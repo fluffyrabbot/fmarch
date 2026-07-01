@@ -142,6 +142,11 @@
               name="accountId"
               value={data.audit.accountControls.accountId}
             />
+            <input
+              type="hidden"
+              name="expectedDisabled"
+              value={data.audit.accountControls.currentDisabled}
+            />
             <button
               type="submit"
               class="fm-touch-button"
@@ -161,6 +166,11 @@
               name="accountId"
               value={data.audit.accountControls.accountId}
             />
+            <input
+              type="hidden"
+              name="expectedDisabled"
+              value={data.audit.accountControls.currentDisabled}
+            />
             <button
               type="submit"
               class="fm-touch-button fm-touch-button--secondary"
@@ -177,6 +187,7 @@
         >
           <strong>{data.audit.accountControls.accountId}</strong>
           <span>{data.audit.accountControls.principalUserId}</span>
+          <span>{data.audit.accountControls.currentDisabled ? "disabled" : "enabled"}</span>
         </p>
         {#if form?.id === "account-disable" || form?.id === "account-enable"}
           <AppStatus

@@ -5293,6 +5293,15 @@ export function validateDevTestGameIdentityAdapterProof(proof, options = {}) {
     proof.identityLifecycle?.accountLifecycle?.enabledStatus !== "enabled" ||
     proof.identityLifecycle?.accountLifecycle?.disabledAccountRejected !== true ||
     proof.identityLifecycle?.accountLifecycle?.staleAccountSessionRejected !== true ||
+    proof.identityLifecycle?.accountLifecycle?.staleAdminControlRejected !== true ||
+    !String(
+      proof.identityLifecycle?.accountLifecycle?.adminControlSurface
+        ?.staleConflictStatusText ?? "",
+    ).includes("stale account lifecycle state") ||
+    !String(
+      proof.identityLifecycle?.accountLifecycle?.adminControlSurface
+        ?.staleConflictStatusText ?? "",
+    ).includes("refresh and use current account controls") ||
     !proof.identityLifecycle?.accountLifecycle?.recoveryCapabilityKinds?.includes(
       "HostOf",
     ) ||

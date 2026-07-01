@@ -186,6 +186,7 @@ struct LoginAuthAccount {
 #[derive(Debug, Clone, Deserialize)]
 struct DisableAuthAccount {
     account_id: String,
+    expected_disabled: Option<bool>,
     #[serde(default = "default_revoke_account_sessions")]
     revoke_sessions: bool,
 }
@@ -193,6 +194,7 @@ struct DisableAuthAccount {
 #[derive(Debug, Clone, Deserialize)]
 struct EnableAuthAccount {
     account_id: String,
+    expected_disabled: Option<bool>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -619,6 +621,12 @@ async fn disable_auth_account(
     .fetch_optional(&mut *tx)
     .await?
     .ok_or_else(account_not_found)?;
+    reject_stale_account_lifecycle(
+        request.expected_disabled,
+        account.1.is_some(),
+        account_id,
+        "disable",
+    )?;
 
     let disabled_at = match account.1 {
         Some(disabled_at) => disabled_at,
@@ -721,6 +729,12 @@ async fn enable_auth_account(
     .fetch_optional(&mut *tx)
     .await?
     .ok_or_else(account_not_found)?;
+    reject_stale_account_lifecycle(
+        request.expected_disabled,
+        account.1.is_some(),
+        account_id,
+        "enable",
+    )?;
 
     if account.1.is_some() {
         sqlx::query("UPDATE auth_account SET disabled_at = NULL WHERE account_id = $1")
@@ -1320,6 +1334,26 @@ fn account_not_found() -> ApiError {
         error: RejectCode::NotAuthorized,
         message: "account was not found".to_string(),
     }
+}
+
+fn reject_stale_account_lifecycle(
+    expected_disabled: Option<bool>,
+    actual_disabled: bool,
+    account_id: &str,
+    action: &str,
+) -> Result<(), ApiError> {
+    if let Some(expected_disabled) = expected_disabled {
+        if expected_disabled != actual_disabled {
+            return Err(ApiError::Reject {
+                status: StatusCode::CONFLICT,
+                error: RejectCode::StreamConflict,
+                message: format!(
+                    "stale account lifecycle state for {account_id}; refresh and use current account controls before {action}"
+                ),
+            });
+        }
+    }
+    Ok(())
 }
 
 fn default_revoke_account_sessions() -> bool {

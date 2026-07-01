@@ -123,6 +123,7 @@ test("admin audit detail load returns identity lifecycle rows through admin sess
   assert.deepEqual(data.audit.accountControls, {
     accountId: "host@example.test",
     principalUserId: "host_h",
+    currentDisabled: false,
     disableAction: "?/disableAccount",
     enableAction: "?/enableAccount",
     revokeSessions: true,
@@ -198,6 +199,7 @@ test("admin audit account lifecycle action disables an account through admin ses
     },
     request: formRequest({
       accountId: "host@example.test",
+      expectedDisabled: "false",
     }),
   });
 
@@ -208,6 +210,7 @@ test("admin audit account lifecycle action disables an account through admin ses
     contentType: "application/json",
     body: {
       account_id: "host@example.test",
+      expected_disabled: false,
       revoke_sessions: true,
     },
   });
@@ -242,6 +245,7 @@ test("admin audit account lifecycle action enables an account through admin sess
     },
     request: formRequest({
       accountId: "host@example.test",
+      expectedDisabled: "true",
     }),
   });
 
@@ -252,11 +256,40 @@ test("admin audit account lifecycle action enables an account through admin sess
     contentType: "application/json",
     body: {
       account_id: "host@example.test",
+      expected_disabled: true,
     },
   });
   assert.equal(result.id, "account-enable");
   assert.equal(result.state, "ack");
   assert.equal(result.message, "host@example.test enabled");
+});
+
+test("admin audit account lifecycle action surfaces stale state conflicts", async () => {
+  const result = await actions.enableAccount({
+    cookies: { get: () => "admin-session" },
+    fetch: async () =>
+      jsonResponse(
+        {
+          error: "StreamConflict",
+          message:
+            "stale account lifecycle state for host@example.test; refresh and use current account controls before enable",
+        },
+        { ok: false, status: 409 },
+      ),
+    locals: {
+      resolvedCapabilities: [{ kind: "GlobalAdmin" }],
+    },
+    request: formRequest({
+      accountId: "host@example.test",
+      expectedDisabled: "false",
+    }),
+  });
+
+  assert.equal(result.status, 409);
+  assert.equal(result.data.id, "account-enable");
+  assert.equal(result.data.state, "reject");
+  assert.match(result.data.message, /stale account lifecycle state/);
+  assert.match(result.data.message, /refresh and use current account controls/);
 });
 
 test("admin audit account lifecycle action requires GlobalAdmin", async () => {

@@ -139,6 +139,7 @@ async function submitAccountLifecycleAction({
 
   const formData = await request.formData();
   const accountId = formString(formData, "accountId");
+  const expectedDisabled = formBoolean(formData, "expectedDisabled");
   if (accountId === null) {
     return fail(400, {
       id: actionId,
@@ -148,13 +149,17 @@ async function submitAccountLifecycleAction({
   }
 
   const apiBaseUrl = process.env.FMARCH_API_BASE_URL ?? "";
+  const payload = buildPayload(accountId);
+  if (expectedDisabled !== null) {
+    payload.expected_disabled = expectedDisabled;
+  }
   const response = await fetch(`${apiBaseUrl}${endpoint}`, {
     method: "POST",
     headers: {
       authorization: `Bearer ${sessionToken}`,
       "content-type": "application/json",
     },
-    body: JSON.stringify(buildPayload(accountId)),
+    body: JSON.stringify(payload),
   });
   const body = await response.json();
   if (!response.ok) {
@@ -187,4 +192,18 @@ function formString(formData, field) {
     return null;
   }
   return value.trim();
+}
+
+function formBoolean(formData, field) {
+  const value = formData.get(field);
+  if (typeof value !== "string") {
+    return null;
+  }
+  if (value === "true") {
+    return true;
+  }
+  if (value === "false") {
+    return false;
+  }
+  return null;
 }

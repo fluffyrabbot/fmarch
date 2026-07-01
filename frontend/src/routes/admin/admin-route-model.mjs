@@ -3509,6 +3509,8 @@ export function normalizeLocalIdentityAdapterAudit(identityAdapterProof, { game 
       true ||
     identityAdapterProof.identityLifecycle?.accountLifecycle?.staleAccountSessionRejected !==
       true ||
+    identityAdapterProof.identityLifecycle?.accountLifecycle?.staleAdminControlRejected !==
+      true ||
     !identityAdapterProof.identityLifecycle?.accountLifecycle?.recoveryCapabilityKinds?.includes(
       "HostOf",
     ) ||
@@ -3619,6 +3621,9 @@ export function normalizeLocalIdentityAdapterAudit(identityAdapterProof, { game 
         staleAccountSessionRejected:
           identityAdapterProof.identityLifecycle.accountLifecycle
             ?.staleAccountSessionRejected === true,
+        staleAdminControlRejected:
+          identityAdapterProof.identityLifecycle.accountLifecycle
+            ?.staleAdminControlRejected === true,
         sameRoleSurface:
           identityAdapterProof.identityLifecycle.accountLifecycle?.sameRoleSurface === true,
         revokedSessionCount:
@@ -3636,6 +3641,10 @@ export function normalizeLocalIdentityAdapterAudit(identityAdapterProof, { game 
           visitedDetailRoleUrl:
             identityAdapterProof.identityLifecycle.accountLifecycle?.adminControlSurface
               ?.visitedDetailRoleUrl === true,
+          staleConflictStatusText: String(
+            identityAdapterProof.identityLifecycle.accountLifecycle?.adminControlSurface
+              ?.staleConflictStatusText ?? "",
+          ),
         }),
         rawPasswordStored:
           identityAdapterProof.identityLifecycle.accountLifecycle?.rawPasswordStored === true,

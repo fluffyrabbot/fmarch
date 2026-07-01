@@ -2805,6 +2805,34 @@ async fn global_admin_account_login_creates_normal_role_session(pool: sqlx::PgPo
         .oneshot(
             Request::builder()
                 .method("POST")
+                .uri("/auth/accounts/enable")
+                .header("content-type", "application/json")
+                .header("authorization", "Bearer account-admin-token")
+                .body(Body::from(
+                    serde_json::json!({
+                        "account_id": "host@example.test",
+                        "expected_disabled": false
+                    })
+                    .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::CONFLICT);
+    let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let stale: RejectMsg = serde_json::from_slice(&bytes).unwrap();
+    assert_eq!(stale.error, RejectCode::StreamConflict);
+    assert!(stale.message.contains("stale account lifecycle state"));
+    assert!(stale
+        .message
+        .contains("refresh and use current account controls"));
+
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
                 .uri("/auth/accounts/login")
                 .header("content-type", "application/json")
                 .body(Body::from(
@@ -2832,7 +2860,8 @@ async fn global_admin_account_login_creates_normal_role_session(pool: sqlx::PgPo
                 .header("authorization", "Bearer account-admin-token")
                 .body(Body::from(
                     serde_json::json!({
-                        "account_id": "host@example.test"
+                        "account_id": "host@example.test",
+                        "expected_disabled": true
                     })
                     .to_string(),
                 ))

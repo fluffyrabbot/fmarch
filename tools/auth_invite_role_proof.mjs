@@ -509,39 +509,106 @@ async function proveIdentityLifecycle({
     returnTo: hostReturnTo,
     expectedText: game,
   });
+  const staleAccountLifecyclePage = await openAdminAccountLifecyclePage({
+    frontendBaseUrl,
+    adminSessionToken,
+    accountId: hostAccount.accountId,
+  });
+  let staleAccountLifecycleConflict;
   const accountDisableControl = await driveAdminAccountLifecycleControl({
     frontendBaseUrl,
     adminSessionToken,
     accountId: hostAccount.accountId,
     action: "disable",
   });
-  await assertUnauthorizedSession(apiBaseUrl, accountLogin.sessionToken);
-  const disabledAccountReject = await driveRejectedAccountLogin({
-    frontendBaseUrl,
-    accountId: hostAccount.accountId,
-    password: hostAccount.password,
-    returnTo: hostReturnTo,
-  });
-  const accountEnableControl = await driveAdminAccountLifecycleControl({
-    frontendBaseUrl,
-    adminSessionToken,
-    accountId: hostAccount.accountId,
-    action: "enable",
-  });
-  const accountRecoveryLogin = await driveAccountLogin({
-    frontendBaseUrl,
-    apiBaseUrl,
-    accountId: hostAccount.accountId,
-    password: hostAccount.password,
-    returnTo: hostReturnTo,
-    expectedCapability: "HostOf",
-  });
-  await assertBrowserSessionRendersRole({
-    frontendBaseUrl,
-    sessionToken: accountRecoveryLogin.sessionToken,
-    returnTo: hostReturnTo,
-    expectedText: game,
-  });
+  try {
+    await assertUnauthorizedSession(apiBaseUrl, accountLogin.sessionToken);
+    const disabledAccountReject = await driveRejectedAccountLogin({
+      frontendBaseUrl,
+      accountId: hostAccount.accountId,
+      password: hostAccount.password,
+      returnTo: hostReturnTo,
+    });
+    staleAccountLifecycleConflict = await submitAdminAccountLifecycleControl({
+      page: staleAccountLifecyclePage.page,
+      accountId: hostAccount.accountId,
+      action: "enable",
+      expectedState: "reject",
+      expectedText: "stale account lifecycle state",
+    });
+    const accountEnableControl = await driveAdminAccountLifecycleControl({
+      frontendBaseUrl,
+      adminSessionToken,
+      accountId: hostAccount.accountId,
+      action: "enable",
+    });
+    const accountRecoveryLogin = await driveAccountLogin({
+      frontendBaseUrl,
+      apiBaseUrl,
+      accountId: hostAccount.accountId,
+      password: hostAccount.password,
+      returnTo: hostReturnTo,
+      expectedCapability: "HostOf",
+    });
+    await assertBrowserSessionRendersRole({
+      frontendBaseUrl,
+      sessionToken: accountRecoveryLogin.sessionToken,
+      returnTo: hostReturnTo,
+      expectedText: game,
+    });
+    return await finishIdentityLifecycleProof({
+      apiBaseUrl,
+      frontendBaseUrl,
+      adminSessionToken,
+      hostSessionToken,
+      rotatedSessionToken,
+      revokedInviteToken,
+      recoveryInviteToken,
+      accountLogin,
+      accountRecoveryLogin,
+      accountDisableControl,
+      accountEnableControl,
+      staleAccountLifecycleConflict,
+      disabledAccountReject,
+      hostScopedInviteIssuance,
+      rotation,
+      rotatedSession,
+      sessionRevocation,
+      inviteRevocation,
+      revokedInviteReject,
+      recovery,
+      hostReturnTo,
+      hostAccount,
+    });
+  } finally {
+    await staleAccountLifecyclePage.page.close();
+  }
+}
+
+async function finishIdentityLifecycleProof({
+  apiBaseUrl,
+  frontendBaseUrl,
+  adminSessionToken,
+  hostSessionToken,
+  rotatedSessionToken,
+  revokedInviteToken,
+  recoveryInviteToken,
+  accountLogin,
+  accountRecoveryLogin,
+  accountDisableControl,
+  accountEnableControl,
+  staleAccountLifecycleConflict,
+  disabledAccountReject,
+  hostScopedInviteIssuance,
+  rotation,
+  rotatedSession,
+  sessionRevocation,
+  inviteRevocation,
+  revokedInviteReject,
+  recovery,
+  hostReturnTo,
+  hostAccount,
+}) {
   const auditTrail = await fetchIdentityLifecycleAudit({
     apiBaseUrl,
     principalUserId: "host_h",
@@ -634,12 +701,15 @@ async function proveIdentityLifecycle({
         enabledStatusTestId: accountEnableControl.statusTestId,
         disabledStatusText: accountDisableControl.visibleStatusText,
         enabledStatusText: accountEnableControl.visibleStatusText,
+        staleConflictStatusTestId: staleAccountLifecycleConflict.statusTestId,
+        staleConflictStatusText: staleAccountLifecycleConflict.visibleStatusText,
         visitedDetailRoleUrl:
           accountDisableControl.visitedDetailRoleUrl &&
           accountEnableControl.visitedDetailRoleUrl,
       },
       disabledAccountRejected: disabledAccountReject.status === "reject",
       staleAccountSessionRejected: true,
+      staleAdminControlRejected: staleAccountLifecycleConflict.status === "passed",
       recoveryCapabilityKinds: accountRecoveryLogin.capabilityKinds,
       sameRoleSurface:
         new URL(accountRecoveryLogin.loginUrl).searchParams.get("returnTo") ===
@@ -881,80 +951,112 @@ async function driveAdminAccountLifecycleControl({
   accountId,
   action,
 }) {
+  const opened = await openAdminAccountLifecyclePage({
+    frontendBaseUrl,
+    adminSessionToken,
+    accountId,
+  });
+  try {
+    return await submitAdminAccountLifecycleControl({
+      page: opened.page,
+      accountId,
+      action,
+      expectedState: "ack",
+      expectedText:
+        action === "disable" ? `${accountId} disabled` : `${accountId} enabled`,
+      detailRoleUrl: opened.detailRoleUrl,
+    });
+  } finally {
+    await opened.page.close();
+  }
+}
+
+async function openAdminAccountLifecyclePage({
+  frontendBaseUrl,
+  adminSessionToken,
+  accountId,
+}) {
   const page = await browser.newPage({ viewport: { width: 1024, height: 768 } });
+  const detailPath = `/admin/audit/identity-lifecycle?game=${encodeURIComponent(
+    game,
+  )}&principal_user_id=host_h`;
+  const detailUrl = `${frontendBaseUrl}${detailPath}`;
+  await page.context().addCookies([
+    {
+      name: "fmarch_session",
+      value: adminSessionToken,
+      url: frontendBaseUrl,
+      httpOnly: true,
+      sameSite: "Lax",
+    },
+  ]);
+  await page.goto(detailUrl, { waitUntil: "networkidle" });
+  await page.getByTestId("admin-audit-detail-surface").waitFor({
+    state: "visible",
+    timeout: 15000,
+  });
+  await page.getByTestId("admin-identity-account-controls").waitFor({
+    state: "visible",
+    timeout: 15000,
+  });
+  const targetText = await page
+    .getByTestId("admin-identity-account-control-target")
+    .innerText();
+  if (!targetText.includes(accountId) || !targetText.includes("host_h")) {
+    await page.close();
+    throw new Error(`admin account lifecycle target drifted: ${targetText}`);
+  }
+  return {
+    page,
+    detailRoleUrl:
+      "/admin/audit/identity-lifecycle?game=<seeded-game>&principal_user_id=host_h",
+  };
+}
+
+async function submitAdminAccountLifecycleControl({
+  page,
+  accountId,
+  action,
+  expectedState,
+  expectedText,
+  detailRoleUrl = "/admin/audit/identity-lifecycle?game=<seeded-game>&principal_user_id=host_h",
+}) {
   const actionConfig =
     action === "disable"
       ? {
           buttonTestId: "admin-identity-account-disable-submit",
           statusTestId: "admin-identity-account-disable-status",
-          expectedText: `${accountId} disabled`,
           statusText: "disabled",
         }
       : {
           buttonTestId: "admin-identity-account-enable-submit",
           statusTestId: "admin-identity-account-enable-status",
-          expectedText: `${accountId} enabled`,
           statusText: "enabled",
         };
-  const detailPath = `/admin/audit/identity-lifecycle?game=${encodeURIComponent(
-    game,
-  )}&principal_user_id=host_h`;
-  const detailUrl = `${frontendBaseUrl}${detailPath}`;
-  try {
-    await page.context().addCookies([
-      {
-        name: "fmarch_session",
-        value: adminSessionToken,
-        url: frontendBaseUrl,
-        httpOnly: true,
-        sameSite: "Lax",
-      },
-    ]);
-    await page.goto(detailUrl, { waitUntil: "networkidle" });
-    await page.getByTestId("admin-audit-detail-surface").waitFor({
-      state: "visible",
-      timeout: 15000,
-    });
-    await page.getByTestId("admin-identity-account-controls").waitFor({
-      state: "visible",
-      timeout: 15000,
-    });
-    const targetText = await page
-      .getByTestId("admin-identity-account-control-target")
-      .innerText();
-    if (!targetText.includes(accountId) || !targetText.includes("host_h")) {
-      throw new Error(`admin account lifecycle target drifted: ${targetText}`);
-    }
-
-    await page.getByTestId(actionConfig.buttonTestId).click();
-    await page.getByTestId(actionConfig.statusTestId).waitFor({
-      state: "visible",
-      timeout: 15000,
-    });
-    const visibleStatusText = await page
-      .getByTestId(actionConfig.statusTestId)
-      .innerText();
-    if (!visibleStatusText.includes(actionConfig.expectedText)) {
-      throw new Error(
-        `admin account ${action} status drifted: ${visibleStatusText}`,
-      );
-    }
-
-    return {
-      status: "passed",
-      statusText: actionConfig.statusText,
-      detailRoleUrl:
-        "/admin/audit/identity-lifecycle?game=<seeded-game>&principal_user_id=host_h",
-      controlsTestId: "admin-identity-account-controls",
-      statusTestId: actionConfig.statusTestId,
-      visibleStatusText,
-      revokedSessionCount:
-        action === "disable" ? revokedSessionCountFromStatus(visibleStatusText) : 0,
-      visitedDetailRoleUrl: true,
-    };
-  } finally {
-    await page.close();
+  await page.getByTestId(actionConfig.buttonTestId).click();
+  await page.getByTestId(actionConfig.statusTestId).waitFor({
+    state: "visible",
+    timeout: 15000,
+  });
+  const statusLocator = page.getByTestId(actionConfig.statusTestId);
+  const visibleStatusText = await statusLocator.innerText();
+  const state = await statusLocator.getAttribute("data-state");
+  if (state !== expectedState || !visibleStatusText.includes(expectedText)) {
+    throw new Error(
+      `admin account ${action} status drifted: ${state} ${visibleStatusText}`,
+    );
   }
+  return {
+    status: "passed",
+    statusText: actionConfig.statusText,
+    detailRoleUrl,
+    controlsTestId: "admin-identity-account-controls",
+    statusTestId: actionConfig.statusTestId,
+    visibleStatusText,
+    revokedSessionCount:
+      action === "disable" ? revokedSessionCountFromStatus(visibleStatusText) : 0,
+    visitedDetailRoleUrl: true,
+  };
 }
 
 function revokedSessionCountFromStatus(statusText) {
@@ -1248,6 +1350,15 @@ function assertInviteProof(evidence) {
     evidence.identityLifecycle?.accountLifecycle?.enabledStatus !== "enabled" ||
     evidence.identityLifecycle?.accountLifecycle?.disabledAccountRejected !== true ||
     evidence.identityLifecycle?.accountLifecycle?.staleAccountSessionRejected !== true ||
+    evidence.identityLifecycle?.accountLifecycle?.staleAdminControlRejected !== true ||
+    !String(
+      evidence.identityLifecycle?.accountLifecycle?.adminControlSurface
+        ?.staleConflictStatusText ?? "",
+    ).includes("stale account lifecycle state") ||
+    !String(
+      evidence.identityLifecycle?.accountLifecycle?.adminControlSurface
+        ?.staleConflictStatusText ?? "",
+    ).includes("refresh and use current account controls") ||
     !evidence.identityLifecycle?.accountLifecycle?.recoveryCapabilityKinds?.includes(
       "HostOf",
     ) ||

@@ -576,6 +576,7 @@ test("admin identity lifecycle detail data carries audit event rows", async () =
   assert.deepEqual(data.audit.accountControls, {
     accountId: "host@example.test",
     principalUserId: "host_h",
+    currentDisabled: false,
     disableAction: "?/disableAccount",
     enableAction: "?/enableAccount",
     revokeSessions: true,
@@ -2762,6 +2763,7 @@ test("admin route data exposes local identity adapter proof as a native audit ro
       enabledStatus: "enabled",
       disabledAccountRejected: true,
       staleAccountSessionRejected: true,
+      staleAdminControlRejected: true,
       sameRoleSurface: true,
       revokedSessionCount: 1,
       adminControlSurface: {
@@ -2769,6 +2771,8 @@ test("admin route data exposes local identity adapter proof as a native audit ro
           "/admin/audit/identity-lifecycle?game=<seeded-game>&principal_user_id=host_h",
         controlsTestId: "admin-identity-account-controls",
         visitedDetailRoleUrl: true,
+        staleConflictStatusText:
+          "stale account lifecycle state for host@example.test; refresh and use current account controls before enable",
       },
       rawPasswordStored: false,
     },
@@ -5231,11 +5235,14 @@ function identityAdapterProofFixture() {
             "/admin/audit/identity-lifecycle?game=<seeded-game>&principal_user_id=host_h",
           controlsTestId: "admin-identity-account-controls",
           visitedDetailRoleUrl: true,
+          staleConflictStatusText:
+            "stale account lifecycle state for host@example.test; refresh and use current account controls before enable",
         },
         disabledStatus: "disabled",
         enabledStatus: "enabled",
         disabledAccountRejected: true,
         staleAccountSessionRejected: true,
+        staleAdminControlRejected: true,
         recoveryCapabilityKinds: ["HostOf"],
         sameRoleSurface: true,
         revokedSessionCount: 1,

@@ -711,9 +711,18 @@ function identityLifecycleAccountControls({ entries, principalUserId }) {
     return null;
   }
   const accountId = accountEntry.metadata.account_id.trim();
+  const latestLifecycleEntry = entries.find(
+    (entry) =>
+      entry.metadata?.account_id === accountId &&
+      ["account_disabled", "account_enabled", "account_created"].includes(
+        entry.eventKind,
+      ),
+  );
+  const currentDisabled = latestLifecycleEntry?.eventKind === "account_disabled";
   return Object.freeze({
     accountId,
     principalUserId,
+    currentDisabled,
     disableAction: "?/disableAccount",
     enableAction: "?/enableAccount",
     revokeSessions: true,
