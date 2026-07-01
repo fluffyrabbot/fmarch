@@ -337,6 +337,62 @@ export function assertCompletedPrivateChannelTransition({
   }
 }
 
+export function completedPrivateChannelProofAssertionCases({
+  proof,
+  expectedGame,
+  sourceRoleUrl,
+  visitedRolePath,
+  assertCompletedPrivateChannelReloadProof,
+  assertStaleCompletedPrivatePostRecoveryProof,
+}) {
+  return [
+    {
+      assertProof: assertCompletedPrivateChannelReloadProof,
+      proof: proof?.reloadProof,
+      sourceRoleUrl,
+      visitedRolePath,
+    },
+    {
+      assertProof: assertStaleCompletedPrivatePostRecoveryProof,
+      proof: proof?.staleCompletedPostRecoveryProof,
+      expectedGame,
+      sourceRoleUrl,
+      visitedRolePath,
+    },
+  ];
+}
+
+export function assertCompletedPrivateChannelProofCases({
+  proof,
+  sourceRoleUrl,
+  visitedRolePath,
+  cases,
+  includeEvidenceInError = false,
+}) {
+  if (
+    proof?.status !== "passed" ||
+    proof.clickedThroughFromRoleUrl !== true ||
+    proof.releaseReady !== false ||
+    proof.productionReady !== false ||
+    proof.sourceRoleUrl !== sourceRoleUrl ||
+    proof.visitedRolePath !== visitedRolePath
+  ) {
+    throwPrivateChannelScenarioAssertionError({
+      message: "core-loop admin proof missing completed private channel shell",
+      evidence: proof,
+      includeEvidenceInError,
+    });
+  }
+  assertCompletedPrivateChannelTransition({
+    transition: proof.transition,
+    failureMessage:
+      "core-loop admin proof missing completed private channel transition",
+  });
+  for (const { assertProof, ...scenario } of cases) {
+    assertProof(scenario);
+  }
+}
+
 export function completedPrivateChannelReloadSnapshotAssertionCases({
   proof,
   scenario = completedPrivateChannelReloadScenario(),

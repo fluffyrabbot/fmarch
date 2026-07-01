@@ -22,7 +22,6 @@ import {
   staleNightFourActionRecoveryScenario,
 } from "./dev_test_game_core_loop_action_scenarios.mjs";
 import {
-  assertCompletedPrivateChannelTransition,
   completedPrivateChannelReloadScenario,
   completedPrivateChannelTransition,
   privateChannelSubmitPostScenario,
@@ -30,7 +29,9 @@ import {
   privateReceiptProofArgs,
   privateReceiptScenario,
   assertCompletedPrivateChannelReloadProofCase,
+  assertCompletedPrivateChannelProofCases,
   assertStaleCompletedPrivatePostRecoveryProofCase,
+  completedPrivateChannelProofAssertionCases,
   staleCompletedPrivatePostScenario,
   stalePrivateChannelPostPhaseLockedScenario,
 } from "./dev_test_game_core_loop_private_receipt_scenarios.mjs";
@@ -12806,35 +12807,19 @@ function assertCompletedPrivateChannelProof({
   sourceRoleUrl,
   visitedRolePath,
 }) {
-  if (
-    proof?.status !== "passed" ||
-    proof.clickedThroughFromRoleUrl !== true ||
-    proof.releaseReady !== false ||
-    proof.productionReady !== false ||
-    proof.sourceRoleUrl !== sourceRoleUrl ||
-    proof.visitedRolePath !== visitedRolePath
-  ) {
-    throw new Error(
-      `core-loop admin proof missing completed private channel shell: ${JSON.stringify(
-        proof,
-      )}`,
-    );
-  }
-  assertCompletedPrivateChannelTransition({
-    transition: proof.transition,
-    failureMessage:
-      "core-loop admin proof missing completed private channel transition",
-  });
-  assertCompletedPrivateChannelReloadProof({
-    proof: proof.reloadProof,
+  assertCompletedPrivateChannelProofCases({
+    proof,
     sourceRoleUrl,
     visitedRolePath,
-  });
-  assertStaleCompletedPrivatePostRecoveryProof({
-    proof: proof.staleCompletedPostRecoveryProof,
-    expectedGame,
-    sourceRoleUrl,
-    visitedRolePath,
+    includeEvidenceInError: true,
+    cases: completedPrivateChannelProofAssertionCases({
+      proof,
+      expectedGame,
+      sourceRoleUrl,
+      visitedRolePath,
+      assertCompletedPrivateChannelReloadProof,
+      assertStaleCompletedPrivatePostRecoveryProof,
+    }),
   });
 }
 

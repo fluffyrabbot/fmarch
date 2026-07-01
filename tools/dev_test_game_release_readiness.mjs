@@ -50,8 +50,9 @@ import {
   staleNightFourActionRecoveryScenario,
 } from "./dev_test_game_core_loop_action_scenarios.mjs";
 import {
-  assertCompletedPrivateChannelTransition,
   completedPrivateChannelReloadScenario,
+  assertCompletedPrivateChannelProofCases,
+  completedPrivateChannelProofAssertionCases,
   privateChannelSubmitPostScenario,
   privateReceiptAssertionArgs,
   privateReceiptScenario,
@@ -4903,31 +4904,20 @@ function assertCoreLoopCompletedPrivateChannelProof({
   sourceRoleUrl,
   visitedRolePath,
 }) {
-  if (
-    proof?.status !== "passed" ||
-    proof.clickedThroughFromRoleUrl !== true ||
-    proof.releaseReady !== false ||
-    proof.productionReady !== false ||
-    proof.sourceRoleUrl !== sourceRoleUrl ||
-    proof.visitedRolePath !== visitedRolePath
-  ) {
-    throw new Error("core-loop admin proof missing completed private channel shell");
-  }
-  assertCompletedPrivateChannelTransition({
-    transition: proof.transition,
-    failureMessage:
-      "core-loop admin proof missing completed private channel transition",
-  });
-  assertCoreLoopCompletedPrivateChannelReloadProof({
-    proof: proof.reloadProof,
+  assertCompletedPrivateChannelProofCases({
+    proof,
     sourceRoleUrl,
     visitedRolePath,
-  });
-  assertCoreLoopStaleCompletedPrivatePostRecoveryProof({
-    proof: proof.staleCompletedPostRecoveryProof,
-    expectedGame,
-    sourceRoleUrl,
-    visitedRolePath,
+    cases: completedPrivateChannelProofAssertionCases({
+      proof,
+      expectedGame,
+      sourceRoleUrl,
+      visitedRolePath,
+      assertCompletedPrivateChannelReloadProof:
+        assertCoreLoopCompletedPrivateChannelReloadProof,
+      assertStaleCompletedPrivatePostRecoveryProof:
+        assertCoreLoopStaleCompletedPrivatePostRecoveryProof,
+    }),
   });
 }
 
