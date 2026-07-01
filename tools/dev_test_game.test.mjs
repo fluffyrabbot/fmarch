@@ -51,6 +51,7 @@ import {
 } from "./dev_test_game_seed_scenario_cases.mjs";
 import {
   hostStaleControlLaneIds,
+  hostedMatrixReconnectLaneIds,
   staleConflictMessageLaneIds,
 } from "./dev_test_game_hardening_lane_cases.mjs";
 import {
@@ -13508,16 +13509,7 @@ function hostedConcurrentRaceMatrixAdminProofFixture() {
         "replacement-vote",
         "replacement-action",
       ],
-      reconnectLaneIds: [
-        "reconnect-recovery",
-        "replacement-reconnect-recovery",
-        "stale-action-reconnect-recovery",
-        "stale-host-complete-reconnect-recovery",
-        "stale-host-resolve-reconnect-recovery",
-        "stale-host-advance-reconnect-recovery",
-        "stale-host-deadline-reconnect-recovery",
-        "stale-cohost-deadline-reconnect-recovery",
-      ],
+      reconnectLaneIds: hostedMatrixReconnectLaneIds,
       staleConflictLaneIds: [
         "replacement-stale-conflict-message",
         "stale-action-conflict-message",
@@ -13563,16 +13555,7 @@ function hostedConcurrentRaceMatrixAdminProofFixture() {
         "replacement-vote",
         "replacement-action",
       ],
-      visibleReconnectLanes: [
-        "reconnect-recovery",
-        "replacement-reconnect-recovery",
-        "stale-action-reconnect-recovery",
-        "stale-host-complete-reconnect-recovery",
-        "stale-host-resolve-reconnect-recovery",
-        "stale-host-advance-reconnect-recovery",
-        "stale-host-deadline-reconnect-recovery",
-        "stale-cohost-deadline-reconnect-recovery",
-      ],
+      visibleReconnectLanes: hostedMatrixReconnectLaneIds,
       visibleStaleConflictLanes: [
         "replacement-stale-conflict-message",
         "stale-action-conflict-message",

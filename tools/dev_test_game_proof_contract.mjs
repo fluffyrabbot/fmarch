@@ -5,7 +5,10 @@ import {
   completedGameHardeningLaneIds,
 } from "./dev_test_game_core_loop_completed_scenarios.mjs";
 import {
+  cohostDeadlineRecoveryLaneIds,
   hostStaleControlLaneIds,
+  hostPhaseStaleRecoveryLaneIds,
+  hostRaceReloadLaneIds,
   playerActionConflictRecoveryLaneIds,
   playerActionFoundationLaneIds,
   staleConflictMessageLaneIds,
@@ -86,18 +89,11 @@ const requiredLaneIds = Object.freeze([
   ...hostStaleControlLaneIds.slice(3, 5),
   ...completedGameHardeningLaneIds(),
   ...playerActionConflictRecoveryLaneIds,
-  "concurrent-host-resolve-race",
-  "concurrent-host-resolve-race-reload",
-  "concurrent-host-advance-race",
-  "concurrent-host-advance-race-reload",
-  "concurrent-host-deadline-advance-race",
-  "concurrent-host-deadline-advance-race-reload",
-  "concurrent-host-mixed-advance-race",
-  "concurrent-host-mixed-advance-race-reload",
-  ...hostStaleControlLaneIds.slice(8),
+  ...hostRaceReloadLaneIds,
+  ...hostStaleControlLaneIds.slice(8, 9),
+  ...hostPhaseStaleRecoveryLaneIds,
   "stale-cohost-deadline",
-  "stale-cohost-deadline-reload",
-  "stale-cohost-deadline-reconnect-recovery",
+  ...cohostDeadlineRecoveryLaneIds,
 ]);
 
 export function buildDevTestGameProofRun(session, options = {}) {

@@ -5,7 +5,10 @@ import {
 } from "./dev_test_game_core_loop_completed_scenarios.mjs";
 import { assertDevTestGameProofRun } from "./dev_test_game_proof_contract.mjs";
 import {
+  cohostDeadlineRecoveryLaneIds,
   hostStaleControlLaneIds,
+  hostPhaseStaleRecoveryLaneIds,
+  hostRaceReloadLaneIds,
   playerActionConflictRecoveryLaneIds,
   playerActionFoundationLaneIds,
   promotedStalePlayerCommandLaneIds,
@@ -66,18 +69,10 @@ const requiredChecks = [
   ...completedGameHardeningLaneIds(),
   ...playerActionConflictRecoveryLaneIds,
   ...hostStaleControlLaneIds.slice(8, 9),
-  "concurrent-host-resolve-race",
-  "concurrent-host-resolve-race-reload",
-  "concurrent-host-advance-race",
-  "concurrent-host-advance-race-reload",
-  "concurrent-host-deadline-advance-race",
-  "concurrent-host-deadline-advance-race-reload",
-  "concurrent-host-mixed-advance-race",
-  "concurrent-host-mixed-advance-race-reload",
-  ...hostStaleControlLaneIds.slice(9),
+  ...hostRaceReloadLaneIds,
+  ...hostPhaseStaleRecoveryLaneIds,
   "stale-cohost-deadline",
-  "stale-cohost-deadline-reload",
-  "stale-cohost-deadline-reconnect-recovery",
+  ...cohostDeadlineRecoveryLaneIds,
 ];
 
 await runAdminAuditProof({

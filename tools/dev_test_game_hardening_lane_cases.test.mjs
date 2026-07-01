@@ -1,7 +1,12 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
+  cohostDeadlineRecoveryLaneIds,
+  hostCohostRaceRecoveryLaneIds,
   hostStaleControlLaneIds,
+  hostPhaseStaleRecoveryLaneIds,
+  hostRaceReloadLaneIds,
+  hostedMatrixReconnectLaneIds,
   hostedMatrixStaleConflictLaneIds,
   playerActionConflictRecoveryLaneIds,
   playerActionFoundationLaneIds,
@@ -41,6 +46,55 @@ test("hardening lane cases share host stale-control IDs", () => {
   ]);
 });
 
+test("hardening lane cases share host race/reload IDs", () => {
+  assert.deepEqual(hostRaceReloadLaneIds, [
+    "concurrent-host-resolve-race",
+    "concurrent-host-resolve-race-reload",
+    "concurrent-host-advance-race",
+    "concurrent-host-advance-race-reload",
+    "concurrent-host-deadline-advance-race",
+    "concurrent-host-deadline-advance-race-reload",
+    "concurrent-host-mixed-advance-race",
+    "concurrent-host-mixed-advance-race-reload",
+  ]);
+});
+
+test("hardening lane cases share host/cohost stale recovery IDs", () => {
+  assert.deepEqual(hostPhaseStaleRecoveryLaneIds, [
+    "stale-host-resolve-reload",
+    "stale-host-resolve-reconnect-recovery",
+    "stale-host-advance-reload",
+    "stale-host-advance-reconnect-recovery",
+    "stale-host-deadline-reload",
+    "stale-host-deadline-reconnect-recovery",
+  ]);
+  assert.deepEqual(cohostDeadlineRecoveryLaneIds, [
+    "stale-cohost-deadline-reload",
+    "stale-cohost-deadline-reconnect-recovery",
+  ]);
+});
+
+test("hardening lane cases share seed-order host/cohost race recovery IDs", () => {
+  assert.deepEqual(hostCohostRaceRecoveryLaneIds, [
+    "concurrent-host-resolve-race",
+    "concurrent-host-resolve-race-reload",
+    "stale-host-resolve-reload",
+    "stale-host-resolve-reconnect-recovery",
+    "concurrent-host-advance-race",
+    "concurrent-host-advance-race-reload",
+    "stale-host-advance-reload",
+    "stale-host-advance-reconnect-recovery",
+    "stale-host-deadline-reload",
+    "stale-host-deadline-reconnect-recovery",
+    "stale-cohost-deadline-reload",
+    "stale-cohost-deadline-reconnect-recovery",
+    "concurrent-host-deadline-advance-race",
+    "concurrent-host-deadline-advance-race-reload",
+    "concurrent-host-mixed-advance-race",
+    "concurrent-host-mixed-advance-race-reload",
+  ]);
+});
+
 test("hardening lane cases share player action foundation IDs", () => {
   assert.deepEqual(playerActionFoundationLaneIds, [
     "idempotent-retry",
@@ -75,5 +129,20 @@ test("hardening lane cases derive hosted stale-conflict matrix IDs", () => {
   assert.deepEqual(hostedMatrixStaleConflictLaneIds, [
     ...staleConflictMessageLaneIds,
     "stale-host-control",
+  ]);
+});
+
+test("hardening lane cases derive hosted matrix reconnect IDs", () => {
+  assert.deepEqual(hostedMatrixReconnectLaneIds, [
+    "reconnect-recovery",
+    "replacement-reconnect-recovery",
+    "replacement-action-reconnect",
+    "replacement-stale-private-post-reconnect",
+    "stale-action-reconnect-recovery",
+    "stale-host-complete-reconnect-recovery",
+    "stale-host-resolve-reconnect-recovery",
+    "stale-host-advance-reconnect-recovery",
+    "stale-host-deadline-reconnect-recovery",
+    "stale-cohost-deadline-reconnect-recovery",
   ]);
 });

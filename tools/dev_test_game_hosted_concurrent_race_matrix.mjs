@@ -12,6 +12,7 @@ import {
   buildRealHostedEvidenceInputs,
 } from "./dev_test_game_real_hosted_evidence_inputs.mjs";
 import {
+  hostedMatrixReconnectLaneIds,
   hostedMatrixStaleConflictLaneIds,
 } from "./dev_test_game_hardening_lane_cases.mjs";
 
@@ -32,19 +33,7 @@ const hostedMatrixJsonPath = path.join(
   devTestGameHostedConcurrentRaceMatrixPath,
 );
 
-const reconnectLaneIds = Object.freeze([
-  "reconnect-recovery",
-  "replacement-reconnect-recovery",
-  "replacement-action-reconnect",
-  "replacement-stale-private-post-reconnect",
-  "stale-action-reconnect-recovery",
-  "stale-host-complete-reconnect-recovery",
-  "stale-host-resolve-reconnect-recovery",
-  "stale-host-advance-reconnect-recovery",
-  "stale-host-deadline-reconnect-recovery",
-  "stale-cohost-deadline-reconnect-recovery",
-]);
-
+const reconnectLaneIds = hostedMatrixReconnectLaneIds;
 const staleConflictLaneIds = hostedMatrixStaleConflictLaneIds;
 
 export function buildDevTestGameHostedConcurrentRaceMatrixEvidence(

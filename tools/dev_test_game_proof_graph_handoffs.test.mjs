@@ -13,6 +13,7 @@ import {
   hostedTargetPreflightCheckIds,
 } from "./dev_test_game_hosted_target_preflight.mjs";
 import {
+  hostedMatrixReconnectLaneIds,
   hostedMatrixStaleConflictLaneIds,
   staleConflictMessageLaneIds,
 } from "./dev_test_game_hardening_lane_cases.mjs";
@@ -112,16 +113,7 @@ test("admin proof graph role handoffs cover every admin-proof role URL", () => {
     handoffs.find(
       (handoff) => handoff.linkId === "admin-proof:hosted-concurrent-race-matrix",
     )?.requiredReconnectLaneIds,
-    [
-      "reconnect-recovery",
-      "replacement-reconnect-recovery",
-      "stale-action-reconnect-recovery",
-      "stale-host-complete-reconnect-recovery",
-      "stale-host-resolve-reconnect-recovery",
-      "stale-host-advance-reconnect-recovery",
-      "stale-host-deadline-reconnect-recovery",
-      "stale-cohost-deadline-reconnect-recovery",
-    ],
+    hostedMatrixReconnectLaneIds,
   );
   assert.deepEqual(
     handoffs.find(
@@ -219,16 +211,7 @@ function hostedMatrixFixture() {
       { id: "real-hosted-deployment" },
     ],
     cells: [{ id: "player-vote-change" }, { id: "player-night-action" }],
-    reconnectLanes: [
-      { id: "reconnect-recovery" },
-      { id: "replacement-reconnect-recovery" },
-      { id: "stale-action-reconnect-recovery" },
-      { id: "stale-host-complete-reconnect-recovery" },
-      { id: "stale-host-resolve-reconnect-recovery" },
-      { id: "stale-host-advance-reconnect-recovery" },
-      { id: "stale-host-deadline-reconnect-recovery" },
-      { id: "stale-cohost-deadline-reconnect-recovery" },
-    ],
+    reconnectLanes: hostedMatrixReconnectLaneIds.map((id) => ({ id })),
     staleConflictLanes: hostedMatrixStaleConflictLaneIds.map((id) => ({ id })),
     requestedEvidence: { id: "hosted-concurrent-race-matrix" },
     remainingGaps: [{ id: "gap-a" }, { id: "gap-b" }],
