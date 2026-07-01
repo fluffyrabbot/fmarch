@@ -26,6 +26,8 @@ import {
 } from "./dev_test_game_hosted_evidence_lane_demo_proof.mjs";
 import {
   hostStaleControlLaneIds,
+} from "./dev_test_game_host_stale_control_scenarios.mjs";
+import {
   staleConflictMessageLaneIds,
 } from "./dev_test_game_hardening_lane_cases.mjs";
 import {

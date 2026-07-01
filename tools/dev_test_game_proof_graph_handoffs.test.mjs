@@ -16,6 +16,8 @@ import {
 } from "./dev_test_game_hosted_target_preflight.mjs";
 import {
   hostedMatrixReconnectLaneIds,
+} from "./dev_test_game_host_stale_control_scenarios.mjs";
+import {
   hostedMatrixStaleConflictLaneIds,
 } from "./dev_test_game_hardening_lane_cases.mjs";
 

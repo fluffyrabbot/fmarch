@@ -1,6 +1,6 @@
 import {
   hostCohostRaceRecoveryLaneIds,
-} from "./dev_test_game_hardening_lane_cases.mjs";
+} from "./dev_test_game_host_stale_control_scenarios.mjs";
 
 export const seedRequiredScenarioIds = Object.freeze([
   "host-phase-controls",

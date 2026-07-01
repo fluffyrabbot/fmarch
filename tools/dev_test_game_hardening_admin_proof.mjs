@@ -11,6 +11,8 @@ import {
   hostPromptStaleControlLaneIds,
   hostRaceReloadLaneIds,
   hostStandaloneStaleControlLaneIds,
+} from "./dev_test_game_host_stale_control_scenarios.mjs";
+import {
   playerActionConflictRecoveryLaneIds,
   playerActionFoundationLaneIds,
   promotedStalePlayerCommandLaneIds,

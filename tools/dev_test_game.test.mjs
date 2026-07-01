@@ -60,6 +60,8 @@ import {
 import {
   hostStaleControlLaneIds,
   hostedMatrixReconnectLaneIds,
+} from "./dev_test_game_host_stale_control_scenarios.mjs";
+import {
   staleConflictMessageLaneIds,
 } from "./dev_test_game_hardening_lane_cases.mjs";
 import {

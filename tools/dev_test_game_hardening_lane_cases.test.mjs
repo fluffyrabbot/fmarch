@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import { test } from "node:test";
 import {
   cohostDeadlineRecoveryLaneIds,
@@ -15,6 +16,8 @@ import {
   hostRaceReloadLaneIds,
   hostStandaloneStaleControlLaneIds,
   hostedMatrixReconnectLaneIds,
+} from "./dev_test_game_host_stale_control_scenarios.mjs";
+import {
   hostedMatrixStaleConflictLaneIds,
   playerActionConflictRecoveryLaneIds,
   playerActionFoundationLaneIds,
@@ -64,6 +67,52 @@ test("hardening lane cases share host stale-control IDs", () => {
     ...hostGenericStaleControlLaneIds,
     ...hostPhaseStaleControlLaneIds,
   ]);
+});
+
+test("host stale-control production callers use the shared scenario module", async () => {
+  const callerPaths = [
+    "tools/dev_test_game_next_action.mjs",
+    "tools/dev_test_game_release_readiness.mjs",
+    "tools/dev_test_game_proof_contract.mjs",
+    "tools/dev_test_game_hardening_admin_proof.mjs",
+    "tools/dev_test_game_seed_scenario_cases.mjs",
+    "tools/dev_test_game_hosted_concurrent_race_matrix.mjs",
+    "tools/dev_test_game.test.mjs",
+    "frontend/src/routes/admin/admin-route-model.test.mjs",
+  ];
+  const forbiddenHardeningImports = [
+    "cohostDeadlineRecoveryLaneIds",
+    "cohostDeadlineStaleControlCases",
+    "hostCohostRaceRecoveryLaneIds",
+    "hostGenericStaleControlLaneIds",
+    "hostPhaseStaleControlCases",
+    "hostPhaseStaleRecoveryLaneIds",
+    "hostPromptStaleControlLaneIds",
+    "hostRaceReloadLaneIds",
+    "hostStandaloneStaleControlLaneIds",
+    "hostStaleControlLaneIds",
+    "hostedMatrixReconnectLaneIds",
+  ];
+
+  for (const callerPath of callerPaths) {
+    const source = await readFile(callerPath, "utf8");
+    assert(
+      source.includes("./dev_test_game_host_stale_control_scenarios.mjs") ||
+        source.includes(
+          "../../../../tools/dev_test_game_host_stale_control_scenarios.mjs",
+        ),
+      `${callerPath} should import host stale-control definitions through the scenario module`,
+    );
+
+    for (const importBlock of hardeningLaneImportBlocks(source)) {
+      for (const forbiddenImport of forbiddenHardeningImports) {
+        assert(
+          !importBlock.includes(forbiddenImport),
+          `${callerPath} should not import ${forbiddenImport} from hardening lane cases`,
+        );
+      }
+    }
+  }
 });
 
 test("hardening lane cases share host phase stale-control scenarios", () => {
@@ -138,6 +187,15 @@ test("hardening lane cases share host phase stale-control scenarios", () => {
     hostPhaseStaleControlCaseDefinitions[0],
   );
 });
+
+function hardeningLaneImportBlocks(source) {
+  return Array.from(
+    source.matchAll(
+      /import\s*{([^}]*)}\s*from\s*["'][^"']*dev_test_game_hardening_lane_cases\.mjs["'];/g,
+    ),
+    (match) => match[1],
+  );
+}
 
 test("hardening lane cases share host race/reload IDs", () => {
   assert.deepEqual(hostRaceReloadLaneIds, [
