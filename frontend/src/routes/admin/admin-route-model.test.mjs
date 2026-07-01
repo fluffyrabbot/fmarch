@@ -2170,6 +2170,11 @@ test("admin local core loop detail data carries lane rows", async () => {
       ["resolution-receipts", "passed: factional_kill receipt, target slot-2"],
       ["player-action-boundary", "passed: 0 unowned actions, direct reject InvalidTarget"],
       ["private-channel", "passed: private:mafia_day_chat, denied 403"],
+      ["stale-host-resolve", "passed: Reject PhaseLocked, role URL true, locked true"],
+      [
+        "stale-host-resolve-reload",
+        "passed: Reject PhaseLocked: phase locked; stale phase state, refresh and use current controls, locked true",
+      ],
       ["stale-host-advance", "passed: Reject InvalidTarget, role URL true, locked false"],
       [
         "stale-host-advance-reload",
@@ -2217,6 +2222,16 @@ test("admin local core loop detail data carries lane rows", async () => {
         "private-channel",
         "passed: private:mafia_day_chat, denied 403",
         "passed: private:mafia_day_chat, denied 403",
+      ],
+      [
+        "stale-host-resolve",
+        "passed: Reject PhaseLocked, role URL true, locked true",
+        "passed: Reject PhaseLocked, role URL true, locked true",
+      ],
+      [
+        "stale-host-resolve-reload",
+        "passed: Reject PhaseLocked: phase locked; stale phase state, refresh and use current controls, locked true",
+        "passed: Reject PhaseLocked: phase locked; stale phase state, refresh and use current controls, locked true",
       ],
       [
         "stale-host-advance",
@@ -2344,7 +2359,7 @@ test("admin local hardening detail data carries lane rows", async () => {
       ],
       ["stale-host-control", "passed: Reject PhaseLocked, current D02"],
       ["concurrent-host-resolve-race", "passed: ack resolve, reject PhaseLocked"],
-      ["stale-host-resolve", "passed: Reject PhaseLocked, role URL false, locked true"],
+      ["stale-host-resolve", "passed: Reject PhaseLocked, role URL true, locked true"],
       [
         "stale-cohost-deadline-reconnect-recovery",
         "passed: reconnecting -> recovered, deadline null, phase controls 0",
@@ -3133,6 +3148,7 @@ function proofRunFixture() {
     },
     "stale-host-resolve": {
       rejectError: "PhaseLocked",
+      roleUrl: "http://127.0.0.1:5173/g/midsummer/host",
       stalePhase: "D02",
       phaseId: "D02",
       locked: true,

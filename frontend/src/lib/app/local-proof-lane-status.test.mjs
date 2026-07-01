@@ -49,6 +49,30 @@ test("core loop lane status formats seeded recovery evidence", () => {
   );
   assert.equal(
     coreLoopLaneStatus({
+      id: "stale-host-resolve",
+      status: "passed",
+      evidence: {
+        rejectError: "PhaseLocked",
+        roleUrl: "http://127.0.0.1:5173/g/game-id/host",
+        locked: true,
+      },
+    }),
+    "passed: Reject PhaseLocked, role URL true, locked true",
+  );
+  assert.equal(
+    coreLoopLaneStatus({
+      id: "stale-host-resolve-reload",
+      status: "passed",
+      evidence: {
+        rejectReceipt:
+          "Reject PhaseLocked: phase locked; stale phase state, refresh and use current controls",
+        locked: true,
+      },
+    }),
+    "passed: Reject PhaseLocked: phase locked; stale phase state, refresh and use current controls, locked true",
+  );
+  assert.equal(
+    coreLoopLaneStatus({
       id: "stale-host-advance-reload",
       status: "passed",
       evidence: {
@@ -374,6 +398,24 @@ test("highlighted lane evidence maps keep browser proof assertions aligned", () 
         },
       },
       {
+        id: "stale-host-resolve",
+        status: "passed",
+        evidence: {
+          rejectError: "PhaseLocked",
+          roleUrl: "http://127.0.0.1:5173/g/game-id/host",
+          locked: true,
+        },
+      },
+      {
+        id: "stale-host-resolve-reload",
+        status: "passed",
+        evidence: {
+          rejectReceipt:
+            "Reject PhaseLocked: phase locked; stale phase state, refresh and use current controls",
+          locked: true,
+        },
+      },
+      {
         id: "stale-host-advance-reload",
         status: "passed",
         evidence: {
@@ -394,6 +436,14 @@ test("highlighted lane evidence maps keep browser proof assertions aligned", () 
   assert.equal(
     coreLoopHighlightedLaneEvidence(proofRun)["invalid-action-recovery"],
     "passed: Reject InvalidTarget, legal action visible true",
+  );
+  assert.equal(
+    coreLoopHighlightedLaneEvidence(proofRun)["stale-host-resolve"],
+    "passed: Reject PhaseLocked, role URL true, locked true",
+  );
+  assert.equal(
+    coreLoopHighlightedLaneEvidence(proofRun)["stale-host-resolve-reload"],
+    "passed: Reject PhaseLocked: phase locked; stale phase state, refresh and use current controls, locked true",
   );
   assert.equal(
     coreLoopHighlightedLaneEvidence(proofRun)["stale-host-advance"],

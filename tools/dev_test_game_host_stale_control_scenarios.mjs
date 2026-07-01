@@ -130,6 +130,16 @@ export function hostStaleAdvanceControlCase() {
   return hostPhaseStaleControlCase("advance");
 }
 
+export function hostStaleResolveControlCase() {
+  return hostPhaseStaleControlCase("resolve");
+}
+
+export const hostStaleResolveControlLaneId =
+  hostStaleResolveControlCase().baseLaneId;
+
+export const hostStaleResolveReloadLaneId =
+  hostStaleResolveControlCase().reloadLaneId;
+
 export const hostStaleAdvanceControlLaneId =
   hostStaleAdvanceControlCase().baseLaneId;
 
