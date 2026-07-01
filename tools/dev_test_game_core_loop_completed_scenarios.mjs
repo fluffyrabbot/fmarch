@@ -251,3 +251,237 @@ export function assertCompletedStaleRejectCases(cases) {
     assertProof(scenario);
   }
 }
+
+export function assertCompletedHostStaleCommandRecoveryProofCase({
+  proof,
+  expectedGame,
+  sourceRoleUrl,
+  expectedCommandKind,
+  includeEvidenceInError = false,
+}) {
+  const snapshot = proof?.recoverySnapshot;
+  if (
+    proof?.status !== "passed" ||
+    proof.clickedThroughFromRoleUrl !== true ||
+    proof.releaseReady !== false ||
+    proof.productionReady !== false ||
+    proof.rawInviteTokensVisible !== false ||
+    proof.sourceRoleUrl !== sourceRoleUrl ||
+    typeof proof.visitedRolePath !== "string" ||
+    !proof.visitedRolePath.endsWith("/host") ||
+    proof.surfaceTestId !== "host-console-surface" ||
+    proof.commandEndpoint !== "/commands" ||
+    proof.commandKind !== expectedCommandKind ||
+    proof.command?.game !== expectedGame ||
+    proof.commandResponse?.ok !== false ||
+    proof.commandResponse?.status !== 409 ||
+    proof.commandResponse?.body?.body?.kind !== "Reject" ||
+    proof.commandResponse?.body?.body?.body?.error !==
+      "GameAlreadyCompleted" ||
+    !String(proof.commandResponse?.body?.body?.body?.message ?? "").includes(
+      "Reject GameAlreadyCompleted: game already completed",
+    ) ||
+    proof.setupResyncFromSeq !== 921 ||
+    proof.setupResyncSnapshotHost?.completed !== true ||
+    proof.setupResyncSnapshotHost?.phase?.id !== "N05" ||
+    proof.recoveryResyncFromSeq !== 921 ||
+    proof.recoveryResyncSnapshotHost?.completed !== true ||
+    proof.recoveryResyncSnapshotHost?.phase?.id !== "N05" ||
+    snapshot?.checkpoint?.phaseId !== "N05" ||
+    snapshot.checkpoint.phaseState !== "open" ||
+    snapshot.checkpoint.deadlineAffordance !== "none" ||
+    !String(snapshot.checkpoint.actionState ?? "").startsWith("disabled:") ||
+    snapshot.projection?.completed !== true ||
+    snapshot.projection?.phase?.id !== "N05" ||
+    snapshot.projection?.phase?.state !== "open" ||
+    snapshot.projection?.slots?.[0]?.role_revealed !== true ||
+    snapshot.projection?.slots?.[0]?.alignment_revealed !== true ||
+    snapshot.projection?.slots?.[1]?.role_revealed !== true ||
+    snapshot.projection?.slots?.[1]?.alignment_revealed !== true ||
+    snapshot.dayVoteOutcomes?.at?.(-1)?.phaseId !== "D05" ||
+    snapshot.hostPrompts?.length !== 0 ||
+    snapshot.actionTiles?.length !== 0 ||
+    snapshot.triggerButtons?.length !== 0
+  ) {
+    throwCompletedScenarioAssertionError({
+      message: `core-loop admin proof missing completed host stale ${expectedCommandKind} recovery`,
+      evidence: proof,
+      includeEvidenceInError,
+    });
+  }
+}
+
+export function assertCompletedPlayerReloadProofCase({
+  proof,
+  sourceRoleUrl,
+  expectedSlot,
+  expectedBoundaryText,
+  expectedCommandStateEndpoint,
+  expectedNotificationsEndpoint,
+  includeEvidenceInError = false,
+}) {
+  if (
+    proof?.status !== "passed" ||
+    proof.clickedThroughFromRoleUrl !== true ||
+    proof.releaseReady !== false ||
+    proof.productionReady !== false ||
+    proof.rawInviteTokensVisible !== false ||
+    proof.targetOnlyActionVisible !== false ||
+    proof.sourceRoleUrl !== sourceRoleUrl ||
+    typeof proof.visitedRolePath !== "string" ||
+    !proof.visitedRolePath.includes("/g/") ||
+    proof.surfaceTestId !== "player-surface" ||
+    proof.resyncFromSeq !== 921 ||
+    proof.initialResyncSnapshotCommandState?.gameCompleted !== true ||
+    proof.reloadedResyncSnapshotCommandState?.gameCompleted !== true
+  ) {
+    throwCompletedScenarioAssertionError({
+      message: "core-loop admin proof missing completed player reload shell",
+      evidence: proof,
+      includeEvidenceInError,
+    });
+  }
+  for (const [label, snapshot] of [
+    ["initial", proof.initialSnapshot],
+    ["reloaded", proof.reloadedSnapshot],
+  ]) {
+    if (
+      snapshot?.checkpoint?.phaseId !== "N05" ||
+      snapshot.checkpoint.phaseState !== "open" ||
+      snapshot.checkpoint.actorSlot !== expectedSlot ||
+      snapshot.checkpoint.actionState !== "disabled:game complete" ||
+      snapshot.checkpoint.receiptState !== "idle" ||
+      snapshot.commandState?.actorSlot !== expectedSlot ||
+      snapshot.commandState?.phase?.phaseId !== "N05" ||
+      snapshot.commandState?.gameCompleted !== true ||
+      snapshot.commandState?.actions?.length !== 0 ||
+      snapshot.commandState?.voteTargets?.length !== 0 ||
+      !String(snapshot.commandState?.boundary ?? "").includes(
+        expectedBoundaryText,
+      ) ||
+      snapshot.dayVoteOutcomes?.at?.(-1)?.phaseId !== "D05" ||
+      snapshot.coldLoadEndpoints?.commandStateEndpoint !==
+        expectedCommandStateEndpoint ||
+      snapshot.coldLoadEndpoints?.notificationsEndpoint !==
+        expectedNotificationsEndpoint ||
+      snapshot.enabledMutatingButtons?.length !== 0 ||
+      !snapshot.disabledMutatingButtons?.some(
+        (button) => button.action === "submit_post" && button.disabled === true,
+      )
+    ) {
+      throwCompletedScenarioAssertionError({
+        message: `core-loop admin proof missing ${label} completed player reload closure`,
+        evidence: snapshot,
+        includeEvidenceInError,
+      });
+    }
+  }
+}
+
+export function assertStaleCompletedGamePlayerCommandRecoveryProofCase({
+  proof,
+  expectedGame,
+  sourceRoleUrl,
+  scenario,
+  includeEvidenceInError = false,
+}) {
+  if (
+    proof?.status !== "passed" ||
+    proof.clickedThroughFromRoleUrl !== true ||
+    proof.releaseReady !== false ||
+    proof.productionReady !== false ||
+    proof.rawInviteTokensVisible !== false ||
+    proof.targetOnlyReceiptVisible !== false ||
+    proof.sourceRoleUrl !== sourceRoleUrl ||
+    typeof proof.visitedRolePath !== "string" ||
+    !proof.visitedRolePath.includes("/g/") ||
+    proof.surfaceTestId !== "player-surface" ||
+    proof.clickedAction !== scenario.clickedAction ||
+    proof.commandKind !== scenario.commandKind ||
+    proof.setupResyncFromSeq !== 918 ||
+    proof.setupSnapshotCommandState?.phase?.phaseId !== "D05" ||
+    proof.command?.game !== expectedGame ||
+    proof.command.actor_slot !== "slot-7" ||
+    proof.commandStatus?.state !== "reject" ||
+    proof.commandStatus.error !== "GameAlreadyCompleted" ||
+    !String(proof.commandStatus.message ?? "").includes(
+      "Reject GameAlreadyCompleted: game already completed",
+    ) ||
+    proof.bridgePlan?.role !== "player" ||
+    proof.bridgePlan.commandKind !== scenario.commandKind ||
+    proof.bridgePlan.commandEndpoint !== "/commands" ||
+    proof.bridgePlan.finalState !== "reject" ||
+    !sameStringArray(
+      proof.bridgePlan.projectionRefreshKeys,
+      scenario.expectedRefreshKeys,
+    ) ||
+    proof.receipts?.at?.(-1)?.state !== "reject" ||
+    proof.projectionCommandState?.actorSlot !== "slot-7" ||
+    proof.projectionCommandState?.phase?.phaseId !== "N05" ||
+    proof.projectionCommandState?.gameCompleted !== true ||
+    proof.projectionCommandState?.actions?.length !== 0 ||
+    proof.projectionCommandState?.voteTargets?.length !== 0 ||
+    !String(proof.projectionCommandState?.boundary ?? "").includes(
+      scenario.rejectedBoundary,
+    ) ||
+    proof.checkpointReceiptState !== "reject:GameAlreadyCompleted" ||
+    proof.checkpointPhaseIdAfterReject !== "N05" ||
+    proof.checkpointActionStateAfterReject !== "disabled:game complete" ||
+    proof.checkpointTargetSlotsAfterReject !== "" ||
+    proof.receiptCount !== 1 ||
+    !String(proof.receiptStatusText ?? "")
+      .toLowerCase()
+      .includes("reject gamealreadycompleted")
+  ) {
+    throwCompletedScenarioAssertionError({
+      message: `core-loop admin proof missing stale completed-game ${scenario.commandKind} recovery`,
+      evidence: proof,
+      includeEvidenceInError,
+    });
+  }
+  if (scenario.commandKind === "SubmitVote") {
+    if (
+      proof.setupSnapshotCommandState?.voteTargets?.[0]?.kind !== "no_lynch" ||
+      proof.command.target !== "NoLynch"
+    ) {
+      throwCompletedScenarioAssertionError({
+        message: "core-loop admin proof missing stale completed-game vote command",
+        evidence: proof,
+        includeEvidenceInError,
+      });
+    }
+  }
+  if (scenario.commandKind === "SubmitPost") {
+    if (
+      proof.command.channel_id !== "main" ||
+      proof.command.body !== scenario.postBody ||
+      proof.stalePostBody !== scenario.postBody
+    ) {
+      throwCompletedScenarioAssertionError({
+        message: "core-loop admin proof missing stale completed-game post command",
+        evidence: proof,
+        includeEvidenceInError,
+      });
+    }
+  }
+}
+
+function throwCompletedScenarioAssertionError({
+  message,
+  evidence,
+  includeEvidenceInError,
+}) {
+  if (includeEvidenceInError) {
+    throw new Error(`${message}: ${JSON.stringify(evidence)}`);
+  }
+  throw new Error(message);
+}
+
+function sameStringArray(actual, expected) {
+  return (
+    Array.isArray(actual) &&
+    Array.isArray(expected) &&
+    actual.length === expected.length &&
+    actual.every((value, index) => value === expected[index])
+  );
+}
