@@ -34,6 +34,10 @@ import {
 import {
   seedRequiredScenarioIds,
 } from "./dev_test_game_seed_scenario_cases.mjs";
+import {
+  hostStaleControlLaneIds,
+  staleConflictMessageLaneIds,
+} from "./dev_test_game_hardening_lane_cases.mjs";
 import { adminSpineReadinessEvidenceEnv } from "./dev_test_game_admin_spine.mjs";
 import {
   backupAwareOpsEnv,
@@ -1147,42 +1151,19 @@ test("dev test-game next-action derives one local recovery command from the mani
     strategy: "stale-conflict-message-before-readiness",
     status: "covered",
     source: "target/dev-test-game/release-readiness-checklist.json",
-    requiredLaneCount: 3,
-    coveredLaneCount: 3,
+    requiredLaneCount: staleConflictMessageLaneIds.length,
+    coveredLaneCount: staleConflictMessageLaneIds.length,
     gapCount: 0,
-    laneIds: [
-      "replacement-stale-conflict-message",
-      "stale-action-conflict-message",
-      "stale-dead-action-conflict",
-    ],
+    laneIds: [...staleConflictMessageLaneIds],
   });
   assert.deepEqual(freshAction.hostStaleControlTrace, {
     strategy: "host-stale-control-before-readiness",
     status: "covered",
     source: "target/dev-test-game/release-readiness-checklist.json",
-    requiredLaneCount: 18,
-    coveredLaneCount: 18,
+    requiredLaneCount: hostStaleControlLaneIds.length,
+    coveredLaneCount: hostStaleControlLaneIds.length,
     gapCount: 0,
-    laneIds: [
-      "stale-host-publish",
-      "stale-host-lifecycle",
-      "stale-host-modkill",
-      "stale-host-prompt",
-      "stale-host-prompt-reload",
-      "stale-host-complete",
-      "stale-host-complete-reload",
-      "stale-host-complete-reconnect-recovery",
-      "stale-host-control",
-      "stale-host-resolve",
-      "stale-host-resolve-reload",
-      "stale-host-resolve-reconnect-recovery",
-      "stale-host-advance",
-      "stale-host-advance-reload",
-      "stale-host-advance-reconnect-recovery",
-      "stale-host-deadline",
-      "stale-host-deadline-reload",
-      "stale-host-deadline-reconnect-recovery",
-    ],
+    laneIds: [...hostStaleControlLaneIds],
   });
 });
 
@@ -8577,8 +8558,8 @@ function devTestGameReleaseReadinessChecklistFixture({
           status: "passed",
           evidence: "target/dev-test-game/proof-run.json",
           laneIds: staleConflictMessageMilestoneFixture().laneIds,
-          requiredLaneCount: 3,
-          coveredLaneCount: 3,
+          requiredLaneCount: staleConflictMessageLaneIds.length,
+          coveredLaneCount: staleConflictMessageLaneIds.length,
         },
         {
           id: "local-host-stale-control-milestone",
@@ -8586,8 +8567,8 @@ function devTestGameReleaseReadinessChecklistFixture({
           status: "passed",
           evidence: "target/dev-test-game/proof-run.json",
           laneIds: hostStaleControlMilestoneFixture().laneIds,
-          requiredLaneCount: 18,
-          coveredLaneCount: 18,
+          requiredLaneCount: hostStaleControlLaneIds.length,
+          coveredLaneCount: hostStaleControlLaneIds.length,
         },
         ...(includeProofGraphHandoffCheck
           ? [
@@ -8741,13 +8722,9 @@ function devTestGameReleaseReadinessChecklistFixture({
 function staleConflictMessageMilestoneFixture() {
   return {
     status: "passed",
-    laneIds: [
-      "replacement-stale-conflict-message",
-      "stale-action-conflict-message",
-      "stale-dead-action-conflict",
-    ],
-    requiredLaneCount: 3,
-    coveredLaneCount: 3,
+    laneIds: [...staleConflictMessageLaneIds],
+    requiredLaneCount: staleConflictMessageLaneIds.length,
+    coveredLaneCount: staleConflictMessageLaneIds.length,
     gapCount: 0,
   };
 }
@@ -8755,28 +8732,9 @@ function staleConflictMessageMilestoneFixture() {
 function hostStaleControlMilestoneFixture() {
   return {
     status: "passed",
-    laneIds: [
-      "stale-host-publish",
-      "stale-host-lifecycle",
-      "stale-host-modkill",
-      "stale-host-prompt",
-      "stale-host-prompt-reload",
-      "stale-host-complete",
-      "stale-host-complete-reload",
-      "stale-host-complete-reconnect-recovery",
-      "stale-host-control",
-      "stale-host-resolve",
-      "stale-host-resolve-reload",
-      "stale-host-resolve-reconnect-recovery",
-      "stale-host-advance",
-      "stale-host-advance-reload",
-      "stale-host-advance-reconnect-recovery",
-      "stale-host-deadline",
-      "stale-host-deadline-reload",
-      "stale-host-deadline-reconnect-recovery",
-    ],
-    requiredLaneCount: 18,
-    coveredLaneCount: 18,
+    laneIds: [...hostStaleControlLaneIds],
+    requiredLaneCount: hostStaleControlLaneIds.length,
+    coveredLaneCount: hostStaleControlLaneIds.length,
     gapCount: 0,
   };
 }

@@ -8,6 +8,10 @@ import {
   buildAdminRouteData,
   summarizeRecoveryGate,
 } from "./admin-route-model.mjs";
+import {
+  hostStaleControlLaneIds,
+  staleConflictMessageLaneIds,
+} from "../../../../tools/dev_test_game_hardening_lane_cases.mjs";
 
 const LOCAL_RACE_COMMAND =
   "npm run test:dev-test-game-hosted-concurrent-race-matrix";
@@ -1423,10 +1427,7 @@ test("admin route data exposes local next action as a native audit row", async (
       ...hostConcurrentRaceReloadCheckRows(),
       ...playerConcurrentActionReloadCheckRows(),
       ...cohostDeadlineRaceReloadCheckRows(),
-      ["stale-conflict-message-milestone", "3/3 covered"],
-      ["stale-conflict-message-replacement-stale-conflict-message", "covered"],
-      ["stale-conflict-message-stale-action-conflict-message", "covered"],
-      ["stale-conflict-message-stale-dead-action-conflict", "covered"],
+      ...staleConflictMessageCheckRows(),
       ...hostStaleControlCheckRows(),
     ],
   );
@@ -1697,10 +1698,7 @@ test("admin local next action detail data carries recovery check rows", async ()
       ...hostConcurrentRaceReloadCheckRows(),
       ...playerConcurrentActionReloadCheckRows(),
       ...cohostDeadlineRaceReloadCheckRows(),
-      ["stale-conflict-message-milestone", "3/3 covered"],
-      ["stale-conflict-message-replacement-stale-conflict-message", "covered"],
-      ["stale-conflict-message-stale-action-conflict-message", "covered"],
-      ["stale-conflict-message-stale-dead-action-conflict", "covered"],
+      ...staleConflictMessageCheckRows(),
       ...hostStaleControlCheckRows(),
     ],
   );
@@ -1750,10 +1748,7 @@ test("admin local next action detail data carries harness stability drift rows",
       ...hostConcurrentRaceReloadCheckRows(),
       ...playerConcurrentActionReloadCheckRows(),
       ...cohostDeadlineRaceReloadCheckRows(),
-      ["stale-conflict-message-milestone", "3/3 covered"],
-      ["stale-conflict-message-replacement-stale-conflict-message", "covered"],
-      ["stale-conflict-message-stale-action-conflict-message", "covered"],
-      ["stale-conflict-message-stale-dead-action-conflict", "covered"],
+      ...staleConflictMessageCheckRows(),
       ...hostStaleControlCheckRows(),
     ],
   );
@@ -4962,14 +4957,10 @@ function staleConflictMessageTraceFixture() {
     strategy: "stale-conflict-message-before-readiness",
     status: "covered",
     source: "target/dev-test-game/release-readiness-checklist.json",
-    requiredLaneCount: 3,
-    coveredLaneCount: 3,
+    requiredLaneCount: staleConflictMessageLaneIds.length,
+    coveredLaneCount: staleConflictMessageLaneIds.length,
     gapCount: 0,
-    laneIds: [
-      "replacement-stale-conflict-message",
-      "stale-action-conflict-message",
-      "stale-dead-action-conflict",
-    ],
+    laneIds: [...staleConflictMessageLaneIds],
   };
 }
 
@@ -4978,43 +4969,36 @@ function hostStaleControlTraceFixture() {
     strategy: "host-stale-control-before-readiness",
     status: "covered",
     source: "target/dev-test-game/release-readiness-checklist.json",
-    requiredLaneCount: 18,
-    coveredLaneCount: 18,
+    requiredLaneCount: hostStaleControlLaneIds.length,
+    coveredLaneCount: hostStaleControlLaneIds.length,
     gapCount: 0,
-    laneIds: hostStaleControlLaneIds(),
+    laneIds: [...hostStaleControlLaneIds],
   };
 }
 
 function hostStaleControlCheckRows() {
   return [
-    ["host-stale-control-milestone", "18/18 covered"],
-    ...hostStaleControlLaneIds().map((laneId) => [
+    [
+      "host-stale-control-milestone",
+      `${hostStaleControlLaneIds.length}/${hostStaleControlLaneIds.length} covered`,
+    ],
+    ...hostStaleControlLaneIds.map((laneId) => [
       `host-stale-control-${laneId}`,
       "covered",
     ]),
   ];
 }
 
-function hostStaleControlLaneIds() {
+function staleConflictMessageCheckRows() {
   return [
-    "stale-host-publish",
-    "stale-host-lifecycle",
-    "stale-host-modkill",
-    "stale-host-prompt",
-    "stale-host-prompt-reload",
-    "stale-host-complete",
-    "stale-host-complete-reload",
-    "stale-host-complete-reconnect-recovery",
-    "stale-host-control",
-    "stale-host-resolve",
-    "stale-host-resolve-reload",
-    "stale-host-resolve-reconnect-recovery",
-    "stale-host-advance",
-    "stale-host-advance-reload",
-    "stale-host-advance-reconnect-recovery",
-    "stale-host-deadline",
-    "stale-host-deadline-reload",
-    "stale-host-deadline-reconnect-recovery",
+    [
+      "stale-conflict-message-milestone",
+      `${staleConflictMessageLaneIds.length}/${staleConflictMessageLaneIds.length} covered`,
+    ],
+    ...staleConflictMessageLaneIds.map((laneId) => [
+      `stale-conflict-message-${laneId}`,
+      "covered",
+    ]),
   ];
 }
 
@@ -5149,8 +5133,8 @@ function releaseReadinessChecklistFixture() {
           status: "passed",
           evidence: "target/dev-test-game/proof-run.json",
           laneIds: staleConflictMessageMilestoneFixture().laneIds,
-          requiredLaneCount: 3,
-          coveredLaneCount: 3,
+          requiredLaneCount: staleConflictMessageLaneIds.length,
+          coveredLaneCount: staleConflictMessageLaneIds.length,
         },
         {
           id: "local-host-stale-control-milestone",
@@ -5158,8 +5142,8 @@ function releaseReadinessChecklistFixture() {
           status: "passed",
           evidence: "target/dev-test-game/proof-run.json",
           laneIds: hostStaleControlMilestoneFixture().laneIds,
-          requiredLaneCount: 18,
-          coveredLaneCount: 18,
+          requiredLaneCount: hostStaleControlLaneIds.length,
+          coveredLaneCount: hostStaleControlLaneIds.length,
         },
         {
           id: "local-proof-graph-admin-role-handoffs",
@@ -5235,13 +5219,9 @@ function releaseReadinessChecklistFixture() {
 function staleConflictMessageMilestoneFixture() {
   return {
     status: "passed",
-    laneIds: [
-      "replacement-stale-conflict-message",
-      "stale-action-conflict-message",
-      "stale-dead-action-conflict",
-    ],
-    requiredLaneCount: 3,
-    coveredLaneCount: 3,
+    laneIds: [...staleConflictMessageLaneIds],
+    requiredLaneCount: staleConflictMessageLaneIds.length,
+    coveredLaneCount: staleConflictMessageLaneIds.length,
     gapCount: 0,
   };
 }
@@ -5249,9 +5229,9 @@ function staleConflictMessageMilestoneFixture() {
 function hostStaleControlMilestoneFixture() {
   return {
     status: "passed",
-    laneIds: hostStaleControlLaneIds(),
-    requiredLaneCount: 18,
-    coveredLaneCount: 18,
+    laneIds: [...hostStaleControlLaneIds],
+    requiredLaneCount: hostStaleControlLaneIds.length,
+    coveredLaneCount: hostStaleControlLaneIds.length,
     gapCount: 0,
   };
 }
