@@ -13,6 +13,9 @@ import {
   seededCoreLoopPlayerSurfaceFixture,
 } from "./dev_test_game_core_loop_proof_fixtures.mjs";
 import {
+  postDayThreeResolutionSurfaceFixture,
+} from "./dev_test_game_core_loop_surface_fixtures.mjs";
+import {
   assertCompletedGameEndgameSurfaceProof,
   assertCompletedGameEndgameSurfaceAssertionCases,
   assertCompletedGameEndgameTransition,
@@ -338,6 +341,24 @@ test("core-loop proof fixture module derives seeded host proof shells", () => {
   });
   assert.deepEqual(proof.completeProof, { id: "complete-game-proof" });
   assert.equal(proof.rawInviteTokensVisible, false);
+});
+
+test("core-loop surface fixture module builds post-Day-3 resolution surface", () => {
+  const surface = postDayThreeResolutionSurfaceFixture({ game: "game-a" });
+
+  assert.equal(surface.sourceHostRoleUrl, "http://127.0.0.1:5173/g/game-a/host");
+  assert.equal(surface.sourceActionPlayerRoleUrl, "http://127.0.0.1:5173/g/game-a");
+  assert.equal(
+    surface.sourceTargetRoleUrl,
+    "http://127.0.0.1:5173/g/game-a?private=notification-1",
+  );
+  assert.equal(surface.targetReceiptProof.targetSlot, "slot-4");
+  assert.equal(surface.hostAdvanceProof.advanceProof.commandKind, "AdvancePhase");
+  assert.equal(surface.hostAdvanceProof.setupSnapshotHost.phase.id, "D03");
+  assert.equal(
+    surface.actionPlayerNightThreeProof.projectionCommandState.phase.phaseId,
+    "N03",
+  );
 });
 
 test("completed-game scenario module derives shared assertion cases", () => {
