@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import { test } from "node:test";
 import {
   replacementPrivatePostHardeningLaneIds,
@@ -6,7 +7,7 @@ import {
   replacementPrivatePostRecoveryLaneIds,
   replacementStalePrivatePostAfterResolveScenario,
   replacementStalePrivatePostAfterCompleteScenario,
-} from "./dev_test_game_replacement_private_scenarios.mjs";
+} from "./dev_test_game_replacement_private_scenario_cases.mjs";
 
 test("replacement private scenario module groups private-post race and recovery lanes", () => {
   assert.deepEqual(replacementPrivatePostRaceLaneIds, [
@@ -64,4 +65,18 @@ test("replacement completed private-post scenario carries shared command facts",
     outcomeSummary:
       "Rowan's stale replacement private post rejected GameAlreadyCompleted after host completion and reloaded into completed private-channel truth",
   });
+});
+
+test("replacement private live harness imports extracted scenario cases", async () => {
+  const source = await readFile("tools/dev_test_game.mjs", "utf8");
+  assert(
+    source.includes("./dev_test_game_replacement_private_scenario_cases.mjs"),
+    "dev-test-game live harness should import replacement private cases from the extracted case module",
+  );
+  assert(
+    !source.includes("./dev_test_game_replacement_private_scenarios.mjs"),
+    "dev-test-game live harness should not import replacement private cases through the compatibility facade",
+  );
+  assert(source.includes("replacementStalePrivatePostAfterResolveScenario"));
+  assert(source.includes("replacementStalePrivatePostAfterCompleteScenario"));
 });
