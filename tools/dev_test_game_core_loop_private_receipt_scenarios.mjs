@@ -193,6 +193,13 @@ export function privateReceiptScenarios() {
 export function completedPrivateChannelReloadScenario() {
   return {
     transitionToken: "private:role-pm:reload:complete",
+    channelId: "role-pm",
+    actorSlot: "slot-7",
+    actorStatus: "alive",
+    completedPhaseId: "N05",
+    completedPhaseState: "open",
+    completedActionState: "disabled:game complete",
+    completedThreadBody: "Completed private channel remains readable.",
     resyncFromSeq: 921,
     routeBoundary:
       "Seeded browser completed private-channel role URL reloaded into durable endgame controls.",
@@ -248,6 +255,13 @@ export function stalePrivateChannelPostPhaseLockedScenario() {
 export function staleCompletedPrivatePostScenario() {
   return {
     transitionToken: "private:submit_post:reject:GameAlreadyCompleted",
+    clickedAction: "submit_post",
+    commandKind: "SubmitPost",
+    channelId: "role-pm",
+    actorSlot: "slot-7",
+    commandError: "GameAlreadyCompleted",
+    commandMessage: "Reject GameAlreadyCompleted: game already completed",
+    expectedReceiptStatusFragment: "reject gamealreadycompleted",
     stalePostBody: "Stale completed private proof post",
     expectedRefreshKeys: [
       "thread",
@@ -260,6 +274,42 @@ export function staleCompletedPrivatePostScenario() {
     staleBoundary:
       "Seeded browser stale completed private-channel proof opened before completion refresh.",
     expectedBoundary: "GameAlreadyCompleted recovery refreshed role-pm controls",
+  };
+}
+
+export function completedPrivateChannelSnapshot({
+  scenario = completedPrivateChannelReloadScenario(),
+  receiptState = "idle",
+  boundary = scenario.routeBoundary,
+} = {}) {
+  return {
+    checkpoint: {
+      phaseId: scenario.completedPhaseId,
+      phaseState: scenario.completedPhaseState,
+      actorSlot: scenario.actorSlot,
+      actionState: scenario.completedActionState,
+      receiptState,
+    },
+    commandPanelChannelId: scenario.channelId,
+    channelContext: {
+      channelId: scenario.channelId,
+      actorSlot: scenario.actorSlot,
+      capabilityLabel: `ChannelMember(${scenario.channelId})`,
+      actorStatus: scenario.actorStatus,
+    },
+    commandState: {
+      actorSlot: scenario.actorSlot,
+      gameCompleted: true,
+      actions: [],
+      voteTargets: [],
+      boundary,
+    },
+    threadPostBodies: [scenario.completedThreadBody],
+    buttons: [
+      { action: "withdraw_vote", disabled: true, reason: "" },
+      { action: "submit_post", disabled: true, reason: "" },
+    ],
+    enabledMutatingButtons: [],
   };
 }
 

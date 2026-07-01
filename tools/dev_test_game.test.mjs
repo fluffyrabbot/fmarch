@@ -24,6 +24,12 @@ import {
   staleCompletedGamePlayerCommandCases,
 } from "./dev_test_game_core_loop_completed_scenarios.mjs";
 import {
+  completedPrivateChannelReloadScenario,
+  completedPrivateChannelSnapshot,
+  completedPrivateChannelTransition,
+  staleCompletedPrivatePostScenario,
+} from "./dev_test_game_core_loop_private_receipt_scenarios.mjs";
+import {
   assertDevTestGameOpsArtifacts,
   buildDevTestGameOpsArtifacts,
 } from "./dev_test_game_ops_artifacts.mjs";
@@ -12195,48 +12201,16 @@ function privateChannelRoleSurfaceFixture() {
     `http://127.0.0.1:5173/g/${game}/c/role-pm?private=notification-1`;
   const visitedRolePath =
     `/g/${game}/c/role-pm?private=notification-1`;
-  const completedPrivateReloadSnapshot = {
-    checkpoint: {
-      phaseId: "N05",
-      phaseState: "open",
-      actorSlot: "slot-7",
-      actionState: "disabled:game complete",
-      receiptState: "idle",
-    },
-    commandPanelChannelId: "role-pm",
-    channelContext: {
-      channelId: "role-pm",
-      actorSlot: "slot-7",
-      capabilityLabel: "ChannelMember(role-pm)",
-      actorStatus: "alive",
-    },
-    commandState: {
-      actorSlot: "slot-7",
-      gameCompleted: true,
-      actions: [],
-      voteTargets: [],
-      boundary:
-        "Seeded browser completed private-channel role URL reloaded into durable endgame controls.",
-    },
-    threadPostBodies: ["Completed private channel remains readable."],
-    buttons: [
-      { action: "withdraw_vote", disabled: true, reason: "" },
-      { action: "submit_post", disabled: true, reason: "" },
-    ],
-    enabledMutatingButtons: [],
-  };
-  const completedPrivateRejectSnapshot = {
-    ...completedPrivateReloadSnapshot,
-    checkpoint: {
-      ...completedPrivateReloadSnapshot.checkpoint,
-      receiptState: "reject:GameAlreadyCompleted",
-    },
-    commandState: {
-      ...completedPrivateReloadSnapshot.commandState,
-      boundary:
-        "Seeded browser completed private-channel GameAlreadyCompleted recovery refreshed role-pm controls.",
-    },
-  };
+  const completedPrivateReloadScenario = completedPrivateChannelReloadScenario();
+  const staleCompletedPrivateScenario = staleCompletedPrivatePostScenario();
+  const completedPrivateReloadSnapshot = completedPrivateChannelSnapshot({
+    scenario: completedPrivateReloadScenario,
+  });
+  const completedPrivateRejectSnapshot = completedPrivateChannelSnapshot({
+    scenario: completedPrivateReloadScenario,
+    receiptState: `reject:${staleCompletedPrivateScenario.commandError}`,
+    boundary: staleCompletedPrivateScenario.routeBoundary,
+  });
   return {
     status: "passed",
     sourceRoleUrl: roleUrl,
@@ -12379,15 +12353,14 @@ function privateChannelRoleSurfaceFixture() {
       sourceRoleUrl: roleUrl,
       visitedRolePath,
       clickedThroughFromRoleUrl: true,
-      transition:
-        "private:role-pm:reload:complete -> private:submit_post:reject:GameAlreadyCompleted",
+      transition: completedPrivateChannelTransition(),
       reloadProof: {
         status: "passed",
         sourceRoleUrl: roleUrl,
         visitedRolePath,
         surfaceTestId: "player-surface",
         clickedThroughFromRoleUrl: true,
-        resyncFromSeq: 921,
+        resyncFromSeq: completedPrivateReloadScenario.resyncFromSeq,
         initialResyncSnapshotCommandState:
           completedPrivateReloadSnapshot.commandState,
         reloadedResyncSnapshotCommandState:
@@ -12403,47 +12376,43 @@ function privateChannelRoleSurfaceFixture() {
         sourceRoleUrl: roleUrl,
         visitedRolePath,
         clickedThroughFromRoleUrl: true,
-        clickedAction: "submit_post",
-        commandKind: "SubmitPost",
+        clickedAction: staleCompletedPrivateScenario.clickedAction,
+        commandKind: staleCompletedPrivateScenario.commandKind,
         command: {
           game,
-          channel_id: "role-pm",
-          actor_slot: "slot-7",
-          body: "Stale completed private proof post",
+          channel_id: staleCompletedPrivateScenario.channelId,
+          actor_slot: staleCompletedPrivateScenario.actorSlot,
+          body: staleCompletedPrivateScenario.stalePostBody,
         },
         commandStatus: {
           state: "reject",
-          error: "GameAlreadyCompleted",
-          message: "Reject GameAlreadyCompleted: game already completed",
+          error: staleCompletedPrivateScenario.commandError,
+          message: staleCompletedPrivateScenario.commandMessage,
         },
         bridgePlan: {
           role: "player",
-          commandKind: "SubmitPost",
+          commandKind: staleCompletedPrivateScenario.commandKind,
           commandEndpoint: "/commands",
           finalState: "reject",
-          projectionRefreshKeys: [
-            "thread",
-            "votecount",
-            "commandState",
-            "dayVoteOutcomes",
-          ],
+          projectionRefreshKeys: staleCompletedPrivateScenario.expectedRefreshKeys,
         },
         receipts: [
           {
-            actionId: "submit_post",
+            actionId: staleCompletedPrivateScenario.clickedAction,
             state: "reject",
-            message: "Reject GameAlreadyCompleted: game already completed",
+            message: staleCompletedPrivateScenario.commandMessage,
             current: true,
           },
         ],
-        stalePrivatePostBody: "Stale completed private proof post",
+        stalePrivatePostBody: staleCompletedPrivateScenario.stalePostBody,
         submitDisabledBeforeReject: false,
         snapshotAfterReject: completedPrivateRejectSnapshot,
         snapshotAfterReload: completedPrivateRejectSnapshot,
         reloadedResyncSnapshotCommandState:
           completedPrivateRejectSnapshot.commandState,
-        receiptStatusText: "Reject GameAlreadyCompleted: game already completed",
-        receiptRefreshKeys: "thread,votecount,commandState,dayVoteOutcomes",
+        receiptStatusText: staleCompletedPrivateScenario.commandMessage,
+        receiptRefreshKeys:
+          staleCompletedPrivateScenario.expectedRefreshKeys.join(","),
         rawInviteTokensVisible: false,
       },
       releaseReady: false,

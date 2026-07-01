@@ -5164,21 +5164,21 @@ function assertCoreLoopStaleCompletedPrivatePostRecoveryProof({
     proof.rawInviteTokensVisible !== false ||
     proof.sourceRoleUrl !== sourceRoleUrl ||
     proof.visitedRolePath !== visitedRolePath ||
-    proof.clickedAction !== "submit_post" ||
-    proof.commandKind !== "SubmitPost" ||
+    proof.clickedAction !== scenario.clickedAction ||
+    proof.commandKind !== scenario.commandKind ||
     proof.command?.game !== expectedGame ||
-    proof.command.channel_id !== "role-pm" ||
-    proof.command.actor_slot !== "slot-7" ||
+    proof.command.channel_id !== scenario.channelId ||
+    proof.command.actor_slot !== scenario.actorSlot ||
     proof.command.body !== proof.stalePrivatePostBody ||
     proof.stalePrivatePostBody !== scenario.stalePostBody ||
     proof.submitDisabledBeforeReject !== false ||
     proof.commandStatus?.state !== "reject" ||
-    proof.commandStatus.error !== "GameAlreadyCompleted" ||
+    proof.commandStatus.error !== scenario.commandError ||
     !String(proof.commandStatus.message ?? "").includes(
-      "Reject GameAlreadyCompleted: game already completed",
+      scenario.commandMessage,
     ) ||
     proof.bridgePlan?.role !== "player" ||
-    proof.bridgePlan.commandKind !== "SubmitPost" ||
+    proof.bridgePlan.commandKind !== scenario.commandKind ||
     proof.bridgePlan.commandEndpoint !== "/commands" ||
     proof.bridgePlan.finalState !== "reject" ||
     !sameStringArray(
@@ -5188,7 +5188,7 @@ function assertCoreLoopStaleCompletedPrivatePostRecoveryProof({
     proof.receipts?.at?.(-1)?.state !== "reject" ||
     !String(proof.receiptStatusText ?? "")
       .toLowerCase()
-      .includes("reject gamealreadycompleted") ||
+      .includes(scenario.expectedReceiptStatusFragment) ||
     proof.receiptRefreshKeys !== scenario.expectedRefreshKeys.join(",") ||
     proof.reloadedResyncSnapshotCommandState?.gameCompleted !== true
   ) {
@@ -5210,22 +5210,24 @@ function assertCoreLoopCompletedPrivateChannelSnapshot({
   expectedBoundary,
   rejectedBody = null,
 }) {
+  const scenario = completedPrivateChannelReloadScenario();
   if (
-    snapshot?.checkpoint?.phaseId !== "N05" ||
-    snapshot.checkpoint.phaseState !== "open" ||
-    snapshot.checkpoint.actorSlot !== "slot-7" ||
-    snapshot.checkpoint.actionState !== "disabled:game complete" ||
-    snapshot.commandPanelChannelId !== "role-pm" ||
-    snapshot.channelContext?.channelId !== "role-pm" ||
-    snapshot.channelContext?.actorSlot !== "slot-7" ||
-    snapshot.channelContext?.capabilityLabel !== "ChannelMember(role-pm)" ||
-    snapshot.channelContext?.actorStatus !== "alive" ||
-    snapshot.commandState?.actorSlot !== "slot-7" ||
+    snapshot?.checkpoint?.phaseId !== scenario.completedPhaseId ||
+    snapshot.checkpoint.phaseState !== scenario.completedPhaseState ||
+    snapshot.checkpoint.actorSlot !== scenario.actorSlot ||
+    snapshot.checkpoint.actionState !== scenario.completedActionState ||
+    snapshot.commandPanelChannelId !== scenario.channelId ||
+    snapshot.channelContext?.channelId !== scenario.channelId ||
+    snapshot.channelContext?.actorSlot !== scenario.actorSlot ||
+    snapshot.channelContext?.capabilityLabel !==
+      `ChannelMember(${scenario.channelId})` ||
+    snapshot.channelContext?.actorStatus !== scenario.actorStatus ||
+    snapshot.commandState?.actorSlot !== scenario.actorSlot ||
     snapshot.commandState?.gameCompleted !== true ||
     snapshot.commandState?.actions?.length !== 0 ||
     snapshot.commandState?.voteTargets?.length !== 0 ||
     !String(snapshot.commandState?.boundary ?? "").includes(expectedBoundary) ||
-    !snapshot.threadPostBodies?.includes("Completed private channel remains readable.") ||
+    !snapshot.threadPostBodies?.includes(scenario.completedThreadBody) ||
     snapshot.enabledMutatingButtons?.length !== 0 ||
     !snapshot.buttons?.some(
       (button) => button.action === "submit_post" && button.disabled === true,

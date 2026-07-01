@@ -8116,6 +8116,7 @@ async function proveCompletedPrivateChannelReload({
 }) {
   const page = await browser.newPage({ viewport: { width: 1024, height: 768 } });
   const visitedRolePath = rolePathFromUrl(roleUrl);
+  const scenario = completedPrivateChannelReloadScenario();
   try {
     await installCompletedPrivateChannelBrowserRoutes(page);
     await page.context().addCookies([
@@ -8141,12 +8142,12 @@ async function proveCompletedPrivateChannelReload({
       return window.__fmarchTriggerPlayerResync(921);
     });
     await page.waitForFunction(
-      () =>
+      (completedThreadBody) =>
         window.__fmarchPlayerProjection?.commandState?.gameCompleted === true &&
         window.__fmarchPlayerProjection?.thread?.posts?.some?.((post) =>
-          String(post?.body ?? "").includes("Completed private channel remains readable"),
+          String(post?.body ?? "").includes(completedThreadBody),
         ) === true,
-      null,
+      scenario.completedThreadBody,
       { timeout: 15000 },
     );
     const initialSnapshot = await collectCompletedPrivateChannelSnapshot(page);
@@ -8162,12 +8163,12 @@ async function proveCompletedPrivateChannelReload({
       return window.__fmarchTriggerPlayerResync(921);
     });
     await page.waitForFunction(
-      () =>
+      (completedThreadBody) =>
         window.__fmarchPlayerProjection?.commandState?.gameCompleted === true &&
         window.__fmarchPlayerProjection?.thread?.posts?.some?.((post) =>
-          String(post?.body ?? "").includes("Completed private channel remains readable"),
+          String(post?.body ?? "").includes(completedThreadBody),
         ) === true,
-      null,
+      scenario.completedThreadBody,
       { timeout: 15000 },
     );
     const reloadedSnapshot = await collectCompletedPrivateChannelSnapshot(page);
@@ -8229,7 +8230,7 @@ async function provePrivateChannelStaleCompletedPostRecovery({
       timeout: 15000,
     });
     const submitButton = page.locator(
-      '[data-testid="player-composer"] button[data-action="submit_post"]',
+      `[data-testid="player-composer"] button[data-action="${scenario.clickedAction}"]`,
     );
     await submitButton.waitFor({ state: "visible", timeout: 15000 });
     const submitDisabledBeforeReject = await submitButton.isDisabled();
@@ -8238,16 +8239,21 @@ async function provePrivateChannelStaleCompletedPostRecovery({
     );
     await submitButton.click();
     await page.waitForFunction(
-      () =>
+      ({ commandError, commandKind }) =>
         window.__fmarchPlayerCommandStatus?.state === "reject" &&
-        window.__fmarchPlayerCommandStatus?.error === "GameAlreadyCompleted" &&
+        window.__fmarchPlayerCommandStatus?.error === commandError &&
         window.__fmarchPlayerProjection?.commandState?.gameCompleted === true &&
         window.__fmarchPlayerCommandDispatchBridgePlan?.commandKind ===
-          "SubmitPost",
-      null,
+          commandKind,
+      {
+        commandError: scenario.commandError,
+        commandKind: scenario.commandKind,
+      },
       { timeout: 15000 },
     );
-    const stalePostReceipt = page.getByTestId("player-command-receipt-submit_post");
+    const stalePostReceipt = page.getByTestId(
+      `player-command-receipt-${scenario.clickedAction}`,
+    );
     await stalePostReceipt.waitFor({ state: "visible", timeout: 15000 });
     const commandStatus = await page.evaluate(() => window.__fmarchPlayerCommandStatus);
     const bridgePlan = await page.evaluate(
@@ -8287,8 +8293,8 @@ async function provePrivateChannelStaleCompletedPostRecovery({
       sourceRoleUrl: String(roleUrl),
       visitedRolePath,
       clickedThroughFromRoleUrl: true,
-      clickedAction: "submit_post",
-      commandKind: command === null ? null : "SubmitPost",
+      clickedAction: scenario.clickedAction,
+      commandKind: command === null ? null : scenario.commandKind,
       command,
       commandStatus,
       bridgePlan,
@@ -8495,7 +8501,7 @@ async function installStaleCompletedPrivateChannelBrowserRoutes(
     const commandEnvelope = route.request().postDataJSON();
     const command = commandEnvelope?.body?.body?.command;
     commandRequests.push(command);
-    if (command?.SubmitPost !== undefined) {
+    if (command?.[scenario.commandKind] !== undefined) {
       rejected = true;
       await fulfillJson(
         route,
@@ -8505,9 +8511,9 @@ async function installStaleCompletedPrivateChannelBrowserRoutes(
           body: {
             kind: "Reject",
             body: {
-              error: "GameAlreadyCompleted",
+              error: scenario.commandError,
               retryable: false,
-              message: "Reject GameAlreadyCompleted: game already completed",
+              message: scenario.commandMessage,
             },
           },
         },
@@ -8526,7 +8532,7 @@ async function installStaleCompletedPrivateChannelBrowserRoutes(
           body: {
             error: "WrongCompletedPrivateChannelProofCommand",
             retryable: false,
-            message: "completed private channel stale proof only accepts SubmitPost",
+            message: `completed private channel stale proof only accepts ${scenario.commandKind}`,
           },
         },
       },
@@ -8617,6 +8623,7 @@ async function installCompletedPrivateChannelProjectionRoutes(page) {
 }
 
 function completedPrivateChannelThread() {
+  const scenario = completedPrivateChannelReloadScenario();
   return {
     next_before_seq: null,
     posts: [
@@ -8625,7 +8632,7 @@ function completedPrivateChannelThread() {
         stream_seq: 921,
         author_slot: "host",
         author_user: "host_h",
-        body: "Completed private channel remains readable.",
+        body: scenario.completedThreadBody,
         occurred_at: 1782619200,
       },
     ],
@@ -13087,21 +13094,21 @@ function assertStaleCompletedPrivatePostRecoveryProof({
     proof.rawInviteTokensVisible !== false ||
     proof.sourceRoleUrl !== sourceRoleUrl ||
     proof.visitedRolePath !== visitedRolePath ||
-    proof.clickedAction !== "submit_post" ||
-    proof.commandKind !== "SubmitPost" ||
+    proof.clickedAction !== scenario.clickedAction ||
+    proof.commandKind !== scenario.commandKind ||
     proof.command?.game !== expectedGame ||
-    proof.command.channel_id !== "role-pm" ||
-    proof.command.actor_slot !== "slot-7" ||
+    proof.command.channel_id !== scenario.channelId ||
+    proof.command.actor_slot !== scenario.actorSlot ||
     proof.command.body !== proof.stalePrivatePostBody ||
     proof.stalePrivatePostBody !== scenario.stalePostBody ||
     proof.submitDisabledBeforeReject !== false ||
     proof.commandStatus?.state !== "reject" ||
-    proof.commandStatus.error !== "GameAlreadyCompleted" ||
+    proof.commandStatus.error !== scenario.commandError ||
     !String(proof.commandStatus.message ?? "").includes(
-      "Reject GameAlreadyCompleted: game already completed",
+      scenario.commandMessage,
     ) ||
     proof.bridgePlan?.role !== "player" ||
-    proof.bridgePlan.commandKind !== "SubmitPost" ||
+    proof.bridgePlan.commandKind !== scenario.commandKind ||
     proof.bridgePlan.commandEndpoint !== "/commands" ||
     proof.bridgePlan.finalState !== "reject" ||
     !sameStringArray(
@@ -13111,7 +13118,7 @@ function assertStaleCompletedPrivatePostRecoveryProof({
     proof.receipts?.at?.(-1)?.state !== "reject" ||
     !String(proof.receiptStatusText ?? "")
       .toLowerCase()
-      .includes("reject gamealreadycompleted") ||
+      .includes(scenario.expectedReceiptStatusFragment) ||
     proof.receiptRefreshKeys !== scenario.expectedRefreshKeys.join(",") ||
     proof.reloadedResyncSnapshotCommandState?.gameCompleted !== true
   ) {
@@ -13135,22 +13142,24 @@ function assertCompletedPrivateChannelSnapshot({
   expectedBoundary,
   rejectedBody = null,
 }) {
+  const scenario = completedPrivateChannelReloadScenario();
   if (
-    snapshot?.checkpoint?.phaseId !== "N05" ||
-    snapshot.checkpoint.phaseState !== "open" ||
-    snapshot.checkpoint.actorSlot !== "slot-7" ||
-    snapshot.checkpoint.actionState !== "disabled:game complete" ||
-    snapshot.commandPanelChannelId !== "role-pm" ||
-    snapshot.channelContext?.channelId !== "role-pm" ||
-    snapshot.channelContext?.actorSlot !== "slot-7" ||
-    snapshot.channelContext?.capabilityLabel !== "ChannelMember(role-pm)" ||
-    snapshot.channelContext?.actorStatus !== "alive" ||
-    snapshot.commandState?.actorSlot !== "slot-7" ||
+    snapshot?.checkpoint?.phaseId !== scenario.completedPhaseId ||
+    snapshot.checkpoint.phaseState !== scenario.completedPhaseState ||
+    snapshot.checkpoint.actorSlot !== scenario.actorSlot ||
+    snapshot.checkpoint.actionState !== scenario.completedActionState ||
+    snapshot.commandPanelChannelId !== scenario.channelId ||
+    snapshot.channelContext?.channelId !== scenario.channelId ||
+    snapshot.channelContext?.actorSlot !== scenario.actorSlot ||
+    snapshot.channelContext?.capabilityLabel !==
+      `ChannelMember(${scenario.channelId})` ||
+    snapshot.channelContext?.actorStatus !== scenario.actorStatus ||
+    snapshot.commandState?.actorSlot !== scenario.actorSlot ||
     snapshot.commandState?.gameCompleted !== true ||
     snapshot.commandState?.actions?.length !== 0 ||
     snapshot.commandState?.voteTargets?.length !== 0 ||
     !String(snapshot.commandState?.boundary ?? "").includes(expectedBoundary) ||
-    !snapshot.threadPostBodies?.includes("Completed private channel remains readable.") ||
+    !snapshot.threadPostBodies?.includes(scenario.completedThreadBody) ||
     snapshot.enabledMutatingButtons?.length !== 0 ||
     !snapshot.buttons?.some(
       (button) => button.action === "submit_post" && button.disabled === true,
