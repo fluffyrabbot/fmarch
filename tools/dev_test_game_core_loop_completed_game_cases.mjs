@@ -26,34 +26,55 @@ export {
   staleCompletedGamePlayerCommandCases,
 } from "./dev_test_game_core_loop_completed_recovery_cases.mjs";
 
-export function completedGameEndgameTransitionTokens() {
+export function completedGameEndgameScenarioCaseFamilies({
+  hostStaleCommandCases = completedHostStaleCommandCases(),
+  playerReloadCases = completedPlayerReloadCases(),
+  deadPlayerStaleVoteCase = completedDeadPlayerStaleVoteCase(),
+  playerStaleCommandCases = staleCompletedGamePlayerCommandCases(),
+} = {}) {
+  return {
+    completedHostStaleCommandCases: hostStaleCommandCases,
+    completedPlayerReloadCases: playerReloadCases,
+    completedDeadPlayerStaleVoteCase: deadPlayerStaleVoteCase,
+    staleCompletedGamePlayerCommandCases: playerStaleCommandCases,
+  };
+}
+
+export function completedGameEndgameTransitionTokens({
+  scenarioFamilies = completedGameEndgameScenarioCaseFamilies(),
+} = {}) {
   return [
     "host:N05:complete_game:ack:921",
     "host:reload:complete",
-    ...completedHostStaleCommandCases().map(
+    ...scenarioFamilies.completedHostStaleCommandCases.map(
       (scenario) => scenario.transitionToken,
     ),
     "actionPlayer:endgame:complete",
-    ...completedPlayerReloadCases().map((scenario) => scenario.transitionToken),
-    completedDeadPlayerStaleVoteCase().transitionToken,
-    ...staleCompletedGamePlayerCommandCases().map(
+    ...scenarioFamilies.completedPlayerReloadCases.map(
+      (scenario) => scenario.transitionToken,
+    ),
+    scenarioFamilies.completedDeadPlayerStaleVoteCase.transitionToken,
+    ...scenarioFamilies.staleCompletedGamePlayerCommandCases.map(
       (scenario) => scenario.transitionToken,
     ),
   ];
 }
 
-export function completedGameEndgameTransition() {
-  return completedGameEndgameTransitionTokens().join(" -> ");
+export function completedGameEndgameTransition({
+  scenarioFamilies = completedGameEndgameScenarioCaseFamilies(),
+} = {}) {
+  return completedGameEndgameTransitionTokens({ scenarioFamilies }).join(" -> ");
 }
 
 export function assertCompletedGameEndgameTransition({
   transition,
+  scenarioFamilies = completedGameEndgameScenarioCaseFamilies(),
   failureMessage = "completed-game endgame transition missing shared scenario tokens",
 }) {
   const transitionText = String(transition ?? "");
-  const missingTokens = completedGameEndgameTransitionTokens().filter(
-    (token) => !transitionText.includes(token),
-  );
+  const missingTokens = completedGameEndgameTransitionTokens({
+    scenarioFamilies,
+  }).filter((token) => !transitionText.includes(token));
   if (missingTokens.length > 0) {
     throw new Error(`${failureMessage}: ${missingTokens.join(", ")}`);
   }
@@ -68,6 +89,7 @@ export function completedGameEndgameStaleRejectAssertionCases({
   assertCompletedHostStaleCommandRecoveryProof,
   assertCompletedDeadPlayerStaleVoteRecoveryProof,
   assertStaleCompletedGamePlayerCommandRecoveryProof,
+  scenarioFamilies = completedGameEndgameScenarioCaseFamilies(),
 }) {
   return [
     ...completedHostStaleCommandAssertionCases({
@@ -75,18 +97,21 @@ export function completedGameEndgameStaleRejectAssertionCases({
       expectedGame,
       sourceHostRoleUrl,
       assertCompletedHostStaleCommandRecoveryProof,
+      cases: scenarioFamilies.completedHostStaleCommandCases,
     }),
     completedDeadPlayerStaleVoteAssertionCase({
       completedGameEndgameSurface,
       expectedGame,
       sourceRoleUrl: sourceDeadPlayerRoleUrl,
       assertCompletedDeadPlayerStaleVoteRecoveryProof,
+      scenario: scenarioFamilies.completedDeadPlayerStaleVoteCase,
     }),
     ...staleCompletedGamePlayerCommandAssertionCases({
       completedGameEndgameSurface,
       expectedGame,
       sourceActionPlayerRoleUrl,
       assertStaleCompletedGamePlayerCommandRecoveryProof,
+      cases: scenarioFamilies.staleCompletedGamePlayerCommandCases,
     }),
   ];
 }
@@ -234,6 +259,7 @@ export function completedGameEndgameSurfaceAssertionCases({
   assertCompletedDeadPlayerStaleVoteRecoveryProof,
   assertCompletedPlayerReloadProof,
   assertStaleCompletedGamePlayerCommandRecoveryProof,
+  scenarioFamilies = completedGameEndgameScenarioCaseFamilies(),
 }) {
   return [
     {
@@ -255,7 +281,7 @@ export function completedGameEndgameSurfaceAssertionCases({
     ...completedPlayerReloadAssertionCases({
       completedGameEndgameSurface,
       expectedGame,
-      cases: completedPlayerReloadCases(),
+      cases: scenarioFamilies.completedPlayerReloadCases,
     }).map((scenario) => ({
       assertProof: assertCompletedPlayerReloadProof,
       ...scenario,
@@ -274,6 +300,7 @@ export function completedGameEndgameSurfaceAssertionCases({
       assertCompletedHostStaleCommandRecoveryProof,
       assertCompletedDeadPlayerStaleVoteRecoveryProof,
       assertStaleCompletedGamePlayerCommandRecoveryProof,
+      scenarioFamilies,
     }),
   ];
 }

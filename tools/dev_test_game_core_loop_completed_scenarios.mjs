@@ -3,6 +3,7 @@ import {
   assertCompletedGameEndgameTransition,
   completedActionPlayerSurfaceProofArgs,
   completedDeadPlayerStaleVoteCase,
+  completedGameEndgameScenarioCaseFamilies,
   completedGameEndgameSurfaceAssertionCases,
 } from "./dev_test_game_core_loop_completed_game_cases.mjs";
 
@@ -17,6 +18,7 @@ export {
   completedDeadPlayerStaleVoteCase,
   completedDeadPlayerStaleVoteCaseDefinition,
   completedDeadPlayerStaleVoteProofArgs,
+  completedGameEndgameScenarioCaseFamilies,
   completedGameHardeningLaneCaseDefinitions,
   completedGameHardeningLaneCases,
   completedGameHardeningLaneIds,
@@ -45,6 +47,7 @@ export function assertCompletedGameEndgameSurfaceProof({
   completedGameEndgameSurface,
   assertHostPhaseTransitionActionProof,
   assertPostDayThreePlayerSurfaceProof,
+  scenarioFamilies = completedGameEndgameScenarioCaseFamilies(),
   includeEvidenceInError = false,
 }) {
   const expectedGame = gameFromCompletedRoleUrl(
@@ -72,6 +75,7 @@ export function assertCompletedGameEndgameSurfaceProof({
   }
   assertCompletedGameEndgameTransition({
     transition: completedGameEndgameSurface.transition,
+    scenarioFamilies,
     failureMessage:
       "core-loop admin proof missing completed-game endgame transition",
   });
@@ -117,6 +121,7 @@ export function assertCompletedGameEndgameSurfaceProof({
           ...scenario,
           includeEvidenceInError,
         }),
+      scenarioFamilies,
     }),
   });
 }

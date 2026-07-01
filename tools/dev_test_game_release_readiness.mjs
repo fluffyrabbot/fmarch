@@ -55,6 +55,7 @@ import {
 } from "./dev_test_game_release_readiness_cases.mjs";
 import {
   assertCompletedGameEndgameSurfaceProof,
+  completedGameEndgameScenarioCaseFamilies,
 } from "./dev_test_game_core_loop_completed_game_scenario_assertions.mjs";
 import {
   assertPlayerActionSubmissionClickProofCase,
@@ -3599,8 +3600,10 @@ function assertCoreLoopStaleDayFiveVoteRecoveryProof({
 }
 
 function assertCoreLoopCompletedGameEndgameSurface(completedGameEndgameSurface) {
+  const scenarioFamilies = completedGameEndgameScenarioCaseFamilies();
   assertCompletedGameEndgameSurfaceProof({
     completedGameEndgameSurface,
+    scenarioFamilies,
     assertPostDayThreePlayerSurfaceProof:
       assertCoreLoopPostDayThreePlayerSurfaceProof,
     assertHostPhaseTransitionActionProof:

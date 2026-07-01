@@ -1,5 +1,6 @@
 import {
   completedDeadPlayerStaleVoteCase,
+  completedGameEndgameScenarioCaseFamilies,
   completedHostStaleCommandCases,
   completedPlayerReloadProofCases,
   completedPlayerReloadCases,
@@ -21,6 +22,7 @@ export {
   completedDeadPlayerStaleVoteCase,
   completedDeadPlayerStaleVoteCaseDefinition,
   completedDeadPlayerStaleVoteProofArgs,
+  completedGameEndgameScenarioCaseFamilies,
   completedGameEndgameStaleRejectAssertionCases,
   completedGameEndgameSurfaceAssertionCases,
   completedGameEndgameTransition,
@@ -48,16 +50,21 @@ export function completedGameEndgameProofScenarioCases({
   deadPlayerRoleUrl,
   commandStateBuilders,
 }) {
+  const scenarioFamilies = completedGameEndgameScenarioCaseFamilies();
   return {
-    completedHostStaleCommandCases: completedHostStaleCommandCases(),
+    completedHostStaleCommandCases:
+      scenarioFamilies.completedHostStaleCommandCases,
     completedPlayerReloadCases: completedPlayerReloadProofCases({
       actionPlayerRoleUrl,
       normalPlayerRoleUrl,
       deadPlayerRoleUrl,
       commandStateBuilders,
+      cases: scenarioFamilies.completedPlayerReloadCases,
     }),
-    completedDeadPlayerStaleVoteCase: completedDeadPlayerStaleVoteCase(),
-    staleCompletedGamePlayerCommandCases: staleCompletedGamePlayerCommandCases(),
+    completedDeadPlayerStaleVoteCase:
+      scenarioFamilies.completedDeadPlayerStaleVoteCase,
+    staleCompletedGamePlayerCommandCases:
+      scenarioFamilies.staleCompletedGamePlayerCommandCases,
   };
 }
 

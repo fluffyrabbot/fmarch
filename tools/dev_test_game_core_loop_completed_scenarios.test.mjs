@@ -25,6 +25,7 @@ import {
   completedDeadPlayerStaleVoteAssertionCase,
   completedDeadPlayerStaleVoteCaseDefinition,
   completedDeadPlayerStaleVoteProofArgs,
+  completedGameEndgameScenarioCaseFamilies,
   completedGameEndgameStaleRejectAssertionCases,
   completedGameEndgameProofScenarioCases,
   completedGameEndgameSurfaceAssertionCases,
@@ -84,6 +85,43 @@ test("completed-game scenario module exposes shared frozen definitions", () => {
   );
   assert.notEqual(
     completedDeadPlayerStaleVoteCase(),
+    completedDeadPlayerStaleVoteCaseDefinition,
+  );
+});
+
+test("completed-game scenario module groups shared recovery case families", () => {
+  const scenarioFamilies = completedGameEndgameScenarioCaseFamilies();
+
+  assert.deepEqual(
+    scenarioFamilies.completedHostStaleCommandCases,
+    completedHostStaleCommandCaseDefinitions,
+  );
+  assert.deepEqual(
+    scenarioFamilies.completedPlayerReloadCases,
+    completedPlayerReloadCaseDefinitions,
+  );
+  assert.deepEqual(
+    scenarioFamilies.completedDeadPlayerStaleVoteCase,
+    completedDeadPlayerStaleVoteCaseDefinition,
+  );
+  assert.deepEqual(
+    scenarioFamilies.staleCompletedGamePlayerCommandCases,
+    staleCompletedGamePlayerCommandCaseDefinitions,
+  );
+  assert.notEqual(
+    scenarioFamilies.completedHostStaleCommandCases[0],
+    completedHostStaleCommandCaseDefinitions[0],
+  );
+  assert.notEqual(
+    scenarioFamilies.completedPlayerReloadCases[0],
+    completedPlayerReloadCaseDefinitions[0],
+  );
+  assert.notEqual(
+    scenarioFamilies.staleCompletedGamePlayerCommandCases[0],
+    staleCompletedGamePlayerCommandCaseDefinitions[0],
+  );
+  assert.notEqual(
+    scenarioFamilies.completedDeadPlayerStaleVoteCase,
     completedDeadPlayerStaleVoteCaseDefinition,
   );
 });
@@ -692,6 +730,7 @@ test("completed-game scenario module derives shared surface assertion sequence",
     sourceDeadPlayerRoleUrl: "http://127.0.0.1/g/game-a/dead",
   };
   const asserted = [];
+  const scenarioFamilies = completedGameEndgameScenarioCaseFamilies();
   const cases = completedGameEndgameSurfaceAssertionCases({
     completedGameEndgameSurface,
     expectedGame: "game-a",
@@ -717,6 +756,7 @@ test("completed-game scenario module derives shared surface assertion sequence",
       "player-stale",
       asserted,
     ),
+    scenarioFamilies,
   });
 
   assert.deepEqual(
@@ -965,13 +1005,14 @@ test("completed-game shared surface assertion fails closed", () => {
 });
 
 test("completed-game transition covers every stale and reload scenario", () => {
-  const transition = completedGameEndgameTransition();
-  assertCompletedGameEndgameTransition({ transition });
+  const scenarioFamilies = completedGameEndgameScenarioCaseFamilies();
+  const transition = completedGameEndgameTransition({ scenarioFamilies });
+  assertCompletedGameEndgameTransition({ transition, scenarioFamilies });
   for (const scenario of [
-    ...completedHostStaleCommandCases(),
-    ...completedPlayerReloadCases(),
-    completedDeadPlayerStaleVoteCase(),
-    ...staleCompletedGamePlayerCommandCases(),
+    ...scenarioFamilies.completedHostStaleCommandCases,
+    ...scenarioFamilies.completedPlayerReloadCases,
+    scenarioFamilies.completedDeadPlayerStaleVoteCase,
+    ...scenarioFamilies.staleCompletedGamePlayerCommandCases,
   ]) {
     assert.match(transition, new RegExp(escapeRegExp(scenario.transitionToken)));
   }
