@@ -18,6 +18,12 @@ import {
   buildDevTestGameReleaseReadiness,
 } from "./dev_test_game_release_readiness.mjs";
 import {
+  completedGameEndgameTransition,
+  completedHostStaleCommandCases,
+  completedPlayerReloadCases,
+  staleCompletedGamePlayerCommandCases,
+} from "./dev_test_game_core_loop_completed_scenarios.mjs";
+import {
   assertDevTestGameOpsArtifacts,
   buildDevTestGameOpsArtifacts,
 } from "./dev_test_game_ops_artifacts.mjs";
@@ -11491,6 +11497,11 @@ function dayFiveNoLynchResolutionSurfaceFixture() {
 function completedGameEndgameSurfaceFixture() {
   const game = "00000000-0000-0000-0000-000000000002";
   const baseRoleUrl = `http://127.0.0.1:5173/g/${game}`;
+  const completedRoleUrls = {
+    sourceActionPlayerRoleUrl: baseRoleUrl,
+    sourceNormalPlayerRoleUrl: `${baseRoleUrl}/player-rowan`,
+    sourceDeadPlayerRoleUrl: `${baseRoleUrl}?private=notification-1`,
+  };
   const dayFiveOutcomes = [
     { phaseId: "D02", status: "Lynch" },
     { phaseId: "D03", status: "Lynch" },
@@ -11529,41 +11540,26 @@ function completedGameEndgameSurfaceFixture() {
     actionTiles: [],
     triggerButtons: [],
   };
-  const completedReloadSnapshot = completedPlayerReloadSnapshotFixture({
-    game,
-    dayVoteOutcomes: dayFiveOutcomes,
-    slot: "slot-7",
-    principalUserId: "player_mira",
-    boundary:
-      "Seeded browser completed action-player role URL reloaded into durable endgame controls.",
-  });
-  const completedNormalReloadSnapshot = completedPlayerReloadSnapshotFixture({
-    game,
-    dayVoteOutcomes: dayFiveOutcomes,
-    slot: "slot-4",
-    principalUserId: "player_rowan",
-    boundary:
-      "Seeded browser completed normal-player role URL reloaded into durable endgame controls.",
-  });
-  const completedDeadReloadSnapshot = completedPlayerReloadSnapshotFixture({
-    game,
-    dayVoteOutcomes: dayFiveOutcomes,
-    slot: "slot-2",
-    principalUserId: "player_ilya",
-    actorAlive: false,
-    actorStatus: "dead",
-    boundary:
-      "Seeded browser completed dead-player role URL reloaded into durable endgame controls.",
-  });
+  const completedReloadSnapshots = Object.fromEntries(
+    completedPlayerReloadCases().map((scenario) => [
+      scenario.proofField,
+      completedPlayerReloadSnapshotFixture({
+        game,
+        dayVoteOutcomes: dayFiveOutcomes,
+        slot: scenario.expectedSlot,
+        principalUserId: scenario.principalUserId,
+        actorAlive: scenario.expectedActorAlive,
+        actorStatus: scenario.expectedActorStatus,
+        boundary: scenario.boundary,
+      }),
+    ]),
+  );
   return {
     status: "passed",
     sourceHostRoleUrl: `${baseRoleUrl}/host`,
-    sourceActionPlayerRoleUrl: baseRoleUrl,
-    sourceNormalPlayerRoleUrl: `${baseRoleUrl}/player-rowan`,
-    sourceDeadPlayerRoleUrl: `${baseRoleUrl}?private=notification-1`,
+    ...completedRoleUrls,
     clickedThroughFromRoleUrl: true,
-    transition:
-      "host:N05:complete_game:ack:921 -> host:reload:complete -> host:stale_resolve_phase:reject:GameAlreadyCompleted -> host:stale_advance_phase:reject:GameAlreadyCompleted -> host:stale_complete_game:reject:GameAlreadyCompleted -> actionPlayer:endgame:complete -> actionPlayer:reload:complete -> normalPlayer:reload:complete -> deadPlayer:reload:complete -> deadPlayer:stale_submit_vote:reject:GameAlreadyCompleted -> stale:D05:submit_vote:reject:GameAlreadyCompleted -> stale:D05:submit_post:reject:GameAlreadyCompleted",
+    transition: completedGameEndgameTransition(),
     hostCompleteProof: {
       status: "passed",
       sourceRoleUrl: `${baseRoleUrl}/host`,
@@ -11625,27 +11621,9 @@ function completedGameEndgameSurfaceFixture() {
       releaseReady: false,
       productionReady: false,
     },
-    completedHostStaleResolveRecoveryProof: completedHostStaleCommandProofFixture({
+    ...completedHostStaleCommandProofFixtures({
       sourceRoleUrl: `${baseRoleUrl}/host`,
       visitedRolePath: `/g/${game}/host`,
-      commandId: "completed-host-stale-resolve",
-      commandKind: "ResolvePhase",
-      game,
-      snapshot: completedHostReloadSnapshot,
-    }),
-    completedHostStaleAdvanceRecoveryProof: completedHostStaleCommandProofFixture({
-      sourceRoleUrl: `${baseRoleUrl}/host`,
-      visitedRolePath: `/g/${game}/host`,
-      commandId: "completed-host-stale-advance",
-      commandKind: "AdvancePhase",
-      game,
-      snapshot: completedHostReloadSnapshot,
-    }),
-    completedHostStaleCompleteRecoveryProof: completedHostStaleCommandProofFixture({
-      sourceRoleUrl: `${baseRoleUrl}/host`,
-      visitedRolePath: `/g/${game}/host`,
-      commandId: "completed-host-stale-complete",
-      commandKind: "CompleteGame",
       game,
       snapshot: completedHostReloadSnapshot,
     }),
@@ -11672,20 +11650,9 @@ function completedGameEndgameSurfaceFixture() {
       notificationsEndpoint: `/games/${game}/notifications?principal_user_id=player_mira`,
       dayVoteOutcomes: dayFiveOutcomes,
     }),
-    completedPlayerReloadProof: completedPlayerReloadProofFixture({
-      sourceRoleUrl: baseRoleUrl,
-      visitedRolePath: `/g/${game}`,
-      snapshot: completedReloadSnapshot,
-    }),
-    completedNormalPlayerReloadProof: completedPlayerReloadProofFixture({
-      sourceRoleUrl: `${baseRoleUrl}/player-rowan`,
-      visitedRolePath: `/g/${game}/player-rowan`,
-      snapshot: completedNormalReloadSnapshot,
-    }),
-    completedDeadPlayerReloadProof: completedPlayerReloadProofFixture({
-      sourceRoleUrl: `${baseRoleUrl}?private=notification-1`,
-      visitedRolePath: `/g/${game}?private=notification-1`,
-      snapshot: completedDeadReloadSnapshot,
+    ...completedPlayerReloadProofFixtures({
+      roleUrls: completedRoleUrls,
+      snapshots: completedReloadSnapshots,
     }),
     completedDeadPlayerStaleVoteRecoveryProof: {
       status: "passed",
@@ -11717,13 +11684,15 @@ function completedGameEndgameSurfaceFixture() {
         },
       },
       setupResyncFromSeq: 921,
-      setupResyncSnapshotCommandState: completedDeadReloadSnapshot.commandState,
+      setupResyncSnapshotCommandState:
+        completedReloadSnapshots.completedDeadPlayerReloadProof.commandState,
       recoveryResyncFromSeq: 921,
-      recoveryResyncSnapshotCommandState: completedDeadReloadSnapshot.commandState,
+      recoveryResyncSnapshotCommandState:
+        completedReloadSnapshots.completedDeadPlayerReloadProof.commandState,
       recoverySnapshot: {
-        ...completedDeadReloadSnapshot,
+        ...completedReloadSnapshots.completedDeadPlayerReloadProof,
         commandState: {
-          ...completedDeadReloadSnapshot.commandState,
+          ...completedReloadSnapshots.completedDeadPlayerReloadProof.commandState,
           boundary:
             "Seeded browser completed dead-player stale vote rejected into durable endgame controls.",
         },
@@ -11733,44 +11702,97 @@ function completedGameEndgameSurfaceFixture() {
       releaseReady: false,
       productionReady: false,
     },
-    staleCompletedVoteRecoveryProof: staleCompletedPlayerCommandProofFixture({
+    ...staleCompletedPlayerCommandProofFixtures({
       sourceRoleUrl: baseRoleUrl,
       visitedRolePath: `/g/${game}`,
-      clickedAction: "submit_vote:no_lynch",
-      commandKind: "SubmitVote",
-      projectionRefreshKeys: ["votecount", "commandState"],
-      command: {
-        game,
-        actor_slot: "slot-7",
-        target: "NoLynch",
-      },
-      boundary:
-        "Seeded browser GameAlreadyCompleted stale D05 vote refreshed into completed endgame controls.",
-    }),
-    staleCompletedPostRecoveryProof: staleCompletedPlayerCommandProofFixture({
-      sourceRoleUrl: baseRoleUrl,
-      visitedRolePath: `/g/${game}`,
-      clickedAction: "submit_post",
-      commandKind: "SubmitPost",
-      projectionRefreshKeys: [
-        "thread",
-        "votecount",
-        "commandState",
-        "dayVoteOutcomes",
-      ],
-      command: {
-        game,
-        actor_slot: "slot-7",
-        channel_id: "main",
-        body: "Stale completed game proof post",
-      },
-      boundary:
-        "Seeded browser GameAlreadyCompleted stale D05 post refreshed into completed endgame controls.",
-      stalePostBody: "Stale completed game proof post",
+      game,
     }),
     releaseReady: false,
     productionReady: false,
   };
+}
+
+function completedHostStaleCommandProofFixtures({
+  sourceRoleUrl,
+  visitedRolePath,
+  game,
+  snapshot,
+}) {
+  return Object.fromEntries(
+    completedHostStaleCommandCases().map((scenario) => [
+      scenario.proofField,
+      completedHostStaleCommandProofFixture({
+        sourceRoleUrl,
+        visitedRolePath,
+        commandId: scenario.commandId,
+        commandKind: scenario.commandKind,
+        game,
+        snapshot,
+      }),
+    ]),
+  );
+}
+
+function completedPlayerReloadProofFixtures({ roleUrls, snapshots }) {
+  return Object.fromEntries(
+    completedPlayerReloadCases().map((scenario) => {
+      const sourceRoleUrl = roleUrls[scenario.sourceRoleUrlField];
+      return [
+        scenario.proofField,
+        completedPlayerReloadProofFixture({
+          sourceRoleUrl,
+          visitedRolePath: pathAndSearchFromUrl(sourceRoleUrl),
+          snapshot: snapshots[scenario.proofField],
+        }),
+      ];
+    }),
+  );
+}
+
+function staleCompletedPlayerCommandProofFixtures({
+  sourceRoleUrl,
+  visitedRolePath,
+  game,
+}) {
+  return Object.fromEntries(
+    staleCompletedGamePlayerCommandCases().map((scenario) => [
+      scenario.proofField,
+      staleCompletedPlayerCommandProofFixture({
+        sourceRoleUrl,
+        visitedRolePath,
+        clickedAction: scenario.clickedAction,
+        commandKind: scenario.commandKind,
+        projectionRefreshKeys: scenario.expectedRefreshKeys,
+        command: staleCompletedPlayerCommandFixture({ game, scenario }),
+        boundary: scenario.rejectedBoundary,
+        stalePostBody: scenario.postBody,
+      }),
+    ]),
+  );
+}
+
+function staleCompletedPlayerCommandFixture({ game, scenario }) {
+  if (scenario.commandKind === "SubmitVote") {
+    return {
+      game,
+      actor_slot: "slot-7",
+      target: "NoLynch",
+    };
+  }
+  if (scenario.commandKind === "SubmitPost") {
+    return {
+      game,
+      actor_slot: "slot-7",
+      channel_id: "main",
+      body: scenario.postBody,
+    };
+  }
+  throw new Error(`unknown stale completed player command: ${scenario.commandKind}`);
+}
+
+function pathAndSearchFromUrl(roleUrl) {
+  const parsed = new URL(roleUrl);
+  return `${parsed.pathname}${parsed.search}`;
 }
 
 function staleCompletedPlayerCommandProofFixture({

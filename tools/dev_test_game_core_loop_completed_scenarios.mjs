@@ -60,6 +60,8 @@ export function completedPlayerReloadCases() {
       cookieValue: "fixture-target",
       commandStateKind: "dead-player",
       expectedSlot: "slot-2",
+      expectedActorAlive: false,
+      expectedActorStatus: "dead",
       expectedBoundaryText: "completed dead-player role URL reloaded",
       principalUserId: "player_ilya",
       boundary:
