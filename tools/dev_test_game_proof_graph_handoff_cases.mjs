@@ -14,8 +14,8 @@ import {
 } from "./dev_test_game_hosted_ops_signal_cases.mjs";
 import {
   hostedIdentityEvidenceCheckIds,
-  hostedIdentityEvidenceInputIds,
-} from "./dev_test_game_hosted_identity_evidence.mjs";
+  hostedIdentityEvidenceHandoffCase,
+} from "./dev_test_game_hosted_identity_evidence_cases.mjs";
 import {
   seedScenarioCoverageGroups,
 } from "./dev_test_game_seed_scenario_cases.mjs";
@@ -50,9 +50,11 @@ export const adminProofDestinationRequirementCases = Object.freeze([
     auditId: "local-hosted-identity-evidence",
     requiredCheckIds: Object.freeze([...hostedIdentityEvidenceCheckIds]),
     requiredUnprovenIds: Object.freeze([...hostedIdentityEvidenceCheckIds]),
-    requiredHostedHandoffInputs: Object.freeze([...hostedIdentityEvidenceInputIds]),
+    requiredHostedHandoffInputs: Object.freeze([
+      ...hostedIdentityEvidenceHandoffCase().inputIds,
+    ]),
     requiredHostedHandoffBlockedChecks: Object.freeze([
-      ...hostedIdentityEvidenceCheckIds,
+      ...hostedIdentityEvidenceHandoffCase().blockedCheckIds,
     ]),
   }),
   Object.freeze({

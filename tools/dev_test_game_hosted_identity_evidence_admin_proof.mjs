@@ -2,9 +2,11 @@ import path from "node:path";
 import { assertDevTestGameProofRun } from "./dev_test_game_proof_contract.mjs";
 import {
   assertDevTestGameHostedIdentityEvidence,
+} from "./dev_test_game_hosted_identity_evidence.mjs";
+import {
   hostedIdentityEvidencePlaceholderFixturePath,
   hostedIdentityEvidenceInputIds,
-} from "./dev_test_game_hosted_identity_evidence.mjs";
+} from "./dev_test_game_hosted_identity_evidence_cases.mjs";
 import {
   artifactDir,
   proveAdminAuditDetail,

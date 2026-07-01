@@ -3,10 +3,9 @@ import { test } from "node:test";
 import {
   devTestGameHostedIdentityEvidenceCommand,
   devTestGameHostedIdentityEvidencePath,
-  hostedIdentityEvidenceBlockedChecks,
+  hostedIdentityEvidenceHandoffCase,
   hostedIdentityEvidencePlaceholderFixturePath,
-  hostedIdentityEvidenceRequirementGroups,
-} from "./dev_test_game_hosted_identity_evidence.mjs";
+} from "./dev_test_game_hosted_identity_evidence_cases.mjs";
 import {
   buildReleaseReadinessUnprovenItems,
   devTestGameReleaseRunbookCommand,
@@ -127,7 +126,7 @@ test("release readiness buildable cases share next-action commands and spine tar
   );
   assert.deepEqual(
     hostedIdentity.hostedHandoffChecklist.blockedCheckIds,
-    hostedIdentityEvidenceBlockedChecks.map((check) => check.id),
+    hostedIdentityEvidenceHandoffCase().blockedCheckIds,
   );
   assert.equal(
     hostedIdentity.hostedHandoffChecklist.placeholderFixturePath,
@@ -139,12 +138,11 @@ test("release readiness buildable cases share next-action commands and spine tar
       group.status,
       group.blockedCheckIds,
     ]),
-    hostedIdentityEvidenceRequirementGroups(
-      hostedIdentityEvidenceBlockedChecks.map((check) => ({
-        ...check,
-        status: "blocked",
-      })),
-    ).map((group) => [group.id, "blocked", group.checkIds]),
+    hostedIdentityEvidenceHandoffCase().requirementGroups.map((group) => [
+      group.id,
+      "blocked",
+      group.checkIds,
+    ]),
   );
 });
 

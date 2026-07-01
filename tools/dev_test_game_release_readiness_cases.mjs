@@ -10,11 +10,8 @@ import {
 import {
   devTestGameHostedIdentityEvidenceCommand,
   devTestGameHostedIdentityEvidencePath,
-  hostedIdentityEvidencePlaceholderFixturePath,
-  hostedIdentityEvidenceBlockedChecks,
-  hostedIdentityEvidenceInputIds,
-  hostedIdentityEvidenceRequirementGroups,
-} from "./dev_test_game_hosted_identity_evidence.mjs";
+  hostedIdentityEvidenceHandoffCase,
+} from "./dev_test_game_hosted_identity_evidence_cases.mjs";
 
 export const devTestGameReleaseRunbookPath =
   "target/dev-test-game/release-runbook.json";
@@ -314,10 +311,6 @@ function hostedDeploymentBuildable({ hostedTargetPreflight }) {
 
 function hostedProductionIdentityBuildable() {
   const command = `npm run ${devTestGameHostedIdentityEvidenceCommand}`;
-  const blockedIdentityChecks = hostedIdentityEvidenceBlockedChecks.map((check) => ({
-    ...check,
-    status: "blocked",
-  }));
   return {
     priority: 15,
     command,
@@ -330,19 +323,7 @@ function hostedProductionIdentityBuildable() {
       releaseReadinessProductionFeatureSpineTargets.identityAdapter,
     proofBoundary:
       "Hosted identity evidence handoff. The local identity adapter admin proof remains the prerequisite role-surface proof, while this command records the hosted account lifecycle, invite delivery, account recovery, abuse controls, session-secret policy, and hosted audit retention/export inputs needed next; it does not prove beta readiness, release readiness, or production readiness.",
-    hostedHandoffChecklist: {
-      status: "blocked",
-      preflightStatus: "blocked",
-      command,
-      proofTarget: devTestGameHostedIdentityEvidencePath,
-      placeholderFixturePath: hostedIdentityEvidencePlaceholderFixturePath,
-      inputIds: [...hostedIdentityEvidenceInputIds],
-      blockedCheckIds: hostedIdentityEvidenceBlockedChecks.map((check) => check.id),
-      blockedChecks: blockedIdentityChecks,
-      requirementGroups: hostedIdentityEvidenceRequirementGroups(
-        blockedIdentityChecks,
-      ),
-    },
+    hostedHandoffChecklist: hostedIdentityEvidenceHandoffCase(),
   };
 }
 

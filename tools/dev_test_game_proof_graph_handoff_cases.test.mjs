@@ -7,6 +7,9 @@ import {
   adminProofDestinationRequirements,
 } from "./dev_test_game_proof_graph_handoff_cases.mjs";
 import {
+  hostedIdentityEvidenceHandoffCase,
+} from "./dev_test_game_hosted_identity_evidence_cases.mjs";
+import {
   staleConflictMessageLaneIds,
 } from "./dev_test_game_stale_conflict_scenarios.mjs";
 import {
@@ -67,6 +70,18 @@ test("admin proof destination handoff cases carry shared row requirements", () =
     seedScenarioCoverageGroups.allDemo,
   );
   assert.deepEqual(
+    adminProofDestinationRequirementForLink(
+      "admin-proof:hosted-identity-evidence",
+    ).requiredHostedHandoffInputs,
+    hostedIdentityEvidenceHandoffCase().inputIds,
+  );
+  assert.deepEqual(
+    adminProofDestinationRequirementForLink(
+      "admin-proof:hosted-identity-evidence",
+    ).requiredHostedHandoffBlockedChecks,
+    hostedIdentityEvidenceHandoffCase().blockedCheckIds,
+  );
+  assert.deepEqual(
     adminProofDestinationRequirementForLink("admin-proof:hosted-target-preflight")
       .requiredCheckIds,
     hostedTargetPreflightCheckIds,
@@ -107,6 +122,12 @@ test("admin proof destination handoff cases return cloned mutable rows", () => {
   requirements
     .find((item) => item.linkId === "admin-proof:hosted-evidence-lane")
     .requiredHostedHandoffBlockedChecks.push("mutated");
+  requirements
+    .find((item) => item.linkId === "admin-proof:hosted-identity-evidence")
+    .requiredHostedHandoffInputs.push("mutated");
+  requirements
+    .find((item) => item.linkId === "admin-proof:hosted-identity-evidence")
+    .requiredHostedHandoffBlockedChecks.push("mutated");
   assert.equal(
     adminProofDestinationRequirementForLink("admin-proof:release")
       .requiredCheckIds.includes("mutated"),
@@ -120,6 +141,18 @@ test("admin proof destination handoff cases return cloned mutable rows", () => {
   assert.equal(
     adminProofDestinationRequirementForLink("admin-proof:hosted-evidence-lane")
       .requiredHostedHandoffBlockedChecks.includes("mutated"),
+    false,
+  );
+  assert.equal(
+    adminProofDestinationRequirementForLink(
+      "admin-proof:hosted-identity-evidence",
+    ).requiredHostedHandoffInputs.includes("mutated"),
+    false,
+  );
+  assert.equal(
+    adminProofDestinationRequirementForLink(
+      "admin-proof:hosted-identity-evidence",
+    ).requiredHostedHandoffBlockedChecks.includes("mutated"),
     false,
   );
 });
