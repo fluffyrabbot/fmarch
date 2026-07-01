@@ -107,7 +107,10 @@ import {
   devTestGameHostedIdentityEvidencePath,
   hostedIdentityEvidenceBlockedChecks,
   hostedIdentityEvidenceInputIds,
+  hostedIdentityEvidencePlaceholderFixturePath,
+  hostedIdentityEvidencePlaceholderSchema,
   hostedIdentityEvidenceRequirementGroups,
+  validateHostedIdentityEvidencePlaceholder,
 } from "./dev_test_game_hosted_identity_evidence.mjs";
 import { devTestGameLiveSpinePlan } from "./dev_test_game_live_spine.mjs";
 import {
@@ -388,9 +391,87 @@ test("hosted identity evidence lane records blocked and passed handoffs", async 
       "hosted-identity-evidence-path-configured",
     ),
   );
+  assert.deepEqual(
+    blocked.hostedHandoffChecklist.requirementGroups.find(
+      (group) => group.id === "hosted-identity-evidence-intake",
+    )?.blockedCheckIds,
+    [
+      "hosted-identity-evidence-path-configured",
+      "hosted-identity-evidence-readable",
+    ],
+  );
+
+  assert.equal(hostedIdentityEvidencePlaceholderSchema.properties.version.const, 1);
+  const malformedPath =
+    "target/dev-test-game/hosted-identity-evidence-malformed.test.json";
+  await mkdir("target/dev-test-game", { recursive: true });
+  await writeFile(
+    malformedPath,
+    `${JSON.stringify({
+      version: 1,
+      proof: "hosted-production-identity-evidence",
+      releaseReady: false,
+      productionReady: false,
+      hostedIdentity: {
+        accountLifecycle: false,
+      },
+    })}\n`,
+  );
+  const malformed = await buildDevTestGameHostedIdentityEvidence({
+    env: { FMARCH_HOSTED_IDENTITY_EVIDENCE_PATH: malformedPath },
+    generatedAt: "2026-07-01T00:00:00.500Z",
+  });
+  assertDevTestGameHostedIdentityEvidence(malformed);
+  assert.equal(malformed.status, "blocked");
+  assert.deepEqual(
+    malformed.checks.map((check) => [check.id, check.status]),
+    [
+      ["hosted-identity-evidence-path-configured", "passed"],
+      ["hosted-identity-evidence-readable", "blocked"],
+      ["hosted-account-lifecycle-evidence", "blocked"],
+      ["invite-delivery-evidence", "blocked"],
+      ["account-recovery-evidence", "blocked"],
+      ["abuse-and-rate-limit-evidence", "blocked"],
+      ["session-secret-policy-evidence", "blocked"],
+      ["hosted-audit-retention-export-evidence", "blocked"],
+      ["role-surface-adapter-preserved", "blocked"],
+      ["release-claim-boundary-carried", "blocked"],
+    ],
+  );
+  assert.match(
+    malformed.checks.find(
+      (check) => check.id === "hosted-identity-evidence-readable",
+    )?.requiredEvidence ?? "",
+    /matching tools\/fixtures\/dev_test_game_hosted_identity_evidence\.placeholder\.json/,
+  );
+
+  const placeholderSource = JSON.parse(
+    await readFile(hostedIdentityEvidencePlaceholderFixturePath, "utf8"),
+  );
+  assert.deepEqual(validateHostedIdentityEvidencePlaceholder(placeholderSource), []);
+  const placeholder = await buildDevTestGameHostedIdentityEvidence({
+    env: {
+      FMARCH_HOSTED_IDENTITY_EVIDENCE_PATH:
+        hostedIdentityEvidencePlaceholderFixturePath,
+    },
+    generatedAt: "2026-07-01T00:00:00.750Z",
+  });
+  assertDevTestGameHostedIdentityEvidence(placeholder);
+  assert.equal(placeholder.status, "blocked");
+  assert.deepEqual(
+    placeholder.hostedHandoffChecklist.requirementGroups.find(
+      (group) => group.id === "hosted-identity-evidence-intake",
+    )?.blockedCheckIds,
+    [],
+  );
+  assert.deepEqual(
+    placeholder.hostedHandoffChecklist.blockedCheckIds.filter((id) =>
+      id.includes("identity-evidence"),
+    ),
+    [],
+  );
 
   const rawPath = "target/dev-test-game/hosted-identity-evidence-raw.test.json";
-  await mkdir("target/dev-test-game", { recursive: true });
   await writeFile(
     rawPath,
     `${JSON.stringify({
@@ -12385,6 +12466,7 @@ function hostedIdentityHandoffChecklistFixture() {
     preflightStatus: "blocked",
     command: `npm run ${devTestGameHostedIdentityEvidenceCommand}`,
     proofTarget: devTestGameHostedIdentityEvidencePath,
+    placeholderFixturePath: hostedIdentityEvidencePlaceholderFixturePath,
     inputIds: [...hostedIdentityEvidenceInputIds],
     blockedCheckIds: hostedIdentityEvidenceBlockedChecks.map((check) => check.id),
     blockedChecks: blockedIdentityChecks,
@@ -13407,6 +13489,10 @@ function hostedIdentityEvidenceAdminProofFixture() {
       ),
       blockedCheckIds: hostedIdentityEvidenceBlockedChecks.map((check) => check.id),
       hostedHandoffInputIds: [...hostedIdentityEvidenceInputIds],
+      hostedHandoffInputValues: {
+        FMARCH_HOSTED_IDENTITY_EVIDENCE_PATH:
+          hostedIdentityEvidencePlaceholderFixturePath,
+      },
       hostedHandoffBlockedCheckIds: hostedIdentityEvidenceBlockedChecks.map(
         (check) => check.id,
       ),
@@ -13429,6 +13515,10 @@ function hostedIdentityEvidenceAdminProofFixture() {
       visibleChecks: hostedIdentityEvidenceBlockedChecks.map((check) => check.id),
       visibleUnproven: hostedIdentityEvidenceBlockedChecks.map((check) => check.id),
       visibleHostedHandoffInputs: [...hostedIdentityEvidenceInputIds],
+      visibleHostedHandoffInputValues: {
+        FMARCH_HOSTED_IDENTITY_EVIDENCE_PATH:
+          `FMARCH_HOSTED_IDENTITY_EVIDENCE_PATH ${hostedIdentityEvidencePlaceholderFixturePath} required`,
+      },
       visibleHostedHandoffBlockedChecks: hostedIdentityEvidenceBlockedChecks.map(
         (check) => check.id,
       ),

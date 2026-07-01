@@ -41,6 +41,7 @@ import {
 import {
   hostedIdentityEvidenceBlockedChecks,
   hostedIdentityEvidenceInputIds,
+  hostedIdentityEvidencePlaceholderFixturePath,
   hostedIdentityEvidenceRequirementGroups,
 } from "../../../../tools/dev_test_game_hosted_identity_evidence.mjs";
 import {
@@ -802,6 +803,12 @@ test("admin route data exposes hosted identity evidence as a native audit row", 
     identity.hostedHandoffChecklist.inputs.map((input) => input.id),
     hostedIdentityEvidenceInputIds,
   );
+  assert.equal(
+    identity.hostedHandoffChecklist.inputs.find(
+      (input) => input.id === "FMARCH_HOSTED_IDENTITY_EVIDENCE_PATH",
+    )?.value,
+    hostedIdentityEvidencePlaceholderFixturePath,
+  );
   assert.deepEqual(
     identity.hostedHandoffChecklist.blockedChecks.map((check) => check.id),
     hostedIdentityEvidenceBlockedChecks.map((check) => check.id),
@@ -826,6 +833,10 @@ test("admin route data exposes hosted identity evidence as a native audit row", 
   assert.equal(
     identity.artifactSummary.nextCommand,
     "npm run test:dev-test-game-hosted-identity-evidence",
+  );
+  assert.equal(
+    identity.artifactSummary.placeholderFixturePath,
+    hostedIdentityEvidencePlaceholderFixturePath,
   );
 });
 
@@ -3440,6 +3451,7 @@ function localHostedIdentityEvidenceFixture() {
     target: {
       rawEvidencePath: null,
       rawEvidenceStatus: "blocked",
+      placeholderFixturePath: hostedIdentityEvidencePlaceholderFixturePath,
     },
     checks: hostedIdentityEvidenceBlockedChecks.map((check) => ({
       id: check.id,
@@ -3451,6 +3463,7 @@ function localHostedIdentityEvidenceFixture() {
       preflightStatus: "blocked",
       command: "npm run test:dev-test-game-hosted-identity-evidence",
       proofTarget: HOSTED_IDENTITY_EVIDENCE_PROOF_TARGET,
+      placeholderFixturePath: hostedIdentityEvidencePlaceholderFixturePath,
       inputIds: [...hostedIdentityEvidenceInputIds],
       blockedCheckIds: hostedIdentityEvidenceBlockedChecks.map((check) => check.id),
       blockedChecks: hostedIdentityEvidenceBlockedChecks.map((check) => ({

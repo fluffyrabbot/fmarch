@@ -1,0 +1,16 @@
+{
+  "version": 1,
+  "proof": "hosted-production-identity-evidence",
+  "status": "placeholder",
+  "releaseReady": false,
+  "productionReady": false,
+  "hostedIdentity": {
+    "accountLifecycle": false,
+    "inviteDelivery": false,
+    "accountRecovery": false,
+    "abuseAndRateLimitPolicy": false,
+    "sessionSecretPolicy": false,
+    "hostedAuditRetentionExport": false,
+    "roleSurfaceArchitectureChanged": false
+  }
+}

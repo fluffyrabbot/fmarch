@@ -82,6 +82,8 @@ await runAdminAuditProof({
       requiredHostedHandoffInputs: requiredHostedHandoffInputIdsForNextAction(
         source.nextAction,
       ),
+      requiredHostedHandoffInputValues:
+        requiredHostedHandoffInputValuesForNextAction(source.nextAction),
       requiredHostedHandoffBlockedChecks:
         requiredHostedHandoffBlockedCheckIdsForNextAction(source.nextAction),
       requiredHostedHandoffGroups:
@@ -594,6 +596,18 @@ export function assertNextActionAdminProof(evidence) {
         );
       }
     }
+    for (const [inputId, expected] of Object.entries(
+      hostedHandoffInputValues(checklist),
+    )) {
+      const visibleText =
+        evidence.adminRoleSurface?.visibleHostedHandoffInputValues?.[inputId] ??
+        "";
+      if (!visibleText.includes(expected)) {
+        throw new Error(
+          `next-action admin proof missing hosted handoff input value: ${inputId}`,
+        );
+      }
+    }
     for (const checkId of checklist.blockedCheckIds) {
       if (
         !evidence.adminRoleSurface?.visibleHostedHandoffBlockedChecks?.includes(
@@ -731,6 +745,22 @@ function requiredHostedHandoffInputIdsForNextAction(nextAction) {
   const inputIds =
     nextAction.nextAction.unproven?.hostedHandoffChecklist?.inputIds;
   return Array.isArray(inputIds) ? inputIds : [];
+}
+
+function requiredHostedHandoffInputValuesForNextAction(nextAction) {
+  return hostedHandoffInputValues(
+    nextAction.nextAction.unproven?.hostedHandoffChecklist,
+  );
+}
+
+function hostedHandoffInputValues(checklist) {
+  return typeof checklist?.placeholderFixturePath === "string" &&
+    checklist.placeholderFixturePath.trim() !== ""
+    ? {
+        FMARCH_HOSTED_IDENTITY_EVIDENCE_PATH:
+          checklist.placeholderFixturePath,
+      }
+    : {};
 }
 
 function requiredHostedHandoffBlockedCheckIdsForNextAction(nextAction) {

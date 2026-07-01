@@ -2,6 +2,7 @@ import path from "node:path";
 import { assertDevTestGameProofRun } from "./dev_test_game_proof_contract.mjs";
 import {
   assertDevTestGameHostedIdentityEvidence,
+  hostedIdentityEvidencePlaceholderFixturePath,
   hostedIdentityEvidenceInputIds,
 } from "./dev_test_game_hosted_identity_evidence.mjs";
 import {
@@ -63,6 +64,10 @@ await runAdminAuditProof({
       requiredUnproven:
         source.hostedIdentityEvidence.hostedHandoffChecklist.blockedCheckIds,
       requiredHostedHandoffInputs: hostedIdentityEvidenceInputIds,
+      requiredHostedHandoffInputValues: {
+        FMARCH_HOSTED_IDENTITY_EVIDENCE_PATH:
+          hostedIdentityEvidencePlaceholderFixturePath,
+      },
       requiredHostedHandoffBlockedChecks:
         source.hostedIdentityEvidence.hostedHandoffChecklist.blockedCheckIds,
       requiredHostedHandoffGroups:
@@ -96,6 +101,10 @@ await runAdminAuditProof({
       blockedCheckIds:
         source.hostedIdentityEvidence.hostedHandoffChecklist.blockedCheckIds,
       hostedHandoffInputIds: hostedIdentityEvidenceInputIds,
+      hostedHandoffInputValues: {
+        FMARCH_HOSTED_IDENTITY_EVIDENCE_PATH:
+          hostedIdentityEvidencePlaceholderFixturePath,
+      },
       hostedHandoffBlockedCheckIds:
         source.hostedIdentityEvidence.hostedHandoffChecklist.blockedCheckIds,
       hostedHandoffGroupIds:
@@ -148,6 +157,17 @@ export function assertHostedIdentityEvidenceAdminProof(evidence) {
     if (!evidence.adminRoleSurface?.visibleHostedHandoffInputs?.includes(inputId)) {
       throw new Error(
         `hosted identity evidence admin proof missing handoff input: ${inputId}`,
+      );
+    }
+  }
+  for (const [inputId, expected] of Object.entries(
+    evidence.generatedFrom?.hostedHandoffInputValues ?? {},
+  )) {
+    const visibleText =
+      evidence.adminRoleSurface?.visibleHostedHandoffInputValues?.[inputId] ?? "";
+    if (!visibleText.includes(expected)) {
+      throw new Error(
+        `hosted identity evidence admin proof missing handoff input value: ${inputId}`,
       );
     }
   }

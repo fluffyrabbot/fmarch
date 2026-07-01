@@ -4,6 +4,7 @@ import {
 import {
   devTestGameHostedIdentityEvidenceCommand,
   devTestGameHostedIdentityEvidencePath,
+  hostedIdentityEvidencePlaceholderFixturePath,
   hostedIdentityEvidenceBlockedChecks,
   hostedIdentityEvidenceInputIds,
   hostedIdentityEvidenceRequirementGroups,
@@ -329,6 +330,7 @@ function hostedProductionIdentityBuildable() {
       preflightStatus: "blocked",
       command,
       proofTarget: devTestGameHostedIdentityEvidencePath,
+      placeholderFixturePath: hostedIdentityEvidencePlaceholderFixturePath,
       inputIds: [...hostedIdentityEvidenceInputIds],
       blockedCheckIds: hostedIdentityEvidenceBlockedChecks.map((check) => check.id),
       blockedChecks: blockedIdentityChecks,

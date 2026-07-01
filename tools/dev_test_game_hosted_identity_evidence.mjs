@@ -8,6 +8,45 @@ export const devTestGameHostedIdentityEvidencePath =
   "target/dev-test-game/hosted-identity-evidence.json";
 export const devTestGameHostedIdentityEvidenceCommand =
   "test:dev-test-game-hosted-identity-evidence";
+export const hostedIdentityEvidencePlaceholderFixturePath =
+  "tools/fixtures/dev_test_game_hosted_identity_evidence.placeholder.json";
+export const hostedIdentityEvidencePlaceholderSchema = Object.freeze({
+  type: "object",
+  required: Object.freeze([
+    "version",
+    "proof",
+    "releaseReady",
+    "productionReady",
+    "hostedIdentity",
+  ]),
+  properties: Object.freeze({
+    version: Object.freeze({ const: 1 }),
+    proof: Object.freeze({ const: "hosted-production-identity-evidence" }),
+    releaseReady: Object.freeze({ type: "boolean" }),
+    productionReady: Object.freeze({ type: "boolean" }),
+    hostedIdentity: Object.freeze({
+      type: "object",
+      required: Object.freeze([
+        "accountLifecycle",
+        "inviteDelivery",
+        "accountRecovery",
+        "abuseAndRateLimitPolicy",
+        "sessionSecretPolicy",
+        "hostedAuditRetentionExport",
+        "roleSurfaceArchitectureChanged",
+      ]),
+      properties: Object.freeze({
+        accountLifecycle: Object.freeze({ type: "boolean" }),
+        inviteDelivery: Object.freeze({ type: "boolean" }),
+        accountRecovery: Object.freeze({ type: "boolean" }),
+        abuseAndRateLimitPolicy: Object.freeze({ type: "boolean" }),
+        sessionSecretPolicy: Object.freeze({ type: "boolean" }),
+        hostedAuditRetentionExport: Object.freeze({ type: "boolean" }),
+        roleSurfaceArchitectureChanged: Object.freeze({ type: "boolean" }),
+      }),
+    }),
+  }),
+});
 export const hostedIdentityEvidenceInputIds = Object.freeze([
   "command",
   "proof-target",
@@ -237,6 +276,8 @@ export async function buildDevTestGameHostedIdentityEvidence({
     target: {
       rawEvidencePath,
       rawEvidenceStatus: rawEvidence.status,
+      placeholderFixturePath: hostedIdentityEvidencePlaceholderFixturePath,
+      placeholderSchema: hostedIdentityEvidencePlaceholderSchema,
     },
     checks,
     hostedHandoffChecklist: {
@@ -244,6 +285,7 @@ export async function buildDevTestGameHostedIdentityEvidence({
       preflightStatus: status,
       command: `npm run ${devTestGameHostedIdentityEvidenceCommand}`,
       proofTarget: devTestGameHostedIdentityEvidencePath,
+      placeholderFixturePath: hostedIdentityEvidencePlaceholderFixturePath,
       inputIds: [...hostedIdentityEvidenceInputIds],
       blockedCheckIds: checks
         .filter((check) => check.status === "blocked")
@@ -363,6 +405,14 @@ async function readRawHostedIdentityEvidence(rawEvidencePath) {
   try {
     const source = JSON.parse(await readFile(resolved, "utf8"));
     const metadata = await stat(resolved);
+    const schemaErrors = validateHostedIdentityEvidencePlaceholder(source);
+    if (schemaErrors.length > 0) {
+      return {
+        status: "blocked",
+        requiredEvidence:
+          `Readable hosted identity evidence JSON matching ${hostedIdentityEvidencePlaceholderFixturePath}: ${schemaErrors.join("; ")}`,
+      };
+    }
     return {
       status: "passed",
       source,
@@ -377,6 +427,49 @@ async function readRawHostedIdentityEvidence(rawEvidencePath) {
       status: "blocked",
       requiredEvidence: `Readable hosted identity evidence JSON: ${error.message}`,
     };
+  }
+}
+
+export function validateHostedIdentityEvidencePlaceholder(source) {
+  const errors = [];
+  requireObject(source, "root", errors);
+  if (errors.length > 0) {
+    return errors;
+  }
+  requireConst(source.version, 1, "version", errors);
+  requireConst(
+    source.proof,
+    "hosted-production-identity-evidence",
+    "proof",
+    errors,
+  );
+  requireBoolean(source.releaseReady, "releaseReady", errors);
+  requireBoolean(source.productionReady, "productionReady", errors);
+  requireObject(source.hostedIdentity, "hostedIdentity", errors);
+  if (source.hostedIdentity !== null && typeof source.hostedIdentity === "object") {
+    for (const field of hostedIdentityEvidencePlaceholderSchema.properties
+      .hostedIdentity.required) {
+      requireBoolean(source.hostedIdentity[field], `hostedIdentity.${field}`, errors);
+    }
+  }
+  return errors;
+}
+
+function requireObject(value, field, errors) {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) {
+    errors.push(`${field} must be an object`);
+  }
+}
+
+function requireConst(value, expected, field, errors) {
+  if (value !== expected) {
+    errors.push(`${field} must be ${JSON.stringify(expected)}`);
+  }
+}
+
+function requireBoolean(value, field, errors) {
+  if (typeof value !== "boolean") {
+    errors.push(`${field} must be boolean`);
   }
 }
 

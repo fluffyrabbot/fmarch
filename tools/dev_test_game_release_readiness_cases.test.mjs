@@ -4,6 +4,7 @@ import {
   devTestGameHostedIdentityEvidenceCommand,
   devTestGameHostedIdentityEvidencePath,
   hostedIdentityEvidenceBlockedChecks,
+  hostedIdentityEvidencePlaceholderFixturePath,
   hostedIdentityEvidenceRequirementGroups,
 } from "./dev_test_game_hosted_identity_evidence.mjs";
 import {
@@ -127,6 +128,10 @@ test("release readiness buildable cases share next-action commands and spine tar
   assert.deepEqual(
     hostedIdentity.hostedHandoffChecklist.blockedCheckIds,
     hostedIdentityEvidenceBlockedChecks.map((check) => check.id),
+  );
+  assert.equal(
+    hostedIdentity.hostedHandoffChecklist.placeholderFixturePath,
+    hostedIdentityEvidencePlaceholderFixturePath,
   );
   assert.deepEqual(
     hostedIdentity.hostedHandoffChecklist.requirementGroups.map((group) => [

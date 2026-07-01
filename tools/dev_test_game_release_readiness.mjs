@@ -4414,6 +4414,17 @@ export function validateDevTestGameHostedEvidenceLaneAdminProof(proof, options =
       );
     }
   }
+  for (const [inputId, expected] of Object.entries(
+    proof.generatedFrom?.hostedHandoffInputValues ?? {},
+  )) {
+    const visibleText =
+      proof.adminRoleSurface?.visibleHostedHandoffInputValues?.[inputId] ?? "";
+    if (!visibleText.includes(expected)) {
+      throw new Error(
+        `hosted identity evidence admin proof missing handoff input value: ${inputId}`,
+      );
+    }
+  }
   for (const checkId of proof.generatedFrom?.hostedHandoffBlockedCheckIds ?? []) {
     if (
       !proof.adminRoleSurface?.visibleHostedHandoffBlockedChecks?.includes(
@@ -4447,6 +4458,8 @@ export function validateDevTestGameHostedEvidenceLaneAdminProof(proof, options =
     visibleRelatedLinks: proof.adminRoleSurface.visibleRelatedLinks,
     visibleHostedHandoffInputs:
       proof.adminRoleSurface.visibleHostedHandoffInputs ?? [],
+    visibleHostedHandoffInputValues:
+      proof.adminRoleSurface.visibleHostedHandoffInputValues ?? {},
     visibleHostedHandoffBlockedChecks:
       proof.adminRoleSurface.visibleHostedHandoffBlockedChecks ?? [],
     laneStatus: String(proof.generatedFrom?.status ?? "unknown"),
@@ -5576,6 +5589,17 @@ export function validateDevTestGameNextActionAdminProof(proof, options = {}) {
         );
       }
     }
+    for (const [inputId, expected] of Object.entries(
+      hostedHandoffInputValues(checklist),
+    )) {
+      const visibleText =
+        proof.adminRoleSurface?.visibleHostedHandoffInputValues?.[inputId] ?? "";
+      if (!visibleText.includes(expected)) {
+        throw new Error(
+          `next-action admin proof missing hosted handoff input value: ${inputId}`,
+        );
+      }
+    }
     for (const checkId of checklist.blockedCheckIds) {
       if (
         !proof.adminRoleSurface?.visibleHostedHandoffBlockedChecks?.includes(
@@ -5620,6 +5644,8 @@ export function validateDevTestGameNextActionAdminProof(proof, options = {}) {
       proof.adminRoleSurface.visibleRelatedDestinations ?? [],
     visibleHostedHandoffInputs:
       proof.adminRoleSurface.visibleHostedHandoffInputs ?? [],
+    visibleHostedHandoffInputValues:
+      proof.adminRoleSurface.visibleHostedHandoffInputValues ?? {},
     visibleHostedHandoffBlockedChecks:
       proof.adminRoleSurface.visibleHostedHandoffBlockedChecks ?? [],
     visibleHostedHandoffGroups:
@@ -5642,6 +5668,16 @@ export function validateDevTestGameNextActionAdminProof(proof, options = {}) {
 function hostedHandoffGroupIds(checklist) {
   const groups = checklist?.requirementGroups;
   return Array.isArray(groups) ? groups.map((group) => String(group.id)) : [];
+}
+
+function hostedHandoffInputValues(checklist) {
+  return typeof checklist?.placeholderFixturePath === "string" &&
+    checklist.placeholderFixturePath.trim() !== ""
+    ? {
+        FMARCH_HOSTED_IDENTITY_EVIDENCE_PATH:
+          checklist.placeholderFixturePath,
+      }
+    : {};
 }
 
 function validateOptionalNextActionAdminProof(proof, options = {}) {

@@ -691,6 +691,11 @@ export function normalizeLocalHostedIdentityEvidenceAudit(
       rawEvidencePath: String(
         hostedIdentityEvidence.target?.rawEvidencePath ?? "",
       ),
+      placeholderFixturePath: String(
+        hostedIdentityEvidence.target?.placeholderFixturePath ??
+          hostedIdentityEvidence.hostedHandoffChecklist?.placeholderFixturePath ??
+          "",
+      ),
       rawEvidenceStatus: String(
         hostedIdentityEvidence.target?.rawEvidenceStatus ?? "unknown",
       ),
@@ -736,7 +741,10 @@ function normalizeHostedIdentityEvidenceHandoffChecklist({
         Object.freeze({
           id: String(id),
           label: String(id),
-          value: "required",
+          value: hostedIdentityHandoffInputValue({
+            id,
+            hostedIdentityEvidence,
+          }),
           required: true,
         }),
       ),
@@ -925,7 +933,10 @@ function normalizeHostedEvidenceLaneHandoffChecklist({
         Object.freeze({
           id: input.id,
           label: input.label,
-          value: input.value,
+          value:
+            input.id === "FMARCH_HOSTED_IDENTITY_EVIDENCE_PATH"
+              ? String(checklist.placeholderFixturePath ?? input.value)
+              : input.value,
           required: input.required,
         }),
       ),
@@ -1959,7 +1970,10 @@ function normalizeNextActionHostedHandoffChecklist({
         Object.freeze({
           id: input.id,
           label: input.label,
-          value: input.value,
+          value:
+            input.id === "FMARCH_HOSTED_IDENTITY_EVIDENCE_PATH"
+              ? String(checklist.placeholderFixturePath ?? input.value)
+              : input.value,
           required: input.required,
         }),
       ),
@@ -1975,6 +1989,16 @@ function normalizeNextActionHostedHandoffChecklist({
     ),
     groups: normalizeHostedHandoffGroups(checklist.requirementGroups),
   });
+}
+
+function hostedIdentityHandoffInputValue({ id, hostedIdentityEvidence }) {
+  return id === "FMARCH_HOSTED_IDENTITY_EVIDENCE_PATH"
+    ? String(
+        hostedIdentityEvidence.hostedHandoffChecklist?.placeholderFixturePath ??
+          hostedIdentityEvidence.target?.placeholderFixturePath ??
+          "required",
+      )
+    : "required";
 }
 
 function normalizeHostedHandoffGroups(groups) {
