@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
   assertCompletedPrivateChannelProofCases,
+  assertDayThreePlayerObservationProofCase,
+  assertPostDayThreePlayerSurfaceProofCase,
   assertPrivateChannelSubmitPostProofCase,
   assertPrivateReceiptRoleSurfaceCase,
   assertStalePrivateChannelPostPhaseLockedProofCase,
@@ -412,6 +414,225 @@ test("private receipt role-surface assertion covers target receipt projection", 
         errorMessage: "missing target receipt",
       }),
     /missing target receipt/,
+  );
+});
+
+test("Day 3 player observation assertion covers target private receipt", () => {
+  const sourceRoleUrl = "http://127.0.0.1/g/game-a?private=notification-1";
+  const proof = {
+    status: "passed",
+    clickedThroughFromRoleUrl: true,
+    releaseReady: false,
+    productionReady: false,
+    rawInviteTokensVisible: false,
+    sourceRoleUrl,
+    visitedRolePath: "/g/game-a?private=notification-1",
+    surfaceTestId: "player-surface",
+    targetSlot: "slot-3",
+    principalUserId: "player-seed",
+    checkpoint: {
+      phaseId: "D03",
+      phaseState: "open",
+      actorSlot: "slot-3",
+      actionState: "disabled:actor is not alive",
+      receiptState: "idle",
+      statusText: "Player action unavailable: actor is not alive",
+    },
+    privateQueueBoundary: {
+      status: "principal-scoped-private-projections",
+      count: 1,
+      text: "Uses principal-scoped endpoints",
+    },
+    projectionCommandState: {
+      actorSlot: "slot-3",
+      actorAlive: false,
+      actorStatus: "dead",
+      phase: { phaseId: "D03", locked: false },
+      actions: [],
+      boundary: "killed target stayed dead",
+    },
+    resyncFromSeq: 906,
+    resyncSnapshotCommandState: {
+      actorSlot: "slot-3",
+      phase: { phaseId: "D03" },
+    },
+    coldLoadEndpoints: {
+      notificationsEndpoint:
+        "/games/game-a/notifications?principal_user_id=player-seed",
+      commandStateEndpoint:
+        "/games/game-a/player-command-state?principal_user_id=player-seed&slot_id=slot-3",
+    },
+    privateNotice: {
+      id: "notification-1",
+      kind: "notification",
+      text: "player_killed factional_kill",
+      detailText: "Phase N02",
+    },
+    projectionNotifications: [
+      { effect: "player_killed", status: "factional_kill" },
+    ],
+    resyncSnapshotNotifications: [
+      { effect: "player_killed", status: "factional_kill" },
+    ],
+  };
+
+  assert.doesNotThrow(() =>
+    assertDayThreePlayerObservationProofCase({
+      proof,
+      sourceRoleUrl,
+      expectedPrincipalUserId: "player-seed",
+      expectedSlot: "slot-3",
+      slotField: "targetSlot",
+      expectedActorAlive: false,
+      expectedActorStatus: "dead",
+      expectedActionState: "disabled:actor is not alive",
+      expectedStatusText: "actor is not alive",
+      expectedPrivateCount: 1,
+      expectedPrivateReceipt: true,
+      expectedBoundaryText: "killed target stayed dead",
+      expectedCommandStateEndpoint:
+        proof.coldLoadEndpoints.commandStateEndpoint,
+      expectedNotificationsEndpoint:
+        proof.coldLoadEndpoints.notificationsEndpoint,
+    }),
+  );
+  assert.throws(
+    () =>
+      assertDayThreePlayerObservationProofCase({
+        proof: {
+          ...proof,
+          projectionNotifications: [],
+        },
+        sourceRoleUrl,
+        expectedPrincipalUserId: "player-seed",
+        expectedSlot: "slot-3",
+        slotField: "targetSlot",
+        expectedActorAlive: false,
+        expectedActorStatus: "dead",
+        expectedActionState: "disabled:actor is not alive",
+        expectedStatusText: "actor is not alive",
+        expectedPrivateCount: 1,
+        expectedPrivateReceipt: true,
+        expectedBoundaryText: "killed target stayed dead",
+        expectedCommandStateEndpoint:
+          proof.coldLoadEndpoints.commandStateEndpoint,
+        expectedNotificationsEndpoint:
+          proof.coldLoadEndpoints.notificationsEndpoint,
+      }),
+    /Day 3 target private receipt/,
+  );
+});
+
+test("post-Day 3 player surface assertion covers private day-vote receipt", () => {
+  const sourceRoleUrl = "http://127.0.0.1/g/game-a?private=notification-1";
+  const proof = {
+    status: "passed",
+    clickedThroughFromRoleUrl: true,
+    releaseReady: false,
+    productionReady: false,
+    rawInviteTokensVisible: false,
+    sourceRoleUrl,
+    visitedRolePath: "/g/game-a?private=notification-1",
+    surfaceTestId: "player-surface",
+    targetSlot: "slot-2",
+    principalUserId: "player_ilya",
+    checkpoint: {
+      phaseId: "N03",
+      phaseState: "open",
+      actorSlot: "slot-2",
+      actionState: "disabled:actor is not alive",
+      receiptState: "idle",
+      statusText: "Player action unavailable: actor is not alive",
+    },
+    privateQueueBoundary: {
+      status: "principal-scoped-private-projections",
+      count: 1,
+      text: "Uses principal-scoped endpoints",
+    },
+    voteButtonCount: 0,
+    projectionCommandState: {
+      actorSlot: "slot-2",
+      actorAlive: false,
+      actorStatus: "dead",
+      phase: { phaseId: "N03", locked: false },
+      actions: [],
+      voteTargets: [],
+      boundary: "target observed post-Day 3 private receipt",
+    },
+    projectionDayVoteOutcomes: [{ phaseId: "D03" }],
+    resyncFromSeq: 910,
+    resyncSnapshotCommandState: {
+      actorSlot: "slot-2",
+      phase: { phaseId: "N03" },
+    },
+    coldLoadEndpoints: {
+      notificationsEndpoint:
+        "/games/game-a/notifications?principal_user_id=player_ilya",
+      commandStateEndpoint:
+        "/games/game-a/player-command-state?principal_user_id=player_ilya&slot_id=slot-2",
+    },
+    privateNotice: {
+      id: "notification-1",
+      kind: "notification",
+      text: "player_killed day_vote",
+      detailText: "Phase D03",
+    },
+    projectionNotifications: [{ effect: "player_killed", status: "day_vote" }],
+    resyncSnapshotNotifications: [
+      { effect: "player_killed", status: "day_vote" },
+    ],
+  };
+
+  assert.doesNotThrow(() =>
+    assertPostDayThreePlayerSurfaceProofCase({
+      proof,
+      sourceRoleUrl,
+      expectedSlot: "slot-2",
+      slotField: "targetSlot",
+      expectedPrincipalUserId: "player_ilya",
+      expectedPhaseId: "N03",
+      expectedPhaseState: "open",
+      expectedActorAlive: false,
+      expectedActorStatus: "dead",
+      expectedActionState: "disabled:actor is not alive",
+      expectedStatusText: "actor is not alive",
+      expectedPrivateCount: 1,
+      expectedPrivateReceipt: true,
+      expectedBoundaryText: "target observed post-Day 3 private receipt",
+      expectedResyncFromSeq: 910,
+      expectedCommandStateEndpoint:
+        proof.coldLoadEndpoints.commandStateEndpoint,
+      expectedNotificationsEndpoint:
+        proof.coldLoadEndpoints.notificationsEndpoint,
+    }),
+  );
+  assert.throws(
+    () =>
+      assertPostDayThreePlayerSurfaceProofCase({
+        proof: {
+          ...proof,
+          projectionDayVoteOutcomes: [{ phaseId: "D02" }],
+        },
+        sourceRoleUrl,
+        expectedSlot: "slot-2",
+        slotField: "targetSlot",
+        expectedPrincipalUserId: "player_ilya",
+        expectedPhaseId: "N03",
+        expectedPhaseState: "open",
+        expectedActorAlive: false,
+        expectedActorStatus: "dead",
+        expectedActionState: "disabled:actor is not alive",
+        expectedStatusText: "actor is not alive",
+        expectedPrivateCount: 1,
+        expectedPrivateReceipt: true,
+        expectedBoundaryText: "target observed post-Day 3 private receipt",
+        expectedResyncFromSeq: 910,
+        expectedCommandStateEndpoint:
+          proof.coldLoadEndpoints.commandStateEndpoint,
+        expectedNotificationsEndpoint:
+          proof.coldLoadEndpoints.notificationsEndpoint,
+      }),
+    /post-Day 3 player surface/,
   );
 });
 

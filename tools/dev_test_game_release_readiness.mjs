@@ -59,6 +59,8 @@ import {
 } from "./dev_test_game_core_loop_host_phase_scenarios.mjs";
 import {
   assertPrivateReceiptRoleSurfaceCase,
+  assertDayThreePlayerObservationProofCase,
+  assertPostDayThreePlayerSurfaceProofCase,
   completedPrivateChannelReloadScenario,
   assertCompletedPrivateChannelProofCases,
   completedPrivateChannelProofAssertionCases,
@@ -2791,72 +2793,22 @@ function assertCoreLoopDayThreePlayerObservationProof({
   expectedCommandStateEndpoint,
   expectedNotificationsEndpoint,
 }) {
-  if (
-    proof?.status !== "passed" ||
-    proof.clickedThroughFromRoleUrl !== true ||
-    proof.releaseReady !== false ||
-    proof.productionReady !== false ||
-    proof.rawInviteTokensVisible !== false ||
-    proof.sourceRoleUrl !== sourceRoleUrl ||
-    typeof proof.visitedRolePath !== "string" ||
-    !proof.visitedRolePath.includes("/g/") ||
-    proof.surfaceTestId !== "player-surface" ||
-    proof[slotField] !== expectedSlot ||
-    proof.principalUserId !== expectedPrincipalUserId ||
-    proof.checkpoint?.phaseId !== "D03" ||
-    proof.checkpoint.phaseState !== "open" ||
-    proof.checkpoint.actorSlot !== expectedSlot ||
-    proof.checkpoint.actionState !== expectedActionState ||
-    proof.checkpoint.receiptState !== "idle" ||
-    !String(proof.checkpoint.statusText ?? "")
-      .toLowerCase()
-      .includes(expectedStatusText) ||
-    proof.privateQueueBoundary?.status !==
-      "principal-scoped-private-projections" ||
-    proof.privateQueueBoundary.count !== expectedPrivateCount ||
-    !String(proof.privateQueueBoundary.text ?? "").includes(
-      "principal-scoped endpoints",
-    ) ||
-    proof.projectionCommandState?.actorSlot !== expectedSlot ||
-    proof.projectionCommandState?.actorAlive !== expectedActorAlive ||
-    proof.projectionCommandState?.actorStatus !== expectedActorStatus ||
-    proof.projectionCommandState?.phase?.phaseId !== "D03" ||
-    proof.projectionCommandState?.phase?.locked !== false ||
-    proof.projectionCommandState?.actions?.length !== 0 ||
-    !String(proof.projectionCommandState?.boundary ?? "").includes(
-      expectedBoundaryText,
-    ) ||
-    proof.resyncFromSeq !== 906 ||
-    proof.resyncSnapshotCommandState?.actorSlot !== expectedSlot ||
-    proof.resyncSnapshotCommandState?.phase?.phaseId !== "D03" ||
-    proof.coldLoadEndpoints?.notificationsEndpoint !==
-      expectedNotificationsEndpoint ||
-    proof.coldLoadEndpoints?.commandStateEndpoint !== expectedCommandStateEndpoint
-  ) {
-    throw new Error("core-loop admin proof missing Day 3 role observation");
-  }
-  if (
-    expectedPrivateReceipt &&
-    (proof.privateNotice?.id !== "notification-1" ||
-      proof.privateNotice.kind !== "notification" ||
-      !String(proof.privateNotice.text ?? "").includes("player_killed") ||
-      !String(proof.privateNotice.text ?? "").includes("factional_kill") ||
-      proof.privateNotice.detailText !== "Phase N02" ||
-      proof.projectionNotifications?.[0]?.effect !== "player_killed" ||
-      proof.projectionNotifications?.[0]?.status !== "factional_kill" ||
-      proof.resyncSnapshotNotifications?.[0]?.status !== "factional_kill")
-  ) {
-    throw new Error("core-loop admin proof missing Day 3 target private receipt");
-  }
-  if (
-    !expectedPrivateReceipt &&
-    (!String(proof.privateEmptyText ?? "").includes("No private results visible") ||
-      proof.projectionNotifications?.length !== 0 ||
-      proof.resyncSnapshotNotifications?.length !== 0 ||
-      proof.privateNotice !== undefined)
-  ) {
-    throw new Error("core-loop admin proof leaked Day 3 target receipt");
-  }
+  assertDayThreePlayerObservationProofCase({
+    proof,
+    sourceRoleUrl,
+    expectedPrincipalUserId,
+    expectedSlot,
+    slotField,
+    expectedActorAlive,
+    expectedActorStatus,
+    expectedActionState,
+    expectedStatusText,
+    expectedPrivateCount,
+    expectedPrivateReceipt,
+    expectedBoundaryText,
+    expectedCommandStateEndpoint,
+    expectedNotificationsEndpoint,
+  });
 }
 
 function assertCoreLoopDayThreeVoteResolutionSurface(
@@ -4305,82 +4257,30 @@ function assertCoreLoopPostDayThreePlayerSurfaceProof({
   expectedPrivateReceiptStatus = "day_vote",
   expectedPrivateReceiptPhaseId = "D03",
 }) {
-  if (
-    proof?.status !== "passed" ||
-    proof.clickedThroughFromRoleUrl !== true ||
-    proof.releaseReady !== false ||
-    proof.productionReady !== false ||
-    proof.rawInviteTokensVisible !== false ||
-    proof.sourceRoleUrl !== sourceRoleUrl ||
-    typeof proof.visitedRolePath !== "string" ||
-    !proof.visitedRolePath.includes("/g/") ||
-    proof.surfaceTestId !== "player-surface" ||
-    proof[slotField] !== expectedSlot ||
-    proof.principalUserId !== expectedPrincipalUserId ||
-    proof.checkpoint?.phaseId !== expectedPhaseId ||
-    proof.checkpoint.phaseState !== expectedPhaseState ||
-    proof.checkpoint.actorSlot !== expectedSlot ||
-    proof.checkpoint.actionState !== expectedActionState ||
-    proof.checkpoint.receiptState !== "idle" ||
-    !String(proof.checkpoint.statusText ?? "")
-      .toLowerCase()
-      .includes(expectedStatusText) ||
-    proof.privateQueueBoundary?.status !==
-      "principal-scoped-private-projections" ||
-    proof.privateQueueBoundary.count !== expectedPrivateCount ||
-    !String(proof.privateQueueBoundary.text ?? "").includes(
-      "principal-scoped endpoints",
-    ) ||
-    proof.voteButtonCount !== expectedVoteButtonCount ||
-    proof.projectionCommandState?.actorSlot !== expectedSlot ||
-    proof.projectionCommandState?.actorAlive !== expectedActorAlive ||
-    proof.projectionCommandState?.actorStatus !== expectedActorStatus ||
-    proof.projectionCommandState?.phase?.phaseId !== expectedPhaseId ||
-    proof.projectionCommandState?.phase?.locked !==
-      (expectedPhaseState === "locked") ||
-    proof.projectionCommandState?.actions?.length !== 0 ||
-    proof.projectionCommandState?.voteTargets?.length !== expectedVoteTargetCount ||
-    !String(proof.projectionCommandState?.boundary ?? "").includes(
-      expectedBoundaryText,
-    ) ||
-    proof.projectionDayVoteOutcomes?.at?.(-1)?.phaseId !==
-      expectedLastVoteOutcomePhaseId ||
-    proof.resyncFromSeq !== expectedResyncFromSeq ||
-    proof.resyncSnapshotCommandState?.actorSlot !== expectedSlot ||
-    proof.resyncSnapshotCommandState?.phase?.phaseId !== expectedPhaseId ||
-    proof.coldLoadEndpoints?.notificationsEndpoint !==
-      expectedNotificationsEndpoint ||
-    proof.coldLoadEndpoints?.commandStateEndpoint !== expectedCommandStateEndpoint
-  ) {
-    throw new Error("core-loop admin proof missing post-Day 3 player surface");
-  }
-  if (
-    expectedPrivateReceipt &&
-    (proof.privateNotice?.id !== "notification-1" ||
-      proof.privateNotice.kind !== "notification" ||
-      !String(proof.privateNotice.text ?? "").includes("player_killed") ||
-      !String(proof.privateNotice.text ?? "").includes(
-        expectedPrivateReceiptStatus,
-      ) ||
-      proof.privateNotice.detailText !==
-        `Phase ${expectedPrivateReceiptPhaseId}` ||
-      proof.projectionNotifications?.[0]?.effect !== "player_killed" ||
-      proof.projectionNotifications?.[0]?.status !==
-        expectedPrivateReceiptStatus ||
-      proof.resyncSnapshotNotifications?.[0]?.status !==
-        expectedPrivateReceiptStatus)
-  ) {
-    throw new Error("core-loop admin proof missing post-Day 3 target receipt");
-  }
-  if (
-    !expectedPrivateReceipt &&
-    (!String(proof.privateEmptyText ?? "").includes("No private results visible") ||
-      proof.projectionNotifications?.length !== 0 ||
-      proof.resyncSnapshotNotifications?.length !== 0 ||
-      proof.privateNotice !== undefined)
-  ) {
-    throw new Error("core-loop admin proof leaked post-Day 3 target receipt");
-  }
+  assertPostDayThreePlayerSurfaceProofCase({
+    proof,
+    sourceRoleUrl,
+    expectedSlot,
+    slotField,
+    expectedPrincipalUserId,
+    expectedPhaseId,
+    expectedPhaseState,
+    expectedActorAlive,
+    expectedActorStatus,
+    expectedActionState,
+    expectedStatusText,
+    expectedPrivateCount,
+    expectedPrivateReceipt,
+    expectedBoundaryText,
+    expectedResyncFromSeq,
+    expectedCommandStateEndpoint,
+    expectedNotificationsEndpoint,
+    expectedVoteButtonCount,
+    expectedVoteTargetCount,
+    expectedLastVoteOutcomePhaseId,
+    expectedPrivateReceiptStatus,
+    expectedPrivateReceiptPhaseId,
+  });
 }
 
 function assertCoreLoopPostDayThreeHostAdvanceProof({
