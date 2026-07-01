@@ -15,6 +15,23 @@ export const replacementPrivatePostHardeningLaneIds = [
   ...replacementPrivatePostRecoveryLaneIds,
 ];
 
+export function replacementConcurrentPrivatePostRaceScenario() {
+  return {
+    gameFixtureId: "replacement-private-post-race-game-a",
+    channelId: "private:mafia_day_chat",
+    actorSlot: "slot-7",
+    hostPrincipalUserId: "host_h",
+    staleOutgoingPrincipalUserId: "player-mira",
+    replacementPrincipalUserId: "player-rowan",
+    replacementOccupantLabel: "player-rowan",
+    commandAction: "submit_post",
+    commandKind: "SubmitPost",
+    rejectionError: "NotYourSlot",
+    proof:
+      "A disposable Mira role URL in the Slot 7 private mafia channel raced SubmitPost against a host role URL ProcessReplacement command, accepted only post-before-replacement ACK ordering or NotYourSlot after replacement, then refreshed browser and API surfaces to Rowan as current Slot 7 with Mira's stale command-state and private-channel routes forbidden.",
+  };
+}
+
 export function replacementStalePrivatePostAfterResolveScenario() {
   return {
     gameFixtureId: "replacement-stale-private-post-after-resolve-game-a",

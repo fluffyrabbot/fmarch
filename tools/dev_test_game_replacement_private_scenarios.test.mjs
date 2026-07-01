@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { test } from "node:test";
 import {
+  replacementConcurrentPrivatePostRaceScenario,
   replacementPrivatePostHardeningLaneIds,
   replacementPrivatePostRaceLaneIds,
   replacementPrivatePostRecoveryLaneIds,
@@ -24,6 +25,23 @@ test("replacement private scenario module groups private-post race and recovery 
     ...replacementPrivatePostRaceLaneIds,
     ...replacementPrivatePostRecoveryLaneIds,
   ]);
+});
+
+test("replacement private-post race scenario carries shared command facts", () => {
+  assert.deepEqual(replacementConcurrentPrivatePostRaceScenario(), {
+    gameFixtureId: "replacement-private-post-race-game-a",
+    channelId: "private:mafia_day_chat",
+    actorSlot: "slot-7",
+    hostPrincipalUserId: "host_h",
+    staleOutgoingPrincipalUserId: "player-mira",
+    replacementPrincipalUserId: "player-rowan",
+    replacementOccupantLabel: "player-rowan",
+    commandAction: "submit_post",
+    commandKind: "SubmitPost",
+    rejectionError: "NotYourSlot",
+    proof:
+      "A disposable Mira role URL in the Slot 7 private mafia channel raced SubmitPost against a host role URL ProcessReplacement command, accepted only post-before-replacement ACK ordering or NotYourSlot after replacement, then refreshed browser and API surfaces to Rowan as current Slot 7 with Mira's stale command-state and private-channel routes forbidden.",
+  });
 });
 
 test("replacement resolved private-post scenario carries shared command facts", () => {

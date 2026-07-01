@@ -11,6 +11,7 @@ import {
   buildDevTestGameProofRun,
 } from "./dev_test_game_proof_contract.mjs";
 import {
+  replacementConcurrentPrivatePostRaceScenario,
   replacementStalePrivatePostAfterResolveScenario,
   replacementStalePrivatePostAfterCompleteScenario,
 } from "./dev_test_game_replacement_private_scenario_cases.mjs";
@@ -16327,6 +16328,7 @@ async function verifyConcurrentReplacementPrivatePostRace({
   frontendBaseUrl,
   normalizeCommandResponse,
 }) {
+  const scenario = replacementConcurrentPrivatePostRaceScenario();
   if (browser === null || browser === undefined) {
     throw new Error("concurrent replacement private-post proof requires a Playwright browser");
   }
@@ -16334,7 +16336,7 @@ async function verifyConcurrentReplacementPrivatePostRace({
   const seed = await seedReplacementPrivatePostRaceGame({ raceGame });
   const hostSession = await createSessionGrantCredential({
     token: `${tokenPrefix}-replacement-post-host-${crypto.randomUUID()}`,
-    principalUserId: "host_h",
+    principalUserId: scenario.hostPrincipalUserId,
     returnTo: `/g/${raceGame}/host`,
     expectedCapabilityKind: "HostOf",
     issuedBy: {
@@ -16345,7 +16347,7 @@ async function verifyConcurrentReplacementPrivatePostRace({
   });
   const stalePlayerSession = await createSessionGrantCredential({
     token: `${tokenPrefix}-replacement-post-player-${crypto.randomUUID()}`,
-    principalUserId: "player-mira",
+    principalUserId: scenario.staleOutgoingPrincipalUserId,
     returnTo: `/g/${raceGame}`,
     expectedCapabilityKind: "SlotOccupant",
     issuedBy: {
@@ -16369,7 +16371,7 @@ async function verifyConcurrentReplacementPrivatePostRace({
     frontendBaseUrl,
   });
   try {
-    const channelRoute = encodeURIComponent(factionDayChatChannel);
+    const channelRoute = encodeURIComponent(scenario.channelId);
     const privateUrl = `${frontendBaseUrl}/g/${raceGame}/c/${channelRoute}`;
     await Promise.all([
       hostEntry.page.goto(`${frontendBaseUrl}/g/${raceGame}/host`, {
@@ -16379,14 +16381,19 @@ async function verifyConcurrentReplacementPrivatePostRace({
     ]);
     await Promise.all([
       hostEntry.page.waitForFunction(
-        () =>
-          window.__fmarchHostProjection?.replacement?.slotId === "slot-7" &&
-          window.__fmarchHostProjection?.replacement?.occupantLabel === "player-mira",
+        ({ actorSlot, occupantLabel }) =>
+          window.__fmarchHostProjection?.replacement?.slotId === actorSlot &&
+          window.__fmarchHostProjection?.replacement?.occupantLabel === occupantLabel,
+        {
+          actorSlot: scenario.actorSlot,
+          occupantLabel: scenario.staleOutgoingPrincipalUserId,
+        },
       ),
       playerEntry.page.waitForFunction(
-        () =>
-          window.__fmarchPlayerProjection?.commandState?.actorSlot === "slot-7" &&
+        (actorSlot) =>
+          window.__fmarchPlayerProjection?.commandState?.actorSlot === actorSlot &&
           window.__fmarchPlayerProjection?.commandState?.actorStatus === "alive",
+        scenario.actorSlot,
       ),
       playerEntry.page
         .getByTestId("player-command-channel-context")
@@ -16415,26 +16422,26 @@ async function verifyConcurrentReplacementPrivatePostRace({
     const replacementCommandId = crypto.randomUUID();
     const [postRaw, replacementRaw] = await Promise.all([
       sendBrowserCommand(playerEntry.page, {
-        principalUserId: "player-mira",
+        principalUserId: scenario.staleOutgoingPrincipalUserId,
         commandId: postCommandId,
         command: {
           SubmitPost: {
             game: raceGame,
-            channel_id: factionDayChatChannel,
-            actor_slot: "slot-7",
+            channel_id: scenario.channelId,
+            actor_slot: scenario.actorSlot,
             body: postBody,
           },
         },
       }),
       sendBrowserCommand(hostEntry.page, {
-        principalUserId: "host_h",
+        principalUserId: scenario.hostPrincipalUserId,
         commandId: replacementCommandId,
         command: {
           ProcessReplacement: {
             game: raceGame,
-            slot: "slot-7",
-            outgoing_user: "player-mira",
-            incoming_user: "player-rowan",
+            slot: scenario.actorSlot,
+            outgoing_user: scenario.staleOutgoingPrincipalUserId,
+            incoming_user: scenario.replacementPrincipalUserId,
           },
         },
       }),
@@ -16452,7 +16459,8 @@ async function verifyConcurrentReplacementPrivatePostRace({
       serverEnvelope: replacementRaw.serverEnvelope,
     });
     const postAcked = post?.state === "ack";
-    const postRejected = post?.state === "reject" && post?.error === "NotYourSlot";
+    const postRejected =
+      post?.state === "reject" && post?.error === scenario.rejectionError;
     const postSeq = postAcked ? post.streamSeqs?.[0] : null;
     const replacementSeq = replacement?.streamSeqs?.[0] ?? null;
     const acceptedPostBeforeReplacement =
@@ -16461,29 +16469,31 @@ async function verifyConcurrentReplacementPrivatePostRace({
       Number.isInteger(replacementSeq) &&
       postSeq < replacementSeq;
     if (
-      setupHostReplacement?.occupantLabel !== "player-mira" ||
-      setupCommandState?.actorSlot !== "slot-7" ||
+      setupHostReplacement?.occupantLabel !==
+        scenario.staleOutgoingPrincipalUserId ||
+      setupCommandState?.actorSlot !== scenario.actorSlot ||
       setupCommandState?.actorStatus !== "alive" ||
-      setupChannelContext?.channelId !== factionDayChatChannel ||
-      setupChannelContext?.actorSlot !== "slot-7" ||
+      setupChannelContext?.channelId !== scenario.channelId ||
+      setupChannelContext?.actorSlot !== scenario.actorSlot ||
       setupChannelContext?.actorStatus !== "alive" ||
       setupButtons.some(
-        (button) => button.action === "submit_post" && button.disabled === false,
+        (button) =>
+          button.action === scenario.commandAction && button.disabled === false,
       ) !== true ||
       replacement?.state !== "ack" ||
       replacement?.serverEnvelope?.body?.kind !== "Ack" ||
       replacement?.requestEnvelope?.body?.body?.command?.ProcessReplacement?.game !==
         raceGame ||
       replacement?.requestEnvelope?.body?.body?.command?.ProcessReplacement?.slot !==
-        "slot-7" ||
+        scenario.actorSlot ||
       replacement?.requestEnvelope?.body?.body?.command?.ProcessReplacement
-        ?.outgoing_user !== "player-mira" ||
+        ?.outgoing_user !== scenario.staleOutgoingPrincipalUserId ||
       replacement?.requestEnvelope?.body?.body?.command?.ProcessReplacement
-        ?.incoming_user !== "player-rowan" ||
+        ?.incoming_user !== scenario.replacementPrincipalUserId ||
       post?.requestEnvelope?.body?.body?.command?.SubmitPost?.channel_id !==
-        factionDayChatChannel ||
+        scenario.channelId ||
       post?.requestEnvelope?.body?.body?.command?.SubmitPost?.actor_slot !==
-        "slot-7" ||
+        scenario.actorSlot ||
       (acceptedPostBeforeReplacement !== true && postRejected !== true)
     ) {
       throw new Error(
@@ -16505,15 +16515,19 @@ async function verifyConcurrentReplacementPrivatePostRace({
       waitUntil: "networkidle",
     });
     await hostEntry.page.waitForFunction(
-      () =>
-        window.__fmarchHostProjection?.replacement?.slotId === "slot-7" &&
-        window.__fmarchHostProjection?.replacement?.occupantLabel === "player-rowan",
+      ({ actorSlot, occupantLabel }) =>
+        window.__fmarchHostProjection?.replacement?.slotId === actorSlot &&
+        window.__fmarchHostProjection?.replacement?.occupantLabel === occupantLabel,
+      {
+        actorSlot: scenario.actorSlot,
+        occupantLabel: scenario.replacementOccupantLabel,
+      },
     );
     const hostReplacementAfterRace = await hostEntry.page.evaluate(
       () => window.__fmarchHostProjection?.replacement,
     );
     const apiCommandStateAfterRace = await fetchJsonStatus(
-      `${apiBaseUrl}/games/${raceGame}/player-command-state?principal_user_id=player-mira&slot_id=slot-7`,
+      `${apiBaseUrl}/games/${raceGame}/player-command-state?principal_user_id=${scenario.staleOutgoingPrincipalUserId}&slot_id=${scenario.actorSlot}`,
     );
     const commandStateAfterRace = {
       status: apiCommandStateAfterRace.status,
@@ -16521,8 +16535,12 @@ async function verifyConcurrentReplacementPrivatePostRace({
       message: apiCommandStateAfterRace.body?.message,
     };
     const apiSlotAfterRace = (
-      await fetchHostConsoleState({ apiBaseUrl, game: raceGame, slot: "slot-7" })
-    ).slots?.find?.((slot) => slot.slot_id === "slot-7");
+      await fetchHostConsoleState({
+        apiBaseUrl,
+        game: raceGame,
+        slot: scenario.actorSlot,
+      })
+    ).slots?.find?.((slot) => slot.slot_id === scenario.actorSlot);
     const staleRouteResponse = await playerEntry.page.goto(privateUrl, {
       waitUntil: "networkidle",
     });
@@ -16540,19 +16558,21 @@ async function verifyConcurrentReplacementPrivatePostRace({
     };
     const buttonsAfterRace = await playerCommandButtons(playerEntry.page);
     const apiThread = await fetchJson(
-      `${apiBaseUrl}/games/${raceGame}/channels/${channelRoute}/thread?principal_user_id=player-rowan&limit=100`,
+      `${apiBaseUrl}/games/${raceGame}/channels/${channelRoute}/thread?principal_user_id=${scenario.replacementPrincipalUserId}&limit=100`,
     );
     const apiThreadPostBodies = (apiThread.posts ?? []).map((item) => item.body);
     if (
       commandStateAfterRace?.status !== 403 ||
-      commandStateAfterRace?.error !== "NotYourSlot" ||
+      commandStateAfterRace?.error !== scenario.rejectionError ||
       buttonsAfterRace.some(
         (button) =>
-          (button.action === "submit_post" || button.action?.startsWith("submit_action")) &&
+          (button.action === scenario.commandAction ||
+            button.action?.startsWith("submit_action")) &&
           button.disabled === false,
       ) ||
-      hostReplacementAfterRace?.occupantLabel !== "player-rowan" ||
-      apiSlotAfterRace?.occupant_user_id !== "player-rowan" ||
+      hostReplacementAfterRace?.occupantLabel !==
+        scenario.replacementOccupantLabel ||
+      apiSlotAfterRace?.occupant_user_id !== scenario.replacementPrincipalUserId ||
       staleRoute.status !== 403 ||
       staleRoute.responseStatus !== 403 ||
       !staleRoute.message.includes("requires scoped channel capability") ||
@@ -16576,7 +16596,7 @@ async function verifyConcurrentReplacementPrivatePostRace({
     }
     const outcomeSummary = postAcked
       ? `private post seq ${postSeq} before replacement seq ${replacementSeq}`
-      : "private post rejected NotYourSlot after replacement";
+      : `private post rejected ${scenario.rejectionError} after replacement`;
     return {
       status: "passed",
       game: raceGame,
@@ -16601,7 +16621,7 @@ async function verifyConcurrentReplacementPrivatePostRace({
       postBody,
       apiThreadPostBodies,
       proof:
-        "A disposable Mira role URL in the Slot 7 private mafia channel raced SubmitPost against a host role URL ProcessReplacement command, accepted only post-before-replacement ACK ordering or NotYourSlot after replacement, then refreshed browser and API surfaces to Rowan as current Slot 7 with Mira's stale command-state and private-channel routes forbidden.",
+        scenario.proof,
     };
   } finally {
     await hostEntry.context.close().catch(() => {});
