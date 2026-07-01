@@ -48,9 +48,11 @@ import {
 import {
   assertCompletedGameEndgameSurfaceAssertionCases,
   assertCompletedGameEndgameTransition,
+  assertCompletedHostReloadProofCase,
   assertCompletedDeadPlayerStaleVoteRecoveryProofCase,
   assertCompletedHostStaleCommandRecoveryProofCase,
   assertCompletedPlayerReloadProofCase,
+  assertHostCompleteGameProofCase,
   completedGameEndgameSurfaceAssertionCases,
   completedGameHardeningLaneIds,
   assertStaleCompletedGamePlayerCommandRecoveryProofCase,
@@ -3867,86 +3869,17 @@ function assertCoreLoopHostCompleteGameProof({
   expectedGame,
   sourceRoleUrl,
 }) {
-  if (
-    proof?.status !== "passed" ||
-    proof.clickedThroughFromRoleUrl !== true ||
-    proof.releaseReady !== false ||
-    proof.productionReady !== false ||
-    proof.rawInviteTokensVisible !== false ||
-    proof.sourceRoleUrl !== sourceRoleUrl ||
-    typeof proof.visitedRolePath !== "string" ||
-    !proof.visitedRolePath.endsWith("/host") ||
-    proof.surfaceTestId !== "host-console-surface" ||
-    proof.setupResyncFromSeq !== 920 ||
-    proof.setupSnapshotHost?.phase?.id !== "N05" ||
-    proof.setupSnapshotHost?.phase?.state !== "open" ||
-    proof.setupSnapshotHost?.completed !== false
-  ) {
-    throw new Error("core-loop admin proof missing host complete-game setup");
-  }
-  assertCoreLoopHostPhaseTransitionActionProof({
-    proof: proof.completeProof,
+  assertHostCompleteGameProofCase({
+    proof,
     expectedGame,
-    actionId: "complete_game",
-    commandKind: "CompleteGame",
-    streamSeq: 921,
-    expectedPhaseId: "N05",
-    expectedPhaseState: "open",
-    expectedDeadlineAffordance: "none",
-    expectedRefreshKeys: [],
+    sourceRoleUrl,
+    assertHostPhaseTransitionActionProof:
+      assertCoreLoopHostPhaseTransitionActionProof,
   });
-  if (
-    proof.completeProof?.projection?.completed !== true ||
-    proof.completeProof?.projection?.slots?.[0]?.role_revealed !== true ||
-    proof.completeProof?.projection?.slots?.[0]?.alignment_revealed !== true
-  ) {
-    throw new Error("core-loop admin proof missing completed host projection");
-  }
 }
 
 function assertCoreLoopCompletedHostReloadProof({ proof, sourceRoleUrl }) {
-  if (
-    proof?.status !== "passed" ||
-    proof.clickedThroughFromRoleUrl !== true ||
-    proof.releaseReady !== false ||
-    proof.productionReady !== false ||
-    proof.rawInviteTokensVisible !== false ||
-    proof.sourceRoleUrl !== sourceRoleUrl ||
-    typeof proof.visitedRolePath !== "string" ||
-    !proof.visitedRolePath.endsWith("/host") ||
-    proof.surfaceTestId !== "host-console-surface" ||
-    proof.resyncFromSeq !== 921 ||
-    proof.initialResyncSnapshotHost?.completed !== true ||
-    proof.reloadedResyncSnapshotHost?.completed !== true
-  ) {
-    throw new Error("core-loop admin proof missing completed host reload shell");
-  }
-  for (const [label, snapshot] of [
-    ["initial", proof.initialSnapshot],
-    ["reloaded", proof.reloadedSnapshot],
-  ]) {
-    if (
-      snapshot?.checkpoint?.phaseId !== "N05" ||
-      snapshot.checkpoint.phaseState !== "open" ||
-      snapshot.checkpoint.deadlineAffordance !== "none" ||
-      !String(snapshot.checkpoint.actionState ?? "").startsWith("disabled:") ||
-      snapshot.projection?.completed !== true ||
-      snapshot.projection?.phase?.id !== "N05" ||
-      snapshot.projection?.phase?.state !== "open" ||
-      snapshot.projection?.slots?.[0]?.role_revealed !== true ||
-      snapshot.projection?.slots?.[0]?.alignment_revealed !== true ||
-      snapshot.projection?.slots?.[1]?.role_revealed !== true ||
-      snapshot.projection?.slots?.[1]?.alignment_revealed !== true ||
-      snapshot.dayVoteOutcomes?.at?.(-1)?.phaseId !== "D05" ||
-      snapshot.hostPrompts?.length !== 0 ||
-      snapshot.actionTiles?.length !== 0 ||
-      snapshot.triggerButtons?.length !== 0
-    ) {
-      throw new Error(
-        `core-loop admin proof missing ${label} completed host reload closure`,
-      );
-    }
-  }
+  assertCompletedHostReloadProofCase({ proof, sourceRoleUrl });
 }
 
 function assertCoreLoopCompletedHostStaleCommandRecoveryProof({

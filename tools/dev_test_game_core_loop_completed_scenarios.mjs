@@ -438,6 +438,113 @@ export function assertCompletedGameEndgameSurfaceAssertionCases({
   }
 }
 
+export function assertHostCompleteGameProofCase({
+  proof,
+  expectedGame,
+  sourceRoleUrl,
+  assertHostPhaseTransitionActionProof,
+  includeEvidenceInError = false,
+}) {
+  if (
+    proof?.status !== "passed" ||
+    proof.clickedThroughFromRoleUrl !== true ||
+    proof.releaseReady !== false ||
+    proof.productionReady !== false ||
+    proof.rawInviteTokensVisible !== false ||
+    proof.sourceRoleUrl !== sourceRoleUrl ||
+    typeof proof.visitedRolePath !== "string" ||
+    !proof.visitedRolePath.endsWith("/host") ||
+    proof.surfaceTestId !== "host-console-surface" ||
+    proof.setupResyncFromSeq !== 920 ||
+    proof.setupSnapshotHost?.phase?.id !== "N05" ||
+    proof.setupSnapshotHost?.phase?.state !== "open" ||
+    proof.setupSnapshotHost?.completed !== false
+  ) {
+    throwCompletedScenarioAssertionError({
+      message: "core-loop admin proof missing host complete-game setup",
+      evidence: proof,
+      includeEvidenceInError,
+    });
+  }
+  assertHostPhaseTransitionActionProof({
+    proof: proof.completeProof,
+    expectedGame,
+    actionId: "complete_game",
+    commandKind: "CompleteGame",
+    streamSeq: 921,
+    expectedPhaseId: "N05",
+    expectedPhaseState: "open",
+    expectedDeadlineAffordance: "none",
+    expectedRefreshKeys: [],
+  });
+  if (
+    proof.completeProof?.projection?.completed !== true ||
+    proof.completeProof?.projection?.slots?.[0]?.role_revealed !== true ||
+    proof.completeProof?.projection?.slots?.[0]?.alignment_revealed !== true
+  ) {
+    throwCompletedScenarioAssertionError({
+      message: "core-loop admin proof missing completed host projection",
+      evidence: proof.completeProof,
+      includeEvidenceInError,
+    });
+  }
+}
+
+export function assertCompletedHostReloadProofCase({
+  proof,
+  sourceRoleUrl,
+  includeEvidenceInError = false,
+}) {
+  if (
+    proof?.status !== "passed" ||
+    proof.clickedThroughFromRoleUrl !== true ||
+    proof.releaseReady !== false ||
+    proof.productionReady !== false ||
+    proof.rawInviteTokensVisible !== false ||
+    proof.sourceRoleUrl !== sourceRoleUrl ||
+    typeof proof.visitedRolePath !== "string" ||
+    !proof.visitedRolePath.endsWith("/host") ||
+    proof.surfaceTestId !== "host-console-surface" ||
+    proof.resyncFromSeq !== 921 ||
+    proof.initialResyncSnapshotHost?.completed !== true ||
+    proof.reloadedResyncSnapshotHost?.completed !== true
+  ) {
+    throwCompletedScenarioAssertionError({
+      message: "core-loop admin proof missing completed host reload shell",
+      evidence: proof,
+      includeEvidenceInError,
+    });
+  }
+  for (const [label, snapshot] of [
+    ["initial", proof.initialSnapshot],
+    ["reloaded", proof.reloadedSnapshot],
+  ]) {
+    if (
+      snapshot?.checkpoint?.phaseId !== "N05" ||
+      snapshot.checkpoint.phaseState !== "open" ||
+      snapshot.checkpoint.deadlineAffordance !== "none" ||
+      !String(snapshot.checkpoint.actionState ?? "").startsWith("disabled:") ||
+      snapshot.projection?.completed !== true ||
+      snapshot.projection?.phase?.id !== "N05" ||
+      snapshot.projection?.phase?.state !== "open" ||
+      snapshot.projection?.slots?.[0]?.role_revealed !== true ||
+      snapshot.projection?.slots?.[0]?.alignment_revealed !== true ||
+      snapshot.projection?.slots?.[1]?.role_revealed !== true ||
+      snapshot.projection?.slots?.[1]?.alignment_revealed !== true ||
+      snapshot.dayVoteOutcomes?.at?.(-1)?.phaseId !== "D05" ||
+      snapshot.hostPrompts?.length !== 0 ||
+      snapshot.actionTiles?.length !== 0 ||
+      snapshot.triggerButtons?.length !== 0
+    ) {
+      throwCompletedScenarioAssertionError({
+        message: `core-loop admin proof missing ${label} completed host reload closure`,
+        evidence: snapshot,
+        includeEvidenceInError,
+      });
+    }
+  }
+}
+
 export function assertCompletedHostStaleCommandRecoveryProofCase({
   proof,
   expectedGame,

@@ -3,6 +3,8 @@ import { test } from "node:test";
 import {
   assertCompletedGameEndgameSurfaceAssertionCases,
   assertCompletedGameEndgameTransition,
+  assertCompletedHostReloadProofCase,
+  assertHostCompleteGameProofCase,
   completedDeadPlayerStaleVoteCaseDefinition,
   completedGameEndgameStaleRejectAssertionCases,
   completedGameEndgameSurfaceAssertionCases,
@@ -375,6 +377,71 @@ test("completed-game scenario module derives shared surface assertion sequence",
   ]);
 });
 
+test("completed-game scenario module asserts host complete-game proof shell", () => {
+  const hostPhaseAssertions = [];
+  const proof = hostCompleteGameProofFixture();
+
+  assertHostCompleteGameProofCase({
+    proof,
+    expectedGame: "game-a",
+    sourceRoleUrl: "http://127.0.0.1/g/game-a/host",
+    assertHostPhaseTransitionActionProof: (scenario) => {
+      hostPhaseAssertions.push(scenario);
+    },
+  });
+
+  assert.deepEqual(hostPhaseAssertions, [
+    {
+      proof: proof.completeProof,
+      expectedGame: "game-a",
+      actionId: "complete_game",
+      commandKind: "CompleteGame",
+      streamSeq: 921,
+      expectedPhaseId: "N05",
+      expectedPhaseState: "open",
+      expectedDeadlineAffordance: "none",
+      expectedRefreshKeys: [],
+    },
+  ]);
+});
+
+test("completed-game scenario module asserts completed host reload shell", () => {
+  assertCompletedHostReloadProofCase({
+    proof: completedHostReloadProofFixture(),
+    sourceRoleUrl: "http://127.0.0.1/g/game-a/host",
+  });
+});
+
+test("completed-game shared host assertions fail closed", () => {
+  assert.throws(
+    () =>
+      assertHostCompleteGameProofCase({
+        proof: {
+          ...hostCompleteGameProofFixture(),
+          setupSnapshotHost: { phase: { id: "D05", state: "open" } },
+        },
+        expectedGame: "game-a",
+        sourceRoleUrl: "http://127.0.0.1/g/game-a/host",
+        assertHostPhaseTransitionActionProof: assertProofFixture,
+      }),
+    /host complete-game setup/,
+  );
+  assert.throws(
+    () =>
+      assertCompletedHostReloadProofCase({
+        proof: {
+          ...completedHostReloadProofFixture(),
+          reloadedSnapshot: {
+            ...completedHostReloadSnapshotFixture(),
+            actionTiles: [{ action: "complete_game" }],
+          },
+        },
+        sourceRoleUrl: "http://127.0.0.1/g/game-a/host",
+      }),
+    /reloaded completed host reload closure/,
+  );
+});
+
 test("completed-game transition covers every stale and reload scenario", () => {
   const transition = completedGameEndgameTransition();
   assertCompletedGameEndgameTransition({ transition });
@@ -410,6 +477,74 @@ function commandStateBuildersFixture() {
 }
 
 function assertProofFixture() {}
+
+function hostCompleteGameProofFixture() {
+  return {
+    status: "passed",
+    clickedThroughFromRoleUrl: true,
+    releaseReady: false,
+    productionReady: false,
+    rawInviteTokensVisible: false,
+    sourceRoleUrl: "http://127.0.0.1/g/game-a/host",
+    visitedRolePath: "/g/game-a/host",
+    surfaceTestId: "host-console-surface",
+    setupResyncFromSeq: 920,
+    setupSnapshotHost: {
+      phase: { id: "N05", state: "open" },
+      completed: false,
+    },
+    completeProof: {
+      projection: {
+        completed: true,
+        slots: [
+          { role_revealed: true, alignment_revealed: true },
+          { role_revealed: true, alignment_revealed: true },
+        ],
+      },
+    },
+  };
+}
+
+function completedHostReloadProofFixture() {
+  return {
+    status: "passed",
+    clickedThroughFromRoleUrl: true,
+    releaseReady: false,
+    productionReady: false,
+    rawInviteTokensVisible: false,
+    sourceRoleUrl: "http://127.0.0.1/g/game-a/host",
+    visitedRolePath: "/g/game-a/host",
+    surfaceTestId: "host-console-surface",
+    resyncFromSeq: 921,
+    initialResyncSnapshotHost: { completed: true },
+    reloadedResyncSnapshotHost: { completed: true },
+    initialSnapshot: completedHostReloadSnapshotFixture(),
+    reloadedSnapshot: completedHostReloadSnapshotFixture(),
+  };
+}
+
+function completedHostReloadSnapshotFixture() {
+  return {
+    checkpoint: {
+      phaseId: "N05",
+      phaseState: "open",
+      deadlineAffordance: "none",
+      actionState: "disabled:game complete",
+    },
+    projection: {
+      completed: true,
+      phase: { id: "N05", state: "open" },
+      slots: [
+        { role_revealed: true, alignment_revealed: true },
+        { role_revealed: true, alignment_revealed: true },
+      ],
+    },
+    dayVoteOutcomes: [{ phaseId: "D05" }],
+    hostPrompts: [],
+    actionTiles: [],
+    triggerButtons: [],
+  };
+}
 
 function recordAssertion(assertionName, asserted) {
   const assertProof = () => {
