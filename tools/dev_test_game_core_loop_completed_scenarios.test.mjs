@@ -3,16 +3,59 @@ import { test } from "node:test";
 import {
   assertCompletedGameEndgameSurfaceAssertionCases,
   assertCompletedGameEndgameTransition,
+  completedDeadPlayerStaleVoteCaseDefinition,
   completedGameEndgameStaleRejectAssertionCases,
   completedGameEndgameSurfaceAssertionCases,
   completedGameEndgameTransition,
   completedDeadPlayerStaleVoteCase,
+  completedHostStaleCommandCaseDefinitions,
   completedHostStaleCommandCases,
+  completedPlayerReloadCaseDefinitions,
   completedPlayerReloadAssertionCases,
   completedPlayerReloadCases,
   completedPlayerReloadProofCases,
+  staleCompletedGamePlayerCommandCaseDefinitions,
   staleCompletedGamePlayerCommandCases,
 } from "./dev_test_game_core_loop_completed_scenarios.mjs";
+
+test("completed-game scenario module exposes shared frozen definitions", () => {
+  assert(Object.isFrozen(completedHostStaleCommandCaseDefinitions));
+  assert(Object.isFrozen(completedPlayerReloadCaseDefinitions));
+  assert(Object.isFrozen(staleCompletedGamePlayerCommandCaseDefinitions));
+  assert(Object.isFrozen(completedDeadPlayerStaleVoteCaseDefinition));
+  assert.deepEqual(
+    completedHostStaleCommandCases(),
+    completedHostStaleCommandCaseDefinitions,
+  );
+  assert.deepEqual(
+    completedPlayerReloadCases(),
+    completedPlayerReloadCaseDefinitions,
+  );
+  assert.deepEqual(
+    staleCompletedGamePlayerCommandCases(),
+    staleCompletedGamePlayerCommandCaseDefinitions,
+  );
+  assert.deepEqual(
+    completedDeadPlayerStaleVoteCase(),
+    completedDeadPlayerStaleVoteCaseDefinition,
+  );
+  assert.notEqual(
+    completedHostStaleCommandCases()[0],
+    completedHostStaleCommandCaseDefinitions[0],
+  );
+  assert.notEqual(
+    completedPlayerReloadCases()[0],
+    completedPlayerReloadCaseDefinitions[0],
+  );
+  assert.notEqual(
+    staleCompletedGamePlayerCommandCases()[0],
+    staleCompletedGamePlayerCommandCaseDefinitions[0],
+  );
+  assert.notEqual(
+    completedDeadPlayerStaleVoteCase(),
+    completedDeadPlayerStaleVoteCaseDefinition,
+  );
+});
 
 test("completed-game scenario module builds player reload proof cases", () => {
   const proofCases = completedPlayerReloadProofCases({

@@ -38,16 +38,24 @@ export const playerActionConflictRecoveryLaneIds = Object.freeze([
   "stale-action-reconnect-recovery",
 ]);
 
-export const hostStaleControlLaneIds = Object.freeze([
+export const hostStandaloneStaleControlLaneIds = Object.freeze([
   "stale-host-publish",
   "stale-host-lifecycle",
   "stale-host-lifecycle-reload",
   "stale-host-modkill",
   "stale-host-modkill-reload",
+]);
+
+export const hostPromptStaleControlLaneIds = Object.freeze([
   "stale-host-prompt",
   "stale-host-prompt-reload",
-  ...completedHostStaleCommandHardeningLaneIds(),
+]);
+
+export const hostGenericStaleControlLaneIds = Object.freeze([
   "stale-host-control",
+]);
+
+export const hostPhaseStaleControlLaneIds = Object.freeze([
   "stale-host-resolve",
   "stale-host-resolve-reload",
   "stale-host-resolve-reconnect-recovery",
@@ -57,6 +65,14 @@ export const hostStaleControlLaneIds = Object.freeze([
   "stale-host-deadline",
   "stale-host-deadline-reload",
   "stale-host-deadline-reconnect-recovery",
+]);
+
+export const hostStaleControlLaneIds = Object.freeze([
+  ...hostStandaloneStaleControlLaneIds,
+  ...hostPromptStaleControlLaneIds,
+  ...completedHostStaleCommandHardeningLaneIds(),
+  ...hostGenericStaleControlLaneIds,
+  ...hostPhaseStaleControlLaneIds,
 ]);
 
 export const hostRaceReloadLaneIds = Object.freeze([
