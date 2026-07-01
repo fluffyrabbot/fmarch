@@ -7,6 +7,9 @@ import {
   handleLocalhostBindFailure,
   preflightLocalhostBindOrExit,
 } from "./frontend_smoke_bind_preflight.mjs";
+import {
+  createUnexpectedMediaResponseGuard,
+} from "./dev_test_game_media_response_guard.mjs";
 
 export const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 export const frontendRoot = path.join(repoRoot, "frontend");
@@ -53,11 +56,16 @@ export async function runAdminAuditProof({
     }
     vite = await startFrontend();
     browser = await chromium.launch();
+    const mediaResponseGuard = createUnexpectedMediaResponseGuard({
+      label: smokeName,
+    });
+    mediaResponseGuard.attachBrowser(browser);
     const adminRoleSurface = await prove({
       browser,
       frontendBaseUrl: await frontendBaseUrl(vite),
       source,
     });
+    mediaResponseGuard.assertNoUnexpectedMedia404({ phase: smokeName });
     const evidence = buildEvidence({ source, adminRoleSurface });
     assertEvidence(evidence);
     await writeFile(evidencePath, `${JSON.stringify(evidence, null, 2)}\n`);

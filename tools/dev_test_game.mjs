@@ -13,6 +13,9 @@ import {
 import {
   replacementStalePrivatePostAfterCompleteScenario,
 } from "./dev_test_game_replacement_private_scenarios.mjs";
+import {
+  createUnexpectedMediaResponseGuard,
+} from "./dev_test_game_media_response_guard.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const frontendRoot = path.join(repoRoot, "frontend");
@@ -935,6 +938,10 @@ async function verifySessionCard(card) {
   resetProofStabilityAudit();
   const { chromium } = await import("playwright");
   const browser = await chromium.launch();
+  const mediaResponseGuard = createUnexpectedMediaResponseGuard({
+    label: "dev-test-game-live-browser-proof",
+  });
+  mediaResponseGuard.attachBrowser(browser);
   const roles = [];
   const sessions = {};
   const roleEntries = {};
@@ -1081,6 +1088,9 @@ async function verifySessionCard(card) {
     card.sessions.replacementPlayer = replacementConsole.replacementSessionRefresh.session;
     sessions.replacementPlayer = replacementConsole.replacementSessionRefresh.browserEntry;
     roles.push("replacementPlayer");
+    mediaResponseGuard.assertNoUnexpectedMedia404({
+      phase: "dev-test-game-live-browser-proof",
+    });
   } finally {
     await concurrentActionPage?.close().catch(() => {});
     await staleActionRetryPage?.close().catch(() => {});
@@ -1106,6 +1116,7 @@ async function verifySessionCard(card) {
     roles,
     sessions,
     proofStability: buildProofStabilityAudit(),
+    mediaResponseGuard: mediaResponseGuard.summary(),
     cohostConsole,
     coreLoop,
     dayVoteResolution,
