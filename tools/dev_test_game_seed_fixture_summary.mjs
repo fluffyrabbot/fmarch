@@ -4,6 +4,9 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { seedCommandPlanForGame } from "./dev_test_game.mjs";
 import { assertDevTestGameProofRun } from "./dev_test_game_proof_contract.mjs";
 import { assertDevTestGameReleaseReadiness } from "./dev_test_game_release_readiness.mjs";
+import {
+  seedRequiredScenarioIds,
+} from "./dev_test_game_seed_scenario_cases.mjs";
 
 export const DEV_TEST_GAME_SEED_FIXTURE_SUMMARY_VERSION = 1;
 
@@ -147,62 +150,7 @@ export function assertDevTestGameSeedFixtureSummary(summary) {
       throw new Error(`seed fixture summary missing passed check: ${id}`);
     }
   }
-  const requiredScenarios = [
-    "host-phase-controls",
-    "cohost-deadline-control",
-    "player-vote-recovery",
-    "player-action-denied",
-    "invalid-action-recovery",
-    "resolution-receipt",
-    "dead-player-recovery",
-    "night-action-loop",
-    "host-replacement-console",
-    "replacement-host-issued-invite",
-    "replacement-pending-player",
-    "replacement-redeemed-invite-recovery",
-    "replacement-session-revocation-recovery",
-    "replacement-session-refresh-recovery",
-    "replacement-stale-session-after-refresh",
-    "replacement-reconnect-recovery",
-    "replacement-stale-conflict-message",
-    "replacement-invalid-target-recovery",
-    "replacement-idempotent-retry",
-    "stale-host-invite-recovery",
-    "replacement-stale-success-recovery",
-    "replacement-stale-player",
-    "replacement-stale-action",
-    "replacement-stale-private-channel",
-    "replacement-stale-private-receipts",
-    "replacement-incoming-player",
-    "action-idempotent-retry",
-    "concurrent-action-race",
-    "concurrent-action-race-reload",
-    "concurrent-player-vote-resolve-race",
-    "concurrent-player-action-advance-race",
-    "concurrent-cohost-deadline-resolve-race",
-    "concurrent-replacement-private-post-race",
-    "concurrent-replacement-private-post-race-reload",
-    "concurrent-replacement-vote-race",
-    "concurrent-replacement-vote-race-reload",
-    "concurrent-replacement-action-race",
-    "concurrent-replacement-action-race-reload",
-    "replacement-incoming-action",
-    "replacement-action-reconnect",
-    "replacement-stale-action-after-resolve",
-    "replacement-stale-private-post-after-resolve",
-    "replacement-stale-private-post-reconnect",
-    "replacement-stale-private-post-after-complete",
-    "replacement-stale-private-post-after-complete-reload",
-    "stale-host-complete-reconnect-recovery",
-    "stale-same-action-recovery",
-    "stale-action-conflict-message",
-    "stale-action-reconnect-recovery",
-    "stale-dead-action-conflict",
-    "private-channel-member",
-    "private-channel-denied",
-    "multiplayer-hardening",
-    "local-ops-readiness",
-  ];
+  const requiredScenarios = seedRequiredScenarioIds;
   const scenarios = new Map(
     (summary.demoScenarios ?? []).map((scenario) => [scenario.id, scenario]),
   );
