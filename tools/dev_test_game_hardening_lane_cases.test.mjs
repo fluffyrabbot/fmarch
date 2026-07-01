@@ -19,12 +19,14 @@ import {
 } from "./dev_test_game_host_stale_control_scenarios.mjs";
 import {
   hostedMatrixStaleConflictLaneIds,
+  staleConflictMessageLaneIds,
+} from "./dev_test_game_hardening_lane_cases.mjs";
+import {
   playerActionConflictRecoveryLaneIds,
   playerActionFoundationLaneIds,
   promotedStalePlayerCommandLaneIds,
-  staleConflictMessageLaneIds,
   stalePlayerCommandLaneIds,
-} from "./dev_test_game_hardening_lane_cases.mjs";
+} from "./dev_test_game_player_recovery_scenarios.mjs";
 
 test("hardening lane cases share stale conflict-message IDs", () => {
   assert.deepEqual(staleConflictMessageLaneIds, [
@@ -102,6 +104,37 @@ test("host stale-control production callers use the shared scenario module", asy
           "../../../../tools/dev_test_game_host_stale_control_scenarios.mjs",
         ),
       `${callerPath} should import host stale-control definitions through the scenario module`,
+    );
+
+    for (const importBlock of hardeningLaneImportBlocks(source)) {
+      for (const forbiddenImport of forbiddenHardeningImports) {
+        assert(
+          !importBlock.includes(forbiddenImport),
+          `${callerPath} should not import ${forbiddenImport} from hardening lane cases`,
+        );
+      }
+    }
+  }
+});
+
+test("player recovery production callers use the shared scenario module", async () => {
+  const callerPaths = [
+    "tools/dev_test_game_release_readiness.mjs",
+    "tools/dev_test_game_proof_contract.mjs",
+    "tools/dev_test_game_hardening_admin_proof.mjs",
+  ];
+  const forbiddenHardeningImports = [
+    "playerActionConflictRecoveryLaneIds",
+    "playerActionFoundationLaneIds",
+    "promotedStalePlayerCommandLaneIds",
+    "stalePlayerCommandLaneIds",
+  ];
+
+  for (const callerPath of callerPaths) {
+    const source = await readFile(callerPath, "utf8");
+    assert(
+      source.includes("./dev_test_game_player_recovery_scenarios.mjs"),
+      `${callerPath} should import player recovery definitions through the scenario module`,
     );
 
     for (const importBlock of hardeningLaneImportBlocks(source)) {
