@@ -102,7 +102,7 @@ try {
   const roles = redactProofRoles(proofRoles);
 
   const evidence = {
-    version: 9,
+    version: 10,
     proof: "auth-invite-role-proof",
     status: "passed",
     releaseReady: false,
@@ -515,6 +515,7 @@ async function proveIdentityLifecycle({
     accountId: hostAccount.accountId,
   });
   let staleAccountLifecycleConflict;
+  let staleAccountLifecycleReloadRecovery;
   const accountDisableControl = await driveAdminAccountLifecycleControl({
     frontendBaseUrl,
     adminSessionToken,
@@ -536,11 +537,19 @@ async function proveIdentityLifecycle({
       expectedState: "reject",
       expectedText: "stale account lifecycle state",
     });
-    const accountEnableControl = await driveAdminAccountLifecycleControl({
-      frontendBaseUrl,
-      adminSessionToken,
+    staleAccountLifecycleReloadRecovery =
+      await reloadStaleAdminAccountLifecyclePage({
+        page: staleAccountLifecyclePage.page,
+        accountId: hostAccount.accountId,
+        detailRoleUrl: staleAccountLifecyclePage.detailRoleUrl,
+      });
+    const accountEnableControl = await submitAdminAccountLifecycleControl({
+      page: staleAccountLifecyclePage.page,
       accountId: hostAccount.accountId,
       action: "enable",
+      expectedState: "ack",
+      expectedText: `${hostAccount.accountId} enabled`,
+      detailRoleUrl: staleAccountLifecyclePage.detailRoleUrl,
     });
     const accountRecoveryLogin = await driveAccountLogin({
       frontendBaseUrl,
@@ -569,6 +578,7 @@ async function proveIdentityLifecycle({
       accountDisableControl,
       accountEnableControl,
       staleAccountLifecycleConflict,
+      staleAccountLifecycleReloadRecovery,
       disabledAccountReject,
       hostScopedInviteIssuance,
       rotation,
@@ -598,6 +608,7 @@ async function finishIdentityLifecycleProof({
   accountDisableControl,
   accountEnableControl,
   staleAccountLifecycleConflict,
+  staleAccountLifecycleReloadRecovery,
   disabledAccountReject,
   hostScopedInviteIssuance,
   rotation,
@@ -703,13 +714,23 @@ async function finishIdentityLifecycleProof({
         enabledStatusText: accountEnableControl.visibleStatusText,
         staleConflictStatusTestId: staleAccountLifecycleConflict.statusTestId,
         staleConflictStatusText: staleAccountLifecycleConflict.visibleStatusText,
+        reloadRecoveryStatus:
+          staleAccountLifecycleReloadRecovery.reloadedTargetState,
+        reloadRecoveryDetailRoleUrl:
+          staleAccountLifecycleReloadRecovery.detailRoleUrl,
+        reloadRecoveryTargetText:
+          staleAccountLifecycleReloadRecovery.targetText,
         visitedDetailRoleUrl:
           accountDisableControl.visitedDetailRoleUrl &&
-          accountEnableControl.visitedDetailRoleUrl,
+          accountEnableControl.visitedDetailRoleUrl &&
+          staleAccountLifecycleReloadRecovery.visitedDetailRoleUrl,
       },
       disabledAccountRejected: disabledAccountReject.status === "reject",
       staleAccountSessionRejected: true,
       staleAdminControlRejected: staleAccountLifecycleConflict.status === "passed",
+      staleAdminControlReloadRecovered:
+        staleAccountLifecycleReloadRecovery.status === "passed" &&
+        accountEnableControl.status === "passed",
       recoveryCapabilityKinds: accountRecoveryLogin.capabilityKinds,
       sameRoleSurface:
         new URL(accountRecoveryLogin.loginUrl).searchParams.get("returnTo") ===
@@ -1013,6 +1034,35 @@ async function openAdminAccountLifecyclePage({
   };
 }
 
+async function reloadStaleAdminAccountLifecyclePage({
+  page,
+  accountId,
+  detailRoleUrl,
+}) {
+  await page.reload({ waitUntil: "networkidle" });
+  await page.getByTestId("admin-identity-account-controls").waitFor({
+    state: "visible",
+    timeout: 15000,
+  });
+  const targetText = await page
+    .getByTestId("admin-identity-account-control-target")
+    .innerText();
+  if (!targetText.includes(accountId) || !targetText.includes("disabled")) {
+    throw new Error(
+      `admin account lifecycle reload did not show disabled target: ${targetText}`,
+    );
+  }
+  return {
+    status: "passed",
+    detailRoleUrl,
+    controlsTestId: "admin-identity-account-controls",
+    targetTestId: "admin-identity-account-control-target",
+    targetText,
+    reloadedTargetState: "disabled",
+    visitedDetailRoleUrl: true,
+  };
+}
+
 async function submitAdminAccountLifecycleControl({
   page,
   accountId,
@@ -1289,7 +1339,7 @@ function redactProofRoles(roles) {
 
 function assertInviteProof(evidence) {
   if (
-    evidence.version !== 9 ||
+    evidence.version !== 10 ||
     evidence.proof !== "auth-invite-role-proof" ||
     evidence.status !== "passed" ||
     evidence.productionReady !== false ||
@@ -1351,6 +1401,17 @@ function assertInviteProof(evidence) {
     evidence.identityLifecycle?.accountLifecycle?.disabledAccountRejected !== true ||
     evidence.identityLifecycle?.accountLifecycle?.staleAccountSessionRejected !== true ||
     evidence.identityLifecycle?.accountLifecycle?.staleAdminControlRejected !== true ||
+    evidence.identityLifecycle?.accountLifecycle?.staleAdminControlReloadRecovered !==
+      true ||
+    evidence.identityLifecycle?.accountLifecycle?.adminControlSurface
+      ?.reloadRecoveryStatus !== "disabled" ||
+    evidence.identityLifecycle?.accountLifecycle?.adminControlSurface
+      ?.reloadRecoveryDetailRoleUrl !==
+      "/admin/audit/identity-lifecycle?game=<seeded-game>&principal_user_id=host_h" ||
+    !String(
+      evidence.identityLifecycle?.accountLifecycle?.adminControlSurface
+        ?.reloadRecoveryTargetText ?? "",
+    ).includes("disabled") ||
     !String(
       evidence.identityLifecycle?.accountLifecycle?.adminControlSurface
         ?.staleConflictStatusText ?? "",

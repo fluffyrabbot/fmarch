@@ -2764,6 +2764,7 @@ test("admin route data exposes local identity adapter proof as a native audit ro
       disabledAccountRejected: true,
       staleAccountSessionRejected: true,
       staleAdminControlRejected: true,
+      staleAdminControlReloadRecovered: true,
       sameRoleSurface: true,
       revokedSessionCount: 1,
       adminControlSurface: {
@@ -2773,6 +2774,10 @@ test("admin route data exposes local identity adapter proof as a native audit ro
         visitedDetailRoleUrl: true,
         staleConflictStatusText:
           "stale account lifecycle state for host@example.test; refresh and use current account controls before enable",
+        reloadRecoveryStatus: "disabled",
+        reloadRecoveryDetailRoleUrl:
+          "/admin/audit/identity-lifecycle?game=<seeded-game>&principal_user_id=host_h",
+        reloadRecoveryTargetText: "host@example.test host_h disabled",
       },
       rawPasswordStored: false,
     },
@@ -5183,7 +5188,7 @@ function backupRestoreProofFixture() {
 
 function identityAdapterProofFixture() {
   return {
-    version: 9,
+    version: 10,
     proof: "auth-invite-role-proof",
     status: "passed",
     scope: "local-auth-invite-role-proof",
@@ -5237,12 +5242,17 @@ function identityAdapterProofFixture() {
           visitedDetailRoleUrl: true,
           staleConflictStatusText:
             "stale account lifecycle state for host@example.test; refresh and use current account controls before enable",
+          reloadRecoveryStatus: "disabled",
+          reloadRecoveryDetailRoleUrl:
+            "/admin/audit/identity-lifecycle?game=<seeded-game>&principal_user_id=host_h",
+          reloadRecoveryTargetText: "host@example.test host_h disabled",
         },
         disabledStatus: "disabled",
         enabledStatus: "enabled",
         disabledAccountRejected: true,
         staleAccountSessionRejected: true,
         staleAdminControlRejected: true,
+        staleAdminControlReloadRecovered: true,
         recoveryCapabilityKinds: ["HostOf"],
         sameRoleSurface: true,
         revokedSessionCount: 1,

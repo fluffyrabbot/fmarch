@@ -3423,7 +3423,7 @@ export function normalizeLocalIdentityAdapterAudit(identityAdapterProof, { game 
   if (
     identityAdapterProof === null ||
     typeof identityAdapterProof !== "object" ||
-    identityAdapterProof.version !== 9 ||
+    identityAdapterProof.version !== 10 ||
     identityAdapterProof.proof !== "auth-invite-role-proof" ||
     identityAdapterProof.status !== "passed" ||
     identityAdapterProof.scope !== "local-auth-invite-role-proof" ||
@@ -3511,6 +3511,17 @@ export function normalizeLocalIdentityAdapterAudit(identityAdapterProof, { game 
       true ||
     identityAdapterProof.identityLifecycle?.accountLifecycle?.staleAdminControlRejected !==
       true ||
+    identityAdapterProof.identityLifecycle?.accountLifecycle
+      ?.staleAdminControlReloadRecovered !== true ||
+    identityAdapterProof.identityLifecycle?.accountLifecycle?.adminControlSurface
+      ?.reloadRecoveryStatus !== "disabled" ||
+    identityAdapterProof.identityLifecycle?.accountLifecycle?.adminControlSurface
+      ?.reloadRecoveryDetailRoleUrl !==
+      "/admin/audit/identity-lifecycle?game=<seeded-game>&principal_user_id=host_h" ||
+    !String(
+      identityAdapterProof.identityLifecycle?.accountLifecycle?.adminControlSurface
+        ?.reloadRecoveryTargetText ?? "",
+    ).includes("disabled") ||
     !identityAdapterProof.identityLifecycle?.accountLifecycle?.recoveryCapabilityKinds?.includes(
       "HostOf",
     ) ||
@@ -3624,6 +3635,9 @@ export function normalizeLocalIdentityAdapterAudit(identityAdapterProof, { game 
         staleAdminControlRejected:
           identityAdapterProof.identityLifecycle.accountLifecycle
             ?.staleAdminControlRejected === true,
+        staleAdminControlReloadRecovered:
+          identityAdapterProof.identityLifecycle.accountLifecycle
+            ?.staleAdminControlReloadRecovered === true,
         sameRoleSurface:
           identityAdapterProof.identityLifecycle.accountLifecycle?.sameRoleSurface === true,
         revokedSessionCount:
@@ -3644,6 +3658,18 @@ export function normalizeLocalIdentityAdapterAudit(identityAdapterProof, { game 
           staleConflictStatusText: String(
             identityAdapterProof.identityLifecycle.accountLifecycle?.adminControlSurface
               ?.staleConflictStatusText ?? "",
+          ),
+          reloadRecoveryStatus: String(
+            identityAdapterProof.identityLifecycle.accountLifecycle?.adminControlSurface
+              ?.reloadRecoveryStatus ?? "",
+          ),
+          reloadRecoveryDetailRoleUrl: String(
+            identityAdapterProof.identityLifecycle.accountLifecycle?.adminControlSurface
+              ?.reloadRecoveryDetailRoleUrl ?? "",
+          ),
+          reloadRecoveryTargetText: String(
+            identityAdapterProof.identityLifecycle.accountLifecycle?.adminControlSurface
+              ?.reloadRecoveryTargetText ?? "",
           ),
         }),
         rawPasswordStored:

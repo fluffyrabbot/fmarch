@@ -5209,7 +5209,7 @@ export function validateDevTestGameIdentityAdapterProof(proof, options = {}) {
     ["host", "HostOf"],
     ["player", "SlotOccupant"],
   ]);
-  if (proof?.version !== 9) {
+  if (proof?.version !== 10) {
     throw new Error(`identity adapter proof version drifted: ${proof?.version}`);
   }
   if (proof.proof !== "auth-invite-role-proof") {
@@ -5294,6 +5294,17 @@ export function validateDevTestGameIdentityAdapterProof(proof, options = {}) {
     proof.identityLifecycle?.accountLifecycle?.disabledAccountRejected !== true ||
     proof.identityLifecycle?.accountLifecycle?.staleAccountSessionRejected !== true ||
     proof.identityLifecycle?.accountLifecycle?.staleAdminControlRejected !== true ||
+    proof.identityLifecycle?.accountLifecycle?.staleAdminControlReloadRecovered !==
+      true ||
+    proof.identityLifecycle?.accountLifecycle?.adminControlSurface
+      ?.reloadRecoveryStatus !== "disabled" ||
+    proof.identityLifecycle?.accountLifecycle?.adminControlSurface
+      ?.reloadRecoveryDetailRoleUrl !==
+      "/admin/audit/identity-lifecycle?game=<seeded-game>&principal_user_id=host_h" ||
+    !String(
+      proof.identityLifecycle?.accountLifecycle?.adminControlSurface
+        ?.reloadRecoveryTargetText ?? "",
+    ).includes("disabled") ||
     !String(
       proof.identityLifecycle?.accountLifecycle?.adminControlSurface
         ?.staleConflictStatusText ?? "",
