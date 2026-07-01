@@ -1,0 +1,241 @@
+import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
+import { test } from "node:test";
+import {
+  assertHostPhaseTransitionSurfaceProof,
+} from "./dev_test_game_core_loop_transition_recovery_scenario_assertions.mjs";
+
+test("core-loop proof and readiness share transition recovery assertions", async () => {
+  const callerPaths = [
+    "tools/dev_test_game_core_loop_admin_proof.mjs",
+    "tools/dev_test_game_release_readiness.mjs",
+  ];
+
+  for (const callerPath of callerPaths) {
+    const source = await readFile(callerPath, "utf8");
+    assert(
+      source.includes(
+        "./dev_test_game_core_loop_transition_recovery_scenario_assertions.mjs",
+      ),
+      `${callerPath} should import transition recovery assertions through the shared module`,
+    );
+    for (const localFunctionName of [
+      "function assertDayFiveNoLynchVoteProof",
+      "function assertDayFiveNoLynchHostTransitionProof",
+      "function assertStaleDayFiveVoteRecoveryProof",
+      "function assertCoreLoopDayFiveNoLynchVoteProof",
+      "function assertCoreLoopDayFiveNoLynchHostTransitionProof",
+      "function assertCoreLoopStaleDayFiveVoteRecoveryProof",
+    ]) {
+      assert(
+        !source.includes(localFunctionName),
+        `${callerPath} should not carry a local ${localFunctionName} copy`,
+      );
+    }
+  }
+});
+
+test("shared host phase transition surface assertion composes stale recovery cases", () => {
+  const actionCalls = [];
+  const surface = {
+    status: "passed",
+    clickedThroughFromRoleUrl: true,
+    releaseReady: false,
+    productionReady: false,
+    sourceHostRoleUrl: "http://127.0.0.1/g/game-a/host",
+    sourcePlayerRoleUrl: "http://127.0.0.1/g/game-a",
+    visitedHostRolePath: "/g/game-a/host",
+    surfaceTestId: "host-console-surface",
+    transition:
+      "host:D02:resolve_phase:ack:801 -> host:advance_phase:ack:802 -> player:N02",
+    resolveProof: { proofId: "resolve" },
+    advanceProof: { proofId: "advance" },
+    staleHostAdvanceRecoveryProof: hostStaleAdvanceProofFixture(),
+    playerObservationProof: playerObservationProofFixture(),
+  };
+
+  assert.doesNotThrow(() =>
+    assertHostPhaseTransitionSurfaceProof({
+      hostPhaseTransitionSurface: surface,
+      assertHostPhaseTransitionActionProof: (args) => actionCalls.push(args),
+    }),
+  );
+  assert.deepEqual(
+    actionCalls.map((call) => [
+      call.proof.proofId,
+      call.actionId,
+      call.commandKind,
+      call.streamSeq,
+      call.expectedPhaseId,
+    ]),
+    [
+      ["resolve", "resolve_phase", "ResolvePhase", 801, "D02"],
+      ["advance", "advance_phase", "AdvancePhase", 802, "N02"],
+    ],
+  );
+
+  assert.throws(
+    () =>
+      assertHostPhaseTransitionSurfaceProof({
+        hostPhaseTransitionSurface: {
+          ...surface,
+          playerObservationProof: {
+            ...surface.playerObservationProof,
+            checkpointTargetSlots: "",
+          },
+        },
+        assertHostPhaseTransitionActionProof: () => {},
+      }),
+    /player phase transition observation/,
+  );
+});
+
+function hostStaleAdvanceProofFixture() {
+  return {
+    status: "passed",
+    releaseReady: false,
+    productionReady: false,
+    sourceRoleUrl: "http://127.0.0.1/g/game-a/host",
+    visitedRolePath: "/g/game-a/host",
+    surfaceTestId: "host-console-surface",
+    setupResyncFromSeq: 801,
+    setupSnapshotHost: {
+      phase: { id: "D02", state: "locked" },
+    },
+    clickedAction: "advance_phase",
+    commandKind: "AdvancePhase",
+    command: { game: "game-a" },
+    commandStatus: {
+      state: "reject",
+      error: "InvalidTarget",
+      message: "stale phase state, refresh and use current controls",
+    },
+    commandOutcome: {
+      state: "reject",
+      error: "InvalidTarget",
+      message: "stale phase state, refresh and use current controls",
+    },
+    bridgePlan: {
+      role: "moderator",
+      commandKind: "AdvancePhase",
+      commandEndpoint: "/commands",
+      finalState: "reject",
+      projectionRefreshKeys: ["host"],
+    },
+    projection: {
+      phase: { id: "N02", state: "open", locked: false },
+    },
+    checkpointPhaseIdAfterReject: "N02",
+    checkpointPhaseStateAfterReject: "open",
+    checkpointDeadlineAffordanceAfterReject: "resolve_phase,lock_thread",
+    activityStatusText: "Reject InvalidTarget: invalid target",
+  };
+}
+
+function playerObservationProofFixture() {
+  return {
+    status: "passed",
+    releaseReady: false,
+    productionReady: false,
+    sourceRoleUrl: "http://127.0.0.1/g/game-a",
+    visitedRolePath: "/g/game-a",
+    surfaceTestId: "player-surface",
+    resyncFromSeq: 802,
+    resyncKeys: ["commandState"],
+    resyncSnapshotCommandState: {
+      phase: { phaseId: "N02" },
+    },
+    projectionCommandState: {
+      phase: { phaseId: "N02" },
+      boundary: "AdvancePhase opened Night 2 controls",
+    },
+    checkpointPhaseId: "N02",
+    checkpointPhaseState: "open",
+    checkpointActionState: "enabled:submit_action:factional_kill",
+    checkpointTargetSlots: "slot-3",
+    checkpointReceiptState: "reject:PhaseLocked",
+    staleVoteRecoveryProof: staleVoteProofFixture(),
+    staleActionRecoveryProof: staleActionProofFixture(),
+  };
+}
+
+function staleVoteProofFixture() {
+  return {
+    status: "passed",
+    clickedAction: "submit_vote",
+    commandKind: "SubmitVote",
+    setupResyncFromSeq: 801,
+    setupSnapshotCommandState: {
+      phase: { phaseId: "D02" },
+      voteTargets: [{ slotId: "slot-2" }],
+    },
+    command: {
+      game: "game-a",
+      actor_slot: "slot-7",
+      target: { Slot: "slot-2" },
+    },
+    commandStatus: {
+      state: "reject",
+      error: "PhaseLocked",
+      message: "stale vote state, refresh and use current vote controls",
+    },
+    bridgePlan: {
+      role: "player",
+      commandKind: "SubmitVote",
+      commandEndpoint: "/commands",
+      finalState: "reject",
+      projectionRefreshKeys: ["votecount", "commandState", "dayVoteOutcomes"],
+    },
+    receipts: [{ state: "reject" }],
+    projectionCommandState: {
+      phase: { phaseId: "N02" },
+      boundary: "PhaseLocked recovery refreshed player controls",
+    },
+    checkpointReceiptState: "reject:PhaseLocked",
+    checkpointPhaseIdAfterReject: "N02",
+    checkpointActionStateAfterReject: "enabled:submit_action:factional_kill",
+    checkpointTargetSlotsAfterReject: "slot-3",
+    recoveryText: "Reject PhaseLocked",
+    receiptCount: 1,
+    receiptStatusText: "stale vote state",
+  };
+}
+
+function staleActionProofFixture() {
+  return {
+    status: "passed",
+    clickedAction: "submit_action:factional_kill",
+    commandKind: "SubmitAction",
+    command: {
+      game: "game-a",
+      action_id: "factional_kill",
+      actor_slot: "slot-7",
+      template_id: "factional_kill",
+      targets: ["slot-3"],
+    },
+    commandStatus: {
+      state: "reject",
+      error: "PhaseLocked",
+      message: "stale action state, refresh and use current action controls",
+    },
+    bridgePlan: {
+      role: "player",
+      commandKind: "SubmitAction",
+      commandEndpoint: "/commands",
+      finalState: "reject",
+      projectionRefreshKeys: ["commandState"],
+    },
+    receipts: [{ state: "reject" }],
+    projectionCommandState: {
+      phase: { phaseId: "N02" },
+      boundary: "PhaseLocked recovery refreshed action controls",
+    },
+    checkpointReceiptState: "reject:PhaseLocked",
+    checkpointPhaseIdAfterReject: "N02",
+    checkpointActionStateAfterReject: "enabled:submit_action:factional_kill",
+    checkpointTargetSlotsAfterReject: "slot-3",
+    recoveryText: "Reject PhaseLocked",
+    receiptCount: 2,
+    receiptStatusText: "Reject PhaseLocked: phase locked",
+  };
+}
