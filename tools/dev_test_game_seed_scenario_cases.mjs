@@ -92,6 +92,8 @@ export const seedDemoOnlyScenarioIds = Object.freeze([
   "resolution-receipts",
   "player-action-boundary",
   "host-votecount-publication",
+  "concurrent-host-publish-race",
+  "concurrent-host-publish-race-reload",
   "host-lifecycle-control",
   "host-modkill-control",
   "stale-host-publish-after-change",
@@ -111,16 +113,18 @@ export const seedDemoOnlyScenarioIds = Object.freeze([
   "stale-player-withdraw-after-change",
   "stale-player-withdraw-after-phase-closure",
   "stale-player-vote-after-phase-closure",
+  "stale-player-complete",
   "stale-dead-target-vote",
   "dead-current-vote",
+  "concurrent-vote-race",
   "concurrent-vote-race-reload",
 ]);
 
 export const seedDemoScenarioIds = Object.freeze([
   ...seedRequiredScenarioIds.slice(0, 3),
-  ...seedDemoOnlyScenarioIds.slice(0, 29),
+  ...seedDemoOnlyScenarioIds.slice(0, 32),
   ...seedRequiredScenarioIds.slice(3, 11),
-  seedDemoOnlyScenarioIds[29],
+  ...seedDemoOnlyScenarioIds.slice(32),
   ...seedRequiredScenarioIds.slice(11),
 ]);
 
