@@ -5822,6 +5822,24 @@ export function validateDevTestGameHostedEvidenceLaneAdminProof(proof, options =
       );
     }
   }
+  for (const inputId of proof.generatedFrom?.hostedHandoffInputIds ?? []) {
+    if (!proof.adminRoleSurface?.visibleHostedHandoffInputs?.includes(inputId)) {
+      throw new Error(
+        `hosted evidence lane admin proof missing handoff input: ${inputId}`,
+      );
+    }
+  }
+  for (const checkId of proof.generatedFrom?.hostedHandoffBlockedCheckIds ?? []) {
+    if (
+      !proof.adminRoleSurface?.visibleHostedHandoffBlockedChecks?.includes(
+        checkId,
+      )
+    ) {
+      throw new Error(
+        `hosted evidence lane admin proof missing handoff blocked check: ${checkId}`,
+      );
+    }
+  }
   return {
     status: "passed",
     path:
@@ -5833,6 +5851,10 @@ export function validateDevTestGameHostedEvidenceLaneAdminProof(proof, options =
     visibleChecks: proof.adminRoleSurface.visibleChecks,
     visibleUnproven: proof.adminRoleSurface.visibleUnproven,
     visibleRelatedLinks: proof.adminRoleSurface.visibleRelatedLinks,
+    visibleHostedHandoffInputs:
+      proof.adminRoleSurface.visibleHostedHandoffInputs ?? [],
+    visibleHostedHandoffBlockedChecks:
+      proof.adminRoleSurface.visibleHostedHandoffBlockedChecks ?? [],
     laneStatus: String(proof.generatedFrom?.status ?? "unknown"),
     preflightStatus: String(proof.generatedFrom?.preflightStatus ?? "unknown"),
     ...(options.artifact === undefined ? {} : { artifact: options.artifact }),

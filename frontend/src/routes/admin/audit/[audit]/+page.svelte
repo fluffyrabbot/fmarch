@@ -229,6 +229,45 @@
         </ol>
       </section>
     {/if}
+    {#if data.audit.hostedHandoffChecklist?.inputs?.length > 0 || data.audit.hostedHandoffChecklist?.blockedChecks?.length > 0}
+      <section
+        class="admin-audit-detail__group"
+        data-testid="admin-audit-detail-hosted-handoff-checklist"
+      >
+        <h2>Hosted handoff checklist</h2>
+        <ol class="admin-audit-detail__entries">
+          <li
+            class="admin-audit-detail__entry admin-audit-detail__entry--stack"
+            data-testid="admin-audit-hosted-handoff-summary"
+          >
+            <strong>{data.audit.hostedHandoffChecklist.status}</strong>
+            <span>{data.audit.hostedHandoffChecklist.preflightStatus}</span>
+            <span>{data.audit.hostedHandoffChecklist.command}</span>
+            <span>{data.audit.hostedHandoffChecklist.proofTarget}</span>
+          </li>
+          {#each data.audit.hostedHandoffChecklist.inputs as input}
+            <li
+              class="admin-audit-detail__entry"
+              data-testid={`admin-audit-hosted-handoff-input-${input.id}`}
+            >
+              <strong>{input.label}</strong>
+              <span>{input.value}</span>
+              <span>{input.required ? "required" : "optional"}</span>
+            </li>
+          {/each}
+          {#each data.audit.hostedHandoffChecklist.blockedChecks as check}
+            <li
+              class="admin-audit-detail__entry"
+              data-testid={`admin-audit-hosted-handoff-blocked-check-${check.id}`}
+            >
+              <strong>{check.id}</strong>
+              <span>{check.status}</span>
+              <span>{check.requiredEvidence}</span>
+            </li>
+          {/each}
+        </ol>
+      </section>
+    {/if}
     {#if data.audit.unproven?.length > 0}
       <ol class="admin-audit-detail__entries" data-testid="admin-audit-detail-unproven">
         {#each data.audit.unproven as item}

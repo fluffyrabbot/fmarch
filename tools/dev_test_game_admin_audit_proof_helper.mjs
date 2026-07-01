@@ -106,6 +106,8 @@ export async function proveAdminAuditDetail({
   requiredSpineRecoveryHooks = [],
   requiredUnproven = [],
   requiredRealHostedEvidenceInputs = [],
+  requiredHostedHandoffInputs = [],
+  requiredHostedHandoffBlockedChecks = [],
   requiredRelatedLinks = [],
   requiredRelatedDestinations = [],
   forbiddenText = [],
@@ -219,6 +221,16 @@ export async function proveAdminAuditDetail({
       page,
       prefix: "admin-audit-real-hosted-evidence-input",
       ids: requiredRealHostedEvidenceInputs,
+    });
+    const visibleHostedHandoffInputs = await waitForRows({
+      page,
+      prefix: "admin-audit-hosted-handoff-input",
+      ids: requiredHostedHandoffInputs,
+    });
+    const visibleHostedHandoffBlockedChecks = await waitForRows({
+      page,
+      prefix: "admin-audit-hosted-handoff-blocked-check",
+      ids: requiredHostedHandoffBlockedChecks,
     });
     const visibleRelatedLinks = await waitForRows({
       page,
@@ -415,6 +427,12 @@ export async function proveAdminAuditDetail({
       ...(visibleRealHostedEvidenceInputs.length === 0
         ? {}
         : { visibleRealHostedEvidenceInputs }),
+      ...(visibleHostedHandoffInputs.length === 0
+        ? {}
+        : { visibleHostedHandoffInputs }),
+      ...(visibleHostedHandoffBlockedChecks.length === 0
+        ? {}
+        : { visibleHostedHandoffBlockedChecks }),
       ...(visibleRelatedLinks.length === 0 ? {} : { visibleRelatedLinks }),
       ...(visibleRelatedDestinations.length === 0
         ? {}

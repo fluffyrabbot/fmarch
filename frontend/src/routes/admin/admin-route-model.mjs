@@ -584,6 +584,11 @@ export function normalizeLocalHostedEvidenceLaneAudit(
   const realHostedEvidenceInputs = normalizeRealHostedEvidenceInputs(
     hostedEvidenceLane.hostedEvidence?.realHostedEvidenceInputs,
   );
+  const hostedHandoffChecklist = normalizeHostedEvidenceLaneHandoffChecklist({
+    hostedEvidenceLane,
+    blockedChecks: checks.filter((check) => blockedCheckIdSet.has(String(check.id))),
+    realHostedEvidenceInputs,
+  });
   return Object.freeze({
     id: "local-hosted-evidence-lane",
     label: "Hosted evidence lane",
@@ -647,6 +652,7 @@ export function normalizeLocalHostedEvidenceLaneAudit(
       }),
     ]),
     realHostedEvidenceInputs,
+    hostedHandoffChecklist,
     artifactSummary: Object.freeze({
       preflightStatus: String(hostedEvidenceLane.preflightStatus ?? "unknown"),
       blockedCheckCount: blockedCheckIds.length,
@@ -674,6 +680,48 @@ export function normalizeLocalHostedEvidenceLaneAudit(
       releaseReady: hostedEvidenceLane.releaseReady === true,
       productionReady: hostedEvidenceLane.productionReady === true,
     }),
+  });
+}
+
+function normalizeHostedEvidenceLaneHandoffChecklist({
+  hostedEvidenceLane,
+  blockedChecks,
+  realHostedEvidenceInputs,
+}) {
+  return Object.freeze({
+    status: String(hostedEvidenceLane.status ?? "unknown"),
+    preflightStatus: String(hostedEvidenceLane.preflightStatus ?? "unknown"),
+    command: String(
+      hostedEvidenceLane.hostedEvidence?.realHostedEvidenceInputs?.command ??
+        hostedEvidenceLane.nextCommand ??
+        "",
+    ),
+    proofTarget: String(
+      hostedEvidenceLane.hostedEvidence?.realHostedEvidenceInputs?.proofTarget ??
+        hostedEvidenceLane.nextProofTarget ??
+        "",
+    ),
+    inputCount: realHostedEvidenceInputs.length,
+    blockedCheckCount: blockedChecks.length,
+    inputs: Object.freeze(
+      realHostedEvidenceInputs.map((input) =>
+        Object.freeze({
+          id: input.id,
+          label: input.label,
+          value: input.value,
+          required: input.required,
+        }),
+      ),
+    ),
+    blockedChecks: Object.freeze(
+      blockedChecks.map((check) =>
+        Object.freeze({
+          id: String(check.id),
+          status: "blocked",
+          requiredEvidence: String(check.requiredEvidence ?? ""),
+        }),
+      ),
+    ),
   });
 }
 

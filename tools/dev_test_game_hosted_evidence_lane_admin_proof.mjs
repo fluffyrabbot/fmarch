@@ -54,6 +54,8 @@ await runAdminAuditProof({
       ),
       requiredUnproven: source.lane.blockedCheckIds,
       requiredRealHostedEvidenceInputs: realHostedEvidenceInputIds,
+      requiredHostedHandoffInputs: realHostedEvidenceInputIds,
+      requiredHostedHandoffBlockedChecks: source.lane.blockedCheckIds,
       requiredRelatedLinks,
     }),
   buildEvidence: ({ source, adminRoleSurface }) => ({
@@ -77,6 +79,8 @@ await runAdminAuditProof({
       ),
       blockedCheckIds: source.lane.blockedCheckIds,
       realHostedEvidenceInputIds,
+      hostedHandoffInputIds: realHostedEvidenceInputIds,
+      hostedHandoffBlockedCheckIds: source.lane.blockedCheckIds,
       relatedAuditIds: requiredRelatedLinks,
     },
     adminRoleSurface,
@@ -119,6 +123,26 @@ export function assertHostedEvidenceLaneAdminProof(evidence) {
     ) {
       throw new Error(
         `hosted evidence lane admin proof missing real hosted input: ${inputId}`,
+      );
+    }
+  }
+  for (const inputId of evidence.generatedFrom?.hostedHandoffInputIds ?? []) {
+    if (
+      !evidence.adminRoleSurface?.visibleHostedHandoffInputs?.includes(inputId)
+    ) {
+      throw new Error(
+        `hosted evidence lane admin proof missing handoff input: ${inputId}`,
+      );
+    }
+  }
+  for (const checkId of evidence.generatedFrom?.hostedHandoffBlockedCheckIds ?? []) {
+    if (
+      !evidence.adminRoleSurface?.visibleHostedHandoffBlockedChecks?.includes(
+        checkId,
+      )
+    ) {
+      throw new Error(
+        `hosted evidence lane admin proof missing handoff blocked check: ${checkId}`,
       );
     }
   }

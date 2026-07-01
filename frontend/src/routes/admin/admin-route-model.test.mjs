@@ -2243,6 +2243,44 @@ test("admin hosted evidence lane detail data carries blocked setup rows", async 
       ],
     ],
   );
+  assert.equal(data.audit.hostedHandoffChecklist.status, "blocked");
+  assert.equal(data.audit.hostedHandoffChecklist.preflightStatus, "blocked");
+  assert.equal(
+    data.audit.hostedHandoffChecklist.command,
+    "npm run test:dev-test-game-hosted-evidence-lane",
+  );
+  assert.equal(
+    data.audit.hostedHandoffChecklist.proofTarget,
+    "target/dev-test-game/hosted-matrix-external.json",
+  );
+  assert.deepEqual(
+    data.audit.hostedHandoffChecklist.inputs.map((item) => [
+      item.id,
+      item.required,
+    ]),
+    [
+      ["command", true],
+      ["proof-target", true],
+      ["FMARCH_HOSTED_MATRIX_FRONTEND_URL", true],
+      ["FMARCH_HOSTED_MATRIX_API_URL", true],
+      ["FMARCH_HOSTED_MATRIX_GROUP_ID", true],
+      ["FMARCH_HOSTED_MATRIX_RAW_EVIDENCE_PATH", true],
+      ["FMARCH_HOSTED_MATRIX_EVIDENCE_PATH", false],
+    ],
+  );
+  assert.deepEqual(
+    data.audit.hostedHandoffChecklist.blockedChecks.map((item) => [
+      item.id,
+      item.status,
+    ]),
+    [
+      ["hosted-frontend-url-configured", "blocked"],
+      ["hosted-api-url-configured", "blocked"],
+      ["hosted-targets-external", "blocked"],
+      ["raw-evidence-path-configured", "blocked"],
+      ["raw-evidence-readable", "blocked"],
+    ],
+  );
   assert.equal(data.audit.artifactSummary.demoProofStatus, "passed");
   assert.equal(data.audit.artifactSummary.demoOnly, true);
   assert.equal(
