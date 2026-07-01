@@ -27,6 +27,10 @@ import {
   devTestGameHostedEvidenceLaneDemoProofPath,
 } from "./dev_test_game_hosted_evidence_lane_demo_proof.mjs";
 import {
+  hostStaleControlLaneIds,
+  staleConflictMessageLaneIds,
+} from "./dev_test_game_hardening_lane_cases.mjs";
+import {
   devTestGameHostedMatrixExternalEvidenceCommand,
   devTestGameHostedMatrixExternalEvidencePath,
 } from "./dev_test_game_hosted_matrix_external_evidence.mjs";
@@ -1869,33 +1873,6 @@ const raceCoveragePromotedMilestoneGroupIds = Object.freeze([
   "host-concurrent-race-reload",
   "player-concurrent-action-reload",
   "cohost-deadline-race-reload",
-]);
-
-const staleConflictMessageLaneIds = Object.freeze([
-  "replacement-stale-conflict-message",
-  "stale-action-conflict-message",
-  "stale-dead-action-conflict",
-]);
-
-const hostStaleControlLaneIds = Object.freeze([
-  "stale-host-publish",
-  "stale-host-lifecycle",
-  "stale-host-modkill",
-  "stale-host-prompt",
-  "stale-host-prompt-reload",
-  "stale-host-complete",
-  "stale-host-complete-reload",
-  "stale-host-complete-reconnect-recovery",
-  "stale-host-control",
-  "stale-host-resolve",
-  "stale-host-resolve-reload",
-  "stale-host-resolve-reconnect-recovery",
-  "stale-host-advance",
-  "stale-host-advance-reload",
-  "stale-host-advance-reconnect-recovery",
-  "stale-host-deadline",
-  "stale-host-deadline-reload",
-  "stale-host-deadline-reconnect-recovery",
 ]);
 
 if (pathToFileURL(process.argv[1] ?? "").href === import.meta.url) {

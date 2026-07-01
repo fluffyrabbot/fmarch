@@ -11,6 +11,9 @@ import {
   assertRealHostedEvidenceInputs,
   buildRealHostedEvidenceInputs,
 } from "./dev_test_game_real_hosted_evidence_inputs.mjs";
+import {
+  hostedMatrixStaleConflictLaneIds,
+} from "./dev_test_game_hardening_lane_cases.mjs";
 
 export const DEV_TEST_GAME_HOSTED_CONCURRENT_RACE_MATRIX_VERSION = 1;
 export const devTestGameReleaseReadinessPath =
@@ -42,12 +45,7 @@ const reconnectLaneIds = Object.freeze([
   "stale-cohost-deadline-reconnect-recovery",
 ]);
 
-const staleConflictLaneIds = Object.freeze([
-  "replacement-stale-conflict-message",
-  "stale-action-conflict-message",
-  "stale-dead-action-conflict",
-  "stale-host-control",
-]);
+const staleConflictLaneIds = hostedMatrixStaleConflictLaneIds;
 
 export function buildDevTestGameHostedConcurrentRaceMatrixEvidence(
   releaseReadiness,
