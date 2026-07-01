@@ -2764,6 +2764,132 @@ async fn global_admin_account_login_creates_normal_role_session(pool: sqlx::PgPo
         .clone()
         .oneshot(
             Request::builder()
+                .method("POST")
+                .uri("/auth/accounts/disable")
+                .header("content-type", "application/json")
+                .header("authorization", "Bearer account-admin-token")
+                .body(Body::from(
+                    serde_json::json!({
+                        "account_id": "host@example.test"
+                    })
+                    .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let disabled: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+    assert_eq!(disabled["status"], "disabled");
+    assert_eq!(disabled["account_id"], "host@example.test");
+    assert_eq!(disabled["principal_user_id"], "host_h");
+    assert_eq!(disabled["revoked_session_count"], 1);
+
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri(format!("/auth/session?game={game}"))
+                .header("authorization", "Bearer host-account-session")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/auth/accounts/login")
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    serde_json::json!({
+                        "account_id": "host@example.test",
+                        "password": "correct horse battery",
+                        "session_token": "disabled-host-account-session",
+                        "expires_at": 4_102_444_800i64
+                    })
+                    .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/auth/accounts/enable")
+                .header("content-type", "application/json")
+                .header("authorization", "Bearer account-admin-token")
+                .body(Body::from(
+                    serde_json::json!({
+                        "account_id": "host@example.test"
+                    })
+                    .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let enabled: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+    assert_eq!(enabled["status"], "enabled");
+    assert_eq!(enabled["disabled_at"], serde_json::Value::Null);
+
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/auth/accounts/login")
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    serde_json::json!({
+                        "account_id": "host@example.test",
+                        "password": "correct horse battery",
+                        "session_token": "reenabled-host-account-session",
+                        "expires_at": 4_102_444_800i64
+                    })
+                    .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri(format!("/auth/session?game={game}"))
+                .header("authorization", "Bearer reenabled-host-account-session")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let reenabled_session: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+    assert_eq!(reenabled_session["principal_user_id"], "host_h");
+    assert_eq!(reenabled_session["capabilities"][0]["kind"], "HostOf");
+
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
                 .method("GET")
                 .uri("/auth/identity-lifecycle-audit?principal_user_id=host_h")
                 .header("authorization", "Bearer account-admin-token")
@@ -2778,8 +2904,12 @@ async fn global_admin_account_login_creates_normal_role_session(pool: sqlx::PgPo
     let audit_text = audit.to_string();
     assert!(audit_text.contains("account_created"));
     assert!(audit_text.contains("account_session_created"));
+    assert!(audit_text.contains("account_disabled"));
+    assert!(audit_text.contains("account_enabled"));
     assert!(!audit_text.contains("correct horse battery"));
     assert!(!audit_text.contains("host-account-session"));
+    assert!(!audit_text.contains("disabled-host-account-session"));
+    assert!(!audit_text.contains("reenabled-host-account-session"));
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]

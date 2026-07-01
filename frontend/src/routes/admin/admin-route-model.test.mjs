@@ -504,11 +504,13 @@ test("admin route data exposes identity lifecycle audit when admin session is pr
     "Bearer admin-session",
   );
   assert.equal(identity.label, "Identity lifecycle");
-  assert.equal(identity.status, "5 lifecycle audit events available");
+  assert.equal(identity.status, "7 lifecycle audit events available");
   assert.equal(identity.authority, "GlobalAdmin");
   assert.equal(identity.rawTokensStored, false);
   assert.deepEqual(identity.eventKinds, [
     "account_created",
+    "account_disabled",
+    "account_enabled",
     "account_session_created",
     "invite_revoked",
     "session_revoked",
@@ -526,6 +528,8 @@ test("admin route data exposes identity lifecycle audit when admin session is pr
     identity.entries.map((entry) => entry.eventKind),
     [
       "account_created",
+      "account_disabled",
+      "account_enabled",
       "account_session_created",
       "session_rotated",
       "session_revoked",
@@ -552,7 +556,7 @@ test("admin identity lifecycle detail data carries audit event rows", async () =
   assert.equal(data.surfaceHeader.title, "Identity lifecycle");
   assert.match(data.surfaceHeader.summary, /identity-lifecycle-audit/);
   assert.equal(data.audit.id, "identity-lifecycle");
-  assert.equal(data.audit.entries.length, 5);
+  assert.equal(data.audit.entries.length, 7);
   assert.deepEqual(
     data.audit.entries.map((entry) => [
       entry.eventKind,
@@ -561,6 +565,8 @@ test("admin identity lifecycle detail data carries audit event rows", async () =
     ]),
     [
       ["account_created", "host_h", "admin_a"],
+      ["account_disabled", "host_h", "admin_a"],
+      ["account_enabled", "host_h", "admin_a"],
       ["account_session_created", "host_h", "host_h"],
       ["session_rotated", "host_h", "host_h"],
       ["session_revoked", "host_h", "admin_a"],
@@ -2687,7 +2693,7 @@ test("admin route data exposes local identity adapter proof as a native audit ro
 
   const identity = data.audit.find((item) => item.id === "local-identity-adapter");
   assert.equal(identity.label, "Local identity adapter");
-  assert.equal(identity.status, "3 role surfaces, 3 lifecycle controls");
+  assert.equal(identity.status, "3 role surfaces, 5 lifecycle controls");
   assert.equal(identity.authority, "GlobalAdmin or GlobalMod");
   assert.equal(
     identity.inspectHref,
@@ -2697,6 +2703,7 @@ test("admin route data exposes local identity adapter proof as a native audit ro
     identity.checks.map((check) => check.id),
     [
       "account-login",
+      "account-lifecycle",
       "session-rotation",
       "session-revocation",
       "invite-revocation",
@@ -2719,7 +2726,13 @@ test("admin route data exposes local identity adapter proof as a native audit ro
     inviteCredentialKind: "single-use-invite",
     sessionCredentialKind: "opaque-session",
     accountCredentialKind: "local-password-account",
-    lifecycleControls: ["session-rotation", "session-revocation", "invite-revocation"],
+    lifecycleControls: [
+      "account-disable",
+      "account-enable",
+      "session-rotation",
+      "session-revocation",
+      "invite-revocation",
+    ],
     delegatedIssuanceControls: ["host-scoped-invite-issuance"],
     hostScopedInvite: {
       issuedByPrincipalUserId: "host_h",
@@ -2735,6 +2748,15 @@ test("admin route data exposes local identity adapter proof as a native audit ro
       accountId: "host@example.test",
       sameRoleSurface: true,
       cookieValuePrefix: "account-session-",
+      rawPasswordStored: false,
+    },
+    accountLifecycle: {
+      disabledStatus: "disabled",
+      enabledStatus: "enabled",
+      disabledAccountRejected: true,
+      staleAccountSessionRejected: true,
+      sameRoleSurface: true,
+      revokedSessionCount: 1,
       rawPasswordStored: false,
     },
     rawTokensStored: false,
@@ -2755,12 +2777,13 @@ test("admin local identity adapter detail data carries lifecycle checks and role
   assert.equal(data.status, "available");
   assert.equal(data.surfaceHeader.title, "Local identity adapter");
   assert.equal(data.audit.id, "local-identity-adapter");
-  assert.equal(data.audit.checks.length, 7);
+  assert.equal(data.audit.checks.length, 8);
   assert.equal(data.audit.sessions.length, 3);
   assert.deepEqual(
     data.audit.checks.map((check) => [check.id, check.status]),
     [
       ["account-login", "passed"],
+      ["account-lifecycle", "passed"],
       ["session-rotation", "passed"],
       ["session-revocation", "passed"],
       ["invite-revocation", "passed"],
@@ -2825,13 +2848,29 @@ function identityLifecycleAuditFixture() {
       {
         id: 2,
         event_at: 99,
+        event_kind: "account_disabled",
+        actor_user_id: "admin_a",
+        principal_user_id: "host_h",
+        metadata: { account_id: "host@example.test" },
+      },
+      {
+        id: 3,
+        event_at: 100,
+        event_kind: "account_enabled",
+        actor_user_id: "admin_a",
+        principal_user_id: "host_h",
+        metadata: { account_id: "host@example.test" },
+      },
+      {
+        id: 4,
+        event_at: 99,
         event_kind: "account_session_created",
         actor_user_id: "host_h",
         principal_user_id: "host_h",
         metadata: { account_id: "host@example.test" },
       },
       {
-        id: 3,
+        id: 5,
         event_at: 100,
         event_kind: "session_rotated",
         actor_user_id: "host_h",
@@ -2839,7 +2878,7 @@ function identityLifecycleAuditFixture() {
         metadata: { global_capability_count: 0 },
       },
       {
-        id: 4,
+        id: 6,
         event_at: 101,
         event_kind: "session_revoked",
         actor_user_id: "admin_a",
@@ -2847,7 +2886,7 @@ function identityLifecycleAuditFixture() {
         metadata: {},
       },
       {
-        id: 5,
+        id: 7,
         event_at: 102,
         event_kind: "invite_revoked",
         actor_user_id: "admin_a",
@@ -5127,7 +5166,7 @@ function backupRestoreProofFixture() {
 
 function identityAdapterProofFixture() {
   return {
-    version: 8,
+    version: 9,
     proof: "auth-invite-role-proof",
     status: "passed",
     scope: "local-auth-invite-role-proof",
@@ -5142,7 +5181,13 @@ function identityAdapterProofFixture() {
       inviteCredentialKind: "single-use-invite",
       accountCredentialKind: "local-password-account",
       sessionCredentialKind: "opaque-session",
-      lifecycleControls: ["session-rotation", "session-revocation", "invite-revocation"],
+      lifecycleControls: [
+        "account-disable",
+        "account-enable",
+        "session-rotation",
+        "session-revocation",
+        "invite-revocation",
+      ],
       delegatedIssuanceControls: ["host-scoped-invite-issuance"],
     },
     identityLifecycle: {
@@ -5163,6 +5208,19 @@ function identityAdapterProofFixture() {
         capabilityKinds: ["HostOf"],
         sameRoleSurface: true,
         cookieValuePrefix: "account-session-",
+        rawPasswordStored: false,
+      },
+      accountLifecycle: {
+        status: "passed",
+        disabledStatus: "disabled",
+        enabledStatus: "enabled",
+        disabledAccountRejected: true,
+        staleAccountSessionRejected: true,
+        recoveryCapabilityKinds: ["HostOf"],
+        sameRoleSurface: true,
+        revokedSessionCount: 1,
+        disabledAtPresent: true,
+        enabledDisabledAtCleared: true,
         rawPasswordStored: false,
       },
       hostScopedInviteIssuance: {

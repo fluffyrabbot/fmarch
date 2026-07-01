@@ -102,14 +102,14 @@ try {
   const roles = redactProofRoles(proofRoles);
 
   const evidence = {
-    version: 8,
+    version: 9,
     proof: "auth-invite-role-proof",
     status: "passed",
     releaseReady: false,
     scope: "local-auth-invite-role-proof",
     productionReady: false,
     proofBoundary:
-      "Local scratch-Postgres plus local Rust API, SvelteKit login/action/host/admin-audit routes, and Chromium proof. Proves invite-issued sessions plus a local account credential login preserve the existing role-surface capability architecture for seeded admin, host, and player URLs, including host-role-surface game-scoped player invite issuance, GlobalAdmin account creation, GlobalAdmin discovery, and inspection of local identity lifecycle audit rows from the admin overview; it does not prove production password hardening, account recovery, email delivery, hosted identity, abuse controls, hosted audit retention/export, or beta release readiness.",
+      "Local scratch-Postgres plus local Rust API, SvelteKit login/action/host/admin-audit routes, and Chromium proof. Proves invite-issued sessions plus a local account credential lifecycle preserve the existing role-surface capability architecture for seeded admin, host, and player URLs, including host-role-surface game-scoped player invite issuance, GlobalAdmin account creation/disable/enable, stale account-session revocation, disabled-account login rejection, GlobalAdmin discovery, and inspection of local identity lifecycle audit rows from the admin overview; it does not prove production password hardening, account recovery, email delivery, hosted identity, abuse controls, hosted audit retention/export, or beta release readiness.",
     identityAdapter: {
       status: "passed",
       replacesDevTokensWithoutRoleSurfaceChange: true,
@@ -117,7 +117,13 @@ try {
       sessionCredentialKind: "opaque-session",
       inviteCredentialKind: "single-use-invite",
       accountCredentialKind: "local-password-account",
-      lifecycleControls: ["session-rotation", "session-revocation", "invite-revocation"],
+      lifecycleControls: [
+        "account-disable",
+        "account-enable",
+        "session-rotation",
+        "session-revocation",
+        "invite-revocation",
+      ],
       delegatedIssuanceControls: ["host-scoped-invite-issuance"],
       roleSurfacePattern: "/auth/login?returnTo=<role-surface>&invite=<token>",
       accountRoleSurfacePattern: "/auth/login?returnTo=<role-surface>&account=<account-id>",
@@ -503,6 +509,35 @@ async function proveIdentityLifecycle({
     returnTo: hostReturnTo,
     expectedText: game,
   });
+  const accountDisable = await disableAccount({
+    apiBaseUrl,
+    accountId: hostAccount.accountId,
+  });
+  await assertUnauthorizedSession(apiBaseUrl, accountLogin.sessionToken);
+  const disabledAccountReject = await driveRejectedAccountLogin({
+    frontendBaseUrl,
+    accountId: hostAccount.accountId,
+    password: hostAccount.password,
+    returnTo: hostReturnTo,
+  });
+  const accountEnable = await enableAccount({
+    apiBaseUrl,
+    accountId: hostAccount.accountId,
+  });
+  const accountRecoveryLogin = await driveAccountLogin({
+    frontendBaseUrl,
+    apiBaseUrl,
+    accountId: hostAccount.accountId,
+    password: hostAccount.password,
+    returnTo: hostReturnTo,
+    expectedCapability: "HostOf",
+  });
+  await assertBrowserSessionRendersRole({
+    frontendBaseUrl,
+    sessionToken: accountRecoveryLogin.sessionToken,
+    returnTo: hostReturnTo,
+    expectedText: game,
+  });
   const auditTrail = await fetchIdentityLifecycleAudit({
     apiBaseUrl,
     principalUserId: "host_h",
@@ -510,6 +545,8 @@ async function proveIdentityLifecycle({
   const auditEventKinds = auditTrail.entries.map((entry) => entry.event_kind).sort();
   for (const eventKind of [
     "account_created",
+    "account_disabled",
+    "account_enabled",
     "account_session_created",
     "invite_revoked",
     "session_revoked",
@@ -526,6 +563,7 @@ async function proveIdentityLifecycle({
     revokedInviteToken,
     recoveryInviteToken,
     accountLogin.sessionToken,
+    accountRecoveryLogin.sessionToken,
     hostAccount.password,
   ]) {
     if (auditText.includes(rawToken)) {
@@ -541,6 +579,7 @@ async function proveIdentityLifecycle({
       revokedInviteToken,
       recoveryInviteToken,
       accountLogin.sessionToken,
+      accountRecoveryLogin.sessionToken,
       hostAccount.password,
     ],
   });
@@ -577,6 +616,21 @@ async function proveIdentityLifecycle({
       sameRoleSurface:
         new URL(accountLogin.loginUrl).searchParams.get("returnTo") === hostReturnTo,
       cookieValuePrefix: accountLogin.cookie.valuePrefix,
+      rawPasswordStored: false,
+    },
+    accountLifecycle: {
+      status: "passed",
+      disabledStatus: accountDisable.status,
+      enabledStatus: accountEnable.status,
+      disabledAccountRejected: disabledAccountReject.status === "reject",
+      staleAccountSessionRejected: true,
+      recoveryCapabilityKinds: accountRecoveryLogin.capabilityKinds,
+      sameRoleSurface:
+        new URL(accountRecoveryLogin.loginUrl).searchParams.get("returnTo") ===
+        hostReturnTo,
+      revokedSessionCount: accountDisable.revoked_session_count,
+      disabledAtPresent: accountDisable.disabled_at !== null,
+      enabledDisabledAtCleared: accountEnable.disabled_at === null,
       rawPasswordStored: false,
     },
     auditTrail: {
@@ -766,6 +820,32 @@ async function revokeInvite({ apiBaseUrl, inviteToken }) {
   });
 }
 
+async function disableAccount({ apiBaseUrl, accountId }) {
+  return await fetchJson(`${apiBaseUrl}/auth/accounts/disable`, {
+    method: "POST",
+    headers: {
+      authorization: `Bearer ${rootAdminSessionToken}`,
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({
+      account_id: accountId,
+    }),
+  });
+}
+
+async function enableAccount({ apiBaseUrl, accountId }) {
+  return await fetchJson(`${apiBaseUrl}/auth/accounts/enable`, {
+    method: "POST",
+    headers: {
+      authorization: `Bearer ${rootAdminSessionToken}`,
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({
+      account_id: accountId,
+    }),
+  });
+}
+
 async function fetchIdentityLifecycleAudit({ apiBaseUrl, principalUserId }) {
   return await fetchJson(
     `${apiBaseUrl}/auth/identity-lifecycle-audit?principal_user_id=${encodeURIComponent(
@@ -850,12 +930,14 @@ async function driveAdminIdentityAuditSurface({
     const visibleEventKinds = [];
     for (const eventKind of [
       "account_created",
+      "account_disabled",
+      "account_enabled",
       "account_session_created",
       "session_rotated",
       "session_revoked",
       "invite_revoked",
     ]) {
-      await page.getByTestId(`admin-audit-entry-${eventKind}`).waitFor({
+      await page.getByTestId(`admin-audit-entry-${eventKind}`).first().waitFor({
         state: "visible",
         timeout: 15000,
       });
@@ -959,6 +1041,35 @@ async function driveRejectedInviteLogin({ frontendBaseUrl, inviteToken, returnTo
   }
 }
 
+async function driveRejectedAccountLogin({
+  frontendBaseUrl,
+  accountId,
+  password,
+  returnTo,
+}) {
+  const page = await browser.newPage({ viewport: { width: 1024, height: 768 } });
+  const loginUrl = `${frontendBaseUrl}/auth/login?returnTo=${encodeURIComponent(
+    returnTo,
+  )}&account=${encodeURIComponent(accountId)}`;
+  try {
+    await page.goto(loginUrl, { waitUntil: "networkidle" });
+    await page.getByTestId("auth-login-surface").waitFor({ state: "visible" });
+    await page.getByTestId("auth-login-password").fill(password);
+    await page.getByTestId("auth-login-submit").click();
+    await page.getByText("Account credentials are missing, disabled, or invalid").waitFor({
+      state: "visible",
+      timeout: 15000,
+    });
+    return {
+      status: "reject",
+      loginUrl,
+      returnTo,
+    };
+  } finally {
+    await page.close();
+  }
+}
+
 function redactProofRoles(roles) {
   return Object.fromEntries(
     Object.entries(roles).map(([role, entry]) => {
@@ -970,7 +1081,7 @@ function redactProofRoles(roles) {
 
 function assertInviteProof(evidence) {
   if (
-    evidence.version !== 8 ||
+    evidence.version !== 9 ||
     evidence.proof !== "auth-invite-role-proof" ||
     evidence.status !== "passed" ||
     evidence.productionReady !== false ||
@@ -1019,12 +1130,27 @@ function assertInviteProof(evidence) {
     evidence.identityLifecycle?.accountLogin?.sameRoleSurface !== true ||
     evidence.identityLifecycle?.accountLogin?.cookieValuePrefix !== "account-session-" ||
     evidence.identityLifecycle?.accountLogin?.rawPasswordStored !== false ||
+    evidence.identityLifecycle?.accountLifecycle?.status !== "passed" ||
+    evidence.identityLifecycle?.accountLifecycle?.disabledStatus !== "disabled" ||
+    evidence.identityLifecycle?.accountLifecycle?.enabledStatus !== "enabled" ||
+    evidence.identityLifecycle?.accountLifecycle?.disabledAccountRejected !== true ||
+    evidence.identityLifecycle?.accountLifecycle?.staleAccountSessionRejected !== true ||
+    !evidence.identityLifecycle?.accountLifecycle?.recoveryCapabilityKinds?.includes(
+      "HostOf",
+    ) ||
+    evidence.identityLifecycle?.accountLifecycle?.sameRoleSurface !== true ||
+    evidence.identityLifecycle?.accountLifecycle?.revokedSessionCount < 1 ||
+    evidence.identityLifecycle?.accountLifecycle?.disabledAtPresent !== true ||
+    evidence.identityLifecycle?.accountLifecycle?.enabledDisabledAtCleared !== true ||
+    evidence.identityLifecycle?.accountLifecycle?.rawPasswordStored !== false ||
     evidence.identityLifecycle?.auditTrail?.status !== "passed" ||
     evidence.identityLifecycle?.auditTrail?.rawTokensStored !== false ||
     !evidence.identityLifecycle?.auditTrail?.eventKinds?.includes("session_rotated") ||
     !evidence.identityLifecycle?.auditTrail?.eventKinds?.includes("session_revoked") ||
     !evidence.identityLifecycle?.auditTrail?.eventKinds?.includes("invite_revoked") ||
     !evidence.identityLifecycle?.auditTrail?.eventKinds?.includes("account_created") ||
+    !evidence.identityLifecycle?.auditTrail?.eventKinds?.includes("account_disabled") ||
+    !evidence.identityLifecycle?.auditTrail?.eventKinds?.includes("account_enabled") ||
     !evidence.identityLifecycle?.auditTrail?.eventKinds?.includes(
       "account_session_created",
     ) ||
@@ -1042,6 +1168,12 @@ function assertInviteProof(evidence) {
     ) ||
     !evidence.identityLifecycle?.adminAuditSurface?.visibleEventKinds?.includes(
       "account_created",
+    ) ||
+    !evidence.identityLifecycle?.adminAuditSurface?.visibleEventKinds?.includes(
+      "account_disabled",
+    ) ||
+    !evidence.identityLifecycle?.adminAuditSurface?.visibleEventKinds?.includes(
+      "account_enabled",
     ) ||
     !evidence.identityLifecycle?.adminAuditSurface?.visibleEventKinds?.includes(
       "account_session_created",

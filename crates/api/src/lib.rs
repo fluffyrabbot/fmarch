@@ -83,6 +83,8 @@ pub fn router_with_state(state: ApiState) -> Router {
         .route("/auth/session-grants", post(create_auth_session_grant))
         .route("/auth/accounts", post(create_auth_account))
         .route("/auth/accounts/login", post(login_auth_account))
+        .route("/auth/accounts/disable", post(disable_auth_account))
+        .route("/auth/accounts/enable", post(enable_auth_account))
         .route("/auth/session-rotations", post(rotate_auth_session))
         .route("/auth/session-revocations", post(revoke_auth_session))
         .route("/auth/invites", post(create_auth_invite))
@@ -179,6 +181,27 @@ struct LoginAuthAccount {
     password: String,
     session_token: String,
     expires_at: i64,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct DisableAuthAccount {
+    account_id: String,
+    #[serde(default = "default_revoke_account_sessions")]
+    revoke_sessions: bool,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct EnableAuthAccount {
+    account_id: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct AuthAccountLifecycleResponse {
+    status: String,
+    account_id: String,
+    principal_user_id: String,
+    disabled_at: Option<i64>,
+    revoked_session_count: i64,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -564,6 +587,187 @@ async fn login_auth_account(
     Ok(Json(
         auth_session_response(&state, account.0, None, account.3).await?,
     ))
+}
+
+async fn disable_auth_account(
+    State(state): State<ApiState>,
+    headers: HeaderMap,
+    Json(request): Json<DisableAuthAccount>,
+) -> Result<Json<AuthAccountLifecycleResponse>, ApiError> {
+    let caller_token = bearer_token(&headers).ok_or_else(unauthorized_session)?;
+    let actor_user_id = require_global_admin(&state, caller_token, "account disable").await?;
+    let account_id = request.account_id.trim();
+    if account_id.is_empty() {
+        return Err(ApiError::Reject {
+            status: StatusCode::BAD_REQUEST,
+            error: RejectCode::Internal,
+            message: "account disable requires account_id".to_string(),
+        });
+    }
+
+    let now = unix_now_seconds();
+    let mut tx = state.pool.begin().await?;
+    let account = sqlx::query_as::<_, (String, Option<i64>)>(
+        r#"
+        SELECT principal_user_id, disabled_at
+        FROM auth_account
+        WHERE account_id = $1
+        FOR UPDATE
+        "#,
+    )
+    .bind(account_id)
+    .fetch_optional(&mut *tx)
+    .await?
+    .ok_or_else(account_not_found)?;
+
+    let disabled_at = match account.1 {
+        Some(disabled_at) => disabled_at,
+        None => {
+            sqlx::query("UPDATE auth_account SET disabled_at = $2 WHERE account_id = $1")
+                .bind(account_id)
+                .bind(now)
+                .execute(&mut *tx)
+                .await?;
+            now
+        }
+    };
+    let revoked_session_count = if request.revoke_sessions {
+        sqlx::query(
+            r#"
+            UPDATE auth_session
+            SET revoked_at = $1
+            WHERE principal_user_id = $2
+              AND revoked_at IS NULL
+              AND expires_at > $1
+            "#,
+        )
+        .bind(now)
+        .bind(account.0.as_str())
+        .execute(&mut *tx)
+        .await?
+        .rows_affected() as i64
+    } else {
+        0
+    };
+
+    sqlx::query(
+        r#"
+        INSERT INTO identity_lifecycle_audit (
+            event_at,
+            event_kind,
+            actor_user_id,
+            principal_user_id,
+            token_hash,
+            related_token_hash,
+            metadata
+        )
+        VALUES ($1, 'account_disabled', $2, $3, NULL, NULL, $4::JSONB)
+        "#,
+    )
+    .bind(now)
+    .bind(actor_user_id.as_str())
+    .bind(account.0.as_str())
+    .bind(
+        serde_json::json!({
+            "account_id": account_id,
+            "revoked_session_count": revoked_session_count
+        })
+        .to_string(),
+    )
+    .execute(&mut *tx)
+    .await?;
+    tx.commit().await?;
+
+    Ok(Json(AuthAccountLifecycleResponse {
+        status: if account.1.is_some() {
+            "already_disabled".to_string()
+        } else {
+            "disabled".to_string()
+        },
+        account_id: account_id.to_string(),
+        principal_user_id: account.0,
+        disabled_at: Some(disabled_at),
+        revoked_session_count,
+    }))
+}
+
+async fn enable_auth_account(
+    State(state): State<ApiState>,
+    headers: HeaderMap,
+    Json(request): Json<EnableAuthAccount>,
+) -> Result<Json<AuthAccountLifecycleResponse>, ApiError> {
+    let caller_token = bearer_token(&headers).ok_or_else(unauthorized_session)?;
+    let actor_user_id = require_global_admin(&state, caller_token, "account enable").await?;
+    let account_id = request.account_id.trim();
+    if account_id.is_empty() {
+        return Err(ApiError::Reject {
+            status: StatusCode::BAD_REQUEST,
+            error: RejectCode::Internal,
+            message: "account enable requires account_id".to_string(),
+        });
+    }
+
+    let now = unix_now_seconds();
+    let mut tx = state.pool.begin().await?;
+    let account = sqlx::query_as::<_, (String, Option<i64>)>(
+        r#"
+        SELECT principal_user_id, disabled_at
+        FROM auth_account
+        WHERE account_id = $1
+        FOR UPDATE
+        "#,
+    )
+    .bind(account_id)
+    .fetch_optional(&mut *tx)
+    .await?
+    .ok_or_else(account_not_found)?;
+
+    if account.1.is_some() {
+        sqlx::query("UPDATE auth_account SET disabled_at = NULL WHERE account_id = $1")
+            .bind(account_id)
+            .execute(&mut *tx)
+            .await?;
+    }
+
+    sqlx::query(
+        r#"
+        INSERT INTO identity_lifecycle_audit (
+            event_at,
+            event_kind,
+            actor_user_id,
+            principal_user_id,
+            token_hash,
+            related_token_hash,
+            metadata
+        )
+        VALUES ($1, 'account_enabled', $2, $3, NULL, NULL, $4::JSONB)
+        "#,
+    )
+    .bind(now)
+    .bind(actor_user_id.as_str())
+    .bind(account.0.as_str())
+    .bind(
+        serde_json::json!({
+            "account_id": account_id,
+            "was_disabled": account.1.is_some()
+        })
+        .to_string(),
+    )
+    .execute(&mut *tx)
+    .await?;
+    tx.commit().await?;
+
+    Ok(Json(AuthAccountLifecycleResponse {
+        status: if account.1.is_some() {
+            "enabled".to_string()
+        } else {
+            "already_enabled".to_string()
+        },
+        account_id: account_id.to_string(),
+        principal_user_id: account.0,
+        disabled_at: None,
+        revoked_session_count: 0,
+    }))
 }
 
 async fn rotate_auth_session(
@@ -1108,6 +1312,18 @@ fn unauthorized_account() -> ApiError {
         error: RejectCode::NotAuthorized,
         message: "account credentials are missing, disabled, or invalid".to_string(),
     }
+}
+
+fn account_not_found() -> ApiError {
+    ApiError::Reject {
+        status: StatusCode::NOT_FOUND,
+        error: RejectCode::NotAuthorized,
+        message: "account was not found".to_string(),
+    }
+}
+
+fn default_revoke_account_sessions() -> bool {
+    true
 }
 
 fn normalize_dev_global_capabilities(values: &[String]) -> Result<Vec<String>, ApiError> {

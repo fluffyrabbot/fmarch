@@ -662,6 +662,8 @@ export function normalizeIdentityLifecycleAudit(payload, context = {}) {
   const eventKinds = [...new Set(entries.map((entry) => entry.eventKind))].sort();
   const requiredEvents = [
     "account_created",
+    "account_disabled",
+    "account_enabled",
     "account_session_created",
     "invite_revoked",
     "session_revoked",

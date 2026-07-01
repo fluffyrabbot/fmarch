@@ -3423,7 +3423,7 @@ export function normalizeLocalIdentityAdapterAudit(identityAdapterProof, { game 
   if (
     identityAdapterProof === null ||
     typeof identityAdapterProof !== "object" ||
-    identityAdapterProof.version !== 8 ||
+    identityAdapterProof.version !== 9 ||
     identityAdapterProof.proof !== "auth-invite-role-proof" ||
     identityAdapterProof.status !== "passed" ||
     identityAdapterProof.scope !== "local-auth-invite-role-proof" ||
@@ -3453,6 +3453,10 @@ export function normalizeLocalIdentityAdapterAudit(identityAdapterProof, { game 
   );
   const lifecycleChecks = [
     ["account-login", identityAdapterProof.identityLifecycle?.accountLogin?.status],
+    [
+      "account-lifecycle",
+      identityAdapterProof.identityLifecycle?.accountLifecycle?.status,
+    ],
     ["session-rotation", identityAdapterProof.identityLifecycle?.sessionRotation?.status],
     ["session-revocation", identityAdapterProof.identityLifecycle?.sessionRevocation?.status],
     ["invite-revocation", identityAdapterProof.identityLifecycle?.inviteRevocation?.status],
@@ -3491,6 +3495,19 @@ export function normalizeLocalIdentityAdapterAudit(identityAdapterProof, { game 
     ) ||
     identityAdapterProof.identityLifecycle?.accountLogin?.sameRoleSurface !== true ||
     identityAdapterProof.identityLifecycle?.accountLogin?.rawPasswordStored !== false ||
+    identityAdapterProof.identityLifecycle?.accountLifecycle?.disabledStatus !==
+      "disabled" ||
+    identityAdapterProof.identityLifecycle?.accountLifecycle?.enabledStatus !==
+      "enabled" ||
+    identityAdapterProof.identityLifecycle?.accountLifecycle?.disabledAccountRejected !==
+      true ||
+    identityAdapterProof.identityLifecycle?.accountLifecycle?.staleAccountSessionRejected !==
+      true ||
+    !identityAdapterProof.identityLifecycle?.accountLifecycle?.recoveryCapabilityKinds?.includes(
+      "HostOf",
+    ) ||
+    identityAdapterProof.identityLifecycle?.accountLifecycle?.sameRoleSurface !== true ||
+    identityAdapterProof.identityLifecycle?.accountLifecycle?.rawPasswordStored !== false ||
     identityAdapterProof.identityLifecycle?.auditTrail?.rawTokensStored !== false ||
     identityAdapterProof.identityLifecycle?.adminAuditSurface?.rawTokensVisible !== false
   ) {
@@ -3582,6 +3599,27 @@ export function normalizeLocalIdentityAdapterAudit(identityAdapterProof, { game 
         ),
         rawPasswordStored:
           identityAdapterProof.identityLifecycle.accountLogin?.rawPasswordStored === true,
+      }),
+      accountLifecycle: Object.freeze({
+        disabledStatus: String(
+          identityAdapterProof.identityLifecycle.accountLifecycle?.disabledStatus ?? "",
+        ),
+        enabledStatus: String(
+          identityAdapterProof.identityLifecycle.accountLifecycle?.enabledStatus ?? "",
+        ),
+        disabledAccountRejected:
+          identityAdapterProof.identityLifecycle.accountLifecycle
+            ?.disabledAccountRejected === true,
+        staleAccountSessionRejected:
+          identityAdapterProof.identityLifecycle.accountLifecycle
+            ?.staleAccountSessionRejected === true,
+        sameRoleSurface:
+          identityAdapterProof.identityLifecycle.accountLifecycle?.sameRoleSurface === true,
+        revokedSessionCount:
+          identityAdapterProof.identityLifecycle.accountLifecycle?.revokedSessionCount ??
+          null,
+        rawPasswordStored:
+          identityAdapterProof.identityLifecycle.accountLifecycle?.rawPasswordStored === true,
       }),
       rawTokensStored: identityAdapterProof.identityLifecycle.auditTrail.rawTokensStored,
       rawTokensVisible:

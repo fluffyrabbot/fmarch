@@ -17,6 +17,7 @@ const identityProofRelativePath = path.relative(repoRoot, identityProofPath);
 const evidencePath = path.join(artifactDir, "identity-admin-proof.json");
 const requiredChecks = [
   "account-login",
+  "account-lifecycle",
   "session-rotation",
   "session-revocation",
   "invite-revocation",

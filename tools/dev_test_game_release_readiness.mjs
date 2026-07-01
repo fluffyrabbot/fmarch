@@ -5209,7 +5209,7 @@ export function validateDevTestGameIdentityAdapterProof(proof, options = {}) {
     ["host", "HostOf"],
     ["player", "SlotOccupant"],
   ]);
-  if (proof?.version !== 8) {
+  if (proof?.version !== 9) {
     throw new Error(`identity adapter proof version drifted: ${proof?.version}`);
   }
   if (proof.proof !== "auth-invite-role-proof") {
@@ -5230,6 +5230,8 @@ export function validateDevTestGameIdentityAdapterProof(proof, options = {}) {
     proof.identityAdapter?.inviteCredentialKind !== "single-use-invite" ||
     proof.identityAdapter?.accountCredentialKind !== "local-password-account" ||
     proof.identityAdapter?.sessionCredentialKind !== "opaque-session" ||
+    !proof.identityAdapter?.lifecycleControls?.includes("account-disable") ||
+    !proof.identityAdapter?.lifecycleControls?.includes("account-enable") ||
     !proof.identityAdapter?.lifecycleControls?.includes("session-rotation") ||
     !proof.identityAdapter?.lifecycleControls?.includes("session-revocation") ||
     !proof.identityAdapter?.lifecycleControls?.includes("invite-revocation") ||
@@ -5279,9 +5281,24 @@ export function validateDevTestGameIdentityAdapterProof(proof, options = {}) {
     proof.identityLifecycle?.accountLogin?.sameRoleSurface !== true ||
     proof.identityLifecycle?.accountLogin?.cookieValuePrefix !== "account-session-" ||
     proof.identityLifecycle?.accountLogin?.rawPasswordStored !== false ||
+    proof.identityLifecycle?.accountLifecycle?.status !== "passed" ||
+    proof.identityLifecycle?.accountLifecycle?.disabledStatus !== "disabled" ||
+    proof.identityLifecycle?.accountLifecycle?.enabledStatus !== "enabled" ||
+    proof.identityLifecycle?.accountLifecycle?.disabledAccountRejected !== true ||
+    proof.identityLifecycle?.accountLifecycle?.staleAccountSessionRejected !== true ||
+    !proof.identityLifecycle?.accountLifecycle?.recoveryCapabilityKinds?.includes(
+      "HostOf",
+    ) ||
+    proof.identityLifecycle?.accountLifecycle?.sameRoleSurface !== true ||
+    proof.identityLifecycle?.accountLifecycle?.revokedSessionCount < 1 ||
+    proof.identityLifecycle?.accountLifecycle?.disabledAtPresent !== true ||
+    proof.identityLifecycle?.accountLifecycle?.enabledDisabledAtCleared !== true ||
+    proof.identityLifecycle?.accountLifecycle?.rawPasswordStored !== false ||
     proof.identityLifecycle?.auditTrail?.status !== "passed" ||
     proof.identityLifecycle?.auditTrail?.rawTokensStored !== false ||
     !proof.identityLifecycle?.auditTrail?.eventKinds?.includes("account_created") ||
+    !proof.identityLifecycle?.auditTrail?.eventKinds?.includes("account_disabled") ||
+    !proof.identityLifecycle?.auditTrail?.eventKinds?.includes("account_enabled") ||
     !proof.identityLifecycle?.auditTrail?.eventKinds?.includes(
       "account_session_created",
     ) ||
@@ -5293,6 +5310,12 @@ export function validateDevTestGameIdentityAdapterProof(proof, options = {}) {
     proof.identityLifecycle?.adminAuditSurface?.rawTokensVisible !== false ||
     !proof.identityLifecycle?.adminAuditSurface?.visibleEventKinds?.includes(
       "account_created",
+    ) ||
+    !proof.identityLifecycle?.adminAuditSurface?.visibleEventKinds?.includes(
+      "account_disabled",
+    ) ||
+    !proof.identityLifecycle?.adminAuditSurface?.visibleEventKinds?.includes(
+      "account_enabled",
     ) ||
     !proof.identityLifecycle?.adminAuditSurface?.visibleEventKinds?.includes(
       "account_session_created",
@@ -5354,6 +5377,7 @@ export function validateDevTestGameIdentityAdapterProof(proof, options = {}) {
 export function validateDevTestGameIdentityAdminProof(proof, options = {}) {
   const requiredChecks = [
     "account-login",
+    "account-lifecycle",
     "session-rotation",
     "session-revocation",
     "invite-revocation",

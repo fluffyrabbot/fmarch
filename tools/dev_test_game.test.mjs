@@ -8521,7 +8521,7 @@ function artifactSummary(path) {
 
 function identityAdapterProofFixture(game) {
   return {
-    version: 8,
+    version: 9,
     proof: "auth-invite-role-proof",
     status: "passed",
     scope: "local-auth-invite-role-proof",
@@ -8535,7 +8535,13 @@ function identityAdapterProofFixture(game) {
       sessionCredentialKind: "opaque-session",
       inviteCredentialKind: "single-use-invite",
       accountCredentialKind: "local-password-account",
-      lifecycleControls: ["session-rotation", "session-revocation", "invite-revocation"],
+      lifecycleControls: [
+        "account-disable",
+        "account-enable",
+        "session-rotation",
+        "session-revocation",
+        "invite-revocation",
+      ],
       delegatedIssuanceControls: ["host-scoped-invite-issuance"],
       roleSurfacePattern: "/auth/login?returnTo=<role-surface>&invite=<token>",
       accountRoleSurfacePattern: "/auth/login?returnTo=<role-surface>&account=<account-id>",
@@ -8589,11 +8595,26 @@ function identityAdapterProofFixture(game) {
         cookieValuePrefix: "account-session-",
         rawPasswordStored: false,
       },
+      accountLifecycle: {
+        status: "passed",
+        disabledStatus: "disabled",
+        enabledStatus: "enabled",
+        disabledAccountRejected: true,
+        staleAccountSessionRejected: true,
+        recoveryCapabilityKinds: ["HostOf"],
+        sameRoleSurface: true,
+        revokedSessionCount: 1,
+        disabledAtPresent: true,
+        enabledDisabledAtCleared: true,
+        rawPasswordStored: false,
+      },
       auditTrail: {
         status: "passed",
         principalUserId: "host_h",
         eventKinds: [
           "account_created",
+          "account_disabled",
+          "account_enabled",
           "account_session_created",
           "invite_revoked",
           "session_revoked",
@@ -8612,6 +8633,8 @@ function identityAdapterProofFixture(game) {
         clickedThroughFromOverview: true,
         visibleEventKinds: [
           "account_created",
+          "account_disabled",
+          "account_enabled",
           "account_session_created",
           "session_rotated",
           "session_revoked",
@@ -9296,6 +9319,7 @@ function identityAdminProofFixture() {
       clickedThroughFromOverview: true,
       visibleChecks: [
         "account-login",
+        "account-lifecycle",
         "session-rotation",
         "session-revocation",
         "invite-revocation",
