@@ -4,6 +4,7 @@ import {
   replacementPrivatePostHardeningLaneIds,
   replacementPrivatePostRaceLaneIds,
   replacementPrivatePostRecoveryLaneIds,
+  replacementStalePrivatePostAfterResolveScenario,
   replacementStalePrivatePostAfterCompleteScenario,
 } from "./dev_test_game_replacement_private_scenarios.mjs";
 
@@ -22,6 +23,25 @@ test("replacement private scenario module groups private-post race and recovery 
     ...replacementPrivatePostRaceLaneIds,
     ...replacementPrivatePostRecoveryLaneIds,
   ]);
+});
+
+test("replacement resolved private-post scenario carries shared command facts", () => {
+  assert.deepEqual(replacementStalePrivatePostAfterResolveScenario(), {
+    gameFixtureId: "replacement-stale-private-post-after-resolve-game-a",
+    channelId: "private:mafia_day_chat",
+    actorSlot: "slot-7",
+    hostPrincipalUserId: "host_h",
+    staleOutgoingPrincipalUserId: "player-mira",
+    replacementPrincipalUserId: "player-rowan",
+    replacementOccupantLabel: "player-rowan",
+    commandAction: "submit_post",
+    commandKind: "SubmitPost",
+    postAckSeq: 71,
+    fixturePostBody: "Replacement stale private post after resolve fixture",
+    reconnectPostBody: "Replacement stale private post reconnect fixture",
+    outcomeSummary:
+      "Rowan's stale replacement private post ACKed after D01 resolution with locked channel truth",
+  });
 });
 
 test("replacement completed private-post scenario carries shared command facts", () => {

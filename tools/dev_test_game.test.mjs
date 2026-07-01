@@ -83,6 +83,7 @@ import {
   replacementPrivatePostRaceLaneIds,
   replacementPrivatePostRecoveryLaneIds,
   replacementStalePrivatePostAfterCompleteScenario,
+  replacementStalePrivatePostAfterResolveScenario,
 } from "./dev_test_game_replacement_private_scenarios.mjs";
 import {
   playerRecoveryAuditLaneIds,
@@ -2138,6 +2139,8 @@ test("seed plan creates a playable mafiascum D01 game shape", () => {
 test("session card and markdown include role credential URLs and tokens", async () => {
   const game = "44444444-4444-4444-8444-444444444444";
   const tokens = createTokenSet("dev-test-card");
+  const replacementResolvedPrivatePost =
+    replacementStalePrivatePostAfterResolveScenario();
   const replacementCompletedPrivatePost =
     replacementStalePrivatePostAfterCompleteScenario();
   const card = buildSessionCard({
@@ -5027,8 +5030,8 @@ test("session card and markdown include role credential URLs and tokens", async 
       },
       replacementStalePrivatePostAfterResolve: {
         status: "passed",
-        game: "replacement-stale-private-post-after-resolve-game-a",
-        channel: "private:mafia_day_chat",
+        game: replacementResolvedPrivatePost.gameFixtureId,
+        channel: replacementResolvedPrivatePost.channelId,
         hostEntry: { capabilityKinds: ["HostOf"] },
         staleOutgoingEntry: { capabilityKinds: ["SlotOccupant"] },
         replacementEntry: { capabilityKinds: ["SlotOccupant"] },
@@ -5040,50 +5043,59 @@ test("session card and markdown include role credential URLs and tokens", async 
               body: {
                 command: {
                   ProcessReplacement: {
-                    game: "replacement-stale-private-post-after-resolve-game-a",
-                    slot: "slot-7",
-                    outgoing_user: "player-mira",
-                    incoming_user: "player-rowan",
+                    game: replacementResolvedPrivatePost.gameFixtureId,
+                    slot: replacementResolvedPrivatePost.actorSlot,
+                    outgoing_user:
+                      replacementResolvedPrivatePost.staleOutgoingPrincipalUserId,
+                    incoming_user:
+                      replacementResolvedPrivatePost.replacementPrincipalUserId,
                   },
                 },
               },
             },
           },
         },
-        hostReplacementAfterProcess: { occupantLabel: "player-rowan" },
+        hostReplacementAfterProcess: {
+          occupantLabel: replacementResolvedPrivatePost.replacementOccupantLabel,
+        },
         commandStateBeforeClose: {
-          actorSlot: "slot-7",
+          actorSlot: replacementResolvedPrivatePost.actorSlot,
           actorStatus: "alive",
           phase: { phaseId: "D01", locked: false },
         },
         channelContextBeforeClose: {
-          channelId: "private:mafia_day_chat",
-          actorSlot: "slot-7",
+          channelId: replacementResolvedPrivatePost.channelId,
+          actorSlot: replacementResolvedPrivatePost.actorSlot,
           actorStatus: "alive",
-          capabilityLabel: "ChannelMember(private:mafia_day_chat)",
+          capabilityLabel:
+            `ChannelMember(${replacementResolvedPrivatePost.channelId})`,
         },
-        submitPostBeforeClose: { action: "submit_post", disabled: false },
+        submitPostBeforeClose: {
+          action: replacementResolvedPrivatePost.commandAction,
+          disabled: false,
+        },
         closedStatus: { state: "closed" },
         resolveDay: { commandStatus: { state: "ack" } },
         hostPhaseAfterResolve: { id: "D01", locked: true },
         apiCommandStateAfterResolve: {
-          actor_slot: "slot-7",
+          actor_slot: replacementResolvedPrivatePost.actorSlot,
           phase: { phase_id: "D01", locked: true },
         },
-        postBody: "Replacement stale private post after resolve fixture",
+        postBody: replacementResolvedPrivatePost.fixturePostBody,
         stalePost: {
           state: "ack",
-          streamSeqs: [71],
+          streamSeqs: [replacementResolvedPrivatePost.postAckSeq],
           serverEnvelope: { body: { kind: "Ack" } },
           requestEnvelope: {
             body: {
               body: {
-                principal_user_id: "player-rowan",
+                principal_user_id:
+                  replacementResolvedPrivatePost.replacementPrincipalUserId,
                 command: {
                   SubmitPost: {
-                    channel_id: "private:mafia_day_chat",
-                    actor_slot: "slot-7",
-                    body: "Replacement stale private post after resolve fixture",
+                    channel_id: replacementResolvedPrivatePost.channelId,
+                    actor_slot: replacementResolvedPrivatePost.actorSlot,
+                    body: replacementResolvedPrivatePost.fixturePostBody,
                   },
                 },
               },
@@ -5091,23 +5103,26 @@ test("session card and markdown include role credential URLs and tokens", async 
           },
         },
         dispatchPlan: { projectionRefreshKeys: ["thread", "commandState"] },
-        currentReceipt: { actionId: "submit_post", state: "ack" },
+        currentReceipt: {
+          actionId: replacementResolvedPrivatePost.commandAction,
+          state: "ack",
+        },
         commandStateAfterAck: {
-          actorSlot: "slot-7",
+          actorSlot: replacementResolvedPrivatePost.actorSlot,
           actorStatus: "alive",
           phase: { phaseId: "D01", locked: true },
           voteTargets: [],
         },
         channelContextAfterAck: {
-          channelId: "private:mafia_day_chat",
-          actorSlot: "slot-7",
+          channelId: replacementResolvedPrivatePost.channelId,
+          actorSlot: replacementResolvedPrivatePost.actorSlot,
         },
         projectedPost: {
-          authorSlot: "slot-7",
-          body: "Replacement stale private post after resolve fixture",
+          authorSlot: replacementResolvedPrivatePost.actorSlot,
+          body: replacementResolvedPrivatePost.fixturePostBody,
         },
         apiThreadPostBodies: [
-          "Replacement stale private post after resolve fixture",
+          replacementResolvedPrivatePost.fixturePostBody,
         ],
         rowanPrivateIsolationAfterAck: {
           targetKillVisible: false,
@@ -5118,27 +5133,30 @@ test("session card and markdown include role credential URLs and tokens", async 
         privateReconnectAfterAck: {
           status: "passed",
           reconnectCommandStateBeforeDrop: {
-            actorSlot: "slot-7",
+            actorSlot: replacementResolvedPrivatePost.actorSlot,
             phase: { phaseId: "D01", locked: true },
           },
           reconnectChannelContextBeforeDrop: {
-            channelId: "private:mafia_day_chat",
-            actorSlot: "slot-7",
+            channelId: replacementResolvedPrivatePost.channelId,
+            actorSlot: replacementResolvedPrivatePost.actorSlot,
           },
           reconnectButtonsBeforeDrop: [
             { action: "withdraw_vote", disabled: true },
-            { action: "submit_post", disabled: false },
+            {
+              action: replacementResolvedPrivatePost.commandAction,
+              disabled: false,
+            },
           ],
           reconnectingStatus: { state: "reconnecting" },
-          reconnectPostBody:
-            "Replacement stale private post reconnect fixture",
+          reconnectPostBody: replacementResolvedPrivatePost.reconnectPostBody,
           reconnectCommand: {
-            principalUserId: "player-rowan",
+            principalUserId:
+              replacementResolvedPrivatePost.replacementPrincipalUserId,
             command: {
               SubmitPost: {
-                channel_id: "private:mafia_day_chat",
-                actor_slot: "slot-7",
-                body: "Replacement stale private post reconnect fixture",
+                channel_id: replacementResolvedPrivatePost.channelId,
+                actor_slot: replacementResolvedPrivatePost.actorSlot,
+                body: replacementResolvedPrivatePost.reconnectPostBody,
               },
             },
           },
@@ -5147,22 +5165,25 @@ test("session card and markdown include role credential URLs and tokens", async 
             state: "recovered",
           },
           recoveredCommandState: {
-            actorSlot: "slot-7",
+            actorSlot: replacementResolvedPrivatePost.actorSlot,
             phase: { phaseId: "D01", locked: true },
             voteTargets: [],
           },
           recoveredSnapshotContainsPost: true,
           reconnectChannelContextAfterRecovery: {
-            channelId: "private:mafia_day_chat",
-            actorSlot: "slot-7",
+            channelId: replacementResolvedPrivatePost.channelId,
+            actorSlot: replacementResolvedPrivatePost.actorSlot,
           },
           reconnectButtonsAfterRecovery: [
             { action: "withdraw_vote", disabled: true },
-            { action: "submit_post", disabled: false },
+            {
+              action: replacementResolvedPrivatePost.commandAction,
+              disabled: false,
+            },
           ],
           apiThreadPostBodiesAfterReconnect: [
-            "Replacement stale private post after resolve fixture",
-            "Replacement stale private post reconnect fixture",
+            replacementResolvedPrivatePost.fixturePostBody,
+            replacementResolvedPrivatePost.reconnectPostBody,
           ],
           apiCommandStateAfterReconnect: {
             phase: { phase_id: "D01", locked: true },
@@ -5170,8 +5191,7 @@ test("session card and markdown include role credential URLs and tokens", async 
           },
           staleOutgoingThreadAfterReconnect: { status: 403 },
         },
-        outcomeSummary:
-          "Rowan's stale replacement private post ACKed after D01 resolution with locked channel truth",
+        outcomeSummary: replacementResolvedPrivatePost.outcomeSummary,
       },
       replacementStalePrivatePostAfterComplete: {
         status: "passed",

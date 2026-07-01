@@ -15,6 +15,25 @@ export const replacementPrivatePostHardeningLaneIds = [
   ...replacementPrivatePostRecoveryLaneIds,
 ];
 
+export function replacementStalePrivatePostAfterResolveScenario() {
+  return {
+    gameFixtureId: "replacement-stale-private-post-after-resolve-game-a",
+    channelId: "private:mafia_day_chat",
+    actorSlot: "slot-7",
+    hostPrincipalUserId: "host_h",
+    staleOutgoingPrincipalUserId: "player-mira",
+    replacementPrincipalUserId: "player-rowan",
+    replacementOccupantLabel: "player-rowan",
+    commandAction: "submit_post",
+    commandKind: "SubmitPost",
+    postAckSeq: 71,
+    fixturePostBody: "Replacement stale private post after resolve fixture",
+    reconnectPostBody: "Replacement stale private post reconnect fixture",
+    outcomeSummary:
+      "Rowan's stale replacement private post ACKed after D01 resolution with locked channel truth",
+  };
+}
+
 export function replacementStalePrivatePostAfterCompleteScenario() {
   return {
     gameFixtureId: "replacement-stale-private-post-after-complete-game-a",
