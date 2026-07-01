@@ -88,14 +88,17 @@ export const seedDemoOnlyScenarioIds = Object.freeze([
   "day-vote-no-lynch",
   "host-deadline-advance",
   "stale-deadline-advance",
+  "private-channel",
+  "resolution-receipts",
+  "player-action-boundary",
   "concurrent-vote-race-reload",
 ]);
 
 export const seedDemoScenarioIds = Object.freeze([
   ...seedRequiredScenarioIds.slice(0, 3),
-  ...seedDemoOnlyScenarioIds.slice(0, 4),
+  ...seedDemoOnlyScenarioIds.slice(0, 7),
   ...seedRequiredScenarioIds.slice(3, 11),
-  seedDemoOnlyScenarioIds[4],
+  seedDemoOnlyScenarioIds[7],
   ...seedRequiredScenarioIds.slice(11),
 ]);
 
@@ -108,6 +111,7 @@ export const seedScenarioCoverageGroups = Object.freeze({
 const seedScenarioRoleOverrides = new Map([
   ["day-vote-resolution", "actionPlayer"],
   ["player-action-denied", "player"],
+  ["player-action-boundary", "player"],
   ["stale-deadline-advance", "host"],
   ["concurrent-replacement-private-post-race", "player"],
   ["concurrent-replacement-private-post-race-reload", "player"],

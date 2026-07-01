@@ -49,12 +49,15 @@ test("seed scenario cases include reload and stale-reject proof rows", () => {
 });
 
 test("seed scenario cases expose generated demo scenario fixture rows", () => {
-  assert.equal(seedDemoScenarioIds.length, 87);
+  assert.equal(seedDemoScenarioIds.length, 90);
   assert.deepEqual(seedDemoOnlyScenarioIds, [
     "day-vote-resolution",
     "day-vote-no-lynch",
     "host-deadline-advance",
     "stale-deadline-advance",
+    "private-channel",
+    "resolution-receipts",
+    "player-action-boundary",
     "concurrent-vote-race-reload",
   ]);
   assert.deepEqual(seedScenarioCoverageGroups.required, seedRequiredScenarioIds);
@@ -71,6 +74,11 @@ test("seed scenario cases expose generated demo scenario fixture rows", () => {
   ]);
   assert.deepEqual(seedDemoScenarioIds.slice(6, 9), [
     "stale-deadline-advance",
+    "private-channel",
+    "resolution-receipts",
+  ]);
+  assert.deepEqual(seedDemoScenarioIds.slice(9, 12), [
+    "player-action-boundary",
     "player-action-denied",
     "invalid-action-recovery",
   ]);
@@ -99,6 +107,9 @@ test("seed scenario cases expose production fixture metadata", () => {
       .filter((scenario) =>
         [
           "day-vote-resolution",
+          "private-channel",
+          "resolution-receipts",
+          "player-action-boundary",
           "player-action-denied",
           "stale-deadline-advance",
           "replacement-idempotent-retry",
@@ -109,6 +120,9 @@ test("seed scenario cases expose production fixture metadata", () => {
     [
       ["day-vote-resolution", "actionPlayer", "/redacted/actionPlayer"],
       ["stale-deadline-advance", "host", "/redacted/host"],
+      ["private-channel", "player", "/redacted/player"],
+      ["resolution-receipts", "deniedPlayer", "/redacted/deniedPlayer"],
+      ["player-action-boundary", "player", "/redacted/player"],
       ["player-action-denied", "player", "/redacted/player"],
       ["replacement-idempotent-retry", "host", "/redacted/host"],
       ["stale-dead-action-conflict", "actionPlayer", "/redacted/actionPlayer"],
