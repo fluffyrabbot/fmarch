@@ -45,6 +45,8 @@ import {
   assertStaleCompletedGamePlayerCommandRecoveryProofCase,
 } from "./dev_test_game_core_loop_completed_scenarios.mjs";
 import {
+  assertPlayerActionSubmissionClickProofCase,
+  assertPlayerInvalidActionRecoveryProofCase,
   playerActionSubmissionScenario,
   playerInvalidActionRecoveryScenario,
   staleNightFourActionRecoveryScenario,
@@ -2157,90 +2159,20 @@ function assertCoreLoopPlayerActionCheckpoint(playerRoleSurface) {
 }
 
 function assertCoreLoopPlayerActionClickProof({ clickProof, expectedGame }) {
-  const scenario = playerActionSubmissionScenario();
-  if (
-    clickProof?.status !== "passed" ||
-    clickProof.clickedAction !== scenario.clickedAction ||
-    clickProof.commandKind !== scenario.commandKind ||
-    clickProof.command?.game !== expectedGame ||
-    clickProof.command.action_id !== scenario.actionId ||
-    clickProof.command.actor_slot !== scenario.actorSlot ||
-    clickProof.command.template_id !== scenario.templateId ||
-    clickProof.command.targets?.[0] !== scenario.targetSlot ||
-    clickProof.command.grant_id !== scenario.grantId ||
-    clickProof.commandStatus?.state !== scenario.finalState ||
-    !clickProof.commandStatus?.message?.includes(
-      `Ack: stream seqs ${scenario.streamSeq}`,
-    ) ||
-    clickProof.bridgePlan?.role !== "player" ||
-    clickProof.bridgePlan.commandKind !== scenario.commandKind ||
-    clickProof.bridgePlan.commandEndpoint !== "/commands" ||
-    clickProof.bridgePlan.finalState !== scenario.finalState ||
-    !sameStringArray(
-      clickProof.bridgePlan.projectionRefreshKeys,
-      scenario.expectedRefreshKeys,
-    ) ||
-    clickProof.receipts?.at?.(-1)?.state !== scenario.finalState ||
-    clickProof.projectionCommandState?.phase?.phaseId !==
-      scenario.refreshedPhaseId ||
-    clickProof.projectionCommandState?.actions?.length !== 0 ||
-    !String(clickProof.checkpointReceiptState ?? "").startsWith("ack:") ||
-    clickProof.checkpointActionStateAfterAck !== scenario.checkpointActionState ||
-    clickProof.receiptCount !== 1 ||
-    !String(clickProof.receiptStatusText ?? "")
-      .toLowerCase()
-      .includes(`ack: stream seqs ${scenario.streamSeq}`)
-  ) {
-    throw new Error("core-loop admin proof missing player action click ACK");
-  }
+  assertPlayerActionSubmissionClickProofCase({
+    proof: clickProof,
+    expectedGame,
+  });
 }
 
 function assertCoreLoopPlayerActionInvalidRecoveryProof({
   invalidRecoveryProof,
   expectedGame,
 }) {
-  const scenario = playerInvalidActionRecoveryScenario();
-  if (
-    invalidRecoveryProof?.status !== "passed" ||
-    invalidRecoveryProof.clickedAction !== scenario.clickedAction ||
-    invalidRecoveryProof.commandKind !== scenario.commandKind ||
-    invalidRecoveryProof.command?.game !== expectedGame ||
-    invalidRecoveryProof.command.action_id !== scenario.actionId ||
-    invalidRecoveryProof.command.actor_slot !== scenario.actorSlot ||
-    invalidRecoveryProof.command.template_id !== scenario.templateId ||
-    invalidRecoveryProof.command.targets?.[0] !== scenario.targetSlot ||
-    invalidRecoveryProof.command.grant_id !== scenario.grantId ||
-    invalidRecoveryProof.commandStatus?.state !== scenario.finalState ||
-    invalidRecoveryProof.commandStatus.error !== scenario.error ||
-    !invalidRecoveryProof.commandStatus?.message?.includes(
-      scenario.messageIncludes,
-    ) ||
-    invalidRecoveryProof.bridgePlan?.role !== "player" ||
-    invalidRecoveryProof.bridgePlan.commandKind !== scenario.commandKind ||
-    invalidRecoveryProof.bridgePlan.commandEndpoint !== "/commands" ||
-    invalidRecoveryProof.bridgePlan.finalState !== scenario.finalState ||
-    !sameStringArray(
-      invalidRecoveryProof.bridgePlan.projectionRefreshKeys,
-      scenario.expectedRefreshKeys,
-    ) ||
-    invalidRecoveryProof.receipts?.at?.(-1)?.state !== scenario.finalState ||
-    invalidRecoveryProof.projectionCommandState?.phase?.phaseId !==
-      scenario.refreshedPhaseId ||
-    invalidRecoveryProof.projectionCommandState?.actions?.[0]?.templateId !==
-      scenario.refreshedActionTemplateId ||
-    invalidRecoveryProof.checkpointReceiptState !==
-      scenario.checkpointReceiptState ||
-    invalidRecoveryProof.checkpointActionStateAfterReject !==
-      scenario.checkpointActionState ||
-    invalidRecoveryProof.checkpointTargetSlotsAfterReject !==
-      scenario.checkpointTargetSlots ||
-    invalidRecoveryProof.receiptCount !== 1 ||
-    !String(invalidRecoveryProof.receiptStatusText ?? "")
-      .toLowerCase()
-      .includes(scenario.messageIncludes.toLowerCase())
-  ) {
-    throw new Error("core-loop admin proof missing player invalid-action recovery");
-  }
+  assertPlayerInvalidActionRecoveryProofCase({
+    proof: invalidRecoveryProof,
+    expectedGame,
+  });
 }
 
 function assertCoreLoopTargetResolutionReceiptSurface(targetSurface) {

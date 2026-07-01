@@ -82,3 +82,118 @@ export function staleNightFourActionRecoveryScenario() {
     checkpointTargetSlots: "",
   };
 }
+
+export function assertPlayerActionSubmissionClickProofCase({
+  proof,
+  expectedGame,
+  scenario = playerActionSubmissionScenario(),
+  includeEvidenceInError = false,
+}) {
+  if (
+    proof?.status !== "passed" ||
+    proof.clickedAction !== scenario.clickedAction ||
+    proof.commandKind !== scenario.commandKind ||
+    proof.command?.game !== expectedGame ||
+    proof.command.action_id !== scenario.actionId ||
+    proof.command.actor_slot !== scenario.actorSlot ||
+    proof.command.template_id !== scenario.templateId ||
+    proof.command.targets?.[0] !== scenario.targetSlot ||
+    proof.command.grant_id !== scenario.grantId ||
+    proof.commandStatus?.state !== scenario.finalState ||
+    !String(proof.commandStatus?.message ?? "").includes(
+      `Ack: stream seqs ${scenario.streamSeq}`,
+    ) ||
+    proof.bridgePlan?.role !== "player" ||
+    proof.bridgePlan.commandKind !== scenario.commandKind ||
+    proof.bridgePlan.commandEndpoint !== "/commands" ||
+    proof.bridgePlan.finalState !== scenario.finalState ||
+    !sameStringArray(
+      proof.bridgePlan.projectionRefreshKeys,
+      scenario.expectedRefreshKeys,
+    ) ||
+    proof.receipts?.at?.(-1)?.state !== scenario.finalState ||
+    proof.projectionCommandState?.phase?.phaseId !== scenario.refreshedPhaseId ||
+    proof.projectionCommandState?.actions?.length !== 0 ||
+    !String(proof.checkpointReceiptState ?? "").startsWith("ack:") ||
+    proof.checkpointActionStateAfterAck !== scenario.checkpointActionState ||
+    proof.receiptCount !== 1 ||
+    !String(proof.receiptStatusText ?? "")
+      .toLowerCase()
+      .includes(`ack: stream seqs ${scenario.streamSeq}`)
+  ) {
+    throwActionScenarioAssertionError({
+      message: "core-loop admin proof missing player action click ACK",
+      evidence: proof,
+      includeEvidenceInError,
+    });
+  }
+}
+
+export function assertPlayerInvalidActionRecoveryProofCase({
+  proof,
+  expectedGame,
+  scenario = playerInvalidActionRecoveryScenario(),
+  includeEvidenceInError = false,
+}) {
+  if (
+    proof?.status !== "passed" ||
+    proof.clickedAction !== scenario.clickedAction ||
+    proof.commandKind !== scenario.commandKind ||
+    proof.command?.game !== expectedGame ||
+    proof.command.action_id !== scenario.actionId ||
+    proof.command.actor_slot !== scenario.actorSlot ||
+    proof.command.template_id !== scenario.templateId ||
+    proof.command.targets?.[0] !== scenario.targetSlot ||
+    proof.command.grant_id !== scenario.grantId ||
+    proof.commandStatus?.state !== scenario.finalState ||
+    proof.commandStatus.error !== scenario.error ||
+    !String(proof.commandStatus?.message ?? "").includes(
+      scenario.messageIncludes,
+    ) ||
+    proof.bridgePlan?.role !== "player" ||
+    proof.bridgePlan.commandKind !== scenario.commandKind ||
+    proof.bridgePlan.commandEndpoint !== "/commands" ||
+    proof.bridgePlan.finalState !== scenario.finalState ||
+    !sameStringArray(
+      proof.bridgePlan.projectionRefreshKeys,
+      scenario.expectedRefreshKeys,
+    ) ||
+    proof.receipts?.at?.(-1)?.state !== scenario.finalState ||
+    proof.projectionCommandState?.phase?.phaseId !== scenario.refreshedPhaseId ||
+    proof.projectionCommandState?.actions?.[0]?.templateId !==
+      scenario.refreshedActionTemplateId ||
+    proof.checkpointReceiptState !== scenario.checkpointReceiptState ||
+    proof.checkpointActionStateAfterReject !== scenario.checkpointActionState ||
+    proof.checkpointTargetSlotsAfterReject !== scenario.checkpointTargetSlots ||
+    proof.receiptCount !== 1 ||
+    !String(proof.receiptStatusText ?? "")
+      .toLowerCase()
+      .includes(scenario.messageIncludes.toLowerCase())
+  ) {
+    throwActionScenarioAssertionError({
+      message: "core-loop admin proof missing player invalid-action recovery",
+      evidence: proof,
+      includeEvidenceInError,
+    });
+  }
+}
+
+function throwActionScenarioAssertionError({
+  message,
+  evidence,
+  includeEvidenceInError,
+}) {
+  if (includeEvidenceInError) {
+    throw new Error(`${message}: ${JSON.stringify(evidence)}`);
+  }
+  throw new Error(message);
+}
+
+function sameStringArray(actual, expected) {
+  return (
+    Array.isArray(actual) &&
+    Array.isArray(expected) &&
+    actual.length === expected.length &&
+    actual.every((value, index) => value === expected[index])
+  );
+}
