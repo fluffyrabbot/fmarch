@@ -327,14 +327,43 @@ export function completedGameEndgameStaleRejectAssertionCases({
       sourceRoleUrl: sourceDeadPlayerRoleUrl,
       scenario: completedDeadPlayerStaleVoteCase(),
     },
-    ...staleCompletedGamePlayerCommandCases().map((scenario) => ({
-      assertProof: assertStaleCompletedGamePlayerCommandRecoveryProof,
-      proof: completedGameEndgameSurface[scenario.proofField],
+    ...staleCompletedGamePlayerCommandAssertionCases({
+      completedGameEndgameSurface,
       expectedGame,
-      sourceRoleUrl: sourceActionPlayerRoleUrl,
-      scenario,
-    })),
+      sourceActionPlayerRoleUrl,
+      assertStaleCompletedGamePlayerCommandRecoveryProof,
+    }),
   ];
+}
+
+export function staleCompletedGamePlayerCommandAssertionCases({
+  completedGameEndgameSurface,
+  expectedGame,
+  sourceActionPlayerRoleUrl,
+  assertStaleCompletedGamePlayerCommandRecoveryProof,
+  cases = staleCompletedGamePlayerCommandCases(),
+}) {
+  return cases.map((scenario) => ({
+    assertProof: assertStaleCompletedGamePlayerCommandRecoveryProof,
+    proof: completedGameEndgameSurface[scenario.proofField],
+    ...staleCompletedGamePlayerCommandProofArgs({
+      expectedGame,
+      sourceActionPlayerRoleUrl,
+      scenario,
+    }),
+  }));
+}
+
+export function staleCompletedGamePlayerCommandProofArgs({
+  expectedGame,
+  sourceActionPlayerRoleUrl,
+  scenario,
+}) {
+  return {
+    expectedGame,
+    sourceRoleUrl: sourceActionPlayerRoleUrl,
+    scenario,
+  };
 }
 
 export function completedActionPlayerSurfaceProofArgs({

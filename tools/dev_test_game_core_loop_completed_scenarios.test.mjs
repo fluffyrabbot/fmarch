@@ -19,8 +19,10 @@ import {
   completedPlayerReloadAssertionCases,
   completedPlayerReloadCases,
   completedPlayerReloadProofCases,
+  staleCompletedGamePlayerCommandAssertionCases,
   staleCompletedGamePlayerCommandCaseDefinitions,
   staleCompletedGamePlayerCommandCases,
+  staleCompletedGamePlayerCommandProofArgs,
 } from "./dev_test_game_core_loop_completed_scenarios.mjs";
 
 test("completed-game scenario module exposes shared frozen definitions", () => {
@@ -277,6 +279,51 @@ test("completed-game scenario module derives action-player completed surface cas
         "/games/game-a/notifications?principal_user_id=player_mira",
       expectedLastVoteOutcomePhaseId: "D05",
     },
+  );
+});
+
+test("completed-game scenario module derives stale completed-player command assertion cases", () => {
+  const completedGameEndgameSurface = {
+    staleCompletedVoteRecoveryProof: { id: "stale-completed-vote" },
+    staleCompletedPostRecoveryProof: { id: "stale-completed-post" },
+  };
+  const [voteScenario, postScenario] = staleCompletedGamePlayerCommandCases();
+
+  assert.deepEqual(
+    staleCompletedGamePlayerCommandProofArgs({
+      expectedGame: "game-a",
+      sourceActionPlayerRoleUrl: "http://127.0.0.1/g/game-a/action",
+      scenario: voteScenario,
+    }),
+    {
+      expectedGame: "game-a",
+      sourceRoleUrl: "http://127.0.0.1/g/game-a/action",
+      scenario: voteScenario,
+    },
+  );
+  assert.deepEqual(
+    staleCompletedGamePlayerCommandAssertionCases({
+      completedGameEndgameSurface,
+      expectedGame: "game-a",
+      sourceActionPlayerRoleUrl: "http://127.0.0.1/g/game-a/action",
+      assertStaleCompletedGamePlayerCommandRecoveryProof: assertProofFixture,
+    }),
+    [
+      {
+        assertProof: assertProofFixture,
+        proof: { id: "stale-completed-vote" },
+        expectedGame: "game-a",
+        sourceRoleUrl: "http://127.0.0.1/g/game-a/action",
+        scenario: voteScenario,
+      },
+      {
+        assertProof: assertProofFixture,
+        proof: { id: "stale-completed-post" },
+        expectedGame: "game-a",
+        sourceRoleUrl: "http://127.0.0.1/g/game-a/action",
+        scenario: postScenario,
+      },
+    ],
   );
 });
 
