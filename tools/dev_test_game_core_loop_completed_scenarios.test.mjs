@@ -7,6 +7,10 @@ import {
   assertHostCompleteGameProofCase,
 } from "./dev_test_game_core_loop_completed_scenarios.mjs";
 import {
+  hostPhaseTransitionActionFixture,
+  postDayThreePlayerSurfaceFixture,
+} from "./dev_test_game_core_loop_proof_fixtures.mjs";
+import {
   assertCompletedGameEndgameSurfaceProof,
   assertCompletedGameEndgameSurfaceAssertionCases,
   assertCompletedGameEndgameTransition,
@@ -229,6 +233,49 @@ test("completed-game scenario module builds reusable proof fixtures", () => {
     stalePlayerProofs.staleCompletedPostRecoveryProof.command.body,
     "Stale completed game proof post",
   );
+});
+
+test("core-loop proof fixture module builds shared host and player proof shapes", () => {
+  const hostProof = hostPhaseTransitionActionFixture({
+    actionId: "resolve_phase",
+    commandKind: "ResolvePhase",
+    streamSeq: 701,
+    phaseId: "D02",
+    phaseState: "locked",
+    deadlineAffordance: "advance_phase",
+    projectionRefreshKeys: ["host", "votecount"],
+    command: { game: "game-a" },
+  });
+  const playerProof = postDayThreePlayerSurfaceFixture({
+    sourceRoleUrl: "http://127.0.0.1/g/game-a",
+    visitedRolePath: "/g/game-a",
+    slotField: "actionPlayerSlot",
+    slot: "slot-7",
+    principalUserId: "player_mira",
+    phaseId: "N05",
+    phaseState: "open",
+    actorAlive: true,
+    actorStatus: "alive",
+    gameCompleted: true,
+    actionState: "disabled:game complete",
+    statusText: "Player action unavailable: game complete",
+    privateCount: 0,
+    privateReceipt: false,
+    boundary: "completed game endgame state",
+    resyncFromSeq: 921,
+    commandStateEndpoint:
+      "/games/game-a/player-command-state?principal_user_id=player_mira&slot_id=slot-7",
+    notificationsEndpoint:
+      "/games/game-a/notifications?principal_user_id=player_mira",
+  });
+
+  assert.equal(hostProof.commandStatus.message, "Ack: stream seqs 701");
+  assert.deepEqual(hostProof.bridgePlan.projectionRefreshKeys, [
+    "host",
+    "votecount",
+  ]);
+  assert.equal(playerProof.projectionCommandState.gameCompleted, true);
+  assert.equal(playerProof.privateEmptyText, "No private results visible");
 });
 
 test("completed-game scenario module derives shared assertion cases", () => {
