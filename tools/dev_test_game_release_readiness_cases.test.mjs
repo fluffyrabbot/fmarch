@@ -100,6 +100,31 @@ test("release readiness buildable cases share next-action commands and spine tar
   );
   assert.equal(releaseRunbook.command, `npm run ${devTestGameReleaseRunbookCommand}`);
   assert.equal(releaseRunbook.proofTarget, devTestGameReleaseRunbookPath);
+
+  const hostedIdentity = releaseReadinessBuildableItemForId(
+    "hosted-production-identity",
+  );
+  assert.equal(
+    hostedIdentity.command,
+    "npm run test:dev-test-game-identity-admin-proof",
+  );
+  assert.equal(
+    hostedIdentity.roleUrl,
+    "/admin/audit/local-identity-adapter?game=<seeded-game>",
+  );
+  assert.equal(hostedIdentity.actionStatus, undefined);
+  assert.equal(hostedIdentity.priority, -10);
+  assert.deepEqual(
+    hostedIdentity.productionFeatureSpineTarget,
+    releaseReadinessProductionFeatureSpineTargets.identityAdapter,
+  );
+  assert.deepEqual(hostedIdentity.hostedHandoffChecklist.blockedCheckIds, [
+    "hosted-account-lifecycle-configured",
+    "invite-delivery-configured",
+    "account-recovery-configured",
+    "abuse-and-rate-limit-policy-configured",
+    "hosted-audit-retention-export-configured",
+  ]);
 });
 
 test("hosted deployment buildable case carries blocked and passed preflight states", () => {

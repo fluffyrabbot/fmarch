@@ -107,7 +107,7 @@ function assertChecklistItemShape(item) {
   }
   if (!validFeatureSpineTarget(item.productionFeatureSpineTarget)) {
     throw new Error(
-      `production-facing surface ${id} is missing a core-loop spine target`,
+      `production-facing surface ${id} is missing a seeded spine target`,
     );
   }
   if (
@@ -132,19 +132,23 @@ function assertChecklistItemShape(item) {
 }
 
 function validFeatureSpineTarget(target) {
-  return (
-    target !== null &&
-    typeof target === "object" &&
-    typeof target.featureSlotId === "string" &&
-    target.featureSlotId.trim() !== "" &&
-    target.sourceCheckId === "local-core-loop-proof" &&
-    typeof target.cycleId === "string" &&
-    target.cycleId.trim() !== "" &&
-    typeof target.roleUrlId === "string" &&
-    target.roleUrlId.trim() !== "" &&
-    typeof target.checkpointId === "string" &&
-    target.checkpointId.trim() !== "" &&
-    typeof target.adminCheckId === "string" &&
-    target.adminCheckId.trim() !== ""
+  if (
+    target === null ||
+    typeof target !== "object" ||
+    typeof target.featureSlotId !== "string" ||
+    target.featureSlotId.trim() === "" ||
+    typeof target.cycleId !== "string" ||
+    target.cycleId.trim() === "" ||
+    typeof target.roleUrlId !== "string" ||
+    target.roleUrlId.trim() === "" ||
+    typeof target.checkpointId !== "string" ||
+    target.checkpointId.trim() === "" ||
+    typeof target.adminCheckId !== "string" ||
+    target.adminCheckId.trim() === ""
+  ) {
+    return false;
+  }
+  return ["local-core-loop-proof", "local-identity-adapter-proof"].includes(
+    target.sourceCheckId,
   );
 }

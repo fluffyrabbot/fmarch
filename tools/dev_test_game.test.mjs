@@ -94,6 +94,7 @@ import {
 import {
   assertDevTestGameNextAction,
   buildDevTestGameNextAction,
+  devTestGameIdentityAdminProofCommand,
   devTestGameLiveProofCommand,
   devTestGameSeedFixtureCommand,
   devTestGameSeedFixturePath,
@@ -798,23 +799,23 @@ test("dev test-game next-action derives one local recovery command from the mani
   });
   assertDevTestGameNextAction(freshAction);
   assert.deepEqual(freshAction.nextAction, {
-    command: "npm run test:dev-test-game-hosted-concurrent-race-matrix",
+    command: devTestGameIdentityAdminProofCommand,
     reason: "release-readiness-unproven",
-    status: "ready",
+    status: "blocked",
     unproven: {
-      id: "hosted-concurrent-race-matrix",
+      id: "hosted-production-identity",
       status: "unproven",
-      requiredEvidence:
-        "Hosted or hosted-like concurrent command race matrix beyond the promoted local replacement, host, player, cohost deadline, lifecycle, and complete-game reload milestones, including multi-session reload/reconnect recovery and stale-client conflict evidence",
+      requiredEvidence: "Hosted account lifecycle",
       buildSlice:
-        "Create the first hosted-like concurrent race matrix proof request from the promoted local race baseline.",
-      proofTarget: devTestGameHostedConcurrentRaceMatrixPath,
-      roleUrl:
-        "/admin/audit/local-hosted-concurrent-race-matrix?game=<seeded-game>",
-      proofGraphNodeId: "admin-proof:hosted-concurrent-race-matrix",
-      productionFeatureSpineTarget: productionFeatureSpineTargetFixture(),
-      spineDrilldown: featureSpineDrilldownFixture(),
-      spineTarget: resolvedFeatureSpineTargetFixture(),
+        "Use the seeded identity admin role URL as the local prerequisite, then attach hosted account lifecycle, invite delivery, recovery, abuse/rate-limit, session-secret, and audit retention evidence without changing role surfaces.",
+      proofTarget: "target/dev-test-game/identity-admin-proof.json",
+      roleUrl: "/admin/audit/local-identity-adapter?game=<seeded-game>",
+      proofGraphNodeId: "admin-proof:identity",
+      productionFeatureSpineTarget:
+        productionFeatureSpineTargetFixture("identity-adapter"),
+      spineDrilldown: featureSpineDrilldownFixture("identity-adapter"),
+      spineTarget: resolvedFeatureSpineTargetFixture("identity-adapter"),
+      hostedHandoffChecklist: hostedIdentityHandoffChecklistFixture(),
     },
   });
   assert.deepEqual(freshAction.selectionTrace, {
@@ -856,15 +857,37 @@ test("dev test-game next-action derives one local recovery command from the mani
   });
   assert.deepEqual(freshAction.releaseReadinessTrace, {
     strategy: "local-dev-release-readiness-priority",
-    candidateCount: 1,
-    selectedUnprovenId: "hosted-concurrent-race-matrix",
+    candidateCount: 2,
+    selectedUnprovenId: "hosted-production-identity",
     candidates: [
       {
         rank: 1,
+        id: "hosted-production-identity",
+        status: "unproven",
+        priority: -10,
+        selected: true,
+        command: devTestGameIdentityAdminProofCommand,
+        buildSlice:
+          "Use the seeded identity admin role URL as the local prerequisite, then attach hosted account lifecycle, invite delivery, recovery, abuse/rate-limit, session-secret, and audit retention evidence without changing role surfaces.",
+        proofTarget: "target/dev-test-game/identity-admin-proof.json",
+        roleUrl: "/admin/audit/local-identity-adapter?game=<seeded-game>",
+        proofGraphNodeId: "admin-proof:identity",
+        productionFeatureSpineTarget:
+          productionFeatureSpineTargetFixture("identity-adapter"),
+        spineDrilldown: featureSpineDrilldownFixture("identity-adapter"),
+        spineTarget: resolvedFeatureSpineTargetFixture("identity-adapter"),
+        actionStatus: "blocked",
+        hostedHandoffChecklist: hostedIdentityHandoffChecklistFixture(),
+        proofBoundary:
+          "Hosted identity lifecycle handoff. The local identity adapter admin proof is the prerequisite role-surface proof; it does not prove hosted account lifecycle, invite delivery, account recovery, abuse controls, session-secret policy, hosted audit retention/export, beta readiness, release readiness, or production readiness.",
+        requiredEvidence: "Hosted account lifecycle",
+      },
+      {
+        rank: 2,
         id: "hosted-concurrent-race-matrix",
         status: "unproven",
         priority: 5,
-        selected: true,
+        selected: false,
         command: "npm run test:dev-test-game-hosted-concurrent-race-matrix",
         buildSlice:
           "Create the first hosted-like concurrent race matrix proof request from the promoted local race baseline.",
@@ -8855,6 +8878,35 @@ function devTestGameReleaseReadinessChecklistFixture({
                 proofLaneCoverage: seedProofLaneCoverage,
               },
             ]),
+        {
+          id: "local-identity-adapter-proof",
+          label: "Local production-identity adapter proof",
+          status: "passed",
+          evidence: "target/auth-invite-role-proof/invite-role-proof.json",
+          proofBoundary:
+            "Local identity adapter proof keeps role surfaces stable.",
+          roles: ["admin", "host", "player"],
+          adminRoleSurface: {
+            status: "passed",
+            path: "target/dev-test-game/identity-admin-proof.json",
+            proofBoundary:
+              "Local identity adapter admin role URL proof.",
+            overviewRoleUrl: "/admin?game=<seeded-game>",
+            detailRoleUrl:
+              "/admin/audit/local-identity-adapter?game=<seeded-game>",
+            visibleChecks: [
+              "account-login",
+              "account-lifecycle",
+              "session-rotation",
+              "session-revocation",
+              "invite-revocation",
+              "host-scoped-invite-issuance",
+              "audit-trail",
+              "admin-audit-surface",
+            ],
+            visibleSessions: ["admin", "host", "player"],
+          },
+        },
         ...(includeProofGraphHandoffCheck
           ? [
               {
@@ -12900,6 +12952,20 @@ function productionFeatureSpineTargetFixture(slotId = "player-action-submission"
 
 function resolvedFeatureSpineTargetFixture(slotId = "player-action-submission") {
   const declaration = productionFeatureSpineTargetFixture(slotId);
+  if (slotId === "identity-adapter") {
+    return {
+      featureSlotId: declaration.featureSlotId,
+      sourceCheckId: "local-identity-adapter-proof",
+      detailRoleUrl: "/admin/audit/local-identity-adapter?game=<seeded-game>",
+      cycleId: declaration.cycleId,
+      roleUrlId: declaration.roleUrlId,
+      roleUrl: "/admin/audit/local-identity-adapter?game=<seeded-game>",
+      checkpointId: declaration.checkpointId,
+      adminCheckId: declaration.adminCheckId,
+      browserProofCommand: devTestGameLiveProofCommand,
+      rerunCommand: devTestGameIdentityAdminProofCommand,
+    };
+  }
   return {
     featureSlotId: declaration.featureSlotId,
     sourceCheckId: "local-core-loop-proof",
@@ -12910,6 +12976,7 @@ function resolvedFeatureSpineTargetFixture(slotId = "player-action-submission") 
     checkpointId: declaration.checkpointId,
     adminCheckId: declaration.adminCheckId,
     browserProofCommand: devTestGameLiveProofCommand,
+    rerunCommand: "npm run test:dev-test-game-core-loop-admin-proof",
   };
 }
 
@@ -12924,12 +12991,78 @@ function featureSpineDrilldownFixture(slotId = "player-action-submission") {
     checkpointRowId: target.checkpointId,
     adminCheckId: target.adminCheckId,
     roleUrl: target.roleUrl,
-    rerunCommand: "npm run test:dev-test-game-core-loop-admin-proof",
+    rerunCommand:
+      target.rerunCommand ?? "npm run test:dev-test-game-core-loop-admin-proof",
     browserProofCommand: target.browserProofCommand,
   };
 }
 
+function hostedIdentityHandoffChecklistFixture() {
+  return {
+    status: "blocked",
+    preflightStatus: "blocked",
+    command: devTestGameIdentityAdminProofCommand,
+    proofTarget: "target/dev-test-game/identity-admin-proof.json",
+    inputIds: [
+      "hosted-account-lifecycle",
+      "invite-delivery",
+      "account-recovery",
+      "rate-limit-policy",
+      "abuse-control-policy",
+      "session-secret-policy",
+      "hosted-audit-retention-export",
+    ],
+    blockedCheckIds: [
+      "hosted-account-lifecycle-configured",
+      "invite-delivery-configured",
+      "account-recovery-configured",
+      "abuse-and-rate-limit-policy-configured",
+      "hosted-audit-retention-export-configured",
+    ],
+    blockedChecks: [
+      {
+        id: "hosted-account-lifecycle-configured",
+        status: "blocked",
+        requiredEvidence:
+          "Configure hosted account create/login/disable/enable lifecycle evidence over the existing role-surface adapter.",
+      },
+      {
+        id: "invite-delivery-configured",
+        status: "blocked",
+        requiredEvidence:
+          "Configure hosted invite delivery and revocation evidence without exposing raw invite tokens in role URLs or admin surfaces.",
+      },
+      {
+        id: "account-recovery-configured",
+        status: "blocked",
+        requiredEvidence:
+          "Configure hosted account recovery evidence and prove recovered sessions keep the same role-surface architecture.",
+      },
+      {
+        id: "abuse-and-rate-limit-policy-configured",
+        status: "blocked",
+        requiredEvidence:
+          "Configure hosted rate-limit and abuse-control evidence for login, invite, and session lifecycle operations.",
+      },
+      {
+        id: "hosted-audit-retention-export-configured",
+        status: "blocked",
+        requiredEvidence:
+          "Configure hosted audit retention/export evidence for account, invite, and session lifecycle events.",
+      },
+    ],
+  };
+}
+
 const productionFeatureSpineTargetFixtures = Object.freeze({
+  "identity-adapter": Object.freeze({
+    featureSlotId: "identity-adapter",
+    sourceCheckId: "local-identity-adapter-proof",
+    cycleId: "identity-adapter",
+    roleUrlId: "local-identity-adapter",
+    checkpointId: "account-login",
+    adminCheckId: "account-login",
+  }),
   "host-phase-control": Object.freeze({
     featureSlotId: "host-phase-control",
     sourceCheckId: "local-core-loop-proof",

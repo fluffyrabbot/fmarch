@@ -1717,15 +1717,28 @@ function normalizeNextActionHostedHandoffChecklist({
   const blockedChecks = Array.isArray(checklist.blockedChecks)
     ? checklist.blockedChecks
     : [];
+  const checklistInputs =
+    realHostedEvidenceInputs.length > 0
+      ? realHostedEvidenceInputs
+      : Array.isArray(checklist.inputIds)
+        ? checklist.inputIds.map((id) =>
+            Object.freeze({
+              id: String(id ?? ""),
+              label: String(id ?? ""),
+              value: "required",
+              required: true,
+            }),
+          )
+        : [];
   return Object.freeze({
     status: String(checklist.status ?? "unknown"),
     preflightStatus: String(checklist.preflightStatus ?? "unknown"),
     command: String(checklist.command ?? ""),
     proofTarget: String(checklist.proofTarget ?? ""),
-    inputCount: realHostedEvidenceInputs.length,
+    inputCount: checklistInputs.length,
     blockedCheckCount: blockedChecks.length,
     inputs: Object.freeze(
-      realHostedEvidenceInputs.map((input) =>
+      checklistInputs.map((input) =>
         Object.freeze({
           id: input.id,
           label: input.label,
