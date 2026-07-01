@@ -46,20 +46,9 @@ import {
   replacementPrivatePostRecoveryLaneIds,
 } from "./dev_test_game_replacement_private_scenarios.mjs";
 import {
-  assertCompletedActionPlayerSurfaceProofCase,
-  assertCompletedHostReloadProofCase,
-  assertCompletedDeadPlayerStaleVoteRecoveryProofCase,
-  assertCompletedHostStaleCommandRecoveryProofCase,
-  assertCompletedPlayerReloadProofCase,
-  assertHostCompleteGameProofCase,
+  assertCompletedGameEndgameSurfaceProof,
   completedGameHardeningLaneIds,
-  assertStaleCompletedGamePlayerCommandRecoveryProofCase,
 } from "./dev_test_game_core_loop_completed_scenarios.mjs";
-import {
-  assertCompletedGameEndgameSurfaceAssertionCases,
-  assertCompletedGameEndgameTransition,
-  completedGameEndgameSurfaceAssertionCases,
-} from "./dev_test_game_core_loop_completed_game_cases.mjs";
 import {
   assertPlayerActionSubmissionClickProofCase,
   assertPlayerInvalidActionRecoveryProofCase,
@@ -3824,140 +3813,12 @@ function assertCoreLoopStaleDayFiveVoteRecoveryProof({
 }
 
 function assertCoreLoopCompletedGameEndgameSurface(completedGameEndgameSurface) {
-  const expectedGame = gameFromRoleUrl(
-    completedGameEndgameSurface?.sourceHostRoleUrl,
-  );
-  if (
-    completedGameEndgameSurface?.status !== "passed" ||
-    completedGameEndgameSurface.clickedThroughFromRoleUrl !== true ||
-    completedGameEndgameSurface.releaseReady !== false ||
-    completedGameEndgameSurface.productionReady !== false ||
-    typeof completedGameEndgameSurface.sourceHostRoleUrl !== "string" ||
-    !completedGameEndgameSurface.sourceHostRoleUrl.endsWith("/host") ||
-    typeof completedGameEndgameSurface.sourceActionPlayerRoleUrl !== "string" ||
-    !completedGameEndgameSurface.sourceActionPlayerRoleUrl.includes("/g/") ||
-    typeof completedGameEndgameSurface.sourceNormalPlayerRoleUrl !== "string" ||
-    !completedGameEndgameSurface.sourceNormalPlayerRoleUrl.includes("/g/") ||
-    typeof completedGameEndgameSurface.sourceDeadPlayerRoleUrl !== "string" ||
-    !completedGameEndgameSurface.sourceDeadPlayerRoleUrl.includes("/g/")
-  ) {
-    throw new Error("core-loop admin proof missing completed-game endgame surface");
-  }
-  assertCompletedGameEndgameTransition({
-    transition: completedGameEndgameSurface.transition,
-    failureMessage:
-      "core-loop admin proof missing completed-game endgame transition",
-  });
-  assertCompletedGameEndgameSurfaceAssertionCases({
+  assertCompletedGameEndgameSurfaceProof({
     completedGameEndgameSurface,
-    cases: completedGameEndgameSurfaceAssertionCases({
-      completedGameEndgameSurface,
-      expectedGame,
-      assertHostCompleteGameProof: assertCoreLoopHostCompleteGameProof,
-      assertCompletedHostReloadProof: assertCoreLoopCompletedHostReloadProof,
-      assertActionPlayerCompletedProof:
-        assertCoreLoopActionPlayerCompletedProof,
-      assertCompletedHostStaleCommandRecoveryProof:
-        assertCoreLoopCompletedHostStaleCommandRecoveryProof,
-      assertCompletedDeadPlayerStaleVoteRecoveryProof:
-        assertCoreLoopCompletedDeadPlayerStaleVoteRecoveryProof,
-      assertCompletedPlayerReloadProof:
-        assertCoreLoopCompletedPlayerReloadProof,
-      assertStaleCompletedGamePlayerCommandRecoveryProof:
-        assertCoreLoopStaleCompletedGamePlayerCommandRecoveryProof,
-    }),
-  });
-}
-
-function assertCoreLoopActionPlayerCompletedProof({
-  proof,
-  expectedGame,
-  sourceRoleUrl,
-}) {
-  assertCompletedActionPlayerSurfaceProofCase({
-    proof,
-    expectedGame,
-    sourceRoleUrl,
     assertPostDayThreePlayerSurfaceProof:
       assertCoreLoopPostDayThreePlayerSurfaceProof,
-  });
-}
-
-function assertCoreLoopHostCompleteGameProof({
-  proof,
-  expectedGame,
-  sourceRoleUrl,
-}) {
-  assertHostCompleteGameProofCase({
-    proof,
-    expectedGame,
-    sourceRoleUrl,
     assertHostPhaseTransitionActionProof:
       assertCoreLoopHostPhaseTransitionActionProof,
-  });
-}
-
-function assertCoreLoopCompletedHostReloadProof({ proof, sourceRoleUrl }) {
-  assertCompletedHostReloadProofCase({ proof, sourceRoleUrl });
-}
-
-function assertCoreLoopCompletedHostStaleCommandRecoveryProof({
-  proof,
-  expectedGame,
-  sourceRoleUrl,
-  expectedCommandKind,
-}) {
-  assertCompletedHostStaleCommandRecoveryProofCase({
-    proof,
-    expectedGame,
-    sourceRoleUrl,
-    expectedCommandKind,
-  });
-}
-
-function assertCoreLoopCompletedPlayerReloadProof({
-  proof,
-  sourceRoleUrl,
-  expectedSlot,
-  expectedBoundaryText,
-  expectedCommandStateEndpoint,
-  expectedNotificationsEndpoint,
-}) {
-  assertCompletedPlayerReloadProofCase({
-    proof,
-    sourceRoleUrl,
-    expectedSlot,
-    expectedBoundaryText,
-    expectedCommandStateEndpoint,
-    expectedNotificationsEndpoint,
-  });
-}
-
-function assertCoreLoopCompletedDeadPlayerStaleVoteRecoveryProof({
-  proof,
-  expectedGame,
-  sourceRoleUrl,
-  scenario,
-}) {
-  assertCompletedDeadPlayerStaleVoteRecoveryProofCase({
-    proof,
-    expectedGame,
-    sourceRoleUrl,
-    scenario,
-  });
-}
-
-function assertCoreLoopStaleCompletedGamePlayerCommandRecoveryProof({
-  proof,
-  expectedGame,
-  sourceRoleUrl,
-  scenario,
-}) {
-  assertStaleCompletedGamePlayerCommandRecoveryProofCase({
-    proof,
-    expectedGame,
-    sourceRoleUrl,
-    scenario,
   });
 }
 

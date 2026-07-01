@@ -1,6 +1,9 @@
 import {
+  assertCompletedGameEndgameSurfaceAssertionCases,
+  assertCompletedGameEndgameTransition,
   completedActionPlayerSurfaceProofArgs,
   completedDeadPlayerStaleVoteCase,
+  completedGameEndgameSurfaceAssertionCases,
 } from "./dev_test_game_core_loop_completed_game_cases.mjs";
 
 export {
@@ -101,6 +104,86 @@ export function completedPlayerHardeningReloadLaneIds() {
   return completedGameHardeningLaneCases()
     .filter((scenario) => scenario.family === "completed-player-reload")
     .map((scenario) => scenario.id);
+}
+
+export function assertCompletedGameEndgameSurfaceProof({
+  completedGameEndgameSurface,
+  assertHostPhaseTransitionActionProof,
+  assertPostDayThreePlayerSurfaceProof,
+  includeEvidenceInError = false,
+}) {
+  const expectedGame = gameFromCompletedRoleUrl(
+    completedGameEndgameSurface?.sourceHostRoleUrl,
+  );
+  if (
+    completedGameEndgameSurface?.status !== "passed" ||
+    completedGameEndgameSurface.clickedThroughFromRoleUrl !== true ||
+    completedGameEndgameSurface.releaseReady !== false ||
+    completedGameEndgameSurface.productionReady !== false ||
+    typeof completedGameEndgameSurface.sourceHostRoleUrl !== "string" ||
+    !completedGameEndgameSurface.sourceHostRoleUrl.endsWith("/host") ||
+    typeof completedGameEndgameSurface.sourceActionPlayerRoleUrl !== "string" ||
+    !completedGameEndgameSurface.sourceActionPlayerRoleUrl.includes("/g/") ||
+    typeof completedGameEndgameSurface.sourceNormalPlayerRoleUrl !== "string" ||
+    !completedGameEndgameSurface.sourceNormalPlayerRoleUrl.includes("/g/") ||
+    typeof completedGameEndgameSurface.sourceDeadPlayerRoleUrl !== "string" ||
+    !completedGameEndgameSurface.sourceDeadPlayerRoleUrl.includes("/g/")
+  ) {
+    throwCompletedScenarioAssertionError({
+      message: "core-loop admin proof missing completed-game endgame surface",
+      evidence: completedGameEndgameSurface,
+      includeEvidenceInError,
+    });
+  }
+  assertCompletedGameEndgameTransition({
+    transition: completedGameEndgameSurface.transition,
+    failureMessage:
+      "core-loop admin proof missing completed-game endgame transition",
+  });
+  assertCompletedGameEndgameSurfaceAssertionCases({
+    completedGameEndgameSurface,
+    includeEvidenceInError,
+    cases: completedGameEndgameSurfaceAssertionCases({
+      completedGameEndgameSurface,
+      expectedGame,
+      assertHostCompleteGameProof: (scenario) =>
+        assertHostCompleteGameProofCase({
+          ...scenario,
+          assertHostPhaseTransitionActionProof,
+          includeEvidenceInError,
+        }),
+      assertCompletedHostReloadProof: (scenario) =>
+        assertCompletedHostReloadProofCase({
+          ...scenario,
+          includeEvidenceInError,
+        }),
+      assertActionPlayerCompletedProof: (scenario) =>
+        assertCompletedActionPlayerSurfaceProofCase({
+          ...scenario,
+          assertPostDayThreePlayerSurfaceProof,
+        }),
+      assertCompletedHostStaleCommandRecoveryProof: (scenario) =>
+        assertCompletedHostStaleCommandRecoveryProofCase({
+          ...scenario,
+          includeEvidenceInError,
+        }),
+      assertCompletedDeadPlayerStaleVoteRecoveryProof: (scenario) =>
+        assertCompletedDeadPlayerStaleVoteRecoveryProofCase({
+          ...scenario,
+          includeEvidenceInError,
+        }),
+      assertCompletedPlayerReloadProof: (scenario) =>
+        assertCompletedPlayerReloadProofCase({
+          ...scenario,
+          includeEvidenceInError,
+        }),
+      assertStaleCompletedGamePlayerCommandRecoveryProof: (scenario) =>
+        assertStaleCompletedGamePlayerCommandRecoveryProofCase({
+          ...scenario,
+          includeEvidenceInError,
+        }),
+    }),
+  });
 }
 
 export function assertHostCompleteGameProofCase({
@@ -518,6 +601,14 @@ function throwCompletedScenarioAssertionError({
     throw new Error(`${message}: ${JSON.stringify(evidence)}`);
   }
   throw new Error(message);
+}
+
+function gameFromCompletedRoleUrl(roleUrl) {
+  try {
+    return new URL(roleUrl).pathname.split("/")[2] ?? "";
+  } catch {
+    return "";
+  }
 }
 
 function sameStringArray(actual, expected) {

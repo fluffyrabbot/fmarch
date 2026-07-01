@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
   assertCompletedActionPlayerSurfaceProofCase,
+  assertCompletedGameEndgameSurfaceProof,
   assertCompletedHostReloadProofCase,
   assertHostCompleteGameProofCase,
 } from "./dev_test_game_core_loop_completed_scenarios.mjs";
@@ -690,6 +691,23 @@ test("completed-game shared host assertions fail closed", () => {
         sourceRoleUrl: "http://127.0.0.1/g/game-a/host",
       }),
     /reloaded completed host reload closure/,
+  );
+});
+
+test("completed-game shared surface assertion fails closed", () => {
+  assert.throws(
+    () =>
+      assertCompletedGameEndgameSurfaceProof({
+        completedGameEndgameSurface: {
+          status: "passed",
+          clickedThroughFromRoleUrl: true,
+          releaseReady: false,
+          productionReady: false,
+        },
+        assertHostPhaseTransitionActionProof: assertProofFixture,
+        assertPostDayThreePlayerSurfaceProof: assertProofFixture,
+      }),
+    /completed-game endgame surface/,
   );
 });
 
