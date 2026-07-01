@@ -75,6 +75,61 @@ export const hostedIdentityEvidenceBlockedChecks = Object.freeze([
       "The hosted identity evidence file must keep releaseReady and productionReady false.",
   }),
 ]);
+export const hostedIdentityEvidenceRequirementGroupDefinitions = Object.freeze([
+  Object.freeze({
+    id: "hosted-identity-evidence-intake",
+    label: "Evidence intake",
+    checkIds: Object.freeze([
+      "hosted-identity-evidence-path-configured",
+      "hosted-identity-evidence-readable",
+    ]),
+    requiredEvidence: "Attach a readable hosted identity evidence JSON file.",
+  }),
+  Object.freeze({
+    id: "hosted-account-lifecycle",
+    label: "Account lifecycle",
+    checkIds: Object.freeze([
+      "hosted-account-lifecycle-evidence",
+      "role-surface-adapter-preserved",
+    ]),
+    requiredEvidence:
+      "Hosted account create/login/disable/enable evidence while preserving the role-surface adapter.",
+  }),
+  Object.freeze({
+    id: "invite-delivery-revocation",
+    label: "Invite delivery and revocation",
+    checkIds: Object.freeze(["invite-delivery-evidence"]),
+    requiredEvidence:
+      "Hosted invite delivery and revocation evidence without exposing raw invite tokens.",
+  }),
+  Object.freeze({
+    id: "account-recovery",
+    label: "Account recovery",
+    checkIds: Object.freeze(["account-recovery-evidence"]),
+    requiredEvidence:
+      "Hosted account recovery evidence where recovered sessions keep the same role-surface architecture.",
+  }),
+  Object.freeze({
+    id: "abuse-session-policy",
+    label: "Abuse and session policy",
+    checkIds: Object.freeze([
+      "abuse-and-rate-limit-evidence",
+      "session-secret-policy-evidence",
+    ]),
+    requiredEvidence:
+      "Hosted abuse/rate-limit evidence plus session-secret storage, rotation, and deployment policy evidence.",
+  }),
+  Object.freeze({
+    id: "audit-retention-export",
+    label: "Audit retention and export",
+    checkIds: Object.freeze([
+      "hosted-audit-retention-export-evidence",
+      "release-claim-boundary-carried",
+    ]),
+    requiredEvidence:
+      "Hosted audit retention/export evidence while keeping releaseReady and productionReady false.",
+  }),
+]);
 
 const outputPath = path.join(repoRoot, devTestGameHostedIdentityEvidencePath);
 
@@ -166,6 +221,7 @@ export async function buildDevTestGameHostedIdentityEvidence({
   const status = checks.every((check) => check.status === "passed")
     ? "passed"
     : "blocked";
+  const requirementGroups = hostedIdentityEvidenceRequirementGroups(checks);
   const evidence = {
     version: DEV_TEST_GAME_HOSTED_IDENTITY_EVIDENCE_VERSION,
     proof: "dev-test-game-hosted-identity-evidence",
@@ -199,6 +255,7 @@ export async function buildDevTestGameHostedIdentityEvidence({
           status: "blocked",
           requiredEvidence: String(check.requiredEvidence ?? ""),
         })),
+      requirementGroups,
     },
     nextCommand: `npm run ${devTestGameHostedIdentityEvidenceCommand}`,
     nextProofTarget: devTestGameHostedIdentityEvidencePath,
@@ -244,7 +301,55 @@ export function assertDevTestGameHostedIdentityEvidence(evidence) {
   ) {
     throw new Error("hosted identity evidence handoff checklist drifted");
   }
+  assertHostedIdentityEvidenceRequirementGroups(evidence);
   return evidence;
+}
+
+export function hostedIdentityEvidenceRequirementGroups(checks) {
+  const checksById = new Map((checks ?? []).map((check) => [check.id, check]));
+  return hostedIdentityEvidenceRequirementGroupDefinitions.map((group) => {
+    const checkIds = [...group.checkIds];
+    const blockedCheckIds = checkIds.filter(
+      (id) => checksById.get(id)?.status !== "passed",
+    );
+    return {
+      id: group.id,
+      label: group.label,
+      status: blockedCheckIds.length === 0 ? "passed" : "blocked",
+      requiredEvidence: group.requiredEvidence,
+      checkIds,
+      blockedCheckIds,
+    };
+  });
+}
+
+function assertHostedIdentityEvidenceRequirementGroups(evidence) {
+  const groups = evidence.hostedHandoffChecklist?.requirementGroups;
+  if (!Array.isArray(groups)) {
+    throw new Error("hosted identity evidence missing requirement groups");
+  }
+  const groupsById = new Map(groups.map((group) => [group.id, group]));
+  for (const definition of hostedIdentityEvidenceRequirementGroupDefinitions) {
+    const group = groupsById.get(definition.id);
+    if (
+      group === undefined ||
+      group.label !== definition.label ||
+      !sameStringArray(group.checkIds, definition.checkIds) ||
+      !["passed", "blocked"].includes(group.status) ||
+      !Array.isArray(group.blockedCheckIds)
+    ) {
+      throw new Error(`hosted identity evidence requirement group drifted: ${definition.id}`);
+    }
+  }
+}
+
+function sameStringArray(actual, expected) {
+  return (
+    Array.isArray(actual) &&
+    Array.isArray(expected) &&
+    actual.length === expected.length &&
+    actual.every((value, index) => value === expected[index])
+  );
 }
 
 async function readRawHostedIdentityEvidence(rawEvidencePath) {

@@ -1,6 +1,12 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
+  devTestGameHostedIdentityEvidenceCommand,
+  devTestGameHostedIdentityEvidencePath,
+  hostedIdentityEvidenceBlockedChecks,
+  hostedIdentityEvidenceRequirementGroups,
+} from "./dev_test_game_hosted_identity_evidence.mjs";
+import {
   buildReleaseReadinessUnprovenItems,
   devTestGameReleaseRunbookCommand,
   devTestGameReleaseRunbookPath,
@@ -106,25 +112,35 @@ test("release readiness buildable cases share next-action commands and spine tar
   );
   assert.equal(
     hostedIdentity.command,
-    "npm run test:dev-test-game-identity-admin-proof",
+    `npm run ${devTestGameHostedIdentityEvidenceCommand}`,
   );
+  assert.equal(hostedIdentity.proofTarget, devTestGameHostedIdentityEvidencePath);
   assert.equal(
     hostedIdentity.roleUrl,
-    "/admin/audit/local-identity-adapter?game=<seeded-game>",
+    "/admin/audit/local-hosted-identity-evidence?game=<seeded-game>",
   );
-  assert.equal(hostedIdentity.actionStatus, undefined);
   assert.equal(hostedIdentity.priority, -10);
   assert.deepEqual(
     hostedIdentity.productionFeatureSpineTarget,
     releaseReadinessProductionFeatureSpineTargets.identityAdapter,
   );
-  assert.deepEqual(hostedIdentity.hostedHandoffChecklist.blockedCheckIds, [
-    "hosted-account-lifecycle-configured",
-    "invite-delivery-configured",
-    "account-recovery-configured",
-    "abuse-and-rate-limit-policy-configured",
-    "hosted-audit-retention-export-configured",
-  ]);
+  assert.deepEqual(
+    hostedIdentity.hostedHandoffChecklist.blockedCheckIds,
+    hostedIdentityEvidenceBlockedChecks.map((check) => check.id),
+  );
+  assert.deepEqual(
+    hostedIdentity.hostedHandoffChecklist.requirementGroups.map((group) => [
+      group.id,
+      group.status,
+      group.blockedCheckIds,
+    ]),
+    hostedIdentityEvidenceRequirementGroups(
+      hostedIdentityEvidenceBlockedChecks.map((check) => ({
+        ...check,
+        status: "blocked",
+      })),
+    ).map((group) => [group.id, "blocked", group.checkIds]),
+  );
 });
 
 test("hosted deployment buildable case carries blocked and passed preflight states", () => {

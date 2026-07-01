@@ -750,6 +750,9 @@ function normalizeHostedIdentityEvidenceHandoffChecklist({
         }),
       ),
     ),
+    groups: normalizeHostedHandoffGroups(
+      hostedIdentityEvidence.hostedHandoffChecklist?.requirementGroups,
+    ),
   });
 }
 
@@ -1970,7 +1973,32 @@ function normalizeNextActionHostedHandoffChecklist({
         }),
       ),
     ),
+    groups: normalizeHostedHandoffGroups(checklist.requirementGroups),
   });
+}
+
+function normalizeHostedHandoffGroups(groups) {
+  return Object.freeze(
+    (Array.isArray(groups) ? groups : []).map((group) =>
+      Object.freeze({
+        id: String(group.id ?? ""),
+        label: String(group.label ?? group.id ?? ""),
+        status: String(group.status ?? "unknown"),
+        requiredEvidence: String(group.requiredEvidence ?? ""),
+        checkIds: Object.freeze(
+          (Array.isArray(group.checkIds) ? group.checkIds : []).map((id) =>
+            String(id),
+          ),
+        ),
+        blockedCheckIds: Object.freeze(
+          (Array.isArray(group.blockedCheckIds)
+            ? group.blockedCheckIds
+            : []
+          ).map((id) => String(id)),
+        ),
+      }),
+    ),
+  );
 }
 
 function normalizeNextActionStabilityTrace(stabilityTrace) {

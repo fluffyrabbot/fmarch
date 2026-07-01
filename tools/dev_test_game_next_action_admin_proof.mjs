@@ -84,6 +84,8 @@ await runAdminAuditProof({
       ),
       requiredHostedHandoffBlockedChecks:
         requiredHostedHandoffBlockedCheckIdsForNextAction(source.nextAction),
+      requiredHostedHandoffGroups:
+        requiredHostedHandoffGroupIdsForNextAction(source.nextAction),
       requiredHostedHandoffSummary:
         requiredHostedHandoffSummaryForNextAction(source.nextAction),
       requiredRelatedDestinations: requiredRelatedDestinationsForHandoffs(
@@ -603,6 +605,15 @@ export function assertNextActionAdminProof(evidence) {
         );
       }
     }
+    for (const groupId of hostedHandoffGroupIds(checklist)) {
+      if (
+        !evidence.adminRoleSurface?.visibleHostedHandoffGroups?.includes(groupId)
+      ) {
+        throw new Error(
+          `next-action admin proof missing hosted handoff group: ${groupId}`,
+        );
+      }
+    }
     const summary = evidence.adminRoleSurface?.visibleHostedHandoffSummary;
     if (
       summary?.status !== checklist.status ||
@@ -726,6 +737,17 @@ function requiredHostedHandoffBlockedCheckIdsForNextAction(nextAction) {
   const blockedCheckIds =
     nextAction.nextAction.unproven?.hostedHandoffChecklist?.blockedCheckIds;
   return Array.isArray(blockedCheckIds) ? blockedCheckIds : [];
+}
+
+function requiredHostedHandoffGroupIdsForNextAction(nextAction) {
+  return hostedHandoffGroupIds(
+    nextAction.nextAction.unproven?.hostedHandoffChecklist,
+  );
+}
+
+function hostedHandoffGroupIds(checklist) {
+  const groups = checklist?.requirementGroups;
+  return Array.isArray(groups) ? groups.map((group) => String(group.id)) : [];
 }
 
 function requiredHostedHandoffSummaryForNextAction(nextAction) {

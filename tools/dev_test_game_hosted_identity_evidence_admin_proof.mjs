@@ -65,6 +65,10 @@ await runAdminAuditProof({
       requiredHostedHandoffInputs: hostedIdentityEvidenceInputIds,
       requiredHostedHandoffBlockedChecks:
         source.hostedIdentityEvidence.hostedHandoffChecklist.blockedCheckIds,
+      requiredHostedHandoffGroups:
+        source.hostedIdentityEvidence.hostedHandoffChecklist.requirementGroups.map(
+          (group) => group.id,
+        ),
       requiredRelatedLinks,
     }),
   buildEvidence: ({ source, adminRoleSurface }) => ({
@@ -94,6 +98,10 @@ await runAdminAuditProof({
       hostedHandoffInputIds: hostedIdentityEvidenceInputIds,
       hostedHandoffBlockedCheckIds:
         source.hostedIdentityEvidence.hostedHandoffChecklist.blockedCheckIds,
+      hostedHandoffGroupIds:
+        source.hostedIdentityEvidence.hostedHandoffChecklist.requirementGroups.map(
+          (group) => group.id,
+        ),
       relatedAuditIds: requiredRelatedLinks,
     },
     adminRoleSurface,
@@ -151,6 +159,15 @@ export function assertHostedIdentityEvidenceAdminProof(evidence) {
     ) {
       throw new Error(
         `hosted identity evidence admin proof missing handoff blocked check: ${checkId}`,
+      );
+    }
+  }
+  for (const groupId of evidence.generatedFrom?.hostedHandoffGroupIds ?? []) {
+    if (
+      !evidence.adminRoleSurface?.visibleHostedHandoffGroups?.includes(groupId)
+    ) {
+      throw new Error(
+        `hosted identity evidence admin proof missing handoff group: ${groupId}`,
       );
     }
   }

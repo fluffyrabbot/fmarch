@@ -4425,6 +4425,15 @@ export function validateDevTestGameHostedEvidenceLaneAdminProof(proof, options =
       );
     }
   }
+  for (const groupId of proof.generatedFrom?.hostedHandoffGroupIds ?? []) {
+    if (
+      !proof.adminRoleSurface?.visibleHostedHandoffGroups?.includes(groupId)
+    ) {
+      throw new Error(
+        `hosted identity evidence admin proof missing handoff group: ${groupId}`,
+      );
+    }
+  }
   return {
     status: "passed",
     path:
@@ -4524,6 +4533,8 @@ export function validateDevTestGameHostedIdentityEvidenceAdminProof(
       proof.adminRoleSurface.visibleHostedHandoffInputs ?? [],
     visibleHostedHandoffBlockedChecks:
       proof.adminRoleSurface.visibleHostedHandoffBlockedChecks ?? [],
+    visibleHostedHandoffGroups:
+      proof.adminRoleSurface.visibleHostedHandoffGroups ?? [],
     evidenceStatus: String(proof.generatedFrom?.status ?? "unknown"),
     rawEvidenceStatus: String(
       proof.generatedFrom?.rawEvidenceStatus ?? "unknown",
@@ -5576,6 +5587,15 @@ export function validateDevTestGameNextActionAdminProof(proof, options = {}) {
         );
       }
     }
+    for (const groupId of hostedHandoffGroupIds(checklist)) {
+      if (
+        !proof.adminRoleSurface?.visibleHostedHandoffGroups?.includes(groupId)
+      ) {
+        throw new Error(
+          `next-action admin proof missing hosted handoff group: ${groupId}`,
+        );
+      }
+    }
     const summary = proof.adminRoleSurface?.visibleHostedHandoffSummary;
     if (
       summary?.status !== checklist.status ||
@@ -5602,6 +5622,8 @@ export function validateDevTestGameNextActionAdminProof(proof, options = {}) {
       proof.adminRoleSurface.visibleHostedHandoffInputs ?? [],
     visibleHostedHandoffBlockedChecks:
       proof.adminRoleSurface.visibleHostedHandoffBlockedChecks ?? [],
+    visibleHostedHandoffGroups:
+      proof.adminRoleSurface.visibleHostedHandoffGroups ?? [],
     visibleHostedHandoffSummary:
       proof.adminRoleSurface.visibleHostedHandoffSummary ?? null,
     command: String(proof.generatedFrom?.command ?? ""),
@@ -5615,6 +5637,11 @@ export function validateDevTestGameNextActionAdminProof(proof, options = {}) {
     localReadinessDependencyCandidateCount: localTrace.candidateCount,
     ...(options.artifact === undefined ? {} : { artifact: options.artifact }),
   };
+}
+
+function hostedHandoffGroupIds(checklist) {
+  const groups = checklist?.requirementGroups;
+  return Array.isArray(groups) ? groups.map((group) => String(group.id)) : [];
 }
 
 function validateOptionalNextActionAdminProof(proof, options = {}) {

@@ -107,6 +107,7 @@ import {
   devTestGameHostedIdentityEvidencePath,
   hostedIdentityEvidenceBlockedChecks,
   hostedIdentityEvidenceInputIds,
+  hostedIdentityEvidenceRequirementGroups,
 } from "./dev_test_game_hosted_identity_evidence.mjs";
 import { devTestGameLiveSpinePlan } from "./dev_test_game_live_spine.mjs";
 import {
@@ -12375,6 +12376,10 @@ function featureSpineDrilldownFixture(slotId = "player-action-submission") {
 }
 
 function hostedIdentityHandoffChecklistFixture() {
+  const blockedIdentityChecks = hostedIdentityEvidenceBlockedChecks.map((check) => ({
+    ...check,
+    status: "blocked",
+  }));
   return {
     status: "blocked",
     preflightStatus: "blocked",
@@ -12382,10 +12387,10 @@ function hostedIdentityHandoffChecklistFixture() {
     proofTarget: devTestGameHostedIdentityEvidencePath,
     inputIds: [...hostedIdentityEvidenceInputIds],
     blockedCheckIds: hostedIdentityEvidenceBlockedChecks.map((check) => check.id),
-    blockedChecks: hostedIdentityEvidenceBlockedChecks.map((check) => ({
-      ...check,
-      status: "blocked",
-    })),
+    blockedChecks: blockedIdentityChecks,
+    requirementGroups: hostedIdentityEvidenceRequirementGroups(
+      blockedIdentityChecks,
+    ),
   };
 }
 
@@ -13405,6 +13410,12 @@ function hostedIdentityEvidenceAdminProofFixture() {
       hostedHandoffBlockedCheckIds: hostedIdentityEvidenceBlockedChecks.map(
         (check) => check.id,
       ),
+      hostedHandoffGroupIds: hostedIdentityEvidenceRequirementGroups(
+        hostedIdentityEvidenceBlockedChecks.map((check) => ({
+          ...check,
+          status: "blocked",
+        })),
+      ).map((group) => group.id),
       relatedAuditIds: ["local-identity-adapter", "local-next-action"],
     },
     adminRoleSurface: {
@@ -13421,6 +13432,12 @@ function hostedIdentityEvidenceAdminProofFixture() {
       visibleHostedHandoffBlockedChecks: hostedIdentityEvidenceBlockedChecks.map(
         (check) => check.id,
       ),
+      visibleHostedHandoffGroups: hostedIdentityEvidenceRequirementGroups(
+        hostedIdentityEvidenceBlockedChecks.map((check) => ({
+          ...check,
+          status: "blocked",
+        })),
+      ).map((group) => group.id),
       visibleRelatedLinks: ["local-identity-adapter", "local-next-action"],
       rawInviteTokensVisible: false,
       releaseReady: false,

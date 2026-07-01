@@ -41,6 +41,7 @@ import {
 import {
   hostedIdentityEvidenceBlockedChecks,
   hostedIdentityEvidenceInputIds,
+  hostedIdentityEvidenceRequirementGroups,
 } from "../../../../tools/dev_test_game_hosted_identity_evidence.mjs";
 import {
   releaseReadinessUnprovenItem,
@@ -804,6 +805,19 @@ test("admin route data exposes hosted identity evidence as a native audit row", 
   assert.deepEqual(
     identity.hostedHandoffChecklist.blockedChecks.map((check) => check.id),
     hostedIdentityEvidenceBlockedChecks.map((check) => check.id),
+  );
+  assert.deepEqual(
+    identity.hostedHandoffChecklist.groups.map((group) => [
+      group.id,
+      group.status,
+      group.blockedCheckIds,
+    ]),
+    hostedIdentityEvidenceRequirementGroups(
+      hostedIdentityEvidenceBlockedChecks.map((check) => ({
+        ...check,
+        status: "blocked",
+      })),
+    ).map((group) => [group.id, "blocked", group.checkIds]),
   );
   assert.equal(
     identity.artifactSummary.nextProofTarget,
@@ -3443,6 +3457,12 @@ function localHostedIdentityEvidenceFixture() {
         ...check,
         status: "blocked",
       })),
+      requirementGroups: hostedIdentityEvidenceRequirementGroups(
+        hostedIdentityEvidenceBlockedChecks.map((check) => ({
+          ...check,
+          status: "blocked",
+        })),
+      ),
     },
     nextCommand: "npm run test:dev-test-game-hosted-identity-evidence",
     nextProofTarget: HOSTED_IDENTITY_EVIDENCE_PROOF_TARGET,

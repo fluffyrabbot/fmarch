@@ -349,6 +349,17 @@
               <span>{input.required ? "required" : "optional"}</span>
             </li>
           {/each}
+          {#each data.audit.hostedHandoffChecklist.groups ?? [] as group}
+            <li
+              class="admin-audit-detail__entry admin-audit-detail__entry--stack"
+              data-testid={`admin-audit-hosted-handoff-group-${group.id}`}
+            >
+              <strong>{group.label}</strong>
+              <span>{group.status}</span>
+              <span>{group.blockedCheckIds.length} blocked</span>
+              <span>{group.requiredEvidence}</span>
+            </li>
+          {/each}
           {#each data.audit.hostedHandoffChecklist.blockedChecks as check}
             <li
               class="admin-audit-detail__entry"

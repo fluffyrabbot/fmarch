@@ -6,6 +6,7 @@ import {
   devTestGameHostedIdentityEvidencePath,
   hostedIdentityEvidenceBlockedChecks,
   hostedIdentityEvidenceInputIds,
+  hostedIdentityEvidenceRequirementGroups,
 } from "./dev_test_game_hosted_identity_evidence.mjs";
 
 export const devTestGameReleaseRunbookPath =
@@ -307,6 +308,10 @@ function hostedDeploymentBuildable({ hostedTargetPreflight }) {
 
 function hostedProductionIdentityBuildable() {
   const command = `npm run ${devTestGameHostedIdentityEvidenceCommand}`;
+  const blockedIdentityChecks = hostedIdentityEvidenceBlockedChecks.map((check) => ({
+    ...check,
+    status: "blocked",
+  }));
   return {
     priority: -10,
     command,
@@ -326,10 +331,10 @@ function hostedProductionIdentityBuildable() {
       proofTarget: devTestGameHostedIdentityEvidencePath,
       inputIds: [...hostedIdentityEvidenceInputIds],
       blockedCheckIds: hostedIdentityEvidenceBlockedChecks.map((check) => check.id),
-      blockedChecks: hostedIdentityEvidenceBlockedChecks.map((check) => ({
-        ...check,
-        status: "blocked",
-      })),
+      blockedChecks: blockedIdentityChecks,
+      requirementGroups: hostedIdentityEvidenceRequirementGroups(
+        blockedIdentityChecks,
+      ),
     },
   };
 }
