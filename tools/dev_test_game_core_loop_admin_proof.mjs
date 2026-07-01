@@ -5,12 +5,9 @@ import {
 } from "../frontend/src/lib/app/local-proof-lane-status.mjs";
 import {
   assertCompletedGameEndgameSurfaceProof,
-  completedDeadPlayerStaleVoteCase,
+  completedGameEndgameProofScenarioCases,
   completedGameEndgameTransition,
-  completedHostStaleCommandCases,
-  completedPlayerReloadProofCases,
-  staleCompletedGamePlayerCommandCases,
-} from "./dev_test_game_core_loop_completed_scenarios.mjs";
+} from "./dev_test_game_core_loop_completed_game_scenario_assertions.mjs";
 import {
   assertPlayerActionSubmissionClickProofCase,
   assertPlayerInvalidActionRecoveryProofCase,
@@ -1702,6 +1699,12 @@ async function proveCompletedGameEndgameSurface({
   normalPlayerRoleUrl,
   deadPlayerRoleUrl,
 }) {
+  const completedScenarioCases = completedGameEndgameProofScenarioCases({
+    actionPlayerRoleUrl,
+    normalPlayerRoleUrl,
+    deadPlayerRoleUrl,
+    commandStateBuilders: completedPlayerReloadCommandStateBuilders(),
+  });
   const hostCompleteProof = await proveHostCompleteGameFromNightFive({
     browser,
     frontendBaseUrl,
@@ -1717,7 +1720,7 @@ async function proveCompletedGameEndgameSurface({
       browser,
       frontendBaseUrl,
       roleUrl: hostRoleUrl,
-      cases: completedHostStaleCommandCases(),
+      cases: completedScenarioCases.completedHostStaleCommandCases,
     });
   const actionPlayerCompletedProof = await provePostDayThreePlayerSurface({
     browser,
@@ -1744,26 +1747,21 @@ async function proveCompletedGameEndgameSurface({
   const completedPlayerReloadProofs = await proveCompletedPlayerRoleReloadCases({
     browser,
     frontendBaseUrl,
-    cases: completedPlayerReloadProofCases({
-      actionPlayerRoleUrl,
-      normalPlayerRoleUrl,
-      deadPlayerRoleUrl,
-      commandStateBuilders: completedPlayerReloadCommandStateBuilders(),
-    }),
+    cases: completedScenarioCases.completedPlayerReloadCases,
   });
   const completedDeadPlayerStaleVoteRecoveryProof =
     await proveCompletedDeadPlayerStaleVoteRecovery({
       browser,
       frontendBaseUrl,
       roleUrl: deadPlayerRoleUrl,
-      scenario: completedDeadPlayerStaleVoteCase(),
+      scenario: completedScenarioCases.completedDeadPlayerStaleVoteCase,
     });
   const staleCompletedPlayerRecoveryProofs =
     await proveStaleCompletedGamePlayerCommandRecoveryCases({
       browser,
       frontendBaseUrl,
       roleUrl: actionPlayerRoleUrl,
-      cases: staleCompletedGamePlayerCommandCases(),
+      cases: completedScenarioCases.staleCompletedGamePlayerCommandCases,
     });
   return {
     status: "passed",

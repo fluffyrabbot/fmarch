@@ -3,11 +3,11 @@ import { readFile } from "node:fs/promises";
 import { test } from "node:test";
 import {
   assertCompletedActionPlayerSurfaceProofCase,
-  assertCompletedGameEndgameSurfaceProof,
   assertCompletedHostReloadProofCase,
   assertHostCompleteGameProofCase,
 } from "./dev_test_game_core_loop_completed_scenarios.mjs";
 import {
+  assertCompletedGameEndgameSurfaceProof,
   assertCompletedGameEndgameSurfaceAssertionCases,
   assertCompletedGameEndgameTransition,
   completedActionPlayerSurfaceAssertionCase,
@@ -17,6 +17,7 @@ import {
   completedDeadPlayerStaleVoteCaseDefinition,
   completedDeadPlayerStaleVoteProofArgs,
   completedGameEndgameStaleRejectAssertionCases,
+  completedGameEndgameProofScenarioCases,
   completedGameEndgameSurfaceAssertionCases,
   completedGameEndgameTransition,
   completedHostStaleCommandCaseDefinitions,
@@ -31,7 +32,7 @@ import {
   staleCompletedGamePlayerCommandCases,
   staleCompletedGamePlayerCommandAssertionCases,
   staleCompletedGamePlayerCommandProofArgs,
-} from "./dev_test_game_core_loop_completed_scenarios.mjs";
+} from "./dev_test_game_core_loop_completed_game_scenario_assertions.mjs";
 
 test("completed-game scenario module exposes shared frozen definitions", () => {
   assert(Object.isFrozen(completedHostStaleCommandCaseDefinitions));
@@ -76,16 +77,15 @@ test("completed-game production harness callers use the shared scenario facade",
   const callerPaths = [
     "tools/dev_test_game_core_loop_admin_proof.mjs",
     "tools/dev_test_game_release_readiness.mjs",
-    "tools/dev_test_game_proof_contract.mjs",
-    "tools/dev_test_game_hardening_admin_proof.mjs",
-    "tools/dev_test_game_hardening_lane_cases.mjs",
   ];
 
   for (const callerPath of callerPaths) {
     const source = await readFile(callerPath, "utf8");
     assert(
-      source.includes("./dev_test_game_core_loop_completed_scenarios.mjs"),
-      `${callerPath} should import completed-game definitions through the scenario facade`,
+      source.includes(
+        "./dev_test_game_core_loop_completed_game_scenario_assertions.mjs",
+      ),
+      `${callerPath} should import completed-game definitions through the shared scenario/assertion facade`,
     );
     assert(
       !source.includes("./dev_test_game_core_loop_completed_recovery_cases.mjs"),
@@ -140,6 +140,44 @@ test("completed-game scenario module builds player reload proof cases", () => {
           "Seeded browser completed dead-player role URL reloaded into durable endgame controls.",
       },
     ],
+  );
+});
+
+test("completed-game scenario module bundles proof runner case families", () => {
+  const proofCases = completedGameEndgameProofScenarioCases({
+    actionPlayerRoleUrl: "http://127.0.0.1/g/game-a/action",
+    normalPlayerRoleUrl: "http://127.0.0.1/g/game-a/normal",
+    deadPlayerRoleUrl: "http://127.0.0.1/g/game-a/dead",
+    commandStateBuilders: commandStateBuildersFixture(),
+  });
+
+  assert.deepEqual(
+    proofCases.completedHostStaleCommandCases.map(
+      (scenario) => scenario.proofField,
+    ),
+    [
+      "completedHostStaleResolveRecoveryProof",
+      "completedHostStaleAdvanceRecoveryProof",
+      "completedHostStaleCompleteRecoveryProof",
+    ],
+  );
+  assert.deepEqual(
+    proofCases.completedPlayerReloadCases.map((scenario) => scenario.proofField),
+    [
+      "completedPlayerReloadProof",
+      "completedNormalPlayerReloadProof",
+      "completedDeadPlayerReloadProof",
+    ],
+  );
+  assert.equal(
+    proofCases.completedDeadPlayerStaleVoteCase.proofField,
+    "completedDeadPlayerStaleVoteRecoveryProof",
+  );
+  assert.deepEqual(
+    proofCases.staleCompletedGamePlayerCommandCases.map(
+      (scenario) => scenario.proofField,
+    ),
+    ["staleCompletedVoteRecoveryProof", "staleCompletedPostRecoveryProof"],
   );
 });
 
