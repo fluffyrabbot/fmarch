@@ -4408,6 +4408,7 @@ function releaseReadinessTraceFixture({ unproven, command }) {
         proofTarget: unproven.proofTarget,
         roleUrl: unproven.roleUrl,
         proofGraphNodeId: unproven.proofGraphNodeId,
+        actionStatus: unproven.actionStatus ?? "ready",
         productionFeatureSpineTarget: unproven.productionFeatureSpineTarget,
         spineDrilldown: unproven.spineDrilldown,
         spineTarget: unproven.spineTarget,

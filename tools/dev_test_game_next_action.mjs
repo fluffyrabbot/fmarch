@@ -212,7 +212,7 @@ export function buildDevTestGameNextAction(
         ? {
             command: selectedUnproven.command,
             reason: "release-readiness-unproven",
-            status: "ready",
+            status: selectedUnproven.actionStatus,
             unproven: {
               id: selectedUnproven.item.id,
               status: selectedUnproven.item.status,
@@ -780,6 +780,7 @@ function rankedBuildableReleaseReadinessItems(
         realHostedEvidenceStatus: buildable.realHostedEvidenceStatus,
         realHostedEvidenceInputs: buildable.realHostedEvidenceInputs,
         hostedHandoffChecklist: buildable.hostedHandoffChecklist,
+        actionStatus: releaseReadinessActionStatus(buildable),
       };
     })
     .filter((candidate) => candidate !== null)
@@ -837,6 +838,7 @@ function buildReleaseReadinessTrace(candidates) {
       roleUrl: candidate.roleUrl,
       proofGraphNodeId: candidate.proofGraphNodeId,
       proofBoundary: candidate.proofBoundary,
+      actionStatus: candidate.actionStatus,
       requiredEvidence: candidate.item.requiredEvidence,
       productionFeatureSpineTarget: candidate.productionFeatureSpineTarget,
       spineDrilldown: candidate.spineDrilldown,
@@ -1272,6 +1274,7 @@ function assertReleaseReadinessTrace(releaseReadinessTrace, nextAction) {
       nextAction.command !== selected.command ||
       nextAction.unproven?.roleUrl !== selected.roleUrl ||
       nextAction.unproven?.proofGraphNodeId !== selected.proofGraphNodeId ||
+      nextAction.status !== selected.actionStatus ||
       JSON.stringify(nextAction.unproven?.productionFeatureSpineTarget ?? null) !==
         JSON.stringify(selected.productionFeatureSpineTarget ?? null) ||
       JSON.stringify(nextAction.unproven?.spineDrilldown ?? null) !==
@@ -1291,6 +1294,15 @@ function assertReleaseReadinessTrace(releaseReadinessTrace, nextAction) {
       );
     }
   }
+}
+
+function releaseReadinessActionStatus(buildable) {
+  return (
+    buildable?.hostedHandoffChecklist?.status === "blocked" ||
+    buildable?.realHostedEvidenceStatus === "unproven"
+  )
+    ? "blocked"
+    : "ready";
 }
 
 function validActionableSpineTarget(spineTarget) {

@@ -16,6 +16,9 @@ test("selected next-action graph node summary carries browser-visible status tex
     {
       id: "admin-proof:hosted-concurrent-race-matrix",
       status: "passed",
+      auditId: "local-hosted-concurrent-race-matrix",
+      roleUrl:
+        "/admin/audit/local-hosted-concurrent-race-matrix?game=<seeded-game>",
       proofCommand:
         "npm run test:dev-test-game-hosted-concurrent-race-matrix-admin-proof",
     },
@@ -106,6 +109,8 @@ function proofGraphFixture() {
       {
         id: "admin-proof:hosted-concurrent-race-matrix",
         status: "passed",
+        roleUrl:
+          "/admin/audit/local-hosted-concurrent-race-matrix?game=<seeded-game>",
         proofCommand:
           "npm run test:dev-test-game-hosted-concurrent-race-matrix-admin-proof",
       },

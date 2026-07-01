@@ -863,6 +863,7 @@ test("dev test-game next-action derives one local recovery command from the mani
         productionFeatureSpineTarget: productionFeatureSpineTargetFixture(),
         spineDrilldown: featureSpineDrilldownFixture(),
         spineTarget: resolvedFeatureSpineTargetFixture(),
+        actionStatus: "ready",
         proofBoundary:
           "Machine-readable request artifact only. This can prepare hosted-like concurrent race proof work from the local promoted baseline, but it does not prove hosted deployment, multi-node races, beta readiness, release readiness, or production readiness.",
         requiredEvidence:
@@ -1299,6 +1300,7 @@ test("dev test-game next-action advances hosted deployment after target prefligh
     blockedPreflightAction.nextAction.command,
     `npm run ${devTestGameHostedEvidenceLaneCommand}`,
   );
+  assert.equal(blockedPreflightAction.nextAction.status, "blocked");
   assert.equal(
     blockedPreflightAction.nextAction.unproven.proofTarget,
     devTestGameHostedEvidenceLanePath,
@@ -1318,6 +1320,10 @@ test("dev test-game next-action advances hosted deployment after target prefligh
   assert.equal(
     blockedPreflightAction.releaseReadinessTrace.candidates[0].proofGraphNodeId,
     "admin-proof:hosted-evidence-lane",
+  );
+  assert.equal(
+    blockedPreflightAction.releaseReadinessTrace.candidates[0].actionStatus,
+    "blocked",
   );
   assert.deepEqual(
     blockedPreflightAction.nextAction.unproven.spineTarget,
@@ -1366,6 +1372,7 @@ test("dev test-game next-action advances hosted deployment after target prefligh
     passedPreflightAction.nextAction.command,
     `npm run ${devTestGameHostedEvidenceLaneCommand}`,
   );
+  assert.equal(passedPreflightAction.nextAction.status, "ready");
   assert.equal(
     passedPreflightAction.nextAction.unproven.proofTarget,
     devTestGameHostedMatrixExternalEvidencePath,
@@ -1389,6 +1396,31 @@ test("dev test-game next-action advances hosted deployment after target prefligh
   assert.equal(
     passedPreflightAction.generatedFrom.hostedTargetPreflightNextProofTarget,
     devTestGameHostedMatrixExternalEvidencePath,
+  );
+
+  const syntheticPreflightAction = buildDevTestGameNextAction(freshManifest, {
+    generatedAt: "2026-06-26T00:00:01.000Z",
+    opsArtifacts: devTestGameOpsArtifactsFixture(),
+    raceCoverage: devTestGameRaceCoverageFixture(),
+    releaseReadinessChecklist: readiness,
+    hostedTargetPreflight: hostedTargetPreflightFixture({
+      status: "passed",
+      rawEvidenceSyntheticExternalTarget: true,
+    }),
+  });
+  assertDevTestGameNextAction(syntheticPreflightAction);
+  assert.equal(syntheticPreflightAction.nextAction.status, "blocked");
+  assert.equal(
+    syntheticPreflightAction.nextAction.unproven.hostedEvidenceMode,
+    "synthetic-demo",
+  );
+  assert.equal(
+    syntheticPreflightAction.nextAction.unproven.realHostedEvidenceStatus,
+    "unproven",
+  );
+  assert.equal(
+    syntheticPreflightAction.releaseReadinessTrace.candidates[0].actionStatus,
+    "blocked",
   );
 });
 
@@ -14038,7 +14070,10 @@ function hostedEvidenceLaneDemoProofFixture() {
   };
 }
 
-function hostedTargetPreflightFixture({ status }) {
+function hostedTargetPreflightFixture({
+  status,
+  rawEvidenceSyntheticExternalTarget = false,
+}) {
   const passed = status === "passed";
   return {
     version: 1,
@@ -14057,6 +14092,7 @@ function hostedTargetPreflightFixture({ status }) {
         ? "target/dev-test-game/hosted-matrix-raw-evidence.json"
         : null,
       rawEvidenceStatus: passed ? "passed" : "blocked",
+      rawEvidenceSyntheticExternalTarget,
     },
     checks: [
       ...hostedTargetPreflightBlockingCheckIds.map((id) => ({
