@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import { test } from "node:test";
 import {
   assertCompletedPrivateChannelProofCases,
@@ -316,6 +317,38 @@ test("completed private-channel scenarios derive shared proof assertion cases", 
     cases,
   });
   assert.deepEqual(asserted, ["reload", "stale-completed-post"]);
+});
+
+test("private-channel production harness callers use shared scenario definitions", async () => {
+  const proofSource = await readFile(
+    "tools/dev_test_game_core_loop_admin_proof.mjs",
+    "utf8",
+  );
+  const readinessSource = await readFile(
+    "tools/dev_test_game_release_readiness.mjs",
+    "utf8",
+  );
+
+  assert(
+    proofSource.includes("./dev_test_game_core_loop_private_channel_cases.mjs"),
+    "core-loop admin proof should import private-channel scenarios from the shared module",
+  );
+  assert(
+    proofSource.includes("completedPrivateChannelReloadScenario") &&
+      proofSource.includes("staleCompletedPrivatePostScenario"),
+    "core-loop admin proof should use shared completed private-channel scenario verbs",
+  );
+  assert(
+    readinessSource.includes(
+      "./dev_test_game_core_loop_private_receipt_scenarios.mjs",
+    ),
+    "release readiness should use the private-channel assertion facade",
+  );
+  assert(
+    !readinessSource.includes("Completed private channel remains readable.") &&
+      !readinessSource.includes("Stale completed private proof post"),
+    "release readiness should not duplicate completed private-channel fixture strings",
+  );
 });
 
 test("stale private-channel PhaseLocked assertion covers refreshed private post recovery", () => {
