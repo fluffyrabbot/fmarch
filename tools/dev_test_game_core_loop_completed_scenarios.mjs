@@ -311,22 +311,18 @@ export function completedGameEndgameStaleRejectAssertionCases({
   assertStaleCompletedGamePlayerCommandRecoveryProof,
 }) {
   return [
-    ...completedHostStaleCommandCases().map((scenario) => ({
-      assertProof: assertCompletedHostStaleCommandRecoveryProof,
-      proof: completedGameEndgameSurface[scenario.proofField],
+    ...completedHostStaleCommandAssertionCases({
+      completedGameEndgameSurface,
       expectedGame,
-      sourceRoleUrl: sourceHostRoleUrl,
-      expectedCommandKind: scenario.commandKind,
-    })),
-    {
-      assertProof: assertCompletedDeadPlayerStaleVoteRecoveryProof,
-      proof: completedGameEndgameSurface[
-        completedDeadPlayerStaleVoteCase().proofField
-      ],
+      sourceHostRoleUrl,
+      assertCompletedHostStaleCommandRecoveryProof,
+    }),
+    completedDeadPlayerStaleVoteAssertionCase({
+      completedGameEndgameSurface,
       expectedGame,
       sourceRoleUrl: sourceDeadPlayerRoleUrl,
-      scenario: completedDeadPlayerStaleVoteCase(),
-    },
+      assertCompletedDeadPlayerStaleVoteRecoveryProof,
+    }),
     ...staleCompletedGamePlayerCommandAssertionCases({
       completedGameEndgameSurface,
       expectedGame,
@@ -334,6 +330,66 @@ export function completedGameEndgameStaleRejectAssertionCases({
       assertStaleCompletedGamePlayerCommandRecoveryProof,
     }),
   ];
+}
+
+export function completedHostStaleCommandAssertionCases({
+  completedGameEndgameSurface,
+  expectedGame,
+  sourceHostRoleUrl,
+  assertCompletedHostStaleCommandRecoveryProof,
+  cases = completedHostStaleCommandCases(),
+}) {
+  return cases.map((scenario) => ({
+    assertProof: assertCompletedHostStaleCommandRecoveryProof,
+    proof: completedGameEndgameSurface[scenario.proofField],
+    ...completedHostStaleCommandProofArgs({
+      expectedGame,
+      sourceHostRoleUrl,
+      scenario,
+    }),
+  }));
+}
+
+export function completedHostStaleCommandProofArgs({
+  expectedGame,
+  sourceHostRoleUrl,
+  scenario,
+}) {
+  return {
+    expectedGame,
+    sourceRoleUrl: sourceHostRoleUrl,
+    expectedCommandKind: scenario.commandKind,
+  };
+}
+
+export function completedDeadPlayerStaleVoteAssertionCase({
+  completedGameEndgameSurface,
+  expectedGame,
+  sourceRoleUrl,
+  assertCompletedDeadPlayerStaleVoteRecoveryProof,
+  scenario = completedDeadPlayerStaleVoteCase(),
+}) {
+  return {
+    assertProof: assertCompletedDeadPlayerStaleVoteRecoveryProof,
+    proof: completedGameEndgameSurface[scenario.proofField],
+    ...completedDeadPlayerStaleVoteProofArgs({
+      expectedGame,
+      sourceRoleUrl,
+      scenario,
+    }),
+  };
+}
+
+export function completedDeadPlayerStaleVoteProofArgs({
+  expectedGame,
+  sourceRoleUrl,
+  scenario = completedDeadPlayerStaleVoteCase(),
+}) {
+  return {
+    expectedGame,
+    sourceRoleUrl,
+    scenario,
+  };
 }
 
 export function staleCompletedGamePlayerCommandAssertionCases({

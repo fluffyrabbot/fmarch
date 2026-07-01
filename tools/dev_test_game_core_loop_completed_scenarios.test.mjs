@@ -8,13 +8,17 @@ import {
   assertHostCompleteGameProofCase,
   completedActionPlayerSurfaceAssertionCase,
   completedActionPlayerSurfaceProofArgs,
+  completedDeadPlayerStaleVoteAssertionCase,
   completedDeadPlayerStaleVoteCaseDefinition,
+  completedDeadPlayerStaleVoteProofArgs,
   completedGameEndgameStaleRejectAssertionCases,
   completedGameEndgameSurfaceAssertionCases,
   completedGameEndgameTransition,
   completedDeadPlayerStaleVoteCase,
+  completedHostStaleCommandAssertionCases,
   completedHostStaleCommandCaseDefinitions,
   completedHostStaleCommandCases,
+  completedHostStaleCommandProofArgs,
   completedPlayerReloadCaseDefinitions,
   completedPlayerReloadAssertionCases,
   completedPlayerReloadCases,
@@ -212,6 +216,95 @@ test("completed-game scenario module derives shared assertion cases", () => {
         commandKind: "SubmitPost",
       },
     ],
+  );
+});
+
+test("completed-game scenario module derives stale host and dead-player assertion cases", () => {
+  const completedGameEndgameSurface = {
+    completedHostStaleResolveRecoveryProof: { id: "host-resolve-stale" },
+    completedHostStaleAdvanceRecoveryProof: { id: "host-advance-stale" },
+    completedHostStaleCompleteRecoveryProof: { id: "host-complete-stale" },
+    completedDeadPlayerStaleVoteRecoveryProof: { id: "dead-stale-vote" },
+  };
+  const [resolveScenario, advanceScenario, completeScenario] =
+    completedHostStaleCommandCases();
+  const deadPlayerScenario = completedDeadPlayerStaleVoteCase();
+
+  assert.deepEqual(
+    completedHostStaleCommandProofArgs({
+      expectedGame: "game-a",
+      sourceHostRoleUrl: "http://127.0.0.1/g/game-a/host",
+      scenario: resolveScenario,
+    }),
+    {
+      expectedGame: "game-a",
+      sourceRoleUrl: "http://127.0.0.1/g/game-a/host",
+      expectedCommandKind: "ResolvePhase",
+    },
+  );
+  assert.deepEqual(
+    completedHostStaleCommandAssertionCases({
+      completedGameEndgameSurface,
+      expectedGame: "game-a",
+      sourceHostRoleUrl: "http://127.0.0.1/g/game-a/host",
+      assertCompletedHostStaleCommandRecoveryProof: assertProofFixture,
+    }),
+    [
+      {
+        assertProof: assertProofFixture,
+        proof: { id: "host-resolve-stale" },
+        expectedGame: "game-a",
+        sourceRoleUrl: "http://127.0.0.1/g/game-a/host",
+        expectedCommandKind: "ResolvePhase",
+      },
+      {
+        assertProof: assertProofFixture,
+        proof: { id: "host-advance-stale" },
+        expectedGame: "game-a",
+        sourceRoleUrl: "http://127.0.0.1/g/game-a/host",
+        expectedCommandKind: "AdvancePhase",
+      },
+      {
+        assertProof: assertProofFixture,
+        proof: { id: "host-complete-stale" },
+        expectedGame: "game-a",
+        sourceRoleUrl: "http://127.0.0.1/g/game-a/host",
+        expectedCommandKind: "CompleteGame",
+      },
+    ],
+  );
+  assert.deepEqual(
+    [resolveScenario, advanceScenario, completeScenario].map(
+      (scenario) => scenario.commandKind,
+    ),
+    ["ResolvePhase", "AdvancePhase", "CompleteGame"],
+  );
+  assert.deepEqual(
+    completedDeadPlayerStaleVoteProofArgs({
+      expectedGame: "game-a",
+      sourceRoleUrl: "http://127.0.0.1/g/game-a/dead",
+      scenario: deadPlayerScenario,
+    }),
+    {
+      expectedGame: "game-a",
+      sourceRoleUrl: "http://127.0.0.1/g/game-a/dead",
+      scenario: deadPlayerScenario,
+    },
+  );
+  assert.deepEqual(
+    completedDeadPlayerStaleVoteAssertionCase({
+      completedGameEndgameSurface,
+      expectedGame: "game-a",
+      sourceRoleUrl: "http://127.0.0.1/g/game-a/dead",
+      assertCompletedDeadPlayerStaleVoteRecoveryProof: assertProofFixture,
+    }),
+    {
+      assertProof: assertProofFixture,
+      proof: { id: "dead-stale-vote" },
+      expectedGame: "game-a",
+      sourceRoleUrl: "http://127.0.0.1/g/game-a/dead",
+      scenario: deadPlayerScenario,
+    },
   );
 });
 
