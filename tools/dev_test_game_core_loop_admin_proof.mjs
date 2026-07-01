@@ -45,6 +45,10 @@ import {
   staleCompletedPrivatePostScenario,
   stalePrivateChannelPostPhaseLockedScenario,
 } from "./dev_test_game_core_loop_private_channel_cases.mjs";
+import {
+  coreLoopAdminCheckIds,
+  coreLoopSpineCheckId,
+} from "./dev_test_game_core_loop_scenarios.mjs";
 import { assertDevTestGameProofRun } from "./dev_test_game_proof_contract.mjs";
 import {
   artifactDir,
@@ -61,34 +65,7 @@ const proofRunPath = path.resolve(
 );
 const proofRunRelativePath = path.relative(repoRoot, proofRunPath);
 const evidencePath = path.join(artifactDir, "core-loop-admin-proof.json");
-const requiredChecks = [
-  "core-loop-spine",
-  "core-loop",
-  "day-vote-resolution",
-  "day-vote-no-lynch",
-  "action-loop",
-  "host-deadline-advance",
-  "stale-deadline-advance",
-  "invalid-action-recovery",
-  "resolution-receipts",
-  "dead-player-recovery",
-  "player-action-boundary",
-  "private-channel",
-  "host-votecount-publication",
-  "host-lifecycle-control",
-  "host-modkill-control",
-  "replacement-host-issued-invite",
-  "replacement-pending-player",
-  "replacement-invalid-target-recovery",
-  "replacement-console",
-  "stale-host-invite-recovery",
-  "replacement-stale-success-recovery",
-  "replacement-stale-player",
-  "replacement-stale-action",
-  "replacement-stale-private-channel",
-  "replacement-stale-private-receipts",
-  "replacement-incoming-player",
-];
+const requiredChecks = coreLoopAdminCheckIds;
 
 const requiredSpineRows = (proofRun) => {
   const cycles = Array.isArray(proofRun?.coreLoopSpine?.cycles)
@@ -135,7 +112,7 @@ await runAdminAuditProof({
       auditId: "local-core-loop",
       requiredChecks,
       requiredCheckStatuses: {
-        "core-loop-spine": coreLoopSpineStatus(proofRun),
+        [coreLoopSpineCheckId]: coreLoopSpineStatus(proofRun),
         ...coreLoopHighlightedLaneEvidence(proofRun),
       },
       requiredSpineCycles: spineRows.cycles,

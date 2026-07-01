@@ -17,6 +17,9 @@ import {
 import {
   hardeningAuditLaneIds,
 } from "../../../../tools/dev_test_game_hardening_scenarios.mjs";
+import {
+  coreLoopAuditLaneIds,
+} from "../../../../tools/dev_test_game_core_loop_scenarios.mjs";
 
 export const ADMIN_ROUTE_CONTRACT = Object.freeze({
   surfaceTestId: "admin-surface",
@@ -3227,33 +3230,7 @@ export function normalizeLocalCoreLoopAudit(proofRun, { game }) {
   ) {
     return null;
   }
-  const requiredLaneIds = [
-    "core-loop",
-    "day-vote-resolution",
-    "day-vote-no-lynch",
-    "action-loop",
-    "host-deadline-advance",
-    "stale-deadline-advance",
-    "invalid-action-recovery",
-    "resolution-receipts",
-    "dead-player-recovery",
-    "player-action-boundary",
-    "private-channel",
-    "host-votecount-publication",
-    "host-lifecycle-control",
-    "host-modkill-control",
-    "replacement-host-issued-invite",
-    "replacement-pending-player",
-    "replacement-invalid-target-recovery",
-    "replacement-console",
-    "stale-host-invite-recovery",
-    "replacement-stale-success-recovery",
-    "replacement-stale-player",
-    "replacement-stale-action",
-    "replacement-stale-private-channel",
-    "replacement-stale-private-receipts",
-    "replacement-incoming-player",
-  ];
+  const requiredLaneIds = coreLoopAuditLaneIds;
   const lanes = Array.isArray(proofRun.lanes) ? proofRun.lanes : [];
   const laneById = new Map(lanes.map((lane) => [lane.id, lane]));
   if (

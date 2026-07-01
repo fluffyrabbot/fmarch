@@ -16,6 +16,10 @@ import {
   hardeningAuditLaneIds,
 } from "../../../../tools/dev_test_game_hardening_scenarios.mjs";
 import {
+  coreLoopAdminCheckIds,
+  coreLoopAuditLaneIds,
+} from "../../../../tools/dev_test_game_core_loop_scenarios.mjs";
+import {
   staleConflictMessageLaneIds,
 } from "../../../../tools/dev_test_game_stale_conflict_scenarios.mjs";
 import {
@@ -2045,39 +2049,12 @@ test("admin route data exposes local core loop proof as a native audit row", asy
 
   const coreLoop = data.audit.find((item) => item.id === "local-core-loop");
   assert.equal(coreLoop.label, "Local core loop");
-  assert.equal(coreLoop.status, "25 core loop lanes passed");
+  assert.equal(coreLoop.status, `${coreLoopAuditLaneIds.length} core loop lanes passed`);
   assert.equal(coreLoop.authority, "GlobalAdmin or GlobalMod");
   assert.equal(coreLoop.inspectHref, "/admin/audit/local-core-loop?game=midsummer");
   assert.deepEqual(
     coreLoop.checks.map((check) => check.id),
-    [
-      "core-loop-spine",
-      "core-loop",
-      "day-vote-resolution",
-      "day-vote-no-lynch",
-      "action-loop",
-      "host-deadline-advance",
-      "stale-deadline-advance",
-      "invalid-action-recovery",
-      "resolution-receipts",
-      "dead-player-recovery",
-      "player-action-boundary",
-      "private-channel",
-      "host-votecount-publication",
-      "host-lifecycle-control",
-      "host-modkill-control",
-      "replacement-host-issued-invite",
-      "replacement-pending-player",
-      "replacement-invalid-target-recovery",
-      "replacement-console",
-      "stale-host-invite-recovery",
-      "replacement-stale-success-recovery",
-      "replacement-stale-player",
-      "replacement-stale-action",
-      "replacement-stale-private-channel",
-      "replacement-stale-private-receipts",
-      "replacement-incoming-player",
-    ],
+    coreLoopAdminCheckIds,
   );
   assert.deepEqual(coreLoop.artifactSummary, {
     game: "game-a",
@@ -2150,36 +2127,68 @@ test("admin local core loop detail data carries lane rows", async () => {
       ["staleActionConflictReject", "PhaseLocked"],
     ],
   );
-  assert.equal(data.audit.checks.length, 26);
+  assert.equal(data.audit.checks.length, coreLoopAdminCheckIds.length);
   assert.deepEqual(
+    data.audit.checks.map((check) => check.id),
+    coreLoopAdminCheckIds,
+  );
+  const checkStatusById = Object.fromEntries(
     data.audit.checks.map((check) => [check.id, check.status]),
+  );
+  assert.deepEqual(
     [
       ["core-loop-spine", "passed: D01 -> N01 -> D02, vote ack, next N02"],
       ["core-loop", "passed: PhaseLocked vote receipt, unchanged unknown, lock ack/unlock ack"],
-      ["day-vote-resolution", "passed"],
-      ["day-vote-no-lynch", "passed"],
       ["action-loop", "passed: role URL false, night unknown, receipt unknown, D02 unknown, next unknown"],
       ["host-deadline-advance", "passed: D01 deadline -> N01"],
-      ["stale-deadline-advance", "passed"],
       ["invalid-action-recovery", "passed: Reject InvalidTarget, legal action visible true"],
       ["resolution-receipts", "passed: factional_kill receipt, target slot-2"],
-      ["dead-player-recovery", "passed"],
       ["player-action-boundary", "passed: 0 unowned actions, direct reject InvalidTarget"],
       ["private-channel", "passed: private:mafia_day_chat, denied 403"],
-      ["host-votecount-publication", "passed"],
-      ["host-lifecycle-control", "passed"],
-      ["host-modkill-control", "passed"],
-      ["replacement-host-issued-invite", "passed"],
-      ["replacement-pending-player", "passed"],
-      ["replacement-invalid-target-recovery", "passed"],
-      ["replacement-console", "passed"],
-      ["stale-host-invite-recovery", "passed"],
-      ["replacement-stale-success-recovery", "passed"],
-      ["replacement-stale-player", "passed"],
-      ["replacement-stale-action", "passed"],
-      ["replacement-stale-private-channel", "passed"],
-      ["replacement-stale-private-receipts", "passed"],
       ["replacement-incoming-player", "passed"],
+    ].map(([id, status]) => [id, status, checkStatusById[id]]),
+    [
+      [
+        "core-loop-spine",
+        "passed: D01 -> N01 -> D02, vote ack, next N02",
+        "passed: D01 -> N01 -> D02, vote ack, next N02",
+      ],
+      [
+        "core-loop",
+        "passed: PhaseLocked vote receipt, unchanged unknown, lock ack/unlock ack",
+        "passed: PhaseLocked vote receipt, unchanged unknown, lock ack/unlock ack",
+      ],
+      [
+        "action-loop",
+        "passed: role URL false, night unknown, receipt unknown, D02 unknown, next unknown",
+        "passed: role URL false, night unknown, receipt unknown, D02 unknown, next unknown",
+      ],
+      [
+        "host-deadline-advance",
+        "passed: D01 deadline -> N01",
+        "passed: D01 deadline -> N01",
+      ],
+      [
+        "invalid-action-recovery",
+        "passed: Reject InvalidTarget, legal action visible true",
+        "passed: Reject InvalidTarget, legal action visible true",
+      ],
+      [
+        "resolution-receipts",
+        "passed: factional_kill receipt, target slot-2",
+        "passed: factional_kill receipt, target slot-2",
+      ],
+      [
+        "player-action-boundary",
+        "passed: 0 unowned actions, direct reject InvalidTarget",
+        "passed: 0 unowned actions, direct reject InvalidTarget",
+      ],
+      [
+        "private-channel",
+        "passed: private:mafia_day_chat, denied 403",
+        "passed: private:mafia_day_chat, denied 403",
+      ],
+      ["replacement-incoming-player", "passed", "passed"],
     ],
   );
 });

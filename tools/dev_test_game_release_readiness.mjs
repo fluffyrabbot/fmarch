@@ -41,6 +41,10 @@ import {
   hardeningAuditLaneIds,
 } from "./dev_test_game_hardening_scenarios.mjs";
 import {
+  coreLoopAdminCheckIds,
+  coreLoopAuditLaneIds,
+} from "./dev_test_game_core_loop_scenarios.mjs";
+import {
   hostedOpsReadinessBoundaryCheckId,
   hostedOpsSignalCheckIds,
   hostedOpsTelemetryBoundaryCheckId,
@@ -487,33 +491,7 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
       label: "Host controls, replacement, player actions, private channels, and day/night loop",
       status: "passed",
       evidence: sourcePath,
-      laneIds: [
-        "core-loop",
-        "day-vote-resolution",
-        "day-vote-no-lynch",
-        "action-loop",
-        "host-deadline-advance",
-        "stale-deadline-advance",
-        "invalid-action-recovery",
-        "resolution-receipts",
-        "dead-player-recovery",
-        "player-action-boundary",
-        "private-channel",
-        "host-votecount-publication",
-        "host-lifecycle-control",
-        "host-modkill-control",
-        "replacement-host-issued-invite",
-        "replacement-pending-player",
-        "replacement-invalid-target-recovery",
-        "replacement-console",
-        "stale-host-invite-recovery",
-        "replacement-stale-success-recovery",
-        "replacement-stale-player",
-        "replacement-stale-action",
-        "replacement-stale-private-channel",
-        "replacement-stale-private-receipts",
-        "replacement-incoming-player",
-      ],
+      laneIds: coreLoopAuditLaneIds,
       ...(coreLoopAdminProofEvidence === undefined
         ? {}
         : {
@@ -1650,34 +1628,7 @@ export function validateDevTestGameBackupRestoreProof(proof, options = {}) {
 }
 
 export function validateDevTestGameCoreLoopAdminProof(proof, options = {}) {
-  const requiredChecks = [
-    "core-loop-spine",
-    "core-loop",
-    "day-vote-resolution",
-    "day-vote-no-lynch",
-    "action-loop",
-    "host-deadline-advance",
-    "stale-deadline-advance",
-    "invalid-action-recovery",
-    "resolution-receipts",
-    "dead-player-recovery",
-    "player-action-boundary",
-    "private-channel",
-    "host-votecount-publication",
-    "host-lifecycle-control",
-    "host-modkill-control",
-    "replacement-host-issued-invite",
-    "replacement-pending-player",
-    "replacement-invalid-target-recovery",
-    "replacement-console",
-    "stale-host-invite-recovery",
-    "replacement-stale-success-recovery",
-    "replacement-stale-player",
-    "replacement-stale-action",
-    "replacement-stale-private-channel",
-    "replacement-stale-private-receipts",
-    "replacement-incoming-player",
-  ];
+  const requiredChecks = coreLoopAdminCheckIds;
   if (proof?.version !== 1) {
     throw new Error(`core-loop admin proof version drifted: ${proof?.version}`);
   }
