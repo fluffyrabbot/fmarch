@@ -168,6 +168,25 @@ const seedScenarioProofLaneAliases = new Map([
   ["local-ops-readiness", ["local-ops-artifact-bundle", "local-backup-restore-drill"]],
 ]);
 
+export const seedAliasOnlyProofLaneIds = Object.freeze([
+  "browser-entry",
+  "cohost-console",
+  "core-loop",
+  "action-loop",
+  "stale-action-conflict",
+]);
+
+export const seedAggregateOnlyProofLaneIds = Object.freeze([
+  "replacement-console",
+  "idempotent-retry",
+  "reconnect-recovery",
+]);
+
+export const seedNonDirectProofLaneIds = Object.freeze([
+  ...seedAliasOnlyProofLaneIds,
+  ...seedAggregateOnlyProofLaneIds,
+]);
+
 export function seedDemoScenarioFixtureRows({
   ids = seedDemoScenarioIds,
   status = "available_locally",
@@ -202,6 +221,24 @@ export function seedDemoScenarioCatalog({
 
 export function seedDemoScenarioProofLaneCandidates(id) {
   return seedScenarioProofLaneAliases.get(id) ?? [id];
+}
+
+export function seedDemoScenarioClassifiedProofLaneIds({
+  ids = seedDemoScenarioIds,
+} = {}) {
+  return new Set([
+    ...ids,
+    ...ids.flatMap((id) => seedDemoScenarioProofLaneCandidates(id)),
+    ...seedAggregateOnlyProofLaneIds,
+  ]);
+}
+
+export function unclassifiedSeedProofLaneIds({
+  proofLaneIds,
+  ids = seedDemoScenarioIds,
+} = {}) {
+  const classifiedLaneIds = seedDemoScenarioClassifiedProofLaneIds({ ids });
+  return proofLaneIds.filter((id) => !classifiedLaneIds.has(id));
 }
 
 function seedScenarioNote(id, role) {

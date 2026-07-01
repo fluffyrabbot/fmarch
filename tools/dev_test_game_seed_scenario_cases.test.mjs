@@ -1,13 +1,19 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import {
+  seedAggregateOnlyProofLaneIds,
+  seedAliasOnlyProofLaneIds,
+  seedDemoScenarioClassifiedProofLaneIds,
   seedDemoScenarioCatalog,
   seedDemoScenarioFixtureRows,
   seedDemoScenarioIds,
   seedDemoOnlyScenarioIds,
   seedDemoScenarioProofLaneCandidates,
+  seedNonDirectProofLaneIds,
   seedRequiredScenarioIds,
   seedScenarioCoverageGroups,
+  unclassifiedSeedProofLaneIds,
 } from "./dev_test_game_seed_scenario_cases.mjs";
 
 test("seed scenario cases expose one full shared required inventory", () => {
@@ -262,4 +268,52 @@ test("seed scenario cases expose production fixture metadata", () => {
   assert.deepEqual(seedDemoScenarioProofLaneCandidates("concurrent-action-race"), [
     "concurrent-action-race",
   ]);
+});
+
+test("seed scenario cases classify every passed proof lane", () => {
+  const proofRun = JSON.parse(
+    readFileSync("target/dev-test-game/proof-run.json", "utf8"),
+  );
+  const passedLaneIds = (proofRun.lanes ?? [])
+    .filter((lane) => lane.status === "passed")
+    .map((lane) => lane.id);
+  const directScenarioIds = new Set(seedScenarioCoverageGroups.allDemo);
+  const aliasCoveredLaneIds = new Set(
+    seedScenarioCoverageGroups.allDemo.flatMap((id) =>
+      seedDemoScenarioProofLaneCandidates(id),
+    ),
+  );
+
+  const nonDirectPassedLaneIds = passedLaneIds.filter(
+    (id) => !directScenarioIds.has(id),
+  );
+  assert.deepEqual(
+    [...nonDirectPassedLaneIds].sort(),
+    [...seedNonDirectProofLaneIds].sort(),
+  );
+  assert.deepEqual(seedAliasOnlyProofLaneIds, [
+    "browser-entry",
+    "cohost-console",
+    "core-loop",
+    "action-loop",
+    "stale-action-conflict",
+  ]);
+  assert.deepEqual(seedAggregateOnlyProofLaneIds, [
+    "replacement-console",
+    "idempotent-retry",
+    "reconnect-recovery",
+  ]);
+  for (const laneId of seedAliasOnlyProofLaneIds) {
+    assert.equal(aliasCoveredLaneIds.has(laneId), true);
+  }
+  for (const laneId of seedAggregateOnlyProofLaneIds) {
+    assert.equal(aliasCoveredLaneIds.has(laneId), false);
+  }
+  assert.deepEqual(
+    [...seedDemoScenarioClassifiedProofLaneIds()]
+      .filter((id) => seedAggregateOnlyProofLaneIds.includes(id))
+      .sort(),
+    [...seedAggregateOnlyProofLaneIds].sort(),
+  );
+  assert.deepEqual(unclassifiedSeedProofLaneIds({ proofLaneIds: passedLaneIds }), []);
 });
