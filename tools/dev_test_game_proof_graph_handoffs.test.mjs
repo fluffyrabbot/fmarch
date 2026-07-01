@@ -17,7 +17,7 @@ import {
   staleConflictMessageLaneIds,
 } from "./dev_test_game_hardening_lane_cases.mjs";
 import {
-  seedRequiredScenarioIds,
+  seedScenarioCoverageGroups,
 } from "./dev_test_game_seed_scenario_cases.mjs";
 
 test("admin proof graph role handoffs cover every admin-proof role URL", () => {
@@ -50,7 +50,7 @@ test("admin proof graph role handoffs cover every admin-proof role URL", () => {
   assert.deepEqual(
     handoffs.find((handoff) => handoff.linkId === "admin-proof:seed")
       ?.requiredScenarioIds,
-    seedRequiredScenarioIds,
+    seedScenarioCoverageGroups.allDemo,
   );
   assert.deepEqual(
     handoffs.find((handoff) => handoff.linkId === "admin-proof:identity")

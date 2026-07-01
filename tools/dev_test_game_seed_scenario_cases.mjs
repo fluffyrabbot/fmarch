@@ -83,14 +83,25 @@ export const seedRequiredScenarioIds = Object.freeze([
   "local-ops-readiness",
 ]);
 
-export const seedDemoScenarioIds = Object.freeze([
-  ...seedRequiredScenarioIds.slice(0, 3),
+export const seedDemoOnlyScenarioIds = Object.freeze([
   "day-vote-resolution",
   "day-vote-no-lynch",
-  ...seedRequiredScenarioIds.slice(3, 11),
   "concurrent-vote-race-reload",
+]);
+
+export const seedDemoScenarioIds = Object.freeze([
+  ...seedRequiredScenarioIds.slice(0, 3),
+  ...seedDemoOnlyScenarioIds.slice(0, 2),
+  ...seedRequiredScenarioIds.slice(3, 11),
+  seedDemoOnlyScenarioIds[2],
   ...seedRequiredScenarioIds.slice(11),
 ]);
+
+export const seedScenarioCoverageGroups = Object.freeze({
+  required: seedRequiredScenarioIds,
+  demoOnly: seedDemoOnlyScenarioIds,
+  allDemo: seedDemoScenarioIds,
+});
 
 const seedScenarioRoleOverrides = new Map([
   ["day-vote-resolution", "actionPlayer"],

@@ -4,8 +4,10 @@ import {
   seedDemoScenarioCatalog,
   seedDemoScenarioFixtureRows,
   seedDemoScenarioIds,
+  seedDemoOnlyScenarioIds,
   seedDemoScenarioProofLaneCandidates,
   seedRequiredScenarioIds,
+  seedScenarioCoverageGroups,
 } from "./dev_test_game_seed_scenario_cases.mjs";
 
 test("seed scenario cases expose one full shared required inventory", () => {
@@ -48,6 +50,14 @@ test("seed scenario cases include reload and stale-reject proof rows", () => {
 
 test("seed scenario cases expose generated demo scenario fixture rows", () => {
   assert.equal(seedDemoScenarioIds.length, 85);
+  assert.deepEqual(seedDemoOnlyScenarioIds, [
+    "day-vote-resolution",
+    "day-vote-no-lynch",
+    "concurrent-vote-race-reload",
+  ]);
+  assert.deepEqual(seedScenarioCoverageGroups.required, seedRequiredScenarioIds);
+  assert.deepEqual(seedScenarioCoverageGroups.demoOnly, seedDemoOnlyScenarioIds);
+  assert.deepEqual(seedScenarioCoverageGroups.allDemo, seedDemoScenarioIds);
   assert.equal(new Set(seedDemoScenarioIds).size, seedDemoScenarioIds.length);
   assert.deepEqual(seedDemoScenarioIds.slice(0, 6), [
     "host-phase-controls",

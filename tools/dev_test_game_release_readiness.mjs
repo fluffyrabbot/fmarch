@@ -25,7 +25,7 @@ import {
   staleConflictMessageLaneIds,
 } from "./dev_test_game_hardening_lane_cases.mjs";
 import {
-  seedRequiredScenarioIds,
+  seedScenarioCoverageGroups,
 } from "./dev_test_game_seed_scenario_cases.mjs";
 import {
   hostedTargetPreflightCheckIds,
@@ -5829,7 +5829,7 @@ export function validateDevTestGameSeedFixtureSummary(summary, options = {}) {
     "proof-lanes-carried",
     "release-boundary-carried",
   ];
-  const requiredScenarios = seedRequiredScenarioIds;
+  const requiredScenarios = seedScenarioCoverageGroups.allDemo;
   if (summary?.version !== 1) {
     throw new Error(`seed fixture summary version drifted: ${summary?.version}`);
   }
@@ -5881,7 +5881,7 @@ export function validateDevTestGameSeedFixtureSummary(summary, options = {}) {
 }
 
 export function validateDevTestGameSeedAdminProof(proof, options = {}) {
-  const requiredScenarios = seedRequiredScenarioIds;
+  const requiredScenarios = seedScenarioCoverageGroups.allDemo;
   if (proof?.version !== 1) {
     throw new Error(`seed admin proof version drifted: ${proof?.version}`);
   }

@@ -1,7 +1,7 @@
 import path from "node:path";
 import { assertDevTestGameSeedFixtureSummary } from "./dev_test_game_seed_fixture_summary.mjs";
 import {
-  seedRequiredScenarioIds,
+  seedScenarioCoverageGroups,
 } from "./dev_test_game_seed_scenario_cases.mjs";
 import {
   artifactDir,
@@ -18,7 +18,7 @@ const seedFixturePath = path.resolve(
 );
 const seedFixtureRelativePath = path.relative(repoRoot, seedFixturePath);
 const evidencePath = path.join(artifactDir, "seed-admin-proof.json");
-const requiredScenarios = seedRequiredScenarioIds;
+const requiredScenarios = seedScenarioCoverageGroups.allDemo;
 
 await runAdminAuditProof({
   smokeName: "dev-test-game-seed-admin-proof",

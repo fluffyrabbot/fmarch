@@ -14,7 +14,7 @@ import {
 } from "../../../../tools/dev_test_game_hardening_lane_cases.mjs";
 import {
   seedDemoScenarioFixtureRows,
-  seedDemoScenarioIds,
+  seedScenarioCoverageGroups,
 } from "../../../../tools/dev_test_game_seed_scenario_cases.mjs";
 
 const LOCAL_RACE_COMMAND =
@@ -2340,11 +2340,11 @@ test("admin route data exposes local seed fixture summary as a native audit row"
   assert.equal(seed.inspectHref, "/admin/audit/local-seed-fixtures?game=midsummer");
   assert.deepEqual(
     seed.scenarios.map((scenario) => scenario.id),
-    seedDemoScenarioIds,
+    seedScenarioCoverageGroups.allDemo,
   );
   assert.deepEqual(seed.artifactSummary, {
     game: "game-a",
-    scenarioCount: seedDemoScenarioIds.length,
+    scenarioCount: seedScenarioCoverageGroups.allDemo.length,
     roleCount: 7,
     slotCount: 5,
     releaseReady: false,
@@ -2363,7 +2363,7 @@ test("admin local seed fixture detail data carries scenario rows", async () => {
   assert.equal(data.status, "available");
   assert.equal(data.surfaceHeader.title, "Local seed fixtures");
   assert.equal(data.audit.id, "local-seed-fixtures");
-  assert.equal(data.audit.scenarios.length, seedDemoScenarioIds.length);
+  assert.equal(data.audit.scenarios.length, seedScenarioCoverageGroups.allDemo.length);
   assert.deepEqual(
     data.audit.scenarios.map((scenario) => [scenario.id, scenario.status]),
     seedDemoScenarioFixtureRows().map((scenario) => [

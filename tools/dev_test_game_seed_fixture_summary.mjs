@@ -6,8 +6,8 @@ import { assertDevTestGameProofRun } from "./dev_test_game_proof_contract.mjs";
 import { assertDevTestGameReleaseReadiness } from "./dev_test_game_release_readiness.mjs";
 import {
   seedDemoScenarioCatalog,
-  seedDemoScenarioIds,
   seedDemoScenarioProofLaneCandidates,
+  seedScenarioCoverageGroups,
 } from "./dev_test_game_seed_scenario_cases.mjs";
 
 export const DEV_TEST_GAME_SEED_FIXTURE_SUMMARY_VERSION = 1;
@@ -153,7 +153,7 @@ export function assertDevTestGameSeedFixtureSummary(summary) {
       throw new Error(`seed fixture summary missing passed check: ${id}`);
     }
   }
-  const requiredScenarios = seedDemoScenarioIds;
+  const requiredScenarios = seedScenarioCoverageGroups.allDemo;
   const scenarioIds = (summary.demoScenarios ?? []).map((scenario) => scenario.id);
   if (
     scenarioIds.length !== requiredScenarios.length ||

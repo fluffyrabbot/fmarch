@@ -7,7 +7,7 @@ import {
   hostedTargetPreflightCheckIds,
 } from "./dev_test_game_hosted_target_preflight.mjs";
 import {
-  seedRequiredScenarioIds,
+  seedScenarioCoverageGroups,
 } from "./dev_test_game_seed_scenario_cases.mjs";
 
 const adminProofDestinationRequirements = [
@@ -45,7 +45,7 @@ const adminProofDestinationRequirements = [
   {
     linkId: "admin-proof:seed",
     auditId: "local-seed-fixtures",
-    requiredScenarioIds: seedRequiredScenarioIds,
+    requiredScenarioIds: seedScenarioCoverageGroups.allDemo,
   },
   {
     linkId: "admin-proof:release",

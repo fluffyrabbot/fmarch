@@ -32,8 +32,8 @@ import {
   buildDevTestGameSeedFixtureSummary,
 } from "./dev_test_game_seed_fixture_summary.mjs";
 import {
-  seedDemoScenarioIds,
   seedRequiredScenarioIds,
+  seedScenarioCoverageGroups,
 } from "./dev_test_game_seed_scenario_cases.mjs";
 import {
   hostStaleControlLaneIds,
@@ -8024,7 +8024,7 @@ test("session card and markdown include role credential URLs and tokens", async 
   );
   assert.deepEqual(
     seedFixture.demoScenarios.map((scenario) => scenario.id),
-    seedDemoScenarioIds,
+    seedScenarioCoverageGroups.allDemo,
   );
   const seedFixtureReadiness = buildDevTestGameReleaseReadiness(proofRun, {
     generatedAt: "2026-06-26T00:00:00.000Z",
@@ -12803,7 +12803,7 @@ function seedAdminProofFixture() {
       linkTestId: "admin-audit-link-local-seed-fixtures",
       surfaceTestId: "admin-audit-detail-surface",
       clickedThroughFromOverview: true,
-      visibleScenarios: [...seedRequiredScenarioIds],
+      visibleScenarios: [...seedScenarioCoverageGroups.allDemo],
       rawInviteTokensVisible: false,
       releaseReady: false,
       productionReady: false,
