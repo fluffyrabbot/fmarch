@@ -28,6 +28,7 @@ export {
   completedGameEndgameTransition,
   completedGameEndgameTransitionTokens,
   completedGameHardeningLaneCaseDefinitions,
+  completedGameHardeningLaneCase,
   completedGameHardeningLaneCases,
   completedGameHardeningLaneIds,
   completedGameHardeningLaneIdsFor,

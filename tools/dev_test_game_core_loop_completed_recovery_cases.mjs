@@ -264,6 +264,16 @@ export function completedGameHardeningLaneCases() {
   return completedGameHardeningLaneCaseDefinitions.map(cloneScenarioCase);
 }
 
+export function completedGameHardeningLaneCase(id) {
+  const scenario = completedGameHardeningLaneCaseDefinitions.find(
+    (candidate) => candidate.id === id,
+  );
+  if (scenario === undefined) {
+    throw new Error(`unknown completed-game hardening lane: ${id}`);
+  }
+  return cloneScenarioCase(scenario);
+}
+
 export function completedGameHardeningLaneIds() {
   return completedGameHardeningLaneCases().map((scenario) => scenario.id);
 }

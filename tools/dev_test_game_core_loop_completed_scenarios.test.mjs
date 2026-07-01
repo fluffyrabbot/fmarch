@@ -30,6 +30,7 @@ import {
   completedGameEndgameProofScenarioCases,
   completedGameEndgameSurfaceAssertionCases,
   completedGameEndgameTransition,
+  completedGameHardeningLaneCase,
   completedGameHardeningLaneIds,
   completedGameHardeningLaneIdsFor,
   completedGameSeedDemoOnlyScenarioIds,
@@ -137,6 +138,16 @@ test("completed-game scenario module groups shared recovery case families", () =
 });
 
 test("completed-game scenario module derives shared hardening lane groups", () => {
+  assert.deepEqual(completedGameHardeningLaneCase("stale-host-complete"), {
+    id: "stale-host-complete",
+    label: "Stale complete-game reveal rejects after live completion",
+    family: "completed-host-stale-command",
+    seedGroup: "demo-only",
+  });
+  assert.throws(
+    () => completedGameHardeningLaneCase("missing-completed-lane"),
+    /unknown completed-game hardening lane: missing-completed-lane/,
+  );
   assert.deepEqual(completedGameHardeningLaneIds(), [
     "stale-host-complete",
     "stale-host-complete-reload",
@@ -216,6 +227,28 @@ test("completed-game production harness callers use the shared scenario facade",
     assert(
       !source.includes("./dev_test_game_core_loop_completed_game_cases.mjs"),
       `${callerPath} should not import completed-game assertion helpers directly`,
+    );
+  }
+});
+
+test("completed-game proof contract uses shared hardening lane metadata", async () => {
+  const source = await readFile("tools/dev_test_game_proof_contract.mjs", "utf8");
+  assert(
+    source.includes("completedGameHardeningLaneCase"),
+    "proof contract should import completed-game hardening lane metadata",
+  );
+  for (const scenario of completedGameHardeningLaneIds().map((id) =>
+    completedGameHardeningLaneCase(id),
+  )) {
+    assert(
+      new RegExp(`completedGameLane\\(\\s*"${escapeRegExp(scenario.id)}"`).test(
+        source,
+      ),
+      `proof contract should build ${scenario.id} through completedGameLane`,
+    );
+    assert(
+      !source.includes(`lane("${scenario.id}", "${scenario.label}"`),
+      `proof contract should not duplicate ${scenario.id} label text`,
     );
   }
 });

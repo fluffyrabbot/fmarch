@@ -20,6 +20,7 @@ export {
   completedDeadPlayerStaleVoteProofArgs,
   completedGameEndgameScenarioCaseFamilies,
   completedGameHardeningLaneCaseDefinitions,
+  completedGameHardeningLaneCase,
   completedGameHardeningLaneCases,
   completedGameHardeningLaneIdsFor,
   completedGameHardeningLaneIds,

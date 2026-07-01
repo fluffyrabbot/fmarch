@@ -2,6 +2,7 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import {
+  completedGameHardeningLaneCase,
   completedGameHardeningLaneIds,
 } from "./dev_test_game_core_loop_completed_scenarios.mjs";
 import {
@@ -5467,7 +5468,7 @@ export function buildDevTestGameProofRun(session, options = {}) {
             )?.status === "resolved",
       },
     ),
-    lane("stale-host-complete", "Stale complete-game reveal rejects after live completion", {
+    completedGameLane("stale-host-complete", {
       rejectError: hardening.staleHostComplete?.reject?.error ?? null,
       liveCompleteSeqs:
         hardening.staleHostComplete?.liveComplete?.commandStatus?.streamSeqs ?? null,
@@ -5522,9 +5523,8 @@ export function buildDevTestGameProofRun(session, options = {}) {
           (slot) => slot.role_revealed === true && slot.alignment_revealed === true,
         ) === true,
     }),
-    lane(
+    completedGameLane(
       "stale-host-complete-reload",
-      "Stale host complete recovery reloads revealed console",
       {
         game: hardening.staleHostComplete?.game ?? null,
         routeStatus:
@@ -5577,9 +5577,8 @@ export function buildDevTestGameProofRun(session, options = {}) {
             ) === true,
       },
     ),
-    lane(
+    completedGameLane(
       "stale-host-complete-reconnect-recovery",
-      "Stale host complete recovery reconnects revealed console",
       {
         game: hardening.staleHostComplete?.game ?? null,
         reconnectingState:
@@ -5625,7 +5624,7 @@ export function buildDevTestGameProofRun(session, options = {}) {
           ) === false,
       },
     ),
-    lane("concurrent-host-complete-race", "Concurrent complete-game commands converge", {
+    completedGameLane("concurrent-host-complete-race", {
       ackRaceRole: hardening.concurrentHostCompleteRace?.ackRaceRole ?? null,
       rejectRaceRole: hardening.concurrentHostCompleteRace?.rejectRaceRole ?? null,
       rejectError: hardening.concurrentHostCompleteRace?.reject?.error ?? null,
@@ -5727,9 +5726,8 @@ export function buildDevTestGameProofRun(session, options = {}) {
           (slot) => slot.role_revealed === true && slot.alignment_revealed === true,
         ) === true,
     }),
-    lane(
+    completedGameLane(
       "concurrent-host-complete-race-reload",
-      "Concurrent complete-game race reloads revealed host consoles",
       {
         game: hardening.concurrentHostCompleteRace?.game ?? null,
         firstRouteStatus:
@@ -5796,7 +5794,7 @@ export function buildDevTestGameProofRun(session, options = {}) {
             ) === true,
       },
     ),
-    lane("concurrent-player-complete-race", "Concurrent player command and completion converge", {
+    completedGameLane("concurrent-player-complete-race", {
       postState: hardening.concurrentPlayerCompleteRace?.post?.state ?? null,
       postError: hardening.concurrentPlayerCompleteRace?.post?.error ?? null,
       postSeq: hardening.concurrentPlayerCompleteRace?.postSeq ?? null,
@@ -5873,7 +5871,7 @@ export function buildDevTestGameProofRun(session, options = {}) {
           (slot) => slot.role_revealed === true && slot.alignment_revealed === true,
         ) === true,
     }),
-    lane("public-player-complete-reload", "Public player board reloads completed game truth", {
+    completedGameLane("public-player-complete-reload", {
       game: hardening.concurrentPlayerCompleteRace?.game ?? null,
       routeStatus:
         hardening.concurrentPlayerCompleteRace?.publicReloadAfterRace
@@ -5958,7 +5956,7 @@ export function buildDevTestGameProofRun(session, options = {}) {
                 hardening.concurrentPlayerCompleteRace?.postBody,
               ) === false)),
     }),
-    lane("stale-player-complete", "Stale player command rejects after live completion", {
+    completedGameLane("stale-player-complete", {
       rejectError: hardening.stalePlayerComplete?.reject?.error ?? null,
       gameCompleted:
         hardening.stalePlayerComplete?.commandStateAfterReject?.gameCompleted ?? null,
@@ -6004,9 +6002,8 @@ export function buildDevTestGameProofRun(session, options = {}) {
         hardening.stalePlayerComplete?.apiCommandStateAfterReject?.vote_targets?.length ===
           0,
     }),
-    lane(
+    completedGameLane(
       "stale-player-complete-reload",
-      "Stale public player complete recovery reloads completed board",
       {
         game: hardening.stalePlayerComplete?.game ?? null,
         routeStatus:
@@ -8011,6 +8008,11 @@ function actionsExcludeAll(actions, expectedActions) {
 
 function emptyActionList(actions) {
   return Array.isArray(actions) && actions.length === 0;
+}
+
+function completedGameLane(id, evidence) {
+  const scenario = completedGameHardeningLaneCase(id);
+  return lane(scenario.id, scenario.label, evidence);
 }
 
 function lane(id, label, evidence) {

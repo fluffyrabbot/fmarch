@@ -11,6 +11,7 @@ export {
   completedDeadPlayerStaleVoteCase,
   completedDeadPlayerStaleVoteCaseDefinition,
   completedGameHardeningLaneCaseDefinitions,
+  completedGameHardeningLaneCase,
   completedGameHardeningLaneCases,
   completedGameHardeningLaneIdsFor,
   completedGameHardeningLaneIds,
