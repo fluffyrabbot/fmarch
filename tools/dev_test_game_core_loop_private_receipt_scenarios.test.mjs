@@ -31,7 +31,7 @@ import {
   staleCompletedPrivatePostSnapshotCase,
   stalePrivateChannelPostPhaseLockedScenario,
   staleCompletedPrivatePostScenario,
-} from "./dev_test_game_core_loop_private_channel_cases.mjs";
+} from "./dev_test_game_core_loop_private_channel_scenario_cases.mjs";
 
 test("completed private-channel scenarios build reusable snapshots and transitions", () => {
   const reloadScenario = completedPrivateChannelReloadScenario();
@@ -328,10 +328,20 @@ test("private-channel production harness callers use shared scenario definitions
     "tools/dev_test_game_release_readiness.mjs",
     "utf8",
   );
+  const assertionFacadeSource = await readFile(
+    "tools/dev_test_game_core_loop_private_receipt_scenarios.mjs",
+    "utf8",
+  );
 
   assert(
-    proofSource.includes("./dev_test_game_core_loop_private_channel_cases.mjs"),
-    "core-loop admin proof should import private-channel scenarios from the shared module",
+    proofSource.includes(
+      "./dev_test_game_core_loop_private_channel_scenario_cases.mjs",
+    ),
+    "core-loop admin proof should import private-channel scenarios from the extracted case module",
+  );
+  assert(
+    !proofSource.includes("./dev_test_game_core_loop_private_channel_cases.mjs"),
+    "core-loop admin proof should not import private-channel scenarios through the compatibility facade",
   );
   assert(
     proofSource.includes("completedPrivateChannelReloadScenario") &&
@@ -343,6 +353,18 @@ test("private-channel production harness callers use shared scenario definitions
       "./dev_test_game_core_loop_private_receipt_scenarios.mjs",
     ),
     "release readiness should use the private-channel assertion facade",
+  );
+  assert(
+    assertionFacadeSource.includes(
+      "./dev_test_game_core_loop_private_channel_scenario_cases.mjs",
+    ),
+    "private-channel assertion facade should import completed private-channel cases from the extracted case module",
+  );
+  assert(
+    !assertionFacadeSource.includes(
+      "./dev_test_game_core_loop_private_channel_cases.mjs",
+    ),
+    "private-channel assertion facade should not import cases through the compatibility facade",
   );
   assert(
     !readinessSource.includes("Completed private channel remains readable.") &&

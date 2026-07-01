@@ -9,7 +9,7 @@ import {
   staleCompletedPrivatePostScenario,
   staleCompletedPrivatePostSnapshotAssertionCases,
   stalePrivateChannelPostPhaseLockedScenario,
-} from "./dev_test_game_core_loop_private_channel_cases.mjs";
+} from "./dev_test_game_core_loop_private_channel_scenario_cases.mjs";
 
 const privateQueueBoundaryStatus = "principal-scoped-private-projections";
 
@@ -35,7 +35,7 @@ export {
   staleCompletedPrivatePostSnapshotAssertionCases,
   staleCompletedPrivatePostSnapshotCase,
   stalePrivateChannelPostPhaseLockedScenario,
-} from "./dev_test_game_core_loop_private_channel_cases.mjs";
+} from "./dev_test_game_core_loop_private_channel_scenario_cases.mjs";
 
 export function privateReceiptScenario(id) {
   const scenario = privateReceiptScenarios().find((entry) => entry.id === id);
