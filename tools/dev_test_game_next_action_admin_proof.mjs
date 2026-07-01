@@ -79,6 +79,11 @@ await runAdminAuditProof({
         source.proofGraph,
       ),
       requiredRelatedLinks: requiredRelatedLinksForNextAction(source.nextAction),
+      requiredHostedHandoffInputs: requiredHostedHandoffInputIdsForNextAction(
+        source.nextAction,
+      ),
+      requiredHostedHandoffBlockedChecks:
+        requiredHostedHandoffBlockedCheckIdsForNextAction(source.nextAction),
       requiredRelatedDestinations: requiredRelatedDestinationsForHandoff(
         hostedMatrixHandoffSummary({
           nextAction: source.nextAction,
@@ -117,6 +122,8 @@ await runAdminAuditProof({
         source.nextAction.nextAction.unproven?.spineDrilldown ?? null,
       unprovenSpineTarget:
         source.nextAction.nextAction.unproven?.spineTarget ?? null,
+      unprovenHostedHandoffChecklist:
+        source.nextAction.nextAction.unproven?.hostedHandoffChecklist ?? null,
       selectedProofGraphNode: selectedNextActionProofGraphNodeSummary({
         nextAction: source.nextAction,
         proofGraph: source.proofGraph,
@@ -501,6 +508,36 @@ export function assertNextActionAdminProof(evidence) {
     handoff: relatedHandoff,
     proofName: "next-action admin proof",
   });
+  const checklist = evidence.generatedFrom?.unprovenHostedHandoffChecklist;
+  if (checklist !== null && checklist !== undefined) {
+    if (
+      checklist.status !== "blocked" ||
+      !Array.isArray(checklist.inputIds) ||
+      !Array.isArray(checklist.blockedCheckIds)
+    ) {
+      throw new Error("next-action admin proof has malformed hosted handoff checklist");
+    }
+    for (const inputId of checklist.inputIds) {
+      if (
+        !evidence.adminRoleSurface?.visibleHostedHandoffInputs?.includes(inputId)
+      ) {
+        throw new Error(
+          `next-action admin proof missing hosted handoff input: ${inputId}`,
+        );
+      }
+    }
+    for (const checkId of checklist.blockedCheckIds) {
+      if (
+        !evidence.adminRoleSurface?.visibleHostedHandoffBlockedChecks?.includes(
+          checkId,
+        )
+      ) {
+        throw new Error(
+          `next-action admin proof missing hosted handoff blocked check: ${checkId}`,
+        );
+      }
+    }
+  }
   return evidence;
 }
 
@@ -581,6 +618,18 @@ function requiredRelatedLinksForNextAction(nextAction) {
       ? [localCheckId]
       : []),
   ];
+}
+
+function requiredHostedHandoffInputIdsForNextAction(nextAction) {
+  const inputIds =
+    nextAction.nextAction.unproven?.hostedHandoffChecklist?.inputIds;
+  return Array.isArray(inputIds) ? inputIds : [];
+}
+
+function requiredHostedHandoffBlockedCheckIdsForNextAction(nextAction) {
+  const blockedCheckIds =
+    nextAction.nextAction.unproven?.hostedHandoffChecklist?.blockedCheckIds;
+  return Array.isArray(blockedCheckIds) ? blockedCheckIds : [];
 }
 
 function requiredCheckStatusesForNextAction(nextAction, proofGraph) {

@@ -6797,6 +6797,36 @@ export function validateDevTestGameNextActionAdminProof(proof, options = {}) {
   ) {
     throw new Error("next-action admin proof is missing release readiness trace");
   }
+  const checklist = proof.generatedFrom?.unprovenHostedHandoffChecklist;
+  if (checklist !== null && checklist !== undefined) {
+    if (
+      checklist.status !== "blocked" ||
+      !Array.isArray(checklist.inputIds) ||
+      !Array.isArray(checklist.blockedCheckIds)
+    ) {
+      throw new Error("next-action admin proof has malformed hosted handoff checklist");
+    }
+    for (const inputId of checklist.inputIds) {
+      if (
+        !proof.adminRoleSurface?.visibleHostedHandoffInputs?.includes(inputId)
+      ) {
+        throw new Error(
+          `next-action admin proof missing hosted handoff input: ${inputId}`,
+        );
+      }
+    }
+    for (const checkId of checklist.blockedCheckIds) {
+      if (
+        !proof.adminRoleSurface?.visibleHostedHandoffBlockedChecks?.includes(
+          checkId,
+        )
+      ) {
+        throw new Error(
+          `next-action admin proof missing hosted handoff blocked check: ${checkId}`,
+        );
+      }
+    }
+  }
   return {
     status: "passed",
     path: options.path ?? "target/dev-test-game/next-action-admin-proof.json",
@@ -6805,6 +6835,10 @@ export function validateDevTestGameNextActionAdminProof(proof, options = {}) {
     detailRoleUrl: proof.adminRoleSurface.detailRoleUrl,
     visibleChecks: proof.adminRoleSurface.visibleChecks,
     visibleRelatedLinks: proof.adminRoleSurface.visibleRelatedLinks,
+    visibleHostedHandoffInputs:
+      proof.adminRoleSurface.visibleHostedHandoffInputs ?? [],
+    visibleHostedHandoffBlockedChecks:
+      proof.adminRoleSurface.visibleHostedHandoffBlockedChecks ?? [],
     command: String(proof.generatedFrom?.command ?? ""),
     reason: String(proof.generatedFrom?.reason ?? ""),
     unprovenProductionFeatureSpineTarget:

@@ -1263,6 +1263,34 @@ test("dev test-game next-action advances hosted deployment after target prefligh
     blockedPreflightAction.generatedFrom.hostedTargetPreflightStatus,
     "blocked",
   );
+  assert.deepEqual(
+    blockedPreflightAction.nextAction.unproven.hostedHandoffChecklist.inputIds,
+    [
+      "command",
+      "proof-target",
+      "FMARCH_HOSTED_MATRIX_FRONTEND_URL",
+      "FMARCH_HOSTED_MATRIX_API_URL",
+      "FMARCH_HOSTED_MATRIX_GROUP_ID",
+      "FMARCH_HOSTED_MATRIX_RAW_EVIDENCE_PATH",
+      "FMARCH_HOSTED_MATRIX_EVIDENCE_PATH",
+    ],
+  );
+  assert.deepEqual(
+    blockedPreflightAction.nextAction.unproven.hostedHandoffChecklist
+      .blockedCheckIds,
+    [
+      "hosted-frontend-url-configured",
+      "hosted-api-url-configured",
+      "hosted-targets-external",
+      "raw-evidence-path-configured",
+      "raw-evidence-readable",
+    ],
+  );
+  assert.deepEqual(
+    blockedPreflightAction.releaseReadinessTrace.candidates[0]
+      .hostedHandoffChecklist,
+    blockedPreflightAction.nextAction.unproven.hostedHandoffChecklist,
+  );
 
   const passedPreflightAction = buildDevTestGameNextAction(freshManifest, {
     generatedAt: "2026-06-26T00:00:01.000Z",

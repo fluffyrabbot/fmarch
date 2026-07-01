@@ -208,6 +208,12 @@ export function buildDevTestGameNextAction(
                     realHostedEvidenceInputs:
                       selectedUnproven.realHostedEvidenceInputs,
                   }),
+              ...(selectedUnproven.hostedHandoffChecklist === undefined
+                ? {}
+                : {
+                    hostedHandoffChecklist:
+                      selectedUnproven.hostedHandoffChecklist,
+                  }),
             },
           }
         : {
@@ -408,6 +414,16 @@ export function assertDevTestGameNextAction(evidence) {
     if (!validProductionFeatureSpineDrilldown(evidence.nextAction.unproven?.spineDrilldown)) {
       throw new Error(
         "next-action release-readiness recovery is missing a feature spine drilldown",
+      );
+    }
+    if (
+      evidence.nextAction.unproven?.hostedHandoffChecklist !== undefined &&
+      !validHostedHandoffChecklist(
+        evidence.nextAction.unproven.hostedHandoffChecklist,
+      )
+    ) {
+      throw new Error(
+        "next-action release-readiness recovery has a malformed hosted handoff checklist",
       );
     }
   }
@@ -701,6 +717,7 @@ function rankedBuildableReleaseReadinessItems(
         hostedEvidenceMode: buildable.hostedEvidenceMode,
         realHostedEvidenceStatus: buildable.realHostedEvidenceStatus,
         realHostedEvidenceInputs: buildable.realHostedEvidenceInputs,
+        hostedHandoffChecklist: buildable.hostedHandoffChecklist,
       };
     })
     .filter((candidate) => candidate !== null)
@@ -771,6 +788,9 @@ function buildReleaseReadinessTrace(candidates) {
       ...(candidate.realHostedEvidenceInputs === undefined
         ? {}
         : { realHostedEvidenceInputs: candidate.realHostedEvidenceInputs }),
+      ...(candidate.hostedHandoffChecklist === undefined
+        ? {}
+        : { hostedHandoffChecklist: candidate.hostedHandoffChecklist }),
     })),
   };
 }
@@ -1161,7 +1181,9 @@ function assertReleaseReadinessTrace(releaseReadinessTrace, nextAction) {
       JSON.stringify(nextAction.unproven?.spineDrilldown ?? null) !==
         JSON.stringify(selected.spineDrilldown ?? null) ||
       JSON.stringify(nextAction.unproven?.spineTarget ?? null) !==
-        JSON.stringify(selected.spineTarget ?? null)
+        JSON.stringify(selected.spineTarget ?? null) ||
+      JSON.stringify(nextAction.unproven?.hostedHandoffChecklist ?? null) !==
+        JSON.stringify(selected.hostedHandoffChecklist ?? null)
     ) {
       throw new Error("next-action release-readiness selection does not match action");
     }
@@ -1221,6 +1243,30 @@ function validProductionFeatureSpineDrilldown(drilldown) {
     drilldown.rerunCommand === devTestGameCoreLoopAdminProofCommand &&
     typeof drilldown.browserProofCommand === "string" &&
     drilldown.browserProofCommand.includes("test:dev-test-game-live")
+  );
+}
+
+function validHostedHandoffChecklist(checklist) {
+  return (
+    checklist !== null &&
+    typeof checklist === "object" &&
+    checklist.status === "blocked" &&
+    checklist.preflightStatus === "blocked" &&
+    typeof checklist.command === "string" &&
+    checklist.command.includes("test:dev-test-game-hosted-evidence-lane") &&
+    checklist.proofTarget === devTestGameHostedEvidenceLanePath &&
+    Array.isArray(checklist.inputIds) &&
+    checklist.inputIds.includes("FMARCH_HOSTED_MATRIX_FRONTEND_URL") &&
+    Array.isArray(checklist.blockedCheckIds) &&
+    checklist.blockedCheckIds.length > 0 &&
+    Array.isArray(checklist.blockedChecks) &&
+    checklist.blockedChecks.length === checklist.blockedCheckIds.length &&
+    checklist.blockedChecks.every(
+      (check) =>
+        checklist.blockedCheckIds.includes(check.id) &&
+        check.status === "blocked" &&
+        typeof check.requiredEvidence === "string",
+    )
   );
 }
 
@@ -1650,7 +1696,59 @@ function hostedDeploymentBuildable({ hostedTargetPreflight }) {
       }),
     };
   }
-  return localBuildableReleaseReadinessItems.get("hosted-deployment");
+  const blockedBuildable = localBuildableReleaseReadinessItems.get(
+    "hosted-deployment",
+  );
+  if (hostedTargetPreflight?.status === "blocked") {
+    return {
+      ...blockedBuildable,
+      hostedHandoffChecklist: hostedHandoffChecklistFromPreflight({
+        preflight: hostedTargetPreflight,
+        command: blockedBuildable.command,
+        proofTarget: blockedBuildable.proofTarget,
+        realHostedEvidenceInputs: blockedBuildable.realHostedEvidenceInputs,
+      }),
+    };
+  }
+  return blockedBuildable;
+}
+
+function hostedHandoffChecklistFromPreflight({
+  preflight,
+  command,
+  proofTarget,
+  realHostedEvidenceInputs,
+}) {
+  const blockedChecks = (preflight.checks ?? [])
+    .filter((check) => check?.status === "blocked")
+    .map((check) => ({
+      id: String(check.id ?? ""),
+      status: "blocked",
+      requiredEvidence: String(check.requiredEvidence ?? ""),
+    }))
+    .filter((check) => check.id !== "");
+  return {
+    status: "blocked",
+    preflightStatus: String(preflight.status ?? "unknown"),
+    command,
+    proofTarget,
+    inputIds: realHostedEvidenceInputIds(realHostedEvidenceInputs),
+    blockedCheckIds: blockedChecks.map((check) => check.id),
+    blockedChecks,
+  };
+}
+
+function realHostedEvidenceInputIds(realHostedEvidenceInputs) {
+  const env = Array.isArray(realHostedEvidenceInputs?.env)
+    ? realHostedEvidenceInputs.env
+    : [];
+  return [
+    "command",
+    "proof-target",
+    ...env
+      .map((item) => String(item?.name ?? ""))
+      .filter((name) => name !== ""),
+  ];
 }
 
 const productionFeatureSpineTargets = Object.freeze({

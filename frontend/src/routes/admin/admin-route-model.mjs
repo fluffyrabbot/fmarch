@@ -1206,6 +1206,10 @@ export function normalizeLocalNextActionAudit(nextAction, { game, proofGraph = n
   const realHostedEvidenceInputs = normalizeRealHostedEvidenceInputs(
     unproven?.realHostedEvidenceInputs,
   );
+  const hostedHandoffChecklist = normalizeNextActionHostedHandoffChecklist({
+    unproven,
+    realHostedEvidenceInputs,
+  });
   const localCheckRoleUrl =
     typeof localCheck?.roleUrl === "string" && localCheck.roleUrl.trim() !== ""
       ? localCheck.roleUrl
@@ -1509,6 +1513,7 @@ export function normalizeLocalNextActionAudit(nextAction, { game, proofGraph = n
                 ]),
           ]),
     realHostedEvidenceInputs,
+    ...(hostedHandoffChecklist === null ? {} : { hostedHandoffChecklist }),
     artifactSummary: Object.freeze({
       command,
       reason,
@@ -1586,6 +1591,46 @@ export function normalizeLocalNextActionAudit(nextAction, { game, proofGraph = n
       releaseReady: nextAction.releaseReady === true,
       productionReady: nextAction.productionReady === true,
     }),
+  });
+}
+
+function normalizeNextActionHostedHandoffChecklist({
+  unproven,
+  realHostedEvidenceInputs,
+}) {
+  const checklist = unproven?.hostedHandoffChecklist;
+  if (checklist === null || typeof checklist !== "object") {
+    return null;
+  }
+  const blockedChecks = Array.isArray(checklist.blockedChecks)
+    ? checklist.blockedChecks
+    : [];
+  return Object.freeze({
+    status: String(checklist.status ?? "unknown"),
+    preflightStatus: String(checklist.preflightStatus ?? "unknown"),
+    command: String(checklist.command ?? ""),
+    proofTarget: String(checklist.proofTarget ?? ""),
+    inputCount: realHostedEvidenceInputs.length,
+    blockedCheckCount: blockedChecks.length,
+    inputs: Object.freeze(
+      realHostedEvidenceInputs.map((input) =>
+        Object.freeze({
+          id: input.id,
+          label: input.label,
+          value: input.value,
+          required: input.required,
+        }),
+      ),
+    ),
+    blockedChecks: Object.freeze(
+      blockedChecks.map((check) =>
+        Object.freeze({
+          id: String(check.id ?? ""),
+          status: String(check.status ?? "unknown"),
+          requiredEvidence: String(check.requiredEvidence ?? ""),
+        }),
+      ),
+    ),
   });
 }
 
