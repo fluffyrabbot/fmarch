@@ -25,6 +25,8 @@ import {
   staleConflictMessageLaneIds,
 } from "./dev_test_game_hardening_lane_cases.mjs";
 import {
+  seedAggregateOnlyProofLaneIds,
+  seedAliasOnlyProofLaneIds,
   seedScenarioCoverageGroups,
 } from "./dev_test_game_seed_scenario_cases.mjs";
 import {
@@ -624,6 +626,7 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
       evidence: seedFixtureEvidence.path,
       proofBoundary: seedFixtureEvidence.proofBoundary,
       scenarioCount: seedFixtureEvidence.scenarioCount,
+      proofLaneCoverage: seedFixtureEvidence.proofLaneCoverage,
       ...(seedAdminProofEvidence === undefined
         ? {}
         : { adminRoleSurface: seedAdminProofEvidence }),
@@ -5860,6 +5863,9 @@ export function validateDevTestGameSeedFixtureSummary(summary, options = {}) {
   if ((summary.fixture?.slots ?? []).length < 5) {
     throw new Error("seed fixture summary must enumerate seeded slots");
   }
+  const proofLaneCoverage = validateSeedFixtureProofLaneCoverage(
+    summary.proofLaneCoverage,
+  );
   const serialized = JSON.stringify(summary);
   if (/invite=(?!REDACTED)/.test(serialized)) {
     throw new Error("seed fixture summary leaked an invite URL token");
@@ -5871,6 +5877,7 @@ export function validateDevTestGameSeedFixtureSummary(summary, options = {}) {
     scenarioCount: requiredScenarios.length,
     roleCount: summary.fixture?.roleCount ?? 0,
     slotCount: summary.fixture?.slots?.length ?? 0,
+    proofLaneCoverage,
     proofBoundary: summary.proofBoundary,
     scope: summary.scope,
     productionReady: summary.productionReady,
@@ -5878,8 +5885,73 @@ export function validateDevTestGameSeedFixtureSummary(summary, options = {}) {
   };
 }
 
+function validateSeedFixtureProofLaneCoverage(coverage) {
+  if (coverage?.status !== "passed") {
+    throw new Error(`seed fixture proof lane coverage is ${coverage?.status}`);
+  }
+  if (!Number.isInteger(coverage.passedLaneCount) || coverage.passedLaneCount <= 0) {
+    throw new Error("seed fixture proof lane coverage must count passed lanes");
+  }
+  const aliasOnlyLaneIds = coverage.aliasOnly?.laneIds ?? [];
+  const aggregateOnlyLaneIds = coverage.aggregateOnly?.laneIds ?? [];
+  const directSeededLaneIds = coverage.directSeeded?.laneIds ?? [];
+  const unclassifiedLaneIds = coverage.unclassified?.laneIds ?? [];
+  for (const laneId of seedAliasOnlyProofLaneIds) {
+    if (!aliasOnlyLaneIds.includes(laneId)) {
+      throw new Error(`seed fixture proof lane coverage missing alias lane: ${laneId}`);
+    }
+  }
+  for (const laneId of seedAggregateOnlyProofLaneIds) {
+    if (!aggregateOnlyLaneIds.includes(laneId)) {
+      throw new Error(
+        `seed fixture proof lane coverage missing aggregate lane: ${laneId}`,
+      );
+    }
+  }
+  if (coverage.directSeeded?.count !== directSeededLaneIds.length) {
+    throw new Error("seed fixture direct proof lane count drifted");
+  }
+  if (coverage.aliasOnly?.count !== aliasOnlyLaneIds.length) {
+    throw new Error("seed fixture alias proof lane count drifted");
+  }
+  if (coverage.aggregateOnly?.count !== aggregateOnlyLaneIds.length) {
+    throw new Error("seed fixture aggregate proof lane count drifted");
+  }
+  if (coverage.unclassified?.count !== 0 || unclassifiedLaneIds.length !== 0) {
+    throw new Error(
+      `seed fixture proof lane coverage has unclassified lanes: ${unclassifiedLaneIds.join(", ")}`,
+    );
+  }
+  return {
+    status: "passed",
+    passedLaneCount: coverage.passedLaneCount,
+    directSeeded: {
+      count: directSeededLaneIds.length,
+      laneIds: directSeededLaneIds,
+    },
+    aliasOnly: {
+      count: aliasOnlyLaneIds.length,
+      laneIds: aliasOnlyLaneIds,
+    },
+    aggregateOnly: {
+      count: aggregateOnlyLaneIds.length,
+      laneIds: aggregateOnlyLaneIds,
+    },
+    unclassified: {
+      count: 0,
+      laneIds: [],
+    },
+  };
+}
+
 export function validateDevTestGameSeedAdminProof(proof, options = {}) {
   const requiredScenarios = seedScenarioCoverageGroups.allDemo;
+  const requiredProofLaneCoverage = [
+    "direct-seeded",
+    "alias-only",
+    "aggregate-only",
+    "unclassified",
+  ];
   if (proof?.version !== 1) {
     throw new Error(`seed admin proof version drifted: ${proof?.version}`);
   }
@@ -5906,6 +5978,13 @@ export function validateDevTestGameSeedAdminProof(proof, options = {}) {
       throw new Error(`seed admin proof missing visible scenario: ${scenarioId}`);
     }
   }
+  for (const coverageId of requiredProofLaneCoverage) {
+    if (!proof.adminRoleSurface?.visibleProofLaneCoverage?.includes(coverageId)) {
+      throw new Error(
+        `seed admin proof missing visible proof lane coverage: ${coverageId}`,
+      );
+    }
+  }
   return {
     status: "passed",
     path: options.path ?? "target/dev-test-game/seed-admin-proof.json",
@@ -5913,6 +5992,7 @@ export function validateDevTestGameSeedAdminProof(proof, options = {}) {
     overviewRoleUrl: proof.adminRoleSurface.overviewRoleUrl,
     detailRoleUrl: proof.adminRoleSurface.detailRoleUrl,
     visibleScenarios: proof.adminRoleSurface.visibleScenarios,
+    visibleProofLaneCoverage: proof.adminRoleSurface.visibleProofLaneCoverage,
     ...(options.artifact === undefined ? {} : { artifact: options.artifact }),
   };
 }

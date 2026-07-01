@@ -5,9 +5,12 @@ import { seedCommandPlanForGame } from "./dev_test_game.mjs";
 import { assertDevTestGameProofRun } from "./dev_test_game_proof_contract.mjs";
 import { assertDevTestGameReleaseReadiness } from "./dev_test_game_release_readiness.mjs";
 import {
+  seedAggregateOnlyProofLaneIds,
+  seedAliasOnlyProofLaneIds,
   seedDemoScenarioCatalog,
   seedDemoScenarioProofLaneCandidates,
   seedScenarioCoverageGroups,
+  unclassifiedSeedProofLaneIds,
 } from "./dev_test_game_seed_scenario_cases.mjs";
 
 export const DEV_TEST_GAME_SEED_FIXTURE_SUMMARY_VERSION = 1;
@@ -41,8 +44,11 @@ export function buildDevTestGameSeedFixtureSummary({
   }
   const roles = redactRoles(session.sessions ?? {});
   const slots = summarizeSeedSlots(seedCommandPlanForGame(session.game));
-  const laneIds = proof.lanes.map((lane) => lane.id);
-  const demoScenarioRows = demoScenarios({ roles, laneIds });
+  const passedLaneIds = proof.lanes
+    .filter((lane) => lane.status === "passed")
+    .map((lane) => lane.id);
+  const demoScenarioRows = demoScenarios({ roles, laneIds: passedLaneIds });
+  const proofLaneCoverage = proofLaneCoverageForPassedLanes(passedLaneIds);
   const summary = {
     version: DEV_TEST_GAME_SEED_FIXTURE_SUMMARY_VERSION,
     proof: "dev-test-game-seed-fixture-summary",
@@ -72,6 +78,7 @@ export function buildDevTestGameSeedFixtureSummary({
       slots,
     },
     demoScenarios: demoScenarioRows,
+    proofLaneCoverage,
     proofRun: {
       status: proof.status,
       laneCount: proof.lanes.length,
@@ -111,6 +118,10 @@ export function buildDevTestGameSeedFixtureSummary({
         id: "proof-lanes-carried",
         status: "passed",
         laneCount: proof.lanes.length,
+        directSeededLaneCount: proofLaneCoverage.directSeeded.count,
+        aliasOnlyLaneCount: proofLaneCoverage.aliasOnly.count,
+        aggregateOnlyLaneCount: proofLaneCoverage.aggregateOnly.count,
+        unclassifiedLaneCount: proofLaneCoverage.unclassified.count,
       },
       {
         id: "release-boundary-carried",
@@ -169,6 +180,7 @@ export function assertDevTestGameSeedFixtureSummary(summary) {
       throw new Error(`seed fixture summary missing local scenario: ${id}`);
     }
   }
+  assertSeedFixtureProofLaneCoverage(summary.proofLaneCoverage);
   if ((summary.fixture?.slots ?? []).length < 5) {
     throw new Error("seed fixture summary must enumerate seeded slots");
   }
@@ -199,6 +211,40 @@ export function assertDevTestGameSeedFixtureSummary(summary) {
   return summary;
 }
 
+function assertSeedFixtureProofLaneCoverage(coverage) {
+  if (coverage?.status !== "passed") {
+    throw new Error(`seed fixture proof lane coverage is ${coverage?.status}`);
+  }
+  if (!Number.isInteger(coverage.passedLaneCount) || coverage.passedLaneCount <= 0) {
+    throw new Error("seed fixture proof lane coverage must count passed lanes");
+  }
+  for (const [id, expectedLaneIds] of [
+    ["aliasOnly", seedAliasOnlyProofLaneIds],
+    ["aggregateOnly", seedAggregateOnlyProofLaneIds],
+  ]) {
+    const laneIds = coverage[id]?.laneIds ?? [];
+    for (const laneId of expectedLaneIds) {
+      if (!laneIds.includes(laneId)) {
+        throw new Error(`seed fixture proof lane coverage missing ${id} lane: ${laneId}`);
+      }
+    }
+    if (coverage[id]?.count !== laneIds.length) {
+      throw new Error(`seed fixture proof lane coverage count drifted for ${id}`);
+    }
+  }
+  if ((coverage.directSeeded?.laneIds ?? []).length !== coverage.directSeeded?.count) {
+    throw new Error("seed fixture direct seeded proof lane count drifted");
+  }
+  if ((coverage.unclassified?.laneIds ?? []).length !== 0) {
+    throw new Error(
+      `seed fixture proof lane coverage has unclassified lanes: ${coverage.unclassified.laneIds.join(", ")}`,
+    );
+  }
+  if (coverage.unclassified?.count !== 0) {
+    throw new Error("seed fixture proof lane coverage must have zero unclassified lanes");
+  }
+}
+
 function demoScenarios({ roles, laneIds }) {
   const laneSet = new Set(laneIds);
   return seedDemoScenarioCatalog({
@@ -208,6 +254,37 @@ function demoScenarios({ roles, laneIds }) {
       ),
     roleUrlForRole: (role) => roles[role]?.loginUrlRedacted ?? null,
   });
+}
+
+function proofLaneCoverageForPassedLanes(passedLaneIds) {
+  const passedLaneSet = new Set(passedLaneIds);
+  const directScenarioSet = new Set(seedScenarioCoverageGroups.allDemo);
+  const directSeeded = passedLaneIds.filter((id) => directScenarioSet.has(id));
+  const aliasOnly = seedAliasOnlyProofLaneIds.filter((id) => passedLaneSet.has(id));
+  const aggregateOnly = seedAggregateOnlyProofLaneIds.filter((id) =>
+    passedLaneSet.has(id),
+  );
+  const unclassified = unclassifiedSeedProofLaneIds({ proofLaneIds: passedLaneIds });
+  return {
+    status: unclassified.length === 0 ? "passed" : "failed",
+    passedLaneCount: passedLaneIds.length,
+    directSeeded: {
+      count: directSeeded.length,
+      laneIds: directSeeded,
+    },
+    aliasOnly: {
+      count: aliasOnly.length,
+      laneIds: aliasOnly,
+    },
+    aggregateOnly: {
+      count: aggregateOnly.length,
+      laneIds: aggregateOnly,
+    },
+    unclassified: {
+      count: unclassified.length,
+      laneIds: unclassified,
+    },
+  };
 }
 
 function summarizeSeedSlots(plan) {
@@ -309,6 +386,21 @@ function markdownSeedFixture(summary) {
     lines.push(
       `| ${scenario.id} | ${scenario.role} | ${scenario.provenBy.join(", ")} |`,
     );
+  }
+  lines.push(
+    "",
+    "## Proof Lane Coverage",
+    "",
+    "| Classification | Count | Lanes |",
+    "| --- | ---: | --- |",
+  );
+  for (const [label, entry] of [
+    ["Direct seeded", summary.proofLaneCoverage.directSeeded],
+    ["Alias-only", summary.proofLaneCoverage.aliasOnly],
+    ["Aggregate-only", summary.proofLaneCoverage.aggregateOnly],
+    ["Unclassified", summary.proofLaneCoverage.unclassified],
+  ]) {
+    lines.push(`| ${label} | ${entry.count} | ${entry.laneIds.join(", ")} |`);
   }
   return `${lines.join("\n")}\n`;
 }

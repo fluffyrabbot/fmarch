@@ -2567,6 +2567,9 @@ export function normalizeLocalSeedFixtureAudit(seedFixtureSummary, { game }) {
   const localScenarios = scenarios.filter(
     (scenario) => scenario?.status === "available_locally",
   );
+  const proofLaneCoverage = normalizeProofLaneCoverage(
+    seedFixtureSummary.proofLaneCoverage,
+  );
   return Object.freeze({
     id: "local-seed-fixtures",
     label: "Local seed fixtures",
@@ -2588,15 +2591,57 @@ export function normalizeLocalSeedFixtureAudit(seedFixtureSummary, { game }) {
         }),
       ),
     ),
+    proofLaneCoverage,
     artifactSummary: Object.freeze({
       game: String(seedFixtureSummary.fixture?.game ?? ""),
       scenarioCount: scenarios.length,
       roleCount: Number(seedFixtureSummary.fixture?.roleCount ?? 0),
       slotCount: Number(seedFixtureSummary.fixture?.slots?.length ?? 0),
+      proofLaneCount: Number(
+        seedFixtureSummary.proofLaneCoverage?.passedLaneCount ?? 0,
+      ),
+      directSeededProofLaneCount: Number(
+        seedFixtureSummary.proofLaneCoverage?.directSeeded?.count ?? 0,
+      ),
+      aliasOnlyProofLaneCount: Number(
+        seedFixtureSummary.proofLaneCoverage?.aliasOnly?.count ?? 0,
+      ),
+      aggregateOnlyProofLaneCount: Number(
+        seedFixtureSummary.proofLaneCoverage?.aggregateOnly?.count ?? 0,
+      ),
+      unclassifiedProofLaneCount: Number(
+        seedFixtureSummary.proofLaneCoverage?.unclassified?.count ?? 0,
+      ),
       releaseReady: seedFixtureSummary.releaseReady === true,
       productionReady: seedFixtureSummary.productionReady === true,
     }),
   });
+}
+
+function normalizeProofLaneCoverage(coverage) {
+  if (coverage === null || typeof coverage !== "object") {
+    return Object.freeze([]);
+  }
+  return Object.freeze(
+    [
+      ["direct-seeded", "Direct seeded proof lanes", coverage.directSeeded],
+      ["alias-only", "Alias-only proof lanes", coverage.aliasOnly],
+      ["aggregate-only", "Aggregate-only proof lanes", coverage.aggregateOnly],
+      ["unclassified", "Unclassified proof lanes", coverage.unclassified],
+    ].map(([id, label, entry]) =>
+      Object.freeze({
+        id,
+        label,
+        status: `${Number(entry?.count ?? 0)} lanes`,
+        count: Number(entry?.count ?? 0),
+        laneIds: Object.freeze(
+          Array.isArray(entry?.laneIds)
+            ? entry.laneIds.map((laneId) => String(laneId))
+            : [],
+        ),
+      }),
+    ),
+  );
 }
 
 export function appendLocalReleaseReadinessAudit(

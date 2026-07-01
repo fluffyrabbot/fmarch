@@ -44,6 +44,8 @@ import {
   buildDevTestGameSeedFixtureSummary,
 } from "./dev_test_game_seed_fixture_summary.mjs";
 import {
+  seedAggregateOnlyProofLaneIds,
+  seedAliasOnlyProofLaneIds,
   seedRequiredScenarioIds,
   seedScenarioCoverageGroups,
 } from "./dev_test_game_seed_scenario_cases.mjs";
@@ -8057,6 +8059,16 @@ test("session card and markdown include role credential URLs and tokens", async 
     seedFixture.demoScenarios.map((scenario) => scenario.id),
     seedScenarioCoverageGroups.allDemo,
   );
+  assert.equal(seedFixture.proofLaneCoverage.status, "passed");
+  assert.equal(seedFixture.proofLaneCoverage.unclassified.count, 0);
+  assert.deepEqual(
+    seedFixture.proofLaneCoverage.aliasOnly.laneIds,
+    seedAliasOnlyProofLaneIds,
+  );
+  assert.deepEqual(
+    seedFixture.proofLaneCoverage.aggregateOnly.laneIds,
+    seedAggregateOnlyProofLaneIds,
+  );
   const seedFixtureReadiness = buildDevTestGameReleaseReadiness(proofRun, {
     generatedAt: "2026-06-26T00:00:00.000Z",
     opsArtifactsPath: "target/dev-test-game/ops-artifacts.json",
@@ -8077,6 +8089,12 @@ test("session card and markdown include role credential URLs and tokens", async 
       (item) => item.id === "local-seed-demo-fixture",
     ).adminRoleSurface.detailRoleUrl,
     "/admin/audit/local-seed-fixtures?game=<seeded-game>",
+  );
+  assert.equal(
+    seedFixtureReadiness.localDevelopmentSpine.checks.find(
+      (item) => item.id === "local-seed-demo-fixture",
+    ).proofLaneCoverage.unclassified.count,
+    0,
   );
   assert.equal(
     seedFixtureReadiness.releaseReadiness.unproven.some(
@@ -12810,6 +12828,12 @@ function seedAdminProofFixture() {
       surfaceTestId: "admin-audit-detail-surface",
       clickedThroughFromOverview: true,
       visibleScenarios: [...seedScenarioCoverageGroups.allDemo],
+      visibleProofLaneCoverage: [
+        "direct-seeded",
+        "alias-only",
+        "aggregate-only",
+        "unclassified",
+      ],
       rawInviteTokensVisible: false,
       releaseReady: false,
       productionReady: false,

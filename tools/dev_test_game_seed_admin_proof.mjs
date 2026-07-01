@@ -19,6 +19,12 @@ const seedFixturePath = path.resolve(
 const seedFixtureRelativePath = path.relative(repoRoot, seedFixturePath);
 const evidencePath = path.join(artifactDir, "seed-admin-proof.json");
 const requiredScenarios = seedScenarioCoverageGroups.allDemo;
+const requiredProofLaneCoverage = [
+  "direct-seeded",
+  "alias-only",
+  "aggregate-only",
+  "unclassified",
+];
 
 await runAdminAuditProof({
   smokeName: "dev-test-game-seed-admin-proof",
@@ -36,6 +42,7 @@ await runAdminAuditProof({
       game: seedFixture.fixture.game,
       auditId: "local-seed-fixtures",
       requiredScenarios,
+      requiredProofLaneCoverage,
     }),
   buildEvidence: ({ source: seedFixture, adminRoleSurface }) => ({
     version: 1,
@@ -49,6 +56,7 @@ await runAdminAuditProof({
     generatedFrom: {
       seedFixtureSummary: seedFixtureRelativePath,
       game: seedFixture.fixture.game,
+      proofLaneCoverage: seedFixture.proofLaneCoverage,
     },
     adminRoleSurface,
   }),
@@ -75,6 +83,13 @@ export function assertSeedAdminProof(evidence) {
   for (const scenarioId of requiredScenarios) {
     if (!evidence.adminRoleSurface?.visibleScenarios?.includes(scenarioId)) {
       throw new Error(`seed admin proof missing visible scenario: ${scenarioId}`);
+    }
+  }
+  for (const coverageId of requiredProofLaneCoverage) {
+    if (!evidence.adminRoleSurface?.visibleProofLaneCoverage?.includes(coverageId)) {
+      throw new Error(
+        `seed admin proof missing visible proof lane coverage: ${coverageId}`,
+      );
     }
   }
   return evidence;

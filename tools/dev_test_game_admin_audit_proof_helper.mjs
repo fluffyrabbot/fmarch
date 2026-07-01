@@ -100,6 +100,7 @@ export async function proveAdminAuditDetail({
   requiredSessions = [],
   requiredReconnectLanes = [],
   requiredStaleConflictLanes = [],
+  requiredProofLaneCoverage = [],
   requiredSpineCycles = [],
   requiredSpineRoleUrls = [],
   requiredSpineCheckpoints = [],
@@ -191,6 +192,11 @@ export async function proveAdminAuditDetail({
       page,
       prefix: "admin-audit-stale-conflict-lane",
       ids: requiredStaleConflictLanes,
+    });
+    const visibleProofLaneCoverage = await waitForRows({
+      page,
+      prefix: "admin-audit-proof-lane-coverage",
+      ids: requiredProofLaneCoverage,
     });
     const visibleSpineCycles = await waitForRows({
       page,
@@ -303,6 +309,11 @@ export async function proveAdminAuditDetail({
         prefix: "admin-audit-stale-conflict-lane",
         ids: destination.requiredStaleConflictLanes ?? [],
       });
+      const destinationVisibleProofLaneCoverage = await waitForRows({
+        page,
+        prefix: "admin-audit-proof-lane-coverage",
+        ids: destination.requiredProofLaneCoverage ?? [],
+      });
       const destinationVisibleUnproven = await waitForRows({
         page,
         prefix: "admin-audit-unproven",
@@ -374,6 +385,9 @@ export async function proveAdminAuditDetail({
         ...(destinationVisibleStaleConflictLanes.length === 0
           ? {}
           : { visibleStaleConflictLanes: destinationVisibleStaleConflictLanes }),
+        ...(destinationVisibleProofLaneCoverage.length === 0
+          ? {}
+          : { visibleProofLaneCoverage: destinationVisibleProofLaneCoverage }),
         ...(destinationVisibleUnproven.length === 0
           ? {}
           : { visibleUnproven: destinationVisibleUnproven }),
@@ -434,6 +448,9 @@ export async function proveAdminAuditDetail({
       ...(visibleStaleConflictLanes.length === 0
         ? {}
         : { visibleStaleConflictLanes }),
+      ...(visibleProofLaneCoverage.length === 0
+        ? {}
+        : { visibleProofLaneCoverage }),
       ...(visibleSpineCycles.length === 0 ? {} : { visibleSpineCycles }),
       ...(visibleSpineRoleUrls.length === 0 ? {} : { visibleSpineRoleUrls }),
       ...(visibleSpineCheckpoints.length === 0

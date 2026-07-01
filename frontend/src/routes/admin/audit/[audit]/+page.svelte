@@ -181,6 +181,26 @@
         {/each}
       </ol>
     {/if}
+    {#if data.audit.proofLaneCoverage?.length > 0}
+      <section
+        class="admin-audit-detail__group"
+        data-testid="admin-audit-detail-proof-lane-coverage"
+      >
+        <h2>Proof lane coverage</h2>
+        <ol class="admin-audit-detail__entries">
+          {#each data.audit.proofLaneCoverage as coverage}
+            <li
+              class="admin-audit-detail__entry admin-audit-detail__entry--stack"
+              data-testid={`admin-audit-proof-lane-coverage-${coverage.id}`}
+            >
+              <strong>{coverage.label}</strong>
+              <span>{coverage.status}</span>
+              <span>{coverage.laneIds.join(", ")}</span>
+            </li>
+          {/each}
+        </ol>
+      </section>
+    {/if}
     {#if data.audit.sessions?.length > 0}
       <ol class="admin-audit-detail__entries" data-testid="admin-audit-detail-sessions">
         {#each data.audit.sessions as session}

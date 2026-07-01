@@ -13,6 +13,8 @@ import {
   staleConflictMessageLaneIds,
 } from "../../../../tools/dev_test_game_hardening_lane_cases.mjs";
 import {
+  seedAggregateOnlyProofLaneIds,
+  seedAliasOnlyProofLaneIds,
   seedDemoScenarioFixtureRows,
   seedScenarioCoverageGroups,
 } from "../../../../tools/dev_test_game_seed_scenario_cases.mjs";
@@ -2347,6 +2349,11 @@ test("admin route data exposes local seed fixture summary as a native audit row"
     scenarioCount: seedScenarioCoverageGroups.allDemo.length,
     roleCount: 7,
     slotCount: 5,
+    proofLaneCount: 113,
+    directSeededProofLaneCount: 105,
+    aliasOnlyProofLaneCount: seedAliasOnlyProofLaneIds.length,
+    aggregateOnlyProofLaneCount: seedAggregateOnlyProofLaneIds.length,
+    unclassifiedProofLaneCount: 0,
     releaseReady: false,
     productionReady: false,
   });
@@ -2370,6 +2377,18 @@ test("admin local seed fixture detail data carries scenario rows", async () => {
       scenario.id,
       scenario.status,
     ]),
+  );
+  assert.deepEqual(
+    data.audit.proofLaneCoverage.map((coverage) => [
+      coverage.id,
+      coverage.count,
+    ]),
+    [
+      ["direct-seeded", 105],
+      ["alias-only", seedAliasOnlyProofLaneIds.length],
+      ["aggregate-only", seedAggregateOnlyProofLaneIds.length],
+      ["unclassified", 0],
+    ],
   );
 });
 
@@ -3262,6 +3281,26 @@ function seedFixtureSummaryFixture() {
       ],
     },
     demoScenarios: seedDemoScenarioFixtureRows(),
+    proofLaneCoverage: {
+      status: "passed",
+      passedLaneCount: 113,
+      directSeeded: {
+        count: 105,
+        laneIds: seedScenarioCoverageGroups.allDemo.slice(0, 105),
+      },
+      aliasOnly: {
+        count: seedAliasOnlyProofLaneIds.length,
+        laneIds: seedAliasOnlyProofLaneIds,
+      },
+      aggregateOnly: {
+        count: seedAggregateOnlyProofLaneIds.length,
+        laneIds: seedAggregateOnlyProofLaneIds,
+      },
+      unclassified: {
+        count: 0,
+        laneIds: [],
+      },
+    },
   };
 }
 
