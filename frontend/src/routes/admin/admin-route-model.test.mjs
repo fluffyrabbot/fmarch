@@ -25,6 +25,10 @@ import {
 import {
   hostedOpsSignalCheckStatusRows,
 } from "../../../../tools/dev_test_game_hosted_ops_signal_cases.mjs";
+import {
+  releaseReadinessUnprovenItem,
+  releaseReadinessUnprovenStatusRows,
+} from "../../../../tools/dev_test_game_release_readiness_cases.mjs";
 
 const LOCAL_RACE_COMMAND =
   "npm run test:dev-test-game-hosted-concurrent-race-matrix";
@@ -2589,7 +2593,10 @@ test("admin route data exposes local release readiness as a native audit row", a
   );
   assert.deepEqual(
     readiness.unproven.map((item) => item.id),
-    ["hosted-deployment", "human-release-runbook"],
+    releaseReadinessUnprovenStatusRows([
+      "hosted-deployment",
+      "human-release-runbook",
+    ]).map((item) => item.id),
   );
   assert.deepEqual(readiness.artifactSummary, {
     game: "game-a",
@@ -2633,10 +2640,10 @@ test("admin local release readiness detail data carries checks and unproven rows
   assert.equal(data.audit.unproven.length, 2);
   assert.deepEqual(
     data.audit.unproven.map((item) => [item.id, item.status]),
-    [
-      ["hosted-deployment", "unproven"],
-      ["human-release-runbook", "unproven"],
-    ],
+    releaseReadinessUnprovenStatusRows([
+      "hosted-deployment",
+      "human-release-runbook",
+    ]).map((item) => [item.id, item.status]),
   );
 });
 
@@ -5016,16 +5023,8 @@ function releaseReadinessChecklistFixture() {
       status: "not_ready",
       reason: "Local proof passed, but hosted evidence remains unproven.",
       unproven: [
-        {
-          id: "hosted-deployment",
-          status: "unproven",
-          requiredEvidence: "Hosted API/frontend deployment proof",
-        },
-        {
-          id: "human-release-runbook",
-          status: "unproven",
-          requiredEvidence: "Human-executed beta/release checklist",
-        },
+        releaseReadinessUnprovenItem("hosted-deployment"),
+        releaseReadinessUnprovenItem("human-release-runbook"),
       ],
     },
     proofBoundary:

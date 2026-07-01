@@ -4,12 +4,17 @@ import { pathToFileURL } from "node:url";
 import {
   assertDevTestGameReleaseReadiness,
 } from "./dev_test_game_release_readiness.mjs";
+import {
+  devTestGameReleaseRunbookCommand,
+  devTestGameReleaseRunbookPath,
+} from "./dev_test_game_release_readiness_cases.mjs";
 import { repoRoot } from "./dev_test_game_spine_runner.mjs";
 
 export const DEV_TEST_GAME_RELEASE_RUNBOOK_VERSION = 1;
-export const devTestGameReleaseRunbookPath =
-  "target/dev-test-game/release-runbook.json";
-export const devTestGameReleaseRunbookCommand = "test:dev-test-game-release-runbook";
+export {
+  devTestGameReleaseRunbookCommand,
+  devTestGameReleaseRunbookPath,
+} from "./dev_test_game_release_readiness_cases.mjs";
 const devTestGameReleaseReadinessPath =
   "target/dev-test-game/release-readiness-checklist.json";
 

@@ -47,6 +47,10 @@ import {
   hostedOpsTelemetryBoundaryCheckId,
 } from "./dev_test_game_hosted_ops_signal_cases.mjs";
 import {
+  buildReleaseReadinessUnprovenItems,
+  releaseAdminProofFallbackUnprovenIds,
+} from "./dev_test_game_release_readiness_cases.mjs";
+import {
   replacementPrivatePostRaceLaneIds,
   replacementPrivatePostRecoveryLaneIds,
 } from "./dev_test_game_replacement_private_scenarios.mjs";
@@ -853,73 +857,16 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
         : { adminRoleSurface: releaseRunbookAdminProofEvidence }),
     });
   }
-  const unproven = [
-    ...(identityAdapterEvidence === undefined
-      ? [
-          {
-            id: "production-identity",
-            status: "unproven",
-            requiredEvidence:
-              "Real accounts, sessions, and invite delivery replacing local dev tokens without changing role surfaces",
-          },
-        ]
-      : [
-          {
-            id: "hosted-production-identity",
-            status: "unproven",
-            requiredEvidence:
-              "Hosted account lifecycle, invite delivery, account recovery, rate limits, abuse controls, production session-secret policy, and hosted audit retention/export over the proven role-surface adapter",
-          },
-        ]),
-    {
-      id: "hosted-deployment",
-      status: "unproven",
-      requiredEvidence: "Hosted API/frontend deployment proof with external health checks",
-    },
-    ...(seedFixtureEvidence === undefined
-      ? [
-          {
-            id: "seed-demo-fixtures",
-            status: "unproven",
-            requiredEvidence:
-              "Machine-readable seeded local demo fixture and scenario inventory tied to this proof run",
-          },
-        ]
-      : [
-          {
-            id: "hosted-demo-fixtures",
-            status: "unproven",
-            requiredEvidence:
-              "Hosted/demo environment fixtures, sanitized demo data policy, and release-safe invite delivery",
-          },
-        ]),
-    ...(backupRestoreEvidence === undefined
-      ? [
-          {
-            id: "backup-restore-drill",
-            status: "unproven",
-            requiredEvidence:
-              "Local or production-like backup/restore drill tied to this dev-test-game spine",
-          },
-        ]
-      : [
-          {
-            id: "production-backup-recovery",
-            status: "unproven",
-            requiredEvidence:
-              "Production-like backup storage, PITR restore, key escrow, and secret rotation evidence",
-          },
-        ]),
-    ...raceMatrixUnprovenItems({
-      raceCoverageEvidence,
-      hostedConcurrentRaceMatrixEvidence,
-    }),
-    ...observabilityUnprovenItems({
-      opsArtifactsEvidence,
-      hostedOpsSignalsEvidence,
-    }),
-    ...humanReleaseUnprovenItems({ releaseRunbookEvidence }),
-  ];
+  const unproven = buildReleaseReadinessUnprovenItems({
+    identityAdapterEvidence,
+    seedFixtureEvidence,
+    backupRestoreEvidence,
+    raceCoverageEvidence,
+    hostedConcurrentRaceMatrixEvidence,
+    opsArtifactsEvidence,
+    hostedOpsSignalsEvidence,
+    releaseRunbookEvidence,
+  });
   const releaseReadinessStatus = "not_ready";
   const releaseReadinessReasonText = releaseReadinessReason({
     backupRestoreEvidence,
@@ -1312,98 +1259,6 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
     proofBoundary:
       "Derived from the local dev-test-game proof-run artifact. Passing means the local harness evidence is coherent; it does not mean production, hosted, beta, or release readiness.",
   };
-}
-
-function raceMatrixUnprovenItems({
-  raceCoverageEvidence,
-  hostedConcurrentRaceMatrixEvidence,
-}) {
-  if (raceCoverageEvidence === undefined) {
-    return [
-      {
-        id: "exhaustive-race-coverage",
-        status: "unproven",
-        requiredEvidence:
-          "Machine-readable local race coverage inventory tied to the saved dev-test-game proof-run",
-      },
-    ];
-  }
-  if (hostedConcurrentRaceMatrixEvidence === undefined) {
-    return [
-      {
-        id: "hosted-concurrent-race-matrix",
-        status: "unproven",
-        requiredEvidence:
-          "Hosted or hosted-like concurrent command race matrix beyond the promoted local replacement, host, player, cohost deadline, lifecycle, and complete-game reload milestones, including multi-session reload/reconnect recovery and stale-client conflict evidence",
-      },
-    ];
-  }
-  if (hostedConcurrentRaceMatrixEvidence.realHostedDeploymentStatus === "passed") {
-    return [];
-  }
-  return [
-    {
-      id: "real-hosted-concurrent-race-matrix",
-      status: "unproven",
-      requiredEvidence:
-        "Externally reachable hosted API/frontend deployment, multi-node command race execution, and hosted reload/reconnect and stale-client conflict evidence beyond the local hosted-like matrix artifact",
-    },
-  ];
-}
-
-function observabilityUnprovenItems({ opsArtifactsEvidence, hostedOpsSignalsEvidence }) {
-  if (opsArtifactsEvidence === undefined) {
-    return [
-      {
-        id: "observability-and-operations",
-        status: "unproven",
-        requiredEvidence:
-          "Saved local proof artifacts, redacted role entrypoints, checksums, logs/metrics/traces, and operator runbook evidence for the seeded game flow",
-      },
-    ];
-  }
-  if (hostedOpsSignalsEvidence === undefined) {
-    return [
-      {
-        id: "hosted-observability-and-operations",
-        status: "unproven",
-        requiredEvidence:
-          "Hosted-like or hosted ops signal bundle tying matrix/readiness artifacts to logs, metrics, traces, paging/SLOs, and incident response boundaries",
-      },
-    ];
-  }
-  if (hostedOpsSignalsEvidence.hostedTelemetryStatus === "passed") {
-    return [];
-  }
-  return [
-    {
-      id: "real-hosted-observability-and-operations",
-      status: "unproven",
-      requiredEvidence:
-        "Hosted logs, metrics, traces, paging/SLOs, and incident response evidence from an externally reachable deployment",
-    },
-  ];
-}
-
-function humanReleaseUnprovenItems({ releaseRunbookEvidence }) {
-  if (releaseRunbookEvidence === undefined) {
-    return [
-      {
-        id: "human-release-runbook",
-        status: "unproven",
-        requiredEvidence:
-          "Human-executed beta/release checklist with rollback and support path",
-      },
-    ];
-  }
-  return [
-    {
-      id: "human-release-approval",
-      status: "unproven",
-      requiredEvidence:
-        "Human release owner executes the local runbook rehearsal, verifies rollback/support staffing, and records explicit beta/release approval",
-    },
-  ];
 }
 
 function releaseReadinessReason({
@@ -5896,7 +5751,7 @@ export function validateDevTestGameReleaseAdminProof(proof, options = {}) {
     "local-core-loop-proof",
     "local-hardening-proof",
   ];
-  const requiredUnproven = ["hosted-deployment", "human-release-runbook"];
+  const requiredUnproven = releaseAdminProofFallbackUnprovenIds;
   if (proof?.version !== 1) {
     throw new Error(`release admin proof version drifted: ${proof?.version}`);
   }

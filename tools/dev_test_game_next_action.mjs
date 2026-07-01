@@ -16,11 +16,9 @@ import {
   raceCoveragePromotedReloadGroups,
 } from "./dev_test_game_race_coverage.mjs";
 import {
-  devTestGameHostedConcurrentRaceMatrixCommand,
   devTestGameHostedConcurrentRaceMatrixPath,
 } from "./dev_test_game_hosted_concurrent_race_matrix.mjs";
 import {
-  devTestGameHostedEvidenceLaneCommand,
   devTestGameHostedEvidenceLanePath,
 } from "./dev_test_game_hosted_evidence_lane.mjs";
 import {
@@ -31,20 +29,12 @@ import {
   staleConflictMessageLaneIds,
 } from "./dev_test_game_hardening_lane_cases.mjs";
 import {
-  devTestGameHostedMatrixExternalEvidenceCommand,
-  devTestGameHostedMatrixExternalEvidencePath,
-} from "./dev_test_game_hosted_matrix_external_evidence.mjs";
-import {
   assertDevTestGameHostedTargetPreflight,
   devTestGameHostedTargetPreflightPath,
 } from "./dev_test_game_hosted_target_preflight.mjs";
 import {
-  buildRealHostedEvidenceInputs,
-} from "./dev_test_game_real_hosted_evidence_inputs.mjs";
-import {
-  devTestGameReleaseRunbookCommand,
-  devTestGameReleaseRunbookPath,
-} from "./dev_test_game_release_runbook.mjs";
+  releaseReadinessBuildableItemForId,
+} from "./dev_test_game_release_readiness_cases.mjs";
 import { rankedMissingLocalReadinessDependencies } from "./dev_test_game_local_readiness_dependencies.mjs";
 
 export const DEV_TEST_GAME_NEXT_ACTION_VERSION = 1;
@@ -752,9 +742,7 @@ function rankedBuildableReleaseReadinessItems(
   return (readiness.releaseReadiness?.unproven ?? [])
     .map((item, index) => {
       const buildable =
-        item.id === "hosted-deployment"
-          ? hostedDeploymentBuildable({ hostedTargetPreflight })
-          : localBuildableReleaseReadinessItems.get(item.id);
+        releaseReadinessBuildableItemForId(item.id, { hostedTargetPreflight });
       if (buildable === undefined) {
         return null;
       }
@@ -1810,198 +1798,6 @@ const terminalArtifactPaths = new Set([
   "target/dev-test-game/next-action-admin-proof.json",
   "target/dev-test-game/proof-graph.json",
   "target/dev-test-game/proof-graph-admin-proof.json",
-]);
-
-function hostedDeploymentBuildable({ hostedTargetPreflight }) {
-  if (hostedTargetPreflight?.status === "passed") {
-    const syntheticExternalTarget =
-      hostedTargetPreflight.target?.rawEvidenceSyntheticExternalTarget === true;
-    return {
-      priority: 0,
-      command: `npm run ${devTestGameHostedEvidenceLaneCommand}`,
-      buildSlice:
-        syntheticExternalTarget
-          ? "Run the one-command hosted evidence lane to refresh the local demo pass path; real externally hosted evidence remains required."
-          : "Run the one-command hosted evidence lane; the hosted target preflight has passed, so the lane can write external hosted matrix evidence.",
-      proofTarget: devTestGameHostedMatrixExternalEvidencePath,
-      roleUrl:
-        "/admin/audit/local-hosted-concurrent-race-matrix?game=<seeded-game>",
-      proofGraphNodeId: "admin-proof:hosted-concurrent-race-matrix",
-      productionFeatureSpineTarget:
-        productionFeatureSpineTargets.hostPhaseControl,
-      proofBoundary:
-        syntheticExternalTarget
-          ? "Local demo hosted evidence handoff after passed synthetic target preflight. This command refreshes the blocked-to-passed local pass path, but does not satisfy real hosted deployment evidence."
-          : "External hosted evidence handoff after passed target preflight. This command requires the same FMARCH_HOSTED_MATRIX_FRONTEND_URL, FMARCH_HOSTED_MATRIX_API_URL, and FMARCH_HOSTED_MATRIX_RAW_EVIDENCE_PATH target inputs; it does not let local hosted-like evidence satisfy hosted deployment.",
-      hostedEvidenceMode: syntheticExternalTarget ? "synthetic-demo" : "real-hosted",
-      realHostedEvidenceStatus: syntheticExternalTarget ? "unproven" : "passed",
-      realHostedEvidenceInputs: buildRealHostedEvidenceInputs({
-        status: syntheticExternalTarget ? "unproven" : "passed",
-        mode: syntheticExternalTarget ? "synthetic-demo" : "real-hosted",
-      }),
-    };
-  }
-  const blockedBuildable = localBuildableReleaseReadinessItems.get(
-    "hosted-deployment",
-  );
-  if (hostedTargetPreflight?.status === "blocked") {
-    return {
-      ...blockedBuildable,
-      hostedHandoffChecklist: hostedHandoffChecklistFromPreflight({
-        preflight: hostedTargetPreflight,
-        command: blockedBuildable.command,
-        proofTarget: blockedBuildable.proofTarget,
-        realHostedEvidenceInputs: blockedBuildable.realHostedEvidenceInputs,
-      }),
-    };
-  }
-  return blockedBuildable;
-}
-
-function hostedHandoffChecklistFromPreflight({
-  preflight,
-  command,
-  proofTarget,
-  realHostedEvidenceInputs,
-}) {
-  const blockedChecks = (preflight.checks ?? [])
-    .filter((check) => check?.status === "blocked")
-    .map((check) => ({
-      id: String(check.id ?? ""),
-      status: "blocked",
-      requiredEvidence: String(check.requiredEvidence ?? ""),
-    }))
-    .filter((check) => check.id !== "");
-  return {
-    status: "blocked",
-    preflightStatus: String(preflight.status ?? "unknown"),
-    command,
-    proofTarget,
-    inputIds: realHostedEvidenceInputIds(realHostedEvidenceInputs),
-    blockedCheckIds: blockedChecks.map((check) => check.id),
-    blockedChecks,
-  };
-}
-
-function realHostedEvidenceInputIds(realHostedEvidenceInputs) {
-  const env = Array.isArray(realHostedEvidenceInputs?.env)
-    ? realHostedEvidenceInputs.env
-    : [];
-  return [
-    "command",
-    "proof-target",
-    ...env
-      .map((item) => String(item?.name ?? ""))
-      .filter((name) => name !== ""),
-  ];
-}
-
-const productionFeatureSpineTargets = Object.freeze({
-  hostPhaseControl: Object.freeze({
-    featureSlotId: "host-phase-control",
-    sourceCheckId: "local-core-loop-proof",
-    cycleId: "d02-n02",
-    roleUrlId: "d02-n02-host",
-    checkpointId: "d02-n02-d02-vote-open",
-    adminCheckId: "host-lifecycle-control",
-  }),
-  playerActionSubmission: Object.freeze({
-    featureSlotId: "player-action-submission",
-    sourceCheckId: "local-core-loop-proof",
-    cycleId: "d02-n02",
-    roleUrlId: "d02-n02-actionPlayer",
-    checkpointId: "d02-n02-n02-action-open",
-    adminCheckId: "action-loop",
-  }),
-  privateChannel: Object.freeze({
-    featureSlotId: "private-channel",
-    sourceCheckId: "local-core-loop-proof",
-    cycleId: "d01-n01-d02",
-    roleUrlId: "d01-n01-d02-actionPlayer",
-    checkpointId: "d01-n01-d02-n01-action-open",
-    adminCheckId: "private-channel",
-  }),
-  staleRecovery: Object.freeze({
-    featureSlotId: "stale-recovery",
-    sourceCheckId: "local-core-loop-proof",
-    cycleId: "d01-n01-d02",
-    roleUrlId: "d01-n01-d02-host",
-    checkpointId: "d01-n01-d02-d01-resolved-locked",
-    adminCheckId: "stale-deadline-advance",
-  }),
-});
-
-const localBuildableReleaseReadinessItems = new Map([
-  [
-    "hosted-deployment",
-    {
-      priority: 0,
-      command: `npm run ${devTestGameHostedEvidenceLaneCommand}`,
-      buildSlice:
-        "Run the one-command hosted evidence lane; it records a blocked preflight report until externally reachable hosted URLs and raw evidence are configured.",
-      proofTarget: devTestGameHostedEvidenceLanePath,
-      roleUrl: "/admin/audit/local-hosted-evidence-lane?game=<seeded-game>",
-      proofGraphNodeId: "admin-proof:hosted-evidence-lane",
-      productionFeatureSpineTarget:
-        productionFeatureSpineTargets.hostPhaseControl,
-      proofBoundary:
-        "Hosted evidence lane handoff. This command records whether FMARCH_HOSTED_MATRIX_FRONTEND_URL, FMARCH_HOSTED_MATRIX_API_URL, and FMARCH_HOSTED_MATRIX_RAW_EVIDENCE_PATH are configured for a non-local hosted target, then exposes the blocked or passed lane through its native admin role URL; it does not let local hosted-like evidence satisfy hosted deployment.",
-      realHostedEvidenceInputs: buildRealHostedEvidenceInputs({
-        status: "unproven",
-        mode: "not_configured",
-      }),
-    },
-  ],
-  [
-    "hosted-concurrent-race-matrix",
-    {
-      priority: 5,
-      command: `npm run ${devTestGameHostedConcurrentRaceMatrixCommand}`,
-      buildSlice:
-        "Create the first hosted-like concurrent race matrix proof request from the promoted local race baseline.",
-      proofTarget: devTestGameHostedConcurrentRaceMatrixPath,
-      roleUrl:
-        "/admin/audit/local-hosted-concurrent-race-matrix?game=<seeded-game>",
-      proofGraphNodeId: "admin-proof:hosted-concurrent-race-matrix",
-      productionFeatureSpineTarget:
-        productionFeatureSpineTargets.playerActionSubmission,
-      proofBoundary:
-        "Machine-readable request artifact only. This can prepare hosted-like concurrent race proof work from the local promoted baseline, but it does not prove hosted deployment, multi-node races, beta readiness, release readiness, or production readiness.",
-    },
-  ],
-  [
-    "real-hosted-concurrent-race-matrix",
-    {
-      priority: 10,
-      command: `npm run ${devTestGameHostedMatrixExternalEvidenceCommand}`,
-      buildSlice:
-        "Promote the local hosted-like matrix with externally reachable hosted race, reload, reconnect, and stale-client evidence.",
-      proofTarget: devTestGameHostedMatrixExternalEvidencePath,
-      roleUrl:
-        "/admin/audit/local-hosted-concurrent-race-matrix?game=<seeded-game>",
-      proofGraphNodeId: "admin-proof:hosted-concurrent-race-matrix",
-      productionFeatureSpineTarget:
-        productionFeatureSpineTargets.staleRecovery,
-      proofBoundary:
-        "External hosted matrix handoff. Passing requires normalized raw evidence from a real hosted target; local browser/API proof artifacts are only the baseline.",
-    },
-  ],
-  [
-    "human-release-runbook",
-    {
-      priority: 20,
-      command: `npm run ${devTestGameReleaseRunbookCommand}`,
-      buildSlice:
-        "Create the local release-runbook rehearsal that maps remaining readiness gaps to rollback, support, owner, and evidence boundaries.",
-      proofTarget: devTestGameReleaseRunbookPath,
-      roleUrl: "/admin/audit/local-release-runbook?game=<seeded-game>",
-      proofGraphNodeId: "admin-proof:release-runbook",
-      productionFeatureSpineTarget:
-        productionFeatureSpineTargets.privateChannel,
-      proofBoundary:
-        "Machine-readable local runbook rehearsal only. This can prove the release checklist is mapped and inspectable, but it does not prove human approval, beta readiness, release readiness, or production readiness.",
-    },
-  ],
 ]);
 
 const replacementRaceReloadCellIds = Object.freeze([

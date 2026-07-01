@@ -1,6 +1,9 @@
 import path from "node:path";
 import { assertDevTestGameReleaseReadiness } from "./dev_test_game_release_readiness.mjs";
 import {
+  releaseAdminProofFallbackUnprovenIds,
+} from "./dev_test_game_release_readiness_cases.mjs";
+import {
   artifactDir,
   proveAdminAuditDetail,
   readJson,
@@ -26,7 +29,7 @@ const requiredLocalPrerequisites = [
   "local-next-action-admin-surface",
   "local-hosted-evidence-lane-demo-proof",
 ];
-const requiredUnprovenItems = ["hosted-deployment", "human-release-runbook"];
+const requiredUnprovenItems = releaseAdminProofFallbackUnprovenIds;
 
 await runAdminAuditProof({
   smokeName: "dev-test-game-release-admin-proof",

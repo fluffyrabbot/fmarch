@@ -45,6 +45,9 @@ import {
   hostedOpsTelemetryBoundaryCheckId,
 } from "./dev_test_game_hosted_ops_signal_cases.mjs";
 import {
+  releaseAdminProofFallbackUnprovenIds,
+} from "./dev_test_game_release_readiness_cases.mjs";
+import {
   assertDevTestGameSeedFixtureSummary,
   buildDevTestGameSeedFixtureSummary,
 } from "./dev_test_game_seed_fixture_summary.mjs";
@@ -13225,7 +13228,7 @@ function releaseAdminProofFixture() {
         "local-core-loop-proof",
         "local-hardening-proof",
       ],
-      unprovenIds: ["hosted-deployment", "human-release-runbook"],
+      unprovenIds: [...releaseAdminProofFallbackUnprovenIds],
     },
     adminRoleSurface: {
       status: "passed",
@@ -13239,7 +13242,7 @@ function releaseAdminProofFixture() {
         "local-core-loop-proof",
         "local-hardening-proof",
       ],
-      visibleUnproven: ["hosted-deployment", "human-release-runbook"],
+      visibleUnproven: [...releaseAdminProofFallbackUnprovenIds],
       rawInviteTokensVisible: false,
       releaseReady: false,
       productionReady: false,
