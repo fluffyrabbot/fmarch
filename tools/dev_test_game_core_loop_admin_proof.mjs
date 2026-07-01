@@ -26,14 +26,14 @@ import {
 import {
   assertCompletedPrivateChannelTransition,
   completedPrivateChannelReloadScenario,
-  completedPrivateChannelReloadSnapshotAssertionCases,
   completedPrivateChannelTransition,
   privateChannelSubmitPostScenario,
   privateReceiptAssertionArgs,
   privateReceiptProofArgs,
   privateReceiptScenario,
+  assertCompletedPrivateChannelReloadProofCase,
+  assertStaleCompletedPrivatePostRecoveryProofCase,
   staleCompletedPrivatePostScenario,
-  staleCompletedPrivatePostSnapshotAssertionCases,
   stalePrivateChannelPostPhaseLockedScenario,
 } from "./dev_test_game_core_loop_private_receipt_scenarios.mjs";
 import { assertDevTestGameProofRun } from "./dev_test_game_proof_contract.mjs";
@@ -12895,32 +12895,12 @@ function assertCompletedPrivateChannelReloadProof({
   sourceRoleUrl,
   visitedRolePath,
 }) {
-  const scenario = completedPrivateChannelReloadScenario();
-  if (
-    proof?.status !== "passed" ||
-    proof.clickedThroughFromRoleUrl !== true ||
-    proof.releaseReady !== false ||
-    proof.productionReady !== false ||
-    proof.rawInviteTokensVisible !== false ||
-    proof.sourceRoleUrl !== sourceRoleUrl ||
-    proof.visitedRolePath !== visitedRolePath ||
-    proof.surfaceTestId !== "player-surface" ||
-    proof.resyncFromSeq !== scenario.resyncFromSeq ||
-    proof.initialResyncSnapshotCommandState?.gameCompleted !== true ||
-    proof.reloadedResyncSnapshotCommandState?.gameCompleted !== true
-  ) {
-    throw new Error(
-      `core-loop admin proof missing completed private reload shell: ${JSON.stringify(
-        proof,
-      )}`,
-    );
-  }
-  for (const snapshotCase of completedPrivateChannelReloadSnapshotAssertionCases({
+  assertCompletedPrivateChannelReloadProofCase({
     proof,
-    scenario,
-  })) {
-    assertCompletedPrivateChannelSnapshot(snapshotCase);
-  }
+    sourceRoleUrl,
+    visitedRolePath,
+    includeEvidenceInError: true,
+  });
 }
 
 function assertStaleCompletedPrivatePostRecoveryProof({
@@ -12929,92 +12909,13 @@ function assertStaleCompletedPrivatePostRecoveryProof({
   sourceRoleUrl,
   visitedRolePath,
 }) {
-  const scenario = staleCompletedPrivatePostScenario();
-  if (
-    proof?.status !== "passed" ||
-    proof.clickedThroughFromRoleUrl !== true ||
-    proof.rawInviteTokensVisible !== false ||
-    proof.sourceRoleUrl !== sourceRoleUrl ||
-    proof.visitedRolePath !== visitedRolePath ||
-    proof.clickedAction !== scenario.clickedAction ||
-    proof.commandKind !== scenario.commandKind ||
-    proof.command?.game !== expectedGame ||
-    proof.command.channel_id !== scenario.channelId ||
-    proof.command.actor_slot !== scenario.actorSlot ||
-    proof.command.body !== proof.stalePrivatePostBody ||
-    proof.stalePrivatePostBody !== scenario.stalePostBody ||
-    proof.submitDisabledBeforeReject !== false ||
-    proof.commandStatus?.state !== "reject" ||
-    proof.commandStatus.error !== scenario.commandError ||
-    !String(proof.commandStatus.message ?? "").includes(
-      scenario.commandMessage,
-    ) ||
-    proof.bridgePlan?.role !== "player" ||
-    proof.bridgePlan.commandKind !== scenario.commandKind ||
-    proof.bridgePlan.commandEndpoint !== "/commands" ||
-    proof.bridgePlan.finalState !== "reject" ||
-    !sameStringArray(
-      proof.bridgePlan.projectionRefreshKeys,
-      scenario.expectedRefreshKeys,
-    ) ||
-    proof.receipts?.at?.(-1)?.state !== "reject" ||
-    !String(proof.receiptStatusText ?? "")
-      .toLowerCase()
-      .includes(scenario.expectedReceiptStatusFragment) ||
-    proof.receiptRefreshKeys !== scenario.expectedRefreshKeys.join(",") ||
-    proof.reloadedResyncSnapshotCommandState?.gameCompleted !== true
-  ) {
-    throw new Error(
-      `core-loop admin proof missing stale completed private post recovery: ${JSON.stringify(
-        proof,
-      )}`,
-    );
-  }
-  for (const snapshotCase of staleCompletedPrivatePostSnapshotAssertionCases({
+  assertStaleCompletedPrivatePostRecoveryProofCase({
     proof,
-    scenario,
-  })) {
-    assertCompletedPrivateChannelSnapshot(snapshotCase);
-  }
-}
-
-function assertCompletedPrivateChannelSnapshot({
-  snapshot,
-  label,
-  expectedBoundary,
-  rejectedBody = null,
-}) {
-  const scenario = completedPrivateChannelReloadScenario();
-  if (
-    snapshot?.checkpoint?.phaseId !== scenario.completedPhaseId ||
-    snapshot.checkpoint.phaseState !== scenario.completedPhaseState ||
-    snapshot.checkpoint.actorSlot !== scenario.actorSlot ||
-    snapshot.checkpoint.actionState !== scenario.completedActionState ||
-    snapshot.commandPanelChannelId !== scenario.channelId ||
-    snapshot.channelContext?.channelId !== scenario.channelId ||
-    snapshot.channelContext?.actorSlot !== scenario.actorSlot ||
-    snapshot.channelContext?.capabilityLabel !==
-      `ChannelMember(${scenario.channelId})` ||
-    snapshot.channelContext?.actorStatus !== scenario.actorStatus ||
-    snapshot.commandState?.actorSlot !== scenario.actorSlot ||
-    snapshot.commandState?.gameCompleted !== true ||
-    snapshot.commandState?.actions?.length !== 0 ||
-    snapshot.commandState?.voteTargets?.length !== 0 ||
-    !String(snapshot.commandState?.boundary ?? "").includes(expectedBoundary) ||
-    !snapshot.threadPostBodies?.includes(scenario.completedThreadBody) ||
-    snapshot.enabledMutatingButtons?.length !== 0 ||
-    !snapshot.buttons?.some(
-      (button) => button.action === "submit_post" && button.disabled === true,
-    ) ||
-    (rejectedBody !== null &&
-      snapshot.threadPostBodies?.includes(rejectedBody) === true)
-  ) {
-    throw new Error(
-      `core-loop admin proof missing ${label} completed private channel closure: ${JSON.stringify(
-        snapshot,
-      )}`,
-    );
-  }
+    expectedGame,
+    sourceRoleUrl,
+    visitedRolePath,
+    includeEvidenceInError: true,
+  });
 }
 
 function gameFromRoleUrl(roleUrl) {

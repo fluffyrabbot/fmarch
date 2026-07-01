@@ -375,6 +375,164 @@ export function staleCompletedPrivatePostSnapshotAssertionCases({
   ];
 }
 
+export function assertCompletedPrivateChannelReloadProofCase({
+  proof,
+  sourceRoleUrl,
+  visitedRolePath,
+  scenario = completedPrivateChannelReloadScenario(),
+  includeEvidenceInError = false,
+}) {
+  if (
+    proof?.status !== "passed" ||
+    proof.clickedThroughFromRoleUrl !== true ||
+    proof.releaseReady !== false ||
+    proof.productionReady !== false ||
+    proof.rawInviteTokensVisible !== false ||
+    proof.sourceRoleUrl !== sourceRoleUrl ||
+    proof.visitedRolePath !== visitedRolePath ||
+    proof.surfaceTestId !== "player-surface" ||
+    proof.resyncFromSeq !== scenario.resyncFromSeq ||
+    proof.initialResyncSnapshotCommandState?.gameCompleted !== true ||
+    proof.reloadedResyncSnapshotCommandState?.gameCompleted !== true
+  ) {
+    throwPrivateChannelScenarioAssertionError({
+      message: "core-loop admin proof missing completed private reload shell",
+      evidence: proof,
+      includeEvidenceInError,
+    });
+  }
+  for (const snapshotCase of completedPrivateChannelReloadSnapshotAssertionCases({
+    proof,
+    scenario,
+  })) {
+    assertCompletedPrivateChannelSnapshotCase({
+      ...snapshotCase,
+      scenario,
+      includeEvidenceInError,
+    });
+  }
+}
+
+export function assertStaleCompletedPrivatePostRecoveryProofCase({
+  proof,
+  expectedGame,
+  sourceRoleUrl,
+  visitedRolePath,
+  scenario = staleCompletedPrivatePostScenario(),
+  includeEvidenceInError = false,
+}) {
+  if (
+    proof?.status !== "passed" ||
+    proof.clickedThroughFromRoleUrl !== true ||
+    proof.rawInviteTokensVisible !== false ||
+    proof.sourceRoleUrl !== sourceRoleUrl ||
+    proof.visitedRolePath !== visitedRolePath ||
+    proof.clickedAction !== scenario.clickedAction ||
+    proof.commandKind !== scenario.commandKind ||
+    proof.command?.game !== expectedGame ||
+    proof.command.channel_id !== scenario.channelId ||
+    proof.command.actor_slot !== scenario.actorSlot ||
+    proof.command.body !== proof.stalePrivatePostBody ||
+    proof.stalePrivatePostBody !== scenario.stalePostBody ||
+    proof.submitDisabledBeforeReject !== false ||
+    proof.commandStatus?.state !== "reject" ||
+    proof.commandStatus.error !== scenario.commandError ||
+    !String(proof.commandStatus.message ?? "").includes(
+      scenario.commandMessage,
+    ) ||
+    proof.bridgePlan?.role !== "player" ||
+    proof.bridgePlan.commandKind !== scenario.commandKind ||
+    proof.bridgePlan.commandEndpoint !== "/commands" ||
+    proof.bridgePlan.finalState !== "reject" ||
+    !sameStringArray(
+      proof.bridgePlan.projectionRefreshKeys,
+      scenario.expectedRefreshKeys,
+    ) ||
+    proof.receipts?.at?.(-1)?.state !== "reject" ||
+    !String(proof.receiptStatusText ?? "")
+      .toLowerCase()
+      .includes(scenario.expectedReceiptStatusFragment) ||
+    proof.receiptRefreshKeys !== scenario.expectedRefreshKeys.join(",") ||
+    proof.reloadedResyncSnapshotCommandState?.gameCompleted !== true
+  ) {
+    throwPrivateChannelScenarioAssertionError({
+      message: "core-loop admin proof missing stale completed private post recovery",
+      evidence: proof,
+      includeEvidenceInError,
+    });
+  }
+  for (const snapshotCase of staleCompletedPrivatePostSnapshotAssertionCases({
+    proof,
+    scenario,
+  })) {
+    assertCompletedPrivateChannelSnapshotCase({
+      ...snapshotCase,
+      scenario: completedPrivateChannelReloadScenario(),
+      includeEvidenceInError,
+    });
+  }
+}
+
+export function assertCompletedPrivateChannelSnapshotCase({
+  snapshot,
+  label,
+  expectedBoundary,
+  rejectedBody = null,
+  scenario = completedPrivateChannelReloadScenario(),
+  includeEvidenceInError = false,
+}) {
+  if (
+    snapshot?.checkpoint?.phaseId !== scenario.completedPhaseId ||
+    snapshot.checkpoint.phaseState !== scenario.completedPhaseState ||
+    snapshot.checkpoint.actorSlot !== scenario.actorSlot ||
+    snapshot.checkpoint.actionState !== scenario.completedActionState ||
+    snapshot.commandPanelChannelId !== scenario.channelId ||
+    snapshot.channelContext?.channelId !== scenario.channelId ||
+    snapshot.channelContext?.actorSlot !== scenario.actorSlot ||
+    snapshot.channelContext?.capabilityLabel !==
+      `ChannelMember(${scenario.channelId})` ||
+    snapshot.channelContext?.actorStatus !== scenario.actorStatus ||
+    snapshot.commandState?.actorSlot !== scenario.actorSlot ||
+    snapshot.commandState?.gameCompleted !== true ||
+    snapshot.commandState?.actions?.length !== 0 ||
+    snapshot.commandState?.voteTargets?.length !== 0 ||
+    !String(snapshot.commandState?.boundary ?? "").includes(expectedBoundary) ||
+    !snapshot.threadPostBodies?.includes(scenario.completedThreadBody) ||
+    snapshot.enabledMutatingButtons?.length !== 0 ||
+    !snapshot.buttons?.some(
+      (button) => button.action === "submit_post" && button.disabled === true,
+    ) ||
+    (rejectedBody !== null &&
+      snapshot.threadPostBodies?.includes(rejectedBody) === true)
+  ) {
+    throwPrivateChannelScenarioAssertionError({
+      message: `core-loop admin proof missing ${label} completed private channel closure`,
+      evidence: snapshot,
+      includeEvidenceInError,
+    });
+  }
+}
+
+function throwPrivateChannelScenarioAssertionError({
+  message,
+  evidence,
+  includeEvidenceInError,
+}) {
+  if (includeEvidenceInError) {
+    throw new Error(`${message}: ${JSON.stringify(evidence)}`);
+  }
+  throw new Error(message);
+}
+
+function sameStringArray(actual, expected) {
+  return (
+    Array.isArray(actual) &&
+    Array.isArray(expected) &&
+    actual.length === expected.length &&
+    actual.every((value, index) => value === expected[index])
+  );
+}
+
 export function privateReceiptProofArgs(scenario) {
   return {
     expectedSlot: scenario.expectedSlot,
