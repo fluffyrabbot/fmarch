@@ -47,17 +47,19 @@ import {
 } from "./dev_test_game_replacement_private_scenarios.mjs";
 import {
   assertCompletedActionPlayerSurfaceProofCase,
-  assertCompletedGameEndgameSurfaceAssertionCases,
-  assertCompletedGameEndgameTransition,
   assertCompletedHostReloadProofCase,
   assertCompletedDeadPlayerStaleVoteRecoveryProofCase,
   assertCompletedHostStaleCommandRecoveryProofCase,
   assertCompletedPlayerReloadProofCase,
   assertHostCompleteGameProofCase,
-  completedGameEndgameSurfaceAssertionCases,
   completedGameHardeningLaneIds,
   assertStaleCompletedGamePlayerCommandRecoveryProofCase,
 } from "./dev_test_game_core_loop_completed_scenarios.mjs";
+import {
+  assertCompletedGameEndgameSurfaceAssertionCases,
+  assertCompletedGameEndgameTransition,
+  completedGameEndgameSurfaceAssertionCases,
+} from "./dev_test_game_core_loop_completed_game_cases.mjs";
 import {
   assertPlayerActionSubmissionClickProofCase,
   assertPlayerInvalidActionRecoveryProofCase,

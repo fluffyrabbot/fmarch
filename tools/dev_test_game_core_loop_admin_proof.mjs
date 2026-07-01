@@ -5,22 +5,23 @@ import {
 } from "../frontend/src/lib/app/local-proof-lane-status.mjs";
 import {
   assertCompletedActionPlayerSurfaceProofCase,
-  assertCompletedGameEndgameSurfaceAssertionCases,
-  assertCompletedGameEndgameTransition,
   assertCompletedHostReloadProofCase,
   assertCompletedDeadPlayerStaleVoteRecoveryProofCase,
   assertCompletedHostStaleCommandRecoveryProofCase,
   assertCompletedPlayerReloadProofCase,
   assertHostCompleteGameProofCase,
+  assertStaleCompletedGamePlayerCommandRecoveryProofCase,
+} from "./dev_test_game_core_loop_completed_scenarios.mjs";
+import {
+  assertCompletedGameEndgameSurfaceAssertionCases,
+  assertCompletedGameEndgameTransition,
   completedDeadPlayerStaleVoteCase,
   completedGameEndgameTransition,
   completedGameEndgameSurfaceAssertionCases,
   completedHostStaleCommandCases,
-  completedPlayerReloadCases,
   completedPlayerReloadProofCases,
-  assertStaleCompletedGamePlayerCommandRecoveryProofCase,
   staleCompletedGamePlayerCommandCases,
-} from "./dev_test_game_core_loop_completed_scenarios.mjs";
+} from "./dev_test_game_core_loop_completed_game_cases.mjs";
 import {
   assertPlayerActionSubmissionClickProofCase,
   assertPlayerInvalidActionRecoveryProofCase,

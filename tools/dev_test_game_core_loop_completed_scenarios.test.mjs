@@ -2,10 +2,12 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
   assertCompletedActionPlayerSurfaceProofCase,
-  assertCompletedGameEndgameSurfaceAssertionCases,
-  assertCompletedGameEndgameTransition,
   assertCompletedHostReloadProofCase,
   assertHostCompleteGameProofCase,
+} from "./dev_test_game_core_loop_completed_scenarios.mjs";
+import {
+  assertCompletedGameEndgameSurfaceAssertionCases,
+  assertCompletedGameEndgameTransition,
   completedActionPlayerSurfaceAssertionCase,
   completedActionPlayerSurfaceProofArgs,
   completedDeadPlayerStaleVoteAssertionCase,
@@ -27,7 +29,7 @@ import {
   staleCompletedGamePlayerCommandCaseDefinitions,
   staleCompletedGamePlayerCommandCases,
   staleCompletedGamePlayerCommandProofArgs,
-} from "./dev_test_game_core_loop_completed_scenarios.mjs";
+} from "./dev_test_game_core_loop_completed_game_cases.mjs";
 
 test("completed-game scenario module exposes shared frozen definitions", () => {
   assert(Object.isFrozen(completedHostStaleCommandCaseDefinitions));
