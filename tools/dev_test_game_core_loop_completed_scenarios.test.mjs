@@ -12,25 +12,27 @@ import {
   completedActionPlayerSurfaceAssertionCase,
   completedActionPlayerSurfaceProofArgs,
   completedDeadPlayerStaleVoteAssertionCase,
-  completedDeadPlayerStaleVoteCaseDefinition,
   completedDeadPlayerStaleVoteProofArgs,
   completedGameEndgameStaleRejectAssertionCases,
   completedGameEndgameSurfaceAssertionCases,
   completedGameEndgameTransition,
-  completedDeadPlayerStaleVoteCase,
   completedHostStaleCommandAssertionCases,
-  completedHostStaleCommandCaseDefinitions,
-  completedHostStaleCommandCases,
   completedHostStaleCommandProofArgs,
-  completedPlayerReloadCaseDefinitions,
   completedPlayerReloadAssertionCases,
-  completedPlayerReloadCases,
   completedPlayerReloadProofCases,
   staleCompletedGamePlayerCommandAssertionCases,
-  staleCompletedGamePlayerCommandCaseDefinitions,
-  staleCompletedGamePlayerCommandCases,
   staleCompletedGamePlayerCommandProofArgs,
 } from "./dev_test_game_core_loop_completed_game_cases.mjs";
+import {
+  completedDeadPlayerStaleVoteCase,
+  completedDeadPlayerStaleVoteCaseDefinition,
+  completedHostStaleCommandCaseDefinitions,
+  completedHostStaleCommandCases,
+  completedPlayerReloadCaseDefinitions,
+  completedPlayerReloadCases,
+  staleCompletedGamePlayerCommandCaseDefinitions,
+  staleCompletedGamePlayerCommandCases,
+} from "./dev_test_game_core_loop_completed_recovery_cases.mjs";
 
 test("completed-game scenario module exposes shared frozen definitions", () => {
   assert(Object.isFrozen(completedHostStaleCommandCaseDefinitions));

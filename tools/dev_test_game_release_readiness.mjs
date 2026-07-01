@@ -56,8 +56,10 @@ import {
 } from "./dev_test_game_replacement_private_scenarios.mjs";
 import {
   assertCompletedGameEndgameSurfaceProof,
-  completedGameHardeningLaneIds,
 } from "./dev_test_game_core_loop_completed_scenarios.mjs";
+import {
+  completedGameHardeningLaneIds,
+} from "./dev_test_game_core_loop_completed_recovery_cases.mjs";
 import {
   assertPlayerActionSubmissionClickProofCase,
   assertPlayerInvalidActionRecoveryProofCase,

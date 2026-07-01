@@ -17,6 +17,9 @@ export {
   completedDeadPlayerStaleVoteCase,
   completedDeadPlayerStaleVoteCaseDefinition,
   completedDeadPlayerStaleVoteProofArgs,
+  completedGameHardeningLaneCaseDefinitions,
+  completedGameHardeningLaneCases,
+  completedGameHardeningLaneIds,
   completedGameEndgameStaleRejectAssertionCases,
   completedGameEndgameSurfaceAssertionCases,
   completedGameEndgameTransition,
@@ -24,87 +27,19 @@ export {
   completedHostStaleCommandAssertionCases,
   completedHostStaleCommandCaseDefinitions,
   completedHostStaleCommandCases,
+  completedHostStaleCommandHardeningLaneIds,
   completedHostStaleCommandProofArgs,
   completedPlayerReloadAssertionCases,
   completedPlayerReloadCaseDefinitions,
   completedPlayerReloadCases,
   completedPlayerReloadCommandState,
   completedPlayerReloadProofCases,
+  completedPlayerHardeningReloadLaneIds,
   staleCompletedGamePlayerCommandAssertionCases,
   staleCompletedGamePlayerCommandCaseDefinitions,
   staleCompletedGamePlayerCommandCases,
   staleCompletedGamePlayerCommandProofArgs,
 } from "./dev_test_game_core_loop_completed_game_cases.mjs";
-
-const cloneScenarioCase = (scenario) => ({ ...scenario });
-
-export const completedGameHardeningLaneCaseDefinitions = Object.freeze([
-  Object.freeze({
-    id: "stale-host-complete",
-    label: "Stale complete-game reveal rejects after live completion",
-    family: "completed-host-stale-command",
-  }),
-  Object.freeze({
-    id: "stale-host-complete-reload",
-    label: "Stale host complete recovery reloads revealed console",
-    family: "completed-host-stale-command",
-  }),
-  Object.freeze({
-    id: "stale-host-complete-reconnect-recovery",
-    label: "Stale host complete recovery reconnects revealed console",
-    family: "completed-host-stale-command",
-  }),
-  Object.freeze({
-    id: "concurrent-host-complete-race",
-    label: "Concurrent complete-game commands converge",
-    family: "completed-host-race",
-  }),
-  Object.freeze({
-    id: "concurrent-host-complete-race-reload",
-    label: "Concurrent complete-game race reloads revealed host consoles",
-    family: "completed-host-race",
-  }),
-  Object.freeze({
-    id: "concurrent-player-complete-race",
-    label: "Concurrent player command and completion converge",
-    family: "completed-player-stale-command",
-  }),
-  Object.freeze({
-    id: "public-player-complete-reload",
-    label: "Public player board reloads completed game truth",
-    family: "completed-player-reload",
-  }),
-  Object.freeze({
-    id: "stale-player-complete",
-    label: "Stale player command rejects after live completion",
-    family: "completed-player-stale-command",
-  }),
-  Object.freeze({
-    id: "stale-player-complete-reload",
-    label: "Stale public player complete recovery reloads completed board",
-    family: "completed-player-reload",
-  }),
-]);
-
-export function completedGameHardeningLaneCases() {
-  return completedGameHardeningLaneCaseDefinitions.map(cloneScenarioCase);
-}
-
-export function completedGameHardeningLaneIds() {
-  return completedGameHardeningLaneCases().map((scenario) => scenario.id);
-}
-
-export function completedHostStaleCommandHardeningLaneIds() {
-  return completedGameHardeningLaneCases()
-    .filter((scenario) => scenario.family === "completed-host-stale-command")
-    .map((scenario) => scenario.id);
-}
-
-export function completedPlayerHardeningReloadLaneIds() {
-  return completedGameHardeningLaneCases()
-    .filter((scenario) => scenario.family === "completed-player-reload")
-    .map((scenario) => scenario.id);
-}
 
 export function assertCompletedGameEndgameSurfaceProof({
   completedGameEndgameSurface,

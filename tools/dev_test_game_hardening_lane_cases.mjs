@@ -1,6 +1,6 @@
 import {
   completedHostStaleCommandHardeningLaneIds,
-} from "./dev_test_game_core_loop_completed_scenarios.mjs";
+} from "./dev_test_game_core_loop_completed_recovery_cases.mjs";
 import {
   replacementPrivatePostRecoveryLaneIds,
 } from "./dev_test_game_replacement_private_scenarios.mjs";
