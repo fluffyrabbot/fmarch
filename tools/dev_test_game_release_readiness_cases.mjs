@@ -402,6 +402,10 @@ const localBuildableReleaseReadinessItems = new Map([
   ],
 ]);
 
+export const releaseReadinessBuildableItemIds = Object.freeze([
+  ...localBuildableReleaseReadinessItems.keys(),
+]);
+
 function cloneBuildableItem(item) {
   if (item === undefined) {
     return undefined;

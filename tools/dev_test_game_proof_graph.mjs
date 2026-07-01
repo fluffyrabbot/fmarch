@@ -10,6 +10,9 @@ import {
   devTestGameSeedFixtureRoleUrl,
 } from "./dev_test_game_next_action.mjs";
 import { assertDevTestGameSpineManifest } from "./dev_test_game_spine_manifest.mjs";
+import {
+  assertProductionFacingSurfaceGraphCoverage,
+} from "./dev_test_game_production_surface_checklist.mjs";
 export {
   devTestGameProofGraphAdminProofCommand,
   devTestGameProofGraphAdminProofPath,
@@ -139,6 +142,7 @@ export function assertDevTestGameProofGraph(evidence, { adminSpineProof } = {}) 
   if (adminSpineProof !== undefined) {
     assertDevTestGameProofGraphCoversAdminSpine(evidence, adminSpineProof);
   }
+  assertProductionFacingSurfaceGraphCoverage({ proofGraph: evidence });
   return evidence;
 }
 
