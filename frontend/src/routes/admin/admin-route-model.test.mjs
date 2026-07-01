@@ -3,6 +3,7 @@ import { test } from "node:test";
 import { actions, load } from "./+page.server.js";
 import {
   ADMIN_ROUTE_CONTRACT,
+  LOCAL_PLAYER_RECOVERY_AUDIT_LANE_IDS,
   adminForbiddenMessage,
   buildAdminAuditDetailData,
   buildAdminRouteData,
@@ -14,6 +15,9 @@ import {
 import {
   staleConflictMessageLaneIds,
 } from "../../../../tools/dev_test_game_stale_conflict_scenarios.mjs";
+import {
+  playerRecoveryAuditLaneIds,
+} from "../../../../tools/dev_test_game_player_recovery_scenarios.mjs";
 import {
   seedAggregateOnlyProofLaneIds,
   seedAliasOnlyProofLaneIds,
@@ -2071,6 +2075,45 @@ test("admin route data exposes local hardening proof as a native audit row", asy
   });
 });
 
+test("admin route data exposes local player recovery proof as a focused audit row", async () => {
+  const data = await buildAdminRouteData({
+    principalUserId: "admin_a",
+    capabilities: [{ kind: "GlobalAdmin" }],
+    proofRun: proofRunFixture(),
+  });
+
+  const playerRecovery = data.audit.find(
+    (item) => item.id === "local-player-recovery",
+  );
+  assert.deepEqual(LOCAL_PLAYER_RECOVERY_AUDIT_LANE_IDS, playerRecoveryAuditLaneIds);
+  assert.equal(playerRecovery.label, "Local player recovery");
+  assert.equal(playerRecovery.status, "25 player recovery lanes passed");
+  assert.equal(playerRecovery.authority, "GlobalAdmin or GlobalMod");
+  assert.equal(
+    playerRecovery.inspectHref,
+    "/admin/audit/local-player-recovery?game=midsummer",
+  );
+  assert.deepEqual(
+    playerRecovery.checks.map((check) => check.id),
+    playerRecoveryAuditLaneIds,
+  );
+  assert.deepEqual(
+    playerRecovery.relatedLinks.map((link) => [link.id, link.href]),
+    [
+      ["local-core-loop", "/admin/audit/local-core-loop?game=midsummer"],
+      ["local-hardening", "/admin/audit/local-hardening?game=midsummer"],
+    ],
+  );
+  assert.deepEqual(playerRecovery.artifactSummary, {
+    game: "game-a",
+    roleCount: 6,
+    laneCount: 107,
+    playerRecoveryLaneCount: 25,
+    releaseReady: false,
+    productionReady: false,
+  });
+});
+
 test("admin route data exposes local core loop proof as a native audit row", async () => {
   const data = await buildAdminRouteData({
     principalUserId: "admin_a",
@@ -2215,6 +2258,71 @@ test("admin local core loop detail data carries lane rows", async () => {
       ["replacement-stale-private-channel", "passed"],
       ["replacement-stale-private-receipts", "passed"],
       ["replacement-incoming-player", "passed"],
+    ],
+  );
+});
+
+test("admin local player recovery detail data carries focused lane rows", async () => {
+  const data = await buildAdminAuditDetailData({
+    audit: "local-player-recovery",
+    principalUserId: "admin_a",
+    capabilities: [{ kind: "GlobalAdmin" }],
+    proofRun: proofRunFixture(),
+  });
+
+  assert.equal(data.status, "available");
+  assert.equal(data.surfaceHeader.title, "Local player recovery");
+  assert.equal(data.audit.id, "local-player-recovery");
+  assert.equal(data.audit.checks.length, 25);
+  assert.deepEqual(
+    data.audit.checks.map((check) => [check.id, check.status]),
+    [
+      [
+        "action-loop",
+        "passed: role URL false, night unknown, receipt unknown, D02 unknown, next unknown",
+      ],
+      [
+        "invalid-action-recovery",
+        "passed: Reject InvalidTarget, legal action visible true",
+      ],
+      ["dead-player-recovery", "passed"],
+      ["player-action-boundary", "passed: 0 unowned actions, direct reject InvalidTarget"],
+      ["idempotent-retry", "passed"],
+      ["action-idempotent-retry", "passed"],
+      ["concurrent-action-race", "passed: ack action, reject ActionAlreadySubmitted"],
+      ["concurrent-action-race-reload", "passed: target slot-2, alive false"],
+      ["reconnect-recovery", "passed: reconnecting -> recovered"],
+      ["stale-player-vote", "passed"],
+      ["concurrent-vote-race", "passed"],
+      ["concurrent-vote-race-reload", "passed"],
+      ["concurrent-player-vote-resolve-race", "passed"],
+      ["concurrent-player-vote-resolve-race-reload", "passed"],
+      ["concurrent-player-action-advance-race", "passed"],
+      ["concurrent-player-action-advance-race-reload", "passed"],
+      ["concurrent-player-complete-race", "passed"],
+      ["public-player-complete-reload", "passed"],
+      ["stale-player-complete", "passed"],
+      ["stale-player-complete-reload", "passed"],
+      [
+        "stale-dead-action-conflict",
+        "passed: Reject SlotNotAlive, role URL true, actor dead",
+      ],
+      [
+        "stale-same-action-recovery",
+        "passed: Reject ActionAlreadySubmitted, role URL true, visible false",
+      ],
+      [
+        "stale-action-conflict",
+        "passed: Reject PhaseLocked, role URL true, refreshed D02",
+      ],
+      [
+        "stale-action-reconnect-recovery",
+        "passed: role URL true, reconnecting -> recovered, phase D02",
+      ],
+      [
+        "stale-action-conflict-message",
+        "passed: role URL true, Reject PhaseLocked: phase locked; stale action state, refresh and use current action controls",
+      ],
     ],
   );
 });

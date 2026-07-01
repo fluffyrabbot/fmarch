@@ -21,6 +21,34 @@ export const ADMIN_ROUTE_CONTRACT = Object.freeze({
   requiredText: "Operations",
 });
 
+export const LOCAL_PLAYER_RECOVERY_AUDIT_LANE_IDS = Object.freeze([
+  "action-loop",
+  "invalid-action-recovery",
+  "dead-player-recovery",
+  "player-action-boundary",
+  "idempotent-retry",
+  "action-idempotent-retry",
+  "concurrent-action-race",
+  "concurrent-action-race-reload",
+  "reconnect-recovery",
+  "stale-player-vote",
+  "concurrent-vote-race",
+  "concurrent-vote-race-reload",
+  "concurrent-player-vote-resolve-race",
+  "concurrent-player-vote-resolve-race-reload",
+  "concurrent-player-action-advance-race",
+  "concurrent-player-action-advance-race-reload",
+  "concurrent-player-complete-race",
+  "public-player-complete-reload",
+  "stale-player-complete",
+  "stale-player-complete-reload",
+  "stale-dead-action-conflict",
+  "stale-same-action-recovery",
+  "stale-action-conflict",
+  "stale-action-reconnect-recovery",
+  "stale-action-conflict-message",
+]);
+
 export async function buildAdminRouteData({
   principalUserId,
   capabilities = [],
@@ -162,8 +190,12 @@ export async function buildAdminRouteData({
                                   appendLocalReleaseReadinessAudit(
                                     appendLocalSeedFixtureAudit(
                                       appendLocalOpsArtifactsAudit(
-                                        appendLocalHardeningAudit(
-                                          appendLocalCoreLoopAudit(coldData.audit, proofRun, { game }),
+                                        appendLocalPlayerRecoveryAudit(
+                                          appendLocalHardeningAudit(
+                                            appendLocalCoreLoopAudit(coldData.audit, proofRun, { game }),
+                                            proofRun,
+                                            { game },
+                                          ),
                                           proofRun,
                                           { game },
                                         ),
@@ -3379,6 +3411,102 @@ export function appendLocalHardeningAudit(audit, proofRun, { game }) {
     return audit;
   }
   return Object.freeze([...audit.filter((item) => item.id !== row.id), row]);
+}
+
+export function appendLocalPlayerRecoveryAudit(audit, proofRun, { game }) {
+  const row = normalizeLocalPlayerRecoveryAudit(proofRun, { game });
+  if (row === null) {
+    return audit;
+  }
+  return Object.freeze([...audit.filter((item) => item.id !== row.id), row]);
+}
+
+export function normalizeLocalPlayerRecoveryAudit(proofRun, { game }) {
+  if (
+    proofRun === null ||
+    typeof proofRun !== "object" ||
+    proofRun.version !== 1 ||
+    proofRun.proof !== "dev-test-game-proof-run" ||
+    proofRun.status !== "passed" ||
+    proofRun.scope !== "local-dev-test-game-harness" ||
+    proofRun.releaseReady !== false ||
+    proofRun.productionReady !== false
+  ) {
+    return null;
+  }
+  const lanes = Array.isArray(proofRun.lanes) ? proofRun.lanes : [];
+  const laneById = new Map(lanes.map((lane) => [lane.id, lane]));
+  if (
+    LOCAL_PLAYER_RECOVERY_AUDIT_LANE_IDS.some(
+      (id) => laneById.get(id)?.status !== "passed",
+    ) ||
+    proofRun.session?.verificationStatus !== "passed"
+  ) {
+    return null;
+  }
+  return Object.freeze({
+    id: "local-player-recovery",
+    label: "Local player recovery",
+    status: `${LOCAL_PLAYER_RECOVERY_AUDIT_LANE_IDS.length} player recovery lanes passed`,
+    authority: "GlobalAdmin or GlobalMod",
+    boundary: "Local player-action recovery proof",
+    boundaryDetail:
+      "Focused local dev-test-game player action recovery, stale command, reload, and conflict lanes without hosted multiplayer claims.",
+    href: proofRun.artifacts?.proofRun ?? "target/dev-test-game/proof-run.json",
+    inspectHref: adminAuditInspectHref({
+      game,
+      audit: "local-player-recovery",
+    }),
+    checks: Object.freeze(
+      LOCAL_PLAYER_RECOVERY_AUDIT_LANE_IDS.map((id) => {
+        const lane = laneById.get(id);
+        return Object.freeze({
+          id,
+          status: localPlayerRecoveryLaneStatus(lane),
+        });
+      }),
+    ),
+    relatedLinks: Object.freeze([
+      Object.freeze({
+        id: "local-core-loop",
+        label: "Core loop",
+        href: adminAuditInspectHref({ game, audit: "local-core-loop" }),
+        status: "source proof",
+        command: "test:dev-test-game-core-loop-admin-proof",
+      }),
+      Object.freeze({
+        id: "local-hardening",
+        label: "Multiplayer hardening",
+        href: adminAuditInspectHref({ game, audit: "local-hardening" }),
+        status: "parent proof",
+        command: "test:dev-test-game-hardening-admin-proof",
+      }),
+    ]),
+    artifactSummary: Object.freeze({
+      game: String(proofRun.session?.game ?? ""),
+      roleCount: Array.isArray(proofRun.session?.roles)
+        ? proofRun.session.roles.length
+        : 0,
+      laneCount: lanes.length,
+      playerRecoveryLaneCount: LOCAL_PLAYER_RECOVERY_AUDIT_LANE_IDS.length,
+      releaseReady: proofRun.releaseReady === true,
+      productionReady: proofRun.productionReady === true,
+    }),
+  });
+}
+
+function localPlayerRecoveryLaneStatus(lane) {
+  if (
+    [
+      "action-loop",
+      "invalid-action-recovery",
+      "dead-player-recovery",
+      "player-action-boundary",
+    ].includes(lane?.id)
+  ) {
+    return coreLoopLaneStatus(lane);
+  }
+  return hardeningLaneStatus(lane);
 }
 
 export function normalizeLocalHardeningAudit(proofRun, { game }) {

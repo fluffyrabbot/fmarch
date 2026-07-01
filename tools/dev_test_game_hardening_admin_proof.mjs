@@ -15,6 +15,7 @@ import {
 import {
   playerActionConflictRecoveryLaneIds,
   playerActionFoundationLaneIds,
+  playerRecoveryAuditLaneIds,
   promotedStalePlayerCommandLaneIds,
 } from "./dev_test_game_player_recovery_scenarios.mjs";
 import {
@@ -89,16 +90,33 @@ await runAdminAuditProof({
     FMARCH_DEV_TEST_GAME_PROOF_RUN: proofRunRelativePath,
   },
   loadSource: async () => assertDevTestGameProofRun(await readJson(proofRunPath)),
-  prove: async ({ browser, frontendBaseUrl, source: proofRun }) =>
-    await proveAdminAuditDetail({
+  prove: async ({ browser, frontendBaseUrl, source: proofRun }) => {
+    const highlightedLaneEvidence = hardeningHighlightedLaneEvidence(proofRun);
+    const playerRecoveryHighlightedLaneEvidence = Object.fromEntries(
+      playerRecoveryAuditLaneIds
+        .filter((id) => highlightedLaneEvidence[id] !== undefined)
+        .map((id) => [id, highlightedLaneEvidence[id]]),
+    );
+    const adminRoleSurface = await proveAdminAuditDetail({
       browser,
       frontendBaseUrl,
       game: proofRun.session.game,
       auditId: "local-hardening",
       requiredChecks,
-      requiredCheckStatuses: hardeningHighlightedLaneEvidence(proofRun),
-    }),
-  buildEvidence: ({ source: proofRun, adminRoleSurface }) => ({
+      requiredCheckStatuses: highlightedLaneEvidence,
+    });
+    const playerRecoveryRoleSurface = await proveAdminAuditDetail({
+      browser,
+      frontendBaseUrl,
+      game: proofRun.session.game,
+      auditId: "local-player-recovery",
+      requiredChecks: playerRecoveryAuditLaneIds,
+      requiredCheckStatuses: playerRecoveryHighlightedLaneEvidence,
+      requiredRelatedLinks: ["local-core-loop", "local-hardening"],
+    });
+    return { adminRoleSurface, playerRecoveryRoleSurface };
+  },
+  buildEvidence: ({ source: proofRun, adminRoleSurface: surfaces }) => ({
     version: 1,
     proof: "dev-test-game-hardening-admin-proof",
     status: "passed",
@@ -106,13 +124,14 @@ await runAdminAuditProof({
     productionReady: false,
     scope: "local-dev-test-game-hardening-admin-surface",
     proofBoundary:
-      "Local SvelteKit admin role URL with fixture admin authority over the dev-test-game multiplayer-hardening proof-run lanes. Proves the saved local hardening evidence is discoverable from the seeded admin overview and inspectable in a native admin audit detail route; it does not prove exhaustive race coverage, hosted reconnect behavior, multi-node concurrency, beta readiness, or production readiness.",
+      "Local SvelteKit admin role URL with fixture admin authority over the dev-test-game multiplayer-hardening proof-run lanes. Proves the saved local hardening evidence and focused player-recovery matrix are discoverable from the seeded admin overview and inspectable in native admin audit detail routes; it does not prove exhaustive race coverage, hosted reconnect behavior, multi-node concurrency, beta readiness, or production readiness.",
     generatedFrom: {
       proofRun: proofRunRelativePath,
       game: proofRun.session.game,
       highlightedLaneEvidence: hardeningHighlightedLaneEvidence(proofRun),
     },
-    adminRoleSurface,
+    adminRoleSurface: surfaces.adminRoleSurface,
+    playerRecoveryRoleSurface: surfaces.playerRecoveryRoleSurface,
   }),
   assertEvidence: assertHardeningAdminProof,
 });
@@ -130,7 +149,9 @@ export function assertHardeningAdminProof(evidence) {
   }
   if (
     evidence.adminRoleSurface?.clickedThroughFromOverview !== true ||
-    evidence.adminRoleSurface?.rawInviteTokensVisible !== false
+    evidence.adminRoleSurface?.rawInviteTokensVisible !== false ||
+    evidence.playerRecoveryRoleSurface?.clickedThroughFromOverview !== true ||
+    evidence.playerRecoveryRoleSurface?.rawInviteTokensVisible !== false
   ) {
     throw new Error("hardening admin proof did not prove admin overview click-through");
   }
@@ -150,6 +171,20 @@ export function assertHardeningAdminProof(evidence) {
     ) {
       throw new Error(
         `hardening admin proof missing visible status for ${checkId}: ${expectedStatus}`,
+      );
+    }
+  }
+  for (const checkId of playerRecoveryAuditLaneIds) {
+    if (!evidence.playerRecoveryRoleSurface?.visibleChecks?.includes(checkId)) {
+      throw new Error(`player recovery admin proof missing visible check: ${checkId}`);
+    }
+  }
+  for (const relatedLinkId of ["local-core-loop", "local-hardening"]) {
+    if (
+      !evidence.playerRecoveryRoleSurface?.visibleRelatedLinks?.includes(relatedLinkId)
+    ) {
+      throw new Error(
+        `player recovery admin proof missing related link: ${relatedLinkId}`,
       );
     }
   }

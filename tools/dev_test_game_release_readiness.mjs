@@ -32,6 +32,7 @@ import {
 import {
   playerActionConflictRecoveryLaneIds,
   playerActionFoundationLaneIds,
+  playerRecoveryAuditLaneIds,
   promotedStalePlayerCommandLaneIds,
 } from "./dev_test_game_player_recovery_scenarios.mjs";
 import {
@@ -4308,9 +4309,20 @@ export function validateDevTestGameHardeningAdminProof(proof, options = {}) {
   ) {
     throw new Error("hardening admin proof did not prove admin overview click-through");
   }
+  if (
+    proof.playerRecoveryRoleSurface?.clickedThroughFromOverview !== true ||
+    proof.playerRecoveryRoleSurface?.rawInviteTokensVisible !== false
+  ) {
+    throw new Error("hardening admin proof did not prove player recovery click-through");
+  }
   for (const checkId of requiredChecks) {
     if (!proof.adminRoleSurface?.visibleChecks?.includes(checkId)) {
       throw new Error(`hardening admin proof missing visible check: ${checkId}`);
+    }
+  }
+  for (const checkId of playerRecoveryAuditLaneIds) {
+    if (!proof.playerRecoveryRoleSurface?.visibleChecks?.includes(checkId)) {
+      throw new Error(`player recovery admin proof missing visible check: ${checkId}`);
     }
   }
   return {

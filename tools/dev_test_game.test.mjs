@@ -69,6 +69,9 @@ import {
   replacementPrivatePostRecoveryLaneIds,
   replacementStalePrivatePostAfterCompleteScenario,
 } from "./dev_test_game_replacement_private_scenarios.mjs";
+import {
+  playerRecoveryAuditLaneIds,
+} from "./dev_test_game_player_recovery_scenarios.mjs";
 import { adminSpineReadinessEvidenceEnv } from "./dev_test_game_admin_spine.mjs";
 import {
   backupAwareOpsEnv,
@@ -13245,6 +13248,19 @@ function hardeningAdminProofFixture() {
         "stale-cohost-deadline-reload",
         "stale-cohost-deadline-reconnect-recovery",
       ],
+      rawInviteTokensVisible: false,
+      releaseReady: false,
+      productionReady: false,
+    },
+    playerRecoveryRoleSurface: {
+      status: "passed",
+      overviewRoleUrl: "/admin?game=<seeded-game>",
+      detailRoleUrl: "/admin/audit/local-player-recovery?game=<seeded-game>",
+      linkTestId: "admin-audit-link-local-player-recovery",
+      surfaceTestId: "admin-audit-detail-surface",
+      clickedThroughFromOverview: true,
+      visibleChecks: [...playerRecoveryAuditLaneIds],
+      visibleRelatedLinks: ["local-core-loop", "local-hardening"],
       rawInviteTokensVisible: false,
       releaseReady: false,
       productionReady: false,

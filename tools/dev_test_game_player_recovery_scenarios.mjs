@@ -19,8 +19,42 @@ export const promotedStalePlayerCommandLaneIds = Object.freeze(
   stalePlayerCommandLaneIds.slice(0, 1),
 );
 
+export const corePlayerRecoveryLaneIds = Object.freeze([
+  "action-loop",
+  "invalid-action-recovery",
+  "dead-player-recovery",
+  "player-action-boundary",
+]);
+
+export const playerRecoveryRaceLaneIds = Object.freeze([
+  "concurrent-vote-race",
+  "concurrent-vote-race-reload",
+  "concurrent-player-vote-resolve-race",
+  "concurrent-player-vote-resolve-race-reload",
+  "concurrent-player-action-advance-race",
+  "concurrent-player-action-advance-race-reload",
+]);
+
+export const completedPlayerRecoveryLaneIds = Object.freeze([
+  "concurrent-player-complete-race",
+  "public-player-complete-reload",
+  "stale-player-complete",
+  "stale-player-complete-reload",
+]);
+
 export const playerActionConflictRecoveryLaneIds = Object.freeze([
   "stale-same-action-recovery",
   "stale-action-conflict",
   "stale-action-reconnect-recovery",
+]);
+
+export const playerRecoveryAuditLaneIds = Object.freeze([
+  ...corePlayerRecoveryLaneIds,
+  ...playerActionFoundationLaneIds,
+  ...promotedStalePlayerCommandLaneIds,
+  ...playerRecoveryRaceLaneIds,
+  ...completedPlayerRecoveryLaneIds,
+  "stale-dead-action-conflict",
+  ...playerActionConflictRecoveryLaneIds,
+  "stale-action-conflict-message",
 ]);
