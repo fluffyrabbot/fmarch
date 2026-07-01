@@ -142,6 +142,64 @@ const raceCells = Object.freeze([
   }),
 ]);
 
+export const raceCoveragePromotedReloadGroups = Object.freeze(
+  [
+    {
+      id: "replacement-race-reload",
+      label: "Replacement race reload",
+      cellIds: [
+        "replacement-private-post",
+        "replacement-vote",
+        "replacement-action",
+      ],
+    },
+    {
+      id: "host-concurrent-race-reload",
+      label: "Host concurrent race reload",
+      cellIds: [
+        "host-resolve",
+        "host-advance",
+        "host-deadline-advance",
+        "host-lifecycle",
+        "host-mixed-advance",
+        "host-votecount-publication",
+        "host-complete-game",
+      ],
+    },
+    {
+      id: "player-concurrent-action-reload",
+      label: "Player concurrent action reload",
+      cellIds: [
+        "player-vote-change",
+        "player-night-action",
+        "player-vote-vs-host-resolve",
+        "player-action-vs-host-advance",
+        "player-vs-completed-game",
+      ],
+    },
+    {
+      id: "cohost-deadline-race-reload",
+      label: "Cohost deadline race reload",
+      cellIds: ["cohost-deadline-vs-host-resolve"],
+    },
+  ].map((group) =>
+    Object.freeze({
+      ...group,
+      cellIds: Object.freeze(group.cellIds),
+    }),
+  ),
+);
+
+export function raceCoveragePromotedReloadGroup(groupId) {
+  const group = raceCoveragePromotedReloadGroups.find(
+    (candidate) => candidate.id === groupId,
+  );
+  if (group === undefined) {
+    throw new Error(`unknown race coverage promoted reload group: ${groupId}`);
+  }
+  return group;
+}
+
 export function buildDevTestGameRaceCoverage(
   proofRun,
   {

@@ -11,7 +11,11 @@ import {
   localProofGraphAdminRoleHandoffsCheckId,
 } from "./dev_test_game_local_readiness_dependencies.mjs";
 import { assertDevTestGameProofRun } from "./dev_test_game_proof_contract.mjs";
-import { assertDevTestGameRaceCoverage } from "./dev_test_game_race_coverage.mjs";
+import {
+  assertDevTestGameRaceCoverage,
+  raceCoveragePromotedReloadGroup,
+  raceCoveragePromotedReloadGroups,
+} from "./dev_test_game_race_coverage.mjs";
 import {
   assertDevTestGameHostedEvidenceLaneDemoProof,
   devTestGameHostedEvidenceLaneDemoProofPath,
@@ -1675,28 +1679,18 @@ function buildRaceCoveragePromotedMilestones(
     cohostDeadlineRaceReloadMilestone,
   },
 ) {
-  const groups = [
+  const milestoneByGroupId = new Map([
+    ["replacement-race-reload", replacementRaceReloadMilestone],
+    ["host-concurrent-race-reload", hostConcurrentRaceReloadMilestone],
+    ["player-concurrent-action-reload", playerConcurrentActionReloadMilestone],
+    ["cohost-deadline-race-reload", cohostDeadlineRaceReloadMilestone],
+  ]);
+  const groups = raceCoveragePromotedReloadGroups.map((group) =>
     buildRaceCoveragePromotedMilestoneGroup(
-      "replacement-race-reload",
-      "Replacement race reload",
-      replacementRaceReloadMilestone,
+      group,
+      milestoneByGroupId.get(group.id),
     ),
-    buildRaceCoveragePromotedMilestoneGroup(
-      "host-concurrent-race-reload",
-      "Host concurrent race reload",
-      hostConcurrentRaceReloadMilestone,
-    ),
-    buildRaceCoveragePromotedMilestoneGroup(
-      "player-concurrent-action-reload",
-      "Player concurrent action reload",
-      playerConcurrentActionReloadMilestone,
-    ),
-    buildRaceCoveragePromotedMilestoneGroup(
-      "cohost-deadline-race-reload",
-      "Cohost deadline race reload",
-      cohostDeadlineRaceReloadMilestone,
-    ),
-  ];
+  );
   const requiredCellCount = groups.reduce(
     (total, group) => total + group.requiredCellCount,
     0,
@@ -1724,10 +1718,10 @@ function buildRaceCoveragePromotedMilestones(
   };
 }
 
-function buildRaceCoveragePromotedMilestoneGroup(id, label, milestone) {
+function buildRaceCoveragePromotedMilestoneGroup(group, milestone) {
   return {
-    id,
-    label,
+    id: group.id,
+    label: group.label,
     status: milestone.status,
     cellIds: [...milestone.cellIds],
     requiredCellCount: milestone.requiredCellCount,
@@ -1764,31 +1758,19 @@ const hostStaleControlLaneIds = Object.freeze([
 ]);
 
 const replacementRaceReloadCellIds = Object.freeze([
-  "replacement-private-post",
-  "replacement-vote",
-  "replacement-action",
+  ...raceCoveragePromotedReloadGroup("replacement-race-reload").cellIds,
 ]);
 
 const hostConcurrentRaceReloadCellIds = Object.freeze([
-  "host-resolve",
-  "host-advance",
-  "host-deadline-advance",
-  "host-lifecycle",
-  "host-mixed-advance",
-  "host-votecount-publication",
-  "host-complete-game",
+  ...raceCoveragePromotedReloadGroup("host-concurrent-race-reload").cellIds,
 ]);
 
 const playerConcurrentActionReloadCellIds = Object.freeze([
-  "player-vote-change",
-  "player-night-action",
-  "player-vote-vs-host-resolve",
-  "player-action-vs-host-advance",
-  "player-vs-completed-game",
+  ...raceCoveragePromotedReloadGroup("player-concurrent-action-reload").cellIds,
 ]);
 
 const cohostDeadlineRaceReloadCellIds = Object.freeze([
-  "cohost-deadline-vs-host-resolve",
+  ...raceCoveragePromotedReloadGroup("cohost-deadline-race-reload").cellIds,
 ]);
 
 export function validateDevTestGameBackupRestoreProof(proof, options = {}) {

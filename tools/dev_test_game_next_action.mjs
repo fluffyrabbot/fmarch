@@ -12,6 +12,8 @@ import { assertDevTestGameOpsArtifacts } from "./dev_test_game_ops_artifacts.mjs
 import {
   assertDevTestGameRaceCoverage,
   devTestGameRaceCoveragePath,
+  raceCoveragePromotedReloadGroup,
+  raceCoveragePromotedReloadGroups,
 } from "./dev_test_game_race_coverage.mjs";
 import {
   devTestGameHostedConcurrentRaceMatrixCommand,
@@ -974,28 +976,15 @@ function buildRaceCoveragePromotedMilestones(
     cohostDeadlineRaceReloadTrace,
   },
 ) {
-  const groups = [
-    buildRaceCoveragePromotedMilestoneGroup(
-      "replacement-race-reload",
-      "Replacement race reload",
-      replacementRaceReloadTrace,
-    ),
-    buildRaceCoveragePromotedMilestoneGroup(
-      "host-concurrent-race-reload",
-      "Host concurrent race reload",
-      hostConcurrentRaceReloadTrace,
-    ),
-    buildRaceCoveragePromotedMilestoneGroup(
-      "player-concurrent-action-reload",
-      "Player concurrent action reload",
-      playerConcurrentActionReloadTrace,
-    ),
-    buildRaceCoveragePromotedMilestoneGroup(
-      "cohost-deadline-race-reload",
-      "Cohost deadline race reload",
-      cohostDeadlineRaceReloadTrace,
-    ),
-  ];
+  const traceByGroupId = new Map([
+    ["replacement-race-reload", replacementRaceReloadTrace],
+    ["host-concurrent-race-reload", hostConcurrentRaceReloadTrace],
+    ["player-concurrent-action-reload", playerConcurrentActionReloadTrace],
+    ["cohost-deadline-race-reload", cohostDeadlineRaceReloadTrace],
+  ]);
+  const groups = raceCoveragePromotedReloadGroups.map((group) =>
+    buildRaceCoveragePromotedMilestoneGroup(group, traceByGroupId.get(group.id)),
+  );
   const requiredCellCount = groups.reduce(
     (total, group) => total + group.requiredCellCount,
     0,
@@ -1023,10 +1012,10 @@ function buildRaceCoveragePromotedMilestones(
   };
 }
 
-function buildRaceCoveragePromotedMilestoneGroup(id, label, trace) {
+function buildRaceCoveragePromotedMilestoneGroup(group, trace) {
   return {
-    id,
-    label,
+    id: group.id,
+    label: group.label,
     status: trace.status,
     cellIds: trace.cells.map((cell) => cell.id),
     requiredCellCount: trace.requiredCellCount,
@@ -1860,31 +1849,19 @@ const localBuildableReleaseReadinessItems = new Map([
 ]);
 
 const replacementRaceReloadCellIds = Object.freeze([
-  "replacement-private-post",
-  "replacement-vote",
-  "replacement-action",
+  ...raceCoveragePromotedReloadGroup("replacement-race-reload").cellIds,
 ]);
 
 const hostConcurrentRaceReloadCellIds = Object.freeze([
-  "host-resolve",
-  "host-advance",
-  "host-deadline-advance",
-  "host-lifecycle",
-  "host-mixed-advance",
-  "host-votecount-publication",
-  "host-complete-game",
+  ...raceCoveragePromotedReloadGroup("host-concurrent-race-reload").cellIds,
 ]);
 
 const playerConcurrentActionReloadCellIds = Object.freeze([
-  "player-vote-change",
-  "player-night-action",
-  "player-vote-vs-host-resolve",
-  "player-action-vs-host-advance",
-  "player-vs-completed-game",
+  ...raceCoveragePromotedReloadGroup("player-concurrent-action-reload").cellIds,
 ]);
 
 const cohostDeadlineRaceReloadCellIds = Object.freeze([
-  "cohost-deadline-vs-host-resolve",
+  ...raceCoveragePromotedReloadGroup("cohost-deadline-race-reload").cellIds,
 ]);
 
 const raceCoveragePromotedMilestoneGroupIds = Object.freeze([

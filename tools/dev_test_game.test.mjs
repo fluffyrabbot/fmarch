@@ -74,6 +74,8 @@ import {
   buildDevTestGameRaceCoverage,
   devTestGameRaceCoverageCommand,
   devTestGameRaceCoveragePath,
+  raceCoveragePromotedReloadGroup,
+  raceCoveragePromotedReloadGroups,
 } from "./dev_test_game_race_coverage.mjs";
 import {
   assertDevTestGameHostedConcurrentRaceMatrixEvidence,
@@ -8865,21 +8867,13 @@ function devTestGameRaceCoverageFixture() {
 
 function hostConcurrentRaceReloadCellIdsFixture() {
   return [
-    "host-resolve",
-    "host-advance",
-    "host-deadline-advance",
-    "host-lifecycle",
-    "host-mixed-advance",
-    "host-votecount-publication",
-    "host-complete-game",
+    ...raceCoveragePromotedReloadGroup("host-concurrent-race-reload").cellIds,
   ];
 }
 
 function replacementRaceReloadCellIdsFixture() {
   return [
-    "replacement-private-post",
-    "replacement-vote",
-    "replacement-action",
+    ...raceCoveragePromotedReloadGroup("replacement-race-reload").cellIds,
   ];
 }
 
@@ -8939,11 +8933,7 @@ function hostConcurrentRaceReloadCellsFixture() {
 
 function playerConcurrentActionReloadCellIdsFixture() {
   return [
-    "player-vote-change",
-    "player-night-action",
-    "player-vote-vs-host-resolve",
-    "player-action-vs-host-advance",
-    "player-vs-completed-game",
+    ...raceCoveragePromotedReloadGroup("player-concurrent-action-reload").cellIds,
   ];
 }
 
@@ -8988,7 +8978,9 @@ function playerConcurrentActionReloadCellsFixture() {
 }
 
 function cohostDeadlineRaceReloadCellIdsFixture() {
-  return ["cohost-deadline-vs-host-resolve"];
+  return [
+    ...raceCoveragePromotedReloadGroup("cohost-deadline-race-reload").cellIds,
+  ];
 }
 
 function cohostDeadlineRaceReloadCellsFixture() {
@@ -9004,54 +8996,29 @@ function cohostDeadlineRaceReloadCellsFixture() {
 }
 
 function raceCoveragePromotedMilestonesFixture({ groupStatus }) {
+  const requiredCellCount = raceCoveragePromotedReloadGroups.reduce(
+    (total, group) => total + group.cellIds.length,
+    0,
+  );
   return {
     status: "passed",
-    cellCount: 16,
-    provenCellCount: 16,
-    reloadCoveredCellCount: 16,
-    groupCount: 4,
-    passedGroupCount: 4,
-    requiredCellCount: 16,
-    coveredCellCount: 16,
+    cellCount: requiredCellCount,
+    provenCellCount: requiredCellCount,
+    reloadCoveredCellCount: requiredCellCount,
+    groupCount: raceCoveragePromotedReloadGroups.length,
+    passedGroupCount: raceCoveragePromotedReloadGroups.length,
+    requiredCellCount,
+    coveredCellCount: requiredCellCount,
     gapCount: 0,
-    groups: [
-      {
-        id: "replacement-race-reload",
-        label: "Replacement race reload",
-        status: groupStatus,
-        cellIds: replacementRaceReloadCellIdsFixture(),
-        requiredCellCount: 3,
-        coveredCellCount: 3,
-        gapCount: 0,
-      },
-      {
-        id: "host-concurrent-race-reload",
-        label: "Host concurrent race reload",
-        status: groupStatus,
-        cellIds: hostConcurrentRaceReloadCellIdsFixture(),
-        requiredCellCount: 7,
-        coveredCellCount: 7,
-        gapCount: 0,
-      },
-      {
-        id: "player-concurrent-action-reload",
-        label: "Player concurrent action reload",
-        status: groupStatus,
-        cellIds: playerConcurrentActionReloadCellIdsFixture(),
-        requiredCellCount: 5,
-        coveredCellCount: 5,
-        gapCount: 0,
-      },
-      {
-        id: "cohost-deadline-race-reload",
-        label: "Cohost deadline race reload",
-        status: groupStatus,
-        cellIds: cohostDeadlineRaceReloadCellIdsFixture(),
-        requiredCellCount: 1,
-        coveredCellCount: 1,
-        gapCount: 0,
-      },
-    ],
+    groups: raceCoveragePromotedReloadGroups.map((group) => ({
+      id: group.id,
+      label: group.label,
+      status: groupStatus,
+      cellIds: [...group.cellIds],
+      requiredCellCount: group.cellIds.length,
+      coveredCellCount: group.cellIds.length,
+      gapCount: 0,
+    })),
   };
 }
 
