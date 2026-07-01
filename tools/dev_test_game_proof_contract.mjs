@@ -7,6 +7,7 @@ import {
 import {
   cohostDeadlineRecoveryLaneIds,
   hostGenericStaleControlLaneIds,
+  hostPhaseStaleControlCases,
   hostPhaseStaleRecoveryLaneIds,
   hostPromptStaleControlLaneIds,
   hostRaceReloadLaneIds,
@@ -7173,560 +7174,7 @@ export function buildDevTestGameProofRun(session, options = {}) {
             ?.apiPhaseAfterReload?.deadline === null,
       },
     ),
-    lane("stale-host-resolve", "Stale host resolve rejects after live resolution", {
-      rejectError: hardening.staleHostResolve?.reject?.error ?? null,
-      roleUrl: hardening.staleHostResolve?.setup?.roleUrl ?? null,
-      staleClickActionId:
-        hardening.staleHostResolve?.staleClickBrowserProof?.clickedActionId ?? null,
-      staleClickReceipt:
-        hardening.staleHostResolve?.staleClickBrowserProof?.receiptStatusText ?? null,
-      staleClickRefreshKeys:
-        hardening.staleHostResolve?.staleClickBrowserProof?.dispatchRefreshKeys ??
-        null,
-      stalePhase: hardening.staleHostResolve?.setup?.stalePhase?.id ?? null,
-      liveResolveSeqs:
-        hardening.staleHostResolve?.liveResolve?.commandStatus?.streamSeqs ?? null,
-      phaseId: hardening.staleHostResolve?.phaseAfterReject?.id ?? null,
-      locked: hardening.staleHostResolve?.phaseAfterReject?.locked ?? null,
-      phaseActions: hardening.staleHostResolve?.phaseActionsAfterReject ?? null,
-      restoreLocked: hardening.staleHostResolve?.apiPhaseAfterRestore?.locked ?? null,
-      passed:
-        hardening.staleHostResolve?.status === "passed" &&
-        typeof hardening.staleHostResolve?.setup?.roleUrl === "string" &&
-        hardening.staleHostResolve?.setup?.roleUrl.includes(
-          `/g/${session?.game ?? ""}/host`,
-        ) === true &&
-        hardening.staleHostResolve?.staleClickBrowserProof?.roleUrl ===
-          hardening.staleHostResolve?.setup?.roleUrl &&
-        hardening.staleHostResolve?.staleClickBrowserProof?.clickedActionId ===
-          "resolve_phase" &&
-        hardening.staleHostResolve?.staleClickBrowserProof?.receiptStatusText?.includes(
-          "Reject PhaseLocked",
-        ) === true &&
-        hardening.staleHostResolve?.staleClickBrowserProof?.dispatchRefreshKeys?.includes(
-          "host",
-        ) === true &&
-        hardening.staleHostResolve?.staleClickBrowserProof?.phaseAfterReject?.id ===
-          "D02" &&
-        hardening.staleHostResolve?.staleClickBrowserProof?.phaseAfterReject
-          ?.locked === true &&
-        hardening.staleHostResolve?.staleClickBrowserProof?.phaseActionsAfterReject?.includes(
-          "unlock_thread",
-        ) === true &&
-        hardening.staleHostResolve?.staleClickBrowserProof?.phaseActionsAfterReject?.includes(
-          "advance_phase",
-        ) === true &&
-        hardening.staleHostResolve?.staleClickBrowserProof?.phaseActionsAfterReject?.includes(
-          "resolve_phase",
-        ) === false &&
-        hardening.staleHostResolve?.setup?.stalePhase?.id === "D02" &&
-        hardening.staleHostResolve?.setup?.stalePhase?.locked === false &&
-        hardening.staleHostResolve?.setup?.phaseActions?.includes(
-          "resolve_phase",
-        ) === true &&
-        hardening.staleHostResolve?.setup?.phaseActions?.includes("lock_thread") ===
-          true &&
-        hardening.staleHostResolve?.liveResolve?.commandStatus?.state === "ack" &&
-        Array.isArray(
-          hardening.staleHostResolve?.liveResolve?.commandStatus?.streamSeqs,
-        ) &&
-        hardening.staleHostResolve.liveResolve.commandStatus.streamSeqs.length > 0 &&
-        hardening.staleHostResolve?.reject?.state === "reject" &&
-        hardening.staleHostResolve?.reject?.error === "PhaseLocked" &&
-        hardening.staleHostResolve?.reject?.serverEnvelope?.body?.kind === "Reject" &&
-        Array.isArray(hardening.staleHostResolve?.reject?.streamSeqs) === false &&
-        hardening.staleHostResolve?.reject?.message?.includes(
-          "stale phase state",
-        ) === true &&
-        hardening.staleHostResolve?.phaseAfterReject?.id === "D02" &&
-        hardening.staleHostResolve?.phaseAfterReject?.locked === true &&
-        hardening.staleHostResolve?.phaseActionsAfterReject?.includes(
-          "unlock_thread",
-        ) === true &&
-        hardening.staleHostResolve?.phaseActionsAfterReject?.includes(
-          "advance_phase",
-        ) === true &&
-        hardening.staleHostResolve?.phaseActionsAfterReject?.includes(
-          "resolve_phase",
-        ) === false &&
-        hardening.staleHostResolve?.activityRow?.source === "outcome" &&
-        hardening.staleHostResolve?.activityRow?.actionId === "resolve_phase" &&
-        hardening.staleHostResolve?.dispatchPlan?.projectionRefreshKeys?.includes(
-          "host",
-        ) === true &&
-        hardening.staleHostResolve?.apiPhaseAfterReject?.phase_id === "D02" &&
-        hardening.staleHostResolve?.apiPhaseAfterReject?.locked === true &&
-        hardening.staleHostResolve?.restoreAfterReject?.commandStatus?.state === "ack" &&
-        hardening.staleHostResolve?.apiPhaseAfterRestore?.phase_id === "D02" &&
-        hardening.staleHostResolve?.apiPhaseAfterRestore?.locked === false,
-    }),
-    lane(
-      "stale-host-resolve-reload",
-      "Stale host resolve recovery reloads locked phase console",
-      {
-        game: session.game ?? null,
-        routeStatus:
-          hardening.staleHostResolve?.staleHostResolveReloadAfterReject
-            ?.routeResponseStatus ?? null,
-        rejectReceipt:
-          hardening.staleHostResolve?.staleHostResolveReloadAfterReject
-            ?.rejectReceiptStatusText ?? null,
-        phaseId:
-          hardening.staleHostResolve?.staleHostResolveReloadAfterReject
-            ?.phaseAfterReload?.id ?? null,
-        locked:
-          hardening.staleHostResolve?.staleHostResolveReloadAfterReject
-            ?.phaseAfterReload?.locked ?? null,
-        phaseActions:
-          hardening.staleHostResolve?.staleHostResolveReloadAfterReject
-            ?.phaseActionsAfterReload ?? null,
-        apiLocked:
-          hardening.staleHostResolve?.staleHostResolveReloadAfterReject
-            ?.apiPhaseAfterReload?.locked ?? null,
-        passed:
-          hardening.staleHostResolve?.status === "passed" &&
-          hardening.staleHostResolve?.reject?.error === "PhaseLocked" &&
-          hardening.staleHostResolve?.staleHostResolveReloadAfterReject?.status ===
-            "passed" &&
-          hardening.staleHostResolve?.staleHostResolveReloadAfterReject
-            ?.routeResponseStatus === 200 &&
-          hardening.staleHostResolve?.staleHostResolveReloadAfterReject
-            ?.rejectReceiptStatusText?.includes("Reject PhaseLocked") === true &&
-          hardening.staleHostResolve?.staleHostResolveReloadAfterReject
-            ?.phaseAfterReload?.id === "D02" &&
-          hardening.staleHostResolve?.staleHostResolveReloadAfterReject
-            ?.phaseAfterReload?.locked === true &&
-          hardening.staleHostResolve?.staleHostResolveReloadAfterReject
-            ?.phaseActionsAfterReload?.includes("unlock_thread") === true &&
-          hardening.staleHostResolve?.staleHostResolveReloadAfterReject
-            ?.phaseActionsAfterReload?.includes("advance_phase") === true &&
-          hardening.staleHostResolve?.staleHostResolveReloadAfterReject
-            ?.phaseActionsAfterReload?.includes("resolve_phase") === false &&
-          hardening.staleHostResolve?.staleHostResolveReloadAfterReject
-            ?.phaseActionsAfterReload?.includes("lock_thread") === false &&
-          hardening.staleHostResolve?.staleHostResolveReloadAfterReject
-            ?.deadlineActionsAfterReload?.includes("extend_deadline") === true &&
-          hardening.staleHostResolve?.staleHostResolveReloadAfterReject
-            ?.apiPhaseAfterReload?.phase_id === "D02" &&
-          hardening.staleHostResolve?.staleHostResolveReloadAfterReject
-            ?.apiPhaseAfterReload?.locked === true,
-      },
-    ),
-    lane(
-      "stale-host-resolve-reconnect-recovery",
-      "Stale host resolve recovery reconnects locked phase console",
-      {
-        game: session.game ?? null,
-        reconnectingState:
-          hardening.staleHostResolve?.reconnectAfterReject?.reconnectingStatus
-            ?.state ?? null,
-        recoveryState:
-          hardening.staleHostResolve?.reconnectAfterReject?.reconnectRecoveryEvent
-            ?.state ?? null,
-        recoveredPhase:
-          hardening.staleHostResolve?.reconnectAfterReject?.recoveredHostProjection
-            ?.phase?.id ?? null,
-        recoveredLocked:
-          hardening.staleHostResolve?.reconnectAfterReject?.recoveredHostProjection
-            ?.phase?.locked ?? null,
-        phaseActions:
-          hardening.staleHostResolve?.phaseActionsAfterReconnect ?? null,
-        passed:
-          hardening.staleHostResolve?.status === "passed" &&
-          hardening.staleHostResolve?.reject?.error === "PhaseLocked" &&
-          hardening.staleHostResolve?.reconnectAfterReject?.status === "passed" &&
-          hardening.staleHostResolve?.reconnectAfterReject?.reconnectingStatus
-            ?.state === "reconnecting" &&
-          hardening.staleHostResolve?.reconnectAfterReject?.reconnectRecoveryEvent
-            ?.state === "recovered" &&
-          hardening.staleHostResolve?.reconnectAfterReject?.reconnectRecoveryEvent
-            ?.attempt === 1 &&
-          hardening.staleHostResolve?.reconnectAfterReject
-            ?.recoveredHostProjection?.phase?.id === "D02" &&
-          hardening.staleHostResolve?.reconnectAfterReject
-            ?.recoveredHostProjection?.phase?.locked === true &&
-          hardening.staleHostResolve?.phaseActionsAfterReconnect?.includes(
-            "unlock_thread",
-          ) === true &&
-          hardening.staleHostResolve?.phaseActionsAfterReconnect?.includes(
-            "advance_phase",
-          ) === true &&
-          hardening.staleHostResolve?.phaseActionsAfterReconnect?.includes(
-            "resolve_phase",
-          ) === false &&
-          hardening.staleHostResolve?.phaseActionsAfterReconnect?.includes(
-            "lock_thread",
-          ) === false &&
-          hardening.staleHostResolve?.deadlineActionsAfterReconnect?.includes(
-            "extend_deadline",
-          ) === true,
-      },
-    ),
-    lane("stale-host-advance", "Stale host advance rejects after live unlock", {
-      rejectError: hardening.staleHostAdvance?.reject?.error ?? null,
-      roleUrl: hardening.staleHostAdvance?.setup?.roleUrl ?? null,
-      staleClickActionId:
-        hardening.staleHostAdvance?.staleClickBrowserProof?.clickedActionId ??
-        null,
-      staleClickReceipt:
-        hardening.staleHostAdvance?.staleClickBrowserProof?.receiptStatusText ??
-        null,
-      staleClickRefreshKeys:
-        hardening.staleHostAdvance?.staleClickBrowserProof?.dispatchRefreshKeys ??
-        null,
-      stalePhase: hardening.staleHostAdvance?.setup?.stalePhase?.id ?? null,
-      liveUnlockSeqs:
-        hardening.staleHostAdvance?.liveUnlock?.commandStatus?.streamSeqs ?? null,
-      phaseId: hardening.staleHostAdvance?.phaseAfterReject?.id ?? null,
-      locked: hardening.staleHostAdvance?.phaseAfterReject?.locked ?? null,
-      phaseActions: hardening.staleHostAdvance?.phaseActionsAfterReject ?? null,
-      passed:
-        hardening.staleHostAdvance?.status === "passed" &&
-        typeof hardening.staleHostAdvance?.setup?.roleUrl === "string" &&
-        hardening.staleHostAdvance?.setup?.roleUrl.includes(
-          `/g/${session?.game ?? ""}/host`,
-        ) === true &&
-        hardening.staleHostAdvance?.staleClickBrowserProof?.roleUrl ===
-          hardening.staleHostAdvance?.setup?.roleUrl &&
-        hardening.staleHostAdvance?.staleClickBrowserProof?.clickedActionId ===
-          "advance_phase" &&
-        hardening.staleHostAdvance?.staleClickBrowserProof?.receiptStatusText?.includes(
-          "Reject InvalidTarget",
-        ) === true &&
-        hardening.staleHostAdvance?.staleClickBrowserProof?.dispatchRefreshKeys?.includes(
-          "host",
-        ) === true &&
-        hardening.staleHostAdvance?.staleClickBrowserProof?.phaseAfterReject?.id ===
-          "D02" &&
-        hardening.staleHostAdvance?.staleClickBrowserProof?.phaseAfterReject
-          ?.locked === false &&
-        hardening.staleHostAdvance?.staleClickBrowserProof?.phaseActionsAfterReject?.includes(
-          "resolve_phase",
-        ) === true &&
-        hardening.staleHostAdvance?.staleClickBrowserProof?.phaseActionsAfterReject?.includes(
-          "lock_thread",
-        ) === true &&
-        hardening.staleHostAdvance?.staleClickBrowserProof?.phaseActionsAfterReject?.includes(
-          "advance_phase",
-        ) === false &&
-        hardening.staleHostAdvance?.setup?.stalePhase?.id === "D02" &&
-        hardening.staleHostAdvance?.setup?.stalePhase?.locked === true &&
-        hardening.staleHostAdvance?.setup?.phaseActions?.includes(
-          "advance_phase",
-        ) === true &&
-        hardening.staleHostAdvance?.setup?.phaseActions?.includes("unlock_thread") ===
-          true &&
-        hardening.staleHostAdvance?.liveUnlock?.commandStatus?.state === "ack" &&
-        Array.isArray(
-          hardening.staleHostAdvance?.liveUnlock?.commandStatus?.streamSeqs,
-        ) &&
-        hardening.staleHostAdvance.liveUnlock.commandStatus.streamSeqs.length > 0 &&
-        hardening.staleHostAdvance?.reject?.state === "reject" &&
-        hardening.staleHostAdvance?.reject?.error === "InvalidTarget" &&
-        hardening.staleHostAdvance?.reject?.serverEnvelope?.body?.kind === "Reject" &&
-        Array.isArray(hardening.staleHostAdvance?.reject?.streamSeqs) === false &&
-        hardening.staleHostAdvance?.reject?.message?.includes(
-          "stale phase state",
-        ) === true &&
-        hardening.staleHostAdvance?.phaseAfterReject?.id === "D02" &&
-        hardening.staleHostAdvance?.phaseAfterReject?.locked === false &&
-        hardening.staleHostAdvance?.phaseActionsAfterReject?.includes(
-          "resolve_phase",
-        ) === true &&
-        hardening.staleHostAdvance?.phaseActionsAfterReject?.includes(
-          "lock_thread",
-        ) === true &&
-        hardening.staleHostAdvance?.phaseActionsAfterReject?.includes(
-          "advance_phase",
-        ) === false &&
-        hardening.staleHostAdvance?.activityRow?.source === "outcome" &&
-        hardening.staleHostAdvance?.activityRow?.actionId === "advance_phase" &&
-        hardening.staleHostAdvance?.dispatchPlan?.projectionRefreshKeys?.includes(
-          "host",
-        ) === true &&
-        hardening.staleHostAdvance?.apiPhaseAfterReject?.phase_id === "D02" &&
-        hardening.staleHostAdvance?.apiPhaseAfterReject?.locked === false,
-    }),
-    lane(
-      "stale-host-advance-reload",
-      "Stale host advance recovery reloads open phase console",
-      {
-        game: session.game ?? null,
-        routeStatus:
-          hardening.staleHostAdvance?.staleHostAdvanceReloadAfterReject
-            ?.routeResponseStatus ?? null,
-        rejectReceipt:
-          hardening.staleHostAdvance?.staleHostAdvanceReloadAfterReject
-            ?.rejectReceiptStatusText ?? null,
-        phaseId:
-          hardening.staleHostAdvance?.staleHostAdvanceReloadAfterReject
-            ?.phaseAfterReload?.id ?? null,
-        locked:
-          hardening.staleHostAdvance?.staleHostAdvanceReloadAfterReject
-            ?.phaseAfterReload?.locked ?? null,
-        phaseActions:
-          hardening.staleHostAdvance?.staleHostAdvanceReloadAfterReject
-            ?.phaseActionsAfterReload ?? null,
-        apiLocked:
-          hardening.staleHostAdvance?.staleHostAdvanceReloadAfterReject
-            ?.apiPhaseAfterReload?.locked ?? null,
-        passed:
-          hardening.staleHostAdvance?.status === "passed" &&
-          hardening.staleHostAdvance?.reject?.error === "InvalidTarget" &&
-          hardening.staleHostAdvance?.staleHostAdvanceReloadAfterReject?.status ===
-            "passed" &&
-          hardening.staleHostAdvance?.staleHostAdvanceReloadAfterReject
-            ?.routeResponseStatus === 200 &&
-          hardening.staleHostAdvance?.staleHostAdvanceReloadAfterReject
-            ?.rejectReceiptStatusText?.includes("Reject InvalidTarget") === true &&
-          hardening.staleHostAdvance?.staleHostAdvanceReloadAfterReject
-            ?.phaseAfterReload?.id === "D02" &&
-          hardening.staleHostAdvance?.staleHostAdvanceReloadAfterReject
-            ?.phaseAfterReload?.locked === false &&
-          hardening.staleHostAdvance?.staleHostAdvanceReloadAfterReject
-            ?.phaseActionsAfterReload?.includes("resolve_phase") === true &&
-          hardening.staleHostAdvance?.staleHostAdvanceReloadAfterReject
-            ?.phaseActionsAfterReload?.includes("lock_thread") === true &&
-          hardening.staleHostAdvance?.staleHostAdvanceReloadAfterReject
-            ?.phaseActionsAfterReload?.includes("advance_phase") === false &&
-          hardening.staleHostAdvance?.staleHostAdvanceReloadAfterReject
-            ?.deadlineActionsAfterReload?.includes("extend_deadline") === true &&
-          hardening.staleHostAdvance?.staleHostAdvanceReloadAfterReject
-            ?.apiPhaseAfterReload?.phase_id === "D02" &&
-          hardening.staleHostAdvance?.staleHostAdvanceReloadAfterReject
-            ?.apiPhaseAfterReload?.locked === false,
-      },
-    ),
-    lane(
-      "stale-host-advance-reconnect-recovery",
-      "Stale host advance recovery reconnects open phase console",
-      {
-        game: session.game ?? null,
-        reconnectingState:
-          hardening.staleHostAdvance?.reconnectAfterReject?.reconnectingStatus
-            ?.state ?? null,
-        recoveryState:
-          hardening.staleHostAdvance?.reconnectAfterReject?.reconnectRecoveryEvent
-            ?.state ?? null,
-        recoveredPhase:
-          hardening.staleHostAdvance?.reconnectAfterReject?.recoveredHostProjection
-            ?.phase?.id ?? null,
-        recoveredLocked:
-          hardening.staleHostAdvance?.reconnectAfterReject?.recoveredHostProjection
-            ?.phase?.locked ?? null,
-        phaseActions:
-          hardening.staleHostAdvance?.phaseActionsAfterReconnect ?? null,
-        passed:
-          hardening.staleHostAdvance?.status === "passed" &&
-          hardening.staleHostAdvance?.reject?.error === "InvalidTarget" &&
-          hardening.staleHostAdvance?.reconnectAfterReject?.status === "passed" &&
-          hardening.staleHostAdvance?.reconnectAfterReject?.reconnectingStatus
-            ?.state === "reconnecting" &&
-          hardening.staleHostAdvance?.reconnectAfterReject?.reconnectRecoveryEvent
-            ?.state === "recovered" &&
-          hardening.staleHostAdvance?.reconnectAfterReject?.reconnectRecoveryEvent
-            ?.attempt === 1 &&
-          hardening.staleHostAdvance?.reconnectAfterReject
-            ?.recoveredHostProjection?.phase?.id === "D02" &&
-          hardening.staleHostAdvance?.reconnectAfterReject
-            ?.recoveredHostProjection?.phase?.locked === false &&
-          hardening.staleHostAdvance?.phaseActionsAfterReconnect?.includes(
-            "resolve_phase",
-          ) === true &&
-          hardening.staleHostAdvance?.phaseActionsAfterReconnect?.includes(
-            "lock_thread",
-          ) === true &&
-          hardening.staleHostAdvance?.phaseActionsAfterReconnect?.includes(
-            "advance_phase",
-          ) === false &&
-          hardening.staleHostAdvance?.deadlineActionsAfterReconnect?.includes(
-            "extend_deadline",
-          ) === true,
-      },
-    ),
-    lane("stale-host-deadline", "Stale host deadline control rejects without drift", {
-      rejectError: hardening.staleHostDeadline?.reject?.error ?? null,
-      roleUrl: hardening.staleHostDeadline?.setup?.roleUrl ?? null,
-      staleClickActionId:
-        hardening.staleHostDeadline?.staleClickBrowserProof?.clickedActionId ??
-        null,
-      staleClickReceipt:
-        hardening.staleHostDeadline?.staleClickBrowserProof?.receiptStatusText ??
-        null,
-      staleClickRefreshKeys:
-        hardening.staleHostDeadline?.staleClickBrowserProof?.dispatchRefreshKeys ??
-        null,
-      stalePhase: hardening.staleHostDeadline?.setup?.stalePhase?.id ?? null,
-      phaseId: hardening.staleHostDeadline?.phaseAfterReject?.id ?? null,
-      activitySource: hardening.staleHostDeadline?.activityRow?.source ?? null,
-      deadlineActions: hardening.staleHostDeadline?.deadlineActionsAfterReject ?? null,
-      phaseActions: hardening.staleHostDeadline?.phaseActionsAfterReject ?? null,
-      apiDeadline: hardening.staleHostDeadline?.apiPhaseAfterReject?.deadline ?? null,
-      passed:
-        hardening.staleHostDeadline?.status === "passed" &&
-        typeof hardening.staleHostDeadline?.setup?.roleUrl === "string" &&
-        hardening.staleHostDeadline?.setup?.roleUrl.includes(
-          `/g/${session?.game ?? ""}/host`,
-        ) === true &&
-        hardening.staleHostDeadline?.staleClickBrowserProof?.roleUrl ===
-          hardening.staleHostDeadline?.setup?.roleUrl &&
-        hardening.staleHostDeadline?.staleClickBrowserProof?.clickedActionId ===
-          "extend_deadline" &&
-        hardening.staleHostDeadline?.staleClickBrowserProof?.receiptStatusText?.includes(
-          "Reject PhaseLocked",
-        ) === true &&
-        hardening.staleHostDeadline?.staleClickBrowserProof?.dispatchRefreshKeys?.includes(
-          "host",
-        ) === true &&
-        hardening.staleHostDeadline?.staleClickBrowserProof?.phaseAfterReject?.id ===
-          "D02" &&
-        hardening.staleHostDeadline?.staleClickBrowserProof?.phaseAfterReject
-          ?.locked === false &&
-        hardening.staleHostDeadline?.staleClickBrowserProof?.deadlineActionsAfterReject?.includes(
-          "extend_deadline",
-        ) === true &&
-        hardening.staleHostDeadline?.staleClickBrowserProof?.phaseActionsAfterReject?.includes(
-          "resolve_phase",
-        ) === true &&
-        hardening.staleHostDeadline?.staleClickBrowserProof?.phaseActionsAfterReject?.includes(
-          "lock_thread",
-        ) === true &&
-        hardening.staleHostDeadline?.staleClickBrowserProof?.apiPhaseAfterReject
-          ?.deadline === null &&
-        hardening.staleHostDeadline?.setup?.stalePhase?.id === "D01" &&
-        hardening.staleHostDeadline?.setup?.stalePhase?.locked === false &&
-        hardening.staleHostDeadline?.setup?.deadlineActions?.includes(
-          "extend_deadline",
-        ) === true &&
-        hardening.staleHostDeadline?.setup?.phaseActions?.includes(
-          "resolve_phase",
-        ) === true &&
-        hardening.staleHostDeadline?.setup?.phaseActions?.includes("lock_thread") ===
-          true &&
-        hardening.staleHostDeadline?.reject?.error === "PhaseLocked" &&
-        hardening.staleHostDeadline?.reject?.message?.includes(
-          "stale phase state",
-        ) === true &&
-        hardening.staleHostDeadline?.phaseAfterReject?.id === "D02" &&
-        hardening.staleHostDeadline?.phaseAfterReject?.locked === false &&
-        hardening.staleHostDeadline?.deadlineActionsAfterReject?.includes(
-          "extend_deadline",
-        ) === true &&
-        hardening.staleHostDeadline?.phaseActionsAfterReject?.includes(
-          "resolve_phase",
-        ) === true &&
-        hardening.staleHostDeadline?.phaseActionsAfterReject?.includes(
-          "lock_thread",
-        ) === true &&
-        hardening.staleHostDeadline?.activityRow?.source === "outcome" &&
-        hardening.staleHostDeadline?.activityRow?.actionId === "extend_deadline" &&
-        hardening.staleHostDeadline?.dispatchPlan?.projectionRefreshKeys?.includes(
-          "host",
-        ) === true &&
-        hardening.staleHostDeadline?.apiPhaseAfterReject?.phase_id === "D02" &&
-        hardening.staleHostDeadline?.apiPhaseAfterReject?.locked === false &&
-        hardening.staleHostDeadline?.apiPhaseAfterReject?.deadline === null,
-    }),
-    lane("stale-host-deadline-reload", "Stale host deadline recovery reloads open phase console", {
-      rejectError: hardening.staleHostDeadline?.reject?.error ?? null,
-      routeStatus:
-        hardening.staleHostDeadline?.staleHostDeadlineReloadAfterReject
-          ?.routeResponseStatus ?? null,
-      rejectReceipt:
-        hardening.staleHostDeadline?.staleHostDeadlineReloadAfterReject
-          ?.rejectReceiptStatusText ?? null,
-      phaseId:
-        hardening.staleHostDeadline?.staleHostDeadlineReloadAfterReject
-          ?.phaseAfterReload?.id ?? null,
-      locked:
-        hardening.staleHostDeadline?.staleHostDeadlineReloadAfterReject
-          ?.phaseAfterReload?.locked ?? null,
-      deadlineActions:
-        hardening.staleHostDeadline?.staleHostDeadlineReloadAfterReject
-          ?.deadlineActionsAfterReload ?? null,
-      phaseActions:
-        hardening.staleHostDeadline?.staleHostDeadlineReloadAfterReject
-          ?.phaseActionsAfterReload ?? null,
-      apiDeadline:
-        hardening.staleHostDeadline?.staleHostDeadlineReloadAfterReject
-          ?.apiPhaseAfterReload?.deadline ?? null,
-      passed:
-        hardening.staleHostDeadline?.status === "passed" &&
-        hardening.staleHostDeadline?.reject?.error === "PhaseLocked" &&
-        hardening.staleHostDeadline?.staleHostDeadlineReloadAfterReject?.status ===
-          "passed" &&
-        hardening.staleHostDeadline?.staleHostDeadlineReloadAfterReject
-          ?.routeResponseStatus === 200 &&
-        hardening.staleHostDeadline?.staleHostDeadlineReloadAfterReject
-          ?.rejectReceiptStatusText?.includes("Reject PhaseLocked") === true &&
-        hardening.staleHostDeadline?.staleHostDeadlineReloadAfterReject
-          ?.phaseAfterReload?.id === "D02" &&
-        hardening.staleHostDeadline?.staleHostDeadlineReloadAfterReject
-          ?.phaseAfterReload?.locked === false &&
-        hardening.staleHostDeadline?.staleHostDeadlineReloadAfterReject
-          ?.deadlineActionsAfterReload?.includes("extend_deadline") === true &&
-        hardening.staleHostDeadline?.staleHostDeadlineReloadAfterReject
-          ?.phaseActionsAfterReload?.includes("resolve_phase") === true &&
-        hardening.staleHostDeadline?.staleHostDeadlineReloadAfterReject
-          ?.phaseActionsAfterReload?.includes("lock_thread") === true &&
-        hardening.staleHostDeadline?.staleHostDeadlineReloadAfterReject
-          ?.apiPhaseAfterReload?.phase_id === "D02" &&
-        hardening.staleHostDeadline?.staleHostDeadlineReloadAfterReject
-          ?.apiPhaseAfterReload?.locked === false &&
-        hardening.staleHostDeadline?.staleHostDeadlineReloadAfterReject
-          ?.apiPhaseAfterReload?.deadline === null,
-    }),
-    lane(
-      "stale-host-deadline-reconnect-recovery",
-      "Stale host deadline recovery reconnects open phase console",
-      {
-        game: session.game ?? null,
-        reconnectingState:
-          hardening.staleHostDeadline?.reconnectAfterReject?.reconnectingStatus
-            ?.state ?? null,
-        recoveryState:
-          hardening.staleHostDeadline?.reconnectAfterReject?.reconnectRecoveryEvent
-            ?.state ?? null,
-        recoveredPhase:
-          hardening.staleHostDeadline?.reconnectAfterReject?.recoveredHostProjection
-            ?.phase?.id ?? null,
-        recoveredLocked:
-          hardening.staleHostDeadline?.reconnectAfterReject?.recoveredHostProjection
-            ?.phase?.locked ?? null,
-        deadlineActions:
-          hardening.staleHostDeadline?.deadlineActionsAfterReconnect ?? null,
-        phaseActions:
-          hardening.staleHostDeadline?.phaseActionsAfterReconnect ?? null,
-        apiDeadline:
-          hardening.staleHostDeadline?.apiPhaseAfterReconnect?.deadline ?? null,
-        passed:
-          hardening.staleHostDeadline?.status === "passed" &&
-          hardening.staleHostDeadline?.reject?.error === "PhaseLocked" &&
-          hardening.staleHostDeadline?.reconnectAfterReject?.status === "passed" &&
-          hardening.staleHostDeadline?.reconnectAfterReject?.reconnectingStatus
-            ?.state === "reconnecting" &&
-          hardening.staleHostDeadline?.reconnectAfterReject?.reconnectRecoveryEvent
-            ?.state === "recovered" &&
-          hardening.staleHostDeadline?.reconnectAfterReject?.reconnectRecoveryEvent
-            ?.attempt === 1 &&
-          hardening.staleHostDeadline?.reconnectAfterReject
-            ?.recoveredHostProjection?.phase?.id === "D02" &&
-          hardening.staleHostDeadline?.reconnectAfterReject
-            ?.recoveredHostProjection?.phase?.locked === false &&
-          hardening.staleHostDeadline?.deadlineActionsAfterReconnect?.includes(
-            "extend_deadline",
-          ) === true &&
-          hardening.staleHostDeadline?.phaseActionsAfterReconnect?.includes(
-            "resolve_phase",
-          ) === true &&
-          hardening.staleHostDeadline?.phaseActionsAfterReconnect?.includes(
-            "lock_thread",
-          ) === true &&
-          hardening.staleHostDeadline?.apiPhaseAfterReconnect?.phase_id === "D02" &&
-          hardening.staleHostDeadline?.apiPhaseAfterReconnect?.locked === false &&
-          hardening.staleHostDeadline?.apiPhaseAfterReconnect?.deadline === null,
-      },
-    ),
+    ...hostPhaseStaleControlLanes({ hardening, session }),
     lane("stale-cohost-deadline", "Stale cohost deadline control rejects without drift", {
       rejectError: hardening.staleCohostDeadline?.reject?.error ?? null,
       roleUrl: hardening.staleCohostDeadline?.setup?.roleUrl ?? null,
@@ -8249,6 +7697,317 @@ function hasEnabledButton(buttons, actionId) {
 
 function firstActionTemplate(actions) {
   return actions?.find((action) => action.templateId !== undefined)?.templateId ?? null;
+}
+
+function hostPhaseStaleControlLanes({ hardening, session }) {
+  return hostPhaseStaleControlCases().flatMap((scenario) => [
+    hostPhaseStaleBaseLane({ hardening, session, scenario }),
+    hostPhaseStaleReloadLane({ hardening, session, scenario }),
+    hostPhaseStaleReconnectLane({ hardening, session, scenario }),
+  ]);
+}
+
+function hostPhaseStaleBaseLane({ hardening, session, scenario }) {
+  const proof = hardening?.[scenario.proofField];
+  return lane(scenario.baseLaneId, scenario.baseLabel, {
+    rejectError: proof?.reject?.error ?? null,
+    roleUrl: proof?.setup?.roleUrl ?? null,
+    staleClickActionId: proof?.staleClickBrowserProof?.clickedActionId ?? null,
+    staleClickReceipt: proof?.staleClickBrowserProof?.receiptStatusText ?? null,
+    staleClickRefreshKeys:
+      proof?.staleClickBrowserProof?.dispatchRefreshKeys ?? null,
+    stalePhase: proof?.setup?.stalePhase?.id ?? null,
+    ...hostPhaseStaleBaseExtraEvidence({ proof, scenario }),
+    phaseId: proof?.phaseAfterReject?.id ?? null,
+    locked: proof?.phaseAfterReject?.locked ?? null,
+    phaseActions: proof?.phaseActionsAfterReject ?? null,
+    passed: hostPhaseStaleBasePassed({ proof, session, scenario }),
+  });
+}
+
+function hostPhaseStaleBaseExtraEvidence({ proof, scenario }) {
+  if (scenario.key === "resolve") {
+    return {
+      liveResolveSeqs: proof?.liveResolve?.commandStatus?.streamSeqs ?? null,
+      restoreLocked: proof?.apiPhaseAfterRestore?.locked ?? null,
+    };
+  }
+  if (scenario.key === "advance") {
+    return {
+      liveUnlockSeqs: proof?.liveUnlock?.commandStatus?.streamSeqs ?? null,
+    };
+  }
+  return {
+    activitySource: proof?.activityRow?.source ?? null,
+    deadlineActions: proof?.deadlineActionsAfterReject ?? null,
+    apiDeadline: proof?.apiPhaseAfterReject?.deadline ?? null,
+  };
+}
+
+function hostPhaseStaleReloadLane({ hardening, session, scenario }) {
+  const proof = hardening?.[scenario.proofField];
+  const reloadProof = proof?.[scenario.reloadProofField];
+  return lane(scenario.reloadLaneId, scenario.reloadLabel, {
+    ...hostPhaseStaleReloadPrefixEvidence({ proof, session, scenario }),
+    routeStatus: reloadProof?.routeResponseStatus ?? null,
+    rejectReceipt: reloadProof?.rejectReceiptStatusText ?? null,
+    phaseId: reloadProof?.phaseAfterReload?.id ?? null,
+    locked: reloadProof?.phaseAfterReload?.locked ?? null,
+    ...hostPhaseStaleReloadActionEvidence({ reloadProof, scenario }),
+    passed: hostPhaseStaleReloadPassed({ proof, reloadProof, scenario }),
+  });
+}
+
+function hostPhaseStaleReloadPrefixEvidence({ proof, session, scenario }) {
+  if (scenario.key === "deadline") {
+    return {
+      rejectError: proof?.reject?.error ?? null,
+    };
+  }
+  return {
+    game: session.game ?? null,
+  };
+}
+
+function hostPhaseStaleReloadActionEvidence({ reloadProof, scenario }) {
+  if (scenario.key === "deadline") {
+    return {
+      deadlineActions: reloadProof?.deadlineActionsAfterReload ?? null,
+      phaseActions: reloadProof?.phaseActionsAfterReload ?? null,
+      apiDeadline: reloadProof?.apiPhaseAfterReload?.deadline ?? null,
+    };
+  }
+  return {
+    phaseActions: reloadProof?.phaseActionsAfterReload ?? null,
+    apiLocked: reloadProof?.apiPhaseAfterReload?.locked ?? null,
+  };
+}
+
+function hostPhaseStaleReconnectLane({ hardening, session, scenario }) {
+  const proof = hardening?.[scenario.proofField];
+  const reconnectProof = proof?.reconnectAfterReject;
+  return lane(scenario.reconnectLaneId, scenario.reconnectLabel, {
+    game: session.game ?? null,
+    reconnectingState: reconnectProof?.reconnectingStatus?.state ?? null,
+    recoveryState: reconnectProof?.reconnectRecoveryEvent?.state ?? null,
+    recoveredPhase: reconnectProof?.recoveredHostProjection?.phase?.id ?? null,
+    recoveredLocked:
+      reconnectProof?.recoveredHostProjection?.phase?.locked ?? null,
+    ...hostPhaseStaleReconnectActionEvidence({ proof, scenario }),
+    passed: hostPhaseStaleReconnectPassed({ proof, reconnectProof, scenario }),
+  });
+}
+
+function hostPhaseStaleReconnectActionEvidence({ proof, scenario }) {
+  if (scenario.key === "deadline") {
+    return {
+      deadlineActions: proof?.deadlineActionsAfterReconnect ?? null,
+      phaseActions: proof?.phaseActionsAfterReconnect ?? null,
+      apiDeadline: proof?.apiPhaseAfterReconnect?.deadline ?? null,
+    };
+  }
+  return {
+    phaseActions: proof?.phaseActionsAfterReconnect ?? null,
+  };
+}
+
+function hostPhaseStaleBasePassed({ proof, session, scenario }) {
+  const liveCommandProof =
+    scenario.key === "resolve"
+      ? proof?.liveResolve
+      : scenario.key === "advance"
+        ? proof?.liveUnlock
+        : null;
+  return (
+    proof?.status === "passed" &&
+    typeof proof?.setup?.roleUrl === "string" &&
+    proof.setup.roleUrl.includes(`/g/${session?.game ?? ""}/host`) === true &&
+    proof?.staleClickBrowserProof?.roleUrl === proof.setup.roleUrl &&
+    proof?.staleClickBrowserProof?.clickedActionId === scenario.actionId &&
+    proof?.staleClickBrowserProof?.receiptStatusText?.includes(
+      `Reject ${scenario.rejectError}`,
+    ) === true &&
+    proof?.staleClickBrowserProof?.dispatchRefreshKeys?.includes("host") ===
+      true &&
+    hostPhaseMatches(
+      proof?.staleClickBrowserProof?.phaseAfterReject,
+      scenario.expectedCurrentPhase,
+    ) &&
+    hostPhaseActionsMatch(
+      proof?.staleClickBrowserProof?.phaseActionsAfterReject,
+      scenario.expectedCurrentActions,
+    ) &&
+    hostPhaseStaleClickDeadlinePassed({ proof, scenario }) &&
+    hostPhaseMatches(proof?.setup?.stalePhase, scenario.expectedStalePhase) &&
+    hostPhaseActionsMatch(
+      proof?.setup?.phaseActions,
+      scenario.expectedSetupActions,
+    ) &&
+    hostDeadlineActionsMatch(
+      proof?.setup?.deadlineActions,
+      scenario.expectedSetupActions,
+    ) &&
+    (liveCommandProof === null || hostCommandAckedWithSeqs(liveCommandProof)) &&
+    proof?.reject?.state === "reject" &&
+    proof?.reject?.error === scenario.rejectError &&
+    hostPhaseStaleRejectEnvelopePassed({ proof, scenario }) &&
+    Array.isArray(proof?.reject?.streamSeqs) === false &&
+    proof?.reject?.message?.includes("stale phase state") === true &&
+    hostPhaseMatches(proof?.phaseAfterReject, scenario.expectedCurrentPhase) &&
+    hostPhaseActionsMatch(
+      proof?.phaseActionsAfterReject,
+      scenario.expectedCurrentActions,
+    ) &&
+    hostDeadlineActionsMatch(
+      proof?.deadlineActionsAfterReject,
+      scenario.expectedCurrentActions,
+    ) &&
+    proof?.activityRow?.source === "outcome" &&
+    proof?.activityRow?.actionId === scenario.actionId &&
+    proof?.dispatchPlan?.projectionRefreshKeys?.includes("host") === true &&
+    hostApiPhaseMatches(proof?.apiPhaseAfterReject, scenario.expectedCurrentPhase) &&
+    hostPhaseStaleRestorePassed({ proof, scenario })
+  );
+}
+
+function hostPhaseStaleReloadPassed({ proof, reloadProof, scenario }) {
+  return (
+    proof?.status === "passed" &&
+    proof?.reject?.error === scenario.rejectError &&
+    reloadProof?.status === "passed" &&
+    reloadProof?.routeResponseStatus === 200 &&
+    reloadProof?.rejectReceiptStatusText?.includes(
+      `Reject ${scenario.rejectError}`,
+    ) === true &&
+    hostPhaseMatches(reloadProof?.phaseAfterReload, scenario.expectedCurrentPhase) &&
+    hostPhaseActionsMatch(
+      reloadProof?.phaseActionsAfterReload,
+      scenario.expectedCurrentActions,
+    ) &&
+    hostDeadlineActionsMatch(
+      reloadProof?.deadlineActionsAfterReload,
+      scenario.expectedCurrentActions,
+    ) &&
+    hostApiPhaseMatches(
+      reloadProof?.apiPhaseAfterReload,
+      scenario.expectedCurrentPhase,
+    )
+  );
+}
+
+function hostPhaseStaleReconnectPassed({ proof, reconnectProof, scenario }) {
+  return (
+    proof?.status === "passed" &&
+    proof?.reject?.error === scenario.rejectError &&
+    reconnectProof?.status === "passed" &&
+    reconnectProof?.reconnectingStatus?.state === "reconnecting" &&
+    reconnectProof?.reconnectRecoveryEvent?.state === "recovered" &&
+    reconnectProof?.reconnectRecoveryEvent?.attempt === 1 &&
+    hostPhaseMatches(
+      reconnectProof?.recoveredHostProjection?.phase,
+      scenario.expectedCurrentPhase,
+    ) &&
+    hostPhaseActionsMatch(
+      proof?.phaseActionsAfterReconnect,
+      scenario.expectedCurrentActions,
+    ) &&
+    hostDeadlineActionsMatch(
+      proof?.deadlineActionsAfterReconnect,
+      scenario.expectedCurrentActions,
+    ) &&
+    hostPhaseStaleReconnectApiPassed({ proof, scenario })
+  );
+}
+
+function hostPhaseStaleRestorePassed({ proof, scenario }) {
+  if (scenario.key !== "resolve") {
+    return true;
+  }
+  return (
+    proof?.restoreAfterReject?.commandStatus?.state === "ack" &&
+    proof?.apiPhaseAfterRestore?.phase_id === "D02" &&
+    proof?.apiPhaseAfterRestore?.locked === false
+  );
+}
+
+function hostPhaseStaleClickDeadlinePassed({ proof, scenario }) {
+  if (scenario.key !== "deadline") {
+    return true;
+  }
+  return (
+    hostDeadlineActionsMatch(
+      proof?.staleClickBrowserProof?.deadlineActionsAfterReject,
+      scenario.expectedCurrentActions,
+    ) &&
+    hostApiPhaseMatches(
+      proof?.staleClickBrowserProof?.apiPhaseAfterReject,
+      scenario.expectedCurrentPhase,
+    )
+  );
+}
+
+function hostPhaseStaleRejectEnvelopePassed({ proof, scenario }) {
+  if (scenario.key === "deadline") {
+    return true;
+  }
+  return proof?.reject?.serverEnvelope?.body?.kind === "Reject";
+}
+
+function hostPhaseStaleReconnectApiPassed({ proof, scenario }) {
+  if (!Object.hasOwn(scenario.expectedCurrentPhase, "deadline")) {
+    return true;
+  }
+  return hostApiPhaseMatches(
+    proof?.apiPhaseAfterReconnect,
+    scenario.expectedCurrentPhase,
+  );
+}
+
+function hostCommandAckedWithSeqs(commandProof) {
+  return (
+    commandProof?.commandStatus?.state === "ack" &&
+    Array.isArray(commandProof?.commandStatus?.streamSeqs) &&
+    commandProof.commandStatus.streamSeqs.length > 0
+  );
+}
+
+function hostPhaseMatches(phase, expectedPhase) {
+  return (
+    phase?.id === expectedPhase.id &&
+    phase?.locked === expectedPhase.locked
+  );
+}
+
+function hostApiPhaseMatches(apiPhase, expectedPhase) {
+  return (
+    apiPhase?.phase_id === expectedPhase.id &&
+    apiPhase?.locked === expectedPhase.locked &&
+    (!Object.hasOwn(expectedPhase, "deadline") ||
+      apiPhase?.deadline === expectedPhase.deadline)
+  );
+}
+
+function hostPhaseActionsMatch(actions, expectedActions) {
+  return (
+    actionsIncludeAll(actions, expectedActions.phaseIncludes) &&
+    actionsExcludeAll(actions, expectedActions.phaseExcludes)
+  );
+}
+
+function hostDeadlineActionsMatch(actions, expectedActions) {
+  return actionsIncludeAll(actions, expectedActions.deadlineIncludes);
+}
+
+function actionsIncludeAll(actions, expectedActions) {
+  return (expectedActions ?? []).every(
+    (actionId) => actions?.includes(actionId) === true,
+  );
+}
+
+function actionsExcludeAll(actions, expectedActions) {
+  return (expectedActions ?? []).every(
+    (actionId) => actions?.includes(actionId) === false,
+  );
 }
 
 function lane(id, label, evidence) {
