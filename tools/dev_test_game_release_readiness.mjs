@@ -58,6 +58,7 @@ import {
   privateReceiptScenario,
   assertCompletedPrivateChannelReloadProofCase,
   assertStaleCompletedPrivatePostRecoveryProofCase,
+  assertStalePrivateChannelPostPhaseLockedProofCase,
   staleCompletedPrivatePostScenario,
   stalePrivateChannelPostPhaseLockedScenario,
 } from "./dev_test_game_core_loop_private_receipt_scenarios.mjs";
@@ -4836,60 +4837,13 @@ function assertCoreLoopPrivateChannelRoleSurface(privateChannelRoleSurface) {
   ) {
     throw new Error("core-loop admin proof missing private channel SubmitPost ACK");
   }
-  if (
-    stalePostProof?.status !== "passed" ||
-    stalePostProof.sourceRoleUrl !== privateChannelRoleSurface.sourceRoleUrl ||
-    stalePostProof.visitedRolePath !== privateChannelRoleSurface.visitedRolePath ||
-    stalePostProof.clickedAction !== stalePostScenario.clickedAction ||
-    stalePostProof.commandKind !== stalePostScenario.commandKind ||
-    stalePostProof.command?.game !== expectedGame ||
-    stalePostProof.command.channel_id !== stalePostScenario.channelId ||
-    stalePostProof.command.actor_slot !== stalePostScenario.actorSlot ||
-    stalePostProof.command.body !== stalePostProof.stalePrivatePostBody ||
-    stalePostProof.stalePrivatePostBody !== stalePostScenario.stalePostBody ||
-    stalePostProof.commandStatus?.state !== "reject" ||
-    stalePostProof.commandStatus.error !== stalePostScenario.commandError ||
-    !String(stalePostProof.commandStatus.message ?? "").includes(
-      stalePostScenario.commandMessageFragment,
-    ) ||
-    stalePostProof.bridgePlan?.role !== "player" ||
-    stalePostProof.bridgePlan.commandKind !== stalePostScenario.commandKind ||
-    stalePostProof.bridgePlan.commandEndpoint !== "/commands" ||
-    stalePostProof.bridgePlan.finalState !== "reject" ||
-    !sameStringArray(
-      stalePostProof.bridgePlan.projectionRefreshKeys,
-      stalePostScenario.expectedRefreshKeys,
-    ) ||
-    stalePostProof.receipts?.at?.(-1)?.state !== "reject" ||
-    stalePostProof.projectionCommandState?.phase?.phaseId !==
-      stalePostScenario.expectedPhaseId ||
-    stalePostProof.projectionCommandState?.phase?.locked !==
-      stalePostScenario.expectedLocked ||
-    !String(stalePostProof.projectionCommandState?.boundary ?? "").includes(
-      "private post PhaseLocked recovery",
-    ) ||
-    stalePostProof.projectionThread?.posts?.at?.(-1)?.body !==
-      stalePostScenario.currentThreadBody ||
-    stalePostProof.projectionThread?.posts?.some?.(
-      (post) => post?.body === stalePostProof.stalePrivatePostBody,
-    ) === true ||
-    !String(stalePostProof.currentThreadText ?? "").includes(
-      stalePostScenario.currentThreadBody,
-    ) ||
-    stalePostProof.checkpointPhaseId !== stalePostScenario.expectedPhaseId ||
-    stalePostProof.checkpointActionState !==
-      stalePostScenario.expectedActionState ||
-    stalePostProof.checkpointReceiptState !==
-      stalePostScenario.expectedReceiptState ||
-    !String(stalePostProof.receiptStatusText ?? "")
-      .toLowerCase()
-      .includes(stalePostScenario.expectedReceiptStatusFragment) ||
-    stalePostProof.receiptRefreshKeys !==
-      stalePostScenario.expectedRefreshKeys.join(",") ||
-    stalePostProof.rawInviteTokensVisible !== false
-  ) {
-    throw new Error("core-loop admin proof missing private channel stale post recovery");
-  }
+  assertStalePrivateChannelPostPhaseLockedProofCase({
+    proof: stalePostProof,
+    expectedGame,
+    sourceRoleUrl: privateChannelRoleSurface.sourceRoleUrl,
+    visitedRolePath: privateChannelRoleSurface.visitedRolePath,
+    scenario: stalePostScenario,
+  });
   assertCoreLoopCompletedPrivateChannelProof({
     proof: completedProof,
     expectedGame,

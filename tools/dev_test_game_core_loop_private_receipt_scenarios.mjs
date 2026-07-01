@@ -393,6 +393,68 @@ export function assertCompletedPrivateChannelProofCases({
   }
 }
 
+export function assertStalePrivateChannelPostPhaseLockedProofCase({
+  proof,
+  expectedGame,
+  sourceRoleUrl,
+  visitedRolePath,
+  scenario = stalePrivateChannelPostPhaseLockedScenario(),
+  includeEvidenceInError = false,
+}) {
+  if (
+    proof?.status !== "passed" ||
+    proof.sourceRoleUrl !== sourceRoleUrl ||
+    proof.visitedRolePath !== visitedRolePath ||
+    proof.clickedAction !== scenario.clickedAction ||
+    proof.commandKind !== scenario.commandKind ||
+    proof.command?.game !== expectedGame ||
+    proof.command.channel_id !== scenario.channelId ||
+    proof.command.actor_slot !== scenario.actorSlot ||
+    proof.command.body !== proof.stalePrivatePostBody ||
+    proof.stalePrivatePostBody !== scenario.stalePostBody ||
+    proof.commandStatus?.state !== "reject" ||
+    proof.commandStatus.error !== scenario.commandError ||
+    !String(proof.commandStatus.message ?? "").includes(
+      scenario.commandMessageFragment,
+    ) ||
+    proof.bridgePlan?.role !== "player" ||
+    proof.bridgePlan.commandKind !== scenario.commandKind ||
+    proof.bridgePlan.commandEndpoint !== "/commands" ||
+    proof.bridgePlan.finalState !== "reject" ||
+    !sameStringArray(
+      proof.bridgePlan.projectionRefreshKeys,
+      scenario.expectedRefreshKeys,
+    ) ||
+    proof.receipts?.at?.(-1)?.state !== "reject" ||
+    proof.projectionCommandState?.phase?.phaseId !==
+      scenario.expectedPhaseId ||
+    proof.projectionCommandState?.phase?.locked !== scenario.expectedLocked ||
+    !String(proof.projectionCommandState?.boundary ?? "").includes(
+      "private post PhaseLocked recovery",
+    ) ||
+    proof.projectionThread?.posts?.at?.(-1)?.body !==
+      scenario.currentThreadBody ||
+    proof.projectionThread?.posts?.some?.(
+      (post) => post?.body === proof.stalePrivatePostBody,
+    ) === true ||
+    !String(proof.currentThreadText ?? "").includes(scenario.currentThreadBody) ||
+    proof.checkpointPhaseId !== scenario.expectedPhaseId ||
+    proof.checkpointActionState !== scenario.expectedActionState ||
+    proof.checkpointReceiptState !== scenario.expectedReceiptState ||
+    !String(proof.receiptStatusText ?? "")
+      .toLowerCase()
+      .includes(scenario.expectedReceiptStatusFragment) ||
+    proof.receiptRefreshKeys !== scenario.expectedRefreshKeys.join(",") ||
+    proof.rawInviteTokensVisible !== false
+  ) {
+    throwPrivateChannelScenarioAssertionError({
+      message: "core-loop admin proof missing private channel stale post recovery",
+      evidence: proof,
+      includeEvidenceInError,
+    });
+  }
+}
+
 export function completedPrivateChannelReloadSnapshotAssertionCases({
   proof,
   scenario = completedPrivateChannelReloadScenario(),

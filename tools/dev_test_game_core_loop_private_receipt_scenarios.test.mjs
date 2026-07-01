@@ -2,10 +2,12 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
   assertCompletedPrivateChannelProofCases,
+  assertStalePrivateChannelPostPhaseLockedProofCase,
   completedPrivateChannelProofAssertionCases,
   completedPrivateChannelReloadScenario,
   completedPrivateChannelSnapshot,
   completedPrivateChannelTransition,
+  stalePrivateChannelPostPhaseLockedScenario,
   staleCompletedPrivatePostScenario,
 } from "./dev_test_game_core_loop_private_receipt_scenarios.mjs";
 
@@ -182,6 +184,81 @@ test("completed private-channel scenarios derive shared proof assertion cases", 
     cases,
   });
   assert.deepEqual(asserted, ["reload", "stale-completed-post"]);
+});
+
+test("stale private-channel PhaseLocked assertion covers refreshed private post recovery", () => {
+  const scenario = stalePrivateChannelPostPhaseLockedScenario();
+  const proof = {
+    status: "passed",
+    sourceRoleUrl: "http://127.0.0.1/g/game-a/c/role-pm?private=notification-1",
+    visitedRolePath: "/g/game-a/c/role-pm?private=notification-1",
+    clickedAction: scenario.clickedAction,
+    commandKind: scenario.commandKind,
+    command: {
+      game: "game-a",
+      channel_id: scenario.channelId,
+      actor_slot: scenario.actorSlot,
+      body: scenario.stalePostBody,
+    },
+    commandStatus: {
+      state: "reject",
+      error: scenario.commandError,
+      message: scenario.commandMessageFragment,
+    },
+    bridgePlan: {
+      role: "player",
+      commandKind: scenario.commandKind,
+      commandEndpoint: "/commands",
+      finalState: "reject",
+      projectionRefreshKeys: scenario.expectedRefreshKeys,
+    },
+    receipts: [{ state: "reject" }],
+    projectionCommandState: {
+      phase: {
+        phaseId: scenario.expectedPhaseId,
+        locked: scenario.expectedLocked,
+      },
+      boundary: scenario.routeBoundary,
+    },
+    projectionThread: {
+      posts: [{ body: scenario.currentThreadBody }],
+    },
+    stalePrivatePostBody: scenario.stalePostBody,
+    currentThreadText: scenario.currentThreadBody,
+    checkpointPhaseId: scenario.expectedPhaseId,
+    checkpointActionState: scenario.expectedActionState,
+    checkpointReceiptState: scenario.expectedReceiptState,
+    receiptStatusText: scenario.expectedReceiptStatusFragment,
+    receiptRefreshKeys: scenario.expectedRefreshKeys.join(","),
+    rawInviteTokensVisible: false,
+  };
+
+  assert.doesNotThrow(() =>
+    assertStalePrivateChannelPostPhaseLockedProofCase({
+      proof,
+      expectedGame: "game-a",
+      sourceRoleUrl: proof.sourceRoleUrl,
+      visitedRolePath: proof.visitedRolePath,
+    }),
+  );
+  assert.throws(
+    () =>
+      assertStalePrivateChannelPostPhaseLockedProofCase({
+        proof: {
+          ...proof,
+          projectionThread: {
+            posts: [
+              { body: scenario.currentThreadBody },
+              { body: scenario.stalePostBody },
+            ],
+          },
+        },
+        expectedGame: "game-a",
+        sourceRoleUrl: proof.sourceRoleUrl,
+        visitedRolePath: proof.visitedRolePath,
+      }),
+    /private channel stale post recovery/,
+  );
 });
 
 function recordAssertion(assertionName, asserted) {
