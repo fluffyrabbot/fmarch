@@ -1,6 +1,9 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import {
+  completedGameHardeningLaneIds,
+} from "./dev_test_game_core_loop_completed_scenarios.mjs";
 
 export const DEV_TEST_GAME_PROOF_VERSION = 1;
 
@@ -86,15 +89,7 @@ const requiredLaneIds = Object.freeze([
   "concurrent-host-lifecycle-race-reload",
   "stale-host-prompt",
   "stale-host-prompt-reload",
-  "stale-host-complete",
-  "stale-host-complete-reload",
-  "stale-host-complete-reconnect-recovery",
-  "concurrent-host-complete-race",
-  "concurrent-host-complete-race-reload",
-  "concurrent-player-complete-race",
-  "public-player-complete-reload",
-  "stale-player-complete",
-  "stale-player-complete-reload",
+  ...completedGameHardeningLaneIds(),
   "stale-same-action-recovery",
   "stale-dead-action-conflict",
   "stale-action-conflict",
