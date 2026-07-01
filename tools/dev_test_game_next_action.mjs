@@ -56,6 +56,12 @@ export const devTestGameLiveProofCommand =
   "DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch npm run test:dev-test-game-live";
 export const devTestGameCoreLoopAdminProofCommand =
   "npm run test:dev-test-game-core-loop-admin-proof";
+export const devTestGameSeedFixtureCommand =
+  "npm run test:dev-test-game-seed-fixture";
+export const devTestGameSeedFixturePath =
+  "target/dev-test-game/seed-fixture-summary.json";
+export const devTestGameSeedFixtureRoleUrl =
+  "/admin/audit/local-seed-fixtures?game=<seeded-game>";
 
 const nextActionJsonPath = path.join(repoRoot, devTestGameNextActionPath);
 
@@ -93,6 +99,11 @@ export function buildDevTestGameNextAction(
   const selectionTrace = buildSelectionTrace(candidates);
   const stabilityDrift = proofStabilityDriftFromOpsArtifacts(ops);
   const stabilityTrace = buildProofStabilityTrace(stabilityDrift);
+  const seedProofLaneCoverageDrift =
+    seedProofLaneCoverageDriftFromReadiness(readiness);
+  const seedProofLaneCoverageTrace = buildSeedProofLaneCoverageTrace(
+    seedProofLaneCoverageDrift,
+  );
   const releaseReadinessCandidates = rankedBuildableReleaseReadinessItems(readiness, {
     hostedTargetPreflight: hostedPreflight,
     coreLoopSpineTarget,
@@ -162,6 +173,25 @@ export function buildDevTestGameNextAction(
               buildSlice:
                 "Stabilize the critical host-confirm browser interaction before expanding the production-facing seeded proof spine.",
               proofTarget: "target/dev-test-game/session.json",
+            },
+          }
+      : seedProofLaneCoverageDrift.status === "drifted"
+        ? {
+            command: devTestGameSeedFixtureCommand,
+            reason: "seed-proof-lane-coverage-drift",
+            status: "blocked",
+            seedProofLaneCoverage: {
+              source: seedProofLaneCoverageDrift.source,
+              status: seedProofLaneCoverageDrift.status,
+              passedLaneCount: seedProofLaneCoverageDrift.passedLaneCount,
+              unclassifiedLaneCount:
+                seedProofLaneCoverageDrift.unclassifiedLaneCount,
+              unclassifiedLaneIds:
+                seedProofLaneCoverageDrift.unclassifiedLaneIds,
+              buildSlice:
+                "Classify every passed proof lane as direct seeded, alias-covered, or aggregate-only before expanding the production-facing seeded proof spine.",
+              proofTarget: devTestGameSeedFixturePath,
+              roleUrl: devTestGameSeedFixtureRoleUrl,
             },
           }
       : selectedLocalReadinessDependency !== undefined
@@ -272,6 +302,9 @@ export function buildDevTestGameNextAction(
             releaseReadinessChecklist: releaseReadinessChecklistSource,
             releaseReadinessGeneratedAt: readiness.generatedAt,
             releaseReadinessSummary,
+            seedProofLaneCoverageStatus: seedProofLaneCoverageDrift.status,
+            seedProofLaneCoverageUnclassifiedCount:
+              seedProofLaneCoverageDrift.unclassifiedLaneCount,
           }),
       ...(races === null
         ? {}
@@ -320,6 +353,7 @@ export function buildDevTestGameNextAction(
     nextAction,
     selectionTrace,
     stabilityTrace,
+    seedProofLaneCoverageTrace,
     localReadinessDependencyTrace,
     releaseReadinessTrace,
     replacementRaceReloadTrace,
@@ -361,6 +395,7 @@ export function assertDevTestGameNextAction(evidence) {
       "all-artifacts-fresh",
       "artifact-not-fresh",
       "harness-stability-drift",
+      "seed-proof-lane-coverage-drift",
       "release-readiness-local-check-missing",
       "release-readiness-unproven",
     ].includes(evidence.nextAction.reason)
@@ -439,8 +474,29 @@ export function assertDevTestGameNextAction(evidence) {
   ) {
     throw new Error("next-action harness-stability recovery is missing stability evidence");
   }
+  if (evidence.nextAction.reason === "seed-proof-lane-coverage-drift") {
+    if (
+      typeof evidence.nextAction.seedProofLaneCoverage?.source !== "string" ||
+      !Array.isArray(
+        evidence.nextAction.seedProofLaneCoverage?.unclassifiedLaneIds,
+      ) ||
+      evidence.nextAction.seedProofLaneCoverage.unclassifiedLaneIds.length === 0 ||
+      evidence.nextAction.seedProofLaneCoverage.roleUrl !==
+        devTestGameSeedFixtureRoleUrl ||
+      evidence.nextAction.seedProofLaneCoverage.proofTarget !==
+        devTestGameSeedFixturePath
+    ) {
+      throw new Error(
+        "next-action seed proof-lane coverage recovery is missing drift evidence",
+      );
+    }
+  }
   assertSelectionTrace(evidence.selectionTrace, evidence.nextAction);
   assertProofStabilityTrace(evidence.stabilityTrace, evidence.nextAction);
+  assertSeedProofLaneCoverageTrace(
+    evidence.seedProofLaneCoverageTrace,
+    evidence.nextAction,
+  );
   assertLocalReadinessDependencyTrace(
     evidence.localReadinessDependencyTrace,
     evidence.nextAction,
@@ -798,6 +854,53 @@ function buildReleaseReadinessTrace(candidates) {
         ? {}
         : { hostedHandoffChecklist: candidate.hostedHandoffChecklist }),
     })),
+  };
+}
+
+function seedProofLaneCoverageDriftFromReadiness(readiness) {
+  const seedCheck = readiness?.localDevelopmentSpine?.checks?.find?.(
+    (check) => check?.id === "local-seed-demo-fixture",
+  );
+  const coverage = seedCheck?.proofLaneCoverage;
+  const unclassifiedLaneIds = Array.isArray(coverage?.unclassified?.laneIds)
+    ? coverage.unclassified.laneIds.map((laneId) => String(laneId))
+    : [];
+  const unclassifiedLaneCount = numberOrZero(
+    coverage?.unclassified?.count ?? unclassifiedLaneIds.length,
+  );
+  return {
+    strategy: "seed-proof-lane-coverage-before-readiness",
+    status:
+      readiness === null || coverage === null || typeof coverage !== "object"
+        ? "unavailable"
+        : unclassifiedLaneCount > 0
+          ? "drifted"
+          : "clean",
+    source: readiness === null ? "" : devTestGameReleaseReadinessPath,
+    checkId: seedCheck?.id ?? null,
+    passedLaneCount: numberOrZero(coverage?.passedLaneCount),
+    directSeededLaneCount: numberOrZero(coverage?.directSeeded?.count),
+    aliasOnlyLaneCount: numberOrZero(coverage?.aliasOnly?.count),
+    aggregateOnlyLaneCount: numberOrZero(coverage?.aggregateOnly?.count),
+    unclassifiedLaneCount,
+    unclassifiedLaneIds,
+  };
+}
+
+function buildSeedProofLaneCoverageTrace(seedProofLaneCoverageDrift) {
+  return {
+    strategy: seedProofLaneCoverageDrift.strategy,
+    status: seedProofLaneCoverageDrift.status,
+    source: seedProofLaneCoverageDrift.source,
+    checkId: seedProofLaneCoverageDrift.checkId,
+    passedLaneCount: seedProofLaneCoverageDrift.passedLaneCount,
+    directSeededLaneCount: seedProofLaneCoverageDrift.directSeededLaneCount,
+    aliasOnlyLaneCount: seedProofLaneCoverageDrift.aliasOnlyLaneCount,
+    aggregateOnlyLaneCount: seedProofLaneCoverageDrift.aggregateOnlyLaneCount,
+    unclassifiedLaneCount:
+      seedProofLaneCoverageDrift.unclassifiedLaneCount,
+    unclassifiedLaneIds: seedProofLaneCoverageDrift.unclassifiedLaneIds,
+    selected: seedProofLaneCoverageDrift.status === "drifted",
   };
 }
 
@@ -1331,6 +1434,43 @@ function assertProofStabilityTrace(stabilityTrace, nextAction) {
     stabilityTrace.selected === true
   ) {
     throw new Error("next-action stability trace selected without drift action");
+  }
+}
+
+function assertSeedProofLaneCoverageTrace(seedProofLaneCoverageTrace, nextAction) {
+  if (
+    seedProofLaneCoverageTrace?.strategy !==
+      "seed-proof-lane-coverage-before-readiness" ||
+    !["clean", "drifted", "unavailable"].includes(seedProofLaneCoverageTrace.status) ||
+    typeof seedProofLaneCoverageTrace.selected !== "boolean" ||
+    !Number.isInteger(seedProofLaneCoverageTrace.unclassifiedLaneCount) ||
+    !Array.isArray(seedProofLaneCoverageTrace.unclassifiedLaneIds)
+  ) {
+    throw new Error("next-action seed proof-lane coverage trace is missing or malformed");
+  }
+  if (
+    nextAction.reason === "seed-proof-lane-coverage-drift" &&
+    (seedProofLaneCoverageTrace.status !== "drifted" ||
+      seedProofLaneCoverageTrace.selected !== true ||
+      seedProofLaneCoverageTrace.unclassifiedLaneIds.length === 0)
+  ) {
+    throw new Error(
+      "next-action seed proof-lane coverage trace does not match selected drift",
+    );
+  }
+  if (
+    nextAction.reason !== "seed-proof-lane-coverage-drift" &&
+    seedProofLaneCoverageTrace.selected === true
+  ) {
+    throw new Error(
+      "next-action seed proof-lane coverage trace selected without drift action",
+    );
+  }
+  if (
+    seedProofLaneCoverageTrace.unclassifiedLaneCount !==
+    seedProofLaneCoverageTrace.unclassifiedLaneIds.length
+  ) {
+    throw new Error("next-action seed proof-lane coverage trace count drifted");
   }
 }
 

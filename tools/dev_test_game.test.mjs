@@ -86,6 +86,9 @@ import {
   assertDevTestGameNextAction,
   buildDevTestGameNextAction,
   devTestGameLiveProofCommand,
+  devTestGameSeedFixtureCommand,
+  devTestGameSeedFixturePath,
+  devTestGameSeedFixtureRoleUrl,
 } from "./dev_test_game_next_action.mjs";
 import {
   assertDevTestGameProofGraph,
@@ -819,6 +822,19 @@ test("dev test-game next-action derives one local recovery command from the mani
     eventCount: 0,
     selected: false,
   });
+  assert.deepEqual(freshAction.seedProofLaneCoverageTrace, {
+    strategy: "seed-proof-lane-coverage-before-readiness",
+    status: "clean",
+    source: "target/dev-test-game/release-readiness-checklist.json",
+    checkId: "local-seed-demo-fixture",
+    passedLaneCount: 113,
+    directSeededLaneCount: 105,
+    aliasOnlyLaneCount: seedAliasOnlyProofLaneIds.length,
+    aggregateOnlyLaneCount: seedAggregateOnlyProofLaneIds.length,
+    unclassifiedLaneCount: 0,
+    unclassifiedLaneIds: [],
+    selected: false,
+  });
   assert.deepEqual(freshAction.localReadinessDependencyTrace, {
     strategy: "local-readiness-dependency-before-hosted-work",
     candidateCount: 0,
@@ -906,6 +922,53 @@ test("dev test-game next-action derives one local recovery command from the mani
           "Passed proof graph admin role-handoff check in the generated release-readiness checklist",
       },
     ],
+  });
+  const unclassifiedSeedCoverageAction = buildDevTestGameNextAction(freshManifest, {
+    generatedAt: "2026-06-26T00:00:01.000Z",
+    opsArtifacts: devTestGameOpsArtifactsFixture(),
+    raceCoverage: devTestGameRaceCoverageFixture(),
+    releaseReadinessChecklist: devTestGameReleaseReadinessChecklistFixture({
+      seedProofLaneCoverage: seedProofLaneCoverageFixture({
+        unclassifiedLaneIds: ["new-production-proof-lane"],
+      }),
+      unproven: [
+        {
+          id: "hosted-concurrent-race-matrix",
+          status: "unproven",
+          requiredEvidence: "Hosted concurrent matrix evidence",
+        },
+      ],
+    }),
+  });
+  assertDevTestGameNextAction(unclassifiedSeedCoverageAction);
+  assert.deepEqual(unclassifiedSeedCoverageAction.nextAction, {
+    command: devTestGameSeedFixtureCommand,
+    reason: "seed-proof-lane-coverage-drift",
+    status: "blocked",
+    seedProofLaneCoverage: {
+      source: "target/dev-test-game/release-readiness-checklist.json",
+      status: "drifted",
+      passedLaneCount: 114,
+      unclassifiedLaneCount: 1,
+      unclassifiedLaneIds: ["new-production-proof-lane"],
+      buildSlice:
+        "Classify every passed proof lane as direct seeded, alias-covered, or aggregate-only before expanding the production-facing seeded proof spine.",
+      proofTarget: devTestGameSeedFixturePath,
+      roleUrl: devTestGameSeedFixtureRoleUrl,
+    },
+  });
+  assert.deepEqual(unclassifiedSeedCoverageAction.seedProofLaneCoverageTrace, {
+    strategy: "seed-proof-lane-coverage-before-readiness",
+    status: "drifted",
+    source: "target/dev-test-game/release-readiness-checklist.json",
+    checkId: "local-seed-demo-fixture",
+    passedLaneCount: 114,
+    directSeededLaneCount: 105,
+    aliasOnlyLaneCount: seedAliasOnlyProofLaneIds.length,
+    aggregateOnlyLaneCount: seedAggregateOnlyProofLaneIds.length,
+    unclassifiedLaneCount: 1,
+    unclassifiedLaneIds: ["new-production-proof-lane"],
+    selected: true,
   });
   const missingNextActionAdminDependencyAction = buildDevTestGameNextAction(
     freshManifest,
@@ -8474,6 +8537,7 @@ function identityAdapterProofFixture(game) {
 
 function devTestGameReleaseReadinessChecklistFixture({
   unproven,
+  seedProofLaneCoverage = seedProofLaneCoverageFixture(),
   includeProofGraphHandoffCheck = true,
   includeProofFreshnessAdminCheck = true,
   includeNextActionAdminCheck = true,
@@ -8534,6 +8598,20 @@ function devTestGameReleaseReadinessChecklistFixture({
           requiredLaneCount: hostStaleControlLaneIds.length,
           coveredLaneCount: hostStaleControlLaneIds.length,
         },
+        ...(seedProofLaneCoverage === null
+          ? []
+          : [
+              {
+                id: "local-seed-demo-fixture",
+                label: "Local seed/demo fixture summary",
+                status: "passed",
+                evidence: "target/dev-test-game/seed-fixture-summary.json",
+                proofBoundary:
+                  "Local seed/demo fixture inventory for one dev-test-game run.",
+                scenarioCount: seedScenarioCoverageGroups.allDemo.length,
+                proofLaneCoverage: seedProofLaneCoverage,
+              },
+            ]),
         ...(includeProofGraphHandoffCheck
           ? [
               {
@@ -8680,6 +8758,29 @@ function devTestGameReleaseReadinessChecklistFixture({
     },
     proofBoundary:
       "Derived from the local dev-test-game proof-run artifact without release claims.",
+  };
+}
+
+function seedProofLaneCoverageFixture({ unclassifiedLaneIds = [] } = {}) {
+  return {
+    status: unclassifiedLaneIds.length === 0 ? "passed" : "failed",
+    passedLaneCount: 113 + unclassifiedLaneIds.length,
+    directSeeded: {
+      count: 105,
+      laneIds: seedScenarioCoverageGroups.allDemo.slice(0, 105),
+    },
+    aliasOnly: {
+      count: seedAliasOnlyProofLaneIds.length,
+      laneIds: seedAliasOnlyProofLaneIds,
+    },
+    aggregateOnly: {
+      count: seedAggregateOnlyProofLaneIds.length,
+      laneIds: seedAggregateOnlyProofLaneIds,
+    },
+    unclassified: {
+      count: unclassifiedLaneIds.length,
+      laneIds: unclassifiedLaneIds,
+    },
   };
 }
 
@@ -13160,6 +13261,13 @@ function nextActionAdminProofFixture() {
         selectedCheckId: null,
         candidateIds: [],
       },
+      seedProofLaneCoverageTrace: {
+        strategy: "seed-proof-lane-coverage-before-readiness",
+        status: "clean",
+        selected: false,
+        unclassifiedLaneCount: 0,
+        unclassifiedLaneIds: [],
+      },
     },
     adminRoleSurface: {
       status: "passed",
@@ -13180,6 +13288,7 @@ function nextActionAdminProofFixture() {
         "selected-spine-admin-check",
         "selected-spine-rerun-command",
         "selected-spine-browser-proof",
+        "seed-proof-lane-coverage-trace",
         "release-readiness-selection-trace",
       ],
       visibleRelatedLinks: ["admin-proof:hosted-concurrent-race-matrix"],

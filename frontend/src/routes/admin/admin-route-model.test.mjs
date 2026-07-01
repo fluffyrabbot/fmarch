@@ -21,6 +21,7 @@ import {
 
 const LOCAL_RACE_COMMAND =
   "npm run test:dev-test-game-hosted-concurrent-race-matrix";
+const SEED_FIXTURE_COMMAND = "npm run test:dev-test-game-seed-fixture";
 const LOCAL_PROOF_GRAPH_COMMAND =
   "npm run test:dev-test-game-proof-graph-admin-proof";
 const LIVE_BROWSER_PROOF_COMMAND =
@@ -1425,6 +1426,7 @@ test("admin route data exposes local next action as a native audit row", async (
       ["selection-trace", "0 candidates"],
       ["release-readiness-selection-trace", "1 buildable candidates"],
       ["release-readiness-hosted-concurrent-race-matrix", "selected:unproven"],
+      ["seed-proof-lane-coverage-trace", "0 unclassified lanes"],
       ["race-coverage-promoted-milestones", "4/4 groups, 16/16 cells, 16/16 reloads"],
       ["replacement-race-reload-milestone", "3/3 covered"],
       ["replacement-race-reload-replacement-private-post", "covered:passed"],
@@ -1473,6 +1475,13 @@ test("admin route data exposes local next action as a native audit row", async (
     selectedLocalCheckProofTarget: "",
     selectedLocalCheckRoleUrl: "",
     selectedLocalCheckRoleHref: "",
+    selectedSeedProofLaneCoverageSource: "",
+    selectedSeedProofLaneCoverageUnclassifiedCount: 0,
+    selectedSeedProofLaneCoverageUnclassifiedLaneIds: [],
+    selectedSeedProofLaneCoverageBuildSlice: "",
+    selectedSeedProofLaneCoverageProofTarget: "",
+    selectedSeedProofLaneCoverageRoleUrl: "",
+    selectedSeedProofLaneCoverageRoleHref: "",
     selectedUnprovenId: "hosted-concurrent-race-matrix",
     selectedBuildSlice:
       "Create the first hosted-like concurrent race matrix proof request from the promoted local race baseline.",
@@ -1517,6 +1526,7 @@ test("admin route data exposes local next action as a native audit row", async (
       maxAttempts: 1,
       eventCount: 0,
     },
+    seedProofLaneCoverageTrace: seedProofLaneCoverageTraceFixture(),
     localReadinessDependencyTrace: {
       strategy: "local-readiness-dependency-before-hosted-work",
       candidateCount: 0,
@@ -1628,6 +1638,61 @@ test("admin route data exposes local readiness dependency next action", async ()
   );
 });
 
+test("admin route data exposes seed proof-lane coverage drift next action", async () => {
+  const seedProofLaneCoverage = seedProofLaneCoverageActionFixture({
+    unclassifiedLaneIds: ["new-production-proof-lane"],
+  });
+  const data = await buildAdminRouteData({
+    principalUserId: "admin_a",
+    capabilities: [{ kind: "GlobalAdmin" }],
+    nextAction: nextActionFixture({
+      actionStatus: "blocked",
+      reason: "seed-proof-lane-coverage-drift",
+      command: SEED_FIXTURE_COMMAND,
+      seedProofLaneCoverage,
+      releaseReadinessTrace: releaseReadinessTraceFixture({ unproven: undefined }),
+    }),
+  });
+
+  const nextAction = data.audit.find((item) => item.id === "local-next-action");
+  assert.equal(nextAction.status, `blocked: ${SEED_FIXTURE_COMMAND}`);
+  assert.deepEqual(
+    nextAction.checks
+      .filter((check) =>
+        [
+          "seed-proof-lane-coverage-drift",
+          "seed-proof-lane-coverage",
+          "seed-proof-lane-coverage-trace",
+          "seed-proof-lane-coverage-new-production-proof-lane",
+        ].includes(check.id),
+      )
+      .map((check) => [check.id, check.status]),
+    [
+      ["seed-proof-lane-coverage-drift", "blocked"],
+      ["seed-proof-lane-coverage", "1 unclassified lanes"],
+      ["seed-proof-lane-coverage-trace", "1 unclassified lanes"],
+      ["seed-proof-lane-coverage-new-production-proof-lane", "unclassified"],
+    ],
+  );
+  assert.deepEqual(nextAction.relatedLinks, [
+    {
+      id: "seed-proof-lane-coverage",
+      label: "Seed proof-lane coverage",
+      href: "/admin/audit/local-seed-fixtures?game=midsummer",
+      status: "drifted",
+      command: SEED_FIXTURE_COMMAND,
+    },
+  ]);
+  assert.equal(
+    nextAction.artifactSummary.selectedSeedProofLaneCoverageRoleHref,
+    "/admin/audit/local-seed-fixtures?game=midsummer",
+  );
+  assert.deepEqual(
+    nextAction.artifactSummary.selectedSeedProofLaneCoverageUnclassifiedLaneIds,
+    ["new-production-proof-lane"],
+  );
+});
+
 test("admin local next action detail data carries hosted evidence handoff checklist", async () => {
   const unproven = hostedEvidenceLaneUnprovenFixture();
   const data = await buildAdminAuditDetailData({
@@ -1696,6 +1761,7 @@ test("admin local next action detail data carries recovery check rows", async ()
       ["core-loop", "stale"],
       ["selection-trace", "1 candidates"],
       ["selection-trace-core-loop", "selected:stale"],
+      ["seed-proof-lane-coverage-trace", "0 unclassified lanes"],
       ["race-coverage-promoted-milestones", "4/4 groups, 16/16 cells, 16/16 reloads"],
       ["replacement-race-reload-milestone", "3/3 covered"],
       ["replacement-race-reload-replacement-private-post", "covered:passed"],
@@ -1746,6 +1812,7 @@ test("admin local next action detail data carries harness stability drift rows",
       ["harness-stability-drift", "blocked"],
       ["proof-stability-drift", "1 retries, 1 DOM fallbacks, 0 force fallbacks"],
       ["selection-trace", "0 candidates"],
+      ["seed-proof-lane-coverage-trace", "0 unclassified lanes"],
       ["race-coverage-promoted-milestones", "4/4 groups, 16/16 cells, 16/16 reloads"],
       ["replacement-race-reload-milestone", "3/3 covered"],
       ["replacement-race-reload-replacement-private-post", "covered:passed"],
@@ -3581,6 +3648,10 @@ function nextActionFixture({
   localReadinessDependencyTrace = localReadinessDependencyTraceFixture(),
   stability,
   stabilityTrace = stabilityTraceFixture({ stability }),
+  seedProofLaneCoverage,
+  seedProofLaneCoverageTrace = seedProofLaneCoverageTraceFixture({
+    seedProofLaneCoverage,
+  }),
   replacementRaceReloadTrace = replacementRaceReloadTraceFixture(),
   hostConcurrentRaceReloadTrace = hostConcurrentRaceReloadTraceFixture(),
   playerConcurrentActionReloadTrace = playerConcurrentActionReloadTraceFixture(),
@@ -3653,6 +3724,9 @@ function nextActionFixture({
         forceFallbackCount: Number(stability?.forceFallbackCount ?? 0),
         failureCount: Number(stability?.failureCount ?? 0),
       },
+      seedProofLaneCoverageStatus: seedProofLaneCoverageTrace.status,
+      seedProofLaneCoverageUnclassifiedCount:
+        seedProofLaneCoverageTrace.unclassifiedLaneCount,
     },
     nextAction: {
       command,
@@ -3662,9 +3736,13 @@ function nextActionFixture({
       ...(localCheck === undefined ? {} : { localCheck }),
       ...(unproven === undefined ? {} : { unproven }),
       ...(stability === undefined ? {} : { stability }),
+      ...(seedProofLaneCoverage === undefined
+        ? {}
+        : { seedProofLaneCoverage }),
     },
     selectionTrace,
     stabilityTrace,
+    seedProofLaneCoverageTrace,
     localReadinessDependencyTrace,
     releaseReadinessTrace,
     replacementRaceReloadTrace,
@@ -3689,6 +3767,20 @@ function proofGraphHandoffLocalCheckFixture() {
     roleUrl: "/admin/audit/local-proof-graph?game=<seeded-game>",
     proofBoundary:
       "Local browser proof that the proof graph admin surface follows every mapped admin-proof role URL.",
+  };
+}
+
+function seedProofLaneCoverageActionFixture({ unclassifiedLaneIds }) {
+  return {
+    source: "target/dev-test-game/release-readiness-checklist.json",
+    status: "drifted",
+    passedLaneCount: 113 + unclassifiedLaneIds.length,
+    unclassifiedLaneCount: unclassifiedLaneIds.length,
+    unclassifiedLaneIds,
+    buildSlice:
+      "Classify every passed proof lane as direct seeded, alias-covered, or aggregate-only before expanding the production-facing seeded proof spine.",
+    proofTarget: "target/dev-test-game/seed-fixture-summary.json",
+    roleUrl: "/admin/audit/local-seed-fixtures?game=<seeded-game>",
   };
 }
 
@@ -4337,6 +4429,25 @@ function stabilityTraceFixture({ stability }) {
     maxAttempts: Number(stability?.maxAttempts ?? 1),
     eventCount: Number(stability?.eventCount ?? 0),
     selected: stability !== undefined,
+  };
+}
+
+function seedProofLaneCoverageTraceFixture({ seedProofLaneCoverage } = {}) {
+  const unclassifiedLaneIds =
+    seedProofLaneCoverage?.unclassifiedLaneIds?.map((laneId) => String(laneId)) ??
+    [];
+  return {
+    strategy: "seed-proof-lane-coverage-before-readiness",
+    status: seedProofLaneCoverage === undefined ? "clean" : "drifted",
+    source: "target/dev-test-game/release-readiness-checklist.json",
+    checkId: "local-seed-demo-fixture",
+    selected: seedProofLaneCoverage !== undefined,
+    passedLaneCount: Number(seedProofLaneCoverage?.passedLaneCount ?? 113),
+    directSeededLaneCount: 105,
+    aliasOnlyLaneCount: seedAliasOnlyProofLaneIds.length,
+    aggregateOnlyLaneCount: seedAggregateOnlyProofLaneIds.length,
+    unclassifiedLaneCount: unclassifiedLaneIds.length,
+    unclassifiedLaneIds,
   };
 }
 

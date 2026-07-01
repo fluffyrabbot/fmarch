@@ -112,6 +112,13 @@ await runAdminAuditProof({
       artifactId: source.nextAction.nextAction.artifact?.id ?? null,
       localCheckId: source.nextAction.nextAction.localCheck?.id ?? null,
       localCheckRoleUrl: source.nextAction.nextAction.localCheck?.roleUrl ?? null,
+      seedProofLaneCoverageRoleUrl:
+        source.nextAction.nextAction.seedProofLaneCoverage?.roleUrl ?? null,
+      seedProofLaneCoverageSource:
+        source.nextAction.nextAction.seedProofLaneCoverage?.source ?? null,
+      seedProofLaneCoverageUnclassifiedLaneIds:
+        source.nextAction.nextAction.seedProofLaneCoverage
+          ?.unclassifiedLaneIds ?? [],
       unprovenId: source.nextAction.nextAction.unproven?.id ?? null,
       unprovenRoleUrl: source.nextAction.nextAction.unproven?.roleUrl ?? null,
       unprovenProofGraphNodeId:
@@ -168,6 +175,15 @@ await runAdminAuditProof({
         domFallbackCount: source.nextAction.stabilityTrace.domFallbackCount,
         forceFallbackCount: source.nextAction.stabilityTrace.forceFallbackCount,
         failureCount: source.nextAction.stabilityTrace.failureCount,
+      },
+      seedProofLaneCoverageTrace: {
+        strategy: source.nextAction.seedProofLaneCoverageTrace.strategy,
+        status: source.nextAction.seedProofLaneCoverageTrace.status,
+        selected: source.nextAction.seedProofLaneCoverageTrace.selected,
+        unclassifiedLaneCount:
+          source.nextAction.seedProofLaneCoverageTrace.unclassifiedLaneCount,
+        unclassifiedLaneIds:
+          source.nextAction.seedProofLaneCoverageTrace.unclassifiedLaneIds,
       },
       replacementRaceReloadTrace: {
         strategy: source.nextAction.replacementRaceReloadTrace.strategy,
@@ -311,6 +327,25 @@ export function assertNextActionAdminProof(evidence) {
     typeof evidence.generatedFrom.stabilityTrace.selected !== "boolean"
   ) {
     throw new Error("next-action admin proof is missing stability trace evidence");
+  }
+  if (
+    evidence.generatedFrom?.seedProofLaneCoverageTrace?.strategy !==
+      "seed-proof-lane-coverage-before-readiness" ||
+    !["clean", "drifted", "unavailable"].includes(
+      evidence.generatedFrom.seedProofLaneCoverageTrace.status,
+    ) ||
+    typeof evidence.generatedFrom.seedProofLaneCoverageTrace.selected !==
+      "boolean" ||
+    !Number.isInteger(
+      evidence.generatedFrom.seedProofLaneCoverageTrace.unclassifiedLaneCount,
+    ) ||
+    !Array.isArray(
+      evidence.generatedFrom.seedProofLaneCoverageTrace.unclassifiedLaneIds,
+    )
+  ) {
+    throw new Error(
+      "next-action admin proof is missing seed proof-lane coverage trace evidence",
+    );
   }
   if (
     evidence.generatedFrom?.replacementRaceReloadTrace?.strategy !==
@@ -502,6 +537,14 @@ export function assertNextActionAdminProof(evidence) {
   ) {
     throw new Error("next-action admin proof missing local readiness role URL");
   }
+  if (
+    typeof evidence.generatedFrom?.seedProofLaneCoverageRoleUrl === "string" &&
+    !evidence.adminRoleSurface?.visibleRelatedLinks?.includes(
+      "seed-proof-lane-coverage",
+    )
+  ) {
+    throw new Error("next-action admin proof missing seed coverage role URL");
+  }
   const relatedHandoff = evidence.generatedFrom?.relatedHandoff;
   assertAdminAuditRelatedHandoff({
     adminRoleSurface: evidence.adminRoleSurface,
@@ -570,6 +613,15 @@ function requiredChecksForNextAction(nextAction) {
   if (nextAction.nextAction.stability?.source !== undefined) {
     checks.push("proof-stability-drift");
   }
+  if (nextAction.nextAction.seedProofLaneCoverage?.source !== undefined) {
+    checks.push("seed-proof-lane-coverage");
+  }
+  if (nextAction.seedProofLaneCoverageTrace?.status !== "unavailable") {
+    checks.push("seed-proof-lane-coverage-trace");
+    for (const laneId of nextAction.seedProofLaneCoverageTrace.unclassifiedLaneIds) {
+      checks.push(`seed-proof-lane-coverage-${laneId}`);
+    }
+  }
   for (const candidate of nextAction.selectionTrace.candidates) {
     checks.push(`selection-trace-${candidate.id}`);
   }
@@ -610,12 +662,18 @@ function requiredChecksForNextAction(nextAction) {
 function requiredRelatedLinksForNextAction(nextAction) {
   const proofGraphNodeId = nextAction.nextAction.unproven?.proofGraphNodeId;
   const localCheckId = nextAction.nextAction.localCheck?.id;
+  const seedProofLaneCoverageRoleUrl =
+    nextAction.nextAction.seedProofLaneCoverage?.roleUrl;
   return [
     ...(typeof proofGraphNodeId === "string" && proofGraphNodeId.trim() !== ""
       ? [proofGraphNodeId]
       : []),
     ...(typeof localCheckId === "string" && localCheckId.trim() !== ""
       ? [localCheckId]
+      : []),
+    ...(typeof seedProofLaneCoverageRoleUrl === "string" &&
+    seedProofLaneCoverageRoleUrl.trim() !== ""
+      ? ["seed-proof-lane-coverage"]
       : []),
   ];
 }
@@ -678,6 +736,23 @@ function requiredChecksForEvidence(evidence) {
       : []),
     ...(evidence.generatedFrom?.stabilityStatus === "drifted"
       ? ["proof-stability-drift"]
+      : []),
+    ...(typeof evidence.generatedFrom?.seedProofLaneCoverageSource === "string"
+      ? ["seed-proof-lane-coverage"]
+      : []),
+    ...(evidence.generatedFrom?.seedProofLaneCoverageTrace?.status !==
+      "unavailable"
+      ? [
+          "seed-proof-lane-coverage-trace",
+          ...(Array.isArray(
+            evidence.generatedFrom.seedProofLaneCoverageTrace
+              .unclassifiedLaneIds,
+          )
+            ? evidence.generatedFrom.seedProofLaneCoverageTrace.unclassifiedLaneIds.map(
+                (id) => `seed-proof-lane-coverage-${id}`,
+              )
+            : []),
+        ]
       : []),
     ...(Array.isArray(evidence.generatedFrom?.selectionTrace?.candidateIds)
       ? evidence.generatedFrom.selectionTrace.candidateIds.map((id) => `selection-trace-${id}`)

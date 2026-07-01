@@ -1203,6 +1203,11 @@ export function normalizeLocalNextActionAudit(nextAction, { game, proofGraph = n
     action.unproven !== null && typeof action.unproven === "object"
       ? action.unproven
       : null;
+  const seedProofLaneCoverage =
+    action.seedProofLaneCoverage !== null &&
+    typeof action.seedProofLaneCoverage === "object"
+      ? action.seedProofLaneCoverage
+      : null;
   const realHostedEvidenceInputs = normalizeRealHostedEvidenceInputs(
     unproven?.realHostedEvidenceInputs,
   );
@@ -1217,6 +1222,11 @@ export function normalizeLocalNextActionAudit(nextAction, { game, proofGraph = n
   const unprovenRoleUrl =
     typeof unproven?.roleUrl === "string" && unproven.roleUrl.trim() !== ""
       ? unproven.roleUrl
+      : "";
+  const seedProofLaneCoverageRoleUrl =
+    typeof seedProofLaneCoverage?.roleUrl === "string" &&
+    seedProofLaneCoverage.roleUrl.trim() !== ""
+      ? seedProofLaneCoverage.roleUrl
       : "";
   const unprovenProofGraphNodeId =
     typeof unproven?.proofGraphNodeId === "string" &&
@@ -1273,6 +1283,10 @@ export function normalizeLocalNextActionAudit(nextAction, { game, proofGraph = n
     nextAction.hostStaleControlTrace,
   );
   const stabilityTrace = normalizeNextActionStabilityTrace(nextAction.stabilityTrace);
+  const seedProofLaneCoverageTrace =
+    normalizeNextActionSeedProofLaneCoverageTrace(
+      nextAction.seedProofLaneCoverageTrace,
+    );
   const stability =
     action.stability !== null && typeof action.stability === "object"
       ? action.stability
@@ -1358,6 +1372,16 @@ export function normalizeLocalNextActionAudit(nextAction, { game, proofGraph = n
             )} force fallbacks`,
           }),
         ]),
+    ...(seedProofLaneCoverage === null
+      ? []
+      : [
+          Object.freeze({
+            id: "seed-proof-lane-coverage",
+            status: `${Number(
+              seedProofLaneCoverage.unclassifiedLaneCount ?? 0,
+            )} unclassified lanes`,
+          }),
+        ]),
     Object.freeze({
       id: "selection-trace",
       status: `${selectionTrace.candidateCount} candidates`,
@@ -1383,6 +1407,20 @@ export function normalizeLocalNextActionAudit(nextAction, { game, proofGraph = n
               status: candidate.selected
                 ? `selected:${candidate.status}`
                 : `rank-${candidate.rank}:${candidate.status}`,
+            }),
+          ),
+        ]),
+    ...(seedProofLaneCoverageTrace.status === "unavailable"
+      ? []
+      : [
+          Object.freeze({
+            id: "seed-proof-lane-coverage-trace",
+            status: `${seedProofLaneCoverageTrace.unclassifiedLaneCount} unclassified lanes`,
+          }),
+          ...seedProofLaneCoverageTrace.unclassifiedLaneIds.map((laneId) =>
+            Object.freeze({
+              id: `seed-proof-lane-coverage-${laneId}`,
+              status: "unclassified",
             }),
           ),
         ]),
@@ -1486,7 +1524,9 @@ export function normalizeLocalNextActionAudit(nextAction, { game, proofGraph = n
     inspectHref: adminAuditInspectHref({ game, audit: "local-next-action" }),
     checks: Object.freeze(checks),
     relatedLinks:
-      unprovenRoleUrl === "" && localCheckRoleUrl === ""
+      unprovenRoleUrl === "" &&
+      localCheckRoleUrl === "" &&
+      seedProofLaneCoverageRoleUrl === ""
         ? Object.freeze([])
         : Object.freeze([
             ...(unprovenRoleUrl === ""
@@ -1508,6 +1548,19 @@ export function normalizeLocalNextActionAudit(nextAction, { game, proofGraph = n
                     label: String(localCheck.id ?? "Local readiness dependency"),
                     href: seededRoleUrlToAdminHref(localCheckRoleUrl, { game }),
                     status: String(localCheck.status ?? actionStatus),
+                    command,
+                  }),
+                ]),
+            ...(seedProofLaneCoverageRoleUrl === ""
+              ? []
+              : [
+                  Object.freeze({
+                    id: "seed-proof-lane-coverage",
+                    label: "Seed proof-lane coverage",
+                    href: seededRoleUrlToAdminHref(seedProofLaneCoverageRoleUrl, {
+                      game,
+                    }),
+                    status: String(seedProofLaneCoverage.status ?? actionStatus),
                     command,
                   }),
                 ]),
@@ -1547,6 +1600,30 @@ export function normalizeLocalNextActionAudit(nextAction, { game, proofGraph = n
         localCheckRoleUrl === ""
           ? ""
           : seededRoleUrlToAdminHref(localCheckRoleUrl, { game }),
+      selectedSeedProofLaneCoverageSource: String(
+        seedProofLaneCoverage?.source ?? "",
+      ),
+      selectedSeedProofLaneCoverageUnclassifiedCount: Number(
+        seedProofLaneCoverage?.unclassifiedLaneCount ?? 0,
+      ),
+      selectedSeedProofLaneCoverageUnclassifiedLaneIds: Object.freeze(
+        Array.isArray(seedProofLaneCoverage?.unclassifiedLaneIds)
+          ? seedProofLaneCoverage.unclassifiedLaneIds.map((laneId) =>
+              String(laneId),
+            )
+          : [],
+      ),
+      selectedSeedProofLaneCoverageBuildSlice: String(
+        seedProofLaneCoverage?.buildSlice ?? "",
+      ),
+      selectedSeedProofLaneCoverageProofTarget: String(
+        seedProofLaneCoverage?.proofTarget ?? "",
+      ),
+      selectedSeedProofLaneCoverageRoleUrl: seedProofLaneCoverageRoleUrl,
+      selectedSeedProofLaneCoverageRoleHref:
+        seedProofLaneCoverageRoleUrl === ""
+          ? ""
+          : seededRoleUrlToAdminHref(seedProofLaneCoverageRoleUrl, { game }),
       selectedUnprovenId: String(unproven?.id ?? ""),
       selectedBuildSlice: String(unproven?.buildSlice ?? ""),
       selectedProofTarget: String(unproven?.proofTarget ?? ""),
@@ -1579,6 +1656,7 @@ export function normalizeLocalNextActionAudit(nextAction, { game, proofGraph = n
       stabilityBuildSlice: String(stability?.buildSlice ?? ""),
       stabilityProofTarget: String(stability?.proofTarget ?? ""),
       stabilityTrace,
+      seedProofLaneCoverageTrace,
       localReadinessDependencyTrace,
       releaseReadinessTrace,
       replacementRaceReloadTrace,
@@ -1664,6 +1742,58 @@ function normalizeNextActionStabilityTrace(stabilityTrace) {
     failureCount: Number(stabilityTrace.failureCount ?? 0),
     maxAttempts: Number(stabilityTrace.maxAttempts ?? 0),
     eventCount: Number(stabilityTrace.eventCount ?? 0),
+  });
+}
+
+function normalizeNextActionSeedProofLaneCoverageTrace(seedProofLaneCoverageTrace) {
+  if (
+    seedProofLaneCoverageTrace === null ||
+    typeof seedProofLaneCoverageTrace !== "object" ||
+    seedProofLaneCoverageTrace.strategy !==
+      "seed-proof-lane-coverage-before-readiness" ||
+    !Array.isArray(seedProofLaneCoverageTrace.unclassifiedLaneIds)
+  ) {
+    return Object.freeze({
+      strategy: "unknown",
+      status: "unavailable",
+      source: "",
+      checkId: null,
+      selected: false,
+      passedLaneCount: 0,
+      directSeededLaneCount: 0,
+      aliasOnlyLaneCount: 0,
+      aggregateOnlyLaneCount: 0,
+      unclassifiedLaneCount: 0,
+      unclassifiedLaneIds: Object.freeze([]),
+    });
+  }
+  return Object.freeze({
+    strategy: seedProofLaneCoverageTrace.strategy,
+    status: String(seedProofLaneCoverageTrace.status ?? "unknown"),
+    source: String(seedProofLaneCoverageTrace.source ?? ""),
+    checkId:
+      typeof seedProofLaneCoverageTrace.checkId === "string"
+        ? seedProofLaneCoverageTrace.checkId
+        : null,
+    selected: seedProofLaneCoverageTrace.selected === true,
+    passedLaneCount: Number(seedProofLaneCoverageTrace.passedLaneCount ?? 0),
+    directSeededLaneCount: Number(
+      seedProofLaneCoverageTrace.directSeededLaneCount ?? 0,
+    ),
+    aliasOnlyLaneCount: Number(
+      seedProofLaneCoverageTrace.aliasOnlyLaneCount ?? 0,
+    ),
+    aggregateOnlyLaneCount: Number(
+      seedProofLaneCoverageTrace.aggregateOnlyLaneCount ?? 0,
+    ),
+    unclassifiedLaneCount: Number(
+      seedProofLaneCoverageTrace.unclassifiedLaneCount ?? 0,
+    ),
+    unclassifiedLaneIds: Object.freeze(
+      seedProofLaneCoverageTrace.unclassifiedLaneIds.map((laneId) =>
+        String(laneId),
+      ),
+    ),
   });
 }
 

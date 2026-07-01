@@ -6649,6 +6649,40 @@ export function validateDevTestGameNextActionAdminProof(proof, options = {}) {
   ) {
     throw new Error("next-action admin proof is missing release readiness trace");
   }
+  const seedProofLaneCoverageTrace =
+    proof.generatedFrom?.seedProofLaneCoverageTrace;
+  if (
+    seedProofLaneCoverageTrace?.strategy !==
+      "seed-proof-lane-coverage-before-readiness" ||
+    !["clean", "drifted", "unavailable"].includes(
+      seedProofLaneCoverageTrace.status,
+    ) ||
+    typeof seedProofLaneCoverageTrace.selected !== "boolean" ||
+    !Number.isInteger(seedProofLaneCoverageTrace.unclassifiedLaneCount) ||
+    !Array.isArray(seedProofLaneCoverageTrace.unclassifiedLaneIds)
+  ) {
+    throw new Error(
+      "next-action admin proof is missing seed proof-lane coverage trace",
+    );
+  }
+  if (
+    seedProofLaneCoverageTrace.status !== "unavailable" &&
+    !proof.adminRoleSurface?.visibleChecks?.includes(
+      "seed-proof-lane-coverage-trace",
+    )
+  ) {
+    throw new Error(
+      "next-action admin proof missing seed proof-lane coverage trace row",
+    );
+  }
+  if (
+    typeof proof.generatedFrom?.seedProofLaneCoverageRoleUrl === "string" &&
+    !proof.adminRoleSurface?.visibleRelatedLinks?.includes(
+      "seed-proof-lane-coverage",
+    )
+  ) {
+    throw new Error("next-action admin proof missing seed coverage role URL");
+  }
   const checklist = proof.generatedFrom?.unprovenHostedHandoffChecklist;
   if (checklist !== null && checklist !== undefined) {
     if (
@@ -6697,6 +6731,7 @@ export function validateDevTestGameNextActionAdminProof(proof, options = {}) {
       proof.generatedFrom?.unprovenProductionFeatureSpineTarget ?? null,
     unprovenSpineDrilldown: proof.generatedFrom?.unprovenSpineDrilldown ?? null,
     unprovenSpineTarget: proof.generatedFrom?.unprovenSpineTarget ?? null,
+    seedProofLaneCoverageTrace,
     releaseReadinessCandidateCount: releaseTrace.candidateCount,
     localReadinessDependencyCandidateCount: localTrace.candidateCount,
     ...(options.artifact === undefined ? {} : { artifact: options.artifact }),
