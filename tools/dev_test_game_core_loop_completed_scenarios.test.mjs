@@ -216,9 +216,15 @@ test("completed-game production harness callers use the shared scenario facade",
     const source = await readFile(callerPath, "utf8");
     assert(
       source.includes(
+        "./dev_test_game_core_loop_completed_game_scenario_assertions.mjs",
+      ),
+      `${callerPath} should import completed-game cases through the shared scenario/assertion module`,
+    );
+    assert(
+      !source.includes(
         "./dev_test_game_core_loop_completed_recovery_scenario_assertions.mjs",
       ),
-      `${callerPath} should import completed recovery cases through the shared scenario/assertion module`,
+      `${callerPath} should not import completed recovery definitions directly`,
     );
     assert(
       !source.includes("./dev_test_game_core_loop_completed_recovery_cases.mjs"),

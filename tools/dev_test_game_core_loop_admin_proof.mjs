@@ -5,11 +5,10 @@ import {
 } from "../frontend/src/lib/app/local-proof-lane-status.mjs";
 import {
   assertCompletedGameEndgameSurfaceProof,
-} from "./dev_test_game_core_loop_completed_game_scenario_assertions.mjs";
-import {
   completedGameEndgameProofScenarioCases,
+  completedGameEndgameScenarioCaseFamilies,
   completedGameEndgameTransition,
-} from "./dev_test_game_core_loop_completed_recovery_scenario_assertions.mjs";
+} from "./dev_test_game_core_loop_completed_game_scenario_assertions.mjs";
 import {
   assertPlayerActionSubmissionClickProofCase,
   assertPlayerInvalidActionRecoveryProofCase,
@@ -11234,8 +11233,10 @@ function assertDayFiveNoLynchResolutionSurface(dayFiveNoLynchResolutionSurface) 
   });
 }
 function assertCompletedGameEndgameSurface(completedGameEndgameSurface) {
+  const scenarioFamilies = completedGameEndgameScenarioCaseFamilies();
   assertCompletedGameEndgameSurfaceProof({
     completedGameEndgameSurface,
+    scenarioFamilies,
     assertHostPhaseTransitionActionProof,
     assertPostDayThreePlayerSurfaceProof,
     includeEvidenceInError: true,
