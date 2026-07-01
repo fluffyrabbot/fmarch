@@ -183,9 +183,47 @@ export const hostPhaseStaleRecoveryLaneIds = Object.freeze([
   ]),
 ]);
 
+export const cohostDeadlineStaleControlCaseDefinitions = Object.freeze([
+  Object.freeze({
+    key: "cohost-deadline",
+    proofField: "staleCohostDeadline",
+    reloadProofField: "staleCohostDeadlineReloadAfterReject",
+    baseLaneId: "stale-cohost-deadline",
+    reloadLaneId: "stale-cohost-deadline-reload",
+    reconnectLaneId: "stale-cohost-deadline-reconnect-recovery",
+    baseLabel: "Stale cohost deadline control rejects without drift",
+    reloadLabel: "Stale cohost deadline recovery reloads delegated console",
+    reconnectLabel: "Stale cohost deadline recovery reconnects delegated console",
+    actionId: "extend_deadline",
+    rejectError: "PhaseLocked",
+    expectedStalePhase: Object.freeze({ id: "D01", locked: false }),
+    expectedCurrentPhase: Object.freeze({
+      id: "D02",
+      locked: false,
+      deadline: null,
+    }),
+    expectedSetupActions: Object.freeze({
+      phaseIncludes: [],
+      phaseExcludes: [],
+      deadlineIncludes: ["extend_deadline"],
+    }),
+    expectedCurrentActions: Object.freeze({
+      phaseIncludes: [],
+      phaseExcludes: [],
+      deadlineIncludes: ["extend_deadline"],
+    }),
+  }),
+]);
+
+export function cohostDeadlineStaleControlCases() {
+  return cohostDeadlineStaleControlCaseDefinitions.map(cloneScenarioCase);
+}
+
 export const cohostDeadlineRecoveryLaneIds = Object.freeze([
-  "stale-cohost-deadline-reload",
-  "stale-cohost-deadline-reconnect-recovery",
+  ...cohostDeadlineStaleControlCaseDefinitions.flatMap((scenario) => [
+    scenario.reloadLaneId,
+    scenario.reconnectLaneId,
+  ]),
 ]);
 
 export const hostCohostRaceRecoveryLaneIds = Object.freeze([

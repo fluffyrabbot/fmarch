@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
   cohostDeadlineRecoveryLaneIds,
+  cohostDeadlineStaleControlCases,
+  cohostDeadlineStaleControlCaseDefinitions,
   hostCohostRaceRecoveryLaneIds,
   hostGenericStaleControlLaneIds,
   hostStaleControlLaneIds,
@@ -163,6 +165,49 @@ test("hardening lane cases share host/cohost stale recovery IDs", () => {
     "stale-cohost-deadline-reload",
     "stale-cohost-deadline-reconnect-recovery",
   ]);
+});
+
+test("hardening lane cases share cohost deadline stale-control scenario", () => {
+  assert(Object.isFrozen(cohostDeadlineStaleControlCaseDefinitions));
+  assert.deepEqual(
+    cohostDeadlineStaleControlCases().map((scenario) => ({
+      key: scenario.key,
+      proofField: scenario.proofField,
+      lanes: [
+        scenario.baseLaneId,
+        scenario.reloadLaneId,
+        scenario.reconnectLaneId,
+      ],
+      actionId: scenario.actionId,
+      rejectError: scenario.rejectError,
+      stalePhase: scenario.expectedStalePhase,
+      currentPhase: scenario.expectedCurrentPhase,
+      currentPhaseIncludes: scenario.expectedCurrentActions.phaseIncludes,
+      currentDeadlineIncludes:
+        scenario.expectedCurrentActions.deadlineIncludes,
+    })),
+    [
+      {
+        key: "cohost-deadline",
+        proofField: "staleCohostDeadline",
+        lanes: [
+          "stale-cohost-deadline",
+          "stale-cohost-deadline-reload",
+          "stale-cohost-deadline-reconnect-recovery",
+        ],
+        actionId: "extend_deadline",
+        rejectError: "PhaseLocked",
+        stalePhase: { id: "D01", locked: false },
+        currentPhase: { id: "D02", locked: false, deadline: null },
+        currentPhaseIncludes: [],
+        currentDeadlineIncludes: ["extend_deadline"],
+      },
+    ],
+  );
+  assert.notEqual(
+    cohostDeadlineStaleControlCases()[0],
+    cohostDeadlineStaleControlCaseDefinitions[0],
+  );
 });
 
 test("hardening lane cases share seed-order host/cohost race recovery IDs", () => {

@@ -6,6 +6,7 @@ import {
 } from "./dev_test_game_core_loop_completed_scenarios.mjs";
 import {
   cohostDeadlineRecoveryLaneIds,
+  cohostDeadlineStaleControlCases,
   hostGenericStaleControlLaneIds,
   hostPhaseStaleControlCases,
   hostPhaseStaleRecoveryLaneIds,
@@ -7175,168 +7176,7 @@ export function buildDevTestGameProofRun(session, options = {}) {
       },
     ),
     ...hostPhaseStaleControlLanes({ hardening, session }),
-    lane("stale-cohost-deadline", "Stale cohost deadline control rejects without drift", {
-      rejectError: hardening.staleCohostDeadline?.reject?.error ?? null,
-      roleUrl: hardening.staleCohostDeadline?.setup?.roleUrl ?? null,
-      staleClickActionId:
-        hardening.staleCohostDeadline?.staleClickBrowserProof?.clickedActionId ??
-        null,
-      staleClickReceipt:
-        hardening.staleCohostDeadline?.staleClickBrowserProof?.receiptStatusText ??
-        null,
-      staleClickRefreshKeys:
-        hardening.staleCohostDeadline?.staleClickBrowserProof?.dispatchRefreshKeys ??
-        null,
-      stalePhase: hardening.staleCohostDeadline?.setup?.stalePhase?.id ?? null,
-      phaseId: hardening.staleCohostDeadline?.phaseAfterReject?.id ?? null,
-      activitySource: hardening.staleCohostDeadline?.activityRow?.source ?? null,
-      currentActions: hardening.staleCohostDeadline?.deadlineActionsAfterReject ?? null,
-      apiDeadline: hardening.staleCohostDeadline?.apiPhaseAfterReject?.deadline ?? null,
-      passed:
-        hardening.staleCohostDeadline?.status === "passed" &&
-        typeof hardening.staleCohostDeadline?.setup?.roleUrl === "string" &&
-        hardening.staleCohostDeadline?.setup?.roleUrl.includes(
-          `/g/${session?.game ?? ""}/host`,
-        ) === true &&
-        hardening.staleCohostDeadline?.staleClickBrowserProof?.roleUrl ===
-          hardening.staleCohostDeadline?.setup?.roleUrl &&
-        hardening.staleCohostDeadline?.staleClickBrowserProof?.clickedActionId ===
-          "extend_deadline" &&
-        hardening.staleCohostDeadline?.staleClickBrowserProof?.receiptStatusText?.includes(
-          "Reject PhaseLocked",
-        ) === true &&
-        hardening.staleCohostDeadline?.staleClickBrowserProof?.dispatchRefreshKeys?.includes(
-          "host",
-        ) === true &&
-        hardening.staleCohostDeadline?.staleClickBrowserProof?.phaseAfterReject?.id ===
-          "D02" &&
-        hardening.staleCohostDeadline?.staleClickBrowserProof?.phaseAfterReject
-          ?.locked === false &&
-        hardening.staleCohostDeadline?.staleClickBrowserProof?.deadlineActionsAfterReject?.includes(
-          "extend_deadline",
-        ) === true &&
-        hardening.staleCohostDeadline?.staleClickBrowserProof?.phaseActionsAfterReject
-          ?.length === 0 &&
-        hardening.staleCohostDeadline?.staleClickBrowserProof?.apiPhaseAfterReject
-          ?.deadline === null &&
-        hardening.staleCohostDeadline?.setup?.stalePhase?.id === "D01" &&
-        hardening.staleCohostDeadline?.setup?.stalePhase?.locked === false &&
-        hardening.staleCohostDeadline?.setup?.deadlineActions?.includes(
-          "extend_deadline",
-        ) === true &&
-        hardening.staleCohostDeadline?.setup?.phaseActions?.length === 0 &&
-        hardening.staleCohostDeadline?.reject?.error === "PhaseLocked" &&
-        hardening.staleCohostDeadline?.reject?.message?.includes(
-          "stale phase state",
-        ) === true &&
-        hardening.staleCohostDeadline?.phaseAfterReject?.id === "D02" &&
-        hardening.staleCohostDeadline?.phaseAfterReject?.locked === false &&
-        hardening.staleCohostDeadline?.deadlineActionsAfterReject?.includes(
-          "extend_deadline",
-        ) === true &&
-        hardening.staleCohostDeadline?.phaseActionsAfterReject?.length === 0 &&
-        hardening.staleCohostDeadline?.activityRow?.source === "outcome" &&
-        hardening.staleCohostDeadline?.activityRow?.actionId === "extend_deadline" &&
-        hardening.staleCohostDeadline?.dispatchPlan?.projectionRefreshKeys?.includes(
-          "host",
-        ) === true &&
-        hardening.staleCohostDeadline?.apiPhaseAfterReject?.phase_id === "D02" &&
-        hardening.staleCohostDeadline?.apiPhaseAfterReject?.locked === false &&
-        hardening.staleCohostDeadline?.apiPhaseAfterReject?.deadline === null,
-    }),
-    lane("stale-cohost-deadline-reload", "Stale cohost deadline recovery reloads delegated console", {
-      rejectError: hardening.staleCohostDeadline?.reject?.error ?? null,
-      routeStatus:
-        hardening.staleCohostDeadline?.staleCohostDeadlineReloadAfterReject
-          ?.routeResponseStatus ?? null,
-      rejectReceipt:
-        hardening.staleCohostDeadline?.staleCohostDeadlineReloadAfterReject
-          ?.rejectReceiptStatusText ?? null,
-      phaseId:
-        hardening.staleCohostDeadline?.staleCohostDeadlineReloadAfterReject
-          ?.phaseAfterReload?.id ?? null,
-      locked:
-        hardening.staleCohostDeadline?.staleCohostDeadlineReloadAfterReject
-          ?.phaseAfterReload?.locked ?? null,
-      deadlineActions:
-        hardening.staleCohostDeadline?.staleCohostDeadlineReloadAfterReject
-          ?.deadlineActionsAfterReload ?? null,
-      phaseActions:
-        hardening.staleCohostDeadline?.staleCohostDeadlineReloadAfterReject
-          ?.phaseActionsAfterReload ?? null,
-      apiDeadline:
-        hardening.staleCohostDeadline?.staleCohostDeadlineReloadAfterReject
-          ?.apiPhaseAfterReload?.deadline ?? null,
-      passed:
-        hardening.staleCohostDeadline?.status === "passed" &&
-        hardening.staleCohostDeadline?.reject?.error === "PhaseLocked" &&
-        hardening.staleCohostDeadline?.staleCohostDeadlineReloadAfterReject?.status ===
-          "passed" &&
-        hardening.staleCohostDeadline?.staleCohostDeadlineReloadAfterReject
-          ?.routeResponseStatus === 200 &&
-        hardening.staleCohostDeadline?.staleCohostDeadlineReloadAfterReject
-          ?.rejectReceiptStatusText?.includes("Reject PhaseLocked") === true &&
-        hardening.staleCohostDeadline?.staleCohostDeadlineReloadAfterReject
-          ?.phaseAfterReload?.id === "D02" &&
-        hardening.staleCohostDeadline?.staleCohostDeadlineReloadAfterReject
-          ?.phaseAfterReload?.locked === false &&
-        hardening.staleCohostDeadline?.staleCohostDeadlineReloadAfterReject
-          ?.deadlineActionsAfterReload?.includes("extend_deadline") === true &&
-        hardening.staleCohostDeadline?.staleCohostDeadlineReloadAfterReject
-          ?.phaseActionsAfterReload?.length === 0 &&
-        hardening.staleCohostDeadline?.staleCohostDeadlineReloadAfterReject
-          ?.apiPhaseAfterReload?.phase_id === "D02" &&
-        hardening.staleCohostDeadline?.staleCohostDeadlineReloadAfterReject
-          ?.apiPhaseAfterReload?.locked === false &&
-        hardening.staleCohostDeadline?.staleCohostDeadlineReloadAfterReject
-          ?.apiPhaseAfterReload?.deadline === null,
-    }),
-    lane(
-      "stale-cohost-deadline-reconnect-recovery",
-      "Stale cohost deadline recovery reconnects delegated console",
-      {
-        game: session.game ?? null,
-        reconnectingState:
-          hardening.staleCohostDeadline?.reconnectAfterReject?.reconnectingStatus
-            ?.state ?? null,
-        recoveryState:
-          hardening.staleCohostDeadline?.reconnectAfterReject?.reconnectRecoveryEvent
-            ?.state ?? null,
-        recoveredPhase:
-          hardening.staleCohostDeadline?.reconnectAfterReject?.recoveredHostProjection
-            ?.phase?.id ?? null,
-        recoveredLocked:
-          hardening.staleCohostDeadline?.reconnectAfterReject?.recoveredHostProjection
-            ?.phase?.locked ?? null,
-        deadlineActions:
-          hardening.staleCohostDeadline?.deadlineActionsAfterReconnect ?? null,
-        phaseActions:
-          hardening.staleCohostDeadline?.phaseActionsAfterReconnect ?? null,
-        apiDeadline:
-          hardening.staleCohostDeadline?.apiPhaseAfterReconnect?.deadline ?? null,
-        passed:
-          hardening.staleCohostDeadline?.status === "passed" &&
-          hardening.staleCohostDeadline?.reject?.error === "PhaseLocked" &&
-          hardening.staleCohostDeadline?.reconnectAfterReject?.status === "passed" &&
-          hardening.staleCohostDeadline?.reconnectAfterReject?.reconnectingStatus
-            ?.state === "reconnecting" &&
-          hardening.staleCohostDeadline?.reconnectAfterReject?.reconnectRecoveryEvent
-            ?.state === "recovered" &&
-          hardening.staleCohostDeadline?.reconnectAfterReject?.reconnectRecoveryEvent
-            ?.attempt === 1 &&
-          hardening.staleCohostDeadline?.reconnectAfterReject
-            ?.recoveredHostProjection?.phase?.id === "D02" &&
-          hardening.staleCohostDeadline?.reconnectAfterReject
-            ?.recoveredHostProjection?.phase?.locked === false &&
-          hardening.staleCohostDeadline?.deadlineActionsAfterReconnect?.includes(
-            "extend_deadline",
-          ) === true &&
-          hardening.staleCohostDeadline?.phaseActionsAfterReconnect?.length === 0 &&
-          hardening.staleCohostDeadline?.apiPhaseAfterReconnect?.phase_id === "D02" &&
-          hardening.staleCohostDeadline?.apiPhaseAfterReconnect?.locked === false &&
-          hardening.staleCohostDeadline?.apiPhaseAfterReconnect?.deadline === null,
-      },
-    ),
+    ...cohostDeadlineStaleControlLanes({ hardening, session }),
   ];
   const status = lanes.every((item) => item.status === "passed") ? "passed" : "failed";
   const coreLoopSpine = buildCoreLoopSpineSummary({ session, verification });
@@ -7811,6 +7651,69 @@ function hostPhaseStaleReconnectActionEvidence({ proof, scenario }) {
   };
 }
 
+function cohostDeadlineStaleControlLanes({ hardening, session }) {
+  return cohostDeadlineStaleControlCases().flatMap((scenario) => [
+    cohostDeadlineStaleBaseLane({ hardening, session, scenario }),
+    cohostDeadlineStaleReloadLane({ hardening, scenario }),
+    cohostDeadlineStaleReconnectLane({ hardening, session, scenario }),
+  ]);
+}
+
+function cohostDeadlineStaleBaseLane({ hardening, session, scenario }) {
+  const proof = hardening?.[scenario.proofField];
+  return lane(scenario.baseLaneId, scenario.baseLabel, {
+    rejectError: proof?.reject?.error ?? null,
+    roleUrl: proof?.setup?.roleUrl ?? null,
+    staleClickActionId: proof?.staleClickBrowserProof?.clickedActionId ?? null,
+    staleClickReceipt: proof?.staleClickBrowserProof?.receiptStatusText ?? null,
+    staleClickRefreshKeys:
+      proof?.staleClickBrowserProof?.dispatchRefreshKeys ?? null,
+    stalePhase: proof?.setup?.stalePhase?.id ?? null,
+    phaseId: proof?.phaseAfterReject?.id ?? null,
+    activitySource: proof?.activityRow?.source ?? null,
+    currentActions: proof?.deadlineActionsAfterReject ?? null,
+    apiDeadline: proof?.apiPhaseAfterReject?.deadline ?? null,
+    passed: cohostDeadlineStaleBasePassed({ proof, session, scenario }),
+  });
+}
+
+function cohostDeadlineStaleReloadLane({ hardening, scenario }) {
+  const proof = hardening?.[scenario.proofField];
+  const reloadProof = proof?.[scenario.reloadProofField];
+  return lane(scenario.reloadLaneId, scenario.reloadLabel, {
+    rejectError: proof?.reject?.error ?? null,
+    routeStatus: reloadProof?.routeResponseStatus ?? null,
+    rejectReceipt: reloadProof?.rejectReceiptStatusText ?? null,
+    phaseId: reloadProof?.phaseAfterReload?.id ?? null,
+    locked: reloadProof?.phaseAfterReload?.locked ?? null,
+    deadlineActions: reloadProof?.deadlineActionsAfterReload ?? null,
+    phaseActions: reloadProof?.phaseActionsAfterReload ?? null,
+    apiDeadline: reloadProof?.apiPhaseAfterReload?.deadline ?? null,
+    passed: cohostDeadlineStaleReloadPassed({ proof, reloadProof, scenario }),
+  });
+}
+
+function cohostDeadlineStaleReconnectLane({ hardening, session, scenario }) {
+  const proof = hardening?.[scenario.proofField];
+  const reconnectProof = proof?.reconnectAfterReject;
+  return lane(scenario.reconnectLaneId, scenario.reconnectLabel, {
+    game: session.game ?? null,
+    reconnectingState: reconnectProof?.reconnectingStatus?.state ?? null,
+    recoveryState: reconnectProof?.reconnectRecoveryEvent?.state ?? null,
+    recoveredPhase: reconnectProof?.recoveredHostProjection?.phase?.id ?? null,
+    recoveredLocked:
+      reconnectProof?.recoveredHostProjection?.phase?.locked ?? null,
+    deadlineActions: proof?.deadlineActionsAfterReconnect ?? null,
+    phaseActions: proof?.phaseActionsAfterReconnect ?? null,
+    apiDeadline: proof?.apiPhaseAfterReconnect?.deadline ?? null,
+    passed: cohostDeadlineStaleReconnectPassed({
+      proof,
+      reconnectProof,
+      scenario,
+    }),
+  });
+}
+
 function hostPhaseStaleBasePassed({ proof, session, scenario }) {
   const liveCommandProof =
     scenario.key === "resolve"
@@ -7919,6 +7822,98 @@ function hostPhaseStaleReconnectPassed({ proof, reconnectProof, scenario }) {
   );
 }
 
+function cohostDeadlineStaleBasePassed({ proof, session, scenario }) {
+  return (
+    proof?.status === "passed" &&
+    typeof proof?.setup?.roleUrl === "string" &&
+    proof.setup.roleUrl.includes(`/g/${session?.game ?? ""}/host`) === true &&
+    proof?.staleClickBrowserProof?.roleUrl === proof.setup.roleUrl &&
+    proof?.staleClickBrowserProof?.clickedActionId === scenario.actionId &&
+    proof?.staleClickBrowserProof?.receiptStatusText?.includes(
+      `Reject ${scenario.rejectError}`,
+    ) === true &&
+    proof?.staleClickBrowserProof?.dispatchRefreshKeys?.includes("host") ===
+      true &&
+    hostPhaseMatches(
+      proof?.staleClickBrowserProof?.phaseAfterReject,
+      scenario.expectedCurrentPhase,
+    ) &&
+    hostDeadlineActionsMatch(
+      proof?.staleClickBrowserProof?.deadlineActionsAfterReject,
+      scenario.expectedCurrentActions,
+    ) &&
+    emptyActionList(proof?.staleClickBrowserProof?.phaseActionsAfterReject) &&
+    hostApiPhaseMatches(
+      proof?.staleClickBrowserProof?.apiPhaseAfterReject,
+      scenario.expectedCurrentPhase,
+    ) &&
+    hostPhaseMatches(proof?.setup?.stalePhase, scenario.expectedStalePhase) &&
+    hostDeadlineActionsMatch(
+      proof?.setup?.deadlineActions,
+      scenario.expectedSetupActions,
+    ) &&
+    emptyActionList(proof?.setup?.phaseActions) &&
+    proof?.reject?.error === scenario.rejectError &&
+    proof?.reject?.message?.includes("stale phase state") === true &&
+    hostPhaseMatches(proof?.phaseAfterReject, scenario.expectedCurrentPhase) &&
+    hostDeadlineActionsMatch(
+      proof?.deadlineActionsAfterReject,
+      scenario.expectedCurrentActions,
+    ) &&
+    emptyActionList(proof?.phaseActionsAfterReject) &&
+    proof?.activityRow?.source === "outcome" &&
+    proof?.activityRow?.actionId === scenario.actionId &&
+    proof?.dispatchPlan?.projectionRefreshKeys?.includes("host") === true &&
+    hostApiPhaseMatches(proof?.apiPhaseAfterReject, scenario.expectedCurrentPhase)
+  );
+}
+
+function cohostDeadlineStaleReloadPassed({ proof, reloadProof, scenario }) {
+  return (
+    proof?.status === "passed" &&
+    proof?.reject?.error === scenario.rejectError &&
+    reloadProof?.status === "passed" &&
+    reloadProof?.routeResponseStatus === 200 &&
+    reloadProof?.rejectReceiptStatusText?.includes(
+      `Reject ${scenario.rejectError}`,
+    ) === true &&
+    hostPhaseMatches(reloadProof?.phaseAfterReload, scenario.expectedCurrentPhase) &&
+    hostDeadlineActionsMatch(
+      reloadProof?.deadlineActionsAfterReload,
+      scenario.expectedCurrentActions,
+    ) &&
+    emptyActionList(reloadProof?.phaseActionsAfterReload) &&
+    hostApiPhaseMatches(
+      reloadProof?.apiPhaseAfterReload,
+      scenario.expectedCurrentPhase,
+    )
+  );
+}
+
+function cohostDeadlineStaleReconnectPassed({ proof, reconnectProof, scenario }) {
+  return (
+    proof?.status === "passed" &&
+    proof?.reject?.error === scenario.rejectError &&
+    reconnectProof?.status === "passed" &&
+    reconnectProof?.reconnectingStatus?.state === "reconnecting" &&
+    reconnectProof?.reconnectRecoveryEvent?.state === "recovered" &&
+    reconnectProof?.reconnectRecoveryEvent?.attempt === 1 &&
+    hostPhaseMatches(
+      reconnectProof?.recoveredHostProjection?.phase,
+      scenario.expectedCurrentPhase,
+    ) &&
+    hostDeadlineActionsMatch(
+      proof?.deadlineActionsAfterReconnect,
+      scenario.expectedCurrentActions,
+    ) &&
+    emptyActionList(proof?.phaseActionsAfterReconnect) &&
+    hostApiPhaseMatches(
+      proof?.apiPhaseAfterReconnect,
+      scenario.expectedCurrentPhase,
+    )
+  );
+}
+
 function hostPhaseStaleRestorePassed({ proof, scenario }) {
   if (scenario.key !== "resolve") {
     return true;
@@ -8008,6 +8003,10 @@ function actionsExcludeAll(actions, expectedActions) {
   return (expectedActions ?? []).every(
     (actionId) => actions?.includes(actionId) === false,
   );
+}
+
+function emptyActionList(actions) {
+  return Array.isArray(actions) && actions.length === 0;
 }
 
 function lane(id, label, evidence) {
