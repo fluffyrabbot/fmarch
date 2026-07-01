@@ -1,11 +1,9 @@
 import {
   completedDeadPlayerStaleVoteCase,
-  completedGameEndgameScenarioCaseFamilies,
   completedHostStaleCommandCases,
-  completedPlayerReloadProofCases,
   completedPlayerReloadCases,
   staleCompletedGamePlayerCommandCases,
-} from "./dev_test_game_core_loop_completed_game_cases.mjs";
+} from "./dev_test_game_core_loop_completed_endgame_scenarios.mjs";
 
 export {
   assertCompletedGameEndgameSurfaceProof,
@@ -22,6 +20,7 @@ export {
   completedDeadPlayerStaleVoteCase,
   completedDeadPlayerStaleVoteCaseDefinition,
   completedDeadPlayerStaleVoteProofArgs,
+  completedGameEndgameProofScenarioCases,
   completedGameEndgameScenarioCaseFamilies,
   completedGameEndgameStaleRejectAssertionCases,
   completedGameEndgameSurfaceAssertionCases,
@@ -60,30 +59,6 @@ export {
   staleCompletedGamePlayerCommandCases,
   staleCompletedGamePlayerCommandProofArgs,
 } from "./dev_test_game_core_loop_completed_game_cases.mjs";
-
-export function completedGameEndgameProofScenarioCases({
-  actionPlayerRoleUrl,
-  normalPlayerRoleUrl,
-  deadPlayerRoleUrl,
-  commandStateBuilders,
-}) {
-  const scenarioFamilies = completedGameEndgameScenarioCaseFamilies();
-  return {
-    completedHostStaleCommandCases:
-      scenarioFamilies.completedHostStaleCommandCases,
-    completedPlayerReloadCases: completedPlayerReloadProofCases({
-      actionPlayerRoleUrl,
-      normalPlayerRoleUrl,
-      deadPlayerRoleUrl,
-      commandStateBuilders,
-      cases: scenarioFamilies.completedPlayerReloadCases,
-    }),
-    completedDeadPlayerStaleVoteCase:
-      scenarioFamilies.completedDeadPlayerStaleVoteCase,
-    staleCompletedGamePlayerCommandCases:
-      scenarioFamilies.staleCompletedGamePlayerCommandCases,
-  };
-}
 
 export function completedGameDayVoteOutcomesFixture() {
   return [
