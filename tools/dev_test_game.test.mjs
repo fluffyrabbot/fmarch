@@ -40,6 +40,11 @@ import {
   devTestGameHostedOpsSignalsPath,
 } from "./dev_test_game_hosted_ops_signals.mjs";
 import {
+  hostedOpsSignalCheckIds,
+  hostedOpsSignalRelatedAuditIds,
+  hostedOpsTelemetryBoundaryCheckId,
+} from "./dev_test_game_hosted_ops_signal_cases.mjs";
+import {
   assertDevTestGameSeedFixtureSummary,
   buildDevTestGameSeedFixtureSummary,
 } from "./dev_test_game_seed_fixture_summary.mjs";
@@ -8148,7 +8153,9 @@ test("session card and markdown include role credential URLs and tokens", async 
   );
   assert.equal(hostedOpsSignals.matrix.cellCount, 16);
   assert.equal(
-    hostedOpsSignals.checks.find((check) => check.id === "hosted-telemetry-boundary-carried")
+    hostedOpsSignals.checks.find(
+      (check) => check.id === hostedOpsTelemetryBoundaryCheckId,
+    )
       .status,
     "unproven",
   );
@@ -13121,17 +13128,8 @@ function hostedOpsSignalsAdminProofFixture() {
       linkTestId: "admin-audit-link-local-hosted-ops-signals",
       surfaceTestId: "admin-audit-detail-surface",
       clickedThroughFromOverview: true,
-      visibleChecks: [
-        "hosted-matrix-artifact-checksummed",
-        "local-target-signals-carried",
-        "matrix-health-counters-carried",
-        "readiness-boundary-carried",
-        "hosted-telemetry-boundary-carried",
-      ],
-      visibleRelatedLinks: [
-        "local-hosted-concurrent-race-matrix",
-        "local-ops-artifacts",
-      ],
+      visibleChecks: [...hostedOpsSignalCheckIds],
+      visibleRelatedLinks: [...hostedOpsSignalRelatedAuditIds],
       rawInviteTokensVisible: false,
       releaseReady: false,
       productionReady: false,

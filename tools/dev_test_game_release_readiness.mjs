@@ -42,6 +42,11 @@ import {
   hostedTargetPreflightCheckIds,
 } from "./dev_test_game_hosted_target_preflight.mjs";
 import {
+  hostedOpsReadinessBoundaryCheckId,
+  hostedOpsSignalCheckIds,
+  hostedOpsTelemetryBoundaryCheckId,
+} from "./dev_test_game_hosted_ops_signal_cases.mjs";
+import {
   replacementPrivatePostRaceLaneIds,
   replacementPrivatePostRecoveryLaneIds,
 } from "./dev_test_game_replacement_private_scenarios.mjs";
@@ -4572,13 +4577,7 @@ export function validateDevTestGameOpsAdminProof(proof, options = {}) {
 }
 
 export function validateDevTestGameHostedOpsSignals(signals, options = {}) {
-  const requiredChecks = [
-    "hosted-matrix-artifact-checksummed",
-    "local-target-signals-carried",
-    "matrix-health-counters-carried",
-    "readiness-boundary-carried",
-    "hosted-telemetry-boundary-carried",
-  ];
+  const requiredChecks = hostedOpsSignalCheckIds;
   if (
     signals?.version !== 1 ||
     signals.proof !== "dev-test-game-hosted-ops-signals" ||
@@ -4596,7 +4595,7 @@ export function validateDevTestGameHostedOpsSignals(signals, options = {}) {
       throw new Error(`hosted ops signals missing check: ${id}`);
     }
   }
-  if (checks.get("readiness-boundary-carried") !== "passed") {
+  if (checks.get(hostedOpsReadinessBoundaryCheckId) !== "passed") {
     throw new Error("hosted ops signals readiness boundary did not pass");
   }
   if (
@@ -4629,20 +4628,14 @@ export function validateDevTestGameHostedOpsSignals(signals, options = {}) {
       signals.target.realHostedDeploymentStatus ?? "unknown",
     ),
     hostedTelemetryStatus: String(
-      checks.get("hosted-telemetry-boundary-carried") ?? "unknown",
+      checks.get(hostedOpsTelemetryBoundaryCheckId) ?? "unknown",
     ),
     ...(options.artifact === undefined ? {} : { artifact: options.artifact }),
   };
 }
 
 export function validateDevTestGameHostedOpsSignalsAdminProof(proof, options = {}) {
-  const requiredChecks = [
-    "hosted-matrix-artifact-checksummed",
-    "local-target-signals-carried",
-    "matrix-health-counters-carried",
-    "readiness-boundary-carried",
-    "hosted-telemetry-boundary-carried",
-  ];
+  const requiredChecks = hostedOpsSignalCheckIds;
   if (
     proof?.version !== 1 ||
     proof.proof !== "dev-test-game-hosted-ops-signals-admin-proof" ||

@@ -1,6 +1,12 @@
 import path from "node:path";
 import { assertDevTestGameHostedOpsSignals } from "./dev_test_game_hosted_ops_signals.mjs";
 import {
+  hostedOpsSignalCheckIds,
+  hostedOpsSignalRelatedAuditIds,
+  hostedOpsTelemetryBoundaryCheckId,
+  hostedOpsTelemetryBoundaryStatus,
+} from "./dev_test_game_hosted_ops_signal_cases.mjs";
+import {
   artifactDir,
   proveAdminAuditDetail,
   readJson,
@@ -15,17 +21,8 @@ const hostedOpsSignalsPath = path.resolve(
 );
 const hostedOpsSignalsRelativePath = path.relative(repoRoot, hostedOpsSignalsPath);
 const evidencePath = path.join(artifactDir, "hosted-ops-signals-admin-proof.json");
-const requiredChecks = [
-  "hosted-matrix-artifact-checksummed",
-  "local-target-signals-carried",
-  "matrix-health-counters-carried",
-  "readiness-boundary-carried",
-  "hosted-telemetry-boundary-carried",
-];
-const requiredRelatedLinks = [
-  "local-hosted-concurrent-race-matrix",
-  "local-ops-artifacts",
-];
+const requiredChecks = hostedOpsSignalCheckIds;
+const requiredRelatedLinks = hostedOpsSignalRelatedAuditIds;
 
 await runAdminAuditProof({
   smokeName: "dev-test-game-hosted-ops-signals-admin-proof",
@@ -44,10 +41,9 @@ await runAdminAuditProof({
       auditId: "local-hosted-ops-signals",
       requiredChecks,
       requiredCheckStatuses: {
-        "hosted-telemetry-boundary-carried":
-          hostedOpsSignals.target.realHostedDeploymentStatus === "passed"
-            ? "passed"
-            : "unproven",
+        [hostedOpsTelemetryBoundaryCheckId]: hostedOpsTelemetryBoundaryStatus(
+          hostedOpsSignals.target.realHostedDeploymentStatus,
+        ),
       },
       requiredRelatedLinks,
     }),

@@ -5,6 +5,11 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { assertDevTestGameHostedConcurrentRaceMatrixEvidence } from "./dev_test_game_hosted_concurrent_race_matrix.mjs";
 import { assertDevTestGameOpsArtifacts } from "./dev_test_game_ops_artifacts.mjs";
 import { assertDevTestGameReleaseReadiness } from "./dev_test_game_release_readiness.mjs";
+import {
+  hostedOpsReadinessBoundaryCheckId,
+  hostedOpsSignalCheckCases,
+  hostedOpsSignalCheckIds,
+} from "./dev_test_game_hosted_ops_signal_cases.mjs";
 
 export const DEV_TEST_GAME_HOSTED_OPS_SIGNALS_VERSION = 1;
 export const devTestGameHostedOpsSignalsPath =
@@ -96,38 +101,15 @@ export function buildDevTestGameHostedOpsSignals({
       hostedConcurrentRaceMatrix: artifacts.hostedConcurrentRaceMatrix,
       readiness: artifacts.readiness,
     },
-    checks: [
-      {
-        id: "hosted-matrix-artifact-checksummed",
-        status: "passed",
-        evidence: artifacts.hostedConcurrentRaceMatrix.path,
-      },
-      {
-        id: "local-target-signals-carried",
-        status: "passed",
-        evidence: [matrix.hostedLikeTarget.frontendBaseUrl, matrix.hostedLikeTarget.apiBaseUrl],
-      },
-      {
-        id: "matrix-health-counters-carried",
-        status: "passed",
-        cellCount: matrix.summary.cellCount,
-        reconnectLaneCount: matrix.summary.reconnectLaneCount,
-        staleConflictLaneCount: matrix.summary.staleConflictLaneCount,
-      },
-      {
-        id: "readiness-boundary-carried",
-        status: "passed",
-        releaseReady: false,
-        productionReady: false,
-      },
-      {
-        id: "hosted-telemetry-boundary-carried",
-        status:
-          matrix.summary.realHostedDeploymentStatus === "passed" ? "passed" : "unproven",
-        requiredEvidence:
-          "Hosted logs, metrics, traces, paging/SLOs, and incident response evidence from an externally reachable deployment.",
-      },
-    ],
+    checks: hostedOpsSignalCheckCases({
+      hostedConcurrentRaceMatrixPath: artifacts.hostedConcurrentRaceMatrix.path,
+      frontendBaseUrl: matrix.hostedLikeTarget.frontendBaseUrl,
+      apiBaseUrl: matrix.hostedLikeTarget.apiBaseUrl,
+      cellCount: matrix.summary.cellCount,
+      reconnectLaneCount: matrix.summary.reconnectLaneCount,
+      staleConflictLaneCount: matrix.summary.staleConflictLaneCount,
+      realHostedDeploymentStatus: matrix.summary.realHostedDeploymentStatus,
+    }),
   };
   assertDevTestGameHostedOpsSignals(signals);
   return signals;
@@ -163,18 +145,12 @@ export function assertDevTestGameHostedOpsSignals(signals) {
   const checks = new Map(
     (signals.checks ?? []).map((check) => [check.id, check.status]),
   );
-  for (const id of [
-    "hosted-matrix-artifact-checksummed",
-    "local-target-signals-carried",
-    "matrix-health-counters-carried",
-    "readiness-boundary-carried",
-    "hosted-telemetry-boundary-carried",
-  ]) {
+  for (const id of hostedOpsSignalCheckIds) {
     if (!["passed", "unproven"].includes(String(checks.get(id)))) {
       throw new Error(`hosted ops signals missing check: ${id}`);
     }
   }
-  if (checks.get("readiness-boundary-carried") !== "passed") {
+  if (checks.get(hostedOpsReadinessBoundaryCheckId) !== "passed") {
     throw new Error("hosted ops signals readiness boundary did not pass");
   }
   const serialized = JSON.stringify(signals);

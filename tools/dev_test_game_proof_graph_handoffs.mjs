@@ -7,6 +7,10 @@ import {
   hostedTargetPreflightCheckIds,
 } from "./dev_test_game_hosted_target_preflight.mjs";
 import {
+  hostedOpsSignalCheckIds,
+  hostedOpsSignalRelatedAuditIds,
+} from "./dev_test_game_hosted_ops_signal_cases.mjs";
+import {
   seedScenarioCoverageGroups,
 } from "./dev_test_game_seed_scenario_cases.mjs";
 
@@ -124,17 +128,8 @@ const adminProofDestinationRequirements = [
   {
     linkId: "admin-proof:hosted-ops-signals",
     auditId: "local-hosted-ops-signals",
-    requiredCheckIds: [
-      "hosted-matrix-artifact-checksummed",
-      "local-target-signals-carried",
-      "matrix-health-counters-carried",
-      "readiness-boundary-carried",
-      "hosted-telemetry-boundary-carried",
-    ],
-    requiredRelatedLinkIds: [
-      "local-hosted-concurrent-race-matrix",
-      "local-ops-artifacts",
-    ],
+    requiredCheckIds: hostedOpsSignalCheckIds,
+    requiredRelatedLinkIds: hostedOpsSignalRelatedAuditIds,
   },
   {
     linkId: "admin-proof:spine-manifest",

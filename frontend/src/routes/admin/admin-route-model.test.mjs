@@ -22,6 +22,9 @@ import {
   hostedEvidenceBlockedHandoffChecklistFixture,
   hostedEvidenceRealHostedInputsFixture,
 } from "../../../../tools/dev_test_game_hosted_handoff_cases.mjs";
+import {
+  hostedOpsSignalCheckStatusRows,
+} from "../../../../tools/dev_test_game_hosted_ops_signal_cases.mjs";
 
 const LOCAL_RACE_COMMAND =
   "npm run test:dev-test-game-hosted-concurrent-race-matrix";
@@ -632,13 +635,7 @@ test("admin route data exposes local hosted ops signals as a native audit row", 
   assert.equal(ops.inspectHref, "/admin/audit/local-hosted-ops-signals?game=midsummer");
   assert.deepEqual(
     ops.checks.map((check) => [check.id, check.status]),
-    [
-      ["hosted-matrix-artifact-checksummed", "passed"],
-      ["local-target-signals-carried", "passed"],
-      ["matrix-health-counters-carried", "passed"],
-      ["readiness-boundary-carried", "passed"],
-      ["hosted-telemetry-boundary-carried", "unproven"],
-    ],
+    hostedOpsSignalCheckStatusRows().map((check) => [check.id, check.status]),
   );
   assert.deepEqual(ops.artifactSummary, {
     game: "game-a",
@@ -3349,13 +3346,7 @@ function localHostedOpsSignalsFixture() {
       staleConflictLaneCount: 4,
       hostedEvidenceStatus: "not_configured",
     },
-    checks: [
-      { id: "hosted-matrix-artifact-checksummed", status: "passed" },
-      { id: "local-target-signals-carried", status: "passed" },
-      { id: "matrix-health-counters-carried", status: "passed" },
-      { id: "readiness-boundary-carried", status: "passed" },
-      { id: "hosted-telemetry-boundary-carried", status: "unproven" },
-    ],
+    checks: hostedOpsSignalCheckStatusRows(),
   };
 }
 
