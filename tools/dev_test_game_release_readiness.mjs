@@ -5282,6 +5282,13 @@ export function validateDevTestGameIdentityAdapterProof(proof, options = {}) {
     proof.identityLifecycle?.accountLogin?.cookieValuePrefix !== "account-session-" ||
     proof.identityLifecycle?.accountLogin?.rawPasswordStored !== false ||
     proof.identityLifecycle?.accountLifecycle?.status !== "passed" ||
+    proof.identityLifecycle?.accountLifecycle?.adminControlSurface?.status !== "passed" ||
+    proof.identityLifecycle?.accountLifecycle?.adminControlSurface?.detailRoleUrl !==
+      "/admin/audit/identity-lifecycle?game=<seeded-game>&principal_user_id=host_h" ||
+    proof.identityLifecycle?.accountLifecycle?.adminControlSurface?.controlsTestId !==
+      "admin-identity-account-controls" ||
+    proof.identityLifecycle?.accountLifecycle?.adminControlSurface?.visitedDetailRoleUrl !==
+      true ||
     proof.identityLifecycle?.accountLifecycle?.disabledStatus !== "disabled" ||
     proof.identityLifecycle?.accountLifecycle?.enabledStatus !== "enabled" ||
     proof.identityLifecycle?.accountLifecycle?.disabledAccountRejected !== true ||

@@ -573,6 +573,13 @@ test("admin identity lifecycle detail data carries audit event rows", async () =
       ["invite_revoked", "host_h", "admin_a"],
     ],
   );
+  assert.deepEqual(data.audit.accountControls, {
+    accountId: "host@example.test",
+    principalUserId: "host_h",
+    disableAction: "?/disableAccount",
+    enableAction: "?/enableAccount",
+    revokeSessions: true,
+  });
 });
 
 test("admin route data exposes local ops artifacts as a native audit row", async () => {
@@ -2757,6 +2764,12 @@ test("admin route data exposes local identity adapter proof as a native audit ro
       staleAccountSessionRejected: true,
       sameRoleSurface: true,
       revokedSessionCount: 1,
+      adminControlSurface: {
+        detailRoleUrl:
+          "/admin/audit/identity-lifecycle?game=<seeded-game>&principal_user_id=host_h",
+        controlsTestId: "admin-identity-account-controls",
+        visitedDetailRoleUrl: true,
+      },
       rawPasswordStored: false,
     },
     rawTokensStored: false,
@@ -5212,6 +5225,13 @@ function identityAdapterProofFixture() {
       },
       accountLifecycle: {
         status: "passed",
+        adminControlSurface: {
+          status: "passed",
+          detailRoleUrl:
+            "/admin/audit/identity-lifecycle?game=<seeded-game>&principal_user_id=host_h",
+          controlsTestId: "admin-identity-account-controls",
+          visitedDetailRoleUrl: true,
+        },
         disabledStatus: "disabled",
         enabledStatus: "enabled",
         disabledAccountRejected: true,

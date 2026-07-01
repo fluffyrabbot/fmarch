@@ -3495,6 +3495,12 @@ export function normalizeLocalIdentityAdapterAudit(identityAdapterProof, { game 
     ) ||
     identityAdapterProof.identityLifecycle?.accountLogin?.sameRoleSurface !== true ||
     identityAdapterProof.identityLifecycle?.accountLogin?.rawPasswordStored !== false ||
+    identityAdapterProof.identityLifecycle?.accountLifecycle?.adminControlSurface?.status !==
+      "passed" ||
+    identityAdapterProof.identityLifecycle?.accountLifecycle?.adminControlSurface
+      ?.controlsTestId !== "admin-identity-account-controls" ||
+    identityAdapterProof.identityLifecycle?.accountLifecycle?.adminControlSurface
+      ?.visitedDetailRoleUrl !== true ||
     identityAdapterProof.identityLifecycle?.accountLifecycle?.disabledStatus !==
       "disabled" ||
     identityAdapterProof.identityLifecycle?.accountLifecycle?.enabledStatus !==
@@ -3618,6 +3624,19 @@ export function normalizeLocalIdentityAdapterAudit(identityAdapterProof, { game 
         revokedSessionCount:
           identityAdapterProof.identityLifecycle.accountLifecycle?.revokedSessionCount ??
           null,
+        adminControlSurface: Object.freeze({
+          detailRoleUrl: String(
+            identityAdapterProof.identityLifecycle.accountLifecycle?.adminControlSurface
+              ?.detailRoleUrl ?? "",
+          ),
+          controlsTestId: String(
+            identityAdapterProof.identityLifecycle.accountLifecycle?.adminControlSurface
+              ?.controlsTestId ?? "",
+          ),
+          visitedDetailRoleUrl:
+            identityAdapterProof.identityLifecycle.accountLifecycle?.adminControlSurface
+              ?.visitedDetailRoleUrl === true,
+        }),
         rawPasswordStored:
           identityAdapterProof.identityLifecycle.accountLifecycle?.rawPasswordStored === true,
       }),

@@ -8597,6 +8597,13 @@ function identityAdapterProofFixture(game) {
       },
       accountLifecycle: {
         status: "passed",
+        adminControlSurface: {
+          status: "passed",
+          detailRoleUrl:
+            "/admin/audit/identity-lifecycle?game=<seeded-game>&principal_user_id=host_h",
+          controlsTestId: "admin-identity-account-controls",
+          visitedDetailRoleUrl: true,
+        },
         disabledStatus: "disabled",
         enabledStatus: "enabled",
         disabledAccountRejected: true,

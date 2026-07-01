@@ -6,6 +6,7 @@
   } from "$lib/components/admin/admin-surface-model.mjs";
 
   export let data;
+  export let form;
 
   const surfaceTestId = "admin-audit-detail-surface";
   const statusTestId = "admin-audit-detail-status";
@@ -123,6 +124,68 @@
           </li>
         {/each}
       </ol>
+    {/if}
+    {#if data.audit.accountControls}
+      <section
+        class="admin-audit-detail__group"
+        data-testid="admin-identity-account-controls"
+      >
+        <h2>Account lifecycle controls</h2>
+        <div class="admin-audit-detail__controls">
+          <form
+            method="POST"
+            action={data.audit.accountControls.disableAction}
+            data-testid="admin-identity-account-disable-form"
+          >
+            <input
+              type="hidden"
+              name="accountId"
+              value={data.audit.accountControls.accountId}
+            />
+            <button
+              type="submit"
+              class="fm-touch-button"
+              data-min-touch-target-px="44"
+              data-testid="admin-identity-account-disable-submit"
+            >
+              Disable account
+            </button>
+          </form>
+          <form
+            method="POST"
+            action={data.audit.accountControls.enableAction}
+            data-testid="admin-identity-account-enable-form"
+          >
+            <input
+              type="hidden"
+              name="accountId"
+              value={data.audit.accountControls.accountId}
+            />
+            <button
+              type="submit"
+              class="fm-touch-button fm-touch-button--secondary"
+              data-min-touch-target-px="44"
+              data-testid="admin-identity-account-enable-submit"
+            >
+              Enable account
+            </button>
+          </form>
+        </div>
+        <p
+          class="admin-audit-detail__entry"
+          data-testid="admin-identity-account-control-target"
+        >
+          <strong>{data.audit.accountControls.accountId}</strong>
+          <span>{data.audit.accountControls.principalUserId}</span>
+        </p>
+        {#if form?.id === "account-disable" || form?.id === "account-enable"}
+          <AppStatus
+            status={form}
+            testId={`admin-identity-${form.id}-status`}
+            className="admin-surface__audit-status"
+          />
+        {/if}
+      </section>
     {/if}
     {#if data.audit.checks?.length > 0}
       <ol class="admin-audit-detail__entries" data-testid="admin-audit-detail-checks">
@@ -452,5 +515,11 @@
     gap: 8px 12px;
     min-block-size: 44px;
     text-decoration: none;
+  }
+
+  .admin-audit-detail__controls {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
   }
 </style>

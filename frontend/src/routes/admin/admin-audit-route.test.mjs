@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { load } from "./audit/[audit]/+page.server.js";
+import { actions, load } from "./audit/[audit]/+page.server.js";
 import { adminForbiddenMessage } from "./admin-route-model.mjs";
 
 test("admin audit detail load returns the native SPA audit surface", async () => {
@@ -49,7 +49,7 @@ test("admin audit detail load returns identity lifecycle rows through admin sess
               event_kind: "account_created",
               actor_user_id: "admin_a",
               principal_user_id: "host_h",
-              metadata: {},
+              metadata: { account_id: "host@example.test" },
             },
             {
               id: 2,
@@ -120,6 +120,13 @@ test("admin audit detail load returns identity lifecycle rows through admin sess
       "invite_revoked",
     ],
   );
+  assert.deepEqual(data.audit.accountControls, {
+    accountId: "host@example.test",
+    principalUserId: "host_h",
+    disableAction: "?/disableAccount",
+    enableAction: "?/enableAccount",
+    revokeSessions: true,
+  });
 });
 
 test("admin audit detail load rejects non-admin authority", async () => {
@@ -165,3 +172,120 @@ test("admin audit detail load rejects unknown audit rows", async () => {
       err.body.message === "Admin audit item missing-proof is not available.",
   );
 });
+
+test("admin audit account lifecycle action disables an account through admin session", async () => {
+  let observedRequest = null;
+  const result = await actions.disableAccount({
+    cookies: { get: () => "admin-session" },
+    fetch: async (url, init) => {
+      observedRequest = {
+        url,
+        method: init.method,
+        authorization: init.headers.authorization,
+        contentType: init.headers["content-type"],
+        body: JSON.parse(init.body),
+      };
+      return jsonResponse({
+        status: "disabled",
+        account_id: "host@example.test",
+        principal_user_id: "host_h",
+        disabled_at: 123,
+        revoked_session_count: 2,
+      });
+    },
+    locals: {
+      resolvedCapabilities: [{ kind: "GlobalAdmin" }],
+    },
+    request: formRequest({
+      accountId: "host@example.test",
+    }),
+  });
+
+  assert.deepEqual(observedRequest, {
+    url: "/auth/accounts/disable",
+    method: "POST",
+    authorization: "Bearer admin-session",
+    contentType: "application/json",
+    body: {
+      account_id: "host@example.test",
+      revoke_sessions: true,
+    },
+  });
+  assert.equal(result.id, "account-disable");
+  assert.equal(result.state, "ack");
+  assert.equal(result.message, "host@example.test disabled; revoked 2 sessions");
+  assert.equal(result.revokedSessionCount, 2);
+});
+
+test("admin audit account lifecycle action enables an account through admin session", async () => {
+  let observedRequest = null;
+  const result = await actions.enableAccount({
+    cookies: { get: () => "admin-session" },
+    fetch: async (url, init) => {
+      observedRequest = {
+        url,
+        method: init.method,
+        authorization: init.headers.authorization,
+        contentType: init.headers["content-type"],
+        body: JSON.parse(init.body),
+      };
+      return jsonResponse({
+        status: "enabled",
+        account_id: "host@example.test",
+        principal_user_id: "host_h",
+        disabled_at: null,
+        revoked_session_count: 0,
+      });
+    },
+    locals: {
+      resolvedCapabilities: [{ kind: "GlobalAdmin" }],
+    },
+    request: formRequest({
+      accountId: "host@example.test",
+    }),
+  });
+
+  assert.deepEqual(observedRequest, {
+    url: "/auth/accounts/enable",
+    method: "POST",
+    authorization: "Bearer admin-session",
+    contentType: "application/json",
+    body: {
+      account_id: "host@example.test",
+    },
+  });
+  assert.equal(result.id, "account-enable");
+  assert.equal(result.state, "ack");
+  assert.equal(result.message, "host@example.test enabled");
+});
+
+test("admin audit account lifecycle action requires GlobalAdmin", async () => {
+  const result = await actions.disableAccount({
+    cookies: { get: () => "mod-session" },
+    fetch: async () => {
+      throw new Error("GlobalMod must not call account lifecycle controls");
+    },
+    locals: {
+      resolvedCapabilities: [{ kind: "GlobalMod" }],
+    },
+    request: formRequest({
+      accountId: "host@example.test",
+    }),
+  });
+
+  assert.equal(result.status, 403);
+  assert.equal(result.data.id, "account-disable");
+  assert.equal(result.data.state, "reject");
+  assert.equal(result.data.message, "Account lifecycle controls require GlobalAdmin");
+});
+
+function formRequest(fields) {
+  const formData = new FormData();
+  for (const [key, value] of Object.entries(fields)) {
+    formData.append(key, value);
+  }
+  return new Request("http://localhost/admin/audit/identity-lifecycle", {
+    method: "POST",
+    body: formData,
+  });
+}

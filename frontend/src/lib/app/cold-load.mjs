@@ -693,7 +693,30 @@ export function normalizeIdentityLifecycleAudit(payload, context = {}) {
     entries: Object.freeze(entries),
     eventKinds: Object.freeze(eventKinds),
     principalUserId,
+    accountControls: identityLifecycleAccountControls({
+      entries,
+      principalUserId,
+    }),
     rawTokensStored: false,
+  });
+}
+
+function identityLifecycleAccountControls({ entries, principalUserId }) {
+  const accountEntry = entries.find(
+    (entry) =>
+      typeof entry.metadata?.account_id === "string" &&
+      entry.metadata.account_id.trim() !== "",
+  );
+  if (accountEntry === undefined) {
+    return null;
+  }
+  const accountId = accountEntry.metadata.account_id.trim();
+  return Object.freeze({
+    accountId,
+    principalUserId,
+    disableAction: "?/disableAccount",
+    enableAction: "?/enableAccount",
+    revokeSessions: true,
   });
 }
 
