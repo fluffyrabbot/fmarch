@@ -346,20 +346,76 @@ export function completedPrivateChannelProofAssertionCases({
   assertStaleCompletedPrivatePostRecoveryProof,
 }) {
   return [
-    {
-      assertProof: assertCompletedPrivateChannelReloadProof,
-      proof: proof?.reloadProof,
+    completedPrivateChannelReloadAssertionCase({
+      proof,
       sourceRoleUrl,
       visitedRolePath,
-    },
-    {
-      assertProof: assertStaleCompletedPrivatePostRecoveryProof,
-      proof: proof?.staleCompletedPostRecoveryProof,
+      assertCompletedPrivateChannelReloadProof,
+    }),
+    staleCompletedPrivatePostAssertionCase({
+      proof,
       expectedGame,
       sourceRoleUrl,
       visitedRolePath,
-    },
+      assertStaleCompletedPrivatePostRecoveryProof,
+    }),
   ];
+}
+
+export function completedPrivateChannelReloadAssertionCase({
+  proof,
+  sourceRoleUrl,
+  visitedRolePath,
+  assertCompletedPrivateChannelReloadProof,
+}) {
+  return {
+    assertProof: assertCompletedPrivateChannelReloadProof,
+    proof: proof?.reloadProof,
+    ...completedPrivateChannelReloadProofArgs({
+      sourceRoleUrl,
+      visitedRolePath,
+    }),
+  };
+}
+
+export function completedPrivateChannelReloadProofArgs({
+  sourceRoleUrl,
+  visitedRolePath,
+}) {
+  return {
+    sourceRoleUrl,
+    visitedRolePath,
+  };
+}
+
+export function staleCompletedPrivatePostAssertionCase({
+  proof,
+  expectedGame,
+  sourceRoleUrl,
+  visitedRolePath,
+  assertStaleCompletedPrivatePostRecoveryProof,
+}) {
+  return {
+    assertProof: assertStaleCompletedPrivatePostRecoveryProof,
+    proof: proof?.staleCompletedPostRecoveryProof,
+    ...staleCompletedPrivatePostProofArgs({
+      expectedGame,
+      sourceRoleUrl,
+      visitedRolePath,
+    }),
+  };
+}
+
+export function staleCompletedPrivatePostProofArgs({
+  expectedGame,
+  sourceRoleUrl,
+  visitedRolePath,
+}) {
+  return {
+    expectedGame,
+    sourceRoleUrl,
+    visitedRolePath,
+  };
 }
 
 export function assertCompletedPrivateChannelProofCases({

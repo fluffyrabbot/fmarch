@@ -8,12 +8,16 @@ import {
   assertPrivateReceiptRoleSurfaceCase,
   assertStalePrivateChannelPostPhaseLockedProofCase,
   completedPrivateChannelProofAssertionCases,
+  completedPrivateChannelReloadAssertionCase,
+  completedPrivateChannelReloadProofArgs,
   completedPrivateChannelReloadScenario,
   completedPrivateChannelSnapshot,
   completedPrivateChannelTransition,
   privateChannelSubmitPostScenario,
   privateReceiptAssertionArgs,
   privateReceiptScenario,
+  staleCompletedPrivatePostAssertionCase,
+  staleCompletedPrivatePostProofArgs,
   stalePrivateChannelPostPhaseLockedScenario,
   staleCompletedPrivatePostScenario,
 } from "./dev_test_game_core_loop_private_receipt_scenarios.mjs";
@@ -143,6 +147,59 @@ test("completed private-channel scenarios derive shared proof assertion cases", 
     productionReady: false,
   };
   const asserted = [];
+  const assertProofFixture = () => {};
+  assert.deepEqual(
+    completedPrivateChannelReloadProofArgs({
+      sourceRoleUrl: proof.sourceRoleUrl,
+      visitedRolePath: proof.visitedRolePath,
+    }),
+    {
+      sourceRoleUrl: proof.sourceRoleUrl,
+      visitedRolePath: proof.visitedRolePath,
+    },
+  );
+  assert.deepEqual(
+    staleCompletedPrivatePostProofArgs({
+      expectedGame: "game-a",
+      sourceRoleUrl: proof.sourceRoleUrl,
+      visitedRolePath: proof.visitedRolePath,
+    }),
+    {
+      expectedGame: "game-a",
+      sourceRoleUrl: proof.sourceRoleUrl,
+      visitedRolePath: proof.visitedRolePath,
+    },
+  );
+  assert.deepEqual(
+    completedPrivateChannelReloadAssertionCase({
+      proof,
+      sourceRoleUrl: proof.sourceRoleUrl,
+      visitedRolePath: proof.visitedRolePath,
+      assertCompletedPrivateChannelReloadProof: assertProofFixture,
+    }),
+    {
+      assertProof: assertProofFixture,
+      proof: proof.reloadProof,
+      sourceRoleUrl: proof.sourceRoleUrl,
+      visitedRolePath: proof.visitedRolePath,
+    },
+  );
+  assert.deepEqual(
+    staleCompletedPrivatePostAssertionCase({
+      proof,
+      expectedGame: "game-a",
+      sourceRoleUrl: proof.sourceRoleUrl,
+      visitedRolePath: proof.visitedRolePath,
+      assertStaleCompletedPrivatePostRecoveryProof: assertProofFixture,
+    }),
+    {
+      assertProof: assertProofFixture,
+      proof: proof.staleCompletedPostRecoveryProof,
+      expectedGame: "game-a",
+      sourceRoleUrl: proof.sourceRoleUrl,
+      visitedRolePath: proof.visitedRolePath,
+    },
+  );
   const cases = completedPrivateChannelProofAssertionCases({
     proof,
     expectedGame: "game-a",
