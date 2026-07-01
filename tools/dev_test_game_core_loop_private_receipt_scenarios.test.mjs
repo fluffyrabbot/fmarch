@@ -7,6 +7,10 @@ import {
   assertPrivateChannelSubmitPostProofCase,
   assertPrivateReceiptRoleSurfaceCase,
   assertStalePrivateChannelPostPhaseLockedProofCase,
+  privateReceiptAssertionArgs,
+  privateReceiptScenario,
+} from "./dev_test_game_core_loop_private_receipt_scenarios.mjs";
+import {
   completedPrivateChannelReloadInitialSnapshotCase,
   completedPrivateChannelProofAssertionCases,
   completedPrivateChannelReloadAssertionCase,
@@ -18,8 +22,6 @@ import {
   completedPrivateChannelSnapshot,
   completedPrivateChannelTransition,
   privateChannelSubmitPostScenario,
-  privateReceiptAssertionArgs,
-  privateReceiptScenario,
   staleCompletedPrivatePostAfterRejectSnapshotCase,
   staleCompletedPrivatePostAfterReloadSnapshotCase,
   staleCompletedPrivatePostAssertionCase,
@@ -28,7 +30,7 @@ import {
   staleCompletedPrivatePostSnapshotCase,
   stalePrivateChannelPostPhaseLockedScenario,
   staleCompletedPrivatePostScenario,
-} from "./dev_test_game_core_loop_private_receipt_scenarios.mjs";
+} from "./dev_test_game_core_loop_private_channel_cases.mjs";
 
 test("completed private-channel scenarios build reusable snapshots and transitions", () => {
   const reloadScenario = completedPrivateChannelReloadScenario();

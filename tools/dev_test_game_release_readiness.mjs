@@ -77,19 +77,21 @@ import {
   assertPrivateReceiptRoleSurfaceCase,
   assertDayThreePlayerObservationProofCase,
   assertPostDayThreePlayerSurfaceProofCase,
-  completedPrivateChannelReloadScenario,
   assertCompletedPrivateChannelProofCases,
-  completedPrivateChannelProofAssertionCases,
-  privateChannelSubmitPostScenario,
   privateReceiptAssertionArgs,
   privateReceiptScenario,
   assertCompletedPrivateChannelReloadProofCase,
   assertPrivateChannelSubmitPostProofCase,
   assertStaleCompletedPrivatePostRecoveryProofCase,
   assertStalePrivateChannelPostPhaseLockedProofCase,
+} from "./dev_test_game_core_loop_private_receipt_scenarios.mjs";
+import {
+  completedPrivateChannelProofAssertionCases,
+  completedPrivateChannelReloadScenario,
+  privateChannelSubmitPostScenario,
   staleCompletedPrivatePostScenario,
   stalePrivateChannelPostPhaseLockedScenario,
-} from "./dev_test_game_core_loop_private_receipt_scenarios.mjs";
+} from "./dev_test_game_core_loop_private_channel_cases.mjs";
 
 export const DEV_TEST_GAME_RELEASE_READINESS_VERSION = 1;
 const devTestGameSeededBrowserProofCommand =
