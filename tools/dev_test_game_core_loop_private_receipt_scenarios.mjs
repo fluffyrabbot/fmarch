@@ -1,5 +1,6 @@
 import {
   assertCompletedPrivateChannelTransition,
+  completedPrivateChannelProofAssertionCases,
   completedPrivateChannelReloadScenario,
   completedPrivateChannelReloadSnapshotAssertionCases,
   completedPrivateChannelSnapshot,
@@ -255,6 +256,94 @@ export function assertCompletedPrivateChannelProofCases({
   for (const { assertProof, ...scenario } of cases) {
     assertProof(scenario);
   }
+}
+
+export function assertPrivateChannelRoleSurfaceProof({
+  privateChannelRoleSurface,
+  includeEvidenceInError = false,
+}) {
+  const submitPostProof = privateChannelRoleSurface?.submitPostProof;
+  const stalePostProof =
+    privateChannelRoleSurface?.stalePostAfterPhaseTransitionProof;
+  const completedProof =
+    privateChannelRoleSurface?.completedPrivateChannelProof;
+  const expectedGame = gameFromRoleUrl(privateChannelRoleSurface?.sourceRoleUrl);
+  const submitPostScenario = privateChannelSubmitPostScenario();
+  const stalePostScenario = stalePrivateChannelPostPhaseLockedScenario();
+  if (
+    privateChannelRoleSurface?.status !== "passed" ||
+    privateChannelRoleSurface.clickedThroughFromRoleUrl !== true ||
+    privateChannelRoleSurface.releaseReady !== false ||
+    privateChannelRoleSurface.productionReady !== false ||
+    privateChannelRoleSurface.rawInviteTokensVisible !== false ||
+    typeof privateChannelRoleSurface.sourceRoleUrl !== "string" ||
+    !privateChannelRoleSurface.sourceRoleUrl.includes("/g/") ||
+    typeof privateChannelRoleSurface.visitedRolePath !== "string" ||
+    !privateChannelRoleSurface.visitedRolePath.includes("/c/role-pm") ||
+    !privateChannelRoleSurface.visitedRolePath.includes("private=notification-1") ||
+    privateChannelRoleSurface.surfaceTestId !== "player-surface" ||
+    privateChannelRoleSurface.channelRailTestId !== "player-channel-role-pm" ||
+    privateChannelRoleSurface.channelId !== "role-pm" ||
+    privateChannelRoleSurface.channelAriaCurrent !== "page" ||
+    privateChannelRoleSurface.commandPanelChannelId !== "role-pm" ||
+    privateChannelRoleSurface.channelContextChannelId !== "role-pm" ||
+    privateChannelRoleSurface.channelContextCapabilityLabel !==
+      "ChannelMember(role-pm)" ||
+    privateChannelRoleSurface.privateQueueBoundary?.status !==
+      privateQueueBoundaryStatus ||
+    privateChannelRoleSurface.privateQueueBoundary?.count < 1 ||
+    !String(privateChannelRoleSurface.privateQueueBoundary?.text ?? "").includes(
+      "principal-scoped endpoints",
+    ) ||
+    privateChannelRoleSurface.expandedPrivateItem?.id !== "notification-1" ||
+    privateChannelRoleSurface.expandedPrivateItem?.detailTestId !==
+      "player-private-detail-notification-1" ||
+    !String(privateChannelRoleSurface.expandedPrivateItem?.detailText ?? "").includes(
+      "Phase",
+    )
+  ) {
+    throwPrivateChannelScenarioAssertionError({
+      message: "core-loop admin proof missing private channel role URL surface",
+      evidence: privateChannelRoleSurface,
+      includeEvidenceInError,
+    });
+  }
+  assertPrivateChannelSubmitPostProofCase({
+    proof: submitPostProof,
+    expectedGame,
+    scenario: submitPostScenario,
+    includeEvidenceInError,
+  });
+  assertStalePrivateChannelPostPhaseLockedProofCase({
+    proof: stalePostProof,
+    expectedGame,
+    sourceRoleUrl: privateChannelRoleSurface.sourceRoleUrl,
+    visitedRolePath: privateChannelRoleSurface.visitedRolePath,
+    scenario: stalePostScenario,
+    includeEvidenceInError,
+  });
+  assertCompletedPrivateChannelProofCases({
+    proof: completedProof,
+    sourceRoleUrl: privateChannelRoleSurface.sourceRoleUrl,
+    visitedRolePath: privateChannelRoleSurface.visitedRolePath,
+    includeEvidenceInError,
+    cases: completedPrivateChannelProofAssertionCases({
+      proof: completedProof,
+      expectedGame,
+      sourceRoleUrl: privateChannelRoleSurface.sourceRoleUrl,
+      visitedRolePath: privateChannelRoleSurface.visitedRolePath,
+      assertCompletedPrivateChannelReloadProof: (scenario) =>
+        assertCompletedPrivateChannelReloadProofCase({
+          ...scenario,
+          includeEvidenceInError,
+        }),
+      assertStaleCompletedPrivatePostRecoveryProof: (scenario) =>
+        assertStaleCompletedPrivatePostRecoveryProofCase({
+          ...scenario,
+          includeEvidenceInError,
+        }),
+    }),
+  });
 }
 
 export function assertPrivateChannelSubmitPostProofCase({
@@ -907,6 +996,14 @@ export function assertPostDayThreePlayerSurfaceProofCase({
       evidence: proof,
       includeEvidenceInError,
     });
+  }
+}
+
+function gameFromRoleUrl(roleUrl) {
+  try {
+    return new URL(roleUrl).pathname.split("/")[2] ?? "";
+  } catch {
+    return "";
   }
 }
 
