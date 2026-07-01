@@ -21,19 +21,10 @@ import {
   devTestGameHostedEvidenceLaneDemoProofPath,
 } from "./dev_test_game_hosted_evidence_lane_demo_proof.mjs";
 import {
-  cohostDeadlineRecoveryLaneIds,
-  hostGenericStaleControlLaneIds,
   hostStaleControlLaneIds,
-  hostPhaseStaleRecoveryLaneIds,
-  hostPromptStaleControlLaneIds,
-  hostRaceReloadLaneIds,
-  hostStandaloneStaleControlLaneIds,
 } from "./dev_test_game_host_stale_control_scenarios.mjs";
 import {
-  playerActionConflictRecoveryLaneIds,
-  playerActionFoundationLaneIds,
   playerRecoveryAuditLaneIds,
-  promotedStalePlayerCommandLaneIds,
 } from "./dev_test_game_player_recovery_scenarios.mjs";
 import {
   staleConflictMessageLaneIds,
@@ -47,6 +38,9 @@ import {
   hostedTargetPreflightCheckIds,
 } from "./dev_test_game_hosted_target_preflight.mjs";
 import {
+  hardeningAuditLaneIds,
+} from "./dev_test_game_hardening_scenarios.mjs";
+import {
   hostedOpsReadinessBoundaryCheckId,
   hostedOpsSignalCheckIds,
   hostedOpsTelemetryBoundaryCheckId,
@@ -56,12 +50,7 @@ import {
   releaseAdminProofFallbackUnprovenIds,
 } from "./dev_test_game_release_readiness_cases.mjs";
 import {
-  replacementPrivatePostRaceLaneIds,
-  replacementPrivatePostRecoveryLaneIds,
-} from "./dev_test_game_replacement_private_scenarios.mjs";
-import {
   assertCompletedGameEndgameSurfaceProof,
-  completedGameHardeningLaneIds,
 } from "./dev_test_game_core_loop_completed_scenarios.mjs";
 import {
   assertPlayerActionSubmissionClickProofCase,
@@ -539,47 +528,7 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
       label: "Idempotency, reconnect, stale-client, and local concurrent race matrix",
       status: "passed",
       evidence: sourcePath,
-      laneIds: [
-        "replacement-redeemed-invite-recovery",
-        "replacement-session-revocation-recovery",
-        "replacement-session-refresh-recovery",
-        "replacement-stale-session-after-refresh",
-        "replacement-reconnect-recovery",
-        ...staleConflictMessageLaneIds,
-        "replacement-idempotent-retry",
-        ...playerActionFoundationLaneIds,
-        ...promotedStalePlayerCommandLaneIds,
-        "concurrent-vote-race",
-        "concurrent-vote-race-reload",
-        "concurrent-player-vote-resolve-race",
-        "concurrent-player-vote-resolve-race-reload",
-        "concurrent-player-action-advance-race",
-        "concurrent-player-action-advance-race-reload",
-        "concurrent-cohost-deadline-resolve-race",
-        "concurrent-cohost-deadline-resolve-race-reload",
-        ...replacementPrivatePostRaceLaneIds,
-        "concurrent-replacement-vote-race",
-        "concurrent-replacement-vote-race-reload",
-        "concurrent-replacement-action-race",
-        "concurrent-replacement-action-race-reload",
-        "replacement-incoming-action",
-        "replacement-action-reconnect",
-        "replacement-stale-action-after-resolve",
-        ...replacementPrivatePostRecoveryLaneIds,
-        "concurrent-host-publish-race",
-        "concurrent-host-publish-race-reload",
-        ...hostStandaloneStaleControlLaneIds,
-        "concurrent-host-lifecycle-race",
-        "concurrent-host-lifecycle-race-reload",
-        ...hostPromptStaleControlLaneIds,
-        ...completedGameHardeningLaneIds(),
-        ...playerActionConflictRecoveryLaneIds,
-        ...hostGenericStaleControlLaneIds,
-        ...hostRaceReloadLaneIds,
-        ...hostPhaseStaleRecoveryLaneIds,
-        "stale-cohost-deadline",
-        ...cohostDeadlineRecoveryLaneIds,
-      ],
+      laneIds: hardeningAuditLaneIds,
       ...(hardeningAdminProofEvidence === undefined
         ? {}
         : { adminRoleSurface: hardeningAdminProofEvidence }),
@@ -4247,47 +4196,7 @@ function assertVisibleAdminRows({ label, visibleRows, requiredRows }) {
 }
 
 export function validateDevTestGameHardeningAdminProof(proof, options = {}) {
-  const requiredChecks = [
-    "replacement-redeemed-invite-recovery",
-    "replacement-session-revocation-recovery",
-    "replacement-session-refresh-recovery",
-    "replacement-stale-session-after-refresh",
-    "replacement-reconnect-recovery",
-    ...staleConflictMessageLaneIds,
-    "replacement-idempotent-retry",
-    ...playerActionFoundationLaneIds,
-    ...promotedStalePlayerCommandLaneIds,
-    "concurrent-vote-race",
-    "concurrent-vote-race-reload",
-    "concurrent-player-vote-resolve-race",
-    "concurrent-player-vote-resolve-race-reload",
-    "concurrent-player-action-advance-race",
-    "concurrent-player-action-advance-race-reload",
-    "concurrent-cohost-deadline-resolve-race",
-    "concurrent-cohost-deadline-resolve-race-reload",
-    ...replacementPrivatePostRaceLaneIds,
-    "concurrent-replacement-vote-race",
-    "concurrent-replacement-vote-race-reload",
-    "concurrent-replacement-action-race",
-    "concurrent-replacement-action-race-reload",
-    "replacement-incoming-action",
-    "replacement-action-reconnect",
-    "replacement-stale-action-after-resolve",
-    ...replacementPrivatePostRecoveryLaneIds,
-    "concurrent-host-publish-race",
-    "concurrent-host-publish-race-reload",
-    ...hostStandaloneStaleControlLaneIds,
-    "concurrent-host-lifecycle-race",
-    "concurrent-host-lifecycle-race-reload",
-    ...hostPromptStaleControlLaneIds,
-    ...completedGameHardeningLaneIds(),
-    ...playerActionConflictRecoveryLaneIds,
-    ...hostGenericStaleControlLaneIds,
-    ...hostRaceReloadLaneIds,
-    ...hostPhaseStaleRecoveryLaneIds,
-    "stale-cohost-deadline",
-    ...cohostDeadlineRecoveryLaneIds,
-  ];
+  const requiredChecks = hardeningAuditLaneIds;
   if (proof?.version !== 1) {
     throw new Error(`hardening admin proof version drifted: ${proof?.version}`);
   }
