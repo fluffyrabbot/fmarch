@@ -660,7 +660,13 @@ export function normalizeIdentityLifecycleAudit(payload, context = {}) {
     return null;
   }
   const eventKinds = [...new Set(entries.map((entry) => entry.eventKind))].sort();
-  const requiredEvents = ["invite_revoked", "session_revoked", "session_rotated"];
+  const requiredEvents = [
+    "account_created",
+    "account_session_created",
+    "invite_revoked",
+    "session_revoked",
+    "session_rotated",
+  ];
   const complete = requiredEvents.every((eventKind) => eventKinds.includes(eventKind));
   const principalUserId = String(context.identityPrincipalUserId ?? entries[0].principalUserId);
 
@@ -673,7 +679,7 @@ export function normalizeIdentityLifecycleAudit(payload, context = {}) {
     authority: "GlobalAdmin",
     boundary: "Local identity lifecycle audit",
     boundaryDetail:
-      "/auth/identity-lifecycle-audit records session and invite lifecycle events without raw credential echoes",
+      "/auth/identity-lifecycle-audit records account, session, and invite lifecycle events without raw credential echoes",
     href: adminIdentityLifecycleAuditHref({
       game: context.game,
       principalUserId,

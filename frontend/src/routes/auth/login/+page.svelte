@@ -6,6 +6,7 @@
   $: returnTo = form?.returnTo ?? login.returnTo ?? "/";
   $: rejection = form?.state === "reject" ? form.message : null;
   $: tokenValue = login.inviteToken ?? "";
+  $: accountValue = login.accountId ?? "";
 </script>
 
 <svelte:head>
@@ -18,7 +19,7 @@
       <p class="fm-eyebrow">Auth</p>
       <h1>Sign in</h1>
       <p class="fm-summary">
-        Use an opaque session token or invite issued through an authenticated identity flow.
+        Use an opaque session, invite, or account credential issued through an authenticated identity flow.
       </p>
     </div>
   </section>
@@ -40,7 +41,27 @@
           autocomplete="current-password"
           data-testid="auth-login-token"
           value={tokenValue}
-          required
+        />
+      </label>
+
+      <label class="auth-login__field">
+        <span>Account</span>
+        <input
+          name="accountId"
+          type="text"
+          autocomplete="username"
+          data-testid="auth-login-account"
+          value={accountValue}
+        />
+      </label>
+
+      <label class="auth-login__field">
+        <span>Password</span>
+        <input
+          name="password"
+          type="password"
+          autocomplete="current-password"
+          data-testid="auth-login-password"
         />
       </label>
 

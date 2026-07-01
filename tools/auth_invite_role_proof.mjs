@@ -26,6 +26,12 @@ const inviteTokens = Object.freeze({
   host: `invite-proof-host-${game}`,
   player: `invite-proof-player-${game}`,
 });
+const accountCredentials = Object.freeze({
+  host: Object.freeze({
+    accountId: `host-${game}@example.test`,
+    password: `host-account-password-${game}`,
+  }),
+});
 const frontendRequire = createRequire(path.join(frontendRoot, "package.json"));
 
 if (!databaseUrl) {
@@ -56,6 +62,7 @@ try {
   await seedRootAdminSession(proofDatabase.url);
   const seedCommands = await seedGame(apiBaseUrl);
   const invites = await createInvites(apiBaseUrl);
+  const accounts = await createAccounts(apiBaseUrl);
   const frontendBaseUrl = await startFrontend(apiBaseUrl);
   browser = await chromium.launch();
   const proofRoles = {
@@ -90,27 +97,30 @@ try {
     adminSessionToken: proofRoles.admin.sessionToken,
     hostSessionToken: proofRoles.host.sessionToken,
     hostReturnTo: `/g/${game}/host`,
+    hostAccount: accountCredentials.host,
   });
   const roles = redactProofRoles(proofRoles);
 
   const evidence = {
-    version: 7,
+    version: 8,
     proof: "auth-invite-role-proof",
     status: "passed",
     releaseReady: false,
     scope: "local-auth-invite-role-proof",
     productionReady: false,
     proofBoundary:
-      "Local scratch-Postgres plus local Rust API, SvelteKit login/action/host/admin-audit routes, and Chromium proof. Proves invite-issued sessions preserve the existing role-surface capability architecture for seeded admin, host, and player URLs, including host-role-surface game-scoped player invite issuance, GlobalAdmin discovery, and inspection of local identity lifecycle audit rows from the admin overview; it does not prove production account recovery, email delivery, hosted identity, abuse controls, hosted audit retention/export, or beta release readiness.",
+      "Local scratch-Postgres plus local Rust API, SvelteKit login/action/host/admin-audit routes, and Chromium proof. Proves invite-issued sessions plus a local account credential login preserve the existing role-surface capability architecture for seeded admin, host, and player URLs, including host-role-surface game-scoped player invite issuance, GlobalAdmin account creation, GlobalAdmin discovery, and inspection of local identity lifecycle audit rows from the admin overview; it does not prove production password hardening, account recovery, email delivery, hosted identity, abuse controls, hosted audit retention/export, or beta release readiness.",
     identityAdapter: {
       status: "passed",
       replacesDevTokensWithoutRoleSurfaceChange: true,
       browserCookieName: "fmarch_session",
       sessionCredentialKind: "opaque-session",
       inviteCredentialKind: "single-use-invite",
+      accountCredentialKind: "local-password-account",
       lifecycleControls: ["session-rotation", "session-revocation", "invite-revocation"],
       delegatedIssuanceControls: ["host-scoped-invite-issuance"],
       roleSurfacePattern: "/auth/login?returnTo=<role-surface>&invite=<token>",
+      accountRoleSurfacePattern: "/auth/login?returnTo=<role-surface>&account=<account-id>",
       capabilityAuthority:
         "auth_session resolves principal_user_id and committed game/global capabilities at the API boundary",
     },
@@ -124,6 +134,7 @@ try {
     frontendBaseUrl,
     seedCommands,
     invites,
+    accounts,
     roles,
   };
   assertInviteProof(evidence);
@@ -208,6 +219,46 @@ async function createInvites(apiBaseUrl) {
       inviteToken: inviteTokens.player,
       principalUserId: "player-mira",
     }),
+  };
+}
+
+async function createAccounts(apiBaseUrl) {
+  return {
+    host: await createAccount(apiBaseUrl, {
+      accountId: accountCredentials.host.accountId,
+      password: accountCredentials.host.password,
+      principalUserId: "host_h",
+    }),
+  };
+}
+
+async function createAccount(
+  apiBaseUrl,
+  {
+    accountId,
+    password,
+    principalUserId,
+    globalCapabilities = [],
+    bearerToken = rootAdminSessionToken,
+  },
+) {
+  const response = await fetchJson(`${apiBaseUrl}/auth/accounts`, {
+    method: "POST",
+    headers: {
+      authorization: `Bearer ${bearerToken}`,
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({
+      account_id: accountId,
+      password,
+      principal_user_id: principalUserId,
+      global_capabilities: globalCapabilities,
+    }),
+  });
+  return {
+    accountId: response.account_id,
+    principalUserId: response.principal_user_id,
+    globalCapabilities: response.global_capabilities,
   };
 }
 
@@ -307,12 +358,78 @@ async function driveInviteLogin({
   }
 }
 
+async function driveAccountLogin({
+  frontendBaseUrl,
+  apiBaseUrl,
+  accountId,
+  password,
+  returnTo,
+  expectedCapability,
+}) {
+  const page = await browser.newPage({ viewport: { width: 1024, height: 768 } });
+  const loginUrl = `${frontendBaseUrl}/auth/login?returnTo=${encodeURIComponent(
+    returnTo,
+  )}&account=${encodeURIComponent(accountId)}`;
+  try {
+    await page.goto(loginUrl, { waitUntil: "networkidle" });
+    await page.getByTestId("auth-login-surface").waitFor({ state: "visible" });
+    const accountValue = await page.getByTestId("auth-login-account").inputValue();
+    if (accountValue !== accountId) {
+      throw new Error(`account login id was not prefilled: ${accountValue}`);
+    }
+    await page.getByTestId("auth-login-password").fill(password);
+    await Promise.all([
+      page.waitForURL(`${frontendBaseUrl}${returnTo}`, { timeout: 15000 }),
+      page.getByTestId("auth-login-submit").click(),
+    ]);
+    await page.waitForLoadState("networkidle");
+    const cookies = await page.context().cookies(frontendBaseUrl);
+    const sessionCookie = cookies.find((cookie) => cookie.name === "fmarch_session");
+    if (sessionCookie === undefined) {
+      throw new Error("account login did not set fmarch_session cookie");
+    }
+    const session = await fetchJson(`${apiBaseUrl}/auth/session?game=${game}`, {
+      headers: { authorization: `Bearer ${sessionCookie.value}` },
+    });
+    const capabilityKinds = (session.capabilities ?? []).map(
+      (capability) => capability.kind,
+    );
+    if (!capabilityKinds.includes(expectedCapability)) {
+      throw new Error(
+        `account session missing ${expectedCapability}: ${JSON.stringify(session)}`,
+      );
+    }
+    const bodyText = await page.locator("body").innerText();
+    if (!bodyText.includes(game)) {
+      throw new Error(`account login did not render game ${game}`);
+    }
+    return {
+      role: "hostAccount",
+      loginUrl,
+      returnTo,
+      accountId,
+      principalUserId: session.principal_user_id,
+      capabilityKinds,
+      sessionToken: sessionCookie.value,
+      cookie: {
+        httpOnly: sessionCookie.httpOnly,
+        sameSite: sessionCookie.sameSite,
+        secure: sessionCookie.secure,
+        valuePrefix: sessionCookie.value.slice(0, "account-session-".length),
+      },
+    };
+  } finally {
+    await page.close();
+  }
+}
+
 async function proveIdentityLifecycle({
   apiBaseUrl,
   frontendBaseUrl,
   adminSessionToken,
   hostSessionToken,
   hostReturnTo,
+  hostAccount,
 }) {
   const rotatedSessionToken = `rotated-host-session-${game}`;
   const rotation = await rotateSession({
@@ -372,12 +489,32 @@ async function proveIdentityLifecycle({
     hostSessionToken: recovery.sessionToken,
     hostReturnTo,
   });
+  const accountLogin = await driveAccountLogin({
+    frontendBaseUrl,
+    apiBaseUrl,
+    accountId: hostAccount.accountId,
+    password: hostAccount.password,
+    returnTo: hostReturnTo,
+    expectedCapability: "HostOf",
+  });
+  await assertBrowserSessionRendersRole({
+    frontendBaseUrl,
+    sessionToken: accountLogin.sessionToken,
+    returnTo: hostReturnTo,
+    expectedText: game,
+  });
   const auditTrail = await fetchIdentityLifecycleAudit({
     apiBaseUrl,
     principalUserId: "host_h",
   });
   const auditEventKinds = auditTrail.entries.map((entry) => entry.event_kind).sort();
-  for (const eventKind of ["invite_revoked", "session_revoked", "session_rotated"]) {
+  for (const eventKind of [
+    "account_created",
+    "account_session_created",
+    "invite_revoked",
+    "session_revoked",
+    "session_rotated",
+  ]) {
     if (!auditEventKinds.includes(eventKind)) {
       throw new Error(`identity lifecycle audit missing ${eventKind}`);
     }
@@ -388,6 +525,8 @@ async function proveIdentityLifecycle({
     rotatedSessionToken,
     revokedInviteToken,
     recoveryInviteToken,
+    accountLogin.sessionToken,
+    hostAccount.password,
   ]) {
     if (auditText.includes(rawToken)) {
       throw new Error("identity lifecycle audit leaked a raw credential");
@@ -401,6 +540,8 @@ async function proveIdentityLifecycle({
       rotatedSessionToken,
       revokedInviteToken,
       recoveryInviteToken,
+      accountLogin.sessionToken,
+      hostAccount.password,
     ],
   });
 
@@ -428,6 +569,16 @@ async function proveIdentityLifecycle({
       sameRoleSurface: new URL(recovery.loginUrl).searchParams.get("returnTo") === hostReturnTo,
     },
     hostScopedInviteIssuance,
+    accountLogin: {
+      status: "passed",
+      principalUserId: accountLogin.principalUserId,
+      accountId: accountLogin.accountId,
+      capabilityKinds: accountLogin.capabilityKinds,
+      sameRoleSurface:
+        new URL(accountLogin.loginUrl).searchParams.get("returnTo") === hostReturnTo,
+      cookieValuePrefix: accountLogin.cookie.valuePrefix,
+      rawPasswordStored: false,
+    },
     auditTrail: {
       status: "passed",
       principalUserId: "host_h",
@@ -444,6 +595,7 @@ async function proveIdentityLifecycle({
     adminAuditSurface,
     nonClaims: [
       "hosted account recovery",
+      "production password hardening or credential reset policy",
       "email or out-of-band invite delivery",
       "cross-game invite restrictions beyond recorded local game scope",
       "rate limiting or abuse controls",
@@ -696,7 +848,13 @@ async function driveAdminIdentityAuditSurface({
       timeout: 15000,
     });
     const visibleEventKinds = [];
-    for (const eventKind of ["session_rotated", "session_revoked", "invite_revoked"]) {
+    for (const eventKind of [
+      "account_created",
+      "account_session_created",
+      "session_rotated",
+      "session_revoked",
+      "invite_revoked",
+    ]) {
       await page.getByTestId(`admin-audit-entry-${eventKind}`).waitFor({
         state: "visible",
         timeout: 15000,
@@ -812,7 +970,7 @@ function redactProofRoles(roles) {
 
 function assertInviteProof(evidence) {
   if (
-    evidence.version !== 7 ||
+    evidence.version !== 8 ||
     evidence.proof !== "auth-invite-role-proof" ||
     evidence.status !== "passed" ||
     evidence.productionReady !== false ||
@@ -823,6 +981,7 @@ function assertInviteProof(evidence) {
   if (
     evidence.identityAdapter?.replacesDevTokensWithoutRoleSurfaceChange !== true ||
     evidence.identityAdapter?.browserCookieName !== "fmarch_session" ||
+    evidence.identityAdapter?.accountCredentialKind !== "local-password-account" ||
     !evidence.identityAdapter?.delegatedIssuanceControls?.includes(
       "host-scoped-invite-issuance",
     ) ||
@@ -852,11 +1011,23 @@ function assertInviteProof(evidence) {
     ) ||
     evidence.identityLifecycle?.hostScopedInviteIssuance?.sameRoleSurface !== true ||
     evidence.identityLifecycle?.hostScopedInviteIssuance?.hostRoleSurfaceStillValid !== true ||
+    evidence.identityLifecycle?.accountLogin?.status !== "passed" ||
+    evidence.identityLifecycle?.accountLogin?.principalUserId !== "host_h" ||
+    evidence.identityLifecycle?.accountLogin?.accountId !==
+      accountCredentials.host.accountId ||
+    !evidence.identityLifecycle?.accountLogin?.capabilityKinds?.includes("HostOf") ||
+    evidence.identityLifecycle?.accountLogin?.sameRoleSurface !== true ||
+    evidence.identityLifecycle?.accountLogin?.cookieValuePrefix !== "account-session-" ||
+    evidence.identityLifecycle?.accountLogin?.rawPasswordStored !== false ||
     evidence.identityLifecycle?.auditTrail?.status !== "passed" ||
     evidence.identityLifecycle?.auditTrail?.rawTokensStored !== false ||
     !evidence.identityLifecycle?.auditTrail?.eventKinds?.includes("session_rotated") ||
     !evidence.identityLifecycle?.auditTrail?.eventKinds?.includes("session_revoked") ||
     !evidence.identityLifecycle?.auditTrail?.eventKinds?.includes("invite_revoked") ||
+    !evidence.identityLifecycle?.auditTrail?.eventKinds?.includes("account_created") ||
+    !evidence.identityLifecycle?.auditTrail?.eventKinds?.includes(
+      "account_session_created",
+    ) ||
     evidence.identityLifecycle?.adminAuditSurface?.status !== "passed" ||
     evidence.identityLifecycle?.adminAuditSurface?.clickedThroughFromOverview !== true ||
     evidence.identityLifecycle?.adminAuditSurface?.rawTokensVisible !== false ||
@@ -868,9 +1039,22 @@ function assertInviteProof(evidence) {
     ) ||
     !evidence.identityLifecycle?.adminAuditSurface?.visibleEventKinds?.includes(
       "invite_revoked",
+    ) ||
+    !evidence.identityLifecycle?.adminAuditSurface?.visibleEventKinds?.includes(
+      "account_created",
+    ) ||
+    !evidence.identityLifecycle?.adminAuditSurface?.visibleEventKinds?.includes(
+      "account_session_created",
     )
   ) {
     throw new Error("invite proof must preserve the role-surface identity adapter");
+  }
+  if (
+    evidence.accounts?.host?.accountId !== accountCredentials.host.accountId ||
+    evidence.accounts?.host?.principalUserId !== "host_h" ||
+    Object.hasOwn(evidence.accounts.host, "password")
+  ) {
+    throw new Error("invite proof must include only redacted account evidence");
   }
   for (const [role, capability] of [
     ["admin", "GlobalAdmin"],

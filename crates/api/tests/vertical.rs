@@ -2626,6 +2626,163 @@ async fn global_admin_can_issue_scoped_operator_session_grants(pool: sqlx::PgPoo
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+async fn global_admin_account_login_creates_normal_role_session(pool: sqlx::PgPool) {
+    let app = router_with_dev_auth(pool.clone());
+    let game = Uuid::new_v4();
+
+    expect_ack(
+        post_command(
+            app.clone(),
+            1,
+            "host_h",
+            Command::CreateGame {
+                game,
+                pack: "mafiascum".into(),
+            },
+        )
+        .await,
+    );
+
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/auth/dev-session")
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    serde_json::json!({
+                        "token": "account-admin-token",
+                        "principal_user_id": "admin_a",
+                        "expires_at": 4_102_444_800i64,
+                        "global_capabilities": ["GlobalAdmin"]
+                    })
+                    .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/auth/accounts")
+                .header("content-type", "application/json")
+                .header("authorization", "Bearer account-admin-token")
+                .body(Body::from(
+                    serde_json::json!({
+                        "account_id": "host@example.test",
+                        "password": "correct horse battery",
+                        "principal_user_id": "host_h"
+                    })
+                    .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let account: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+    assert_eq!(account["account_id"], "host@example.test");
+    assert_eq!(account["principal_user_id"], "host_h");
+
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/auth/accounts/login")
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    serde_json::json!({
+                        "account_id": "host@example.test",
+                        "password": "wrong password",
+                        "session_token": "host-account-session-wrong",
+                        "expires_at": 4_102_444_800i64
+                    })
+                    .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+    let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let reject: RejectMsg = serde_json::from_slice(&bytes).unwrap();
+    assert_eq!(reject.error, RejectCode::NotAuthorized);
+
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/auth/accounts/login")
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    serde_json::json!({
+                        "account_id": "host@example.test",
+                        "password": "correct horse battery",
+                        "session_token": "host-account-session",
+                        "expires_at": 4_102_444_800i64
+                    })
+                    .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let login: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+    assert_eq!(login["principal_user_id"], "host_h");
+
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri(format!("/auth/session?game={game}"))
+                .header("authorization", "Bearer host-account-session")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let session: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+    assert_eq!(session["principal_user_id"], "host_h");
+    assert_eq!(session["capabilities"][0]["kind"], "HostOf");
+    assert_eq!(session["capabilities"][0]["body"]["game"], game.to_string());
+
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri("/auth/identity-lifecycle-audit?principal_user_id=host_h")
+                .header("authorization", "Bearer account-admin-token")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let audit: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+    let audit_text = audit.to_string();
+    assert!(audit_text.contains("account_created"));
+    assert!(audit_text.contains("account_session_created"));
+    assert!(!audit_text.contains("correct horse battery"));
+    assert!(!audit_text.contains("host-account-session"));
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
 async fn global_admin_invite_redeems_to_normal_role_session(pool: sqlx::PgPool) {
     let app = router_with_dev_auth(pool.clone());
     let game = Uuid::new_v4();

@@ -8,6 +8,7 @@ export function load({ locals, url }) {
       principalUserId:
         typeof locals.principalUserId === "string" ? locals.principalUserId : null,
       inviteToken: optionalToken(url.searchParams.get("invite")),
+      accountId: optionalToken(url.searchParams.get("account")),
       returnTo: safeReturnTo(url.searchParams.get("returnTo")),
     },
   };
@@ -17,38 +18,54 @@ export const actions = {
   default: async ({ cookies, fetch, request, url }) => {
     const formData = await request.formData();
     const token = requiredToken(formData, "token");
+    const accountId = requiredToken(formData, "accountId");
+    const password = requiredToken(formData, "password");
     const returnTo = safeReturnTo(formData.get("returnTo"));
-    if (token === null) {
+    if (token === null && (accountId === null || password === null)) {
       return fail(400, {
         state: "reject",
-        message: "Session or invite token is required",
+        message: "Session, invite, or account credentials are required",
         returnTo,
       });
     }
 
-    const direct = await verifySessionToken({ fetch, token });
-    if (direct.status === "ok") {
-      cookies.set(SESSION_COOKIE_NAME, token, sessionCookieOptions(url));
+    if (token !== null) {
+      const direct = await verifySessionToken({ fetch, token });
+      if (direct.status === "ok") {
+        cookies.set(SESSION_COOKIE_NAME, token, sessionCookieOptions(url));
+        throw redirect(303, returnTo);
+      }
+      if (direct.status !== "unauthorized") {
+        return fail(502, {
+          state: "reject",
+          message: direct.message,
+          returnTo,
+        });
+      }
+
+      const redeemed = await redeemInviteToken({ fetch, inviteToken: token });
+      if (redeemed.status !== "ok") {
+        return fail(redeemed.statusCode, {
+          state: "reject",
+          message: redeemed.message,
+          returnTo,
+        });
+      }
+
+      cookies.set(SESSION_COOKIE_NAME, redeemed.sessionToken, sessionCookieOptions(url));
       throw redirect(303, returnTo);
     }
-    if (direct.status !== "unauthorized") {
-      return fail(502, {
+
+    const account = await loginAccount({ fetch, accountId, password });
+    if (account.status !== "ok") {
+      return fail(account.statusCode, {
         state: "reject",
-        message: direct.message,
+        message: account.message,
         returnTo,
       });
     }
 
-    const redeemed = await redeemInviteToken({ fetch, inviteToken: token });
-    if (redeemed.status !== "ok") {
-      return fail(redeemed.statusCode, {
-        state: "reject",
-        message: redeemed.message,
-        returnTo,
-      });
-    }
-
-    cookies.set(SESSION_COOKIE_NAME, redeemed.sessionToken, sessionCookieOptions(url));
+    cookies.set(SESSION_COOKIE_NAME, account.sessionToken, sessionCookieOptions(url));
     throw redirect(303, returnTo);
   },
 };
@@ -112,6 +129,39 @@ async function redeemInviteToken({ fetch, inviteToken }) {
   return { status: "ok", sessionToken, session: body };
 }
 
+async function loginAccount({ fetch, accountId, password }) {
+  const sessionToken = `account-session-${randomUUID()}`;
+  const response = await fetch(authAccountLoginUrl(process.env), {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      accept: "application/json",
+    },
+    body: JSON.stringify({
+      account_id: accountId,
+      password,
+      session_token: sessionToken,
+      expires_at: Math.floor(Date.now() / 1000) + 60 * 60 * 24 * 7,
+    }),
+  });
+  if (!response.ok) {
+    return {
+      status: "reject",
+      statusCode: response.status === 401 ? 401 : 502,
+      message: "Account credentials are missing, disabled, or invalid",
+    };
+  }
+  const body = await response.json();
+  if (!validSessionBody(body)) {
+    return {
+      status: "reject",
+      statusCode: 502,
+      message: "Auth service returned a malformed account session",
+    };
+  }
+  return { status: "ok", sessionToken, session: body };
+}
+
 function requiredToken(formData, field) {
   const value = formData.get(field);
   if (typeof value !== "string") {
@@ -142,6 +192,14 @@ function authInviteRedeemUrl(env) {
       ? env.FMARCH_API_BASE_URL.replace(/\/$/, "")
       : "";
   return `${baseUrl}/auth/invites/redeem`;
+}
+
+function authAccountLoginUrl(env) {
+  const baseUrl =
+    typeof env.FMARCH_API_BASE_URL === "string"
+      ? env.FMARCH_API_BASE_URL.replace(/\/$/, "")
+      : "";
+  return `${baseUrl}/auth/accounts/login`;
 }
 
 function validSessionBody(body) {

@@ -12,6 +12,7 @@ test("login load preserves only local return paths", () => {
       login: {
         principalUserId: null,
         inviteToken: "",
+        accountId: "",
         returnTo: "/admin",
       },
     },
@@ -28,6 +29,7 @@ test("login load preserves only local return paths", () => {
       login: {
         principalUserId: "admin_a",
         inviteToken: "",
+        accountId: "",
         returnTo: "/",
       },
     },
@@ -44,7 +46,25 @@ test("login load preserves only local return paths", () => {
       login: {
         principalUserId: null,
         inviteToken: "host-invite-token",
+        accountId: "",
         returnTo: "/g/midsummer",
+      },
+    },
+  );
+
+  assert.deepEqual(
+    load({
+      locals: {},
+      url: new URL(
+        "http://localhost/auth/login?returnTo=/g/midsummer/host&account=host%40example.test",
+      ),
+    }),
+    {
+      login: {
+        principalUserId: null,
+        inviteToken: "",
+        accountId: "host@example.test",
+        returnTo: "/g/midsummer/host",
       },
     },
   );
@@ -163,6 +183,61 @@ test("login action redeems invite tokens into opaque browser sessions", async ()
   });
 });
 
+test("login action exchanges account credentials for an opaque browser session", async () => {
+  const observed = { requests: [] };
+  await assert.rejects(
+    async () =>
+      await actions.default({
+        cookies: {
+          set(name, value, options) {
+            observed.cookie = { name, value, options };
+          },
+        },
+        fetch: async (url, init) => {
+          observed.requests.push({
+            url,
+            method: init.method,
+            authorization: init.headers.authorization,
+            accept: init.headers.accept,
+            body: init.body === undefined ? null : JSON.parse(init.body),
+          });
+          assert.equal(url, "/auth/accounts/login");
+          return jsonResponse({
+            principal_user_id: "host_h",
+            capabilities: [{ kind: "HostOf" }],
+          });
+        },
+        request: formRequest({
+          token: "",
+          accountId: " host@example.test ",
+          password: " correct horse battery ",
+          returnTo: "/g/midsummer/host",
+        }),
+        url: new URL("http://localhost/auth/login"),
+      }),
+    (err) => err.status === 303 && err.location === "/g/midsummer/host",
+  );
+
+  assert.equal(observed.requests.length, 1);
+  assert.equal(observed.requests[0].url, "/auth/accounts/login");
+  assert.equal(observed.requests[0].method, "POST");
+  assert.equal(observed.requests[0].accept, "application/json");
+  assert.equal(observed.requests[0].body.account_id, "host@example.test");
+  assert.equal(observed.requests[0].body.password, "correct horse battery");
+  assert.match(observed.requests[0].body.session_token, /^account-session-/);
+  assert.equal(Number.isSafeInteger(observed.requests[0].body.expires_at), true);
+  assert.deepEqual(observed.cookie, {
+    name: "fmarch_session",
+    value: observed.requests[0].body.session_token,
+    options: {
+      path: "/",
+      httpOnly: true,
+      sameSite: "lax",
+      secure: false,
+    },
+  });
+});
+
 test("login action rejects missing or revoked tokens without setting a cookie", async () => {
   const missing = await actions.default({
     cookies: forbiddenCookieJar(),
@@ -172,7 +247,10 @@ test("login action rejects missing or revoked tokens without setting a cookie", 
   });
   assert.equal(missing.status, 400);
   assert.equal(missing.data.state, "reject");
-  assert.equal(missing.data.message, "Session or invite token is required");
+  assert.equal(
+    missing.data.message,
+    "Session, invite, or account credentials are required",
+  );
 
   const revoked = await actions.default({
     cookies: forbiddenCookieJar(),

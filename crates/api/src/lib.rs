@@ -24,10 +24,10 @@ use wire::{
     AckMsg, CapabilityGrant, ClientEnvelope, DayVoteOutcomeDelta, Hello,
     HostConsolePhaseStateDelta, HostConsoleSlotOccupancyDelta, HostConsoleStateDelta,
     HostConsoleThreadPostDelta, HostPhaseControl, HostPromptDelta, HostPromptsDelta,
-    PROTOCOL_VERSION, PlayerInvestigationResult, PlayerInvestigationResultsDelta,
-    PlayerNotification, PlayerNotificationsDelta, ProjectionDelta, RejectCode, RejectMsg,
-    ServerEnvelope, ServerMsg, ThreadPage, ThreadPost, ThreadPostsDelta, VoteCountClearedDelta,
-    VoteCountDelta,
+    PlayerInvestigationResult, PlayerInvestigationResultsDelta, PlayerNotification,
+    PlayerNotificationsDelta, ProjectionDelta, RejectCode, RejectMsg, ServerEnvelope, ServerMsg,
+    ThreadPage, ThreadPost, ThreadPostsDelta, VoteCountClearedDelta, VoteCountDelta,
+    PROTOCOL_VERSION,
 };
 
 #[derive(Clone)]
@@ -81,6 +81,8 @@ pub fn router_with_state(state: ApiState) -> Router {
         .route("/auth/session", get(auth_session))
         .route("/auth/dev-session", post(create_dev_auth_session))
         .route("/auth/session-grants", post(create_auth_session_grant))
+        .route("/auth/accounts", post(create_auth_account))
+        .route("/auth/accounts/login", post(login_auth_account))
         .route("/auth/session-rotations", post(rotate_auth_session))
         .route("/auth/session-revocations", post(revoke_auth_session))
         .route("/auth/invites", post(create_auth_invite))
@@ -153,6 +155,30 @@ struct CreateAuthSessionGrant {
     expires_at: i64,
     #[serde(default)]
     global_capabilities: Vec<String>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct CreateAuthAccount {
+    account_id: String,
+    password: String,
+    principal_user_id: String,
+    #[serde(default)]
+    global_capabilities: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct AuthAccountResponse {
+    account_id: String,
+    principal_user_id: String,
+    global_capabilities: Vec<String>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct LoginAuthAccount {
+    account_id: String,
+    password: String,
+    session_token: String,
+    expires_at: i64,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -344,6 +370,199 @@ async fn create_auth_session_grant(
 
     Ok(Json(
         auth_session_response(&state, request.principal_user_id, None, global_capabilities).await?,
+    ))
+}
+
+async fn create_auth_account(
+    State(state): State<ApiState>,
+    headers: HeaderMap,
+    Json(request): Json<CreateAuthAccount>,
+) -> Result<Json<AuthAccountResponse>, ApiError> {
+    let caller_token = bearer_token(&headers).ok_or_else(unauthorized_session)?;
+    let actor_user_id = require_global_admin(&state, caller_token, "account creation").await?;
+
+    let account_id = request.account_id.trim();
+    let password = request.password.trim();
+    let principal_user_id = request.principal_user_id.trim();
+    if account_id.is_empty() || password.is_empty() || principal_user_id.is_empty() {
+        return Err(ApiError::Reject {
+            status: StatusCode::BAD_REQUEST,
+            error: RejectCode::Internal,
+            message: "account creation requires account_id, password, and principal_user_id"
+                .to_string(),
+        });
+    }
+    let global_capabilities = normalize_global_capabilities(&request.global_capabilities)?;
+    let now = unix_now_seconds();
+    let password_salt = Uuid::new_v4().to_string();
+    let password_hash = hash_account_password(&password_salt, password);
+    let mut tx = state.pool.begin().await?;
+    let inserted = sqlx::query(
+        r#"
+        INSERT INTO auth_account (
+            account_id,
+            principal_user_id,
+            password_salt,
+            password_hash,
+            created_at,
+            disabled_at,
+            global_capabilities
+        )
+        VALUES ($1, $2, $3, $4, $5, NULL, $6)
+        ON CONFLICT (account_id) DO NOTHING
+        "#,
+    )
+    .bind(account_id)
+    .bind(principal_user_id)
+    .bind(&password_salt)
+    .bind(&password_hash)
+    .bind(now)
+    .bind(&global_capabilities)
+    .execute(&mut *tx)
+    .await?;
+
+    if inserted.rows_affected() != 1 {
+        return Err(ApiError::Reject {
+            status: StatusCode::CONFLICT,
+            error: RejectCode::Internal,
+            message: "account already exists".to_string(),
+        });
+    }
+
+    sqlx::query(
+        r#"
+        INSERT INTO identity_lifecycle_audit (
+            event_at,
+            event_kind,
+            actor_user_id,
+            principal_user_id,
+            token_hash,
+            related_token_hash,
+            metadata
+        )
+        VALUES ($1, 'account_created', $2, $3, NULL, NULL, $4::JSONB)
+        "#,
+    )
+    .bind(now)
+    .bind(actor_user_id.as_str())
+    .bind(principal_user_id)
+    .bind(
+        serde_json::json!({
+            "account_id": account_id,
+            "global_capability_count": global_capabilities.len()
+        })
+        .to_string(),
+    )
+    .execute(&mut *tx)
+    .await?;
+    tx.commit().await?;
+
+    Ok(Json(AuthAccountResponse {
+        account_id: account_id.to_string(),
+        principal_user_id: principal_user_id.to_string(),
+        global_capabilities,
+    }))
+}
+
+async fn login_auth_account(
+    State(state): State<ApiState>,
+    Json(request): Json<LoginAuthAccount>,
+) -> Result<Json<AuthSessionResponse>, ApiError> {
+    let account_id = request.account_id.trim();
+    let password = request.password.trim();
+    let session_token = request.session_token.trim();
+    if account_id.is_empty() || password.is_empty() || session_token.is_empty() {
+        return Err(ApiError::Reject {
+            status: StatusCode::BAD_REQUEST,
+            error: RejectCode::Internal,
+            message: "account login requires account_id, password, and session_token".to_string(),
+        });
+    }
+    let now = unix_now_seconds();
+    if request.expires_at <= now {
+        return Err(ApiError::Reject {
+            status: StatusCode::BAD_REQUEST,
+            error: RejectCode::Internal,
+            message: "account session expiry must be in the future".to_string(),
+        });
+    }
+
+    let account = sqlx::query_as::<_, (String, String, String, Vec<String>)>(
+        r#"
+        SELECT principal_user_id, password_salt, password_hash, global_capabilities
+        FROM auth_account
+        WHERE account_id = $1
+          AND disabled_at IS NULL
+        "#,
+    )
+    .bind(account_id)
+    .fetch_optional(&state.pool)
+    .await?
+    .ok_or_else(unauthorized_account)?;
+
+    if hash_account_password(account.1.as_str(), password) != account.2 {
+        return Err(unauthorized_account());
+    }
+
+    let session_hash = hash_session_token(session_token);
+    let mut tx = state.pool.begin().await?;
+    sqlx::query(
+        r#"
+        INSERT INTO auth_session (
+            token_hash,
+            principal_user_id,
+            created_at,
+            expires_at,
+            revoked_at,
+            global_capabilities
+        )
+        VALUES ($1, $2, $3, $4, NULL, $5)
+        ON CONFLICT (token_hash) DO UPDATE
+        SET principal_user_id = EXCLUDED.principal_user_id,
+            expires_at = EXCLUDED.expires_at,
+            revoked_at = NULL,
+            global_capabilities = EXCLUDED.global_capabilities
+        "#,
+    )
+    .bind(&session_hash)
+    .bind(account.0.as_str())
+    .bind(now)
+    .bind(request.expires_at)
+    .bind(&account.3)
+    .execute(&mut *tx)
+    .await?;
+    sqlx::query(
+        r#"
+        INSERT INTO identity_lifecycle_audit (
+            event_at,
+            event_kind,
+            actor_user_id,
+            principal_user_id,
+            token_hash,
+            related_token_hash,
+            metadata
+        )
+        VALUES ($1, 'account_session_created', $2, $3, $4, NULL, $5::JSONB)
+        "#,
+    )
+    .bind(now)
+    .bind(account.0.as_str())
+    .bind(account.0.as_str())
+    .bind(session_hash)
+    .bind(
+        serde_json::json!({
+            "account_id": account_id,
+            "session_expires_at": request.expires_at,
+            "global_capability_count": account.3.len()
+        })
+        .to_string(),
+    )
+    .execute(&mut *tx)
+    .await?;
+    tx.commit().await?;
+
+    Ok(Json(
+        auth_session_response(&state, account.0, None, account.3).await?,
     ))
 }
 
@@ -883,6 +1102,14 @@ fn unauthorized_invite() -> ApiError {
     }
 }
 
+fn unauthorized_account() -> ApiError {
+    ApiError::Reject {
+        status: StatusCode::UNAUTHORIZED,
+        error: RejectCode::NotAuthorized,
+        message: "account credentials are missing, disabled, or invalid".to_string(),
+    }
+}
+
 fn normalize_dev_global_capabilities(values: &[String]) -> Result<Vec<String>, ApiError> {
     normalize_global_capabilities(values)
 }
@@ -958,6 +1185,20 @@ fn global_capability_grants(values: &[String]) -> Vec<CapabilityGrant> {
 
 fn hash_session_token(token: &str) -> String {
     let digest = Sha256::digest(token.as_bytes());
+    let mut out = String::with_capacity(digest.len() * 2);
+    for byte in digest {
+        use std::fmt::Write as _;
+        let _ = write!(&mut out, "{byte:02x}");
+    }
+    out
+}
+
+fn hash_account_password(salt: &str, password: &str) -> String {
+    let mut hasher = Sha256::new();
+    hasher.update(salt.as_bytes());
+    hasher.update([0]);
+    hasher.update(password.as_bytes());
+    let digest = hasher.finalize();
     let mut out = String::with_capacity(digest.len() * 2);
     for byte in digest {
         use std::fmt::Write as _;

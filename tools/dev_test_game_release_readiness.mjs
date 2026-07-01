@@ -5209,7 +5209,7 @@ export function validateDevTestGameIdentityAdapterProof(proof, options = {}) {
     ["host", "HostOf"],
     ["player", "SlotOccupant"],
   ]);
-  if (proof?.version !== 7) {
+  if (proof?.version !== 8) {
     throw new Error(`identity adapter proof version drifted: ${proof?.version}`);
   }
   if (proof.proof !== "auth-invite-role-proof") {
@@ -5228,6 +5228,7 @@ export function validateDevTestGameIdentityAdapterProof(proof, options = {}) {
     proof.identityAdapter?.replacesDevTokensWithoutRoleSurfaceChange !== true ||
     proof.identityAdapter?.browserCookieName !== "fmarch_session" ||
     proof.identityAdapter?.inviteCredentialKind !== "single-use-invite" ||
+    proof.identityAdapter?.accountCredentialKind !== "local-password-account" ||
     proof.identityAdapter?.sessionCredentialKind !== "opaque-session" ||
     !proof.identityAdapter?.lifecycleControls?.includes("session-rotation") ||
     !proof.identityAdapter?.lifecycleControls?.includes("session-revocation") ||
@@ -5272,14 +5273,30 @@ export function validateDevTestGameIdentityAdapterProof(proof, options = {}) {
     ) ||
     proof.identityLifecycle?.hostScopedInviteIssuance?.sameRoleSurface !== true ||
     proof.identityLifecycle?.hostScopedInviteIssuance?.hostRoleSurfaceStillValid !== true ||
+    proof.identityLifecycle?.accountLogin?.status !== "passed" ||
+    proof.identityLifecycle?.accountLogin?.principalUserId !== "host_h" ||
+    !proof.identityLifecycle?.accountLogin?.capabilityKinds?.includes("HostOf") ||
+    proof.identityLifecycle?.accountLogin?.sameRoleSurface !== true ||
+    proof.identityLifecycle?.accountLogin?.cookieValuePrefix !== "account-session-" ||
+    proof.identityLifecycle?.accountLogin?.rawPasswordStored !== false ||
     proof.identityLifecycle?.auditTrail?.status !== "passed" ||
     proof.identityLifecycle?.auditTrail?.rawTokensStored !== false ||
+    !proof.identityLifecycle?.auditTrail?.eventKinds?.includes("account_created") ||
+    !proof.identityLifecycle?.auditTrail?.eventKinds?.includes(
+      "account_session_created",
+    ) ||
     !proof.identityLifecycle?.auditTrail?.eventKinds?.includes("session_rotated") ||
     !proof.identityLifecycle?.auditTrail?.eventKinds?.includes("session_revoked") ||
     !proof.identityLifecycle?.auditTrail?.eventKinds?.includes("invite_revoked") ||
     proof.identityLifecycle?.adminAuditSurface?.status !== "passed" ||
     proof.identityLifecycle?.adminAuditSurface?.clickedThroughFromOverview !== true ||
     proof.identityLifecycle?.adminAuditSurface?.rawTokensVisible !== false ||
+    !proof.identityLifecycle?.adminAuditSurface?.visibleEventKinds?.includes(
+      "account_created",
+    ) ||
+    !proof.identityLifecycle?.adminAuditSurface?.visibleEventKinds?.includes(
+      "account_session_created",
+    ) ||
     !proof.identityLifecycle?.adminAuditSurface?.visibleEventKinds?.includes(
       "session_rotated",
     ) ||
@@ -5314,6 +5331,14 @@ export function validateDevTestGameIdentityAdapterProof(proof, options = {}) {
   if ((proof.seedCommands ?? []).length !== 22) {
     throw new Error("identity adapter proof did not seed the local game shape");
   }
+  if (
+    proof.accounts?.host?.principalUserId !== "host_h" ||
+    typeof proof.accounts?.host?.accountId !== "string" ||
+    proof.accounts.host.accountId.trim() === "" ||
+    Object.hasOwn(proof.accounts.host, "password")
+  ) {
+    throw new Error("identity adapter proof missing redacted host account evidence");
+  }
   return {
     status: "passed",
     path: options.path ?? "target/auth-invite-role-proof/invite-role-proof.json",
@@ -5328,6 +5353,7 @@ export function validateDevTestGameIdentityAdapterProof(proof, options = {}) {
 
 export function validateDevTestGameIdentityAdminProof(proof, options = {}) {
   const requiredChecks = [
+    "account-login",
     "session-rotation",
     "session-revocation",
     "invite-revocation",

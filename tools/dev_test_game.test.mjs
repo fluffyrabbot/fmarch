@@ -8521,7 +8521,7 @@ function artifactSummary(path) {
 
 function identityAdapterProofFixture(game) {
   return {
-    version: 7,
+    version: 8,
     proof: "auth-invite-role-proof",
     status: "passed",
     scope: "local-auth-invite-role-proof",
@@ -8534,9 +8534,11 @@ function identityAdapterProofFixture(game) {
       browserCookieName: "fmarch_session",
       sessionCredentialKind: "opaque-session",
       inviteCredentialKind: "single-use-invite",
+      accountCredentialKind: "local-password-account",
       lifecycleControls: ["session-rotation", "session-revocation", "invite-revocation"],
       delegatedIssuanceControls: ["host-scoped-invite-issuance"],
       roleSurfacePattern: "/auth/login?returnTo=<role-surface>&invite=<token>",
+      accountRoleSurfacePattern: "/auth/login?returnTo=<role-surface>&account=<account-id>",
       capabilityAuthority:
         "auth_session resolves principal_user_id and committed game/global capabilities at the API boundary",
     },
@@ -8578,10 +8580,25 @@ function identityAdapterProofFixture(game) {
         hostRoleSurfaceStillValid: true,
         rawInviteTokenStored: false,
       },
+      accountLogin: {
+        status: "passed",
+        principalUserId: "host_h",
+        accountId: "host@example.test",
+        capabilityKinds: ["HostOf"],
+        sameRoleSurface: true,
+        cookieValuePrefix: "account-session-",
+        rawPasswordStored: false,
+      },
       auditTrail: {
         status: "passed",
         principalUserId: "host_h",
-        eventKinds: ["invite_revoked", "session_revoked", "session_rotated"],
+        eventKinds: [
+          "account_created",
+          "account_session_created",
+          "invite_revoked",
+          "session_revoked",
+          "session_rotated",
+        ],
         actorUserIds: ["admin_a", "host_h"],
         rawTokensStored: false,
       },
@@ -8593,7 +8610,13 @@ function identityAdapterProofFixture(game) {
         linkTestId: "admin-audit-link-identity-lifecycle",
         surfaceTestId: "admin-audit-detail-surface",
         clickedThroughFromOverview: true,
-        visibleEventKinds: ["session_rotated", "session_revoked", "invite_revoked"],
+        visibleEventKinds: [
+          "account_created",
+          "account_session_created",
+          "session_rotated",
+          "session_revoked",
+          "invite_revoked",
+        ],
         principalUserId: "host_h",
         rawTokensVisible: false,
       },
@@ -8610,6 +8633,13 @@ function identityAdapterProofFixture(game) {
       kind: index === 0 ? "CreateGame" : "SeedCommand",
       streamSeqs: [index + 1],
     })),
+    accounts: {
+      host: {
+        accountId: "host@example.test",
+        principalUserId: "host_h",
+        globalCapabilities: [],
+      },
+    },
     roles: {
       admin: identityRole({
         role: "admin",
@@ -9265,6 +9295,7 @@ function identityAdminProofFixture() {
       surfaceTestId: "admin-audit-detail-surface",
       clickedThroughFromOverview: true,
       visibleChecks: [
+        "account-login",
         "session-rotation",
         "session-revocation",
         "invite-revocation",

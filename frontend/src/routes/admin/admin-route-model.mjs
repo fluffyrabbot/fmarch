@@ -3423,7 +3423,7 @@ export function normalizeLocalIdentityAdapterAudit(identityAdapterProof, { game 
   if (
     identityAdapterProof === null ||
     typeof identityAdapterProof !== "object" ||
-    identityAdapterProof.version !== 7 ||
+    identityAdapterProof.version !== 8 ||
     identityAdapterProof.proof !== "auth-invite-role-proof" ||
     identityAdapterProof.status !== "passed" ||
     identityAdapterProof.scope !== "local-auth-invite-role-proof" ||
@@ -3452,6 +3452,7 @@ export function normalizeLocalIdentityAdapterAudit(identityAdapterProof, { game 
     }),
   );
   const lifecycleChecks = [
+    ["account-login", identityAdapterProof.identityLifecycle?.accountLogin?.status],
     ["session-rotation", identityAdapterProof.identityLifecycle?.sessionRotation?.status],
     ["session-revocation", identityAdapterProof.identityLifecycle?.sessionRevocation?.status],
     ["invite-revocation", identityAdapterProof.identityLifecycle?.inviteRevocation?.status],
@@ -3484,6 +3485,12 @@ export function normalizeLocalIdentityAdapterAudit(identityAdapterProof, { game 
       ?.globalCapabilitiesGranted !== 0 ||
     identityAdapterProof.identityLifecycle?.hostScopedInviteIssuance?.rawInviteTokenStored !==
       false ||
+    identityAdapterProof.identityLifecycle?.accountLogin?.principalUserId !== "host_h" ||
+    !identityAdapterProof.identityLifecycle?.accountLogin?.capabilityKinds?.includes(
+      "HostOf",
+    ) ||
+    identityAdapterProof.identityLifecycle?.accountLogin?.sameRoleSurface !== true ||
+    identityAdapterProof.identityLifecycle?.accountLogin?.rawPasswordStored !== false ||
     identityAdapterProof.identityLifecycle?.auditTrail?.rawTokensStored !== false ||
     identityAdapterProof.identityLifecycle?.adminAuditSurface?.rawTokensVisible !== false
   ) {
@@ -3524,6 +3531,9 @@ export function normalizeLocalIdentityAdapterAudit(identityAdapterProof, { game 
       sessionCredentialKind: String(
         identityAdapterProof.identityAdapter?.sessionCredentialKind ?? "",
       ),
+      accountCredentialKind: String(
+        identityAdapterProof.identityAdapter?.accountCredentialKind ?? "",
+      ),
       lifecycleControls: Object.freeze(controls.map((control) => String(control))),
       delegatedIssuanceControls: Object.freeze(
         (Array.isArray(identityAdapterProof.identityAdapter?.delegatedIssuanceControls)
@@ -3557,6 +3567,21 @@ export function normalizeLocalIdentityAdapterAudit(identityAdapterProof, { game 
         clickedThroughFromHostRoleUrl:
           identityAdapterProof.identityLifecycle.hostScopedInviteIssuance
             ?.clickedThroughFromHostRoleUrl === true,
+      }),
+      accountLogin: Object.freeze({
+        principalUserId: String(
+          identityAdapterProof.identityLifecycle.accountLogin?.principalUserId ?? "",
+        ),
+        accountId: String(
+          identityAdapterProof.identityLifecycle.accountLogin?.accountId ?? "",
+        ),
+        sameRoleSurface:
+          identityAdapterProof.identityLifecycle.accountLogin?.sameRoleSurface === true,
+        cookieValuePrefix: String(
+          identityAdapterProof.identityLifecycle.accountLogin?.cookieValuePrefix ?? "",
+        ),
+        rawPasswordStored:
+          identityAdapterProof.identityLifecycle.accountLogin?.rawPasswordStored === true,
       }),
       rawTokensStored: identityAdapterProof.identityLifecycle.auditTrail.rawTokensStored,
       rawTokensVisible:

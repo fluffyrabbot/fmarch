@@ -45,6 +45,22 @@ test("admin audit detail load returns identity lifecycle rows through admin sess
           entries: [
             {
               id: 1,
+              event_at: 98,
+              event_kind: "account_created",
+              actor_user_id: "admin_a",
+              principal_user_id: "host_h",
+              metadata: {},
+            },
+            {
+              id: 2,
+              event_at: 99,
+              event_kind: "account_session_created",
+              actor_user_id: "host_h",
+              principal_user_id: "host_h",
+              metadata: {},
+            },
+            {
+              id: 3,
               event_at: 100,
               event_kind: "session_rotated",
               actor_user_id: "host_h",
@@ -52,7 +68,7 @@ test("admin audit detail load returns identity lifecycle rows through admin sess
               metadata: {},
             },
             {
-              id: 2,
+              id: 4,
               event_at: 101,
               event_kind: "session_revoked",
               actor_user_id: "admin_a",
@@ -60,7 +76,7 @@ test("admin audit detail load returns identity lifecycle rows through admin sess
               metadata: {},
             },
             {
-              id: 3,
+              id: 5,
               event_at: 102,
               event_kind: "invite_revoked",
               actor_user_id: "admin_a",
@@ -78,7 +94,13 @@ test("admin audit detail load returns identity lifecycle rows through admin sess
   assert.equal(data.surfaceHeader.title, "Identity lifecycle");
   assert.deepEqual(
     data.audit.entries.map((entry) => entry.eventKind),
-    ["session_rotated", "session_revoked", "invite_revoked"],
+    [
+      "account_created",
+      "account_session_created",
+      "session_rotated",
+      "session_revoked",
+      "invite_revoked",
+    ],
   );
 });
 
