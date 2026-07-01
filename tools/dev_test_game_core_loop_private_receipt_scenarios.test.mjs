@@ -3,12 +3,15 @@ import { test } from "node:test";
 import {
   assertCompletedPrivateChannelProofCases,
   assertPrivateChannelSubmitPostProofCase,
+  assertPrivateReceiptRoleSurfaceCase,
   assertStalePrivateChannelPostPhaseLockedProofCase,
   completedPrivateChannelProofAssertionCases,
   completedPrivateChannelReloadScenario,
   completedPrivateChannelSnapshot,
   completedPrivateChannelTransition,
   privateChannelSubmitPostScenario,
+  privateReceiptAssertionArgs,
+  privateReceiptScenario,
   stalePrivateChannelPostPhaseLockedScenario,
   staleCompletedPrivatePostScenario,
 } from "./dev_test_game_core_loop_private_receipt_scenarios.mjs";
@@ -315,6 +318,100 @@ test("private-channel SubmitPost ACK assertion covers projected private post", (
         expectedGame: "game-a",
       }),
     /private channel SubmitPost ACK/,
+  );
+});
+
+test("private receipt role-surface assertion covers target receipt projection", () => {
+  const scenario = privateReceiptScenario("n01-target-receipt");
+  const sourceRoleUrl =
+    "http://127.0.0.1/g/game-a?private=notification-1";
+  const args = privateReceiptAssertionArgs({
+    scenario,
+    expectedGame: "game-a",
+    sourceRoleUrl,
+  });
+  const proof = {
+    status: "passed",
+    clickedThroughFromRoleUrl: true,
+    releaseReady: false,
+    productionReady: false,
+    rawInviteTokensVisible: false,
+    targetSlot: scenario.expectedSlot,
+    principalUserId: scenario.principalUserId,
+    sourceRoleUrl,
+    visitedRolePath: "/g/game-a?private=notification-1",
+    surfaceTestId: "player-surface",
+    checkpoint: {
+      phaseId: scenario.phaseId,
+      phaseState: scenario.phaseState,
+      actorSlot: scenario.expectedSlot,
+      actionState: scenario.actionState,
+      receiptState: "idle",
+      statusText: `Player action unavailable: ${scenario.statusText}`,
+    },
+    privateQueueBoundary: {
+      status: args.expectedPrivateQueueBoundaryStatus,
+      count: 1,
+      text: "Uses principal-scoped endpoints",
+    },
+    projectionCommandState: {
+      actorSlot: scenario.expectedSlot,
+      actorAlive: scenario.actorAlive,
+      actorStatus: scenario.actorStatus,
+      phase: { phaseId: "ignored", locked: true },
+      actions: [],
+      boundary: scenario.boundaryText,
+    },
+    resyncFromSeq: scenario.resyncFromSeq,
+    resyncSnapshotCommandState: {
+      actorSlot: scenario.expectedSlot,
+      phase: { phaseId: "ignored" },
+    },
+    coldLoadEndpoints: {
+      notificationsEndpoint: args.expectedNotificationsEndpoint,
+      commandStateEndpoint: args.expectedCommandStateEndpoint,
+    },
+    privateNotice: {
+      id: "notification-1",
+      kind: "notification",
+      text: `player_killed ${scenario.privateReceiptStatus}`,
+      detailText: `Phase ${scenario.privateReceiptPhaseId}`,
+    },
+    projectionNotifications: [
+      {
+        effect: "player_killed",
+        status: scenario.privateReceiptStatus,
+      },
+    ],
+    resyncSnapshotNotifications: [
+      {
+        effect: "player_killed",
+        status: "ignored",
+      },
+    ],
+  };
+
+  assert.doesNotThrow(() =>
+    assertPrivateReceiptRoleSurfaceCase({
+      proof,
+      ...args,
+      errorMessage: "missing target receipt",
+    }),
+  );
+  assert.throws(
+    () =>
+      assertPrivateReceiptRoleSurfaceCase({
+        proof: {
+          ...proof,
+          privateNotice: {
+            ...proof.privateNotice,
+            text: "player_killed wrong_status",
+          },
+        },
+        ...args,
+        errorMessage: "missing target receipt",
+      }),
+    /missing target receipt/,
   );
 });
 

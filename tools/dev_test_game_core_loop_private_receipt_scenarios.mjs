@@ -748,6 +748,132 @@ export function privateReceiptAssertionArgs({
   };
 }
 
+export function assertPrivateReceiptRoleSurfaceCase({
+  proof,
+  sourceRoleUrl,
+  expectedSlot,
+  slotField,
+  expectedPrincipalUserId,
+  expectedPhaseId,
+  expectedPhaseState,
+  expectedActorAlive,
+  expectedActorStatus,
+  expectedActionState,
+  expectedStatusText,
+  expectedPrivateCount,
+  expectedPrivateReceipt,
+  expectedBoundaryText,
+  expectedResyncFromSeq,
+  expectedPrivateReceiptStatus,
+  expectedPrivateReceiptPhaseId,
+  expectedResyncNotificationEffect,
+  expectedResyncNotificationStatus,
+  expectedPrivateQueueBoundaryStatus,
+  expectedProjectionPhaseId,
+  expectedProjectionLocked,
+  expectedResyncSnapshotPhaseId,
+  expectedCommandStateEndpoint,
+  expectedNotificationsEndpoint,
+  errorMessage,
+  includeEvidenceInError = false,
+}) {
+  if (
+    proof?.status !== "passed" ||
+    proof.clickedThroughFromRoleUrl !== true ||
+    proof.releaseReady !== false ||
+    proof.productionReady !== false ||
+    proof.rawInviteTokensVisible !== false ||
+    proof[slotField] !== expectedSlot ||
+    proof.principalUserId !== expectedPrincipalUserId ||
+    (!expectedPrivateReceipt && proof.targetReceiptVisible !== false) ||
+    typeof proof.sourceRoleUrl !== "string" ||
+    proof.sourceRoleUrl !== sourceRoleUrl ||
+    !proof.sourceRoleUrl.includes("/g/") ||
+    !proof.sourceRoleUrl.includes("private=notification-1") ||
+    typeof proof.visitedRolePath !== "string" ||
+    !proof.visitedRolePath.includes("/g/") ||
+    !proof.visitedRolePath.includes("private=notification-1") ||
+    proof.surfaceTestId !== "player-surface" ||
+    proof.checkpoint?.phaseId !== expectedPhaseId ||
+    proof.checkpoint.phaseState !== expectedPhaseState ||
+    proof.checkpoint.actorSlot !== expectedSlot ||
+    proof.checkpoint.actionState !== expectedActionState ||
+    proof.checkpoint.receiptState !== "idle" ||
+    !String(proof.checkpoint.statusText ?? "")
+      .toLowerCase()
+      .includes(`player action unavailable: ${expectedStatusText}`) ||
+    proof.privateQueueBoundary?.status !== expectedPrivateQueueBoundaryStatus ||
+    proof.privateQueueBoundary.count !== expectedPrivateCount ||
+    !String(proof.privateQueueBoundary.text ?? "").includes(
+      "principal-scoped endpoints",
+    ) ||
+    proof.projectionCommandState?.actorSlot !== expectedSlot ||
+    proof.projectionCommandState?.actorAlive !== expectedActorAlive ||
+    proof.projectionCommandState?.actorStatus !== expectedActorStatus ||
+    (expectedProjectionPhaseId !== null &&
+      proof.projectionCommandState?.phase?.phaseId !== expectedProjectionPhaseId) ||
+    (expectedProjectionLocked !== null &&
+      proof.projectionCommandState?.phase?.locked !== expectedProjectionLocked) ||
+    proof.projectionCommandState?.actions?.length !== 0 ||
+    !String(proof.projectionCommandState?.boundary ?? "").includes(
+      expectedBoundaryText,
+    ) ||
+    proof.resyncFromSeq !== expectedResyncFromSeq ||
+    proof.resyncSnapshotCommandState?.actorSlot !== expectedSlot ||
+    (expectedResyncSnapshotPhaseId !== null &&
+      proof.resyncSnapshotCommandState?.phase?.phaseId !==
+        expectedResyncSnapshotPhaseId) ||
+    proof.coldLoadEndpoints?.notificationsEndpoint !==
+      expectedNotificationsEndpoint ||
+    proof.coldLoadEndpoints?.commandStateEndpoint !== expectedCommandStateEndpoint
+  ) {
+    throwPrivateChannelScenarioAssertionError({
+      message: errorMessage,
+      evidence: proof,
+      includeEvidenceInError,
+    });
+  }
+  if (
+    expectedPrivateReceipt &&
+    (proof.privateNotice?.id !== "notification-1" ||
+      proof.privateNotice.kind !== "notification" ||
+      !String(proof.privateNotice.text ?? "").includes("player_killed") ||
+      !String(proof.privateNotice.text ?? "").includes(
+        expectedPrivateReceiptStatus,
+      ) ||
+      proof.privateNotice.detailText !==
+        `Phase ${expectedPrivateReceiptPhaseId}` ||
+      proof.projectionNotifications?.[0]?.effect !== "player_killed" ||
+      proof.projectionNotifications?.[0]?.status !==
+        expectedPrivateReceiptStatus ||
+      (expectedResyncNotificationEffect !== null &&
+        proof.resyncSnapshotNotifications?.[0]?.effect !==
+          expectedResyncNotificationEffect) ||
+      (expectedResyncNotificationStatus !== null &&
+        proof.resyncSnapshotNotifications?.[0]?.status !==
+          expectedResyncNotificationStatus))
+  ) {
+    throwPrivateChannelScenarioAssertionError({
+      message: errorMessage,
+      evidence: proof,
+      includeEvidenceInError,
+    });
+  }
+  if (
+    !expectedPrivateReceipt &&
+    (!String(proof.privateEmptyText ?? "").includes("No private results visible") ||
+      proof.projectionNotifications?.length !== 0 ||
+      proof.resyncSnapshotNotifications?.length !== 0 ||
+      proof.privateNotice !== undefined)
+  ) {
+    throwPrivateChannelScenarioAssertionError({
+      message: errorMessage,
+      evidence: proof,
+      includeEvidenceInError,
+    });
+  }
+}
+
 function privateReceiptNotifications(scenario) {
   if (!scenario.privateReceipt) {
     return [];

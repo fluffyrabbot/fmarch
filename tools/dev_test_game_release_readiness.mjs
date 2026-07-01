@@ -52,6 +52,10 @@ import {
   staleNightFourActionRecoveryScenario,
 } from "./dev_test_game_core_loop_action_scenarios.mjs";
 import {
+  assertHostPhaseTransitionActionProofCase,
+} from "./dev_test_game_core_loop_host_phase_scenarios.mjs";
+import {
+  assertPrivateReceiptRoleSurfaceCase,
   completedPrivateChannelReloadScenario,
   assertCompletedPrivateChannelProofCases,
   completedPrivateChannelProofAssertionCases,
@@ -2255,89 +2259,34 @@ function assertCoreLoopPrivateReceiptRoleSurface({
   expectedNotificationsEndpoint,
   errorMessage,
 }) {
-  if (
-    proof?.status !== "passed" ||
-    proof.clickedThroughFromRoleUrl !== true ||
-    proof.releaseReady !== false ||
-    proof.productionReady !== false ||
-    proof.rawInviteTokensVisible !== false ||
-    proof[slotField] !== expectedSlot ||
-    proof.principalUserId !== expectedPrincipalUserId ||
-    (!expectedPrivateReceipt && proof.targetReceiptVisible !== false) ||
-    typeof proof.sourceRoleUrl !== "string" ||
-    proof.sourceRoleUrl !== sourceRoleUrl ||
-    !proof.sourceRoleUrl.includes("/g/") ||
-    !proof.sourceRoleUrl.includes("private=notification-1") ||
-    typeof proof.visitedRolePath !== "string" ||
-    !proof.visitedRolePath.includes("/g/") ||
-    !proof.visitedRolePath.includes("private=notification-1") ||
-    proof.surfaceTestId !== "player-surface" ||
-    proof.checkpoint?.phaseId !== expectedPhaseId ||
-    proof.checkpoint.phaseState !== expectedPhaseState ||
-    proof.checkpoint.actorSlot !== expectedSlot ||
-    proof.checkpoint.actionState !== expectedActionState ||
-    proof.checkpoint.receiptState !== "idle" ||
-    !String(proof.checkpoint.statusText ?? "")
-      .toLowerCase()
-      .includes(`player action unavailable: ${expectedStatusText}`) ||
-    proof.privateQueueBoundary?.status !== expectedPrivateQueueBoundaryStatus ||
-    proof.privateQueueBoundary.count !== expectedPrivateCount ||
-    !String(proof.privateQueueBoundary.text ?? "").includes(
-      "principal-scoped endpoints",
-    ) ||
-    proof.projectionCommandState?.actorSlot !== expectedSlot ||
-    proof.projectionCommandState?.actorAlive !== expectedActorAlive ||
-    proof.projectionCommandState?.actorStatus !== expectedActorStatus ||
-    (expectedProjectionPhaseId !== null &&
-      proof.projectionCommandState?.phase?.phaseId !== expectedProjectionPhaseId) ||
-    (expectedProjectionLocked !== null &&
-      proof.projectionCommandState?.phase?.locked !== expectedProjectionLocked) ||
-    proof.projectionCommandState?.actions?.length !== 0 ||
-    !String(proof.projectionCommandState?.boundary ?? "").includes(
-      expectedBoundaryText,
-    ) ||
-    proof.resyncFromSeq !== expectedResyncFromSeq ||
-    proof.resyncSnapshotCommandState?.actorSlot !== expectedSlot ||
-    (expectedResyncSnapshotPhaseId !== null &&
-      proof.resyncSnapshotCommandState?.phase?.phaseId !==
-        expectedResyncSnapshotPhaseId) ||
-    proof.coldLoadEndpoints?.notificationsEndpoint !==
-      expectedNotificationsEndpoint ||
-    proof.coldLoadEndpoints?.commandStateEndpoint !== expectedCommandStateEndpoint
-  ) {
-    throw new Error(errorMessage);
-  }
-  if (
-    expectedPrivateReceipt &&
-    (proof.privateNotice?.id !== "notification-1" ||
-      proof.privateNotice.kind !== "notification" ||
-      !String(proof.privateNotice.text ?? "").includes("player_killed") ||
-      !String(proof.privateNotice.text ?? "").includes(
-        expectedPrivateReceiptStatus,
-      ) ||
-      proof.privateNotice.detailText !==
-        `Phase ${expectedPrivateReceiptPhaseId}` ||
-      proof.projectionNotifications?.[0]?.effect !== "player_killed" ||
-      proof.projectionNotifications?.[0]?.status !==
-        expectedPrivateReceiptStatus ||
-      (expectedResyncNotificationEffect !== null &&
-        proof.resyncSnapshotNotifications?.[0]?.effect !==
-          expectedResyncNotificationEffect) ||
-      (expectedResyncNotificationStatus !== null &&
-        proof.resyncSnapshotNotifications?.[0]?.status !==
-          expectedResyncNotificationStatus))
-  ) {
-    throw new Error(errorMessage);
-  }
-  if (
-    !expectedPrivateReceipt &&
-    (!String(proof.privateEmptyText ?? "").includes("No private results visible") ||
-      proof.projectionNotifications?.length !== 0 ||
-      proof.resyncSnapshotNotifications?.length !== 0 ||
-      proof.privateNotice !== undefined)
-  ) {
-    throw new Error(errorMessage);
-  }
+  assertPrivateReceiptRoleSurfaceCase({
+    proof,
+    sourceRoleUrl,
+    expectedSlot,
+    slotField,
+    expectedPrincipalUserId,
+    expectedPhaseId,
+    expectedPhaseState,
+    expectedActorAlive,
+    expectedActorStatus,
+    expectedActionState,
+    expectedStatusText,
+    expectedPrivateCount,
+    expectedPrivateReceipt,
+    expectedBoundaryText,
+    expectedResyncFromSeq,
+    expectedPrivateReceiptStatus,
+    expectedPrivateReceiptPhaseId,
+    expectedResyncNotificationEffect,
+    expectedResyncNotificationStatus,
+    expectedPrivateQueueBoundaryStatus,
+    expectedProjectionPhaseId,
+    expectedProjectionLocked,
+    expectedResyncSnapshotPhaseId,
+    expectedCommandStateEndpoint,
+    expectedNotificationsEndpoint,
+    errorMessage,
+  });
 }
 
 function assertCoreLoopTargetPostDayVoteAdvanceSurface(targetSurface) {
@@ -4572,33 +4521,17 @@ function assertCoreLoopHostPhaseTransitionActionProof({
   expectedDeadlineAffordance,
   expectedRefreshKeys,
 }) {
-  if (
-    proof?.status !== "passed" ||
-    proof.clickedAction !== actionId ||
-    proof.commandKind !== commandKind ||
-    proof.command?.game !== expectedGame ||
-    (commandKind === "ResolvePhase" && proof.command.seed !== 918273) ||
-    proof.commandStatus?.state !== "ack" ||
-    !proof.commandStatus?.message?.includes(`Ack: stream seqs ${streamSeq}`) ||
-    proof.commandOutcome?.state !== "ack" ||
-    !proof.commandOutcome?.message?.includes(`Ack: stream seqs ${streamSeq}`) ||
-    proof.bridgePlan?.role !== "moderator" ||
-    proof.bridgePlan.commandKind !== commandKind ||
-    proof.bridgePlan.commandEndpoint !== "/commands" ||
-    proof.bridgePlan.finalState !== "ack" ||
-    !sameStringArray(proof.bridgePlan.projectionRefreshKeys, expectedRefreshKeys) ||
-    proof.projection?.phase?.id !== expectedPhaseId ||
-    proof.projection?.phase?.state !== expectedPhaseState ||
-    proof.projection?.phase?.locked !== (expectedPhaseState === "locked") ||
-    proof.checkpointPhaseId !== expectedPhaseId ||
-    proof.checkpointPhaseState !== expectedPhaseState ||
-    proof.checkpointDeadlineAffordance !== expectedDeadlineAffordance ||
-    !String(proof.activityStatusText ?? "")
-      .toLowerCase()
-      .includes(`ack: stream seqs ${streamSeq}`)
-  ) {
-    throw new Error(`core-loop admin proof missing host ${actionId} transition ACK`);
-  }
+  assertHostPhaseTransitionActionProofCase({
+    proof,
+    expectedGame,
+    actionId,
+    commandKind,
+    streamSeq,
+    expectedPhaseId,
+    expectedPhaseState,
+    expectedDeadlineAffordance,
+    expectedRefreshKeys,
+  });
 }
 
 function assertCoreLoopPlayerStaleVoteAfterTransitionProof({
