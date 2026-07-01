@@ -49,7 +49,7 @@ test("seed scenario cases include reload and stale-reject proof rows", () => {
 });
 
 test("seed scenario cases expose generated demo scenario fixture rows", () => {
-  assert.equal(seedDemoScenarioIds.length, 93);
+  assert.equal(seedDemoScenarioIds.length, 96);
   assert.deepEqual(seedDemoOnlyScenarioIds, [
     "day-vote-resolution",
     "day-vote-no-lynch",
@@ -61,6 +61,9 @@ test("seed scenario cases expose generated demo scenario fixture rows", () => {
     "host-votecount-publication",
     "host-lifecycle-control",
     "host-modkill-control",
+    "stale-player-vote",
+    "stale-player-vote-after-change",
+    "stale-player-post-after-phase-closure",
     "concurrent-vote-race-reload",
   ]);
   assert.deepEqual(seedScenarioCoverageGroups.required, seedRequiredScenarioIds);
@@ -87,6 +90,11 @@ test("seed scenario cases expose generated demo scenario fixture rows", () => {
   ]);
   assert.deepEqual(seedDemoScenarioIds.slice(12, 15), [
     "host-modkill-control",
+    "stale-player-vote",
+    "stale-player-vote-after-change",
+  ]);
+  assert.deepEqual(seedDemoScenarioIds.slice(15, 18), [
+    "stale-player-post-after-phase-closure",
     "player-action-denied",
     "invalid-action-recovery",
   ]);
@@ -121,6 +129,9 @@ test("seed scenario cases expose production fixture metadata", () => {
           "host-votecount-publication",
           "host-lifecycle-control",
           "host-modkill-control",
+          "stale-player-vote",
+          "stale-player-vote-after-change",
+          "stale-player-post-after-phase-closure",
           "player-action-denied",
           "stale-deadline-advance",
           "replacement-idempotent-retry",
@@ -137,6 +148,9 @@ test("seed scenario cases expose production fixture metadata", () => {
       ["host-votecount-publication", "host", "/redacted/host"],
       ["host-lifecycle-control", "host", "/redacted/host"],
       ["host-modkill-control", "host", "/redacted/host"],
+      ["stale-player-vote", "player", "/redacted/player"],
+      ["stale-player-vote-after-change", "player", "/redacted/player"],
+      ["stale-player-post-after-phase-closure", "player", "/redacted/player"],
       ["player-action-denied", "player", "/redacted/player"],
       ["replacement-idempotent-retry", "host", "/redacted/host"],
       ["stale-dead-action-conflict", "actionPlayer", "/redacted/actionPlayer"],
