@@ -82,3 +82,57 @@ export const seedRequiredScenarioIds = Object.freeze([
   "multiplayer-hardening",
   "local-ops-readiness",
 ]);
+
+export const seedDemoScenarioIds = Object.freeze([
+  ...seedRequiredScenarioIds.slice(0, 3),
+  "day-vote-resolution",
+  "day-vote-no-lynch",
+  ...seedRequiredScenarioIds.slice(3, 11),
+  "concurrent-vote-race-reload",
+  ...seedRequiredScenarioIds.slice(11),
+]);
+
+export function seedDemoScenarioFixtureRows({
+  ids = seedDemoScenarioIds,
+  status = "available_locally",
+} = {}) {
+  return ids.map((id) => ({
+    id,
+    title: seedScenarioTitle(id),
+    role: seedScenarioRole(id),
+    status,
+  }));
+}
+
+function seedScenarioTitle(id) {
+  return String(id)
+    .split("-")
+    .filter((part) => part !== "")
+    .map((part) => `${part.slice(0, 1).toUpperCase()}${part.slice(1)}`)
+    .join(" ");
+}
+
+function seedScenarioRole(id) {
+  if (id === "local-ops-readiness") {
+    return "admin";
+  }
+  if (id.includes("cohost")) {
+    return "cohost";
+  }
+  if (id.includes("denied") || id.includes("receipt") || id.includes("dead-player")) {
+    return "deniedPlayer";
+  }
+  if (id.includes("action") || id.includes("night-action")) {
+    return "actionPlayer";
+  }
+  if (id.includes("replacement-stale-conflict")) {
+    return "host";
+  }
+  if (id.includes("replacement") && !id.includes("host")) {
+    return "replacementPlayer";
+  }
+  if (id.includes("host")) {
+    return "host";
+  }
+  return "player";
+}
