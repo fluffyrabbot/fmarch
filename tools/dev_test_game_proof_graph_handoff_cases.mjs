@@ -4,7 +4,10 @@ import {
 import {
   hostedTargetPreflightBlockingCheckIds,
   hostedTargetPreflightCheckIds,
-} from "./dev_test_game_hosted_target_preflight.mjs";
+} from "./dev_test_game_hosted_target_preflight_cases.mjs";
+import {
+  hostedEvidenceHandoffCase,
+} from "./dev_test_game_hosted_handoff_cases.mjs";
 import {
   hostedOpsSignalCheckIds,
   hostedOpsSignalRelatedAuditIds,
@@ -137,6 +140,12 @@ export const adminProofDestinationRequirementCases = Object.freeze([
       "hosted-target-preflight",
       ...hostedTargetPreflightBlockingCheckIds,
     ]),
+    requiredHostedHandoffInputs: Object.freeze([
+      ...hostedEvidenceHandoffCase().inputIds,
+    ]),
+    requiredHostedHandoffBlockedChecks: Object.freeze([
+      ...hostedEvidenceHandoffCase().blockedCheckIds,
+    ]),
     requiredRelatedLinkIds: Object.freeze([
       "local-hosted-target-preflight",
       "local-hosted-concurrent-race-matrix",
@@ -207,6 +216,20 @@ function cloneRequirement(requirement) {
     ...(requirement.requiredUnprovenIds === undefined
       ? {}
       : { requiredUnprovenIds: [...requirement.requiredUnprovenIds] }),
+    ...(requirement.requiredHostedHandoffInputs === undefined
+      ? {}
+      : {
+          requiredHostedHandoffInputs: [
+            ...requirement.requiredHostedHandoffInputs,
+          ],
+        }),
+    ...(requirement.requiredHostedHandoffBlockedChecks === undefined
+      ? {}
+      : {
+          requiredHostedHandoffBlockedChecks: [
+            ...requirement.requiredHostedHandoffBlockedChecks,
+          ],
+        }),
     ...(requirement.requiredLocalPrerequisiteDestinations === undefined
       ? {}
       : {

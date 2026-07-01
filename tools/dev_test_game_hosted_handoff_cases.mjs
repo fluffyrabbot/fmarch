@@ -1,6 +1,6 @@
 import {
   hostedTargetPreflightBlockingCheckIds,
-} from "./dev_test_game_hosted_target_preflight.mjs";
+} from "./dev_test_game_hosted_target_preflight_cases.mjs";
 import {
   buildRealHostedEvidenceInputs,
   realHostedEvidenceInputIds,

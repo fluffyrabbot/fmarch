@@ -2,6 +2,12 @@ import {
   buildRealHostedEvidenceInputs,
 } from "./dev_test_game_real_hosted_evidence_inputs.mjs";
 import {
+  hostedEvidenceHandoffInputIds,
+  hostedEvidenceLaneCommand,
+  hostedEvidenceLanePath,
+  hostedMatrixExternalEvidencePath,
+} from "./dev_test_game_hosted_handoff_cases.mjs";
+import {
   devTestGameHostedIdentityEvidenceCommand,
   devTestGameHostedIdentityEvidencePath,
   hostedIdentityEvidencePlaceholderFixturePath,
@@ -267,12 +273,12 @@ function hostedDeploymentBuildable({ hostedTargetPreflight }) {
       hostedTargetPreflight.target?.rawEvidenceSyntheticExternalTarget === true;
     return {
       priority: 0,
-      command: "npm run test:dev-test-game-hosted-evidence-lane",
+      command: hostedEvidenceLaneCommand,
       buildSlice:
         syntheticExternalTarget
           ? "Run the one-command hosted evidence lane to refresh the local demo pass path; real externally hosted evidence remains required."
           : "Run the one-command hosted evidence lane; the hosted target preflight has passed, so the lane can write external hosted matrix evidence.",
-      proofTarget: "target/dev-test-game/hosted-matrix-external.json",
+      proofTarget: hostedMatrixExternalEvidencePath,
       roleUrl:
         "/admin/audit/local-hosted-concurrent-race-matrix?game=<seeded-game>",
       proofGraphNodeId: "admin-proof:hosted-concurrent-race-matrix",
@@ -300,7 +306,6 @@ function hostedDeploymentBuildable({ hostedTargetPreflight }) {
         preflight: hostedTargetPreflight,
         command: blockedBuildable.command,
         proofTarget: blockedBuildable.proofTarget,
-        realHostedEvidenceInputs: blockedBuildable.realHostedEvidenceInputs,
       }),
     };
   }
@@ -345,7 +350,6 @@ function hostedHandoffChecklistFromPreflight({
   preflight,
   command,
   proofTarget,
-  realHostedEvidenceInputs,
 }) {
   const blockedChecks = (preflight.checks ?? [])
     .filter((check) => check?.status === "blocked")
@@ -360,23 +364,10 @@ function hostedHandoffChecklistFromPreflight({
     preflightStatus: String(preflight.status ?? "unknown"),
     command,
     proofTarget,
-    inputIds: realHostedEvidenceInputIds(realHostedEvidenceInputs),
+    inputIds: [...hostedEvidenceHandoffInputIds],
     blockedCheckIds: blockedChecks.map((check) => check.id),
     blockedChecks,
   };
-}
-
-function realHostedEvidenceInputIds(realHostedEvidenceInputs) {
-  const env = Array.isArray(realHostedEvidenceInputs?.env)
-    ? realHostedEvidenceInputs.env
-    : [];
-  return [
-    "command",
-    "proof-target",
-    ...env
-      .map((item) => String(item?.name ?? ""))
-      .filter((name) => name !== ""),
-  ];
 }
 
 const localBuildableReleaseReadinessItems = new Map([
@@ -388,10 +379,10 @@ const localBuildableReleaseReadinessItems = new Map([
     "hosted-deployment",
     {
       priority: 0,
-      command: "npm run test:dev-test-game-hosted-evidence-lane",
+      command: hostedEvidenceLaneCommand,
       buildSlice:
         "Run the one-command hosted evidence lane; it records a blocked preflight report until externally reachable hosted URLs and raw evidence are configured.",
-      proofTarget: "target/dev-test-game/hosted-evidence-lane.json",
+      proofTarget: hostedEvidenceLanePath,
       roleUrl: "/admin/audit/local-hosted-evidence-lane?game=<seeded-game>",
       proofGraphNodeId: "admin-proof:hosted-evidence-lane",
       productionFeatureSpineTarget:

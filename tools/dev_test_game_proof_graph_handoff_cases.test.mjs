@@ -12,7 +12,10 @@ import {
 import {
   hostedTargetPreflightBlockingCheckIds,
   hostedTargetPreflightCheckIds,
-} from "./dev_test_game_hosted_target_preflight.mjs";
+} from "./dev_test_game_hosted_target_preflight_cases.mjs";
+import {
+  hostedEvidenceHandoffCase,
+} from "./dev_test_game_hosted_handoff_cases.mjs";
 import {
   hostedOpsSignalCheckIds,
   hostedOpsSignalRelatedAuditIds,
@@ -74,6 +77,16 @@ test("admin proof destination handoff cases carry shared row requirements", () =
     ["hosted-target-preflight", ...hostedTargetPreflightBlockingCheckIds],
   );
   assert.deepEqual(
+    adminProofDestinationRequirementForLink("admin-proof:hosted-evidence-lane")
+      .requiredHostedHandoffInputs,
+    hostedEvidenceHandoffCase().inputIds,
+  );
+  assert.deepEqual(
+    adminProofDestinationRequirementForLink("admin-proof:hosted-evidence-lane")
+      .requiredHostedHandoffBlockedChecks,
+    hostedEvidenceHandoffCase().blockedCheckIds,
+  );
+  assert.deepEqual(
     adminProofDestinationRequirementForLink("admin-proof:hosted-ops-signals")
       .requiredCheckIds,
     hostedOpsSignalCheckIds,
@@ -89,9 +102,24 @@ test("admin proof destination handoff cases return cloned mutable rows", () => {
   const requirements = adminProofDestinationRequirements();
   requirements.find((item) => item.linkId === "admin-proof:release")
     .requiredCheckIds.push("mutated");
+  requirements.find((item) => item.linkId === "admin-proof:hosted-evidence-lane")
+    .requiredHostedHandoffInputs.push("mutated");
+  requirements
+    .find((item) => item.linkId === "admin-proof:hosted-evidence-lane")
+    .requiredHostedHandoffBlockedChecks.push("mutated");
   assert.equal(
     adminProofDestinationRequirementForLink("admin-proof:release")
       .requiredCheckIds.includes("mutated"),
+    false,
+  );
+  assert.equal(
+    adminProofDestinationRequirementForLink("admin-proof:hosted-evidence-lane")
+      .requiredHostedHandoffInputs.includes("mutated"),
+    false,
+  );
+  assert.equal(
+    adminProofDestinationRequirementForLink("admin-proof:hosted-evidence-lane")
+      .requiredHostedHandoffBlockedChecks.includes("mutated"),
     false,
   );
 });

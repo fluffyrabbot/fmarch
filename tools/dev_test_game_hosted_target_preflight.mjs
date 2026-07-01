@@ -9,6 +9,13 @@ import {
   devTestGameHostedMatrixExternalEvidenceCommand,
   devTestGameHostedMatrixExternalEvidencePath,
 } from "./dev_test_game_hosted_matrix_external_evidence.mjs";
+export {
+  hostedTargetPreflightBlockingCheckIds,
+  hostedTargetPreflightCheckIds,
+} from "./dev_test_game_hosted_target_preflight_cases.mjs";
+import {
+  hostedTargetPreflightCheckIds,
+} from "./dev_test_game_hosted_target_preflight_cases.mjs";
 import { repoRoot } from "./dev_test_game_spine_runner.mjs";
 
 export const DEV_TEST_GAME_HOSTED_TARGET_PREFLIGHT_VERSION = 1;
@@ -16,18 +23,6 @@ export const devTestGameHostedTargetPreflightPath =
   "target/dev-test-game/hosted-target-preflight.json";
 export const devTestGameHostedTargetPreflightCommand =
   "test:dev-test-game-hosted-target-preflight";
-export const hostedTargetPreflightBlockingCheckIds = Object.freeze([
-  "hosted-frontend-url-configured",
-  "hosted-api-url-configured",
-  "hosted-targets-external",
-  "raw-evidence-path-configured",
-  "raw-evidence-readable",
-]);
-export const hostedTargetPreflightCheckIds = Object.freeze([
-  ...hostedTargetPreflightBlockingCheckIds,
-  "release-claim-boundary-carried",
-]);
-
 const outputPath = path.join(repoRoot, devTestGameHostedTargetPreflightPath);
 
 if (pathToFileURL(process.argv[1] ?? "").href === import.meta.url) {

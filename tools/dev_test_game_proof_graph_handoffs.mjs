@@ -24,10 +24,14 @@ export function adminProofGraphRoleHandoffs({
       return handoff === null ? [] : [handoff];
     }
     if (requirement.linkId === "admin-proof:hosted-evidence-lane") {
+      const handoff = baseHandoffForRequirement(requirement);
       return [
         {
-          ...baseHandoffForRequirement(requirement),
-          ...hostedEvidenceLaneHandoffRequirements(hostedEvidenceLane),
+          ...handoff,
+          ...hostedEvidenceLaneHandoffRequirements({
+            hostedEvidenceLane,
+            handoff,
+          }),
         },
       ];
     }
@@ -51,34 +55,25 @@ function baseHandoffForRequirement(requirement) {
     requiredScenarioIds: requirement.requiredScenarioIds ?? [],
     requiredSessionIds: requirement.requiredSessionIds ?? [],
     requiredUnprovenIds: requirement.requiredUnprovenIds ?? [],
+    requiredHostedHandoffInputIds:
+      requirement.requiredHostedHandoffInputs ?? [],
+    requiredHostedHandoffBlockedCheckIds:
+      requirement.requiredHostedHandoffBlockedChecks ?? [],
     requiredLocalPrerequisiteDestinations:
       requirement.requiredLocalPrerequisiteDestinations ?? [],
     requiredRelatedLinkIds: requirement.requiredRelatedLinkIds ?? [],
   };
 }
 
-function hostedEvidenceLaneHandoffRequirements(hostedEvidenceLane) {
+function hostedEvidenceLaneHandoffRequirements({ hostedEvidenceLane, handoff }) {
   return {
-    requiredHostedHandoffInputIds: hostedEvidenceInputIds(
-      hostedEvidenceLane?.hostedEvidence?.realHostedEvidenceInputs,
-    ),
+    requiredHostedHandoffInputIds: handoff.requiredHostedHandoffInputIds,
     requiredHostedHandoffBlockedCheckIds: Array.isArray(
       hostedEvidenceLane?.blockedCheckIds,
     )
       ? hostedEvidenceLane.blockedCheckIds.map((id) => String(id))
-      : [],
+      : handoff.requiredHostedHandoffBlockedCheckIds,
   };
-}
-
-function hostedEvidenceInputIds(realHostedEvidenceInputs) {
-  const env = Array.isArray(realHostedEvidenceInputs?.env)
-    ? realHostedEvidenceInputs.env
-    : [];
-  return [
-    "command",
-    "proof-target",
-    ...env.map((item) => String(item?.name ?? "")).filter((id) => id !== ""),
-  ];
 }
 
 export function assertAdminProofGraphRoleHandoffCoverage({ proofGraph, handoffs }) {
