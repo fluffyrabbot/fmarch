@@ -21,6 +21,8 @@ import {
   completedDeadPlayerStaleVoteRecoveryProofFixture,
   completedGameDayVoteOutcomesFixture,
   completedGameEndgameTransition,
+  completedGameRaceCoverageCellCases,
+  completedGameRaceCoverageCellIds,
   completedHostReloadProofFixture,
   completedHostReloadSnapshotFixture,
   completedHostStaleCommandProofFixtures,
@@ -9245,11 +9247,9 @@ function devTestGameRaceCoverageFixture() {
       "concurrent-host-publish-race",
       "concurrent-host-publish-race-reload",
     ),
-    raceCoverageCell("host-complete-game", "concurrent-host-complete-race", "concurrent-host-complete-race-reload"),
-    raceCoverageCell(
-      "player-vs-completed-game",
-      "concurrent-player-complete-race",
-      "public-player-complete-reload",
+    ...completedGameRaceCoverageCellCases().map(
+      ({ id, raceLaneId, reloadLaneId }) =>
+        raceCoverageCell(id, raceLaneId, reloadLaneId),
     ),
   ];
   return {
@@ -9336,13 +9336,7 @@ function hostConcurrentRaceReloadCellsFixture() {
       reloadStatus: "passed",
       covered: true,
     },
-    {
-      id: "host-complete-game",
-      raceLaneId: "concurrent-host-complete-race",
-      reloadLaneId: "concurrent-host-complete-race-reload",
-      reloadStatus: "passed",
-      covered: true,
-    },
+    completedRaceCoverageCellFixture("host-complete-game"),
   ];
 }
 
@@ -9382,13 +9376,7 @@ function playerConcurrentActionReloadCellsFixture() {
       reloadStatus: "passed",
       covered: true,
     },
-    {
-      id: "player-vs-completed-game",
-      raceLaneId: "concurrent-player-complete-race",
-      reloadLaneId: "public-player-complete-reload",
-      reloadStatus: "passed",
-      covered: true,
-    },
+    completedRaceCoverageCellFixture("player-vs-completed-game"),
   ];
 }
 
@@ -9434,6 +9422,22 @@ function raceCoveragePromotedMilestonesFixture({ groupStatus }) {
       coveredCellCount: group.cellIds.length,
       gapCount: 0,
     })),
+  };
+}
+
+function completedRaceCoverageCellFixture(id) {
+  const cell = completedGameRaceCoverageCellCases().find(
+    (candidate) => candidate.id === id,
+  );
+  if (cell === undefined) {
+    throw new Error(`unknown completed race coverage fixture cell: ${id}`);
+  }
+  return {
+    id: cell.id,
+    raceLaneId: cell.raceLaneId,
+    reloadLaneId: cell.reloadLaneId,
+    reloadStatus: "passed",
+    covered: true,
   };
 }
 
@@ -13063,8 +13067,7 @@ function raceCoverageAdminProofFixture() {
         "host-deadline-advance",
         "host-lifecycle",
         "host-mixed-advance",
-        "host-complete-game",
-        "player-vs-completed-game",
+        ...completedGameRaceCoverageCellIds(),
       ],
       cellCount: 16,
       reloadCoveredCellCount: 15,
@@ -13090,8 +13093,7 @@ function raceCoverageAdminProofFixture() {
         "host-deadline-advance",
         "host-lifecycle",
         "host-mixed-advance",
-        "host-complete-game",
-        "player-vs-completed-game",
+        ...completedGameRaceCoverageCellIds(),
       ],
       rawInviteTokensVisible: false,
       releaseReady: false,

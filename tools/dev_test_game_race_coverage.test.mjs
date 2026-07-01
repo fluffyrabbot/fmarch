@@ -1,9 +1,50 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
+  completedGameRaceCoverageCellCases,
+  completedGameRaceCoverageCellDefinitions,
+} from "./dev_test_game_core_loop_completed_scenarios.mjs";
+import {
   raceCoveragePromotedReloadGroup,
   raceCoveragePromotedReloadGroups,
 } from "./dev_test_game_race_coverage.mjs";
+
+test("race coverage imports completed-game cells from shared scenarios", () => {
+  assert(Object.isFrozen(completedGameRaceCoverageCellDefinitions));
+  assert.deepEqual(
+    completedGameRaceCoverageCellCases().map((cell) => ({
+      id: cell.id,
+      raceLaneId: cell.raceLaneId,
+      reloadLaneId: cell.reloadLaneId,
+      promotedReloadGroupId: cell.promotedReloadGroupId,
+      roleSurfaces: cell.roleSurfaces,
+    })),
+    [
+      {
+        id: "host-complete-game",
+        raceLaneId: "concurrent-host-complete-race",
+        reloadLaneId: "concurrent-host-complete-race-reload",
+        promotedReloadGroupId: "host-concurrent-race-reload",
+        roleSurfaces: ["host", "player"],
+      },
+      {
+        id: "player-vs-completed-game",
+        raceLaneId: "concurrent-player-complete-race",
+        reloadLaneId: "public-player-complete-reload",
+        promotedReloadGroupId: "player-concurrent-action-reload",
+        roleSurfaces: ["player", "host"],
+      },
+    ],
+  );
+  assert.notEqual(
+    completedGameRaceCoverageCellCases()[0],
+    completedGameRaceCoverageCellDefinitions[0],
+  );
+  assert.notEqual(
+    completedGameRaceCoverageCellCases()[0].roleSurfaces,
+    completedGameRaceCoverageCellDefinitions[0].roleSurfaces,
+  );
+});
 
 test("race coverage exposes promoted reload groups from one contract", () => {
   assert.deepEqual(

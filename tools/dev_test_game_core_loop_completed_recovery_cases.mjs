@@ -1,4 +1,8 @@
 const cloneScenarioCase = (scenario) => ({ ...scenario });
+const cloneRaceCoverageCell = (cell) => ({
+  ...cell,
+  roleSurfaces: [...cell.roleSurfaces],
+});
 
 export const completedHostStaleCommandCaseDefinitions = Object.freeze([
   Object.freeze({
@@ -345,4 +349,39 @@ export function completedGameSeedRequiredScenarioIds() {
 
 export function completedGameSeedDemoOnlyScenarioIds() {
   return completedGameHardeningLaneIdsFor({ seedGroups: "demo-only" });
+}
+
+export const completedGameRaceCoverageCellDefinitions = Object.freeze([
+  Object.freeze({
+    id: "host-complete-game",
+    actorPair: "host vs host",
+    commandFamily: "complete game",
+    raceLaneId: "concurrent-host-complete-race",
+    reloadLaneId: "concurrent-host-complete-race-reload",
+    roleSurfaces: Object.freeze(["host", "player"]),
+    promotedReloadGroupId: "host-concurrent-race-reload",
+  }),
+  Object.freeze({
+    id: "player-vs-completed-game",
+    actorPair: "player vs host",
+    commandFamily: "post-completion recovery",
+    raceLaneId: "concurrent-player-complete-race",
+    reloadLaneId: "public-player-complete-reload",
+    roleSurfaces: Object.freeze(["player", "host"]),
+    promotedReloadGroupId: "player-concurrent-action-reload",
+  }),
+]);
+
+export function completedGameRaceCoverageCellCases() {
+  return completedGameRaceCoverageCellDefinitions.map(cloneRaceCoverageCell);
+}
+
+export function completedGameRaceCoverageCellIds() {
+  return completedGameRaceCoverageCellCases().map((cell) => cell.id);
+}
+
+export function completedGameRaceCoverageCellIdsForPromotedGroup(groupId) {
+  return completedGameRaceCoverageCellCases()
+    .filter((cell) => cell.promotedReloadGroupId === groupId)
+    .map((cell) => cell.id);
 }

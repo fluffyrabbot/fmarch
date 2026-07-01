@@ -1,6 +1,10 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
+import {
+  completedGameRaceCoverageCellCases,
+  completedGameRaceCoverageCellIdsForPromotedGroup,
+} from "./dev_test_game_core_loop_completed_scenarios.mjs";
 import { assertDevTestGameProofRun } from "./dev_test_game_proof_contract.mjs";
 import { repoRoot } from "./dev_test_game_spine_runner.mjs";
 
@@ -124,22 +128,7 @@ const raceCells = Object.freeze([
     reloadLaneId: "concurrent-host-publish-race-reload",
     roleSurfaces: ["host", "player"],
   }),
-  raceCell({
-    id: "host-complete-game",
-    actorPair: "host vs host",
-    commandFamily: "complete game",
-    raceLaneId: "concurrent-host-complete-race",
-    reloadLaneId: "concurrent-host-complete-race-reload",
-    roleSurfaces: ["host", "player"],
-  }),
-  raceCell({
-    id: "player-vs-completed-game",
-    actorPair: "player vs host",
-    commandFamily: "post-completion recovery",
-    raceLaneId: "concurrent-player-complete-race",
-    reloadLaneId: "public-player-complete-reload",
-    roleSurfaces: ["player", "host"],
-  }),
+  ...completedGameRaceCoverageCellCases().map(raceCell),
 ]);
 
 export const raceCoveragePromotedReloadGroups = Object.freeze(
@@ -163,7 +152,9 @@ export const raceCoveragePromotedReloadGroups = Object.freeze(
         "host-lifecycle",
         "host-mixed-advance",
         "host-votecount-publication",
-        "host-complete-game",
+        ...completedGameRaceCoverageCellIdsForPromotedGroup(
+          "host-concurrent-race-reload",
+        ),
       ],
     },
     {
@@ -174,7 +165,9 @@ export const raceCoveragePromotedReloadGroups = Object.freeze(
         "player-night-action",
         "player-vote-vs-host-resolve",
         "player-action-vs-host-advance",
-        "player-vs-completed-game",
+        ...completedGameRaceCoverageCellIdsForPromotedGroup(
+          "player-concurrent-action-reload",
+        ),
       ],
     },
     {
