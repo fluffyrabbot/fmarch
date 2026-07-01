@@ -97,14 +97,19 @@ export const seedDemoOnlyScenarioIds = Object.freeze([
   "stale-player-vote",
   "stale-player-vote-after-change",
   "stale-player-post-after-phase-closure",
+  "stale-player-withdraw-after-change",
+  "stale-player-withdraw-after-phase-closure",
+  "stale-player-vote-after-phase-closure",
+  "stale-dead-target-vote",
+  "dead-current-vote",
   "concurrent-vote-race-reload",
 ]);
 
 export const seedDemoScenarioIds = Object.freeze([
   ...seedRequiredScenarioIds.slice(0, 3),
-  ...seedDemoOnlyScenarioIds.slice(0, 13),
+  ...seedDemoOnlyScenarioIds.slice(0, 18),
   ...seedRequiredScenarioIds.slice(3, 11),
-  seedDemoOnlyScenarioIds[13],
+  seedDemoOnlyScenarioIds[18],
   ...seedRequiredScenarioIds.slice(11),
 ]);
 

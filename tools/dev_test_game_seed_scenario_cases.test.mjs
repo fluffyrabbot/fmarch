@@ -49,7 +49,7 @@ test("seed scenario cases include reload and stale-reject proof rows", () => {
 });
 
 test("seed scenario cases expose generated demo scenario fixture rows", () => {
-  assert.equal(seedDemoScenarioIds.length, 96);
+  assert.equal(seedDemoScenarioIds.length, 101);
   assert.deepEqual(seedDemoOnlyScenarioIds, [
     "day-vote-resolution",
     "day-vote-no-lynch",
@@ -64,6 +64,11 @@ test("seed scenario cases expose generated demo scenario fixture rows", () => {
     "stale-player-vote",
     "stale-player-vote-after-change",
     "stale-player-post-after-phase-closure",
+    "stale-player-withdraw-after-change",
+    "stale-player-withdraw-after-phase-closure",
+    "stale-player-vote-after-phase-closure",
+    "stale-dead-target-vote",
+    "dead-current-vote",
     "concurrent-vote-race-reload",
   ]);
   assert.deepEqual(seedScenarioCoverageGroups.required, seedRequiredScenarioIds);
@@ -95,6 +100,15 @@ test("seed scenario cases expose generated demo scenario fixture rows", () => {
   ]);
   assert.deepEqual(seedDemoScenarioIds.slice(15, 18), [
     "stale-player-post-after-phase-closure",
+    "stale-player-withdraw-after-change",
+    "stale-player-withdraw-after-phase-closure",
+  ]);
+  assert.deepEqual(seedDemoScenarioIds.slice(18, 21), [
+    "stale-player-vote-after-phase-closure",
+    "stale-dead-target-vote",
+    "dead-current-vote",
+  ]);
+  assert.deepEqual(seedDemoScenarioIds.slice(21, 23), [
     "player-action-denied",
     "invalid-action-recovery",
   ]);
@@ -132,6 +146,11 @@ test("seed scenario cases expose production fixture metadata", () => {
           "stale-player-vote",
           "stale-player-vote-after-change",
           "stale-player-post-after-phase-closure",
+          "stale-player-withdraw-after-change",
+          "stale-player-withdraw-after-phase-closure",
+          "stale-player-vote-after-phase-closure",
+          "stale-dead-target-vote",
+          "dead-current-vote",
           "player-action-denied",
           "stale-deadline-advance",
           "replacement-idempotent-retry",
@@ -151,6 +170,15 @@ test("seed scenario cases expose production fixture metadata", () => {
       ["stale-player-vote", "player", "/redacted/player"],
       ["stale-player-vote-after-change", "player", "/redacted/player"],
       ["stale-player-post-after-phase-closure", "player", "/redacted/player"],
+      ["stale-player-withdraw-after-change", "player", "/redacted/player"],
+      [
+        "stale-player-withdraw-after-phase-closure",
+        "player",
+        "/redacted/player",
+      ],
+      ["stale-player-vote-after-phase-closure", "player", "/redacted/player"],
+      ["stale-dead-target-vote", "player", "/redacted/player"],
+      ["dead-current-vote", "player", "/redacted/player"],
       ["player-action-denied", "player", "/redacted/player"],
       ["replacement-idempotent-retry", "host", "/redacted/host"],
       ["stale-dead-action-conflict", "actionPlayer", "/redacted/actionPlayer"],
