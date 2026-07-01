@@ -17,6 +17,7 @@ import {
   devTestGameHostedEvidenceLaneDemoProofPath,
 } from "./dev_test_game_hosted_evidence_lane_demo_proof.mjs";
 import {
+  assertCompletedPlayerReloadCases,
   assertCompletedStaleRejectCases,
   assertCompletedGameEndgameTransition,
   completedGameEndgameStaleRejectAssertionCases,
@@ -4096,12 +4097,13 @@ function assertCoreLoopCompletedGameEndgameSurface(completedGameEndgameSurface) 
   ) {
     throw new Error("core-loop admin proof missing completed player command state");
   }
-  assertCoreLoopCompletedPlayerReloadCases(
+  assertCompletedPlayerReloadCases(
     completedPlayerReloadAssertionCases({
       completedGameEndgameSurface,
       expectedGame,
       cases: completedPlayerReloadCases(),
     }),
+    assertCoreLoopCompletedPlayerReloadProof,
   );
   assertCompletedStaleRejectCases(
     completedGameEndgameStaleRejectAssertionCases({
@@ -4205,18 +4207,6 @@ function assertCoreLoopCompletedHostReloadProof({ proof, sourceRoleUrl }) {
         `core-loop admin proof missing ${label} completed host reload closure`,
       );
     }
-  }
-}
-
-function assertCoreLoopCompletedPlayerReloadCases(cases) {
-  for (const scenario of cases) {
-    assertCoreLoopCompletedPlayerReloadProof({
-      ...scenario,
-      expectedCommandStateEndpoint:
-        `/games/${scenario.expectedGame}/player-command-state?principal_user_id=${scenario.principalUserId}&slot_id=${scenario.expectedSlot}`,
-      expectedNotificationsEndpoint:
-        `/games/${scenario.expectedGame}/notifications?principal_user_id=${scenario.principalUserId}`,
-    });
   }
 }
 
