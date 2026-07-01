@@ -61,6 +61,42 @@ test("core loop lane status formats seeded recovery evidence", () => {
   );
   assert.equal(
     coreLoopLaneStatus({
+      id: "stale-host-complete-reload",
+      status: "passed",
+      evidence: {
+        rejectReceipt: "Reject GameAlreadyCompleted: game already completed",
+        revealedSlots: 1,
+        completeActionVisible: false,
+      },
+    }),
+    "passed: Reject GameAlreadyCompleted: game already completed, revealed 1, complete visible false",
+  );
+  assert.equal(
+    coreLoopLaneStatus({
+      id: "concurrent-player-complete-race",
+      status: "passed",
+      evidence: {
+        postError: "GameAlreadyCompleted",
+        apiCompleted: true,
+        apiThreadHasPost: false,
+      },
+    }),
+    "passed: post GameAlreadyCompleted, completed true, thread post false",
+  );
+  assert.equal(
+    coreLoopLaneStatus({
+      id: "stale-player-complete-reload",
+      status: "passed",
+      evidence: {
+        gameCompleted: true,
+        currentVote: "false",
+        threadPostCount: 0,
+      },
+    }),
+    "passed: completed true, vote false, posts 0",
+  );
+  assert.equal(
+    coreLoopLaneStatus({
       id: "stale-host-resolve-reload",
       status: "passed",
       evidence: {
@@ -331,6 +367,60 @@ test("highlighted lane evidence maps keep browser proof assertions aligned", () 
           reconnectingState: "reconnecting",
           recoveryState: "recovered",
           recoveredCompleted: true,
+          revealedSlots: 1,
+        },
+      },
+      {
+        id: "stale-host-complete-reload",
+        status: "passed",
+        evidence: {
+          rejectReceipt: "Reject GameAlreadyCompleted: game already completed",
+          revealedSlots: 1,
+          completeActionVisible: false,
+        },
+      },
+      {
+        id: "concurrent-host-complete-race",
+        status: "passed",
+        evidence: {
+          rejectError: "GameAlreadyCompleted",
+          apiCompleted: true,
+          apiRevealedSlots: 1,
+        },
+      },
+      {
+        id: "concurrent-host-complete-race-reload",
+        status: "passed",
+        evidence: {
+          apiCompleted: true,
+          firstRevealedSlots: 1,
+          secondRevealedSlots: 1,
+        },
+      },
+      {
+        id: "concurrent-player-complete-race",
+        status: "passed",
+        evidence: {
+          postError: "GameAlreadyCompleted",
+          apiCompleted: true,
+          apiThreadHasPost: false,
+        },
+      },
+      {
+        id: "public-player-complete-reload",
+        status: "passed",
+        evidence: {
+          gameCompleted: true,
+          reloadPostCount: 0,
+        },
+      },
+      {
+        id: "stale-player-complete-reload",
+        status: "passed",
+        evidence: {
+          gameCompleted: true,
+          currentVote: "false",
+          threadPostCount: 0,
         },
       },
       {
@@ -436,6 +526,40 @@ test("highlighted lane evidence maps keep browser proof assertions aligned", () 
   assert.equal(
     coreLoopHighlightedLaneEvidence(proofRun)["invalid-action-recovery"],
     "passed: Reject InvalidTarget, legal action visible true",
+  );
+  assert.equal(
+    coreLoopHighlightedLaneEvidence(proofRun)["stale-host-complete-reload"],
+    "passed: Reject GameAlreadyCompleted: game already completed, revealed 1, complete visible false",
+  );
+  assert.equal(
+    coreLoopHighlightedLaneEvidence(proofRun)[
+      "stale-host-complete-reconnect-recovery"
+    ],
+    "passed: reconnecting -> recovered, completed true, revealed 1",
+  );
+  assert.equal(
+    coreLoopHighlightedLaneEvidence(proofRun)["concurrent-host-complete-race"],
+    "passed: reject GameAlreadyCompleted, completed true, revealed 1",
+  );
+  assert.equal(
+    coreLoopHighlightedLaneEvidence(proofRun)[
+      "concurrent-host-complete-race-reload"
+    ],
+    "passed: completed true, revealed 1/1",
+  );
+  assert.equal(
+    coreLoopHighlightedLaneEvidence(proofRun)[
+      "concurrent-player-complete-race"
+    ],
+    "passed: post GameAlreadyCompleted, completed true, thread post false",
+  );
+  assert.equal(
+    coreLoopHighlightedLaneEvidence(proofRun)["public-player-complete-reload"],
+    "passed: completed true, posts 0",
+  );
+  assert.equal(
+    coreLoopHighlightedLaneEvidence(proofRun)["stale-player-complete-reload"],
+    "passed: completed true, vote false, posts 0",
   );
   assert.equal(
     coreLoopHighlightedLaneEvidence(proofRun)["stale-host-resolve"],

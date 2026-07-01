@@ -6,6 +6,13 @@ export const CORE_LOOP_HIGHLIGHTED_LANE_IDS = Object.freeze([
   "resolution-receipts",
   "player-action-boundary",
   "private-channel",
+  "stale-host-complete-reload",
+  "stale-host-complete-reconnect-recovery",
+  "concurrent-host-complete-race",
+  "concurrent-host-complete-race-reload",
+  "concurrent-player-complete-race",
+  "public-player-complete-reload",
+  "stale-player-complete-reload",
   "stale-host-resolve",
   "stale-host-resolve-reload",
   "stale-host-advance",
@@ -83,6 +90,20 @@ export function coreLoopLaneStatus(lane) {
       return `${status}: ${String(evidence.channel ?? "unknown")}, denied ${String(evidence.deniedStatus ?? "unknown")}`;
     case "resolution-receipts":
       return `${status}: ${String(evidence.targetNoticeStatus ?? "unknown")} receipt, target ${String(evidence.targetSlot ?? "unknown")}`;
+    case "stale-host-complete-reload":
+      return `${status}: ${String(evidence.rejectReceipt ?? "unknown")}, revealed ${String(evidence.revealedSlots ?? "unknown")}, complete visible ${String(evidence.completeActionVisible ?? "unknown")}`;
+    case "stale-host-complete-reconnect-recovery":
+      return `${status}: ${String(evidence.reconnectingState ?? "unknown")} -> ${String(evidence.recoveryState ?? "unknown")}, completed ${String(evidence.recoveredCompleted ?? "unknown")}, revealed ${String(evidence.revealedSlots ?? "unknown")}`;
+    case "concurrent-host-complete-race":
+      return `${status}: reject ${String(evidence.rejectError ?? "unknown")}, completed ${String(evidence.apiCompleted ?? "unknown")}, revealed ${String(evidence.apiRevealedSlots ?? "unknown")}`;
+    case "concurrent-host-complete-race-reload":
+      return `${status}: completed ${String(evidence.apiCompleted ?? "unknown")}, revealed ${String(evidence.firstRevealedSlots ?? "unknown")}/${String(evidence.secondRevealedSlots ?? "unknown")}`;
+    case "concurrent-player-complete-race":
+      return `${status}: post ${String(evidence.postError ?? "unknown")}, completed ${String(evidence.apiCompleted ?? "unknown")}, thread post ${String(evidence.apiThreadHasPost ?? "unknown")}`;
+    case "public-player-complete-reload":
+      return `${status}: completed ${String(evidence.gameCompleted ?? "unknown")}, posts ${String(evidence.reloadPostCount ?? "unknown")}`;
+    case "stale-player-complete-reload":
+      return `${status}: completed ${String(evidence.gameCompleted ?? "unknown")}, vote ${String(evidence.currentVote ?? "unknown")}, posts ${String(evidence.threadPostCount ?? "unknown")}`;
     case "stale-host-resolve":
       return `${status}: Reject ${String(evidence.rejectError ?? "unknown")}, role URL ${typeof evidence.roleUrl === "string"}, locked ${String(evidence.locked ?? "unknown")}`;
     case "stale-host-resolve-reload":

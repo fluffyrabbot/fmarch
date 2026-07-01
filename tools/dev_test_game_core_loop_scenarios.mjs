@@ -1,4 +1,7 @@
 import {
+  completedGameSeedRequiredScenarioIds,
+} from "./dev_test_game_core_loop_completed_scenarios.mjs";
+import {
   hostStaleAdvanceControlLaneId,
   hostStaleAdvanceReloadLaneId,
   hostStaleResolveControlLaneId,
@@ -22,6 +25,7 @@ export const coreLoopAuditLaneIds = Object.freeze([
   "host-votecount-publication",
   "host-lifecycle-control",
   "host-modkill-control",
+  ...completedGameSeedRequiredScenarioIds(),
   hostStaleResolveControlLaneId,
   hostStaleResolveReloadLaneId,
   hostStaleAdvanceControlLaneId,

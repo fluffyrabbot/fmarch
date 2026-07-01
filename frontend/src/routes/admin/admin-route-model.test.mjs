@@ -2170,6 +2170,28 @@ test("admin local core loop detail data carries lane rows", async () => {
       ["resolution-receipts", "passed: factional_kill receipt, target slot-2"],
       ["player-action-boundary", "passed: 0 unowned actions, direct reject InvalidTarget"],
       ["private-channel", "passed: private:mafia_day_chat, denied 403"],
+      [
+        "stale-host-complete-reload",
+        "passed: Reject GameAlreadyCompleted: game already completed, revealed 1, complete visible false",
+      ],
+      [
+        "stale-host-complete-reconnect-recovery",
+        "passed: reconnecting -> recovered, completed true, revealed 1",
+      ],
+      [
+        "concurrent-host-complete-race",
+        "passed: reject GameAlreadyCompleted, completed true, revealed 1",
+      ],
+      [
+        "concurrent-host-complete-race-reload",
+        "passed: completed true, revealed 1/1",
+      ],
+      [
+        "concurrent-player-complete-race",
+        "passed: post GameAlreadyCompleted, completed true, thread post false",
+      ],
+      ["public-player-complete-reload", "passed: completed true, posts 0"],
+      ["stale-player-complete-reload", "passed: completed true, vote false, posts 0"],
       ["stale-host-resolve", "passed: Reject PhaseLocked, role URL true, locked true"],
       [
         "stale-host-resolve-reload",
@@ -2222,6 +2244,41 @@ test("admin local core loop detail data carries lane rows", async () => {
         "private-channel",
         "passed: private:mafia_day_chat, denied 403",
         "passed: private:mafia_day_chat, denied 403",
+      ],
+      [
+        "stale-host-complete-reload",
+        "passed: Reject GameAlreadyCompleted: game already completed, revealed 1, complete visible false",
+        "passed: Reject GameAlreadyCompleted: game already completed, revealed 1, complete visible false",
+      ],
+      [
+        "stale-host-complete-reconnect-recovery",
+        "passed: reconnecting -> recovered, completed true, revealed 1",
+        "passed: reconnecting -> recovered, completed true, revealed 1",
+      ],
+      [
+        "concurrent-host-complete-race",
+        "passed: reject GameAlreadyCompleted, completed true, revealed 1",
+        "passed: reject GameAlreadyCompleted, completed true, revealed 1",
+      ],
+      [
+        "concurrent-host-complete-race-reload",
+        "passed: completed true, revealed 1/1",
+        "passed: completed true, revealed 1/1",
+      ],
+      [
+        "concurrent-player-complete-race",
+        "passed: post GameAlreadyCompleted, completed true, thread post false",
+        "passed: post GameAlreadyCompleted, completed true, thread post false",
+      ],
+      [
+        "public-player-complete-reload",
+        "passed: completed true, posts 0",
+        "passed: completed true, posts 0",
+      ],
+      [
+        "stale-player-complete-reload",
+        "passed: completed true, vote false, posts 0",
+        "passed: completed true, vote false, posts 0",
       ],
       [
         "stale-host-resolve",
@@ -3127,6 +3184,35 @@ function proofRunFixture() {
       recoveredCompleted: true,
       revealedSlots: 1,
       completeActionVisible: false,
+    },
+    "stale-host-complete-reload": {
+      rejectReceipt: "Reject GameAlreadyCompleted: game already completed",
+      revealedSlots: 1,
+      completeActionVisible: false,
+    },
+    "concurrent-host-complete-race": {
+      rejectError: "GameAlreadyCompleted",
+      apiCompleted: true,
+      apiRevealedSlots: 1,
+    },
+    "concurrent-host-complete-race-reload": {
+      apiCompleted: true,
+      firstRevealedSlots: 1,
+      secondRevealedSlots: 1,
+    },
+    "concurrent-player-complete-race": {
+      postError: "GameAlreadyCompleted",
+      apiCompleted: true,
+      apiThreadHasPost: false,
+    },
+    "public-player-complete-reload": {
+      gameCompleted: true,
+      reloadPostCount: 0,
+    },
+    "stale-player-complete-reload": {
+      gameCompleted: true,
+      currentVote: "false",
+      threadPostCount: 0,
     },
     "stale-host-control": {
       rejectError: "PhaseLocked",
