@@ -36,7 +36,7 @@ import {
 } from "./dev_test_game_core_loop_private_receipt_scenarios.mjs";
 import {
   hostPhaseTransitionActionFixture,
-  postDayThreePlayerSurfaceFixture,
+  seededCoreLoopPlayerSurfaceFixture,
 } from "./dev_test_game_core_loop_proof_fixtures.mjs";
 import {
   assertDevTestGameOpsArtifacts,
@@ -11088,9 +11088,9 @@ function postDayThreeResolutionSurfaceFixture() {
     clickedThroughFromRoleUrl: true,
     transition:
       "target:D03:day_vote -> actionPlayer:D03:privacy -> host:advance_phase:ack:909 -> actionPlayer:N03",
-    targetReceiptProof: postDayThreePlayerSurfaceFixture({
-      sourceRoleUrl: `${baseRoleUrl}?private=notification-1`,
-      visitedRolePath: `/g/${game}?private=notification-1`,
+    targetReceiptProof: seededCoreLoopPlayerSurfaceFixture({
+      game,
+      roleUrlSuffix: "?private=notification-1",
       slotField: "targetSlot",
       slot: "slot-4",
       principalUserId: "player_rowan",
@@ -11105,13 +11105,9 @@ function postDayThreeResolutionSurfaceFixture() {
       boundary:
         "Seeded browser target role received day_vote private receipt after D03 resolution.",
       resyncFromSeq: 908,
-      commandStateEndpoint:
-        `/games/${game}/player-command-state?principal_user_id=player_rowan&slot_id=slot-4`,
-      notificationsEndpoint: `/games/${game}/notifications?principal_user_id=player_rowan`,
     }),
-    actionPlayerPrivacyProof: postDayThreePlayerSurfaceFixture({
-      sourceRoleUrl: baseRoleUrl,
-      visitedRolePath: `/g/${game}`,
+    actionPlayerPrivacyProof: seededCoreLoopPlayerSurfaceFixture({
+      game,
       slotField: "actionPlayerSlot",
       slot: "slot-7",
       principalUserId: "player_mira",
@@ -11126,9 +11122,6 @@ function postDayThreeResolutionSurfaceFixture() {
       boundary:
         "Seeded browser action player stayed alive with no target-only D03 receipt after host resolved Day 3.",
       resyncFromSeq: 908,
-      commandStateEndpoint:
-        `/games/${game}/player-command-state?principal_user_id=player_mira&slot_id=slot-7`,
-      notificationsEndpoint: `/games/${game}/notifications?principal_user_id=player_mira`,
     }),
     hostAdvanceProof: {
       status: "passed",
@@ -11159,9 +11152,8 @@ function postDayThreeResolutionSurfaceFixture() {
       releaseReady: false,
       productionReady: false,
     },
-    actionPlayerNightThreeProof: postDayThreePlayerSurfaceFixture({
-      sourceRoleUrl: baseRoleUrl,
-      visitedRolePath: `/g/${game}`,
+    actionPlayerNightThreeProof: seededCoreLoopPlayerSurfaceFixture({
+      game,
       slotField: "actionPlayerSlot",
       slot: "slot-7",
       principalUserId: "player_mira",
@@ -11176,9 +11168,6 @@ function postDayThreeResolutionSurfaceFixture() {
       boundary:
         "Seeded browser action player observed host AdvancePhase from locked D03 into open N03.",
       resyncFromSeq: 909,
-      commandStateEndpoint:
-        `/games/${game}/player-command-state?principal_user_id=player_mira&slot_id=slot-7`,
-      notificationsEndpoint: `/games/${game}/notifications?principal_user_id=player_mira`,
     }),
     releaseReady: false,
     productionReady: false,
@@ -11195,9 +11184,8 @@ function nightThreeEmptyResolutionSurfaceFixture() {
     clickedThroughFromRoleUrl: true,
     transition:
       "actionPlayer:N03:no_action -> host:resolve_phase:ack:910 -> host:advance_phase:ack:911 -> actionPlayer:D04:no_lynch_vote",
-    actionPlayerNoActionProof: postDayThreePlayerSurfaceFixture({
-      sourceRoleUrl: baseRoleUrl,
-      visitedRolePath: `/g/${game}`,
+    actionPlayerNoActionProof: seededCoreLoopPlayerSurfaceFixture({
+      game,
       slotField: "actionPlayerSlot",
       slot: "slot-7",
       principalUserId: "player_mira",
@@ -11212,9 +11200,6 @@ function nightThreeEmptyResolutionSurfaceFixture() {
       boundary:
         "Seeded browser action player opened N03 with no legal night action after D03 attrition.",
       resyncFromSeq: 909,
-      commandStateEndpoint:
-        `/games/${game}/player-command-state?principal_user_id=player_mira&slot_id=slot-7`,
-      notificationsEndpoint: `/games/${game}/notifications?principal_user_id=player_mira`,
     }),
     hostTransitionProof: {
       status: "passed",
@@ -11263,9 +11248,8 @@ function nightThreeEmptyResolutionSurfaceFixture() {
       releaseReady: false,
       productionReady: false,
     },
-    actionPlayerDayFourProof: postDayThreePlayerSurfaceFixture({
-      sourceRoleUrl: baseRoleUrl,
-      visitedRolePath: `/g/${game}`,
+    actionPlayerDayFourProof: seededCoreLoopPlayerSurfaceFixture({
+      game,
       slotField: "actionPlayerSlot",
       slot: "slot-7",
       principalUserId: "player_mira",
@@ -11280,9 +11264,6 @@ function nightThreeEmptyResolutionSurfaceFixture() {
       boundary:
         "Seeded browser action player observed host AdvancePhase from empty N03 into open D04 no-lynch voting.",
       resyncFromSeq: 911,
-      commandStateEndpoint:
-        `/games/${game}/player-command-state?principal_user_id=player_mira&slot_id=slot-7`,
-      notificationsEndpoint: `/games/${game}/notifications?principal_user_id=player_mira`,
       voteButtonCount: 1,
       voteTargets: [{ kind: "no_lynch", slotId: null, label: "No lynch" }],
     }),
@@ -11298,9 +11279,8 @@ function dayFourSurvivorRoleSurfaceFixture() {
     status: "passed",
     sourceRoleUrl: baseRoleUrl,
     clickedThroughFromRoleUrl: true,
-    survivorProof: postDayThreePlayerSurfaceFixture({
-      sourceRoleUrl: baseRoleUrl,
-      visitedRolePath: `/g/${game}`,
+    survivorProof: seededCoreLoopPlayerSurfaceFixture({
+      game,
       slotField: "survivorSlot",
       slot: "slot-5",
       principalUserId: "player_sage",
@@ -11315,9 +11295,6 @@ function dayFourSurvivorRoleSurfaceFixture() {
       boundary:
         "Seeded browser survivor role opened D04 as a living vote target for the next night-action loop.",
       resyncFromSeq: 911,
-      commandStateEndpoint:
-        `/games/${game}/player-command-state?principal_user_id=player_sage&slot_id=slot-5`,
-      notificationsEndpoint: `/games/${game}/notifications?principal_user_id=player_sage`,
       voteButtonCount: 2,
       voteTargets: [
         { kind: "slot", slotId: "slot-7", label: "Slot 7" },
@@ -11647,9 +11624,9 @@ function postNightFourTransitionSurfaceFixture() {
       releaseReady: false,
       productionReady: false,
     },
-    survivorDayFiveProof: postDayThreePlayerSurfaceFixture({
-      sourceRoleUrl: `${baseRoleUrl}?private=notification-1`,
-      visitedRolePath: `/g/${game}?private=notification-1`,
+    survivorDayFiveProof: seededCoreLoopPlayerSurfaceFixture({
+      game,
+      roleUrlSuffix: "?private=notification-1",
       slotField: "survivorSlot",
       slot: "slot-5",
       principalUserId: "player_sage",
@@ -11666,18 +11643,14 @@ function postNightFourTransitionSurfaceFixture() {
       boundary:
         "Seeded browser survivor stayed dead with no controls after N04 advanced to Day 5.",
       resyncFromSeq: 917,
-      commandStateEndpoint:
-        `/games/${game}/player-command-state?principal_user_id=player_sage&slot_id=slot-5`,
-      notificationsEndpoint: `/games/${game}/notifications?principal_user_id=player_sage`,
       dayVoteOutcomes: [
         { phaseId: "D02", status: "Lynch" },
         { phaseId: "D03", status: "Lynch" },
         { phaseId: "D04", status: "NoLynch" },
       ],
     }),
-    actionPlayerDayFiveProof: postDayThreePlayerSurfaceFixture({
-      sourceRoleUrl: baseRoleUrl,
-      visitedRolePath: `/g/${game}`,
+    actionPlayerDayFiveProof: seededCoreLoopPlayerSurfaceFixture({
+      game,
       slotField: "actionPlayerSlot",
       slot: "slot-7",
       principalUserId: "player_mira",
@@ -11692,9 +11665,6 @@ function postNightFourTransitionSurfaceFixture() {
       boundary:
         "Seeded browser action player observed open Day 5 no-lynch controls after Night 4 advanced.",
       resyncFromSeq: 917,
-      commandStateEndpoint:
-        `/games/${game}/player-command-state?principal_user_id=player_mira&slot_id=slot-7`,
-      notificationsEndpoint: `/games/${game}/notifications?principal_user_id=player_mira`,
       voteButtonCount: 1,
       voteTargets: [{ kind: "no_lynch", slotId: null, label: "No lynch" }],
       dayVoteOutcomes: [
@@ -11892,9 +11862,8 @@ function dayFiveNoLynchResolutionSurfaceFixture() {
       releaseReady: false,
       productionReady: false,
     },
-    actionPlayerNightFiveProof: postDayThreePlayerSurfaceFixture({
-      sourceRoleUrl: baseRoleUrl,
-      visitedRolePath: `/g/${game}`,
+    actionPlayerNightFiveProof: seededCoreLoopPlayerSurfaceFixture({
+      game,
       slotField: "actionPlayerSlot",
       slot: "slot-7",
       principalUserId: "player_mira",
@@ -11909,9 +11878,6 @@ function dayFiveNoLynchResolutionSurfaceFixture() {
       boundary:
         "Seeded browser action player observed host AdvancePhase from Day 5 no-lynch into open Night 5 with no legal action.",
       resyncFromSeq: 920,
-      commandStateEndpoint:
-        `/games/${game}/player-command-state?principal_user_id=player_mira&slot_id=slot-7`,
-      notificationsEndpoint: `/games/${game}/notifications?principal_user_id=player_mira`,
       dayVoteOutcomes: dayFiveOutcomes,
     }),
     staleDayFiveVoteRecoveryProof: {
@@ -12058,9 +12024,8 @@ function completedGameEndgameSurfaceFixture() {
       game,
       snapshot: completedHostReloadSnapshot,
     }),
-    actionPlayerCompletedProof: postDayThreePlayerSurfaceFixture({
-      sourceRoleUrl: baseRoleUrl,
-      visitedRolePath: `/g/${game}`,
+    actionPlayerCompletedProof: seededCoreLoopPlayerSurfaceFixture({
+      game,
       slotField: "actionPlayerSlot",
       slot: "slot-7",
       principalUserId: "player_mira",
@@ -12076,9 +12041,6 @@ function completedGameEndgameSurfaceFixture() {
       boundary:
         "Seeded browser action player observed completed game endgame state with no vote, post, or action controls.",
       resyncFromSeq: 921,
-      commandStateEndpoint:
-        `/games/${game}/player-command-state?principal_user_id=player_mira&slot_id=slot-7`,
-      notificationsEndpoint: `/games/${game}/notifications?principal_user_id=player_mira`,
       dayVoteOutcomes: dayFiveOutcomes,
     }),
     ...completedPlayerReloadProofFixtures({

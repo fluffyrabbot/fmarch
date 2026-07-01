@@ -9,6 +9,7 @@ import {
 import {
   hostPhaseTransitionActionFixture,
   postDayThreePlayerSurfaceFixture,
+  seededCoreLoopPlayerSurfaceFixture,
 } from "./dev_test_game_core_loop_proof_fixtures.mjs";
 import {
   assertCompletedGameEndgameSurfaceProof,
@@ -276,6 +277,43 @@ test("core-loop proof fixture module builds shared host and player proof shapes"
   ]);
   assert.equal(playerProof.projectionCommandState.gameCompleted, true);
   assert.equal(playerProof.privateEmptyText, "No private results visible");
+});
+
+test("core-loop proof fixture module derives seeded role URLs and endpoints", () => {
+  const proof = seededCoreLoopPlayerSurfaceFixture({
+    game: "game-a",
+    roleUrlSuffix: "?private=notification-1",
+    slotField: "survivorSlot",
+    slot: "slot-5",
+    principalUserId: "player_sage",
+    phaseId: "D05",
+    phaseState: "open",
+    actorAlive: false,
+    actorStatus: "dead",
+    actionState: "disabled:actor is not alive",
+    statusText: "Player action unavailable: actor is not alive",
+    privateCount: 1,
+    privateReceipt: true,
+    privateReceiptStatus: "factional_kill",
+    privateReceiptPhaseId: "N04",
+    boundary: "survivor stayed dead",
+    resyncFromSeq: 917,
+  });
+
+  assert.equal(
+    proof.sourceRoleUrl,
+    "http://127.0.0.1:5173/g/game-a?private=notification-1",
+  );
+  assert.equal(proof.visitedRolePath, "/g/game-a?private=notification-1");
+  assert.equal(
+    proof.coldLoadEndpoints.commandStateEndpoint,
+    "/games/game-a/player-command-state?principal_user_id=player_sage&slot_id=slot-5",
+  );
+  assert.equal(
+    proof.coldLoadEndpoints.notificationsEndpoint,
+    "/games/game-a/notifications?principal_user_id=player_sage",
+  );
+  assert.equal(proof.privateNotice.detailText, "Phase N04");
 });
 
 test("completed-game scenario module derives shared assertion cases", () => {

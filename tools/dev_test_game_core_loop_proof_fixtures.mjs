@@ -152,3 +152,52 @@ export function postDayThreePlayerSurfaceFixture({
   }
   return proof;
 }
+
+export function seededCoreLoopPlayerSurfaceFixture({
+  game,
+  roleUrlSuffix = "",
+  visitedRolePathSuffix = roleUrlSuffix,
+  slot,
+  principalUserId,
+  ...proofArgs
+}) {
+  return postDayThreePlayerSurfaceFixture({
+    sourceRoleUrl: seededCoreLoopRoleUrl({ game, suffix: roleUrlSuffix }),
+    visitedRolePath: seededCoreLoopRolePath({
+      game,
+      suffix: visitedRolePathSuffix,
+    }),
+    slot,
+    principalUserId,
+    commandStateEndpoint: seededCoreLoopCommandStateEndpoint({
+      game,
+      principalUserId,
+      slot,
+    }),
+    notificationsEndpoint: seededCoreLoopNotificationsEndpoint({
+      game,
+      principalUserId,
+    }),
+    ...proofArgs,
+  });
+}
+
+export function seededCoreLoopRoleUrl({ game, suffix = "" }) {
+  return `http://127.0.0.1:5173/g/${game}${suffix}`;
+}
+
+export function seededCoreLoopRolePath({ game, suffix = "" }) {
+  return `/g/${game}${suffix}`;
+}
+
+export function seededCoreLoopCommandStateEndpoint({
+  game,
+  principalUserId,
+  slot,
+}) {
+  return `/games/${game}/player-command-state?principal_user_id=${principalUserId}&slot_id=${slot}`;
+}
+
+export function seededCoreLoopNotificationsEndpoint({ game, principalUserId }) {
+  return `/games/${game}/notifications?principal_user_id=${principalUserId}`;
+}
