@@ -1653,6 +1653,30 @@ test("dev test-game hosted evidence lane records blocked preflight state", async
   assert.equal(lane.productionReady, false);
   assert.equal(lane.preflightStatus, "blocked");
   assert.deepEqual(lane.blockedCheckIds, hostedTargetPreflightBlockingCheckIds);
+  assert.deepEqual(
+    lane.checks
+      .filter((check) => lane.blockedCheckIds.includes(check.id))
+      .map((check) => [check.id, check.requiredEvidence]),
+    [
+      [
+        "hosted-frontend-url-configured",
+        "Set FMARCH_HOSTED_MATRIX_FRONTEND_URL.",
+      ],
+      ["hosted-api-url-configured", "Set FMARCH_HOSTED_MATRIX_API_URL."],
+      [
+        "hosted-targets-external",
+        "Both hosted target URLs must be externally reachable http(s) URLs, not localhost or loopback.",
+      ],
+      [
+        "raw-evidence-path-configured",
+        "Set FMARCH_HOSTED_MATRIX_RAW_EVIDENCE_PATH.",
+      ],
+      [
+        "raw-evidence-readable",
+        "Set FMARCH_HOSTED_MATRIX_RAW_EVIDENCE_PATH.",
+      ],
+    ],
+  );
   assert.equal(lane.nextCommand, `npm run ${devTestGameHostedEvidenceLaneCommand}`);
   assert.equal(lane.nextProofTarget, devTestGameHostedEvidenceLanePath);
   assert.deepEqual(lane.generatedFrom, {

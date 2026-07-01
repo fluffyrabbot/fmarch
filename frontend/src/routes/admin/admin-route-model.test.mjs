@@ -2484,13 +2484,37 @@ test("admin hosted target preflight detail data carries blocked setup rows", asy
     ["local-hosted-concurrent-race-matrix", "local-next-action"],
   );
   assert.deepEqual(
-    data.audit.unproven.map((item) => [item.id, item.status]),
+    data.audit.unproven.map((item) => [
+      item.id,
+      item.status,
+      item.requiredEvidence,
+    ]),
     [
-      ["hosted-frontend-url-configured", "blocked"],
-      ["hosted-api-url-configured", "blocked"],
-      ["hosted-targets-external", "blocked"],
-      ["raw-evidence-path-configured", "blocked"],
-      ["raw-evidence-readable", "blocked"],
+      [
+        "hosted-frontend-url-configured",
+        "blocked",
+        "Set FMARCH_HOSTED_MATRIX_FRONTEND_URL.",
+      ],
+      [
+        "hosted-api-url-configured",
+        "blocked",
+        "Set FMARCH_HOSTED_MATRIX_API_URL.",
+      ],
+      [
+        "hosted-targets-external",
+        "blocked",
+        "Both hosted target URLs must be externally reachable http(s) URLs, not localhost or loopback.",
+      ],
+      [
+        "raw-evidence-path-configured",
+        "blocked",
+        "Set FMARCH_HOSTED_MATRIX_RAW_EVIDENCE_PATH.",
+      ],
+      [
+        "raw-evidence-readable",
+        "blocked",
+        "Set FMARCH_HOSTED_MATRIX_RAW_EVIDENCE_PATH.",
+      ],
     ],
   );
 });
@@ -2587,13 +2611,34 @@ test("admin hosted evidence lane detail data carries blocked setup rows", async 
     data.audit.hostedHandoffChecklist.blockedChecks.map((item) => [
       item.id,
       item.status,
+      item.requiredEvidence,
     ]),
     [
-      ["hosted-frontend-url-configured", "blocked"],
-      ["hosted-api-url-configured", "blocked"],
-      ["hosted-targets-external", "blocked"],
-      ["raw-evidence-path-configured", "blocked"],
-      ["raw-evidence-readable", "blocked"],
+      [
+        "hosted-frontend-url-configured",
+        "blocked",
+        "Set FMARCH_HOSTED_MATRIX_FRONTEND_URL.",
+      ],
+      [
+        "hosted-api-url-configured",
+        "blocked",
+        "Set FMARCH_HOSTED_MATRIX_API_URL.",
+      ],
+      [
+        "hosted-targets-external",
+        "blocked",
+        "Both hosted target URLs must be externally reachable http(s) URLs, not localhost or loopback.",
+      ],
+      [
+        "raw-evidence-path-configured",
+        "blocked",
+        "Set FMARCH_HOSTED_MATRIX_RAW_EVIDENCE_PATH.",
+      ],
+      [
+        "raw-evidence-readable",
+        "blocked",
+        "Set FMARCH_HOSTED_MATRIX_RAW_EVIDENCE_PATH.",
+      ],
     ],
   );
   assert.equal(data.audit.artifactSummary.demoProofStatus, "passed");
@@ -3550,15 +3595,32 @@ function localHostedTargetPreflightFixture() {
       rawEvidenceStatus: "blocked",
     },
     checks: [
-      { id: "hosted-frontend-url-configured", status: "blocked" },
-      { id: "hosted-api-url-configured", status: "blocked" },
+      {
+        id: "hosted-frontend-url-configured",
+        status: "blocked",
+        requiredEvidence: "Set FMARCH_HOSTED_MATRIX_FRONTEND_URL.",
+      },
+      {
+        id: "hosted-api-url-configured",
+        status: "blocked",
+        requiredEvidence: "Set FMARCH_HOSTED_MATRIX_API_URL.",
+      },
       {
         id: "hosted-targets-external",
         status: "blocked",
-        requiredEvidence: "Externally reachable hosted URLs.",
+        requiredEvidence:
+          "Both hosted target URLs must be externally reachable http(s) URLs, not localhost or loopback.",
       },
-      { id: "raw-evidence-path-configured", status: "blocked" },
-      { id: "raw-evidence-readable", status: "blocked" },
+      {
+        id: "raw-evidence-path-configured",
+        status: "blocked",
+        requiredEvidence: "Set FMARCH_HOSTED_MATRIX_RAW_EVIDENCE_PATH.",
+      },
+      {
+        id: "raw-evidence-readable",
+        status: "blocked",
+        requiredEvidence: "Set FMARCH_HOSTED_MATRIX_RAW_EVIDENCE_PATH.",
+      },
       {
         id: "release-claim-boundary-carried",
         status: "passed",
@@ -3650,16 +3712,38 @@ function localHostedEvidenceLaneFixture() {
         "Passed hosted target preflight and normalized hosted matrix evidence.",
     },
     checks: [
-      { id: "hosted-target-preflight", status: "blocked" },
-      { id: "hosted-frontend-url-configured", status: "blocked" },
-      { id: "hosted-api-url-configured", status: "blocked" },
+      {
+        id: "hosted-target-preflight",
+        status: "blocked",
+        requiredEvidence:
+          "Pass hosted target preflight before external hosted evidence normalization.",
+      },
+      {
+        id: "hosted-frontend-url-configured",
+        status: "blocked",
+        requiredEvidence: "Set FMARCH_HOSTED_MATRIX_FRONTEND_URL.",
+      },
+      {
+        id: "hosted-api-url-configured",
+        status: "blocked",
+        requiredEvidence: "Set FMARCH_HOSTED_MATRIX_API_URL.",
+      },
       {
         id: "hosted-targets-external",
         status: "blocked",
-        requiredEvidence: "Externally reachable hosted URLs.",
+        requiredEvidence:
+          "Both hosted target URLs must be externally reachable http(s) URLs, not localhost or loopback.",
       },
-      { id: "raw-evidence-path-configured", status: "blocked" },
-      { id: "raw-evidence-readable", status: "blocked" },
+      {
+        id: "raw-evidence-path-configured",
+        status: "blocked",
+        requiredEvidence: "Set FMARCH_HOSTED_MATRIX_RAW_EVIDENCE_PATH.",
+      },
+      {
+        id: "raw-evidence-readable",
+        status: "blocked",
+        requiredEvidence: "Set FMARCH_HOSTED_MATRIX_RAW_EVIDENCE_PATH.",
+      },
       {
         id: "release-claim-boundary-carried",
         status: "passed",

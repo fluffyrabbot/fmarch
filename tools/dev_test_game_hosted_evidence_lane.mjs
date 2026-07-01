@@ -96,6 +96,18 @@ export function assertDevTestGameHostedEvidenceLane(evidence) {
     ) {
       throw new Error("blocked hosted evidence lane drifted");
     }
+    for (const checkId of evidence.blockedCheckIds) {
+      const check = checks.get(checkId);
+      if (
+        check?.status !== "blocked" ||
+        typeof check.requiredEvidence !== "string" ||
+        check.requiredEvidence.trim() === ""
+      ) {
+        throw new Error(
+          `blocked hosted evidence lane missing required evidence for ${checkId}`,
+        );
+      }
+    }
     assertRealHostedEvidenceInputs(evidence.hostedEvidence.realHostedEvidenceInputs);
   }
   if (evidence.status === "passed") {
@@ -150,11 +162,14 @@ function buildBlockedHostedEvidenceLane({ preflight, generatedAt }) {
       {
         id: "hosted-target-preflight",
         status: preflight.status,
+        ...(preflight.status === "blocked"
+          ? {
+              requiredEvidence:
+                "Pass hosted target preflight before external hosted evidence normalization.",
+            }
+          : {}),
       },
-      ...preflight.checks.map((check) => ({
-        id: check.id,
-        status: check.status,
-      })),
+      ...preflight.checks.map(copyHostedEvidenceLaneCheck),
     ],
     generatedFrom: {
       hostedTargetPreflight: devTestGameHostedTargetPreflightPath,
@@ -162,6 +177,21 @@ function buildBlockedHostedEvidenceLane({ preflight, generatedAt }) {
     nextCommand: `npm run ${devTestGameHostedEvidenceLaneCommand}`,
     nextProofTarget: devTestGameHostedEvidenceLanePath,
   });
+}
+
+function copyHostedEvidenceLaneCheck(check) {
+  return {
+    id: check.id,
+    status: check.status,
+    ...(check.requiredEvidence === undefined
+      ? {}
+      : { requiredEvidence: check.requiredEvidence }),
+    ...(check.evidence === undefined ? {} : { evidence: check.evidence }),
+    ...(check.releaseReady === undefined ? {} : { releaseReady: check.releaseReady }),
+    ...(check.productionReady === undefined
+      ? {}
+      : { productionReady: check.productionReady }),
+  };
 }
 
 function buildPassedHostedEvidenceLane({
