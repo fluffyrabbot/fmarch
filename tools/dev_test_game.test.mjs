@@ -980,23 +980,23 @@ test("dev test-game next-action derives one local recovery command from the mani
   });
   assertDevTestGameNextAction(freshAction);
   assert.deepEqual(freshAction.nextAction, {
-    command: `npm run ${devTestGameHostedIdentityEvidenceCommand}`,
+    command: "npm run test:dev-test-game-hosted-concurrent-race-matrix",
     reason: "release-readiness-unproven",
-    status: "blocked",
+    status: "ready",
     unproven: {
-      id: "hosted-production-identity",
+      id: "hosted-concurrent-race-matrix",
       status: "unproven",
-      requiredEvidence: "Hosted account lifecycle",
+      requiredEvidence:
+        "Hosted or hosted-like concurrent command race matrix beyond the promoted local replacement, host, player, cohost deadline, lifecycle, and complete-game reload milestones, including multi-session reload/reconnect recovery and stale-client conflict evidence",
       buildSlice:
-        "Run the hosted identity evidence intake; it records a blocked handoff until hosted account lifecycle, invite delivery, recovery, abuse/rate-limit, session-secret, and audit retention evidence are attached without changing role surfaces.",
-      proofTarget: devTestGameHostedIdentityEvidencePath,
-      roleUrl: "/admin/audit/local-hosted-identity-evidence?game=<seeded-game>",
-      proofGraphNodeId: "admin-proof:hosted-identity-evidence",
-      productionFeatureSpineTarget:
-        productionFeatureSpineTargetFixture("identity-adapter"),
-      spineDrilldown: featureSpineDrilldownFixture("identity-adapter"),
-      spineTarget: resolvedFeatureSpineTargetFixture("identity-adapter"),
-      hostedHandoffChecklist: hostedIdentityHandoffChecklistFixture(),
+        "Create the first hosted-like concurrent race matrix proof request from the promoted local race baseline.",
+      proofTarget: devTestGameHostedConcurrentRaceMatrixPath,
+      roleUrl:
+        "/admin/audit/local-hosted-concurrent-race-matrix?game=<seeded-game>",
+      proofGraphNodeId: "admin-proof:hosted-concurrent-race-matrix",
+      productionFeatureSpineTarget: productionFeatureSpineTargetFixture(),
+      spineDrilldown: featureSpineDrilldownFixture(),
+      spineTarget: resolvedFeatureSpineTargetFixture(),
     },
   });
   assert.deepEqual(freshAction.selectionTrace, {
@@ -1039,14 +1039,36 @@ test("dev test-game next-action derives one local recovery command from the mani
   assert.deepEqual(freshAction.releaseReadinessTrace, {
     strategy: "local-dev-release-readiness-priority",
     candidateCount: 2,
-    selectedUnprovenId: "hosted-production-identity",
+    selectedUnprovenId: "hosted-concurrent-race-matrix",
     candidates: [
       {
         rank: 1,
+        id: "hosted-concurrent-race-matrix",
+        status: "unproven",
+        priority: 5,
+        selected: true,
+        command: "npm run test:dev-test-game-hosted-concurrent-race-matrix",
+        buildSlice:
+          "Create the first hosted-like concurrent race matrix proof request from the promoted local race baseline.",
+        proofTarget: devTestGameHostedConcurrentRaceMatrixPath,
+        roleUrl:
+          "/admin/audit/local-hosted-concurrent-race-matrix?game=<seeded-game>",
+        proofGraphNodeId: "admin-proof:hosted-concurrent-race-matrix",
+        productionFeatureSpineTarget: productionFeatureSpineTargetFixture(),
+        spineDrilldown: featureSpineDrilldownFixture(),
+        spineTarget: resolvedFeatureSpineTargetFixture(),
+        actionStatus: "ready",
+        proofBoundary:
+          "Machine-readable request artifact only. This can prepare hosted-like concurrent race proof work from the local promoted baseline, but it does not prove hosted deployment, multi-node races, beta readiness, release readiness, or production readiness.",
+        requiredEvidence:
+          "Hosted or hosted-like concurrent command race matrix beyond the promoted local replacement, host, player, cohost deadline, lifecycle, and complete-game reload milestones, including multi-session reload/reconnect recovery and stale-client conflict evidence",
+      },
+      {
+        rank: 2,
         id: "hosted-production-identity",
         status: "unproven",
-        priority: -10,
-        selected: true,
+        priority: 15,
+        selected: false,
         command: `npm run ${devTestGameHostedIdentityEvidenceCommand}`,
         buildSlice:
           "Run the hosted identity evidence intake; it records a blocked handoff until hosted account lifecycle, invite delivery, recovery, abuse/rate-limit, session-secret, and audit retention evidence are attached without changing role surfaces.",
@@ -1063,28 +1085,6 @@ test("dev test-game next-action derives one local recovery command from the mani
         proofBoundary:
           "Hosted identity evidence handoff. The local identity adapter admin proof remains the prerequisite role-surface proof, while this command records the hosted account lifecycle, invite delivery, account recovery, abuse controls, session-secret policy, and hosted audit retention/export inputs needed next; it does not prove beta readiness, release readiness, or production readiness.",
         requiredEvidence: "Hosted account lifecycle",
-      },
-      {
-        rank: 2,
-        id: "hosted-concurrent-race-matrix",
-        status: "unproven",
-        priority: 5,
-        selected: false,
-        command: "npm run test:dev-test-game-hosted-concurrent-race-matrix",
-        buildSlice:
-          "Create the first hosted-like concurrent race matrix proof request from the promoted local race baseline.",
-        proofTarget: devTestGameHostedConcurrentRaceMatrixPath,
-        roleUrl:
-          "/admin/audit/local-hosted-concurrent-race-matrix?game=<seeded-game>",
-        proofGraphNodeId: "admin-proof:hosted-concurrent-race-matrix",
-        productionFeatureSpineTarget: productionFeatureSpineTargetFixture(),
-        spineDrilldown: featureSpineDrilldownFixture(),
-        spineTarget: resolvedFeatureSpineTargetFixture(),
-        actionStatus: "ready",
-        proofBoundary:
-          "Machine-readable request artifact only. This can prepare hosted-like concurrent race proof work from the local promoted baseline, but it does not prove hosted deployment, multi-node races, beta readiness, release readiness, or production readiness.",
-        requiredEvidence:
-          "Hosted or hosted-like concurrent command race matrix beyond the promoted local replacement, host, player, cohost deadline, lifecycle, and complete-game reload milestones, including multi-session reload/reconnect recovery and stale-client conflict evidence",
       },
     ],
   });

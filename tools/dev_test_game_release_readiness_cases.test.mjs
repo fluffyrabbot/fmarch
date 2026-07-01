@@ -120,7 +120,7 @@ test("release readiness buildable cases share next-action commands and spine tar
     hostedIdentity.roleUrl,
     "/admin/audit/local-hosted-identity-evidence?game=<seeded-game>",
   );
-  assert.equal(hostedIdentity.priority, -10);
+  assert.equal(hostedIdentity.priority, 15);
   assert.deepEqual(
     hostedIdentity.productionFeatureSpineTarget,
     releaseReadinessProductionFeatureSpineTargets.identityAdapter,

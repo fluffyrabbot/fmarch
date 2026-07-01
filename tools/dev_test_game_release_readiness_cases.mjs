@@ -314,7 +314,7 @@ function hostedProductionIdentityBuildable() {
     status: "blocked",
   }));
   return {
-    priority: -10,
+    priority: 15,
     command,
     buildSlice:
       "Run the hosted identity evidence intake; it records a blocked handoff until hosted account lifecycle, invite delivery, recovery, abuse/rate-limit, session-secret, and audit retention evidence are attached without changing role surfaces.",
