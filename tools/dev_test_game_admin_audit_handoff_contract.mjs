@@ -14,6 +14,10 @@ export function requiredRelatedDestinationsForHandoff(handoff) {
           requiredUnproven: handoff.requiredUnprovenIds ?? [],
           requiredLocalPrerequisiteDestinations:
             handoff.requiredLocalPrerequisiteDestinations ?? [],
+          requiredHostedHandoffInputs:
+            handoff.requiredHostedHandoffInputIds ?? [],
+          requiredHostedHandoffBlockedChecks:
+            handoff.requiredHostedHandoffBlockedCheckIds ?? [],
           requiredRelatedLinks: handoff.requiredRelatedLinkIds ?? [],
         },
       ];
@@ -131,6 +135,20 @@ export function assertAdminAuditRelatedHandoff({
     if (!destination.visibleRelatedLinks?.includes(relatedLinkId)) {
       throw new Error(
         `${name} handoff destination missing related link: ${relatedLinkId}`,
+      );
+    }
+  }
+  for (const inputId of handoff.requiredHostedHandoffInputIds ?? []) {
+    if (!destination.visibleHostedHandoffInputs?.includes(inputId)) {
+      throw new Error(
+        `${name} handoff destination missing hosted handoff input: ${inputId}`,
+      );
+    }
+  }
+  for (const checkId of handoff.requiredHostedHandoffBlockedCheckIds ?? []) {
+    if (!destination.visibleHostedHandoffBlockedChecks?.includes(checkId)) {
+      throw new Error(
+        `${name} handoff destination missing hosted handoff blocked check: ${checkId}`,
       );
     }
   }

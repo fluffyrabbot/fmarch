@@ -4,11 +4,13 @@ import {
   adminProofGraphRoleHandoffs,
   assertAdminProofGraphRoleHandoffCoverage,
 } from "./dev_test_game_proof_graph_handoffs.mjs";
+import { realHostedEvidenceInputIds } from "./dev_test_game_real_hosted_evidence_inputs.mjs";
 
 test("admin proof graph role handoffs cover every admin-proof role URL", () => {
   const handoffs = adminProofGraphRoleHandoffs({
     proofGraph: proofGraphFixture(),
     hostedMatrix: hostedMatrixFixture(),
+    hostedEvidenceLane: hostedEvidenceLaneFixture(),
   });
 
   assert.deepEqual(
@@ -126,6 +128,18 @@ test("admin proof graph role handoffs cover every admin-proof role URL", () => {
       "local-next-action",
     ],
   );
+  assert.deepEqual(
+    handoffs.find(
+      (handoff) => handoff.linkId === "admin-proof:hosted-evidence-lane",
+    )?.requiredHostedHandoffInputIds,
+    realHostedEvidenceInputIds,
+  );
+  assert.deepEqual(
+    handoffs.find(
+      (handoff) => handoff.linkId === "admin-proof:hosted-evidence-lane",
+    )?.requiredHostedHandoffBlockedCheckIds,
+    hostedEvidenceBlockedCheckIdsFixture(),
+  );
 });
 
 test("admin proof graph role handoff coverage fails closed for unmapped nodes", () => {
@@ -201,4 +215,29 @@ function hostedMatrixFixture() {
       realHostedDeploymentStatus: "unproven",
     },
   };
+}
+
+function hostedEvidenceLaneFixture() {
+  return {
+    blockedCheckIds: hostedEvidenceBlockedCheckIdsFixture(),
+    hostedEvidence: {
+      realHostedEvidenceInputs: {
+        command: "npm run test:dev-test-game-hosted-evidence-lane",
+        proofTarget: "target/dev-test-game/hosted-matrix-external.json",
+        env: realHostedEvidenceInputIds
+          .filter((id) => id.startsWith("FMARCH_HOSTED_MATRIX_"))
+          .map((name) => ({ name })),
+      },
+    },
+  };
+}
+
+function hostedEvidenceBlockedCheckIdsFixture() {
+  return [
+    "hosted-frontend-url-configured",
+    "hosted-api-url-configured",
+    "hosted-targets-external",
+    "raw-evidence-path-configured",
+    "raw-evidence-readable",
+  ];
 }

@@ -93,6 +93,7 @@ import {
   devTestGameHostedEvidenceLanePath,
   runDevTestGameHostedEvidenceLane,
 } from "./dev_test_game_hosted_evidence_lane.mjs";
+import { realHostedEvidenceInputIds } from "./dev_test_game_real_hosted_evidence_inputs.mjs";
 import {
   assertDevTestGameHostedEvidenceLaneDemoProof,
   devTestGameHostedEvidenceLaneDemoBlockedPath,
@@ -13210,6 +13211,13 @@ function proofGraphAdminProofFixture() {
     requiredSessionIds: [],
     requiredUnprovenIds: [],
     requiredRelatedLinkIds: [],
+    ...(linkId === "admin-proof:hosted-evidence-lane"
+      ? {
+          requiredHostedHandoffInputIds: hostedHandoffInputIdsFixture(),
+          requiredHostedHandoffBlockedCheckIds:
+            hostedHandoffBlockedCheckIdsFixture(),
+        }
+      : {}),
   }));
   return {
     version: 1,
@@ -13259,12 +13267,33 @@ function proofGraphAdminProofFixture() {
         linkId: handoff.linkId,
         auditId: handoff.auditId,
         detailRoleUrl: `/admin/audit/${handoff.auditId}?game=<seeded-game>`,
+        ...(handoff.linkId === "admin-proof:hosted-evidence-lane"
+          ? {
+              visibleHostedHandoffInputs: hostedHandoffInputIdsFixture(),
+              visibleHostedHandoffBlockedChecks:
+                hostedHandoffBlockedCheckIdsFixture(),
+            }
+          : {}),
       })),
       rawInviteTokensVisible: false,
       releaseReady: false,
       productionReady: false,
     },
   };
+}
+
+function hostedHandoffInputIdsFixture() {
+  return [...realHostedEvidenceInputIds];
+}
+
+function hostedHandoffBlockedCheckIdsFixture() {
+  return [
+    "hosted-frontend-url-configured",
+    "hosted-api-url-configured",
+    "hosted-targets-external",
+    "raw-evidence-path-configured",
+    "raw-evidence-readable",
+  ];
 }
 
 function proofFreshnessAdminProofFixture() {

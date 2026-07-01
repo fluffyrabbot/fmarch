@@ -25,6 +25,8 @@ test("related handoff requirements map to admin audit destination proof inputs",
           auditId: "local-proof-freshness",
         },
       ],
+      requiredHostedHandoffInputs: hostedHandoffInputIdsFixture(),
+      requiredHostedHandoffBlockedChecks: hostedHandoffBlockedCheckIdsFixture(),
       requiredRelatedLinks: ["local-next-action"],
     },
   ]);
@@ -46,6 +48,8 @@ test("related handoff requirements map to admin audit destination proof inputs",
           auditId: "local-proof-freshness",
         },
       ],
+      requiredHostedHandoffInputs: hostedHandoffInputIdsFixture(),
+      requiredHostedHandoffBlockedChecks: hostedHandoffBlockedCheckIdsFixture(),
       requiredRelatedLinks: ["local-next-action"],
     },
   ]);
@@ -128,6 +132,43 @@ test("related handoff assertion fails closed for missing hardening lane rows", (
   );
 });
 
+test("related handoff assertion fails closed for missing hosted handoff rows", () => {
+  assert.throws(
+    () =>
+      assertAdminAuditRelatedHandoff({
+        adminRoleSurface: {
+          ...adminRoleSurfaceFixture(),
+          visibleRelatedDestinations: [
+            {
+              ...adminRoleSurfaceFixture().visibleRelatedDestinations[0],
+              visibleHostedHandoffInputs: ["command", "proof-target"],
+            },
+          ],
+        },
+        handoff: handoffFixture(),
+        proofName: "proof graph admin proof",
+      }),
+    /proof graph admin proof handoff destination missing hosted handoff input: FMARCH_HOSTED_MATRIX_FRONTEND_URL/,
+  );
+  assert.throws(
+    () =>
+      assertAdminAuditRelatedHandoff({
+        adminRoleSurface: {
+          ...adminRoleSurfaceFixture(),
+          visibleRelatedDestinations: [
+            {
+              ...adminRoleSurfaceFixture().visibleRelatedDestinations[0],
+              visibleHostedHandoffBlockedChecks: [],
+            },
+          ],
+        },
+        handoff: handoffFixture(),
+        proofName: "proof graph admin proof",
+      }),
+    /proof graph admin proof handoff destination missing hosted handoff blocked check: hosted-frontend-url-configured/,
+  );
+});
+
 function handoffFixture() {
   return {
     linkId: "admin-proof:hosted-concurrent-race-matrix",
@@ -145,6 +186,8 @@ function handoffFixture() {
         auditId: "local-proof-freshness",
       },
     ],
+    requiredHostedHandoffInputIds: hostedHandoffInputIdsFixture(),
+    requiredHostedHandoffBlockedCheckIds: hostedHandoffBlockedCheckIdsFixture(),
     requiredRelatedLinkIds: ["local-next-action"],
   };
 }
@@ -177,8 +220,32 @@ function adminRoleSurfaceFixture() {
             clickedThrough: true,
           },
         ],
+        visibleHostedHandoffInputs: hostedHandoffInputIdsFixture(),
+        visibleHostedHandoffBlockedChecks: hostedHandoffBlockedCheckIdsFixture(),
         visibleRelatedLinks: ["local-next-action"],
       },
     ],
   };
+}
+
+function hostedHandoffInputIdsFixture() {
+  return [
+    "command",
+    "proof-target",
+    "FMARCH_HOSTED_MATRIX_FRONTEND_URL",
+    "FMARCH_HOSTED_MATRIX_API_URL",
+    "FMARCH_HOSTED_MATRIX_GROUP_ID",
+    "FMARCH_HOSTED_MATRIX_RAW_EVIDENCE_PATH",
+    "FMARCH_HOSTED_MATRIX_EVIDENCE_PATH",
+  ];
+}
+
+function hostedHandoffBlockedCheckIdsFixture() {
+  return [
+    "hosted-frontend-url-configured",
+    "hosted-api-url-configured",
+    "hosted-targets-external",
+    "raw-evidence-path-configured",
+    "raw-evidence-readable",
+  ];
 }

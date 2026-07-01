@@ -153,7 +153,11 @@ const adminProofDestinationRequirements = [
   },
 ];
 
-export function adminProofGraphRoleHandoffs({ proofGraph, hostedMatrix }) {
+export function adminProofGraphRoleHandoffs({
+  proofGraph,
+  hostedMatrix,
+  hostedEvidenceLane,
+}) {
   const roleNodes = adminProofRoleNodes(proofGraph);
   const roleNodeById = new Map(roleNodes.map((node) => [node.id, node]));
   const handoffs = adminProofDestinationRequirements.flatMap((requirement) => {
@@ -169,19 +173,16 @@ export function adminProofGraphRoleHandoffs({ proofGraph, hostedMatrix }) {
       });
       return handoff === null ? [] : [handoff];
     }
+    if (requirement.linkId === "admin-proof:hosted-evidence-lane") {
+      return [
+        {
+          ...baseHandoffForRequirement(requirement),
+          ...hostedEvidenceLaneHandoffRequirements(hostedEvidenceLane),
+        },
+      ];
+    }
     return [
-      {
-        linkId: requirement.linkId,
-        auditId: requirement.auditId,
-        requiredCheckIds: requirement.requiredCheckIds ?? [],
-        requiredCheckStatuses: requirement.requiredCheckStatuses ?? {},
-        requiredScenarioIds: requirement.requiredScenarioIds ?? [],
-        requiredSessionIds: requirement.requiredSessionIds ?? [],
-        requiredUnprovenIds: requirement.requiredUnprovenIds ?? [],
-        requiredLocalPrerequisiteDestinations:
-          requirement.requiredLocalPrerequisiteDestinations ?? [],
-        requiredRelatedLinkIds: requirement.requiredRelatedLinkIds ?? [],
-      },
+      baseHandoffForRequirement(requirement),
     ];
   });
   assertAdminProofGraphRoleHandoffCoverage({
@@ -189,6 +190,45 @@ export function adminProofGraphRoleHandoffs({ proofGraph, hostedMatrix }) {
     handoffs,
   });
   return handoffs;
+}
+
+function baseHandoffForRequirement(requirement) {
+  return {
+    linkId: requirement.linkId,
+    auditId: requirement.auditId,
+    requiredCheckIds: requirement.requiredCheckIds ?? [],
+    requiredCheckStatuses: requirement.requiredCheckStatuses ?? {},
+    requiredScenarioIds: requirement.requiredScenarioIds ?? [],
+    requiredSessionIds: requirement.requiredSessionIds ?? [],
+    requiredUnprovenIds: requirement.requiredUnprovenIds ?? [],
+    requiredLocalPrerequisiteDestinations:
+      requirement.requiredLocalPrerequisiteDestinations ?? [],
+    requiredRelatedLinkIds: requirement.requiredRelatedLinkIds ?? [],
+  };
+}
+
+function hostedEvidenceLaneHandoffRequirements(hostedEvidenceLane) {
+  return {
+    requiredHostedHandoffInputIds: hostedEvidenceInputIds(
+      hostedEvidenceLane?.hostedEvidence?.realHostedEvidenceInputs,
+    ),
+    requiredHostedHandoffBlockedCheckIds: Array.isArray(
+      hostedEvidenceLane?.blockedCheckIds,
+    )
+      ? hostedEvidenceLane.blockedCheckIds.map((id) => String(id))
+      : [],
+  };
+}
+
+function hostedEvidenceInputIds(realHostedEvidenceInputs) {
+  const env = Array.isArray(realHostedEvidenceInputs?.env)
+    ? realHostedEvidenceInputs.env
+    : [];
+  return [
+    "command",
+    "proof-target",
+    ...env.map((item) => String(item?.name ?? "")).filter((id) => id !== ""),
+  ];
 }
 
 export function assertAdminProofGraphRoleHandoffCoverage({ proofGraph, handoffs }) {

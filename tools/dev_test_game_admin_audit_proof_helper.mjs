@@ -340,6 +340,16 @@ export async function proveAdminAuditDetail({
         prefix: "admin-audit-related-link",
         ids: destination.requiredRelatedLinks ?? [],
       });
+      const destinationVisibleHostedHandoffInputs = await waitForRows({
+        page,
+        prefix: "admin-audit-hosted-handoff-input",
+        ids: destination.requiredHostedHandoffInputs ?? [],
+      });
+      const destinationVisibleHostedHandoffBlockedChecks = await waitForRows({
+        page,
+        prefix: "admin-audit-hosted-handoff-blocked-check",
+        ids: destination.requiredHostedHandoffBlockedChecks ?? [],
+      });
       await assertAdminAuditBodyText({
         page,
         auditId: destinationAuditId,
@@ -385,6 +395,15 @@ export async function proveAdminAuditDetail({
         ...(destinationVisibleRelatedLinks.length === 0
           ? {}
           : { visibleRelatedLinks: destinationVisibleRelatedLinks }),
+        ...(destinationVisibleHostedHandoffInputs.length === 0
+          ? {}
+          : { visibleHostedHandoffInputs: destinationVisibleHostedHandoffInputs }),
+        ...(destinationVisibleHostedHandoffBlockedChecks.length === 0
+          ? {}
+          : {
+              visibleHostedHandoffBlockedChecks:
+                destinationVisibleHostedHandoffBlockedChecks,
+            }),
       });
     }
     return {

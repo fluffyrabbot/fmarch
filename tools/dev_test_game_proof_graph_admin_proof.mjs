@@ -10,6 +10,9 @@ import {
   devTestGameHostedEvidenceLaneDemoBlockedPath,
 } from "./dev_test_game_hosted_evidence_lane_demo_proof.mjs";
 import {
+  assertDevTestGameHostedEvidenceLane,
+} from "./dev_test_game_hosted_evidence_lane.mjs";
+import {
   artifactDir,
   proveAdminAuditDetail,
   readJson,
@@ -79,6 +82,9 @@ await runAdminAuditProof({
       hostedMatrix: assertDevTestGameHostedConcurrentRaceMatrixEvidence(
         await readJson(hostedMatrixPath),
       ),
+      hostedEvidenceLane: assertDevTestGameHostedEvidenceLane(
+        await readJson(hostedEvidenceLanePath),
+      ),
     };
   },
   prove: async ({ browser, frontendBaseUrl, source }) =>
@@ -95,6 +101,7 @@ await runAdminAuditProof({
         adminProofGraphRoleHandoffs({
           proofGraph: source.proofGraph,
           hostedMatrix: source.hostedMatrix,
+          hostedEvidenceLane: source.hostedEvidenceLane,
         }),
       ),
     }),
@@ -112,6 +119,7 @@ await runAdminAuditProof({
       proofRun: proofRunRelativePath,
       adminSpineProof: adminSpineProofRelativePath,
       hostedConcurrentRaceMatrix: hostedMatrixRelativePath,
+      hostedEvidenceLane: hostedEvidenceLaneRelativePath,
       game: source.proofRun.session.game,
       nodeIds: source.proofGraph.nodes.map((node) => node.id),
       edgeCount: source.proofGraph.edges.length,
@@ -119,6 +127,7 @@ await runAdminAuditProof({
       adminProofRoleHandoffs: adminProofGraphRoleHandoffs({
         proofGraph: source.proofGraph,
         hostedMatrix: source.hostedMatrix,
+        hostedEvidenceLane: source.hostedEvidenceLane,
       }),
     },
     adminRoleSurface,
