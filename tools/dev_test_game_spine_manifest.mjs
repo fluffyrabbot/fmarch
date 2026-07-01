@@ -25,6 +25,10 @@ import {
   devTestGameHostedConcurrentRaceMatrixPath,
 } from "./dev_test_game_hosted_concurrent_race_matrix.mjs";
 import {
+  devTestGameHostedIdentityEvidenceCommand,
+  devTestGameHostedIdentityEvidencePath,
+} from "./dev_test_game_hosted_identity_evidence.mjs";
+import {
   devTestGameHostedEvidenceLaneCommand,
   devTestGameHostedEvidenceLanePath,
 } from "./dev_test_game_hosted_evidence_lane.mjs";
@@ -159,6 +163,15 @@ export function buildDevTestGameSpineManifest({
           "target/dev-test-game/release-readiness-checklist.json",
           devTestGameRaceCoveragePath,
         ],
+      },
+      hostedIdentityEvidence: {
+        script: devTestGameHostedIdentityEvidenceCommand,
+        proofArtifact: devTestGameHostedIdentityEvidencePath,
+        dependsOn: [
+          "target/auth-invite-role-proof/invite-role-proof.json",
+          "target/dev-test-game/identity-admin-proof.json",
+        ],
+        roleUrl: "/admin/audit/local-identity-adapter?game=<seeded-game>",
       },
       hostedOpsSignals: {
         script: devTestGameHostedOpsSignalsCommand,
@@ -298,6 +311,7 @@ export function buildDevTestGameSpineManifest({
       nextActionPath,
       nextActionAdminProofPath,
       devTestGameHostedConcurrentRaceMatrixPath,
+      devTestGameHostedIdentityEvidencePath,
       devTestGameHostedTargetPreflightPath,
       devTestGameHostedEvidenceLanePath,
       devTestGameHostedEvidenceLaneDemoProofPath,
@@ -363,6 +377,14 @@ export function buildDevTestGameSpineManifest({
         evidence: [
           devTestGameHostedConcurrentRaceMatrixCommand,
           devTestGameHostedConcurrentRaceMatrixPath,
+        ],
+      },
+      {
+        id: "hosted-identity-evidence-recorded",
+        status: "passed",
+        evidence: [
+          devTestGameHostedIdentityEvidenceCommand,
+          devTestGameHostedIdentityEvidencePath,
         ],
       },
       {
@@ -463,6 +485,7 @@ export function assertDevTestGameSpineManifest(manifest) {
   assertPlanScripts(manifest.commands?.identity?.plan ?? [], [
     "tools/auth_invite_role_proof.mjs",
     "tools/dev_test_game_identity_admin_proof.mjs",
+    "tools/dev_test_game_hosted_identity_evidence.mjs",
     "tools/dev_test_game_release_readiness.mjs",
   ]);
   assertPlanScripts(manifest.commands?.adminSpine?.plan ?? [], [
@@ -515,6 +538,22 @@ export function assertDevTestGameSpineManifest(manifest) {
   ) {
     throw new Error(
       `spine manifest hosted concurrent race matrix artifact drifted: ${manifest.commands.hostedConcurrentRaceMatrix.proofArtifact}`,
+    );
+  }
+  if (
+    manifest.commands?.hostedIdentityEvidence?.script !==
+    devTestGameHostedIdentityEvidenceCommand
+  ) {
+    throw new Error(
+      `spine manifest hosted identity evidence command drifted: ${manifest.commands?.hostedIdentityEvidence?.script}`,
+    );
+  }
+  if (
+    manifest.commands.hostedIdentityEvidence.proofArtifact !==
+    devTestGameHostedIdentityEvidencePath
+  ) {
+    throw new Error(
+      `spine manifest hosted identity evidence artifact drifted: ${manifest.commands.hostedIdentityEvidence.proofArtifact}`,
     );
   }
   if (manifest.commands?.hostedOpsSignals?.script !== devTestGameHostedOpsSignalsCommand) {
@@ -644,6 +683,7 @@ export function assertDevTestGameSpineManifest(manifest) {
     nextActionPath,
     nextActionAdminProofPath,
     devTestGameHostedConcurrentRaceMatrixPath,
+    devTestGameHostedIdentityEvidencePath,
     devTestGameHostedTargetPreflightPath,
     devTestGameHostedEvidenceLanePath,
     devTestGameHostedEvidenceLaneDemoProofPath,
@@ -681,6 +721,7 @@ export function assertDevTestGameSpineManifest(manifest) {
     "artifact-refresh-status-recorded",
     "race-coverage-recorded",
     "hosted-concurrent-race-matrix-recorded",
+    "hosted-identity-evidence-recorded",
     "hosted-target-preflight-recorded",
     "hosted-evidence-lane-recorded",
     "hosted-evidence-lane-demo-proof-recorded",
@@ -915,6 +956,8 @@ const artifactRefreshCommands = Object.freeze({
     "npm run test:dev-test-game-hosted-concurrent-race-matrix",
   "hosted-concurrent-race-matrix-admin":
     "npm run test:dev-test-game-hosted-concurrent-race-matrix-admin-proof",
+  "hosted-identity-evidence":
+    "npm run test:dev-test-game-hosted-identity-evidence",
   "hosted-target-preflight": "npm run test:dev-test-game-hosted-target-preflight",
   "hosted-evidence-lane": "npm run test:dev-test-game-hosted-evidence-lane",
   "hosted-evidence-lane-demo":

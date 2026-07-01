@@ -23,6 +23,7 @@
     "test:dev-test-game-release-runbook-admin-proof": "node tools/dev_test_game_release_runbook_admin_proof.mjs",
     "test:dev-test-game-backup-admin-proof": "node tools/dev_test_game_backup_admin_proof.mjs",
     "test:dev-test-game-identity-admin-proof": "node tools/dev_test_game_identity_admin_proof.mjs",
+    "test:dev-test-game-hosted-identity-evidence": "node tools/dev_test_game_hosted_identity_evidence.mjs",
     "test:dev-test-game-admin-spine-proof": "node tools/dev_test_game_admin_spine_proof.mjs",
     "test:dev-test-game-admin-spine-admin-proof": "node tools/dev_test_game_admin_spine_admin_proof.mjs",
     "test:dev-test-game-spine-manifest": "node tools/dev_test_game_spine_manifest.mjs",

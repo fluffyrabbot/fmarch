@@ -25,6 +25,8 @@ const DEFAULT_HOSTED_CONCURRENT_RACE_MATRIX =
   "target/dev-test-game/hosted-concurrent-race-matrix.json";
 const DEFAULT_HOSTED_CONCURRENT_RACE_MATRIX_ADMIN_PROOF =
   "target/dev-test-game/hosted-concurrent-race-matrix-admin-proof.json";
+const DEFAULT_HOSTED_IDENTITY_EVIDENCE =
+  "target/dev-test-game/hosted-identity-evidence.json";
 const DEFAULT_HOSTED_OPS_SIGNALS =
   "target/dev-test-game/hosted-ops-signals.json";
 const DEFAULT_HOSTED_TARGET_PREFLIGHT =
@@ -186,6 +188,12 @@ const LOCAL_PROOF_FRESHNESS_ARTIFACTS = Object.freeze([
     label: "Hosted concurrent race matrix admin proof",
     env: "FMARCH_DEV_TEST_GAME_HOSTED_CONCURRENT_RACE_MATRIX_ADMIN_PROOF",
     fallback: DEFAULT_HOSTED_CONCURRENT_RACE_MATRIX_ADMIN_PROOF,
+  }),
+  Object.freeze({
+    id: "hosted-identity-evidence",
+    label: "Hosted identity evidence",
+    env: "FMARCH_DEV_TEST_GAME_HOSTED_IDENTITY_EVIDENCE",
+    fallback: DEFAULT_HOSTED_IDENTITY_EVIDENCE,
   }),
   Object.freeze({
     id: "hosted-ops-signals",

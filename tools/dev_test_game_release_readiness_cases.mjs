@@ -1,6 +1,12 @@
 import {
   buildRealHostedEvidenceInputs,
 } from "./dev_test_game_real_hosted_evidence_inputs.mjs";
+import {
+  devTestGameHostedIdentityEvidenceCommand,
+  devTestGameHostedIdentityEvidencePath,
+  hostedIdentityEvidenceBlockedChecks,
+  hostedIdentityEvidenceInputIds,
+} from "./dev_test_game_hosted_identity_evidence.mjs";
 
 export const devTestGameReleaseRunbookPath =
   "target/dev-test-game/release-runbook.json";
@@ -299,71 +305,30 @@ function hostedDeploymentBuildable({ hostedTargetPreflight }) {
   return blockedBuildable;
 }
 
-const hostedIdentityHandoffInputIds = Object.freeze([
-  "hosted-account-lifecycle",
-  "invite-delivery",
-  "account-recovery",
-  "rate-limit-policy",
-  "abuse-control-policy",
-  "session-secret-policy",
-  "hosted-audit-retention-export",
-]);
-
-const hostedIdentityHandoffBlockedChecks = Object.freeze([
-  Object.freeze({
-    id: "hosted-account-lifecycle-configured",
-    status: "blocked",
-    requiredEvidence:
-      "Configure hosted account create/login/disable/enable lifecycle evidence over the existing role-surface adapter.",
-  }),
-  Object.freeze({
-    id: "invite-delivery-configured",
-    status: "blocked",
-    requiredEvidence:
-      "Configure hosted invite delivery and revocation evidence without exposing raw invite tokens in role URLs or admin surfaces.",
-  }),
-  Object.freeze({
-    id: "account-recovery-configured",
-    status: "blocked",
-    requiredEvidence:
-      "Configure hosted account recovery evidence and prove recovered sessions keep the same role-surface architecture.",
-  }),
-  Object.freeze({
-    id: "abuse-and-rate-limit-policy-configured",
-    status: "blocked",
-    requiredEvidence:
-      "Configure hosted rate-limit and abuse-control evidence for login, invite, and session lifecycle operations.",
-  }),
-  Object.freeze({
-    id: "hosted-audit-retention-export-configured",
-    status: "blocked",
-    requiredEvidence:
-      "Configure hosted audit retention/export evidence for account, invite, and session lifecycle events.",
-  }),
-]);
-
 function hostedProductionIdentityBuildable() {
+  const command = `npm run ${devTestGameHostedIdentityEvidenceCommand}`;
   return {
     priority: -10,
-    command: "npm run test:dev-test-game-identity-admin-proof",
+    command,
     buildSlice:
-      "Use the seeded identity admin role URL as the local prerequisite, then attach hosted account lifecycle, invite delivery, recovery, abuse/rate-limit, session-secret, and audit retention evidence without changing role surfaces.",
-    proofTarget: "target/dev-test-game/identity-admin-proof.json",
+      "Run the hosted identity evidence intake; it records a blocked handoff until hosted account lifecycle, invite delivery, recovery, abuse/rate-limit, session-secret, and audit retention evidence are attached without changing role surfaces.",
+    proofTarget: devTestGameHostedIdentityEvidencePath,
     roleUrl: "/admin/audit/local-identity-adapter?game=<seeded-game>",
     proofGraphNodeId: "admin-proof:identity",
     productionFeatureSpineTarget:
       releaseReadinessProductionFeatureSpineTargets.identityAdapter,
     proofBoundary:
-      "Hosted identity lifecycle handoff. The local identity adapter admin proof is the prerequisite role-surface proof; it does not prove hosted account lifecycle, invite delivery, account recovery, abuse controls, session-secret policy, hosted audit retention/export, beta readiness, release readiness, or production readiness.",
+      "Hosted identity evidence handoff. The local identity adapter admin proof remains the prerequisite role-surface proof, while this command records the hosted account lifecycle, invite delivery, account recovery, abuse controls, session-secret policy, and hosted audit retention/export inputs needed next; it does not prove beta readiness, release readiness, or production readiness.",
     hostedHandoffChecklist: {
       status: "blocked",
       preflightStatus: "blocked",
-      command: "npm run test:dev-test-game-identity-admin-proof",
-      proofTarget: "target/dev-test-game/identity-admin-proof.json",
-      inputIds: [...hostedIdentityHandoffInputIds],
-      blockedCheckIds: hostedIdentityHandoffBlockedChecks.map((check) => check.id),
-      blockedChecks: hostedIdentityHandoffBlockedChecks.map((check) => ({
+      command,
+      proofTarget: devTestGameHostedIdentityEvidencePath,
+      inputIds: [...hostedIdentityEvidenceInputIds],
+      blockedCheckIds: hostedIdentityEvidenceBlockedChecks.map((check) => check.id),
+      blockedChecks: hostedIdentityEvidenceBlockedChecks.map((check) => ({
         ...check,
+        status: "blocked",
       })),
     },
   };

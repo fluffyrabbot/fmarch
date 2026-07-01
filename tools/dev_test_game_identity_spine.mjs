@@ -1,4 +1,7 @@
 import { pathToFileURL } from "node:url";
+import {
+  devTestGameHostedIdentityEvidencePath,
+} from "./dev_test_game_hosted_identity_evidence.mjs";
 import { runNodeScript } from "./dev_test_game_spine_runner.mjs";
 
 export const identityReadinessEnv = {
@@ -9,11 +12,14 @@ export const identityReadinessEnv = {
     "target/auth-invite-role-proof/invite-role-proof.json",
   FMARCH_DEV_TEST_GAME_IDENTITY_ADMIN_PROOF:
     "target/dev-test-game/identity-admin-proof.json",
+  FMARCH_DEV_TEST_GAME_HOSTED_IDENTITY_EVIDENCE:
+    devTestGameHostedIdentityEvidencePath,
 };
 
 export const devTestGameIdentitySpinePlan = [
   { script: "tools/auth_invite_role_proof.mjs" },
   { script: "tools/dev_test_game_identity_admin_proof.mjs" },
+  { script: "tools/dev_test_game_hosted_identity_evidence.mjs" },
   { script: "tools/dev_test_game_release_readiness.mjs", env: identityReadinessEnv },
 ];
 
