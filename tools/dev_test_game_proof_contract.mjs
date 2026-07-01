@@ -3,7 +3,7 @@ import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import {
   completedGameHardeningLaneIds,
-} from "./dev_test_game_core_loop_completed_recovery_cases.mjs";
+} from "./dev_test_game_core_loop_completed_scenarios.mjs";
 import {
   cohostDeadlineRecoveryLaneIds,
   cohostDeadlineStaleControlCases,

@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import { test } from "node:test";
 import {
   assertCompletedActionPlayerSurfaceProofCase,
@@ -11,28 +12,26 @@ import {
   assertCompletedGameEndgameTransition,
   completedActionPlayerSurfaceAssertionCase,
   completedActionPlayerSurfaceProofArgs,
+  completedDeadPlayerStaleVoteCase,
   completedDeadPlayerStaleVoteAssertionCase,
+  completedDeadPlayerStaleVoteCaseDefinition,
   completedDeadPlayerStaleVoteProofArgs,
   completedGameEndgameStaleRejectAssertionCases,
   completedGameEndgameSurfaceAssertionCases,
   completedGameEndgameTransition,
-  completedHostStaleCommandAssertionCases,
-  completedHostStaleCommandProofArgs,
-  completedPlayerReloadAssertionCases,
-  completedPlayerReloadProofCases,
-  staleCompletedGamePlayerCommandAssertionCases,
-  staleCompletedGamePlayerCommandProofArgs,
-} from "./dev_test_game_core_loop_completed_game_cases.mjs";
-import {
-  completedDeadPlayerStaleVoteCase,
-  completedDeadPlayerStaleVoteCaseDefinition,
   completedHostStaleCommandCaseDefinitions,
   completedHostStaleCommandCases,
+  completedHostStaleCommandAssertionCases,
+  completedHostStaleCommandProofArgs,
   completedPlayerReloadCaseDefinitions,
   completedPlayerReloadCases,
+  completedPlayerReloadAssertionCases,
+  completedPlayerReloadProofCases,
   staleCompletedGamePlayerCommandCaseDefinitions,
   staleCompletedGamePlayerCommandCases,
-} from "./dev_test_game_core_loop_completed_recovery_cases.mjs";
+  staleCompletedGamePlayerCommandAssertionCases,
+  staleCompletedGamePlayerCommandProofArgs,
+} from "./dev_test_game_core_loop_completed_scenarios.mjs";
 
 test("completed-game scenario module exposes shared frozen definitions", () => {
   assert(Object.isFrozen(completedHostStaleCommandCaseDefinitions));
@@ -71,6 +70,32 @@ test("completed-game scenario module exposes shared frozen definitions", () => {
     completedDeadPlayerStaleVoteCase(),
     completedDeadPlayerStaleVoteCaseDefinition,
   );
+});
+
+test("completed-game production harness callers use the shared scenario facade", async () => {
+  const callerPaths = [
+    "tools/dev_test_game_core_loop_admin_proof.mjs",
+    "tools/dev_test_game_release_readiness.mjs",
+    "tools/dev_test_game_proof_contract.mjs",
+    "tools/dev_test_game_hardening_admin_proof.mjs",
+    "tools/dev_test_game_hardening_lane_cases.mjs",
+  ];
+
+  for (const callerPath of callerPaths) {
+    const source = await readFile(callerPath, "utf8");
+    assert(
+      source.includes("./dev_test_game_core_loop_completed_scenarios.mjs"),
+      `${callerPath} should import completed-game definitions through the scenario facade`,
+    );
+    assert(
+      !source.includes("./dev_test_game_core_loop_completed_recovery_cases.mjs"),
+      `${callerPath} should not import completed-game recovery definitions directly`,
+    );
+    assert(
+      !source.includes("./dev_test_game_core_loop_completed_game_cases.mjs"),
+      `${callerPath} should not import completed-game assertion helpers directly`,
+    );
+  }
 });
 
 test("completed-game scenario module builds player reload proof cases", () => {

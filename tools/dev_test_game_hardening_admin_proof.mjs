@@ -2,7 +2,7 @@ import path from "node:path";
 import { hardeningHighlightedLaneEvidence } from "../frontend/src/lib/app/local-proof-lane-status.mjs";
 import {
   completedGameHardeningLaneIds,
-} from "./dev_test_game_core_loop_completed_recovery_cases.mjs";
+} from "./dev_test_game_core_loop_completed_scenarios.mjs";
 import { assertDevTestGameProofRun } from "./dev_test_game_proof_contract.mjs";
 import {
   cohostDeadlineRecoveryLaneIds,

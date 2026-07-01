@@ -5,16 +5,12 @@ import {
 } from "../frontend/src/lib/app/local-proof-lane-status.mjs";
 import {
   assertCompletedGameEndgameSurfaceProof,
-} from "./dev_test_game_core_loop_completed_scenarios.mjs";
-import {
   completedDeadPlayerStaleVoteCase,
+  completedGameEndgameTransition,
   completedHostStaleCommandCases,
   completedPlayerReloadProofCases,
   staleCompletedGamePlayerCommandCases,
-} from "./dev_test_game_core_loop_completed_recovery_cases.mjs";
-import {
-  completedGameEndgameTransition,
-} from "./dev_test_game_core_loop_completed_game_cases.mjs";
+} from "./dev_test_game_core_loop_completed_scenarios.mjs";
 import {
   assertPlayerActionSubmissionClickProofCase,
   assertPlayerInvalidActionRecoveryProofCase,
