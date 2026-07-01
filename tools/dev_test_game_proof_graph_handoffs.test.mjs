@@ -5,21 +5,19 @@ import {
   assertAdminProofGraphRoleHandoffCoverage,
 } from "./dev_test_game_proof_graph_handoffs.mjs";
 import {
+  adminProofDestinationRequirementForLink,
+} from "./dev_test_game_proof_graph_handoff_cases.mjs";
+import {
   hostedEvidenceHandoffInputIds,
   hostedEvidenceLaneHandoffFixture,
 } from "./dev_test_game_hosted_handoff_cases.mjs";
 import {
   hostedTargetPreflightBlockingCheckIds,
-  hostedTargetPreflightCheckIds,
 } from "./dev_test_game_hosted_target_preflight.mjs";
 import {
   hostedMatrixReconnectLaneIds,
   hostedMatrixStaleConflictLaneIds,
-  staleConflictMessageLaneIds,
 } from "./dev_test_game_hardening_lane_cases.mjs";
-import {
-  seedScenarioCoverageGroups,
-} from "./dev_test_game_seed_scenario_cases.mjs";
 
 test("admin proof graph role handoffs cover every admin-proof role URL", () => {
   const handoffs = adminProofGraphRoleHandoffs({
@@ -51,53 +49,32 @@ test("admin proof graph role handoffs cover every admin-proof role URL", () => {
   assert.deepEqual(
     handoffs.find((handoff) => handoff.linkId === "admin-proof:seed")
       ?.requiredScenarioIds,
-    seedScenarioCoverageGroups.allDemo,
+    adminProofDestinationRequirementForLink("admin-proof:seed")
+      .requiredScenarioIds,
   );
   assert.deepEqual(
     handoffs.find((handoff) => handoff.linkId === "admin-proof:identity")
       ?.requiredSessionIds,
-    ["admin", "host", "player"],
+    adminProofDestinationRequirementForLink("admin-proof:identity")
+      .requiredSessionIds,
   );
   assert.deepEqual(
     handoffs.find((handoff) => handoff.linkId === "admin-proof:hardening")
       ?.requiredCheckIds,
-    [
-      "idempotent-retry",
-      "concurrent-action-race",
-      ...staleConflictMessageLaneIds,
-    ],
+    adminProofDestinationRequirementForLink("admin-proof:hardening")
+      .requiredCheckIds,
   );
   assert.deepEqual(
     handoffs.find((handoff) => handoff.linkId === "admin-proof:release")
       ?.requiredCheckIds,
-    [
-      "local-role-url-browser-proof",
-      "local-core-loop-proof",
-      "local-hardening-proof",
-      "local-proof-graph-admin-role-handoffs",
-    ],
+    adminProofDestinationRequirementForLink("admin-proof:release")
+      .requiredCheckIds,
   );
   assert.deepEqual(
     handoffs.find((handoff) => handoff.linkId === "admin-proof:release")
       ?.requiredLocalPrerequisiteDestinations,
-    [
-      {
-        id: "local-proof-graph-admin-role-handoffs",
-        auditId: "local-proof-graph",
-      },
-      {
-        id: "local-proof-freshness-admin-surface",
-        auditId: "local-proof-freshness",
-      },
-      {
-        id: "local-next-action-admin-surface",
-        auditId: "local-next-action",
-      },
-      {
-        id: "local-hosted-evidence-lane-demo-proof",
-        auditId: "local-hosted-evidence-lane",
-      },
-    ],
+    adminProofDestinationRequirementForLink("admin-proof:release")
+      .requiredLocalPrerequisiteDestinations,
   );
   assert.deepEqual(
     handoffs.find(
@@ -125,23 +102,23 @@ test("admin proof graph role handoffs cover every admin-proof role URL", () => {
     handoffs.find(
       (handoff) => handoff.linkId === "admin-proof:hosted-evidence-lane",
     )?.requiredCheckIds,
-    ["hosted-target-preflight", ...hostedTargetPreflightBlockingCheckIds],
+    adminProofDestinationRequirementForLink("admin-proof:hosted-evidence-lane")
+      .requiredCheckIds,
   );
   assert.deepEqual(
     handoffs.find(
       (handoff) => handoff.linkId === "admin-proof:hosted-target-preflight",
     )?.requiredCheckIds,
-    hostedTargetPreflightCheckIds,
+    adminProofDestinationRequirementForLink(
+      "admin-proof:hosted-target-preflight",
+    ).requiredCheckIds,
   );
   assert.deepEqual(
     handoffs.find(
       (handoff) => handoff.linkId === "admin-proof:hosted-evidence-lane",
     )?.requiredRelatedLinkIds,
-    [
-      "local-hosted-target-preflight",
-      "local-hosted-concurrent-race-matrix",
-      "local-next-action",
-    ],
+    adminProofDestinationRequirementForLink("admin-proof:hosted-evidence-lane")
+      .requiredRelatedLinkIds,
   );
   assert.deepEqual(
     handoffs.find(

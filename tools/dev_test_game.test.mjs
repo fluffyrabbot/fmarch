@@ -109,6 +109,9 @@ import {
   devTestGameProofGraphPath,
 } from "./dev_test_game_proof_graph.mjs";
 import {
+  adminProofDestinationRequirementLinkRows,
+} from "./dev_test_game_proof_graph_handoff_cases.mjs";
+import {
   assertDevTestGameRaceCoverage,
   buildDevTestGameRaceCoverage,
   devTestGameRaceCoverageCommand,
@@ -8492,7 +8495,10 @@ test("session card and markdown include role credential URLs and tokens", async 
       (item) => item.id === "local-proof-graph-admin-role-handoffs",
   );
   assert.equal(handoffCheck.status, "passed");
-  assert.equal(handoffCheck.roleHandoffCount, 13);
+  assert.equal(
+    handoffCheck.roleHandoffCount,
+    adminProofDestinationRequirementLinkRows.length,
+  );
   assert(handoffCheck.roleHandoffIds.includes("admin-proof:release"));
   assert(handoffCheck.destinationAuditIds.includes("local-release-readiness"));
   assert.equal(
@@ -8502,7 +8508,7 @@ test("session card and markdown include role credential URLs and tokens", async 
   assert.equal(
     proofGraphHandoffReadiness.localDevelopmentSpine.evidence.proofGraphAdminProof
       .roleHandoffCount,
-    13,
+    adminProofDestinationRequirementLinkRows.length,
   );
   const proofFreshnessAdminReadiness = buildDevTestGameReleaseReadiness(proofRun, {
     generatedAt: "2026-06-26T00:00:00.000Z",
@@ -13297,40 +13303,28 @@ function releaseRunbookAdminProofFixture() {
 }
 
 function proofGraphAdminProofFixture() {
-  const handoffs = [
-    ["admin-proof:core-loop", "local-core-loop"],
-    ["admin-proof:hardening", "local-hardening"],
-    ["admin-proof:identity", "local-identity-adapter"],
-    ["admin-proof:backup", "local-backup-restore"],
-    ["admin-proof:ops", "local-ops-artifacts"],
-    ["admin-proof:seed", "local-seed-fixtures"],
-    ["admin-proof:release", "local-release-readiness"],
-    ["admin-proof:release-runbook", "local-release-runbook"],
-    ["admin-proof:race-coverage", "local-race-coverage"],
-    [
-      "admin-proof:hosted-concurrent-race-matrix",
-      "local-hosted-concurrent-race-matrix",
-    ],
-    ["admin-proof:hosted-evidence-lane", "local-hosted-evidence-lane"],
-    ["admin-proof:hosted-ops-signals", "local-hosted-ops-signals"],
-    ["admin-proof:spine-manifest", "local-spine-manifest"],
-  ].map(([linkId, auditId]) => ({
-    linkId,
-    auditId,
-    requiredCheckIds: [],
-    requiredCheckStatuses: {},
-    requiredScenarioIds: [],
-    requiredSessionIds: [],
-    requiredUnprovenIds: [],
-    requiredRelatedLinkIds: [],
-    ...(linkId === "admin-proof:hosted-evidence-lane"
-      ? {
-          requiredHostedHandoffInputIds: hostedHandoffInputIdsFixture(),
-          requiredHostedHandoffBlockedCheckIds:
-            hostedHandoffBlockedCheckIdsFixture(),
-        }
-      : {}),
-  }));
+  const handoffs = adminProofDestinationRequirementLinkRows.map(
+    ([linkId, auditId]) => ({
+      linkId,
+      auditId,
+      requiredCheckIds: [],
+      requiredCheckStatuses: {},
+      requiredScenarioIds: [],
+      requiredSessionIds: [],
+      requiredUnprovenIds: [],
+      requiredRelatedLinkIds: [],
+      ...(linkId === "admin-proof:hosted-evidence-lane"
+        ? {
+            requiredHostedHandoffInputIds: hostedHandoffInputIdsFixture(),
+            requiredHostedHandoffBlockedCheckIds:
+              hostedHandoffBlockedCheckIdsFixture(),
+          }
+        : {}),
+    }),
+  );
+  const adminProofSurfaceIds = handoffs.map((handoff) =>
+    handoff.linkId.replace("admin-proof:", ""),
+  );
   return {
     version: 1,
     proof: "dev-test-game-proof-graph-admin-proof",
@@ -13348,22 +13342,7 @@ function proofGraphAdminProofFixture() {
       game: "00000000-0000-0000-0000-000000000001",
       nodeIds: handoffs.map((handoff) => handoff.linkId),
       edgeCount: handoffs.length,
-      adminProofSurfaceIds: [
-        "core-loop",
-        "hardening",
-        "identity",
-        "backup",
-        "ops",
-        "seed",
-        "release",
-        "release-runbook",
-        "race-coverage",
-        "hosted-target-preflight",
-        "hosted-evidence-lane",
-        "hosted-concurrent-race-matrix",
-        "hosted-ops-signals",
-        "spine-manifest",
-      ],
+      adminProofSurfaceIds,
       adminProofRoleHandoffs: handoffs,
     },
     adminRoleSurface: {
