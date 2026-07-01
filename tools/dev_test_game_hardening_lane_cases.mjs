@@ -1,3 +1,7 @@
+import {
+  completedHostStaleCommandHardeningLaneIds,
+} from "./dev_test_game_core_loop_completed_scenarios.mjs";
+
 export const staleConflictMessageLaneIds = Object.freeze([
   "replacement-stale-conflict-message",
   "stale-action-conflict-message",
@@ -10,9 +14,7 @@ export const hostStaleControlLaneIds = Object.freeze([
   "stale-host-modkill",
   "stale-host-prompt",
   "stale-host-prompt-reload",
-  "stale-host-complete",
-  "stale-host-complete-reload",
-  "stale-host-complete-reconnect-recovery",
+  ...completedHostStaleCommandHardeningLaneIds(),
   "stale-host-control",
   "stale-host-resolve",
   "stale-host-resolve-reload",
