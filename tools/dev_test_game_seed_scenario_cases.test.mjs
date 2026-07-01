@@ -1,8 +1,10 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
+  seedDemoScenarioCatalog,
   seedDemoScenarioFixtureRows,
   seedDemoScenarioIds,
+  seedDemoScenarioProofLaneCandidates,
   seedRequiredScenarioIds,
 } from "./dev_test_game_seed_scenario_cases.mjs";
 
@@ -63,4 +65,41 @@ test("seed scenario cases expose generated demo scenario fixture rows", () => {
     seedDemoScenarioFixtureRows().map((scenario) => scenario.status),
     Array.from({ length: seedDemoScenarioIds.length }, () => "available_locally"),
   );
+});
+
+test("seed scenario cases expose production fixture metadata", () => {
+  const scenarios = seedDemoScenarioCatalog({
+    provenByForId: seedDemoScenarioProofLaneCandidates,
+    roleUrlForRole: (role) => `/redacted/${role}`,
+  });
+  assert.equal(scenarios.length, seedDemoScenarioIds.length);
+  assert.deepEqual(
+    scenarios.map((scenario) => scenario.id),
+    seedDemoScenarioIds,
+  );
+  assert.deepEqual(
+    scenarios
+      .filter((scenario) =>
+        [
+          "day-vote-resolution",
+          "player-action-denied",
+          "replacement-idempotent-retry",
+          "stale-dead-action-conflict",
+        ].includes(scenario.id),
+      )
+      .map((scenario) => [scenario.id, scenario.role, scenario.roleUrlRedacted]),
+    [
+      ["day-vote-resolution", "actionPlayer", "/redacted/actionPlayer"],
+      ["player-action-denied", "player", "/redacted/player"],
+      ["replacement-idempotent-retry", "host", "/redacted/host"],
+      ["stale-dead-action-conflict", "actionPlayer", "/redacted/actionPlayer"],
+    ],
+  );
+  assert.deepEqual(seedDemoScenarioProofLaneCandidates("host-phase-controls"), [
+    "browser-entry",
+    "core-loop",
+  ]);
+  assert.deepEqual(seedDemoScenarioProofLaneCandidates("concurrent-action-race"), [
+    "concurrent-action-race",
+  ]);
 });

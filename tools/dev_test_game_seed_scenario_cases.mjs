@@ -92,16 +92,82 @@ export const seedDemoScenarioIds = Object.freeze([
   ...seedRequiredScenarioIds.slice(11),
 ]);
 
+const seedScenarioRoleOverrides = new Map([
+  ["day-vote-resolution", "actionPlayer"],
+  ["player-action-denied", "player"],
+  ["concurrent-replacement-private-post-race", "player"],
+  ["concurrent-replacement-private-post-race-reload", "player"],
+  ["concurrent-replacement-vote-race", "player"],
+  ["concurrent-replacement-vote-race-reload", "player"],
+  ["concurrent-replacement-action-race", "player"],
+  ["concurrent-replacement-action-race-reload", "player"],
+  ["replacement-incoming-action", "player"],
+  ["host-replacement-console", "host"],
+  ["replacement-host-issued-invite", "host"],
+  ["replacement-idempotent-retry", "host"],
+  ["stale-host-invite-recovery", "host"],
+  ["replacement-stale-success-recovery", "host"],
+  ["replacement-stale-player", "player"],
+  ["replacement-stale-action", "player"],
+  ["replacement-stale-private-channel", "player"],
+  ["replacement-stale-private-receipts", "player"],
+  ["stale-dead-action-conflict", "actionPlayer"],
+]);
+
+const seedScenarioProofLaneAliases = new Map([
+  ["host-phase-controls", ["browser-entry", "core-loop"]],
+  ["cohost-deadline-control", ["browser-entry", "cohost-console"]],
+  ["player-vote-recovery", ["browser-entry", "core-loop", "stale-player-vote"]],
+  ["player-action-denied", ["browser-entry", "player-action-boundary"]],
+  ["resolution-receipt", ["browser-entry", "resolution-receipts"]],
+  ["night-action-loop", ["action-loop", "stale-action-conflict"]],
+  ["local-ops-readiness", ["local-ops-artifact-bundle", "local-backup-restore-drill"]],
+]);
+
 export function seedDemoScenarioFixtureRows({
   ids = seedDemoScenarioIds,
   status = "available_locally",
 } = {}) {
-  return ids.map((id) => ({
-    id,
-    title: seedScenarioTitle(id),
-    role: seedScenarioRole(id),
-    status,
+  return seedDemoScenarioCatalog({ ids, status }).map((scenario) => ({
+    id: scenario.id,
+    title: scenario.title,
+    role: scenario.role,
+    status: scenario.status,
   }));
+}
+
+export function seedDemoScenarioCatalog({
+  ids = seedDemoScenarioIds,
+  status = "available_locally",
+  provenByForId = seedDemoScenarioProofLaneCandidates,
+  roleUrlForRole = () => null,
+} = {}) {
+  return ids.map((id) => {
+    const role = seedScenarioRole(id);
+    return {
+      id,
+      title: seedScenarioTitle(id),
+      status,
+      role,
+      roleUrlRedacted: roleUrlForRole(role),
+      provenBy: provenByForId(id),
+      note: seedScenarioNote(id, role),
+    };
+  });
+}
+
+export function seedDemoScenarioProofLaneCandidates(id) {
+  return seedScenarioProofLaneAliases.get(id) ?? [id];
+}
+
+function seedScenarioNote(id, role) {
+  return [
+    "Local seeded scenario",
+    id,
+    "is exposed through the",
+    role,
+    "role surface and checked by matching dev-test-game proof lanes.",
+  ].join(" ");
 }
 
 function seedScenarioTitle(id) {
@@ -113,17 +179,21 @@ function seedScenarioTitle(id) {
 }
 
 function seedScenarioRole(id) {
+  const overriddenRole = seedScenarioRoleOverrides.get(id);
+  if (overriddenRole !== undefined) {
+    return overriddenRole;
+  }
   if (id === "local-ops-readiness") {
     return "admin";
   }
   if (id.includes("cohost")) {
     return "cohost";
   }
-  if (id.includes("denied") || id.includes("receipt") || id.includes("dead-player")) {
-    return "deniedPlayer";
-  }
   if (id.includes("action") || id.includes("night-action")) {
     return "actionPlayer";
+  }
+  if (id.includes("denied") || id.includes("receipt") || id.includes("dead-player")) {
+    return "deniedPlayer";
   }
   if (id.includes("replacement-stale-conflict")) {
     return "host";
