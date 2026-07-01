@@ -680,7 +680,8 @@ invite delivery, account recovery, rate limits, abuse controls, production
 session-secret policy, hosted deployment, hosted demo fixtures,
 production-like backup/PITR, exhaustive race coverage, hosted
 logs/metrics/traces, upload or transcode behavior, beta readiness, or
-rollback/delete semantics for existing append-only games. The harness still
-uses an internal root dev session only to mint local invites; production
-accounts/sessions/invites remain a later identity layer over the same role
-surfaces.
+rollback/delete semantics for existing append-only games. The harness seeds a
+local root GlobalAdmin row directly into `auth_session` with `/auth/dev-session`
+disabled, then mints local browser credentials through `/auth/session-grants`
+and invite redemption; hosted production accounts/sessions/invites remain a
+later identity layer over the same role surfaces.

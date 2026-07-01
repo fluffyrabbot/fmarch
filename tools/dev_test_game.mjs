@@ -1,4 +1,5 @@
 import { spawn } from "node:child_process";
+import { createHash } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import net from "node:net";
@@ -53,6 +54,7 @@ let serverOutput = "";
 let apiServerExit;
 let apiStartupTimeoutMs = defaultApiStartupTimeoutMs;
 let proofStabilityAudit;
+let identityBootstrap;
 
 export async function main(rawArgs = process.argv.slice(2), env = process.env) {
   args = parseArgs(rawArgs);
@@ -76,6 +78,7 @@ export async function main(rawArgs = process.argv.slice(2), env = process.env) {
   commandEnvelopeId = 1;
   serverOutput = "";
   apiServerExit = undefined;
+  identityBootstrap = undefined;
 
   await mkdir(artifactDir, { recursive: true });
   if (apiBaseUrl === undefined) {
@@ -100,6 +103,7 @@ export async function main(rawArgs = process.argv.slice(2), env = process.env) {
     apiBaseUrl,
     frontendBaseUrl,
     seedCommands: seedResult.commands,
+    identityBootstrap,
     sessions,
   });
   await writeFile(sessionJsonPath, `${JSON.stringify(card, null, 2)}\n`);
@@ -156,7 +160,6 @@ async function startApi() {
       ...process.env,
       DATABASE_URL: databaseUrl,
       FMARCH_BIND: `${host}:${port}`,
-      FMARCH_DEV_AUTH: "1",
       RUST_LOG: process.env.RUST_LOG ?? "warn",
     },
     stdio: ["ignore", "pipe", "pipe"],
@@ -299,16 +302,7 @@ export function seedCommandPlanForGame(game) {
 }
 
 async function createSessions() {
-  await fetchJson(`${apiBaseUrl}/auth/dev-session`, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({
-      token: tokens.rootAdmin,
-      principal_user_id: "root_admin",
-      expires_at: expiresAt,
-      global_capabilities: ["GlobalAdmin"],
-    }),
-  });
+  identityBootstrap = await seedRootAdminSession();
 
   return {
     admin: await createInviteCredential({
@@ -348,6 +342,57 @@ async function createSessions() {
       returnTo: `/g/${game}/host`,
       expectedCapabilityKind: "CohostOf",
     }),
+  };
+}
+
+async function seedRootAdminSession() {
+  await runSql(databaseUrl, `
+    INSERT INTO auth_session (
+      token_hash,
+      principal_user_id,
+      created_at,
+      expires_at,
+      revoked_at,
+      global_capabilities
+    )
+    VALUES (
+      ${sqlLiteral(hashSessionToken(tokens.rootAdmin))},
+      'root_admin',
+      0,
+      ${Number(expiresAt)},
+      NULL,
+      ARRAY['GlobalAdmin']::TEXT[]
+    )
+    ON CONFLICT (token_hash) DO UPDATE SET
+      principal_user_id = EXCLUDED.principal_user_id,
+      expires_at = EXCLUDED.expires_at,
+      revoked_at = NULL,
+      global_capabilities = EXCLUDED.global_capabilities;
+  `);
+  const session = await fetchJson(`${apiBaseUrl}/auth/session`, {
+    headers: { authorization: `Bearer ${tokens.rootAdmin}` },
+  });
+  const capabilityKinds = (session.capabilities ?? []).map(
+    (capability) => capability.kind,
+  );
+  if (
+    session.principal_user_id !== "root_admin" ||
+    !capabilityKinds.includes("GlobalAdmin")
+  ) {
+    throw new Error(
+      `root admin seed did not resolve GlobalAdmin: ${JSON.stringify(session)}`,
+    );
+  }
+  return {
+    status: "passed",
+    devSessionEndpointEnabled: false,
+    rootSessionSource: "auth_session",
+    browserCredentialIssuer: "/auth/session-grants",
+    rootPrincipalUserId: session.principal_user_id,
+    rootCapabilityKinds: capabilityKinds,
+    rawRootTokenStored: false,
+    boundary:
+      "Root GlobalAdmin is seeded directly into the local auth_session table so the dev-test-game spine keeps /auth/dev-session disabled and mints browser credentials through /auth/session-grants plus invite redemption.",
   };
 }
 
@@ -494,6 +539,7 @@ export function buildSessionCard({
   apiBaseUrl,
   frontendBaseUrl,
   seedCommands,
+  identityBootstrap = null,
   sessions,
 }) {
   const withFrontendUrls = Object.fromEntries(
@@ -517,6 +563,7 @@ export function buildSessionCard({
     apiBaseUrl,
     frontendBaseUrl,
     seedCommandCount: seedCommands.length,
+    identityBootstrap,
     sessions: withFrontendUrls,
     artifacts: {
       json: path.relative(repoRoot, sessionJsonPath),
@@ -553,6 +600,12 @@ export function markdownSessionCard(card) {
     `- seed: ${card.seedMode}`,
     `- frontend: ${card.frontendBaseUrl}`,
     `- api: ${card.apiBaseUrl}`,
+    ...(card.identityBootstrap === null
+      ? []
+      : [
+          `- identity bootstrap: ${card.identityBootstrap.rootSessionSource} -> ${card.identityBootstrap.browserCredentialIssuer}`,
+          `- dev session endpoint enabled: ${card.identityBootstrap.devSessionEndpointEnabled}`,
+        ]),
     "",
     "Open a role login URL and submit. Invite tokens are prefilled in the URL; session tokens are repeated below for recovery/debug use.",
     "",
@@ -20467,6 +20520,39 @@ async function grantAuthSession({
   });
 }
 
+async function runSql(url, sql) {
+  return await runProcess("psql", [url, "-v", "ON_ERROR_STOP=1", "-c", sql]);
+}
+
+async function runProcess(command, args) {
+  return await new Promise((resolve, reject) => {
+    const child = spawn(command, args, {
+      cwd: repoRoot,
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    let stdout = "";
+    let stderr = "";
+    child.stdout.on("data", (chunk) => {
+      stdout += chunk.toString();
+    });
+    child.stderr.on("data", (chunk) => {
+      stderr += chunk.toString();
+    });
+    child.once("error", reject);
+    child.once("exit", (code, signal) => {
+      if (code === 0) {
+        resolve({ stdout, stderr });
+        return;
+      }
+      reject(
+        new Error(
+          `${command} exited with ${code ?? signal}\nstdout:\n${stdout}\nstderr:\n${stderr}`,
+        ),
+      );
+    });
+  });
+}
+
 async function fetchWithTimeout(url, options = {}, timeoutMs = 15000) {
   const controller = new AbortController();
   const timeout = globalThis.setTimeout(() => controller.abort(), timeoutMs);
@@ -20478,6 +20564,14 @@ async function fetchWithTimeout(url, options = {}, timeoutMs = 15000) {
   } finally {
     globalThis.clearTimeout(timeout);
   }
+}
+
+function hashSessionToken(token) {
+  return createHash("sha256").update(token).digest("hex");
+}
+
+function sqlLiteral(value) {
+  return `'${String(value).replaceAll("'", "''")}'`;
 }
 
 async function freePort() {

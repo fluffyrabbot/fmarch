@@ -1875,6 +1875,17 @@ test("session card and markdown include role credential URLs and tokens", async 
     apiBaseUrl: "http://127.0.0.1:4101",
     frontendBaseUrl: "http://127.0.0.1:4102",
     seedCommands: [{ command: { CreateGame: { game, pack: "mafiascum" } } }],
+    identityBootstrap: {
+      status: "passed",
+      devSessionEndpointEnabled: false,
+      rootSessionSource: "auth_session",
+      browserCredentialIssuer: "/auth/session-grants",
+      rootPrincipalUserId: "root_admin",
+      rootCapabilityKinds: ["GlobalAdmin"],
+      rawRootTokenStored: false,
+      boundary:
+        "Root GlobalAdmin is seeded directly into the local auth_session table.",
+    },
     sessions: {
       host: {
         principalUserId: "host_h",
@@ -1913,6 +1924,9 @@ test("session card and markdown include role credential URLs and tokens", async 
 
   assert.equal(card.name, "card");
   assert.equal(card.seedCommandCount, 1);
+  assert.equal(card.identityBootstrap.devSessionEndpointEnabled, false);
+  assert.equal(card.identityBootstrap.rootSessionSource, "auth_session");
+  assert.equal(card.identityBootstrap.browserCredentialIssuer, "/auth/session-grants");
   assert.equal(
     card.sessions.host.loginUrl,
     `http://127.0.0.1:4102/auth/login?returnTo=%2Fg%2F${game}%2Fhost&invite=dev-test-card-host`,
@@ -7110,6 +7124,8 @@ test("session card and markdown include role credential URLs and tokens", async 
     card.verification.replacementConsole.replacementSessionRefresh.browserEntry;
   const markdown = markdownSessionCard(card);
   assert(markdown.includes("# fmarch Dev Test Game"));
+  assert(markdown.includes("identity bootstrap: auth_session -> /auth/session-grants"));
+  assert(markdown.includes("dev session endpoint enabled: false"));
   assert(markdown.includes("Open a role login URL"));
   assert(markdown.includes("dev-test-card-host"));
   assert(markdown.includes("dev-test-card-cohost"));
@@ -7206,6 +7222,8 @@ test("session card and markdown include role credential URLs and tokens", async 
   });
   assertDevTestGameProofRun(proofRun);
   assert.equal(proofRun.status, "passed");
+  assert.equal(proofRun.identityBootstrap.devSessionEndpointEnabled, false);
+  assert.equal(proofRun.identityBootstrap.rootSessionSource, "auth_session");
   assert.equal(proofRun.productionReady, false);
   assert.equal(proofRun.releaseReady, false);
   assert.deepEqual(

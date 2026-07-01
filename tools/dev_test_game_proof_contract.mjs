@@ -7808,6 +7808,7 @@ export function buildDevTestGameProofRun(session, options = {}) {
       verificationStatus: verification.status ?? null,
       roles: verification.roles ?? [],
     },
+    identityBootstrap: session?.identityBootstrap ?? null,
     coreLoopSpine,
     lanes,
     nonClaims: [
@@ -7838,6 +7839,18 @@ export function assertDevTestGameProofRun(proof) {
   }
   if (proof.productionReady !== false || proof.releaseReady !== false) {
     throw new Error("dev-test-game proof must not claim production or release readiness");
+  }
+  if (
+    proof.identityBootstrap?.status !== "passed" ||
+    proof.identityBootstrap?.devSessionEndpointEnabled !== false ||
+    proof.identityBootstrap?.rootSessionSource !== "auth_session" ||
+    proof.identityBootstrap?.browserCredentialIssuer !== "/auth/session-grants" ||
+    proof.identityBootstrap?.rawRootTokenStored !== false ||
+    !proof.identityBootstrap?.rootCapabilityKinds?.includes("GlobalAdmin")
+  ) {
+    throw new Error(
+      "dev-test-game proof must bootstrap identity through auth_session with /auth/dev-session disabled",
+    );
   }
   assertCoreLoopSpineSummary(proof.coreLoopSpine);
   for (const laneId of requiredLaneIds) {
