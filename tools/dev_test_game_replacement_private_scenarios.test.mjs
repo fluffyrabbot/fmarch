@@ -2,7 +2,9 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { test } from "node:test";
 import {
+  replacementConcurrentActionRaceScenario,
   replacementConcurrentPrivatePostRaceScenario,
+  replacementConcurrentVoteRaceScenario,
   replacementPrivatePostHardeningLaneIds,
   replacementPrivatePostRaceLaneIds,
   replacementPrivatePostRecoveryLaneIds,
@@ -41,6 +43,44 @@ test("replacement private-post race scenario carries shared command facts", () =
     rejectionError: "NotYourSlot",
     proof:
       "A disposable Mira role URL in the Slot 7 private mafia channel raced SubmitPost against a host role URL ProcessReplacement command, accepted only post-before-replacement ACK ordering or NotYourSlot after replacement, then refreshed browser and API surfaces to Rowan as current Slot 7 with Mira's stale command-state and private-channel routes forbidden.",
+  });
+});
+
+test("replacement vote race scenario carries shared command facts", () => {
+  assert.deepEqual(replacementConcurrentVoteRaceScenario(), {
+    gameFixtureId: "replacement-vote-race-game-a",
+    actorSlot: "slot-7",
+    targetSlot: "slot-2",
+    hostPrincipalUserId: "host_h",
+    staleOutgoingPrincipalUserId: "player-mira",
+    replacementPrincipalUserId: "player-rowan",
+    replacementOccupantLabel: "player-rowan",
+    commandActionPrefix: "submit_vote",
+    commandKind: "SubmitVote",
+    rejectionError: "NotYourSlot",
+    proof:
+      "A disposable Mira board role URL raced SubmitVote against a host role URL ProcessReplacement command, accepted only vote-before-replacement ACK ordering or NotYourSlot after replacement, then refreshed API surfaces to Rowan as current Slot 7 with Mira's stale command-state route forbidden.",
+  });
+});
+
+test("replacement action race scenario carries shared command facts", () => {
+  assert.deepEqual(replacementConcurrentActionRaceScenario(), {
+    gameFixtureId: "replacement-action-race-game-a",
+    actorSlot: "slot_4",
+    targetSlot: "slot-2",
+    hostPrincipalUserId: "host_h",
+    staleOutgoingPrincipalUserId: "player-goon-a",
+    replacementPrincipalUserId: "player-rowan",
+    replacementOccupantLabel: "player-rowan",
+    actionId: "replacement_race_factional_kill",
+    staleRetryActionId: "replacement_race_stale_retry",
+    commandAction: "submit_action:factional_kill",
+    commandKind: "SubmitAction",
+    templateId: "factional_kill",
+    phaseId: "N01",
+    rejectionError: "NotYourSlot",
+    proof:
+      "A disposable Slot 4 mafia-goon role URL raced SubmitAction factional_kill against a host role URL ProcessReplacement command, accepted only action-before-replacement ACK ordering or NotYourSlot after replacement, then proved the stale outgoing role cannot retry while Rowan opens the current Slot 4 action surface.",
   });
 });
 
@@ -97,4 +137,18 @@ test("replacement private live harness imports extracted scenario cases", async 
   );
   assert(source.includes("replacementStalePrivatePostAfterResolveScenario"));
   assert(source.includes("replacementStalePrivatePostAfterCompleteScenario"));
+  assert(source.includes("replacementConcurrentVoteRaceScenario"));
+  assert(source.includes("replacementConcurrentActionRaceScenario"));
+});
+
+test("replacement race proof and readiness import extracted scenario cases", async () => {
+  const proofContractSource = await readFile(
+    "tools/dev_test_game_proof_contract.mjs",
+    "utf8",
+  );
+  const liveProofSource = await readFile("tools/dev_test_game_live_proof.mjs", "utf8");
+  for (const source of [proofContractSource, liveProofSource]) {
+    assert(source.includes("replacementConcurrentVoteRaceScenario"));
+    assert(source.includes("replacementConcurrentActionRaceScenario"));
+  }
 });

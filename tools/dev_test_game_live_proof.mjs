@@ -3,12 +3,18 @@ import { spawn } from "node:child_process";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import {
+  replacementConcurrentActionRaceScenario,
+  replacementConcurrentVoteRaceScenario,
+} from "./dev_test_game_replacement_private_scenario_cases.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const sessionPath = path.join(repoRoot, "target", "dev-test-game", "session.json");
 const proofRunPath = path.join(repoRoot, "target", "dev-test-game", "proof-run.json");
 const databaseUrl =
   process.env.DATABASE_URL ?? "postgres://fmarch:fmarch@localhost:5544/fmarch";
+const replacementVoteRaceScenario = replacementConcurrentVoteRaceScenario();
+const replacementActionRaceScenario = replacementConcurrentActionRaceScenario();
 
 const exitCode = await run("npm", [
   "run",
@@ -2383,7 +2389,7 @@ assert.equal(replacementPrivatePostRace.hostReplacementAfterRace.occupantLabel, 
 assert.equal(replacementPrivatePostRace.apiSlotAfterRace.occupant_user_id, "player-rowan");
 assert.equal(replacementPrivatePostRace.staleRoute.status, 403);
 assert.equal(replacementVoteRace.status, "passed");
-assert.equal(replacementVoteRace.targetSlot, "slot-2");
+assert.equal(replacementVoteRace.targetSlot, replacementVoteRaceScenario.targetSlot);
 assert.equal(
   replacementVoteRace.hostEntry.capabilityKinds.includes("HostOf"),
   true,
@@ -2392,12 +2398,16 @@ assert.equal(
   replacementVoteRace.playerEntry.capabilityKinds.includes("SlotOccupant"),
   true,
 );
-assert.equal(replacementVoteRace.setupHostReplacement.occupantLabel, "player-mira");
-assert.equal(replacementVoteRace.setupCommandState.actorSlot, "slot-7");
+assert.equal(
+  replacementVoteRace.setupHostReplacement.occupantLabel,
+  replacementVoteRaceScenario.staleOutgoingPrincipalUserId,
+);
+assert.equal(replacementVoteRace.setupCommandState.actorSlot, replacementVoteRaceScenario.actorSlot);
 assert.equal(replacementVoteRace.setupCommandState.actorStatus, "alive");
 assert.equal(
   replacementVoteRace.setupCommandState.voteTargets.some(
-    (target) => target.kind === "slot" && target.slotId === "slot-2",
+    (target) =>
+      target.kind === "slot" && target.slotId === replacementVoteRaceScenario.targetSlot,
   ),
   true,
 );
@@ -2405,20 +2415,25 @@ assert.equal(replacementVoteRace.replacement.state, "ack");
 assert.equal(
   replacementVoteRace.replacement.requestEnvelope.body.body.command.ProcessReplacement
     .slot,
-  "slot-7",
+  replacementVoteRaceScenario.actorSlot,
+);
+assert.equal(
+  replacementVoteRace.replacement.requestEnvelope.body.body.command.ProcessReplacement
+    .outgoing_user,
+  replacementVoteRaceScenario.staleOutgoingPrincipalUserId,
 );
 assert.equal(
   replacementVoteRace.replacement.requestEnvelope.body.body.command.ProcessReplacement
     .incoming_user,
-  "player-rowan",
+  replacementVoteRaceScenario.replacementPrincipalUserId,
 );
 assert.equal(
   replacementVoteRace.vote.requestEnvelope.body.body.command.SubmitVote.actor_slot,
-  "slot-7",
+  replacementVoteRaceScenario.actorSlot,
 );
 assert.equal(
   replacementVoteRace.vote.requestEnvelope.body.body.command.SubmitVote.target.Slot,
-  "slot-2",
+  replacementVoteRaceScenario.targetSlot,
 );
 if (replacementVoteRace.vote.state === "ack") {
   assert.equal(replacementVoteRace.vote.serverEnvelope.body.kind, "Ack");
@@ -2426,16 +2441,25 @@ if (replacementVoteRace.vote.state === "ack") {
   assert.equal(replacementVoteRace.targetVotecount.count, 1);
 } else {
   assert.equal(replacementVoteRace.vote.state, "reject");
-  assert.equal(replacementVoteRace.vote.error, "NotYourSlot");
+  assert.equal(replacementVoteRace.vote.error, replacementVoteRaceScenario.rejectionError);
   assert.equal(replacementVoteRace.vote.serverEnvelope.body.kind, "Reject");
   assert.equal(replacementVoteRace.targetVotecount, null);
 }
 assert.equal(replacementVoteRace.commandStateAfterRace.status, 403);
-assert.equal(replacementVoteRace.commandStateAfterRace.error, "NotYourSlot");
-assert.equal(replacementVoteRace.hostReplacementAfterRace.occupantLabel, "player-rowan");
-assert.equal(replacementVoteRace.apiSlotAfterRace.occupant_user_id, "player-rowan");
+assert.equal(
+  replacementVoteRace.commandStateAfterRace.error,
+  replacementVoteRaceScenario.rejectionError,
+);
+assert.equal(
+  replacementVoteRace.hostReplacementAfterRace.occupantLabel,
+  replacementVoteRaceScenario.replacementOccupantLabel,
+);
+assert.equal(
+  replacementVoteRace.apiSlotAfterRace.occupant_user_id,
+  replacementVoteRaceScenario.replacementPrincipalUserId,
+);
 assert.equal(replacementActionRace.status, "passed");
-assert.equal(replacementActionRace.targetSlot, "slot-2");
+assert.equal(replacementActionRace.targetSlot, replacementActionRaceScenario.targetSlot);
 assert.equal(
   replacementActionRace.hostEntry.capabilityKinds.includes("HostOf"),
   true,
@@ -2448,15 +2472,24 @@ assert.equal(
   replacementActionRace.replacementEntry.capabilityKinds.includes("SlotOccupant"),
   true,
 );
-assert.equal(replacementActionRace.setupHostPhase.id, "N01");
+assert.equal(replacementActionRace.setupHostPhase.id, replacementActionRaceScenario.phaseId);
 assert.equal(replacementActionRace.setupHostPhase.locked, false);
-assert.equal(replacementActionRace.setupSlot.occupant_user_id, "player-goon-a");
-assert.equal(replacementActionRace.setupCommandState.actorSlot, "slot_4");
+assert.equal(
+  replacementActionRace.setupSlot.occupant_user_id,
+  replacementActionRaceScenario.staleOutgoingPrincipalUserId,
+);
+assert.equal(
+  replacementActionRace.setupCommandState.actorSlot,
+  replacementActionRaceScenario.actorSlot,
+);
 assert.equal(replacementActionRace.setupCommandState.actorStatus, "alive");
-assert.equal(replacementActionRace.setupCommandState.phase.phaseId, "N01");
+assert.equal(
+  replacementActionRace.setupCommandState.phase.phaseId,
+  replacementActionRaceScenario.phaseId,
+);
 assert.equal(
   replacementActionRace.setupCommandState.actions.some(
-    (candidate) => candidate.templateId === "factional_kill",
+    (candidate) => candidate.templateId === replacementActionRaceScenario.templateId,
   ),
   true,
 );
@@ -2464,25 +2497,30 @@ assert.equal(replacementActionRace.replacement.state, "ack");
 assert.equal(
   replacementActionRace.replacement.requestEnvelope.body.body.command.ProcessReplacement
     .slot,
-  "slot_4",
+  replacementActionRaceScenario.actorSlot,
+);
+assert.equal(
+  replacementActionRace.replacement.requestEnvelope.body.body.command.ProcessReplacement
+    .outgoing_user,
+  replacementActionRaceScenario.staleOutgoingPrincipalUserId,
 );
 assert.equal(
   replacementActionRace.replacement.requestEnvelope.body.body.command.ProcessReplacement
     .incoming_user,
-  "player-rowan",
+  replacementActionRaceScenario.replacementPrincipalUserId,
 );
 assert.equal(
   replacementActionRace.action.requestEnvelope.body.body.command.SubmitAction.actor_slot,
-  "slot_4",
+  replacementActionRaceScenario.actorSlot,
 );
 assert.equal(
   replacementActionRace.action.requestEnvelope.body.body.command.SubmitAction
     .template_id,
-  "factional_kill",
+  replacementActionRaceScenario.templateId,
 );
 assert.equal(
   replacementActionRace.action.requestEnvelope.body.body.command.SubmitAction.targets[0],
-  "slot-2",
+  replacementActionRaceScenario.targetSlot,
 );
 if (replacementActionRace.action.state === "ack") {
   assert.equal(replacementActionRace.action.serverEnvelope.body.kind, "Ack");
@@ -2494,31 +2532,43 @@ if (replacementActionRace.action.state === "ack") {
   assert.equal(replacementActionRace.currentRoleCommandState.actions.length, 0);
 } else {
   assert.equal(replacementActionRace.action.state, "reject");
-  assert.equal(replacementActionRace.action.error, "NotYourSlot");
+  assert.equal(replacementActionRace.action.error, replacementActionRaceScenario.rejectionError);
   assert.equal(replacementActionRace.action.serverEnvelope.body.kind, "Reject");
   assert.equal(
     replacementActionRace.currentCommandStateAfterRace.actions.some(
-      (candidate) => candidate.template_id === "factional_kill",
+      (candidate) => candidate.template_id === replacementActionRaceScenario.templateId,
     ),
     true,
   );
   assert.equal(
     replacementActionRace.currentRoleCommandState.actions.some(
-      (candidate) => candidate.templateId === "factional_kill",
+      (candidate) => candidate.templateId === replacementActionRaceScenario.templateId,
     ),
     true,
   );
 }
 assert.equal(replacementActionRace.commandStateAfterRace.status, 403);
-assert.equal(replacementActionRace.commandStateAfterRace.error, "NotYourSlot");
+assert.equal(
+  replacementActionRace.commandStateAfterRace.error,
+  replacementActionRaceScenario.rejectionError,
+);
 assert.equal(replacementActionRace.staleRetry.state, "reject");
-assert.equal(replacementActionRace.staleRetry.error, "NotYourSlot");
-assert.equal(replacementActionRace.hostPhaseAfterRace.id, "N01");
+assert.equal(replacementActionRace.staleRetry.error, replacementActionRaceScenario.rejectionError);
+assert.equal(replacementActionRace.hostPhaseAfterRace.id, replacementActionRaceScenario.phaseId);
 assert.equal(replacementActionRace.hostPhaseAfterRace.locked, false);
-assert.equal(replacementActionRace.apiSlotAfterRace.occupant_user_id, "player-rowan");
-assert.equal(replacementActionRace.currentCommandStateAfterRace.actor_slot, "slot_4");
+assert.equal(
+  replacementActionRace.apiSlotAfterRace.occupant_user_id,
+  replacementActionRaceScenario.replacementPrincipalUserId,
+);
+assert.equal(
+  replacementActionRace.currentCommandStateAfterRace.actor_slot,
+  replacementActionRaceScenario.actorSlot,
+);
 assert.equal(replacementActionRace.currentCommandStateAfterRace.actor_status, "alive");
-assert.equal(replacementActionRace.currentRoleCommandState.actorSlot, "slot_4");
+assert.equal(
+  replacementActionRace.currentRoleCommandState.actorSlot,
+  replacementActionRaceScenario.actorSlot,
+);
 assert.equal(replacementActionRace.currentRoleCommandState.actorStatus, "alive");
 assert.equal(replacementIncomingAction.status, "passed");
 assert.equal(replacementIncomingAction.targetSlot, "slot-2");

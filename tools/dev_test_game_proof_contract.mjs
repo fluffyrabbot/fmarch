@@ -29,6 +29,10 @@ import {
   replacementPrivatePostRaceLaneIds,
   replacementPrivatePostRecoveryLaneIds,
 } from "./dev_test_game_replacement_private_scenarios.mjs";
+import {
+  replacementConcurrentActionRaceScenario,
+  replacementConcurrentVoteRaceScenario,
+} from "./dev_test_game_replacement_private_scenario_cases.mjs";
 
 export const DEV_TEST_GAME_PROOF_VERSION = 1;
 
@@ -113,6 +117,8 @@ export function buildDevTestGameProofRun(session, options = {}) {
   const generatedAt = options.generatedAt ?? new Date().toISOString();
   const verification = session?.verification ?? {};
   const hardening = verification.multiplayerHardening ?? {};
+  const replacementVoteRaceScenario = replacementConcurrentVoteRaceScenario();
+  const replacementActionRaceScenario = replacementConcurrentActionRaceScenario();
   const lanes = [
     lane("browser-entry", "Role URLs open verified browser sessions", {
       roles: verification.roles ?? [],
@@ -3294,7 +3300,8 @@ export function buildDevTestGameProofRun(session, options = {}) {
         targetCount: hardening.concurrentReplacementVoteRace?.targetVotecount?.count ?? null,
         passed:
           hardening.concurrentReplacementVoteRace?.status === "passed" &&
-          hardening.concurrentReplacementVoteRace?.targetSlot === "slot-2" &&
+          hardening.concurrentReplacementVoteRace?.targetSlot ===
+            replacementVoteRaceScenario.targetSlot &&
           hardening.concurrentReplacementVoteRace?.hostEntry?.capabilityKinds?.includes(
             "HostOf",
           ) === true &&
@@ -3302,13 +3309,16 @@ export function buildDevTestGameProofRun(session, options = {}) {
             "SlotOccupant",
           ) === true &&
           hardening.concurrentReplacementVoteRace?.setupHostReplacement
-            ?.occupantLabel === "player-mira" &&
+            ?.occupantLabel ===
+            replacementVoteRaceScenario.staleOutgoingPrincipalUserId &&
           hardening.concurrentReplacementVoteRace?.setupCommandState?.actorSlot ===
-            "slot-7" &&
+            replacementVoteRaceScenario.actorSlot &&
           hardening.concurrentReplacementVoteRace?.setupCommandState?.actorStatus ===
             "alive" &&
           hardening.concurrentReplacementVoteRace?.setupCommandState?.voteTargets?.some(
-            (target) => target.kind === "slot" && target.slotId === "slot-2",
+            (target) =>
+              target.kind === "slot" &&
+              target.slotId === replacementVoteRaceScenario.targetSlot,
           ) === true &&
           hardening.concurrentReplacementVoteRace?.replacement?.state === "ack" &&
           hardening.concurrentReplacementVoteRace?.replacement?.serverEnvelope?.body
@@ -3317,15 +3327,20 @@ export function buildDevTestGameProofRun(session, options = {}) {
             ?.body?.command?.ProcessReplacement?.game ===
             hardening.concurrentReplacementVoteRace?.game &&
           hardening.concurrentReplacementVoteRace?.replacement?.requestEnvelope?.body
-            ?.body?.command?.ProcessReplacement?.slot === "slot-7" &&
+            ?.body?.command?.ProcessReplacement?.slot ===
+            replacementVoteRaceScenario.actorSlot &&
           hardening.concurrentReplacementVoteRace?.replacement?.requestEnvelope?.body
-            ?.body?.command?.ProcessReplacement?.outgoing_user === "player-mira" &&
+            ?.body?.command?.ProcessReplacement?.outgoing_user ===
+            replacementVoteRaceScenario.staleOutgoingPrincipalUserId &&
           hardening.concurrentReplacementVoteRace?.replacement?.requestEnvelope?.body
-            ?.body?.command?.ProcessReplacement?.incoming_user === "player-rowan" &&
+            ?.body?.command?.ProcessReplacement?.incoming_user ===
+            replacementVoteRaceScenario.replacementPrincipalUserId &&
           hardening.concurrentReplacementVoteRace?.vote?.requestEnvelope?.body?.body
-            ?.command?.SubmitVote?.actor_slot === "slot-7" &&
+            ?.command?.SubmitVote?.actor_slot ===
+            replacementVoteRaceScenario.actorSlot &&
           hardening.concurrentReplacementVoteRace?.vote?.requestEnvelope?.body?.body
-            ?.command?.SubmitVote?.target?.Slot === "slot-2" &&
+            ?.command?.SubmitVote?.target?.Slot ===
+            replacementVoteRaceScenario.targetSlot &&
           ((hardening.concurrentReplacementVoteRace?.vote?.state === "ack" &&
             hardening.concurrentReplacementVoteRace?.vote?.serverEnvelope?.body
               ?.kind === "Ack" &&
@@ -3334,18 +3349,19 @@ export function buildDevTestGameProofRun(session, options = {}) {
             hardening.concurrentReplacementVoteRace?.targetVotecount?.count === 1) ||
             (hardening.concurrentReplacementVoteRace?.vote?.state === "reject" &&
               hardening.concurrentReplacementVoteRace?.vote?.error ===
-                "NotYourSlot" &&
+                replacementVoteRaceScenario.rejectionError &&
               hardening.concurrentReplacementVoteRace?.vote?.serverEnvelope?.body
                 ?.kind === "Reject" &&
               hardening.concurrentReplacementVoteRace?.targetVotecount === null)) &&
           hardening.concurrentReplacementVoteRace?.commandStateAfterRace?.status ===
             403 &&
           hardening.concurrentReplacementVoteRace?.commandStateAfterRace?.error ===
-            "NotYourSlot" &&
+            replacementVoteRaceScenario.rejectionError &&
           hardening.concurrentReplacementVoteRace?.hostReplacementAfterRace
-            ?.occupantLabel === "player-rowan" &&
+            ?.occupantLabel === replacementVoteRaceScenario.replacementOccupantLabel &&
           hardening.concurrentReplacementVoteRace?.apiSlotAfterRace
-            ?.occupant_user_id === "player-rowan",
+            ?.occupant_user_id ===
+            replacementVoteRaceScenario.replacementPrincipalUserId,
       },
     ),
     lane(
@@ -3373,11 +3389,12 @@ export function buildDevTestGameProofRun(session, options = {}) {
           hardening.concurrentReplacementVoteRace?.commandStateAfterRace?.status ===
             403 &&
           hardening.concurrentReplacementVoteRace?.commandStateAfterRace?.error ===
-            "NotYourSlot" &&
+            replacementVoteRaceScenario.rejectionError &&
           hardening.concurrentReplacementVoteRace?.hostReplacementAfterRace
-            ?.occupantLabel === "player-rowan" &&
+            ?.occupantLabel === replacementVoteRaceScenario.replacementOccupantLabel &&
           hardening.concurrentReplacementVoteRace?.apiSlotAfterRace
-            ?.occupant_user_id === "player-rowan" &&
+            ?.occupant_user_id ===
+            replacementVoteRaceScenario.replacementPrincipalUserId &&
           hardening.concurrentReplacementVoteRace?.targetVotecount?.count ===
             (hardening.concurrentReplacementVoteRace?.vote?.state === "ack"
               ? 1
@@ -3405,7 +3422,8 @@ export function buildDevTestGameProofRun(session, options = {}) {
             ?.actions?.length ?? null,
         passed:
           hardening.concurrentReplacementActionRace?.status === "passed" &&
-          hardening.concurrentReplacementActionRace?.targetSlot === "slot-2" &&
+          hardening.concurrentReplacementActionRace?.targetSlot ===
+            replacementActionRaceScenario.targetSlot &&
           hardening.concurrentReplacementActionRace?.hostEntry?.capabilityKinds?.includes(
             "HostOf",
           ) === true &&
@@ -3415,19 +3433,21 @@ export function buildDevTestGameProofRun(session, options = {}) {
           hardening.concurrentReplacementActionRace?.replacementEntry?.capabilityKinds?.includes(
             "SlotOccupant",
           ) === true &&
-          hardening.concurrentReplacementActionRace?.setupHostPhase?.id === "N01" &&
+          hardening.concurrentReplacementActionRace?.setupHostPhase?.id ===
+            replacementActionRaceScenario.phaseId &&
           hardening.concurrentReplacementActionRace?.setupHostPhase?.locked ===
             false &&
           hardening.concurrentReplacementActionRace?.setupSlot?.occupant_user_id ===
-            "player-goon-a" &&
+            replacementActionRaceScenario.staleOutgoingPrincipalUserId &&
           hardening.concurrentReplacementActionRace?.setupCommandState?.actorSlot ===
-            "slot_4" &&
+            replacementActionRaceScenario.actorSlot &&
           hardening.concurrentReplacementActionRace?.setupCommandState
             ?.actorStatus === "alive" &&
           hardening.concurrentReplacementActionRace?.setupCommandState?.phase
-            ?.phaseId === "N01" &&
+            ?.phaseId === replacementActionRaceScenario.phaseId &&
           hardening.concurrentReplacementActionRace?.setupCommandState?.actions?.some(
-            (candidate) => candidate.templateId === "factional_kill",
+            (candidate) =>
+              candidate.templateId === replacementActionRaceScenario.templateId,
           ) === true &&
           hardening.concurrentReplacementActionRace?.replacement?.state === "ack" &&
           hardening.concurrentReplacementActionRace?.replacement?.serverEnvelope
@@ -3436,22 +3456,26 @@ export function buildDevTestGameProofRun(session, options = {}) {
             ?.body?.body?.command?.ProcessReplacement?.game ===
             hardening.concurrentReplacementActionRace?.game &&
           hardening.concurrentReplacementActionRace?.replacement?.requestEnvelope
-            ?.body?.body?.command?.ProcessReplacement?.slot === "slot_4" &&
+            ?.body?.body?.command?.ProcessReplacement?.slot ===
+            replacementActionRaceScenario.actorSlot &&
           hardening.concurrentReplacementActionRace?.replacement?.requestEnvelope
             ?.body?.body?.command?.ProcessReplacement?.outgoing_user ===
-            "player-goon-a" &&
+            replacementActionRaceScenario.staleOutgoingPrincipalUserId &&
           hardening.concurrentReplacementActionRace?.replacement?.requestEnvelope
             ?.body?.body?.command?.ProcessReplacement?.incoming_user ===
-            "player-rowan" &&
+            replacementActionRaceScenario.replacementPrincipalUserId &&
           hardening.concurrentReplacementActionRace?.action?.requestEnvelope?.body
-            ?.body?.command?.SubmitAction?.actor_slot === "slot_4" &&
+            ?.body?.command?.SubmitAction?.actor_slot ===
+            replacementActionRaceScenario.actorSlot &&
           hardening.concurrentReplacementActionRace?.action?.requestEnvelope?.body
             ?.body?.command?.SubmitAction?.action_id ===
-            "replacement_race_factional_kill" &&
+            replacementActionRaceScenario.actionId &&
           hardening.concurrentReplacementActionRace?.action?.requestEnvelope?.body
-            ?.body?.command?.SubmitAction?.template_id === "factional_kill" &&
+            ?.body?.command?.SubmitAction?.template_id ===
+            replacementActionRaceScenario.templateId &&
           hardening.concurrentReplacementActionRace?.action?.requestEnvelope?.body
-            ?.body?.command?.SubmitAction?.targets?.[0] === "slot-2" &&
+            ?.body?.command?.SubmitAction?.targets?.[0] ===
+            replacementActionRaceScenario.targetSlot &&
           ((hardening.concurrentReplacementActionRace?.action?.state === "ack" &&
             hardening.concurrentReplacementActionRace?.action?.serverEnvelope?.body
               ?.kind === "Ack" &&
@@ -3464,37 +3488,41 @@ export function buildDevTestGameProofRun(session, options = {}) {
             (hardening.concurrentReplacementActionRace?.action?.state ===
               "reject" &&
               hardening.concurrentReplacementActionRace?.action?.error ===
-                "NotYourSlot" &&
+                replacementActionRaceScenario.rejectionError &&
               hardening.concurrentReplacementActionRace?.action?.serverEnvelope
                 ?.body?.kind === "Reject" &&
               hardening.concurrentReplacementActionRace?.currentCommandStateAfterRace
                 ?.actions?.some(
-                  (candidate) => candidate.template_id === "factional_kill",
+                  (candidate) =>
+                    candidate.template_id ===
+                    replacementActionRaceScenario.templateId,
                 ) === true &&
               hardening.concurrentReplacementActionRace?.currentRoleCommandState
                 ?.actions?.some(
-                  (candidate) => candidate.templateId === "factional_kill",
+                  (candidate) =>
+                    candidate.templateId === replacementActionRaceScenario.templateId,
                 ) === true)) &&
           hardening.concurrentReplacementActionRace?.commandStateAfterRace?.status ===
             403 &&
           hardening.concurrentReplacementActionRace?.commandStateAfterRace?.error ===
-            "NotYourSlot" &&
+            replacementActionRaceScenario.rejectionError &&
           hardening.concurrentReplacementActionRace?.staleRetry?.state ===
             "reject" &&
           hardening.concurrentReplacementActionRace?.staleRetry?.error ===
-            "NotYourSlot" &&
+            replacementActionRaceScenario.rejectionError &&
           hardening.concurrentReplacementActionRace?.hostPhaseAfterRace?.id ===
-            "N01" &&
+            replacementActionRaceScenario.phaseId &&
           hardening.concurrentReplacementActionRace?.hostPhaseAfterRace?.locked ===
             false &&
           hardening.concurrentReplacementActionRace?.apiSlotAfterRace
-            ?.occupant_user_id === "player-rowan" &&
+            ?.occupant_user_id ===
+            replacementActionRaceScenario.replacementPrincipalUserId &&
           hardening.concurrentReplacementActionRace?.currentCommandStateAfterRace
-            ?.actor_slot === "slot_4" &&
+            ?.actor_slot === replacementActionRaceScenario.actorSlot &&
           hardening.concurrentReplacementActionRace?.currentCommandStateAfterRace
             ?.actor_status === "alive" &&
           hardening.concurrentReplacementActionRace?.currentRoleCommandState
-            ?.actorSlot === "slot_4" &&
+            ?.actorSlot === replacementActionRaceScenario.actorSlot &&
           hardening.concurrentReplacementActionRace?.currentRoleCommandState
             ?.actorStatus === "alive",
       },
@@ -3527,7 +3555,7 @@ export function buildDevTestGameProofRun(session, options = {}) {
         enabledCurrentActionControls:
           hardening.concurrentReplacementActionRace?.currentRoleButtons?.filter(
             (button) =>
-              button.action === "submit_action:factional_kill" &&
+              button.action === replacementActionRaceScenario.commandAction &&
               button.disabled === false,
           ).length ?? null,
         passed:
@@ -3535,29 +3563,30 @@ export function buildDevTestGameProofRun(session, options = {}) {
           hardening.concurrentReplacementActionRace?.commandStateAfterRace?.status ===
             403 &&
           hardening.concurrentReplacementActionRace?.commandStateAfterRace?.error ===
-            "NotYourSlot" &&
+            replacementActionRaceScenario.rejectionError &&
           hardening.concurrentReplacementActionRace?.staleRetry?.state ===
             "reject" &&
           hardening.concurrentReplacementActionRace?.staleRetry?.error ===
-            "NotYourSlot" &&
+            replacementActionRaceScenario.rejectionError &&
           hardening.concurrentReplacementActionRace?.apiSlotAfterRace
-            ?.occupant_user_id === "player-rowan" &&
+            ?.occupant_user_id ===
+            replacementActionRaceScenario.replacementPrincipalUserId &&
           hardening.concurrentReplacementActionRace?.apiCurrentCommandStateStatus
             ?.status === 200 &&
           hardening.concurrentReplacementActionRace?.currentCommandStateAfterRace
-            ?.actor_slot === "slot_4" &&
+            ?.actor_slot === replacementActionRaceScenario.actorSlot &&
           hardening.concurrentReplacementActionRace?.currentCommandStateAfterRace
             ?.actor_status === "alive" &&
           hardening.concurrentReplacementActionRace?.currentCommandStateAfterRace
-            ?.phase?.phase_id === "N01" &&
+            ?.phase?.phase_id === replacementActionRaceScenario.phaseId &&
           hardening.concurrentReplacementActionRace?.currentCommandStateAfterRace
             ?.phase?.locked === false &&
           hardening.concurrentReplacementActionRace?.currentRoleCommandState
-            ?.actorSlot === "slot_4" &&
+            ?.actorSlot === replacementActionRaceScenario.actorSlot &&
           hardening.concurrentReplacementActionRace?.currentRoleCommandState
             ?.actorStatus === "alive" &&
           hardening.concurrentReplacementActionRace?.currentRoleCommandState?.phase
-            ?.phaseId === "N01" &&
+            ?.phaseId === replacementActionRaceScenario.phaseId &&
           hardening.concurrentReplacementActionRace?.currentRoleCommandState?.phase
             ?.locked === false &&
           ((hardening.concurrentReplacementActionRace?.action?.state === "ack" &&
@@ -3567,24 +3596,27 @@ export function buildDevTestGameProofRun(session, options = {}) {
               ?.actions?.length === 0 &&
             hardening.concurrentReplacementActionRace?.currentRoleButtons?.some(
               (button) =>
-                button.action === "submit_action:factional_kill" &&
+                button.action === replacementActionRaceScenario.commandAction &&
                 button.disabled === false,
             ) === false) ||
             (hardening.concurrentReplacementActionRace?.action?.state ===
               "reject" &&
               hardening.concurrentReplacementActionRace?.action?.error ===
-                "NotYourSlot" &&
+                replacementActionRaceScenario.rejectionError &&
               hardening.concurrentReplacementActionRace?.currentCommandStateAfterRace
                 ?.actions?.some(
-                  (candidate) => candidate.template_id === "factional_kill",
+                  (candidate) =>
+                    candidate.template_id ===
+                    replacementActionRaceScenario.templateId,
                 ) === true &&
               hardening.concurrentReplacementActionRace?.currentRoleCommandState
                 ?.actions?.some(
-                  (candidate) => candidate.templateId === "factional_kill",
+                  (candidate) =>
+                    candidate.templateId === replacementActionRaceScenario.templateId,
                 ) === true &&
               hardening.concurrentReplacementActionRace?.currentRoleButtons?.some(
                 (button) =>
-                  button.action === "submit_action:factional_kill" &&
+                  button.action === replacementActionRaceScenario.commandAction &&
                   button.disabled === false,
               ) === true)),
       },

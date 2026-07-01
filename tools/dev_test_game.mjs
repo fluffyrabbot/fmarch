@@ -11,7 +11,9 @@ import {
   buildDevTestGameProofRun,
 } from "./dev_test_game_proof_contract.mjs";
 import {
+  replacementConcurrentActionRaceScenario,
   replacementConcurrentPrivatePostRaceScenario,
+  replacementConcurrentVoteRaceScenario,
   replacementStalePrivatePostAfterResolveScenario,
   replacementStalePrivatePostAfterCompleteScenario,
 } from "./dev_test_game_replacement_private_scenario_cases.mjs";
@@ -17822,6 +17824,7 @@ async function verifyConcurrentReplacementVoteRace({
   frontendBaseUrl,
   normalizeCommandResponse,
 }) {
+  const scenario = replacementConcurrentVoteRaceScenario();
   if (browser === null || browser === undefined) {
     throw new Error("concurrent replacement vote proof requires a Playwright browser");
   }
@@ -17829,7 +17832,7 @@ async function verifyConcurrentReplacementVoteRace({
   const seed = await seedReplacementVoteRaceGame({ raceGame });
   const hostSession = await createSessionGrantCredential({
     token: `${tokenPrefix}-replacement-vote-host-${crypto.randomUUID()}`,
-    principalUserId: "host_h",
+    principalUserId: scenario.hostPrincipalUserId,
     returnTo: `/g/${raceGame}/host`,
     expectedCapabilityKind: "HostOf",
     issuedBy: {
@@ -17840,7 +17843,7 @@ async function verifyConcurrentReplacementVoteRace({
   });
   const stalePlayerSession = await createSessionGrantCredential({
     token: `${tokenPrefix}-replacement-vote-player-${crypto.randomUUID()}`,
-    principalUserId: "player-mira",
+    principalUserId: scenario.staleOutgoingPrincipalUserId,
     returnTo: `/g/${raceGame}`,
     expectedCapabilityKind: "SlotOccupant",
     issuedBy: {
@@ -17872,17 +17875,22 @@ async function verifyConcurrentReplacementVoteRace({
     ]);
     await Promise.all([
       hostEntry.page.waitForFunction(
-        () =>
-          window.__fmarchHostProjection?.replacement?.slotId === "slot-7" &&
-          window.__fmarchHostProjection?.replacement?.occupantLabel === "player-mira",
+        ({ actorSlot, occupantLabel }) =>
+          window.__fmarchHostProjection?.replacement?.slotId === actorSlot &&
+          window.__fmarchHostProjection?.replacement?.occupantLabel === occupantLabel,
+        {
+          actorSlot: scenario.actorSlot,
+          occupantLabel: scenario.staleOutgoingPrincipalUserId,
+        },
       ),
       playerEntry.page.waitForFunction(
-        () =>
-          window.__fmarchPlayerProjection?.commandState?.actorSlot === "slot-7" &&
+        ({ actorSlot, targetSlot }) =>
+          window.__fmarchPlayerProjection?.commandState?.actorSlot === actorSlot &&
           window.__fmarchPlayerProjection?.commandState?.actorStatus === "alive" &&
           window.__fmarchPlayerProjection?.commandState?.voteTargets?.some(
-            (target) => target.kind === "slot" && target.slotId === "slot-2",
+            (target) => target.kind === "slot" && target.slotId === targetSlot,
           ),
+        { actorSlot: scenario.actorSlot, targetSlot: scenario.targetSlot },
       ),
     ]);
     const setupHostReplacement = await hostEntry.page.evaluate(
@@ -17892,30 +17900,30 @@ async function verifyConcurrentReplacementVoteRace({
       () => window.__fmarchPlayerProjection?.commandState,
     );
     const setupButtons = await playerCommandButtons(playerEntry.page);
-    const targetSlot = "slot-2";
+    const targetSlot = scenario.targetSlot;
     const voteCommandId = crypto.randomUUID();
     const replacementCommandId = crypto.randomUUID();
     const [voteRaw, replacementRaw] = await Promise.all([
       sendBrowserCommand(playerEntry.page, {
-        principalUserId: "player-mira",
+        principalUserId: scenario.staleOutgoingPrincipalUserId,
         commandId: voteCommandId,
         command: {
           SubmitVote: {
             game: raceGame,
-            actor_slot: "slot-7",
+            actor_slot: scenario.actorSlot,
             target: { Slot: targetSlot },
           },
         },
       }),
       sendBrowserCommand(hostEntry.page, {
-        principalUserId: "host_h",
+        principalUserId: scenario.hostPrincipalUserId,
         commandId: replacementCommandId,
         command: {
           ProcessReplacement: {
             game: raceGame,
-            slot: "slot-7",
-            outgoing_user: "player-mira",
-            incoming_user: "player-rowan",
+            slot: scenario.actorSlot,
+            outgoing_user: scenario.staleOutgoingPrincipalUserId,
+            incoming_user: scenario.replacementPrincipalUserId,
           },
         },
       }),
@@ -17933,7 +17941,8 @@ async function verifyConcurrentReplacementVoteRace({
       serverEnvelope: replacementRaw.serverEnvelope,
     });
     const voteAcked = vote?.state === "ack";
-    const voteRejected = vote?.state === "reject" && vote?.error === "NotYourSlot";
+    const voteRejected =
+      vote?.state === "reject" && vote?.error === scenario.rejectionError;
     const voteSeq = voteAcked ? vote.streamSeqs?.[0] : null;
     const replacementSeq = replacement?.streamSeqs?.[0] ?? null;
     const acceptedVoteBeforeReplacement =
@@ -17942,26 +17951,30 @@ async function verifyConcurrentReplacementVoteRace({
       Number.isInteger(replacementSeq) &&
       voteSeq < replacementSeq;
     if (
-      setupHostReplacement?.occupantLabel !== "player-mira" ||
-      setupCommandState?.actorSlot !== "slot-7" ||
+      setupHostReplacement?.occupantLabel !==
+        scenario.staleOutgoingPrincipalUserId ||
+      setupCommandState?.actorSlot !== scenario.actorSlot ||
       setupCommandState?.actorStatus !== "alive" ||
       setupCommandState?.voteTargets?.some(
         (target) => target.kind === "slot" && target.slotId === targetSlot,
       ) !== true ||
       setupButtons.some(
-        (button) => button.action?.startsWith("submit_vote") && button.disabled === false,
+        (button) =>
+          button.action?.startsWith(scenario.commandActionPrefix) &&
+          button.disabled === false,
       ) !== true ||
       replacement?.state !== "ack" ||
       replacement?.serverEnvelope?.body?.kind !== "Ack" ||
       replacement?.requestEnvelope?.body?.body?.command?.ProcessReplacement?.game !==
         raceGame ||
       replacement?.requestEnvelope?.body?.body?.command?.ProcessReplacement?.slot !==
-        "slot-7" ||
+        scenario.actorSlot ||
       replacement?.requestEnvelope?.body?.body?.command?.ProcessReplacement
-        ?.outgoing_user !== "player-mira" ||
+        ?.outgoing_user !== scenario.staleOutgoingPrincipalUserId ||
       replacement?.requestEnvelope?.body?.body?.command?.ProcessReplacement
-        ?.incoming_user !== "player-rowan" ||
-      vote?.requestEnvelope?.body?.body?.command?.SubmitVote?.actor_slot !== "slot-7" ||
+        ?.incoming_user !== scenario.replacementPrincipalUserId ||
+      vote?.requestEnvelope?.body?.body?.command?.SubmitVote?.actor_slot !==
+        scenario.actorSlot ||
       vote?.requestEnvelope?.body?.body?.command?.SubmitVote?.target?.Slot !==
         targetSlot ||
       (acceptedVoteBeforeReplacement !== true && voteRejected !== true)
@@ -17985,15 +17998,19 @@ async function verifyConcurrentReplacementVoteRace({
       waitUntil: "networkidle",
     });
     await hostEntry.page.waitForFunction(
-      () =>
-        window.__fmarchHostProjection?.replacement?.slotId === "slot-7" &&
-        window.__fmarchHostProjection?.replacement?.occupantLabel === "player-rowan",
+      ({ actorSlot, occupantLabel }) =>
+        window.__fmarchHostProjection?.replacement?.slotId === actorSlot &&
+        window.__fmarchHostProjection?.replacement?.occupantLabel === occupantLabel,
+      {
+        actorSlot: scenario.actorSlot,
+        occupantLabel: scenario.replacementOccupantLabel,
+      },
     );
     const hostReplacementAfterRace = await hostEntry.page.evaluate(
       () => window.__fmarchHostProjection?.replacement,
     );
     const apiCommandStateAfterRace = await fetchJsonStatus(
-      `${apiBaseUrl}/games/${raceGame}/player-command-state?principal_user_id=player-mira&slot_id=slot-7`,
+      `${apiBaseUrl}/games/${raceGame}/player-command-state?principal_user_id=${scenario.staleOutgoingPrincipalUserId}&slot_id=${scenario.actorSlot}`,
     );
     const commandStateAfterRace = {
       status: apiCommandStateAfterRace.status,
@@ -18001,8 +18018,12 @@ async function verifyConcurrentReplacementVoteRace({
       message: apiCommandStateAfterRace.body?.message,
     };
     const apiSlotAfterRace = (
-      await fetchHostConsoleState({ apiBaseUrl, game: raceGame, slot: "slot-7" })
-    ).slots?.find?.((slot) => slot.slot_id === "slot-7");
+      await fetchHostConsoleState({
+        apiBaseUrl,
+        game: raceGame,
+        slot: scenario.actorSlot,
+      })
+    ).slots?.find?.((slot) => slot.slot_id === scenario.actorSlot);
     const apiVotecountAfterRace = await fetchJson(
       `${apiBaseUrl}/games/${raceGame}/votecount`,
     );
@@ -18011,9 +18032,10 @@ async function verifyConcurrentReplacementVoteRace({
     );
     if (
       commandStateAfterRace?.status !== 403 ||
-      commandStateAfterRace?.error !== "NotYourSlot" ||
-      hostReplacementAfterRace?.occupantLabel !== "player-rowan" ||
-      apiSlotAfterRace?.occupant_user_id !== "player-rowan" ||
+      commandStateAfterRace?.error !== scenario.rejectionError ||
+      hostReplacementAfterRace?.occupantLabel !==
+        scenario.replacementOccupantLabel ||
+      apiSlotAfterRace?.occupant_user_id !== scenario.replacementPrincipalUserId ||
       (voteAcked === true && targetVotecount?.count !== 1) ||
       (voteAcked === false && targetVotecount !== undefined)
     ) {
@@ -18034,7 +18056,7 @@ async function verifyConcurrentReplacementVoteRace({
     }
     const outcomeSummary = voteAcked
       ? `vote seq ${voteSeq} before replacement seq ${replacementSeq}`
-      : "vote rejected NotYourSlot after replacement";
+      : `vote rejected ${scenario.rejectionError} after replacement`;
     return {
       status: "passed",
       game: raceGame,
@@ -18057,7 +18079,7 @@ async function verifyConcurrentReplacementVoteRace({
       apiVotecountAfterRace,
       targetVotecount: targetVotecount ?? null,
       proof:
-        "A disposable Mira board role URL raced SubmitVote against a host role URL ProcessReplacement command, accepted only vote-before-replacement ACK ordering or NotYourSlot after replacement, then refreshed API surfaces to Rowan as current Slot 7 with Mira's stale command-state route forbidden.",
+        scenario.proof,
     };
   } finally {
     await hostEntry.context.close().catch(() => {});
@@ -18092,6 +18114,7 @@ async function verifyConcurrentReplacementActionRace({
   frontendBaseUrl,
   normalizeCommandResponse,
 }) {
+  const scenario = replacementConcurrentActionRaceScenario();
   if (browser === null || browser === undefined) {
     throw new Error("concurrent replacement action proof requires a Playwright browser");
   }
@@ -18099,7 +18122,7 @@ async function verifyConcurrentReplacementActionRace({
   const seed = await seedReplacementActionRaceGame({ raceGame });
   const hostSession = await createSessionGrantCredential({
     token: `${tokenPrefix}-replacement-action-host-${crypto.randomUUID()}`,
-    principalUserId: "host_h",
+    principalUserId: scenario.hostPrincipalUserId,
     returnTo: `/g/${raceGame}/host`,
     expectedCapabilityKind: "HostOf",
     issuedBy: {
@@ -18110,7 +18133,7 @@ async function verifyConcurrentReplacementActionRace({
   });
   const stalePlayerSession = await createSessionGrantCredential({
     token: `${tokenPrefix}-replacement-action-player-${crypto.randomUUID()}`,
-    principalUserId: "player-goon-a",
+    principalUserId: scenario.staleOutgoingPrincipalUserId,
     returnTo: `/g/${raceGame}`,
     expectedCapabilityKind: "SlotOccupant",
     issuedBy: {
@@ -18142,16 +18165,24 @@ async function verifyConcurrentReplacementActionRace({
       gotoPlayerBoard(playerEntry.page, raceGame),
     ]);
     await Promise.all([
-      waitForHostProjectionPhase(hostEntry.page, { phaseId: "N01", locked: false }),
+      waitForHostProjectionPhase(hostEntry.page, {
+        phaseId: scenario.phaseId,
+        locked: false,
+      }),
       playerEntry.page.waitForFunction(
-        () =>
-          window.__fmarchPlayerProjection?.commandState?.actorSlot === "slot_4" &&
+        ({ actorSlot, phaseId, templateId }) =>
+          window.__fmarchPlayerProjection?.commandState?.actorSlot === actorSlot &&
           window.__fmarchPlayerProjection?.commandState?.actorStatus === "alive" &&
-          window.__fmarchPlayerProjection?.commandState?.phase?.phaseId === "N01" &&
+          window.__fmarchPlayerProjection?.commandState?.phase?.phaseId === phaseId &&
           window.__fmarchPlayerProjection?.commandState?.phase?.locked === false &&
           window.__fmarchPlayerProjection?.commandState?.actions?.some(
-            (action) => action.templateId === "factional_kill",
+            (action) => action.templateId === templateId,
           ),
+        {
+          actorSlot: scenario.actorSlot,
+          phaseId: scenario.phaseId,
+          templateId: scenario.templateId,
+        },
       ),
     ]);
     const setupHostPhase = await hostEntry.page.evaluate(
@@ -18162,34 +18193,38 @@ async function verifyConcurrentReplacementActionRace({
     );
     const setupButtons = await playerCommandButtons(playerEntry.page);
     const setupSlot = (
-      await fetchHostConsoleState({ apiBaseUrl, game: raceGame, slot: "slot_4" })
-    ).slots?.find?.((slot) => slot.slot_id === "slot_4");
-    const targetSlot = "slot-2";
+      await fetchHostConsoleState({
+        apiBaseUrl,
+        game: raceGame,
+        slot: scenario.actorSlot,
+      })
+    ).slots?.find?.((slot) => slot.slot_id === scenario.actorSlot);
+    const targetSlot = scenario.targetSlot;
     const actionCommandId = crypto.randomUUID();
     const replacementCommandId = crypto.randomUUID();
     const [actionRaw, replacementRaw] = await Promise.all([
       sendBrowserCommand(playerEntry.page, {
-        principalUserId: "player-goon-a",
+        principalUserId: scenario.staleOutgoingPrincipalUserId,
         commandId: actionCommandId,
         command: {
           SubmitAction: {
             game: raceGame,
-            action_id: "replacement_race_factional_kill",
-            actor_slot: "slot_4",
-            template_id: "factional_kill",
+            action_id: scenario.actionId,
+            actor_slot: scenario.actorSlot,
+            template_id: scenario.templateId,
             targets: [targetSlot],
           },
         },
       }),
       sendBrowserCommand(hostEntry.page, {
-        principalUserId: "host_h",
+        principalUserId: scenario.hostPrincipalUserId,
         commandId: replacementCommandId,
         command: {
           ProcessReplacement: {
             game: raceGame,
-            slot: "slot_4",
-            outgoing_user: "player-goon-a",
-            incoming_user: "player-rowan",
+            slot: scenario.actorSlot,
+            outgoing_user: scenario.staleOutgoingPrincipalUserId,
+            incoming_user: scenario.replacementPrincipalUserId,
           },
         },
       }),
@@ -18207,7 +18242,8 @@ async function verifyConcurrentReplacementActionRace({
       serverEnvelope: replacementRaw.serverEnvelope,
     });
     const actionAcked = action?.state === "ack";
-    const actionRejected = action?.state === "reject" && action?.error === "NotYourSlot";
+    const actionRejected =
+      action?.state === "reject" && action?.error === scenario.rejectionError;
     const actionSeq = actionAcked ? action.streamSeqs?.[0] : null;
     const replacementSeq = replacement?.streamSeqs?.[0] ?? null;
     const acceptedActionBeforeReplacement =
@@ -18216,33 +18252,33 @@ async function verifyConcurrentReplacementActionRace({
       Number.isInteger(replacementSeq) &&
       actionSeq < replacementSeq;
     if (
-      setupHostPhase?.id !== "N01" ||
+      setupHostPhase?.id !== scenario.phaseId ||
       setupHostPhase?.locked !== false ||
-      setupSlot?.occupant_user_id !== "player-goon-a" ||
-      setupCommandState?.actorSlot !== "slot_4" ||
+      setupSlot?.occupant_user_id !== scenario.staleOutgoingPrincipalUserId ||
+      setupCommandState?.actorSlot !== scenario.actorSlot ||
       setupCommandState?.actorStatus !== "alive" ||
-      setupCommandState?.phase?.phaseId !== "N01" ||
+      setupCommandState?.phase?.phaseId !== scenario.phaseId ||
       setupCommandState?.actions?.some(
-        (candidate) => candidate.templateId === "factional_kill",
+        (candidate) => candidate.templateId === scenario.templateId,
       ) !== true ||
       setupButtons.some(
         (button) =>
-          button.action === "submit_action:factional_kill" && button.disabled === false,
+          button.action === scenario.commandAction && button.disabled === false,
       ) !== true ||
       replacement?.state !== "ack" ||
       replacement?.serverEnvelope?.body?.kind !== "Ack" ||
       replacement?.requestEnvelope?.body?.body?.command?.ProcessReplacement?.game !==
         raceGame ||
       replacement?.requestEnvelope?.body?.body?.command?.ProcessReplacement?.slot !==
-        "slot_4" ||
+        scenario.actorSlot ||
       replacement?.requestEnvelope?.body?.body?.command?.ProcessReplacement
-        ?.outgoing_user !== "player-goon-a" ||
+        ?.outgoing_user !== scenario.staleOutgoingPrincipalUserId ||
       replacement?.requestEnvelope?.body?.body?.command?.ProcessReplacement
-        ?.incoming_user !== "player-rowan" ||
+        ?.incoming_user !== scenario.replacementPrincipalUserId ||
       action?.requestEnvelope?.body?.body?.command?.SubmitAction?.actor_slot !==
-        "slot_4" ||
+        scenario.actorSlot ||
       action?.requestEnvelope?.body?.body?.command?.SubmitAction?.template_id !==
-        "factional_kill" ||
+        scenario.templateId ||
       action?.requestEnvelope?.body?.body?.command?.SubmitAction?.targets?.[0] !==
         targetSlot ||
       (acceptedActionBeforeReplacement !== true && actionRejected !== true)
@@ -18267,15 +18303,16 @@ async function verifyConcurrentReplacementActionRace({
       waitUntil: "networkidle",
     });
     await hostEntry.page.waitForFunction(
-      () =>
-        window.__fmarchHostProjection?.phase?.id === "N01" &&
+      (phaseId) =>
+        window.__fmarchHostProjection?.phase?.id === phaseId &&
         window.__fmarchHostProjection?.phase?.locked === false,
+      scenario.phaseId,
     );
     const hostPhaseAfterRace = await hostEntry.page.evaluate(
       () => window.__fmarchHostProjection?.phase,
     );
     const apiCommandStateAfterRace = await fetchJsonStatus(
-      `${apiBaseUrl}/games/${raceGame}/player-command-state?principal_user_id=player-goon-a&slot_id=slot_4`,
+      `${apiBaseUrl}/games/${raceGame}/player-command-state?principal_user_id=${scenario.staleOutgoingPrincipalUserId}&slot_id=${scenario.actorSlot}`,
     );
     const commandStateAfterRace = {
       status: apiCommandStateAfterRace.status,
@@ -18284,14 +18321,14 @@ async function verifyConcurrentReplacementActionRace({
     };
     const retryCommandId = crypto.randomUUID();
     const staleRetryRaw = await sendBrowserCommand(playerEntry.page, {
-      principalUserId: "player-goon-a",
+      principalUserId: scenario.staleOutgoingPrincipalUserId,
       commandId: retryCommandId,
       command: {
         SubmitAction: {
           game: raceGame,
-          action_id: "replacement_race_stale_retry",
-          actor_slot: "slot_4",
-          template_id: "factional_kill",
+          action_id: scenario.staleRetryActionId,
+          actor_slot: scenario.actorSlot,
+          template_id: scenario.templateId,
           targets: [targetSlot],
         },
       },
@@ -18303,15 +18340,19 @@ async function verifyConcurrentReplacementActionRace({
       serverEnvelope: staleRetryRaw.serverEnvelope,
     });
     const apiSlotAfterRace = (
-      await fetchHostConsoleState({ apiBaseUrl, game: raceGame, slot: "slot_4" })
-    ).slots?.find?.((slot) => slot.slot_id === "slot_4");
+      await fetchHostConsoleState({
+        apiBaseUrl,
+        game: raceGame,
+        slot: scenario.actorSlot,
+      })
+    ).slots?.find?.((slot) => slot.slot_id === scenario.actorSlot);
     const apiCurrentCommandStateStatus = await fetchJsonStatus(
-      `${apiBaseUrl}/games/${raceGame}/player-command-state?principal_user_id=player-rowan&slot_id=slot_4`,
+      `${apiBaseUrl}/games/${raceGame}/player-command-state?principal_user_id=${scenario.replacementPrincipalUserId}&slot_id=${scenario.actorSlot}`,
     );
     const currentCommandStateAfterRace = apiCurrentCommandStateStatus.body;
     const replacementSession = await createSessionGrantCredential({
       token: `${tokenPrefix}-replacement-action-current-${crypto.randomUUID()}`,
-      principalUserId: "player-rowan",
+      principalUserId: scenario.replacementPrincipalUserId,
       returnTo: `/g/${raceGame}`,
       expectedCapabilityKind: "SlotOccupant",
       issuedBy: {
@@ -18329,10 +18370,11 @@ async function verifyConcurrentReplacementActionRace({
     });
     await gotoPlayerBoard(replacementEntry.page, raceGame);
     await replacementEntry.page.waitForFunction(
-      () =>
-        window.__fmarchPlayerProjection?.commandState?.actorSlot === "slot_4" &&
+      ({ actorSlot, phaseId }) =>
+        window.__fmarchPlayerProjection?.commandState?.actorSlot === actorSlot &&
         window.__fmarchPlayerProjection?.commandState?.actorStatus === "alive" &&
-        window.__fmarchPlayerProjection?.commandState?.phase?.phaseId === "N01",
+        window.__fmarchPlayerProjection?.commandState?.phase?.phaseId === phaseId,
+      { actorSlot: scenario.actorSlot, phaseId: scenario.phaseId },
     );
     const currentRoleCommandState = await replacementEntry.page.evaluate(
       () => window.__fmarchPlayerProjection?.commandState,
@@ -18340,35 +18382,35 @@ async function verifyConcurrentReplacementActionRace({
     const currentRoleButtons = await playerCommandButtons(replacementEntry.page);
     const currentHasAction =
       currentCommandStateAfterRace?.actions?.some(
-        (candidate) => candidate.template_id === "factional_kill",
+        (candidate) => candidate.template_id === scenario.templateId,
       ) === true;
     const currentRoleHasAction =
       currentRoleCommandState?.actions?.some(
-        (candidate) => candidate.templateId === "factional_kill",
+        (candidate) => candidate.templateId === scenario.templateId,
       ) === true;
     if (
-      hostPhaseAfterRace?.id !== "N01" ||
+      hostPhaseAfterRace?.id !== scenario.phaseId ||
       hostPhaseAfterRace?.locked !== false ||
       commandStateAfterRace?.status !== 403 ||
-      commandStateAfterRace?.error !== "NotYourSlot" ||
+      commandStateAfterRace?.error !== scenario.rejectionError ||
       staleRetry?.state !== "reject" ||
-      staleRetry?.error !== "NotYourSlot" ||
+      staleRetry?.error !== scenario.rejectionError ||
       staleRetry?.serverEnvelope?.body?.kind !== "Reject" ||
-      apiSlotAfterRace?.occupant_user_id !== "player-rowan" ||
+      apiSlotAfterRace?.occupant_user_id !== scenario.replacementPrincipalUserId ||
       apiCurrentCommandStateStatus.status !== 200 ||
-      currentCommandStateAfterRace?.actor_slot !== "slot_4" ||
+      currentCommandStateAfterRace?.actor_slot !== scenario.actorSlot ||
       currentCommandStateAfterRace?.actor_status !== "alive" ||
-      currentCommandStateAfterRace?.phase?.phase_id !== "N01" ||
+      currentCommandStateAfterRace?.phase?.phase_id !== scenario.phaseId ||
       currentCommandStateAfterRace?.phase?.locked !== false ||
-      currentRoleCommandState?.actorSlot !== "slot_4" ||
+      currentRoleCommandState?.actorSlot !== scenario.actorSlot ||
       currentRoleCommandState?.actorStatus !== "alive" ||
-      currentRoleCommandState?.phase?.phaseId !== "N01" ||
+      currentRoleCommandState?.phase?.phaseId !== scenario.phaseId ||
       currentRoleCommandState?.phase?.locked !== false ||
       currentHasAction !== !actionAcked ||
       currentRoleHasAction !== !actionAcked ||
       currentRoleButtons.some(
         (button) =>
-          button.action === "submit_action:factional_kill" && button.disabled === false,
+          button.action === scenario.commandAction && button.disabled === false,
       ) !== !actionAcked
     ) {
       throw new Error(
@@ -18391,7 +18433,7 @@ async function verifyConcurrentReplacementActionRace({
     }
     const outcomeSummary = actionAcked
       ? `action seq ${actionSeq} before replacement seq ${replacementSeq}`
-      : "action rejected NotYourSlot after replacement";
+      : `action rejected ${scenario.rejectionError} after replacement`;
     return {
       status: "passed",
       game: raceGame,
@@ -18419,7 +18461,7 @@ async function verifyConcurrentReplacementActionRace({
       currentRoleCommandState,
       currentRoleButtons,
       proof:
-        "A disposable Slot 4 mafia-goon role URL raced SubmitAction factional_kill against a host role URL ProcessReplacement command, accepted only action-before-replacement ACK ordering or NotYourSlot after replacement, then proved the stale outgoing role cannot retry while Rowan opens the current Slot 4 action surface.",
+        scenario.proof,
     };
   } finally {
     await replacementEntry?.context?.close().catch(() => {});
