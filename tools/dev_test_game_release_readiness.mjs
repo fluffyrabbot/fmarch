@@ -46,6 +46,7 @@ import {
   replacementPrivatePostRecoveryLaneIds,
 } from "./dev_test_game_replacement_private_scenarios.mjs";
 import {
+  assertCompletedActionPlayerSurfaceProofCase,
   assertCompletedGameEndgameSurfaceAssertionCases,
   assertCompletedGameEndgameTransition,
   assertCompletedHostReloadProofCase,
@@ -3851,7 +3852,7 @@ function assertCoreLoopCompletedGameEndgameSurface(completedGameEndgameSurface) 
       assertHostCompleteGameProof: assertCoreLoopHostCompleteGameProof,
       assertCompletedHostReloadProof: assertCoreLoopCompletedHostReloadProof,
       assertActionPlayerCompletedProof:
-        assertCoreLoopPostDayThreePlayerSurfaceProof,
+        assertCoreLoopActionPlayerCompletedProof,
       assertCompletedHostStaleCommandRecoveryProof:
         assertCoreLoopCompletedHostStaleCommandRecoveryProof,
       assertCompletedDeadPlayerStaleVoteRecoveryProof:
@@ -3861,6 +3862,20 @@ function assertCoreLoopCompletedGameEndgameSurface(completedGameEndgameSurface) 
       assertStaleCompletedGamePlayerCommandRecoveryProof:
         assertCoreLoopStaleCompletedGamePlayerCommandRecoveryProof,
     }),
+  });
+}
+
+function assertCoreLoopActionPlayerCompletedProof({
+  proof,
+  expectedGame,
+  sourceRoleUrl,
+}) {
+  assertCompletedActionPlayerSurfaceProofCase({
+    proof,
+    expectedGame,
+    sourceRoleUrl,
+    assertPostDayThreePlayerSurfaceProof:
+      assertCoreLoopPostDayThreePlayerSurfaceProof,
   });
 }
 

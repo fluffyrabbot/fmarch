@@ -4,6 +4,7 @@ import {
   coreLoopSpineStatus,
 } from "../frontend/src/lib/app/local-proof-lane-status.mjs";
 import {
+  assertCompletedActionPlayerSurfaceProofCase,
   assertCompletedGameEndgameSurfaceAssertionCases,
   assertCompletedGameEndgameTransition,
   assertCompletedHostReloadProofCase,
@@ -11701,12 +11702,21 @@ function assertCompletedGameEndgameSurface(completedGameEndgameSurface) {
       expectedGame,
       assertHostCompleteGameProof,
       assertCompletedHostReloadProof,
-      assertActionPlayerCompletedProof: assertPostDayThreePlayerSurfaceProof,
+      assertActionPlayerCompletedProof: assertActionPlayerCompletedProof,
       assertCompletedHostStaleCommandRecoveryProof,
       assertCompletedDeadPlayerStaleVoteRecoveryProof,
       assertCompletedPlayerReloadProof,
       assertStaleCompletedGamePlayerCommandRecoveryProof,
     }),
+  });
+}
+
+function assertActionPlayerCompletedProof({ proof, expectedGame, sourceRoleUrl }) {
+  assertCompletedActionPlayerSurfaceProofCase({
+    proof,
+    expectedGame,
+    sourceRoleUrl,
+    assertPostDayThreePlayerSurfaceProof,
   });
 }
 

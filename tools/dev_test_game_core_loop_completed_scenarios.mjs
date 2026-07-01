@@ -337,6 +337,49 @@ export function completedGameEndgameStaleRejectAssertionCases({
   ];
 }
 
+export function completedActionPlayerSurfaceProofArgs({
+  expectedGame,
+  sourceRoleUrl,
+}) {
+  return {
+    expectedGame,
+    sourceRoleUrl,
+    expectedSlot: "slot-7",
+    slotField: "actionPlayerSlot",
+    expectedPrincipalUserId: "player_mira",
+    expectedPhaseId: "N05",
+    expectedPhaseState: "open",
+    expectedActorAlive: true,
+    expectedActorStatus: "alive",
+    expectedActionState: "disabled:game complete",
+    expectedStatusText: "game complete",
+    expectedPrivateCount: 0,
+    expectedPrivateReceipt: false,
+    expectedBoundaryText: "completed game endgame state",
+    expectedResyncFromSeq: 921,
+    expectedCommandStateEndpoint:
+      `/games/${expectedGame}/player-command-state?principal_user_id=player_mira&slot_id=slot-7`,
+    expectedNotificationsEndpoint:
+      `/games/${expectedGame}/notifications?principal_user_id=player_mira`,
+    expectedLastVoteOutcomePhaseId: "D05",
+  };
+}
+
+export function completedActionPlayerSurfaceAssertionCase({
+  completedGameEndgameSurface,
+  expectedGame,
+  assertActionPlayerCompletedProof,
+}) {
+  return {
+    assertProof: assertActionPlayerCompletedProof,
+    proof: completedGameEndgameSurface.actionPlayerCompletedProof,
+    ...completedActionPlayerSurfaceProofArgs({
+      expectedGame,
+      sourceRoleUrl: completedGameEndgameSurface.sourceActionPlayerRoleUrl,
+    }),
+  };
+}
+
 export function completedGameEndgameSurfaceAssertionCases({
   completedGameEndgameSurface,
   expectedGame,
@@ -360,30 +403,11 @@ export function completedGameEndgameSurfaceAssertionCases({
       proof: completedGameEndgameSurface.completedHostReloadProof,
       sourceRoleUrl: completedGameEndgameSurface.sourceHostRoleUrl,
     },
-    {
-      assertProof: assertActionPlayerCompletedProof,
-      proof: completedGameEndgameSurface.actionPlayerCompletedProof,
+    completedActionPlayerSurfaceAssertionCase({
+      completedGameEndgameSurface,
       expectedGame,
-      sourceRoleUrl: completedGameEndgameSurface.sourceActionPlayerRoleUrl,
-      expectedSlot: "slot-7",
-      slotField: "actionPlayerSlot",
-      expectedPrincipalUserId: "player_mira",
-      expectedPhaseId: "N05",
-      expectedPhaseState: "open",
-      expectedActorAlive: true,
-      expectedActorStatus: "alive",
-      expectedActionState: "disabled:game complete",
-      expectedStatusText: "game complete",
-      expectedPrivateCount: 0,
-      expectedPrivateReceipt: false,
-      expectedBoundaryText: "completed game endgame state",
-      expectedResyncFromSeq: 921,
-      expectedCommandStateEndpoint:
-        `/games/${expectedGame}/player-command-state?principal_user_id=player_mira&slot_id=slot-7`,
-      expectedNotificationsEndpoint:
-        `/games/${expectedGame}/notifications?principal_user_id=player_mira`,
-      expectedLastVoteOutcomePhaseId: "D05",
-    },
+      assertActionPlayerCompletedProof,
+    }),
     ...completedPlayerReloadAssertionCases({
       completedGameEndgameSurface,
       expectedGame,
@@ -543,6 +567,21 @@ export function assertCompletedHostReloadProofCase({
       });
     }
   }
+}
+
+export function assertCompletedActionPlayerSurfaceProofCase({
+  proof,
+  expectedGame,
+  sourceRoleUrl,
+  assertPostDayThreePlayerSurfaceProof,
+}) {
+  assertPostDayThreePlayerSurfaceProof({
+    proof,
+    ...completedActionPlayerSurfaceProofArgs({
+      expectedGame,
+      sourceRoleUrl,
+    }),
+  });
 }
 
 export function assertCompletedHostStaleCommandRecoveryProofCase({

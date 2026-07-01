@@ -1,10 +1,13 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
+  assertCompletedActionPlayerSurfaceProofCase,
   assertCompletedGameEndgameSurfaceAssertionCases,
   assertCompletedGameEndgameTransition,
   assertCompletedHostReloadProofCase,
   assertHostCompleteGameProofCase,
+  completedActionPlayerSurfaceAssertionCase,
+  completedActionPlayerSurfaceProofArgs,
   completedDeadPlayerStaleVoteCaseDefinition,
   completedGameEndgameStaleRejectAssertionCases,
   completedGameEndgameSurfaceAssertionCases,
@@ -210,6 +213,73 @@ test("completed-game scenario module derives shared assertion cases", () => {
   );
 });
 
+test("completed-game scenario module derives action-player completed surface case", () => {
+  const completedGameEndgameSurface = {
+    actionPlayerCompletedProof: { id: "action-player-complete" },
+    sourceActionPlayerRoleUrl: "http://127.0.0.1/g/game-a/action",
+  };
+
+  assert.deepEqual(
+    completedActionPlayerSurfaceProofArgs({
+      expectedGame: "game-a",
+      sourceRoleUrl: "http://127.0.0.1/g/game-a/action",
+    }),
+    {
+      expectedGame: "game-a",
+      sourceRoleUrl: "http://127.0.0.1/g/game-a/action",
+      expectedSlot: "slot-7",
+      slotField: "actionPlayerSlot",
+      expectedPrincipalUserId: "player_mira",
+      expectedPhaseId: "N05",
+      expectedPhaseState: "open",
+      expectedActorAlive: true,
+      expectedActorStatus: "alive",
+      expectedActionState: "disabled:game complete",
+      expectedStatusText: "game complete",
+      expectedPrivateCount: 0,
+      expectedPrivateReceipt: false,
+      expectedBoundaryText: "completed game endgame state",
+      expectedResyncFromSeq: 921,
+      expectedCommandStateEndpoint:
+        "/games/game-a/player-command-state?principal_user_id=player_mira&slot_id=slot-7",
+      expectedNotificationsEndpoint:
+        "/games/game-a/notifications?principal_user_id=player_mira",
+      expectedLastVoteOutcomePhaseId: "D05",
+    },
+  );
+  assert.deepEqual(
+    completedActionPlayerSurfaceAssertionCase({
+      completedGameEndgameSurface,
+      expectedGame: "game-a",
+      assertActionPlayerCompletedProof: assertProofFixture,
+    }),
+    {
+      assertProof: assertProofFixture,
+      proof: { id: "action-player-complete" },
+      expectedGame: "game-a",
+      sourceRoleUrl: "http://127.0.0.1/g/game-a/action",
+      expectedSlot: "slot-7",
+      slotField: "actionPlayerSlot",
+      expectedPrincipalUserId: "player_mira",
+      expectedPhaseId: "N05",
+      expectedPhaseState: "open",
+      expectedActorAlive: true,
+      expectedActorStatus: "alive",
+      expectedActionState: "disabled:game complete",
+      expectedStatusText: "game complete",
+      expectedPrivateCount: 0,
+      expectedPrivateReceipt: false,
+      expectedBoundaryText: "completed game endgame state",
+      expectedResyncFromSeq: 921,
+      expectedCommandStateEndpoint:
+        "/games/game-a/player-command-state?principal_user_id=player_mira&slot_id=slot-7",
+      expectedNotificationsEndpoint:
+        "/games/game-a/notifications?principal_user_id=player_mira",
+      expectedLastVoteOutcomePhaseId: "D05",
+    },
+  );
+});
+
 test("completed-game scenario module derives shared surface assertion sequence", () => {
   const completedGameEndgameSurface = {
     hostCompleteProof: { id: "host-complete" },
@@ -410,6 +480,45 @@ test("completed-game scenario module asserts completed host reload shell", () =>
     proof: completedHostReloadProofFixture(),
     sourceRoleUrl: "http://127.0.0.1/g/game-a/host",
   });
+});
+
+test("completed-game scenario module delegates action-player completed assertion", () => {
+  const asserted = [];
+  const proof = { id: "action-player-complete" };
+  assertCompletedActionPlayerSurfaceProofCase({
+    proof,
+    expectedGame: "game-a",
+    sourceRoleUrl: "http://127.0.0.1/g/game-a/action",
+    assertPostDayThreePlayerSurfaceProof: (scenario) => {
+      asserted.push(scenario);
+    },
+  });
+
+  assert.deepEqual(asserted, [
+    {
+      proof,
+      expectedGame: "game-a",
+      sourceRoleUrl: "http://127.0.0.1/g/game-a/action",
+      expectedSlot: "slot-7",
+      slotField: "actionPlayerSlot",
+      expectedPrincipalUserId: "player_mira",
+      expectedPhaseId: "N05",
+      expectedPhaseState: "open",
+      expectedActorAlive: true,
+      expectedActorStatus: "alive",
+      expectedActionState: "disabled:game complete",
+      expectedStatusText: "game complete",
+      expectedPrivateCount: 0,
+      expectedPrivateReceipt: false,
+      expectedBoundaryText: "completed game endgame state",
+      expectedResyncFromSeq: 921,
+      expectedCommandStateEndpoint:
+        "/games/game-a/player-command-state?principal_user_id=player_mira&slot_id=slot-7",
+      expectedNotificationsEndpoint:
+        "/games/game-a/notifications?principal_user_id=player_mira",
+      expectedLastVoteOutcomePhaseId: "D05",
+    },
+  ]);
 });
 
 test("completed-game shared host assertions fail closed", () => {
