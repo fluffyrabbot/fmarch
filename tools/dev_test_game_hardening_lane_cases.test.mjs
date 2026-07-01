@@ -27,7 +27,9 @@ test("hardening lane cases share host stale-control IDs", () => {
   assert.deepEqual(hostStaleControlLaneIds, [
     "stale-host-publish",
     "stale-host-lifecycle",
+    "stale-host-lifecycle-reload",
     "stale-host-modkill",
+    "stale-host-modkill-reload",
     "stale-host-prompt",
     "stale-host-prompt-reload",
     "stale-host-complete",

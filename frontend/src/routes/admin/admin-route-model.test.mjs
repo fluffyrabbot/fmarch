@@ -1914,7 +1914,7 @@ test("admin route data exposes local hardening proof as a native audit row", asy
 
   const hardening = data.audit.find((item) => item.id === "local-hardening");
   assert.equal(hardening.label, "Local multiplayer hardening");
-  assert.equal(hardening.status, "78 hardening lanes passed");
+  assert.equal(hardening.status, "80 hardening lanes passed");
   assert.equal(hardening.authority, "GlobalAdmin or GlobalMod");
   assert.equal(hardening.inspectHref, "/admin/audit/local-hardening?game=midsummer");
   assert.deepEqual(
@@ -1958,7 +1958,9 @@ test("admin route data exposes local hardening proof as a native audit row", asy
       "concurrent-host-publish-race-reload",
       "stale-host-publish",
       "stale-host-lifecycle",
+      "stale-host-lifecycle-reload",
       "stale-host-modkill",
+      "stale-host-modkill-reload",
       "stale-host-prompt",
       "stale-host-prompt-reload",
       "stale-host-complete",
@@ -2003,7 +2005,7 @@ test("admin route data exposes local hardening proof as a native audit row", asy
   assert.deepEqual(hardening.artifactSummary, {
     game: "game-a",
     roleCount: 6,
-    laneCount: 105,
+    laneCount: 107,
     releaseReady: false,
     productionReady: false,
   });
@@ -2055,7 +2057,7 @@ test("admin route data exposes local core loop proof as a native audit row", asy
   assert.deepEqual(coreLoop.artifactSummary, {
     game: "game-a",
     roleCount: 6,
-    laneCount: 105,
+    laneCount: 107,
     releaseReady: false,
     productionReady: false,
   });
@@ -2168,7 +2170,7 @@ test("admin local hardening detail data carries lane rows", async () => {
   assert.equal(data.status, "available");
   assert.equal(data.surfaceHeader.title, "Local multiplayer hardening");
   assert.equal(data.audit.id, "local-hardening");
-  assert.equal(data.audit.checks.length, 78);
+  assert.equal(data.audit.checks.length, 80);
   assert.deepEqual(
     data.audit.checks.map((check) => [check.id, check.status]),
     [
@@ -2210,7 +2212,9 @@ test("admin local hardening detail data carries lane rows", async () => {
       ["concurrent-host-publish-race-reload", "passed"],
       ["stale-host-publish", "passed"],
       ["stale-host-lifecycle", "passed"],
+      ["stale-host-lifecycle-reload", "passed"],
       ["stale-host-modkill", "passed"],
+      ["stale-host-modkill-reload", "passed"],
       ["stale-host-prompt", "passed"],
       ["stale-host-prompt-reload", "passed"],
       ["stale-host-complete", "passed"],
@@ -2466,7 +2470,7 @@ test("admin route data exposes local seed fixture summary as a native audit row"
 
   const seed = data.audit.find((item) => item.id === "local-seed-fixtures");
   assert.equal(seed.label, "Local seed fixtures");
-  assert.equal(seed.status, "116 demo scenarios available locally");
+  assert.equal(seed.status, "118 demo scenarios available locally");
   assert.equal(seed.authority, "GlobalAdmin or GlobalMod");
   assert.equal(seed.inspectHref, "/admin/audit/local-seed-fixtures?game=midsummer");
   assert.deepEqual(
@@ -2478,8 +2482,8 @@ test("admin route data exposes local seed fixture summary as a native audit row"
     scenarioCount: seedScenarioCoverageGroups.allDemo.length,
     roleCount: 7,
     slotCount: 5,
-    proofLaneCount: 113,
-    directSeededProofLaneCount: 105,
+    proofLaneCount: 115,
+    directSeededProofLaneCount: 107,
     aliasOnlyProofLaneCount: seedAliasOnlyProofLaneIds.length,
     aggregateOnlyProofLaneCount: seedAggregateOnlyProofLaneIds.length,
     unclassifiedProofLaneCount: 0,
@@ -2513,7 +2517,7 @@ test("admin local seed fixture detail data carries scenario rows", async () => {
       coverage.count,
     ]),
     [
-      ["direct-seeded", 105],
+      ["direct-seeded", 107],
       ["alias-only", seedAliasOnlyProofLaneIds.length],
       ["aggregate-only", seedAggregateOnlyProofLaneIds.length],
       ["unclassified", 0],
@@ -3156,8 +3160,10 @@ function proofRunFixture() {
     "stale-host-publish",
     "host-lifecycle-control",
     "stale-host-lifecycle",
+    "stale-host-lifecycle-reload",
     "host-modkill-control",
     "stale-host-modkill",
+    "stale-host-modkill-reload",
     "stale-host-prompt",
     "stale-host-prompt-reload",
     "stale-host-complete",
@@ -3485,10 +3491,10 @@ function seedFixtureSummaryFixture() {
     demoScenarios: seedDemoScenarioFixtureRows(),
     proofLaneCoverage: {
       status: "passed",
-      passedLaneCount: 113,
+      passedLaneCount: 115,
       directSeeded: {
-        count: 105,
-        laneIds: seedScenarioCoverageGroups.allDemo.slice(0, 105),
+        count: 107,
+        laneIds: seedScenarioCoverageGroups.allDemo.slice(0, 107),
       },
       aliasOnly: {
         count: seedAliasOnlyProofLaneIds.length,
@@ -3909,7 +3915,7 @@ function seedProofLaneCoverageActionFixture({ unclassifiedLaneIds }) {
   return {
     source: "target/dev-test-game/release-readiness-checklist.json",
     status: "drifted",
-    passedLaneCount: 113 + unclassifiedLaneIds.length,
+    passedLaneCount: 115 + unclassifiedLaneIds.length,
     unclassifiedLaneCount: unclassifiedLaneIds.length,
     unclassifiedLaneIds,
     buildSlice:
@@ -4028,7 +4034,7 @@ function raceCoverageFixture() {
     generatedFrom: {
       proofRun: "target/dev-test-game/proof-run.json",
       game: "00000000-0000-0000-0000-000000000001",
-      laneCount: 105,
+      laneCount: 107,
     },
     summary: {
       cellCount: 3,
@@ -4594,8 +4600,8 @@ function seedProofLaneCoverageTraceFixture({ seedProofLaneCoverage } = {}) {
     source: "target/dev-test-game/release-readiness-checklist.json",
     checkId: "local-seed-demo-fixture",
     selected: seedProofLaneCoverage !== undefined,
-    passedLaneCount: Number(seedProofLaneCoverage?.passedLaneCount ?? 113),
-    directSeededLaneCount: 105,
+    passedLaneCount: Number(seedProofLaneCoverage?.passedLaneCount ?? 115),
+    directSeededLaneCount: 107,
     aliasOnlyLaneCount: seedAliasOnlyProofLaneIds.length,
     aggregateOnlyLaneCount: seedAggregateOnlyProofLaneIds.length,
     unclassifiedLaneCount: unclassifiedLaneIds.length,

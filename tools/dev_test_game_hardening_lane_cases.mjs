@@ -41,7 +41,9 @@ export const playerActionConflictRecoveryLaneIds = Object.freeze([
 export const hostStaleControlLaneIds = Object.freeze([
   "stale-host-publish",
   "stale-host-lifecycle",
+  "stale-host-lifecycle-reload",
   "stale-host-modkill",
+  "stale-host-modkill-reload",
   "stale-host-prompt",
   "stale-host-prompt-reload",
   ...completedHostStaleCommandHardeningLaneIds(),

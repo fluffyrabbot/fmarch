@@ -3441,6 +3441,45 @@ assert.equal(
   "dead",
 );
 assert.equal(
+  session.verification.multiplayerHardening.staleHostLifecycle
+    .staleHostSlotLifecycleReloadAfterReject.status,
+  "passed",
+);
+assert.equal(
+  session.verification.multiplayerHardening.staleHostLifecycle
+    .staleHostSlotLifecycleReloadAfterReject.routeResponseStatus,
+  200,
+);
+assert.match(
+  session.verification.multiplayerHardening.staleHostLifecycle
+    .staleHostSlotLifecycleReloadAfterReject.rejectReceiptStatusText,
+  /Reject InvalidTarget/,
+);
+assert.equal(
+  session.verification.multiplayerHardening.staleHostLifecycle
+    .staleHostSlotLifecycleReloadAfterReject.replacementAfterReload.lifecycleLabel,
+  "Dead",
+);
+assert.equal(
+  session.verification.multiplayerHardening.staleHostLifecycle
+    .staleHostSlotLifecycleReloadAfterReject.lifecycleActionsAfterReload.includes(
+      "mark_dead",
+    ),
+  false,
+);
+assert.equal(
+  session.verification.multiplayerHardening.staleHostLifecycle
+    .staleHostSlotLifecycleReloadAfterReject.lifecycleActionsAfterReload.includes(
+      "modkill_slot",
+    ),
+  false,
+);
+assert.equal(
+  session.verification.multiplayerHardening.staleHostLifecycle
+    .staleHostSlotLifecycleReloadAfterReject.apiSlotAfterReload.status,
+  "dead",
+);
+assert.equal(
   session.verification.multiplayerHardening.hostModkillControl.status,
   "passed",
 );
@@ -3542,6 +3581,45 @@ assert.equal(
 assert.equal(
   session.verification.multiplayerHardening.staleHostModkill.playerCommandStateAfterReject
     .actorStatus,
+  "modkilled",
+);
+assert.equal(
+  session.verification.multiplayerHardening.staleHostModkill
+    .staleHostSlotLifecycleReloadAfterReject.status,
+  "passed",
+);
+assert.equal(
+  session.verification.multiplayerHardening.staleHostModkill
+    .staleHostSlotLifecycleReloadAfterReject.routeResponseStatus,
+  200,
+);
+assert.match(
+  session.verification.multiplayerHardening.staleHostModkill
+    .staleHostSlotLifecycleReloadAfterReject.rejectReceiptStatusText,
+  /Reject InvalidTarget/,
+);
+assert.equal(
+  session.verification.multiplayerHardening.staleHostModkill
+    .staleHostSlotLifecycleReloadAfterReject.replacementAfterReload.lifecycleLabel,
+  "Modkilled",
+);
+assert.equal(
+  session.verification.multiplayerHardening.staleHostModkill
+    .staleHostSlotLifecycleReloadAfterReject.lifecycleActionsAfterReload.includes(
+      "mark_dead",
+    ),
+  false,
+);
+assert.equal(
+  session.verification.multiplayerHardening.staleHostModkill
+    .staleHostSlotLifecycleReloadAfterReject.lifecycleActionsAfterReload.includes(
+      "modkill_slot",
+    ),
+  false,
+);
+assert.equal(
+  session.verification.multiplayerHardening.staleHostModkill
+    .staleHostSlotLifecycleReloadAfterReject.apiSlotAfterReload.status,
   "modkilled",
 );
 assert.equal(

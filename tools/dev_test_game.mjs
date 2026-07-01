@@ -8196,6 +8196,40 @@ async function submitStaleHostLifecycleRecovery({
   const playerCommandStateAfterReject = await playerPage.evaluate(
     () => window.__fmarchPlayerProjection?.commandState,
   );
+  const reloadAfterReject = await gotoHostConsole(staleHostLifecyclePage, game);
+  await staleHostLifecyclePage.waitForFunction(
+    (expected) =>
+      window.__fmarchHostProjection?.replacement?.lifecycleLabel === expected,
+    lifecycleLabel,
+  );
+  const surfaceTextAfterReload = await staleHostLifecyclePage
+    .getByTestId("host-console-surface")
+    .innerText();
+  const phaseAfterReload = await staleHostLifecyclePage.evaluate(
+    () => window.__fmarchHostProjection?.phase,
+  );
+  const replacementAfterReload = await staleHostLifecyclePage.evaluate(
+    () => window.__fmarchHostProjection?.replacement,
+  );
+  const lifecycleActionsAfterReload = await visibleHostControlActions(
+    staleHostLifecyclePage,
+    "slot-lifecycle",
+  );
+  const apiSlotAfterReload = await fetchResolvedSlotState({
+    apiBaseUrl,
+    game,
+    slot: "slot-7",
+  });
+  const staleHostSlotLifecycleReloadAfterReject = {
+    status: "passed",
+    routeResponseStatus: reloadAfterReject.status,
+    rejectReceiptStatusText: activityStatusText,
+    surfaceText: surfaceTextAfterReload,
+    phaseAfterReload,
+    replacementAfterReload,
+    lifecycleActionsAfterReload,
+    apiSlotAfterReload,
+  };
   if (
     staleHostLifecycleSetup?.replacement?.lifecycleLabel !== "Alive" ||
     !staleHostLifecycleSetup?.lifecycleActions?.includes(actionId) ||
@@ -8222,7 +8256,24 @@ async function submitStaleHostLifecycleRecovery({
     apiSlotAfterReject?.alive !== false ||
     apiSlotAfterReject?.status !== lifecycleStatus ||
     playerCommandStateAfterReject?.actorAlive !== false ||
-    playerCommandStateAfterReject?.actorStatus !== lifecycleStatus
+    playerCommandStateAfterReject?.actorStatus !== lifecycleStatus ||
+    staleHostSlotLifecycleReloadAfterReject.routeResponseStatus !== 200 ||
+    !staleHostSlotLifecycleReloadAfterReject.rejectReceiptStatusText.includes(
+      "Reject InvalidTarget",
+    ) ||
+    staleHostSlotLifecycleReloadAfterReject.phaseAfterReload?.id !== "D02" ||
+    staleHostSlotLifecycleReloadAfterReject.phaseAfterReload?.locked !== false ||
+    staleHostSlotLifecycleReloadAfterReject.replacementAfterReload
+      ?.lifecycleLabel !== lifecycleLabel ||
+    staleHostSlotLifecycleReloadAfterReject.lifecycleActionsAfterReload.includes(
+      "mark_dead",
+    ) ||
+    staleHostSlotLifecycleReloadAfterReject.lifecycleActionsAfterReload.includes(
+      "modkill_slot",
+    ) ||
+    staleHostSlotLifecycleReloadAfterReject.apiSlotAfterReload?.alive !== false ||
+    staleHostSlotLifecycleReloadAfterReject.apiSlotAfterReload?.status !==
+      lifecycleStatus
   ) {
     throw new Error(
       `stale host lifecycle recovery drifted: ${JSON.stringify({
@@ -8237,6 +8288,7 @@ async function submitStaleHostLifecycleRecovery({
         dispatchPlan,
         apiSlotAfterReject,
         playerCommandStateAfterReject,
+        staleHostSlotLifecycleReloadAfterReject,
       })}`,
     );
   }
@@ -8254,6 +8306,7 @@ async function submitStaleHostLifecycleRecovery({
     dispatchPlan,
     apiSlotAfterReject,
     playerCommandStateAfterReject,
+    staleHostSlotLifecycleReloadAfterReject,
   };
 }
 

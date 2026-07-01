@@ -828,8 +828,8 @@ test("dev test-game next-action derives one local recovery command from the mani
     status: "clean",
     source: "target/dev-test-game/release-readiness-checklist.json",
     checkId: "local-seed-demo-fixture",
-    passedLaneCount: 113,
-    directSeededLaneCount: 105,
+    passedLaneCount: 115,
+    directSeededLaneCount: 107,
     aliasOnlyLaneCount: seedAliasOnlyProofLaneIds.length,
     aggregateOnlyLaneCount: seedAggregateOnlyProofLaneIds.length,
     unclassifiedLaneCount: 0,
@@ -949,7 +949,7 @@ test("dev test-game next-action derives one local recovery command from the mani
     seedProofLaneCoverage: {
       source: "target/dev-test-game/release-readiness-checklist.json",
       status: "drifted",
-      passedLaneCount: 114,
+      passedLaneCount: 116,
       unclassifiedLaneCount: 1,
       unclassifiedLaneIds: ["new-production-proof-lane"],
       buildSlice:
@@ -963,8 +963,8 @@ test("dev test-game next-action derives one local recovery command from the mani
     status: "drifted",
     source: "target/dev-test-game/release-readiness-checklist.json",
     checkId: "local-seed-demo-fixture",
-    passedLaneCount: 114,
-    directSeededLaneCount: 105,
+    passedLaneCount: 116,
+    directSeededLaneCount: 107,
     aliasOnlyLaneCount: seedAliasOnlyProofLaneIds.length,
     aggregateOnlyLaneCount: seedAggregateOnlyProofLaneIds.length,
     unclassifiedLaneCount: 1,
@@ -5302,6 +5302,16 @@ test("session card and markdown include role credential URLs and tokens", async 
           actorAlive: false,
           actorStatus: "dead",
         },
+        staleHostSlotLifecycleReloadAfterReject: {
+          status: "passed",
+          routeResponseStatus: 200,
+          rejectReceiptStatusText:
+            "Reject InvalidTarget: invalid target; slot lifecycle changed or is already current, refresh the slot controls before retrying",
+          phaseAfterReload: { id: "D02", locked: false },
+          replacementAfterReload: { lifecycleLabel: "Dead" },
+          lifecycleActionsAfterReload: [],
+          apiSlotAfterReload: { alive: false, status: "dead" },
+        },
       },
       hostModkillControl: {
         status: "passed",
@@ -5383,6 +5393,16 @@ test("session card and markdown include role credential URLs and tokens", async 
         playerCommandStateAfterReject: {
           actorAlive: false,
           actorStatus: "modkilled",
+        },
+        staleHostSlotLifecycleReloadAfterReject: {
+          status: "passed",
+          routeResponseStatus: 200,
+          rejectReceiptStatusText:
+            "Reject InvalidTarget: invalid target; slot lifecycle changed or is already current, refresh the slot controls before retrying",
+          phaseAfterReload: { id: "D02", locked: false },
+          replacementAfterReload: { lifecycleLabel: "Modkilled" },
+          lifecycleActionsAfterReload: [],
+          apiSlotAfterReload: { alive: false, status: "modkilled" },
         },
       },
       concurrentHostLifecycleRace: {
@@ -7297,8 +7317,10 @@ test("session card and markdown include role credential URLs and tokens", async 
       "stale-host-publish",
       "host-lifecycle-control",
       "stale-host-lifecycle",
+      "stale-host-lifecycle-reload",
       "host-modkill-control",
       "stale-host-modkill",
+      "stale-host-modkill-reload",
       "concurrent-host-lifecycle-race",
       "concurrent-host-lifecycle-race-reload",
       "stale-host-prompt",
@@ -8001,7 +8023,7 @@ test("session card and markdown include role credential URLs and tokens", async 
   assert.equal(opsArtifacts.productionReady, false);
   assert.equal(opsArtifacts.run.game, game);
   assert.equal(opsArtifacts.run.seedCommandCount, 1);
-  assert.equal(opsArtifacts.proofRun.laneCount, 113);
+  assert.equal(opsArtifacts.proofRun.laneCount, 115);
   assert.equal(opsArtifacts.proofStability.hostConfirmClicks.total, 4);
   assert.equal(
     opsArtifacts.checks.some(
@@ -8930,10 +8952,10 @@ function devTestGameReleaseReadinessChecklistFixture({
 function seedProofLaneCoverageFixture({ unclassifiedLaneIds = [] } = {}) {
   return {
     status: unclassifiedLaneIds.length === 0 ? "passed" : "failed",
-    passedLaneCount: 113 + unclassifiedLaneIds.length,
+    passedLaneCount: 115 + unclassifiedLaneIds.length,
     directSeeded: {
-      count: 105,
-      laneIds: seedScenarioCoverageGroups.allDemo.slice(0, 105),
+      count: 107,
+      laneIds: seedScenarioCoverageGroups.allDemo.slice(0, 107),
     },
     aliasOnly: {
       count: seedAliasOnlyProofLaneIds.length,
@@ -9041,7 +9063,7 @@ function devTestGameRaceCoverageFixture() {
       proofRun: "target/dev-test-game/proof-run.json",
       proofGeneratedAt: "2026-06-26T00:00:00.000Z",
       game: "game-a",
-      laneCount: 113,
+      laneCount: 115,
     },
     summary: {
       cellCount: cells.length,
@@ -9272,7 +9294,7 @@ function devTestGameOpsArtifactsFixture({
     roles: {},
     proofRun: {
       status: "passed",
-      laneCount: 113,
+      laneCount: 115,
       lanes: [],
       nonClaims: [],
     },
@@ -12948,7 +12970,9 @@ function hardeningAdminProofFixture() {
         "concurrent-host-publish-race-reload",
         "stale-host-publish",
         "stale-host-lifecycle",
+        "stale-host-lifecycle-reload",
         "stale-host-modkill",
+        "stale-host-modkill-reload",
         "stale-host-prompt",
         "stale-host-prompt-reload",
         "stale-host-complete",

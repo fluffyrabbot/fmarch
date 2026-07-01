@@ -566,11 +566,15 @@ ACK stream seqs while the API and player thread projections keep exactly one
 official count, keeps a second host page frozen on the D02 `Mark dead` control
 until the live host marks Slot 7 dead, then renders a stale `SetSlotStatus`
 `Reject InvalidTarget` receipt with no ACK stream seqs while the API and player
-command projections stay on the single dead status until the seed is restored,
+command projections stay on the single dead status, reloads the same host role
+URL into terminal Slot 7 controls with stale lifecycle actions hidden, then
+keeps that state until the seed is restored,
 keeps another host page frozen on the D02 `Modkill slot` control until the live
 host modkills Slot 7, then renders the same stale lifecycle `Reject
 InvalidTarget` receipt while API and player command projections stay on the
-single modkilled status until the seed is restored,
+single modkilled status, reloads that stale host role URL into terminal Slot 7
+controls with stale lifecycle actions hidden, then keeps that state until the
+seed is restored,
 keeps a full host page frozen on the
 D01 deadline control until its stale `ExtendDeadline` click renders a host
 command activity `Reject PhaseLocked` receipt, refreshes to
@@ -582,7 +586,7 @@ control without mutating the D02 deadline.
 The same local hardening evidence is inspectable from the seeded admin role:
 `target/dev-test-game/hardening-admin-proof.json` is written by clicking from
 the admin overview into the native local multiplayer-hardening detail route and
-verifying the thirty-one hardening lane rows above.
+verifying the thirty-three hardening lane rows above.
 
 `proof-run.json` is the compact machine-checkable truth surface for this local
 harness. It records the passed lanes, seed game identity, artifact paths, and

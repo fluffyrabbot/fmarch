@@ -81,16 +81,16 @@ const requiredLaneIds = Object.freeze([
   "host-votecount-publication",
   "concurrent-host-publish-race",
   "concurrent-host-publish-race-reload",
-  ...hostStaleControlLaneIds.slice(0, 3),
+  ...hostStaleControlLaneIds.slice(0, 5),
   "host-lifecycle-control",
   "host-modkill-control",
   "concurrent-host-lifecycle-race",
   "concurrent-host-lifecycle-race-reload",
-  ...hostStaleControlLaneIds.slice(3, 5),
+  ...hostStaleControlLaneIds.slice(5, 7),
   ...completedGameHardeningLaneIds(),
   ...playerActionConflictRecoveryLaneIds,
   ...hostRaceReloadLaneIds,
-  ...hostStaleControlLaneIds.slice(8, 9),
+  ...hostStaleControlLaneIds.slice(10, 11),
   ...hostPhaseStaleRecoveryLaneIds,
   "stale-cohost-deadline",
   ...cohostDeadlineRecoveryLaneIds,
@@ -4971,6 +4971,43 @@ export function buildDevTestGameProofRun(session, options = {}) {
         hardening.staleHostLifecycle?.playerCommandStateAfterReject?.actorStatus ===
           "dead",
     }),
+    lane(
+      "stale-host-lifecycle-reload",
+      "Stale host lifecycle reloads terminal slot controls",
+      {
+        routeStatus:
+          hardening.staleHostLifecycle?.staleHostSlotLifecycleReloadAfterReject
+            ?.routeResponseStatus ?? null,
+        lifecycle:
+          hardening.staleHostLifecycle?.staleHostSlotLifecycleReloadAfterReject
+            ?.replacementAfterReload?.lifecycleLabel ?? null,
+        apiStatus:
+          hardening.staleHostLifecycle?.staleHostSlotLifecycleReloadAfterReject
+            ?.apiSlotAfterReload?.status ?? null,
+        passed:
+          hardening.staleHostLifecycle?.status === "passed" &&
+          hardening.staleHostLifecycle?.staleHostSlotLifecycleReloadAfterReject
+            ?.status === "passed" &&
+          hardening.staleHostLifecycle.staleHostSlotLifecycleReloadAfterReject
+            .routeResponseStatus === 200 &&
+          hardening.staleHostLifecycle.staleHostSlotLifecycleReloadAfterReject
+            .rejectReceiptStatusText?.includes("Reject InvalidTarget") === true &&
+          hardening.staleHostLifecycle.staleHostSlotLifecycleReloadAfterReject
+            .phaseAfterReload?.id === "D02" &&
+          hardening.staleHostLifecycle.staleHostSlotLifecycleReloadAfterReject
+            .phaseAfterReload?.locked === false &&
+          hardening.staleHostLifecycle.staleHostSlotLifecycleReloadAfterReject
+            .replacementAfterReload?.lifecycleLabel === "Dead" &&
+          hardening.staleHostLifecycle.staleHostSlotLifecycleReloadAfterReject
+            .lifecycleActionsAfterReload?.includes("mark_dead") === false &&
+          hardening.staleHostLifecycle.staleHostSlotLifecycleReloadAfterReject
+            .lifecycleActionsAfterReload?.includes("modkill_slot") === false &&
+          hardening.staleHostLifecycle.staleHostSlotLifecycleReloadAfterReject
+            .apiSlotAfterReload?.alive === false &&
+          hardening.staleHostLifecycle.staleHostSlotLifecycleReloadAfterReject
+            .apiSlotAfterReload?.status === "dead",
+      },
+    ),
     lane("host-modkill-control", "Host modkill control disables player commands", {
       targetSlot: hardening.hostModkillControl?.targetSlot ?? null,
       modkillState:
@@ -5069,6 +5106,43 @@ export function buildDevTestGameProofRun(session, options = {}) {
         hardening.staleHostModkill?.playerCommandStateAfterReject?.actorStatus ===
           "modkilled",
     }),
+    lane(
+      "stale-host-modkill-reload",
+      "Stale host modkill reloads terminal slot controls",
+      {
+        routeStatus:
+          hardening.staleHostModkill?.staleHostSlotLifecycleReloadAfterReject
+            ?.routeResponseStatus ?? null,
+        lifecycle:
+          hardening.staleHostModkill?.staleHostSlotLifecycleReloadAfterReject
+            ?.replacementAfterReload?.lifecycleLabel ?? null,
+        apiStatus:
+          hardening.staleHostModkill?.staleHostSlotLifecycleReloadAfterReject
+            ?.apiSlotAfterReload?.status ?? null,
+        passed:
+          hardening.staleHostModkill?.status === "passed" &&
+          hardening.staleHostModkill?.staleHostSlotLifecycleReloadAfterReject
+            ?.status === "passed" &&
+          hardening.staleHostModkill.staleHostSlotLifecycleReloadAfterReject
+            .routeResponseStatus === 200 &&
+          hardening.staleHostModkill.staleHostSlotLifecycleReloadAfterReject
+            .rejectReceiptStatusText?.includes("Reject InvalidTarget") === true &&
+          hardening.staleHostModkill.staleHostSlotLifecycleReloadAfterReject
+            .phaseAfterReload?.id === "D02" &&
+          hardening.staleHostModkill.staleHostSlotLifecycleReloadAfterReject
+            .phaseAfterReload?.locked === false &&
+          hardening.staleHostModkill.staleHostSlotLifecycleReloadAfterReject
+            .replacementAfterReload?.lifecycleLabel === "Modkilled" &&
+          hardening.staleHostModkill.staleHostSlotLifecycleReloadAfterReject
+            .lifecycleActionsAfterReload?.includes("mark_dead") === false &&
+          hardening.staleHostModkill.staleHostSlotLifecycleReloadAfterReject
+            .lifecycleActionsAfterReload?.includes("modkill_slot") === false &&
+          hardening.staleHostModkill.staleHostSlotLifecycleReloadAfterReject
+            .apiSlotAfterReload?.alive === false &&
+          hardening.staleHostModkill.staleHostSlotLifecycleReloadAfterReject
+            .apiSlotAfterReload?.status === "modkilled",
+      },
+    ),
     lane(
       "concurrent-host-lifecycle-race",
       "Concurrent host lifecycle commands converge",
