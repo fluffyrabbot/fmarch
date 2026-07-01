@@ -1,4 +1,8 @@
 import { hostedMatrixHandoffSummaryForRoleLink } from "../frontend/src/lib/app/local-proof-handoff-status.mjs";
+import {
+  hostedTargetPreflightBlockingCheckIds,
+  hostedTargetPreflightCheckIds,
+} from "./dev_test_game_hosted_target_preflight.mjs";
 
 const adminProofDestinationRequirements = [
   {
@@ -91,14 +95,7 @@ const adminProofDestinationRequirements = [
   {
     linkId: "admin-proof:hosted-target-preflight",
     auditId: "local-hosted-target-preflight",
-    requiredCheckIds: [
-      "hosted-frontend-url-configured",
-      "hosted-api-url-configured",
-      "hosted-targets-external",
-      "raw-evidence-path-configured",
-      "raw-evidence-readable",
-      "release-claim-boundary-carried",
-    ],
+    requiredCheckIds: hostedTargetPreflightCheckIds,
     requiredRelatedLinkIds: [
       "local-hosted-concurrent-race-matrix",
       "local-next-action",
@@ -109,11 +106,7 @@ const adminProofDestinationRequirements = [
     auditId: "local-hosted-evidence-lane",
     requiredCheckIds: [
       "hosted-target-preflight",
-      "hosted-frontend-url-configured",
-      "hosted-api-url-configured",
-      "hosted-targets-external",
-      "raw-evidence-path-configured",
-      "raw-evidence-readable",
+      ...hostedTargetPreflightBlockingCheckIds,
     ],
     requiredRelatedLinkIds: [
       "local-hosted-target-preflight",

@@ -93,7 +93,10 @@ import {
   devTestGameHostedEvidenceLanePath,
   runDevTestGameHostedEvidenceLane,
 } from "./dev_test_game_hosted_evidence_lane.mjs";
-import { realHostedEvidenceInputIds } from "./dev_test_game_real_hosted_evidence_inputs.mjs";
+import {
+  hostedEvidenceHandoffBlockedCheckIds,
+  hostedEvidenceHandoffInputIds,
+} from "./dev_test_game_hosted_handoff_cases.mjs";
 import {
   assertDevTestGameHostedEvidenceLaneDemoProof,
   devTestGameHostedEvidenceLaneDemoBlockedPath,
@@ -114,6 +117,8 @@ import {
   assertDevTestGameHostedTargetPreflight,
   devTestGameHostedTargetPreflightCommand,
   devTestGameHostedTargetPreflightPath,
+  hostedTargetPreflightBlockingCheckIds,
+  hostedTargetPreflightCheckIds,
 } from "./dev_test_game_hosted_target_preflight.mjs";
 import {
   devTestGameReleaseRunbookCommand,
@@ -1266,26 +1271,12 @@ test("dev test-game next-action advances hosted deployment after target prefligh
   );
   assert.deepEqual(
     blockedPreflightAction.nextAction.unproven.hostedHandoffChecklist.inputIds,
-    [
-      "command",
-      "proof-target",
-      "FMARCH_HOSTED_MATRIX_FRONTEND_URL",
-      "FMARCH_HOSTED_MATRIX_API_URL",
-      "FMARCH_HOSTED_MATRIX_GROUP_ID",
-      "FMARCH_HOSTED_MATRIX_RAW_EVIDENCE_PATH",
-      "FMARCH_HOSTED_MATRIX_EVIDENCE_PATH",
-    ],
+    hostedEvidenceHandoffInputIds,
   );
   assert.deepEqual(
     blockedPreflightAction.nextAction.unproven.hostedHandoffChecklist
       .blockedCheckIds,
-    [
-      "hosted-frontend-url-configured",
-      "hosted-api-url-configured",
-      "hosted-targets-external",
-      "raw-evidence-path-configured",
-      "raw-evidence-readable",
-    ],
+    hostedEvidenceHandoffBlockedCheckIds,
   );
   assert.deepEqual(
     blockedPreflightAction.releaseReadinessTrace.candidates[0]
@@ -1342,13 +1333,7 @@ test("dev test-game hosted evidence lane records blocked preflight state", async
   assert.equal(lane.releaseReady, false);
   assert.equal(lane.productionReady, false);
   assert.equal(lane.preflightStatus, "blocked");
-  assert.deepEqual(lane.blockedCheckIds, [
-    "hosted-frontend-url-configured",
-    "hosted-api-url-configured",
-    "hosted-targets-external",
-    "raw-evidence-path-configured",
-    "raw-evidence-readable",
-  ]);
+  assert.deepEqual(lane.blockedCheckIds, hostedTargetPreflightBlockingCheckIds);
   assert.equal(lane.nextCommand, `npm run ${devTestGameHostedEvidenceLaneCommand}`);
   assert.equal(lane.nextProofTarget, devTestGameHostedEvidenceLanePath);
   assert.deepEqual(lane.generatedFrom, {
@@ -13283,17 +13268,11 @@ function proofGraphAdminProofFixture() {
 }
 
 function hostedHandoffInputIdsFixture() {
-  return [...realHostedEvidenceInputIds];
+  return [...hostedEvidenceHandoffInputIds];
 }
 
 function hostedHandoffBlockedCheckIdsFixture() {
-  return [
-    "hosted-frontend-url-configured",
-    "hosted-api-url-configured",
-    "hosted-targets-external",
-    "raw-evidence-path-configured",
-    "raw-evidence-readable",
-  ];
+  return [...hostedEvidenceHandoffBlockedCheckIds];
 }
 
 function proofFreshnessAdminProofFixture() {
@@ -13737,21 +13716,8 @@ function hostedTargetPreflightAdminProofFixture() {
       proofRun: "target/dev-test-game/proof-run.json",
       game: "00000000-0000-0000-0000-000000000001",
       status: "blocked",
-      checkIds: [
-        "hosted-frontend-url-configured",
-        "hosted-api-url-configured",
-        "hosted-targets-external",
-        "raw-evidence-path-configured",
-        "raw-evidence-readable",
-        "release-claim-boundary-carried",
-      ],
-      blockedCheckIds: [
-        "hosted-frontend-url-configured",
-        "hosted-api-url-configured",
-        "hosted-targets-external",
-        "raw-evidence-path-configured",
-        "raw-evidence-readable",
-      ],
+      checkIds: [...hostedTargetPreflightCheckIds],
+      blockedCheckIds: [...hostedTargetPreflightBlockingCheckIds],
       relatedAuditIds: [
         "local-hosted-concurrent-race-matrix",
         "local-next-action",
@@ -13765,21 +13731,8 @@ function hostedTargetPreflightAdminProofFixture() {
       linkTestId: "admin-audit-link-local-hosted-target-preflight",
       surfaceTestId: "admin-audit-detail-surface",
       clickedThroughFromOverview: true,
-      visibleChecks: [
-        "hosted-frontend-url-configured",
-        "hosted-api-url-configured",
-        "hosted-targets-external",
-        "raw-evidence-path-configured",
-        "raw-evidence-readable",
-        "release-claim-boundary-carried",
-      ],
-      visibleUnproven: [
-        "hosted-frontend-url-configured",
-        "hosted-api-url-configured",
-        "hosted-targets-external",
-        "raw-evidence-path-configured",
-        "raw-evidence-readable",
-      ],
+      visibleChecks: [...hostedTargetPreflightCheckIds],
+      visibleUnproven: [...hostedTargetPreflightBlockingCheckIds],
       visibleRelatedLinks: [
         "local-hosted-concurrent-race-matrix",
         "local-next-action",
@@ -13808,45 +13761,13 @@ function hostedEvidenceLaneAdminProofFixture() {
       preflightStatus: "blocked",
       checkIds: [
         "hosted-target-preflight",
-        "hosted-frontend-url-configured",
-        "hosted-api-url-configured",
-        "hosted-targets-external",
-        "raw-evidence-path-configured",
-        "raw-evidence-readable",
+        ...hostedTargetPreflightBlockingCheckIds,
         "release-claim-boundary-carried",
       ],
-      blockedCheckIds: [
-        "hosted-frontend-url-configured",
-        "hosted-api-url-configured",
-        "hosted-targets-external",
-        "raw-evidence-path-configured",
-        "raw-evidence-readable",
-      ],
-      realHostedEvidenceInputIds: [
-        "command",
-        "proof-target",
-        "FMARCH_HOSTED_MATRIX_FRONTEND_URL",
-        "FMARCH_HOSTED_MATRIX_API_URL",
-        "FMARCH_HOSTED_MATRIX_GROUP_ID",
-        "FMARCH_HOSTED_MATRIX_RAW_EVIDENCE_PATH",
-        "FMARCH_HOSTED_MATRIX_EVIDENCE_PATH",
-      ],
-      hostedHandoffInputIds: [
-        "command",
-        "proof-target",
-        "FMARCH_HOSTED_MATRIX_FRONTEND_URL",
-        "FMARCH_HOSTED_MATRIX_API_URL",
-        "FMARCH_HOSTED_MATRIX_GROUP_ID",
-        "FMARCH_HOSTED_MATRIX_RAW_EVIDENCE_PATH",
-        "FMARCH_HOSTED_MATRIX_EVIDENCE_PATH",
-      ],
-      hostedHandoffBlockedCheckIds: [
-        "hosted-frontend-url-configured",
-        "hosted-api-url-configured",
-        "hosted-targets-external",
-        "raw-evidence-path-configured",
-        "raw-evidence-readable",
-      ],
+      blockedCheckIds: [...hostedTargetPreflightBlockingCheckIds],
+      realHostedEvidenceInputIds: [...hostedEvidenceHandoffInputIds],
+      hostedHandoffInputIds: [...hostedEvidenceHandoffInputIds],
+      hostedHandoffBlockedCheckIds: [...hostedEvidenceHandoffBlockedCheckIds],
       relatedAuditIds: [
         "local-hosted-target-preflight",
         "local-hosted-concurrent-race-matrix",
@@ -13862,44 +13783,14 @@ function hostedEvidenceLaneAdminProofFixture() {
       clickedThroughFromOverview: true,
       visibleChecks: [
         "hosted-target-preflight",
-        "hosted-frontend-url-configured",
-        "hosted-api-url-configured",
-        "hosted-targets-external",
-        "raw-evidence-path-configured",
-        "raw-evidence-readable",
+        ...hostedTargetPreflightBlockingCheckIds,
         "release-claim-boundary-carried",
       ],
-      visibleUnproven: [
-        "hosted-frontend-url-configured",
-        "hosted-api-url-configured",
-        "hosted-targets-external",
-        "raw-evidence-path-configured",
-        "raw-evidence-readable",
-      ],
-      visibleRealHostedEvidenceInputs: [
-        "command",
-        "proof-target",
-        "FMARCH_HOSTED_MATRIX_FRONTEND_URL",
-        "FMARCH_HOSTED_MATRIX_API_URL",
-        "FMARCH_HOSTED_MATRIX_GROUP_ID",
-        "FMARCH_HOSTED_MATRIX_RAW_EVIDENCE_PATH",
-        "FMARCH_HOSTED_MATRIX_EVIDENCE_PATH",
-      ],
-      visibleHostedHandoffInputs: [
-        "command",
-        "proof-target",
-        "FMARCH_HOSTED_MATRIX_FRONTEND_URL",
-        "FMARCH_HOSTED_MATRIX_API_URL",
-        "FMARCH_HOSTED_MATRIX_GROUP_ID",
-        "FMARCH_HOSTED_MATRIX_RAW_EVIDENCE_PATH",
-        "FMARCH_HOSTED_MATRIX_EVIDENCE_PATH",
-      ],
+      visibleUnproven: [...hostedTargetPreflightBlockingCheckIds],
+      visibleRealHostedEvidenceInputs: [...hostedEvidenceHandoffInputIds],
+      visibleHostedHandoffInputs: [...hostedEvidenceHandoffInputIds],
       visibleHostedHandoffBlockedChecks: [
-        "hosted-frontend-url-configured",
-        "hosted-api-url-configured",
-        "hosted-targets-external",
-        "raw-evidence-path-configured",
-        "raw-evidence-readable",
+        ...hostedEvidenceHandoffBlockedCheckIds,
       ],
       visibleRelatedLinks: [
         "local-hosted-target-preflight",
@@ -13986,7 +13877,7 @@ function hostedEvidenceLaneDemoProofFixture() {
     blockedLane: {
       status: "blocked",
       preflightStatus: "blocked",
-      blockedCheckIds: ["hosted-frontend-url-configured"],
+      blockedCheckIds: [hostedTargetPreflightBlockingCheckIds[0]],
       nextProofTarget: "target/dev-test-game/hosted-evidence-lane.json",
     },
     passedLane: {
@@ -14038,26 +13929,10 @@ function hostedTargetPreflightFixture({ status }) {
       rawEvidenceStatus: passed ? "passed" : "blocked",
     },
     checks: [
-      {
-        id: "hosted-frontend-url-configured",
+      ...hostedTargetPreflightBlockingCheckIds.map((id) => ({
+        id,
         status: passed ? "passed" : "blocked",
-      },
-      {
-        id: "hosted-api-url-configured",
-        status: passed ? "passed" : "blocked",
-      },
-      {
-        id: "hosted-targets-external",
-        status: passed ? "passed" : "blocked",
-      },
-      {
-        id: "raw-evidence-path-configured",
-        status: passed ? "passed" : "blocked",
-      },
-      {
-        id: "raw-evidence-readable",
-        status: passed ? "passed" : "blocked",
-      },
+      })),
       {
         id: "release-claim-boundary-carried",
         status: "passed",

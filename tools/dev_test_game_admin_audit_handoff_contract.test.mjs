@@ -6,6 +6,9 @@ import {
   requiredRelatedDestinationsForHandoff,
   requiredRelatedDestinationsForHandoffs,
 } from "./dev_test_game_admin_audit_handoff_contract.mjs";
+import {
+  hostedEvidenceHandoffCase,
+} from "./dev_test_game_hosted_handoff_cases.mjs";
 
 test("related handoff requirements map to admin audit destination proof inputs", () => {
   assert.deepEqual(requiredRelatedDestinationsForHandoff(handoffFixture()), [
@@ -170,6 +173,7 @@ test("related handoff assertion fails closed for missing hosted handoff rows", (
 });
 
 function handoffFixture() {
+  const hostedHandoff = hostedEvidenceHandoffCase();
   return {
     linkId: "admin-proof:hosted-concurrent-race-matrix",
     auditId: "local-hosted-concurrent-race-matrix",
@@ -186,13 +190,14 @@ function handoffFixture() {
         auditId: "local-proof-freshness",
       },
     ],
-    requiredHostedHandoffInputIds: hostedHandoffInputIdsFixture(),
-    requiredHostedHandoffBlockedCheckIds: hostedHandoffBlockedCheckIdsFixture(),
+    requiredHostedHandoffInputIds: hostedHandoff.inputIds,
+    requiredHostedHandoffBlockedCheckIds: hostedHandoff.blockedCheckIds,
     requiredRelatedLinkIds: ["local-next-action"],
   };
 }
 
 function adminRoleSurfaceFixture() {
+  const hostedHandoff = hostedEvidenceHandoffCase();
   return {
     visibleRelatedLinks: ["admin-proof:hosted-concurrent-race-matrix"],
     visibleRelatedDestinations: [
@@ -220,8 +225,8 @@ function adminRoleSurfaceFixture() {
             clickedThrough: true,
           },
         ],
-        visibleHostedHandoffInputs: hostedHandoffInputIdsFixture(),
-        visibleHostedHandoffBlockedChecks: hostedHandoffBlockedCheckIdsFixture(),
+        visibleHostedHandoffInputs: hostedHandoff.inputIds,
+        visibleHostedHandoffBlockedChecks: hostedHandoff.blockedCheckIds,
         visibleRelatedLinks: ["local-next-action"],
       },
     ],
@@ -229,23 +234,9 @@ function adminRoleSurfaceFixture() {
 }
 
 function hostedHandoffInputIdsFixture() {
-  return [
-    "command",
-    "proof-target",
-    "FMARCH_HOSTED_MATRIX_FRONTEND_URL",
-    "FMARCH_HOSTED_MATRIX_API_URL",
-    "FMARCH_HOSTED_MATRIX_GROUP_ID",
-    "FMARCH_HOSTED_MATRIX_RAW_EVIDENCE_PATH",
-    "FMARCH_HOSTED_MATRIX_EVIDENCE_PATH",
-  ];
+  return hostedEvidenceHandoffCase().inputIds;
 }
 
 function hostedHandoffBlockedCheckIdsFixture() {
-  return [
-    "hosted-frontend-url-configured",
-    "hosted-api-url-configured",
-    "hosted-targets-external",
-    "raw-evidence-path-configured",
-    "raw-evidence-readable",
-  ];
+  return hostedEvidenceHandoffCase().blockedCheckIds;
 }

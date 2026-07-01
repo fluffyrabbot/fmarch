@@ -2,8 +2,8 @@ import path from "node:path";
 import { assertDevTestGameProofRun } from "./dev_test_game_proof_contract.mjs";
 import { assertDevTestGameHostedEvidenceLane } from "./dev_test_game_hosted_evidence_lane.mjs";
 import {
-  realHostedEvidenceInputIds,
-} from "./dev_test_game_real_hosted_evidence_inputs.mjs";
+  hostedEvidenceHandoffInputIds,
+} from "./dev_test_game_hosted_handoff_cases.mjs";
 import {
   artifactDir,
   proveAdminAuditDetail,
@@ -53,8 +53,8 @@ await runAdminAuditProof({
         source.lane.checks.map((check) => [check.id, check.status]),
       ),
       requiredUnproven: source.lane.blockedCheckIds,
-      requiredRealHostedEvidenceInputs: realHostedEvidenceInputIds,
-      requiredHostedHandoffInputs: realHostedEvidenceInputIds,
+      requiredRealHostedEvidenceInputs: hostedEvidenceHandoffInputIds,
+      requiredHostedHandoffInputs: hostedEvidenceHandoffInputIds,
       requiredHostedHandoffBlockedChecks: source.lane.blockedCheckIds,
       requiredRelatedLinks,
     }),
@@ -78,8 +78,8 @@ await runAdminAuditProof({
         source.lane.checks.map((check) => [check.id, check.status]),
       ),
       blockedCheckIds: source.lane.blockedCheckIds,
-      realHostedEvidenceInputIds,
-      hostedHandoffInputIds: realHostedEvidenceInputIds,
+      realHostedEvidenceInputIds: hostedEvidenceHandoffInputIds,
+      hostedHandoffInputIds: hostedEvidenceHandoffInputIds,
       hostedHandoffBlockedCheckIds: source.lane.blockedCheckIds,
       relatedAuditIds: requiredRelatedLinks,
     },

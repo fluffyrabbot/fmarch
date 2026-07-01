@@ -17,6 +17,9 @@ import {
   devTestGameHostedEvidenceLaneDemoProofPath,
 } from "./dev_test_game_hosted_evidence_lane_demo_proof.mjs";
 import {
+  hostedTargetPreflightCheckIds,
+} from "./dev_test_game_hosted_target_preflight.mjs";
+import {
   assertCompletedPlayerReloadCases,
   assertCompletedStaleRejectCases,
   assertCompletedGameEndgameTransition,
@@ -5725,14 +5728,7 @@ export function validateDevTestGameHostedTargetPreflightAdminProof(
   proof,
   options = {},
 ) {
-  const requiredChecks = [
-    "hosted-frontend-url-configured",
-    "hosted-api-url-configured",
-    "hosted-targets-external",
-    "raw-evidence-path-configured",
-    "raw-evidence-readable",
-    "release-claim-boundary-carried",
-  ];
+  const requiredChecks = hostedTargetPreflightCheckIds;
   if (
     proof?.version !== 1 ||
     proof.proof !== "dev-test-game-hosted-target-preflight-admin-proof" ||

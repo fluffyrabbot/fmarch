@@ -16,6 +16,17 @@ export const devTestGameHostedTargetPreflightPath =
   "target/dev-test-game/hosted-target-preflight.json";
 export const devTestGameHostedTargetPreflightCommand =
   "test:dev-test-game-hosted-target-preflight";
+export const hostedTargetPreflightBlockingCheckIds = Object.freeze([
+  "hosted-frontend-url-configured",
+  "hosted-api-url-configured",
+  "hosted-targets-external",
+  "raw-evidence-path-configured",
+  "raw-evidence-readable",
+]);
+export const hostedTargetPreflightCheckIds = Object.freeze([
+  ...hostedTargetPreflightBlockingCheckIds,
+  "release-claim-boundary-carried",
+]);
 
 const outputPath = path.join(repoRoot, devTestGameHostedTargetPreflightPath);
 
@@ -137,14 +148,7 @@ export function assertDevTestGameHostedTargetPreflight(preflight) {
     throw new Error("hosted target preflight shape drifted");
   }
   const checks = new Map((preflight.checks ?? []).map((check) => [check.id, check]));
-  for (const id of [
-    "hosted-frontend-url-configured",
-    "hosted-api-url-configured",
-    "hosted-targets-external",
-    "raw-evidence-path-configured",
-    "raw-evidence-readable",
-    "release-claim-boundary-carried",
-  ]) {
+  for (const id of hostedTargetPreflightCheckIds) {
     if (!checks.has(id)) {
       throw new Error(`hosted target preflight missing check: ${id}`);
     }

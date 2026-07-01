@@ -4,7 +4,14 @@ import {
   adminProofGraphRoleHandoffs,
   assertAdminProofGraphRoleHandoffCoverage,
 } from "./dev_test_game_proof_graph_handoffs.mjs";
-import { realHostedEvidenceInputIds } from "./dev_test_game_real_hosted_evidence_inputs.mjs";
+import {
+  hostedEvidenceHandoffInputIds,
+  hostedEvidenceLaneHandoffFixture,
+} from "./dev_test_game_hosted_handoff_cases.mjs";
+import {
+  hostedTargetPreflightBlockingCheckIds,
+  hostedTargetPreflightCheckIds,
+} from "./dev_test_game_hosted_target_preflight.mjs";
 
 test("admin proof graph role handoffs cover every admin-proof role URL", () => {
   const handoffs = adminProofGraphRoleHandoffs({
@@ -24,6 +31,7 @@ test("admin proof graph role handoffs cover every admin-proof role URL", () => {
       ["admin-proof:seed", "local-seed-fixtures"],
       ["admin-proof:release", "local-release-readiness"],
       ["admin-proof:race-coverage", "local-race-coverage"],
+      ["admin-proof:hosted-target-preflight", "local-hosted-target-preflight"],
       ["admin-proof:hosted-evidence-lane", "local-hosted-evidence-lane"],
       [
         "admin-proof:hosted-concurrent-race-matrix",
@@ -109,14 +117,13 @@ test("admin proof graph role handoffs cover every admin-proof role URL", () => {
     handoffs.find(
       (handoff) => handoff.linkId === "admin-proof:hosted-evidence-lane",
     )?.requiredCheckIds,
-    [
-      "hosted-target-preflight",
-      "hosted-frontend-url-configured",
-      "hosted-api-url-configured",
-      "hosted-targets-external",
-      "raw-evidence-path-configured",
-      "raw-evidence-readable",
-    ],
+    ["hosted-target-preflight", ...hostedTargetPreflightBlockingCheckIds],
+  );
+  assert.deepEqual(
+    handoffs.find(
+      (handoff) => handoff.linkId === "admin-proof:hosted-target-preflight",
+    )?.requiredCheckIds,
+    hostedTargetPreflightCheckIds,
   );
   assert.deepEqual(
     handoffs.find(
@@ -132,13 +139,13 @@ test("admin proof graph role handoffs cover every admin-proof role URL", () => {
     handoffs.find(
       (handoff) => handoff.linkId === "admin-proof:hosted-evidence-lane",
     )?.requiredHostedHandoffInputIds,
-    realHostedEvidenceInputIds,
+    hostedEvidenceHandoffInputIds,
   );
   assert.deepEqual(
     handoffs.find(
       (handoff) => handoff.linkId === "admin-proof:hosted-evidence-lane",
     )?.requiredHostedHandoffBlockedCheckIds,
-    hostedEvidenceBlockedCheckIdsFixture(),
+    hostedTargetPreflightBlockingCheckIds,
   );
 });
 
@@ -171,6 +178,7 @@ function proofGraphFixture() {
       roleNode("admin-proof:seed", "local-seed-fixtures"),
       roleNode("admin-proof:release", "local-release-readiness"),
       roleNode("admin-proof:race-coverage", "local-race-coverage"),
+      roleNode("admin-proof:hosted-target-preflight", "local-hosted-target-preflight"),
       roleNode(
         "admin-proof:hosted-concurrent-race-matrix",
         "local-hosted-concurrent-race-matrix",
@@ -218,26 +226,5 @@ function hostedMatrixFixture() {
 }
 
 function hostedEvidenceLaneFixture() {
-  return {
-    blockedCheckIds: hostedEvidenceBlockedCheckIdsFixture(),
-    hostedEvidence: {
-      realHostedEvidenceInputs: {
-        command: "npm run test:dev-test-game-hosted-evidence-lane",
-        proofTarget: "target/dev-test-game/hosted-matrix-external.json",
-        env: realHostedEvidenceInputIds
-          .filter((id) => id.startsWith("FMARCH_HOSTED_MATRIX_"))
-          .map((name) => ({ name })),
-      },
-    },
-  };
-}
-
-function hostedEvidenceBlockedCheckIdsFixture() {
-  return [
-    "hosted-frontend-url-configured",
-    "hosted-api-url-configured",
-    "hosted-targets-external",
-    "raw-evidence-path-configured",
-    "raw-evidence-readable",
-  ];
+  return hostedEvidenceLaneHandoffFixture();
 }

@@ -1,6 +1,9 @@
 import path from "node:path";
 import { assertDevTestGameProofRun } from "./dev_test_game_proof_contract.mjs";
-import { assertDevTestGameHostedTargetPreflight } from "./dev_test_game_hosted_target_preflight.mjs";
+import {
+  assertDevTestGameHostedTargetPreflight,
+  hostedTargetPreflightCheckIds,
+} from "./dev_test_game_hosted_target_preflight.mjs";
 import {
   artifactDir,
   proveAdminAuditDetail,
@@ -25,14 +28,7 @@ const evidencePath = path.join(
   artifactDir,
   "hosted-target-preflight-admin-proof.json",
 );
-const requiredChecks = [
-  "hosted-frontend-url-configured",
-  "hosted-api-url-configured",
-  "hosted-targets-external",
-  "raw-evidence-path-configured",
-  "raw-evidence-readable",
-  "release-claim-boundary-carried",
-];
+const requiredChecks = hostedTargetPreflightCheckIds;
 const requiredRelatedLinks = [
   "local-hosted-concurrent-race-matrix",
   "local-next-action",
