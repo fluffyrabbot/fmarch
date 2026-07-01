@@ -55,17 +55,107 @@ export const hostGenericStaleControlLaneIds = Object.freeze([
   "stale-host-control",
 ]);
 
-export const hostPhaseStaleControlLaneIds = Object.freeze([
-  "stale-host-resolve",
-  "stale-host-resolve-reload",
-  "stale-host-resolve-reconnect-recovery",
-  "stale-host-advance",
-  "stale-host-advance-reload",
-  "stale-host-advance-reconnect-recovery",
-  "stale-host-deadline",
-  "stale-host-deadline-reload",
-  "stale-host-deadline-reconnect-recovery",
+const cloneScenarioCase = (scenario) => ({
+  ...scenario,
+  expectedStalePhase: { ...scenario.expectedStalePhase },
+  expectedCurrentPhase: { ...scenario.expectedCurrentPhase },
+  expectedSetupActions: Object.freeze({ ...scenario.expectedSetupActions }),
+  expectedCurrentActions: Object.freeze({ ...scenario.expectedCurrentActions }),
+});
+
+export const hostPhaseStaleControlCaseDefinitions = Object.freeze([
+  Object.freeze({
+    key: "resolve",
+    proofField: "staleHostResolve",
+    reloadProofField: "staleHostResolveReloadAfterReject",
+    baseLaneId: "stale-host-resolve",
+    reloadLaneId: "stale-host-resolve-reload",
+    reconnectLaneId: "stale-host-resolve-reconnect-recovery",
+    baseLabel: "Stale host resolve rejects after live resolution",
+    reloadLabel: "Stale host resolve recovery reloads locked phase console",
+    reconnectLabel: "Stale host resolve recovery reconnects locked phase console",
+    actionId: "resolve_phase",
+    rejectError: "PhaseLocked",
+    expectedStalePhase: Object.freeze({ id: "D02", locked: false }),
+    expectedCurrentPhase: Object.freeze({ id: "D02", locked: true }),
+    expectedSetupActions: Object.freeze({
+      phaseIncludes: ["resolve_phase", "lock_thread"],
+      phaseExcludes: [],
+      deadlineIncludes: [],
+    }),
+    expectedCurrentActions: Object.freeze({
+      phaseIncludes: ["unlock_thread", "advance_phase"],
+      phaseExcludes: ["resolve_phase", "lock_thread"],
+      deadlineIncludes: ["extend_deadline"],
+    }),
+  }),
+  Object.freeze({
+    key: "advance",
+    proofField: "staleHostAdvance",
+    reloadProofField: "staleHostAdvanceReloadAfterReject",
+    baseLaneId: "stale-host-advance",
+    reloadLaneId: "stale-host-advance-reload",
+    reconnectLaneId: "stale-host-advance-reconnect-recovery",
+    baseLabel: "Stale host advance rejects after live unlock",
+    reloadLabel: "Stale host advance recovery reloads open phase console",
+    reconnectLabel: "Stale host advance recovery reconnects open phase console",
+    actionId: "advance_phase",
+    rejectError: "InvalidTarget",
+    expectedStalePhase: Object.freeze({ id: "D02", locked: true }),
+    expectedCurrentPhase: Object.freeze({ id: "D02", locked: false }),
+    expectedSetupActions: Object.freeze({
+      phaseIncludes: ["advance_phase", "unlock_thread"],
+      phaseExcludes: [],
+      deadlineIncludes: [],
+    }),
+    expectedCurrentActions: Object.freeze({
+      phaseIncludes: ["resolve_phase", "lock_thread"],
+      phaseExcludes: ["advance_phase"],
+      deadlineIncludes: ["extend_deadline"],
+    }),
+  }),
+  Object.freeze({
+    key: "deadline",
+    proofField: "staleHostDeadline",
+    reloadProofField: "staleHostDeadlineReloadAfterReject",
+    baseLaneId: "stale-host-deadline",
+    reloadLaneId: "stale-host-deadline-reload",
+    reconnectLaneId: "stale-host-deadline-reconnect-recovery",
+    baseLabel: "Stale host deadline control rejects without drift",
+    reloadLabel: "Stale host deadline recovery reloads open phase console",
+    reconnectLabel: "Stale host deadline recovery reconnects open phase console",
+    actionId: "extend_deadline",
+    rejectError: "PhaseLocked",
+    expectedStalePhase: Object.freeze({ id: "D01", locked: false }),
+    expectedCurrentPhase: Object.freeze({
+      id: "D02",
+      locked: false,
+      deadline: null,
+    }),
+    expectedSetupActions: Object.freeze({
+      phaseIncludes: ["resolve_phase", "lock_thread"],
+      phaseExcludes: [],
+      deadlineIncludes: ["extend_deadline"],
+    }),
+    expectedCurrentActions: Object.freeze({
+      phaseIncludes: ["resolve_phase", "lock_thread"],
+      phaseExcludes: [],
+      deadlineIncludes: ["extend_deadline"],
+    }),
+  }),
 ]);
+
+export function hostPhaseStaleControlCases() {
+  return hostPhaseStaleControlCaseDefinitions.map(cloneScenarioCase);
+}
+
+export const hostPhaseStaleControlLaneIds = Object.freeze(
+  hostPhaseStaleControlCaseDefinitions.flatMap((scenario) => [
+    scenario.baseLaneId,
+    scenario.reloadLaneId,
+    scenario.reconnectLaneId,
+  ]),
+);
 
 export const hostStaleControlLaneIds = Object.freeze([
   ...hostStandaloneStaleControlLaneIds,
@@ -87,12 +177,10 @@ export const hostRaceReloadLaneIds = Object.freeze([
 ]);
 
 export const hostPhaseStaleRecoveryLaneIds = Object.freeze([
-  "stale-host-resolve-reload",
-  "stale-host-resolve-reconnect-recovery",
-  "stale-host-advance-reload",
-  "stale-host-advance-reconnect-recovery",
-  "stale-host-deadline-reload",
-  "stale-host-deadline-reconnect-recovery",
+  ...hostPhaseStaleControlCaseDefinitions.flatMap((scenario) => [
+    scenario.reloadLaneId,
+    scenario.reconnectLaneId,
+  ]),
 ]);
 
 export const cohostDeadlineRecoveryLaneIds = Object.freeze([

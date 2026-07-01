@@ -5,6 +5,8 @@ import {
   hostCohostRaceRecoveryLaneIds,
   hostGenericStaleControlLaneIds,
   hostStaleControlLaneIds,
+  hostPhaseStaleControlCases,
+  hostPhaseStaleControlCaseDefinitions,
   hostPhaseStaleRecoveryLaneIds,
   hostPhaseStaleControlLaneIds,
   hostPromptStaleControlLaneIds,
@@ -60,6 +62,79 @@ test("hardening lane cases share host stale-control IDs", () => {
     ...hostGenericStaleControlLaneIds,
     ...hostPhaseStaleControlLaneIds,
   ]);
+});
+
+test("hardening lane cases share host phase stale-control scenarios", () => {
+  assert(Object.isFrozen(hostPhaseStaleControlCaseDefinitions));
+  assert.deepEqual(
+    hostPhaseStaleControlCases().map((scenario) => ({
+      key: scenario.key,
+      proofField: scenario.proofField,
+      lanes: [
+        scenario.baseLaneId,
+        scenario.reloadLaneId,
+        scenario.reconnectLaneId,
+      ],
+      actionId: scenario.actionId,
+      rejectError: scenario.rejectError,
+      stalePhase: scenario.expectedStalePhase,
+      currentPhase: scenario.expectedCurrentPhase,
+      currentPhaseIncludes: scenario.expectedCurrentActions.phaseIncludes,
+      currentDeadlineIncludes:
+        scenario.expectedCurrentActions.deadlineIncludes,
+    })),
+    [
+      {
+        key: "resolve",
+        proofField: "staleHostResolve",
+        lanes: [
+          "stale-host-resolve",
+          "stale-host-resolve-reload",
+          "stale-host-resolve-reconnect-recovery",
+        ],
+        actionId: "resolve_phase",
+        rejectError: "PhaseLocked",
+        stalePhase: { id: "D02", locked: false },
+        currentPhase: { id: "D02", locked: true },
+        currentPhaseIncludes: ["unlock_thread", "advance_phase"],
+        currentDeadlineIncludes: ["extend_deadline"],
+      },
+      {
+        key: "advance",
+        proofField: "staleHostAdvance",
+        lanes: [
+          "stale-host-advance",
+          "stale-host-advance-reload",
+          "stale-host-advance-reconnect-recovery",
+        ],
+        actionId: "advance_phase",
+        rejectError: "InvalidTarget",
+        stalePhase: { id: "D02", locked: true },
+        currentPhase: { id: "D02", locked: false },
+        currentPhaseIncludes: ["resolve_phase", "lock_thread"],
+        currentDeadlineIncludes: ["extend_deadline"],
+      },
+      {
+        key: "deadline",
+        proofField: "staleHostDeadline",
+        lanes: [
+          "stale-host-deadline",
+          "stale-host-deadline-reload",
+          "stale-host-deadline-reconnect-recovery",
+        ],
+        actionId: "extend_deadline",
+        rejectError: "PhaseLocked",
+        stalePhase: { id: "D01", locked: false },
+        currentPhase: { id: "D02", locked: false, deadline: null },
+        currentPhaseIncludes: ["resolve_phase", "lock_thread"],
+        currentDeadlineIncludes: ["extend_deadline"],
+      },
+    ],
+  );
+  assert.notEqual(
+    hostPhaseStaleControlCases()[0],
+    hostPhaseStaleControlCaseDefinitions[0],
+  );
 });
 
 test("hardening lane cases share host race/reload IDs", () => {
