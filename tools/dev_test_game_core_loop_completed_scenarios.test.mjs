@@ -209,6 +209,7 @@ test("completed-game scenario module derives shared hardening lane groups", () =
 test("completed-game production harness callers use the shared scenario facade", async () => {
   const callerPaths = [
     "tools/dev_test_game_core_loop_admin_proof.mjs",
+    "tools/dev_test_game_proof_contract.mjs",
     "tools/dev_test_game_release_readiness.mjs",
   ];
 
