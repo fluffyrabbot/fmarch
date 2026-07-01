@@ -3,7 +3,7 @@ import {
   completedHostStaleCommandCases,
   completedPlayerReloadCases,
   staleCompletedGamePlayerCommandCases,
-} from "./dev_test_game_core_loop_completed_endgame_scenarios.mjs";
+} from "./dev_test_game_core_loop_completed_recovery_scenario_cases.mjs";
 
 export {
   assertCompletedGameEndgameSurfaceProof,

@@ -55,8 +55,10 @@ import {
 } from "./dev_test_game_release_readiness_cases.mjs";
 import {
   assertCompletedGameEndgameSurfaceProof,
-  completedGameEndgameScenarioCaseFamilies,
 } from "./dev_test_game_core_loop_completed_game_scenario_assertions.mjs";
+import {
+  completedGameEndgameScenarioCaseFamilies,
+} from "./dev_test_game_core_loop_completed_recovery_scenario_cases.mjs";
 import {
   assertPlayerActionSubmissionClickProofCase,
   assertPlayerInvalidActionRecoveryProofCase,

@@ -206,7 +206,7 @@ test("completed-game scenario module derives shared hardening lane groups", () =
   );
 });
 
-test("completed-game production harness callers use the shared scenario facade", async () => {
+test("completed-game production harness callers share extracted recovery cases", async () => {
   const scenarioCallerPaths = [
     "tools/dev_test_game_core_loop_admin_proof.mjs",
     "tools/dev_test_game_release_readiness.mjs",
@@ -218,13 +218,19 @@ test("completed-game production harness callers use the shared scenario facade",
       source.includes(
         "./dev_test_game_core_loop_completed_game_scenario_assertions.mjs",
       ),
-      `${callerPath} should import completed-game cases through the shared scenario/assertion module`,
+      `${callerPath} should import completed-game assertions through the public scenario module`,
+    );
+    assert(
+      source.includes(
+        "./dev_test_game_core_loop_completed_recovery_scenario_cases.mjs",
+      ),
+      `${callerPath} should import completed recovery cases through the extracted case module`,
     );
     assert(
       !source.includes(
         "./dev_test_game_core_loop_completed_recovery_scenario_assertions.mjs",
       ),
-      `${callerPath} should not import completed recovery definitions directly`,
+      `${callerPath} should not import completed recovery cases through the compatibility facade`,
     );
     assert(
       !source.includes("./dev_test_game_core_loop_completed_recovery_cases.mjs"),

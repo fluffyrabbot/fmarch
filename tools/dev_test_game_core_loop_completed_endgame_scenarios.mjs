@@ -2,7 +2,7 @@ import {
   completedPlayerReloadAssertionCases,
   completedGameEndgameScenarioCaseFamilies,
   completedGameEndgameStaleRejectAssertionCases,
-} from "./dev_test_game_core_loop_completed_recovery_scenario_assertions.mjs";
+} from "./dev_test_game_core_loop_completed_recovery_scenario_cases.mjs";
 
 export {
   assertCompletedGameEndgameTransition,
@@ -29,7 +29,7 @@ export {
   staleCompletedGamePlayerCommandCaseDefinitions,
   staleCompletedGamePlayerCommandCases,
   staleCompletedGamePlayerCommandProofArgs,
-} from "./dev_test_game_core_loop_completed_recovery_scenario_assertions.mjs";
+} from "./dev_test_game_core_loop_completed_recovery_scenario_cases.mjs";
 
 export function completedActionPlayerSurfaceProofArgs({
   expectedGame,
