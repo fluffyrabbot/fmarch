@@ -3995,6 +3995,8 @@ async function verifySeededPlayerActionBoundary({ playerPage, game }) {
 
 async function freezeStaleActionPage({ staleActionPage, game }) {
   await gotoPlayerBoard(staleActionPage, game);
+  const roleUrl = staleActionPage.url();
+  const visitedRolePath = rolePathFromUrl(roleUrl);
   await staleActionPage.locator('[data-action="submit_action:factional_kill"]').waitFor({
     state: "visible",
   });
@@ -4016,6 +4018,8 @@ async function freezeStaleActionPage({ staleActionPage, game }) {
     () => window.__fmarchClosePlayerLiveProjection(),
   );
   return {
+    roleUrl,
+    visitedRolePath,
     staleN01Phase,
     actionConfig,
     closedStatus,
@@ -4715,6 +4719,8 @@ async function submitStaleDeadActionConflict({
   );
   return {
     status: "passed",
+    sourceRoleUrl: staleDeadActionSetup.roleUrl,
+    visitedRolePath: staleDeadActionSetup.visitedRolePath,
     staleN01Phase: staleDeadActionSetup.staleN01Phase,
     actionConfig: staleDeadActionSetup.actionConfig,
     closedStatus: staleDeadActionSetup.closedStatus,
@@ -19996,6 +20002,14 @@ async function gotoPlayerBoard(page, game) {
     status: response.status(),
     url: page.url(),
   };
+}
+
+function rolePathFromUrl(roleUrl) {
+  if (typeof roleUrl !== "string" || roleUrl.trim() === "") {
+    throw new Error("dev-test-game role proof missing source role URL");
+  }
+  const parsed = new URL(roleUrl);
+  return `${parsed.pathname}${parsed.search}`;
 }
 
 async function gotoHostConsole(page, game) {

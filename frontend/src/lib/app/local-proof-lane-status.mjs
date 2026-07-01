@@ -97,7 +97,7 @@ export function hardeningLaneStatus(lane) {
     case "stale-same-action-recovery":
       return `${status}: Reject ${String(evidence.rejectError ?? "unknown")}, visible ${String(evidence.actionVisibleAfterRefresh ?? "unknown")}`;
     case "stale-dead-action-conflict":
-      return `${status}: Reject ${String(evidence.rejectError ?? "unknown")}, actor ${String(evidence.actorStatusAfterReject ?? "unknown")}`;
+      return `${status}: Reject ${String(evidence.rejectError ?? "unknown")}, role URL ${typeof evidence.roleUrl === "string"}, actor ${String(evidence.actorStatusAfterReject ?? "unknown")}`;
     case "stale-action-conflict":
       return `${status}: Reject ${String(evidence.rejectError ?? "unknown")}, refreshed ${String(evidence.refreshedPhase ?? "unknown")}`;
     case "stale-action-conflict-message":

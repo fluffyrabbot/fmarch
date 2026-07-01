@@ -6167,6 +6167,8 @@ export function buildDevTestGameProofRun(session, options = {}) {
         hardening.staleSameActionRecovery?.actionVisibleAfterRefresh === false,
     }),
     lane("stale-dead-action-conflict", "Stale action actor death rejects and refreshes", {
+      roleUrl: hardening.staleDeadActionConflict?.sourceRoleUrl ?? null,
+      visitedRolePath: hardening.staleDeadActionConflict?.visitedRolePath ?? null,
       rejectError: hardening.staleDeadActionConflict?.reject?.error ?? null,
       rejectMessage: hardening.staleDeadActionConflict?.reject?.message ?? null,
       templateId: hardening.staleDeadActionConflict?.actionConfig?.templateId ?? null,
@@ -6180,6 +6182,10 @@ export function buildDevTestGameProofRun(session, options = {}) {
         null,
       passed:
         hardening.staleDeadActionConflict?.status === "passed" &&
+        typeof hardening.staleDeadActionConflict?.sourceRoleUrl === "string" &&
+        hardening.staleDeadActionConflict.sourceRoleUrl.includes("/g/") &&
+        typeof hardening.staleDeadActionConflict?.visitedRolePath === "string" &&
+        hardening.staleDeadActionConflict.visitedRolePath.includes("/g/") &&
         hardening.staleDeadActionConflict?.markDead?.state === "ack" &&
         hardening.staleDeadActionConflict?.restoreAlive?.state === "ack" &&
         hardening.staleDeadActionConflict?.apiSlotAfterDead?.alive === false &&

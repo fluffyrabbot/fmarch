@@ -2230,7 +2230,10 @@ test("admin local hardening detail data carries lane rows", async () => {
       ["stale-player-complete", "passed"],
       ["stale-player-complete-reload", "passed"],
       ["stale-same-action-recovery", "passed: Reject ActionAlreadySubmitted, visible false"],
-      ["stale-dead-action-conflict", "passed: Reject SlotNotAlive, actor dead"],
+      [
+        "stale-dead-action-conflict",
+        "passed: Reject SlotNotAlive, role URL true, actor dead",
+      ],
       ["stale-action-conflict", "passed: Reject PhaseLocked, refreshed D02"],
       [
         "stale-action-conflict-message",
@@ -2996,6 +2999,8 @@ function proofRunFixture() {
       actionVisibleAfterRefresh: false,
     },
     "stale-dead-action-conflict": {
+      roleUrl: "http://127.0.0.1:5173/g/midsummer",
+      visitedRolePath: "/g/midsummer",
       rejectError: "SlotNotAlive",
       rejectMessage:
         "Reject SlotNotAlive: slot not alive; actor is no longer alive, refresh and use current action controls",

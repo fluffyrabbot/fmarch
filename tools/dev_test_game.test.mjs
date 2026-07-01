@@ -5788,6 +5788,8 @@ test("session card and markdown include role credential URLs and tokens", async 
       },
       staleDeadActionConflict: {
         status: "passed",
+        sourceRoleUrl: "http://127.0.0.1:5173/g/midsummer",
+        visitedRolePath: "/g/midsummer",
         markDead: { state: "ack" },
         apiSlotAfterDead: { alive: false, status: "dead" },
         actionConfig: {

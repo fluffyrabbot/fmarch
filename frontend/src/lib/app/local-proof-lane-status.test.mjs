@@ -134,6 +134,18 @@ test("hardening lane status formats stale and concurrent conflict evidence", () 
   );
   assert.equal(
     hardeningLaneStatus({
+      id: "stale-dead-action-conflict",
+      status: "passed",
+      evidence: {
+        rejectError: "SlotNotAlive",
+        roleUrl: "http://127.0.0.1:5173/g/game-id",
+        actorStatusAfterReject: "dead",
+      },
+    }),
+    "passed: Reject SlotNotAlive, role URL true, actor dead",
+  );
+  assert.equal(
+    hardeningLaneStatus({
       id: "stale-host-resolve",
       status: "passed",
       evidence: {
