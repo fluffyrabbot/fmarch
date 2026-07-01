@@ -51,6 +51,11 @@ import {
   hostStaleControlLaneIds,
   staleConflictMessageLaneIds,
 } from "./dev_test_game_hardening_lane_cases.mjs";
+import {
+  replacementPrivatePostRaceLaneIds,
+  replacementPrivatePostRecoveryLaneIds,
+  replacementStalePrivatePostAfterCompleteScenario,
+} from "./dev_test_game_replacement_private_scenarios.mjs";
 import { adminSpineReadinessEvidenceEnv } from "./dev_test_game_admin_spine.mjs";
 import {
   backupAwareOpsEnv,
@@ -1108,8 +1113,8 @@ test("dev test-game next-action derives one local recovery command from the mani
     cells: [
       {
         id: "replacement-private-post",
-        raceLaneId: "concurrent-replacement-private-post-race",
-        reloadLaneId: "concurrent-replacement-private-post-race-reload",
+        raceLaneId: replacementPrivatePostRaceLaneIds[0],
+        reloadLaneId: replacementPrivatePostRaceLaneIds[1],
         reloadStatus: "passed",
         covered: true,
       },
@@ -1715,6 +1720,8 @@ test("seed plan creates a playable mafiascum D01 game shape", () => {
 test("session card and markdown include role credential URLs and tokens", async () => {
   const game = "44444444-4444-4444-8444-444444444444";
   const tokens = createTokenSet("dev-test-card");
+  const replacementCompletedPrivatePost =
+    replacementStalePrivatePostAfterCompleteScenario();
   const card = buildSessionCard({
     gameName: "card",
     game,
@@ -4736,8 +4743,8 @@ test("session card and markdown include role credential URLs and tokens", async 
       },
       replacementStalePrivatePostAfterComplete: {
         status: "passed",
-        game: "replacement-stale-private-post-after-complete-game-a",
-        channel: "private:mafia_day_chat",
+        game: replacementCompletedPrivatePost.gameFixtureId,
+        channel: replacementCompletedPrivatePost.channelId,
         hostEntry: { capabilityKinds: ["HostOf"] },
         staleOutgoingEntry: { capabilityKinds: ["SlotOccupant"] },
         replacementEntry: { capabilityKinds: ["SlotOccupant"] },
@@ -4748,26 +4755,33 @@ test("session card and markdown include role credential URLs and tokens", async 
               body: {
                 command: {
                   ProcessReplacement: {
-                    game: "replacement-stale-private-post-after-complete-game-a",
-                    slot: "slot-7",
-                    incoming_user: "player-rowan",
+                    game: replacementCompletedPrivatePost.gameFixtureId,
+                    slot: replacementCompletedPrivatePost.actorSlot,
+                    incoming_user:
+                      replacementCompletedPrivatePost.replacementPrincipalUserId,
                   },
                 },
               },
             },
           },
         },
-        hostReplacementAfterProcess: { occupantLabel: "player-rowan" },
+        hostReplacementAfterProcess: {
+          occupantLabel: replacementCompletedPrivatePost.replacementOccupantLabel,
+        },
         commandStateBeforeClose: {
-          actorSlot: "slot-7",
+          actorSlot: replacementCompletedPrivatePost.actorSlot,
           gameCompleted: false,
         },
         channelContextBeforeClose: {
-          channelId: "private:mafia_day_chat",
-          actorSlot: "slot-7",
-          capabilityLabel: "ChannelMember(private:mafia_day_chat)",
+          channelId: replacementCompletedPrivatePost.channelId,
+          actorSlot: replacementCompletedPrivatePost.actorSlot,
+          capabilityLabel:
+            `ChannelMember(${replacementCompletedPrivatePost.channelId})`,
         },
-        submitPostBeforeClose: { action: "submit_post", disabled: false },
+        submitPostBeforeClose: {
+          action: replacementCompletedPrivatePost.commandAction,
+          disabled: false,
+        },
         closedStatus: { state: "closed" },
         complete: {
           commandStatus: {
@@ -4777,7 +4791,7 @@ test("session card and markdown include role credential URLs and tokens", async 
                 body: {
                   command: {
                     CompleteGame: {
-                      game: "replacement-stale-private-post-after-complete-game-a",
+                      game: replacementCompletedPrivatePost.gameFixtureId,
                     },
                   },
                 },
@@ -4790,20 +4804,21 @@ test("session card and markdown include role credential URLs and tokens", async 
         ],
         hostActionsAfterComplete: [],
         apiStateAfterComplete: { completed: true },
-        postBody: "Replacement stale private post after complete fixture",
+        postBody: replacementCompletedPrivatePost.fixturePostBody,
         reject: {
           state: "reject",
-          error: "GameAlreadyCompleted",
+          error: replacementCompletedPrivatePost.commandError,
           serverEnvelope: { body: { kind: "Reject" } },
           requestEnvelope: {
             body: {
               body: {
-                principal_user_id: "player-rowan",
+                principal_user_id:
+                  replacementCompletedPrivatePost.replacementPrincipalUserId,
                 command: {
                   SubmitPost: {
-                    channel_id: "private:mafia_day_chat",
-                    actor_slot: "slot-7",
-                    body: "Replacement stale private post after complete fixture",
+                    channel_id: replacementCompletedPrivatePost.channelId,
+                    actor_slot: replacementCompletedPrivatePost.actorSlot,
+                    body: replacementCompletedPrivatePost.fixturePostBody,
                   },
                 },
               },
@@ -4811,23 +4826,28 @@ test("session card and markdown include role credential URLs and tokens", async 
           },
         },
         dispatchPlan: { projectionRefreshKeys: ["commandState"] },
-        currentReceipt: { actionId: "submit_post", state: "reject" },
-        receiptStatusText:
-          "Reject GameAlreadyCompleted: game already completed",
+        currentReceipt: {
+          actionId: replacementCompletedPrivatePost.commandAction,
+          state: "reject",
+        },
+        receiptStatusText: replacementCompletedPrivatePost.commandMessage,
         commandStateAfterReject: {
-          actorSlot: "slot-7",
+          actorSlot: replacementCompletedPrivatePost.actorSlot,
           gameCompleted: true,
           actions: [],
           voteTargets: [],
-          boundary: "Role-action availability: game is complete.",
+          boundary: replacementCompletedPrivatePost.commandStateBoundary,
         },
         channelContextAfterReject: {
-          channelId: "private:mafia_day_chat",
-          actorSlot: "slot-7",
+          channelId: replacementCompletedPrivatePost.channelId,
+          actorSlot: replacementCompletedPrivatePost.actorSlot,
         },
         buttonsAfterReject: [
           { action: "withdraw_vote", disabled: true },
-          { action: "submit_post", disabled: true },
+          {
+            action: replacementCompletedPrivatePost.commandAction,
+            disabled: true,
+          },
         ],
         apiCommandStateAfterReject: {
           game_completed: true,
@@ -4842,20 +4862,24 @@ test("session card and markdown include role credential URLs and tokens", async 
           routeResponseStatus: 200,
           threadPagerVisible: true,
           recoveredCommandState: {
-            actorSlot: "slot-7",
+            actorSlot: replacementCompletedPrivatePost.actorSlot,
             gameCompleted: true,
             actions: [],
             voteTargets: [],
-            boundary: "Role-action availability: game is complete.",
+            boundary: replacementCompletedPrivatePost.commandStateBoundary,
           },
           reloadChannelContext: {
-            channelId: "private:mafia_day_chat",
-            actorSlot: "slot-7",
-            capabilityLabel: "ChannelMember(private:mafia_day_chat)",
+            channelId: replacementCompletedPrivatePost.channelId,
+            actorSlot: replacementCompletedPrivatePost.actorSlot,
+            capabilityLabel:
+              `ChannelMember(${replacementCompletedPrivatePost.channelId})`,
           },
           reloadButtons: [
             { action: "withdraw_vote", disabled: true },
-            { action: "submit_post", disabled: true },
+            {
+              action: replacementCompletedPrivatePost.commandAction,
+              disabled: true,
+            },
           ],
           reloadThreadPostBodies: [],
           reloadRejectedPostVisible: false,
@@ -4871,8 +4895,7 @@ test("session card and markdown include role credential URLs and tokens", async 
           },
           staleOutgoingThreadAfterReload: { status: 403 },
         },
-        outcomeSummary:
-          "Rowan's stale replacement private post rejected GameAlreadyCompleted after host completion and reloaded into completed private-channel truth",
+        outcomeSummary: replacementCompletedPrivatePost.outcomeSummary,
       },
       staleHostPublishAfterChange: {
         status: "passed",
@@ -7091,8 +7114,7 @@ test("session card and markdown include role credential URLs and tokens", async 
       "concurrent-player-action-advance-race-reload",
       "concurrent-cohost-deadline-resolve-race",
       "concurrent-cohost-deadline-resolve-race-reload",
-      "concurrent-replacement-private-post-race",
-      "concurrent-replacement-private-post-race-reload",
+      ...replacementPrivatePostRaceLaneIds,
       "concurrent-replacement-vote-race",
       "concurrent-replacement-vote-race-reload",
       "concurrent-replacement-action-race",
@@ -7100,10 +7122,7 @@ test("session card and markdown include role credential URLs and tokens", async 
       "replacement-incoming-action",
       "replacement-action-reconnect",
       "replacement-stale-action-after-resolve",
-      "replacement-stale-private-post-after-resolve",
-      "replacement-stale-private-post-reconnect",
-      "replacement-stale-private-post-after-complete",
-      "replacement-stale-private-post-after-complete-reload",
+      ...replacementPrivatePostRecoveryLaneIds,
       "stale-dead-target-vote",
       "dead-current-vote",
       "concurrent-vote-race",
@@ -8687,8 +8706,8 @@ function devTestGameRaceCoverageFixture() {
     ),
     raceCoverageCell(
       "replacement-private-post",
-      "concurrent-replacement-private-post-race",
-      "concurrent-replacement-private-post-race-reload",
+      replacementPrivatePostRaceLaneIds[0],
+      replacementPrivatePostRaceLaneIds[1],
     ),
     raceCoverageCell(
       "replacement-vote",
@@ -12626,8 +12645,7 @@ function hardeningAdminProofFixture() {
         "concurrent-player-action-advance-race-reload",
         "concurrent-cohost-deadline-resolve-race",
         "concurrent-cohost-deadline-resolve-race-reload",
-        "concurrent-replacement-private-post-race",
-        "concurrent-replacement-private-post-race-reload",
+        ...replacementPrivatePostRaceLaneIds,
         "concurrent-replacement-vote-race",
         "concurrent-replacement-vote-race-reload",
         "concurrent-replacement-action-race",
@@ -12635,10 +12653,7 @@ function hardeningAdminProofFixture() {
         "replacement-incoming-action",
         "replacement-action-reconnect",
         "replacement-stale-action-after-resolve",
-        "replacement-stale-private-post-after-resolve",
-        "replacement-stale-private-post-reconnect",
-        "replacement-stale-private-post-after-complete",
-        "replacement-stale-private-post-after-complete-reload",
+        ...replacementPrivatePostRecoveryLaneIds,
         "concurrent-vote-race",
         "concurrent-vote-race-reload",
         "stale-host-publish-after-change",
