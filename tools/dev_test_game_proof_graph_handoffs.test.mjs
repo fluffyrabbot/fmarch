@@ -12,6 +12,13 @@ import {
   hostedTargetPreflightBlockingCheckIds,
   hostedTargetPreflightCheckIds,
 } from "./dev_test_game_hosted_target_preflight.mjs";
+import {
+  hostedMatrixStaleConflictLaneIds,
+  staleConflictMessageLaneIds,
+} from "./dev_test_game_hardening_lane_cases.mjs";
+import {
+  seedRequiredScenarioIds,
+} from "./dev_test_game_seed_scenario_cases.mjs";
 
 test("admin proof graph role handoffs cover every admin-proof role URL", () => {
   const handoffs = adminProofGraphRoleHandoffs({
@@ -43,12 +50,21 @@ test("admin proof graph role handoffs cover every admin-proof role URL", () => {
   assert.deepEqual(
     handoffs.find((handoff) => handoff.linkId === "admin-proof:seed")
       ?.requiredScenarioIds,
-    ["host-phase-controls", "player-action-denied", "local-ops-readiness"],
+    seedRequiredScenarioIds,
   );
   assert.deepEqual(
     handoffs.find((handoff) => handoff.linkId === "admin-proof:identity")
       ?.requiredSessionIds,
     ["admin", "host", "player"],
+  );
+  assert.deepEqual(
+    handoffs.find((handoff) => handoff.linkId === "admin-proof:hardening")
+      ?.requiredCheckIds,
+    [
+      "idempotent-retry",
+      "concurrent-action-race",
+      ...staleConflictMessageLaneIds,
+    ],
   );
   assert.deepEqual(
     handoffs.find((handoff) => handoff.linkId === "admin-proof:release")
@@ -111,7 +127,7 @@ test("admin proof graph role handoffs cover every admin-proof role URL", () => {
     handoffs.find(
       (handoff) => handoff.linkId === "admin-proof:hosted-concurrent-race-matrix",
     )?.requiredStaleConflictLaneIds,
-    ["replacement-stale-conflict-message", "stale-action-conflict-message"],
+    hostedMatrixStaleConflictLaneIds,
   );
   assert.deepEqual(
     handoffs.find(
@@ -213,10 +229,7 @@ function hostedMatrixFixture() {
       { id: "stale-host-deadline-reconnect-recovery" },
       { id: "stale-cohost-deadline-reconnect-recovery" },
     ],
-    staleConflictLanes: [
-      { id: "replacement-stale-conflict-message" },
-      { id: "stale-action-conflict-message" },
-    ],
+    staleConflictLanes: hostedMatrixStaleConflictLaneIds.map((id) => ({ id })),
     requestedEvidence: { id: "hosted-concurrent-race-matrix" },
     remainingGaps: [{ id: "gap-a" }, { id: "gap-b" }],
     summary: {

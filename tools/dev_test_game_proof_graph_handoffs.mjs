@@ -1,8 +1,14 @@
 import { hostedMatrixHandoffSummaryForRoleLink } from "../frontend/src/lib/app/local-proof-handoff-status.mjs";
 import {
+  staleConflictMessageLaneIds,
+} from "./dev_test_game_hardening_lane_cases.mjs";
+import {
   hostedTargetPreflightBlockingCheckIds,
   hostedTargetPreflightCheckIds,
 } from "./dev_test_game_hosted_target_preflight.mjs";
+import {
+  seedRequiredScenarioIds,
+} from "./dev_test_game_seed_scenario_cases.mjs";
 
 const adminProofDestinationRequirements = [
   {
@@ -16,7 +22,7 @@ const adminProofDestinationRequirements = [
     requiredCheckIds: [
       "idempotent-retry",
       "concurrent-action-race",
-      "stale-action-conflict-message",
+      ...staleConflictMessageLaneIds,
     ],
   },
   {
@@ -39,11 +45,7 @@ const adminProofDestinationRequirements = [
   {
     linkId: "admin-proof:seed",
     auditId: "local-seed-fixtures",
-    requiredScenarioIds: [
-      "host-phase-controls",
-      "player-action-denied",
-      "local-ops-readiness",
-    ],
+    requiredScenarioIds: seedRequiredScenarioIds,
   },
   {
     linkId: "admin-proof:release",

@@ -9,6 +9,9 @@ import {
 import {
   hostedEvidenceHandoffCase,
 } from "./dev_test_game_hosted_handoff_cases.mjs";
+import {
+  hostedMatrixStaleConflictLaneIds,
+} from "./dev_test_game_hardening_lane_cases.mjs";
 
 test("related handoff requirements map to admin audit destination proof inputs", () => {
   assert.deepEqual(requiredRelatedDestinationsForHandoff(handoffFixture()), [
@@ -20,7 +23,7 @@ test("related handoff requirements map to admin audit destination proof inputs",
       requiredScenarios: ["host-phase-controls"],
       requiredSessions: ["host"],
       requiredReconnectLanes: ["reconnect-recovery"],
-      requiredStaleConflictLanes: ["stale-action-conflict-message"],
+      requiredStaleConflictLanes: hostedMatrixStaleConflictLaneIds,
       requiredUnproven: ["hosted-concurrent-race-matrix"],
       requiredLocalPrerequisiteDestinations: [
         {
@@ -43,7 +46,7 @@ test("related handoff requirements map to admin audit destination proof inputs",
       requiredScenarios: ["host-phase-controls"],
       requiredSessions: ["host"],
       requiredReconnectLanes: ["reconnect-recovery"],
-      requiredStaleConflictLanes: ["stale-action-conflict-message"],
+      requiredStaleConflictLanes: hostedMatrixStaleConflictLaneIds,
       requiredUnproven: ["hosted-concurrent-race-matrix"],
       requiredLocalPrerequisiteDestinations: [
         {
@@ -131,7 +134,7 @@ test("related handoff assertion fails closed for missing hardening lane rows", (
         handoff: handoffFixture(),
         proofName: "proof graph admin proof",
       }),
-    /proof graph admin proof handoff destination missing stale-conflict lane: stale-action-conflict-message/,
+    /proof graph admin proof handoff destination missing stale-conflict lane: replacement-stale-conflict-message/,
   );
 });
 
@@ -182,7 +185,7 @@ function handoffFixture() {
     requiredScenarioIds: ["host-phase-controls"],
     requiredSessionIds: ["host"],
     requiredReconnectLaneIds: ["reconnect-recovery"],
-    requiredStaleConflictLaneIds: ["stale-action-conflict-message"],
+    requiredStaleConflictLaneIds: hostedMatrixStaleConflictLaneIds,
     requiredUnprovenIds: ["hosted-concurrent-race-matrix"],
     requiredLocalPrerequisiteDestinations: [
       {
@@ -210,7 +213,7 @@ function adminRoleSurfaceFixture() {
         visibleScenarios: ["host-phase-controls"],
         visibleSessions: ["host"],
         visibleReconnectLanes: ["reconnect-recovery"],
-        visibleStaleConflictLanes: ["stale-action-conflict-message"],
+        visibleStaleConflictLanes: hostedMatrixStaleConflictLaneIds,
         visibleUnproven: ["hosted-concurrent-race-matrix"],
         visibleLocalPrerequisites: ["local-proof-freshness-admin-surface"],
         visibleLocalPrerequisiteRoleUrls: {
