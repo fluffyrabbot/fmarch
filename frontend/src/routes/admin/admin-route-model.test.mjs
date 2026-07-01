@@ -2171,6 +2171,10 @@ test("admin local core loop detail data carries lane rows", async () => {
       ["player-action-boundary", "passed: 0 unowned actions, direct reject InvalidTarget"],
       ["private-channel", "passed: private:mafia_day_chat, denied 403"],
       ["stale-host-advance", "passed: Reject InvalidTarget, role URL true, locked false"],
+      [
+        "stale-host-advance-reload",
+        "passed: Reject InvalidTarget: invalid target; stale phase state, refresh and use current controls, locked false",
+      ],
       ["replacement-incoming-player", "passed"],
     ].map(([id, status]) => [id, status, checkStatusById[id]]),
     [
@@ -2218,6 +2222,11 @@ test("admin local core loop detail data carries lane rows", async () => {
         "stale-host-advance",
         "passed: Reject InvalidTarget, role URL true, locked false",
         "passed: Reject InvalidTarget, role URL true, locked false",
+      ],
+      [
+        "stale-host-advance-reload",
+        "passed: Reject InvalidTarget: invalid target; stale phase state, refresh and use current controls, locked false",
+        "passed: Reject InvalidTarget: invalid target; stale phase state, refresh and use current controls, locked false",
       ],
       ["replacement-incoming-player", "passed", "passed"],
     ],
@@ -3151,6 +3160,15 @@ function proofRunFixture() {
       phaseId: "D02",
       locked: false,
       phaseActions: ["resolve_phase", "lock_thread"],
+    },
+    "stale-host-advance-reload": {
+      routeStatus: 200,
+      rejectReceipt:
+        "Reject InvalidTarget: invalid target; stale phase state, refresh and use current controls",
+      phaseId: "D02",
+      locked: false,
+      phaseActions: ["resolve_phase", "lock_thread"],
+      apiLocked: false,
     },
     "stale-host-advance-reconnect-recovery": {
       reconnectingState: "reconnecting",

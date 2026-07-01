@@ -49,6 +49,18 @@ test("core loop lane status formats seeded recovery evidence", () => {
   );
   assert.equal(
     coreLoopLaneStatus({
+      id: "stale-host-advance-reload",
+      status: "passed",
+      evidence: {
+        rejectReceipt:
+          "Reject InvalidTarget: invalid target; stale phase state, refresh and use current controls",
+        locked: false,
+      },
+    }),
+    "passed: Reject InvalidTarget: invalid target; stale phase state, refresh and use current controls, locked false",
+  );
+  assert.equal(
+    coreLoopLaneStatus({
       id: "action-loop",
       status: "passed",
       evidence: {
@@ -361,6 +373,15 @@ test("highlighted lane evidence maps keep browser proof assertions aligned", () 
           phaseActions: [],
         },
       },
+      {
+        id: "stale-host-advance-reload",
+        status: "passed",
+        evidence: {
+          rejectReceipt:
+            "Reject InvalidTarget: invalid target; stale phase state, refresh and use current controls",
+          locked: false,
+        },
+      },
     ],
   };
 
@@ -377,6 +398,10 @@ test("highlighted lane evidence maps keep browser proof assertions aligned", () 
   assert.equal(
     coreLoopHighlightedLaneEvidence(proofRun)["stale-host-advance"],
     "passed: Reject InvalidTarget, role URL true, locked false",
+  );
+  assert.equal(
+    coreLoopHighlightedLaneEvidence(proofRun)["stale-host-advance-reload"],
+    "passed: Reject InvalidTarget: invalid target; stale phase state, refresh and use current controls, locked false",
   );
   assert.equal(
     hardeningHighlightedLaneEvidence(proofRun)["stale-action-conflict-message"],

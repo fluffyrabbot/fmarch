@@ -1,5 +1,6 @@
 import {
   hostStaleAdvanceControlLaneId,
+  hostStaleAdvanceReloadLaneId,
 } from "./dev_test_game_host_stale_control_scenarios.mjs";
 
 export const coreLoopSpineCheckId = "core-loop-spine";
@@ -20,6 +21,7 @@ export const coreLoopAuditLaneIds = Object.freeze([
   "host-lifecycle-control",
   "host-modkill-control",
   hostStaleAdvanceControlLaneId,
+  hostStaleAdvanceReloadLaneId,
   "replacement-host-issued-invite",
   "replacement-pending-player",
   "replacement-invalid-target-recovery",

@@ -18,6 +18,7 @@ import {
   hostStandaloneStaleControlLaneIds,
   hostStaleAdvanceControlCase,
   hostStaleAdvanceControlLaneId,
+  hostStaleAdvanceReloadLaneId,
   hostedMatrixReconnectLaneIds,
 } from "./dev_test_game_host_stale_control_scenarios.mjs";
 import {
@@ -266,6 +267,7 @@ test("hardening lane cases share host phase stale-control scenarios", () => {
   assert.equal(hostPhaseStaleControlCase("advance").baseLaneId, "stale-host-advance");
   assert.equal(hostStaleAdvanceControlCase().rejectError, "InvalidTarget");
   assert.equal(hostStaleAdvanceControlLaneId, "stale-host-advance");
+  assert.equal(hostStaleAdvanceReloadLaneId, "stale-host-advance-reload");
 });
 
 function hardeningLaneImportBlocks(source) {

@@ -133,6 +133,9 @@ export function hostStaleAdvanceControlCase() {
 export const hostStaleAdvanceControlLaneId =
   hostStaleAdvanceControlCase().baseLaneId;
 
+export const hostStaleAdvanceReloadLaneId =
+  hostStaleAdvanceControlCase().reloadLaneId;
+
 export const hostPhaseStaleControlLaneIds = Object.freeze(
   hostPhaseStaleControlCaseDefinitions.flatMap((scenario) => [
     scenario.baseLaneId,
