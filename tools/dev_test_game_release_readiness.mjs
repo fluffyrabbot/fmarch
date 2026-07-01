@@ -37,14 +37,11 @@ import {
   replacementPrivatePostRecoveryLaneIds,
 } from "./dev_test_game_replacement_private_scenarios.mjs";
 import {
-  assertCompletedPlayerReloadCases,
-  assertCompletedStaleRejectCases,
+  assertCompletedGameEndgameSurfaceAssertionCases,
   assertCompletedGameEndgameTransition,
   assertCompletedHostStaleCommandRecoveryProofCase,
   assertCompletedPlayerReloadProofCase,
-  completedGameEndgameStaleRejectAssertionCases,
-  completedPlayerReloadCases,
-  completedPlayerReloadAssertionCases,
+  completedGameEndgameSurfaceAssertionCases,
   assertStaleCompletedGamePlayerCommandRecoveryProofCase,
 } from "./dev_test_game_core_loop_completed_scenarios.mjs";
 import {
@@ -4013,69 +4010,25 @@ function assertCoreLoopCompletedGameEndgameSurface(completedGameEndgameSurface) 
     failureMessage:
       "core-loop admin proof missing completed-game endgame transition",
   });
-  assertCoreLoopHostCompleteGameProof({
-    proof: completedGameEndgameSurface.hostCompleteProof,
-    expectedGame,
-    sourceRoleUrl: completedGameEndgameSurface.sourceHostRoleUrl,
-  });
-  assertCoreLoopCompletedHostReloadProof({
-    proof: completedGameEndgameSurface.completedHostReloadProof,
-    sourceRoleUrl: completedGameEndgameSurface.sourceHostRoleUrl,
-  });
-  assertCoreLoopPostDayThreePlayerSurfaceProof({
-    proof: completedGameEndgameSurface.actionPlayerCompletedProof,
-    sourceRoleUrl: completedGameEndgameSurface.sourceActionPlayerRoleUrl,
-    expectedSlot: "slot-7",
-    slotField: "actionPlayerSlot",
-    expectedPrincipalUserId: "player_mira",
-    expectedPhaseId: "N05",
-    expectedPhaseState: "open",
-    expectedActorAlive: true,
-    expectedActorStatus: "alive",
-    expectedActionState: "disabled:game complete",
-    expectedStatusText: "game complete",
-    expectedPrivateCount: 0,
-    expectedPrivateReceipt: false,
-    expectedBoundaryText: "completed game endgame state",
-    expectedResyncFromSeq: 921,
-    expectedCommandStateEndpoint:
-      `/games/${expectedGame}/player-command-state?principal_user_id=player_mira&slot_id=slot-7`,
-    expectedNotificationsEndpoint:
-      `/games/${expectedGame}/notifications?principal_user_id=player_mira`,
-    expectedLastVoteOutcomePhaseId: "D05",
-  });
-  if (
-    completedGameEndgameSurface.actionPlayerCompletedProof?.projectionCommandState
-      ?.gameCompleted !== true ||
-    completedGameEndgameSurface.actionPlayerCompletedProof?.resyncSnapshotCommandState
-      ?.gameCompleted !== true
-  ) {
-    throw new Error("core-loop admin proof missing completed player command state");
-  }
-  assertCompletedPlayerReloadCases(
-    completedPlayerReloadAssertionCases({
+  assertCompletedGameEndgameSurfaceAssertionCases({
+    completedGameEndgameSurface,
+    cases: completedGameEndgameSurfaceAssertionCases({
       completedGameEndgameSurface,
       expectedGame,
-      cases: completedPlayerReloadCases(),
-    }),
-    assertCoreLoopCompletedPlayerReloadProof,
-  );
-  assertCompletedStaleRejectCases(
-    completedGameEndgameStaleRejectAssertionCases({
-      completedGameEndgameSurface,
-      expectedGame,
-      sourceHostRoleUrl: completedGameEndgameSurface.sourceHostRoleUrl,
-      sourceDeadPlayerRoleUrl: completedGameEndgameSurface.sourceDeadPlayerRoleUrl,
-      sourceActionPlayerRoleUrl:
-        completedGameEndgameSurface.sourceActionPlayerRoleUrl,
+      assertHostCompleteGameProof: assertCoreLoopHostCompleteGameProof,
+      assertCompletedHostReloadProof: assertCoreLoopCompletedHostReloadProof,
+      assertActionPlayerCompletedProof:
+        assertCoreLoopPostDayThreePlayerSurfaceProof,
       assertCompletedHostStaleCommandRecoveryProof:
         assertCoreLoopCompletedHostStaleCommandRecoveryProof,
       assertCompletedDeadPlayerStaleVoteRecoveryProof:
         assertCoreLoopCompletedDeadPlayerStaleVoteRecoveryProof,
+      assertCompletedPlayerReloadProof:
+        assertCoreLoopCompletedPlayerReloadProof,
       assertStaleCompletedGamePlayerCommandRecoveryProof:
         assertCoreLoopStaleCompletedGamePlayerCommandRecoveryProof,
     }),
-  );
+  });
 }
 
 function assertCoreLoopHostCompleteGameProof({

@@ -1,8 +1,10 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
+  assertCompletedGameEndgameSurfaceAssertionCases,
   assertCompletedGameEndgameTransition,
   completedGameEndgameStaleRejectAssertionCases,
+  completedGameEndgameSurfaceAssertionCases,
   completedGameEndgameTransition,
   completedHostStaleCommandCases,
   completedPlayerReloadAssertionCases,
@@ -162,6 +164,173 @@ test("completed-game scenario module derives shared assertion cases", () => {
   );
 });
 
+test("completed-game scenario module derives shared surface assertion sequence", () => {
+  const completedGameEndgameSurface = {
+    hostCompleteProof: { id: "host-complete" },
+    completedHostReloadProof: { id: "host-reload" },
+    actionPlayerCompletedProof: {
+      id: "action-player-complete",
+      projectionCommandState: { gameCompleted: true },
+      resyncSnapshotCommandState: { gameCompleted: true },
+    },
+    completedPlayerReloadProof: { id: "action-reload-proof" },
+    completedNormalPlayerReloadProof: { id: "normal-reload-proof" },
+    completedDeadPlayerReloadProof: { id: "dead-reload-proof" },
+    completedHostStaleResolveRecoveryProof: { id: "host-resolve-stale" },
+    completedHostStaleAdvanceRecoveryProof: { id: "host-advance-stale" },
+    completedHostStaleCompleteRecoveryProof: { id: "host-complete-stale" },
+    completedDeadPlayerStaleVoteRecoveryProof: { id: "dead-stale-vote" },
+    staleCompletedVoteRecoveryProof: { id: "stale-completed-vote" },
+    staleCompletedPostRecoveryProof: { id: "stale-completed-post" },
+    sourceHostRoleUrl: "http://127.0.0.1/g/game-a/host",
+    sourceActionPlayerRoleUrl: "http://127.0.0.1/g/game-a/action",
+    sourceNormalPlayerRoleUrl: "http://127.0.0.1/g/game-a/normal",
+    sourceDeadPlayerRoleUrl: "http://127.0.0.1/g/game-a/dead",
+  };
+  const asserted = [];
+  const cases = completedGameEndgameSurfaceAssertionCases({
+    completedGameEndgameSurface,
+    expectedGame: "game-a",
+    assertHostCompleteGameProof: recordAssertion("host-complete", asserted),
+    assertCompletedHostReloadProof: recordAssertion("host-reload", asserted),
+    assertActionPlayerCompletedProof: recordAssertion(
+      "action-player-complete",
+      asserted,
+    ),
+    assertCompletedHostStaleCommandRecoveryProof: recordAssertion(
+      "host-stale",
+      asserted,
+    ),
+    assertCompletedDeadPlayerStaleVoteRecoveryProof: recordAssertion(
+      "dead-stale-vote",
+      asserted,
+    ),
+    assertCompletedPlayerReloadProof: recordAssertion(
+      "player-reload",
+      asserted,
+    ),
+    assertStaleCompletedGamePlayerCommandRecoveryProof: recordAssertion(
+      "player-stale",
+      asserted,
+    ),
+  });
+
+  assert.deepEqual(
+    cases.map((scenario) => ({
+      assertProofName: scenario.assertProof.assertionName,
+      proof: scenario.proof.id,
+      sourceRoleUrl: scenario.sourceRoleUrl,
+      expectedCommandKind: scenario.expectedCommandKind ?? null,
+      commandKind: scenario.scenario?.commandKind ?? null,
+    })),
+    [
+      {
+        assertProofName: "host-complete",
+        proof: "host-complete",
+        sourceRoleUrl: "http://127.0.0.1/g/game-a/host",
+        expectedCommandKind: null,
+        commandKind: null,
+      },
+      {
+        assertProofName: "host-reload",
+        proof: "host-reload",
+        sourceRoleUrl: "http://127.0.0.1/g/game-a/host",
+        expectedCommandKind: null,
+        commandKind: null,
+      },
+      {
+        assertProofName: "action-player-complete",
+        proof: "action-player-complete",
+        sourceRoleUrl: "http://127.0.0.1/g/game-a/action",
+        expectedCommandKind: null,
+        commandKind: null,
+      },
+      {
+        assertProofName: "player-reload",
+        proof: "action-reload-proof",
+        sourceRoleUrl: "http://127.0.0.1/g/game-a/action",
+        expectedCommandKind: null,
+        commandKind: null,
+      },
+      {
+        assertProofName: "player-reload",
+        proof: "normal-reload-proof",
+        sourceRoleUrl: "http://127.0.0.1/g/game-a/normal",
+        expectedCommandKind: null,
+        commandKind: null,
+      },
+      {
+        assertProofName: "player-reload",
+        proof: "dead-reload-proof",
+        sourceRoleUrl: "http://127.0.0.1/g/game-a/dead",
+        expectedCommandKind: null,
+        commandKind: null,
+      },
+      {
+        assertProofName: "host-stale",
+        proof: "host-resolve-stale",
+        sourceRoleUrl: "http://127.0.0.1/g/game-a/host",
+        expectedCommandKind: "ResolvePhase",
+        commandKind: null,
+      },
+      {
+        assertProofName: "host-stale",
+        proof: "host-advance-stale",
+        sourceRoleUrl: "http://127.0.0.1/g/game-a/host",
+        expectedCommandKind: "AdvancePhase",
+        commandKind: null,
+      },
+      {
+        assertProofName: "host-stale",
+        proof: "host-complete-stale",
+        sourceRoleUrl: "http://127.0.0.1/g/game-a/host",
+        expectedCommandKind: "CompleteGame",
+        commandKind: null,
+      },
+      {
+        assertProofName: "dead-stale-vote",
+        proof: "dead-stale-vote",
+        sourceRoleUrl: "http://127.0.0.1/g/game-a/dead",
+        expectedCommandKind: null,
+        commandKind: null,
+      },
+      {
+        assertProofName: "player-stale",
+        proof: "stale-completed-vote",
+        sourceRoleUrl: "http://127.0.0.1/g/game-a/action",
+        expectedCommandKind: null,
+        commandKind: "SubmitVote",
+      },
+      {
+        assertProofName: "player-stale",
+        proof: "stale-completed-post",
+        sourceRoleUrl: "http://127.0.0.1/g/game-a/action",
+        expectedCommandKind: null,
+        commandKind: "SubmitPost",
+      },
+    ],
+  );
+
+  assertCompletedGameEndgameSurfaceAssertionCases({
+    cases,
+    completedGameEndgameSurface,
+  });
+  assert.deepEqual(asserted, [
+    "host-complete",
+    "host-reload",
+    "action-player-complete",
+    "player-reload",
+    "player-reload",
+    "player-reload",
+    "host-stale",
+    "host-stale",
+    "host-stale",
+    "dead-stale-vote",
+    "player-stale",
+    "player-stale",
+  ]);
+});
+
 test("completed-game transition covers every stale and reload scenario", () => {
   const transition = completedGameEndgameTransition();
   assertCompletedGameEndgameTransition({ transition });
@@ -196,6 +365,14 @@ function commandStateBuildersFixture() {
 }
 
 function assertProofFixture() {}
+
+function recordAssertion(assertionName, asserted) {
+  const assertProof = () => {
+    asserted.push(assertionName);
+  };
+  assertProof.assertionName = assertionName;
+  return assertProof;
+}
 
 function escapeRegExp(value) {
   return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");

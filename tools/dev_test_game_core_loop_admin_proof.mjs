@@ -4,16 +4,14 @@ import {
   coreLoopSpineStatus,
 } from "../frontend/src/lib/app/local-proof-lane-status.mjs";
 import {
-  assertCompletedPlayerReloadCases,
-  assertCompletedStaleRejectCases,
+  assertCompletedGameEndgameSurfaceAssertionCases,
   assertCompletedGameEndgameTransition,
   assertCompletedHostStaleCommandRecoveryProofCase,
   assertCompletedPlayerReloadProofCase,
   completedGameEndgameTransition,
-  completedGameEndgameStaleRejectAssertionCases,
+  completedGameEndgameSurfaceAssertionCases,
   completedHostStaleCommandCases,
   completedPlayerReloadCases,
-  completedPlayerReloadAssertionCases,
   completedPlayerReloadProofCases,
   assertStaleCompletedGamePlayerCommandRecoveryProofCase,
   staleCompletedGamePlayerCommandCases,
@@ -11863,71 +11861,21 @@ function assertCompletedGameEndgameSurface(completedGameEndgameSurface) {
     failureMessage:
       "core-loop admin proof missing completed-game endgame transition",
   });
-  assertHostCompleteGameProof({
-    proof: completedGameEndgameSurface.hostCompleteProof,
-    expectedGame,
-    sourceRoleUrl: completedGameEndgameSurface.sourceHostRoleUrl,
-  });
-  assertCompletedHostReloadProof({
-    proof: completedGameEndgameSurface.completedHostReloadProof,
-    sourceRoleUrl: completedGameEndgameSurface.sourceHostRoleUrl,
-  });
-  assertPostDayThreePlayerSurfaceProof({
-    proof: completedGameEndgameSurface.actionPlayerCompletedProof,
-    expectedGame,
-    sourceRoleUrl: completedGameEndgameSurface.sourceActionPlayerRoleUrl,
-    expectedSlot: "slot-7",
-    slotField: "actionPlayerSlot",
-    expectedPrincipalUserId: "player_mira",
-    expectedPhaseId: "N05",
-    expectedPhaseState: "open",
-    expectedActorAlive: true,
-    expectedActorStatus: "alive",
-    expectedActionState: "disabled:game complete",
-    expectedStatusText: "game complete",
-    expectedPrivateCount: 0,
-    expectedPrivateReceipt: false,
-    expectedBoundaryText: "completed game endgame state",
-    expectedResyncFromSeq: 921,
-    expectedCommandStateEndpoint:
-      `/games/${expectedGame}/player-command-state?principal_user_id=player_mira&slot_id=slot-7`,
-    expectedNotificationsEndpoint:
-      `/games/${expectedGame}/notifications?principal_user_id=player_mira`,
-    expectedLastVoteOutcomePhaseId: "D05",
-  });
-  if (
-    completedGameEndgameSurface.actionPlayerCompletedProof?.projectionCommandState
-      ?.gameCompleted !== true ||
-    completedGameEndgameSurface.actionPlayerCompletedProof?.resyncSnapshotCommandState
-      ?.gameCompleted !== true
-  ) {
-    throw new Error(
-      `core-loop admin proof missing completed player command state: ${JSON.stringify(
-        completedGameEndgameSurface.actionPlayerCompletedProof,
-      )}`,
-    );
-  }
-  assertCompletedPlayerReloadCases(
-    completedPlayerReloadAssertionCases({
+  assertCompletedGameEndgameSurfaceAssertionCases({
+    completedGameEndgameSurface,
+    includeEvidenceInError: true,
+    cases: completedGameEndgameSurfaceAssertionCases({
       completedGameEndgameSurface,
       expectedGame,
-      cases: completedPlayerReloadCases(),
-    }),
-    assertCompletedPlayerReloadProof,
-  );
-  assertCompletedStaleRejectCases(
-    completedGameEndgameStaleRejectAssertionCases({
-      completedGameEndgameSurface,
-      expectedGame,
-      sourceHostRoleUrl: completedGameEndgameSurface.sourceHostRoleUrl,
-      sourceDeadPlayerRoleUrl: completedGameEndgameSurface.sourceDeadPlayerRoleUrl,
-      sourceActionPlayerRoleUrl:
-        completedGameEndgameSurface.sourceActionPlayerRoleUrl,
+      assertHostCompleteGameProof,
+      assertCompletedHostReloadProof,
+      assertActionPlayerCompletedProof: assertPostDayThreePlayerSurfaceProof,
       assertCompletedHostStaleCommandRecoveryProof,
       assertCompletedDeadPlayerStaleVoteRecoveryProof,
+      assertCompletedPlayerReloadProof,
       assertStaleCompletedGamePlayerCommandRecoveryProof,
     }),
-  );
+  });
 }
 
 function assertHostCompleteGameProof({ proof, expectedGame, sourceRoleUrl }) {

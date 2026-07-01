@@ -246,9 +246,104 @@ export function completedGameEndgameStaleRejectAssertionCases({
   ];
 }
 
+export function completedGameEndgameSurfaceAssertionCases({
+  completedGameEndgameSurface,
+  expectedGame,
+  assertHostCompleteGameProof,
+  assertCompletedHostReloadProof,
+  assertActionPlayerCompletedProof,
+  assertCompletedHostStaleCommandRecoveryProof,
+  assertCompletedDeadPlayerStaleVoteRecoveryProof,
+  assertCompletedPlayerReloadProof,
+  assertStaleCompletedGamePlayerCommandRecoveryProof,
+}) {
+  return [
+    {
+      assertProof: assertHostCompleteGameProof,
+      proof: completedGameEndgameSurface.hostCompleteProof,
+      expectedGame,
+      sourceRoleUrl: completedGameEndgameSurface.sourceHostRoleUrl,
+    },
+    {
+      assertProof: assertCompletedHostReloadProof,
+      proof: completedGameEndgameSurface.completedHostReloadProof,
+      sourceRoleUrl: completedGameEndgameSurface.sourceHostRoleUrl,
+    },
+    {
+      assertProof: assertActionPlayerCompletedProof,
+      proof: completedGameEndgameSurface.actionPlayerCompletedProof,
+      expectedGame,
+      sourceRoleUrl: completedGameEndgameSurface.sourceActionPlayerRoleUrl,
+      expectedSlot: "slot-7",
+      slotField: "actionPlayerSlot",
+      expectedPrincipalUserId: "player_mira",
+      expectedPhaseId: "N05",
+      expectedPhaseState: "open",
+      expectedActorAlive: true,
+      expectedActorStatus: "alive",
+      expectedActionState: "disabled:game complete",
+      expectedStatusText: "game complete",
+      expectedPrivateCount: 0,
+      expectedPrivateReceipt: false,
+      expectedBoundaryText: "completed game endgame state",
+      expectedResyncFromSeq: 921,
+      expectedCommandStateEndpoint:
+        `/games/${expectedGame}/player-command-state?principal_user_id=player_mira&slot_id=slot-7`,
+      expectedNotificationsEndpoint:
+        `/games/${expectedGame}/notifications?principal_user_id=player_mira`,
+      expectedLastVoteOutcomePhaseId: "D05",
+    },
+    ...completedPlayerReloadAssertionCases({
+      completedGameEndgameSurface,
+      expectedGame,
+      cases: completedPlayerReloadCases(),
+    }).map((scenario) => ({
+      assertProof: assertCompletedPlayerReloadProof,
+      ...scenario,
+      expectedCommandStateEndpoint:
+        `/games/${scenario.expectedGame}/player-command-state?principal_user_id=${scenario.principalUserId}&slot_id=${scenario.expectedSlot}`,
+      expectedNotificationsEndpoint:
+        `/games/${scenario.expectedGame}/notifications?principal_user_id=${scenario.principalUserId}`,
+    })),
+    ...completedGameEndgameStaleRejectAssertionCases({
+      completedGameEndgameSurface,
+      expectedGame,
+      sourceHostRoleUrl: completedGameEndgameSurface.sourceHostRoleUrl,
+      sourceDeadPlayerRoleUrl: completedGameEndgameSurface.sourceDeadPlayerRoleUrl,
+      sourceActionPlayerRoleUrl:
+        completedGameEndgameSurface.sourceActionPlayerRoleUrl,
+      assertCompletedHostStaleCommandRecoveryProof,
+      assertCompletedDeadPlayerStaleVoteRecoveryProof,
+      assertStaleCompletedGamePlayerCommandRecoveryProof,
+    }),
+  ];
+}
+
 export function assertCompletedStaleRejectCases(cases) {
   for (const { assertProof, ...scenario } of cases) {
     assertProof(scenario);
+  }
+}
+
+export function assertCompletedGameEndgameSurfaceAssertionCases({
+  cases,
+  completedGameEndgameSurface,
+  includeEvidenceInError = false,
+}) {
+  for (const { assertProof, ...scenario } of cases) {
+    assertProof(scenario);
+  }
+  if (
+    completedGameEndgameSurface.actionPlayerCompletedProof
+      ?.projectionCommandState?.gameCompleted !== true ||
+    completedGameEndgameSurface.actionPlayerCompletedProof
+      ?.resyncSnapshotCommandState?.gameCompleted !== true
+  ) {
+    throwCompletedScenarioAssertionError({
+      message: "core-loop admin proof missing completed player command state",
+      evidence: completedGameEndgameSurface.actionPlayerCompletedProof,
+      includeEvidenceInError,
+    });
   }
 }
 
