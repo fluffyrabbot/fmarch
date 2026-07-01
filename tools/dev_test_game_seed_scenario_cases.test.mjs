@@ -49,7 +49,7 @@ test("seed scenario cases include reload and stale-reject proof rows", () => {
 });
 
 test("seed scenario cases expose generated demo scenario fixture rows", () => {
-  assert.equal(seedDemoScenarioIds.length, 107);
+  assert.equal(seedDemoScenarioIds.length, 112);
   assert.deepEqual(seedDemoOnlyScenarioIds, [
     "day-vote-resolution",
     "day-vote-no-lynch",
@@ -67,6 +67,11 @@ test("seed scenario cases expose generated demo scenario fixture rows", () => {
     "stale-host-modkill",
     "stale-host-prompt",
     "stale-host-complete",
+    "stale-host-control",
+    "stale-host-resolve",
+    "stale-host-advance",
+    "stale-host-deadline",
+    "stale-cohost-deadline",
     "stale-player-vote",
     "stale-player-vote-after-change",
     "stale-player-post-after-phase-closure",
@@ -111,20 +116,29 @@ test("seed scenario cases expose generated demo scenario fixture rows", () => {
   ]);
   assert.deepEqual(seedDemoScenarioIds.slice(18, 21), [
     "stale-host-complete",
-    "stale-player-vote",
-    "stale-player-vote-after-change",
+    "stale-host-control",
+    "stale-host-resolve",
   ]);
   assert.deepEqual(seedDemoScenarioIds.slice(21, 24), [
-    "stale-player-post-after-phase-closure",
-    "stale-player-withdraw-after-change",
-    "stale-player-withdraw-after-phase-closure",
+    "stale-host-advance",
+    "stale-host-deadline",
+    "stale-cohost-deadline",
   ]);
   assert.deepEqual(seedDemoScenarioIds.slice(24, 27), [
+    "stale-player-vote",
+    "stale-player-vote-after-change",
+    "stale-player-post-after-phase-closure",
+  ]);
+  assert.deepEqual(seedDemoScenarioIds.slice(27, 30), [
+    "stale-player-withdraw-after-change",
+    "stale-player-withdraw-after-phase-closure",
     "stale-player-vote-after-phase-closure",
+  ]);
+  assert.deepEqual(seedDemoScenarioIds.slice(30, 32), [
     "stale-dead-target-vote",
     "dead-current-vote",
   ]);
-  assert.deepEqual(seedDemoScenarioIds.slice(27, 29), [
+  assert.deepEqual(seedDemoScenarioIds.slice(32, 34), [
     "player-action-denied",
     "invalid-action-recovery",
   ]);
@@ -165,6 +179,11 @@ test("seed scenario cases expose production fixture metadata", () => {
           "stale-host-modkill",
           "stale-host-prompt",
           "stale-host-complete",
+          "stale-host-control",
+          "stale-host-resolve",
+          "stale-host-advance",
+          "stale-host-deadline",
+          "stale-cohost-deadline",
           "stale-player-vote",
           "stale-player-vote-after-change",
           "stale-player-post-after-phase-closure",
@@ -195,6 +214,11 @@ test("seed scenario cases expose production fixture metadata", () => {
       ["stale-host-modkill", "host", "/redacted/host"],
       ["stale-host-prompt", "host", "/redacted/host"],
       ["stale-host-complete", "host", "/redacted/host"],
+      ["stale-host-control", "host", "/redacted/host"],
+      ["stale-host-resolve", "host", "/redacted/host"],
+      ["stale-host-advance", "host", "/redacted/host"],
+      ["stale-host-deadline", "host", "/redacted/host"],
+      ["stale-cohost-deadline", "cohost", "/redacted/cohost"],
       ["stale-player-vote", "player", "/redacted/player"],
       ["stale-player-vote-after-change", "player", "/redacted/player"],
       ["stale-player-post-after-phase-closure", "player", "/redacted/player"],

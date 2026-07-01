@@ -100,6 +100,11 @@ export const seedDemoOnlyScenarioIds = Object.freeze([
   "stale-host-modkill",
   "stale-host-prompt",
   "stale-host-complete",
+  "stale-host-control",
+  "stale-host-resolve",
+  "stale-host-advance",
+  "stale-host-deadline",
+  "stale-cohost-deadline",
   "stale-player-vote",
   "stale-player-vote-after-change",
   "stale-player-post-after-phase-closure",
@@ -113,9 +118,9 @@ export const seedDemoOnlyScenarioIds = Object.freeze([
 
 export const seedDemoScenarioIds = Object.freeze([
   ...seedRequiredScenarioIds.slice(0, 3),
-  ...seedDemoOnlyScenarioIds.slice(0, 24),
+  ...seedDemoOnlyScenarioIds.slice(0, 29),
   ...seedRequiredScenarioIds.slice(3, 11),
-  seedDemoOnlyScenarioIds[24],
+  seedDemoOnlyScenarioIds[29],
   ...seedRequiredScenarioIds.slice(11),
 ]);
 
