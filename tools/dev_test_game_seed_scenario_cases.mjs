@@ -91,14 +91,17 @@ export const seedDemoOnlyScenarioIds = Object.freeze([
   "private-channel",
   "resolution-receipts",
   "player-action-boundary",
+  "host-votecount-publication",
+  "host-lifecycle-control",
+  "host-modkill-control",
   "concurrent-vote-race-reload",
 ]);
 
 export const seedDemoScenarioIds = Object.freeze([
   ...seedRequiredScenarioIds.slice(0, 3),
-  ...seedDemoOnlyScenarioIds.slice(0, 7),
+  ...seedDemoOnlyScenarioIds.slice(0, 10),
   ...seedRequiredScenarioIds.slice(3, 11),
-  seedDemoOnlyScenarioIds[7],
+  seedDemoOnlyScenarioIds[10],
   ...seedRequiredScenarioIds.slice(11),
 ]);
 
