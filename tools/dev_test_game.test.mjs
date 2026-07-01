@@ -127,6 +127,7 @@ import {
   runDevTestGameHostedEvidenceLane,
 } from "./dev_test_game_hosted_evidence_lane.mjs";
 import {
+  hostedEvidenceBlockedHandoffChecklistFixture,
   hostedEvidenceHandoffBlockedCheckIds,
   hostedEvidenceHandoffInputIds,
 } from "./dev_test_game_hosted_handoff_cases.mjs";
@@ -13393,11 +13394,13 @@ function proofGraphAdminProofFixture() {
 }
 
 function hostedHandoffInputIdsFixture() {
-  return [...hostedEvidenceHandoffInputIds];
+  return [...hostedEvidenceBlockedHandoffChecklistFixture().inputIds];
 }
 
 function hostedHandoffBlockedCheckIdsFixture() {
-  return [...hostedEvidenceHandoffBlockedCheckIds];
+  return [
+    ...hostedEvidenceBlockedHandoffChecklistFixture().blockedCheckIds,
+  ];
 }
 
 function proofFreshnessAdminProofFixture() {

@@ -18,6 +18,10 @@ import {
   seedDemoScenarioFixtureRows,
   seedScenarioCoverageGroups,
 } from "../../../../tools/dev_test_game_seed_scenario_cases.mjs";
+import {
+  hostedEvidenceBlockedHandoffChecklistFixture,
+  hostedEvidenceRealHostedInputsFixture,
+} from "../../../../tools/dev_test_game_hosted_handoff_cases.mjs";
 
 const LOCAL_RACE_COMMAND =
   "npm run test:dev-test-game-hosted-concurrent-race-matrix";
@@ -4298,41 +4302,7 @@ function hostedConcurrentRaceMatrixFixture() {
 }
 
 function realHostedEvidenceInputsFixture() {
-  return {
-    status: "unproven",
-    mode: "not_configured",
-    command: "npm run test:dev-test-game-hosted-evidence-lane",
-    proofTarget: "target/dev-test-game/hosted-matrix-external.json",
-    requiredEvidence:
-      "Raw hosted matrix evidence from a real externally reachable hosted target.",
-    env: [
-      {
-        name: "FMARCH_HOSTED_MATRIX_FRONTEND_URL",
-        required: true,
-        description: "Externally reachable frontend base URL.",
-      },
-      {
-        name: "FMARCH_HOSTED_MATRIX_API_URL",
-        required: true,
-        description: "Externally reachable API base URL.",
-      },
-      {
-        name: "FMARCH_HOSTED_MATRIX_GROUP_ID",
-        required: true,
-        description: "Hosted matrix group to prove.",
-      },
-      {
-        name: "FMARCH_HOSTED_MATRIX_RAW_EVIDENCE_PATH",
-        required: true,
-        description: "Raw hosted matrix evidence captured from the real target.",
-      },
-      {
-        name: "FMARCH_HOSTED_MATRIX_EVIDENCE_PATH",
-        required: false,
-        description: "Optional normalized hosted matrix evidence output path.",
-      },
-    ],
-  };
+  return hostedEvidenceRealHostedInputsFixture();
 }
 
 function proofGraphNode({
@@ -4444,98 +4414,15 @@ function hostedEvidenceLaneUnprovenFixture() {
       adminCheckId: "action-loop",
       browserProofCommand: LIVE_BROWSER_PROOF_COMMAND,
     },
-    realHostedEvidenceInputs: {
-      status: "unproven",
-      mode: "not_configured",
-      command: "npm run test:dev-test-game-hosted-evidence-lane",
-      proofTarget: "target/dev-test-game/hosted-matrix-external.json",
-      requiredEvidence:
-        "Raw hosted matrix evidence from a real externally reachable hosted target.",
-      env: [
-        {
-          name: "FMARCH_HOSTED_MATRIX_FRONTEND_URL",
-          required: true,
-          description: "Externally reachable frontend base URL.",
-        },
-        {
-          name: "FMARCH_HOSTED_MATRIX_API_URL",
-          required: true,
-          description: "Externally reachable API base URL.",
-        },
-        {
-          name: "FMARCH_HOSTED_MATRIX_GROUP_ID",
-          required: true,
-          description: "Hosted matrix group to prove.",
-        },
-        {
-          name: "FMARCH_HOSTED_MATRIX_RAW_EVIDENCE_PATH",
-          required: true,
-          description:
-            "Raw hosted matrix evidence captured from the real target.",
-        },
-        {
-          name: "FMARCH_HOSTED_MATRIX_EVIDENCE_PATH",
-          required: false,
-          description:
-            "Optional normalized hosted matrix evidence output path.",
-        },
-      ],
-    },
+    realHostedEvidenceInputs: realHostedEvidenceInputsFixture(),
     hostedHandoffChecklist: hostedHandoffChecklistFixture(),
   };
 }
 
 function hostedHandoffChecklistFixture() {
-  return {
-    status: "blocked",
-    preflightStatus: "blocked",
-    command: "npm run test:dev-test-game-hosted-evidence-lane",
+  return hostedEvidenceBlockedHandoffChecklistFixture({
     proofTarget: HOSTED_EVIDENCE_LANE_PROOF_TARGET,
-    inputIds: [
-      "command",
-      "proof-target",
-      "FMARCH_HOSTED_MATRIX_FRONTEND_URL",
-      "FMARCH_HOSTED_MATRIX_API_URL",
-      "FMARCH_HOSTED_MATRIX_GROUP_ID",
-      "FMARCH_HOSTED_MATRIX_RAW_EVIDENCE_PATH",
-      "FMARCH_HOSTED_MATRIX_EVIDENCE_PATH",
-    ],
-    blockedCheckIds: [
-      "hosted-frontend-url-configured",
-      "hosted-api-url-configured",
-      "hosted-targets-external",
-      "raw-evidence-path-configured",
-      "raw-evidence-readable",
-    ],
-    blockedChecks: [
-      {
-        id: "hosted-frontend-url-configured",
-        status: "blocked",
-        requiredEvidence: "Set FMARCH_HOSTED_MATRIX_FRONTEND_URL.",
-      },
-      {
-        id: "hosted-api-url-configured",
-        status: "blocked",
-        requiredEvidence: "Set FMARCH_HOSTED_MATRIX_API_URL.",
-      },
-      {
-        id: "hosted-targets-external",
-        status: "blocked",
-        requiredEvidence:
-          "Both hosted target URLs must be externally reachable http(s) URLs, not localhost or loopback.",
-      },
-      {
-        id: "raw-evidence-path-configured",
-        status: "blocked",
-        requiredEvidence: "Set FMARCH_HOSTED_MATRIX_RAW_EVIDENCE_PATH.",
-      },
-      {
-        id: "raw-evidence-readable",
-        status: "blocked",
-        requiredEvidence: "Set FMARCH_HOSTED_MATRIX_RAW_EVIDENCE_PATH.",
-      },
-    ],
-  };
+  });
 }
 
 function productionFeatureSpineTargetFixture() {
