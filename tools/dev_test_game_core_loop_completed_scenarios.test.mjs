@@ -222,13 +222,13 @@ test("completed-game production harness callers share extracted recovery cases",
     );
     assert(
       source.includes(
-        "./dev_test_game_core_loop_completed_recovery_scenario_cases.mjs",
+        "./dev_test_game_core_loop_completed_recovery_scenario_assertions.mjs",
       ),
-      `${callerPath} should import completed recovery cases through the extracted case module`,
+      `${callerPath} should import completed recovery cases through the extracted scenario/assertion module`,
     );
     assert(
       !source.includes(
-        "./dev_test_game_core_loop_completed_recovery_scenario_assertions.mjs",
+        "./dev_test_game_core_loop_completed_recovery_scenario_cases.mjs",
       ),
       `${callerPath} should not import completed recovery cases through the compatibility facade`,
     );
