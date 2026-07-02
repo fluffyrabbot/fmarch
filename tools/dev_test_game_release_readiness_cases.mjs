@@ -21,6 +21,10 @@ import {
   playerInvalidActionRecoveryLaneId,
 } from "./dev_test_game_core_loop_action_scenario_cases.mjs";
 import {
+  completedGameHardeningSpineCycleId,
+  completedGameStaleRecoverySpineLaneCase,
+} from "./dev_test_game_core_loop_completed_game_cases.mjs";
+import {
   featureSpineCheckpointTarget,
   featureSpineRecoveryHookTarget,
   featureSpineTargetBySlotId,
@@ -47,6 +51,8 @@ export const releaseReadinessRealHostedConcurrentRaceMatrixCommand =
   "npm run test:dev-test-game-hosted-matrix-external-evidence";
 export const releaseReadinessRealHostedConcurrentRaceMatrixProofTarget =
   hostedMatrixExternalEvidencePath;
+const completedGameStaleRecoverySpineLane =
+  completedGameStaleRecoverySpineLaneCase();
 
 export const releaseReadinessProductionFeatureSpineTargets = Object.freeze({
   identityAdapter: featureSpineCheckpointTarget({
@@ -126,10 +132,10 @@ export const releaseReadinessProductionFeatureSpineTargets = Object.freeze({
   completedGameStaleRecovery: featureSpineCheckpointTarget({
     featureSlotId: "completed-game-stale-recovery",
     sourceCheckId: "local-hardening-proof",
-    cycleId: "hardening-completed-game",
-    roleUrlId: "stale-host-complete-reload",
-    checkpointId: "stale-host-complete-reload",
-    adminCheckId: "stale-host-complete-reload",
+    cycleId: completedGameHardeningSpineCycleId,
+    roleUrlId: completedGameStaleRecoverySpineLane.id,
+    checkpointId: completedGameStaleRecoverySpineLane.id,
+    adminCheckId: completedGameStaleRecoverySpineLane.id,
   }),
   replacementStaleConflictMessage: featureSpineCheckpointTarget({
     featureSlotId: "replacement-stale-conflict-message",

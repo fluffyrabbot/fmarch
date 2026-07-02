@@ -21,6 +21,10 @@ import {
   releaseReadinessUnprovenItem,
   releaseReadinessUnprovenStatusRows,
 } from "./dev_test_game_release_readiness_cases.mjs";
+import {
+  completedGameHardeningSpineCycleId,
+  completedGameStaleRecoverySpineLaneCase,
+} from "./dev_test_game_core_loop_completed_game_cases.mjs";
 
 test("release readiness unproven cases share blocker IDs and status rows", () => {
   assert.ok(releaseReadinessUnprovenCaseIds.includes("hosted-deployment"));
@@ -147,11 +151,11 @@ test("release readiness buildable cases share next-action commands and spine tar
     {
       featureSlotId: "completed-game-stale-recovery",
       sourceCheckId: "local-hardening-proof",
-      cycleId: "hardening-completed-game",
-      roleUrlId: "stale-host-complete-reload",
+      cycleId: completedGameHardeningSpineCycleId,
+      roleUrlId: completedGameStaleRecoverySpineLaneCase().id,
       rowKind: "checkpoint",
-      checkpointId: "stale-host-complete-reload",
-      adminCheckId: "stale-host-complete-reload",
+      checkpointId: completedGameStaleRecoverySpineLaneCase().id,
+      adminCheckId: completedGameStaleRecoverySpineLaneCase().id,
     },
   );
   assert.deepEqual(

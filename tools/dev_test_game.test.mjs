@@ -18,6 +18,7 @@ import {
   buildDevTestGameReleaseReadiness,
 } from "./dev_test_game_release_readiness.mjs";
 import {
+  completedGameHardeningSpineCycleId,
   completedGameRaceCoverageCellCases,
   completedGameRaceCoverageCellIds,
   completedGameHardeningSpineLaneCases,
@@ -12458,7 +12459,7 @@ function hardeningSpineTargetsFixture({
     defaultRoleUrl: roleUrlHrefs["replacement-stale-conflict-message"],
     defaultCheckpointId: "replacement-stale-conflict-message",
     browserProofCommand: devTestGameLiveProofCommand,
-    cycleIds: ["hardening-stale-conflict", "hardening-completed-game"],
+    cycleIds: ["hardening-stale-conflict", completedGameHardeningSpineCycleId],
     roleUrlIds: Object.keys(roleUrlHrefs),
     checkpointIds: Object.keys(roleUrlHrefs),
     recoveryHookIds: [],

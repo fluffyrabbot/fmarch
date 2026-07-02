@@ -55,7 +55,9 @@ import {
   stalePlayerCommandLaneIds,
 } from "./dev_test_game_player_recovery_scenarios.mjs";
 import {
+  completedGameHardeningSpineCycleId,
   completedGameHardeningSpineLaneCases,
+  completedGameStaleRecoverySpineLaneCase,
 } from "./dev_test_game_core_loop_completed_game_cases.mjs";
 
 test("hardening lane cases share stale conflict-message IDs", () => {
@@ -282,6 +284,7 @@ test("hardening lane cases summarize host stale-control coverage", () => {
 });
 
 test("hardening lane cases share completed-game spine rows", () => {
+  assert.equal(completedGameHardeningSpineCycleId, "hardening-completed-game");
   assert.deepEqual(
     completedGameHardeningSpineLaneCases().map(({ id, role }) => ({
       id,
@@ -301,6 +304,16 @@ test("hardening lane cases share completed-game spine rows", () => {
         role: "player",
       },
     ],
+  );
+  assert.deepEqual(
+    {
+      id: completedGameStaleRecoverySpineLaneCase().id,
+      role: completedGameStaleRecoverySpineLaneCase().role,
+    },
+    {
+      id: "stale-host-complete-reload",
+      role: "host",
+    },
   );
 });
 

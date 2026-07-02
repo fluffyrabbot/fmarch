@@ -4,6 +4,9 @@ const cloneRaceCoverageCell = (cell) => ({
   roleSurfaces: [...cell.roleSurfaces],
 });
 
+export const completedGameHardeningSpineCycleId =
+  "hardening-completed-game";
+
 export {
   assertCompletedGameEndgameTransition,
   assertCompletedPlayerReloadCases,
@@ -204,6 +207,18 @@ export function completedGameHardeningSpineLaneCases() {
       proofSteps: "reload",
     }).map((scenario) => ({ ...scenario, role: "player" })),
   ];
+}
+
+export function completedGameStaleRecoverySpineLaneCase() {
+  const cases = completedGameHardeningSpineLaneCases().filter(
+    (scenario) =>
+      scenario.proofGroup === "stale-host-complete" &&
+      scenario.proofStep === "reload",
+  );
+  if (cases.length !== 1) {
+    throw new Error("completed-game stale recovery spine lane drifted");
+  }
+  return cloneScenarioCase(cases[0]);
 }
 
 export function completedHostSeedDemoOnlyScenarioIds() {
