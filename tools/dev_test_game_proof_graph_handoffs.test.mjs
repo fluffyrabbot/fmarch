@@ -6,6 +6,8 @@ import {
 } from "./dev_test_game_proof_graph_handoffs.mjs";
 import {
   adminProofDestinationRequirementForLink,
+  adminProofDestinationRequirementLinkRows,
+  adminProofDestinationRequirementRoleRows,
 } from "./dev_test_game_proof_graph_handoff_cases.mjs";
 import {
   hostedEvidenceHandoffInputIds,
@@ -30,23 +32,7 @@ test("admin proof graph role handoffs cover every admin-proof role URL", () => {
 
   assert.deepEqual(
     handoffs.map((handoff) => [handoff.linkId, handoff.auditId]),
-    [
-      ["admin-proof:core-loop", "local-core-loop"],
-      ["admin-proof:hardening", "local-hardening"],
-      ["admin-proof:identity", "local-identity-adapter"],
-      ["admin-proof:backup", "local-backup-restore"],
-      ["admin-proof:ops", "local-ops-artifacts"],
-      ["admin-proof:seed", "local-seed-fixtures"],
-      ["admin-proof:release", "local-release-readiness"],
-      ["admin-proof:race-coverage", "local-race-coverage"],
-      ["admin-proof:hosted-target-preflight", "local-hosted-target-preflight"],
-      ["admin-proof:hosted-evidence-lane", "local-hosted-evidence-lane"],
-      [
-        "admin-proof:hosted-concurrent-race-matrix",
-        "local-hosted-concurrent-race-matrix",
-      ],
-      ["admin-proof:spine-manifest", "local-spine-manifest"],
-    ],
+    adminProofDestinationRequirementLinkRows,
   );
   assert.deepEqual(
     handoffs.find((handoff) => handoff.linkId === "admin-proof:seed")
@@ -156,30 +142,14 @@ test("admin proof graph role handoff coverage fails closed for unmapped nodes", 
 
 function proofGraphFixture() {
   return {
-    nodes: [
-      roleNode("admin-proof:core-loop", "local-core-loop"),
-      roleNode("admin-proof:hardening", "local-hardening"),
-      roleNode("admin-proof:identity", "local-identity-adapter"),
-      roleNode("admin-proof:backup", "local-backup-restore"),
-      roleNode("admin-proof:ops", "local-ops-artifacts"),
-      roleNode("admin-proof:seed", "local-seed-fixtures"),
-      roleNode("admin-proof:release", "local-release-readiness"),
-      roleNode("admin-proof:race-coverage", "local-race-coverage"),
-      roleNode("admin-proof:hosted-target-preflight", "local-hosted-target-preflight"),
-      roleNode(
-        "admin-proof:hosted-concurrent-race-matrix",
-        "local-hosted-concurrent-race-matrix",
-      ),
-      roleNode("admin-proof:hosted-evidence-lane", "local-hosted-evidence-lane"),
-      roleNode("admin-proof:spine-manifest", "local-spine-manifest"),
-    ],
+    nodes: adminProofDestinationRequirementRoleRows().map(roleNode),
   };
 }
 
-function roleNode(id, auditId) {
+function roleNode({ linkId, roleUrl }) {
   return {
-    id,
-    roleUrl: `/admin/audit/${auditId}?game=<seeded-game>`,
+    id: linkId,
+    roleUrl,
   };
 }
 

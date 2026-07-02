@@ -66,6 +66,10 @@ import {
   releaseReadinessUnprovenItem,
   releaseReadinessUnprovenStatusRows,
 } from "../../../../tools/dev_test_game_release_readiness_cases.mjs";
+import {
+  adminProofDestinationRequirementLinkRows,
+  adminProofDestinationRequirementRoleRows,
+} from "../../../../tools/dev_test_game_proof_graph_handoff_cases.mjs";
 
 const LOCAL_RACE_COMMAND =
   "npm run test:dev-test-game-hosted-concurrent-race-matrix";
@@ -1067,35 +1071,29 @@ test("admin local admin spine detail data carries aggregate proof rows", async (
 });
 
 test("admin route data exposes local proof graph as a native audit row", async () => {
+  const proofGraph = proofGraphFixture();
   const data = await buildAdminRouteData({
     principalUserId: "admin_a",
     capabilities: [{ kind: "GlobalAdmin" }],
-    proofGraph: proofGraphFixture(),
+    proofGraph,
   });
 
   const graph = data.audit.find((item) => item.id === "local-proof-graph");
   assert.equal(graph.label, "Local proof graph");
-  assert.equal(graph.status, "6 proof nodes, 6 edges");
+  assert.equal(
+    graph.status,
+    `${proofGraph.summary.nodeCount} proof nodes, ${proofGraph.summary.edgeCount} edges`,
+  );
   assert.equal(graph.authority, "GlobalAdmin or GlobalMod");
   assert.equal(graph.inspectHref, "/admin/audit/local-proof-graph?game=midsummer");
   assert.deepEqual(
     graph.checks.map((check) => [check.id, check.status]),
     [
-      ["admin-spine", "passed"],
-      ["spine-manifest", "passed"],
-      ["proof-freshness", "passed"],
-      ["next-action", "recorded"],
-      ["admin-proof:seed", "passed"],
-      ["admin-proof:hosted-concurrent-race-matrix", "passed"],
-      ["edge:admin-spine:aggregates:spine-manifest", "aggregates"],
-      ["edge:spine-manifest:records:proof-freshness", "records"],
-      ["edge:spine-manifest:records:next-action", "records"],
-      ["edge:proof-freshness:recovers-through:next-action", "recovers-through"],
-      ["edge:next-action:recovery-target:admin-proof:seed", "recovery-target"],
-      [
-        "edge:admin-spine:aggregates:admin-proof:hosted-concurrent-race-matrix",
-        "aggregates",
-      ],
+      ...proofGraph.nodes.map((node) => [node.id, node.status]),
+      ...proofGraph.edges.map((edge) => [
+        `edge:${edge.from}:${edge.relationship}:${edge.to}`,
+        edge.relationship,
+      ]),
     ],
   );
   assert.deepEqual(
@@ -1105,29 +1103,36 @@ test("admin route data exposes local proof graph as a native audit row", async (
       ["spine-manifest", "/admin/audit/local-spine-manifest?game=midsummer"],
       ["proof-freshness", "/admin/audit/local-proof-freshness?game=midsummer"],
       ["next-action", "/admin/audit/local-next-action?game=midsummer"],
-      ["admin-proof:seed", "/admin/audit/local-seed-fixtures?game=midsummer"],
-      [
-        "admin-proof:hosted-concurrent-race-matrix",
-        "/admin/audit/local-hosted-concurrent-race-matrix?game=midsummer",
-      ],
+      ...adminProofDestinationRequirementRoleRows({ game: "midsummer" }).map(
+        ({ linkId, roleUrl }) => [linkId, roleUrl],
+      ),
     ],
   );
+  assert.deepEqual(
+    graph.relatedLinks
+      .filter((link) => link.id.startsWith("admin-proof:"))
+      .map((link) => [link.id, link.href]),
+    adminProofDestinationRequirementRoleRows({ game: "midsummer" }).map(
+      ({ linkId, roleUrl }) => [linkId, roleUrl],
+    ),
+  );
   assert.deepEqual(graph.artifactSummary, {
-    nodeCount: 6,
-    edgeCount: 6,
-    roleUrlCount: 6,
-    recoveryTargetCount: 6,
+    nodeCount: proofGraph.summary.nodeCount,
+    edgeCount: proofGraph.summary.edgeCount,
+    roleUrlCount: proofGraph.summary.roleUrlCount,
+    recoveryTargetCount: proofGraph.summary.recoveryTargetCount,
     releaseReady: false,
     productionReady: false,
   });
 });
 
 test("admin local proof graph detail data carries graph node rows", async () => {
+  const proofGraph = proofGraphFixture();
   const data = await buildAdminAuditDetailData({
     audit: "local-proof-graph",
     principalUserId: "admin_a",
     capabilities: [{ kind: "GlobalAdmin" }],
-    proofGraph: proofGraphFixture(),
+    proofGraph,
   });
 
   assert.equal(data.status, "available");
@@ -1136,21 +1141,11 @@ test("admin local proof graph detail data carries graph node rows", async () => 
   assert.deepEqual(
     data.audit.checks.map((check) => [check.id, check.status]),
     [
-      ["admin-spine", "passed"],
-      ["spine-manifest", "passed"],
-      ["proof-freshness", "passed"],
-      ["next-action", "recorded"],
-      ["admin-proof:seed", "passed"],
-      ["admin-proof:hosted-concurrent-race-matrix", "passed"],
-      ["edge:admin-spine:aggregates:spine-manifest", "aggregates"],
-      ["edge:spine-manifest:records:proof-freshness", "records"],
-      ["edge:spine-manifest:records:next-action", "records"],
-      ["edge:proof-freshness:recovers-through:next-action", "recovers-through"],
-      ["edge:next-action:recovery-target:admin-proof:seed", "recovery-target"],
-      [
-        "edge:admin-spine:aggregates:admin-proof:hosted-concurrent-race-matrix",
-        "aggregates",
-      ],
+      ...proofGraph.nodes.map((node) => [node.id, node.status]),
+      ...proofGraph.edges.map((edge) => [
+        `edge:${edge.from}:${edge.relationship}:${edge.to}`,
+        edge.relationship,
+      ]),
     ],
   );
   assert.deepEqual(
@@ -1160,11 +1155,9 @@ test("admin local proof graph detail data carries graph node rows", async () => 
       ["spine-manifest", "/admin/audit/local-spine-manifest?game=midsummer"],
       ["proof-freshness", "/admin/audit/local-proof-freshness?game=midsummer"],
       ["next-action", "/admin/audit/local-next-action?game=midsummer"],
-      ["admin-proof:seed", "/admin/audit/local-seed-fixtures?game=midsummer"],
-      [
-        "admin-proof:hosted-concurrent-race-matrix",
-        "/admin/audit/local-hosted-concurrent-race-matrix?game=midsummer",
-      ],
+      ...adminProofDestinationRequirementRoleRows({ game: "midsummer" }).map(
+        ({ linkId, roleUrl }) => [linkId, roleUrl],
+      ),
     ],
   );
 });
@@ -4370,6 +4363,61 @@ function seedProofLaneCoverageActionFixture({ unclassifiedLaneIds }) {
 }
 
 function proofGraphFixture() {
+  const nodes = [
+    proofGraphNode({
+      id: "admin-spine",
+      label: "Local admin spine",
+      status: "passed",
+      artifact: "target/dev-test-game/admin-spine-proof.json",
+      roleUrl: "/admin/audit/local-admin-spine?game=<seeded-game>",
+      recoveryCommand: "npm run test:dev-test-game-admin-spine",
+    }),
+    proofGraphNode({
+      id: "spine-manifest",
+      label: "Local spine manifest",
+      status: "passed",
+      artifact: "target/dev-test-game/spine-manifest.json",
+      roleUrl: "/admin/audit/local-spine-manifest?game=<seeded-game>",
+      recoveryCommand: "npm run test:dev-test-game-spine-manifest-admin-proof",
+    }),
+    proofGraphNode({
+      id: "proof-freshness",
+      label: "Local proof freshness",
+      status: "passed",
+      artifact: "target/dev-test-game/proof-freshness-admin-proof.json",
+      roleUrl: "/admin/audit/local-proof-freshness?game=<seeded-game>",
+      recoveryCommand: "test:dev-test-game-proof-freshness-admin-proof",
+    }),
+    proofGraphNode({
+      id: "next-action",
+      label: "Local next action",
+      status: "recorded",
+      artifact: "target/dev-test-game/next-action.json",
+      roleUrl: "/admin/audit/local-next-action?game=<seeded-game>",
+      recoveryCommand: "test:dev-test-game-next-action",
+    }),
+    ...adminProofGraphNodesFixture(),
+  ];
+  const edges = [
+    { from: "admin-spine", to: "spine-manifest", relationship: "aggregates" },
+    { from: "spine-manifest", to: "proof-freshness", relationship: "records" },
+    { from: "spine-manifest", to: "next-action", relationship: "records" },
+    { from: "proof-freshness", to: "next-action", relationship: "recovers-through" },
+    {
+      from: "next-action",
+      to: "admin-proof:seed",
+      relationship: "recovery-target",
+      reason: "seed-proof-lane-coverage-drift",
+      command: "npm run test:dev-test-game-seed-fixture",
+      roleUrl: "/admin/audit/local-seed-fixtures?game=<seeded-game>",
+      proofTarget: "target/dev-test-game/seed-fixture-summary.json",
+    },
+    ...adminProofDestinationRequirementLinkRows.map(([linkId]) => ({
+      from: "admin-spine",
+      to: linkId,
+      relationship: "aggregates",
+    })),
+  ];
   return {
     version: 1,
     proof: "dev-test-game-proof-graph",
@@ -4384,85 +4432,38 @@ function proofGraphFixture() {
       adminSpineProof: "target/dev-test-game/admin-spine-proof.json",
     },
     summary: {
-      nodeCount: 6,
-      edgeCount: 6,
-      roleUrlCount: 6,
-      recoveryTargetCount: 6,
+      nodeCount: nodes.length,
+      edgeCount: edges.length,
+      roleUrlCount: nodes.filter((node) => node.roleUrl).length,
+      recoveryTargetCount: nodes.filter((node) => node.recoveryCommand).length,
     },
-    nodes: [
-      proofGraphNode({
-        id: "admin-spine",
-        label: "Local admin spine",
-        status: "passed",
-        artifact: "target/dev-test-game/admin-spine-proof.json",
-        roleUrl: "/admin/audit/local-admin-spine?game=<seeded-game>",
-        recoveryCommand: "npm run test:dev-test-game-admin-spine",
-      }),
-      proofGraphNode({
-        id: "spine-manifest",
-        label: "Local spine manifest",
-        status: "passed",
-        artifact: "target/dev-test-game/spine-manifest.json",
-        roleUrl: "/admin/audit/local-spine-manifest?game=<seeded-game>",
-        recoveryCommand: "npm run test:dev-test-game-spine-manifest-admin-proof",
-      }),
-      proofGraphNode({
-        id: "proof-freshness",
-        label: "Local proof freshness",
-        status: "passed",
-        artifact: "target/dev-test-game/proof-freshness-admin-proof.json",
-        roleUrl: "/admin/audit/local-proof-freshness?game=<seeded-game>",
-        recoveryCommand: "test:dev-test-game-proof-freshness-admin-proof",
-      }),
-      proofGraphNode({
-        id: "next-action",
-        label: "Local next action",
-        status: "recorded",
-        artifact: "target/dev-test-game/next-action.json",
-        roleUrl: "/admin/audit/local-next-action?game=<seeded-game>",
-        recoveryCommand: "test:dev-test-game-next-action",
-      }),
-      proofGraphNode({
-        id: "admin-proof:seed",
-        label: "Seed fixture admin proof",
-        status: "passed",
-        artifact: "target/dev-test-game/seed-admin-proof.json",
-        roleUrl: "/admin/audit/local-seed-fixtures?game=<seeded-game>",
-        recoveryCommand: "npm run test:dev-test-game-seed-fixture",
-      }),
-      proofGraphNode({
-        id: "admin-proof:hosted-concurrent-race-matrix",
-        label: "Hosted concurrent race matrix admin proof",
-        status: "passed",
-        artifact:
-          "target/dev-test-game/hosted-concurrent-race-matrix-admin-proof.json",
-        roleUrl:
-          "/admin/audit/local-hosted-concurrent-race-matrix?game=<seeded-game>",
-        recoveryCommand:
-          "npm run test:dev-test-game-hosted-concurrent-race-matrix-admin-proof",
-      }),
-    ],
-    edges: [
-      { from: "admin-spine", to: "spine-manifest", relationship: "aggregates" },
-      { from: "spine-manifest", to: "proof-freshness", relationship: "records" },
-      { from: "spine-manifest", to: "next-action", relationship: "records" },
-      { from: "proof-freshness", to: "next-action", relationship: "recovers-through" },
-      {
-        from: "next-action",
-        to: "admin-proof:seed",
-        relationship: "recovery-target",
-        reason: "seed-proof-lane-coverage-drift",
-        command: "npm run test:dev-test-game-seed-fixture",
-        roleUrl: "/admin/audit/local-seed-fixtures?game=<seeded-game>",
-        proofTarget: "target/dev-test-game/seed-fixture-summary.json",
-      },
-      {
-        from: "admin-spine",
-        to: "admin-proof:hosted-concurrent-race-matrix",
-        relationship: "aggregates",
-      },
-    ],
+    nodes,
+    edges,
   };
+}
+
+function adminProofGraphNodesFixture() {
+  return adminProofDestinationRequirementRoleRows().map(
+    ({ linkId, auditId, roleUrl }) =>
+      proofGraphNode({
+        id: linkId,
+        label: `${auditId} admin proof`,
+        status: "passed",
+        artifact: adminProofArtifactPath(linkId),
+        roleUrl,
+        recoveryCommand: adminProofRecoveryCommand(linkId),
+      }),
+  );
+}
+
+function adminProofArtifactPath(linkId) {
+  const proofId = linkId.replace("admin-proof:", "");
+  return `target/dev-test-game/${proofId}-admin-proof.json`;
+}
+
+function adminProofRecoveryCommand(linkId) {
+  const proofId = linkId.replace("admin-proof:", "");
+  return `npm run test:dev-test-game-${proofId}-admin-proof`;
 }
 
 function raceCoverageFixture() {

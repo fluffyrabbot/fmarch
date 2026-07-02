@@ -186,6 +186,25 @@ export const adminProofDestinationRequirementLinkRows = Object.freeze(
   ),
 );
 
+export function adminProofDestinationRequirementRoleRows({
+  game = "<seeded-game>",
+} = {}) {
+  return adminProofDestinationRequirementCases.map((requirement) =>
+    Object.freeze({
+      linkId: requirement.linkId,
+      auditId: requirement.auditId,
+      roleUrl: adminProofDestinationRoleUrl({
+        auditId: requirement.auditId,
+        game,
+      }),
+    }),
+  );
+}
+
+export function adminProofDestinationRoleUrl({ auditId, game = "<seeded-game>" }) {
+  return `/admin/audit/${auditId}?game=${String(game)}`;
+}
+
 export function adminProofDestinationRequirements() {
   return adminProofDestinationRequirementCases.map((requirement) =>
     cloneRequirement(requirement),

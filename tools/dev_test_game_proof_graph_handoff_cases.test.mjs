@@ -4,6 +4,8 @@ import {
   adminProofDestinationRequirementCases,
   adminProofDestinationRequirementForLink,
   adminProofDestinationRequirementLinkRows,
+  adminProofDestinationRequirementRoleRows,
+  adminProofDestinationRoleUrl,
   adminProofDestinationRequirements,
 } from "./dev_test_game_proof_graph_handoff_cases.mjs";
 import {
@@ -51,6 +53,21 @@ test("admin proof destination handoff cases share link and audit rows", () => {
   assert.equal(
     adminProofDestinationRequirementCases.length,
     adminProofDestinationRequirementLinkRows.length,
+  );
+  assert.deepEqual(
+    adminProofDestinationRequirementRoleRows(),
+    adminProofDestinationRequirementLinkRows.map(([linkId, auditId]) => ({
+      linkId,
+      auditId,
+      roleUrl: `/admin/audit/${auditId}?game=<seeded-game>`,
+    })),
+  );
+  assert.equal(
+    adminProofDestinationRoleUrl({
+      auditId: "local-core-loop",
+      game: "midsummer",
+    }),
+    "/admin/audit/local-core-loop?game=midsummer",
   );
 });
 
