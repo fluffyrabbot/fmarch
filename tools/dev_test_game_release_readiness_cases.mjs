@@ -123,6 +123,14 @@ export const releaseReadinessProductionFeatureSpineTargets = Object.freeze({
     checkpointId: "d02-n02-d02-resolved-target-killed",
     adminCheckId: "completed-game-hardening-coverage",
   }),
+  completedGameStaleRecovery: featureSpineCheckpointTarget({
+    featureSlotId: "completed-game-stale-recovery",
+    sourceCheckId: "local-hardening-proof",
+    cycleId: "hardening-completed-game",
+    roleUrlId: "stale-host-complete-reload",
+    checkpointId: "stale-host-complete-reload",
+    adminCheckId: "stale-host-complete-reload",
+  }),
   replacementStaleConflictMessage: featureSpineCheckpointTarget({
     featureSlotId: "replacement-stale-conflict-message",
     sourceCheckId: "local-hardening-proof",

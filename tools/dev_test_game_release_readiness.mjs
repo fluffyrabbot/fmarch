@@ -99,6 +99,9 @@ import {
   completedGameProofReadinessScenarioFamilies,
 } from "./dev_test_game_core_loop_completed_game_proof_readiness_scenarios.mjs";
 import {
+  completedGameHardeningSpineLaneCases,
+} from "./dev_test_game_core_loop_completed_game_cases.mjs";
+import {
   assertPlayerStaleActionAfterTransitionProofCase,
   assertPlayerStaleVoteAfterTransitionProofCase,
   staleNightFourActionRecoveryScenario,
@@ -627,6 +630,7 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
         : {
             adminRoleSurface: hardeningAdminProofEvidence,
             spineTargets: buildHardeningReadinessSpineTargets({
+              proof,
               hardeningAdminProofEvidence,
               staleConflictMessageMilestone,
             }),
@@ -2845,11 +2849,13 @@ function buildCoreLoopReadinessSpineTargets(coreLoopAdminProofEvidence) {
 }
 
 function buildHardeningReadinessSpineTargets({
+  proof,
   hardeningAdminProofEvidence,
   staleConflictMessageMilestone,
 }) {
   const surfaces = [...(staleConflictMessageMilestone.surfaces ?? [])];
-  const roleUrlHrefs = Object.fromEntries(
+  const completedGameRows = buildCompletedGameHardeningSpineRows(proof);
+  const staleConflictRoleUrlHrefs = Object.fromEntries(
     surfaces
       .filter(
         (surface) =>
@@ -2859,8 +2865,20 @@ function buildHardeningReadinessSpineTargets({
       )
       .map((surface) => [surface.laneId, surface.roleUrl]),
   );
-  const cycleIds = ["hardening-stale-conflict"];
-  const roleUrlIds = surfaces.map((surface) => String(surface.laneId));
+  const roleUrlHrefs = {
+    ...staleConflictRoleUrlHrefs,
+    ...completedGameRows.roleUrlHrefs,
+  };
+  const cycleIds = [
+    "hardening-stale-conflict",
+    ...(completedGameRows.roleUrlIds.length === 0
+      ? []
+      : ["hardening-completed-game"]),
+  ];
+  const roleUrlIds = [
+    ...surfaces.map((surface) => String(surface.laneId)),
+    ...completedGameRows.roleUrlIds,
+  ];
   const checkpointIds = [...roleUrlIds];
   const defaultRoleUrlId = roleUrlIds.includes(
     "replacement-stale-conflict-message",
@@ -2903,6 +2921,48 @@ function buildHardeningReadinessSpineTargets({
         defaultProductionFeatureSpineRerunCommands,
     }),
   };
+}
+
+function buildCompletedGameHardeningSpineRows(proof) {
+  const frontendBaseUrl = String(proof?.session?.frontendBaseUrl ?? "").replace(
+    /\/$/,
+    "",
+  );
+  const laneById = new Map((proof?.lanes ?? []).map((lane) => [lane.id, lane]));
+  const laneCases = completedGameHardeningSpineLaneCases();
+  const roleUrlHrefs = Object.fromEntries(
+    laneCases
+      .map((scenario) => {
+        const lane = laneById.get(scenario.id);
+        const game = String(lane?.evidence?.game ?? "");
+        if (
+          lane?.status !== "passed" ||
+          frontendBaseUrl === "" ||
+          game === ""
+        ) {
+          return null;
+        }
+        return [
+          scenario.id,
+          completedGameHardeningSpineRoleUrl({
+            frontendBaseUrl,
+            game,
+            role: scenario.role,
+          }),
+        ];
+      })
+      .filter((entry) => entry !== null),
+  );
+  return {
+    roleUrlIds: laneCases
+      .map((scenario) => scenario.id)
+      .filter((laneId) => roleUrlHrefs[laneId] !== undefined),
+    roleUrlHrefs,
+  };
+}
+
+function completedGameHardeningSpineRoleUrl({ frontendBaseUrl, game, role }) {
+  return `${frontendBaseUrl}/g/${game}${role === "host" ? "/host" : ""}`;
 }
 
 function assertVisibleAdminRows({ label, visibleRows, requiredRows }) {
@@ -5375,20 +5435,26 @@ function validHardeningSpineTargets(spineTargets) {
     spineTargets.browserProofCommand.includes("test:dev-test-game-live") &&
     Array.isArray(spineTargets.cycleIds) &&
     spineTargets.cycleIds.includes("hardening-stale-conflict") &&
+    spineTargets.cycleIds.includes("hardening-completed-game") &&
     Array.isArray(spineTargets.roleUrlIds) &&
     spineTargets.roleUrlIds.includes("replacement-stale-conflict-message") &&
+    spineTargets.roleUrlIds.includes("stale-host-complete-reload") &&
     spineTargets.roleUrlHrefs !== null &&
     typeof spineTargets.roleUrlHrefs === "object" &&
     typeof spineTargets.roleUrlHrefs["replacement-stale-conflict-message"] ===
       "string" &&
+    typeof spineTargets.roleUrlHrefs["stale-host-complete-reload"] ===
+      "string" &&
     Array.isArray(spineTargets.checkpointIds) &&
     spineTargets.checkpointIds.includes("replacement-stale-conflict-message") &&
+    spineTargets.checkpointIds.includes("stale-host-complete-reload") &&
     Array.isArray(spineTargets.recoveryHookIds) &&
     spineTargets.recoveryHookIds.length === 0 &&
     Array.isArray(spineTargets.visibleAdminCheckIds) &&
     spineTargets.visibleAdminCheckIds.includes(
       "replacement-stale-conflict-message",
     ) &&
+    spineTargets.visibleAdminCheckIds.includes("stale-host-complete-reload") &&
     validHardeningProductionFeatureTargets(spineTargets.productionFeatureTargets)
   );
 }

@@ -143,6 +143,18 @@ test("release readiness buildable cases share next-action commands and spine tar
     },
   );
   assert.deepEqual(
+    releaseReadinessProductionFeatureSpineTargets.completedGameStaleRecovery,
+    {
+      featureSlotId: "completed-game-stale-recovery",
+      sourceCheckId: "local-hardening-proof",
+      cycleId: "hardening-completed-game",
+      roleUrlId: "stale-host-complete-reload",
+      rowKind: "checkpoint",
+      checkpointId: "stale-host-complete-reload",
+      adminCheckId: "stale-host-complete-reload",
+    },
+  );
+  assert.deepEqual(
     releaseReadinessProductionFeatureSpineTargets.replacementStaleConflictMessage,
     {
       featureSlotId: "replacement-stale-conflict-message",

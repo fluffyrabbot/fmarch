@@ -193,6 +193,19 @@ export function completedHostStaleCommandSeedRecoveryLaneIds() {
   });
 }
 
+export function completedGameHardeningSpineLaneCases() {
+  return [
+    ...completedGameHardeningLaneCasesFor({
+      proofGroups: "stale-host-complete",
+      proofSteps: ["reload", "reconnect"],
+    }).map((scenario) => ({ ...scenario, role: "host" })),
+    ...completedGameHardeningLaneCasesFor({
+      proofGroups: "stale-player-complete",
+      proofSteps: "reload",
+    }).map((scenario) => ({ ...scenario, role: "player" })),
+  ];
+}
+
 export function completedHostSeedDemoOnlyScenarioIds() {
   return completedGameHardeningLaneIdsFor({
     families: "completed-host-stale-command",

@@ -20,6 +20,7 @@ import {
 import {
   completedGameRaceCoverageCellCases,
   completedGameRaceCoverageCellIds,
+  completedGameHardeningSpineLaneCases,
 } from "./dev_test_game_core_loop_completed_game_scenario_assertions.mjs";
 import {
   coreLoopHostControlScenarioFamily,
@@ -2142,9 +2143,9 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
     graph,
     releaseReadiness,
   );
-  assert.equal(graph.summary.nodeCount, 29);
-  assert.equal(graph.summary.roleUrlCount, 29);
-  assert.equal(graph.summary.productionFeatureTargetCount, 10);
+  assert.equal(graph.summary.nodeCount, 30);
+  assert.equal(graph.summary.roleUrlCount, 30);
+  assert.equal(graph.summary.productionFeatureTargetCount, 11);
   assert.deepEqual(
     graph.nodes
       .filter((node) => node.kind === "admin-proof-surface")
@@ -12457,7 +12458,7 @@ function hardeningSpineTargetsFixture({
     defaultRoleUrl: roleUrlHrefs["replacement-stale-conflict-message"],
     defaultCheckpointId: "replacement-stale-conflict-message",
     browserProofCommand: devTestGameLiveProofCommand,
-    cycleIds: ["hardening-stale-conflict"],
+    cycleIds: ["hardening-stale-conflict", "hardening-completed-game"],
     roleUrlIds: Object.keys(roleUrlHrefs),
     checkpointIds: Object.keys(roleUrlHrefs),
     recoveryHookIds: [],
@@ -12472,25 +12473,60 @@ function hardeningSpineTargetsFixture({
 
 function hardeningRoleUrlHrefsFromProofRun(proofRun) {
   const laneById = new Map(proofRun.lanes.map((lane) => [lane.id, lane]));
-  return Object.fromEntries(
-    staleConflictMessageSurfaceCases().map((surface) => [
-      surface.laneId,
-      String(laneById.get(surface.laneId)?.evidence?.roleUrl ?? ""),
-    ]),
+  const frontendBaseUrl = String(proofRun.session.frontendBaseUrl).replace(
+    /\/$/,
+    "",
   );
+  return {
+    ...Object.fromEntries(
+      staleConflictMessageSurfaceCases().map((surface) => [
+        surface.laneId,
+        String(laneById.get(surface.laneId)?.evidence?.roleUrl ?? ""),
+      ]),
+    ),
+    ...Object.fromEntries(
+      completedGameHardeningSpineLaneCases().map((scenario) => [
+        scenario.id,
+        hardeningSpineRoleUrlFromGame({
+          frontendBaseUrl,
+          game: laneById.get(scenario.id).evidence.game,
+          role: scenario.role,
+        }),
+      ]),
+    ),
+  };
 }
 
 function hardeningRoleUrlHrefsFixture() {
-  return Object.fromEntries(
-    staleConflictMessageSurfaceFixtureRows().map((surface) => [
-      surface.laneId,
-      surface.roleUrl,
-    ]),
-  );
+  return {
+    ...Object.fromEntries(
+      staleConflictMessageSurfaceFixtureRows().map((surface) => [
+        surface.laneId,
+        surface.roleUrl,
+      ]),
+    ),
+    ...Object.fromEntries(
+      completedGameHardeningSpineLaneCases().map((scenario) => [
+        scenario.id,
+        hardeningSpineRoleUrlFromGame({
+          frontendBaseUrl: "http://127.0.0.1:5173",
+          game: `fixture-${scenario.id}`,
+          role: scenario.role,
+        }),
+      ]),
+    ),
+  };
+}
+
+function hardeningSpineRoleUrlFromGame({ frontendBaseUrl, game, role }) {
+  return `${frontendBaseUrl}/g/${game}${role === "host" ? "/host" : ""}`;
 }
 
 function hardeningProductionFeatureTargetsFixture(roleUrlHrefs) {
-  const slotIds = ["replacement-stale-conflict-message"];
+  const slotIds = [
+    "completed-game-stale-recovery",
+    "replacement-stale-conflict-message",
+  ];
   return {
     status: "passed",
     slotIds,
@@ -12565,7 +12601,12 @@ function featureSpineCaseFixture(
       includeTargetRerunCommand: true,
     });
   }
-  if (slotId === "replacement-stale-conflict-message") {
+  if (
+    [
+      "replacement-stale-conflict-message",
+      "completed-game-stale-recovery",
+    ].includes(slotId)
+  ) {
     return featureSpineFixture({
       slotId,
       detailRoleUrl: "/admin/audit/local-hardening?game=<seeded-game>",

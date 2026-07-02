@@ -54,6 +54,9 @@ import {
   promotedStalePlayerCommandLaneIds,
   stalePlayerCommandLaneIds,
 } from "./dev_test_game_player_recovery_scenarios.mjs";
+import {
+  completedGameHardeningSpineLaneCases,
+} from "./dev_test_game_core_loop_completed_game_cases.mjs";
 
 test("hardening lane cases share stale conflict-message IDs", () => {
   assert.deepEqual(staleConflictMessageLaneIds, [
@@ -275,6 +278,29 @@ test("hardening lane cases summarize host stale-control coverage", () => {
   assert.equal(summary.familyCount, 5);
   assert.doesNotThrow(() =>
     assertHostStaleControlCoverageSummary({ summary, lanes }),
+  );
+});
+
+test("hardening lane cases share completed-game spine rows", () => {
+  assert.deepEqual(
+    completedGameHardeningSpineLaneCases().map(({ id, role }) => ({
+      id,
+      role,
+    })),
+    [
+      {
+        id: "stale-host-complete-reload",
+        role: "host",
+      },
+      {
+        id: "stale-host-complete-reconnect-recovery",
+        role: "host",
+      },
+      {
+        id: "stale-player-complete-reload",
+        role: "player",
+      },
+    ],
   );
 });
 

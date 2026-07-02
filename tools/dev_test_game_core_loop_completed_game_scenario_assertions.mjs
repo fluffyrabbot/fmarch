@@ -25,6 +25,7 @@ export {
   completedGameHardeningLaneCasesFor,
   completedGameHardeningLaneIds,
   completedGameHardeningLaneIdsFor,
+  completedGameHardeningSpineLaneCases,
   completedGameRaceCoverageCellCases,
   completedGameRaceCoverageCellDefinitions,
   completedGameRaceCoverageCellIds,
