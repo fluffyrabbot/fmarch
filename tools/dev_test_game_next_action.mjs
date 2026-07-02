@@ -49,6 +49,9 @@ import {
 import {
   productionFeatureGraphSourceNodeId,
 } from "./dev_test_game_production_feature_graph_sources.mjs";
+import {
+  productionFeatureSourceTargetsByCheckIdFromReadiness,
+} from "./dev_test_game_production_feature_readiness_sources.mjs";
 import { devTestGameProofGraphPath } from "./dev_test_game_proof_graph_paths.mjs";
 
 export const DEV_TEST_GAME_NEXT_ACTION_VERSION = 1;
@@ -126,10 +129,12 @@ export function buildDevTestGameNextAction(
       ? null
       : assertDevTestGameHostedTargetPreflight(hostedTargetPreflight);
   const graph = proofGraph === null ? null : assertProofGraphForNextAction(proofGraph);
-  const coreLoopSpineTarget = coreLoopSpineTargetFromReadiness(readiness);
-  const hardeningSpineTarget = hardeningSpineTargetFromReadiness(readiness);
-  const identityAdapterSpineTarget =
-    identityAdapterSpineTargetFromReadiness(readiness);
+  const sourceTargetsByCheckId =
+    productionFeatureSourceTargetsByCheckIdFromReadiness(readiness, {
+      defaultBrowserProofCommand: devTestGameLiveProofCommand,
+      defaultRerunCommandBySourceCheckId:
+        defaultProductionFeatureSpineRerunCommands,
+    });
   const candidates = rankedArtifactsNeedingRefresh(manifest);
   const artifact = candidates[0]?.artifact;
   const selectionTrace = buildSelectionTrace(candidates);
@@ -142,9 +147,7 @@ export function buildDevTestGameNextAction(
   );
   const releaseReadinessCandidates = rankedBuildableReleaseReadinessItems(readiness, {
     hostedTargetPreflight: hostedPreflight,
-    coreLoopSpineTarget,
-    hardeningSpineTarget,
-    identityAdapterSpineTarget,
+    sourceTargetsByCheckId,
     proofGraph: graph,
   });
   const releaseReadinessTrace = buildReleaseReadinessTrace(releaseReadinessCandidates);
@@ -693,113 +696,11 @@ function buildSelectionTrace(candidates) {
   };
 }
 
-function coreLoopSpineTargetFromReadiness(readiness) {
-  return sourceSpineTargetFromReadiness(readiness, "local-core-loop-proof");
-}
-
-function hardeningSpineTargetFromReadiness(readiness) {
-  return sourceSpineTargetFromReadiness(readiness, "local-hardening-proof");
-}
-
-function sourceSpineTargetFromReadiness(readiness, sourceCheckId) {
-  const sourceCheck = readiness?.localDevelopmentSpine?.checks?.find?.(
-    (check) => check?.id === sourceCheckId,
-  );
-  const targets = sourceCheck?.spineTargets;
-  if (targets === null || typeof targets !== "object") {
-    return null;
-  }
-  const target = {
-    sourceCheckId,
-    detailRoleUrl: String(targets.detailRoleUrl ?? ""),
-    cycleId: String(targets.defaultCycleId ?? ""),
-    roleUrlId: String(targets.defaultRoleUrlId ?? ""),
-    roleUrl: String(targets.defaultRoleUrl ?? ""),
-    checkpointId: String(targets.defaultCheckpointId ?? ""),
-    browserProofCommand: String(targets.browserProofCommand ?? ""),
-    cycleIds: [...(targets.cycleIds ?? [])].map((id) => String(id)),
-    roleUrlIds: [...(targets.roleUrlIds ?? [])].map((id) => String(id)),
-    checkpointIds: [...(targets.checkpointIds ?? [])].map((id) => String(id)),
-    recoveryHookIds: [...(targets.recoveryHookIds ?? [])].map((id) =>
-      String(id),
-    ),
-    visibleAdminCheckIds: [...(targets.visibleAdminCheckIds ?? [])].map((id) =>
-      String(id),
-    ),
-    roleUrlHrefs:
-      targets.roleUrlHrefs !== null && typeof targets.roleUrlHrefs === "object"
-        ? Object.fromEntries(
-            Object.entries(targets.roleUrlHrefs).map(([id, href]) => [
-              String(id),
-              String(href ?? ""),
-            ]),
-          )
-        : {},
-  };
-  return [
-    target.sourceCheckId,
-    target.detailRoleUrl,
-    target.cycleId,
-    target.roleUrlId,
-    target.roleUrl,
-    target.checkpointId,
-    target.visibleAdminCheckIds.length > 0 ? "visible-admin-checks" : "",
-    target.browserProofCommand,
-  ].every((value) => value !== "")
-    ? target
-    : null;
-}
-
-function identityAdapterSpineTargetFromReadiness(readiness) {
-  const identityCheck = readiness?.localDevelopmentSpine?.checks?.find?.(
-    (check) => check?.id === "local-identity-adapter-proof",
-  );
-  const detailRoleUrl = String(
-    identityCheck?.adminRoleSurface?.detailRoleUrl ?? "",
-  );
-  const visibleAdminCheckIds = [
-    ...(identityCheck?.adminRoleSurface?.visibleChecks ?? []),
-  ].map((id) => String(id));
-  const target = {
-    sourceCheckId: "local-identity-adapter-proof",
-    detailRoleUrl,
-    cycleId: "identity-adapter",
-    roleUrlId: "local-identity-adapter",
-    roleUrl: detailRoleUrl,
-    checkpointId: "account-login",
-    browserProofCommand: devTestGameLiveProofCommand,
-    rerunCommand: devTestGameIdentityAdminProofCommand,
-    cycleIds: ["identity-adapter"],
-    roleUrlIds: ["local-identity-adapter"],
-    checkpointIds: ["account-login"],
-    recoveryHookIds: [],
-    visibleAdminCheckIds,
-    roleUrlHrefs: {
-      "local-identity-adapter": detailRoleUrl,
-    },
-  };
-  return [
-    target.sourceCheckId,
-    target.detailRoleUrl,
-    target.cycleId,
-    target.roleUrlId,
-    target.roleUrl,
-    target.checkpointId,
-    target.visibleAdminCheckIds.length > 0 ? "visible-admin-checks" : "",
-    target.browserProofCommand,
-    target.rerunCommand,
-  ].every((value) => value !== "")
-    ? target
-    : null;
-}
-
 function rankedBuildableReleaseReadinessItems(
   readiness,
   {
     hostedTargetPreflight = null,
-    coreLoopSpineTarget = null,
-    hardeningSpineTarget = null,
-    identityAdapterSpineTarget = null,
+    sourceTargetsByCheckId = {},
     proofGraph = null,
   } = {},
 ) {
@@ -816,11 +717,7 @@ function rankedBuildableReleaseReadinessItems(
       const spineTarget = resolveProductionFeatureSpineTarget({
         itemId: item.id,
         declaration: buildable.productionFeatureSpineTarget,
-        sourceTargetsByCheckId: {
-          "local-core-loop-proof": coreLoopSpineTarget,
-          "local-hardening-proof": hardeningSpineTarget,
-          "local-identity-adapter-proof": identityAdapterSpineTarget,
-        },
+        sourceTargetsByCheckId,
         defaultRerunCommandBySourceCheckId:
           defaultProductionFeatureSpineRerunCommands,
       });

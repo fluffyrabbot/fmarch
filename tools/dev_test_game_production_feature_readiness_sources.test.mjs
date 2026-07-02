@@ -1,0 +1,136 @@
+import assert from "node:assert/strict";
+import { test } from "node:test";
+import {
+  productionFeatureSourceTargetFromReadiness,
+  productionFeatureSourceTargetsByCheckIdFromReadiness,
+} from "./dev_test_game_production_feature_readiness_sources.mjs";
+
+const browserProofCommand =
+  "DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch npm run test:dev-test-game-live";
+const coreLoopAdminProofCommand =
+  "npm run test:dev-test-game-core-loop-admin-proof";
+const hardeningAdminProofCommand =
+  "npm run test:dev-test-game-hardening-admin-proof";
+const identityAdminProofCommand =
+  "npm run test:dev-test-game-identity-admin-proof";
+const rerunCommands = Object.freeze({
+  "local-core-loop-proof": coreLoopAdminProofCommand,
+  "local-hardening-proof": hardeningAdminProofCommand,
+  "local-identity-adapter-proof": identityAdminProofCommand,
+});
+
+test("production feature readiness sources derive every available source target", () => {
+  const sourceTargets = productionFeatureSourceTargetsByCheckIdFromReadiness(
+    readinessFixture(),
+    {
+      defaultBrowserProofCommand: browserProofCommand,
+      defaultRerunCommandBySourceCheckId: rerunCommands,
+    },
+  );
+
+  assert.deepEqual(Object.keys(sourceTargets), [
+    "local-core-loop-proof",
+    "local-hardening-proof",
+    "local-identity-adapter-proof",
+  ]);
+  assert.equal(sourceTargets["local-core-loop-proof"].roleUrlId, "d02-n02-host");
+  assert.equal(
+    sourceTargets["local-hardening-proof"].roleUrlHrefs[
+      "replacement-stale-conflict-message"
+    ],
+    "http://127.0.0.1:5173/g/game-a/host",
+  );
+  assert.equal(
+    sourceTargets["local-identity-adapter-proof"].rerunCommand,
+    identityAdminProofCommand,
+  );
+});
+
+test("production feature readiness source target fails closed for missing rows", () => {
+  assert.equal(
+    productionFeatureSourceTargetFromReadiness(
+      { localDevelopmentSpine: { checks: [] } },
+      "local-core-loop-proof",
+    ),
+    null,
+  );
+  assert.equal(
+    productionFeatureSourceTargetFromReadiness(
+      {
+        localDevelopmentSpine: {
+          checks: [
+            {
+              id: "local-identity-adapter-proof",
+              adminRoleSurface: {
+                detailRoleUrl: "/admin/audit/local-identity-adapter?game=<seeded-game>",
+                visibleChecks: ["account-login"],
+              },
+            },
+          ],
+        },
+      },
+      "local-identity-adapter-proof",
+      {
+        defaultBrowserProofCommand: browserProofCommand,
+        defaultRerunCommandBySourceCheckId: {},
+      },
+    ),
+    null,
+  );
+});
+
+function readinessFixture() {
+  return {
+    localDevelopmentSpine: {
+      checks: [
+        {
+          id: "local-core-loop-proof",
+          spineTargets: {
+            detailRoleUrl: "/admin/audit/local-core-loop?game=<seeded-game>",
+            defaultCycleId: "d02-n02",
+            defaultRoleUrlId: "d02-n02-host",
+            defaultRoleUrl: "http://127.0.0.1:5173/g/game-b/host",
+            defaultCheckpointId: "d02-n02-d02-vote-open",
+            browserProofCommand,
+            cycleIds: ["d02-n02"],
+            roleUrlIds: ["d02-n02-host"],
+            checkpointIds: ["d02-n02-d02-vote-open"],
+            recoveryHookIds: [],
+            visibleAdminCheckIds: ["host-lifecycle-control"],
+            roleUrlHrefs: {
+              "d02-n02-host": "http://127.0.0.1:5173/g/game-b/host",
+            },
+          },
+        },
+        {
+          id: "local-hardening-proof",
+          spineTargets: {
+            detailRoleUrl: "/admin/audit/local-hardening?game=<seeded-game>",
+            defaultCycleId: "hardening-stale-conflict",
+            defaultRoleUrlId: "replacement-stale-conflict-message",
+            defaultRoleUrl: "http://127.0.0.1:5173/g/game-a/host",
+            defaultCheckpointId: "replacement-stale-conflict-message",
+            browserProofCommand,
+            cycleIds: ["hardening-stale-conflict"],
+            roleUrlIds: ["replacement-stale-conflict-message"],
+            checkpointIds: ["replacement-stale-conflict-message"],
+            recoveryHookIds: [],
+            visibleAdminCheckIds: ["replacement-stale-conflict-message"],
+            roleUrlHrefs: {
+              "replacement-stale-conflict-message":
+                "http://127.0.0.1:5173/g/game-a/host",
+            },
+          },
+        },
+        {
+          id: "local-identity-adapter-proof",
+          adminRoleSurface: {
+            detailRoleUrl:
+              "/admin/audit/local-identity-adapter?game=<seeded-game>",
+            visibleChecks: ["account-login"],
+          },
+        },
+      ],
+    },
+  };
+}
