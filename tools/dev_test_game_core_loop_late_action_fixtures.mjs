@@ -12,6 +12,262 @@ export function lateLoopDayVoteOutcomesFixture() {
   ];
 }
 
+export function nightFourActionSubmissionSurfaceFixture({
+  game = "00000000-0000-0000-0000-000000000002",
+} = {}) {
+  const baseRoleUrl = `http://127.0.0.1:5173/g/${game}`;
+  return {
+    status: "passed",
+    sourceHostRoleUrl: `${baseRoleUrl}/host`,
+    sourceActionPlayerRoleUrl: baseRoleUrl,
+    clickedThroughFromRoleUrl: true,
+    transition:
+      "player:D04:no_lynch:ack:912 -> host:D04:resolve_phase:ack:913 -> host:advance_phase:ack:914 -> player:N04:submit_action:slot-5:ack:915",
+    dayFourVoteProof: {
+      status: "passed",
+      sourceRoleUrl: baseRoleUrl,
+      visitedRolePath: `/g/${game}`,
+      surfaceTestId: "player-surface",
+      clickedThroughFromRoleUrl: true,
+      clickedAction: "submit_vote:no_lynch",
+      commandKind: "SubmitVote",
+      command: {
+        game,
+        actor_slot: "slot-7",
+        target: "NoLynch",
+      },
+      commandStatus: {
+        state: "ack",
+        message: "Ack: stream seqs 912",
+      },
+      bridgePlan: {
+        role: "player",
+        commandKind: "SubmitVote",
+        commandEndpoint: "/commands",
+        finalState: "ack",
+        projectionRefreshKeys: ["votecount", "commandState"],
+      },
+      receipts: [{ state: "ack" }],
+      projectionCommandState: {
+        actorSlot: "slot-7",
+        phase: {
+          phaseId: "D04",
+          locked: false,
+        },
+        currentVote: {
+          kind: "no_lynch",
+        },
+        boundary:
+          "Seeded browser Day 4 no-lynch vote ACK refreshed current vote and votecount projection.",
+      },
+      projectionVotecount: [{ target: "No lynch", count: 1, needed: 1 }],
+      projectionDayVoteOutcomes: [
+        { phaseId: "D02" },
+        { phaseId: "D03" },
+      ],
+      setupResyncFromSeq: 911,
+      setupSnapshotCommandState: {
+        phase: {
+          phaseId: "D04",
+        },
+      },
+      currentVote: {
+        hasVote: "true",
+        text: "Current vote: No lynch",
+      },
+      receiptCount: 1,
+      receiptStatusText: "Ack: stream seqs 912",
+      receiptRefreshKeys: "votecount,commandState",
+      rawInviteTokensVisible: false,
+      targetOnlyReceiptVisible: false,
+      releaseReady: false,
+      productionReady: false,
+    },
+    hostTransitionProof: seededCoreLoopHostSurfaceFixture({
+      game,
+      setupResyncFromSeq: 912,
+      setupPhaseId: "D04",
+      setupPhaseState: "open",
+      resolveProof: {
+        ...hostPhaseTransitionActionFixture({
+          actionId: "resolve_phase",
+          commandKind: "ResolvePhase",
+          streamSeq: 913,
+          phaseId: "D04",
+          phaseState: "locked",
+          deadlineAffordance: "unlock_thread,advance_phase",
+          projectionRefreshKeys: [
+            "host",
+            "votecount",
+            "dayVoteOutcomes",
+            "hostPrompts",
+          ],
+          command: {
+            game,
+            seed: 918273,
+          },
+        }),
+        votecountProjection: [{ target: "No lynch", count: 1, needed: 1 }],
+        dayVoteOutcomesProjection: [
+          { phaseId: "D02" },
+          { phaseId: "D03" },
+          { phaseId: "D04", status: "NoLynch" },
+        ],
+      },
+      advanceProof: hostPhaseTransitionActionFixture({
+        actionId: "advance_phase",
+        commandKind: "AdvancePhase",
+        streamSeq: 914,
+        phaseId: "N04",
+        phaseState: "open",
+        deadlineAffordance: "resolve_phase,lock_thread",
+        projectionRefreshKeys: [],
+        command: {
+          game,
+        },
+      }),
+    }),
+    nightFourActionProof: {
+      status: "passed",
+      sourceRoleUrl: baseRoleUrl,
+      visitedRolePath: `/g/${game}`,
+      surfaceTestId: "player-surface",
+      clickedThroughFromRoleUrl: true,
+      setupResyncFromSeq: 914,
+      setupSnapshotCommandState: {
+        phase: {
+          phaseId: "N04",
+        },
+        actions: [{ targets: ["slot-5"] }],
+      },
+      clickProof: {
+        status: "passed",
+        clickedAction: "submit_action:factional_kill",
+        commandKind: "SubmitAction",
+        command: {
+          game,
+          action_id: "factional_kill",
+          actor_slot: "slot-7",
+          template_id: "factional_kill",
+          targets: ["slot-5"],
+          grant_id: "grant-factional-kill-n04",
+        },
+        commandStatus: {
+          state: "ack",
+          message: "Ack: stream seqs 915",
+        },
+        bridgePlan: {
+          role: "player",
+          commandKind: "SubmitAction",
+          commandEndpoint: "/commands",
+          finalState: "ack",
+          projectionRefreshKeys: [
+            "notifications",
+            "investigationResults",
+            "commandState",
+          ],
+        },
+        receipts: [{ state: "ack" }],
+        projectionCommandState: {
+          phase: {
+            phaseId: "N04",
+          },
+          actions: [],
+          boundary:
+            "Seeded browser Night 4 action ACK refreshed action state after targeting slot-5.",
+        },
+        checkpointReceiptState: "ack:Ack: stream seqs 915",
+        checkpointActionStateAfterAck: "disabled:no legal action available",
+        receiptCount: 1,
+        receiptStatusText: "Ack: stream seqs 915",
+      },
+      releaseReady: false,
+      productionReady: false,
+    },
+    releaseReady: false,
+    productionReady: false,
+  };
+}
+
+export function nightFourResolutionReceiptSurfaceFixture({
+  game = "00000000-0000-0000-0000-000000000002",
+} = {}) {
+  const baseRoleUrl = `http://127.0.0.1:5173/g/${game}`;
+  return {
+    status: "passed",
+    sourceHostRoleUrl: `${baseRoleUrl}/host`,
+    sourceActionPlayerRoleUrl: baseRoleUrl,
+    sourceSurvivorRoleUrl: `${baseRoleUrl}?private=notification-1`,
+    clickedThroughFromRoleUrl: true,
+    transition:
+      "host:N04:resolve_phase:ack:916 -> survivor:N04:factional_kill_receipt -> actionPlayer:N04:privacy",
+    hostResolutionProof: seededCoreLoopHostSurfaceFixture({
+      game,
+      setupResyncFromSeq: 915,
+      setupPhaseId: "N04",
+      setupPhaseState: "open",
+      resolveProof: hostPhaseTransitionActionFixture({
+        actionId: "resolve_phase",
+        commandKind: "ResolvePhase",
+        streamSeq: 916,
+        phaseId: "N04",
+        phaseState: "locked",
+        deadlineAffordance: "unlock_thread,advance_phase",
+        projectionRefreshKeys: [
+          "host",
+          "votecount",
+          "dayVoteOutcomes",
+          "hostPrompts",
+        ],
+        command: {
+          game,
+          seed: 918273,
+        },
+      }),
+    }),
+    survivorReceiptProof: nightFourResolutionPlayerSurfaceFixture({
+      sourceRoleUrl: `${baseRoleUrl}?private=notification-1`,
+      visitedRolePath: `/g/${game}?private=notification-1`,
+      slotField: "survivorSlot",
+      slot: "slot-5",
+      principalUserId: "player_sage",
+      actorAlive: false,
+      actorStatus: "dead",
+      actionState: "disabled:actor is not alive",
+      statusText: "Player action unavailable: actor is not alive",
+      privateCount: 1,
+      privateReceipt: true,
+      boundary:
+        "Seeded browser survivor target received factional_kill private receipt after N04 resolution.",
+      commandStateEndpoint:
+        `/games/${game}/player-command-state?principal_user_id=player_sage&slot_id=slot-5`,
+      notificationsEndpoint:
+        `/games/${game}/notifications?principal_user_id=player_sage`,
+    }),
+    actionPlayerPrivacyProof: nightFourResolutionPlayerSurfaceFixture({
+      sourceRoleUrl: baseRoleUrl,
+      visitedRolePath: `/g/${game}`,
+      slotField: "actionPlayerSlot",
+      slot: "slot-7",
+      principalUserId: "player_mira",
+      actorAlive: true,
+      actorStatus: "alive",
+      actionState: "disabled:phase locked",
+      statusText: "Player action unavailable: phase locked",
+      privateCount: 0,
+      privateReceipt: false,
+      boundary:
+        "Seeded browser action player stayed alive with no target-only N04 receipt after host resolved Night 4.",
+      commandStateEndpoint:
+        `/games/${game}/player-command-state?principal_user_id=player_mira&slot_id=slot-7`,
+      notificationsEndpoint:
+        `/games/${game}/notifications?principal_user_id=player_mira`,
+    }),
+    releaseReady: false,
+    productionReady: false,
+  };
+}
+
 export function postNightFourTransitionSurfaceFixture({
   game = "00000000-0000-0000-0000-000000000002",
   dayVoteOutcomes = lateLoopDayVoteOutcomesFixture(),
@@ -152,4 +408,99 @@ export function postNightFourTransitionSurfaceFixture({
     releaseReady: false,
     productionReady: false,
   };
+}
+
+function nightFourResolutionPlayerSurfaceFixture({
+  sourceRoleUrl,
+  visitedRolePath,
+  slotField,
+  slot,
+  principalUserId,
+  actorAlive,
+  actorStatus,
+  actionState,
+  statusText,
+  privateCount,
+  privateReceipt,
+  boundary,
+  commandStateEndpoint,
+  notificationsEndpoint,
+}) {
+  const proof = {
+    status: "passed",
+    sourceRoleUrl,
+    visitedRolePath,
+    surfaceTestId: "player-surface",
+    clickedThroughFromRoleUrl: true,
+    [slotField]: slot,
+    principalUserId,
+    checkpoint: {
+      phaseId: "N04",
+      phaseState: "locked",
+      actorSlot: slot,
+      actionState,
+      receiptState: "idle",
+      statusText,
+    },
+    privateQueueBoundary: {
+      status: "principal-scoped-private-projections",
+      count: privateCount,
+      text:
+        "Notifications and investigation results are loaded from principal-scoped endpoints only.",
+    },
+    voteButtonCount: 0,
+    projectionCommandState: {
+      actorSlot: slot,
+      actorAlive,
+      actorStatus,
+      phase: {
+        phaseId: "N04",
+        locked: true,
+      },
+      actions: [],
+      voteTargets: [],
+      boundary,
+    },
+    projectionNotifications: privateReceipt
+      ? [
+          {
+            effect: "player_killed",
+            status: "factional_kill",
+          },
+        ]
+      : [],
+    projectionDayVoteOutcomes: lateLoopDayVoteOutcomesFixture(),
+    resyncFromSeq: 916,
+    resyncSnapshotCommandState: {
+      actorSlot: slot,
+      phase: {
+        phaseId: "N04",
+      },
+    },
+    resyncSnapshotNotifications: privateReceipt
+      ? [
+          {
+            status: "factional_kill",
+          },
+        ]
+      : [],
+    coldLoadEndpoints: {
+      notificationsEndpoint,
+      commandStateEndpoint,
+    },
+    rawInviteTokensVisible: false,
+    releaseReady: false,
+    productionReady: false,
+  };
+  if (privateReceipt) {
+    proof.privateNotice = {
+      id: "notification-1",
+      kind: "notification",
+      text: "player_killed factional_kill",
+      detailText: "Phase N04",
+    };
+  } else {
+    proof.privateEmptyText = "No private results visible";
+  }
+  return proof;
 }

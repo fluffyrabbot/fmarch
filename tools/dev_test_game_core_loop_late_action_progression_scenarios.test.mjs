@@ -9,6 +9,17 @@ import {
   nightFourActionSubmissionSurfaceCase,
   nightFourResolutionReceiptSurfaceCase,
 } from "./dev_test_game_core_loop_late_action_progression_scenarios.mjs";
+import {
+  assertDayFourNoLynchVoteProofCase,
+} from "./dev_test_game_core_loop_no_lynch_progression_scenarios.mjs";
+import {
+  assertDayFourNoLynchHostTransitionProofCase,
+  assertHostPhaseTransitionActionProofCase,
+} from "./dev_test_game_core_loop_host_phase_scenarios.mjs";
+import {
+  nightFourActionSubmissionSurfaceFixture,
+  nightFourResolutionReceiptSurfaceFixture,
+} from "./dev_test_game_core_loop_late_action_fixtures.mjs";
 
 test("late action progression family shares Night 4 action and recovery cases", () => {
   assert.equal(
@@ -172,6 +183,31 @@ test("late action progression assertion checks host resolution and receipt priva
       args.expectedPhaseId,
     ]),
     [["host-resolve", "resolve_phase", 916, "N04"]],
+  );
+});
+
+test("Night 4 action fixture satisfies the shared submission assertion", () => {
+  assert.doesNotThrow(() =>
+    assertNightFourActionSubmissionSurfaceCase({
+      nightFourActionSubmissionSurface:
+        nightFourActionSubmissionSurfaceFixture(),
+      expectedGame: "00000000-0000-0000-0000-000000000002",
+      assertDayFourNoLynchVoteProof: assertDayFourNoLynchVoteProofCase,
+      assertDayFourNoLynchHostTransitionProof:
+        assertDayFourNoLynchHostTransitionProofCase,
+    }),
+  );
+});
+
+test("Night 4 receipt fixture satisfies the shared privacy assertion", () => {
+  assert.doesNotThrow(() =>
+    assertNightFourResolutionReceiptSurfaceCase({
+      nightFourResolutionReceiptSurface:
+        nightFourResolutionReceiptSurfaceFixture(),
+      expectedGame: "00000000-0000-0000-0000-000000000002",
+      assertHostPhaseTransitionActionProof:
+        assertHostPhaseTransitionActionProofCase,
+    }),
   );
 });
 
