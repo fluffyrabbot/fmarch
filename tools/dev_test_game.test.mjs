@@ -227,6 +227,9 @@ import {
   devTestGameHostedConcurrentRaceMatrixPath,
 } from "./dev_test_game_hosted_concurrent_race_matrix.mjs";
 import {
+  invalidActionRecoveryHostedConcurrentRaceMatrixUnprovenFixture,
+} from "./dev_test_game_next_action_spine_fixtures.mjs";
+import {
   assertDevTestGameHostedMatrixExternalEvidence,
   buildDevTestGameHostedMatrixExternalEvidence,
   devTestGameHostedMatrixExternalEvidenceCommand,
@@ -12800,6 +12803,14 @@ function nextActionAdminProofFixture() {
     command: "npm run test:dev-test-game-hosted-concurrent-race-matrix",
     proofTarget: "target/dev-test-game/hosted-concurrent-race-matrix.json",
   });
+  const invalidActionRecoveryUnproven =
+    invalidActionRecoveryHostedConcurrentRaceMatrixUnprovenFixture({
+      proofTarget: devTestGameHostedConcurrentRaceMatrixPath,
+      spineRoleUrl:
+        coreLoopSpineTargetsFixture().roleUrlHrefs["d02-n02-actionPlayer"],
+      browserProofCommand: devTestGameLiveProofCommand,
+      includeTargetRerunCommand: true,
+    });
   return {
     version: 1,
     proof: "dev-test-game-next-action-admin-proof",
@@ -12825,11 +12836,9 @@ function nextActionAdminProofFixture() {
         "/admin/audit/local-hosted-concurrent-race-matrix?game=<seeded-game>",
       unprovenProofGraphNodeId: "admin-proof:hosted-concurrent-race-matrix",
       unprovenProductionFeatureSpineTarget:
-        productionFeatureSpineTargetFixture("invalid-action-recovery"),
-      unprovenSpineDrilldown:
-        featureSpineDrilldownFixture("invalid-action-recovery"),
-      unprovenSpineTarget:
-        resolvedFeatureSpineTargetFixture("invalid-action-recovery"),
+        invalidActionRecoveryUnproven.productionFeatureSpineTarget,
+      unprovenSpineDrilldown: invalidActionRecoveryUnproven.spineDrilldown,
+      unprovenSpineTarget: invalidActionRecoveryUnproven.spineTarget,
       unprovenHostedHandoffChecklist: hostedHandoffChecklist,
       selectedProofGraphNode: {
         id: "admin-proof:hosted-concurrent-race-matrix",
