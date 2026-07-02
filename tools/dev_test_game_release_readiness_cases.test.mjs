@@ -117,6 +117,19 @@ test("release readiness buildable cases share next-action commands and spine tar
     hostedMatrix.productionFeatureSpineTarget,
     releaseReadinessProductionFeatureSpineTargets.invalidActionRecovery,
   );
+  assert.deepEqual(
+    releaseReadinessProductionFeatureSpineTargets.staleActionConflictMessage,
+    {
+      featureSlotId: "stale-action-conflict-message",
+      sourceCheckId: "local-core-loop-proof",
+      cycleId: "d01-n01-d02",
+      roleUrlId: "d01-n01-d02-actionPlayer",
+      rowKind: "recovery-hook",
+      checkpointId: "d01-n01-d02-n01-action-open",
+      recoveryHookId: "staleActionConflictReject",
+      adminCheckId: "action-loop",
+    },
+  );
 
   const releaseRunbook = releaseReadinessBuildableItemForId(
     "human-release-runbook",
@@ -128,6 +141,10 @@ test("release readiness buildable cases share next-action commands and spine tar
     "real-hosted-concurrent-race-matrix",
   );
   assert.equal(realHostedMatrix.realHostedEvidenceStatus, "unproven");
+  assert.deepEqual(
+    realHostedMatrix.productionFeatureSpineTarget,
+    releaseReadinessProductionFeatureSpineTargets.staleActionConflictMessage,
+  );
 
   const hostedIdentity = releaseReadinessBuildableItemForId(
     "hosted-production-identity",
