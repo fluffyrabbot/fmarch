@@ -10,9 +10,13 @@ import {
   staleCompletedPrivatePostCommandFacts,
 } from "./dev_test_game_core_loop_private_channel_scenario_assertions.mjs";
 import {
+  assertReplacementPrivateChannelRecoveryCoverageSummary,
+  buildReplacementPrivateChannelRecoveryCoverageSummary,
   replacementConcurrentActionRaceScenario,
   replacementConcurrentPrivatePostRaceScenario,
   replacementConcurrentVoteRaceScenario,
+  replacementPrivateChannelRecoveryCoverageFamilies,
+  replacementPrivateChannelRecoveryCoverageFamilyDefinitions,
   replacementPrivateChannelRecoveryLaneIds,
   replacementPrivatePostHardeningLaneIds,
   replacementPrivatePostRaceLaneIds,
@@ -41,6 +45,57 @@ test("replacement private scenario module groups private-post race and recovery 
     ...replacementPrivatePostRaceLaneIds,
     ...replacementPrivatePostRecoveryLaneIds,
   ]);
+});
+
+test("replacement private-channel recovery coverage is derived from shared lanes", () => {
+  assert(Object.isFrozen(replacementPrivateChannelRecoveryCoverageFamilyDefinitions));
+  assert.deepEqual(
+    replacementPrivateChannelRecoveryCoverageFamilies().map((family) => ({
+      id: family.id,
+      laneIds: family.laneIds,
+    })),
+    [
+      {
+        id: "replacement-private-authority",
+        laneIds: [
+          "replacement-stale-private-channel",
+          "replacement-stale-private-receipts",
+        ],
+      },
+      {
+        id: "replacement-private-post-after-resolve",
+        laneIds: [
+          "replacement-stale-private-post-after-resolve",
+          "replacement-stale-private-post-reconnect",
+        ],
+      },
+      {
+        id: "replacement-private-post-after-complete",
+        laneIds: [
+          "replacement-stale-private-post-after-complete",
+          "replacement-stale-private-post-after-complete-reload",
+        ],
+      },
+    ],
+  );
+  const lanes = replacementPrivateChannelRecoveryLaneIds.map((id) => ({
+    id,
+    status: "passed",
+  }));
+  const summary = buildReplacementPrivateChannelRecoveryCoverageSummary(lanes);
+  assert.deepEqual(
+    summary.sourceLaneIds,
+    replacementPrivateChannelRecoveryLaneIds,
+  );
+  assert.equal(summary.laneCount, replacementPrivateChannelRecoveryLaneIds.length);
+  assert.equal(
+    summary.passedLaneCount,
+    replacementPrivateChannelRecoveryLaneIds.length,
+  );
+  assert.equal(summary.familyCount, 3);
+  assert.doesNotThrow(() =>
+    assertReplacementPrivateChannelRecoveryCoverageSummary({ summary, lanes }),
+  );
 });
 
 test("replacement private-post race scenario carries shared command facts", () => {

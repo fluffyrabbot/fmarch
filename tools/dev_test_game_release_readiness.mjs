@@ -28,12 +28,14 @@ import {
   playerRecoveryAuditLaneIds,
 } from "./dev_test_game_player_recovery_scenarios.mjs";
 import {
+  assertReplacementActionRecoveryCoverageSummary,
   replacementActionLaneIds,
 } from "./dev_test_game_replacement_action_scenario_cases.mjs";
 import {
   replacementHandoffRecoveryLaneIds,
 } from "./dev_test_game_replacement_handoff_scenario_cases.mjs";
 import {
+  assertReplacementPrivateChannelRecoveryCoverageSummary,
   replacementPrivateChannelRecoveryLaneIds,
 } from "./dev_test_game_replacement_private_scenarios.mjs";
 import {
@@ -612,6 +614,7 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
       laneIds: [...privateChannelRecoveryMilestone.laneIds],
       requiredLaneCount: privateChannelRecoveryMilestone.requiredLaneCount,
       coveredLaneCount: privateChannelRecoveryMilestone.coveredLaneCount,
+      familyCount: privateChannelRecoveryMilestone.familyCount,
     },
     {
       id: "local-replacement-action-recovery-milestone",
@@ -623,6 +626,7 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
       laneIds: [...replacementActionRecoveryMilestone.laneIds],
       requiredLaneCount: replacementActionRecoveryMilestone.requiredLaneCount,
       coveredLaneCount: replacementActionRecoveryMilestone.coveredLaneCount,
+      familyCount: replacementActionRecoveryMilestone.familyCount,
     },
     {
       id: "local-replacement-handoff-recovery-milestone",
@@ -1106,6 +1110,8 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
         requiredLaneCount: privateChannelRecoveryMilestone.requiredLaneCount,
         coveredLaneCount: privateChannelRecoveryMilestone.coveredLaneCount,
         gapCount: privateChannelRecoveryMilestone.gapCount,
+        familyCount: privateChannelRecoveryMilestone.familyCount,
+        families: privateChannelRecoveryMilestone.families,
       },
       replacementActionRecoveryMilestone: {
         status: replacementActionRecoveryMilestone.status,
@@ -1113,6 +1119,8 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
         requiredLaneCount: replacementActionRecoveryMilestone.requiredLaneCount,
         coveredLaneCount: replacementActionRecoveryMilestone.coveredLaneCount,
         gapCount: replacementActionRecoveryMilestone.gapCount,
+        familyCount: replacementActionRecoveryMilestone.familyCount,
+        families: replacementActionRecoveryMilestone.families,
       },
       replacementHandoffRecoveryMilestone: {
         status: replacementHandoffRecoveryMilestone.status,
@@ -1219,6 +1227,8 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
                 coveredLaneCount:
                   privateChannelRecoveryMilestone.coveredLaneCount,
                 gapCount: privateChannelRecoveryMilestone.gapCount,
+                familyCount: privateChannelRecoveryMilestone.familyCount,
+                families: privateChannelRecoveryMilestone.families,
               },
               replacementActionRecoveryMilestone: {
                 status: replacementActionRecoveryMilestone.status,
@@ -1228,6 +1238,8 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
                 coveredLaneCount:
                   replacementActionRecoveryMilestone.coveredLaneCount,
                 gapCount: replacementActionRecoveryMilestone.gapCount,
+                familyCount: replacementActionRecoveryMilestone.familyCount,
+                families: replacementActionRecoveryMilestone.families,
               },
               replacementHandoffRecoveryMilestone: {
                 status: replacementHandoffRecoveryMilestone.status,
@@ -1625,48 +1637,48 @@ function buildHostStaleControlMilestone(proof, { sourcePath }) {
 }
 
 function buildPrivateChannelRecoveryMilestone(proof, { sourcePath }) {
-  const lanes = new Map(proof.lanes.map((lane) => [lane.id, lane]));
-  const laneIds = [...replacementPrivateChannelRecoveryLaneIds];
-  const coveredLaneCount = laneIds.filter(
-    (laneId) => lanes.get(laneId)?.status === "passed",
-  ).length;
-  const gapCount = laneIds.length - coveredLaneCount;
-  if (gapCount !== 0) {
+  let coverage;
+  try {
+    coverage = assertReplacementPrivateChannelRecoveryCoverageSummary({
+      summary: proof.replacementPrivateChannelRecoveryCoverage,
+      lanes: proof.lanes,
+    });
+  } catch (error) {
     throw new Error(
-      `private-channel recovery milestone missing passed lanes from ${sourcePath}: ${laneIds
-        .filter((laneId) => lanes.get(laneId)?.status !== "passed")
-        .join(", ")}`,
+      `private-channel recovery milestone missing passed lanes from ${sourcePath}: ${error.message}`,
     );
   }
   return {
-    status: "passed",
-    laneIds,
-    requiredLaneCount: laneIds.length,
-    coveredLaneCount,
-    gapCount,
+    status: coverage.status,
+    laneIds: [...coverage.sourceLaneIds],
+    requiredLaneCount: coverage.laneCount,
+    coveredLaneCount: coverage.passedLaneCount,
+    gapCount: coverage.laneCount - coverage.passedLaneCount,
+    familyCount: coverage.familyCount,
+    families: coverage.families,
   };
 }
 
 function buildReplacementActionRecoveryMilestone(proof, { sourcePath }) {
-  const lanes = new Map(proof.lanes.map((lane) => [lane.id, lane]));
-  const laneIds = [...replacementActionLaneIds];
-  const coveredLaneCount = laneIds.filter(
-    (laneId) => lanes.get(laneId)?.status === "passed",
-  ).length;
-  const gapCount = laneIds.length - coveredLaneCount;
-  if (gapCount !== 0) {
+  let coverage;
+  try {
+    coverage = assertReplacementActionRecoveryCoverageSummary({
+      summary: proof.replacementActionRecoveryCoverage,
+      lanes: proof.lanes,
+    });
+  } catch (error) {
     throw new Error(
-      `replacement action recovery milestone missing passed lanes from ${sourcePath}: ${laneIds
-        .filter((laneId) => lanes.get(laneId)?.status !== "passed")
-        .join(", ")}`,
+      `replacement action recovery milestone missing passed lanes from ${sourcePath}: ${error.message}`,
     );
   }
   return {
-    status: "passed",
-    laneIds,
-    requiredLaneCount: laneIds.length,
-    coveredLaneCount,
-    gapCount,
+    status: coverage.status,
+    laneIds: [...coverage.sourceLaneIds],
+    requiredLaneCount: coverage.laneCount,
+    coveredLaneCount: coverage.passedLaneCount,
+    gapCount: coverage.laneCount - coverage.passedLaneCount,
+    familyCount: coverage.familyCount,
+    families: coverage.families,
   };
 }
 

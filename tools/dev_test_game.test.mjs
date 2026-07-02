@@ -92,6 +92,7 @@ import {
   hostedMatrixStaleConflictLaneIds,
 } from "./dev_test_game_hosted_concurrent_race_matrix_cases.mjs";
 import {
+  replacementPrivateChannelRecoveryCoverageFamilies,
   replacementPrivateChannelRecoveryLaneIds,
   replacementPrivatePostRaceLaneIds,
   replacementPrivatePostRecoveryLaneIds,
@@ -99,6 +100,7 @@ import {
   replacementStalePrivatePostAfterResolveScenario,
 } from "./dev_test_game_replacement_private_scenarios.mjs";
 import {
+  replacementActionRecoveryCoverageFamilies,
   replacementActionLaneIds,
   replacementActionReconnectScenario,
   replacementIncomingActionScenario,
@@ -7924,6 +7926,7 @@ test("session card and markdown include role credential URLs and tokens", async 
       laneIds: [...replacementPrivateChannelRecoveryLaneIds],
       requiredLaneCount: replacementPrivateChannelRecoveryLaneIds.length,
       coveredLaneCount: replacementPrivateChannelRecoveryLaneIds.length,
+      familyCount: replacementPrivateChannelRecoveryCoverageFamilies().length,
     },
   );
   assert.deepEqual(
@@ -7940,6 +7943,7 @@ test("session card and markdown include role credential URLs and tokens", async 
       laneIds: [...replacementActionLaneIds],
       requiredLaneCount: replacementActionLaneIds.length,
       coveredLaneCount: replacementActionLaneIds.length,
+      familyCount: replacementActionRecoveryCoverageFamilies().length,
     },
   );
   assert.deepEqual(
@@ -9328,6 +9332,7 @@ function devTestGameReleaseReadinessChecklistFixture({
           laneIds: privateChannelRecoveryMilestoneFixture().laneIds,
           requiredLaneCount: replacementPrivateChannelRecoveryLaneIds.length,
           coveredLaneCount: replacementPrivateChannelRecoveryLaneIds.length,
+          familyCount: replacementPrivateChannelRecoveryCoverageFamilies().length,
         },
         {
           id: "local-replacement-action-recovery-milestone",
@@ -9337,6 +9342,7 @@ function devTestGameReleaseReadinessChecklistFixture({
           laneIds: replacementActionRecoveryMilestoneFixture().laneIds,
           requiredLaneCount: replacementActionLaneIds.length,
           coveredLaneCount: replacementActionLaneIds.length,
+          familyCount: replacementActionRecoveryCoverageFamilies().length,
         },
         {
           id: "local-replacement-handoff-recovery-milestone",
@@ -9627,6 +9633,12 @@ function privateChannelRecoveryMilestoneFixture() {
     requiredLaneCount: replacementPrivateChannelRecoveryLaneIds.length,
     coveredLaneCount: replacementPrivateChannelRecoveryLaneIds.length,
     gapCount: 0,
+    familyCount: replacementPrivateChannelRecoveryCoverageFamilies().length,
+    families: replacementPrivateChannelRecoveryCoverageFamilies().map((family) => ({
+      ...family,
+      status: "passed",
+      passedLaneIds: [...family.laneIds],
+    })),
   };
 }
 
@@ -9637,6 +9649,12 @@ function replacementActionRecoveryMilestoneFixture() {
     requiredLaneCount: replacementActionLaneIds.length,
     coveredLaneCount: replacementActionLaneIds.length,
     gapCount: 0,
+    familyCount: replacementActionRecoveryCoverageFamilies().length,
+    families: replacementActionRecoveryCoverageFamilies().map((family) => ({
+      ...family,
+      status: "passed",
+      passedLaneIds: [...family.laneIds],
+    })),
   };
 }
 

@@ -5,6 +5,10 @@ import {
   playerFactionalKillActionCommandFacts,
 } from "./dev_test_game_core_loop_action_scenarios.mjs";
 import {
+  assertReplacementActionRecoveryCoverageSummary,
+  buildReplacementActionRecoveryCoverageSummary,
+  replacementActionRecoveryCoverageFamilies,
+  replacementActionRecoveryCoverageFamilyDefinitions,
   replacementActionLaneIds,
   replacementActionReconnectScenario,
   replacementIncomingActionScenario,
@@ -17,6 +21,39 @@ test("replacement action lane IDs are shared in proof order", () => {
     "replacement-action-reconnect",
     "replacement-stale-action-after-resolve",
   ]);
+});
+
+test("replacement action recovery coverage is derived from shared lanes", () => {
+  assert(Object.isFrozen(replacementActionRecoveryCoverageFamilyDefinitions));
+  assert.deepEqual(
+    replacementActionRecoveryCoverageFamilies().map((family) => ({
+      id: family.id,
+      laneIds: family.laneIds,
+    })),
+    [
+      {
+        id: "replacement-action-current-surface",
+        laneIds: ["replacement-incoming-action"],
+      },
+      {
+        id: "replacement-action-reconnect",
+        laneIds: ["replacement-action-reconnect"],
+      },
+      {
+        id: "replacement-action-stale-reject",
+        laneIds: ["replacement-stale-action-after-resolve"],
+      },
+    ],
+  );
+  const lanes = replacementActionLaneIds.map((id) => ({ id, status: "passed" }));
+  const summary = buildReplacementActionRecoveryCoverageSummary(lanes);
+  assert.deepEqual(summary.sourceLaneIds, replacementActionLaneIds);
+  assert.equal(summary.laneCount, replacementActionLaneIds.length);
+  assert.equal(summary.passedLaneCount, replacementActionLaneIds.length);
+  assert.equal(summary.familyCount, 3);
+  assert.doesNotThrow(() =>
+    assertReplacementActionRecoveryCoverageSummary({ summary, lanes }),
+  );
 });
 
 test("replacement incoming-action scenario carries shared command facts", () => {

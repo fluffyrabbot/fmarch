@@ -31,6 +31,14 @@ import {
   playerRecoveryAuditLaneIds,
 } from "../../../../tools/dev_test_game_player_recovery_scenarios.mjs";
 import {
+  replacementPrivateChannelRecoveryCoverageFamilies,
+  replacementPrivateChannelRecoveryLaneIds,
+} from "../../../../tools/dev_test_game_replacement_private_scenarios.mjs";
+import {
+  replacementActionLaneIds,
+  replacementActionRecoveryCoverageFamilies,
+} from "../../../../tools/dev_test_game_replacement_action_scenario_cases.mjs";
+import {
   seedAggregateOnlyProofLaneIds,
   seedAliasOnlyProofLaneIds,
   seedDemoScenarioFixtureRows,
@@ -3547,6 +3555,10 @@ function proofRunFixture() {
     },
     completedGameHardeningCoverage: completedGameHardeningCoverageFixture(),
     hostStaleControlCoverage: hostStaleControlCoverageFixture(),
+    replacementPrivateChannelRecoveryCoverage:
+      replacementPrivateChannelRecoveryCoverageFixture(),
+    replacementActionRecoveryCoverage:
+      replacementActionRecoveryCoverageFixture(),
     lanes,
   };
 }
@@ -3606,6 +3618,43 @@ function hostStaleControlCoverageFixture() {
       })),
     ),
     families,
+  };
+}
+
+function replacementPrivateChannelRecoveryCoverageFixture() {
+  return passedCoverageFixture({
+    laneIds: replacementPrivateChannelRecoveryLaneIds,
+    families: replacementPrivateChannelRecoveryCoverageFamilies(),
+  });
+}
+
+function replacementActionRecoveryCoverageFixture() {
+  return passedCoverageFixture({
+    laneIds: replacementActionLaneIds,
+    families: replacementActionRecoveryCoverageFamilies(),
+  });
+}
+
+function passedCoverageFixture({ laneIds, families }) {
+  const passedFamilies = families.map((family) => ({
+    ...family,
+    status: "passed",
+    passedLaneIds: [...family.laneIds],
+  }));
+  return {
+    status: "passed",
+    laneCount: laneIds.length,
+    passedLaneCount: laneIds.length,
+    familyCount: passedFamilies.length,
+    sourceLaneIds: [...laneIds],
+    laneStatuses: passedFamilies.flatMap((family) =>
+      family.laneIds.map((laneId) => ({
+        id: laneId,
+        family: family.id,
+        status: "passed",
+      })),
+    ),
+    families: passedFamilies,
   };
 }
 

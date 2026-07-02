@@ -1,4 +1,8 @@
 export {
+  assertReplacementPrivateChannelRecoveryCoverageSummary,
+  buildReplacementPrivateChannelRecoveryCoverageSummary,
+  replacementPrivateChannelRecoveryCoverageFamilies,
+  replacementPrivateChannelRecoveryCoverageFamilyDefinitions,
   replacementPrivateChannelRecoveryLaneIds,
   replacementPrivatePostHardeningLaneIds,
   replacementPrivatePostRaceLaneIds,

@@ -45,6 +45,8 @@ import {
   staleConflictMessageLaneIds,
 } from "./dev_test_game_stale_conflict_scenarios.mjs";
 import {
+  assertReplacementActionRecoveryCoverageSummary,
+  buildReplacementActionRecoveryCoverageSummary,
   replacementActionLaneIds,
   replacementActionReconnectScenario,
   replacementIncomingActionScenario,
@@ -66,6 +68,8 @@ import {
   stalePlayerWithdrawAfterChangeAckMatches,
 } from "./dev_test_game_stale_player_command_assertions.mjs";
 import {
+  assertReplacementPrivateChannelRecoveryCoverageSummary,
+  buildReplacementPrivateChannelRecoveryCoverageSummary,
   replacementPrivatePostRaceLaneIds,
   replacementPrivatePostRecoveryLaneIds,
 } from "./dev_test_game_replacement_private_scenarios.mjs";
@@ -5867,6 +5871,10 @@ export function buildDevTestGameProofRun(session, options = {}) {
     buildCompletedGameHardeningCoverage(lanes);
   const hostStaleControlCoverage =
     buildHostStaleControlCoverageSummary(lanes);
+  const replacementPrivateChannelRecoveryCoverage =
+    buildReplacementPrivateChannelRecoveryCoverageSummary(lanes);
+  const replacementActionRecoveryCoverage =
+    buildReplacementActionRecoveryCoverageSummary(lanes);
   return {
     version: DEV_TEST_GAME_PROOF_VERSION,
     proof: "dev-test-game-proof-run",
@@ -5893,6 +5901,8 @@ export function buildDevTestGameProofRun(session, options = {}) {
     coreLoopSpine,
     completedGameHardeningCoverage,
     hostStaleControlCoverage,
+    replacementPrivateChannelRecoveryCoverage,
+    replacementActionRecoveryCoverage,
     lanes,
     nonClaims: [
       "production account identity",
@@ -5942,6 +5952,14 @@ export function assertDevTestGameProofRun(proof) {
   });
   assertHostStaleControlCoverageSummary({
     summary: proof.hostStaleControlCoverage,
+    lanes: proof.lanes,
+  });
+  assertReplacementPrivateChannelRecoveryCoverageSummary({
+    summary: proof.replacementPrivateChannelRecoveryCoverage,
+    lanes: proof.lanes,
+  });
+  assertReplacementActionRecoveryCoverageSummary({
+    summary: proof.replacementActionRecoveryCoverage,
     lanes: proof.lanes,
   });
   for (const laneId of requiredLaneIds) {

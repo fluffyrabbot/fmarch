@@ -1,6 +1,11 @@
 import {
   playerFactionalKillActionCommandFacts,
 } from "./dev_test_game_core_loop_action_scenarios.mjs";
+import {
+  assertLaneCoverageSummary,
+  buildLaneCoverageSummary,
+  cloneLaneCoverageFamilies,
+} from "./dev_test_game_lane_coverage.mjs";
 
 const baseReplacementActionCommandFacts =
   playerFactionalKillActionCommandFacts({
@@ -30,6 +35,51 @@ export const replacementActionLaneIds = [
   "replacement-action-reconnect",
   "replacement-stale-action-after-resolve",
 ];
+
+export const replacementActionRecoveryCoverageFamilyDefinitions = Object.freeze([
+  Object.freeze({
+    id: "replacement-action-current-surface",
+    label: "Replacement action current surface",
+    laneIds: Object.freeze(["replacement-incoming-action"]),
+  }),
+  Object.freeze({
+    id: "replacement-action-reconnect",
+    label: "Replacement action reconnect recovery",
+    laneIds: Object.freeze(["replacement-action-reconnect"]),
+  }),
+  Object.freeze({
+    id: "replacement-action-stale-reject",
+    label: "Replacement action stale reject recovery",
+    laneIds: Object.freeze(["replacement-stale-action-after-resolve"]),
+  }),
+]);
+
+export function replacementActionRecoveryCoverageFamilies() {
+  return cloneLaneCoverageFamilies(
+    replacementActionRecoveryCoverageFamilyDefinitions,
+  );
+}
+
+export function buildReplacementActionRecoveryCoverageSummary(lanes) {
+  return buildLaneCoverageSummary({
+    lanes,
+    laneIds: replacementActionLaneIds,
+    families: replacementActionRecoveryCoverageFamilyDefinitions,
+  });
+}
+
+export function assertReplacementActionRecoveryCoverageSummary({
+  summary,
+  lanes,
+}) {
+  return assertLaneCoverageSummary({
+    summary,
+    lanes,
+    laneIds: replacementActionLaneIds,
+    familyDefinitions: replacementActionRecoveryCoverageFamilyDefinitions,
+    label: "replacement action recovery",
+  });
+}
 
 export function replacementIncomingActionScenario() {
   return {

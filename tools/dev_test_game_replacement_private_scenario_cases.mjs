@@ -6,6 +6,11 @@ import {
   playerFactionalKillActionCommandFacts,
   playerSlotVoteCommandFacts,
 } from "./dev_test_game_core_loop_action_scenarios.mjs";
+import {
+  assertLaneCoverageSummary,
+  buildLaneCoverageSummary,
+  cloneLaneCoverageFamilies,
+} from "./dev_test_game_lane_coverage.mjs";
 
 export const replacementPrivatePostRaceLaneIds = [
   "concurrent-replacement-private-post-race",
@@ -24,6 +29,61 @@ export const replacementPrivateChannelRecoveryLaneIds = [
   "replacement-stale-private-receipts",
   ...replacementPrivatePostRecoveryLaneIds,
 ];
+
+export const replacementPrivateChannelRecoveryCoverageFamilyDefinitions =
+  Object.freeze([
+    Object.freeze({
+      id: "replacement-private-authority",
+      label: "Replacement private authority recovery",
+      laneIds: Object.freeze([
+        "replacement-stale-private-channel",
+        "replacement-stale-private-receipts",
+      ]),
+    }),
+    Object.freeze({
+      id: "replacement-private-post-after-resolve",
+      label: "Replacement private post after resolve",
+      laneIds: Object.freeze([
+        "replacement-stale-private-post-after-resolve",
+        "replacement-stale-private-post-reconnect",
+      ]),
+    }),
+    Object.freeze({
+      id: "replacement-private-post-after-complete",
+      label: "Replacement private post after complete",
+      laneIds: Object.freeze([
+        "replacement-stale-private-post-after-complete",
+        "replacement-stale-private-post-after-complete-reload",
+      ]),
+    }),
+  ]);
+
+export function replacementPrivateChannelRecoveryCoverageFamilies() {
+  return cloneLaneCoverageFamilies(
+    replacementPrivateChannelRecoveryCoverageFamilyDefinitions,
+  );
+}
+
+export function buildReplacementPrivateChannelRecoveryCoverageSummary(lanes) {
+  return buildLaneCoverageSummary({
+    lanes,
+    laneIds: replacementPrivateChannelRecoveryLaneIds,
+    families: replacementPrivateChannelRecoveryCoverageFamilyDefinitions,
+  });
+}
+
+export function assertReplacementPrivateChannelRecoveryCoverageSummary({
+  summary,
+  lanes,
+}) {
+  return assertLaneCoverageSummary({
+    summary,
+    lanes,
+    laneIds: replacementPrivateChannelRecoveryLaneIds,
+    familyDefinitions: replacementPrivateChannelRecoveryCoverageFamilyDefinitions,
+    label: "replacement private-channel recovery",
+  });
+}
 
 export const replacementPrivatePostHardeningLaneIds = [
   ...replacementPrivatePostRaceLaneIds,
