@@ -115,6 +115,14 @@ export const releaseReadinessProductionFeatureSpineTargets = Object.freeze({
     recoveryHookId: "staleActionConflictReject",
     adminCheckId: "action-loop",
   }),
+  completedGameRecovery: featureSpineCheckpointTarget({
+    featureSlotId: "completed-game-recovery",
+    sourceCheckId: "local-core-loop-proof",
+    cycleId: "d02-n02",
+    roleUrlId: "d02-n02-host",
+    checkpointId: "d02-n02-d02-resolved-target-killed",
+    adminCheckId: "completed-game-hardening-coverage",
+  }),
   replacementStaleConflictMessage: featureSpineCheckpointTarget({
     featureSlotId: "replacement-stale-conflict-message",
     sourceCheckId: "local-hardening-proof",

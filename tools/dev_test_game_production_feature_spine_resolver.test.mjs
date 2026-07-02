@@ -81,6 +81,8 @@ test("production feature spine resolver builds and validates source collections"
     "private-channel",
     "resolution-receipts",
     "stale-recovery",
+    "stale-action-conflict-message",
+    "completed-game-recovery",
   ]);
   assert.equal(
     collection.bySlotId["invalid-action-recovery"].recoveryHookId,
@@ -131,16 +133,27 @@ function coreLoopSourceTargetFixture() {
       "d01-n01-d02-privateChannel",
       "d02-n02-host",
       "d02-n02-actionPlayer",
+      "d02-n02-normalPlayer",
+      "d02-n02-target",
     ],
     checkpointIds: [
       "d01-n01-d02-d01-resolved-locked",
       "d01-n01-d02-n01-action-open",
       "d01-n01-d02-n01-resolved-target-killed",
+      "d01-n01-d02-d02-day-controls-return",
       "d02-n02-d02-vote-open",
+      "d02-n02-d02-deciding-vote-submitted",
+      "d02-n02-d02-resolved-target-killed",
       "d02-n02-n02-action-open",
     ],
-    recoveryHookIds: ["invalidActionReject"],
+    recoveryHookIds: [
+      "staleLockedVoteReject",
+      "invalidActionReject",
+      "normalPlayerDirectActionReject",
+      "staleActionConflictReject",
+    ],
     visibleAdminCheckIds: [
+      "completed-game-hardening-coverage",
       "host-lifecycle-control",
       "action-loop",
       "invalid-action-recovery",
@@ -157,6 +170,8 @@ function coreLoopSourceTargetFixture() {
         "http://127.0.0.1:5173/g/game-a/c/private%3Amafia_day_chat",
       "d02-n02-host": "http://127.0.0.1:5173/g/game-b/host",
       "d02-n02-actionPlayer": "http://127.0.0.1:5173/g/game-b",
+      "d02-n02-normalPlayer": "http://127.0.0.1:5173/g/game-b",
+      "d02-n02-target": "http://127.0.0.1:5173/g/game-b",
     },
   };
 }
