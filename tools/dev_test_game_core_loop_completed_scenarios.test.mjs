@@ -82,6 +82,14 @@ import {
   coreLoopCompletedEndgameProgressionScenarioFamilies,
   coreLoopCompletedEndgameProgressionTransition,
 } from "./dev_test_game_core_loop_completed_endgame_progression_scenarios.mjs";
+import {
+  assertCompletedGameProofReadinessSurfaceProof,
+  completedGameProofReadinessCaseGroupIds,
+  completedGameProofReadinessCaseGroups,
+  completedGameProofReadinessProofScenarioCases,
+  completedGameProofReadinessScenarioFamilies,
+  completedGameProofReadinessTransition,
+} from "./dev_test_game_core_loop_completed_game_proof_readiness_scenarios.mjs";
 
 test("completed-game scenario module exposes shared frozen definitions", () => {
   assert(Object.isFrozen(completedHostStaleCommandCaseDefinitions));
@@ -309,20 +317,38 @@ test("completed-game production harness callers share extracted recovery cases",
     assert(
       importsFromModule({
         source,
+        importedName: "completedGameProofReadinessScenarioFamilies",
+        moduleSpecifier:
+          "./dev_test_game_core_loop_completed_game_proof_readiness_scenarios.mjs",
+      }),
+      `${callerPath} should import completed-game recovery case families from the shared proof/readiness scenario module`,
+    );
+    assert(
+      importsFromModule({
+        source,
+        importedName: "assertCompletedGameProofReadinessSurfaceProof",
+        moduleSpecifier:
+          "./dev_test_game_core_loop_completed_game_proof_readiness_scenarios.mjs",
+      }),
+      `${callerPath} should import completed-game assertions through the shared proof/readiness scenario module`,
+    );
+    assert(
+      !importsFromModule({
+        source,
         importedName: "coreLoopCompletedEndgameProgressionScenarioFamilies",
         moduleSpecifier:
           "./dev_test_game_core_loop_completed_endgame_progression_scenarios.mjs",
       }),
-      `${callerPath} should import completed-game recovery case families from the shared progression scenario/assertion module`,
+      `${callerPath} should not import completed-game proof/readiness families from the broader progression module`,
     );
     assert(
-      importsFromModule({
+      !importsFromModule({
         source,
         importedName: "assertCoreLoopCompletedEndgameProgressionSurfaceProof",
         moduleSpecifier:
           "./dev_test_game_core_loop_completed_endgame_progression_scenarios.mjs",
       }),
-      `${callerPath} should import completed-game assertions through the shared progression scenario/assertion module`,
+      `${callerPath} should not import completed-game proof/readiness assertions from the broader progression module`,
     );
     assert(
       !importsFromModule({
@@ -380,9 +406,9 @@ test("completed-game production harness callers share extracted recovery cases",
     );
     assert(
       source.includes(
-        "./dev_test_game_core_loop_completed_endgame_progression_scenarios.mjs",
+        "./dev_test_game_core_loop_completed_game_proof_readiness_scenarios.mjs",
       ),
-      `${callerPath} should import completed recovery cases through the shared progression scenario/assertion module`,
+      `${callerPath} should import completed recovery cases through the shared proof/readiness scenario module`,
     );
     assert(
       !source.includes(
@@ -416,6 +442,24 @@ test("completed-game production harness callers share extracted recovery cases",
   );
 });
 
+test("completed-game proof/readiness facade exposes one completed recovery table", () => {
+  assert.deepEqual(completedGameProofReadinessCaseGroupIds, [
+    "completedHostStaleCommandCases",
+    "completedPlayerReloadCases",
+    "staleCompletedGamePlayerCommandCases",
+  ]);
+  assert.deepEqual(
+    completedGameProofReadinessScenarioFamilies(),
+    completedGameEndgameScenarioCaseFamilies(),
+  );
+  assert.deepEqual(completedGameProofReadinessCaseGroups(), {
+    completedHostStaleCommandCases: completedHostStaleCommandCases(),
+    completedPlayerReloadCases: completedPlayerReloadCases(),
+    staleCompletedGamePlayerCommandCases:
+      staleCompletedGamePlayerCommandCases(),
+  });
+});
+
 test("completed-game progression facade shares proof and readiness cases", () => {
   assert.deepEqual(
     coreLoopCompletedEndgameProgressionScenarioFamilies(),
@@ -427,14 +471,14 @@ test("completed-game progression facade shares proof and readiness cases", () =>
     deadPlayerStaleVoteCase: completedDeadPlayerStaleVoteCase(),
     playerStaleCommandCases: [staleCompletedGamePlayerCommandCases()[1]],
   });
-  const proofCases = coreLoopCompletedEndgameProgressionProofScenarioCases({
+  const proofCases = completedGameProofReadinessProofScenarioCases({
     actionPlayerRoleUrl: "http://127.0.0.1/g/game-a/action",
     normalPlayerRoleUrl: "http://127.0.0.1/g/game-a/normal",
     deadPlayerRoleUrl: "http://127.0.0.1/g/game-a/dead",
     commandStateBuilders: commandStateBuildersFixture(),
     scenarioFamilies,
   });
-  const transition = coreLoopCompletedEndgameProgressionTransition({
+  const transition = completedGameProofReadinessTransition({
     scenarioFamilies,
   });
 
@@ -1477,6 +1521,13 @@ test("completed-game fixture satisfies the shared endgame assertion", () => {
   );
   assert.doesNotThrow(() =>
     assertCoreLoopCompletedEndgameProgressionSurfaceProof({
+      completedGameEndgameSurface: completedGameEndgameSurfaceFixture(),
+      assertHostPhaseTransitionActionProof: assertProofFixture,
+      assertPostDayThreePlayerSurfaceProof: assertProofFixture,
+    }),
+  );
+  assert.doesNotThrow(() =>
+    assertCompletedGameProofReadinessSurfaceProof({
       completedGameEndgameSurface: completedGameEndgameSurfaceFixture(),
       assertHostPhaseTransitionActionProof: assertProofFixture,
       assertPostDayThreePlayerSurfaceProof: assertProofFixture,

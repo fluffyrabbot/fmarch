@@ -77,9 +77,9 @@ import {
   releaseAdminProofFallbackUnprovenIds,
 } from "./dev_test_game_release_readiness_cases.mjs";
 import {
-  assertCoreLoopCompletedEndgameProgressionSurfaceProof,
-  coreLoopCompletedEndgameProgressionScenarioFamilies,
-} from "./dev_test_game_core_loop_completed_endgame_progression_scenarios.mjs";
+  assertCompletedGameProofReadinessSurfaceProof,
+  completedGameProofReadinessScenarioFamilies,
+} from "./dev_test_game_core_loop_completed_game_proof_readiness_scenarios.mjs";
 import {
   assertPlayerStaleActionAfterTransitionProofCase,
   assertPlayerStaleVoteAfterTransitionProofCase,
@@ -2688,8 +2688,8 @@ function assertCoreLoopDayFiveNoLynchResolutionSurface(
   });
 }
 function assertCoreLoopCompletedGameEndgameSurface(completedGameEndgameSurface) {
-  const scenarioFamilies = coreLoopCompletedEndgameProgressionScenarioFamilies();
-  assertCoreLoopCompletedEndgameProgressionSurfaceProof({
+  const scenarioFamilies = completedGameProofReadinessScenarioFamilies();
+  assertCompletedGameProofReadinessSurfaceProof({
     completedGameEndgameSurface,
     scenarioFamilies,
     assertPostDayThreePlayerSurfaceProof:
