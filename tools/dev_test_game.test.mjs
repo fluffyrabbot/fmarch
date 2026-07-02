@@ -32,6 +32,9 @@ import {
   coreLoopPrivateReceiptSurfaceScenarioFamily,
 } from "./dev_test_game_core_loop_private_receipt_surface_scenarios.mjs";
 import {
+  coreLoopPostDayVoteAdvanceScenarioFamily,
+} from "./dev_test_game_core_loop_post_day_vote_advance_scenarios.mjs";
+import {
   coreLoopVoteResolutionScenarioFamily,
 } from "./dev_test_game_core_loop_vote_resolution_scenarios.mjs";
 import {
@@ -10111,6 +10114,8 @@ function coreLoopAdminProofFixture() {
         coreLoopPlayerActionRecoveryScenarioFamily(),
       privateReceiptSurfaceFamily:
         coreLoopPrivateReceiptSurfaceScenarioFamily(),
+      postDayVoteAdvanceFamily:
+        coreLoopPostDayVoteAdvanceScenarioFamily(),
       voteResolutionFamily: coreLoopVoteResolutionScenarioFamily(),
       phaseProgressionFamily: {
         id: "core-loop-phase-progression",
