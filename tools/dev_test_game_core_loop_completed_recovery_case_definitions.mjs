@@ -5,6 +5,10 @@ import {
 } from "./dev_test_game_core_loop_host_phase_scenarios.mjs";
 
 const cloneScenarioCase = (scenario) => ({ ...scenario });
+const freezeScenarioCase = (scenario) =>
+  Object.freeze(cloneScenarioCase(scenario));
+const freezeScenarioCases = (scenarios) =>
+  Object.freeze(scenarios.map(freezeScenarioCase));
 
 export const completedHostStaleCommandCaseDefinitions = Object.freeze([
   Object.freeze({
@@ -34,7 +38,7 @@ export const completedHostStaleCommandCaseDefinitions = Object.freeze([
 ]);
 
 export function completedHostStaleCommandCases() {
-  return completedHostStaleCommandCaseDefinitions.map(cloneScenarioCase);
+  return freezeScenarioCases(completedHostStaleCommandCaseDefinitions);
 }
 
 export const completedPlayerReloadCaseDefinitions = Object.freeze([
@@ -79,7 +83,7 @@ export const completedPlayerReloadCaseDefinitions = Object.freeze([
 ]);
 
 export function completedPlayerReloadCases() {
-  return completedPlayerReloadCaseDefinitions.map(cloneScenarioCase);
+  return freezeScenarioCases(completedPlayerReloadCaseDefinitions);
 }
 
 export const staleCompletedGamePlayerCommandCaseDefinitions = Object.freeze([
@@ -124,7 +128,7 @@ export const staleCompletedGamePlayerCommandCaseDefinitions = Object.freeze([
 ]);
 
 export function staleCompletedGamePlayerCommandCases() {
-  return staleCompletedGamePlayerCommandCaseDefinitions.map(cloneScenarioCase);
+  return freezeScenarioCases(staleCompletedGamePlayerCommandCaseDefinitions);
 }
 
 export const completedDeadPlayerStaleVoteCaseDefinition = Object.freeze({
@@ -137,7 +141,7 @@ export const completedDeadPlayerStaleVoteCaseDefinition = Object.freeze({
 });
 
 export function completedDeadPlayerStaleVoteCase() {
-  return cloneScenarioCase(completedDeadPlayerStaleVoteCaseDefinition);
+  return freezeScenarioCase(completedDeadPlayerStaleVoteCaseDefinition);
 }
 
 export function completedGameEndgameScenarioCaseFamilies({
@@ -146,10 +150,14 @@ export function completedGameEndgameScenarioCaseFamilies({
   deadPlayerStaleVoteCase = completedDeadPlayerStaleVoteCase(),
   playerStaleCommandCases = staleCompletedGamePlayerCommandCases(),
 } = {}) {
-  return {
-    completedHostStaleCommandCases: hostStaleCommandCases,
-    completedPlayerReloadCases: playerReloadCases,
-    completedDeadPlayerStaleVoteCase: deadPlayerStaleVoteCase,
-    staleCompletedGamePlayerCommandCases: playerStaleCommandCases,
-  };
+  return Object.freeze({
+    completedHostStaleCommandCases: freezeScenarioCases(hostStaleCommandCases),
+    completedPlayerReloadCases: freezeScenarioCases(playerReloadCases),
+    completedDeadPlayerStaleVoteCase: freezeScenarioCase(
+      deadPlayerStaleVoteCase,
+    ),
+    staleCompletedGamePlayerCommandCases: freezeScenarioCases(
+      playerStaleCommandCases,
+    ),
+  });
 }

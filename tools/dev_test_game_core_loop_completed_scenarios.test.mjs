@@ -84,6 +84,13 @@ test("completed-game scenario module exposes shared frozen definitions", () => {
     completedDeadPlayerStaleVoteCase(),
     completedDeadPlayerStaleVoteCaseDefinition,
   );
+  assert(Object.isFrozen(completedHostStaleCommandCases()));
+  assert(Object.isFrozen(completedHostStaleCommandCases()[0]));
+  assert(Object.isFrozen(completedPlayerReloadCases()));
+  assert(Object.isFrozen(completedPlayerReloadCases()[0]));
+  assert(Object.isFrozen(staleCompletedGamePlayerCommandCases()));
+  assert(Object.isFrozen(staleCompletedGamePlayerCommandCases()[0]));
+  assert(Object.isFrozen(completedDeadPlayerStaleVoteCase()));
   assert.notEqual(
     completedHostStaleCommandCases()[0],
     completedHostStaleCommandCaseDefinitions[0],
@@ -105,6 +112,16 @@ test("completed-game scenario module exposes shared frozen definitions", () => {
 test("completed-game scenario module groups shared recovery case families", () => {
   const scenarioFamilies = completedGameEndgameScenarioCaseFamilies();
 
+  assert(Object.isFrozen(scenarioFamilies));
+  assert(Object.isFrozen(scenarioFamilies.completedHostStaleCommandCases));
+  assert(Object.isFrozen(scenarioFamilies.completedHostStaleCommandCases[0]));
+  assert(Object.isFrozen(scenarioFamilies.completedPlayerReloadCases));
+  assert(Object.isFrozen(scenarioFamilies.completedPlayerReloadCases[0]));
+  assert(Object.isFrozen(scenarioFamilies.completedDeadPlayerStaleVoteCase));
+  assert(Object.isFrozen(scenarioFamilies.staleCompletedGamePlayerCommandCases));
+  assert(
+    Object.isFrozen(scenarioFamilies.staleCompletedGamePlayerCommandCases[0]),
+  );
   assert.deepEqual(
     scenarioFamilies.completedHostStaleCommandCases,
     completedHostStaleCommandCaseDefinitions,
