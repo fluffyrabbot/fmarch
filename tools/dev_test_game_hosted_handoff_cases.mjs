@@ -80,6 +80,28 @@ export function hostedEvidenceBlockedHandoffChecklistFixture({
   };
 }
 
+export function hostedEvidenceBlockedHandoffChecklistFromPreflight({
+  preflight,
+  command = hostedEvidenceLaneCommand,
+  proofTarget = hostedEvidenceLanePath,
+}) {
+  const blockedChecks = (preflight?.checks ?? [])
+    .filter((check) => check?.status === "blocked")
+    .map((check) => ({
+      id: String(check.id ?? ""),
+      status: "blocked",
+      requiredEvidence: String(check.requiredEvidence ?? ""),
+    }))
+    .filter((check) => check.id !== "");
+  return hostedEvidenceBlockedHandoffChecklistFixture({
+    preflightStatus: String(preflight?.status ?? "unknown"),
+    command,
+    proofTarget,
+    blockedCheckIds: blockedChecks.map((check) => check.id),
+    blockedChecks,
+  });
+}
+
 export function hostedEvidenceLaneHandoffFixture({
   realHostedEvidenceInputMode = "not_configured",
   realHostedEvidenceInputStatus = "unproven",

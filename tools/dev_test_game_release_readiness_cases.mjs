@@ -2,7 +2,7 @@ import {
   buildRealHostedEvidenceInputs,
 } from "./dev_test_game_real_hosted_evidence_inputs.mjs";
 import {
-  hostedEvidenceHandoffInputIds,
+  hostedEvidenceBlockedHandoffChecklistFromPreflight,
   hostedEvidenceLaneCommand,
   hostedEvidenceLanePath,
   hostedMatrixExternalEvidencePath,
@@ -299,7 +299,7 @@ function hostedDeploymentBuildable({ hostedTargetPreflight }) {
   if (hostedTargetPreflight?.status === "blocked") {
     return {
       ...blockedBuildable,
-      hostedHandoffChecklist: hostedHandoffChecklistFromPreflight({
+      hostedHandoffChecklist: hostedEvidenceBlockedHandoffChecklistFromPreflight({
         preflight: hostedTargetPreflight,
         command: blockedBuildable.command,
         proofTarget: blockedBuildable.proofTarget,
@@ -324,30 +324,6 @@ function hostedProductionIdentityBuildable() {
     proofBoundary:
       "Hosted identity evidence handoff. The local identity adapter admin proof remains the prerequisite role-surface proof, while this command records the hosted account lifecycle, invite delivery, account recovery, abuse controls, session-secret policy, and hosted audit retention/export inputs needed next; it does not prove beta readiness, release readiness, or production readiness.",
     hostedHandoffChecklist: hostedIdentityEvidenceHandoffCase(),
-  };
-}
-
-function hostedHandoffChecklistFromPreflight({
-  preflight,
-  command,
-  proofTarget,
-}) {
-  const blockedChecks = (preflight.checks ?? [])
-    .filter((check) => check?.status === "blocked")
-    .map((check) => ({
-      id: String(check.id ?? ""),
-      status: "blocked",
-      requiredEvidence: String(check.requiredEvidence ?? ""),
-    }))
-    .filter((check) => check.id !== "");
-  return {
-    status: "blocked",
-    preflightStatus: String(preflight.status ?? "unknown"),
-    command,
-    proofTarget,
-    inputIds: [...hostedEvidenceHandoffInputIds],
-    blockedCheckIds: blockedChecks.map((check) => check.id),
-    blockedChecks,
   };
 }
 
