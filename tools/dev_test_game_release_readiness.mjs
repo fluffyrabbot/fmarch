@@ -37,6 +37,7 @@ import {
   replacementPrivateChannelRecoveryLaneIds,
 } from "./dev_test_game_replacement_private_scenarios.mjs";
 import {
+  staleConflictMessageSurfaceCases,
   staleConflictMessageLaneIds,
 } from "./dev_test_game_stale_conflict_scenarios.mjs";
 import {
@@ -556,7 +557,21 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
       laneIds: [...staleConflictMessageMilestone.laneIds],
       requiredLaneCount: staleConflictMessageMilestone.requiredLaneCount,
       coveredLaneCount: staleConflictMessageMilestone.coveredLaneCount,
+      surfaces: staleConflictMessageMilestone.surfaces,
     },
+    ...staleConflictMessageMilestone.surfaces.map((surface) => ({
+      id: surface.checkId,
+      label: surface.label,
+      status: surface.status,
+      evidence: sourcePath,
+      proofBoundary: surface.proofBoundary,
+      laneId: surface.laneId,
+      roleUrl: surface.roleUrl,
+      rejectError: surface.rejectError,
+      receiptStatusText: surface.receiptStatusText,
+      stalePhase: surface.stalePhase,
+      refreshedPhase: surface.refreshedPhase,
+    })),
     {
       id: "local-host-stale-control-milestone",
       label: "Host stale-control recovery",
@@ -1054,6 +1069,7 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
         requiredLaneCount: staleConflictMessageMilestone.requiredLaneCount,
         coveredLaneCount: staleConflictMessageMilestone.coveredLaneCount,
         gapCount: staleConflictMessageMilestone.gapCount,
+        surfaces: staleConflictMessageMilestone.surfaces,
       },
       hostStaleControlMilestone: {
         status: hostStaleControlMilestone.status,
@@ -1161,6 +1177,7 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
                 requiredLaneCount: staleConflictMessageMilestone.requiredLaneCount,
                 coveredLaneCount: staleConflictMessageMilestone.coveredLaneCount,
                 gapCount: staleConflictMessageMilestone.gapCount,
+                surfaces: staleConflictMessageMilestone.surfaces,
               },
               hostStaleControlMilestone: {
                 status: hostStaleControlMilestone.status,
@@ -1427,7 +1444,47 @@ function buildStaleConflictMessageMilestone(proof, { sourcePath }) {
     requiredLaneCount: laneIds.length,
     coveredLaneCount,
     gapCount,
+    surfaces: buildStaleConflictMessageSurfaces(lanes, { sourcePath }),
   };
+}
+
+function buildStaleConflictMessageSurfaces(lanes, { sourcePath }) {
+  return staleConflictMessageSurfaceCases().map((scenario) => {
+    const lane = lanes.get(scenario.laneId);
+    const evidence = lane?.evidence ?? {};
+    if (
+      lane?.status !== "passed" ||
+      typeof evidence.roleUrl !== "string" ||
+      !evidence.roleUrl.includes("/g/") ||
+      evidence.rejectError !== scenario.expectedRejectError ||
+      evidence.templateId !== scenario.expectedTemplateId ||
+      evidence.stalePhase !== scenario.expectedStalePhase ||
+      evidence.refreshedPhase !== scenario.expectedRefreshedPhase ||
+      !String(evidence.receiptStatusText ?? "").includes(
+        scenario.expectedReceiptFragment,
+      )
+    ) {
+      throw new Error(
+        `stale conflict-message surface missing proof from ${sourcePath}: ${scenario.id}`,
+      );
+    }
+    return {
+      id: scenario.id,
+      checkId: scenario.checkId,
+      label: scenario.label,
+      status: "passed",
+      laneId: scenario.laneId,
+      role: scenario.role,
+      roleUrl: evidence.roleUrl,
+      visitedRolePath: evidence.visitedRolePath,
+      rejectError: evidence.rejectError,
+      templateId: evidence.templateId,
+      stalePhase: evidence.stalePhase,
+      refreshedPhase: evidence.refreshedPhase,
+      receiptStatusText: evidence.receiptStatusText,
+      proofBoundary: scenario.proofBoundary,
+    };
+  });
 }
 
 function buildHostStaleControlMilestone(proof, { sourcePath }) {

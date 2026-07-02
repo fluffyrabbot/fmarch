@@ -267,6 +267,7 @@ await runAdminAuditProof({
         coveredLaneCount: source.nextAction.staleConflictMessageTrace.coveredLaneCount,
         gapCount: source.nextAction.staleConflictMessageTrace.gapCount,
         laneIds: source.nextAction.staleConflictMessageTrace.laneIds,
+        surfaces: source.nextAction.staleConflictMessageTrace.surfaces,
       },
       hostStaleControlTrace: {
         strategy: source.nextAction.hostStaleControlTrace.strategy,
@@ -440,7 +441,8 @@ export function assertNextActionAdminProof(evidence) {
     !Number.isInteger(
       evidence.generatedFrom.staleConflictMessageTrace.requiredLaneCount,
     ) ||
-    !Array.isArray(evidence.generatedFrom.staleConflictMessageTrace.laneIds)
+    !Array.isArray(evidence.generatedFrom.staleConflictMessageTrace.laneIds) ||
+    !Array.isArray(evidence.generatedFrom.staleConflictMessageTrace.surfaces)
   ) {
     throw new Error(
       "next-action admin proof is missing stale conflict-message trace evidence",
@@ -712,6 +714,9 @@ function requiredChecksForNextAction(nextAction) {
   for (const laneId of nextAction.staleConflictMessageTrace.laneIds) {
     checks.push(`stale-conflict-message-${laneId}`);
   }
+  for (const surface of nextAction.staleConflictMessageTrace.surfaces) {
+    checks.push(surface.checkId);
+  }
   checks.push("host-stale-control-milestone");
   for (const laneId of nextAction.hostStaleControlTrace.laneIds) {
     checks.push(`host-stale-control-${laneId}`);
@@ -925,6 +930,11 @@ function requiredChecksForEvidence(evidence) {
     ...(Array.isArray(evidence.generatedFrom?.staleConflictMessageTrace?.laneIds)
       ? evidence.generatedFrom.staleConflictMessageTrace.laneIds.map(
           (id) => `stale-conflict-message-${id}`,
+        )
+      : []),
+    ...(Array.isArray(evidence.generatedFrom?.staleConflictMessageTrace?.surfaces)
+      ? evidence.generatedFrom.staleConflictMessageTrace.surfaces.map(
+          (surface) => surface.checkId,
         )
       : []),
     "host-stale-control-milestone",

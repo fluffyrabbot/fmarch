@@ -20,6 +20,7 @@ import {
   coreLoopAuditLaneIds,
 } from "../../../../tools/dev_test_game_core_loop_scenarios.mjs";
 import {
+  staleConflictMessageSurfaceCases,
   staleConflictMessageLaneIds,
 } from "../../../../tools/dev_test_game_stale_conflict_scenarios.mjs";
 import {
@@ -5090,7 +5091,23 @@ function staleConflictMessageTraceFixture() {
     coveredLaneCount: staleConflictMessageLaneIds.length,
     gapCount: 0,
     laneIds: [...staleConflictMessageLaneIds],
+    surfaces: staleConflictMessageSurfaceFixtureRows(),
   };
+}
+
+function staleConflictMessageSurfaceFixtureRows() {
+  return staleConflictMessageSurfaceCases().map((scenario) => ({
+    id: scenario.id,
+    checkId: scenario.checkId,
+    label: scenario.label,
+    status: "passed",
+    laneId: scenario.laneId,
+    roleUrl: "http://127.0.0.1:5173/g/game-a",
+    rejectError: scenario.expectedRejectError,
+    receiptStatusText:
+      "Reject PhaseLocked: phase locked; stale action state, refresh and use current action controls",
+    proofBoundary: scenario.proofBoundary,
+  }));
 }
 
 function hostStaleControlTraceFixture() {
@@ -5127,6 +5144,10 @@ function staleConflictMessageCheckRows() {
     ...staleConflictMessageLaneIds.map((laneId) => [
       `stale-conflict-message-${laneId}`,
       "covered",
+    ]),
+    ...staleConflictMessageSurfaceFixtureRows().map((surface) => [
+      surface.checkId,
+      `${surface.status}:${surface.rejectError}`,
     ]),
   ];
 }

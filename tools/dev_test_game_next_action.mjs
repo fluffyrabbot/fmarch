@@ -28,6 +28,7 @@ import {
   hostStaleControlLaneIds,
 } from "./dev_test_game_host_stale_control_scenarios.mjs";
 import {
+  staleConflictMessageSurfaceCases,
   staleConflictMessageLaneIds,
 } from "./dev_test_game_stale_conflict_scenarios.mjs";
 import {
@@ -1194,6 +1195,19 @@ function buildStaleConflictMessageTrace(readiness) {
   const laneIds = Array.isArray(milestone?.laneIds)
     ? milestone.laneIds.map((laneId) => String(laneId))
     : staleConflictMessageLaneIds.map((laneId) => String(laneId));
+  const surfaces = Array.isArray(milestone?.surfaces)
+    ? milestone.surfaces.map((surface) => ({
+        id: String(surface.id ?? ""),
+        checkId: String(surface.checkId ?? ""),
+        label: String(surface.label ?? surface.id ?? ""),
+        status: String(surface.status ?? "unknown"),
+        laneId: String(surface.laneId ?? ""),
+        roleUrl: String(surface.roleUrl ?? ""),
+        rejectError: String(surface.rejectError ?? ""),
+        receiptStatusText: String(surface.receiptStatusText ?? ""),
+        proofBoundary: String(surface.proofBoundary ?? ""),
+      }))
+    : [];
   const requiredLaneCount = Number(
     milestone?.requiredLaneCount ?? check?.requiredLaneCount ?? laneIds.length,
   );
@@ -1216,6 +1230,7 @@ function buildStaleConflictMessageTrace(readiness) {
     coveredLaneCount,
     gapCount,
     laneIds,
+    surfaces,
   };
 }
 
@@ -1765,7 +1780,8 @@ function assertStaleConflictMessageTrace(trace) {
     !Number.isInteger(trace.requiredLaneCount) ||
     !Number.isInteger(trace.coveredLaneCount) ||
     !Number.isInteger(trace.gapCount) ||
-    !Array.isArray(trace.laneIds)
+    !Array.isArray(trace.laneIds) ||
+    !Array.isArray(trace.surfaces)
   ) {
     throw new Error("next-action stale conflict-message trace is missing or malformed");
   }
@@ -1779,6 +1795,25 @@ function assertStaleConflictMessageTrace(trace) {
   for (const laneId of staleConflictMessageLaneIds) {
     if (!trace.laneIds.includes(laneId)) {
       throw new Error(`next-action stale conflict-message trace missing lane: ${laneId}`);
+    }
+  }
+  for (const scenario of staleConflictMessageSurfaceCases()) {
+    const surface = trace.surfaces.find(
+      (candidate) => candidate.id === scenario.id,
+    );
+    if (
+      trace.status === "covered" &&
+      (surface?.checkId !== scenario.checkId ||
+        surface.laneId !== scenario.laneId ||
+        surface.status !== "passed" ||
+        !String(surface.roleUrl ?? "").includes("/g/") ||
+        !String(surface.receiptStatusText ?? "").includes(
+          scenario.expectedReceiptFragment,
+        ))
+    ) {
+      throw new Error(
+        `next-action stale conflict-message trace missing surface: ${scenario.id}`,
+      );
     }
   }
   if (trace.status === "covered" && trace.gapCount !== 0) {

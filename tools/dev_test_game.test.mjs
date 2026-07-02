@@ -78,6 +78,7 @@ import {
   hostStaleControlLaneIds,
 } from "./dev_test_game_host_stale_control_scenarios.mjs";
 import {
+  staleConflictMessageSurfaceCases,
   staleConflictMessageLaneIds,
 } from "./dev_test_game_stale_conflict_scenarios.mjs";
 import {
@@ -1479,6 +1480,7 @@ test("dev test-game next-action derives one local recovery command from the mani
     coveredLaneCount: staleConflictMessageLaneIds.length,
     gapCount: 0,
     laneIds: [...staleConflictMessageLaneIds],
+    surfaces: staleConflictMessageSurfaceFixtureRows(),
   });
   assert.deepEqual(freshAction.hostStaleControlTrace, {
     strategy: "host-stale-control-before-readiness",
@@ -9463,7 +9465,23 @@ function staleConflictMessageMilestoneFixture() {
     requiredLaneCount: staleConflictMessageLaneIds.length,
     coveredLaneCount: staleConflictMessageLaneIds.length,
     gapCount: 0,
+    surfaces: staleConflictMessageSurfaceFixtureRows(),
   };
+}
+
+function staleConflictMessageSurfaceFixtureRows() {
+  return staleConflictMessageSurfaceCases().map((scenario) => ({
+    id: scenario.id,
+    checkId: scenario.checkId,
+    label: scenario.label,
+    status: "passed",
+    laneId: scenario.laneId,
+    roleUrl: "http://127.0.0.1:5173/g/game-a",
+    rejectError: scenario.expectedRejectError,
+    receiptStatusText:
+      "Reject PhaseLocked: phase locked; stale action state, refresh and use current action controls",
+    proofBoundary: scenario.proofBoundary,
+  }));
 }
 
 function hostStaleControlMilestoneFixture() {

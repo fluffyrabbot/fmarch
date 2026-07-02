@@ -1738,6 +1738,12 @@ export function normalizeLocalNextActionAudit(nextAction, { game, proofGraph = n
         status: staleConflictMessageTrace.status,
       }),
     ),
+    ...staleConflictMessageTrace.surfaces.map((surface) =>
+      Object.freeze({
+        id: surface.checkId,
+        status: `${surface.status}:${surface.rejectError}`,
+      }),
+    ),
     Object.freeze({
       id: "host-stale-control-milestone",
       status: `${hostStaleControlTrace.coveredLaneCount}/${hostStaleControlTrace.requiredLaneCount} ${hostStaleControlTrace.status}`,
@@ -2593,6 +2599,7 @@ function normalizeNextActionStaleConflictMessageTrace(staleConflictMessageTrace)
       coveredLaneCount: 0,
       gapCount: 0,
       laneIds: Object.freeze([]),
+      surfaces: Object.freeze([]),
     });
   }
   return Object.freeze({
@@ -2604,6 +2611,24 @@ function normalizeNextActionStaleConflictMessageTrace(staleConflictMessageTrace)
     gapCount: Number(staleConflictMessageTrace.gapCount ?? 0),
     laneIds: Object.freeze(
       staleConflictMessageTrace.laneIds.map((laneId) => String(laneId)),
+    ),
+    surfaces: Object.freeze(
+      (Array.isArray(staleConflictMessageTrace.surfaces)
+        ? staleConflictMessageTrace.surfaces
+        : []
+      ).map((surface) =>
+        Object.freeze({
+          id: String(surface.id ?? ""),
+          checkId: String(surface.checkId ?? ""),
+          label: String(surface.label ?? surface.id ?? ""),
+          status: String(surface.status ?? "unknown"),
+          laneId: String(surface.laneId ?? ""),
+          roleUrl: String(surface.roleUrl ?? ""),
+          rejectError: String(surface.rejectError ?? ""),
+          receiptStatusText: String(surface.receiptStatusText ?? ""),
+          proofBoundary: String(surface.proofBoundary ?? ""),
+        }),
+      ),
     ),
   });
 }
