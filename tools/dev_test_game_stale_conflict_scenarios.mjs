@@ -67,6 +67,23 @@ export const staleConflictMessageSurfaceCaseDefinitions = Object.freeze([
     proofBoundary:
       "Seeded host role URL proof that a stale deadline control rejects with an explicit PhaseLocked conflict message and refreshes into current host phase controls.",
   }),
+  Object.freeze({
+    id: "stale-cohost-deadline-surface",
+    checkId: "stale-conflict-message-surface-stale-cohost-deadline",
+    laneId: "stale-cohost-deadline",
+    label: "Stale cohost deadline conflict message surface",
+    role: "cohost",
+    expectedRejectError: "PhaseLocked",
+    expectedStalePhase: "D01",
+    expectedReceiptFragment: "stale phase state",
+    expectedStaleClickActionId: "extend_deadline",
+    expectedStaleClickRefreshKeys: ["host"],
+    expectedActivitySource: "outcome",
+    expectedPhaseId: "D02",
+    expectedCurrentActions: ["extend_deadline"],
+    proofBoundary:
+      "Seeded cohost role URL proof that a delegated stale deadline control rejects with an explicit PhaseLocked conflict message and refreshes into current delegated controls.",
+  }),
 ]);
 
 export function staleConflictMessageSurfaceCases() {

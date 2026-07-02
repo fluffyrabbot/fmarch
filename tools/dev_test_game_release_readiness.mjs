@@ -579,6 +579,7 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
       locked: surface.locked,
       deadlineActions: surface.deadlineActions,
       phaseActions: surface.phaseActions,
+      currentActions: surface.currentActions,
       actorStatusAfterReject: surface.actorStatusAfterReject,
       actionVisibleAfterRefresh: surface.actionVisibleAfterRefresh,
       restoredActorStatus: surface.restoredActorStatus,
@@ -1505,7 +1506,9 @@ function buildStaleConflictMessageSurfaces(lanes, { sourcePath }) {
       (scenario.expectedDeadlineActions !== undefined &&
         !sameStringArray(evidence.deadlineActions, scenario.expectedDeadlineActions)) ||
       (scenario.expectedPhaseActions !== undefined &&
-        !sameStringArray(evidence.phaseActions, scenario.expectedPhaseActions))
+        !sameStringArray(evidence.phaseActions, scenario.expectedPhaseActions)) ||
+      (scenario.expectedCurrentActions !== undefined &&
+        !sameStringArray(evidence.currentActions, scenario.expectedCurrentActions))
     ) {
       throw new Error(
         `stale conflict-message surface missing proof from ${sourcePath}: ${scenario.id}`,
@@ -1532,6 +1535,7 @@ function buildStaleConflictMessageSurfaces(lanes, { sourcePath }) {
       locked: evidence.locked,
       deadlineActions: evidence.deadlineActions,
       phaseActions: evidence.phaseActions,
+      currentActions: evidence.currentActions,
       actorStatusAfterReject: evidence.actorStatusAfterReject,
       actionVisibleAfterRefresh: evidence.actionVisibleAfterRefresh,
       restoredActorStatus: evidence.restoredActorStatus,

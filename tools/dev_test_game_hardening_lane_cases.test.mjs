@@ -103,11 +103,29 @@ test("hardening lane cases share stale conflict-message IDs", () => {
       proofBoundary:
         "Seeded host role URL proof that a stale deadline control rejects with an explicit PhaseLocked conflict message and refreshes into current host phase controls.",
     },
+    {
+      id: "stale-cohost-deadline-surface",
+      checkId: "stale-conflict-message-surface-stale-cohost-deadline",
+      laneId: "stale-cohost-deadline",
+      label: "Stale cohost deadline conflict message surface",
+      role: "cohost",
+      expectedRejectError: "PhaseLocked",
+      expectedStalePhase: "D01",
+      expectedReceiptFragment: "stale phase state",
+      expectedStaleClickActionId: "extend_deadline",
+      expectedStaleClickRefreshKeys: ["host"],
+      expectedActivitySource: "outcome",
+      expectedPhaseId: "D02",
+      expectedCurrentActions: ["extend_deadline"],
+      proofBoundary:
+        "Seeded cohost role URL proof that a delegated stale deadline control rejects with an explicit PhaseLocked conflict message and refreshes into current delegated controls.",
+    },
   ]);
   assert.deepEqual(staleConflictMessageSurfaceCheckIds(), [
     "stale-conflict-message-surface-stale-action-conflict-message",
     "stale-conflict-message-surface-stale-dead-action-conflict",
     "stale-conflict-message-surface-stale-host-deadline",
+    "stale-conflict-message-surface-stale-cohost-deadline",
   ]);
 });
 
