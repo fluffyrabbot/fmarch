@@ -95,7 +95,6 @@ import {
 } from "./dev_test_game_hosted_ops_signal_cases.mjs";
 import {
   releaseAdminProofFallbackUnprovenIds,
-  releaseReadinessProductionFeatureSpineTargetsBySlotId,
 } from "./dev_test_game_release_readiness_cases.mjs";
 import {
   assertDevTestGameSeedFixtureSummary,
@@ -227,6 +226,7 @@ import {
   devTestGameHostedConcurrentRaceMatrixPath,
 } from "./dev_test_game_hosted_concurrent_race_matrix.mjs";
 import {
+  featureSpineFixture,
   invalidActionRecoveryHostedConcurrentRaceMatrixUnprovenFixture,
 } from "./dev_test_game_next_action_spine_fixtures.mjs";
 import {
@@ -12263,65 +12263,34 @@ function coreLoopSpineTargetsFixture() {
 }
 
 function productionFeatureSpineTargetFixture(slotId = "player-action-submission") {
-  return {
-    ...releaseReadinessProductionFeatureSpineTargetsBySlotId[slotId],
-  };
+  return featureSpineCaseFixture(slotId).productionFeatureSpineTarget;
 }
 
 function resolvedFeatureSpineTargetFixture(slotId = "player-action-submission") {
-  const declaration = productionFeatureSpineTargetFixture(slotId);
-  if (slotId === "identity-adapter") {
-    return {
-      featureSlotId: declaration.featureSlotId,
-      sourceCheckId: "local-identity-adapter-proof",
-      detailRoleUrl: "/admin/audit/local-identity-adapter?game=<seeded-game>",
-      cycleId: declaration.cycleId,
-      roleUrlId: declaration.roleUrlId,
-      roleUrl: "/admin/audit/local-identity-adapter?game=<seeded-game>",
-      rowKind: declaration.rowKind,
-      checkpointId: declaration.checkpointId,
-      adminCheckId: declaration.adminCheckId,
-      browserProofCommand: devTestGameLiveProofCommand,
-      rerunCommand: devTestGameIdentityAdminProofCommand,
-    };
-  }
-  return {
-    featureSlotId: declaration.featureSlotId,
-    sourceCheckId: "local-core-loop-proof",
-    detailRoleUrl: "/admin/audit/local-core-loop?game=<seeded-game>",
-    cycleId: declaration.cycleId,
-    roleUrlId: declaration.roleUrlId,
-    roleUrl: coreLoopSpineTargetsFixture().roleUrlHrefs[declaration.roleUrlId],
-    rowKind: declaration.rowKind,
-    checkpointId: declaration.checkpointId,
-    ...(declaration.rowKind === "recovery-hook"
-      ? { recoveryHookId: declaration.recoveryHookId }
-      : {}),
-    adminCheckId: declaration.adminCheckId,
-    browserProofCommand: devTestGameLiveProofCommand,
-    rerunCommand: "npm run test:dev-test-game-core-loop-admin-proof",
-  };
+  return featureSpineCaseFixture(slotId).spineTarget;
 }
 
 function featureSpineDrilldownFixture(slotId = "player-action-submission") {
-  const target = resolvedFeatureSpineTargetFixture(slotId);
-  return {
-    featureSlotId: target.featureSlotId,
-    sourceCheckId: target.sourceCheckId,
-    detailRoleUrl: target.detailRoleUrl,
-    cycleRowId: target.cycleId,
-    roleUrlRowId: target.roleUrlId,
-    rowKind: target.rowKind,
-    checkpointRowId: target.checkpointId,
-    ...(target.rowKind === "recovery-hook"
-      ? { recoveryHookRowId: target.recoveryHookId }
-      : {}),
-    adminCheckId: target.adminCheckId,
-    roleUrl: target.roleUrl,
-    rerunCommand:
-      target.rerunCommand ?? "npm run test:dev-test-game-core-loop-admin-proof",
-    browserProofCommand: target.browserProofCommand,
-  };
+  return featureSpineCaseFixture(slotId).spineDrilldown;
+}
+
+function featureSpineCaseFixture(slotId = "player-action-submission") {
+  if (slotId === "identity-adapter") {
+    return featureSpineFixture({
+      slotId,
+      detailRoleUrl: "/admin/audit/local-identity-adapter?game=<seeded-game>",
+      roleUrl: "/admin/audit/local-identity-adapter?game=<seeded-game>",
+      browserProofCommand: devTestGameLiveProofCommand,
+      rerunCommand: devTestGameIdentityAdminProofCommand,
+      includeTargetRerunCommand: true,
+    });
+  }
+  return featureSpineFixture({
+    slotId,
+    roleUrlsById: coreLoopSpineTargetsFixture().roleUrlHrefs,
+    browserProofCommand: devTestGameLiveProofCommand,
+    includeTargetRerunCommand: true,
+  });
 }
 
 function hostedIdentityHandoffChecklistFixture() {

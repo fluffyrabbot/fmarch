@@ -18,6 +18,7 @@ export function featureSpineFixture({
   slotId = "player-action-submission",
   detailRoleUrl = "/admin/audit/local-core-loop?game=<seeded-game>",
   roleUrl,
+  roleUrlsById,
   browserProofCommand,
   rerunCommand = "npm run test:dev-test-game-core-loop-admin-proof",
   includeTargetRerunCommand = false,
@@ -32,6 +33,12 @@ export function featureSpineFixture({
   const recoveryHookId =
     declaration.recoveryHookId ??
     (includeEmptyRecoveryHook ? "" : undefined);
+  const resolvedRoleUrl = roleUrl ?? roleUrlsById?.[declaration.roleUrlId];
+  if (resolvedRoleUrl === undefined) {
+    throw new Error(
+      `Missing role URL for production feature spine target slot: ${slotId}`,
+    );
+  }
   const productionFeatureSpineTarget = {
     ...declaration,
     ...(recoveryHookId === undefined ? {} : { recoveryHookId }),
@@ -42,7 +49,7 @@ export function featureSpineFixture({
     detailRoleUrl,
     cycleId: declaration.cycleId,
     roleUrlId: declaration.roleUrlId,
-    roleUrl,
+    roleUrl: resolvedRoleUrl,
     rowKind: declaration.rowKind,
     checkpointId: declaration.checkpointId,
     ...(recoveryHookId === undefined ? {} : { recoveryHookId }),
@@ -65,7 +72,7 @@ export function featureSpineFixture({
         ? {}
         : { recoveryHookRowId: recoveryHookId }),
       adminCheckId: declaration.adminCheckId,
-      roleUrl,
+      roleUrl: resolvedRoleUrl,
       rerunCommand,
       browserProofCommand,
     },
