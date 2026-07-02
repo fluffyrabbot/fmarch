@@ -1762,6 +1762,38 @@ test("admin route data exposes local next action as a native audit row", async (
   });
 });
 
+test("admin route data exposes recovery-hook spine drilldowns", async () => {
+  const data = await buildAdminRouteData({
+    principalUserId: "admin_a",
+    capabilities: [{ kind: "GlobalAdmin" }],
+    nextAction: nextActionFixture({
+      unproven: invalidActionRecoveryUnprovenFixture(),
+    }),
+    proofGraph: proofGraphFixture(),
+  });
+
+  const nextAction = data.audit.find((item) => item.id === "local-next-action");
+  const checks = new Map(
+    nextAction.checks.map((check) => [check.id, check.status]),
+  );
+  assert.equal(
+    checks.get("selected-feature-spine-declaration"),
+    "invalid-action-recovery:d02-n02/recovery-hook:invalidActionReject/d02-n02-actionPlayer/invalid-action-recovery",
+  );
+  assert.equal(
+    checks.get("selected-spine-target"),
+    "d02-n02/recovery-hook:invalidActionReject/d02-n02-actionPlayer/invalid-action-recovery",
+  );
+  assert.equal(
+    checks.get("selected-spine-drilldown"),
+    "invalid-action-recovery:d02-n02/recovery-hook:invalidActionReject/d02-n02-actionPlayer/invalid-action-recovery",
+  );
+  assert.equal(
+    checks.get("selected-spine-admin-check"),
+    "invalid-action-recovery",
+  );
+});
+
 test("admin route data exposes local readiness dependency next action", async () => {
   const localCheck = proofGraphHandoffLocalCheckFixture();
   const data = await buildAdminRouteData({
@@ -4849,13 +4881,44 @@ function hostedEvidenceLaneUnprovenFixture() {
   };
 }
 
+function invalidActionRecoveryUnprovenFixture() {
+  return {
+    id: "hosted-concurrent-race-matrix",
+    status: "unproven",
+    requiredEvidence:
+      "Hosted or hosted-like concurrent command race matrix beyond the promoted local replacement, host, player, cohost deadline, lifecycle, and complete-game reload milestones, including multi-session reload/reconnect recovery and stale-client conflict evidence",
+    buildSlice:
+      "Create the first hosted-like concurrent race matrix proof request from the promoted local race baseline.",
+    proofTarget: HOSTED_MATRIX_PROOF_TARGET,
+    roleUrl: "/admin/audit/local-hosted-concurrent-race-matrix?game=<seeded-game>",
+    proofGraphNodeId: "admin-proof:hosted-concurrent-race-matrix",
+    productionFeatureSpineTarget: productionFeatureSpineTargetFixture(
+      "invalid-action-recovery",
+    ),
+    spineDrilldown: featureSpineDrilldownFixture("invalid-action-recovery"),
+    spineTarget: featureSpineTargetFixture("invalid-action-recovery"),
+  };
+}
+
 function hostedHandoffChecklistFixture() {
   return hostedEvidenceBlockedHandoffChecklistFixture({
     proofTarget: HOSTED_EVIDENCE_LANE_PROOF_TARGET,
   });
 }
 
-function productionFeatureSpineTargetFixture() {
+function productionFeatureSpineTargetFixture(slotId = "player-action-submission") {
+  if (slotId === "invalid-action-recovery") {
+    return {
+      featureSlotId: "invalid-action-recovery",
+      sourceCheckId: "local-core-loop-proof",
+      cycleId: "d02-n02",
+      roleUrlId: "d02-n02-actionPlayer",
+      rowKind: "recovery-hook",
+      checkpointId: "d02-n02-n02-action-open",
+      recoveryHookId: "invalidActionReject",
+      adminCheckId: "invalid-action-recovery",
+    };
+  }
   return {
     featureSlotId: "player-action-submission",
     sourceCheckId: "local-core-loop-proof",
@@ -4868,17 +4931,35 @@ function productionFeatureSpineTargetFixture() {
   };
 }
 
-function featureSpineDrilldownFixture() {
+function featureSpineTargetFixture(slotId = "player-action-submission") {
+  const target = productionFeatureSpineTargetFixture(slotId);
   return {
-    featureSlotId: "player-action-submission",
-    sourceCheckId: "local-core-loop-proof",
+    sourceCheckId: target.sourceCheckId,
+    featureSlotId: target.featureSlotId,
     detailRoleUrl: "/admin/audit/local-core-loop?game=<seeded-game>",
-    cycleRowId: "d02-n02",
-    roleUrlRowId: "d02-n02-actionPlayer",
-    rowKind: "checkpoint",
-    checkpointRowId: "d02-n02-n02-action-open",
-    recoveryHookRowId: "",
-    adminCheckId: "action-loop",
+    cycleId: target.cycleId,
+    roleUrlId: target.roleUrlId,
+    roleUrl: ACTIONABLE_SPINE_ROLE_URL,
+    rowKind: target.rowKind,
+    checkpointId: target.checkpointId,
+    recoveryHookId: target.recoveryHookId ?? "",
+    adminCheckId: target.adminCheckId,
+    browserProofCommand: LIVE_BROWSER_PROOF_COMMAND,
+  };
+}
+
+function featureSpineDrilldownFixture(slotId = "player-action-submission") {
+  const target = productionFeatureSpineTargetFixture(slotId);
+  return {
+    featureSlotId: target.featureSlotId,
+    sourceCheckId: target.sourceCheckId,
+    detailRoleUrl: "/admin/audit/local-core-loop?game=<seeded-game>",
+    cycleRowId: target.cycleId,
+    roleUrlRowId: target.roleUrlId,
+    rowKind: target.rowKind,
+    checkpointRowId: target.checkpointId,
+    recoveryHookRowId: target.recoveryHookId ?? "",
+    adminCheckId: target.adminCheckId,
     roleUrl: ACTIONABLE_SPINE_ROLE_URL,
     rerunCommand: "npm run test:dev-test-game-core-loop-admin-proof",
     browserProofCommand: LIVE_BROWSER_PROOF_COMMAND,

@@ -32,6 +32,12 @@ import {
 import {
   hostedEvidenceHandoffInputRows,
 } from "../../../../tools/dev_test_game_hosted_handoff_cases.mjs";
+import {
+  normalizeSpineRowKind,
+  selectedSpineDeclarationStatus,
+  selectedSpineDrilldownStatus,
+  selectedSpineTargetStatus,
+} from "./selected-spine-status.mjs";
 
 export const ADMIN_ROUTE_CONTRACT = Object.freeze({
   surfaceTestId: "admin-surface",
@@ -2264,49 +2270,6 @@ function normalizeNextActionSpineTarget(spineTarget) {
     adminCheckId: String(spineTarget.adminCheckId ?? ""),
     browserProofCommand: String(spineTarget.browserProofCommand ?? ""),
   });
-}
-
-function normalizeSpineRowKind(row) {
-  return row?.rowKind === "recovery-hook" ? "recovery-hook" : "checkpoint";
-}
-
-function selectedSpineDeclarationStatus(declaration) {
-  return `${declaration.featureSlotId}:${[
-    declaration.cycleId,
-    selectedSpineRowStatusId(declaration),
-    declaration.roleUrlId,
-    declaration.adminCheckId,
-  ].join("/")}`;
-}
-
-function selectedSpineTargetStatus(target) {
-  return [
-    target.cycleId,
-    selectedSpineRowStatusId(target),
-    target.roleUrlId,
-    target.adminCheckId,
-  ].join("/");
-}
-
-function selectedSpineDrilldownStatus(drilldown) {
-  return `${drilldown.featureSlotId}:${[
-    drilldown.cycleRowId,
-    selectedSpineDrilldownRowStatusId(drilldown),
-    drilldown.roleUrlRowId,
-    drilldown.adminCheckId,
-  ].join("/")}`;
-}
-
-function selectedSpineRowStatusId(row) {
-  return row.rowKind === "recovery-hook" && row.recoveryHookId !== ""
-    ? `recovery-hook:${row.recoveryHookId}`
-    : row.checkpointId;
-}
-
-function selectedSpineDrilldownRowStatusId(row) {
-  return row.rowKind === "recovery-hook" && row.recoveryHookRowId !== ""
-    ? `recovery-hook:${row.recoveryHookRowId}`
-    : row.checkpointRowId;
 }
 
 function normalizeNextActionFeatureSpineDeclaration(declaration) {
