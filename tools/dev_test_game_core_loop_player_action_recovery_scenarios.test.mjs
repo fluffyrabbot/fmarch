@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import { test } from "node:test";
 import {
   assertPlayerActionRoleSurfaceProof,
@@ -43,6 +44,21 @@ test("player-action recovery family shares submission and recovery cases", () =>
   assert.deepEqual(
     family.recovery.staleActionAfterTransition,
     staleNightOneActionAfterTransitionRecoveryScenario(),
+  );
+});
+
+test("player-action recovery family imports case-only scenario definitions", async () => {
+  const source = await readFile(
+    "tools/dev_test_game_core_loop_player_action_recovery_scenarios.mjs",
+    "utf8",
+  );
+  assert(
+    source.includes("./dev_test_game_core_loop_action_scenario_cases.mjs"),
+    "player-action recovery family should derive raw scenarios from the case-only module",
+  );
+  assert(
+    source.includes("./dev_test_game_core_loop_action_scenarios.mjs"),
+    "player-action recovery family should keep importing assertion helpers",
   );
 });
 

@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import { test } from "node:test";
 import {
   assertPlayerActionSubmissionClickProofCase,
@@ -20,6 +21,28 @@ test("player action scenario module exports proof lane ids", () => {
   assert.equal(playerActionLoopLaneId, "action-loop");
   assert.equal(playerInvalidActionRecoveryLaneId, "invalid-action-recovery");
   assert.equal(playerActionBoundaryLaneId, "player-action-boundary");
+});
+
+test("player action assertions import case-only scenario definitions", async () => {
+  const assertionSource = await readFile(
+    "tools/dev_test_game_core_loop_action_scenarios.mjs",
+    "utf8",
+  );
+  assert(
+    assertionSource.includes(
+      "./dev_test_game_core_loop_action_scenario_cases.mjs",
+    ),
+    "player action assertions should derive scenarios from the case-only module",
+  );
+  assert(
+    !/export\s+function\s+playerInvalidActionRecoveryScenario\b/.test(
+      assertionSource,
+    ) &&
+      !/export\s+function\s+staleNightFourActionRecoveryScenario\b/.test(
+        assertionSource,
+      ),
+    "player action assertions should not redefine raw recovery scenarios",
+  );
 });
 
 test("player command fact helpers derive reusable vote and action vocabulary", () => {

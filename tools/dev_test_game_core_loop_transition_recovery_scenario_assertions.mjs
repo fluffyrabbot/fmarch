@@ -1,8 +1,10 @@
 import {
   assertPlayerStaleActionAfterTransitionProofCase,
   assertPlayerStaleVoteAfterTransitionProofCase,
-  staleNightFourActionRecoveryScenario,
 } from "./dev_test_game_core_loop_action_scenarios.mjs";
+import {
+  staleNightFourActionRecoveryScenario,
+} from "./dev_test_game_core_loop_action_scenario_cases.mjs";
 import {
   assertHostStaleAdvanceAfterTransitionProofCase,
   hostAdvancePhaseCommandFacts,

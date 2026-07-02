@@ -1,6 +1,8 @@
 import {
   assertPlayerActionSubmissionClickProofCase,
   assertPlayerInvalidActionRecoveryProofCase,
+} from "./dev_test_game_core_loop_action_scenarios.mjs";
+import {
   playerActionBoundaryLaneId,
   playerActionLoopLaneId,
   playerActionSubmissionScenario,
@@ -8,7 +10,7 @@ import {
   playerInvalidActionRecoveryScenario,
   staleDayTwoVoteAfterTransitionRecoveryScenario,
   staleNightOneActionAfterTransitionRecoveryScenario,
-} from "./dev_test_game_core_loop_action_scenarios.mjs";
+} from "./dev_test_game_core_loop_action_scenario_cases.mjs";
 
 export {
   playerActionBoundaryLaneId,
@@ -18,7 +20,7 @@ export {
   playerInvalidActionRecoveryScenario,
   staleDayTwoVoteAfterTransitionRecoveryScenario,
   staleNightOneActionAfterTransitionRecoveryScenario,
-} from "./dev_test_game_core_loop_action_scenarios.mjs";
+} from "./dev_test_game_core_loop_action_scenario_cases.mjs";
 
 export const coreLoopPlayerActionRecoveryFamilyId =
   "core-loop-player-action-recovery";

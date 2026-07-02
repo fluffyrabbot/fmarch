@@ -13,10 +13,12 @@ import {
 import {
   assertPlayerStaleActionAfterTransitionProofCase,
   assertPlayerStaleVoteAfterTransitionProofCase,
+} from "./dev_test_game_core_loop_action_scenarios.mjs";
+import {
   playerActionSubmissionScenario,
   playerInvalidActionRecoveryScenario,
   staleNightFourActionRecoveryScenario,
-} from "./dev_test_game_core_loop_action_scenarios.mjs";
+} from "./dev_test_game_core_loop_action_scenario_cases.mjs";
 import {
   assertPlayerActionRoleSurfaceProof,
   coreLoopPlayerActionRecoveryFamilyId,

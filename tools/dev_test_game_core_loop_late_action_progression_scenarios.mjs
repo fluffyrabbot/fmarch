@@ -1,7 +1,7 @@
 import {
   playerActionLoopLaneId,
   staleNightFourActionRecoveryScenario,
-} from "./dev_test_game_core_loop_action_scenarios.mjs";
+} from "./dev_test_game_core_loop_action_scenario_cases.mjs";
 import {
   hostResolvePhaseTransitionCase,
 } from "./dev_test_game_core_loop_host_phase_scenarios.mjs";
