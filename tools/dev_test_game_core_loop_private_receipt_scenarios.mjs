@@ -145,6 +145,7 @@ export function privateReceiptScenarios() {
       privateReceiptPhaseId: "N02",
       boundaryText: "night target role received factional_kill private receipt",
       resyncFromSeq: 904,
+      assertResyncNotificationEffect: false,
     },
     {
       id: "n02-normal-privacy",

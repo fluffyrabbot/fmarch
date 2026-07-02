@@ -100,13 +100,19 @@ import {
   assertStaleNightFourActionRecoveryProofCase,
 } from "./dev_test_game_core_loop_transition_recovery_scenario_assertions.mjs";
 import {
-  assertPrivateReceiptRoleSurfaceCase,
   assertDayThreePlayerObservationProofCase,
   assertPostDayThreePlayerSurfaceProofCase,
-  privateReceiptAssertionArgs,
-  privateReceiptScenario,
   assertPrivateChannelRoleSurfaceProof,
 } from "./dev_test_game_core_loop_private_receipt_scenarios.mjs";
+import {
+  assertNightActionResolutionReceiptSurfaceProof,
+  assertNormalDayVotePrivacySurfaceProof,
+  assertNormalNightActionResolutionPrivacySurfaceProof,
+  assertNormalResolutionPrivacySurfaceProof,
+  assertTargetDayVoteReceiptSurfaceProof,
+  assertTargetResolutionReceiptSurfaceProof,
+  coreLoopPrivateReceiptSurfaceFamilyId,
+} from "./dev_test_game_core_loop_private_receipt_surface_scenarios.mjs";
 import {
   assertDayThreeVoteResolutionSurfaceCase,
   coreLoopVoteResolutionFamilyId,
@@ -2100,6 +2106,15 @@ export function validateDevTestGameCoreLoopAdminProof(proof, options = {}) {
     );
   }
   if (
+    proof.generatedFrom?.privateReceiptSurfaceFamily?.id !==
+      coreLoopPrivateReceiptSurfaceFamilyId ||
+    !Array.isArray(proof.generatedFrom?.privateReceiptSurfaceFamily?.laneIds)
+  ) {
+    throw new Error(
+      "core-loop admin proof missing private receipt surface family",
+    );
+  }
+  if (
     proof.generatedFrom?.voteResolutionFamily?.id !==
       coreLoopVoteResolutionFamilyId ||
     !Array.isArray(proof.generatedFrom?.voteResolutionFamily?.laneIds)
@@ -2301,111 +2316,37 @@ function assertCoreLoopPlayerActionCheckpoint(playerRoleSurface) {
 
 function assertCoreLoopTargetResolutionReceiptSurface(targetSurface) {
   const expectedGame = gameFromRoleUrl(targetSurface?.sourceRoleUrl);
-  assertCoreLoopPrivateReceiptRoleSurface({
+  assertTargetResolutionReceiptSurfaceProof({
     proof: targetSurface,
-    ...privateReceiptAssertionArgs({
-      scenario: privateReceiptScenario("n01-target-receipt"),
-      expectedGame,
-      sourceRoleUrl: targetSurface?.sourceRoleUrl,
-    }),
-    errorMessage: "core-loop admin proof missing target resolution receipt surface",
+    expectedGame,
+    sourceRoleUrl: targetSurface?.sourceRoleUrl,
   });
 }
 
 function assertCoreLoopNormalResolutionPrivacySurface(normalSurface) {
   const expectedGame = gameFromRoleUrl(normalSurface?.sourceRoleUrl);
-  assertCoreLoopPrivateReceiptRoleSurface({
+  assertNormalResolutionPrivacySurfaceProof({
     proof: normalSurface,
-    ...privateReceiptAssertionArgs({
-      scenario: privateReceiptScenario("n01-normal-privacy"),
-      expectedGame,
-      sourceRoleUrl: normalSurface?.sourceRoleUrl,
-    }),
-    errorMessage: "core-loop admin proof missing normal resolution privacy surface",
+    expectedGame,
+    sourceRoleUrl: normalSurface?.sourceRoleUrl,
   });
 }
 
 function assertCoreLoopTargetDayVoteReceiptSurface(targetSurface) {
   const expectedGame = gameFromRoleUrl(targetSurface?.sourceRoleUrl);
-  assertCoreLoopPrivateReceiptRoleSurface({
+  assertTargetDayVoteReceiptSurfaceProof({
     proof: targetSurface,
-    ...privateReceiptAssertionArgs({
-      scenario: privateReceiptScenario("d02-target-receipt"),
-      expectedGame,
-      sourceRoleUrl: targetSurface?.sourceRoleUrl,
-    }),
-    errorMessage: "core-loop admin proof missing target day-vote receipt surface",
+    expectedGame,
+    sourceRoleUrl: targetSurface?.sourceRoleUrl,
   });
 }
 
 function assertCoreLoopNormalDayVotePrivacySurface(normalSurface) {
   const expectedGame = gameFromRoleUrl(normalSurface?.sourceRoleUrl);
-  assertCoreLoopPrivateReceiptRoleSurface({
+  assertNormalDayVotePrivacySurfaceProof({
     proof: normalSurface,
-    ...privateReceiptAssertionArgs({
-      scenario: privateReceiptScenario("d02-normal-privacy"),
-      expectedGame,
-      sourceRoleUrl: normalSurface?.sourceRoleUrl,
-    }),
-    errorMessage: "core-loop admin proof missing normal day-vote privacy surface",
-  });
-}
-
-function assertCoreLoopPrivateReceiptRoleSurface({
-  proof,
-  sourceRoleUrl,
-  expectedSlot,
-  slotField,
-  expectedPrincipalUserId,
-  expectedPhaseId,
-  expectedPhaseState,
-  expectedActorAlive,
-  expectedActorStatus,
-  expectedActionState,
-  expectedStatusText,
-  expectedPrivateCount,
-  expectedPrivateReceipt,
-  expectedBoundaryText,
-  expectedResyncFromSeq,
-  expectedPrivateReceiptStatus,
-  expectedPrivateReceiptPhaseId,
-  expectedResyncNotificationEffect,
-  expectedResyncNotificationStatus,
-  expectedPrivateQueueBoundaryStatus,
-  expectedProjectionPhaseId,
-  expectedProjectionLocked,
-  expectedResyncSnapshotPhaseId,
-  expectedCommandStateEndpoint,
-  expectedNotificationsEndpoint,
-  errorMessage,
-}) {
-  assertPrivateReceiptRoleSurfaceCase({
-    proof,
-    sourceRoleUrl,
-    expectedSlot,
-    slotField,
-    expectedPrincipalUserId,
-    expectedPhaseId,
-    expectedPhaseState,
-    expectedActorAlive,
-    expectedActorStatus,
-    expectedActionState,
-    expectedStatusText,
-    expectedPrivateCount,
-    expectedPrivateReceipt,
-    expectedBoundaryText,
-    expectedResyncFromSeq,
-    expectedPrivateReceiptStatus,
-    expectedPrivateReceiptPhaseId,
-    expectedResyncNotificationEffect,
-    expectedResyncNotificationStatus,
-    expectedPrivateQueueBoundaryStatus,
-    expectedProjectionPhaseId,
-    expectedProjectionLocked,
-    expectedResyncSnapshotPhaseId,
-    expectedCommandStateEndpoint,
-    expectedNotificationsEndpoint,
-    errorMessage,
+    expectedGame,
+    sourceRoleUrl: normalSurface?.sourceRoleUrl,
   });
 }
 
@@ -2534,134 +2475,20 @@ function assertCoreLoopNormalPostDayVoteAdvanceSurface(normalSurface) {
 
 function assertCoreLoopNightActionResolutionReceiptSurface(targetSurface) {
   const expectedGame = gameFromRoleUrl(targetSurface?.sourceRoleUrl);
-  const scenario = privateReceiptScenario("n02-target-receipt");
-  if (
-    targetSurface?.status !== "passed" ||
-    targetSurface.clickedThroughFromRoleUrl !== true ||
-    targetSurface.releaseReady !== false ||
-    targetSurface.productionReady !== false ||
-    targetSurface.rawInviteTokensVisible !== false ||
-    targetSurface.targetSlot !== scenario.expectedSlot ||
-    targetSurface.principalUserId !== scenario.principalUserId ||
-    typeof targetSurface.sourceRoleUrl !== "string" ||
-    !targetSurface.sourceRoleUrl.includes("/g/") ||
-    !targetSurface.sourceRoleUrl.includes("private=notification-1") ||
-    typeof targetSurface.visitedRolePath !== "string" ||
-    !targetSurface.visitedRolePath.includes("/g/") ||
-    !targetSurface.visitedRolePath.includes("private=notification-1") ||
-    targetSurface.surfaceTestId !== "player-surface" ||
-    targetSurface.checkpoint?.phaseId !== scenario.phaseId ||
-    targetSurface.checkpoint.phaseState !== scenario.phaseState ||
-    targetSurface.checkpoint.actorSlot !== scenario.expectedSlot ||
-    targetSurface.checkpoint.actionState !== scenario.actionState ||
-    targetSurface.checkpoint.receiptState !== "idle" ||
-    !String(targetSurface.checkpoint.statusText ?? "")
-      .toLowerCase()
-      .includes(`player action unavailable: ${scenario.statusText}`) ||
-    targetSurface.privateQueueBoundary?.status !==
-      "principal-scoped-private-projections" ||
-    targetSurface.privateQueueBoundary.count !== 1 ||
-    !String(targetSurface.privateQueueBoundary.text ?? "").includes(
-      "principal-scoped endpoints",
-    ) ||
-    targetSurface.privateNotice?.id !== "notification-1" ||
-    targetSurface.privateNotice.kind !== "notification" ||
-    !String(targetSurface.privateNotice.text ?? "").includes("player_killed") ||
-    !String(targetSurface.privateNotice.text ?? "").includes(
-      scenario.privateReceiptStatus,
-    ) ||
-    targetSurface.privateNotice.detailText !==
-      `Phase ${scenario.privateReceiptPhaseId}` ||
-    targetSurface.projectionCommandState?.actorSlot !== scenario.expectedSlot ||
-    targetSurface.projectionCommandState?.actorAlive !== scenario.actorAlive ||
-    targetSurface.projectionCommandState?.actorStatus !== scenario.actorStatus ||
-    targetSurface.projectionCommandState?.phase?.phaseId !== scenario.phaseId ||
-    targetSurface.projectionCommandState?.phase?.locked !== true ||
-    targetSurface.projectionCommandState?.actions?.length !== 0 ||
-    !String(targetSurface.projectionCommandState?.boundary ?? "").includes(
-      scenario.boundaryText,
-    ) ||
-    targetSurface.projectionNotifications?.[0]?.effect !== "player_killed" ||
-    targetSurface.projectionNotifications?.[0]?.status !==
-      scenario.privateReceiptStatus ||
-    targetSurface.resyncFromSeq !== scenario.resyncFromSeq ||
-    targetSurface.resyncSnapshotCommandState?.actorSlot !== scenario.expectedSlot ||
-    targetSurface.resyncSnapshotCommandState?.phase?.phaseId !==
-      scenario.phaseId ||
-    targetSurface.resyncSnapshotNotifications?.[0]?.status !==
-      scenario.privateReceiptStatus ||
-    targetSurface.coldLoadEndpoints?.notificationsEndpoint !==
-      `/games/${expectedGame}/notifications?principal_user_id=${scenario.principalUserId}` ||
-    targetSurface.coldLoadEndpoints?.commandStateEndpoint !==
-      `/games/${expectedGame}/player-command-state?principal_user_id=${scenario.principalUserId}&slot_id=${scenario.expectedSlot}`
-  ) {
-    throw new Error(
-      "core-loop admin proof missing night action resolution receipt surface",
-    );
-  }
+  assertNightActionResolutionReceiptSurfaceProof({
+    proof: targetSurface,
+    expectedGame,
+    sourceRoleUrl: targetSurface?.sourceRoleUrl,
+  });
 }
 
 function assertCoreLoopNormalNightActionResolutionPrivacySurface(normalSurface) {
   const expectedGame = gameFromRoleUrl(normalSurface?.sourceRoleUrl);
-  const scenario = privateReceiptScenario("n02-normal-privacy");
-  if (
-    normalSurface?.status !== "passed" ||
-    normalSurface.clickedThroughFromRoleUrl !== true ||
-    normalSurface.releaseReady !== false ||
-    normalSurface.productionReady !== false ||
-    normalSurface.rawInviteTokensVisible !== false ||
-    normalSurface.normalSlot !== scenario.expectedSlot ||
-    normalSurface.principalUserId !== scenario.principalUserId ||
-    normalSurface.targetReceiptVisible !== false ||
-    typeof normalSurface.sourceRoleUrl !== "string" ||
-    !normalSurface.sourceRoleUrl.includes("/g/") ||
-    !normalSurface.sourceRoleUrl.includes("private=notification-1") ||
-    typeof normalSurface.visitedRolePath !== "string" ||
-    !normalSurface.visitedRolePath.includes("/g/") ||
-    !normalSurface.visitedRolePath.includes("private=notification-1") ||
-    normalSurface.surfaceTestId !== "player-surface" ||
-    normalSurface.checkpoint?.phaseId !== scenario.phaseId ||
-    normalSurface.checkpoint.phaseState !== scenario.phaseState ||
-    normalSurface.checkpoint.actorSlot !== scenario.expectedSlot ||
-    normalSurface.checkpoint.actionState !== scenario.actionState ||
-    normalSurface.checkpoint.receiptState !== "idle" ||
-    !String(normalSurface.checkpoint.statusText ?? "")
-      .toLowerCase()
-      .includes(`player action unavailable: ${scenario.statusText}`) ||
-    normalSurface.privateQueueBoundary?.status !==
-      "principal-scoped-private-projections" ||
-    normalSurface.privateQueueBoundary.count !== 0 ||
-    !String(normalSurface.privateQueueBoundary.text ?? "").includes(
-      "principal-scoped endpoints",
-    ) ||
-    !String(normalSurface.privateEmptyText ?? "").includes(
-      "No private results visible",
-    ) ||
-    normalSurface.projectionCommandState?.actorSlot !== scenario.expectedSlot ||
-    normalSurface.projectionCommandState?.actorAlive !== scenario.actorAlive ||
-    normalSurface.projectionCommandState?.actorStatus !== scenario.actorStatus ||
-    normalSurface.projectionCommandState?.phase?.phaseId !== scenario.phaseId ||
-    normalSurface.projectionCommandState?.phase?.locked !== true ||
-    normalSurface.projectionCommandState?.actions?.length !== 0 ||
-    !String(normalSurface.projectionCommandState?.boundary ?? "").includes(
-      scenario.boundaryText,
-    ) ||
-    normalSurface.projectionNotifications?.length !== 0 ||
-    normalSurface.resyncFromSeq !== scenario.resyncFromSeq ||
-    normalSurface.resyncSnapshotCommandState?.actorSlot !==
-      scenario.expectedSlot ||
-    normalSurface.resyncSnapshotCommandState?.phase?.phaseId !==
-      scenario.phaseId ||
-    normalSurface.resyncSnapshotNotifications?.length !== 0 ||
-    normalSurface.coldLoadEndpoints?.notificationsEndpoint !==
-      `/games/${expectedGame}/notifications?principal_user_id=${scenario.principalUserId}` ||
-    normalSurface.coldLoadEndpoints?.commandStateEndpoint !==
-      `/games/${expectedGame}/player-command-state?principal_user_id=${scenario.principalUserId}&slot_id=${scenario.expectedSlot}`
-  ) {
-    throw new Error(
-      "core-loop admin proof missing normal night action resolution privacy surface",
-    );
-  }
+  assertNormalNightActionResolutionPrivacySurfaceProof({
+    proof: normalSurface,
+    expectedGame,
+    sourceRoleUrl: normalSurface?.sourceRoleUrl,
+  });
 }
 
 function assertCoreLoopHostPhaseTransitionSurface(hostPhaseTransitionSurface) {
