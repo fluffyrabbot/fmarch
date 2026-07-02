@@ -27,6 +27,10 @@ import {
   completedGameStaleRecoverySpineLaneCase,
 } from "./dev_test_game_core_loop_completed_game_cases.mjs";
 import {
+  coreLoopFeatureSpineSourceCheckId,
+  coreLoopFeatureSpineTargetRows,
+} from "./dev_test_game_core_loop_feature_spine_targets.mjs";
+import {
   replacementStaleConflictMessageSpineLaneCase,
 } from "./dev_test_game_stale_conflict_scenarios.mjs";
 
@@ -100,13 +104,16 @@ test("release readiness buildable cases share next-action commands and spine tar
   assert.deepEqual(
     releaseReadinessProductionFeatureSpineTargets.resolutionReceipts,
     {
-      featureSlotId: "resolution-receipts",
-      sourceCheckId: "local-core-loop-proof",
-      cycleId: "d01-n01-d02",
-      roleUrlId: "d01-n01-d02-target",
+      featureSlotId: coreLoopFeatureSpineTargetRows.resolutionReceipts
+        .featureSlotId,
+      sourceCheckId: coreLoopFeatureSpineSourceCheckId,
+      cycleId: coreLoopFeatureSpineTargetRows.resolutionReceipts.cycleId,
+      roleUrlId: coreLoopFeatureSpineTargetRows.resolutionReceipts.roleUrlId,
       rowKind: "checkpoint",
-      checkpointId: "d01-n01-d02-n01-resolved-target-killed",
-      adminCheckId: "resolution-receipts",
+      checkpointId:
+        coreLoopFeatureSpineTargetRows.resolutionReceipts.checkpointId,
+      adminCheckId:
+        coreLoopFeatureSpineTargetRows.resolutionReceipts.adminCheckId,
     },
   );
 
@@ -128,26 +135,36 @@ test("release readiness buildable cases share next-action commands and spine tar
   assert.deepEqual(
     releaseReadinessProductionFeatureSpineTargets.staleActionConflictMessage,
     {
-      featureSlotId: "stale-action-conflict-message",
-      sourceCheckId: "local-core-loop-proof",
-      cycleId: "d01-n01-d02",
-      roleUrlId: "d01-n01-d02-actionPlayer",
+      featureSlotId: coreLoopFeatureSpineTargetRows.staleActionConflictMessage
+        .featureSlotId,
+      sourceCheckId: coreLoopFeatureSpineSourceCheckId,
+      cycleId:
+        coreLoopFeatureSpineTargetRows.staleActionConflictMessage.cycleId,
+      roleUrlId:
+        coreLoopFeatureSpineTargetRows.staleActionConflictMessage.roleUrlId,
       rowKind: "recovery-hook",
-      checkpointId: "d01-n01-d02-n01-action-open",
-      recoveryHookId: "staleActionConflictReject",
-      adminCheckId: "action-loop",
+      checkpointId:
+        coreLoopFeatureSpineTargetRows.staleActionConflictMessage.checkpointId,
+      recoveryHookId:
+        coreLoopFeatureSpineTargetRows.staleActionConflictMessage
+          .recoveryHookId,
+      adminCheckId:
+        coreLoopFeatureSpineTargetRows.staleActionConflictMessage.adminCheckId,
     },
   );
   assert.deepEqual(
     releaseReadinessProductionFeatureSpineTargets.completedGameRecovery,
     {
-      featureSlotId: "completed-game-recovery",
-      sourceCheckId: "local-core-loop-proof",
-      cycleId: "d02-n02",
-      roleUrlId: "d02-n02-host",
+      featureSlotId: coreLoopFeatureSpineTargetRows.completedGameRecovery
+        .featureSlotId,
+      sourceCheckId: coreLoopFeatureSpineSourceCheckId,
+      cycleId: coreLoopFeatureSpineTargetRows.completedGameRecovery.cycleId,
+      roleUrlId: coreLoopFeatureSpineTargetRows.completedGameRecovery.roleUrlId,
       rowKind: "checkpoint",
-      checkpointId: "d02-n02-d02-resolved-target-killed",
-      adminCheckId: "completed-game-hardening-coverage",
+      checkpointId:
+        coreLoopFeatureSpineTargetRows.completedGameRecovery.checkpointId,
+      adminCheckId:
+        coreLoopFeatureSpineTargetRows.completedGameRecovery.adminCheckId,
     },
   );
   assert.deepEqual(
@@ -259,11 +276,37 @@ test("scenario-owned production feature targets derive proof row ids from source
   }
 });
 
+test("local core production feature targets derive proof row ids from shared source rows", () => {
+  for (const [targetKey, source] of Object.entries(
+    coreLoopFeatureSpineTargetRows,
+  )) {
+    const target = releaseReadinessProductionFeatureSpineTargets[targetKey];
+    assert.notEqual(target, undefined, `missing target ${targetKey}`);
+    assert.equal(target.featureSlotId, source.featureSlotId);
+    assert.equal(target.sourceCheckId, coreLoopFeatureSpineSourceCheckId);
+    assert.equal(target.cycleId, source.cycleId);
+    assert.equal(target.roleUrlId, source.roleUrlId);
+    assert.equal(target.checkpointId, source.checkpointId);
+    assert.equal(target.adminCheckId, source.adminCheckId);
+    if (source.recoveryHookId !== undefined) {
+      assert.equal(target.recoveryHookId, source.recoveryHookId);
+    }
+  }
+});
+
 test("scenario-owned production feature targets avoid hand-maintained row literals", async () => {
   const source = await readFile(
     "tools/dev_test_game_release_readiness_cases.mjs",
     "utf8",
   );
+  for (const targetKey of Object.keys(coreLoopFeatureSpineTargetRows)) {
+    const targetBlock = featureTargetDeclarationBlock(source, targetKey);
+    assert.match(
+      targetBlock,
+      new RegExp(`\\.\\.\\.coreLoopSpineRows\\.${targetKey}`),
+    );
+  }
+
   const completedGameBlock = featureTargetDeclarationBlock(
     source,
     "completedGameStaleRecovery",

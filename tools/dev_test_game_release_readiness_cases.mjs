@@ -17,9 +17,8 @@ import {
   hostedIdentityEvidenceHandoffCase,
 } from "./dev_test_game_hosted_identity_evidence_cases.mjs";
 import {
-  playerInvalidActionRecoveryHookId,
-  playerInvalidActionRecoveryLaneId,
-} from "./dev_test_game_core_loop_action_scenario_cases.mjs";
+  coreLoopFeatureSpineTargetRows,
+} from "./dev_test_game_core_loop_feature_spine_targets.mjs";
 import {
   completedGameHardeningSpineCycleId,
   completedGameStaleRecoverySpineLaneCase,
@@ -58,6 +57,7 @@ const completedGameStaleRecoverySpineLane =
   completedGameStaleRecoverySpineLaneCase();
 const replacementStaleConflictMessageSpineLane =
   replacementStaleConflictMessageSpineLaneCase();
+const coreLoopSpineRows = coreLoopFeatureSpineTargetRows;
 
 export const releaseReadinessProductionFeatureSpineTargets = Object.freeze({
   identityAdapter: featureSpineCheckpointTarget({
@@ -69,70 +69,28 @@ export const releaseReadinessProductionFeatureSpineTargets = Object.freeze({
     adminCheckId: "account-login",
   }),
   hostPhaseControl: featureSpineCheckpointTarget({
-    featureSlotId: "host-phase-control",
-    sourceCheckId: "local-core-loop-proof",
-    cycleId: "d02-n02",
-    roleUrlId: "d02-n02-host",
-    checkpointId: "d02-n02-d02-vote-open",
-    adminCheckId: "host-lifecycle-control",
+    ...coreLoopSpineRows.hostPhaseControl,
   }),
   playerActionSubmission: featureSpineCheckpointTarget({
-    featureSlotId: "player-action-submission",
-    sourceCheckId: "local-core-loop-proof",
-    cycleId: "d02-n02",
-    roleUrlId: "d02-n02-actionPlayer",
-    checkpointId: "d02-n02-n02-action-open",
-    adminCheckId: "action-loop",
+    ...coreLoopSpineRows.playerActionSubmission,
   }),
   invalidActionRecovery: featureSpineRecoveryHookTarget({
-    featureSlotId: playerInvalidActionRecoveryLaneId,
-    sourceCheckId: "local-core-loop-proof",
-    cycleId: "d02-n02",
-    roleUrlId: "d02-n02-actionPlayer",
-    checkpointId: "d02-n02-n02-action-open",
-    recoveryHookId: playerInvalidActionRecoveryHookId,
-    adminCheckId: playerInvalidActionRecoveryLaneId,
+    ...coreLoopSpineRows.invalidActionRecovery,
   }),
   privateChannel: featureSpineCheckpointTarget({
-    featureSlotId: "private-channel",
-    sourceCheckId: "local-core-loop-proof",
-    cycleId: "d01-n01-d02",
-    roleUrlId: "d01-n01-d02-privateChannel",
-    checkpointId: "d01-n01-d02-n01-action-open",
-    adminCheckId: "private-channel",
+    ...coreLoopSpineRows.privateChannel,
   }),
   resolutionReceipts: featureSpineCheckpointTarget({
-    featureSlotId: "resolution-receipts",
-    sourceCheckId: "local-core-loop-proof",
-    cycleId: "d01-n01-d02",
-    roleUrlId: "d01-n01-d02-target",
-    checkpointId: "d01-n01-d02-n01-resolved-target-killed",
-    adminCheckId: "resolution-receipts",
+    ...coreLoopSpineRows.resolutionReceipts,
   }),
   staleRecovery: featureSpineCheckpointTarget({
-    featureSlotId: "stale-recovery",
-    sourceCheckId: "local-core-loop-proof",
-    cycleId: "d01-n01-d02",
-    roleUrlId: "d01-n01-d02-host",
-    checkpointId: "d01-n01-d02-d01-resolved-locked",
-    adminCheckId: "stale-deadline-advance",
+    ...coreLoopSpineRows.staleRecovery,
   }),
   staleActionConflictMessage: featureSpineRecoveryHookTarget({
-    featureSlotId: "stale-action-conflict-message",
-    sourceCheckId: "local-core-loop-proof",
-    cycleId: "d01-n01-d02",
-    roleUrlId: "d01-n01-d02-actionPlayer",
-    checkpointId: "d01-n01-d02-n01-action-open",
-    recoveryHookId: "staleActionConflictReject",
-    adminCheckId: "action-loop",
+    ...coreLoopSpineRows.staleActionConflictMessage,
   }),
   completedGameRecovery: featureSpineCheckpointTarget({
-    featureSlotId: "completed-game-recovery",
-    sourceCheckId: "local-core-loop-proof",
-    cycleId: "d02-n02",
-    roleUrlId: "d02-n02-host",
-    checkpointId: "d02-n02-d02-resolved-target-killed",
-    adminCheckId: "completed-game-hardening-coverage",
+    ...coreLoopSpineRows.completedGameRecovery,
   }),
   completedGameStaleRecovery: featureSpineCheckpointTarget({
     featureSlotId: "completed-game-stale-recovery",
