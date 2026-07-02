@@ -175,8 +175,14 @@ export function completedHostStaleCommandHardeningLaneIds() {
 }
 
 export function completedHostRaceHardeningLaneIds() {
-  return completedGameHardeningLaneIdsFor({
-    families: "completed-host-race",
+  return completedHostCompleteRaceHardeningLaneCases().map(
+    (scenario) => scenario.id,
+  );
+}
+
+export function completedHostCompleteRaceHardeningLaneCases() {
+  return completedGameHardeningLaneCasesFor({
+    proofGroups: "host-complete-race",
   });
 }
 
@@ -206,6 +212,12 @@ export function completedPlayerRecoveryLaneIds() {
 export function completedPlayerHardeningReloadLaneIds() {
   return completedGameHardeningLaneIdsFor({
     families: "completed-player-reload",
+  });
+}
+
+export function completedPlayerCompleteRaceHardeningLaneCases() {
+  return completedGameHardeningLaneCasesFor({
+    proofGroups: "player-complete-race",
   });
 }
 

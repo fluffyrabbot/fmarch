@@ -5,7 +5,9 @@ import {
   completedGameHardeningLaneCase,
   completedGameHardeningLaneCases,
   completedGameHardeningLaneIds,
+  completedHostCompleteRaceHardeningLaneCases,
   completedHostStaleCommandHardeningLaneCases,
+  completedPlayerCompleteRaceHardeningLaneCases,
   completedStalePlayerCompleteHardeningLaneCases,
 } from "./dev_test_game_core_loop_completed_game_scenario_assertions.mjs";
 import {
@@ -6741,8 +6743,9 @@ function completedHostStaleCompleteProofLanes({ hardening }) {
 }
 
 function completedHostCompleteRaceProofLanes({ hardening }) {
+  const [raceLane, reloadLane] = completedHostCompleteRaceHardeningLaneCases();
   return [
-    completedGameLane("concurrent-host-complete-race", {
+    completedGameLane(raceLane, {
       ackRaceRole: hardening.concurrentHostCompleteRace?.ackRaceRole ?? null,
       rejectRaceRole: hardening.concurrentHostCompleteRace?.rejectRaceRole ?? null,
       rejectError: hardening.concurrentHostCompleteRace?.reject?.error ?? null,
@@ -6845,7 +6848,7 @@ function completedHostCompleteRaceProofLanes({ hardening }) {
         ) === true,
     }),
     completedGameLane(
-      "concurrent-host-complete-race-reload",
+      reloadLane,
       {
         game: hardening.concurrentHostCompleteRace?.game ?? null,
         firstRouteStatus:
@@ -6916,8 +6919,9 @@ function completedHostCompleteRaceProofLanes({ hardening }) {
 }
 
 function completedPlayerCompleteRaceProofLanes({ hardening }) {
+  const [raceLane, reloadLane] = completedPlayerCompleteRaceHardeningLaneCases();
   return [
-    completedGameLane("concurrent-player-complete-race", {
+    completedGameLane(raceLane, {
       postState: hardening.concurrentPlayerCompleteRace?.post?.state ?? null,
       postError: hardening.concurrentPlayerCompleteRace?.post?.error ?? null,
       postSeq: hardening.concurrentPlayerCompleteRace?.postSeq ?? null,
@@ -6994,7 +6998,7 @@ function completedPlayerCompleteRaceProofLanes({ hardening }) {
           (slot) => slot.role_revealed === true && slot.alignment_revealed === true,
         ) === true,
     }),
-    completedGameLane("public-player-complete-reload", {
+    completedGameLane(reloadLane, {
       game: hardening.concurrentPlayerCompleteRace?.game ?? null,
       routeStatus:
         hardening.concurrentPlayerCompleteRace?.publicReloadAfterRace

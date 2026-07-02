@@ -39,6 +39,7 @@ import {
   completedGameHardeningLaneIdsFor,
   completedGameSeedDemoOnlyScenarioIds,
   completedGameSeedRequiredScenarioIds,
+  completedHostCompleteRaceHardeningLaneCases,
   completedHostRaceHardeningLaneIds,
   completedHostSeedDemoOnlyScenarioIds,
   completedHostStaleCommandCaseDefinitions,
@@ -48,6 +49,7 @@ import {
   completedHostStaleCommandSeedRecoveryLaneIds,
   completedHostStaleCommandProofArgs,
   completedPlayerRecoveryLaneIds,
+  completedPlayerCompleteRaceHardeningLaneCases,
   completedPlayerReloadCaseDefinitions,
   completedPlayerReloadCases,
   completedPlayerReloadAssertionCases,
@@ -194,6 +196,16 @@ test("completed-game scenario module derives shared hardening lane groups", () =
     "concurrent-host-complete-race",
     "concurrent-host-complete-race-reload",
   ]);
+  assert.deepEqual(
+    completedHostCompleteRaceHardeningLaneCases().map((scenario) => [
+      scenario.id,
+      scenario.proofStep,
+    ]),
+    [
+      ["concurrent-host-complete-race", "race"],
+      ["concurrent-host-complete-race-reload", "reload"],
+    ],
+  );
   assert.deepEqual(completedHostStaleCommandSeedRecoveryLaneIds(), [
     "stale-host-complete-reload",
     "stale-host-complete-reconnect-recovery",
@@ -207,6 +219,16 @@ test("completed-game scenario module derives shared hardening lane groups", () =
     "stale-player-complete",
     "stale-player-complete-reload",
   ]);
+  assert.deepEqual(
+    completedPlayerCompleteRaceHardeningLaneCases().map((scenario) => [
+      scenario.id,
+      scenario.proofStep,
+    ]),
+    [
+      ["concurrent-player-complete-race", "race"],
+      ["public-player-complete-reload", "reload"],
+    ],
+  );
   assert.deepEqual(completedPlayerSeedRequiredScenarioIds(), [
     "concurrent-player-complete-race",
     "public-player-complete-reload",
@@ -514,6 +536,14 @@ test("completed-game proof contract uses shared hardening lane metadata", async 
     {
       helperName: "completedHostStaleCompleteProofLanes",
       cases: completedHostStaleCommandHardeningLaneCases(),
+    },
+    {
+      helperName: "completedHostCompleteRaceProofLanes",
+      cases: completedHostCompleteRaceHardeningLaneCases(),
+    },
+    {
+      helperName: "completedPlayerCompleteRaceProofLanes",
+      cases: completedPlayerCompleteRaceHardeningLaneCases(),
     },
     {
       helperName: "completedStalePlayerCompleteProofLanes",
