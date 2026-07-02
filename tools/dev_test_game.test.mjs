@@ -88,6 +88,7 @@ import {
   replacementStalePrivatePostAfterResolveScenario,
 } from "./dev_test_game_replacement_private_scenarios.mjs";
 import {
+  replacementActionLaneIds,
   replacementActionReconnectScenario,
   replacementIncomingActionScenario,
   replacementStaleActionAfterResolveScenario,
@@ -7822,6 +7823,22 @@ test("session card and markdown include role credential URLs and tokens", async 
       coveredLaneCount: replacementPrivateChannelRecoveryLaneIds.length,
     },
   );
+  assert.deepEqual(
+    hardeningReadiness.localDevelopmentSpine.checks.find(
+      (item) => item.id === "local-replacement-action-recovery-milestone",
+    ),
+    {
+      id: "local-replacement-action-recovery-milestone",
+      label: "Replacement action recovery",
+      status: "passed",
+      evidence: "target/dev-test-game/proof-run.json",
+      proofBoundary:
+        "Local seeded-game proof that incoming replacement factional_kill actions resolve, reconnect to locked post-resolution state, and stale replacement action controls reject after phase resolution without leaking target receipts.",
+      laneIds: [...replacementActionLaneIds],
+      requiredLaneCount: replacementActionLaneIds.length,
+      coveredLaneCount: replacementActionLaneIds.length,
+    },
+  );
   const raceCoverageReadiness = buildDevTestGameReleaseReadiness(proofRun, {
     generatedAt: "2026-06-26T00:00:00.000Z",
     raceCoveragePath: "target/dev-test-game/race-coverage.json",
@@ -9125,6 +9142,8 @@ function devTestGameReleaseReadinessChecklistFixture({
       staleConflictMessageMilestone: staleConflictMessageMilestoneFixture(),
       hostStaleControlMilestone: hostStaleControlMilestoneFixture(),
       privateChannelRecoveryMilestone: privateChannelRecoveryMilestoneFixture(),
+      replacementActionRecoveryMilestone:
+        replacementActionRecoveryMilestoneFixture(),
     },
     localDevelopmentSpine: {
       status: "passed",
@@ -9174,6 +9193,15 @@ function devTestGameReleaseReadinessChecklistFixture({
           laneIds: privateChannelRecoveryMilestoneFixture().laneIds,
           requiredLaneCount: replacementPrivateChannelRecoveryLaneIds.length,
           coveredLaneCount: replacementPrivateChannelRecoveryLaneIds.length,
+        },
+        {
+          id: "local-replacement-action-recovery-milestone",
+          label: "Replacement action recovery",
+          status: "passed",
+          evidence: "target/dev-test-game/proof-run.json",
+          laneIds: replacementActionRecoveryMilestoneFixture().laneIds,
+          requiredLaneCount: replacementActionLaneIds.length,
+          coveredLaneCount: replacementActionLaneIds.length,
         },
         ...(seedProofLaneCoverage === null
           ? []
@@ -9416,6 +9444,16 @@ function privateChannelRecoveryMilestoneFixture() {
     laneIds: [...replacementPrivateChannelRecoveryLaneIds],
     requiredLaneCount: replacementPrivateChannelRecoveryLaneIds.length,
     coveredLaneCount: replacementPrivateChannelRecoveryLaneIds.length,
+    gapCount: 0,
+  };
+}
+
+function replacementActionRecoveryMilestoneFixture() {
+  return {
+    status: "passed",
+    laneIds: [...replacementActionLaneIds],
+    requiredLaneCount: replacementActionLaneIds.length,
+    coveredLaneCount: replacementActionLaneIds.length,
     gapCount: 0,
   };
 }
