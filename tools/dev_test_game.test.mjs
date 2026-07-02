@@ -207,6 +207,8 @@ import {
 import {
   assertDevTestGameRaceCoverage,
   buildDevTestGameRaceCoverage,
+  completedHostRaceCoveragePromotedReloadGroup,
+  completedPlayerRaceCoveragePromotedReloadGroup,
   devTestGameRaceCoverageCommand,
   devTestGameRaceCoveragePath,
   raceCoveragePromotedReloadGroup,
@@ -9801,7 +9803,7 @@ function devTestGameRaceCoverageFixture() {
 
 function hostConcurrentRaceReloadCellIdsFixture() {
   return [
-    ...raceCoveragePromotedReloadGroup("host-concurrent-race-reload").cellIds,
+    ...completedHostRaceCoveragePromotedReloadGroup().cellIds,
   ];
 }
 
@@ -9861,7 +9863,7 @@ function hostConcurrentRaceReloadCellsFixture() {
 
 function playerConcurrentActionReloadCellIdsFixture() {
   return [
-    ...raceCoveragePromotedReloadGroup("player-concurrent-action-reload").cellIds,
+    ...completedPlayerRaceCoveragePromotedReloadGroup().cellIds,
   ];
 }
 

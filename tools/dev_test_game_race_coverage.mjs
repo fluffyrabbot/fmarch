@@ -173,6 +173,30 @@ export function raceCoveragePromotedReloadGroup(groupId) {
   return group;
 }
 
+function completedGameRaceCoveragePromotedReloadGroupForProofGroup(proofGroup) {
+  const cell = completedGameRaceCoverageCellCases().find(
+    (candidate) => candidate.proofGroup === proofGroup,
+  );
+  if (cell === undefined) {
+    throw new Error(
+      `unknown completed-game race coverage proof group: ${proofGroup}`,
+    );
+  }
+  return raceCoveragePromotedReloadGroup(cell.promotedReloadGroupId);
+}
+
+export function completedHostRaceCoveragePromotedReloadGroup() {
+  return completedGameRaceCoveragePromotedReloadGroupForProofGroup(
+    "host-complete-race",
+  );
+}
+
+export function completedPlayerRaceCoveragePromotedReloadGroup() {
+  return completedGameRaceCoveragePromotedReloadGroupForProofGroup(
+    "player-complete-race",
+  );
+}
+
 const localReadinessMilestoneDefinitions = Object.freeze([
   Object.freeze({
     groupId: "host-concurrent-race-reload",

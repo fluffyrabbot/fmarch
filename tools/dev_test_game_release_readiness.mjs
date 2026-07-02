@@ -13,6 +13,8 @@ import {
 import { assertDevTestGameProofRun } from "./dev_test_game_proof_contract.mjs";
 import {
   assertDevTestGameRaceCoverage,
+  completedHostRaceCoveragePromotedReloadGroup,
+  completedPlayerRaceCoveragePromotedReloadGroup,
   raceCoverageLocalReadinessMilestoneCases,
   raceCoveragePromotedReloadGroup,
   raceCoveragePromotedReloadGroups,
@@ -1978,11 +1980,11 @@ const replacementRaceReloadCellIds = Object.freeze([
 ]);
 
 const hostConcurrentRaceReloadCellIds = Object.freeze([
-  ...raceCoveragePromotedReloadGroup("host-concurrent-race-reload").cellIds,
+  ...completedHostRaceCoveragePromotedReloadGroup().cellIds,
 ]);
 
 const playerConcurrentActionReloadCellIds = Object.freeze([
-  ...raceCoveragePromotedReloadGroup("player-concurrent-action-reload").cellIds,
+  ...completedPlayerRaceCoveragePromotedReloadGroup().cellIds,
 ]);
 
 const cohostDeadlineRaceReloadCellIds = Object.freeze([

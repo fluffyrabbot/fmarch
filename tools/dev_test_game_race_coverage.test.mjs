@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import { test } from "node:test";
 import {
   completedGameRaceCoverageCellCases,
@@ -9,6 +10,8 @@ import {
   hostPhaseRaceCoverageCellDefinitions,
 } from "./dev_test_game_host_stale_control_scenarios.mjs";
 import {
+  completedHostRaceCoveragePromotedReloadGroup,
+  completedPlayerRaceCoveragePromotedReloadGroup,
   raceCoverageLocalReadinessMilestoneCases,
   raceCoverageLocalReadinessMilestoneDefinitions,
   raceCoveragePromotedReloadGroup,
@@ -88,6 +91,7 @@ test("race coverage imports completed-game cells from shared scenarios", () => {
       id: cell.id,
       raceLaneId: cell.raceLaneId,
       reloadLaneId: cell.reloadLaneId,
+      proofGroup: cell.proofGroup,
       promotedReloadGroupId: cell.promotedReloadGroupId,
       roleSurfaces: cell.roleSurfaces,
     })),
@@ -96,6 +100,7 @@ test("race coverage imports completed-game cells from shared scenarios", () => {
         id: "host-complete-game",
         raceLaneId: "concurrent-host-complete-race",
         reloadLaneId: "concurrent-host-complete-race-reload",
+        proofGroup: "host-complete-race",
         promotedReloadGroupId: "host-concurrent-race-reload",
         roleSurfaces: ["host", "player"],
       },
@@ -103,6 +108,7 @@ test("race coverage imports completed-game cells from shared scenarios", () => {
         id: "player-vs-completed-game",
         raceLaneId: "concurrent-player-complete-race",
         reloadLaneId: "public-player-complete-reload",
+        proofGroup: "player-complete-race",
         promotedReloadGroupId: "player-concurrent-action-reload",
         roleSurfaces: ["player", "host"],
       },
@@ -115,6 +121,14 @@ test("race coverage imports completed-game cells from shared scenarios", () => {
   assert.notEqual(
     completedGameRaceCoverageCellCases()[0].roleSurfaces,
     completedGameRaceCoverageCellDefinitions[0].roleSurfaces,
+  );
+  assert.equal(
+    completedHostRaceCoveragePromotedReloadGroup().id,
+    "host-concurrent-race-reload",
+  );
+  assert.equal(
+    completedPlayerRaceCoveragePromotedReloadGroup().id,
+    "player-concurrent-action-reload",
   );
 });
 
@@ -172,6 +186,18 @@ test("race coverage promoted reload groups fail closed for unknown ids", () => {
   assert.throws(
     () => raceCoveragePromotedReloadGroup("missing-group"),
     /unknown race coverage promoted reload group: missing-group/,
+  );
+});
+
+test("release readiness consumes completed race promoted group helpers", async () => {
+  const source = await readFile("tools/dev_test_game_release_readiness.mjs", "utf8");
+  assert(
+    source.includes("completedHostRaceCoveragePromotedReloadGroup"),
+    "release readiness should consume completed host race promoted group helper",
+  );
+  assert(
+    source.includes("completedPlayerRaceCoveragePromotedReloadGroup"),
+    "release readiness should consume completed player race promoted group helper",
   );
 });
 

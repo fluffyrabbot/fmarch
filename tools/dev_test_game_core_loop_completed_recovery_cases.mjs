@@ -252,13 +252,33 @@ export function completedGameSeedDemoOnlyScenarioIds() {
   return completedGameHardeningLaneIdsFor({ seedGroups: "demo-only" });
 }
 
+function completedGameHardeningLaneIdFor({ proofGroup, proofStep }) {
+  const cases = completedGameHardeningLaneCasesFor({
+    proofGroups: proofGroup,
+    proofSteps: proofStep,
+  });
+  if (cases.length !== 1) {
+    throw new Error(
+      `expected one completed-game hardening lane for ${proofGroup}:${proofStep}`,
+    );
+  }
+  return cases[0].id;
+}
+
 export const completedGameRaceCoverageCellDefinitions = Object.freeze([
   Object.freeze({
     id: "host-complete-game",
     actorPair: "host vs host",
     commandFamily: "complete game",
-    raceLaneId: "concurrent-host-complete-race",
-    reloadLaneId: "concurrent-host-complete-race-reload",
+    proofGroup: "host-complete-race",
+    raceLaneId: completedGameHardeningLaneIdFor({
+      proofGroup: "host-complete-race",
+      proofStep: "race",
+    }),
+    reloadLaneId: completedGameHardeningLaneIdFor({
+      proofGroup: "host-complete-race",
+      proofStep: "reload",
+    }),
     roleSurfaces: Object.freeze(["host", "player"]),
     promotedReloadGroupId: "host-concurrent-race-reload",
   }),
@@ -266,8 +286,15 @@ export const completedGameRaceCoverageCellDefinitions = Object.freeze([
     id: "player-vs-completed-game",
     actorPair: "player vs host",
     commandFamily: "post-completion recovery",
-    raceLaneId: "concurrent-player-complete-race",
-    reloadLaneId: "public-player-complete-reload",
+    proofGroup: "player-complete-race",
+    raceLaneId: completedGameHardeningLaneIdFor({
+      proofGroup: "player-complete-race",
+      proofStep: "race",
+    }),
+    reloadLaneId: completedGameHardeningLaneIdFor({
+      proofGroup: "player-complete-race",
+      proofStep: "reload",
+    }),
     roleSurfaces: Object.freeze(["player", "host"]),
     promotedReloadGroupId: "player-concurrent-action-reload",
   }),
