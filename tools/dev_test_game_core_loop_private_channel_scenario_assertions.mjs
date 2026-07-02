@@ -167,11 +167,12 @@ export function completedPrivateChannelTransition() {
 
 export function assertCompletedPrivateChannelTransition({
   transition,
+  transitionTokens = completedPrivateChannelTransitionTokens(),
   failureMessage = "completed private-channel transition missing shared scenario tokens",
 }) {
   const transitionText = String(transition ?? "");
-  const missingTokens = completedPrivateChannelTransitionTokens().filter(
-    (token) => !transitionText.includes(token),
+  const missingTokens = transitionTokens.filter((token) =>
+    !transitionText.includes(token),
   );
   if (missingTokens.length > 0) {
     throw new Error(`${failureMessage}: ${missingTokens.join(", ")}`);
@@ -185,6 +186,8 @@ export function completedPrivateChannelProofAssertionCases({
   visitedRolePath,
   assertCompletedPrivateChannelReloadProof,
   assertStaleCompletedPrivatePostRecoveryProof,
+  reloadScenario = completedPrivateChannelReloadScenario(),
+  staleCompletedPostScenario = staleCompletedPrivatePostScenario(),
 }) {
   return [
     completedPrivateChannelReloadAssertionCase({
@@ -192,6 +195,7 @@ export function completedPrivateChannelProofAssertionCases({
       sourceRoleUrl,
       visitedRolePath,
       assertCompletedPrivateChannelReloadProof,
+      scenario: reloadScenario,
     }),
     staleCompletedPrivatePostAssertionCase({
       proof,
@@ -199,6 +203,7 @@ export function completedPrivateChannelProofAssertionCases({
       sourceRoleUrl,
       visitedRolePath,
       assertStaleCompletedPrivatePostRecoveryProof,
+      scenario: staleCompletedPostScenario,
     }),
   ];
 }
@@ -208,10 +213,12 @@ export function completedPrivateChannelReloadAssertionCase({
   sourceRoleUrl,
   visitedRolePath,
   assertCompletedPrivateChannelReloadProof,
+  scenario = completedPrivateChannelReloadScenario(),
 }) {
   return {
     assertProof: assertCompletedPrivateChannelReloadProof,
     proof: proof?.reloadProof,
+    scenario,
     ...completedPrivateChannelReloadProofArgs({
       sourceRoleUrl,
       visitedRolePath,
@@ -235,10 +242,12 @@ export function staleCompletedPrivatePostAssertionCase({
   sourceRoleUrl,
   visitedRolePath,
   assertStaleCompletedPrivatePostRecoveryProof,
+  scenario = staleCompletedPrivatePostScenario(),
 }) {
   return {
     assertProof: assertStaleCompletedPrivatePostRecoveryProof,
     proof: proof?.staleCompletedPostRecoveryProof,
+    scenario,
     ...staleCompletedPrivatePostProofArgs({
       expectedGame,
       sourceRoleUrl,

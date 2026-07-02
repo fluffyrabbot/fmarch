@@ -36,11 +36,14 @@ import {
   staleCompletedPlayerCommandProofFixtures,
 } from "./dev_test_game_core_loop_completed_game_fixtures.mjs";
 import {
-  completedPrivateChannelReloadScenario,
   completedPrivateChannelSnapshot,
-  completedPrivateChannelTransition,
-  staleCompletedPrivatePostScenario,
 } from "./dev_test_game_core_loop_private_receipt_scenarios.mjs";
+import {
+  completedPrivateChannelReloadScenario,
+  completedPrivateChannelTransition,
+  coreLoopPrivateChannelRecoveryScenarioFamily,
+  staleCompletedPrivatePostScenario,
+} from "./dev_test_game_core_loop_private_channel_recovery_scenarios.mjs";
 import {
   hostPhaseTransitionActionFixture,
   seededCoreLoopHostSurfaceFixture,
@@ -10099,6 +10102,8 @@ function coreLoopAdminProofFixture() {
       },
       completedEndgameProgressionFamily:
         coreLoopCompletedEndgameProgressionScenarioFamily(),
+      privateChannelRecoveryFamily:
+        coreLoopPrivateChannelRecoveryScenarioFamily(),
       coreLoopSpineRows: {
         cycles: ["d01-n01-d02", "d02-n02"],
         roleUrls: [

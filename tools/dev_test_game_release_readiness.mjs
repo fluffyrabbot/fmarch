@@ -129,6 +129,10 @@ import {
   coreLoopCompletedEndgameProgressionFamilyId,
   coreLoopCompletedEndgameProgressionScenarioFamilies,
 } from "./dev_test_game_core_loop_completed_endgame_progression_scenarios.mjs";
+import {
+  coreLoopPrivateChannelRecoveryFamilyId,
+  coreLoopPrivateChannelRecoveryScenarioFamily,
+} from "./dev_test_game_core_loop_private_channel_recovery_scenarios.mjs";
 export const DEV_TEST_GAME_RELEASE_READINESS_VERSION = 1;
 const devTestGameSeededBrowserProofCommand =
   "DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch npm run test:dev-test-game-live";
@@ -2102,6 +2106,15 @@ export function validateDevTestGameCoreLoopAdminProof(proof, options = {}) {
       "core-loop admin proof missing completed endgame progression family",
     );
   }
+  if (
+    proof.generatedFrom?.privateChannelRecoveryFamily?.id !==
+      coreLoopPrivateChannelRecoveryFamilyId ||
+    !Array.isArray(proof.generatedFrom?.privateChannelRecoveryFamily?.laneIds)
+  ) {
+    throw new Error(
+      "core-loop admin proof missing private-channel recovery family",
+    );
+  }
   assertVisibleAdminRows({
     label: "core-loop admin proof missing visible spine cycle",
     visibleRows: proof.adminRoleSurface?.visibleSpineCycles,
@@ -2168,6 +2181,7 @@ export function validateDevTestGameCoreLoopAdminProof(proof, options = {}) {
   assertCoreLoopCompletedGameEndgameSurface(proof.completedGameEndgameSurface);
   assertPrivateChannelRoleSurfaceProof({
     privateChannelRoleSurface: proof.privateChannelRoleSurface,
+    scenarioFamily: coreLoopPrivateChannelRecoveryScenarioFamily(),
   });
   assertVisibleAdminRows({
     label: "core-loop admin proof missing visible spine checkpoint",

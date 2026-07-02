@@ -12,6 +12,9 @@ import {
   staleCompletedPrivatePostSnapshotAssertionCases,
   stalePrivateChannelPostPhaseLockedScenario,
 } from "./dev_test_game_core_loop_private_channel_scenario_assertions.mjs";
+import {
+  coreLoopPrivateChannelRecoveryScenarioFamily,
+} from "./dev_test_game_core_loop_private_channel_recovery_scenarios.mjs";
 
 const privateQueueBoundaryStatus = "principal-scoped-private-projections";
 
@@ -236,6 +239,7 @@ export function assertCompletedPrivateChannelProofCases({
   sourceRoleUrl,
   visitedRolePath,
   cases,
+  transitionTokens,
   includeEvidenceInError = false,
 }) {
   if (
@@ -254,6 +258,7 @@ export function assertCompletedPrivateChannelProofCases({
   }
   assertCompletedPrivateChannelTransition({
     transition: proof.transition,
+    transitionTokens,
     failureMessage:
       "core-loop admin proof missing completed private channel transition",
   });
@@ -264,6 +269,7 @@ export function assertCompletedPrivateChannelProofCases({
 
 export function assertPrivateChannelRoleSurfaceProof({
   privateChannelRoleSurface,
+  scenarioFamily = coreLoopPrivateChannelRecoveryScenarioFamily(),
   includeEvidenceInError = false,
 }) {
   const submitPostProof = privateChannelRoleSurface?.submitPostProof;
@@ -272,8 +278,9 @@ export function assertPrivateChannelRoleSurfaceProof({
   const completedProof =
     privateChannelRoleSurface?.completedPrivateChannelProof;
   const expectedGame = gameFromRoleUrl(privateChannelRoleSurface?.sourceRoleUrl);
-  const submitPostScenario = privateChannelSubmitPostScenario();
-  const stalePostScenario = stalePrivateChannelPostPhaseLockedScenario();
+  const submitPostScenario = scenarioFamily.scenarios.submitPost;
+  const stalePostScenario =
+    scenarioFamily.scenarios.stalePostAfterPhaseTransition;
   if (
     privateChannelRoleSurface?.status !== "passed" ||
     privateChannelRoleSurface.clickedThroughFromRoleUrl !== true ||
@@ -330,12 +337,16 @@ export function assertPrivateChannelRoleSurfaceProof({
     proof: completedProof,
     sourceRoleUrl: privateChannelRoleSurface.sourceRoleUrl,
     visitedRolePath: privateChannelRoleSurface.visitedRolePath,
+    transitionTokens: scenarioFamily.transitionTokens,
     includeEvidenceInError,
     cases: completedPrivateChannelProofAssertionCases({
       proof: completedProof,
       expectedGame,
       sourceRoleUrl: privateChannelRoleSurface.sourceRoleUrl,
       visitedRolePath: privateChannelRoleSurface.visitedRolePath,
+      reloadScenario: scenarioFamily.scenarios.completedPrivateChannelReload,
+      staleCompletedPostScenario:
+        scenarioFamily.scenarios.staleCompletedPrivatePost,
       assertCompletedPrivateChannelReloadProof: (scenario) =>
         assertCompletedPrivateChannelReloadProofCase({
           ...scenario,

@@ -72,12 +72,14 @@ import {
   coreLoopCompletedEndgameProgressionScenarioFamilies,
 } from "./dev_test_game_core_loop_completed_endgame_progression_scenarios.mjs";
 import {
+  coreLoopPrivateChannelRecoveryFamilyId,
+  coreLoopPrivateChannelRecoveryScenarioFamily,
   completedPrivateChannelReloadScenario,
   completedPrivateChannelTransition,
   privateChannelSubmitPostScenario,
   staleCompletedPrivatePostScenario,
   stalePrivateChannelPostPhaseLockedScenario,
-} from "./dev_test_game_core_loop_private_channel_scenario_assertions.mjs";
+} from "./dev_test_game_core_loop_private_channel_recovery_scenarios.mjs";
 import {
   coreLoopAdminCheckIds,
   coreLoopCompletedGameCoverageCheckId,
@@ -383,6 +385,8 @@ await runAdminAuditProof({
       dayFiveProgressionFamily: coreLoopDayFiveProgressionScenarioFamily(),
       completedEndgameProgressionFamily:
         coreLoopCompletedEndgameProgressionScenarioFamily(),
+      privateChannelRecoveryFamily:
+        coreLoopPrivateChannelRecoveryScenarioFamily(),
       highlightedLaneEvidence: coreLoopHighlightedLaneEvidence(proofRun),
     },
     adminRoleSurface: surfaces.adminRoleSurface,
@@ -9659,6 +9663,17 @@ export function assertCoreLoopAdminProof(evidence) {
       "core-loop admin proof missing completed endgame progression family",
     );
   }
+  if (
+    evidence.generatedFrom?.privateChannelRecoveryFamily?.id !==
+      coreLoopPrivateChannelRecoveryFamilyId ||
+    !Array.isArray(
+      evidence.generatedFrom?.privateChannelRecoveryFamily?.laneIds,
+    )
+  ) {
+    throw new Error(
+      "core-loop admin proof missing private-channel recovery family",
+    );
+  }
   assertVisibleRows(
     "core-loop admin proof missing visible spine cycle",
     evidence.adminRoleSurface?.visibleSpineCycles,
@@ -9735,6 +9750,7 @@ export function assertCoreLoopAdminProof(evidence) {
   assertCompletedGameEndgameSurface(evidence.completedGameEndgameSurface);
   assertPrivateChannelRoleSurfaceProof({
     privateChannelRoleSurface: evidence.privateChannelRoleSurface,
+    scenarioFamily: coreLoopPrivateChannelRecoveryScenarioFamily(),
     includeEvidenceInError: true,
   });
   return evidence;

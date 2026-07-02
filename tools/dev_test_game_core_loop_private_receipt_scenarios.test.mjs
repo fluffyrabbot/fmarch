@@ -249,6 +249,7 @@ test("completed private-channel scenarios derive shared proof assertion cases", 
     {
       assertProof: assertProofFixture,
       proof: proof.reloadProof,
+      scenario: reloadScenario,
       sourceRoleUrl: proof.sourceRoleUrl,
       visitedRolePath: proof.visitedRolePath,
     },
@@ -264,6 +265,7 @@ test("completed private-channel scenarios derive shared proof assertion cases", 
     {
       assertProof: assertProofFixture,
       proof: proof.staleCompletedPostRecoveryProof,
+      scenario: staleScenario,
       expectedGame: "game-a",
       sourceRoleUrl: proof.sourceRoleUrl,
       visitedRolePath: proof.visitedRolePath,
@@ -289,6 +291,7 @@ test("completed private-channel scenarios derive shared proof assertion cases", 
       assertProofName: scenario.assertProof.assertionName,
       proofStatus: scenario.proof.status,
       expectedGame: scenario.expectedGame ?? null,
+      transitionToken: scenario.scenario.transitionToken,
       sourceRoleUrl: scenario.sourceRoleUrl,
       visitedRolePath: scenario.visitedRolePath,
     })),
@@ -297,6 +300,7 @@ test("completed private-channel scenarios derive shared proof assertion cases", 
         assertProofName: "reload",
         proofStatus: "passed",
         expectedGame: null,
+        transitionToken: reloadScenario.transitionToken,
         sourceRoleUrl: proof.sourceRoleUrl,
         visitedRolePath: proof.visitedRolePath,
       },
@@ -304,6 +308,7 @@ test("completed private-channel scenarios derive shared proof assertion cases", 
         assertProofName: "stale-completed-post",
         proofStatus: "passed",
         expectedGame: "game-a",
+        transitionToken: staleScenario.transitionToken,
         sourceRoleUrl: proof.sourceRoleUrl,
         visitedRolePath: proof.visitedRolePath,
       },
@@ -335,9 +340,9 @@ test("private-channel production harness callers use shared scenario definitions
 
   assert(
     proofSource.includes(
-      "./dev_test_game_core_loop_private_channel_scenario_assertions.mjs",
+      "./dev_test_game_core_loop_private_channel_recovery_scenarios.mjs",
     ),
-    "core-loop admin proof should import private-channel scenarios from the extracted scenario/assertion module",
+    "core-loop admin proof should import private-channel scenarios from the shared recovery family module",
   );
   assert(
     !proofSource.includes(
@@ -347,15 +352,22 @@ test("private-channel production harness callers use shared scenario definitions
     "core-loop admin proof should not import private-channel scenarios through the compatibility facade",
   );
   assert(
-    proofSource.includes("completedPrivateChannelReloadScenario") &&
+    proofSource.includes("coreLoopPrivateChannelRecoveryScenarioFamily") &&
+      proofSource.includes("completedPrivateChannelReloadScenario") &&
       proofSource.includes("staleCompletedPrivatePostScenario"),
-    "core-loop admin proof should use shared completed private-channel scenario verbs",
+    "core-loop admin proof should use shared completed private-channel recovery family verbs",
+  );
+  assert(
+    readinessSource.includes(
+      "./dev_test_game_core_loop_private_channel_recovery_scenarios.mjs",
+    ),
+    "release readiness should import the shared private-channel recovery family",
   );
   assert(
     readinessSource.includes(
       "./dev_test_game_core_loop_private_receipt_scenarios.mjs",
     ),
-    "release readiness should use the private-channel assertion facade",
+    "release readiness should keep using the private-channel assertion facade",
   );
   assert(
     assertionFacadeSource.includes(
