@@ -38,6 +38,9 @@ import {
   staleOutgoingCommandStateForbidden,
 } from "./dev_test_game_replacement_assertions.mjs";
 import {
+  staleActionRejectRecoveryMatches,
+} from "./dev_test_game_stale_action_recovery_assertions.mjs";
+import {
   replacementPrivatePostRaceLaneIds,
   replacementPrivatePostRecoveryLaneIds,
 } from "./dev_test_game_replacement_private_scenarios.mjs";
@@ -3931,76 +3934,49 @@ export function buildDevTestGameProofRun(session, options = {}) {
           ?.slot_id === replacementStaleActionAfterResolveCase.targetSlot &&
         hardening.replacementStaleActionAfterResolve?.targetSlotAfterResolve
           ?.alive === true &&
-        hardening.replacementStaleActionAfterResolve?.reject?.state ===
-          "reject" &&
-        hardening.replacementStaleActionAfterResolve?.reject?.error ===
-          replacementStaleActionAfterResolveCase.rejectionError &&
-        hardening.replacementStaleActionAfterResolve?.reject?.serverEnvelope?.body
-          ?.kind === "Reject" &&
-        Array.isArray(hardening.replacementStaleActionAfterResolve?.reject?.streamSeqs) ===
-          false &&
-        hardening.replacementStaleActionAfterResolve?.reject?.message?.includes(
-          replacementStaleActionAfterResolveCase.staleActionStateMessageFragment,
-        ) === true &&
-        hardening.replacementStaleActionAfterResolve?.reject?.message?.includes(
-          replacementStaleActionAfterResolveCase
-            .currentActionControlsMessageFragment,
-        ) === true &&
-        hardening.replacementStaleActionAfterResolve?.reject?.requestEnvelope?.body
-          ?.body?.command?.SubmitAction?.actor_slot ===
-          replacementStaleActionAfterResolveCase.actorSlot &&
-        hardening.replacementStaleActionAfterResolve?.reject?.requestEnvelope?.body
-          ?.body?.command?.SubmitAction?.action_id ===
-          replacementStaleActionAfterResolveCase.staleActionId &&
-        hardening.replacementStaleActionAfterResolve?.reject?.requestEnvelope?.body
-          ?.body?.command?.SubmitAction?.template_id ===
-          replacementStaleActionAfterResolveCase.templateId &&
-        hardening.replacementStaleActionAfterResolve?.dispatchPlan
-          ?.projectionRefreshKeys?.includes("notifications") === true &&
-        hardening.replacementStaleActionAfterResolve?.dispatchPlan
-          ?.projectionRefreshKeys?.includes("investigationResults") === true &&
-        hardening.replacementStaleActionAfterResolve?.dispatchPlan
-          ?.projectionRefreshKeys?.includes("commandState") === true &&
-        hardening.replacementStaleActionAfterResolve?.currentReceipt?.actionId ===
-          replacementStaleActionAfterResolveCase.commandAction &&
-        hardening.replacementStaleActionAfterResolve?.currentReceipt?.state ===
-          "reject" &&
-        hardening.replacementStaleActionAfterResolve?.currentReceipt
-          ?.commandTrace?.projectionRefreshKeys?.includes("commandState") === true &&
-        hardening.replacementStaleActionAfterResolve?.receiptStatusText?.includes(
-          replacementStaleActionAfterResolveCase.rejectionStatusText,
-        ) === true &&
-        hardening.replacementStaleActionAfterResolve?.receiptStatusText?.includes(
-          replacementStaleActionAfterResolveCase.staleActionStateMessageFragment,
-        ) === true &&
-        hardening.replacementStaleActionAfterResolve?.commandStateAfterReject
-          ?.actorSlot === replacementStaleActionAfterResolveCase.actorSlot &&
-        hardening.replacementStaleActionAfterResolve?.commandStateAfterReject
-          ?.actorAlive === true &&
-        hardening.replacementStaleActionAfterResolve?.commandStateAfterReject
-          ?.actorStatus === "alive" &&
-        hardening.replacementStaleActionAfterResolve?.commandStateAfterReject?.phase
-          ?.phaseId === replacementStaleActionAfterResolveCase.phaseId &&
-        hardening.replacementStaleActionAfterResolve?.commandStateAfterReject?.phase
-          ?.locked === true &&
-        hardening.replacementStaleActionAfterResolve?.commandStateAfterReject
-          ?.actions?.length === 0 &&
-        hardening.replacementStaleActionAfterResolve?.buttonsAfterReject?.some(
-          (button) =>
-            button.action === replacementStaleActionAfterResolveCase.commandAction,
-        ) === false &&
-        hardening.replacementStaleActionAfterResolve?.apiCommandStateAfterReject
-          ?.actor_slot === replacementStaleActionAfterResolveCase.actorSlot &&
-        hardening.replacementStaleActionAfterResolve?.apiCommandStateAfterReject
-          ?.actor_alive === true &&
-        hardening.replacementStaleActionAfterResolve?.apiCommandStateAfterReject
-          ?.actor_status === "alive" &&
-        hardening.replacementStaleActionAfterResolve?.apiCommandStateAfterReject
-          ?.phase?.phase_id === replacementStaleActionAfterResolveCase.phaseId &&
-        hardening.replacementStaleActionAfterResolve?.apiCommandStateAfterReject
-          ?.phase?.locked === true &&
-        hardening.replacementStaleActionAfterResolve?.apiCommandStateAfterReject
-          ?.actions?.length === 0 &&
+        staleActionRejectRecoveryMatches(
+          hardening.replacementStaleActionAfterResolve,
+          {
+            error: replacementStaleActionAfterResolveCase.rejectionError,
+            actorSlot: replacementStaleActionAfterResolveCase.actorSlot,
+            actionId: replacementStaleActionAfterResolveCase.staleActionId,
+            templateId: replacementStaleActionAfterResolveCase.templateId,
+            commandAction: replacementStaleActionAfterResolveCase.commandAction,
+            messageFragments: [
+              replacementStaleActionAfterResolveCase
+                .staleActionStateMessageFragment,
+              replacementStaleActionAfterResolveCase
+                .currentActionControlsMessageFragment,
+            ],
+            dispatchRefreshKeys: [
+              "notifications",
+              "investigationResults",
+              "commandState",
+            ],
+            receiptRefreshKeys: ["commandState"],
+            receiptStatusFragments: [
+              replacementStaleActionAfterResolveCase.rejectionStatusText,
+              replacementStaleActionAfterResolveCase
+                .staleActionStateMessageFragment,
+            ],
+            browserCommandState: {
+              actorSlot: replacementStaleActionAfterResolveCase.actorSlot,
+              actorAlive: true,
+              actorStatus: "alive",
+              phaseId: replacementStaleActionAfterResolveCase.phaseId,
+              locked: true,
+              actionCount: 0,
+            },
+            apiCommandState: {
+              actorSlot: replacementStaleActionAfterResolveCase.actorSlot,
+              actorAlive: true,
+              actorStatus: "alive",
+              phaseId: replacementStaleActionAfterResolveCase.phaseId,
+              locked: true,
+              actionCount: 0,
+            },
+          },
+        ) &&
         hardening.replacementStaleActionAfterResolve?.targetSlotAfterReject
           ?.slot_id === replacementStaleActionAfterResolveCase.targetSlot &&
         hardening.replacementStaleActionAfterResolve?.targetSlotAfterReject
@@ -6155,78 +6131,46 @@ export function buildDevTestGameProofRun(session, options = {}) {
         hardening.staleSameActionRecovery.sourceRoleUrl.includes("/g/") &&
         typeof hardening.staleSameActionRecovery?.visitedRolePath === "string" &&
         hardening.staleSameActionRecovery.visitedRolePath.includes("/g/") &&
-        hardening.staleSameActionRecovery?.reject?.state === "reject" &&
-        hardening.staleSameActionRecovery?.reject?.error ===
-          "ActionAlreadySubmitted" &&
-        hardening.staleSameActionRecovery?.reject?.serverEnvelope?.body?.kind ===
-          "Reject" &&
-        Array.isArray(hardening.staleSameActionRecovery?.reject?.streamSeqs) ===
-          false &&
         hardening.staleSameActionRecovery?.reject?.commandId !==
           hardening.staleSameActionRecovery?.legalActionCommandId &&
-        hardening.staleSameActionRecovery?.reject?.requestEnvelope?.body?.body
-          ?.command?.SubmitAction?.actor_slot === "slot_4" &&
-        hardening.staleSameActionRecovery?.reject?.requestEnvelope?.body?.body
-          ?.command?.SubmitAction?.action_id === "role_factional_kill" &&
-        hardening.staleSameActionRecovery?.reject?.requestEnvelope?.body?.body
-          ?.command?.SubmitAction?.template_id === "factional_kill" &&
-        hardening.staleSameActionRecovery?.reject?.requestEnvelope?.body?.body
-          ?.command?.SubmitAction?.targets?.[0] ===
-          hardening.staleSameActionRecovery?.legalActionTarget &&
-        hardening.staleSameActionRecovery?.reject?.message?.includes(
-          "refresh and use current controls",
-        ) === true &&
-        hardening.staleSameActionRecovery?.dispatchPlan?.projectionRefreshKeys?.includes(
-          "notifications",
-        ) === true &&
-        hardening.staleSameActionRecovery?.dispatchPlan?.projectionRefreshKeys?.includes(
-          "investigationResults",
-        ) === true &&
-        hardening.staleSameActionRecovery?.dispatchPlan?.projectionRefreshKeys?.includes(
-          "commandState",
-        ) === true &&
-        hardening.staleSameActionRecovery?.dispatchPlan?.projectionRefreshKeys?.includes(
-          "dayVoteOutcomes",
-        ) === false &&
-        hardening.staleSameActionRecovery?.currentReceipt?.actionId ===
-          "submit_action:factional_kill" &&
-        hardening.staleSameActionRecovery?.currentReceipt?.state === "reject" &&
-        hardening.staleSameActionRecovery?.currentReceipt?.commandTrace
-          ?.projectionRefreshKeys?.includes("commandState") === true &&
-        hardening.staleSameActionRecovery?.currentReceipt?.commandTrace
-          ?.projectionRefreshKeys?.includes("dayVoteOutcomes") === false &&
-        hardening.staleSameActionRecovery?.receiptStatusText?.includes(
-          "Reject ActionAlreadySubmitted",
-        ) === true &&
-        hardening.staleSameActionRecovery?.receiptStatusText?.includes(
-          "refresh and use current controls",
-        ) === true &&
-        hardening.staleSameActionRecovery?.staleN01Phase?.phaseId === "N01" &&
-        hardening.staleSameActionRecovery?.commandStateAfterReject?.actorSlot ===
-          "slot_4" &&
-        hardening.staleSameActionRecovery?.commandStateAfterReject?.actorAlive ===
-          true &&
-        hardening.staleSameActionRecovery?.commandStateAfterReject?.actorStatus ===
-          "alive" &&
-        hardening.staleSameActionRecovery?.commandStateAfterReject?.phase?.phaseId ===
-          "N01" &&
-        hardening.staleSameActionRecovery?.commandStateAfterReject?.phase?.locked ===
-          false &&
-        hardening.staleSameActionRecovery?.commandStateAfterReject?.actions?.length ===
-          0 &&
-        hardening.staleSameActionRecovery?.apiCommandStateAfterReject?.actor_slot ===
-          "slot_4" &&
-        hardening.staleSameActionRecovery?.apiCommandStateAfterReject?.actor_alive ===
-          true &&
-        hardening.staleSameActionRecovery?.apiCommandStateAfterReject?.actor_status ===
-          "alive" &&
-        hardening.staleSameActionRecovery?.apiCommandStateAfterReject?.phase?.phase_id ===
-          "N01" &&
-        hardening.staleSameActionRecovery?.apiCommandStateAfterReject?.phase?.locked ===
-          false &&
-        hardening.staleSameActionRecovery?.apiCommandStateAfterReject?.actions?.length ===
-          0 &&
-        hardening.staleSameActionRecovery?.actionVisibleAfterRefresh === false,
+        staleActionRejectRecoveryMatches(hardening.staleSameActionRecovery, {
+          error: "ActionAlreadySubmitted",
+          actorSlot: "slot_4",
+          actionId: "role_factional_kill",
+          templateId: "factional_kill",
+          targetSlot: hardening.staleSameActionRecovery?.legalActionTarget,
+          commandAction: "submit_action:factional_kill",
+          messageFragments: ["refresh and use current controls"],
+          dispatchRefreshKeys: [
+            "notifications",
+            "investigationResults",
+            "commandState",
+          ],
+          forbiddenDispatchRefreshKeys: ["dayVoteOutcomes"],
+          receiptRefreshKeys: ["commandState"],
+          forbiddenReceiptRefreshKeys: ["dayVoteOutcomes"],
+          receiptStatusFragments: [
+            "Reject ActionAlreadySubmitted",
+            "refresh and use current controls",
+          ],
+          stalePhaseId: "N01",
+          browserCommandState: {
+            actorSlot: "slot_4",
+            actorAlive: true,
+            actorStatus: "alive",
+            phaseId: "N01",
+            locked: false,
+            actionCount: 0,
+          },
+          apiCommandState: {
+            actorSlot: "slot_4",
+            actorAlive: true,
+            actorStatus: "alive",
+            phaseId: "N01",
+            locked: false,
+            actionCount: 0,
+          },
+        }),
     }),
     lane("stale-dead-action-conflict", "Stale action actor death rejects and refreshes", {
       roleUrl: hardening.staleDeadActionConflict?.sourceRoleUrl ?? null,
@@ -6302,73 +6246,40 @@ export function buildDevTestGameProofRun(session, options = {}) {
         hardening.staleActionConflict.sourceRoleUrl.includes("/g/") &&
         typeof hardening.staleActionConflict?.visitedRolePath === "string" &&
         hardening.staleActionConflict.visitedRolePath.includes("/g/") &&
-        hardening.staleActionConflict?.reject?.state === "reject" &&
-        hardening.staleActionConflict?.reject?.error === "PhaseLocked" &&
-        hardening.staleActionConflict?.reject?.serverEnvelope?.body?.kind ===
-          "Reject" &&
-        Array.isArray(hardening.staleActionConflict?.reject?.streamSeqs) === false &&
-        hardening.staleActionConflict?.reject?.requestEnvelope?.body?.body?.command
-          ?.SubmitAction?.actor_slot === "slot_4" &&
-        hardening.staleActionConflict?.reject?.requestEnvelope?.body?.body?.command
-          ?.SubmitAction?.template_id === "factional_kill" &&
-        hardening.staleActionConflict?.reject?.message?.includes(
-          "stale action state",
-        ) === true &&
-        hardening.staleActionConflict?.reject?.message?.includes(
-          "current action controls",
-        ) === true &&
-        hardening.staleActionConflict?.dispatchPlan?.projectionRefreshKeys?.includes(
-          "notifications",
-        ) === true &&
-        hardening.staleActionConflict?.dispatchPlan?.projectionRefreshKeys?.includes(
-          "investigationResults",
-        ) === true &&
-        hardening.staleActionConflict?.dispatchPlan?.projectionRefreshKeys?.includes(
-          "commandState",
-        ) === true &&
-        hardening.staleActionConflict?.dispatchPlan?.projectionRefreshKeys?.includes(
-          "dayVoteOutcomes",
-        ) === true &&
-        hardening.staleActionConflict?.currentReceipt?.actionId ===
-          "submit_action:factional_kill" &&
-        hardening.staleActionConflict?.currentReceipt?.state === "reject" &&
-        hardening.staleActionConflict?.currentReceipt?.commandTrace
-          ?.projectionRefreshKeys?.includes("commandState") === true &&
-        hardening.staleActionConflict?.currentReceipt?.commandTrace
-          ?.projectionRefreshKeys?.includes("dayVoteOutcomes") === false &&
-        hardening.staleActionConflict?.receiptStatusText?.includes(
-          "Reject PhaseLocked",
-        ) === true &&
-        hardening.staleActionConflict?.receiptStatusText?.includes(
-          "stale action state",
-        ) === true &&
-        hardening.staleActionConflict?.staleN01Phase?.phaseId === "N01" &&
         hardening.staleActionConflict?.phaseAfterReject?.phaseId === "D02" &&
-        hardening.staleActionConflict?.commandStateAfterReject?.actorSlot ===
-          "slot_4" &&
-        hardening.staleActionConflict?.commandStateAfterReject?.actorAlive ===
-          true &&
-        hardening.staleActionConflict?.commandStateAfterReject?.actorStatus ===
-          "alive" &&
-        hardening.staleActionConflict?.commandStateAfterReject?.phase?.phaseId ===
-          "D02" &&
-        hardening.staleActionConflict?.commandStateAfterReject?.phase?.locked ===
-          false &&
-        hardening.staleActionConflict?.commandStateAfterReject?.actions?.length ===
-          0 &&
-        hardening.staleActionConflict?.apiCommandStateAfterReject?.actor_slot ===
-          "slot_4" &&
-        hardening.staleActionConflict?.apiCommandStateAfterReject?.actor_alive ===
-          true &&
-        hardening.staleActionConflict?.apiCommandStateAfterReject?.actor_status ===
-          "alive" &&
-        hardening.staleActionConflict?.apiCommandStateAfterReject?.phase?.phase_id ===
-          "D02" &&
-        hardening.staleActionConflict?.apiCommandStateAfterReject?.phase?.locked ===
-          false &&
-        hardening.staleActionConflict?.apiCommandStateAfterReject?.actions?.length ===
-          0 &&
-        hardening.staleActionConflict?.actionVisibleAfterRefresh === false,
+        staleActionRejectRecoveryMatches(hardening.staleActionConflict, {
+          error: "PhaseLocked",
+          actorSlot: "slot_4",
+          templateId: "factional_kill",
+          commandAction: "submit_action:factional_kill",
+          messageFragments: ["stale action state", "current action controls"],
+          dispatchRefreshKeys: [
+            "notifications",
+            "investigationResults",
+            "commandState",
+            "dayVoteOutcomes",
+          ],
+          receiptRefreshKeys: ["commandState"],
+          forbiddenReceiptRefreshKeys: ["dayVoteOutcomes"],
+          receiptStatusFragments: ["Reject PhaseLocked", "stale action state"],
+          stalePhaseId: "N01",
+          browserCommandState: {
+            actorSlot: "slot_4",
+            actorAlive: true,
+            actorStatus: "alive",
+            phaseId: "D02",
+            locked: false,
+            actionCount: 0,
+          },
+          apiCommandState: {
+            actorSlot: "slot_4",
+            actorAlive: true,
+            actorStatus: "alive",
+            phaseId: "D02",
+            locked: false,
+            actionCount: 0,
+          },
+        }),
     }),
     lane("stale-action-conflict-message", "Stale player action conflict message is explicit", {
       roleUrl: hardening.staleActionConflict?.sourceRoleUrl ?? null,
