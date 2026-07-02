@@ -6,6 +6,8 @@ import {
   coreLoopPrivateChannelRecoveryFamilyId,
   coreLoopPrivateChannelRecoveryLaneIds,
   coreLoopPrivateChannelRecoveryScenarioFamily,
+  coreLoopPrivateChannelPostLaneId,
+  coreLoopPrivateChannelStalePostLaneId,
   privateChannelSubmitPostScenario,
   staleCompletedPrivatePostScenario,
   stalePrivateChannelPostPhaseLockedScenario,
@@ -16,7 +18,15 @@ test("private-channel recovery family shares post, reload, and stale recovery ca
     coreLoopPrivateChannelRecoveryFamilyId,
     "core-loop-private-channel-recovery",
   );
-  assert.deepEqual(coreLoopPrivateChannelRecoveryLaneIds, ["private-channel"]);
+  assert.equal(coreLoopPrivateChannelPostLaneId, "private-channel");
+  assert.equal(
+    coreLoopPrivateChannelStalePostLaneId,
+    "private-channel-stale-post-after-transition",
+  );
+  assert.deepEqual(coreLoopPrivateChannelRecoveryLaneIds, [
+    coreLoopPrivateChannelPostLaneId,
+    coreLoopPrivateChannelStalePostLaneId,
+  ]);
 
   const family = coreLoopPrivateChannelRecoveryScenarioFamily();
   assert.equal(family.id, coreLoopPrivateChannelRecoveryFamilyId);

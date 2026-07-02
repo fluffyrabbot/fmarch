@@ -158,6 +158,7 @@ import {
 } from "./dev_test_game_core_loop_completed_endgame_progression_scenarios.mjs";
 import {
   coreLoopPrivateChannelRecoveryFamilyId,
+  coreLoopPrivateChannelRecoveryLaneIds,
   coreLoopPrivateChannelRecoveryScenarioFamily,
 } from "./dev_test_game_core_loop_private_channel_recovery_scenarios.mjs";
 export const DEV_TEST_GAME_RELEASE_READINESS_VERSION = 1;
@@ -2195,7 +2196,10 @@ export function validateDevTestGameCoreLoopAdminProof(proof, options = {}) {
   if (
     proof.generatedFrom?.privateChannelRecoveryFamily?.id !==
       coreLoopPrivateChannelRecoveryFamilyId ||
-    !Array.isArray(proof.generatedFrom?.privateChannelRecoveryFamily?.laneIds)
+    !sameStringArray(
+      proof.generatedFrom?.privateChannelRecoveryFamily?.laneIds,
+      coreLoopPrivateChannelRecoveryLaneIds,
+    )
   ) {
     throw new Error(
       "core-loop admin proof missing private-channel recovery family",

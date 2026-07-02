@@ -18,8 +18,13 @@ export {
 export const coreLoopPrivateChannelRecoveryFamilyId =
   "core-loop-private-channel-recovery";
 
+export const coreLoopPrivateChannelPostLaneId = "private-channel";
+export const coreLoopPrivateChannelStalePostLaneId =
+  "private-channel-stale-post-after-transition";
+
 export const coreLoopPrivateChannelRecoveryLaneIds = Object.freeze([
-  "private-channel",
+  coreLoopPrivateChannelPostLaneId,
+  coreLoopPrivateChannelStalePostLaneId,
 ]);
 
 export function coreLoopPrivateChannelRecoveryScenarioFamily() {

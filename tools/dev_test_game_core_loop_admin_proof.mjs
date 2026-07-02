@@ -103,6 +103,7 @@ import {
 } from "./dev_test_game_core_loop_completed_endgame_progression_scenarios.mjs";
 import {
   coreLoopPrivateChannelRecoveryFamilyId,
+  coreLoopPrivateChannelRecoveryLaneIds,
   coreLoopPrivateChannelRecoveryScenarioFamily,
   completedPrivateChannelReloadScenario,
   completedPrivateChannelTransition,
@@ -9772,8 +9773,9 @@ export function assertCoreLoopAdminProof(evidence) {
   if (
     evidence.generatedFrom?.privateChannelRecoveryFamily?.id !==
       coreLoopPrivateChannelRecoveryFamilyId ||
-    !Array.isArray(
+    !sameStringArray(
       evidence.generatedFrom?.privateChannelRecoveryFamily?.laneIds,
+      coreLoopPrivateChannelRecoveryLaneIds,
     )
   ) {
     throw new Error(
