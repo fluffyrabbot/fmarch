@@ -13473,6 +13473,12 @@ function spineManifestAdminProofFixture() {
 }
 
 function hostedTargetPreflightAdminProofFixture() {
+  const blockedCheckRequiredEvidence = Object.fromEntries(
+    hostedEvidenceBlockedHandoffChecklistFixture().blockedChecks.map((check) => [
+      check.id,
+      check.requiredEvidence,
+    ]),
+  );
   return {
     version: 1,
     proof: "dev-test-game-hosted-target-preflight-admin-proof",
@@ -13488,6 +13494,7 @@ function hostedTargetPreflightAdminProofFixture() {
       status: "blocked",
       checkIds: [...hostedTargetPreflightCheckIds],
       blockedCheckIds: [...hostedTargetPreflightBlockingCheckIds],
+      blockedCheckRequiredEvidence,
       relatedAuditIds: [
         "local-hosted-concurrent-race-matrix",
         "local-next-action",
@@ -13503,6 +13510,12 @@ function hostedTargetPreflightAdminProofFixture() {
       clickedThroughFromOverview: true,
       visibleChecks: [...hostedTargetPreflightCheckIds],
       visibleUnproven: [...hostedTargetPreflightBlockingCheckIds],
+      visibleUnprovenStatuses: Object.fromEntries(
+        Object.entries(blockedCheckRequiredEvidence).map(([checkId, evidence]) => [
+          checkId,
+          `${checkId}\nblocked\n${evidence}`,
+        ]),
+      ),
       visibleRelatedLinks: [
         "local-hosted-concurrent-race-matrix",
         "local-next-action",

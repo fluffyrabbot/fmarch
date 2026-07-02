@@ -123,6 +123,7 @@ export async function proveAdminAuditDetail({
   requiredHostedHandoffSummary = null,
   requiredRelatedLinks = [],
   requiredRelatedDestinations = [],
+  requiredUnprovenStatuses = {},
   forbiddenText = [],
 }) {
   const page = await browser.newPage({ viewport: { width: 1024, height: 768 } });
@@ -234,6 +235,12 @@ export async function proveAdminAuditDetail({
       page,
       prefix: "admin-audit-unproven",
       ids: requiredUnproven,
+      expectedStatuses: requiredUnprovenStatuses,
+    });
+    const visibleUnprovenStatuses = await readRowStatuses({
+      page,
+      prefix: "admin-audit-unproven",
+      ids: Object.keys(requiredUnprovenStatuses),
     });
     const visibleRealHostedEvidenceInputs = await waitForRows({
       page,
@@ -493,6 +500,9 @@ export async function proveAdminAuditDetail({
         ? {}
         : { visibleSpineRecoveryHooks }),
       ...(visibleUnproven.length === 0 ? {} : { visibleUnproven }),
+      ...(Object.keys(visibleUnprovenStatuses).length === 0
+        ? {}
+        : { visibleUnprovenStatuses }),
       ...(visibleRealHostedEvidenceInputs.length === 0
         ? {}
         : { visibleRealHostedEvidenceInputs }),

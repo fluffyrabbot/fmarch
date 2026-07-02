@@ -45,8 +45,11 @@ await runAdminAuditProof({
     preflight: assertDevTestGameHostedTargetPreflight(await readJson(preflightPath)),
     proofRun: assertDevTestGameProofRun(await readJson(proofRunPath)),
   }),
-  prove: async ({ browser, frontendBaseUrl, source }) =>
-    await proveAdminAuditDetail({
+  prove: async ({ browser, frontendBaseUrl, source }) => {
+    const blockedRequiredEvidence = blockedCheckRequiredEvidence(
+      source.preflight.checks,
+    );
+    return await proveAdminAuditDetail({
       browser,
       frontendBaseUrl,
       game: source.proofRun.session.game,
@@ -58,8 +61,10 @@ await runAdminAuditProof({
       requiredUnproven: source.preflight.checks
         .filter((check) => check.status === "blocked")
         .map((check) => check.id),
+      requiredUnprovenStatuses: blockedRequiredEvidence,
       requiredRelatedLinks,
-    }),
+    });
+  },
   buildEvidence: ({ source, adminRoleSurface }) => ({
     version: 1,
     proof: "dev-test-game-hosted-target-preflight-admin-proof",
@@ -81,6 +86,9 @@ await runAdminAuditProof({
       blockedCheckIds: source.preflight.checks
         .filter((check) => check.status === "blocked")
         .map((check) => check.id),
+      blockedCheckRequiredEvidence: blockedCheckRequiredEvidence(
+        source.preflight.checks,
+      ),
       relatedAuditIds: requiredRelatedLinks,
     },
     adminRoleSurface,
@@ -115,10 +123,33 @@ export function assertHostedTargetPreflightAdminProof(evidence) {
       throw new Error(`hosted target preflight admin proof missing blocked row: ${checkId}`);
     }
   }
+  for (const [checkId, expectedText] of Object.entries(
+    evidence.generatedFrom?.blockedCheckRequiredEvidence ?? {},
+  )) {
+    const visibleText = evidence.adminRoleSurface?.visibleUnprovenStatuses?.[checkId];
+    if (typeof visibleText !== "string" || !visibleText.includes(expectedText)) {
+      throw new Error(
+        `hosted target preflight admin proof missing blocked required evidence: ${checkId}`,
+      );
+    }
+  }
   for (const linkId of evidence.generatedFrom?.relatedAuditIds ?? []) {
     if (!evidence.adminRoleSurface?.visibleRelatedLinks?.includes(linkId)) {
       throw new Error(`hosted target preflight admin proof missing related link: ${linkId}`);
     }
   }
   return evidence;
+}
+
+function blockedCheckRequiredEvidence(checks) {
+  return Object.fromEntries(
+    (Array.isArray(checks) ? checks : [])
+      .filter(
+        (check) =>
+          check?.status === "blocked" &&
+          typeof check.requiredEvidence === "string" &&
+          check.requiredEvidence.trim() !== "",
+      )
+      .map((check) => [String(check.id), check.requiredEvidence]),
+  );
 }
