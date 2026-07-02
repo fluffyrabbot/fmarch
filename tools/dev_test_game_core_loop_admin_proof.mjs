@@ -26,6 +26,7 @@ import {
   assertHostStaleAdvanceAfterTransitionProofCase,
   hostAdvancePhaseCommandFacts,
   hostCompleteGameCommandFacts,
+  hostDeadlineAffordanceForPhaseState,
   hostResolvePhaseCommandFacts,
 } from "./dev_test_game_core_loop_host_phase_scenarios.mjs";
 import {
@@ -619,12 +620,12 @@ async function proveHostLifecycleStaleReject({
       { timeout: 15000 },
     );
     await page.waitForFunction(
-      () =>
+      (expectedDeadlineAffordance) =>
         document
           .querySelector('[data-testid="host-lifecycle-control-checkpoint"]')
           ?.getAttribute("data-deadline-affordance") ===
-        "resolve_phase,lock_thread",
-      null,
+        expectedDeadlineAffordance,
+      hostDeadlineAffordanceForPhaseState("open"),
       { timeout: 15000 },
     );
     const commandStatuses = await page.evaluate(
@@ -762,7 +763,6 @@ async function proveHostPhaseTransitionSurface({
       streamSeq: 801,
       expectedPhaseId: "D02",
       expectedPhaseState: "locked",
-      expectedDeadlineAffordance: "unlock_thread,advance_phase",
     });
     const advanceProof = await proveHostPhaseActionClick({
       page,
@@ -771,7 +771,6 @@ async function proveHostPhaseTransitionSurface({
       streamSeq: 802,
       expectedPhaseId: "N02",
       expectedPhaseState: "open",
-      expectedDeadlineAffordance: "resolve_phase,lock_thread",
     });
     const staleHostAdvanceRecoveryProof =
       await proveHostStaleAdvanceAfterTransition({
@@ -844,7 +843,6 @@ async function proveHostNightActionTransitionSurface({
       streamSeq: 905,
       expectedPhaseId: "N02",
       expectedPhaseState: "locked",
-      expectedDeadlineAffordance: "unlock_thread,advance_phase",
     });
     const advanceProof = await proveHostPhaseActionClick({
       page,
@@ -853,7 +851,6 @@ async function proveHostNightActionTransitionSurface({
       streamSeq: 906,
       expectedPhaseId: "D03",
       expectedPhaseState: "open",
-      expectedDeadlineAffordance: "resolve_phase,lock_thread",
     });
     const actionPlayerObservationProof = await proveDayThreePlayerObservation({
       browser,
@@ -1259,7 +1256,6 @@ async function proveDayThreeHostVoteResolution({
       streamSeq: 908,
       expectedPhaseId: "D03",
       expectedPhaseState: "locked",
-      expectedDeadlineAffordance: "unlock_thread,advance_phase",
     });
     const hostVotecountProjection = await page.evaluate(
       () => window.__fmarchHostVotecountProjection,
@@ -1823,7 +1819,7 @@ async function proveNightFourHostResolution({
       return window.__fmarchTriggerHostResync(915);
     });
     await page.waitForFunction(
-      () => {
+      (expectedDeadlineAffordance) => {
         const checkpoint = document.querySelector(
           '[data-testid="host-lifecycle-control-checkpoint"]',
         );
@@ -1831,10 +1827,10 @@ async function proveNightFourHostResolution({
           checkpoint?.getAttribute("data-phase-id") === "N04" &&
           checkpoint?.getAttribute("data-phase-state") === "open" &&
           checkpoint?.getAttribute("data-deadline-affordance") ===
-            "resolve_phase,lock_thread"
+            expectedDeadlineAffordance
         );
       },
-      null,
+      hostDeadlineAffordanceForPhaseState("open"),
       { timeout: 15000 },
     );
     const resolveProof = await proveHostPhaseActionClick({
@@ -1844,7 +1840,6 @@ async function proveNightFourHostResolution({
       streamSeq: 916,
       expectedPhaseId: "N04",
       expectedPhaseState: "locked",
-      expectedDeadlineAffordance: "unlock_thread,advance_phase",
     });
     const bodyText = await page.locator("body").innerText();
     if (/invite=(?!REDACTED)/.test(bodyText)) {
@@ -2035,7 +2030,7 @@ async function proveDayFourNoLynchHostTransition({
       return window.__fmarchTriggerHostResync(912);
     });
     await page.waitForFunction(
-      () => {
+      (expectedDeadlineAffordance) => {
         const checkpoint = document.querySelector(
           '[data-testid="host-lifecycle-control-checkpoint"]',
         );
@@ -2043,10 +2038,10 @@ async function proveDayFourNoLynchHostTransition({
           checkpoint?.getAttribute("data-phase-id") === "D04" &&
           checkpoint?.getAttribute("data-phase-state") === "open" &&
           checkpoint?.getAttribute("data-deadline-affordance") ===
-            "resolve_phase,lock_thread"
+            expectedDeadlineAffordance
         );
       },
-      null,
+      hostDeadlineAffordanceForPhaseState("open"),
       { timeout: 15000 },
     );
     const resolveProof = await proveHostPhaseActionClick({
@@ -2056,7 +2051,6 @@ async function proveDayFourNoLynchHostTransition({
       streamSeq: 913,
       expectedPhaseId: "D04",
       expectedPhaseState: "locked",
-      expectedDeadlineAffordance: "unlock_thread,advance_phase",
     });
     const advanceProof = await proveHostPhaseActionClick({
       page,
@@ -2065,7 +2059,6 @@ async function proveDayFourNoLynchHostTransition({
       streamSeq: 914,
       expectedPhaseId: "N04",
       expectedPhaseState: "open",
-      expectedDeadlineAffordance: "resolve_phase,lock_thread",
     });
     const bodyText = await page.locator("body").innerText();
     if (/invite=(?!REDACTED)/.test(bodyText)) {
@@ -2257,7 +2250,7 @@ async function proveDayFiveNoLynchHostTransition({
       return window.__fmarchTriggerHostResync(918);
     });
     await page.waitForFunction(
-      () => {
+      (expectedDeadlineAffordance) => {
         const checkpoint = document.querySelector(
           '[data-testid="host-lifecycle-control-checkpoint"]',
         );
@@ -2265,10 +2258,10 @@ async function proveDayFiveNoLynchHostTransition({
           checkpoint?.getAttribute("data-phase-id") === "D05" &&
           checkpoint?.getAttribute("data-phase-state") === "open" &&
           checkpoint?.getAttribute("data-deadline-affordance") ===
-            "resolve_phase,lock_thread"
+            expectedDeadlineAffordance
         );
       },
-      null,
+      hostDeadlineAffordanceForPhaseState("open"),
       { timeout: 15000 },
     );
     const resolveProof = await proveHostPhaseActionClick({
@@ -2278,7 +2271,6 @@ async function proveDayFiveNoLynchHostTransition({
       streamSeq: 919,
       expectedPhaseId: "D05",
       expectedPhaseState: "locked",
-      expectedDeadlineAffordance: "unlock_thread,advance_phase",
     });
     const advanceProof = await proveHostPhaseActionClick({
       page,
@@ -2287,7 +2279,6 @@ async function proveDayFiveNoLynchHostTransition({
       streamSeq: 920,
       expectedPhaseId: "N05",
       expectedPhaseState: "open",
-      expectedDeadlineAffordance: "resolve_phase,lock_thread",
     });
     const bodyText = await page.locator("body").innerText();
     if (/invite=(?!REDACTED)/.test(bodyText)) {
@@ -2446,7 +2437,7 @@ async function proveHostCompleteGameFromNightFive({
       return window.__fmarchTriggerHostResync(920);
     });
     await page.waitForFunction(
-      () => {
+      (expectedDeadlineAffordance) => {
         const checkpoint = document.querySelector(
           '[data-testid="host-lifecycle-control-checkpoint"]',
         );
@@ -2454,10 +2445,10 @@ async function proveHostCompleteGameFromNightFive({
           checkpoint?.getAttribute("data-phase-id") === "N05" &&
           checkpoint?.getAttribute("data-phase-state") === "open" &&
           checkpoint?.getAttribute("data-deadline-affordance") ===
-            "resolve_phase,lock_thread"
+            expectedDeadlineAffordance
         );
       },
-      null,
+      hostDeadlineAffordanceForPhaseState("open"),
       { timeout: 15000 },
     );
     const completeProof = await proveHostPhaseActionClick({
@@ -3249,7 +3240,7 @@ async function proveNightThreeEmptyHostTransition({
       return window.__fmarchTriggerHostResync(909);
     });
     await page.waitForFunction(
-      () => {
+      (expectedDeadlineAffordance) => {
         const checkpoint = document.querySelector(
           '[data-testid="host-lifecycle-control-checkpoint"]',
         );
@@ -3257,10 +3248,10 @@ async function proveNightThreeEmptyHostTransition({
           checkpoint?.getAttribute("data-phase-id") === "N03" &&
           checkpoint?.getAttribute("data-phase-state") === "open" &&
           checkpoint?.getAttribute("data-deadline-affordance") ===
-            "resolve_phase,lock_thread"
+            expectedDeadlineAffordance
         );
       },
-      null,
+      hostDeadlineAffordanceForPhaseState("open"),
       { timeout: 15000 },
     );
     const resolveProof = await proveHostPhaseActionClick({
@@ -3270,7 +3261,6 @@ async function proveNightThreeEmptyHostTransition({
       streamSeq: 910,
       expectedPhaseId: "N03",
       expectedPhaseState: "locked",
-      expectedDeadlineAffordance: "unlock_thread,advance_phase",
     });
     const advanceProof = await proveHostPhaseActionClick({
       page,
@@ -3279,7 +3269,6 @@ async function proveNightThreeEmptyHostTransition({
       streamSeq: 911,
       expectedPhaseId: "D04",
       expectedPhaseState: "open",
-      expectedDeadlineAffordance: "resolve_phase,lock_thread",
     });
     const bodyText = await page.locator("body").innerText();
     if (/invite=(?!REDACTED)/.test(bodyText)) {
@@ -3492,7 +3481,7 @@ async function provePostNightFourHostAdvance({
       return window.__fmarchTriggerHostResync(916);
     });
     await page.waitForFunction(
-      () => {
+      (expectedDeadlineAffordance) => {
         const checkpoint = document.querySelector(
           '[data-testid="host-lifecycle-control-checkpoint"]',
         );
@@ -3500,10 +3489,10 @@ async function provePostNightFourHostAdvance({
           checkpoint?.getAttribute("data-phase-id") === "N04" &&
           checkpoint?.getAttribute("data-phase-state") === "locked" &&
           checkpoint?.getAttribute("data-deadline-affordance") ===
-            "unlock_thread,advance_phase"
+            expectedDeadlineAffordance
         );
       },
-      null,
+      hostDeadlineAffordanceForPhaseState("locked"),
       { timeout: 15000 },
     );
     const advanceProof = await proveHostPhaseActionClick({
@@ -3513,7 +3502,6 @@ async function provePostNightFourHostAdvance({
       streamSeq: 917,
       expectedPhaseId: "D05",
       expectedPhaseState: "open",
-      expectedDeadlineAffordance: "resolve_phase,lock_thread",
     });
     const bodyText = await page.locator("body").innerText();
     if (/invite=(?!REDACTED)/.test(bodyText)) {
@@ -3675,7 +3663,7 @@ async function provePostDayThreeHostAdvance({
       return window.__fmarchTriggerHostResync(908);
     });
     await page.waitForFunction(
-      () => {
+      (expectedDeadlineAffordance) => {
         const checkpoint = document.querySelector(
           '[data-testid="host-lifecycle-control-checkpoint"]',
         );
@@ -3683,10 +3671,10 @@ async function provePostDayThreeHostAdvance({
           checkpoint?.getAttribute("data-phase-id") === "D03" &&
           checkpoint?.getAttribute("data-phase-state") === "locked" &&
           checkpoint?.getAttribute("data-deadline-affordance") ===
-            "unlock_thread,advance_phase"
+            expectedDeadlineAffordance
         );
       },
-      null,
+      hostDeadlineAffordanceForPhaseState("locked"),
       { timeout: 15000 },
     );
     const advanceProof = await proveHostPhaseActionClick({
@@ -3696,7 +3684,6 @@ async function provePostDayThreeHostAdvance({
       streamSeq: 909,
       expectedPhaseId: "N03",
       expectedPhaseState: "open",
-      expectedDeadlineAffordance: "resolve_phase,lock_thread",
     });
     const bodyText = await page.locator("body").innerText();
     if (/invite=(?!REDACTED)/.test(bodyText)) {
@@ -3728,7 +3715,9 @@ async function proveHostPhaseActionClick({
   streamSeq,
   expectedPhaseId,
   expectedPhaseState,
-  expectedDeadlineAffordance,
+  expectedDeadlineAffordance = hostDeadlineAffordanceForPhaseState(
+    expectedPhaseState,
+  ),
 }) {
   const actionTile = page.getByTestId(`critical-host-action-${actionId}`);
   await actionTile.waitFor({ state: "visible", timeout: 15000 });
@@ -3849,7 +3838,7 @@ async function proveHostStaleAdvanceAfterTransition({
       return window.__fmarchTriggerHostResync(801);
     });
     await page.waitForFunction(
-      () => {
+      (expectedDeadlineAffordance) => {
         const checkpoint = document.querySelector(
           '[data-testid="host-lifecycle-control-checkpoint"]',
         );
@@ -3857,10 +3846,10 @@ async function proveHostStaleAdvanceAfterTransition({
           checkpoint?.getAttribute("data-phase-id") === "D02" &&
           checkpoint?.getAttribute("data-phase-state") === "locked" &&
           checkpoint?.getAttribute("data-deadline-affordance") ===
-            "unlock_thread,advance_phase"
+            expectedDeadlineAffordance
         );
       },
-      null,
+      hostDeadlineAffordanceForPhaseState("locked"),
       { timeout: 15000 },
     );
     const actionTile = page.getByTestId("critical-host-action-advance_phase");
@@ -3882,7 +3871,7 @@ async function proveHostStaleAdvanceAfterTransition({
       { timeout: 15000 },
     );
     await page.waitForFunction(
-      () => {
+      (expectedDeadlineAffordance) => {
         const checkpoint = document.querySelector(
           '[data-testid="host-lifecycle-control-checkpoint"]',
         );
@@ -3890,10 +3879,10 @@ async function proveHostStaleAdvanceAfterTransition({
           checkpoint?.getAttribute("data-phase-id") === "N02" &&
           checkpoint?.getAttribute("data-phase-state") === "open" &&
           checkpoint?.getAttribute("data-deadline-affordance") ===
-            "resolve_phase,lock_thread"
+            expectedDeadlineAffordance
         );
       },
-      null,
+      hostDeadlineAffordanceForPhaseState("open"),
       { timeout: 15000 },
     );
     const commandStatuses = await page.evaluate(
@@ -10205,7 +10194,6 @@ function assertHostNightActionTransitionSurface(hostNightActionTransitionSurface
     streamSeq: 905,
     expectedPhaseId: "N02",
     expectedPhaseState: "locked",
-    expectedDeadlineAffordance: "unlock_thread,advance_phase",
     expectedRefreshKeys: ["host", "votecount", "dayVoteOutcomes", "hostPrompts"],
   });
   assertHostPhaseTransitionActionProof({
@@ -10215,7 +10203,6 @@ function assertHostNightActionTransitionSurface(hostNightActionTransitionSurface
     streamSeq: 906,
     expectedPhaseId: "D03",
     expectedPhaseState: "open",
-    expectedDeadlineAffordance: "resolve_phase,lock_thread",
     expectedRefreshKeys: [],
   });
   assertDayThreePlayerObservationProof({
@@ -10451,7 +10438,6 @@ function assertDayThreeHostVoteResolutionProof({
     streamSeq: 908,
     expectedPhaseId: "D03",
     expectedPhaseState: "locked",
-    expectedDeadlineAffordance: "unlock_thread,advance_phase",
     expectedRefreshKeys: ["host", "votecount", "dayVoteOutcomes", "hostPrompts"],
   });
   if (
@@ -10823,7 +10809,6 @@ function assertNightFourHostResolutionProof({
     streamSeq: 916,
     expectedPhaseId: "N04",
     expectedPhaseState: "locked",
-    expectedDeadlineAffordance: "unlock_thread,advance_phase",
     expectedRefreshKeys: ["host", "votecount", "dayVoteOutcomes", "hostPrompts"],
   });
 }
@@ -11067,7 +11052,6 @@ function assertPostNightFourHostAdvanceProof({
     streamSeq: 917,
     expectedPhaseId: "D05",
     expectedPhaseState: "open",
-    expectedDeadlineAffordance: "resolve_phase,lock_thread",
     expectedRefreshKeys: [],
   });
   if (proof.advanceProof?.dayVoteOutcomesProjection?.at?.(-1)?.phaseId !== "D04") {
@@ -11200,7 +11184,6 @@ function assertDayFourNoLynchHostTransitionProof({
     streamSeq: 913,
     expectedPhaseId: "D04",
     expectedPhaseState: "locked",
-    expectedDeadlineAffordance: "unlock_thread,advance_phase",
     expectedRefreshKeys: ["host", "votecount", "dayVoteOutcomes", "hostPrompts"],
   });
   assertHostPhaseTransitionActionProof({
@@ -11210,7 +11193,6 @@ function assertDayFourNoLynchHostTransitionProof({
     streamSeq: 914,
     expectedPhaseId: "N04",
     expectedPhaseState: "open",
-    expectedDeadlineAffordance: "resolve_phase,lock_thread",
     expectedRefreshKeys: [],
   });
   if (
@@ -11368,7 +11350,6 @@ function assertPostDayThreeHostAdvanceProof({ proof, expectedGame, sourceRoleUrl
     streamSeq: 909,
     expectedPhaseId: "N03",
     expectedPhaseState: "open",
-    expectedDeadlineAffordance: "resolve_phase,lock_thread",
     expectedRefreshKeys: [],
   });
 }
@@ -11405,7 +11386,6 @@ function assertNightThreeEmptyHostTransitionProof({
     streamSeq: 910,
     expectedPhaseId: "N03",
     expectedPhaseState: "locked",
-    expectedDeadlineAffordance: "unlock_thread,advance_phase",
     expectedRefreshKeys: ["host", "votecount", "dayVoteOutcomes", "hostPrompts"],
   });
   assertHostPhaseTransitionActionProof({
@@ -11415,7 +11395,6 @@ function assertNightThreeEmptyHostTransitionProof({
     streamSeq: 911,
     expectedPhaseId: "D04",
     expectedPhaseState: "open",
-    expectedDeadlineAffordance: "resolve_phase,lock_thread",
     expectedRefreshKeys: [],
   });
 }
@@ -11436,7 +11415,9 @@ function assertHostPhaseTransitionActionProof({
   streamSeq,
   expectedPhaseId,
   expectedPhaseState,
-  expectedDeadlineAffordance,
+  expectedDeadlineAffordance = hostDeadlineAffordanceForPhaseState(
+    expectedPhaseState,
+  ),
   expectedRefreshKeys,
 }) {
   assertHostPhaseTransitionActionProofCase({

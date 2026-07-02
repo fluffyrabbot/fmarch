@@ -74,6 +74,7 @@ import {
   assertHostPhaseTransitionActionProofCase,
   assertHostStaleAdvanceAfterTransitionProofCase,
   hostAdvancePhaseCommandFacts,
+  hostDeadlineAffordanceForPhaseState,
   hostResolvePhaseCommandFacts,
 } from "./dev_test_game_core_loop_host_phase_scenarios.mjs";
 import {
@@ -2276,7 +2277,6 @@ function assertCoreLoopHostNightActionTransitionSurface(
     streamSeq: 905,
     expectedPhaseId: "N02",
     expectedPhaseState: "locked",
-    expectedDeadlineAffordance: "unlock_thread,advance_phase",
     expectedRefreshKeys: ["host", "votecount", "dayVoteOutcomes", "hostPrompts"],
   });
   assertCoreLoopHostPhaseTransitionActionProof({
@@ -2286,7 +2286,6 @@ function assertCoreLoopHostNightActionTransitionSurface(
     streamSeq: 906,
     expectedPhaseId: "D03",
     expectedPhaseState: "open",
-    expectedDeadlineAffordance: "resolve_phase,lock_thread",
     expectedRefreshKeys: [],
   });
   assertCoreLoopDayThreePlayerObservationProof({
@@ -2512,7 +2511,6 @@ function assertCoreLoopDayThreeHostVoteResolutionProof({
     streamSeq: 908,
     expectedPhaseId: "D03",
     expectedPhaseState: "locked",
-    expectedDeadlineAffordance: "unlock_thread,advance_phase",
     expectedRefreshKeys: ["host", "votecount", "dayVoteOutcomes", "hostPrompts"],
   });
   if (
@@ -2850,7 +2848,6 @@ function assertCoreLoopNightFourHostResolutionProof({
     streamSeq: 916,
     expectedPhaseId: "N04",
     expectedPhaseState: "locked",
-    expectedDeadlineAffordance: "unlock_thread,advance_phase",
     expectedRefreshKeys: ["host", "votecount", "dayVoteOutcomes", "hostPrompts"],
   });
 }
@@ -3074,7 +3071,6 @@ function assertCoreLoopPostNightFourHostAdvanceProof({
     streamSeq: 917,
     expectedPhaseId: "D05",
     expectedPhaseState: "open",
-    expectedDeadlineAffordance: "resolve_phase,lock_thread",
     expectedRefreshKeys: [],
   });
   if (proof.advanceProof?.dayVoteOutcomesProjection?.at?.(-1)?.phaseId !== "D04") {
@@ -3202,7 +3198,6 @@ function assertCoreLoopDayFourNoLynchHostTransitionProof({
     streamSeq: 913,
     expectedPhaseId: "D04",
     expectedPhaseState: "locked",
-    expectedDeadlineAffordance: "unlock_thread,advance_phase",
     expectedRefreshKeys: ["host", "votecount", "dayVoteOutcomes", "hostPrompts"],
   });
   assertCoreLoopHostPhaseTransitionActionProof({
@@ -3212,7 +3207,6 @@ function assertCoreLoopDayFourNoLynchHostTransitionProof({
     streamSeq: 914,
     expectedPhaseId: "N04",
     expectedPhaseState: "open",
-    expectedDeadlineAffordance: "resolve_phase,lock_thread",
     expectedRefreshKeys: [],
   });
   if (
@@ -3361,7 +3355,6 @@ function assertCoreLoopPostDayThreeHostAdvanceProof({
     streamSeq: 909,
     expectedPhaseId: "N03",
     expectedPhaseState: "open",
-    expectedDeadlineAffordance: "resolve_phase,lock_thread",
     expectedRefreshKeys: [],
   });
 }
@@ -3394,7 +3387,6 @@ function assertCoreLoopNightThreeEmptyHostTransitionProof({
     streamSeq: 910,
     expectedPhaseId: "N03",
     expectedPhaseState: "locked",
-    expectedDeadlineAffordance: "unlock_thread,advance_phase",
     expectedRefreshKeys: ["host", "votecount", "dayVoteOutcomes", "hostPrompts"],
   });
   assertCoreLoopHostPhaseTransitionActionProof({
@@ -3404,7 +3396,6 @@ function assertCoreLoopNightThreeEmptyHostTransitionProof({
     streamSeq: 911,
     expectedPhaseId: "D04",
     expectedPhaseState: "open",
-    expectedDeadlineAffordance: "resolve_phase,lock_thread",
     expectedRefreshKeys: [],
   });
 }
@@ -3427,7 +3418,9 @@ function assertCoreLoopHostPhaseTransitionActionProof({
   streamSeq,
   expectedPhaseId,
   expectedPhaseState,
-  expectedDeadlineAffordance,
+  expectedDeadlineAffordance = hostDeadlineAffordanceForPhaseState(
+    expectedPhaseState,
+  ),
   expectedRefreshKeys,
 }) {
   assertHostPhaseTransitionActionProofCase({

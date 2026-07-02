@@ -7,9 +7,13 @@ import {
   hostAdvanceByDeadlineCommandFacts,
   hostAdvancePhaseCommandFacts,
   hostCompleteGameCommandFacts,
+  hostDeadlineAffordanceForPhaseState,
   hostExtendDeadlineCommandFacts,
   hostLifecycleControlScenario,
+  hostLockedPhaseTransitionCase,
   hostLockThreadCommandFacts,
+  hostOpenPhaseTransitionCase,
+  hostPhaseTransitionCaseForState,
   hostResolvePhaseCommandFacts,
   hostUnlockThreadCommandFacts,
 } from "./dev_test_game_core_loop_host_phase_scenarios.mjs";
@@ -95,7 +99,6 @@ test("host phase transition ACK assertion covers resolve projection refresh", ()
       streamSeq: 801,
       expectedPhaseId: "D02",
       expectedPhaseState: "locked",
-      expectedDeadlineAffordance: "unlock_thread,advance_phase",
       expectedRefreshKeys: ["host", "votecount"],
     }),
   );
@@ -115,7 +118,6 @@ test("host phase transition ACK assertion covers resolve projection refresh", ()
         streamSeq: 801,
         expectedPhaseId: "D02",
         expectedPhaseState: "locked",
-        expectedDeadlineAffordance: "unlock_thread,advance_phase",
         expectedRefreshKeys: ["host", "votecount"],
       }),
     /host resolve_phase transition ACK/,
@@ -123,6 +125,25 @@ test("host phase transition ACK assertion covers resolve projection refresh", ()
 });
 
 test("host phase scenario module exposes shared lifecycle control case", () => {
+  assert.deepEqual(hostOpenPhaseTransitionCase(), {
+    phaseState: "open",
+    locked: false,
+    deadlineAffordance: "resolve_phase,lock_thread",
+  });
+  assert.deepEqual(hostLockedPhaseTransitionCase(), {
+    phaseState: "locked",
+    locked: true,
+    deadlineAffordance: "unlock_thread,advance_phase",
+  });
+  assert.deepEqual(hostPhaseTransitionCaseForState("open"), {
+    phaseState: "open",
+    locked: false,
+    deadlineAffordance: "resolve_phase,lock_thread",
+  });
+  assert.equal(
+    hostDeadlineAffordanceForPhaseState("locked"),
+    "unlock_thread,advance_phase",
+  );
   assert.deepEqual(hostLifecycleControlScenario(), {
     proofCheckId: "host-lifecycle-control",
     surfaceTestId: "host-console-surface",

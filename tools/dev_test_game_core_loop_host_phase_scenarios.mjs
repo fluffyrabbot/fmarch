@@ -3,6 +3,7 @@ const cloneLifecycleScenario = (scenario) => ({
   ...scenario,
   visibleRows: [...scenario.visibleRows],
 });
+const clonePhaseStateCase = (phaseStateCase) => ({ ...phaseStateCase });
 
 const hostPhaseCommandFactDefinitions = Object.freeze({
   resolve: Object.freeze({
@@ -65,6 +66,45 @@ export function hostAdvanceByDeadlineCommandFacts() {
 
 const actionAffordance = (actionIds) => actionIds.join(",");
 
+const hostPhaseTransitionStateDefinitions = Object.freeze({
+  open: Object.freeze({
+    phaseState: "open",
+    locked: false,
+    deadlineAffordance: actionAffordance([
+      hostResolvePhaseCommandFacts().actionId,
+      hostLockThreadCommandFacts().actionId,
+    ]),
+  }),
+  locked: Object.freeze({
+    phaseState: "locked",
+    locked: true,
+    deadlineAffordance: actionAffordance([
+      hostUnlockThreadCommandFacts().actionId,
+      hostAdvancePhaseCommandFacts().actionId,
+    ]),
+  }),
+});
+
+export function hostOpenPhaseTransitionCase() {
+  return clonePhaseStateCase(hostPhaseTransitionStateDefinitions.open);
+}
+
+export function hostLockedPhaseTransitionCase() {
+  return clonePhaseStateCase(hostPhaseTransitionStateDefinitions.locked);
+}
+
+export function hostPhaseTransitionCaseForState(phaseState) {
+  const phaseStateCase = hostPhaseTransitionStateDefinitions[phaseState];
+  if (phaseStateCase === undefined) {
+    throw new Error(`unknown host phase transition state: ${phaseState}`);
+  }
+  return clonePhaseStateCase(phaseStateCase);
+}
+
+export function hostDeadlineAffordanceForPhaseState(phaseState) {
+  return hostPhaseTransitionCaseForState(phaseState).deadlineAffordance;
+}
+
 const hostLifecycleControlScenarioDefinition = Object.freeze({
   proofCheckId: "host-lifecycle-control",
   surfaceTestId: "host-console-surface",
@@ -78,14 +118,10 @@ const hostLifecycleControlScenarioDefinition = Object.freeze({
   lockedPhaseState: "locked",
   slotId: "slot-7",
   actionState: "enabled:mark_dead,modkill_slot",
-  openDeadlineAffordance: actionAffordance([
-    hostResolvePhaseCommandFacts().actionId,
-    hostLockThreadCommandFacts().actionId,
-  ]),
-  lockedDeadlineAffordance: actionAffordance([
-    hostUnlockThreadCommandFacts().actionId,
-    hostAdvancePhaseCommandFacts().actionId,
-  ]),
+  openDeadlineAffordance:
+    hostPhaseTransitionStateDefinitions.open.deadlineAffordance,
+  lockedDeadlineAffordance:
+    hostPhaseTransitionStateDefinitions.locked.deadlineAffordance,
   visibleRows: Object.freeze([
     "phase",
     "slot",
@@ -256,7 +292,9 @@ export function assertHostPhaseTransitionActionProofCase({
   streamSeq,
   expectedPhaseId,
   expectedPhaseState,
-  expectedDeadlineAffordance,
+  expectedDeadlineAffordance = hostDeadlineAffordanceForPhaseState(
+    expectedPhaseState,
+  ),
   expectedRefreshKeys,
   includeEvidenceInError = false,
 }) {
@@ -277,7 +315,8 @@ export function assertHostPhaseTransitionActionProofCase({
     !sameStringArray(proof.bridgePlan.projectionRefreshKeys, expectedRefreshKeys) ||
     proof.projection?.phase?.id !== expectedPhaseId ||
     proof.projection?.phase?.state !== expectedPhaseState ||
-    proof.projection?.phase?.locked !== (expectedPhaseState === "locked") ||
+    proof.projection?.phase?.locked !==
+      hostPhaseTransitionCaseForState(expectedPhaseState).locked ||
     proof.checkpointPhaseId !== expectedPhaseId ||
     proof.checkpointPhaseState !== expectedPhaseState ||
     proof.checkpointDeadlineAffordance !== expectedDeadlineAffordance ||
@@ -334,7 +373,7 @@ export function assertHostStaleAdvanceAfterTransitionProofCase({
     proof.checkpointPhaseIdAfterReject !== "N02" ||
     proof.checkpointPhaseStateAfterReject !== "open" ||
     proof.checkpointDeadlineAffordanceAfterReject !==
-      "resolve_phase,lock_thread" ||
+      hostDeadlineAffordanceForPhaseState("open") ||
     !String(proof.activityStatusText ?? "")
       .toLowerCase()
       .includes("reject invalidtarget: invalid target")
