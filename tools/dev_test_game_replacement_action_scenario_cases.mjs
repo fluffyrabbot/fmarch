@@ -1,13 +1,25 @@
+import {
+  playerFactionalKillActionCommandFacts,
+} from "./dev_test_game_core_loop_action_scenarios.mjs";
+
+const baseReplacementActionCommandFacts =
+  playerFactionalKillActionCommandFacts({
+    actorSlot: "slot_4",
+    targetSlot: "slot-2",
+    phaseId: "N01",
+  });
+
 const baseReplacementActionScenario = Object.freeze({
-  actorSlot: "slot_4",
-  targetSlot: "slot-2",
+  actorSlot: baseReplacementActionCommandFacts.actorSlot,
+  targetSlot: baseReplacementActionCommandFacts.targetSlot,
   hostPrincipalUserId: "host_h",
   staleOutgoingPrincipalUserId: "player-goon-a",
   replacementPrincipalUserId: "player-rowan",
   targetPrincipalUserId: "player-target",
-  templateId: "factional_kill",
-  commandAction: "submit_action:factional_kill",
-  phaseId: "N01",
+  templateId: baseReplacementActionCommandFacts.templateId,
+  commandAction: baseReplacementActionCommandFacts.commandAction,
+  commandKind: baseReplacementActionCommandFacts.commandKind,
+  phaseId: baseReplacementActionCommandFacts.phaseId,
   staleOutgoingError: "NotYourSlot",
   targetNoticeEffect: "player_killed",
   targetStatusAfterKill: "dead",

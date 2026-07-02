@@ -2,6 +2,9 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { test } from "node:test";
 import {
+  playerFactionalKillActionCommandFacts,
+} from "./dev_test_game_core_loop_action_scenarios.mjs";
+import {
   replacementActionLaneIds,
   replacementActionReconnectScenario,
   replacementIncomingActionScenario,
@@ -17,18 +20,24 @@ test("replacement action lane IDs are shared in proof order", () => {
 });
 
 test("replacement incoming-action scenario carries shared command facts", () => {
+  const action = playerFactionalKillActionCommandFacts({
+    actorSlot: "slot_4",
+    targetSlot: "slot-2",
+    phaseId: "N01",
+  });
   assert.deepEqual(replacementIncomingActionScenario(), {
     laneId: "replacement-incoming-action",
     gameFixtureId: "replacement-incoming-action-game-a",
-    actorSlot: "slot_4",
-    targetSlot: "slot-2",
+    actorSlot: action.actorSlot,
+    targetSlot: action.targetSlot,
     hostPrincipalUserId: "host_h",
     staleOutgoingPrincipalUserId: "player-goon-a",
     replacementPrincipalUserId: "player-rowan",
     targetPrincipalUserId: "player-target",
-    templateId: "factional_kill",
-    commandAction: "submit_action:factional_kill",
-    phaseId: "N01",
+    templateId: action.templateId,
+    commandAction: action.commandAction,
+    commandKind: action.commandKind,
+    phaseId: action.phaseId,
     staleOutgoingError: "NotYourSlot",
     targetNoticeEffect: "player_killed",
     targetStatusAfterKill: "dead",
@@ -41,18 +50,24 @@ test("replacement incoming-action scenario carries shared command facts", () => 
 });
 
 test("replacement action reconnect scenario carries shared command facts", () => {
+  const action = playerFactionalKillActionCommandFacts({
+    actorSlot: "slot_4",
+    targetSlot: "slot-2",
+    phaseId: "N01",
+  });
   assert.deepEqual(replacementActionReconnectScenario(), {
     laneId: "replacement-action-reconnect",
     gameFixtureId: "replacement-action-reconnect-game-a",
-    actorSlot: "slot_4",
-    targetSlot: "slot-2",
+    actorSlot: action.actorSlot,
+    targetSlot: action.targetSlot,
     hostPrincipalUserId: "host_h",
     staleOutgoingPrincipalUserId: "player-goon-a",
     replacementPrincipalUserId: "player-rowan",
     targetPrincipalUserId: "player-target",
-    templateId: "factional_kill",
-    commandAction: "submit_action:factional_kill",
-    phaseId: "N01",
+    templateId: action.templateId,
+    commandAction: action.commandAction,
+    commandKind: action.commandKind,
+    phaseId: action.phaseId,
     staleOutgoingError: "NotYourSlot",
     targetNoticeEffect: "player_killed",
     targetStatusAfterKill: "dead",
@@ -67,18 +82,24 @@ test("replacement action reconnect scenario carries shared command facts", () =>
 });
 
 test("replacement stale action after resolve scenario carries shared command facts", () => {
+  const action = playerFactionalKillActionCommandFacts({
+    actorSlot: "slot_4",
+    targetSlot: "slot-2",
+    phaseId: "N01",
+  });
   assert.deepEqual(replacementStaleActionAfterResolveScenario(), {
     laneId: "replacement-stale-action-after-resolve",
     gameFixtureId: "replacement-stale-action-after-resolve-game-a",
-    actorSlot: "slot_4",
-    targetSlot: "slot-2",
+    actorSlot: action.actorSlot,
+    targetSlot: action.targetSlot,
     hostPrincipalUserId: "host_h",
     staleOutgoingPrincipalUserId: "player-goon-a",
     replacementPrincipalUserId: "player-rowan",
     targetPrincipalUserId: "player-target",
-    templateId: "factional_kill",
-    commandAction: "submit_action:factional_kill",
-    phaseId: "N01",
+    templateId: action.templateId,
+    commandAction: action.commandAction,
+    commandKind: action.commandKind,
+    phaseId: action.phaseId,
     staleOutgoingError: "NotYourSlot",
     targetNoticeEffect: "player_killed",
     targetStatusAfterKill: "dead",
@@ -92,6 +113,22 @@ test("replacement stale action after resolve scenario carries shared command fac
     proof:
       "After Rowan replaced into Slot 4, a replacement role URL froze with factional_kill available, the host resolved N01, and Rowan's stale action click rejected PhaseLocked while refreshing to locked N01 with no actions and no target kill receipt.",
   });
+});
+
+test("replacement action scenarios import shared core action facts", async () => {
+  const source = await readFile(
+    "tools/dev_test_game_replacement_action_scenario_cases.mjs",
+    "utf8",
+  );
+  assert(
+    source.includes("./dev_test_game_core_loop_action_scenarios.mjs"),
+    "replacement action scenarios should import shared core action facts",
+  );
+  assert(
+    !source.includes('templateId: "factional_kill"') &&
+      !source.includes('commandAction: "submit_action:factional_kill"'),
+    "replacement action scenarios should not duplicate factional_kill command facts",
+  );
 });
 
 test("replacement action consumers import extracted scenario cases", async () => {

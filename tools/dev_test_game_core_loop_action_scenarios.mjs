@@ -22,6 +22,36 @@ export function playerActionSubmissionScenario() {
   };
 }
 
+export function playerSlotVoteCommandFacts({
+  actorSlot = "slot-7",
+  targetSlot = "slot-2",
+} = {}) {
+  return {
+    actorSlot,
+    targetSlot,
+    commandActionPrefix: "submit_vote",
+    commandKind: "SubmitVote",
+  };
+}
+
+export function playerFactionalKillActionCommandFacts({
+  actorSlot = playerActionSubmissionScenario().actorSlot,
+  targetSlot = playerActionSubmissionScenario().targetSlot,
+  actionId = playerActionSubmissionScenario().actionId,
+  phaseId,
+} = {}) {
+  const scenario = playerActionSubmissionScenario();
+  return {
+    actorSlot,
+    targetSlot,
+    actionId,
+    commandAction: scenario.clickedAction,
+    commandKind: scenario.commandKind,
+    templateId: scenario.templateId,
+    ...(phaseId === undefined ? {} : { phaseId }),
+  };
+}
+
 export function playerInvalidActionRecoveryScenario() {
   return {
     clickedAction: "submit_invalid_action:factional_kill",

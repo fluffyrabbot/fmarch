@@ -5,9 +5,43 @@ import {
   assertPlayerInvalidActionRecoveryProofCase,
   assertPlayerStaleActionAfterTransitionProofCase,
   assertPlayerStaleVoteAfterTransitionProofCase,
+  playerFactionalKillActionCommandFacts,
   playerActionSubmissionScenario,
   playerInvalidActionRecoveryScenario,
+  playerSlotVoteCommandFacts,
 } from "./dev_test_game_core_loop_action_scenarios.mjs";
+
+test("player command fact helpers derive reusable vote and action vocabulary", () => {
+  assert.deepEqual(
+    playerSlotVoteCommandFacts({
+      actorSlot: "slot-4",
+      targetSlot: "slot-2",
+    }),
+    {
+      actorSlot: "slot-4",
+      targetSlot: "slot-2",
+      commandActionPrefix: "submit_vote",
+      commandKind: "SubmitVote",
+    },
+  );
+  assert.deepEqual(
+    playerFactionalKillActionCommandFacts({
+      actorSlot: "slot_4",
+      targetSlot: "slot-2",
+      actionId: "replacement_race_factional_kill",
+      phaseId: "N01",
+    }),
+    {
+      actorSlot: "slot_4",
+      targetSlot: "slot-2",
+      actionId: "replacement_race_factional_kill",
+      commandAction: "submit_action:factional_kill",
+      commandKind: "SubmitAction",
+      templateId: "factional_kill",
+      phaseId: "N01",
+    },
+  );
+});
 
 test("player action submission assertion covers factional kill ACK", () => {
   const scenario = playerActionSubmissionScenario();

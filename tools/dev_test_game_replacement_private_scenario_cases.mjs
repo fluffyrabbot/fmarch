@@ -2,6 +2,10 @@ import {
   privateChannelSubmitPostCommandFacts,
   staleCompletedPrivatePostCommandFacts,
 } from "./dev_test_game_core_loop_private_channel_scenario_assertions.mjs";
+import {
+  playerFactionalKillActionCommandFacts,
+  playerSlotVoteCommandFacts,
+} from "./dev_test_game_core_loop_action_scenarios.mjs";
 
 export const replacementPrivatePostRaceLaneIds = [
   "concurrent-replacement-private-post-race",
@@ -42,16 +46,20 @@ export function replacementConcurrentPrivatePostRaceScenario() {
 }
 
 export function replacementConcurrentVoteRaceScenario() {
-  return {
-    gameFixtureId: "replacement-vote-race-game-a",
+  const vote = playerSlotVoteCommandFacts({
     actorSlot: "slot-7",
     targetSlot: "slot-2",
+  });
+  return {
+    gameFixtureId: "replacement-vote-race-game-a",
+    actorSlot: vote.actorSlot,
+    targetSlot: vote.targetSlot,
     hostPrincipalUserId: "host_h",
     staleOutgoingPrincipalUserId: "player-mira",
     replacementPrincipalUserId: "player-rowan",
     replacementOccupantLabel: "player-rowan",
-    commandActionPrefix: "submit_vote",
-    commandKind: "SubmitVote",
+    commandActionPrefix: vote.commandActionPrefix,
+    commandKind: vote.commandKind,
     rejectionError: "NotYourSlot",
     proof:
       "A disposable Mira board role URL raced SubmitVote against a host role URL ProcessReplacement command, accepted only vote-before-replacement ACK ordering or NotYourSlot after replacement, then refreshed API surfaces to Rowan as current Slot 7 with Mira's stale command-state route forbidden.",
@@ -59,20 +67,26 @@ export function replacementConcurrentVoteRaceScenario() {
 }
 
 export function replacementConcurrentActionRaceScenario() {
-  return {
-    gameFixtureId: "replacement-action-race-game-a",
+  const action = playerFactionalKillActionCommandFacts({
     actorSlot: "slot_4",
     targetSlot: "slot-2",
+    actionId: "replacement_race_factional_kill",
+    phaseId: "N01",
+  });
+  return {
+    gameFixtureId: "replacement-action-race-game-a",
+    actorSlot: action.actorSlot,
+    targetSlot: action.targetSlot,
     hostPrincipalUserId: "host_h",
     staleOutgoingPrincipalUserId: "player-goon-a",
     replacementPrincipalUserId: "player-rowan",
     replacementOccupantLabel: "player-rowan",
-    actionId: "replacement_race_factional_kill",
+    actionId: action.actionId,
     staleRetryActionId: "replacement_race_stale_retry",
-    commandAction: "submit_action:factional_kill",
-    commandKind: "SubmitAction",
-    templateId: "factional_kill",
-    phaseId: "N01",
+    commandAction: action.commandAction,
+    commandKind: action.commandKind,
+    templateId: action.templateId,
+    phaseId: action.phaseId,
     rejectionError: "NotYourSlot",
     proof:
       "A disposable Slot 4 mafia-goon role URL raced SubmitAction factional_kill against a host role URL ProcessReplacement command, accepted only action-before-replacement ACK ordering or NotYourSlot after replacement, then proved the stale outgoing role cannot retry while Rowan opens the current Slot 4 action surface.",
