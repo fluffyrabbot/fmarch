@@ -72,6 +72,11 @@ import {
 } from "./dev_test_game_core_loop_completed_game_fixtures.mjs";
 import {
   assertCoreLoopCompletedEndgameProgressionSurfaceProof,
+  completedHostCompleteRaceProofLaneDescriptors,
+  completedHostStaleCompleteProofLaneDescriptors,
+  completedPlayerCompleteRaceProofLaneDescriptors,
+  completedStalePlayerCompleteProofLaneDescriptors,
+  coreLoopCompletedGameHardeningLaneDescriptors,
   coreLoopCompletedEndgameProgressionProofScenarioCases,
   coreLoopCompletedEndgameProgressionScenarioFamilies,
   coreLoopCompletedEndgameProgressionTransition,
@@ -522,8 +527,13 @@ function importsFromModule({ source, importedName, moduleSpecifier }) {
 test("completed-game proof contract uses shared hardening lane metadata", async () => {
   const source = await readFile("tools/dev_test_game_proof_contract.mjs", "utf8");
   assert(
-    source.includes("completedGameHardeningLaneCase"),
-    "proof contract should import completed-game hardening lane metadata",
+    importsFromModule({
+      source,
+      importedName: "coreLoopCompletedGameHardeningLaneDescriptors",
+      moduleSpecifier:
+        "./dev_test_game_core_loop_completed_endgame_progression_scenarios.mjs",
+    }),
+    "proof contract should import completed-game hardening descriptors from the progression facade",
   );
   assert(
     source.includes("...completedGameHardeningProofLanes({ hardening })"),
@@ -538,8 +548,8 @@ test("completed-game proof contract uses shared hardening lane metadata", async 
     "proof contract should validate completed-game coverage summary",
   );
   assert(
-    source.includes("completedGameHardeningLaneIds().map"),
-    "proof contract should order completed-game proof lanes from shared metadata",
+    !source.includes("completedGameHardeningLaneIds().map"),
+    "proof contract should leave completed-game lane ordering to the progression facade",
   );
   for (const helperName of [
     "completedHostStaleCompleteProofLanes",
@@ -548,8 +558,8 @@ test("completed-game proof contract uses shared hardening lane metadata", async 
     "completedStalePlayerCompleteProofLanes",
   ]) {
     assert(
-      source.includes(`...${helperName}({ hardening })`),
-      `proof contract should compose completed-game lanes through ${helperName}`,
+      !source.includes(helperName),
+      `proof contract should not keep local completed-game lane helper ${helperName}`,
     );
   }
   for (const scenario of completedGameHardeningLaneIds().map((id) =>
@@ -560,31 +570,41 @@ test("completed-game proof contract uses shared hardening lane metadata", async 
       `proof contract should not duplicate ${scenario.id} label text`,
     );
   }
-  for (const { helperName, cases } of [
+});
+
+test("completed-game progression facade owns hardening lane descriptors", () => {
+  const hardening = completedHardeningProofFixture();
+  assert.deepEqual(
+    coreLoopCompletedGameHardeningLaneDescriptors({ hardening }).map(
+      (descriptor) => [descriptor.id, descriptor.label, descriptor.evidence.passed],
+    ),
+    completedGameHardeningLaneIds().map((id) => {
+      const scenario = completedGameHardeningLaneCase(id);
+      return [scenario.id, scenario.label, true];
+    }),
+  );
+  for (const { helper, cases } of [
     {
-      helperName: "completedHostStaleCompleteProofLanes",
+      helper: completedHostStaleCompleteProofLaneDescriptors,
       cases: completedHostStaleCommandHardeningLaneCases(),
     },
     {
-      helperName: "completedHostCompleteRaceProofLanes",
+      helper: completedHostCompleteRaceProofLaneDescriptors,
       cases: completedHostCompleteRaceHardeningLaneCases(),
     },
     {
-      helperName: "completedPlayerCompleteRaceProofLanes",
+      helper: completedPlayerCompleteRaceProofLaneDescriptors,
       cases: completedPlayerCompleteRaceHardeningLaneCases(),
     },
     {
-      helperName: "completedStalePlayerCompleteProofLanes",
+      helper: completedStalePlayerCompleteProofLaneDescriptors,
       cases: completedStalePlayerCompleteHardeningLaneCases(),
     },
   ]) {
-    const helperSource = functionSource(source, helperName);
-    for (const scenario of cases) {
-      assert(
-        !helperSource.includes(`"${scenario.id}"`),
-        `${helperName} should use shared lane case metadata for ${scenario.id}`,
-      );
-    }
+    assert.deepEqual(
+      helper({ hardening }).map((descriptor) => descriptor.id),
+      cases.map((scenario) => scenario.id),
+    );
   }
 });
 
@@ -1497,6 +1517,235 @@ function commandStateBuildersFixture() {
   };
 }
 
+function completedHardeningProofFixture(game = "completed-hardening-game") {
+  const hiddenSlot = { role_revealed: false, alignment_revealed: false };
+  const revealedSlot = { role_revealed: true, alignment_revealed: true };
+  const completeGameCommand = (targetGame) => ({
+    body: { body: { command: { CompleteGame: { game: targetGame } } } },
+  });
+  return {
+    staleHostComplete: {
+      status: "passed",
+      game: `${game}-stale-host-complete`,
+      setup: { roleActions: ["complete_game"], slots: [hiddenSlot] },
+      liveComplete: {
+        commandStatus: { state: "ack", streamSeqs: [55] },
+      },
+      reject: {
+        state: "reject",
+        error: "GameAlreadyCompleted",
+        serverEnvelope: { body: { kind: "Reject" } },
+      },
+      slotsAfterReject: [revealedSlot],
+      revealTextAfterReject: "All 1 slots revealed",
+      roleActionsAfterReject: [],
+      activityRow: {
+        source: "outcome",
+        actionId: "complete_game",
+        dispatchKind: "complete_game",
+      },
+      dispatchPlan: { projectionRefreshKeys: ["host"] },
+      apiStateAfterReject: { completed: true, slots: [revealedSlot] },
+      staleHostReloadAfterReject: {
+        status: "passed",
+        routeResponseStatus: 200,
+        rejectReceiptStatusText:
+          "Reject GameAlreadyCompleted: game already completed",
+        surfaceText: "All 1 slots revealed",
+        slotsAfterReload: [revealedSlot],
+        revealTextAfterReload: "All 1 slots revealed",
+        roleActionsAfterReload: [],
+        apiStateAfterReload: { completed: true, slots: [revealedSlot] },
+      },
+      reconnectAfterReject: {
+        status: "passed",
+        reconnectingStatus: { state: "reconnecting" },
+        reconnectRecoveryEvent: { attempt: 1, state: "recovered" },
+        recoveredHostProjection: { completed: true, slots: [revealedSlot] },
+      },
+      roleActionsAfterReconnect: [],
+    },
+    concurrentHostCompleteRace: {
+      status: "passed",
+      game: `${game}-host-race`,
+      setup: {
+        firstRoleActions: ["complete_game"],
+        secondRoleActions: ["complete_game"],
+        firstRevealText: "0/1 slots revealed",
+        secondRevealText: "0/1 slots revealed",
+        firstSlots: [hiddenSlot],
+        secondSlots: [hiddenSlot],
+      },
+      ackRaceRole: "first",
+      rejectRaceRole: "second",
+      ack: {
+        state: "ack",
+        commandId: "host-race-ack",
+        streamSeqs: [56],
+        serverEnvelope: { body: { kind: "Ack" } },
+        requestEnvelope: completeGameCommand(`${game}-host-race`),
+      },
+      reject: {
+        state: "reject",
+        commandId: "host-race-reject",
+        error: "GameAlreadyCompleted",
+        serverEnvelope: { body: { kind: "Reject" } },
+        requestEnvelope: completeGameCommand(`${game}-host-race`),
+      },
+      firstSlotsAfterRace: [revealedSlot],
+      secondSlotsAfterRace: [revealedSlot],
+      firstRevealTextAfterRace: "All 1 slots revealed",
+      secondRevealTextAfterRace: "All 1 slots revealed",
+      firstRoleActionsAfterRace: [],
+      secondRoleActionsAfterRace: [],
+      firstActivityStatusText: "Ack",
+      secondActivityStatusText:
+        "Reject GameAlreadyCompleted: game already completed",
+      firstDispatchPlan: { projectionRefreshKeys: ["host"] },
+      secondDispatchPlan: { projectionRefreshKeys: ["host"] },
+      apiStateAfterRace: { completed: true, slots: [revealedSlot] },
+      roleReloadAfterRace: {
+        status: "passed",
+        firstRouteStatus: 200,
+        secondRouteStatus: 200,
+        firstSlotsAfterReload: [revealedSlot],
+        secondSlotsAfterReload: [revealedSlot],
+        firstRevealTextAfterReload: "All 1 slots revealed",
+        secondRevealTextAfterReload: "All 1 slots revealed",
+        firstRoleActionsAfterReload: [],
+        secondRoleActionsAfterReload: [],
+        apiStateAfterReload: { completed: true, slots: [revealedSlot] },
+      },
+    },
+    concurrentPlayerCompleteRace: {
+      status: "passed",
+      game: `${game}-player-race`,
+      postBody: "concurrent player complete fixture post",
+      setupCommandState: {
+        actorSlot: "slot-7",
+        gameCompleted: false,
+      },
+      setupPostButton: { action: "submit_post", disabled: false },
+      setupHostActions: ["complete_game"],
+      setupHostSlots: [hiddenSlot],
+      post: {
+        state: "reject",
+        error: "GameAlreadyCompleted",
+        serverEnvelope: { body: { kind: "Reject" } },
+        requestEnvelope: {
+          body: {
+            body: {
+              command: {
+                SubmitPost: {
+                  body: "concurrent player complete fixture post",
+                },
+              },
+            },
+          },
+        },
+      },
+      complete: {
+        state: "ack",
+        streamSeqs: [57],
+        serverEnvelope: { body: { kind: "Ack" } },
+        requestEnvelope: completeGameCommand(`${game}-player-race`),
+      },
+      postSeq: null,
+      completeSeq: 57,
+      commandStateAfterRace: {
+        gameCompleted: true,
+        actions: [],
+        voteTargets: [],
+      },
+      buttonsAfterRace: [{ action: "submit_post", disabled: true }],
+      hostSlotsAfterRace: [revealedSlot],
+      apiCommandStateAfterRace: {
+        game_completed: true,
+        actions: [],
+        vote_targets: [],
+      },
+      apiThreadHasPost: false,
+      apiStateAfterRace: { completed: true, slots: [revealedSlot] },
+      publicReloadAfterRace: {
+        status: "passed",
+        routeResponseStatus: 200,
+        threadPagerVisible: true,
+        surfaceText: "Endgame\nThe game is complete.",
+        recoveredCommandState: {
+          actorSlot: "slot-7",
+          gameCompleted: true,
+          actions: [],
+          voteTargets: [],
+          boundary: "game is complete",
+        },
+        reloadButtons: [{ action: "submit_post", disabled: true }],
+        reloadPostCount: 0,
+        reloadPostVisible: false,
+        reloadThreadPostBodies: [],
+        apiCommandStateAfterReload: {
+          game_completed: true,
+          actions: [],
+          vote_targets: [],
+        },
+        apiThreadPostCount: 0,
+        apiThreadPostBodiesAfterReload: [],
+        apiStateAfterReload: { completed: true, slots: [revealedSlot] },
+      },
+    },
+    stalePlayerComplete: {
+      status: "passed",
+      game: `${game}-stale-player`,
+      setupCommandState: {
+        gameCompleted: false,
+        voteTargets: [{ kind: "no_lynch" }],
+      },
+      staleVoteButton: { action: "submit_vote:no_lynch", disabled: false },
+      liveComplete: { state: "ack" },
+      reject: {
+        state: "reject",
+        error: "GameAlreadyCompleted",
+        serverEnvelope: { body: { kind: "Reject" } },
+      },
+      dispatchPlan: { projectionRefreshKeys: ["commandState"] },
+      commandStateAfterReject: {
+        gameCompleted: true,
+        actions: [],
+        voteTargets: [],
+      },
+      buttonsAfterReject: [{ action: "submit_post", disabled: true }],
+      currentVoteAfterReject: { hasVote: "false", text: "No current vote" },
+      apiCommandStateAfterReject: {
+        game_completed: true,
+        actions: [],
+        vote_targets: [],
+      },
+      stalePublicReloadAfterReject: {
+        status: "passed",
+        routeResponseStatus: 200,
+        threadPagerVisible: true,
+        surfaceText: "Endgame\nThe game is complete.",
+        recoveredCommandState: {
+          actorSlot: "slot-7",
+          gameCompleted: true,
+          actions: [],
+          voteTargets: [],
+          boundary: "game is complete",
+        },
+        reloadButtons: [{ action: "submit_post", disabled: true }],
+        reloadCurrentVote: { hasVote: "false", text: "No current vote" },
+        reloadThreadPostBodies: [],
+        apiCommandStateAfterReload: {
+          game_completed: true,
+          actions: [],
+          vote_targets: [],
+        },
+        apiThreadPostBodiesAfterReload: [],
+        apiStateAfterReload: { completed: true, slots: [revealedSlot] },
+      },
+    },
+  };
+}
+
 function assertProofFixture() {}
 
 function hostCompleteGameProofFixture() {
@@ -1532,13 +1781,6 @@ function recordAssertion(assertionName, asserted) {
   };
   assertProof.assertionName = assertionName;
   return assertProof;
-}
-
-function functionSource(source, functionName) {
-  const start = source.indexOf(`function ${functionName}`);
-  assert.notEqual(start, -1, `${functionName} should exist`);
-  const nextFunction = source.indexOf("\nfunction ", start + 1);
-  return nextFunction === -1 ? source.slice(start) : source.slice(start, nextFunction);
 }
 
 function escapeRegExp(value) {
