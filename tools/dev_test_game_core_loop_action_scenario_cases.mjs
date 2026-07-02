@@ -1,5 +1,6 @@
 export const playerActionLoopLaneId = "action-loop";
 export const playerInvalidActionRecoveryLaneId = "invalid-action-recovery";
+export const playerInvalidActionRecoveryHookId = "invalidActionReject";
 export const playerActionBoundaryLaneId = "player-action-boundary";
 
 export function playerActionSubmissionScenario() {
@@ -81,6 +82,7 @@ export function playerInvalidActionRecoveryScenario() {
     checkpointReceiptState: "reject:InvalidTarget",
     checkpointActionState: "enabled:submit_action:factional_kill",
     checkpointTargetSlots: "slot-3",
+    recoveryHookId: playerInvalidActionRecoveryHookId,
   };
 }
 

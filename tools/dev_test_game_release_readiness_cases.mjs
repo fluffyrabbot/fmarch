@@ -16,6 +16,10 @@ import {
   devTestGameHostedIdentityEvidencePath,
   hostedIdentityEvidenceHandoffCase,
 } from "./dev_test_game_hosted_identity_evidence_cases.mjs";
+import {
+  playerInvalidActionRecoveryHookId,
+  playerInvalidActionRecoveryLaneId,
+} from "./dev_test_game_core_loop_action_scenario_cases.mjs";
 
 export const devTestGameReleaseRunbookPath =
   "target/dev-test-game/release-runbook.json";
@@ -27,6 +31,7 @@ export const releaseReadinessProductionFeatureSpineTargets = Object.freeze({
     sourceCheckId: "local-identity-adapter-proof",
     cycleId: "identity-adapter",
     roleUrlId: "local-identity-adapter",
+    rowKind: "checkpoint",
     checkpointId: "account-login",
     adminCheckId: "account-login",
   }),
@@ -35,6 +40,7 @@ export const releaseReadinessProductionFeatureSpineTargets = Object.freeze({
     sourceCheckId: "local-core-loop-proof",
     cycleId: "d02-n02",
     roleUrlId: "d02-n02-host",
+    rowKind: "checkpoint",
     checkpointId: "d02-n02-d02-vote-open",
     adminCheckId: "host-lifecycle-control",
   }),
@@ -43,14 +49,26 @@ export const releaseReadinessProductionFeatureSpineTargets = Object.freeze({
     sourceCheckId: "local-core-loop-proof",
     cycleId: "d02-n02",
     roleUrlId: "d02-n02-actionPlayer",
+    rowKind: "checkpoint",
     checkpointId: "d02-n02-n02-action-open",
     adminCheckId: "action-loop",
+  }),
+  invalidActionRecovery: Object.freeze({
+    featureSlotId: playerInvalidActionRecoveryLaneId,
+    sourceCheckId: "local-core-loop-proof",
+    cycleId: "d02-n02",
+    roleUrlId: "d02-n02-actionPlayer",
+    rowKind: "recovery-hook",
+    checkpointId: "d02-n02-n02-action-open",
+    recoveryHookId: playerInvalidActionRecoveryHookId,
+    adminCheckId: playerInvalidActionRecoveryLaneId,
   }),
   privateChannel: Object.freeze({
     featureSlotId: "private-channel",
     sourceCheckId: "local-core-loop-proof",
     cycleId: "d01-n01-d02",
     roleUrlId: "d01-n01-d02-actionPlayer",
+    rowKind: "checkpoint",
     checkpointId: "d01-n01-d02-n01-action-open",
     adminCheckId: "private-channel",
   }),
@@ -59,6 +77,7 @@ export const releaseReadinessProductionFeatureSpineTargets = Object.freeze({
     sourceCheckId: "local-core-loop-proof",
     cycleId: "d01-n01-d02",
     roleUrlId: "d01-n01-d02-host",
+    rowKind: "checkpoint",
     checkpointId: "d01-n01-d02-d01-resolved-locked",
     adminCheckId: "stale-deadline-advance",
   }),
@@ -379,7 +398,7 @@ const localBuildableReleaseReadinessItems = new Map([
         "/admin/audit/local-hosted-concurrent-race-matrix?game=<seeded-game>",
       proofGraphNodeId: "admin-proof:hosted-concurrent-race-matrix",
       productionFeatureSpineTarget:
-        releaseReadinessProductionFeatureSpineTargets.playerActionSubmission,
+        releaseReadinessProductionFeatureSpineTargets.invalidActionRecovery,
       proofBoundary:
         "Machine-readable request artifact only. This can prepare hosted-like concurrent race proof work from the local promoted baseline, but it does not prove hosted deployment, multi-node races, beta readiness, release readiness, or production readiness.",
     },

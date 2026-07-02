@@ -5,6 +5,7 @@ import {
 import {
   playerActionBoundaryLaneId,
   playerActionLoopLaneId,
+  playerInvalidActionRecoveryHookId,
   playerActionSubmissionScenario,
   playerInvalidActionRecoveryLaneId,
   playerInvalidActionRecoveryScenario,
@@ -15,6 +16,7 @@ import {
 export {
   playerActionBoundaryLaneId,
   playerActionLoopLaneId,
+  playerInvalidActionRecoveryHookId,
   playerInvalidActionRecoveryLaneId,
   playerActionSubmissionScenario,
   playerInvalidActionRecoveryScenario,

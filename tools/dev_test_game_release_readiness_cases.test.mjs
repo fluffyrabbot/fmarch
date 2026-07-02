@@ -102,7 +102,7 @@ test("release readiness buildable cases share next-action commands and spine tar
   );
   assert.deepEqual(
     hostedMatrix.productionFeatureSpineTarget,
-    releaseReadinessProductionFeatureSpineTargets.playerActionSubmission,
+    releaseReadinessProductionFeatureSpineTargets.invalidActionRecovery,
   );
 
   const releaseRunbook = releaseReadinessBuildableItemForId(

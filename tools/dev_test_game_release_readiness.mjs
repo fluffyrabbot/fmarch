@@ -4265,17 +4265,25 @@ export function validateDevTestGameNextActionAdminProof(proof, options = {}) {
     const declaration = proof.generatedFrom.unprovenProductionFeatureSpineTarget;
     const drilldown = proof.generatedFrom.unprovenSpineDrilldown;
     const target = proof.generatedFrom.unprovenSpineTarget;
+    const rowKind =
+      declaration?.rowKind === "recovery-hook" ? "recovery-hook" : "checkpoint";
     if (
       typeof declaration?.featureSlotId !== "string" ||
       typeof declaration?.cycleId !== "string" ||
       typeof declaration?.roleUrlId !== "string" ||
+      !["checkpoint", "recovery-hook"].includes(rowKind) ||
       typeof declaration?.checkpointId !== "string" ||
+      (rowKind === "recovery-hook" &&
+        typeof declaration?.recoveryHookId !== "string") ||
       typeof declaration?.adminCheckId !== "string" ||
       typeof target.featureSlotId !== "string" ||
       typeof target.cycleId !== "string" ||
       typeof target.roleUrlId !== "string" ||
       typeof target.roleUrl !== "string" ||
+      (target.rowKind ?? "checkpoint") !== rowKind ||
       typeof target.checkpointId !== "string" ||
+      (rowKind === "recovery-hook" &&
+        target.recoveryHookId !== declaration.recoveryHookId) ||
       typeof target.adminCheckId !== "string" ||
       typeof target.browserProofCommand !== "string" ||
       target.featureSlotId !== declaration.featureSlotId ||
@@ -4283,7 +4291,10 @@ export function validateDevTestGameNextActionAdminProof(proof, options = {}) {
       typeof drilldown?.featureSlotId !== "string" ||
       typeof drilldown?.cycleRowId !== "string" ||
       typeof drilldown?.roleUrlRowId !== "string" ||
+      (drilldown.rowKind ?? "checkpoint") !== rowKind ||
       typeof drilldown?.checkpointRowId !== "string" ||
+      (rowKind === "recovery-hook" &&
+        drilldown.recoveryHookRowId !== declaration.recoveryHookId) ||
       typeof drilldown?.adminCheckId !== "string" ||
       typeof drilldown?.rerunCommand !== "string" ||
       drilldown.featureSlotId !== declaration.featureSlotId ||
@@ -5225,6 +5236,8 @@ function validCoreLoopSpineTargets(spineTargets) {
     typeof spineTargets.roleUrlHrefs[spineTargets.defaultRoleUrlId] === "string" &&
     Array.isArray(spineTargets.checkpointIds) &&
     spineTargets.checkpointIds.includes(spineTargets.defaultCheckpointId) &&
+    Array.isArray(spineTargets.recoveryHookIds) &&
+    spineTargets.recoveryHookIds.includes("invalidActionReject") &&
     Array.isArray(spineTargets.visibleAdminCheckIds) &&
     spineTargets.visibleAdminCheckIds.includes("core-loop-spine") &&
     spineTargets.visibleAdminCheckIds.includes("host-lifecycle-control")

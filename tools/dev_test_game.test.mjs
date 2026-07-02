@@ -1061,9 +1061,10 @@ test("dev test-game next-action derives one local recovery command from the mani
       roleUrl:
         "/admin/audit/local-hosted-concurrent-race-matrix?game=<seeded-game>",
       proofGraphNodeId: "admin-proof:hosted-concurrent-race-matrix",
-      productionFeatureSpineTarget: productionFeatureSpineTargetFixture(),
-      spineDrilldown: featureSpineDrilldownFixture(),
-      spineTarget: resolvedFeatureSpineTargetFixture(),
+      productionFeatureSpineTarget:
+        productionFeatureSpineTargetFixture("invalid-action-recovery"),
+      spineDrilldown: featureSpineDrilldownFixture("invalid-action-recovery"),
+      spineTarget: resolvedFeatureSpineTargetFixture("invalid-action-recovery"),
     },
   });
   assert.deepEqual(freshAction.selectionTrace, {
@@ -1121,9 +1122,10 @@ test("dev test-game next-action derives one local recovery command from the mani
         roleUrl:
           "/admin/audit/local-hosted-concurrent-race-matrix?game=<seeded-game>",
         proofGraphNodeId: "admin-proof:hosted-concurrent-race-matrix",
-        productionFeatureSpineTarget: productionFeatureSpineTargetFixture(),
-        spineDrilldown: featureSpineDrilldownFixture(),
-        spineTarget: resolvedFeatureSpineTargetFixture(),
+        productionFeatureSpineTarget:
+          productionFeatureSpineTargetFixture("invalid-action-recovery"),
+        spineDrilldown: featureSpineDrilldownFixture("invalid-action-recovery"),
+        spineTarget: resolvedFeatureSpineTargetFixture("invalid-action-recovery"),
         actionStatus: "ready",
         proofBoundary:
           "Machine-readable request artifact only. This can prepare hosted-like concurrent race proof work from the local promoted baseline, but it does not prove hosted deployment, multi-node races, beta readiness, release readiness, or production readiness.",
@@ -12270,6 +12272,7 @@ function resolvedFeatureSpineTargetFixture(slotId = "player-action-submission") 
       cycleId: declaration.cycleId,
       roleUrlId: declaration.roleUrlId,
       roleUrl: "/admin/audit/local-identity-adapter?game=<seeded-game>",
+      rowKind: declaration.rowKind,
       checkpointId: declaration.checkpointId,
       adminCheckId: declaration.adminCheckId,
       browserProofCommand: devTestGameLiveProofCommand,
@@ -12283,7 +12286,11 @@ function resolvedFeatureSpineTargetFixture(slotId = "player-action-submission") 
     cycleId: declaration.cycleId,
     roleUrlId: declaration.roleUrlId,
     roleUrl: coreLoopSpineTargetsFixture().roleUrlHrefs[declaration.roleUrlId],
+    rowKind: declaration.rowKind,
     checkpointId: declaration.checkpointId,
+    ...(declaration.rowKind === "recovery-hook"
+      ? { recoveryHookId: declaration.recoveryHookId }
+      : {}),
     adminCheckId: declaration.adminCheckId,
     browserProofCommand: devTestGameLiveProofCommand,
     rerunCommand: "npm run test:dev-test-game-core-loop-admin-proof",
@@ -12298,7 +12305,11 @@ function featureSpineDrilldownFixture(slotId = "player-action-submission") {
     detailRoleUrl: target.detailRoleUrl,
     cycleRowId: target.cycleId,
     roleUrlRowId: target.roleUrlId,
+    rowKind: target.rowKind,
     checkpointRowId: target.checkpointId,
+    ...(target.rowKind === "recovery-hook"
+      ? { recoveryHookRowId: target.recoveryHookId }
+      : {}),
     adminCheckId: target.adminCheckId,
     roleUrl: target.roleUrl,
     rerunCommand:
@@ -12317,6 +12328,7 @@ const productionFeatureSpineTargetFixtures = Object.freeze({
     sourceCheckId: "local-identity-adapter-proof",
     cycleId: "identity-adapter",
     roleUrlId: "local-identity-adapter",
+    rowKind: "checkpoint",
     checkpointId: "account-login",
     adminCheckId: "account-login",
   }),
@@ -12325,6 +12337,7 @@ const productionFeatureSpineTargetFixtures = Object.freeze({
     sourceCheckId: "local-core-loop-proof",
     cycleId: "d02-n02",
     roleUrlId: "d02-n02-host",
+    rowKind: "checkpoint",
     checkpointId: "d02-n02-d02-vote-open",
     adminCheckId: "host-lifecycle-control",
   }),
@@ -12333,14 +12346,26 @@ const productionFeatureSpineTargetFixtures = Object.freeze({
     sourceCheckId: "local-core-loop-proof",
     cycleId: "d02-n02",
     roleUrlId: "d02-n02-actionPlayer",
+    rowKind: "checkpoint",
     checkpointId: "d02-n02-n02-action-open",
     adminCheckId: "action-loop",
+  }),
+  "invalid-action-recovery": Object.freeze({
+    featureSlotId: "invalid-action-recovery",
+    sourceCheckId: "local-core-loop-proof",
+    cycleId: "d02-n02",
+    roleUrlId: "d02-n02-actionPlayer",
+    rowKind: "recovery-hook",
+    checkpointId: "d02-n02-n02-action-open",
+    recoveryHookId: "invalidActionReject",
+    adminCheckId: "invalid-action-recovery",
   }),
   "private-channel": Object.freeze({
     featureSlotId: "private-channel",
     sourceCheckId: "local-core-loop-proof",
     cycleId: "d01-n01-d02",
     roleUrlId: "d01-n01-d02-actionPlayer",
+    rowKind: "checkpoint",
     checkpointId: "d01-n01-d02-n01-action-open",
     adminCheckId: "private-channel",
   }),
@@ -12349,6 +12374,7 @@ const productionFeatureSpineTargetFixtures = Object.freeze({
     sourceCheckId: "local-core-loop-proof",
     cycleId: "d01-n01-d02",
     roleUrlId: "d01-n01-d02-host",
+    rowKind: "checkpoint",
     checkpointId: "d01-n01-d02-d01-resolved-locked",
     adminCheckId: "stale-deadline-advance",
   }),
@@ -12853,9 +12879,12 @@ function nextActionAdminProofFixture() {
       unprovenRoleUrl:
         "/admin/audit/local-hosted-concurrent-race-matrix?game=<seeded-game>",
       unprovenProofGraphNodeId: "admin-proof:hosted-concurrent-race-matrix",
-      unprovenProductionFeatureSpineTarget: productionFeatureSpineTargetFixture(),
-      unprovenSpineDrilldown: featureSpineDrilldownFixture(),
-      unprovenSpineTarget: resolvedFeatureSpineTargetFixture(),
+      unprovenProductionFeatureSpineTarget:
+        productionFeatureSpineTargetFixture("invalid-action-recovery"),
+      unprovenSpineDrilldown:
+        featureSpineDrilldownFixture("invalid-action-recovery"),
+      unprovenSpineTarget:
+        resolvedFeatureSpineTargetFixture("invalid-action-recovery"),
       unprovenHostedHandoffChecklist: hostedHandoffChecklist,
       selectedProofGraphNode: {
         id: "admin-proof:hosted-concurrent-race-matrix",
