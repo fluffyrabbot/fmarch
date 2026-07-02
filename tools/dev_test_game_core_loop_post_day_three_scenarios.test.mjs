@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import { test } from "node:test";
 import {
   assertPostDayThreeResolutionSurfaceCase,
@@ -155,4 +156,46 @@ test("post-Day 3 resolution assertion delegates receipts, host advance, and Nigh
       }),
     /post-Day 3 resolution surface/,
   );
+});
+
+test("post-day and post-night production callers use shared transition assertions", async () => {
+  const adminProofSource = await readFile(
+    "tools/dev_test_game_core_loop_admin_proof.mjs",
+    "utf8",
+  );
+  const readinessSource = await readFile(
+    "tools/dev_test_game_release_readiness.mjs",
+    "utf8",
+  );
+  for (const [callerName, source] of [
+    ["core-loop admin proof", adminProofSource],
+    ["release readiness", readinessSource],
+  ]) {
+    assert(
+      source.includes("assertPostDayThreeResolutionSurfaceCase") &&
+        source.includes(
+          "./dev_test_game_core_loop_resolution_receipt_privacy_scenarios.mjs",
+        ),
+      `${callerName} should import the shared post-Day 3 transition assertion`,
+    );
+    assert(
+      source.includes("assertPostNightFourTransitionSurfaceCase") &&
+        source.includes(
+          "./dev_test_game_core_loop_post_night_four_transition_scenarios.mjs",
+        ),
+      `${callerName} should import the shared post-Night 4 transition assertion`,
+    );
+  }
+  for (const localTransitionFragment of [
+    "target:D03:day_vote",
+    "host:advance_phase:ack:909",
+    "host:N04:advance_phase:ack:917",
+    "survivor:D05:dead_no_controls",
+    "actionPlayer:D05:no_lynch_controls",
+  ]) {
+    assert(
+      !readinessSource.includes(localTransitionFragment),
+      `release readiness should not carry local transition fragment ${localTransitionFragment}`,
+    );
+  }
 });
