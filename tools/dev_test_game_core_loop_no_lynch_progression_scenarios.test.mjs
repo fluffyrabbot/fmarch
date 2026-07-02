@@ -7,8 +7,10 @@ import {
   coreLoopNoLynchProgressionScenarioFamily,
   dayFourNoLynchResolutionSurfaceCase,
   dayFourNoLynchVoteProofCase,
-  dayFiveNoLynchResolutionSurfaceCase,
 } from "./dev_test_game_core_loop_no_lynch_progression_scenarios.mjs";
+import {
+  dayFiveNoLynchResolutionSurfaceCase,
+} from "./dev_test_game_core_loop_day_five_progression_scenarios.mjs";
 
 test("no-lynch progression family shares Day 4 and Day 5 no-lynch cases", () => {
   assert.equal(

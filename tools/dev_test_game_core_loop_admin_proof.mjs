@@ -86,12 +86,14 @@ import {
 import {
   assertDayFourNoLynchHostTransitionProofCase,
   assertDayFourNoLynchVoteProofCase,
-  assertDayFiveNoLynchResolutionSurfaceProof,
-  coreLoopDayFiveProgressionFamilyId,
-  coreLoopDayFiveProgressionScenarioFamily,
   coreLoopNoLynchProgressionFamilyId,
   coreLoopNoLynchProgressionScenarioFamily,
 } from "./dev_test_game_core_loop_no_lynch_progression_scenarios.mjs";
+import {
+  assertDayFiveNoLynchResolutionSurfaceProof,
+  coreLoopDayFiveProgressionFamilyId,
+  coreLoopDayFiveProgressionScenarioFamily,
+} from "./dev_test_game_core_loop_day_five_progression_scenarios.mjs";
 import {
   coreLoopHostControlFamilyId,
   coreLoopHostControlScenarioFamily,

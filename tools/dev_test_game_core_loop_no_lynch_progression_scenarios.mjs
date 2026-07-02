@@ -3,27 +3,12 @@ import {
   dayFourNoLynchHostTransitionProofCase,
 } from "./dev_test_game_core_loop_host_phase_scenarios.mjs";
 import {
-  assertDayFiveNoLynchHostTransitionProofCase,
-  assertDayFiveNoLynchResolutionSurfaceProof,
-  assertDayFiveNoLynchVoteProofCase,
-  assertStaleDayFiveVoteRecoveryProofCase,
-  coreLoopDayFiveProgressionFamilyId,
-  coreLoopDayFiveProgressionLaneIds,
-  coreLoopDayFiveProgressionScenarioFamily,
   dayFiveNoLynchResolutionSurfaceCase,
 } from "./dev_test_game_core_loop_day_five_progression_scenarios.mjs";
 
 export {
   assertDayFourNoLynchHostTransitionProofCase,
   dayFourNoLynchHostTransitionProofCase,
-  assertDayFiveNoLynchHostTransitionProofCase,
-  assertDayFiveNoLynchResolutionSurfaceProof,
-  assertDayFiveNoLynchVoteProofCase,
-  assertStaleDayFiveVoteRecoveryProofCase,
-  coreLoopDayFiveProgressionFamilyId,
-  coreLoopDayFiveProgressionLaneIds,
-  coreLoopDayFiveProgressionScenarioFamily,
-  dayFiveNoLynchResolutionSurfaceCase,
 };
 
 export const coreLoopNoLynchProgressionFamilyId =

@@ -41,6 +41,9 @@ import {
   coreLoopNoLynchProgressionScenarioFamily,
 } from "./dev_test_game_core_loop_no_lynch_progression_scenarios.mjs";
 import {
+  coreLoopDayFiveProgressionScenarioFamily,
+} from "./dev_test_game_core_loop_day_five_progression_scenarios.mjs";
+import {
   coreLoopResolutionReceiptPrivacyScenarioFamily,
 } from "./dev_test_game_core_loop_resolution_receipt_privacy_scenarios.mjs";
 import {
@@ -10129,10 +10132,8 @@ function coreLoopAdminProofFixture() {
         coreLoopResolutionReceiptPrivacyScenarioFamily(),
       noLynchProgressionFamily:
         coreLoopNoLynchProgressionScenarioFamily(),
-      dayFiveProgressionFamily: {
-        id: "core-loop-day-five-progression",
-        laneIds: ["day-vote-no-lynch", "action-loop"],
-      },
+      dayFiveProgressionFamily:
+        coreLoopDayFiveProgressionScenarioFamily(),
       completedEndgameProgressionFamily:
         coreLoopCompletedEndgameProgressionScenarioFamily(),
       privateChannelRecoveryFamily:
