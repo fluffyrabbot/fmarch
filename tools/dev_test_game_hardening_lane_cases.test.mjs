@@ -7,6 +7,9 @@ import {
   cohostDeadlineStaleControlCaseDefinitions,
   hostCohostRaceRecoveryLaneIds,
   hostGenericStaleControlLaneIds,
+  cohostDeadlineActionSet,
+  hostLockedPhaseActionSet,
+  hostOpenPhaseActionSet,
   hostPhaseRaceCoverageCellCases,
   hostPhaseRaceCoverageCellDefinitions,
   hostPhaseStaleControlCase,
@@ -200,6 +203,16 @@ test("stale conflict production callers use the shared scenario module", async (
 
 test("hardening lane cases share host phase stale-control scenarios", () => {
   assert(Object.isFrozen(hostPhaseStaleControlCaseDefinitions));
+  assert.deepEqual(hostOpenPhaseActionSet(), {
+    phaseIncludes: ["resolve_phase", "lock_thread"],
+    phaseExcludes: [],
+    deadlineIncludes: ["extend_deadline"],
+  });
+  assert.deepEqual(hostLockedPhaseActionSet({ excludeOpen: true }), {
+    phaseIncludes: ["unlock_thread", "advance_phase"],
+    phaseExcludes: ["resolve_phase", "lock_thread"],
+    deadlineIncludes: ["extend_deadline"],
+  });
   assert.deepEqual(
     hostPhaseStaleControlCases().map((scenario) => ({
       key: scenario.key,
@@ -273,6 +286,10 @@ test("hardening lane cases share host phase stale-control scenarios", () => {
     hostPhaseStaleControlCases()[0],
     hostPhaseStaleControlCaseDefinitions[0],
   );
+  assert.notEqual(
+    hostPhaseStaleControlCases()[0].expectedCurrentActions.phaseIncludes,
+    hostPhaseStaleControlCaseDefinitions[0].expectedCurrentActions.phaseIncludes,
+  );
   assert.equal(hostPhaseStaleControlCase("resolve").baseLaneId, "stale-host-resolve");
   assert.equal(hostStaleResolveControlCase().rejectError, "PhaseLocked");
   assert.equal(hostStaleResolveControlLaneId, "stale-host-resolve");
@@ -330,6 +347,11 @@ test("hardening lane cases share host/cohost stale recovery IDs", () => {
 
 test("hardening lane cases share cohost deadline stale-control scenario", () => {
   assert(Object.isFrozen(cohostDeadlineStaleControlCaseDefinitions));
+  assert.deepEqual(cohostDeadlineActionSet(), {
+    phaseIncludes: [],
+    phaseExcludes: [],
+    deadlineIncludes: ["extend_deadline"],
+  });
   assert.deepEqual(
     cohostDeadlineStaleControlCases().map((scenario) => ({
       key: scenario.key,
@@ -370,6 +392,10 @@ test("hardening lane cases share cohost deadline stale-control scenario", () => 
   assert.notEqual(
     cohostDeadlineStaleControlCases()[0],
     cohostDeadlineStaleControlCaseDefinitions[0],
+  );
+  assert.notEqual(
+    cohostDeadlineStaleControlCases()[0].expectedCurrentActions.deadlineIncludes,
+    cohostDeadlineStaleControlCaseDefinitions[0].expectedCurrentActions.deadlineIncludes,
   );
 });
 

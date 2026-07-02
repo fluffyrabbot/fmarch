@@ -28,12 +28,19 @@ export const hostGenericStaleControlLaneIds = Object.freeze([
   "stale-host-control",
 ]);
 
+const cloneHostActionSet = (actionSet) =>
+  hostActionSet({
+    phaseIncludes: actionSet.phaseIncludes,
+    phaseExcludes: actionSet.phaseExcludes,
+    deadlineIncludes: actionSet.deadlineIncludes,
+  });
+
 const cloneScenarioCase = (scenario) => ({
   ...scenario,
   expectedStalePhase: { ...scenario.expectedStalePhase },
   expectedCurrentPhase: { ...scenario.expectedCurrentPhase },
-  expectedSetupActions: Object.freeze({ ...scenario.expectedSetupActions }),
-  expectedCurrentActions: Object.freeze({ ...scenario.expectedCurrentActions }),
+  expectedSetupActions: cloneHostActionSet(scenario.expectedSetupActions),
+  expectedCurrentActions: cloneHostActionSet(scenario.expectedCurrentActions),
 });
 
 const cloneRaceCoverageCell = (cell) => ({
@@ -41,6 +48,54 @@ const cloneRaceCoverageCell = (cell) => ({
   roleSurfaces: [...cell.roleSurfaces],
   commandFacts: cell.commandFacts.map((facts) => ({ ...facts })),
 });
+
+const hostLockThreadActionId = "lock_thread";
+const hostUnlockThreadActionId = "unlock_thread";
+const hostResolvePhaseActionId = hostResolvePhaseCommandFacts().actionId;
+const hostAdvancePhaseActionId = hostAdvancePhaseCommandFacts().actionId;
+const hostExtendDeadlineActionId = hostExtendDeadlineCommandFacts().actionId;
+
+function hostActionSet({
+  phaseIncludes = [],
+  phaseExcludes = [],
+  deadlineIncludes = [],
+} = {}) {
+  return Object.freeze({
+    phaseIncludes: Object.freeze([...phaseIncludes]),
+    phaseExcludes: Object.freeze([...phaseExcludes]),
+    deadlineIncludes: Object.freeze([...deadlineIncludes]),
+  });
+}
+
+export function hostOpenPhaseActionSet({
+  includeDeadline = true,
+  excludeAdvance = false,
+} = {}) {
+  return hostActionSet({
+    phaseIncludes: [hostResolvePhaseActionId, hostLockThreadActionId],
+    phaseExcludes: excludeAdvance ? [hostAdvancePhaseActionId] : [],
+    deadlineIncludes: includeDeadline ? [hostExtendDeadlineActionId] : [],
+  });
+}
+
+export function hostLockedPhaseActionSet({
+  includeDeadline = true,
+  excludeOpen = false,
+} = {}) {
+  return hostActionSet({
+    phaseIncludes: [hostUnlockThreadActionId, hostAdvancePhaseActionId],
+    phaseExcludes: excludeOpen
+      ? [hostResolvePhaseActionId, hostLockThreadActionId]
+      : [],
+    deadlineIncludes: includeDeadline ? [hostExtendDeadlineActionId] : [],
+  });
+}
+
+export function cohostDeadlineActionSet() {
+  return hostActionSet({
+    deadlineIncludes: [hostExtendDeadlineActionId],
+  });
+}
 
 export const hostPhaseStaleControlCaseDefinitions = Object.freeze([
   Object.freeze({
@@ -57,16 +112,8 @@ export const hostPhaseStaleControlCaseDefinitions = Object.freeze([
     rejectError: "PhaseLocked",
     expectedStalePhase: Object.freeze({ id: "D02", locked: false }),
     expectedCurrentPhase: Object.freeze({ id: "D02", locked: true }),
-    expectedSetupActions: Object.freeze({
-      phaseIncludes: ["resolve_phase", "lock_thread"],
-      phaseExcludes: [],
-      deadlineIncludes: [],
-    }),
-    expectedCurrentActions: Object.freeze({
-      phaseIncludes: ["unlock_thread", "advance_phase"],
-      phaseExcludes: ["resolve_phase", "lock_thread"],
-      deadlineIncludes: ["extend_deadline"],
-    }),
+    expectedSetupActions: hostOpenPhaseActionSet({ includeDeadline: false }),
+    expectedCurrentActions: hostLockedPhaseActionSet({ excludeOpen: true }),
   }),
   Object.freeze({
     key: "advance",
@@ -82,16 +129,8 @@ export const hostPhaseStaleControlCaseDefinitions = Object.freeze([
     rejectError: "InvalidTarget",
     expectedStalePhase: Object.freeze({ id: "D02", locked: true }),
     expectedCurrentPhase: Object.freeze({ id: "D02", locked: false }),
-    expectedSetupActions: Object.freeze({
-      phaseIncludes: ["advance_phase", "unlock_thread"],
-      phaseExcludes: [],
-      deadlineIncludes: [],
-    }),
-    expectedCurrentActions: Object.freeze({
-      phaseIncludes: ["resolve_phase", "lock_thread"],
-      phaseExcludes: ["advance_phase"],
-      deadlineIncludes: ["extend_deadline"],
-    }),
+    expectedSetupActions: hostLockedPhaseActionSet({ includeDeadline: false }),
+    expectedCurrentActions: hostOpenPhaseActionSet({ excludeAdvance: true }),
   }),
   Object.freeze({
     key: "deadline",
@@ -111,16 +150,8 @@ export const hostPhaseStaleControlCaseDefinitions = Object.freeze([
       locked: false,
       deadline: null,
     }),
-    expectedSetupActions: Object.freeze({
-      phaseIncludes: ["resolve_phase", "lock_thread"],
-      phaseExcludes: [],
-      deadlineIncludes: ["extend_deadline"],
-    }),
-    expectedCurrentActions: Object.freeze({
-      phaseIncludes: ["resolve_phase", "lock_thread"],
-      phaseExcludes: [],
-      deadlineIncludes: ["extend_deadline"],
-    }),
+    expectedSetupActions: hostOpenPhaseActionSet(),
+    expectedCurrentActions: hostOpenPhaseActionSet(),
   }),
 ]);
 
@@ -259,16 +290,8 @@ export const cohostDeadlineStaleControlCaseDefinitions = Object.freeze([
       locked: false,
       deadline: null,
     }),
-    expectedSetupActions: Object.freeze({
-      phaseIncludes: [],
-      phaseExcludes: [],
-      deadlineIncludes: ["extend_deadline"],
-    }),
-    expectedCurrentActions: Object.freeze({
-      phaseIncludes: [],
-      phaseExcludes: [],
-      deadlineIncludes: ["extend_deadline"],
-    }),
+    expectedSetupActions: cohostDeadlineActionSet(),
+    expectedCurrentActions: cohostDeadlineActionSet(),
   }),
 ]);
 
