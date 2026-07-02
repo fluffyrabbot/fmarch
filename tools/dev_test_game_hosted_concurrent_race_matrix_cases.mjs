@@ -3,6 +3,7 @@ import {
 } from "./dev_test_game_host_stale_control_scenarios.mjs";
 import {
   hostedMatrixStaleConflictLaneIds,
+  staleConflictMessageSurfaceCases,
 } from "./dev_test_game_stale_conflict_scenarios.mjs";
 import {
   realHostedEvidenceInputIds,
@@ -51,16 +52,31 @@ export const hostedMatrixRealHostedEvidenceInputIds = Object.freeze([
   ...realHostedEvidenceInputIds,
 ]);
 
-export const hostedMatrixStaleConflictMilestoneCaseDefinitions = Object.freeze([
-  Object.freeze({
-    id: "hosted-stale-host-control-conflict",
-    label: "Hosted stale host-control conflict",
-    laneId: "stale-host-control",
-    progressCheckId: "stale-client-conflict-messages",
-    proofBoundary:
-      "Local hosted-like matrix proof that stale host controls surface explicit conflict recovery through the current host role surface.",
-  }),
-]);
+const staleConflictProgressCheckId = "stale-client-conflict-messages";
+
+export const hostedMatrixStaleConflictMilestoneCaseDefinitions = Object.freeze(
+  [
+    ...staleConflictMessageSurfaceCases().map((scenario) =>
+      Object.freeze({
+        id: `hosted-${scenario.laneId}`,
+        label: `Hosted ${scenario.label}`,
+        laneId: scenario.laneId,
+        progressCheckId: staleConflictProgressCheckId,
+        proofBoundary:
+          `Local hosted-like matrix proof backed by the ${scenario.role} ` +
+          `role URL stale-client surface: ${scenario.proofBoundary}`,
+      }),
+    ),
+    Object.freeze({
+      id: "hosted-stale-host-control-conflict",
+      label: "Hosted stale host-control conflict",
+      laneId: "stale-host-control",
+      progressCheckId: staleConflictProgressCheckId,
+      proofBoundary:
+        "Local hosted-like matrix proof that stale host controls surface explicit conflict recovery through the current host role surface.",
+    }),
+  ],
+);
 
 export function hostedMatrixStaleConflictMilestoneCases() {
   return hostedMatrixStaleConflictMilestoneCaseDefinitions.map(cloneMilestoneCase);

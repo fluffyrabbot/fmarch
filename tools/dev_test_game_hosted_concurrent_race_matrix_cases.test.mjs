@@ -15,6 +15,9 @@ import {
 import {
   realHostedEvidenceInputIds,
 } from "./dev_test_game_real_hosted_evidence_inputs.mjs";
+import {
+  staleConflictMessageSurfaceCases,
+} from "./dev_test_game_stale_conflict_scenarios.mjs";
 
 test("hosted concurrent matrix cases share progress and handoff IDs", () => {
   assert.deepEqual(hostedMatrixProgressCheckIds, [
@@ -51,19 +54,34 @@ test("hosted concurrent matrix cases share progress and handoff IDs", () => {
   );
   assert.equal(hostedMatrixReconnectLaneIds.length, 10);
   assert.equal(hostedMatrixStaleConflictLaneIds.length, 6);
-  assert.deepEqual(hostedMatrixStaleConflictMilestoneCases(), [
-    {
-      id: "hosted-stale-host-control-conflict",
-      label: "Hosted stale host-control conflict",
-      laneId: "stale-host-control",
+  assert.deepEqual(
+    hostedMatrixStaleConflictMilestoneCases().slice(0, 5),
+    staleConflictMessageSurfaceCases().map((scenario) => ({
+      id: `hosted-${scenario.laneId}`,
+      label: `Hosted ${scenario.label}`,
+      laneId: scenario.laneId,
       progressCheckId: "stale-client-conflict-messages",
       proofBoundary:
-        "Local hosted-like matrix proof that stale host controls surface explicit conflict recovery through the current host role surface.",
-    },
-  ]);
+        `Local hosted-like matrix proof backed by the ${scenario.role} ` +
+        `role URL stale-client surface: ${scenario.proofBoundary}`,
+    })),
+  );
+  assert.deepEqual(hostedMatrixStaleConflictMilestoneCases().at(-1), {
+    id: "hosted-stale-host-control-conflict",
+    label: "Hosted stale host-control conflict",
+    laneId: "stale-host-control",
+    progressCheckId: "stale-client-conflict-messages",
+    proofBoundary:
+      "Local hosted-like matrix proof that stale host controls surface explicit conflict recovery through the current host role surface.",
+  });
   assert.deepEqual(hostedMatrixStaleConflictMilestoneLaneIds(), [
+    ...staleConflictMessageSurfaceCases().map((scenario) => scenario.laneId),
     "stale-host-control",
   ]);
+  assert.deepEqual(
+    hostedMatrixStaleConflictMilestoneLaneIds(),
+    hostedMatrixStaleConflictLaneIds,
+  );
 });
 
 test("hosted concurrent matrix consumers import extracted cases", async () => {

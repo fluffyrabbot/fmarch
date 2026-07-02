@@ -627,8 +627,7 @@ function assertHostedMatrixStaleConflictMilestones(milestones) {
       milestone?.status !== "passed" ||
       milestone.progressCheckId !== scenario.progressCheckId ||
       milestone.laneId !== scenario.laneId ||
-      typeof milestone.proofBoundary !== "string" ||
-      !milestone.proofBoundary.includes("stale host controls")
+      milestone.proofBoundary !== scenario.proofBoundary
     ) {
       throw new Error(
         `hosted concurrent race matrix stale milestone drifted: ${scenario.id}`,
