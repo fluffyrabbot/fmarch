@@ -346,6 +346,14 @@ test("completed-game proof contract uses shared hardening lane metadata", async 
     source.includes("completedGameHardeningLaneCase"),
     "proof contract should import completed-game hardening lane metadata",
   );
+  assert(
+    source.includes("...completedGameHardeningProofLanes({ hardening })"),
+    "proof contract should build completed-game lanes through the shared helper",
+  );
+  assert(
+    source.includes("completedGameHardeningLaneIds().map"),
+    "proof contract should order completed-game proof lanes from shared metadata",
+  );
   for (const scenario of completedGameHardeningLaneIds().map((id) =>
     completedGameHardeningLaneCase(id),
   )) {
