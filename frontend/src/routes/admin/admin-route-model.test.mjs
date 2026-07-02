@@ -2048,6 +2048,22 @@ test("admin route data exposes local hardening proof as a native audit row", asy
   });
 });
 
+test("admin proof-run fixture lane inventory follows shared audit lists", () => {
+  const laneIds = proofRunFixture().lanes.map((lane) => lane.id);
+  const sharedLaneIds = [
+    ...coreLoopAuditLaneIds,
+    ...hardeningAuditLaneIds,
+    ...playerRecoveryAuditLaneIds,
+  ];
+  const fixtureOnlyLaneIds = laneIds.filter((id) => !sharedLaneIds.includes(id));
+
+  assert.equal(laneIds.length, new Set(laneIds).size);
+  assert.deepEqual(fixtureOnlyLaneIds, ["browser-entry", "cohost-console"]);
+  for (const id of sharedLaneIds) {
+    assert.equal(laneIds.includes(id), true, `fixture missing shared lane ${id}`);
+  }
+});
+
 test("admin route data exposes local player recovery proof as a focused audit row", async () => {
   const data = await buildAdminRouteData({
     principalUserId: "admin_a",
@@ -3397,119 +3413,7 @@ function proofRunFixture() {
       apiDeadline: null,
     },
   };
-  const lanes = [
-    "browser-entry",
-    "cohost-console",
-    "core-loop",
-    "day-vote-resolution",
-    "day-vote-no-lynch",
-    "action-loop",
-    "host-deadline-advance",
-    "stale-deadline-advance",
-    "invalid-action-recovery",
-    "resolution-receipts",
-    "dead-player-recovery",
-    "player-action-boundary",
-    "private-channel",
-    "private-channel-stale-post-after-transition",
-    "private-channel-completed-game-recovery",
-    "private-channel-invalid-action-recovery",
-    "replacement-host-issued-invite",
-    "replacement-pending-player",
-    "replacement-redeemed-invite-recovery",
-    "replacement-session-revocation-recovery",
-    "replacement-session-refresh-recovery",
-    "replacement-stale-session-after-refresh",
-    "replacement-reconnect-recovery",
-    "replacement-stale-conflict-message",
-    "replacement-invalid-target-recovery",
-    "replacement-console",
-    "replacement-idempotent-retry",
-    "stale-host-invite-recovery",
-    "replacement-stale-success-recovery",
-    "replacement-stale-player",
-    "replacement-stale-action",
-    "replacement-stale-private-channel",
-    "replacement-stale-private-receipts",
-    "replacement-incoming-player",
-    "idempotent-retry",
-    "action-idempotent-retry",
-    "concurrent-action-race",
-    "concurrent-action-race-reload",
-    "reconnect-recovery",
-    "stale-player-vote",
-    "concurrent-vote-race",
-    "concurrent-vote-race-reload",
-    "concurrent-player-vote-resolve-race",
-    "concurrent-player-vote-resolve-race-reload",
-    "concurrent-player-action-advance-race",
-    "concurrent-player-action-advance-race-reload",
-    "concurrent-cohost-deadline-resolve-race",
-    "concurrent-cohost-deadline-resolve-race-reload",
-    "concurrent-replacement-private-post-race",
-    "concurrent-replacement-private-post-race-reload",
-    "concurrent-replacement-vote-race",
-    "concurrent-replacement-vote-race-reload",
-    "concurrent-replacement-action-race",
-    "concurrent-replacement-action-race-reload",
-    "replacement-incoming-action",
-    "replacement-action-reconnect",
-    "replacement-stale-action-after-resolve",
-    "replacement-stale-private-post-after-resolve",
-    "replacement-stale-private-post-reconnect",
-    "replacement-stale-private-post-after-complete",
-    "replacement-stale-private-post-after-complete-reload",
-    "host-votecount-publication",
-    "concurrent-host-publish-race",
-    "concurrent-host-publish-race-reload",
-    "stale-host-publish",
-    "host-lifecycle-control",
-    "stale-host-lifecycle",
-    "stale-host-lifecycle-reload",
-    "host-modkill-control",
-    "stale-host-modkill",
-    "stale-host-modkill-reload",
-    "stale-host-prompt",
-    "stale-host-prompt-reload",
-    "stale-host-complete",
-    "stale-host-complete-reload",
-    "stale-host-complete-reconnect-recovery",
-    "concurrent-host-complete-race",
-    "concurrent-host-complete-race-reload",
-    "concurrent-player-complete-race",
-    "public-player-complete-reload",
-    "stale-player-complete",
-    "stale-player-complete-reload",
-    "stale-same-action-recovery",
-    "stale-dead-action-conflict",
-    "stale-action-conflict",
-    "stale-action-conflict-message",
-    "stale-action-reconnect-recovery",
-    "private-channel-stale-action-reconnect-recovery",
-    "stale-host-control",
-    "concurrent-host-resolve-race",
-    "concurrent-host-resolve-race-reload",
-    "concurrent-host-advance-race",
-    "concurrent-host-advance-race-reload",
-    "concurrent-host-deadline-advance-race",
-    "concurrent-host-deadline-advance-race-reload",
-    "concurrent-host-lifecycle-race",
-    "concurrent-host-lifecycle-race-reload",
-    "concurrent-host-mixed-advance-race",
-    "concurrent-host-mixed-advance-race-reload",
-    "stale-host-resolve",
-    "stale-host-resolve-reload",
-    "stale-host-resolve-reconnect-recovery",
-    "stale-host-advance",
-    "stale-host-advance-reload",
-    "stale-host-advance-reconnect-recovery",
-    "stale-host-deadline",
-    "stale-host-deadline-reload",
-    "stale-host-deadline-reconnect-recovery",
-    "stale-cohost-deadline",
-    "stale-cohost-deadline-reload",
-    "stale-cohost-deadline-reconnect-recovery",
-  ].map((id) => ({
+  const lanes = proofRunFixtureLaneIds().map((id) => ({
     id,
     label: id,
     status: "passed",
@@ -3591,6 +3495,18 @@ function proofRunFixture() {
       replacementHandoffRecoveryCoverageFixture(),
     lanes,
   };
+}
+
+function proofRunFixtureLaneIds() {
+  return [
+    ...new Set([
+      "browser-entry",
+      "cohost-console",
+      ...coreLoopAuditLaneIds,
+      ...hardeningAuditLaneIds,
+      ...playerRecoveryAuditLaneIds,
+    ]),
+  ];
 }
 
 function completedGameHardeningCoverageFixture() {
