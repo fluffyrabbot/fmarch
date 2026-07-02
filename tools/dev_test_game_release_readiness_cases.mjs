@@ -20,6 +20,9 @@ import {
   coreLoopFeatureSpineTargetRows,
 } from "./dev_test_game_core_loop_feature_spine_targets.mjs";
 import {
+  identityFeatureSpineTargetRows,
+} from "./dev_test_game_identity_feature_spine_targets.mjs";
+import {
   completedGameHardeningSpineCycleId,
   completedGameStaleRecoverySpineLaneCase,
 } from "./dev_test_game_core_loop_completed_game_cases.mjs";
@@ -58,15 +61,11 @@ const completedGameStaleRecoverySpineLane =
 const replacementStaleConflictMessageSpineLane =
   replacementStaleConflictMessageSpineLaneCase();
 const coreLoopSpineRows = coreLoopFeatureSpineTargetRows;
+const identitySpineRows = identityFeatureSpineTargetRows;
 
 export const releaseReadinessProductionFeatureSpineTargets = Object.freeze({
   identityAdapter: featureSpineCheckpointTarget({
-    featureSlotId: "identity-adapter",
-    sourceCheckId: "local-identity-adapter-proof",
-    cycleId: "identity-adapter",
-    roleUrlId: "local-identity-adapter",
-    checkpointId: "account-login",
-    adminCheckId: "account-login",
+    ...identitySpineRows.identityAdapter,
   }),
   hostPhaseControl: featureSpineCheckpointTarget({
     ...coreLoopSpineRows.hostPhaseControl,

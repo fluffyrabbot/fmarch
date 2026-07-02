@@ -4,6 +4,10 @@ import {
   productionFeatureSourceTargetFromReadiness,
   productionFeatureSourceTargetsByCheckIdFromReadiness,
 } from "./dev_test_game_production_feature_readiness_sources.mjs";
+import {
+  identityFeatureSpineSourceCheckId,
+  identityFeatureSpineTargetRows,
+} from "./dev_test_game_identity_feature_spine_targets.mjs";
 
 const browserProofCommand =
   "DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch npm run test:dev-test-game-live";
@@ -41,8 +45,24 @@ test("production feature readiness sources derive every available source target"
     "http://127.0.0.1:5173/g/game-a/host",
   );
   assert.equal(
-    sourceTargets["local-identity-adapter-proof"].rerunCommand,
+    sourceTargets[identityFeatureSpineSourceCheckId].rerunCommand,
     identityAdminProofCommand,
+  );
+  assert.deepEqual(
+    {
+      sourceCheckId: sourceTargets[identityFeatureSpineSourceCheckId]
+        .sourceCheckId,
+      cycleId: sourceTargets[identityFeatureSpineSourceCheckId].cycleId,
+      roleUrlId: sourceTargets[identityFeatureSpineSourceCheckId].roleUrlId,
+      checkpointId:
+        sourceTargets[identityFeatureSpineSourceCheckId].checkpointId,
+    },
+    {
+      sourceCheckId: identityFeatureSpineSourceCheckId,
+      cycleId: identityFeatureSpineTargetRows.identityAdapter.cycleId,
+      roleUrlId: identityFeatureSpineTargetRows.identityAdapter.roleUrlId,
+      checkpointId: identityFeatureSpineTargetRows.identityAdapter.checkpointId,
+    },
   );
 });
 

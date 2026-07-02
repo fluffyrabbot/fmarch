@@ -3,6 +3,10 @@ import {
   productionFeatureSourceCheckIds,
   productionFeatureSourceForCheckId,
 } from "./dev_test_game_production_feature_source_registry.mjs";
+import {
+  identityFeatureSpineSourceCheckId,
+  identityFeatureSpineTargetRows,
+} from "./dev_test_game_identity_feature_spine_targets.mjs";
 
 export function productionFeatureSourceTargetsByCheckIdFromReadiness(
   readiness,
@@ -94,8 +98,9 @@ function identityAdapterSourceTargetFromReadiness(
   readiness,
   { defaultBrowserProofCommand, defaultRerunCommand },
 ) {
+  const identityTarget = identityFeatureSpineTargetRows.identityAdapter;
   const sourceCheck = readiness?.localDevelopmentSpine?.checks?.find?.(
-    (check) => check?.id === "local-identity-adapter-proof",
+    (check) => check?.id === identityFeatureSpineSourceCheckId,
   );
   const detailRoleUrl = String(
     sourceCheck?.adminRoleSurface?.detailRoleUrl ?? "",
@@ -104,21 +109,21 @@ function identityAdapterSourceTargetFromReadiness(
     ...(sourceCheck?.adminRoleSurface?.visibleChecks ?? []),
   ].map((id) => String(id));
   const sourceTarget = {
-    sourceCheckId: "local-identity-adapter-proof",
+    sourceCheckId: identityFeatureSpineSourceCheckId,
     detailRoleUrl,
-    cycleId: "identity-adapter",
-    roleUrlId: "local-identity-adapter",
+    cycleId: identityTarget.cycleId,
+    roleUrlId: identityTarget.roleUrlId,
     roleUrl: detailRoleUrl,
-    checkpointId: "account-login",
+    checkpointId: identityTarget.checkpointId,
     browserProofCommand: defaultBrowserProofCommand,
     rerunCommand: defaultRerunCommand,
-    cycleIds: ["identity-adapter"],
-    roleUrlIds: ["local-identity-adapter"],
-    checkpointIds: ["account-login"],
+    cycleIds: [identityTarget.cycleId],
+    roleUrlIds: [identityTarget.roleUrlId],
+    checkpointIds: [identityTarget.checkpointId],
     recoveryHookIds: [],
     visibleAdminCheckIds,
     roleUrlHrefs: {
-      "local-identity-adapter": detailRoleUrl,
+      [identityTarget.roleUrlId]: detailRoleUrl,
     },
   };
   return validSourceTarget(sourceTarget) && sourceTarget.rerunCommand !== ""

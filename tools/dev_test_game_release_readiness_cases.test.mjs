@@ -31,6 +31,10 @@ import {
   coreLoopFeatureSpineTargetRows,
 } from "./dev_test_game_core_loop_feature_spine_targets.mjs";
 import {
+  identityFeatureSpineSourceCheckId,
+  identityFeatureSpineTargetRows,
+} from "./dev_test_game_identity_feature_spine_targets.mjs";
+import {
   replacementStaleConflictMessageSpineLaneCase,
 } from "./dev_test_game_stale_conflict_scenarios.mjs";
 
@@ -294,6 +298,17 @@ test("local core production feature targets derive proof row ids from shared sou
   }
 });
 
+test("identity production feature target derives proof row ids from shared source rows", () => {
+  const source = identityFeatureSpineTargetRows.identityAdapter;
+  const target = releaseReadinessProductionFeatureSpineTargets.identityAdapter;
+  assert.equal(target.featureSlotId, source.featureSlotId);
+  assert.equal(target.sourceCheckId, identityFeatureSpineSourceCheckId);
+  assert.equal(target.cycleId, source.cycleId);
+  assert.equal(target.roleUrlId, source.roleUrlId);
+  assert.equal(target.checkpointId, source.checkpointId);
+  assert.equal(target.adminCheckId, source.adminCheckId);
+});
+
 test("scenario-owned production feature targets avoid hand-maintained row literals", async () => {
   const source = await readFile(
     "tools/dev_test_game_release_readiness_cases.mjs",
@@ -306,6 +321,11 @@ test("scenario-owned production feature targets avoid hand-maintained row litera
       new RegExp(`\\.\\.\\.coreLoopSpineRows\\.${targetKey}`),
     );
   }
+  const identityBlock = featureTargetDeclarationBlock(source, "identityAdapter");
+  assert.match(
+    identityBlock,
+    /\.\.\.identitySpineRows\.identityAdapter/,
+  );
 
   const completedGameBlock = featureTargetDeclarationBlock(
     source,
