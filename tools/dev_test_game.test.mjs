@@ -227,7 +227,9 @@ import {
 } from "./dev_test_game_hosted_concurrent_race_matrix.mjs";
 import {
   featureSpineFixture,
+  hostedProductionIdentityUnprovenFixture,
   invalidActionRecoveryHostedConcurrentRaceMatrixUnprovenFixture,
+  releaseReadinessTraceCandidateFixture,
 } from "./dev_test_game_next_action_spine_fixtures.mjs";
 import {
   assertDevTestGameHostedMatrixExternalEvidence,
@@ -1050,26 +1052,28 @@ test("dev test-game next-action derives one local recovery command from the mani
     }),
   });
   assertDevTestGameNextAction(freshAction);
+  const hostedConcurrentMatrixUnproven =
+    invalidActionRecoveryHostedConcurrentRaceMatrixUnprovenFixture({
+      proofTarget: devTestGameHostedConcurrentRaceMatrixPath,
+      spineRoleUrl:
+        coreLoopSpineTargetsFixture().roleUrlHrefs["d02-n02-actionPlayer"],
+      browserProofCommand: devTestGameLiveProofCommand,
+      includeTargetRerunCommand: true,
+    });
+  const hostedProductionIdentityUnproven =
+    hostedProductionIdentityUnprovenFixture({
+      proofTarget: devTestGameHostedIdentityEvidencePath,
+      browserProofCommand: devTestGameLiveProofCommand,
+      rerunCommand: devTestGameIdentityAdminProofCommand,
+      includeTargetRerunCommand: true,
+      requiredEvidence: "Hosted account lifecycle",
+      hostedHandoffChecklist: hostedIdentityHandoffChecklistFixture(),
+    });
   assert.deepEqual(freshAction.nextAction, {
     command: "npm run test:dev-test-game-hosted-concurrent-race-matrix",
     reason: "release-readiness-unproven",
     status: "ready",
-    unproven: {
-      id: "hosted-concurrent-race-matrix",
-      status: "unproven",
-      requiredEvidence:
-        "Hosted or hosted-like concurrent command race matrix beyond the promoted local replacement, host, player, cohost deadline, lifecycle, and complete-game reload milestones, including multi-session reload/reconnect recovery and stale-client conflict evidence",
-      buildSlice:
-        "Create the first hosted-like concurrent race matrix proof request from the promoted local race baseline.",
-      proofTarget: devTestGameHostedConcurrentRaceMatrixPath,
-      roleUrl:
-        "/admin/audit/local-hosted-concurrent-race-matrix?game=<seeded-game>",
-      proofGraphNodeId: "admin-proof:hosted-concurrent-race-matrix",
-      productionFeatureSpineTarget:
-        productionFeatureSpineTargetFixture("invalid-action-recovery"),
-      spineDrilldown: featureSpineDrilldownFixture("invalid-action-recovery"),
-      spineTarget: resolvedFeatureSpineTargetFixture("invalid-action-recovery"),
-    },
+    unproven: hostedConcurrentMatrixUnproven,
   });
   assert.deepEqual(freshAction.selectionTrace, {
     strategy: "development-spine-priority",
@@ -1113,52 +1117,27 @@ test("dev test-game next-action derives one local recovery command from the mani
     candidateCount: 2,
     selectedUnprovenId: "hosted-concurrent-race-matrix",
     candidates: [
-      {
+      releaseReadinessTraceCandidateFixture({
         rank: 1,
-        id: "hosted-concurrent-race-matrix",
-        status: "unproven",
-        priority: 5,
+        id: hostedConcurrentMatrixUnproven.id,
         selected: true,
-        command: "npm run test:dev-test-game-hosted-concurrent-race-matrix",
-        buildSlice:
-          "Create the first hosted-like concurrent race matrix proof request from the promoted local race baseline.",
         proofTarget: devTestGameHostedConcurrentRaceMatrixPath,
-        roleUrl:
-          "/admin/audit/local-hosted-concurrent-race-matrix?game=<seeded-game>",
-        proofGraphNodeId: "admin-proof:hosted-concurrent-race-matrix",
-        productionFeatureSpineTarget:
-          productionFeatureSpineTargetFixture("invalid-action-recovery"),
-        spineDrilldown: featureSpineDrilldownFixture("invalid-action-recovery"),
-        spineTarget: resolvedFeatureSpineTargetFixture("invalid-action-recovery"),
-        actionStatus: "ready",
-        proofBoundary:
-          "Machine-readable request artifact only. This can prepare hosted-like concurrent race proof work from the local promoted baseline, but it does not prove hosted deployment, multi-node races, beta readiness, release readiness, or production readiness.",
-        requiredEvidence:
-          "Hosted or hosted-like concurrent command race matrix beyond the promoted local replacement, host, player, cohost deadline, lifecycle, and complete-game reload milestones, including multi-session reload/reconnect recovery and stale-client conflict evidence",
-      },
-      {
+        spineRoleUrl:
+          coreLoopSpineTargetsFixture().roleUrlHrefs["d02-n02-actionPlayer"],
+        browserProofCommand: devTestGameLiveProofCommand,
+        includeTargetRerunCommand: true,
+      }),
+      releaseReadinessTraceCandidateFixture({
         rank: 2,
-        id: "hosted-production-identity",
-        status: "unproven",
-        priority: 15,
+        id: hostedProductionIdentityUnproven.id,
         selected: false,
-        command: `npm run ${devTestGameHostedIdentityEvidenceCommand}`,
-        buildSlice:
-          "Run the hosted identity evidence intake; it records a blocked handoff until hosted account lifecycle, invite delivery, recovery, abuse/rate-limit, session-secret, and audit retention evidence are attached without changing role surfaces.",
         proofTarget: devTestGameHostedIdentityEvidencePath,
-        roleUrl:
-          "/admin/audit/local-hosted-identity-evidence?game=<seeded-game>",
-        proofGraphNodeId: "admin-proof:hosted-identity-evidence",
-        productionFeatureSpineTarget:
-          productionFeatureSpineTargetFixture("identity-adapter"),
-        spineDrilldown: featureSpineDrilldownFixture("identity-adapter"),
-        spineTarget: resolvedFeatureSpineTargetFixture("identity-adapter"),
-        actionStatus: "blocked",
-        hostedHandoffChecklist: hostedIdentityHandoffChecklistFixture(),
-        proofBoundary:
-          "Hosted identity evidence handoff. The local identity adapter admin proof remains the prerequisite role-surface proof, while this command records the hosted account lifecycle, invite delivery, account recovery, abuse controls, session-secret policy, and hosted audit retention/export inputs needed next; it does not prove beta readiness, release readiness, or production readiness.",
+        browserProofCommand: devTestGameLiveProofCommand,
+        rerunCommand: devTestGameIdentityAdminProofCommand,
+        includeTargetRerunCommand: true,
         requiredEvidence: "Hosted account lifecycle",
-      },
+        hostedHandoffChecklist: hostedIdentityHandoffChecklistFixture(),
+      }),
     ],
   });
   const missingLocalDependencyAction = buildDevTestGameNextAction(freshManifest, {

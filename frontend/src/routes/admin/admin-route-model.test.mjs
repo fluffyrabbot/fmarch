@@ -78,6 +78,7 @@ import {
 } from "../../../../tools/dev_test_game_proof_graph_handoff_cases.mjs";
 import {
   featureSpineFixture,
+  hostedEvidenceLaneUnprovenFixture as sharedHostedEvidenceLaneUnprovenFixture,
   invalidActionRecoveryHostedConcurrentRaceMatrixUnprovenFixture,
 } from "../../../../tools/dev_test_game_next_action_spine_fixtures.mjs";
 
@@ -90,6 +91,8 @@ const LIVE_BROWSER_PROOF_COMMAND =
   "DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch npm run test:dev-test-game-live";
 const ACTIONABLE_SPINE_ROLE_URL =
   "http://127.0.0.1:5173/g/00000000-0000-0000-0000-000000000002";
+const HOST_SPINE_ROLE_URL =
+  "http://127.0.0.1:5173/g/00000000-0000-0000-0000-000000000002/host";
 const HOSTED_MATRIX_PROOF_TARGET =
   "target/dev-test-game/hosted-concurrent-race-matrix.json";
 const HOSTED_TARGET_PREFLIGHT_PROOF_TARGET =
@@ -4825,22 +4828,15 @@ function releaseReadinessTraceFixture({ unproven, command }) {
 }
 
 function hostedEvidenceLaneUnprovenFixture() {
-  return {
-    id: "hosted-deployment",
-    status: "unproven",
+  return sharedHostedEvidenceLaneUnprovenFixture({
     requiredEvidence:
       "Externally reachable hosted API/frontend deployment and raw hosted evidence.",
-    buildSlice:
-      "Run the one-command hosted evidence lane; it records a blocked preflight report until externally reachable hosted URLs and raw evidence are configured.",
     proofTarget: HOSTED_EVIDENCE_LANE_PROOF_TARGET,
-    roleUrl: "/admin/audit/local-hosted-evidence-lane?game=<seeded-game>",
-    proofGraphNodeId: "admin-proof:hosted-evidence-lane",
-    productionFeatureSpineTarget: productionFeatureSpineTargetFixture(),
-    spineDrilldown: featureSpineDrilldownFixture(),
-    spineTarget: featureSpineTargetFixture(),
+    roleUrlsById: { "d02-n02-host": HOST_SPINE_ROLE_URL },
+    browserProofCommand: LIVE_BROWSER_PROOF_COMMAND,
     realHostedEvidenceInputs: realHostedEvidenceInputsFixture(),
     hostedHandoffChecklist: hostedHandoffChecklistFixture(),
-  };
+  });
 }
 
 function hostedHandoffChecklistFixture() {

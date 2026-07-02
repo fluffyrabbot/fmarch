@@ -1,5 +1,7 @@
 import {
+  releaseReadinessBuildableItemForId,
   releaseReadinessProductionFeatureSpineTargetsBySlotId,
+  releaseReadinessUnprovenItem,
 } from "./dev_test_game_release_readiness_cases.mjs";
 
 export const invalidActionRecoveryHostedConcurrentRaceMatrixUnprovenText =
@@ -97,21 +99,203 @@ export function invalidActionRecoveryHostedConcurrentRaceMatrixUnprovenFixture({
   rerunCommand,
   includeTargetRerunCommand = false,
 }) {
-  const spine = invalidActionRecoveryFeatureSpineFixture({
-    detailRoleUrl,
-    roleUrl: spineRoleUrl,
-    browserProofCommand,
-    rerunCommand,
-    includeTargetRerunCommand,
-  });
-  return {
+  return releaseReadinessUnprovenFixture({
     id: "hosted-concurrent-race-matrix",
-    status: "unproven",
     requiredEvidence: invalidActionRecoveryHostedConcurrentRaceMatrixUnprovenText,
     buildSlice: invalidActionRecoveryHostedConcurrentRaceMatrixBuildSlice,
     proofTarget,
     roleUrl,
     proofGraphNodeId,
-    ...spine,
+    detailRoleUrl,
+    spineRoleUrl,
+    browserProofCommand,
+    rerunCommand,
+    includeTargetRerunCommand,
+  });
+}
+
+export function hostedEvidenceLaneUnprovenFixture({
+  proofTarget,
+  roleUrl,
+  proofGraphNodeId,
+  detailRoleUrl,
+  spineRoleUrl,
+  roleUrlsById,
+  browserProofCommand,
+  rerunCommand,
+  includeTargetRerunCommand = false,
+  requiredEvidence,
+  hostedHandoffChecklist,
+  hostedTargetPreflight,
+  realHostedEvidenceInputs,
+} = {}) {
+  return releaseReadinessUnprovenFixture({
+    id: "hosted-deployment",
+    requiredEvidence,
+    proofTarget,
+    roleUrl,
+    proofGraphNodeId,
+    detailRoleUrl,
+    spineRoleUrl,
+    roleUrlsById,
+    browserProofCommand,
+    rerunCommand,
+    includeTargetRerunCommand,
+    hostedHandoffChecklist,
+    hostedTargetPreflight,
+    realHostedEvidenceInputs,
+  });
+}
+
+export function hostedProductionIdentityUnprovenFixture({
+  proofTarget,
+  roleUrl,
+  proofGraphNodeId,
+  detailRoleUrl = "/admin/audit/local-identity-adapter?game=<seeded-game>",
+  spineRoleUrl = "/admin/audit/local-identity-adapter?game=<seeded-game>",
+  browserProofCommand,
+  rerunCommand,
+  includeTargetRerunCommand = false,
+  requiredEvidence,
+  hostedHandoffChecklist,
+} = {}) {
+  return releaseReadinessUnprovenFixture({
+    id: "hosted-production-identity",
+    requiredEvidence,
+    proofTarget,
+    roleUrl,
+    proofGraphNodeId,
+    detailRoleUrl,
+    spineRoleUrl,
+    browserProofCommand,
+    rerunCommand,
+    includeTargetRerunCommand,
+    hostedHandoffChecklist,
+  });
+}
+
+export function releaseReadinessTraceCandidateFixture({
+  rank,
+  selected,
+  priority,
+  command,
+  actionStatus,
+  proofBoundary,
+  ...unprovenOptions
+}) {
+  const buildable = releaseReadinessBuildableItemForId(unprovenOptions.id, {
+    hostedTargetPreflight: unprovenOptions.hostedTargetPreflight,
+  });
+  const unproven = releaseReadinessUnprovenFixture(unprovenOptions);
+  return {
+    rank,
+    id: unproven.id,
+    status: unproven.status,
+    priority: priority ?? buildable.priority,
+    selected,
+    command: command ?? buildable.command,
+    buildSlice: unproven.buildSlice,
+    proofTarget: unproven.proofTarget,
+    roleUrl: unproven.roleUrl,
+    proofGraphNodeId: unproven.proofGraphNodeId,
+    productionFeatureSpineTarget: unproven.productionFeatureSpineTarget,
+    spineDrilldown: unproven.spineDrilldown,
+    spineTarget: unproven.spineTarget,
+    actionStatus: actionStatus ?? actionStatusForBuildable(buildable),
+    proofBoundary: proofBoundary ?? buildable.proofBoundary,
+    requiredEvidence: unproven.requiredEvidence,
+    ...(unproven.hostedEvidenceMode === undefined
+      ? {}
+      : { hostedEvidenceMode: unproven.hostedEvidenceMode }),
+    ...(unproven.realHostedEvidenceStatus === undefined
+      ? {}
+      : { realHostedEvidenceStatus: unproven.realHostedEvidenceStatus }),
+    ...(unproven.realHostedEvidenceInputs === undefined
+      ? {}
+      : { realHostedEvidenceInputs: unproven.realHostedEvidenceInputs }),
+    ...(unproven.hostedHandoffChecklist === undefined
+      ? {}
+      : { hostedHandoffChecklist: unproven.hostedHandoffChecklist }),
   };
+}
+
+export function releaseReadinessUnprovenFixture({
+  id,
+  requiredEvidence,
+  buildSlice,
+  proofTarget,
+  roleUrl,
+  proofGraphNodeId,
+  detailRoleUrl,
+  spineRoleUrl,
+  roleUrlsById,
+  browserProofCommand,
+  rerunCommand,
+  includeTargetRerunCommand = false,
+  hostedHandoffChecklist,
+  hostedTargetPreflight,
+  realHostedEvidenceInputs,
+} = {}) {
+  const item = releaseReadinessUnprovenItem(id);
+  const buildable = releaseReadinessBuildableItemForId(id, {
+    hostedTargetPreflight,
+  });
+  if (buildable === undefined) {
+    throw new Error(`release-readiness item is not buildable: ${id}`);
+  }
+  const identityAdapterSpine =
+    buildable.productionFeatureSpineTarget.sourceCheckId ===
+    "local-identity-adapter-proof";
+  const resolvedDetailRoleUrl =
+    detailRoleUrl ??
+    (identityAdapterSpine
+      ? "/admin/audit/local-identity-adapter?game=<seeded-game>"
+      : undefined);
+  const resolvedSpineRoleUrl =
+    spineRoleUrl ??
+    (identityAdapterSpine
+      ? "/admin/audit/local-identity-adapter?game=<seeded-game>"
+      : undefined);
+  const spine = featureSpineFixture({
+    slotId: buildable.productionFeatureSpineTarget.featureSlotId,
+    detailRoleUrl: resolvedDetailRoleUrl,
+    roleUrl: resolvedSpineRoleUrl,
+    roleUrlsById,
+    browserProofCommand,
+    rerunCommand,
+    includeTargetRerunCommand,
+  });
+  const resolvedRealHostedEvidenceInputs =
+    realHostedEvidenceInputs ?? buildable.realHostedEvidenceInputs;
+  const resolvedHostedHandoffChecklist =
+    hostedHandoffChecklist ?? buildable.hostedHandoffChecklist;
+  return {
+    id: item.id,
+    status: "unproven",
+    requiredEvidence: requiredEvidence ?? item.requiredEvidence,
+    buildSlice: buildSlice ?? buildable.buildSlice,
+    proofTarget: proofTarget ?? buildable.proofTarget,
+    roleUrl: roleUrl ?? buildable.roleUrl,
+    proofGraphNodeId: proofGraphNodeId ?? buildable.proofGraphNodeId,
+    ...spine,
+    ...(buildable.hostedEvidenceMode === undefined
+      ? {}
+      : { hostedEvidenceMode: buildable.hostedEvidenceMode }),
+    ...(buildable.realHostedEvidenceStatus === undefined
+      ? {}
+      : { realHostedEvidenceStatus: buildable.realHostedEvidenceStatus }),
+    ...(resolvedRealHostedEvidenceInputs === undefined
+      ? {}
+      : { realHostedEvidenceInputs: resolvedRealHostedEvidenceInputs }),
+    ...(resolvedHostedHandoffChecklist === undefined
+      ? {}
+      : { hostedHandoffChecklist: resolvedHostedHandoffChecklist }),
+  };
+}
+
+function actionStatusForBuildable(buildable) {
+  return buildable?.hostedHandoffChecklist?.status === "blocked" ||
+    buildable?.realHostedEvidenceStatus === "unproven"
+    ? "blocked"
+    : "ready";
 }
