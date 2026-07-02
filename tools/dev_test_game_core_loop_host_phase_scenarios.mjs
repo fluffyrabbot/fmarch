@@ -17,6 +17,11 @@ const cloneHostTransitionSurfaceCase = (surfaceCase) => ({
     ...playerCase,
   })),
 });
+const cloneDayVoteHostTransitionProofCase = (transitionCase) => ({
+  ...transitionCase,
+  resolveCase: cloneTransitionProofCase(transitionCase.resolveCase),
+  advanceCase: cloneTransitionProofCase(transitionCase.advanceCase),
+});
 
 const hostPhaseCommandFactDefinitions = Object.freeze({
   resolve: Object.freeze({
@@ -292,6 +297,92 @@ export function assertHostNightActionTransitionSurfaceCase({
         `/games/${expectedGame}/player-command-state?principal_user_id=${playerCase.expectedPrincipalUserId}&slot_id=${playerCase.expectedSlot}`,
       expectedNotificationsEndpoint:
         `/games/${expectedGame}/notifications?principal_user_id=${playerCase.expectedPrincipalUserId}`,
+    });
+  }
+}
+
+const dayFourNoLynchHostTransitionProofCaseDefinition = Object.freeze({
+  surfaceTestId: "host-console-surface",
+  setupResyncFromSeq: 912,
+  setupPhaseId: "D04",
+  setupPhaseState: "open",
+  expectedVotecountTarget: "No lynch",
+  expectedDayVoteOutcomePhaseId: "D04",
+  expectedDayVoteOutcomeStatus: "NoLynch",
+  resolveCase: Object.freeze(
+    hostResolvePhaseTransitionCase({
+      streamSeq: 913,
+      expectedPhaseId: "D04",
+    }),
+  ),
+  advanceCase: Object.freeze(
+    hostAdvancePhaseTransitionCase({
+      streamSeq: 914,
+      expectedPhaseId: "N04",
+    }),
+  ),
+});
+
+export function dayFourNoLynchHostTransitionProofCase() {
+  return cloneDayVoteHostTransitionProofCase(
+    dayFourNoLynchHostTransitionProofCaseDefinition,
+  );
+}
+
+export function assertDayFourNoLynchHostTransitionProofCase({
+  proof,
+  expectedGame,
+  sourceRoleUrl,
+  assertHostPhaseTransitionActionProof = assertHostPhaseTransitionActionProofCase,
+  includeEvidenceInError = false,
+}) {
+  const transitionCase = dayFourNoLynchHostTransitionProofCaseDefinition;
+  if (
+    proof?.status !== "passed" ||
+    proof.clickedThroughFromRoleUrl !== true ||
+    proof.releaseReady !== false ||
+    proof.productionReady !== false ||
+    proof.rawInviteTokensVisible !== false ||
+    proof.sourceRoleUrl !== sourceRoleUrl ||
+    typeof proof.visitedRolePath !== "string" ||
+    !proof.visitedRolePath.endsWith("/host") ||
+    proof.surfaceTestId !== transitionCase.surfaceTestId ||
+    proof.setupResyncFromSeq !== transitionCase.setupResyncFromSeq ||
+    proof.setupSnapshotHost?.phase?.id !== transitionCase.setupPhaseId ||
+    proof.setupSnapshotHost?.phase?.state !== transitionCase.setupPhaseState
+  ) {
+    throwHostPhaseScenarioAssertionError({
+      message:
+        "core-loop admin proof missing Day 4 no-lynch host transition",
+      evidence: proof,
+      includeEvidenceInError,
+    });
+  }
+  assertHostPhaseTransitionActionProof({
+    proof: proof.resolveProof,
+    expectedGame,
+    ...transitionCase.resolveCase,
+    includeEvidenceInError,
+  });
+  assertHostPhaseTransitionActionProof({
+    proof: proof.advanceProof,
+    expectedGame,
+    ...transitionCase.advanceCase,
+    includeEvidenceInError,
+  });
+  if (
+    proof.resolveProof?.votecountProjection?.[0]?.target !==
+      transitionCase.expectedVotecountTarget ||
+    proof.resolveProof?.dayVoteOutcomesProjection?.at?.(-1)?.phaseId !==
+      transitionCase.expectedDayVoteOutcomePhaseId ||
+    proof.resolveProof?.dayVoteOutcomesProjection?.at?.(-1)?.status !==
+      transitionCase.expectedDayVoteOutcomeStatus
+  ) {
+    throwHostPhaseScenarioAssertionError({
+      message:
+        "core-loop admin proof missing Day 4 no-lynch host projections",
+      evidence: proof.resolveProof,
+      includeEvidenceInError,
     });
   }
 }
