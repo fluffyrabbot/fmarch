@@ -46,6 +46,7 @@ import {
   validProductionFeatureSpineDrilldown,
   validProductionFeatureSpineTarget,
 } from "./dev_test_game_production_feature_spine_resolver.mjs";
+import { devTestGameProofGraphPath } from "./dev_test_game_proof_graph_paths.mjs";
 
 export const DEV_TEST_GAME_NEXT_ACTION_VERSION = 1;
 export const devTestGameNextActionPath = "target/dev-test-game/next-action.json";
@@ -96,6 +97,8 @@ export function buildDevTestGameNextAction(
     raceCoverageSource = devTestGameRaceCoveragePath,
     hostedTargetPreflight = null,
     hostedTargetPreflightSource = devTestGameHostedTargetPreflightPath,
+    proofGraph = null,
+    proofGraphSource = devTestGameProofGraphPath,
   } = {},
 ) {
   const manifest = assertDevTestGameSpineManifest(spineManifest);
@@ -111,6 +114,7 @@ export function buildDevTestGameNextAction(
     hostedTargetPreflight === null
       ? null
       : assertDevTestGameHostedTargetPreflight(hostedTargetPreflight);
+  const graph = proofGraph === null ? null : assertProofGraphForNextAction(proofGraph);
   const coreLoopSpineTarget = coreLoopSpineTargetFromReadiness(readiness);
   const identityAdapterSpineTarget =
     identityAdapterSpineTargetFromReadiness(readiness);
@@ -128,6 +132,7 @@ export function buildDevTestGameNextAction(
     hostedTargetPreflight: hostedPreflight,
     coreLoopSpineTarget,
     identityAdapterSpineTarget,
+    proofGraph: graph,
   });
   const releaseReadinessTrace = buildReleaseReadinessTrace(releaseReadinessCandidates);
   const localReadinessDependencyCandidates =
@@ -250,6 +255,12 @@ export function buildDevTestGameNextAction(
               ...(selectedUnproven.spineTarget == null
                 ? {}
                 : { spineTarget: selectedUnproven.spineTarget }),
+              ...(selectedUnproven.selectedProductionFeatureGraph == null
+                ? {}
+                : {
+                    selectedProductionFeatureGraph:
+                      selectedUnproven.selectedProductionFeatureGraph,
+                  }),
               ...(selectedUnproven.hostedEvidenceMode === undefined
                 ? {}
                 : { hostedEvidenceMode: selectedUnproven.hostedEvidenceMode }),
@@ -370,6 +381,12 @@ export function buildDevTestGameNextAction(
               (check) => check.status === "blocked",
             ).length,
           }),
+      ...(graph === null
+        ? {}
+        : {
+            proofGraph: proofGraphSource,
+            proofGraphGeneratedAt: graph.generatedAt,
+          }),
     },
     nextAction,
     selectionTrace,
@@ -488,6 +505,17 @@ export function assertDevTestGameNextAction(evidence) {
       );
     }
     if (
+      evidence.generatedFrom?.proofGraph !== undefined &&
+      !validSelectedProductionFeatureGraph(
+        evidence.nextAction.unproven?.selectedProductionFeatureGraph,
+        evidence.nextAction.unproven?.spineTarget,
+      )
+    ) {
+      throw new Error(
+        "next-action release-readiness recovery is missing selected production feature graph evidence",
+      );
+    }
+    if (
       evidence.nextAction.unproven?.hostedHandoffChecklist !== undefined &&
       !validHostedHandoffChecklist(
         evidence.nextAction.unproven.hostedHandoffChecklist,
@@ -572,6 +600,11 @@ export async function writeDevTestGameNextAction({
       devTestGameHostedTargetPreflightPath,
   );
   const hostedTargetPreflight = await readOptionalJson(absoluteHostedTargetPreflightPath);
+  const absoluteProofGraphPath = path.resolve(
+    repoRoot,
+    process.env.FMARCH_DEV_TEST_GAME_PROOF_GRAPH ?? devTestGameProofGraphPath,
+  );
+  const proofGraph = await readOptionalJson(absoluteProofGraphPath);
   const spineManifestSource = path.relative(repoRoot, absoluteManifestPath);
   const releaseReadinessChecklistSource = path.relative(
     repoRoot,
@@ -583,6 +616,7 @@ export async function writeDevTestGameNextAction({
     repoRoot,
     absoluteHostedTargetPreflightPath,
   );
+  const proofGraphSource = path.relative(repoRoot, absoluteProofGraphPath);
   const evidence = buildDevTestGameNextAction(manifest, {
     generatedAt,
     spineManifestSource,
@@ -594,6 +628,8 @@ export async function writeDevTestGameNextAction({
     raceCoverageSource,
     hostedTargetPreflight,
     hostedTargetPreflightSource,
+    proofGraph,
+    proofGraphSource,
   });
   await mkdir(path.dirname(nextActionJsonPath), { recursive: true });
   await writeFile(nextActionJsonPath, `${JSON.stringify(evidence, null, 2)}\n`);
@@ -742,6 +778,7 @@ function rankedBuildableReleaseReadinessItems(
     hostedTargetPreflight = null,
     coreLoopSpineTarget = null,
     identityAdapterSpineTarget = null,
+    proofGraph = null,
   } = {},
 ) {
   if (readiness === null) {
@@ -764,6 +801,11 @@ function rankedBuildableReleaseReadinessItems(
         defaultRerunCommandBySourceCheckId:
           defaultProductionFeatureSpineRerunCommands,
       });
+      const selectedProductionFeatureGraph =
+        selectedProductionFeatureGraphForTarget({
+          proofGraph,
+          spineTarget,
+        });
       return {
         item,
         index,
@@ -777,6 +819,7 @@ function rankedBuildableReleaseReadinessItems(
         productionFeatureSpineTarget: buildable.productionFeatureSpineTarget,
         spineTarget,
         spineDrilldown: buildProductionFeatureSpineDrilldown(spineTarget),
+        selectedProductionFeatureGraph,
         hostedEvidenceMode: buildable.hostedEvidenceMode,
         realHostedEvidenceStatus: buildable.realHostedEvidenceStatus,
         realHostedEvidenceInputs: buildable.realHostedEvidenceInputs,
@@ -807,6 +850,107 @@ async function readOptionalJson(filePath) {
     }
     throw error;
   }
+}
+
+function assertProofGraphForNextAction(proofGraph) {
+  if (
+    proofGraph?.version !== 1 ||
+    proofGraph.proof !== "dev-test-game-proof-graph" ||
+    proofGraph.status !== "passed" ||
+    proofGraph.scope !== "local-dev-test-game-proof-graph" ||
+    !Array.isArray(proofGraph.nodes) ||
+    !Array.isArray(proofGraph.edges)
+  ) {
+    throw new Error("next-action proof graph input is malformed");
+  }
+  return proofGraph;
+}
+
+function selectedProductionFeatureGraphForTarget({ proofGraph, spineTarget }) {
+  if (proofGraph === null) {
+    return null;
+  }
+  const nodeId = `production-feature:${spineTarget.featureSlotId}`;
+  const node = proofGraph.nodes.find((candidate) => candidate?.id === nodeId);
+  if (node === undefined) {
+    throw new Error(`next-action proof graph missing feature node: ${nodeId}`);
+  }
+  const edge = proofGraph.edges.find(
+    (candidate) =>
+      candidate?.to === nodeId &&
+      candidate?.relationship === "proves-production-feature",
+  );
+  if (edge === undefined) {
+    throw new Error(`next-action proof graph missing feature edge: ${nodeId}`);
+  }
+  if (
+    node.featureSlotId !== spineTarget.featureSlotId ||
+    node.sourceCheckId !== spineTarget.sourceCheckId ||
+    edge.from !== productionFeatureGraphSourceNodeId(spineTarget.sourceCheckId) ||
+    edge.featureSlotId !== spineTarget.featureSlotId ||
+    edge.command !== spineTarget.browserProofCommand
+  ) {
+    throw new Error(
+      `next-action proof graph feature target drifted: ${spineTarget.featureSlotId}`,
+    );
+  }
+  const targetRoleUrl = String(node.targetRoleUrl ?? "");
+  const edgeTargetRoleUrl = String(edge.targetRoleUrl ?? "");
+  return {
+    nodeId,
+    status: String(node.status ?? "unknown"),
+    sourceNodeId: String(edge.from ?? ""),
+    edge: {
+      from: String(edge.from ?? ""),
+      to: String(edge.to ?? ""),
+      relationship: String(edge.relationship ?? ""),
+    },
+    roleUrl: String(node.roleUrl ?? ""),
+    targetRoleUrl,
+    edgeTargetRoleUrl,
+    selectedSpineTargetRoleUrl: String(spineTarget.roleUrl ?? ""),
+    targetRoleUrlMatchesSelectedSpineTarget:
+      targetRoleUrl === spineTarget.roleUrl &&
+      edgeTargetRoleUrl === spineTarget.roleUrl,
+    browserProofCommand: String(
+      node.browserProofCommand ?? edge.command ?? spineTarget.browserProofCommand,
+    ),
+    proofTarget: String(node.artifact ?? ""),
+  };
+}
+
+function productionFeatureGraphSourceNodeId(sourceCheckId) {
+  if (sourceCheckId === "local-identity-adapter-proof") {
+    return "admin-proof:identity";
+  }
+  return "admin-proof:core-loop";
+}
+
+function validSelectedProductionFeatureGraph(graphSelection, spineTarget) {
+  if (
+    graphSelection === null ||
+    typeof graphSelection !== "object" ||
+    spineTarget === null ||
+    typeof spineTarget !== "object"
+  ) {
+    return false;
+  }
+  const expectedNodeId = `production-feature:${spineTarget.featureSlotId}`;
+  return (
+    graphSelection.nodeId === expectedNodeId &&
+    graphSelection.status === "passed" &&
+    typeof graphSelection.sourceNodeId === "string" &&
+    graphSelection.sourceNodeId.length > 0 &&
+    graphSelection.edge?.to === expectedNodeId &&
+    graphSelection.edge?.relationship === "proves-production-feature" &&
+    typeof graphSelection.targetRoleUrl === "string" &&
+    graphSelection.targetRoleUrl.length > 0 &&
+    typeof graphSelection.selectedSpineTargetRoleUrl === "string" &&
+    graphSelection.selectedSpineTargetRoleUrl === spineTarget.roleUrl &&
+    graphSelection.browserProofCommand === spineTarget.browserProofCommand &&
+    typeof graphSelection.proofTarget === "string" &&
+    graphSelection.proofTarget.length > 0
+  );
 }
 
 function buildLocalReadinessDependencyTrace(candidates) {
@@ -854,6 +998,12 @@ function buildReleaseReadinessTrace(candidates) {
       productionFeatureSpineTarget: candidate.productionFeatureSpineTarget,
       spineDrilldown: candidate.spineDrilldown,
       ...(candidate.spineTarget == null ? {} : { spineTarget: candidate.spineTarget }),
+      ...(candidate.selectedProductionFeatureGraph == null
+        ? {}
+        : {
+            selectedProductionFeatureGraph:
+              candidate.selectedProductionFeatureGraph,
+          }),
       ...(candidate.hostedEvidenceMode === undefined
         ? {}
         : { hostedEvidenceMode: candidate.hostedEvidenceMode }),
@@ -1351,6 +1501,8 @@ function assertReleaseReadinessTrace(releaseReadinessTrace, nextAction) {
         JSON.stringify(selected.spineDrilldown ?? null) ||
       JSON.stringify(nextAction.unproven?.spineTarget ?? null) !==
         JSON.stringify(selected.spineTarget ?? null) ||
+      JSON.stringify(nextAction.unproven?.selectedProductionFeatureGraph ?? null) !==
+        JSON.stringify(selected.selectedProductionFeatureGraph ?? null) ||
       JSON.stringify(nextAction.unproven?.hostedHandoffChecklist ?? null) !==
         JSON.stringify(selected.hostedHandoffChecklist ?? null)
     ) {

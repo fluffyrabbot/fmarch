@@ -1116,6 +1116,10 @@ test("admin route data exposes local proof graph as a native audit row", async (
       ["spine-manifest", "/admin/audit/local-spine-manifest?game=midsummer"],
       ["proof-freshness", "/admin/audit/local-proof-freshness?game=midsummer"],
       ["next-action", "/admin/audit/local-next-action?game=midsummer"],
+      [
+        "production-feature:player-action-submission",
+        "/admin/audit/local-core-loop?game=midsummer",
+      ],
       ...adminProofDestinationRequirementRoleRows({ game: "midsummer" }).map(
         ({ linkId, roleUrl }) => [linkId, roleUrl],
       ),
@@ -1168,6 +1172,10 @@ test("admin local proof graph detail data carries graph node rows", async () => 
       ["spine-manifest", "/admin/audit/local-spine-manifest?game=midsummer"],
       ["proof-freshness", "/admin/audit/local-proof-freshness?game=midsummer"],
       ["next-action", "/admin/audit/local-next-action?game=midsummer"],
+      [
+        "production-feature:player-action-submission",
+        "/admin/audit/local-core-loop?game=midsummer",
+      ],
       ...adminProofDestinationRequirementRoleRows({ game: "midsummer" }).map(
         ({ linkId, roleUrl }) => [linkId, roleUrl],
       ),
@@ -1599,6 +1607,14 @@ test("admin route data exposes local next action as a native audit row", async (
         "npm run test:dev-test-game-core-loop-admin-proof",
       ],
       ["selected-spine-browser-proof", LIVE_BROWSER_PROOF_COMMAND],
+      [
+        "selected-production-feature-graph-node",
+        "production-feature:player-action-submission:passed",
+      ],
+      [
+        "selected-production-feature-graph-edge",
+        "admin-proof:core-loop->production-feature:player-action-submission",
+      ],
       ["selection-trace", "0 candidates"],
       ["release-readiness-selection-trace", "1 buildable candidates"],
       ["release-readiness-hosted-concurrent-race-matrix", "selected:unproven"],
@@ -1622,6 +1638,13 @@ test("admin route data exposes local next action as a native audit row", async (
       href: "/admin/audit/local-proof-graph?game=midsummer",
       status: "passed",
       command: LOCAL_RACE_COMMAND,
+    },
+    {
+      id: "production-feature:player-action-submission",
+      label: "production-feature:player-action-submission",
+      href: "/admin/audit/local-proof-graph?game=midsummer",
+      status: "passed",
+      command: LIVE_BROWSER_PROOF_COMMAND,
     },
     {
       id: "admin-proof:hosted-concurrent-race-matrix",
@@ -1730,6 +1753,21 @@ test("admin route data exposes local next action as a native audit row", async (
           productionFeatureSpineTarget: productionFeatureSpineTargetFixture(),
           spineDrilldown: featureSpineDrilldownFixture(),
           spineTarget: featureSpineTargetFixture(),
+          selectedProductionFeatureGraph: {
+            nodeId: "production-feature:player-action-submission",
+            status: "passed",
+            sourceNodeId: "admin-proof:core-loop",
+            edgeFrom: "admin-proof:core-loop",
+            edgeTo: "production-feature:player-action-submission",
+            edgeRelationship: "proves-production-feature",
+            roleUrl: "/admin/audit/local-core-loop?game=<seeded-game>",
+            targetRoleUrl: ACTIONABLE_SPINE_ROLE_URL,
+            edgeTargetRoleUrl: ACTIONABLE_SPINE_ROLE_URL,
+            selectedSpineTargetRoleUrl: ACTIONABLE_SPINE_ROLE_URL,
+            targetRoleUrlMatchesSelectedSpineTarget: true,
+            browserProofCommand: LIVE_BROWSER_PROOF_COMMAND,
+            proofTarget: "target/dev-test-game/release-readiness-checklist.json",
+          },
         },
       ],
     },
@@ -4244,6 +4282,8 @@ function nextActionFixture({
           productionFeatureSpineTarget: productionFeatureSpineTargetFixture(),
           spineDrilldown: featureSpineDrilldownFixture(),
           spineTarget: featureSpineTargetFixture(),
+          selectedProductionFeatureGraph:
+            selectedProductionFeatureGraphFixture(),
         }
       : undefined,
   selectionTrace = selectionTraceFixture({ artifact, command }),
@@ -4417,6 +4457,16 @@ function proofGraphFixture() {
       roleUrl: "/admin/audit/local-next-action?game=<seeded-game>",
       recoveryCommand: "test:dev-test-game-next-action",
     }),
+    {
+      id: "production-feature:player-action-submission",
+      label: "Production feature: player-action-submission",
+      kind: "production-feature-spine-target",
+      status: "passed",
+      artifact: "target/dev-test-game/release-readiness-checklist.json",
+      roleUrl: "/admin/audit/local-core-loop?game=<seeded-game>",
+      targetRoleUrl: ACTIONABLE_SPINE_ROLE_URL,
+      browserProofCommand: LIVE_BROWSER_PROOF_COMMAND,
+    },
     ...adminProofGraphNodesFixture(),
   ];
   const edges = [
@@ -4438,6 +4488,14 @@ function proofGraphFixture() {
       to: linkId,
       relationship: "aggregates",
     })),
+    {
+      from: "admin-proof:core-loop",
+      to: "production-feature:player-action-submission",
+      relationship: "proves-production-feature",
+      featureSlotId: "player-action-submission",
+      targetRoleUrl: ACTIONABLE_SPINE_ROLE_URL,
+      command: LIVE_BROWSER_PROOF_COMMAND,
+    },
   ];
   return {
     version: 1,
@@ -4825,6 +4883,12 @@ function releaseReadinessTraceFixture({ unproven, command }) {
         productionFeatureSpineTarget: unproven.productionFeatureSpineTarget,
         spineDrilldown: unproven.spineDrilldown,
         spineTarget: unproven.spineTarget,
+        ...(unproven.selectedProductionFeatureGraph === undefined
+          ? {}
+          : {
+              selectedProductionFeatureGraph:
+                unproven.selectedProductionFeatureGraph,
+            }),
         ...(unproven.hostedHandoffChecklist === undefined
           ? {}
           : { hostedHandoffChecklist: unproven.hostedHandoffChecklist }),
@@ -4870,6 +4934,26 @@ function featureSpineTargetFixture() {
 
 function featureSpineDrilldownFixture() {
   return playerActionSubmissionSpineFixture().spineDrilldown;
+}
+
+function selectedProductionFeatureGraphFixture() {
+  return {
+    nodeId: "production-feature:player-action-submission",
+    status: "passed",
+    sourceNodeId: "admin-proof:core-loop",
+    edge: {
+      from: "admin-proof:core-loop",
+      to: "production-feature:player-action-submission",
+      relationship: "proves-production-feature",
+    },
+    roleUrl: "/admin/audit/local-core-loop?game=<seeded-game>",
+    targetRoleUrl: ACTIONABLE_SPINE_ROLE_URL,
+    edgeTargetRoleUrl: ACTIONABLE_SPINE_ROLE_URL,
+    selectedSpineTargetRoleUrl: ACTIONABLE_SPINE_ROLE_URL,
+    targetRoleUrlMatchesSelectedSpineTarget: true,
+    browserProofCommand: LIVE_BROWSER_PROOF_COMMAND,
+    proofTarget: "target/dev-test-game/release-readiness-checklist.json",
+  };
 }
 
 function localReadinessDependencyTraceFixture({ localCheck, command } = {}) {

@@ -136,6 +136,9 @@ await runAdminAuditProof({
         source.nextAction.nextAction.unproven?.spineDrilldown ?? null,
       unprovenSpineTarget:
         source.nextAction.nextAction.unproven?.spineTarget ?? null,
+      unprovenSelectedProductionFeatureGraph:
+        source.nextAction.nextAction.unproven?.selectedProductionFeatureGraph ??
+        null,
       unprovenHostedHandoffChecklist:
         source.nextAction.nextAction.unproven?.hostedHandoffChecklist ?? null,
       selectedProofGraphNode: selectedNextActionProofGraphNodeSummary({
@@ -682,6 +685,12 @@ function requiredChecksForNextAction(nextAction) {
       checks.push("selected-spine-rerun-command");
       checks.push("selected-spine-browser-proof");
     }
+    if (
+      nextAction.nextAction.unproven.selectedProductionFeatureGraph !== undefined
+    ) {
+      checks.push("selected-production-feature-graph-node");
+      checks.push("selected-production-feature-graph-edge");
+    }
   }
   if (nextAction.nextAction.stability?.source !== undefined) {
     checks.push("proof-stability-drift");
@@ -738,6 +747,8 @@ function requiredChecksForNextAction(nextAction) {
 
 function requiredRelatedLinksForNextAction(nextAction) {
   const proofGraphNodeId = nextAction.nextAction.unproven?.proofGraphNodeId;
+  const selectedProductionFeatureGraphNodeId =
+    nextAction.nextAction.unproven?.selectedProductionFeatureGraph?.nodeId;
   const localCheckId = nextAction.nextAction.localCheck?.id;
   const seedProofLaneCoverageRoleUrl =
     nextAction.nextAction.seedProofLaneCoverage?.roleUrl;
@@ -747,6 +758,10 @@ function requiredRelatedLinksForNextAction(nextAction) {
       : []),
     ...(typeof proofGraphNodeId === "string" && proofGraphNodeId.trim() !== ""
       ? [proofGraphNodeId]
+      : []),
+    ...(typeof selectedProductionFeatureGraphNodeId === "string" &&
+    selectedProductionFeatureGraphNodeId.trim() !== ""
+      ? [selectedProductionFeatureGraphNodeId]
       : []),
     ...(typeof localCheckId === "string" && localCheckId.trim() !== ""
       ? [localCheckId]
@@ -824,6 +839,7 @@ function requiredCheckStatusesForNextAction(nextAction, proofGraph) {
 function relatedHandoffsForNextAction({ nextAction, proofGraph, hostedMatrix }) {
   return [
     selectedProofGraphHandoffSummary({ nextAction, proofGraph }),
+    selectedProductionFeatureGraphHandoffSummary({ nextAction }),
     hostedMatrixHandoffSummary({ nextAction, hostedMatrix }),
   ].filter((handoff) => handoff !== null);
 }
@@ -842,6 +858,25 @@ function selectedProofGraphHandoffSummary({ nextAction, proofGraph }) {
     requiredCheckIds: [selectedNode.id],
     requiredRelatedLinkIds:
       selectedNode.roleUrl === "" ? [] : [selectedNode.id],
+  };
+}
+
+function selectedProductionFeatureGraphHandoffSummary({ nextAction }) {
+  const selectedGraph =
+    nextAction.nextAction.unproven?.selectedProductionFeatureGraph;
+  if (
+    selectedGraph === null ||
+    typeof selectedGraph !== "object" ||
+    typeof selectedGraph.nodeId !== "string" ||
+    selectedGraph.nodeId.trim() === ""
+  ) {
+    return null;
+  }
+  return {
+    linkId: selectedGraph.nodeId,
+    auditId: "local-proof-graph",
+    requiredCheckIds: [selectedGraph.nodeId],
+    requiredRelatedLinkIds: [selectedGraph.nodeId],
   };
 }
 
@@ -875,6 +910,15 @@ function requiredChecksForEvidence(evidence) {
                 "selected-spine-admin-check",
                 "selected-spine-rerun-command",
                 "selected-spine-browser-proof",
+              ]),
+          ...(evidence.generatedFrom?.unprovenSelectedProductionFeatureGraph ===
+            null ||
+          evidence.generatedFrom?.unprovenSelectedProductionFeatureGraph ===
+            undefined
+            ? []
+            : [
+                "selected-production-feature-graph-node",
+                "selected-production-feature-graph-edge",
               ]),
         ]
       : []),

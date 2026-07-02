@@ -1568,6 +1568,7 @@ test("dev test-game next-action advances hosted deployment after target prefligh
     raceCoverage: devTestGameRaceCoverageFixture(),
     releaseReadinessChecklist: readiness,
     hostedTargetPreflight: hostedTargetPreflightFixture({ status: "blocked" }),
+    proofGraph: nextActionProofGraphFixture("host-phase-control"),
   });
   assertDevTestGameNextAction(blockedPreflightAction);
   assert.equal(
@@ -1615,9 +1616,41 @@ test("dev test-game next-action advances hosted deployment after target prefligh
     blockedPreflightAction.releaseReadinessTrace.candidates[0].spineTarget,
     blockedPreflightAction.nextAction.unproven.spineTarget,
   );
+  assert.deepEqual(
+    blockedPreflightAction.nextAction.unproven.selectedProductionFeatureGraph,
+    {
+      nodeId: "production-feature:host-phase-control",
+      status: "passed",
+      sourceNodeId: "admin-proof:core-loop",
+      edge: {
+        from: "admin-proof:core-loop",
+        to: "production-feature:host-phase-control",
+        relationship: "proves-production-feature",
+      },
+      roleUrl: "/admin/audit/local-core-loop?game=<seeded-game>",
+      targetRoleUrl:
+        coreLoopSpineTargetsFixture().roleUrlHrefs["d02-n02-host"],
+      edgeTargetRoleUrl:
+        coreLoopSpineTargetsFixture().roleUrlHrefs["d02-n02-host"],
+      selectedSpineTargetRoleUrl:
+        coreLoopSpineTargetsFixture().roleUrlHrefs["d02-n02-host"],
+      targetRoleUrlMatchesSelectedSpineTarget: true,
+      browserProofCommand: devTestGameLiveProofCommand,
+      proofTarget: devTestGameReleaseReadinessPath,
+    },
+  );
+  assert.deepEqual(
+    blockedPreflightAction.releaseReadinessTrace.candidates[0]
+      .selectedProductionFeatureGraph,
+    blockedPreflightAction.nextAction.unproven.selectedProductionFeatureGraph,
+  );
   assert.equal(
     blockedPreflightAction.generatedFrom.hostedTargetPreflightStatus,
     "blocked",
+  );
+  assert.equal(
+    blockedPreflightAction.generatedFrom.proofGraph,
+    devTestGameProofGraphPath,
   );
   assert.deepEqual(
     blockedPreflightAction.nextAction.unproven.hostedHandoffChecklist.inputIds,
@@ -12372,6 +12405,45 @@ function productionFeatureSpineTargetFixture(slotId = "player-action-submission"
 
 function resolvedFeatureSpineTargetFixture(slotId = "player-action-submission") {
   return featureSpineCaseFixture(slotId).spineTarget;
+}
+
+function nextActionProofGraphFixture(slotId = "player-action-submission") {
+  const target = resolvedFeatureSpineTargetFixture(slotId);
+  const sourceNodeId =
+    target.sourceCheckId === "local-identity-adapter-proof"
+      ? "admin-proof:identity"
+      : "admin-proof:core-loop";
+  const nodeId = `production-feature:${slotId}`;
+  return {
+    version: 1,
+    proof: "dev-test-game-proof-graph",
+    status: "passed",
+    generatedAt: "2026-06-26T00:00:00.000Z",
+    scope: "local-dev-test-game-proof-graph",
+    nodes: [
+      {
+        id: nodeId,
+        kind: "production-feature-spine-target",
+        status: "passed",
+        featureSlotId: slotId,
+        sourceCheckId: target.sourceCheckId,
+        roleUrl: target.detailRoleUrl,
+        targetRoleUrl: target.roleUrl,
+        browserProofCommand: target.browserProofCommand,
+        artifact: devTestGameReleaseReadinessPath,
+      },
+    ],
+    edges: [
+      {
+        from: sourceNodeId,
+        to: nodeId,
+        relationship: "proves-production-feature",
+        featureSlotId: slotId,
+        targetRoleUrl: target.roleUrl,
+        command: target.browserProofCommand,
+      },
+    ],
+  };
 }
 
 function featureSpineDrilldownFixture(slotId = "player-action-submission") {

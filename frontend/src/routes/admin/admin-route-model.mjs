@@ -1497,6 +1497,10 @@ export function normalizeLocalNextActionAudit(nextAction, { game, proofGraph = n
     normalizeNextActionFeatureSpineDeclaration(
       unproven?.productionFeatureSpineTarget,
     );
+  const selectedProductionFeatureGraph =
+    normalizeNextActionProductionFeatureGraph(
+      unproven?.selectedProductionFeatureGraph,
+    );
   const selectionTrace = normalizeNextActionSelectionTrace(nextAction.selectionTrace);
   const releaseReadinessTrace = normalizeNextActionReleaseReadinessTrace(
     nextAction.releaseReadinessTrace,
@@ -1614,6 +1618,18 @@ export function normalizeLocalNextActionAudit(nextAction, { game, proofGraph = n
           Object.freeze({
             id: "selected-spine-browser-proof",
             status: selectedSpineTarget.browserProofCommand,
+          }),
+        ]),
+    ...(selectedProductionFeatureGraph.nodeId === ""
+      ? []
+      : [
+          Object.freeze({
+            id: "selected-production-feature-graph-node",
+            status: `${selectedProductionFeatureGraph.nodeId}:${selectedProductionFeatureGraph.status}`,
+          }),
+          Object.freeze({
+            id: "selected-production-feature-graph-edge",
+            status: `${selectedProductionFeatureGraph.edgeFrom}->${selectedProductionFeatureGraph.edgeTo}`,
           }),
         ]),
     ...(stability === null
@@ -1793,7 +1809,8 @@ export function normalizeLocalNextActionAudit(nextAction, { game, proofGraph = n
       unprovenRoleUrl === "" &&
       localCheckRoleUrl === "" &&
       seedProofLaneCoverageRoleUrl === "" &&
-      selectedProofGraphNode === null
+      selectedProofGraphNode === null &&
+      selectedProductionFeatureGraph.nodeId === ""
         ? Object.freeze([])
         : Object.freeze([
             ...(selectedProofGraphNode === null
@@ -1805,6 +1822,17 @@ export function normalizeLocalNextActionAudit(nextAction, { game, proofGraph = n
                     href: adminAuditInspectHref({ game, audit: "local-proof-graph" }),
                     status: selectedProofGraphNode.status,
                     command: selectedProofGraphNode.proofCommand,
+                  }),
+                ]),
+            ...(selectedProductionFeatureGraph.nodeId === ""
+              ? []
+              : [
+                  Object.freeze({
+                    id: selectedProductionFeatureGraph.nodeId,
+                    label: selectedProductionFeatureGraph.nodeId,
+                    href: adminAuditInspectHref({ game, audit: "local-proof-graph" }),
+                    status: selectedProductionFeatureGraph.status,
+                    command: selectedProductionFeatureGraph.browserProofCommand,
                   }),
                 ]),
             ...(unprovenRoleUrl === ""
@@ -2211,6 +2239,10 @@ function normalizeNextActionReleaseReadinessTrace(releaseReadinessTrace) {
           candidate.spineDrilldown,
         ),
         spineTarget: normalizeNextActionSpineTarget(candidate.spineTarget),
+        selectedProductionFeatureGraph:
+          normalizeNextActionProductionFeatureGraph(
+            candidate.selectedProductionFeatureGraph,
+          ),
         ...(candidate.hostedEvidenceMode === undefined
           ? {}
           : { hostedEvidenceMode: String(candidate.hostedEvidenceMode) }),
@@ -2294,6 +2326,48 @@ function normalizeNextActionFeatureSpineDeclaration(declaration) {
     checkpointId: String(declaration.checkpointId ?? ""),
     recoveryHookId: String(declaration.recoveryHookId ?? ""),
     adminCheckId: String(declaration.adminCheckId ?? ""),
+  });
+}
+
+function normalizeNextActionProductionFeatureGraph(graphSelection) {
+  if (graphSelection === null || typeof graphSelection !== "object") {
+    return Object.freeze({
+      nodeId: "",
+      status: "",
+      sourceNodeId: "",
+      edgeFrom: "",
+      edgeTo: "",
+      edgeRelationship: "",
+      roleUrl: "",
+      targetRoleUrl: "",
+      edgeTargetRoleUrl: "",
+      selectedSpineTargetRoleUrl: "",
+      targetRoleUrlMatchesSelectedSpineTarget: false,
+      browserProofCommand: "",
+      proofTarget: "",
+    });
+  }
+  const edge =
+    graphSelection.edge !== null && typeof graphSelection.edge === "object"
+      ? graphSelection.edge
+      : {};
+  return Object.freeze({
+    nodeId: String(graphSelection.nodeId ?? ""),
+    status: String(graphSelection.status ?? "unknown"),
+    sourceNodeId: String(graphSelection.sourceNodeId ?? ""),
+    edgeFrom: String(edge.from ?? ""),
+    edgeTo: String(edge.to ?? ""),
+    edgeRelationship: String(edge.relationship ?? ""),
+    roleUrl: String(graphSelection.roleUrl ?? ""),
+    targetRoleUrl: String(graphSelection.targetRoleUrl ?? ""),
+    edgeTargetRoleUrl: String(graphSelection.edgeTargetRoleUrl ?? ""),
+    selectedSpineTargetRoleUrl: String(
+      graphSelection.selectedSpineTargetRoleUrl ?? "",
+    ),
+    targetRoleUrlMatchesSelectedSpineTarget:
+      graphSelection.targetRoleUrlMatchesSelectedSpineTarget === true,
+    browserProofCommand: String(graphSelection.browserProofCommand ?? ""),
+    proofTarget: String(graphSelection.proofTarget ?? ""),
   });
 }
 
