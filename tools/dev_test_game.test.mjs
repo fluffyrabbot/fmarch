@@ -10086,6 +10086,10 @@ function coreLoopAdminProofFixture() {
         id: "core-loop-phase-progression",
         laneIds: ["day-vote-resolution", "day-vote-no-lynch", "action-loop"],
       },
+      lateActionProgressionFamily: {
+        id: "core-loop-late-action-progression",
+        laneIds: ["action-loop"],
+      },
       coreLoopSpineRows: {
         cycles: ["d01-n01-d02", "d02-n02"],
         roleUrls: [

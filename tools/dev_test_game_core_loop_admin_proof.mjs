@@ -58,6 +58,12 @@ import {
   coreLoopPhaseProgressionScenarioFamily,
 } from "./dev_test_game_core_loop_phase_progression_scenarios.mjs";
 import {
+  assertNightFourActionSubmissionSurfaceCase,
+  assertNightFourResolutionReceiptSurfaceCase,
+  coreLoopLateActionProgressionFamilyId,
+  coreLoopLateActionProgressionScenarioFamily,
+} from "./dev_test_game_core_loop_late_action_progression_scenarios.mjs";
+import {
   completedPrivateChannelReloadScenario,
   completedPrivateChannelTransition,
   privateChannelSubmitPostScenario,
@@ -364,6 +370,8 @@ await runAdminAuditProof({
       completedGameHardeningCoverageStatus:
         completedGameHardeningCoverageStatus(proofRun),
       phaseProgressionFamily: coreLoopPhaseProgressionScenarioFamily(),
+      lateActionProgressionFamily:
+        coreLoopLateActionProgressionScenarioFamily(),
       highlightedLaneEvidence: coreLoopHighlightedLaneEvidence(proofRun),
     },
     adminRoleSurface: surfaces.adminRoleSurface,
@@ -9615,6 +9623,13 @@ export function assertCoreLoopAdminProof(evidence) {
   ) {
     throw new Error("core-loop admin proof missing phase progression family");
   }
+  if (
+    evidence.generatedFrom?.lateActionProgressionFamily?.id !==
+      coreLoopLateActionProgressionFamilyId ||
+    !Array.isArray(evidence.generatedFrom?.lateActionProgressionFamily?.laneIds)
+  ) {
+    throw new Error("core-loop admin proof missing late action progression family");
+  }
   assertVisibleRows(
     "core-loop admin proof missing visible spine cycle",
     evidence.adminRoleSurface?.visibleSpineCycles,
@@ -10387,49 +10402,13 @@ function assertNightFourActionSubmissionSurface(nightFourActionSubmissionSurface
   const expectedGame = gameFromRoleUrl(
     nightFourActionSubmissionSurface?.sourceHostRoleUrl,
   );
-  if (
-    nightFourActionSubmissionSurface?.status !== "passed" ||
-    nightFourActionSubmissionSurface.clickedThroughFromRoleUrl !== true ||
-    nightFourActionSubmissionSurface.releaseReady !== false ||
-    nightFourActionSubmissionSurface.productionReady !== false ||
-    typeof nightFourActionSubmissionSurface.sourceHostRoleUrl !== "string" ||
-    !nightFourActionSubmissionSurface.sourceHostRoleUrl.endsWith("/host") ||
-    typeof nightFourActionSubmissionSurface.sourceActionPlayerRoleUrl !==
-      "string" ||
-    !nightFourActionSubmissionSurface.sourceActionPlayerRoleUrl.includes("/g/") ||
-    !String(nightFourActionSubmissionSurface.transition ?? "").includes(
-      "player:D04:no_lynch:ack:912",
-    ) ||
-    !String(nightFourActionSubmissionSurface.transition ?? "").includes(
-      "host:D04:resolve_phase:ack:913",
-    ) ||
-    !String(nightFourActionSubmissionSurface.transition ?? "").includes(
-      "host:advance_phase:ack:914",
-    ) ||
-    !String(nightFourActionSubmissionSurface.transition ?? "").includes(
-      "player:N04:submit_action:slot-5:ack:915",
-    )
-  ) {
-    throw new Error(
-      `core-loop admin proof missing Night 4 action submission surface: ${JSON.stringify(
-        nightFourActionSubmissionSurface,
-      )}`,
-    );
-  }
-  assertDayFourNoLynchVoteProof({
-    proof: nightFourActionSubmissionSurface.dayFourVoteProof,
+  assertNightFourActionSubmissionSurfaceCase({
+    nightFourActionSubmissionSurface,
     expectedGame,
-    sourceRoleUrl: nightFourActionSubmissionSurface.sourceActionPlayerRoleUrl,
-  });
-  assertDayFourNoLynchHostTransitionProof({
-    proof: nightFourActionSubmissionSurface.hostTransitionProof,
-    expectedGame,
-    sourceRoleUrl: nightFourActionSubmissionSurface.sourceHostRoleUrl,
-  });
-  assertNightFourPlayerActionSubmissionProof({
-    proof: nightFourActionSubmissionSurface.nightFourActionProof,
-    expectedGame,
-    sourceRoleUrl: nightFourActionSubmissionSurface.sourceActionPlayerRoleUrl,
+    assertDayFourNoLynchVoteProof: assertDayFourNoLynchVoteProof,
+    assertDayFourNoLynchHostTransitionProof:
+      assertDayFourNoLynchHostTransitionProof,
+    includeEvidenceInError: true,
   });
 }
 
@@ -10439,204 +10418,12 @@ function assertNightFourResolutionReceiptSurface(
   const expectedGame = gameFromRoleUrl(
     nightFourResolutionReceiptSurface?.sourceHostRoleUrl,
   );
-  if (
-    nightFourResolutionReceiptSurface?.status !== "passed" ||
-    nightFourResolutionReceiptSurface.clickedThroughFromRoleUrl !== true ||
-    nightFourResolutionReceiptSurface.releaseReady !== false ||
-    nightFourResolutionReceiptSurface.productionReady !== false ||
-    typeof nightFourResolutionReceiptSurface.sourceHostRoleUrl !== "string" ||
-    !nightFourResolutionReceiptSurface.sourceHostRoleUrl.endsWith("/host") ||
-    typeof nightFourResolutionReceiptSurface.sourceActionPlayerRoleUrl !==
-      "string" ||
-    !nightFourResolutionReceiptSurface.sourceActionPlayerRoleUrl.includes("/g/") ||
-    typeof nightFourResolutionReceiptSurface.sourceSurvivorRoleUrl !== "string" ||
-    !nightFourResolutionReceiptSurface.sourceSurvivorRoleUrl.includes("/g/") ||
-    !String(nightFourResolutionReceiptSurface.transition ?? "").includes(
-      "host:N04:resolve_phase:ack:916",
-    ) ||
-    !String(nightFourResolutionReceiptSurface.transition ?? "").includes(
-      "survivor:N04:factional_kill_receipt",
-    ) ||
-    !String(nightFourResolutionReceiptSurface.transition ?? "").includes(
-      "actionPlayer:N04:privacy",
-    )
-  ) {
-    throw new Error(
-      `core-loop admin proof missing Night 4 resolution receipt surface: ${JSON.stringify(
-        nightFourResolutionReceiptSurface,
-      )}`,
-    );
-  }
-  const survivorReceiptScenario = privateReceiptScenario("n04-survivor-receipt");
-  const actionPlayerPrivacyScenario = privateReceiptScenario(
-    "n04-action-player-privacy",
-  );
-  assertNightFourHostResolutionProof({
-    proof: nightFourResolutionReceiptSurface.hostResolutionProof,
+  assertNightFourResolutionReceiptSurfaceCase({
+    nightFourResolutionReceiptSurface,
     expectedGame,
-    sourceRoleUrl: nightFourResolutionReceiptSurface.sourceHostRoleUrl,
+    assertHostPhaseTransitionActionProof,
+    includeEvidenceInError: true,
   });
-  assertNightFourResolutionPlayerSurfaceProof({
-    proof: nightFourResolutionReceiptSurface.survivorReceiptProof,
-    ...privateReceiptAssertionArgs({
-      scenario: survivorReceiptScenario,
-      expectedGame,
-      sourceRoleUrl: nightFourResolutionReceiptSurface.sourceSurvivorRoleUrl,
-    }),
-  });
-  assertNightFourResolutionPlayerSurfaceProof({
-    proof: nightFourResolutionReceiptSurface.actionPlayerPrivacyProof,
-    ...privateReceiptAssertionArgs({
-      scenario: actionPlayerPrivacyScenario,
-      expectedGame,
-      sourceRoleUrl: nightFourResolutionReceiptSurface.sourceActionPlayerRoleUrl,
-    }),
-  });
-}
-
-function assertNightFourHostResolutionProof({
-  proof,
-  expectedGame,
-  sourceRoleUrl,
-}) {
-  if (
-    proof?.status !== "passed" ||
-    proof.clickedThroughFromRoleUrl !== true ||
-    proof.releaseReady !== false ||
-    proof.productionReady !== false ||
-    proof.rawInviteTokensVisible !== false ||
-    proof.sourceRoleUrl !== sourceRoleUrl ||
-    typeof proof.visitedRolePath !== "string" ||
-    !proof.visitedRolePath.endsWith("/host") ||
-    proof.surfaceTestId !== "host-console-surface" ||
-    proof.setupResyncFromSeq !== 915 ||
-    proof.setupSnapshotHost?.phase?.id !== "N04" ||
-    proof.setupSnapshotHost?.phase?.state !== "open"
-  ) {
-    throw new Error(
-      `core-loop admin proof missing Night 4 host resolution: ${JSON.stringify(
-        proof,
-      )}`,
-    );
-  }
-  assertHostPhaseTransitionActionProof({
-    proof: proof.resolveProof,
-    expectedGame,
-    ...hostResolvePhaseTransitionCase({
-      streamSeq: 916,
-      expectedPhaseId: "N04",
-    }),
-  });
-}
-
-function assertNightFourResolutionPlayerSurfaceProof({
-  proof,
-  sourceRoleUrl,
-  expectedSlot,
-  slotField,
-  expectedPrincipalUserId,
-  expectedActorAlive,
-  expectedActorStatus,
-  expectedActionState,
-  expectedStatusText,
-  expectedPrivateCount,
-  expectedPrivateReceipt,
-  expectedBoundaryText,
-  expectedPhaseId,
-  expectedPhaseState,
-  expectedResyncFromSeq,
-  expectedPrivateReceiptStatus,
-  expectedPrivateReceiptPhaseId,
-  expectedPrivateQueueBoundaryStatus,
-  expectedCommandStateEndpoint,
-  expectedNotificationsEndpoint,
-}) {
-  if (
-    proof?.status !== "passed" ||
-    proof.clickedThroughFromRoleUrl !== true ||
-    proof.releaseReady !== false ||
-    proof.productionReady !== false ||
-    proof.rawInviteTokensVisible !== false ||
-    proof.sourceRoleUrl !== sourceRoleUrl ||
-    typeof proof.visitedRolePath !== "string" ||
-    !proof.visitedRolePath.includes("/g/") ||
-    proof.surfaceTestId !== "player-surface" ||
-    proof[slotField] !== expectedSlot ||
-    proof.principalUserId !== expectedPrincipalUserId ||
-    proof.checkpoint?.phaseId !== expectedPhaseId ||
-    proof.checkpoint.phaseState !== expectedPhaseState ||
-    proof.checkpoint.actorSlot !== expectedSlot ||
-    proof.checkpoint.actionState !== expectedActionState ||
-    proof.checkpoint.receiptState !== "idle" ||
-    !String(proof.checkpoint.statusText ?? "")
-      .toLowerCase()
-      .includes(expectedStatusText) ||
-    proof.privateQueueBoundary?.status !== expectedPrivateQueueBoundaryStatus ||
-    proof.privateQueueBoundary.count !== expectedPrivateCount ||
-    !String(proof.privateQueueBoundary.text ?? "").includes(
-      "principal-scoped endpoints",
-    ) ||
-    proof.voteButtonCount !== 0 ||
-    proof.projectionCommandState?.actorSlot !== expectedSlot ||
-    proof.projectionCommandState?.actorAlive !== expectedActorAlive ||
-    proof.projectionCommandState?.actorStatus !== expectedActorStatus ||
-    proof.projectionCommandState?.phase?.phaseId !== expectedPhaseId ||
-    proof.projectionCommandState?.phase?.locked !==
-      (expectedPhaseState === "locked") ||
-    proof.projectionCommandState?.actions?.length !== 0 ||
-    proof.projectionCommandState?.voteTargets?.length !== 0 ||
-    !String(proof.projectionCommandState?.boundary ?? "").includes(
-      expectedBoundaryText,
-    ) ||
-    proof.projectionDayVoteOutcomes?.at?.(-1)?.phaseId !== "D04" ||
-    proof.resyncFromSeq !== expectedResyncFromSeq ||
-    proof.resyncSnapshotCommandState?.actorSlot !== expectedSlot ||
-    proof.resyncSnapshotCommandState?.phase?.phaseId !== expectedPhaseId ||
-    proof.coldLoadEndpoints?.notificationsEndpoint !==
-      expectedNotificationsEndpoint ||
-    proof.coldLoadEndpoints?.commandStateEndpoint !== expectedCommandStateEndpoint
-  ) {
-    throw new Error(
-      `core-loop admin proof missing Night 4 player surface: ${JSON.stringify(
-        proof,
-      )}`,
-    );
-  }
-  if (
-    expectedPrivateReceipt &&
-    (proof.privateNotice?.id !== "notification-1" ||
-      proof.privateNotice.kind !== "notification" ||
-      !String(proof.privateNotice.text ?? "").includes("player_killed") ||
-      !String(proof.privateNotice.text ?? "").includes(
-        expectedPrivateReceiptStatus,
-      ) ||
-      proof.privateNotice.detailText !==
-        `Phase ${expectedPrivateReceiptPhaseId}` ||
-      proof.projectionNotifications?.[0]?.effect !== "player_killed" ||
-      proof.projectionNotifications?.[0]?.status !==
-        expectedPrivateReceiptStatus ||
-      proof.resyncSnapshotNotifications?.[0]?.status !==
-        expectedPrivateReceiptStatus)
-  ) {
-    throw new Error(
-      `core-loop admin proof missing Night 4 survivor receipt: ${JSON.stringify(
-        proof,
-      )}`,
-    );
-  }
-  if (
-    !expectedPrivateReceipt &&
-    (!String(proof.privateEmptyText ?? "").includes("No private results visible") ||
-      proof.projectionNotifications?.length !== 0 ||
-      proof.resyncSnapshotNotifications?.length !== 0 ||
-      proof.privateNotice !== undefined)
-  ) {
-    throw new Error(
-      `core-loop admin proof leaked Night 4 target receipt: ${JSON.stringify(
-        proof,
-      )}`,
-    );
-  }
 }
 
 function assertPostNightFourTransitionSurface(postNightFourTransitionSurface) {
@@ -10754,68 +10541,6 @@ function assertDayFourNoLynchHostTransitionProof({
     assertHostPhaseTransitionActionProof,
     includeEvidenceInError: true,
   });
-}
-
-function assertNightFourPlayerActionSubmissionProof({
-  proof,
-  expectedGame,
-  sourceRoleUrl,
-}) {
-  const clickProof = proof?.clickProof;
-  if (
-    proof?.status !== "passed" ||
-    proof.clickedThroughFromRoleUrl !== true ||
-    proof.releaseReady !== false ||
-    proof.productionReady !== false ||
-    proof.sourceRoleUrl !== sourceRoleUrl ||
-    typeof proof.visitedRolePath !== "string" ||
-    !proof.visitedRolePath.includes("/g/") ||
-    proof.surfaceTestId !== "player-surface" ||
-    proof.setupResyncFromSeq !== 914 ||
-    proof.setupSnapshotCommandState?.phase?.phaseId !== "N04" ||
-    proof.setupSnapshotCommandState?.actions?.[0]?.targets?.[0] !== "slot-5" ||
-    clickProof?.status !== "passed" ||
-    clickProof.clickedAction !== "submit_action:factional_kill" ||
-    clickProof.commandKind !== "SubmitAction" ||
-    clickProof.command?.game !== expectedGame ||
-    clickProof.command.actor_slot !== "slot-7" ||
-    clickProof.command.action_id !== "factional_kill" ||
-    clickProof.command.template_id !== "factional_kill" ||
-    clickProof.command.targets?.[0] !== "slot-5" ||
-    clickProof.command.grant_id !== "grant-factional-kill-n04" ||
-    clickProof.commandStatus?.state !== "ack" ||
-    !clickProof.commandStatus?.message?.includes("Ack: stream seqs 915") ||
-    clickProof.bridgePlan?.role !== "player" ||
-    clickProof.bridgePlan.commandKind !== "SubmitAction" ||
-    clickProof.bridgePlan.commandEndpoint !== "/commands" ||
-    clickProof.bridgePlan.finalState !== "ack" ||
-    !sameStringArray(clickProof.bridgePlan.projectionRefreshKeys, [
-      "notifications",
-      "investigationResults",
-      "commandState",
-    ]) ||
-    clickProof.receipts?.at?.(-1)?.state !== "ack" ||
-    clickProof.projectionCommandState?.phase?.phaseId !== "N04" ||
-    clickProof.projectionCommandState?.actions?.length !== 0 ||
-    !String(clickProof.projectionCommandState?.boundary ?? "").includes(
-      "Night 4 action ACK",
-    ) ||
-    !String(clickProof.checkpointReceiptState ?? "").includes(
-      "Ack: stream seqs 915",
-    ) ||
-    clickProof.checkpointActionStateAfterAck !==
-      "disabled:no legal action available" ||
-    clickProof.receiptCount !== 1 ||
-    !String(clickProof.receiptStatusText ?? "")
-      .toLowerCase()
-      .includes("ack: stream seqs 915")
-  ) {
-    throw new Error(
-      `core-loop admin proof missing Night 4 player action ACK: ${JSON.stringify(
-        proof,
-      )}`,
-    );
-  }
 }
 
 function assertPostDayThreePlayerSurfaceProof({
