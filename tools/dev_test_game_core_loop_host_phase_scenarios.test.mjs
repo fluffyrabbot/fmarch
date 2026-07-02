@@ -6,6 +6,7 @@ import {
   assertHostStaleAdvanceAfterTransitionProofCase,
   hostAdvanceByDeadlineCommandFacts,
   hostAdvancePhaseCommandFacts,
+  hostAdvancePhaseTransitionCase,
   hostCompleteGameCommandFacts,
   hostDeadlineAffordanceForPhaseState,
   hostExtendDeadlineCommandFacts,
@@ -14,6 +15,7 @@ import {
   hostLockThreadCommandFacts,
   hostOpenPhaseTransitionCase,
   hostPhaseTransitionCaseForState,
+  hostResolvePhaseTransitionCase,
   hostResolvePhaseCommandFacts,
   hostUnlockThreadCommandFacts,
 } from "./dev_test_game_core_loop_host_phase_scenarios.mjs";
@@ -175,6 +177,42 @@ test("host phase scenario module exposes shared lifecycle control case", () => {
   assert.notEqual(
     hostLifecycleControlScenario().visibleRows,
     hostLifecycleControlScenario().visibleRows,
+  );
+});
+
+test("host phase transition cases share command, phase, and refresh facts", () => {
+  assert.deepEqual(
+    hostResolvePhaseTransitionCase({ streamSeq: 801, expectedPhaseId: "D02" }),
+    {
+      actionId: "resolve_phase",
+      commandKind: "ResolvePhase",
+      streamSeq: 801,
+      expectedPhaseId: "D02",
+      expectedPhaseState: "locked",
+      expectedRefreshKeys: [
+        "host",
+        "votecount",
+        "dayVoteOutcomes",
+        "hostPrompts",
+      ],
+    },
+  );
+  assert.deepEqual(
+    hostAdvancePhaseTransitionCase({ streamSeq: 802, expectedPhaseId: "N02" }),
+    {
+      actionId: "advance_phase",
+      commandKind: "AdvancePhase",
+      streamSeq: 802,
+      expectedPhaseId: "N02",
+      expectedPhaseState: "open",
+      expectedRefreshKeys: [],
+    },
+  );
+  assert.notEqual(
+    hostResolvePhaseTransitionCase({ streamSeq: 1, expectedPhaseId: "D01" })
+      .expectedRefreshKeys,
+    hostResolvePhaseTransitionCase({ streamSeq: 1, expectedPhaseId: "D01" })
+      .expectedRefreshKeys,
   );
 });
 

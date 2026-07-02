@@ -4,6 +4,10 @@ const cloneLifecycleScenario = (scenario) => ({
   visibleRows: [...scenario.visibleRows],
 });
 const clonePhaseStateCase = (phaseStateCase) => ({ ...phaseStateCase });
+const cloneTransitionProofCase = (transitionCase) => ({
+  ...transitionCase,
+  expectedRefreshKeys: [...transitionCase.expectedRefreshKeys],
+});
 
 const hostPhaseCommandFactDefinitions = Object.freeze({
   resolve: Object.freeze({
@@ -103,6 +107,39 @@ export function hostPhaseTransitionCaseForState(phaseState) {
 
 export function hostDeadlineAffordanceForPhaseState(phaseState) {
   return hostPhaseTransitionCaseForState(phaseState).deadlineAffordance;
+}
+
+const hostResolvePhaseTransitionRefreshKeys = Object.freeze([
+  "host",
+  "votecount",
+  "dayVoteOutcomes",
+  "hostPrompts",
+]);
+
+export function hostResolvePhaseTransitionCase({
+  streamSeq,
+  expectedPhaseId,
+} = {}) {
+  return cloneTransitionProofCase({
+    ...hostResolvePhaseCommandFacts(),
+    streamSeq,
+    expectedPhaseId,
+    expectedPhaseState: "locked",
+    expectedRefreshKeys: hostResolvePhaseTransitionRefreshKeys,
+  });
+}
+
+export function hostAdvancePhaseTransitionCase({
+  streamSeq,
+  expectedPhaseId,
+} = {}) {
+  return cloneTransitionProofCase({
+    ...hostAdvancePhaseCommandFacts(),
+    streamSeq,
+    expectedPhaseId,
+    expectedPhaseState: "open",
+    expectedRefreshKeys: [],
+  });
 }
 
 const hostLifecycleControlScenarioDefinition = Object.freeze({

@@ -73,9 +73,9 @@ import {
   assertHostLifecycleControlRoleSurfaceCase,
   assertHostPhaseTransitionActionProofCase,
   assertHostStaleAdvanceAfterTransitionProofCase,
-  hostAdvancePhaseCommandFacts,
+  hostAdvancePhaseTransitionCase,
   hostDeadlineAffordanceForPhaseState,
-  hostResolvePhaseCommandFacts,
+  hostResolvePhaseTransitionCase,
 } from "./dev_test_game_core_loop_host_phase_scenarios.mjs";
 import {
   assertDayFiveNoLynchResolutionSurfaceProof,
@@ -2273,20 +2273,18 @@ function assertCoreLoopHostNightActionTransitionSurface(
   assertCoreLoopHostPhaseTransitionActionProof({
     proof: resolveProof,
     expectedGame,
-    ...hostResolvePhaseCommandFacts(),
-    streamSeq: 905,
-    expectedPhaseId: "N02",
-    expectedPhaseState: "locked",
-    expectedRefreshKeys: ["host", "votecount", "dayVoteOutcomes", "hostPrompts"],
+    ...hostResolvePhaseTransitionCase({
+      streamSeq: 905,
+      expectedPhaseId: "N02",
+    }),
   });
   assertCoreLoopHostPhaseTransitionActionProof({
     proof: advanceProof,
     expectedGame,
-    ...hostAdvancePhaseCommandFacts(),
-    streamSeq: 906,
-    expectedPhaseId: "D03",
-    expectedPhaseState: "open",
-    expectedRefreshKeys: [],
+    ...hostAdvancePhaseTransitionCase({
+      streamSeq: 906,
+      expectedPhaseId: "D03",
+    }),
   });
   assertCoreLoopDayThreePlayerObservationProof({
     proof: actionPlayerObservationProof,
@@ -2507,11 +2505,10 @@ function assertCoreLoopDayThreeHostVoteResolutionProof({
   assertCoreLoopHostPhaseTransitionActionProof({
     proof: proof.resolveProof,
     expectedGame,
-    ...hostResolvePhaseCommandFacts(),
-    streamSeq: 908,
-    expectedPhaseId: "D03",
-    expectedPhaseState: "locked",
-    expectedRefreshKeys: ["host", "votecount", "dayVoteOutcomes", "hostPrompts"],
+    ...hostResolvePhaseTransitionCase({
+      streamSeq: 908,
+      expectedPhaseId: "D03",
+    }),
   });
   if (
     proof.resolveProof?.votecountProjection?.[0]?.target !== "slot-4 / Rowan" ||
@@ -2844,11 +2841,10 @@ function assertCoreLoopNightFourHostResolutionProof({
   assertCoreLoopHostPhaseTransitionActionProof({
     proof: proof.resolveProof,
     expectedGame,
-    ...hostResolvePhaseCommandFacts(),
-    streamSeq: 916,
-    expectedPhaseId: "N04",
-    expectedPhaseState: "locked",
-    expectedRefreshKeys: ["host", "votecount", "dayVoteOutcomes", "hostPrompts"],
+    ...hostResolvePhaseTransitionCase({
+      streamSeq: 916,
+      expectedPhaseId: "N04",
+    }),
   });
 }
 
@@ -3067,11 +3063,10 @@ function assertCoreLoopPostNightFourHostAdvanceProof({
   assertCoreLoopHostPhaseTransitionActionProof({
     proof: proof.advanceProof,
     expectedGame,
-    ...hostAdvancePhaseCommandFacts(),
-    streamSeq: 917,
-    expectedPhaseId: "D05",
-    expectedPhaseState: "open",
-    expectedRefreshKeys: [],
+    ...hostAdvancePhaseTransitionCase({
+      streamSeq: 917,
+      expectedPhaseId: "D05",
+    }),
   });
   if (proof.advanceProof?.dayVoteOutcomesProjection?.at?.(-1)?.phaseId !== "D04") {
     throw new Error("core-loop admin proof missing post-Night 4 host outcomes");
@@ -3194,20 +3189,18 @@ function assertCoreLoopDayFourNoLynchHostTransitionProof({
   assertCoreLoopHostPhaseTransitionActionProof({
     proof: proof.resolveProof,
     expectedGame,
-    ...hostResolvePhaseCommandFacts(),
-    streamSeq: 913,
-    expectedPhaseId: "D04",
-    expectedPhaseState: "locked",
-    expectedRefreshKeys: ["host", "votecount", "dayVoteOutcomes", "hostPrompts"],
+    ...hostResolvePhaseTransitionCase({
+      streamSeq: 913,
+      expectedPhaseId: "D04",
+    }),
   });
   assertCoreLoopHostPhaseTransitionActionProof({
     proof: proof.advanceProof,
     expectedGame,
-    ...hostAdvancePhaseCommandFacts(),
-    streamSeq: 914,
-    expectedPhaseId: "N04",
-    expectedPhaseState: "open",
-    expectedRefreshKeys: [],
+    ...hostAdvancePhaseTransitionCase({
+      streamSeq: 914,
+      expectedPhaseId: "N04",
+    }),
   });
   if (
     proof.resolveProof?.votecountProjection?.[0]?.target !== "No lynch" ||
@@ -3351,11 +3344,10 @@ function assertCoreLoopPostDayThreeHostAdvanceProof({
   assertCoreLoopHostPhaseTransitionActionProof({
     proof: proof.advanceProof,
     expectedGame,
-    ...hostAdvancePhaseCommandFacts(),
-    streamSeq: 909,
-    expectedPhaseId: "N03",
-    expectedPhaseState: "open",
-    expectedRefreshKeys: [],
+    ...hostAdvancePhaseTransitionCase({
+      streamSeq: 909,
+      expectedPhaseId: "N03",
+    }),
   });
 }
 
@@ -3383,20 +3375,18 @@ function assertCoreLoopNightThreeEmptyHostTransitionProof({
   assertCoreLoopHostPhaseTransitionActionProof({
     proof: proof.resolveProof,
     expectedGame,
-    ...hostResolvePhaseCommandFacts(),
-    streamSeq: 910,
-    expectedPhaseId: "N03",
-    expectedPhaseState: "locked",
-    expectedRefreshKeys: ["host", "votecount", "dayVoteOutcomes", "hostPrompts"],
+    ...hostResolvePhaseTransitionCase({
+      streamSeq: 910,
+      expectedPhaseId: "N03",
+    }),
   });
   assertCoreLoopHostPhaseTransitionActionProof({
     proof: proof.advanceProof,
     expectedGame,
-    ...hostAdvancePhaseCommandFacts(),
-    streamSeq: 911,
-    expectedPhaseId: "D04",
-    expectedPhaseState: "open",
-    expectedRefreshKeys: [],
+    ...hostAdvancePhaseTransitionCase({
+      streamSeq: 911,
+      expectedPhaseId: "D04",
+    }),
   });
 }
 

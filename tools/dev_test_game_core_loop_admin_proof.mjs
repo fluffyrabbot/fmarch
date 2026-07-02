@@ -24,10 +24,10 @@ import {
   assertHostLifecycleControlRoleSurfaceCase,
   assertHostPhaseTransitionActionProofCase,
   assertHostStaleAdvanceAfterTransitionProofCase,
-  hostAdvancePhaseCommandFacts,
+  hostAdvancePhaseTransitionCase,
   hostCompleteGameCommandFacts,
   hostDeadlineAffordanceForPhaseState,
-  hostResolvePhaseCommandFacts,
+  hostResolvePhaseTransitionCase,
 } from "./dev_test_game_core_loop_host_phase_scenarios.mjs";
 import {
   assertDayFiveNoLynchResolutionSurfaceProof,
@@ -759,18 +759,18 @@ async function proveHostPhaseTransitionSurface({
     const resolveProof = await proveHostPhaseActionClick({
       page,
       commandRequests,
-      ...hostResolvePhaseCommandFacts(),
-      streamSeq: 801,
-      expectedPhaseId: "D02",
-      expectedPhaseState: "locked",
+      ...hostResolvePhaseTransitionCase({
+        streamSeq: 801,
+        expectedPhaseId: "D02",
+      }),
     });
     const advanceProof = await proveHostPhaseActionClick({
       page,
       commandRequests,
-      ...hostAdvancePhaseCommandFacts(),
-      streamSeq: 802,
-      expectedPhaseId: "N02",
-      expectedPhaseState: "open",
+      ...hostAdvancePhaseTransitionCase({
+        streamSeq: 802,
+        expectedPhaseId: "N02",
+      }),
     });
     const staleHostAdvanceRecoveryProof =
       await proveHostStaleAdvanceAfterTransition({
@@ -839,18 +839,18 @@ async function proveHostNightActionTransitionSurface({
     const resolveProof = await proveHostPhaseActionClick({
       page,
       commandRequests,
-      ...hostResolvePhaseCommandFacts(),
-      streamSeq: 905,
-      expectedPhaseId: "N02",
-      expectedPhaseState: "locked",
+      ...hostResolvePhaseTransitionCase({
+        streamSeq: 905,
+        expectedPhaseId: "N02",
+      }),
     });
     const advanceProof = await proveHostPhaseActionClick({
       page,
       commandRequests,
-      ...hostAdvancePhaseCommandFacts(),
-      streamSeq: 906,
-      expectedPhaseId: "D03",
-      expectedPhaseState: "open",
+      ...hostAdvancePhaseTransitionCase({
+        streamSeq: 906,
+        expectedPhaseId: "D03",
+      }),
     });
     const actionPlayerObservationProof = await proveDayThreePlayerObservation({
       browser,
@@ -1252,10 +1252,10 @@ async function proveDayThreeHostVoteResolution({
     const resolveProof = await proveHostPhaseActionClick({
       page,
       commandRequests,
-      ...hostResolvePhaseCommandFacts(),
-      streamSeq: 908,
-      expectedPhaseId: "D03",
-      expectedPhaseState: "locked",
+      ...hostResolvePhaseTransitionCase({
+        streamSeq: 908,
+        expectedPhaseId: "D03",
+      }),
     });
     const hostVotecountProjection = await page.evaluate(
       () => window.__fmarchHostVotecountProjection,
@@ -1836,10 +1836,10 @@ async function proveNightFourHostResolution({
     const resolveProof = await proveHostPhaseActionClick({
       page,
       commandRequests,
-      ...hostResolvePhaseCommandFacts(),
-      streamSeq: 916,
-      expectedPhaseId: "N04",
-      expectedPhaseState: "locked",
+      ...hostResolvePhaseTransitionCase({
+        streamSeq: 916,
+        expectedPhaseId: "N04",
+      }),
     });
     const bodyText = await page.locator("body").innerText();
     if (/invite=(?!REDACTED)/.test(bodyText)) {
@@ -2047,18 +2047,18 @@ async function proveDayFourNoLynchHostTransition({
     const resolveProof = await proveHostPhaseActionClick({
       page,
       commandRequests,
-      ...hostResolvePhaseCommandFacts(),
-      streamSeq: 913,
-      expectedPhaseId: "D04",
-      expectedPhaseState: "locked",
+      ...hostResolvePhaseTransitionCase({
+        streamSeq: 913,
+        expectedPhaseId: "D04",
+      }),
     });
     const advanceProof = await proveHostPhaseActionClick({
       page,
       commandRequests,
-      ...hostAdvancePhaseCommandFacts(),
-      streamSeq: 914,
-      expectedPhaseId: "N04",
-      expectedPhaseState: "open",
+      ...hostAdvancePhaseTransitionCase({
+        streamSeq: 914,
+        expectedPhaseId: "N04",
+      }),
     });
     const bodyText = await page.locator("body").innerText();
     if (/invite=(?!REDACTED)/.test(bodyText)) {
@@ -2267,18 +2267,18 @@ async function proveDayFiveNoLynchHostTransition({
     const resolveProof = await proveHostPhaseActionClick({
       page,
       commandRequests,
-      ...hostResolvePhaseCommandFacts(),
-      streamSeq: 919,
-      expectedPhaseId: "D05",
-      expectedPhaseState: "locked",
+      ...hostResolvePhaseTransitionCase({
+        streamSeq: 919,
+        expectedPhaseId: "D05",
+      }),
     });
     const advanceProof = await proveHostPhaseActionClick({
       page,
       commandRequests,
-      ...hostAdvancePhaseCommandFacts(),
-      streamSeq: 920,
-      expectedPhaseId: "N05",
-      expectedPhaseState: "open",
+      ...hostAdvancePhaseTransitionCase({
+        streamSeq: 920,
+        expectedPhaseId: "N05",
+      }),
     });
     const bodyText = await page.locator("body").innerText();
     if (/invite=(?!REDACTED)/.test(bodyText)) {
@@ -3257,18 +3257,18 @@ async function proveNightThreeEmptyHostTransition({
     const resolveProof = await proveHostPhaseActionClick({
       page,
       commandRequests,
-      ...hostResolvePhaseCommandFacts(),
-      streamSeq: 910,
-      expectedPhaseId: "N03",
-      expectedPhaseState: "locked",
+      ...hostResolvePhaseTransitionCase({
+        streamSeq: 910,
+        expectedPhaseId: "N03",
+      }),
     });
     const advanceProof = await proveHostPhaseActionClick({
       page,
       commandRequests,
-      ...hostAdvancePhaseCommandFacts(),
-      streamSeq: 911,
-      expectedPhaseId: "D04",
-      expectedPhaseState: "open",
+      ...hostAdvancePhaseTransitionCase({
+        streamSeq: 911,
+        expectedPhaseId: "D04",
+      }),
     });
     const bodyText = await page.locator("body").innerText();
     if (/invite=(?!REDACTED)/.test(bodyText)) {
@@ -3498,10 +3498,10 @@ async function provePostNightFourHostAdvance({
     const advanceProof = await proveHostPhaseActionClick({
       page,
       commandRequests,
-      ...hostAdvancePhaseCommandFacts(),
-      streamSeq: 917,
-      expectedPhaseId: "D05",
-      expectedPhaseState: "open",
+      ...hostAdvancePhaseTransitionCase({
+        streamSeq: 917,
+        expectedPhaseId: "D05",
+      }),
     });
     const bodyText = await page.locator("body").innerText();
     if (/invite=(?!REDACTED)/.test(bodyText)) {
@@ -3680,10 +3680,10 @@ async function provePostDayThreeHostAdvance({
     const advanceProof = await proveHostPhaseActionClick({
       page,
       commandRequests,
-      ...hostAdvancePhaseCommandFacts(),
-      streamSeq: 909,
-      expectedPhaseId: "N03",
-      expectedPhaseState: "open",
+      ...hostAdvancePhaseTransitionCase({
+        streamSeq: 909,
+        expectedPhaseId: "N03",
+      }),
     });
     const bodyText = await page.locator("body").innerText();
     if (/invite=(?!REDACTED)/.test(bodyText)) {
@@ -10190,20 +10190,18 @@ function assertHostNightActionTransitionSurface(hostNightActionTransitionSurface
   assertHostPhaseTransitionActionProof({
     proof: resolveProof,
     expectedGame,
-    ...hostResolvePhaseCommandFacts(),
-    streamSeq: 905,
-    expectedPhaseId: "N02",
-    expectedPhaseState: "locked",
-    expectedRefreshKeys: ["host", "votecount", "dayVoteOutcomes", "hostPrompts"],
+    ...hostResolvePhaseTransitionCase({
+      streamSeq: 905,
+      expectedPhaseId: "N02",
+    }),
   });
   assertHostPhaseTransitionActionProof({
     proof: advanceProof,
     expectedGame,
-    ...hostAdvancePhaseCommandFacts(),
-    streamSeq: 906,
-    expectedPhaseId: "D03",
-    expectedPhaseState: "open",
-    expectedRefreshKeys: [],
+    ...hostAdvancePhaseTransitionCase({
+      streamSeq: 906,
+      expectedPhaseId: "D03",
+    }),
   });
   assertDayThreePlayerObservationProof({
     proof: actionPlayerObservationProof,
@@ -10434,11 +10432,10 @@ function assertDayThreeHostVoteResolutionProof({
   assertHostPhaseTransitionActionProof({
     proof: proof.resolveProof,
     expectedGame,
-    ...hostResolvePhaseCommandFacts(),
-    streamSeq: 908,
-    expectedPhaseId: "D03",
-    expectedPhaseState: "locked",
-    expectedRefreshKeys: ["host", "votecount", "dayVoteOutcomes", "hostPrompts"],
+    ...hostResolvePhaseTransitionCase({
+      streamSeq: 908,
+      expectedPhaseId: "D03",
+    }),
   });
   if (
     proof.resolveProof?.votecountProjection?.[0]?.target !== "slot-4 / Rowan" ||
@@ -10805,11 +10802,10 @@ function assertNightFourHostResolutionProof({
   assertHostPhaseTransitionActionProof({
     proof: proof.resolveProof,
     expectedGame,
-    ...hostResolvePhaseCommandFacts(),
-    streamSeq: 916,
-    expectedPhaseId: "N04",
-    expectedPhaseState: "locked",
-    expectedRefreshKeys: ["host", "votecount", "dayVoteOutcomes", "hostPrompts"],
+    ...hostResolvePhaseTransitionCase({
+      streamSeq: 916,
+      expectedPhaseId: "N04",
+    }),
   });
 }
 
@@ -11048,11 +11044,10 @@ function assertPostNightFourHostAdvanceProof({
   assertHostPhaseTransitionActionProof({
     proof: proof.advanceProof,
     expectedGame,
-    ...hostAdvancePhaseCommandFacts(),
-    streamSeq: 917,
-    expectedPhaseId: "D05",
-    expectedPhaseState: "open",
-    expectedRefreshKeys: [],
+    ...hostAdvancePhaseTransitionCase({
+      streamSeq: 917,
+      expectedPhaseId: "D05",
+    }),
   });
   if (proof.advanceProof?.dayVoteOutcomesProjection?.at?.(-1)?.phaseId !== "D04") {
     throw new Error(
@@ -11180,20 +11175,18 @@ function assertDayFourNoLynchHostTransitionProof({
   assertHostPhaseTransitionActionProof({
     proof: proof.resolveProof,
     expectedGame,
-    ...hostResolvePhaseCommandFacts(),
-    streamSeq: 913,
-    expectedPhaseId: "D04",
-    expectedPhaseState: "locked",
-    expectedRefreshKeys: ["host", "votecount", "dayVoteOutcomes", "hostPrompts"],
+    ...hostResolvePhaseTransitionCase({
+      streamSeq: 913,
+      expectedPhaseId: "D04",
+    }),
   });
   assertHostPhaseTransitionActionProof({
     proof: proof.advanceProof,
     expectedGame,
-    ...hostAdvancePhaseCommandFacts(),
-    streamSeq: 914,
-    expectedPhaseId: "N04",
-    expectedPhaseState: "open",
-    expectedRefreshKeys: [],
+    ...hostAdvancePhaseTransitionCase({
+      streamSeq: 914,
+      expectedPhaseId: "N04",
+    }),
   });
   if (
     proof.resolveProof?.votecountProjection?.[0]?.target !== "No lynch" ||
@@ -11346,11 +11339,10 @@ function assertPostDayThreeHostAdvanceProof({ proof, expectedGame, sourceRoleUrl
   assertHostPhaseTransitionActionProof({
     proof: proof.advanceProof,
     expectedGame,
-    ...hostAdvancePhaseCommandFacts(),
-    streamSeq: 909,
-    expectedPhaseId: "N03",
-    expectedPhaseState: "open",
-    expectedRefreshKeys: [],
+    ...hostAdvancePhaseTransitionCase({
+      streamSeq: 909,
+      expectedPhaseId: "N03",
+    }),
   });
 }
 
@@ -11382,20 +11374,18 @@ function assertNightThreeEmptyHostTransitionProof({
   assertHostPhaseTransitionActionProof({
     proof: proof.resolveProof,
     expectedGame,
-    ...hostResolvePhaseCommandFacts(),
-    streamSeq: 910,
-    expectedPhaseId: "N03",
-    expectedPhaseState: "locked",
-    expectedRefreshKeys: ["host", "votecount", "dayVoteOutcomes", "hostPrompts"],
+    ...hostResolvePhaseTransitionCase({
+      streamSeq: 910,
+      expectedPhaseId: "N03",
+    }),
   });
   assertHostPhaseTransitionActionProof({
     proof: proof.advanceProof,
     expectedGame,
-    ...hostAdvancePhaseCommandFacts(),
-    streamSeq: 911,
-    expectedPhaseId: "D04",
-    expectedPhaseState: "open",
-    expectedRefreshKeys: [],
+    ...hostAdvancePhaseTransitionCase({
+      streamSeq: 911,
+      expectedPhaseId: "D04",
+    }),
   });
 }
 
