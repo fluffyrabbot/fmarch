@@ -8,6 +8,15 @@ const cloneTransitionProofCase = (transitionCase) => ({
   ...transitionCase,
   expectedRefreshKeys: [...transitionCase.expectedRefreshKeys],
 });
+const cloneHostTransitionSurfaceCase = (surfaceCase) => ({
+  ...surfaceCase,
+  transitionFragments: [...surfaceCase.transitionFragments],
+  resolveCase: cloneTransitionProofCase(surfaceCase.resolveCase),
+  advanceCase: cloneTransitionProofCase(surfaceCase.advanceCase),
+  playerObservationCases: surfaceCase.playerObservationCases.map((playerCase) => ({
+    ...playerCase,
+  })),
+});
 
 const hostPhaseCommandFactDefinitions = Object.freeze({
   resolve: Object.freeze({
@@ -140,6 +149,151 @@ export function hostAdvancePhaseTransitionCase({
     expectedPhaseState: "open",
     expectedRefreshKeys: [],
   });
+}
+
+const hostNightActionTransitionSurfaceCaseDefinition = Object.freeze({
+  surfaceTestId: "host-console-surface",
+  transitionFragments: Object.freeze([
+    "resolve_phase:ack:905",
+    "advance_phase:ack:906",
+    "actionPlayer:D03",
+    "target:D03",
+    "normal:D03",
+  ]),
+  resolveCase: Object.freeze(
+    hostResolvePhaseTransitionCase({
+      streamSeq: 905,
+      expectedPhaseId: "N02",
+    }),
+  ),
+  advanceCase: Object.freeze(
+    hostAdvancePhaseTransitionCase({
+      streamSeq: 906,
+      expectedPhaseId: "D03",
+    }),
+  ),
+  playerObservationCases: Object.freeze([
+    Object.freeze({
+      proofField: "actionPlayerObservationProof",
+      sourceRoleUrlField: "sourceActionPlayerRoleUrl",
+      expectedPrincipalUserId: "player_mira",
+      expectedSlot: "slot-7",
+      slotField: "actionPlayerSlot",
+      expectedActorAlive: true,
+      expectedActorStatus: "alive",
+      expectedActionState: "disabled:no legal action available",
+      expectedStatusText: "no legal action available",
+      expectedPrivateCount: 0,
+      expectedPrivateReceipt: false,
+      expectedBoundaryText: "action player observed host AdvancePhase",
+    }),
+    Object.freeze({
+      proofField: "nightTargetObservationProof",
+      sourceRoleUrlField: "sourceNightTargetRoleUrl",
+      expectedPrincipalUserId: "player-seed",
+      expectedSlot: "slot-3",
+      slotField: "targetSlot",
+      expectedActorAlive: false,
+      expectedActorStatus: "dead",
+      expectedActionState: "disabled:actor is not alive",
+      expectedStatusText: "actor is not alive",
+      expectedPrivateCount: 1,
+      expectedPrivateReceipt: true,
+      expectedBoundaryText: "killed target stayed dead",
+    }),
+    Object.freeze({
+      proofField: "normalObservationProof",
+      sourceRoleUrlField: "sourceNormalRoleUrl",
+      expectedPrincipalUserId: "player_rowan",
+      expectedSlot: "slot-4",
+      slotField: "normalSlot",
+      expectedActorAlive: true,
+      expectedActorStatus: "alive",
+      expectedActionState: "disabled:no legal action available",
+      expectedStatusText: "no legal action available",
+      expectedPrivateCount: 0,
+      expectedPrivateReceipt: false,
+      expectedBoundaryText: "normal player observed open D03",
+    }),
+  ]),
+});
+
+export function hostNightActionTransitionSurfaceCase() {
+  return cloneHostTransitionSurfaceCase(
+    hostNightActionTransitionSurfaceCaseDefinition,
+  );
+}
+
+export function assertHostNightActionTransitionSurfaceCase({
+  hostNightActionTransitionSurface,
+  expectedGame,
+  assertPlayerObservationProof,
+  includeEvidenceInError = false,
+}) {
+  const surfaceCase = hostNightActionTransitionSurfaceCaseDefinition;
+  if (
+    hostNightActionTransitionSurface?.status !== "passed" ||
+    hostNightActionTransitionSurface.clickedThroughFromRoleUrl !== true ||
+    hostNightActionTransitionSurface.releaseReady !== false ||
+    hostNightActionTransitionSurface.productionReady !== false ||
+    typeof hostNightActionTransitionSurface.sourceHostRoleUrl !== "string" ||
+    !hostNightActionTransitionSurface.sourceHostRoleUrl.includes("/g/") ||
+    !hostNightActionTransitionSurface.sourceHostRoleUrl.endsWith("/host") ||
+    typeof hostNightActionTransitionSurface.sourceActionPlayerRoleUrl !==
+      "string" ||
+    !hostNightActionTransitionSurface.sourceActionPlayerRoleUrl.includes("/g/") ||
+    typeof hostNightActionTransitionSurface.sourceNightTargetRoleUrl !==
+      "string" ||
+    !hostNightActionTransitionSurface.sourceNightTargetRoleUrl.includes("/g/") ||
+    typeof hostNightActionTransitionSurface.sourceNormalRoleUrl !== "string" ||
+    !hostNightActionTransitionSurface.sourceNormalRoleUrl.includes("/g/") ||
+    typeof hostNightActionTransitionSurface.visitedHostRolePath !== "string" ||
+    !hostNightActionTransitionSurface.visitedHostRolePath.endsWith("/host") ||
+    hostNightActionTransitionSurface.surfaceTestId !== surfaceCase.surfaceTestId ||
+    !surfaceCase.transitionFragments.every((fragment) =>
+      String(hostNightActionTransitionSurface.transition ?? "").includes(fragment),
+    )
+  ) {
+    throwHostPhaseScenarioAssertionError({
+      message: "core-loop admin proof missing host night action transition surface",
+      evidence: hostNightActionTransitionSurface,
+      includeEvidenceInError,
+    });
+  }
+  assertHostPhaseTransitionActionProofCase({
+    proof: hostNightActionTransitionSurface.resolveProof,
+    expectedGame,
+    ...surfaceCase.resolveCase,
+    includeEvidenceInError,
+  });
+  assertHostPhaseTransitionActionProofCase({
+    proof: hostNightActionTransitionSurface.advanceProof,
+    expectedGame,
+    ...surfaceCase.advanceCase,
+    includeEvidenceInError,
+  });
+  for (const playerCase of surfaceCase.playerObservationCases) {
+    assertPlayerObservationProof({
+      proof: hostNightActionTransitionSurface[playerCase.proofField],
+      expectedGame,
+      sourceRoleUrl:
+        hostNightActionTransitionSurface[playerCase.sourceRoleUrlField],
+      expectedPrincipalUserId: playerCase.expectedPrincipalUserId,
+      expectedSlot: playerCase.expectedSlot,
+      slotField: playerCase.slotField,
+      expectedActorAlive: playerCase.expectedActorAlive,
+      expectedActorStatus: playerCase.expectedActorStatus,
+      expectedActionState: playerCase.expectedActionState,
+      expectedStatusText: playerCase.expectedStatusText,
+      expectedPrivateCount: playerCase.expectedPrivateCount,
+      expectedPrivateReceipt: playerCase.expectedPrivateReceipt,
+      expectedBoundaryText: playerCase.expectedBoundaryText,
+      expectedCommandStateEndpoint:
+        `/games/${expectedGame}/player-command-state?principal_user_id=${playerCase.expectedPrincipalUserId}&slot_id=${playerCase.expectedSlot}`,
+      expectedNotificationsEndpoint:
+        `/games/${expectedGame}/notifications?principal_user_id=${playerCase.expectedPrincipalUserId}`,
+    });
+  }
 }
 
 const hostLifecycleControlScenarioDefinition = Object.freeze({

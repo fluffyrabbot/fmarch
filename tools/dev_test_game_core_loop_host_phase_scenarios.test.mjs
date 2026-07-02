@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
+  assertHostNightActionTransitionSurfaceCase,
   assertHostLifecycleControlRoleSurfaceCase,
   assertHostPhaseTransitionActionProofCase,
   assertHostStaleAdvanceAfterTransitionProofCase,
@@ -13,6 +14,7 @@ import {
   hostLifecycleControlScenario,
   hostLockedPhaseTransitionCase,
   hostLockThreadCommandFacts,
+  hostNightActionTransitionSurfaceCase,
   hostOpenPhaseTransitionCase,
   hostPhaseTransitionCaseForState,
   hostResolvePhaseTransitionCase,
@@ -216,6 +218,179 @@ test("host phase transition cases share command, phase, and refresh facts", () =
   );
 });
 
+test("host night action transition surface case shares transition and observation facts", () => {
+  assert.deepEqual(hostNightActionTransitionSurfaceCase(), {
+    surfaceTestId: "host-console-surface",
+    transitionFragments: [
+      "resolve_phase:ack:905",
+      "advance_phase:ack:906",
+      "actionPlayer:D03",
+      "target:D03",
+      "normal:D03",
+    ],
+    resolveCase: {
+      actionId: "resolve_phase",
+      commandKind: "ResolvePhase",
+      streamSeq: 905,
+      expectedPhaseId: "N02",
+      expectedPhaseState: "locked",
+      expectedRefreshKeys: [
+        "host",
+        "votecount",
+        "dayVoteOutcomes",
+        "hostPrompts",
+      ],
+    },
+    advanceCase: {
+      actionId: "advance_phase",
+      commandKind: "AdvancePhase",
+      streamSeq: 906,
+      expectedPhaseId: "D03",
+      expectedPhaseState: "open",
+      expectedRefreshKeys: [],
+    },
+    playerObservationCases: [
+      {
+        proofField: "actionPlayerObservationProof",
+        sourceRoleUrlField: "sourceActionPlayerRoleUrl",
+        expectedPrincipalUserId: "player_mira",
+        expectedSlot: "slot-7",
+        slotField: "actionPlayerSlot",
+        expectedActorAlive: true,
+        expectedActorStatus: "alive",
+        expectedActionState: "disabled:no legal action available",
+        expectedStatusText: "no legal action available",
+        expectedPrivateCount: 0,
+        expectedPrivateReceipt: false,
+        expectedBoundaryText: "action player observed host AdvancePhase",
+      },
+      {
+        proofField: "nightTargetObservationProof",
+        sourceRoleUrlField: "sourceNightTargetRoleUrl",
+        expectedPrincipalUserId: "player-seed",
+        expectedSlot: "slot-3",
+        slotField: "targetSlot",
+        expectedActorAlive: false,
+        expectedActorStatus: "dead",
+        expectedActionState: "disabled:actor is not alive",
+        expectedStatusText: "actor is not alive",
+        expectedPrivateCount: 1,
+        expectedPrivateReceipt: true,
+        expectedBoundaryText: "killed target stayed dead",
+      },
+      {
+        proofField: "normalObservationProof",
+        sourceRoleUrlField: "sourceNormalRoleUrl",
+        expectedPrincipalUserId: "player_rowan",
+        expectedSlot: "slot-4",
+        slotField: "normalSlot",
+        expectedActorAlive: true,
+        expectedActorStatus: "alive",
+        expectedActionState: "disabled:no legal action available",
+        expectedStatusText: "no legal action available",
+        expectedPrivateCount: 0,
+        expectedPrivateReceipt: false,
+        expectedBoundaryText: "normal player observed open D03",
+      },
+    ],
+  });
+  assert.notEqual(
+    hostNightActionTransitionSurfaceCase().transitionFragments,
+    hostNightActionTransitionSurfaceCase().transitionFragments,
+  );
+  assert.notEqual(
+    hostNightActionTransitionSurfaceCase().playerObservationCases,
+    hostNightActionTransitionSurfaceCase().playerObservationCases,
+  );
+});
+
+test("host night action transition assertion delegates player observation cases", () => {
+  const observed = [];
+  const hostNightActionTransitionSurface = {
+    status: "passed",
+    clickedThroughFromRoleUrl: true,
+    releaseReady: false,
+    productionReady: false,
+    sourceHostRoleUrl: "http://127.0.0.1:5173/g/game-a/host",
+    sourceActionPlayerRoleUrl: "http://127.0.0.1:5173/g/game-a",
+    sourceNightTargetRoleUrl: "http://127.0.0.1:5173/g/game-a?slot=slot-3",
+    sourceNormalRoleUrl: "http://127.0.0.1:5173/g/game-a?slot=slot-4",
+    visitedHostRolePath: "/g/game-a/host",
+    surfaceTestId: "host-console-surface",
+    transition:
+      "resolve_phase:ack:905 -> advance_phase:ack:906 -> actionPlayer:D03 -> target:D03 -> normal:D03",
+    resolveProof: hostPhaseTransitionProofFixture({
+      actionId: "resolve_phase",
+      commandKind: "ResolvePhase",
+      streamSeq: 905,
+      expectedPhaseId: "N02",
+      expectedPhaseState: "locked",
+      deadlineAffordance: "unlock_thread,advance_phase",
+      refreshKeys: ["host", "votecount", "dayVoteOutcomes", "hostPrompts"],
+    }),
+    advanceProof: hostPhaseTransitionProofFixture({
+      actionId: "advance_phase",
+      commandKind: "AdvancePhase",
+      streamSeq: 906,
+      expectedPhaseId: "D03",
+      expectedPhaseState: "open",
+      deadlineAffordance: "resolve_phase,lock_thread",
+      refreshKeys: [],
+    }),
+    actionPlayerObservationProof: { id: "action" },
+    nightTargetObservationProof: { id: "target" },
+    normalObservationProof: { id: "normal" },
+  };
+
+  assert.doesNotThrow(() =>
+    assertHostNightActionTransitionSurfaceCase({
+      hostNightActionTransitionSurface,
+      expectedGame: "game-a",
+      assertPlayerObservationProof: (args) => observed.push(args),
+    }),
+  );
+  assert.deepEqual(
+    observed.map((args) => [
+      args.proof.id,
+      args.expectedPrincipalUserId,
+      args.expectedCommandStateEndpoint,
+      args.expectedNotificationsEndpoint,
+    ]),
+    [
+      [
+        "action",
+        "player_mira",
+        "/games/game-a/player-command-state?principal_user_id=player_mira&slot_id=slot-7",
+        "/games/game-a/notifications?principal_user_id=player_mira",
+      ],
+      [
+        "target",
+        "player-seed",
+        "/games/game-a/player-command-state?principal_user_id=player-seed&slot_id=slot-3",
+        "/games/game-a/notifications?principal_user_id=player-seed",
+      ],
+      [
+        "normal",
+        "player_rowan",
+        "/games/game-a/player-command-state?principal_user_id=player_rowan&slot_id=slot-4",
+        "/games/game-a/notifications?principal_user_id=player_rowan",
+      ],
+    ],
+  );
+  assert.throws(
+    () =>
+      assertHostNightActionTransitionSurfaceCase({
+        hostNightActionTransitionSurface: {
+          ...hostNightActionTransitionSurface,
+          transition: "resolve_phase:ack:905",
+        },
+        expectedGame: "game-a",
+        assertPlayerObservationProof: () => {},
+      }),
+    /host night action transition surface/,
+  );
+});
+
 test("host lifecycle control assertion covers checkpoint, click, and stale reject", () => {
   const hostRoleSurface = {
     status: "passed",
@@ -379,3 +554,49 @@ test("host stale advance recovery assertion covers refreshed host controls", () 
     /host stale advance recovery after transition/,
   );
 });
+
+function hostPhaseTransitionProofFixture({
+  actionId,
+  commandKind,
+  streamSeq,
+  expectedPhaseId,
+  expectedPhaseState,
+  deadlineAffordance,
+  refreshKeys,
+}) {
+  return {
+    status: "passed",
+    clickedAction: actionId,
+    commandKind,
+    command: {
+      game: "game-a",
+      ...(commandKind === "ResolvePhase" ? { seed: 918273 } : {}),
+    },
+    commandStatus: {
+      state: "ack",
+      message: `Ack: stream seqs ${streamSeq}`,
+    },
+    commandOutcome: {
+      state: "ack",
+      message: `Ack: stream seqs ${streamSeq}`,
+    },
+    bridgePlan: {
+      role: "moderator",
+      commandKind,
+      commandEndpoint: "/commands",
+      finalState: "ack",
+      projectionRefreshKeys: refreshKeys,
+    },
+    projection: {
+      phase: {
+        id: expectedPhaseId,
+        state: expectedPhaseState,
+        locked: expectedPhaseState === "locked",
+      },
+    },
+    checkpointPhaseId: expectedPhaseId,
+    checkpointPhaseState: expectedPhaseState,
+    checkpointDeadlineAffordance: deadlineAffordance,
+    activityStatusText: `Ack: stream seqs ${streamSeq}`,
+  };
+}

@@ -22,6 +22,7 @@ import {
 } from "./dev_test_game_core_loop_action_scenarios.mjs";
 import {
   assertHostLifecycleControlRoleSurfaceCase,
+  assertHostNightActionTransitionSurfaceCase,
   assertHostPhaseTransitionActionProofCase,
   assertHostStaleAdvanceAfterTransitionProofCase,
   hostAdvancePhaseTransitionCase,
@@ -10138,127 +10139,11 @@ function assertHostNightActionTransitionSurface(hostNightActionTransitionSurface
   const expectedGame = gameFromRoleUrl(
     hostNightActionTransitionSurface?.sourceHostRoleUrl,
   );
-  const resolveProof = hostNightActionTransitionSurface?.resolveProof;
-  const advanceProof = hostNightActionTransitionSurface?.advanceProof;
-  const actionPlayerObservationProof =
-    hostNightActionTransitionSurface?.actionPlayerObservationProof;
-  const nightTargetObservationProof =
-    hostNightActionTransitionSurface?.nightTargetObservationProof;
-  const normalObservationProof =
-    hostNightActionTransitionSurface?.normalObservationProof;
-  if (
-    hostNightActionTransitionSurface?.status !== "passed" ||
-    hostNightActionTransitionSurface.clickedThroughFromRoleUrl !== true ||
-    hostNightActionTransitionSurface.releaseReady !== false ||
-    hostNightActionTransitionSurface.productionReady !== false ||
-    typeof hostNightActionTransitionSurface.sourceHostRoleUrl !== "string" ||
-    !hostNightActionTransitionSurface.sourceHostRoleUrl.includes("/g/") ||
-    !hostNightActionTransitionSurface.sourceHostRoleUrl.endsWith("/host") ||
-    typeof hostNightActionTransitionSurface.sourceActionPlayerRoleUrl !==
-      "string" ||
-    !hostNightActionTransitionSurface.sourceActionPlayerRoleUrl.includes("/g/") ||
-    typeof hostNightActionTransitionSurface.sourceNightTargetRoleUrl !==
-      "string" ||
-    !hostNightActionTransitionSurface.sourceNightTargetRoleUrl.includes("/g/") ||
-    typeof hostNightActionTransitionSurface.sourceNormalRoleUrl !== "string" ||
-    !hostNightActionTransitionSurface.sourceNormalRoleUrl.includes("/g/") ||
-    typeof hostNightActionTransitionSurface.visitedHostRolePath !== "string" ||
-    !hostNightActionTransitionSurface.visitedHostRolePath.endsWith("/host") ||
-    hostNightActionTransitionSurface.surfaceTestId !== "host-console-surface" ||
-    !String(hostNightActionTransitionSurface.transition ?? "").includes(
-      "resolve_phase:ack:905",
-    ) ||
-    !String(hostNightActionTransitionSurface.transition ?? "").includes(
-      "advance_phase:ack:906",
-    ) ||
-    !String(hostNightActionTransitionSurface.transition ?? "").includes(
-      "actionPlayer:D03",
-    ) ||
-    !String(hostNightActionTransitionSurface.transition ?? "").includes(
-      "target:D03",
-    ) ||
-    !String(hostNightActionTransitionSurface.transition ?? "").includes(
-      "normal:D03",
-    )
-  ) {
-    throw new Error(
-      `core-loop admin proof missing host night action transition surface: ${JSON.stringify(
-        hostNightActionTransitionSurface,
-      )}`,
-    );
-  }
-  assertHostPhaseTransitionActionProof({
-    proof: resolveProof,
+  assertHostNightActionTransitionSurfaceCase({
+    hostNightActionTransitionSurface,
     expectedGame,
-    ...hostResolvePhaseTransitionCase({
-      streamSeq: 905,
-      expectedPhaseId: "N02",
-    }),
-  });
-  assertHostPhaseTransitionActionProof({
-    proof: advanceProof,
-    expectedGame,
-    ...hostAdvancePhaseTransitionCase({
-      streamSeq: 906,
-      expectedPhaseId: "D03",
-    }),
-  });
-  assertDayThreePlayerObservationProof({
-    proof: actionPlayerObservationProof,
-    expectedGame,
-    sourceRoleUrl: hostNightActionTransitionSurface.sourceActionPlayerRoleUrl,
-    expectedPrincipalUserId: "player_mira",
-    expectedSlot: "slot-7",
-    slotField: "actionPlayerSlot",
-    expectedActorAlive: true,
-    expectedActorStatus: "alive",
-    expectedActionState: "disabled:no legal action available",
-    expectedStatusText: "no legal action available",
-    expectedPrivateCount: 0,
-    expectedPrivateReceipt: false,
-    expectedBoundaryText: "action player observed host AdvancePhase",
-    expectedCommandStateEndpoint:
-      `/games/${expectedGame}/player-command-state?principal_user_id=player_mira&slot_id=slot-7`,
-    expectedNotificationsEndpoint:
-      `/games/${expectedGame}/notifications?principal_user_id=player_mira`,
-  });
-  assertDayThreePlayerObservationProof({
-    proof: nightTargetObservationProof,
-    expectedGame,
-    sourceRoleUrl: hostNightActionTransitionSurface.sourceNightTargetRoleUrl,
-    expectedPrincipalUserId: "player-seed",
-    expectedSlot: "slot-3",
-    slotField: "targetSlot",
-    expectedActorAlive: false,
-    expectedActorStatus: "dead",
-    expectedActionState: "disabled:actor is not alive",
-    expectedStatusText: "actor is not alive",
-    expectedPrivateCount: 1,
-    expectedPrivateReceipt: true,
-    expectedBoundaryText: "killed target stayed dead",
-    expectedCommandStateEndpoint:
-      `/games/${expectedGame}/player-command-state?principal_user_id=player-seed&slot_id=slot-3`,
-    expectedNotificationsEndpoint:
-      `/games/${expectedGame}/notifications?principal_user_id=player-seed`,
-  });
-  assertDayThreePlayerObservationProof({
-    proof: normalObservationProof,
-    expectedGame,
-    sourceRoleUrl: hostNightActionTransitionSurface.sourceNormalRoleUrl,
-    expectedPrincipalUserId: "player_rowan",
-    expectedSlot: "slot-4",
-    slotField: "normalSlot",
-    expectedActorAlive: true,
-    expectedActorStatus: "alive",
-    expectedActionState: "disabled:no legal action available",
-    expectedStatusText: "no legal action available",
-    expectedPrivateCount: 0,
-    expectedPrivateReceipt: false,
-    expectedBoundaryText: "normal player observed open D03",
-    expectedCommandStateEndpoint:
-      `/games/${expectedGame}/player-command-state?principal_user_id=player_rowan&slot_id=slot-4`,
-    expectedNotificationsEndpoint:
-      `/games/${expectedGame}/notifications?principal_user_id=player_rowan`,
+    assertPlayerObservationProof: assertDayThreePlayerObservationProof,
+    includeEvidenceInError: true,
   });
 }
 
