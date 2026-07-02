@@ -50,6 +50,8 @@ import {
 } from "./dev_test_game_core_loop_private_receipt_scenarios.mjs";
 import {
   assertDayThreeVoteResolutionSurfaceCase,
+  coreLoopVoteResolutionFamilyId,
+  coreLoopVoteResolutionScenarioFamily,
 } from "./dev_test_game_core_loop_vote_resolution_scenarios.mjs";
 import {
   assertPostDayThreeResolutionSurfaceCase,
@@ -389,6 +391,7 @@ await runAdminAuditProof({
       hostControlFamily: coreLoopHostControlScenarioFamily(),
       playerActionRecoveryFamily:
         coreLoopPlayerActionRecoveryScenarioFamily(),
+      voteResolutionFamily: coreLoopVoteResolutionScenarioFamily(),
       phaseProgressionFamily: coreLoopPhaseProgressionScenarioFamily(),
       lateActionProgressionFamily:
         coreLoopLateActionProgressionScenarioFamily(),
@@ -9656,6 +9659,13 @@ export function assertCoreLoopAdminProof(evidence) {
     throw new Error(
       "core-loop admin proof missing player-action recovery family",
     );
+  }
+  if (
+    evidence.generatedFrom?.voteResolutionFamily?.id !==
+      coreLoopVoteResolutionFamilyId ||
+    !Array.isArray(evidence.generatedFrom?.voteResolutionFamily?.laneIds)
+  ) {
+    throw new Error("core-loop admin proof missing vote-resolution family");
   }
   if (
     evidence.generatedFrom?.phaseProgressionFamily?.id !==

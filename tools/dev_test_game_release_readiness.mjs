@@ -110,6 +110,7 @@ import {
 } from "./dev_test_game_core_loop_private_receipt_scenarios.mjs";
 import {
   assertDayThreeVoteResolutionSurfaceCase,
+  coreLoopVoteResolutionFamilyId,
 } from "./dev_test_game_core_loop_vote_resolution_scenarios.mjs";
 import {
   assertPostDayThreeResolutionSurfaceCase,
@@ -2094,6 +2095,13 @@ export function validateDevTestGameCoreLoopAdminProof(proof, options = {}) {
     throw new Error(
       "core-loop admin proof missing player-action recovery family",
     );
+  }
+  if (
+    proof.generatedFrom?.voteResolutionFamily?.id !==
+      coreLoopVoteResolutionFamilyId ||
+    !Array.isArray(proof.generatedFrom?.voteResolutionFamily?.laneIds)
+  ) {
+    throw new Error("core-loop admin proof missing vote-resolution family");
   }
   if (
     proof.generatedFrom?.phaseProgressionFamily?.id !==

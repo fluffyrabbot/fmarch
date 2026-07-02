@@ -4,8 +4,9 @@ import {
   staleNightOneActionAfterTransitionRecoveryScenario,
 } from "./dev_test_game_core_loop_action_scenarios.mjs";
 import {
+  coreLoopVoteResolutionLaneIds,
+  coreLoopVoteResolutionScenarioFamily,
   dayThreeVoteResolutionLaneId,
-  dayThreeVoteResolutionSurfaceCase,
 } from "./dev_test_game_core_loop_vote_resolution_scenarios.mjs";
 import {
   postDayThreeResolutionSurfaceCase,
@@ -15,7 +16,7 @@ export const coreLoopPhaseProgressionFamilyId =
   "core-loop-phase-progression";
 
 export const coreLoopPhaseProgressionLaneIds = Object.freeze([
-  dayThreeVoteResolutionLaneId,
+  ...coreLoopVoteResolutionLaneIds,
   "day-vote-no-lynch",
   playerActionLoopLaneId,
 ]);
@@ -48,6 +49,7 @@ export const coreLoopPhaseProgressionSeedAliasEntries = Object.freeze([
 ]);
 
 export function coreLoopPhaseProgressionScenarioFamily() {
+  const voteResolutionFamily = coreLoopVoteResolutionScenarioFamily();
   return {
     id: coreLoopPhaseProgressionFamilyId,
     laneIds: [...coreLoopPhaseProgressionLaneIds],
@@ -57,7 +59,8 @@ export function coreLoopPhaseProgressionScenarioFamily() {
       ...coreLoopPhaseProgressionDemoOnlySeedScenarioIds,
     ],
     surfaces: {
-      dayThreeVoteResolution: dayThreeVoteResolutionSurfaceCase(),
+      dayThreeVoteResolution:
+        voteResolutionFamily.surfaces.dayThreeVoteResolution,
       postDayThreeResolution: postDayThreeResolutionSurfaceCase(),
     },
     staleRejects: {

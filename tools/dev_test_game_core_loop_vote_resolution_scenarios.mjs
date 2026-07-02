@@ -3,6 +3,10 @@ import {
 } from "./dev_test_game_core_loop_host_phase_scenarios.mjs";
 
 export const dayThreeVoteResolutionLaneId = "day-vote-resolution";
+export const coreLoopVoteResolutionFamilyId = "core-loop-vote-resolution";
+export const coreLoopVoteResolutionLaneIds = Object.freeze([
+  dayThreeVoteResolutionLaneId,
+]);
 
 const cloneVoteResolutionSurfaceCase = (surfaceCase) => ({
   ...surfaceCase,
@@ -53,6 +57,16 @@ export function dayThreeVoteResolutionSurfaceCase() {
   return cloneVoteResolutionSurfaceCase(
     dayThreeVoteResolutionSurfaceCaseDefinition,
   );
+}
+
+export function coreLoopVoteResolutionScenarioFamily() {
+  return {
+    id: coreLoopVoteResolutionFamilyId,
+    laneIds: [...coreLoopVoteResolutionLaneIds],
+    surfaces: {
+      dayThreeVoteResolution: dayThreeVoteResolutionSurfaceCase(),
+    },
+  };
 }
 
 export function assertDayThreeVoteResolutionSurfaceCase({

@@ -2,12 +2,19 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
   assertDayThreeVoteResolutionSurfaceCase,
+  coreLoopVoteResolutionFamilyId,
+  coreLoopVoteResolutionLaneIds,
+  coreLoopVoteResolutionScenarioFamily,
   dayThreeVoteResolutionLaneId,
   dayThreeVoteResolutionSurfaceCase,
 } from "./dev_test_game_core_loop_vote_resolution_scenarios.mjs";
 
-test("Day 3 vote resolution scenario module exports proof lane id", () => {
+test("Day 3 vote resolution scenario module exports family and proof lane id", () => {
+  assert.equal(coreLoopVoteResolutionFamilyId, "core-loop-vote-resolution");
   assert.equal(dayThreeVoteResolutionLaneId, "day-vote-resolution");
+  assert.deepEqual(coreLoopVoteResolutionLaneIds, [
+    dayThreeVoteResolutionLaneId,
+  ]);
 });
 
 test("Day 3 vote resolution case shares vote and host resolution facts", () => {
@@ -62,6 +69,19 @@ test("Day 3 vote resolution case shares vote and host resolution facts", () => {
   assert.notEqual(
     dayThreeVoteResolutionSurfaceCase().playerVoteCase,
     dayThreeVoteResolutionSurfaceCase().playerVoteCase,
+  );
+});
+
+test("core loop vote-resolution family shares the Day 3 surface case", () => {
+  const family = coreLoopVoteResolutionScenarioFamily();
+  assert.equal(family.id, coreLoopVoteResolutionFamilyId);
+  assert.deepEqual(family.laneIds, coreLoopVoteResolutionLaneIds);
+  assert.deepEqual(family.surfaces.dayThreeVoteResolution, {
+    ...dayThreeVoteResolutionSurfaceCase(),
+  });
+  assert.notEqual(
+    family.surfaces.dayThreeVoteResolution,
+    coreLoopVoteResolutionScenarioFamily().surfaces.dayThreeVoteResolution,
   );
 });
 
