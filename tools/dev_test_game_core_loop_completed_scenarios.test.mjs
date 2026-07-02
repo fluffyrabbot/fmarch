@@ -34,6 +34,7 @@ import {
   completedGameEndgameSurfaceAssertionCases,
   completedGameEndgameTransition,
   completedGameHardeningLaneCase,
+  completedGameHardeningLaneCasesFor,
   completedGameHardeningLaneIds,
   completedGameHardeningLaneIdsFor,
   completedGameSeedDemoOnlyScenarioIds,
@@ -43,6 +44,7 @@ import {
   completedHostStaleCommandCaseDefinitions,
   completedHostStaleCommandCases,
   completedHostStaleCommandAssertionCases,
+  completedHostStaleCommandHardeningLaneCases,
   completedHostStaleCommandSeedRecoveryLaneIds,
   completedHostStaleCommandProofArgs,
   completedPlayerRecoveryLaneIds,
@@ -52,6 +54,7 @@ import {
   completedPlayerReloadProofCases,
   completedPlayerSeedDemoOnlyScenarioIds,
   completedPlayerSeedRequiredScenarioIds,
+  completedStalePlayerCompleteHardeningLaneCases,
   staleCompletedGamePlayerCommandCaseDefinitions,
   staleCompletedGamePlayerCommandCases,
   staleCompletedGamePlayerCommandAssertionCases,
@@ -169,6 +172,8 @@ test("completed-game scenario module derives shared hardening lane groups", () =
     label: "Stale complete-game reveal rejects after live completion",
     family: "completed-host-stale-command",
     seedGroup: "demo-only",
+    proofGroup: "stale-host-complete",
+    proofStep: "reject",
   });
   assert.throws(
     () => completedGameHardeningLaneCase("missing-completed-lane"),
@@ -229,6 +234,37 @@ test("completed-game scenario module derives shared hardening lane groups", () =
       seedGroups: "required",
     }),
     ["public-player-complete-reload", "stale-player-complete-reload"],
+  );
+  assert.deepEqual(
+    completedGameHardeningLaneCasesFor({
+      proofGroups: "stale-host-complete",
+    }).map((scenario) => [scenario.id, scenario.proofStep]),
+    [
+      ["stale-host-complete", "reject"],
+      ["stale-host-complete-reload", "reload"],
+      ["stale-host-complete-reconnect-recovery", "reconnect"],
+    ],
+  );
+  assert.deepEqual(
+    completedHostStaleCommandHardeningLaneCases().map((scenario) => [
+      scenario.id,
+      scenario.proofStep,
+    ]),
+    [
+      ["stale-host-complete", "reject"],
+      ["stale-host-complete-reload", "reload"],
+      ["stale-host-complete-reconnect-recovery", "reconnect"],
+    ],
+  );
+  assert.deepEqual(
+    completedStalePlayerCompleteHardeningLaneCases().map((scenario) => [
+      scenario.id,
+      scenario.proofStep,
+    ]),
+    [
+      ["stale-player-complete", "reject"],
+      ["stale-player-complete-reload", "reload"],
+    ],
   );
 });
 
@@ -470,15 +506,27 @@ test("completed-game proof contract uses shared hardening lane metadata", async 
     completedGameHardeningLaneCase(id),
   )) {
     assert(
-      new RegExp(`completedGameLane\\(\\s*"${escapeRegExp(scenario.id)}"`).test(
-        source,
-      ),
-      `proof contract should build ${scenario.id} through completedGameLane`,
-    );
-    assert(
       !source.includes(`lane("${scenario.id}", "${scenario.label}"`),
       `proof contract should not duplicate ${scenario.id} label text`,
     );
+  }
+  for (const { helperName, cases } of [
+    {
+      helperName: "completedHostStaleCompleteProofLanes",
+      cases: completedHostStaleCommandHardeningLaneCases(),
+    },
+    {
+      helperName: "completedStalePlayerCompleteProofLanes",
+      cases: completedStalePlayerCompleteHardeningLaneCases(),
+    },
+  ]) {
+    const helperSource = functionSource(source, helperName);
+    for (const scenario of cases) {
+      assert(
+        !helperSource.includes(`"${scenario.id}"`),
+        `${helperName} should use shared lane case metadata for ${scenario.id}`,
+      );
+    }
   }
 });
 
@@ -1419,6 +1467,13 @@ function recordAssertion(assertionName, asserted) {
   };
   assertProof.assertionName = assertionName;
   return assertProof;
+}
+
+function functionSource(source, functionName) {
+  const start = source.indexOf(`function ${functionName}`);
+  assert.notEqual(start, -1, `${functionName} should exist`);
+  const nextFunction = source.indexOf("\nfunction ", start + 1);
+  return nextFunction === -1 ? source.slice(start) : source.slice(start, nextFunction);
 }
 
 function escapeRegExp(value) {

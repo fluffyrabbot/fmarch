@@ -5,6 +5,8 @@ import {
   completedGameHardeningLaneCase,
   completedGameHardeningLaneCases,
   completedGameHardeningLaneIds,
+  completedHostStaleCommandHardeningLaneCases,
+  completedStalePlayerCompleteHardeningLaneCases,
 } from "./dev_test_game_core_loop_completed_game_scenario_assertions.mjs";
 import {
   assertHostStaleControlCoverageSummary,
@@ -6576,8 +6578,10 @@ function completedGameHardeningProofLanes({ hardening }) {
 }
 
 function completedHostStaleCompleteProofLanes({ hardening }) {
+  const [rejectLane, reloadLane, reconnectLane] =
+    completedHostStaleCommandHardeningLaneCases();
   return [
-    completedGameLane("stale-host-complete", {
+    completedGameLane(rejectLane, {
       rejectError: hardening.staleHostComplete?.reject?.error ?? null,
       liveCompleteSeqs:
         hardening.staleHostComplete?.liveComplete?.commandStatus?.streamSeqs ?? null,
@@ -6633,7 +6637,7 @@ function completedHostStaleCompleteProofLanes({ hardening }) {
         ) === true,
     }),
     completedGameLane(
-      "stale-host-complete-reload",
+      reloadLane,
       {
         game: hardening.staleHostComplete?.game ?? null,
         routeStatus:
@@ -6687,7 +6691,7 @@ function completedHostStaleCompleteProofLanes({ hardening }) {
       },
     ),
     completedGameLane(
-      "stale-host-complete-reconnect-recovery",
+      reconnectLane,
       {
         game: hardening.staleHostComplete?.game ?? null,
         reconnectingState:
@@ -7079,8 +7083,10 @@ function completedPlayerCompleteRaceProofLanes({ hardening }) {
 }
 
 function completedStalePlayerCompleteProofLanes({ hardening }) {
+  const [rejectLane, reloadLane] =
+    completedStalePlayerCompleteHardeningLaneCases();
   return [
-    completedGameLane("stale-player-complete", {
+    completedGameLane(rejectLane, {
       rejectError: hardening.stalePlayerComplete?.reject?.error ?? null,
       gameCompleted:
         hardening.stalePlayerComplete?.commandStateAfterReject?.gameCompleted ?? null,
@@ -7127,7 +7133,7 @@ function completedStalePlayerCompleteProofLanes({ hardening }) {
           0,
     }),
     completedGameLane(
-      "stale-player-complete-reload",
+      reloadLane,
       {
         game: hardening.stalePlayerComplete?.game ?? null,
         routeStatus:
@@ -7203,8 +7209,11 @@ function completedStalePlayerCompleteProofLanes({ hardening }) {
   ];
 }
 
-function completedGameLane(id, evidence) {
-  const scenario = completedGameHardeningLaneCase(id);
+function completedGameLane(scenarioOrId, evidence) {
+  const scenario =
+    typeof scenarioOrId === "string"
+      ? completedGameHardeningLaneCase(scenarioOrId)
+      : scenarioOrId;
   return lane(scenario.id, scenario.label, evidence);
 }
 

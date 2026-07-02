@@ -5,6 +5,7 @@ export {
   completedGameHardeningLaneCase,
   completedGameHardeningLaneCaseDefinitions,
   completedGameHardeningLaneCases,
+  completedGameHardeningLaneCasesFor,
   completedGameHardeningLaneIds,
   completedGameHardeningLaneIdsFor,
   completedGameRaceCoverageCellCases,
@@ -17,6 +18,7 @@ export {
   completedHostSeedDemoOnlyScenarioIds,
   completedHostStaleCommandCaseDefinitions,
   completedHostStaleCommandCases,
+  completedHostStaleCommandHardeningLaneCases,
   completedHostStaleCommandHardeningLaneIds,
   completedHostStaleCommandSeedRecoveryLaneIds,
   completedPlayerHardeningReloadLaneIds,
@@ -28,6 +30,7 @@ export {
   completedPlayerReloadProofCases,
   completedPlayerSeedDemoOnlyScenarioIds,
   completedPlayerSeedRequiredScenarioIds,
+  completedStalePlayerCompleteHardeningLaneCases,
   staleCompletedGamePlayerCommandCaseDefinitions,
   staleCompletedGamePlayerCommandCases,
 } from "./dev_test_game_core_loop_completed_recovery_cases.mjs";
