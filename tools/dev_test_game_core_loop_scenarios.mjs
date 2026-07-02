@@ -11,9 +11,8 @@ import {
   replacementCoreLoopHandoffLaneIds,
 } from "./dev_test_game_replacement_handoff_scenario_cases.mjs";
 import {
-  playerActionBoundaryLaneId,
-  playerInvalidActionRecoveryLaneId,
-} from "./dev_test_game_core_loop_action_scenarios.mjs";
+  coreLoopPlayerActionRecoveryLaneIds,
+} from "./dev_test_game_core_loop_player_action_recovery_scenarios.mjs";
 import {
   coreLoopPhaseProgressionLaneIds,
 } from "./dev_test_game_core_loop_phase_progression_scenarios.mjs";
@@ -30,10 +29,11 @@ export const coreLoopAuditLaneIds = Object.freeze([
   ...coreLoopPhaseProgressionLaneIds,
   "host-deadline-advance",
   "stale-deadline-advance",
-  playerInvalidActionRecoveryLaneId,
   "resolution-receipts",
   "dead-player-recovery",
-  playerActionBoundaryLaneId,
+  ...coreLoopPlayerActionRecoveryLaneIds.filter(
+    (laneId) => !coreLoopPhaseProgressionLaneIds.includes(laneId),
+  ),
   "private-channel",
   "host-votecount-publication",
   ...coreLoopHostControlLaneIds,

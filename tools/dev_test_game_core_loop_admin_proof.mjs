@@ -11,14 +11,17 @@ import {
   completedGameEndgameTransition,
 } from "./dev_test_game_core_loop_completed_recovery_scenario_cases.mjs";
 import {
-  assertPlayerActionSubmissionClickProofCase,
-  assertPlayerInvalidActionRecoveryProofCase,
   assertPlayerStaleActionAfterTransitionProofCase,
   assertPlayerStaleVoteAfterTransitionProofCase,
   playerActionSubmissionScenario,
   playerInvalidActionRecoveryScenario,
   staleNightFourActionRecoveryScenario,
 } from "./dev_test_game_core_loop_action_scenarios.mjs";
+import {
+  assertPlayerActionRoleSurfaceProof,
+  coreLoopPlayerActionRecoveryFamilyId,
+  coreLoopPlayerActionRecoveryScenarioFamily,
+} from "./dev_test_game_core_loop_player_action_recovery_scenarios.mjs";
 import {
   assertDayFourNoLynchHostTransitionProofCase,
   assertEmptyNightThreeHostTransitionProofCase,
@@ -384,6 +387,8 @@ await runAdminAuditProof({
       completedGameHardeningCoverageStatus:
         completedGameHardeningCoverageStatus(proofRun),
       hostControlFamily: coreLoopHostControlScenarioFamily(),
+      playerActionRecoveryFamily:
+        coreLoopPlayerActionRecoveryScenarioFamily(),
       phaseProgressionFamily: coreLoopPhaseProgressionScenarioFamily(),
       lateActionProgressionFamily:
         coreLoopLateActionProgressionScenarioFamily(),
@@ -9644,6 +9649,15 @@ export function assertCoreLoopAdminProof(evidence) {
     throw new Error("core-loop admin proof missing host-control family");
   }
   if (
+    evidence.generatedFrom?.playerActionRecoveryFamily?.id !==
+      coreLoopPlayerActionRecoveryFamilyId ||
+    !Array.isArray(evidence.generatedFrom?.playerActionRecoveryFamily?.laneIds)
+  ) {
+    throw new Error(
+      "core-loop admin proof missing player-action recovery family",
+    );
+  }
+  if (
     evidence.generatedFrom?.phaseProgressionFamily?.id !==
       coreLoopPhaseProgressionFamilyId ||
     !Array.isArray(evidence.generatedFrom?.phaseProgressionFamily?.laneIds)
@@ -9779,81 +9793,9 @@ function assertHostLifecycleControlCheckpoint(hostRoleSurface) {
 }
 
 function assertPlayerActionSubmissionCheckpoint(playerRoleSurface) {
-  const scenario = playerActionSubmissionScenario();
-  const checkpoint = playerRoleSurface?.playerActionSubmissionCheckpoint;
-  const clickProof = playerRoleSurface?.playerActionSubmissionClickProof;
-  const invalidRecoveryProof = playerRoleSurface?.playerActionInvalidRecoveryProof;
-  if (
-    playerRoleSurface?.status !== "passed" ||
-    playerRoleSurface.clickedThroughFromRoleUrl !== true ||
-    playerRoleSurface.releaseReady !== false ||
-    playerRoleSurface.productionReady !== false ||
-    typeof playerRoleSurface.sourceRoleUrl !== "string" ||
-    !playerRoleSurface.sourceRoleUrl.includes("/g/") ||
-    typeof playerRoleSurface.visitedRolePath !== "string" ||
-    !playerRoleSurface.visitedRolePath.includes("/g/") ||
-    playerRoleSurface.surfaceTestId !== "player-surface" ||
-    playerRoleSurface.checkpointTestId !== "player-action-submission-checkpoint" ||
-    checkpoint?.proofCheckId !== "player-action-submission" ||
-    checkpoint.phaseId !== "N02" ||
-    checkpoint.phaseState !== "open" ||
-    checkpoint.actorSlot !== scenario.actorSlot ||
-    checkpoint.actionState !== `enabled:${scenario.clickedAction}` ||
-    checkpoint.selectedAction !== scenario.actionId ||
-    checkpoint.targetSlots !== scenario.targetSlot ||
-    checkpoint.receiptState !== "idle" ||
-    !checkpoint.targetText?.includes(
-      `${scenario.actionId} -> ${scenario.targetSlot}`,
-    ) ||
-    !checkpoint.recoveryText?.includes("Reject PhaseLocked") ||
-    !String(checkpoint.statusText ?? "")
-      .toLowerCase()
-      .includes("player action submission is reachable from this role url")
-  ) {
-    throw new Error(
-      `core-loop admin proof missing player action role checkpoint: ${JSON.stringify(
-        {
-          surface: {
-            status: playerRoleSurface?.status,
-            sourceRoleUrl: playerRoleSurface?.sourceRoleUrl,
-            visitedRolePath: playerRoleSurface?.visitedRolePath,
-            surfaceTestId: playerRoleSurface?.surfaceTestId,
-            checkpointTestId: playerRoleSurface?.checkpointTestId,
-            clickedThroughFromRoleUrl: playerRoleSurface?.clickedThroughFromRoleUrl,
-            releaseReady: playerRoleSurface?.releaseReady,
-            productionReady: playerRoleSurface?.productionReady,
-          },
-          checkpoint,
-        },
-      )}`,
-    );
-  }
-  for (const rowId of [
-    "phase",
-    "actor",
-    "actionState",
-    "target",
-    "receipt",
-    "recovery",
-  ]) {
-    if (!checkpoint.visibleRows?.includes(rowId)) {
-      throw new Error(`player action checkpoint missing visible row: ${rowId}`);
-    }
-  }
-  assertPlayerActionSubmissionClickProof({
-    clickProof,
-    expectedGame: gameFromRoleUrl(playerRoleSurface.sourceRoleUrl),
-  });
-  assertPlayerActionInvalidRecoveryProof({
-    invalidRecoveryProof,
-    expectedGame: gameFromRoleUrl(playerRoleSurface.sourceRoleUrl),
-  });
-}
-
-function assertPlayerActionSubmissionClickProof({ clickProof, expectedGame }) {
-  assertPlayerActionSubmissionClickProofCase({
-    proof: clickProof,
-    expectedGame,
+  assertPlayerActionRoleSurfaceProof({
+    playerRoleSurface,
+    scenarioFamily: coreLoopPlayerActionRecoveryScenarioFamily(),
     includeEvidenceInError: true,
   });
 }
@@ -10230,17 +10172,6 @@ function assertNormalNightActionResolutionPrivacySurface(normalSurface) {
       )}`,
     );
   }
-}
-
-function assertPlayerActionInvalidRecoveryProof({
-  invalidRecoveryProof,
-  expectedGame,
-}) {
-  assertPlayerInvalidActionRecoveryProofCase({
-    proof: invalidRecoveryProof,
-    expectedGame,
-    includeEvidenceInError: true,
-  });
 }
 
 function assertHostPhaseTransitionSurface(hostPhaseTransitionSurface) {

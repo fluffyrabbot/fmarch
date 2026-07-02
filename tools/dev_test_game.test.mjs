@@ -26,6 +26,9 @@ import {
   coreLoopHostControlScenarioFamily,
 } from "./dev_test_game_core_loop_host_control_scenarios.mjs";
 import {
+  coreLoopPlayerActionRecoveryScenarioFamily,
+} from "./dev_test_game_core_loop_player_action_recovery_scenarios.mjs";
+import {
   coreLoopCompletedEndgameProgressionScenarioFamily,
 } from "./dev_test_game_core_loop_completed_endgame_progression_scenarios.mjs";
 import {
@@ -10092,6 +10095,8 @@ function coreLoopAdminProofFixture() {
       coreLoopSpineStatus: "passed: D01 -> N01 -> D02, vote ack, next N02",
       completedGameHardeningCoverageStatus: "passed: 10/10 lanes across 4 families",
       hostControlFamily: coreLoopHostControlScenarioFamily(),
+      playerActionRecoveryFamily:
+        coreLoopPlayerActionRecoveryScenarioFamily(),
       phaseProgressionFamily: {
         id: "core-loop-phase-progression",
         laneIds: ["day-vote-resolution", "day-vote-no-lynch", "action-loop"],
