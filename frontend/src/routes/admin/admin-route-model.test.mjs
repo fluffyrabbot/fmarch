@@ -5495,6 +5495,7 @@ function releaseReadinessChecklistFixture() {
           laneIds: hostStaleControlMilestoneFixture().laneIds,
           requiredLaneCount: hostStaleControlLaneIds.length,
           coveredLaneCount: hostStaleControlLaneIds.length,
+          familyCount: hostStaleControlCoverageFamilies().length,
         },
         {
           id: "local-proof-graph-admin-role-handoffs",

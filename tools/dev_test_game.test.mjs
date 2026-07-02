@@ -9327,6 +9327,7 @@ function devTestGameReleaseReadinessChecklistFixture({
           laneIds: hostStaleControlMilestoneFixture().laneIds,
           requiredLaneCount: hostStaleControlLaneIds.length,
           coveredLaneCount: hostStaleControlLaneIds.length,
+          familyCount: hostStaleControlCoverageFamilies().length,
         },
         {
           id: "local-private-channel-recovery-milestone",

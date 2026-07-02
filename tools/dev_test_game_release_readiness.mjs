@@ -121,6 +121,17 @@ import {
 export const DEV_TEST_GAME_RELEASE_READINESS_VERSION = 1;
 const devTestGameSeededBrowserProofCommand =
   "DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch npm run test:dev-test-game-live";
+const proofRunLaneCoverageMilestoneIds = Object.freeze([
+  "local-stale-conflict-message-milestone",
+  "local-host-stale-control-milestone",
+  "local-private-channel-recovery-milestone",
+  "local-replacement-action-recovery-milestone",
+  "local-replacement-handoff-recovery-milestone",
+]);
+const artifactCoverageMilestoneIds = Object.freeze([
+  "local-race-coverage-proof",
+  "local-seed-demo-fixture",
+]);
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const artifactDir = path.join(repoRoot, "target", "dev-test-game");
@@ -5594,6 +5605,9 @@ export function assertDevTestGameReleaseReadiness(checklist) {
     }
   }
   assertLocalReadinessDependencyChecks(checklist.localDevelopmentSpine?.checks);
+  assertReleaseReadinessCoverageMilestoneConventions(
+    checklist.localDevelopmentSpine?.checks,
+  );
   const coreLoopCheck = checklist.localDevelopmentSpine?.checks?.find(
     (check) => check.id === "local-core-loop-proof",
   );
@@ -5766,6 +5780,37 @@ export function assertDevTestGameReleaseReadiness(checklist) {
     }
   }
   return checklist;
+}
+
+function assertReleaseReadinessCoverageMilestoneConventions(checks = []) {
+  const checkById = new Map((checks ?? []).map((check) => [check.id, check]));
+  for (const checkId of proofRunLaneCoverageMilestoneIds) {
+    const check = checkById.get(checkId);
+    if (check === undefined) {
+      continue;
+    }
+    if (
+      !Array.isArray(check.laneIds) ||
+      !Number.isInteger(check.requiredLaneCount) ||
+      !Number.isInteger(check.coveredLaneCount) ||
+      !Number.isInteger(check.familyCount) ||
+      check.familyCount <= 0 ||
+      check.requiredLaneCount !== check.laneIds.length ||
+      check.coveredLaneCount !== check.laneIds.length
+    ) {
+      throw new Error(
+        `dev-test-game proof-run coverage milestone missing summary metadata: ${checkId}`,
+      );
+    }
+  }
+  for (const checkId of artifactCoverageMilestoneIds) {
+    const check = checkById.get(checkId);
+    if (check !== undefined && Number.isInteger(check.familyCount)) {
+      throw new Error(
+        `dev-test-game artifact coverage milestone must not masquerade as proof-run lane coverage: ${checkId}`,
+      );
+    }
+  }
 }
 
 function validCoreLoopSpineTargets(spineTargets) {
