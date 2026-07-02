@@ -116,10 +116,10 @@ import {
   devTestGameHostedIdentityEvidenceCommand,
   devTestGameHostedIdentityEvidencePath,
   hostedIdentityEvidenceBlockedChecks,
+  hostedIdentityEvidenceHandoffCase,
   hostedIdentityEvidenceInputIds,
   hostedIdentityEvidencePlaceholderFixturePath,
   hostedIdentityEvidencePlaceholderSchema,
-  hostedIdentityEvidenceRequirementGroups,
   validateHostedIdentityEvidencePlaceholder,
 } from "./dev_test_game_hosted_identity_evidence.mjs";
 import { devTestGameLiveSpinePlan } from "./dev_test_game_live_spine.mjs";
@@ -12503,23 +12503,7 @@ function featureSpineDrilldownFixture(slotId = "player-action-submission") {
 }
 
 function hostedIdentityHandoffChecklistFixture() {
-  const blockedIdentityChecks = hostedIdentityEvidenceBlockedChecks.map((check) => ({
-    ...check,
-    status: "blocked",
-  }));
-  return {
-    status: "blocked",
-    preflightStatus: "blocked",
-    command: `npm run ${devTestGameHostedIdentityEvidenceCommand}`,
-    proofTarget: devTestGameHostedIdentityEvidencePath,
-    placeholderFixturePath: hostedIdentityEvidencePlaceholderFixturePath,
-    inputIds: [...hostedIdentityEvidenceInputIds],
-    blockedCheckIds: hostedIdentityEvidenceBlockedChecks.map((check) => check.id),
-    blockedChecks: blockedIdentityChecks,
-    requirementGroups: hostedIdentityEvidenceRequirementGroups(
-      blockedIdentityChecks,
-    ),
-  };
+  return hostedIdentityEvidenceHandoffCase();
 }
 
 const productionFeatureSpineTargetFixtures = Object.freeze({
@@ -13528,6 +13512,8 @@ function hostedTargetPreflightAdminProofFixture() {
 }
 
 function hostedIdentityEvidenceAdminProofFixture() {
+  const handoff = hostedIdentityEvidenceHandoffCase();
+  const handoffGroupIds = handoff.requirementGroups.map((group) => group.id);
   return {
     version: 1,
     proof: "dev-test-game-hosted-identity-evidence-admin-proof",
@@ -13547,20 +13533,13 @@ function hostedIdentityEvidenceAdminProofFixture() {
         hostedIdentityEvidenceBlockedChecks.map((check) => [check.id, "blocked"]),
       ),
       blockedCheckIds: hostedIdentityEvidenceBlockedChecks.map((check) => check.id),
-      hostedHandoffInputIds: [...hostedIdentityEvidenceInputIds],
+      hostedHandoffInputIds: handoff.inputIds,
       hostedHandoffInputValues: {
         FMARCH_HOSTED_IDENTITY_EVIDENCE_PATH:
           hostedIdentityEvidencePlaceholderFixturePath,
       },
-      hostedHandoffBlockedCheckIds: hostedIdentityEvidenceBlockedChecks.map(
-        (check) => check.id,
-      ),
-      hostedHandoffGroupIds: hostedIdentityEvidenceRequirementGroups(
-        hostedIdentityEvidenceBlockedChecks.map((check) => ({
-          ...check,
-          status: "blocked",
-        })),
-      ).map((group) => group.id),
+      hostedHandoffBlockedCheckIds: handoff.blockedCheckIds,
+      hostedHandoffGroupIds: handoffGroupIds,
       relatedAuditIds: ["local-identity-adapter", "local-next-action"],
     },
     adminRoleSurface: {
@@ -13578,15 +13557,8 @@ function hostedIdentityEvidenceAdminProofFixture() {
         FMARCH_HOSTED_IDENTITY_EVIDENCE_PATH:
           `FMARCH_HOSTED_IDENTITY_EVIDENCE_PATH ${hostedIdentityEvidencePlaceholderFixturePath} required`,
       },
-      visibleHostedHandoffBlockedChecks: hostedIdentityEvidenceBlockedChecks.map(
-        (check) => check.id,
-      ),
-      visibleHostedHandoffGroups: hostedIdentityEvidenceRequirementGroups(
-        hostedIdentityEvidenceBlockedChecks.map((check) => ({
-          ...check,
-          status: "blocked",
-        })),
-      ).map((group) => group.id),
+      visibleHostedHandoffBlockedChecks: handoff.blockedCheckIds,
+      visibleHostedHandoffGroups: handoffGroupIds,
       visibleRelatedLinks: ["local-identity-adapter", "local-next-action"],
       rawInviteTokensVisible: false,
       releaseReady: false,
