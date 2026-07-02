@@ -7,6 +7,9 @@ import {
   coreLoopDayFiveProgressionScenarioFamily,
   dayFiveNoLynchResolutionSurfaceCase,
 } from "./dev_test_game_core_loop_day_five_progression_scenarios.mjs";
+import {
+  dayFiveNoLynchResolutionSurfaceFixture,
+} from "./dev_test_game_core_loop_completed_game_fixtures.mjs";
 
 test("Day 5 progression family shares no-lynch resolution and stale vote cases", () => {
   assert.equal(
@@ -98,6 +101,17 @@ test("Day 5 progression assertion delegates host and player observations", () =>
       args.expectedLastVoteOutcomePhaseId,
     ]),
     [["night-five-player", "N05", "D05"]],
+  );
+});
+
+test("Day 5 fixture satisfies the shared progression assertion", () => {
+  assert.doesNotThrow(() =>
+    assertDayFiveNoLynchResolutionSurfaceProof({
+      dayFiveNoLynchResolutionSurface:
+        dayFiveNoLynchResolutionSurfaceFixture(),
+      assertHostPhaseTransitionActionProof: () => {},
+      assertPostDayThreePlayerSurfaceProof: () => {},
+    }),
   );
 });
 
