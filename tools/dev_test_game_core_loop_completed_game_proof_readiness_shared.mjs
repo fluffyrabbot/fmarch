@@ -6,13 +6,15 @@ import {
   completedGameEndgameScenarioCaseFamilies,
   completedGameEndgameTransition,
   completedGameEndgameTransitionTokens,
-  completedHostStaleCommandCases,
-  completedPlayerReloadCases,
-  staleCompletedGamePlayerCommandCases,
 } from "./dev_test_game_core_loop_completed_recovery_scenario_cases.mjs";
 import {
   completedGameHardeningLaneIds,
 } from "./dev_test_game_core_loop_completed_game_cases.mjs";
+import {
+  completedHostStaleCommandCases,
+  completedPlayerReloadCases,
+  staleCompletedGamePlayerCommandCases,
+} from "./dev_test_game_core_loop_completed_game_proof_readiness_case_definitions.mjs";
 
 export {
   assertCompletedGameEndgameSurfaceProof,
@@ -31,19 +33,22 @@ export {
   completedGameEndgameTransition,
   completedGameEndgameTransitionTokens,
   completedHostStaleCommandAssertionCases,
-  completedHostStaleCommandCaseDefinitions,
-  completedHostStaleCommandCases,
   completedHostStaleCommandProofArgs,
   completedPlayerReloadAssertionCases,
-  completedPlayerReloadCaseDefinitions,
-  completedPlayerReloadCases,
   completedPlayerReloadCommandState,
   completedPlayerReloadProofCases,
   staleCompletedGamePlayerCommandAssertionCases,
-  staleCompletedGamePlayerCommandCaseDefinitions,
-  staleCompletedGamePlayerCommandCases,
   staleCompletedGamePlayerCommandProofArgs,
 } from "./dev_test_game_core_loop_completed_recovery_scenario_cases.mjs";
+
+export {
+  completedHostStaleCommandCaseDefinitions,
+  completedHostStaleCommandCases,
+  completedPlayerReloadCaseDefinitions,
+  completedPlayerReloadCases,
+  staleCompletedGamePlayerCommandCaseDefinitions,
+  staleCompletedGamePlayerCommandCases,
+} from "./dev_test_game_core_loop_completed_game_proof_readiness_case_definitions.mjs";
 
 export const completedGameProofReadinessCaseGroupDefinitions = Object.freeze([
   Object.freeze({ id: "completedHostStaleCommandCases" }),

@@ -92,8 +92,40 @@ import {
   completedGameProofReadinessScenarioFamilies,
   completedGameProofReadinessTransition,
 } from "./dev_test_game_core_loop_completed_game_proof_readiness_cases.mjs";
+import {
+  completedHostStaleCommandCaseDefinitions as extractedCompletedHostStaleCommandCaseDefinitions,
+  completedHostStaleCommandCases as extractedCompletedHostStaleCommandCases,
+  completedPlayerReloadCaseDefinitions as extractedCompletedPlayerReloadCaseDefinitions,
+  completedPlayerReloadCases as extractedCompletedPlayerReloadCases,
+  staleCompletedGamePlayerCommandCaseDefinitions as extractedStaleCompletedGamePlayerCommandCaseDefinitions,
+  staleCompletedGamePlayerCommandCases as extractedStaleCompletedGamePlayerCommandCases,
+} from "./dev_test_game_core_loop_completed_game_proof_readiness_case_definitions.mjs";
 
 test("completed-game scenario module exposes shared frozen definitions", () => {
+  assert.equal(
+    completedHostStaleCommandCaseDefinitions,
+    extractedCompletedHostStaleCommandCaseDefinitions,
+  );
+  assert.equal(
+    completedPlayerReloadCaseDefinitions,
+    extractedCompletedPlayerReloadCaseDefinitions,
+  );
+  assert.equal(
+    staleCompletedGamePlayerCommandCaseDefinitions,
+    extractedStaleCompletedGamePlayerCommandCaseDefinitions,
+  );
+  assert.equal(
+    completedHostStaleCommandCases,
+    extractedCompletedHostStaleCommandCases,
+  );
+  assert.equal(
+    completedPlayerReloadCases,
+    extractedCompletedPlayerReloadCases,
+  );
+  assert.equal(
+    staleCompletedGamePlayerCommandCases,
+    extractedStaleCompletedGamePlayerCommandCases,
+  );
   assert(Object.isFrozen(completedHostStaleCommandCaseDefinitions));
   assert(Object.isFrozen(completedPlayerReloadCaseDefinitions));
   assert(Object.isFrozen(staleCompletedGamePlayerCommandCaseDefinitions));
@@ -448,6 +480,56 @@ test("completed-game production harness callers share extracted recovery cases",
     ),
     "proof contract should keep using the completed-game public scenario facade",
   );
+
+  const proofReadinessSharedSource = await readFile(
+    "tools/dev_test_game_core_loop_completed_game_proof_readiness_shared.mjs",
+    "utf8",
+  );
+  for (const importedName of [
+    "completedHostStaleCommandCases",
+    "completedPlayerReloadCases",
+    "staleCompletedGamePlayerCommandCases",
+  ]) {
+    assert(
+      importsFromModule({
+        source: proofReadinessSharedSource,
+        importedName,
+        moduleSpecifier:
+          "./dev_test_game_core_loop_completed_game_proof_readiness_case_definitions.mjs",
+      }),
+      `proof/readiness shared module should import ${importedName} from the extracted case definitions`,
+    );
+    assert(
+      !importsFromModule({
+        source: proofReadinessSharedSource,
+        importedName,
+        moduleSpecifier:
+          "./dev_test_game_core_loop_completed_recovery_scenario_cases.mjs",
+      }),
+      `proof/readiness shared module should not source ${importedName} from the broader recovery scenario bundle`,
+    );
+  }
+
+  const recoveryDefinitionSource = await readFile(
+    "tools/dev_test_game_core_loop_completed_recovery_case_definitions.mjs",
+    "utf8",
+  );
+  assert(
+    recoveryDefinitionSource.includes(
+      "./dev_test_game_core_loop_completed_game_proof_readiness_case_definitions.mjs",
+    ),
+    "broader completed recovery definitions should re-export the extracted proof/readiness cases",
+  );
+  for (const commandFactName of [
+    "hostResolvePhaseCommandFacts",
+    "hostAdvancePhaseCommandFacts",
+    "hostCompleteGameCommandFacts",
+  ]) {
+    assert(
+      !recoveryDefinitionSource.includes(commandFactName),
+      `broader completed recovery definitions should not own ${commandFactName}`,
+    );
+  }
 });
 
 test("completed-game proof/readiness facade exposes one completed recovery table", () => {
@@ -596,9 +678,17 @@ test("completed-game test fixtures live outside the assertion facade", async () 
 
 function importsFromModule({ source, importedName, moduleSpecifier }) {
   const importPattern = new RegExp(
-    `import\\s*\\{[\\s\\S]*?\\b${escapeRegExp(importedName)}\\b[\\s\\S]*?\\}\\s*from\\s*"${escapeRegExp(moduleSpecifier)}";`,
+    `import\\s*\\{([^}]*)\\}\\s*from\\s*"${escapeRegExp(moduleSpecifier)}";`,
+    "g",
   );
-  return importPattern.test(source);
+  return Array.from(source.matchAll(importPattern)).some((match) =>
+    match[1]
+      .split(",")
+      .map((entry) => entry.trim())
+      .some((entry) =>
+        new RegExp(`\\b${escapeRegExp(importedName)}\\b`).test(entry),
+      ),
+  );
 }
 
 test("completed-game proof contract uses shared hardening lane metadata", async () => {
