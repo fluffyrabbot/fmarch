@@ -56,7 +56,12 @@ import {
   replacementConcurrentActionRaceScenario,
   replacementConcurrentPrivatePostRaceScenario,
   replacementConcurrentVoteRaceScenario,
+  replacementStalePrivatePostAfterCompleteScenario,
 } from "./dev_test_game_replacement_private_scenario_cases.mjs";
+import {
+  replacementCompletedPrivatePostRejectMatches,
+  replacementCompletedPrivatePostReloadMatches,
+} from "./dev_test_game_replacement_private_post_assertions.mjs";
 
 export const DEV_TEST_GAME_PROOF_VERSION = 1;
 
@@ -143,6 +148,8 @@ export function buildDevTestGameProofRun(session, options = {}) {
     replacementConcurrentPrivatePostRaceScenario();
   const replacementVoteRaceScenario = replacementConcurrentVoteRaceScenario();
   const replacementActionRaceScenario = replacementConcurrentActionRaceScenario();
+  const replacementCompletedPrivatePostScenario =
+    replacementStalePrivatePostAfterCompleteScenario();
   const replacementIncomingActionCase = replacementIncomingActionScenario();
   const replacementActionReconnectCase = replacementActionReconnectScenario();
   const replacementStaleActionAfterResolveCase =
@@ -4248,116 +4255,10 @@ export function buildDevTestGameProofRun(session, options = {}) {
           hardening.replacementStalePrivatePostAfterComplete
             ?.staleOutgoingThreadAfterReject?.status ?? null,
         passed:
-          hardening.replacementStalePrivatePostAfterComplete?.status === "passed" &&
-          hardening.replacementStalePrivatePostAfterComplete?.channel ===
-            "private:mafia_day_chat" &&
-          hardening.replacementStalePrivatePostAfterComplete?.hostEntry?.capabilityKinds?.includes(
-            "HostOf",
-          ) === true &&
-          hardening.replacementStalePrivatePostAfterComplete?.staleOutgoingEntry?.capabilityKinds?.includes(
-            "SlotOccupant",
-          ) === true &&
-          hardening.replacementStalePrivatePostAfterComplete?.replacementEntry?.capabilityKinds?.includes(
-            "SlotOccupant",
-          ) === true &&
-          hardening.replacementStalePrivatePostAfterComplete?.replacement?.state ===
-            "ack" &&
-          hardening.replacementStalePrivatePostAfterComplete?.replacement
-            ?.requestEnvelope?.body?.body?.command?.ProcessReplacement?.slot ===
-            "slot-7" &&
-          hardening.replacementStalePrivatePostAfterComplete?.replacement
-            ?.requestEnvelope?.body?.body?.command?.ProcessReplacement?.incoming_user ===
-            "player-rowan" &&
-          hardening.replacementStalePrivatePostAfterComplete
-            ?.hostReplacementAfterProcess?.occupantLabel === "player-rowan" &&
-          hardening.replacementStalePrivatePostAfterComplete?.commandStateBeforeClose
-            ?.actorSlot === "slot-7" &&
-          hardening.replacementStalePrivatePostAfterComplete?.commandStateBeforeClose
-            ?.gameCompleted === false &&
-          hardening.replacementStalePrivatePostAfterComplete?.channelContextBeforeClose
-            ?.channelId === "private:mafia_day_chat" &&
-          hardening.replacementStalePrivatePostAfterComplete?.channelContextBeforeClose
-            ?.actorSlot === "slot-7" &&
-          hardening.replacementStalePrivatePostAfterComplete?.channelContextBeforeClose
-            ?.capabilityLabel?.includes(
-              "ChannelMember(private:mafia_day_chat)",
-            ) === true &&
-          hardening.replacementStalePrivatePostAfterComplete?.submitPostBeforeClose
-            ?.disabled === false &&
-          hardening.replacementStalePrivatePostAfterComplete?.closedStatus?.state ===
-            "closed" &&
-          hardening.replacementStalePrivatePostAfterComplete?.complete?.commandStatus
-            ?.state === "ack" &&
-          hardening.replacementStalePrivatePostAfterComplete?.complete?.commandStatus
-            ?.requestEnvelope?.body?.body?.command?.CompleteGame?.game ===
-            hardening.replacementStalePrivatePostAfterComplete?.game &&
-          hardening.replacementStalePrivatePostAfterComplete?.hostSlotsAfterComplete?.some(
-            (slot) =>
-              slot.role_revealed !== true || slot.alignment_revealed !== true,
-          ) === false &&
-          hardening.replacementStalePrivatePostAfterComplete?.hostActionsAfterComplete?.includes(
-            "complete_game",
-          ) === false &&
-          hardening.replacementStalePrivatePostAfterComplete?.apiStateAfterComplete
-            ?.completed === true &&
-          hardening.replacementStalePrivatePostAfterComplete?.reject?.state ===
-            "reject" &&
-          hardening.replacementStalePrivatePostAfterComplete?.reject?.error ===
-            "GameAlreadyCompleted" &&
-          hardening.replacementStalePrivatePostAfterComplete?.reject?.serverEnvelope
-            ?.body?.kind === "Reject" &&
-          Array.isArray(
-            hardening.replacementStalePrivatePostAfterComplete?.reject?.streamSeqs,
-          ) === false &&
-          hardening.replacementStalePrivatePostAfterComplete?.reject?.requestEnvelope
-            ?.body?.body?.principal_user_id === "player-rowan" &&
-          hardening.replacementStalePrivatePostAfterComplete?.reject?.requestEnvelope
-            ?.body?.body?.command?.SubmitPost?.channel_id ===
-            "private:mafia_day_chat" &&
-          hardening.replacementStalePrivatePostAfterComplete?.reject?.requestEnvelope
-            ?.body?.body?.command?.SubmitPost?.actor_slot === "slot-7" &&
-          hardening.replacementStalePrivatePostAfterComplete?.reject?.requestEnvelope
-            ?.body?.body?.command?.SubmitPost?.body ===
-            hardening.replacementStalePrivatePostAfterComplete?.postBody &&
-          hardening.replacementStalePrivatePostAfterComplete?.dispatchPlan
-            ?.projectionRefreshKeys?.includes("commandState") === true &&
-          hardening.replacementStalePrivatePostAfterComplete?.currentReceipt
-            ?.actionId === "submit_post" &&
-          hardening.replacementStalePrivatePostAfterComplete?.currentReceipt
-            ?.state === "reject" &&
-          hardening.replacementStalePrivatePostAfterComplete?.receiptStatusText?.includes(
-            "Reject GameAlreadyCompleted",
-          ) === true &&
-          hardening.replacementStalePrivatePostAfterComplete?.commandStateAfterReject
-            ?.actorSlot === "slot-7" &&
-          hardening.replacementStalePrivatePostAfterComplete?.commandStateAfterReject
-            ?.gameCompleted === true &&
-          hardening.replacementStalePrivatePostAfterComplete?.commandStateAfterReject
-            ?.actions?.length === 0 &&
-          hardening.replacementStalePrivatePostAfterComplete?.commandStateAfterReject
-            ?.voteTargets?.length === 0 &&
-          hardening.replacementStalePrivatePostAfterComplete?.commandStateAfterReject
-            ?.boundary?.includes("game is complete") === true &&
-          hardening.replacementStalePrivatePostAfterComplete?.channelContextAfterReject
-            ?.channelId === "private:mafia_day_chat" &&
-          hardening.replacementStalePrivatePostAfterComplete?.channelContextAfterReject
-            ?.actorSlot === "slot-7" &&
-          hardening.replacementStalePrivatePostAfterComplete?.buttonsAfterReject?.some(
-            (button) => button.disabled !== true,
-          ) === false &&
-          hardening.replacementStalePrivatePostAfterComplete?.apiCommandStateAfterReject
-            ?.game_completed === true &&
-          hardening.replacementStalePrivatePostAfterComplete?.apiCommandStateAfterReject
-            ?.actions?.length === 0 &&
-          hardening.replacementStalePrivatePostAfterComplete?.apiCommandStateAfterReject
-            ?.vote_targets?.length === 0 &&
-          hardening.replacementStalePrivatePostAfterComplete?.apiThreadPostBodies?.includes(
-            hardening.replacementStalePrivatePostAfterComplete?.postBody,
-          ) === false &&
-          hardening.replacementStalePrivatePostAfterComplete
-            ?.staleOutgoingRouteAfterReject?.status === 403 &&
-          hardening.replacementStalePrivatePostAfterComplete
-            ?.staleOutgoingThreadAfterReject?.status === 403,
+          replacementCompletedPrivatePostRejectMatches(
+            hardening.replacementStalePrivatePostAfterComplete,
+            replacementCompletedPrivatePostScenario,
+          ),
       },
     ),
     lane(
@@ -4380,74 +4281,12 @@ export function buildDevTestGameProofRun(session, options = {}) {
             ?.privateReloadAfterReject?.staleOutgoingRouteAfterReload?.status ??
           null,
         passed:
-          hardening.replacementStalePrivatePostAfterComplete?.status === "passed" &&
-          hardening.replacementStalePrivatePostAfterComplete?.channel ===
-            "private:mafia_day_chat" &&
-          hardening.replacementStalePrivatePostAfterComplete?.reject?.error ===
-            "GameAlreadyCompleted" &&
-          hardening.replacementStalePrivatePostAfterComplete
-            ?.privateReloadAfterReject?.status === "passed" &&
-          hardening.replacementStalePrivatePostAfterComplete
-            ?.privateReloadAfterReject?.routeResponseStatus === 200 &&
-          hardening.replacementStalePrivatePostAfterComplete
-            ?.privateReloadAfterReject?.threadPagerVisible === true &&
-          hardening.replacementStalePrivatePostAfterComplete
-            ?.privateReloadAfterReject?.recoveredCommandState?.actorSlot ===
-            "slot-7" &&
-          hardening.replacementStalePrivatePostAfterComplete
-            ?.privateReloadAfterReject?.recoveredCommandState?.gameCompleted ===
-            true &&
-          hardening.replacementStalePrivatePostAfterComplete
-            ?.privateReloadAfterReject?.recoveredCommandState?.actions?.length === 0 &&
-          hardening.replacementStalePrivatePostAfterComplete
-            ?.privateReloadAfterReject?.recoveredCommandState?.voteTargets?.length ===
-            0 &&
-          hardening.replacementStalePrivatePostAfterComplete
-            ?.privateReloadAfterReject?.recoveredCommandState?.boundary?.includes(
-              "game is complete",
-            ) === true &&
-          hardening.replacementStalePrivatePostAfterComplete
-            ?.privateReloadAfterReject?.reloadChannelContext?.channelId ===
-            "private:mafia_day_chat" &&
-          hardening.replacementStalePrivatePostAfterComplete
-            ?.privateReloadAfterReject?.reloadChannelContext?.actorSlot ===
-            "slot-7" &&
-          hardening.replacementStalePrivatePostAfterComplete
-            ?.privateReloadAfterReject?.reloadChannelContext?.capabilityLabel?.includes(
-              "ChannelMember(private:mafia_day_chat)",
-            ) === true &&
-          hardening.replacementStalePrivatePostAfterComplete
-            ?.privateReloadAfterReject?.reloadButtons?.some(
-              (button) => button.disabled !== true,
-            ) === false &&
-          hardening.replacementStalePrivatePostAfterComplete
-            ?.privateReloadAfterReject?.reloadRejectedPostVisible === false &&
-          hardening.replacementStalePrivatePostAfterComplete
-            ?.privateReloadAfterReject?.reloadThreadPostBodies?.includes(
-              hardening.replacementStalePrivatePostAfterComplete?.postBody,
-            ) === false &&
-          hardening.replacementStalePrivatePostAfterComplete
-            ?.privateReloadAfterReject?.apiCommandStateAfterReload?.game_completed ===
-            true &&
-          hardening.replacementStalePrivatePostAfterComplete
-            ?.privateReloadAfterReject?.apiCommandStateAfterReload?.actions?.length ===
-            0 &&
-          hardening.replacementStalePrivatePostAfterComplete
-            ?.privateReloadAfterReject?.apiCommandStateAfterReload
-            ?.vote_targets?.length === 0 &&
-          hardening.replacementStalePrivatePostAfterComplete
-            ?.privateReloadAfterReject?.apiThreadPostBodiesAfterReload?.includes(
-              hardening.replacementStalePrivatePostAfterComplete?.postBody,
-            ) === false &&
-          hardening.replacementStalePrivatePostAfterComplete
-            ?.privateReloadAfterReject?.staleOutgoingRouteAfterReload?.status ===
-            403 &&
-          hardening.replacementStalePrivatePostAfterComplete
-            ?.privateReloadAfterReject?.staleOutgoingRouteAfterReload
-            ?.responseStatus === 403 &&
-          hardening.replacementStalePrivatePostAfterComplete
-            ?.privateReloadAfterReject?.staleOutgoingThreadAfterReload?.status ===
-            403,
+          replacementCompletedPrivatePostReloadMatches(
+            hardening.replacementStalePrivatePostAfterComplete,
+            hardening.replacementStalePrivatePostAfterComplete
+              ?.privateReloadAfterReject,
+            replacementCompletedPrivatePostScenario,
+          ),
       },
     ),
     lane("stale-dead-target-vote", "Stale dead-target vote rejects and refreshes targets", {
