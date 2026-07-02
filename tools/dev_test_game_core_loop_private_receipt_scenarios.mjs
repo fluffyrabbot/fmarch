@@ -284,9 +284,26 @@ export function assertPrivateChannelRoleSurfaceProof({
   const completedProof =
     privateChannelRoleSurface?.completedPrivateChannelProof;
   const expectedGame = gameFromRoleUrl(privateChannelRoleSurface?.sourceRoleUrl);
-  const submitPostScenario = scenarioFamily.scenarios.submitPost;
+  const expectedChannel = channelFromRoleUrl(
+    privateChannelRoleSurface?.sourceRoleUrl,
+  );
+  const submitPostScenario = privateChannelScenarioForChannel({
+    scenario: scenarioFamily.scenarios.submitPost,
+    channelId: expectedChannel,
+  });
   const stalePostScenario =
-    scenarioFamily.scenarios.stalePostAfterPhaseTransition;
+    privateChannelScenarioForChannel({
+      scenario: scenarioFamily.scenarios.stalePostAfterPhaseTransition,
+      channelId: expectedChannel,
+    });
+  const completedReloadScenario = privateChannelScenarioForChannel({
+    scenario: scenarioFamily.scenarios.completedPrivateChannelReload,
+    channelId: expectedChannel,
+  });
+  const staleCompletedPostScenario = privateChannelScenarioForChannel({
+    scenario: scenarioFamily.scenarios.staleCompletedPrivatePost,
+    channelId: expectedChannel,
+  });
   if (
     privateChannelRoleSurface?.status !== "passed" ||
     privateChannelRoleSurface.clickedThroughFromRoleUrl !== true ||
@@ -296,16 +313,18 @@ export function assertPrivateChannelRoleSurfaceProof({
     typeof privateChannelRoleSurface.sourceRoleUrl !== "string" ||
     !privateChannelRoleSurface.sourceRoleUrl.includes("/g/") ||
     typeof privateChannelRoleSurface.visitedRolePath !== "string" ||
-    !privateChannelRoleSurface.visitedRolePath.includes("/c/role-pm") ||
-    !privateChannelRoleSurface.visitedRolePath.includes("private=notification-1") ||
+    !privateChannelRoleSurface.visitedRolePath.includes(
+      `/c/${encodeURIComponent(expectedChannel)}`,
+    ) ||
     privateChannelRoleSurface.surfaceTestId !== "player-surface" ||
-    privateChannelRoleSurface.channelRailTestId !== "player-channel-role-pm" ||
-    privateChannelRoleSurface.channelId !== "role-pm" ||
+    privateChannelRoleSurface.channelRailTestId !==
+      `player-channel-${expectedChannel}` ||
+    privateChannelRoleSurface.channelId !== expectedChannel ||
     privateChannelRoleSurface.channelAriaCurrent !== "page" ||
-    privateChannelRoleSurface.commandPanelChannelId !== "role-pm" ||
-    privateChannelRoleSurface.channelContextChannelId !== "role-pm" ||
+    privateChannelRoleSurface.commandPanelChannelId !== expectedChannel ||
+    privateChannelRoleSurface.channelContextChannelId !== expectedChannel ||
     privateChannelRoleSurface.channelContextCapabilityLabel !==
-      "ChannelMember(role-pm)" ||
+      `ChannelMember(${expectedChannel})` ||
     privateChannelRoleSurface.privateQueueBoundary?.status !==
       privateQueueBoundaryStatus ||
     privateChannelRoleSurface.privateQueueBoundary?.count < 1 ||
@@ -350,9 +369,8 @@ export function assertPrivateChannelRoleSurfaceProof({
       expectedGame,
       sourceRoleUrl: privateChannelRoleSurface.sourceRoleUrl,
       visitedRolePath: privateChannelRoleSurface.visitedRolePath,
-      reloadScenario: scenarioFamily.scenarios.completedPrivateChannelReload,
-      staleCompletedPostScenario:
-        scenarioFamily.scenarios.staleCompletedPrivatePost,
+      reloadScenario: completedReloadScenario,
+      staleCompletedPostScenario,
       assertCompletedPrivateChannelReloadProof: (scenario) =>
         assertCompletedPrivateChannelReloadProofCase({
           ...scenario,
@@ -365,6 +383,13 @@ export function assertPrivateChannelRoleSurfaceProof({
         }),
     }),
   });
+}
+
+function privateChannelScenarioForChannel({ scenario, channelId }) {
+  return {
+    ...scenario,
+    channelId,
+  };
 }
 
 export function assertPrivateChannelSubmitPostProofCase({
@@ -564,7 +589,10 @@ export function assertStaleCompletedPrivatePostRecoveryProofCase({
   })) {
     assertCompletedPrivateChannelSnapshotCase({
       ...snapshotCase,
-      scenario: completedPrivateChannelReloadScenario(),
+      scenario: privateChannelScenarioForChannel({
+        scenario: completedPrivateChannelReloadScenario(),
+        channelId: scenario.channelId,
+      }),
       includeEvidenceInError,
     });
   }
@@ -1025,6 +1053,16 @@ function gameFromRoleUrl(roleUrl) {
     return new URL(roleUrl).pathname.split("/")[2] ?? "";
   } catch {
     return "";
+  }
+}
+
+function channelFromRoleUrl(roleUrl) {
+  try {
+    const parts = new URL(roleUrl).pathname.split("/");
+    const channelIndex = parts.indexOf("c") + 1;
+    return decodeURIComponent(parts[channelIndex] ?? "role-pm");
+  } catch {
+    return "role-pm";
   }
 }
 

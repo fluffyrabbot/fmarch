@@ -2183,6 +2183,10 @@ test("admin local core loop detail data carries lane rows", async () => {
           ["actionPlayer", "http://127.0.0.1:5173/g/game-a"],
           ["normalPlayer", "http://127.0.0.1:5173/g/game-a"],
           ["target", "http://127.0.0.1:5173/g/game-a"],
+          [
+            "privateChannel",
+            "http://127.0.0.1:5173/g/game-a/c/private%3Amafia_day_chat",
+          ],
         ],
         [
           ["d01-resolved-locked", "phase D01, locked"],
@@ -3474,6 +3478,8 @@ function proofRunFixture() {
             actionPlayer: "http://127.0.0.1:5173/g/game-a",
             normalPlayer: "http://127.0.0.1:5173/g/game-a",
             target: "http://127.0.0.1:5173/g/game-a",
+            privateChannel:
+              "http://127.0.0.1:5173/g/game-a/c/private%3Amafia_day_chat",
           },
           checkpoints: [
             { id: "d01-resolved-locked", phase: "D01", locked: true },

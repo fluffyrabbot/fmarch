@@ -86,7 +86,7 @@ export const releaseReadinessProductionFeatureSpineTargets = Object.freeze({
     featureSlotId: "private-channel",
     sourceCheckId: "local-core-loop-proof",
     cycleId: "d01-n01-d02",
-    roleUrlId: "d01-n01-d02-actionPlayer",
+    roleUrlId: "d01-n01-d02-privateChannel",
     checkpointId: "d01-n01-d02-n01-action-open",
     adminCheckId: "private-channel",
   }),

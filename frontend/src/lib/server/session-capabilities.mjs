@@ -151,6 +151,12 @@ function fixtureSession({ token, context }) {
             channel: "role-pm",
             source: "fixture",
           },
+          {
+            kind: "ChannelMember",
+            game,
+            channel: "private:mafia_day_chat",
+            source: "fixture",
+          },
         ]),
       });
     case "fixture-target":

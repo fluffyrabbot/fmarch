@@ -3094,7 +3094,10 @@ test("session card and markdown include role credential URLs and tokens", async 
       status: "passed",
       proof: "player posted privately and denied player recovered",
       channel: "private:mafia_day_chat",
-      allowed: { submitPost: { state: "ack", message: "Ack: stream seqs 43" } },
+      allowed: {
+        url: `/g/${game}/c/private%3Amafia_day_chat`,
+        submitPost: { state: "ack", message: "Ack: stream seqs 43" },
+      },
       denied: { status: 403, actionLabel: "Back to board" },
       stalePostAfterPhaseTransition: {
         status: "passed",
@@ -10378,6 +10381,7 @@ function coreLoopAdminProofFixture() {
           "d01-n01-d02-actionPlayer",
           "d01-n01-d02-normalPlayer",
           "d01-n01-d02-target",
+          "d01-n01-d02-privateChannel",
           "d02-n02-host",
           "d02-n02-actionPlayer",
           "d02-n02-normalPlayer",
@@ -10392,6 +10396,8 @@ function coreLoopAdminProofFixture() {
             "http://127.0.0.1:5173/g/00000000-0000-0000-0000-000000000001",
           "d01-n01-d02-target":
             "http://127.0.0.1:5173/g/00000000-0000-0000-0000-000000000001",
+          "d01-n01-d02-privateChannel":
+            "http://127.0.0.1:5173/g/00000000-0000-0000-0000-000000000001/c/private%3Amafia_day_chat",
           "d02-n02-host":
             "http://127.0.0.1:5173/g/00000000-0000-0000-0000-000000000002/host",
           "d02-n02-actionPlayer":
@@ -10438,6 +10444,7 @@ function coreLoopAdminProofFixture() {
         "d01-n01-d02-actionPlayer",
         "d01-n01-d02-normalPlayer",
         "d01-n01-d02-target",
+        "d01-n01-d02-privateChannel",
         "d02-n02-host",
         "d02-n02-actionPlayer",
         "d02-n02-normalPlayer",
@@ -12199,6 +12206,7 @@ function coreLoopSpineTargetsFixture() {
       "d01-n01-d02-actionPlayer",
       "d01-n01-d02-normalPlayer",
       "d01-n01-d02-target",
+      "d01-n01-d02-privateChannel",
       "d02-n02-host",
       "d02-n02-actionPlayer",
       "d02-n02-normalPlayer",
@@ -12230,6 +12238,8 @@ function coreLoopSpineTargetsFixture() {
         "http://127.0.0.1:5173/g/00000000-0000-0000-0000-000000000001",
       "d01-n01-d02-target":
         "http://127.0.0.1:5173/g/00000000-0000-0000-0000-000000000001",
+      "d01-n01-d02-privateChannel":
+        "http://127.0.0.1:5173/g/00000000-0000-0000-0000-000000000001/c/private%3Amafia_day_chat",
       "d02-n02-host":
         "http://127.0.0.1:5173/g/00000000-0000-0000-0000-000000000002/host",
       "d02-n02-actionPlayer":

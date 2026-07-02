@@ -6434,6 +6434,7 @@ function buildCoreLoopSpineSummary({ session, verification }) {
         actionPlayer: dayNight.actionRoleUrl ?? null,
         normalPlayer: dayNight.normalPlayerRoleUrl ?? null,
         target: nightResolution.targetRoleUrl ?? null,
+        privateChannel: verification.privateChannel?.allowed?.url ?? null,
       },
       checkpoints: [
         {
@@ -6577,6 +6578,11 @@ function buildCoreLoopSpineSummary({ session, verification }) {
     cycles[0]?.game === session?.game &&
     cycles[0]?.roleUrls?.host?.includes(`/g/${session?.game ?? ""}/host`) === true &&
     cycles[0]?.roleUrls?.actionPlayer?.includes(`/g/${session?.game ?? ""}`) === true &&
+    cycles[0]?.roleUrls?.privateChannel?.includes(
+      `/g/${session?.game ?? ""}/c/`,
+    ) === true &&
+    cycles[0]?.roleUrls?.privateChannel?.includes("private%3Amafia_day_chat") ===
+      true &&
     cycles[0]?.checkpoints?.[0]?.phase === "D01" &&
     cycles[0]?.checkpoints?.[0]?.locked === true &&
     cycles[0]?.checkpoints?.[0]?.resolveState === "ack" &&
@@ -6671,6 +6677,14 @@ function assertCoreLoopSpineSummary(summary) {
     ) {
       throw new Error(`core loop spine cycle malformed: ${JSON.stringify(cycle)}`);
     }
+  }
+  if (
+    !summary.cycles[0]?.roleUrls?.privateChannel?.includes("/c/") ||
+    !summary.cycles[0]?.roleUrls?.privateChannel?.includes(
+      "private%3Amafia_day_chat",
+    )
+  ) {
+    throw new Error("core loop spine summary must expose private-channel role URL");
   }
   if (
     summary.recoveryHooks?.staleLockedVoteReject !== "PhaseLocked" ||

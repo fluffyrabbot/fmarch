@@ -366,9 +366,11 @@ await runAdminAuditProof({
     const privateChannelRoleSurface = await provePrivateChannelRoleSurface({
       browser,
       frontendBaseUrl,
-      roleUrl: privateChannelRoleUrlFromPlayerRoleUrl(
-        spineRows.roleUrlHrefs["d02-n02-actionPlayer"],
-      ),
+      roleUrl:
+        spineRows.roleUrlHrefs["d01-n01-d02-privateChannel"] ??
+        privateChannelRoleUrlFromPlayerRoleUrl(
+          spineRows.roleUrlHrefs["d02-n02-actionPlayer"],
+        ),
     });
     return {
       adminRoleSurface,
@@ -7899,13 +7901,19 @@ async function provePrivateChannelRoleSurface({
   roleUrl,
 }) {
   const page = await browser.newPage({ viewport: { width: 1024, height: 768 } });
-  const visitedRolePath = rolePathFromUrl(roleUrl);
+  const visitedRolePath = privateChannelFocusedRolePathFromUrl(roleUrl);
   const commandRequests = [];
-  const scenario = privateChannelSubmitPostScenario();
+  const channelId = channelIdFromPrivateChannelRoleUrl(roleUrl);
+  const scenario = privateChannelScenarioForRoleUrl({
+    roleUrl,
+    scenario: privateChannelSubmitPostScenario(),
+  });
+  const channelRailTestId = `player-channel-${channelId}`;
   const privatePostBody = scenario.postBody;
   try {
     await installPrivateChannelBrowserRoutes(page, {
       commandRequests,
+      roleUrl,
       privatePostBody,
     });
     await page.context().addCookies([
@@ -7924,7 +7932,7 @@ async function provePrivateChannelRoleSurface({
       state: "visible",
       timeout: 15000,
     });
-    const privateChannel = page.getByTestId("player-channel-role-pm");
+    const privateChannel = page.getByTestId(channelRailTestId);
     await privateChannel.waitFor({ state: "visible", timeout: 15000 });
     const channelAriaCurrent = await privateChannel.getAttribute("aria-current");
     const commandPanel = page.getByTestId("player-primary-action-zone");
@@ -8011,9 +8019,9 @@ async function provePrivateChannelRoleSurface({
       sourceRoleUrl: String(roleUrl),
       visitedRolePath,
       surfaceTestId: "player-surface",
-      channelRailTestId: "player-channel-role-pm",
+      channelRailTestId,
       clickedThroughFromRoleUrl: true,
-      channelId: "role-pm",
+      channelId,
       channelAriaCurrent,
       commandPanelChannelId,
       channelContextChannelId,
@@ -8059,13 +8067,17 @@ async function provePrivateChannelStalePostAfterPhaseTransition({
   roleUrl,
 }) {
   const page = await browser.newPage({ viewport: { width: 1024, height: 768 } });
-  const visitedRolePath = rolePathFromUrl(roleUrl);
+  const visitedRolePath = privateChannelFocusedRolePathFromUrl(roleUrl);
   const commandRequests = [];
-  const scenario = stalePrivateChannelPostPhaseLockedScenario();
+  const scenario = privateChannelScenarioForRoleUrl({
+    roleUrl,
+    scenario: stalePrivateChannelPostPhaseLockedScenario(),
+  });
   const stalePrivatePostBody = scenario.stalePostBody;
   try {
     await installPrivateChannelStalePostBrowserRoutes(page, {
       commandRequests,
+      roleUrl,
     });
     await page.context().addCookies([
       {
@@ -8174,7 +8186,7 @@ async function proveCompletedPrivateChannelRoleSurface({
   return {
     status: "passed",
     sourceRoleUrl: String(roleUrl),
-    visitedRolePath: rolePathFromUrl(roleUrl),
+    visitedRolePath: privateChannelFocusedRolePathFromUrl(roleUrl),
     clickedThroughFromRoleUrl: true,
     transition: completedPrivateChannelTransition(),
     reloadProof,
@@ -8190,10 +8202,13 @@ async function proveCompletedPrivateChannelReload({
   roleUrl,
 }) {
   const page = await browser.newPage({ viewport: { width: 1024, height: 768 } });
-  const visitedRolePath = rolePathFromUrl(roleUrl);
-  const scenario = completedPrivateChannelReloadScenario();
+  const visitedRolePath = privateChannelFocusedRolePathFromUrl(roleUrl);
+  const scenario = privateChannelScenarioForRoleUrl({
+    roleUrl,
+    scenario: completedPrivateChannelReloadScenario(),
+  });
   try {
-    await installCompletedPrivateChannelBrowserRoutes(page);
+    await installCompletedPrivateChannelBrowserRoutes(page, { roleUrl });
     await page.context().addCookies([
       {
         name: "fmarch_fixture_session",
@@ -8279,13 +8294,17 @@ async function provePrivateChannelStaleCompletedPostRecovery({
   roleUrl,
 }) {
   const page = await browser.newPage({ viewport: { width: 1024, height: 768 } });
-  const visitedRolePath = rolePathFromUrl(roleUrl);
+  const visitedRolePath = privateChannelFocusedRolePathFromUrl(roleUrl);
   const commandRequests = [];
-  const scenario = staleCompletedPrivatePostScenario();
+  const scenario = privateChannelScenarioForRoleUrl({
+    roleUrl,
+    scenario: staleCompletedPrivatePostScenario(),
+  });
   const stalePrivatePostBody = scenario.stalePostBody;
   try {
     await installStaleCompletedPrivateChannelBrowserRoutes(page, {
       commandRequests,
+      roleUrl,
       stalePrivatePostBody,
     });
     await page.context().addCookies([
@@ -8391,9 +8410,12 @@ async function provePrivateChannelStaleCompletedPostRecovery({
 
 async function installPrivateChannelBrowserRoutes(
   page,
-  { commandRequests, privatePostBody },
+  { commandRequests, roleUrl, privatePostBody },
 ) {
-  const scenario = privateChannelSubmitPostScenario();
+  const scenario = privateChannelScenarioForRoleUrl({
+    roleUrl,
+    scenario: privateChannelSubmitPostScenario(),
+  });
   await page.route("**/commands", async (route) => {
     const commandEnvelope = route.request().postDataJSON();
     const command = commandEnvelope?.body?.body?.command;
@@ -8429,7 +8451,7 @@ async function installPrivateChannelBrowserRoutes(
       409,
     );
   });
-  await page.route("**/games/*/channels/role-pm/thread?**", async (route) => {
+  await page.route("**/games/*/channels/*/thread?**", async (route) => {
     await fulfillJson(route, {
       next_before_seq: null,
       posts: [
@@ -8457,8 +8479,14 @@ async function installPrivateChannelBrowserRoutes(
   });
 }
 
-async function installPrivateChannelStalePostBrowserRoutes(page, { commandRequests }) {
-  const scenario = stalePrivateChannelPostPhaseLockedScenario();
+async function installPrivateChannelStalePostBrowserRoutes(
+  page,
+  { commandRequests, roleUrl },
+) {
+  const scenario = privateChannelScenarioForRoleUrl({
+    roleUrl,
+    scenario: stalePrivateChannelPostPhaseLockedScenario(),
+  });
   await page.route("**/commands", async (route) => {
     const commandEnvelope = route.request().postDataJSON();
     const command = commandEnvelope?.body?.body?.command;
@@ -8500,7 +8528,7 @@ async function installPrivateChannelStalePostBrowserRoutes(page, { commandReques
       409,
     );
   });
-  await page.route("**/games/*/channels/role-pm/thread?**", async (route) => {
+  await page.route("**/games/*/channels/*/thread?**", async (route) => {
     await fulfillJson(route, {
       next_before_seq: null,
       posts: [
@@ -8543,7 +8571,7 @@ async function installPrivateChannelStalePostBrowserRoutes(page, { commandReques
   });
 }
 
-async function installCompletedPrivateChannelBrowserRoutes(page) {
+async function installCompletedPrivateChannelBrowserRoutes(page, { roleUrl }) {
   await page.route("**/commands", async (route) => {
     const commandEnvelope = route.request().postDataJSON();
     await fulfillJson(
@@ -8563,12 +8591,12 @@ async function installCompletedPrivateChannelBrowserRoutes(page) {
       409,
     );
   });
-  await installCompletedPrivateChannelProjectionRoutes(page);
+  await installCompletedPrivateChannelProjectionRoutes(page, { roleUrl });
 }
 
 async function installStaleCompletedPrivateChannelBrowserRoutes(
   page,
-  { commandRequests, stalePrivatePostBody },
+  { commandRequests, roleUrl, stalePrivatePostBody },
 ) {
   const scenario = staleCompletedPrivatePostScenario();
   let rejected = false;
@@ -8614,11 +8642,11 @@ async function installStaleCompletedPrivateChannelBrowserRoutes(
       409,
     );
   });
-  await page.route("**/games/*/channels/role-pm/thread?**", async (route) => {
+  await page.route("**/games/*/channels/*/thread?**", async (route) => {
     await fulfillJson(
       route,
       rejected
-        ? completedPrivateChannelThread()
+        ? completedPrivateChannelThread({ roleUrl })
         : {
             next_before_seq: null,
             posts: [
@@ -8665,10 +8693,13 @@ async function installStaleCompletedPrivateChannelBrowserRoutes(
   });
 }
 
-async function installCompletedPrivateChannelProjectionRoutes(page) {
-  const scenario = completedPrivateChannelReloadScenario();
-  await page.route("**/games/*/channels/role-pm/thread?**", async (route) => {
-    await fulfillJson(route, completedPrivateChannelThread());
+async function installCompletedPrivateChannelProjectionRoutes(page, { roleUrl }) {
+  const scenario = privateChannelScenarioForRoleUrl({
+    roleUrl,
+    scenario: completedPrivateChannelReloadScenario(),
+  });
+  await page.route("**/games/*/channels/*/thread?**", async (route) => {
+    await fulfillJson(route, completedPrivateChannelThread({ roleUrl }));
   });
   await page.route("**/games/*/votecount?**", async (route) => {
     await fulfillJson(route, []);
@@ -8697,8 +8728,14 @@ async function installCompletedPrivateChannelProjectionRoutes(page) {
   });
 }
 
-function completedPrivateChannelThread() {
-  const scenario = completedPrivateChannelReloadScenario();
+function completedPrivateChannelThread({ roleUrl } = {}) {
+  const scenario =
+    roleUrl === undefined
+      ? completedPrivateChannelReloadScenario()
+      : privateChannelScenarioForRoleUrl({
+          roleUrl,
+          scenario: completedPrivateChannelReloadScenario(),
+        });
   return {
     next_before_seq: null,
     posts: [
@@ -8711,6 +8748,13 @@ function completedPrivateChannelThread() {
         occurred_at: 1782619200,
       },
     ],
+  };
+}
+
+function privateChannelScenarioForRoleUrl({ roleUrl, scenario }) {
+  return {
+    ...scenario,
+    channelId: channelIdFromPrivateChannelRoleUrl(roleUrl),
   };
 }
 
@@ -9614,6 +9658,23 @@ function rolePathFromUrl(roleUrl) {
   }
   const parsed = new URL(roleUrl);
   return `${parsed.pathname}${parsed.search}`;
+}
+
+function privateChannelFocusedRolePathFromUrl(roleUrl) {
+  const parsed = new URL(roleUrl);
+  if (!parsed.searchParams.has("private")) {
+    parsed.searchParams.set("private", "notification-1");
+  }
+  return `${parsed.pathname}${parsed.search}`;
+}
+
+function channelIdFromPrivateChannelRoleUrl(roleUrl) {
+  if (typeof roleUrl !== "string" || roleUrl.trim() === "") {
+    throw new Error("private channel proof missing channel role URL");
+  }
+  const parts = new URL(roleUrl).pathname.split("/");
+  const channelIndex = parts.indexOf("c") + 1;
+  return decodeURIComponent(parts[channelIndex] ?? "role-pm");
 }
 
 function privateChannelRoleUrlFromPlayerRoleUrl(roleUrl) {

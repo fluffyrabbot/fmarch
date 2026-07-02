@@ -144,8 +144,16 @@ test("fixture sessions exercise admin, player, and host role routes", async () =
   });
   assert.equal(board.principalUserId, "player_mira");
   assert.deepEqual(
-    board.resolvedCapabilities.map((capability) => capability.game),
-    ["midsummer", "midsummer"],
+    board.resolvedCapabilities.map((capability) => [
+      capability.kind,
+      capability.game,
+      capability.channel ?? capability.slot ?? null,
+    ]),
+    [
+      ["SlotOccupant", "midsummer", "slot-7"],
+      ["ChannelMember", "midsummer", "role-pm"],
+      ["ChannelMember", "midsummer", "private:mafia_day_chat"],
+    ],
   );
 
   const admin = await resolveAuthenticatedSession({
@@ -163,8 +171,15 @@ test("fixture sessions exercise admin, player, and host role routes", async () =
   });
   assert.equal(player.principalUserId, "player_mira");
   assert.deepEqual(
-    player.resolvedCapabilities.map((capability) => capability.kind),
-    ["SlotOccupant", "ChannelMember"],
+    player.resolvedCapabilities.map((capability) => [
+      capability.kind,
+      capability.channel ?? capability.slot ?? null,
+    ]),
+    [
+      ["SlotOccupant", "slot-7"],
+      ["ChannelMember", "role-pm"],
+      ["ChannelMember", "private:mafia_day_chat"],
+    ],
   );
 
   const target = await resolveAuthenticatedSession({
@@ -243,10 +258,12 @@ test("fixture session helper exposes the same game-scoped proof capabilities", (
     player.resolvedCapabilities.map((capability) => [
       capability.kind,
       capability.game,
+      capability.channel ?? capability.slot ?? null,
     ]),
     [
-      ["SlotOccupant", "midsummer"],
-      ["ChannelMember", "midsummer"],
+      ["SlotOccupant", "midsummer", "slot-7"],
+      ["ChannelMember", "midsummer", "role-pm"],
+      ["ChannelMember", "midsummer", "private:mafia_day_chat"],
     ],
   );
 });
