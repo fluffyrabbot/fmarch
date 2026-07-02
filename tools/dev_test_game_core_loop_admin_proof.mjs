@@ -4,11 +4,11 @@ import {
   coreLoopSpineStatus,
 } from "../frontend/src/lib/app/local-proof-lane-status.mjs";
 import {
-  assertCompletedGameEndgameSurfaceProof,
-  completedGameEndgameProofScenarioCases,
-  completedGameEndgameScenarioCaseFamilies,
-  completedGameEndgameTransition,
-} from "./dev_test_game_core_loop_completed_recovery_scenario_assertions.mjs";
+  assertCoreLoopCompletedEndgameProgressionSurfaceProof,
+  coreLoopCompletedEndgameProgressionProofScenarioCases,
+  coreLoopCompletedEndgameProgressionScenarioFamilies,
+  coreLoopCompletedEndgameProgressionTransition,
+} from "./dev_test_game_core_loop_completed_endgame_progression_scenarios.mjs";
 import {
   assertPlayerStaleActionAfterTransitionProofCase,
   assertPlayerStaleVoteAfterTransitionProofCase,
@@ -1795,9 +1795,9 @@ async function proveCompletedGameEndgameSurface({
   normalPlayerRoleUrl,
   deadPlayerRoleUrl,
 }) {
-  const scenarioFamilies = completedGameEndgameScenarioCaseFamilies();
+  const scenarioFamilies = coreLoopCompletedEndgameProgressionScenarioFamilies();
   const completedScenarioCases =
-    completedGameEndgameProofScenarioCases({
+    coreLoopCompletedEndgameProgressionProofScenarioCases({
       actionPlayerRoleUrl,
       normalPlayerRoleUrl,
       deadPlayerRoleUrl,
@@ -1869,7 +1869,7 @@ async function proveCompletedGameEndgameSurface({
     sourceNormalPlayerRoleUrl: String(normalPlayerRoleUrl),
     sourceDeadPlayerRoleUrl: String(deadPlayerRoleUrl),
     clickedThroughFromRoleUrl: true,
-    transition: completedGameEndgameTransition({
+    transition: coreLoopCompletedEndgameProgressionTransition({
       scenarioFamilies,
     }),
     hostCompleteProof,
@@ -10240,8 +10240,8 @@ function assertDayFiveNoLynchResolutionSurface(dayFiveNoLynchResolutionSurface) 
   });
 }
 function assertCompletedGameEndgameSurface(completedGameEndgameSurface) {
-  const scenarioFamilies = completedGameEndgameScenarioCaseFamilies();
-  assertCompletedGameEndgameSurfaceProof({
+  const scenarioFamilies = coreLoopCompletedEndgameProgressionScenarioFamilies();
+  assertCoreLoopCompletedEndgameProgressionSurfaceProof({
     completedGameEndgameSurface,
     scenarioFamilies,
     assertHostPhaseTransitionActionProof,

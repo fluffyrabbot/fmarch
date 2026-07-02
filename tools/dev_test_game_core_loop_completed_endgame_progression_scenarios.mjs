@@ -7,6 +7,20 @@ import {
 import {
   completedGameHardeningLaneIds,
 } from "./dev_test_game_core_loop_completed_game_cases.mjs";
+import {
+  assertCompletedGameEndgameSurfaceProof,
+} from "./dev_test_game_core_loop_completed_recovery_scenario_assertions.mjs";
+
+export {
+  completedDeadPlayerStaleVoteCase,
+  completedDeadPlayerStaleVoteCaseDefinition,
+  completedHostStaleCommandCaseDefinitions,
+  completedHostStaleCommandCases,
+  completedPlayerReloadCaseDefinitions,
+  completedPlayerReloadCases,
+  staleCompletedGamePlayerCommandCaseDefinitions,
+  staleCompletedGamePlayerCommandCases,
+} from "./dev_test_game_core_loop_completed_recovery_scenario_cases.mjs";
 
 export const coreLoopCompletedEndgameProgressionFamilyId =
   "core-loop-completed-endgame-progression";
@@ -31,6 +45,16 @@ export function coreLoopCompletedEndgameProgressionProofScenarioCases({
     normalPlayerRoleUrl,
     deadPlayerRoleUrl,
     commandStateBuilders,
+    scenarioFamilies,
+  });
+}
+
+export function assertCoreLoopCompletedEndgameProgressionSurfaceProof({
+  scenarioFamilies = coreLoopCompletedEndgameProgressionScenarioFamilies(),
+  ...proofArgs
+}) {
+  assertCompletedGameEndgameSurfaceProof({
+    ...proofArgs,
     scenarioFamilies,
   });
 }

@@ -71,7 +71,9 @@ import {
   staleCompletedPlayerCommandProofFixtures,
 } from "./dev_test_game_core_loop_completed_game_fixtures.mjs";
 import {
+  assertCoreLoopCompletedEndgameProgressionSurfaceProof,
   coreLoopCompletedEndgameProgressionProofScenarioCases,
+  coreLoopCompletedEndgameProgressionScenarioFamilies,
   coreLoopCompletedEndgameProgressionTransition,
 } from "./dev_test_game_core_loop_completed_endgame_progression_scenarios.mjs";
 
@@ -301,20 +303,38 @@ test("completed-game production harness callers share extracted recovery cases",
     assert(
       importsFromModule({
         source,
+        importedName: "coreLoopCompletedEndgameProgressionScenarioFamilies",
+        moduleSpecifier:
+          "./dev_test_game_core_loop_completed_endgame_progression_scenarios.mjs",
+      }),
+      `${callerPath} should import completed-game recovery case families from the shared progression scenario/assertion module`,
+    );
+    assert(
+      importsFromModule({
+        source,
+        importedName: "assertCoreLoopCompletedEndgameProgressionSurfaceProof",
+        moduleSpecifier:
+          "./dev_test_game_core_loop_completed_endgame_progression_scenarios.mjs",
+      }),
+      `${callerPath} should import completed-game assertions through the shared progression scenario/assertion module`,
+    );
+    assert(
+      !importsFromModule({
+        source,
         importedName: "completedGameEndgameScenarioCaseFamilies",
         moduleSpecifier:
           "./dev_test_game_core_loop_completed_recovery_scenario_assertions.mjs",
       }),
-      `${callerPath} should import completed-game recovery case families from the shared scenario/assertion module`,
+      `${callerPath} should not import completed-game recovery case families through the lower-level scenario/assertion module`,
     );
     assert(
-      importsFromModule({
+      !importsFromModule({
         source,
         importedName: "assertCompletedGameEndgameSurfaceProof",
         moduleSpecifier:
           "./dev_test_game_core_loop_completed_recovery_scenario_assertions.mjs",
       }),
-      `${callerPath} should import completed-game assertions through the shared scenario/assertion module`,
+      `${callerPath} should not import completed-game assertions through the lower-level scenario/assertion module`,
     );
     assert(
       !importsFromModule({
@@ -354,9 +374,9 @@ test("completed-game production harness callers share extracted recovery cases",
     );
     assert(
       source.includes(
-        "./dev_test_game_core_loop_completed_recovery_scenario_assertions.mjs",
+        "./dev_test_game_core_loop_completed_endgame_progression_scenarios.mjs",
       ),
-      `${callerPath} should import completed recovery cases through the shared scenario/assertion module`,
+      `${callerPath} should import completed recovery cases through the shared progression scenario/assertion module`,
     );
     assert(
       !source.includes(
@@ -369,10 +389,8 @@ test("completed-game production harness callers share extracted recovery cases",
       `${callerPath} should not import completed-game recovery definitions directly`,
     );
     assert(
-      !source.includes(
-        "./dev_test_game_core_loop_completed_endgame_scenarios.mjs",
-      ),
-      `${callerPath} should not import completed recovery definitions through the endgame adapter`,
+      !source.includes("./dev_test_game_core_loop_completed_endgame_scenarios.mjs"),
+      `${callerPath} should not import completed recovery definitions through the lower-level endgame adapter`,
     );
     assert(
       !source.includes("./dev_test_game_core_loop_completed_game_cases.mjs"),
@@ -393,6 +411,10 @@ test("completed-game production harness callers share extracted recovery cases",
 });
 
 test("completed-game progression facade shares proof and readiness cases", () => {
+  assert.deepEqual(
+    coreLoopCompletedEndgameProgressionScenarioFamilies(),
+    completedGameEndgameScenarioCaseFamilies(),
+  );
   const scenarioFamilies = completedGameEndgameScenarioCaseFamilies({
     hostStaleCommandCases: [completedHostStaleCommandCases()[2]],
     playerReloadCases: [completedPlayerReloadCases()[0]],
@@ -1426,6 +1448,13 @@ test("completed-game shared surface assertion fails closed", () => {
 test("completed-game fixture satisfies the shared endgame assertion", () => {
   assert.doesNotThrow(() =>
     assertCompletedGameEndgameSurfaceProof({
+      completedGameEndgameSurface: completedGameEndgameSurfaceFixture(),
+      assertHostPhaseTransitionActionProof: assertProofFixture,
+      assertPostDayThreePlayerSurfaceProof: assertProofFixture,
+    }),
+  );
+  assert.doesNotThrow(() =>
+    assertCoreLoopCompletedEndgameProgressionSurfaceProof({
       completedGameEndgameSurface: completedGameEndgameSurfaceFixture(),
       assertHostPhaseTransitionActionProof: assertProofFixture,
       assertPostDayThreePlayerSurfaceProof: assertProofFixture,
