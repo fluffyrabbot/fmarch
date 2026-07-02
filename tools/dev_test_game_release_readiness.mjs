@@ -87,7 +87,6 @@ import {
   coreLoopPlayerActionRecoveryScenarioFamily,
 } from "./dev_test_game_core_loop_player_action_recovery_scenarios.mjs";
 import {
-  assertDayFourNoLynchHostTransitionProofCase,
   assertEmptyNightThreeHostTransitionProofCase,
   assertHostLifecycleControlRoleSurfaceCase,
   assertHostNightActionTransitionSurfaceCase,
@@ -124,9 +123,12 @@ import {
   coreLoopLateActionProgressionFamilyId,
 } from "./dev_test_game_core_loop_late_action_progression_scenarios.mjs";
 import {
+  assertDayFourNoLynchHostTransitionProofCase,
+  assertDayFourNoLynchVoteProofCase,
   assertDayFiveNoLynchResolutionSurfaceProof,
   coreLoopDayFiveProgressionFamilyId,
-} from "./dev_test_game_core_loop_day_five_progression_scenarios.mjs";
+  coreLoopNoLynchProgressionFamilyId,
+} from "./dev_test_game_core_loop_no_lynch_progression_scenarios.mjs";
 import {
   coreLoopHostControlFamilyId,
   coreLoopHostControlScenarioFamily,
@@ -2118,6 +2120,13 @@ export function validateDevTestGameCoreLoopAdminProof(proof, options = {}) {
     throw new Error("core-loop admin proof missing late action progression family");
   }
   if (
+    proof.generatedFrom?.noLynchProgressionFamily?.id !==
+      coreLoopNoLynchProgressionFamilyId ||
+    !Array.isArray(proof.generatedFrom?.noLynchProgressionFamily?.laneIds)
+  ) {
+    throw new Error("core-loop admin proof missing no-lynch progression family");
+  }
+  if (
     proof.generatedFrom?.dayFiveProgressionFamily?.id !==
       coreLoopDayFiveProgressionFamilyId ||
     !Array.isArray(proof.generatedFrom?.dayFiveProgressionFamily?.laneIds)
@@ -2936,56 +2945,11 @@ function assertCoreLoopDayFourNoLynchVoteProof({
   expectedGame,
   sourceRoleUrl,
 }) {
-  if (
-    proof?.status !== "passed" ||
-    proof.clickedThroughFromRoleUrl !== true ||
-    proof.releaseReady !== false ||
-    proof.productionReady !== false ||
-    proof.rawInviteTokensVisible !== false ||
-    proof.targetOnlyReceiptVisible !== false ||
-    proof.sourceRoleUrl !== sourceRoleUrl ||
-    typeof proof.visitedRolePath !== "string" ||
-    !proof.visitedRolePath.includes("/g/") ||
-    proof.surfaceTestId !== "player-surface" ||
-    proof.clickedAction !== "submit_vote:no_lynch" ||
-    proof.commandKind !== "SubmitVote" ||
-    proof.command?.game !== expectedGame ||
-    proof.command.actor_slot !== "slot-7" ||
-    proof.command.target !== "NoLynch" ||
-    proof.commandStatus?.state !== "ack" ||
-    !proof.commandStatus?.message?.includes("Ack: stream seqs 912") ||
-    proof.bridgePlan?.role !== "player" ||
-    proof.bridgePlan.commandKind !== "SubmitVote" ||
-    proof.bridgePlan.commandEndpoint !== "/commands" ||
-    proof.bridgePlan.finalState !== "ack" ||
-    !sameStringArray(proof.bridgePlan.projectionRefreshKeys, [
-      "votecount",
-      "commandState",
-    ]) ||
-    proof.receipts?.at?.(-1)?.state !== "ack" ||
-    proof.projectionCommandState?.actorSlot !== "slot-7" ||
-    proof.projectionCommandState?.phase?.phaseId !== "D04" ||
-    proof.projectionCommandState?.phase?.locked !== false ||
-    proof.projectionCommandState?.currentVote?.kind !== "no_lynch" ||
-    !String(proof.projectionCommandState?.boundary ?? "").includes(
-      "Day 4 no-lynch vote ACK",
-    ) ||
-    proof.projectionVotecount?.[0]?.target !== "No lynch" ||
-    proof.projectionVotecount?.[0]?.count !== 1 ||
-    proof.projectionVotecount?.[0]?.needed !== 1 ||
-    proof.projectionDayVoteOutcomes?.at?.(-1)?.phaseId !== "D03" ||
-    proof.setupResyncFromSeq !== 911 ||
-    proof.setupSnapshotCommandState?.phase?.phaseId !== "D04" ||
-    proof.currentVote?.hasVote !== "true" ||
-    !String(proof.currentVote?.text ?? "").includes("No lynch") ||
-    proof.receiptCount !== 1 ||
-    !String(proof.receiptStatusText ?? "")
-      .toLowerCase()
-      .includes("ack: stream seqs 912") ||
-    proof.receiptRefreshKeys !== "votecount,commandState"
-  ) {
-    throw new Error("core-loop admin proof missing Day 4 no-lynch vote ACK");
-  }
+  assertDayFourNoLynchVoteProofCase({
+    proof,
+    expectedGame,
+    sourceRoleUrl,
+  });
 }
 
 function assertCoreLoopDayFourNoLynchHostTransitionProof({

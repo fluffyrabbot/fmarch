@@ -3,10 +3,12 @@ import {
   staleNightFourActionRecoveryScenario,
 } from "./dev_test_game_core_loop_action_scenarios.mjs";
 import {
-  dayFourNoLynchHostTransitionProofCase,
   hostResolvePhaseTransitionCase,
   postNightFourTransitionSurfaceCase,
 } from "./dev_test_game_core_loop_host_phase_scenarios.mjs";
+import {
+  dayFourNoLynchHostTransitionProofCase,
+} from "./dev_test_game_core_loop_no_lynch_progression_scenarios.mjs";
 import {
   privateReceiptAssertionArgs,
   privateReceiptScenario,

@@ -32,6 +32,9 @@ import {
   coreLoopVoteResolutionScenarioFamily,
 } from "./dev_test_game_core_loop_vote_resolution_scenarios.mjs";
 import {
+  coreLoopNoLynchProgressionScenarioFamily,
+} from "./dev_test_game_core_loop_no_lynch_progression_scenarios.mjs";
+import {
   coreLoopCompletedEndgameProgressionScenarioFamily,
 } from "./dev_test_game_core_loop_completed_endgame_progression_scenarios.mjs";
 import {
@@ -10109,6 +10112,8 @@ function coreLoopAdminProofFixture() {
         id: "core-loop-late-action-progression",
         laneIds: ["action-loop"],
       },
+      noLynchProgressionFamily:
+        coreLoopNoLynchProgressionScenarioFamily(),
       dayFiveProgressionFamily: {
         id: "core-loop-day-five-progression",
         laneIds: ["day-vote-no-lynch", "action-loop"],
