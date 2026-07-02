@@ -34,6 +34,9 @@ import {
   staleConflictMessageLaneIds,
 } from "./dev_test_game_stale_conflict_scenarios.mjs";
 import {
+  replacementSessionRecoveryLaneIds,
+} from "./dev_test_game_replacement_handoff_scenario_cases.mjs";
+import {
   playerActionConflictRecoveryLaneIds,
   playerActionFoundationLaneIds,
   promotedStalePlayerCommandLaneIds,
@@ -462,7 +465,7 @@ test("hardening lane cases derive hosted stale-conflict matrix IDs", () => {
 test("hardening lane cases derive hosted matrix reconnect IDs", () => {
   assert.deepEqual(hostedMatrixReconnectLaneIds, [
     "reconnect-recovery",
-    "replacement-reconnect-recovery",
+    replacementSessionRecoveryLaneIds.at(-1),
     "replacement-action-reconnect",
     "replacement-stale-private-post-reconnect",
     "stale-action-reconnect-recovery",

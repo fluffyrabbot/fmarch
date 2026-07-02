@@ -12,6 +12,9 @@ import {
 import {
   replacementPrivatePostRecoveryLaneIds,
 } from "./dev_test_game_replacement_private_scenarios.mjs";
+import {
+  replacementSessionRecoveryLaneIds,
+} from "./dev_test_game_replacement_handoff_scenario_cases.mjs";
 
 export const hostStandaloneStaleControlLaneIds = Object.freeze([
   "stale-host-publish",
@@ -328,7 +331,7 @@ export const hostCohostRaceRecoveryLaneIds = Object.freeze([
 
 export const hostedMatrixReconnectLaneIds = Object.freeze([
   "reconnect-recovery",
-  "replacement-reconnect-recovery",
+  replacementSessionRecoveryLaneIds.at(-1),
   "replacement-action-reconnect",
   replacementPrivatePostRecoveryLaneIds[1],
   "stale-action-reconnect-recovery",

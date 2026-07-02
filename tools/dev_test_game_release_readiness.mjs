@@ -31,6 +31,9 @@ import {
   replacementActionLaneIds,
 } from "./dev_test_game_replacement_action_scenario_cases.mjs";
 import {
+  replacementHandoffRecoveryLaneIds,
+} from "./dev_test_game_replacement_handoff_scenario_cases.mjs";
+import {
   replacementPrivateChannelRecoveryLaneIds,
 } from "./dev_test_game_replacement_private_scenarios.mjs";
 import {
@@ -235,6 +238,10 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
     });
   const replacementActionRecoveryMilestone =
     buildReplacementActionRecoveryMilestone(proof, {
+      sourcePath,
+    });
+  const replacementHandoffRecoveryMilestone =
+    buildReplacementHandoffRecoveryMilestone(proof, {
       sourcePath,
     });
   const coreLoopAdminProofEvidence = options.coreLoopAdminProof
@@ -578,6 +585,17 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
       laneIds: [...replacementActionRecoveryMilestone.laneIds],
       requiredLaneCount: replacementActionRecoveryMilestone.requiredLaneCount,
       coveredLaneCount: replacementActionRecoveryMilestone.coveredLaneCount,
+    },
+    {
+      id: "local-replacement-handoff-recovery-milestone",
+      label: "Replacement handoff recovery",
+      status: "passed",
+      evidence: sourcePath,
+      proofBoundary:
+        "Local seeded-game proof that host-issued replacement role URLs, pending and invalid replacement states, replacement session recovery, stale and duplicate replacement commands, stale outgoing authority, private-channel authority, reconnect recovery, and incoming player control all preserve current slot ownership.",
+      laneIds: [...replacementHandoffRecoveryMilestone.laneIds],
+      requiredLaneCount: replacementHandoffRecoveryMilestone.requiredLaneCount,
+      coveredLaneCount: replacementHandoffRecoveryMilestone.coveredLaneCount,
     },
   ];
   if (backupRestoreEvidence !== undefined) {
@@ -1052,6 +1070,13 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
         coveredLaneCount: replacementActionRecoveryMilestone.coveredLaneCount,
         gapCount: replacementActionRecoveryMilestone.gapCount,
       },
+      replacementHandoffRecoveryMilestone: {
+        status: replacementHandoffRecoveryMilestone.status,
+        laneIds: [...replacementHandoffRecoveryMilestone.laneIds],
+        requiredLaneCount: replacementHandoffRecoveryMilestone.requiredLaneCount,
+        coveredLaneCount: replacementHandoffRecoveryMilestone.coveredLaneCount,
+        gapCount: replacementHandoffRecoveryMilestone.gapCount,
+      },
     },
     localDevelopmentSpine: {
       status: "passed",
@@ -1155,6 +1180,15 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
                 coveredLaneCount:
                   replacementActionRecoveryMilestone.coveredLaneCount,
                 gapCount: replacementActionRecoveryMilestone.gapCount,
+              },
+              replacementHandoffRecoveryMilestone: {
+                status: replacementHandoffRecoveryMilestone.status,
+                laneIds: [...replacementHandoffRecoveryMilestone.laneIds],
+                requiredLaneCount:
+                  replacementHandoffRecoveryMilestone.requiredLaneCount,
+                coveredLaneCount:
+                  replacementHandoffRecoveryMilestone.coveredLaneCount,
+                gapCount: replacementHandoffRecoveryMilestone.gapCount,
               },
               ...(backupRestoreEvidence === undefined
                 ? {}
@@ -1446,6 +1480,29 @@ function buildReplacementActionRecoveryMilestone(proof, { sourcePath }) {
   if (gapCount !== 0) {
     throw new Error(
       `replacement action recovery milestone missing passed lanes from ${sourcePath}: ${laneIds
+        .filter((laneId) => lanes.get(laneId)?.status !== "passed")
+        .join(", ")}`,
+    );
+  }
+  return {
+    status: "passed",
+    laneIds,
+    requiredLaneCount: laneIds.length,
+    coveredLaneCount,
+    gapCount,
+  };
+}
+
+function buildReplacementHandoffRecoveryMilestone(proof, { sourcePath }) {
+  const lanes = new Map(proof.lanes.map((lane) => [lane.id, lane]));
+  const laneIds = [...replacementHandoffRecoveryLaneIds];
+  const coveredLaneCount = laneIds.filter(
+    (laneId) => lanes.get(laneId)?.status === "passed",
+  ).length;
+  const gapCount = laneIds.length - coveredLaneCount;
+  if (gapCount !== 0) {
+    throw new Error(
+      `replacement handoff recovery milestone missing passed lanes from ${sourcePath}: ${laneIds
         .filter((laneId) => lanes.get(laneId)?.status !== "passed")
         .join(", ")}`,
     );
@@ -5321,6 +5378,21 @@ export function assertDevTestGameReleaseReadiness(checklist) {
   ) {
     throw new Error(
       "dev-test-game replacement action recovery readiness check lane list drifted",
+    );
+  }
+  const replacementHandoffRecoveryCheck =
+    checklist.localDevelopmentSpine?.checks?.find(
+      (check) => check.id === "local-replacement-handoff-recovery-milestone",
+    );
+  if (
+    replacementHandoffRecoveryCheck !== undefined &&
+    !sameStringArray(
+      replacementHandoffRecoveryCheck.laneIds,
+      replacementHandoffRecoveryLaneIds,
+    )
+  ) {
+    throw new Error(
+      "dev-test-game replacement handoff recovery readiness check lane list drifted",
     );
   }
   if (checklist.releaseReadiness?.status !== "not_ready") {

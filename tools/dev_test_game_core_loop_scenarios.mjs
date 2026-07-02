@@ -7,6 +7,9 @@ import {
   hostStaleResolveControlLaneId,
   hostStaleResolveReloadLaneId,
 } from "./dev_test_game_host_stale_control_scenarios.mjs";
+import {
+  replacementCoreLoopHandoffLaneIds,
+} from "./dev_test_game_replacement_handoff_scenario_cases.mjs";
 
 export const coreLoopSpineCheckId = "core-loop-spine";
 
@@ -30,17 +33,7 @@ export const coreLoopAuditLaneIds = Object.freeze([
   hostStaleResolveReloadLaneId,
   hostStaleAdvanceControlLaneId,
   hostStaleAdvanceReloadLaneId,
-  "replacement-host-issued-invite",
-  "replacement-pending-player",
-  "replacement-invalid-target-recovery",
-  "replacement-console",
-  "stale-host-invite-recovery",
-  "replacement-stale-success-recovery",
-  "replacement-stale-player",
-  "replacement-stale-action",
-  "replacement-stale-private-channel",
-  "replacement-stale-private-receipts",
-  "replacement-incoming-player",
+  ...replacementCoreLoopHandoffLaneIds,
 ]);
 
 export const coreLoopAdminCheckIds = Object.freeze([

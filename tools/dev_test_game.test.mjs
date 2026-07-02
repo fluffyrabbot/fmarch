@@ -94,6 +94,10 @@ import {
   replacementStaleActionAfterResolveScenario,
 } from "./dev_test_game_replacement_action_scenario_cases.mjs";
 import {
+  replacementHandoffHardeningLaneIds,
+  replacementHandoffRecoveryLaneIds,
+} from "./dev_test_game_replacement_handoff_scenario_cases.mjs";
+import {
   playerRecoveryAuditLaneIds,
 } from "./dev_test_game_player_recovery_scenarios.mjs";
 import {
@@ -7616,24 +7620,9 @@ test("session card and markdown include role credential URLs and tokens", async 
       "dead-player-recovery",
       "player-action-boundary",
       "private-channel",
-      "replacement-host-issued-invite",
-      "replacement-pending-player",
-      "replacement-redeemed-invite-recovery",
-      "replacement-session-revocation-recovery",
-      "replacement-session-refresh-recovery",
-      "replacement-stale-session-after-refresh",
-      "replacement-reconnect-recovery",
-      "stale-host-invite-recovery",
-      "replacement-stale-conflict-message",
-      "replacement-invalid-target-recovery",
-      "replacement-console",
-      "replacement-idempotent-retry",
-      "replacement-stale-success-recovery",
-      "replacement-stale-player",
-      "replacement-stale-action",
-      "replacement-stale-private-channel",
-      "replacement-stale-private-receipts",
-      "replacement-incoming-player",
+      ...replacementHandoffRecoveryLaneIds.slice(0, 8),
+      staleConflictMessageLaneIds[0],
+      ...replacementHandoffRecoveryLaneIds.slice(8),
       "idempotent-retry",
       "action-idempotent-retry",
       "concurrent-action-race",
@@ -7837,6 +7826,22 @@ test("session card and markdown include role credential URLs and tokens", async 
       laneIds: [...replacementActionLaneIds],
       requiredLaneCount: replacementActionLaneIds.length,
       coveredLaneCount: replacementActionLaneIds.length,
+    },
+  );
+  assert.deepEqual(
+    hardeningReadiness.localDevelopmentSpine.checks.find(
+      (item) => item.id === "local-replacement-handoff-recovery-milestone",
+    ),
+    {
+      id: "local-replacement-handoff-recovery-milestone",
+      label: "Replacement handoff recovery",
+      status: "passed",
+      evidence: "target/dev-test-game/proof-run.json",
+      proofBoundary:
+        "Local seeded-game proof that host-issued replacement role URLs, pending and invalid replacement states, replacement session recovery, stale and duplicate replacement commands, stale outgoing authority, private-channel authority, reconnect recovery, and incoming player control all preserve current slot ownership.",
+      laneIds: [...replacementHandoffRecoveryLaneIds],
+      requiredLaneCount: replacementHandoffRecoveryLaneIds.length,
+      coveredLaneCount: replacementHandoffRecoveryLaneIds.length,
     },
   );
   const raceCoverageReadiness = buildDevTestGameReleaseReadiness(proofRun, {
@@ -9144,6 +9149,8 @@ function devTestGameReleaseReadinessChecklistFixture({
       privateChannelRecoveryMilestone: privateChannelRecoveryMilestoneFixture(),
       replacementActionRecoveryMilestone:
         replacementActionRecoveryMilestoneFixture(),
+      replacementHandoffRecoveryMilestone:
+        replacementHandoffRecoveryMilestoneFixture(),
     },
     localDevelopmentSpine: {
       status: "passed",
@@ -9202,6 +9209,15 @@ function devTestGameReleaseReadinessChecklistFixture({
           laneIds: replacementActionRecoveryMilestoneFixture().laneIds,
           requiredLaneCount: replacementActionLaneIds.length,
           coveredLaneCount: replacementActionLaneIds.length,
+        },
+        {
+          id: "local-replacement-handoff-recovery-milestone",
+          label: "Replacement handoff recovery",
+          status: "passed",
+          evidence: "target/dev-test-game/proof-run.json",
+          laneIds: replacementHandoffRecoveryMilestoneFixture().laneIds,
+          requiredLaneCount: replacementHandoffRecoveryLaneIds.length,
+          coveredLaneCount: replacementHandoffRecoveryLaneIds.length,
         },
         ...(seedProofLaneCoverage === null
           ? []
@@ -9454,6 +9470,16 @@ function replacementActionRecoveryMilestoneFixture() {
     laneIds: [...replacementActionLaneIds],
     requiredLaneCount: replacementActionLaneIds.length,
     coveredLaneCount: replacementActionLaneIds.length,
+    gapCount: 0,
+  };
+}
+
+function replacementHandoffRecoveryMilestoneFixture() {
+  return {
+    status: "passed",
+    laneIds: [...replacementHandoffRecoveryLaneIds],
+    requiredLaneCount: replacementHandoffRecoveryLaneIds.length,
+    coveredLaneCount: replacementHandoffRecoveryLaneIds.length,
     gapCount: 0,
   };
 }
@@ -12649,13 +12675,9 @@ function hardeningAdminProofFixture() {
       surfaceTestId: "admin-audit-detail-surface",
       clickedThroughFromOverview: true,
       visibleChecks: [
-        "replacement-redeemed-invite-recovery",
-        "replacement-session-revocation-recovery",
-        "replacement-session-refresh-recovery",
-        "replacement-stale-session-after-refresh",
-        "replacement-reconnect-recovery",
-        "replacement-stale-conflict-message",
-        "replacement-idempotent-retry",
+        ...replacementHandoffHardeningLaneIds.slice(0, -1),
+        ...staleConflictMessageLaneIds,
+        replacementHandoffHardeningLaneIds.at(-1),
         "idempotent-retry",
         "action-idempotent-retry",
         "concurrent-action-race",

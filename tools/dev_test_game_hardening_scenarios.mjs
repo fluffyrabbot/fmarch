@@ -19,19 +19,17 @@ import {
   replacementPrivatePostRecoveryLaneIds,
 } from "./dev_test_game_replacement_private_scenarios.mjs";
 import {
+  replacementHandoffHardeningLaneIds,
+} from "./dev_test_game_replacement_handoff_scenario_cases.mjs";
+import {
   staleConflictMessageLaneIds,
 } from "./dev_test_game_stale_conflict_scenarios.mjs";
 
 const uniqueLaneIds = (laneIds) => [...new Set(laneIds)];
 
 export const hardeningAuditLaneIds = Object.freeze(uniqueLaneIds([
-  "replacement-redeemed-invite-recovery",
-  "replacement-session-revocation-recovery",
-  "replacement-session-refresh-recovery",
-  "replacement-stale-session-after-refresh",
-  "replacement-reconnect-recovery",
+  ...replacementHandoffHardeningLaneIds,
   ...staleConflictMessageLaneIds,
-  "replacement-idempotent-retry",
   ...playerActionFoundationLaneIds,
   ...promotedStalePlayerCommandLaneIds,
   "concurrent-vote-race",
