@@ -95,6 +95,7 @@ export const seedDemoOnlyScenarioIds = Object.freeze([
   "private-channel",
   "private-channel-stale-post-after-transition",
   "private-channel-completed-game-recovery",
+  "private-channel-invalid-action-recovery",
   "resolution-receipts",
   playerActionBoundaryLaneId,
   "host-votecount-publication",
@@ -169,6 +170,7 @@ const seedScenarioRoleOverrides = new Map([
   ["replacement-stale-action", "player"],
   ["replacement-stale-private-channel", "player"],
   ["replacement-stale-private-receipts", "player"],
+  ["private-channel-invalid-action-recovery", "actionPlayer"],
   ["stale-dead-action-conflict", "actionPlayer"],
 ]);
 

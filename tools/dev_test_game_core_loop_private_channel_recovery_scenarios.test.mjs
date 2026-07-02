@@ -4,6 +4,7 @@ import {
   completedPrivateChannelReloadScenario,
   completedPrivateChannelTransitionTokens,
   coreLoopPrivateChannelCompletedPostLaneId,
+  coreLoopPrivateChannelInvalidActionLaneId,
   coreLoopPrivateChannelRecoveryFamilyId,
   coreLoopPrivateChannelRecoveryLaneIds,
   coreLoopPrivateChannelRecoveryScenarioFamily,
@@ -28,10 +29,15 @@ test("private-channel recovery family shares post, reload, and stale recovery ca
     coreLoopPrivateChannelCompletedPostLaneId,
     "private-channel-completed-game-recovery",
   );
+  assert.equal(
+    coreLoopPrivateChannelInvalidActionLaneId,
+    "private-channel-invalid-action-recovery",
+  );
   assert.deepEqual(coreLoopPrivateChannelRecoveryLaneIds, [
     coreLoopPrivateChannelPostLaneId,
     coreLoopPrivateChannelStalePostLaneId,
     coreLoopPrivateChannelCompletedPostLaneId,
+    coreLoopPrivateChannelInvalidActionLaneId,
   ]);
 
   const family = coreLoopPrivateChannelRecoveryScenarioFamily();

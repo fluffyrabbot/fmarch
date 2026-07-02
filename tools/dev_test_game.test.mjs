@@ -59,6 +59,7 @@ import {
   completedPrivateChannelReloadScenario,
   completedPrivateChannelTransition,
   coreLoopPrivateChannelCompletedPostLaneId,
+  coreLoopPrivateChannelInvalidActionLaneId,
   coreLoopPrivateChannelRecoveryLaneIds,
   coreLoopPrivateChannelRecoveryScenarioFamily,
   coreLoopPrivateChannelStalePostLaneId,
@@ -435,6 +436,9 @@ test("dev test-game spine orchestrators expose stable proof order and env maps",
     { kind: "node", script: "tools/dev_test_game_live_proof.mjs" },
     { kind: "node", script: "tools/dev_test_game_proof_contract.mjs" },
     { kind: "node", script: "tools/dev_test_game_core_loop_admin_proof.mjs" },
+    { kind: "node", script: "tools/dev_test_game_release_readiness.mjs" },
+    { kind: "node", script: "tools/dev_test_game_seed_fixture_summary.mjs" },
+    { kind: "node", script: "tools/dev_test_game_seed_admin_proof.mjs" },
     { kind: "node", script: "tools/dev_test_game_release_readiness.mjs" },
     { kind: "spine", script: "backup-restore" },
     { kind: "spine", script: "identity" },
@@ -2903,6 +2907,47 @@ test("session card and markdown include role credential URLs and tokens", async 
       },
       resolvedTargetSlot: { alive: false },
       d02Phase: { phaseId: "D02" },
+      privateChannelInvalidActionRecovery: {
+        status: "passed",
+        laneId: coreLoopPrivateChannelInvalidActionLaneId,
+        channel: "private:mafia_day_chat",
+        reject: {
+          state: "reject",
+          error: "InvalidTarget",
+          requestEnvelope: {
+            body: {
+              body: {
+                command: {
+                  SubmitAction: {
+                    actor_slot: "slot_4",
+                    template_id: "factional_kill",
+                    targets: ["slot_4"],
+                  },
+                },
+              },
+            },
+          },
+        },
+        afterRejectSnapshot: {
+          channelContext: {
+            channelId: "private:mafia_day_chat",
+            actorSlot: "slot_4",
+          },
+          commandState: {
+            phase: { phaseId: "N01" },
+            actions: [{ templateId: "factional_kill" }],
+          },
+        },
+        currentReceipt: {
+          actionId: "submit_invalid_action:factional_kill",
+          state: "reject",
+          commandTrace: {
+            projectionRefreshKeys: ["commandState"],
+          },
+        },
+        legalActionVisibleAfterReject: true,
+        privateThreadPagerVisible: true,
+      },
     },
     invalidActionRecovery: {
       status: "passed",
@@ -8056,7 +8101,7 @@ test("session card and markdown include role credential URLs and tokens", async 
       status: "passed",
       evidence: "target/dev-test-game/proof-run.json",
       proofBoundary:
-        "Local seeded-game proof that stale replacement private-channel authority, private receipts, stale private posts after phase resolution, reconnect recovery, and completed-game private-channel reloads preserve current player scope and recovery hints.",
+        "Local seeded-game proof that stale replacement private-channel authority, private receipts, stale private posts after phase resolution, private-channel invalid action recovery, reconnect recovery, and completed-game private-channel reloads preserve current player scope and recovery hints.",
       laneIds: [...replacementPrivateChannelRecoveryLaneIds],
       requiredLaneCount: replacementPrivateChannelRecoveryLaneIds.length,
       coveredLaneCount: replacementPrivateChannelRecoveryLaneIds.length,
@@ -8683,7 +8728,7 @@ test("session card and markdown include role credential URLs and tokens", async 
   assert.equal(opsArtifacts.productionReady, false);
   assert.equal(opsArtifacts.run.game, game);
   assert.equal(opsArtifacts.run.seedCommandCount, 1);
-  assert.equal(opsArtifacts.proofRun.laneCount, 117);
+  assert.equal(opsArtifacts.proofRun.laneCount, 118);
   assert.equal(opsArtifacts.proofStability.hostConfirmClicks.total, 4);
   assert.equal(
     opsArtifacts.checks.some(
@@ -9887,7 +9932,7 @@ function devTestGameRaceCoverageFixture() {
       proofRun: "target/dev-test-game/proof-run.json",
       proofGeneratedAt: "2026-06-26T00:00:00.000Z",
       game: "game-a",
-      laneCount: 117,
+      laneCount: 118,
     },
     summary: {
       cellCount: cells.length,
@@ -10122,7 +10167,7 @@ function devTestGameOpsArtifactsFixture({
     roles: {},
     proofRun: {
       status: "passed",
-      laneCount: 117,
+      laneCount: 118,
       lanes: [],
       nonClaims: [],
     },

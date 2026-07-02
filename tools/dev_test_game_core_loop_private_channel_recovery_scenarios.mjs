@@ -23,11 +23,14 @@ export const coreLoopPrivateChannelStalePostLaneId =
   "private-channel-stale-post-after-transition";
 export const coreLoopPrivateChannelCompletedPostLaneId =
   "private-channel-completed-game-recovery";
+export const coreLoopPrivateChannelInvalidActionLaneId =
+  "private-channel-invalid-action-recovery";
 
 export const coreLoopPrivateChannelRecoveryLaneIds = Object.freeze([
   coreLoopPrivateChannelPostLaneId,
   coreLoopPrivateChannelStalePostLaneId,
   coreLoopPrivateChannelCompletedPostLaneId,
+  coreLoopPrivateChannelInvalidActionLaneId,
 ]);
 
 export function coreLoopPrivateChannelRecoveryScenarioFamily() {

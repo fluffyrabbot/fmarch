@@ -24,6 +24,7 @@ import {
 } from "./dev_test_game_replacement_private_scenario_cases.mjs";
 import {
   coreLoopPrivateChannelCompletedPostLaneId,
+  coreLoopPrivateChannelInvalidActionLaneId,
   coreLoopPrivateChannelStalePostLaneId,
 } from "./dev_test_game_core_loop_private_channel_recovery_scenarios.mjs";
 import {
@@ -971,6 +972,7 @@ async function verifySessionCard(card) {
   let multiplayerHardening;
   let replacementConsole;
   let concurrentActionPage;
+  let privateChannelActionPage;
   let staleActionRetryPage;
   let staleSameActionPage;
   let staleActionPage;
@@ -997,6 +999,7 @@ async function verifySessionCard(card) {
       roles.push(role);
     }
     concurrentActionPage = await roleEntries.actionPlayer.context.newPage();
+    privateChannelActionPage = await roleEntries.actionPlayer.context.newPage();
     staleActionRetryPage = await roleEntries.actionPlayer.context.newPage();
     staleSameActionPage = await roleEntries.actionPlayer.context.newPage();
     staleActionPage = await roleEntries.actionPlayer.context.newPage();
@@ -1054,6 +1057,7 @@ async function verifySessionCard(card) {
       actionPage: roleEntries.actionPlayer.page,
       targetPage: roleEntries.deniedPlayer.page,
       concurrentActionPage,
+      privateChannelActionPage,
       staleActionRetryPage,
       staleSameActionPage,
       staleActionPage,
@@ -1107,6 +1111,7 @@ async function verifySessionCard(card) {
     });
   } finally {
     await concurrentActionPage?.close().catch(() => {});
+    await privateChannelActionPage?.close().catch(() => {});
     await staleActionRetryPage?.close().catch(() => {});
     await staleSameActionPage?.close().catch(() => {});
     await staleActionPage?.close().catch(() => {});
@@ -2584,6 +2589,7 @@ async function verifySeededActionLoop({
   actionPage,
   targetPage,
   concurrentActionPage,
+  privateChannelActionPage,
   staleActionRetryPage,
   staleSameActionPage,
   staleActionPage,
@@ -2726,6 +2732,13 @@ async function verifySeededActionLoop({
     game,
     apiBaseUrl,
   });
+  const privateChannelInvalidActionRecovery =
+    await verifyPrivateChannelInvalidActionRecovery({
+      page: privateChannelActionPage,
+      game,
+      apiBaseUrl,
+      frontendBaseUrl,
+    });
   const invalidActionRecovery = await verifySeededInvalidActionRecovery({
     actionPage,
   });
@@ -2920,6 +2933,7 @@ async function verifySeededActionLoop({
     n01Phase,
     invalidAction,
     invalidActionRecovery,
+    privateChannelInvalidActionRecovery,
     legalAction,
     playerActionBoundary,
     deadlineAdvance,
@@ -2939,7 +2953,7 @@ async function verifySeededActionLoop({
     d02VoteNightTransition,
     staleHostControlSetup,
     proof:
-      "The seeded host role URL resolved D01 and advanced to N01 through deadline-expiry evidence while a stale host deadline control rejected with current-phase recovery, the action-player role URL rendered factional_kill, a frozen stale action page recovered after Slot 4 was temporarily marked dead, the live action-player recovered from an invalid self-action, two action-player pages raced factional_kill with one ACK and one ActionAlreadySubmitted recovery, a frozen action retry page replayed the winning command_id and got the original ACK, a frozen same-action page rejected with ActionAlreadySubmitted recovery, then the host role URL resolved N01 and advanced the same game to D02 while the target role URL received the private kill receipt, day vote controls returned for living role URLs, a stale action-player page recovered a frozen N01 action through a PhaseLocked refresh, and a disposable D02 role proof submitted the deciding day vote, resolved that vote, advanced to N02, and restored the living mafia-goon night action surface.",
+      "The seeded host role URL resolved D01 and advanced to N01 through deadline-expiry evidence while a stale host deadline control rejected with current-phase recovery, the action-player role URL rendered factional_kill, a frozen stale action page recovered after Slot 4 was temporarily marked dead, a private-channel action-player role URL recovered from an invalid self-action without losing channel context, the live action-player recovered from an invalid self-action, two action-player pages raced factional_kill with one ACK and one ActionAlreadySubmitted recovery, a frozen action retry page replayed the winning command_id and got the original ACK, a frozen same-action page rejected with ActionAlreadySubmitted recovery, then the host role URL resolved N01 and advanced the same game to D02 while the target role URL received the private kill receipt, day vote controls returned for living role URLs, a stale action-player page recovered a frozen N01 action through a PhaseLocked refresh, and a disposable D02 role proof submitted the deciding day vote, resolved that vote, advanced to N02, and restored the living mafia-goon night action surface.",
   };
 }
 
@@ -3680,6 +3694,161 @@ async function verifySeededInvalidActionRecovery({ actionPage }) {
     receiptStatusText,
     proof:
       "The action-player role URL submitted the seeded invalid self-action, rendered a current InvalidTarget command receipt, refreshed commandState, and kept the legal factional_kill action available without advancing phase.",
+  };
+}
+
+async function verifyPrivateChannelInvalidActionRecovery({
+  page,
+  game,
+  apiBaseUrl,
+  frontendBaseUrl,
+}) {
+  const route = await openPrivateChannelRoleSurface({
+    page,
+    frontendBaseUrl,
+    game,
+    proofLabel: "private-channel invalid action",
+  });
+  await page.waitForFunction(
+    () =>
+      window.__fmarchPlayerProjection?.commandState?.actorSlot === "slot_4" &&
+      window.__fmarchPlayerProjection?.commandState?.phase?.phaseId === "N01" &&
+      window.__fmarchPlayerProjection?.commandState?.phase?.locked === false &&
+      window.__fmarchPlayerProjection?.commandState?.actions?.some(
+        (action) => action.templateId === "factional_kill",
+      ),
+  );
+  const setupSnapshot = await privateChannelRoleSnapshot(page);
+  const invalidActionButton = setupSnapshot.buttons.find(
+    (button) => button.action === "submit_invalid_action:factional_kill",
+  );
+  const legalActionButton = setupSnapshot.buttons.find(
+    (button) => button.action === "submit_action:factional_kill",
+  );
+  if (
+    setupSnapshot.channelContext.channelId !== factionDayChatChannel ||
+    setupSnapshot.channelContext.actorSlot !== "slot_4" ||
+    !setupSnapshot.channelContext.capabilityLabel?.includes(
+      `ChannelMember(${factionDayChatChannel})`,
+    ) ||
+    invalidActionButton?.disabled !== false ||
+    legalActionButton?.disabled !== false
+  ) {
+    throw new Error(
+      `private-channel invalid action setup drifted: ${JSON.stringify({
+        route,
+        setupSnapshot,
+        invalidActionButton,
+        legalActionButton,
+      })}`,
+    );
+  }
+
+  await page.locator('[data-action="submit_invalid_action:factional_kill"]').click();
+  await page.waitForFunction(
+    () =>
+      window.__fmarchPlayerCommandStatus?.state === "reject" &&
+      window.__fmarchPlayerCommandStatus?.error === "InvalidTarget" &&
+      window.__fmarchPlayerCommandStatus?.requestEnvelope?.body?.body?.command
+        ?.SubmitAction?.action_id === "invalid_self_factional_kill",
+  );
+  await page.waitForFunction(
+    () =>
+      window.__fmarchPlayerProjection?.commandState?.phase?.phaseId === "N01" &&
+      window.__fmarchPlayerProjection?.commandState?.actions?.some(
+        (action) => action.templateId === "factional_kill",
+      ) &&
+      document
+        .querySelector("[data-testid='player-command-channel-context']")
+        ?.getAttribute("data-channel-id") === "private:mafia_day_chat",
+  );
+  const reject = await page.evaluate(() => window.__fmarchPlayerCommandStatus);
+  const afterRejectSnapshot = await privateChannelRoleSnapshot(page);
+  const currentReceipt = await page.evaluate(() =>
+    window.__fmarchPlayerCommandReceipts?.find((receipt) => receipt.current === true),
+  );
+  const receiptStatusText = await page.getByTestId("player-command-status").innerText();
+  const apiCommandStateAfterReject = await fetchPlayerSlotCommandState({
+    apiBaseUrl,
+    game,
+    principalUserId: "player-goon-a",
+    slotId: "slot_4",
+  });
+  const legalActionVisibleAfterReject = await page
+    .locator('[data-action="submit_action:factional_kill"]')
+    .isVisible();
+  const privateThreadPagerVisible = await page
+    .getByTestId("player-thread-pager")
+    .isVisible();
+
+  if (
+    reject?.state !== "reject" ||
+    reject?.error !== "InvalidTarget" ||
+    reject?.requestEnvelope?.body?.body?.principal_user_id !== "player-goon-a" ||
+    reject?.requestEnvelope?.body?.body?.command?.SubmitAction?.actor_slot !==
+      "slot_4" ||
+    reject?.requestEnvelope?.body?.body?.command?.SubmitAction?.template_id !==
+      "factional_kill" ||
+    reject?.requestEnvelope?.body?.body?.command?.SubmitAction?.targets?.[0] !==
+      "slot_4" ||
+    currentReceipt?.actionId !== "submit_invalid_action:factional_kill" ||
+    currentReceipt?.state !== "reject" ||
+    currentReceipt?.commandTrace?.projectionRefreshKeys?.includes(
+      "commandState",
+    ) !== true ||
+    !receiptStatusText.includes("Reject InvalidTarget") ||
+    afterRejectSnapshot.channelContext.channelId !== factionDayChatChannel ||
+    afterRejectSnapshot.channelContext.actorSlot !== "slot_4" ||
+    afterRejectSnapshot.commandState?.phase?.phaseId !== "N01" ||
+    afterRejectSnapshot.commandState?.phase?.locked !== false ||
+    !afterRejectSnapshot.commandState?.actions?.some(
+      (action) => action.templateId === "factional_kill",
+    ) ||
+    legalActionVisibleAfterReject !== true ||
+    !afterRejectSnapshot.buttons.some(
+      (button) =>
+        button.action === "submit_action:factional_kill" &&
+        button.disabled === false,
+    ) ||
+    apiCommandStateAfterReject?.phase?.phase_id !== "N01" ||
+    apiCommandStateAfterReject?.actions?.some(
+      (action) => action.template_id === "factional_kill",
+    ) !== true ||
+    privateThreadPagerVisible !== true
+  ) {
+    throw new Error(
+      `private-channel invalid action recovery drifted: ${JSON.stringify({
+        route,
+        reject,
+        setupSnapshot,
+        afterRejectSnapshot,
+        currentReceipt,
+        receiptStatusText,
+        apiCommandStateAfterReject,
+        legalActionVisibleAfterReject,
+        privateThreadPagerVisible,
+      })}`,
+    );
+  }
+
+  return {
+    status: "passed",
+    laneId: coreLoopPrivateChannelInvalidActionLaneId,
+    game,
+    channel: factionDayChatChannel,
+    route,
+    setupSnapshot,
+    invalidActionButton,
+    legalActionButton,
+    reject,
+    afterRejectSnapshot,
+    currentReceipt,
+    receiptStatusText,
+    apiCommandStateAfterReject,
+    legalActionVisibleAfterReject,
+    privateThreadPagerVisible,
+    proof:
+      "The action-player private-channel role URL submitted the seeded invalid self-action, rendered a current InvalidTarget command receipt, refreshed commandState, kept the legal factional_kill action available, and preserved the scoped private-channel context.",
   };
 }
 

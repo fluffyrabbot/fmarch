@@ -105,6 +105,7 @@ import {
 } from "./dev_test_game_replacement_private_post_assertions.mjs";
 import {
   coreLoopPrivateChannelCompletedPostLaneId,
+  coreLoopPrivateChannelInvalidActionLaneId,
   coreLoopPrivateChannelPostLaneId,
   coreLoopPrivateChannelRecoveryLaneIds,
   coreLoopPrivateChannelStalePostLaneId,
@@ -1114,6 +1115,74 @@ export function buildDevTestGameProofRun(session, options = {}) {
             ?.apiThreadPostBodiesAfterReload?.includes(
               verification.privateChannel?.completedGameRecovery?.postBody,
             ) === false,
+      },
+    ),
+    lane(
+      coreLoopPrivateChannelInvalidActionLaneId,
+      "Private channel invalid action recovery",
+      {
+        channel:
+          verification.actionLoop?.privateChannelInvalidActionRecovery
+            ?.channel ?? null,
+        state:
+          verification.actionLoop?.privateChannelInvalidActionRecovery
+            ?.reject?.state ?? null,
+        error:
+          verification.actionLoop?.privateChannelInvalidActionRecovery
+            ?.reject?.error ?? null,
+        phase:
+          verification.actionLoop?.privateChannelInvalidActionRecovery
+            ?.afterRejectSnapshot?.commandState?.phase?.phaseId ?? null,
+        legalActionVisible:
+          verification.actionLoop?.privateChannelInvalidActionRecovery
+            ?.legalActionVisibleAfterReject ?? null,
+        privateThreadPagerVisible:
+          verification.actionLoop?.privateChannelInvalidActionRecovery
+            ?.privateThreadPagerVisible ?? null,
+        passed:
+          verification.actionLoop?.privateChannelInvalidActionRecovery
+            ?.status === "passed" &&
+          verification.actionLoop?.privateChannelInvalidActionRecovery
+            ?.laneId === coreLoopPrivateChannelInvalidActionLaneId &&
+          verification.actionLoop?.privateChannelInvalidActionRecovery
+            ?.channel === "private:mafia_day_chat" &&
+          verification.actionLoop?.privateChannelInvalidActionRecovery
+            ?.reject?.state === "reject" &&
+          verification.actionLoop?.privateChannelInvalidActionRecovery
+            ?.reject?.error === "InvalidTarget" &&
+          verification.actionLoop?.privateChannelInvalidActionRecovery
+            ?.reject?.requestEnvelope?.body?.body?.command?.SubmitAction
+            ?.actor_slot === "slot_4" &&
+          verification.actionLoop?.privateChannelInvalidActionRecovery
+            ?.reject?.requestEnvelope?.body?.body?.command?.SubmitAction
+            ?.template_id === "factional_kill" &&
+          verification.actionLoop?.privateChannelInvalidActionRecovery
+            ?.reject?.requestEnvelope?.body?.body?.command?.SubmitAction
+            ?.targets?.[0] === "slot_4" &&
+          verification.actionLoop?.privateChannelInvalidActionRecovery
+            ?.currentReceipt?.actionId ===
+            "submit_invalid_action:factional_kill" &&
+          verification.actionLoop?.privateChannelInvalidActionRecovery
+            ?.currentReceipt?.state === "reject" &&
+          verification.actionLoop?.privateChannelInvalidActionRecovery
+            ?.currentReceipt?.commandTrace?.projectionRefreshKeys?.includes(
+              "commandState",
+            ) === true &&
+          verification.actionLoop?.privateChannelInvalidActionRecovery
+            ?.afterRejectSnapshot?.channelContext?.channelId ===
+            "private:mafia_day_chat" &&
+          verification.actionLoop?.privateChannelInvalidActionRecovery
+            ?.afterRejectSnapshot?.channelContext?.actorSlot === "slot_4" &&
+          verification.actionLoop?.privateChannelInvalidActionRecovery
+            ?.afterRejectSnapshot?.commandState?.phase?.phaseId === "N01" &&
+          verification.actionLoop?.privateChannelInvalidActionRecovery
+            ?.afterRejectSnapshot?.commandState?.actions?.some(
+              (action) => action.templateId === "factional_kill",
+            ) === true &&
+          verification.actionLoop?.privateChannelInvalidActionRecovery
+            ?.legalActionVisibleAfterReject === true &&
+          verification.actionLoop?.privateChannelInvalidActionRecovery
+            ?.privateThreadPagerVisible === true,
       },
     ),
     lane("replacement-host-issued-invite", "Host issues incoming replacement role URL", {

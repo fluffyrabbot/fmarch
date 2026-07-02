@@ -322,6 +322,44 @@ assert.equal(
     .reloadButtons.some((button) => button.disabled !== true),
   false,
 );
+assert.equal(
+  session.verification.actionLoop.privateChannelInvalidActionRecovery.status,
+  "passed",
+);
+assert.equal(
+  session.verification.actionLoop.privateChannelInvalidActionRecovery.laneId,
+  "private-channel-invalid-action-recovery",
+);
+assert.equal(
+  session.verification.actionLoop.privateChannelInvalidActionRecovery.channel,
+  "private:mafia_day_chat",
+);
+assert.equal(
+  session.verification.actionLoop.privateChannelInvalidActionRecovery.reject.error,
+  "InvalidTarget",
+);
+assert.equal(
+  session.verification.actionLoop.privateChannelInvalidActionRecovery
+    .afterRejectSnapshot.channelContext.channelId,
+  "private:mafia_day_chat",
+);
+assert.equal(
+  session.verification.actionLoop.privateChannelInvalidActionRecovery
+    .afterRejectSnapshot.channelContext.actorSlot,
+  "slot_4",
+);
+assert.equal(
+  session.verification.actionLoop.privateChannelInvalidActionRecovery
+    .afterRejectSnapshot.commandState.actions.some(
+      (action) => action.templateId === "factional_kill",
+    ),
+  true,
+);
+assert.equal(
+  session.verification.actionLoop.privateChannelInvalidActionRecovery
+    .legalActionVisibleAfterReject,
+  true,
+);
 assert.equal(session.verification.actionLoop.status, "passed");
 assert.equal(session.verification.actionLoop.resolveDay.commandStatus.state, "ack");
 assert.equal(session.verification.actionLoop.advanceNight.commandStatus.state, "ack");

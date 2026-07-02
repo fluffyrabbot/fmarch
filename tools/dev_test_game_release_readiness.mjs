@@ -50,6 +50,7 @@ import {
 import {
   seedAggregateOnlyProofLaneIds,
   seedAliasOnlyProofLaneIds,
+  seedDemoScenarioIds,
   seedScenarioCoverageGroups,
 } from "./dev_test_game_seed_scenario_cases.mjs";
 import {
@@ -667,7 +668,7 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
       status: "passed",
       evidence: sourcePath,
       proofBoundary:
-        "Local seeded-game proof that stale replacement private-channel authority, private receipts, stale private posts after phase resolution, reconnect recovery, and completed-game private-channel reloads preserve current player scope and recovery hints.",
+        "Local seeded-game proof that stale replacement private-channel authority, private receipts, stale private posts after phase resolution, private-channel invalid action recovery, reconnect recovery, and completed-game private-channel reloads preserve current player scope and recovery hints.",
       laneIds: [...privateChannelRecoveryMilestone.laneIds],
       requiredLaneCount: privateChannelRecoveryMilestone.requiredLaneCount,
       coveredLaneCount: privateChannelRecoveryMilestone.coveredLaneCount,
@@ -5406,14 +5407,14 @@ if (pathToFileURL(process.argv[1] ?? "").href === import.meta.url) {
     readOptionalBackupRestoreArtifacts(),
     readOptionalBackupAdminProof(),
     readOptionalOpsArtifacts(),
-    readOptionalSeedFixtureSummary(),
+    readOptionalSeedFixtureSummary({ expectedGame: proofRun?.session?.game }),
     readOptionalIdentityAdapterProof(),
     readOptionalIdentityAdminProof(),
     readOptionalHostedIdentityEvidenceAdminProof(),
     readOptionalOpsAdminProof(),
     readOptionalHostedOpsSignals(),
     readOptionalHostedOpsSignalsAdminProof(),
-    readOptionalSeedAdminProof(),
+    readOptionalSeedAdminProof({ expectedGame: proofRun?.session?.game }),
     readOptionalSpineManifest(),
     readOptionalSpineManifestAdminProof(),
     readOptionalAdminSpineProof(),
@@ -5590,22 +5591,29 @@ async function readOptionalHostedOpsSignalsAdminProof() {
   };
 }
 
-async function readOptionalSeedAdminProof() {
+async function readOptionalSeedAdminProof({ expectedGame } = {}) {
   const override = process.env.FMARCH_DEV_TEST_GAME_SEED_ADMIN_PROOF;
   const proofPath = await resolveOptionalDefaultArtifactPath(override, defaultSeedAdminProofPath);
   if (proofPath === undefined) {
     return undefined;
   }
+  const proof = JSON.parse(await readFile(proofPath, "utf8"));
+  if (
+    override === undefined &&
+    !defaultSeedAdminProofMatchesCurrentProof(proof, { expectedGame })
+  ) {
+    return undefined;
+  }
   const now = new Date();
   const artifact = await readFreshArtifactMetadata(proofPath, now);
   return {
-    seedAdminProof: JSON.parse(await readFile(proofPath, "utf8")),
+    seedAdminProof: proof,
     seedAdminProofPath: path.relative(repoRoot, proofPath),
     seedAdminProofArtifact: artifact,
   };
 }
 
-async function readOptionalSeedFixtureSummary() {
+async function readOptionalSeedFixtureSummary({ expectedGame } = {}) {
   const override = process.env.FMARCH_DEV_TEST_GAME_SEED_FIXTURE_SUMMARY;
   const fixturePath = await resolveOptionalDefaultArtifactPath(
     override,
@@ -5614,13 +5622,46 @@ async function readOptionalSeedFixtureSummary() {
   if (fixturePath === undefined) {
     return undefined;
   }
+  const summary = JSON.parse(await readFile(fixturePath, "utf8"));
+  if (
+    override === undefined &&
+    !defaultSeedFixtureSummaryMatchesCurrentProof(summary, { expectedGame })
+  ) {
+    return undefined;
+  }
   const now = new Date();
   const artifact = await readFreshArtifactMetadata(fixturePath, now);
   return {
-    seedFixtureSummary: JSON.parse(await readFile(fixturePath, "utf8")),
+    seedFixtureSummary: summary,
     seedFixtureSummaryPath: path.relative(repoRoot, fixturePath),
     seedFixtureSummaryArtifact: artifact,
   };
+}
+
+function defaultSeedFixtureSummaryMatchesCurrentProof(summary, { expectedGame } = {}) {
+  if (
+    expectedGame !== undefined &&
+    summary?.generatedFrom?.game !== expectedGame
+  ) {
+    return false;
+  }
+  const scenarioIds = new Set(
+    (summary?.demoScenarios ?? []).map((scenario) => scenario.id),
+  );
+  return seedDemoScenarioIds.every((id) => scenarioIds.has(id));
+}
+
+function defaultSeedAdminProofMatchesCurrentProof(proof, { expectedGame } = {}) {
+  if (
+    expectedGame !== undefined &&
+    proof?.generatedFrom?.game !== expectedGame
+  ) {
+    return false;
+  }
+  const visibleScenarios = new Set(
+    proof?.adminRoleSurface?.visibleScenarios ?? [],
+  );
+  return seedDemoScenarioIds.every((id) => visibleScenarios.has(id));
 }
 
 async function readOptionalIdentityAdapterProof() {
