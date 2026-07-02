@@ -1,3 +1,48 @@
+const cloneCommandFacts = (facts) => ({ ...facts });
+
+const hostPhaseCommandFactDefinitions = Object.freeze({
+  resolve: Object.freeze({
+    actionId: "resolve_phase",
+    commandKind: "ResolvePhase",
+  }),
+  advance: Object.freeze({
+    actionId: "advance_phase",
+    commandKind: "AdvancePhase",
+  }),
+  complete: Object.freeze({
+    actionId: "complete_game",
+    commandKind: "CompleteGame",
+  }),
+  extendDeadline: Object.freeze({
+    actionId: "extend_deadline",
+    commandKind: "ExtendDeadline",
+  }),
+  advanceByDeadline: Object.freeze({
+    actionId: "advance_phase_by_deadline",
+    commandKind: "AdvancePhaseByDeadline",
+  }),
+});
+
+export function hostResolvePhaseCommandFacts() {
+  return cloneCommandFacts(hostPhaseCommandFactDefinitions.resolve);
+}
+
+export function hostAdvancePhaseCommandFacts() {
+  return cloneCommandFacts(hostPhaseCommandFactDefinitions.advance);
+}
+
+export function hostCompleteGameCommandFacts() {
+  return cloneCommandFacts(hostPhaseCommandFactDefinitions.complete);
+}
+
+export function hostExtendDeadlineCommandFacts() {
+  return cloneCommandFacts(hostPhaseCommandFactDefinitions.extendDeadline);
+}
+
+export function hostAdvanceByDeadlineCommandFacts() {
+  return cloneCommandFacts(hostPhaseCommandFactDefinitions.advanceByDeadline);
+}
+
 export function assertHostPhaseTransitionActionProofCase({
   proof,
   expectedGame,

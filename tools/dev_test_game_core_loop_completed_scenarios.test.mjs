@@ -692,9 +692,13 @@ test("completed-game scenario module derives stale host and dead-player assertio
   );
   assert.deepEqual(
     [resolveScenario, advanceScenario, completeScenario].map(
-      (scenario) => scenario.commandKind,
+      (scenario) => [scenario.actionId, scenario.commandKind],
     ),
-    ["ResolvePhase", "AdvancePhase", "CompleteGame"],
+    [
+      ["resolve_phase", "ResolvePhase"],
+      ["advance_phase", "AdvancePhase"],
+      ["complete_game", "CompleteGame"],
+    ],
   );
   assert.deepEqual(
     completedDeadPlayerStaleVoteProofArgs({

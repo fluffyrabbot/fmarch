@@ -1,26 +1,32 @@
+import {
+  hostAdvancePhaseCommandFacts,
+  hostCompleteGameCommandFacts,
+  hostResolvePhaseCommandFacts,
+} from "./dev_test_game_core_loop_host_phase_scenarios.mjs";
+
 const cloneScenarioCase = (scenario) => ({ ...scenario });
 
 export const completedHostStaleCommandCaseDefinitions = Object.freeze([
   Object.freeze({
     proofField: "completedHostStaleResolveRecoveryProof",
-    commandKind: "ResolvePhase",
     commandId: "completed-host-stale-resolve",
+    ...hostResolvePhaseCommandFacts(),
     transitionToken: "host:stale_resolve_phase:reject:GameAlreadyCompleted",
     boundary:
       "Seeded browser completed host stale ResolvePhase rejected into completed host controls.",
   }),
   Object.freeze({
     proofField: "completedHostStaleAdvanceRecoveryProof",
-    commandKind: "AdvancePhase",
     commandId: "completed-host-stale-advance",
+    ...hostAdvancePhaseCommandFacts(),
     transitionToken: "host:stale_advance_phase:reject:GameAlreadyCompleted",
     boundary:
       "Seeded browser completed host stale AdvancePhase rejected into completed host controls.",
   }),
   Object.freeze({
     proofField: "completedHostStaleCompleteRecoveryProof",
-    commandKind: "CompleteGame",
     commandId: "completed-host-stale-complete",
+    ...hostCompleteGameCommandFacts(),
     transitionToken: "host:stale_complete_game:reject:GameAlreadyCompleted",
     boundary:
       "Seeded browser completed host stale CompleteGame rejected into completed host controls.",

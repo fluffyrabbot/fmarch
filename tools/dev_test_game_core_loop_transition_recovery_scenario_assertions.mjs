@@ -5,6 +5,8 @@ import {
 } from "./dev_test_game_core_loop_action_scenarios.mjs";
 import {
   assertHostStaleAdvanceAfterTransitionProofCase,
+  hostAdvancePhaseCommandFacts,
+  hostResolvePhaseCommandFacts,
 } from "./dev_test_game_core_loop_host_phase_scenarios.mjs";
 
 export function assertHostPhaseTransitionSurfaceProof({
@@ -51,8 +53,7 @@ export function assertHostPhaseTransitionSurfaceProof({
   assertHostPhaseTransitionActionProof({
     proof: resolveProof,
     expectedGame,
-    actionId: "resolve_phase",
-    commandKind: "ResolvePhase",
+    ...hostResolvePhaseCommandFacts(),
     streamSeq: 801,
     expectedPhaseId: "D02",
     expectedPhaseState: "locked",
@@ -62,8 +63,7 @@ export function assertHostPhaseTransitionSurfaceProof({
   assertHostPhaseTransitionActionProof({
     proof: advanceProof,
     expectedGame,
-    actionId: "advance_phase",
-    commandKind: "AdvancePhase",
+    ...hostAdvancePhaseCommandFacts(),
     streamSeq: 802,
     expectedPhaseId: "N02",
     expectedPhaseState: "open",
@@ -341,8 +341,7 @@ export function assertDayFiveNoLynchHostTransitionProofCase({
   assertHostPhaseTransitionActionProof({
     proof: proof.resolveProof,
     expectedGame,
-    actionId: "resolve_phase",
-    commandKind: "ResolvePhase",
+    ...hostResolvePhaseCommandFacts(),
     streamSeq: 919,
     expectedPhaseId: "D05",
     expectedPhaseState: "locked",
@@ -352,8 +351,7 @@ export function assertDayFiveNoLynchHostTransitionProofCase({
   assertHostPhaseTransitionActionProof({
     proof: proof.advanceProof,
     expectedGame,
-    actionId: "advance_phase",
-    commandKind: "AdvancePhase",
+    ...hostAdvancePhaseCommandFacts(),
     streamSeq: 920,
     expectedPhaseId: "N05",
     expectedPhaseState: "open",

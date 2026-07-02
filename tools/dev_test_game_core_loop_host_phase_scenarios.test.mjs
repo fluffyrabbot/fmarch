@@ -3,7 +3,39 @@ import { test } from "node:test";
 import {
   assertHostPhaseTransitionActionProofCase,
   assertHostStaleAdvanceAfterTransitionProofCase,
+  hostAdvanceByDeadlineCommandFacts,
+  hostAdvancePhaseCommandFacts,
+  hostCompleteGameCommandFacts,
+  hostExtendDeadlineCommandFacts,
+  hostResolvePhaseCommandFacts,
 } from "./dev_test_game_core_loop_host_phase_scenarios.mjs";
+
+test("host phase scenario module exposes shared command facts", () => {
+  assert.deepEqual(hostResolvePhaseCommandFacts(), {
+    actionId: "resolve_phase",
+    commandKind: "ResolvePhase",
+  });
+  assert.deepEqual(hostAdvancePhaseCommandFacts(), {
+    actionId: "advance_phase",
+    commandKind: "AdvancePhase",
+  });
+  assert.deepEqual(hostCompleteGameCommandFacts(), {
+    actionId: "complete_game",
+    commandKind: "CompleteGame",
+  });
+  assert.deepEqual(hostExtendDeadlineCommandFacts(), {
+    actionId: "extend_deadline",
+    commandKind: "ExtendDeadline",
+  });
+  assert.deepEqual(hostAdvanceByDeadlineCommandFacts(), {
+    actionId: "advance_phase_by_deadline",
+    commandKind: "AdvancePhaseByDeadline",
+  });
+  assert.notEqual(
+    hostResolvePhaseCommandFacts(),
+    hostResolvePhaseCommandFacts(),
+  );
+});
 
 test("host phase transition ACK assertion covers resolve projection refresh", () => {
   const proof = {

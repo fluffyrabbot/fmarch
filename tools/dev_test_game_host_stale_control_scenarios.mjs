@@ -2,6 +2,11 @@ import {
   completedHostStaleCommandHardeningLaneIds,
 } from "./dev_test_game_core_loop_completed_scenarios.mjs";
 import {
+  hostAdvancePhaseCommandFacts,
+  hostExtendDeadlineCommandFacts,
+  hostResolvePhaseCommandFacts,
+} from "./dev_test_game_core_loop_host_phase_scenarios.mjs";
+import {
   replacementPrivatePostRecoveryLaneIds,
 } from "./dev_test_game_replacement_private_scenarios.mjs";
 
@@ -41,7 +46,7 @@ export const hostPhaseStaleControlCaseDefinitions = Object.freeze([
     baseLabel: "Stale host resolve rejects after live resolution",
     reloadLabel: "Stale host resolve recovery reloads locked phase console",
     reconnectLabel: "Stale host resolve recovery reconnects locked phase console",
-    actionId: "resolve_phase",
+    ...hostResolvePhaseCommandFacts(),
     rejectError: "PhaseLocked",
     expectedStalePhase: Object.freeze({ id: "D02", locked: false }),
     expectedCurrentPhase: Object.freeze({ id: "D02", locked: true }),
@@ -66,7 +71,7 @@ export const hostPhaseStaleControlCaseDefinitions = Object.freeze([
     baseLabel: "Stale host advance rejects after live unlock",
     reloadLabel: "Stale host advance recovery reloads open phase console",
     reconnectLabel: "Stale host advance recovery reconnects open phase console",
-    actionId: "advance_phase",
+    ...hostAdvancePhaseCommandFacts(),
     rejectError: "InvalidTarget",
     expectedStalePhase: Object.freeze({ id: "D02", locked: true }),
     expectedCurrentPhase: Object.freeze({ id: "D02", locked: false }),
@@ -91,7 +96,7 @@ export const hostPhaseStaleControlCaseDefinitions = Object.freeze([
     baseLabel: "Stale host deadline control rejects without drift",
     reloadLabel: "Stale host deadline recovery reloads open phase console",
     reconnectLabel: "Stale host deadline recovery reconnects open phase console",
-    actionId: "extend_deadline",
+    ...hostExtendDeadlineCommandFacts(),
     rejectError: "PhaseLocked",
     expectedStalePhase: Object.freeze({ id: "D01", locked: false }),
     expectedCurrentPhase: Object.freeze({
@@ -191,7 +196,7 @@ export const cohostDeadlineStaleControlCaseDefinitions = Object.freeze([
     baseLabel: "Stale cohost deadline control rejects without drift",
     reloadLabel: "Stale cohost deadline recovery reloads delegated console",
     reconnectLabel: "Stale cohost deadline recovery reconnects delegated console",
-    actionId: "extend_deadline",
+    ...hostExtendDeadlineCommandFacts(),
     rejectError: "PhaseLocked",
     expectedStalePhase: Object.freeze({ id: "D01", locked: false }),
     expectedCurrentPhase: Object.freeze({

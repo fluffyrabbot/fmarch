@@ -72,6 +72,8 @@ import {
 import {
   assertHostPhaseTransitionActionProofCase,
   assertHostStaleAdvanceAfterTransitionProofCase,
+  hostAdvancePhaseCommandFacts,
+  hostResolvePhaseCommandFacts,
 } from "./dev_test_game_core_loop_host_phase_scenarios.mjs";
 import {
   assertDayFiveNoLynchResolutionSurfaceProof,
@@ -2383,8 +2385,7 @@ function assertCoreLoopHostNightActionTransitionSurface(
   assertCoreLoopHostPhaseTransitionActionProof({
     proof: resolveProof,
     expectedGame,
-    actionId: "resolve_phase",
-    commandKind: "ResolvePhase",
+    ...hostResolvePhaseCommandFacts(),
     streamSeq: 905,
     expectedPhaseId: "N02",
     expectedPhaseState: "locked",
@@ -2394,8 +2395,7 @@ function assertCoreLoopHostNightActionTransitionSurface(
   assertCoreLoopHostPhaseTransitionActionProof({
     proof: advanceProof,
     expectedGame,
-    actionId: "advance_phase",
-    commandKind: "AdvancePhase",
+    ...hostAdvancePhaseCommandFacts(),
     streamSeq: 906,
     expectedPhaseId: "D03",
     expectedPhaseState: "open",
@@ -2621,8 +2621,7 @@ function assertCoreLoopDayThreeHostVoteResolutionProof({
   assertCoreLoopHostPhaseTransitionActionProof({
     proof: proof.resolveProof,
     expectedGame,
-    actionId: "resolve_phase",
-    commandKind: "ResolvePhase",
+    ...hostResolvePhaseCommandFacts(),
     streamSeq: 908,
     expectedPhaseId: "D03",
     expectedPhaseState: "locked",
@@ -2960,8 +2959,7 @@ function assertCoreLoopNightFourHostResolutionProof({
   assertCoreLoopHostPhaseTransitionActionProof({
     proof: proof.resolveProof,
     expectedGame,
-    actionId: "resolve_phase",
-    commandKind: "ResolvePhase",
+    ...hostResolvePhaseCommandFacts(),
     streamSeq: 916,
     expectedPhaseId: "N04",
     expectedPhaseState: "locked",
@@ -3185,8 +3183,7 @@ function assertCoreLoopPostNightFourHostAdvanceProof({
   assertCoreLoopHostPhaseTransitionActionProof({
     proof: proof.advanceProof,
     expectedGame,
-    actionId: "advance_phase",
-    commandKind: "AdvancePhase",
+    ...hostAdvancePhaseCommandFacts(),
     streamSeq: 917,
     expectedPhaseId: "D05",
     expectedPhaseState: "open",
@@ -3314,8 +3311,7 @@ function assertCoreLoopDayFourNoLynchHostTransitionProof({
   assertCoreLoopHostPhaseTransitionActionProof({
     proof: proof.resolveProof,
     expectedGame,
-    actionId: "resolve_phase",
-    commandKind: "ResolvePhase",
+    ...hostResolvePhaseCommandFacts(),
     streamSeq: 913,
     expectedPhaseId: "D04",
     expectedPhaseState: "locked",
@@ -3325,8 +3321,7 @@ function assertCoreLoopDayFourNoLynchHostTransitionProof({
   assertCoreLoopHostPhaseTransitionActionProof({
     proof: proof.advanceProof,
     expectedGame,
-    actionId: "advance_phase",
-    commandKind: "AdvancePhase",
+    ...hostAdvancePhaseCommandFacts(),
     streamSeq: 914,
     expectedPhaseId: "N04",
     expectedPhaseState: "open",
@@ -3475,8 +3470,7 @@ function assertCoreLoopPostDayThreeHostAdvanceProof({
   assertCoreLoopHostPhaseTransitionActionProof({
     proof: proof.advanceProof,
     expectedGame,
-    actionId: "advance_phase",
-    commandKind: "AdvancePhase",
+    ...hostAdvancePhaseCommandFacts(),
     streamSeq: 909,
     expectedPhaseId: "N03",
     expectedPhaseState: "open",
@@ -3509,8 +3503,7 @@ function assertCoreLoopNightThreeEmptyHostTransitionProof({
   assertCoreLoopHostPhaseTransitionActionProof({
     proof: proof.resolveProof,
     expectedGame,
-    actionId: "resolve_phase",
-    commandKind: "ResolvePhase",
+    ...hostResolvePhaseCommandFacts(),
     streamSeq: 910,
     expectedPhaseId: "N03",
     expectedPhaseState: "locked",
@@ -3520,8 +3513,7 @@ function assertCoreLoopNightThreeEmptyHostTransitionProof({
   assertCoreLoopHostPhaseTransitionActionProof({
     proof: proof.advanceProof,
     expectedGame,
-    actionId: "advance_phase",
-    commandKind: "AdvancePhase",
+    ...hostAdvancePhaseCommandFacts(),
     streamSeq: 911,
     expectedPhaseId: "D04",
     expectedPhaseState: "open",

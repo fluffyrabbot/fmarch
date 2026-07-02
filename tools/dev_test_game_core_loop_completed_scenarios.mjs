@@ -6,6 +6,9 @@ import {
   completedGameEndgameScenarioCaseFamilies,
   completedGameEndgameSurfaceAssertionCases,
 } from "./dev_test_game_core_loop_completed_game_cases.mjs";
+import {
+  hostCompleteGameCommandFacts,
+} from "./dev_test_game_core_loop_host_phase_scenarios.mjs";
 
 export {
   assertCompletedGameEndgameSurfaceAssertionCases,
@@ -171,8 +174,7 @@ export function assertHostCompleteGameProofCase({
   assertHostPhaseTransitionActionProof({
     proof: proof.completeProof,
     expectedGame,
-    actionId: "complete_game",
-    commandKind: "CompleteGame",
+    ...hostCompleteGameCommandFacts(),
     streamSeq: 921,
     expectedPhaseId: "N05",
     expectedPhaseState: "open",
