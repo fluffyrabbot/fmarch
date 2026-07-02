@@ -219,6 +219,20 @@ test("hardening lane status formats stale and concurrent conflict evidence", () 
   );
   assert.equal(
     hardeningLaneStatus({
+      id: "private-channel-stale-action-reconnect-recovery",
+      status: "passed",
+      evidence: {
+        roleUrl: "http://127.0.0.1:5173/g/game-id/c/private%3Amafia_day_chat",
+        channelAfterReject: "private:mafia_day_chat",
+        reconnectChannel: "private:mafia_day_chat",
+        rejectError: "PhaseLocked",
+        recoveredPhase: "D02",
+      },
+    }),
+    "passed: role URL true, channel private:mafia_day_chat, reject PhaseLocked, recovered private:mafia_day_chat D02",
+  );
+  assert.equal(
+    hardeningLaneStatus({
       id: "stale-host-complete-reconnect-recovery",
       status: "passed",
       evidence: {
@@ -368,6 +382,18 @@ test("highlighted lane evidence maps keep browser proof assertions aligned", () 
           roleUrl: "http://127.0.0.1:5173/g/game-id",
           reconnectingState: "reconnecting",
           recoveryState: "recovered",
+          recoveredPhase: "D02",
+        },
+      },
+      {
+        id: "private-channel-stale-action-reconnect-recovery",
+        status: "passed",
+        evidence: {
+          roleUrl:
+            "http://127.0.0.1:5173/g/game-id/c/private%3Amafia_day_chat",
+          channelAfterReject: "private:mafia_day_chat",
+          reconnectChannel: "private:mafia_day_chat",
+          rejectError: "PhaseLocked",
           recoveredPhase: "D02",
         },
       },
@@ -595,6 +621,12 @@ test("highlighted lane evidence maps keep browser proof assertions aligned", () 
   assert.equal(
     hardeningHighlightedLaneEvidence(proofRun)["stale-action-reconnect-recovery"],
     "passed: role URL true, reconnecting -> recovered, phase D02",
+  );
+  assert.equal(
+    hardeningHighlightedLaneEvidence(proofRun)[
+      "private-channel-stale-action-reconnect-recovery"
+    ],
+    "passed: role URL true, channel private:mafia_day_chat, reject PhaseLocked, recovered private:mafia_day_chat D02",
   );
   assert.equal(
     hardeningHighlightedLaneEvidence(proofRun)[

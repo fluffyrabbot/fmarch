@@ -43,6 +43,7 @@ export const HARDENING_HIGHLIGHTED_LANE_IDS = Object.freeze([
   "stale-action-conflict",
   "stale-action-conflict-message",
   "stale-action-reconnect-recovery",
+  "private-channel-stale-action-reconnect-recovery",
   "stale-host-complete-reconnect-recovery",
   "stale-host-control",
   "concurrent-host-resolve-race",
@@ -152,6 +153,8 @@ export function hardeningLaneStatus(lane) {
       return `${status}: role URL ${typeof evidence.roleUrl === "string"}, ${String(evidence.receiptStatusText ?? evidence.rejectMessage ?? "unknown")}`;
     case "stale-action-reconnect-recovery":
       return `${status}: role URL ${typeof evidence.roleUrl === "string"}, ${String(evidence.reconnectingState ?? "unknown")} -> ${String(evidence.recoveryState ?? "unknown")}, phase ${String(evidence.recoveredPhase ?? "unknown")}`;
+    case "private-channel-stale-action-reconnect-recovery":
+      return `${status}: role URL ${typeof evidence.roleUrl === "string"}, channel ${String(evidence.channelAfterReject ?? evidence.channel ?? "unknown")}, reject ${String(evidence.rejectError ?? "unknown")}, recovered ${String(evidence.reconnectChannel ?? "unknown")} ${String(evidence.recoveredPhase ?? "unknown")}`;
     case "stale-host-complete-reconnect-recovery":
       return `${status}: ${String(evidence.reconnectingState ?? "unknown")} -> ${String(evidence.recoveryState ?? "unknown")}, completed ${String(evidence.recoveredCompleted ?? "unknown")}`;
     case "stale-host-control":

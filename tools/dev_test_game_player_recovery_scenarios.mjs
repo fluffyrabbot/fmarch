@@ -47,6 +47,7 @@ export const playerActionConflictRecoveryLaneIds = Object.freeze([
   "stale-same-action-recovery",
   "stale-action-conflict",
   "stale-action-reconnect-recovery",
+  "private-channel-stale-action-reconnect-recovery",
 ]);
 
 export const playerRecoveryAuditLaneIds = Object.freeze([

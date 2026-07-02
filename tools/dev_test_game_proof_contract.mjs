@@ -5320,6 +5320,115 @@ export function buildDevTestGameProofRun(session, options = {}) {
           (button) => button.action === "submit_action:factional_kill",
         ) !== true,
     }),
+    lane(
+      "private-channel-stale-action-reconnect-recovery",
+      "Private channel stale action reconnect preserves scope",
+      {
+        roleUrl:
+          hardening.privateChannelStaleActionReconnectRecovery?.sourceRoleUrl ??
+          null,
+        visitedRolePath:
+          hardening.privateChannelStaleActionReconnectRecovery?.visitedRolePath ??
+          null,
+        channel:
+          hardening.privateChannelStaleActionReconnectRecovery?.channel ?? null,
+        rejectError:
+          hardening.privateChannelStaleActionReconnectRecovery?.reject?.error ??
+          null,
+        refreshedPhase:
+          hardening.privateChannelStaleActionReconnectRecovery
+            ?.commandStateAfterReject?.phase?.phaseId ?? null,
+        channelAfterReject:
+          hardening.privateChannelStaleActionReconnectRecovery
+            ?.channelContextAfterReject?.channelId ?? null,
+        reconnectChannel:
+          hardening.privateChannelStaleActionReconnectRecovery
+            ?.reconnectChannelContext?.channelId ?? null,
+        recoveredPhase:
+          hardening.privateChannelStaleActionReconnectRecovery
+            ?.reconnectAfterReject?.recoveredCommandState?.phase?.phaseId ??
+          null,
+        privateThreadPagerVisible:
+          hardening.privateChannelStaleActionReconnectRecovery
+            ?.privateThreadPagerVisibleAfterReconnect ?? null,
+        passed:
+          hardening.privateChannelStaleActionReconnectRecovery?.status ===
+            "passed" &&
+          typeof hardening.privateChannelStaleActionReconnectRecovery
+            ?.sourceRoleUrl === "string" &&
+          hardening.privateChannelStaleActionReconnectRecovery.sourceRoleUrl
+            .includes("/c/private%3Amafia_day_chat") &&
+          staleActionRejectRecoveryMatches(
+            hardening.privateChannelStaleActionReconnectRecovery,
+            {
+              error: "PhaseLocked",
+              actorSlot: "slot_4",
+              templateId: "factional_kill",
+              commandAction: "submit_action:factional_kill",
+              messageFragments: [
+                "stale action state",
+                "current action controls",
+              ],
+              dispatchRefreshKeys: ["commandState", "dayVoteOutcomes"],
+              receiptRefreshKeys: ["commandState"],
+              stalePhaseId: "N01",
+              browserCommandState: {
+                actorSlot: "slot_4",
+                actorAlive: true,
+                actorStatus: "alive",
+                phaseId: "D02",
+                locked: false,
+                actionCount: 0,
+              },
+              apiCommandState: {
+                actorSlot: "slot_4",
+                actorAlive: true,
+                actorStatus: "alive",
+                phaseId: "D02",
+                locked: false,
+                actionCount: 0,
+              },
+            },
+          ) &&
+          hardening.privateChannelStaleActionReconnectRecovery
+            ?.channelContextBeforeClose?.channelId ===
+            "private:mafia_day_chat" &&
+          hardening.privateChannelStaleActionReconnectRecovery
+            ?.channelContextAfterReject?.channelId ===
+            "private:mafia_day_chat" &&
+          hardening.privateChannelStaleActionReconnectRecovery
+            ?.channelContextAfterReject?.actorSlot === "slot_4" &&
+          hardening.privateChannelStaleActionReconnectRecovery
+            ?.privateThreadPagerVisibleAfterReject === true &&
+          hardening.privateChannelStaleActionReconnectRecovery
+            ?.reconnectAfterReject?.reconnectCommand?.command?.SubmitPost
+            ?.channel_id === "private:mafia_day_chat" &&
+          hardening.privateChannelStaleActionReconnectRecovery
+            ?.reconnectAfterReject?.reconnectRecoveryEvent?.state ===
+            "recovered" &&
+          hardening.privateChannelStaleActionReconnectRecovery
+            ?.reconnectAfterReject?.reconnectRecoveryEvent?.attempt === 1 &&
+          hardening.privateChannelStaleActionReconnectRecovery
+            ?.reconnectAfterReject?.recoveredSnapshotContainsPost === true &&
+          hardening.privateChannelStaleActionReconnectRecovery
+            ?.reconnectAfterReject?.recoveredCommandState?.actorSlot ===
+            "slot_4" &&
+          hardening.privateChannelStaleActionReconnectRecovery
+            ?.reconnectAfterReject?.recoveredCommandState?.phase?.phaseId ===
+            "D02" &&
+          hardening.privateChannelStaleActionReconnectRecovery
+            ?.reconnectAfterReject?.recoveredCommandState?.actions?.length ===
+            0 &&
+          hardening.privateChannelStaleActionReconnectRecovery
+            ?.reconnectChannelContext?.channelId === "private:mafia_day_chat" &&
+          hardening.privateChannelStaleActionReconnectRecovery
+            ?.privateThreadPagerVisibleAfterReconnect === true &&
+          hardening.privateChannelStaleActionReconnectRecovery
+            ?.buttonsAfterReconnect?.some(
+              (button) => button.action === "submit_action:factional_kill",
+            ) !== true,
+      },
+    ),
     lane("stale-host-control", "Stale host phase control rejects without drift", {
       rejectError: hardening.staleHostControl?.reject?.error ?? null,
       stalePhase: hardening.staleHostControl?.setup?.stalePhase?.id ?? null,

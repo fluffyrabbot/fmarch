@@ -52,7 +52,7 @@ test("hosted concurrent matrix cases share progress and handoff IDs", () => {
     hostedMatrixRealHostedEvidenceInputIds,
     realHostedEvidenceInputIds,
   );
-  assert.equal(hostedMatrixReconnectLaneIds.length, 10);
+  assert.equal(hostedMatrixReconnectLaneIds.length, 11);
   assert.equal(hostedMatrixStaleConflictLaneIds.length, 6);
   assert.deepEqual(
     hostedMatrixStaleConflictMilestoneCases().slice(0, 5),

@@ -436,6 +436,7 @@ test("dev test-game spine orchestrators expose stable proof order and env maps",
     { kind: "node", script: "tools/dev_test_game_live_proof.mjs" },
     { kind: "node", script: "tools/dev_test_game_proof_contract.mjs" },
     { kind: "node", script: "tools/dev_test_game_core_loop_admin_proof.mjs" },
+    { kind: "node", script: "tools/dev_test_game_hardening_admin_proof.mjs" },
     { kind: "node", script: "tools/dev_test_game_release_readiness.mjs" },
     { kind: "node", script: "tools/dev_test_game_seed_fixture_summary.mjs" },
     { kind: "node", script: "tools/dev_test_game_seed_admin_proof.mjs" },
@@ -6555,6 +6556,101 @@ test("session card and markdown include role credential URLs and tokens", async 
         buttonsAfterReconnect: [],
         actionVisibleAfterRefresh: false,
       },
+      privateChannelStaleActionReconnectRecovery: {
+        status: "passed",
+        sourceRoleUrl:
+          "http://127.0.0.1:5173/g/midsummer/c/private%3Amafia_day_chat",
+        visitedRolePath: "/g/midsummer/c/private%3Amafia_day_chat",
+        channel: "private:mafia_day_chat",
+        staleN01Phase: { phaseId: "N01" },
+        channelContextBeforeClose: {
+          channelId: "private:mafia_day_chat",
+          actorSlot: "slot_4",
+        },
+        actionConfig: {
+          templateId: "factional_kill",
+        },
+        reject: {
+          state: "reject",
+          error: "PhaseLocked",
+          message:
+            "Reject PhaseLocked: phase locked; stale action state, refresh and use current action controls",
+          serverEnvelope: { body: { kind: "Reject" } },
+          requestEnvelope: {
+            body: {
+              body: {
+                command: {
+                  SubmitAction: {
+                    actor_slot: "slot_4",
+                    template_id: "factional_kill",
+                  },
+                },
+              },
+            },
+          },
+        },
+        commandStateAfterReject: {
+          actorSlot: "slot_4",
+          actorAlive: true,
+          actorStatus: "alive",
+          phase: { phaseId: "D02", locked: false },
+          actions: [],
+        },
+        channelContextAfterReject: {
+          channelId: "private:mafia_day_chat",
+          actorSlot: "slot_4",
+        },
+        dispatchPlan: {
+          projectionRefreshKeys: ["commandState", "dayVoteOutcomes"],
+        },
+        currentReceipt: {
+          actionId: "submit_action:factional_kill",
+          state: "reject",
+          commandTrace: {
+            projectionRefreshKeys: ["commandState"],
+          },
+        },
+        receiptStatusText:
+          "Reject PhaseLocked: phase locked; stale action state, refresh and use current action controls",
+        apiCommandStateAfterReject: {
+          actor_slot: "slot_4",
+          actor_alive: true,
+          actor_status: "alive",
+          phase: { phase_id: "D02", locked: false },
+          actions: [],
+        },
+        actionVisibleAfterRefresh: false,
+        privateThreadPagerVisibleAfterReject: true,
+        reconnectAfterReject: {
+          status: "passed",
+          principalUserId: "player-goon-a",
+          actorSlot: "slot_4",
+          reconnectingStatus: { state: "reconnecting" },
+          reconnectRecoveryEvent: { attempt: 1, state: "recovered" },
+          recoveredSnapshotContainsPost: true,
+          reconnectCommand: {
+            command: {
+              SubmitPost: {
+                channel_id: "private:mafia_day_chat",
+                actor_slot: "slot_4",
+              },
+            },
+          },
+          recoveredCommandState: {
+            actorSlot: "slot_4",
+            actorAlive: true,
+            actorStatus: "alive",
+            phase: { phaseId: "D02", locked: false },
+            actions: [],
+          },
+        },
+        reconnectChannelContext: {
+          channelId: "private:mafia_day_chat",
+          actorSlot: "slot_4",
+        },
+        privateThreadPagerVisibleAfterReconnect: true,
+        buttonsAfterReconnect: [],
+      },
       staleHostControl: {
         status: "passed",
         setup: {
@@ -7977,6 +8073,7 @@ test("session card and markdown include role credential URLs and tokens", async 
       "stale-action-conflict",
       "stale-action-conflict-message",
       "stale-action-reconnect-recovery",
+      "private-channel-stale-action-reconnect-recovery",
       "stale-host-control",
       "concurrent-host-resolve-race",
       "concurrent-host-resolve-race-reload",
@@ -8257,7 +8354,10 @@ test("session card and markdown include role credential URLs and tokens", async 
   );
   assert.equal(hostedMatrix.summary.cellCount, 16);
   assert.equal(hostedMatrix.summary.reloadCoveredCellCount, 16);
-  assert.equal(hostedMatrix.summary.reconnectLaneCount, 10);
+  assert.equal(
+    hostedMatrix.summary.reconnectLaneCount,
+    hostedMatrixReconnectLaneIds.length,
+  );
   assert.equal(
     hostedMatrix.summary.staleConflictLaneCount,
     hostedMatrixStaleConflictLaneIds.length,
@@ -8728,7 +8828,7 @@ test("session card and markdown include role credential URLs and tokens", async 
   assert.equal(opsArtifacts.productionReady, false);
   assert.equal(opsArtifacts.run.game, game);
   assert.equal(opsArtifacts.run.seedCommandCount, 1);
-  assert.equal(opsArtifacts.proofRun.laneCount, 118);
+  assert.equal(opsArtifacts.proofRun.laneCount, 119);
   assert.equal(opsArtifacts.proofStability.hostConfirmClicks.total, 4);
   assert.equal(
     opsArtifacts.checks.some(
@@ -9932,7 +10032,7 @@ function devTestGameRaceCoverageFixture() {
       proofRun: "target/dev-test-game/proof-run.json",
       proofGeneratedAt: "2026-06-26T00:00:00.000Z",
       game: "game-a",
-      laneCount: 118,
+      laneCount: 119,
     },
     summary: {
       cellCount: cells.length,
@@ -10167,7 +10267,7 @@ function devTestGameOpsArtifactsFixture({
     roles: {},
     proofRun: {
       status: "passed",
-      laneCount: 118,
+      laneCount: 119,
       lanes: [],
       nonClaims: [],
     },
@@ -12330,6 +12430,7 @@ function hardeningAdminProofFixture() {
         "stale-action-conflict",
         "stale-action-conflict-message",
         "stale-action-reconnect-recovery",
+        "private-channel-stale-action-reconnect-recovery",
         "stale-host-control",
         "concurrent-host-resolve-race",
         "concurrent-host-resolve-race-reload",

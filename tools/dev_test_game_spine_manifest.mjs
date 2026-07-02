@@ -495,6 +495,7 @@ export function assertDevTestGameSpineManifest(manifest) {
     "tools/dev_test_game_live_proof.mjs",
     "tools/dev_test_game_proof_contract.mjs",
     "tools/dev_test_game_core_loop_admin_proof.mjs",
+    "tools/dev_test_game_hardening_admin_proof.mjs",
     "tools/dev_test_game_release_readiness.mjs",
     "tools/dev_test_game_seed_fixture_summary.mjs",
     "tools/dev_test_game_seed_admin_proof.mjs",

@@ -9,6 +9,7 @@ export const devTestGameLiveSpinePlan = [
   { kind: "node", script: "tools/dev_test_game_live_proof.mjs" },
   { kind: "node", script: "tools/dev_test_game_proof_contract.mjs" },
   { kind: "node", script: "tools/dev_test_game_core_loop_admin_proof.mjs" },
+  { kind: "node", script: "tools/dev_test_game_hardening_admin_proof.mjs" },
   { kind: "node", script: "tools/dev_test_game_release_readiness.mjs" },
   { kind: "node", script: "tools/dev_test_game_seed_fixture_summary.mjs" },
   { kind: "node", script: "tools/dev_test_game_seed_admin_proof.mjs" },

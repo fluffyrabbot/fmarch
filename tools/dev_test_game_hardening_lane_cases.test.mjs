@@ -643,6 +643,7 @@ test("hardening lane cases share player action conflict recovery IDs", () => {
     "stale-same-action-recovery",
     "stale-action-conflict",
     "stale-action-reconnect-recovery",
+    "private-channel-stale-action-reconnect-recovery",
   ]);
 });
 
@@ -660,6 +661,7 @@ test("hardening lane cases derive hosted matrix reconnect IDs", () => {
     "replacement-action-reconnect",
     "replacement-stale-private-post-reconnect",
     "stale-action-reconnect-recovery",
+    "private-channel-stale-action-reconnect-recovery",
     "stale-host-complete-reconnect-recovery",
     "stale-host-resolve-reconnect-recovery",
     "stale-host-advance-reconnect-recovery",

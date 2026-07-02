@@ -81,6 +81,7 @@ export const seedRequiredScenarioIds = Object.freeze([
   "replacement-incoming-player",
   "stale-action-conflict-message",
   "stale-action-reconnect-recovery",
+  "private-channel-stale-action-reconnect-recovery",
   "stale-dead-action-conflict",
   "private-channel-member",
   "private-channel-denied",
@@ -171,6 +172,7 @@ const seedScenarioRoleOverrides = new Map([
   ["replacement-stale-private-channel", "player"],
   ["replacement-stale-private-receipts", "player"],
   ["private-channel-invalid-action-recovery", "actionPlayer"],
+  ["private-channel-stale-action-reconnect-recovery", "actionPlayer"],
   ["stale-dead-action-conflict", "actionPlayer"],
 ]);
 

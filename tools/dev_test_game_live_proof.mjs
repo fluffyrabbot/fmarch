@@ -28,15 +28,31 @@ const replacementActionReconnectCase = replacementActionReconnectScenario();
 const replacementStaleActionAfterResolveCase =
   replacementStaleActionAfterResolveScenario();
 
-const exitCode = await run("npm", [
-  "run",
-  "dev:test-game",
-  "--",
+const devTestGameArgs = [
   "--name",
   "live-proof",
   "--reset",
   "--verify",
   "--no-keepalive",
+];
+if (process.env.FMARCH_DEV_TEST_GAME_API_BASE_URL) {
+  devTestGameArgs.push(
+    "--api-base-url",
+    process.env.FMARCH_DEV_TEST_GAME_API_BASE_URL,
+  );
+}
+if (process.env.FMARCH_DEV_TEST_GAME_FRONTEND_BASE_URL) {
+  devTestGameArgs.push(
+    "--frontend-base-url",
+    process.env.FMARCH_DEV_TEST_GAME_FRONTEND_BASE_URL,
+  );
+}
+
+const exitCode = await run("npm", [
+  "run",
+  "dev:test-game",
+  "--",
+  ...devTestGameArgs,
 ]);
 if (exitCode !== 0) {
   process.exit(exitCode);
@@ -4800,6 +4816,45 @@ assert.equal(
 assert.equal(
   session.verification.multiplayerHardening.staleActionConflict.actionVisibleAfterRefresh,
   false,
+);
+assert.equal(
+  session.verification.multiplayerHardening
+    .privateChannelStaleActionReconnectRecovery.status,
+  "passed",
+);
+assert.equal(
+  session.verification.multiplayerHardening
+    .privateChannelStaleActionReconnectRecovery.channel,
+  "private:mafia_day_chat",
+);
+assert.equal(
+  session.verification.multiplayerHardening
+    .privateChannelStaleActionReconnectRecovery.reject.error,
+  "PhaseLocked",
+);
+assert.equal(
+  session.verification.multiplayerHardening
+    .privateChannelStaleActionReconnectRecovery.channelContextAfterReject
+    .channelId,
+  "private:mafia_day_chat",
+);
+assert.equal(
+  session.verification.multiplayerHardening
+    .privateChannelStaleActionReconnectRecovery.reconnectAfterReject
+    .reconnectCommand.command.SubmitPost.channel_id,
+  "private:mafia_day_chat",
+);
+assert.equal(
+  session.verification.multiplayerHardening
+    .privateChannelStaleActionReconnectRecovery.reconnectChannelContext
+    .channelId,
+  "private:mafia_day_chat",
+);
+assert.equal(
+  session.verification.multiplayerHardening
+    .privateChannelStaleActionReconnectRecovery
+    .privateThreadPagerVisibleAfterReconnect,
+  true,
 );
 assert.equal(
   session.verification.multiplayerHardening.staleHostControl.status,

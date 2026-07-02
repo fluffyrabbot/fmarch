@@ -18,6 +18,9 @@ import {
   hardeningAuditLaneIds,
 } from "../../../../tools/dev_test_game_hardening_scenarios.mjs";
 import {
+  playerRecoveryAuditLaneIds,
+} from "../../../../tools/dev_test_game_player_recovery_scenarios.mjs";
+import {
   coreLoopCompletedGameCoverageCheckId,
   coreLoopAuditLaneIds,
 } from "../../../../tools/dev_test_game_core_loop_scenarios.mjs";
@@ -36,33 +39,7 @@ export const ADMIN_ROUTE_CONTRACT = Object.freeze({
   requiredText: "Operations",
 });
 
-export const LOCAL_PLAYER_RECOVERY_AUDIT_LANE_IDS = Object.freeze([
-  playerActionLoopLaneId,
-  playerInvalidActionRecoveryLaneId,
-  "dead-player-recovery",
-  playerActionBoundaryLaneId,
-  "idempotent-retry",
-  "action-idempotent-retry",
-  "concurrent-action-race",
-  "concurrent-action-race-reload",
-  "reconnect-recovery",
-  "stale-player-vote",
-  "concurrent-vote-race",
-  "concurrent-vote-race-reload",
-  "concurrent-player-vote-resolve-race",
-  "concurrent-player-vote-resolve-race-reload",
-  "concurrent-player-action-advance-race",
-  "concurrent-player-action-advance-race-reload",
-  "concurrent-player-complete-race",
-  "public-player-complete-reload",
-  "stale-player-complete",
-  "stale-player-complete-reload",
-  "stale-dead-action-conflict",
-  "stale-same-action-recovery",
-  "stale-action-conflict",
-  "stale-action-reconnect-recovery",
-  "stale-action-conflict-message",
-]);
+export const LOCAL_PLAYER_RECOVERY_AUDIT_LANE_IDS = playerRecoveryAuditLaneIds;
 
 export async function buildAdminRouteData({
   principalUserId,

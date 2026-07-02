@@ -973,6 +973,7 @@ async function verifySessionCard(card) {
   let replacementConsole;
   let concurrentActionPage;
   let privateChannelActionPage;
+  let privateChannelStaleActionPage;
   let staleActionRetryPage;
   let staleSameActionPage;
   let staleActionPage;
@@ -1000,6 +1001,8 @@ async function verifySessionCard(card) {
     }
     concurrentActionPage = await roleEntries.actionPlayer.context.newPage();
     privateChannelActionPage = await roleEntries.actionPlayer.context.newPage();
+    privateChannelStaleActionPage =
+      await roleEntries.actionPlayer.context.newPage();
     staleActionRetryPage = await roleEntries.actionPlayer.context.newPage();
     staleSameActionPage = await roleEntries.actionPlayer.context.newPage();
     staleActionPage = await roleEntries.actionPlayer.context.newPage();
@@ -1058,6 +1061,7 @@ async function verifySessionCard(card) {
       targetPage: roleEntries.deniedPlayer.page,
       concurrentActionPage,
       privateChannelActionPage,
+      privateChannelStaleActionPage,
       staleActionRetryPage,
       staleSameActionPage,
       staleActionPage,
@@ -1079,6 +1083,8 @@ async function verifySessionCard(card) {
       actionIdempotentRetry: actionLoop.actionIdempotentRetry,
       staleSameActionRecovery: actionLoop.staleSameActionRecovery,
       staleActionConflict: actionLoop.staleActionConflict,
+      privateChannelStaleActionReconnectRecovery:
+        actionLoop.privateChannelStaleActionReconnectRecovery,
       staleDeadActionConflict: actionLoop.staleDeadActionConflict,
       staleHostPage,
       staleHostControlSetup: actionLoop.staleHostControlSetup,
@@ -1112,6 +1118,7 @@ async function verifySessionCard(card) {
   } finally {
     await concurrentActionPage?.close().catch(() => {});
     await privateChannelActionPage?.close().catch(() => {});
+    await privateChannelStaleActionPage?.close().catch(() => {});
     await staleActionRetryPage?.close().catch(() => {});
     await staleSameActionPage?.close().catch(() => {});
     await staleActionPage?.close().catch(() => {});
@@ -2590,6 +2597,7 @@ async function verifySeededActionLoop({
   targetPage,
   concurrentActionPage,
   privateChannelActionPage,
+  privateChannelStaleActionPage,
   staleActionRetryPage,
   staleSameActionPage,
   staleActionPage,
@@ -2720,6 +2728,12 @@ async function verifySeededActionLoop({
     game,
   });
   const staleActionSetup = await freezeStaleActionPage({ staleActionPage, game });
+  const privateChannelStaleActionSetup =
+    await freezeStalePrivateChannelActionPage({
+      page: privateChannelStaleActionPage,
+      game,
+      frontendBaseUrl,
+    });
   const staleDeadActionSetup = await freezeStaleActionPage({
     staleActionPage: staleDeadActionPage,
     game,
@@ -2918,6 +2932,13 @@ async function verifySeededActionLoop({
     apiBaseUrl,
     game,
   });
+  const privateChannelStaleActionReconnectRecovery =
+    await submitPrivateChannelStaleActionReconnectRecovery({
+      page: privateChannelStaleActionPage,
+      setup: privateChannelStaleActionSetup,
+      apiBaseUrl,
+      game,
+    });
   const d02VoteNightTransition = await verifySeededD02VoteNightTransition({
     browser,
     apiBaseUrl,
@@ -2950,6 +2971,7 @@ async function verifySeededActionLoop({
     d02PhaseText,
     staleDeadActionConflict,
     staleActionConflict,
+    privateChannelStaleActionReconnectRecovery,
     d02VoteNightTransition,
     staleHostControlSetup,
     proof:
@@ -4223,6 +4245,235 @@ async function freezeStaleActionPage({ staleActionPage, game }) {
     staleN01Phase,
     actionConfig,
     closedStatus,
+  };
+}
+
+async function freezeStalePrivateChannelActionPage({ page, game, frontendBaseUrl }) {
+  const route = await openPrivateChannelRoleSurface({
+    page,
+    frontendBaseUrl,
+    game,
+    proofLabel: "stale private-channel action",
+  });
+  const roleUrl = page.url();
+  const visitedRolePath = rolePathFromUrl(roleUrl);
+  await page.locator('[data-action="submit_action:factional_kill"]').waitFor({
+    state: "visible",
+  });
+  await page.waitForFunction(
+    () =>
+      window.__fmarchPlayerProjection?.commandState?.actorSlot === "slot_4" &&
+      window.__fmarchPlayerProjection?.commandState?.phase?.phaseId === "N01" &&
+      window.__fmarchPlayerProjection?.commandState?.phase?.locked === false,
+  );
+  const snapshot = await privateChannelRoleSnapshot(page);
+  const actionConfig = snapshot.commandState?.actions?.find(
+    (action) => action.templateId === "factional_kill",
+  );
+  const actionButton = snapshot.buttons.find(
+    (button) => button.action === "submit_action:factional_kill",
+  );
+  const closedStatus = await closePlayerLiveProjection(page);
+  if (
+    snapshot.channelContext.channelId !== factionDayChatChannel ||
+    snapshot.channelContext.actorSlot !== "slot_4" ||
+    !snapshot.channelContext.capabilityLabel?.includes(
+      `ChannelMember(${factionDayChatChannel})`,
+    ) ||
+    actionConfig?.templateId !== "factional_kill" ||
+    actionButton?.disabled !== false ||
+    closedStatus?.state !== "closed"
+  ) {
+    throw new Error(
+      `stale private-channel action setup drifted: ${JSON.stringify({
+        route,
+        snapshot,
+        actionConfig,
+        actionButton,
+        closedStatus,
+      })}`,
+    );
+  }
+  return {
+    route,
+    roleUrl,
+    visitedRolePath,
+    staleN01Phase: snapshot.commandState?.phase ?? null,
+    channelContextBeforeClose: snapshot.channelContext,
+    actionConfig,
+    actionButton,
+    closedStatus,
+  };
+}
+
+async function submitPrivateChannelStaleActionReconnectRecovery({
+  page,
+  setup,
+  apiBaseUrl,
+  game,
+}) {
+  await page.locator('[data-action="submit_action:factional_kill"]').click();
+  await page.waitForFunction(
+    () =>
+      window.__fmarchPlayerCommandStatus?.state === "reject" &&
+      window.__fmarchPlayerCommandStatus?.error === "PhaseLocked",
+  );
+  await page.waitForFunction(
+    () =>
+      window.__fmarchPlayerProjection?.commandState?.phase?.phaseId === "D02" &&
+      (window.__fmarchPlayerProjection?.commandState?.actions ?? []).length === 0 &&
+      document
+        .querySelector("[data-testid='player-command-channel-context']")
+        ?.getAttribute("data-channel-id") === "private:mafia_day_chat",
+  );
+  const reject = await page.evaluate(() => window.__fmarchPlayerCommandStatus);
+  const afterRejectSnapshot = await privateChannelRoleSnapshot(page);
+  const phaseAfterReject = afterRejectSnapshot.commandState?.phase ?? null;
+  const commandStateAfterReject = afterRejectSnapshot.commandState;
+  const dispatchPlan = await page.evaluate(
+    () => window.__fmarchPlayerCommandDispatchBridgePlan,
+  );
+  const currentReceipt = await page.evaluate(() =>
+    window.__fmarchPlayerCommandReceipts?.find((receipt) => receipt.current === true),
+  );
+  const receiptStatusText = await page.getByTestId("player-command-status").innerText();
+  const apiCommandStateAfterReject = await fetchJson(
+    `${apiBaseUrl}/games/${game}/player-command-state?principal_user_id=player-goon-a&slot_id=slot_4`,
+  );
+  const actionVisibleAfterRefresh = await page
+    .locator('[data-action="submit_action:factional_kill"]')
+    .isVisible();
+  const privateThreadPagerVisibleAfterReject = await page
+    .getByTestId("player-thread-pager")
+    .isVisible();
+  if (
+    reject?.state !== "reject" ||
+    reject?.error !== "PhaseLocked" ||
+    !reject?.message?.includes("stale action state") ||
+    !reject?.message?.includes("current action controls") ||
+    reject?.requestEnvelope?.body?.body?.principal_user_id !== "player-goon-a" ||
+    reject?.requestEnvelope?.body?.body?.command?.SubmitAction?.actor_slot !==
+      "slot_4" ||
+    reject?.requestEnvelope?.body?.body?.command?.SubmitAction?.template_id !==
+      "factional_kill" ||
+    dispatchPlan?.projectionRefreshKeys?.includes("commandState") !== true ||
+    dispatchPlan?.projectionRefreshKeys?.includes("dayVoteOutcomes") !== true ||
+    currentReceipt?.actionId !== "submit_action:factional_kill" ||
+    currentReceipt?.state !== "reject" ||
+    currentReceipt?.commandTrace?.projectionRefreshKeys?.includes("commandState") !==
+      true ||
+    !receiptStatusText.includes("Reject PhaseLocked") ||
+    !receiptStatusText.includes("stale action state") ||
+    commandStateAfterReject?.actorSlot !== "slot_4" ||
+    commandStateAfterReject?.actorAlive !== true ||
+    commandStateAfterReject?.actorStatus !== "alive" ||
+    commandStateAfterReject?.phase?.phaseId !== "D02" ||
+    commandStateAfterReject?.phase?.locked !== false ||
+    commandStateAfterReject?.actions?.length !== 0 ||
+    afterRejectSnapshot.channelContext.channelId !== factionDayChatChannel ||
+    afterRejectSnapshot.channelContext.actorSlot !== "slot_4" ||
+    actionVisibleAfterRefresh !== false ||
+    privateThreadPagerVisibleAfterReject !== true ||
+    apiCommandStateAfterReject?.actor_slot !== "slot_4" ||
+    apiCommandStateAfterReject?.actor_alive !== true ||
+    apiCommandStateAfterReject?.actor_status !== "alive" ||
+    apiCommandStateAfterReject?.phase?.phase_id !== "D02" ||
+    apiCommandStateAfterReject?.phase?.locked !== false ||
+    apiCommandStateAfterReject?.actions?.length !== 0
+  ) {
+    throw new Error(
+      `private-channel stale action recovery drifted: ${JSON.stringify({
+        setup,
+        reject,
+        afterRejectSnapshot,
+        dispatchPlan,
+        currentReceipt,
+        receiptStatusText,
+        apiCommandStateAfterReject,
+        actionVisibleAfterRefresh,
+        privateThreadPagerVisibleAfterReject,
+      })}`,
+    );
+  }
+  await page.goto(setup.roleUrl, { waitUntil: "networkidle" });
+  await page.waitForFunction(
+    () =>
+      window.__fmarchPlayerProjection?.commandState?.actorSlot === "slot_4" &&
+      window.__fmarchPlayerProjection?.commandState?.phase?.phaseId === "D02" &&
+      (window.__fmarchPlayerProjection?.commandState?.actions ?? []).length === 0 &&
+      document
+        .querySelector("[data-testid='player-command-channel-context']")
+        ?.getAttribute("data-channel-id") === "private:mafia_day_chat" &&
+      typeof window.__fmarchDropPlayerLiveProjection === "function",
+  );
+  const reconnectAfterReject = await verifyRoleReconnectRecovery({
+    page,
+    game,
+    principalUserId: "player-goon-a",
+    actorSlot: "slot_4",
+    postPrefix: "Private-channel stale action reconnect proof",
+    channelId: factionDayChatChannel,
+  });
+  const buttonsAfterReconnect = await playerCommandButtons(page);
+  const reconnectChannelContext = await playerPrivateChannelContext(page);
+  const privateThreadPagerVisibleAfterReconnect = await page
+    .getByTestId("player-thread-pager")
+    .isVisible();
+  if (
+    reconnectAfterReject?.status !== "passed" ||
+    reconnectAfterReject?.reconnectCommand?.command?.SubmitPost?.channel_id !==
+      factionDayChatChannel ||
+    reconnectAfterReject?.reconnectingStatus?.state !== "reconnecting" ||
+    reconnectAfterReject?.reconnectRecoveryEvent?.state !== "recovered" ||
+    reconnectAfterReject?.reconnectRecoveryEvent?.attempt !== 1 ||
+    reconnectAfterReject?.recoveredSnapshotContainsPost !== true ||
+    reconnectAfterReject?.recoveredCommandState?.actorSlot !== "slot_4" ||
+    reconnectAfterReject?.recoveredCommandState?.actorAlive !== true ||
+    reconnectAfterReject?.recoveredCommandState?.actorStatus !== "alive" ||
+    reconnectAfterReject?.recoveredCommandState?.phase?.phaseId !== "D02" ||
+    reconnectAfterReject?.recoveredCommandState?.phase?.locked !== false ||
+    reconnectAfterReject?.recoveredCommandState?.actions?.length !== 0 ||
+    reconnectChannelContext.channelId !== factionDayChatChannel ||
+    reconnectChannelContext.actorSlot !== "slot_4" ||
+    privateThreadPagerVisibleAfterReconnect !== true ||
+    buttonsAfterReconnect.some(
+      (button) => button.action === "submit_action:factional_kill",
+    )
+  ) {
+    throw new Error(
+      `private-channel stale action reconnect drifted: ${JSON.stringify({
+        reconnectAfterReject,
+        buttonsAfterReconnect,
+        reconnectChannelContext,
+        privateThreadPagerVisibleAfterReconnect,
+      })}`,
+    );
+  }
+  return {
+    status: "passed",
+    sourceRoleUrl: setup.roleUrl,
+    visitedRolePath: setup.visitedRolePath,
+    channel: factionDayChatChannel,
+    staleN01Phase: setup.staleN01Phase,
+    channelContextBeforeClose: setup.channelContextBeforeClose,
+    actionConfig: setup.actionConfig,
+    closedStatus: setup.closedStatus,
+    reject,
+    phaseAfterReject,
+    commandStateAfterReject,
+    channelContextAfterReject: afterRejectSnapshot.channelContext,
+    dispatchPlan,
+    currentReceipt,
+    receiptStatusText,
+    apiCommandStateAfterReject,
+    actionVisibleAfterRefresh,
+    privateThreadPagerVisibleAfterReject,
+    reconnectAfterReject,
+    reconnectChannelContext,
+    privateThreadPagerVisibleAfterReconnect,
+    buttonsAfterReconnect,
+    proof:
+      "A private-channel action-player role URL froze with a legal N01 factional_kill control, rejected that stale action after the game reached D02, preserved private-channel context and explicit PhaseLocked recovery copy, then reconnected on the same private route without regaining action controls.",
   };
 }
 
@@ -5808,6 +6059,7 @@ async function verifySeededMultiplayerHardening({
   actionIdempotentRetry,
   staleSameActionRecovery,
   staleActionConflict,
+  privateChannelStaleActionReconnectRecovery,
   staleDeadActionConflict,
   staleHostPage,
   staleHostControlSetup,
@@ -6266,6 +6518,7 @@ async function verifySeededMultiplayerHardening({
     staleSameActionRecovery,
     staleDeadActionConflict,
     staleActionConflict,
+    privateChannelStaleActionReconnectRecovery,
     staleHostControl,
     concurrentHostResolveRace,
     concurrentHostAdvanceRace,
@@ -6281,7 +6534,7 @@ async function verifySeededMultiplayerHardening({
     staleHostDeadline,
     staleCohostDeadline,
     proof:
-      "The seeded player role URL replayed the same SubmitPost command_id through /commands and got the original ACK with one projected post, recovered a dropped live projection through reconnect, refreshed command state after a stale locked-phase vote reject, ACKed a stale player vote after another role changed the live votecount and refreshed to the current combined projection, ACKed a stale withdraw after the same slot's live ballot changed and refreshed to no current vote, rejected stale withdraw and submit-vote controls after host phase resolution with PhaseLocked and refreshed to locked commandState plus day-vote outcome truth, ACKed a stale submit-post control after host phase resolution while refreshing thread, locked commandState, and day-vote outcome truth, proved a player SubmitVote racing host ResolvePhase either serializes before resolution or rejects with PhaseLocked, then reloads player and host role URLs to locked day-vote outcome truth, proved a stale N01 factional_kill control racing host AdvancePhase rejects without appending, then action-player and host role URLs reload to open D02, proved a cohost ExtendDeadline racing host ResolvePhase either serializes the deadline before resolution or rejects PhaseLocked, then reloads host and cohost role URLs to locked D01 deadline truth, proved stale Slot 7 private-post and vote commands plus a stale Slot 4 factional_kill command racing host ProcessReplacement either serialize before replacement or reject with NotYourSlot while the stale outgoing role loses command-state authority and Rowan becomes current occupant, proved an incoming Rowan Slot 4 factional_kill resolves and survives replacement reconnect into locked N01 without action controls while target kill receipts stay scoped, proved Rowan's stale replacement action after host N01 resolution rejects PhaseLocked, appends no action, and keeps target receipts scoped, proved Rowan's stale replacement private post after host D01 resolution ACKs while refreshing to locked private-channel and command-state truth, proved Rowan's stale replacement private post after CompleteGame rejects GameAlreadyCompleted while refreshing to completed-game truth, then reloaded Rowan's private channel route into completed-game disabled controls while Mira stayed forbidden, refreshed to the current legal vote target set after a stale dead-target vote rejected as InvalidTarget, cleared an existing current vote and live votecount row when its target was marked dead, proved two concurrent player vote commands converge, then reload both player role URLs, to the same current-vote and projected-votecount truth, proved a concurrent factional_kill race converges with one stored action and one ActionAlreadySubmitted recovery, then reloads action-player and host role URLs to locked N01 dead-target truth, proved two host role pages racing D02 resolve_phase converge with one ACK, one PhaseLocked recovery, and a restored open D02, proved two host role pages racing D02 advance_phase converge with one ACK, one InvalidTarget recovery, and open N02, proved two host role pages racing D01 advance_phase_by_deadline converge with one deadline evidence ACK, one InvalidTarget recovery, no duplicate deadline evidence, and open N01, proved two host role pages racing D01 advance_phase against advance_phase_by_deadline converge with one ACK, one InvalidTarget recovery, no duplicate deadline evidence, and open N01, proved a stale host PublishVotecount after a live non-empty votecount change publishes the current server-derived body instead of the frozen body, proved the seeded host role URL can publish that official votecount from the browser control into the public thread, proved two host role pages racing PublishVotecount converge with one official count, one InvalidTarget recovery, and reloaded host/player role URLs still showing one official post, proved a stale host PublishVotecount rejects without appending a duplicate official count, proved the seeded host role URL can mark Slot 7 dead and modkilled through browser controls while the affected player role URL loses controls with SlotNotAlive recovery before the seed is restored each time, proved stale host Mark dead and Modkill slot controls reject without duplicating a current lifecycle status, proved two host role pages racing Mark dead against Modkill slot converge to one terminal slot status with one InvalidTarget lifecycle recovery and disabled affected-player controls, proved stale host ResolvePhase recovery reloads the host console to locked D02 truth with current unlock/advance controls, proved stale host AdvancePhase recovery reloads the host console to open D02 truth with current resolve/lock controls, proved stale host ExtendDeadline recovery reloads the host console to open D02 truth with current deadline/phase controls, proved stale cohost ExtendDeadline recovery reloads the delegated host console to open D02 truth with host-only phase controls still absent, proved stale host ResolveHostPrompt recovery reloads the host console to resolved prompt truth with the stale prompt action hidden, proved two host role pages racing CompleteGame converge with one revealed endgame and one GameAlreadyCompleted recovery, proved stale host CompleteGame recovery reloads the host console to revealed endgame truth with complete_game hidden, proved a player SubmitPost racing CompleteGame either serializes before completion or rejects with GameAlreadyCompleted, then reloaded the public player board to Endgame with disabled controls and exactly the legal post outcome, proved stale player completed-game recovery reloads the public board to Endgame with no current vote, no vote targets, and no thread mutation, proved a frozen N01 action control replays the same command_id and receives the original ACK, proved another frozen N01 action control rejects and refreshes after its actor is temporarily marked dead, preserved another frozen N01 action page until it rejected with stale PhaseLocked recovery on D02, then stale seeded host phase/deadline/resolve/advance/prompt/complete-game, stale player completed-game, and cohost deadline role URLs clicked old controls, rendered command receipts, refreshed or reloaded to current projections, and exposed their current valid control sets.",
+      "The seeded player role URL replayed the same SubmitPost command_id through /commands and got the original ACK with one projected post, recovered a dropped live projection through reconnect, refreshed command state after a stale locked-phase vote reject, ACKed a stale player vote after another role changed the live votecount and refreshed to the current combined projection, ACKed a stale withdraw after the same slot's live ballot changed and refreshed to no current vote, rejected stale withdraw and submit-vote controls after host phase resolution with PhaseLocked and refreshed to locked commandState plus day-vote outcome truth, ACKed a stale submit-post control after host phase resolution while refreshing thread, locked commandState, and day-vote outcome truth, proved a player SubmitVote racing host ResolvePhase either serializes before resolution or rejects with PhaseLocked, then reloads player and host role URLs to locked day-vote outcome truth, proved a stale N01 factional_kill control racing host AdvancePhase rejects without appending, then action-player and host role URLs reload to open D02, proved a private-channel stale N01 factional_kill control rejects on D02 with explicit PhaseLocked recovery copy, keeps private-channel scope, and reconnects on the same private route without action controls, proved a cohost ExtendDeadline racing host ResolvePhase either serializes the deadline before resolution or rejects PhaseLocked, then reloads host and cohost role URLs to locked D01 deadline truth, proved stale Slot 7 private-post and vote commands plus a stale Slot 4 factional_kill command racing host ProcessReplacement either serialize before replacement or reject with NotYourSlot while the stale outgoing role loses command-state authority and Rowan becomes current occupant, proved an incoming Rowan Slot 4 factional_kill resolves and survives replacement reconnect into locked N01 without action controls while target kill receipts stay scoped, proved Rowan's stale replacement action after host N01 resolution rejects PhaseLocked, appends no action, and keeps target receipts scoped, proved Rowan's stale replacement private post after host D01 resolution ACKs while refreshing to locked private-channel and command-state truth, proved Rowan's stale replacement private post after CompleteGame rejects GameAlreadyCompleted while refreshing to completed-game truth, then reloaded Rowan's private channel route into completed-game disabled controls while Mira stayed forbidden, refreshed to the current legal vote target set after a stale dead-target vote rejected as InvalidTarget, cleared an existing current vote and live votecount row when its target was marked dead, proved two concurrent player vote commands converge, then reload both player role URLs, to the same current-vote and projected-votecount truth, proved a concurrent factional_kill race converges with one stored action and one ActionAlreadySubmitted recovery, then reloads action-player and host role URLs to locked N01 dead-target truth, proved two host role pages racing D02 resolve_phase converge with one ACK, one PhaseLocked recovery, and a restored open D02, proved two host role pages racing D02 advance_phase converge with one ACK, one InvalidTarget recovery, and open N02, proved two host role pages racing D01 advance_phase_by_deadline converge with one deadline evidence ACK, one InvalidTarget recovery, no duplicate deadline evidence, and open N01, proved two host role pages racing D01 advance_phase against advance_phase_by_deadline converge with one ACK, one InvalidTarget recovery, no duplicate deadline evidence, and open N01, proved a stale host PublishVotecount after a live non-empty votecount change publishes the current server-derived body instead of the frozen body, proved the seeded host role URL can publish that official votecount from the browser control into the public thread, proved two host role pages racing PublishVotecount converge with one official count, one InvalidTarget recovery, and reloaded host/player role URLs still showing one official post, proved a stale host PublishVotecount rejects without appending a duplicate official count, proved the seeded host role URL can mark Slot 7 dead and modkilled through browser controls while the affected player role URL loses controls with SlotNotAlive recovery before the seed is restored each time, proved stale host Mark dead and Modkill slot controls reject without duplicating a current lifecycle status, proved two host role pages racing Mark dead against Modkill slot converge to one terminal slot status with one InvalidTarget lifecycle recovery and disabled affected-player controls, proved stale host ResolvePhase recovery reloads the host console to locked D02 truth with current unlock/advance controls, proved stale host AdvancePhase recovery reloads the host console to open D02 truth with current resolve/lock controls, proved stale host ExtendDeadline recovery reloads the host console to open D02 truth with current deadline/phase controls, proved stale cohost ExtendDeadline recovery reloads the delegated host console to open D02 truth with host-only phase controls still absent, proved stale host ResolveHostPrompt recovery reloads the host console to resolved prompt truth with the stale prompt action hidden, proved two host role pages racing CompleteGame converge with one revealed endgame and one GameAlreadyCompleted recovery, proved stale host CompleteGame recovery reloads the host console to revealed endgame truth with complete_game hidden, proved a player SubmitPost racing CompleteGame either serializes before completion or rejects with GameAlreadyCompleted, then reloaded the public player board to Endgame with disabled controls and exactly the legal post outcome, proved stale player completed-game recovery reloads the public board to Endgame with no current vote, no vote targets, and no thread mutation, proved a frozen N01 action control replays the same command_id and receives the original ACK, proved another frozen N01 action control rejects and refreshes after its actor is temporarily marked dead, preserved another frozen N01 action page until it rejected with stale PhaseLocked recovery on D02, then stale seeded host phase/deadline/resolve/advance/prompt/complete-game, stale player completed-game, and cohost deadline role URLs clicked old controls, rendered command receipts, refreshed or reloaded to current projections, and exposed their current valid control sets.",
   };
 }
 
@@ -14638,6 +14891,7 @@ async function verifyRoleReconnectRecovery({
   actorSlot,
   postPrefix,
   navigate = false,
+  channelId = "main",
 }) {
   if (navigate) {
     await gotoPlayerBoard(page, game);
@@ -14656,7 +14910,7 @@ async function verifyRoleReconnectRecovery({
   const reconnectCommand = await sendCommand(principalUserId, {
     SubmitPost: {
       game,
-      channel_id: "main",
+      channel_id: channelId,
       actor_slot: actorSlot,
       body: reconnectPostBody,
     },

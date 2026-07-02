@@ -390,6 +390,7 @@ export const hostedMatrixReconnectLaneIds = Object.freeze([
   "replacement-action-reconnect",
   replacementPrivatePostRecoveryLaneIds[1],
   "stale-action-reconnect-recovery",
+  "private-channel-stale-action-reconnect-recovery",
   "stale-host-complete-reconnect-recovery",
   "stale-host-resolve-reconnect-recovery",
   "stale-host-advance-reconnect-recovery",

@@ -2042,7 +2042,7 @@ test("admin route data exposes local hardening proof as a native audit row", asy
   assert.deepEqual(hardening.artifactSummary, {
     game: "game-a",
     roleCount: 6,
-    laneCount: 107,
+    laneCount: proofRunFixture().lanes.length,
     releaseReady: false,
     productionReady: false,
   });
@@ -2060,7 +2060,10 @@ test("admin route data exposes local player recovery proof as a focused audit ro
   );
   assert.deepEqual(LOCAL_PLAYER_RECOVERY_AUDIT_LANE_IDS, playerRecoveryAuditLaneIds);
   assert.equal(playerRecovery.label, "Local player recovery");
-  assert.equal(playerRecovery.status, "25 player recovery lanes passed");
+  assert.equal(
+    playerRecovery.status,
+    `${playerRecoveryAuditLaneIds.length} player recovery lanes passed`,
+  );
   assert.equal(playerRecovery.authority, "GlobalAdmin or GlobalMod");
   assert.equal(
     playerRecovery.inspectHref,
@@ -2080,8 +2083,8 @@ test("admin route data exposes local player recovery proof as a focused audit ro
   assert.deepEqual(playerRecovery.artifactSummary, {
     game: "game-a",
     roleCount: 6,
-    laneCount: 107,
-    playerRecoveryLaneCount: 25,
+    laneCount: proofRunFixture().lanes.length,
+    playerRecoveryLaneCount: playerRecoveryAuditLaneIds.length,
     releaseReady: false,
     productionReady: false,
   });
@@ -2106,7 +2109,7 @@ test("admin route data exposes local core loop proof as a native audit row", asy
   assert.deepEqual(coreLoop.artifactSummary, {
     game: "game-a",
     roleCount: 6,
-    laneCount: 107,
+    laneCount: proofRunFixture().lanes.length,
     completedGameCoverageStatus: "passed",
     completedGameCoverageLaneCount: 9,
     completedGameCoverageFamilyCount: 4,
@@ -2341,7 +2344,7 @@ test("admin local player recovery detail data carries focused lane rows", async 
   assert.equal(data.status, "available");
   assert.equal(data.surfaceHeader.title, "Local player recovery");
   assert.equal(data.audit.id, "local-player-recovery");
-  assert.equal(data.audit.checks.length, 25);
+  assert.equal(data.audit.checks.length, playerRecoveryAuditLaneIds.length);
   assert.deepEqual(
     data.audit.checks.map((check) => [check.id, check.status]),
     [
@@ -2386,6 +2389,10 @@ test("admin local player recovery detail data carries focused lane rows", async 
       [
         "stale-action-reconnect-recovery",
         "passed: role URL true, reconnecting -> recovered, phase D02",
+      ],
+      [
+        "private-channel-stale-action-reconnect-recovery",
+        "passed: role URL true, channel private:mafia_day_chat, reject PhaseLocked, recovered private:mafia_day_chat D02",
       ],
       [
         "stale-action-conflict-message",
@@ -2694,7 +2701,10 @@ test("admin route data exposes local seed fixture summary as a native audit row"
 
   const seed = data.audit.find((item) => item.id === "local-seed-fixtures");
   assert.equal(seed.label, "Local seed fixtures");
-  assert.equal(seed.status, "118 demo scenarios available locally");
+  assert.equal(
+    seed.status,
+    `${seedScenarioCoverageGroups.allDemo.length} demo scenarios available locally`,
+  );
   assert.equal(seed.authority, "GlobalAdmin or GlobalMod");
   assert.equal(seed.inspectHref, "/admin/audit/local-seed-fixtures?game=midsummer");
   assert.deepEqual(
@@ -3259,6 +3269,14 @@ function proofRunFixture() {
       recoveredActions: 0,
       recoveredSnapshotContainsPost: true,
     },
+    "private-channel-stale-action-reconnect-recovery": {
+      roleUrl: "http://127.0.0.1:5173/g/midsummer/c/private%3Amafia_day_chat",
+      visitedRolePath: "/g/midsummer/c/private%3Amafia_day_chat",
+      channelAfterReject: "private:mafia_day_chat",
+      reconnectChannel: "private:mafia_day_chat",
+      rejectError: "PhaseLocked",
+      recoveredPhase: "D02",
+    },
     "stale-host-complete-reconnect-recovery": {
       reconnectingState: "reconnecting",
       recoveryState: "recovered",
@@ -3393,6 +3411,9 @@ function proofRunFixture() {
     "dead-player-recovery",
     "player-action-boundary",
     "private-channel",
+    "private-channel-stale-post-after-transition",
+    "private-channel-completed-game-recovery",
+    "private-channel-invalid-action-recovery",
     "replacement-host-issued-invite",
     "replacement-pending-player",
     "replacement-redeemed-invite-recovery",
@@ -3464,6 +3485,7 @@ function proofRunFixture() {
     "stale-action-conflict",
     "stale-action-conflict-message",
     "stale-action-reconnect-recovery",
+    "private-channel-stale-action-reconnect-recovery",
     "stale-host-control",
     "concurrent-host-resolve-race",
     "concurrent-host-resolve-race-reload",

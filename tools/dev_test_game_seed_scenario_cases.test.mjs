@@ -17,7 +17,7 @@ import {
 } from "./dev_test_game_seed_scenario_cases.mjs";
 
 test("seed scenario cases expose one full shared required inventory", () => {
-  assert.equal(seedRequiredScenarioIds.length, 82);
+  assert.equal(seedRequiredScenarioIds.length, 83);
   assert.equal(new Set(seedRequiredScenarioIds).size, seedRequiredScenarioIds.length);
   assert.deepEqual(seedRequiredScenarioIds.slice(0, 8), [
     "host-phase-controls",
@@ -55,7 +55,7 @@ test("seed scenario cases include reload and stale-reject proof rows", () => {
 });
 
 test("seed scenario cases expose generated demo scenario fixture rows", () => {
-  assert.equal(seedDemoScenarioIds.length, 121);
+  assert.equal(seedDemoScenarioIds.length, 122);
   assert.deepEqual(seedDemoOnlyScenarioIds, [
     "day-vote-resolution",
     "day-vote-no-lynch",
@@ -244,6 +244,7 @@ test("seed scenario cases expose production fixture metadata", () => {
           "player-action-denied",
           "stale-deadline-advance",
           "replacement-idempotent-retry",
+          "private-channel-stale-action-reconnect-recovery",
           "stale-dead-action-conflict",
         ].includes(scenario.id),
       )
@@ -303,6 +304,11 @@ test("seed scenario cases expose production fixture metadata", () => {
       ["dead-current-vote", "player", "/redacted/player"],
       ["concurrent-vote-race", "player", "/redacted/player"],
       ["replacement-idempotent-retry", "host", "/redacted/host"],
+      [
+        "private-channel-stale-action-reconnect-recovery",
+        "actionPlayer",
+        "/redacted/actionPlayer",
+      ],
       ["stale-dead-action-conflict", "actionPlayer", "/redacted/actionPlayer"],
     ],
   );

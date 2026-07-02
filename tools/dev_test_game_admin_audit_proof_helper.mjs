@@ -556,10 +556,27 @@ async function waitForRows({ page, prefix, ids, expectedStatuses = {} }) {
   const visible = [];
   for (const id of ids) {
     const row = page.getByTestId(`${prefix}-${id}`);
-    await row.waitFor({
-      state: "visible",
-      timeout: 15000,
-    });
+    try {
+      await row.waitFor({
+        state: "visible",
+        timeout: 15000,
+      });
+    } catch (error) {
+      const evidence = await page.evaluate((rowPrefix) => {
+        const rows = Array.from(
+          document.querySelectorAll(`[data-testid^="${rowPrefix}-"]`),
+        ).map((node) => node.getAttribute("data-testid"));
+        return {
+          href: window.location.href,
+          rows,
+          body: document.body?.innerText?.slice(0, 4000) ?? "",
+        };
+      }, prefix);
+      throw new Error(
+        `${prefix}-${id} did not become visible: ${JSON.stringify(evidence)}`,
+        { cause: error },
+      );
+    }
     const expectedStatus = expectedStatuses[id];
     if (expectedStatus !== undefined) {
       const text = await row.innerText();
