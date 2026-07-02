@@ -7,6 +7,8 @@ import {
 } from "./dev_test_game_release_readiness.mjs";
 import {
   assertDevTestGameNextAction,
+  devTestGameIdentityAdminProofCommand,
+  devTestGameLiveProofCommand,
   devTestGameNextActionPath,
   devTestGameReleaseReadinessPath,
   devTestGameSeedFixtureCommand,
@@ -16,7 +18,11 @@ import {
 import { assertDevTestGameSpineManifest } from "./dev_test_game_spine_manifest.mjs";
 import {
   assertProductionFacingSurfaceGraphCoverage,
+  productionFacingSurfaceChecklistItems,
 } from "./dev_test_game_production_surface_checklist.mjs";
+import {
+  featureSpineRowKind,
+} from "./dev_test_game_feature_spine_targets.mjs";
 export {
   devTestGameProofGraphAdminProofCommand,
   devTestGameProofGraphAdminProofPath,
@@ -256,18 +262,18 @@ export function assertDevTestGameProofGraphCoversProductionFeatureTargets(
   releaseReadiness,
 ) {
   const readiness = assertDevTestGameReleaseReadiness(releaseReadiness);
-  const targets = coreLoopProductionFeatureTargetCollection(readiness);
+  const targets = productionFeatureTargetsForGraph(readiness);
   const nodes = (graph.nodes ?? []).filter(
     (node) => node.kind === "production-feature-spine-target",
   );
-  if (nodes.length !== targets.slotIds.length) {
+  if (nodes.length !== targets.length) {
     throw new Error(
-      `proof graph production feature target count drifted: expected ${targets.slotIds.length}, got ${nodes.length}`,
+      `proof graph production feature target count drifted: expected ${targets.length}, got ${nodes.length}`,
     );
   }
   const nodesBySlotId = new Map(nodes.map((node) => [node.featureSlotId, node]));
-  for (const slotId of targets.slotIds) {
-    const target = targets.bySlotId[slotId];
+  for (const target of targets) {
+    const slotId = target.featureSlotId;
     const node = nodesBySlotId.get(slotId);
     if (node === undefined) {
       throw new Error(`proof graph missing production feature target: ${slotId}`);
@@ -462,13 +468,12 @@ function buildProductionFeatureTargetNodes({
   releaseReadiness,
   releaseReadinessSource,
 }) {
-  const targets = coreLoopProductionFeatureTargetCollection(releaseReadiness);
-  return targets.slotIds.map((slotId) => {
-    const target = targets.bySlotId[slotId];
+  const targets = productionFeatureTargetsForGraph(releaseReadiness);
+  return targets.map((target) => {
     return {
-      id: `production-feature:${slotId}`,
-      featureSlotId: slotId,
-      label: `Production feature: ${slotId}`,
+      id: `production-feature:${target.featureSlotId}`,
+      featureSlotId: target.featureSlotId,
+      label: `Production feature: ${target.featureSlotId}`,
       kind: "production-feature-spine-target",
       status: "passed",
       artifact: releaseReadinessSource,
@@ -487,6 +492,29 @@ function buildProductionFeatureTargetNodes({
   });
 }
 
+function productionFeatureTargetsForGraph(releaseReadiness) {
+  const coreLoopTargets = coreLoopProductionFeatureTargetCollection(releaseReadiness);
+  const targetsBySlotId = new Map(
+    coreLoopTargets.slotIds.map((slotId) => [
+      slotId,
+      coreLoopTargets.bySlotId[slotId],
+    ]),
+  );
+  for (const item of productionFacingSurfaceChecklistItems()) {
+    const slotId = item.productionFeatureSpineTarget.featureSlotId;
+    if (!targetsBySlotId.has(slotId)) {
+      targetsBySlotId.set(
+        slotId,
+        resolveBuildableProductionFeatureTarget({
+          declaration: item.productionFeatureSpineTarget,
+          releaseReadiness,
+        }),
+      );
+    }
+  }
+  return [...targetsBySlotId.values()];
+}
+
 function coreLoopProductionFeatureTargetCollection(releaseReadiness) {
   const coreLoopCheck = releaseReadiness.localDevelopmentSpine?.checks?.find(
     (check) => check.id === "local-core-loop-proof",
@@ -503,9 +531,40 @@ function coreLoopProductionFeatureTargetCollection(releaseReadiness) {
   return targets;
 }
 
+function resolveBuildableProductionFeatureTarget({ declaration, releaseReadiness }) {
+  if (declaration.sourceCheckId === "local-identity-adapter-proof") {
+    const identityCheck = releaseReadiness.localDevelopmentSpine?.checks?.find(
+      (check) => check.id === declaration.sourceCheckId,
+    );
+    const detailRoleUrl = identityCheck?.adminRoleSurface?.detailRoleUrl;
+    if (typeof detailRoleUrl !== "string" || detailRoleUrl.trim() === "") {
+      throw new Error("proof graph missing identity adapter production feature target");
+    }
+    return {
+      featureSlotId: declaration.featureSlotId,
+      sourceCheckId: declaration.sourceCheckId,
+      detailRoleUrl,
+      cycleId: declaration.cycleId,
+      roleUrlId: declaration.roleUrlId,
+      roleUrl: detailRoleUrl,
+      rowKind: featureSpineRowKind(declaration),
+      checkpointId: declaration.checkpointId,
+      adminCheckId: declaration.adminCheckId,
+      browserProofCommand: devTestGameLiveProofCommand,
+      rerunCommand: devTestGameIdentityAdminProofCommand,
+    };
+  }
+  throw new Error(
+    `proof graph cannot resolve production feature source check: ${declaration.sourceCheckId}`,
+  );
+}
+
 function productionFeatureSourceGraphNodeId(sourceCheckId) {
   if (sourceCheckId === "local-core-loop-proof") {
     return "admin-proof:core-loop";
+  }
+  if (sourceCheckId === "local-identity-adapter-proof") {
+    return "admin-proof:identity";
   }
   throw new Error(`unknown production feature source check: ${sourceCheckId}`);
 }

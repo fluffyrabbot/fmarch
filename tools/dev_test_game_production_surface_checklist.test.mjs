@@ -46,7 +46,12 @@ test("production-facing surface graph coverage fails closed for missing proof no
   const proofGraph = {
     nodes: checklist
       .filter((item) => item.proofGraphNodeId !== "admin-proof:release-runbook")
-      .map((item) => ({ id: item.proofGraphNodeId })),
+      .flatMap((item) => [
+        { id: item.proofGraphNodeId },
+        {
+          id: `production-feature:${item.productionFeatureSpineTarget.featureSlotId}`,
+        },
+      ]),
   };
   assert.throws(
     () =>
@@ -58,10 +63,42 @@ test("production-facing surface graph coverage fails closed for missing proof no
   );
 });
 
-test("production-facing surface graph coverage accepts declared admin proof nodes", () => {
+test("production-facing surface graph coverage fails closed for missing feature node", () => {
+  const checklist = productionFacingSurfaceChecklistItems();
+  const [first] = checklist;
+  const proofGraph = {
+    nodes: checklist.flatMap((item) => [
+      { id: item.proofGraphNodeId },
+      ...(item.unprovenId === first.unprovenId
+        ? []
+        : [
+            {
+              id: `production-feature:${item.productionFeatureSpineTarget.featureSlotId}`,
+            },
+          ]),
+    ]),
+  };
+  assert.throws(
+    () =>
+      assertProductionFacingSurfaceGraphCoverage({
+        checklist,
+        proofGraph,
+      }),
+    new RegExp(
+      `production-facing surface missing production feature graph node: production-feature:${first.productionFeatureSpineTarget.featureSlotId}`,
+    ),
+  );
+});
+
+test("production-facing surface graph coverage accepts declared proof and feature nodes", () => {
   const checklist = productionFacingSurfaceChecklistItems();
   const proofGraph = {
-    nodes: checklist.map((item) => ({ id: item.proofGraphNodeId })),
+    nodes: checklist.flatMap((item) => [
+      { id: item.proofGraphNodeId },
+      {
+        id: `production-feature:${item.productionFeatureSpineTarget.featureSlotId}`,
+      },
+    ]),
   };
   assert.equal(
     assertProductionFacingSurfaceGraphCoverage({ checklist, proofGraph }),

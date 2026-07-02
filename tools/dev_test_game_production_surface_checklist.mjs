@@ -58,13 +58,20 @@ export function assertProductionFacingSurfaceGraphCoverage({
     Array.isArray(proofGraph?.nodes)
       ? proofGraph.nodes
           .map((node) => String(node?.id ?? ""))
-          .filter((id) => id.startsWith("admin-proof:"))
+          .filter((id) => id !== "")
       : [],
   );
   for (const item of checklist) {
     if (!graphNodeIds.has(item.proofGraphNodeId)) {
       throw new Error(
         `production-facing surface missing proof graph node: ${item.proofGraphNodeId}`,
+      );
+    }
+    const featureSlotId = item.productionFeatureSpineTarget.featureSlotId;
+    const featureNodeId = `production-feature:${featureSlotId}`;
+    if (!graphNodeIds.has(featureNodeId)) {
+      throw new Error(
+        `production-facing surface missing production feature graph node: ${featureNodeId}`,
       );
     }
   }

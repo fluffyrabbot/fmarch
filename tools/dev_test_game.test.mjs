@@ -2102,9 +2102,9 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
     graph,
     releaseReadiness,
   );
-  assert.equal(graph.summary.nodeCount, 25);
-  assert.equal(graph.summary.roleUrlCount, 25);
-  assert.equal(graph.summary.productionFeatureTargetCount, 6);
+  assert.equal(graph.summary.nodeCount, 26);
+  assert.equal(graph.summary.roleUrlCount, 26);
+  assert.equal(graph.summary.productionFeatureTargetCount, 7);
   assert.deepEqual(
     graph.nodes
       .filter((node) => node.kind === "admin-proof-surface")
@@ -2165,6 +2165,34 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
     releaseReadiness.localDevelopmentSpine.checks.find(
       (check) => check.id === "local-core-loop-proof",
     ).spineTargets.productionFeatureTargets;
+  const identityAdapterCheck = releaseReadiness.localDevelopmentSpine.checks.find(
+    (check) => check.id === "local-identity-adapter-proof",
+  );
+  const expectedProductionFeatureRows = [
+    ...productionFeatureTargets.slotIds.map((slotId) => {
+      const target = productionFeatureTargets.bySlotId[slotId];
+      return [
+        `production-feature:${slotId}`,
+        slotId,
+        target.sourceCheckId,
+        devTestGameReleaseReadinessPath,
+        target.detailRoleUrl,
+        target.roleUrl,
+        target.browserProofCommand,
+        target.rerunCommand,
+      ];
+    }),
+    [
+      "production-feature:identity-adapter",
+      "identity-adapter",
+      "local-identity-adapter-proof",
+      devTestGameReleaseReadinessPath,
+      identityAdapterCheck.adminRoleSurface.detailRoleUrl,
+      identityAdapterCheck.adminRoleSurface.detailRoleUrl,
+      devTestGameLiveProofCommand,
+      devTestGameIdentityAdminProofCommand,
+    ],
+  ];
   assert.deepEqual(
     graph.nodes
       .filter((node) => node.kind === "production-feature-spine-target")
@@ -2178,19 +2206,7 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
         node.browserProofCommand,
         node.recoveryCommand,
       ]),
-    productionFeatureTargets.slotIds.map((slotId) => {
-      const target = productionFeatureTargets.bySlotId[slotId];
-      return [
-        `production-feature:${slotId}`,
-        slotId,
-        target.sourceCheckId,
-        devTestGameReleaseReadinessPath,
-        target.detailRoleUrl,
-        target.roleUrl,
-        target.browserProofCommand,
-        target.rerunCommand,
-      ];
-    }),
+    expectedProductionFeatureRows,
   );
   assert(
     graph.edges.some(
@@ -2201,10 +2217,13 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
     ),
   );
   assert(
-    productionFeatureTargets.slotIds.every((slotId) =>
+    expectedProductionFeatureRows.every(([, slotId, sourceCheckId]) =>
       graph.edges.some(
         (edge) =>
-          edge.from === "admin-proof:core-loop" &&
+          edge.from ===
+            (sourceCheckId === "local-core-loop-proof"
+              ? "admin-proof:core-loop"
+              : "admin-proof:identity") &&
           edge.to === `production-feature:${slotId}` &&
           edge.relationship === "proves-production-feature",
       ),
