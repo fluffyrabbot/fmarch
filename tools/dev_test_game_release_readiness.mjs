@@ -568,9 +568,13 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
       laneId: surface.laneId,
       roleUrl: surface.roleUrl,
       rejectError: surface.rejectError,
+      rejectMessage: surface.rejectMessage,
       receiptStatusText: surface.receiptStatusText,
       stalePhase: surface.stalePhase,
       refreshedPhase: surface.refreshedPhase,
+      actorStatusAfterReject: surface.actorStatusAfterReject,
+      actionVisibleAfterRefresh: surface.actionVisibleAfterRefresh,
+      restoredActorStatus: surface.restoredActorStatus,
     })),
     {
       id: "local-host-stale-control-milestone",
@@ -1459,10 +1463,24 @@ function buildStaleConflictMessageSurfaces(lanes, { sourcePath }) {
       evidence.rejectError !== scenario.expectedRejectError ||
       evidence.templateId !== scenario.expectedTemplateId ||
       evidence.stalePhase !== scenario.expectedStalePhase ||
-      evidence.refreshedPhase !== scenario.expectedRefreshedPhase ||
-      !String(evidence.receiptStatusText ?? "").includes(
-        scenario.expectedReceiptFragment,
-      )
+      (scenario.expectedRefreshedPhase !== undefined &&
+        evidence.refreshedPhase !== scenario.expectedRefreshedPhase) ||
+      (scenario.expectedReceiptFragment !== undefined &&
+        !String(evidence.receiptStatusText ?? "").includes(
+          scenario.expectedReceiptFragment,
+        )) ||
+      (scenario.expectedRejectMessageFragment !== undefined &&
+        !String(evidence.rejectMessage ?? "").includes(
+          scenario.expectedRejectMessageFragment,
+        )) ||
+      (scenario.expectedActorStatusAfterReject !== undefined &&
+        evidence.actorStatusAfterReject !==
+          scenario.expectedActorStatusAfterReject) ||
+      (scenario.expectedActionVisibleAfterRefresh !== undefined &&
+        evidence.actionVisibleAfterRefresh !==
+          scenario.expectedActionVisibleAfterRefresh) ||
+      (scenario.expectedRestoredActorStatus !== undefined &&
+        evidence.restoredActorStatus !== scenario.expectedRestoredActorStatus)
     ) {
       throw new Error(
         `stale conflict-message surface missing proof from ${sourcePath}: ${scenario.id}`,
@@ -1478,9 +1496,13 @@ function buildStaleConflictMessageSurfaces(lanes, { sourcePath }) {
       roleUrl: evidence.roleUrl,
       visitedRolePath: evidence.visitedRolePath,
       rejectError: evidence.rejectError,
+      rejectMessage: evidence.rejectMessage,
       templateId: evidence.templateId,
       stalePhase: evidence.stalePhase,
       refreshedPhase: evidence.refreshedPhase,
+      actorStatusAfterReject: evidence.actorStatusAfterReject,
+      actionVisibleAfterRefresh: evidence.actionVisibleAfterRefresh,
+      restoredActorStatus: evidence.restoredActorStatus,
       receiptStatusText: evidence.receiptStatusText,
       proofBoundary: scenario.proofBoundary,
     };

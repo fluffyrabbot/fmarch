@@ -9478,8 +9478,14 @@ function staleConflictMessageSurfaceFixtureRows() {
     laneId: scenario.laneId,
     roleUrl: "http://127.0.0.1:5173/g/game-a",
     rejectError: scenario.expectedRejectError,
+    rejectMessage:
+      scenario.expectedRejectMessageFragment === undefined
+        ? ""
+        : `Reject ${scenario.expectedRejectError}: ${scenario.expectedRejectMessageFragment}`,
     receiptStatusText:
-      "Reject PhaseLocked: phase locked; stale action state, refresh and use current action controls",
+      scenario.expectedReceiptFragment === undefined
+        ? ""
+        : `Reject ${scenario.expectedRejectError}: ${scenario.expectedReceiptFragment}`,
     proofBoundary: scenario.proofBoundary,
   }));
 }

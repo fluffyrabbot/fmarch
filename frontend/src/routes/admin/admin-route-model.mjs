@@ -2625,6 +2625,7 @@ function normalizeNextActionStaleConflictMessageTrace(staleConflictMessageTrace)
           laneId: String(surface.laneId ?? ""),
           roleUrl: String(surface.roleUrl ?? ""),
           rejectError: String(surface.rejectError ?? ""),
+          rejectMessage: String(surface.rejectMessage ?? ""),
           receiptStatusText: String(surface.receiptStatusText ?? ""),
           proofBoundary: String(surface.proofBoundary ?? ""),
         }),

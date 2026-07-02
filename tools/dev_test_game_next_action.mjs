@@ -1204,6 +1204,7 @@ function buildStaleConflictMessageTrace(readiness) {
         laneId: String(surface.laneId ?? ""),
         roleUrl: String(surface.roleUrl ?? ""),
         rejectError: String(surface.rejectError ?? ""),
+        rejectMessage: String(surface.rejectMessage ?? ""),
         receiptStatusText: String(surface.receiptStatusText ?? ""),
         proofBoundary: String(surface.proofBoundary ?? ""),
       }))
@@ -1807,9 +1808,14 @@ function assertStaleConflictMessageTrace(trace) {
         surface.laneId !== scenario.laneId ||
         surface.status !== "passed" ||
         !String(surface.roleUrl ?? "").includes("/g/") ||
-        !String(surface.receiptStatusText ?? "").includes(
-          scenario.expectedReceiptFragment,
-        ))
+        (scenario.expectedReceiptFragment !== undefined &&
+          !String(surface.receiptStatusText ?? "").includes(
+            scenario.expectedReceiptFragment,
+          )) ||
+        (scenario.expectedRejectMessageFragment !== undefined &&
+          !String(surface.rejectMessage ?? "").includes(
+            scenario.expectedRejectMessageFragment,
+          )))
     ) {
       throw new Error(
         `next-action stale conflict-message trace missing surface: ${scenario.id}`,

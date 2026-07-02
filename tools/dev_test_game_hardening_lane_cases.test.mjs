@@ -68,9 +68,26 @@ test("hardening lane cases share stale conflict-message IDs", () => {
       proofBoundary:
         "Seeded player role URL proof that a stale factional_kill action rejects with an explicit PhaseLocked conflict message and refreshes into current action controls.",
     },
+    {
+      id: "stale-dead-action-conflict-surface",
+      checkId: "stale-conflict-message-surface-stale-dead-action-conflict",
+      laneId: "stale-dead-action-conflict",
+      label: "Stale dead-action conflict message surface",
+      role: "player",
+      expectedRejectError: "SlotNotAlive",
+      expectedTemplateId: "factional_kill",
+      expectedStalePhase: "N01",
+      expectedRejectMessageFragment: "actor is no longer alive",
+      expectedActorStatusAfterReject: "dead",
+      expectedActionVisibleAfterRefresh: false,
+      expectedRestoredActorStatus: "alive",
+      proofBoundary:
+        "Seeded player role URL proof that a stale factional_kill action rejects after actor death with an explicit SlotNotAlive conflict message and refreshes with action controls removed.",
+    },
   ]);
   assert.deepEqual(staleConflictMessageSurfaceCheckIds(), [
     "stale-conflict-message-surface-stale-action-conflict-message",
+    "stale-conflict-message-surface-stale-dead-action-conflict",
   ]);
 });
 
