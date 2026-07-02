@@ -1,5 +1,7 @@
 import {
   releaseReadinessBuildableItemForId,
+  releaseReadinessHostedConcurrentRaceMatrixProofGraphNodeId,
+  releaseReadinessHostedConcurrentRaceMatrixRoleUrl,
   releaseReadinessProductionFeatureSpineTargetsBySlotId,
   releaseReadinessUnprovenItem,
 } from "./dev_test_game_release_readiness_cases.mjs";
@@ -11,10 +13,10 @@ export const invalidActionRecoveryHostedConcurrentRaceMatrixBuildSlice =
   "Create the first hosted-like concurrent race matrix proof request from the promoted local race baseline.";
 
 export const invalidActionRecoveryHostedConcurrentRaceMatrixRoleUrl =
-  "/admin/audit/local-hosted-concurrent-race-matrix?game=<seeded-game>";
+  releaseReadinessHostedConcurrentRaceMatrixRoleUrl;
 
 export const invalidActionRecoveryHostedConcurrentRaceMatrixProofGraphNodeId =
-  "admin-proof:hosted-concurrent-race-matrix";
+  releaseReadinessHostedConcurrentRaceMatrixProofGraphNodeId;
 
 export function featureSpineFixture({
   slotId = "player-action-submission",

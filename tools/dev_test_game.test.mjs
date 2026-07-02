@@ -95,6 +95,7 @@ import {
 } from "./dev_test_game_hosted_ops_signal_cases.mjs";
 import {
   releaseAdminProofFallbackUnprovenIds,
+  releaseReadinessHostedConcurrentRaceMatrixCommand,
 } from "./dev_test_game_release_readiness_cases.mjs";
 import {
   assertDevTestGameSeedFixtureSummary,
@@ -1070,7 +1071,7 @@ test("dev test-game next-action derives one local recovery command from the mani
       hostedHandoffChecklist: hostedIdentityHandoffChecklistFixture(),
     });
   assert.deepEqual(freshAction.nextAction, {
-    command: "npm run test:dev-test-game-hosted-concurrent-race-matrix",
+    command: releaseReadinessHostedConcurrentRaceMatrixCommand,
     reason: "release-readiness-unproven",
     status: "ready",
     unproven: hostedConcurrentMatrixUnproven,

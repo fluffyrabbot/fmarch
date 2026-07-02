@@ -29,6 +29,24 @@ import {
 export const devTestGameReleaseRunbookPath =
   "target/dev-test-game/release-runbook.json";
 export const devTestGameReleaseRunbookCommand = "test:dev-test-game-release-runbook";
+export const releaseReadinessHostedEvidenceLaneRoleUrl =
+  "/admin/audit/local-hosted-evidence-lane?game=<seeded-game>";
+export const releaseReadinessHostedEvidenceLaneProofGraphNodeId =
+  "admin-proof:hosted-evidence-lane";
+export const releaseReadinessHostedEvidenceLaneProofTarget =
+  hostedEvidenceLanePath;
+export const releaseReadinessHostedConcurrentRaceMatrixCommand =
+  "npm run test:dev-test-game-hosted-concurrent-race-matrix";
+export const releaseReadinessHostedConcurrentRaceMatrixRoleUrl =
+  "/admin/audit/local-hosted-concurrent-race-matrix?game=<seeded-game>";
+export const releaseReadinessHostedConcurrentRaceMatrixProofGraphNodeId =
+  "admin-proof:hosted-concurrent-race-matrix";
+export const releaseReadinessHostedConcurrentRaceMatrixProofTarget =
+  "target/dev-test-game/hosted-concurrent-race-matrix.json";
+export const releaseReadinessRealHostedConcurrentRaceMatrixCommand =
+  "npm run test:dev-test-game-hosted-matrix-external-evidence";
+export const releaseReadinessRealHostedConcurrentRaceMatrixProofTarget =
+  hostedMatrixExternalEvidencePath;
 
 export const releaseReadinessProductionFeatureSpineTargets = Object.freeze({
   identityAdapter: featureSpineCheckpointTarget({
@@ -297,13 +315,13 @@ function hostedDeploymentBuildable({ hostedTargetPreflight }) {
       : hostedEvidenceLaneCommand;
     const proofTarget = syntheticExternalTarget
       ? devTestGameHostedEvidenceLaneDemoProofPath
-      : hostedMatrixExternalEvidencePath;
+      : releaseReadinessRealHostedConcurrentRaceMatrixProofTarget;
     const roleUrl = syntheticExternalTarget
-      ? "/admin/audit/local-hosted-evidence-lane?game=<seeded-game>"
-      : "/admin/audit/local-hosted-concurrent-race-matrix?game=<seeded-game>";
+      ? releaseReadinessHostedEvidenceLaneRoleUrl
+      : releaseReadinessHostedConcurrentRaceMatrixRoleUrl;
     const proofGraphNodeId = syntheticExternalTarget
-      ? "admin-proof:hosted-evidence-lane"
-      : "admin-proof:hosted-concurrent-race-matrix";
+      ? releaseReadinessHostedEvidenceLaneProofGraphNodeId
+      : releaseReadinessHostedConcurrentRaceMatrixProofGraphNodeId;
     return {
       priority: 0,
       command,
@@ -374,9 +392,9 @@ const localBuildableReleaseReadinessItems = new Map([
       command: hostedEvidenceLaneCommand,
       buildSlice:
         "Run the one-command hosted evidence lane; it records a blocked preflight report until externally reachable hosted URLs and raw evidence are configured.",
-      proofTarget: hostedEvidenceLanePath,
-      roleUrl: "/admin/audit/local-hosted-evidence-lane?game=<seeded-game>",
-      proofGraphNodeId: "admin-proof:hosted-evidence-lane",
+      proofTarget: releaseReadinessHostedEvidenceLaneProofTarget,
+      roleUrl: releaseReadinessHostedEvidenceLaneRoleUrl,
+      proofGraphNodeId: releaseReadinessHostedEvidenceLaneProofGraphNodeId,
       productionFeatureSpineTarget:
         releaseReadinessProductionFeatureSpineTargets.hostPhaseControl,
       proofBoundary:
@@ -391,13 +409,13 @@ const localBuildableReleaseReadinessItems = new Map([
     "hosted-concurrent-race-matrix",
     {
       priority: 5,
-      command: "npm run test:dev-test-game-hosted-concurrent-race-matrix",
+      command: releaseReadinessHostedConcurrentRaceMatrixCommand,
       buildSlice:
         "Create the first hosted-like concurrent race matrix proof request from the promoted local race baseline.",
-      proofTarget: "target/dev-test-game/hosted-concurrent-race-matrix.json",
-      roleUrl:
-        "/admin/audit/local-hosted-concurrent-race-matrix?game=<seeded-game>",
-      proofGraphNodeId: "admin-proof:hosted-concurrent-race-matrix",
+      proofTarget: releaseReadinessHostedConcurrentRaceMatrixProofTarget,
+      roleUrl: releaseReadinessHostedConcurrentRaceMatrixRoleUrl,
+      proofGraphNodeId:
+        releaseReadinessHostedConcurrentRaceMatrixProofGraphNodeId,
       productionFeatureSpineTarget:
         releaseReadinessProductionFeatureSpineTargets.invalidActionRecovery,
       proofBoundary:
@@ -408,13 +426,13 @@ const localBuildableReleaseReadinessItems = new Map([
     "real-hosted-concurrent-race-matrix",
     {
       priority: 10,
-      command: "npm run test:dev-test-game-hosted-matrix-external-evidence",
+      command: releaseReadinessRealHostedConcurrentRaceMatrixCommand,
       buildSlice:
         "Promote the local hosted-like matrix with externally reachable hosted race, reload, reconnect, and stale-client evidence.",
-      proofTarget: "target/dev-test-game/hosted-matrix-external.json",
-      roleUrl:
-        "/admin/audit/local-hosted-concurrent-race-matrix?game=<seeded-game>",
-      proofGraphNodeId: "admin-proof:hosted-concurrent-race-matrix",
+      proofTarget: releaseReadinessRealHostedConcurrentRaceMatrixProofTarget,
+      roleUrl: releaseReadinessHostedConcurrentRaceMatrixRoleUrl,
+      proofGraphNodeId:
+        releaseReadinessHostedConcurrentRaceMatrixProofGraphNodeId,
       productionFeatureSpineTarget:
         releaseReadinessProductionFeatureSpineTargets.staleRecovery,
       proofBoundary:
