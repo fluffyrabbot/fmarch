@@ -1,4 +1,8 @@
-export const CORE_LOOP_HIGHLIGHTED_LANE_IDS = Object.freeze([
+import {
+  completedGameSeedRequiredScenarioIds,
+} from "../../../../tools/dev_test_game_core_loop_completed_scenarios.mjs";
+
+const CORE_LOOP_FOUNDATION_HIGHLIGHTED_LANE_IDS = Object.freeze([
   "core-loop",
   "action-loop",
   "host-deadline-advance",
@@ -6,17 +10,23 @@ export const CORE_LOOP_HIGHLIGHTED_LANE_IDS = Object.freeze([
   "resolution-receipts",
   "player-action-boundary",
   "private-channel",
-  "stale-host-complete-reload",
-  "stale-host-complete-reconnect-recovery",
-  "concurrent-host-complete-race",
-  "concurrent-host-complete-race-reload",
-  "concurrent-player-complete-race",
-  "public-player-complete-reload",
-  "stale-player-complete-reload",
+]);
+
+export const CORE_LOOP_COMPLETED_GAME_HIGHLIGHTED_LANE_IDS = Object.freeze([
+  ...completedGameSeedRequiredScenarioIds(),
+]);
+
+const CORE_LOOP_HOST_STALE_COMMAND_HIGHLIGHTED_LANE_IDS = Object.freeze([
   "stale-host-resolve",
   "stale-host-resolve-reload",
   "stale-host-advance",
   "stale-host-advance-reload",
+]);
+
+export const CORE_LOOP_HIGHLIGHTED_LANE_IDS = Object.freeze([
+  ...CORE_LOOP_FOUNDATION_HIGHLIGHTED_LANE_IDS,
+  ...CORE_LOOP_COMPLETED_GAME_HIGHLIGHTED_LANE_IDS,
+  ...CORE_LOOP_HOST_STALE_COMMAND_HIGHLIGHTED_LANE_IDS,
 ]);
 
 export const HARDENING_HIGHLIGHTED_LANE_IDS = Object.freeze([

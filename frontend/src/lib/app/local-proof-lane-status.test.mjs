@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
+  completedGameSeedRequiredScenarioIds,
+} from "../../../../tools/dev_test_game_core_loop_completed_scenarios.mjs";
+import {
+  CORE_LOOP_COMPLETED_GAME_HIGHLIGHTED_LANE_IDS,
   CORE_LOOP_HIGHLIGHTED_LANE_IDS,
   HARDENING_HIGHLIGHTED_LANE_IDS,
   coreLoopHighlightedLaneEvidence,
@@ -9,6 +13,13 @@ import {
   hardeningHighlightedLaneEvidence,
   hardeningLaneStatus,
 } from "./local-proof-lane-status.mjs";
+
+test("core loop highlighted completed-game lanes come from shared scenarios", () => {
+  assert.deepEqual(
+    CORE_LOOP_COMPLETED_GAME_HIGHLIGHTED_LANE_IDS,
+    completedGameSeedRequiredScenarioIds(),
+  );
+});
 
 test("core loop lane status formats seeded recovery evidence", () => {
   assert.equal(
