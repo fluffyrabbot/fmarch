@@ -215,6 +215,15 @@ test("completed-game production harness callers share extracted recovery cases",
   for (const callerPath of scenarioCallerPaths) {
     const source = await readFile(callerPath, "utf8");
     assert(
+      importsFromModule({
+        source,
+        importedName: "completedGameEndgameScenarioCaseFamilies",
+        moduleSpecifier:
+          "./dev_test_game_core_loop_completed_recovery_scenario_assertions.mjs",
+      }),
+      `${callerPath} should import completed-game recovery case families from the extracted scenario/assertion module`,
+    );
+    assert(
       source.includes(
         "./dev_test_game_core_loop_completed_game_scenario_assertions.mjs",
       ),
@@ -259,6 +268,13 @@ test("completed-game production harness callers share extracted recovery cases",
     "proof contract should keep using the completed-game public scenario facade",
   );
 });
+
+function importsFromModule({ source, importedName, moduleSpecifier }) {
+  const importPattern = new RegExp(
+    `import\\s*\\{[\\s\\S]*?\\b${escapeRegExp(importedName)}\\b[\\s\\S]*?\\}\\s*from\\s*"${escapeRegExp(moduleSpecifier)}";`,
+  );
+  return importPattern.test(source);
+}
 
 test("completed-game proof contract uses shared hardening lane metadata", async () => {
   const source = await readFile("tools/dev_test_game_proof_contract.mjs", "utf8");
