@@ -112,16 +112,17 @@ import {
   coreLoopVoteResolutionFamilyId,
 } from "./dev_test_game_core_loop_vote_resolution_scenarios.mjs";
 import {
-  assertPostDayThreeResolutionSurfaceCase,
-} from "./dev_test_game_core_loop_post_day_three_scenarios.mjs";
-import {
   coreLoopPhaseProgressionFamilyId,
 } from "./dev_test_game_core_loop_phase_progression_scenarios.mjs";
 import {
   assertNightFourActionSubmissionSurfaceCase,
-  assertNightFourResolutionReceiptSurfaceCase,
   coreLoopLateActionProgressionFamilyId,
 } from "./dev_test_game_core_loop_late_action_progression_scenarios.mjs";
+import {
+  assertNightFourResolutionReceiptSurfaceCase,
+  assertPostDayThreeResolutionSurfaceCase,
+  coreLoopResolutionReceiptPrivacyFamilyId,
+} from "./dev_test_game_core_loop_resolution_receipt_privacy_scenarios.mjs";
 import {
   assertDayFourNoLynchHostTransitionProofCase,
   assertDayFourNoLynchVoteProofCase,
@@ -2118,6 +2119,17 @@ export function validateDevTestGameCoreLoopAdminProof(proof, options = {}) {
     !Array.isArray(proof.generatedFrom?.lateActionProgressionFamily?.laneIds)
   ) {
     throw new Error("core-loop admin proof missing late action progression family");
+  }
+  if (
+    proof.generatedFrom?.resolutionReceiptPrivacyFamily?.id !==
+      coreLoopResolutionReceiptPrivacyFamilyId ||
+    !Array.isArray(
+      proof.generatedFrom?.resolutionReceiptPrivacyFamily?.laneIds,
+    )
+  ) {
+    throw new Error(
+      "core-loop admin proof missing resolution receipt/privacy family",
+    );
   }
   if (
     proof.generatedFrom?.noLynchProgressionFamily?.id !==

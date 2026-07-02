@@ -53,18 +53,20 @@ import {
   coreLoopVoteResolutionScenarioFamily,
 } from "./dev_test_game_core_loop_vote_resolution_scenarios.mjs";
 import {
-  assertPostDayThreeResolutionSurfaceCase,
-} from "./dev_test_game_core_loop_post_day_three_scenarios.mjs";
-import {
   coreLoopPhaseProgressionFamilyId,
   coreLoopPhaseProgressionScenarioFamily,
 } from "./dev_test_game_core_loop_phase_progression_scenarios.mjs";
 import {
   assertNightFourActionSubmissionSurfaceCase,
-  assertNightFourResolutionReceiptSurfaceCase,
   coreLoopLateActionProgressionFamilyId,
   coreLoopLateActionProgressionScenarioFamily,
 } from "./dev_test_game_core_loop_late_action_progression_scenarios.mjs";
+import {
+  assertNightFourResolutionReceiptSurfaceCase,
+  assertPostDayThreeResolutionSurfaceCase,
+  coreLoopResolutionReceiptPrivacyFamilyId,
+  coreLoopResolutionReceiptPrivacyScenarioFamily,
+} from "./dev_test_game_core_loop_resolution_receipt_privacy_scenarios.mjs";
 import {
   assertDayFourNoLynchHostTransitionProofCase,
   assertDayFourNoLynchVoteProofCase,
@@ -398,6 +400,8 @@ await runAdminAuditProof({
       phaseProgressionFamily: coreLoopPhaseProgressionScenarioFamily(),
       lateActionProgressionFamily:
         coreLoopLateActionProgressionScenarioFamily(),
+      resolutionReceiptPrivacyFamily:
+        coreLoopResolutionReceiptPrivacyScenarioFamily(),
       noLynchProgressionFamily:
         coreLoopNoLynchProgressionScenarioFamily(),
       dayFiveProgressionFamily: coreLoopDayFiveProgressionScenarioFamily(),
@@ -9685,6 +9689,17 @@ export function assertCoreLoopAdminProof(evidence) {
     !Array.isArray(evidence.generatedFrom?.lateActionProgressionFamily?.laneIds)
   ) {
     throw new Error("core-loop admin proof missing late action progression family");
+  }
+  if (
+    evidence.generatedFrom?.resolutionReceiptPrivacyFamily?.id !==
+      coreLoopResolutionReceiptPrivacyFamilyId ||
+    !Array.isArray(
+      evidence.generatedFrom?.resolutionReceiptPrivacyFamily?.laneIds,
+    )
+  ) {
+    throw new Error(
+      "core-loop admin proof missing resolution receipt/privacy family",
+    );
   }
   if (
     evidence.generatedFrom?.noLynchProgressionFamily?.id !==

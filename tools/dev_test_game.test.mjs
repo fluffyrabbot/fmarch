@@ -35,6 +35,9 @@ import {
   coreLoopNoLynchProgressionScenarioFamily,
 } from "./dev_test_game_core_loop_no_lynch_progression_scenarios.mjs";
 import {
+  coreLoopResolutionReceiptPrivacyScenarioFamily,
+} from "./dev_test_game_core_loop_resolution_receipt_privacy_scenarios.mjs";
+import {
   coreLoopCompletedEndgameProgressionScenarioFamily,
 } from "./dev_test_game_core_loop_completed_endgame_progression_scenarios.mjs";
 import {
@@ -10112,6 +10115,8 @@ function coreLoopAdminProofFixture() {
         id: "core-loop-late-action-progression",
         laneIds: ["action-loop"],
       },
+      resolutionReceiptPrivacyFamily:
+        coreLoopResolutionReceiptPrivacyScenarioFamily(),
       noLynchProgressionFamily:
         coreLoopNoLynchProgressionScenarioFamily(),
       dayFiveProgressionFamily: {
