@@ -92,6 +92,29 @@ export function getLocalReadinessDependency(id) {
   return localReadinessDependencyById.get(id);
 }
 
+export function localReadinessDependencyRecoveryFor(id) {
+  const dependency = getLocalReadinessDependency(id);
+  if (dependency === undefined) {
+    throw new Error(`unknown local readiness dependency: ${id}`);
+  }
+  return buildLocalReadinessDependencyRecovery(dependency);
+}
+
+export function localReadinessDependencyCheckFor(id, overrides = {}) {
+  const dependency = getLocalReadinessDependency(id);
+  if (dependency === undefined) {
+    throw new Error(`unknown local readiness dependency: ${id}`);
+  }
+  return {
+    id: dependency.id,
+    label: dependency.label,
+    status: "missing",
+    dependencyGated: true,
+    recovery: buildLocalReadinessDependencyRecovery(dependency),
+    ...overrides,
+  };
+}
+
 export function assertLocalReadinessDependencyRegistry() {
   const ids = new Set();
   for (const dependency of localReadinessDependencies) {

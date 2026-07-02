@@ -67,6 +67,12 @@ import {
   releaseReadinessUnprovenStatusRows,
 } from "../../../../tools/dev_test_game_release_readiness_cases.mjs";
 import {
+  localNextActionAdminSurfaceCheckId,
+  localProofFreshnessAdminSurfaceCheckId,
+  localProofGraphAdminRoleHandoffsCheckId,
+  localReadinessDependencyCheckFor,
+} from "../../../../tools/dev_test_game_local_readiness_dependencies.mjs";
+import {
   adminProofDestinationRequirementLinkRows,
   adminProofDestinationRequirementRoleRows,
 } from "../../../../tools/dev_test_game_proof_graph_handoff_cases.mjs";
@@ -4334,17 +4340,13 @@ function nextActionFixture({
 }
 
 function proofGraphHandoffLocalCheckFixture() {
+  const check = localReadinessDependencyCheckFor(
+    localProofGraphAdminRoleHandoffsCheckId,
+  );
   return {
-    id: "local-proof-graph-admin-role-handoffs",
-    status: "missing",
-    requiredEvidence:
-      "Passed proof graph admin role-handoff check in the generated release-readiness checklist",
-    buildSlice:
-      "Refresh the proof graph admin role-handoff browser proof before choosing hosted readiness work.",
-    proofTarget: "target/dev-test-game/proof-graph-admin-proof.json",
-    roleUrl: "/admin/audit/local-proof-graph?game=<seeded-game>",
-    proofBoundary:
-      "Local browser proof that the proof graph admin surface follows every mapped admin-proof role URL.",
+    id: check.id,
+    status: check.status,
+    ...check.recovery,
   };
 }
 
@@ -5436,54 +5438,18 @@ function releaseReadinessChecklistFixture() {
           coveredLaneCount: hostStaleControlLaneIds.length,
           familyCount: hostStaleControlCoverageFamilies().length,
         },
-        {
-          id: "local-proof-graph-admin-role-handoffs",
-          label: "Proof graph admin role handoffs",
-          status: "passed",
-          dependencyGated: true,
-          evidence: "target/dev-test-game/proof-graph-admin-proof.json",
-          recovery: {
-            command: "npm run test:dev-test-game-proof-graph-admin-proof",
-            proofTarget: "target/dev-test-game/proof-graph-admin-proof.json",
-            roleUrl: "/admin/audit/local-proof-graph?game=<seeded-game>",
-            proofBoundary:
-              "Local browser proof that the proof graph admin surface follows every mapped admin-proof role URL.",
-            requiredEvidence:
-              "Passed proof graph admin role-handoff check in the generated release-readiness checklist",
-          },
-        },
-        {
-          id: "local-proof-freshness-admin-surface",
-          label: "Proof freshness admin surface",
-          status: "passed",
-          dependencyGated: true,
-          evidence: "target/dev-test-game/proof-freshness-admin-proof.json",
-          recovery: {
-            command: "npm run test:dev-test-game-proof-freshness-admin-proof",
-            proofTarget: "target/dev-test-game/proof-freshness-admin-proof.json",
-            roleUrl: "/admin/audit/local-proof-freshness?game=<seeded-game>",
-            proofBoundary:
-              "Local browser proof that the proof-freshness admin surface exposes fresh generated artifacts and the next-action handoff.",
-            requiredEvidence:
-              "Passed proof-freshness admin surface check in the generated release-readiness checklist",
-          },
-        },
-        {
-          id: "local-next-action-admin-surface",
-          label: "Next-action admin surface",
-          status: "passed",
-          dependencyGated: true,
-          evidence: "target/dev-test-game/next-action-admin-proof.json",
-          recovery: {
-            command: "npm run test:dev-test-game-next-action-admin-proof",
-            proofTarget: "target/dev-test-game/next-action-admin-proof.json",
-            roleUrl: "/admin/audit/local-next-action?game=<seeded-game>",
-            proofBoundary:
-              "Local browser proof that the next-action admin surface exposes the selected command and readiness traces.",
-            requiredEvidence:
-              "Passed next-action admin surface check in the generated release-readiness checklist",
-          },
-        },
+        localDependencyReadinessCheckFixture(
+          localProofGraphAdminRoleHandoffsCheckId,
+          "target/dev-test-game/proof-graph-admin-proof.json",
+        ),
+        localDependencyReadinessCheckFixture(
+          localProofFreshnessAdminSurfaceCheckId,
+          "target/dev-test-game/proof-freshness-admin-proof.json",
+        ),
+        localDependencyReadinessCheckFixture(
+          localNextActionAdminSurfaceCheckId,
+          "target/dev-test-game/next-action-admin-proof.json",
+        ),
       ],
     },
     releaseReadiness: {
@@ -5497,6 +5463,13 @@ function releaseReadinessChecklistFixture() {
     proofBoundary:
       "Derived from the local dev-test-game proof-run artifact without release claims.",
   };
+}
+
+function localDependencyReadinessCheckFixture(id, evidence) {
+  return localReadinessDependencyCheckFor(id, {
+    status: "passed",
+    evidence,
+  });
 }
 
 function staleConflictMessageMilestoneFixture() {

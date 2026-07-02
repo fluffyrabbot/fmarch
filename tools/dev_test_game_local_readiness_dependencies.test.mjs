@@ -6,6 +6,8 @@ import {
   buildProofFreshnessAdminSurfaceReadinessCheck,
   buildProofGraphAdminRoleHandoffsReadinessCheck,
   getLocalReadinessDependency,
+  localReadinessDependencyCheckFor,
+  localReadinessDependencyRecoveryFor,
   localNextActionAdminSurfaceCheckId,
   localHostedEvidenceLaneDemoProofCheckId,
   localProofFreshnessAdminSurfaceCheckId,
@@ -32,6 +34,32 @@ test("local readiness dependency contract carries recovery command and role surf
     requiredEvidence:
       "Passed proof graph admin role-handoff check in the generated release-readiness checklist",
   });
+  assert.deepEqual(localReadinessDependencyRecoveryFor(dependency.id), {
+    command: dependency.command,
+    buildSlice: dependency.buildSlice,
+    proofTarget: dependency.proofTarget,
+    roleUrl: dependency.roleUrl,
+    proofBoundary: dependency.proofBoundary,
+    requiredEvidence: dependency.requiredEvidence,
+  });
+  assert.deepEqual(
+    localReadinessDependencyCheckFor(dependency.id, {
+      status: "passed",
+      evidence: dependency.proofTarget,
+    }),
+    {
+      id: dependency.id,
+      label: dependency.label,
+      status: "passed",
+      dependencyGated: true,
+      evidence: dependency.proofTarget,
+      recovery: localReadinessDependencyRecoveryFor(dependency.id),
+    },
+  );
+  assert.throws(
+    () => localReadinessDependencyCheckFor("local-unknown-readiness-dependency"),
+    /unknown local readiness dependency/,
+  );
 });
 
 test("proof graph admin proof builds the matching local readiness check", () => {
