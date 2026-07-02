@@ -90,7 +90,7 @@ import {
   completedGameProofReadinessProofScenarioCases,
   completedGameProofReadinessScenarioFamilies,
   completedGameProofReadinessTransition,
-} from "./dev_test_game_core_loop_completed_game_proof_readiness_cases.mjs";
+} from "./dev_test_game_core_loop_completed_game_proof_readiness_scenarios.mjs";
 
 test("completed-game scenario module exposes shared frozen definitions", () => {
   assert(Object.isFrozen(completedHostStaleCommandCaseDefinitions));
@@ -320,7 +320,7 @@ test("completed-game production harness callers share extracted recovery cases",
         source,
         importedName: "completedGameProofReadinessScenarioFamilies",
         moduleSpecifier:
-          "./dev_test_game_core_loop_completed_game_proof_readiness_cases.mjs",
+          "./dev_test_game_core_loop_completed_game_proof_readiness_scenarios.mjs",
       }),
       `${callerPath} should import completed-game recovery case families from the shared proof/readiness scenario module`,
     );
@@ -329,7 +329,7 @@ test("completed-game production harness callers share extracted recovery cases",
         source,
         importedName: "assertCompletedGameProofReadinessSurfaceProof",
         moduleSpecifier:
-          "./dev_test_game_core_loop_completed_game_proof_readiness_cases.mjs",
+          "./dev_test_game_core_loop_completed_game_proof_readiness_scenarios.mjs",
       }),
       `${callerPath} should import completed-game assertions through the shared proof/readiness scenario module`,
     );
@@ -407,15 +407,15 @@ test("completed-game production harness callers share extracted recovery cases",
     );
     assert(
       source.includes(
-        "./dev_test_game_core_loop_completed_game_proof_readiness_cases.mjs",
+        "./dev_test_game_core_loop_completed_game_proof_readiness_scenarios.mjs",
       ),
       `${callerPath} should import completed recovery cases through the shared proof/readiness scenario module`,
     );
     assert(
       !source.includes(
-        "./dev_test_game_core_loop_completed_game_proof_readiness_scenarios.mjs",
+        "./dev_test_game_core_loop_completed_game_proof_readiness_cases.mjs",
       ),
-      `${callerPath} should not import completed recovery cases through the legacy proof/readiness facade`,
+      `${callerPath} should not import completed recovery cases through the legacy proof/readiness cases shim`,
     );
     assert(
       !source.includes(
