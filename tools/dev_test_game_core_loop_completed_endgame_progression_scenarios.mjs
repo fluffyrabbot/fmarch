@@ -1,5 +1,7 @@
 import {
+  completedGameEndgameProofScenarioCases,
   completedGameEndgameScenarioCaseFamilies,
+  completedGameEndgameTransition,
   completedGameEndgameTransitionTokens,
 } from "./dev_test_game_core_loop_completed_recovery_scenario_cases.mjs";
 import {
@@ -15,6 +17,28 @@ export const coreLoopCompletedEndgameProgressionLaneIds = Object.freeze(
 
 export function coreLoopCompletedEndgameProgressionScenarioFamilies() {
   return completedGameEndgameScenarioCaseFamilies();
+}
+
+export function coreLoopCompletedEndgameProgressionProofScenarioCases({
+  actionPlayerRoleUrl,
+  normalPlayerRoleUrl,
+  deadPlayerRoleUrl,
+  commandStateBuilders,
+  scenarioFamilies = coreLoopCompletedEndgameProgressionScenarioFamilies(),
+}) {
+  return completedGameEndgameProofScenarioCases({
+    actionPlayerRoleUrl,
+    normalPlayerRoleUrl,
+    deadPlayerRoleUrl,
+    commandStateBuilders,
+    scenarioFamilies,
+  });
+}
+
+export function coreLoopCompletedEndgameProgressionTransition({
+  scenarioFamilies = coreLoopCompletedEndgameProgressionScenarioFamilies(),
+} = {}) {
+  return completedGameEndgameTransition({ scenarioFamilies });
 }
 
 export function coreLoopCompletedEndgameProgressionScenarioFamily({

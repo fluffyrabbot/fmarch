@@ -7,10 +7,6 @@ import {
   assertCompletedGameEndgameSurfaceProof,
 } from "./dev_test_game_core_loop_completed_game_scenario_assertions.mjs";
 import {
-  completedGameEndgameProofScenarioCases,
-  completedGameEndgameTransition,
-} from "./dev_test_game_core_loop_completed_recovery_scenario_cases.mjs";
-import {
   assertPlayerStaleActionAfterTransitionProofCase,
   assertPlayerStaleVoteAfterTransitionProofCase,
   playerActionSubmissionScenario,
@@ -99,7 +95,9 @@ import {
   coreLoopHostControlScenarioFamily,
 } from "./dev_test_game_core_loop_host_control_scenarios.mjs";
 import {
+  coreLoopCompletedEndgameProgressionTransition,
   coreLoopCompletedEndgameProgressionFamilyId,
+  coreLoopCompletedEndgameProgressionProofScenarioCases,
   coreLoopCompletedEndgameProgressionScenarioFamily,
   coreLoopCompletedEndgameProgressionScenarioFamilies,
 } from "./dev_test_game_core_loop_completed_endgame_progression_scenarios.mjs";
@@ -1796,12 +1794,15 @@ async function proveCompletedGameEndgameSurface({
   normalPlayerRoleUrl,
   deadPlayerRoleUrl,
 }) {
-  const completedScenarioCases = completedGameEndgameProofScenarioCases({
-    actionPlayerRoleUrl,
-    normalPlayerRoleUrl,
-    deadPlayerRoleUrl,
-    commandStateBuilders: completedPlayerReloadCommandStateBuilders(),
-  });
+  const scenarioFamilies = coreLoopCompletedEndgameProgressionScenarioFamilies();
+  const completedScenarioCases =
+    coreLoopCompletedEndgameProgressionProofScenarioCases({
+      actionPlayerRoleUrl,
+      normalPlayerRoleUrl,
+      deadPlayerRoleUrl,
+      commandStateBuilders: completedPlayerReloadCommandStateBuilders(),
+      scenarioFamilies,
+    });
   const hostCompleteProof = await proveHostCompleteGameFromNightFive({
     browser,
     frontendBaseUrl,
@@ -1867,7 +1868,9 @@ async function proveCompletedGameEndgameSurface({
     sourceNormalPlayerRoleUrl: String(normalPlayerRoleUrl),
     sourceDeadPlayerRoleUrl: String(deadPlayerRoleUrl),
     clickedThroughFromRoleUrl: true,
-    transition: completedGameEndgameTransition(),
+    transition: coreLoopCompletedEndgameProgressionTransition({
+      scenarioFamilies,
+    }),
     hostCompleteProof,
     completedHostReloadProof,
     ...completedHostStaleRecoveryProofs,

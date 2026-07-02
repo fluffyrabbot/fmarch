@@ -65,6 +65,10 @@ import {
   completedPlayerReloadSnapshotsFixture,
   staleCompletedPlayerCommandProofFixtures,
 } from "./dev_test_game_core_loop_completed_game_fixtures.mjs";
+import {
+  coreLoopCompletedEndgameProgressionProofScenarioCases,
+  coreLoopCompletedEndgameProgressionTransition,
+} from "./dev_test_game_core_loop_completed_endgame_progression_scenarios.mjs";
 
 test("completed-game scenario module exposes shared frozen definitions", () => {
   assert(Object.isFrozen(completedHostStaleCommandCaseDefinitions));
@@ -261,6 +265,24 @@ test("completed-game production harness callers share extracted recovery cases",
       `${callerPath} should not import completed-game recovery case families separately from the progression module`,
     );
     assert(
+      !importsFromModule({
+        source,
+        importedName: "completedGameEndgameProofScenarioCases",
+        moduleSpecifier:
+          "./dev_test_game_core_loop_completed_recovery_scenario_cases.mjs",
+      }),
+      `${callerPath} should not import completed-game proof cases separately from the progression module`,
+    );
+    assert(
+      !importsFromModule({
+        source,
+        importedName: "completedGameEndgameTransition",
+        moduleSpecifier:
+          "./dev_test_game_core_loop_completed_recovery_scenario_cases.mjs",
+      }),
+      `${callerPath} should not import completed-game transitions separately from the progression module`,
+    );
+    assert(
       source.includes(
         "./dev_test_game_core_loop_completed_endgame_progression_scenarios.mjs",
       ),
@@ -304,6 +326,51 @@ test("completed-game production harness callers share extracted recovery cases",
     ),
     "proof contract should keep using the completed-game public scenario facade",
   );
+});
+
+test("completed-game progression facade shares proof and readiness cases", () => {
+  const scenarioFamilies = completedGameEndgameScenarioCaseFamilies({
+    hostStaleCommandCases: [completedHostStaleCommandCases()[2]],
+    playerReloadCases: [completedPlayerReloadCases()[0]],
+    deadPlayerStaleVoteCase: completedDeadPlayerStaleVoteCase(),
+    playerStaleCommandCases: [staleCompletedGamePlayerCommandCases()[1]],
+  });
+  const proofCases = coreLoopCompletedEndgameProgressionProofScenarioCases({
+    actionPlayerRoleUrl: "http://127.0.0.1/g/game-a/action",
+    normalPlayerRoleUrl: "http://127.0.0.1/g/game-a/normal",
+    deadPlayerRoleUrl: "http://127.0.0.1/g/game-a/dead",
+    commandStateBuilders: commandStateBuildersFixture(),
+    scenarioFamilies,
+  });
+  const transition = coreLoopCompletedEndgameProgressionTransition({
+    scenarioFamilies,
+  });
+
+  assert.deepEqual(
+    proofCases.completedHostStaleCommandCases.map(
+      (scenario) => scenario.proofField,
+    ),
+    ["completedHostStaleCompleteRecoveryProof"],
+  );
+  assert.deepEqual(
+    proofCases.completedPlayerReloadCases.map((scenario) => scenario.proofField),
+    ["completedPlayerReloadProof"],
+  );
+  assert.deepEqual(
+    proofCases.staleCompletedGamePlayerCommandCases.map(
+      (scenario) => scenario.proofField,
+    ),
+    ["staleCompletedPostRecoveryProof"],
+  );
+  assert.match(
+    transition,
+    /host:stale_complete_game:reject:GameAlreadyCompleted/,
+  );
+  assert.match(transition, /actionPlayer:reload:complete/);
+  assert.match(transition, /stale:D05:submit_post:reject:GameAlreadyCompleted/);
+  assert.doesNotMatch(transition, /host:stale_resolve_phase/);
+  assert.doesNotMatch(transition, /normalPlayer:reload:complete/);
+  assert.doesNotMatch(transition, /stale:D05:submit_vote/);
 });
 
 test("completed-game test fixtures live outside the assertion facade", async () => {

@@ -92,8 +92,8 @@ export function completedGameEndgameProofScenarioCases({
   normalPlayerRoleUrl,
   deadPlayerRoleUrl,
   commandStateBuilders,
+  scenarioFamilies = completedGameEndgameScenarioCaseFamilies(),
 }) {
-  const scenarioFamilies = completedGameEndgameScenarioCaseFamilies();
   return {
     completedHostStaleCommandCases:
       scenarioFamilies.completedHostStaleCommandCases,
