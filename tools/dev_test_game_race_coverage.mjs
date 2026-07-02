@@ -5,6 +5,10 @@ import {
   completedGameRaceCoverageCellCases,
   completedGameRaceCoverageCellIdsForPromotedGroup,
 } from "./dev_test_game_core_loop_completed_scenarios.mjs";
+import {
+  hostPhaseRaceCoverageCellCases,
+  hostPhaseRaceCoverageCellIds,
+} from "./dev_test_game_host_stale_control_scenarios.mjs";
 import { assertDevTestGameProofRun } from "./dev_test_game_proof_contract.mjs";
 import { repoRoot } from "./dev_test_game_spine_runner.mjs";
 
@@ -80,44 +84,13 @@ const raceCells = Object.freeze([
     reloadLaneId: "concurrent-replacement-action-race-reload",
     roleSurfaces: ["player", "replacementPlayer", "host"],
   }),
-  raceCell({
-    id: "host-resolve",
-    actorPair: "host vs host",
-    commandFamily: "phase resolution",
-    raceLaneId: "concurrent-host-resolve-race",
-    reloadLaneId: "concurrent-host-resolve-race-reload",
-    roleSurfaces: ["host"],
-  }),
-  raceCell({
-    id: "host-advance",
-    actorPair: "host vs host",
-    commandFamily: "phase advance",
-    raceLaneId: "concurrent-host-advance-race",
-    reloadLaneId: "concurrent-host-advance-race-reload",
-    roleSurfaces: ["host"],
-  }),
-  raceCell({
-    id: "host-deadline-advance",
-    actorPair: "host vs host",
-    commandFamily: "deadline and phase advance",
-    raceLaneId: "concurrent-host-deadline-advance-race",
-    reloadLaneId: "concurrent-host-deadline-advance-race-reload",
-    roleSurfaces: ["host"],
-  }),
+  ...hostPhaseRaceCoverageCellCases().map(raceCell),
   raceCell({
     id: "host-lifecycle",
     actorPair: "host vs host",
     commandFamily: "host lifecycle controls",
     raceLaneId: "concurrent-host-lifecycle-race",
     reloadLaneId: "concurrent-host-lifecycle-race-reload",
-    roleSurfaces: ["host"],
-  }),
-  raceCell({
-    id: "host-mixed-advance",
-    actorPair: "host vs host",
-    commandFamily: "mixed phase advance controls",
-    raceLaneId: "concurrent-host-mixed-advance-race",
-    reloadLaneId: "concurrent-host-mixed-advance-race-reload",
     roleSurfaces: ["host"],
   }),
   raceCell({
@@ -146,9 +119,9 @@ export const raceCoveragePromotedReloadGroups = Object.freeze(
       id: "host-concurrent-race-reload",
       label: "Host concurrent race reload",
       cellIds: [
-        "host-resolve",
-        "host-advance",
-        "host-deadline-advance",
+        ...hostPhaseRaceCoverageCellIds().filter(
+          (id) => id !== "host-mixed-advance",
+        ),
         "host-lifecycle",
         "host-mixed-advance",
         "host-votecount-publication",
@@ -367,6 +340,7 @@ function raceCell({
   raceLaneId,
   reloadLaneId = null,
   roleSurfaces,
+  commandFacts = [],
 }) {
   return Object.freeze({
     id,
@@ -375,6 +349,9 @@ function raceCell({
     raceLaneId,
     reloadLaneId,
     roleSurfaces: Object.freeze(roleSurfaces),
+    commandFacts: Object.freeze(
+      commandFacts.map((facts) => Object.freeze({ ...facts })),
+    ),
   });
 }
 

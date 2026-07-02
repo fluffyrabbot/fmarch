@@ -5,11 +5,81 @@ import {
   completedGameRaceCoverageCellDefinitions,
 } from "./dev_test_game_core_loop_completed_scenarios.mjs";
 import {
+  hostPhaseRaceCoverageCellCases,
+  hostPhaseRaceCoverageCellDefinitions,
+} from "./dev_test_game_host_stale_control_scenarios.mjs";
+import {
   raceCoverageLocalReadinessMilestoneCases,
   raceCoverageLocalReadinessMilestoneDefinitions,
   raceCoveragePromotedReloadGroup,
   raceCoveragePromotedReloadGroups,
 } from "./dev_test_game_race_coverage.mjs";
+
+test("race coverage imports host phase race cells from shared scenarios", () => {
+  assert(Object.isFrozen(hostPhaseRaceCoverageCellDefinitions));
+  assert.deepEqual(
+    hostPhaseRaceCoverageCellCases().map((cell) => ({
+      id: cell.id,
+      raceLaneId: cell.raceLaneId,
+      reloadLaneId: cell.reloadLaneId,
+      roleSurfaces: cell.roleSurfaces,
+      commandFacts: cell.commandFacts,
+    })),
+    [
+      {
+        id: "host-resolve",
+        raceLaneId: "concurrent-host-resolve-race",
+        reloadLaneId: "concurrent-host-resolve-race-reload",
+        roleSurfaces: ["host"],
+        commandFacts: [
+          { actionId: "resolve_phase", commandKind: "ResolvePhase" },
+        ],
+      },
+      {
+        id: "host-advance",
+        raceLaneId: "concurrent-host-advance-race",
+        reloadLaneId: "concurrent-host-advance-race-reload",
+        roleSurfaces: ["host"],
+        commandFacts: [
+          { actionId: "advance_phase", commandKind: "AdvancePhase" },
+        ],
+      },
+      {
+        id: "host-deadline-advance",
+        raceLaneId: "concurrent-host-deadline-advance-race",
+        reloadLaneId: "concurrent-host-deadline-advance-race-reload",
+        roleSurfaces: ["host"],
+        commandFacts: [
+          {
+            actionId: "advance_phase_by_deadline",
+            commandKind: "AdvancePhaseByDeadline",
+          },
+        ],
+      },
+      {
+        id: "host-mixed-advance",
+        raceLaneId: "concurrent-host-mixed-advance-race",
+        reloadLaneId: "concurrent-host-mixed-advance-race-reload",
+        roleSurfaces: ["host"],
+        commandFacts: [
+          { actionId: "advance_phase", commandKind: "AdvancePhase" },
+          {
+            actionId: "advance_phase_by_deadline",
+            commandKind: "AdvancePhaseByDeadline",
+          },
+        ],
+      },
+    ],
+  );
+  assert.notEqual(
+    hostPhaseRaceCoverageCellCases()[0],
+    hostPhaseRaceCoverageCellDefinitions[0],
+  );
+  assert.notEqual(
+    hostPhaseRaceCoverageCellCases()[0].commandFacts,
+    hostPhaseRaceCoverageCellDefinitions[0].commandFacts,
+  );
+});
 
 test("race coverage imports completed-game cells from shared scenarios", () => {
   assert(Object.isFrozen(completedGameRaceCoverageCellDefinitions));

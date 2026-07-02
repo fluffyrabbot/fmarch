@@ -7,6 +7,8 @@ import {
   cohostDeadlineStaleControlCaseDefinitions,
   hostCohostRaceRecoveryLaneIds,
   hostGenericStaleControlLaneIds,
+  hostPhaseRaceCoverageCellCases,
+  hostPhaseRaceCoverageCellDefinitions,
   hostPhaseStaleControlCase,
   hostStaleControlLaneIds,
   hostPhaseStaleControlCases,
@@ -291,6 +293,7 @@ function hardeningLaneImportBlocks(source) {
 }
 
 test("hardening lane cases share host race/reload IDs", () => {
+  assert(Object.isFrozen(hostPhaseRaceCoverageCellDefinitions));
   assert.deepEqual(hostRaceReloadLaneIds, [
     "concurrent-host-resolve-race",
     "concurrent-host-resolve-race-reload",
@@ -301,6 +304,13 @@ test("hardening lane cases share host race/reload IDs", () => {
     "concurrent-host-mixed-advance-race",
     "concurrent-host-mixed-advance-race-reload",
   ]);
+  assert.deepEqual(
+    hostPhaseRaceCoverageCellCases().flatMap((scenario) => [
+      scenario.raceLaneId,
+      scenario.reloadLaneId,
+    ]),
+    hostRaceReloadLaneIds,
+  );
 });
 
 test("hardening lane cases share host/cohost stale recovery IDs", () => {

@@ -2,6 +2,7 @@ import {
   completedHostStaleCommandHardeningLaneIds,
 } from "./dev_test_game_core_loop_completed_scenarios.mjs";
 import {
+  hostAdvanceByDeadlineCommandFacts,
   hostAdvancePhaseCommandFacts,
   hostExtendDeadlineCommandFacts,
   hostResolvePhaseCommandFacts,
@@ -33,6 +34,12 @@ const cloneScenarioCase = (scenario) => ({
   expectedCurrentPhase: { ...scenario.expectedCurrentPhase },
   expectedSetupActions: Object.freeze({ ...scenario.expectedSetupActions }),
   expectedCurrentActions: Object.freeze({ ...scenario.expectedCurrentActions }),
+});
+
+const cloneRaceCoverageCell = (cell) => ({
+  ...cell,
+  roleSurfaces: [...cell.roleSurfaces],
+  commandFacts: cell.commandFacts.map((facts) => ({ ...facts })),
 });
 
 export const hostPhaseStaleControlCaseDefinitions = Object.freeze([
@@ -167,16 +174,64 @@ export const hostStaleControlLaneIds = Object.freeze([
   ...hostPhaseStaleControlLaneIds,
 ]);
 
-export const hostRaceReloadLaneIds = Object.freeze([
-  "concurrent-host-resolve-race",
-  "concurrent-host-resolve-race-reload",
-  "concurrent-host-advance-race",
-  "concurrent-host-advance-race-reload",
-  "concurrent-host-deadline-advance-race",
-  "concurrent-host-deadline-advance-race-reload",
-  "concurrent-host-mixed-advance-race",
-  "concurrent-host-mixed-advance-race-reload",
+export const hostPhaseRaceCoverageCellDefinitions = Object.freeze([
+  Object.freeze({
+    id: "host-resolve",
+    actorPair: "host vs host",
+    commandFamily: "phase resolution",
+    raceLaneId: "concurrent-host-resolve-race",
+    reloadLaneId: "concurrent-host-resolve-race-reload",
+    roleSurfaces: Object.freeze(["host"]),
+    commandFacts: Object.freeze([Object.freeze(hostResolvePhaseCommandFacts())]),
+  }),
+  Object.freeze({
+    id: "host-advance",
+    actorPair: "host vs host",
+    commandFamily: "phase advance",
+    raceLaneId: "concurrent-host-advance-race",
+    reloadLaneId: "concurrent-host-advance-race-reload",
+    roleSurfaces: Object.freeze(["host"]),
+    commandFacts: Object.freeze([Object.freeze(hostAdvancePhaseCommandFacts())]),
+  }),
+  Object.freeze({
+    id: "host-deadline-advance",
+    actorPair: "host vs host",
+    commandFamily: "deadline and phase advance",
+    raceLaneId: "concurrent-host-deadline-advance-race",
+    reloadLaneId: "concurrent-host-deadline-advance-race-reload",
+    roleSurfaces: Object.freeze(["host"]),
+    commandFacts: Object.freeze([
+      Object.freeze(hostAdvanceByDeadlineCommandFacts()),
+    ]),
+  }),
+  Object.freeze({
+    id: "host-mixed-advance",
+    actorPair: "host vs host",
+    commandFamily: "mixed phase advance controls",
+    raceLaneId: "concurrent-host-mixed-advance-race",
+    reloadLaneId: "concurrent-host-mixed-advance-race-reload",
+    roleSurfaces: Object.freeze(["host"]),
+    commandFacts: Object.freeze([
+      Object.freeze(hostAdvancePhaseCommandFacts()),
+      Object.freeze(hostAdvanceByDeadlineCommandFacts()),
+    ]),
+  }),
 ]);
+
+export function hostPhaseRaceCoverageCellCases() {
+  return hostPhaseRaceCoverageCellDefinitions.map(cloneRaceCoverageCell);
+}
+
+export function hostPhaseRaceCoverageCellIds() {
+  return hostPhaseRaceCoverageCellCases().map((cell) => cell.id);
+}
+
+export const hostRaceReloadLaneIds = Object.freeze(
+  hostPhaseRaceCoverageCellDefinitions.flatMap((scenario) => [
+    scenario.raceLaneId,
+    scenario.reloadLaneId,
+  ]),
+);
 
 export const hostPhaseStaleRecoveryLaneIds = Object.freeze([
   ...hostPhaseStaleControlCaseDefinitions.flatMap((scenario) => [

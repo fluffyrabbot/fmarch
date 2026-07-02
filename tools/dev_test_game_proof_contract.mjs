@@ -18,6 +18,12 @@ import {
   hostStaleResolveControlLaneId,
 } from "./dev_test_game_host_stale_control_scenarios.mjs";
 import {
+  hostAdvanceByDeadlineCommandFacts,
+  hostAdvancePhaseCommandFacts,
+  hostExtendDeadlineCommandFacts,
+  hostResolvePhaseCommandFacts,
+} from "./dev_test_game_core_loop_host_phase_scenarios.mjs";
+import {
   cohostDeadlineStaleBasePassed,
   cohostDeadlineStaleReconnectPassed,
   cohostDeadlineStaleReloadPassed,
@@ -73,6 +79,12 @@ import {
 } from "./dev_test_game_replacement_private_post_assertions.mjs";
 
 export const DEV_TEST_GAME_PROOF_VERSION = 1;
+
+const hostResolvePhaseActionId = hostResolvePhaseCommandFacts().actionId;
+const hostAdvancePhaseActionId = hostAdvancePhaseCommandFacts().actionId;
+const hostExtendDeadlineActionId = hostExtendDeadlineCommandFacts().actionId;
+const hostAdvanceByDeadlineActionId =
+  hostAdvanceByDeadlineCommandFacts().actionId;
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const defaultSessionPath = path.join(repoRoot, "target", "dev-test-game", "session.json");
@@ -763,7 +775,7 @@ export function buildDevTestGameProofRun(session, options = {}) {
             ?.deadline,
         ) &&
         verification.actionLoop?.staleDeadlineAdvance?.setup?.visibleActions?.includes(
-          "advance_phase_by_deadline",
+          hostAdvanceByDeadlineActionId,
         ) === true &&
         verification.actionLoop?.staleDeadlineAdvance?.reject?.error ===
           "InvalidTarget" &&
@@ -777,18 +789,18 @@ export function buildDevTestGameProofRun(session, options = {}) {
         verification.actionLoop?.staleDeadlineAdvance?.activityRow?.source ===
           "outcome" &&
         verification.actionLoop?.staleDeadlineAdvance?.activityRow?.actionId ===
-          "advance_phase_by_deadline" &&
+          hostAdvanceByDeadlineActionId &&
         verification.actionLoop?.staleDeadlineAdvance?.dispatchPlan?.projectionRefreshKeys?.includes(
           "host",
         ) === true &&
         verification.actionLoop?.staleDeadlineAdvance?.visibleActionsAfterReject?.includes(
-          "resolve_phase",
+          hostResolvePhaseActionId,
         ) === true &&
         verification.actionLoop?.staleDeadlineAdvance?.visibleActionsAfterReject?.includes(
           "lock_thread",
         ) === true &&
         verification.actionLoop?.staleDeadlineAdvance?.visibleActionsAfterReject?.includes(
-          "advance_phase_by_deadline",
+          hostAdvanceByDeadlineActionId,
         ) === false &&
         verification.actionLoop?.staleDeadlineAdvance?.apiPhaseAfterReject?.phase_id ===
           "N01" &&
@@ -2282,7 +2294,7 @@ export function buildDevTestGameProofRun(session, options = {}) {
           hardening.concurrentPlayerVoteResolveRace?.setupHostPhase?.locked ===
             false &&
           hardening.concurrentPlayerVoteResolveRace?.setupHostPhaseActions?.includes(
-            "resolve_phase",
+            hostResolvePhaseActionId,
           ) === true &&
           hardening.concurrentPlayerVoteResolveRace?.resolve?.state === "ack" &&
           hardening.concurrentPlayerVoteResolveRace?.resolve?.serverEnvelope?.body
@@ -2455,7 +2467,7 @@ export function buildDevTestGameProofRun(session, options = {}) {
           hardening.concurrentPlayerActionAdvanceRace?.setupHostPhase?.locked ===
             false &&
           hardening.concurrentPlayerActionAdvanceRace?.setupHostPhaseActions?.includes(
-            "resolve_phase",
+            hostResolvePhaseActionId,
           ) === true &&
           hardening.concurrentPlayerActionAdvanceRace?.closedStatus?.state ===
             "closed" &&
@@ -2465,7 +2477,7 @@ export function buildDevTestGameProofRun(session, options = {}) {
           hardening.concurrentPlayerActionAdvanceRace?.lockedHostPhase?.locked ===
             true &&
           hardening.concurrentPlayerActionAdvanceRace?.lockedHostPhaseActions?.includes(
-            "advance_phase",
+            hostAdvancePhaseActionId,
           ) === true &&
           hardening.concurrentPlayerActionAdvanceRace?.reject?.state === "reject" &&
           ["PhaseLocked", "InvalidTarget"].includes(
@@ -2506,10 +2518,10 @@ export function buildDevTestGameProofRun(session, options = {}) {
           hardening.concurrentPlayerActionAdvanceRace?.hostPhaseAfterRace?.locked ===
             false &&
           hardening.concurrentPlayerActionAdvanceRace?.hostPhaseActionsAfterRace?.includes(
-            "resolve_phase",
+            hostResolvePhaseActionId,
           ) === true &&
           hardening.concurrentPlayerActionAdvanceRace?.hostPhaseActionsAfterRace?.includes(
-            "advance_phase",
+            hostAdvancePhaseActionId,
           ) === false &&
           hardening.concurrentPlayerActionAdvanceRace?.apiCommandStateAfterRace
             ?.actor_slot === "slot_4" &&
@@ -2567,9 +2579,9 @@ export function buildDevTestGameProofRun(session, options = {}) {
           hardening.concurrentPlayerActionAdvanceRace?.roleReloadAfterRace
             ?.hostPhaseAfterReload?.locked === false &&
           hardening.concurrentPlayerActionAdvanceRace?.roleReloadAfterRace
-            ?.hostPhaseActionsAfterReload?.includes("resolve_phase") === true &&
+            ?.hostPhaseActionsAfterReload?.includes(hostResolvePhaseActionId) === true &&
           hardening.concurrentPlayerActionAdvanceRace?.roleReloadAfterRace
-            ?.hostPhaseActionsAfterReload?.includes("advance_phase") === false &&
+            ?.hostPhaseActionsAfterReload?.includes(hostAdvancePhaseActionId) === false &&
           hardening.concurrentPlayerActionAdvanceRace?.roleReloadAfterRace
             ?.apiCommandStateAfterReload?.actor_slot === "slot_4" &&
           hardening.concurrentPlayerActionAdvanceRace?.roleReloadAfterRace
@@ -2617,15 +2629,15 @@ export function buildDevTestGameProofRun(session, options = {}) {
           hardening.concurrentCohostDeadlineResolveRace?.setupCohostPhase?.locked ===
             false &&
           hardening.concurrentCohostDeadlineResolveRace?.setupHostPhaseActions?.includes(
-            "resolve_phase",
+            hostResolvePhaseActionId,
           ) === true &&
           hardening.concurrentCohostDeadlineResolveRace?.setupHostDeadlineActions?.includes(
-            "extend_deadline",
+            hostExtendDeadlineActionId,
           ) === true &&
           hardening.concurrentCohostDeadlineResolveRace?.setupCohostPhaseActions
             ?.length === 0 &&
           hardening.concurrentCohostDeadlineResolveRace?.setupCohostDeadlineActions?.includes(
-            "extend_deadline",
+            hostExtendDeadlineActionId,
           ) === true &&
           hardening.concurrentCohostDeadlineResolveRace?.resolve?.state === "ack" &&
           hardening.concurrentCohostDeadlineResolveRace?.resolve?.serverEnvelope?.body
@@ -2683,18 +2695,18 @@ export function buildDevTestGameProofRun(session, options = {}) {
             "unlock_thread",
           ) === true &&
           hardening.concurrentCohostDeadlineResolveRace?.hostPhaseActionsAfterRace?.includes(
-            "advance_phase",
+            hostAdvancePhaseActionId,
           ) === true &&
           hardening.concurrentCohostDeadlineResolveRace?.hostPhaseActionsAfterRace?.includes(
-            "resolve_phase",
+            hostResolvePhaseActionId,
           ) === false &&
           hardening.concurrentCohostDeadlineResolveRace?.cohostPhaseActionsAfterRace
             ?.length === 0 &&
           hardening.concurrentCohostDeadlineResolveRace?.hostDeadlineActionsAfterRace?.includes(
-            "extend_deadline",
+            hostExtendDeadlineActionId,
           ) === true &&
           hardening.concurrentCohostDeadlineResolveRace?.cohostDeadlineActionsAfterRace?.includes(
-            "extend_deadline",
+            hostExtendDeadlineActionId,
           ) === true &&
           hardening.concurrentCohostDeadlineResolveRace?.hostStateAfterRace?.phase
             ?.phase_id === "D01" &&
@@ -2759,17 +2771,17 @@ export function buildDevTestGameProofRun(session, options = {}) {
           hardening.concurrentCohostDeadlineResolveRace?.roleReloadAfterRace
             ?.hostPhaseActionsAfterReload?.includes("unlock_thread") === true &&
           hardening.concurrentCohostDeadlineResolveRace?.roleReloadAfterRace
-            ?.hostPhaseActionsAfterReload?.includes("advance_phase") === true &&
+            ?.hostPhaseActionsAfterReload?.includes(hostAdvancePhaseActionId) === true &&
           hardening.concurrentCohostDeadlineResolveRace?.roleReloadAfterRace
-            ?.hostPhaseActionsAfterReload?.includes("resolve_phase") === false &&
+            ?.hostPhaseActionsAfterReload?.includes(hostResolvePhaseActionId) === false &&
           hardening.concurrentCohostDeadlineResolveRace?.roleReloadAfterRace
             ?.hostPhaseActionsAfterReload?.includes("lock_thread") === false &&
           hardening.concurrentCohostDeadlineResolveRace?.roleReloadAfterRace
             ?.cohostPhaseActionsAfterReload?.length === 0 &&
           hardening.concurrentCohostDeadlineResolveRace?.roleReloadAfterRace
-            ?.hostDeadlineActionsAfterReload?.includes("extend_deadline") === true &&
+            ?.hostDeadlineActionsAfterReload?.includes(hostExtendDeadlineActionId) === true &&
           hardening.concurrentCohostDeadlineResolveRace?.roleReloadAfterRace
-            ?.cohostDeadlineActionsAfterReload?.includes("extend_deadline") === true &&
+            ?.cohostDeadlineActionsAfterReload?.includes(hostExtendDeadlineActionId) === true &&
           hardening.concurrentCohostDeadlineResolveRace?.roleReloadAfterRace
             ?.hostApiPhaseAfterReload?.phase_id === "D01" &&
           hardening.concurrentCohostDeadlineResolveRace?.roleReloadAfterRace
@@ -3567,7 +3579,7 @@ export function buildDevTestGameProofRun(session, options = {}) {
         hardening.replacementStaleActionAfterResolve?.hostPhaseAfterResolve
           ?.locked === true &&
         hardening.replacementStaleActionAfterResolve?.hostPhaseActionsAfterResolve?.includes(
-          "advance_phase",
+          hostAdvancePhaseActionId,
         ) === true &&
         hardening.replacementStaleActionAfterResolve?.targetSlotAfterResolve
           ?.slot_id === replacementStaleActionAfterResolveCase.targetSlot &&
@@ -5696,7 +5708,7 @@ export function buildDevTestGameProofRun(session, options = {}) {
           "host",
         ) === true &&
         hardening.staleHostControl?.visibleActionsAfterReject?.includes(
-          "resolve_phase",
+          hostResolvePhaseActionId,
         ) === true &&
         hardening.staleHostControl?.visibleActionsAfterReject?.includes(
           "lock_thread",
@@ -5722,7 +5734,7 @@ export function buildDevTestGameProofRun(session, options = {}) {
         hardening.concurrentHostResolveRace?.setup?.stalePhase?.id === "D02" &&
         hardening.concurrentHostResolveRace?.setup?.stalePhase?.locked === false &&
         hardening.concurrentHostResolveRace?.setup?.phaseActions?.includes(
-          "resolve_phase",
+          hostResolvePhaseActionId,
         ) === true &&
         hardening.concurrentHostResolveRace?.setup?.phaseActions?.includes(
           "lock_thread",
@@ -5766,10 +5778,10 @@ export function buildDevTestGameProofRun(session, options = {}) {
           "unlock_thread",
         ) === true &&
         hardening.concurrentHostResolveRace?.livePhaseActionsAfterRace?.includes(
-          "advance_phase",
+          hostAdvancePhaseActionId,
         ) === true &&
         hardening.concurrentHostResolveRace?.livePhaseActionsAfterRace?.includes(
-          "resolve_phase",
+          hostResolvePhaseActionId,
         ) === false &&
         hardening.concurrentHostResolveRace?.livePhaseActionsAfterRace?.includes(
           "lock_thread",
@@ -5778,18 +5790,18 @@ export function buildDevTestGameProofRun(session, options = {}) {
           "unlock_thread",
         ) === true &&
         hardening.concurrentHostResolveRace?.concurrentPhaseActionsAfterRace?.includes(
-          "advance_phase",
+          hostAdvancePhaseActionId,
         ) === true &&
         hardening.concurrentHostResolveRace?.concurrentPhaseActionsAfterRace?.includes(
-          "resolve_phase",
+          hostResolvePhaseActionId,
         ) === false &&
         hardening.concurrentHostResolveRace?.concurrentPhaseActionsAfterRace?.includes(
           "lock_thread",
         ) === false &&
         hardening.concurrentHostResolveRace?.liveActivityRow?.actionId ===
-          "resolve_phase" &&
+          hostResolvePhaseActionId &&
         hardening.concurrentHostResolveRace?.concurrentActivityRow?.actionId ===
-          "resolve_phase" &&
+          hostResolvePhaseActionId &&
         hardening.concurrentHostResolveRace?.apiPhaseAfterRace?.phase_id === "D02" &&
         hardening.concurrentHostResolveRace?.apiPhaseAfterRace?.locked === true &&
         hardening.concurrentHostResolveRace?.restoreAfterRace?.commandStatus?.state ===
@@ -5840,27 +5852,27 @@ export function buildDevTestGameProofRun(session, options = {}) {
           hardening.concurrentHostResolveRace?.roleReloadAfterRace
             ?.livePhaseActionsAfterReload?.includes("unlock_thread") === true &&
           hardening.concurrentHostResolveRace?.roleReloadAfterRace
-            ?.livePhaseActionsAfterReload?.includes("advance_phase") === true &&
+            ?.livePhaseActionsAfterReload?.includes(hostAdvancePhaseActionId) === true &&
           hardening.concurrentHostResolveRace?.roleReloadAfterRace
-            ?.livePhaseActionsAfterReload?.includes("resolve_phase") === false &&
+            ?.livePhaseActionsAfterReload?.includes(hostResolvePhaseActionId) === false &&
           hardening.concurrentHostResolveRace?.roleReloadAfterRace
             ?.livePhaseActionsAfterReload?.includes("lock_thread") === false &&
           hardening.concurrentHostResolveRace?.roleReloadAfterRace
             ?.concurrentPhaseActionsAfterReload?.includes("unlock_thread") ===
             true &&
           hardening.concurrentHostResolveRace?.roleReloadAfterRace
-            ?.concurrentPhaseActionsAfterReload?.includes("advance_phase") ===
+            ?.concurrentPhaseActionsAfterReload?.includes(hostAdvancePhaseActionId) ===
             true &&
           hardening.concurrentHostResolveRace?.roleReloadAfterRace
-            ?.concurrentPhaseActionsAfterReload?.includes("resolve_phase") ===
+            ?.concurrentPhaseActionsAfterReload?.includes(hostResolvePhaseActionId) ===
             false &&
           hardening.concurrentHostResolveRace?.roleReloadAfterRace
             ?.concurrentPhaseActionsAfterReload?.includes("lock_thread") ===
             false &&
           hardening.concurrentHostResolveRace?.roleReloadAfterRace
-            ?.liveDeadlineActionsAfterReload?.includes("extend_deadline") === true &&
+            ?.liveDeadlineActionsAfterReload?.includes(hostExtendDeadlineActionId) === true &&
           hardening.concurrentHostResolveRace?.roleReloadAfterRace
-            ?.concurrentDeadlineActionsAfterReload?.includes("extend_deadline") ===
+            ?.concurrentDeadlineActionsAfterReload?.includes(hostExtendDeadlineActionId) ===
             true &&
           hardening.concurrentHostResolveRace?.roleReloadAfterRace
             ?.apiPhaseAfterReload?.phase_id === "D02" &&
@@ -5881,7 +5893,7 @@ export function buildDevTestGameProofRun(session, options = {}) {
         hardening.concurrentHostAdvanceRace?.setup?.stalePhase?.id === "D02" &&
         hardening.concurrentHostAdvanceRace?.setup?.stalePhase?.locked === true &&
         hardening.concurrentHostAdvanceRace?.setup?.phaseActions?.includes(
-          "advance_phase",
+          hostAdvancePhaseActionId,
         ) === true &&
         hardening.concurrentHostAdvanceRace?.setup?.phaseActions?.includes(
           "unlock_thread",
@@ -5922,33 +5934,33 @@ export function buildDevTestGameProofRun(session, options = {}) {
         hardening.concurrentHostAdvanceRace?.concurrentPhaseAfterRace?.locked ===
           false &&
         hardening.concurrentHostAdvanceRace?.livePhaseActionsAfterRace?.includes(
-          "resolve_phase",
+          hostResolvePhaseActionId,
         ) === true &&
         hardening.concurrentHostAdvanceRace?.livePhaseActionsAfterRace?.includes(
           "lock_thread",
         ) === true &&
         hardening.concurrentHostAdvanceRace?.livePhaseActionsAfterRace?.includes(
-          "advance_phase",
+          hostAdvancePhaseActionId,
         ) === false &&
         hardening.concurrentHostAdvanceRace?.livePhaseActionsAfterRace?.includes(
           "unlock_thread",
         ) === false &&
         hardening.concurrentHostAdvanceRace?.concurrentPhaseActionsAfterRace?.includes(
-          "resolve_phase",
+          hostResolvePhaseActionId,
         ) === true &&
         hardening.concurrentHostAdvanceRace?.concurrentPhaseActionsAfterRace?.includes(
           "lock_thread",
         ) === true &&
         hardening.concurrentHostAdvanceRace?.concurrentPhaseActionsAfterRace?.includes(
-          "advance_phase",
+          hostAdvancePhaseActionId,
         ) === false &&
         hardening.concurrentHostAdvanceRace?.concurrentPhaseActionsAfterRace?.includes(
           "unlock_thread",
         ) === false &&
         hardening.concurrentHostAdvanceRace?.liveActivityRow?.actionId ===
-          "advance_phase" &&
+          hostAdvancePhaseActionId &&
         hardening.concurrentHostAdvanceRace?.concurrentActivityRow?.actionId ===
-          "advance_phase" &&
+          hostAdvancePhaseActionId &&
         hardening.concurrentHostAdvanceRace?.apiPhaseAfterRace?.phase_id === "N02" &&
         hardening.concurrentHostAdvanceRace?.apiPhaseAfterRace?.locked === false,
     }),
@@ -5989,28 +6001,28 @@ export function buildDevTestGameProofRun(session, options = {}) {
           hardening.concurrentHostAdvanceRace?.roleReloadAfterRace
             ?.concurrentPhaseAfterReload?.locked === false &&
           hardening.concurrentHostAdvanceRace?.roleReloadAfterRace
-            ?.livePhaseActionsAfterReload?.includes("resolve_phase") === true &&
+            ?.livePhaseActionsAfterReload?.includes(hostResolvePhaseActionId) === true &&
           hardening.concurrentHostAdvanceRace?.roleReloadAfterRace
             ?.livePhaseActionsAfterReload?.includes("lock_thread") === true &&
           hardening.concurrentHostAdvanceRace?.roleReloadAfterRace
-            ?.livePhaseActionsAfterReload?.includes("advance_phase") === false &&
+            ?.livePhaseActionsAfterReload?.includes(hostAdvancePhaseActionId) === false &&
           hardening.concurrentHostAdvanceRace?.roleReloadAfterRace
             ?.livePhaseActionsAfterReload?.includes("unlock_thread") === false &&
           hardening.concurrentHostAdvanceRace?.roleReloadAfterRace
-            ?.concurrentPhaseActionsAfterReload?.includes("resolve_phase") ===
+            ?.concurrentPhaseActionsAfterReload?.includes(hostResolvePhaseActionId) ===
             true &&
           hardening.concurrentHostAdvanceRace?.roleReloadAfterRace
             ?.concurrentPhaseActionsAfterReload?.includes("lock_thread") === true &&
           hardening.concurrentHostAdvanceRace?.roleReloadAfterRace
-            ?.concurrentPhaseActionsAfterReload?.includes("advance_phase") ===
+            ?.concurrentPhaseActionsAfterReload?.includes(hostAdvancePhaseActionId) ===
             false &&
           hardening.concurrentHostAdvanceRace?.roleReloadAfterRace
             ?.concurrentPhaseActionsAfterReload?.includes("unlock_thread") ===
             false &&
           hardening.concurrentHostAdvanceRace?.roleReloadAfterRace
-            ?.liveDeadlineActionsAfterReload?.includes("extend_deadline") === true &&
+            ?.liveDeadlineActionsAfterReload?.includes(hostExtendDeadlineActionId) === true &&
           hardening.concurrentHostAdvanceRace?.roleReloadAfterRace
-            ?.concurrentDeadlineActionsAfterReload?.includes("extend_deadline") ===
+            ?.concurrentDeadlineActionsAfterReload?.includes(hostExtendDeadlineActionId) ===
             true &&
           hardening.concurrentHostAdvanceRace?.roleReloadAfterRace
             ?.apiPhaseAfterReload?.phase_id === "N02" &&
@@ -6039,10 +6051,10 @@ export function buildDevTestGameProofRun(session, options = {}) {
           typeof hardening.concurrentHostDeadlineAdvanceRace?.setup?.stalePhase
             ?.deadline === "number" &&
           hardening.concurrentHostDeadlineAdvanceRace?.setup?.visibleActions?.includes(
-            "advance_phase_by_deadline",
+            hostAdvanceByDeadlineActionId,
           ) === true &&
           hardening.concurrentHostDeadlineAdvanceRace?.setup?.visibleActions?.includes(
-            "advance_phase",
+            hostAdvancePhaseActionId,
           ) === true &&
           hardening.concurrentHostDeadlineAdvanceRace?.setup?.visibleActions?.includes(
             "unlock_thread",
@@ -6108,27 +6120,27 @@ export function buildDevTestGameProofRun(session, options = {}) {
           hardening.concurrentHostDeadlineAdvanceRace?.concurrentPhaseAfterRace
             ?.deadline === null &&
           hardening.concurrentHostDeadlineAdvanceRace?.livePhaseActionsAfterRace?.includes(
-            "resolve_phase",
+            hostResolvePhaseActionId,
           ) === true &&
           hardening.concurrentHostDeadlineAdvanceRace?.livePhaseActionsAfterRace?.includes(
             "lock_thread",
           ) === true &&
           hardening.concurrentHostDeadlineAdvanceRace?.livePhaseActionsAfterRace?.includes(
-            "advance_phase_by_deadline",
+            hostAdvanceByDeadlineActionId,
           ) === false &&
           hardening.concurrentHostDeadlineAdvanceRace?.concurrentPhaseActionsAfterRace?.includes(
-            "resolve_phase",
+            hostResolvePhaseActionId,
           ) === true &&
           hardening.concurrentHostDeadlineAdvanceRace?.concurrentPhaseActionsAfterRace?.includes(
             "lock_thread",
           ) === true &&
           hardening.concurrentHostDeadlineAdvanceRace?.concurrentPhaseActionsAfterRace?.includes(
-            "advance_phase_by_deadline",
+            hostAdvanceByDeadlineActionId,
           ) === false &&
           hardening.concurrentHostDeadlineAdvanceRace?.liveActivityRow?.actionId ===
-            "advance_phase_by_deadline" &&
+            hostAdvanceByDeadlineActionId &&
           hardening.concurrentHostDeadlineAdvanceRace?.concurrentActivityRow?.actionId ===
-            "advance_phase_by_deadline" &&
+            hostAdvanceByDeadlineActionId &&
           hardening.concurrentHostDeadlineAdvanceRace?.apiPhaseAfterRace?.phase_id ===
             "N01" &&
           hardening.concurrentHostDeadlineAdvanceRace?.apiPhaseAfterRace?.locked ===
@@ -6181,35 +6193,35 @@ export function buildDevTestGameProofRun(session, options = {}) {
           hardening.concurrentHostDeadlineAdvanceRace?.roleReloadAfterRace
             ?.concurrentPhaseAfterReload?.deadline === null &&
           hardening.concurrentHostDeadlineAdvanceRace?.roleReloadAfterRace
-            ?.livePhaseActionsAfterReload?.includes("resolve_phase") === true &&
+            ?.livePhaseActionsAfterReload?.includes(hostResolvePhaseActionId) === true &&
           hardening.concurrentHostDeadlineAdvanceRace?.roleReloadAfterRace
             ?.livePhaseActionsAfterReload?.includes("lock_thread") === true &&
           hardening.concurrentHostDeadlineAdvanceRace?.roleReloadAfterRace
-            ?.livePhaseActionsAfterReload?.includes("advance_phase") === false &&
+            ?.livePhaseActionsAfterReload?.includes(hostAdvancePhaseActionId) === false &&
           hardening.concurrentHostDeadlineAdvanceRace?.roleReloadAfterRace
             ?.livePhaseActionsAfterReload?.includes("unlock_thread") === false &&
           hardening.concurrentHostDeadlineAdvanceRace?.roleReloadAfterRace
-            ?.livePhaseActionsAfterReload?.includes("advance_phase_by_deadline") ===
+            ?.livePhaseActionsAfterReload?.includes(hostAdvanceByDeadlineActionId) ===
             false &&
           hardening.concurrentHostDeadlineAdvanceRace?.roleReloadAfterRace
-            ?.concurrentPhaseActionsAfterReload?.includes("resolve_phase") ===
+            ?.concurrentPhaseActionsAfterReload?.includes(hostResolvePhaseActionId) ===
             true &&
           hardening.concurrentHostDeadlineAdvanceRace?.roleReloadAfterRace
             ?.concurrentPhaseActionsAfterReload?.includes("lock_thread") === true &&
           hardening.concurrentHostDeadlineAdvanceRace?.roleReloadAfterRace
-            ?.concurrentPhaseActionsAfterReload?.includes("advance_phase") ===
+            ?.concurrentPhaseActionsAfterReload?.includes(hostAdvancePhaseActionId) ===
             false &&
           hardening.concurrentHostDeadlineAdvanceRace?.roleReloadAfterRace
             ?.concurrentPhaseActionsAfterReload?.includes("unlock_thread") ===
             false &&
           hardening.concurrentHostDeadlineAdvanceRace?.roleReloadAfterRace
             ?.concurrentPhaseActionsAfterReload?.includes(
-              "advance_phase_by_deadline",
+              hostAdvanceByDeadlineActionId,
             ) === false &&
           hardening.concurrentHostDeadlineAdvanceRace?.roleReloadAfterRace
-            ?.liveDeadlineActionsAfterReload?.includes("extend_deadline") === true &&
+            ?.liveDeadlineActionsAfterReload?.includes(hostExtendDeadlineActionId) === true &&
           hardening.concurrentHostDeadlineAdvanceRace?.roleReloadAfterRace
-            ?.concurrentDeadlineActionsAfterReload?.includes("extend_deadline") ===
+            ?.concurrentDeadlineActionsAfterReload?.includes(hostExtendDeadlineActionId) ===
             true &&
           hardening.concurrentHostDeadlineAdvanceRace?.roleReloadAfterRace
             ?.apiPhaseAfterReload?.phase_id === "N01" &&
@@ -6244,10 +6256,10 @@ export function buildDevTestGameProofRun(session, options = {}) {
           typeof hardening.concurrentHostMixedAdvanceRace?.setup?.stalePhase
             ?.deadline === "number" &&
           hardening.concurrentHostMixedAdvanceRace?.setup?.visibleActions?.includes(
-            "advance_phase",
+            hostAdvancePhaseActionId,
           ) === true &&
           hardening.concurrentHostMixedAdvanceRace?.setup?.visibleActions?.includes(
-            "advance_phase_by_deadline",
+            hostAdvanceByDeadlineActionId,
           ) === true &&
           ["normal", "deadline"].includes(
             hardening.concurrentHostMixedAdvanceRace?.ackRaceRole,
@@ -6257,10 +6269,10 @@ export function buildDevTestGameProofRun(session, options = {}) {
           ) &&
           hardening.concurrentHostMixedAdvanceRace?.ackRaceRole !==
             hardening.concurrentHostMixedAdvanceRace?.rejectRaceRole &&
-          ["advance_phase", "advance_phase_by_deadline"].includes(
+          [hostAdvancePhaseActionId, hostAdvanceByDeadlineActionId].includes(
             hardening.concurrentHostMixedAdvanceRace?.ackActionId,
           ) &&
-          ["advance_phase", "advance_phase_by_deadline"].includes(
+          [hostAdvancePhaseActionId, hostAdvanceByDeadlineActionId].includes(
             hardening.concurrentHostMixedAdvanceRace?.rejectActionId,
           ) &&
           hardening.concurrentHostMixedAdvanceRace?.ackActionId !==
@@ -6272,7 +6284,7 @@ export function buildDevTestGameProofRun(session, options = {}) {
             hardening.concurrentHostMixedAdvanceRace?.ack?.streamSeqs,
           ) &&
           (hardening.concurrentHostMixedAdvanceRace?.ackActionId ===
-          "advance_phase"
+          hostAdvancePhaseActionId
             ? hardening.concurrentHostMixedAdvanceRace.ack.streamSeqs.length === 1
             : hardening.concurrentHostMixedAdvanceRace.ack.streamSeqs.length ===
               2) &&
@@ -6285,7 +6297,7 @@ export function buildDevTestGameProofRun(session, options = {}) {
             hardening.concurrentHostMixedAdvanceRace?.reject?.streamSeqs,
           ) === false &&
           (hardening.concurrentHostMixedAdvanceRace?.rejectActionId ===
-          "advance_phase"
+          hostAdvancePhaseActionId
             ? hardening.concurrentHostMixedAdvanceRace?.reject?.message?.includes(
                 "stale phase state",
               ) === true
@@ -6321,33 +6333,33 @@ export function buildDevTestGameProofRun(session, options = {}) {
           hardening.concurrentHostMixedAdvanceRace?.deadlinePhaseAfterRace
             ?.deadline === null &&
           hardening.concurrentHostMixedAdvanceRace?.normalPhaseActionsAfterRace?.includes(
-            "resolve_phase",
+            hostResolvePhaseActionId,
           ) === true &&
           hardening.concurrentHostMixedAdvanceRace?.normalPhaseActionsAfterRace?.includes(
             "lock_thread",
           ) === true &&
           hardening.concurrentHostMixedAdvanceRace?.normalPhaseActionsAfterRace?.includes(
-            "advance_phase",
+            hostAdvancePhaseActionId,
           ) === false &&
           hardening.concurrentHostMixedAdvanceRace?.normalPhaseActionsAfterRace?.includes(
-            "advance_phase_by_deadline",
+            hostAdvanceByDeadlineActionId,
           ) === false &&
           hardening.concurrentHostMixedAdvanceRace?.deadlinePhaseActionsAfterRace?.includes(
-            "resolve_phase",
+            hostResolvePhaseActionId,
           ) === true &&
           hardening.concurrentHostMixedAdvanceRace?.deadlinePhaseActionsAfterRace?.includes(
             "lock_thread",
           ) === true &&
           hardening.concurrentHostMixedAdvanceRace?.deadlinePhaseActionsAfterRace?.includes(
-            "advance_phase",
+            hostAdvancePhaseActionId,
           ) === false &&
           hardening.concurrentHostMixedAdvanceRace?.deadlinePhaseActionsAfterRace?.includes(
-            "advance_phase_by_deadline",
+            hostAdvanceByDeadlineActionId,
           ) === false &&
           hardening.concurrentHostMixedAdvanceRace?.normalActivityRow?.actionId ===
-            "advance_phase" &&
+            hostAdvancePhaseActionId &&
           hardening.concurrentHostMixedAdvanceRace?.deadlineActivityRow?.actionId ===
-            "advance_phase_by_deadline" &&
+            hostAdvanceByDeadlineActionId &&
           hardening.concurrentHostMixedAdvanceRace?.apiPhaseAfterRace?.phase_id ===
             "N01" &&
           hardening.concurrentHostMixedAdvanceRace?.apiPhaseAfterRace?.locked ===
@@ -6400,37 +6412,37 @@ export function buildDevTestGameProofRun(session, options = {}) {
           hardening.concurrentHostMixedAdvanceRace?.roleReloadAfterRace
             ?.deadlinePhaseAfterReload?.deadline === null &&
           hardening.concurrentHostMixedAdvanceRace?.roleReloadAfterRace
-            ?.normalPhaseActionsAfterReload?.includes("resolve_phase") === true &&
+            ?.normalPhaseActionsAfterReload?.includes(hostResolvePhaseActionId) === true &&
           hardening.concurrentHostMixedAdvanceRace?.roleReloadAfterRace
             ?.normalPhaseActionsAfterReload?.includes("lock_thread") === true &&
           hardening.concurrentHostMixedAdvanceRace?.roleReloadAfterRace
-            ?.normalPhaseActionsAfterReload?.includes("advance_phase") === false &&
+            ?.normalPhaseActionsAfterReload?.includes(hostAdvancePhaseActionId) === false &&
           hardening.concurrentHostMixedAdvanceRace?.roleReloadAfterRace
             ?.normalPhaseActionsAfterReload?.includes("unlock_thread") === false &&
           hardening.concurrentHostMixedAdvanceRace?.roleReloadAfterRace
             ?.normalPhaseActionsAfterReload?.includes(
-              "advance_phase_by_deadline",
+              hostAdvanceByDeadlineActionId,
             ) === false &&
           hardening.concurrentHostMixedAdvanceRace?.roleReloadAfterRace
-            ?.deadlinePhaseActionsAfterReload?.includes("resolve_phase") ===
+            ?.deadlinePhaseActionsAfterReload?.includes(hostResolvePhaseActionId) ===
             true &&
           hardening.concurrentHostMixedAdvanceRace?.roleReloadAfterRace
             ?.deadlinePhaseActionsAfterReload?.includes("lock_thread") === true &&
           hardening.concurrentHostMixedAdvanceRace?.roleReloadAfterRace
-            ?.deadlinePhaseActionsAfterReload?.includes("advance_phase") ===
+            ?.deadlinePhaseActionsAfterReload?.includes(hostAdvancePhaseActionId) ===
             false &&
           hardening.concurrentHostMixedAdvanceRace?.roleReloadAfterRace
             ?.deadlinePhaseActionsAfterReload?.includes("unlock_thread") ===
             false &&
           hardening.concurrentHostMixedAdvanceRace?.roleReloadAfterRace
             ?.deadlinePhaseActionsAfterReload?.includes(
-              "advance_phase_by_deadline",
+              hostAdvanceByDeadlineActionId,
             ) === false &&
           hardening.concurrentHostMixedAdvanceRace?.roleReloadAfterRace
-            ?.normalDeadlineActionsAfterReload?.includes("extend_deadline") ===
+            ?.normalDeadlineActionsAfterReload?.includes(hostExtendDeadlineActionId) ===
             true &&
           hardening.concurrentHostMixedAdvanceRace?.roleReloadAfterRace
-            ?.deadlineDeadlineActionsAfterReload?.includes("extend_deadline") ===
+            ?.deadlineDeadlineActionsAfterReload?.includes(hostExtendDeadlineActionId) ===
             true &&
           hardening.concurrentHostMixedAdvanceRace?.roleReloadAfterRace
             ?.apiPhaseAfterReload?.phase_id === "N01" &&
