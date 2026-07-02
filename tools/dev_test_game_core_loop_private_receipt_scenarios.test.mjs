@@ -31,7 +31,7 @@ import {
   staleCompletedPrivatePostSnapshotCase,
   stalePrivateChannelPostPhaseLockedScenario,
   staleCompletedPrivatePostScenario,
-} from "./dev_test_game_core_loop_private_channel_scenario_cases.mjs";
+} from "./dev_test_game_core_loop_private_channel_scenario_assertions.mjs";
 
 test("completed private-channel scenarios build reusable snapshots and transitions", () => {
   const reloadScenario = completedPrivateChannelReloadScenario();
@@ -335,12 +335,15 @@ test("private-channel production harness callers use shared scenario definitions
 
   assert(
     proofSource.includes(
-      "./dev_test_game_core_loop_private_channel_scenario_cases.mjs",
+      "./dev_test_game_core_loop_private_channel_scenario_assertions.mjs",
     ),
-    "core-loop admin proof should import private-channel scenarios from the extracted case module",
+    "core-loop admin proof should import private-channel scenarios from the extracted scenario/assertion module",
   );
   assert(
-    !proofSource.includes("./dev_test_game_core_loop_private_channel_cases.mjs"),
+    !proofSource.includes(
+      "./dev_test_game_core_loop_private_channel_scenario_cases.mjs",
+    ) &&
+      !proofSource.includes("./dev_test_game_core_loop_private_channel_cases.mjs"),
     "core-loop admin proof should not import private-channel scenarios through the compatibility facade",
   );
   assert(
@@ -356,14 +359,17 @@ test("private-channel production harness callers use shared scenario definitions
   );
   assert(
     assertionFacadeSource.includes(
-      "./dev_test_game_core_loop_private_channel_scenario_cases.mjs",
+      "./dev_test_game_core_loop_private_channel_scenario_assertions.mjs",
     ),
-    "private-channel assertion facade should import completed private-channel cases from the extracted case module",
+    "private-channel assertion facade should import completed private-channel cases from the extracted scenario/assertion module",
   );
   assert(
     !assertionFacadeSource.includes(
-      "./dev_test_game_core_loop_private_channel_cases.mjs",
-    ),
+      "./dev_test_game_core_loop_private_channel_scenario_cases.mjs",
+    ) &&
+      !assertionFacadeSource.includes(
+        "./dev_test_game_core_loop_private_channel_cases.mjs",
+      ),
     "private-channel assertion facade should not import cases through the compatibility facade",
   );
   assert(

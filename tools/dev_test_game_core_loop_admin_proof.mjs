@@ -44,7 +44,7 @@ import {
   privateChannelSubmitPostScenario,
   staleCompletedPrivatePostScenario,
   stalePrivateChannelPostPhaseLockedScenario,
-} from "./dev_test_game_core_loop_private_channel_scenario_cases.mjs";
+} from "./dev_test_game_core_loop_private_channel_scenario_assertions.mjs";
 import {
   coreLoopAdminCheckIds,
   coreLoopSpineCheckId,
