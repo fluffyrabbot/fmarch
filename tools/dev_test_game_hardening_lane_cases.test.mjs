@@ -84,10 +84,30 @@ test("hardening lane cases share stale conflict-message IDs", () => {
       proofBoundary:
         "Seeded player role URL proof that a stale factional_kill action rejects after actor death with an explicit SlotNotAlive conflict message and refreshes with action controls removed.",
     },
+    {
+      id: "stale-host-deadline-surface",
+      checkId: "stale-conflict-message-surface-stale-host-deadline",
+      laneId: "stale-host-deadline",
+      label: "Stale host deadline conflict message surface",
+      role: "host",
+      expectedRejectError: "PhaseLocked",
+      expectedStalePhase: "D01",
+      expectedReceiptFragment: "stale phase state",
+      expectedStaleClickActionId: "extend_deadline",
+      expectedStaleClickRefreshKeys: ["host"],
+      expectedActivitySource: "outcome",
+      expectedPhaseId: "D02",
+      expectedLocked: false,
+      expectedDeadlineActions: ["extend_deadline"],
+      expectedPhaseActions: ["lock_thread", "resolve_phase"],
+      proofBoundary:
+        "Seeded host role URL proof that a stale deadline control rejects with an explicit PhaseLocked conflict message and refreshes into current host phase controls.",
+    },
   ]);
   assert.deepEqual(staleConflictMessageSurfaceCheckIds(), [
     "stale-conflict-message-surface-stale-action-conflict-message",
     "stale-conflict-message-surface-stale-dead-action-conflict",
+    "stale-conflict-message-surface-stale-host-deadline",
   ]);
 });
 

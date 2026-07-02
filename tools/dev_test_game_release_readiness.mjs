@@ -572,6 +572,13 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
       receiptStatusText: surface.receiptStatusText,
       stalePhase: surface.stalePhase,
       refreshedPhase: surface.refreshedPhase,
+      staleClickActionId: surface.staleClickActionId,
+      staleClickRefreshKeys: surface.staleClickRefreshKeys,
+      activitySource: surface.activitySource,
+      phaseId: surface.phaseId,
+      locked: surface.locked,
+      deadlineActions: surface.deadlineActions,
+      phaseActions: surface.phaseActions,
       actorStatusAfterReject: surface.actorStatusAfterReject,
       actionVisibleAfterRefresh: surface.actionVisibleAfterRefresh,
       restoredActorStatus: surface.restoredActorStatus,
@@ -1461,12 +1468,13 @@ function buildStaleConflictMessageSurfaces(lanes, { sourcePath }) {
       typeof evidence.roleUrl !== "string" ||
       !evidence.roleUrl.includes("/g/") ||
       evidence.rejectError !== scenario.expectedRejectError ||
-      evidence.templateId !== scenario.expectedTemplateId ||
+      (scenario.expectedTemplateId !== undefined &&
+        evidence.templateId !== scenario.expectedTemplateId) ||
       evidence.stalePhase !== scenario.expectedStalePhase ||
       (scenario.expectedRefreshedPhase !== undefined &&
         evidence.refreshedPhase !== scenario.expectedRefreshedPhase) ||
       (scenario.expectedReceiptFragment !== undefined &&
-        !String(evidence.receiptStatusText ?? "").includes(
+        !String(evidence.receiptStatusText ?? evidence.staleClickReceipt ?? "").includes(
           scenario.expectedReceiptFragment,
         )) ||
       (scenario.expectedRejectMessageFragment !== undefined &&
@@ -1480,7 +1488,24 @@ function buildStaleConflictMessageSurfaces(lanes, { sourcePath }) {
         evidence.actionVisibleAfterRefresh !==
           scenario.expectedActionVisibleAfterRefresh) ||
       (scenario.expectedRestoredActorStatus !== undefined &&
-        evidence.restoredActorStatus !== scenario.expectedRestoredActorStatus)
+        evidence.restoredActorStatus !== scenario.expectedRestoredActorStatus) ||
+      (scenario.expectedStaleClickActionId !== undefined &&
+        evidence.staleClickActionId !== scenario.expectedStaleClickActionId) ||
+      (scenario.expectedStaleClickRefreshKeys !== undefined &&
+        !sameStringArray(
+          evidence.staleClickRefreshKeys,
+          scenario.expectedStaleClickRefreshKeys,
+        )) ||
+      (scenario.expectedActivitySource !== undefined &&
+        evidence.activitySource !== scenario.expectedActivitySource) ||
+      (scenario.expectedPhaseId !== undefined &&
+        evidence.phaseId !== scenario.expectedPhaseId) ||
+      (scenario.expectedLocked !== undefined &&
+        evidence.locked !== scenario.expectedLocked) ||
+      (scenario.expectedDeadlineActions !== undefined &&
+        !sameStringArray(evidence.deadlineActions, scenario.expectedDeadlineActions)) ||
+      (scenario.expectedPhaseActions !== undefined &&
+        !sameStringArray(evidence.phaseActions, scenario.expectedPhaseActions))
     ) {
       throw new Error(
         `stale conflict-message surface missing proof from ${sourcePath}: ${scenario.id}`,
@@ -1500,10 +1525,17 @@ function buildStaleConflictMessageSurfaces(lanes, { sourcePath }) {
       templateId: evidence.templateId,
       stalePhase: evidence.stalePhase,
       refreshedPhase: evidence.refreshedPhase,
+      staleClickActionId: evidence.staleClickActionId,
+      staleClickRefreshKeys: evidence.staleClickRefreshKeys,
+      activitySource: evidence.activitySource,
+      phaseId: evidence.phaseId,
+      locked: evidence.locked,
+      deadlineActions: evidence.deadlineActions,
+      phaseActions: evidence.phaseActions,
       actorStatusAfterReject: evidence.actorStatusAfterReject,
       actionVisibleAfterRefresh: evidence.actionVisibleAfterRefresh,
       restoredActorStatus: evidence.restoredActorStatus,
-      receiptStatusText: evidence.receiptStatusText,
+      receiptStatusText: evidence.receiptStatusText ?? evidence.staleClickReceipt,
       proofBoundary: scenario.proofBoundary,
     };
   });

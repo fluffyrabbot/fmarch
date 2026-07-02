@@ -7366,7 +7366,7 @@ test("session card and markdown include role credential URLs and tokens", async 
           roleUrl: `/g/${game}/host`,
           stalePhase: { id: "D01", locked: false },
           deadlineActions: ["extend_deadline"],
-          phaseActions: ["resolve_phase", "lock_thread"],
+          phaseActions: ["lock_thread", "resolve_phase"],
           closedStatus: { state: "closed" },
         },
         staleClickBrowserProof: {
@@ -7377,7 +7377,7 @@ test("session card and markdown include role credential URLs and tokens", async 
           dispatchRefreshKeys: ["host"],
           phaseAfterReject: { id: "D02", locked: false },
           deadlineActionsAfterReject: ["extend_deadline"],
-          phaseActionsAfterReject: ["resolve_phase", "lock_thread"],
+          phaseActionsAfterReject: ["lock_thread", "resolve_phase"],
           apiPhaseAfterReject: { phase_id: "D02", locked: false, deadline: null },
         },
         reject: {
@@ -7395,7 +7395,7 @@ test("session card and markdown include role credential URLs and tokens", async 
         ],
         phaseAfterReject: { id: "D02", locked: false },
         deadlineActionsAfterReject: ["extend_deadline"],
-        phaseActionsAfterReject: ["resolve_phase", "lock_thread"],
+        phaseActionsAfterReject: ["lock_thread", "resolve_phase"],
         activityStatusText:
           "Reject PhaseLocked: phase locked; stale phase state, refresh and use current controls",
         activityRow: {
@@ -7415,7 +7415,7 @@ test("session card and markdown include role credential URLs and tokens", async 
           surfaceText: "Host console",
           phaseAfterReload: { id: "D02", locked: false },
           deadlineActionsAfterReload: ["extend_deadline"],
-          phaseActionsAfterReload: ["resolve_phase", "lock_thread"],
+          phaseActionsAfterReload: ["lock_thread", "resolve_phase"],
           apiPhaseAfterReload: { phase_id: "D02", locked: false, deadline: null },
         },
         reconnectAfterReject: {
@@ -7429,7 +7429,7 @@ test("session card and markdown include role credential URLs and tokens", async 
           },
         },
         deadlineActionsAfterReconnect: ["extend_deadline"],
-        phaseActionsAfterReconnect: ["resolve_phase", "lock_thread"],
+        phaseActionsAfterReconnect: ["lock_thread", "resolve_phase"],
         apiPhaseAfterReconnect: { phase_id: "D02", locked: false, deadline: null },
       },
       staleCohostDeadline: {
