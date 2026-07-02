@@ -5,11 +5,20 @@ import {
   assertPlayerInvalidActionRecoveryProofCase,
   assertPlayerStaleActionAfterTransitionProofCase,
   assertPlayerStaleVoteAfterTransitionProofCase,
+  playerActionBoundaryLaneId,
+  playerActionLoopLaneId,
   playerFactionalKillActionCommandFacts,
   playerActionSubmissionScenario,
+  playerInvalidActionRecoveryLaneId,
   playerInvalidActionRecoveryScenario,
   playerSlotVoteCommandFacts,
 } from "./dev_test_game_core_loop_action_scenarios.mjs";
+
+test("player action scenario module exports proof lane ids", () => {
+  assert.equal(playerActionLoopLaneId, "action-loop");
+  assert.equal(playerInvalidActionRecoveryLaneId, "invalid-action-recovery");
+  assert.equal(playerActionBoundaryLaneId, "player-action-boundary");
+});
 
 test("player command fact helpers derive reusable vote and action vocabulary", () => {
   assert.deepEqual(

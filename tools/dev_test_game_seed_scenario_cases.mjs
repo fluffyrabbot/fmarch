@@ -10,13 +10,21 @@ import {
 import {
   hostCohostRaceRecoveryLaneIds,
 } from "./dev_test_game_host_stale_control_scenarios.mjs";
+import {
+  playerActionBoundaryLaneId,
+  playerActionLoopLaneId,
+  playerInvalidActionRecoveryLaneId,
+} from "./dev_test_game_core_loop_action_scenarios.mjs";
+import {
+  dayThreeVoteResolutionLaneId,
+} from "./dev_test_game_core_loop_vote_resolution_scenarios.mjs";
 
 export const seedRequiredScenarioIds = Object.freeze([
   "host-phase-controls",
   "cohost-deadline-control",
   "player-vote-recovery",
   "player-action-denied",
-  "invalid-action-recovery",
+  playerInvalidActionRecoveryLaneId,
   "resolution-receipt",
   "dead-player-recovery",
   "night-action-loop",
@@ -79,13 +87,13 @@ export const seedRequiredScenarioIds = Object.freeze([
 ]);
 
 export const seedDemoOnlyScenarioIds = Object.freeze([
-  "day-vote-resolution",
+  dayThreeVoteResolutionLaneId,
   "day-vote-no-lynch",
   "host-deadline-advance",
   "stale-deadline-advance",
   "private-channel",
   "resolution-receipts",
-  "player-action-boundary",
+  playerActionBoundaryLaneId,
   "host-votecount-publication",
   "concurrent-host-publish-race",
   "concurrent-host-publish-race-reload",
@@ -138,9 +146,9 @@ export const seedScenarioCoverageGroups = Object.freeze({
 });
 
 const seedScenarioRoleOverrides = new Map([
-  ["day-vote-resolution", "actionPlayer"],
+  [dayThreeVoteResolutionLaneId, "actionPlayer"],
   ["player-action-denied", "player"],
-  ["player-action-boundary", "player"],
+  [playerActionBoundaryLaneId, "player"],
   ["stale-deadline-advance", "host"],
   ["concurrent-replacement-private-post-race", "player"],
   ["concurrent-replacement-private-post-race-reload", "player"],
@@ -165,9 +173,9 @@ const seedScenarioProofLaneAliases = new Map([
   ["host-phase-controls", ["browser-entry", "core-loop"]],
   ["cohost-deadline-control", ["browser-entry", "cohost-console"]],
   ["player-vote-recovery", ["browser-entry", "core-loop", "stale-player-vote"]],
-  ["player-action-denied", ["browser-entry", "player-action-boundary"]],
+  ["player-action-denied", ["browser-entry", playerActionBoundaryLaneId]],
   ["resolution-receipt", ["browser-entry", "resolution-receipts"]],
-  ["night-action-loop", ["action-loop", "stale-action-conflict"]],
+  ["night-action-loop", [playerActionLoopLaneId, "stale-action-conflict"]],
   ["local-ops-readiness", ["local-ops-artifact-bundle", "local-backup-restore-drill"]],
 ]);
 
@@ -175,7 +183,7 @@ export const seedAliasOnlyProofLaneIds = Object.freeze([
   "browser-entry",
   "cohost-console",
   "core-loop",
-  "action-loop",
+  playerActionLoopLaneId,
   "stale-action-conflict",
 ]);
 

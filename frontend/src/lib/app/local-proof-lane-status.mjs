@@ -1,14 +1,19 @@
 import {
   completedGameSeedRequiredScenarioIds,
 } from "../../../../tools/dev_test_game_core_loop_completed_scenarios.mjs";
+import {
+  playerActionBoundaryLaneId,
+  playerActionLoopLaneId,
+  playerInvalidActionRecoveryLaneId,
+} from "../../../../tools/dev_test_game_core_loop_action_scenarios.mjs";
 
 const CORE_LOOP_FOUNDATION_HIGHLIGHTED_LANE_IDS = Object.freeze([
   "core-loop",
-  "action-loop",
+  playerActionLoopLaneId,
   "host-deadline-advance",
-  "invalid-action-recovery",
+  playerInvalidActionRecoveryLaneId,
   "resolution-receipts",
-  "player-action-boundary",
+  playerActionBoundaryLaneId,
   "private-channel",
 ]);
 
@@ -88,13 +93,13 @@ export function coreLoopLaneStatus(lane) {
   switch (lane?.id) {
     case "core-loop":
       return `${status}: ${String(evidence.rejectedVoteError ?? "unknown")} vote receipt, unchanged ${String(evidence.staleVoteVotecountUnchanged ?? "unknown")}, lock ${String(evidence.lockState ?? "unknown")}/unlock ${String(evidence.unlockState ?? "unknown")}`;
-    case "action-loop":
+    case playerActionLoopLaneId:
       return `${status}: role URL ${typeof evidence.actionRoleUrl === "string"}, night ${String(evidence.nightPhase ?? "unknown")}, receipt ${String(evidence.targetReceiptStatus ?? "unknown")}, D02 ${String(evidence.d02VoteOutcomeStatus ?? "unknown")}, next ${String(evidence.nextNightPhase ?? "unknown")}`;
     case "host-deadline-advance":
       return `${status}: ${String(evidence.commandPhase ?? "unknown")} deadline -> ${String(evidence.browserPhaseAfter ?? "unknown")}`;
-    case "invalid-action-recovery":
+    case playerInvalidActionRecoveryLaneId:
       return `${status}: Reject ${String(evidence.rejectError ?? "unknown")}, legal action visible ${String(evidence.legalActionVisible ?? "unknown")}`;
-    case "player-action-boundary":
+    case playerActionBoundaryLaneId:
       return `${status}: ${Number(evidence.commandActionCount ?? 0)} unowned actions, direct reject ${String(evidence.directRejectError ?? "unknown")}`;
     case "private-channel":
       return `${status}: ${String(evidence.channel ?? "unknown")}, denied ${String(evidence.deniedStatus ?? "unknown")}`;

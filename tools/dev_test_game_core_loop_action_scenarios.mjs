@@ -1,3 +1,7 @@
+export const playerActionLoopLaneId = "action-loop";
+export const playerInvalidActionRecoveryLaneId = "invalid-action-recovery";
+export const playerActionBoundaryLaneId = "player-action-boundary";
+
 export function playerActionSubmissionScenario() {
   return {
     clickedAction: "submit_action:factional_kill",

@@ -22,6 +22,11 @@ import {
   coreLoopAuditLaneIds,
 } from "../../../../tools/dev_test_game_core_loop_scenarios.mjs";
 import {
+  playerActionBoundaryLaneId,
+  playerActionLoopLaneId,
+  playerInvalidActionRecoveryLaneId,
+} from "../../../../tools/dev_test_game_core_loop_action_scenarios.mjs";
+import {
   hostedEvidenceHandoffInputRows,
 } from "../../../../tools/dev_test_game_hosted_handoff_cases.mjs";
 
@@ -32,10 +37,10 @@ export const ADMIN_ROUTE_CONTRACT = Object.freeze({
 });
 
 export const LOCAL_PLAYER_RECOVERY_AUDIT_LANE_IDS = Object.freeze([
-  "action-loop",
-  "invalid-action-recovery",
+  playerActionLoopLaneId,
+  playerInvalidActionRecoveryLaneId,
   "dead-player-recovery",
-  "player-action-boundary",
+  playerActionBoundaryLaneId,
   "idempotent-retry",
   "action-idempotent-retry",
   "concurrent-action-race",
@@ -3596,10 +3601,10 @@ export function normalizeLocalPlayerRecoveryAudit(proofRun, { game }) {
 function localPlayerRecoveryLaneStatus(lane) {
   if (
     [
-      "action-loop",
-      "invalid-action-recovery",
+      playerActionLoopLaneId,
+      playerInvalidActionRecoveryLaneId,
       "dead-player-recovery",
-      "player-action-boundary",
+      playerActionBoundaryLaneId,
     ].includes(lane?.id)
   ) {
     return coreLoopLaneStatus(lane);

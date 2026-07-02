@@ -2,6 +2,8 @@ import {
   hostResolvePhaseTransitionCase,
 } from "./dev_test_game_core_loop_host_phase_scenarios.mjs";
 
+export const dayThreeVoteResolutionLaneId = "day-vote-resolution";
+
 const cloneVoteResolutionSurfaceCase = (surfaceCase) => ({
   ...surfaceCase,
   transitionFragments: [...surfaceCase.transitionFragments],

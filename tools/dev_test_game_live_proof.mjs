@@ -4,6 +4,10 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import {
+  playerActionLoopLaneId,
+  playerInvalidActionRecoveryLaneId,
+} from "./dev_test_game_core_loop_action_scenarios.mjs";
+import {
   replacementActionReconnectScenario,
   replacementIncomingActionScenario,
   replacementStaleActionAfterResolveScenario,
@@ -59,8 +63,8 @@ assert.equal(
 assert.equal(proofRun.coreLoopSpine.status, "passed");
 assert.deepEqual(proofRun.coreLoopSpine.sourceLaneIds, [
   "core-loop",
-  "action-loop",
-  "invalid-action-recovery",
+  playerActionLoopLaneId,
+  playerInvalidActionRecoveryLaneId,
   "resolution-receipts",
 ]);
 assert.deepEqual(

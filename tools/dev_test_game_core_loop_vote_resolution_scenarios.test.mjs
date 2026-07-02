@@ -2,8 +2,13 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
   assertDayThreeVoteResolutionSurfaceCase,
+  dayThreeVoteResolutionLaneId,
   dayThreeVoteResolutionSurfaceCase,
 } from "./dev_test_game_core_loop_vote_resolution_scenarios.mjs";
+
+test("Day 3 vote resolution scenario module exports proof lane id", () => {
+  assert.equal(dayThreeVoteResolutionLaneId, "day-vote-resolution");
+});
 
 test("Day 3 vote resolution case shares vote and host resolution facts", () => {
   assert.deepEqual(dayThreeVoteResolutionSurfaceCase(), {

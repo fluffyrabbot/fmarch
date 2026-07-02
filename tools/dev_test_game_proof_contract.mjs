@@ -29,6 +29,14 @@ import {
   hostUnlockThreadCommandFacts,
 } from "./dev_test_game_core_loop_host_phase_scenarios.mjs";
 import {
+  playerActionBoundaryLaneId,
+  playerActionLoopLaneId,
+  playerInvalidActionRecoveryLaneId,
+} from "./dev_test_game_core_loop_action_scenarios.mjs";
+import {
+  dayThreeVoteResolutionLaneId,
+} from "./dev_test_game_core_loop_vote_resolution_scenarios.mjs";
+import {
   cohostDeadlineStaleBasePassed,
   cohostDeadlineStaleReconnectPassed,
   cohostDeadlineStaleReloadPassed,
@@ -110,15 +118,15 @@ const requiredLaneIds = Object.freeze([
   "browser-entry",
   "cohost-console",
   "core-loop",
-  "day-vote-resolution",
+  dayThreeVoteResolutionLaneId,
   "day-vote-no-lynch",
-  "action-loop",
+  playerActionLoopLaneId,
   "host-deadline-advance",
   "stale-deadline-advance",
-  "invalid-action-recovery",
+  playerInvalidActionRecoveryLaneId,
   "resolution-receipts",
   "dead-player-recovery",
-  "player-action-boundary",
+  playerActionBoundaryLaneId,
   "private-channel",
   "replacement-host-issued-invite",
   "replacement-pending-player",
@@ -287,7 +295,7 @@ export function buildDevTestGameProofRun(session, options = {}) {
         verification.coreLoop?.lock?.commandStatus?.state === "ack" &&
         verification.coreLoop?.unlock?.commandStatus?.state === "ack",
     }),
-    lane("day-vote-resolution", "Day vote resolves through role URLs", {
+    lane(dayThreeVoteResolutionLaneId, "Day vote resolves through role URLs", {
       finalVoteState: verification.dayVoteResolution?.finalVote?.state ?? null,
       outcomeStatus: verification.dayVoteResolution?.dayVoteOutcome?.status ?? null,
       winnerSlot: verification.dayVoteResolution?.dayVoteOutcome?.winner_slot ?? null,
@@ -451,7 +459,7 @@ export function buildDevTestGameProofRun(session, options = {}) {
           (notice) => notice.effect !== "player_killed" || notice.status !== "day_vote",
         ),
     }),
-    lane("action-loop", "Day/night action submission and resolution", {
+    lane(playerActionLoopLaneId, "Day/night action submission and resolution", {
       hostRoleUrl: verification.actionLoop?.dayNightTransition?.hostRoleUrl ?? null,
       actionRoleUrl: verification.actionLoop?.dayNightTransition?.actionRoleUrl ?? null,
       normalPlayerRoleUrl:
@@ -826,7 +834,7 @@ export function buildDevTestGameProofRun(session, options = {}) {
         verification.actionLoop?.staleDeadlineAdvance?.apiPhaseAfterReject?.deadline ===
           null,
     }),
-    lane("invalid-action-recovery", "Invalid action reject keeps legal controls usable", {
+    lane(playerInvalidActionRecoveryLaneId, "Invalid action reject keeps legal controls usable", {
       rejectError: verification.invalidActionRecovery?.reject?.error ?? null,
       receiptActionId: verification.invalidActionRecovery?.currentReceipt?.actionId ?? null,
       receiptState: verification.invalidActionRecovery?.currentReceipt?.state ?? null,
@@ -927,7 +935,7 @@ export function buildDevTestGameProofRun(session, options = {}) {
         verification.deadPlayerRecovery?.commandStateAfterRejects?.actorAlive === false &&
         verification.deadPlayerRecovery?.commandStateAfterRejects?.actions?.length === 0,
     }),
-    lane("player-action-boundary", "Player role URL hides and rejects unowned night actions", {
+    lane(playerActionBoundaryLaneId, "Player role URL hides and rejects unowned night actions", {
       phase: verification.playerActionBoundary?.phase?.phaseId ?? null,
       commandActionCount:
         verification.playerActionBoundary?.commandActions?.length ?? null,
@@ -6311,8 +6319,8 @@ function buildCoreLoopSpineSummary({ session, verification }) {
       "Compact derived spine map for the seeded role URL core loop: D01 resolve to N01 action, N01 resolution to D02 day controls, D02 vote resolution, and N02 action return.",
     sourceLaneIds: [
       "core-loop",
-      "action-loop",
-      "invalid-action-recovery",
+      playerActionLoopLaneId,
+      playerInvalidActionRecoveryLaneId,
       "resolution-receipts",
     ],
     cycles,
@@ -6327,7 +6335,10 @@ function assertCoreLoopSpineSummary(summary) {
   if (summary.proof !== undefined && typeof summary.proof !== "string") {
     throw new Error("core loop spine summary proof must be text");
   }
-  if (!Array.isArray(summary.sourceLaneIds) || !summary.sourceLaneIds.includes("action-loop")) {
+  if (
+    !Array.isArray(summary.sourceLaneIds) ||
+    !summary.sourceLaneIds.includes(playerActionLoopLaneId)
+  ) {
     throw new Error("core loop spine summary must cite the action-loop source lane");
   }
   if (!Array.isArray(summary.cycles) || summary.cycles.length !== 2) {
