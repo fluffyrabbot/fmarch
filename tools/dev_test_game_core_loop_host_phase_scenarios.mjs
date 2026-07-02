@@ -22,6 +22,11 @@ const cloneDayVoteHostTransitionProofCase = (transitionCase) => ({
   resolveCase: cloneTransitionProofCase(transitionCase.resolveCase),
   advanceCase: cloneTransitionProofCase(transitionCase.advanceCase),
 });
+const cloneResolveAdvanceHostTransitionProofCase = (transitionCase) => ({
+  ...transitionCase,
+  resolveCase: cloneTransitionProofCase(transitionCase.resolveCase),
+  advanceCase: cloneTransitionProofCase(transitionCase.advanceCase),
+});
 
 const hostPhaseCommandFactDefinitions = Object.freeze({
   resolve: Object.freeze({
@@ -385,6 +390,73 @@ export function assertDayFourNoLynchHostTransitionProofCase({
       includeEvidenceInError,
     });
   }
+}
+
+const emptyNightThreeHostTransitionProofCaseDefinition = Object.freeze({
+  surfaceTestId: "host-console-surface",
+  setupResyncFromSeq: 909,
+  setupPhaseId: "N03",
+  setupPhaseState: "open",
+  resolveCase: Object.freeze(
+    hostResolvePhaseTransitionCase({
+      streamSeq: 910,
+      expectedPhaseId: "N03",
+    }),
+  ),
+  advanceCase: Object.freeze(
+    hostAdvancePhaseTransitionCase({
+      streamSeq: 911,
+      expectedPhaseId: "D04",
+    }),
+  ),
+});
+
+export function emptyNightThreeHostTransitionProofCase() {
+  return cloneResolveAdvanceHostTransitionProofCase(
+    emptyNightThreeHostTransitionProofCaseDefinition,
+  );
+}
+
+export function assertEmptyNightThreeHostTransitionProofCase({
+  proof,
+  expectedGame,
+  sourceRoleUrl,
+  assertHostPhaseTransitionActionProof = assertHostPhaseTransitionActionProofCase,
+  includeEvidenceInError = false,
+}) {
+  const transitionCase = emptyNightThreeHostTransitionProofCaseDefinition;
+  if (
+    proof?.status !== "passed" ||
+    proof.clickedThroughFromRoleUrl !== true ||
+    proof.releaseReady !== false ||
+    proof.productionReady !== false ||
+    proof.rawInviteTokensVisible !== false ||
+    proof.sourceRoleUrl !== sourceRoleUrl ||
+    typeof proof.visitedRolePath !== "string" ||
+    !proof.visitedRolePath.endsWith("/host") ||
+    proof.surfaceTestId !== transitionCase.surfaceTestId ||
+    proof.setupResyncFromSeq !== transitionCase.setupResyncFromSeq ||
+    proof.setupSnapshotHost?.phase?.id !== transitionCase.setupPhaseId ||
+    proof.setupSnapshotHost?.phase?.state !== transitionCase.setupPhaseState
+  ) {
+    throwHostPhaseScenarioAssertionError({
+      message: "core-loop admin proof missing empty Night 3 host transition",
+      evidence: proof,
+      includeEvidenceInError,
+    });
+  }
+  assertHostPhaseTransitionActionProof({
+    proof: proof.resolveProof,
+    expectedGame,
+    ...transitionCase.resolveCase,
+    includeEvidenceInError,
+  });
+  assertHostPhaseTransitionActionProof({
+    proof: proof.advanceProof,
+    expectedGame,
+    ...transitionCase.advanceCase,
+    includeEvidenceInError,
+  });
 }
 
 const hostLifecycleControlScenarioDefinition = Object.freeze({

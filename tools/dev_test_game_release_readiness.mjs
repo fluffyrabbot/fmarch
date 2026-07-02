@@ -71,6 +71,7 @@ import {
 } from "./dev_test_game_core_loop_action_scenarios.mjs";
 import {
   assertDayFourNoLynchHostTransitionProofCase,
+  assertEmptyNightThreeHostTransitionProofCase,
   assertHostLifecycleControlRoleSurfaceCase,
   assertHostNightActionTransitionSurfaceCase,
   assertHostPhaseTransitionActionProofCase,
@@ -3215,37 +3216,12 @@ function assertCoreLoopNightThreeEmptyHostTransitionProof({
   expectedGame,
   sourceRoleUrl,
 }) {
-  if (
-    proof?.status !== "passed" ||
-    proof.clickedThroughFromRoleUrl !== true ||
-    proof.releaseReady !== false ||
-    proof.productionReady !== false ||
-    proof.rawInviteTokensVisible !== false ||
-    proof.sourceRoleUrl !== sourceRoleUrl ||
-    typeof proof.visitedRolePath !== "string" ||
-    !proof.visitedRolePath.endsWith("/host") ||
-    proof.surfaceTestId !== "host-console-surface" ||
-    proof.setupResyncFromSeq !== 909 ||
-    proof.setupSnapshotHost?.phase?.id !== "N03" ||
-    proof.setupSnapshotHost?.phase?.state !== "open"
-  ) {
-    throw new Error("core-loop admin proof missing empty Night 3 host transition");
-  }
-  assertCoreLoopHostPhaseTransitionActionProof({
-    proof: proof.resolveProof,
+  assertEmptyNightThreeHostTransitionProofCase({
+    proof,
     expectedGame,
-    ...hostResolvePhaseTransitionCase({
-      streamSeq: 910,
-      expectedPhaseId: "N03",
-    }),
-  });
-  assertCoreLoopHostPhaseTransitionActionProof({
-    proof: proof.advanceProof,
-    expectedGame,
-    ...hostAdvancePhaseTransitionCase({
-      streamSeq: 911,
-      expectedPhaseId: "D04",
-    }),
+    sourceRoleUrl,
+    assertHostPhaseTransitionActionProof:
+      assertCoreLoopHostPhaseTransitionActionProof,
   });
 }
 

@@ -2,11 +2,13 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
   assertDayFourNoLynchHostTransitionProofCase,
+  assertEmptyNightThreeHostTransitionProofCase,
   assertHostNightActionTransitionSurfaceCase,
   assertHostLifecycleControlRoleSurfaceCase,
   assertHostPhaseTransitionActionProofCase,
   assertHostStaleAdvanceAfterTransitionProofCase,
   dayFourNoLynchHostTransitionProofCase,
+  emptyNightThreeHostTransitionProofCase,
   hostAdvanceByDeadlineCommandFacts,
   hostAdvancePhaseCommandFacts,
   hostAdvancePhaseTransitionCase,
@@ -492,6 +494,111 @@ test("Day 4 no-lynch host transition assertion covers shared projections", () =>
         sourceRoleUrl: "http://127.0.0.1:5173/g/game-a/host",
       }),
     /Day 4 no-lynch host projections/,
+  );
+});
+
+test("empty Night 3 host transition case shares phase facts", () => {
+  assert.deepEqual(emptyNightThreeHostTransitionProofCase(), {
+    surfaceTestId: "host-console-surface",
+    setupResyncFromSeq: 909,
+    setupPhaseId: "N03",
+    setupPhaseState: "open",
+    resolveCase: {
+      actionId: "resolve_phase",
+      commandKind: "ResolvePhase",
+      streamSeq: 910,
+      expectedPhaseId: "N03",
+      expectedPhaseState: "locked",
+      expectedRefreshKeys: [
+        "host",
+        "votecount",
+        "dayVoteOutcomes",
+        "hostPrompts",
+      ],
+    },
+    advanceCase: {
+      actionId: "advance_phase",
+      commandKind: "AdvancePhase",
+      streamSeq: 911,
+      expectedPhaseId: "D04",
+      expectedPhaseState: "open",
+      expectedRefreshKeys: [],
+    },
+  });
+  assert.notEqual(
+    emptyNightThreeHostTransitionProofCase().resolveCase.expectedRefreshKeys,
+    emptyNightThreeHostTransitionProofCase().resolveCase.expectedRefreshKeys,
+  );
+});
+
+test("empty Night 3 host transition assertion covers resolve and advance ACKs", () => {
+  const observed = [];
+  const proof = {
+    status: "passed",
+    clickedThroughFromRoleUrl: true,
+    releaseReady: false,
+    productionReady: false,
+    rawInviteTokensVisible: false,
+    sourceRoleUrl: "http://127.0.0.1:5173/g/game-a/host",
+    visitedRolePath: "/g/game-a/host",
+    surfaceTestId: "host-console-surface",
+    setupResyncFromSeq: 909,
+    setupSnapshotHost: {
+      phase: { id: "N03", state: "open" },
+    },
+    resolveProof: hostPhaseTransitionProofFixture({
+      actionId: "resolve_phase",
+      commandKind: "ResolvePhase",
+      streamSeq: 910,
+      expectedPhaseId: "N03",
+      expectedPhaseState: "locked",
+      deadlineAffordance: "unlock_thread,advance_phase",
+      refreshKeys: ["host", "votecount", "dayVoteOutcomes", "hostPrompts"],
+    }),
+    advanceProof: hostPhaseTransitionProofFixture({
+      actionId: "advance_phase",
+      commandKind: "AdvancePhase",
+      streamSeq: 911,
+      expectedPhaseId: "D04",
+      expectedPhaseState: "open",
+      deadlineAffordance: "resolve_phase,lock_thread",
+      refreshKeys: [],
+    }),
+  };
+
+  assert.doesNotThrow(() =>
+    assertEmptyNightThreeHostTransitionProofCase({
+      proof,
+      expectedGame: "game-a",
+      sourceRoleUrl: "http://127.0.0.1:5173/g/game-a/host",
+      assertHostPhaseTransitionActionProof: (args) => observed.push(args),
+    }),
+  );
+  assert.deepEqual(
+    observed.map((args) => [
+      args.actionId,
+      args.streamSeq,
+      args.expectedPhaseId,
+      args.expectedPhaseState,
+    ]),
+    [
+      ["resolve_phase", 910, "N03", "locked"],
+      ["advance_phase", 911, "D04", "open"],
+    ],
+  );
+  assert.throws(
+    () =>
+      assertEmptyNightThreeHostTransitionProofCase({
+        proof: {
+          ...proof,
+          setupSnapshotHost: {
+            phase: { id: "D04", state: "open" },
+          },
+        },
+        expectedGame: "game-a",
+        sourceRoleUrl: "http://127.0.0.1:5173/g/game-a/host",
+      }),
+    /empty Night 3 host transition/,
   );
 });
 
