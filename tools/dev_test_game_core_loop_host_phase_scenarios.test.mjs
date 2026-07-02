@@ -1,12 +1,14 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
+  assertHostLifecycleControlRoleSurfaceCase,
   assertHostPhaseTransitionActionProofCase,
   assertHostStaleAdvanceAfterTransitionProofCase,
   hostAdvanceByDeadlineCommandFacts,
   hostAdvancePhaseCommandFacts,
   hostCompleteGameCommandFacts,
   hostExtendDeadlineCommandFacts,
+  hostLifecycleControlScenario,
   hostLockThreadCommandFacts,
   hostResolvePhaseCommandFacts,
   hostUnlockThreadCommandFacts,
@@ -117,6 +119,142 @@ test("host phase transition ACK assertion covers resolve projection refresh", ()
         expectedRefreshKeys: ["host", "votecount"],
       }),
     /host resolve_phase transition ACK/,
+  );
+});
+
+test("host phase scenario module exposes shared lifecycle control case", () => {
+  assert.deepEqual(hostLifecycleControlScenario(), {
+    proofCheckId: "host-lifecycle-control",
+    surfaceTestId: "host-console-surface",
+    checkpointTestId: "host-lifecycle-control-checkpoint",
+    role: "moderator",
+    commandEndpoint: "/commands",
+    actionId: "lock_thread",
+    commandKind: "LockThread",
+    ackStreamSeq: 601,
+    openPhaseId: "D01",
+    openPhaseState: "open",
+    lockedPhaseState: "locked",
+    slotId: "slot-7",
+    actionState: "enabled:mark_dead,modkill_slot",
+    openDeadlineAffordance: "resolve_phase,lock_thread",
+    lockedDeadlineAffordance: "unlock_thread,advance_phase",
+    visibleRows: [
+      "phase",
+      "slot",
+      "actionState",
+      "deadlineAffordance",
+      "recovery",
+    ],
+  });
+  assert.notEqual(
+    hostLifecycleControlScenario(),
+    hostLifecycleControlScenario(),
+  );
+  assert.notEqual(
+    hostLifecycleControlScenario().visibleRows,
+    hostLifecycleControlScenario().visibleRows,
+  );
+});
+
+test("host lifecycle control assertion covers checkpoint, click, and stale reject", () => {
+  const hostRoleSurface = {
+    status: "passed",
+    clickedThroughFromRoleUrl: true,
+    releaseReady: false,
+    productionReady: false,
+    sourceRoleUrl: "http://127.0.0.1:5173/g/game-a/host",
+    visitedRolePath: "/g/game-a/host",
+    surfaceTestId: "host-console-surface",
+    checkpointTestId: "host-lifecycle-control-checkpoint",
+    hostLifecycleControlCheckpoint: {
+      proofCheckId: "host-lifecycle-control",
+      phaseId: "D01",
+      phaseState: "open",
+      slotId: "slot-7",
+      actionState: "enabled:mark_dead,modkill_slot",
+      deadlineAffordance: "resolve_phase,lock_thread",
+      visibleRows: [
+        "phase",
+        "slot",
+        "actionState",
+        "deadlineAffordance",
+        "recovery",
+      ],
+      recoveryText: "Reject PhaseLocked: phase locked",
+      statusText: "Host lifecycle controls are reachable from this role URL",
+    },
+    hostLifecycleControlClickProof: {
+      status: "passed",
+      clickedAction: "lock_thread",
+      commandKind: "LockThread",
+      command: { game: "game-a" },
+      commandStatus: { state: "ack", message: "Ack: stream seqs 601" },
+      commandOutcome: { state: "ack", message: "Ack: stream seqs 601" },
+      bridgePlan: {
+        role: "moderator",
+        commandKind: "LockThread",
+        commandEndpoint: "/commands",
+        finalState: "ack",
+        projectionRefreshKeys: [],
+      },
+      projection: { phase: { id: "D01", locked: true } },
+      checkpointPhaseStateAfterAck: "locked",
+      checkpointDeadlineAffordanceAfterAck: "unlock_thread,advance_phase",
+      statusText: "Ack: stream seqs 601",
+      activityCount: 1,
+      activityStatusText: "Ack: stream seqs 601",
+    },
+    hostLifecycleStaleRejectProof: {
+      status: "passed",
+      clickedAction: "lock_thread",
+      commandKind: "LockThread",
+      command: { game: "game-a" },
+      commandStatus: {
+        state: "reject",
+        error: "PhaseLocked",
+        message: "Reject PhaseLocked: phase locked",
+      },
+      commandOutcome: {
+        state: "reject",
+        error: "PhaseLocked",
+        message: "Reject PhaseLocked: phase locked",
+      },
+      bridgePlan: {
+        role: "moderator",
+        commandKind: "LockThread",
+        commandEndpoint: "/commands",
+        finalState: "reject",
+        projectionRefreshKeys: ["host"],
+      },
+      projection: { phase: { id: "D01", locked: false } },
+      checkpointPhaseStateAfterReject: "open",
+      checkpointDeadlineAffordanceAfterReject: "resolve_phase,lock_thread",
+      recoveryText: "Reject PhaseLocked: phase locked",
+      activityCount: 1,
+      activityStatusText: "Reject PhaseLocked: phase locked",
+    },
+  };
+
+  assert.doesNotThrow(() =>
+    assertHostLifecycleControlRoleSurfaceCase({
+      hostRoleSurface,
+      expectedGame: "game-a",
+    }),
+  );
+  assert.throws(
+    () =>
+      assertHostLifecycleControlRoleSurfaceCase({
+        hostRoleSurface: {
+          ...hostRoleSurface,
+          hostLifecycleControlCheckpoint: {
+            ...hostRoleSurface.hostLifecycleControlCheckpoint,
+            deadlineAffordance: "resolve_phase",
+          },
+        },
+        expectedGame: "game-a",
+      }),
+    /host lifecycle role checkpoint/,
   );
 });
 

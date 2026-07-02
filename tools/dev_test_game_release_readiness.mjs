@@ -70,6 +70,7 @@ import {
   staleNightFourActionRecoveryScenario,
 } from "./dev_test_game_core_loop_action_scenarios.mjs";
 import {
+  assertHostLifecycleControlRoleSurfaceCase,
   assertHostPhaseTransitionActionProofCase,
   assertHostStaleAdvanceAfterTransitionProofCase,
   hostAdvancePhaseCommandFacts,
@@ -1766,124 +1767,10 @@ export function validateDevTestGameCoreLoopAdminProof(proof, options = {}) {
 }
 
 function assertCoreLoopHostLifecycleCheckpoint(hostRoleSurface) {
-  const checkpoint = hostRoleSurface?.hostLifecycleControlCheckpoint;
-  const clickProof = hostRoleSurface?.hostLifecycleControlClickProof;
-  const staleRejectProof = hostRoleSurface?.hostLifecycleStaleRejectProof;
-  if (
-    hostRoleSurface?.status !== "passed" ||
-    hostRoleSurface.clickedThroughFromRoleUrl !== true ||
-    hostRoleSurface.releaseReady !== false ||
-    hostRoleSurface.productionReady !== false ||
-    typeof hostRoleSurface.sourceRoleUrl !== "string" ||
-    !hostRoleSurface.sourceRoleUrl.includes("/g/") ||
-    typeof hostRoleSurface.visitedRolePath !== "string" ||
-    !hostRoleSurface.visitedRolePath.endsWith("/host") ||
-    hostRoleSurface.surfaceTestId !== "host-console-surface" ||
-    hostRoleSurface.checkpointTestId !== "host-lifecycle-control-checkpoint" ||
-    checkpoint?.proofCheckId !== "host-lifecycle-control" ||
-    checkpoint.phaseId !== "D01" ||
-    checkpoint.phaseState !== "open" ||
-    checkpoint.slotId !== "slot-7" ||
-    checkpoint.actionState !== "enabled:mark_dead,modkill_slot" ||
-    !checkpoint.deadlineAffordance?.includes("resolve_phase") ||
-    !checkpoint.recoveryText?.includes("Reject PhaseLocked") ||
-    !checkpoint.statusText?.includes(
-      "Host lifecycle controls are reachable from this role URL",
-    )
-  ) {
-    throw new Error("core-loop admin proof missing host lifecycle role checkpoint");
-  }
-  for (const rowId of [
-    "phase",
-    "slot",
-    "actionState",
-    "deadlineAffordance",
-    "recovery",
-  ]) {
-    if (!checkpoint.visibleRows?.includes(rowId)) {
-      throw new Error(`host lifecycle checkpoint missing visible row: ${rowId}`);
-    }
-  }
-  assertCoreLoopHostLifecycleClickProof({
-    clickProof,
-    expectedGame: gameFromRoleUrl(hostRoleSurface.sourceRoleUrl),
+  assertHostLifecycleControlRoleSurfaceCase({
+    hostRoleSurface,
+    expectedGame: gameFromRoleUrl(hostRoleSurface?.sourceRoleUrl),
   });
-  assertCoreLoopHostLifecycleStaleRejectProof({
-    staleRejectProof,
-    expectedGame: gameFromRoleUrl(hostRoleSurface.sourceRoleUrl),
-  });
-}
-
-function assertCoreLoopHostLifecycleClickProof({ clickProof, expectedGame }) {
-  if (
-    clickProof?.status !== "passed" ||
-    clickProof.clickedAction !== "lock_thread" ||
-    clickProof.commandKind !== "LockThread" ||
-    clickProof.command?.game !== expectedGame ||
-    clickProof.commandStatus?.state !== "ack" ||
-    !clickProof.commandStatus?.message?.includes("Ack: stream seqs 601") ||
-    clickProof.commandOutcome?.state !== "ack" ||
-    !clickProof.commandOutcome?.message?.includes("Ack: stream seqs 601") ||
-    clickProof.bridgePlan?.role !== "moderator" ||
-    clickProof.bridgePlan.commandKind !== "LockThread" ||
-    clickProof.bridgePlan.commandEndpoint !== "/commands" ||
-    clickProof.bridgePlan.finalState !== "ack" ||
-    clickProof.bridgePlan.projectionRefreshKeys?.length !== 0 ||
-    clickProof.projection?.phase?.id !== "D01" ||
-    clickProof.projection?.phase?.locked !== true ||
-    clickProof.checkpointPhaseStateAfterAck !== "locked" ||
-    clickProof.checkpointDeadlineAffordanceAfterAck !==
-      "unlock_thread,advance_phase" ||
-    !String(clickProof.statusText ?? "")
-      .toLowerCase()
-      .includes("ack: stream seqs 601") ||
-    clickProof.activityCount !== 1 ||
-    !String(clickProof.activityStatusText ?? "")
-      .toLowerCase()
-      .includes("ack: stream seqs 601")
-  ) {
-    throw new Error("core-loop admin proof missing host lifecycle click ACK");
-  }
-}
-
-function assertCoreLoopHostLifecycleStaleRejectProof({
-  staleRejectProof,
-  expectedGame,
-}) {
-  if (
-    staleRejectProof?.status !== "passed" ||
-    staleRejectProof.clickedAction !== "lock_thread" ||
-    staleRejectProof.commandKind !== "LockThread" ||
-    staleRejectProof.command?.game !== expectedGame ||
-    staleRejectProof.commandStatus?.state !== "reject" ||
-    staleRejectProof.commandStatus.error !== "PhaseLocked" ||
-    !staleRejectProof.commandStatus?.message?.includes(
-      "Reject PhaseLocked: phase locked",
-    ) ||
-    staleRejectProof.commandOutcome?.state !== "reject" ||
-    staleRejectProof.commandOutcome.error !== "PhaseLocked" ||
-    !staleRejectProof.commandOutcome?.message?.includes(
-      "Reject PhaseLocked: phase locked",
-    ) ||
-    staleRejectProof.bridgePlan?.role !== "moderator" ||
-    staleRejectProof.bridgePlan.commandKind !== "LockThread" ||
-    staleRejectProof.bridgePlan.commandEndpoint !== "/commands" ||
-    staleRejectProof.bridgePlan.finalState !== "reject" ||
-    staleRejectProof.bridgePlan.projectionRefreshKeys?.[0] !== "host" ||
-    staleRejectProof.bridgePlan.projectionRefreshKeys?.length !== 1 ||
-    staleRejectProof.projection?.phase?.id !== "D01" ||
-    staleRejectProof.projection?.phase?.locked !== false ||
-    staleRejectProof.checkpointPhaseStateAfterReject !== "open" ||
-    staleRejectProof.checkpointDeadlineAffordanceAfterReject !==
-      "resolve_phase,lock_thread" ||
-    !String(staleRejectProof.recoveryText ?? "").includes("Reject PhaseLocked") ||
-    staleRejectProof.activityCount !== 1 ||
-    !String(staleRejectProof.activityStatusText ?? "")
-      .toLowerCase()
-      .includes("reject phaselocked: phase locked")
-  ) {
-    throw new Error("core-loop admin proof missing host stale lifecycle recovery");
-  }
 }
 
 function assertCoreLoopPlayerActionCheckpoint(playerRoleSurface) {

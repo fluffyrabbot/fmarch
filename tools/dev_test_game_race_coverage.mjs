@@ -18,6 +18,8 @@ export const devTestGameRaceCoveragePath =
 export const devTestGameRaceCoverageCommand = "test:dev-test-game-race-coverage";
 
 const raceCoverageJsonPath = path.join(repoRoot, devTestGameRaceCoveragePath);
+const hostPhaseRaceCoverageCells = hostPhaseRaceCoverageCellCases().map(raceCell);
+const hostMixedAdvanceRaceCoverageCellId = "host-mixed-advance";
 
 const raceCells = Object.freeze([
   raceCell({
@@ -84,7 +86,9 @@ const raceCells = Object.freeze([
     reloadLaneId: "concurrent-replacement-action-race-reload",
     roleSurfaces: ["player", "replacementPlayer", "host"],
   }),
-  ...hostPhaseRaceCoverageCellCases().map(raceCell),
+  ...hostPhaseRaceCoverageCells.filter(
+    (cell) => cell.id !== hostMixedAdvanceRaceCoverageCellId,
+  ),
   raceCell({
     id: "host-lifecycle",
     actorPair: "host vs host",
@@ -93,6 +97,9 @@ const raceCells = Object.freeze([
     reloadLaneId: "concurrent-host-lifecycle-race-reload",
     roleSurfaces: ["host"],
   }),
+  ...hostPhaseRaceCoverageCells.filter(
+    (cell) => cell.id === hostMixedAdvanceRaceCoverageCellId,
+  ),
   raceCell({
     id: "host-votecount-publication",
     actorPair: "host vs host",
