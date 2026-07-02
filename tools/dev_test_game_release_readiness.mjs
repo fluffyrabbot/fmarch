@@ -179,15 +179,23 @@ const devTestGameSeededBrowserProofCommand =
   "DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch npm run test:dev-test-game-live";
 const devTestGameCoreLoopAdminProofCommand =
   "npm run test:dev-test-game-core-loop-admin-proof";
+const devTestGameHardeningAdminProofCommand =
+  "npm run test:dev-test-game-hardening-admin-proof";
 const productionFeatureSpineSourceCheckRules = Object.freeze({
   "local-core-loop-proof": Object.freeze({
     detailRoleUrlIncludes: "/admin/audit/local-core-loop",
     roleUrlIncludes: "/g/",
     rerunCommand: devTestGameCoreLoopAdminProofCommand,
   }),
+  "local-hardening-proof": Object.freeze({
+    detailRoleUrlIncludes: "/admin/audit/local-hardening",
+    roleUrlIncludes: "/g/",
+    rerunCommand: devTestGameHardeningAdminProofCommand,
+  }),
 });
 const defaultProductionFeatureSpineRerunCommands = Object.freeze({
   "local-core-loop-proof": devTestGameCoreLoopAdminProofCommand,
+  "local-hardening-proof": devTestGameHardeningAdminProofCommand,
 });
 const proofRunLaneCoverageMilestoneIds = Object.freeze([
   "local-stale-conflict-message-milestone",
@@ -629,7 +637,13 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
       laneIds: hardeningAuditLaneIds,
       ...(hardeningAdminProofEvidence === undefined
         ? {}
-        : { adminRoleSurface: hardeningAdminProofEvidence }),
+        : {
+            adminRoleSurface: hardeningAdminProofEvidence,
+            spineTargets: buildHardeningReadinessSpineTargets({
+              hardeningAdminProofEvidence,
+              staleConflictMessageMilestone,
+            }),
+          }),
     },
     {
       id: "local-stale-conflict-message-milestone",
@@ -2836,6 +2850,67 @@ function buildCoreLoopReadinessSpineTargets(coreLoopAdminProofEvidence) {
         ].map((id) => String(id)),
         recoveryHookIds,
         roleUrlHrefs: rowIds.roleUrlHrefs ?? {},
+      },
+      defaultRerunCommandBySourceCheckId:
+        defaultProductionFeatureSpineRerunCommands,
+    }),
+  };
+}
+
+function buildHardeningReadinessSpineTargets({
+  hardeningAdminProofEvidence,
+  staleConflictMessageMilestone,
+}) {
+  const surfaces = [...(staleConflictMessageMilestone.surfaces ?? [])];
+  const roleUrlHrefs = Object.fromEntries(
+    surfaces
+      .filter(
+        (surface) =>
+          typeof surface.laneId === "string" &&
+          typeof surface.roleUrl === "string" &&
+          surface.roleUrl !== "",
+      )
+      .map((surface) => [surface.laneId, surface.roleUrl]),
+  );
+  const cycleIds = ["hardening-stale-conflict"];
+  const roleUrlIds = surfaces.map((surface) => String(surface.laneId));
+  const checkpointIds = [...roleUrlIds];
+  const defaultRoleUrlId = roleUrlIds.includes(
+    "replacement-stale-conflict-message",
+  )
+    ? "replacement-stale-conflict-message"
+    : String(roleUrlIds[0] ?? "");
+  return {
+    status: "passed",
+    detailRoleUrl: hardeningAdminProofEvidence.detailRoleUrl,
+    defaultCycleId: "hardening-stale-conflict",
+    defaultRoleUrlId,
+    defaultRoleUrl: String(roleUrlHrefs[defaultRoleUrlId] ?? ""),
+    defaultCheckpointId: defaultRoleUrlId,
+    browserProofCommand: devTestGameSeededBrowserProofCommand,
+    cycleIds,
+    roleUrlIds,
+    checkpointIds,
+    visibleAdminCheckIds: [
+      ...(hardeningAdminProofEvidence.visibleChecks ?? []),
+    ].map((id) => String(id)),
+    recoveryHookIds: [],
+    roleUrlHrefs,
+    productionFeatureTargets: buildProductionFeatureSpineTargetCollection({
+      declarations: releaseReadinessProductionFeatureSpineTargets,
+      sourceTarget: {
+        sourceCheckId: "local-hardening-proof",
+        detailRoleUrl: hardeningAdminProofEvidence.detailRoleUrl,
+        browserProofCommand: devTestGameSeededBrowserProofCommand,
+        rerunCommand: devTestGameHardeningAdminProofCommand,
+        cycleIds,
+        roleUrlIds,
+        checkpointIds,
+        visibleAdminCheckIds: [
+          ...(hardeningAdminProofEvidence.visibleChecks ?? []),
+        ].map((id) => String(id)),
+        recoveryHookIds: [],
+        roleUrlHrefs,
       },
       defaultRerunCommandBySourceCheckId:
         defaultProductionFeatureSpineRerunCommands,
@@ -5050,6 +5125,15 @@ export function assertDevTestGameReleaseReadiness(checklist) {
   ) {
     throw new Error("dev-test-game core-loop readiness check is missing spine targets");
   }
+  const hardeningCheck = checklist.localDevelopmentSpine?.checks?.find(
+    (check) => check.id === "local-hardening-proof",
+  );
+  if (
+    hardeningCheck?.spineTargets !== undefined &&
+    !validHardeningSpineTargets(hardeningCheck.spineTargets)
+  ) {
+    throw new Error("dev-test-game hardening readiness check is missing spine targets");
+  }
   const privateChannelRecoveryCheck =
     checklist.localDevelopmentSpine?.checks?.find(
       (check) => check.id === "local-private-channel-recovery-milestone",
@@ -5283,6 +5367,50 @@ function validCoreLoopProductionFeatureTargets(productionFeatureTargets) {
     declarations: Object.values(releaseReadinessProductionFeatureSpineTargets)
       .filter(
         (declaration) => declaration.sourceCheckId === "local-core-loop-proof",
+      ),
+    sourceCheckRules: productionFeatureSpineSourceCheckRules,
+  });
+}
+
+function validHardeningSpineTargets(spineTargets) {
+  return (
+    spineTargets !== null &&
+    typeof spineTargets === "object" &&
+    spineTargets.status === "passed" &&
+    typeof spineTargets.detailRoleUrl === "string" &&
+    spineTargets.detailRoleUrl.includes("/admin/audit/local-hardening") &&
+    spineTargets.defaultCycleId === "hardening-stale-conflict" &&
+    spineTargets.defaultRoleUrlId === "replacement-stale-conflict-message" &&
+    typeof spineTargets.defaultRoleUrl === "string" &&
+    spineTargets.defaultRoleUrl.includes("/g/") &&
+    spineTargets.defaultCheckpointId === "replacement-stale-conflict-message" &&
+    typeof spineTargets.browserProofCommand === "string" &&
+    spineTargets.browserProofCommand.includes("test:dev-test-game-live") &&
+    Array.isArray(spineTargets.cycleIds) &&
+    spineTargets.cycleIds.includes("hardening-stale-conflict") &&
+    Array.isArray(spineTargets.roleUrlIds) &&
+    spineTargets.roleUrlIds.includes("replacement-stale-conflict-message") &&
+    spineTargets.roleUrlHrefs !== null &&
+    typeof spineTargets.roleUrlHrefs === "object" &&
+    typeof spineTargets.roleUrlHrefs["replacement-stale-conflict-message"] ===
+      "string" &&
+    Array.isArray(spineTargets.checkpointIds) &&
+    spineTargets.checkpointIds.includes("replacement-stale-conflict-message") &&
+    Array.isArray(spineTargets.recoveryHookIds) &&
+    spineTargets.recoveryHookIds.length === 0 &&
+    Array.isArray(spineTargets.visibleAdminCheckIds) &&
+    spineTargets.visibleAdminCheckIds.includes(
+      "replacement-stale-conflict-message",
+    ) &&
+    validHardeningProductionFeatureTargets(spineTargets.productionFeatureTargets)
+  );
+}
+
+function validHardeningProductionFeatureTargets(productionFeatureTargets) {
+  return validProductionFeatureSpineTargetCollection(productionFeatureTargets, {
+    declarations: Object.values(releaseReadinessProductionFeatureSpineTargets)
+      .filter(
+        (declaration) => declaration.sourceCheckId === "local-hardening-proof",
       ),
     sourceCheckRules: productionFeatureSpineSourceCheckRules,
   });

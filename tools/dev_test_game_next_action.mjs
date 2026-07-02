@@ -57,6 +57,8 @@ export const devTestGameLiveProofCommand =
   "DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch npm run test:dev-test-game-live";
 export const devTestGameCoreLoopAdminProofCommand =
   "npm run test:dev-test-game-core-loop-admin-proof";
+export const devTestGameHardeningAdminProofCommand =
+  "npm run test:dev-test-game-hardening-admin-proof";
 export const devTestGameIdentityAdminProofCommand =
   "npm run test:dev-test-game-identity-admin-proof";
 export const devTestGameSeedFixtureCommand =
@@ -73,6 +75,11 @@ const productionFeatureSpineSourceCheckRules = Object.freeze({
     roleUrlIncludes: "/g/",
     rerunCommand: devTestGameCoreLoopAdminProofCommand,
   }),
+  "local-hardening-proof": Object.freeze({
+    detailRoleUrlIncludes: "/admin/audit/local-hardening",
+    roleUrlIncludes: "/g/",
+    rerunCommand: devTestGameHardeningAdminProofCommand,
+  }),
   "local-identity-adapter-proof": Object.freeze({
     detailRoleUrlIncludes: "/admin/audit/local-identity-adapter",
     roleUrlIncludes: "/admin/audit/local-identity-adapter",
@@ -81,6 +88,7 @@ const productionFeatureSpineSourceCheckRules = Object.freeze({
 });
 const defaultProductionFeatureSpineRerunCommands = Object.freeze({
   "local-core-loop-proof": devTestGameCoreLoopAdminProofCommand,
+  "local-hardening-proof": devTestGameHardeningAdminProofCommand,
   "local-identity-adapter-proof": devTestGameIdentityAdminProofCommand,
 });
 
@@ -116,6 +124,7 @@ export function buildDevTestGameNextAction(
       : assertDevTestGameHostedTargetPreflight(hostedTargetPreflight);
   const graph = proofGraph === null ? null : assertProofGraphForNextAction(proofGraph);
   const coreLoopSpineTarget = coreLoopSpineTargetFromReadiness(readiness);
+  const hardeningSpineTarget = hardeningSpineTargetFromReadiness(readiness);
   const identityAdapterSpineTarget =
     identityAdapterSpineTargetFromReadiness(readiness);
   const candidates = rankedArtifactsNeedingRefresh(manifest);
@@ -131,6 +140,7 @@ export function buildDevTestGameNextAction(
   const releaseReadinessCandidates = rankedBuildableReleaseReadinessItems(readiness, {
     hostedTargetPreflight: hostedPreflight,
     coreLoopSpineTarget,
+    hardeningSpineTarget,
     identityAdapterSpineTarget,
     proofGraph: graph,
   });
@@ -681,15 +691,23 @@ function buildSelectionTrace(candidates) {
 }
 
 function coreLoopSpineTargetFromReadiness(readiness) {
-  const coreLoopCheck = readiness?.localDevelopmentSpine?.checks?.find?.(
-    (check) => check?.id === "local-core-loop-proof",
+  return sourceSpineTargetFromReadiness(readiness, "local-core-loop-proof");
+}
+
+function hardeningSpineTargetFromReadiness(readiness) {
+  return sourceSpineTargetFromReadiness(readiness, "local-hardening-proof");
+}
+
+function sourceSpineTargetFromReadiness(readiness, sourceCheckId) {
+  const sourceCheck = readiness?.localDevelopmentSpine?.checks?.find?.(
+    (check) => check?.id === sourceCheckId,
   );
-  const targets = coreLoopCheck?.spineTargets;
+  const targets = sourceCheck?.spineTargets;
   if (targets === null || typeof targets !== "object") {
     return null;
   }
   const target = {
-    sourceCheckId: "local-core-loop-proof",
+    sourceCheckId,
     detailRoleUrl: String(targets.detailRoleUrl ?? ""),
     cycleId: String(targets.defaultCycleId ?? ""),
     roleUrlId: String(targets.defaultRoleUrlId ?? ""),
@@ -777,6 +795,7 @@ function rankedBuildableReleaseReadinessItems(
   {
     hostedTargetPreflight = null,
     coreLoopSpineTarget = null,
+    hardeningSpineTarget = null,
     identityAdapterSpineTarget = null,
     proofGraph = null,
   } = {},
@@ -796,6 +815,7 @@ function rankedBuildableReleaseReadinessItems(
         declaration: buildable.productionFeatureSpineTarget,
         sourceTargetsByCheckId: {
           "local-core-loop-proof": coreLoopSpineTarget,
+          "local-hardening-proof": hardeningSpineTarget,
           "local-identity-adapter-proof": identityAdapterSpineTarget,
         },
         defaultRerunCommandBySourceCheckId:
@@ -920,6 +940,9 @@ function selectedProductionFeatureGraphForTarget({ proofGraph, spineTarget }) {
 }
 
 function productionFeatureGraphSourceNodeId(sourceCheckId) {
+  if (sourceCheckId === "local-hardening-proof") {
+    return "admin-proof:hardening";
+  }
   if (sourceCheckId === "local-identity-adapter-proof") {
     return "admin-proof:identity";
   }

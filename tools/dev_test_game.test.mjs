@@ -126,6 +126,9 @@ import {
   hostedMatrixStaleConflictLaneIds,
 } from "./dev_test_game_hosted_concurrent_race_matrix_cases.mjs";
 import {
+  hardeningAuditLaneIds,
+} from "./dev_test_game_hardening_scenarios.mjs";
+import {
   replacementPrivateChannelRecoveryCoverageFamilies,
   replacementPrivateChannelRecoveryLaneIds,
   replacementPrivatePostRaceLaneIds,
@@ -191,6 +194,7 @@ import {
 import {
   assertDevTestGameNextAction,
   buildDevTestGameNextAction,
+  devTestGameHardeningAdminProofCommand,
   devTestGameIdentityAdminProofCommand,
   devTestGameLiveProofCommand,
   devTestGameReleaseReadinessPath,
@@ -2135,9 +2139,9 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
     graph,
     releaseReadiness,
   );
-  assert.equal(graph.summary.nodeCount, 27);
-  assert.equal(graph.summary.roleUrlCount, 27);
-  assert.equal(graph.summary.productionFeatureTargetCount, 8);
+  assert.equal(graph.summary.nodeCount, 28);
+  assert.equal(graph.summary.roleUrlCount, 28);
+  assert.equal(graph.summary.productionFeatureTargetCount, 9);
   assert.deepEqual(
     graph.nodes
       .filter((node) => node.kind === "admin-proof-surface")
@@ -2194,27 +2198,34 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
       ],
     ],
   );
-  const productionFeatureTargets =
+  const coreLoopProductionFeatureTargets =
     releaseReadiness.localDevelopmentSpine.checks.find(
       (check) => check.id === "local-core-loop-proof",
+    ).spineTargets.productionFeatureTargets;
+  const hardeningProductionFeatureTargets =
+    releaseReadiness.localDevelopmentSpine.checks.find(
+      (check) => check.id === "local-hardening-proof",
     ).spineTargets.productionFeatureTargets;
   const identityAdapterCheck = releaseReadiness.localDevelopmentSpine.checks.find(
     (check) => check.id === "local-identity-adapter-proof",
   );
   const expectedProductionFeatureRows = [
-    ...productionFeatureTargets.slotIds.map((slotId) => {
-      const target = productionFeatureTargets.bySlotId[slotId];
-      return [
-        `production-feature:${slotId}`,
-        slotId,
-        target.sourceCheckId,
-        devTestGameReleaseReadinessPath,
-        target.detailRoleUrl,
-        target.roleUrl,
-        target.browserProofCommand,
-        target.rerunCommand,
-      ];
-    }),
+    ...[coreLoopProductionFeatureTargets, hardeningProductionFeatureTargets]
+      .flatMap((productionFeatureTargets) =>
+        productionFeatureTargets.slotIds.map((slotId) => {
+          const target = productionFeatureTargets.bySlotId[slotId];
+          return [
+            `production-feature:${slotId}`,
+            slotId,
+            target.sourceCheckId,
+            devTestGameReleaseReadinessPath,
+            target.detailRoleUrl,
+            target.roleUrl,
+            target.browserProofCommand,
+            target.rerunCommand,
+          ];
+        }),
+      ),
     [
       "production-feature:identity-adapter",
       "identity-adapter",
@@ -2253,10 +2264,7 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
     expectedProductionFeatureRows.every(([, slotId, sourceCheckId]) =>
       graph.edges.some(
         (edge) =>
-          edge.from ===
-            (sourceCheckId === "local-core-loop-proof"
-              ? "admin-proof:core-loop"
-              : "admin-proof:identity") &&
+          edge.from === productionFeatureSourceNodeFixture(sourceCheckId) &&
           edge.to === `production-feature:${slotId}` &&
           edge.relationship === "proves-production-feature",
       ),
@@ -8297,6 +8305,23 @@ test("session card and markdown include role credential URLs and tokens", async 
     ).adminRoleSurface.detailRoleUrl,
     "/admin/audit/local-hardening?game=<seeded-game>",
   );
+  const hardeningRoleUrlHrefs = hardeningRoleUrlHrefsFromProofRun(proofRun);
+  assert.deepEqual(
+    hardeningReadiness.localDevelopmentSpine.checks.find(
+      (item) => item.id === "local-hardening-proof",
+    ).spineTargets,
+    hardeningSpineTargetsFixture({ roleUrlHrefs: hardeningRoleUrlHrefs }),
+  );
+  assert.deepEqual(
+    hardeningReadiness.localDevelopmentSpine.checks.find(
+      (item) => item.id === "local-hardening-proof",
+    ).spineTargets.productionFeatureTargets.bySlotId[
+      "replacement-stale-conflict-message"
+    ],
+    featureSpineCaseFixture("replacement-stale-conflict-message", {
+      roleUrlHrefs: hardeningRoleUrlHrefs,
+    }).spineTarget,
+  );
   assert.equal(
     hardeningReadiness.generatedFrom.hardeningAdminProof,
     "target/dev-test-game/hardening-admin-proof.json",
@@ -9697,6 +9722,23 @@ function devTestGameReleaseReadinessChecklistFixture({
             detailRoleUrl: "/admin/audit/local-core-loop?game=<seeded-game>",
           },
           spineTargets: coreLoopSpineTargetsFixture(),
+        },
+        {
+          id: "local-hardening-proof",
+          label:
+            "Idempotency, reconnect, stale-client, and local concurrent race matrix",
+          status: "passed",
+          evidence: "target/dev-test-game/proof-run.json",
+          laneIds: hardeningAuditLaneIds,
+          adminRoleSurface: {
+            status: "passed",
+            path: "target/dev-test-game/hardening-admin-proof.json",
+            detailRoleUrl: "/admin/audit/local-hardening?game=<seeded-game>",
+            visibleChecks: [
+              ...hardeningAdminProofFixture().adminRoleSurface.visibleChecks,
+            ],
+          },
+          spineTargets: hardeningSpineTargetsFixture(),
         },
         {
           id: "local-stale-conflict-message-milestone",
@@ -12400,6 +12442,63 @@ function coreLoopProductionFeatureTargetsFixture(roleUrlHrefs) {
   };
 }
 
+function hardeningSpineTargetsFixture({
+  roleUrlHrefs = hardeningRoleUrlHrefsFixture(),
+} = {}) {
+  return {
+    status: "passed",
+    detailRoleUrl: "/admin/audit/local-hardening?game=<seeded-game>",
+    defaultCycleId: "hardening-stale-conflict",
+    defaultRoleUrlId: "replacement-stale-conflict-message",
+    defaultRoleUrl: roleUrlHrefs["replacement-stale-conflict-message"],
+    defaultCheckpointId: "replacement-stale-conflict-message",
+    browserProofCommand: devTestGameLiveProofCommand,
+    cycleIds: ["hardening-stale-conflict"],
+    roleUrlIds: Object.keys(roleUrlHrefs),
+    checkpointIds: Object.keys(roleUrlHrefs),
+    recoveryHookIds: [],
+    visibleAdminCheckIds: [
+      ...hardeningAdminProofFixture().adminRoleSurface.visibleChecks,
+    ],
+    roleUrlHrefs,
+    productionFeatureTargets:
+      hardeningProductionFeatureTargetsFixture(roleUrlHrefs),
+  };
+}
+
+function hardeningRoleUrlHrefsFromProofRun(proofRun) {
+  const laneById = new Map(proofRun.lanes.map((lane) => [lane.id, lane]));
+  return Object.fromEntries(
+    staleConflictMessageSurfaceCases().map((surface) => [
+      surface.laneId,
+      String(laneById.get(surface.laneId)?.evidence?.roleUrl ?? ""),
+    ]),
+  );
+}
+
+function hardeningRoleUrlHrefsFixture() {
+  return Object.fromEntries(
+    staleConflictMessageSurfaceFixtureRows().map((surface) => [
+      surface.laneId,
+      surface.roleUrl,
+    ]),
+  );
+}
+
+function hardeningProductionFeatureTargetsFixture(roleUrlHrefs) {
+  const slotIds = ["replacement-stale-conflict-message"];
+  return {
+    status: "passed",
+    slotIds,
+    bySlotId: Object.fromEntries(
+      slotIds.map((slotId) => [
+        slotId,
+        featureSpineCaseFixture(slotId, { roleUrlHrefs }).spineTarget,
+      ]),
+    ),
+  };
+}
+
 function productionFeatureSpineTargetFixture(slotId = "player-action-submission") {
   return featureSpineCaseFixture(slotId).productionFeatureSpineTarget;
 }
@@ -12410,10 +12509,7 @@ function resolvedFeatureSpineTargetFixture(slotId = "player-action-submission") 
 
 function nextActionProofGraphFixture(slotId = "player-action-submission") {
   const target = resolvedFeatureSpineTargetFixture(slotId);
-  const sourceNodeId =
-    target.sourceCheckId === "local-identity-adapter-proof"
-      ? "admin-proof:identity"
-      : "admin-proof:core-loop";
+  const sourceNodeId = productionFeatureSourceNodeFixture(target.sourceCheckId);
   const nodeId = `production-feature:${slotId}`;
   return {
     version: 1,
@@ -12453,7 +12549,7 @@ function featureSpineDrilldownFixture(slotId = "player-action-submission") {
 
 function featureSpineCaseFixture(
   slotId = "player-action-submission",
-  { roleUrlHrefs = coreLoopSpineTargetsFixture().roleUrlHrefs } = {},
+  { roleUrlHrefs } = {},
 ) {
   if (slotId === "identity-adapter") {
     return featureSpineFixture({
@@ -12465,12 +12561,32 @@ function featureSpineCaseFixture(
       includeTargetRerunCommand: true,
     });
   }
+  if (slotId === "replacement-stale-conflict-message") {
+    return featureSpineFixture({
+      slotId,
+      detailRoleUrl: "/admin/audit/local-hardening?game=<seeded-game>",
+      roleUrlsById: roleUrlHrefs ?? hardeningRoleUrlHrefsFixture(),
+      browserProofCommand: devTestGameLiveProofCommand,
+      rerunCommand: devTestGameHardeningAdminProofCommand,
+      includeTargetRerunCommand: true,
+    });
+  }
   return featureSpineFixture({
     slotId,
-    roleUrlsById: roleUrlHrefs,
+    roleUrlsById: roleUrlHrefs ?? coreLoopSpineTargetsFixture().roleUrlHrefs,
     browserProofCommand: devTestGameLiveProofCommand,
     includeTargetRerunCommand: true,
   });
+}
+
+function productionFeatureSourceNodeFixture(sourceCheckId) {
+  if (sourceCheckId === "local-hardening-proof") {
+    return "admin-proof:hardening";
+  }
+  if (sourceCheckId === "local-identity-adapter-proof") {
+    return "admin-proof:identity";
+  }
+  return "admin-proof:core-loop";
 }
 
 function hostedIdentityHandoffChecklistFixture() {

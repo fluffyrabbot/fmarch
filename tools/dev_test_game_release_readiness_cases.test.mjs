@@ -130,6 +130,18 @@ test("release readiness buildable cases share next-action commands and spine tar
       adminCheckId: "action-loop",
     },
   );
+  assert.deepEqual(
+    releaseReadinessProductionFeatureSpineTargets.replacementStaleConflictMessage,
+    {
+      featureSlotId: "replacement-stale-conflict-message",
+      sourceCheckId: "local-hardening-proof",
+      cycleId: "hardening-stale-conflict",
+      roleUrlId: "replacement-stale-conflict-message",
+      rowKind: "checkpoint",
+      checkpointId: "replacement-stale-conflict-message",
+      adminCheckId: "replacement-stale-conflict-message",
+    },
+  );
 
   const releaseRunbook = releaseReadinessBuildableItemForId(
     "human-release-runbook",
@@ -143,7 +155,8 @@ test("release readiness buildable cases share next-action commands and spine tar
   assert.equal(realHostedMatrix.realHostedEvidenceStatus, "unproven");
   assert.deepEqual(
     realHostedMatrix.productionFeatureSpineTarget,
-    releaseReadinessProductionFeatureSpineTargets.staleActionConflictMessage,
+    releaseReadinessProductionFeatureSpineTargets
+      .replacementStaleConflictMessage,
   );
 
   const hostedIdentity = releaseReadinessBuildableItemForId(

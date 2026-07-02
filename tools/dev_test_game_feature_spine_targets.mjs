@@ -2,6 +2,7 @@ export const featureSpineCheckpointRowKind = "checkpoint";
 export const featureSpineRecoveryHookRowKind = "recovery-hook";
 export const featureSpineSourceCheckIds = Object.freeze([
   "local-core-loop-proof",
+  "local-hardening-proof",
   "local-identity-adapter-proof",
 ]);
 

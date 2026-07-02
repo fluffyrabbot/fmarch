@@ -494,11 +494,16 @@ function buildProductionFeatureTargetNodes({
 
 function productionFeatureTargetsForGraph(releaseReadiness) {
   const coreLoopTargets = coreLoopProductionFeatureTargetCollection(releaseReadiness);
+  const hardeningTargets = hardeningProductionFeatureTargetCollection(
+    releaseReadiness,
+  );
   const targetsBySlotId = new Map(
-    coreLoopTargets.slotIds.map((slotId) => [
-      slotId,
-      coreLoopTargets.bySlotId[slotId],
-    ]),
+    [coreLoopTargets, hardeningTargets].flatMap((targets) =>
+      targets.slotIds.map((slotId) => [
+        slotId,
+        targets.bySlotId[slotId],
+      ]),
+    ),
   );
   for (const item of productionFacingSurfaceChecklistItems()) {
     const slotId = item.productionFeatureSpineTarget.featureSlotId;
@@ -527,6 +532,22 @@ function coreLoopProductionFeatureTargetCollection(releaseReadiness) {
     typeof targets.bySlotId !== "object"
   ) {
     throw new Error("proof graph missing core-loop production feature targets");
+  }
+  return targets;
+}
+
+function hardeningProductionFeatureTargetCollection(releaseReadiness) {
+  const hardeningCheck = releaseReadiness.localDevelopmentSpine?.checks?.find(
+    (check) => check.id === "local-hardening-proof",
+  );
+  const targets = hardeningCheck?.spineTargets?.productionFeatureTargets;
+  if (
+    targets?.status !== "passed" ||
+    !Array.isArray(targets.slotIds) ||
+    targets.bySlotId === null ||
+    typeof targets.bySlotId !== "object"
+  ) {
+    throw new Error("proof graph missing hardening production feature targets");
   }
   return targets;
 }
@@ -562,6 +583,9 @@ function resolveBuildableProductionFeatureTarget({ declaration, releaseReadiness
 function productionFeatureSourceGraphNodeId(sourceCheckId) {
   if (sourceCheckId === "local-core-loop-proof") {
     return "admin-proof:core-loop";
+  }
+  if (sourceCheckId === "local-hardening-proof") {
+    return "admin-proof:hardening";
   }
   if (sourceCheckId === "local-identity-adapter-proof") {
     return "admin-proof:identity";

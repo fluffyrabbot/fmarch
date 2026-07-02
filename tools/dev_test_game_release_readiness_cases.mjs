@@ -115,6 +115,14 @@ export const releaseReadinessProductionFeatureSpineTargets = Object.freeze({
     recoveryHookId: "staleActionConflictReject",
     adminCheckId: "action-loop",
   }),
+  replacementStaleConflictMessage: featureSpineCheckpointTarget({
+    featureSlotId: "replacement-stale-conflict-message",
+    sourceCheckId: "local-hardening-proof",
+    cycleId: "hardening-stale-conflict",
+    roleUrlId: "replacement-stale-conflict-message",
+    checkpointId: "replacement-stale-conflict-message",
+    adminCheckId: "replacement-stale-conflict-message",
+  }),
 });
 export const releaseReadinessProductionFeatureSpineTargetsBySlotId =
   featureSpineTargetBySlotId(releaseReadinessProductionFeatureSpineTargets);
@@ -451,7 +459,8 @@ const localBuildableReleaseReadinessItems = new Map([
       proofGraphNodeId:
         releaseReadinessHostedConcurrentRaceMatrixProofGraphNodeId,
       productionFeatureSpineTarget:
-        releaseReadinessProductionFeatureSpineTargets.staleActionConflictMessage,
+        releaseReadinessProductionFeatureSpineTargets
+          .replacementStaleConflictMessage,
       proofBoundary:
         "External hosted matrix handoff. Passing requires normalized raw evidence from a real hosted target; local browser/API proof artifacts are only the baseline.",
       realHostedEvidenceStatus: "unproven",
