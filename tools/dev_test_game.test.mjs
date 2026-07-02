@@ -75,6 +75,7 @@ import {
   seedScenarioCoverageGroups,
 } from "./dev_test_game_seed_scenario_cases.mjs";
 import {
+  hostStaleControlCoverageFamilies,
   hostStaleControlLaneIds,
 } from "./dev_test_game_host_stale_control_scenarios.mjs";
 import {
@@ -9610,6 +9611,12 @@ function hostStaleControlMilestoneFixture() {
     requiredLaneCount: hostStaleControlLaneIds.length,
     coveredLaneCount: hostStaleControlLaneIds.length,
     gapCount: 0,
+    familyCount: hostStaleControlCoverageFamilies().length,
+    families: hostStaleControlCoverageFamilies().map((family) => ({
+      ...family,
+      status: "passed",
+      passedLaneIds: [...family.laneIds],
+    })),
   };
 }
 
@@ -10038,6 +10045,7 @@ function coreLoopAdminProofFixture() {
       proofRun: "target/dev-test-game/proof-run.json",
       game: "00000000-0000-0000-0000-000000000001",
       coreLoopSpineStatus: "passed: D01 -> N01 -> D02, vote ack, next N02",
+      completedGameHardeningCoverageStatus: "passed: 10/10 lanes across 4 families",
       coreLoopSpineRows: {
         cycles: ["d01-n01-d02", "d02-n02"],
         roleUrls: [
@@ -10096,6 +10104,8 @@ function coreLoopAdminProofFixture() {
       visibleChecks: [...coreLoopAdminCheckIds],
       visibleCheckStatuses: {
         "core-loop-spine": "passed: D01 -> N01 -> D02, vote ack, next N02",
+        "completed-game-hardening-coverage":
+          "passed: 10/10 lanes across 4 families",
       },
       visibleSpineCycles: ["d01-n01-d02", "d02-n02"],
       visibleSpineRoleUrls: [

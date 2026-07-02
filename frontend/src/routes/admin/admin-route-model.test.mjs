@@ -10,6 +10,7 @@ import {
   summarizeRecoveryGate,
 } from "./admin-route-model.mjs";
 import {
+  hostStaleControlCoverageFamilies,
   hostStaleControlLaneIds,
 } from "../../../../tools/dev_test_game_host_stale_control_scenarios.mjs";
 import {
@@ -3545,6 +3546,7 @@ function proofRunFixture() {
       },
     },
     completedGameHardeningCoverage: completedGameHardeningCoverageFixture(),
+    hostStaleControlCoverage: hostStaleControlCoverageFixture(),
     lanes,
   };
 }
@@ -3580,6 +3582,29 @@ function completedGameHardeningCoverageFixture() {
       seedGroup: scenario.seedGroup,
       status: "passed",
     })),
+    families,
+  };
+}
+
+function hostStaleControlCoverageFixture() {
+  const families = hostStaleControlCoverageFamilies().map((family) => ({
+    ...family,
+    status: "passed",
+    passedLaneIds: [...family.laneIds],
+  }));
+  return {
+    status: "passed",
+    laneCount: hostStaleControlLaneIds.length,
+    passedLaneCount: hostStaleControlLaneIds.length,
+    familyCount: families.length,
+    sourceLaneIds: [...hostStaleControlLaneIds],
+    laneStatuses: families.flatMap((family) =>
+      family.laneIds.map((laneId) => ({
+        id: laneId,
+        family: family.id,
+        status: "passed",
+      })),
+    ),
     families,
   };
 }
@@ -5481,6 +5506,12 @@ function hostStaleControlMilestoneFixture() {
     requiredLaneCount: hostStaleControlLaneIds.length,
     coveredLaneCount: hostStaleControlLaneIds.length,
     gapCount: 0,
+    familyCount: hostStaleControlCoverageFamilies().length,
+    families: hostStaleControlCoverageFamilies().map((family) => ({
+      ...family,
+      status: "passed",
+      passedLaneIds: [...family.laneIds],
+    })),
   };
 }
 

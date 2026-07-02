@@ -22,7 +22,7 @@ import {
   devTestGameHostedEvidenceLaneDemoProofPath,
 } from "./dev_test_game_hosted_evidence_lane_demo_proof.mjs";
 import {
-  hostStaleControlLaneIds,
+  assertHostStaleControlCoverageSummary,
 } from "./dev_test_game_host_stale_control_scenarios.mjs";
 import {
   playerRecoveryAuditLaneIds,
@@ -600,6 +600,7 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
       laneIds: [...hostStaleControlMilestone.laneIds],
       requiredLaneCount: hostStaleControlMilestone.requiredLaneCount,
       coveredLaneCount: hostStaleControlMilestone.coveredLaneCount,
+      familyCount: hostStaleControlMilestone.familyCount,
     },
     {
       id: "local-private-channel-recovery-milestone",
@@ -1096,6 +1097,8 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
         requiredLaneCount: hostStaleControlMilestone.requiredLaneCount,
         coveredLaneCount: hostStaleControlMilestone.coveredLaneCount,
         gapCount: hostStaleControlMilestone.gapCount,
+        familyCount: hostStaleControlMilestone.familyCount,
+        families: hostStaleControlMilestone.families,
       },
       privateChannelRecoveryMilestone: {
         status: privateChannelRecoveryMilestone.status,
@@ -1205,6 +1208,8 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
                 requiredLaneCount: hostStaleControlMilestone.requiredLaneCount,
                 coveredLaneCount: hostStaleControlMilestone.coveredLaneCount,
                 gapCount: hostStaleControlMilestone.gapCount,
+                familyCount: hostStaleControlMilestone.familyCount,
+                families: hostStaleControlMilestone.families,
               },
               privateChannelRecoveryMilestone: {
                 status: privateChannelRecoveryMilestone.status,
@@ -1597,25 +1602,25 @@ function buildStaleConflictMessageSurfaces(lanes, { sourcePath }) {
 }
 
 function buildHostStaleControlMilestone(proof, { sourcePath }) {
-  const lanes = new Map(proof.lanes.map((lane) => [lane.id, lane]));
-  const laneIds = [...hostStaleControlLaneIds];
-  const coveredLaneCount = laneIds.filter(
-    (laneId) => lanes.get(laneId)?.status === "passed",
-  ).length;
-  const gapCount = laneIds.length - coveredLaneCount;
-  if (gapCount !== 0) {
+  let coverage;
+  try {
+    coverage = assertHostStaleControlCoverageSummary({
+      summary: proof.hostStaleControlCoverage,
+      lanes: proof.lanes,
+    });
+  } catch (error) {
     throw new Error(
-      `host stale-control milestone missing passed lanes from ${sourcePath}: ${laneIds
-        .filter((laneId) => lanes.get(laneId)?.status !== "passed")
-        .join(", ")}`,
+      `host stale-control milestone missing passed lanes from ${sourcePath}: ${error.message}`,
     );
   }
   return {
-    status: "passed",
-    laneIds,
-    requiredLaneCount: laneIds.length,
-    coveredLaneCount,
-    gapCount,
+    status: coverage.status,
+    laneIds: [...coverage.sourceLaneIds],
+    requiredLaneCount: coverage.laneCount,
+    coveredLaneCount: coverage.passedLaneCount,
+    gapCount: coverage.laneCount - coverage.passedLaneCount,
+    familyCount: coverage.familyCount,
+    families: coverage.families,
   };
 }
 

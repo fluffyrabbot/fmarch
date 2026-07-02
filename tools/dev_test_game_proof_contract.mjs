@@ -7,6 +7,8 @@ import {
   completedGameHardeningLaneIds,
 } from "./dev_test_game_core_loop_completed_game_scenario_assertions.mjs";
 import {
+  assertHostStaleControlCoverageSummary,
+  buildHostStaleControlCoverageSummary,
   cohostDeadlineRecoveryLaneIds,
   cohostDeadlineStaleControlCases,
   hostGenericStaleControlLaneIds,
@@ -5863,6 +5865,8 @@ export function buildDevTestGameProofRun(session, options = {}) {
   const coreLoopSpine = buildCoreLoopSpineSummary({ session, verification });
   const completedGameHardeningCoverage =
     buildCompletedGameHardeningCoverage(lanes);
+  const hostStaleControlCoverage =
+    buildHostStaleControlCoverageSummary(lanes);
   return {
     version: DEV_TEST_GAME_PROOF_VERSION,
     proof: "dev-test-game-proof-run",
@@ -5888,6 +5892,7 @@ export function buildDevTestGameProofRun(session, options = {}) {
     identityBootstrap: session?.identityBootstrap ?? null,
     coreLoopSpine,
     completedGameHardeningCoverage,
+    hostStaleControlCoverage,
     lanes,
     nonClaims: [
       "production account identity",
@@ -5933,6 +5938,10 @@ export function assertDevTestGameProofRun(proof) {
   assertCoreLoopSpineSummary(proof.coreLoopSpine);
   assertCompletedGameHardeningCoverageSummary({
     summary: proof.completedGameHardeningCoverage,
+    lanes: proof.lanes,
+  });
+  assertHostStaleControlCoverageSummary({
+    summary: proof.hostStaleControlCoverage,
     lanes: proof.lanes,
   });
   for (const laneId of requiredLaneIds) {

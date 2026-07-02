@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { test } from "node:test";
 import {
+  assertHostStaleControlCoverageSummary,
+  buildHostStaleControlCoverageSummary,
   cohostDeadlineRecoveryLaneIds,
   cohostDeadlineStaleControlCases,
   cohostDeadlineStaleControlCaseDefinitions,
@@ -12,6 +14,8 @@ import {
   hostOpenPhaseActionSet,
   hostPhaseRaceCoverageCellCases,
   hostPhaseRaceCoverageCellDefinitions,
+  hostStaleControlCoverageFamilies,
+  hostStaleControlCoverageFamilyDefinitions,
   hostPhaseStaleControlCase,
   hostStaleControlLaneIds,
   hostPhaseStaleControlCases,
@@ -183,6 +187,55 @@ test("hardening lane cases share host stale-control IDs", () => {
     ...hostGenericStaleControlLaneIds,
     ...hostPhaseStaleControlLaneIds,
   ]);
+});
+
+test("hardening lane cases summarize host stale-control coverage", () => {
+  assert(Object.isFrozen(hostStaleControlCoverageFamilyDefinitions));
+  assert.deepEqual(
+    hostStaleControlCoverageFamilies().map((family) => ({
+      id: family.id,
+      laneIds: family.laneIds,
+    })),
+    [
+      {
+        id: "standalone-host-controls",
+        laneIds: hostStandaloneStaleControlLaneIds,
+      },
+      {
+        id: "prompt-controls",
+        laneIds: hostPromptStaleControlLaneIds,
+      },
+      {
+        id: "completed-game-stale-commands",
+        laneIds: [
+          "stale-host-complete",
+          "stale-host-complete-reload",
+          "stale-host-complete-reconnect-recovery",
+        ],
+      },
+      {
+        id: "generic-host-control",
+        laneIds: hostGenericStaleControlLaneIds,
+      },
+      {
+        id: "phase-controls",
+        laneIds: hostPhaseStaleControlLaneIds,
+      },
+    ],
+  );
+
+  const lanes = hostStaleControlLaneIds.map((id) => ({
+    id,
+    status: "passed",
+  }));
+  const summary = buildHostStaleControlCoverageSummary(lanes);
+  assert.deepEqual(summary.sourceLaneIds, hostStaleControlLaneIds);
+  assert.equal(summary.laneCount, hostStaleControlLaneIds.length);
+  assert.equal(summary.passedLaneCount, hostStaleControlLaneIds.length);
+  assert.equal(summary.familyCount, 5);
+  assert.doesNotThrow(() =>
+    assertHostStaleControlCoverageSummary({ summary, lanes }),
+  );
 });
 
 test("host stale-control production callers use the shared scenario module", async () => {

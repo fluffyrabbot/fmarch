@@ -54,6 +54,11 @@ const cloneRaceCoverageCell = (cell) => ({
   commandFacts: cell.commandFacts.map((facts) => ({ ...facts })),
 });
 
+const cloneCoverageFamily = (family) => ({
+  ...family,
+  laneIds: [...family.laneIds],
+});
+
 const hostLockThreadActionId = hostLockThreadCommandFacts().actionId;
 const hostUnlockThreadActionId = hostUnlockThreadCommandFacts().actionId;
 const hostResolvePhaseActionId = hostResolvePhaseCommandFacts().actionId;
@@ -209,6 +214,122 @@ export const hostStaleControlLaneIds = Object.freeze([
   ...hostGenericStaleControlLaneIds,
   ...hostPhaseStaleControlLaneIds,
 ]);
+
+export const hostStaleControlCoverageFamilyDefinitions = Object.freeze([
+  Object.freeze({
+    id: "standalone-host-controls",
+    label: "Standalone host stale controls",
+    laneIds: hostStandaloneStaleControlLaneIds,
+  }),
+  Object.freeze({
+    id: "prompt-controls",
+    label: "Prompt stale controls",
+    laneIds: hostPromptStaleControlLaneIds,
+  }),
+  Object.freeze({
+    id: "completed-game-stale-commands",
+    label: "Completed-game stale commands",
+    laneIds: Object.freeze(completedHostStaleCommandHardeningLaneIds()),
+  }),
+  Object.freeze({
+    id: "generic-host-control",
+    label: "Generic host stale control",
+    laneIds: hostGenericStaleControlLaneIds,
+  }),
+  Object.freeze({
+    id: "phase-controls",
+    label: "Host phase stale controls",
+    laneIds: hostPhaseStaleControlLaneIds,
+  }),
+]);
+
+export function hostStaleControlCoverageFamilies() {
+  return hostStaleControlCoverageFamilyDefinitions.map(cloneCoverageFamily);
+}
+
+export function buildHostStaleControlCoverageSummary(lanes) {
+  const laneById = new Map((lanes ?? []).map((lane) => [lane.id, lane]));
+  const families = hostStaleControlCoverageFamilies().map((family) => {
+    const passedLaneIds = family.laneIds.filter(
+      (laneId) => laneById.get(laneId)?.status === "passed",
+    );
+    return {
+      ...family,
+      status:
+        passedLaneIds.length === family.laneIds.length ? "passed" : "failed",
+      passedLaneIds,
+    };
+  });
+  const laneStatuses = families.flatMap((family) =>
+    family.laneIds.map((laneId) => ({
+      id: laneId,
+      family: family.id,
+      status: String(laneById.get(laneId)?.status ?? "missing"),
+    })),
+  );
+  const passedLaneCount = laneStatuses.filter(
+    (laneStatus) => laneStatus.status === "passed",
+  ).length;
+  return {
+    status:
+      passedLaneCount === hostStaleControlLaneIds.length ? "passed" : "failed",
+    laneCount: hostStaleControlLaneIds.length,
+    passedLaneCount,
+    familyCount: families.length,
+    sourceLaneIds: [...hostStaleControlLaneIds],
+    laneStatuses,
+    families,
+  };
+}
+
+export function assertHostStaleControlCoverageSummary({ summary, lanes }) {
+  const expectedLaneIds = [...hostStaleControlLaneIds];
+  const laneById = new Map((lanes ?? []).map((lane) => [lane.id, lane]));
+  if (
+    summary?.status !== "passed" ||
+    summary.laneCount !== expectedLaneIds.length ||
+    summary.passedLaneCount !== expectedLaneIds.length ||
+    summary.familyCount !== hostStaleControlCoverageFamilyDefinitions.length ||
+    !sameArray(summary.sourceLaneIds, expectedLaneIds)
+  ) {
+    throw new Error("host stale-control coverage summary drifted");
+  }
+  for (const family of hostStaleControlCoverageFamilyDefinitions) {
+    const summaryFamily = summary.families?.find(
+      (candidate) => candidate.id === family.id,
+    );
+    if (
+      summaryFamily?.status !== "passed" ||
+      !sameArray(summaryFamily.laneIds, family.laneIds) ||
+      !sameArray(summaryFamily.passedLaneIds, family.laneIds)
+    ) {
+      throw new Error(`host stale-control coverage family drifted: ${family.id}`);
+    }
+    for (const laneId of family.laneIds) {
+      const laneStatus = summary.laneStatuses?.find(
+        (candidate) => candidate.id === laneId,
+      );
+      if (
+        laneById.get(laneId)?.status !== "passed" ||
+        laneStatus?.status !== "passed" ||
+        laneStatus.family !== family.id
+      ) {
+        throw new Error(
+          `host stale-control coverage missing passed lane: ${laneId}`,
+        );
+      }
+    }
+  }
+  return summary;
+}
+
+function sameArray(actual, expected) {
+  return (
+    Array.isArray(actual) &&
+    actual.length === expected.length &&
+    actual.every((item, index) => item === expected[index])
+  );
+}
 
 export const hostPhaseRaceCoverageCellDefinitions = Object.freeze([
   Object.freeze({
