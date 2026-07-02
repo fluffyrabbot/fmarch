@@ -90,6 +90,14 @@ export const releaseReadinessProductionFeatureSpineTargets = Object.freeze({
     checkpointId: "d01-n01-d02-n01-action-open",
     adminCheckId: "private-channel",
   }),
+  resolutionReceipts: featureSpineCheckpointTarget({
+    featureSlotId: "resolution-receipts",
+    sourceCheckId: "local-core-loop-proof",
+    cycleId: "d01-n01-d02",
+    roleUrlId: "d01-n01-d02-target",
+    checkpointId: "d01-n01-d02-n01-resolved-target-killed",
+    adminCheckId: "resolution-receipts",
+  }),
   staleRecovery: featureSpineCheckpointTarget({
     featureSlotId: "stale-recovery",
     sourceCheckId: "local-core-loop-proof",

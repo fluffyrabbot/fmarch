@@ -89,6 +89,19 @@ test("release readiness unproven case builder follows local evidence transitions
 });
 
 test("release readiness buildable cases share next-action commands and spine targets", () => {
+  assert.deepEqual(
+    releaseReadinessProductionFeatureSpineTargets.resolutionReceipts,
+    {
+      featureSlotId: "resolution-receipts",
+      sourceCheckId: "local-core-loop-proof",
+      cycleId: "d01-n01-d02",
+      roleUrlId: "d01-n01-d02-target",
+      rowKind: "checkpoint",
+      checkpointId: "d01-n01-d02-n01-resolved-target-killed",
+      adminCheckId: "resolution-receipts",
+    },
+  );
+
   const hostedMatrix = releaseReadinessBuildableItemForId(
     "hosted-concurrent-race-matrix",
   );

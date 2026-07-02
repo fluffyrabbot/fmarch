@@ -8157,6 +8157,12 @@ test("session card and markdown include role credential URLs and tokens", async 
     ).spineTargets,
     coreLoopSpineTargetsFixture(),
   );
+  assert.deepEqual(
+    coreLoopReadiness.localDevelopmentSpine.checks.find(
+      (item) => item.id === "local-core-loop-proof",
+    ).spineTargets.productionFeatureTargets.bySlotId["resolution-receipts"],
+    featureSpineCaseFixture("resolution-receipts").spineTarget,
+  );
   assert.equal(
     coreLoopReadiness.generatedFrom.coreLoopAdminProof,
     "target/dev-test-game/core-loop-admin-proof.json",
@@ -12191,6 +12197,26 @@ function privateChannelRoleSurfaceFixture() {
 }
 
 function coreLoopSpineTargetsFixture() {
+  const roleUrlHrefs = {
+    "d01-n01-d02-host":
+      "http://127.0.0.1:5173/g/00000000-0000-0000-0000-000000000001/host",
+    "d01-n01-d02-actionPlayer":
+      "http://127.0.0.1:5173/g/00000000-0000-0000-0000-000000000001",
+    "d01-n01-d02-normalPlayer":
+      "http://127.0.0.1:5173/g/00000000-0000-0000-0000-000000000001",
+    "d01-n01-d02-target":
+      "http://127.0.0.1:5173/g/00000000-0000-0000-0000-000000000001",
+    "d01-n01-d02-privateChannel":
+      "http://127.0.0.1:5173/g/00000000-0000-0000-0000-000000000001/c/private%3Amafia_day_chat",
+    "d02-n02-host":
+      "http://127.0.0.1:5173/g/00000000-0000-0000-0000-000000000002/host",
+    "d02-n02-actionPlayer":
+      "http://127.0.0.1:5173/g/00000000-0000-0000-0000-000000000002",
+    "d02-n02-normalPlayer":
+      "http://127.0.0.1:5173/g/00000000-0000-0000-0000-000000000002",
+    "d02-n02-target":
+      "http://127.0.0.1:5173/g/00000000-0000-0000-0000-000000000002",
+  };
   return {
     status: "passed",
     detailRoleUrl: "/admin/audit/local-core-loop?game=<seeded-game>",
@@ -12229,26 +12255,29 @@ function coreLoopSpineTargetsFixture() {
       "staleActionConflictReject",
     ],
     visibleAdminCheckIds: [...coreLoopAdminCheckIds],
-    roleUrlHrefs: {
-      "d01-n01-d02-host":
-        "http://127.0.0.1:5173/g/00000000-0000-0000-0000-000000000001/host",
-      "d01-n01-d02-actionPlayer":
-        "http://127.0.0.1:5173/g/00000000-0000-0000-0000-000000000001",
-      "d01-n01-d02-normalPlayer":
-        "http://127.0.0.1:5173/g/00000000-0000-0000-0000-000000000001",
-      "d01-n01-d02-target":
-        "http://127.0.0.1:5173/g/00000000-0000-0000-0000-000000000001",
-      "d01-n01-d02-privateChannel":
-        "http://127.0.0.1:5173/g/00000000-0000-0000-0000-000000000001/c/private%3Amafia_day_chat",
-      "d02-n02-host":
-        "http://127.0.0.1:5173/g/00000000-0000-0000-0000-000000000002/host",
-      "d02-n02-actionPlayer":
-        "http://127.0.0.1:5173/g/00000000-0000-0000-0000-000000000002",
-      "d02-n02-normalPlayer":
-        "http://127.0.0.1:5173/g/00000000-0000-0000-0000-000000000002",
-      "d02-n02-target":
-        "http://127.0.0.1:5173/g/00000000-0000-0000-0000-000000000002",
-    },
+    roleUrlHrefs,
+    productionFeatureTargets: coreLoopProductionFeatureTargetsFixture(roleUrlHrefs),
+  };
+}
+
+function coreLoopProductionFeatureTargetsFixture(roleUrlHrefs) {
+  const slotIds = [
+    "host-phase-control",
+    "player-action-submission",
+    "invalid-action-recovery",
+    "private-channel",
+    "resolution-receipts",
+    "stale-recovery",
+  ];
+  return {
+    status: "passed",
+    slotIds,
+    bySlotId: Object.fromEntries(
+      slotIds.map((slotId) => [
+        slotId,
+        featureSpineCaseFixture(slotId, { roleUrlHrefs }).spineTarget,
+      ]),
+    ),
   };
 }
 
@@ -12264,7 +12293,10 @@ function featureSpineDrilldownFixture(slotId = "player-action-submission") {
   return featureSpineCaseFixture(slotId).spineDrilldown;
 }
 
-function featureSpineCaseFixture(slotId = "player-action-submission") {
+function featureSpineCaseFixture(
+  slotId = "player-action-submission",
+  { roleUrlHrefs = coreLoopSpineTargetsFixture().roleUrlHrefs } = {},
+) {
   if (slotId === "identity-adapter") {
     return featureSpineFixture({
       slotId,
@@ -12277,7 +12309,7 @@ function featureSpineCaseFixture(slotId = "player-action-submission") {
   }
   return featureSpineFixture({
     slotId,
-    roleUrlsById: coreLoopSpineTargetsFixture().roleUrlHrefs,
+    roleUrlsById: roleUrlHrefs,
     browserProofCommand: devTestGameLiveProofCommand,
     includeTargetRerunCommand: true,
   });
