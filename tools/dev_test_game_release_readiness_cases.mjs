@@ -23,6 +23,10 @@ import {
   identityFeatureSpineTargetRows,
 } from "./dev_test_game_identity_feature_spine_targets.mjs";
 import {
+  hardeningFeatureSpineCycleIds,
+  hardeningFeatureSpineSourceCheckId,
+} from "./dev_test_game_hardening_feature_spine_targets.mjs";
+import {
   completedGameHardeningSpineCycleId,
   completedGameStaleRecoverySpineLaneCase,
 } from "./dev_test_game_core_loop_completed_game_cases.mjs";
@@ -93,7 +97,7 @@ export const releaseReadinessProductionFeatureSpineTargets = Object.freeze({
   }),
   completedGameStaleRecovery: featureSpineCheckpointTarget({
     featureSlotId: "completed-game-stale-recovery",
-    sourceCheckId: "local-hardening-proof",
+    sourceCheckId: hardeningFeatureSpineSourceCheckId,
     cycleId: completedGameHardeningSpineCycleId,
     roleUrlId: completedGameStaleRecoverySpineLane.id,
     checkpointId: completedGameStaleRecoverySpineLane.id,
@@ -101,8 +105,8 @@ export const releaseReadinessProductionFeatureSpineTargets = Object.freeze({
   }),
   replacementStaleConflictMessage: featureSpineCheckpointTarget({
     featureSlotId: "replacement-stale-conflict-message",
-    sourceCheckId: "local-hardening-proof",
-    cycleId: "hardening-stale-conflict",
+    sourceCheckId: hardeningFeatureSpineSourceCheckId,
+    cycleId: hardeningFeatureSpineCycleIds.staleConflict,
     roleUrlId: replacementStaleConflictMessageSpineLane.laneId,
     checkpointId: replacementStaleConflictMessageSpineLane.laneId,
     adminCheckId: replacementStaleConflictMessageSpineLane.laneId,

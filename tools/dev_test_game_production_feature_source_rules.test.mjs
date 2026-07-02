@@ -18,6 +18,15 @@ import {
   productionFeatureReadinessSourceKind,
   productionFeatureSourceRegistry,
 } from "./dev_test_game_production_feature_source_registry.mjs";
+import {
+  coreLoopFeatureSpineSource,
+} from "./dev_test_game_core_loop_feature_spine_targets.mjs";
+import {
+  hardeningFeatureSpineSource,
+} from "./dev_test_game_hardening_feature_spine_targets.mjs";
+import {
+  identityFeatureSpineSource,
+} from "./dev_test_game_identity_feature_spine_targets.mjs";
 
 test("production feature source rules cover every feature spine source", () => {
   assert.deepEqual(
@@ -33,6 +42,11 @@ test("production feature source rules cover every feature spine source", () => {
     "local-hardening-proof": devTestGameHardeningAdminProofCommand,
     "local-identity-adapter-proof": devTestGameIdentityAdminProofCommand,
   });
+  assert.deepEqual(productionFeatureSourceRegistry, [
+    coreLoopFeatureSpineSource,
+    hardeningFeatureSpineSource,
+    identityFeatureSpineSource,
+  ]);
   assert.deepEqual(
     productionFeatureSourceRegistry.map((source) => [
       source.sourceCheckId,

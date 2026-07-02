@@ -35,6 +35,10 @@ import {
   identityFeatureSpineTargetRows,
 } from "./dev_test_game_identity_feature_spine_targets.mjs";
 import {
+  hardeningFeatureSpineCycleIds,
+  hardeningFeatureSpineSourceCheckId,
+} from "./dev_test_game_hardening_feature_spine_targets.mjs";
+import {
   replacementStaleConflictMessageSpineLaneCase,
 } from "./dev_test_game_stale_conflict_scenarios.mjs";
 
@@ -175,7 +179,7 @@ test("release readiness buildable cases share next-action commands and spine tar
     releaseReadinessProductionFeatureSpineTargets.completedGameStaleRecovery,
     {
       featureSlotId: "completed-game-stale-recovery",
-      sourceCheckId: "local-hardening-proof",
+      sourceCheckId: hardeningFeatureSpineSourceCheckId,
       cycleId: completedGameHardeningSpineCycleId,
       roleUrlId: completedGameStaleRecoverySpineLaneCase().id,
       rowKind: "checkpoint",
@@ -187,8 +191,8 @@ test("release readiness buildable cases share next-action commands and spine tar
     releaseReadinessProductionFeatureSpineTargets.replacementStaleConflictMessage,
     {
       featureSlotId: "replacement-stale-conflict-message",
-      sourceCheckId: "local-hardening-proof",
-      cycleId: "hardening-stale-conflict",
+      sourceCheckId: hardeningFeatureSpineSourceCheckId,
+      cycleId: hardeningFeatureSpineCycleIds.staleConflict,
       roleUrlId: replacementStaleConflictMessageSpineLaneCase().laneId,
       rowKind: "checkpoint",
       checkpointId: replacementStaleConflictMessageSpineLaneCase().laneId,
@@ -265,14 +269,14 @@ test("scenario-owned production feature targets derive proof row ids from source
       target: releaseReadinessProductionFeatureSpineTargets
         .replacementStaleConflictMessage,
       source: {
-        cycleId: "hardening-stale-conflict",
+        cycleId: hardeningFeatureSpineCycleIds.staleConflict,
         rowId: replacementStaleConflictMessageSpineLaneCase().laneId,
       },
     },
   ];
 
   for (const { target, source } of scenarioOwnedTargets) {
-    assert.equal(target.sourceCheckId, "local-hardening-proof");
+    assert.equal(target.sourceCheckId, hardeningFeatureSpineSourceCheckId);
     assert.equal(target.cycleId, source.cycleId);
     assert.equal(target.roleUrlId, source.rowId);
     assert.equal(target.checkpointId, source.rowId);

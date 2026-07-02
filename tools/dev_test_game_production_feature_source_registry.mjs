@@ -1,3 +1,16 @@
+import {
+  coreLoopFeatureSpineSource,
+  devTestGameCoreLoopAdminProofCommand,
+} from "./dev_test_game_core_loop_feature_spine_targets.mjs";
+import {
+  devTestGameHardeningAdminProofCommand,
+  hardeningFeatureSpineSource,
+} from "./dev_test_game_hardening_feature_spine_targets.mjs";
+import {
+  devTestGameIdentityAdminProofCommand,
+  identityFeatureSpineSource,
+} from "./dev_test_game_identity_feature_spine_targets.mjs";
+
 export const productionFeatureReadinessSourceKind = Object.freeze({
   spineTargets: "spine-targets",
   identityAdapter: "identity-adapter",
@@ -5,38 +18,16 @@ export const productionFeatureReadinessSourceKind = Object.freeze({
 
 export const devTestGameProductionFeatureBrowserProofCommand =
   "DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch npm run test:dev-test-game-live";
-export const devTestGameCoreLoopAdminProofCommand =
-  "npm run test:dev-test-game-core-loop-admin-proof";
-export const devTestGameHardeningAdminProofCommand =
-  "npm run test:dev-test-game-hardening-admin-proof";
-export const devTestGameIdentityAdminProofCommand =
-  "npm run test:dev-test-game-identity-admin-proof";
+export {
+  devTestGameCoreLoopAdminProofCommand,
+  devTestGameHardeningAdminProofCommand,
+  devTestGameIdentityAdminProofCommand,
+};
 
 export const productionFeatureSourceRegistry = Object.freeze([
-  Object.freeze({
-    sourceCheckId: "local-core-loop-proof",
-    graphSourceNodeId: "admin-proof:core-loop",
-    readinessSourceKind: productionFeatureReadinessSourceKind.spineTargets,
-    detailRoleUrlIncludes: "/admin/audit/local-core-loop",
-    roleUrlIncludes: "/g/",
-    rerunCommand: devTestGameCoreLoopAdminProofCommand,
-  }),
-  Object.freeze({
-    sourceCheckId: "local-hardening-proof",
-    graphSourceNodeId: "admin-proof:hardening",
-    readinessSourceKind: productionFeatureReadinessSourceKind.spineTargets,
-    detailRoleUrlIncludes: "/admin/audit/local-hardening",
-    roleUrlIncludes: "/g/",
-    rerunCommand: devTestGameHardeningAdminProofCommand,
-  }),
-  Object.freeze({
-    sourceCheckId: "local-identity-adapter-proof",
-    graphSourceNodeId: "admin-proof:identity",
-    readinessSourceKind: productionFeatureReadinessSourceKind.identityAdapter,
-    detailRoleUrlIncludes: "/admin/audit/local-identity-adapter",
-    roleUrlIncludes: "/admin/audit/local-identity-adapter",
-    rerunCommand: devTestGameIdentityAdminProofCommand,
-  }),
+  coreLoopFeatureSpineSource,
+  hardeningFeatureSpineSource,
+  identityFeatureSpineSource,
 ]);
 
 export const productionFeatureSourceCheckIds = Object.freeze(

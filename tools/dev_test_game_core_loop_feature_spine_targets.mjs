@@ -8,6 +8,17 @@ import {
 } from "./dev_test_game_core_loop_private_channel_recovery_scenarios.mjs";
 
 export const coreLoopFeatureSpineSourceCheckId = "local-core-loop-proof";
+export const devTestGameCoreLoopAdminProofCommand =
+  "npm run test:dev-test-game-core-loop-admin-proof";
+export const coreLoopFeatureSpineSource = Object.freeze({
+  sourceCheckId: coreLoopFeatureSpineSourceCheckId,
+  graphSourceNodeId: "admin-proof:core-loop",
+  readinessSourceKind: "spine-targets",
+  detailRoleUrlIncludes: "/admin/audit/local-core-loop",
+  roleUrlIncludes: "/g/",
+  rerunCommand: devTestGameCoreLoopAdminProofCommand,
+});
+
 export const coreLoopFeatureSpineCycleIds = Object.freeze({
   dayTwoNightTwo: "d02-n02",
   dayOneNightOneDayTwo: "d01-n01-d02",
