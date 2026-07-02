@@ -86,6 +86,11 @@ import {
   replacementStalePrivatePostAfterResolveScenario,
 } from "./dev_test_game_replacement_private_scenarios.mjs";
 import {
+  replacementActionReconnectScenario,
+  replacementIncomingActionScenario,
+  replacementStaleActionAfterResolveScenario,
+} from "./dev_test_game_replacement_action_scenario_cases.mjs";
+import {
   playerRecoveryAuditLaneIds,
 } from "./dev_test_game_player_recovery_scenarios.mjs";
 import {
@@ -2143,6 +2148,10 @@ test("session card and markdown include role credential URLs and tokens", async 
     replacementStalePrivatePostAfterResolveScenario();
   const replacementCompletedPrivatePost =
     replacementStalePrivatePostAfterCompleteScenario();
+  const replacementIncomingActionCase = replacementIncomingActionScenario();
+  const replacementActionReconnectCase = replacementActionReconnectScenario();
+  const replacementStaleActionAfterResolveCase =
+    replacementStaleActionAfterResolveScenario();
   const card = buildSessionCard({
     gameName: "card",
     game,
@@ -4727,13 +4736,16 @@ test("session card and markdown include role credential URLs and tokens", async 
       },
       replacementIncomingAction: {
         status: "passed",
-        game: "replacement-incoming-action-game-a",
-        targetSlot: "slot-2",
+        game: replacementIncomingActionCase.gameFixtureId,
+        targetSlot: replacementIncomingActionCase.targetSlot,
         hostEntry: { capabilityKinds: ["HostOf"] },
         replacementEntry: { capabilityKinds: ["SlotOccupant"] },
         targetEntry: { capabilityKinds: ["SlotOccupant"] },
-        setupHostPhase: { id: "N01", locked: false },
-        setupSlot: { occupant_user_id: "player-goon-a" },
+        setupHostPhase: { id: replacementIncomingActionCase.phaseId, locked: false },
+        setupSlot: {
+          occupant_user_id:
+            replacementIncomingActionCase.staleOutgoingPrincipalUserId,
+        },
         replacement: {
           state: "ack",
           serverEnvelope: { body: { kind: "Ack" } },
@@ -4742,10 +4754,12 @@ test("session card and markdown include role credential URLs and tokens", async 
               body: {
                 command: {
                   ProcessReplacement: {
-                    game: "replacement-incoming-action-game-a",
-                    slot: "slot_4",
-                    outgoing_user: "player-goon-a",
-                    incoming_user: "player-rowan",
+                    game: replacementIncomingActionCase.gameFixtureId,
+                    slot: replacementIncomingActionCase.actorSlot,
+                    outgoing_user:
+                      replacementIncomingActionCase.staleOutgoingPrincipalUserId,
+                    incoming_user:
+                      replacementIncomingActionCase.replacementPrincipalUserId,
                   },
                 },
               },
@@ -4754,16 +4768,16 @@ test("session card and markdown include role credential URLs and tokens", async 
         },
         outgoingCommandStateAfterReplacement: {
           status: 403,
-          error: "NotYourSlot",
+          error: replacementIncomingActionCase.staleOutgoingError,
         },
         currentCommandStateBeforeAction: {
-          actorSlot: "slot_4",
+          actorSlot: replacementIncomingActionCase.actorSlot,
           actorStatus: "alive",
-          phase: { phaseId: "N01", locked: false },
-          actions: [{ templateId: "factional_kill" }],
+          phase: { phaseId: replacementIncomingActionCase.phaseId, locked: false },
+          actions: [{ templateId: replacementIncomingActionCase.templateId }],
         },
         currentButtonsBeforeAction: [
-          { action: "submit_action:factional_kill", disabled: false },
+          { action: replacementIncomingActionCase.commandAction, disabled: false },
         ],
         action: {
           state: "ack",
@@ -4771,14 +4785,15 @@ test("session card and markdown include role credential URLs and tokens", async 
           requestEnvelope: {
             body: {
               body: {
-                principal_user_id: "player-rowan",
+                principal_user_id:
+                  replacementIncomingActionCase.replacementPrincipalUserId,
                 command: {
                   SubmitAction: {
-                    game: "replacement-incoming-action-game-a",
-                    action_id: "incoming_replacement_factional_kill",
-                    actor_slot: "slot_4",
-                    template_id: "factional_kill",
-                    targets: ["slot-2"],
+                    game: replacementIncomingActionCase.gameFixtureId,
+                    action_id: replacementIncomingActionCase.actionId,
+                    actor_slot: replacementIncomingActionCase.actorSlot,
+                    template_id: replacementIncomingActionCase.templateId,
+                    targets: [replacementIncomingActionCase.targetSlot],
                   },
                 },
               },
@@ -4789,28 +4804,32 @@ test("session card and markdown include role credential URLs and tokens", async 
         currentButtonsAfterAction: [],
         apiCommandStateAfterAction: { actions: [] },
         resolveNight: { commandStatus: { state: "ack" } },
-        hostPhaseAfterResolve: { id: "N01", locked: true },
-        targetSlotAfterResolve: { slot_id: "slot-2", alive: false, status: "dead" },
+        hostPhaseAfterResolve: { id: replacementIncomingActionCase.phaseId, locked: true },
+        targetSlotAfterResolve: {
+          slot_id: replacementIncomingActionCase.targetSlot,
+          alive: false,
+          status: replacementIncomingActionCase.targetStatusAfterKill,
+        },
         targetCommandState: {
-          actorSlot: "slot-2",
+          actorSlot: replacementIncomingActionCase.targetSlot,
           actorAlive: false,
-          actorStatus: "dead",
+          actorStatus: replacementIncomingActionCase.targetStatusAfterKill,
         },
         targetNotice: {
-          audience_slot: "slot-2",
-          effect: "player_killed",
-          status: "factional_kill",
+          audience_slot: replacementIncomingActionCase.targetSlot,
+          effect: replacementIncomingActionCase.targetNoticeEffect,
+          status: replacementIncomingActionCase.templateId,
         },
         replacementPrivateIsolation: {
           targetKillVisible: false,
           notificationCount: 0,
         },
-        outcomeSummary: "Rowan submitted factional_kill as Slot 4 and killed slot-2",
+        outcomeSummary: replacementIncomingActionCase.outcomeSummary,
       },
       replacementActionReconnect: {
         status: "passed",
-        game: "replacement-action-reconnect-game-a",
-        targetSlot: "slot-2",
+        game: replacementActionReconnectCase.gameFixtureId,
+        targetSlot: replacementActionReconnectCase.targetSlot,
         hostEntry: { capabilityKinds: ["HostOf"] },
         replacementEntry: { capabilityKinds: ["SlotOccupant"] },
         targetEntry: { capabilityKinds: ["SlotOccupant"] },
@@ -4822,10 +4841,12 @@ test("session card and markdown include role credential URLs and tokens", async 
               body: {
                 command: {
                   ProcessReplacement: {
-                    game: "replacement-action-reconnect-game-a",
-                    slot: "slot_4",
-                    outgoing_user: "player-goon-a",
-                    incoming_user: "player-rowan",
+                    game: replacementActionReconnectCase.gameFixtureId,
+                    slot: replacementActionReconnectCase.actorSlot,
+                    outgoing_user:
+                      replacementActionReconnectCase.staleOutgoingPrincipalUserId,
+                    incoming_user:
+                      replacementActionReconnectCase.replacementPrincipalUserId,
                   },
                 },
               },
@@ -4833,10 +4854,10 @@ test("session card and markdown include role credential URLs and tokens", async 
           },
         },
         commandStateBeforeAction: {
-          actorSlot: "slot_4",
+          actorSlot: replacementActionReconnectCase.actorSlot,
           actorStatus: "alive",
-          phase: { phaseId: "N01", locked: false },
-          actions: [{ templateId: "factional_kill" }],
+          phase: { phaseId: replacementActionReconnectCase.phaseId, locked: false },
+          actions: [{ templateId: replacementActionReconnectCase.templateId }],
         },
         action: {
           state: "ack",
@@ -4844,14 +4865,15 @@ test("session card and markdown include role credential URLs and tokens", async 
           requestEnvelope: {
             body: {
               body: {
-                principal_user_id: "player-rowan",
+                principal_user_id:
+                  replacementActionReconnectCase.replacementPrincipalUserId,
                 command: {
                   SubmitAction: {
-                    game: "replacement-action-reconnect-game-a",
-                    action_id: "replacement_action_reconnect_factional_kill",
-                    actor_slot: "slot_4",
-                    template_id: "factional_kill",
-                    targets: ["slot-2"],
+                    game: replacementActionReconnectCase.gameFixtureId,
+                    action_id: replacementActionReconnectCase.actionId,
+                    actor_slot: replacementActionReconnectCase.actorSlot,
+                    template_id: replacementActionReconnectCase.templateId,
+                    targets: [replacementActionReconnectCase.targetSlot],
                   },
                 },
               },
@@ -4859,47 +4881,53 @@ test("session card and markdown include role credential URLs and tokens", async 
           },
         },
         resolveNight: { commandStatus: { state: "ack" } },
-        targetSlotAfterResolve: { slot_id: "slot-2", alive: false, status: "dead" },
+        targetSlotAfterResolve: {
+          slot_id: replacementActionReconnectCase.targetSlot,
+          alive: false,
+          status: replacementActionReconnectCase.targetStatusAfterKill,
+        },
         targetCommandState: {
-          actorSlot: "slot-2",
+          actorSlot: replacementActionReconnectCase.targetSlot,
           actorAlive: false,
-          actorStatus: "dead",
+          actorStatus: replacementActionReconnectCase.targetStatusAfterKill,
         },
         targetNoticeBeforeReconnect: {
-          audience_slot: "slot-2",
-          effect: "player_killed",
-          status: "factional_kill",
+          audience_slot: replacementActionReconnectCase.targetSlot,
+          effect: replacementActionReconnectCase.targetNoticeEffect,
+          status: replacementActionReconnectCase.templateId,
         },
         reconnect: {
           status: "passed",
-          principalUserId: "player-rowan",
-          actorSlot: "slot_4",
+          principalUserId: replacementActionReconnectCase.replacementPrincipalUserId,
+          actorSlot: replacementActionReconnectCase.actorSlot,
           reconnectingStatus: { state: "reconnecting" },
           reconnectRecoveryEvent: { attempt: 1, state: "recovered" },
           recoveredSnapshotContainsPost: true,
           reconnectCommand: {
-            principalUserId: "player-rowan",
+            principalUserId:
+              replacementActionReconnectCase.replacementPrincipalUserId,
             command: {
               SubmitPost: {
-                actor_slot: "slot_4",
-                body: "Replacement action reconnect proof from dev:test-game fixture",
+                actor_slot: replacementActionReconnectCase.actorSlot,
+                body:
+                  `${replacementActionReconnectCase.reconnectPostBodyPrefix}fixture`,
               },
             },
             streamSeqs: [60],
           },
           recoveredCommandState: {
-            actorSlot: "slot_4",
+            actorSlot: replacementActionReconnectCase.actorSlot,
             actorAlive: true,
             actorStatus: "alive",
-            phase: { phaseId: "N01", locked: true },
+            phase: { phaseId: replacementActionReconnectCase.phaseId, locked: true },
             actions: [],
           },
         },
         commandStateAfterReconnect: {
-          actorSlot: "slot_4",
+          actorSlot: replacementActionReconnectCase.actorSlot,
           actorAlive: true,
           actorStatus: "alive",
-          phase: { phaseId: "N01", locked: true },
+          phase: { phaseId: replacementActionReconnectCase.phaseId, locked: true },
           actions: [],
         },
         buttonsAfterReconnect: [],
@@ -4908,17 +4936,16 @@ test("session card and markdown include role credential URLs and tokens", async 
           notificationCount: 0,
         },
         targetNoticeAfterReconnect: {
-          audience_slot: "slot-2",
-          effect: "player_killed",
-          status: "factional_kill",
+          audience_slot: replacementActionReconnectCase.targetSlot,
+          effect: replacementActionReconnectCase.targetNoticeEffect,
+          status: replacementActionReconnectCase.templateId,
         },
-        outcomeSummary:
-          "Rowan reconnected after resolved Slot 4 factional_kill to locked N01 with no actions",
+        outcomeSummary: replacementActionReconnectCase.outcomeSummary,
       },
       replacementStaleActionAfterResolve: {
         status: "passed",
-        game: "replacement-stale-action-after-resolve-game-a",
-        targetSlot: "slot-2",
+        game: replacementStaleActionAfterResolveCase.gameFixtureId,
+        targetSlot: replacementStaleActionAfterResolveCase.targetSlot,
         hostEntry: { capabilityKinds: ["HostOf"] },
         replacementEntry: { capabilityKinds: ["SlotOccupant"] },
         targetEntry: { capabilityKinds: ["SlotOccupant"] },
@@ -4930,10 +4957,14 @@ test("session card and markdown include role credential URLs and tokens", async 
               body: {
                 command: {
                   ProcessReplacement: {
-                    game: "replacement-stale-action-after-resolve-game-a",
-                    slot: "slot_4",
-                    outgoing_user: "player-goon-a",
-                    incoming_user: "player-rowan",
+                    game: replacementStaleActionAfterResolveCase.gameFixtureId,
+                    slot: replacementStaleActionAfterResolveCase.actorSlot,
+                    outgoing_user:
+                      replacementStaleActionAfterResolveCase
+                        .staleOutgoingPrincipalUserId,
+                    incoming_user:
+                      replacementStaleActionAfterResolveCase
+                        .replacementPrincipalUserId,
                   },
                 },
               },
@@ -4941,42 +4972,55 @@ test("session card and markdown include role credential URLs and tokens", async 
           },
         },
         commandStateBeforeClose: {
-          actorSlot: "slot_4",
+          actorSlot: replacementStaleActionAfterResolveCase.actorSlot,
           actorStatus: "alive",
-          phase: { phaseId: "N01", locked: false },
-          actions: [{ templateId: "factional_kill" }],
+          phase: {
+            phaseId: replacementStaleActionAfterResolveCase.phaseId,
+            locked: false,
+          },
+          actions: [
+            { templateId: replacementStaleActionAfterResolveCase.templateId },
+          ],
         },
         buttonsBeforeClose: [
-          { action: "submit_action:factional_kill", disabled: false },
+          {
+            action: replacementStaleActionAfterResolveCase.commandAction,
+            disabled: false,
+          },
         ],
         actionButtonBeforeClose: {
-          action: "submit_action:factional_kill",
+          action: replacementStaleActionAfterResolveCase.commandAction,
           disabled: false,
         },
         closedStatus: { state: "closed" },
         resolveNight: { commandStatus: { state: "ack" } },
-        hostPhaseAfterResolve: { id: "N01", locked: true },
+        hostPhaseAfterResolve: {
+          id: replacementStaleActionAfterResolveCase.phaseId,
+          locked: true,
+        },
         hostPhaseActionsAfterResolve: ["advance_phase"],
         targetSlotAfterResolve: {
-          slot_id: "slot-2",
+          slot_id: replacementStaleActionAfterResolveCase.targetSlot,
           alive: true,
           status: "alive",
         },
         reject: {
           state: "reject",
-          error: "PhaseLocked",
+          error: replacementStaleActionAfterResolveCase.rejectionError,
           message:
-            "Reject PhaseLocked: phase locked; stale action state, refresh and use current action controls",
+            `${replacementStaleActionAfterResolveCase.rejectionStatusText}: phase locked; ${replacementStaleActionAfterResolveCase.staleActionStateMessageFragment}, refresh and use ${replacementStaleActionAfterResolveCase.currentActionControlsMessageFragment}`,
           serverEnvelope: { body: { kind: "Reject" } },
           requestEnvelope: {
             body: {
               body: {
                 command: {
                   SubmitAction: {
-                    actor_slot: "slot_4",
-                    action_id: "role_factional_kill",
-                    template_id: "factional_kill",
-                    targets: ["slot-2"],
+                    actor_slot: replacementStaleActionAfterResolveCase.actorSlot,
+                    action_id:
+                      replacementStaleActionAfterResolveCase.staleActionId,
+                    template_id:
+                      replacementStaleActionAfterResolveCase.templateId,
+                    targets: [replacementStaleActionAfterResolveCase.targetSlot],
                   },
                 },
               },
@@ -4984,10 +5028,13 @@ test("session card and markdown include role credential URLs and tokens", async 
           },
         },
         commandStateAfterReject: {
-          actorSlot: "slot_4",
+          actorSlot: replacementStaleActionAfterResolveCase.actorSlot,
           actorAlive: true,
           actorStatus: "alive",
-          phase: { phaseId: "N01", locked: true },
+          phase: {
+            phaseId: replacementStaleActionAfterResolveCase.phaseId,
+            locked: true,
+          },
           actions: [],
         },
         buttonsAfterReject: [],
@@ -4995,21 +5042,24 @@ test("session card and markdown include role credential URLs and tokens", async 
           projectionRefreshKeys: ["notifications", "investigationResults", "commandState"],
         },
         currentReceipt: {
-          actionId: "submit_action:factional_kill",
+          actionId: replacementStaleActionAfterResolveCase.commandAction,
           state: "reject",
           commandTrace: { projectionRefreshKeys: ["commandState"] },
         },
         receiptStatusText:
-          "Reject PhaseLocked: phase locked; stale action state, refresh and use current action controls",
+          `${replacementStaleActionAfterResolveCase.rejectionStatusText}: phase locked; ${replacementStaleActionAfterResolveCase.staleActionStateMessageFragment}, refresh and use ${replacementStaleActionAfterResolveCase.currentActionControlsMessageFragment}`,
         apiCommandStateAfterReject: {
-          actor_slot: "slot_4",
+          actor_slot: replacementStaleActionAfterResolveCase.actorSlot,
           actor_alive: true,
           actor_status: "alive",
-          phase: { phase_id: "N01", locked: true },
+          phase: {
+            phase_id: replacementStaleActionAfterResolveCase.phaseId,
+            locked: true,
+          },
           actions: [],
         },
         targetSlotAfterReject: {
-          slot_id: "slot-2",
+          slot_id: replacementStaleActionAfterResolveCase.targetSlot,
           alive: true,
           status: "alive",
         },
@@ -5018,15 +5068,17 @@ test("session card and markdown include role credential URLs and tokens", async 
           notificationCount: 0,
         },
         targetCommandStateAfterReject: {
-          actorSlot: "slot-2",
+          actorSlot: replacementStaleActionAfterResolveCase.targetSlot,
           actorAlive: true,
           actorStatus: "alive",
-          phase: { phaseId: "N01", locked: true },
+          phase: {
+            phaseId: replacementStaleActionAfterResolveCase.phaseId,
+            locked: true,
+          },
           actions: [],
         },
         targetNoticeAfterReject: null,
-        outcomeSummary:
-          "Rowan's stale replacement factional_kill rejected after N01 resolution without appending",
+        outcomeSummary: replacementStaleActionAfterResolveCase.outcomeSummary,
       },
       replacementStalePrivatePostAfterResolve: {
         status: "passed",

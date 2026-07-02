@@ -11,6 +11,11 @@ import {
   buildDevTestGameProofRun,
 } from "./dev_test_game_proof_contract.mjs";
 import {
+  replacementActionReconnectScenario,
+  replacementIncomingActionScenario,
+  replacementStaleActionAfterResolveScenario,
+} from "./dev_test_game_replacement_action_scenario_cases.mjs";
+import {
   replacementConcurrentActionRaceScenario,
   replacementConcurrentPrivatePostRaceScenario,
   replacementConcurrentVoteRaceScenario,
@@ -18502,6 +18507,7 @@ async function verifyIncomingReplacementActionSubmission({
   frontendBaseUrl,
   normalizeCommandResponse,
 }) {
+  const scenario = replacementIncomingActionScenario();
   if (browser === null || browser === undefined) {
     throw new Error("incoming replacement action proof requires a Playwright browser");
   }
@@ -18509,7 +18515,7 @@ async function verifyIncomingReplacementActionSubmission({
   const seed = await seedIncomingReplacementActionGame({ actionGame });
   const hostSession = await createSessionGrantCredential({
     token: `${tokenPrefix}-incoming-replacement-action-host-${crypto.randomUUID()}`,
-    principalUserId: "host_h",
+    principalUserId: scenario.hostPrincipalUserId,
     returnTo: `/g/${actionGame}/host`,
     expectedCapabilityKind: "HostOf",
     issuedBy: {
@@ -18531,23 +18537,30 @@ async function verifyIncomingReplacementActionSubmission({
     await hostEntry.page.goto(`${frontendBaseUrl}/g/${actionGame}/host`, {
       waitUntil: "networkidle",
     });
-    await waitForHostProjectionPhase(hostEntry.page, { phaseId: "N01", locked: false });
+    await waitForHostProjectionPhase(hostEntry.page, {
+      phaseId: scenario.phaseId,
+      locked: false,
+    });
     const setupHostPhase = await hostEntry.page.evaluate(
       () => window.__fmarchHostProjection?.phase,
     );
     const setupSlot = (
-      await fetchHostConsoleState({ apiBaseUrl, game: actionGame, slot: "slot_4" })
-    ).slots?.find?.((slot) => slot.slot_id === "slot_4");
+      await fetchHostConsoleState({
+        apiBaseUrl,
+        game: actionGame,
+        slot: scenario.actorSlot,
+      })
+    ).slots?.find?.((slot) => slot.slot_id === scenario.actorSlot);
     const replacementCommandId = crypto.randomUUID();
     const replacementRaw = await sendBrowserCommand(hostEntry.page, {
-      principalUserId: "host_h",
+      principalUserId: scenario.hostPrincipalUserId,
       commandId: replacementCommandId,
       command: {
         ProcessReplacement: {
           game: actionGame,
-          slot: "slot_4",
-          outgoing_user: "player-goon-a",
-          incoming_user: "player-rowan",
+          slot: scenario.actorSlot,
+          outgoing_user: scenario.staleOutgoingPrincipalUserId,
+          incoming_user: scenario.replacementPrincipalUserId,
         },
       },
     });
@@ -18558,11 +18571,11 @@ async function verifyIncomingReplacementActionSubmission({
       serverEnvelope: replacementRaw.serverEnvelope,
     });
     const outgoingCommandStateAfterReplacement = await fetchJsonStatus(
-      `${apiBaseUrl}/games/${actionGame}/player-command-state?principal_user_id=player-goon-a&slot_id=slot_4`,
+      `${apiBaseUrl}/games/${actionGame}/player-command-state?principal_user_id=${scenario.staleOutgoingPrincipalUserId}&slot_id=${scenario.actorSlot}`,
     );
     const replacementSession = await createSessionGrantCredential({
       token: `${tokenPrefix}-incoming-replacement-action-player-${crypto.randomUUID()}`,
-      principalUserId: "player-rowan",
+      principalUserId: scenario.replacementPrincipalUserId,
       returnTo: `/g/${actionGame}`,
       expectedCapabilityKind: "SlotOccupant",
       issuedBy: {
@@ -18580,29 +18593,34 @@ async function verifyIncomingReplacementActionSubmission({
     });
     await gotoPlayerBoard(replacementEntry.page, actionGame);
     await replacementEntry.page.waitForFunction(
-      () =>
-        window.__fmarchPlayerProjection?.commandState?.actorSlot === "slot_4" &&
+      ({ actorSlot, phaseId, templateId }) =>
+        window.__fmarchPlayerProjection?.commandState?.actorSlot === actorSlot &&
         window.__fmarchPlayerProjection?.commandState?.actorStatus === "alive" &&
-        window.__fmarchPlayerProjection?.commandState?.phase?.phaseId === "N01" &&
+        window.__fmarchPlayerProjection?.commandState?.phase?.phaseId === phaseId &&
         window.__fmarchPlayerProjection?.commandState?.actions?.some(
-          (action) => action.templateId === "factional_kill",
+          (action) => action.templateId === templateId,
         ),
+      {
+        actorSlot: scenario.actorSlot,
+        phaseId: scenario.phaseId,
+        templateId: scenario.templateId,
+      },
     );
     const currentCommandStateBeforeAction = await replacementEntry.page.evaluate(
       () => window.__fmarchPlayerProjection?.commandState,
     );
     const currentButtonsBeforeAction = await playerCommandButtons(replacementEntry.page);
     const actionCommandId = crypto.randomUUID();
-    const targetSlot = "slot-2";
+    const targetSlot = scenario.targetSlot;
     const actionRaw = await sendBrowserCommand(replacementEntry.page, {
-      principalUserId: "player-rowan",
+      principalUserId: scenario.replacementPrincipalUserId,
       commandId: actionCommandId,
       command: {
         SubmitAction: {
           game: actionGame,
-          action_id: "incoming_replacement_factional_kill",
-          actor_slot: "slot_4",
-          template_id: "factional_kill",
+          action_id: scenario.actionId,
+          actor_slot: scenario.actorSlot,
+          template_id: scenario.templateId,
           targets: [targetSlot],
         },
       },
@@ -18615,21 +18633,25 @@ async function verifyIncomingReplacementActionSubmission({
     });
     await replacementEntry.page.evaluate(() => window.__fmarchTriggerPlayerResync?.(0));
     await replacementEntry.page.waitForFunction(
-      () =>
-        window.__fmarchPlayerProjection?.commandState?.actorSlot === "slot_4" &&
-        window.__fmarchPlayerProjection?.commandState?.phase?.phaseId === "N01" &&
+      ({ actorSlot, phaseId }) =>
+        window.__fmarchPlayerProjection?.commandState?.actorSlot === actorSlot &&
+        window.__fmarchPlayerProjection?.commandState?.phase?.phaseId === phaseId &&
         (window.__fmarchPlayerProjection?.commandState?.actions ?? []).length === 0,
+      { actorSlot: scenario.actorSlot, phaseId: scenario.phaseId },
     );
     const currentCommandStateAfterAction = await replacementEntry.page.evaluate(
       () => window.__fmarchPlayerProjection?.commandState,
     );
     const currentButtonsAfterAction = await playerCommandButtons(replacementEntry.page);
     const apiCommandStateAfterAction = await fetchJson(
-      `${apiBaseUrl}/games/${actionGame}/player-command-state?principal_user_id=player-rowan&slot_id=slot_4`,
+      `${apiBaseUrl}/games/${actionGame}/player-command-state?principal_user_id=${scenario.replacementPrincipalUserId}&slot_id=${scenario.actorSlot}`,
     );
 
     const resolveNight = await confirmHostAction(hostEntry.page, "resolve_phase");
-    await waitForHostProjectionPhase(hostEntry.page, { phaseId: "N01", locked: true });
+    await waitForHostProjectionPhase(hostEntry.page, {
+      phaseId: scenario.phaseId,
+      locked: true,
+    });
     const targetSlotAfterResolve = await fetchResolvedSlotState({
       apiBaseUrl,
       game: actionGame,
@@ -18640,7 +18662,7 @@ async function verifyIncomingReplacementActionSubmission({
     );
     const targetSession = await createSessionGrantCredential({
       token: `${tokenPrefix}-incoming-replacement-action-target-${crypto.randomUUID()}`,
-      principalUserId: "player-target",
+      principalUserId: scenario.targetPrincipalUserId,
       returnTo: `/g/${actionGame}`,
       expectedCapabilityKind: "SlotOccupant",
       issuedBy: {
@@ -18658,29 +18680,37 @@ async function verifyIncomingReplacementActionSubmission({
     });
     await gotoPlayerBoard(targetEntry.page, actionGame);
     await targetEntry.page.waitForFunction(
-      (expectedSlot) =>
+      ({ expectedSlot, targetNoticeEffect, templateId }) =>
         window.__fmarchPlayerProjection?.commandState?.actorSlot === expectedSlot &&
         window.__fmarchPlayerProjection?.commandState?.actorAlive === false &&
         window.__fmarchPlayerProjection?.notifications?.some(
           (notice) =>
             notice.audience_slot === expectedSlot &&
-            notice.effect === "player_killed" &&
-            notice.status === "factional_kill",
+            notice.effect === targetNoticeEffect &&
+            notice.status === templateId,
         ),
-      targetSlot,
+      {
+        expectedSlot: targetSlot,
+        targetNoticeEffect: scenario.targetNoticeEffect,
+        templateId: scenario.templateId,
+      },
     );
     const targetCommandState = await targetEntry.page.evaluate(
       () => window.__fmarchPlayerProjection?.commandState,
     );
     const targetNotice = await targetEntry.page.evaluate(
-      (expectedSlot) =>
+      ({ expectedSlot, targetNoticeEffect, templateId }) =>
         window.__fmarchPlayerProjection?.notifications?.find(
           (notice) =>
             notice.audience_slot === expectedSlot &&
-            notice.effect === "player_killed" &&
-            notice.status === "factional_kill",
+            notice.effect === targetNoticeEffect &&
+            notice.status === templateId,
         ) ?? null,
-      targetSlot,
+      {
+        expectedSlot: targetSlot,
+        targetNoticeEffect: scenario.targetNoticeEffect,
+        templateId: scenario.templateId,
+      },
     );
     await replacementEntry.page.evaluate(() => window.__fmarchTriggerPlayerResync?.(0));
     const replacementNotificationsAfterResolve = await replacementEntry.page.evaluate(
@@ -18690,49 +18720,50 @@ async function verifyIncomingReplacementActionSubmission({
       targetKillVisible: replacementNotificationsAfterResolve.some(
         (notice) =>
           notice.audience_slot === targetSlot ||
-          notice.effect === "player_killed" ||
-          notice.status === "factional_kill",
+          notice.effect === scenario.targetNoticeEffect ||
+          notice.status === scenario.templateId,
       ),
       notificationCount: replacementNotificationsAfterResolve.length,
     };
     if (
-      setupHostPhase?.id !== "N01" ||
+      setupHostPhase?.id !== scenario.phaseId ||
       setupHostPhase?.locked !== false ||
-      setupSlot?.occupant_user_id !== "player-goon-a" ||
+      setupSlot?.occupant_user_id !== scenario.staleOutgoingPrincipalUserId ||
       replacement?.state !== "ack" ||
       replacement?.requestEnvelope?.body?.body?.command?.ProcessReplacement?.slot !==
-        "slot_4" ||
+        scenario.actorSlot ||
       replacement?.requestEnvelope?.body?.body?.command?.ProcessReplacement
-        ?.incoming_user !== "player-rowan" ||
+        ?.incoming_user !== scenario.replacementPrincipalUserId ||
       outgoingCommandStateAfterReplacement.status !== 403 ||
-      outgoingCommandStateAfterReplacement.body?.error !== "NotYourSlot" ||
-      currentCommandStateBeforeAction?.actorSlot !== "slot_4" ||
+      outgoingCommandStateAfterReplacement.body?.error !== scenario.staleOutgoingError ||
+      currentCommandStateBeforeAction?.actorSlot !== scenario.actorSlot ||
       currentCommandStateBeforeAction?.actorStatus !== "alive" ||
       currentCommandStateBeforeAction?.actions?.some(
-        (candidate) => candidate.templateId === "factional_kill",
+        (candidate) => candidate.templateId === scenario.templateId,
       ) !== true ||
       currentButtonsBeforeAction.some(
         (button) =>
-          button.action === "submit_action:factional_kill" && button.disabled === false,
+          button.action === scenario.commandAction && button.disabled === false,
       ) !== true ||
       action?.state !== "ack" ||
-      action?.requestEnvelope?.body?.body?.principal_user_id !== "player-rowan" ||
+      action?.requestEnvelope?.body?.body?.principal_user_id !==
+        scenario.replacementPrincipalUserId ||
       action?.requestEnvelope?.body?.body?.command?.SubmitAction?.actor_slot !==
-        "slot_4" ||
+        scenario.actorSlot ||
       action?.requestEnvelope?.body?.body?.command?.SubmitAction?.template_id !==
-        "factional_kill" ||
+        scenario.templateId ||
       action?.requestEnvelope?.body?.body?.command?.SubmitAction?.targets?.[0] !==
         targetSlot ||
       currentCommandStateAfterAction?.actions?.length !== 0 ||
       currentButtonsAfterAction.some(
-        (button) => button.action === "submit_action:factional_kill",
+        (button) => button.action === scenario.commandAction,
       ) ||
       apiCommandStateAfterAction?.actions?.length !== 0 ||
       resolveNight?.commandStatus?.state !== "ack" ||
-      hostPhaseAfterResolve?.id !== "N01" ||
+      hostPhaseAfterResolve?.id !== scenario.phaseId ||
       hostPhaseAfterResolve?.locked !== true ||
       targetSlotAfterResolve?.alive !== false ||
-      targetSlotAfterResolve?.status !== "dead" ||
+      targetSlotAfterResolve?.status !== scenario.targetStatusAfterKill ||
       targetCommandState?.actorSlot !== targetSlot ||
       targetCommandState?.actorAlive !== false ||
       targetCommandState?.actorStatus !== "dead" ||
@@ -18788,9 +18819,8 @@ async function verifyIncomingReplacementActionSubmission({
       targetCommandState,
       targetNotice,
       replacementPrivateIsolation,
-      outcomeSummary: `Rowan submitted factional_kill as Slot 4 and killed ${targetSlot}`,
-      proof:
-        "A disposable host role URL processed Slot 4 replacement, Rowan's current replacement role URL submitted factional_kill as Slot 4, the host role URL resolved N01, and the target role URL received the private player_killed factional_kill receipt while Rowan did not.",
+      outcomeSummary: scenario.outcomeSummary,
+      proof: scenario.proof,
     };
   } finally {
     await targetEntry?.context?.close().catch(() => {});
@@ -18831,6 +18861,7 @@ async function verifyReplacementActionReconnectRecovery({
   frontendBaseUrl,
   normalizeCommandResponse,
 }) {
+  const scenario = replacementActionReconnectScenario();
   if (browser === null || browser === undefined) {
     throw new Error("replacement action reconnect proof requires a Playwright browser");
   }
@@ -18838,7 +18869,7 @@ async function verifyReplacementActionReconnectRecovery({
   const seed = await seedIncomingReplacementActionGame({ actionGame });
   const hostSession = await createSessionGrantCredential({
     token: `${tokenPrefix}-replacement-action-reconnect-host-${crypto.randomUUID()}`,
-    principalUserId: "host_h",
+    principalUserId: scenario.hostPrincipalUserId,
     returnTo: `/g/${actionGame}/host`,
     expectedCapabilityKind: "HostOf",
     issuedBy: {
@@ -18849,7 +18880,7 @@ async function verifyReplacementActionReconnectRecovery({
   });
   const replacementSession = await createSessionGrantCredential({
     token: `${tokenPrefix}-replacement-action-reconnect-rowan-${crypto.randomUUID()}`,
-    principalUserId: "player-rowan",
+    principalUserId: scenario.replacementPrincipalUserId,
     returnTo: `/g/${actionGame}`,
     expectedCapabilityKind: "SlotOccupant",
     issuedBy: {
@@ -18860,7 +18891,7 @@ async function verifyReplacementActionReconnectRecovery({
   });
   const targetSession = await createSessionGrantCredential({
     token: `${tokenPrefix}-replacement-action-reconnect-target-${crypto.randomUUID()}`,
-    principalUserId: "player-target",
+    principalUserId: scenario.targetPrincipalUserId,
     returnTo: `/g/${actionGame}`,
     expectedCapabilityKind: "SlotOccupant",
     issuedBy: {
@@ -18888,17 +18919,20 @@ async function verifyReplacementActionReconnectRecovery({
     await hostEntry.page.goto(`${frontendBaseUrl}/g/${actionGame}/host`, {
       waitUntil: "networkidle",
     });
-    await waitForHostProjectionPhase(hostEntry.page, { phaseId: "N01", locked: false });
+    await waitForHostProjectionPhase(hostEntry.page, {
+      phaseId: scenario.phaseId,
+      locked: false,
+    });
     const replacementCommandId = crypto.randomUUID();
     const replacementRaw = await sendBrowserCommand(hostEntry.page, {
-      principalUserId: "host_h",
+      principalUserId: scenario.hostPrincipalUserId,
       commandId: replacementCommandId,
       command: {
         ProcessReplacement: {
           game: actionGame,
-          slot: "slot_4",
-          outgoing_user: "player-goon-a",
-          incoming_user: "player-rowan",
+          slot: scenario.actorSlot,
+          outgoing_user: scenario.staleOutgoingPrincipalUserId,
+          incoming_user: scenario.replacementPrincipalUserId,
         },
       },
     });
@@ -18918,28 +18952,33 @@ async function verifyReplacementActionReconnectRecovery({
 
     await gotoPlayerBoard(replacementEntry.page, actionGame);
     await replacementEntry.page.waitForFunction(
-      () =>
-        window.__fmarchPlayerProjection?.commandState?.actorSlot === "slot_4" &&
+      ({ actorSlot, phaseId, templateId }) =>
+        window.__fmarchPlayerProjection?.commandState?.actorSlot === actorSlot &&
         window.__fmarchPlayerProjection?.commandState?.actorStatus === "alive" &&
-        window.__fmarchPlayerProjection?.commandState?.phase?.phaseId === "N01" &&
+        window.__fmarchPlayerProjection?.commandState?.phase?.phaseId === phaseId &&
         window.__fmarchPlayerProjection?.commandState?.actions?.some(
-          (action) => action.templateId === "factional_kill",
+          (action) => action.templateId === templateId,
         ),
+      {
+        actorSlot: scenario.actorSlot,
+        phaseId: scenario.phaseId,
+        templateId: scenario.templateId,
+      },
     );
     const commandStateBeforeAction = await replacementEntry.page.evaluate(
       () => window.__fmarchPlayerProjection?.commandState,
     );
-    const targetSlot = "slot-2";
+    const targetSlot = scenario.targetSlot;
     const actionCommandId = crypto.randomUUID();
     const actionRaw = await sendBrowserCommand(replacementEntry.page, {
-      principalUserId: "player-rowan",
+      principalUserId: scenario.replacementPrincipalUserId,
       commandId: actionCommandId,
       command: {
         SubmitAction: {
           game: actionGame,
-          action_id: "replacement_action_reconnect_factional_kill",
-          actor_slot: "slot_4",
-          template_id: "factional_kill",
+          action_id: scenario.actionId,
+          actor_slot: scenario.actorSlot,
+          template_id: scenario.templateId,
           targets: [targetSlot],
         },
       },
@@ -18951,7 +18990,10 @@ async function verifyReplacementActionReconnectRecovery({
       serverEnvelope: actionRaw.serverEnvelope,
     });
     const resolveNight = await confirmHostAction(hostEntry.page, "resolve_phase");
-    await waitForHostProjectionPhase(hostEntry.page, { phaseId: "N01", locked: true });
+    await waitForHostProjectionPhase(hostEntry.page, {
+      phaseId: scenario.phaseId,
+      locked: true,
+    });
     const targetSlotAfterResolve = await fetchResolvedSlotState({
       apiBaseUrl,
       game: actionGame,
@@ -18960,37 +19002,45 @@ async function verifyReplacementActionReconnectRecovery({
 
     await gotoPlayerBoard(targetEntry.page, actionGame);
     await targetEntry.page.waitForFunction(
-      (expectedSlot) =>
+      ({ expectedSlot, targetNoticeEffect, templateId }) =>
         window.__fmarchPlayerProjection?.commandState?.actorSlot === expectedSlot &&
         window.__fmarchPlayerProjection?.commandState?.actorAlive === false &&
         window.__fmarchPlayerProjection?.notifications?.some(
           (notice) =>
             notice.audience_slot === expectedSlot &&
-            notice.effect === "player_killed" &&
-            notice.status === "factional_kill",
+            notice.effect === targetNoticeEffect &&
+            notice.status === templateId,
         ),
-      targetSlot,
+      {
+        expectedSlot: targetSlot,
+        targetNoticeEffect: scenario.targetNoticeEffect,
+        templateId: scenario.templateId,
+      },
     );
     const targetCommandState = await targetEntry.page.evaluate(
       () => window.__fmarchPlayerProjection?.commandState,
     );
     const targetNoticeBeforeReconnect = await targetEntry.page.evaluate(
-      (expectedSlot) =>
+      ({ expectedSlot, targetNoticeEffect, templateId }) =>
         window.__fmarchPlayerProjection?.notifications?.find(
           (notice) =>
             notice.audience_slot === expectedSlot &&
-            notice.effect === "player_killed" &&
-            notice.status === "factional_kill",
+            notice.effect === targetNoticeEffect &&
+            notice.status === templateId,
         ) ?? null,
-      targetSlot,
+      {
+        expectedSlot: targetSlot,
+        targetNoticeEffect: scenario.targetNoticeEffect,
+        templateId: scenario.templateId,
+      },
     );
 
     const reconnect = await verifyRoleReconnectRecovery({
       page: replacementEntry.page,
       game: actionGame,
-      principalUserId: "player-rowan",
-      actorSlot: "slot_4",
-      postPrefix: "Replacement action reconnect proof",
+      principalUserId: scenario.replacementPrincipalUserId,
+      actorSlot: scenario.actorSlot,
+      postPrefix: scenario.reconnectPostPrefix,
     });
     const commandStateAfterReconnect = reconnect.recoveredCommandState;
     const buttonsAfterReconnect = await playerCommandButtons(replacementEntry.page);
@@ -19001,61 +19051,69 @@ async function verifyReplacementActionReconnectRecovery({
       targetKillVisible: rowanNotificationsAfterReconnect.some(
         (notice) =>
           notice.audience_slot === targetSlot ||
-          notice.effect === "player_killed" ||
-          notice.status === "factional_kill",
+          notice.effect === scenario.targetNoticeEffect ||
+          notice.status === scenario.templateId,
       ),
       notificationCount: rowanNotificationsAfterReconnect.length,
     };
     const targetNoticeAfterReconnect = await targetEntry.page.evaluate(
-      (expectedSlot) =>
+      ({ expectedSlot, targetNoticeEffect, templateId }) =>
         window.__fmarchPlayerProjection?.notifications?.find(
           (notice) =>
             notice.audience_slot === expectedSlot &&
-            notice.effect === "player_killed" &&
-            notice.status === "factional_kill",
+            notice.effect === targetNoticeEffect &&
+            notice.status === templateId,
         ) ?? null,
-      targetSlot,
+      {
+        expectedSlot: targetSlot,
+        targetNoticeEffect: scenario.targetNoticeEffect,
+        templateId: scenario.templateId,
+      },
     );
     if (
       replacement?.state !== "ack" ||
       replacement?.requestEnvelope?.body?.body?.command?.ProcessReplacement?.slot !==
-        "slot_4" ||
+        scenario.actorSlot ||
       replacement?.requestEnvelope?.body?.body?.command?.ProcessReplacement
-        ?.incoming_user !== "player-rowan" ||
-      commandStateBeforeAction?.actorSlot !== "slot_4" ||
+        ?.incoming_user !== scenario.replacementPrincipalUserId ||
+      commandStateBeforeAction?.actorSlot !== scenario.actorSlot ||
       commandStateBeforeAction?.actions?.some(
-        (candidate) => candidate.templateId === "factional_kill",
+        (candidate) => candidate.templateId === scenario.templateId,
       ) !== true ||
       action?.state !== "ack" ||
       action?.requestEnvelope?.body?.body?.command?.SubmitAction?.actor_slot !==
-        "slot_4" ||
+        scenario.actorSlot ||
       action?.requestEnvelope?.body?.body?.command?.SubmitAction?.action_id !==
-        "replacement_action_reconnect_factional_kill" ||
+        scenario.actionId ||
+      action?.requestEnvelope?.body?.body?.command?.SubmitAction?.template_id !==
+        scenario.templateId ||
       action?.requestEnvelope?.body?.body?.command?.SubmitAction?.targets?.[0] !==
         targetSlot ||
       resolveNight?.commandStatus?.state !== "ack" ||
       targetSlotAfterResolve?.alive !== false ||
-      targetSlotAfterResolve?.status !== "dead" ||
+      targetSlotAfterResolve?.status !== scenario.targetStatusAfterKill ||
       targetCommandState?.actorSlot !== targetSlot ||
       targetCommandState?.actorAlive !== false ||
       targetNoticeBeforeReconnect === null ||
       reconnect?.status !== "passed" ||
-      reconnect?.principalUserId !== "player-rowan" ||
-      reconnect?.actorSlot !== "slot_4" ||
+      reconnect?.principalUserId !== scenario.replacementPrincipalUserId ||
+      reconnect?.actorSlot !== scenario.actorSlot ||
       reconnect?.reconnectingStatus?.state !== "reconnecting" ||
       reconnect?.reconnectRecoveryEvent?.state !== "recovered" ||
       reconnect?.reconnectRecoveryEvent?.attempt !== 1 ||
       reconnect?.recoveredSnapshotContainsPost !== true ||
-      reconnect?.reconnectCommand?.principalUserId !== "player-rowan" ||
-      reconnect?.reconnectCommand?.command?.SubmitPost?.actor_slot !== "slot_4" ||
-      commandStateAfterReconnect?.actorSlot !== "slot_4" ||
+      reconnect?.reconnectCommand?.principalUserId !==
+        scenario.replacementPrincipalUserId ||
+      reconnect?.reconnectCommand?.command?.SubmitPost?.actor_slot !==
+        scenario.actorSlot ||
+      commandStateAfterReconnect?.actorSlot !== scenario.actorSlot ||
       commandStateAfterReconnect?.actorAlive !== true ||
       commandStateAfterReconnect?.actorStatus !== "alive" ||
-      commandStateAfterReconnect?.phase?.phaseId !== "N01" ||
+      commandStateAfterReconnect?.phase?.phaseId !== scenario.phaseId ||
       commandStateAfterReconnect?.phase?.locked !== true ||
       commandStateAfterReconnect?.actions?.length !== 0 ||
       buttonsAfterReconnect.some(
-        (button) => button.action === "submit_action:factional_kill",
+        (button) => button.action === scenario.commandAction,
       ) ||
       rowanPrivateIsolationAfterReconnect.targetKillVisible !== false ||
       targetNoticeAfterReconnect === null
@@ -19098,10 +19156,8 @@ async function verifyReplacementActionReconnectRecovery({
       buttonsAfterReconnect,
       rowanPrivateIsolationAfterReconnect,
       targetNoticeAfterReconnect,
-      outcomeSummary:
-        "Rowan reconnected after resolved Slot 4 factional_kill to locked N01 with no actions",
-      proof:
-        "After Rowan replaced into Slot 4, submitted factional_kill, and host resolved N01, Rowan's replacement role URL dropped its live projection and reconnected to locked N01 with no remaining actions while the target role URL retained the private kill receipt.",
+      outcomeSummary: scenario.outcomeSummary,
+      proof: scenario.proof,
     };
   } finally {
     await targetEntry.context.close().catch(() => {});
@@ -19116,6 +19172,7 @@ async function verifyStaleReplacementActionAfterResolve({
   frontendBaseUrl,
   normalizeCommandResponse,
 }) {
+  const scenario = replacementStaleActionAfterResolveScenario();
   if (browser === null || browser === undefined) {
     throw new Error("stale replacement action proof requires a Playwright browser");
   }
@@ -19123,7 +19180,7 @@ async function verifyStaleReplacementActionAfterResolve({
   const seed = await seedIncomingReplacementActionGame({ actionGame });
   const hostSession = await createSessionGrantCredential({
     token: `${tokenPrefix}-replacement-stale-action-host-${crypto.randomUUID()}`,
-    principalUserId: "host_h",
+    principalUserId: scenario.hostPrincipalUserId,
     returnTo: `/g/${actionGame}/host`,
     expectedCapabilityKind: "HostOf",
     issuedBy: {
@@ -19134,7 +19191,7 @@ async function verifyStaleReplacementActionAfterResolve({
   });
   const replacementSession = await createSessionGrantCredential({
     token: `${tokenPrefix}-replacement-stale-action-rowan-${crypto.randomUUID()}`,
-    principalUserId: "player-rowan",
+    principalUserId: scenario.replacementPrincipalUserId,
     returnTo: `/g/${actionGame}`,
     expectedCapabilityKind: "SlotOccupant",
     issuedBy: {
@@ -19156,17 +19213,20 @@ async function verifyStaleReplacementActionAfterResolve({
     await hostEntry.page.goto(`${frontendBaseUrl}/g/${actionGame}/host`, {
       waitUntil: "networkidle",
     });
-    await waitForHostProjectionPhase(hostEntry.page, { phaseId: "N01", locked: false });
+    await waitForHostProjectionPhase(hostEntry.page, {
+      phaseId: scenario.phaseId,
+      locked: false,
+    });
     const replacementCommandId = crypto.randomUUID();
     const replacementRaw = await sendBrowserCommand(hostEntry.page, {
-      principalUserId: "host_h",
+      principalUserId: scenario.hostPrincipalUserId,
       commandId: replacementCommandId,
       command: {
         ProcessReplacement: {
           game: actionGame,
-          slot: "slot_4",
-          outgoing_user: "player-goon-a",
-          incoming_user: "player-rowan",
+            slot: scenario.actorSlot,
+            outgoing_user: scenario.staleOutgoingPrincipalUserId,
+            incoming_user: scenario.replacementPrincipalUserId,
         },
       },
     });
@@ -19185,14 +19245,19 @@ async function verifyStaleReplacementActionAfterResolve({
     });
     await gotoPlayerBoard(replacementEntry.page, actionGame);
     await replacementEntry.page.waitForFunction(
-      () =>
-        window.__fmarchPlayerProjection?.commandState?.actorSlot === "slot_4" &&
+      ({ actorSlot, phaseId, templateId }) =>
+        window.__fmarchPlayerProjection?.commandState?.actorSlot === actorSlot &&
         window.__fmarchPlayerProjection?.commandState?.actorStatus === "alive" &&
-        window.__fmarchPlayerProjection?.commandState?.phase?.phaseId === "N01" &&
+        window.__fmarchPlayerProjection?.commandState?.phase?.phaseId === phaseId &&
         window.__fmarchPlayerProjection?.commandState?.phase?.locked === false &&
         window.__fmarchPlayerProjection?.commandState?.actions?.some(
-          (action) => action.templateId === "factional_kill",
+          (action) => action.templateId === templateId,
         ),
+      {
+        actorSlot: scenario.actorSlot,
+        phaseId: scenario.phaseId,
+        templateId: scenario.templateId,
+      },
     );
     const commandStateBeforeClose = await replacementEntry.page.evaluate(
       () => window.__fmarchPlayerProjection?.commandState,
@@ -19200,7 +19265,7 @@ async function verifyStaleReplacementActionAfterResolve({
     const buttonsBeforeClose = await playerCommandButtons(replacementEntry.page);
     const actionButtonBeforeClose = buttonsBeforeClose.find(
       (button) =>
-        button.action === "submit_action:factional_kill" && button.disabled === false,
+        button.action === scenario.commandAction && button.disabled === false,
     );
     await replacementEntry.page.waitForFunction(
       () => typeof window.__fmarchClosePlayerLiveProjection === "function",
@@ -19210,7 +19275,10 @@ async function verifyStaleReplacementActionAfterResolve({
     );
 
     const resolveNight = await confirmHostAction(hostEntry.page, "resolve_phase");
-    await waitForHostProjectionPhase(hostEntry.page, { phaseId: "N01", locked: true });
+    await waitForHostProjectionPhase(hostEntry.page, {
+      phaseId: scenario.phaseId,
+      locked: true,
+    });
     const hostPhaseAfterResolve = await hostEntry.page.evaluate(
       () => window.__fmarchHostProjection?.phase,
     );
@@ -19218,28 +19286,35 @@ async function verifyStaleReplacementActionAfterResolve({
     const targetSlotAfterResolve = await fetchResolvedSlotState({
       apiBaseUrl,
       game: actionGame,
-      slot: "slot-2",
+      slot: scenario.targetSlot,
     });
 
     await replacementEntry.page
-      .locator('[data-action="submit_action:factional_kill"]')
+      .locator(`[data-action="${scenario.commandAction}"]`)
       .click();
     await replacementEntry.page.waitForFunction(
-      () =>
+      ({ staleActionId, rejectionError }) =>
         window.__fmarchPlayerCommandStatus?.requestEnvelope?.body?.body?.command
-          ?.SubmitAction?.action_id === "role_factional_kill" &&
+          ?.SubmitAction?.action_id === staleActionId &&
         window.__fmarchPlayerCommandStatus?.state === "reject" &&
-        window.__fmarchPlayerCommandStatus?.error === "PhaseLocked",
+        window.__fmarchPlayerCommandStatus?.error === rejectionError,
+      {
+        staleActionId: scenario.staleActionId,
+        rejectionError: scenario.rejectionError,
+      },
     );
     await replacementEntry.page.waitForFunction(
-      () =>
-        window.__fmarchPlayerProjection?.commandState?.actorSlot === "slot_4" &&
-        window.__fmarchPlayerProjection?.commandState?.phase?.phaseId === "N01" &&
+      ({ actorSlot, phaseId }) =>
+        window.__fmarchPlayerProjection?.commandState?.actorSlot === actorSlot &&
+        window.__fmarchPlayerProjection?.commandState?.phase?.phaseId === phaseId &&
         window.__fmarchPlayerProjection?.commandState?.phase?.locked === true &&
         (window.__fmarchPlayerProjection?.commandState?.actions ?? []).length === 0,
+      { actorSlot: scenario.actorSlot, phaseId: scenario.phaseId },
     );
     await replacementEntry.page.waitForFunction(
-      () => document.querySelector('[data-action="submit_action:factional_kill"]') === null,
+      (commandAction) =>
+        document.querySelector(`[data-action="${commandAction}"]`) === null,
+      scenario.commandAction,
     );
     const reject = await replacementEntry.page.evaluate(
       () => window.__fmarchPlayerCommandStatus,
@@ -19258,12 +19333,12 @@ async function verifyStaleReplacementActionAfterResolve({
       .getByTestId("player-command-status")
       .innerText();
     const apiCommandStateAfterReject = await fetchJson(
-      `${apiBaseUrl}/games/${actionGame}/player-command-state?principal_user_id=player-rowan&slot_id=slot_4`,
+      `${apiBaseUrl}/games/${actionGame}/player-command-state?principal_user_id=${scenario.replacementPrincipalUserId}&slot_id=${scenario.actorSlot}`,
     );
     const targetSlotAfterReject = await fetchResolvedSlotState({
       apiBaseUrl,
       game: actionGame,
-      slot: "slot-2",
+      slot: scenario.targetSlot,
     });
     const rowanNotificationsAfterReject = await replacementEntry.page.evaluate(
       () => window.__fmarchPlayerProjection?.notifications ?? [],
@@ -19271,16 +19346,16 @@ async function verifyStaleReplacementActionAfterResolve({
     const rowanPrivateIsolationAfterReject = {
       targetKillVisible: rowanNotificationsAfterReject.some(
         (notice) =>
-          notice.audience_slot === "slot-2" ||
-          notice.effect === "player_killed" ||
-          notice.status === "factional_kill",
+          notice.audience_slot === scenario.targetSlot ||
+          notice.effect === scenario.targetNoticeEffect ||
+          notice.status === scenario.templateId,
       ),
       notificationCount: rowanNotificationsAfterReject.length,
     };
 
     const targetSession = await createSessionGrantCredential({
       token: `${tokenPrefix}-replacement-stale-action-target-${crypto.randomUUID()}`,
-      principalUserId: "player-target",
+      principalUserId: scenario.targetPrincipalUserId,
       returnTo: `/g/${actionGame}`,
       expectedCapabilityKind: "SlotOccupant",
       issuedBy: {
@@ -19298,88 +19373,95 @@ async function verifyStaleReplacementActionAfterResolve({
     });
     await gotoPlayerBoard(targetEntry.page, actionGame);
     await targetEntry.page.waitForFunction(
-      () =>
-        window.__fmarchPlayerProjection?.commandState?.actorSlot === "slot-2" &&
+      ({ targetSlot, phaseId }) =>
+        window.__fmarchPlayerProjection?.commandState?.actorSlot === targetSlot &&
         window.__fmarchPlayerProjection?.commandState?.actorAlive === true &&
-        window.__fmarchPlayerProjection?.commandState?.phase?.phaseId === "N01" &&
+        window.__fmarchPlayerProjection?.commandState?.phase?.phaseId === phaseId &&
         window.__fmarchPlayerProjection?.commandState?.phase?.locked === true,
+      { targetSlot: scenario.targetSlot, phaseId: scenario.phaseId },
     );
     const targetCommandStateAfterReject = await targetEntry.page.evaluate(
       () => window.__fmarchPlayerProjection?.commandState,
     );
     const targetNoticeAfterReject = await targetEntry.page.evaluate(
-      () =>
+      ({ targetSlot, targetNoticeEffect, templateId }) =>
         window.__fmarchPlayerProjection?.notifications?.find(
           (notice) =>
-            notice.audience_slot === "slot-2" &&
-            notice.effect === "player_killed" &&
-            notice.status === "factional_kill",
+            notice.audience_slot === targetSlot &&
+            notice.effect === targetNoticeEffect &&
+            notice.status === templateId,
         ) ?? null,
+      {
+        targetSlot: scenario.targetSlot,
+        targetNoticeEffect: scenario.targetNoticeEffect,
+        templateId: scenario.templateId,
+      },
     );
     const submittedCommand = reject?.requestEnvelope?.body?.body?.command?.SubmitAction;
     if (
       replacement?.state !== "ack" ||
       replacement?.serverEnvelope?.body?.kind !== "Ack" ||
       replacement?.requestEnvelope?.body?.body?.command?.ProcessReplacement?.slot !==
-        "slot_4" ||
+        scenario.actorSlot ||
       replacement?.requestEnvelope?.body?.body?.command?.ProcessReplacement
-        ?.incoming_user !== "player-rowan" ||
-      commandStateBeforeClose?.actorSlot !== "slot_4" ||
+        ?.incoming_user !== scenario.replacementPrincipalUserId ||
+      commandStateBeforeClose?.actorSlot !== scenario.actorSlot ||
       commandStateBeforeClose?.actorStatus !== "alive" ||
-      commandStateBeforeClose?.phase?.phaseId !== "N01" ||
+      commandStateBeforeClose?.phase?.phaseId !== scenario.phaseId ||
       commandStateBeforeClose?.phase?.locked !== false ||
       commandStateBeforeClose?.actions?.some(
-        (candidate) => candidate.templateId === "factional_kill",
+        (candidate) => candidate.templateId === scenario.templateId,
       ) !== true ||
       actionButtonBeforeClose === undefined ||
       closedStatus?.state !== "closed" ||
       resolveNight?.commandStatus?.state !== "ack" ||
-      hostPhaseAfterResolve?.id !== "N01" ||
+      hostPhaseAfterResolve?.id !== scenario.phaseId ||
       hostPhaseAfterResolve?.locked !== true ||
       hostPhaseActionsAfterResolve.includes("advance_phase") !== true ||
-      targetSlotAfterResolve?.slot_id !== "slot-2" ||
+      targetSlotAfterResolve?.slot_id !== scenario.targetSlot ||
       targetSlotAfterResolve?.alive !== true ||
       reject?.state !== "reject" ||
-      reject?.error !== "PhaseLocked" ||
+      reject?.error !== scenario.rejectionError ||
       reject?.serverEnvelope?.body?.kind !== "Reject" ||
       Array.isArray(reject?.streamSeqs) ||
-      reject?.message?.includes("stale action state") !== true ||
-      reject?.message?.includes("current action controls") !== true ||
-      submittedCommand?.actor_slot !== "slot_4" ||
-      submittedCommand?.action_id !== "role_factional_kill" ||
-      submittedCommand?.template_id !== "factional_kill" ||
+      reject?.message?.includes(scenario.staleActionStateMessageFragment) !== true ||
+      reject?.message?.includes(scenario.currentActionControlsMessageFragment) !==
+        true ||
+      submittedCommand?.actor_slot !== scenario.actorSlot ||
+      submittedCommand?.action_id !== scenario.staleActionId ||
+      submittedCommand?.template_id !== scenario.templateId ||
       dispatchPlan?.projectionRefreshKeys?.includes("notifications") !== true ||
       dispatchPlan?.projectionRefreshKeys?.includes("investigationResults") !== true ||
       dispatchPlan?.projectionRefreshKeys?.includes("commandState") !== true ||
-      currentReceipt?.actionId !== "submit_action:factional_kill" ||
+      currentReceipt?.actionId !== scenario.commandAction ||
       currentReceipt?.state !== "reject" ||
       currentReceipt?.commandTrace?.projectionRefreshKeys?.includes("commandState") !==
         true ||
-      !receiptStatusText.includes("Reject PhaseLocked") ||
-      !receiptStatusText.includes("stale action state") ||
-      commandStateAfterReject?.actorSlot !== "slot_4" ||
+      !receiptStatusText.includes(scenario.rejectionStatusText) ||
+      !receiptStatusText.includes(scenario.staleActionStateMessageFragment) ||
+      commandStateAfterReject?.actorSlot !== scenario.actorSlot ||
       commandStateAfterReject?.actorAlive !== true ||
       commandStateAfterReject?.actorStatus !== "alive" ||
-      commandStateAfterReject?.phase?.phaseId !== "N01" ||
+      commandStateAfterReject?.phase?.phaseId !== scenario.phaseId ||
       commandStateAfterReject?.phase?.locked !== true ||
       commandStateAfterReject?.actions?.length !== 0 ||
       buttonsAfterReject.some(
-        (button) => button.action === "submit_action:factional_kill",
+        (button) => button.action === scenario.commandAction,
       ) ||
-      apiCommandStateAfterReject?.actor_slot !== "slot_4" ||
+      apiCommandStateAfterReject?.actor_slot !== scenario.actorSlot ||
       apiCommandStateAfterReject?.actor_alive !== true ||
       apiCommandStateAfterReject?.actor_status !== "alive" ||
-      apiCommandStateAfterReject?.phase?.phase_id !== "N01" ||
+      apiCommandStateAfterReject?.phase?.phase_id !== scenario.phaseId ||
       apiCommandStateAfterReject?.phase?.locked !== true ||
       apiCommandStateAfterReject?.actions?.length !== 0 ||
-      targetSlotAfterReject?.slot_id !== "slot-2" ||
+      targetSlotAfterReject?.slot_id !== scenario.targetSlot ||
       targetSlotAfterReject?.alive !== true ||
       targetSlotAfterReject?.status !== "alive" ||
       rowanPrivateIsolationAfterReject.targetKillVisible !== false ||
-      targetCommandStateAfterReject?.actorSlot !== "slot-2" ||
+      targetCommandStateAfterReject?.actorSlot !== scenario.targetSlot ||
       targetCommandStateAfterReject?.actorAlive !== true ||
       targetCommandStateAfterReject?.actorStatus !== "alive" ||
-      targetCommandStateAfterReject?.phase?.phaseId !== "N01" ||
+      targetCommandStateAfterReject?.phase?.phaseId !== scenario.phaseId ||
       targetCommandStateAfterReject?.phase?.locked !== true ||
       targetNoticeAfterReject !== null
     ) {
@@ -19413,7 +19495,7 @@ async function verifyStaleReplacementActionAfterResolve({
       status: "passed",
       game: actionGame,
       seed,
-      targetSlot: "slot-2",
+      targetSlot: scenario.targetSlot,
       hostEntry: hostEntry.verification,
       replacementEntry: replacementEntry.verification,
       targetEntry: targetEntry.verification,
@@ -19437,10 +19519,8 @@ async function verifyStaleReplacementActionAfterResolve({
       rowanPrivateIsolationAfterReject,
       targetCommandStateAfterReject,
       targetNoticeAfterReject,
-      outcomeSummary:
-        "Rowan's stale replacement factional_kill rejected after N01 resolution without appending",
-      proof:
-        "After Rowan replaced into Slot 4, a replacement role URL froze with factional_kill available, the host resolved N01, and Rowan's stale action click rejected PhaseLocked while refreshing to locked N01 with no actions and no target kill receipt.",
+      outcomeSummary: scenario.outcomeSummary,
+      proof: scenario.proof,
     };
   } finally {
     await targetEntry?.context?.close().catch(() => {});
