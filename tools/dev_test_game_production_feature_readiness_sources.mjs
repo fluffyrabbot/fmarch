@@ -1,6 +1,8 @@
 import {
-  featureSpineSourceCheckIds,
-} from "./dev_test_game_feature_spine_targets.mjs";
+  productionFeatureReadinessSourceKind,
+  productionFeatureSourceCheckIds,
+  productionFeatureSourceForCheckId,
+} from "./dev_test_game_production_feature_source_registry.mjs";
 
 export function productionFeatureSourceTargetsByCheckIdFromReadiness(
   readiness,
@@ -10,7 +12,7 @@ export function productionFeatureSourceTargetsByCheckIdFromReadiness(
   } = {},
 ) {
   return Object.fromEntries(
-    featureSpineSourceCheckIds
+    productionFeatureSourceCheckIds
       .map((sourceCheckId) => [
         sourceCheckId,
         productionFeatureSourceTargetFromReadiness(readiness, sourceCheckId, {
@@ -30,12 +32,22 @@ export function productionFeatureSourceTargetFromReadiness(
     defaultRerunCommandBySourceCheckId = {},
   } = {},
 ) {
-  if (sourceCheckId === "local-identity-adapter-proof") {
+  const source = productionFeatureSourceForCheckId(sourceCheckId);
+  if (
+    source.readinessSourceKind ===
+    productionFeatureReadinessSourceKind.identityAdapter
+  ) {
     return identityAdapterSourceTargetFromReadiness(readiness, {
       defaultBrowserProofCommand,
       defaultRerunCommand:
         defaultRerunCommandBySourceCheckId[sourceCheckId] ?? "",
     });
+  }
+  if (
+    source.readinessSourceKind !==
+    productionFeatureReadinessSourceKind.spineTargets
+  ) {
+    return null;
   }
   return spineTargetsSourceTargetFromReadiness(readiness, sourceCheckId);
 }

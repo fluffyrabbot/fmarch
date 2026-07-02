@@ -1,10 +1,10 @@
+import {
+  productionFeatureSourceCheckIds,
+} from "./dev_test_game_production_feature_source_registry.mjs";
+
 export const featureSpineCheckpointRowKind = "checkpoint";
 export const featureSpineRecoveryHookRowKind = "recovery-hook";
-export const featureSpineSourceCheckIds = Object.freeze([
-  "local-core-loop-proof",
-  "local-hardening-proof",
-  "local-identity-adapter-proof",
-]);
+export const featureSpineSourceCheckIds = productionFeatureSourceCheckIds;
 
 export function featureSpineCheckpointTarget({
   featureSlotId,

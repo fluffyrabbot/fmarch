@@ -14,6 +14,10 @@ import {
   devTestGameProductionFeatureBrowserProofCommand,
   productionFeatureSpineSourceCheckRules,
 } from "./dev_test_game_production_feature_source_rules.mjs";
+import {
+  productionFeatureReadinessSourceKind,
+  productionFeatureSourceRegistry,
+} from "./dev_test_game_production_feature_source_registry.mjs";
 
 test("production feature source rules cover every feature spine source", () => {
   assert.deepEqual(
@@ -29,6 +33,26 @@ test("production feature source rules cover every feature spine source", () => {
     "local-hardening-proof": devTestGameHardeningAdminProofCommand,
     "local-identity-adapter-proof": devTestGameIdentityAdminProofCommand,
   });
+  assert.deepEqual(
+    productionFeatureSourceRegistry.map((source) => [
+      source.sourceCheckId,
+      source.readinessSourceKind,
+    ]),
+    [
+      [
+        "local-core-loop-proof",
+        productionFeatureReadinessSourceKind.spineTargets,
+      ],
+      [
+        "local-hardening-proof",
+        productionFeatureReadinessSourceKind.spineTargets,
+      ],
+      [
+        "local-identity-adapter-proof",
+        productionFeatureReadinessSourceKind.identityAdapter,
+      ],
+    ],
+  );
   assert.ok(
     devTestGameProductionFeatureBrowserProofCommand.includes(
       "test:dev-test-game-live",
