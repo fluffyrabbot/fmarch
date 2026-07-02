@@ -134,6 +134,237 @@ export function completedGameEndgameSurfaceFixture({
   };
 }
 
+export function completedHardeningProofFixture(
+  game = "completed-hardening-game",
+) {
+  const hiddenSlot = { role_revealed: false, alignment_revealed: false };
+  const revealedSlot = { role_revealed: true, alignment_revealed: true };
+  const completeGameCommand = (targetGame) => ({
+    body: { body: { command: { CompleteGame: { game: targetGame } } } },
+  });
+  return {
+    staleHostComplete: {
+      status: "passed",
+      game: `${game}-stale-host-complete`,
+      setup: { roleActions: ["complete_game"], slots: [hiddenSlot] },
+      liveComplete: {
+        commandStatus: { state: "ack", streamSeqs: [55] },
+      },
+      reject: {
+        state: "reject",
+        error: "GameAlreadyCompleted",
+        serverEnvelope: { body: { kind: "Reject" } },
+      },
+      slotsAfterReject: [revealedSlot],
+      revealTextAfterReject: "All 1 slots revealed",
+      roleActionsAfterReject: [],
+      activityRow: {
+        source: "outcome",
+        actionId: "complete_game",
+        dispatchKind: "complete_game",
+      },
+      dispatchPlan: { projectionRefreshKeys: ["host"] },
+      apiStateAfterReject: { completed: true, slots: [revealedSlot] },
+      staleHostReloadAfterReject: {
+        status: "passed",
+        routeResponseStatus: 200,
+        rejectReceiptStatusText:
+          "Reject GameAlreadyCompleted: game already completed",
+        surfaceText: "All 1 slots revealed",
+        slotsAfterReload: [revealedSlot],
+        revealTextAfterReload: "All 1 slots revealed",
+        roleActionsAfterReload: [],
+        apiStateAfterReload: { completed: true, slots: [revealedSlot] },
+      },
+      reconnectAfterReject: {
+        status: "passed",
+        reconnectingStatus: { state: "reconnecting" },
+        reconnectRecoveryEvent: { attempt: 1, state: "recovered" },
+        recoveredHostProjection: { completed: true, slots: [revealedSlot] },
+      },
+      roleActionsAfterReconnect: [],
+    },
+    concurrentHostCompleteRace: {
+      status: "passed",
+      game: `${game}-host-race`,
+      setup: {
+        firstRoleActions: ["complete_game"],
+        secondRoleActions: ["complete_game"],
+        firstRevealText: "0/1 slots revealed",
+        secondRevealText: "0/1 slots revealed",
+        firstSlots: [hiddenSlot],
+        secondSlots: [hiddenSlot],
+      },
+      ackRaceRole: "first",
+      rejectRaceRole: "second",
+      ack: {
+        state: "ack",
+        commandId: "host-race-ack",
+        streamSeqs: [56],
+        serverEnvelope: { body: { kind: "Ack" } },
+        requestEnvelope: completeGameCommand(`${game}-host-race`),
+      },
+      reject: {
+        state: "reject",
+        commandId: "host-race-reject",
+        error: "GameAlreadyCompleted",
+        serverEnvelope: { body: { kind: "Reject" } },
+        requestEnvelope: completeGameCommand(`${game}-host-race`),
+      },
+      firstSlotsAfterRace: [revealedSlot],
+      secondSlotsAfterRace: [revealedSlot],
+      firstRevealTextAfterRace: "All 1 slots revealed",
+      secondRevealTextAfterRace: "All 1 slots revealed",
+      firstRoleActionsAfterRace: [],
+      secondRoleActionsAfterRace: [],
+      firstActivityStatusText: "Ack",
+      secondActivityStatusText:
+        "Reject GameAlreadyCompleted: game already completed",
+      firstDispatchPlan: { projectionRefreshKeys: ["host"] },
+      secondDispatchPlan: { projectionRefreshKeys: ["host"] },
+      apiStateAfterRace: { completed: true, slots: [revealedSlot] },
+      roleReloadAfterRace: {
+        status: "passed",
+        firstRouteStatus: 200,
+        secondRouteStatus: 200,
+        firstSlotsAfterReload: [revealedSlot],
+        secondSlotsAfterReload: [revealedSlot],
+        firstRevealTextAfterReload: "All 1 slots revealed",
+        secondRevealTextAfterReload: "All 1 slots revealed",
+        firstRoleActionsAfterReload: [],
+        secondRoleActionsAfterReload: [],
+        apiStateAfterReload: { completed: true, slots: [revealedSlot] },
+      },
+    },
+    concurrentPlayerCompleteRace: {
+      status: "passed",
+      game: `${game}-player-race`,
+      postBody: "concurrent player complete fixture post",
+      setupCommandState: {
+        actorSlot: "slot-7",
+        gameCompleted: false,
+      },
+      setupPostButton: { action: "submit_post", disabled: false },
+      setupHostActions: ["complete_game"],
+      setupHostSlots: [hiddenSlot],
+      post: {
+        state: "reject",
+        error: "GameAlreadyCompleted",
+        serverEnvelope: { body: { kind: "Reject" } },
+        requestEnvelope: {
+          body: {
+            body: {
+              command: {
+                SubmitPost: {
+                  body: "concurrent player complete fixture post",
+                },
+              },
+            },
+          },
+        },
+      },
+      complete: {
+        state: "ack",
+        streamSeqs: [57],
+        serverEnvelope: { body: { kind: "Ack" } },
+        requestEnvelope: completeGameCommand(`${game}-player-race`),
+      },
+      postSeq: null,
+      completeSeq: 57,
+      commandStateAfterRace: {
+        gameCompleted: true,
+        actions: [],
+        voteTargets: [],
+      },
+      buttonsAfterRace: [{ action: "submit_post", disabled: true }],
+      hostSlotsAfterRace: [revealedSlot],
+      apiCommandStateAfterRace: {
+        game_completed: true,
+        actions: [],
+        vote_targets: [],
+      },
+      apiThreadHasPost: false,
+      apiStateAfterRace: { completed: true, slots: [revealedSlot] },
+      publicReloadAfterRace: {
+        status: "passed",
+        routeResponseStatus: 200,
+        threadPagerVisible: true,
+        surfaceText: "Endgame\nThe game is complete.",
+        recoveredCommandState: {
+          actorSlot: "slot-7",
+          gameCompleted: true,
+          actions: [],
+          voteTargets: [],
+          boundary: "game is complete",
+        },
+        reloadButtons: [{ action: "submit_post", disabled: true }],
+        reloadPostCount: 0,
+        reloadPostVisible: false,
+        reloadThreadPostBodies: [],
+        apiCommandStateAfterReload: {
+          game_completed: true,
+          actions: [],
+          vote_targets: [],
+        },
+        apiThreadPostCount: 0,
+        apiThreadPostBodiesAfterReload: [],
+        apiStateAfterReload: { completed: true, slots: [revealedSlot] },
+      },
+    },
+    stalePlayerComplete: {
+      status: "passed",
+      game: `${game}-stale-player`,
+      setupCommandState: {
+        gameCompleted: false,
+        voteTargets: [{ kind: "no_lynch" }],
+      },
+      staleVoteButton: { action: "submit_vote:no_lynch", disabled: false },
+      liveComplete: { state: "ack" },
+      reject: {
+        state: "reject",
+        error: "GameAlreadyCompleted",
+        serverEnvelope: { body: { kind: "Reject" } },
+      },
+      dispatchPlan: { projectionRefreshKeys: ["commandState"] },
+      commandStateAfterReject: {
+        gameCompleted: true,
+        actions: [],
+        voteTargets: [],
+      },
+      buttonsAfterReject: [{ action: "submit_post", disabled: true }],
+      currentVoteAfterReject: { hasVote: "false", text: "No current vote" },
+      apiCommandStateAfterReject: {
+        game_completed: true,
+        actions: [],
+        vote_targets: [],
+      },
+      stalePublicReloadAfterReject: {
+        status: "passed",
+        routeResponseStatus: 200,
+        threadPagerVisible: true,
+        surfaceText: "Endgame\nThe game is complete.",
+        recoveredCommandState: {
+          actorSlot: "slot-7",
+          gameCompleted: true,
+          actions: [],
+          voteTargets: [],
+          boundary: "game is complete",
+        },
+        reloadButtons: [{ action: "submit_post", disabled: true }],
+        reloadCurrentVote: { hasVote: "false", text: "No current vote" },
+        reloadThreadPostBodies: [],
+        apiCommandStateAfterReload: {
+          game_completed: true,
+          actions: [],
+          vote_targets: [],
+        },
+        apiThreadPostBodiesAfterReload: [],
+        apiStateAfterReload: { completed: true, slots: [revealedSlot] },
+      },
+    },
+  };
+}
+
 export function dayFiveNoLynchResolutionSurfaceFixture({
   game = "00000000-0000-0000-0000-000000000002",
   dayFiveOutcomes = completedGameDayVoteOutcomesFixture(),
