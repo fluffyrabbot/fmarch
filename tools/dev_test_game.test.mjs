@@ -18,18 +18,20 @@ import {
   buildDevTestGameReleaseReadiness,
 } from "./dev_test_game_release_readiness.mjs";
 import {
-  completedDeadPlayerStaleVoteRecoveryProofFixture,
-  completedGameDayVoteOutcomesFixture,
   completedGameEndgameTransition,
   completedGameRaceCoverageCellCases,
   completedGameRaceCoverageCellIds,
+} from "./dev_test_game_core_loop_completed_game_scenario_assertions.mjs";
+import {
+  completedDeadPlayerStaleVoteRecoveryProofFixture,
+  completedGameDayVoteOutcomesFixture,
   completedHostReloadProofFixture,
   completedHostReloadSnapshotFixture,
   completedHostStaleCommandProofFixtures,
   completedPlayerReloadProofFixtures,
   completedPlayerReloadSnapshotsFixture,
   staleCompletedPlayerCommandProofFixtures,
-} from "./dev_test_game_core_loop_completed_game_scenario_assertions.mjs";
+} from "./dev_test_game_core_loop_completed_game_fixtures.mjs";
 import {
   completedPrivateChannelReloadScenario,
   completedPrivateChannelSnapshot,

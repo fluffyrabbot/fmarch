@@ -36,10 +36,7 @@ import {
   completedGameSeedDemoOnlyScenarioIds,
   completedGameSeedRequiredScenarioIds,
   completedHostRaceHardeningLaneIds,
-  completedHostReloadProofFixture,
-  completedHostReloadSnapshotFixture,
   completedHostSeedDemoOnlyScenarioIds,
-  completedHostStaleCommandProofFixtures,
   completedHostStaleCommandCaseDefinitions,
   completedHostStaleCommandCases,
   completedHostStaleCommandAssertionCases,
@@ -49,17 +46,22 @@ import {
   completedPlayerReloadCaseDefinitions,
   completedPlayerReloadCases,
   completedPlayerReloadAssertionCases,
-  completedPlayerReloadProofFixtures,
   completedPlayerReloadProofCases,
-  completedPlayerReloadSnapshotsFixture,
   completedPlayerSeedDemoOnlyScenarioIds,
   completedPlayerSeedRequiredScenarioIds,
-  staleCompletedPlayerCommandProofFixtures,
   staleCompletedGamePlayerCommandCaseDefinitions,
   staleCompletedGamePlayerCommandCases,
   staleCompletedGamePlayerCommandAssertionCases,
   staleCompletedGamePlayerCommandProofArgs,
 } from "./dev_test_game_core_loop_completed_game_scenario_assertions.mjs";
+import {
+  completedHostReloadProofFixture,
+  completedHostReloadSnapshotFixture,
+  completedHostStaleCommandProofFixtures,
+  completedPlayerReloadProofFixtures,
+  completedPlayerReloadSnapshotsFixture,
+  staleCompletedPlayerCommandProofFixtures,
+} from "./dev_test_game_core_loop_completed_game_fixtures.mjs";
 
 test("completed-game scenario module exposes shared frozen definitions", () => {
   assert(Object.isFrozen(completedHostStaleCommandCaseDefinitions));
@@ -267,6 +269,62 @@ test("completed-game production harness callers share extracted recovery cases",
     ),
     "proof contract should keep using the completed-game public scenario facade",
   );
+});
+
+test("completed-game test fixtures live outside the assertion facade", async () => {
+  const sharedFixtureNames = [
+    "completedHostReloadProofFixture",
+    "completedHostStaleCommandProofFixtures",
+    "completedPlayerReloadProofFixtures",
+    "completedPlayerReloadSnapshotsFixture",
+    "staleCompletedPlayerCommandProofFixtures",
+  ];
+  const fixtureCallerPaths = new Map([
+    [
+      "tools/dev_test_game.test.mjs",
+      [
+        "completedDeadPlayerStaleVoteRecoveryProofFixture",
+        "completedGameDayVoteOutcomesFixture",
+        ...sharedFixtureNames,
+      ],
+    ],
+    [
+      "tools/dev_test_game_core_loop_completed_scenarios.test.mjs",
+      sharedFixtureNames,
+    ],
+  ]);
+
+  for (const [callerPath, fixtureNames] of fixtureCallerPaths) {
+    const source = await readFile(callerPath, "utf8");
+    for (const importedName of fixtureNames) {
+      assert(
+        importsFromModule({
+          source,
+          importedName,
+          moduleSpecifier:
+            "./dev_test_game_core_loop_completed_game_fixtures.mjs",
+        }),
+        `${callerPath} should import ${importedName} from the fixture-only module`,
+      );
+    }
+  }
+
+  const assertionFacadeSource = await readFile(
+    "tools/dev_test_game_core_loop_completed_game_scenario_assertions.mjs",
+    "utf8",
+  );
+  for (const fixtureName of [
+    "completedDeadPlayerStaleVoteRecoveryProofFixture",
+    "completedGameDayVoteOutcomesFixture",
+    ...sharedFixtureNames,
+  ]) {
+    assert(
+      !new RegExp(`export\\s+function\\s+${fixtureName}\\b`).test(
+        assertionFacadeSource,
+      ),
+      `assertion facade should not export fixture builder ${fixtureName}`,
+    );
+  }
 });
 
 function importsFromModule({ source, importedName, moduleSpecifier }) {
