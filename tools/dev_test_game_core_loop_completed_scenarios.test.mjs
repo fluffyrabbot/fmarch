@@ -17,6 +17,7 @@ import {
 } from "./dev_test_game_core_loop_surface_fixtures.mjs";
 import {
   completedGameEndgameSurfaceFixture,
+  completedGameEndgameSurfaceProofFieldsFixture,
   completedHardeningProofFixture,
 } from "./dev_test_game_core_loop_completed_game_fixtures.mjs";
 import {
@@ -526,6 +527,7 @@ test("completed-game test fixtures live outside the assertion facade", async () 
     "completedHardeningProofFixture",
     "completedHostReloadProofFixture",
     "completedHostStaleCommandProofFixtures",
+    "completedGameEndgameSurfaceProofFieldsFixture",
     "completedPlayerReloadProofFixtures",
     "completedPlayerReloadSnapshotsFixture",
     "staleCompletedPlayerCommandProofFixtures",
@@ -560,10 +562,27 @@ test("completed-game test fixtures live outside the assertion facade", async () 
     "tools/dev_test_game_core_loop_completed_game_scenario_assertions.mjs",
     "utf8",
   );
+  const fixtureModuleSource = await readFile(
+    "tools/dev_test_game_core_loop_completed_game_fixtures.mjs",
+    "utf8",
+  );
+  assert(
+    fixtureModuleSource.includes(
+      "./dev_test_game_core_loop_completed_game_proof_readiness_scenarios.mjs",
+    ),
+    "completed-game fixtures should derive proof fields from the shared proof/readiness scenario module",
+  );
+  assert(
+    !fixtureModuleSource.includes(
+      "./dev_test_game_core_loop_completed_recovery_scenario_cases.mjs",
+    ),
+    "completed-game fixtures should not import lower-level recovery case tables directly",
+  );
   for (const fixtureName of [
     "completedDeadPlayerStaleVoteRecoveryProofFixture",
     "completedGameDayVoteOutcomesFixture",
     "completedGameEndgameSurfaceFixture",
+    "completedGameEndgameSurfaceProofFieldsFixture",
     ...sharedFixtureNames,
   ]) {
     assert(
@@ -915,19 +934,15 @@ test("core-loop surface fixture module builds post-Day-3 resolution surface", ()
 });
 
 test("completed-game scenario module derives shared assertion cases", () => {
-  const completedGameEndgameSurface = {
-    completedPlayerReloadProof: { id: "action-reload-proof" },
-    completedNormalPlayerReloadProof: { id: "normal-reload-proof" },
-    completedDeadPlayerReloadProof: { id: "dead-reload-proof" },
-    completedHostStaleResolveRecoveryProof: { id: "host-resolve-stale" },
-    completedHostStaleAdvanceRecoveryProof: { id: "host-advance-stale" },
-    completedHostStaleCompleteRecoveryProof: { id: "host-complete-stale" },
-    completedDeadPlayerStaleVoteRecoveryProof: { id: "dead-stale-vote" },
-    staleCompletedVoteRecoveryProof: { id: "stale-completed-vote" },
-    staleCompletedPostRecoveryProof: { id: "stale-completed-post" },
-    sourceActionPlayerRoleUrl: "http://127.0.0.1/g/game-a/action",
-    sourceNormalPlayerRoleUrl: "http://127.0.0.1/g/game-a/normal",
-    sourceDeadPlayerRoleUrl: "http://127.0.0.1/g/game-a/dead",
+  const completedGameEndgameSurface =
+    completedGameEndgameSurfaceProofFieldsFixture();
+  const roleUrlsByField = {
+    sourceActionPlayerRoleUrl:
+      completedGameEndgameSurface.sourceActionPlayerRoleUrl,
+    sourceNormalPlayerRoleUrl:
+      completedGameEndgameSurface.sourceNormalPlayerRoleUrl,
+    sourceDeadPlayerRoleUrl:
+      completedGameEndgameSurface.sourceDeadPlayerRoleUrl,
   };
 
   assert.deepEqual(
@@ -941,35 +956,23 @@ test("completed-game scenario module derives shared assertion cases", () => {
       expectedSlot: scenario.expectedSlot,
       principalUserId: scenario.principalUserId,
     })),
-    [
-      {
-        proof: { id: "action-reload-proof" },
-        sourceRoleUrl: "http://127.0.0.1/g/game-a/action",
-        expectedSlot: "slot-7",
-        principalUserId: "player_mira",
-      },
-      {
-        proof: { id: "normal-reload-proof" },
-        sourceRoleUrl: "http://127.0.0.1/g/game-a/normal",
-        expectedSlot: "slot-4",
-        principalUserId: "player_rowan",
-      },
-      {
-        proof: { id: "dead-reload-proof" },
-        sourceRoleUrl: "http://127.0.0.1/g/game-a/dead",
-        expectedSlot: "slot-2",
-        principalUserId: "player_ilya",
-      },
-    ],
+    completedPlayerReloadCases().map((scenario) => ({
+      proof: { id: `reload:${scenario.proofField}` },
+      sourceRoleUrl: roleUrlsByField[scenario.sourceRoleUrlField],
+      expectedSlot: scenario.expectedSlot,
+      principalUserId: scenario.principalUserId,
+    })),
   );
 
   assert.deepEqual(
     completedGameEndgameStaleRejectAssertionCases({
       completedGameEndgameSurface,
       expectedGame: "game-a",
-      sourceHostRoleUrl: "http://127.0.0.1/g/game-a/host",
-      sourceDeadPlayerRoleUrl: "http://127.0.0.1/g/game-a/dead",
-      sourceActionPlayerRoleUrl: "http://127.0.0.1/g/game-a/action",
+      sourceHostRoleUrl: completedGameEndgameSurface.sourceHostRoleUrl,
+      sourceDeadPlayerRoleUrl:
+        completedGameEndgameSurface.sourceDeadPlayerRoleUrl,
+      sourceActionPlayerRoleUrl:
+        completedGameEndgameSurface.sourceActionPlayerRoleUrl,
       assertCompletedHostStaleCommandRecoveryProof: assertProofFixture,
       assertCompletedDeadPlayerStaleVoteRecoveryProof: assertProofFixture,
       assertStaleCompletedGamePlayerCommandRecoveryProof: assertProofFixture,
@@ -980,42 +983,24 @@ test("completed-game scenario module derives shared assertion cases", () => {
       commandKind: scenario.scenario?.commandKind ?? null,
     })),
     [
-      {
-        proof: { id: "host-resolve-stale" },
-        sourceRoleUrl: "http://127.0.0.1/g/game-a/host",
-        expectedCommandKind: "ResolvePhase",
+      ...completedHostStaleCommandCases().map((scenario) => ({
+        proof: { id: `host-stale:${scenario.proofField}` },
+        sourceRoleUrl: completedGameEndgameSurface.sourceHostRoleUrl,
+        expectedCommandKind: scenario.commandKind,
         commandKind: null,
-      },
+      })),
       {
-        proof: { id: "host-advance-stale" },
-        sourceRoleUrl: "http://127.0.0.1/g/game-a/host",
-        expectedCommandKind: "AdvancePhase",
-        commandKind: null,
-      },
-      {
-        proof: { id: "host-complete-stale" },
-        sourceRoleUrl: "http://127.0.0.1/g/game-a/host",
-        expectedCommandKind: "CompleteGame",
-        commandKind: null,
-      },
-      {
-        proof: { id: "dead-stale-vote" },
-        sourceRoleUrl: "http://127.0.0.1/g/game-a/dead",
+        proof: { id: "dead-player-stale-vote" },
+        sourceRoleUrl: completedGameEndgameSurface.sourceDeadPlayerRoleUrl,
         expectedCommandKind: null,
         commandKind: "SubmitVote",
       },
-      {
-        proof: { id: "stale-completed-vote" },
-        sourceRoleUrl: "http://127.0.0.1/g/game-a/action",
+      ...staleCompletedGamePlayerCommandCases().map((scenario) => ({
+        proof: { id: `player-stale:${scenario.proofField}` },
+        sourceRoleUrl: completedGameEndgameSurface.sourceActionPlayerRoleUrl,
         expectedCommandKind: null,
-        commandKind: "SubmitVote",
-      },
-      {
-        proof: { id: "stale-completed-post" },
-        sourceRoleUrl: "http://127.0.0.1/g/game-a/action",
-        expectedCommandKind: null,
-        commandKind: "SubmitPost",
-      },
+        commandKind: scenario.commandKind,
+      })),
     ],
   );
 });
@@ -1226,28 +1211,8 @@ test("completed-game scenario module derives stale completed-player command asse
 });
 
 test("completed-game scenario module derives shared surface assertion sequence", () => {
-  const completedGameEndgameSurface = {
-    hostCompleteProof: { id: "host-complete" },
-    completedHostReloadProof: { id: "host-reload" },
-    actionPlayerCompletedProof: {
-      id: "action-player-complete",
-      projectionCommandState: { gameCompleted: true },
-      resyncSnapshotCommandState: { gameCompleted: true },
-    },
-    completedPlayerReloadProof: { id: "action-reload-proof" },
-    completedNormalPlayerReloadProof: { id: "normal-reload-proof" },
-    completedDeadPlayerReloadProof: { id: "dead-reload-proof" },
-    completedHostStaleResolveRecoveryProof: { id: "host-resolve-stale" },
-    completedHostStaleAdvanceRecoveryProof: { id: "host-advance-stale" },
-    completedHostStaleCompleteRecoveryProof: { id: "host-complete-stale" },
-    completedDeadPlayerStaleVoteRecoveryProof: { id: "dead-stale-vote" },
-    staleCompletedVoteRecoveryProof: { id: "stale-completed-vote" },
-    staleCompletedPostRecoveryProof: { id: "stale-completed-post" },
-    sourceHostRoleUrl: "http://127.0.0.1/g/game-a/host",
-    sourceActionPlayerRoleUrl: "http://127.0.0.1/g/game-a/action",
-    sourceNormalPlayerRoleUrl: "http://127.0.0.1/g/game-a/normal",
-    sourceDeadPlayerRoleUrl: "http://127.0.0.1/g/game-a/dead",
-  };
+  const completedGameEndgameSurface =
+    completedGameEndgameSurfaceProofFieldsFixture();
   const asserted = [];
   const scenarioFamilies = completedGameEndgameScenarioCaseFamilies();
   const cases = completedGameEndgameSurfaceAssertionCases({
@@ -1308,69 +1273,35 @@ test("completed-game scenario module derives shared surface assertion sequence",
         expectedCommandKind: null,
         commandKind: null,
       },
-      {
+      ...completedPlayerReloadCases().map((scenario) => ({
         assertProofName: "player-reload",
-        proof: "action-reload-proof",
-        sourceRoleUrl: "http://127.0.0.1/g/game-a/action",
+        proof: `reload:${scenario.proofField}`,
+        sourceRoleUrl:
+          completedGameEndgameSurface[scenario.sourceRoleUrlField],
         expectedCommandKind: null,
         commandKind: null,
-      },
-      {
-        assertProofName: "player-reload",
-        proof: "normal-reload-proof",
-        sourceRoleUrl: "http://127.0.0.1/g/game-a/normal",
-        expectedCommandKind: null,
-        commandKind: null,
-      },
-      {
-        assertProofName: "player-reload",
-        proof: "dead-reload-proof",
-        sourceRoleUrl: "http://127.0.0.1/g/game-a/dead",
-        expectedCommandKind: null,
-        commandKind: null,
-      },
-      {
+      })),
+      ...completedHostStaleCommandCases().map((scenario) => ({
         assertProofName: "host-stale",
-        proof: "host-resolve-stale",
+        proof: `host-stale:${scenario.proofField}`,
         sourceRoleUrl: "http://127.0.0.1/g/game-a/host",
-        expectedCommandKind: "ResolvePhase",
+        expectedCommandKind: scenario.commandKind,
         commandKind: null,
-      },
-      {
-        assertProofName: "host-stale",
-        proof: "host-advance-stale",
-        sourceRoleUrl: "http://127.0.0.1/g/game-a/host",
-        expectedCommandKind: "AdvancePhase",
-        commandKind: null,
-      },
-      {
-        assertProofName: "host-stale",
-        proof: "host-complete-stale",
-        sourceRoleUrl: "http://127.0.0.1/g/game-a/host",
-        expectedCommandKind: "CompleteGame",
-        commandKind: null,
-      },
+      })),
       {
         assertProofName: "dead-stale-vote",
-        proof: "dead-stale-vote",
-        sourceRoleUrl: "http://127.0.0.1/g/game-a/dead",
+        proof: "dead-player-stale-vote",
+        sourceRoleUrl: completedGameEndgameSurface.sourceDeadPlayerRoleUrl,
         expectedCommandKind: null,
         commandKind: "SubmitVote",
       },
-      {
+      ...staleCompletedGamePlayerCommandCases().map((scenario) => ({
         assertProofName: "player-stale",
-        proof: "stale-completed-vote",
-        sourceRoleUrl: "http://127.0.0.1/g/game-a/action",
+        proof: `player-stale:${scenario.proofField}`,
+        sourceRoleUrl: completedGameEndgameSurface.sourceActionPlayerRoleUrl,
         expectedCommandKind: null,
-        commandKind: "SubmitVote",
-      },
-      {
-        assertProofName: "player-stale",
-        proof: "stale-completed-post",
-        sourceRoleUrl: "http://127.0.0.1/g/game-a/action",
-        expectedCommandKind: null,
-        commandKind: "SubmitPost",
-      },
+        commandKind: scenario.commandKind,
+      })),
     ],
   );
 

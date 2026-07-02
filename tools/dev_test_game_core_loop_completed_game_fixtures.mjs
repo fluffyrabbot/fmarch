@@ -1,9 +1,10 @@
 import {
+  completedDeadPlayerStaleVoteCase,
   completedGameEndgameTransition,
   completedHostStaleCommandCases,
   completedPlayerReloadCases,
   staleCompletedGamePlayerCommandCases,
-} from "./dev_test_game_core_loop_completed_recovery_scenario_cases.mjs";
+} from "./dev_test_game_core_loop_completed_game_proof_readiness_scenarios.mjs";
 import {
   hostPhaseTransitionActionFixture,
   seededCoreLoopHostSurfaceFixture,
@@ -131,6 +132,43 @@ export function completedGameEndgameSurfaceFixture({
     }),
     releaseReady: false,
     productionReady: false,
+  };
+}
+
+export function completedGameEndgameSurfaceProofFieldsFixture({
+  sourceHostRoleUrl = "http://127.0.0.1/g/game-a/host",
+  sourceActionPlayerRoleUrl = "http://127.0.0.1/g/game-a/action",
+  sourceNormalPlayerRoleUrl = "http://127.0.0.1/g/game-a/normal",
+  sourceDeadPlayerRoleUrl = "http://127.0.0.1/g/game-a/dead",
+  actionPlayerCompletedProof = {
+    id: "action-player-complete",
+    projectionCommandState: { gameCompleted: true },
+    resyncSnapshotCommandState: { gameCompleted: true },
+  },
+} = {}) {
+  return {
+    hostCompleteProof: { id: "host-complete" },
+    completedHostReloadProof: { id: "host-reload" },
+    actionPlayerCompletedProof,
+    ...completedScenarioProofFieldFixtures({
+      cases: completedPlayerReloadCases(),
+      idPrefix: "reload",
+    }),
+    ...completedScenarioProofFieldFixtures({
+      cases: completedHostStaleCommandCases(),
+      idPrefix: "host-stale",
+    }),
+    [completedDeadPlayerStaleVoteCase().proofField]: {
+      id: "dead-player-stale-vote",
+    },
+    ...completedScenarioProofFieldFixtures({
+      cases: staleCompletedGamePlayerCommandCases(),
+      idPrefix: "player-stale",
+    }),
+    sourceHostRoleUrl,
+    sourceActionPlayerRoleUrl,
+    sourceNormalPlayerRoleUrl,
+    sourceDeadPlayerRoleUrl,
   };
 }
 
@@ -954,4 +992,15 @@ export function staleCompletedPlayerCommandProofFixture({
 function pathAndSearchFromUrl(roleUrl) {
   const parsed = new URL(roleUrl);
   return `${parsed.pathname}${parsed.search}`;
+}
+
+function completedScenarioProofFieldFixtures({ cases, idPrefix }) {
+  return Object.fromEntries(
+    cases.map((scenario) => [
+      scenario.proofField,
+      {
+        id: `${idPrefix}:${scenario.proofField}`,
+      },
+    ]),
+  );
 }
