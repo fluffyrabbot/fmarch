@@ -573,8 +573,12 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
       stalePhase: surface.stalePhase,
       refreshedPhase: surface.refreshedPhase,
       staleClickActionId: surface.staleClickActionId,
+      actionId: surface.actionId,
       staleClickRefreshKeys: surface.staleClickRefreshKeys,
       activitySource: surface.activitySource,
+      dispatchKind: surface.dispatchKind,
+      commandOutgoing: surface.commandOutgoing,
+      currentOccupant: surface.currentOccupant,
       phaseId: surface.phaseId,
       locked: surface.locked,
       deadlineActions: surface.deadlineActions,
@@ -1475,9 +1479,12 @@ function buildStaleConflictMessageSurfaces(lanes, { sourcePath }) {
       (scenario.expectedRefreshedPhase !== undefined &&
         evidence.refreshedPhase !== scenario.expectedRefreshedPhase) ||
       (scenario.expectedReceiptFragment !== undefined &&
-        !String(evidence.receiptStatusText ?? evidence.staleClickReceipt ?? "").includes(
-          scenario.expectedReceiptFragment,
-        )) ||
+        !String(
+          evidence.receiptStatusText ??
+            evidence.staleClickReceipt ??
+            evidence.activityStatus ??
+            "",
+        ).includes(scenario.expectedReceiptFragment)) ||
       (scenario.expectedRejectMessageFragment !== undefined &&
         !String(evidence.rejectMessage ?? "").includes(
           scenario.expectedRejectMessageFragment,
@@ -1492,6 +1499,8 @@ function buildStaleConflictMessageSurfaces(lanes, { sourcePath }) {
         evidence.restoredActorStatus !== scenario.expectedRestoredActorStatus) ||
       (scenario.expectedStaleClickActionId !== undefined &&
         evidence.staleClickActionId !== scenario.expectedStaleClickActionId) ||
+      (scenario.expectedActionId !== undefined &&
+        evidence.actionId !== scenario.expectedActionId) ||
       (scenario.expectedStaleClickRefreshKeys !== undefined &&
         !sameStringArray(
           evidence.staleClickRefreshKeys,
@@ -1499,6 +1508,12 @@ function buildStaleConflictMessageSurfaces(lanes, { sourcePath }) {
         )) ||
       (scenario.expectedActivitySource !== undefined &&
         evidence.activitySource !== scenario.expectedActivitySource) ||
+      (scenario.expectedDispatchKind !== undefined &&
+        evidence.dispatchKind !== scenario.expectedDispatchKind) ||
+      (scenario.expectedCommandOutgoing !== undefined &&
+        evidence.commandOutgoing !== scenario.expectedCommandOutgoing) ||
+      (scenario.expectedCurrentOccupant !== undefined &&
+        evidence.currentOccupant !== scenario.expectedCurrentOccupant) ||
       (scenario.expectedPhaseId !== undefined &&
         evidence.phaseId !== scenario.expectedPhaseId) ||
       (scenario.expectedLocked !== undefined &&
@@ -1529,8 +1544,12 @@ function buildStaleConflictMessageSurfaces(lanes, { sourcePath }) {
       stalePhase: evidence.stalePhase,
       refreshedPhase: evidence.refreshedPhase,
       staleClickActionId: evidence.staleClickActionId,
+      actionId: evidence.actionId,
       staleClickRefreshKeys: evidence.staleClickRefreshKeys,
       activitySource: evidence.activitySource,
+      dispatchKind: evidence.dispatchKind,
+      commandOutgoing: evidence.commandOutgoing,
+      currentOccupant: evidence.currentOccupant,
       phaseId: evidence.phaseId,
       locked: evidence.locked,
       deadlineActions: evidence.deadlineActions,
@@ -1539,7 +1558,8 @@ function buildStaleConflictMessageSurfaces(lanes, { sourcePath }) {
       actorStatusAfterReject: evidence.actorStatusAfterReject,
       actionVisibleAfterRefresh: evidence.actionVisibleAfterRefresh,
       restoredActorStatus: evidence.restoredActorStatus,
-      receiptStatusText: evidence.receiptStatusText ?? evidence.staleClickReceipt,
+      receiptStatusText:
+        evidence.receiptStatusText ?? evidence.staleClickReceipt ?? evidence.activityStatus,
       proofBoundary: scenario.proofBoundary,
     };
   });

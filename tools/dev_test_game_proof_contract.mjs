@@ -1290,12 +1290,16 @@ export function buildDevTestGameProofRun(session, options = {}) {
         ) === true,
     }),
     lane("replacement-stale-conflict-message", "Stale replacement conflict message is explicit", {
+      roleUrl: session?.sessions?.host?.directUrl ?? null,
       rejectError:
         verification.replacementConsole?.staleReplacementAfterSuccess?.reject?.error ??
         null,
       activityStatus:
         verification.replacementConsole?.staleReplacementAfterSuccess
           ?.activityStatusText ?? null,
+      activitySource:
+        verification.replacementConsole?.staleReplacementAfterSuccess?.activityRow
+          ?.source ?? null,
       actionId:
         verification.replacementConsole?.staleReplacementAfterSuccess?.activityRow
           ?.actionId ?? null,
@@ -1310,6 +1314,8 @@ export function buildDevTestGameProofRun(session, options = {}) {
         verification.replacementConsole?.staleReplacementAfterSuccess
           ?.apiSlotAfterReject?.occupant_user_id ?? null,
       passed:
+        typeof session?.sessions?.host?.directUrl === "string" &&
+        session.sessions.host.directUrl.includes(`/g/${session?.game ?? ""}/host`) &&
         verification.replacementConsole?.staleReplacementAfterSuccess?.status ===
           "passed" &&
         verification.replacementConsole?.staleReplacementAfterSuccess?.reject

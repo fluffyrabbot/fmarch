@@ -19,6 +19,22 @@ export const hostedMatrixStaleConflictLaneIds = Object.freeze([
 
 export const staleConflictMessageSurfaceCaseDefinitions = Object.freeze([
   Object.freeze({
+    id: "replacement-stale-conflict-message-surface",
+    checkId: "stale-conflict-message-surface-replacement-stale-conflict-message",
+    laneId: "replacement-stale-conflict-message",
+    label: "Replacement stale conflict message surface",
+    role: "host",
+    expectedRejectError: "InvalidTarget",
+    expectedReceiptFragment: "replacement target is stale",
+    expectedActionId: "process_replacement_stale_success",
+    expectedActivitySource: "outcome",
+    expectedDispatchKind: "process_replacement",
+    expectedCommandOutgoing: "player-mira",
+    expectedCurrentOccupant: "player-rowan",
+    proofBoundary:
+      "Seeded host role URL proof that a stale replacement command rejects with an explicit InvalidTarget conflict message and preserves the current slot occupant.",
+  }),
+  Object.freeze({
     id: "stale-action-conflict-message-surface",
     checkId: "stale-conflict-message-surface-stale-action-conflict-message",
     laneId: "stale-action-conflict-message",
@@ -86,13 +102,7 @@ export const staleConflictMessageSurfaceCaseDefinitions = Object.freeze([
   }),
 ]);
 
-export const staleConflictMessageNoSurfaceYetDefinitions = Object.freeze([
-  Object.freeze({
-    laneId: "replacement-stale-conflict-message",
-    noSurfaceYet:
-      "Replacement stale conflicts are still proved through the replacement-console handoff lane; promote this when the stale invite/session conflict has a dedicated role URL reload surface.",
-  }),
-]);
+export const staleConflictMessageNoSurfaceYetDefinitions = Object.freeze([]);
 
 export function staleConflictMessageSurfaceCases() {
   return staleConflictMessageSurfaceCaseDefinitions.map(cloneScenarioCase);

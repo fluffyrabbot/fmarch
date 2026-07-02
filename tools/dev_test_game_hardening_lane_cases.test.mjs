@@ -57,6 +57,22 @@ test("hardening lane cases share stale conflict-message IDs", () => {
   ]);
   assert.deepEqual(staleConflictMessageSurfaceCases(), [
     {
+      id: "replacement-stale-conflict-message-surface",
+      checkId: "stale-conflict-message-surface-replacement-stale-conflict-message",
+      laneId: "replacement-stale-conflict-message",
+      label: "Replacement stale conflict message surface",
+      role: "host",
+      expectedRejectError: "InvalidTarget",
+      expectedReceiptFragment: "replacement target is stale",
+      expectedActionId: "process_replacement_stale_success",
+      expectedActivitySource: "outcome",
+      expectedDispatchKind: "process_replacement",
+      expectedCommandOutgoing: "player-mira",
+      expectedCurrentOccupant: "player-rowan",
+      proofBoundary:
+        "Seeded host role URL proof that a stale replacement command rejects with an explicit InvalidTarget conflict message and preserves the current slot occupant.",
+    },
+    {
       id: "stale-action-conflict-message-surface",
       checkId: "stale-conflict-message-surface-stale-action-conflict-message",
       laneId: "stale-action-conflict-message",
@@ -124,18 +140,13 @@ test("hardening lane cases share stale conflict-message IDs", () => {
     },
   ]);
   assert.deepEqual(staleConflictMessageSurfaceCheckIds(), [
+    "stale-conflict-message-surface-replacement-stale-conflict-message",
     "stale-conflict-message-surface-stale-action-conflict-message",
     "stale-conflict-message-surface-stale-dead-action-conflict",
     "stale-conflict-message-surface-stale-host-deadline",
     "stale-conflict-message-surface-stale-cohost-deadline",
   ]);
-  assert.deepEqual(staleConflictMessageNoSurfaceYetCases(), [
-    {
-      laneId: "replacement-stale-conflict-message",
-      noSurfaceYet:
-        "Replacement stale conflicts are still proved through the replacement-console handoff lane; promote this when the stale invite/session conflict has a dedicated role URL reload surface.",
-    },
-  ]);
+  assert.deepEqual(staleConflictMessageNoSurfaceYetCases(), []);
   assert.doesNotThrow(() => assertStaleConflictMessageSurfaceCoverage());
 });
 
