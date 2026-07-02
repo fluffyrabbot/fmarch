@@ -29,6 +29,15 @@ import {
   assertPostNightFourTransitionSurfaceCase,
   postNightFourTransitionSurfaceCase,
 } from "./dev_test_game_core_loop_post_night_four_transition_scenarios.mjs";
+import {
+  assertPostDayThreePlayerSurfaceProofCase,
+} from "./dev_test_game_core_loop_private_receipt_scenarios.mjs";
+import {
+  assertStaleNightFourActionRecoveryProofCase,
+} from "./dev_test_game_core_loop_transition_recovery_scenario_assertions.mjs";
+import {
+  postNightFourTransitionSurfaceFixture,
+} from "./dev_test_game_core_loop_late_action_fixtures.mjs";
 
 test("host phase scenario module exposes shared command facts", () => {
   assert.deepEqual(hostResolvePhaseCommandFacts(), {
@@ -785,6 +794,20 @@ test("post-Night 4 transition assertion delegates host, player, and stale checks
         assertStaleActionRecoveryProof: () => {},
       }),
     /post-Night 4 transition surface/,
+  );
+});
+
+test("post-Night 4 fixture satisfies the shared transition assertion", () => {
+  assert.doesNotThrow(() =>
+    assertPostNightFourTransitionSurfaceCase({
+      postNightFourTransitionSurface: postNightFourTransitionSurfaceFixture(),
+      expectedGame: "00000000-0000-0000-0000-000000000002",
+      assertHostPhaseTransitionActionProof:
+        assertHostPhaseTransitionActionProofCase,
+      assertPlayerSurfaceProof: assertPostDayThreePlayerSurfaceProofCase,
+      assertStaleActionRecoveryProof:
+        assertStaleNightFourActionRecoveryProofCase,
+    }),
   );
 });
 
