@@ -7,7 +7,9 @@ import {
   hostAdvancePhaseCommandFacts,
   hostCompleteGameCommandFacts,
   hostExtendDeadlineCommandFacts,
+  hostLockThreadCommandFacts,
   hostResolvePhaseCommandFacts,
+  hostUnlockThreadCommandFacts,
 } from "./dev_test_game_core_loop_host_phase_scenarios.mjs";
 
 test("host phase scenario module exposes shared command facts", () => {
@@ -22,6 +24,14 @@ test("host phase scenario module exposes shared command facts", () => {
   assert.deepEqual(hostCompleteGameCommandFacts(), {
     actionId: "complete_game",
     commandKind: "CompleteGame",
+  });
+  assert.deepEqual(hostLockThreadCommandFacts(), {
+    actionId: "lock_thread",
+    commandKind: "LockThread",
+  });
+  assert.deepEqual(hostUnlockThreadCommandFacts(), {
+    actionId: "unlock_thread",
+    commandKind: "UnlockThread",
   });
   assert.deepEqual(hostExtendDeadlineCommandFacts(), {
     actionId: "extend_deadline",

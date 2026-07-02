@@ -9,6 +9,14 @@ const hostPhaseCommandFactDefinitions = Object.freeze({
     actionId: "advance_phase",
     commandKind: "AdvancePhase",
   }),
+  lock: Object.freeze({
+    actionId: "lock_thread",
+    commandKind: "LockThread",
+  }),
+  unlock: Object.freeze({
+    actionId: "unlock_thread",
+    commandKind: "UnlockThread",
+  }),
   complete: Object.freeze({
     actionId: "complete_game",
     commandKind: "CompleteGame",
@@ -29,6 +37,14 @@ export function hostResolvePhaseCommandFacts() {
 
 export function hostAdvancePhaseCommandFacts() {
   return cloneCommandFacts(hostPhaseCommandFactDefinitions.advance);
+}
+
+export function hostLockThreadCommandFacts() {
+  return cloneCommandFacts(hostPhaseCommandFactDefinitions.lock);
+}
+
+export function hostUnlockThreadCommandFacts() {
+  return cloneCommandFacts(hostPhaseCommandFactDefinitions.unlock);
 }
 
 export function hostCompleteGameCommandFacts() {

@@ -5,7 +5,9 @@ import {
   hostAdvanceByDeadlineCommandFacts,
   hostAdvancePhaseCommandFacts,
   hostExtendDeadlineCommandFacts,
+  hostLockThreadCommandFacts,
   hostResolvePhaseCommandFacts,
+  hostUnlockThreadCommandFacts,
 } from "./dev_test_game_core_loop_host_phase_scenarios.mjs";
 import {
   replacementPrivatePostRecoveryLaneIds,
@@ -49,8 +51,8 @@ const cloneRaceCoverageCell = (cell) => ({
   commandFacts: cell.commandFacts.map((facts) => ({ ...facts })),
 });
 
-const hostLockThreadActionId = "lock_thread";
-const hostUnlockThreadActionId = "unlock_thread";
+const hostLockThreadActionId = hostLockThreadCommandFacts().actionId;
+const hostUnlockThreadActionId = hostUnlockThreadCommandFacts().actionId;
 const hostResolvePhaseActionId = hostResolvePhaseCommandFacts().actionId;
 const hostAdvancePhaseActionId = hostAdvancePhaseCommandFacts().actionId;
 const hostExtendDeadlineActionId = hostExtendDeadlineCommandFacts().actionId;
