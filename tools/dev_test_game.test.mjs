@@ -18,7 +18,6 @@ import {
   buildDevTestGameReleaseReadiness,
 } from "./dev_test_game_release_readiness.mjs";
 import {
-  completedGameEndgameTransition,
   completedGameRaceCoverageCellCases,
   completedGameRaceCoverageCellIds,
 } from "./dev_test_game_core_loop_completed_game_scenario_assertions.mjs";
@@ -50,15 +49,8 @@ import {
   coreLoopCompletedEndgameProgressionScenarioFamily,
 } from "./dev_test_game_core_loop_completed_endgame_progression_scenarios.mjs";
 import {
-  completedDeadPlayerStaleVoteRecoveryProofFixture,
-  completedGameDayVoteOutcomesFixture,
-  completedHostReloadProofFixture,
-  completedHostReloadSnapshotFixture,
-  completedHostStaleCommandProofFixtures,
+  completedGameEndgameSurfaceFixture,
   dayFiveNoLynchResolutionSurfaceFixture,
-  completedPlayerReloadProofFixtures,
-  completedPlayerReloadSnapshotsFixture,
-  staleCompletedPlayerCommandProofFixtures,
 } from "./dev_test_game_core_loop_completed_game_fixtures.mjs";
 import {
   completedPrivateChannelSnapshot,
@@ -12120,120 +12112,6 @@ function postNightFourTransitionSurfaceFixture() {
       releaseReady: false,
       productionReady: false,
     },
-    releaseReady: false,
-    productionReady: false,
-  };
-}
-
-function completedGameEndgameSurfaceFixture() {
-  const game = "00000000-0000-0000-0000-000000000002";
-  const baseRoleUrl = `http://127.0.0.1:5173/g/${game}`;
-  const completedRoleUrls = {
-    sourceActionPlayerRoleUrl: baseRoleUrl,
-    sourceNormalPlayerRoleUrl: `${baseRoleUrl}/player-rowan`,
-    sourceDeadPlayerRoleUrl: `${baseRoleUrl}?private=notification-1`,
-  };
-  const dayFiveOutcomes = completedGameDayVoteOutcomesFixture();
-  const completedHostReloadSnapshot = completedHostReloadSnapshotFixture({
-    dayVoteOutcomes: dayFiveOutcomes,
-  });
-  const completedReloadSnapshots = completedPlayerReloadSnapshotsFixture({
-    game,
-    dayVoteOutcomes: dayFiveOutcomes,
-  });
-  return {
-    status: "passed",
-    sourceHostRoleUrl: `${baseRoleUrl}/host`,
-    ...completedRoleUrls,
-    clickedThroughFromRoleUrl: true,
-    transition: completedGameEndgameTransition(),
-    hostCompleteProof: seededCoreLoopHostSurfaceFixture({
-      game,
-      setupResyncFromSeq: 920,
-      setupPhaseId: "N05",
-      setupPhaseState: "open",
-      setupSnapshotHost: {
-        completed: false,
-        phase: {
-          id: "N05",
-          state: "open",
-        },
-      },
-      completeProof: {
-        ...hostPhaseTransitionActionFixture({
-          actionId: "complete_game",
-          commandKind: "CompleteGame",
-          streamSeq: 921,
-          phaseId: "N05",
-          phaseState: "open",
-          deadlineAffordance: "none",
-          projectionRefreshKeys: [],
-          command: {
-            game,
-          },
-        }),
-        projection: {
-          completed: true,
-          phase: {
-            id: "N05",
-            state: "open",
-            locked: false,
-          },
-          slots: [
-            {
-              role_revealed: true,
-              alignment_revealed: true,
-            },
-          ],
-        },
-      },
-    }),
-    completedHostReloadProof: completedHostReloadProofFixture({
-      sourceRoleUrl: `${baseRoleUrl}/host`,
-      visitedRolePath: `/g/${game}/host`,
-      snapshot: completedHostReloadSnapshot,
-    }),
-    ...completedHostStaleCommandProofFixtures({
-      sourceRoleUrl: `${baseRoleUrl}/host`,
-      visitedRolePath: `/g/${game}/host`,
-      game,
-      snapshot: completedHostReloadSnapshot,
-    }),
-    actionPlayerCompletedProof: seededCoreLoopPlayerSurfaceFixture({
-      game,
-      slotField: "actionPlayerSlot",
-      slot: "slot-7",
-      principalUserId: "player_mira",
-      phaseId: "N05",
-      phaseState: "open",
-      actorAlive: true,
-      actorStatus: "alive",
-      gameCompleted: true,
-      actionState: "disabled:game complete",
-      statusText: "Player action unavailable: game complete",
-      privateCount: 0,
-      privateReceipt: false,
-      boundary:
-        "Seeded browser action player observed completed game endgame state with no vote, post, or action controls.",
-      resyncFromSeq: 921,
-      dayVoteOutcomes: dayFiveOutcomes,
-    }),
-    ...completedPlayerReloadProofFixtures({
-      roleUrls: completedRoleUrls,
-      snapshots: completedReloadSnapshots,
-    }),
-    completedDeadPlayerStaleVoteRecoveryProof:
-      completedDeadPlayerStaleVoteRecoveryProofFixture({
-        sourceRoleUrl: `${baseRoleUrl}?private=notification-1`,
-        visitedRolePath: `/g/${game}?private=notification-1`,
-        game,
-        reloadSnapshot: completedReloadSnapshots.completedDeadPlayerReloadProof,
-      }),
-    ...staleCompletedPlayerCommandProofFixtures({
-      sourceRoleUrl: baseRoleUrl,
-      visitedRolePath: `/g/${game}`,
-      game,
-    }),
     releaseReady: false,
     productionReady: false,
   };

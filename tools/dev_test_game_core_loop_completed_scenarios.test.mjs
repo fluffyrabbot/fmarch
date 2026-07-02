@@ -16,6 +16,9 @@ import {
   postDayThreeResolutionSurfaceFixture,
 } from "./dev_test_game_core_loop_surface_fixtures.mjs";
 import {
+  completedGameEndgameSurfaceFixture,
+} from "./dev_test_game_core_loop_completed_game_fixtures.mjs";
+import {
   assertCompletedGameEndgameSurfaceProof,
   assertCompletedGameEndgameSurfaceAssertionCases,
   assertCompletedGameEndgameTransition,
@@ -314,11 +317,7 @@ test("completed-game test fixtures live outside the assertion facade", async () 
   const fixtureCallerPaths = new Map([
     [
       "tools/dev_test_game.test.mjs",
-      [
-        "completedDeadPlayerStaleVoteRecoveryProofFixture",
-        "completedGameDayVoteOutcomesFixture",
-        ...sharedFixtureNames,
-      ],
+      ["completedGameEndgameSurfaceFixture"],
     ],
     [
       "tools/dev_test_game_core_loop_completed_scenarios.test.mjs",
@@ -348,6 +347,7 @@ test("completed-game test fixtures live outside the assertion facade", async () 
   for (const fixtureName of [
     "completedDeadPlayerStaleVoteRecoveryProofFixture",
     "completedGameDayVoteOutcomesFixture",
+    "completedGameEndgameSurfaceFixture",
     ...sharedFixtureNames,
   ]) {
     assert(
@@ -1269,6 +1269,16 @@ test("completed-game shared surface assertion fails closed", () => {
         assertPostDayThreePlayerSurfaceProof: assertProofFixture,
       }),
     /completed-game endgame surface/,
+  );
+});
+
+test("completed-game fixture satisfies the shared endgame assertion", () => {
+  assert.doesNotThrow(() =>
+    assertCompletedGameEndgameSurfaceProof({
+      completedGameEndgameSurface: completedGameEndgameSurfaceFixture(),
+      assertHostPhaseTransitionActionProof: assertProofFixture,
+      assertPostDayThreePlayerSurfaceProof: assertProofFixture,
+    }),
   );
 });
 
