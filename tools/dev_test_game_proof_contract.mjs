@@ -106,6 +106,7 @@ import {
   replacementResolvedPrivatePostReconnectMatches,
 } from "./dev_test_game_replacement_private_post_assertions.mjs";
 import {
+  coreLoopPrivateChannelCompletedPostLaneId,
   coreLoopPrivateChannelPostLaneId,
   coreLoopPrivateChannelRecoveryLaneIds,
   coreLoopPrivateChannelStalePostLaneId,
@@ -1038,6 +1039,83 @@ export function buildDevTestGameProofRun(session, options = {}) {
                 verification.privateChannel?.stalePostAfterPhaseTransition
                   ?.postBody,
             ) === true,
+      },
+    ),
+    lane(
+      coreLoopPrivateChannelCompletedPostLaneId,
+      "Private channel completed-game recovery",
+      {
+        channel:
+          verification.privateChannel?.completedGameRecovery?.channel ?? null,
+        state:
+          verification.privateChannel?.completedGameRecovery?.reject?.state ??
+          null,
+        error:
+          verification.privateChannel?.completedGameRecovery?.reject?.error ??
+          null,
+        gameCompleted:
+          verification.privateChannel?.completedGameRecovery
+            ?.commandStateAfterReject?.gameCompleted ?? null,
+        reloadStatus:
+          verification.privateChannel?.completedGameRecovery?.reloadAfterReject
+            ?.routeResponseStatus ?? null,
+        reloadGameCompleted:
+          verification.privateChannel?.completedGameRecovery?.reloadAfterReject
+            ?.recoveredCommandState?.gameCompleted ?? null,
+        passed:
+          verification.privateChannel?.completedGameRecovery?.status ===
+            "passed" &&
+          verification.privateChannel?.completedGameRecovery?.laneId ===
+            coreLoopPrivateChannelCompletedPostLaneId &&
+          verification.privateChannel?.completedGameRecovery?.channel ===
+            "private:mafia_day_chat" &&
+          verification.privateChannel?.completedGameRecovery?.closedStatus
+            ?.state === "closed" &&
+          verification.privateChannel?.completedGameRecovery?.complete
+            ?.commandStatus?.state === "ack" &&
+          verification.privateChannel?.completedGameRecovery?.reject?.state ===
+            "reject" &&
+          verification.privateChannel?.completedGameRecovery?.reject?.error ===
+            "GameAlreadyCompleted" &&
+          verification.privateChannel?.completedGameRecovery?.reject
+            ?.requestEnvelope?.body?.body?.command?.SubmitPost?.channel_id ===
+            "private:mafia_day_chat" &&
+          verification.privateChannel?.completedGameRecovery?.reject
+            ?.requestEnvelope?.body?.body?.command?.SubmitPost?.actor_slot ===
+            "slot-7" &&
+          verification.privateChannel?.completedGameRecovery?.reject
+            ?.requestEnvelope?.body?.body?.command?.SubmitPost?.body ===
+            verification.privateChannel?.completedGameRecovery?.postBody &&
+          verification.privateChannel?.completedGameRecovery
+            ?.commandStateAfterReject?.gameCompleted === true &&
+          verification.privateChannel?.completedGameRecovery
+            ?.commandStateAfterReject?.actions?.length === 0 &&
+          verification.privateChannel?.completedGameRecovery
+            ?.commandStateAfterReject?.voteTargets?.length === 0 &&
+          verification.privateChannel?.completedGameRecovery
+            ?.dispatchPlan?.projectionRefreshKeys?.includes("commandState") ===
+            true &&
+          verification.privateChannel?.completedGameRecovery
+            ?.apiThreadPostBodies?.includes(
+              verification.privateChannel?.completedGameRecovery?.postBody,
+            ) === false &&
+          verification.privateChannel?.completedGameRecovery?.reloadAfterReject
+            ?.status === "passed" &&
+          verification.privateChannel?.completedGameRecovery?.reloadAfterReject
+            ?.routeResponseStatus === 200 &&
+          verification.privateChannel?.completedGameRecovery?.reloadAfterReject
+            ?.recoveredCommandState?.gameCompleted === true &&
+          verification.privateChannel?.completedGameRecovery?.reloadAfterReject
+            ?.reloadChannelContext?.channelId === "private:mafia_day_chat" &&
+          verification.privateChannel?.completedGameRecovery?.reloadAfterReject
+            ?.reloadButtons?.some((button) => button.disabled !== true) ===
+            false &&
+          verification.privateChannel?.completedGameRecovery?.reloadAfterReject
+            ?.reloadRejectedPostVisible === false &&
+          verification.privateChannel?.completedGameRecovery?.reloadAfterReject
+            ?.apiThreadPostBodiesAfterReload?.includes(
+              verification.privateChannel?.completedGameRecovery?.postBody,
+            ) === false,
       },
     ),
     lane("replacement-host-issued-invite", "Host issues incoming replacement role URL", {

@@ -282,6 +282,46 @@ assert.equal(
     .commandStateAfterAck.phase.locked,
   true,
 );
+assert.equal(
+  session.verification.privateChannel.completedGameRecovery.status,
+  "passed",
+);
+assert.equal(
+  session.verification.privateChannel.completedGameRecovery.laneId,
+  "private-channel-completed-game-recovery",
+);
+assert.equal(
+  session.verification.privateChannel.completedGameRecovery.channel,
+  "private:mafia_day_chat",
+);
+assert.equal(
+  session.verification.privateChannel.completedGameRecovery.reject.state,
+  "reject",
+);
+assert.equal(
+  session.verification.privateChannel.completedGameRecovery.reject.error,
+  "GameAlreadyCompleted",
+);
+assert.equal(
+  session.verification.privateChannel.completedGameRecovery.commandStateAfterReject
+    .gameCompleted,
+  true,
+);
+assert.equal(
+  session.verification.privateChannel.completedGameRecovery.reloadAfterReject
+    .routeResponseStatus,
+  200,
+);
+assert.equal(
+  session.verification.privateChannel.completedGameRecovery.reloadAfterReject
+    .reloadChannelContext.channelId,
+  "private:mafia_day_chat",
+);
+assert.equal(
+  session.verification.privateChannel.completedGameRecovery.reloadAfterReject
+    .reloadButtons.some((button) => button.disabled !== true),
+  false,
+);
 assert.equal(session.verification.actionLoop.status, "passed");
 assert.equal(session.verification.actionLoop.resolveDay.commandStatus.state, "ack");
 assert.equal(session.verification.actionLoop.advanceNight.commandStatus.state, "ack");

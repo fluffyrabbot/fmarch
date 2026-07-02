@@ -58,6 +58,7 @@ import {
 import {
   completedPrivateChannelReloadScenario,
   completedPrivateChannelTransition,
+  coreLoopPrivateChannelCompletedPostLaneId,
   coreLoopPrivateChannelRecoveryLaneIds,
   coreLoopPrivateChannelRecoveryScenarioFamily,
   coreLoopPrivateChannelStalePostLaneId,
@@ -3108,6 +3109,57 @@ test("session card and markdown include role credential URLs and tokens", async 
                 "Stale private-channel post after D01 phase closure fixture.",
             },
           ],
+        },
+      },
+      completedGameRecovery: {
+        status: "passed",
+        laneId: coreLoopPrivateChannelCompletedPostLaneId,
+        channel: "private:mafia_day_chat",
+        postBody: "Completed private-channel stale post fixture.",
+        closedStatus: { state: "closed" },
+        complete: {
+          commandStatus: {
+            state: "ack",
+          },
+        },
+        reject: {
+          state: "reject",
+          error: "GameAlreadyCompleted",
+          requestEnvelope: {
+            body: {
+              body: {
+                command: {
+                  SubmitPost: {
+                    channel_id: "private:mafia_day_chat",
+                    actor_slot: "slot-7",
+                    body: "Completed private-channel stale post fixture.",
+                  },
+                },
+              },
+            },
+          },
+        },
+        commandStateAfterReject: {
+          gameCompleted: true,
+          actions: [],
+          voteTargets: [],
+        },
+        dispatchPlan: {
+          projectionRefreshKeys: ["commandState"],
+        },
+        apiThreadPostBodies: [],
+        reloadAfterReject: {
+          status: "passed",
+          routeResponseStatus: 200,
+          recoveredCommandState: { gameCompleted: true },
+          reloadChannelContext: {
+            channelId: "private:mafia_day_chat",
+          },
+          reloadButtons: [
+            { action: "submit_post", disabled: true },
+          ],
+          reloadRejectedPostVisible: false,
+          apiThreadPostBodiesAfterReload: [],
         },
       },
     },
@@ -8631,7 +8683,7 @@ test("session card and markdown include role credential URLs and tokens", async 
   assert.equal(opsArtifacts.productionReady, false);
   assert.equal(opsArtifacts.run.game, game);
   assert.equal(opsArtifacts.run.seedCommandCount, 1);
-  assert.equal(opsArtifacts.proofRun.laneCount, 116);
+  assert.equal(opsArtifacts.proofRun.laneCount, 117);
   assert.equal(opsArtifacts.proofStability.hostConfirmClicks.total, 4);
   assert.equal(
     opsArtifacts.checks.some(
@@ -9835,7 +9887,7 @@ function devTestGameRaceCoverageFixture() {
       proofRun: "target/dev-test-game/proof-run.json",
       proofGeneratedAt: "2026-06-26T00:00:00.000Z",
       game: "game-a",
-      laneCount: 116,
+      laneCount: 117,
     },
     summary: {
       cellCount: cells.length,
@@ -10070,7 +10122,7 @@ function devTestGameOpsArtifactsFixture({
     roles: {},
     proofRun: {
       status: "passed",
-      laneCount: 116,
+      laneCount: 117,
       lanes: [],
       nonClaims: [],
     },
