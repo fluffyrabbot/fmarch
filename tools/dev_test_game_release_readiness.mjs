@@ -91,10 +91,12 @@ import {
   assertHostLifecycleControlRoleSurfaceCase,
   assertHostNightActionTransitionSurfaceCase,
   assertHostPhaseTransitionActionProofCase,
-  assertPostNightFourTransitionSurfaceCase,
   assertHostStaleAdvanceAfterTransitionProofCase,
   hostDeadlineAffordanceForPhaseState,
 } from "./dev_test_game_core_loop_host_phase_scenarios.mjs";
+import {
+  assertPostNightFourTransitionSurfaceCase,
+} from "./dev_test_game_core_loop_post_night_four_transition_scenarios.mjs";
 import {
   assertHostPhaseTransitionSurfaceProof,
   assertStaleNightFourActionRecoveryProofCase,

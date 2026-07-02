@@ -6,7 +6,6 @@ import {
   assertHostNightActionTransitionSurfaceCase,
   assertHostLifecycleControlRoleSurfaceCase,
   assertHostPhaseTransitionActionProofCase,
-  assertPostNightFourTransitionSurfaceCase,
   assertHostStaleAdvanceAfterTransitionProofCase,
   dayFourNoLynchHostTransitionProofCase,
   emptyNightThreeHostTransitionProofCase,
@@ -22,11 +21,14 @@ import {
   hostNightActionTransitionSurfaceCase,
   hostOpenPhaseTransitionCase,
   hostPhaseTransitionCaseForState,
-  postNightFourTransitionSurfaceCase,
   hostResolvePhaseTransitionCase,
   hostResolvePhaseCommandFacts,
   hostUnlockThreadCommandFacts,
 } from "./dev_test_game_core_loop_host_phase_scenarios.mjs";
+import {
+  assertPostNightFourTransitionSurfaceCase,
+  postNightFourTransitionSurfaceCase,
+} from "./dev_test_game_core_loop_post_night_four_transition_scenarios.mjs";
 
 test("host phase scenario module exposes shared command facts", () => {
   assert.deepEqual(hostResolvePhaseCommandFacts(), {
