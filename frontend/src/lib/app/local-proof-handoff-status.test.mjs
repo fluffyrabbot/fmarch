@@ -20,12 +20,64 @@ test("selected next-action graph node summary carries browser-visible status tex
       roleUrl:
         "/admin/audit/local-hosted-concurrent-race-matrix?game=<seeded-game>",
       proofCommand:
+        "npm run test:dev-test-game-hosted-concurrent-race-matrix",
+      proofTarget:
+        "target/dev-test-game/hosted-concurrent-race-matrix.json",
+      graphProofCommand:
         "npm run test:dev-test-game-hosted-concurrent-race-matrix-admin-proof",
     },
   );
   assert.equal(
     selectedNextActionProofGraphNodeStatus({ nextAction, proofGraph }),
-    "passed: npm run test:dev-test-game-hosted-concurrent-race-matrix-admin-proof",
+    "passed: npm run test:dev-test-game-hosted-concurrent-race-matrix -> target/dev-test-game/hosted-concurrent-race-matrix.json",
+  );
+});
+
+test("selected hosted evidence lane graph node summary carries demo proof command", () => {
+  const nextAction = {
+    nextAction: {
+      command: "npm run test:dev-test-game-hosted-evidence-lane-demo-proof",
+      unproven: {
+        proofTarget:
+          "target/dev-test-game/hosted-evidence-lane-demo-proof.json",
+        proofGraphNodeId: "admin-proof:hosted-evidence-lane",
+        roleUrl: "/admin/audit/local-hosted-evidence-lane?game=<seeded-game>",
+      },
+    },
+  };
+  const proofGraph = {
+    version: 1,
+    proof: "dev-test-game-proof-graph",
+    status: "passed",
+    scope: "local-dev-test-game-proof-graph",
+    nodes: [
+      {
+        id: "admin-proof:hosted-evidence-lane",
+        status: "passed",
+        roleUrl: "/admin/audit/local-hosted-evidence-lane?game=<seeded-game>",
+        proofCommand:
+          "npm run test:dev-test-game-hosted-evidence-lane-admin-proof",
+      },
+    ],
+  };
+
+  assert.deepEqual(
+    selectedNextActionProofGraphNodeSummary({ nextAction, proofGraph }),
+    {
+      id: "admin-proof:hosted-evidence-lane",
+      status: "passed",
+      auditId: "local-hosted-evidence-lane",
+      roleUrl: "/admin/audit/local-hosted-evidence-lane?game=<seeded-game>",
+      proofCommand:
+        "npm run test:dev-test-game-hosted-evidence-lane-demo-proof",
+      proofTarget: "target/dev-test-game/hosted-evidence-lane-demo-proof.json",
+      graphProofCommand:
+        "npm run test:dev-test-game-hosted-evidence-lane-admin-proof",
+    },
+  );
+  assert.equal(
+    selectedNextActionProofGraphNodeStatus({ nextAction, proofGraph }),
+    "passed: npm run test:dev-test-game-hosted-evidence-lane-demo-proof -> target/dev-test-game/hosted-evidence-lane-demo-proof.json",
   );
 });
 
@@ -90,8 +142,10 @@ test("hosted matrix handoff summary derives destination proof assertions", () =>
 function nextActionFixture() {
   return {
     nextAction: {
+      command: "npm run test:dev-test-game-hosted-concurrent-race-matrix",
       unproven: {
         proofGraphNodeId: "admin-proof:hosted-concurrent-race-matrix",
+        proofTarget: "target/dev-test-game/hosted-concurrent-race-matrix.json",
         roleUrl:
           "/admin/audit/local-hosted-concurrent-race-matrix?game=<seeded-game>",
       },

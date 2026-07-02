@@ -4,6 +4,11 @@ export function selectedNextActionProofGraphNodeSummary({
 }) {
   const proofGraphNodeId = nextAction?.nextAction?.unproven?.proofGraphNodeId;
   const node = proofGraphNodeById(proofGraph, proofGraphNodeId);
+  const selectedCommand = stringOrEmpty(nextAction?.nextAction?.command);
+  const selectedProofTarget = stringOrEmpty(
+    nextAction?.nextAction?.unproven?.proofTarget,
+  );
+  const graphProofCommand = proofGraphNodeProofCommand(node);
   return node === null
     ? null
     : {
@@ -11,7 +16,10 @@ export function selectedNextActionProofGraphNodeSummary({
         status: String(node.status ?? "unknown"),
         auditId: auditIdFromProofGraphNodeRoleUrl(node.roleUrl),
         roleUrl: typeof node.roleUrl === "string" ? node.roleUrl : "",
-        proofCommand: proofGraphNodeProofCommand(node),
+        proofCommand:
+          selectedCommand === "" ? graphProofCommand : selectedCommand,
+        proofTarget: selectedProofTarget,
+        graphProofCommand,
       };
 }
 
@@ -25,7 +33,9 @@ export function selectedNextActionProofGraphNodeStatus({
   });
   return selectedNode === null
     ? ""
-    : `${selectedNode.status}: ${selectedNode.proofCommand}`;
+    : selectedNode.proofTarget === ""
+      ? `${selectedNode.status}: ${selectedNode.proofCommand}`
+      : `${selectedNode.status}: ${selectedNode.proofCommand} -> ${selectedNode.proofTarget}`;
 }
 
 export function hostedMatrixHandoffSummary({ nextAction, hostedMatrix }) {
@@ -98,6 +108,10 @@ function proofGraphNodeById(proofGraph, proofGraphNodeId) {
 
 function proofGraphNodeProofCommand(node) {
   return String(node?.proofCommand ?? node?.recoveryCommand ?? "");
+}
+
+function stringOrEmpty(value) {
+  return typeof value === "string" ? value : "";
 }
 
 function auditIdFromProofGraphNodeRoleUrl(roleUrl) {
