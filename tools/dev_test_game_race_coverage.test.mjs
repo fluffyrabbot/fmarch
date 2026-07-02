@@ -10,12 +10,14 @@ import {
   hostPhaseRaceCoverageCellDefinitions,
 } from "./dev_test_game_host_stale_control_scenarios.mjs";
 import {
+  cohostDeadlineRaceCoveragePromotedReloadGroup,
   completedHostRaceCoveragePromotedReloadGroup,
   completedPlayerRaceCoveragePromotedReloadGroup,
   raceCoverageLocalReadinessMilestoneCases,
   raceCoverageLocalReadinessMilestoneDefinitions,
   raceCoveragePromotedReloadGroup,
   raceCoveragePromotedReloadGroups,
+  replacementRaceCoveragePromotedReloadGroup,
 } from "./dev_test_game_race_coverage.mjs";
 
 test("race coverage imports host phase race cells from shared scenarios", () => {
@@ -180,6 +182,14 @@ test("race coverage exposes promoted reload groups from one contract", () => {
       },
     ],
   );
+  assert.equal(
+    replacementRaceCoveragePromotedReloadGroup().id,
+    "replacement-race-reload",
+  );
+  assert.equal(
+    cohostDeadlineRaceCoveragePromotedReloadGroup().id,
+    "cohost-deadline-race-reload",
+  );
 });
 
 test("race coverage promoted reload groups fail closed for unknown ids", () => {
@@ -189,16 +199,54 @@ test("race coverage promoted reload groups fail closed for unknown ids", () => {
   );
 });
 
-test("release readiness consumes completed race promoted group helpers", async () => {
-  const source = await readFile("tools/dev_test_game_release_readiness.mjs", "utf8");
+test("release readiness consumes named race promoted group helpers", async () => {
+  const source = await readFile(
+    "tools/dev_test_game_release_readiness.mjs",
+    "utf8",
+  );
+  for (const helperName of [
+    "replacementRaceCoveragePromotedReloadGroup",
+    "completedHostRaceCoveragePromotedReloadGroup",
+    "completedPlayerRaceCoveragePromotedReloadGroup",
+    "cohostDeadlineRaceCoveragePromotedReloadGroup",
+  ]) {
+    assert(
+      source.includes(helperName),
+      `release readiness should consume ${helperName}`,
+    );
+  }
+  for (const groupId of [
+    "replacement-race-reload",
+    "host-concurrent-race-reload",
+    "player-concurrent-action-reload",
+    "cohost-deadline-race-reload",
+  ]) {
+    assert(
+      !source.includes(`raceCoveragePromotedReloadGroup("${groupId}")`),
+      `release readiness should not duplicate promoted group id ${groupId}`,
+    );
+  }
+});
+
+test("core proof fixture consumes named race promoted group helpers", async () => {
+  const source = await readFile("tools/dev_test_game.test.mjs", "utf8");
   assert(
-    source.includes("completedHostRaceCoveragePromotedReloadGroup"),
-    "release readiness should consume completed host race promoted group helper",
+    source.includes("replacementRaceCoveragePromotedReloadGroup"),
+    "core proof fixture should consume replacement promoted group helper",
   );
   assert(
-    source.includes("completedPlayerRaceCoveragePromotedReloadGroup"),
-    "release readiness should consume completed player race promoted group helper",
+    source.includes("cohostDeadlineRaceCoveragePromotedReloadGroup"),
+    "core proof fixture should consume cohost deadline promoted group helper",
   );
+  for (const groupId of [
+    "replacement-race-reload",
+    "cohost-deadline-race-reload",
+  ]) {
+    assert(
+      !source.includes(`raceCoveragePromotedReloadGroup("${groupId}")`),
+      `core proof fixture should not duplicate promoted group id ${groupId}`,
+    );
+  }
 });
 
 test("race coverage exposes local readiness milestones from promoted groups", () => {

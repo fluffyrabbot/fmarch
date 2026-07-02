@@ -173,6 +173,14 @@ export function raceCoveragePromotedReloadGroup(groupId) {
   return group;
 }
 
+export function replacementRaceCoveragePromotedReloadGroup() {
+  return raceCoveragePromotedReloadGroup("replacement-race-reload");
+}
+
+export function cohostDeadlineRaceCoveragePromotedReloadGroup() {
+  return raceCoveragePromotedReloadGroup("cohost-deadline-race-reload");
+}
+
 function completedGameRaceCoveragePromotedReloadGroupForProofGroup(proofGroup) {
   const cell = completedGameRaceCoverageCellCases().find(
     (candidate) => candidate.proofGroup === proofGroup,
