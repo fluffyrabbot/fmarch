@@ -20,6 +20,9 @@ import {
 import {
   coreLoopAuditLaneIds,
 } from "../../../../tools/dev_test_game_core_loop_scenarios.mjs";
+import {
+  hostedEvidenceHandoffInputRows,
+} from "../../../../tools/dev_test_game_hosted_handoff_cases.mjs";
 
 export const ADMIN_ROUTE_CONTRACT = Object.freeze({
   surfaceTestId: "admin-surface",
@@ -933,10 +936,7 @@ function normalizeHostedEvidenceLaneHandoffChecklist({
         Object.freeze({
           id: input.id,
           label: input.label,
-          value:
-            input.id === "FMARCH_HOSTED_IDENTITY_EVIDENCE_PATH"
-              ? String(checklist.placeholderFixturePath ?? input.value)
-              : input.value,
+          value: input.value,
           required: input.required,
         }),
       ),
@@ -2297,33 +2297,11 @@ function normalizeNextActionSpineDrilldown(drilldown) {
 }
 
 function normalizeRealHostedEvidenceInputs(inputs) {
-  if (inputs === null || typeof inputs !== "object") {
-    return Object.freeze([]);
-  }
-  const env = Array.isArray(inputs.env) ? inputs.env : [];
-  const rows = [
-    Object.freeze({
-      id: "command",
-      label: "Command",
-      value: String(inputs.command ?? ""),
-      required: true,
-    }),
-    Object.freeze({
-      id: "proof-target",
-      label: "Proof target",
-      value: String(inputs.proofTarget ?? ""),
-      required: true,
-    }),
-    ...env.map((item) =>
-      Object.freeze({
-        id: String(item?.name ?? ""),
-        label: String(item?.name ?? ""),
-        value: String(item?.description ?? ""),
-        required: item?.required === true,
-      }),
+  return Object.freeze(
+    hostedEvidenceHandoffInputRows(inputs).map((input) =>
+      Object.freeze(input),
     ),
-  ].filter((item) => item.id !== "" && item.value !== "");
-  return Object.freeze(rows);
+  );
 }
 
 function normalizeNextActionLocalReadinessDependencyTrace(

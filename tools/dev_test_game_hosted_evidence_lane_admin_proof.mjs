@@ -2,7 +2,10 @@ import path from "node:path";
 import { assertDevTestGameProofRun } from "./dev_test_game_proof_contract.mjs";
 import { assertDevTestGameHostedEvidenceLane } from "./dev_test_game_hosted_evidence_lane.mjs";
 import {
+  hostedEvidenceHandoffBlockedCheckRequiredEvidence,
   hostedEvidenceHandoffInputIds,
+  hostedEvidenceHandoffInputValues,
+  hostedEvidenceHandoffSummary,
 } from "./dev_test_game_hosted_handoff_cases.mjs";
 import {
   artifactDir,
@@ -43,24 +46,21 @@ await runAdminAuditProof({
     proofRun: assertDevTestGameProofRun(await readJson(proofRunPath)),
   }),
   prove: async ({ browser, frontendBaseUrl, source }) => {
-    const hostedHandoffInputValues = realHostedEvidenceInputValues(
+    const hostedHandoffInputValues = hostedEvidenceHandoffInputValues(
       source.lane.hostedEvidence?.realHostedEvidenceInputs,
     );
     const hostedHandoffBlockedCheckStatuses =
-      hostedHandoffBlockedCheckRequiredEvidence(
+      hostedEvidenceHandoffBlockedCheckRequiredEvidence(
         source.lane.checks,
         source.lane.blockedCheckIds,
       );
-    const hostedHandoffSummary = {
+    const hostedHandoffSummary = hostedEvidenceHandoffSummary({
       status: source.lane.status,
       preflightStatus: source.lane.preflightStatus,
-      command:
-        source.lane.hostedEvidence?.realHostedEvidenceInputs?.command ??
-        source.lane.nextCommand,
-      proofTarget:
-        source.lane.hostedEvidence?.realHostedEvidenceInputs?.proofTarget ??
-        source.lane.nextProofTarget,
-    };
+      inputs: source.lane.hostedEvidence?.realHostedEvidenceInputs,
+      command: source.lane.nextCommand,
+      proofTarget: source.lane.nextProofTarget,
+    });
     return await proveAdminAuditDetail({
       browser,
       frontendBaseUrl,
@@ -103,25 +103,22 @@ await runAdminAuditProof({
       blockedCheckIds: source.lane.blockedCheckIds,
       realHostedEvidenceInputIds: hostedEvidenceHandoffInputIds,
       hostedHandoffInputIds: hostedEvidenceHandoffInputIds,
-      hostedHandoffInputValues: realHostedEvidenceInputValues(
+      hostedHandoffInputValues: hostedEvidenceHandoffInputValues(
         source.lane.hostedEvidence?.realHostedEvidenceInputs,
       ),
       hostedHandoffBlockedCheckIds: source.lane.blockedCheckIds,
       hostedHandoffBlockedCheckRequiredEvidence:
-        hostedHandoffBlockedCheckRequiredEvidence(
+        hostedEvidenceHandoffBlockedCheckRequiredEvidence(
           source.lane.checks,
           source.lane.blockedCheckIds,
         ),
-      hostedHandoffSummary: {
+      hostedHandoffSummary: hostedEvidenceHandoffSummary({
         status: source.lane.status,
         preflightStatus: source.lane.preflightStatus,
-        command:
-          source.lane.hostedEvidence?.realHostedEvidenceInputs?.command ??
-          source.lane.nextCommand,
-        proofTarget:
-          source.lane.hostedEvidence?.realHostedEvidenceInputs?.proofTarget ??
-          source.lane.nextProofTarget,
-      },
+        inputs: source.lane.hostedEvidence?.realHostedEvidenceInputs,
+        command: source.lane.nextCommand,
+        proofTarget: source.lane.nextProofTarget,
+      }),
       relatedAuditIds: requiredRelatedLinks,
     },
     adminRoleSurface,
@@ -230,33 +227,4 @@ export function assertHostedEvidenceLaneAdminProof(evidence) {
     }
   }
   return evidence;
-}
-
-function realHostedEvidenceInputValues(inputs) {
-  const env = Array.isArray(inputs?.env) ? inputs.env : [];
-  return Object.fromEntries(
-    [
-      ["command", String(inputs?.command ?? "")],
-      ["proof-target", String(inputs?.proofTarget ?? "")],
-      ...env.map((item) => [
-        String(item?.name ?? ""),
-        String(item?.description ?? ""),
-      ]),
-    ].filter(([id, value]) => id !== "" && value !== ""),
-  );
-}
-
-function hostedHandoffBlockedCheckRequiredEvidence(checks, blockedCheckIds = []) {
-  const blockedCheckIdSet = new Set(blockedCheckIds.map((id) => String(id)));
-  return Object.fromEntries(
-    (Array.isArray(checks) ? checks : [])
-      .filter(
-        (check) =>
-          blockedCheckIdSet.has(String(check.id)) &&
-          check?.status === "blocked" &&
-          typeof check.requiredEvidence === "string" &&
-          check.requiredEvidence.trim() !== "",
-      )
-      .map((check) => [String(check.id), check.requiredEvidence]),
-  );
 }
