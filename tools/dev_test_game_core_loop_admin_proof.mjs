@@ -26,6 +26,7 @@ import {
   assertHostLifecycleControlRoleSurfaceCase,
   assertHostNightActionTransitionSurfaceCase,
   assertHostPhaseTransitionActionProofCase,
+  assertPostNightFourTransitionSurfaceCase,
   assertHostStaleAdvanceAfterTransitionProofCase,
   hostAdvancePhaseTransitionCase,
   hostCompleteGameCommandFacts,
@@ -10810,139 +10811,14 @@ function assertPostNightFourTransitionSurface(postNightFourTransitionSurface) {
   const expectedGame = gameFromRoleUrl(
     postNightFourTransitionSurface?.sourceHostRoleUrl,
   );
-  if (
-    postNightFourTransitionSurface?.status !== "passed" ||
-    postNightFourTransitionSurface.clickedThroughFromRoleUrl !== true ||
-    postNightFourTransitionSurface.releaseReady !== false ||
-    postNightFourTransitionSurface.productionReady !== false ||
-    typeof postNightFourTransitionSurface.sourceHostRoleUrl !== "string" ||
-    !postNightFourTransitionSurface.sourceHostRoleUrl.endsWith("/host") ||
-    typeof postNightFourTransitionSurface.sourceActionPlayerRoleUrl !==
-      "string" ||
-    !postNightFourTransitionSurface.sourceActionPlayerRoleUrl.includes("/g/") ||
-    typeof postNightFourTransitionSurface.sourceSurvivorRoleUrl !== "string" ||
-    !postNightFourTransitionSurface.sourceSurvivorRoleUrl.includes("/g/") ||
-    !String(postNightFourTransitionSurface.transition ?? "").includes(
-      "host:N04:advance_phase:ack:917",
-    ) ||
-    !String(postNightFourTransitionSurface.transition ?? "").includes(
-      "survivor:D05:dead_no_controls",
-    ) ||
-    !String(postNightFourTransitionSurface.transition ?? "").includes(
-      "actionPlayer:D05:no_lynch_controls",
-    ) ||
-    !String(postNightFourTransitionSurface.transition ?? "").includes(
-      "stale:N04:submit_action:reject:PhaseLocked",
-    )
-  ) {
-    throw new Error(
-      `core-loop admin proof missing post-Night 4 transition surface: ${JSON.stringify(
-        postNightFourTransitionSurface,
-      )}`,
-    );
-  }
-  assertPostNightFourHostAdvanceProof({
-    proof: postNightFourTransitionSurface.hostAdvanceProof,
+  assertPostNightFourTransitionSurfaceCase({
+    postNightFourTransitionSurface,
     expectedGame,
-    sourceRoleUrl: postNightFourTransitionSurface.sourceHostRoleUrl,
+    assertHostPhaseTransitionActionProof,
+    assertPlayerSurfaceProof: assertPostDayThreePlayerSurfaceProof,
+    assertStaleActionRecoveryProof: assertStaleNightFourActionRecoveryProof,
+    includeEvidenceInError: true,
   });
-  assertPostDayThreePlayerSurfaceProof({
-    proof: postNightFourTransitionSurface.survivorDayFiveProof,
-    expectedGame,
-    sourceRoleUrl: postNightFourTransitionSurface.sourceSurvivorRoleUrl,
-    expectedSlot: "slot-5",
-    slotField: "survivorSlot",
-    expectedPrincipalUserId: "player_sage",
-    expectedPhaseId: "D05",
-    expectedPhaseState: "open",
-    expectedActorAlive: false,
-    expectedActorStatus: "dead",
-    expectedActionState: "disabled:actor is not alive",
-    expectedStatusText: "actor is not alive",
-    expectedPrivateCount: 1,
-    expectedPrivateReceipt: true,
-    expectedBoundaryText: "survivor stayed dead with no controls",
-    expectedResyncFromSeq: 917,
-    expectedCommandStateEndpoint:
-      `/games/${expectedGame}/player-command-state?principal_user_id=player_sage&slot_id=slot-5`,
-    expectedNotificationsEndpoint:
-      `/games/${expectedGame}/notifications?principal_user_id=player_sage`,
-    expectedLastVoteOutcomePhaseId: "D04",
-    expectedPrivateReceiptStatus: "factional_kill",
-    expectedPrivateReceiptPhaseId: "N04",
-  });
-  assertPostDayThreePlayerSurfaceProof({
-    proof: postNightFourTransitionSurface.actionPlayerDayFiveProof,
-    expectedGame,
-    sourceRoleUrl: postNightFourTransitionSurface.sourceActionPlayerRoleUrl,
-    expectedSlot: "slot-7",
-    slotField: "actionPlayerSlot",
-    expectedPrincipalUserId: "player_mira",
-    expectedPhaseId: "D05",
-    expectedPhaseState: "open",
-    expectedActorAlive: true,
-    expectedActorStatus: "alive",
-    expectedActionState: "disabled:no legal action available",
-    expectedStatusText: "no legal action available",
-    expectedPrivateCount: 0,
-    expectedPrivateReceipt: false,
-    expectedBoundaryText: "open Day 5 no-lynch controls",
-    expectedResyncFromSeq: 917,
-    expectedCommandStateEndpoint:
-      `/games/${expectedGame}/player-command-state?principal_user_id=player_mira&slot_id=slot-7`,
-    expectedNotificationsEndpoint:
-      `/games/${expectedGame}/notifications?principal_user_id=player_mira`,
-    expectedVoteButtonCount: 1,
-    expectedVoteTargetCount: 1,
-    expectedLastVoteOutcomePhaseId: "D04",
-  });
-  assertStaleNightFourActionRecoveryProof({
-    proof: postNightFourTransitionSurface.staleNightFourActionRecoveryProof,
-    expectedGame,
-    sourceRoleUrl: postNightFourTransitionSurface.sourceActionPlayerRoleUrl,
-  });
-}
-
-function assertPostNightFourHostAdvanceProof({
-  proof,
-  expectedGame,
-  sourceRoleUrl,
-}) {
-  if (
-    proof?.status !== "passed" ||
-    proof.clickedThroughFromRoleUrl !== true ||
-    proof.releaseReady !== false ||
-    proof.productionReady !== false ||
-    proof.rawInviteTokensVisible !== false ||
-    proof.sourceRoleUrl !== sourceRoleUrl ||
-    typeof proof.visitedRolePath !== "string" ||
-    !proof.visitedRolePath.endsWith("/host") ||
-    proof.surfaceTestId !== "host-console-surface" ||
-    proof.setupResyncFromSeq !== 916 ||
-    proof.setupSnapshotHost?.phase?.id !== "N04" ||
-    proof.setupSnapshotHost?.phase?.state !== "locked"
-  ) {
-    throw new Error(
-      `core-loop admin proof missing post-Night 4 host advance: ${JSON.stringify(
-        proof,
-      )}`,
-    );
-  }
-  assertHostPhaseTransitionActionProof({
-    proof: proof.advanceProof,
-    expectedGame,
-    ...hostAdvancePhaseTransitionCase({
-      streamSeq: 917,
-      expectedPhaseId: "D05",
-    }),
-  });
-  if (proof.advanceProof?.dayVoteOutcomesProjection?.at?.(-1)?.phaseId !== "D04") {
-    throw new Error(
-      `core-loop admin proof missing post-Night 4 host outcome context: ${JSON.stringify(
-        proof.advanceProof,
-      )}`,
-    );
-  }
 }
 
 function assertStaleNightFourActionRecoveryProof({

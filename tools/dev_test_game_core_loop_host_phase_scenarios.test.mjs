@@ -6,6 +6,7 @@ import {
   assertHostNightActionTransitionSurfaceCase,
   assertHostLifecycleControlRoleSurfaceCase,
   assertHostPhaseTransitionActionProofCase,
+  assertPostNightFourTransitionSurfaceCase,
   assertHostStaleAdvanceAfterTransitionProofCase,
   dayFourNoLynchHostTransitionProofCase,
   emptyNightThreeHostTransitionProofCase,
@@ -21,6 +22,7 @@ import {
   hostNightActionTransitionSurfaceCase,
   hostOpenPhaseTransitionCase,
   hostPhaseTransitionCaseForState,
+  postNightFourTransitionSurfaceCase,
   hostResolvePhaseTransitionCase,
   hostResolvePhaseCommandFacts,
   hostUnlockThreadCommandFacts,
@@ -599,6 +601,188 @@ test("empty Night 3 host transition assertion covers resolve and advance ACKs", 
         sourceRoleUrl: "http://127.0.0.1:5173/g/game-a/host",
       }),
     /empty Night 3 host transition/,
+  );
+});
+
+test("post-Night 4 transition surface case shares transition and observation facts", () => {
+  assert.deepEqual(postNightFourTransitionSurfaceCase(), {
+    surfaceTestId: "host-console-surface",
+    transitionFragments: [
+      "host:N04:advance_phase:ack:917",
+      "survivor:D05:dead_no_controls",
+      "actionPlayer:D05:no_lynch_controls",
+      "stale:N04:submit_action:reject:PhaseLocked",
+    ],
+    hostAdvanceSetupResyncFromSeq: 916,
+    hostAdvanceSetupPhaseId: "N04",
+    hostAdvanceSetupPhaseState: "locked",
+    expectedHostAdvanceDayVoteOutcomePhaseId: "D04",
+    hostAdvanceCase: {
+      actionId: "advance_phase",
+      commandKind: "AdvancePhase",
+      streamSeq: 917,
+      expectedPhaseId: "D05",
+      expectedPhaseState: "open",
+      expectedRefreshKeys: [],
+    },
+    playerObservationCases: [
+      {
+        proofField: "survivorDayFiveProof",
+        sourceRoleUrlField: "sourceSurvivorRoleUrl",
+        expectedSlot: "slot-5",
+        slotField: "survivorSlot",
+        expectedPrincipalUserId: "player_sage",
+        expectedPhaseId: "D05",
+        expectedPhaseState: "open",
+        expectedActorAlive: false,
+        expectedActorStatus: "dead",
+        expectedActionState: "disabled:actor is not alive",
+        expectedStatusText: "actor is not alive",
+        expectedPrivateCount: 1,
+        expectedPrivateReceipt: true,
+        expectedBoundaryText: "survivor stayed dead with no controls",
+        expectedResyncFromSeq: 917,
+        expectedVoteButtonCount: 0,
+        expectedVoteTargetCount: 0,
+        expectedLastVoteOutcomePhaseId: "D04",
+        expectedPrivateReceiptStatus: "factional_kill",
+        expectedPrivateReceiptPhaseId: "N04",
+      },
+      {
+        proofField: "actionPlayerDayFiveProof",
+        sourceRoleUrlField: "sourceActionPlayerRoleUrl",
+        expectedSlot: "slot-7",
+        slotField: "actionPlayerSlot",
+        expectedPrincipalUserId: "player_mira",
+        expectedPhaseId: "D05",
+        expectedPhaseState: "open",
+        expectedActorAlive: true,
+        expectedActorStatus: "alive",
+        expectedActionState: "disabled:no legal action available",
+        expectedStatusText: "no legal action available",
+        expectedPrivateCount: 0,
+        expectedPrivateReceipt: false,
+        expectedBoundaryText: "open Day 5 no-lynch controls",
+        expectedResyncFromSeq: 917,
+        expectedVoteButtonCount: 1,
+        expectedVoteTargetCount: 1,
+        expectedLastVoteOutcomePhaseId: "D04",
+        expectedPrivateReceiptStatus: "day_vote",
+        expectedPrivateReceiptPhaseId: "D03",
+      },
+    ],
+  });
+  assert.notEqual(
+    postNightFourTransitionSurfaceCase().transitionFragments,
+    postNightFourTransitionSurfaceCase().transitionFragments,
+  );
+  assert.notEqual(
+    postNightFourTransitionSurfaceCase().playerObservationCases,
+    postNightFourTransitionSurfaceCase().playerObservationCases,
+  );
+});
+
+test("post-Night 4 transition assertion delegates host, player, and stale checks", () => {
+  const observedHost = [];
+  const observedPlayers = [];
+  const observedStale = [];
+  const postNightFourTransitionSurface = {
+    status: "passed",
+    clickedThroughFromRoleUrl: true,
+    releaseReady: false,
+    productionReady: false,
+    sourceHostRoleUrl: "http://127.0.0.1:5173/g/game-a/host",
+    sourceActionPlayerRoleUrl: "http://127.0.0.1:5173/g/game-a?slot=slot-7",
+    sourceSurvivorRoleUrl: "http://127.0.0.1:5173/g/game-a?slot=slot-5",
+    transition:
+      "host:N04:advance_phase:ack:917 -> survivor:D05:dead_no_controls -> actionPlayer:D05:no_lynch_controls -> stale:N04:submit_action:reject:PhaseLocked",
+    hostAdvanceProof: {
+      status: "passed",
+      clickedThroughFromRoleUrl: true,
+      releaseReady: false,
+      productionReady: false,
+      rawInviteTokensVisible: false,
+      sourceRoleUrl: "http://127.0.0.1:5173/g/game-a/host",
+      visitedRolePath: "/g/game-a/host",
+      surfaceTestId: "host-console-surface",
+      setupResyncFromSeq: 916,
+      setupSnapshotHost: { phase: { id: "N04", state: "locked" } },
+      advanceProof: {
+        dayVoteOutcomesProjection: [{ phaseId: "D04" }],
+      },
+    },
+    survivorDayFiveProof: { id: "survivor" },
+    actionPlayerDayFiveProof: { id: "actionPlayer" },
+    staleNightFourActionRecoveryProof: { id: "stale" },
+  };
+
+  assert.doesNotThrow(() =>
+    assertPostNightFourTransitionSurfaceCase({
+      postNightFourTransitionSurface,
+      expectedGame: "game-a",
+      assertHostPhaseTransitionActionProof: (args) => observedHost.push(args),
+      assertPlayerSurfaceProof: (args) => observedPlayers.push(args),
+      assertStaleActionRecoveryProof: (args) => observedStale.push(args),
+    }),
+  );
+  assert.deepEqual(
+    observedHost.map((args) => [
+      args.actionId,
+      args.streamSeq,
+      args.expectedPhaseId,
+      args.expectedPhaseState,
+    ]),
+    [["advance_phase", 917, "D05", "open"]],
+  );
+  assert.deepEqual(
+    observedPlayers.map((args) => [
+      args.proof.id,
+      args.expectedPrincipalUserId,
+      args.expectedCommandStateEndpoint,
+      args.expectedNotificationsEndpoint,
+      args.expectedVoteButtonCount,
+      args.expectedPrivateReceiptStatus,
+    ]),
+    [
+      [
+        "survivor",
+        "player_sage",
+        "/games/game-a/player-command-state?principal_user_id=player_sage&slot_id=slot-5",
+        "/games/game-a/notifications?principal_user_id=player_sage",
+        0,
+        "factional_kill",
+      ],
+      [
+        "actionPlayer",
+        "player_mira",
+        "/games/game-a/player-command-state?principal_user_id=player_mira&slot_id=slot-7",
+        "/games/game-a/notifications?principal_user_id=player_mira",
+        1,
+        "day_vote",
+      ],
+    ],
+  );
+  assert.deepEqual(observedStale, [
+    {
+      proof: { id: "stale" },
+      expectedGame: "game-a",
+      sourceRoleUrl: "http://127.0.0.1:5173/g/game-a?slot=slot-7",
+      includeEvidenceInError: false,
+    },
+  ]);
+  assert.throws(
+    () =>
+      assertPostNightFourTransitionSurfaceCase({
+        postNightFourTransitionSurface: {
+          ...postNightFourTransitionSurface,
+          transition: "host:N04:advance_phase:ack:917",
+        },
+        expectedGame: "game-a",
+        assertHostPhaseTransitionActionProof: () => {},
+        assertPlayerSurfaceProof: () => {},
+        assertStaleActionRecoveryProof: () => {},
+      }),
+    /post-Night 4 transition surface/,
   );
 });
 
