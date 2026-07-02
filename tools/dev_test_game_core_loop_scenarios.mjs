@@ -17,6 +17,9 @@ import {
 import {
   coreLoopPhaseProgressionLaneIds,
 } from "./dev_test_game_core_loop_phase_progression_scenarios.mjs";
+import {
+  coreLoopHostControlLaneIds,
+} from "./dev_test_game_core_loop_host_control_scenarios.mjs";
 
 export const coreLoopSpineCheckId = "core-loop-spine";
 export const coreLoopCompletedGameCoverageCheckId =
@@ -33,8 +36,7 @@ export const coreLoopAuditLaneIds = Object.freeze([
   playerActionBoundaryLaneId,
   "private-channel",
   "host-votecount-publication",
-  "host-lifecycle-control",
-  "host-modkill-control",
+  ...coreLoopHostControlLaneIds,
   ...completedGameSeedRequiredScenarioIds(),
   hostStaleResolveControlLaneId,
   hostStaleResolveReloadLaneId,

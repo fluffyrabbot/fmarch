@@ -695,9 +695,9 @@ export function hostLifecycleControlScenario() {
 export function assertHostLifecycleControlRoleSurfaceCase({
   hostRoleSurface,
   expectedGame,
+  scenario = hostLifecycleControlScenarioDefinition,
   includeEvidenceInError = false,
 }) {
-  const scenario = hostLifecycleControlScenarioDefinition;
   const checkpoint = hostRoleSurface?.hostLifecycleControlCheckpoint;
   const clickProof = hostRoleSurface?.hostLifecycleControlClickProof;
   const staleRejectProof = hostRoleSurface?.hostLifecycleStaleRejectProof;
@@ -741,11 +741,13 @@ export function assertHostLifecycleControlRoleSurfaceCase({
   assertHostLifecycleControlClickProofCase({
     clickProof,
     expectedGame,
+    scenario,
     includeEvidenceInError,
   });
   assertHostLifecycleStaleRejectProofCase({
     staleRejectProof,
     expectedGame,
+    scenario,
     includeEvidenceInError,
   });
 }
@@ -753,9 +755,9 @@ export function assertHostLifecycleControlRoleSurfaceCase({
 export function assertHostLifecycleControlClickProofCase({
   clickProof,
   expectedGame,
+  scenario = hostLifecycleControlScenarioDefinition,
   includeEvidenceInError = false,
 }) {
-  const scenario = hostLifecycleControlScenarioDefinition;
   if (
     clickProof?.status !== "passed" ||
     clickProof.clickedAction !== scenario.actionId ||
@@ -798,9 +800,9 @@ export function assertHostLifecycleControlClickProofCase({
 export function assertHostLifecycleStaleRejectProofCase({
   staleRejectProof,
   expectedGame,
+  scenario = hostLifecycleControlScenarioDefinition,
   includeEvidenceInError = false,
 }) {
-  const scenario = hostLifecycleControlScenarioDefinition;
   if (
     staleRejectProof?.status !== "passed" ||
     staleRejectProof.clickedAction !== scenario.actionId ||

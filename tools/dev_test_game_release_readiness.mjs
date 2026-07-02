@@ -126,6 +126,10 @@ import {
   coreLoopDayFiveProgressionFamilyId,
 } from "./dev_test_game_core_loop_day_five_progression_scenarios.mjs";
 import {
+  coreLoopHostControlFamilyId,
+  coreLoopHostControlScenarioFamily,
+} from "./dev_test_game_core_loop_host_control_scenarios.mjs";
+import {
   coreLoopCompletedEndgameProgressionFamilyId,
   coreLoopCompletedEndgameProgressionScenarioFamilies,
 } from "./dev_test_game_core_loop_completed_endgame_progression_scenarios.mjs";
@@ -2075,6 +2079,13 @@ export function validateDevTestGameCoreLoopAdminProof(proof, options = {}) {
     );
   }
   if (
+    proof.generatedFrom?.hostControlFamily?.id !==
+      coreLoopHostControlFamilyId ||
+    !Array.isArray(proof.generatedFrom?.hostControlFamily?.laneIds)
+  ) {
+    throw new Error("core-loop admin proof missing host-control family");
+  }
+  if (
     proof.generatedFrom?.phaseProgressionFamily?.id !==
       coreLoopPhaseProgressionFamilyId ||
     !Array.isArray(proof.generatedFrom?.phaseProgressionFamily?.laneIds)
@@ -2234,9 +2245,11 @@ export function validateDevTestGameCoreLoopAdminProof(proof, options = {}) {
 }
 
 function assertCoreLoopHostLifecycleCheckpoint(hostRoleSurface) {
+  const scenarioFamily = coreLoopHostControlScenarioFamily();
   assertHostLifecycleControlRoleSurfaceCase({
     hostRoleSurface,
     expectedGame: gameFromRoleUrl(hostRoleSurface?.sourceRoleUrl),
+    scenario: scenarioFamily.surfaces.hostLifecycleControl,
   });
 }
 
