@@ -12,6 +12,9 @@ import {
   buildRealHostedEvidenceInputs,
 } from "./dev_test_game_real_hosted_evidence_inputs.mjs";
 import {
+  isExternallyHostedUrl,
+} from "./dev_test_game_hosted_target_url_policy.mjs";
+import {
   hostedMatrixReconnectLaneIds,
 } from "./dev_test_game_host_stale_control_scenarios.mjs";
 import {
@@ -562,22 +565,6 @@ function promotedGroupIdsFrom(promoted) {
 
 function optionalEnv(value) {
   return typeof value === "string" && value.trim() !== "" ? value.trim() : null;
-}
-
-function isExternallyHostedUrl(value) {
-  let parsed;
-  try {
-    parsed = new URL(value);
-  } catch {
-    return false;
-  }
-  const hostname = parsed.hostname.toLowerCase();
-  return (
-    hostname !== "localhost" &&
-    hostname !== "127.0.0.1" &&
-    hostname !== "::1" &&
-    !hostname.endsWith(".localhost")
-  );
 }
 
 function hostedMatrixCell(cell, laneById) {

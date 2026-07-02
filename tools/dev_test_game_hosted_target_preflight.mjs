@@ -16,6 +16,9 @@ export {
 import {
   hostedTargetPreflightCheckIds,
 } from "./dev_test_game_hosted_target_preflight_cases.mjs";
+import {
+  isExternallyHostedUrl,
+} from "./dev_test_game_hosted_target_url_policy.mjs";
 import { repoRoot } from "./dev_test_game_spine_runner.mjs";
 
 export const DEV_TEST_GAME_HOSTED_TARGET_PREFLIGHT_VERSION = 1;
@@ -73,7 +76,7 @@ export async function buildDevTestGameHostedTargetPreflight({
           ? "passed"
           : "blocked",
       requiredEvidence:
-        "Both hosted target URLs must be externally reachable http(s) URLs, not localhost or loopback.",
+        "Both hosted target URLs must be externally reachable http(s) URLs, not localhost, loopback, private-network, link-local, or reserved IP targets.",
     },
     {
       id: "raw-evidence-path-configured",
@@ -198,20 +201,4 @@ async function readRawEvidence({ rawEvidencePath, frontendBaseUrl, apiBaseUrl, g
 
 function optionalEnv(value) {
   return typeof value === "string" && value.trim() !== "" ? value.trim() : null;
-}
-
-function isExternallyHostedUrl(value) {
-  try {
-    const url = new URL(value);
-    const hostname = url.hostname.toLowerCase();
-    return (
-      ["http:", "https:"].includes(url.protocol) &&
-      hostname !== "localhost" &&
-      hostname !== "127.0.0.1" &&
-      hostname !== "::1" &&
-      !hostname.endsWith(".localhost")
-    );
-  } catch {
-    return false;
-  }
 }

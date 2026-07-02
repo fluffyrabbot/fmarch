@@ -31,7 +31,7 @@ const hostedEvidenceHandoffBlockedChecks = Object.freeze([
     id: "hosted-targets-external",
     status: "blocked",
     requiredEvidence:
-      "Both hosted target URLs must be externally reachable http(s) URLs, not localhost or loopback.",
+      "Both hosted target URLs must be externally reachable http(s) URLs, not localhost, loopback, private-network, link-local, or reserved IP targets.",
   },
   {
     id: "raw-evidence-path-configured",

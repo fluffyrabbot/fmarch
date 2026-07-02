@@ -1671,7 +1671,7 @@ test("dev test-game hosted evidence lane records blocked preflight state", async
       ["hosted-api-url-configured", "Set FMARCH_HOSTED_MATRIX_API_URL."],
       [
         "hosted-targets-external",
-        "Both hosted target URLs must be externally reachable http(s) URLs, not localhost or loopback.",
+        "Both hosted target URLs must be externally reachable http(s) URLs, not localhost, loopback, private-network, link-local, or reserved IP targets.",
       ],
       [
         "raw-evidence-path-configured",

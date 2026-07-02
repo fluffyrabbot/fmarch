@@ -2503,7 +2503,7 @@ test("admin hosted target preflight detail data carries blocked setup rows", asy
       [
         "hosted-targets-external",
         "blocked",
-        "Both hosted target URLs must be externally reachable http(s) URLs, not localhost or loopback.",
+        "Both hosted target URLs must be externally reachable http(s) URLs, not localhost, loopback, private-network, link-local, or reserved IP targets.",
       ],
       [
         "raw-evidence-path-configured",
@@ -2627,7 +2627,7 @@ test("admin hosted evidence lane detail data carries blocked setup rows", async 
       [
         "hosted-targets-external",
         "blocked",
-        "Both hosted target URLs must be externally reachable http(s) URLs, not localhost or loopback.",
+        "Both hosted target URLs must be externally reachable http(s) URLs, not localhost, loopback, private-network, link-local, or reserved IP targets.",
       ],
       [
         "raw-evidence-path-configured",
@@ -3609,7 +3609,7 @@ function localHostedTargetPreflightFixture() {
         id: "hosted-targets-external",
         status: "blocked",
         requiredEvidence:
-          "Both hosted target URLs must be externally reachable http(s) URLs, not localhost or loopback.",
+          "Both hosted target URLs must be externally reachable http(s) URLs, not localhost, loopback, private-network, link-local, or reserved IP targets.",
       },
       {
         id: "raw-evidence-path-configured",
@@ -3732,7 +3732,7 @@ function localHostedEvidenceLaneFixture() {
         id: "hosted-targets-external",
         status: "blocked",
         requiredEvidence:
-          "Both hosted target URLs must be externally reachable http(s) URLs, not localhost or loopback.",
+          "Both hosted target URLs must be externally reachable http(s) URLs, not localhost, loopback, private-network, link-local, or reserved IP targets.",
       },
       {
         id: "raw-evidence-path-configured",
