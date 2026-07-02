@@ -77,6 +77,7 @@ import {
   adminProofDestinationRequirementRoleRows,
 } from "../../../../tools/dev_test_game_proof_graph_handoff_cases.mjs";
 import {
+  featureSpineFixture,
   invalidActionRecoveryHostedConcurrentRaceMatrixUnprovenFixture,
 } from "../../../../tools/dev_test_game_next_action_spine_fixtures.mjs";
 
@@ -1671,19 +1672,7 @@ test("admin route data exposes local next action as a native audit row", async (
     selectedRealHostedEvidenceProofTarget: "",
     selectedProductionFeatureSpineTarget: productionFeatureSpineTargetFixture(),
     selectedSpineDrilldown: featureSpineDrilldownFixture(),
-    selectedSpineTarget: {
-      sourceCheckId: "local-core-loop-proof",
-      featureSlotId: "player-action-submission",
-      detailRoleUrl: "/admin/audit/local-core-loop?game=<seeded-game>",
-      cycleId: "d02-n02",
-      roleUrlId: "d02-n02-actionPlayer",
-      roleUrl: ACTIONABLE_SPINE_ROLE_URL,
-      rowKind: "checkpoint",
-      checkpointId: "d02-n02-n02-action-open",
-      recoveryHookId: "",
-      adminCheckId: "action-loop",
-      browserProofCommand: LIVE_BROWSER_PROOF_COMMAND,
-    },
+    selectedSpineTarget: featureSpineTargetFixture(),
     selectedRoleUrl:
       "/admin/audit/local-hosted-concurrent-race-matrix?game=<seeded-game>",
     selectedRoleHref:
@@ -1737,19 +1726,7 @@ test("admin route data exposes local next action as a native audit row", async (
           proofGraphNodeId: "admin-proof:hosted-concurrent-race-matrix",
           productionFeatureSpineTarget: productionFeatureSpineTargetFixture(),
           spineDrilldown: featureSpineDrilldownFixture(),
-          spineTarget: {
-            sourceCheckId: "local-core-loop-proof",
-            featureSlotId: "player-action-submission",
-            detailRoleUrl: "/admin/audit/local-core-loop?game=<seeded-game>",
-            cycleId: "d02-n02",
-            roleUrlId: "d02-n02-actionPlayer",
-            roleUrl: ACTIONABLE_SPINE_ROLE_URL,
-            rowKind: "checkpoint",
-            checkpointId: "d02-n02-n02-action-open",
-            recoveryHookId: "",
-            adminCheckId: "action-loop",
-            browserProofCommand: LIVE_BROWSER_PROOF_COMMAND,
-          },
+          spineTarget: featureSpineTargetFixture(),
         },
       ],
     },
@@ -4257,17 +4234,7 @@ function nextActionFixture({
           proofGraphNodeId: "admin-proof:hosted-concurrent-race-matrix",
           productionFeatureSpineTarget: productionFeatureSpineTargetFixture(),
           spineDrilldown: featureSpineDrilldownFixture(),
-          spineTarget: {
-            sourceCheckId: "local-core-loop-proof",
-            featureSlotId: "player-action-submission",
-            detailRoleUrl: "/admin/audit/local-core-loop?game=<seeded-game>",
-            cycleId: "d02-n02",
-            roleUrlId: "d02-n02-actionPlayer",
-            roleUrl: ACTIONABLE_SPINE_ROLE_URL,
-            checkpointId: "d02-n02-n02-action-open",
-            adminCheckId: "action-loop",
-            browserProofCommand: LIVE_BROWSER_PROOF_COMMAND,
-          },
+          spineTarget: featureSpineTargetFixture(),
         }
       : undefined,
   selectionTrace = selectionTraceFixture({ artifact, command }),
@@ -4870,19 +4837,7 @@ function hostedEvidenceLaneUnprovenFixture() {
     proofGraphNodeId: "admin-proof:hosted-evidence-lane",
     productionFeatureSpineTarget: productionFeatureSpineTargetFixture(),
     spineDrilldown: featureSpineDrilldownFixture(),
-    spineTarget: {
-      sourceCheckId: "local-core-loop-proof",
-      featureSlotId: "player-action-submission",
-      detailRoleUrl: "/admin/audit/local-core-loop?game=<seeded-game>",
-      cycleId: "d02-n02",
-      roleUrlId: "d02-n02-actionPlayer",
-      roleUrl: ACTIONABLE_SPINE_ROLE_URL,
-      rowKind: "checkpoint",
-      checkpointId: "d02-n02-n02-action-open",
-      recoveryHookId: "",
-      adminCheckId: "action-loop",
-      browserProofCommand: LIVE_BROWSER_PROOF_COMMAND,
-    },
+    spineTarget: featureSpineTargetFixture(),
     realHostedEvidenceInputs: realHostedEvidenceInputsFixture(),
     hostedHandoffChecklist: hostedHandoffChecklistFixture(),
   };
@@ -4894,35 +4849,25 @@ function hostedHandoffChecklistFixture() {
   });
 }
 
+function playerActionSubmissionSpineFixture() {
+  return featureSpineFixture({
+    slotId: "player-action-submission",
+    roleUrl: ACTIONABLE_SPINE_ROLE_URL,
+    browserProofCommand: LIVE_BROWSER_PROOF_COMMAND,
+    includeEmptyRecoveryHook: true,
+  });
+}
+
 function productionFeatureSpineTargetFixture() {
-  return {
-    featureSlotId: "player-action-submission",
-    sourceCheckId: "local-core-loop-proof",
-    cycleId: "d02-n02",
-    roleUrlId: "d02-n02-actionPlayer",
-    rowKind: "checkpoint",
-    checkpointId: "d02-n02-n02-action-open",
-    recoveryHookId: "",
-    adminCheckId: "action-loop",
-  };
+  return playerActionSubmissionSpineFixture().productionFeatureSpineTarget;
+}
+
+function featureSpineTargetFixture() {
+  return playerActionSubmissionSpineFixture().spineTarget;
 }
 
 function featureSpineDrilldownFixture() {
-  const target = productionFeatureSpineTargetFixture();
-  return {
-    featureSlotId: target.featureSlotId,
-    sourceCheckId: target.sourceCheckId,
-    detailRoleUrl: "/admin/audit/local-core-loop?game=<seeded-game>",
-    cycleRowId: target.cycleId,
-    roleUrlRowId: target.roleUrlId,
-    rowKind: target.rowKind,
-    checkpointRowId: target.checkpointId,
-    recoveryHookRowId: target.recoveryHookId ?? "",
-    adminCheckId: target.adminCheckId,
-    roleUrl: ACTIONABLE_SPINE_ROLE_URL,
-    rerunCommand: "npm run test:dev-test-game-core-loop-admin-proof",
-    browserProofCommand: LIVE_BROWSER_PROOF_COMMAND,
-  };
+  return playerActionSubmissionSpineFixture().spineDrilldown;
 }
 
 function localReadinessDependencyTraceFixture({ localCheck, command } = {}) {

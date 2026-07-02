@@ -14,17 +14,27 @@ export const invalidActionRecoveryHostedConcurrentRaceMatrixRoleUrl =
 export const invalidActionRecoveryHostedConcurrentRaceMatrixProofGraphNodeId =
   "admin-proof:hosted-concurrent-race-matrix";
 
-export function invalidActionRecoveryFeatureSpineFixture({
+export function featureSpineFixture({
+  slotId = "player-action-submission",
   detailRoleUrl = "/admin/audit/local-core-loop?game=<seeded-game>",
   roleUrl,
   browserProofCommand,
   rerunCommand = "npm run test:dev-test-game-core-loop-admin-proof",
   includeTargetRerunCommand = false,
+  includeEmptyRecoveryHook = false,
 }) {
-  const declaration = {
-    ...releaseReadinessProductionFeatureSpineTargetsBySlotId[
-      "invalid-action-recovery"
-    ],
+  const declaredTarget =
+    releaseReadinessProductionFeatureSpineTargetsBySlotId[slotId];
+  if (declaredTarget === undefined) {
+    throw new Error(`Unknown production feature spine target slot: ${slotId}`);
+  }
+  const declaration = { ...declaredTarget };
+  const recoveryHookId =
+    declaration.recoveryHookId ??
+    (includeEmptyRecoveryHook ? "" : undefined);
+  const productionFeatureSpineTarget = {
+    ...declaration,
+    ...(recoveryHookId === undefined ? {} : { recoveryHookId }),
   };
   const spineTarget = {
     sourceCheckId: declaration.sourceCheckId,
@@ -35,13 +45,13 @@ export function invalidActionRecoveryFeatureSpineFixture({
     roleUrl,
     rowKind: declaration.rowKind,
     checkpointId: declaration.checkpointId,
-    recoveryHookId: declaration.recoveryHookId,
+    ...(recoveryHookId === undefined ? {} : { recoveryHookId }),
     adminCheckId: declaration.adminCheckId,
     browserProofCommand,
     ...(includeTargetRerunCommand ? { rerunCommand } : {}),
   };
   return {
-    productionFeatureSpineTarget: declaration,
+    productionFeatureSpineTarget,
     spineTarget,
     spineDrilldown: {
       featureSlotId: declaration.featureSlotId,
@@ -51,13 +61,22 @@ export function invalidActionRecoveryFeatureSpineFixture({
       roleUrlRowId: declaration.roleUrlId,
       rowKind: declaration.rowKind,
       checkpointRowId: declaration.checkpointId,
-      recoveryHookRowId: declaration.recoveryHookId,
+      ...(recoveryHookId === undefined
+        ? {}
+        : { recoveryHookRowId: recoveryHookId }),
       adminCheckId: declaration.adminCheckId,
       roleUrl,
       rerunCommand,
       browserProofCommand,
     },
   };
+}
+
+export function invalidActionRecoveryFeatureSpineFixture(options) {
+  return featureSpineFixture({
+    slotId: "invalid-action-recovery",
+    ...options,
+  });
 }
 
 export function invalidActionRecoveryHostedConcurrentRaceMatrixUnprovenFixture({
