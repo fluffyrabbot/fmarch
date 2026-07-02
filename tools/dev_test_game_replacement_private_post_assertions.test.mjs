@@ -3,12 +3,151 @@ import assert from "node:assert/strict";
 import {
   replacementCompletedPrivatePostRejectMatches,
   replacementCompletedPrivatePostReloadMatches,
+  replacementResolvedPrivatePostAckMatches,
+  replacementResolvedPrivatePostReconnectMatches,
 } from "./dev_test_game_replacement_private_post_assertions.mjs";
 import {
+  replacementStalePrivatePostAfterResolveScenario,
   replacementStalePrivatePostAfterCompleteScenario,
 } from "./dev_test_game_replacement_private_scenario_cases.mjs";
 
 const scenario = replacementStalePrivatePostAfterCompleteScenario();
+const resolveScenario = replacementStalePrivatePostAfterResolveScenario();
+
+const replacementResolvedPrivatePostProofFixture = () => ({
+  status: "passed",
+  game: "game-a",
+  channel: resolveScenario.channelId,
+  postBody: resolveScenario.fixturePostBody,
+  hostEntry: { capabilityKinds: ["HostOf"] },
+  staleOutgoingEntry: { capabilityKinds: ["SlotOccupant"] },
+  replacementEntry: { capabilityKinds: ["SlotOccupant"] },
+  replacement: {
+    state: "ack",
+    serverEnvelope: { body: { kind: "Ack" } },
+    requestEnvelope: {
+      body: {
+        body: {
+          command: {
+            ProcessReplacement: {
+              slot: resolveScenario.actorSlot,
+              incoming_user: resolveScenario.replacementPrincipalUserId,
+            },
+          },
+        },
+      },
+    },
+  },
+  hostReplacementAfterProcess: {
+    occupantLabel: resolveScenario.replacementOccupantLabel,
+  },
+  commandStateBeforeClose: {
+    actorSlot: resolveScenario.actorSlot,
+    actorStatus: "alive",
+    phase: { phaseId: "D01", locked: false },
+  },
+  channelContextBeforeClose: {
+    channelId: resolveScenario.channelId,
+    actorSlot: resolveScenario.actorSlot,
+    capabilityLabel: `ChannelMember(${resolveScenario.channelId})`,
+  },
+  submitPostBeforeClose: { disabled: false },
+  closedStatus: { state: "closed" },
+  resolveDay: { commandStatus: { state: "ack" } },
+  hostPhaseAfterResolve: { id: "D01", locked: true },
+  apiCommandStateAfterResolve: {
+    phase: { phase_id: "D01", locked: true },
+  },
+  stalePost: {
+    state: "ack",
+    serverEnvelope: { body: { kind: "Ack" } },
+    streamSeqs: [resolveScenario.postAckSeq],
+    requestEnvelope: {
+      body: {
+        body: {
+          principal_user_id: resolveScenario.replacementPrincipalUserId,
+          command: {
+            SubmitPost: {
+              channel_id: resolveScenario.channelId,
+              actor_slot: resolveScenario.actorSlot,
+              body: resolveScenario.fixturePostBody,
+            },
+          },
+        },
+      },
+    },
+  },
+  dispatchPlan: { projectionRefreshKeys: ["thread", "commandState"] },
+  currentReceipt: { actionId: resolveScenario.commandAction, state: "ack" },
+  commandStateAfterAck: {
+    actorSlot: resolveScenario.actorSlot,
+    actorStatus: "alive",
+    phase: { phaseId: "D01", locked: true },
+    voteTargets: [],
+  },
+  channelContextAfterAck: {
+    channelId: resolveScenario.channelId,
+    actorSlot: resolveScenario.actorSlot,
+  },
+  projectedPost: { authorSlot: resolveScenario.actorSlot },
+  apiThreadPostBodies: [resolveScenario.fixturePostBody],
+  rowanPrivateIsolationAfterAck: {
+    targetKillVisible: false,
+    actionResultVisible: false,
+  },
+  staleOutgoingRouteAfterAck: { status: 403 },
+  staleOutgoingThreadAfterAck: { status: 403 },
+  privateReconnectAfterAck: {
+    status: "passed",
+    reconnectCommandStateBeforeDrop: {
+      actorSlot: resolveScenario.actorSlot,
+      actorStatus: "alive",
+      phase: { phaseId: "D01", locked: true },
+      voteTargets: [],
+    },
+    reconnectChannelContextBeforeDrop: {
+      channelId: resolveScenario.channelId,
+      actorSlot: resolveScenario.actorSlot,
+    },
+    reconnectButtonsBeforeDrop: [{ action: "submit_post", disabled: false }],
+    reconnectingStatus: { state: "reconnecting" },
+    reconnectCommand: {
+      principalUserId: resolveScenario.replacementPrincipalUserId,
+      command: {
+        SubmitPost: {
+          channel_id: resolveScenario.channelId,
+          actor_slot: resolveScenario.actorSlot,
+          body: resolveScenario.reconnectPostBody,
+        },
+      },
+    },
+    reconnectPostBody: resolveScenario.reconnectPostBody,
+    reconnectRecoveryEvent: { state: "recovered", attempt: 1 },
+    recoveredSnapshotContainsPost: true,
+    recoveredCommandState: {
+      actorSlot: resolveScenario.actorSlot,
+      actorStatus: "alive",
+      phase: { phaseId: "D01", locked: true },
+      voteTargets: [],
+    },
+    reconnectChannelContextAfterRecovery: {
+      channelId: resolveScenario.channelId,
+      actorSlot: resolveScenario.actorSlot,
+    },
+    reconnectButtonsAfterRecovery: [
+      { action: "submit_post", disabled: false },
+    ],
+    apiThreadPostBodiesAfterReconnect: [
+      resolveScenario.fixturePostBody,
+      resolveScenario.reconnectPostBody,
+    ],
+    apiCommandStateAfterReconnect: {
+      phase: { phase_id: "D01", locked: true },
+      vote_targets: [],
+    },
+    staleOutgoingThreadAfterReconnect: { status: 403 },
+  },
+});
 
 const replacementCompletedPrivatePostProofFixture = () => ({
   status: "passed",
@@ -179,5 +318,55 @@ test("replacement completed private-post reload assertion covers disabled comple
       scenario,
     ),
     true,
+  );
+});
+
+test("replacement resolved private-post ACK assertion covers locked channel recovery", () => {
+  assert.equal(
+    replacementResolvedPrivatePostAckMatches(
+      replacementResolvedPrivatePostProofFixture(),
+      resolveScenario,
+    ),
+    true,
+  );
+});
+
+test("replacement resolved private-post ACK assertion requires thread refresh", () => {
+  const proof = replacementResolvedPrivatePostProofFixture();
+  proof.dispatchPlan.projectionRefreshKeys = ["commandState"];
+
+  assert.equal(
+    replacementResolvedPrivatePostAckMatches(proof, resolveScenario),
+    false,
+  );
+});
+
+test("replacement resolved private-post reconnect assertion covers recovered post surface", () => {
+  const proof = replacementResolvedPrivatePostProofFixture();
+
+  assert.equal(
+    replacementResolvedPrivatePostReconnectMatches(
+      proof,
+      proof.privateReconnectAfterAck,
+      resolveScenario,
+    ),
+    true,
+  );
+});
+
+test("replacement resolved private-post reconnect assertion rejects vote controls", () => {
+  const proof = replacementResolvedPrivatePostProofFixture();
+  proof.privateReconnectAfterAck.reconnectButtonsAfterRecovery.push({
+    action: "submit_vote:no_lynch",
+    disabled: false,
+  });
+
+  assert.equal(
+    replacementResolvedPrivatePostReconnectMatches(
+      proof,
+      proof.privateReconnectAfterAck,
+      resolveScenario,
+    ),
+    false,
   );
 });
