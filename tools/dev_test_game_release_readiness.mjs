@@ -77,9 +77,6 @@ import {
   assertCompletedGameEndgameSurfaceProof,
 } from "./dev_test_game_core_loop_completed_game_scenario_assertions.mjs";
 import {
-  completedGameEndgameScenarioCaseFamilies,
-} from "./dev_test_game_core_loop_completed_recovery_scenario_cases.mjs";
-import {
   assertPlayerActionSubmissionClickProofCase,
   assertPlayerInvalidActionRecoveryProofCase,
   assertPlayerStaleActionAfterTransitionProofCase,
@@ -128,6 +125,10 @@ import {
   assertDayFiveNoLynchResolutionSurfaceProof,
   coreLoopDayFiveProgressionFamilyId,
 } from "./dev_test_game_core_loop_day_five_progression_scenarios.mjs";
+import {
+  coreLoopCompletedEndgameProgressionFamilyId,
+  coreLoopCompletedEndgameProgressionScenarioFamilies,
+} from "./dev_test_game_core_loop_completed_endgame_progression_scenarios.mjs";
 export const DEV_TEST_GAME_RELEASE_READINESS_VERSION = 1;
 const devTestGameSeededBrowserProofCommand =
   "DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch npm run test:dev-test-game-live";
@@ -2090,6 +2091,17 @@ export function validateDevTestGameCoreLoopAdminProof(proof, options = {}) {
   ) {
     throw new Error("core-loop admin proof missing Day 5 progression family");
   }
+  if (
+    proof.generatedFrom?.completedEndgameProgressionFamily?.id !==
+      coreLoopCompletedEndgameProgressionFamilyId ||
+    !Array.isArray(
+      proof.generatedFrom?.completedEndgameProgressionFamily?.laneIds,
+    )
+  ) {
+    throw new Error(
+      "core-loop admin proof missing completed endgame progression family",
+    );
+  }
   assertVisibleAdminRows({
     label: "core-loop admin proof missing visible spine cycle",
     visibleRows: proof.adminRoleSurface?.visibleSpineCycles,
@@ -2929,7 +2941,7 @@ function assertCoreLoopDayFiveNoLynchResolutionSurface(
   });
 }
 function assertCoreLoopCompletedGameEndgameSurface(completedGameEndgameSurface) {
-  const scenarioFamilies = completedGameEndgameScenarioCaseFamilies();
+  const scenarioFamilies = coreLoopCompletedEndgameProgressionScenarioFamilies();
   assertCompletedGameEndgameSurfaceProof({
     completedGameEndgameSurface,
     scenarioFamilies,

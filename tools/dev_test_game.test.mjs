@@ -23,6 +23,9 @@ import {
   completedGameRaceCoverageCellIds,
 } from "./dev_test_game_core_loop_completed_game_scenario_assertions.mjs";
 import {
+  coreLoopCompletedEndgameProgressionScenarioFamily,
+} from "./dev_test_game_core_loop_completed_endgame_progression_scenarios.mjs";
+import {
   completedDeadPlayerStaleVoteRecoveryProofFixture,
   completedGameDayVoteOutcomesFixture,
   completedHostReloadProofFixture,
@@ -10094,6 +10097,8 @@ function coreLoopAdminProofFixture() {
         id: "core-loop-day-five-progression",
         laneIds: ["day-vote-no-lynch", "action-loop"],
       },
+      completedEndgameProgressionFamily:
+        coreLoopCompletedEndgameProgressionScenarioFamily(),
       coreLoopSpineRows: {
         cycles: ["d01-n01-d02", "d02-n02"],
         roleUrls: [

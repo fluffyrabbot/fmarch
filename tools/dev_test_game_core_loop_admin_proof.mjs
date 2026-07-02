@@ -8,7 +8,6 @@ import {
 } from "./dev_test_game_core_loop_completed_game_scenario_assertions.mjs";
 import {
   completedGameEndgameProofScenarioCases,
-  completedGameEndgameScenarioCaseFamilies,
   completedGameEndgameTransition,
 } from "./dev_test_game_core_loop_completed_recovery_scenario_cases.mjs";
 import {
@@ -67,6 +66,11 @@ import {
   coreLoopDayFiveProgressionFamilyId,
   coreLoopDayFiveProgressionScenarioFamily,
 } from "./dev_test_game_core_loop_day_five_progression_scenarios.mjs";
+import {
+  coreLoopCompletedEndgameProgressionFamilyId,
+  coreLoopCompletedEndgameProgressionScenarioFamily,
+  coreLoopCompletedEndgameProgressionScenarioFamilies,
+} from "./dev_test_game_core_loop_completed_endgame_progression_scenarios.mjs";
 import {
   completedPrivateChannelReloadScenario,
   completedPrivateChannelTransition,
@@ -377,6 +381,8 @@ await runAdminAuditProof({
       lateActionProgressionFamily:
         coreLoopLateActionProgressionScenarioFamily(),
       dayFiveProgressionFamily: coreLoopDayFiveProgressionScenarioFamily(),
+      completedEndgameProgressionFamily:
+        coreLoopCompletedEndgameProgressionScenarioFamily(),
       highlightedLaneEvidence: coreLoopHighlightedLaneEvidence(proofRun),
     },
     adminRoleSurface: surfaces.adminRoleSurface,
@@ -9642,6 +9648,17 @@ export function assertCoreLoopAdminProof(evidence) {
   ) {
     throw new Error("core-loop admin proof missing Day 5 progression family");
   }
+  if (
+    evidence.generatedFrom?.completedEndgameProgressionFamily?.id !==
+      coreLoopCompletedEndgameProgressionFamilyId ||
+    !Array.isArray(
+      evidence.generatedFrom?.completedEndgameProgressionFamily?.laneIds,
+    )
+  ) {
+    throw new Error(
+      "core-loop admin proof missing completed endgame progression family",
+    );
+  }
   assertVisibleRows(
     "core-loop admin proof missing visible spine cycle",
     evidence.adminRoleSurface?.visibleSpineCycles,
@@ -10474,7 +10491,7 @@ function assertDayFiveNoLynchResolutionSurface(dayFiveNoLynchResolutionSurface) 
   });
 }
 function assertCompletedGameEndgameSurface(completedGameEndgameSurface) {
-  const scenarioFamilies = completedGameEndgameScenarioCaseFamilies();
+  const scenarioFamilies = coreLoopCompletedEndgameProgressionScenarioFamilies();
   assertCompletedGameEndgameSurfaceProof({
     completedGameEndgameSurface,
     scenarioFamilies,
