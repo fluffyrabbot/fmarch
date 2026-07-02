@@ -809,6 +809,8 @@ export function normalizeLocalHostedEvidenceLaneAudit(
   const blockedCheckIdSet = new Set(blockedCheckIds);
   const demoProofSummary =
     normalizeLocalHostedEvidenceLaneDemoProofSummary(hostedEvidenceLaneDemoProof);
+  const demoProofChecks =
+    normalizeLocalHostedEvidenceLaneDemoProofChecks(hostedEvidenceLaneDemoProof);
   const realHostedEvidenceInputs = normalizeRealHostedEvidenceInputs(
     hostedEvidenceLane.hostedEvidence?.realHostedEvidenceInputs,
   );
@@ -832,12 +834,15 @@ export function normalizeLocalHostedEvidenceLaneAudit(
       audit: "local-hosted-evidence-lane",
     }),
     checks: Object.freeze(
-      checks.map((check) =>
-        Object.freeze({
-          id: String(check.id),
-          status: String(check.status),
-        }),
-      ),
+      [
+        ...checks.map((check) =>
+          Object.freeze({
+            id: String(check.id),
+            status: String(check.status),
+          }),
+        ),
+        ...demoProofChecks,
+      ],
     ),
     unproven: Object.freeze(
       checks
@@ -954,19 +959,7 @@ function normalizeHostedEvidenceLaneHandoffChecklist({
 }
 
 function normalizeLocalHostedEvidenceLaneDemoProofSummary(proof) {
-  if (
-    proof === null ||
-    typeof proof !== "object" ||
-    proof.version !== 1 ||
-    proof.proof !== "dev-test-game-hosted-evidence-lane-demo-proof" ||
-    proof.status !== "passed" ||
-    proof.scope !== "local-dev-test-game-hosted-evidence-lane-demo-proof" ||
-    proof.releaseReady !== false ||
-    proof.productionReady !== false ||
-    proof.target?.syntheticExternalTarget !== true ||
-    proof.blockedLane?.status !== "blocked" ||
-    proof.passedLane?.status !== "passed"
-  ) {
+  if (!isLocalHostedEvidenceLaneDemoProof(proof)) {
     return null;
   }
   return Object.freeze({
@@ -979,6 +972,34 @@ function normalizeLocalHostedEvidenceLaneDemoProofSummary(proof) {
     demoExternalEvidencePath: String(proof.generatedFrom?.externalEvidence ?? ""),
     demoPassedRoleUrl: String(proof.handoff?.passedRoleUrl ?? ""),
   });
+}
+
+function normalizeLocalHostedEvidenceLaneDemoProofChecks(proof) {
+  if (!isLocalHostedEvidenceLaneDemoProof(proof) || !Array.isArray(proof.checks)) {
+    return [];
+  }
+  return proof.checks.map((check) =>
+    Object.freeze({
+      id: `demo-proof:${String(check.id ?? "")}`,
+      status: String(check.status ?? "unknown"),
+    }),
+  );
+}
+
+function isLocalHostedEvidenceLaneDemoProof(proof) {
+  return (
+    proof !== null &&
+    typeof proof === "object" &&
+    proof.version === 1 &&
+    proof.proof === "dev-test-game-hosted-evidence-lane-demo-proof" &&
+    proof.status === "passed" &&
+    proof.scope === "local-dev-test-game-hosted-evidence-lane-demo-proof" &&
+    proof.releaseReady === false &&
+    proof.productionReady === false &&
+    proof.target?.syntheticExternalTarget === true &&
+    proof.blockedLane?.status === "blocked" &&
+    proof.passedLane?.status === "passed"
+  );
 }
 
 export function normalizeLocalHostedOpsSignalsAudit(hostedOpsSignals, { game }) {

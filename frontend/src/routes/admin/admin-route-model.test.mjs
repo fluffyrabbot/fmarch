@@ -737,6 +737,12 @@ test("admin route data exposes hosted evidence lane as a native audit row", asyn
       "raw-evidence-path-configured",
       "raw-evidence-readable",
       "release-claim-boundary-carried",
+      "demo-proof:blocked-lane-recorded",
+      "demo-proof:synthetic-raw-evidence-written",
+      "demo-proof:passed-lane-recorded",
+      "demo-proof:external-evidence-written",
+      "demo-proof:synthetic-demo-boundary-carried",
+      "demo-proof:release-claim-boundary-carried",
     ],
   );
   assert.deepEqual(
@@ -1546,7 +1552,7 @@ test("admin route data exposes local next action as a native audit row", async (
       ["hosted-concurrent-race-matrix", "unproven"],
       [
         "selected-proof-graph-node",
-        "passed: npm run test:dev-test-game-hosted-concurrent-race-matrix-admin-proof",
+        "passed: npm run test:dev-test-game-hosted-concurrent-race-matrix -> target/dev-test-game/hosted-concurrent-race-matrix.json",
       ],
       [
         "selected-proof-graph-destination",
@@ -1592,8 +1598,7 @@ test("admin route data exposes local next action as a native audit row", async (
       label: "admin-proof:hosted-concurrent-race-matrix",
       href: "/admin/audit/local-proof-graph?game=midsummer",
       status: "passed",
-      command:
-        "npm run test:dev-test-game-hosted-concurrent-race-matrix-admin-proof",
+      command: LOCAL_RACE_COMMAND,
     },
     {
       id: "admin-proof:hosted-concurrent-race-matrix",
@@ -1664,8 +1669,7 @@ test("admin route data exposes local next action as a native audit row", async (
       "/admin/audit/local-hosted-concurrent-race-matrix?game=midsummer",
     selectedProofGraphNodeId: "admin-proof:hosted-concurrent-race-matrix",
     selectedProofGraphNodeStatus: "passed",
-    selectedProofGraphNodeProofCommand:
-      "npm run test:dev-test-game-hosted-concurrent-race-matrix-admin-proof",
+    selectedProofGraphNodeProofCommand: LOCAL_RACE_COMMAND,
     selectedProofGraphNodeRoleUrl:
       "/admin/audit/local-hosted-concurrent-race-matrix?game=<seeded-game>",
     selectedProofGraphNodeAuditId: "local-hosted-concurrent-race-matrix",
@@ -2532,7 +2536,18 @@ test("admin hosted evidence lane detail data carries blocked setup rows", async 
   assert.equal(data.status, "available");
   assert.equal(data.surfaceHeader.title, "Hosted evidence lane");
   assert.equal(data.audit.id, "local-hosted-evidence-lane");
-  assert.equal(data.audit.checks.length, 7);
+  assert.equal(data.audit.checks.length, 13);
+  assert.deepEqual(
+    data.audit.checks.slice(-6).map((check) => [check.id, check.status]),
+    [
+      ["demo-proof:blocked-lane-recorded", "blocked"],
+      ["demo-proof:synthetic-raw-evidence-written", "passed"],
+      ["demo-proof:passed-lane-recorded", "passed"],
+      ["demo-proof:external-evidence-written", "passed"],
+      ["demo-proof:synthetic-demo-boundary-carried", "passed"],
+      ["demo-proof:release-claim-boundary-carried", "passed"],
+    ],
+  );
   assert.deepEqual(
     data.audit.relatedLinks.map((link) => link.id),
     [
@@ -3782,6 +3797,32 @@ function localHostedEvidenceLaneDemoProofFixture() {
       passedRoleUrl:
         "/admin/audit/local-hosted-concurrent-race-matrix?game=<seeded-game>",
     },
+    checks: [
+      {
+        id: "blocked-lane-recorded",
+        status: "blocked",
+      },
+      {
+        id: "synthetic-raw-evidence-written",
+        status: "passed",
+      },
+      {
+        id: "passed-lane-recorded",
+        status: "passed",
+      },
+      {
+        id: "external-evidence-written",
+        status: "passed",
+      },
+      {
+        id: "synthetic-demo-boundary-carried",
+        status: "passed",
+      },
+      {
+        id: "release-claim-boundary-carried",
+        status: "passed",
+      },
+    ],
     blockedLane: {
       status: "blocked",
       preflightStatus: "blocked",

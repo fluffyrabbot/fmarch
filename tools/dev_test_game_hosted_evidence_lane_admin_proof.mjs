@@ -2,6 +2,10 @@ import path from "node:path";
 import { assertDevTestGameProofRun } from "./dev_test_game_proof_contract.mjs";
 import { assertDevTestGameHostedEvidenceLane } from "./dev_test_game_hosted_evidence_lane.mjs";
 import {
+  assertDevTestGameHostedEvidenceLaneDemoProof,
+  devTestGameHostedEvidenceLaneDemoProofPath,
+} from "./dev_test_game_hosted_evidence_lane_demo_proof.mjs";
+import {
   hostedEvidenceHandoffBlockedCheckRequiredEvidence,
   hostedEvidenceHandoffInputIds,
   hostedEvidenceHandoffInputValues,
@@ -25,8 +29,14 @@ const proofRunPath = path.resolve(
   process.env.FMARCH_DEV_TEST_GAME_PROOF_RUN ??
     "target/dev-test-game/proof-run.json",
 );
+const demoProofPath = path.resolve(
+  repoRoot,
+  process.env.FMARCH_DEV_TEST_GAME_HOSTED_EVIDENCE_LANE_DEMO_PROOF ??
+    devTestGameHostedEvidenceLaneDemoProofPath,
+);
 const laneRelativePath = path.relative(repoRoot, lanePath);
 const proofRunRelativePath = path.relative(repoRoot, proofRunPath);
+const demoProofRelativePath = path.relative(repoRoot, demoProofPath);
 const evidencePath = path.join(artifactDir, "hosted-evidence-lane-admin-proof.json");
 const requiredRelatedLinks = [
   "local-hosted-target-preflight",
@@ -40,9 +50,14 @@ await runAdminAuditProof({
   evidencePath,
   envOverrides: {
     FMARCH_DEV_TEST_GAME_HOSTED_EVIDENCE_LANE: laneRelativePath,
+    FMARCH_DEV_TEST_GAME_HOSTED_EVIDENCE_LANE_DEMO_PROOF:
+      demoProofRelativePath,
   },
   loadSource: async () => ({
     lane: assertDevTestGameHostedEvidenceLane(await readJson(lanePath)),
+    demoProof: assertDevTestGameHostedEvidenceLaneDemoProof(
+      await readJson(demoProofPath),
+    ),
     proofRun: assertDevTestGameProofRun(await readJson(proofRunPath)),
   }),
   prove: async ({ browser, frontendBaseUrl, source }) => {
@@ -66,9 +81,15 @@ await runAdminAuditProof({
       frontendBaseUrl,
       game: source.proofRun.session.game,
       auditId: "local-hosted-evidence-lane",
-      requiredChecks: source.lane.checks.map((check) => check.id),
+      requiredChecks: [
+        ...source.lane.checks.map((check) => check.id),
+        ...hostedEvidenceLaneDemoProofCheckIds(source.demoProof),
+      ],
       requiredCheckStatuses: Object.fromEntries(
-        source.lane.checks.map((check) => [check.id, check.status]),
+        [
+          ...source.lane.checks.map((check) => [check.id, check.status]),
+          ...hostedEvidenceLaneDemoProofCheckStatuses(source.demoProof),
+        ],
       ),
       requiredUnproven: source.lane.blockedCheckIds,
       requiredRealHostedEvidenceInputs: hostedEvidenceHandoffInputIds,
@@ -89,17 +110,28 @@ await runAdminAuditProof({
     productionReady: false,
     scope: "local-dev-test-game-hosted-evidence-lane-admin-surface",
     proofBoundary:
-      "Local SvelteKit admin role URL with fixture admin authority over the hosted evidence lane. Proves the lane is discoverable from the seeded admin overview and inspectable in a native admin audit detail route with blocked preflight rows visible; it does not prove hosted deployment, hosted telemetry, beta readiness, release readiness, or production readiness.",
+      "Local SvelteKit admin role URL with fixture admin authority over the hosted evidence lane. Proves the lane is discoverable from the seeded admin overview and inspectable in a native admin audit detail route with blocked preflight rows and local demo proof blocked-to-passed rows visible; it does not prove hosted deployment, hosted telemetry, beta readiness, release readiness, or production readiness.",
     generatedFrom: {
       hostedEvidenceLane: laneRelativePath,
+      hostedEvidenceLaneDemoProof: demoProofRelativePath,
       proofRun: proofRunRelativePath,
       game: source.proofRun.session.game,
       status: source.lane.status,
       preflightStatus: source.lane.preflightStatus,
       checkIds: source.lane.checks.map((check) => check.id),
+      demoProofCheckIds: hostedEvidenceLaneDemoProofCheckIds(source.demoProof),
       checkStatuses: Object.fromEntries(
-        source.lane.checks.map((check) => [check.id, check.status]),
+        [
+          ...source.lane.checks.map((check) => [check.id, check.status]),
+          ...hostedEvidenceLaneDemoProofCheckStatuses(source.demoProof),
+        ],
       ),
+      demoProofStatus: source.demoProof.status,
+      demoProofTarget: devTestGameHostedEvidenceLaneDemoProofPath,
+      demoProofBlockedLaneStatus: source.demoProof.blockedLane.status,
+      demoProofPassedLaneStatus: source.demoProof.passedLane.status,
+      demoProofSyntheticExternalTarget:
+        source.demoProof.target.syntheticExternalTarget,
       blockedCheckIds: source.lane.blockedCheckIds,
       realHostedEvidenceInputIds: hostedEvidenceHandoffInputIds,
       hostedHandoffInputIds: hostedEvidenceHandoffInputIds,
@@ -147,6 +179,21 @@ export function assertHostedEvidenceLaneAdminProof(evidence) {
     if (!evidence.adminRoleSurface?.visibleChecks?.includes(checkId)) {
       throw new Error(`hosted evidence lane admin proof missing visible check: ${checkId}`);
     }
+  }
+  for (const checkId of evidence.generatedFrom?.demoProofCheckIds ?? []) {
+    if (!evidence.adminRoleSurface?.visibleChecks?.includes(checkId)) {
+      throw new Error(
+        `hosted evidence lane admin proof missing visible demo proof check: ${checkId}`,
+      );
+    }
+  }
+  if (
+    evidence.generatedFrom?.demoProofStatus !== "passed" ||
+    evidence.generatedFrom?.demoProofBlockedLaneStatus !== "blocked" ||
+    evidence.generatedFrom?.demoProofPassedLaneStatus !== "passed" ||
+    evidence.generatedFrom?.demoProofSyntheticExternalTarget !== true
+  ) {
+    throw new Error("hosted evidence lane admin proof demo boundary drifted");
   }
   for (const checkId of evidence.generatedFrom?.blockedCheckIds ?? []) {
     if (!evidence.adminRoleSurface?.visibleUnproven?.includes(checkId)) {
@@ -227,4 +274,15 @@ export function assertHostedEvidenceLaneAdminProof(evidence) {
     }
   }
   return evidence;
+}
+
+function hostedEvidenceLaneDemoProofCheckIds(proof) {
+  return (proof.checks ?? []).map((check) => `demo-proof:${String(check.id)}`);
+}
+
+function hostedEvidenceLaneDemoProofCheckStatuses(proof) {
+  return (proof.checks ?? []).map((check) => [
+    `demo-proof:${String(check.id)}`,
+    String(check.status),
+  ]);
 }
