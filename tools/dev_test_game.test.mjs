@@ -10090,6 +10090,10 @@ function coreLoopAdminProofFixture() {
         id: "core-loop-late-action-progression",
         laneIds: ["action-loop"],
       },
+      dayFiveProgressionFamily: {
+        id: "core-loop-day-five-progression",
+        laneIds: ["day-vote-no-lynch", "action-loop"],
+      },
       coreLoopSpineRows: {
         cycles: ["d01-n01-d02", "d02-n02"],
         roleUrls: [

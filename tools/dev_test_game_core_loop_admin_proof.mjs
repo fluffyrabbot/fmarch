@@ -34,7 +34,6 @@ import {
   hostResolvePhaseTransitionCase,
 } from "./dev_test_game_core_loop_host_phase_scenarios.mjs";
 import {
-  assertDayFiveNoLynchResolutionSurfaceProof,
   assertHostPhaseTransitionSurfaceProof,
   assertStaleNightFourActionRecoveryProofCase,
 } from "./dev_test_game_core_loop_transition_recovery_scenario_assertions.mjs";
@@ -63,6 +62,11 @@ import {
   coreLoopLateActionProgressionFamilyId,
   coreLoopLateActionProgressionScenarioFamily,
 } from "./dev_test_game_core_loop_late_action_progression_scenarios.mjs";
+import {
+  assertDayFiveNoLynchResolutionSurfaceProof,
+  coreLoopDayFiveProgressionFamilyId,
+  coreLoopDayFiveProgressionScenarioFamily,
+} from "./dev_test_game_core_loop_day_five_progression_scenarios.mjs";
 import {
   completedPrivateChannelReloadScenario,
   completedPrivateChannelTransition,
@@ -372,6 +376,7 @@ await runAdminAuditProof({
       phaseProgressionFamily: coreLoopPhaseProgressionScenarioFamily(),
       lateActionProgressionFamily:
         coreLoopLateActionProgressionScenarioFamily(),
+      dayFiveProgressionFamily: coreLoopDayFiveProgressionScenarioFamily(),
       highlightedLaneEvidence: coreLoopHighlightedLaneEvidence(proofRun),
     },
     adminRoleSurface: surfaces.adminRoleSurface,
@@ -9629,6 +9634,13 @@ export function assertCoreLoopAdminProof(evidence) {
     !Array.isArray(evidence.generatedFrom?.lateActionProgressionFamily?.laneIds)
   ) {
     throw new Error("core-loop admin proof missing late action progression family");
+  }
+  if (
+    evidence.generatedFrom?.dayFiveProgressionFamily?.id !==
+      coreLoopDayFiveProgressionFamilyId ||
+    !Array.isArray(evidence.generatedFrom?.dayFiveProgressionFamily?.laneIds)
+  ) {
+    throw new Error("core-loop admin proof missing Day 5 progression family");
   }
   assertVisibleRows(
     "core-loop admin proof missing visible spine cycle",
