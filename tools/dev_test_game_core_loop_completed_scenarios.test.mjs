@@ -351,6 +351,14 @@ test("completed-game proof contract uses shared hardening lane metadata", async 
     "proof contract should build completed-game lanes through the shared helper",
   );
   assert(
+    source.includes("buildCompletedGameHardeningCoverage(lanes)"),
+    "proof contract should derive completed-game coverage from generated lanes",
+  );
+  assert(
+    source.includes("assertCompletedGameHardeningCoverageSummary"),
+    "proof contract should validate completed-game coverage summary",
+  );
+  assert(
     source.includes("completedGameHardeningLaneIds().map"),
     "proof contract should order completed-game proof lanes from shared metadata",
   );

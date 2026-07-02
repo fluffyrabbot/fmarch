@@ -20,6 +20,9 @@ import {
   coreLoopAuditLaneIds,
 } from "../../../../tools/dev_test_game_core_loop_scenarios.mjs";
 import {
+  completedGameHardeningLaneCases,
+} from "../../../../tools/dev_test_game_core_loop_completed_scenarios.mjs";
+import {
   staleConflictMessageSurfaceCases,
   staleConflictMessageLaneIds,
 } from "../../../../tools/dev_test_game_stale_conflict_scenarios.mjs";
@@ -2090,6 +2093,9 @@ test("admin route data exposes local core loop proof as a native audit row", asy
     game: "game-a",
     roleCount: 6,
     laneCount: 107,
+    completedGameCoverageStatus: "passed",
+    completedGameCoverageLaneCount: 9,
+    completedGameCoverageFamilyCount: 4,
     releaseReady: false,
     productionReady: false,
   });
@@ -3538,7 +3544,43 @@ function proofRunFixture() {
         staleActionConflictReject: "PhaseLocked",
       },
     },
+    completedGameHardeningCoverage: completedGameHardeningCoverageFixture(),
     lanes,
+  };
+}
+
+function completedGameHardeningCoverageFixture() {
+  const cases = completedGameHardeningLaneCases();
+  const families = [...new Set(cases.map((scenario) => scenario.family))].map(
+    (familyId) => {
+      const familyCases = cases.filter((scenario) => scenario.family === familyId);
+      return {
+        id: familyId,
+        status: "passed",
+        laneIds: familyCases.map((scenario) => scenario.id),
+        passedLaneIds: familyCases.map((scenario) => scenario.id),
+        requiredLaneIds: familyCases
+          .filter((scenario) => scenario.seedGroup === "required")
+          .map((scenario) => scenario.id),
+        demoOnlyLaneIds: familyCases
+          .filter((scenario) => scenario.seedGroup === "demo-only")
+          .map((scenario) => scenario.id),
+      };
+    },
+  );
+  return {
+    status: "passed",
+    laneCount: cases.length,
+    passedLaneCount: cases.length,
+    familyCount: families.length,
+    sourceLaneIds: cases.map((scenario) => scenario.id),
+    laneStatuses: cases.map((scenario) => ({
+      id: scenario.id,
+      family: scenario.family,
+      seedGroup: scenario.seedGroup,
+      status: "passed",
+    })),
+    families,
   };
 }
 

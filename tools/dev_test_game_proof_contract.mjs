@@ -3,6 +3,7 @@ import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import {
   completedGameHardeningLaneCase,
+  completedGameHardeningLaneCases,
   completedGameHardeningLaneIds,
 } from "./dev_test_game_core_loop_completed_game_scenario_assertions.mjs";
 import {
@@ -5860,6 +5861,8 @@ export function buildDevTestGameProofRun(session, options = {}) {
   ];
   const status = lanes.every((item) => item.status === "passed") ? "passed" : "failed";
   const coreLoopSpine = buildCoreLoopSpineSummary({ session, verification });
+  const completedGameHardeningCoverage =
+    buildCompletedGameHardeningCoverage(lanes);
   return {
     version: DEV_TEST_GAME_PROOF_VERSION,
     proof: "dev-test-game-proof-run",
@@ -5884,6 +5887,7 @@ export function buildDevTestGameProofRun(session, options = {}) {
     },
     identityBootstrap: session?.identityBootstrap ?? null,
     coreLoopSpine,
+    completedGameHardeningCoverage,
     lanes,
     nonClaims: [
       "production account identity",
@@ -5927,12 +5931,119 @@ export function assertDevTestGameProofRun(proof) {
     );
   }
   assertCoreLoopSpineSummary(proof.coreLoopSpine);
+  assertCompletedGameHardeningCoverageSummary({
+    summary: proof.completedGameHardeningCoverage,
+    lanes: proof.lanes,
+  });
   for (const laneId of requiredLaneIds) {
     if (!proof.lanes?.some((laneItem) => laneItem.id === laneId && laneItem.status === "passed")) {
       throw new Error(`dev-test-game proof missing passed lane: ${laneId}`);
     }
   }
   return proof;
+}
+
+function buildCompletedGameHardeningCoverage(lanes) {
+  const laneById = new Map(lanes.map((laneItem) => [laneItem.id, laneItem]));
+  const cases = completedGameHardeningLaneCases();
+  const laneStatuses = cases.map((scenario) => {
+    const laneItem = laneById.get(scenario.id);
+    return {
+      id: scenario.id,
+      family: scenario.family,
+      seedGroup: scenario.seedGroup,
+      status: String(laneItem?.status ?? "missing"),
+    };
+  });
+  const familyIds = [...new Set(cases.map((scenario) => scenario.family))];
+  const families = familyIds.map((familyId) => {
+    const familyCases = cases.filter((scenario) => scenario.family === familyId);
+    const familyLaneIds = familyCases.map((scenario) => scenario.id);
+    const passedLaneIds = familyLaneIds.filter(
+      (id) => laneById.get(id)?.status === "passed",
+    );
+    return {
+      id: familyId,
+      status:
+        passedLaneIds.length === familyLaneIds.length ? "passed" : "failed",
+      laneIds: familyLaneIds,
+      passedLaneIds,
+      requiredLaneIds: familyCases
+        .filter((scenario) => scenario.seedGroup === "required")
+        .map((scenario) => scenario.id),
+      demoOnlyLaneIds: familyCases
+        .filter((scenario) => scenario.seedGroup === "demo-only")
+        .map((scenario) => scenario.id),
+    };
+  });
+  const passedLaneCount = laneStatuses.filter(
+    (laneStatus) => laneStatus.status === "passed",
+  ).length;
+  return {
+    status: passedLaneCount === cases.length ? "passed" : "failed",
+    laneCount: cases.length,
+    passedLaneCount,
+    familyCount: families.length,
+    sourceLaneIds: cases.map((scenario) => scenario.id),
+    laneStatuses,
+    families,
+  };
+}
+
+function assertCompletedGameHardeningCoverageSummary({ summary, lanes }) {
+  const laneById = new Map((lanes ?? []).map((laneItem) => [laneItem.id, laneItem]));
+  const cases = completedGameHardeningLaneCases();
+  const expectedLaneIds = cases.map((scenario) => scenario.id);
+  if (
+    summary?.status !== "passed" ||
+    summary.laneCount !== expectedLaneIds.length ||
+    summary.passedLaneCount !== expectedLaneIds.length ||
+    summary.familyCount !== new Set(cases.map((scenario) => scenario.family)).size ||
+    !sameArray(summary.sourceLaneIds, expectedLaneIds)
+  ) {
+    throw new Error("completed-game hardening coverage summary drifted");
+  }
+  for (const scenario of cases) {
+    const laneStatus = summary.laneStatuses?.find(
+      (candidate) => candidate.id === scenario.id,
+    );
+    if (
+      laneById.get(scenario.id)?.status !== "passed" ||
+      laneStatus?.status !== "passed" ||
+      laneStatus.family !== scenario.family ||
+      laneStatus.seedGroup !== scenario.seedGroup
+    ) {
+      throw new Error(
+        `completed-game hardening coverage missing passed lane: ${scenario.id}`,
+      );
+    }
+  }
+  for (const family of summary.families ?? []) {
+    const familyCases = cases.filter((scenario) => scenario.family === family.id);
+    if (
+      family.status !== "passed" ||
+      !sameArray(
+        family.laneIds,
+        familyCases.map((scenario) => scenario.id),
+      ) ||
+      !sameArray(
+        family.requiredLaneIds,
+        familyCases
+          .filter((scenario) => scenario.seedGroup === "required")
+          .map((scenario) => scenario.id),
+      ) ||
+      !sameArray(
+        family.demoOnlyLaneIds,
+        familyCases
+          .filter((scenario) => scenario.seedGroup === "demo-only")
+          .map((scenario) => scenario.id),
+      )
+    ) {
+      throw new Error(
+        `completed-game hardening coverage family drifted: ${family.id}`,
+      );
+    }
+  }
 }
 
 function buildCoreLoopSpineSummary({ session, verification }) {

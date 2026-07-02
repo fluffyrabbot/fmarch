@@ -62,6 +62,7 @@ import {
 } from "./dev_test_game_core_loop_private_channel_scenario_assertions.mjs";
 import {
   coreLoopAdminCheckIds,
+  coreLoopCompletedGameCoverageCheckId,
   coreLoopSpineCheckId,
 } from "./dev_test_game_core_loop_scenarios.mjs";
 import { assertDevTestGameProofRun } from "./dev_test_game_proof_contract.mjs";
@@ -110,6 +111,11 @@ const requiredSpineRows = (proofRun) => {
   };
 };
 
+function completedGameHardeningCoverageStatus(proofRun) {
+  const coverage = proofRun?.completedGameHardeningCoverage;
+  return `${String(coverage?.status ?? "unknown")}: ${Number(coverage?.passedLaneCount ?? 0)}/${Number(coverage?.laneCount ?? 0)} completed-game lanes across ${Number(coverage?.familyCount ?? 0)} families`;
+}
+
 await runAdminAuditProof({
   smokeName: "dev-test-game-core-loop-admin-proof",
   stage: "core-loop-admin-proof-listen",
@@ -128,6 +134,8 @@ await runAdminAuditProof({
       requiredChecks,
       requiredCheckStatuses: {
         [coreLoopSpineCheckId]: coreLoopSpineStatus(proofRun),
+        [coreLoopCompletedGameCoverageCheckId]:
+          completedGameHardeningCoverageStatus(proofRun),
         ...coreLoopHighlightedLaneEvidence(proofRun),
       },
       requiredSpineCycles: spineRows.cycles,
@@ -347,6 +355,10 @@ await runAdminAuditProof({
       game: proofRun.session.game,
       coreLoopSpineStatus: coreLoopSpineStatus(proofRun),
       coreLoopSpineRows: requiredSpineRows(proofRun),
+      completedGameHardeningCoverage:
+        proofRun.completedGameHardeningCoverage,
+      completedGameHardeningCoverageStatus:
+        completedGameHardeningCoverageStatus(proofRun),
       highlightedLaneEvidence: coreLoopHighlightedLaneEvidence(proofRun),
     },
     adminRoleSurface: surfaces.adminRoleSurface,
@@ -9581,6 +9593,15 @@ export function assertCoreLoopAdminProof(evidence) {
     )
   ) {
     throw new Error("core-loop admin proof missing visible core-loop spine status");
+  }
+  if (
+    !evidence.adminRoleSurface?.visibleCheckStatuses?.[
+      coreLoopCompletedGameCoverageCheckId
+    ]?.includes(evidence.generatedFrom?.completedGameHardeningCoverageStatus)
+  ) {
+    throw new Error(
+      "core-loop admin proof missing visible completed-game coverage status",
+    );
   }
   assertVisibleRows(
     "core-loop admin proof missing visible spine cycle",

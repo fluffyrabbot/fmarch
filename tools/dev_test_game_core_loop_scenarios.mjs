@@ -12,6 +12,8 @@ import {
 } from "./dev_test_game_replacement_handoff_scenario_cases.mjs";
 
 export const coreLoopSpineCheckId = "core-loop-spine";
+export const coreLoopCompletedGameCoverageCheckId =
+  "completed-game-hardening-coverage";
 
 export const coreLoopAuditLaneIds = Object.freeze([
   "core-loop",
@@ -38,5 +40,6 @@ export const coreLoopAuditLaneIds = Object.freeze([
 
 export const coreLoopAdminCheckIds = Object.freeze([
   coreLoopSpineCheckId,
+  coreLoopCompletedGameCoverageCheckId,
   ...coreLoopAuditLaneIds,
 ]);

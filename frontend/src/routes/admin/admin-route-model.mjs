@@ -18,6 +18,7 @@ import {
   hardeningAuditLaneIds,
 } from "../../../../tools/dev_test_game_hardening_scenarios.mjs";
 import {
+  coreLoopCompletedGameCoverageCheckId,
   coreLoopAuditLaneIds,
 } from "../../../../tools/dev_test_game_core_loop_scenarios.mjs";
 import {
@@ -3358,6 +3359,10 @@ export function normalizeLocalCoreLoopAudit(proofRun, { game }) {
           id: "core-loop-spine",
           status: coreLoopSpineStatus(proofRun),
         }),
+        Object.freeze({
+          id: coreLoopCompletedGameCoverageCheckId,
+          status: completedGameHardeningCoverageStatus(proofRun),
+        }),
         ...requiredLaneIds.map((id) => {
           const lane = laneById.get(id);
           return Object.freeze({
@@ -3375,10 +3380,24 @@ export function normalizeLocalCoreLoopAudit(proofRun, { game }) {
         ? proofRun.session.roles.length
         : 0,
       laneCount: lanes.length,
+      completedGameCoverageStatus: String(
+        proofRun.completedGameHardeningCoverage?.status ?? "unknown",
+      ),
+      completedGameCoverageLaneCount: Number(
+        proofRun.completedGameHardeningCoverage?.laneCount ?? 0,
+      ),
+      completedGameCoverageFamilyCount: Number(
+        proofRun.completedGameHardeningCoverage?.familyCount ?? 0,
+      ),
       releaseReady: proofRun.releaseReady === true,
       productionReady: proofRun.productionReady === true,
     }),
   });
+}
+
+function completedGameHardeningCoverageStatus(proofRun) {
+  const coverage = proofRun?.completedGameHardeningCoverage;
+  return `${String(coverage?.status ?? "unknown")}: ${Number(coverage?.passedLaneCount ?? 0)}/${Number(coverage?.laneCount ?? 0)} completed-game lanes across ${Number(coverage?.familyCount ?? 0)} families`;
 }
 
 function normalizeCoreLoopSpineCycles(proofRun) {

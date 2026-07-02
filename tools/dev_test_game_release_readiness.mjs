@@ -57,6 +57,7 @@ import {
 } from "./dev_test_game_hosted_concurrent_race_matrix_cases.mjs";
 import {
   coreLoopAdminCheckIds,
+  coreLoopCompletedGameCoverageCheckId,
   coreLoopAuditLaneIds,
 } from "./dev_test_game_core_loop_scenarios.mjs";
 import {
@@ -2005,6 +2006,17 @@ export function validateDevTestGameCoreLoopAdminProof(proof, options = {}) {
   ) {
     throw new Error("core-loop admin proof missing visible core-loop spine status");
   }
+  if (
+    typeof proof.generatedFrom?.completedGameHardeningCoverageStatus !==
+      "string" ||
+    !proof.adminRoleSurface?.visibleCheckStatuses?.[
+      coreLoopCompletedGameCoverageCheckId
+    ]?.includes(proof.generatedFrom.completedGameHardeningCoverageStatus)
+  ) {
+    throw new Error(
+      "core-loop admin proof missing visible completed-game coverage status",
+    );
+  }
   assertVisibleAdminRows({
     label: "core-loop admin proof missing visible spine cycle",
     visibleRows: proof.adminRoleSurface?.visibleSpineCycles,
@@ -2094,6 +2106,10 @@ export function validateDevTestGameCoreLoopAdminProof(proof, options = {}) {
     visibleSpineCheckpoints: proof.adminRoleSurface.visibleSpineCheckpoints,
     visibleSpineRecoveryHooks: proof.adminRoleSurface.visibleSpineRecoveryHooks,
     coreLoopSpineRows: proof.generatedFrom.coreLoopSpineRows,
+    completedGameHardeningCoverage:
+      proof.generatedFrom.completedGameHardeningCoverage,
+    completedGameHardeningCoverageStatus:
+      proof.generatedFrom.completedGameHardeningCoverageStatus,
     hostRoleSurface: proof.hostRoleSurface,
     playerRoleSurface: proof.playerRoleSurface,
     hostPhaseTransitionSurface: proof.hostPhaseTransitionSurface,
