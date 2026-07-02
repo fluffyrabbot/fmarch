@@ -74,12 +74,18 @@ import {
 } from "./dev_test_game_seed_scenario_cases.mjs";
 import {
   hostStaleControlLaneIds,
-  hostedMatrixReconnectLaneIds,
 } from "./dev_test_game_host_stale_control_scenarios.mjs";
 import {
-  hostedMatrixStaleConflictLaneIds,
   staleConflictMessageLaneIds,
 } from "./dev_test_game_stale_conflict_scenarios.mjs";
+import {
+  hostedMatrixAdminRequiredCheckIds,
+  hostedMatrixProgressCheckIds,
+  hostedMatrixReconnectLaneIds,
+  hostedMatrixRelatedAuditIds,
+  hostedMatrixRequestedEvidenceIds,
+  hostedMatrixStaleConflictLaneIds,
+} from "./dev_test_game_hosted_concurrent_race_matrix_cases.mjs";
 import {
   replacementPrivateChannelRecoveryLaneIds,
   replacementPrivatePostRaceLaneIds,
@@ -7995,15 +8001,12 @@ test("session card and markdown include role credential URLs and tokens", async 
   assert.deepEqual(
     hostedMatrix.evidenceProgress.map((item) => [item.id, item.status]),
     [
-      ["hosted-like-api-frontend-target", "passed"],
-      ["multi-session-concurrent-command-matrix", "passed"],
-      ["reload-recovery-after-races", "passed"],
-      ["reconnect-recovery", "passed"],
-      ["stale-client-conflict-messages", "passed"],
-      ["raw-role-credential-redaction", "passed"],
-      ["local-demo-hosted-evidence", "not_applicable"],
-      ["real-hosted-evidence-required", "unproven"],
-      ["real-hosted-deployment", "unproven"],
+      ...hostedMatrixProgressCheckIds
+        .slice(0, 6)
+        .map((checkId) => [checkId, "passed"]),
+      [hostedMatrixProgressCheckIds[6], "not_applicable"],
+      [hostedMatrixProgressCheckIds[7], "unproven"],
+      [hostedMatrixProgressCheckIds[8], "unproven"],
     ],
   );
   const hostedMatrixWithExternalTarget =
@@ -13175,14 +13178,14 @@ function nextActionAdminProofFixture() {
         {
           linkId: "admin-proof:hosted-concurrent-race-matrix",
           auditId: "local-hosted-concurrent-race-matrix",
-          requiredCheckIds: ["hosted-like-api-frontend-target"],
+          requiredCheckIds: [hostedMatrixAdminRequiredCheckIds[0]],
           requiredCheckStatuses: {
-            "real-hosted-deployment": "unproven",
+            [hostedMatrixAdminRequiredCheckIds.at(-1)]: "unproven",
           },
-          requiredUnprovenIds: ["hosted-concurrent-race-matrix"],
+          requiredUnprovenIds: [hostedMatrixRequestedEvidenceIds[0]],
           requiredReconnectLaneIds: [],
           requiredStaleConflictLaneIds: [],
-          requiredRelatedLinkIds: ["local-race-coverage", "local-next-action"],
+          requiredRelatedLinkIds: hostedMatrixRelatedAuditIds,
         },
       ],
       selectionTrace: {
@@ -13259,9 +13262,9 @@ function nextActionAdminProofFixture() {
           auditId: "local-hosted-concurrent-race-matrix",
           detailRoleUrl:
             "/admin/audit/local-hosted-concurrent-race-matrix?game=<seeded-game>",
-          visibleChecks: ["hosted-like-api-frontend-target"],
-          visibleUnproven: ["hosted-concurrent-race-matrix"],
-          visibleRelatedLinks: ["local-race-coverage", "local-next-action"],
+          visibleChecks: [hostedMatrixAdminRequiredCheckIds[0]],
+          visibleUnproven: [hostedMatrixRequestedEvidenceIds[0]],
+          visibleRelatedLinks: hostedMatrixRelatedAuditIds,
         },
       ],
       rawInviteTokensVisible: false,
@@ -13353,22 +13356,9 @@ function hostedConcurrentRaceMatrixAdminProofFixture() {
         "replacement-action",
       ],
       reconnectLaneIds: hostedMatrixReconnectLaneIds,
-      staleConflictLaneIds: [
-        "replacement-stale-conflict-message",
-        "stale-action-conflict-message",
-      ],
-      progressCheckIds: [
-        "hosted-like-api-frontend-target",
-        "multi-session-concurrent-command-matrix",
-        "reload-recovery-after-races",
-        "reconnect-recovery",
-        "stale-client-conflict-messages",
-        "raw-role-credential-redaction",
-        "local-demo-hosted-evidence",
-        "real-hosted-evidence-required",
-        "real-hosted-deployment",
-      ],
-      relatedAuditIds: ["local-race-coverage", "local-next-action"],
+      staleConflictLaneIds: hostedMatrixStaleConflictLaneIds,
+      progressCheckIds: hostedMatrixProgressCheckIds,
+      relatedAuditIds: hostedMatrixRelatedAuditIds,
       requestedEvidenceId: "hosted-concurrent-race-matrix",
       hostedEvidenceStatus: "not_configured",
       hostedEvidenceMode: "not_configured",
@@ -13385,30 +13375,19 @@ function hostedConcurrentRaceMatrixAdminProofFixture() {
       surfaceTestId: "admin-audit-detail-surface",
       clickedThroughFromOverview: true,
       visibleChecks: [
-        "hosted-like-api-frontend-target",
-        "multi-session-concurrent-command-matrix",
-        "reload-recovery-after-races",
-        "reconnect-recovery",
-        "stale-client-conflict-messages",
-        "raw-role-credential-redaction",
-        "local-demo-hosted-evidence",
-        "real-hosted-evidence-required",
-        "real-hosted-deployment",
+        ...hostedMatrixProgressCheckIds,
         "replacement-private-post",
         "replacement-vote",
         "replacement-action",
       ],
       visibleReconnectLanes: hostedMatrixReconnectLaneIds,
-      visibleStaleConflictLanes: [
-        "replacement-stale-conflict-message",
-        "stale-action-conflict-message",
-      ],
+      visibleStaleConflictLanes: hostedMatrixStaleConflictLaneIds,
       visibleUnproven: [
         "hosted-concurrent-race-matrix",
         "remaining-gap-1",
         "remaining-gap-2",
       ],
-      visibleRelatedLinks: ["local-race-coverage", "local-next-action"],
+      visibleRelatedLinks: hostedMatrixRelatedAuditIds,
       rawInviteTokensVisible: false,
       releaseReady: false,
       productionReady: false,

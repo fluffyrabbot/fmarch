@@ -15,11 +15,11 @@ import {
   hostedTargetPreflightBlockingCheckIds,
 } from "./dev_test_game_hosted_target_preflight.mjs";
 import {
+  hostedMatrixAdminRequiredCheckIds,
   hostedMatrixReconnectLaneIds,
-} from "./dev_test_game_host_stale_control_scenarios.mjs";
-import {
+  hostedMatrixRequestedEvidenceIds,
   hostedMatrixStaleConflictLaneIds,
-} from "./dev_test_game_stale_conflict_scenarios.mjs";
+} from "./dev_test_game_hosted_concurrent_race_matrix_cases.mjs";
 
 test("admin proof graph role handoffs cover every admin-proof role URL", () => {
   const handoffs = adminProofGraphRoleHandoffs({
@@ -186,13 +186,13 @@ function roleNode(id, auditId) {
 function hostedMatrixFixture() {
   return {
     evidenceProgress: [
-      { id: "hosted-like-api-frontend-target" },
-      { id: "real-hosted-deployment" },
+      { id: hostedMatrixAdminRequiredCheckIds[0] },
+      { id: hostedMatrixAdminRequiredCheckIds.at(-1) },
     ],
     cells: [{ id: "player-vote-change" }, { id: "player-night-action" }],
     reconnectLanes: hostedMatrixReconnectLaneIds.map((id) => ({ id })),
     staleConflictLanes: hostedMatrixStaleConflictLaneIds.map((id) => ({ id })),
-    requestedEvidence: { id: "hosted-concurrent-race-matrix" },
+    requestedEvidence: { id: hostedMatrixRequestedEvidenceIds[0] },
     remainingGaps: [{ id: "gap-a" }, { id: "gap-b" }],
     summary: {
       realHostedDeploymentStatus: "unproven",

@@ -1,4 +1,8 @@
 export {
+  hostedMatrixReconnectLaneIds,
+} from "./dev_test_game_hosted_concurrent_race_matrix_cases.mjs";
+
+export {
   cohostDeadlineRecoveryLaneIds,
   cohostDeadlineStaleControlCases,
   cohostDeadlineStaleControlCaseDefinitions,
@@ -12,13 +16,15 @@ export {
   hostRaceReloadLaneIds,
   hostStandaloneStaleControlLaneIds,
   hostStaleControlLaneIds,
-  hostedMatrixReconnectLaneIds,
 } from "./dev_test_game_host_stale_control_scenarios.mjs";
 
 export {
-  hostedMatrixStaleConflictLaneIds,
   staleConflictMessageLaneIds,
 } from "./dev_test_game_stale_conflict_scenarios.mjs";
+
+export {
+  hostedMatrixStaleConflictLaneIds,
+} from "./dev_test_game_hosted_concurrent_race_matrix_cases.mjs";
 
 export {
   playerActionConflictRecoveryLaneIds,

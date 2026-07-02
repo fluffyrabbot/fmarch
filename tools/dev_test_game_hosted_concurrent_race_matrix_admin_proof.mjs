@@ -5,6 +5,11 @@ import {
   devTestGameHostedConcurrentRaceMatrixPath,
 } from "./dev_test_game_hosted_concurrent_race_matrix.mjs";
 import {
+  hostedMatrixProgressCheckIds,
+  hostedMatrixRealHostedEvidenceInputIds,
+  hostedMatrixRelatedAuditIds,
+} from "./dev_test_game_hosted_concurrent_race_matrix_cases.mjs";
+import {
   artifactDir,
   proveAdminAuditDetail,
   readJson,
@@ -28,27 +33,10 @@ const evidencePath = path.join(
   artifactDir,
   "hosted-concurrent-race-matrix-admin-proof.json",
 );
-const requiredProgressChecks = [
-  "hosted-like-api-frontend-target",
-  "multi-session-concurrent-command-matrix",
-  "reload-recovery-after-races",
-  "reconnect-recovery",
-  "stale-client-conflict-messages",
-  "raw-role-credential-redaction",
-  "local-demo-hosted-evidence",
-  "real-hosted-evidence-required",
-  "real-hosted-deployment",
-];
-const requiredRelatedLinks = ["local-race-coverage", "local-next-action"];
-const requiredRealHostedEvidenceInputs = [
-  "command",
-  "proof-target",
-  "FMARCH_HOSTED_MATRIX_FRONTEND_URL",
-  "FMARCH_HOSTED_MATRIX_API_URL",
-  "FMARCH_HOSTED_MATRIX_GROUP_ID",
-  "FMARCH_HOSTED_MATRIX_RAW_EVIDENCE_PATH",
-  "FMARCH_HOSTED_MATRIX_EVIDENCE_PATH",
-];
+const requiredProgressChecks = hostedMatrixProgressCheckIds;
+const requiredRelatedLinks = hostedMatrixRelatedAuditIds;
+const requiredRealHostedEvidenceInputs =
+  hostedMatrixRealHostedEvidenceInputIds;
 
 await runAdminAuditProof({
   smokeName: "dev-test-game-hosted-concurrent-race-matrix-admin-proof",

@@ -15,11 +15,11 @@ import {
   isExternallyHostedUrl,
 } from "./dev_test_game_hosted_target_url_policy.mjs";
 import {
+  hostedMatrixProgressCheckIds,
   hostedMatrixReconnectLaneIds,
-} from "./dev_test_game_host_stale_control_scenarios.mjs";
-import {
+  hostedMatrixRequestedEvidenceIds,
   hostedMatrixStaleConflictLaneIds,
-} from "./dev_test_game_stale_conflict_scenarios.mjs";
+} from "./dev_test_game_hosted_concurrent_race_matrix_cases.mjs";
 
 export const DEV_TEST_GAME_HOSTED_CONCURRENT_RACE_MATRIX_VERSION = 1;
 export const devTestGameReleaseReadinessPath =
@@ -80,9 +80,7 @@ export function buildDevTestGameHostedConcurrentRaceMatrixEvidence(
     );
   }
   const unproven = readiness.releaseReadiness.unproven.find((item) =>
-    ["hosted-concurrent-race-matrix", "real-hosted-concurrent-race-matrix"].includes(
-      item.id,
-    ),
+    hostedMatrixRequestedEvidenceIds.includes(item.id),
   );
   if (unproven === undefined) {
     throw new Error(
@@ -174,7 +172,7 @@ export function buildDevTestGameHostedConcurrentRaceMatrixEvidence(
     },
     evidenceProgress: [
       {
-        id: "hosted-like-api-frontend-target",
+        id: hostedMatrixProgressCheckIds[0],
         status: "passed",
         evidence: [
           proof.session.frontendBaseUrl,
@@ -183,39 +181,39 @@ export function buildDevTestGameHostedConcurrentRaceMatrixEvidence(
         ],
       },
       {
-        id: "multi-session-concurrent-command-matrix",
+        id: hostedMatrixProgressCheckIds[1],
         status: "passed",
         evidence: cells.map((cell) => cell.id),
       },
       {
-        id: "reload-recovery-after-races",
+        id: hostedMatrixProgressCheckIds[2],
         status: "passed",
         evidence: cells.map((cell) => cell.reloadLane.id),
       },
       {
-        id: "reconnect-recovery",
+        id: hostedMatrixProgressCheckIds[3],
         status: "passed",
         evidence: reconnectLanes.map((lane) => lane.id),
       },
       {
-        id: "stale-client-conflict-messages",
+        id: hostedMatrixProgressCheckIds[4],
         status: "passed",
         evidence: staleConflictLanes.map((lane) => lane.id),
       },
       {
-        id: "raw-role-credential-redaction",
+        id: hostedMatrixProgressCheckIds[5],
         status: "passed",
         evidence: ["roleSurfaces.directUrl", "lane.evidence redaction"],
       },
       {
-        id: "local-demo-hosted-evidence",
+        id: hostedMatrixProgressCheckIds[6],
         status: localDemoHostedEvidenceStatus,
         ...(externalHostedEvidence.syntheticExternalTarget === true
           ? { evidence: [externalHostedEvidence.evidencePath] }
           : {}),
       },
       {
-        id: "real-hosted-evidence-required",
+        id: hostedMatrixProgressCheckIds[7],
         status: realHostedEvidenceStatus,
         ...(realHostedEvidenceStatus === "passed"
           ? {
@@ -231,7 +229,7 @@ export function buildDevTestGameHostedConcurrentRaceMatrixEvidence(
             }),
       },
       {
-        id: "real-hosted-deployment",
+        id: hostedMatrixProgressCheckIds[8],
         status: realHostedDeploymentPassed ? "passed" : "unproven",
         ...(realHostedDeploymentPassed
           ? {
@@ -369,9 +367,7 @@ export function assertDevTestGameHostedConcurrentRaceMatrixEvidence(evidence) {
     }
   }
   if (
-    !["hosted-concurrent-race-matrix", "real-hosted-concurrent-race-matrix"].includes(
-      evidence.requestedEvidence?.id,
-    ) ||
+    !hostedMatrixRequestedEvidenceIds.includes(evidence.requestedEvidence?.id) ||
     evidence.requestedEvidence.status !== "unproven" ||
     !Array.isArray(evidence.remainingGaps) ||
     evidence.remainingGaps.length === 0

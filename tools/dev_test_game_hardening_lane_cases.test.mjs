@@ -96,7 +96,6 @@ test("host stale-control production callers use the shared scenario module", asy
     "tools/dev_test_game_core_loop_scenarios.mjs",
     "tools/dev_test_game_hardening_admin_proof.mjs",
     "tools/dev_test_game_seed_scenario_cases.mjs",
-    "tools/dev_test_game_hosted_concurrent_race_matrix.mjs",
     "tools/dev_test_game.test.mjs",
     "frontend/src/routes/admin/admin-route-model.test.mjs",
   ];
@@ -173,7 +172,6 @@ test("stale conflict production callers use the shared scenario module", async (
     "tools/dev_test_game_proof_contract.mjs",
     "tools/dev_test_game_hardening_admin_proof.mjs",
     "tools/dev_test_game_proof_graph_handoff_cases.mjs",
-    "tools/dev_test_game_hosted_concurrent_race_matrix.mjs",
     "tools/dev_test_game.test.mjs",
     "tools/dev_test_game_proof_graph_handoff_cases.test.mjs",
     "tools/dev_test_game_proof_graph_handoffs.test.mjs",
@@ -189,6 +187,9 @@ test("stale conflict production callers use the shared scenario module", async (
     const source = await readFile(callerPath, "utf8");
     assert(
       source.includes("./dev_test_game_stale_conflict_scenarios.mjs") ||
+        source.includes(
+          "./dev_test_game_hosted_concurrent_race_matrix_cases.mjs",
+        ) ||
         source.includes(
           "../../../../tools/dev_test_game_stale_conflict_scenarios.mjs",
         ),

@@ -10,21 +10,25 @@ import {
   hostedEvidenceHandoffCase,
 } from "./dev_test_game_hosted_handoff_cases.mjs";
 import {
+  hostedMatrixAdminRequiredCheckIds,
+  hostedMatrixRequestedEvidenceIds,
   hostedMatrixStaleConflictLaneIds,
-} from "./dev_test_game_stale_conflict_scenarios.mjs";
+} from "./dev_test_game_hosted_concurrent_race_matrix_cases.mjs";
 
 test("related handoff requirements map to admin audit destination proof inputs", () => {
   assert.deepEqual(requiredRelatedDestinationsForHandoff(handoffFixture()), [
     {
       linkId: "admin-proof:hosted-concurrent-race-matrix",
       auditId: "local-hosted-concurrent-race-matrix",
-      requiredChecks: ["real-hosted-deployment"],
-      requiredCheckStatuses: { "real-hosted-deployment": "unproven" },
+      requiredChecks: [hostedMatrixAdminRequiredCheckIds.at(-1)],
+      requiredCheckStatuses: {
+        [hostedMatrixAdminRequiredCheckIds.at(-1)]: "unproven",
+      },
       requiredScenarios: ["host-phase-controls"],
       requiredSessions: ["host"],
       requiredReconnectLanes: ["reconnect-recovery"],
       requiredStaleConflictLanes: hostedMatrixStaleConflictLaneIds,
-      requiredUnproven: ["hosted-concurrent-race-matrix"],
+      requiredUnproven: [hostedMatrixRequestedEvidenceIds[0]],
       requiredLocalPrerequisiteDestinations: [
         {
           id: "local-proof-freshness-admin-surface",
@@ -41,13 +45,15 @@ test("related handoff requirements map to admin audit destination proof inputs",
     {
       linkId: "admin-proof:hosted-concurrent-race-matrix",
       auditId: "local-hosted-concurrent-race-matrix",
-      requiredChecks: ["real-hosted-deployment"],
-      requiredCheckStatuses: { "real-hosted-deployment": "unproven" },
+      requiredChecks: [hostedMatrixAdminRequiredCheckIds.at(-1)],
+      requiredCheckStatuses: {
+        [hostedMatrixAdminRequiredCheckIds.at(-1)]: "unproven",
+      },
       requiredScenarios: ["host-phase-controls"],
       requiredSessions: ["host"],
       requiredReconnectLanes: ["reconnect-recovery"],
       requiredStaleConflictLanes: hostedMatrixStaleConflictLaneIds,
-      requiredUnproven: ["hosted-concurrent-race-matrix"],
+      requiredUnproven: [hostedMatrixRequestedEvidenceIds[0]],
       requiredLocalPrerequisiteDestinations: [
         {
           id: "local-proof-freshness-admin-surface",
@@ -180,13 +186,15 @@ function handoffFixture() {
   return {
     linkId: "admin-proof:hosted-concurrent-race-matrix",
     auditId: "local-hosted-concurrent-race-matrix",
-    requiredCheckIds: ["real-hosted-deployment"],
-    requiredCheckStatuses: { "real-hosted-deployment": "unproven" },
+    requiredCheckIds: [hostedMatrixAdminRequiredCheckIds.at(-1)],
+    requiredCheckStatuses: {
+      [hostedMatrixAdminRequiredCheckIds.at(-1)]: "unproven",
+    },
     requiredScenarioIds: ["host-phase-controls"],
     requiredSessionIds: ["host"],
     requiredReconnectLaneIds: ["reconnect-recovery"],
     requiredStaleConflictLaneIds: hostedMatrixStaleConflictLaneIds,
-    requiredUnprovenIds: ["hosted-concurrent-race-matrix"],
+    requiredUnprovenIds: [hostedMatrixRequestedEvidenceIds[0]],
     requiredLocalPrerequisiteDestinations: [
       {
         id: "local-proof-freshness-admin-surface",
@@ -209,12 +217,12 @@ function adminRoleSurfaceFixture() {
         auditId: "local-hosted-concurrent-race-matrix",
         detailRoleUrl:
           "/admin/audit/local-hosted-concurrent-race-matrix?game=<seeded-game>",
-        visibleChecks: ["real-hosted-deployment"],
+        visibleChecks: [hostedMatrixAdminRequiredCheckIds.at(-1)],
         visibleScenarios: ["host-phase-controls"],
         visibleSessions: ["host"],
         visibleReconnectLanes: ["reconnect-recovery"],
         visibleStaleConflictLanes: hostedMatrixStaleConflictLaneIds,
-        visibleUnproven: ["hosted-concurrent-race-matrix"],
+        visibleUnproven: [hostedMatrixRequestedEvidenceIds[0]],
         visibleLocalPrerequisites: ["local-proof-freshness-admin-surface"],
         visibleLocalPrerequisiteRoleUrls: {
           "local-proof-freshness-admin-surface":

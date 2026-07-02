@@ -51,6 +51,9 @@ import {
   hardeningAuditLaneIds,
 } from "./dev_test_game_hardening_scenarios.mjs";
 import {
+  hostedMatrixAdminRequiredCheckIds,
+} from "./dev_test_game_hosted_concurrent_race_matrix_cases.mjs";
+import {
   coreLoopAdminCheckIds,
   coreLoopAuditLaneIds,
 } from "./dev_test_game_core_loop_scenarios.mjs";
@@ -4349,15 +4352,7 @@ export function validateDevTestGameHostedConcurrentRaceMatrixAdminProof(
   proof,
   options = {},
 ) {
-  const requiredChecks = [
-    "hosted-like-api-frontend-target",
-    "multi-session-concurrent-command-matrix",
-    "reload-recovery-after-races",
-    "reconnect-recovery",
-    "stale-client-conflict-messages",
-    "raw-role-credential-redaction",
-    "real-hosted-deployment",
-  ];
+  const requiredChecks = hostedMatrixAdminRequiredCheckIds;
   if (proof?.version !== 1) {
     throw new Error(
       `hosted concurrent race matrix admin proof version drifted: ${proof?.version}`,
