@@ -1,10 +1,14 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
-import { validateDevTestGameAdminSpineProof } from "./dev_test_game_release_readiness.mjs";
+import {
+  assertDevTestGameReleaseReadiness,
+  validateDevTestGameAdminSpineProof,
+} from "./dev_test_game_release_readiness.mjs";
 import {
   assertDevTestGameNextAction,
   devTestGameNextActionPath,
+  devTestGameReleaseReadinessPath,
   devTestGameSeedFixtureCommand,
   devTestGameSeedFixturePath,
   devTestGameSeedFixtureRoleUrl,
@@ -27,12 +31,13 @@ export const DEV_TEST_GAME_PROOF_GRAPH_VERSION = 1;
 const proofGraphJsonPath = path.join(repoRoot, devTestGameProofGraphPath);
 
 export function buildDevTestGameProofGraph(
-  { spineManifest, adminSpineProof, nextAction = null },
+  { spineManifest, adminSpineProof, nextAction = null, releaseReadiness },
   {
     generatedAt = new Date().toISOString(),
     spineManifestSource = "target/dev-test-game/spine-manifest.json",
     adminSpineProofSource = "target/dev-test-game/admin-spine-proof.json",
     nextActionSource = devTestGameNextActionPath,
+    releaseReadinessSource = devTestGameReleaseReadinessPath,
   } = {},
 ) {
   const manifest = assertDevTestGameSpineManifest(spineManifest);
@@ -41,8 +46,15 @@ export function buildDevTestGameProofGraph(
   });
   const nextActionEvidence =
     nextAction === null ? null : assertDevTestGameNextAction(nextAction);
+  const releaseReadinessChecklist =
+    assertDevTestGameReleaseReadiness(releaseReadiness);
   const adminSpine = adminSpineProof;
-  const nodes = buildProofGraphNodes({ manifest, adminSpine });
+  const nodes = buildProofGraphNodes({
+    manifest,
+    adminSpine,
+    releaseReadiness: releaseReadinessChecklist,
+    releaseReadinessSource,
+  });
   const edges = buildProofGraphEdges({ nodes, nextAction: nextActionEvidence });
   const evidence = {
     version: DEV_TEST_GAME_PROOF_GRAPH_VERSION,
@@ -53,31 +65,42 @@ export function buildDevTestGameProofGraph(
     generatedAt,
     scope: "local-dev-test-game-proof-graph",
     proofBoundary:
-      "Generated local proof graph for the dev-test-game development spine. It records local audit role URLs, artifact paths, proof commands, dependencies, and recovery edges for seeded admin proof surfaces; it does not validate artifact contents, hosted identity, hosted operations, beta readiness, release readiness, or production readiness.",
+      "Generated local proof graph for the dev-test-game development spine. It records local audit role URLs, production feature spine target role URLs, artifact paths, proof commands, dependencies, and recovery edges for seeded admin proof surfaces; it does not validate artifact contents, hosted identity, hosted operations, beta readiness, release readiness, or production readiness.",
     generatedFrom: {
       spineManifest: spineManifestSource,
       adminSpineProof: adminSpineProofSource,
       ...(nextActionEvidence === null ? {} : { nextAction: nextActionSource }),
+      releaseReadiness: releaseReadinessSource,
       manifestGeneratedAt: manifest.generatedAt,
       adminSpineGeneratedAt: adminSpine.generatedAt,
       ...(nextActionEvidence === null
         ? {}
         : { nextActionGeneratedAt: nextActionEvidence.generatedAt }),
+      releaseReadinessGeneratedAt: releaseReadinessChecklist.generatedAt,
     },
     summary: {
       nodeCount: nodes.length,
       edgeCount: edges.length,
       roleUrlCount: nodes.filter((node) => node.roleUrl).length,
       recoveryTargetCount: nodes.filter((node) => node.recoveryCommand).length,
+      productionFeatureTargetCount: nodes.filter(
+        (node) => node.kind === "production-feature-spine-target",
+      ).length,
     },
     nodes,
     edges,
   };
-  assertDevTestGameProofGraph(evidence, { adminSpineProof: adminSpine });
+  assertDevTestGameProofGraph(evidence, {
+    adminSpineProof: adminSpine,
+    releaseReadiness: releaseReadinessChecklist,
+  });
   return evidence;
 }
 
-export function assertDevTestGameProofGraph(evidence, { adminSpineProof } = {}) {
+export function assertDevTestGameProofGraph(
+  evidence,
+  { adminSpineProof, releaseReadiness } = {},
+) {
   if (evidence?.version !== DEV_TEST_GAME_PROOF_GRAPH_VERSION) {
     throw new Error(`proof graph version drifted: ${evidence?.version}`);
   }
@@ -103,6 +126,15 @@ export function assertDevTestGameProofGraph(evidence, { adminSpineProof } = {}) 
   if (nodesById.size !== evidence.nodes.length) {
     throw new Error("proof graph node ids must be unique");
   }
+  const productionFeatureTargetNodes = evidence.nodes.filter(
+    (node) => node.kind === "production-feature-spine-target",
+  );
+  if (
+    evidence.summary?.productionFeatureTargetCount !==
+    productionFeatureTargetNodes.length
+  ) {
+    throw new Error("proof graph production feature target count drifted");
+  }
   for (const node of evidence.nodes) {
     if (typeof node.id !== "string" || node.id.trim() === "") {
       throw new Error("proof graph node is missing an id");
@@ -112,6 +144,12 @@ export function assertDevTestGameProofGraph(evidence, { adminSpineProof } = {}) 
     }
     if (node.roleUrl !== undefined && !node.roleUrl.includes("?game=<seeded-game>")) {
       throw new Error(`proof graph node ${node.id} role URL is not seeded`);
+    }
+    if (
+      node.kind === "production-feature-spine-target" &&
+      (typeof node.targetRoleUrl !== "string" || node.targetRoleUrl.trim() === "")
+    ) {
+      throw new Error(`proof graph production feature ${node.id} target role URL is missing`);
     }
   }
   for (const edge of evidence.edges) {
@@ -141,6 +179,12 @@ export function assertDevTestGameProofGraph(evidence, { adminSpineProof } = {}) 
   }
   if (adminSpineProof !== undefined) {
     assertDevTestGameProofGraphCoversAdminSpine(evidence, adminSpineProof);
+  }
+  if (releaseReadiness !== undefined) {
+    assertDevTestGameProofGraphCoversProductionFeatureTargets(
+      evidence,
+      releaseReadiness,
+    );
   }
   assertProductionFacingSurfaceGraphCoverage({ proofGraph: evidence });
   return evidence;
@@ -207,6 +251,64 @@ export function assertDevTestGameProofGraphCoversAdminSpine(graph, adminSpinePro
   return graph;
 }
 
+export function assertDevTestGameProofGraphCoversProductionFeatureTargets(
+  graph,
+  releaseReadiness,
+) {
+  const readiness = assertDevTestGameReleaseReadiness(releaseReadiness);
+  const targets = coreLoopProductionFeatureTargetCollection(readiness);
+  const nodes = (graph.nodes ?? []).filter(
+    (node) => node.kind === "production-feature-spine-target",
+  );
+  if (nodes.length !== targets.slotIds.length) {
+    throw new Error(
+      `proof graph production feature target count drifted: expected ${targets.slotIds.length}, got ${nodes.length}`,
+    );
+  }
+  const nodesBySlotId = new Map(nodes.map((node) => [node.featureSlotId, node]));
+  for (const slotId of targets.slotIds) {
+    const target = targets.bySlotId[slotId];
+    const node = nodesBySlotId.get(slotId);
+    if (node === undefined) {
+      throw new Error(`proof graph missing production feature target: ${slotId}`);
+    }
+    const expectedNodeId = `production-feature:${slotId}`;
+    if (
+      node.id !== expectedNodeId ||
+      node.sourceCheckId !== target.sourceCheckId ||
+      node.roleUrl !== target.detailRoleUrl ||
+      node.targetRoleUrl !== target.roleUrl ||
+      node.cycleId !== target.cycleId ||
+      node.roleUrlId !== target.roleUrlId ||
+      node.rowKind !== target.rowKind ||
+      node.checkpointId !== target.checkpointId ||
+      node.adminCheckId !== target.adminCheckId ||
+      node.browserProofCommand !== target.browserProofCommand ||
+      node.recoveryCommand !== target.rerunCommand
+    ) {
+      throw new Error(`proof graph production feature target drifted: ${slotId}`);
+    }
+    if ((node.recoveryHookId ?? undefined) !== (target.recoveryHookId ?? undefined)) {
+      throw new Error(`proof graph production feature recovery hook drifted: ${slotId}`);
+    }
+    const sourceNodeId = productionFeatureSourceGraphNodeId(target.sourceCheckId);
+    if (
+      !(graph.edges ?? []).some(
+        (edge) =>
+          edge.from === sourceNodeId &&
+          edge.to === expectedNodeId &&
+          edge.relationship === "proves-production-feature" &&
+          edge.roleUrl === target.detailRoleUrl &&
+          edge.targetRoleUrl === target.roleUrl &&
+          edge.command === target.browserProofCommand,
+      )
+    ) {
+      throw new Error(`proof graph production feature ${slotId} is missing proof edge`);
+    }
+  }
+  return graph;
+}
+
 export async function writeDevTestGameProofGraph({
   generatedAt = new Date().toISOString(),
   spineManifestPath = process.env.FMARCH_DEV_TEST_GAME_SPINE_MANIFEST ??
@@ -215,20 +317,27 @@ export async function writeDevTestGameProofGraph({
     "target/dev-test-game/admin-spine-proof.json",
   nextActionPath = process.env.FMARCH_DEV_TEST_GAME_NEXT_ACTION ??
     devTestGameNextActionPath,
+  releaseReadinessPath = process.env.FMARCH_DEV_TEST_GAME_RELEASE_READINESS ??
+    devTestGameReleaseReadinessPath,
 } = {}) {
   const absoluteSpineManifestPath = path.resolve(repoRoot, spineManifestPath);
   const absoluteAdminSpineProofPath = path.resolve(repoRoot, adminSpineProofPath);
   const absoluteNextActionPath = path.resolve(repoRoot, nextActionPath);
+  const absoluteReleaseReadinessPath = path.resolve(repoRoot, releaseReadinessPath);
   const spineManifest = JSON.parse(await readFile(absoluteSpineManifestPath, "utf8"));
   const adminSpineProof = JSON.parse(await readFile(absoluteAdminSpineProofPath, "utf8"));
   const nextAction = JSON.parse(await readFile(absoluteNextActionPath, "utf8"));
+  const releaseReadiness = JSON.parse(
+    await readFile(absoluteReleaseReadinessPath, "utf8"),
+  );
   const evidence = buildDevTestGameProofGraph(
-    { spineManifest, adminSpineProof, nextAction },
+    { spineManifest, adminSpineProof, nextAction, releaseReadiness },
     {
       generatedAt,
       spineManifestSource: path.relative(repoRoot, absoluteSpineManifestPath),
       adminSpineProofSource: path.relative(repoRoot, absoluteAdminSpineProofPath),
       nextActionSource: path.relative(repoRoot, absoluteNextActionPath),
+      releaseReadinessSource: path.relative(repoRoot, absoluteReleaseReadinessPath),
     },
   );
   await mkdir(path.dirname(proofGraphJsonPath), { recursive: true });
@@ -236,7 +345,12 @@ export async function writeDevTestGameProofGraph({
   return evidence;
 }
 
-function buildProofGraphNodes({ manifest, adminSpine }) {
+function buildProofGraphNodes({
+  manifest,
+  adminSpine,
+  releaseReadiness,
+  releaseReadinessSource,
+}) {
   const recoveryCommands = new Map(
     (adminSpine.recovery?.surfaces ?? []).map((surface) => [
       surface.id,
@@ -254,6 +368,10 @@ function buildProofGraphNodes({ manifest, adminSpine }) {
     proofCommand: proof.rerunCommand,
     recoveryCommand: recoveryCommands.get(proof.id) ?? proof.rerunCommand,
   }));
+  const productionFeatureTargetNodes = buildProductionFeatureTargetNodes({
+    releaseReadiness,
+    releaseReadinessSource,
+  });
   return [
     {
       id: "admin-spine",
@@ -296,6 +414,7 @@ function buildProofGraphNodes({ manifest, adminSpine }) {
       recoveryCommand: manifest.commands?.proofFreshness?.script,
     },
     ...adminProofNodes,
+    ...productionFeatureTargetNodes,
   ].map((node) =>
     Object.fromEntries(
       Object.entries(node).filter(([, value]) => value !== undefined && value !== ""),
@@ -314,6 +433,19 @@ function buildProofGraphEdges({ nodes, nextAction = null }) {
     ...nodes
       .filter((node) => node.kind === "admin-proof-surface")
       .map((node) => ["admin-spine", node.id, "aggregates"]),
+    ...nodes
+      .filter((node) => node.kind === "production-feature-spine-target")
+      .map((node) => [
+        productionFeatureSourceGraphNodeId(node.sourceCheckId),
+        node.id,
+        "proves-production-feature",
+        {
+          featureSlotId: node.featureSlotId,
+          roleUrl: node.roleUrl,
+          targetRoleUrl: node.targetRoleUrl,
+          command: node.browserProofCommand,
+        },
+      ]),
   ];
   return edges
     .filter(([from, to]) => nodeIds.has(from) && nodeIds.has(to))
@@ -324,6 +456,58 @@ function buildProofGraphEdges({ nodes, nextAction = null }) {
         ),
       ),
     );
+}
+
+function buildProductionFeatureTargetNodes({
+  releaseReadiness,
+  releaseReadinessSource,
+}) {
+  const targets = coreLoopProductionFeatureTargetCollection(releaseReadiness);
+  return targets.slotIds.map((slotId) => {
+    const target = targets.bySlotId[slotId];
+    return {
+      id: `production-feature:${slotId}`,
+      featureSlotId: slotId,
+      label: `Production feature: ${slotId}`,
+      kind: "production-feature-spine-target",
+      status: "passed",
+      artifact: releaseReadinessSource,
+      sourceCheckId: target.sourceCheckId,
+      roleUrl: target.detailRoleUrl,
+      targetRoleUrl: target.roleUrl,
+      cycleId: target.cycleId,
+      roleUrlId: target.roleUrlId,
+      rowKind: target.rowKind,
+      checkpointId: target.checkpointId,
+      recoveryHookId: target.recoveryHookId,
+      adminCheckId: target.adminCheckId,
+      browserProofCommand: target.browserProofCommand,
+      recoveryCommand: target.rerunCommand,
+    };
+  });
+}
+
+function coreLoopProductionFeatureTargetCollection(releaseReadiness) {
+  const coreLoopCheck = releaseReadiness.localDevelopmentSpine?.checks?.find(
+    (check) => check.id === "local-core-loop-proof",
+  );
+  const targets = coreLoopCheck?.spineTargets?.productionFeatureTargets;
+  if (
+    targets?.status !== "passed" ||
+    !Array.isArray(targets.slotIds) ||
+    targets.bySlotId === null ||
+    typeof targets.bySlotId !== "object"
+  ) {
+    throw new Error("proof graph missing core-loop production feature targets");
+  }
+  return targets;
+}
+
+function productionFeatureSourceGraphNodeId(sourceCheckId) {
+  if (sourceCheckId === "local-core-loop-proof") {
+    return "admin-proof:core-loop";
+  }
+  throw new Error(`unknown production feature source check: ${sourceCheckId}`);
 }
 
 function nextActionRecoveryEdges(nextAction) {

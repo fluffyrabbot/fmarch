@@ -193,6 +193,7 @@ import {
   buildDevTestGameNextAction,
   devTestGameIdentityAdminProofCommand,
   devTestGameLiveProofCommand,
+  devTestGameReleaseReadinessPath,
   devTestGameSeedFixtureCommand,
   devTestGameSeedFixturePath,
   devTestGameSeedFixtureRoleUrl,
@@ -200,6 +201,7 @@ import {
 import {
   assertDevTestGameProofGraph,
   assertDevTestGameProofGraphCoversAdminSpine,
+  assertDevTestGameProofGraphCoversProductionFeatureTargets,
   buildDevTestGameProofGraph,
   devTestGameProofGraphAdminProofCommand,
   devTestGameProofGraphAdminProofPath,
@@ -2042,6 +2044,15 @@ test("dev test-game next-action prioritizes development-spine recovery over mani
 
 test("dev test-game proof graph records local proof role URLs and recovery edges", () => {
   const adminSpineProof = adminSpineProofFixture();
+  const releaseReadiness = devTestGameReleaseReadinessChecklistFixture({
+    unproven: [
+      {
+        id: "hosted-deployment",
+        status: "unproven",
+        requiredEvidence: "Hosted API/frontend deployment proof with external health checks",
+      },
+    ],
+  });
   const spineManifest = buildDevTestGameSpineManifest({
     generatedAt: "2026-06-26T00:00:00.000Z",
     proofFreshness: {
@@ -2078,16 +2089,22 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
     {
       spineManifest,
       adminSpineProof,
+      releaseReadiness,
     },
     {
       generatedAt: "2026-06-26T00:00:00.000Z",
     },
   );
 
-  assertDevTestGameProofGraph(graph);
+  assertDevTestGameProofGraph(graph, { releaseReadiness });
   assertDevTestGameProofGraphCoversAdminSpine(graph, adminSpineProof);
-  assert.equal(graph.summary.nodeCount, 19);
-  assert.equal(graph.summary.roleUrlCount, 19);
+  assertDevTestGameProofGraphCoversProductionFeatureTargets(
+    graph,
+    releaseReadiness,
+  );
+  assert.equal(graph.summary.nodeCount, 25);
+  assert.equal(graph.summary.roleUrlCount, 25);
+  assert.equal(graph.summary.productionFeatureTargetCount, 6);
   assert.deepEqual(
     graph.nodes
       .filter((node) => node.kind === "admin-proof-surface")
@@ -2144,12 +2161,53 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
       ],
     ],
   );
+  const productionFeatureTargets =
+    releaseReadiness.localDevelopmentSpine.checks.find(
+      (check) => check.id === "local-core-loop-proof",
+    ).spineTargets.productionFeatureTargets;
+  assert.deepEqual(
+    graph.nodes
+      .filter((node) => node.kind === "production-feature-spine-target")
+      .map((node) => [
+        node.id,
+        node.featureSlotId,
+        node.sourceCheckId,
+        node.artifact,
+        node.roleUrl,
+        node.targetRoleUrl,
+        node.browserProofCommand,
+        node.recoveryCommand,
+      ]),
+    productionFeatureTargets.slotIds.map((slotId) => {
+      const target = productionFeatureTargets.bySlotId[slotId];
+      return [
+        `production-feature:${slotId}`,
+        slotId,
+        target.sourceCheckId,
+        devTestGameReleaseReadinessPath,
+        target.detailRoleUrl,
+        target.roleUrl,
+        target.browserProofCommand,
+        target.rerunCommand,
+      ];
+    }),
+  );
   assert(
     graph.edges.some(
       (edge) =>
         edge.from === "proof-freshness" &&
         edge.to === "next-action" &&
         edge.relationship === "recovers-through",
+    ),
+  );
+  assert(
+    productionFeatureTargets.slotIds.every((slotId) =>
+      graph.edges.some(
+        (edge) =>
+          edge.from === "admin-proof:core-loop" &&
+          edge.to === `production-feature:${slotId}` &&
+          edge.relationship === "proves-production-feature",
+      ),
     ),
   );
   const seedDriftManifest = buildDevTestGameSpineManifest({
@@ -2181,34 +2239,38 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
     },
     adminSpineProof,
   });
+  const seedDriftReleaseReadiness = devTestGameReleaseReadinessChecklistFixture({
+    seedProofLaneCoverage: seedProofLaneCoverageFixture({
+      unclassifiedLaneIds: ["new-production-proof-lane"],
+    }),
+    unproven: [
+      {
+        id: "hosted-concurrent-race-matrix",
+        status: "unproven",
+        requiredEvidence: "Hosted concurrent matrix evidence",
+      },
+    ],
+  });
   const seedDriftNextAction = buildDevTestGameNextAction(seedDriftManifest, {
     generatedAt: "2026-06-26T00:00:01.000Z",
     opsArtifacts: devTestGameOpsArtifactsFixture(),
     raceCoverage: devTestGameRaceCoverageFixture(),
-    releaseReadinessChecklist: devTestGameReleaseReadinessChecklistFixture({
-      seedProofLaneCoverage: seedProofLaneCoverageFixture({
-        unclassifiedLaneIds: ["new-production-proof-lane"],
-      }),
-      unproven: [
-        {
-          id: "hosted-concurrent-race-matrix",
-          status: "unproven",
-          requiredEvidence: "Hosted concurrent matrix evidence",
-        },
-      ],
-    }),
+    releaseReadinessChecklist: seedDriftReleaseReadiness,
   });
   const seedDriftGraph = buildDevTestGameProofGraph(
     {
       spineManifest: seedDriftManifest,
       adminSpineProof,
       nextAction: seedDriftNextAction,
+      releaseReadiness: seedDriftReleaseReadiness,
     },
     {
       generatedAt: "2026-06-26T00:00:02.000Z",
     },
   );
-  assertDevTestGameProofGraph(seedDriftGraph);
+  assertDevTestGameProofGraph(seedDriftGraph, {
+    releaseReadiness: seedDriftReleaseReadiness,
+  });
   assert.deepEqual(
     seedDriftGraph.edges.find(
       (edge) =>
@@ -2231,6 +2293,10 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
     },
   );
   assert.equal(seedDriftGraph.generatedFrom.nextAction, nextActionPath);
+  assert.equal(
+    seedDriftGraph.generatedFrom.releaseReadiness,
+    devTestGameReleaseReadinessPath,
+  );
   assert.throws(
     () =>
       assertDevTestGameProofGraphCoversAdminSpine(
