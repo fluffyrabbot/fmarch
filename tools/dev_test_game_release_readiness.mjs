@@ -88,6 +88,13 @@ import {
   validProductionFeatureSpineTargetCollection,
 } from "./dev_test_game_production_feature_spine_resolver.mjs";
 import {
+  defaultProductionFeatureSpineRerunCommands,
+  devTestGameCoreLoopAdminProofCommand,
+  devTestGameHardeningAdminProofCommand,
+  devTestGameProductionFeatureBrowserProofCommand,
+  productionFeatureSpineSourceCheckRules,
+} from "./dev_test_game_production_feature_source_rules.mjs";
+import {
   assertCompletedGameProofReadinessSurfaceProof,
   completedGameProofReadinessScenarioFamilies,
 } from "./dev_test_game_core_loop_completed_game_proof_readiness_scenarios.mjs";
@@ -176,27 +183,7 @@ import {
 } from "./dev_test_game_core_loop_private_channel_recovery_scenarios.mjs";
 export const DEV_TEST_GAME_RELEASE_READINESS_VERSION = 1;
 const devTestGameSeededBrowserProofCommand =
-  "DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch npm run test:dev-test-game-live";
-const devTestGameCoreLoopAdminProofCommand =
-  "npm run test:dev-test-game-core-loop-admin-proof";
-const devTestGameHardeningAdminProofCommand =
-  "npm run test:dev-test-game-hardening-admin-proof";
-const productionFeatureSpineSourceCheckRules = Object.freeze({
-  "local-core-loop-proof": Object.freeze({
-    detailRoleUrlIncludes: "/admin/audit/local-core-loop",
-    roleUrlIncludes: "/g/",
-    rerunCommand: devTestGameCoreLoopAdminProofCommand,
-  }),
-  "local-hardening-proof": Object.freeze({
-    detailRoleUrlIncludes: "/admin/audit/local-hardening",
-    roleUrlIncludes: "/g/",
-    rerunCommand: devTestGameHardeningAdminProofCommand,
-  }),
-});
-const defaultProductionFeatureSpineRerunCommands = Object.freeze({
-  "local-core-loop-proof": devTestGameCoreLoopAdminProofCommand,
-  "local-hardening-proof": devTestGameHardeningAdminProofCommand,
-});
+  devTestGameProductionFeatureBrowserProofCommand;
 const proofRunLaneCoverageMilestoneIds = Object.freeze([
   "local-stale-conflict-message-milestone",
   "local-host-stale-control-milestone",

@@ -52,7 +52,18 @@ import {
 import {
   productionFeatureSourceTargetsByCheckIdFromReadiness,
 } from "./dev_test_game_production_feature_readiness_sources.mjs";
+import {
+  defaultProductionFeatureSpineRerunCommands,
+  devTestGameProductionFeatureBrowserProofCommand,
+  productionFeatureSpineSourceCheckRules,
+} from "./dev_test_game_production_feature_source_rules.mjs";
 import { devTestGameProofGraphPath } from "./dev_test_game_proof_graph_paths.mjs";
+
+export {
+  devTestGameCoreLoopAdminProofCommand,
+  devTestGameHardeningAdminProofCommand,
+  devTestGameIdentityAdminProofCommand,
+} from "./dev_test_game_production_feature_source_rules.mjs";
 
 export const DEV_TEST_GAME_NEXT_ACTION_VERSION = 1;
 export const devTestGameNextActionPath = "target/dev-test-game/next-action.json";
@@ -60,13 +71,7 @@ export const devTestGameReleaseReadinessPath =
   "target/dev-test-game/release-readiness-checklist.json";
 export const devTestGameOpsArtifactsPath = "target/dev-test-game/ops-artifacts.json";
 export const devTestGameLiveProofCommand =
-  "DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch npm run test:dev-test-game-live";
-export const devTestGameCoreLoopAdminProofCommand =
-  "npm run test:dev-test-game-core-loop-admin-proof";
-export const devTestGameHardeningAdminProofCommand =
-  "npm run test:dev-test-game-hardening-admin-proof";
-export const devTestGameIdentityAdminProofCommand =
-  "npm run test:dev-test-game-identity-admin-proof";
+  devTestGameProductionFeatureBrowserProofCommand;
 export const devTestGameSeedFixtureCommand =
   "npm run test:dev-test-game-seed-fixture";
 export const devTestGameSeedFixturePath =
@@ -75,28 +80,6 @@ export const devTestGameSeedFixtureRoleUrl =
   "/admin/audit/local-seed-fixtures?game=<seeded-game>";
 
 const nextActionJsonPath = path.join(repoRoot, devTestGameNextActionPath);
-const productionFeatureSpineSourceCheckRules = Object.freeze({
-  "local-core-loop-proof": Object.freeze({
-    detailRoleUrlIncludes: "/admin/audit/local-core-loop",
-    roleUrlIncludes: "/g/",
-    rerunCommand: devTestGameCoreLoopAdminProofCommand,
-  }),
-  "local-hardening-proof": Object.freeze({
-    detailRoleUrlIncludes: "/admin/audit/local-hardening",
-    roleUrlIncludes: "/g/",
-    rerunCommand: devTestGameHardeningAdminProofCommand,
-  }),
-  "local-identity-adapter-proof": Object.freeze({
-    detailRoleUrlIncludes: "/admin/audit/local-identity-adapter",
-    roleUrlIncludes: "/admin/audit/local-identity-adapter",
-    rerunCommand: devTestGameIdentityAdminProofCommand,
-  }),
-});
-const defaultProductionFeatureSpineRerunCommands = Object.freeze({
-  "local-core-loop-proof": devTestGameCoreLoopAdminProofCommand,
-  "local-hardening-proof": devTestGameHardeningAdminProofCommand,
-  "local-identity-adapter-proof": devTestGameIdentityAdminProofCommand,
-});
 
 export function buildDevTestGameNextAction(
   spineManifest,
