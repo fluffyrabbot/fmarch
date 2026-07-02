@@ -1732,6 +1732,10 @@ export function normalizeLocalNextActionAudit(nextAction, { game, proofGraph = n
       id: "stale-conflict-message-milestone",
       status: `${staleConflictMessageTrace.coveredLaneCount}/${staleConflictMessageTrace.requiredLaneCount} ${staleConflictMessageTrace.status}`,
     }),
+    Object.freeze({
+      id: "stale-conflict-message-surface-coverage",
+      status: `${staleConflictMessageTrace.surfaceCoverage.coveredSurfaceCount}/${staleConflictMessageTrace.surfaceCoverage.requiredSurfaceCount} ${staleConflictMessageTrace.surfaceCoverage.status}`,
+    }),
     ...staleConflictMessageTrace.laneIds.map((laneId) =>
       Object.freeze({
         id: `stale-conflict-message-${laneId}`,
@@ -2599,6 +2603,12 @@ function normalizeNextActionStaleConflictMessageTrace(staleConflictMessageTrace)
       coveredLaneCount: 0,
       gapCount: 0,
       laneIds: Object.freeze([]),
+      surfaceCoverage: Object.freeze({
+        status: "unknown",
+        requiredSurfaceCount: 0,
+        coveredSurfaceCount: 0,
+        gapCount: 0,
+      }),
       surfaces: Object.freeze([]),
     });
   }
@@ -2612,6 +2622,18 @@ function normalizeNextActionStaleConflictMessageTrace(staleConflictMessageTrace)
     laneIds: Object.freeze(
       staleConflictMessageTrace.laneIds.map((laneId) => String(laneId)),
     ),
+    surfaceCoverage: Object.freeze({
+      status: String(
+        staleConflictMessageTrace.surfaceCoverage?.status ?? "unknown",
+      ),
+      requiredSurfaceCount: Number(
+        staleConflictMessageTrace.surfaceCoverage?.requiredSurfaceCount ?? 0,
+      ),
+      coveredSurfaceCount: Number(
+        staleConflictMessageTrace.surfaceCoverage?.coveredSurfaceCount ?? 0,
+      ),
+      gapCount: Number(staleConflictMessageTrace.surfaceCoverage?.gapCount ?? 0),
+    }),
     surfaces: Object.freeze(
       (Array.isArray(staleConflictMessageTrace.surfaces)
         ? staleConflictMessageTrace.surfaces

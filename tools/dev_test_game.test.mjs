@@ -1480,6 +1480,7 @@ test("dev test-game next-action derives one local recovery command from the mani
     coveredLaneCount: staleConflictMessageLaneIds.length,
     gapCount: 0,
     laneIds: [...staleConflictMessageLaneIds],
+    surfaceCoverage: staleConflictMessageSurfaceCoverageFixture(),
     surfaces: staleConflictMessageSurfaceFixtureRows(),
   });
   assert.deepEqual(freshAction.hostStaleControlTrace, {
@@ -9206,6 +9207,7 @@ function devTestGameReleaseReadinessChecklistFixture({
           laneIds: staleConflictMessageMilestoneFixture().laneIds,
           requiredLaneCount: staleConflictMessageLaneIds.length,
           coveredLaneCount: staleConflictMessageLaneIds.length,
+          surfaceCoverage: staleConflictMessageSurfaceCoverageFixture(),
         },
         {
           id: "local-host-stale-control-milestone",
@@ -9465,7 +9467,17 @@ function staleConflictMessageMilestoneFixture() {
     requiredLaneCount: staleConflictMessageLaneIds.length,
     coveredLaneCount: staleConflictMessageLaneIds.length,
     gapCount: 0,
+    surfaceCoverage: staleConflictMessageSurfaceCoverageFixture(),
     surfaces: staleConflictMessageSurfaceFixtureRows(),
+  };
+}
+
+function staleConflictMessageSurfaceCoverageFixture() {
+  return {
+    status: "complete",
+    requiredSurfaceCount: staleConflictMessageLaneIds.length,
+    coveredSurfaceCount: staleConflictMessageLaneIds.length,
+    gapCount: 0,
   };
 }
 

@@ -5091,7 +5091,17 @@ function staleConflictMessageTraceFixture() {
     coveredLaneCount: staleConflictMessageLaneIds.length,
     gapCount: 0,
     laneIds: [...staleConflictMessageLaneIds],
+    surfaceCoverage: staleConflictMessageSurfaceCoverageFixture(),
     surfaces: staleConflictMessageSurfaceFixtureRows(),
+  };
+}
+
+function staleConflictMessageSurfaceCoverageFixture() {
+  return {
+    status: "complete",
+    requiredSurfaceCount: staleConflictMessageLaneIds.length,
+    coveredSurfaceCount: staleConflictMessageLaneIds.length,
+    gapCount: 0,
   };
 }
 
@@ -5146,6 +5156,10 @@ function staleConflictMessageCheckRows() {
     [
       "stale-conflict-message-milestone",
       `${staleConflictMessageLaneIds.length}/${staleConflictMessageLaneIds.length} covered`,
+    ],
+    [
+      "stale-conflict-message-surface-coverage",
+      `${staleConflictMessageLaneIds.length}/${staleConflictMessageLaneIds.length} complete`,
     ],
     ...staleConflictMessageLaneIds.map((laneId) => [
       `stale-conflict-message-${laneId}`,
@@ -5291,6 +5305,7 @@ function releaseReadinessChecklistFixture() {
           laneIds: staleConflictMessageMilestoneFixture().laneIds,
           requiredLaneCount: staleConflictMessageLaneIds.length,
           coveredLaneCount: staleConflictMessageLaneIds.length,
+          surfaceCoverage: staleConflictMessageSurfaceCoverageFixture(),
         },
         {
           id: "local-host-stale-control-milestone",
@@ -5371,6 +5386,8 @@ function staleConflictMessageMilestoneFixture() {
     requiredLaneCount: staleConflictMessageLaneIds.length,
     coveredLaneCount: staleConflictMessageLaneIds.length,
     gapCount: 0,
+    surfaceCoverage: staleConflictMessageSurfaceCoverageFixture(),
+    surfaces: staleConflictMessageSurfaceFixtureRows(),
   };
 }
 

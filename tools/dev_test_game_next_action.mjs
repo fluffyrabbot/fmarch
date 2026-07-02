@@ -1209,6 +1209,12 @@ function buildStaleConflictMessageTrace(readiness) {
         proofBoundary: String(surface.proofBoundary ?? ""),
       }))
     : [];
+  const surfaceCoverage = normalizeStaleConflictMessageSurfaceCoverage({
+    coverage: milestone?.surfaceCoverage,
+    readiness,
+    laneIds,
+    surfaces,
+  });
   const requiredLaneCount = Number(
     milestone?.requiredLaneCount ?? check?.requiredLaneCount ?? laneIds.length,
   );
@@ -1231,7 +1237,45 @@ function buildStaleConflictMessageTrace(readiness) {
     coveredLaneCount,
     gapCount,
     laneIds,
+    surfaceCoverage,
     surfaces,
+  };
+}
+
+function normalizeStaleConflictMessageSurfaceCoverage({
+  coverage,
+  readiness,
+  laneIds,
+  surfaces,
+}) {
+  if (readiness === null) {
+    return {
+      status: "unavailable",
+      requiredSurfaceCount: laneIds.length,
+      coveredSurfaceCount: 0,
+      gapCount: laneIds.length,
+    };
+  }
+  const requiredSurfaceCount = Number(
+    coverage?.requiredSurfaceCount ?? laneIds.length,
+  );
+  const coveredSurfaceCount = Number(
+    coverage?.coveredSurfaceCount ??
+      surfaces.filter((surface) => surface.status === "passed").length,
+  );
+  const gapCount = Number(
+    coverage?.gapCount ?? Math.max(requiredSurfaceCount - coveredSurfaceCount, 0),
+  );
+  return {
+    status:
+      coverage?.status === "complete" && gapCount === 0
+        ? "complete"
+        : gapCount === 0
+          ? "complete"
+          : "gapped",
+    requiredSurfaceCount,
+    coveredSurfaceCount,
+    gapCount,
   };
 }
 
@@ -1782,6 +1826,12 @@ function assertStaleConflictMessageTrace(trace) {
     !Number.isInteger(trace.coveredLaneCount) ||
     !Number.isInteger(trace.gapCount) ||
     !Array.isArray(trace.laneIds) ||
+    trace.surfaceCoverage === null ||
+    typeof trace.surfaceCoverage !== "object" ||
+    !["complete", "gapped", "unavailable"].includes(trace.surfaceCoverage.status) ||
+    !Number.isInteger(trace.surfaceCoverage.requiredSurfaceCount) ||
+    !Number.isInteger(trace.surfaceCoverage.coveredSurfaceCount) ||
+    !Number.isInteger(trace.surfaceCoverage.gapCount) ||
     !Array.isArray(trace.surfaces)
   ) {
     throw new Error("next-action stale conflict-message trace is missing or malformed");
@@ -1824,6 +1874,15 @@ function assertStaleConflictMessageTrace(trace) {
   }
   if (trace.status === "covered" && trace.gapCount !== 0) {
     throw new Error("next-action stale conflict-message trace covered with gaps");
+  }
+  if (
+    trace.status === "covered" &&
+    (trace.surfaceCoverage.status !== "complete" ||
+      trace.surfaceCoverage.requiredSurfaceCount !== staleConflictMessageLaneIds.length ||
+      trace.surfaceCoverage.coveredSurfaceCount !== staleConflictMessageSurfaceCases().length ||
+      trace.surfaceCoverage.gapCount !== 0)
+  ) {
+    throw new Error("next-action stale conflict-message trace covered without complete surfaces");
   }
   if (trace.status === "gapped" && trace.gapCount === 0) {
     throw new Error("next-action stale conflict-message trace gapped without gaps");

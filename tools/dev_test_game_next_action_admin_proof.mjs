@@ -267,6 +267,7 @@ await runAdminAuditProof({
         coveredLaneCount: source.nextAction.staleConflictMessageTrace.coveredLaneCount,
         gapCount: source.nextAction.staleConflictMessageTrace.gapCount,
         laneIds: source.nextAction.staleConflictMessageTrace.laneIds,
+        surfaceCoverage: source.nextAction.staleConflictMessageTrace.surfaceCoverage,
         surfaces: source.nextAction.staleConflictMessageTrace.surfaces,
       },
       hostStaleControlTrace: {
@@ -442,6 +443,16 @@ export function assertNextActionAdminProof(evidence) {
       evidence.generatedFrom.staleConflictMessageTrace.requiredLaneCount,
     ) ||
     !Array.isArray(evidence.generatedFrom.staleConflictMessageTrace.laneIds) ||
+    evidence.generatedFrom.staleConflictMessageTrace.surfaceCoverage?.status !==
+      "complete" ||
+    !Number.isInteger(
+      evidence.generatedFrom.staleConflictMessageTrace.surfaceCoverage
+        ?.requiredSurfaceCount,
+    ) ||
+    !Number.isInteger(
+      evidence.generatedFrom.staleConflictMessageTrace.surfaceCoverage
+        ?.coveredSurfaceCount,
+    ) ||
     !Array.isArray(evidence.generatedFrom.staleConflictMessageTrace.surfaces)
   ) {
     throw new Error(
@@ -711,6 +722,7 @@ function requiredChecksForNextAction(nextAction) {
   }
   checks.push("race-coverage-promoted-milestones");
   checks.push("stale-conflict-message-milestone");
+  checks.push("stale-conflict-message-surface-coverage");
   for (const laneId of nextAction.staleConflictMessageTrace.laneIds) {
     checks.push(`stale-conflict-message-${laneId}`);
   }
@@ -927,6 +939,7 @@ function requiredChecksForEvidence(evidence) {
       : []),
     "race-coverage-promoted-milestones",
     "stale-conflict-message-milestone",
+    "stale-conflict-message-surface-coverage",
     ...(Array.isArray(evidence.generatedFrom?.staleConflictMessageTrace?.laneIds)
       ? evidence.generatedFrom.staleConflictMessageTrace.laneIds.map(
           (id) => `stale-conflict-message-${id}`,

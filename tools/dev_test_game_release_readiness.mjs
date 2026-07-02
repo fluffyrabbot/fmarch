@@ -557,6 +557,7 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
       laneIds: [...staleConflictMessageMilestone.laneIds],
       requiredLaneCount: staleConflictMessageMilestone.requiredLaneCount,
       coveredLaneCount: staleConflictMessageMilestone.coveredLaneCount,
+      surfaceCoverage: staleConflictMessageMilestone.surfaceCoverage,
       surfaces: staleConflictMessageMilestone.surfaces,
     },
     ...staleConflictMessageMilestone.surfaces.map((surface) => ({
@@ -1085,6 +1086,7 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
         requiredLaneCount: staleConflictMessageMilestone.requiredLaneCount,
         coveredLaneCount: staleConflictMessageMilestone.coveredLaneCount,
         gapCount: staleConflictMessageMilestone.gapCount,
+        surfaceCoverage: staleConflictMessageMilestone.surfaceCoverage,
         surfaces: staleConflictMessageMilestone.surfaces,
       },
       hostStaleControlMilestone: {
@@ -1193,6 +1195,7 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
                 requiredLaneCount: staleConflictMessageMilestone.requiredLaneCount,
                 coveredLaneCount: staleConflictMessageMilestone.coveredLaneCount,
                 gapCount: staleConflictMessageMilestone.gapCount,
+                surfaceCoverage: staleConflictMessageMilestone.surfaceCoverage,
                 surfaces: staleConflictMessageMilestone.surfaces,
               },
               hostStaleControlMilestone: {
@@ -1454,13 +1457,40 @@ function buildStaleConflictMessageMilestone(proof, { sourcePath }) {
         .join(", ")}`,
     );
   }
+  const surfaces = buildStaleConflictMessageSurfaces(lanes, { sourcePath });
+  const surfaceCoverage = buildStaleConflictMessageSurfaceCoverage({
+    laneIds,
+    surfaces,
+    sourcePath,
+  });
   return {
     status: "passed",
     laneIds,
     requiredLaneCount: laneIds.length,
     coveredLaneCount,
     gapCount,
-    surfaces: buildStaleConflictMessageSurfaces(lanes, { sourcePath }),
+    surfaceCoverage,
+    surfaces,
+  };
+}
+
+function buildStaleConflictMessageSurfaceCoverage({ laneIds, surfaces, sourcePath }) {
+  const requiredSurfaceCount = laneIds.length;
+  const coveredSurfaceCount = surfaces.filter(
+    (surface) => surface.status === "passed" && laneIds.includes(surface.laneId),
+  ).length;
+  const gapCount = requiredSurfaceCount - coveredSurfaceCount;
+  const status = gapCount === 0 ? "complete" : "gapped";
+  if (status !== "complete") {
+    throw new Error(
+      `stale conflict-message surface coverage incomplete from ${sourcePath}: ${coveredSurfaceCount}/${requiredSurfaceCount}`,
+    );
+  }
+  return {
+    status,
+    requiredSurfaceCount,
+    coveredSurfaceCount,
+    gapCount,
   };
 }
 
