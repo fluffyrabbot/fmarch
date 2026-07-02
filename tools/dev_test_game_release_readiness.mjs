@@ -84,6 +84,10 @@ import {
   validFeatureSpineDeclaration,
 } from "./dev_test_game_feature_spine_targets.mjs";
 import {
+  buildProductionFeatureSpineTargetCollection,
+  validProductionFeatureSpineTargetCollection,
+} from "./dev_test_game_production_feature_spine_resolver.mjs";
+import {
   assertCompletedGameProofReadinessSurfaceProof,
   completedGameProofReadinessScenarioFamilies,
 } from "./dev_test_game_core_loop_completed_game_proof_readiness_cases.mjs";
@@ -175,6 +179,16 @@ const devTestGameSeededBrowserProofCommand =
   "DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch npm run test:dev-test-game-live";
 const devTestGameCoreLoopAdminProofCommand =
   "npm run test:dev-test-game-core-loop-admin-proof";
+const productionFeatureSpineSourceCheckRules = Object.freeze({
+  "local-core-loop-proof": Object.freeze({
+    detailRoleUrlIncludes: "/admin/audit/local-core-loop",
+    roleUrlIncludes: "/g/",
+    rerunCommand: devTestGameCoreLoopAdminProofCommand,
+  }),
+});
+const defaultProductionFeatureSpineRerunCommands = Object.freeze({
+  "local-core-loop-proof": devTestGameCoreLoopAdminProofCommand,
+});
 const proofRunLaneCoverageMilestoneIds = Object.freeze([
   "local-stale-conflict-message-milestone",
   "local-host-stale-control-milestone",
@@ -2807,60 +2821,25 @@ function buildCoreLoopReadinessSpineTargets(coreLoopAdminProofEvidence) {
     ),
     recoveryHookIds,
     roleUrlHrefs: { ...(rowIds.roleUrlHrefs ?? {}) },
-    productionFeatureTargets: buildCoreLoopProductionFeatureTargets({
+    productionFeatureTargets: buildProductionFeatureSpineTargetCollection({
       declarations: releaseReadinessProductionFeatureSpineTargets,
-      detailRoleUrl: coreLoopAdminProofEvidence.detailRoleUrl,
-      cycleIds,
-      roleUrlIds,
-      roleUrlHrefs: rowIds.roleUrlHrefs ?? {},
-      checkpointIds,
-      recoveryHookIds,
-      visibleAdminCheckIds: coreLoopAdminProofEvidence.visibleChecks ?? [],
-    }),
-  };
-}
-
-function buildCoreLoopProductionFeatureTargets({
-  declarations,
-  detailRoleUrl,
-  cycleIds,
-  roleUrlIds,
-  roleUrlHrefs,
-  checkpointIds,
-  recoveryHookIds,
-  visibleAdminCheckIds,
-}) {
-  const visibleChecks = new Set(visibleAdminCheckIds.map((id) => String(id)));
-  const targets = Object.values(declarations)
-    .filter((declaration) => declaration.sourceCheckId === "local-core-loop-proof")
-    .map((declaration) => {
-      const rowKind = featureSpineRowKind(declaration);
-      if (
-        !cycleIds.includes(declaration.cycleId) ||
-        !roleUrlIds.includes(declaration.roleUrlId) ||
-        !checkpointIds.includes(declaration.checkpointId) ||
-        (rowKind === featureSpineRecoveryHookRowKind &&
-          !recoveryHookIds.includes(declaration.recoveryHookId)) ||
-        !visibleChecks.has(declaration.adminCheckId)
-      ) {
-        throw new Error(
-          `core-loop production feature spine target is not visible in admin proof: ${declaration.featureSlotId}`,
-        );
-      }
-      return {
-        ...declaration,
-        detailRoleUrl,
-        roleUrl: String(roleUrlHrefs[declaration.roleUrlId] ?? ""),
+      sourceTarget: {
+        sourceCheckId: "local-core-loop-proof",
+        detailRoleUrl: coreLoopAdminProofEvidence.detailRoleUrl,
         browserProofCommand: devTestGameSeededBrowserProofCommand,
         rerunCommand: devTestGameCoreLoopAdminProofCommand,
-      };
-    });
-  return {
-    status: "passed",
-    slotIds: targets.map((target) => target.featureSlotId),
-    bySlotId: Object.fromEntries(
-      targets.map((target) => [target.featureSlotId, target]),
-    ),
+        cycleIds,
+        roleUrlIds,
+        checkpointIds,
+        visibleAdminCheckIds: [
+          ...(coreLoopAdminProofEvidence.visibleChecks ?? []),
+        ].map((id) => String(id)),
+        recoveryHookIds,
+        roleUrlHrefs: rowIds.roleUrlHrefs ?? {},
+      },
+      defaultRerunCommandBySourceCheckId:
+        defaultProductionFeatureSpineRerunCommands,
+    }),
   };
 }
 
@@ -5300,45 +5279,13 @@ function validCoreLoopSpineTargets(spineTargets) {
 }
 
 function validCoreLoopProductionFeatureTargets(productionFeatureTargets) {
-  const declarations = Object.values(releaseReadinessProductionFeatureSpineTargets)
-    .filter((declaration) => declaration.sourceCheckId === "local-core-loop-proof");
-  if (
-    productionFeatureTargets === null ||
-    typeof productionFeatureTargets !== "object" ||
-    productionFeatureTargets.status !== "passed" ||
-    !Array.isArray(productionFeatureTargets.slotIds) ||
-    productionFeatureTargets.slotIds.length !== declarations.length ||
-    productionFeatureTargets.bySlotId === null ||
-    typeof productionFeatureTargets.bySlotId !== "object"
-  ) {
-    return false;
-  }
-  for (const declaration of declarations) {
-    const target = productionFeatureTargets.bySlotId[declaration.featureSlotId];
-    if (
-      !productionFeatureTargets.slotIds.includes(declaration.featureSlotId) ||
-      !validFeatureSpineDeclaration(target) ||
-      target.featureSlotId !== declaration.featureSlotId ||
-      target.sourceCheckId !== declaration.sourceCheckId ||
-      target.cycleId !== declaration.cycleId ||
-      target.roleUrlId !== declaration.roleUrlId ||
-      target.checkpointId !== declaration.checkpointId ||
-      target.adminCheckId !== declaration.adminCheckId ||
-      featureSpineRowKind(target) !== featureSpineRowKind(declaration) ||
-      (featureSpineRowKind(declaration) === featureSpineRecoveryHookRowKind &&
-        target.recoveryHookId !== declaration.recoveryHookId) ||
-      typeof target.detailRoleUrl !== "string" ||
-      !target.detailRoleUrl.includes("/admin/audit/local-core-loop") ||
-      typeof target.roleUrl !== "string" ||
-      !target.roleUrl.includes("/g/") ||
-      typeof target.browserProofCommand !== "string" ||
-      !target.browserProofCommand.includes("test:dev-test-game-live") ||
-      target.rerunCommand !== devTestGameCoreLoopAdminProofCommand
-    ) {
-      return false;
-    }
-  }
-  return true;
+  return validProductionFeatureSpineTargetCollection(productionFeatureTargets, {
+    declarations: Object.values(releaseReadinessProductionFeatureSpineTargets)
+      .filter(
+        (declaration) => declaration.sourceCheckId === "local-core-loop-proof",
+      ),
+    sourceCheckRules: productionFeatureSpineSourceCheckRules,
+  });
 }
 
 function markdownChecklist(checklist) {

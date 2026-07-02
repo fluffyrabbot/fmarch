@@ -40,11 +40,12 @@ import {
 } from "./dev_test_game_release_readiness_cases.mjs";
 import { rankedMissingLocalReadinessDependencies } from "./dev_test_game_local_readiness_dependencies.mjs";
 import {
-  featureSpineDeclarationRowsPresent,
-  featureSpineRecoveryHookRowKind,
-  featureSpineRowKind,
-  validFeatureSpineDeclaration,
-} from "./dev_test_game_feature_spine_targets.mjs";
+  buildProductionFeatureSpineDrilldown,
+  resolveProductionFeatureSpineTarget,
+  validProductionFeatureSpineDeclaration,
+  validProductionFeatureSpineDrilldown,
+  validProductionFeatureSpineTarget,
+} from "./dev_test_game_production_feature_spine_resolver.mjs";
 
 export const DEV_TEST_GAME_NEXT_ACTION_VERSION = 1;
 export const devTestGameNextActionPath = "target/dev-test-game/next-action.json";
@@ -65,6 +66,22 @@ export const devTestGameSeedFixtureRoleUrl =
   "/admin/audit/local-seed-fixtures?game=<seeded-game>";
 
 const nextActionJsonPath = path.join(repoRoot, devTestGameNextActionPath);
+const productionFeatureSpineSourceCheckRules = Object.freeze({
+  "local-core-loop-proof": Object.freeze({
+    detailRoleUrlIncludes: "/admin/audit/local-core-loop",
+    roleUrlIncludes: "/g/",
+    rerunCommand: devTestGameCoreLoopAdminProofCommand,
+  }),
+  "local-identity-adapter-proof": Object.freeze({
+    detailRoleUrlIncludes: "/admin/audit/local-identity-adapter",
+    roleUrlIncludes: "/admin/audit/local-identity-adapter",
+    rerunCommand: devTestGameIdentityAdminProofCommand,
+  }),
+});
+const defaultProductionFeatureSpineRerunCommands = Object.freeze({
+  "local-core-loop-proof": devTestGameCoreLoopAdminProofCommand,
+  "local-identity-adapter-proof": devTestGameIdentityAdminProofCommand,
+});
 
 export function buildDevTestGameNextAction(
   spineManifest,
@@ -451,12 +468,21 @@ export function assertDevTestGameNextAction(evidence) {
         "next-action release-readiness recovery is missing a production feature spine declaration",
       );
     }
-    if (!validActionableSpineTarget(evidence.nextAction.unproven?.spineTarget)) {
+    if (
+      !validProductionFeatureSpineTarget(evidence.nextAction.unproven?.spineTarget, {
+        sourceCheckRules: productionFeatureSpineSourceCheckRules,
+      })
+    ) {
       throw new Error(
         "next-action release-readiness recovery is missing an actionable spine target",
       );
     }
-    if (!validProductionFeatureSpineDrilldown(evidence.nextAction.unproven?.spineDrilldown)) {
+    if (
+      !validProductionFeatureSpineDrilldown(
+        evidence.nextAction.unproven?.spineDrilldown,
+        { sourceCheckRules: productionFeatureSpineSourceCheckRules },
+      )
+    ) {
       throw new Error(
         "next-action release-readiness recovery is missing a feature spine drilldown",
       );
@@ -710,90 +736,6 @@ function identityAdapterSpineTargetFromReadiness(readiness) {
     : null;
 }
 
-function resolveProductionFeatureSpineTarget({
-  itemId,
-  declaration,
-  coreLoopSpineTarget,
-  identityAdapterSpineTarget,
-}) {
-  if (!validProductionFeatureSpineDeclaration(declaration)) {
-    throw new Error(
-      `buildable release-readiness item ${itemId} is missing a production feature spine target`,
-    );
-  }
-  const sourceTarget =
-    declaration.sourceCheckId === "local-identity-adapter-proof"
-      ? identityAdapterSpineTarget
-      : coreLoopSpineTarget;
-  if (sourceTarget === null) {
-    throw new Error(
-      `buildable release-readiness item ${itemId} has no ${declaration.sourceCheckId} spine target to resolve`,
-    );
-  }
-  if (declaration.sourceCheckId !== sourceTarget.sourceCheckId) {
-    throw new Error(
-      `buildable release-readiness item ${itemId} production feature spine target drifted`,
-    );
-  }
-  const rowKind = featureSpineRowKind(declaration);
-  if (
-    !featureSpineDeclarationRowsPresent({
-      declaration,
-      sourceTarget,
-    })
-  ) {
-    throw new Error(
-      `buildable release-readiness item ${itemId} production feature spine target is not in ${declaration.sourceCheckId}`,
-    );
-  }
-  const roleUrl = sourceTarget.roleUrlHrefs[declaration.roleUrlId];
-  if (typeof roleUrl !== "string" || roleUrl === "") {
-    throw new Error(
-      `buildable release-readiness item ${itemId} production feature role URL is missing`,
-    );
-  }
-  return {
-    featureSlotId: declaration.featureSlotId,
-    sourceCheckId: sourceTarget.sourceCheckId,
-    detailRoleUrl: sourceTarget.detailRoleUrl,
-    cycleId: declaration.cycleId,
-    roleUrlId: declaration.roleUrlId,
-    roleUrl,
-    rowKind,
-    checkpointId: declaration.checkpointId,
-    ...(rowKind === featureSpineRecoveryHookRowKind
-      ? { recoveryHookId: declaration.recoveryHookId }
-      : {}),
-    adminCheckId: declaration.adminCheckId,
-    browserProofCommand: sourceTarget.browserProofCommand,
-    rerunCommand: sourceTarget.rerunCommand ?? devTestGameCoreLoopAdminProofCommand,
-  };
-}
-
-function buildProductionFeatureSpineDrilldown(spineTarget) {
-  const rowKind = featureSpineRowKind(spineTarget);
-  return {
-    featureSlotId: spineTarget.featureSlotId,
-    sourceCheckId: spineTarget.sourceCheckId,
-    detailRoleUrl: spineTarget.detailRoleUrl,
-    cycleRowId: spineTarget.cycleId,
-    roleUrlRowId: spineTarget.roleUrlId,
-    rowKind,
-    checkpointRowId: spineTarget.checkpointId,
-    ...(rowKind === featureSpineRecoveryHookRowKind
-      ? { recoveryHookRowId: spineTarget.recoveryHookId }
-      : {}),
-    adminCheckId: spineTarget.adminCheckId,
-    roleUrl: spineTarget.roleUrl,
-    rerunCommand: spineTarget.rerunCommand ?? devTestGameCoreLoopAdminProofCommand,
-    browserProofCommand: spineTarget.browserProofCommand,
-  };
-}
-
-function validProductionFeatureSpineDeclaration(declaration) {
-  return validFeatureSpineDeclaration(declaration);
-}
-
 function rankedBuildableReleaseReadinessItems(
   readiness,
   {
@@ -815,8 +757,12 @@ function rankedBuildableReleaseReadinessItems(
       const spineTarget = resolveProductionFeatureSpineTarget({
         itemId: item.id,
         declaration: buildable.productionFeatureSpineTarget,
-        coreLoopSpineTarget,
-        identityAdapterSpineTarget,
+        sourceTargetsByCheckId: {
+          "local-core-loop-proof": coreLoopSpineTarget,
+          "local-identity-adapter-proof": identityAdapterSpineTarget,
+        },
+        defaultRerunCommandBySourceCheckId:
+          defaultProductionFeatureSpineRerunCommands,
       });
       return {
         item,
@@ -1427,89 +1373,6 @@ function releaseReadinessActionStatus(buildable) {
   )
     ? "blocked"
     : "ready";
-}
-
-function validActionableSpineTarget(spineTarget) {
-  const rowKind = featureSpineRowKind(spineTarget);
-  if (
-    spineTarget === null ||
-    typeof spineTarget !== "object" ||
-    typeof spineTarget.featureSlotId !== "string" ||
-    spineTarget.featureSlotId.length === 0 ||
-    typeof spineTarget.detailRoleUrl !== "string" ||
-    typeof spineTarget.cycleId !== "string" ||
-    spineTarget.cycleId.length === 0 ||
-    typeof spineTarget.roleUrlId !== "string" ||
-    spineTarget.roleUrlId.length === 0 ||
-    typeof spineTarget.roleUrl !== "string" ||
-    typeof spineTarget.checkpointId !== "string" ||
-    spineTarget.checkpointId.length === 0 ||
-    (rowKind === featureSpineRecoveryHookRowKind &&
-      (typeof spineTarget.recoveryHookId !== "string" ||
-        spineTarget.recoveryHookId.length === 0)) ||
-    typeof spineTarget.adminCheckId !== "string" ||
-    spineTarget.adminCheckId.length === 0 ||
-    typeof spineTarget.browserProofCommand !== "string" ||
-    !spineTarget.browserProofCommand.includes("test:dev-test-game-live")
-  ) {
-    return false;
-  }
-  if (spineTarget.sourceCheckId === "local-core-loop-proof") {
-    return (
-      spineTarget.detailRoleUrl.includes("/admin/audit/local-core-loop") &&
-      spineTarget.roleUrl.includes("/g/")
-    );
-  }
-  if (spineTarget.sourceCheckId === "local-identity-adapter-proof") {
-    return (
-      spineTarget.detailRoleUrl.includes("/admin/audit/local-identity-adapter") &&
-      spineTarget.roleUrl.includes("/admin/audit/local-identity-adapter") &&
-      spineTarget.rerunCommand === devTestGameIdentityAdminProofCommand
-    );
-  }
-  return false;
-}
-
-function validProductionFeatureSpineDrilldown(drilldown) {
-  const rowKind = featureSpineRowKind(drilldown);
-  if (
-    drilldown === null ||
-    typeof drilldown !== "object" ||
-    typeof drilldown.featureSlotId !== "string" ||
-    drilldown.featureSlotId.length === 0 ||
-    typeof drilldown.detailRoleUrl !== "string" ||
-    typeof drilldown.cycleRowId !== "string" ||
-    drilldown.cycleRowId.length === 0 ||
-    typeof drilldown.roleUrlRowId !== "string" ||
-    drilldown.roleUrlRowId.length === 0 ||
-    typeof drilldown.checkpointRowId !== "string" ||
-    drilldown.checkpointRowId.length === 0 ||
-    (rowKind === featureSpineRecoveryHookRowKind &&
-      (typeof drilldown.recoveryHookRowId !== "string" ||
-        drilldown.recoveryHookRowId.length === 0)) ||
-    typeof drilldown.adminCheckId !== "string" ||
-    drilldown.adminCheckId.length === 0 ||
-    typeof drilldown.roleUrl !== "string" ||
-    typeof drilldown.browserProofCommand !== "string" ||
-    !drilldown.browserProofCommand.includes("test:dev-test-game-live")
-  ) {
-    return false;
-  }
-  if (drilldown.sourceCheckId === "local-core-loop-proof") {
-    return (
-      drilldown.detailRoleUrl.includes("/admin/audit/local-core-loop") &&
-      drilldown.roleUrl.includes("/g/") &&
-      drilldown.rerunCommand === devTestGameCoreLoopAdminProofCommand
-    );
-  }
-  if (drilldown.sourceCheckId === "local-identity-adapter-proof") {
-    return (
-      drilldown.detailRoleUrl.includes("/admin/audit/local-identity-adapter") &&
-      drilldown.roleUrl.includes("/admin/audit/local-identity-adapter") &&
-      drilldown.rerunCommand === devTestGameIdentityAdminProofCommand
-    );
-  }
-  return false;
 }
 
 function validHostedHandoffChecklist(checklist) {
