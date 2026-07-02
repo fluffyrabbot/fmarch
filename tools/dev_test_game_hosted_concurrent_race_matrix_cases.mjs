@@ -8,6 +8,8 @@ import {
   realHostedEvidenceInputIds,
 } from "./dev_test_game_real_hosted_evidence_inputs.mjs";
 
+const cloneMilestoneCase = (scenario) => ({ ...scenario });
+
 export {
   hostedMatrixReconnectLaneIds,
   hostedMatrixStaleConflictLaneIds,
@@ -48,3 +50,22 @@ export const hostedMatrixRequestedEvidenceIds = Object.freeze([
 export const hostedMatrixRealHostedEvidenceInputIds = Object.freeze([
   ...realHostedEvidenceInputIds,
 ]);
+
+export const hostedMatrixStaleConflictMilestoneCaseDefinitions = Object.freeze([
+  Object.freeze({
+    id: "hosted-stale-host-control-conflict",
+    label: "Hosted stale host-control conflict",
+    laneId: "stale-host-control",
+    progressCheckId: "stale-client-conflict-messages",
+    proofBoundary:
+      "Local hosted-like matrix proof that stale host controls surface explicit conflict recovery through the current host role surface.",
+  }),
+]);
+
+export function hostedMatrixStaleConflictMilestoneCases() {
+  return hostedMatrixStaleConflictMilestoneCaseDefinitions.map(cloneMilestoneCase);
+}
+
+export function hostedMatrixStaleConflictMilestoneLaneIds() {
+  return hostedMatrixStaleConflictMilestoneCases().map((scenario) => scenario.laneId);
+}

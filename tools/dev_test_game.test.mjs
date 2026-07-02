@@ -84,6 +84,7 @@ import {
   hostedMatrixReconnectLaneIds,
   hostedMatrixRelatedAuditIds,
   hostedMatrixRequestedEvidenceIds,
+  hostedMatrixStaleConflictMilestoneCases,
   hostedMatrixStaleConflictLaneIds,
 } from "./dev_test_game_hosted_concurrent_race_matrix_cases.mjs";
 import {
@@ -7970,6 +7971,20 @@ test("session card and markdown include role credential URLs and tokens", async 
     hostedMatrix.summary.staleConflictLaneCount,
     hostedMatrixStaleConflictLaneIds.length,
   );
+  assert.deepEqual(
+    hostedMatrix.staleConflictMilestones.map((milestone) => [
+      milestone.id,
+      milestone.status,
+      milestone.laneId,
+      milestone.progressCheckId,
+    ]),
+    hostedMatrixStaleConflictMilestoneCases().map((scenario) => [
+      scenario.id,
+      "passed",
+      scenario.laneId,
+      scenario.progressCheckId,
+    ]),
+  );
   assert.equal(hostedMatrix.summary.hostedEvidenceStatus, "not_configured");
   assert.equal(hostedMatrix.summary.hostedEvidenceMode, "not_configured");
   assert.equal(
@@ -8373,7 +8388,9 @@ test("session card and markdown include role credential URLs and tokens", async 
       (item) =>
         item.id === "local-hosted-concurrent-race-matrix" &&
         item.status === "passed" &&
-        item.cellCount === 16,
+        item.cellCount === 16 &&
+        item.staleConflictMilestones?.[0]?.id ===
+          hostedMatrixStaleConflictMilestoneCases()[0].id,
     ),
   );
   assert.equal(
@@ -13357,6 +13374,13 @@ function hostedConcurrentRaceMatrixAdminProofFixture() {
       ],
       reconnectLaneIds: hostedMatrixReconnectLaneIds,
       staleConflictLaneIds: hostedMatrixStaleConflictLaneIds,
+      staleConflictMilestones: hostedMatrixStaleConflictMilestoneCases().map(
+        (scenario) => ({
+          id: scenario.id,
+          laneId: scenario.laneId,
+          progressCheckId: scenario.progressCheckId,
+        }),
+      ),
       progressCheckIds: hostedMatrixProgressCheckIds,
       relatedAuditIds: hostedMatrixRelatedAuditIds,
       requestedEvidenceId: "hosted-concurrent-race-matrix",

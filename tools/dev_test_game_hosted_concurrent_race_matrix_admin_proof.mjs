@@ -8,6 +8,7 @@ import {
   hostedMatrixProgressCheckIds,
   hostedMatrixRealHostedEvidenceInputIds,
   hostedMatrixRelatedAuditIds,
+  hostedMatrixStaleConflictMilestoneCases,
 } from "./dev_test_game_hosted_concurrent_race_matrix_cases.mjs";
 import {
   artifactDir,
@@ -37,6 +38,8 @@ const requiredProgressChecks = hostedMatrixProgressCheckIds;
 const requiredRelatedLinks = hostedMatrixRelatedAuditIds;
 const requiredRealHostedEvidenceInputs =
   hostedMatrixRealHostedEvidenceInputIds;
+const requiredStaleConflictMilestones =
+  hostedMatrixStaleConflictMilestoneCases();
 
 await runAdminAuditProof({
   smokeName: "dev-test-game-hosted-concurrent-race-matrix-admin-proof",
@@ -101,6 +104,13 @@ await runAdminAuditProof({
       reconnectLaneIds: source.hostedMatrix.reconnectLanes.map((lane) => lane.id),
       staleConflictLaneIds: source.hostedMatrix.staleConflictLanes.map(
         (lane) => lane.id,
+      ),
+      staleConflictMilestones: source.hostedMatrix.staleConflictMilestones.map(
+        (milestone) => ({
+          id: milestone.id,
+          laneId: milestone.laneId,
+          progressCheckId: milestone.progressCheckId,
+        }),
       ),
       progressCheckIds: requiredProgressChecks,
       relatedAuditIds: requiredRelatedLinks,
@@ -168,6 +178,22 @@ export function assertHostedConcurrentRaceMatrixAdminProof(evidence) {
     if (!evidence.adminRoleSurface?.visibleStaleConflictLanes?.includes(laneId)) {
       throw new Error(
         `hosted concurrent race matrix admin proof missing stale-conflict lane: ${laneId}`,
+      );
+    }
+  }
+  for (const scenario of requiredStaleConflictMilestones) {
+    const milestone = evidence.generatedFrom?.staleConflictMilestones?.find(
+      (candidate) => candidate.id === scenario.id,
+    );
+    if (
+      milestone?.laneId !== scenario.laneId ||
+      milestone.progressCheckId !== scenario.progressCheckId ||
+      !evidence.adminRoleSurface?.visibleStaleConflictLanes?.includes(
+        scenario.laneId,
+      )
+    ) {
+      throw new Error(
+        `hosted concurrent race matrix admin proof missing stale milestone: ${scenario.id}`,
       );
     }
   }

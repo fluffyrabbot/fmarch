@@ -52,6 +52,7 @@ import {
 } from "./dev_test_game_hardening_scenarios.mjs";
 import {
   hostedMatrixAdminRequiredCheckIds,
+  hostedMatrixStaleConflictMilestoneCases,
 } from "./dev_test_game_hosted_concurrent_race_matrix_cases.mjs";
 import {
   coreLoopAdminCheckIds,
@@ -779,6 +780,8 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
       reconnectLaneCount: hostedConcurrentRaceMatrixEvidence.reconnectLaneCount,
       staleConflictLaneCount:
         hostedConcurrentRaceMatrixEvidence.staleConflictLaneCount,
+      staleConflictMilestones:
+        hostedConcurrentRaceMatrixEvidence.staleConflictMilestones,
       hostedEvidenceStatus: hostedConcurrentRaceMatrixEvidence.hostedEvidenceStatus,
       realHostedDeploymentStatus:
         hostedConcurrentRaceMatrixEvidence.realHostedDeploymentStatus,
@@ -4290,6 +4293,27 @@ export function validateDevTestGameHostedConcurrentRaceMatrix(proof, options = {
   ) {
     throw new Error("hosted concurrent race matrix recovery lane summary drifted");
   }
+  const expectedMilestoneCases = hostedMatrixStaleConflictMilestoneCases();
+  if (
+    !Array.isArray(proof.staleConflictMilestones) ||
+    proof.staleConflictMilestones.length !== expectedMilestoneCases.length
+  ) {
+    throw new Error("hosted concurrent race matrix stale milestones drifted");
+  }
+  for (const scenario of expectedMilestoneCases) {
+    const milestone = proof.staleConflictMilestones.find(
+      (candidate) => candidate.id === scenario.id,
+    );
+    if (
+      milestone?.status !== "passed" ||
+      milestone.progressCheckId !== scenario.progressCheckId ||
+      milestone.laneId !== scenario.laneId
+    ) {
+      throw new Error(
+        `hosted concurrent race matrix stale milestone drifted: ${scenario.id}`,
+      );
+    }
+  }
   if (!Array.isArray(proof.remainingGaps)) {
     throw new Error("hosted concurrent race matrix missing remaining gaps");
   }
@@ -4301,6 +4325,14 @@ export function validateDevTestGameHostedConcurrentRaceMatrix(proof, options = {
     reloadCoveredCellCount: summary.reloadCoveredCellCount,
     reconnectLaneCount: summary.reconnectLaneCount,
     staleConflictLaneCount: summary.staleConflictLaneCount,
+    staleConflictMilestones: proof.staleConflictMilestones.map((milestone) => ({
+      id: milestone.id,
+      label: milestone.label,
+      status: milestone.status,
+      progressCheckId: milestone.progressCheckId,
+      laneId: milestone.laneId,
+      proofBoundary: milestone.proofBoundary,
+    })),
     hostedEvidenceStatus: summary.hostedEvidenceStatus,
     realHostedDeploymentStatus: summary.realHostedDeploymentStatus,
     remainingGaps: proof.remainingGaps,
@@ -4405,6 +4437,22 @@ export function validateDevTestGameHostedConcurrentRaceMatrixAdminProof(
       );
     }
   }
+  for (const scenario of hostedMatrixStaleConflictMilestoneCases()) {
+    const milestone = proof.generatedFrom?.staleConflictMilestones?.find(
+      (candidate) => candidate.id === scenario.id,
+    );
+    if (
+      milestone?.laneId !== scenario.laneId ||
+      milestone.progressCheckId !== scenario.progressCheckId ||
+      !proof.adminRoleSurface?.visibleStaleConflictLanes?.includes(
+        scenario.laneId,
+      )
+    ) {
+      throw new Error(
+        `hosted concurrent race matrix admin proof missing stale milestone: ${scenario.id}`,
+      );
+    }
+  }
   if (
     !proof.adminRoleSurface?.visibleUnproven?.includes(
       proof.generatedFrom?.requestedEvidenceId,
@@ -4424,6 +4472,7 @@ export function validateDevTestGameHostedConcurrentRaceMatrixAdminProof(
     detailRoleUrl: proof.adminRoleSurface.detailRoleUrl,
     visibleChecks: proof.adminRoleSurface.visibleChecks,
     visibleUnproven: proof.adminRoleSurface.visibleUnproven,
+    staleConflictMilestones: proof.generatedFrom.staleConflictMilestones,
     hostedEvidenceStatus: String(proof.generatedFrom?.hostedEvidenceStatus ?? ""),
     realHostedDeploymentStatus: String(
       proof.generatedFrom?.realHostedDeploymentStatus ?? "",

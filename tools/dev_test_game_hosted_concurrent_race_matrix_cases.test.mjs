@@ -8,6 +8,8 @@ import {
   hostedMatrixReconnectLaneIds,
   hostedMatrixRelatedAuditIds,
   hostedMatrixRequestedEvidenceIds,
+  hostedMatrixStaleConflictMilestoneCases,
+  hostedMatrixStaleConflictMilestoneLaneIds,
   hostedMatrixStaleConflictLaneIds,
 } from "./dev_test_game_hosted_concurrent_race_matrix_cases.mjs";
 import {
@@ -49,6 +51,19 @@ test("hosted concurrent matrix cases share progress and handoff IDs", () => {
   );
   assert.equal(hostedMatrixReconnectLaneIds.length, 10);
   assert.equal(hostedMatrixStaleConflictLaneIds.length, 6);
+  assert.deepEqual(hostedMatrixStaleConflictMilestoneCases(), [
+    {
+      id: "hosted-stale-host-control-conflict",
+      label: "Hosted stale host-control conflict",
+      laneId: "stale-host-control",
+      progressCheckId: "stale-client-conflict-messages",
+      proofBoundary:
+        "Local hosted-like matrix proof that stale host controls surface explicit conflict recovery through the current host role surface.",
+    },
+  ]);
+  assert.deepEqual(hostedMatrixStaleConflictMilestoneLaneIds(), [
+    "stale-host-control",
+  ]);
 });
 
 test("hosted concurrent matrix consumers import extracted cases", async () => {

@@ -18,6 +18,7 @@ import {
   hostedMatrixProgressCheckIds,
   hostedMatrixReconnectLaneIds,
   hostedMatrixRequestedEvidenceIds,
+  hostedMatrixStaleConflictMilestoneCases,
   hostedMatrixStaleConflictLaneIds,
 } from "./dev_test_game_hosted_concurrent_race_matrix_cases.mjs";
 
@@ -96,6 +97,8 @@ export function buildDevTestGameHostedConcurrentRaceMatrixEvidence(
   const cells = coverage.cells.map((cell) => hostedMatrixCell(cell, laneById));
   const reconnectLanes = proofLanesById(laneById, reconnectLaneIds);
   const staleConflictLanes = proofLanesById(laneById, staleConflictLaneIds);
+  const staleConflictMilestones =
+    hostedMatrixStaleConflictMilestones(staleConflictLanes);
   const roleSurfaces = roleSurfacesFromSession(sessionArtifact);
   const externalHostedEvidence = buildExternalHostedEvidence(hostedTarget, promoted);
   const realHostedDeploymentPassed =
@@ -249,6 +252,7 @@ export function buildDevTestGameHostedConcurrentRaceMatrixEvidence(
     cells,
     reconnectLanes,
     staleConflictLanes,
+    staleConflictMilestones,
     requestedEvidence: {
       id: unproven.id,
       status: unproven.status,
@@ -374,6 +378,7 @@ export function assertDevTestGameHostedConcurrentRaceMatrixEvidence(evidence) {
   ) {
     throw new Error("hosted concurrent race matrix remaining gap drifted");
   }
+  assertHostedMatrixStaleConflictMilestones(evidence.staleConflictMilestones);
   if (
     evidence.nextBuildSlice?.command !==
       devTestGameHostedConcurrentRaceMatrixCommand ||
@@ -584,6 +589,52 @@ function hostedMatrixCell(cell, laneById) {
 
 function proofLanesById(laneById, laneIds) {
   return laneIds.map((laneId) => laneSummary(laneById.get(laneId), laneId));
+}
+
+function hostedMatrixStaleConflictMilestones(staleConflictLanes) {
+  const laneById = new Map(staleConflictLanes.map((lane) => [lane.id, lane]));
+  return hostedMatrixStaleConflictMilestoneCases().map((scenario) => {
+    const lane = laneById.get(scenario.laneId);
+    if (lane?.status !== "passed") {
+      throw new Error(
+        `hosted concurrent race matrix missing stale milestone lane: ${scenario.laneId}`,
+      );
+    }
+    return {
+      id: scenario.id,
+      label: scenario.label,
+      status: "passed",
+      progressCheckId: scenario.progressCheckId,
+      laneId: scenario.laneId,
+      laneLabel: lane.label,
+      proofBoundary: scenario.proofBoundary,
+      evidence: lane.evidence,
+    };
+  });
+}
+
+function assertHostedMatrixStaleConflictMilestones(milestones) {
+  const expectedCases = hostedMatrixStaleConflictMilestoneCases();
+  if (
+    !Array.isArray(milestones) ||
+    milestones.length !== expectedCases.length
+  ) {
+    throw new Error("hosted concurrent race matrix stale milestones drifted");
+  }
+  for (const scenario of expectedCases) {
+    const milestone = milestones.find((candidate) => candidate.id === scenario.id);
+    if (
+      milestone?.status !== "passed" ||
+      milestone.progressCheckId !== scenario.progressCheckId ||
+      milestone.laneId !== scenario.laneId ||
+      typeof milestone.proofBoundary !== "string" ||
+      !milestone.proofBoundary.includes("stale host controls")
+    ) {
+      throw new Error(
+        `hosted concurrent race matrix stale milestone drifted: ${scenario.id}`,
+      );
+    }
+  }
 }
 
 function laneSummary(lane, laneId) {
