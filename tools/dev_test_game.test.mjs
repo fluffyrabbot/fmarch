@@ -107,6 +107,7 @@ import {
   replacementStaleActionAfterResolveScenario,
 } from "./dev_test_game_replacement_action_scenario_cases.mjs";
 import {
+  replacementHandoffRecoveryCoverageFamilies,
   replacementHandoffHardeningLaneIds,
   replacementHandoffRecoveryLaneIds,
 } from "./dev_test_game_replacement_handoff_scenario_cases.mjs";
@@ -7960,6 +7961,7 @@ test("session card and markdown include role credential URLs and tokens", async 
       laneIds: [...replacementHandoffRecoveryLaneIds],
       requiredLaneCount: replacementHandoffRecoveryLaneIds.length,
       coveredLaneCount: replacementHandoffRecoveryLaneIds.length,
+      familyCount: replacementHandoffRecoveryCoverageFamilies().length,
     },
   );
   const raceCoverageReadiness = buildDevTestGameReleaseReadiness(proofRun, {
@@ -9352,6 +9354,7 @@ function devTestGameReleaseReadinessChecklistFixture({
           laneIds: replacementHandoffRecoveryMilestoneFixture().laneIds,
           requiredLaneCount: replacementHandoffRecoveryLaneIds.length,
           coveredLaneCount: replacementHandoffRecoveryLaneIds.length,
+          familyCount: replacementHandoffRecoveryCoverageFamilies().length,
         },
         ...(seedProofLaneCoverage === null
           ? []
@@ -9665,6 +9668,12 @@ function replacementHandoffRecoveryMilestoneFixture() {
     requiredLaneCount: replacementHandoffRecoveryLaneIds.length,
     coveredLaneCount: replacementHandoffRecoveryLaneIds.length,
     gapCount: 0,
+    familyCount: replacementHandoffRecoveryCoverageFamilies().length,
+    families: replacementHandoffRecoveryCoverageFamilies().map((family) => ({
+      ...family,
+      status: "passed",
+      passedLaneIds: [...family.laneIds],
+    })),
   };
 }
 

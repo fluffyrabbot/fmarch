@@ -32,6 +32,7 @@ import {
   replacementActionLaneIds,
 } from "./dev_test_game_replacement_action_scenario_cases.mjs";
 import {
+  assertReplacementHandoffRecoveryCoverageSummary,
   replacementHandoffRecoveryLaneIds,
 } from "./dev_test_game_replacement_handoff_scenario_cases.mjs";
 import {
@@ -638,6 +639,7 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
       laneIds: [...replacementHandoffRecoveryMilestone.laneIds],
       requiredLaneCount: replacementHandoffRecoveryMilestone.requiredLaneCount,
       coveredLaneCount: replacementHandoffRecoveryMilestone.coveredLaneCount,
+      familyCount: replacementHandoffRecoveryMilestone.familyCount,
     },
   ];
   if (backupRestoreEvidence !== undefined) {
@@ -1128,6 +1130,8 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
         requiredLaneCount: replacementHandoffRecoveryMilestone.requiredLaneCount,
         coveredLaneCount: replacementHandoffRecoveryMilestone.coveredLaneCount,
         gapCount: replacementHandoffRecoveryMilestone.gapCount,
+        familyCount: replacementHandoffRecoveryMilestone.familyCount,
+        families: replacementHandoffRecoveryMilestone.families,
       },
     },
     localDevelopmentSpine: {
@@ -1249,6 +1253,8 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
                 coveredLaneCount:
                   replacementHandoffRecoveryMilestone.coveredLaneCount,
                 gapCount: replacementHandoffRecoveryMilestone.gapCount,
+                familyCount: replacementHandoffRecoveryMilestone.familyCount,
+                families: replacementHandoffRecoveryMilestone.families,
               },
               ...(backupRestoreEvidence === undefined
                 ? {}
@@ -1683,25 +1689,25 @@ function buildReplacementActionRecoveryMilestone(proof, { sourcePath }) {
 }
 
 function buildReplacementHandoffRecoveryMilestone(proof, { sourcePath }) {
-  const lanes = new Map(proof.lanes.map((lane) => [lane.id, lane]));
-  const laneIds = [...replacementHandoffRecoveryLaneIds];
-  const coveredLaneCount = laneIds.filter(
-    (laneId) => lanes.get(laneId)?.status === "passed",
-  ).length;
-  const gapCount = laneIds.length - coveredLaneCount;
-  if (gapCount !== 0) {
+  let coverage;
+  try {
+    coverage = assertReplacementHandoffRecoveryCoverageSummary({
+      summary: proof.replacementHandoffRecoveryCoverage,
+      lanes: proof.lanes,
+    });
+  } catch (error) {
     throw new Error(
-      `replacement handoff recovery milestone missing passed lanes from ${sourcePath}: ${laneIds
-        .filter((laneId) => lanes.get(laneId)?.status !== "passed")
-        .join(", ")}`,
+      `replacement handoff recovery milestone missing passed lanes from ${sourcePath}: ${error.message}`,
     );
   }
   return {
-    status: "passed",
-    laneIds,
-    requiredLaneCount: laneIds.length,
-    coveredLaneCount,
-    gapCount,
+    status: coverage.status,
+    laneIds: [...coverage.sourceLaneIds],
+    requiredLaneCount: coverage.laneCount,
+    coveredLaneCount: coverage.passedLaneCount,
+    gapCount: coverage.laneCount - coverage.passedLaneCount,
+    familyCount: coverage.familyCount,
+    families: coverage.families,
   };
 }
 

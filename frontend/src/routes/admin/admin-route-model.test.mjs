@@ -39,6 +39,10 @@ import {
   replacementActionRecoveryCoverageFamilies,
 } from "../../../../tools/dev_test_game_replacement_action_scenario_cases.mjs";
 import {
+  replacementHandoffRecoveryCoverageFamilies,
+  replacementHandoffRecoveryLaneIds,
+} from "../../../../tools/dev_test_game_replacement_handoff_scenario_cases.mjs";
+import {
   seedAggregateOnlyProofLaneIds,
   seedAliasOnlyProofLaneIds,
   seedDemoScenarioFixtureRows,
@@ -3559,6 +3563,8 @@ function proofRunFixture() {
       replacementPrivateChannelRecoveryCoverageFixture(),
     replacementActionRecoveryCoverage:
       replacementActionRecoveryCoverageFixture(),
+    replacementHandoffRecoveryCoverage:
+      replacementHandoffRecoveryCoverageFixture(),
     lanes,
   };
 }
@@ -3632,6 +3638,13 @@ function replacementActionRecoveryCoverageFixture() {
   return passedCoverageFixture({
     laneIds: replacementActionLaneIds,
     families: replacementActionRecoveryCoverageFamilies(),
+  });
+}
+
+function replacementHandoffRecoveryCoverageFixture() {
+  return passedCoverageFixture({
+    laneIds: replacementHandoffRecoveryLaneIds,
+    families: replacementHandoffRecoveryCoverageFamilies(),
   });
 }
 

@@ -2,7 +2,11 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { test } from "node:test";
 import {
+  assertReplacementHandoffRecoveryCoverageSummary,
+  buildReplacementHandoffRecoveryCoverageSummary,
   replacementCoreLoopHandoffLaneIds,
+  replacementHandoffRecoveryCoverageFamilies,
+  replacementHandoffRecoveryCoverageFamilyDefinitions,
   replacementHandoffHardeningLaneIds,
   replacementHandoffRecoveryLaneIds,
   replacementSessionRecoveryLaneIds,
@@ -48,6 +52,64 @@ test("replacement handoff lane IDs are shared in proof order", () => {
     "replacement-stale-private-receipts",
     "replacement-incoming-player",
   ]);
+});
+
+test("replacement handoff recovery coverage is derived from shared lanes", () => {
+  assert(Object.isFrozen(replacementHandoffRecoveryCoverageFamilyDefinitions));
+  assert.deepEqual(
+    replacementHandoffRecoveryCoverageFamilies().map((family) => ({
+      id: family.id,
+      laneIds: family.laneIds,
+    })),
+    [
+      {
+        id: "replacement-entry",
+        laneIds: [
+          "replacement-host-issued-invite",
+          "replacement-pending-player",
+        ],
+      },
+      {
+        id: "replacement-session-recovery",
+        laneIds: replacementSessionRecoveryLaneIds,
+      },
+      {
+        id: "replacement-host-command-recovery",
+        laneIds: [
+          "stale-host-invite-recovery",
+          "replacement-invalid-target-recovery",
+          "replacement-console",
+          "replacement-idempotent-retry",
+          "replacement-stale-success-recovery",
+        ],
+      },
+      {
+        id: "replacement-stale-outgoing-authority",
+        laneIds: [
+          "replacement-stale-player",
+          "replacement-stale-action",
+          "replacement-stale-private-channel",
+          "replacement-stale-private-receipts",
+        ],
+      },
+      {
+        id: "replacement-incoming-player",
+        laneIds: ["replacement-incoming-player"],
+      },
+    ],
+  );
+  const lanes = replacementHandoffRecoveryLaneIds.map((id) => ({
+    id,
+    status: "passed",
+  }));
+  const summary = buildReplacementHandoffRecoveryCoverageSummary(lanes);
+  assert.deepEqual(summary.sourceLaneIds, replacementHandoffRecoveryLaneIds);
+  assert.equal(summary.laneCount, replacementHandoffRecoveryLaneIds.length);
+  assert.equal(summary.passedLaneCount, replacementHandoffRecoveryLaneIds.length);
+  assert.equal(summary.familyCount, 5);
+  assert.doesNotThrow(() =>
+    assertReplacementHandoffRecoveryCoverageSummary({ summary, lanes }),
+  );
 });
 
 test("replacement handoff consumers import extracted lane IDs", async () => {

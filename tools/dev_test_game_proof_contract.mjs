@@ -53,6 +53,10 @@ import {
   replacementStaleActionAfterResolveScenario,
 } from "./dev_test_game_replacement_action_scenario_cases.mjs";
 import {
+  assertReplacementHandoffRecoveryCoverageSummary,
+  buildReplacementHandoffRecoveryCoverageSummary,
+} from "./dev_test_game_replacement_handoff_scenario_cases.mjs";
+import {
   ackedReplacementCommandMatches,
   replacementCommandEnvelopeMatches,
   replacementCurrentOwnerMatches,
@@ -5875,6 +5879,8 @@ export function buildDevTestGameProofRun(session, options = {}) {
     buildReplacementPrivateChannelRecoveryCoverageSummary(lanes);
   const replacementActionRecoveryCoverage =
     buildReplacementActionRecoveryCoverageSummary(lanes);
+  const replacementHandoffRecoveryCoverage =
+    buildReplacementHandoffRecoveryCoverageSummary(lanes);
   return {
     version: DEV_TEST_GAME_PROOF_VERSION,
     proof: "dev-test-game-proof-run",
@@ -5903,6 +5909,7 @@ export function buildDevTestGameProofRun(session, options = {}) {
     hostStaleControlCoverage,
     replacementPrivateChannelRecoveryCoverage,
     replacementActionRecoveryCoverage,
+    replacementHandoffRecoveryCoverage,
     lanes,
     nonClaims: [
       "production account identity",
@@ -5960,6 +5967,10 @@ export function assertDevTestGameProofRun(proof) {
   });
   assertReplacementActionRecoveryCoverageSummary({
     summary: proof.replacementActionRecoveryCoverage,
+    lanes: proof.lanes,
+  });
+  assertReplacementHandoffRecoveryCoverageSummary({
+    summary: proof.replacementHandoffRecoveryCoverage,
     lanes: proof.lanes,
   });
   for (const laneId of requiredLaneIds) {
