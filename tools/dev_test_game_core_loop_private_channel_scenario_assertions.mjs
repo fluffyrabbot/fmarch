@@ -12,6 +12,9 @@ export function completedPrivateChannelReloadScenario() {
     routeBoundary:
       "Seeded browser completed private-channel role URL reloaded into durable endgame controls.",
     expectedBoundary: "completed private-channel role URL reloaded",
+    completedCommandStateBoundary:
+      "Role-action availability: game is complete.",
+    completedCommandStateBoundaryFragment: "game is complete",
   };
 }
 
@@ -82,6 +85,36 @@ export function staleCompletedPrivatePostScenario() {
     staleBoundary:
       "Seeded browser stale completed private-channel proof opened before completion refresh.",
     expectedBoundary: "GameAlreadyCompleted recovery refreshed role-pm controls",
+  };
+}
+
+export function privateChannelSubmitPostCommandFacts({
+  channelId = privateChannelSubmitPostScenario().channelId,
+  actorSlot = privateChannelSubmitPostScenario().actorSlot,
+} = {}) {
+  const scenario = privateChannelSubmitPostScenario();
+  return {
+    channelId,
+    actorSlot,
+    commandAction: scenario.clickedAction,
+    commandKind: scenario.commandKind,
+  };
+}
+
+export function staleCompletedPrivatePostCommandFacts({
+  channelId = staleCompletedPrivatePostScenario().channelId,
+  actorSlot = staleCompletedPrivatePostScenario().actorSlot,
+} = {}) {
+  const scenario = staleCompletedPrivatePostScenario();
+  const completedScenario = completedPrivateChannelReloadScenario();
+  return {
+    ...privateChannelSubmitPostCommandFacts({ channelId, actorSlot }),
+    commandError: scenario.commandError,
+    commandMessage: scenario.commandMessage,
+    commandStateBoundary:
+      completedScenario.completedCommandStateBoundary,
+    commandStateBoundaryFragment:
+      completedScenario.completedCommandStateBoundaryFragment,
   };
 }
 

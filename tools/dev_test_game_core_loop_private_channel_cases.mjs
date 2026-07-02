@@ -12,6 +12,8 @@ export {
   completedPrivateChannelTransition,
   completedPrivateChannelTransitionTokens,
   privateChannelSubmitPostScenario,
+  privateChannelSubmitPostCommandFacts,
+  staleCompletedPrivatePostCommandFacts,
   staleCompletedPrivatePostAfterRejectSnapshotCase,
   staleCompletedPrivatePostAfterReloadSnapshotCase,
   staleCompletedPrivatePostAssertionCase,

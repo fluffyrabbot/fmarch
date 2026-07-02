@@ -2,6 +2,10 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { test } from "node:test";
 import {
+  privateChannelSubmitPostCommandFacts,
+  staleCompletedPrivatePostCommandFacts,
+} from "./dev_test_game_core_loop_private_channel_scenario_assertions.mjs";
+import {
   replacementConcurrentActionRaceScenario,
   replacementConcurrentPrivatePostRaceScenario,
   replacementConcurrentVoteRaceScenario,
@@ -30,16 +34,20 @@ test("replacement private scenario module groups private-post race and recovery 
 });
 
 test("replacement private-post race scenario carries shared command facts", () => {
-  assert.deepEqual(replacementConcurrentPrivatePostRaceScenario(), {
-    gameFixtureId: "replacement-private-post-race-game-a",
+  const privatePost = privateChannelSubmitPostCommandFacts({
     channelId: "private:mafia_day_chat",
     actorSlot: "slot-7",
+  });
+  assert.deepEqual(replacementConcurrentPrivatePostRaceScenario(), {
+    gameFixtureId: "replacement-private-post-race-game-a",
+    channelId: privatePost.channelId,
+    actorSlot: privatePost.actorSlot,
     hostPrincipalUserId: "host_h",
     staleOutgoingPrincipalUserId: "player-mira",
     replacementPrincipalUserId: "player-rowan",
     replacementOccupantLabel: "player-rowan",
-    commandAction: "submit_post",
-    commandKind: "SubmitPost",
+    commandAction: privatePost.commandAction,
+    commandKind: privatePost.commandKind,
     rejectionError: "NotYourSlot",
     proof:
       "A disposable Mira role URL in the Slot 7 private mafia channel raced SubmitPost against a host role URL ProcessReplacement command, accepted only post-before-replacement ACK ordering or NotYourSlot after replacement, then refreshed browser and API surfaces to Rowan as current Slot 7 with Mira's stale command-state and private-channel routes forbidden.",
@@ -85,16 +93,20 @@ test("replacement action race scenario carries shared command facts", () => {
 });
 
 test("replacement resolved private-post scenario carries shared command facts", () => {
-  assert.deepEqual(replacementStalePrivatePostAfterResolveScenario(), {
-    gameFixtureId: "replacement-stale-private-post-after-resolve-game-a",
+  const privatePost = privateChannelSubmitPostCommandFacts({
     channelId: "private:mafia_day_chat",
     actorSlot: "slot-7",
+  });
+  assert.deepEqual(replacementStalePrivatePostAfterResolveScenario(), {
+    gameFixtureId: "replacement-stale-private-post-after-resolve-game-a",
+    channelId: privatePost.channelId,
+    actorSlot: privatePost.actorSlot,
     hostPrincipalUserId: "host_h",
     staleOutgoingPrincipalUserId: "player-mira",
     replacementPrincipalUserId: "player-rowan",
     replacementOccupantLabel: "player-rowan",
-    commandAction: "submit_post",
-    commandKind: "SubmitPost",
+    commandAction: privatePost.commandAction,
+    commandKind: privatePost.commandKind,
     postAckSeq: 71,
     fixturePostBody: "Replacement stale private post after resolve fixture",
     reconnectPostBody: "Replacement stale private post reconnect fixture",
@@ -104,25 +116,52 @@ test("replacement resolved private-post scenario carries shared command facts", 
 });
 
 test("replacement completed private-post scenario carries shared command facts", () => {
-  assert.deepEqual(replacementStalePrivatePostAfterCompleteScenario(), {
-    gameFixtureId: "replacement-stale-private-post-after-complete-game-a",
+  const completedPrivatePost = staleCompletedPrivatePostCommandFacts({
     channelId: "private:mafia_day_chat",
     actorSlot: "slot-7",
+  });
+  assert.deepEqual(replacementStalePrivatePostAfterCompleteScenario(), {
+    gameFixtureId: "replacement-stale-private-post-after-complete-game-a",
+    channelId: completedPrivatePost.channelId,
+    actorSlot: completedPrivatePost.actorSlot,
     hostPrincipalUserId: "host_h",
     staleOutgoingPrincipalUserId: "player-mira",
     replacementPrincipalUserId: "player-rowan",
     replacementOccupantLabel: "player-rowan",
-    commandAction: "submit_post",
-    commandKind: "SubmitPost",
-    commandError: "GameAlreadyCompleted",
-    commandMessage: "Reject GameAlreadyCompleted: game already completed",
-    commandStateBoundary: "Role-action availability: game is complete.",
-    commandStateBoundaryFragment: "game is complete",
+    commandAction: completedPrivatePost.commandAction,
+    commandKind: completedPrivatePost.commandKind,
+    commandError: completedPrivatePost.commandError,
+    commandMessage: completedPrivatePost.commandMessage,
+    commandStateBoundary: completedPrivatePost.commandStateBoundary,
+    commandStateBoundaryFragment:
+      completedPrivatePost.commandStateBoundaryFragment,
     fixturePostBody: "Replacement stale private post after complete fixture",
     livePostBodyPrefix: "Stale Rowan private post after CompleteGame",
     outcomeSummary:
       "Rowan's stale replacement private post rejected GameAlreadyCompleted after host completion and reloaded into completed private-channel truth",
   });
+});
+
+test("replacement private-post scenarios import shared private-channel command facts", async () => {
+  const source = await readFile(
+    "tools/dev_test_game_replacement_private_scenario_cases.mjs",
+    "utf8",
+  );
+  assert(
+    source.includes(
+      "./dev_test_game_core_loop_private_channel_scenario_assertions.mjs",
+    ),
+    "replacement private-post scenarios should import shared private-channel scenario facts",
+  );
+  assert(
+    !source.includes('commandAction: "submit_post"') &&
+      !source.includes('commandKind: "SubmitPost"') &&
+      !source.includes('commandError: "GameAlreadyCompleted"') &&
+      !source.includes(
+        'commandMessage: "Reject GameAlreadyCompleted: game already completed"',
+      ),
+    "replacement private-post scenarios should not duplicate private-channel command facts",
+  );
 });
 
 test("replacement private live harness imports extracted scenario cases", async () => {
