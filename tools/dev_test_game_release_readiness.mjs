@@ -78,7 +78,8 @@ import {
 } from "./dev_test_game_release_readiness_cases.mjs";
 import {
   assertCompletedGameEndgameSurfaceProof,
-} from "./dev_test_game_core_loop_completed_game_scenario_assertions.mjs";
+  completedGameEndgameScenarioCaseFamilies,
+} from "./dev_test_game_core_loop_completed_recovery_scenario_assertions.mjs";
 import {
   assertPlayerStaleActionAfterTransitionProofCase,
   assertPlayerStaleVoteAfterTransitionProofCase,
@@ -154,7 +155,6 @@ import {
 } from "./dev_test_game_core_loop_host_control_scenarios.mjs";
 import {
   coreLoopCompletedEndgameProgressionFamilyId,
-  coreLoopCompletedEndgameProgressionScenarioFamilies,
 } from "./dev_test_game_core_loop_completed_endgame_progression_scenarios.mjs";
 import {
   coreLoopPrivateChannelRecoveryFamilyId,
@@ -2688,7 +2688,7 @@ function assertCoreLoopDayFiveNoLynchResolutionSurface(
   });
 }
 function assertCoreLoopCompletedGameEndgameSurface(completedGameEndgameSurface) {
-  const scenarioFamilies = coreLoopCompletedEndgameProgressionScenarioFamilies();
+  const scenarioFamilies = completedGameEndgameScenarioCaseFamilies();
   assertCompletedGameEndgameSurfaceProof({
     completedGameEndgameSurface,
     scenarioFamilies,

@@ -301,17 +301,20 @@ test("completed-game production harness callers share extracted recovery cases",
     assert(
       importsFromModule({
         source,
-        importedName: "coreLoopCompletedEndgameProgressionScenarioFamilies",
+        importedName: "completedGameEndgameScenarioCaseFamilies",
         moduleSpecifier:
-          "./dev_test_game_core_loop_completed_endgame_progression_scenarios.mjs",
+          "./dev_test_game_core_loop_completed_recovery_scenario_assertions.mjs",
       }),
-      `${callerPath} should import completed-game recovery case families from the shared progression module`,
+      `${callerPath} should import completed-game recovery case families from the shared scenario/assertion module`,
     );
     assert(
-      source.includes(
-        "./dev_test_game_core_loop_completed_game_scenario_assertions.mjs",
-      ),
-      `${callerPath} should import completed-game assertions through the public scenario module`,
+      importsFromModule({
+        source,
+        importedName: "assertCompletedGameEndgameSurfaceProof",
+        moduleSpecifier:
+          "./dev_test_game_core_loop_completed_recovery_scenario_assertions.mjs",
+      }),
+      `${callerPath} should import completed-game assertions through the shared scenario/assertion module`,
     );
     assert(
       !importsFromModule({
@@ -321,6 +324,15 @@ test("completed-game production harness callers share extracted recovery cases",
           "./dev_test_game_core_loop_completed_recovery_scenario_cases.mjs",
       }),
       `${callerPath} should not import completed-game recovery case families separately from the progression module`,
+    );
+    assert(
+      !importsFromModule({
+        source,
+        importedName: "completedGameEndgameScenarioCaseFamilies",
+        moduleSpecifier:
+          "./dev_test_game_core_loop_completed_recovery_scenario_cases.mjs",
+      }),
+      `${callerPath} should not import completed-game recovery case families separately from the shared scenario/assertion module`,
     );
     assert(
       !importsFromModule({
@@ -342,21 +354,15 @@ test("completed-game production harness callers share extracted recovery cases",
     );
     assert(
       source.includes(
-        "./dev_test_game_core_loop_completed_endgame_progression_scenarios.mjs",
+        "./dev_test_game_core_loop_completed_recovery_scenario_assertions.mjs",
       ),
-      `${callerPath} should import completed recovery cases through the shared progression module`,
+      `${callerPath} should import completed recovery cases through the shared scenario/assertion module`,
     );
     assert(
       !source.includes(
         "./dev_test_game_core_loop_completed_recovery_case_definitions.mjs",
       ),
       `${callerPath} should not import completed recovery definitions separately from the shared scenario/assertion module`,
-    );
-    assert(
-      !source.includes(
-        "./dev_test_game_core_loop_completed_recovery_scenario_assertions.mjs",
-      ),
-      `${callerPath} should not import completed recovery cases through the compatibility assertion facade`,
     );
     assert(
       !source.includes("./dev_test_game_core_loop_completed_recovery_cases.mjs"),

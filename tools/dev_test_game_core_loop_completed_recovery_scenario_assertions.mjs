@@ -1,4 +1,8 @@
 export {
+  assertCompletedGameEndgameSurfaceProof,
+} from "./dev_test_game_core_loop_completed_game_scenario_assertions.mjs";
+
+export {
   assertCompletedGameEndgameTransition,
   assertCompletedPlayerReloadCases,
   completedDeadPlayerStaleVoteAssertionCase,
