@@ -22,7 +22,9 @@ import {
   staleConflictMessageLaneIds,
 } from "./dev_test_game_stale_conflict_scenarios.mjs";
 
-export const hardeningAuditLaneIds = Object.freeze([
+const uniqueLaneIds = (laneIds) => [...new Set(laneIds)];
+
+export const hardeningAuditLaneIds = Object.freeze(uniqueLaneIds([
   "replacement-redeemed-invite-recovery",
   "replacement-session-revocation-recovery",
   "replacement-session-refresh-recovery",
@@ -62,4 +64,4 @@ export const hardeningAuditLaneIds = Object.freeze([
   ...hostPhaseStaleControlLaneIds,
   "stale-cohost-deadline",
   ...cohostDeadlineRecoveryLaneIds,
-]);
+]));

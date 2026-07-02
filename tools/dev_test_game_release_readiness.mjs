@@ -527,7 +527,7 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
       status: "passed",
       evidence: sourcePath,
       proofBoundary:
-        "Local seeded-game proof that stale replacement, stale action, and stale dead-actor action paths show explicit conflict messages and current-control recovery hints.",
+        "Local seeded-game proof that stale replacement, player action, dead-actor action, host deadline, and cohost deadline paths show explicit conflict messages and current-control recovery hints.",
       laneIds: [...staleConflictMessageMilestone.laneIds],
       requiredLaneCount: staleConflictMessageMilestone.requiredLaneCount,
       coveredLaneCount: staleConflictMessageMilestone.coveredLaneCount,

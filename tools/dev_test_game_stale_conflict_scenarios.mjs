@@ -6,6 +6,8 @@ export const staleConflictMessageLaneIds = Object.freeze([
   "replacement-stale-conflict-message",
   "stale-action-conflict-message",
   "stale-dead-action-conflict",
+  "stale-host-deadline",
+  "stale-cohost-deadline",
 ]);
 
 export const hostedMatrixStaleConflictLaneIds = Object.freeze([

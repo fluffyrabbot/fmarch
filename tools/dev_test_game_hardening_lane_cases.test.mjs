@@ -45,6 +45,8 @@ test("hardening lane cases share stale conflict-message IDs", () => {
     "replacement-stale-conflict-message",
     "stale-action-conflict-message",
     "stale-dead-action-conflict",
+    "stale-host-deadline",
+    "stale-cohost-deadline",
   ]);
 });
 

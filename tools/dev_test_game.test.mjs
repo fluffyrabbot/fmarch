@@ -77,6 +77,7 @@ import {
   hostedMatrixReconnectLaneIds,
 } from "./dev_test_game_host_stale_control_scenarios.mjs";
 import {
+  hostedMatrixStaleConflictLaneIds,
   staleConflictMessageLaneIds,
 } from "./dev_test_game_stale_conflict_scenarios.mjs";
 import {
@@ -7920,7 +7921,10 @@ test("session card and markdown include role credential URLs and tokens", async 
   assert.equal(hostedMatrix.summary.cellCount, 16);
   assert.equal(hostedMatrix.summary.reloadCoveredCellCount, 16);
   assert.equal(hostedMatrix.summary.reconnectLaneCount, 10);
-  assert.equal(hostedMatrix.summary.staleConflictLaneCount, 4);
+  assert.equal(
+    hostedMatrix.summary.staleConflictLaneCount,
+    hostedMatrixStaleConflictLaneIds.length,
+  );
   assert.equal(hostedMatrix.summary.hostedEvidenceStatus, "not_configured");
   assert.equal(hostedMatrix.summary.hostedEvidenceMode, "not_configured");
   assert.equal(
