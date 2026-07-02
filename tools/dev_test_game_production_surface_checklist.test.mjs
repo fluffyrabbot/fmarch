@@ -10,6 +10,9 @@ import {
   featureSpineSourceCheckIds,
 } from "./dev_test_game_feature_spine_targets.mjs";
 import {
+  productionFeatureGraphSourceNodeId,
+} from "./dev_test_game_production_feature_graph_sources.mjs";
+import {
   assertProductionFacingSurfaceChecklist,
   assertProductionFacingSurfaceGraphCoverage,
   productionFacingSurfaceChecklistItems,
@@ -35,6 +38,11 @@ test("production-facing surface checklist binds proof graph nodes to admin audit
       featureSpineSourceCheckIds.includes(
         item.productionFeatureSpineTarget.sourceCheckId,
       ),
+    );
+    assert.ok(
+      productionFeatureGraphSourceNodeId(
+        item.productionFeatureSpineTarget.sourceCheckId,
+      ).startsWith("admin-proof:"),
     );
     assert.ok(item.command.startsWith("npm run test:"));
     assert.ok(item.proofTarget.startsWith("target/"));

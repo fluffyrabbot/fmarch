@@ -46,6 +46,9 @@ import {
   validProductionFeatureSpineDrilldown,
   validProductionFeatureSpineTarget,
 } from "./dev_test_game_production_feature_spine_resolver.mjs";
+import {
+  productionFeatureGraphSourceNodeId,
+} from "./dev_test_game_production_feature_graph_sources.mjs";
 import { devTestGameProofGraphPath } from "./dev_test_game_proof_graph_paths.mjs";
 
 export const DEV_TEST_GAME_NEXT_ACTION_VERSION = 1;
@@ -937,16 +940,6 @@ function selectedProductionFeatureGraphForTarget({ proofGraph, spineTarget }) {
     ),
     proofTarget: String(node.artifact ?? ""),
   };
-}
-
-function productionFeatureGraphSourceNodeId(sourceCheckId) {
-  if (sourceCheckId === "local-hardening-proof") {
-    return "admin-proof:hardening";
-  }
-  if (sourceCheckId === "local-identity-adapter-proof") {
-    return "admin-proof:identity";
-  }
-  return "admin-proof:core-loop";
 }
 
 function validSelectedProductionFeatureGraph(graphSelection, spineTarget) {

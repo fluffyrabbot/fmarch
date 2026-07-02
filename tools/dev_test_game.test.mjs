@@ -216,6 +216,9 @@ import {
   adminProofDestinationRequirementLinkRows,
 } from "./dev_test_game_proof_graph_handoff_cases.mjs";
 import {
+  productionFeatureGraphSourceNodeId,
+} from "./dev_test_game_production_feature_graph_sources.mjs";
+import {
   assertDevTestGameRaceCoverage,
   buildDevTestGameRaceCoverage,
   cohostDeadlineRaceCoveragePromotedReloadGroup,
@@ -2264,7 +2267,7 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
     expectedProductionFeatureRows.every(([, slotId, sourceCheckId]) =>
       graph.edges.some(
         (edge) =>
-          edge.from === productionFeatureSourceNodeFixture(sourceCheckId) &&
+          edge.from === productionFeatureGraphSourceNodeId(sourceCheckId) &&
           edge.to === `production-feature:${slotId}` &&
           edge.relationship === "proves-production-feature",
       ),
@@ -12509,7 +12512,7 @@ function resolvedFeatureSpineTargetFixture(slotId = "player-action-submission") 
 
 function nextActionProofGraphFixture(slotId = "player-action-submission") {
   const target = resolvedFeatureSpineTargetFixture(slotId);
-  const sourceNodeId = productionFeatureSourceNodeFixture(target.sourceCheckId);
+  const sourceNodeId = productionFeatureGraphSourceNodeId(target.sourceCheckId);
   const nodeId = `production-feature:${slotId}`;
   return {
     version: 1,
@@ -12577,16 +12580,6 @@ function featureSpineCaseFixture(
     browserProofCommand: devTestGameLiveProofCommand,
     includeTargetRerunCommand: true,
   });
-}
-
-function productionFeatureSourceNodeFixture(sourceCheckId) {
-  if (sourceCheckId === "local-hardening-proof") {
-    return "admin-proof:hardening";
-  }
-  if (sourceCheckId === "local-identity-adapter-proof") {
-    return "admin-proof:identity";
-  }
-  return "admin-proof:core-loop";
 }
 
 function hostedIdentityHandoffChecklistFixture() {

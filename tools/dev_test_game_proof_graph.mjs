@@ -23,6 +23,9 @@ import {
 import {
   featureSpineRowKind,
 } from "./dev_test_game_feature_spine_targets.mjs";
+import {
+  productionFeatureGraphSourceNodeId as productionFeatureSourceGraphNodeId,
+} from "./dev_test_game_production_feature_graph_sources.mjs";
 export {
   devTestGameProofGraphAdminProofCommand,
   devTestGameProofGraphAdminProofPath,
@@ -578,19 +581,6 @@ function resolveBuildableProductionFeatureTarget({ declaration, releaseReadiness
   throw new Error(
     `proof graph cannot resolve production feature source check: ${declaration.sourceCheckId}`,
   );
-}
-
-function productionFeatureSourceGraphNodeId(sourceCheckId) {
-  if (sourceCheckId === "local-core-loop-proof") {
-    return "admin-proof:core-loop";
-  }
-  if (sourceCheckId === "local-hardening-proof") {
-    return "admin-proof:hardening";
-  }
-  if (sourceCheckId === "local-identity-adapter-proof") {
-    return "admin-proof:identity";
-  }
-  throw new Error(`unknown production feature source check: ${sourceCheckId}`);
 }
 
 function nextActionRecoveryEdges(nextAction) {
