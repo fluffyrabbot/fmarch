@@ -8,6 +8,10 @@ import {
   hostedMatrixExternalEvidencePath,
 } from "./dev_test_game_hosted_handoff_cases.mjs";
 import {
+  devTestGameHostedEvidenceLaneDemoProofCommand,
+  devTestGameHostedEvidenceLaneDemoProofPath,
+} from "./dev_test_game_hosted_evidence_lane_demo_proof.mjs";
+import {
   devTestGameHostedIdentityEvidenceCommand,
   devTestGameHostedIdentityEvidencePath,
   hostedIdentityEvidenceHandoffCase,
@@ -268,22 +272,33 @@ function hostedDeploymentBuildable({ hostedTargetPreflight }) {
   if (hostedTargetPreflight?.status === "passed") {
     const syntheticExternalTarget =
       hostedTargetPreflight.target?.rawEvidenceSyntheticExternalTarget === true;
+    const command = syntheticExternalTarget
+      ? `npm run ${devTestGameHostedEvidenceLaneDemoProofCommand}`
+      : hostedEvidenceLaneCommand;
+    const proofTarget = syntheticExternalTarget
+      ? devTestGameHostedEvidenceLaneDemoProofPath
+      : hostedMatrixExternalEvidencePath;
+    const roleUrl = syntheticExternalTarget
+      ? "/admin/audit/local-hosted-evidence-lane?game=<seeded-game>"
+      : "/admin/audit/local-hosted-concurrent-race-matrix?game=<seeded-game>";
+    const proofGraphNodeId = syntheticExternalTarget
+      ? "admin-proof:hosted-evidence-lane"
+      : "admin-proof:hosted-concurrent-race-matrix";
     return {
       priority: 0,
-      command: hostedEvidenceLaneCommand,
+      command,
       buildSlice:
         syntheticExternalTarget
-          ? "Run the one-command hosted evidence lane to refresh the local demo pass path; real externally hosted evidence remains required."
+          ? "Run the local hosted evidence lane demo proof; it refreshes blocked and synthetic passed lane artifacts, while real externally hosted evidence remains required."
           : "Run the one-command hosted evidence lane; the hosted target preflight has passed, so the lane can write external hosted matrix evidence.",
-      proofTarget: hostedMatrixExternalEvidencePath,
-      roleUrl:
-        "/admin/audit/local-hosted-concurrent-race-matrix?game=<seeded-game>",
-      proofGraphNodeId: "admin-proof:hosted-concurrent-race-matrix",
+      proofTarget,
+      roleUrl,
+      proofGraphNodeId,
       productionFeatureSpineTarget:
         releaseReadinessProductionFeatureSpineTargets.hostPhaseControl,
       proofBoundary:
         syntheticExternalTarget
-          ? "Local demo hosted evidence handoff after passed synthetic target preflight. This command refreshes the blocked-to-passed local pass path, but does not satisfy real hosted deployment evidence."
+          ? "Local demo proof for the hosted evidence lane pass path after passed synthetic target preflight. This command refreshes blocked and synthetic passed local lane artifacts, but does not satisfy real hosted deployment evidence."
           : "External hosted evidence handoff after passed target preflight. This command requires the same FMARCH_HOSTED_MATRIX_FRONTEND_URL, FMARCH_HOSTED_MATRIX_API_URL, and FMARCH_HOSTED_MATRIX_RAW_EVIDENCE_PATH target inputs; it does not let local hosted-like evidence satisfy hosted deployment.",
       hostedEvidenceMode: syntheticExternalTarget ? "synthetic-demo" : "real-hosted",
       realHostedEvidenceStatus: syntheticExternalTarget ? "unproven" : "passed",
@@ -384,6 +399,7 @@ const localBuildableReleaseReadinessItems = new Map([
         releaseReadinessProductionFeatureSpineTargets.staleRecovery,
       proofBoundary:
         "External hosted matrix handoff. Passing requires normalized raw evidence from a real hosted target; local browser/API proof artifacts are only the baseline.",
+      realHostedEvidenceStatus: "unproven",
     },
   ],
   [

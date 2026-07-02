@@ -835,7 +835,17 @@ function rankedBuildableReleaseReadinessItems(
       };
     })
     .filter((candidate) => candidate !== null)
-    .sort((left, right) => left.priority - right.priority || left.index - right.index);
+    .sort(
+      (left, right) =>
+        releaseReadinessActionRank(left.actionStatus) -
+          releaseReadinessActionRank(right.actionStatus) ||
+        left.priority - right.priority ||
+        left.index - right.index,
+    );
+}
+
+function releaseReadinessActionRank(status) {
+  return status === "ready" ? 0 : 1;
 }
 
 async function readOptionalJson(filePath) {

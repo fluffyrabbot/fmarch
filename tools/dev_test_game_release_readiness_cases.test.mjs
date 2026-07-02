@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
+  devTestGameHostedEvidenceLaneDemoProofCommand,
+  devTestGameHostedEvidenceLaneDemoProofPath,
+} from "./dev_test_game_hosted_evidence_lane_demo_proof.mjs";
+import {
   devTestGameHostedIdentityEvidenceCommand,
   devTestGameHostedIdentityEvidencePath,
   hostedIdentityEvidenceHandoffCase,
@@ -107,6 +111,11 @@ test("release readiness buildable cases share next-action commands and spine tar
   assert.equal(releaseRunbook.command, `npm run ${devTestGameReleaseRunbookCommand}`);
   assert.equal(releaseRunbook.proofTarget, devTestGameReleaseRunbookPath);
 
+  const realHostedMatrix = releaseReadinessBuildableItemForId(
+    "real-hosted-concurrent-race-matrix",
+  );
+  assert.equal(realHostedMatrix.realHostedEvidenceStatus, "unproven");
+
   const hostedIdentity = releaseReadinessBuildableItemForId(
     "hosted-production-identity",
   );
@@ -171,7 +180,34 @@ test("hosted deployment buildable case carries blocked and passed preflight stat
       target: { rawEvidenceSyntheticExternalTarget: true },
     },
   });
-  assert.equal(passed.proofTarget, "target/dev-test-game/hosted-matrix-external.json");
+  assert.equal(
+    passed.command,
+    `npm run ${devTestGameHostedEvidenceLaneDemoProofCommand}`,
+  );
+  assert.equal(passed.proofTarget, devTestGameHostedEvidenceLaneDemoProofPath);
+  assert.equal(
+    passed.roleUrl,
+    "/admin/audit/local-hosted-evidence-lane?game=<seeded-game>",
+  );
+  assert.equal(passed.proofGraphNodeId, "admin-proof:hosted-evidence-lane");
   assert.equal(passed.hostedEvidenceMode, "synthetic-demo");
   assert.equal(passed.realHostedEvidenceStatus, "unproven");
+
+  const realPassed = releaseReadinessBuildableItemForId("hosted-deployment", {
+    hostedTargetPreflight: { status: "passed", target: {} },
+  });
+  assert.equal(
+    realPassed.proofTarget,
+    "target/dev-test-game/hosted-matrix-external.json",
+  );
+  assert.equal(
+    realPassed.roleUrl,
+    "/admin/audit/local-hosted-concurrent-race-matrix?game=<seeded-game>",
+  );
+  assert.equal(
+    realPassed.proofGraphNodeId,
+    "admin-proof:hosted-concurrent-race-matrix",
+  );
+  assert.equal(realPassed.hostedEvidenceMode, "real-hosted");
+  assert.equal(realPassed.realHostedEvidenceStatus, "passed");
 });

@@ -1602,6 +1602,83 @@ test("dev test-game next-action advances hosted deployment after target prefligh
     blockedPreflightAction.nextAction.unproven.hostedHandoffChecklist,
   );
 
+  const mixedBlockedAndReadyReadiness = devTestGameReleaseReadinessChecklistFixture({
+    unproven: [
+      {
+        id: "hosted-deployment",
+        status: "unproven",
+        requiredEvidence: "Hosted API/frontend deployment proof with external health checks",
+      },
+      {
+        id: "human-release-runbook",
+        status: "unproven",
+        requiredEvidence:
+          "Human-executed beta/release checklist with rollback and support path",
+      },
+    ],
+  });
+  const mixedBlockedAndReadyAction = buildDevTestGameNextAction(freshManifest, {
+    generatedAt: "2026-06-26T00:00:01.000Z",
+    opsArtifacts: devTestGameOpsArtifactsFixture(),
+    raceCoverage: devTestGameRaceCoverageFixture(),
+    releaseReadinessChecklist: mixedBlockedAndReadyReadiness,
+    hostedTargetPreflight: hostedTargetPreflightFixture({ status: "blocked" }),
+  });
+  assertDevTestGameNextAction(mixedBlockedAndReadyAction);
+  assert.equal(
+    mixedBlockedAndReadyAction.nextAction.unproven.id,
+    "human-release-runbook",
+  );
+  assert.equal(mixedBlockedAndReadyAction.nextAction.status, "ready");
+  assert.equal(
+    mixedBlockedAndReadyAction.nextAction.command,
+    "npm run test:dev-test-game-release-runbook",
+  );
+  assert.equal(
+    mixedBlockedAndReadyAction.releaseReadinessTrace.candidates[0].id,
+    "human-release-runbook",
+  );
+  assert.equal(
+    mixedBlockedAndReadyAction.releaseReadinessTrace.candidates[0].actionStatus,
+    "ready",
+  );
+  assert.equal(
+    mixedBlockedAndReadyAction.releaseReadinessTrace.candidates[1].id,
+    "hosted-deployment",
+  );
+  assert.equal(
+    mixedBlockedAndReadyAction.releaseReadinessTrace.candidates[1].actionStatus,
+    "blocked",
+  );
+  assert.deepEqual(
+    mixedBlockedAndReadyAction.releaseReadinessTrace.candidates[1]
+      .hostedHandoffChecklist.blockedCheckIds,
+    hostedEvidenceHandoffBlockedCheckIds,
+  );
+
+  const externalHostedMatrixAction = buildDevTestGameNextAction(freshManifest, {
+    generatedAt: "2026-06-26T00:00:01.000Z",
+    opsArtifacts: devTestGameOpsArtifactsFixture(),
+    raceCoverage: devTestGameRaceCoverageFixture(),
+    releaseReadinessChecklist: devTestGameReleaseReadinessChecklistFixture({
+      unproven: [
+        {
+          id: "real-hosted-concurrent-race-matrix",
+          status: "unproven",
+          requiredEvidence:
+            "Externally reachable hosted API/frontend deployment, multi-node command race execution, and hosted reload/reconnect and stale-client conflict evidence beyond the local hosted-like matrix artifact",
+        },
+      ],
+    }),
+    hostedTargetPreflight: hostedTargetPreflightFixture({ status: "blocked" }),
+  });
+  assertDevTestGameNextAction(externalHostedMatrixAction);
+  assert.equal(externalHostedMatrixAction.nextAction.status, "blocked");
+  assert.equal(
+    externalHostedMatrixAction.nextAction.unproven.realHostedEvidenceStatus,
+    "unproven",
+  );
+
   const passedPreflightAction = buildDevTestGameNextAction(freshManifest, {
     generatedAt: "2026-06-26T00:00:01.000Z",
     opsArtifacts: devTestGameOpsArtifactsFixture(),
@@ -1653,6 +1730,22 @@ test("dev test-game next-action advances hosted deployment after target prefligh
   assertDevTestGameNextAction(syntheticPreflightAction);
   assert.equal(syntheticPreflightAction.nextAction.status, "blocked");
   assert.equal(
+    syntheticPreflightAction.nextAction.command,
+    `npm run ${devTestGameHostedEvidenceLaneDemoProofCommand}`,
+  );
+  assert.equal(
+    syntheticPreflightAction.nextAction.unproven.proofTarget,
+    devTestGameHostedEvidenceLaneDemoProofPath,
+  );
+  assert.equal(
+    syntheticPreflightAction.nextAction.unproven.roleUrl,
+    "/admin/audit/local-hosted-evidence-lane?game=<seeded-game>",
+  );
+  assert.equal(
+    syntheticPreflightAction.nextAction.unproven.proofGraphNodeId,
+    "admin-proof:hosted-evidence-lane",
+  );
+  assert.equal(
     syntheticPreflightAction.nextAction.unproven.hostedEvidenceMode,
     "synthetic-demo",
   );
@@ -1663,6 +1756,14 @@ test("dev test-game next-action advances hosted deployment after target prefligh
   assert.equal(
     syntheticPreflightAction.releaseReadinessTrace.candidates[0].actionStatus,
     "blocked",
+  );
+  assert.equal(
+    syntheticPreflightAction.releaseReadinessTrace.candidates[0].command,
+    `npm run ${devTestGameHostedEvidenceLaneDemoProofCommand}`,
+  );
+  assert.equal(
+    syntheticPreflightAction.generatedFrom.hostedTargetPreflightNextProofTarget,
+    devTestGameHostedMatrixExternalEvidencePath,
   );
 });
 
