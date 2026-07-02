@@ -193,6 +193,47 @@ export function raceCoveragePromotedReloadGroup(groupId) {
   return group;
 }
 
+const localReadinessMilestoneDefinitions = Object.freeze([
+  Object.freeze({
+    groupId: "host-concurrent-race-reload",
+    checkId: "local-host-concurrent-race-reload-milestone",
+    proofBoundary:
+      "Local race-coverage proof that host resolve, advance, deadline, lifecycle, mixed advance, votecount publication, and complete-game races all have reload recovery coverage.",
+  }),
+  Object.freeze({
+    groupId: "player-concurrent-action-reload",
+    checkId: "local-player-concurrent-action-reload-milestone",
+    proofBoundary:
+      "Local race-coverage proof that player vote changes, night actions, player-vs-host phase races, and completed-game reload recovery all have reload coverage.",
+  }),
+  Object.freeze({
+    groupId: "cohost-deadline-race-reload",
+    checkId: "local-cohost-deadline-race-reload-milestone",
+    proofBoundary:
+      "Local race-coverage proof that the cohost deadline extension versus host resolve race has reload recovery coverage.",
+  }),
+]);
+
+export const raceCoverageLocalReadinessMilestoneDefinitions = Object.freeze(
+  localReadinessMilestoneDefinitions.map((definition) => {
+    const group = raceCoveragePromotedReloadGroup(definition.groupId);
+    return Object.freeze({
+      id: definition.checkId,
+      groupId: group.id,
+      label: `${group.label} coverage`,
+      proofBoundary: definition.proofBoundary,
+      cellIds: group.cellIds,
+    });
+  }),
+);
+
+export function raceCoverageLocalReadinessMilestoneCases() {
+  return raceCoverageLocalReadinessMilestoneDefinitions.map((definition) => ({
+    ...definition,
+    cellIds: [...definition.cellIds],
+  }));
+}
+
 export function buildDevTestGameRaceCoverage(
   proofRun,
   {

@@ -5,6 +5,8 @@ import {
   completedGameRaceCoverageCellDefinitions,
 } from "./dev_test_game_core_loop_completed_scenarios.mjs";
 import {
+  raceCoverageLocalReadinessMilestoneCases,
+  raceCoverageLocalReadinessMilestoneDefinitions,
   raceCoveragePromotedReloadGroup,
   raceCoveragePromotedReloadGroups,
 } from "./dev_test_game_race_coverage.mjs";
@@ -100,5 +102,62 @@ test("race coverage promoted reload groups fail closed for unknown ids", () => {
   assert.throws(
     () => raceCoveragePromotedReloadGroup("missing-group"),
     /unknown race coverage promoted reload group: missing-group/,
+  );
+});
+
+test("race coverage exposes local readiness milestones from promoted groups", () => {
+  assert(Object.isFrozen(raceCoverageLocalReadinessMilestoneDefinitions));
+  assert.deepEqual(
+    raceCoverageLocalReadinessMilestoneCases().map((milestone) => ({
+      id: milestone.id,
+      groupId: milestone.groupId,
+      label: milestone.label,
+      proofBoundary: milestone.proofBoundary,
+      cellIds: milestone.cellIds,
+    })),
+    [
+      {
+        id: "local-host-concurrent-race-reload-milestone",
+        groupId: "host-concurrent-race-reload",
+        label: "Host concurrent race reload coverage",
+        proofBoundary:
+          "Local race-coverage proof that host resolve, advance, deadline, lifecycle, mixed advance, votecount publication, and complete-game races all have reload recovery coverage.",
+        cellIds: [
+          "host-resolve",
+          "host-advance",
+          "host-deadline-advance",
+          "host-lifecycle",
+          "host-mixed-advance",
+          "host-votecount-publication",
+          "host-complete-game",
+        ],
+      },
+      {
+        id: "local-player-concurrent-action-reload-milestone",
+        groupId: "player-concurrent-action-reload",
+        label: "Player concurrent action reload coverage",
+        proofBoundary:
+          "Local race-coverage proof that player vote changes, night actions, player-vs-host phase races, and completed-game reload recovery all have reload coverage.",
+        cellIds: [
+          "player-vote-change",
+          "player-night-action",
+          "player-vote-vs-host-resolve",
+          "player-action-vs-host-advance",
+          "player-vs-completed-game",
+        ],
+      },
+      {
+        id: "local-cohost-deadline-race-reload-milestone",
+        groupId: "cohost-deadline-race-reload",
+        label: "Cohost deadline race reload coverage",
+        proofBoundary:
+          "Local race-coverage proof that the cohost deadline extension versus host resolve race has reload recovery coverage.",
+        cellIds: ["cohost-deadline-vs-host-resolve"],
+      },
+    ],
+  );
+  assert.notEqual(
+    raceCoverageLocalReadinessMilestoneCases()[0].cellIds,
+    raceCoverageLocalReadinessMilestoneDefinitions[0].cellIds,
   );
 });

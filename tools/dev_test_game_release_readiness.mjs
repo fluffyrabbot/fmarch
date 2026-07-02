@@ -13,6 +13,7 @@ import {
 import { assertDevTestGameProofRun } from "./dev_test_game_proof_contract.mjs";
 import {
   assertDevTestGameRaceCoverage,
+  raceCoverageLocalReadinessMilestoneCases,
   raceCoveragePromotedReloadGroup,
   raceCoveragePromotedReloadGroups,
 } from "./dev_test_game_race_coverage.mjs";
@@ -643,6 +644,11 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
     });
   }
   if (raceCoverageEvidence !== undefined) {
+    const raceCoverageMilestoneByGroupId = new Map([
+      ["host-concurrent-race-reload", hostConcurrentRaceReloadMilestone],
+      ["player-concurrent-action-reload", playerConcurrentActionReloadMilestone],
+      ["cohost-deadline-race-reload", cohostDeadlineRaceReloadMilestone],
+    ]);
     localChecks.push({
       id: "local-race-coverage-inventory",
       label: "Local race coverage inventory",
@@ -655,39 +661,24 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
         ? {}
         : { adminRoleSurface: raceCoverageAdminProofEvidence }),
     });
-    localChecks.push({
-      id: "local-host-concurrent-race-reload-milestone",
-      label: "Host concurrent race reload coverage",
-      status: "passed",
-      evidence: raceCoverageEvidence.path,
-      proofBoundary:
-        "Local race-coverage proof that host resolve, advance, deadline, lifecycle, mixed advance, votecount publication, and complete-game races all have reload recovery coverage.",
-      cellIds: [...hostConcurrentRaceReloadMilestone.cellIds],
-      requiredCellCount: hostConcurrentRaceReloadMilestone.requiredCellCount,
-      coveredCellCount: hostConcurrentRaceReloadMilestone.coveredCellCount,
-    });
-    localChecks.push({
-      id: "local-player-concurrent-action-reload-milestone",
-      label: "Player concurrent action reload coverage",
-      status: "passed",
-      evidence: raceCoverageEvidence.path,
-      proofBoundary:
-        "Local race-coverage proof that player vote changes, night actions, player-vs-host phase races, and completed-game reload recovery all have reload coverage.",
-      cellIds: [...playerConcurrentActionReloadMilestone.cellIds],
-      requiredCellCount: playerConcurrentActionReloadMilestone.requiredCellCount,
-      coveredCellCount: playerConcurrentActionReloadMilestone.coveredCellCount,
-    });
-    localChecks.push({
-      id: "local-cohost-deadline-race-reload-milestone",
-      label: "Cohost deadline race reload coverage",
-      status: "passed",
-      evidence: raceCoverageEvidence.path,
-      proofBoundary:
-        "Local race-coverage proof that the cohost deadline extension versus host resolve race has reload recovery coverage.",
-      cellIds: [...cohostDeadlineRaceReloadMilestone.cellIds],
-      requiredCellCount: cohostDeadlineRaceReloadMilestone.requiredCellCount,
-      coveredCellCount: cohostDeadlineRaceReloadMilestone.coveredCellCount,
-    });
+    for (const milestoneCase of raceCoverageLocalReadinessMilestoneCases()) {
+      const milestone = raceCoverageMilestoneByGroupId.get(milestoneCase.groupId);
+      if (milestone === undefined) {
+        throw new Error(
+          `missing local race readiness milestone for ${milestoneCase.groupId}`,
+        );
+      }
+      localChecks.push({
+        id: milestoneCase.id,
+        label: milestoneCase.label,
+        status: "passed",
+        evidence: raceCoverageEvidence.path,
+        proofBoundary: milestoneCase.proofBoundary,
+        cellIds: [...milestoneCase.cellIds],
+        requiredCellCount: milestone.requiredCellCount,
+        coveredCellCount: milestone.coveredCellCount,
+      });
+    }
     localChecks.push({
       id: "local-race-coverage-promoted-milestones",
       label: "Promoted local race milestone aggregate",
