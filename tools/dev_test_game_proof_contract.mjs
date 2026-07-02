@@ -6397,6 +6397,23 @@ function cohostDeadlineStaleReconnectLane({ hardening, session, scenario }) {
 function completedGameHardeningProofLanes({ hardening }) {
   const lanesById = new Map(
     [
+      ...completedHostStaleCompleteProofLanes({ hardening }),
+      ...completedHostCompleteRaceProofLanes({ hardening }),
+      ...completedPlayerCompleteRaceProofLanes({ hardening }),
+      ...completedStalePlayerCompleteProofLanes({ hardening }),
+    ].map((completedLane) => [completedLane.id, completedLane]),
+  );
+  return completedGameHardeningLaneIds().map((id) => {
+    const completedLane = lanesById.get(id);
+    if (completedLane === undefined) {
+      throw new Error(`completed-game proof lane builder missing: ${id}`);
+    }
+    return completedLane;
+  });
+}
+
+function completedHostStaleCompleteProofLanes({ hardening }) {
+  return [
     completedGameLane("stale-host-complete", {
       rejectError: hardening.staleHostComplete?.reject?.error ?? null,
       liveCompleteSeqs:
@@ -6553,6 +6570,11 @@ function completedGameHardeningProofLanes({ hardening }) {
           ) === false,
       },
     ),
+  ];
+}
+
+function completedHostCompleteRaceProofLanes({ hardening }) {
+  return [
     completedGameLane("concurrent-host-complete-race", {
       ackRaceRole: hardening.concurrentHostCompleteRace?.ackRaceRole ?? null,
       rejectRaceRole: hardening.concurrentHostCompleteRace?.rejectRaceRole ?? null,
@@ -6723,6 +6745,11 @@ function completedGameHardeningProofLanes({ hardening }) {
             ) === true,
       },
     ),
+  ];
+}
+
+function completedPlayerCompleteRaceProofLanes({ hardening }) {
+  return [
     completedGameLane("concurrent-player-complete-race", {
       postState: hardening.concurrentPlayerCompleteRace?.post?.state ?? null,
       postError: hardening.concurrentPlayerCompleteRace?.post?.error ?? null,
@@ -6885,6 +6912,11 @@ function completedGameHardeningProofLanes({ hardening }) {
                 hardening.concurrentPlayerCompleteRace?.postBody,
               ) === false)),
     }),
+  ];
+}
+
+function completedStalePlayerCompleteProofLanes({ hardening }) {
+  return [
     completedGameLane("stale-player-complete", {
       rejectError: hardening.stalePlayerComplete?.reject?.error ?? null,
       gameCompleted:
@@ -7005,15 +7037,7 @@ function completedGameHardeningProofLanes({ hardening }) {
             ) === true,
       },
     ),
-    ].map((completedLane) => [completedLane.id, completedLane]),
-  );
-  return completedGameHardeningLaneIds().map((id) => {
-    const completedLane = lanesById.get(id);
-    if (completedLane === undefined) {
-      throw new Error(`completed-game proof lane builder missing: ${id}`);
-    }
-    return completedLane;
-  });
+  ];
 }
 
 function completedGameLane(id, evidence) {
