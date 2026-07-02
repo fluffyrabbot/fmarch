@@ -4803,33 +4803,28 @@ async function verifySeededPrivateChannel({
   apiBaseUrl,
   frontendBaseUrl,
 }) {
-  const channelRoute = encodeURIComponent(factionDayChatChannel);
-  const privateUrl = `${frontendBaseUrl}/g/${game}/c/${channelRoute}`;
-  const allowedResponse = await playerPage.goto(privateUrl, { waitUntil: "networkidle" });
-  if (allowedResponse === null || !allowedResponse.ok()) {
-    throw new Error(
-      `private channel member route failed with ${allowedResponse?.status() ?? "no response"}`,
-    );
-  }
-  await playerPage.getByTestId("player-surface").waitFor({ state: "visible" });
-  const channelContext = playerPage.getByTestId("player-command-channel-context");
-  await channelContext.waitFor({ state: "visible" });
-  const channelContextId = await channelContext.getAttribute("data-channel-id");
+  const { url: privateUrl } = await openPrivateChannelRoleSurface({
+    page: playerPage,
+    frontendBaseUrl,
+    game,
+    proofLabel: "private channel member",
+  });
+  const channelContext = await playerPrivateChannelContext(playerPage);
+  const channelContextId = channelContext.channelId;
   if (channelContextId !== factionDayChatChannel) {
     throw new Error(`private channel context drifted: ${channelContextId}`);
   }
-  await playerPage.locator('[data-testid="player-composer"] textarea').fill(factionDayChatPostBody);
-  await playerPage.locator('[data-action="submit_post"]').click();
-  await playerPage.waitForFunction(
-    () => window.__fmarchPlayerCommandStatus?.state === "ack",
-  );
+  const submitPost = await submitPrivateChannelPost({
+    page: playerPage,
+    postBody: factionDayChatPostBody,
+    expectedState: "ack",
+  });
   await playerPage.waitForFunction((expectedBody) =>
     window.__fmarchPlayerProjection?.thread?.posts?.some(
       (post) => post.body === expectedBody,
     ),
     factionDayChatPostBody,
   );
-  const submitPost = await playerPage.evaluate(() => window.__fmarchPlayerCommandStatus);
   const submitPostCommand = submitPost.requestEnvelope?.body?.body?.command?.SubmitPost;
   if (
     submitPostCommand?.channel_id !== factionDayChatChannel ||
@@ -4838,10 +4833,14 @@ async function verifySeededPrivateChannel({
   ) {
     throw new Error(`private channel SubmitPost drifted: ${JSON.stringify(submitPostCommand)}`);
   }
-  const apiThread = await fetchJson(
-    `${apiBaseUrl}/games/${game}/channels/${channelRoute}/thread?principal_user_id=player-mira&limit=50`,
-  );
-  if (!apiThread.posts?.some((post) => post.body === factionDayChatPostBody)) {
+  const { thread: apiThread, postBodies: apiThreadPostBodies } =
+    await fetchPrivateChannelThreadPostBodies({
+      apiBaseUrl,
+      game,
+      principalUserId: "player-mira",
+      limit: 50,
+    });
+  if (!apiThreadPostBodies.includes(factionDayChatPostBody)) {
     throw new Error(`private channel API thread missing submitted post: ${JSON.stringify(apiThread)}`);
   }
 
@@ -4887,7 +4886,7 @@ async function verifySeededPrivateChannel({
       url: privateUrl,
       channelContextId,
       submitPost,
-      apiThreadPostBodies: apiThread.posts.map((post) => post.body),
+      apiThreadPostBodies,
     },
     denied: {
       url: privateUrl,
@@ -4903,12 +4902,159 @@ async function verifySeededPrivateChannel({
   };
 }
 
+function privateChannelRoute() {
+  return encodeURIComponent(factionDayChatChannel);
+}
+
+function privateChannelRoleUrl({ frontendBaseUrl, game }) {
+  return `${frontendBaseUrl}/g/${game}/c/${privateChannelRoute()}`;
+}
+
+function privateChannelThreadEndpoint({
+  apiBaseUrl,
+  game,
+  principalUserId,
+  limit = 100,
+}) {
+  return `${apiBaseUrl}/games/${game}/channels/${privateChannelRoute()}/thread?principal_user_id=${principalUserId}&limit=${limit}`;
+}
+
+function playerCommandStateEndpoint({
+  apiBaseUrl,
+  game,
+  principalUserId,
+  slotId,
+}) {
+  return `${apiBaseUrl}/games/${game}/player-command-state?principal_user_id=${principalUserId}&slot_id=${slotId}`;
+}
+
+async function openPrivateChannelRoleSurface({
+  page,
+  frontendBaseUrl,
+  game,
+  proofLabel,
+}) {
+  const url = privateChannelRoleUrl({ frontendBaseUrl, game });
+  const response = await page.goto(url, { waitUntil: "networkidle" });
+  if (response === null || !response.ok()) {
+    throw new Error(
+      `${proofLabel} private-channel route failed with ${
+        response?.status() ?? "no response"
+      }`,
+    );
+  }
+  await page.getByTestId("player-surface").waitFor({ state: "visible" });
+  await page
+    .getByTestId("player-command-channel-context")
+    .waitFor({ state: "visible" });
+  return {
+    url,
+    responseStatus: response.status(),
+  };
+}
+
+async function privateChannelRoleSnapshot(page) {
+  return {
+    commandState: await page.evaluate(
+      () => window.__fmarchPlayerProjection?.commandState,
+    ),
+    channelContext: await playerPrivateChannelContext(page),
+    buttons: await playerCommandButtons(page),
+  };
+}
+
+async function closePlayerLiveProjection(page) {
+  await page.waitForFunction(
+    () => typeof window.__fmarchClosePlayerLiveProjection === "function",
+  );
+  return page.evaluate(() => window.__fmarchClosePlayerLiveProjection());
+}
+
+async function submitPrivateChannelPost({
+  page,
+  postBody,
+  expectedState,
+  expectedError,
+}) {
+  await page.locator('[data-testid="player-composer"] textarea').fill(postBody);
+  await page.locator('[data-action="submit_post"]').click();
+  await page.waitForFunction(
+    ({ expectedBody, expectedChannel, expectedState, expectedError }) => {
+      const status = window.__fmarchPlayerCommandStatus;
+      const command =
+        status?.requestEnvelope?.body?.body?.command?.SubmitPost;
+      return (
+        command?.body === expectedBody &&
+        command?.channel_id === expectedChannel &&
+        status?.state === expectedState &&
+        (expectedError === null || status?.error === expectedError)
+      );
+    },
+    {
+      expectedBody: postBody,
+      expectedChannel: factionDayChatChannel,
+      expectedState,
+      expectedError: expectedError ?? null,
+    },
+  );
+  return page.evaluate(() => window.__fmarchPlayerCommandStatus);
+}
+
+async function fetchPrivateChannelThread({
+  apiBaseUrl,
+  game,
+  principalUserId,
+  limit = 100,
+}) {
+  return fetchJson(
+    privateChannelThreadEndpoint({
+      apiBaseUrl,
+      game,
+      principalUserId,
+      limit,
+    }),
+  );
+}
+
+async function fetchPrivateChannelThreadPostBodies({
+  apiBaseUrl,
+  game,
+  principalUserId,
+  limit = 100,
+}) {
+  const thread = await fetchPrivateChannelThread({
+    apiBaseUrl,
+    game,
+    principalUserId,
+    limit,
+  });
+  return {
+    thread,
+    postBodies: (thread.posts ?? []).map((post) => post.body),
+  };
+}
+
+async function fetchPlayerSlotCommandState({
+  apiBaseUrl,
+  game,
+  principalUserId,
+  slotId,
+}) {
+  return fetchJson(
+    playerCommandStateEndpoint({
+      apiBaseUrl,
+      game,
+      principalUserId,
+      slotId,
+    }),
+  );
+}
+
 async function verifyStalePrivateChannelPostAfterPhaseTransition({
   browser,
   apiBaseUrl,
   frontendBaseUrl,
 }) {
-  const channelRoute = encodeURIComponent(factionDayChatChannel);
   const setup = await openResolvedDayStalePlayerProof({
     browser,
     apiBaseUrl,
@@ -4916,7 +5062,7 @@ async function verifyStalePrivateChannelPostAfterPhaseTransition({
     tokenLabel: "stale-private-post",
     slotSevenRoleKey: "encryptor",
     slotFourRoleKey: "mafia_goon",
-    playerPathForGame: (game) => `/g/${game}/c/${channelRoute}`,
+    playerPathForGame: (game) => `/g/${game}/c/${privateChannelRoute()}`,
   });
   const {
     phaseClosureGame,
@@ -4936,9 +5082,10 @@ async function verifyStalePrivateChannelPostAfterPhaseTransition({
     apiDayVoteOutcomesAfterResolve,
   } = setup;
   try {
-    const channelContextId = await playerEntry.page
-      .getByTestId("player-command-channel-context")
-      .getAttribute("data-channel-id");
+    const { channelContext } = await privateChannelRoleSnapshot(
+      playerEntry.page,
+    );
+    const channelContextId = channelContext.channelId;
     const submitPostBeforeClose = buttonsBeforeClose.find(
       (button) => button.action === "submit_post",
     );
@@ -4959,19 +5106,13 @@ async function verifyStalePrivateChannelPostAfterPhaseTransition({
       );
     }
 
-    await playerEntry.page.locator("textarea").fill(postBody);
-    await playerEntry.page.locator('[data-action="submit_post"]').click();
+    const stalePost = await submitPrivateChannelPost({
+      page: playerEntry.page,
+      postBody,
+      expectedState: "ack",
+    });
     await playerEntry.page.waitForFunction(
-      ({ expectedBody, expectedChannel }) =>
-        window.__fmarchPlayerCommandStatus?.requestEnvelope?.body?.body?.command
-          ?.SubmitPost?.body === expectedBody &&
-        window.__fmarchPlayerCommandStatus?.requestEnvelope?.body?.body?.command
-          ?.SubmitPost?.channel_id === expectedChannel &&
-        window.__fmarchPlayerCommandStatus?.state === "ack",
-      { expectedBody: postBody, expectedChannel: factionDayChatChannel },
-    );
-    await playerEntry.page.waitForFunction(
-      ({ expectedBody, expectedChannel }) =>
+      ({ expectedBody }) =>
         window.__fmarchPlayerProjection?.thread?.posts?.some(
           (post) =>
             post.body === expectedBody &&
@@ -4987,10 +5128,7 @@ async function verifyStalePrivateChannelPostAfterPhaseTransition({
             row.status === "Lynch" &&
             row.winnerSlot === "slot-2",
         ),
-      { expectedBody: postBody, expectedChannel: factionDayChatChannel },
-    );
-    const stalePost = await playerEntry.page.evaluate(
-      () => window.__fmarchPlayerCommandStatus,
+      { expectedBody: postBody },
     );
     const projectedPost = await playerEntry.page.evaluate((expectedBody) =>
       window.__fmarchPlayerProjection?.thread?.posts?.find(
@@ -5010,12 +5148,18 @@ async function verifyStalePrivateChannelPostAfterPhaseTransition({
     const dayVoteOutcomesAfterAck = await playerEntry.page.evaluate(
       () => window.__fmarchPlayerProjection?.dayVoteOutcomes ?? [],
     );
-    const apiCommandStateAfterAck = await fetchJson(
-      `${apiBaseUrl}/games/${phaseClosureGame}/player-command-state?principal_user_id=player-mira&slot_id=slot-7`,
-    );
-    const apiThreadAfterAck = await fetchJson(
-      `${apiBaseUrl}/games/${phaseClosureGame}/channels/${channelRoute}/thread?principal_user_id=player-mira&limit=100`,
-    );
+    const apiCommandStateAfterAck = await fetchPlayerSlotCommandState({
+      apiBaseUrl,
+      game: phaseClosureGame,
+      principalUserId: "player-mira",
+      slotId: "slot-7",
+    });
+    const { thread: apiThreadAfterAck } =
+      await fetchPrivateChannelThreadPostBodies({
+        apiBaseUrl,
+        game: phaseClosureGame,
+        principalUserId: "player-mira",
+      });
     if (
       stalePost?.state !== "ack" ||
       stalePost?.serverEnvelope?.body?.kind !== "Ack" ||
@@ -5124,8 +5268,6 @@ async function verifyCompletedPrivateChannelRecovery({
     throw new Error("completed private-channel proof requires a Playwright browser");
   }
   const completeGame = crypto.randomUUID();
-  const channelRoute = encodeURIComponent(factionDayChatChannel);
-  const privateUrl = `${frontendBaseUrl}/g/${completeGame}/c/${channelRoute}`;
   const seed = await seedPrivateChannelCompleteGame({ game: completeGame });
   const hostSession = await createSessionGrantCredential({
     token: `${tokenPrefix}-completed-private-host-${crypto.randomUUID()}`,
@@ -5175,43 +5317,27 @@ async function verifyCompletedPrivateChannelRecovery({
       .getByTestId("critical-host-action-complete_game")
       .waitFor({ state: "visible" });
 
-    const routeResponse = await playerEntry.page.goto(privateUrl, {
-      waitUntil: "networkidle",
+    await openPrivateChannelRoleSurface({
+      page: playerEntry.page,
+      frontendBaseUrl,
+      game: completeGame,
+      proofLabel: "completed",
     });
-    if (routeResponse === null || !routeResponse.ok()) {
-      throw new Error(
-        `completed private-channel route failed with ${
-          routeResponse?.status() ?? "no response"
-        }`,
-      );
-    }
-    await playerEntry.page.getByTestId("player-surface").waitFor({
-      state: "visible",
-    });
-    await playerEntry.page
-      .getByTestId("player-command-channel-context")
-      .waitFor({ state: "visible" });
     await playerEntry.page.waitForFunction(
       () =>
         window.__fmarchPlayerProjection?.commandState?.actorSlot === "slot-7" &&
         window.__fmarchPlayerProjection?.commandState?.actorStatus === "alive" &&
         window.__fmarchPlayerProjection?.commandState?.gameCompleted === false,
     );
-    const commandStateBeforeComplete = await playerEntry.page.evaluate(
-      () => window.__fmarchPlayerProjection?.commandState,
-    );
-    const channelContextBeforeComplete =
-      await playerPrivateChannelContext(playerEntry.page);
-    const buttonsBeforeComplete = await playerCommandButtons(playerEntry.page);
+    const {
+      commandState: commandStateBeforeComplete,
+      channelContext: channelContextBeforeComplete,
+      buttons: buttonsBeforeComplete,
+    } = await privateChannelRoleSnapshot(playerEntry.page);
     const submitPostBeforeComplete = buttonsBeforeComplete.find(
       (button) => button.action === "submit_post",
     );
-    await playerEntry.page.waitForFunction(
-      () => typeof window.__fmarchClosePlayerLiveProjection === "function",
-    );
-    const closedStatus = await playerEntry.page.evaluate(
-      () => window.__fmarchClosePlayerLiveProjection(),
-    );
+    const closedStatus = await closePlayerLiveProjection(playerEntry.page);
 
     const complete = await confirmHostAction(hostEntry.page, "complete_game");
     await hostEntry.page.waitForFunction(
@@ -5235,18 +5361,12 @@ async function verifyCompletedPrivateChannelRecovery({
 
     const postBody =
       `Completed private-channel stale post ${crypto.randomUUID()}.`;
-    await playerEntry.page
-      .locator('[data-testid="player-composer"] textarea')
-      .fill(postBody);
-    await playerEntry.page.locator('[data-action="submit_post"]').click();
-    await playerEntry.page.waitForFunction(
-      ({ expectedBody }) =>
-        window.__fmarchPlayerCommandStatus?.requestEnvelope?.body?.body?.command
-          ?.SubmitPost?.body === expectedBody &&
-        window.__fmarchPlayerCommandStatus?.state === "reject" &&
-        window.__fmarchPlayerCommandStatus?.error === "GameAlreadyCompleted",
-      { expectedBody: postBody },
-    );
+    const reject = await submitPrivateChannelPost({
+      page: playerEntry.page,
+      postBody,
+      expectedState: "reject",
+      expectedError: "GameAlreadyCompleted",
+    });
     await playerEntry.page.waitForFunction(
       () =>
         window.__fmarchPlayerProjection?.commandState?.gameCompleted === true &&
@@ -5254,15 +5374,11 @@ async function verifyCompletedPrivateChannelRecovery({
         (window.__fmarchPlayerProjection?.commandState?.voteTargets ?? []).length ===
           0,
     );
-    const reject = await playerEntry.page.evaluate(
-      () => window.__fmarchPlayerCommandStatus,
-    );
-    const commandStateAfterReject = await playerEntry.page.evaluate(
-      () => window.__fmarchPlayerProjection?.commandState,
-    );
-    const channelContextAfterReject =
-      await playerPrivateChannelContext(playerEntry.page);
-    const buttonsAfterReject = await playerCommandButtons(playerEntry.page);
+    const {
+      commandState: commandStateAfterReject,
+      channelContext: channelContextAfterReject,
+      buttons: buttonsAfterReject,
+    } = await privateChannelRoleSnapshot(playerEntry.page);
     const dispatchPlan = await playerEntry.page.evaluate(
       () => window.__fmarchPlayerCommandDispatchBridgePlan,
     );
@@ -5274,32 +5390,25 @@ async function verifyCompletedPrivateChannelRecovery({
     const receiptStatusText = await playerEntry.page
       .getByTestId("player-command-status")
       .innerText();
-    const apiCommandStateAfterReject = await fetchJson(
-      `${apiBaseUrl}/games/${completeGame}/player-command-state?principal_user_id=player-mira&slot_id=slot-7`,
-    );
-    const apiThreadAfterReject = await fetchJson(
-      `${apiBaseUrl}/games/${completeGame}/channels/${channelRoute}/thread?principal_user_id=player-mira&limit=100`,
-    );
-    const apiThreadPostBodies = (apiThreadAfterReject.posts ?? []).map(
-      (post) => post.body,
-    );
+    const apiCommandStateAfterReject = await fetchPlayerSlotCommandState({
+      apiBaseUrl,
+      game: completeGame,
+      principalUserId: "player-mira",
+      slotId: "slot-7",
+    });
+    const { thread: apiThreadAfterReject, postBodies: apiThreadPostBodies } =
+      await fetchPrivateChannelThreadPostBodies({
+        apiBaseUrl,
+        game: completeGame,
+        principalUserId: "player-mira",
+      });
 
-    const reloadResponse = await playerEntry.page.goto(privateUrl, {
-      waitUntil: "networkidle",
+    const reloadRoute = await openPrivateChannelRoleSurface({
+      page: playerEntry.page,
+      frontendBaseUrl,
+      game: completeGame,
+      proofLabel: "completed reload",
     });
-    if (reloadResponse === null || !reloadResponse.ok()) {
-      throw new Error(
-        `completed private-channel reload failed with ${
-          reloadResponse?.status() ?? "no response"
-        }`,
-      );
-    }
-    await playerEntry.page.getByTestId("player-surface").waitFor({
-      state: "visible",
-    });
-    await playerEntry.page
-      .getByTestId("player-command-channel-context")
-      .waitFor({ state: "visible" });
     await playerEntry.page.waitForFunction(
       ({ expectedChannelId, rejectedBody }) =>
         window.__fmarchPlayerProjection?.commandState?.actorSlot === "slot-7" &&
@@ -5318,9 +5427,10 @@ async function verifyCompletedPrivateChannelRecovery({
     const reloadProjection = await playerEntry.page.evaluate(
       () => window.__fmarchPlayerProjection,
     );
-    const reloadChannelContext =
-      await playerPrivateChannelContext(playerEntry.page);
-    const reloadButtons = await playerCommandButtons(playerEntry.page);
+    const {
+      channelContext: reloadChannelContext,
+      buttons: reloadButtons,
+    } = await privateChannelRoleSnapshot(playerEntry.page);
     const reloadThreadPostBodies = (
       reloadProjection?.thread?.posts ?? []
     ).map((post) => post.body);
@@ -5329,18 +5439,21 @@ async function verifyCompletedPrivateChannelRecovery({
     const reloadThreadPagerVisible = await playerEntry.page
       .getByTestId("player-thread-pager")
       .isVisible();
-    const apiCommandStateAfterReload = await fetchJson(
-      `${apiBaseUrl}/games/${completeGame}/player-command-state?principal_user_id=player-mira&slot_id=slot-7`,
-    );
-    const apiThreadAfterReload = await fetchJson(
-      `${apiBaseUrl}/games/${completeGame}/channels/${channelRoute}/thread?principal_user_id=player-mira&limit=100`,
-    );
-    const apiThreadPostBodiesAfterReload = (
-      apiThreadAfterReload.posts ?? []
-    ).map((post) => post.body);
+    const apiCommandStateAfterReload = await fetchPlayerSlotCommandState({
+      apiBaseUrl,
+      game: completeGame,
+      principalUserId: "player-mira",
+      slotId: "slot-7",
+    });
+    const { postBodies: apiThreadPostBodiesAfterReload } =
+      await fetchPrivateChannelThreadPostBodies({
+        apiBaseUrl,
+        game: completeGame,
+        principalUserId: "player-mira",
+      });
     const reloadAfterReject = {
       status: "passed",
-      routeResponseStatus: reloadResponse.status(),
+      routeResponseStatus: reloadRoute.responseStatus,
       threadPagerVisible: reloadThreadPagerVisible,
       recoveredCommandState: reloadProjection?.commandState ?? null,
       reloadChannelContext,
