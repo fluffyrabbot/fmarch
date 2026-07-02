@@ -95,6 +95,7 @@ import {
 } from "./dev_test_game_hosted_ops_signal_cases.mjs";
 import {
   releaseAdminProofFallbackUnprovenIds,
+  releaseReadinessProductionFeatureSpineTargetsBySlotId,
 } from "./dev_test_game_release_readiness_cases.mjs";
 import {
   assertDevTestGameSeedFixtureSummary,
@@ -12259,7 +12260,9 @@ function coreLoopSpineTargetsFixture() {
 }
 
 function productionFeatureSpineTargetFixture(slotId = "player-action-submission") {
-  return { ...productionFeatureSpineTargetFixtures[slotId] };
+  return {
+    ...releaseReadinessProductionFeatureSpineTargetsBySlotId[slotId],
+  };
 }
 
 function resolvedFeatureSpineTargetFixture(slotId = "player-action-submission") {
@@ -12321,64 +12324,6 @@ function featureSpineDrilldownFixture(slotId = "player-action-submission") {
 function hostedIdentityHandoffChecklistFixture() {
   return hostedIdentityEvidenceHandoffCase();
 }
-
-const productionFeatureSpineTargetFixtures = Object.freeze({
-  "identity-adapter": Object.freeze({
-    featureSlotId: "identity-adapter",
-    sourceCheckId: "local-identity-adapter-proof",
-    cycleId: "identity-adapter",
-    roleUrlId: "local-identity-adapter",
-    rowKind: "checkpoint",
-    checkpointId: "account-login",
-    adminCheckId: "account-login",
-  }),
-  "host-phase-control": Object.freeze({
-    featureSlotId: "host-phase-control",
-    sourceCheckId: "local-core-loop-proof",
-    cycleId: "d02-n02",
-    roleUrlId: "d02-n02-host",
-    rowKind: "checkpoint",
-    checkpointId: "d02-n02-d02-vote-open",
-    adminCheckId: "host-lifecycle-control",
-  }),
-  "player-action-submission": Object.freeze({
-    featureSlotId: "player-action-submission",
-    sourceCheckId: "local-core-loop-proof",
-    cycleId: "d02-n02",
-    roleUrlId: "d02-n02-actionPlayer",
-    rowKind: "checkpoint",
-    checkpointId: "d02-n02-n02-action-open",
-    adminCheckId: "action-loop",
-  }),
-  "invalid-action-recovery": Object.freeze({
-    featureSlotId: "invalid-action-recovery",
-    sourceCheckId: "local-core-loop-proof",
-    cycleId: "d02-n02",
-    roleUrlId: "d02-n02-actionPlayer",
-    rowKind: "recovery-hook",
-    checkpointId: "d02-n02-n02-action-open",
-    recoveryHookId: "invalidActionReject",
-    adminCheckId: "invalid-action-recovery",
-  }),
-  "private-channel": Object.freeze({
-    featureSlotId: "private-channel",
-    sourceCheckId: "local-core-loop-proof",
-    cycleId: "d01-n01-d02",
-    roleUrlId: "d01-n01-d02-actionPlayer",
-    rowKind: "checkpoint",
-    checkpointId: "d01-n01-d02-n01-action-open",
-    adminCheckId: "private-channel",
-  }),
-  "stale-recovery": Object.freeze({
-    featureSlotId: "stale-recovery",
-    sourceCheckId: "local-core-loop-proof",
-    cycleId: "d01-n01-d02",
-    roleUrlId: "d01-n01-d02-host",
-    rowKind: "checkpoint",
-    checkpointId: "d01-n01-d02-d01-resolved-locked",
-    adminCheckId: "stale-deadline-advance",
-  }),
-});
 
 function hardeningAdminProofFixture() {
   return {

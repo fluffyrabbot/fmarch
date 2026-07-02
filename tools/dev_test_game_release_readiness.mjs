@@ -78,6 +78,11 @@ import {
   releaseAdminProofFallbackUnprovenIds,
 } from "./dev_test_game_release_readiness_cases.mjs";
 import {
+  featureSpineRecoveryHookRowKind,
+  featureSpineRowKind,
+  validFeatureSpineDeclaration,
+} from "./dev_test_game_feature_spine_targets.mjs";
+import {
   assertCompletedGameProofReadinessSurfaceProof,
   completedGameProofReadinessScenarioFamilies,
 } from "./dev_test_game_core_loop_completed_game_proof_readiness_shared.mjs";
@@ -4265,24 +4270,16 @@ export function validateDevTestGameNextActionAdminProof(proof, options = {}) {
     const declaration = proof.generatedFrom.unprovenProductionFeatureSpineTarget;
     const drilldown = proof.generatedFrom.unprovenSpineDrilldown;
     const target = proof.generatedFrom.unprovenSpineTarget;
-    const rowKind =
-      declaration?.rowKind === "recovery-hook" ? "recovery-hook" : "checkpoint";
+    const rowKind = featureSpineRowKind(declaration);
     if (
-      typeof declaration?.featureSlotId !== "string" ||
-      typeof declaration?.cycleId !== "string" ||
-      typeof declaration?.roleUrlId !== "string" ||
-      !["checkpoint", "recovery-hook"].includes(rowKind) ||
-      typeof declaration?.checkpointId !== "string" ||
-      (rowKind === "recovery-hook" &&
-        typeof declaration?.recoveryHookId !== "string") ||
-      typeof declaration?.adminCheckId !== "string" ||
+      !validFeatureSpineDeclaration(declaration) ||
       typeof target.featureSlotId !== "string" ||
       typeof target.cycleId !== "string" ||
       typeof target.roleUrlId !== "string" ||
       typeof target.roleUrl !== "string" ||
-      (target.rowKind ?? "checkpoint") !== rowKind ||
+      featureSpineRowKind(target) !== rowKind ||
       typeof target.checkpointId !== "string" ||
-      (rowKind === "recovery-hook" &&
+      (rowKind === featureSpineRecoveryHookRowKind &&
         target.recoveryHookId !== declaration.recoveryHookId) ||
       typeof target.adminCheckId !== "string" ||
       typeof target.browserProofCommand !== "string" ||
@@ -4291,9 +4288,9 @@ export function validateDevTestGameNextActionAdminProof(proof, options = {}) {
       typeof drilldown?.featureSlotId !== "string" ||
       typeof drilldown?.cycleRowId !== "string" ||
       typeof drilldown?.roleUrlRowId !== "string" ||
-      (drilldown.rowKind ?? "checkpoint") !== rowKind ||
+      featureSpineRowKind(drilldown) !== rowKind ||
       typeof drilldown?.checkpointRowId !== "string" ||
-      (rowKind === "recovery-hook" &&
+      (rowKind === featureSpineRecoveryHookRowKind &&
         drilldown.recoveryHookRowId !== declaration.recoveryHookId) ||
       typeof drilldown?.adminCheckId !== "string" ||
       typeof drilldown?.rerunCommand !== "string" ||

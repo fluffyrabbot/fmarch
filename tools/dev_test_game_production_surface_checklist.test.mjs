@@ -7,6 +7,9 @@ import {
   releaseReadinessBuildableItemIds,
 } from "./dev_test_game_release_readiness_cases.mjs";
 import {
+  featureSpineSourceCheckIds,
+} from "./dev_test_game_feature_spine_targets.mjs";
+import {
   assertProductionFacingSurfaceChecklist,
   assertProductionFacingSurfaceGraphCoverage,
   productionFacingSurfaceChecklistItems,
@@ -28,9 +31,10 @@ test("production-facing surface checklist binds proof graph nodes to admin audit
     );
     assert.equal(item.adminAuditId, destination.auditId);
     assert.ok(item.roleUrl.includes(`/admin/audit/${destination.auditId}`));
-    assert.equal(
-      item.productionFeatureSpineTarget.sourceCheckId,
-      "local-core-loop-proof",
+    assert.ok(
+      featureSpineSourceCheckIds.includes(
+        item.productionFeatureSpineTarget.sourceCheckId,
+      ),
     );
     assert.ok(item.command.startsWith("npm run test:"));
     assert.ok(item.proofTarget.startsWith("target/"));

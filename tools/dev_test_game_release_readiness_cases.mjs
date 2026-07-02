@@ -20,68 +20,69 @@ import {
   playerInvalidActionRecoveryHookId,
   playerInvalidActionRecoveryLaneId,
 } from "./dev_test_game_core_loop_action_scenario_cases.mjs";
+import {
+  featureSpineCheckpointTarget,
+  featureSpineRecoveryHookTarget,
+  featureSpineTargetBySlotId,
+} from "./dev_test_game_feature_spine_targets.mjs";
 
 export const devTestGameReleaseRunbookPath =
   "target/dev-test-game/release-runbook.json";
 export const devTestGameReleaseRunbookCommand = "test:dev-test-game-release-runbook";
 
 export const releaseReadinessProductionFeatureSpineTargets = Object.freeze({
-  identityAdapter: Object.freeze({
+  identityAdapter: featureSpineCheckpointTarget({
     featureSlotId: "identity-adapter",
     sourceCheckId: "local-identity-adapter-proof",
     cycleId: "identity-adapter",
     roleUrlId: "local-identity-adapter",
-    rowKind: "checkpoint",
     checkpointId: "account-login",
     adminCheckId: "account-login",
   }),
-  hostPhaseControl: Object.freeze({
+  hostPhaseControl: featureSpineCheckpointTarget({
     featureSlotId: "host-phase-control",
     sourceCheckId: "local-core-loop-proof",
     cycleId: "d02-n02",
     roleUrlId: "d02-n02-host",
-    rowKind: "checkpoint",
     checkpointId: "d02-n02-d02-vote-open",
     adminCheckId: "host-lifecycle-control",
   }),
-  playerActionSubmission: Object.freeze({
+  playerActionSubmission: featureSpineCheckpointTarget({
     featureSlotId: "player-action-submission",
     sourceCheckId: "local-core-loop-proof",
     cycleId: "d02-n02",
     roleUrlId: "d02-n02-actionPlayer",
-    rowKind: "checkpoint",
     checkpointId: "d02-n02-n02-action-open",
     adminCheckId: "action-loop",
   }),
-  invalidActionRecovery: Object.freeze({
+  invalidActionRecovery: featureSpineRecoveryHookTarget({
     featureSlotId: playerInvalidActionRecoveryLaneId,
     sourceCheckId: "local-core-loop-proof",
     cycleId: "d02-n02",
     roleUrlId: "d02-n02-actionPlayer",
-    rowKind: "recovery-hook",
     checkpointId: "d02-n02-n02-action-open",
     recoveryHookId: playerInvalidActionRecoveryHookId,
     adminCheckId: playerInvalidActionRecoveryLaneId,
   }),
-  privateChannel: Object.freeze({
+  privateChannel: featureSpineCheckpointTarget({
     featureSlotId: "private-channel",
     sourceCheckId: "local-core-loop-proof",
     cycleId: "d01-n01-d02",
     roleUrlId: "d01-n01-d02-actionPlayer",
-    rowKind: "checkpoint",
     checkpointId: "d01-n01-d02-n01-action-open",
     adminCheckId: "private-channel",
   }),
-  staleRecovery: Object.freeze({
+  staleRecovery: featureSpineCheckpointTarget({
     featureSlotId: "stale-recovery",
     sourceCheckId: "local-core-loop-proof",
     cycleId: "d01-n01-d02",
     roleUrlId: "d01-n01-d02-host",
-    rowKind: "checkpoint",
     checkpointId: "d01-n01-d02-d01-resolved-locked",
     adminCheckId: "stale-deadline-advance",
   }),
 });
+export const releaseReadinessProductionFeatureSpineTargetsBySlotId =
+  featureSpineTargetBySlotId(releaseReadinessProductionFeatureSpineTargets);
 
 const releaseReadinessUnprovenCases = Object.freeze({
   "production-identity": Object.freeze({

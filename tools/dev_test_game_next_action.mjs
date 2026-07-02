@@ -39,6 +39,12 @@ import {
   releaseReadinessBuildableItemForId,
 } from "./dev_test_game_release_readiness_cases.mjs";
 import { rankedMissingLocalReadinessDependencies } from "./dev_test_game_local_readiness_dependencies.mjs";
+import {
+  featureSpineDeclarationRowsPresent,
+  featureSpineRecoveryHookRowKind,
+  featureSpineRowKind,
+  validFeatureSpineDeclaration,
+} from "./dev_test_game_feature_spine_targets.mjs";
 
 export const DEV_TEST_GAME_NEXT_ACTION_VERSION = 1;
 export const devTestGameNextActionPath = "target/dev-test-game/next-action.json";
@@ -729,20 +735,12 @@ function resolveProductionFeatureSpineTarget({
       `buildable release-readiness item ${itemId} production feature spine target drifted`,
     );
   }
-  const rowKind = productionFeatureSpineRowKind(declaration);
-  const hasCheckpointRow = sourceTarget.checkpointIds.includes(
-    declaration.checkpointId,
-  );
-  const hasRecoveryHookRow =
-    rowKind === "recovery-hook" &&
-    Array.isArray(sourceTarget.recoveryHookIds) &&
-    sourceTarget.recoveryHookIds.includes(declaration.recoveryHookId);
+  const rowKind = featureSpineRowKind(declaration);
   if (
-    !sourceTarget.cycleIds.includes(declaration.cycleId) ||
-    !sourceTarget.roleUrlIds.includes(declaration.roleUrlId) ||
-    !hasCheckpointRow ||
-    (rowKind === "recovery-hook" && !hasRecoveryHookRow) ||
-    !sourceTarget.visibleAdminCheckIds.includes(declaration.adminCheckId)
+    !featureSpineDeclarationRowsPresent({
+      declaration,
+      sourceTarget,
+    })
   ) {
     throw new Error(
       `buildable release-readiness item ${itemId} production feature spine target is not in ${declaration.sourceCheckId}`,
@@ -763,7 +761,7 @@ function resolveProductionFeatureSpineTarget({
     roleUrl,
     rowKind,
     checkpointId: declaration.checkpointId,
-    ...(rowKind === "recovery-hook"
+    ...(rowKind === featureSpineRecoveryHookRowKind
       ? { recoveryHookId: declaration.recoveryHookId }
       : {}),
     adminCheckId: declaration.adminCheckId,
@@ -773,7 +771,7 @@ function resolveProductionFeatureSpineTarget({
 }
 
 function buildProductionFeatureSpineDrilldown(spineTarget) {
-  const rowKind = productionFeatureSpineRowKind(spineTarget);
+  const rowKind = featureSpineRowKind(spineTarget);
   return {
     featureSlotId: spineTarget.featureSlotId,
     sourceCheckId: spineTarget.sourceCheckId,
@@ -782,7 +780,7 @@ function buildProductionFeatureSpineDrilldown(spineTarget) {
     roleUrlRowId: spineTarget.roleUrlId,
     rowKind,
     checkpointRowId: spineTarget.checkpointId,
-    ...(rowKind === "recovery-hook"
+    ...(rowKind === featureSpineRecoveryHookRowKind
       ? { recoveryHookRowId: spineTarget.recoveryHookId }
       : {}),
     adminCheckId: spineTarget.adminCheckId,
@@ -792,33 +790,8 @@ function buildProductionFeatureSpineDrilldown(spineTarget) {
   };
 }
 
-function productionFeatureSpineRowKind(target) {
-  return target?.rowKind === "recovery-hook" ? "recovery-hook" : "checkpoint";
-}
-
 function validProductionFeatureSpineDeclaration(declaration) {
-  const rowKind = productionFeatureSpineRowKind(declaration);
-  return (
-    declaration !== null &&
-    typeof declaration === "object" &&
-    typeof declaration.featureSlotId === "string" &&
-    declaration.featureSlotId.length > 0 &&
-    ["local-core-loop-proof", "local-identity-adapter-proof"].includes(
-      declaration.sourceCheckId,
-    ) &&
-    typeof declaration.cycleId === "string" &&
-    declaration.cycleId.length > 0 &&
-    typeof declaration.roleUrlId === "string" &&
-    declaration.roleUrlId.length > 0 &&
-    ["checkpoint", "recovery-hook"].includes(rowKind) &&
-    typeof declaration.checkpointId === "string" &&
-    declaration.checkpointId.length > 0 &&
-    (rowKind !== "recovery-hook" ||
-      (typeof declaration.recoveryHookId === "string" &&
-        declaration.recoveryHookId.length > 0)) &&
-    typeof declaration.adminCheckId === "string" &&
-    declaration.adminCheckId.length > 0
-  );
+  return validFeatureSpineDeclaration(declaration);
 }
 
 function rankedBuildableReleaseReadinessItems(
@@ -1457,7 +1430,7 @@ function releaseReadinessActionStatus(buildable) {
 }
 
 function validActionableSpineTarget(spineTarget) {
-  const rowKind = productionFeatureSpineRowKind(spineTarget);
+  const rowKind = featureSpineRowKind(spineTarget);
   if (
     spineTarget === null ||
     typeof spineTarget !== "object" ||
@@ -1469,10 +1442,9 @@ function validActionableSpineTarget(spineTarget) {
     typeof spineTarget.roleUrlId !== "string" ||
     spineTarget.roleUrlId.length === 0 ||
     typeof spineTarget.roleUrl !== "string" ||
-    ["checkpoint", "recovery-hook"].includes(rowKind) === false ||
     typeof spineTarget.checkpointId !== "string" ||
     spineTarget.checkpointId.length === 0 ||
-    (rowKind === "recovery-hook" &&
+    (rowKind === featureSpineRecoveryHookRowKind &&
       (typeof spineTarget.recoveryHookId !== "string" ||
         spineTarget.recoveryHookId.length === 0)) ||
     typeof spineTarget.adminCheckId !== "string" ||
@@ -1499,7 +1471,7 @@ function validActionableSpineTarget(spineTarget) {
 }
 
 function validProductionFeatureSpineDrilldown(drilldown) {
-  const rowKind = productionFeatureSpineRowKind(drilldown);
+  const rowKind = featureSpineRowKind(drilldown);
   if (
     drilldown === null ||
     typeof drilldown !== "object" ||
@@ -1510,10 +1482,9 @@ function validProductionFeatureSpineDrilldown(drilldown) {
     drilldown.cycleRowId.length === 0 ||
     typeof drilldown.roleUrlRowId !== "string" ||
     drilldown.roleUrlRowId.length === 0 ||
-    ["checkpoint", "recovery-hook"].includes(rowKind) === false ||
     typeof drilldown.checkpointRowId !== "string" ||
     drilldown.checkpointRowId.length === 0 ||
-    (rowKind === "recovery-hook" &&
+    (rowKind === featureSpineRecoveryHookRowKind &&
       (typeof drilldown.recoveryHookRowId !== "string" ||
         drilldown.recoveryHookRowId.length === 0)) ||
     typeof drilldown.adminCheckId !== "string" ||

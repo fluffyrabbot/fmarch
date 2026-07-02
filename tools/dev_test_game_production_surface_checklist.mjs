@@ -6,6 +6,9 @@ import {
   releaseReadinessBuildableItemIds,
   releaseReadinessUnprovenItem,
 } from "./dev_test_game_release_readiness_cases.mjs";
+import {
+  validFeatureSpineDeclaration,
+} from "./dev_test_game_feature_spine_targets.mjs";
 
 export function productionFacingSurfaceChecklistItems() {
   return releaseReadinessBuildableItemIds.map((unprovenId) => {
@@ -132,23 +135,5 @@ function assertChecklistItemShape(item) {
 }
 
 function validFeatureSpineTarget(target) {
-  if (
-    target === null ||
-    typeof target !== "object" ||
-    typeof target.featureSlotId !== "string" ||
-    target.featureSlotId.trim() === "" ||
-    typeof target.cycleId !== "string" ||
-    target.cycleId.trim() === "" ||
-    typeof target.roleUrlId !== "string" ||
-    target.roleUrlId.trim() === "" ||
-    typeof target.checkpointId !== "string" ||
-    target.checkpointId.trim() === "" ||
-    typeof target.adminCheckId !== "string" ||
-    target.adminCheckId.trim() === ""
-  ) {
-    return false;
-  }
-  return ["local-core-loop-proof", "local-identity-adapter-proof"].includes(
-    target.sourceCheckId,
-  );
+  return validFeatureSpineDeclaration(target);
 }
