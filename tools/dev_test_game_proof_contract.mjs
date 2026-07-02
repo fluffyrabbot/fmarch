@@ -42,6 +42,8 @@ import {
   stalePlayerCommandLaneIds,
 } from "./dev_test_game_player_recovery_scenarios.mjs";
 import {
+  assertStaleConflictMessageCoverageSummary,
+  buildStaleConflictMessageCoverageSummary,
   staleConflictMessageLaneIds,
 } from "./dev_test_game_stale_conflict_scenarios.mjs";
 import {
@@ -5875,6 +5877,8 @@ export function buildDevTestGameProofRun(session, options = {}) {
     buildCompletedGameHardeningCoverage(lanes);
   const hostStaleControlCoverage =
     buildHostStaleControlCoverageSummary(lanes);
+  const staleConflictMessageCoverage =
+    buildStaleConflictMessageCoverageSummary(lanes);
   const replacementPrivateChannelRecoveryCoverage =
     buildReplacementPrivateChannelRecoveryCoverageSummary(lanes);
   const replacementActionRecoveryCoverage =
@@ -5907,6 +5911,7 @@ export function buildDevTestGameProofRun(session, options = {}) {
     coreLoopSpine,
     completedGameHardeningCoverage,
     hostStaleControlCoverage,
+    staleConflictMessageCoverage,
     replacementPrivateChannelRecoveryCoverage,
     replacementActionRecoveryCoverage,
     replacementHandoffRecoveryCoverage,
@@ -5959,6 +5964,10 @@ export function assertDevTestGameProofRun(proof) {
   });
   assertHostStaleControlCoverageSummary({
     summary: proof.hostStaleControlCoverage,
+    lanes: proof.lanes,
+  });
+  assertStaleConflictMessageCoverageSummary({
+    summary: proof.staleConflictMessageCoverage,
     lanes: proof.lanes,
   });
   assertReplacementPrivateChannelRecoveryCoverageSummary({

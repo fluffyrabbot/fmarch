@@ -40,6 +40,7 @@ import {
   replacementPrivateChannelRecoveryLaneIds,
 } from "./dev_test_game_replacement_private_scenarios.mjs";
 import {
+  assertStaleConflictMessageCoverageSummary,
   staleConflictMessageSurfaceCases,
   staleConflictMessageLaneIds,
 } from "./dev_test_game_stale_conflict_scenarios.mjs";
@@ -561,6 +562,7 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
       laneIds: [...staleConflictMessageMilestone.laneIds],
       requiredLaneCount: staleConflictMessageMilestone.requiredLaneCount,
       coveredLaneCount: staleConflictMessageMilestone.coveredLaneCount,
+      familyCount: staleConflictMessageMilestone.familyCount,
       surfaceCoverage: staleConflictMessageMilestone.surfaceCoverage,
       surfaces: staleConflictMessageMilestone.surfaces,
     },
@@ -1094,6 +1096,8 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
         requiredLaneCount: staleConflictMessageMilestone.requiredLaneCount,
         coveredLaneCount: staleConflictMessageMilestone.coveredLaneCount,
         gapCount: staleConflictMessageMilestone.gapCount,
+        familyCount: staleConflictMessageMilestone.familyCount,
+        families: staleConflictMessageMilestone.families,
         surfaceCoverage: staleConflictMessageMilestone.surfaceCoverage,
         surfaces: staleConflictMessageMilestone.surfaces,
       },
@@ -1211,6 +1215,8 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
                 requiredLaneCount: staleConflictMessageMilestone.requiredLaneCount,
                 coveredLaneCount: staleConflictMessageMilestone.coveredLaneCount,
                 gapCount: staleConflictMessageMilestone.gapCount,
+                familyCount: staleConflictMessageMilestone.familyCount,
+                families: staleConflictMessageMilestone.families,
                 surfaceCoverage: staleConflictMessageMilestone.surfaceCoverage,
                 surfaces: staleConflictMessageMilestone.surfaces,
               },
@@ -1469,18 +1475,18 @@ function joinEnglish(items) {
 
 function buildStaleConflictMessageMilestone(proof, { sourcePath }) {
   const lanes = new Map(proof.lanes.map((lane) => [lane.id, lane]));
-  const laneIds = [...staleConflictMessageLaneIds];
-  const coveredLaneCount = laneIds.filter(
-    (laneId) => lanes.get(laneId)?.status === "passed",
-  ).length;
-  const gapCount = laneIds.length - coveredLaneCount;
-  if (gapCount !== 0) {
+  let coverage;
+  try {
+    coverage = assertStaleConflictMessageCoverageSummary({
+      summary: proof.staleConflictMessageCoverage,
+      lanes: proof.lanes,
+    });
+  } catch (error) {
     throw new Error(
-      `stale conflict-message milestone missing passed lanes from ${sourcePath}: ${laneIds
-        .filter((laneId) => lanes.get(laneId)?.status !== "passed")
-        .join(", ")}`,
+      `stale conflict-message milestone missing passed lanes from ${sourcePath}: ${error.message}`,
     );
   }
+  const laneIds = [...coverage.sourceLaneIds];
   const surfaces = buildStaleConflictMessageSurfaces(lanes, { sourcePath });
   const surfaceCoverage = buildStaleConflictMessageSurfaceCoverage({
     laneIds,
@@ -1488,11 +1494,13 @@ function buildStaleConflictMessageMilestone(proof, { sourcePath }) {
     sourcePath,
   });
   return {
-    status: "passed",
+    status: coverage.status,
     laneIds,
-    requiredLaneCount: laneIds.length,
-    coveredLaneCount,
-    gapCount,
+    requiredLaneCount: coverage.laneCount,
+    coveredLaneCount: coverage.passedLaneCount,
+    gapCount: coverage.laneCount - coverage.passedLaneCount,
+    familyCount: coverage.familyCount,
+    families: coverage.families,
     surfaceCoverage,
     surfaces,
   };

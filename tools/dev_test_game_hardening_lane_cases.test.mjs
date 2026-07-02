@@ -34,8 +34,12 @@ import {
   hostedMatrixReconnectLaneIds,
 } from "./dev_test_game_host_stale_control_scenarios.mjs";
 import {
+  assertStaleConflictMessageCoverageSummary,
   assertStaleConflictMessageSurfaceCoverage,
+  buildStaleConflictMessageCoverageSummary,
   hostedMatrixStaleConflictLaneIds,
+  staleConflictMessageCoverageFamilies,
+  staleConflictMessageCoverageFamilyDefinitions,
   staleConflictMessageNoSurfaceYetCases,
   staleConflictMessageSurfaceCases,
   staleConflictMessageSurfaceCheckIds,
@@ -152,6 +156,42 @@ test("hardening lane cases share stale conflict-message IDs", () => {
   ]);
   assert.deepEqual(staleConflictMessageNoSurfaceYetCases(), []);
   assert.doesNotThrow(() => assertStaleConflictMessageSurfaceCoverage());
+});
+
+test("hardening lane cases summarize stale conflict-message coverage", () => {
+  assert(Object.isFrozen(staleConflictMessageCoverageFamilyDefinitions));
+  assert.deepEqual(
+    staleConflictMessageCoverageFamilies().map((family) => ({
+      id: family.id,
+      laneIds: family.laneIds,
+    })),
+    [
+      {
+        id: "replacement-conflict-message",
+        laneIds: ["replacement-stale-conflict-message"],
+      },
+      {
+        id: "player-action-conflict-messages",
+        laneIds: ["stale-action-conflict-message", "stale-dead-action-conflict"],
+      },
+      {
+        id: "host-deadline-conflict-messages",
+        laneIds: ["stale-host-deadline", "stale-cohost-deadline"],
+      },
+    ],
+  );
+  const lanes = staleConflictMessageLaneIds.map((id) => ({
+    id,
+    status: "passed",
+  }));
+  const summary = buildStaleConflictMessageCoverageSummary(lanes);
+  assert.deepEqual(summary.sourceLaneIds, staleConflictMessageLaneIds);
+  assert.equal(summary.laneCount, staleConflictMessageLaneIds.length);
+  assert.equal(summary.passedLaneCount, staleConflictMessageLaneIds.length);
+  assert.equal(summary.familyCount, 3);
+  assert.doesNotThrow(() =>
+    assertStaleConflictMessageCoverageSummary({ summary, lanes }),
+  );
 });
 
 test("hardening lane cases share host stale-control IDs", () => {

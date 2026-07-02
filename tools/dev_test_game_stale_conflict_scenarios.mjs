@@ -1,6 +1,11 @@
 import {
   hostGenericStaleControlLaneIds,
 } from "./dev_test_game_host_stale_control_scenarios.mjs";
+import {
+  assertLaneCoverageSummary,
+  buildLaneCoverageSummary,
+  cloneLaneCoverageFamilies,
+} from "./dev_test_game_lane_coverage.mjs";
 
 const cloneScenarioCase = (scenario) => ({ ...scenario });
 
@@ -11,6 +16,51 @@ export const staleConflictMessageLaneIds = Object.freeze([
   "stale-host-deadline",
   "stale-cohost-deadline",
 ]);
+
+export const staleConflictMessageCoverageFamilyDefinitions = Object.freeze([
+  Object.freeze({
+    id: "replacement-conflict-message",
+    label: "Replacement stale conflict message",
+    laneIds: Object.freeze(["replacement-stale-conflict-message"]),
+  }),
+  Object.freeze({
+    id: "player-action-conflict-messages",
+    label: "Player action stale conflict messages",
+    laneIds: Object.freeze([
+      "stale-action-conflict-message",
+      "stale-dead-action-conflict",
+    ]),
+  }),
+  Object.freeze({
+    id: "host-deadline-conflict-messages",
+    label: "Host deadline stale conflict messages",
+    laneIds: Object.freeze(["stale-host-deadline", "stale-cohost-deadline"]),
+  }),
+]);
+
+export function staleConflictMessageCoverageFamilies() {
+  return cloneLaneCoverageFamilies(
+    staleConflictMessageCoverageFamilyDefinitions,
+  );
+}
+
+export function buildStaleConflictMessageCoverageSummary(lanes) {
+  return buildLaneCoverageSummary({
+    lanes,
+    laneIds: staleConflictMessageLaneIds,
+    families: staleConflictMessageCoverageFamilyDefinitions,
+  });
+}
+
+export function assertStaleConflictMessageCoverageSummary({ summary, lanes }) {
+  return assertLaneCoverageSummary({
+    summary,
+    lanes,
+    laneIds: staleConflictMessageLaneIds,
+    familyDefinitions: staleConflictMessageCoverageFamilyDefinitions,
+    label: "stale conflict-message",
+  });
+}
 
 export const hostedMatrixStaleConflictLaneIds = Object.freeze([
   ...staleConflictMessageLaneIds,

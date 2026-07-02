@@ -24,6 +24,7 @@ import {
   completedGameHardeningLaneCases,
 } from "../../../../tools/dev_test_game_core_loop_completed_scenarios.mjs";
 import {
+  staleConflictMessageCoverageFamilies,
   staleConflictMessageSurfaceCases,
   staleConflictMessageLaneIds,
 } from "../../../../tools/dev_test_game_stale_conflict_scenarios.mjs";
@@ -3559,6 +3560,7 @@ function proofRunFixture() {
     },
     completedGameHardeningCoverage: completedGameHardeningCoverageFixture(),
     hostStaleControlCoverage: hostStaleControlCoverageFixture(),
+    staleConflictMessageCoverage: staleConflictMessageCoverageFixture(),
     replacementPrivateChannelRecoveryCoverage:
       replacementPrivateChannelRecoveryCoverageFixture(),
     replacementActionRecoveryCoverage:
@@ -3625,6 +3627,13 @@ function hostStaleControlCoverageFixture() {
     ),
     families,
   };
+}
+
+function staleConflictMessageCoverageFixture() {
+  return passedCoverageFixture({
+    laneIds: staleConflictMessageLaneIds,
+    families: staleConflictMessageCoverageFamilies(),
+  });
 }
 
 function replacementPrivateChannelRecoveryCoverageFixture() {
@@ -5475,6 +5484,7 @@ function releaseReadinessChecklistFixture() {
           laneIds: staleConflictMessageMilestoneFixture().laneIds,
           requiredLaneCount: staleConflictMessageLaneIds.length,
           coveredLaneCount: staleConflictMessageLaneIds.length,
+          familyCount: staleConflictMessageCoverageFamilies().length,
           surfaceCoverage: staleConflictMessageSurfaceCoverageFixture(),
         },
         {
@@ -5556,6 +5566,12 @@ function staleConflictMessageMilestoneFixture() {
     requiredLaneCount: staleConflictMessageLaneIds.length,
     coveredLaneCount: staleConflictMessageLaneIds.length,
     gapCount: 0,
+    familyCount: staleConflictMessageCoverageFamilies().length,
+    families: staleConflictMessageCoverageFamilies().map((family) => ({
+      ...family,
+      status: "passed",
+      passedLaneIds: [...family.laneIds],
+    })),
     surfaceCoverage: staleConflictMessageSurfaceCoverageFixture(),
     surfaces: staleConflictMessageSurfaceFixtureRows(),
   };
