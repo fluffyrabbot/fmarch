@@ -86,10 +86,68 @@ export const staleConflictMessageSurfaceCaseDefinitions = Object.freeze([
   }),
 ]);
 
+export const staleConflictMessageNoSurfaceYetDefinitions = Object.freeze([
+  Object.freeze({
+    laneId: "replacement-stale-conflict-message",
+    noSurfaceYet:
+      "Replacement stale conflicts are still proved through the replacement-console handoff lane; promote this when the stale invite/session conflict has a dedicated role URL reload surface.",
+  }),
+]);
+
 export function staleConflictMessageSurfaceCases() {
   return staleConflictMessageSurfaceCaseDefinitions.map(cloneScenarioCase);
 }
 
 export function staleConflictMessageSurfaceCheckIds() {
   return staleConflictMessageSurfaceCases().map((scenario) => scenario.checkId);
+}
+
+export function staleConflictMessageNoSurfaceYetCases() {
+  return staleConflictMessageNoSurfaceYetDefinitions.map(cloneScenarioCase);
+}
+
+export function assertStaleConflictMessageSurfaceCoverage() {
+  const expectedLaneIds = new Set(staleConflictMessageLaneIds);
+  const surfaceLaneIds = staleConflictMessageSurfaceCases().map(
+    (scenario) => scenario.laneId,
+  );
+  const noSurfaceYetLaneIds = staleConflictMessageNoSurfaceYetCases().map(
+    (scenario) => scenario.laneId,
+  );
+  const coveredLaneIds = new Set([...surfaceLaneIds, ...noSurfaceYetLaneIds]);
+  const duplicateLaneIds = [...surfaceLaneIds, ...noSurfaceYetLaneIds].filter(
+    (laneId, index, laneIds) => laneIds.indexOf(laneId) !== index,
+  );
+  const missingLaneIds = staleConflictMessageLaneIds.filter(
+    (laneId) => !coveredLaneIds.has(laneId),
+  );
+  const unexpectedLaneIds = [...coveredLaneIds].filter(
+    (laneId) => !expectedLaneIds.has(laneId),
+  );
+  const missingNoSurfaceYetReasons = staleConflictMessageNoSurfaceYetCases()
+    .filter(
+      (scenario) =>
+        typeof scenario.noSurfaceYet !== "string" ||
+        scenario.noSurfaceYet.trim() === "",
+    )
+    .map((scenario) => scenario.laneId);
+
+  if (
+    duplicateLaneIds.length > 0 ||
+    missingLaneIds.length > 0 ||
+    unexpectedLaneIds.length > 0 ||
+    missingNoSurfaceYetReasons.length > 0
+  ) {
+    throw new Error(
+      [
+        "stale conflict-message surface coverage drifted",
+        `duplicates=${duplicateLaneIds.join(",") || "none"}`,
+        `missing=${missingLaneIds.join(",") || "none"}`,
+        `unexpected=${unexpectedLaneIds.join(",") || "none"}`,
+        `missingNoSurfaceYetReasons=${
+          missingNoSurfaceYetReasons.join(",") || "none"
+        }`,
+      ].join("; "),
+    );
+  }
 }

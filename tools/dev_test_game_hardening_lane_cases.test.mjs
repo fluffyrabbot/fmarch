@@ -30,7 +30,9 @@ import {
   hostedMatrixReconnectLaneIds,
 } from "./dev_test_game_host_stale_control_scenarios.mjs";
 import {
+  assertStaleConflictMessageSurfaceCoverage,
   hostedMatrixStaleConflictLaneIds,
+  staleConflictMessageNoSurfaceYetCases,
   staleConflictMessageSurfaceCases,
   staleConflictMessageSurfaceCheckIds,
   staleConflictMessageLaneIds,
@@ -127,6 +129,14 @@ test("hardening lane cases share stale conflict-message IDs", () => {
     "stale-conflict-message-surface-stale-host-deadline",
     "stale-conflict-message-surface-stale-cohost-deadline",
   ]);
+  assert.deepEqual(staleConflictMessageNoSurfaceYetCases(), [
+    {
+      laneId: "replacement-stale-conflict-message",
+      noSurfaceYet:
+        "Replacement stale conflicts are still proved through the replacement-console handoff lane; promote this when the stale invite/session conflict has a dedicated role URL reload surface.",
+    },
+  ]);
+  assert.doesNotThrow(() => assertStaleConflictMessageSurfaceCoverage());
 });
 
 test("hardening lane cases share host stale-control IDs", () => {
