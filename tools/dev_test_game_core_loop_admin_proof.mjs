@@ -71,6 +71,8 @@ import {
   coreLoopVoteResolutionScenarioFamily,
 } from "./dev_test_game_core_loop_vote_resolution_scenarios.mjs";
 import {
+  assertDayFourSurvivorRoleSurfaceCase,
+  assertNightThreeEmptyResolutionSurfaceCase,
   coreLoopPhaseProgressionFamilyId,
   coreLoopPhaseProgressionScenarioFamily,
 } from "./dev_test_game_core_loop_phase_progression_scenarios.mjs";
@@ -10051,130 +10053,19 @@ function assertPostDayThreeResolutionSurface(postDayThreeResolutionSurface) {
 }
 
 function assertNightThreeEmptyResolutionSurface(nightThreeEmptyResolutionSurface) {
-  const expectedGame = gameFromRoleUrl(
-    nightThreeEmptyResolutionSurface?.sourceHostRoleUrl,
-  );
-  if (
-    nightThreeEmptyResolutionSurface?.status !== "passed" ||
-    nightThreeEmptyResolutionSurface.clickedThroughFromRoleUrl !== true ||
-    nightThreeEmptyResolutionSurface.releaseReady !== false ||
-    nightThreeEmptyResolutionSurface.productionReady !== false ||
-    typeof nightThreeEmptyResolutionSurface.sourceHostRoleUrl !== "string" ||
-    !nightThreeEmptyResolutionSurface.sourceHostRoleUrl.endsWith("/host") ||
-    typeof nightThreeEmptyResolutionSurface.sourceActionPlayerRoleUrl !==
-      "string" ||
-    !nightThreeEmptyResolutionSurface.sourceActionPlayerRoleUrl.includes("/g/") ||
-    !String(nightThreeEmptyResolutionSurface.transition ?? "").includes(
-      "actionPlayer:N03:no_action",
-    ) ||
-    !String(nightThreeEmptyResolutionSurface.transition ?? "").includes(
-      "resolve_phase:ack:910",
-    ) ||
-    !String(nightThreeEmptyResolutionSurface.transition ?? "").includes(
-      "advance_phase:ack:911",
-    ) ||
-    !String(nightThreeEmptyResolutionSurface.transition ?? "").includes(
-      "actionPlayer:D04:no_lynch_vote",
-    )
-  ) {
-    throw new Error(
-      `core-loop admin proof missing empty Night 3 resolution surface: ${JSON.stringify(
-        nightThreeEmptyResolutionSurface,
-      )}`,
-    );
-  }
-  assertPostDayThreePlayerSurfaceProof({
-    proof: nightThreeEmptyResolutionSurface.actionPlayerNoActionProof,
-    expectedGame,
-    sourceRoleUrl: nightThreeEmptyResolutionSurface.sourceActionPlayerRoleUrl,
-    expectedSlot: "slot-7",
-    slotField: "actionPlayerSlot",
-    expectedPrincipalUserId: "player_mira",
-    expectedPhaseId: "N03",
-    expectedPhaseState: "open",
-    expectedActorAlive: true,
-    expectedActorStatus: "alive",
-    expectedActionState: "disabled:no legal action available",
-    expectedStatusText: "no legal action available",
-    expectedPrivateCount: 0,
-    expectedPrivateReceipt: false,
-    expectedBoundaryText: "opened N03 with no legal night action",
-    expectedResyncFromSeq: 909,
-    expectedCommandStateEndpoint:
-      `/games/${expectedGame}/player-command-state?principal_user_id=player_mira&slot_id=slot-7`,
-    expectedNotificationsEndpoint:
-      `/games/${expectedGame}/notifications?principal_user_id=player_mira`,
-  });
-  assertNightThreeEmptyHostTransitionProof({
-    proof: nightThreeEmptyResolutionSurface.hostTransitionProof,
-    expectedGame,
-    sourceRoleUrl: nightThreeEmptyResolutionSurface.sourceHostRoleUrl,
-  });
-  assertPostDayThreePlayerSurfaceProof({
-    proof: nightThreeEmptyResolutionSurface.actionPlayerDayFourProof,
-    expectedGame,
-    sourceRoleUrl: nightThreeEmptyResolutionSurface.sourceActionPlayerRoleUrl,
-    expectedSlot: "slot-7",
-    slotField: "actionPlayerSlot",
-    expectedPrincipalUserId: "player_mira",
-    expectedPhaseId: "D04",
-    expectedPhaseState: "open",
-    expectedActorAlive: true,
-    expectedActorStatus: "alive",
-    expectedActionState: "disabled:no legal action available",
-    expectedStatusText: "no legal action available",
-    expectedPrivateCount: 0,
-    expectedPrivateReceipt: false,
-    expectedBoundaryText: "open D04 no-lynch voting",
-    expectedResyncFromSeq: 911,
-    expectedCommandStateEndpoint:
-      `/games/${expectedGame}/player-command-state?principal_user_id=player_mira&slot_id=slot-7`,
-    expectedNotificationsEndpoint:
-      `/games/${expectedGame}/notifications?principal_user_id=player_mira`,
-    expectedVoteButtonCount: 1,
-    expectedVoteTargetCount: 1,
+  assertNightThreeEmptyResolutionSurfaceCase({
+    nightThreeEmptyResolutionSurface,
+    assertPostDayThreePlayerSurfaceProof,
+    assertNightThreeEmptyHostTransitionProof,
+    includeEvidenceInError: true,
   });
 }
 
 function assertDayFourSurvivorRoleSurface(dayFourSurvivorRoleSurface) {
-  const expectedGame = gameFromRoleUrl(dayFourSurvivorRoleSurface?.sourceRoleUrl);
-  if (
-    dayFourSurvivorRoleSurface?.status !== "passed" ||
-    dayFourSurvivorRoleSurface.clickedThroughFromRoleUrl !== true ||
-    dayFourSurvivorRoleSurface.releaseReady !== false ||
-    dayFourSurvivorRoleSurface.productionReady !== false ||
-    typeof dayFourSurvivorRoleSurface.sourceRoleUrl !== "string" ||
-    !dayFourSurvivorRoleSurface.sourceRoleUrl.includes("/g/")
-  ) {
-    throw new Error(
-      `core-loop admin proof missing Day 4 survivor role surface: ${JSON.stringify(
-        dayFourSurvivorRoleSurface,
-      )}`,
-    );
-  }
-  assertPostDayThreePlayerSurfaceProof({
-    proof: dayFourSurvivorRoleSurface.survivorProof,
-    expectedGame,
-    sourceRoleUrl: dayFourSurvivorRoleSurface.sourceRoleUrl,
-    expectedSlot: "slot-5",
-    slotField: "survivorSlot",
-    expectedPrincipalUserId: "player_sage",
-    expectedPhaseId: "D04",
-    expectedPhaseState: "open",
-    expectedActorAlive: true,
-    expectedActorStatus: "alive",
-    expectedActionState: "disabled:no legal action available",
-    expectedStatusText: "no legal action available",
-    expectedPrivateCount: 0,
-    expectedPrivateReceipt: false,
-    expectedBoundaryText: "survivor role opened D04",
-    expectedResyncFromSeq: 911,
-    expectedCommandStateEndpoint:
-      `/games/${expectedGame}/player-command-state?principal_user_id=player_sage&slot_id=slot-5`,
-    expectedNotificationsEndpoint:
-      `/games/${expectedGame}/notifications?principal_user_id=player_sage`,
-    expectedVoteButtonCount: 2,
-    expectedVoteTargetCount: 2,
+  assertDayFourSurvivorRoleSurfaceCase({
+    dayFourSurvivorRoleSurface,
+    assertPostDayThreePlayerSurfaceProof,
+    includeEvidenceInError: true,
   });
 }
 
