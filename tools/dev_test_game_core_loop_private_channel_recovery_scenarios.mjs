@@ -4,7 +4,7 @@ import {
   privateChannelSubmitPostScenario,
   staleCompletedPrivatePostScenario,
   stalePrivateChannelPostPhaseLockedScenario,
-} from "./dev_test_game_core_loop_private_channel_scenario_assertions.mjs";
+} from "./dev_test_game_core_loop_private_channel_scenario_case_definitions.mjs";
 
 export {
   completedPrivateChannelReloadScenario,
@@ -13,7 +13,7 @@ export {
   privateChannelSubmitPostScenario,
   staleCompletedPrivatePostScenario,
   stalePrivateChannelPostPhaseLockedScenario,
-} from "./dev_test_game_core_loop_private_channel_scenario_assertions.mjs";
+} from "./dev_test_game_core_loop_private_channel_scenario_case_definitions.mjs";
 
 export const coreLoopPrivateChannelRecoveryFamilyId =
   "core-loop-private-channel-recovery";

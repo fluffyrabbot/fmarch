@@ -371,9 +371,9 @@ test("private-channel production harness callers use shared scenario definitions
   );
   assert(
     assertionFacadeSource.includes(
-      "./dev_test_game_core_loop_private_channel_scenario_assertions.mjs",
+      "./dev_test_game_core_loop_private_channel_scenario_case_definitions.mjs",
     ),
-    "private-channel assertion facade should import completed private-channel cases from the extracted scenario/assertion module",
+    "private-channel assertion facade should import completed private-channel cases from the case-only module",
   );
   assert(
     !assertionFacadeSource.includes(

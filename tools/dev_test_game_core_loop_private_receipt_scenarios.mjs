@@ -1,17 +1,19 @@
 import {
   assertCompletedPrivateChannelTransition,
   completedPrivateChannelProofAssertionCases,
-  completedPrivateChannelReloadScenario,
   completedPrivateChannelReloadSnapshotAssertionCases,
+  staleCompletedPrivatePostSnapshotAssertionCases,
+} from "./dev_test_game_core_loop_private_channel_scenario_assertions.mjs";
+import {
+  completedPrivateChannelReloadScenario,
   completedPrivateChannelSnapshot,
   completedPrivateChannelTransition,
   privateChannelSubmitPostCommandFacts,
   privateChannelSubmitPostScenario,
   staleCompletedPrivatePostCommandFacts,
   staleCompletedPrivatePostScenario,
-  staleCompletedPrivatePostSnapshotAssertionCases,
   stalePrivateChannelPostPhaseLockedScenario,
-} from "./dev_test_game_core_loop_private_channel_scenario_assertions.mjs";
+} from "./dev_test_game_core_loop_private_channel_scenario_case_definitions.mjs";
 import {
   coreLoopPrivateChannelRecoveryScenarioFamily,
 } from "./dev_test_game_core_loop_private_channel_recovery_scenarios.mjs";
@@ -19,29 +21,32 @@ import {
 const privateQueueBoundaryStatus = "principal-scoped-private-projections";
 
 export {
-  assertCompletedPrivateChannelTransition,
-  completedPrivateChannelProofAssertionCases,
-  completedPrivateChannelReloadAssertionCase,
-  completedPrivateChannelReloadInitialSnapshotCase,
-  completedPrivateChannelReloadProofArgs,
   completedPrivateChannelReloadScenario,
-  completedPrivateChannelReloadSnapshotAssertionCases,
-  completedPrivateChannelReloadSnapshotCase,
-  completedPrivateChannelReloadedSnapshotCase,
   completedPrivateChannelSnapshot,
   completedPrivateChannelTransition,
   completedPrivateChannelTransitionTokens,
   privateChannelSubmitPostCommandFacts,
   privateChannelSubmitPostScenario,
   staleCompletedPrivatePostCommandFacts,
+  staleCompletedPrivatePostScenario,
+  stalePrivateChannelPostPhaseLockedScenario,
+} from "./dev_test_game_core_loop_private_channel_scenario_case_definitions.mjs";
+
+export {
+  assertCompletedPrivateChannelTransition,
+  completedPrivateChannelProofAssertionCases,
+  completedPrivateChannelReloadAssertionCase,
+  completedPrivateChannelReloadInitialSnapshotCase,
+  completedPrivateChannelReloadProofArgs,
+  completedPrivateChannelReloadSnapshotAssertionCases,
+  completedPrivateChannelReloadSnapshotCase,
+  completedPrivateChannelReloadedSnapshotCase,
   staleCompletedPrivatePostAfterRejectSnapshotCase,
   staleCompletedPrivatePostAfterReloadSnapshotCase,
   staleCompletedPrivatePostAssertionCase,
   staleCompletedPrivatePostProofArgs,
-  staleCompletedPrivatePostScenario,
   staleCompletedPrivatePostSnapshotAssertionCases,
   staleCompletedPrivatePostSnapshotCase,
-  stalePrivateChannelPostPhaseLockedScenario,
 } from "./dev_test_game_core_loop_private_channel_scenario_assertions.mjs";
 
 export function privateReceiptScenario(id) {
