@@ -117,6 +117,50 @@ export function staleNightFourActionRecoveryScenario() {
   };
 }
 
+export function staleDayTwoVoteAfterTransitionRecoveryScenario() {
+  return {
+    clickedAction: "submit_vote",
+    commandKind: "SubmitVote",
+    actorSlot: "slot-7",
+    targetSlot: "slot-2",
+    setupResyncFromSeq: 801,
+    setupPhaseId: "D02",
+    finalState: "reject",
+    error: "PhaseLocked",
+    messageIncludes: "stale vote state, refresh and use current vote controls",
+    expectedRefreshKeys: ["votecount", "commandState", "dayVoteOutcomes"],
+    refreshedPhaseId: "N02",
+    refreshedBoundary: "PhaseLocked recovery",
+    checkpointReceiptState: "reject:PhaseLocked",
+    checkpointActionState: "enabled:submit_action:factional_kill",
+    checkpointTargetSlots: "slot-3",
+    receiptCount: 1,
+    receiptStatusTextIncludes: "stale vote state",
+  };
+}
+
+export function staleNightOneActionAfterTransitionRecoveryScenario() {
+  return {
+    clickedAction: "submit_action:factional_kill",
+    commandKind: "SubmitAction",
+    actionId: "factional_kill",
+    actorSlot: "slot-7",
+    templateId: "factional_kill",
+    targetSlot: "slot-3",
+    finalState: "reject",
+    error: "PhaseLocked",
+    messageIncludes: "stale action state, refresh and use current action controls",
+    expectedRefreshKeys: ["commandState"],
+    refreshedPhaseId: "N02",
+    refreshedBoundary: "PhaseLocked recovery",
+    checkpointReceiptState: "reject:PhaseLocked",
+    checkpointActionState: "enabled:submit_action:factional_kill",
+    checkpointTargetSlots: "slot-3",
+    receiptCount: 2,
+    receiptStatusTextIncludes: "reject phaselocked: phase locked",
+  };
+}
+
 export function assertPlayerActionSubmissionClickProofCase({
   proof,
   expectedGame,
@@ -215,45 +259,44 @@ export function assertPlayerInvalidActionRecoveryProofCase({
 export function assertPlayerStaleVoteAfterTransitionProofCase({
   proof,
   expectedGame,
+  scenario = staleDayTwoVoteAfterTransitionRecoveryScenario(),
   includeEvidenceInError = false,
 }) {
   if (
     proof?.status !== "passed" ||
-    proof.clickedAction !== "submit_vote" ||
-    proof.commandKind !== "SubmitVote" ||
-    proof.setupResyncFromSeq !== 801 ||
-    proof.setupSnapshotCommandState?.phase?.phaseId !== "D02" ||
-    proof.setupSnapshotCommandState?.voteTargets?.[0]?.slotId !== "slot-2" ||
+    proof.clickedAction !== scenario.clickedAction ||
+    proof.commandKind !== scenario.commandKind ||
+    proof.setupResyncFromSeq !== scenario.setupResyncFromSeq ||
+    proof.setupSnapshotCommandState?.phase?.phaseId !== scenario.setupPhaseId ||
+    proof.setupSnapshotCommandState?.voteTargets?.[0]?.slotId !==
+      scenario.targetSlot ||
     proof.command?.game !== expectedGame ||
-    proof.command.actor_slot !== "slot-7" ||
-    proof.command.target?.Slot !== "slot-2" ||
-    proof.commandStatus?.state !== "reject" ||
-    proof.commandStatus.error !== "PhaseLocked" ||
-    !String(proof.commandStatus.message ?? "").includes(
-      "stale vote state, refresh and use current vote controls",
-    ) ||
+    proof.command.actor_slot !== scenario.actorSlot ||
+    proof.command.target?.Slot !== scenario.targetSlot ||
+    proof.commandStatus?.state !== scenario.finalState ||
+    proof.commandStatus.error !== scenario.error ||
+    !String(proof.commandStatus.message ?? "").includes(scenario.messageIncludes) ||
     proof.bridgePlan?.role !== "player" ||
-    proof.bridgePlan.commandKind !== "SubmitVote" ||
+    proof.bridgePlan.commandKind !== scenario.commandKind ||
     proof.bridgePlan.commandEndpoint !== "/commands" ||
-    proof.bridgePlan.finalState !== "reject" ||
-    !proof.bridgePlan.projectionRefreshKeys?.includes("votecount") ||
-    !proof.bridgePlan.projectionRefreshKeys?.includes("commandState") ||
-    !proof.bridgePlan.projectionRefreshKeys?.includes("dayVoteOutcomes") ||
-    proof.receipts?.at?.(-1)?.state !== "reject" ||
-    proof.projectionCommandState?.phase?.phaseId !== "N02" ||
-    !String(proof.projectionCommandState?.boundary ?? "").includes(
-      "PhaseLocked recovery",
+    proof.bridgePlan.finalState !== scenario.finalState ||
+    !scenario.expectedRefreshKeys.every((key) =>
+      proof.bridgePlan.projectionRefreshKeys?.includes(key),
     ) ||
-    proof.checkpointReceiptState !== "reject:PhaseLocked" ||
-    proof.checkpointPhaseIdAfterReject !== "N02" ||
-    proof.checkpointActionStateAfterReject !==
-      "enabled:submit_action:factional_kill" ||
-    proof.checkpointTargetSlotsAfterReject !== "slot-3" ||
+    proof.receipts?.at?.(-1)?.state !== scenario.finalState ||
+    proof.projectionCommandState?.phase?.phaseId !== scenario.refreshedPhaseId ||
+    !String(proof.projectionCommandState?.boundary ?? "").includes(
+      scenario.refreshedBoundary,
+    ) ||
+    proof.checkpointReceiptState !== scenario.checkpointReceiptState ||
+    proof.checkpointPhaseIdAfterReject !== scenario.refreshedPhaseId ||
+    proof.checkpointActionStateAfterReject !== scenario.checkpointActionState ||
+    proof.checkpointTargetSlotsAfterReject !== scenario.checkpointTargetSlots ||
     !String(proof.recoveryText ?? "").includes("Reject PhaseLocked") ||
-    proof.receiptCount !== 1 ||
+    proof.receiptCount !== scenario.receiptCount ||
     !String(proof.receiptStatusText ?? "")
       .toLowerCase()
-      .includes("stale vote state")
+      .includes(scenario.receiptStatusTextIncludes)
   ) {
     throwActionScenarioAssertionError({
       message:
@@ -267,42 +310,42 @@ export function assertPlayerStaleVoteAfterTransitionProofCase({
 export function assertPlayerStaleActionAfterTransitionProofCase({
   proof,
   expectedGame,
+  scenario = staleNightOneActionAfterTransitionRecoveryScenario(),
   includeEvidenceInError = false,
 }) {
   if (
     proof?.status !== "passed" ||
-    proof.clickedAction !== "submit_action:factional_kill" ||
-    proof.commandKind !== "SubmitAction" ||
+    proof.clickedAction !== scenario.clickedAction ||
+    proof.commandKind !== scenario.commandKind ||
     proof.command?.game !== expectedGame ||
-    proof.command.action_id !== "factional_kill" ||
-    proof.command.actor_slot !== "slot-7" ||
-    proof.command.template_id !== "factional_kill" ||
-    proof.command.targets?.[0] !== "slot-3" ||
-    proof.commandStatus?.state !== "reject" ||
-    proof.commandStatus.error !== "PhaseLocked" ||
-    !String(proof.commandStatus.message ?? "").includes(
-      "stale action state, refresh and use current action controls",
-    ) ||
+    proof.command.action_id !== scenario.actionId ||
+    proof.command.actor_slot !== scenario.actorSlot ||
+    proof.command.template_id !== scenario.templateId ||
+    proof.command.targets?.[0] !== scenario.targetSlot ||
+    proof.commandStatus?.state !== scenario.finalState ||
+    proof.commandStatus.error !== scenario.error ||
+    !String(proof.commandStatus.message ?? "").includes(scenario.messageIncludes) ||
     proof.bridgePlan?.role !== "player" ||
-    proof.bridgePlan.commandKind !== "SubmitAction" ||
+    proof.bridgePlan.commandKind !== scenario.commandKind ||
     proof.bridgePlan.commandEndpoint !== "/commands" ||
-    proof.bridgePlan.finalState !== "reject" ||
-    !proof.bridgePlan.projectionRefreshKeys?.includes("commandState") ||
-    proof.receipts?.at?.(-1)?.state !== "reject" ||
-    proof.projectionCommandState?.phase?.phaseId !== "N02" ||
-    !String(proof.projectionCommandState?.boundary ?? "").includes(
-      "PhaseLocked recovery",
+    proof.bridgePlan.finalState !== scenario.finalState ||
+    !scenario.expectedRefreshKeys.every((key) =>
+      proof.bridgePlan.projectionRefreshKeys?.includes(key),
     ) ||
-    proof.checkpointReceiptState !== "reject:PhaseLocked" ||
-    proof.checkpointPhaseIdAfterReject !== "N02" ||
-    proof.checkpointActionStateAfterReject !==
-      "enabled:submit_action:factional_kill" ||
-    proof.checkpointTargetSlotsAfterReject !== "slot-3" ||
+    proof.receipts?.at?.(-1)?.state !== scenario.finalState ||
+    proof.projectionCommandState?.phase?.phaseId !== scenario.refreshedPhaseId ||
+    !String(proof.projectionCommandState?.boundary ?? "").includes(
+      scenario.refreshedBoundary,
+    ) ||
+    proof.checkpointReceiptState !== scenario.checkpointReceiptState ||
+    proof.checkpointPhaseIdAfterReject !== scenario.refreshedPhaseId ||
+    proof.checkpointActionStateAfterReject !== scenario.checkpointActionState ||
+    proof.checkpointTargetSlotsAfterReject !== scenario.checkpointTargetSlots ||
     !String(proof.recoveryText ?? "").includes("Reject PhaseLocked") ||
-    proof.receiptCount !== 2 ||
+    proof.receiptCount !== scenario.receiptCount ||
     !String(proof.receiptStatusText ?? "")
       .toLowerCase()
-      .includes("reject phaselocked: phase locked")
+      .includes(scenario.receiptStatusTextIncludes)
   ) {
     throwActionScenarioAssertionError({
       message:

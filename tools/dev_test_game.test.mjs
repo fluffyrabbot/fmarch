@@ -10082,6 +10082,10 @@ function coreLoopAdminProofFixture() {
       game: "00000000-0000-0000-0000-000000000001",
       coreLoopSpineStatus: "passed: D01 -> N01 -> D02, vote ack, next N02",
       completedGameHardeningCoverageStatus: "passed: 10/10 lanes across 4 families",
+      phaseProgressionFamily: {
+        id: "core-loop-phase-progression",
+        laneIds: ["day-vote-resolution", "day-vote-no-lynch", "action-loop"],
+      },
       coreLoopSpineRows: {
         cycles: ["d01-n01-d02", "d02-n02"],
         roleUrls: [

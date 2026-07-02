@@ -54,6 +54,10 @@ import {
   assertPostDayThreeResolutionSurfaceCase,
 } from "./dev_test_game_core_loop_post_day_three_scenarios.mjs";
 import {
+  coreLoopPhaseProgressionFamilyId,
+  coreLoopPhaseProgressionScenarioFamily,
+} from "./dev_test_game_core_loop_phase_progression_scenarios.mjs";
+import {
   completedPrivateChannelReloadScenario,
   completedPrivateChannelTransition,
   privateChannelSubmitPostScenario,
@@ -359,6 +363,7 @@ await runAdminAuditProof({
         proofRun.completedGameHardeningCoverage,
       completedGameHardeningCoverageStatus:
         completedGameHardeningCoverageStatus(proofRun),
+      phaseProgressionFamily: coreLoopPhaseProgressionScenarioFamily(),
       highlightedLaneEvidence: coreLoopHighlightedLaneEvidence(proofRun),
     },
     adminRoleSurface: surfaces.adminRoleSurface,
@@ -9602,6 +9607,13 @@ export function assertCoreLoopAdminProof(evidence) {
     throw new Error(
       "core-loop admin proof missing visible completed-game coverage status",
     );
+  }
+  if (
+    evidence.generatedFrom?.phaseProgressionFamily?.id !==
+      coreLoopPhaseProgressionFamilyId ||
+    !Array.isArray(evidence.generatedFrom?.phaseProgressionFamily?.laneIds)
+  ) {
+    throw new Error("core-loop admin proof missing phase progression family");
   }
   assertVisibleRows(
     "core-loop admin proof missing visible spine cycle",

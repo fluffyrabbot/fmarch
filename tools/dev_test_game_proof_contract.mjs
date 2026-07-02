@@ -34,8 +34,9 @@ import {
   playerInvalidActionRecoveryLaneId,
 } from "./dev_test_game_core_loop_action_scenarios.mjs";
 import {
-  dayThreeVoteResolutionLaneId,
-} from "./dev_test_game_core_loop_vote_resolution_scenarios.mjs";
+  coreLoopPhaseProgressionLaneIds,
+  coreLoopPhaseProgressionSpineSourceLaneIds,
+} from "./dev_test_game_core_loop_phase_progression_scenarios.mjs";
 import {
   cohostDeadlineStaleBasePassed,
   cohostDeadlineStaleReconnectPassed,
@@ -118,9 +119,7 @@ const requiredLaneIds = Object.freeze([
   "browser-entry",
   "cohost-console",
   "core-loop",
-  dayThreeVoteResolutionLaneId,
-  "day-vote-no-lynch",
-  playerActionLoopLaneId,
+  ...coreLoopPhaseProgressionLaneIds,
   "host-deadline-advance",
   "stale-deadline-advance",
   playerInvalidActionRecoveryLaneId,
@@ -295,7 +294,7 @@ export function buildDevTestGameProofRun(session, options = {}) {
         verification.coreLoop?.lock?.commandStatus?.state === "ack" &&
         verification.coreLoop?.unlock?.commandStatus?.state === "ack",
     }),
-    lane(dayThreeVoteResolutionLaneId, "Day vote resolves through role URLs", {
+    lane(coreLoopPhaseProgressionLaneIds[0], "Day vote resolves through role URLs", {
       finalVoteState: verification.dayVoteResolution?.finalVote?.state ?? null,
       outcomeStatus: verification.dayVoteResolution?.dayVoteOutcome?.status ?? null,
       winnerSlot: verification.dayVoteResolution?.dayVoteOutcome?.winner_slot ?? null,
@@ -393,7 +392,7 @@ export function buildDevTestGameProofRun(session, options = {}) {
           (control) => control?.disabled === true,
         ),
     }),
-    lane("day-vote-no-lynch", "No-lynch day vote resolves without a death", {
+    lane(coreLoopPhaseProgressionLaneIds[1], "No-lynch day vote resolves without a death", {
       outcomeStatus: verification.dayVoteNoLynch?.dayVoteOutcome?.status ?? null,
       noLynchTally: verification.dayVoteNoLynch?.dayVoteOutcome?.tallies?.no_lynch ?? null,
       miraVoteState: verification.dayVoteNoLynch?.miraNoLynchVote?.state ?? null,
@@ -6317,12 +6316,7 @@ function buildCoreLoopSpineSummary({ session, verification }) {
     status: passed ? "passed" : "failed",
     proof:
       "Compact derived spine map for the seeded role URL core loop: D01 resolve to N01 action, N01 resolution to D02 day controls, D02 vote resolution, and N02 action return.",
-    sourceLaneIds: [
-      "core-loop",
-      playerActionLoopLaneId,
-      playerInvalidActionRecoveryLaneId,
-      "resolution-receipts",
-    ],
+    sourceLaneIds: [...coreLoopPhaseProgressionSpineSourceLaneIds],
     cycles,
     recoveryHooks,
   };

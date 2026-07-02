@@ -12,12 +12,11 @@ import {
 } from "./dev_test_game_replacement_handoff_scenario_cases.mjs";
 import {
   playerActionBoundaryLaneId,
-  playerActionLoopLaneId,
   playerInvalidActionRecoveryLaneId,
 } from "./dev_test_game_core_loop_action_scenarios.mjs";
 import {
-  dayThreeVoteResolutionLaneId,
-} from "./dev_test_game_core_loop_vote_resolution_scenarios.mjs";
+  coreLoopPhaseProgressionLaneIds,
+} from "./dev_test_game_core_loop_phase_progression_scenarios.mjs";
 
 export const coreLoopSpineCheckId = "core-loop-spine";
 export const coreLoopCompletedGameCoverageCheckId =
@@ -25,9 +24,7 @@ export const coreLoopCompletedGameCoverageCheckId =
 
 export const coreLoopAuditLaneIds = Object.freeze([
   "core-loop",
-  dayThreeVoteResolutionLaneId,
-  "day-vote-no-lynch",
-  playerActionLoopLaneId,
+  ...coreLoopPhaseProgressionLaneIds,
   "host-deadline-advance",
   "stale-deadline-advance",
   playerInvalidActionRecoveryLaneId,

@@ -4,9 +4,8 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import {
-  playerActionLoopLaneId,
-  playerInvalidActionRecoveryLaneId,
-} from "./dev_test_game_core_loop_action_scenarios.mjs";
+  coreLoopPhaseProgressionSpineSourceLaneIds,
+} from "./dev_test_game_core_loop_phase_progression_scenarios.mjs";
 import {
   replacementActionReconnectScenario,
   replacementIncomingActionScenario,
@@ -61,12 +60,10 @@ assert.equal(
   true,
 );
 assert.equal(proofRun.coreLoopSpine.status, "passed");
-assert.deepEqual(proofRun.coreLoopSpine.sourceLaneIds, [
-  "core-loop",
-  playerActionLoopLaneId,
-  playerInvalidActionRecoveryLaneId,
-  "resolution-receipts",
-]);
+assert.deepEqual(
+  proofRun.coreLoopSpine.sourceLaneIds,
+  coreLoopPhaseProgressionSpineSourceLaneIds,
+);
 assert.deepEqual(
   proofRun.coreLoopSpine.cycles.map((cycle) => cycle.id),
   ["d01-n01-d02", "d02-n02"],

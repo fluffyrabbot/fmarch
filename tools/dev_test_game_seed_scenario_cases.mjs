@@ -12,12 +12,14 @@ import {
 } from "./dev_test_game_host_stale_control_scenarios.mjs";
 import {
   playerActionBoundaryLaneId,
-  playerActionLoopLaneId,
   playerInvalidActionRecoveryLaneId,
 } from "./dev_test_game_core_loop_action_scenarios.mjs";
 import {
-  dayThreeVoteResolutionLaneId,
-} from "./dev_test_game_core_loop_vote_resolution_scenarios.mjs";
+  coreLoopPhaseProgressionAliasOnlyProofLaneIds,
+  coreLoopPhaseProgressionDemoOnlySeedScenarioIds,
+  coreLoopPhaseProgressionRequiredSeedScenarioIds,
+  coreLoopPhaseProgressionSeedAliasEntries,
+} from "./dev_test_game_core_loop_phase_progression_scenarios.mjs";
 
 export const seedRequiredScenarioIds = Object.freeze([
   "host-phase-controls",
@@ -27,7 +29,7 @@ export const seedRequiredScenarioIds = Object.freeze([
   playerInvalidActionRecoveryLaneId,
   "resolution-receipt",
   "dead-player-recovery",
-  "night-action-loop",
+  ...coreLoopPhaseProgressionRequiredSeedScenarioIds,
   "action-idempotent-retry",
   "concurrent-action-race",
   "concurrent-action-race-reload",
@@ -87,8 +89,7 @@ export const seedRequiredScenarioIds = Object.freeze([
 ]);
 
 export const seedDemoOnlyScenarioIds = Object.freeze([
-  dayThreeVoteResolutionLaneId,
-  "day-vote-no-lynch",
+  ...coreLoopPhaseProgressionDemoOnlySeedScenarioIds,
   "host-deadline-advance",
   "stale-deadline-advance",
   "private-channel",
@@ -146,7 +147,7 @@ export const seedScenarioCoverageGroups = Object.freeze({
 });
 
 const seedScenarioRoleOverrides = new Map([
-  [dayThreeVoteResolutionLaneId, "actionPlayer"],
+  [coreLoopPhaseProgressionDemoOnlySeedScenarioIds[0], "actionPlayer"],
   ["player-action-denied", "player"],
   [playerActionBoundaryLaneId, "player"],
   ["stale-deadline-advance", "host"],
@@ -175,7 +176,7 @@ const seedScenarioProofLaneAliases = new Map([
   ["player-vote-recovery", ["browser-entry", "core-loop", "stale-player-vote"]],
   ["player-action-denied", ["browser-entry", playerActionBoundaryLaneId]],
   ["resolution-receipt", ["browser-entry", "resolution-receipts"]],
-  ["night-action-loop", [playerActionLoopLaneId, "stale-action-conflict"]],
+  ...coreLoopPhaseProgressionSeedAliasEntries,
   ["local-ops-readiness", ["local-ops-artifact-bundle", "local-backup-restore-drill"]],
 ]);
 
@@ -183,7 +184,7 @@ export const seedAliasOnlyProofLaneIds = Object.freeze([
   "browser-entry",
   "cohost-console",
   "core-loop",
-  playerActionLoopLaneId,
+  coreLoopPhaseProgressionAliasOnlyProofLaneIds[0],
   "stale-action-conflict",
 ]);
 

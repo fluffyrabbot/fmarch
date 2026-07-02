@@ -12,6 +12,8 @@ import {
   playerInvalidActionRecoveryLaneId,
   playerInvalidActionRecoveryScenario,
   playerSlotVoteCommandFacts,
+  staleDayTwoVoteAfterTransitionRecoveryScenario,
+  staleNightOneActionAfterTransitionRecoveryScenario,
 } from "./dev_test_game_core_loop_action_scenarios.mjs";
 
 test("player action scenario module exports proof lane ids", () => {
@@ -171,44 +173,45 @@ test("player invalid-action recovery assertion covers InvalidTarget refresh", ()
 });
 
 test("player stale vote recovery assertion covers PhaseLocked transition reject", () => {
+  const scenario = staleDayTwoVoteAfterTransitionRecoveryScenario();
   const proof = {
     status: "passed",
-    clickedAction: "submit_vote",
-    commandKind: "SubmitVote",
-    setupResyncFromSeq: 801,
+    clickedAction: scenario.clickedAction,
+    commandKind: scenario.commandKind,
+    setupResyncFromSeq: scenario.setupResyncFromSeq,
     setupSnapshotCommandState: {
-      phase: { phaseId: "D02" },
-      voteTargets: [{ slotId: "slot-2" }],
+      phase: { phaseId: scenario.setupPhaseId },
+      voteTargets: [{ slotId: scenario.targetSlot }],
     },
     command: {
       game: "game-a",
-      actor_slot: "slot-7",
-      target: { Slot: "slot-2" },
+      actor_slot: scenario.actorSlot,
+      target: { Slot: scenario.targetSlot },
     },
     commandStatus: {
-      state: "reject",
-      error: "PhaseLocked",
-      message: "stale vote state, refresh and use current vote controls",
+      state: scenario.finalState,
+      error: scenario.error,
+      message: scenario.messageIncludes,
     },
     bridgePlan: {
       role: "player",
-      commandKind: "SubmitVote",
+      commandKind: scenario.commandKind,
       commandEndpoint: "/commands",
-      finalState: "reject",
-      projectionRefreshKeys: ["votecount", "commandState", "dayVoteOutcomes"],
+      finalState: scenario.finalState,
+      projectionRefreshKeys: scenario.expectedRefreshKeys,
     },
-    receipts: [{ state: "reject" }],
+    receipts: [{ state: scenario.finalState }],
     projectionCommandState: {
-      phase: { phaseId: "N02" },
-      boundary: "PhaseLocked recovery refreshed player controls",
+      phase: { phaseId: scenario.refreshedPhaseId },
+      boundary: `${scenario.refreshedBoundary} refreshed player controls`,
     },
-    checkpointReceiptState: "reject:PhaseLocked",
-    checkpointPhaseIdAfterReject: "N02",
-    checkpointActionStateAfterReject: "enabled:submit_action:factional_kill",
-    checkpointTargetSlotsAfterReject: "slot-3",
+    checkpointReceiptState: scenario.checkpointReceiptState,
+    checkpointPhaseIdAfterReject: scenario.refreshedPhaseId,
+    checkpointActionStateAfterReject: scenario.checkpointActionState,
+    checkpointTargetSlotsAfterReject: scenario.checkpointTargetSlots,
     recoveryText: "Reject PhaseLocked",
-    receiptCount: 1,
-    receiptStatusText: "stale vote state",
+    receiptCount: scenario.receiptCount,
+    receiptStatusText: scenario.receiptStatusTextIncludes,
   };
 
   assert.doesNotThrow(() =>
@@ -234,41 +237,42 @@ test("player stale vote recovery assertion covers PhaseLocked transition reject"
 });
 
 test("player stale action recovery assertion covers PhaseLocked transition reject", () => {
+  const scenario = staleNightOneActionAfterTransitionRecoveryScenario();
   const proof = {
     status: "passed",
-    clickedAction: "submit_action:factional_kill",
-    commandKind: "SubmitAction",
+    clickedAction: scenario.clickedAction,
+    commandKind: scenario.commandKind,
     command: {
       game: "game-a",
-      action_id: "factional_kill",
-      actor_slot: "slot-7",
-      template_id: "factional_kill",
-      targets: ["slot-3"],
+      action_id: scenario.actionId,
+      actor_slot: scenario.actorSlot,
+      template_id: scenario.templateId,
+      targets: [scenario.targetSlot],
     },
     commandStatus: {
-      state: "reject",
-      error: "PhaseLocked",
-      message: "stale action state, refresh and use current action controls",
+      state: scenario.finalState,
+      error: scenario.error,
+      message: scenario.messageIncludes,
     },
     bridgePlan: {
       role: "player",
-      commandKind: "SubmitAction",
+      commandKind: scenario.commandKind,
       commandEndpoint: "/commands",
-      finalState: "reject",
-      projectionRefreshKeys: ["commandState"],
+      finalState: scenario.finalState,
+      projectionRefreshKeys: scenario.expectedRefreshKeys,
     },
-    receipts: [{ state: "reject" }],
+    receipts: [{ state: scenario.finalState }],
     projectionCommandState: {
-      phase: { phaseId: "N02" },
-      boundary: "PhaseLocked recovery refreshed action controls",
+      phase: { phaseId: scenario.refreshedPhaseId },
+      boundary: `${scenario.refreshedBoundary} refreshed action controls`,
     },
-    checkpointReceiptState: "reject:PhaseLocked",
-    checkpointPhaseIdAfterReject: "N02",
-    checkpointActionStateAfterReject: "enabled:submit_action:factional_kill",
-    checkpointTargetSlotsAfterReject: "slot-3",
+    checkpointReceiptState: scenario.checkpointReceiptState,
+    checkpointPhaseIdAfterReject: scenario.refreshedPhaseId,
+    checkpointActionStateAfterReject: scenario.checkpointActionState,
+    checkpointTargetSlotsAfterReject: scenario.checkpointTargetSlots,
     recoveryText: "Reject PhaseLocked",
-    receiptCount: 2,
-    receiptStatusText: "Reject PhaseLocked: phase locked",
+    receiptCount: scenario.receiptCount,
+    receiptStatusText: scenario.receiptStatusTextIncludes,
   };
 
   assert.doesNotThrow(() =>
