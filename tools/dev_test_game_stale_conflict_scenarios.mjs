@@ -158,6 +158,16 @@ export function staleConflictMessageSurfaceCases() {
   return staleConflictMessageSurfaceCaseDefinitions.map(cloneScenarioCase);
 }
 
+export function replacementStaleConflictMessageSpineLaneCase() {
+  const cases = staleConflictMessageSurfaceCases().filter(
+    (scenario) => scenario.laneId === "replacement-stale-conflict-message",
+  );
+  if (cases.length !== 1) {
+    throw new Error("replacement stale conflict-message spine lane drifted");
+  }
+  return cloneScenarioCase(cases[0]);
+}
+
 export function staleConflictMessageSurfaceCheckIds() {
   return staleConflictMessageSurfaceCases().map((scenario) => scenario.checkId);
 }

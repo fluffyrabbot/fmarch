@@ -41,6 +41,7 @@ import {
   staleConflictMessageCoverageFamilies,
   staleConflictMessageCoverageFamilyDefinitions,
   staleConflictMessageNoSurfaceYetCases,
+  replacementStaleConflictMessageSpineLaneCase,
   staleConflictMessageSurfaceCases,
   staleConflictMessageSurfaceCheckIds,
   staleConflictMessageLaneIds,
@@ -68,6 +69,16 @@ test("hardening lane cases share stale conflict-message IDs", () => {
     "stale-host-deadline",
     "stale-cohost-deadline",
   ]);
+  assert.deepEqual(
+    {
+      laneId: replacementStaleConflictMessageSpineLaneCase().laneId,
+      role: replacementStaleConflictMessageSpineLaneCase().role,
+    },
+    {
+      laneId: "replacement-stale-conflict-message",
+      role: "host",
+    },
+  );
   assert.deepEqual(staleConflictMessageSurfaceCases(), [
     {
       id: "replacement-stale-conflict-message-surface",

@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import { test } from "node:test";
 import {
   devTestGameHostedEvidenceLaneDemoProofCommand,
@@ -25,6 +26,9 @@ import {
   completedGameHardeningSpineCycleId,
   completedGameStaleRecoverySpineLaneCase,
 } from "./dev_test_game_core_loop_completed_game_cases.mjs";
+import {
+  replacementStaleConflictMessageSpineLaneCase,
+} from "./dev_test_game_stale_conflict_scenarios.mjs";
 
 test("release readiness unproven cases share blocker IDs and status rows", () => {
   assert.ok(releaseReadinessUnprovenCaseIds.includes("hosted-deployment"));
@@ -164,10 +168,10 @@ test("release readiness buildable cases share next-action commands and spine tar
       featureSlotId: "replacement-stale-conflict-message",
       sourceCheckId: "local-hardening-proof",
       cycleId: "hardening-stale-conflict",
-      roleUrlId: "replacement-stale-conflict-message",
+      roleUrlId: replacementStaleConflictMessageSpineLaneCase().laneId,
       rowKind: "checkpoint",
-      checkpointId: "replacement-stale-conflict-message",
-      adminCheckId: "replacement-stale-conflict-message",
+      checkpointId: replacementStaleConflictMessageSpineLaneCase().laneId,
+      adminCheckId: replacementStaleConflictMessageSpineLaneCase().laneId,
     },
   );
 
@@ -223,6 +227,76 @@ test("release readiness buildable cases share next-action commands and spine tar
       "blocked",
       group.checkIds,
     ]),
+  );
+});
+
+test("scenario-owned production feature targets derive proof row ids from source cases", () => {
+  const scenarioOwnedTargets = [
+    {
+      target: releaseReadinessProductionFeatureSpineTargets
+        .completedGameStaleRecovery,
+      source: {
+        cycleId: completedGameHardeningSpineCycleId,
+        rowId: completedGameStaleRecoverySpineLaneCase().id,
+      },
+    },
+    {
+      target: releaseReadinessProductionFeatureSpineTargets
+        .replacementStaleConflictMessage,
+      source: {
+        cycleId: "hardening-stale-conflict",
+        rowId: replacementStaleConflictMessageSpineLaneCase().laneId,
+      },
+    },
+  ];
+
+  for (const { target, source } of scenarioOwnedTargets) {
+    assert.equal(target.sourceCheckId, "local-hardening-proof");
+    assert.equal(target.cycleId, source.cycleId);
+    assert.equal(target.roleUrlId, source.rowId);
+    assert.equal(target.checkpointId, source.rowId);
+    assert.equal(target.adminCheckId, source.rowId);
+  }
+});
+
+test("scenario-owned production feature targets avoid hand-maintained row literals", async () => {
+  const source = await readFile(
+    "tools/dev_test_game_release_readiness_cases.mjs",
+    "utf8",
+  );
+  const completedGameBlock = featureTargetDeclarationBlock(
+    source,
+    "completedGameStaleRecovery",
+  );
+  assert.match(
+    completedGameBlock,
+    /roleUrlId:\s+completedGameStaleRecoverySpineLane\.id/,
+  );
+  assert.match(
+    completedGameBlock,
+    /checkpointId:\s+completedGameStaleRecoverySpineLane\.id/,
+  );
+  assert.match(
+    completedGameBlock,
+    /adminCheckId:\s+completedGameStaleRecoverySpineLane\.id/,
+  );
+  assert.doesNotMatch(completedGameBlock, /"stale-host-complete-reload"/);
+
+  const replacementBlock = featureTargetDeclarationBlock(
+    source,
+    "replacementStaleConflictMessage",
+  );
+  assert.match(
+    replacementBlock,
+    /roleUrlId:\s+replacementStaleConflictMessageSpineLane\.laneId/,
+  );
+  assert.match(
+    replacementBlock,
+    /checkpointId:\s+replacementStaleConflictMessageSpineLane\.laneId/,
+  );
+  assert.match(
+    replacementBlock,
+    /adminCheckId:\s+replacementStaleConflictMessageSpineLane\.laneId/,
   );
 });
 
@@ -282,3 +356,12 @@ test("hosted deployment buildable case carries blocked and passed preflight stat
   assert.equal(realPassed.hostedEvidenceMode, "real-hosted");
   assert.equal(realPassed.realHostedEvidenceStatus, "passed");
 });
+
+function featureTargetDeclarationBlock(source, targetKey) {
+  const startNeedle = `${targetKey}: featureSpine`;
+  const start = source.indexOf(startNeedle);
+  assert.notEqual(start, -1, `missing target declaration: ${targetKey}`);
+  const end = source.indexOf("\n  }),", start);
+  assert.notEqual(end, -1, `missing target declaration end: ${targetKey}`);
+  return source.slice(start, end);
+}

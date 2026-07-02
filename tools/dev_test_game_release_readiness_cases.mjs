@@ -25,6 +25,9 @@ import {
   completedGameStaleRecoverySpineLaneCase,
 } from "./dev_test_game_core_loop_completed_game_cases.mjs";
 import {
+  replacementStaleConflictMessageSpineLaneCase,
+} from "./dev_test_game_stale_conflict_scenarios.mjs";
+import {
   featureSpineCheckpointTarget,
   featureSpineRecoveryHookTarget,
   featureSpineTargetBySlotId,
@@ -53,6 +56,8 @@ export const releaseReadinessRealHostedConcurrentRaceMatrixProofTarget =
   hostedMatrixExternalEvidencePath;
 const completedGameStaleRecoverySpineLane =
   completedGameStaleRecoverySpineLaneCase();
+const replacementStaleConflictMessageSpineLane =
+  replacementStaleConflictMessageSpineLaneCase();
 
 export const releaseReadinessProductionFeatureSpineTargets = Object.freeze({
   identityAdapter: featureSpineCheckpointTarget({
@@ -141,9 +146,9 @@ export const releaseReadinessProductionFeatureSpineTargets = Object.freeze({
     featureSlotId: "replacement-stale-conflict-message",
     sourceCheckId: "local-hardening-proof",
     cycleId: "hardening-stale-conflict",
-    roleUrlId: "replacement-stale-conflict-message",
-    checkpointId: "replacement-stale-conflict-message",
-    adminCheckId: "replacement-stale-conflict-message",
+    roleUrlId: replacementStaleConflictMessageSpineLane.laneId,
+    checkpointId: replacementStaleConflictMessageSpineLane.laneId,
+    adminCheckId: replacementStaleConflictMessageSpineLane.laneId,
   }),
 });
 export const releaseReadinessProductionFeatureSpineTargetsBySlotId =

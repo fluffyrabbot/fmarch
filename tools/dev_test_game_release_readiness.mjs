@@ -44,6 +44,7 @@ import {
 } from "./dev_test_game_replacement_private_scenarios.mjs";
 import {
   assertStaleConflictMessageCoverageSummary,
+  replacementStaleConflictMessageSpineLaneCase,
   staleConflictMessageSurfaceCases,
   staleConflictMessageLaneIds,
 } from "./dev_test_game_stale_conflict_scenarios.mjs";
@@ -2882,10 +2883,12 @@ function buildHardeningReadinessSpineTargets({
     ...completedGameRows.roleUrlIds,
   ];
   const checkpointIds = [...roleUrlIds];
+  const replacementStaleConflictLane =
+    replacementStaleConflictMessageSpineLaneCase();
   const defaultRoleUrlId = roleUrlIds.includes(
-    "replacement-stale-conflict-message",
+    replacementStaleConflictLane.laneId,
   )
-    ? "replacement-stale-conflict-message"
+    ? replacementStaleConflictLane.laneId
     : String(roleUrlIds[0] ?? "");
   return {
     status: "passed",
@@ -5424,6 +5427,8 @@ function validCoreLoopProductionFeatureTargets(productionFeatureTargets) {
 function validHardeningSpineTargets(spineTargets) {
   const completedGameStaleRecoveryLane =
     completedGameStaleRecoverySpineLaneCase();
+  const replacementStaleConflictLane =
+    replacementStaleConflictMessageSpineLaneCase();
   return (
     spineTargets !== null &&
     typeof spineTargets === "object" &&
@@ -5431,32 +5436,32 @@ function validHardeningSpineTargets(spineTargets) {
     typeof spineTargets.detailRoleUrl === "string" &&
     spineTargets.detailRoleUrl.includes("/admin/audit/local-hardening") &&
     spineTargets.defaultCycleId === "hardening-stale-conflict" &&
-    spineTargets.defaultRoleUrlId === "replacement-stale-conflict-message" &&
+    spineTargets.defaultRoleUrlId === replacementStaleConflictLane.laneId &&
     typeof spineTargets.defaultRoleUrl === "string" &&
     spineTargets.defaultRoleUrl.includes("/g/") &&
-    spineTargets.defaultCheckpointId === "replacement-stale-conflict-message" &&
+    spineTargets.defaultCheckpointId === replacementStaleConflictLane.laneId &&
     typeof spineTargets.browserProofCommand === "string" &&
     spineTargets.browserProofCommand.includes("test:dev-test-game-live") &&
     Array.isArray(spineTargets.cycleIds) &&
     spineTargets.cycleIds.includes("hardening-stale-conflict") &&
     spineTargets.cycleIds.includes(completedGameHardeningSpineCycleId) &&
     Array.isArray(spineTargets.roleUrlIds) &&
-    spineTargets.roleUrlIds.includes("replacement-stale-conflict-message") &&
+    spineTargets.roleUrlIds.includes(replacementStaleConflictLane.laneId) &&
     spineTargets.roleUrlIds.includes(completedGameStaleRecoveryLane.id) &&
     spineTargets.roleUrlHrefs !== null &&
     typeof spineTargets.roleUrlHrefs === "object" &&
-    typeof spineTargets.roleUrlHrefs["replacement-stale-conflict-message"] ===
+    typeof spineTargets.roleUrlHrefs[replacementStaleConflictLane.laneId] ===
       "string" &&
     typeof spineTargets.roleUrlHrefs[completedGameStaleRecoveryLane.id] ===
       "string" &&
     Array.isArray(spineTargets.checkpointIds) &&
-    spineTargets.checkpointIds.includes("replacement-stale-conflict-message") &&
+    spineTargets.checkpointIds.includes(replacementStaleConflictLane.laneId) &&
     spineTargets.checkpointIds.includes(completedGameStaleRecoveryLane.id) &&
     Array.isArray(spineTargets.recoveryHookIds) &&
     spineTargets.recoveryHookIds.length === 0 &&
     Array.isArray(spineTargets.visibleAdminCheckIds) &&
     spineTargets.visibleAdminCheckIds.includes(
-      "replacement-stale-conflict-message",
+      replacementStaleConflictLane.laneId,
     ) &&
     spineTargets.visibleAdminCheckIds.includes(
       completedGameStaleRecoveryLane.id,
