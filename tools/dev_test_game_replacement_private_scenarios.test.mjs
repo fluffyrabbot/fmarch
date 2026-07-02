@@ -13,6 +13,7 @@ import {
   replacementConcurrentActionRaceScenario,
   replacementConcurrentPrivatePostRaceScenario,
   replacementConcurrentVoteRaceScenario,
+  replacementPrivateChannelRecoveryLaneIds,
   replacementPrivatePostHardeningLaneIds,
   replacementPrivatePostRaceLaneIds,
   replacementPrivatePostRecoveryLaneIds,
@@ -30,6 +31,11 @@ test("replacement private scenario module groups private-post race and recovery 
     "replacement-stale-private-post-reconnect",
     "replacement-stale-private-post-after-complete",
     "replacement-stale-private-post-after-complete-reload",
+  ]);
+  assert.deepEqual(replacementPrivateChannelRecoveryLaneIds, [
+    "replacement-stale-private-channel",
+    "replacement-stale-private-receipts",
+    ...replacementPrivatePostRecoveryLaneIds,
   ]);
   assert.deepEqual(replacementPrivatePostHardeningLaneIds, [
     ...replacementPrivatePostRaceLaneIds,

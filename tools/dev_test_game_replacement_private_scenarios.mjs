@@ -1,4 +1,5 @@
 export {
+  replacementPrivateChannelRecoveryLaneIds,
   replacementPrivatePostHardeningLaneIds,
   replacementPrivatePostRaceLaneIds,
   replacementPrivatePostRecoveryLaneIds,

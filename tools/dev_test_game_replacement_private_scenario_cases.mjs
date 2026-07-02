@@ -19,6 +19,12 @@ export const replacementPrivatePostRecoveryLaneIds = [
   "replacement-stale-private-post-after-complete-reload",
 ];
 
+export const replacementPrivateChannelRecoveryLaneIds = [
+  "replacement-stale-private-channel",
+  "replacement-stale-private-receipts",
+  ...replacementPrivatePostRecoveryLaneIds,
+];
+
 export const replacementPrivatePostHardeningLaneIds = [
   ...replacementPrivatePostRaceLaneIds,
   ...replacementPrivatePostRecoveryLaneIds,

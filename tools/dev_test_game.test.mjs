@@ -81,6 +81,7 @@ import {
   staleConflictMessageLaneIds,
 } from "./dev_test_game_stale_conflict_scenarios.mjs";
 import {
+  replacementPrivateChannelRecoveryLaneIds,
   replacementPrivatePostRaceLaneIds,
   replacementPrivatePostRecoveryLaneIds,
   replacementStalePrivatePostAfterCompleteScenario,
@@ -7805,6 +7806,22 @@ test("session card and markdown include role credential URLs and tokens", async 
     hardeningReadiness.generatedFrom.hardeningAdminProof,
     "target/dev-test-game/hardening-admin-proof.json",
   );
+  assert.deepEqual(
+    hardeningReadiness.localDevelopmentSpine.checks.find(
+      (item) => item.id === "local-private-channel-recovery-milestone",
+    ),
+    {
+      id: "local-private-channel-recovery-milestone",
+      label: "Private-channel recovery",
+      status: "passed",
+      evidence: "target/dev-test-game/proof-run.json",
+      proofBoundary:
+        "Local seeded-game proof that stale replacement private-channel authority, private receipts, stale private posts after phase resolution, reconnect recovery, and completed-game private-channel reloads preserve current player scope and recovery hints.",
+      laneIds: [...replacementPrivateChannelRecoveryLaneIds],
+      requiredLaneCount: replacementPrivateChannelRecoveryLaneIds.length,
+      coveredLaneCount: replacementPrivateChannelRecoveryLaneIds.length,
+    },
+  );
   const raceCoverageReadiness = buildDevTestGameReleaseReadiness(proofRun, {
     generatedAt: "2026-06-26T00:00:00.000Z",
     raceCoveragePath: "target/dev-test-game/race-coverage.json",
@@ -9107,6 +9124,7 @@ function devTestGameReleaseReadinessChecklistFixture({
       game: "game-a",
       staleConflictMessageMilestone: staleConflictMessageMilestoneFixture(),
       hostStaleControlMilestone: hostStaleControlMilestoneFixture(),
+      privateChannelRecoveryMilestone: privateChannelRecoveryMilestoneFixture(),
     },
     localDevelopmentSpine: {
       status: "passed",
@@ -9147,6 +9165,15 @@ function devTestGameReleaseReadinessChecklistFixture({
           laneIds: hostStaleControlMilestoneFixture().laneIds,
           requiredLaneCount: hostStaleControlLaneIds.length,
           coveredLaneCount: hostStaleControlLaneIds.length,
+        },
+        {
+          id: "local-private-channel-recovery-milestone",
+          label: "Private-channel recovery",
+          status: "passed",
+          evidence: "target/dev-test-game/proof-run.json",
+          laneIds: privateChannelRecoveryMilestoneFixture().laneIds,
+          requiredLaneCount: replacementPrivateChannelRecoveryLaneIds.length,
+          coveredLaneCount: replacementPrivateChannelRecoveryLaneIds.length,
         },
         ...(seedProofLaneCoverage === null
           ? []
@@ -9379,6 +9406,16 @@ function hostStaleControlMilestoneFixture() {
     laneIds: [...hostStaleControlLaneIds],
     requiredLaneCount: hostStaleControlLaneIds.length,
     coveredLaneCount: hostStaleControlLaneIds.length,
+    gapCount: 0,
+  };
+}
+
+function privateChannelRecoveryMilestoneFixture() {
+  return {
+    status: "passed",
+    laneIds: [...replacementPrivateChannelRecoveryLaneIds],
+    requiredLaneCount: replacementPrivateChannelRecoveryLaneIds.length,
+    coveredLaneCount: replacementPrivateChannelRecoveryLaneIds.length,
     gapCount: 0,
   };
 }

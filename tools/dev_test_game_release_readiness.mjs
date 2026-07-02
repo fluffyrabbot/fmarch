@@ -28,6 +28,9 @@ import {
   playerRecoveryAuditLaneIds,
 } from "./dev_test_game_player_recovery_scenarios.mjs";
 import {
+  replacementPrivateChannelRecoveryLaneIds,
+} from "./dev_test_game_replacement_private_scenarios.mjs";
+import {
   staleConflictMessageLaneIds,
 } from "./dev_test_game_stale_conflict_scenarios.mjs";
 import {
@@ -223,6 +226,10 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
   const hostStaleControlMilestone = buildHostStaleControlMilestone(proof, {
     sourcePath,
   });
+  const privateChannelRecoveryMilestone =
+    buildPrivateChannelRecoveryMilestone(proof, {
+      sourcePath,
+    });
   const coreLoopAdminProofEvidence = options.coreLoopAdminProof
     ? validateDevTestGameCoreLoopAdminProof(options.coreLoopAdminProof, {
         path:
@@ -542,6 +549,17 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
       laneIds: [...hostStaleControlMilestone.laneIds],
       requiredLaneCount: hostStaleControlMilestone.requiredLaneCount,
       coveredLaneCount: hostStaleControlMilestone.coveredLaneCount,
+    },
+    {
+      id: "local-private-channel-recovery-milestone",
+      label: "Private-channel recovery",
+      status: "passed",
+      evidence: sourcePath,
+      proofBoundary:
+        "Local seeded-game proof that stale replacement private-channel authority, private receipts, stale private posts after phase resolution, reconnect recovery, and completed-game private-channel reloads preserve current player scope and recovery hints.",
+      laneIds: [...privateChannelRecoveryMilestone.laneIds],
+      requiredLaneCount: privateChannelRecoveryMilestone.requiredLaneCount,
+      coveredLaneCount: privateChannelRecoveryMilestone.coveredLaneCount,
     },
   ];
   if (backupRestoreEvidence !== undefined) {
@@ -1002,6 +1020,13 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
         coveredLaneCount: hostStaleControlMilestone.coveredLaneCount,
         gapCount: hostStaleControlMilestone.gapCount,
       },
+      privateChannelRecoveryMilestone: {
+        status: privateChannelRecoveryMilestone.status,
+        laneIds: [...privateChannelRecoveryMilestone.laneIds],
+        requiredLaneCount: privateChannelRecoveryMilestone.requiredLaneCount,
+        coveredLaneCount: privateChannelRecoveryMilestone.coveredLaneCount,
+        gapCount: privateChannelRecoveryMilestone.gapCount,
+      },
     },
     localDevelopmentSpine: {
       status: "passed",
@@ -1087,6 +1112,15 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
                 requiredLaneCount: hostStaleControlMilestone.requiredLaneCount,
                 coveredLaneCount: hostStaleControlMilestone.coveredLaneCount,
                 gapCount: hostStaleControlMilestone.gapCount,
+              },
+              privateChannelRecoveryMilestone: {
+                status: privateChannelRecoveryMilestone.status,
+                laneIds: [...privateChannelRecoveryMilestone.laneIds],
+                requiredLaneCount:
+                  privateChannelRecoveryMilestone.requiredLaneCount,
+                coveredLaneCount:
+                  privateChannelRecoveryMilestone.coveredLaneCount,
+                gapCount: privateChannelRecoveryMilestone.gapCount,
               },
               ...(backupRestoreEvidence === undefined
                 ? {}
@@ -1332,6 +1366,29 @@ function buildHostStaleControlMilestone(proof, { sourcePath }) {
   if (gapCount !== 0) {
     throw new Error(
       `host stale-control milestone missing passed lanes from ${sourcePath}: ${laneIds
+        .filter((laneId) => lanes.get(laneId)?.status !== "passed")
+        .join(", ")}`,
+    );
+  }
+  return {
+    status: "passed",
+    laneIds,
+    requiredLaneCount: laneIds.length,
+    coveredLaneCount,
+    gapCount,
+  };
+}
+
+function buildPrivateChannelRecoveryMilestone(proof, { sourcePath }) {
+  const lanes = new Map(proof.lanes.map((lane) => [lane.id, lane]));
+  const laneIds = [...replacementPrivateChannelRecoveryLaneIds];
+  const coveredLaneCount = laneIds.filter(
+    (laneId) => lanes.get(laneId)?.status === "passed",
+  ).length;
+  const gapCount = laneIds.length - coveredLaneCount;
+  if (gapCount !== 0) {
+    throw new Error(
+      `private-channel recovery milestone missing passed lanes from ${sourcePath}: ${laneIds
         .filter((laneId) => lanes.get(laneId)?.status !== "passed")
         .join(", ")}`,
     );
@@ -5178,6 +5235,21 @@ export function assertDevTestGameReleaseReadiness(checklist) {
     !validCoreLoopSpineTargets(coreLoopCheck.spineTargets)
   ) {
     throw new Error("dev-test-game core-loop readiness check is missing spine targets");
+  }
+  const privateChannelRecoveryCheck =
+    checklist.localDevelopmentSpine?.checks?.find(
+      (check) => check.id === "local-private-channel-recovery-milestone",
+    );
+  if (
+    privateChannelRecoveryCheck !== undefined &&
+    !sameStringArray(
+      privateChannelRecoveryCheck.laneIds,
+      replacementPrivateChannelRecoveryLaneIds,
+    )
+  ) {
+    throw new Error(
+      "dev-test-game private-channel recovery readiness check lane list drifted",
+    );
   }
   if (checklist.releaseReadiness?.status !== "not_ready") {
     throw new Error("dev-test-game release readiness must remain not_ready");
