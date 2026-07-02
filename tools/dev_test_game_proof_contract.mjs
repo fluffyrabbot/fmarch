@@ -32,11 +32,18 @@ import {
   replacementStaleActionAfterResolveScenario,
 } from "./dev_test_game_replacement_action_scenario_cases.mjs";
 import {
+  ackedReplacementCommandMatches,
+  replacementCommandEnvelopeMatches,
+  replacementCurrentOwnerMatches,
+  staleOutgoingCommandStateForbidden,
+} from "./dev_test_game_replacement_assertions.mjs";
+import {
   replacementPrivatePostRaceLaneIds,
   replacementPrivatePostRecoveryLaneIds,
 } from "./dev_test_game_replacement_private_scenarios.mjs";
 import {
   replacementConcurrentActionRaceScenario,
+  replacementConcurrentPrivatePostRaceScenario,
   replacementConcurrentVoteRaceScenario,
 } from "./dev_test_game_replacement_private_scenario_cases.mjs";
 
@@ -121,6 +128,8 @@ export function buildDevTestGameProofRun(session, options = {}) {
   const generatedAt = options.generatedAt ?? new Date().toISOString();
   const verification = session?.verification ?? {};
   const hardening = verification.multiplayerHardening ?? {};
+  const replacementPrivatePostRaceScenario =
+    replacementConcurrentPrivatePostRaceScenario();
   const replacementVoteRaceScenario = replacementConcurrentVoteRaceScenario();
   const replacementActionRaceScenario = replacementConcurrentActionRaceScenario();
   const replacementIncomingActionCase = replacementIncomingActionScenario();
@@ -1362,24 +1371,18 @@ export function buildDevTestGameProofRun(session, options = {}) {
       historyLabel: verification.replacementConsole?.projectedReplacement?.historyLabel ?? null,
       passed:
         verification.replacementConsole?.status === "passed" &&
-        verification.replacementConsole?.processReplacement?.commandStatus?.state ===
-          "ack" &&
-        verification.replacementConsole?.processReplacement?.commandStatus?.requestEnvelope
-          ?.body?.body?.principal_user_id === "host_h" &&
-        verification.replacementConsole?.processReplacement?.commandStatus?.requestEnvelope
-          ?.body?.body?.command?.ProcessReplacement?.slot === "slot-7" &&
-        verification.replacementConsole?.processReplacement?.commandStatus?.requestEnvelope
-          ?.body?.body?.command?.ProcessReplacement?.outgoing_user === "player-mira" &&
-        verification.replacementConsole?.processReplacement?.commandStatus?.requestEnvelope
-          ?.body?.body?.command?.ProcessReplacement?.incoming_user === "player-rowan" &&
-        verification.replacementConsole?.projectedReplacement?.slotId === "slot-7" &&
-        verification.replacementConsole?.projectedReplacement?.occupantLabel ===
-          "player-rowan" &&
-        verification.replacementConsole?.projectedReplacement?.historyLabel?.includes(
-          "slot-7",
-        ) === true &&
-        verification.replacementConsole?.apiSlot?.slot_id === "slot-7" &&
-        verification.replacementConsole?.apiSlot?.occupant_user_id === "player-rowan",
+        ackedReplacementCommandMatches(
+          verification.replacementConsole?.processReplacement?.commandStatus,
+          replacementPrivatePostRaceScenario,
+          session?.game,
+        ) &&
+        replacementCurrentOwnerMatches(
+          {
+            hostProjection: verification.replacementConsole?.projectedReplacement,
+            apiSlot: verification.replacementConsole?.apiSlot,
+          },
+          replacementPrivatePostRaceScenario,
+        ),
     }),
     lane("replacement-idempotent-retry", "Duplicate replacement command id returns original ACK", {
       commandId:
@@ -1409,30 +1412,25 @@ export function buildDevTestGameProofRun(session, options = {}) {
         verification.replacementConsole?.replacementIdempotentRetry?.sameStreamSeqs ===
           true &&
         verification.replacementConsole?.replacementIdempotentRetry?.retryReplacement
-          ?.requestEnvelope?.body?.body?.principal_user_id === "host_h" &&
-        verification.replacementConsole?.replacementIdempotentRetry?.retryReplacement
           ?.requestEnvelope?.body?.body?.command_id ===
           verification.replacementConsole?.processReplacement?.commandStatus
             ?.requestEnvelope?.body?.body?.command_id &&
-        verification.replacementConsole?.replacementIdempotentRetry?.retryReplacement
-          ?.requestEnvelope?.body?.body?.command?.ProcessReplacement?.slot ===
-          "slot-7" &&
-        verification.replacementConsole?.replacementIdempotentRetry?.retryReplacement
-          ?.requestEnvelope?.body?.body?.command?.ProcessReplacement?.outgoing_user ===
-          "player-mira" &&
-        verification.replacementConsole?.replacementIdempotentRetry?.retryReplacement
-          ?.requestEnvelope?.body?.body?.command?.ProcessReplacement?.incoming_user ===
-          "player-rowan" &&
-        verification.replacementConsole?.replacementIdempotentRetry
-          ?.hostProjectionAfterRetry?.slotId === "slot-7" &&
-        verification.replacementConsole?.replacementIdempotentRetry
-          ?.hostProjectionAfterRetry?.occupantLabel === "player-rowan" &&
-        verification.replacementConsole?.replacementIdempotentRetry
-          ?.hostProjectionAfterRetry?.historyLabel?.includes("slot-7") === true &&
-        verification.replacementConsole?.replacementIdempotentRetry?.apiSlotAfterRetry
-          ?.slot_id === "slot-7" &&
-        verification.replacementConsole?.replacementIdempotentRetry?.apiSlotAfterRetry
-          ?.occupant_user_id === "player-rowan",
+        replacementCommandEnvelopeMatches(
+          verification.replacementConsole?.replacementIdempotentRetry?.retryReplacement,
+          replacementPrivatePostRaceScenario,
+          session?.game,
+        ) &&
+        replacementCurrentOwnerMatches(
+          {
+            hostProjection:
+              verification.replacementConsole?.replacementIdempotentRetry
+                ?.hostProjectionAfterRetry,
+            apiSlot:
+              verification.replacementConsole?.replacementIdempotentRetry
+                ?.apiSlotAfterRetry,
+          },
+          replacementPrivatePostRaceScenario,
+        ),
     }),
     lane("replacement-stale-success-recovery", "Stale replacement after success recovers", {
       rejectError:
@@ -3181,21 +3179,11 @@ export function buildDevTestGameProofRun(session, options = {}) {
             ?.actorSlot === "slot-7" &&
           hardening.concurrentReplacementPrivatePostRace?.setupChannelContext
             ?.actorStatus === "alive" &&
-          hardening.concurrentReplacementPrivatePostRace?.replacement?.state ===
-            "ack" &&
-          hardening.concurrentReplacementPrivatePostRace?.replacement?.serverEnvelope
-            ?.body?.kind === "Ack" &&
-          hardening.concurrentReplacementPrivatePostRace?.replacement?.requestEnvelope
-            ?.body?.body?.command?.ProcessReplacement?.game ===
-            hardening.concurrentReplacementPrivatePostRace?.game &&
-          hardening.concurrentReplacementPrivatePostRace?.replacement?.requestEnvelope
-            ?.body?.body?.command?.ProcessReplacement?.slot === "slot-7" &&
-          hardening.concurrentReplacementPrivatePostRace?.replacement?.requestEnvelope
-            ?.body?.body?.command?.ProcessReplacement?.outgoing_user ===
-            "player-mira" &&
-          hardening.concurrentReplacementPrivatePostRace?.replacement?.requestEnvelope
-            ?.body?.body?.command?.ProcessReplacement?.incoming_user ===
-            "player-rowan" &&
+          ackedReplacementCommandMatches(
+            hardening.concurrentReplacementPrivatePostRace?.replacement,
+            replacementPrivatePostRaceScenario,
+            hardening.concurrentReplacementPrivatePostRace?.game,
+          ) &&
           hardening.concurrentReplacementPrivatePostRace?.post?.requestEnvelope?.body
             ?.body?.command?.SubmitPost?.channel_id === "private:mafia_day_chat" &&
           hardening.concurrentReplacementPrivatePostRace?.post?.requestEnvelope?.body
@@ -3217,20 +3205,26 @@ export function buildDevTestGameProofRun(session, options = {}) {
               hardening.concurrentReplacementPrivatePostRace?.apiThreadPostBodies?.includes(
                 hardening.concurrentReplacementPrivatePostRace?.postBody,
               ) === false)) &&
-          hardening.concurrentReplacementPrivatePostRace?.commandStateAfterRace
-            ?.status === 403 &&
-          hardening.concurrentReplacementPrivatePostRace?.commandStateAfterRace
-            ?.error === "NotYourSlot" &&
+          staleOutgoingCommandStateForbidden(
+            hardening.concurrentReplacementPrivatePostRace?.commandStateAfterRace,
+            replacementPrivatePostRaceScenario,
+          ) &&
           hardening.concurrentReplacementPrivatePostRace?.buttonsAfterRace?.some(
             (button) =>
               (button.action === "submit_post" ||
                 button.action?.startsWith("submit_action")) &&
               button.disabled === false,
           ) === false &&
-          hardening.concurrentReplacementPrivatePostRace?.hostReplacementAfterRace
-            ?.occupantLabel === "player-rowan" &&
-          hardening.concurrentReplacementPrivatePostRace?.apiSlotAfterRace
-            ?.occupant_user_id === "player-rowan" &&
+          replacementCurrentOwnerMatches(
+            {
+              hostProjection:
+                hardening.concurrentReplacementPrivatePostRace
+                  ?.hostReplacementAfterRace,
+              apiSlot:
+                hardening.concurrentReplacementPrivatePostRace?.apiSlotAfterRace,
+            },
+            replacementPrivatePostRaceScenario,
+          ) &&
           hardening.concurrentReplacementPrivatePostRace?.staleRoute?.status === 403,
       },
     ),
@@ -3273,20 +3267,26 @@ export function buildDevTestGameProofRun(session, options = {}) {
           hardening.concurrentReplacementPrivatePostRace?.staleRoute?.message?.includes(
             "requires scoped channel capability",
           ) === true &&
-          hardening.concurrentReplacementPrivatePostRace?.commandStateAfterRace
-            ?.status === 403 &&
-          hardening.concurrentReplacementPrivatePostRace?.commandStateAfterRace
-            ?.error === "NotYourSlot" &&
+          staleOutgoingCommandStateForbidden(
+            hardening.concurrentReplacementPrivatePostRace?.commandStateAfterRace,
+            replacementPrivatePostRaceScenario,
+          ) &&
           hardening.concurrentReplacementPrivatePostRace?.buttonsAfterRace?.some(
             (button) =>
               (button.action === "submit_post" ||
                 button.action?.startsWith("submit_action")) &&
               button.disabled === false,
           ) === false &&
-          hardening.concurrentReplacementPrivatePostRace?.hostReplacementAfterRace
-            ?.occupantLabel === "player-rowan" &&
-          hardening.concurrentReplacementPrivatePostRace?.apiSlotAfterRace
-            ?.occupant_user_id === "player-rowan" &&
+          replacementCurrentOwnerMatches(
+            {
+              hostProjection:
+                hardening.concurrentReplacementPrivatePostRace
+                  ?.hostReplacementAfterRace,
+              apiSlot:
+                hardening.concurrentReplacementPrivatePostRace?.apiSlotAfterRace,
+            },
+            replacementPrivatePostRaceScenario,
+          ) &&
           hardening.concurrentReplacementPrivatePostRace?.apiThreadPostBodies?.includes(
             hardening.concurrentReplacementPrivatePostRace?.postBody,
           ) === (hardening.concurrentReplacementPrivatePostRace?.post?.state === "ack"),
@@ -3661,25 +3661,15 @@ export function buildDevTestGameProofRun(session, options = {}) {
         hardening.replacementIncomingAction?.setupHostPhase?.locked === false &&
         hardening.replacementIncomingAction?.setupSlot?.occupant_user_id ===
           replacementIncomingActionCase.staleOutgoingPrincipalUserId &&
-        hardening.replacementIncomingAction?.replacement?.state === "ack" &&
-        hardening.replacementIncomingAction?.replacement?.serverEnvelope?.body
-          ?.kind === "Ack" &&
-        hardening.replacementIncomingAction?.replacement?.requestEnvelope?.body
-          ?.body?.command?.ProcessReplacement?.game ===
-          hardening.replacementIncomingAction?.game &&
-        hardening.replacementIncomingAction?.replacement?.requestEnvelope?.body
-          ?.body?.command?.ProcessReplacement?.slot ===
-          replacementIncomingActionCase.actorSlot &&
-        hardening.replacementIncomingAction?.replacement?.requestEnvelope?.body
-          ?.body?.command?.ProcessReplacement?.outgoing_user ===
-          replacementIncomingActionCase.staleOutgoingPrincipalUserId &&
-        hardening.replacementIncomingAction?.replacement?.requestEnvelope?.body
-          ?.body?.command?.ProcessReplacement?.incoming_user ===
-          replacementIncomingActionCase.replacementPrincipalUserId &&
-        hardening.replacementIncomingAction?.outgoingCommandStateAfterReplacement
-          ?.status === 403 &&
-        hardening.replacementIncomingAction?.outgoingCommandStateAfterReplacement
-          ?.error === replacementIncomingActionCase.staleOutgoingError &&
+        ackedReplacementCommandMatches(
+          hardening.replacementIncomingAction?.replacement,
+          replacementIncomingActionCase,
+          hardening.replacementIncomingAction?.game,
+        ) &&
+        staleOutgoingCommandStateForbidden(
+          hardening.replacementIncomingAction?.outgoingCommandStateAfterReplacement,
+          replacementIncomingActionCase,
+        ) &&
         hardening.replacementIncomingAction?.currentCommandStateBeforeAction
           ?.actorSlot === replacementIncomingActionCase.actorSlot &&
         hardening.replacementIncomingAction?.currentCommandStateBeforeAction
@@ -3772,18 +3762,11 @@ export function buildDevTestGameProofRun(session, options = {}) {
         hardening.replacementActionReconnect?.targetEntry?.capabilityKinds?.includes(
           "SlotOccupant",
         ) === true &&
-        hardening.replacementActionReconnect?.replacement?.state === "ack" &&
-        hardening.replacementActionReconnect?.replacement?.serverEnvelope?.body
-          ?.kind === "Ack" &&
-        hardening.replacementActionReconnect?.replacement?.requestEnvelope?.body
-          ?.body?.command?.ProcessReplacement?.slot ===
-          replacementActionReconnectCase.actorSlot &&
-        hardening.replacementActionReconnect?.replacement?.requestEnvelope?.body
-          ?.body?.command?.ProcessReplacement?.outgoing_user ===
-          replacementActionReconnectCase.staleOutgoingPrincipalUserId &&
-        hardening.replacementActionReconnect?.replacement?.requestEnvelope?.body
-          ?.body?.command?.ProcessReplacement?.incoming_user ===
-          replacementActionReconnectCase.replacementPrincipalUserId &&
+        ackedReplacementCommandMatches(
+          hardening.replacementActionReconnect?.replacement,
+          replacementActionReconnectCase,
+          hardening.replacementActionReconnect?.game,
+        ) &&
         hardening.replacementActionReconnect?.commandStateBeforeAction
           ?.actorSlot === replacementActionReconnectCase.actorSlot &&
         hardening.replacementActionReconnect?.commandStateBeforeAction
@@ -3910,16 +3893,11 @@ export function buildDevTestGameProofRun(session, options = {}) {
         hardening.replacementStaleActionAfterResolve?.targetEntry?.capabilityKinds?.includes(
           "SlotOccupant",
         ) === true &&
-        hardening.replacementStaleActionAfterResolve?.replacement?.state ===
-          "ack" &&
-        hardening.replacementStaleActionAfterResolve?.replacement?.serverEnvelope
-          ?.body?.kind === "Ack" &&
-        hardening.replacementStaleActionAfterResolve?.replacement?.requestEnvelope
-          ?.body?.body?.command?.ProcessReplacement?.slot ===
-          replacementStaleActionAfterResolveCase.actorSlot &&
-        hardening.replacementStaleActionAfterResolve?.replacement?.requestEnvelope
-          ?.body?.body?.command?.ProcessReplacement?.incoming_user ===
-          replacementStaleActionAfterResolveCase.replacementPrincipalUserId &&
+        ackedReplacementCommandMatches(
+          hardening.replacementStaleActionAfterResolve?.replacement,
+          replacementStaleActionAfterResolveCase,
+          hardening.replacementStaleActionAfterResolve?.game,
+        ) &&
         hardening.replacementStaleActionAfterResolve?.commandStateBeforeClose
           ?.actorSlot === replacementStaleActionAfterResolveCase.actorSlot &&
         hardening.replacementStaleActionAfterResolve?.commandStateBeforeClose
