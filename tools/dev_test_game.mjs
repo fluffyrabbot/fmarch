@@ -23,6 +23,9 @@ import {
   replacementStalePrivatePostAfterCompleteScenario,
 } from "./dev_test_game_replacement_private_scenario_cases.mjs";
 import {
+  coreLoopPrivateChannelStalePostLaneId,
+} from "./dev_test_game_core_loop_private_channel_recovery_scenarios.mjs";
+import {
   createUnexpectedMediaResponseGuard,
 } from "./dev_test_game_media_response_guard.mjs";
 
@@ -1036,6 +1039,7 @@ async function verifySessionCard(card) {
       frontendBaseUrl: card.frontendBaseUrl,
     });
     privateChannel = await verifySeededPrivateChannel({
+      browser,
       playerPage: roleEntries.player.page,
       deniedPage: roleEntries.deniedPlayer.page,
       game: card.game,
@@ -2162,7 +2166,11 @@ async function verifySeededDayVoteResolution({
   }
 }
 
-async function seedDayVoteResolutionGame({ game }) {
+async function seedDayVoteResolutionGame({
+  game,
+  slotSevenRoleKey = "vanilla_townie",
+  slotFourRoleKey = "vanilla_townie",
+}) {
   const plan = [
     ["host_h", { CreateGame: { game, pack: "mafiascum" } }],
     ["host_h", { AddSlot: { game, slot: "slot-7" } }],
@@ -2171,13 +2179,13 @@ async function seedDayVoteResolutionGame({ game }) {
     ["host_h", { AddSlot: { game, slot: "slot_4" } }],
     ["host_h", { AddSlot: { game, slot: "slot_5" } }],
     ["host_h", { AssignSlot: { game, slot: "slot-7", user: "player-mira" } }],
-    ["host_h", { AssignRole: { game, slot: "slot-7", role_key: "vanilla_townie" } }],
+    ["host_h", { AssignRole: { game, slot: "slot-7", role_key: slotSevenRoleKey } }],
     ["host_h", { AssignSlot: { game, slot: "slot-2", user: "player-target" } }],
     ["host_h", { AssignRole: { game, slot: "slot-2", role_key: "vanilla_townie" } }],
     ["host_h", { AssignSlot: { game, slot: "slot-3", user: "player-seed" } }],
     ["host_h", { AssignRole: { game, slot: "slot-3", role_key: "vanilla_townie" } }],
     ["host_h", { AssignSlot: { game, slot: "slot_4", user: "player-goon-a" } }],
-    ["host_h", { AssignRole: { game, slot: "slot_4", role_key: "vanilla_townie" } }],
+    ["host_h", { AssignRole: { game, slot: "slot_4", role_key: slotFourRoleKey } }],
     ["host_h", { AssignSlot: { game, slot: "slot_5", user: "player-goon-b" } }],
     ["host_h", { AssignRole: { game, slot: "slot_5", role_key: "vanilla_townie" } }],
     ["host_h", { StartGame: { game, phase: "D01" } }],
@@ -2204,6 +2212,8 @@ async function seedDayVoteResolutionGame({ game }) {
     preseededVotes: 3,
     targetSlot: "slot-2",
     resolvingVoterSlot: "slot_4",
+    slotSevenRoleKey,
+    slotFourRoleKey,
   };
 }
 
@@ -4785,6 +4795,7 @@ async function setSlotLifecycleViaHost({ hostPage, game, slot, status }) {
 }
 
 async function verifySeededPrivateChannel({
+  browser,
   playerPage,
   deniedPage,
   game,
@@ -4856,6 +4867,12 @@ async function verifySeededPrivateChannel({
     action.click(),
   ]);
   await deniedPage.getByTestId("board-surface").waitFor({ state: "visible" });
+  const stalePostAfterPhaseTransition =
+    await verifyStalePrivateChannelPostAfterPhaseTransition({
+      browser,
+      apiBaseUrl,
+      frontendBaseUrl,
+    });
 
   return {
     status: "passed",
@@ -4873,9 +4890,222 @@ async function verifySeededPrivateChannel({
       actionHref,
       recoveredUrl: deniedPage.url(),
     },
+    stalePostAfterPhaseTransition,
     proof:
-      "The seeded player role URL opened the pack-declared faction day chat, submitted a private-channel post through /commands, and the denied player role URL rendered the 403 Back to board recovery for the same channel.",
+      "The seeded player role URL opened the pack-declared faction day chat, submitted a private-channel post through /commands, the denied player role URL rendered the 403 Back to board recovery for the same channel, and a disposable private-channel role URL proved stale SubmitPost recovery after host phase resolution.",
   };
+}
+
+async function verifyStalePrivateChannelPostAfterPhaseTransition({
+  browser,
+  apiBaseUrl,
+  frontendBaseUrl,
+}) {
+  const channelRoute = encodeURIComponent(factionDayChatChannel);
+  const setup = await openResolvedDayStalePlayerProof({
+    browser,
+    apiBaseUrl,
+    frontendBaseUrl,
+    tokenLabel: "stale-private-post",
+    slotSevenRoleKey: "encryptor",
+    slotFourRoleKey: "mafia_goon",
+    playerPathForGame: (game) => `/g/${game}/c/${channelRoute}`,
+  });
+  const {
+    phaseClosureGame,
+    seed,
+    hostSession,
+    playerSession,
+    hostEntry,
+    playerEntry,
+    commandStateBeforeClose,
+    currentVoteBeforeClose,
+    buttonsBeforeClose,
+    closedStatus,
+    hostBeforeResolve,
+    resolveDay,
+    hostAfterResolve,
+    apiCommandStateAfterResolve,
+    apiDayVoteOutcomesAfterResolve,
+  } = setup;
+  try {
+    const channelContextId = await playerEntry.page
+      .getByTestId("player-command-channel-context")
+      .getAttribute("data-channel-id");
+    const submitPostBeforeClose = buttonsBeforeClose.find(
+      (button) => button.action === "submit_post",
+    );
+    const postBody =
+      `Stale private-channel post after D01 phase closure ${crypto.randomUUID()}.`;
+    if (
+      channelContextId !== factionDayChatChannel ||
+      submitPostBeforeClose?.disabled !== false
+    ) {
+      throw new Error(
+        `stale private-channel post setup drifted: ${JSON.stringify({
+          phaseClosureGame,
+          channelContextId,
+          commandStateBeforeClose,
+          submitPostBeforeClose,
+          buttonsBeforeClose,
+        })}`,
+      );
+    }
+
+    await playerEntry.page.locator("textarea").fill(postBody);
+    await playerEntry.page.locator('[data-action="submit_post"]').click();
+    await playerEntry.page.waitForFunction(
+      ({ expectedBody, expectedChannel }) =>
+        window.__fmarchPlayerCommandStatus?.requestEnvelope?.body?.body?.command
+          ?.SubmitPost?.body === expectedBody &&
+        window.__fmarchPlayerCommandStatus?.requestEnvelope?.body?.body?.command
+          ?.SubmitPost?.channel_id === expectedChannel &&
+        window.__fmarchPlayerCommandStatus?.state === "ack",
+      { expectedBody: postBody, expectedChannel: factionDayChatChannel },
+    );
+    await playerEntry.page.waitForFunction(
+      ({ expectedBody, expectedChannel }) =>
+        window.__fmarchPlayerProjection?.thread?.posts?.some(
+          (post) =>
+            post.body === expectedBody &&
+            post.authorSlot === "slot-7",
+        ) &&
+        window.__fmarchPlayerProjection?.commandState?.phase?.locked === true &&
+        window.__fmarchPlayerProjection?.commandState?.currentVote === null &&
+        (window.__fmarchPlayerProjection?.commandState?.voteTargets ?? []).length ===
+          0 &&
+        window.__fmarchPlayerProjection?.dayVoteOutcomes?.some(
+          (row) =>
+            row.phaseId === "D01" &&
+            row.status === "Lynch" &&
+            row.winnerSlot === "slot-2",
+        ),
+      { expectedBody: postBody, expectedChannel: factionDayChatChannel },
+    );
+    const stalePost = await playerEntry.page.evaluate(
+      () => window.__fmarchPlayerCommandStatus,
+    );
+    const projectedPost = await playerEntry.page.evaluate((expectedBody) =>
+      window.__fmarchPlayerProjection?.thread?.posts?.find(
+        (post) => post.body === expectedBody,
+      ),
+    postBody);
+    const commandStateAfterAck = await playerEntry.page.evaluate(
+      () => window.__fmarchPlayerProjection?.commandState,
+    );
+    const channelContextAfterAck = await playerEntry.page
+      .getByTestId("player-command-channel-context")
+      .getAttribute("data-channel-id");
+    const dispatchPlan = await playerEntry.page.evaluate(
+      () => window.__fmarchPlayerCommandDispatchBridgePlan,
+    );
+    const buttonsAfterAck = await playerCommandButtons(playerEntry.page);
+    const dayVoteOutcomesAfterAck = await playerEntry.page.evaluate(
+      () => window.__fmarchPlayerProjection?.dayVoteOutcomes ?? [],
+    );
+    const apiCommandStateAfterAck = await fetchJson(
+      `${apiBaseUrl}/games/${phaseClosureGame}/player-command-state?principal_user_id=player-mira&slot_id=slot-7`,
+    );
+    const apiThreadAfterAck = await fetchJson(
+      `${apiBaseUrl}/games/${phaseClosureGame}/channels/${channelRoute}/thread?principal_user_id=player-mira&limit=100`,
+    );
+    if (
+      stalePost?.state !== "ack" ||
+      stalePost?.serverEnvelope?.body?.kind !== "Ack" ||
+      stalePost?.requestEnvelope?.body?.body?.command?.SubmitPost?.actor_slot !==
+        "slot-7" ||
+      stalePost?.requestEnvelope?.body?.body?.command?.SubmitPost?.channel_id !==
+        factionDayChatChannel ||
+      stalePost?.requestEnvelope?.body?.body?.command?.SubmitPost?.body !== postBody ||
+      dispatchPlan?.projectionRefreshKeys?.includes("thread") !== true ||
+      dispatchPlan?.projectionRefreshKeys?.includes("votecount") !== true ||
+      dispatchPlan?.projectionRefreshKeys?.includes("commandState") !== true ||
+      dispatchPlan?.projectionRefreshKeys?.includes("dayVoteOutcomes") !== true ||
+      projectedPost?.authorSlot !== "slot-7" ||
+      channelContextAfterAck !== factionDayChatChannel ||
+      commandStateAfterAck?.phase?.phaseId !== "D01" ||
+      commandStateAfterAck?.phase?.locked !== true ||
+      commandStateAfterAck?.currentVote !== null ||
+      commandStateAfterAck?.voteTargets?.length !== 0 ||
+      buttonsAfterAck.some((button) => button.action?.startsWith("submit_vote")) ||
+      !buttonsAfterAck.some(
+        (button) => button.action === "submit_post" && button.disabled === false,
+      ) ||
+      !dayVoteOutcomesAfterAck.some(
+        (row) =>
+          row.phaseId === "D01" &&
+          row.status === "Lynch" &&
+          row.winnerSlot === "slot-2",
+      ) ||
+      apiCommandStateAfterAck?.phase?.locked !== true ||
+      apiCommandStateAfterAck?.vote_targets?.length !== 0 ||
+      apiCommandStateAfterAck?.current_vote !== null ||
+      !apiThreadAfterAck.posts?.some(
+        (post) => post.body === postBody && post.author_slot === "slot-7",
+      )
+    ) {
+      throw new Error(
+        `stale private-channel post recovery drifted: ${JSON.stringify({
+          phaseClosureGame,
+          postBody,
+          stalePost,
+          projectedPost,
+          channelContextAfterAck,
+          commandStateAfterAck,
+          dispatchPlan,
+          buttonsAfterAck,
+          dayVoteOutcomesAfterAck,
+          apiCommandStateAfterAck,
+          apiThreadAfterAck,
+        })}`,
+      );
+    }
+
+    return {
+      status: "passed",
+      laneId: coreLoopPrivateChannelStalePostLaneId,
+      game: phaseClosureGame,
+      seed,
+      channel: factionDayChatChannel,
+      hostSession: {
+        principalUserId: hostSession.principalUserId,
+        credentialKind: hostSession.credentialKind,
+        expectedCapabilityKind: hostSession.expectedCapabilityKind,
+      },
+      playerSession: {
+        principalUserId: playerSession.principalUserId,
+        credentialKind: playerSession.credentialKind,
+        expectedCapabilityKind: playerSession.expectedCapabilityKind,
+      },
+      hostEntry: hostEntry.verification,
+      playerEntry: playerEntry.verification,
+      commandStateBeforeClose,
+      currentVoteBeforeClose,
+      submitPostBeforeClose,
+      buttonsBeforeClose,
+      closedStatus,
+      hostBeforeResolve,
+      resolveDay,
+      hostAfterResolve,
+      apiCommandStateAfterResolve,
+      apiDayVoteOutcomesAfterResolve,
+      postBody,
+      stalePost,
+      projectedPost,
+      channelContextAfterAck,
+      commandStateAfterAck,
+      dispatchPlan,
+      buttonsAfterAck,
+      dayVoteOutcomesAfterAck,
+      apiCommandStateAfterAck,
+      apiThreadAfterAck,
+      proof:
+        "A disposable private-channel role URL froze on the faction day chat, a disposable host role URL resolved D01 and locked the phase, then the stale private SubmitPost ACKed while refreshing the private thread, locked commandState, and day-vote outcome truth.",
+    };
+  } finally {
+    await hostEntry.context.close().catch(() => {});
+    await playerEntry.context.close().catch(() => {});
+  }
 }
 
 async function verifySeededMultiplayerHardening({
@@ -14439,12 +14669,19 @@ async function openResolvedDayStalePlayerProof({
   apiBaseUrl,
   frontendBaseUrl,
   tokenLabel,
+  playerPathForGame,
+  slotSevenRoleKey = "vanilla_townie",
+  slotFourRoleKey = "vanilla_townie",
 }) {
   if (browser === null || browser === undefined) {
     throw new Error("stale player phase-closure proof requires a Playwright browser");
   }
   const phaseClosureGame = crypto.randomUUID();
-  const seed = await seedDayVoteResolutionGame({ game: phaseClosureGame });
+  const seed = await seedDayVoteResolutionGame({
+    game: phaseClosureGame,
+    slotSevenRoleKey,
+    slotFourRoleKey,
+  });
   const hostSession = await createSessionGrantCredential({
     token: `${tokenPrefix}-${tokenLabel}-phase-host-${crypto.randomUUID()}`,
     principalUserId: "host_h",
@@ -14482,7 +14719,30 @@ async function openResolvedDayStalePlayerProof({
     frontendBaseUrl,
   });
   try {
-    await gotoPlayerBoard(playerEntry.page, phaseClosureGame);
+    const playerPath =
+      typeof playerPathForGame === "function"
+        ? playerPathForGame(phaseClosureGame)
+        : null;
+    if (playerPath === null) {
+      await gotoPlayerBoard(playerEntry.page, phaseClosureGame);
+    } else {
+      const playerPathResponse = await playerEntry.page.goto(
+        `${frontendBaseUrl}${playerPath}`,
+        {
+          waitUntil: "networkidle",
+        },
+      );
+      if (playerPathResponse === null || !playerPathResponse.ok()) {
+        throw new Error(
+          `stale player role path failed with ${
+            playerPathResponse?.status() ?? "no response"
+          }: ${playerPath}`,
+        );
+      }
+      await playerEntry.page.getByTestId("player-surface").waitFor({
+        state: "visible",
+      });
+    }
     await playerEntry.page.waitForFunction(
       () =>
         window.__fmarchPlayerProjection?.commandState?.actorSlot === "slot-7" &&

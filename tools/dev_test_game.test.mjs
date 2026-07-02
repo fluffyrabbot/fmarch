@@ -58,7 +58,9 @@ import {
 import {
   completedPrivateChannelReloadScenario,
   completedPrivateChannelTransition,
+  coreLoopPrivateChannelRecoveryLaneIds,
   coreLoopPrivateChannelRecoveryScenarioFamily,
+  coreLoopPrivateChannelStalePostLaneId,
   staleCompletedPrivatePostScenario,
 } from "./dev_test_game_core_loop_private_channel_recovery_scenarios.mjs";
 import {
@@ -3061,6 +3063,53 @@ test("session card and markdown include role credential URLs and tokens", async 
       channel: "private:mafia_day_chat",
       allowed: { submitPost: { state: "ack", message: "Ack: stream seqs 43" } },
       denied: { status: 403, actionLabel: "Back to board" },
+      stalePostAfterPhaseTransition: {
+        status: "passed",
+        laneId: coreLoopPrivateChannelStalePostLaneId,
+        channel: "private:mafia_day_chat",
+        postBody: "Stale private-channel post after D01 phase closure fixture.",
+        stalePost: {
+          state: "ack",
+          requestEnvelope: {
+            body: {
+              body: {
+                command: {
+                  SubmitPost: {
+                    channel_id: "private:mafia_day_chat",
+                    actor_slot: "slot-7",
+                    body: "Stale private-channel post after D01 phase closure fixture.",
+                  },
+                },
+              },
+            },
+          },
+          serverEnvelope: { body: { kind: "Ack" } },
+        },
+        commandStateAfterAck: {
+          phase: { phaseId: "D01", locked: true },
+          currentVote: null,
+          voteTargets: [],
+        },
+        dispatchPlan: {
+          projectionRefreshKeys: [
+            "thread",
+            "votecount",
+            "commandState",
+            "dayVoteOutcomes",
+          ],
+        },
+        projectedPost: {
+          body: "Stale private-channel post after D01 phase closure fixture.",
+        },
+        apiThreadAfterAck: {
+          posts: [
+            {
+              body:
+                "Stale private-channel post after D01 phase closure fixture.",
+            },
+          ],
+        },
+      },
     },
     replacementConsole: {
       status: "passed",
@@ -7768,7 +7817,7 @@ test("session card and markdown include role credential URLs and tokens", async 
       "resolution-receipts",
       "dead-player-recovery",
       "player-action-boundary",
-      "private-channel",
+      ...coreLoopPrivateChannelRecoveryLaneIds,
       ...replacementHandoffRecoveryLaneIds.slice(0, 8),
       staleConflictMessageLaneIds[0],
       ...replacementHandoffRecoveryLaneIds.slice(8),
@@ -8582,7 +8631,7 @@ test("session card and markdown include role credential URLs and tokens", async 
   assert.equal(opsArtifacts.productionReady, false);
   assert.equal(opsArtifacts.run.game, game);
   assert.equal(opsArtifacts.run.seedCommandCount, 1);
-  assert.equal(opsArtifacts.proofRun.laneCount, 115);
+  assert.equal(opsArtifacts.proofRun.laneCount, 116);
   assert.equal(opsArtifacts.proofStability.hostConfirmClicks.total, 4);
   assert.equal(
     opsArtifacts.checks.some(
@@ -9786,7 +9835,7 @@ function devTestGameRaceCoverageFixture() {
       proofRun: "target/dev-test-game/proof-run.json",
       proofGeneratedAt: "2026-06-26T00:00:00.000Z",
       game: "game-a",
-      laneCount: 115,
+      laneCount: 116,
     },
     summary: {
       cellCount: cells.length,
@@ -10021,7 +10070,7 @@ function devTestGameOpsArtifactsFixture({
     roles: {},
     proofRun: {
       status: "passed",
-      laneCount: 115,
+      laneCount: 116,
       lanes: [],
       nonClaims: [],
     },

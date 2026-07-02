@@ -93,6 +93,7 @@ export const seedDemoOnlyScenarioIds = Object.freeze([
   "host-deadline-advance",
   "stale-deadline-advance",
   "private-channel",
+  "private-channel-stale-post-after-transition",
   "resolution-receipts",
   playerActionBoundaryLaneId,
   "host-votecount-publication",

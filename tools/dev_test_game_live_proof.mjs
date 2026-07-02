@@ -256,6 +256,32 @@ assert.equal(
 assert.equal(session.verification.privateChannel.denied.status, 403);
 assert.equal(session.verification.privateChannel.denied.actionLabel, "Back to board");
 assert.match(session.verification.privateChannel.denied.recoveredUrl, /\/$/);
+assert.equal(
+  session.verification.privateChannel.stalePostAfterPhaseTransition.status,
+  "passed",
+);
+assert.equal(
+  session.verification.privateChannel.stalePostAfterPhaseTransition.laneId,
+  "private-channel-stale-post-after-transition",
+);
+assert.equal(
+  session.verification.privateChannel.stalePostAfterPhaseTransition.channel,
+  "private:mafia_day_chat",
+);
+assert.equal(
+  session.verification.privateChannel.stalePostAfterPhaseTransition.stalePost.state,
+  "ack",
+);
+assert.equal(
+  session.verification.privateChannel.stalePostAfterPhaseTransition.stalePost
+    .requestEnvelope.body.body.command.SubmitPost.channel_id,
+  "private:mafia_day_chat",
+);
+assert.equal(
+  session.verification.privateChannel.stalePostAfterPhaseTransition
+    .commandStateAfterAck.phase.locked,
+  true,
+);
 assert.equal(session.verification.actionLoop.status, "passed");
 assert.equal(session.verification.actionLoop.resolveDay.commandStatus.state, "ack");
 assert.equal(session.verification.actionLoop.advanceNight.commandStatus.state, "ack");

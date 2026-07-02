@@ -55,13 +55,14 @@ test("seed scenario cases include reload and stale-reject proof rows", () => {
 });
 
 test("seed scenario cases expose generated demo scenario fixture rows", () => {
-  assert.equal(seedDemoScenarioIds.length, 118);
+  assert.equal(seedDemoScenarioIds.length, 119);
   assert.deepEqual(seedDemoOnlyScenarioIds, [
     "day-vote-resolution",
     "day-vote-no-lynch",
     "host-deadline-advance",
     "stale-deadline-advance",
     "private-channel",
+    "private-channel-stale-post-after-transition",
     "resolution-receipts",
     "player-action-boundary",
     "host-votecount-publication",
@@ -122,57 +123,57 @@ test("seed scenario cases expose generated demo scenario fixture rows", () => {
   assert.deepEqual(seedDemoScenarioIds.slice(6, 9), [
     "stale-deadline-advance",
     "private-channel",
-    "resolution-receipts",
+    "private-channel-stale-post-after-transition",
   ]);
   assert.deepEqual(seedDemoScenarioIds.slice(9, 12), [
+    "resolution-receipts",
     "player-action-boundary",
     "host-votecount-publication",
-    "concurrent-host-publish-race",
   ]);
   assert.deepEqual(seedDemoScenarioIds.slice(12, 15), [
+    "concurrent-host-publish-race",
     "concurrent-host-publish-race-reload",
     "host-lifecycle-control",
-    "host-modkill-control",
   ]);
   assert.deepEqual(seedDemoScenarioIds.slice(15, 18), [
+    "host-modkill-control",
     "stale-host-publish-after-change",
     "stale-host-publish",
-    "stale-host-lifecycle",
   ]);
   assert.deepEqual(seedDemoScenarioIds.slice(18, 21), [
+    "stale-host-lifecycle",
     "stale-host-lifecycle-reload",
     "stale-host-modkill",
-    "stale-host-modkill-reload",
   ]);
   assert.deepEqual(seedDemoScenarioIds.slice(21, 24), [
+    "stale-host-modkill-reload",
     "stale-host-prompt",
     "stale-host-complete",
-    "stale-host-control",
   ]);
   assert.deepEqual(seedDemoScenarioIds.slice(24, 27), [
+    "stale-host-control",
     "stale-host-resolve",
     "stale-host-advance",
-    "stale-host-deadline",
   ]);
   assert.deepEqual(seedDemoScenarioIds.slice(27, 30), [
+    "stale-host-deadline",
     "stale-cohost-deadline",
     "stale-player-vote",
-    "stale-player-vote-after-change",
   ]);
   assert.deepEqual(seedDemoScenarioIds.slice(30, 35), [
+    "stale-player-vote-after-change",
     "stale-player-post-after-phase-closure",
     "stale-player-withdraw-after-change",
     "stale-player-withdraw-after-phase-closure",
     "stale-player-vote-after-phase-closure",
-    "stale-player-complete",
   ]);
   assert.deepEqual(seedDemoScenarioIds.slice(35, 37), [
     "player-action-denied",
     "invalid-action-recovery",
   ]);
   assert.deepEqual(seedDemoScenarioIds.slice(43, 45), [
+    "stale-player-complete",
     "stale-dead-target-vote",
-    "dead-current-vote",
   ]);
   assert.equal(
     seedDemoScenarioIds.includes("concurrent-vote-race-reload"),
@@ -200,6 +201,7 @@ test("seed scenario cases expose production fixture metadata", () => {
         [
           "day-vote-resolution",
           "private-channel",
+          "private-channel-stale-post-after-transition",
           "resolution-receipts",
           "player-action-boundary",
           "host-votecount-publication",
@@ -241,6 +243,11 @@ test("seed scenario cases expose production fixture metadata", () => {
       ["day-vote-resolution", "actionPlayer", "/redacted/actionPlayer"],
       ["stale-deadline-advance", "host", "/redacted/host"],
       ["private-channel", "player", "/redacted/player"],
+      [
+        "private-channel-stale-post-after-transition",
+        "player",
+        "/redacted/player",
+      ],
       ["resolution-receipts", "deniedPlayer", "/redacted/deniedPlayer"],
       ["player-action-boundary", "player", "/redacted/player"],
       ["host-votecount-publication", "host", "/redacted/host"],
@@ -271,8 +278,8 @@ test("seed scenario cases expose production fixture metadata", () => {
         "/redacted/player",
       ],
       ["stale-player-vote-after-phase-closure", "player", "/redacted/player"],
-      ["stale-player-complete", "player", "/redacted/player"],
       ["player-action-denied", "player", "/redacted/player"],
+      ["stale-player-complete", "player", "/redacted/player"],
       ["stale-dead-target-vote", "player", "/redacted/player"],
       ["dead-current-vote", "player", "/redacted/player"],
       ["concurrent-vote-race", "player", "/redacted/player"],

@@ -105,6 +105,11 @@ import {
   replacementResolvedPrivatePostAckMatches,
   replacementResolvedPrivatePostReconnectMatches,
 } from "./dev_test_game_replacement_private_post_assertions.mjs";
+import {
+  coreLoopPrivateChannelPostLaneId,
+  coreLoopPrivateChannelRecoveryLaneIds,
+  coreLoopPrivateChannelStalePostLaneId,
+} from "./dev_test_game_core_loop_private_channel_recovery_scenarios.mjs";
 
 export const DEV_TEST_GAME_PROOF_VERSION = 1;
 
@@ -130,7 +135,7 @@ const requiredLaneIds = Object.freeze([
   "resolution-receipts",
   "dead-player-recovery",
   playerActionBoundaryLaneId,
-  "private-channel",
+  ...coreLoopPrivateChannelRecoveryLaneIds,
   "replacement-host-issued-invite",
   "replacement-pending-player",
   "replacement-redeemed-invite-recovery",
@@ -968,7 +973,7 @@ export function buildDevTestGameProofRun(session, options = {}) {
         verification.playerActionBoundary?.phaseAfterReject?.phaseId === "N01" &&
         verification.playerActionBoundary?.actionVisibleAfterReject === false,
     }),
-    lane("private-channel", "Private channel member post and denied recovery", {
+    lane(coreLoopPrivateChannelPostLaneId, "Private channel member post and denied recovery", {
       channel: verification.privateChannel?.channel ?? null,
       allowedState: verification.privateChannel?.allowed?.submitPost?.state ?? null,
       deniedStatus: verification.privateChannel?.denied?.status ?? null,
@@ -978,6 +983,63 @@ export function buildDevTestGameProofRun(session, options = {}) {
         verification.privateChannel?.allowed?.submitPost?.state === "ack" &&
         verification.privateChannel?.denied?.status === 403,
     }),
+    lane(
+      coreLoopPrivateChannelStalePostLaneId,
+      "Private channel stale post after phase transition",
+      {
+        channel:
+          verification.privateChannel?.stalePostAfterPhaseTransition?.channel ??
+          null,
+        state:
+          verification.privateChannel?.stalePostAfterPhaseTransition?.stalePost
+            ?.state ?? null,
+        refreshedPhase:
+          verification.privateChannel?.stalePostAfterPhaseTransition
+            ?.commandStateAfterAck?.phase?.phaseId ?? null,
+        refreshedLocked:
+          verification.privateChannel?.stalePostAfterPhaseTransition
+            ?.commandStateAfterAck?.phase?.locked ?? null,
+        projectedPostBody:
+          verification.privateChannel?.stalePostAfterPhaseTransition
+            ?.projectedPost?.body ?? null,
+        passed:
+          verification.privateChannel?.stalePostAfterPhaseTransition?.status ===
+            "passed" &&
+          verification.privateChannel?.stalePostAfterPhaseTransition?.laneId ===
+            coreLoopPrivateChannelStalePostLaneId &&
+          verification.privateChannel?.stalePostAfterPhaseTransition?.channel ===
+            "private:mafia_day_chat" &&
+          verification.privateChannel?.stalePostAfterPhaseTransition?.stalePost
+            ?.state === "ack" &&
+          verification.privateChannel?.stalePostAfterPhaseTransition?.stalePost
+            ?.requestEnvelope?.body?.body?.command?.SubmitPost?.channel_id ===
+            "private:mafia_day_chat" &&
+          verification.privateChannel?.stalePostAfterPhaseTransition?.stalePost
+            ?.requestEnvelope?.body?.body?.command?.SubmitPost?.body ===
+            verification.privateChannel?.stalePostAfterPhaseTransition?.postBody &&
+          verification.privateChannel?.stalePostAfterPhaseTransition
+            ?.commandStateAfterAck?.phase?.locked === true &&
+          verification.privateChannel?.stalePostAfterPhaseTransition
+            ?.commandStateAfterAck?.currentVote === null &&
+          verification.privateChannel?.stalePostAfterPhaseTransition
+            ?.commandStateAfterAck?.voteTargets?.length === 0 &&
+          verification.privateChannel?.stalePostAfterPhaseTransition
+            ?.dispatchPlan?.projectionRefreshKeys?.includes("thread") === true &&
+          verification.privateChannel?.stalePostAfterPhaseTransition
+            ?.dispatchPlan?.projectionRefreshKeys?.includes("commandState") ===
+            true &&
+          verification.privateChannel?.stalePostAfterPhaseTransition
+            ?.dispatchPlan?.projectionRefreshKeys?.includes("dayVoteOutcomes") ===
+            true &&
+          verification.privateChannel?.stalePostAfterPhaseTransition
+            ?.apiThreadAfterAck?.posts?.some(
+              (post) =>
+                post.body ===
+                verification.privateChannel?.stalePostAfterPhaseTransition
+                  ?.postBody,
+            ) === true,
+      },
+    ),
     lane("replacement-host-issued-invite", "Host issues incoming replacement role URL", {
       principalUserId:
         verification.replacementConsole?.hostIssuedInvite?.session?.principalUserId ??

@@ -19,6 +19,9 @@ import {
 import {
   coreLoopHostControlLaneIds,
 } from "./dev_test_game_core_loop_host_control_scenarios.mjs";
+import {
+  coreLoopPrivateChannelRecoveryLaneIds,
+} from "./dev_test_game_core_loop_private_channel_recovery_scenarios.mjs";
 
 export const coreLoopSpineCheckId = "core-loop-spine";
 export const coreLoopCompletedGameCoverageCheckId =
@@ -34,7 +37,7 @@ export const coreLoopAuditLaneIds = Object.freeze([
   ...coreLoopPlayerActionRecoveryLaneIds.filter(
     (laneId) => !coreLoopPhaseProgressionLaneIds.includes(laneId),
   ),
-  "private-channel",
+  ...coreLoopPrivateChannelRecoveryLaneIds,
   "host-votecount-publication",
   ...coreLoopHostControlLaneIds,
   ...completedGameSeedRequiredScenarioIds(),
