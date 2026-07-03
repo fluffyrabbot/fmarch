@@ -8,6 +8,9 @@ import {
 import {
   coreLoopPrivateChannelPostLaneId,
 } from "./dev_test_game_core_loop_private_channel_recovery_scenarios.mjs";
+import {
+  dayThreeVoteResolutionLaneId,
+} from "./dev_test_game_core_loop_vote_resolution_scenarios.mjs";
 
 export const coreLoopFeatureSpineSourceCheckId = "local-core-loop-proof";
 export const devTestGameCoreLoopAdminProofCommand =
@@ -59,6 +62,13 @@ export const coreLoopFeatureSpineTargetRows = Object.freeze({
     roleUrlId: `${dayTwoNightTwo}-host`,
     checkpointId: `${dayTwoNightTwo}-d02-vote-open`,
     adminCheckId: "host-lifecycle-control",
+  }),
+  dayVoteResolution: checkpointRow({
+    featureSlotId: dayThreeVoteResolutionLaneId,
+    cycleId: dayTwoNightTwo,
+    roleUrlId: `${dayTwoNightTwo}-actionPlayer`,
+    checkpointId: `${dayTwoNightTwo}-d02-deciding-vote-submitted`,
+    adminCheckId: dayThreeVoteResolutionLaneId,
   }),
   playerActionSubmission: checkpointRow({
     featureSlotId: "player-action-submission",
