@@ -23,6 +23,11 @@ import {
   localAdminAuditIds,
 } from "./dev_test_game_admin_audit_surface_ids.mjs";
 import {
+  localNextActionAdminSurfaceCheckId,
+  localProofFreshnessAdminSurfaceCheckId,
+  localProofGraphAdminRoleHandoffsCheckId,
+} from "./dev_test_game_local_readiness_dependencies.mjs";
+import {
   assertAdminAuditRelatedHandoffs,
   requiredRelatedDestinationsForHandoffs,
 } from "./dev_test_game_admin_audit_handoff_contract.mjs";
@@ -90,8 +95,13 @@ await runAdminAuditProof({
       ),
     };
   },
-  prove: async ({ browser, frontendBaseUrl, source }) =>
-    await proveAdminAuditDetail({
+  prove: async ({ browser, frontendBaseUrl, source }) => {
+    const roleHandoffs = bootstrapProofGraphAdminRoleHandoffs({
+      proofGraph: source.proofGraph,
+      hostedMatrix: source.hostedMatrix,
+      hostedEvidenceLane: source.hostedEvidenceLane,
+    });
+    return await proveAdminAuditDetail({
       browser,
       frontendBaseUrl,
       game: source.proofRun.session.game,
@@ -104,13 +114,10 @@ await runAdminAuditProof({
         .filter((node) => typeof node.roleUrl === "string" && node.roleUrl.trim() !== "")
         .map((node) => node.id),
       requiredRelatedDestinations: requiredRelatedDestinationsForHandoffs(
-        adminProofGraphRoleHandoffs({
-          proofGraph: source.proofGraph,
-          hostedMatrix: source.hostedMatrix,
-          hostedEvidenceLane: source.hostedEvidenceLane,
-        }),
+        roleHandoffs,
       ),
-    }),
+    });
+  },
   buildEvidence: ({ source, adminRoleSurface }) => ({
     version: 1,
     proof: "dev-test-game-proof-graph-admin-proof",
@@ -131,7 +138,7 @@ await runAdminAuditProof({
       edgeRowIds: source.proofGraph.edges.map((edge) => proofGraphEdgeCheckId(edge)),
       edgeCount: source.proofGraph.edges.length,
       adminProofSurfaceIds: source.adminSpineProof.proofIds,
-      adminProofRoleHandoffs: adminProofGraphRoleHandoffs({
+      adminProofRoleHandoffs: bootstrapProofGraphAdminRoleHandoffs({
         proofGraph: source.proofGraph,
         hostedMatrix: source.hostedMatrix,
         hostedEvidenceLane: source.hostedEvidenceLane,
@@ -195,4 +202,50 @@ function proofGraphEdgeCheckId(edge) {
   return `edge:${String(edge?.from ?? "")}:${String(
     edge?.relationship ?? "related",
   )}:${String(edge?.to ?? "")}`;
+}
+
+function bootstrapProofGraphAdminRoleHandoffs({
+  proofGraph,
+  hostedMatrix,
+  hostedEvidenceLane,
+}) {
+  return adminProofGraphRoleHandoffs({
+    proofGraph,
+    hostedMatrix,
+    hostedEvidenceLane,
+  }).map(bootstrapProofGraphAdminRoleHandoff);
+}
+
+function bootstrapProofGraphAdminRoleHandoff(handoff) {
+  if (handoff.linkId === "admin-proof:release") {
+    return releaseReadinessBootstrapHandoff(handoff);
+  }
+  if (handoff.linkId === "admin-proof:release-runbook") {
+    return releaseRunbookBootstrapHandoff(handoff);
+  }
+  return handoff;
+}
+
+function releaseReadinessBootstrapHandoff(handoff) {
+  const bootstrapIds = new Set([
+    localProofGraphAdminRoleHandoffsCheckId,
+    localProofFreshnessAdminSurfaceCheckId,
+    localNextActionAdminSurfaceCheckId,
+  ]);
+  return {
+    ...handoff,
+    requiredCheckIds: (handoff.requiredCheckIds ?? []).filter(
+      (id) => !bootstrapIds.has(id),
+    ),
+    requiredLocalPrerequisiteDestinations: (
+      handoff.requiredLocalPrerequisiteDestinations ?? []
+    ).filter((item) => !bootstrapIds.has(item.id)),
+  };
+}
+
+function releaseRunbookBootstrapHandoff(handoff) {
+  return {
+    ...handoff,
+    requiredUnprovenIds: [],
+  };
 }

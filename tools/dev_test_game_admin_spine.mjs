@@ -78,6 +78,18 @@ export const adminSpineReadinessEvidenceEnv = {
   FMARCH_DEV_TEST_GAME_NEXT_ACTION_ADMIN_PROOF: nextActionAdminProofPath,
 };
 
+export const adminSpinePreGraphReadinessEvidenceEnv = Object.fromEntries(
+  Object.entries(adminSpineReadinessEvidenceEnv).filter(
+    ([key]) =>
+      ![
+        "FMARCH_DEV_TEST_GAME_PROOF_GRAPH",
+        "FMARCH_DEV_TEST_GAME_PROOF_GRAPH_ADMIN_PROOF",
+        "FMARCH_DEV_TEST_GAME_PROOF_FRESHNESS_ADMIN_PROOF",
+        "FMARCH_DEV_TEST_GAME_NEXT_ACTION_ADMIN_PROOF",
+      ].includes(key),
+  ),
+);
+
 if (pathToFileURL(process.argv[1] ?? "").href === import.meta.url) {
   await runDevTestGameAdminSpine();
 }
@@ -89,13 +101,14 @@ export async function runDevTestGameAdminSpine() {
   await runNodeScript("tools/dev_test_game_hosted_identity_evidence.mjs");
   await runNodeScript("tools/dev_test_game_hosted_target_preflight.mjs");
   await runNodeScript("tools/dev_test_game_hosted_evidence_lane.mjs");
+  await runNodeScript("tools/dev_test_game_hosted_evidence_lane_demo_proof.mjs");
   await runNodeScript("tools/dev_test_game_hosted_ops_signals.mjs");
   await runNodeScript("tools/dev_test_game_release_runbook.mjs");
   const evidence = await runAdminSpineProof();
   console.log(`wrote ${adminSpineProofPath} (${evidence.status})`);
   await runNodeScript("tools/dev_test_game_admin_spine_admin_proof.mjs");
   await runNodeScript("tools/dev_test_game_release_readiness.mjs", {
-    env: adminSpineReadinessEvidenceEnv,
+    env: adminSpinePreGraphReadinessEvidenceEnv,
   });
   await runNodeScript("tools/dev_test_game_spine_manifest.mjs");
   await runNodeScript("tools/dev_test_game_next_action.mjs");
