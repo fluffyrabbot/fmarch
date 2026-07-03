@@ -6,7 +6,7 @@ import {
   completedGameEndgameScenarioCaseFamilies,
   completedGameEndgameTransition,
   completedGameEndgameTransitionTokens,
-} from "./dev_test_game_core_loop_completed_recovery_scenario_cases.mjs";
+} from "./dev_test_game_core_loop_completed_game_shared_scenario_assertions.mjs";
 import {
   completedGameHardeningLaneIds,
 } from "./dev_test_game_core_loop_completed_game_cases.mjs";
@@ -39,7 +39,7 @@ export {
   completedPlayerReloadProofCases,
   staleCompletedGamePlayerCommandAssertionCases,
   staleCompletedGamePlayerCommandProofArgs,
-} from "./dev_test_game_core_loop_completed_recovery_scenario_cases.mjs";
+} from "./dev_test_game_core_loop_completed_game_shared_scenario_assertions.mjs";
 
 export {
   completedHostStaleCommandCaseDefinitions,

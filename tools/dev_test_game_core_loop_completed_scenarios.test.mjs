@@ -502,6 +502,31 @@ test("completed-game production harness callers share extracted recovery cases",
     "utf8",
   );
   for (const importedName of [
+    "completedGameEndgameProofScenarioCases",
+    "completedGameEndgameScenarioCaseFamilies",
+    "completedGameEndgameTransition",
+    "completedGameEndgameTransitionTokens",
+  ]) {
+    assert(
+      importsFromModule({
+        source: sharedScenarioSource,
+        importedName,
+        moduleSpecifier:
+          "./dev_test_game_core_loop_completed_game_shared_scenario_assertions.mjs",
+      }),
+      `shared scenario/assertion module should import ${importedName} from the canonical completed-game scenario/assertion module`,
+    );
+    assert(
+      !importsFromModule({
+        source: sharedScenarioSource,
+        importedName,
+        moduleSpecifier:
+          "./dev_test_game_core_loop_completed_recovery_scenario_cases.mjs",
+      }),
+      `shared scenario/assertion module should not source ${importedName} from the recovery adapter`,
+    );
+  }
+  for (const importedName of [
     "completedHostStaleCommandCases",
     "completedPlayerReloadCases",
     "staleCompletedGamePlayerCommandCases",
@@ -532,9 +557,25 @@ test("completed-game production harness callers share extracted recovery cases",
   );
   assert(
     recoveryDefinitionSource.includes(
-      "./dev_test_game_core_loop_completed_game_shared_case_definitions.mjs",
+      "./dev_test_game_core_loop_completed_game_shared_scenario_assertions.mjs",
     ),
-    "broader completed recovery definitions should re-export the shared completed-game cases",
+    "broader completed recovery definitions should re-export the shared completed-game scenario/assertion module",
+  );
+  const recoveryScenarioCaseSource = await readFile(
+    "tools/dev_test_game_core_loop_completed_recovery_scenario_cases.mjs",
+    "utf8",
+  );
+  assert(
+    recoveryScenarioCaseSource.includes(
+      "./dev_test_game_core_loop_completed_game_shared_scenario_assertions.mjs",
+    ),
+    "broader completed recovery scenario cases should re-export the shared completed-game scenario/assertion module",
+  );
+  assert(
+    !recoveryScenarioCaseSource.includes(
+      "./dev_test_game_core_loop_completed_recovery_case_definitions.mjs",
+    ),
+    "broader completed recovery scenario cases should not source a second completed-game case table",
   );
   for (const commandFactName of [
     "hostResolvePhaseCommandFacts",
