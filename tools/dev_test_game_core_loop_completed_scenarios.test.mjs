@@ -91,7 +91,7 @@ import {
   completedGameProofReadinessProofScenarioCases,
   completedGameProofReadinessScenarioFamilies,
   completedGameProofReadinessTransition,
-} from "./dev_test_game_core_loop_completed_game_proof_readiness_shared.mjs";
+} from "./dev_test_game_core_loop_completed_game_shared_scenarios.mjs";
 import {
   completedHostStaleCommandCaseDefinitions as extractedCompletedHostStaleCommandCaseDefinitions,
   completedHostStaleCommandCases as extractedCompletedHostStaleCommandCases,
@@ -99,7 +99,7 @@ import {
   completedPlayerReloadCases as extractedCompletedPlayerReloadCases,
   staleCompletedGamePlayerCommandCaseDefinitions as extractedStaleCompletedGamePlayerCommandCaseDefinitions,
   staleCompletedGamePlayerCommandCases as extractedStaleCompletedGamePlayerCommandCases,
-} from "./dev_test_game_core_loop_completed_game_proof_readiness_case_definitions.mjs";
+} from "./dev_test_game_core_loop_completed_game_shared_case_definitions.mjs";
 
 test("completed-game scenario module exposes shared frozen definitions", () => {
   assert.equal(
@@ -353,18 +353,18 @@ test("completed-game production harness callers share extracted recovery cases",
         source,
         importedName: "completedGameProofReadinessScenarioFamilies",
         moduleSpecifier:
-          "./dev_test_game_core_loop_completed_game_proof_readiness_shared.mjs",
+          "./dev_test_game_core_loop_completed_game_shared_scenarios.mjs",
       }),
-      `${callerPath} should import completed-game recovery case families from the shared proof/readiness module`,
+      `${callerPath} should import completed-game recovery case families from the shared scenario/assertion module`,
     );
     assert(
       importsFromModule({
         source,
         importedName: "assertCompletedGameProofReadinessSurfaceProof",
         moduleSpecifier:
-          "./dev_test_game_core_loop_completed_game_proof_readiness_shared.mjs",
+          "./dev_test_game_core_loop_completed_game_shared_scenarios.mjs",
       }),
-      `${callerPath} should import completed-game assertions through the shared proof/readiness module`,
+      `${callerPath} should import completed-game assertions through the shared scenario/assertion module`,
     );
     assert(
       !importsFromModule({
@@ -440,9 +440,15 @@ test("completed-game production harness callers share extracted recovery cases",
     );
     assert(
       source.includes(
+        "./dev_test_game_core_loop_completed_game_shared_scenarios.mjs",
+      ),
+      `${callerPath} should import completed recovery cases through the shared scenario/assertion module`,
+    );
+    assert(
+      !source.includes(
         "./dev_test_game_core_loop_completed_game_proof_readiness_shared.mjs",
       ),
-      `${callerPath} should import completed recovery cases through the shared proof/readiness module`,
+      `${callerPath} should not import through the compatibility proof/readiness shared barrel`,
     );
     assert(
       !source.includes(
@@ -491,8 +497,8 @@ test("completed-game production harness callers share extracted recovery cases",
     "proof contract should keep using the completed-game public scenario facade",
   );
 
-  const proofReadinessSharedSource = await readFile(
-    "tools/dev_test_game_core_loop_completed_game_proof_readiness_shared.mjs",
+  const sharedScenarioSource = await readFile(
+    "tools/dev_test_game_core_loop_completed_game_shared_scenarios.mjs",
     "utf8",
   );
   for (const importedName of [
@@ -502,21 +508,21 @@ test("completed-game production harness callers share extracted recovery cases",
   ]) {
     assert(
       importsFromModule({
-        source: proofReadinessSharedSource,
+        source: sharedScenarioSource,
         importedName,
         moduleSpecifier:
-          "./dev_test_game_core_loop_completed_game_proof_readiness_case_definitions.mjs",
+          "./dev_test_game_core_loop_completed_game_shared_case_definitions.mjs",
       }),
-      `proof/readiness shared module should import ${importedName} from the extracted case definitions`,
+      `shared scenario/assertion module should import ${importedName} from the shared case definitions`,
     );
     assert(
       !importsFromModule({
-        source: proofReadinessSharedSource,
+        source: sharedScenarioSource,
         importedName,
         moduleSpecifier:
           "./dev_test_game_core_loop_completed_recovery_scenario_cases.mjs",
       }),
-      `proof/readiness shared module should not source ${importedName} from the broader recovery scenario bundle`,
+      `shared scenario/assertion module should not source ${importedName} from the broader recovery scenario bundle`,
     );
   }
 
@@ -526,9 +532,9 @@ test("completed-game production harness callers share extracted recovery cases",
   );
   assert(
     recoveryDefinitionSource.includes(
-      "./dev_test_game_core_loop_completed_game_proof_readiness_case_definitions.mjs",
+      "./dev_test_game_core_loop_completed_game_shared_case_definitions.mjs",
     ),
-    "broader completed recovery definitions should re-export the extracted proof/readiness cases",
+    "broader completed recovery definitions should re-export the shared completed-game cases",
   );
   for (const commandFactName of [
     "hostResolvePhaseCommandFacts",
@@ -660,9 +666,9 @@ test("completed-game test fixtures live outside the assertion facade", async () 
   );
   assert(
     fixtureModuleSource.includes(
-      "./dev_test_game_core_loop_completed_game_proof_readiness_shared.mjs",
+      "./dev_test_game_core_loop_completed_game_shared_scenarios.mjs",
     ),
-    "completed-game fixtures should derive proof fields from the shared proof/readiness module",
+    "completed-game fixtures should derive proof fields from the shared scenario/assertion module",
   );
   assert(
     !fixtureModuleSource.includes(

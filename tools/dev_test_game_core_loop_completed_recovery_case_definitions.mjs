@@ -2,7 +2,7 @@ import {
   completedHostStaleCommandCases,
   completedPlayerReloadCases,
   staleCompletedGamePlayerCommandCases,
-} from "./dev_test_game_core_loop_completed_game_proof_readiness_case_definitions.mjs";
+} from "./dev_test_game_core_loop_completed_game_shared_case_definitions.mjs";
 
 export {
   completedHostStaleCommandCaseDefinitions,
@@ -11,7 +11,7 @@ export {
   completedPlayerReloadCases,
   staleCompletedGamePlayerCommandCaseDefinitions,
   staleCompletedGamePlayerCommandCases,
-} from "./dev_test_game_core_loop_completed_game_proof_readiness_case_definitions.mjs";
+} from "./dev_test_game_core_loop_completed_game_shared_case_definitions.mjs";
 
 const cloneScenarioCase = (scenario) => ({ ...scenario });
 const freezeScenarioCase = (scenario) =>

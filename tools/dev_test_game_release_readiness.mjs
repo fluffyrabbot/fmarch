@@ -112,7 +112,7 @@ import {
 import {
   assertCompletedGameProofReadinessSurfaceProof,
   completedGameProofReadinessScenarioFamilies,
-} from "./dev_test_game_core_loop_completed_game_proof_readiness_shared.mjs";
+} from "./dev_test_game_core_loop_completed_game_shared_scenarios.mjs";
 import {
   completedGameHardeningSpineCycleId,
   completedGameHardeningSpineLaneCases,
