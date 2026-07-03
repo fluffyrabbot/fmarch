@@ -5,6 +5,10 @@ import {
   releaseReadinessProductionFeatureSpineTargetsBySlotId,
   releaseReadinessUnprovenItem,
 } from "./dev_test_game_release_readiness_cases.mjs";
+import {
+  localAdminAuditIds,
+  localAdminAuditRoleUrl,
+} from "./dev_test_game_admin_audit_surface_ids.mjs";
 
 export const invalidActionRecoveryHostedConcurrentRaceMatrixUnprovenText =
   "Hosted or hosted-like concurrent command race matrix beyond the promoted local replacement, host, player, cohost deadline, lifecycle, and complete-game reload milestones, including multi-session reload/reconnect recovery and stale-client conflict evidence";
@@ -20,7 +24,7 @@ export const invalidActionRecoveryHostedConcurrentRaceMatrixProofGraphNodeId =
 
 export function featureSpineFixture({
   slotId = "player-action-submission",
-  detailRoleUrl = "/admin/audit/local-core-loop?game=<seeded-game>",
+  detailRoleUrl = localAdminAuditRoleUrl(localAdminAuditIds.coreLoop),
   roleUrl,
   roleUrlsById,
   browserProofCommand,
@@ -153,8 +157,8 @@ export function hostedProductionIdentityUnprovenFixture({
   proofTarget,
   roleUrl,
   proofGraphNodeId,
-  detailRoleUrl = "/admin/audit/local-identity-adapter?game=<seeded-game>",
-  spineRoleUrl = "/admin/audit/local-identity-adapter?game=<seeded-game>",
+  detailRoleUrl = localAdminAuditRoleUrl(localAdminAuditIds.identityAdapter),
+  spineRoleUrl = localAdminAuditRoleUrl(localAdminAuditIds.identityAdapter),
   browserProofCommand,
   rerunCommand,
   includeTargetRerunCommand = false,
@@ -251,12 +255,12 @@ export function releaseReadinessUnprovenFixture({
   const resolvedDetailRoleUrl =
     detailRoleUrl ??
     (identityAdapterSpine
-      ? "/admin/audit/local-identity-adapter?game=<seeded-game>"
+      ? localAdminAuditRoleUrl(localAdminAuditIds.identityAdapter)
       : undefined);
   const resolvedSpineRoleUrl =
     spineRoleUrl ??
     (identityAdapterSpine
-      ? "/admin/audit/local-identity-adapter?game=<seeded-game>"
+      ? localAdminAuditRoleUrl(localAdminAuditIds.identityAdapter)
       : undefined);
   const spine = featureSpineFixture({
     slotId: buildable.productionFeatureSpineTarget.featureSlotId,
