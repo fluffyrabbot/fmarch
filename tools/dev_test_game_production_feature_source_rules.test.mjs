@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import { test } from "node:test";
 import {
   featureSpineSourceCheckIds,
@@ -20,12 +21,15 @@ import {
 } from "./dev_test_game_production_feature_source_registry.mjs";
 import {
   coreLoopFeatureSpineSource,
+  coreLoopFeatureSpineSourceCheckId,
 } from "./dev_test_game_core_loop_feature_spine_targets.mjs";
 import {
   hardeningFeatureSpineSource,
+  hardeningFeatureSpineSourceCheckId,
 } from "./dev_test_game_hardening_feature_spine_targets.mjs";
 import {
   identityFeatureSpineSource,
+  identityFeatureSpineSourceCheckId,
 } from "./dev_test_game_identity_feature_spine_targets.mjs";
 
 test("production feature source rules cover every feature spine source", () => {
@@ -38,9 +42,9 @@ test("production feature source rules cover every feature spine source", () => {
     Object.keys(productionFeatureGraphSourceNodeIdsByCheckId),
   );
   assert.deepEqual(defaultProductionFeatureSpineRerunCommands, {
-    "local-core-loop-proof": devTestGameCoreLoopAdminProofCommand,
-    "local-hardening-proof": devTestGameHardeningAdminProofCommand,
-    "local-identity-adapter-proof": devTestGameIdentityAdminProofCommand,
+    [coreLoopFeatureSpineSourceCheckId]: devTestGameCoreLoopAdminProofCommand,
+    [hardeningFeatureSpineSourceCheckId]: devTestGameHardeningAdminProofCommand,
+    [identityFeatureSpineSourceCheckId]: devTestGameIdentityAdminProofCommand,
   });
   assert.deepEqual(productionFeatureSourceRegistry, [
     coreLoopFeatureSpineSource,
@@ -54,15 +58,15 @@ test("production feature source rules cover every feature spine source", () => {
     ]),
     [
       [
-        "local-core-loop-proof",
+        coreLoopFeatureSpineSourceCheckId,
         productionFeatureReadinessSourceKind.spineTargets,
       ],
       [
-        "local-hardening-proof",
+        hardeningFeatureSpineSourceCheckId,
         productionFeatureReadinessSourceKind.spineTargets,
       ],
       [
-        "local-identity-adapter-proof",
+        identityFeatureSpineSourceCheckId,
         productionFeatureReadinessSourceKind.identityAdapter,
       ],
     ],
@@ -72,4 +76,25 @@ test("production feature source rules cover every feature spine source", () => {
       "test:dev-test-game-live",
     ),
   );
+});
+
+test("production feature builders use source modules instead of raw source ids", async () => {
+  const sourceIdLiterals = [
+    coreLoopFeatureSpineSourceCheckId,
+    hardeningFeatureSpineSourceCheckId,
+    identityFeatureSpineSourceCheckId,
+  ];
+  for (const sourceFile of [
+    "dev_test_game_release_readiness.mjs",
+    "dev_test_game_proof_graph.mjs",
+  ]) {
+    const source = await readFile(new URL(sourceFile, import.meta.url), "utf8");
+    for (const sourceId of sourceIdLiterals) {
+      assert.equal(
+        source.includes(JSON.stringify(sourceId)),
+        false,
+        `${sourceFile} should import the feature source id for ${sourceId}`,
+      );
+    }
+  }
 });

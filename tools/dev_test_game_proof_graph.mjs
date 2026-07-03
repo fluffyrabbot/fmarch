@@ -26,6 +26,15 @@ import {
 import {
   productionFeatureGraphSourceNodeId as productionFeatureSourceGraphNodeId,
 } from "./dev_test_game_production_feature_graph_sources.mjs";
+import {
+  coreLoopFeatureSpineSourceCheckId,
+} from "./dev_test_game_core_loop_feature_spine_targets.mjs";
+import {
+  hardeningFeatureSpineSourceCheckId,
+} from "./dev_test_game_hardening_feature_spine_targets.mjs";
+import {
+  identityFeatureSpineSourceCheckId,
+} from "./dev_test_game_identity_feature_spine_targets.mjs";
 export {
   devTestGameProofGraphAdminProofCommand,
   devTestGameProofGraphAdminProofPath,
@@ -525,7 +534,7 @@ function productionFeatureTargetsForGraph(releaseReadiness) {
 
 function coreLoopProductionFeatureTargetCollection(releaseReadiness) {
   const coreLoopCheck = releaseReadiness.localDevelopmentSpine?.checks?.find(
-    (check) => check.id === "local-core-loop-proof",
+    (check) => check.id === coreLoopFeatureSpineSourceCheckId,
   );
   const targets = coreLoopCheck?.spineTargets?.productionFeatureTargets;
   if (
@@ -541,7 +550,7 @@ function coreLoopProductionFeatureTargetCollection(releaseReadiness) {
 
 function hardeningProductionFeatureTargetCollection(releaseReadiness) {
   const hardeningCheck = releaseReadiness.localDevelopmentSpine?.checks?.find(
-    (check) => check.id === "local-hardening-proof",
+    (check) => check.id === hardeningFeatureSpineSourceCheckId,
   );
   const targets = hardeningCheck?.spineTargets?.productionFeatureTargets;
   if (
@@ -556,7 +565,7 @@ function hardeningProductionFeatureTargetCollection(releaseReadiness) {
 }
 
 function resolveBuildableProductionFeatureTarget({ declaration, releaseReadiness }) {
-  if (declaration.sourceCheckId === "local-identity-adapter-proof") {
+  if (declaration.sourceCheckId === identityFeatureSpineSourceCheckId) {
     const identityCheck = releaseReadiness.localDevelopmentSpine?.checks?.find(
       (check) => check.id === declaration.sourceCheckId,
     );

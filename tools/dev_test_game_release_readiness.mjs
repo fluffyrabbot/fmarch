@@ -96,6 +96,15 @@ import {
   productionFeatureSpineSourceCheckRules,
 } from "./dev_test_game_production_feature_source_rules.mjs";
 import {
+  coreLoopFeatureSpineSourceCheckId,
+} from "./dev_test_game_core_loop_feature_spine_targets.mjs";
+import {
+  hardeningFeatureSpineSourceCheckId,
+} from "./dev_test_game_hardening_feature_spine_targets.mjs";
+import {
+  identityFeatureSpineSourceCheckId,
+} from "./dev_test_game_identity_feature_spine_targets.mjs";
+import {
   assertCompletedGameProofReadinessSurfaceProof,
   completedGameProofReadinessScenarioFamilies,
 } from "./dev_test_game_core_loop_completed_game_proof_readiness_scenarios.mjs";
@@ -608,7 +617,7 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
       laneIds: proof.lanes.map((lane) => lane.id),
     },
     {
-      id: "local-core-loop-proof",
+      id: coreLoopFeatureSpineSourceCheckId,
       label: "Host controls, replacement, player actions, private channels, and day/night loop",
       status: "passed",
       evidence: sourcePath,
@@ -623,7 +632,7 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
           }),
     },
     {
-      id: "local-hardening-proof",
+      id: hardeningFeatureSpineSourceCheckId,
       label: "Idempotency, reconnect, stale-client, and local concurrent race matrix",
       status: "passed",
       evidence: sourcePath,
@@ -790,7 +799,7 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
   }
   if (identityAdapterEvidence !== undefined) {
     localChecks.push({
-      id: "local-identity-adapter-proof",
+      id: identityFeatureSpineSourceCheckId,
       label: "Local production-identity adapter proof",
       status: "passed",
       evidence: identityAdapterEvidence.path,
@@ -2832,7 +2841,7 @@ function buildCoreLoopReadinessSpineTargets(coreLoopAdminProofEvidence) {
     productionFeatureTargets: buildProductionFeatureSpineTargetCollection({
       declarations: releaseReadinessProductionFeatureSpineTargets,
       sourceTarget: {
-        sourceCheckId: "local-core-loop-proof",
+        sourceCheckId: coreLoopFeatureSpineSourceCheckId,
         detailRoleUrl: coreLoopAdminProofEvidence.detailRoleUrl,
         browserProofCommand: devTestGameSeededBrowserProofCommand,
         rerunCommand: devTestGameCoreLoopAdminProofCommand,
@@ -2909,7 +2918,7 @@ function buildHardeningReadinessSpineTargets({
     productionFeatureTargets: buildProductionFeatureSpineTargetCollection({
       declarations: releaseReadinessProductionFeatureSpineTargets,
       sourceTarget: {
-        sourceCheckId: "local-hardening-proof",
+        sourceCheckId: hardeningFeatureSpineSourceCheckId,
         detailRoleUrl: hardeningAdminProofEvidence.detailRoleUrl,
         browserProofCommand: devTestGameSeededBrowserProofCommand,
         rerunCommand: devTestGameHardeningAdminProofCommand,
@@ -4694,8 +4703,8 @@ function validateOptionalNextActionAdminProof(proof, options = {}) {
 export function validateDevTestGameReleaseAdminProof(proof, options = {}) {
   const requiredChecks = [
     "local-role-url-browser-proof",
-    "local-core-loop-proof",
-    "local-hardening-proof",
+    coreLoopFeatureSpineSourceCheckId,
+    hardeningFeatureSpineSourceCheckId,
   ];
   const requiredUnproven = releaseAdminProofFallbackUnprovenIds;
   if (proof?.version !== 1) {
@@ -5166,7 +5175,7 @@ export function assertDevTestGameReleaseReadiness(checklist) {
     checklist.localDevelopmentSpine?.checks,
   );
   const coreLoopCheck = checklist.localDevelopmentSpine?.checks?.find(
-    (check) => check.id === "local-core-loop-proof",
+    (check) => check.id === coreLoopFeatureSpineSourceCheckId,
   );
   if (!sameStringArray(coreLoopCheck?.laneIds, coreLoopAuditLaneIds)) {
     throw new Error("dev-test-game core-loop readiness check lane list drifted");
@@ -5178,7 +5187,7 @@ export function assertDevTestGameReleaseReadiness(checklist) {
     throw new Error("dev-test-game core-loop readiness check is missing spine targets");
   }
   const hardeningCheck = checklist.localDevelopmentSpine?.checks?.find(
-    (check) => check.id === "local-hardening-proof",
+    (check) => check.id === hardeningFeatureSpineSourceCheckId,
   );
   if (
     hardeningCheck?.spineTargets !== undefined &&
@@ -5284,7 +5293,9 @@ export function assertDevTestGameReleaseReadiness(checklist) {
     throw new Error("dev-test-game seed fixtures cannot be both passed and unproven");
   }
   const hasIdentityAdapterCheck = checklist.localDevelopmentSpine?.checks?.some(
-    (check) => check.id === "local-identity-adapter-proof" && check.status === "passed",
+    (check) =>
+      check.id === identityFeatureSpineSourceCheckId &&
+      check.status === "passed",
   );
   const hasIdentityUnproven = checklist.releaseReadiness?.unproven?.some(
     (item) => item.id === "production-identity",
@@ -5418,7 +5429,8 @@ function validCoreLoopProductionFeatureTargets(productionFeatureTargets) {
   return validProductionFeatureSpineTargetCollection(productionFeatureTargets, {
     declarations: Object.values(releaseReadinessProductionFeatureSpineTargets)
       .filter(
-        (declaration) => declaration.sourceCheckId === "local-core-loop-proof",
+        (declaration) =>
+          declaration.sourceCheckId === coreLoopFeatureSpineSourceCheckId,
       ),
     sourceCheckRules: productionFeatureSpineSourceCheckRules,
   });
@@ -5474,7 +5486,8 @@ function validHardeningProductionFeatureTargets(productionFeatureTargets) {
   return validProductionFeatureSpineTargetCollection(productionFeatureTargets, {
     declarations: Object.values(releaseReadinessProductionFeatureSpineTargets)
       .filter(
-        (declaration) => declaration.sourceCheckId === "local-hardening-proof",
+        (declaration) =>
+          declaration.sourceCheckId === hardeningFeatureSpineSourceCheckId,
       ),
     sourceCheckRules: productionFeatureSpineSourceCheckRules,
   });
