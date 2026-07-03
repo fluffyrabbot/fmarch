@@ -1,3 +1,10 @@
+import {
+  completedGameStaleRecoverySpineLaneCase as sharedCompletedGameStaleRecoverySpineLaneCase,
+  completedHostStaleCommandHardeningLaneCaseDefinitions,
+  completedPlayerReloadHardeningLaneCaseDefinitions,
+  staleCompletedGamePlayerCommandHardeningLaneCaseDefinitions,
+} from "./dev_test_game_core_loop_completed_game_shared_case_definitions.mjs";
+
 const cloneScenarioCase = (scenario) => ({ ...scenario });
 const cloneRaceCoverageCell = (cell) => ({
   ...cell,
@@ -35,30 +42,7 @@ export {
 } from "./dev_test_game_core_loop_completed_recovery_scenario_cases.mjs";
 
 export const completedGameHardeningLaneCaseDefinitions = Object.freeze([
-  Object.freeze({
-    id: "stale-host-complete",
-    label: "Stale complete-game reveal rejects after live completion",
-    family: "completed-host-stale-command",
-    seedGroup: "demo-only",
-    proofGroup: "stale-host-complete",
-    proofStep: "reject",
-  }),
-  Object.freeze({
-    id: "stale-host-complete-reload",
-    label: "Stale host complete recovery reloads revealed console",
-    family: "completed-host-stale-command",
-    seedGroup: "required",
-    proofGroup: "stale-host-complete",
-    proofStep: "reload",
-  }),
-  Object.freeze({
-    id: "stale-host-complete-reconnect-recovery",
-    label: "Stale host complete recovery reconnects revealed console",
-    family: "completed-host-stale-command",
-    seedGroup: "required",
-    proofGroup: "stale-host-complete",
-    proofStep: "reconnect",
-  }),
+  ...completedHostStaleCommandHardeningLaneCaseDefinitions(),
   Object.freeze({
     id: "concurrent-host-complete-race",
     label: "Concurrent complete-game commands converge",
@@ -83,30 +67,13 @@ export const completedGameHardeningLaneCaseDefinitions = Object.freeze([
     proofGroup: "player-complete-race",
     proofStep: "race",
   }),
-  Object.freeze({
-    id: "public-player-complete-reload",
-    label: "Public player board reloads completed game truth",
-    family: "completed-player-reload",
-    seedGroup: "required",
-    proofGroup: "player-complete-race",
-    proofStep: "reload",
-  }),
-  Object.freeze({
-    id: "stale-player-complete",
-    label: "Stale player command rejects after live completion",
-    family: "completed-player-stale-command",
-    seedGroup: "demo-only",
-    proofGroup: "stale-player-complete",
-    proofStep: "reject",
-  }),
-  Object.freeze({
-    id: "stale-player-complete-reload",
-    label: "Stale public player complete recovery reloads completed board",
-    family: "completed-player-reload",
-    seedGroup: "required",
-    proofGroup: "stale-player-complete",
-    proofStep: "reload",
-  }),
+  ...completedPlayerReloadHardeningLaneCaseDefinitions().filter(
+    (scenario) => scenario.proofGroup === "player-complete-race",
+  ),
+  ...staleCompletedGamePlayerCommandHardeningLaneCaseDefinitions(),
+  ...completedPlayerReloadHardeningLaneCaseDefinitions().filter(
+    (scenario) => scenario.proofGroup === "stale-player-complete",
+  ),
 ]);
 
 export function completedGameHardeningLaneCases() {
@@ -210,15 +177,7 @@ export function completedGameHardeningSpineLaneCases() {
 }
 
 export function completedGameStaleRecoverySpineLaneCase() {
-  const cases = completedGameHardeningSpineLaneCases().filter(
-    (scenario) =>
-      scenario.proofGroup === "stale-host-complete" &&
-      scenario.proofStep === "reload",
-  );
-  if (cases.length !== 1) {
-    throw new Error("completed-game stale recovery spine lane drifted");
-  }
-  return cloneScenarioCase(cases[0]);
+  return sharedCompletedGameStaleRecoverySpineLaneCase();
 }
 
 export function completedHostSeedDemoOnlyScenarioIds() {

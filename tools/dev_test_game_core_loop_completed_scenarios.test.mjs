@@ -93,10 +93,13 @@ import {
   completedGameProofReadinessTransition,
 } from "./dev_test_game_core_loop_completed_game_shared_scenarios.mjs";
 import {
+  completedHostStaleCommandHardeningLaneCaseDefinitions as extractedCompletedHostStaleCommandHardeningLaneCaseDefinitions,
   completedHostStaleCommandCaseDefinitions as extractedCompletedHostStaleCommandCaseDefinitions,
   completedHostStaleCommandCases as extractedCompletedHostStaleCommandCases,
+  completedPlayerReloadHardeningLaneCaseDefinitions as extractedCompletedPlayerReloadHardeningLaneCaseDefinitions,
   completedPlayerReloadCaseDefinitions as extractedCompletedPlayerReloadCaseDefinitions,
   completedPlayerReloadCases as extractedCompletedPlayerReloadCases,
+  staleCompletedGamePlayerCommandHardeningLaneCaseDefinitions as extractedStaleCompletedGamePlayerCommandHardeningLaneCaseDefinitions,
   staleCompletedGamePlayerCommandCaseDefinitions as extractedStaleCompletedGamePlayerCommandCaseDefinitions,
   staleCompletedGamePlayerCommandCases as extractedStaleCompletedGamePlayerCommandCases,
 } from "./dev_test_game_core_loop_completed_game_shared_case_definitions.mjs";
@@ -219,6 +222,25 @@ test("completed-game scenario module groups shared recovery case families", () =
 });
 
 test("completed-game scenario module derives shared hardening lane groups", () => {
+  assert.deepEqual(
+    completedGameHardeningLaneCasesFor({
+      families: "completed-host-stale-command",
+    }),
+    extractedCompletedHostStaleCommandHardeningLaneCaseDefinitions(),
+  );
+  assert.deepEqual(
+    completedGameHardeningLaneCasesFor({
+      families: "completed-player-reload",
+    }),
+    extractedCompletedPlayerReloadHardeningLaneCaseDefinitions(),
+  );
+  assert.deepEqual(
+    completedGameHardeningLaneCasesFor({
+      families: "completed-player-stale-command",
+      proofGroups: "stale-player-complete",
+    }),
+    extractedStaleCompletedGamePlayerCommandHardeningLaneCaseDefinitions(),
+  );
   assert.deepEqual(completedGameHardeningLaneCase("stale-host-complete"), {
     id: "stale-host-complete",
     label: "Stale complete-game reveal rejects after live completion",
@@ -548,6 +570,30 @@ test("completed-game production harness callers share extracted recovery cases",
           "./dev_test_game_core_loop_completed_recovery_scenario_cases.mjs",
       }),
       `shared scenario/assertion module should not source ${importedName} from the broader recovery scenario bundle`,
+    );
+  }
+
+  for (const callerPath of [
+    "tools/dev_test_game_release_readiness.mjs",
+    "tools/dev_test_game_release_readiness_cases.mjs",
+  ]) {
+    const source = await readFile(callerPath, "utf8");
+    assert(
+      importsFromModule({
+        source,
+        importedName: "completedGameStaleRecoverySpineLaneCase",
+        moduleSpecifier:
+          "./dev_test_game_core_loop_completed_game_shared_scenarios.mjs",
+      }),
+      `${callerPath} should import completed-game stale recovery from the shared scenario/assertion module`,
+    );
+    assert(
+      !importsFromModule({
+        source,
+        importedName: "completedGameStaleRecoverySpineLaneCase",
+        moduleSpecifier: "./dev_test_game_core_loop_completed_game_cases.mjs",
+      }),
+      `${callerPath} should not import completed-game stale recovery from the broad completed-game cases barrel`,
     );
   }
 

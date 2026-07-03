@@ -30,8 +30,10 @@ import {
 } from "./dev_test_game_admin_audit_surface_ids.mjs";
 import {
   completedGameHardeningSpineCycleId,
-  completedGameStaleRecoverySpineLaneCase,
 } from "./dev_test_game_core_loop_completed_game_cases.mjs";
+import {
+  completedGameStaleRecoverySpineLaneCase,
+} from "./dev_test_game_core_loop_completed_game_shared_scenarios.mjs";
 import {
   coreLoopFeatureSpineSourceCheckId,
   coreLoopFeatureSpineTargetRows,
