@@ -309,6 +309,27 @@ export const hostPhaseRaceCoverageCellDefinitions = Object.freeze([
   }),
 ]);
 
+export const hostStandaloneRaceCoverageCellDefinitions = Object.freeze([
+  Object.freeze({
+    id: "host-votecount-publication",
+    actorPair: "host vs host",
+    commandFamily: "official votecount publication",
+    raceLaneId: "concurrent-host-publish-race",
+    reloadLaneId: "concurrent-host-publish-race-reload",
+    roleSurfaces: Object.freeze(["host", "player"]),
+    commandFacts: Object.freeze([]),
+  }),
+  Object.freeze({
+    id: "host-lifecycle",
+    actorPair: "host vs host",
+    commandFamily: "host lifecycle controls",
+    raceLaneId: "concurrent-host-lifecycle-race",
+    reloadLaneId: "concurrent-host-lifecycle-race-reload",
+    roleSurfaces: Object.freeze(["host"]),
+    commandFacts: Object.freeze([]),
+  }),
+]);
+
 export function hostPhaseRaceCoverageCellCases() {
   return hostPhaseRaceCoverageCellDefinitions.map(cloneRaceCoverageCell);
 }
@@ -317,12 +338,45 @@ export function hostPhaseRaceCoverageCellIds() {
   return hostPhaseRaceCoverageCellCases().map((cell) => cell.id);
 }
 
+export function hostStandaloneRaceCoverageCellCases() {
+  return hostStandaloneRaceCoverageCellDefinitions.map(cloneRaceCoverageCell);
+}
+
+export function hostStandaloneRaceCoverageCellIds() {
+  return hostStandaloneRaceCoverageCellCases().map((cell) => cell.id);
+}
+
+export function hostStandaloneRaceCoverageCellCase(id) {
+  const cell = hostStandaloneRaceCoverageCellDefinitions.find(
+    (candidate) => candidate.id === id,
+  );
+  if (cell === undefined) {
+    throw new Error(`unknown host standalone race coverage cell: ${id}`);
+  }
+  return cloneRaceCoverageCell(cell);
+}
+
 export const hostRaceReloadLaneIds = Object.freeze(
   hostPhaseRaceCoverageCellDefinitions.flatMap((scenario) => [
     scenario.raceLaneId,
     scenario.reloadLaneId,
   ]),
 );
+
+export const hostPublishRaceLaneIds = Object.freeze([
+  hostStandaloneRaceCoverageCellCase("host-votecount-publication").raceLaneId,
+  hostStandaloneRaceCoverageCellCase("host-votecount-publication").reloadLaneId,
+]);
+
+export const hostLifecycleRaceLaneIds = Object.freeze([
+  hostStandaloneRaceCoverageCellCase("host-lifecycle").raceLaneId,
+  hostStandaloneRaceCoverageCellCase("host-lifecycle").reloadLaneId,
+]);
+
+export const hostStandaloneRaceReloadLaneIds = Object.freeze([
+  ...hostPublishRaceLaneIds,
+  ...hostLifecycleRaceLaneIds,
+]);
 
 export const hostPhaseStaleRecoveryLaneIds = Object.freeze([
   ...hostPhaseStaleControlCaseDefinitions.flatMap((scenario) => [

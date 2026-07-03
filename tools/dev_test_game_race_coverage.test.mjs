@@ -8,6 +8,8 @@ import {
 import {
   hostPhaseRaceCoverageCellCases,
   hostPhaseRaceCoverageCellDefinitions,
+  hostStandaloneRaceCoverageCellCases,
+  hostStandaloneRaceCoverageCellDefinitions,
 } from "./dev_test_game_host_stale_control_scenarios.mjs";
 import {
   cohostDeadlineRaceCoveragePromotedReloadGroup,
@@ -86,6 +88,56 @@ test("race coverage imports host phase race cells from shared scenarios", () => 
   );
 });
 
+test("race coverage imports standalone host race cells from shared scenarios", async () => {
+  assert(Object.isFrozen(hostStandaloneRaceCoverageCellDefinitions));
+  assert.deepEqual(
+    hostStandaloneRaceCoverageCellCases().map((cell) => ({
+      id: cell.id,
+      raceLaneId: cell.raceLaneId,
+      reloadLaneId: cell.reloadLaneId,
+      roleSurfaces: cell.roleSurfaces,
+      commandFacts: cell.commandFacts,
+    })),
+    [
+      {
+        id: "host-votecount-publication",
+        raceLaneId: "concurrent-host-publish-race",
+        reloadLaneId: "concurrent-host-publish-race-reload",
+        roleSurfaces: ["host", "player"],
+        commandFacts: [],
+      },
+      {
+        id: "host-lifecycle",
+        raceLaneId: "concurrent-host-lifecycle-race",
+        reloadLaneId: "concurrent-host-lifecycle-race-reload",
+        roleSurfaces: ["host"],
+        commandFacts: [],
+      },
+    ],
+  );
+  assert.notEqual(
+    hostStandaloneRaceCoverageCellCases()[0],
+    hostStandaloneRaceCoverageCellDefinitions[0],
+  );
+
+  const source = await readFile("tools/dev_test_game_race_coverage.mjs", "utf8");
+  assert(
+    importsFromModule({
+      source,
+      importedName: "hostStandaloneRaceCoverageCellCases",
+      moduleSpecifier: "./dev_test_game_host_stale_control_scenarios.mjs",
+    }),
+    "race coverage should import standalone host race cells from the shared scenario module",
+  );
+  assert(
+    !source.includes('commandFamily: "host lifecycle controls"') &&
+      !source.includes(
+        'commandFamily: "official votecount publication"',
+      ),
+    "race coverage should not locally own standalone host race cells",
+  );
+});
+
 test("race coverage imports completed-game cells from shared scenarios", () => {
   assert(Object.isFrozen(completedGameRaceCoverageCellDefinitions));
   assert.deepEqual(
@@ -133,6 +185,25 @@ test("race coverage imports completed-game cells from shared scenarios", () => {
     "player-concurrent-action-reload",
   );
 });
+
+function importsFromModule({ source, importedName, moduleSpecifier }) {
+  const importPattern = new RegExp(
+    `import\\s*\\{([^}]*)\\}\\s*from\\s*"${escapeRegExp(moduleSpecifier)}";`,
+    "g",
+  );
+  return Array.from(source.matchAll(importPattern)).some((match) =>
+    match[1]
+      .split(",")
+      .map((entry) => entry.trim())
+      .some((entry) =>
+        new RegExp(`\\b${escapeRegExp(importedName)}\\b`).test(entry),
+      ),
+  );
+}
+
+function escapeRegExp(value) {
+  return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
 
 test("race coverage exposes promoted reload groups from one contract", () => {
   assert.deepEqual(

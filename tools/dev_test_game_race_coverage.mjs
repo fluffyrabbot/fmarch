@@ -8,6 +8,8 @@ import {
 import {
   hostPhaseRaceCoverageCellCases,
   hostPhaseRaceCoverageCellIds,
+  hostStandaloneRaceCoverageCellCases,
+  hostStandaloneRaceCoverageCellIds,
 } from "./dev_test_game_host_stale_control_scenarios.mjs";
 import { assertDevTestGameProofRun } from "./dev_test_game_proof_contract.mjs";
 import { repoRoot } from "./dev_test_game_spine_runner.mjs";
@@ -19,7 +21,12 @@ export const devTestGameRaceCoverageCommand = "test:dev-test-game-race-coverage"
 
 const raceCoverageJsonPath = path.join(repoRoot, devTestGameRaceCoveragePath);
 const hostPhaseRaceCoverageCells = hostPhaseRaceCoverageCellCases().map(raceCell);
+const hostStandaloneRaceCoverageCells =
+  hostStandaloneRaceCoverageCellCases().map(raceCell);
 const hostMixedAdvanceRaceCoverageCellId = "host-mixed-advance";
+const hostLifecycleRaceCoverageCellId = "host-lifecycle";
+const hostVotecountPublicationRaceCoverageCellId =
+  "host-votecount-publication";
 
 const raceCells = Object.freeze([
   raceCell({
@@ -89,25 +96,15 @@ const raceCells = Object.freeze([
   ...hostPhaseRaceCoverageCells.filter(
     (cell) => cell.id !== hostMixedAdvanceRaceCoverageCellId,
   ),
-  raceCell({
-    id: "host-lifecycle",
-    actorPair: "host vs host",
-    commandFamily: "host lifecycle controls",
-    raceLaneId: "concurrent-host-lifecycle-race",
-    reloadLaneId: "concurrent-host-lifecycle-race-reload",
-    roleSurfaces: ["host"],
-  }),
+  ...hostStandaloneRaceCoverageCells.filter(
+    (cell) => cell.id === hostLifecycleRaceCoverageCellId,
+  ),
   ...hostPhaseRaceCoverageCells.filter(
     (cell) => cell.id === hostMixedAdvanceRaceCoverageCellId,
   ),
-  raceCell({
-    id: "host-votecount-publication",
-    actorPair: "host vs host",
-    commandFamily: "official votecount publication",
-    raceLaneId: "concurrent-host-publish-race",
-    reloadLaneId: "concurrent-host-publish-race-reload",
-    roleSurfaces: ["host", "player"],
-  }),
+  ...hostStandaloneRaceCoverageCells.filter(
+    (cell) => cell.id === hostVotecountPublicationRaceCoverageCellId,
+  ),
   ...completedGameRaceCoverageCellCases().map(raceCell),
 ]);
 
@@ -129,9 +126,11 @@ export const raceCoveragePromotedReloadGroups = Object.freeze(
         ...hostPhaseRaceCoverageCellIds().filter(
           (id) => id !== "host-mixed-advance",
         ),
-        "host-lifecycle",
+        hostLifecycleRaceCoverageCellId,
         "host-mixed-advance",
-        "host-votecount-publication",
+        ...hostStandaloneRaceCoverageCellIds().filter(
+          (id) => id === hostVotecountPublicationRaceCoverageCellId,
+        ),
         ...completedGameRaceCoverageCellIdsForPromotedGroup(
           "host-concurrent-race-reload",
         ),

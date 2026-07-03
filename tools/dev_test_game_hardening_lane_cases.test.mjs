@@ -10,6 +10,7 @@ import {
   hostCohostRaceRecoveryLaneIds,
   hostGenericStaleControlLaneIds,
   cohostDeadlineActionSet,
+  hostLifecycleRaceLaneIds,
   hostLockedPhaseActionSet,
   hostOpenPhaseActionSet,
   hostPhaseRaceCoverageCellCases,
@@ -23,7 +24,11 @@ import {
   hostPhaseStaleRecoveryLaneIds,
   hostPhaseStaleControlLaneIds,
   hostPromptStaleControlLaneIds,
+  hostPublishRaceLaneIds,
   hostRaceReloadLaneIds,
+  hostStandaloneRaceCoverageCellCases,
+  hostStandaloneRaceCoverageCellDefinitions,
+  hostStandaloneRaceReloadLaneIds,
   hostStandaloneStaleControlLaneIds,
   hostStaleAdvanceControlCase,
   hostStaleAdvanceControlLaneId,
@@ -557,6 +562,7 @@ function hardeningLaneImportBlocks(source) {
 
 test("hardening lane cases share host race/reload IDs", () => {
   assert(Object.isFrozen(hostPhaseRaceCoverageCellDefinitions));
+  assert(Object.isFrozen(hostStandaloneRaceCoverageCellDefinitions));
   assert.deepEqual(hostRaceReloadLaneIds, [
     "concurrent-host-resolve-race",
     "concurrent-host-resolve-race-reload",
@@ -573,6 +579,40 @@ test("hardening lane cases share host race/reload IDs", () => {
       scenario.reloadLaneId,
     ]),
     hostRaceReloadLaneIds,
+  );
+  assert.deepEqual(hostPublishRaceLaneIds, [
+    "concurrent-host-publish-race",
+    "concurrent-host-publish-race-reload",
+  ]);
+  assert.deepEqual(hostLifecycleRaceLaneIds, [
+    "concurrent-host-lifecycle-race",
+    "concurrent-host-lifecycle-race-reload",
+  ]);
+  assert.deepEqual(hostStandaloneRaceReloadLaneIds, [
+    ...hostPublishRaceLaneIds,
+    ...hostLifecycleRaceLaneIds,
+  ]);
+  assert.deepEqual(
+    hostStandaloneRaceCoverageCellCases().map((cell) => ({
+      id: cell.id,
+      raceLaneId: cell.raceLaneId,
+      reloadLaneId: cell.reloadLaneId,
+      roleSurfaces: cell.roleSurfaces,
+    })),
+    [
+      {
+        id: "host-votecount-publication",
+        raceLaneId: "concurrent-host-publish-race",
+        reloadLaneId: "concurrent-host-publish-race-reload",
+        roleSurfaces: ["host", "player"],
+      },
+      {
+        id: "host-lifecycle",
+        raceLaneId: "concurrent-host-lifecycle-race",
+        reloadLaneId: "concurrent-host-lifecycle-race-reload",
+        roleSurfaces: ["host"],
+      },
+    ],
   );
 });
 

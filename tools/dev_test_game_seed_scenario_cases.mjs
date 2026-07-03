@@ -9,6 +9,8 @@ import {
 } from "./dev_test_game_core_loop_completed_scenarios.mjs";
 import {
   hostCohostRaceRecoveryLaneIds,
+  hostLifecycleRaceLaneIds,
+  hostPublishRaceLaneIds,
 } from "./dev_test_game_host_stale_control_scenarios.mjs";
 import {
   playerActionBoundaryLaneId,
@@ -53,8 +55,7 @@ export const seedRequiredScenarioIds = Object.freeze([
   "replacement-stale-private-post-after-complete",
   "replacement-stale-private-post-after-complete-reload",
   ...hostCohostRaceRecoveryLaneIds.slice(0, 14),
-  "concurrent-host-lifecycle-race",
-  "concurrent-host-lifecycle-race-reload",
+  ...hostLifecycleRaceLaneIds,
   ...completedHostRaceHardeningLaneIds(),
   "stale-host-prompt-reload",
   ...completedHostStaleCommandSeedRecoveryLaneIds(),
@@ -100,8 +101,7 @@ export const seedDemoOnlyScenarioIds = Object.freeze([
   "resolution-receipts",
   playerActionBoundaryLaneId,
   "host-votecount-publication",
-  "concurrent-host-publish-race",
-  "concurrent-host-publish-race-reload",
+  ...hostPublishRaceLaneIds,
   "host-lifecycle-control",
   "host-modkill-control",
   "stale-host-publish-after-change",
