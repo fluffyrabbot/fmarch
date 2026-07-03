@@ -35,6 +35,10 @@ import {
 import {
   identityFeatureSpineSourceCheckId,
 } from "./dev_test_game_identity_feature_spine_targets.mjs";
+import {
+  localAdminAuditIds,
+  localAdminAuditRoleUrl,
+} from "./dev_test_game_admin_audit_surface_ids.mjs";
 export {
   devTestGameProofGraphAdminProofCommand,
   devTestGameProofGraphAdminProofPath,
@@ -397,7 +401,7 @@ function buildProofGraphNodes({
       kind: "aggregate-proof",
       status: adminSpine.status,
       artifact: "target/dev-test-game/admin-spine-proof.json",
-      roleUrl: "/admin/audit/local-admin-spine?game=<seeded-game>",
+      roleUrl: localAdminAuditRoleUrl(localAdminAuditIds.adminSpine),
       proofCommand: manifest.commands?.adminSpine?.script,
       recoveryCommand: adminSpine.recovery?.nextCommand,
     },
@@ -407,7 +411,7 @@ function buildProofGraphNodes({
       kind: "manifest",
       status: manifest.status,
       artifact: "target/dev-test-game/spine-manifest.json",
-      roleUrl: "/admin/audit/local-spine-manifest?game=<seeded-game>",
+      roleUrl: localAdminAuditRoleUrl(localAdminAuditIds.spineManifest),
       proofCommand: "test:dev-test-game-spine-manifest",
       recoveryCommand: recoveryCommands.get("spine-manifest"),
     },
@@ -417,7 +421,7 @@ function buildProofGraphNodes({
       kind: "freshness-dashboard",
       status: manifest.artifactFreshness?.status ?? "unknown",
       artifact: manifest.commands?.proofFreshness?.proofArtifact,
-      roleUrl: "/admin/audit/local-proof-freshness?game=<seeded-game>",
+      roleUrl: localAdminAuditRoleUrl(localAdminAuditIds.proofFreshness),
       proofCommand: manifest.commands?.proofFreshness?.script,
       recoveryCommand: manifest.artifactFreshness?.nextCommand,
     },
@@ -427,7 +431,7 @@ function buildProofGraphNodes({
       kind: "recovery-receipt",
       status: "recorded",
       artifact: manifest.commands?.nextAction?.proofArtifact,
-      roleUrl: "/admin/audit/local-next-action?game=<seeded-game>",
+      roleUrl: localAdminAuditRoleUrl(localAdminAuditIds.nextAction),
       proofCommand: manifest.commands?.nextAction?.script,
       recoveryCommand: manifest.commands?.proofFreshness?.script,
     },

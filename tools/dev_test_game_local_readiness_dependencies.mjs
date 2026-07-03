@@ -8,6 +8,10 @@ import {
   proofFreshnessAdminProofCommand,
   proofFreshnessAdminProofPath,
 } from "./dev_test_game_next_action_paths.mjs";
+import {
+  localAdminAuditIds,
+  localAdminAuditRoleUrl,
+} from "./dev_test_game_admin_audit_surface_ids.mjs";
 
 export const localProofGraphAdminRoleHandoffsCheckId =
   "local-proof-graph-admin-role-handoffs";
@@ -32,7 +36,7 @@ export const localReadinessDependencies = Object.freeze([
     buildSlice:
       "Refresh the proof graph admin role-handoff browser proof before choosing hosted readiness work.",
     proofTarget: devTestGameProofGraphAdminProofPath,
-    roleUrl: "/admin/audit/local-proof-graph?game=<seeded-game>",
+    roleUrl: localAdminAuditRoleUrl(localAdminAuditIds.proofGraph),
     proofBoundary:
       "Local browser proof that the proof graph admin surface follows every mapped admin-proof role URL. This recovers a local readiness dependency only; it does not prove hosted deployment, release readiness, or production readiness.",
     requiredEvidence:
@@ -46,7 +50,7 @@ export const localReadinessDependencies = Object.freeze([
     buildSlice:
       "Refresh the proof-freshness admin browser proof before hosted readiness work can be selected.",
     proofTarget: proofFreshnessAdminProofPath,
-    roleUrl: "/admin/audit/local-proof-freshness?game=<seeded-game>",
+    roleUrl: localAdminAuditRoleUrl(localAdminAuditIds.proofFreshness),
     proofBoundary:
       "Local browser proof that the proof-freshness admin surface exposes fresh generated artifacts and the next-action handoff from the seeded admin audit route. This recovers a local readiness dependency only; it does not validate artifact contents, hosted deployment, release readiness, or production readiness.",
     requiredEvidence:
@@ -60,7 +64,7 @@ export const localReadinessDependencies = Object.freeze([
     buildSlice:
       "Refresh the next-action admin browser proof before hosted readiness work can be selected.",
     proofTarget: nextActionAdminProofPath,
-    roleUrl: "/admin/audit/local-next-action?game=<seeded-game>",
+    roleUrl: localAdminAuditRoleUrl(localAdminAuditIds.nextAction),
     proofBoundary:
       "Local browser proof that the next-action admin surface exposes the selected command, local readiness dependency trace, release-readiness trace, and role URL handoffs from the seeded admin audit route. This recovers a local readiness dependency only; it does not prove hosted deployment, release readiness, or production readiness.",
     requiredEvidence:

@@ -73,6 +73,10 @@ import {
   proofFreshnessAdminProofCommand,
   proofFreshnessAdminProofPath,
 } from "./dev_test_game_next_action_paths.mjs";
+import {
+  localAdminAuditIds,
+  localAdminAuditRoleUrl,
+} from "./dev_test_game_admin_audit_surface_ids.mjs";
 import { repoRoot } from "./dev_test_game_spine_runner.mjs";
 
 export const DEV_TEST_GAME_SPINE_MANIFEST_VERSION = 1;
@@ -243,7 +247,7 @@ export function buildDevTestGameSpineManifest({
           "target/dev-test-game/proof-run.json",
           devTestGameProofGraphPath,
         ],
-        roleUrl: "/admin/audit/local-next-action?game=<seeded-game>",
+        roleUrl: localAdminAuditRoleUrl(localAdminAuditIds.nextAction),
       },
       proofGraph: {
         script: devTestGameProofGraphCommand,
@@ -258,7 +262,7 @@ export function buildDevTestGameSpineManifest({
           adminSpineProofPath,
           "target/dev-test-game/proof-run.json",
         ],
-        roleUrl: "/admin/audit/local-proof-graph?game=<seeded-game>",
+        roleUrl: localAdminAuditRoleUrl(localAdminAuditIds.proofGraph),
       },
     },
     evidenceEnv,
@@ -294,7 +298,7 @@ export function buildDevTestGameSpineManifest({
           "target/dev-test-game/proof-run.json",
           devTestGameProofGraphPath,
         ],
-        roleUrl: "/admin/audit/local-next-action?game=<seeded-game>",
+        roleUrl: localAdminAuditRoleUrl(localAdminAuditIds.nextAction),
         boundary:
           "Terminal local admin role proof for the generated next-action receipt. It is recorded separately from artifact freshness inputs to avoid making the receipt depend on its own browser proof.",
       },
@@ -317,7 +321,7 @@ export function buildDevTestGameSpineManifest({
           adminSpineProofPath,
           "target/dev-test-game/proof-run.json",
         ],
-        roleUrl: "/admin/audit/local-proof-graph?game=<seeded-game>",
+        roleUrl: localAdminAuditRoleUrl(localAdminAuditIds.proofGraph),
         boundary:
           "Terminal local admin role proof for the generated proof graph detail route and graph-to-admin-spine coverage invariant.",
       },
@@ -813,7 +817,7 @@ function assertTerminalArtifacts(terminalArtifacts) {
   if (
     adminProof?.command !== nextActionAdminProofCommand ||
     adminProof.path !== nextActionAdminProofPath ||
-    adminProof.roleUrl !== "/admin/audit/local-next-action?game=<seeded-game>" ||
+    adminProof.roleUrl !== localAdminAuditRoleUrl(localAdminAuditIds.nextAction) ||
     !Array.isArray(adminProof.dependsOn) ||
     !adminProof.dependsOn.includes(nextActionPath) ||
     !adminProof.dependsOn.includes(devTestGameProofGraphPath)
@@ -834,7 +838,8 @@ function assertTerminalArtifacts(terminalArtifacts) {
   if (
     proofGraphAdminProof?.command !== devTestGameProofGraphAdminProofCommand ||
     proofGraphAdminProof.path !== devTestGameProofGraphAdminProofPath ||
-    proofGraphAdminProof.roleUrl !== "/admin/audit/local-proof-graph?game=<seeded-game>" ||
+    proofGraphAdminProof.roleUrl !==
+      localAdminAuditRoleUrl(localAdminAuditIds.proofGraph) ||
     !Array.isArray(proofGraphAdminProof.dependsOn) ||
     !proofGraphAdminProof.dependsOn.includes(devTestGameProofGraphPath)
   ) {

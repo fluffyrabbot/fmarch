@@ -105,6 +105,11 @@ import {
   identityFeatureSpineSourceCheckId,
 } from "./dev_test_game_identity_feature_spine_targets.mjs";
 import {
+  localAdminAuditHandoffCheckIds,
+  localAdminAuditIds,
+  localAdminAuditRoleUrl,
+} from "./dev_test_game_admin_audit_surface_ids.mjs";
+import {
   assertCompletedGameProofReadinessSurfaceProof,
   completedGameProofReadinessScenarioFamilies,
 } from "./dev_test_game_core_loop_completed_game_proof_readiness_scenarios.mjs";
@@ -827,7 +832,7 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
   }
   if (spineManifestEvidence !== undefined) {
     localChecks.push({
-      id: "local-spine-manifest",
+      id: localAdminAuditIds.spineManifest,
       label: "Local development-spine manifest",
       status: "passed",
       evidence: spineManifestEvidence.path,
@@ -4366,11 +4371,17 @@ export function validateDevTestGameProofFreshnessAdminProof(proof, options = {})
     proof.generatedFrom.nextActionCommand.trim() === "" ||
     typeof proof.generatedFrom?.nextActionStatus !== "string" ||
     typeof proof.generatedFrom?.nextActionReason !== "string" ||
-    !proof.adminRoleSurface?.visibleRelatedLinks?.includes("local-next-action")
+    !proof.adminRoleSurface?.visibleRelatedLinks?.includes(
+      localAdminAuditIds.nextAction,
+    )
   ) {
     throw new Error("proof freshness admin proof did not prove next-action handoff");
   }
-  if (!proof.adminRoleSurface?.visibleChecks?.includes("next-action-handoff")) {
+  if (
+    !proof.adminRoleSurface?.visibleChecks?.includes(
+      localAdminAuditHandoffCheckIds.nextAction,
+    )
+  ) {
     throw new Error("proof freshness admin proof missing next-action handoff check");
   }
   const artifactIds = Array.isArray(proof.generatedFrom?.artifactIds)
@@ -4511,12 +4522,12 @@ export function validateDevTestGameNextActionAdminProof(proof, options = {}) {
       proof.adminRoleSurface?.visibleRelatedDestinations?.find(
         (item) =>
           item?.linkId === "selected-proof-graph-node" &&
-          item.auditId === "local-proof-graph",
+          item.auditId === localAdminAuditIds.proofGraph,
       ) ?? null;
     if (
       graphDestination === null ||
       graphDestination.detailRoleUrl !==
-        "/admin/audit/local-proof-graph?game=<seeded-game>" ||
+        localAdminAuditRoleUrl(localAdminAuditIds.proofGraph) ||
       !graphDestination.visibleChecks?.includes(String(selectedProofGraphNode.id))
     ) {
       throw new Error(
@@ -5091,7 +5102,7 @@ export function validateDevTestGameAdminSpineAdminProof(proof, options = {}) {
     "hosted-ops-signals",
     "spine-manifest",
     "recovery",
-    "spine-manifest-handoff",
+    localAdminAuditHandoffCheckIds.spineManifest,
   ];
   if (proof?.version !== 1) {
     throw new Error(`admin spine admin proof version drifted: ${proof?.version}`);

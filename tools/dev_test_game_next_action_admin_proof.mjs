@@ -25,6 +25,9 @@ import {
   selectedNextActionProofGraphNodeStatus,
   selectedNextActionProofGraphNodeSummary,
 } from "../frontend/src/lib/app/local-proof-handoff-status.mjs";
+import {
+  localAdminAuditIds,
+} from "./dev_test_game_admin_audit_surface_ids.mjs";
 
 const nextActionPath = path.resolve(
   repoRoot,
@@ -72,7 +75,7 @@ await runAdminAuditProof({
       browser,
       frontendBaseUrl,
       game: source.proofRun.session.game,
-      auditId: "local-next-action",
+      auditId: localAdminAuditIds.nextAction,
       requiredChecks: requiredChecksForNextAction(source.nextAction),
       requiredCheckStatuses: requiredCheckStatusesForNextAction(
         source.nextAction,
@@ -854,7 +857,7 @@ function selectedProofGraphHandoffSummary({ nextAction, proofGraph }) {
   }
   return {
     linkId: "selected-proof-graph-node",
-    auditId: "local-proof-graph",
+    auditId: localAdminAuditIds.proofGraph,
     requiredCheckIds: [selectedNode.id],
     requiredRelatedLinkIds:
       selectedNode.roleUrl === "" ? [] : [selectedNode.id],
@@ -874,7 +877,7 @@ function selectedProductionFeatureGraphHandoffSummary({ nextAction }) {
   }
   return {
     linkId: selectedGraph.nodeId,
-    auditId: "local-proof-graph",
+    auditId: localAdminAuditIds.proofGraph,
     requiredCheckIds: [selectedGraph.nodeId],
     requiredRelatedLinkIds: [selectedGraph.nodeId],
   };

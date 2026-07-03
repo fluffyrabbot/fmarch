@@ -8,6 +8,10 @@ import {
   repoRoot,
   runAdminAuditProof,
 } from "./dev_test_game_admin_audit_proof_helper.mjs";
+import {
+  localAdminAuditHandoffCheckIds,
+  localAdminAuditIds,
+} from "./dev_test_game_admin_audit_surface_ids.mjs";
 
 const adminSpineProofPath = path.resolve(
   repoRoot,
@@ -36,9 +40,9 @@ const requiredChecks = [
   "hosted-ops-signals",
   "spine-manifest",
   "recovery",
-  "spine-manifest-handoff",
+  localAdminAuditHandoffCheckIds.spineManifest,
 ];
-const requiredRelatedLinks = ["local-spine-manifest"];
+const requiredRelatedLinks = [localAdminAuditIds.spineManifest];
 
 await runAdminAuditProof({
   smokeName: "dev-test-game-admin-spine-admin-proof",
@@ -56,7 +60,7 @@ await runAdminAuditProof({
       browser,
       frontendBaseUrl,
       game: source.proofRun.session.game,
-      auditId: "local-admin-spine",
+      auditId: localAdminAuditIds.adminSpine,
       requiredChecks,
       requiredRelatedLinks,
     }),

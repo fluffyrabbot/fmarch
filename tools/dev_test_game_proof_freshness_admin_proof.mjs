@@ -9,6 +9,10 @@ import {
   repoRoot,
   runAdminAuditProof,
 } from "./dev_test_game_admin_audit_proof_helper.mjs";
+import {
+  localAdminAuditHandoffCheckIds,
+  localAdminAuditIds,
+} from "./dev_test_game_admin_audit_surface_ids.mjs";
 
 const proofRunPath = path.resolve(
   repoRoot,
@@ -40,10 +44,10 @@ await runAdminAuditProof({
       browser,
       frontendBaseUrl,
       game: source.proofRun.session.game,
-      auditId: "local-proof-freshness",
+      auditId: localAdminAuditIds.proofFreshness,
       requiredChecks: [
         ...source.freshness.artifacts.map((artifact) => artifact.id),
-        "next-action-handoff",
+        localAdminAuditHandoffCheckIds.nextAction,
       ],
       requiredCheckStatuses: Object.fromEntries(
         [
@@ -51,10 +55,13 @@ await runAdminAuditProof({
             artifact.id,
             artifact.status,
           ]),
-          ["next-action-handoff", source.nextAction.nextAction.status],
+          [
+            localAdminAuditHandoffCheckIds.nextAction,
+            source.nextAction.nextAction.status,
+          ],
         ],
       ),
-      requiredRelatedLinks: ["local-next-action"],
+      requiredRelatedLinks: [localAdminAuditIds.nextAction],
     }),
   buildEvidence: ({ source, adminRoleSurface }) => ({
     version: 1,
@@ -119,11 +126,17 @@ export function assertProofFreshnessAdminProof(evidence) {
   if (
     typeof evidence.generatedFrom?.nextActionCommand !== "string" ||
     evidence.generatedFrom.nextActionCommand.trim() === "" ||
-    !evidence.adminRoleSurface?.visibleRelatedLinks?.includes("local-next-action")
+    !evidence.adminRoleSurface?.visibleRelatedLinks?.includes(
+      localAdminAuditIds.nextAction,
+    )
   ) {
     throw new Error("proof freshness admin proof did not prove next-action handoff");
   }
-  if (!evidence.adminRoleSurface?.visibleChecks?.includes("next-action-handoff")) {
+  if (
+    !evidence.adminRoleSurface?.visibleChecks?.includes(
+      localAdminAuditHandoffCheckIds.nextAction,
+    )
+  ) {
     throw new Error("proof freshness admin proof missing next-action handoff check");
   }
   for (const id of evidence.generatedFrom?.artifactIds ?? []) {
