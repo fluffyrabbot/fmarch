@@ -1,3 +1,7 @@
+import {
+  localAdminAuditRoleUrl,
+} from "./dev_test_game_admin_audit_surface_ids.mjs";
+
 export function requiredRelatedDestinationsForHandoff(handoff) {
   return handoff === null || handoff === undefined
     ? []
@@ -53,7 +57,7 @@ export function assertAdminAuditRelatedHandoff({
   if (destination === null) {
     throw new Error(`${name} did not follow related handoff: ${linkId}`);
   }
-  const expectedRoleUrl = `/admin/audit/${auditId}?game=<seeded-game>`;
+  const expectedRoleUrl = localAdminAuditRoleUrl(auditId);
   if (destination.detailRoleUrl !== expectedRoleUrl) {
     throw new Error(`${name} followed related handoff to the wrong role URL`);
   }
@@ -93,8 +97,7 @@ export function assertAdminAuditRelatedHandoff({
         (item) =>
           item?.id === prerequisiteId &&
           item.auditId === prerequisiteAuditId &&
-          item.detailRoleUrl ===
-            `/admin/audit/${prerequisiteAuditId}?game=<seeded-game>` &&
+          item.detailRoleUrl === localAdminAuditRoleUrl(prerequisiteAuditId) &&
           item.clickedThrough === true,
       ) ?? null;
     if (visitedDestination === null) {

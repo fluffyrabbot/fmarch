@@ -14,6 +14,13 @@ import {
   hostedMatrixRequestedEvidenceIds,
   hostedMatrixStaleConflictLaneIds,
 } from "./dev_test_game_hosted_concurrent_race_matrix_cases.mjs";
+import {
+  localAdminAuditIds,
+  localAdminAuditRoleUrl,
+} from "./dev_test_game_admin_audit_surface_ids.mjs";
+import {
+  localProofFreshnessAdminSurfaceCheckId,
+} from "./dev_test_game_local_readiness_dependencies.mjs";
 
 test("related handoff requirements map to admin audit destination proof inputs", () => {
   assert.deepEqual(requiredRelatedDestinationsForHandoff(handoffFixture()), [
@@ -31,8 +38,8 @@ test("related handoff requirements map to admin audit destination proof inputs",
       requiredUnproven: [hostedMatrixRequestedEvidenceIds[0]],
       requiredLocalPrerequisiteDestinations: [
         {
-          id: "local-proof-freshness-admin-surface",
-          auditId: "local-proof-freshness",
+          id: localProofFreshnessAdminSurfaceCheckId,
+          auditId: localAdminAuditIds.proofFreshness,
         },
       ],
       requiredHostedHandoffInputs: hostedHandoffInputIdsFixture(),
@@ -56,8 +63,8 @@ test("related handoff requirements map to admin audit destination proof inputs",
       requiredUnproven: [hostedMatrixRequestedEvidenceIds[0]],
       requiredLocalPrerequisiteDestinations: [
         {
-          id: "local-proof-freshness-admin-surface",
-          auditId: "local-proof-freshness",
+          id: localProofFreshnessAdminSurfaceCheckId,
+          auditId: localAdminAuditIds.proofFreshness,
         },
       ],
       requiredHostedHandoffInputs: hostedHandoffInputIdsFixture(),
@@ -197,13 +204,13 @@ function handoffFixture() {
     requiredUnprovenIds: [hostedMatrixRequestedEvidenceIds[0]],
     requiredLocalPrerequisiteDestinations: [
       {
-        id: "local-proof-freshness-admin-surface",
-        auditId: "local-proof-freshness",
+        id: localProofFreshnessAdminSurfaceCheckId,
+        auditId: localAdminAuditIds.proofFreshness,
       },
     ],
     requiredHostedHandoffInputIds: hostedHandoff.inputIds,
     requiredHostedHandoffBlockedCheckIds: hostedHandoff.blockedCheckIds,
-    requiredRelatedLinkIds: ["local-next-action"],
+    requiredRelatedLinkIds: [localAdminAuditIds.nextAction],
   };
 }
 
@@ -223,22 +230,26 @@ function adminRoleSurfaceFixture() {
         visibleReconnectLanes: ["reconnect-recovery"],
         visibleStaleConflictLanes: hostedMatrixStaleConflictLaneIds,
         visibleUnproven: [hostedMatrixRequestedEvidenceIds[0]],
-        visibleLocalPrerequisites: ["local-proof-freshness-admin-surface"],
+        visibleLocalPrerequisites: [localProofFreshnessAdminSurfaceCheckId],
         visibleLocalPrerequisiteRoleUrls: {
-          "local-proof-freshness-admin-surface":
-            "/admin/audit/local-proof-freshness?game=game-a",
+          [localProofFreshnessAdminSurfaceCheckId]: localAdminAuditRoleUrl(
+            localAdminAuditIds.proofFreshness,
+            { game: "game-a" },
+          ),
         },
         visitedLocalPrerequisiteDestinations: [
           {
-            id: "local-proof-freshness-admin-surface",
-            auditId: "local-proof-freshness",
-            detailRoleUrl: "/admin/audit/local-proof-freshness?game=<seeded-game>",
+            id: localProofFreshnessAdminSurfaceCheckId,
+            auditId: localAdminAuditIds.proofFreshness,
+            detailRoleUrl: localAdminAuditRoleUrl(
+              localAdminAuditIds.proofFreshness,
+            ),
             clickedThrough: true,
           },
         ],
         visibleHostedHandoffInputs: hostedHandoff.inputIds,
         visibleHostedHandoffBlockedChecks: hostedHandoff.blockedCheckIds,
-        visibleRelatedLinks: ["local-next-action"],
+        visibleRelatedLinks: [localAdminAuditIds.nextAction],
       },
     ],
   };

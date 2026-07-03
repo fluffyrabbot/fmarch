@@ -19,6 +19,17 @@ import {
 import {
   seedScenarioCoverageGroups,
 } from "./dev_test_game_seed_scenario_cases.mjs";
+import {
+  localAdminAuditHandoffCheckIds,
+  localAdminAuditIds,
+  localAdminAuditRoleUrl,
+} from "./dev_test_game_admin_audit_surface_ids.mjs";
+import {
+  localHostedEvidenceLaneDemoProofCheckId,
+  localNextActionAdminSurfaceCheckId,
+  localProofFreshnessAdminSurfaceCheckId,
+  localProofGraphAdminRoleHandoffsCheckId,
+} from "./dev_test_game_local_readiness_dependencies.mjs";
 
 export const adminProofDestinationRequirementCases = Object.freeze([
   Object.freeze({
@@ -83,23 +94,23 @@ export const adminProofDestinationRequirementCases = Object.freeze([
       "local-role-url-browser-proof",
       "local-core-loop-proof",
       "local-hardening-proof",
-      "local-proof-graph-admin-role-handoffs",
+      localProofGraphAdminRoleHandoffsCheckId,
     ]),
     requiredLocalPrerequisiteDestinations: Object.freeze([
       Object.freeze({
-        id: "local-proof-graph-admin-role-handoffs",
-        auditId: "local-proof-graph",
+        id: localProofGraphAdminRoleHandoffsCheckId,
+        auditId: localAdminAuditIds.proofGraph,
       }),
       Object.freeze({
-        id: "local-proof-freshness-admin-surface",
-        auditId: "local-proof-freshness",
+        id: localProofFreshnessAdminSurfaceCheckId,
+        auditId: localAdminAuditIds.proofFreshness,
       }),
       Object.freeze({
-        id: "local-next-action-admin-surface",
-        auditId: "local-next-action",
+        id: localNextActionAdminSurfaceCheckId,
+        auditId: localAdminAuditIds.nextAction,
       }),
       Object.freeze({
-        id: "local-hosted-evidence-lane-demo-proof",
+        id: localHostedEvidenceLaneDemoProofCheckId,
         auditId: "local-hosted-evidence-lane",
       }),
     ]),
@@ -132,7 +143,7 @@ export const adminProofDestinationRequirementCases = Object.freeze([
     requiredCheckIds: Object.freeze([...hostedTargetPreflightCheckIds]),
     requiredRelatedLinkIds: Object.freeze([
       "local-hosted-concurrent-race-matrix",
-      "local-next-action",
+      localAdminAuditIds.nextAction,
     ]),
   }),
   Object.freeze({
@@ -151,7 +162,7 @@ export const adminProofDestinationRequirementCases = Object.freeze([
     requiredRelatedLinkIds: Object.freeze([
       "local-hosted-target-preflight",
       "local-hosted-concurrent-race-matrix",
-      "local-next-action",
+      localAdminAuditIds.nextAction,
     ]),
   }),
   Object.freeze({
@@ -167,15 +178,15 @@ export const adminProofDestinationRequirementCases = Object.freeze([
   }),
   Object.freeze({
     linkId: "admin-proof:spine-manifest",
-    auditId: "local-spine-manifest",
+    auditId: localAdminAuditIds.spineManifest,
     requiredCheckIds: Object.freeze([
       "live-spine-order-recorded",
-      "proof-freshness-handoff",
-      "next-action-handoff",
+      localAdminAuditHandoffCheckIds.proofFreshness,
+      localAdminAuditHandoffCheckIds.nextAction,
     ]),
     requiredRelatedLinkIds: Object.freeze([
-      "local-proof-freshness",
-      "local-next-action",
+      localAdminAuditIds.proofFreshness,
+      localAdminAuditIds.nextAction,
     ]),
   }),
 ]);
@@ -202,7 +213,7 @@ export function adminProofDestinationRequirementRoleRows({
 }
 
 export function adminProofDestinationRoleUrl({ auditId, game = "<seeded-game>" }) {
-  return `/admin/audit/${auditId}?game=${String(game)}`;
+  return localAdminAuditRoleUrl(auditId, { game });
 }
 
 export function adminProofDestinationRequirements() {

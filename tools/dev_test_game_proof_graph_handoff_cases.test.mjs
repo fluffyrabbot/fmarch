@@ -28,6 +28,16 @@ import {
 import {
   seedScenarioCoverageGroups,
 } from "./dev_test_game_seed_scenario_cases.mjs";
+import {
+  localAdminAuditHandoffCheckIds,
+  localAdminAuditIds,
+} from "./dev_test_game_admin_audit_surface_ids.mjs";
+import {
+  localHostedEvidenceLaneDemoProofCheckId,
+  localNextActionAdminSurfaceCheckId,
+  localProofFreshnessAdminSurfaceCheckId,
+  localProofGraphAdminRoleHandoffsCheckId,
+} from "./dev_test_game_local_readiness_dependencies.mjs";
 
 test("admin proof destination handoff cases share link and audit rows", () => {
   assert.deepEqual(adminProofDestinationRequirementLinkRows, [
@@ -48,7 +58,7 @@ test("admin proof destination handoff cases share link and audit rows", () => {
       "local-hosted-concurrent-race-matrix",
     ],
     ["admin-proof:hosted-ops-signals", "local-hosted-ops-signals"],
-    ["admin-proof:spine-manifest", "local-spine-manifest"],
+    ["admin-proof:spine-manifest", localAdminAuditIds.spineManifest],
   ]);
   assert.equal(
     adminProofDestinationRequirementCases.length,
@@ -127,6 +137,42 @@ test("admin proof destination handoff cases carry shared row requirements", () =
     adminProofDestinationRequirementForLink("admin-proof:hosted-ops-signals")
       .requiredRelatedLinkIds,
     hostedOpsSignalRelatedAuditIds,
+  );
+  assert.deepEqual(
+    adminProofDestinationRequirementForLink("admin-proof:release")
+      .requiredLocalPrerequisiteDestinations,
+    [
+      {
+        id: localProofGraphAdminRoleHandoffsCheckId,
+        auditId: localAdminAuditIds.proofGraph,
+      },
+      {
+        id: localProofFreshnessAdminSurfaceCheckId,
+        auditId: localAdminAuditIds.proofFreshness,
+      },
+      {
+        id: localNextActionAdminSurfaceCheckId,
+        auditId: localAdminAuditIds.nextAction,
+      },
+      {
+        id: localHostedEvidenceLaneDemoProofCheckId,
+        auditId: "local-hosted-evidence-lane",
+      },
+    ],
+  );
+  assert.deepEqual(
+    adminProofDestinationRequirementForLink("admin-proof:spine-manifest")
+      .requiredCheckIds,
+    [
+      "live-spine-order-recorded",
+      localAdminAuditHandoffCheckIds.proofFreshness,
+      localAdminAuditHandoffCheckIds.nextAction,
+    ],
+  );
+  assert.deepEqual(
+    adminProofDestinationRequirementForLink("admin-proof:spine-manifest")
+      .requiredRelatedLinkIds,
+    [localAdminAuditIds.proofFreshness, localAdminAuditIds.nextAction],
   );
 });
 

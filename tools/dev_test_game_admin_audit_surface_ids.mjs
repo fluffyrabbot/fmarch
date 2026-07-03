@@ -12,6 +12,9 @@ export const localAdminAuditHandoffCheckIds = Object.freeze({
   spineManifest: "spine-manifest-handoff",
 });
 
-export function localAdminAuditRoleUrl(auditId) {
-  return `/admin/audit/${auditId}?game=<seeded-game>`;
+export function localAdminAuditRoleUrl(
+  auditId,
+  { game = "<seeded-game>" } = {},
+) {
+  return `/admin/audit/${auditId}?game=${String(game)}`;
 }

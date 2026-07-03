@@ -24,6 +24,10 @@ test("local admin audit surface ids build stable seeded role URLs", () => {
     localAdminAuditRoleUrl(localAdminAuditIds.nextAction),
     "/admin/audit/local-next-action?game=<seeded-game>",
   );
+  assert.equal(
+    localAdminAuditRoleUrl(localAdminAuditIds.proofGraph, { game: "midsummer" }),
+    "/admin/audit/local-proof-graph?game=midsummer",
+  );
 });
 
 test("local admin proof builders use shared audit surface ids", async () => {
@@ -40,6 +44,9 @@ test("local admin proof builders use shared audit surface ids", async () => {
     "dev_test_game_proof_graph.mjs",
     "dev_test_game_spine_manifest.mjs",
     "dev_test_game_release_readiness.mjs",
+    "dev_test_game_proof_graph_handoff_cases.mjs",
+    "dev_test_game_proof_graph_admin_proof.mjs",
+    "dev_test_game_admin_audit_handoff_contract.mjs",
   ]) {
     const source = await readFile(new URL(sourceFile, import.meta.url), "utf8");
     for (const rawId of rawIds) {

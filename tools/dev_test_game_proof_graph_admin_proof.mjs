@@ -20,6 +20,9 @@ import {
   runAdminAuditProof,
 } from "./dev_test_game_admin_audit_proof_helper.mjs";
 import {
+  localAdminAuditIds,
+} from "./dev_test_game_admin_audit_surface_ids.mjs";
+import {
   assertAdminAuditRelatedHandoffs,
   requiredRelatedDestinationsForHandoffs,
 } from "./dev_test_game_admin_audit_handoff_contract.mjs";
@@ -92,7 +95,7 @@ await runAdminAuditProof({
       browser,
       frontendBaseUrl,
       game: source.proofRun.session.game,
-      auditId: "local-proof-graph",
+      auditId: localAdminAuditIds.proofGraph,
       requiredChecks: [
         ...source.proofGraph.nodes.map((node) => node.id),
         ...source.proofGraph.edges.map((edge) => proofGraphEdgeCheckId(edge)),
