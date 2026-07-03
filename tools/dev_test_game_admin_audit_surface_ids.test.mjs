@@ -86,6 +86,7 @@ test("admin proof handoff builders use shared audit surface ids", async () => {
     "dev_test_game_hosted_concurrent_race_matrix_cases.mjs",
     "dev_test_game_hosted_ops_signal_cases.mjs",
     "../frontend/src/routes/admin/admin-route-model.mjs",
+    "../frontend/src/routes/admin/admin-route-model.test.mjs",
   ]) {
     const source = await readFile(new URL(sourceFile, import.meta.url), "utf8");
     for (const rawId of rawIds) {

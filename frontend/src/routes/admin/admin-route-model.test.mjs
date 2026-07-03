@@ -81,6 +81,11 @@ import {
   hostedEvidenceLaneUnprovenFixture as sharedHostedEvidenceLaneUnprovenFixture,
   invalidActionRecoveryHostedConcurrentRaceMatrixUnprovenFixture,
 } from "../../../../tools/dev_test_game_next_action_spine_fixtures.mjs";
+import {
+  localAdminAuditHandoffCheckIds,
+  localAdminAuditIds,
+  localAdminAuditRoleUrl,
+} from "../../../../tools/dev_test_game_admin_audit_surface_ids.mjs";
 
 const LOCAL_RACE_COMMAND =
   "npm run test:dev-test-game-hosted-concurrent-race-matrix";
@@ -657,11 +662,11 @@ test("admin route data exposes local ops artifacts as a native audit row", async
     opsArtifacts: localOpsArtifactsFixture(),
   });
 
-  const ops = data.audit.find((item) => item.id === "local-ops-artifacts");
+  const ops = data.audit.find((item) => item.id === localAdminAuditIds.opsArtifacts);
   assert.equal(ops.label, "Local ops artifacts");
   assert.equal(ops.status, "5 local ops checks passed");
   assert.equal(ops.authority, "GlobalAdmin or GlobalMod");
-  assert.equal(ops.inspectHref, "/admin/audit/local-ops-artifacts?game=midsummer");
+  assert.equal(ops.inspectHref, localAdminAuditRoleUrl(localAdminAuditIds.opsArtifacts, { game: "midsummer" }));
   assert.deepEqual(
     ops.checks.map((check) => check.id),
     [
@@ -688,11 +693,11 @@ test("admin route data exposes local hosted ops signals as a native audit row", 
     hostedOpsSignals: localHostedOpsSignalsFixture(),
   });
 
-  const ops = data.audit.find((item) => item.id === "local-hosted-ops-signals");
+  const ops = data.audit.find((item) => item.id === localAdminAuditIds.hostedOpsSignals);
   assert.equal(ops.label, "Local hosted ops signals");
   assert.equal(ops.status, "4 hosted-like ops signals passed");
   assert.equal(ops.authority, "GlobalAdmin or GlobalMod");
-  assert.equal(ops.inspectHref, "/admin/audit/local-hosted-ops-signals?game=midsummer");
+  assert.equal(ops.inspectHref, localAdminAuditRoleUrl(localAdminAuditIds.hostedOpsSignals, { game: "midsummer" }));
   assert.deepEqual(
     ops.checks.map((check) => [check.id, check.status]),
     hostedOpsSignalCheckStatusRows().map((check) => [check.id, check.status]),
@@ -716,13 +721,13 @@ test("admin route data exposes hosted target preflight as a native audit row", a
   });
 
   const preflight = data.audit.find(
-    (item) => item.id === "local-hosted-target-preflight",
+    (item) => item.id === localAdminAuditIds.hostedTargetPreflight,
   );
   assert.equal(preflight.label, "Hosted target preflight");
   assert.equal(preflight.status, "1 passed, 5 blocked");
   assert.equal(
     preflight.inspectHref,
-    "/admin/audit/local-hosted-target-preflight?game=midsummer",
+    localAdminAuditRoleUrl(localAdminAuditIds.hostedTargetPreflight, { game: "midsummer" }),
   );
   assert.deepEqual(
     preflight.checks.map((check) => [check.id, check.status]),
@@ -756,11 +761,11 @@ test("admin route data exposes hosted evidence lane as a native audit row", asyn
     hostedEvidenceLaneDemoProof: localHostedEvidenceLaneDemoProofFixture(),
   });
 
-  const lane = data.audit.find((item) => item.id === "local-hosted-evidence-lane");
+  const lane = data.audit.find((item) => item.id === localAdminAuditIds.hostedEvidenceLane);
   assert.equal(lane.label, "Hosted evidence lane");
   assert.equal(lane.status, "blocked: 1 passed, 5 blocked");
   assert.equal(lane.authority, "GlobalAdmin or GlobalMod");
-  assert.equal(lane.inspectHref, "/admin/audit/local-hosted-evidence-lane?game=midsummer");
+  assert.equal(lane.inspectHref, localAdminAuditRoleUrl(localAdminAuditIds.hostedEvidenceLane, { game: "midsummer" }));
   assert.deepEqual(
     lane.checks.map((check) => check.id),
     [
@@ -782,9 +787,9 @@ test("admin route data exposes hosted evidence lane as a native audit row", asyn
   assert.deepEqual(
     lane.relatedLinks.map((link) => link.id),
     [
-      "local-hosted-target-preflight",
-      "local-hosted-concurrent-race-matrix",
-      "local-next-action",
+      localAdminAuditIds.hostedTargetPreflight,
+      localAdminAuditIds.hostedConcurrentRaceMatrix,
+      localAdminAuditIds.nextAction,
     ],
   );
   assert.equal(lane.artifactSummary.nextCommand, "npm run test:dev-test-game-hosted-evidence-lane");
@@ -819,14 +824,14 @@ test("admin route data exposes hosted identity evidence as a native audit row", 
   });
 
   const identity = data.audit.find(
-    (item) => item.id === "local-hosted-identity-evidence",
+    (item) => item.id === localAdminAuditIds.hostedIdentityEvidence,
   );
   assert.equal(identity.label, "Hosted identity evidence");
   assert.equal(identity.status, "blocked: 0 passed, 10 blocked");
   assert.equal(identity.authority, "GlobalAdmin or GlobalMod");
   assert.equal(
     identity.inspectHref,
-    "/admin/audit/local-hosted-identity-evidence?game=midsummer",
+    localAdminAuditRoleUrl(localAdminAuditIds.hostedIdentityEvidence, { game: "midsummer" }),
   );
   assert.deepEqual(
     identity.checks.map((check) => check.id),
@@ -838,7 +843,7 @@ test("admin route data exposes hosted identity evidence as a native audit row", 
   );
   assert.deepEqual(
     identity.relatedLinks.map((link) => link.id),
-    ["local-identity-adapter", "local-next-action"],
+    [localAdminAuditIds.identityAdapter, localAdminAuditIds.nextAction],
   );
   assert.deepEqual(
     identity.hostedHandoffChecklist.inputs.map((input) => input.id),
@@ -888,11 +893,11 @@ test("admin route data exposes local spine manifest as a native audit row", asyn
     spineManifest: spineManifestFixture(),
   });
 
-  const manifest = data.audit.find((item) => item.id === "local-spine-manifest");
+  const manifest = data.audit.find((item) => item.id === localAdminAuditIds.spineManifest);
   assert.equal(manifest.label, "Local spine manifest");
   assert.equal(manifest.status, "11 manifest checks passed");
   assert.equal(manifest.authority, "GlobalAdmin or GlobalMod");
-  assert.equal(manifest.inspectHref, "/admin/audit/local-spine-manifest?game=midsummer");
+  assert.equal(manifest.inspectHref, localAdminAuditRoleUrl(localAdminAuditIds.spineManifest, { game: "midsummer" }));
   assert.deepEqual(
     manifest.checks.map((check) => check.id),
     [
@@ -907,23 +912,23 @@ test("admin route data exposes local spine manifest as a native audit row", asyn
       "hosted-evidence-lane-demo-proof-recorded",
       "terminal-artifacts-recorded",
       "release-boundary-carried",
-      "proof-freshness-handoff",
-      "next-action-handoff",
+      localAdminAuditHandoffCheckIds.proofFreshness,
+      localAdminAuditHandoffCheckIds.nextAction,
     ],
   );
   assert.deepEqual(manifest.relatedLinks, [
     {
-      id: "local-proof-freshness",
+      id: localAdminAuditIds.proofFreshness,
       label: "Proof freshness",
-      href: "/admin/audit/local-proof-freshness?game=midsummer",
+      href: localAdminAuditRoleUrl(localAdminAuditIds.proofFreshness, { game: "midsummer" }),
       status: "blocked",
       command:
         "DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch npm run test:dev-test-game-live",
     },
     {
-      id: "local-next-action",
+      id: localAdminAuditIds.nextAction,
       label: "Ranked next action",
-      href: "/admin/audit/local-next-action?game=midsummer",
+      href: localAdminAuditRoleUrl(localAdminAuditIds.nextAction, { game: "midsummer" }),
       status: "test:dev-test-game-next-action",
       command: "test:dev-test-game-next-action",
     },
@@ -939,8 +944,8 @@ test("admin route data exposes local spine manifest as a native audit row", asyn
     missingCount: 0,
     nextCommand:
       "DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch npm run test:dev-test-game-live",
-    nextActionInspectHref: "/admin/audit/local-next-action?game=midsummer",
-    proofFreshnessInspectHref: "/admin/audit/local-proof-freshness?game=midsummer",
+    nextActionInspectHref: localAdminAuditRoleUrl(localAdminAuditIds.nextAction, { game: "midsummer" }),
+    proofFreshnessInspectHref: localAdminAuditRoleUrl(localAdminAuditIds.proofFreshness, { game: "midsummer" }),
     releaseReady: false,
     productionReady: false,
   });
@@ -948,7 +953,7 @@ test("admin route data exposes local spine manifest as a native audit row", asyn
 
 test("admin local spine manifest detail data carries manifest check rows", async () => {
   const data = await buildAdminAuditDetailData({
-    audit: "local-spine-manifest",
+    audit: localAdminAuditIds.spineManifest,
     principalUserId: "admin_a",
     capabilities: [{ kind: "GlobalAdmin" }],
     spineManifest: spineManifestFixture(),
@@ -956,7 +961,7 @@ test("admin local spine manifest detail data carries manifest check rows", async
 
   assert.equal(data.status, "available");
   assert.equal(data.surfaceHeader.title, "Local spine manifest");
-  assert.equal(data.audit.id, "local-spine-manifest");
+  assert.equal(data.audit.id, localAdminAuditIds.spineManifest);
   assert.equal(data.audit.checks.length, 13);
   assert.deepEqual(
     data.audit.checks.map((check) => [check.id, check.status]),
@@ -972,15 +977,15 @@ test("admin local spine manifest detail data carries manifest check rows", async
       ["hosted-evidence-lane-demo-proof-recorded", "passed"],
       ["terminal-artifacts-recorded", "passed"],
       ["release-boundary-carried", "passed"],
-      ["proof-freshness-handoff", "blocked"],
-      ["next-action-handoff", "test:dev-test-game-next-action"],
+      [localAdminAuditHandoffCheckIds.proofFreshness, "blocked"],
+      [localAdminAuditHandoffCheckIds.nextAction, "test:dev-test-game-next-action"],
     ],
   );
   assert.deepEqual(
     data.audit.relatedLinks.map((link) => [link.id, link.href]),
     [
-      ["local-proof-freshness", "/admin/audit/local-proof-freshness?game=midsummer"],
-      ["local-next-action", "/admin/audit/local-next-action?game=midsummer"],
+      [localAdminAuditIds.proofFreshness, localAdminAuditRoleUrl(localAdminAuditIds.proofFreshness, { game: "midsummer" })],
+      [localAdminAuditIds.nextAction, localAdminAuditRoleUrl(localAdminAuditIds.nextAction, { game: "midsummer" })],
     ],
   );
 });
@@ -992,11 +997,11 @@ test("admin route data exposes local admin spine proof as a native audit row", a
     adminSpineProof: adminSpineProofFixture(),
   });
 
-  const adminSpine = data.audit.find((item) => item.id === "local-admin-spine");
+  const adminSpine = data.audit.find((item) => item.id === localAdminAuditIds.adminSpine);
   assert.equal(adminSpine.label, "Local admin spine");
   assert.equal(adminSpine.status, "10 admin proof surfaces passed");
   assert.equal(adminSpine.authority, "GlobalAdmin or GlobalMod");
-  assert.equal(adminSpine.inspectHref, "/admin/audit/local-admin-spine?game=midsummer");
+  assert.equal(adminSpine.inspectHref, localAdminAuditRoleUrl(localAdminAuditIds.adminSpine, { game: "midsummer" }));
   assert.deepEqual(
     adminSpine.checks.map((check) => check.id),
     [
@@ -1011,14 +1016,14 @@ test("admin route data exposes local admin spine proof as a native audit row", a
       "hosted-concurrent-race-matrix",
       "spine-manifest",
       "recovery",
-      "spine-manifest-handoff",
+      localAdminAuditHandoffCheckIds.spineManifest,
     ],
   );
   assert.deepEqual(adminSpine.relatedLinks, [
     {
-      id: "local-spine-manifest",
+      id: localAdminAuditIds.spineManifest,
       label: "Spine manifest",
-      href: "/admin/audit/local-spine-manifest?game=midsummer",
+      href: localAdminAuditRoleUrl(localAdminAuditIds.spineManifest, { game: "midsummer" }),
       status: "passed",
       command: "npm run test:dev-test-game-spine-manifest-admin-proof",
     },
@@ -1029,7 +1034,7 @@ test("admin route data exposes local admin spine proof as a native audit row", a
     recoveryStatus: "passed",
     refreshedCount: 10,
     nextCommand: "npm run test:dev-test-game-admin-spine",
-    spineManifestInspectHref: "/admin/audit/local-spine-manifest?game=midsummer",
+    spineManifestInspectHref: localAdminAuditRoleUrl(localAdminAuditIds.spineManifest, { game: "midsummer" }),
     releaseReady: false,
     productionReady: false,
   });
@@ -1037,7 +1042,7 @@ test("admin route data exposes local admin spine proof as a native audit row", a
 
 test("admin local admin spine detail data carries aggregate proof rows", async () => {
   const data = await buildAdminAuditDetailData({
-    audit: "local-admin-spine",
+    audit: localAdminAuditIds.adminSpine,
     principalUserId: "admin_a",
     capabilities: [{ kind: "GlobalAdmin" }],
     adminSpineProof: adminSpineProofFixture(),
@@ -1045,7 +1050,7 @@ test("admin local admin spine detail data carries aggregate proof rows", async (
 
   assert.equal(data.status, "available");
   assert.equal(data.surfaceHeader.title, "Local admin spine");
-  assert.equal(data.audit.id, "local-admin-spine");
+  assert.equal(data.audit.id, localAdminAuditIds.adminSpine);
   assert.equal(data.audit.checks.length, 12);
   assert.deepEqual(
     data.audit.checks.map((check) => [check.id, check.status]),
@@ -1061,7 +1066,7 @@ test("admin local admin spine detail data carries aggregate proof rows", async (
       ["hosted-concurrent-race-matrix", "passed"],
       ["spine-manifest", "passed"],
       ["recovery", "passed"],
-      ["spine-manifest-handoff", "passed"],
+      [localAdminAuditHandoffCheckIds.spineManifest, "passed"],
     ],
   );
   assert.equal(
@@ -1074,9 +1079,9 @@ test("admin local admin spine detail data carries aggregate proof rows", async (
   );
   assert.deepEqual(data.audit.relatedLinks, [
     {
-      id: "local-spine-manifest",
+      id: localAdminAuditIds.spineManifest,
       label: "Spine manifest",
-      href: "/admin/audit/local-spine-manifest?game=midsummer",
+      href: localAdminAuditRoleUrl(localAdminAuditIds.spineManifest, { game: "midsummer" }),
       status: "passed",
       command: "npm run test:dev-test-game-spine-manifest-admin-proof",
     },
@@ -1091,14 +1096,14 @@ test("admin route data exposes local proof graph as a native audit row", async (
     proofGraph,
   });
 
-  const graph = data.audit.find((item) => item.id === "local-proof-graph");
+  const graph = data.audit.find((item) => item.id === localAdminAuditIds.proofGraph);
   assert.equal(graph.label, "Local proof graph");
   assert.equal(
     graph.status,
     `${proofGraph.summary.nodeCount} proof nodes, ${proofGraph.summary.edgeCount} edges`,
   );
   assert.equal(graph.authority, "GlobalAdmin or GlobalMod");
-  assert.equal(graph.inspectHref, "/admin/audit/local-proof-graph?game=midsummer");
+  assert.equal(graph.inspectHref, localAdminAuditRoleUrl(localAdminAuditIds.proofGraph, { game: "midsummer" }));
   assert.deepEqual(
     graph.checks.map((check) => [check.id, check.status]),
     [
@@ -1112,13 +1117,13 @@ test("admin route data exposes local proof graph as a native audit row", async (
   assert.deepEqual(
     graph.relatedLinks.map((link) => [link.id, link.href]),
     [
-      ["admin-spine", "/admin/audit/local-admin-spine?game=midsummer"],
-      ["spine-manifest", "/admin/audit/local-spine-manifest?game=midsummer"],
-      ["proof-freshness", "/admin/audit/local-proof-freshness?game=midsummer"],
-      ["next-action", "/admin/audit/local-next-action?game=midsummer"],
+      ["admin-spine", localAdminAuditRoleUrl(localAdminAuditIds.adminSpine, { game: "midsummer" })],
+      ["spine-manifest", localAdminAuditRoleUrl(localAdminAuditIds.spineManifest, { game: "midsummer" })],
+      ["proof-freshness", localAdminAuditRoleUrl(localAdminAuditIds.proofFreshness, { game: "midsummer" })],
+      ["next-action", localAdminAuditRoleUrl(localAdminAuditIds.nextAction, { game: "midsummer" })],
       [
         "production-feature:player-action-submission",
-        "/admin/audit/local-core-loop?game=midsummer",
+        localAdminAuditRoleUrl(localAdminAuditIds.coreLoop, { game: "midsummer" }),
       ],
       ...adminProofDestinationRequirementRoleRows({ game: "midsummer" }).map(
         ({ linkId, roleUrl }) => [linkId, roleUrl],
@@ -1146,7 +1151,7 @@ test("admin route data exposes local proof graph as a native audit row", async (
 test("admin local proof graph detail data carries graph node rows", async () => {
   const proofGraph = proofGraphFixture();
   const data = await buildAdminAuditDetailData({
-    audit: "local-proof-graph",
+    audit: localAdminAuditIds.proofGraph,
     principalUserId: "admin_a",
     capabilities: [{ kind: "GlobalAdmin" }],
     proofGraph,
@@ -1154,7 +1159,7 @@ test("admin local proof graph detail data carries graph node rows", async () => 
 
   assert.equal(data.status, "available");
   assert.equal(data.surfaceHeader.title, "Local proof graph");
-  assert.equal(data.audit.id, "local-proof-graph");
+  assert.equal(data.audit.id, localAdminAuditIds.proofGraph);
   assert.deepEqual(
     data.audit.checks.map((check) => [check.id, check.status]),
     [
@@ -1168,13 +1173,13 @@ test("admin local proof graph detail data carries graph node rows", async () => 
   assert.deepEqual(
     data.audit.relatedLinks.map((link) => [link.id, link.href]),
     [
-      ["admin-spine", "/admin/audit/local-admin-spine?game=midsummer"],
-      ["spine-manifest", "/admin/audit/local-spine-manifest?game=midsummer"],
-      ["proof-freshness", "/admin/audit/local-proof-freshness?game=midsummer"],
-      ["next-action", "/admin/audit/local-next-action?game=midsummer"],
+      ["admin-spine", localAdminAuditRoleUrl(localAdminAuditIds.adminSpine, { game: "midsummer" })],
+      ["spine-manifest", localAdminAuditRoleUrl(localAdminAuditIds.spineManifest, { game: "midsummer" })],
+      ["proof-freshness", localAdminAuditRoleUrl(localAdminAuditIds.proofFreshness, { game: "midsummer" })],
+      ["next-action", localAdminAuditRoleUrl(localAdminAuditIds.nextAction, { game: "midsummer" })],
       [
         "production-feature:player-action-submission",
-        "/admin/audit/local-core-loop?game=midsummer",
+        localAdminAuditRoleUrl(localAdminAuditIds.coreLoop, { game: "midsummer" }),
       ],
       ...adminProofDestinationRequirementRoleRows({ game: "midsummer" }).map(
         ({ linkId, roleUrl }) => [linkId, roleUrl],
@@ -1190,13 +1195,13 @@ test("admin route data exposes local race coverage as a native audit row", async
     raceCoverage: raceCoverageFixture(),
   });
 
-  const raceCoverage = data.audit.find((item) => item.id === "local-race-coverage");
+  const raceCoverage = data.audit.find((item) => item.id === localAdminAuditIds.raceCoverage);
   assert.equal(raceCoverage.label, "Local race coverage");
   assert.equal(raceCoverage.status, "3 race cells passed");
   assert.equal(raceCoverage.authority, "GlobalAdmin or GlobalMod");
   assert.equal(
     raceCoverage.inspectHref,
-    "/admin/audit/local-race-coverage?game=midsummer",
+    localAdminAuditRoleUrl(localAdminAuditIds.raceCoverage, { game: "midsummer" }),
   );
   assert.deepEqual(
     raceCoverage.checks.map((check) => [check.id, check.status]),
@@ -1221,7 +1226,7 @@ test("admin route data exposes local race coverage as a native audit row", async
 
 test("admin local race coverage detail data carries race cell rows", async () => {
   const data = await buildAdminAuditDetailData({
-    audit: "local-race-coverage",
+    audit: localAdminAuditIds.raceCoverage,
     principalUserId: "admin_a",
     capabilities: [{ kind: "GlobalAdmin" }],
     raceCoverage: raceCoverageFixture(),
@@ -1229,7 +1234,7 @@ test("admin local race coverage detail data carries race cell rows", async () =>
 
   assert.equal(data.status, "available");
   assert.equal(data.surfaceHeader.title, "Local race coverage");
-  assert.equal(data.audit.id, "local-race-coverage");
+  assert.equal(data.audit.id, localAdminAuditIds.raceCoverage);
   assert.deepEqual(
     data.audit.checks.map((check) => [check.id, check.status]),
     [
@@ -1248,14 +1253,14 @@ test("admin route data exposes local hosted matrix as a native audit row", async
   });
 
   const matrix = data.audit.find(
-    (item) => item.id === "local-hosted-concurrent-race-matrix",
+    (item) => item.id === localAdminAuditIds.hostedConcurrentRaceMatrix,
   );
   assert.equal(matrix.label, "Local hosted matrix");
   assert.equal(matrix.status, "3 hosted-like race cells passed");
   assert.equal(matrix.authority, "GlobalAdmin or GlobalMod");
   assert.equal(
     matrix.inspectHref,
-    "/admin/audit/local-hosted-concurrent-race-matrix?game=midsummer",
+    localAdminAuditRoleUrl(localAdminAuditIds.hostedConcurrentRaceMatrix, { game: "midsummer" }),
   );
   assert.deepEqual(
     matrix.checks.map((check) => [check.id, check.status]),
@@ -1277,8 +1282,8 @@ test("admin route data exposes local hosted matrix as a native audit row", async
   assert.deepEqual(
     matrix.relatedLinks.map((link) => [link.id, link.href]),
     [
-      ["local-race-coverage", "/admin/audit/local-race-coverage?game=midsummer"],
-      ["local-next-action", "/admin/audit/local-next-action?game=midsummer"],
+      [localAdminAuditIds.raceCoverage, localAdminAuditRoleUrl(localAdminAuditIds.raceCoverage, { game: "midsummer" })],
+      [localAdminAuditIds.nextAction, localAdminAuditRoleUrl(localAdminAuditIds.nextAction, { game: "midsummer" })],
     ],
   );
   assert.deepEqual(
@@ -1338,7 +1343,7 @@ test("admin route data exposes local hosted matrix as a native audit row", async
 
 test("admin local hosted matrix detail data carries progress and gap rows", async () => {
   const data = await buildAdminAuditDetailData({
-    audit: "local-hosted-concurrent-race-matrix",
+    audit: localAdminAuditIds.hostedConcurrentRaceMatrix,
     principalUserId: "admin_a",
     capabilities: [{ kind: "GlobalAdmin" }],
     hostedConcurrentRaceMatrix: hostedConcurrentRaceMatrixFixture(),
@@ -1346,7 +1351,7 @@ test("admin local hosted matrix detail data carries progress and gap rows", asyn
 
   assert.equal(data.status, "available");
   assert.equal(data.surfaceHeader.title, "Local hosted matrix");
-  assert.equal(data.audit.id, "local-hosted-concurrent-race-matrix");
+  assert.equal(data.audit.id, localAdminAuditIds.hostedConcurrentRaceMatrix);
   assert.deepEqual(
     data.audit.checks.map((check) => [check.id, check.status]),
     [
@@ -1447,13 +1452,13 @@ test("admin route data exposes local proof freshness as a native audit row", asy
     nextAction: nextActionFixture(),
   });
 
-  const freshness = data.audit.find((item) => item.id === "local-proof-freshness");
+  const freshness = data.audit.find((item) => item.id === localAdminAuditIds.proofFreshness);
   assert.equal(freshness.label, "Local proof freshness");
   assert.equal(freshness.status, "23 fresh, 0 stale, 0 missing");
   assert.equal(freshness.authority, "GlobalAdmin or GlobalMod");
   assert.equal(
     freshness.inspectHref,
-    "/admin/audit/local-proof-freshness?game=midsummer",
+    localAdminAuditRoleUrl(localAdminAuditIds.proofFreshness, { game: "midsummer" }),
   );
   assert.deepEqual(
     freshness.checks.map((check) => check.id),
@@ -1481,14 +1486,14 @@ test("admin route data exposes local proof freshness as a native audit row", asy
       "hosted-evidence-lane",
       "hosted-evidence-lane-admin",
       "hosted-evidence-lane-demo",
-      "next-action-handoff",
+      localAdminAuditHandoffCheckIds.nextAction,
     ],
   );
   assert.deepEqual(freshness.relatedLinks, [
     {
-      id: "local-next-action",
+      id: localAdminAuditIds.nextAction,
       label: "Ranked next action",
-      href: "/admin/audit/local-next-action?game=midsummer",
+      href: localAdminAuditRoleUrl(localAdminAuditIds.nextAction, { game: "midsummer" }),
       status: `ready: ${LOCAL_RACE_COMMAND}`,
       command: LOCAL_RACE_COMMAND,
     },
@@ -1500,7 +1505,7 @@ test("admin route data exposes local proof freshness as a native audit row", asy
     missingCount: 0,
     maxAgeHours: 24,
     nextActionCommand: LOCAL_RACE_COMMAND,
-    nextActionInspectHref: "/admin/audit/local-next-action?game=midsummer",
+    nextActionInspectHref: localAdminAuditRoleUrl(localAdminAuditIds.nextAction, { game: "midsummer" }),
     releaseReady: false,
     productionReady: false,
   });
@@ -1508,7 +1513,7 @@ test("admin route data exposes local proof freshness as a native audit row", asy
 
 test("admin local proof freshness detail data carries stale and missing rows", async () => {
   const data = await buildAdminAuditDetailData({
-    audit: "local-proof-freshness",
+    audit: localAdminAuditIds.proofFreshness,
     principalUserId: "admin_a",
     capabilities: [{ kind: "GlobalAdmin" }],
     proofFreshness: proofFreshnessFixture({
@@ -1536,7 +1541,7 @@ test("admin local proof freshness detail data carries stale and missing rows", a
 
   assert.equal(data.status, "available");
   assert.equal(data.surfaceHeader.title, "Local proof freshness");
-  assert.equal(data.audit.id, "local-proof-freshness");
+  assert.equal(data.audit.id, localAdminAuditIds.proofFreshness);
   assert.deepEqual(
     data.audit.checks.map((check) => [check.id, check.status]),
     [
@@ -1544,16 +1549,16 @@ test("admin local proof freshness detail data carries stale and missing rows", a
       ["proof-run", "stale"],
       ["backup-restore", "missing"],
       [
-        "next-action-handoff",
+        localAdminAuditHandoffCheckIds.nextAction,
         "blocked: DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch npm run test:dev-test-game-live",
       ],
     ],
   );
   assert.deepEqual(data.audit.relatedLinks, [
     {
-      id: "local-next-action",
+      id: localAdminAuditIds.nextAction,
       label: "Ranked next action",
-      href: "/admin/audit/local-next-action?game=midsummer",
+      href: localAdminAuditRoleUrl(localAdminAuditIds.nextAction, { game: "midsummer" }),
       status:
         "blocked: DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch npm run test:dev-test-game-live",
       command:
@@ -1570,11 +1575,11 @@ test("admin route data exposes local next action as a native audit row", async (
     proofGraph: proofGraphFixture(),
   });
 
-  const nextAction = data.audit.find((item) => item.id === "local-next-action");
+  const nextAction = data.audit.find((item) => item.id === localAdminAuditIds.nextAction);
   assert.equal(nextAction.label, "Local next action");
   assert.equal(nextAction.status, `ready: ${LOCAL_RACE_COMMAND}`);
   assert.equal(nextAction.authority, "GlobalAdmin or GlobalMod");
-  assert.equal(nextAction.inspectHref, "/admin/audit/local-next-action?game=midsummer");
+  assert.equal(nextAction.inspectHref, localAdminAuditRoleUrl(localAdminAuditIds.nextAction, { game: "midsummer" }));
   assert.deepEqual(
     nextAction.checks.map((check) => [check.id, check.status]),
     [
@@ -1635,21 +1640,21 @@ test("admin route data exposes local next action as a native audit row", async (
     {
       id: "selected-proof-graph-node",
       label: "admin-proof:hosted-concurrent-race-matrix",
-      href: "/admin/audit/local-proof-graph?game=midsummer",
+      href: localAdminAuditRoleUrl(localAdminAuditIds.proofGraph, { game: "midsummer" }),
       status: "passed",
       command: LOCAL_RACE_COMMAND,
     },
     {
       id: "production-feature:player-action-submission",
       label: "production-feature:player-action-submission",
-      href: "/admin/audit/local-proof-graph?game=midsummer",
+      href: localAdminAuditRoleUrl(localAdminAuditIds.proofGraph, { game: "midsummer" }),
       status: "passed",
       command: LIVE_BROWSER_PROOF_COMMAND,
     },
     {
       id: "admin-proof:hosted-concurrent-race-matrix",
       label: "hosted-concurrent-race-matrix",
-      href: "/admin/audit/local-hosted-concurrent-race-matrix?game=midsummer",
+      href: localAdminAuditRoleUrl(localAdminAuditIds.hostedConcurrentRaceMatrix, { game: "midsummer" }),
       status: "unproven",
       command: LOCAL_RACE_COMMAND,
     },
@@ -1700,16 +1705,16 @@ test("admin route data exposes local next action as a native audit row", async (
     selectedSpineDrilldown: featureSpineDrilldownFixture(),
     selectedSpineTarget: featureSpineTargetFixture(),
     selectedRoleUrl:
-      "/admin/audit/local-hosted-concurrent-race-matrix?game=<seeded-game>",
+      localAdminAuditRoleUrl(localAdminAuditIds.hostedConcurrentRaceMatrix),
     selectedRoleHref:
-      "/admin/audit/local-hosted-concurrent-race-matrix?game=midsummer",
+      localAdminAuditRoleUrl(localAdminAuditIds.hostedConcurrentRaceMatrix, { game: "midsummer" }),
     selectedProofGraphNodeId: "admin-proof:hosted-concurrent-race-matrix",
     selectedProofGraphNodeStatus: "passed",
     selectedProofGraphNodeProofCommand: LOCAL_RACE_COMMAND,
     selectedProofGraphNodeRoleUrl:
-      "/admin/audit/local-hosted-concurrent-race-matrix?game=<seeded-game>",
-    selectedProofGraphNodeAuditId: "local-hosted-concurrent-race-matrix",
-    selectedProofGraphNodeHref: "/admin/audit/local-proof-graph?game=midsummer",
+      localAdminAuditRoleUrl(localAdminAuditIds.hostedConcurrentRaceMatrix),
+    selectedProofGraphNodeAuditId: localAdminAuditIds.hostedConcurrentRaceMatrix,
+    selectedProofGraphNodeHref: localAdminAuditRoleUrl(localAdminAuditIds.proofGraph, { game: "midsummer" }),
     stabilitySource: "",
     stabilityBuildSlice: "",
     stabilityProofTarget: "",
@@ -1748,7 +1753,7 @@ test("admin route data exposes local next action as a native audit row", async (
             "Create the first hosted-like concurrent race matrix proof request from the promoted local race baseline.",
           proofTarget: HOSTED_MATRIX_PROOF_TARGET,
           roleUrl:
-            "/admin/audit/local-hosted-concurrent-race-matrix?game=<seeded-game>",
+            localAdminAuditRoleUrl(localAdminAuditIds.hostedConcurrentRaceMatrix),
           proofGraphNodeId: "admin-proof:hosted-concurrent-race-matrix",
           productionFeatureSpineTarget: productionFeatureSpineTargetFixture(),
           spineDrilldown: featureSpineDrilldownFixture(),
@@ -1760,7 +1765,7 @@ test("admin route data exposes local next action as a native audit row", async (
             edgeFrom: "admin-proof:core-loop",
             edgeTo: "production-feature:player-action-submission",
             edgeRelationship: "proves-production-feature",
-            roleUrl: "/admin/audit/local-core-loop?game=<seeded-game>",
+            roleUrl: localAdminAuditRoleUrl(localAdminAuditIds.coreLoop),
             targetRoleUrl: ACTIONABLE_SPINE_ROLE_URL,
             edgeTargetRoleUrl: ACTIONABLE_SPINE_ROLE_URL,
             selectedSpineTargetRoleUrl: ACTIONABLE_SPINE_ROLE_URL,
@@ -1797,7 +1802,7 @@ test("admin route data exposes recovery-hook spine drilldowns", async () => {
     proofGraph: proofGraphFixture(),
   });
 
-  const nextAction = data.audit.find((item) => item.id === "local-next-action");
+  const nextAction = data.audit.find((item) => item.id === localAdminAuditIds.nextAction);
   const checks = new Map(
     nextAction.checks.map((check) => [check.id, check.status]),
   );
@@ -1840,7 +1845,7 @@ test("admin route data exposes local readiness dependency next action", async ()
     }),
   });
 
-  const nextAction = data.audit.find((item) => item.id === "local-next-action");
+  const nextAction = data.audit.find((item) => item.id === localAdminAuditIds.nextAction);
   assert.equal(nextAction.status, `blocked: ${LOCAL_PROOF_GRAPH_COMMAND}`);
   assert.deepEqual(
     nextAction.checks
@@ -1867,14 +1872,14 @@ test("admin route data exposes local readiness dependency next action", async ()
     {
       id: "local-proof-graph-admin-role-handoffs",
       label: "local-proof-graph-admin-role-handoffs",
-      href: "/admin/audit/local-proof-graph?game=midsummer",
+      href: localAdminAuditRoleUrl(localAdminAuditIds.proofGraph, { game: "midsummer" }),
       status: "missing",
       command: LOCAL_PROOF_GRAPH_COMMAND,
     },
   ]);
   assert.equal(
     nextAction.artifactSummary.selectedLocalCheckRoleHref,
-    "/admin/audit/local-proof-graph?game=midsummer",
+    localAdminAuditRoleUrl(localAdminAuditIds.proofGraph, { game: "midsummer" }),
   );
 });
 
@@ -1894,7 +1899,7 @@ test("admin route data exposes seed proof-lane coverage drift next action", asyn
     }),
   });
 
-  const nextAction = data.audit.find((item) => item.id === "local-next-action");
+  const nextAction = data.audit.find((item) => item.id === localAdminAuditIds.nextAction);
   assert.equal(nextAction.status, `blocked: ${SEED_FIXTURE_COMMAND}`);
   assert.deepEqual(
     nextAction.checks
@@ -1918,14 +1923,14 @@ test("admin route data exposes seed proof-lane coverage drift next action", asyn
     {
       id: "seed-proof-lane-coverage",
       label: "Seed proof-lane coverage",
-      href: "/admin/audit/local-seed-fixtures?game=midsummer",
+      href: localAdminAuditRoleUrl(localAdminAuditIds.seedFixtures, { game: "midsummer" }),
       status: "drifted",
       command: SEED_FIXTURE_COMMAND,
     },
   ]);
   assert.equal(
     nextAction.artifactSummary.selectedSeedProofLaneCoverageRoleHref,
-    "/admin/audit/local-seed-fixtures?game=midsummer",
+    localAdminAuditRoleUrl(localAdminAuditIds.seedFixtures, { game: "midsummer" }),
   );
   assert.deepEqual(
     nextAction.artifactSummary.selectedSeedProofLaneCoverageUnclassifiedLaneIds,
@@ -1936,7 +1941,7 @@ test("admin route data exposes seed proof-lane coverage drift next action", asyn
 test("admin local next action detail data carries hosted evidence handoff checklist", async () => {
   const unproven = hostedEvidenceLaneUnprovenFixture();
   const data = await buildAdminAuditDetailData({
-    audit: "local-next-action",
+    audit: localAdminAuditIds.nextAction,
     principalUserId: "admin_a",
     capabilities: [{ kind: "GlobalAdmin" }],
     nextAction: nextActionFixture({
@@ -1946,7 +1951,7 @@ test("admin local next action detail data carries hosted evidence handoff checkl
   });
 
   assert.equal(data.status, "available");
-  assert.equal(data.audit.id, "local-next-action");
+  assert.equal(data.audit.id, localAdminAuditIds.nextAction);
   assert.equal(data.audit.hostedHandoffChecklist.status, "blocked");
   assert.equal(data.audit.hostedHandoffChecklist.preflightStatus, "blocked");
   assert.equal(
@@ -1967,13 +1972,13 @@ test("admin local next action detail data carries hosted evidence handoff checkl
   );
   assert.equal(
     data.audit.artifactSummary.selectedRoleHref,
-    "/admin/audit/local-hosted-evidence-lane?game=midsummer",
+    localAdminAuditRoleUrl(localAdminAuditIds.hostedEvidenceLane, { game: "midsummer" }),
   );
 });
 
 test("admin local next action detail data carries recovery check rows", async () => {
   const data = await buildAdminAuditDetailData({
-    audit: "local-next-action",
+    audit: localAdminAuditIds.nextAction,
     principalUserId: "admin_a",
     capabilities: [{ kind: "GlobalAdmin" }],
     nextAction: nextActionFixture({
@@ -1992,7 +1997,7 @@ test("admin local next action detail data carries recovery check rows", async ()
 
   assert.equal(data.status, "available");
   assert.equal(data.surfaceHeader.title, "Local next action");
-  assert.equal(data.audit.id, "local-next-action");
+  assert.equal(data.audit.id, localAdminAuditIds.nextAction);
   assert.deepEqual(
     data.audit.checks.map((check) => [check.id, check.status]),
     [
@@ -2018,7 +2023,7 @@ test("admin local next action detail data carries recovery check rows", async ()
 
 test("admin local next action detail data carries harness stability drift rows", async () => {
   const data = await buildAdminAuditDetailData({
-    audit: "local-next-action",
+    audit: localAdminAuditIds.nextAction,
     principalUserId: "admin_a",
     capabilities: [{ kind: "GlobalAdmin" }],
     nextAction: nextActionFixture({
@@ -2044,7 +2049,7 @@ test("admin local next action detail data carries harness stability drift rows",
   });
 
   assert.equal(data.status, "available");
-  assert.equal(data.audit.id, "local-next-action");
+  assert.equal(data.audit.id, localAdminAuditIds.nextAction);
   assert.deepEqual(
     data.audit.checks.map((check) => [check.id, check.status]),
     [
@@ -2090,11 +2095,11 @@ test("admin route data exposes local hardening proof as a native audit row", asy
     proofRun: proofRunFixture(),
   });
 
-  const hardening = data.audit.find((item) => item.id === "local-hardening");
+  const hardening = data.audit.find((item) => item.id === localAdminAuditIds.hardening);
   assert.equal(hardening.label, "Local multiplayer hardening");
   assert.equal(hardening.status, `${hardeningAuditLaneIds.length} hardening lanes passed`);
   assert.equal(hardening.authority, "GlobalAdmin or GlobalMod");
-  assert.equal(hardening.inspectHref, "/admin/audit/local-hardening?game=midsummer");
+  assert.equal(hardening.inspectHref, localAdminAuditRoleUrl(localAdminAuditIds.hardening, { game: "midsummer" }));
   assert.deepEqual(
     hardening.checks.map((check) => check.id),
     hardeningAuditLaneIds,
@@ -2152,8 +2157,8 @@ test("admin route data exposes local player recovery proof as a focused audit ro
   assert.deepEqual(
     playerRecovery.relatedLinks.map((link) => [link.id, link.href]),
     [
-      ["local-core-loop", "/admin/audit/local-core-loop?game=midsummer"],
-      ["local-hardening", "/admin/audit/local-hardening?game=midsummer"],
+      [localAdminAuditIds.coreLoop, localAdminAuditRoleUrl(localAdminAuditIds.coreLoop, { game: "midsummer" })],
+      [localAdminAuditIds.hardening, localAdminAuditRoleUrl(localAdminAuditIds.hardening, { game: "midsummer" })],
     ],
   );
   assert.deepEqual(playerRecovery.artifactSummary, {
@@ -2173,11 +2178,11 @@ test("admin route data exposes local core loop proof as a native audit row", asy
     proofRun: proofRunFixture(),
   });
 
-  const coreLoop = data.audit.find((item) => item.id === "local-core-loop");
+  const coreLoop = data.audit.find((item) => item.id === localAdminAuditIds.coreLoop);
   assert.equal(coreLoop.label, "Local core loop");
   assert.equal(coreLoop.status, `${coreLoopAuditLaneIds.length} core loop lanes passed`);
   assert.equal(coreLoop.authority, "GlobalAdmin or GlobalMod");
-  assert.equal(coreLoop.inspectHref, "/admin/audit/local-core-loop?game=midsummer");
+  assert.equal(coreLoop.inspectHref, localAdminAuditRoleUrl(localAdminAuditIds.coreLoop, { game: "midsummer" }));
   assert.deepEqual(
     coreLoop.checks.map((check) => check.id),
     coreLoopAdminCheckIds,
@@ -2196,7 +2201,7 @@ test("admin route data exposes local core loop proof as a native audit row", asy
 
 test("admin local core loop detail data carries lane rows", async () => {
   const data = await buildAdminAuditDetailData({
-    audit: "local-core-loop",
+    audit: localAdminAuditIds.coreLoop,
     principalUserId: "admin_a",
     capabilities: [{ kind: "GlobalAdmin" }],
     proofRun: proofRunFixture(),
@@ -2204,7 +2209,7 @@ test("admin local core loop detail data carries lane rows", async () => {
 
   assert.equal(data.status, "available");
   assert.equal(data.surfaceHeader.title, "Local core loop");
-  assert.equal(data.audit.id, "local-core-loop");
+  assert.equal(data.audit.id, localAdminAuditIds.coreLoop);
   assert.deepEqual(
     data.audit.spineCycles.map((cycle) => [
       cycle.id,
@@ -2484,7 +2489,7 @@ test("admin local player recovery detail data carries focused lane rows", async 
 
 test("admin local hardening detail data carries lane rows", async () => {
   const data = await buildAdminAuditDetailData({
-    audit: "local-hardening",
+    audit: localAdminAuditIds.hardening,
     principalUserId: "admin_a",
     capabilities: [{ kind: "GlobalAdmin" }],
     proofRun: proofRunFixture(),
@@ -2492,7 +2497,7 @@ test("admin local hardening detail data carries lane rows", async () => {
 
   assert.equal(data.status, "available");
   assert.equal(data.surfaceHeader.title, "Local multiplayer hardening");
-  assert.equal(data.audit.id, "local-hardening");
+  assert.equal(data.audit.id, localAdminAuditIds.hardening);
   assert.equal(data.audit.checks.length, hardeningAuditLaneIds.length);
   assert.deepEqual(
     data.audit.checks.map((check) => check.id),
@@ -2539,7 +2544,7 @@ test("admin local hardening detail data carries lane rows", async () => {
 
 test("admin local ops artifact detail data carries check rows", async () => {
   const data = await buildAdminAuditDetailData({
-    audit: "local-ops-artifacts",
+    audit: localAdminAuditIds.opsArtifacts,
     principalUserId: "admin_a",
     capabilities: [{ kind: "GlobalAdmin" }],
     opsArtifacts: localOpsArtifactsFixture(),
@@ -2547,7 +2552,7 @@ test("admin local ops artifact detail data carries check rows", async () => {
 
   assert.equal(data.status, "available");
   assert.equal(data.surfaceHeader.title, "Local ops artifacts");
-  assert.equal(data.audit.id, "local-ops-artifacts");
+  assert.equal(data.audit.id, localAdminAuditIds.opsArtifacts);
   assert.equal(data.audit.checks.length, 5);
   assert.deepEqual(
     data.audit.checks.map((check) => [check.id, check.status]),
@@ -2563,7 +2568,7 @@ test("admin local ops artifact detail data carries check rows", async () => {
 
 test("admin local hosted ops signals detail data carries signal rows", async () => {
   const data = await buildAdminAuditDetailData({
-    audit: "local-hosted-ops-signals",
+    audit: localAdminAuditIds.hostedOpsSignals,
     principalUserId: "admin_a",
     capabilities: [{ kind: "GlobalAdmin" }],
     hostedOpsSignals: localHostedOpsSignalsFixture(),
@@ -2571,17 +2576,17 @@ test("admin local hosted ops signals detail data carries signal rows", async () 
 
   assert.equal(data.status, "available");
   assert.equal(data.surfaceHeader.title, "Local hosted ops signals");
-  assert.equal(data.audit.id, "local-hosted-ops-signals");
+  assert.equal(data.audit.id, localAdminAuditIds.hostedOpsSignals);
   assert.equal(data.audit.checks.length, 5);
   assert.deepEqual(
     data.audit.relatedLinks.map((link) => link.id),
-    ["local-hosted-concurrent-race-matrix", "local-ops-artifacts"],
+    [localAdminAuditIds.hostedConcurrentRaceMatrix, localAdminAuditIds.opsArtifacts],
   );
 });
 
 test("admin hosted target preflight detail data carries blocked setup rows", async () => {
   const data = await buildAdminAuditDetailData({
-    audit: "local-hosted-target-preflight",
+    audit: localAdminAuditIds.hostedTargetPreflight,
     principalUserId: "admin_a",
     capabilities: [{ kind: "GlobalAdmin" }],
     hostedTargetPreflight: localHostedTargetPreflightFixture(),
@@ -2589,11 +2594,11 @@ test("admin hosted target preflight detail data carries blocked setup rows", asy
 
   assert.equal(data.status, "available");
   assert.equal(data.surfaceHeader.title, "Hosted target preflight");
-  assert.equal(data.audit.id, "local-hosted-target-preflight");
+  assert.equal(data.audit.id, localAdminAuditIds.hostedTargetPreflight);
   assert.equal(data.audit.checks.length, 6);
   assert.deepEqual(
     data.audit.relatedLinks.map((link) => link.id),
-    ["local-hosted-concurrent-race-matrix", "local-next-action"],
+    [localAdminAuditIds.hostedConcurrentRaceMatrix, localAdminAuditIds.nextAction],
   );
   assert.deepEqual(
     data.audit.unproven.map((item) => [
@@ -2633,7 +2638,7 @@ test("admin hosted target preflight detail data carries blocked setup rows", asy
 
 test("admin hosted evidence lane detail data carries blocked setup rows", async () => {
   const data = await buildAdminAuditDetailData({
-    audit: "local-hosted-evidence-lane",
+    audit: localAdminAuditIds.hostedEvidenceLane,
     principalUserId: "admin_a",
     capabilities: [{ kind: "GlobalAdmin" }],
     hostedEvidenceLane: localHostedEvidenceLaneFixture(),
@@ -2642,7 +2647,7 @@ test("admin hosted evidence lane detail data carries blocked setup rows", async 
 
   assert.equal(data.status, "available");
   assert.equal(data.surfaceHeader.title, "Hosted evidence lane");
-  assert.equal(data.audit.id, "local-hosted-evidence-lane");
+  assert.equal(data.audit.id, localAdminAuditIds.hostedEvidenceLane);
   assert.equal(data.audit.checks.length, 13);
   assert.deepEqual(
     data.audit.checks.slice(-6).map((check) => [check.id, check.status]),
@@ -2658,9 +2663,9 @@ test("admin hosted evidence lane detail data carries blocked setup rows", async 
   assert.deepEqual(
     data.audit.relatedLinks.map((link) => link.id),
     [
-      "local-hosted-target-preflight",
-      "local-hosted-concurrent-race-matrix",
-      "local-next-action",
+      localAdminAuditIds.hostedTargetPreflight,
+      localAdminAuditIds.hostedConcurrentRaceMatrix,
+      localAdminAuditIds.nextAction,
     ],
   );
   assert.deepEqual(
@@ -2768,7 +2773,7 @@ test("admin hosted evidence lane detail data carries blocked setup rows", async 
   assert.equal(data.audit.artifactSummary.demoOnly, true);
   assert.equal(
     data.audit.artifactSummary.demoPassedRoleUrl,
-    "/admin/audit/local-hosted-concurrent-race-matrix?game=<seeded-game>",
+    localAdminAuditRoleUrl(localAdminAuditIds.hostedConcurrentRaceMatrix),
   );
 });
 
@@ -2779,14 +2784,14 @@ test("admin route data exposes local seed fixture summary as a native audit row"
     seedFixtureSummary: seedFixtureSummaryFixture(),
   });
 
-  const seed = data.audit.find((item) => item.id === "local-seed-fixtures");
+  const seed = data.audit.find((item) => item.id === localAdminAuditIds.seedFixtures);
   assert.equal(seed.label, "Local seed fixtures");
   assert.equal(
     seed.status,
     `${seedScenarioCoverageGroups.allDemo.length} demo scenarios available locally`,
   );
   assert.equal(seed.authority, "GlobalAdmin or GlobalMod");
-  assert.equal(seed.inspectHref, "/admin/audit/local-seed-fixtures?game=midsummer");
+  assert.equal(seed.inspectHref, localAdminAuditRoleUrl(localAdminAuditIds.seedFixtures, { game: "midsummer" }));
   assert.deepEqual(
     seed.scenarios.map((scenario) => scenario.id),
     seedScenarioCoverageGroups.allDemo,
@@ -2808,7 +2813,7 @@ test("admin route data exposes local seed fixture summary as a native audit row"
 
 test("admin local seed fixture detail data carries scenario rows", async () => {
   const data = await buildAdminAuditDetailData({
-    audit: "local-seed-fixtures",
+    audit: localAdminAuditIds.seedFixtures,
     principalUserId: "admin_a",
     capabilities: [{ kind: "GlobalAdmin" }],
     seedFixtureSummary: seedFixtureSummaryFixture(),
@@ -2816,7 +2821,7 @@ test("admin local seed fixture detail data carries scenario rows", async () => {
 
   assert.equal(data.status, "available");
   assert.equal(data.surfaceHeader.title, "Local seed fixtures");
-  assert.equal(data.audit.id, "local-seed-fixtures");
+  assert.equal(data.audit.id, localAdminAuditIds.seedFixtures);
   assert.equal(data.audit.scenarios.length, seedScenarioCoverageGroups.allDemo.length);
   assert.deepEqual(
     data.audit.scenarios.map((scenario) => [scenario.id, scenario.status]),
@@ -2846,13 +2851,13 @@ test("admin route data exposes local release readiness as a native audit row", a
     releaseReadinessChecklist: releaseReadinessChecklistFixture(),
   });
 
-  const readiness = data.audit.find((item) => item.id === "local-release-readiness");
+  const readiness = data.audit.find((item) => item.id === localAdminAuditIds.releaseReadiness);
   assert.equal(readiness.label, "Local release readiness");
   assert.equal(readiness.status, "8 local checks passed, 2 release items unproven");
   assert.equal(readiness.authority, "GlobalAdmin or GlobalMod");
   assert.equal(
     readiness.inspectHref,
-    "/admin/audit/local-release-readiness?game=midsummer",
+    localAdminAuditRoleUrl(localAdminAuditIds.releaseReadiness, { game: "midsummer" }),
   );
   assert.deepEqual(
     readiness.checks.map((check) => check.id),
@@ -2877,17 +2882,17 @@ test("admin route data exposes local release readiness as a native audit row", a
       [
         "local-proof-graph-admin-role-handoffs",
         "npm run test:dev-test-game-proof-graph-admin-proof",
-        "/admin/audit/local-proof-graph?game=<seeded-game>",
+        localAdminAuditRoleUrl(localAdminAuditIds.proofGraph),
       ],
       [
         "local-proof-freshness-admin-surface",
         "npm run test:dev-test-game-proof-freshness-admin-proof",
-        "/admin/audit/local-proof-freshness?game=<seeded-game>",
+        localAdminAuditRoleUrl(localAdminAuditIds.proofFreshness),
       ],
       [
         "local-next-action-admin-surface",
         "npm run test:dev-test-game-next-action-admin-proof",
-        "/admin/audit/local-next-action?game=<seeded-game>",
+        localAdminAuditRoleUrl(localAdminAuditIds.nextAction),
       ],
     ],
   );
@@ -2910,7 +2915,7 @@ test("admin route data exposes local release readiness as a native audit row", a
 
 test("admin local release readiness detail data carries checks and unproven rows", async () => {
   const data = await buildAdminAuditDetailData({
-    audit: "local-release-readiness",
+    audit: localAdminAuditIds.releaseReadiness,
     principalUserId: "admin_a",
     capabilities: [{ kind: "GlobalAdmin" }],
     releaseReadinessChecklist: releaseReadinessChecklistFixture(),
@@ -2918,7 +2923,7 @@ test("admin local release readiness detail data carries checks and unproven rows
 
   assert.equal(data.status, "available");
   assert.equal(data.surfaceHeader.title, "Local release readiness");
-  assert.equal(data.audit.id, "local-release-readiness");
+  assert.equal(data.audit.id, localAdminAuditIds.releaseReadiness);
   assert.equal(data.audit.checks.length, 8);
   assert.deepEqual(
     data.audit.localPrerequisites.map((item) => [item.id, item.proofTarget]),
@@ -2954,13 +2959,13 @@ test("admin route data exposes local backup restore proof as a native audit row"
     backupRestoreProof: backupRestoreProofFixture(),
   });
 
-  const backup = data.audit.find((item) => item.id === "local-backup-restore");
+  const backup = data.audit.find((item) => item.id === localAdminAuditIds.backupRestore);
   assert.equal(backup.label, "Local backup restore");
   assert.equal(backup.status, "5 backup restore checks passed");
   assert.equal(backup.authority, "GlobalAdmin or GlobalMod");
   assert.equal(
     backup.inspectHref,
-    "/admin/audit/local-backup-restore?game=midsummer",
+    localAdminAuditRoleUrl(localAdminAuditIds.backupRestore, { game: "midsummer" }),
   );
   assert.deepEqual(
     backup.checks.map((check) => check.id),
@@ -2992,7 +2997,7 @@ test("admin route data exposes local backup restore proof as a native audit row"
 
 test("admin local backup restore detail data carries checks and restored sessions", async () => {
   const data = await buildAdminAuditDetailData({
-    audit: "local-backup-restore",
+    audit: localAdminAuditIds.backupRestore,
     principalUserId: "admin_a",
     capabilities: [{ kind: "GlobalAdmin" }],
     backupRestoreProof: backupRestoreProofFixture(),
@@ -3000,7 +3005,7 @@ test("admin local backup restore detail data carries checks and restored session
 
   assert.equal(data.status, "available");
   assert.equal(data.surfaceHeader.title, "Local backup restore");
-  assert.equal(data.audit.id, "local-backup-restore");
+  assert.equal(data.audit.id, localAdminAuditIds.backupRestore);
   assert.equal(data.audit.checks.length, 5);
   assert.equal(data.audit.sessions.length, 3);
   assert.deepEqual(
@@ -3020,13 +3025,13 @@ test("admin route data exposes local identity adapter proof as a native audit ro
     identityAdapterProof: identityAdapterProofFixture(),
   });
 
-  const identity = data.audit.find((item) => item.id === "local-identity-adapter");
+  const identity = data.audit.find((item) => item.id === localAdminAuditIds.identityAdapter);
   assert.equal(identity.label, "Local identity adapter");
   assert.equal(identity.status, "3 role surfaces, 5 lifecycle controls");
   assert.equal(identity.authority, "GlobalAdmin or GlobalMod");
   assert.equal(
     identity.inspectHref,
-    "/admin/audit/local-identity-adapter?game=midsummer",
+    localAdminAuditRoleUrl(localAdminAuditIds.identityAdapter, { game: "midsummer" }),
   );
   assert.deepEqual(
     identity.checks.map((check) => check.id),
@@ -3111,7 +3116,7 @@ test("admin route data exposes local identity adapter proof as a native audit ro
 
 test("admin local identity adapter detail data carries lifecycle checks and role rows", async () => {
   const data = await buildAdminAuditDetailData({
-    audit: "local-identity-adapter",
+    audit: localAdminAuditIds.identityAdapter,
     principalUserId: "admin_a",
     capabilities: [{ kind: "GlobalAdmin" }],
     identityAdapterProof: identityAdapterProofFixture(),
@@ -3119,7 +3124,7 @@ test("admin local identity adapter detail data carries lifecycle checks and role
 
   assert.equal(data.status, "available");
   assert.equal(data.surfaceHeader.title, "Local identity adapter");
-  assert.equal(data.audit.id, "local-identity-adapter");
+  assert.equal(data.audit.id, localAdminAuditIds.identityAdapter);
   assert.equal(data.audit.checks.length, 8);
   assert.equal(data.audit.sessions.length, 3);
   assert.deepEqual(
@@ -3935,9 +3940,9 @@ function localHostedEvidenceLaneDemoProofFixture() {
       externalEvidence: "target/dev-test-game/hosted-matrix-demo-external.json",
     },
     handoff: {
-      blockedRoleUrl: "/admin/audit/local-hosted-evidence-lane?game=<seeded-game>",
+      blockedRoleUrl: localAdminAuditRoleUrl(localAdminAuditIds.hostedEvidenceLane),
       passedRoleUrl:
-        "/admin/audit/local-hosted-concurrent-race-matrix?game=<seeded-game>",
+        localAdminAuditRoleUrl(localAdminAuditIds.hostedConcurrentRaceMatrix),
     },
     checks: [
       {
@@ -4059,19 +4064,19 @@ function spineManifestFixture() {
       hostedTargetPreflight: {
         script: "test:dev-test-game-hosted-target-preflight",
         proofArtifact: HOSTED_TARGET_PREFLIGHT_PROOF_TARGET,
-        roleUrl: "/admin/audit/local-hosted-target-preflight?game=<seeded-game>",
+        roleUrl: localAdminAuditRoleUrl(localAdminAuditIds.hostedTargetPreflight),
       },
       hostedEvidenceLane: {
         script: "test:dev-test-game-hosted-evidence-lane",
         proofArtifact: HOSTED_EVIDENCE_LANE_PROOF_TARGET,
-        roleUrl: "/admin/audit/local-hosted-evidence-lane?game=<seeded-game>",
+        roleUrl: localAdminAuditRoleUrl(localAdminAuditIds.hostedEvidenceLane),
       },
       hostedEvidenceLaneDemoProof: {
         script: "test:dev-test-game-hosted-evidence-lane-demo-proof",
         proofArtifact:
           "target/dev-test-game/hosted-evidence-lane-demo-proof.json",
         demoOnly: true,
-        roleUrl: "/admin/audit/local-hosted-evidence-lane?game=<seeded-game>",
+        roleUrl: localAdminAuditRoleUrl(localAdminAuditIds.hostedEvidenceLane),
       },
       nextAction: {
         script: "test:dev-test-game-next-action",
@@ -4080,7 +4085,7 @@ function spineManifestFixture() {
       nextActionAdminProof: {
         script: "test:dev-test-game-next-action-admin-proof",
         proofArtifact: "target/dev-test-game/next-action-admin-proof.json",
-        roleUrl: "/admin/audit/local-next-action?game=<seeded-game>",
+        roleUrl: localAdminAuditRoleUrl(localAdminAuditIds.nextAction),
       },
       proofGraph: {
         script: "test:dev-test-game-proof-graph",
@@ -4089,7 +4094,7 @@ function spineManifestFixture() {
       proofGraphAdminProof: {
         script: "test:dev-test-game-proof-graph-admin-proof",
         proofArtifact: "target/dev-test-game/proof-graph-admin-proof.json",
-        roleUrl: "/admin/audit/local-proof-graph?game=<seeded-game>",
+        roleUrl: localAdminAuditRoleUrl(localAdminAuditIds.proofGraph),
       },
     },
     terminalArtifacts: [
@@ -4102,7 +4107,7 @@ function spineManifestFixture() {
         id: "next-action-admin-proof",
         command: "test:dev-test-game-next-action-admin-proof",
         path: "target/dev-test-game/next-action-admin-proof.json",
-        roleUrl: "/admin/audit/local-next-action?game=<seeded-game>",
+        roleUrl: localAdminAuditRoleUrl(localAdminAuditIds.nextAction),
       },
       {
         id: "proof-graph",
@@ -4113,7 +4118,7 @@ function spineManifestFixture() {
         id: "proof-graph-admin-proof",
         command: "test:dev-test-game-proof-graph-admin-proof",
         path: "target/dev-test-game/proof-graph-admin-proof.json",
-        roleUrl: "/admin/audit/local-proof-graph?game=<seeded-game>",
+        roleUrl: localAdminAuditRoleUrl(localAdminAuditIds.proofGraph),
       },
     ],
     artifactFreshness: {
@@ -4277,7 +4282,7 @@ function nextActionFixture({
             "Create the first hosted-like concurrent race matrix proof request from the promoted local race baseline.",
           proofTarget: HOSTED_MATRIX_PROOF_TARGET,
           roleUrl:
-            "/admin/audit/local-hosted-concurrent-race-matrix?game=<seeded-game>",
+            localAdminAuditRoleUrl(localAdminAuditIds.hostedConcurrentRaceMatrix),
           proofGraphNodeId: "admin-proof:hosted-concurrent-race-matrix",
           productionFeatureSpineTarget: productionFeatureSpineTargetFixture(),
           spineDrilldown: featureSpineDrilldownFixture(),
@@ -4419,7 +4424,7 @@ function seedProofLaneCoverageActionFixture({ unclassifiedLaneIds }) {
     buildSlice:
       "Classify every passed proof lane as direct seeded, alias-covered, or aggregate-only before expanding the production-facing seeded proof spine.",
     proofTarget: "target/dev-test-game/seed-fixture-summary.json",
-    roleUrl: "/admin/audit/local-seed-fixtures?game=<seeded-game>",
+    roleUrl: localAdminAuditRoleUrl(localAdminAuditIds.seedFixtures),
   };
 }
 
@@ -4430,7 +4435,7 @@ function proofGraphFixture() {
       label: "Local admin spine",
       status: "passed",
       artifact: "target/dev-test-game/admin-spine-proof.json",
-      roleUrl: "/admin/audit/local-admin-spine?game=<seeded-game>",
+      roleUrl: localAdminAuditRoleUrl(localAdminAuditIds.adminSpine),
       recoveryCommand: "npm run test:dev-test-game-admin-spine",
     }),
     proofGraphNode({
@@ -4438,7 +4443,7 @@ function proofGraphFixture() {
       label: "Local spine manifest",
       status: "passed",
       artifact: "target/dev-test-game/spine-manifest.json",
-      roleUrl: "/admin/audit/local-spine-manifest?game=<seeded-game>",
+      roleUrl: localAdminAuditRoleUrl(localAdminAuditIds.spineManifest),
       recoveryCommand: "npm run test:dev-test-game-spine-manifest-admin-proof",
     }),
     proofGraphNode({
@@ -4446,7 +4451,7 @@ function proofGraphFixture() {
       label: "Local proof freshness",
       status: "passed",
       artifact: "target/dev-test-game/proof-freshness-admin-proof.json",
-      roleUrl: "/admin/audit/local-proof-freshness?game=<seeded-game>",
+      roleUrl: localAdminAuditRoleUrl(localAdminAuditIds.proofFreshness),
       recoveryCommand: "test:dev-test-game-proof-freshness-admin-proof",
     }),
     proofGraphNode({
@@ -4454,7 +4459,7 @@ function proofGraphFixture() {
       label: "Local next action",
       status: "recorded",
       artifact: "target/dev-test-game/next-action.json",
-      roleUrl: "/admin/audit/local-next-action?game=<seeded-game>",
+      roleUrl: localAdminAuditRoleUrl(localAdminAuditIds.nextAction),
       recoveryCommand: "test:dev-test-game-next-action",
     }),
     {
@@ -4463,7 +4468,7 @@ function proofGraphFixture() {
       kind: "production-feature-spine-target",
       status: "passed",
       artifact: "target/dev-test-game/release-readiness-checklist.json",
-      roleUrl: "/admin/audit/local-core-loop?game=<seeded-game>",
+      roleUrl: localAdminAuditRoleUrl(localAdminAuditIds.coreLoop),
       targetRoleUrl: ACTIONABLE_SPINE_ROLE_URL,
       browserProofCommand: LIVE_BROWSER_PROOF_COMMAND,
     },
@@ -4480,7 +4485,7 @@ function proofGraphFixture() {
       relationship: "recovery-target",
       reason: "seed-proof-lane-coverage-drift",
       command: "npm run test:dev-test-game-seed-fixture",
-      roleUrl: "/admin/audit/local-seed-fixtures?game=<seeded-game>",
+      roleUrl: localAdminAuditRoleUrl(localAdminAuditIds.seedFixtures),
       proofTarget: "target/dev-test-game/seed-fixture-summary.json",
     },
     ...adminProofDestinationRequirementLinkRows.map(([linkId]) => ({
@@ -4946,7 +4951,7 @@ function selectedProductionFeatureGraphFixture() {
       to: "production-feature:player-action-submission",
       relationship: "proves-production-feature",
     },
-    roleUrl: "/admin/audit/local-core-loop?game=<seeded-game>",
+    roleUrl: localAdminAuditRoleUrl(localAdminAuditIds.coreLoop),
     targetRoleUrl: ACTIONABLE_SPINE_ROLE_URL,
     edgeTargetRoleUrl: ACTIONABLE_SPINE_ROLE_URL,
     selectedSpineTargetRoleUrl: ACTIONABLE_SPINE_ROLE_URL,
