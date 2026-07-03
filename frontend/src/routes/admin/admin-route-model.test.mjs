@@ -2256,6 +2256,24 @@ test("admin local core loop detail data carries lane rows", async () => {
           ["n02-action-open", "phase N02, action factional_kill"],
         ],
       ],
+      [
+        "n02-d03",
+        "game-b",
+        [
+          ["host", "http://127.0.0.1:5173/g/game-b/host"],
+          ["actionPlayer", "http://127.0.0.1:5173/g/game-b"],
+          ["normalPlayer", "http://127.0.0.1:5173/g/game-b"],
+        ],
+        [
+          ["n02-action-open", "phase N02, action factional_kill"],
+          ["n02-action-submitted", "action ack, target slot-3"],
+          [
+            "n02-resolved-target-killed",
+            "phase N02, locked, target dead, target status dead",
+          ],
+          ["d03-day-controls-return", "phase D03"],
+        ],
+      ],
     ],
   );
   assert.deepEqual(
@@ -2277,7 +2295,10 @@ test("admin local core loop detail data carries lane rows", async () => {
   );
   assert.deepEqual(
     [
-      ["core-loop-spine", "passed: D01 -> N01 -> D02, vote ack, next N02"],
+      [
+        "core-loop-spine",
+        "passed: D01 -> N01 -> D02, vote ack, N02 action ack, next D03",
+      ],
       ["core-loop", "passed: PhaseLocked vote receipt, unchanged unknown, lock ack/unlock ack"],
       ["action-loop", "passed: role URL false, night unknown, receipt unknown, D02 unknown, next unknown"],
       ["host-deadline-advance", "passed: D01 deadline -> N01"],
@@ -2322,8 +2343,8 @@ test("admin local core loop detail data carries lane rows", async () => {
     [
       [
         "core-loop-spine",
-        "passed: D01 -> N01 -> D02, vote ack, next N02",
-        "passed: D01 -> N01 -> D02, vote ack, next N02",
+        "passed: D01 -> N01 -> D02, vote ack, N02 action ack, next D03",
+        "passed: D01 -> N01 -> D02, vote ack, N02 action ack, next D03",
       ],
       [
         "core-loop",
@@ -3547,6 +3568,40 @@ function proofRunFixture() {
             { id: "d02-deciding-vote-submitted", voteState: "ack", projectedCount: 3 },
             { id: "d02-resolved-target-killed", outcomeStatus: "Lynch" },
             { id: "n02-action-open", phase: "N02", actionTemplate: "factional_kill" },
+          ],
+        },
+        {
+          id: "n02-d03",
+          game: "game-b",
+          roleUrls: {
+            host: "http://127.0.0.1:5173/g/game-b/host",
+            actionPlayer: "http://127.0.0.1:5173/g/game-b",
+            normalPlayer: "http://127.0.0.1:5173/g/game-b",
+          },
+          checkpoints: [
+            {
+              id: "n02-action-open",
+              phase: "N02",
+              actionTemplate: "factional_kill",
+              actionTarget: "slot-3",
+            },
+            {
+              id: "n02-action-submitted",
+              actionState: "ack",
+              targetSlot: "slot-3",
+            },
+            {
+              id: "n02-resolved-target-killed",
+              phase: "N02",
+              locked: true,
+              targetAlive: false,
+              targetStatus: "dead",
+            },
+            {
+              id: "d03-day-controls-return",
+              phase: "D03",
+              actionVoteControls: 2,
+            },
           ],
         },
       ],

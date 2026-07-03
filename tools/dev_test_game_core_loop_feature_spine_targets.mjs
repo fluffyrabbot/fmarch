@@ -33,11 +33,13 @@ export const coreLoopFeatureSpineSource = Object.freeze({
 export const coreLoopFeatureSpineCycleIds = Object.freeze({
   dayTwoNightTwo: "d02-n02",
   dayOneNightOneDayTwo: "d01-n01-d02",
+  nightTwoDayThree: "n02-d03",
 });
 
 const dayTwoNightTwo = coreLoopFeatureSpineCycleIds.dayTwoNightTwo;
 const dayOneNightOneDayTwo =
   coreLoopFeatureSpineCycleIds.dayOneNightOneDayTwo;
+const nightTwoDayThree = coreLoopFeatureSpineCycleIds.nightTwoDayThree;
 
 const checkpointRow = ({
   featureSlotId,
@@ -95,6 +97,13 @@ export const coreLoopFeatureSpineTargetRows = Object.freeze({
     cycleId: dayTwoNightTwo,
     roleUrlId: `${dayTwoNightTwo}-host`,
     checkpointId: `${dayTwoNightTwo}-n02-action-open`,
+    adminCheckId: "core-loop",
+  }),
+  nightTwoActionResolution: checkpointRow({
+    featureSlotId: "night-two-action-resolution",
+    cycleId: nightTwoDayThree,
+    roleUrlId: `${nightTwoDayThree}-host`,
+    checkpointId: `${nightTwoDayThree}-n02-resolved-target-killed`,
     adminCheckId: "core-loop",
   }),
   invalidActionRecovery: recoveryHookRow({

@@ -3547,6 +3547,8 @@ function formatCoreLoopSpineCheckpointStatus(checkpoint) {
   pushField(parts, "resolve", checkpoint?.resolveState);
   pushField(parts, "advance", checkpoint?.advanceState);
   pushField(parts, "action", checkpoint?.actionTemplate);
+  pushField(parts, "action", checkpoint?.actionState);
+  pushField(parts, "template", checkpoint?.templateId);
   if (typeof checkpoint?.actionButtonVisible === "boolean") {
     parts.push(`action button ${checkpoint.actionButtonVisible ? "visible" : "hidden"}`);
   }

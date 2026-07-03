@@ -147,7 +147,7 @@ test("core loop lane status formats seeded recovery evidence", () => {
   assert.equal(coreLoopLaneStatus({ id: "unhighlighted", status: "passed" }), "passed");
 });
 
-test("core loop spine status formats compact two-cycle evidence", () => {
+test("core loop spine status formats compact live spine evidence", () => {
   assert.equal(
     coreLoopSpineStatus({
       coreLoopSpine: {
@@ -168,14 +168,21 @@ test("core loop spine status formats compact two-cycle evidence", () => {
               { id: "n02-action-open", phase: "N02" },
             ],
           },
+          {
+            id: "n02-d03",
+            checkpoints: [
+              { id: "n02-action-submitted", actionState: "ack" },
+              { id: "d03-day-controls-return", phase: "D03" },
+            ],
+          },
         ],
       },
     }),
-    "passed: D01 -> N01 -> D02, vote ack, next N02",
+    "passed: D01 -> N01 -> D02, vote ack, N02 action ack, next D03",
   );
   assert.equal(
     coreLoopSpineStatus({}),
-    "unknown: unknown -> unknown -> unknown, vote unknown, next unknown",
+    "unknown: unknown -> unknown -> unknown, vote unknown, unknown action unknown, next unknown",
   );
 });
 

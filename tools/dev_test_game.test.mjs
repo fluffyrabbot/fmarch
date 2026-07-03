@@ -2148,9 +2148,9 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
     graph,
     releaseReadiness,
   );
-  assert.equal(graph.summary.nodeCount, 34);
-  assert.equal(graph.summary.roleUrlCount, 34);
-  assert.equal(graph.summary.productionFeatureTargetCount, 15);
+  assert.equal(graph.summary.nodeCount, 35);
+  assert.equal(graph.summary.roleUrlCount, 35);
+  assert.equal(graph.summary.productionFeatureTargetCount, 16);
   assert.deepEqual(
     graph.nodes
       .filter((node) => node.kind === "admin-proof-surface")
@@ -2935,7 +2935,7 @@ test("session card and markdown include role credential URLs and tokens", async 
             actorSlot: "slot_4",
             actorAlive: true,
             phase: { phaseId: "N02", locked: false },
-            actions: [{ templateId: "factional_kill" }],
+            actions: [{ templateId: "factional_kill", targets: ["slot-3"] }],
           },
           buttons: [{ action: "submit_action:factional_kill", disabled: false }],
         },
@@ -2945,6 +2945,46 @@ test("session card and markdown include role credential URLs and tokens", async 
             phase: { phaseId: "N02", locked: false },
           },
           factionalKillVisible: false,
+        },
+        n02ActionTarget: "slot-3",
+        n02ActionSubmission: {
+          state: "ack",
+          requestEnvelope: {
+            body: {
+              body: {
+                command: {
+                  SubmitAction: {
+                    actor_slot: "slot_4",
+                    template_id: "factional_kill",
+                    targets: ["slot-3"],
+                  },
+                },
+              },
+            },
+          },
+        },
+        n02ActionAfterSubmit: {
+          buttons: [],
+        },
+        resolveN02: { commandStatus: { state: "ack" } },
+        hostAfterResolveN02: { phase: { id: "N02", locked: true } },
+        n02ResolvedTargetSlot: {
+          slot_id: "slot-3",
+          alive: false,
+          status: "dead",
+        },
+        advanceD03: { commandStatus: { state: "ack" } },
+        d03ActionSurface: {
+          commandState: {
+            phase: { phaseId: "D03", locked: false },
+          },
+          buttons: [{ action: "submit_vote:no_lynch", disabled: false }],
+        },
+        d03NormalPlayerSurface: {
+          commandState: {
+            phase: { phaseId: "D03", locked: false },
+          },
+          buttons: [{ action: "submit_vote:no_lynch", disabled: false }],
         },
       },
       staleActionConflict: {
@@ -10521,7 +10561,8 @@ function coreLoopAdminProofFixture() {
     generatedFrom: {
       proofRun: "target/dev-test-game/proof-run.json",
       game: "00000000-0000-0000-0000-000000000001",
-      coreLoopSpineStatus: "passed: D01 -> N01 -> D02, vote ack, next N02",
+      coreLoopSpineStatus:
+        "passed: D01 -> N01 -> D02, vote ack, N02 action ack, next D03",
       completedGameHardeningCoverageStatus: "passed: 10/10 lanes across 4 families",
       hostControlFamily: coreLoopHostControlScenarioFamily(),
       playerActionRecoveryFamily:
@@ -10550,7 +10591,7 @@ function coreLoopAdminProofFixture() {
       privateChannelRecoveryFamily:
         coreLoopPrivateChannelRecoveryScenarioFamily(),
       coreLoopSpineRows: {
-        cycles: ["d01-n01-d02", "d02-n02"],
+        cycles: ["d01-n01-d02", "d02-n02", "n02-d03"],
         roleUrls: [
           "d01-n01-d02-host",
           "d01-n01-d02-actionPlayer",
@@ -10561,6 +10602,9 @@ function coreLoopAdminProofFixture() {
           "d02-n02-actionPlayer",
           "d02-n02-normalPlayer",
           "d02-n02-target",
+          "n02-d03-host",
+          "n02-d03-actionPlayer",
+          "n02-d03-normalPlayer",
         ],
         roleUrlHrefs: {
           "d01-n01-d02-host":
@@ -10581,6 +10625,12 @@ function coreLoopAdminProofFixture() {
             "http://127.0.0.1:5173/g/00000000-0000-0000-0000-000000000002",
           "d02-n02-target":
             "http://127.0.0.1:5173/g/00000000-0000-0000-0000-000000000002",
+          "n02-d03-host":
+            "http://127.0.0.1:5173/g/00000000-0000-0000-0000-000000000002/host",
+          "n02-d03-actionPlayer":
+            "http://127.0.0.1:5173/g/00000000-0000-0000-0000-000000000002",
+          "n02-d03-normalPlayer":
+            "http://127.0.0.1:5173/g/00000000-0000-0000-0000-000000000002",
         },
         checkpoints: [
           "d01-n01-d02-d01-resolved-locked",
@@ -10591,6 +10641,10 @@ function coreLoopAdminProofFixture() {
           "d02-n02-d02-deciding-vote-submitted",
           "d02-n02-d02-resolved-target-killed",
           "d02-n02-n02-action-open",
+          "n02-d03-n02-action-open",
+          "n02-d03-n02-action-submitted",
+          "n02-d03-n02-resolved-target-killed",
+          "n02-d03-d03-day-controls-return",
         ],
         recoveryHooks: [
           "staleLockedVoteReject",
@@ -10609,11 +10663,12 @@ function coreLoopAdminProofFixture() {
       clickedThroughFromOverview: true,
       visibleChecks: [...coreLoopAdminCheckIds],
       visibleCheckStatuses: {
-        "core-loop-spine": "passed: D01 -> N01 -> D02, vote ack, next N02",
+        "core-loop-spine":
+          "passed: D01 -> N01 -> D02, vote ack, N02 action ack, next D03",
         "completed-game-hardening-coverage":
           "passed: 10/10 lanes across 4 families",
       },
-      visibleSpineCycles: ["d01-n01-d02", "d02-n02"],
+      visibleSpineCycles: ["d01-n01-d02", "d02-n02", "n02-d03"],
       visibleSpineRoleUrls: [
         "d01-n01-d02-host",
         "d01-n01-d02-actionPlayer",
@@ -10624,6 +10679,9 @@ function coreLoopAdminProofFixture() {
         "d02-n02-actionPlayer",
         "d02-n02-normalPlayer",
         "d02-n02-target",
+        "n02-d03-host",
+        "n02-d03-actionPlayer",
+        "n02-d03-normalPlayer",
       ],
       visibleSpineCheckpoints: [
         "d01-n01-d02-d01-resolved-locked",
@@ -10634,6 +10692,10 @@ function coreLoopAdminProofFixture() {
         "d02-n02-d02-deciding-vote-submitted",
         "d02-n02-d02-resolved-target-killed",
         "d02-n02-n02-action-open",
+        "n02-d03-n02-action-open",
+        "n02-d03-n02-action-submitted",
+        "n02-d03-n02-resolved-target-killed",
+        "n02-d03-d03-day-controls-return",
       ],
       visibleSpineRecoveryHooks: [
         "staleLockedVoteReject",
@@ -12385,6 +12447,12 @@ function coreLoopSpineTargetsFixture() {
       "http://127.0.0.1:5173/g/00000000-0000-0000-0000-000000000002",
     "d02-n02-target":
       "http://127.0.0.1:5173/g/00000000-0000-0000-0000-000000000002",
+    "n02-d03-host":
+      "http://127.0.0.1:5173/g/00000000-0000-0000-0000-000000000002/host",
+    "n02-d03-actionPlayer":
+      "http://127.0.0.1:5173/g/00000000-0000-0000-0000-000000000002",
+    "n02-d03-normalPlayer":
+      "http://127.0.0.1:5173/g/00000000-0000-0000-0000-000000000002",
   };
   return {
     status: "passed",
@@ -12395,7 +12463,7 @@ function coreLoopSpineTargetsFixture() {
       "http://127.0.0.1:5173/g/00000000-0000-0000-0000-000000000002",
     defaultCheckpointId: "d02-n02-n02-action-open",
     browserProofCommand: devTestGameLiveProofCommand,
-    cycleIds: ["d01-n01-d02", "d02-n02"],
+    cycleIds: ["d01-n01-d02", "d02-n02", "n02-d03"],
     roleUrlIds: [
       "d01-n01-d02-host",
       "d01-n01-d02-actionPlayer",
@@ -12406,6 +12474,9 @@ function coreLoopSpineTargetsFixture() {
       "d02-n02-actionPlayer",
       "d02-n02-normalPlayer",
       "d02-n02-target",
+      "n02-d03-host",
+      "n02-d03-actionPlayer",
+      "n02-d03-normalPlayer",
     ],
     checkpointIds: [
       "d01-n01-d02-d01-resolved-locked",
@@ -12416,6 +12487,10 @@ function coreLoopSpineTargetsFixture() {
       "d02-n02-d02-deciding-vote-submitted",
       "d02-n02-d02-resolved-target-killed",
       "d02-n02-n02-action-open",
+      "n02-d03-n02-action-open",
+      "n02-d03-n02-action-submitted",
+      "n02-d03-n02-resolved-target-killed",
+      "n02-d03-d03-day-controls-return",
     ],
     recoveryHookIds: [
       "staleLockedVoteReject",
@@ -12436,6 +12511,7 @@ function coreLoopProductionFeatureTargetsFixture(roleUrlHrefs) {
     "post-day-three-transition",
     "player-action-submission",
     "host-night-action-transition",
+    "night-two-action-resolution",
     "invalid-action-recovery",
     "player-action-boundary",
     "private-channel",

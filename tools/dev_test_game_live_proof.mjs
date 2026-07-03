@@ -82,10 +82,11 @@ assert.deepEqual(
 );
 assert.deepEqual(
   proofRun.coreLoopSpine.cycles.map((cycle) => cycle.id),
-  ["d01-n01-d02", "d02-n02"],
+  ["d01-n01-d02", "d02-n02", "n02-d03"],
 );
 const proofRunSpineFirstCycle = proofRun.coreLoopSpine.cycles[0];
 const proofRunSpineSecondCycle = proofRun.coreLoopSpine.cycles[1];
+const proofRunSpineThirdCycle = proofRun.coreLoopSpine.cycles[2];
 assert.equal(proofRunSpineFirstCycle.game, session.game);
 assert.match(proofRunSpineFirstCycle.roleUrls.host, new RegExp(`/g/${session.game}/host`));
 assert.equal(proofRunSpineFirstCycle.checkpoints[0].id, "d01-resolved-locked");
@@ -112,6 +113,22 @@ assert.equal(proofRunSpineSecondCycle.checkpoints[2].receiptStatus, "day_vote");
 assert.equal(proofRunSpineSecondCycle.checkpoints[3].phase, "N02");
 assert.equal(proofRunSpineSecondCycle.checkpoints[3].actionTemplate, "factional_kill");
 assert.equal(proofRunSpineSecondCycle.checkpoints[3].normalPlayerFactionalKillVisible, false);
+assert.match(
+  proofRunSpineThirdCycle.roleUrls.host,
+  new RegExp(`/g/${proofRunSpineThirdCycle.game}/host`),
+);
+assert.equal(proofRunSpineThirdCycle.checkpoints[0].phase, "N02");
+assert.equal(proofRunSpineThirdCycle.checkpoints[0].actionTemplate, "factional_kill");
+assert.equal(proofRunSpineThirdCycle.checkpoints[0].actionTarget, "slot-3");
+assert.equal(proofRunSpineThirdCycle.checkpoints[1].actionState, "ack");
+assert.equal(proofRunSpineThirdCycle.checkpoints[1].templateId, "factional_kill");
+assert.equal(proofRunSpineThirdCycle.checkpoints[1].targetSlot, "slot-3");
+assert.equal(proofRunSpineThirdCycle.checkpoints[2].resolveState, "ack");
+assert.equal(proofRunSpineThirdCycle.checkpoints[2].targetAlive, false);
+assert.equal(proofRunSpineThirdCycle.checkpoints[2].targetStatus, "dead");
+assert.equal(proofRunSpineThirdCycle.checkpoints[3].phase, "D03");
+assert.equal(proofRunSpineThirdCycle.checkpoints[3].actionVoteControls > 0, true);
+assert.equal(proofRunSpineThirdCycle.checkpoints[3].normalVoteControls > 0, true);
 assert.equal(proofRun.coreLoopSpine.recoveryHooks.staleLockedVoteReject, "PhaseLocked");
 assert.equal(proofRun.coreLoopSpine.recoveryHooks.invalidActionReject, "InvalidTarget");
 assert.equal(

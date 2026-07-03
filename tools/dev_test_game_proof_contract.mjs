@@ -6564,6 +6564,77 @@ function buildCoreLoopSpineSummary({ session, verification }) {
         },
       ],
     },
+    {
+      id: "n02-d03",
+      game: d02VoteNight.game ?? null,
+      roleUrls: {
+        host: d02VoteNight.hostRoleUrl ?? null,
+        actionPlayer: d02VoteNight.actionRoleUrl ?? null,
+        normalPlayer: d02VoteNight.playerRoleUrl ?? null,
+      },
+      checkpoints: [
+        {
+          id: "n02-action-open",
+          phase:
+            d02VoteNight.n02ActionSurface?.commandState?.phase?.phaseId ?? null,
+          locked:
+            d02VoteNight.n02ActionSurface?.commandState?.phase?.locked ?? null,
+          actionTemplate: firstActionTemplate(
+            d02VoteNight.n02ActionSurface?.commandState?.actions,
+          ),
+          actionTarget: d02VoteNight.n02ActionTarget ?? null,
+          actionButtonVisible: hasEnabledButton(
+            d02VoteNight.n02ActionSurface?.buttons,
+            "submit_action:factional_kill",
+          ),
+        },
+        {
+          id: "n02-action-submitted",
+          actionState: d02VoteNight.n02ActionSubmission?.state ?? null,
+          actorSlot:
+            d02VoteNight.n02ActionSubmission?.requestEnvelope?.body?.body?.command
+              ?.SubmitAction?.actor_slot ?? null,
+          templateId:
+            d02VoteNight.n02ActionSubmission?.requestEnvelope?.body?.body?.command
+              ?.SubmitAction?.template_id ?? null,
+          targetSlot:
+            d02VoteNight.n02ActionSubmission?.requestEnvelope?.body?.body?.command
+              ?.SubmitAction?.targets?.[0] ?? null,
+          actionButtonVisible: hasEnabledButton(
+            d02VoteNight.n02ActionAfterSubmit?.buttons,
+            "submit_action:factional_kill",
+          ),
+        },
+        {
+          id: "n02-resolved-target-killed",
+          resolveState: d02VoteNight.resolveN02?.commandStatus?.state ?? null,
+          phase: d02VoteNight.hostAfterResolveN02?.phase?.id ?? null,
+          locked: d02VoteNight.hostAfterResolveN02?.phase?.locked ?? null,
+          targetSlot: d02VoteNight.n02ResolvedTargetSlot?.slot_id ?? null,
+          targetAlive: d02VoteNight.n02ResolvedTargetSlot?.alive ?? null,
+          targetStatus: d02VoteNight.n02ResolvedTargetSlot?.status ?? null,
+        },
+        {
+          id: "d03-day-controls-return",
+          advanceState: d02VoteNight.advanceD03?.commandStatus?.state ?? null,
+          phase: d02VoteNight.d03ActionSurface?.commandState?.phase?.phaseId ?? null,
+          locked:
+            d02VoteNight.d03ActionSurface?.commandState?.phase?.locked ?? null,
+          actionSubmitControls: countButtonsWithPrefix(
+            d02VoteNight.d03ActionSurface?.buttons,
+            "submit_action",
+          ),
+          actionVoteControls: countButtonsWithPrefix(
+            d02VoteNight.d03ActionSurface?.buttons,
+            "submit_vote",
+          ),
+          normalVoteControls: countButtonsWithPrefix(
+            d02VoteNight.d03NormalPlayerSurface?.buttons,
+            "submit_vote",
+          ),
+        },
+      ],
+    },
   ];
   const recoveryHooks = {
     staleLockedVoteReject: verification.coreLoop?.rejectedVote?.error ?? null,
@@ -6632,6 +6703,32 @@ function buildCoreLoopSpineSummary({ session, verification }) {
     cycles[1]?.checkpoints?.[3]?.actionTemplate === "factional_kill" &&
     cycles[1]?.checkpoints?.[3]?.actionButtonVisible === true &&
     cycles[1]?.checkpoints?.[3]?.normalPlayerFactionalKillVisible === false &&
+    cycles[2]?.game === cycles[1]?.game &&
+    cycles[2]?.roleUrls?.host?.includes(`/g/${cycles[2]?.game}/host`) === true &&
+    cycles[2]?.roleUrls?.actionPlayer?.includes(`/g/${cycles[2]?.game}`) === true &&
+    cycles[2]?.roleUrls?.normalPlayer?.includes(`/g/${cycles[2]?.game}`) === true &&
+    cycles[2]?.checkpoints?.[0]?.phase === "N02" &&
+    cycles[2]?.checkpoints?.[0]?.locked === false &&
+    cycles[2]?.checkpoints?.[0]?.actionTemplate === "factional_kill" &&
+    cycles[2]?.checkpoints?.[0]?.actionTarget === "slot-3" &&
+    cycles[2]?.checkpoints?.[0]?.actionButtonVisible === true &&
+    cycles[2]?.checkpoints?.[1]?.actionState === "ack" &&
+    cycles[2]?.checkpoints?.[1]?.actorSlot === "slot_4" &&
+    cycles[2]?.checkpoints?.[1]?.templateId === "factional_kill" &&
+    cycles[2]?.checkpoints?.[1]?.targetSlot === "slot-3" &&
+    cycles[2]?.checkpoints?.[1]?.actionButtonVisible === false &&
+    cycles[2]?.checkpoints?.[2]?.resolveState === "ack" &&
+    cycles[2]?.checkpoints?.[2]?.phase === "N02" &&
+    cycles[2]?.checkpoints?.[2]?.locked === true &&
+    cycles[2]?.checkpoints?.[2]?.targetSlot === "slot-3" &&
+    cycles[2]?.checkpoints?.[2]?.targetAlive === false &&
+    cycles[2]?.checkpoints?.[2]?.targetStatus === "dead" &&
+    cycles[2]?.checkpoints?.[3]?.advanceState === "ack" &&
+    cycles[2]?.checkpoints?.[3]?.phase === "D03" &&
+    cycles[2]?.checkpoints?.[3]?.locked === false &&
+    cycles[2]?.checkpoints?.[3]?.actionSubmitControls === 0 &&
+    cycles[2]?.checkpoints?.[3]?.actionVoteControls > 0 &&
+    cycles[2]?.checkpoints?.[3]?.normalVoteControls > 0 &&
     recoveryHooks.staleLockedVoteReject === "PhaseLocked" &&
     recoveryHooks.invalidActionReject === "InvalidTarget" &&
     recoveryHooks.normalPlayerDirectActionReject === "InvalidTarget" &&
@@ -6639,7 +6736,7 @@ function buildCoreLoopSpineSummary({ session, verification }) {
   return {
     status: passed ? "passed" : "failed",
     proof:
-      "Compact derived spine map for the seeded role URL core loop: D01 resolve to N01 action, N01 resolution to D02 day controls, D02 vote resolution, and N02 action return.",
+      "Compact derived spine map for the seeded role URL core loop: D01 resolve to N01 action, N01 resolution to D02 day controls, D02 vote resolution, N02 action return, N02 action submission/resolution, and D03 day controls.",
     sourceLaneIds: [...coreLoopPhaseProgressionSpineSourceLaneIds],
     cycles,
     recoveryHooks,
@@ -6659,8 +6756,8 @@ function assertCoreLoopSpineSummary(summary) {
   ) {
     throw new Error("core loop spine summary must cite the action-loop source lane");
   }
-  if (!Array.isArray(summary.cycles) || summary.cycles.length !== 2) {
-    throw new Error("core loop spine summary must expose exactly two cycles");
+  if (!Array.isArray(summary.cycles) || summary.cycles.length !== 3) {
+    throw new Error("core loop spine summary must expose exactly three cycles");
   }
   for (const cycle of summary.cycles) {
     if (
