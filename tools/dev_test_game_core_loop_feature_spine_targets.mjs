@@ -6,6 +6,9 @@ import {
   playerInvalidActionRecoveryLaneId,
 } from "./dev_test_game_core_loop_action_scenario_cases.mjs";
 import {
+  hostNightActionTransitionLaneId,
+} from "./dev_test_game_core_loop_host_phase_scenarios.mjs";
+import {
   coreLoopPrivateChannelPostLaneId,
 } from "./dev_test_game_core_loop_private_channel_recovery_scenarios.mjs";
 import {
@@ -86,6 +89,13 @@ export const coreLoopFeatureSpineTargetRows = Object.freeze({
     roleUrlId: `${dayTwoNightTwo}-actionPlayer`,
     checkpointId: `${dayTwoNightTwo}-n02-action-open`,
     adminCheckId: playerActionLoopLaneId,
+  }),
+  hostNightActionTransition: checkpointRow({
+    featureSlotId: hostNightActionTransitionLaneId,
+    cycleId: dayTwoNightTwo,
+    roleUrlId: `${dayTwoNightTwo}-host`,
+    checkpointId: `${dayTwoNightTwo}-n02-action-open`,
+    adminCheckId: "core-loop",
   }),
   invalidActionRecovery: recoveryHookRow({
     featureSlotId: playerInvalidActionRecoveryLaneId,

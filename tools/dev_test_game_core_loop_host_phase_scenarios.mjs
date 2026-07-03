@@ -135,6 +135,9 @@ const hostResolvePhaseTransitionRefreshKeys = Object.freeze([
   "hostPrompts",
 ]);
 
+export const hostNightActionTransitionLaneId =
+  "host-night-action-transition";
+
 export function hostResolvePhaseTransitionCase({
   streamSeq,
   expectedPhaseId,

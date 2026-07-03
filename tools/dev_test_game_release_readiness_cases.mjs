@@ -87,6 +87,9 @@ export const releaseReadinessProductionFeatureSpineTargets = Object.freeze({
   playerActionSubmission: featureSpineCheckpointTarget({
     ...coreLoopSpineRows.playerActionSubmission,
   }),
+  hostNightActionTransition: featureSpineCheckpointTarget({
+    ...coreLoopSpineRows.hostNightActionTransition,
+  }),
   invalidActionRecovery: featureSpineRecoveryHookTarget({
     ...coreLoopSpineRows.invalidActionRecovery,
   }),
