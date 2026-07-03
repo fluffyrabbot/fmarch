@@ -2,6 +2,8 @@ export const playerActionLoopLaneId = "action-loop";
 export const playerInvalidActionRecoveryLaneId = "invalid-action-recovery";
 export const playerInvalidActionRecoveryHookId = "invalidActionReject";
 export const playerActionBoundaryLaneId = "player-action-boundary";
+export const playerActionBoundaryRecoveryHookId =
+  "normalPlayerDirectActionReject";
 
 export function playerActionSubmissionScenario() {
   return {

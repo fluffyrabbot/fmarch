@@ -84,6 +84,9 @@ export const releaseReadinessProductionFeatureSpineTargets = Object.freeze({
   invalidActionRecovery: featureSpineRecoveryHookTarget({
     ...coreLoopSpineRows.invalidActionRecovery,
   }),
+  playerActionBoundary: featureSpineRecoveryHookTarget({
+    ...coreLoopSpineRows.playerActionBoundary,
+  }),
   privateChannel: featureSpineCheckpointTarget({
     ...coreLoopSpineRows.privateChannel,
   }),

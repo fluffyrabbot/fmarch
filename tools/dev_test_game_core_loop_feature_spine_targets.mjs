@@ -1,5 +1,7 @@
 import {
   playerActionLoopLaneId,
+  playerActionBoundaryLaneId,
+  playerActionBoundaryRecoveryHookId,
   playerInvalidActionRecoveryHookId,
   playerInvalidActionRecoveryLaneId,
 } from "./dev_test_game_core_loop_action_scenario_cases.mjs";
@@ -72,6 +74,14 @@ export const coreLoopFeatureSpineTargetRows = Object.freeze({
     checkpointId: `${dayTwoNightTwo}-n02-action-open`,
     recoveryHookId: playerInvalidActionRecoveryHookId,
     adminCheckId: playerInvalidActionRecoveryLaneId,
+  }),
+  playerActionBoundary: recoveryHookRow({
+    featureSlotId: playerActionBoundaryLaneId,
+    cycleId: dayOneNightOneDayTwo,
+    roleUrlId: `${dayOneNightOneDayTwo}-normalPlayer`,
+    checkpointId: `${dayOneNightOneDayTwo}-n01-action-open`,
+    recoveryHookId: playerActionBoundaryRecoveryHookId,
+    adminCheckId: playerActionBoundaryLaneId,
   }),
   privateChannel: checkpointRow({
     featureSlotId: coreLoopPrivateChannelPostLaneId,

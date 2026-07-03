@@ -78,6 +78,7 @@ test("production feature spine resolver builds and validates source collections"
     "host-phase-control",
     "player-action-submission",
     "invalid-action-recovery",
+    "player-action-boundary",
     "private-channel",
     "resolution-receipts",
     "stale-recovery",
@@ -87,6 +88,21 @@ test("production feature spine resolver builds and validates source collections"
   assert.equal(
     collection.bySlotId["invalid-action-recovery"].recoveryHookId,
     "invalidActionReject",
+  );
+  assert.deepEqual(
+    {
+      roleUrlId: collection.bySlotId["player-action-boundary"].roleUrlId,
+      checkpointId: collection.bySlotId["player-action-boundary"].checkpointId,
+      recoveryHookId:
+        collection.bySlotId["player-action-boundary"].recoveryHookId,
+      adminCheckId: collection.bySlotId["player-action-boundary"].adminCheckId,
+    },
+    {
+      roleUrlId: "d01-n01-d02-normalPlayer",
+      checkpointId: "d01-n01-d02-n01-action-open",
+      recoveryHookId: "normalPlayerDirectActionReject",
+      adminCheckId: "player-action-boundary",
+    },
   );
   assert.equal(
     validProductionFeatureSpineTargetCollection(collection, {
@@ -157,6 +173,7 @@ function coreLoopSourceTargetFixture() {
       "host-lifecycle-control",
       "action-loop",
       "invalid-action-recovery",
+      "player-action-boundary",
       "private-channel",
       "resolution-receipts",
       "stale-deadline-advance",

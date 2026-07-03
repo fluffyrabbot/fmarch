@@ -8,6 +8,7 @@ import {
 
 export {
   playerActionBoundaryLaneId,
+  playerActionBoundaryRecoveryHookId,
   playerActionLoopLaneId,
   playerActionSubmissionScenario,
   playerFactionalKillActionCommandFacts,
