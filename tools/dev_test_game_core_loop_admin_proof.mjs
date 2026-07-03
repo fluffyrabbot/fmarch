@@ -4,12 +4,11 @@ import {
   coreLoopSpineStatus,
 } from "../frontend/src/lib/app/local-proof-lane-status.mjs";
 import {
-  assertCompletedGameProofReadinessSurfaceProof,
-  completedGameProofReadinessProofScenarioCases,
-  completedGameProofReadinessScenarioFamilies,
-  completedGameProofReadinessScenarioFamily,
-  completedGameProofReadinessTransition,
-} from "./dev_test_game_core_loop_completed_game_proof_readiness_contract.mjs";
+  assertCompletedGameEndgameSurfaceProof,
+  completedGameEndgameProofScenarioCases,
+  completedGameEndgameScenarioCaseFamilies,
+  completedGameEndgameTransition,
+} from "./dev_test_game_core_loop_completed_game_shared_scenarios.mjs";
 import {
   assertPlayerStaleActionAfterTransitionProofCase,
   assertPlayerStaleVoteAfterTransitionProofCase,
@@ -104,6 +103,7 @@ import {
 } from "./dev_test_game_core_loop_host_control_scenarios.mjs";
 import {
   coreLoopCompletedEndgameProgressionFamilyId,
+  coreLoopCompletedEndgameProgressionScenarioFamily,
 } from "./dev_test_game_core_loop_completed_endgame_progression_scenarios.mjs";
 import {
   coreLoopPrivateChannelRecoveryFamilyId,
@@ -433,7 +433,7 @@ await runAdminAuditProof({
         coreLoopNoLynchProgressionScenarioFamily(),
       dayFiveProgressionFamily: coreLoopDayFiveProgressionScenarioFamily(),
       completedEndgameProgressionFamily:
-        completedGameProofReadinessScenarioFamily(),
+        coreLoopCompletedEndgameProgressionScenarioFamily(),
       privateChannelRecoveryFamily:
         coreLoopPrivateChannelRecoveryScenarioFamily(),
       highlightedLaneEvidence: coreLoopHighlightedLaneEvidence(proofRun),
@@ -1801,9 +1801,9 @@ async function proveCompletedGameEndgameSurface({
   normalPlayerRoleUrl,
   deadPlayerRoleUrl,
 }) {
-  const scenarioFamilies = completedGameProofReadinessScenarioFamilies();
+  const scenarioFamilies = completedGameEndgameScenarioCaseFamilies();
   const completedScenarioCases =
-    completedGameProofReadinessProofScenarioCases({
+    completedGameEndgameProofScenarioCases({
       actionPlayerRoleUrl,
       normalPlayerRoleUrl,
       deadPlayerRoleUrl,
@@ -1875,7 +1875,7 @@ async function proveCompletedGameEndgameSurface({
     sourceNormalPlayerRoleUrl: String(normalPlayerRoleUrl),
     sourceDeadPlayerRoleUrl: String(deadPlayerRoleUrl),
     clickedThroughFromRoleUrl: true,
-    transition: completedGameProofReadinessTransition({
+    transition: completedGameEndgameTransition({
       scenarioFamilies,
     }),
     hostCompleteProof,
@@ -10194,8 +10194,8 @@ function assertDayFiveNoLynchResolutionSurface(dayFiveNoLynchResolutionSurface) 
   });
 }
 function assertCompletedGameEndgameSurface(completedGameEndgameSurface) {
-  const scenarioFamilies = completedGameProofReadinessScenarioFamilies();
-  assertCompletedGameProofReadinessSurfaceProof({
+  const scenarioFamilies = completedGameEndgameScenarioCaseFamilies();
+  assertCompletedGameEndgameSurfaceProof({
     completedGameEndgameSurface,
     scenarioFamilies,
     assertHostPhaseTransitionActionProof,
