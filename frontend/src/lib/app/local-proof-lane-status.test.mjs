@@ -173,16 +173,20 @@ test("core loop spine status formats compact live spine evidence", () => {
             checkpoints: [
               { id: "n02-action-submitted", actionState: "ack" },
               { id: "d03-day-controls-return", phase: "D03" },
+              {
+                id: "d03-terminal-advance-reject",
+                rejectError: "InvalidTarget",
+              },
             ],
           },
         ],
       },
     }),
-    "passed: D01 -> N01 -> D02, vote ack, N02 action ack, next D03",
+    "passed: D01 -> N01 -> D02, vote ack, N02 action ack, next D03, terminal advance InvalidTarget",
   );
   assert.equal(
     coreLoopSpineStatus({}),
-    "unknown: unknown -> unknown -> unknown, vote unknown, unknown action unknown, next unknown",
+    "unknown: unknown -> unknown -> unknown, vote unknown, unknown action unknown, next unknown, terminal advance unknown",
   );
 });
 

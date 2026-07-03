@@ -3583,6 +3583,7 @@ function formatCoreLoopSpineCheckpointStatus(checkpoint) {
   }
   pushField(parts, "resolve", checkpoint?.resolveState);
   pushField(parts, "advance", checkpoint?.advanceState);
+  pushField(parts, "reject", checkpoint?.rejectError);
   pushField(parts, "action", checkpoint?.actionTemplate);
   pushField(parts, "action", checkpoint?.actionState);
   pushField(parts, "template", checkpoint?.templateId);
@@ -3604,6 +3605,11 @@ function formatCoreLoopSpineCheckpointStatus(checkpoint) {
   if (typeof checkpoint?.normalPlayerFactionalKillVisible === "boolean") {
     parts.push(
       `normal factional kill ${checkpoint.normalPlayerFactionalKillVisible ? "visible" : "hidden"}`,
+    );
+  }
+  if (typeof checkpoint?.advanceControlVisible === "boolean") {
+    parts.push(
+      `advance control ${checkpoint.advanceControlVisible ? "visible" : "hidden"}`,
     );
   }
   return parts.length === 0 ? "recorded" : parts.join(", ");

@@ -6633,6 +6633,28 @@ function buildCoreLoopSpineSummary({ session, verification }) {
             "submit_vote",
           ),
         },
+        {
+          id: "d03-terminal-advance-reject",
+          voteState: d02VoteNight.d03TerminalVoteSubmission?.state ?? null,
+          voteTarget: d02VoteNight.d03TerminalVoteTarget?.slotId ?? null,
+          projectedCount: d02VoteNight.d03TerminalApiVoteRow?.count ?? null,
+          resolveState: d02VoteNight.resolveD03?.commandStatus?.state ?? null,
+          outcomeStatus: d02VoteNight.d03TerminalDayVoteOutcome?.status ?? null,
+          winnerSlot: d02VoteNight.d03TerminalDayVoteOutcome?.winnerSlot ?? null,
+          targetAlive: d02VoteNight.d03TerminalResolvedSlot?.alive ?? null,
+          targetStatus: d02VoteNight.d03TerminalResolvedSlot?.status ?? null,
+          advanceState:
+            d02VoteNight.d03TerminalAdvanceReject?.commandStatus?.state ?? null,
+          rejectError:
+            d02VoteNight.d03TerminalAdvanceReject?.commandStatus?.error ?? null,
+          phase: d02VoteNight.hostAfterTerminalAdvanceReject?.phase?.id ?? null,
+          locked:
+            d02VoteNight.hostAfterTerminalAdvanceReject?.phase?.locked ?? null,
+          advanceControlVisible:
+            d02VoteNight.hostAfterTerminalAdvanceReject?.phaseActions?.includes(
+              "advance_phase",
+            ) ?? null,
+        },
       ],
     },
   ];
@@ -6642,6 +6664,8 @@ function buildCoreLoopSpineSummary({ session, verification }) {
     normalPlayerDirectActionReject:
       dayNight.normalPlayerNightSurface?.directRejectError ?? null,
     staleActionConflictReject: actionLoop.staleActionConflict?.reject?.error ?? null,
+    d03TerminalAdvanceReject:
+      d02VoteNight.d03TerminalAdvanceReject?.commandStatus?.error ?? null,
   };
   const passed =
     cycles[0]?.game === session?.game &&
@@ -6729,14 +6753,27 @@ function buildCoreLoopSpineSummary({ session, verification }) {
     cycles[2]?.checkpoints?.[3]?.actionSubmitControls === 0 &&
     cycles[2]?.checkpoints?.[3]?.actionVoteControls > 0 &&
     cycles[2]?.checkpoints?.[3]?.normalVoteControls > 0 &&
+    cycles[2]?.checkpoints?.[4]?.voteState === "ack" &&
+    cycles[2]?.checkpoints?.[4]?.voteTarget === "slot_4" &&
+    cycles[2]?.checkpoints?.[4]?.resolveState === "ack" &&
+    cycles[2]?.checkpoints?.[4]?.outcomeStatus === "NoMajority" &&
+    cycles[2]?.checkpoints?.[4]?.winnerSlot === null &&
+    cycles[2]?.checkpoints?.[4]?.targetAlive === true &&
+    cycles[2]?.checkpoints?.[4]?.targetStatus === "alive" &&
+    cycles[2]?.checkpoints?.[4]?.advanceState === "reject" &&
+    cycles[2]?.checkpoints?.[4]?.rejectError === "InvalidTarget" &&
+    cycles[2]?.checkpoints?.[4]?.phase === "D03" &&
+    cycles[2]?.checkpoints?.[4]?.locked === true &&
+    cycles[2]?.checkpoints?.[4]?.advanceControlVisible === true &&
     recoveryHooks.staleLockedVoteReject === "PhaseLocked" &&
     recoveryHooks.invalidActionReject === "InvalidTarget" &&
     recoveryHooks.normalPlayerDirectActionReject === "InvalidTarget" &&
-    recoveryHooks.staleActionConflictReject === "PhaseLocked";
+    recoveryHooks.staleActionConflictReject === "PhaseLocked" &&
+    recoveryHooks.d03TerminalAdvanceReject === "InvalidTarget";
   return {
     status: passed ? "passed" : "failed",
     proof:
-      "Compact derived spine map for the seeded role URL core loop: D01 resolve to N01 action, N01 resolution to D02 day controls, D02 vote resolution, N02 action return, N02 action submission/resolution, and D03 day controls.",
+      "Compact derived spine map for the seeded role URL core loop: D01 resolve to N01 action, N01 resolution to D02 day controls, D02 vote resolution, N02 action return, N02 action submission/resolution, D03 day controls, and terminal D03 AdvancePhase InvalidTarget recovery instead of an unproven Night 3.",
     sourceLaneIds: [...coreLoopPhaseProgressionSpineSourceLaneIds],
     cycles,
     recoveryHooks,
@@ -6768,7 +6805,9 @@ function assertCoreLoopSpineSummary(summary) {
       typeof cycle.roleUrls !== "object" ||
       !Object.values(cycle.roleUrls).every((url) => typeof url === "string") ||
       !Array.isArray(cycle.checkpoints) ||
-      cycle.checkpoints.length !== 4
+      (cycle.id === "n02-d03"
+        ? cycle.checkpoints.length !== 5
+        : cycle.checkpoints.length !== 4)
     ) {
       throw new Error(`core loop spine cycle malformed: ${JSON.stringify(cycle)}`);
     }
@@ -6785,7 +6824,8 @@ function assertCoreLoopSpineSummary(summary) {
     summary.recoveryHooks?.staleLockedVoteReject !== "PhaseLocked" ||
     summary.recoveryHooks?.invalidActionReject !== "InvalidTarget" ||
     summary.recoveryHooks?.normalPlayerDirectActionReject !== "InvalidTarget" ||
-    summary.recoveryHooks?.staleActionConflictReject !== "PhaseLocked"
+    summary.recoveryHooks?.staleActionConflictReject !== "PhaseLocked" ||
+    summary.recoveryHooks?.d03TerminalAdvanceReject !== "InvalidTarget"
   ) {
     throw new Error(
       `core loop spine recovery hooks drifted: ${JSON.stringify(summary.recoveryHooks)}`,

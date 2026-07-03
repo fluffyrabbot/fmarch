@@ -2168,9 +2168,9 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
     graph,
     releaseReadiness,
   );
-  assert.equal(graph.summary.nodeCount, 35);
-  assert.equal(graph.summary.roleUrlCount, 35);
-  assert.equal(graph.summary.productionFeatureTargetCount, 16);
+  assert.equal(graph.summary.nodeCount, 36);
+  assert.equal(graph.summary.roleUrlCount, 36);
+  assert.equal(graph.summary.productionFeatureTargetCount, 17);
   assert.deepEqual(
     graph.nodes
       .filter((node) => node.kind === "admin-proof-surface")
@@ -3003,8 +3003,81 @@ test("session card and markdown include role credential URLs and tokens", async 
         d03NormalPlayerSurface: {
           commandState: {
             phase: { phaseId: "D03", locked: false },
+            actorSlot: "slot-7",
+            voteTargets: [{ kind: "slot", slotId: "slot_4", label: "Slot 4" }],
           },
-          buttons: [{ action: "submit_vote:no_lynch", disabled: false }],
+          buttons: [
+            { action: "submit_vote:slot_4", text: "Vote Slot 4", disabled: false },
+            { action: "submit_vote:no_lynch", disabled: false },
+          ],
+        },
+        d03TerminalVoteTarget: {
+          kind: "slot",
+          slotId: "slot_4",
+          label: "Slot 4",
+        },
+        d03TerminalVoteButton: {
+          action: "submit_vote:slot_4",
+          text: "Vote Slot 4",
+          disabled: false,
+        },
+        d03TerminalVoteSubmission: {
+          state: "ack",
+          requestEnvelope: {
+            body: {
+              body: {
+                principal_user_id: "player-mira",
+                command: {
+                  SubmitVote: {
+                    actor_slot: "slot-7",
+                    target: { Slot: "slot_4" },
+                  },
+                },
+              },
+            },
+          },
+        },
+        d03TerminalPlayerAfterVote: {
+          commandState: {
+            currentVote: { kind: "slot", slotId: "slot_4" },
+          },
+          currentVote: { hasVote: "true" },
+          votecount: [{ target: "slot_4", count: 1 }],
+        },
+        d03TerminalApiVoteRow: {
+          phaseId: "D03",
+          target: "slot_4",
+          count: 1,
+        },
+        resolveD03: { commandStatus: { state: "ack" } },
+        hostAfterResolveD03: {
+          phase: { id: "D03", locked: true },
+          phaseActions: ["advance_phase"],
+          slots: [{ slot_id: "slot_4", alive: true, status: "alive" }],
+        },
+        d03TerminalDayVoteOutcome: {
+          phaseId: "D03",
+          status: "NoMajority",
+          winnerSlot: null,
+          tallies: { slot_4: 1 },
+        },
+        d03TerminalResolvedSlot: {
+          slot_id: "slot_4",
+          alive: true,
+          status: "alive",
+        },
+        d03TerminalAdvanceReject: {
+          commandStatus: {
+            state: "reject",
+            error: "InvalidTarget",
+            message:
+              "Reject InvalidTarget: invalid target; stale phase state, refresh and use current controls",
+          },
+        },
+        hostAfterTerminalAdvanceReject: {
+          phase: { id: "D03", locked: true },
+          phaseActions: ["advance_phase", "unlock_thread"],
+          slots: [{ slot_id: "slot_4", alive: true, status: "alive" }],
         },
       },
       staleActionConflict: {
@@ -10582,7 +10655,7 @@ function coreLoopAdminProofFixture() {
       proofRun: "target/dev-test-game/proof-run.json",
       game: "00000000-0000-0000-0000-000000000001",
       coreLoopSpineStatus:
-        "passed: D01 -> N01 -> D02, vote ack, N02 action ack, next D03",
+        "passed: D01 -> N01 -> D02, vote ack, N02 action ack, next D03, terminal advance InvalidTarget",
       completedGameHardeningCoverageStatus: "passed: 10/10 lanes across 4 families",
       hostControlFamily: coreLoopHostControlScenarioFamily(),
       playerActionRecoveryFamily:
@@ -10665,12 +10738,14 @@ function coreLoopAdminProofFixture() {
           "n02-d03-n02-action-submitted",
           "n02-d03-n02-resolved-target-killed",
           "n02-d03-d03-day-controls-return",
+          "n02-d03-d03-terminal-advance-reject",
         ],
         recoveryHooks: [
           "staleLockedVoteReject",
           "invalidActionReject",
           "normalPlayerDirectActionReject",
           "staleActionConflictReject",
+          "d03TerminalAdvanceReject",
         ],
       },
     },
@@ -10684,7 +10759,7 @@ function coreLoopAdminProofFixture() {
       visibleChecks: [...coreLoopAdminCheckIds],
       visibleCheckStatuses: {
         "core-loop-spine":
-          "passed: D01 -> N01 -> D02, vote ack, N02 action ack, next D03",
+          "passed: D01 -> N01 -> D02, vote ack, N02 action ack, next D03, terminal advance InvalidTarget",
         "completed-game-hardening-coverage":
           "passed: 10/10 lanes across 4 families",
       },
@@ -10716,12 +10791,14 @@ function coreLoopAdminProofFixture() {
         "n02-d03-n02-action-submitted",
         "n02-d03-n02-resolved-target-killed",
         "n02-d03-d03-day-controls-return",
+        "n02-d03-d03-terminal-advance-reject",
       ],
       visibleSpineRecoveryHooks: [
         "staleLockedVoteReject",
         "invalidActionReject",
         "normalPlayerDirectActionReject",
         "staleActionConflictReject",
+        "d03TerminalAdvanceReject",
       ],
       rawInviteTokensVisible: false,
       releaseReady: false,
@@ -12511,12 +12588,14 @@ function coreLoopSpineTargetsFixture() {
       "n02-d03-n02-action-submitted",
       "n02-d03-n02-resolved-target-killed",
       "n02-d03-d03-day-controls-return",
+      "n02-d03-d03-terminal-advance-reject",
     ],
     recoveryHookIds: [
       "staleLockedVoteReject",
       "invalidActionReject",
       "normalPlayerDirectActionReject",
       "staleActionConflictReject",
+      "d03TerminalAdvanceReject",
     ],
     visibleAdminCheckIds: [...coreLoopAdminCheckIds],
     roleUrlHrefs,

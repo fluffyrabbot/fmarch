@@ -80,7 +80,8 @@ export function coreLoopSpineStatus(proofRun) {
   const secondNight = checkpointById(secondCycle, "n02-action-open");
   const thirdAction = checkpointById(thirdCycle, "n02-action-submitted");
   const thirdDay = checkpointById(thirdCycle, "d03-day-controls-return");
-  return `${status}: ${String(firstStart?.phase ?? "unknown")} -> ${String(firstNight?.phase ?? "unknown")} -> ${String(firstDay?.phase ?? "unknown")}, vote ${String(secondVote?.voteState ?? "unknown")}, ${String(secondNight?.phase ?? "unknown")} action ${String(thirdAction?.actionState ?? "unknown")}, next ${String(thirdDay?.phase ?? "unknown")}`;
+  const terminal = checkpointById(thirdCycle, "d03-terminal-advance-reject");
+  return `${status}: ${String(firstStart?.phase ?? "unknown")} -> ${String(firstNight?.phase ?? "unknown")} -> ${String(firstDay?.phase ?? "unknown")}, vote ${String(secondVote?.voteState ?? "unknown")}, ${String(secondNight?.phase ?? "unknown")} action ${String(thirdAction?.actionState ?? "unknown")}, next ${String(thirdDay?.phase ?? "unknown")}, terminal advance ${String(terminal?.rejectError ?? "unknown")}`;
 }
 
 export function hardeningHighlightedLaneEvidence(proofRun) {

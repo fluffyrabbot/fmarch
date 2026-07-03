@@ -129,6 +129,19 @@ assert.equal(proofRunSpineThirdCycle.checkpoints[2].targetStatus, "dead");
 assert.equal(proofRunSpineThirdCycle.checkpoints[3].phase, "D03");
 assert.equal(proofRunSpineThirdCycle.checkpoints[3].actionVoteControls > 0, true);
 assert.equal(proofRunSpineThirdCycle.checkpoints[3].normalVoteControls > 0, true);
+assert.equal(proofRunSpineThirdCycle.checkpoints[4].id, "d03-terminal-advance-reject");
+assert.equal(proofRunSpineThirdCycle.checkpoints[4].voteState, "ack");
+assert.equal(proofRunSpineThirdCycle.checkpoints[4].voteTarget, "slot_4");
+assert.equal(proofRunSpineThirdCycle.checkpoints[4].resolveState, "ack");
+assert.equal(proofRunSpineThirdCycle.checkpoints[4].outcomeStatus, "NoMajority");
+assert.equal(proofRunSpineThirdCycle.checkpoints[4].winnerSlot, null);
+assert.equal(proofRunSpineThirdCycle.checkpoints[4].targetAlive, true);
+assert.equal(proofRunSpineThirdCycle.checkpoints[4].targetStatus, "alive");
+assert.equal(proofRunSpineThirdCycle.checkpoints[4].advanceState, "reject");
+assert.equal(proofRunSpineThirdCycle.checkpoints[4].rejectError, "InvalidTarget");
+assert.equal(proofRunSpineThirdCycle.checkpoints[4].phase, "D03");
+assert.equal(proofRunSpineThirdCycle.checkpoints[4].locked, true);
+assert.equal(proofRunSpineThirdCycle.checkpoints[4].advanceControlVisible, true);
 assert.equal(proofRun.coreLoopSpine.recoveryHooks.staleLockedVoteReject, "PhaseLocked");
 assert.equal(proofRun.coreLoopSpine.recoveryHooks.invalidActionReject, "InvalidTarget");
 assert.equal(
@@ -136,6 +149,7 @@ assert.equal(
   "InvalidTarget",
 );
 assert.equal(proofRun.coreLoopSpine.recoveryHooks.staleActionConflictReject, "PhaseLocked");
+assert.equal(proofRun.coreLoopSpine.recoveryHooks.d03TerminalAdvanceReject, "InvalidTarget");
 assert.deepEqual(session.verification.roles, [
   "host",
   "player",
@@ -867,6 +881,95 @@ assert.equal(
   session.verification.actionLoop.d02VoteNightTransition.n02NormalPlayerSurface
     .factionalKillVisible,
   false,
+);
+assert.equal(
+  session.verification.actionLoop.d02VoteNightTransition.d03TerminalVoteSubmission.state,
+  "ack",
+);
+assert.equal(
+  session.verification.actionLoop.d02VoteNightTransition.d03TerminalVoteSubmission
+    .requestEnvelope.body.body.principal_user_id,
+  "player-mira",
+);
+assert.equal(
+  session.verification.actionLoop.d02VoteNightTransition.d03TerminalVoteSubmission
+    .requestEnvelope.body.body.command.SubmitVote.actor_slot,
+  "slot-7",
+);
+assert.equal(
+  session.verification.actionLoop.d02VoteNightTransition.d03TerminalVoteSubmission
+    .requestEnvelope.body.body.command.SubmitVote.target.Slot,
+  "slot_4",
+);
+assert.equal(
+  session.verification.actionLoop.d02VoteNightTransition.d03TerminalApiVoteRow
+    .phaseId,
+  "D03",
+);
+assert.equal(
+  session.verification.actionLoop.d02VoteNightTransition.d03TerminalApiVoteRow
+    .target,
+  "slot_4",
+);
+assert.equal(
+  session.verification.actionLoop.d02VoteNightTransition.d03TerminalApiVoteRow
+    .count,
+  1,
+);
+assert.equal(
+  session.verification.actionLoop.d02VoteNightTransition.resolveD03.commandStatus
+    .state,
+  "ack",
+);
+assert.equal(
+  session.verification.actionLoop.d02VoteNightTransition.hostAfterResolveD03.phase
+    .id,
+  "D03",
+);
+assert.equal(
+  session.verification.actionLoop.d02VoteNightTransition.hostAfterResolveD03.phase
+    .locked,
+  true,
+);
+assert.equal(
+  session.verification.actionLoop.d02VoteNightTransition.d03TerminalDayVoteOutcome
+    .status,
+  "NoMajority",
+);
+assert.equal(
+  session.verification.actionLoop.d02VoteNightTransition.d03TerminalDayVoteOutcome
+    .winnerSlot,
+  null,
+);
+assert.equal(
+  session.verification.actionLoop.d02VoteNightTransition.d03TerminalResolvedSlot
+    .alive,
+  true,
+);
+assert.equal(
+  session.verification.actionLoop.d02VoteNightTransition.d03TerminalResolvedSlot
+    .status,
+  "alive",
+);
+assert.equal(
+  session.verification.actionLoop.d02VoteNightTransition.d03TerminalAdvanceReject
+    .commandStatus.state,
+  "reject",
+);
+assert.equal(
+  session.verification.actionLoop.d02VoteNightTransition.d03TerminalAdvanceReject
+    .commandStatus.error,
+  "InvalidTarget",
+);
+assert.equal(
+  session.verification.actionLoop.d02VoteNightTransition.hostAfterTerminalAdvanceReject
+    .phase.locked,
+  true,
+);
+assert.equal(
+  session.verification.actionLoop.d02VoteNightTransition.hostAfterTerminalAdvanceReject
+    .phaseActions.includes("advance_phase"),
+  true,
 );
 const concurrentVoteRace = session.verification.multiplayerHardening.concurrentVoteRace;
 const expectedOfficialVotecountBody = `Official votecount for D02\n- ${concurrentVoteRace.targetSlot}: ${concurrentVoteRace.apiProjection.count}`;

@@ -3497,6 +3497,160 @@ async function verifySeededD02VoteNightTransition({
       );
     }
 
+    const d03TerminalVoteTarget =
+      d03NormalPlayerSurface.commandState?.voteTargets?.find(
+        (target) =>
+          target.kind === "slot" &&
+          String(target.label ?? "").toLowerCase().includes("slot 4"),
+      ) ??
+      d03NormalPlayerSurface.commandState?.voteTargets?.find(
+        (target) => target.kind === "slot",
+      );
+    const d03TerminalVoteButton = d03NormalPlayerSurface.buttons.find(
+      (button) =>
+        button.action === "submit_vote" &&
+        d03TerminalVoteTarget?.label !== undefined &&
+        button.text?.includes(d03TerminalVoteTarget.label) &&
+        button.disabled === false,
+    );
+    if (
+      d03NormalPlayerSurface.commandState?.actorSlot !== "slot-7" ||
+      d03TerminalVoteTarget?.kind !== "slot" ||
+      typeof d03TerminalVoteTarget?.slotId !== "string" ||
+      d03TerminalVoteButton === undefined
+    ) {
+      throw new Error(
+        `D03 terminal vote setup drifted: ${JSON.stringify({
+          d03NormalPlayerSurface,
+          d03TerminalVoteTarget,
+          d03TerminalVoteButton,
+        })}`,
+      );
+    }
+    await playerEntry.page
+      .locator('[data-action="submit_vote"]', {
+        hasText: d03TerminalVoteTarget.label,
+      })
+      .first()
+      .click();
+    await playerEntry.page.waitForFunction(
+      (targetSlot) =>
+        window.__fmarchPlayerCommandStatus?.state === "ack" &&
+        window.__fmarchPlayerCommandStatus?.requestEnvelope?.body?.body?.command
+          ?.SubmitVote?.target?.Slot === targetSlot &&
+        window.__fmarchPlayerProjection?.commandState?.currentVote?.kind ===
+          "slot" &&
+        window.__fmarchPlayerProjection?.commandState?.currentVote?.slotId ===
+          targetSlot,
+      d03TerminalVoteTarget.slotId,
+    );
+    const d03TerminalVoteSubmission = await playerEntry.page.evaluate(
+      () => window.__fmarchPlayerCommandStatus,
+    );
+    const d03TerminalPlayerAfterVote = {
+      commandState: await playerEntry.page.evaluate(
+        () => window.__fmarchPlayerProjection?.commandState,
+      ),
+      currentVote: await playerCurrentVoteSnapshot(playerEntry.page),
+      votecount: await playerEntry.page.evaluate(
+        () => window.__fmarchPlayerProjection?.votecount ?? [],
+      ),
+    };
+    const d03TerminalApiVotecountAfterVote = await fetchJson(
+      `${apiBaseUrl}/games/${transitionGame}/votecount`,
+    );
+    const d03TerminalApiVoteRow = normalizedVotecountRows(
+      d03TerminalApiVotecountAfterVote,
+    ).find(
+      (row) =>
+        row.phaseId === "D03" && row.target === d03TerminalVoteTarget.slotId,
+    );
+
+    const resolveD03 = await confirmHostAction(hostEntry.page, "resolve_phase");
+    await waitForHostProjectionPhase(hostEntry.page, {
+      phaseId: "D03",
+      locked: true,
+    });
+    const hostAfterResolveD03 = {
+      phase: await hostEntry.page.evaluate(() => window.__fmarchHostProjection?.phase),
+      phaseActions: await visibleHostPhaseActions(hostEntry.page),
+      dayVoteOutcomes: await hostEntry.page.evaluate(
+        () => window.__fmarchHostDayVoteOutcomesProjection ?? [],
+      ),
+      slots: await hostEntry.page.evaluate(() => window.__fmarchHostProjection?.slots ?? []),
+    };
+    const d03TerminalDayVoteOutcomes = await fetchJson(
+      `${apiBaseUrl}/games/${transitionGame}/day-vote-outcomes`,
+    );
+    const d03TerminalDayVoteOutcome = normalizeDayVoteOutcomeRows(
+      d03TerminalDayVoteOutcomes,
+    ).find((row) => row.phaseId === "D03");
+    const d03TerminalResolvedSlot = await fetchResolvedSlotState({
+      apiBaseUrl,
+      game: transitionGame,
+      slot: d03TerminalVoteTarget.slotId,
+    });
+
+    const d03TerminalAdvanceReject = await confirmHostAction(
+      hostEntry.page,
+      "advance_phase",
+      "reject",
+    );
+    await waitForHostProjectionPhase(hostEntry.page, {
+      phaseId: "D03",
+      locked: true,
+    });
+    const hostAfterTerminalAdvanceReject = {
+      phase: await hostEntry.page.evaluate(() => window.__fmarchHostProjection?.phase),
+      phaseActions: await visibleHostPhaseActions(hostEntry.page),
+      slots: await hostEntry.page.evaluate(() => window.__fmarchHostProjection?.slots ?? []),
+    };
+
+    if (
+      d03TerminalVoteSubmission?.state !== "ack" ||
+      d03TerminalVoteSubmission?.requestEnvelope?.body?.body?.principal_user_id !==
+        "player-mira" ||
+      d03TerminalVoteSubmission?.requestEnvelope?.body?.body?.command?.SubmitVote
+        ?.actor_slot !== "slot-7" ||
+      d03TerminalVoteSubmission?.requestEnvelope?.body?.body?.command?.SubmitVote
+        ?.target?.Slot !== d03TerminalVoteTarget.slotId ||
+      d03TerminalPlayerAfterVote.commandState?.currentVote?.slotId !==
+        d03TerminalVoteTarget.slotId ||
+      d03TerminalPlayerAfterVote.currentVote.hasVote !== "true" ||
+      d03TerminalApiVoteRow?.count === undefined ||
+      resolveD03.commandStatus?.state !== "ack" ||
+      hostAfterResolveD03.phase?.id !== "D03" ||
+      hostAfterResolveD03.phase?.locked !== true ||
+      d03TerminalDayVoteOutcome?.status !== "NoMajority" ||
+      d03TerminalDayVoteOutcome?.winnerSlot !== null ||
+      d03TerminalDayVoteOutcome?.tallies?.[d03TerminalVoteTarget.slotId] !== 1 ||
+      d03TerminalResolvedSlot?.slot_id !== d03TerminalVoteTarget.slotId ||
+      d03TerminalResolvedSlot?.alive !== true ||
+      d03TerminalResolvedSlot?.status !== "alive" ||
+      d03TerminalAdvanceReject.commandStatus?.state !== "reject" ||
+      d03TerminalAdvanceReject.commandStatus?.error !== "InvalidTarget" ||
+      hostAfterTerminalAdvanceReject.phase?.id !== "D03" ||
+      hostAfterTerminalAdvanceReject.phase?.locked !== true ||
+      !hostAfterTerminalAdvanceReject.phaseActions.includes("advance_phase")
+    ) {
+      throw new Error(
+        `D03 terminal boundary drifted: ${JSON.stringify({
+          transitionGame,
+          d03TerminalVoteTarget,
+          d03TerminalVoteButton,
+          d03TerminalVoteSubmission,
+          d03TerminalPlayerAfterVote,
+          d03TerminalApiVoteRow,
+          resolveD03,
+          hostAfterResolveD03,
+          d03TerminalDayVoteOutcome,
+          d03TerminalResolvedSlot,
+          d03TerminalAdvanceReject,
+          hostAfterTerminalAdvanceReject,
+        })}`,
+      );
+    }
+
     return {
       status: "passed",
       game: transitionGame,
@@ -3531,8 +3685,19 @@ async function verifySeededD02VoteNightTransition({
       d03HostSurface,
       d03ActionSurface,
       d03NormalPlayerSurface,
+      d03TerminalVoteTarget,
+      d03TerminalVoteButton,
+      d03TerminalVoteSubmission,
+      d03TerminalPlayerAfterVote,
+      d03TerminalApiVoteRow,
+      resolveD03,
+      hostAfterResolveD03,
+      d03TerminalDayVoteOutcome,
+      d03TerminalResolvedSlot,
+      d03TerminalAdvanceReject,
+      hostAfterTerminalAdvanceReject,
       proof:
-        "A disposable seeded local game reached open D02 through real phase commands, the Slot 4 mafia-goon role URL submitted the deciding day vote, the host role URL resolved D02 into a day-vote kill with the target-only receipt, advanced to open N02 where the living mafia-goon role URL regained factional_kill while the normal player role URL did not, then the mafia-goon role URL submitted the N02 factional_kill, the host role URL resolved it, and the same role URLs advanced to open D03 day controls.",
+        "A disposable seeded local game reached open D02 through real phase commands, the Slot 4 mafia-goon role URL submitted the deciding day vote, the host role URL resolved D02 into a day-vote kill with the target-only receipt, advanced to open N02 where the living mafia-goon role URL regained factional_kill while the normal player role URL did not, then the mafia-goon role URL submitted the N02 factional_kill, the host role URL resolved it, and the same role URLs advanced to open D03 day controls before Slot 7 submitted a D03 vote for Slot 4, host resolution recorded NoMajority and locked D03, and host AdvancePhase rejected InvalidTarget instead of inventing a Night 3.",
     };
   } finally {
     await hostEntry.context.close().catch(() => {});

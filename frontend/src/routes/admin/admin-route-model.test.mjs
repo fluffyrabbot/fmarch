@@ -2290,6 +2290,10 @@ test("admin local core loop detail data carries lane rows", async () => {
             "phase N02, locked, target dead, target status dead",
           ],
           ["d03-day-controls-return", "phase D03"],
+          [
+            "d03-terminal-advance-reject",
+            "phase D03, locked, resolve ack, advance reject, reject InvalidTarget, target alive, target status alive, vote target slot_4, vote ack, outcome NoMajority, count 1, advance control visible",
+          ],
         ],
       ],
     ],
@@ -2301,6 +2305,7 @@ test("admin local core loop detail data carries lane rows", async () => {
       ["invalidActionReject", "InvalidTarget"],
       ["normalPlayerDirectActionReject", "InvalidTarget"],
       ["staleActionConflictReject", "PhaseLocked"],
+      ["d03TerminalAdvanceReject", "InvalidTarget"],
     ],
   );
   assert.equal(data.audit.checks.length, coreLoopAdminCheckIds.length);
@@ -2315,7 +2320,7 @@ test("admin local core loop detail data carries lane rows", async () => {
     [
       [
         "core-loop-spine",
-        "passed: D01 -> N01 -> D02, vote ack, N02 action ack, next D03",
+        "passed: D01 -> N01 -> D02, vote ack, N02 action ack, next D03, terminal advance InvalidTarget",
       ],
       ["core-loop", "passed: PhaseLocked vote receipt, unchanged unknown, lock ack/unlock ack"],
       ["action-loop", "passed: role URL false, night unknown, receipt unknown, D02 unknown, next unknown"],
@@ -2361,8 +2366,8 @@ test("admin local core loop detail data carries lane rows", async () => {
     [
       [
         "core-loop-spine",
-        "passed: D01 -> N01 -> D02, vote ack, N02 action ack, next D03",
-        "passed: D01 -> N01 -> D02, vote ack, N02 action ack, next D03",
+        "passed: D01 -> N01 -> D02, vote ack, N02 action ack, next D03, terminal advance InvalidTarget",
+        "passed: D01 -> N01 -> D02, vote ack, N02 action ack, next D03, terminal advance InvalidTarget",
       ],
       [
         "core-loop",
@@ -3632,6 +3637,22 @@ function proofRunFixture() {
               phase: "D03",
               actionVoteControls: 2,
             },
+            {
+              id: "d03-terminal-advance-reject",
+              phase: "D03",
+              locked: true,
+              voteState: "ack",
+              voteTarget: "slot_4",
+              projectedCount: 1,
+              resolveState: "ack",
+              outcomeStatus: "NoMajority",
+              winnerSlot: null,
+              targetAlive: true,
+              targetStatus: "alive",
+              advanceState: "reject",
+              rejectError: "InvalidTarget",
+              advanceControlVisible: true,
+            },
           ],
         },
       ],
@@ -3640,6 +3661,7 @@ function proofRunFixture() {
         invalidActionReject: "InvalidTarget",
         normalPlayerDirectActionReject: "InvalidTarget",
         staleActionConflictReject: "PhaseLocked",
+        d03TerminalAdvanceReject: "InvalidTarget",
       },
     },
     completedGameHardeningCoverage: completedGameHardeningCoverageFixture(),
