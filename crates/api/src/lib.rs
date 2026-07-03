@@ -2175,15 +2175,33 @@ fn phase_kind_for_id(phase_id: &str) -> Result<domain::pack::PhaseKind, ApiError
 }
 
 fn phase_number_for_id(phase_id: &str) -> Result<u32, ApiError> {
-    phase_id
-        .get(1..)
-        .and_then(|raw| raw.parse::<u32>().ok())
+    let digits: String = phase_id
+        .chars()
+        .skip(1)
+        .take_while(|c| c.is_ascii_digit())
+        .collect();
+    digits
+        .parse::<u32>()
+        .ok()
         .filter(|number| *number > 0)
         .ok_or_else(|| ApiError::Reject {
             status: StatusCode::INTERNAL_SERVER_ERROR,
             error: RejectCode::Internal,
             message: format!("invalid phase id `{phase_id}`"),
         })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn phase_number_for_id_accepts_revote_suffixes() {
+        assert_eq!(phase_number_for_id("D03").unwrap(), 3);
+        assert_eq!(phase_number_for_id("D03R1").unwrap(), 3);
+        assert_eq!(phase_number_for_id("N12R2").unwrap(), 12);
+        assert!(phase_number_for_id("DR1").is_err());
+    }
 }
 
 async fn load_pack_for_game(state: &ApiState, game: Uuid) -> Result<domain::Pack, ApiError> {

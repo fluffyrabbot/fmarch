@@ -3584,6 +3584,9 @@ function formatCoreLoopSpineCheckpointStatus(checkpoint) {
   pushField(parts, "resolve", checkpoint?.resolveState);
   pushField(parts, "advance", checkpoint?.advanceState);
   pushField(parts, "reject", checkpoint?.rejectError);
+  pushField(parts, "prompt", checkpoint?.promptId);
+  pushField(parts, "prompt status", checkpoint?.promptStatusAfter);
+  pushField(parts, "stream seqs", checkpoint?.streamSeqCount);
   pushField(parts, "action", checkpoint?.actionTemplate);
   pushField(parts, "action", checkpoint?.actionState);
   pushField(parts, "template", checkpoint?.templateId);

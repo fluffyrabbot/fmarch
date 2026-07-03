@@ -154,6 +154,20 @@ assert.equal(proofRunSpineThirdCycle.checkpoints[5].outcomeStatus, "NoMajority")
 assert.equal(proofRunSpineThirdCycle.checkpoints[5].projectedCount, 1);
 assert.equal(proofRunSpineThirdCycle.checkpoints[5].advanceControlVisible, true);
 assert.equal(proofRunSpineThirdCycle.checkpoints[5].unlockControlVisible, true);
+assert.equal(proofRunSpineThirdCycle.checkpoints[6].id, "d03-revote-prompt-resolved");
+assert.equal(proofRunSpineThirdCycle.checkpoints[6].promptId, "D03:revote:NoMajority");
+assert.equal(
+  proofRunSpineThirdCycle.checkpoints[6].promptActionId,
+  "resolve_host_prompt-D03-revote-NoMajority",
+);
+assert.equal(proofRunSpineThirdCycle.checkpoints[6].promptStatusBefore, "pending");
+assert.equal(proofRunSpineThirdCycle.checkpoints[6].resolveState, "ack");
+assert.equal(proofRunSpineThirdCycle.checkpoints[6].streamSeqCount, 2);
+assert.equal(proofRunSpineThirdCycle.checkpoints[6].promptStatusAfter, "resolved");
+assert.equal(proofRunSpineThirdCycle.checkpoints[6].phase, "D03R1");
+assert.equal(proofRunSpineThirdCycle.checkpoints[6].locked, false);
+assert.equal(proofRunSpineThirdCycle.checkpoints[6].actionVoteControls > 0, true);
+assert.equal(proofRunSpineThirdCycle.checkpoints[6].normalVoteControls > 0, true);
 assert.equal(proofRun.coreLoopSpine.recoveryHooks.staleLockedVoteReject, "PhaseLocked");
 assert.equal(proofRun.coreLoopSpine.recoveryHooks.invalidActionReject, "InvalidTarget");
 assert.equal(

@@ -6684,6 +6684,36 @@ function buildCoreLoopSpineSummary({ session, verification }) {
               "unlock_thread",
             ) ?? null,
         },
+        {
+          id: "d03-revote-prompt-resolved",
+          promptId: d02VoteNight.d03RevotePrompt?.id ?? null,
+          promptActionId: d02VoteNight.d03RevotePromptActionId ?? null,
+          promptStatusBefore:
+            d02VoteNight.d03RevotePrompt?.status ?? null,
+          resolveState:
+            d02VoteNight.d03RevotePromptResolution?.commandStatus?.state ?? null,
+          streamSeqCount: Array.isArray(
+            d02VoteNight.d03RevotePromptResolution?.commandStatus?.streamSeqs,
+          )
+            ? d02VoteNight.d03RevotePromptResolution.commandStatus.streamSeqs
+                .length
+            : null,
+          promptStatusAfter:
+            d02VoteNight.hostAfterD03RevotePrompt?.hostPrompts?.find(
+              (prompt) => prompt.id === d02VoteNight.d03RevotePrompt?.id,
+            )?.status ?? null,
+          phase: d02VoteNight.hostAfterD03RevotePrompt?.phase?.id ?? null,
+          locked:
+            d02VoteNight.hostAfterD03RevotePrompt?.phase?.locked ?? null,
+          actionVoteControls: countButtonsWithPrefix(
+            d02VoteNight.actionAfterD03RevotePrompt?.buttons,
+            "submit_vote",
+          ),
+          normalVoteControls: countButtonsWithPrefix(
+            d02VoteNight.normalAfterD03RevotePrompt?.buttons,
+            "submit_vote",
+          ),
+        },
       ],
     },
   ];
@@ -6804,6 +6834,17 @@ function buildCoreLoopSpineSummary({ session, verification }) {
     cycles[2]?.checkpoints?.[5]?.projectedCount === 1 &&
     cycles[2]?.checkpoints?.[5]?.advanceControlVisible === true &&
     cycles[2]?.checkpoints?.[5]?.unlockControlVisible === true &&
+    cycles[2]?.checkpoints?.[6]?.promptId === "D03:revote:NoMajority" &&
+    cycles[2]?.checkpoints?.[6]?.promptActionId ===
+      "resolve_host_prompt-D03-revote-NoMajority" &&
+    cycles[2]?.checkpoints?.[6]?.promptStatusBefore === "pending" &&
+    cycles[2]?.checkpoints?.[6]?.resolveState === "ack" &&
+    cycles[2]?.checkpoints?.[6]?.streamSeqCount === 2 &&
+    cycles[2]?.checkpoints?.[6]?.promptStatusAfter === "resolved" &&
+    cycles[2]?.checkpoints?.[6]?.phase === "D03R1" &&
+    cycles[2]?.checkpoints?.[6]?.locked === false &&
+    cycles[2]?.checkpoints?.[6]?.actionVoteControls > 0 &&
+    cycles[2]?.checkpoints?.[6]?.normalVoteControls > 0 &&
     recoveryHooks.staleLockedVoteReject === "PhaseLocked" &&
     recoveryHooks.invalidActionReject === "InvalidTarget" &&
     recoveryHooks.normalPlayerDirectActionReject === "InvalidTarget" &&
@@ -6812,7 +6853,7 @@ function buildCoreLoopSpineSummary({ session, verification }) {
   return {
     status: passed ? "passed" : "failed",
     proof:
-      "Compact derived spine map for the seeded role URL core loop: D01 resolve to N01 action, N01 resolution to D02 day controls, D02 vote resolution, N02 action return, N02 action submission/resolution, D03 day controls, terminal D03 AdvancePhase InvalidTarget recovery instead of an unproven Night 3, and host role URL reload back to locked D03 NoMajority truth.",
+      "Compact derived spine map for the seeded role URL core loop: D01 resolve to N01 action, N01 resolution to D02 day controls, D02 vote resolution, N02 action return, N02 action submission/resolution, D03 day controls, D03 NoMajority AdvancePhase InvalidTarget recovery, host role URL reload back to locked D03 NoMajority truth, and host revote prompt resolution into open D03R1 controls.",
     sourceLaneIds: [...coreLoopPhaseProgressionSpineSourceLaneIds],
     cycles,
     recoveryHooks,
@@ -6845,7 +6886,7 @@ function assertCoreLoopSpineSummary(summary) {
       !Object.values(cycle.roleUrls).every((url) => typeof url === "string") ||
       !Array.isArray(cycle.checkpoints) ||
       (cycle.id === "n02-d03"
-        ? cycle.checkpoints.length !== 6
+        ? cycle.checkpoints.length !== 7
         : cycle.checkpoints.length !== 4)
     ) {
       throw new Error(`core loop spine cycle malformed: ${JSON.stringify(cycle)}`);
