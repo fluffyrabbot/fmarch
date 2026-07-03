@@ -1640,7 +1640,7 @@ test("dev test-game next-action advances hosted deployment after target prefligh
         to: "production-feature:host-phase-control",
         relationship: "proves-production-feature",
       },
-      roleUrl: "/admin/audit/local-core-loop?game=<seeded-game>",
+      roleUrl: localAdminAuditRoleUrl(localAdminAuditIds.coreLoop),
       targetRoleUrl:
         coreLoopSpineTargetsFixture().roleUrlHrefs["d02-n02-host"],
       edgeTargetRoleUrl:
@@ -8284,7 +8284,7 @@ test("session card and markdown include role credential URLs and tokens", async 
     coreLoopReadiness.localDevelopmentSpine.checks.find(
       (item) => item.id === "local-core-loop-proof",
     ).adminRoleSurface.detailRoleUrl,
-    "/admin/audit/local-core-loop?game=<seeded-game>",
+    localAdminAuditRoleUrl(localAdminAuditIds.coreLoop),
   );
   assert.deepEqual(
     coreLoopReadiness.localDevelopmentSpine.checks.find(
@@ -8312,7 +8312,7 @@ test("session card and markdown include role credential URLs and tokens", async 
     hardeningReadiness.localDevelopmentSpine.checks.find(
       (item) => item.id === "local-hardening-proof",
     ).adminRoleSurface.detailRoleUrl,
-    "/admin/audit/local-hardening?game=<seeded-game>",
+    localAdminAuditRoleUrl(localAdminAuditIds.hardening),
   );
   const hardeningRoleUrlHrefs = hardeningRoleUrlHrefsFromProofRun(proofRun);
   assert.deepEqual(
@@ -9728,7 +9728,7 @@ function devTestGameReleaseReadinessChecklistFixture({
           laneIds: coreLoopAuditLaneIds,
           adminRoleSurface: {
             path: "target/dev-test-game/core-loop-admin-proof.json",
-            detailRoleUrl: "/admin/audit/local-core-loop?game=<seeded-game>",
+            detailRoleUrl: localAdminAuditRoleUrl(localAdminAuditIds.coreLoop),
           },
           spineTargets: coreLoopSpineTargetsFixture(),
         },
@@ -9742,7 +9742,7 @@ function devTestGameReleaseReadinessChecklistFixture({
           adminRoleSurface: {
             status: "passed",
             path: "target/dev-test-game/hardening-admin-proof.json",
-            detailRoleUrl: "/admin/audit/local-hardening?game=<seeded-game>",
+            detailRoleUrl: localAdminAuditRoleUrl(localAdminAuditIds.hardening),
             visibleChecks: [
               ...hardeningAdminProofFixture().adminRoleSurface.visibleChecks,
             ],
@@ -10603,8 +10603,8 @@ function coreLoopAdminProofFixture() {
     adminRoleSurface: {
       status: "passed",
       overviewRoleUrl: "/admin?game=<seeded-game>",
-      detailRoleUrl: "/admin/audit/local-core-loop?game=<seeded-game>",
-      linkTestId: "admin-audit-link-local-core-loop",
+      detailRoleUrl: localAdminAuditRoleUrl(localAdminAuditIds.coreLoop),
+      linkTestId: `admin-audit-link-${localAdminAuditIds.coreLoop}`,
       surfaceTestId: "admin-audit-detail-surface",
       clickedThroughFromOverview: true,
       visibleChecks: [...coreLoopAdminCheckIds],
@@ -12388,7 +12388,7 @@ function coreLoopSpineTargetsFixture() {
   };
   return {
     status: "passed",
-    detailRoleUrl: "/admin/audit/local-core-loop?game=<seeded-game>",
+    detailRoleUrl: localAdminAuditRoleUrl(localAdminAuditIds.coreLoop),
     defaultCycleId: "d02-n02",
     defaultRoleUrlId: "d02-n02-actionPlayer",
     defaultRoleUrl:
@@ -12457,7 +12457,7 @@ function hardeningSpineTargetsFixture({
 } = {}) {
   return {
     status: "passed",
-    detailRoleUrl: "/admin/audit/local-hardening?game=<seeded-game>",
+    detailRoleUrl: localAdminAuditRoleUrl(localAdminAuditIds.hardening),
     defaultCycleId: "hardening-stale-conflict",
     defaultRoleUrlId: "replacement-stale-conflict-message",
     defaultRoleUrl: roleUrlHrefs["replacement-stale-conflict-message"],
@@ -12614,7 +12614,7 @@ function featureSpineCaseFixture(
   ) {
     return featureSpineFixture({
       slotId,
-      detailRoleUrl: "/admin/audit/local-hardening?game=<seeded-game>",
+      detailRoleUrl: localAdminAuditRoleUrl(localAdminAuditIds.hardening),
       roleUrlsById: roleUrlHrefs ?? hardeningRoleUrlHrefsFixture(),
       browserProofCommand: devTestGameLiveProofCommand,
       rerunCommand: devTestGameHardeningAdminProofCommand,
@@ -12649,8 +12649,8 @@ function hardeningAdminProofFixture() {
     adminRoleSurface: {
       status: "passed",
       overviewRoleUrl: "/admin?game=<seeded-game>",
-      detailRoleUrl: "/admin/audit/local-hardening?game=<seeded-game>",
-      linkTestId: "admin-audit-link-local-hardening",
+      detailRoleUrl: localAdminAuditRoleUrl(localAdminAuditIds.hardening),
+      linkTestId: `admin-audit-link-${localAdminAuditIds.hardening}`,
       surfaceTestId: "admin-audit-detail-surface",
       clickedThroughFromOverview: true,
       visibleChecks: [

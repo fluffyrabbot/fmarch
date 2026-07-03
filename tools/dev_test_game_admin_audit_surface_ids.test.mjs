@@ -75,6 +75,25 @@ test("local admin proof builders use shared audit surface ids", async () => {
   }
 });
 
+test("dev-test-game proof surface fixtures use shared core and hardening role URLs", async () => {
+  const source = await readFile(
+    new URL("dev_test_game.test.mjs", import.meta.url),
+    "utf8",
+  );
+  for (const rawValue of [
+    localAdminAuditRoleUrl(localAdminAuditIds.coreLoop),
+    localAdminAuditRoleUrl(localAdminAuditIds.hardening),
+    `admin-audit-link-${localAdminAuditIds.coreLoop}`,
+    `admin-audit-link-${localAdminAuditIds.hardening}`,
+  ]) {
+    assert.equal(
+      source.includes(JSON.stringify(rawValue)),
+      false,
+      `dev_test_game.test.mjs should derive ${rawValue} from shared admin audit ids`,
+    );
+  }
+});
+
 test("admin proof handoff builders use shared audit surface ids", async () => {
   const rawIds = [
     ...Object.values(localAdminAuditIds),
