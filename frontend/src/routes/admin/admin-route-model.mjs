@@ -33,6 +33,10 @@ import {
   hostedEvidenceHandoffInputRows,
 } from "../../../../tools/dev_test_game_hosted_handoff_cases.mjs";
 import {
+  localAdminAuditHandoffCheckIds,
+  localAdminAuditIds,
+} from "../../../../tools/dev_test_game_admin_audit_surface_ids.mjs";
+import {
   normalizeSpineRowKind,
   selectedSpineDeclarationStatus,
   selectedSpineDrilldownStatus,
@@ -511,7 +515,7 @@ export function normalizeLocalHostedTargetPreflightAudit(
   const passedChecks = checks.filter((check) => check?.status === "passed");
   const blockedChecks = checks.filter((check) => check?.status === "blocked");
   return Object.freeze({
-    id: "local-hosted-target-preflight",
+    id: localAdminAuditIds.hostedTargetPreflight,
     label: "Hosted target preflight",
     status: `${passedChecks.length} passed, ${blockedChecks.length} blocked`,
     authority: "GlobalAdmin or GlobalMod",
@@ -522,7 +526,7 @@ export function normalizeLocalHostedTargetPreflightAudit(
     href: "target/dev-test-game/hosted-target-preflight.json",
     inspectHref: adminAuditInspectHref({
       game,
-      audit: "local-hosted-target-preflight",
+      audit: localAdminAuditIds.hostedTargetPreflight,
     }),
     checks: Object.freeze(
       checks.map((check) =>
@@ -543,19 +547,19 @@ export function normalizeLocalHostedTargetPreflightAudit(
     ),
     relatedLinks: Object.freeze([
       Object.freeze({
-        id: "local-hosted-concurrent-race-matrix",
+        id: localAdminAuditIds.hostedConcurrentRaceMatrix,
         label: "Hosted matrix",
         href: adminAuditInspectHref({
           game,
-          audit: "local-hosted-concurrent-race-matrix",
+          audit: localAdminAuditIds.hostedConcurrentRaceMatrix,
         }),
         status: String(hostedTargetPreflight.target?.rawEvidenceStatus ?? "unknown"),
         command: "test:dev-test-game-hosted-concurrent-race-matrix",
       }),
       Object.freeze({
-        id: "local-next-action",
+        id: localAdminAuditIds.nextAction,
         label: "Ranked next action",
-        href: adminAuditInspectHref({ game, audit: "local-next-action" }),
+        href: adminAuditInspectHref({ game, audit: localAdminAuditIds.nextAction }),
         status: String(hostedTargetPreflight.status ?? "unknown"),
         command: "test:dev-test-game-next-action",
       }),
@@ -627,7 +631,7 @@ export function normalizeLocalHostedIdentityEvidenceAudit(
     ),
   });
   return Object.freeze({
-    id: "local-hosted-identity-evidence",
+    id: localAdminAuditIds.hostedIdentityEvidence,
     label: "Hosted identity evidence",
     status: `${hostedIdentityEvidence.status}: ${passedChecks.length} passed, ${blockedCheckIds.length} blocked`,
     authority: "GlobalAdmin or GlobalMod",
@@ -638,7 +642,7 @@ export function normalizeLocalHostedIdentityEvidenceAudit(
     href: "target/dev-test-game/hosted-identity-evidence.json",
     inspectHref: adminAuditInspectHref({
       game,
-      audit: "local-hosted-identity-evidence",
+      audit: localAdminAuditIds.hostedIdentityEvidence,
     }),
     checks: Object.freeze(
       checks.map((check) =>
@@ -661,19 +665,19 @@ export function normalizeLocalHostedIdentityEvidenceAudit(
     ),
     relatedLinks: Object.freeze([
       Object.freeze({
-        id: "local-identity-adapter",
+        id: localAdminAuditIds.identityAdapter,
         label: "Local identity adapter",
         href: adminAuditInspectHref({
           game,
-          audit: "local-identity-adapter",
+          audit: localAdminAuditIds.identityAdapter,
         }),
         status: "prerequisite",
         command: "test:dev-test-game-identity-admin-proof",
       }),
       Object.freeze({
-        id: "local-next-action",
+        id: localAdminAuditIds.nextAction,
         label: "Ranked next action",
-        href: adminAuditInspectHref({ game, audit: "local-next-action" }),
+        href: adminAuditInspectHref({ game, audit: localAdminAuditIds.nextAction }),
         status: String(hostedIdentityEvidence.status ?? "unknown"),
         command: "test:dev-test-game-next-action",
       }),
@@ -809,7 +813,7 @@ export function normalizeLocalHostedEvidenceLaneAudit(
     realHostedEvidenceInputs,
   });
   return Object.freeze({
-    id: "local-hosted-evidence-lane",
+    id: localAdminAuditIds.hostedEvidenceLane,
     label: "Hosted evidence lane",
     status: `${hostedEvidenceLane.status}: ${passedChecks.length} passed, ${blockedCheckIds.length} blocked`,
     authority: "GlobalAdmin or GlobalMod",
@@ -820,7 +824,7 @@ export function normalizeLocalHostedEvidenceLaneAudit(
     href: "target/dev-test-game/hosted-evidence-lane.json",
     inspectHref: adminAuditInspectHref({
       game,
-      audit: "local-hosted-evidence-lane",
+      audit: localAdminAuditIds.hostedEvidenceLane,
     }),
     checks: Object.freeze(
       [
@@ -846,29 +850,29 @@ export function normalizeLocalHostedEvidenceLaneAudit(
     ),
     relatedLinks: Object.freeze([
       Object.freeze({
-        id: "local-hosted-target-preflight",
+        id: localAdminAuditIds.hostedTargetPreflight,
         label: "Hosted target preflight",
         href: adminAuditInspectHref({
           game,
-          audit: "local-hosted-target-preflight",
+          audit: localAdminAuditIds.hostedTargetPreflight,
         }),
         status: String(hostedEvidenceLane.preflightStatus ?? "unknown"),
         command: "test:dev-test-game-hosted-target-preflight",
       }),
       Object.freeze({
-        id: "local-hosted-concurrent-race-matrix",
+        id: localAdminAuditIds.hostedConcurrentRaceMatrix,
         label: "Hosted matrix",
         href: adminAuditInspectHref({
           game,
-          audit: "local-hosted-concurrent-race-matrix",
+          audit: localAdminAuditIds.hostedConcurrentRaceMatrix,
         }),
         status: String(hostedEvidenceLane.target?.rawEvidenceStatus ?? "unknown"),
         command: "test:dev-test-game-hosted-concurrent-race-matrix",
       }),
       Object.freeze({
-        id: "local-next-action",
+        id: localAdminAuditIds.nextAction,
         label: "Ranked next action",
-        href: adminAuditInspectHref({ game, audit: "local-next-action" }),
+        href: adminAuditInspectHref({ game, audit: localAdminAuditIds.nextAction }),
         status: String(hostedEvidenceLane.status ?? "unknown"),
         command: "test:dev-test-game-next-action",
       }),
@@ -1009,7 +1013,7 @@ export function normalizeLocalHostedOpsSignalsAudit(hostedOpsSignals, { game }) 
     : [];
   const passedChecks = checks.filter((check) => check?.status === "passed");
   return Object.freeze({
-    id: "local-hosted-ops-signals",
+    id: localAdminAuditIds.hostedOpsSignals,
     label: "Local hosted ops signals",
     status: `${passedChecks.length} hosted-like ops signals passed`,
     authority: "GlobalAdmin or GlobalMod",
@@ -1018,7 +1022,7 @@ export function normalizeLocalHostedOpsSignalsAudit(hostedOpsSignals, { game }) 
       hostedOpsSignals.proofBoundary ??
       "Local hosted-like ops signal bundle without hosted telemetry or release claims.",
     href: "target/dev-test-game/hosted-ops-signals.json",
-    inspectHref: adminAuditInspectHref({ game, audit: "local-hosted-ops-signals" }),
+    inspectHref: adminAuditInspectHref({ game, audit: localAdminAuditIds.hostedOpsSignals }),
     checks: Object.freeze(
       checks.map((check) =>
         Object.freeze({
@@ -1029,19 +1033,19 @@ export function normalizeLocalHostedOpsSignalsAudit(hostedOpsSignals, { game }) 
     ),
     relatedLinks: Object.freeze([
       Object.freeze({
-        id: "local-hosted-concurrent-race-matrix",
+        id: localAdminAuditIds.hostedConcurrentRaceMatrix,
         label: "Hosted matrix",
         href: adminAuditInspectHref({
           game,
-          audit: "local-hosted-concurrent-race-matrix",
+          audit: localAdminAuditIds.hostedConcurrentRaceMatrix,
         }),
         status: String(hostedOpsSignals.matrix?.hostedEvidenceStatus ?? "unknown"),
         command: "test:dev-test-game-hosted-concurrent-race-matrix",
       }),
       Object.freeze({
-        id: "local-ops-artifacts",
+        id: localAdminAuditIds.opsArtifacts,
         label: "Ops artifacts",
-        href: adminAuditInspectHref({ game, audit: "local-ops-artifacts" }),
+        href: adminAuditInspectHref({ game, audit: localAdminAuditIds.opsArtifacts }),
         status: "passed",
         command: "test:dev-test-game-ops-artifacts",
       }),
@@ -1161,7 +1165,7 @@ export function normalizeLocalHostedConcurrentRaceMatrixAudit(
     hostedConcurrentRaceMatrix.realHostedEvidenceInputs,
   );
   return Object.freeze({
-    id: "local-hosted-concurrent-race-matrix",
+    id: localAdminAuditIds.hostedConcurrentRaceMatrix,
     label: "Local hosted matrix",
     status: `${Number(
       hostedConcurrentRaceMatrix.summary?.passedCellCount ?? 0,
@@ -1174,7 +1178,7 @@ export function normalizeLocalHostedConcurrentRaceMatrixAudit(
     href: "target/dev-test-game/hosted-concurrent-race-matrix.json",
     inspectHref: adminAuditInspectHref({
       game,
-      audit: "local-hosted-concurrent-race-matrix",
+      audit: localAdminAuditIds.hostedConcurrentRaceMatrix,
     }),
     checks: Object.freeze(
       [
@@ -1194,9 +1198,9 @@ export function normalizeLocalHostedConcurrentRaceMatrixAudit(
     ),
     relatedLinks: Object.freeze([
       Object.freeze({
-        id: "local-race-coverage",
+        id: localAdminAuditIds.raceCoverage,
         label: "Race coverage",
-        href: adminAuditInspectHref({ game, audit: "local-race-coverage" }),
+        href: adminAuditInspectHref({ game, audit: localAdminAuditIds.raceCoverage }),
         status: String(
           hostedConcurrentRaceMatrix.generatedFrom?.raceCoveragePromotedMilestones
             ?.status ?? "unknown",
@@ -1204,9 +1208,9 @@ export function normalizeLocalHostedConcurrentRaceMatrixAudit(
         command: "test:dev-test-game-race-coverage",
       }),
       Object.freeze({
-        id: "local-next-action",
+        id: localAdminAuditIds.nextAction,
         label: "Ranked next action",
-        href: adminAuditInspectHref({ game, audit: "local-next-action" }),
+        href: adminAuditInspectHref({ game, audit: localAdminAuditIds.nextAction }),
         status: String(requestedEvidence?.status ?? "unknown"),
         command: String(hostedConcurrentRaceMatrix.nextBuildSlice?.command ?? ""),
       }),
@@ -1317,7 +1321,7 @@ export function normalizeLocalRaceCoverageAudit(raceCoverage, { game }) {
   const cells = Array.isArray(raceCoverage.cells) ? raceCoverage.cells : [];
   const passedCells = cells.filter((cell) => cell?.status === "passed");
   return Object.freeze({
-    id: "local-race-coverage",
+    id: localAdminAuditIds.raceCoverage,
     label: "Local race coverage",
     status: `${passedCells.length} race cells passed`,
     authority: "GlobalAdmin or GlobalMod",
@@ -1326,7 +1330,7 @@ export function normalizeLocalRaceCoverageAudit(raceCoverage, { game }) {
       raceCoverage.proofBoundary ??
       "Generated local race-coverage inventory without hosted concurrency claims.",
     href: "target/dev-test-game/race-coverage.json",
-    inspectHref: adminAuditInspectHref({ game, audit: "local-race-coverage" }),
+    inspectHref: adminAuditInspectHref({ game, audit: localAdminAuditIds.raceCoverage }),
     checks: Object.freeze(
       cells.map((cell) =>
         Object.freeze({
@@ -1372,7 +1376,7 @@ export function normalizeLocalProofGraphAudit(proofGraph, { game }) {
     (node) => typeof node?.roleUrl === "string" && node.roleUrl.trim() !== "",
   );
   return Object.freeze({
-    id: "local-proof-graph",
+    id: localAdminAuditIds.proofGraph,
     label: "Local proof graph",
     status: `${nodes.length} proof nodes, ${edges.length} edges`,
     authority: "GlobalAdmin or GlobalMod",
@@ -1381,7 +1385,7 @@ export function normalizeLocalProofGraphAudit(proofGraph, { game }) {
       proofGraph.proofBoundary ??
       "Generated local proof graph without hosted or release-readiness claims.",
     href: "target/dev-test-game/proof-graph.json",
-    inspectHref: adminAuditInspectHref({ game, audit: "local-proof-graph" }),
+    inspectHref: adminAuditInspectHref({ game, audit: localAdminAuditIds.proofGraph }),
     checks: Object.freeze(
       [
         ...nodes.map((node) => ({
@@ -1791,7 +1795,7 @@ export function normalizeLocalNextActionAudit(nextAction, { game, proofGraph = n
   const releaseReadinessSummary =
     nextAction.generatedFrom?.releaseReadinessSummary ?? {};
   return Object.freeze({
-    id: "local-next-action",
+    id: localAdminAuditIds.nextAction,
     label: "Local next action",
     status:
       command === ""
@@ -1803,7 +1807,7 @@ export function normalizeLocalNextActionAudit(nextAction, { game, proofGraph = n
       nextAction.proofBoundary ??
       "Local dev-test-game next-action receipt without hosted, release, or production claims.",
     href: "target/dev-test-game/next-action.json",
-    inspectHref: adminAuditInspectHref({ game, audit: "local-next-action" }),
+    inspectHref: adminAuditInspectHref({ game, audit: localAdminAuditIds.nextAction }),
     checks: Object.freeze(checks),
     relatedLinks:
       unprovenRoleUrl === "" &&
@@ -1819,7 +1823,7 @@ export function normalizeLocalNextActionAudit(nextAction, { game, proofGraph = n
                   Object.freeze({
                     id: "selected-proof-graph-node",
                     label: selectedProofGraphNode.id,
-                    href: adminAuditInspectHref({ game, audit: "local-proof-graph" }),
+                    href: adminAuditInspectHref({ game, audit: localAdminAuditIds.proofGraph }),
                     status: selectedProofGraphNode.status,
                     command: selectedProofGraphNode.proofCommand,
                   }),
@@ -1830,7 +1834,7 @@ export function normalizeLocalNextActionAudit(nextAction, { game, proofGraph = n
                   Object.freeze({
                     id: selectedProductionFeatureGraph.nodeId,
                     label: selectedProductionFeatureGraph.nodeId,
-                    href: adminAuditInspectHref({ game, audit: "local-proof-graph" }),
+                    href: adminAuditInspectHref({ game, audit: localAdminAuditIds.proofGraph }),
                     status: selectedProductionFeatureGraph.status,
                     command: selectedProductionFeatureGraph.browserProofCommand,
                   }),
@@ -1963,7 +1967,7 @@ export function normalizeLocalNextActionAudit(nextAction, { game, proofGraph = n
       selectedProofGraphNodeHref:
         selectedProofGraphNode === null
           ? ""
-          : adminAuditInspectHref({ game, audit: "local-proof-graph" }),
+          : adminAuditInspectHref({ game, audit: localAdminAuditIds.proofGraph }),
       stabilitySource: String(stability?.source ?? ""),
       stabilityBuildSlice: String(stability?.buildSlice ?? ""),
       stabilityProofTarget: String(stability?.proofTarget ?? ""),
@@ -2808,14 +2812,14 @@ export function normalizeLocalProofFreshnessAudit(
     nextActionRow === null
       ? null
       : Object.freeze({
-          id: "local-next-action",
+          id: localAdminAuditIds.nextAction,
           label: "Ranked next action",
           href: nextActionRow.inspectHref,
           status: nextActionRow.status,
           command: nextActionRow.artifactSummary.command,
         });
   return Object.freeze({
-    id: "local-proof-freshness",
+    id: localAdminAuditIds.proofFreshness,
     label: "Local proof freshness",
     status: `${Number(summary.freshCount ?? 0)} fresh, ${Number(
       summary.staleCount ?? 0,
@@ -2826,7 +2830,7 @@ export function normalizeLocalProofFreshnessAudit(
       proofFreshness.proofBoundary ??
       "Local dev-test-game artifact age dashboard without content validation or release claims.",
     href: "target/dev-test-game/release-readiness-checklist.json",
-    inspectHref: adminAuditInspectHref({ game, audit: "local-proof-freshness" }),
+    inspectHref: adminAuditInspectHref({ game, audit: localAdminAuditIds.proofFreshness }),
     checks: Object.freeze(
       [
         ...artifacts.map((artifact) =>
@@ -2839,7 +2843,7 @@ export function normalizeLocalProofFreshnessAudit(
           ? []
           : [
               Object.freeze({
-                id: "next-action-handoff",
+                id: localAdminAuditHandoffCheckIds.nextAction,
                 status: nextActionHandoff.status,
               }),
             ]),
@@ -2874,7 +2878,7 @@ export function normalizeLocalOpsArtifactsAudit(opsArtifacts, { game }) {
   const checks = Array.isArray(opsArtifacts.checks) ? opsArtifacts.checks : [];
   const passedChecks = checks.filter((check) => check?.status === "passed");
   return Object.freeze({
-    id: "local-ops-artifacts",
+    id: localAdminAuditIds.opsArtifacts,
     label: "Local ops artifacts",
     status: `${passedChecks.length} local ops checks passed`,
     authority: "GlobalAdmin or GlobalMod",
@@ -2883,7 +2887,7 @@ export function normalizeLocalOpsArtifactsAudit(opsArtifacts, { game }) {
       opsArtifacts.proofBoundary ??
       "Local dev-test-game ops artifact bundle without hosted observability claims.",
     href: "target/dev-test-game/ops-artifacts.json",
-    inspectHref: adminAuditInspectHref({ game, audit: "local-ops-artifacts" }),
+    inspectHref: adminAuditInspectHref({ game, audit: localAdminAuditIds.opsArtifacts }),
     checks: Object.freeze(
       checks.map((check) =>
         Object.freeze({
@@ -2945,22 +2949,22 @@ export function normalizeLocalSpineManifestAudit(spineManifest, { game }) {
       : {};
   const spineManifestRelatedLinks = Object.freeze([
     Object.freeze({
-      id: "local-proof-freshness",
+      id: localAdminAuditIds.proofFreshness,
       label: "Proof freshness",
-      href: adminAuditInspectHref({ game, audit: "local-proof-freshness" }),
+      href: adminAuditInspectHref({ game, audit: localAdminAuditIds.proofFreshness }),
       status: String(artifactFreshness.status ?? "unknown"),
       command: String(artifactFreshness.nextCommand ?? ""),
     }),
     Object.freeze({
-      id: "local-next-action",
+      id: localAdminAuditIds.nextAction,
       label: "Ranked next action",
-      href: adminAuditInspectHref({ game, audit: "local-next-action" }),
+      href: adminAuditInspectHref({ game, audit: localAdminAuditIds.nextAction }),
       status: String(spineManifest.commands?.nextAction?.script ?? "unknown"),
       command: String(spineManifest.commands?.nextAction?.script ?? ""),
     }),
   ]);
   return Object.freeze({
-    id: "local-spine-manifest",
+    id: localAdminAuditIds.spineManifest,
     label: "Local spine manifest",
     status: `${checks.filter((check) => check?.status === "passed").length} manifest checks passed`,
     authority: "GlobalAdmin or GlobalMod",
@@ -2969,7 +2973,7 @@ export function normalizeLocalSpineManifestAudit(spineManifest, { game }) {
       spineManifest.proofBoundary ??
       "Generated local dev-test-game proof order and evidence wiring without release claims.",
     href: "target/dev-test-game/spine-manifest.json",
-    inspectHref: adminAuditInspectHref({ game, audit: "local-spine-manifest" }),
+    inspectHref: adminAuditInspectHref({ game, audit: localAdminAuditIds.spineManifest }),
     checks: Object.freeze(
       [
         ...checks.map((check) =>
@@ -2979,11 +2983,11 @@ export function normalizeLocalSpineManifestAudit(spineManifest, { game }) {
           }),
         ),
         Object.freeze({
-          id: "proof-freshness-handoff",
+          id: localAdminAuditHandoffCheckIds.proofFreshness,
           status: String(artifactFreshness.status ?? "unknown"),
         }),
         Object.freeze({
-          id: "next-action-handoff",
+          id: localAdminAuditHandoffCheckIds.nextAction,
           status: String(spineManifest.commands?.nextAction?.script ?? "unknown"),
         }),
       ],
@@ -3001,10 +3005,10 @@ export function normalizeLocalSpineManifestAudit(spineManifest, { game }) {
       staleCount: Number(freshnessSummary.staleCount ?? 0),
       missingCount: Number(freshnessSummary.missingCount ?? 0),
       nextCommand: String(artifactFreshness.nextCommand ?? ""),
-      nextActionInspectHref: adminAuditInspectHref({ game, audit: "local-next-action" }),
+      nextActionInspectHref: adminAuditInspectHref({ game, audit: localAdminAuditIds.nextAction }),
       proofFreshnessInspectHref: adminAuditInspectHref({
         game,
-        audit: "local-proof-freshness",
+        audit: localAdminAuditIds.proofFreshness,
       }),
       releaseReady: spineManifest.releaseReady === true,
       productionReady: spineManifest.productionReady === true,
@@ -3042,9 +3046,9 @@ export function normalizeLocalAdminSpineAudit(adminSpineProof, { game }) {
       : {};
   const adminSpineRelatedLinks = Object.freeze([
     Object.freeze({
-      id: "local-spine-manifest",
+      id: localAdminAuditIds.spineManifest,
       label: "Spine manifest",
-      href: adminAuditInspectHref({ game, audit: "local-spine-manifest" }),
+      href: adminAuditInspectHref({ game, audit: localAdminAuditIds.spineManifest }),
       status: String(
         proofs.find((proof) => proof?.id === "spine-manifest")?.status ?? "unknown",
       ),
@@ -3056,7 +3060,7 @@ export function normalizeLocalAdminSpineAudit(adminSpineProof, { game }) {
     }),
   ]);
   return Object.freeze({
-    id: "local-admin-spine",
+    id: localAdminAuditIds.adminSpine,
     label: "Local admin spine",
     status: `${proofs.filter((proof) => proof?.status === "passed").length} admin proof surfaces passed`,
     authority: "GlobalAdmin or GlobalMod",
@@ -3065,7 +3069,7 @@ export function normalizeLocalAdminSpineAudit(adminSpineProof, { game }) {
       adminSpineProof.proofBoundary ??
       "Local aggregate admin proof without hosted or release-readiness claims.",
     href: "target/dev-test-game/admin-spine-proof.json",
-    inspectHref: adminAuditInspectHref({ game, audit: "local-admin-spine" }),
+    inspectHref: adminAuditInspectHref({ game, audit: localAdminAuditIds.adminSpine }),
     checks: Object.freeze(
       [
         ...proofs.map((proof) =>
@@ -3086,7 +3090,7 @@ export function normalizeLocalAdminSpineAudit(adminSpineProof, { game }) {
           nextCommand: String(recovery.nextCommand ?? ""),
         }),
         Object.freeze({
-          id: "spine-manifest-handoff",
+          id: localAdminAuditHandoffCheckIds.spineManifest,
           status: String(
             proofs.find((proof) => proof?.id === "spine-manifest")?.status ?? "unknown",
           ),
@@ -3102,7 +3106,7 @@ export function normalizeLocalAdminSpineAudit(adminSpineProof, { game }) {
       nextCommand: String(recovery.nextCommand ?? ""),
       spineManifestInspectHref: adminAuditInspectHref({
         game,
-        audit: "local-spine-manifest",
+        audit: localAdminAuditIds.spineManifest,
       }),
       releaseReady: adminSpineProof.releaseReady === true,
       productionReady: adminSpineProof.productionReady === true,
@@ -3138,7 +3142,7 @@ export function normalizeLocalSeedFixtureAudit(seedFixtureSummary, { game }) {
     seedFixtureSummary.proofLaneCoverage,
   );
   return Object.freeze({
-    id: "local-seed-fixtures",
+    id: localAdminAuditIds.seedFixtures,
     label: "Local seed fixtures",
     status: `${localScenarios.length} demo scenarios available locally`,
     authority: "GlobalAdmin or GlobalMod",
@@ -3147,7 +3151,7 @@ export function normalizeLocalSeedFixtureAudit(seedFixtureSummary, { game }) {
       seedFixtureSummary.proofBoundary ??
       "Local seed/demo fixture summary without hosted demo-data claims.",
     href: "target/dev-test-game/seed-fixture-summary.json",
-    inspectHref: adminAuditInspectHref({ game, audit: "local-seed-fixtures" }),
+    inspectHref: adminAuditInspectHref({ game, audit: localAdminAuditIds.seedFixtures }),
     scenarios: Object.freeze(
       scenarios.map((scenario) =>
         Object.freeze({
@@ -3251,7 +3255,7 @@ export function normalizeLocalReleaseReadinessAudit(
     ? releaseReadinessChecklist.releaseReadiness.unproven
     : [];
   return Object.freeze({
-    id: "local-release-readiness",
+    id: localAdminAuditIds.releaseReadiness,
     label: "Local release readiness",
     status: `${checks.length} local checks passed, ${unproven.length} release items unproven`,
     authority: "GlobalAdmin or GlobalMod",
@@ -3262,7 +3266,7 @@ export function normalizeLocalReleaseReadinessAudit(
     href: "target/dev-test-game/release-readiness-checklist.json",
     inspectHref: adminAuditInspectHref({
       game,
-      audit: "local-release-readiness",
+      audit: localAdminAuditIds.releaseReadiness,
     }),
     checks: Object.freeze(
       checks.map((check) =>
@@ -3335,7 +3339,7 @@ export function normalizeLocalReleaseRunbookAudit(releaseRunbook, { game }) {
     : [];
   const passedChecks = checks.filter((check) => check?.status === "passed");
   return Object.freeze({
-    id: "local-release-runbook",
+    id: localAdminAuditIds.releaseRunbook,
     label: "Local release runbook",
     status: `${passedChecks.length} runbook checks passed, ${runbookItems.length} gaps rehearsed`,
     authority: "GlobalAdmin or GlobalMod",
@@ -3344,7 +3348,7 @@ export function normalizeLocalReleaseRunbookAudit(releaseRunbook, { game }) {
       releaseRunbook.proofBoundary ??
       "Local release-runbook rehearsal without human approval or release claims.",
     href: "target/dev-test-game/release-runbook.json",
-    inspectHref: adminAuditInspectHref({ game, audit: "local-release-runbook" }),
+    inspectHref: adminAuditInspectHref({ game, audit: localAdminAuditIds.releaseRunbook }),
     checks: Object.freeze(
       checks.map((check) =>
         Object.freeze({
@@ -3367,9 +3371,9 @@ export function normalizeLocalReleaseRunbookAudit(releaseRunbook, { game }) {
     ),
     relatedLinks: Object.freeze([
       Object.freeze({
-        id: "local-release-readiness",
+        id: localAdminAuditIds.releaseReadiness,
         label: "Release readiness",
-        href: adminAuditInspectHref({ game, audit: "local-release-readiness" }),
+        href: adminAuditInspectHref({ game, audit: localAdminAuditIds.releaseReadiness }),
         status: "not_ready",
         command: "test:dev-test-game-readiness",
       }),
@@ -3416,7 +3420,7 @@ export function normalizeLocalCoreLoopAudit(proofRun, { game }) {
     return null;
   }
   return Object.freeze({
-    id: "local-core-loop",
+    id: localAdminAuditIds.coreLoop,
     label: "Local core loop",
     status: `${requiredLaneIds.length} core loop lanes passed`,
     authority: "GlobalAdmin or GlobalMod",
@@ -3427,7 +3431,7 @@ export function normalizeLocalCoreLoopAudit(proofRun, { game }) {
     href: proofRun.artifacts?.proofRun ?? "target/dev-test-game/proof-run.json",
     inspectHref: adminAuditInspectHref({
       game,
-      audit: "local-core-loop",
+      audit: localAdminAuditIds.coreLoop,
     }),
     checks: Object.freeze(
       [
@@ -3642,16 +3646,16 @@ export function normalizeLocalPlayerRecoveryAudit(proofRun, { game }) {
     ),
     relatedLinks: Object.freeze([
       Object.freeze({
-        id: "local-core-loop",
+        id: localAdminAuditIds.coreLoop,
         label: "Core loop",
-        href: adminAuditInspectHref({ game, audit: "local-core-loop" }),
+        href: adminAuditInspectHref({ game, audit: localAdminAuditIds.coreLoop }),
         status: "source proof",
         command: "test:dev-test-game-core-loop-admin-proof",
       }),
       Object.freeze({
-        id: "local-hardening",
+        id: localAdminAuditIds.hardening,
         label: "Multiplayer hardening",
-        href: adminAuditInspectHref({ game, audit: "local-hardening" }),
+        href: adminAuditInspectHref({ game, audit: localAdminAuditIds.hardening }),
         status: "parent proof",
         command: "test:dev-test-game-hardening-admin-proof",
       }),
@@ -3706,7 +3710,7 @@ export function normalizeLocalHardeningAudit(proofRun, { game }) {
     return null;
   }
   return Object.freeze({
-    id: "local-hardening",
+    id: localAdminAuditIds.hardening,
     label: "Local multiplayer hardening",
     status: `${requiredLaneIds.length} hardening lanes passed`,
     authority: "GlobalAdmin or GlobalMod",
@@ -3717,7 +3721,7 @@ export function normalizeLocalHardeningAudit(proofRun, { game }) {
     href: proofRun.artifacts?.proofRun ?? "target/dev-test-game/proof-run.json",
     inspectHref: adminAuditInspectHref({
       game,
-      audit: "local-hardening",
+      audit: localAdminAuditIds.hardening,
     }),
     checks: Object.freeze(
       requiredLaneIds.map((id) => {
@@ -3784,7 +3788,7 @@ export function normalizeLocalBackupRestoreAudit(backupRestoreProof, { game }) {
     }),
   );
   return Object.freeze({
-    id: "local-backup-restore",
+    id: localAdminAuditIds.backupRestore,
     label: "Local backup restore",
     status: `${requiredChecks.length} backup restore checks passed`,
     authority: "GlobalAdmin or GlobalMod",
@@ -3797,7 +3801,7 @@ export function normalizeLocalBackupRestoreAudit(backupRestoreProof, { game }) {
       "target/live-stack-backup-restore-drill/local-backup-restore-proof.json",
     inspectHref: adminAuditInspectHref({
       game,
-      audit: "local-backup-restore",
+      audit: localAdminAuditIds.backupRestore,
     }),
     checks: Object.freeze(
       checks.map((check) =>
@@ -3948,7 +3952,7 @@ export function normalizeLocalIdentityAdapterAudit(identityAdapterProof, { game 
     ? identityAdapterProof.identityAdapter.lifecycleControls
     : [];
   return Object.freeze({
-    id: "local-identity-adapter",
+    id: localAdminAuditIds.identityAdapter,
     label: "Local identity adapter",
     status: `${roles.length} role surfaces, ${controls.length} lifecycle controls`,
     authority: "GlobalAdmin or GlobalMod",
@@ -3959,7 +3963,7 @@ export function normalizeLocalIdentityAdapterAudit(identityAdapterProof, { game 
     href: "target/auth-invite-role-proof/invite-role-proof.json",
     inspectHref: adminAuditInspectHref({
       game,
-      audit: "local-identity-adapter",
+      audit: localAdminAuditIds.identityAdapter,
     }),
     checks: Object.freeze(
       lifecycleChecks.map(([id, status]) =>
