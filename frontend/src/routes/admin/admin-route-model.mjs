@@ -3602,6 +3602,8 @@ function formatCoreLoopSpineCheckpointStatus(checkpoint) {
   pushField(parts, "outcome", checkpoint?.outcomeStatus);
   pushField(parts, "winner", checkpoint?.winnerSlot);
   pushField(parts, "count", checkpoint?.projectedCount);
+  pushField(parts, "route", checkpoint?.routeResponseStatus);
+  pushField(parts, "reject receipt", checkpoint?.rejectReceiptStatus);
   if (typeof checkpoint?.normalPlayerFactionalKillVisible === "boolean") {
     parts.push(
       `normal factional kill ${checkpoint.normalPlayerFactionalKillVisible ? "visible" : "hidden"}`,
@@ -3610,6 +3612,11 @@ function formatCoreLoopSpineCheckpointStatus(checkpoint) {
   if (typeof checkpoint?.advanceControlVisible === "boolean") {
     parts.push(
       `advance control ${checkpoint.advanceControlVisible ? "visible" : "hidden"}`,
+    );
+  }
+  if (typeof checkpoint?.unlockControlVisible === "boolean") {
+    parts.push(
+      `unlock control ${checkpoint.unlockControlVisible ? "visible" : "hidden"}`,
     );
   }
   return parts.length === 0 ? "recorded" : parts.join(", ");

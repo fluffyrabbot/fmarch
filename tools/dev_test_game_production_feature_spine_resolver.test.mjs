@@ -82,6 +82,7 @@ test("production feature spine resolver builds and validates source collections"
     "host-night-action-transition",
     "night-two-action-resolution",
     "day-three-terminal-boundary",
+    "day-three-terminal-recovery",
     "invalid-action-recovery",
     "player-action-boundary",
     "private-channel",
@@ -147,6 +148,23 @@ test("production feature spine resolver builds and validates source collections"
     {
       roleUrlId: "n02-d03-host",
       checkpointId: "n02-d03-d03-terminal-advance-reject",
+      recoveryHookId: "d03TerminalAdvanceReject",
+      adminCheckId: "core-loop",
+    },
+  );
+  assert.deepEqual(
+    {
+      roleUrlId: collection.bySlotId["day-three-terminal-recovery"].roleUrlId,
+      checkpointId:
+        collection.bySlotId["day-three-terminal-recovery"].checkpointId,
+      recoveryHookId:
+        collection.bySlotId["day-three-terminal-recovery"].recoveryHookId,
+      adminCheckId:
+        collection.bySlotId["day-three-terminal-recovery"].adminCheckId,
+    },
+    {
+      roleUrlId: "n02-d03-host",
+      checkpointId: "n02-d03-d03-terminal-reload-recovery",
       recoveryHookId: "d03TerminalAdvanceReject",
       adminCheckId: "core-loop",
     },
@@ -231,6 +249,7 @@ function coreLoopSourceTargetFixture() {
       "n02-d03-n02-resolved-target-killed",
       "n02-d03-d03-day-controls-return",
       "n02-d03-d03-terminal-advance-reject",
+      "n02-d03-d03-terminal-reload-recovery",
     ],
     recoveryHookIds: [
       "staleLockedVoteReject",

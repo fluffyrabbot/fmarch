@@ -177,16 +177,20 @@ test("core loop spine status formats compact live spine evidence", () => {
                 id: "d03-terminal-advance-reject",
                 rejectError: "InvalidTarget",
               },
+              {
+                id: "d03-terminal-reload-recovery",
+                phase: "D03",
+              },
             ],
           },
         ],
       },
     }),
-    "passed: D01 -> N01 -> D02, vote ack, N02 action ack, next D03, terminal advance InvalidTarget",
+    "passed: D01 -> N01 -> D02, vote ack, N02 action ack, next D03, terminal advance InvalidTarget, reload D03",
   );
   assert.equal(
     coreLoopSpineStatus({}),
-    "unknown: unknown -> unknown -> unknown, vote unknown, unknown action unknown, next unknown, terminal advance unknown",
+    "unknown: unknown -> unknown -> unknown, vote unknown, unknown action unknown, next unknown, terminal advance unknown, reload unknown",
   );
 });
 

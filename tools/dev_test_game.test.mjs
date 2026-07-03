@@ -2168,9 +2168,9 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
     graph,
     releaseReadiness,
   );
-  assert.equal(graph.summary.nodeCount, 36);
-  assert.equal(graph.summary.roleUrlCount, 36);
-  assert.equal(graph.summary.productionFeatureTargetCount, 17);
+  assert.equal(graph.summary.nodeCount, 37);
+  assert.equal(graph.summary.roleUrlCount, 37);
+  assert.equal(graph.summary.productionFeatureTargetCount, 18);
   assert.deepEqual(
     graph.nodes
       .filter((node) => node.kind === "admin-proof-surface")
@@ -3078,6 +3078,37 @@ test("session card and markdown include role credential URLs and tokens", async 
           phase: { id: "D03", locked: true },
           phaseActions: ["advance_phase", "unlock_thread"],
           slots: [{ slot_id: "slot_4", alive: true, status: "alive" }],
+        },
+        d03TerminalActivityStatusText:
+          "Reject InvalidTarget: invalid target; stale phase state, refresh and use current controls",
+        d03TerminalActivityRow: {
+          source: "outcome",
+          actionId: "advance_phase",
+          dispatchKind: "advance_phase",
+        },
+        d03TerminalDispatchPlan: {
+          projectionRefreshKeys: ["host"],
+        },
+        d03TerminalApiHostStateAfterReject: {
+          phase: { id: "D03", locked: true },
+        },
+        d03TerminalHostReloadAfterReject: {
+          status: "passed",
+          routeResponseStatus: 200,
+          rejectReceiptStatusText:
+            "Reject InvalidTarget: invalid target; stale phase state, refresh and use current controls",
+          phase: { id: "D03", locked: true },
+          phaseActions: ["advance_phase", "unlock_thread"],
+          dayVoteOutcomes: [
+            {
+              phaseId: "D03",
+              status: "NoMajority",
+              winnerSlot: null,
+              tallies: { slot_4: 1 },
+            },
+          ],
+          outcomePanel: "D03 NoMajority\nNoMajority",
+          apiPhase: { id: "D03", locked: true },
         },
       },
       staleActionConflict: {
@@ -10655,7 +10686,7 @@ function coreLoopAdminProofFixture() {
       proofRun: "target/dev-test-game/proof-run.json",
       game: "00000000-0000-0000-0000-000000000001",
       coreLoopSpineStatus:
-        "passed: D01 -> N01 -> D02, vote ack, N02 action ack, next D03, terminal advance InvalidTarget",
+        "passed: D01 -> N01 -> D02, vote ack, N02 action ack, next D03, terminal advance InvalidTarget, reload D03",
       completedGameHardeningCoverageStatus: "passed: 10/10 lanes across 4 families",
       hostControlFamily: coreLoopHostControlScenarioFamily(),
       playerActionRecoveryFamily:
@@ -10739,6 +10770,7 @@ function coreLoopAdminProofFixture() {
           "n02-d03-n02-resolved-target-killed",
           "n02-d03-d03-day-controls-return",
           "n02-d03-d03-terminal-advance-reject",
+          "n02-d03-d03-terminal-reload-recovery",
         ],
         recoveryHooks: [
           "staleLockedVoteReject",
@@ -10759,7 +10791,7 @@ function coreLoopAdminProofFixture() {
       visibleChecks: [...coreLoopAdminCheckIds],
       visibleCheckStatuses: {
         "core-loop-spine":
-          "passed: D01 -> N01 -> D02, vote ack, N02 action ack, next D03, terminal advance InvalidTarget",
+          "passed: D01 -> N01 -> D02, vote ack, N02 action ack, next D03, terminal advance InvalidTarget, reload D03",
         "completed-game-hardening-coverage":
           "passed: 10/10 lanes across 4 families",
       },
@@ -10792,6 +10824,7 @@ function coreLoopAdminProofFixture() {
         "n02-d03-n02-resolved-target-killed",
         "n02-d03-d03-day-controls-return",
         "n02-d03-d03-terminal-advance-reject",
+        "n02-d03-d03-terminal-reload-recovery",
       ],
       visibleSpineRecoveryHooks: [
         "staleLockedVoteReject",
@@ -12589,6 +12622,7 @@ function coreLoopSpineTargetsFixture() {
       "n02-d03-n02-resolved-target-killed",
       "n02-d03-d03-day-controls-return",
       "n02-d03-d03-terminal-advance-reject",
+      "n02-d03-d03-terminal-reload-recovery",
     ],
     recoveryHookIds: [
       "staleLockedVoteReject",

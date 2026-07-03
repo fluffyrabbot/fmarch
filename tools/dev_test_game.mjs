@@ -3605,6 +3605,64 @@ async function verifySeededD02VoteNightTransition({
       phaseActions: await visibleHostPhaseActions(hostEntry.page),
       slots: await hostEntry.page.evaluate(() => window.__fmarchHostProjection?.slots ?? []),
     };
+    const d03TerminalActivityStatusText = await hostEntry.page
+      .locator('[data-testid="host-command-activity-status-advance_phase"][data-state="reject"]')
+      .first()
+      .innerText();
+    const d03TerminalActivityRow = await hostEntry.page
+      .locator('[data-testid="host-command-activity-advance_phase"][data-source="outcome"]')
+      .first()
+      .evaluate((node) => ({
+        source: node.getAttribute("data-source"),
+        actionId: node.getAttribute("data-confirmation-action-id"),
+        dispatchKind: node.getAttribute("data-confirmation-dispatch-kind"),
+        text: node.textContent,
+      }));
+    const d03TerminalDispatchPlan = await hostEntry.page.evaluate(
+      () => window.__fmarchHostCommandDispatchBridgePlan,
+    );
+    const d03TerminalApiHostStateAfterReject = await fetchHostConsoleState({
+      apiBaseUrl,
+      game: transitionGame,
+    });
+    const d03TerminalHostReloadResponse = await hostEntry.page.goto(
+      `${frontendBaseUrl}/g/${transitionGame}/host`,
+      { waitUntil: "networkidle" },
+    );
+    await hostEntry.page.getByTestId("host-console-surface").waitFor({
+      state: "visible",
+      timeout: 15000,
+    });
+    await waitForHostProjectionPhase(hostEntry.page, {
+      phaseId: "D03",
+      locked: true,
+    });
+    await hostEntry.page.waitForFunction(
+      () =>
+        window.__fmarchHostDayVoteOutcomesProjection?.some(
+          (row) =>
+            row.phaseId === "D03" &&
+            row.status === "NoMajority" &&
+            row.winnerSlot === null,
+        ),
+      null,
+      { timeout: 15000 },
+    );
+    const d03TerminalHostReloadAfterReject = {
+      status: "passed",
+      routeResponseStatus: d03TerminalHostReloadResponse?.status() ?? null,
+      rejectReceiptStatusText: d03TerminalActivityStatusText,
+      surfaceText: await hostEntry.page.getByTestId("host-console-surface").innerText(),
+      phase: await hostEntry.page.evaluate(() => window.__fmarchHostProjection?.phase),
+      phaseActions: await visibleHostPhaseActions(hostEntry.page),
+      dayVoteOutcomes: await hostEntry.page.evaluate(
+        () => window.__fmarchHostDayVoteOutcomesProjection ?? [],
+      ),
+      outcomePanel: await hostEntry.page
+        .locator('[data-testid="host-day-vote-outcome-latest"]')
+        .innerText(),
+      apiPhase: d03TerminalApiHostStateAfterReject.phase,
+    };
 
     if (
       d03TerminalVoteSubmission?.state !== "ack" ||
@@ -3631,7 +3689,33 @@ async function verifySeededD02VoteNightTransition({
       d03TerminalAdvanceReject.commandStatus?.error !== "InvalidTarget" ||
       hostAfterTerminalAdvanceReject.phase?.id !== "D03" ||
       hostAfterTerminalAdvanceReject.phase?.locked !== true ||
-      !hostAfterTerminalAdvanceReject.phaseActions.includes("advance_phase")
+      !hostAfterTerminalAdvanceReject.phaseActions.includes("advance_phase") ||
+      !d03TerminalActivityStatusText.includes("Reject InvalidTarget") ||
+      !d03TerminalActivityStatusText.includes("stale phase state") ||
+      d03TerminalActivityRow.source !== "outcome" ||
+      d03TerminalActivityRow.actionId !== "advance_phase" ||
+      d03TerminalActivityRow.dispatchKind !== "advance_phase" ||
+      !d03TerminalDispatchPlan?.projectionRefreshKeys?.includes("host") ||
+      (d03TerminalApiHostStateAfterReject.phase?.id ??
+        d03TerminalApiHostStateAfterReject.phase?.phase_id) !== "D03" ||
+      d03TerminalApiHostStateAfterReject.phase?.locked !== true ||
+      d03TerminalHostReloadAfterReject.routeResponseStatus !== 200 ||
+      d03TerminalHostReloadAfterReject.phase?.id !== "D03" ||
+      d03TerminalHostReloadAfterReject.phase?.locked !== true ||
+      !d03TerminalHostReloadAfterReject.phaseActions.includes("advance_phase") ||
+      !d03TerminalHostReloadAfterReject.phaseActions.includes("unlock_thread") ||
+      d03TerminalHostReloadAfterReject.phaseActions.includes("resolve_phase") ||
+      !d03TerminalHostReloadAfterReject.dayVoteOutcomes.some(
+        (row) =>
+          row.phaseId === "D03" &&
+          row.status === "NoMajority" &&
+          row.winnerSlot === null &&
+          row.tallies?.[d03TerminalVoteTarget.slotId] === 1,
+      ) ||
+      !d03TerminalHostReloadAfterReject.outcomePanel.includes("D03 NoMajority") ||
+      (d03TerminalHostReloadAfterReject.apiPhase?.id ??
+        d03TerminalHostReloadAfterReject.apiPhase?.phase_id) !== "D03" ||
+      d03TerminalHostReloadAfterReject.apiPhase?.locked !== true
     ) {
       throw new Error(
         `D03 terminal boundary drifted: ${JSON.stringify({
@@ -3647,6 +3731,11 @@ async function verifySeededD02VoteNightTransition({
           d03TerminalResolvedSlot,
           d03TerminalAdvanceReject,
           hostAfterTerminalAdvanceReject,
+          d03TerminalActivityStatusText,
+          d03TerminalActivityRow,
+          d03TerminalDispatchPlan,
+          d03TerminalApiHostStateAfterReject,
+          d03TerminalHostReloadAfterReject,
         })}`,
       );
     }
@@ -3696,8 +3785,13 @@ async function verifySeededD02VoteNightTransition({
       d03TerminalResolvedSlot,
       d03TerminalAdvanceReject,
       hostAfterTerminalAdvanceReject,
+      d03TerminalActivityStatusText,
+      d03TerminalActivityRow,
+      d03TerminalDispatchPlan,
+      d03TerminalApiHostStateAfterReject,
+      d03TerminalHostReloadAfterReject,
       proof:
-        "A disposable seeded local game reached open D02 through real phase commands, the Slot 4 mafia-goon role URL submitted the deciding day vote, the host role URL resolved D02 into a day-vote kill with the target-only receipt, advanced to open N02 where the living mafia-goon role URL regained factional_kill while the normal player role URL did not, then the mafia-goon role URL submitted the N02 factional_kill, the host role URL resolved it, and the same role URLs advanced to open D03 day controls before Slot 7 submitted a D03 vote for Slot 4, host resolution recorded NoMajority and locked D03, and host AdvancePhase rejected InvalidTarget instead of inventing a Night 3.",
+        "A disposable seeded local game reached open D02 through real phase commands, the Slot 4 mafia-goon role URL submitted the deciding day vote, the host role URL resolved D02 into a day-vote kill with the target-only receipt, advanced to open N02 where the living mafia-goon role URL regained factional_kill while the normal player role URL did not, then the mafia-goon role URL submitted the N02 factional_kill, the host role URL resolved it, and the same role URLs advanced to open D03 day controls before Slot 7 submitted a D03 vote for Slot 4, host resolution recorded NoMajority and locked D03, host AdvancePhase rejected InvalidTarget instead of inventing a Night 3, and the host role URL reloaded to the same locked D03 NoMajority recovery truth.",
     };
   } finally {
     await hostEntry.context.close().catch(() => {});

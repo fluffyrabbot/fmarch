@@ -107,6 +107,15 @@ const coreLoopFeatureSpineLaneRows = Object.freeze([
     adminCheckId: "core-loop",
   }),
   Object.freeze({
+    targetKey: "dayThreeTerminalRecovery",
+    featureSlotId: "day-three-terminal-recovery",
+    cycleId: nightTwoDayThree,
+    role: "host",
+    checkpointId: `${nightTwoDayThree}-d03-terminal-reload-recovery`,
+    recoveryHookId: "d03TerminalAdvanceReject",
+    adminCheckId: "core-loop",
+  }),
+  Object.freeze({
     targetKey: "invalidActionRecovery",
     featureSlotId: playerInvalidActionRecoveryLaneId,
     cycleId: dayTwoNightTwo,

@@ -6655,6 +6655,35 @@ function buildCoreLoopSpineSummary({ session, verification }) {
               "advance_phase",
             ) ?? null,
         },
+        {
+          id: "d03-terminal-reload-recovery",
+          routeResponseStatus:
+            d02VoteNight.d03TerminalHostReloadAfterReject?.routeResponseStatus ??
+            null,
+          rejectReceiptStatus:
+            d02VoteNight.d03TerminalHostReloadAfterReject
+              ?.rejectReceiptStatusText ?? null,
+          phase:
+            d02VoteNight.d03TerminalHostReloadAfterReject?.phase?.id ?? null,
+          locked:
+            d02VoteNight.d03TerminalHostReloadAfterReject?.phase?.locked ?? null,
+          outcomeStatus:
+            d02VoteNight.d03TerminalHostReloadAfterReject?.dayVoteOutcomes?.find(
+              (row) => row.phaseId === "D03",
+            )?.status ?? null,
+          projectedCount:
+            d02VoteNight.d03TerminalHostReloadAfterReject?.dayVoteOutcomes?.find(
+              (row) => row.phaseId === "D03",
+            )?.tallies?.[d02VoteNight.d03TerminalVoteTarget?.slotId] ?? null,
+          advanceControlVisible:
+            d02VoteNight.d03TerminalHostReloadAfterReject?.phaseActions?.includes(
+              "advance_phase",
+            ) ?? null,
+          unlockControlVisible:
+            d02VoteNight.d03TerminalHostReloadAfterReject?.phaseActions?.includes(
+              "unlock_thread",
+            ) ?? null,
+        },
       ],
     },
   ];
@@ -6765,6 +6794,16 @@ function buildCoreLoopSpineSummary({ session, verification }) {
     cycles[2]?.checkpoints?.[4]?.phase === "D03" &&
     cycles[2]?.checkpoints?.[4]?.locked === true &&
     cycles[2]?.checkpoints?.[4]?.advanceControlVisible === true &&
+    cycles[2]?.checkpoints?.[5]?.routeResponseStatus === 200 &&
+    cycles[2]?.checkpoints?.[5]?.rejectReceiptStatus?.includes(
+      "Reject InvalidTarget",
+    ) === true &&
+    cycles[2]?.checkpoints?.[5]?.phase === "D03" &&
+    cycles[2]?.checkpoints?.[5]?.locked === true &&
+    cycles[2]?.checkpoints?.[5]?.outcomeStatus === "NoMajority" &&
+    cycles[2]?.checkpoints?.[5]?.projectedCount === 1 &&
+    cycles[2]?.checkpoints?.[5]?.advanceControlVisible === true &&
+    cycles[2]?.checkpoints?.[5]?.unlockControlVisible === true &&
     recoveryHooks.staleLockedVoteReject === "PhaseLocked" &&
     recoveryHooks.invalidActionReject === "InvalidTarget" &&
     recoveryHooks.normalPlayerDirectActionReject === "InvalidTarget" &&
@@ -6773,7 +6812,7 @@ function buildCoreLoopSpineSummary({ session, verification }) {
   return {
     status: passed ? "passed" : "failed",
     proof:
-      "Compact derived spine map for the seeded role URL core loop: D01 resolve to N01 action, N01 resolution to D02 day controls, D02 vote resolution, N02 action return, N02 action submission/resolution, D03 day controls, and terminal D03 AdvancePhase InvalidTarget recovery instead of an unproven Night 3.",
+      "Compact derived spine map for the seeded role URL core loop: D01 resolve to N01 action, N01 resolution to D02 day controls, D02 vote resolution, N02 action return, N02 action submission/resolution, D03 day controls, terminal D03 AdvancePhase InvalidTarget recovery instead of an unproven Night 3, and host role URL reload back to locked D03 NoMajority truth.",
     sourceLaneIds: [...coreLoopPhaseProgressionSpineSourceLaneIds],
     cycles,
     recoveryHooks,
@@ -6806,7 +6845,7 @@ function assertCoreLoopSpineSummary(summary) {
       !Object.values(cycle.roleUrls).every((url) => typeof url === "string") ||
       !Array.isArray(cycle.checkpoints) ||
       (cycle.id === "n02-d03"
-        ? cycle.checkpoints.length !== 5
+        ? cycle.checkpoints.length !== 6
         : cycle.checkpoints.length !== 4)
     ) {
       throw new Error(`core loop spine cycle malformed: ${JSON.stringify(cycle)}`);

@@ -142,6 +142,18 @@ assert.equal(proofRunSpineThirdCycle.checkpoints[4].rejectError, "InvalidTarget"
 assert.equal(proofRunSpineThirdCycle.checkpoints[4].phase, "D03");
 assert.equal(proofRunSpineThirdCycle.checkpoints[4].locked, true);
 assert.equal(proofRunSpineThirdCycle.checkpoints[4].advanceControlVisible, true);
+assert.equal(proofRunSpineThirdCycle.checkpoints[5].id, "d03-terminal-reload-recovery");
+assert.equal(proofRunSpineThirdCycle.checkpoints[5].routeResponseStatus, 200);
+assert.match(
+  proofRunSpineThirdCycle.checkpoints[5].rejectReceiptStatus,
+  /Reject InvalidTarget/,
+);
+assert.equal(proofRunSpineThirdCycle.checkpoints[5].phase, "D03");
+assert.equal(proofRunSpineThirdCycle.checkpoints[5].locked, true);
+assert.equal(proofRunSpineThirdCycle.checkpoints[5].outcomeStatus, "NoMajority");
+assert.equal(proofRunSpineThirdCycle.checkpoints[5].projectedCount, 1);
+assert.equal(proofRunSpineThirdCycle.checkpoints[5].advanceControlVisible, true);
+assert.equal(proofRunSpineThirdCycle.checkpoints[5].unlockControlVisible, true);
 assert.equal(proofRun.coreLoopSpine.recoveryHooks.staleLockedVoteReject, "PhaseLocked");
 assert.equal(proofRun.coreLoopSpine.recoveryHooks.invalidActionReject, "InvalidTarget");
 assert.equal(
@@ -969,6 +981,68 @@ assert.equal(
 assert.equal(
   session.verification.actionLoop.d02VoteNightTransition.hostAfterTerminalAdvanceReject
     .phaseActions.includes("advance_phase"),
+  true,
+);
+assert.match(
+  session.verification.actionLoop.d02VoteNightTransition
+    .d03TerminalActivityStatusText,
+  /Reject InvalidTarget/,
+);
+assert.match(
+  session.verification.actionLoop.d02VoteNightTransition
+    .d03TerminalActivityStatusText,
+  /stale phase state/,
+);
+assert.equal(
+  session.verification.actionLoop.d02VoteNightTransition.d03TerminalActivityRow
+    .actionId,
+  "advance_phase",
+);
+assert.equal(
+  session.verification.actionLoop.d02VoteNightTransition.d03TerminalDispatchPlan
+    .projectionRefreshKeys.includes("host"),
+  true,
+);
+assert.equal(
+  session.verification.actionLoop.d02VoteNightTransition
+    .d03TerminalHostReloadAfterReject.status,
+  "passed",
+);
+assert.equal(
+  session.verification.actionLoop.d02VoteNightTransition
+    .d03TerminalHostReloadAfterReject.routeResponseStatus,
+  200,
+);
+assert.match(
+  session.verification.actionLoop.d02VoteNightTransition
+    .d03TerminalHostReloadAfterReject.rejectReceiptStatusText,
+  /Reject InvalidTarget/,
+);
+assert.equal(
+  session.verification.actionLoop.d02VoteNightTransition
+    .d03TerminalHostReloadAfterReject.phase.id,
+  "D03",
+);
+assert.equal(
+  session.verification.actionLoop.d02VoteNightTransition
+    .d03TerminalHostReloadAfterReject.phase.locked,
+  true,
+);
+assert.equal(
+  session.verification.actionLoop.d02VoteNightTransition
+    .d03TerminalHostReloadAfterReject.phaseActions.includes("advance_phase"),
+  true,
+);
+assert.equal(
+  session.verification.actionLoop.d02VoteNightTransition
+    .d03TerminalHostReloadAfterReject.phaseActions.includes("unlock_thread"),
+  true,
+);
+assert.equal(
+  session.verification.actionLoop.d02VoteNightTransition
+    .d03TerminalHostReloadAfterReject.dayVoteOutcomes.some(
+      (row) => row.phaseId === "D03" && row.status === "NoMajority",
+    ),
   true,
 );
 const concurrentVoteRace = session.verification.multiplayerHardening.concurrentVoteRace;
