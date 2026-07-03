@@ -74,6 +74,18 @@ const coreLoopFeatureSpineLaneRows = Object.freeze([
     adminCheckId: "core-loop",
   }),
   Object.freeze({
+    targetKey: "nightActionLoop",
+    featureSlotId: "night-action-loop",
+    cycleId: dayOneNightOneDayTwo,
+    role: "actionPlayer",
+    checkpointId: `${dayOneNightOneDayTwo}-n01-action-open`,
+    adminCheckId: playerActionLoopLaneId,
+    proofLaneAliases: Object.freeze([
+      playerActionLoopLaneId,
+      "stale-action-conflict",
+    ]),
+  }),
+  Object.freeze({
     targetKey: "playerActionSubmission",
     featureSlotId: "player-action-submission",
     cycleId: dayTwoNightTwo,
@@ -181,10 +193,6 @@ const coreLoopSeedOnlyLaneRows = Object.freeze([
     featureSlotId: "night-action-loop",
     seedMembership: "required",
     seedOrder: 10,
-    proofLaneAliases: Object.freeze([
-      playerActionLoopLaneId,
-      "stale-action-conflict",
-    ]),
   }),
   Object.freeze({
     featureSlotId: "day-vote-no-lynch",

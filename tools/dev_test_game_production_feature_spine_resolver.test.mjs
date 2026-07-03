@@ -78,6 +78,7 @@ test("production feature spine resolver builds and validates source collections"
     "host-phase-control",
     "day-vote-resolution",
     "post-day-three-transition",
+    "night-action-loop",
     "player-action-submission",
     "host-night-action-transition",
     "night-two-action-resolution",
@@ -119,6 +120,18 @@ test("production feature spine resolver builds and validates source collections"
       roleUrlId: "d02-n02-host",
       checkpointId: "d02-n02-d02-resolved-target-killed",
       adminCheckId: "core-loop",
+    },
+  );
+  assert.deepEqual(
+    {
+      roleUrlId: collection.bySlotId["night-action-loop"].roleUrlId,
+      checkpointId: collection.bySlotId["night-action-loop"].checkpointId,
+      adminCheckId: collection.bySlotId["night-action-loop"].adminCheckId,
+    },
+    {
+      roleUrlId: "d01-n01-d02-actionPlayer",
+      checkpointId: "d01-n01-d02-n01-action-open",
+      adminCheckId: "action-loop",
     },
   );
   assert.deepEqual(
