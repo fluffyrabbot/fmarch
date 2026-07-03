@@ -73,49 +73,20 @@ const replacementStaleConflictMessageSpineLane =
 const coreLoopSpineRows = coreLoopFeatureSpineTargetRows;
 const identitySpineRows = identityFeatureSpineTargetRows;
 
+const coreLoopProductionFeatureSpineTargets = Object.freeze(
+  Object.fromEntries(
+    Object.entries(coreLoopSpineRows).map(([targetKey, row]) => [
+      targetKey,
+      featureSpineTargetFromSourceRow(row),
+    ]),
+  ),
+);
+
 export const releaseReadinessProductionFeatureSpineTargets = Object.freeze({
   identityAdapter: featureSpineCheckpointTarget({
     ...identitySpineRows.identityAdapter,
   }),
-  hostPhaseControl: featureSpineCheckpointTarget({
-    ...coreLoopSpineRows.hostPhaseControl,
-  }),
-  dayVoteResolution: featureSpineCheckpointTarget({
-    ...coreLoopSpineRows.dayVoteResolution,
-  }),
-  postDayThreeTransition: featureSpineCheckpointTarget({
-    ...coreLoopSpineRows.postDayThreeTransition,
-  }),
-  playerActionSubmission: featureSpineCheckpointTarget({
-    ...coreLoopSpineRows.playerActionSubmission,
-  }),
-  hostNightActionTransition: featureSpineCheckpointTarget({
-    ...coreLoopSpineRows.hostNightActionTransition,
-  }),
-  nightTwoActionResolution: featureSpineCheckpointTarget({
-    ...coreLoopSpineRows.nightTwoActionResolution,
-  }),
-  invalidActionRecovery: featureSpineRecoveryHookTarget({
-    ...coreLoopSpineRows.invalidActionRecovery,
-  }),
-  playerActionBoundary: featureSpineRecoveryHookTarget({
-    ...coreLoopSpineRows.playerActionBoundary,
-  }),
-  privateChannel: featureSpineCheckpointTarget({
-    ...coreLoopSpineRows.privateChannel,
-  }),
-  resolutionReceipts: featureSpineCheckpointTarget({
-    ...coreLoopSpineRows.resolutionReceipts,
-  }),
-  staleRecovery: featureSpineCheckpointTarget({
-    ...coreLoopSpineRows.staleRecovery,
-  }),
-  staleActionConflictMessage: featureSpineRecoveryHookTarget({
-    ...coreLoopSpineRows.staleActionConflictMessage,
-  }),
-  completedGameRecovery: featureSpineCheckpointTarget({
-    ...coreLoopSpineRows.completedGameRecovery,
-  }),
+  ...coreLoopProductionFeatureSpineTargets,
   completedGameStaleRecovery: featureSpineCheckpointTarget({
     featureSlotId: "completed-game-stale-recovery",
     sourceCheckId: hardeningFeatureSpineSourceCheckId,
@@ -135,6 +106,14 @@ export const releaseReadinessProductionFeatureSpineTargets = Object.freeze({
 });
 export const releaseReadinessProductionFeatureSpineTargetsBySlotId =
   featureSpineTargetBySlotId(releaseReadinessProductionFeatureSpineTargets);
+
+function featureSpineTargetFromSourceRow(row) {
+  const targetFactory =
+    row.recoveryHookId === undefined
+      ? featureSpineCheckpointTarget
+      : featureSpineRecoveryHookTarget;
+  return targetFactory({ ...row });
+}
 
 const releaseReadinessUnprovenCases = Object.freeze({
   "production-identity": Object.freeze({

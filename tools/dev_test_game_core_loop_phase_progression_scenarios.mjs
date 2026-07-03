@@ -1,5 +1,4 @@
 import {
-  playerActionLoopLaneId,
   staleDayTwoVoteAfterTransitionRecoveryScenario,
   staleNightOneActionAfterTransitionRecoveryScenario,
 } from "./dev_test_game_core_loop_action_scenario_cases.mjs";
@@ -7,49 +6,43 @@ import {
   emptyNightThreeHostTransitionProofCase,
 } from "./dev_test_game_core_loop_host_phase_scenarios.mjs";
 import {
-  coreLoopVoteResolutionLaneIds,
   coreLoopVoteResolutionScenarioFamily,
-  dayThreeVoteResolutionLaneId,
 } from "./dev_test_game_core_loop_vote_resolution_scenarios.mjs";
 import {
   postDayThreeResolutionSurfaceCase,
 } from "./dev_test_game_core_loop_post_day_three_scenarios.mjs";
+import {
+  coreLoopFeatureDemoOnlySeedScenarioIds,
+  coreLoopFeaturePhaseProgressionLaneIds,
+  coreLoopFeaturePhaseProgressionSpineSourceLaneIds,
+  coreLoopFeatureRequiredSeedScenarioIds,
+  coreLoopFeatureSeedAliasOnlyProofLaneIds,
+  coreLoopFeatureSeedProofLaneAliasEntries,
+  nightThreeActionResolutionLaneId as catalogNightThreeActionResolutionLaneId,
+} from "./dev_test_game_feature_lane_catalog.mjs";
 
 export const coreLoopPhaseProgressionFamilyId =
   "core-loop-phase-progression";
+export const nightThreeActionResolutionLaneId =
+  catalogNightThreeActionResolutionLaneId;
 
-export const coreLoopPhaseProgressionLaneIds = Object.freeze([
-  ...coreLoopVoteResolutionLaneIds,
-  "day-vote-no-lynch",
-  playerActionLoopLaneId,
-]);
+export const coreLoopPhaseProgressionLaneIds =
+  coreLoopFeaturePhaseProgressionLaneIds;
 
-export const coreLoopPhaseProgressionSpineSourceLaneIds = Object.freeze([
-  "core-loop",
-  dayThreeVoteResolutionLaneId,
-  playerActionLoopLaneId,
-  "resolution-receipts",
-]);
+export const coreLoopPhaseProgressionSpineSourceLaneIds =
+  coreLoopFeaturePhaseProgressionSpineSourceLaneIds;
 
 export const coreLoopPhaseProgressionRequiredSeedScenarioIds =
-  Object.freeze(["night-action-loop"]);
+  coreLoopFeatureRequiredSeedScenarioIds;
 
-export const coreLoopPhaseProgressionDemoOnlySeedScenarioIds = Object.freeze([
-  dayThreeVoteResolutionLaneId,
-  "day-vote-no-lynch",
-]);
+export const coreLoopPhaseProgressionDemoOnlySeedScenarioIds =
+  coreLoopFeatureDemoOnlySeedScenarioIds;
 
-export const coreLoopPhaseProgressionAliasOnlyProofLaneIds = Object.freeze([
-  playerActionLoopLaneId,
-  "stale-action-conflict",
-]);
+export const coreLoopPhaseProgressionAliasOnlyProofLaneIds =
+  coreLoopFeatureSeedAliasOnlyProofLaneIds;
 
-export const coreLoopPhaseProgressionSeedAliasEntries = Object.freeze([
-  Object.freeze([
-    "night-action-loop",
-    coreLoopPhaseProgressionAliasOnlyProofLaneIds,
-  ]),
-]);
+export const coreLoopPhaseProgressionSeedAliasEntries =
+  coreLoopFeatureSeedProofLaneAliasEntries;
 
 const clonePlayerObservationCase = (scenario) => ({ ...scenario });
 

@@ -81,6 +81,8 @@ test("production feature spine resolver builds and validates source collections"
     "player-action-submission",
     "host-night-action-transition",
     "night-two-action-resolution",
+    "day-three-vote-night-transition",
+    "night-three-action-resolution",
     "invalid-action-recovery",
     "player-action-boundary",
     "private-channel",
@@ -135,6 +137,36 @@ test("production feature spine resolver builds and validates source collections"
   );
   assert.deepEqual(
     {
+      roleUrlId:
+        collection.bySlotId["day-three-vote-night-transition"].roleUrlId,
+      checkpointId:
+        collection.bySlotId["day-three-vote-night-transition"].checkpointId,
+      adminCheckId:
+        collection.bySlotId["day-three-vote-night-transition"].adminCheckId,
+    },
+    {
+      roleUrlId: "d03-n03-voter",
+      checkpointId: "d03-n03-n03-action-open",
+      adminCheckId: "day-vote-resolution",
+    },
+  );
+  assert.deepEqual(
+    {
+      roleUrlId:
+        collection.bySlotId["night-three-action-resolution"].roleUrlId,
+      checkpointId:
+        collection.bySlotId["night-three-action-resolution"].checkpointId,
+      adminCheckId:
+        collection.bySlotId["night-three-action-resolution"].adminCheckId,
+    },
+    {
+      roleUrlId: "n03-d04-survivor",
+      checkpointId: "n03-d04-d04-day-controls-return",
+      adminCheckId: "night-three-action-resolution",
+    },
+  );
+  assert.deepEqual(
+    {
       roleUrlId: collection.bySlotId["player-action-boundary"].roleUrlId,
       checkpointId: collection.bySlotId["player-action-boundary"].checkpointId,
       recoveryHookId:
@@ -184,7 +216,7 @@ function coreLoopSourceTargetFixture() {
     detailRoleUrl: "/admin/audit/local-core-loop?game=<seeded-game>",
     browserProofCommand,
     rerunCommand: coreLoopAdminProofCommand,
-    cycleIds: ["d01-n01-d02", "d02-n02", "n02-d03"],
+    cycleIds: ["d01-n01-d02", "d02-n02", "n02-d03", "d03-n03", "n03-d04"],
     roleUrlIds: [
       "d01-n01-d02-host",
       "d01-n01-d02-actionPlayer",
@@ -198,6 +230,8 @@ function coreLoopSourceTargetFixture() {
       "n02-d03-host",
       "n02-d03-actionPlayer",
       "n02-d03-normalPlayer",
+      "d03-n03-voter",
+      "n03-d04-survivor",
     ],
     checkpointIds: [
       "d01-n01-d02-d01-resolved-locked",
@@ -212,6 +246,8 @@ function coreLoopSourceTargetFixture() {
       "n02-d03-n02-action-submitted",
       "n02-d03-n02-resolved-target-killed",
       "n02-d03-d03-day-controls-return",
+      "d03-n03-n03-action-open",
+      "n03-d04-d04-day-controls-return",
     ],
     recoveryHookIds: [
       "staleLockedVoteReject",
@@ -224,6 +260,7 @@ function coreLoopSourceTargetFixture() {
       "completed-game-hardening-coverage",
       "host-lifecycle-control",
       "day-vote-resolution",
+      "night-three-action-resolution",
       "action-loop",
       "invalid-action-recovery",
       "player-action-boundary",
@@ -245,6 +282,8 @@ function coreLoopSourceTargetFixture() {
       "n02-d03-actionPlayer": "http://127.0.0.1:5173/g/game-b",
       "n02-d03-normalPlayer": "http://127.0.0.1:5173/g/game-b",
       "d02-n02-target": "http://127.0.0.1:5173/g/game-b",
+      "d03-n03-voter": "http://127.0.0.1:5173/g/game-c",
+      "n03-d04-survivor": "http://127.0.0.1:5173/g/game-c",
     },
   };
 }

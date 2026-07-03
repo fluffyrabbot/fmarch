@@ -21,11 +21,12 @@ import {
   playerInvalidActionRecoveryLaneId,
 } from "./dev_test_game_core_loop_action_scenarios.mjs";
 import {
-  coreLoopPhaseProgressionAliasOnlyProofLaneIds,
-  coreLoopPhaseProgressionDemoOnlySeedScenarioIds,
-  coreLoopPhaseProgressionRequiredSeedScenarioIds,
-  coreLoopPhaseProgressionSeedAliasEntries,
-} from "./dev_test_game_core_loop_phase_progression_scenarios.mjs";
+  coreLoopFeatureDemoOnlySeedScenarioIds,
+  coreLoopFeatureRequiredSeedScenarioIds,
+  coreLoopFeatureSeedAliasOnlyProofLaneIds,
+  coreLoopFeatureSeedProofLaneAliasEntries,
+  coreLoopFeatureSeedRoleOverrideEntries,
+} from "./dev_test_game_feature_lane_catalog.mjs";
 
 export const seedRequiredScenarioIds = Object.freeze([
   "host-phase-controls",
@@ -35,7 +36,7 @@ export const seedRequiredScenarioIds = Object.freeze([
   playerInvalidActionRecoveryLaneId,
   "resolution-receipt",
   "dead-player-recovery",
-  ...coreLoopPhaseProgressionRequiredSeedScenarioIds,
+  ...coreLoopFeatureRequiredSeedScenarioIds,
   "action-idempotent-retry",
   "concurrent-action-race",
   "concurrent-action-race-reload",
@@ -91,7 +92,7 @@ export const seedRequiredScenarioIds = Object.freeze([
 ]);
 
 export const seedDemoOnlyScenarioIds = Object.freeze([
-  ...coreLoopPhaseProgressionDemoOnlySeedScenarioIds,
+  ...coreLoopFeatureDemoOnlySeedScenarioIds,
   "host-deadline-advance",
   "stale-deadline-advance",
   "private-channel",
@@ -151,7 +152,7 @@ export const seedScenarioCoverageGroups = Object.freeze({
 });
 
 const seedScenarioRoleOverrides = new Map([
-  [coreLoopPhaseProgressionDemoOnlySeedScenarioIds[0], "actionPlayer"],
+  ...coreLoopFeatureSeedRoleOverrideEntries,
   ["player-action-denied", "player"],
   [playerActionBoundaryLaneId, "player"],
   ["stale-deadline-advance", "host"],
@@ -182,7 +183,7 @@ const seedScenarioProofLaneAliases = new Map([
   ["player-vote-recovery", ["browser-entry", "core-loop", "stale-player-vote"]],
   ["player-action-denied", ["browser-entry", playerActionBoundaryLaneId]],
   ["resolution-receipt", ["browser-entry", "resolution-receipts"]],
-  ...coreLoopPhaseProgressionSeedAliasEntries,
+  ...coreLoopFeatureSeedProofLaneAliasEntries,
   ["local-ops-readiness", ["local-ops-artifact-bundle", "local-backup-restore-drill"]],
 ]);
 
@@ -190,8 +191,7 @@ export const seedAliasOnlyProofLaneIds = Object.freeze([
   "browser-entry",
   "cohost-console",
   "core-loop",
-  coreLoopPhaseProgressionAliasOnlyProofLaneIds[0],
-  "stale-action-conflict",
+  ...coreLoopFeatureSeedAliasOnlyProofLaneIds,
 ]);
 
 export const seedAggregateOnlyProofLaneIds = Object.freeze([

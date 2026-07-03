@@ -326,11 +326,13 @@ test("scenario-owned production feature targets avoid hand-maintained row litera
     "tools/dev_test_game_release_readiness_cases.mjs",
     "utf8",
   );
+  assert.match(source, /Object\.entries\(coreLoopSpineRows\)\.map/);
+  assert.match(source, /featureSpineTargetFromSourceRow\(row\)/);
   for (const targetKey of Object.keys(coreLoopFeatureSpineTargetRows)) {
-    const targetBlock = featureTargetDeclarationBlock(source, targetKey);
-    assert.match(
-      targetBlock,
-      new RegExp(`\\.\\.\\.coreLoopSpineRows\\.${targetKey}`),
+    assert.equal(
+      source.includes(`${targetKey}: featureSpine`),
+      false,
+      `core-loop target should derive from catalog row: ${targetKey}`,
     );
   }
   const identityBlock = featureTargetDeclarationBlock(source, "identityAdapter");

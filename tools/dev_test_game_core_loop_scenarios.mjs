@@ -22,6 +22,9 @@ import {
 import {
   coreLoopPrivateChannelRecoveryLaneIds,
 } from "./dev_test_game_core_loop_private_channel_recovery_scenarios.mjs";
+import {
+  coreLoopFeatureSpineAdminCheckIds,
+} from "./dev_test_game_feature_lane_catalog.mjs";
 
 export const coreLoopSpineCheckId = "core-loop-spine";
 export const coreLoopCompletedGameCoverageCheckId =
@@ -49,7 +52,10 @@ export const coreLoopAuditLaneIds = Object.freeze([
 ]);
 
 export const coreLoopAdminCheckIds = Object.freeze([
-  coreLoopSpineCheckId,
-  coreLoopCompletedGameCoverageCheckId,
-  ...coreLoopAuditLaneIds,
+  ...new Set([
+    coreLoopSpineCheckId,
+    coreLoopCompletedGameCoverageCheckId,
+    ...coreLoopAuditLaneIds,
+    ...coreLoopFeatureSpineAdminCheckIds,
+  ]),
 ]);

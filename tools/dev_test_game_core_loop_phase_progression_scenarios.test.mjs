@@ -37,6 +37,7 @@ test("core loop phase progression family names proof, seed, and stale reject cas
   assert.deepEqual(coreLoopPhaseProgressionDemoOnlySeedScenarioIds, [
     "day-vote-resolution",
     "day-vote-no-lynch",
+    "night-three-action-resolution",
   ]);
   assert.deepEqual(coreLoopPhaseProgressionAliasOnlyProofLaneIds, [
     "action-loop",
