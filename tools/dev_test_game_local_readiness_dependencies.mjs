@@ -78,7 +78,7 @@ export const localReadinessDependencies = Object.freeze([
     buildSlice:
       "Refresh the local hosted evidence lane demo proof before choosing hosted deployment work.",
     proofTarget: devTestGameHostedEvidenceLaneDemoProofPath,
-    roleUrl: "/admin/audit/local-hosted-evidence-lane?game=<seeded-game>",
+    roleUrl: localAdminAuditRoleUrl(localAdminAuditIds.hostedEvidenceLane),
     proofBoundary:
       "Local demo proof for the hosted evidence lane pass path. This recovers the blocked-to-passed handoff using synthetic external-looking evidence only; it does not prove hosted deployment, release readiness, or production readiness.",
     requiredEvidence:

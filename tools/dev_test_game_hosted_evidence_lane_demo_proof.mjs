@@ -17,6 +17,10 @@ import {
   assertDevTestGameHostedMatrixRawEvidence,
   defaultHostedMatrixRawGroupId,
 } from "./dev_test_game_hosted_matrix_raw_evidence.mjs";
+import {
+  localAdminAuditIds,
+  localAdminAuditRoleUrl,
+} from "./dev_test_game_admin_audit_surface_ids.mjs";
 import { repoRoot } from "./dev_test_game_spine_runner.mjs";
 
 export const DEV_TEST_GAME_HOSTED_EVIDENCE_LANE_DEMO_PROOF_VERSION = 1;
@@ -177,9 +181,11 @@ export async function runDevTestGameHostedEvidenceLaneDemoProof({
     ],
     handoff: {
       blockedRoleUrl:
-        "/admin/audit/local-hosted-evidence-lane?game=<seeded-game>",
+        localAdminAuditRoleUrl(localAdminAuditIds.hostedEvidenceLane),
       passedRoleUrl:
-        "/admin/audit/local-hosted-concurrent-race-matrix?game=<seeded-game>",
+        localAdminAuditRoleUrl(
+          localAdminAuditIds.hostedConcurrentRaceMatrix,
+        ),
       blockedNextCommand: blockedLane.nextCommand,
       passedNextCommand: passedLane.nextCommand,
       passedNextProofTarget: passedLane.nextProofTarget,
@@ -258,9 +264,9 @@ export function assertDevTestGameHostedEvidenceLaneDemoProof(proof) {
     !Array.isArray(proof.passedLane.blockedCheckIds) ||
     proof.passedLane.blockedCheckIds.length !== 0 ||
     proof.handoff?.blockedRoleUrl !==
-      "/admin/audit/local-hosted-evidence-lane?game=<seeded-game>" ||
+      localAdminAuditRoleUrl(localAdminAuditIds.hostedEvidenceLane) ||
     proof.handoff?.passedRoleUrl !==
-      "/admin/audit/local-hosted-concurrent-race-matrix?game=<seeded-game>"
+      localAdminAuditRoleUrl(localAdminAuditIds.hostedConcurrentRaceMatrix)
   ) {
     throw new Error("hosted evidence lane demo handoff drifted");
   }

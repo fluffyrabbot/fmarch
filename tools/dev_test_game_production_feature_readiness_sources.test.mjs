@@ -8,6 +8,10 @@ import {
   identityFeatureSpineSourceCheckId,
   identityFeatureSpineTargetRows,
 } from "./dev_test_game_identity_feature_spine_targets.mjs";
+import {
+  localAdminAuditIds,
+  localAdminAuditRoleUrl,
+} from "./dev_test_game_admin_audit_surface_ids.mjs";
 
 const browserProofCommand =
   "DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch npm run test:dev-test-game-live";
@@ -22,6 +26,11 @@ const rerunCommands = Object.freeze({
   "local-hardening-proof": hardeningAdminProofCommand,
   "local-identity-adapter-proof": identityAdminProofCommand,
 });
+const coreLoopRoleUrl = localAdminAuditRoleUrl(localAdminAuditIds.coreLoop);
+const hardeningRoleUrl = localAdminAuditRoleUrl(localAdminAuditIds.hardening);
+const identityAdapterRoleUrl = localAdminAuditRoleUrl(
+  localAdminAuditIds.identityAdapter,
+);
 
 test("production feature readiness sources derive every available source target", () => {
   const sourceTargets = productionFeatureSourceTargetsByCheckIdFromReadiness(
@@ -82,7 +91,7 @@ test("production feature readiness source target fails closed for missing rows",
             {
               id: "local-identity-adapter-proof",
               adminRoleSurface: {
-                detailRoleUrl: "/admin/audit/local-identity-adapter?game=<seeded-game>",
+                detailRoleUrl: identityAdapterRoleUrl,
                 visibleChecks: ["account-login"],
               },
             },
@@ -106,7 +115,7 @@ function readinessFixture() {
         {
           id: "local-core-loop-proof",
           spineTargets: {
-            detailRoleUrl: "/admin/audit/local-core-loop?game=<seeded-game>",
+            detailRoleUrl: coreLoopRoleUrl,
             defaultCycleId: "d02-n02",
             defaultRoleUrlId: "d02-n02-host",
             defaultRoleUrl: "http://127.0.0.1:5173/g/game-b/host",
@@ -125,7 +134,7 @@ function readinessFixture() {
         {
           id: "local-hardening-proof",
           spineTargets: {
-            detailRoleUrl: "/admin/audit/local-hardening?game=<seeded-game>",
+            detailRoleUrl: hardeningRoleUrl,
             defaultCycleId: "hardening-stale-conflict",
             defaultRoleUrlId: "replacement-stale-conflict-message",
             defaultRoleUrl: "http://127.0.0.1:5173/g/game-a/host",
@@ -145,8 +154,7 @@ function readinessFixture() {
         {
           id: "local-identity-adapter-proof",
           adminRoleSurface: {
-            detailRoleUrl:
-              "/admin/audit/local-identity-adapter?game=<seeded-game>",
+            detailRoleUrl: identityAdapterRoleUrl,
             visibleChecks: ["account-login"],
           },
         },

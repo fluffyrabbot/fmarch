@@ -138,6 +138,34 @@ test("release readiness fixtures use shared admin audit role URLs", async () => 
   }
 });
 
+test("final proof fixture sweep uses shared admin audit role URLs", async () => {
+  const rawRoleUrls = [
+    localAdminAuditRoleUrl(localAdminAuditIds.proofGraph),
+    localAdminAuditRoleUrl(localAdminAuditIds.proofFreshness),
+    localAdminAuditRoleUrl(localAdminAuditIds.nextAction),
+    localAdminAuditRoleUrl(localAdminAuditIds.hostedEvidenceLane),
+    localAdminAuditRoleUrl(localAdminAuditIds.hostedConcurrentRaceMatrix),
+    localAdminAuditRoleUrl(localAdminAuditIds.coreLoop),
+    localAdminAuditRoleUrl(localAdminAuditIds.hardening),
+    localAdminAuditRoleUrl(localAdminAuditIds.identityAdapter),
+  ];
+  for (const sourceFile of [
+    "dev_test_game_local_readiness_dependencies.mjs",
+    "dev_test_game_local_readiness_dependencies.test.mjs",
+    "dev_test_game_hosted_evidence_lane_demo_proof.mjs",
+    "dev_test_game_production_feature_readiness_sources.test.mjs",
+  ]) {
+    const source = await readFile(new URL(sourceFile, import.meta.url), "utf8");
+    for (const rawValue of rawRoleUrls) {
+      assert.equal(
+        source.includes(JSON.stringify(rawValue)),
+        false,
+        `${sourceFile} should derive ${rawValue} from shared admin audit ids`,
+      );
+    }
+  }
+});
+
 test("admin proof handoff builders use shared audit surface ids", async () => {
   const rawIds = [
     ...Object.values(localAdminAuditIds),

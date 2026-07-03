@@ -14,6 +14,19 @@ import {
   localProofGraphAdminRoleHandoffsCheckId,
   rankedMissingLocalReadinessDependencies,
 } from "./dev_test_game_local_readiness_dependencies.mjs";
+import {
+  localAdminAuditIds,
+  localAdminAuditRoleUrl,
+} from "./dev_test_game_admin_audit_surface_ids.mjs";
+
+const proofGraphRoleUrl = localAdminAuditRoleUrl(localAdminAuditIds.proofGraph);
+const proofFreshnessRoleUrl = localAdminAuditRoleUrl(
+  localAdminAuditIds.proofFreshness,
+);
+const nextActionRoleUrl = localAdminAuditRoleUrl(localAdminAuditIds.nextAction);
+const hostedEvidenceLaneRoleUrl = localAdminAuditRoleUrl(
+  localAdminAuditIds.hostedEvidenceLane,
+);
 
 test("local readiness dependency contract carries recovery command and role surface", () => {
   const dependency = getLocalReadinessDependency(
@@ -28,7 +41,7 @@ test("local readiness dependency contract carries recovery command and role surf
     buildSlice:
       "Refresh the proof graph admin role-handoff browser proof before choosing hosted readiness work.",
     proofTarget: "target/dev-test-game/proof-graph-admin-proof.json",
-    roleUrl: "/admin/audit/local-proof-graph?game=<seeded-game>",
+    roleUrl: proofGraphRoleUrl,
     proofBoundary:
       "Local browser proof that the proof graph admin surface follows every mapped admin-proof role URL. This recovers a local readiness dependency only; it does not prove hosted deployment, release readiness, or production readiness.",
     requiredEvidence:
@@ -69,7 +82,7 @@ test("proof graph admin proof builds the matching local readiness check", () => 
     roleHandoffCount: 2,
     roleHandoffIds: ["admin-proof:release", "admin-proof:next-action"],
     destinationAuditIds: ["local-release-readiness", "local-next-action"],
-    detailRoleUrl: "/admin/audit/local-proof-graph?game=<seeded-game>",
+    detailRoleUrl: proofGraphRoleUrl,
   };
 
   assert.deepEqual(
@@ -88,7 +101,7 @@ test("proof graph admin proof builds the matching local readiness check", () => 
         buildSlice:
           "Refresh the proof graph admin role-handoff browser proof before choosing hosted readiness work.",
         proofTarget: "target/dev-test-game/proof-graph-admin-proof.json",
-        roleUrl: "/admin/audit/local-proof-graph?game=<seeded-game>",
+        roleUrl: proofGraphRoleUrl,
         proofBoundary:
           "Local browser proof that the proof graph admin surface follows every mapped admin-proof role URL. This recovers a local readiness dependency only; it does not prove hosted deployment, release readiness, or production readiness.",
         requiredEvidence:
@@ -110,7 +123,7 @@ test("next-action admin proof builds the matching local readiness check", () => 
     reason: "release-readiness-unproven",
     releaseReadinessCandidateCount: 1,
     localReadinessDependencyCandidateCount: 0,
-    detailRoleUrl: "/admin/audit/local-next-action?game=<seeded-game>",
+    detailRoleUrl: nextActionRoleUrl,
   };
 
   assert.deepEqual(
@@ -127,7 +140,7 @@ test("next-action admin proof builds the matching local readiness check", () => 
         buildSlice:
           "Refresh the next-action admin browser proof before hosted readiness work can be selected.",
         proofTarget: "target/dev-test-game/next-action-admin-proof.json",
-        roleUrl: "/admin/audit/local-next-action?game=<seeded-game>",
+        roleUrl: nextActionRoleUrl,
         proofBoundary:
           "Local browser proof that the next-action admin surface exposes the selected command, local readiness dependency trace, release-readiness trace, and role URL handoffs from the seeded admin audit route. This recovers a local readiness dependency only; it does not prove hosted deployment, release readiness, or production readiness.",
         requiredEvidence:
@@ -151,7 +164,7 @@ test("proof-freshness admin proof builds the matching local readiness check", ()
     nextActionCommand: "npm run test:dev-test-game-hosted-concurrent-race-matrix",
     nextActionStatus: "ready",
     nextActionReason: "release-readiness-unproven",
-    detailRoleUrl: "/admin/audit/local-proof-freshness?game=<seeded-game>",
+    detailRoleUrl: proofFreshnessRoleUrl,
   };
 
   assert.deepEqual(
@@ -170,7 +183,7 @@ test("proof-freshness admin proof builds the matching local readiness check", ()
         buildSlice:
           "Refresh the proof-freshness admin browser proof before hosted readiness work can be selected.",
         proofTarget: "target/dev-test-game/proof-freshness-admin-proof.json",
-        roleUrl: "/admin/audit/local-proof-freshness?game=<seeded-game>",
+        roleUrl: proofFreshnessRoleUrl,
         proofBoundary:
           "Local browser proof that the proof-freshness admin surface exposes fresh generated artifacts and the next-action handoff from the seeded admin audit route. This recovers a local readiness dependency only; it does not validate artifact contents, hosted deployment, release readiness, or production readiness.",
         requiredEvidence:
@@ -248,7 +261,7 @@ test("missing local readiness dependencies rank before hosted readiness work", (
       buildSlice:
         "Refresh the proof graph admin role-handoff browser proof before choosing hosted readiness work.",
       proofTarget: "target/dev-test-game/proof-graph-admin-proof.json",
-      roleUrl: "/admin/audit/local-proof-graph?game=<seeded-game>",
+      roleUrl: proofGraphRoleUrl,
       proofBoundary:
         "Local browser proof that the proof graph admin surface follows every mapped admin-proof role URL. This recovers a local readiness dependency only; it does not prove hosted deployment, release readiness, or production readiness.",
       requiredEvidence:
@@ -263,7 +276,7 @@ test("missing local readiness dependencies rank before hosted readiness work", (
       buildSlice:
         "Refresh the proof-freshness admin browser proof before hosted readiness work can be selected.",
       proofTarget: "target/dev-test-game/proof-freshness-admin-proof.json",
-      roleUrl: "/admin/audit/local-proof-freshness?game=<seeded-game>",
+      roleUrl: proofFreshnessRoleUrl,
       proofBoundary:
         "Local browser proof that the proof-freshness admin surface exposes fresh generated artifacts and the next-action handoff from the seeded admin audit route. This recovers a local readiness dependency only; it does not validate artifact contents, hosted deployment, release readiness, or production readiness.",
       requiredEvidence:
@@ -278,7 +291,7 @@ test("missing local readiness dependencies rank before hosted readiness work", (
       buildSlice:
         "Refresh the next-action admin browser proof before hosted readiness work can be selected.",
       proofTarget: "target/dev-test-game/next-action-admin-proof.json",
-      roleUrl: "/admin/audit/local-next-action?game=<seeded-game>",
+      roleUrl: nextActionRoleUrl,
       proofBoundary:
         "Local browser proof that the next-action admin surface exposes the selected command, local readiness dependency trace, release-readiness trace, and role URL handoffs from the seeded admin audit route. This recovers a local readiness dependency only; it does not prove hosted deployment, release readiness, or production readiness.",
       requiredEvidence:
@@ -293,7 +306,7 @@ test("missing local readiness dependencies rank before hosted readiness work", (
       buildSlice:
         "Refresh the local hosted evidence lane demo proof before choosing hosted deployment work.",
       proofTarget: "target/dev-test-game/hosted-evidence-lane-demo-proof.json",
-      roleUrl: "/admin/audit/local-hosted-evidence-lane?game=<seeded-game>",
+      roleUrl: hostedEvidenceLaneRoleUrl,
       proofBoundary:
         "Local demo proof for the hosted evidence lane pass path. This recovers the blocked-to-passed handoff using synthetic external-looking evidence only; it does not prove hosted deployment, release readiness, or production readiness.",
       requiredEvidence:
