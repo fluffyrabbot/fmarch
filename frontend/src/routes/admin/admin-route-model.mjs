@@ -3954,6 +3954,8 @@ function formatCoreLoopSpineCheckpointStatus(checkpoint) {
   pushField(parts, "api count", checkpoint?.apiCount);
   pushField(parts, "stale D03 target", checkpoint?.staleD03Target);
   pushField(parts, "stale D03 count", checkpoint?.staleD03Count);
+  pushField(parts, "action vote controls", checkpoint?.actionVoteControls);
+  pushField(parts, "normal vote controls", checkpoint?.normalVoteControls);
   if (typeof checkpoint?.promptActionVisible === "boolean") {
     parts.push(`prompt action ${checkpoint.promptActionVisible ? "visible" : "hidden"}`);
   }

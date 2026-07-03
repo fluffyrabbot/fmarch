@@ -2359,7 +2359,7 @@ test("admin local core loop detail data carries lane rows", async () => {
           ["d01-resolved-locked", "phase D01, locked"],
           ["n01-action-open", "phase N01, action factional_kill"],
           ["n01-resolved-target-killed", "receipt factional_kill"],
-          ["d02-day-controls-return", "phase D02"],
+          ["d02-day-controls-return", "phase D02, action vote controls 2"],
         ],
       ],
       [
@@ -2393,7 +2393,7 @@ test("admin local core loop detail data carries lane rows", async () => {
             "n02-resolved-target-killed",
             "phase N02, locked, target dead, target status dead",
           ],
-          ["d03-day-controls-return", "phase D03"],
+          ["d03-day-controls-return", "phase D03, action vote controls 2"],
           [
             "d03-terminal-advance-reject",
             "phase D03, locked, resolve ack, advance reject, reject InvalidTarget, target alive, target status alive, vote target slot_4, vote ack, outcome NoMajority, count 1, advance control visible",
@@ -2404,7 +2404,7 @@ test("admin local core loop detail data carries lane rows", async () => {
           ],
           [
             "d03-revote-prompt-resolved",
-            "phase D03R1, open, resolve ack, prompt D03:revote:NoMajority, prompt status resolved, stream seqs 2",
+            "phase D03R1, open, resolve ack, prompt D03:revote:NoMajority, prompt status resolved, stream seqs 2, action vote controls 2, normal vote controls 2",
           ],
           [
             "d03r1-revote-ballot-submitted",
@@ -2413,6 +2413,10 @@ test("admin local core loop detail data carries lane rows", async () => {
           [
             "d03r1-revote-resolved-no-majority",
             "phase D03R1, locked, resolve ack, prompt D03R1:revote:NoMajority, prompt status pending, original prompt status resolved, outcome NoMajority, count 1, prompt action visible",
+          ],
+          [
+            "d03r2-revote-prompt-resolved",
+            "phase D03R2, open, resolve ack, prompt D03R1:revote:NoMajority, prompt status resolved, original prompt status resolved, stream seqs 2, action vote controls 1, normal vote controls 1",
           ],
         ],
       ],
@@ -2440,7 +2444,7 @@ test("admin local core loop detail data carries lane rows", async () => {
     [
       [
         "core-loop-spine",
-        "passed: D01 -> N01 -> D02, vote ack, N02 action ack, next D03, terminal advance InvalidTarget, reload D03, revote D03R1, revote vote ack, revote resolve ack",
+        "passed: D01 -> N01 -> D02, vote ack, N02 action ack, next D03, terminal advance InvalidTarget, reload D03, revote D03R1, revote vote ack, revote resolve ack, second revote D03R2",
       ],
       ["core-loop", "passed: PhaseLocked vote receipt, unchanged unknown, lock ack/unlock ack"],
       ["action-loop", "passed: role URL false, night unknown, receipt unknown, D02 unknown, next unknown"],
@@ -2486,8 +2490,8 @@ test("admin local core loop detail data carries lane rows", async () => {
     [
       [
         "core-loop-spine",
-        "passed: D01 -> N01 -> D02, vote ack, N02 action ack, next D03, terminal advance InvalidTarget, reload D03, revote D03R1, revote vote ack, revote resolve ack",
-        "passed: D01 -> N01 -> D02, vote ack, N02 action ack, next D03, terminal advance InvalidTarget, reload D03, revote D03R1, revote vote ack, revote resolve ack",
+        "passed: D01 -> N01 -> D02, vote ack, N02 action ack, next D03, terminal advance InvalidTarget, reload D03, revote D03R1, revote vote ack, revote resolve ack, second revote D03R2",
+        "passed: D01 -> N01 -> D02, vote ack, N02 action ack, next D03, terminal advance InvalidTarget, reload D03, revote D03R1, revote vote ack, revote resolve ack, second revote D03R2",
       ],
       [
         "core-loop",
@@ -3878,6 +3882,20 @@ function proofRunFixture() {
               promptStatusAfter: "pending",
               originalPromptStatus: "resolved",
               promptActionVisible: true,
+            },
+            {
+              id: "d03r2-revote-prompt-resolved",
+              phase: "D03R2",
+              locked: false,
+              resolveState: "ack",
+              promptId: "D03R1:revote:NoMajority",
+              promptActionId: "resolve_host_prompt-D03R1-revote-NoMajority",
+              promptStatusBefore: "pending",
+              promptStatusAfter: "resolved",
+              originalPromptStatus: "resolved",
+              streamSeqCount: 2,
+              actionVoteControls: 1,
+              normalVoteControls: 1,
             },
           ],
         },

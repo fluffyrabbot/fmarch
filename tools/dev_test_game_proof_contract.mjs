@@ -6775,6 +6775,41 @@ function buildCoreLoopSpineSummary({ session, verification }) {
               d02VoteNight.d03R1RevotePromptActionId,
             ) ?? null,
         },
+        {
+          id: "d03r2-revote-prompt-resolved",
+          promptId: d02VoteNight.d03R1RevotePrompt?.id ?? null,
+          promptActionId: d02VoteNight.d03R1RevotePromptActionId ?? null,
+          promptStatusBefore:
+            d02VoteNight.d03R1RevotePrompt?.status ?? null,
+          resolveState:
+            d02VoteNight.d03R1RevotePromptResolution?.commandStatus?.state ??
+            null,
+          streamSeqCount: Array.isArray(
+            d02VoteNight.d03R1RevotePromptResolution?.commandStatus?.streamSeqs,
+          )
+            ? d02VoteNight.d03R1RevotePromptResolution.commandStatus.streamSeqs
+                .length
+            : null,
+          promptStatusAfter:
+            d02VoteNight.hostAfterD03R1RevotePrompt?.hostPrompts?.find(
+              (prompt) => prompt.id === d02VoteNight.d03R1RevotePrompt?.id,
+            )?.status ?? null,
+          originalPromptStatus:
+            d02VoteNight.hostAfterD03R1RevotePrompt?.hostPrompts?.find(
+              (prompt) => prompt.id === d02VoteNight.d03RevotePrompt?.id,
+            )?.status ?? null,
+          phase: d02VoteNight.hostAfterD03R1RevotePrompt?.phase?.id ?? null,
+          locked:
+            d02VoteNight.hostAfterD03R1RevotePrompt?.phase?.locked ?? null,
+          actionVoteControls: countButtonsWithPrefix(
+            d02VoteNight.actionAfterD03R1RevotePrompt?.buttons,
+            "submit_vote",
+          ),
+          normalVoteControls: countButtonsWithPrefix(
+            d02VoteNight.normalAfterD03R1RevotePrompt?.buttons,
+            "submit_vote",
+          ),
+        },
       ],
     },
   ];
@@ -6931,6 +6966,19 @@ function buildCoreLoopSpineSummary({ session, verification }) {
     cycles[2]?.checkpoints?.[8]?.promptStatusAfter === "pending" &&
     cycles[2]?.checkpoints?.[8]?.originalPromptStatus === "resolved" &&
     cycles[2]?.checkpoints?.[8]?.promptActionVisible === true &&
+    cycles[2]?.checkpoints?.[9]?.id === "d03r2-revote-prompt-resolved" &&
+    cycles[2]?.checkpoints?.[9]?.promptId === "D03R1:revote:NoMajority" &&
+    cycles[2]?.checkpoints?.[9]?.promptActionId ===
+      "resolve_host_prompt-D03R1-revote-NoMajority" &&
+    cycles[2]?.checkpoints?.[9]?.promptStatusBefore === "pending" &&
+    cycles[2]?.checkpoints?.[9]?.resolveState === "ack" &&
+    cycles[2]?.checkpoints?.[9]?.streamSeqCount === 2 &&
+    cycles[2]?.checkpoints?.[9]?.promptStatusAfter === "resolved" &&
+    cycles[2]?.checkpoints?.[9]?.originalPromptStatus === "resolved" &&
+    cycles[2]?.checkpoints?.[9]?.phase === "D03R2" &&
+    cycles[2]?.checkpoints?.[9]?.locked === false &&
+    cycles[2]?.checkpoints?.[9]?.actionVoteControls > 0 &&
+    cycles[2]?.checkpoints?.[9]?.normalVoteControls > 0 &&
     recoveryHooks.staleLockedVoteReject === "PhaseLocked" &&
     recoveryHooks.invalidActionReject === "InvalidTarget" &&
     recoveryHooks.normalPlayerDirectActionReject === "InvalidTarget" &&
@@ -6939,7 +6987,7 @@ function buildCoreLoopSpineSummary({ session, verification }) {
   return {
     status: passed ? "passed" : "failed",
     proof:
-      "Compact derived spine map for the seeded role URL core loop: D01 resolve to N01 action, N01 resolution to D02 day controls, D02 vote resolution, N02 action return, N02 action submission/resolution, D03 day controls, D03 NoMajority AdvancePhase InvalidTarget recovery, host role URL reload back to locked D03 NoMajority truth, host revote prompt resolution into open D03R1 controls, a D03R1 no-lynch revote ballot keyed separately from the stale D03 tally, and host resolution of D03R1 back to locked NoMajority with a fresh pending revote prompt.",
+      "Compact derived spine map for the seeded role URL core loop: D01 resolve to N01 action, N01 resolution to D02 day controls, D02 vote resolution, N02 action return, N02 action submission/resolution, D03 day controls, D03 NoMajority AdvancePhase InvalidTarget recovery, host role URL reload back to locked D03 NoMajority truth, host revote prompt resolution into open D03R1 controls, a D03R1 no-lynch revote ballot keyed separately from the stale D03 tally, host resolution of D03R1 back to locked NoMajority with a fresh pending revote prompt, and second revote prompt resolution into open D03R2 controls.",
     sourceLaneIds: [...coreLoopPhaseProgressionSpineSourceLaneIds],
     cycles,
     recoveryHooks,
@@ -6972,7 +7020,7 @@ function assertCoreLoopSpineSummary(summary) {
       !Object.values(cycle.roleUrls).every((url) => typeof url === "string") ||
       !Array.isArray(cycle.checkpoints) ||
       (cycle.id === "n02-d03"
-        ? cycle.checkpoints.length !== 9
+        ? cycle.checkpoints.length !== 10
         : cycle.checkpoints.length !== 4)
     ) {
       throw new Error(`core loop spine cycle malformed: ${JSON.stringify(cycle)}`);

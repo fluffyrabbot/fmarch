@@ -3305,7 +3305,8 @@ fn phase_advanced_from_prompt(
 }
 
 fn next_revote_phase_id(stream: &[eventstore::StoredEvent], source_phase_id: &str) -> String {
-    let prefix = format!("{source_phase_id}R");
+    let base_phase_id = revote_base_phase_id(source_phase_id);
+    let prefix = format!("{base_phase_id}R");
     let max_existing = stream
         .iter()
         .filter_map(|event| {
@@ -3322,6 +3323,15 @@ fn next_revote_phase_id(stream: &[eventstore::StoredEvent], source_phase_id: &st
         .max()
         .unwrap_or(0);
     format!("{prefix}{}", max_existing + 1)
+}
+
+fn revote_base_phase_id(source_phase_id: &str) -> &str {
+    if let Some((base, suffix)) = source_phase_id.split_once('R') {
+        if !base.is_empty() && suffix.parse::<u32>().is_ok() {
+            return base;
+        }
+    }
+    source_phase_id
 }
 
 fn skip_next_day_target(source_phase_id: &str) -> Result<(String, String), Reject> {
@@ -5451,6 +5461,35 @@ mod tests {
             .unwrap(),
             HostPromptEffect::AdvancePhase {
                 phase_id: "D01R3".to_string(),
+                reason: "revote",
+                skipped_phase_id: None,
+            }
+        );
+    }
+
+    #[test]
+    fn host_prompt_effect_advances_revote_prompt_from_revote_phase_flatly() {
+        let prompt = prompt("revote", "D01R1", serde_json::json!({}));
+        let stream = vec![phase_event("D01R1")];
+        let effects = vec![prompt_effect(
+            "revote",
+            HostPromptDecisionKind::Acknowledge,
+            HostPromptResolutionEffect::AdvanceRevote,
+        )];
+
+        assert_eq!(
+            host_prompt_effect(
+                &effects,
+                &phase_policy(vec![domain::pack::PhaseKind::Day]),
+                &prompt,
+                &HostPromptDecision::Acknowledge {
+                    metadata: serde_json::json!({})
+                },
+                &stream
+            )
+            .unwrap(),
+            HostPromptEffect::AdvancePhase {
+                phase_id: "D01R2".to_string(),
                 reason: "revote",
                 skipped_phase_id: None,
             }

@@ -2326,9 +2326,9 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
     graph,
     releaseReadiness,
   );
-  assert.equal(graph.summary.nodeCount, 42);
-  assert.equal(graph.summary.roleUrlCount, 42);
-  assert.equal(graph.summary.productionFeatureTargetCount, 22);
+  assert.equal(graph.summary.nodeCount, 43);
+  assert.equal(graph.summary.roleUrlCount, 43);
+  assert.equal(graph.summary.productionFeatureTargetCount, 23);
   assert.deepEqual(
     graph.nodes
       .filter((node) => node.kind === "admin-proof-surface")
@@ -3429,6 +3429,58 @@ test("session card and markdown include role credential URLs and tokens", async 
         apiPromptsAfterResolveD03R1: [
           { id: "D03:revote:NoMajority", status: "resolved" },
           { id: "D03R1:revote:NoMajority", status: "pending" },
+        ],
+        d03R1RevotePromptResolution: {
+          commandStatus: {
+            state: "ack",
+            streamSeqs: [60, 61],
+            requestEnvelope: {
+              body: {
+                body: {
+                  command: {
+                    ResolveHostPrompt: {
+                      prompt_id: "D03R1:revote:NoMajority",
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+        hostAfterD03R1RevotePrompt: {
+          phase: { id: "D03R2", locked: false },
+          phaseActions: ["resolve_phase", "lock_thread"],
+          hostPrompts: [
+            {
+              id: "D03:revote:NoMajority",
+              label: "revote",
+              value: "no_majority",
+              status: "resolved",
+            },
+            {
+              id: "D03R1:revote:NoMajority",
+              label: "revote",
+              value: "no_majority",
+              status: "resolved",
+            },
+          ],
+          promptActions: [],
+        },
+        actionAfterD03R1RevotePrompt: {
+          commandState: {
+            phase: { phaseId: "D03R2", locked: false },
+          },
+          buttons: [{ action: "submit_vote:no_lynch", disabled: false }],
+        },
+        normalAfterD03R1RevotePrompt: {
+          commandState: {
+            phase: { phaseId: "D03R2", locked: false },
+          },
+          buttons: [{ action: "submit_vote:slot_4", disabled: false }],
+        },
+        apiPromptsAfterD03R1Revote: [
+          { id: "D03:revote:NoMajority", status: "resolved" },
+          { id: "D03R1:revote:NoMajority", status: "resolved" },
         ],
       },
       staleActionConflict: {
@@ -11047,7 +11099,7 @@ function coreLoopAdminProofFixture() {
       proofRun: "target/dev-test-game/proof-run.json",
       game: "00000000-0000-0000-0000-000000000001",
       coreLoopSpineStatus:
-        "passed: D01 -> N01 -> D02, vote ack, N02 action ack, next D03, terminal advance InvalidTarget, reload D03, revote D03R1, revote vote ack, revote resolve ack",
+        "passed: D01 -> N01 -> D02, vote ack, N02 action ack, next D03, terminal advance InvalidTarget, reload D03, revote D03R1, revote vote ack, revote resolve ack, second revote D03R2",
       completedGameHardeningCoverageStatus: "passed: 10/10 lanes across 4 families",
       hostControlFamily: coreLoopHostControlScenarioFamily(),
       playerActionRecoveryFamily:
@@ -11135,6 +11187,7 @@ function coreLoopAdminProofFixture() {
           "n02-d03-d03-revote-prompt-resolved",
           "n02-d03-d03r1-revote-ballot-submitted",
           "n02-d03-d03r1-revote-resolved-no-majority",
+          "n02-d03-d03r2-revote-prompt-resolved",
         ],
         recoveryHooks: [
           "staleLockedVoteReject",
@@ -11155,7 +11208,7 @@ function coreLoopAdminProofFixture() {
       visibleChecks: [...coreLoopAdminCheckIds],
       visibleCheckStatuses: {
         "core-loop-spine":
-          "passed: D01 -> N01 -> D02, vote ack, N02 action ack, next D03, terminal advance InvalidTarget, reload D03, revote D03R1, revote vote ack, revote resolve ack",
+          "passed: D01 -> N01 -> D02, vote ack, N02 action ack, next D03, terminal advance InvalidTarget, reload D03, revote D03R1, revote vote ack, revote resolve ack, second revote D03R2",
         "completed-game-hardening-coverage":
           "passed: 10/10 lanes across 4 families",
       },
@@ -11192,6 +11245,7 @@ function coreLoopAdminProofFixture() {
         "n02-d03-d03-revote-prompt-resolved",
         "n02-d03-d03r1-revote-ballot-submitted",
         "n02-d03-d03r1-revote-resolved-no-majority",
+        "n02-d03-d03r2-revote-prompt-resolved",
       ],
       visibleSpineRecoveryHooks: [
         "staleLockedVoteReject",
@@ -12993,6 +13047,7 @@ function coreLoopSpineTargetsFixture() {
       "n02-d03-d03-revote-prompt-resolved",
       "n02-d03-d03r1-revote-ballot-submitted",
       "n02-d03-d03r1-revote-resolved-no-majority",
+      "n02-d03-d03r2-revote-prompt-resolved",
     ],
     recoveryHookIds: [
       "staleLockedVoteReject",
