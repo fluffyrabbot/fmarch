@@ -3600,11 +3600,18 @@ function formatCoreLoopSpineCheckpointStatus(checkpoint) {
   }
   pushField(parts, "target status", checkpoint?.targetStatus);
   pushField(parts, "receipt", checkpoint?.receiptStatus);
+  pushField(parts, "actor", checkpoint?.actorSlot);
   pushField(parts, "vote target", checkpoint?.voteTarget);
   pushField(parts, "vote", checkpoint?.voteState);
+  pushField(parts, "current vote", checkpoint?.currentVoteKind);
   pushField(parts, "outcome", checkpoint?.outcomeStatus);
   pushField(parts, "winner", checkpoint?.winnerSlot);
   pushField(parts, "count", checkpoint?.projectedCount);
+  pushField(parts, "api phase", checkpoint?.apiPhase);
+  pushField(parts, "api target", checkpoint?.apiTarget);
+  pushField(parts, "api count", checkpoint?.apiCount);
+  pushField(parts, "stale D03 target", checkpoint?.staleD03Target);
+  pushField(parts, "stale D03 count", checkpoint?.staleD03Count);
   pushField(parts, "route", checkpoint?.routeResponseStatus);
   pushField(parts, "reject receipt", checkpoint?.rejectReceiptStatus);
   if (typeof checkpoint?.normalPlayerFactionalKillVisible === "boolean") {

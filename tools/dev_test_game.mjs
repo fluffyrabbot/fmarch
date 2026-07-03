@@ -3739,6 +3739,68 @@ async function verifySeededD02VoteNightTransition({
     const apiPromptsAfterD03Revote = await fetchJson(
       `${apiBaseUrl}/games/${transitionGame}/host-prompts?principal_user_id=host_h`,
     );
+    const d03RevoteBallotTarget =
+      actionAfterD03RevotePrompt.commandState?.voteTargets?.find(
+        (target) => target.kind === "no_lynch",
+      ) ?? null;
+    const d03RevoteNoLynchButton = actionAfterD03RevotePrompt.buttons.find(
+      (button) =>
+        button.action === "submit_vote:no_lynch" && button.disabled === false,
+    );
+    if (d03RevoteBallotTarget?.kind !== "no_lynch" || d03RevoteNoLynchButton === undefined) {
+      throw new Error(
+        `D03R1 revote no-lynch setup drifted: ${JSON.stringify({
+          actionAfterD03RevotePrompt,
+          d03RevoteBallotTarget,
+          d03RevoteNoLynchButton,
+        })}`,
+      );
+    }
+    await actionEntry.page.locator('[data-action="submit_vote:no_lynch"]').click();
+    await actionEntry.page.waitForFunction(
+      () =>
+        window.__fmarchPlayerCommandStatus?.state === "ack" &&
+        window.__fmarchPlayerCommandStatus?.requestEnvelope?.body?.body
+          ?.principal_user_id === "player-goon-a" &&
+        window.__fmarchPlayerCommandStatus?.requestEnvelope?.body?.body?.command
+          ?.SubmitVote?.actor_slot === "slot_4" &&
+        window.__fmarchPlayerCommandStatus?.requestEnvelope?.body?.body?.command
+          ?.SubmitVote?.target === "NoLynch" &&
+        window.__fmarchPlayerProjection?.commandState?.phase?.phaseId === "D03R1" &&
+        window.__fmarchPlayerProjection?.commandState?.currentVote?.kind ===
+          "no_lynch",
+    );
+    await waitForPlayerVotecount(actionEntry.page, {
+      target: "no_lynch",
+      count: 1,
+    });
+    const d03RevoteVoteSubmission = await actionEntry.page.evaluate(
+      () => window.__fmarchPlayerCommandStatus,
+    );
+    const d03RevoteActionAfterVote = {
+      roleUrl: actionEntry.page.url(),
+      commandState: await actionEntry.page.evaluate(
+        () => window.__fmarchPlayerProjection?.commandState,
+      ),
+      currentVote: await playerCurrentVoteSnapshot(actionEntry.page),
+      votecount: await actionEntry.page.evaluate(
+        () => window.__fmarchPlayerProjection?.votecount ?? [],
+      ),
+      buttons: await playerCommandButtons(actionEntry.page),
+    };
+    const d03RevoteApiVotecountAfterVote = normalizedVotecountRows(
+      await fetchJson(`${apiBaseUrl}/games/${transitionGame}/votecount`),
+    );
+    const d03RevoteApiNoLynchRow = d03RevoteApiVotecountAfterVote.find(
+      (row) => row.phaseId === "D03R1" && row.target === "no_lynch",
+    );
+    const d03RevoteApiOriginalD03Row = d03RevoteApiVotecountAfterVote.find(
+      (row) =>
+        row.phaseId === "D03" && row.target === d03TerminalVoteTarget.slotId,
+    );
+    const d03RevoteApiStaleD03NoLynchRow = d03RevoteApiVotecountAfterVote.find(
+      (row) => row.phaseId === "D03" && row.target === "no_lynch",
+    );
 
     if (
       d03TerminalVoteSubmission?.state !== "ack" ||
@@ -3827,7 +3889,25 @@ async function verifySeededD02VoteNightTransition({
       normalAfterD03RevotePrompt.commandState?.phase?.locked !== false ||
       !normalAfterD03RevotePrompt.buttons.some((button) =>
         String(button.action ?? "").startsWith("submit_vote"),
-      )
+      ) ||
+      d03RevoteVoteSubmission?.state !== "ack" ||
+      d03RevoteVoteSubmission?.requestEnvelope?.body?.body?.principal_user_id !==
+        "player-goon-a" ||
+      d03RevoteVoteSubmission?.requestEnvelope?.body?.body?.command?.SubmitVote
+        ?.actor_slot !== "slot_4" ||
+      d03RevoteVoteSubmission?.requestEnvelope?.body?.body?.command?.SubmitVote
+        ?.target !== "NoLynch" ||
+      d03RevoteActionAfterVote.commandState?.phase?.phaseId !== "D03R1" ||
+      d03RevoteActionAfterVote.commandState?.phase?.locked !== false ||
+      d03RevoteActionAfterVote.commandState?.currentVote?.kind !== "no_lynch" ||
+      d03RevoteActionAfterVote.currentVote.hasVote !== "true" ||
+      !d03RevoteActionAfterVote.votecount.some(
+        (row) => row.target === "no_lynch" && row.count === 1,
+      ) ||
+      d03RevoteApiNoLynchRow?.count !== 1 ||
+      d03RevoteApiNoLynchRow?.needed === undefined ||
+      d03RevoteApiOriginalD03Row?.count !== 1 ||
+      d03RevoteApiStaleD03NoLynchRow !== undefined
     ) {
       throw new Error(
         `D03 revote boundary drifted: ${JSON.stringify({
@@ -3855,6 +3935,14 @@ async function verifySeededD02VoteNightTransition({
           actionAfterD03RevotePrompt,
           normalAfterD03RevotePrompt,
           apiPromptsAfterD03Revote,
+          d03RevoteBallotTarget,
+          d03RevoteNoLynchButton,
+          d03RevoteVoteSubmission,
+          d03RevoteActionAfterVote,
+          d03RevoteApiVotecountAfterVote,
+          d03RevoteApiNoLynchRow,
+          d03RevoteApiOriginalD03Row,
+          d03RevoteApiStaleD03NoLynchRow,
         })}`,
       );
     }
@@ -3916,8 +4004,16 @@ async function verifySeededD02VoteNightTransition({
       actionAfterD03RevotePrompt,
       normalAfterD03RevotePrompt,
       apiPromptsAfterD03Revote,
+      d03RevoteBallotTarget,
+      d03RevoteNoLynchButton,
+      d03RevoteVoteSubmission,
+      d03RevoteActionAfterVote,
+      d03RevoteApiVotecountAfterVote,
+      d03RevoteApiNoLynchRow,
+      d03RevoteApiOriginalD03Row,
+      d03RevoteApiStaleD03NoLynchRow,
       proof:
-        "A disposable seeded local game reached open D02 through real phase commands, the Slot 4 mafia-goon role URL submitted the deciding day vote, the host role URL resolved D02 into a day-vote kill with the target-only receipt, advanced to open N02 where the living mafia-goon role URL regained factional_kill while the normal player role URL did not, then the mafia-goon role URL submitted the N02 factional_kill, the host role URL resolved it, and the same role URLs advanced to open D03 day controls before Slot 7 submitted a D03 vote for Slot 4, host resolution recorded NoMajority and issued the D03 revote host prompt, host AdvancePhase rejected InvalidTarget instead of inventing a Night 3, the host role URL reloaded to the same locked D03 NoMajority recovery truth, and resolving the revote prompt advanced the same host and player role URLs into open D03R1 controls.",
+        "A disposable seeded local game reached open D02 through real phase commands, the Slot 4 mafia-goon role URL submitted the deciding day vote, the host role URL resolved D02 into a day-vote kill with the target-only receipt, advanced to open N02 where the living mafia-goon role URL regained factional_kill while the normal player role URL did not, then the mafia-goon role URL submitted the N02 factional_kill, the host role URL resolved it, and the same role URLs advanced to open D03 day controls before Slot 7 submitted a D03 vote for Slot 4, host resolution recorded NoMajority and issued the D03 revote host prompt, host AdvancePhase rejected InvalidTarget instead of inventing a Night 3, the host role URL reloaded to the same locked D03 NoMajority recovery truth, resolving the revote prompt advanced the same host and player role URLs into open D03R1 controls, and the action-player role URL submitted a no-lynch revote ballot whose API tally was keyed to D03R1 while the old D03 slot tally stayed separate.",
     };
   } finally {
     await hostEntry.context.close().catch(() => {});

@@ -2168,9 +2168,9 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
     graph,
     releaseReadiness,
   );
-  assert.equal(graph.summary.nodeCount, 39);
-  assert.equal(graph.summary.roleUrlCount, 39);
-  assert.equal(graph.summary.productionFeatureTargetCount, 20);
+  assert.equal(graph.summary.nodeCount, 40);
+  assert.equal(graph.summary.roleUrlCount, 40);
+  assert.equal(graph.summary.productionFeatureTargetCount, 21);
   assert.deepEqual(
     graph.nodes
       .filter((node) => node.kind === "admin-proof-surface")
@@ -3166,11 +3166,60 @@ test("session card and markdown include role credential URLs and tokens", async 
           promptActions: [],
         },
         actionAfterD03RevotePrompt: {
+          commandState: {
+            voteTargets: [{ kind: "no_lynch", slotId: null, label: "No lynch" }],
+          },
           buttons: [{ action: "submit_vote:no_lynch", disabled: false }],
         },
         normalAfterD03RevotePrompt: {
           buttons: [{ action: "submit_vote:slot_4", disabled: false }],
         },
+        d03RevoteBallotTarget: {
+          kind: "no_lynch",
+          slotId: null,
+          label: "No lynch",
+        },
+        d03RevoteNoLynchButton: {
+          action: "submit_vote:no_lynch",
+          disabled: false,
+        },
+        d03RevoteVoteSubmission: {
+          state: "ack",
+          requestEnvelope: {
+            body: {
+              body: {
+                principal_user_id: "player-goon-a",
+                command: {
+                  SubmitVote: {
+                    actor_slot: "slot_4",
+                    target: "NoLynch",
+                  },
+                },
+              },
+            },
+          },
+        },
+        d03RevoteActionAfterVote: {
+          commandState: {
+            phase: { phaseId: "D03R1", locked: false },
+            currentVote: { kind: "no_lynch", slotId: null, label: "No lynch" },
+          },
+          currentVote: { hasVote: "true" },
+          votecount: [{ phaseId: "D03R1", target: "no_lynch", count: 1 }],
+        },
+        d03RevoteApiNoLynchRow: {
+          phaseId: "D03R1",
+          target: "no_lynch",
+          count: 1,
+          needed: 2,
+        },
+        d03RevoteApiOriginalD03Row: {
+          phaseId: "D03",
+          target: "slot_4",
+          count: 1,
+          needed: 2,
+        },
+        d03RevoteApiStaleD03NoLynchRow: null,
       },
       staleActionConflict: {
         reject: { error: "PhaseLocked" },
@@ -10747,7 +10796,7 @@ function coreLoopAdminProofFixture() {
       proofRun: "target/dev-test-game/proof-run.json",
       game: "00000000-0000-0000-0000-000000000001",
       coreLoopSpineStatus:
-        "passed: D01 -> N01 -> D02, vote ack, N02 action ack, next D03, terminal advance InvalidTarget, reload D03, revote D03R1",
+        "passed: D01 -> N01 -> D02, vote ack, N02 action ack, next D03, terminal advance InvalidTarget, reload D03, revote D03R1, revote vote ack",
       completedGameHardeningCoverageStatus: "passed: 10/10 lanes across 4 families",
       hostControlFamily: coreLoopHostControlScenarioFamily(),
       playerActionRecoveryFamily:
@@ -10833,6 +10882,7 @@ function coreLoopAdminProofFixture() {
           "n02-d03-d03-terminal-advance-reject",
           "n02-d03-d03-terminal-reload-recovery",
           "n02-d03-d03-revote-prompt-resolved",
+          "n02-d03-d03r1-revote-ballot-submitted",
         ],
         recoveryHooks: [
           "staleLockedVoteReject",
@@ -10853,7 +10903,7 @@ function coreLoopAdminProofFixture() {
       visibleChecks: [...coreLoopAdminCheckIds],
       visibleCheckStatuses: {
         "core-loop-spine":
-          "passed: D01 -> N01 -> D02, vote ack, N02 action ack, next D03, terminal advance InvalidTarget, reload D03, revote D03R1",
+          "passed: D01 -> N01 -> D02, vote ack, N02 action ack, next D03, terminal advance InvalidTarget, reload D03, revote D03R1, revote vote ack",
         "completed-game-hardening-coverage":
           "passed: 10/10 lanes across 4 families",
       },
@@ -10888,6 +10938,7 @@ function coreLoopAdminProofFixture() {
         "n02-d03-d03-terminal-advance-reject",
         "n02-d03-d03-terminal-reload-recovery",
         "n02-d03-d03-revote-prompt-resolved",
+        "n02-d03-d03r1-revote-ballot-submitted",
       ],
       visibleSpineRecoveryHooks: [
         "staleLockedVoteReject",
@@ -12687,6 +12738,7 @@ function coreLoopSpineTargetsFixture() {
       "n02-d03-d03-terminal-advance-reject",
       "n02-d03-d03-terminal-reload-recovery",
       "n02-d03-d03-revote-prompt-resolved",
+      "n02-d03-d03r1-revote-ballot-submitted",
     ],
     recoveryHookIds: [
       "staleLockedVoteReject",

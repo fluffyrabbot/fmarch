@@ -168,6 +168,23 @@ assert.equal(proofRunSpineThirdCycle.checkpoints[6].phase, "D03R1");
 assert.equal(proofRunSpineThirdCycle.checkpoints[6].locked, false);
 assert.equal(proofRunSpineThirdCycle.checkpoints[6].actionVoteControls > 0, true);
 assert.equal(proofRunSpineThirdCycle.checkpoints[6].normalVoteControls > 0, true);
+assert.equal(
+  proofRunSpineThirdCycle.checkpoints[7].id,
+  "d03r1-revote-ballot-submitted",
+);
+assert.equal(proofRunSpineThirdCycle.checkpoints[7].phase, "D03R1");
+assert.equal(proofRunSpineThirdCycle.checkpoints[7].locked, false);
+assert.equal(proofRunSpineThirdCycle.checkpoints[7].voteState, "ack");
+assert.equal(proofRunSpineThirdCycle.checkpoints[7].actorSlot, "slot_4");
+assert.equal(proofRunSpineThirdCycle.checkpoints[7].voteTarget, "NoLynch");
+assert.equal(proofRunSpineThirdCycle.checkpoints[7].currentVoteKind, "no_lynch");
+assert.equal(proofRunSpineThirdCycle.checkpoints[7].projectedCount, 1);
+assert.equal(proofRunSpineThirdCycle.checkpoints[7].apiPhase, "D03R1");
+assert.equal(proofRunSpineThirdCycle.checkpoints[7].apiTarget, "no_lynch");
+assert.equal(proofRunSpineThirdCycle.checkpoints[7].apiCount, 1);
+assert.equal(proofRunSpineThirdCycle.checkpoints[7].staleD03Target, "slot_4");
+assert.equal(proofRunSpineThirdCycle.checkpoints[7].staleD03Count, 1);
+assert.equal(proofRunSpineThirdCycle.checkpoints[7].staleD03NoLynchCount, null);
 assert.equal(proofRun.coreLoopSpine.recoveryHooks.staleLockedVoteReject, "PhaseLocked");
 assert.equal(proofRun.coreLoopSpine.recoveryHooks.invalidActionReject, "InvalidTarget");
 assert.equal(

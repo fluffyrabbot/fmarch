@@ -86,7 +86,8 @@ export function coreLoopSpineStatus(proofRun) {
     "d03-terminal-reload-recovery",
   );
   const revote = checkpointById(thirdCycle, "d03-revote-prompt-resolved");
-  return `${status}: ${String(firstStart?.phase ?? "unknown")} -> ${String(firstNight?.phase ?? "unknown")} -> ${String(firstDay?.phase ?? "unknown")}, vote ${String(secondVote?.voteState ?? "unknown")}, ${String(secondNight?.phase ?? "unknown")} action ${String(thirdAction?.actionState ?? "unknown")}, next ${String(thirdDay?.phase ?? "unknown")}, terminal advance ${String(terminal?.rejectError ?? "unknown")}, reload ${String(terminalReload?.phase ?? "unknown")}, revote ${String(revote?.phase ?? "unknown")}`;
+  const revoteBallot = checkpointById(thirdCycle, "d03r1-revote-ballot-submitted");
+  return `${status}: ${String(firstStart?.phase ?? "unknown")} -> ${String(firstNight?.phase ?? "unknown")} -> ${String(firstDay?.phase ?? "unknown")}, vote ${String(secondVote?.voteState ?? "unknown")}, ${String(secondNight?.phase ?? "unknown")} action ${String(thirdAction?.actionState ?? "unknown")}, next ${String(thirdDay?.phase ?? "unknown")}, terminal advance ${String(terminal?.rejectError ?? "unknown")}, reload ${String(terminalReload?.phase ?? "unknown")}, revote ${String(revote?.phase ?? "unknown")}, revote vote ${String(revoteBallot?.voteState ?? "unknown")}`;
 }
 
 export function hardeningHighlightedLaneEvidence(proofRun) {

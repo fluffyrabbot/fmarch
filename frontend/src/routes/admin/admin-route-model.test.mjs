@@ -2302,6 +2302,10 @@ test("admin local core loop detail data carries lane rows", async () => {
             "d03-revote-prompt-resolved",
             "phase D03R1, open, resolve ack, prompt D03:revote:NoMajority, prompt status resolved, stream seqs 2",
           ],
+          [
+            "d03r1-revote-ballot-submitted",
+            "phase D03R1, open, actor slot_4, vote target NoLynch, vote ack, current vote no_lynch, count 1, api phase D03R1, api target no_lynch, api count 1, stale D03 target slot_4, stale D03 count 1",
+          ],
         ],
       ],
     ],
@@ -2328,7 +2332,7 @@ test("admin local core loop detail data carries lane rows", async () => {
     [
       [
         "core-loop-spine",
-        "passed: D01 -> N01 -> D02, vote ack, N02 action ack, next D03, terminal advance InvalidTarget, reload D03, revote D03R1",
+        "passed: D01 -> N01 -> D02, vote ack, N02 action ack, next D03, terminal advance InvalidTarget, reload D03, revote D03R1, revote vote ack",
       ],
       ["core-loop", "passed: PhaseLocked vote receipt, unchanged unknown, lock ack/unlock ack"],
       ["action-loop", "passed: role URL false, night unknown, receipt unknown, D02 unknown, next unknown"],
@@ -2374,8 +2378,8 @@ test("admin local core loop detail data carries lane rows", async () => {
     [
       [
         "core-loop-spine",
-        "passed: D01 -> N01 -> D02, vote ack, N02 action ack, next D03, terminal advance InvalidTarget, reload D03, revote D03R1",
-        "passed: D01 -> N01 -> D02, vote ack, N02 action ack, next D03, terminal advance InvalidTarget, reload D03, revote D03R1",
+        "passed: D01 -> N01 -> D02, vote ack, N02 action ack, next D03, terminal advance InvalidTarget, reload D03, revote D03R1, revote vote ack",
+        "passed: D01 -> N01 -> D02, vote ack, N02 action ack, next D03, terminal advance InvalidTarget, reload D03, revote D03R1, revote vote ack",
       ],
       [
         "core-loop",
@@ -3685,6 +3689,22 @@ function proofRunFixture() {
               locked: false,
               actionVoteControls: 2,
               normalVoteControls: 2,
+            },
+            {
+              id: "d03r1-revote-ballot-submitted",
+              phase: "D03R1",
+              locked: false,
+              voteState: "ack",
+              actorSlot: "slot_4",
+              voteTarget: "NoLynch",
+              currentVoteKind: "no_lynch",
+              projectedCount: 1,
+              apiPhase: "D03R1",
+              apiTarget: "no_lynch",
+              apiCount: 1,
+              staleD03Target: "slot_4",
+              staleD03Count: 1,
+              staleD03NoLynchCount: null,
             },
           ],
         },

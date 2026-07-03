@@ -185,16 +185,20 @@ test("core loop spine status formats compact live spine evidence", () => {
                 id: "d03-revote-prompt-resolved",
                 phase: "D03R1",
               },
+              {
+                id: "d03r1-revote-ballot-submitted",
+                voteState: "ack",
+              },
             ],
           },
         ],
       },
     }),
-    "passed: D01 -> N01 -> D02, vote ack, N02 action ack, next D03, terminal advance InvalidTarget, reload D03, revote D03R1",
+    "passed: D01 -> N01 -> D02, vote ack, N02 action ack, next D03, terminal advance InvalidTarget, reload D03, revote D03R1, revote vote ack",
   );
   assert.equal(
     coreLoopSpineStatus({}),
-    "unknown: unknown -> unknown -> unknown, vote unknown, unknown action unknown, next unknown, terminal advance unknown, reload unknown, revote unknown",
+    "unknown: unknown -> unknown -> unknown, vote unknown, unknown action unknown, next unknown, terminal advance unknown, reload unknown, revote unknown, revote vote unknown",
   );
 });
 
