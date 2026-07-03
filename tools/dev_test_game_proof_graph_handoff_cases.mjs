@@ -13,6 +13,10 @@ import {
   hostedOpsSignalRelatedAuditIds,
 } from "./dev_test_game_hosted_ops_signal_cases.mjs";
 import {
+  realHostedObservabilityHandoffCase,
+  realHostedObservabilityHandoffCheckIds,
+} from "./dev_test_game_real_hosted_observability_handoff_cases.mjs";
+import {
   hostedIdentityEvidenceCheckIds,
   hostedIdentityEvidenceHandoffCase,
 } from "./dev_test_game_hosted_identity_evidence_cases.mjs";
@@ -175,6 +179,21 @@ export const adminProofDestinationRequirementCases = Object.freeze([
     auditId: localAdminAuditIds.hostedOpsSignals,
     requiredCheckIds: Object.freeze([...hostedOpsSignalCheckIds]),
     requiredRelatedLinkIds: Object.freeze([...hostedOpsSignalRelatedAuditIds]),
+  }),
+  Object.freeze({
+    linkId: "admin-proof:real-hosted-observability-handoff",
+    auditId: localAdminAuditIds.realHostedObservabilityHandoff,
+    requiredCheckIds: Object.freeze([...realHostedObservabilityHandoffCheckIds]),
+    requiredHostedHandoffInputs: Object.freeze([
+      ...realHostedObservabilityHandoffCase().inputIds,
+    ]),
+    requiredHostedHandoffBlockedChecks: Object.freeze([
+      ...realHostedObservabilityHandoffCase().blockedCheckIds,
+    ]),
+    requiredRelatedLinkIds: Object.freeze([
+      localAdminAuditIds.hostedOpsSignals,
+      localAdminAuditIds.nextAction,
+    ]),
   }),
   Object.freeze({
     linkId: "admin-proof:spine-manifest",

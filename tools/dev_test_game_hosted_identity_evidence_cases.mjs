@@ -12,13 +12,33 @@ export const hostedIdentityEvidencePlaceholderSchema = Object.freeze({
     "proof",
     "releaseReady",
     "productionReady",
+    "redaction",
     "hostedIdentity",
   ]),
   properties: Object.freeze({
     version: Object.freeze({ const: 1 }),
     proof: Object.freeze({ const: "hosted-production-identity-evidence" }),
-    releaseReady: Object.freeze({ type: "boolean" }),
-    productionReady: Object.freeze({ type: "boolean" }),
+    releaseReady: Object.freeze({ const: false }),
+    productionReady: Object.freeze({ const: false }),
+    redaction: Object.freeze({
+      type: "object",
+      required: Object.freeze([
+        "packetKind",
+        "rawInviteTokensIncluded",
+        "rawSessionSecretsIncluded",
+        "rawPasswordHashesIncluded",
+        "rawPersonalContactIncluded",
+      ]),
+      properties: Object.freeze({
+        packetKind: Object.freeze({
+          const: "redacted-hosted-identity-intake",
+        }),
+        rawInviteTokensIncluded: Object.freeze({ const: false }),
+        rawSessionSecretsIncluded: Object.freeze({ const: false }),
+        rawPasswordHashesIncluded: Object.freeze({ const: false }),
+        rawPersonalContactIncluded: Object.freeze({ const: false }),
+      }),
+    }),
     hostedIdentity: Object.freeze({
       type: "object",
       required: Object.freeze([
@@ -31,12 +51,12 @@ export const hostedIdentityEvidencePlaceholderSchema = Object.freeze({
         "roleSurfaceArchitectureChanged",
       ]),
       properties: Object.freeze({
-        accountLifecycle: Object.freeze({ type: "boolean" }),
-        inviteDelivery: Object.freeze({ type: "boolean" }),
-        accountRecovery: Object.freeze({ type: "boolean" }),
-        abuseAndRateLimitPolicy: Object.freeze({ type: "boolean" }),
-        sessionSecretPolicy: Object.freeze({ type: "boolean" }),
-        hostedAuditRetentionExport: Object.freeze({ type: "boolean" }),
+        accountLifecycle: Object.freeze({ type: "object" }),
+        inviteDelivery: Object.freeze({ type: "object" }),
+        accountRecovery: Object.freeze({ type: "object" }),
+        abuseAndRateLimitPolicy: Object.freeze({ type: "object" }),
+        sessionSecretPolicy: Object.freeze({ type: "object" }),
+        hostedAuditRetentionExport: Object.freeze({ type: "object" }),
         roleSurfaceArchitectureChanged: Object.freeze({ type: "boolean" }),
       }),
     }),
@@ -47,6 +67,67 @@ export const hostedIdentityEvidenceInputIds = Object.freeze([
   "command",
   "proof-target",
   "FMARCH_HOSTED_IDENTITY_EVIDENCE_PATH",
+  "redacted-account-lifecycle-packet",
+  "redacted-invite-delivery-packet",
+  "redacted-account-recovery-packet",
+  "redacted-abuse-rate-limit-packet",
+  "redacted-session-secret-packet",
+  "redacted-audit-retention-packet",
+]);
+
+export const hostedIdentityEvidencePacketSectionDefinitions = Object.freeze([
+  Object.freeze({
+    field: "accountLifecycle",
+    checkId: "hosted-account-lifecycle-evidence",
+    label: "Account lifecycle",
+    requiredInputIds: Object.freeze([
+      "createAccount",
+      "login",
+      "disableAccount",
+      "enableAccount",
+    ]),
+  }),
+  Object.freeze({
+    field: "inviteDelivery",
+    checkId: "invite-delivery-evidence",
+    label: "Invite delivery",
+    requiredInputIds: Object.freeze(["deliveryChannels", "revocationCovered"]),
+  }),
+  Object.freeze({
+    field: "accountRecovery",
+    checkId: "account-recovery-evidence",
+    label: "Account recovery",
+    requiredInputIds: Object.freeze([
+      "recoveryMethods",
+      "recoveredSessionsPreserveRoleSurfaceAdapter",
+    ]),
+  }),
+  Object.freeze({
+    field: "abuseAndRateLimitPolicy",
+    checkId: "abuse-and-rate-limit-evidence",
+    label: "Abuse and rate limit",
+    requiredInputIds: Object.freeze(["protectedOperations", "rateLimitPolicyRef"]),
+  }),
+  Object.freeze({
+    field: "sessionSecretPolicy",
+    checkId: "session-secret-policy-evidence",
+    label: "Session secret policy",
+    requiredInputIds: Object.freeze([
+      "storage",
+      "rotation",
+      "deploymentSecretSource",
+    ]),
+  }),
+  Object.freeze({
+    field: "hostedAuditRetentionExport",
+    checkId: "hosted-audit-retention-export-evidence",
+    label: "Audit retention and export",
+    requiredInputIds: Object.freeze([
+      "eventFamilies",
+      "retentionWindow",
+      "exportRef",
+    ]),
+  }),
 ]);
 
 export const hostedIdentityEvidenceCheckIds = Object.freeze([
@@ -74,32 +155,32 @@ export const hostedIdentityEvidenceBlockedChecks = Object.freeze([
   Object.freeze({
     id: "hosted-account-lifecycle-evidence",
     requiredEvidence:
-      "Hosted account create/login/disable/enable lifecycle evidence over the existing role-surface adapter.",
+      "Redacted hosted account create/login/disable/enable intake packet with evidence refs over the existing role-surface adapter.",
   }),
   Object.freeze({
     id: "invite-delivery-evidence",
     requiredEvidence:
-      "Hosted invite delivery and revocation evidence without exposing raw invite tokens in role URLs or admin surfaces.",
+      "Redacted hosted invite delivery and revocation intake packet without raw invite tokens in role URLs or admin surfaces.",
   }),
   Object.freeze({
     id: "account-recovery-evidence",
     requiredEvidence:
-      "Hosted account recovery evidence where recovered sessions keep the same role-surface architecture.",
+      "Redacted hosted account recovery intake packet where recovered sessions keep the same role-surface architecture.",
   }),
   Object.freeze({
     id: "abuse-and-rate-limit-evidence",
     requiredEvidence:
-      "Hosted rate-limit and abuse-control evidence for login, invite, and session lifecycle operations.",
+      "Redacted hosted rate-limit and abuse-control intake packet for login, invite, and session lifecycle operations.",
   }),
   Object.freeze({
     id: "session-secret-policy-evidence",
     requiredEvidence:
-      "Hosted session-secret storage, rotation, and deployment policy evidence.",
+      "Redacted hosted session-secret storage, rotation, and deployment input packet with no raw secrets.",
   }),
   Object.freeze({
     id: "hosted-audit-retention-export-evidence",
     requiredEvidence:
-      "Hosted audit retention/export evidence for account, invite, and session lifecycle events.",
+      "Redacted hosted audit retention/export intake packet for account, invite, and session lifecycle events.",
   }),
   Object.freeze({
     id: "role-surface-adapter-preserved",

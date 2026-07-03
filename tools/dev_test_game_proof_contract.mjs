@@ -6747,6 +6747,34 @@ function buildCoreLoopSpineSummary({ session, verification }) {
           staleD03NoLynchCount:
             d02VoteNight.d03RevoteApiStaleD03NoLynchRow?.count ?? null,
         },
+        {
+          id: "d03r1-revote-resolved-no-majority",
+          phase: d02VoteNight.hostAfterResolveD03R1?.phase?.id ?? null,
+          locked:
+            d02VoteNight.hostAfterResolveD03R1?.phase?.locked ?? null,
+          resolveState:
+            d02VoteNight.resolveD03R1?.commandStatus?.state ?? null,
+          outcomeStatus:
+            d02VoteNight.d03R1DayVoteOutcome?.status ?? null,
+          winnerSlot:
+            d02VoteNight.d03R1DayVoteOutcome?.winnerSlot ?? null,
+          projectedCount:
+            d02VoteNight.d03R1DayVoteOutcome?.tallies?.no_lynch ?? null,
+          promptId: d02VoteNight.d03R1RevotePrompt?.id ?? null,
+          promptActionId: d02VoteNight.d03R1RevotePromptActionId ?? null,
+          promptStatusAfter:
+            d02VoteNight.d03R1RevotePrompt?.status ?? null,
+          originalPromptStatus:
+            d02VoteNight.apiPromptsAfterResolveD03R1?.find(
+              (prompt) =>
+                (prompt.id ?? prompt.prompt_id) ===
+                d02VoteNight.d03RevotePrompt?.id,
+            )?.status ?? null,
+          promptActionVisible:
+            d02VoteNight.hostAfterResolveD03R1?.promptActions?.includes(
+              d02VoteNight.d03R1RevotePromptActionId,
+            ) ?? null,
+        },
       ],
     },
   ];
@@ -6891,6 +6919,18 @@ function buildCoreLoopSpineSummary({ session, verification }) {
     cycles[2]?.checkpoints?.[7]?.staleD03Target === "slot_4" &&
     cycles[2]?.checkpoints?.[7]?.staleD03Count === 1 &&
     cycles[2]?.checkpoints?.[7]?.staleD03NoLynchCount === null &&
+    cycles[2]?.checkpoints?.[8]?.phase === "D03R1" &&
+    cycles[2]?.checkpoints?.[8]?.locked === true &&
+    cycles[2]?.checkpoints?.[8]?.resolveState === "ack" &&
+    cycles[2]?.checkpoints?.[8]?.outcomeStatus === "NoMajority" &&
+    cycles[2]?.checkpoints?.[8]?.winnerSlot === null &&
+    cycles[2]?.checkpoints?.[8]?.projectedCount === 1 &&
+    cycles[2]?.checkpoints?.[8]?.promptId === "D03R1:revote:NoMajority" &&
+    cycles[2]?.checkpoints?.[8]?.promptActionId ===
+      "resolve_host_prompt-D03R1-revote-NoMajority" &&
+    cycles[2]?.checkpoints?.[8]?.promptStatusAfter === "pending" &&
+    cycles[2]?.checkpoints?.[8]?.originalPromptStatus === "resolved" &&
+    cycles[2]?.checkpoints?.[8]?.promptActionVisible === true &&
     recoveryHooks.staleLockedVoteReject === "PhaseLocked" &&
     recoveryHooks.invalidActionReject === "InvalidTarget" &&
     recoveryHooks.normalPlayerDirectActionReject === "InvalidTarget" &&
@@ -6899,7 +6939,7 @@ function buildCoreLoopSpineSummary({ session, verification }) {
   return {
     status: passed ? "passed" : "failed",
     proof:
-      "Compact derived spine map for the seeded role URL core loop: D01 resolve to N01 action, N01 resolution to D02 day controls, D02 vote resolution, N02 action return, N02 action submission/resolution, D03 day controls, D03 NoMajority AdvancePhase InvalidTarget recovery, host role URL reload back to locked D03 NoMajority truth, host revote prompt resolution into open D03R1 controls, and a D03R1 no-lynch revote ballot keyed separately from the stale D03 tally.",
+      "Compact derived spine map for the seeded role URL core loop: D01 resolve to N01 action, N01 resolution to D02 day controls, D02 vote resolution, N02 action return, N02 action submission/resolution, D03 day controls, D03 NoMajority AdvancePhase InvalidTarget recovery, host role URL reload back to locked D03 NoMajority truth, host revote prompt resolution into open D03R1 controls, a D03R1 no-lynch revote ballot keyed separately from the stale D03 tally, and host resolution of D03R1 back to locked NoMajority with a fresh pending revote prompt.",
     sourceLaneIds: [...coreLoopPhaseProgressionSpineSourceLaneIds],
     cycles,
     recoveryHooks,
@@ -6932,7 +6972,7 @@ function assertCoreLoopSpineSummary(summary) {
       !Object.values(cycle.roleUrls).every((url) => typeof url === "string") ||
       !Array.isArray(cycle.checkpoints) ||
       (cycle.id === "n02-d03"
-        ? cycle.checkpoints.length !== 8
+        ? cycle.checkpoints.length !== 9
         : cycle.checkpoints.length !== 4)
     ) {
       throw new Error(`core loop spine cycle malformed: ${JSON.stringify(cycle)}`);

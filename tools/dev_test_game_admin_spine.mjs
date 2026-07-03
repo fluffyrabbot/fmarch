@@ -12,6 +12,9 @@ import {
   devTestGameProofGraphPath,
 } from "./dev_test_game_proof_graph_paths.mjs";
 import {
+  devTestGameRealHostedObservabilityHandoffPath,
+} from "./dev_test_game_real_hosted_observability_handoff_cases.mjs";
+import {
   nextActionAdminProofPath,
   proofFreshnessAdminProofPath,
 } from "./dev_test_game_next_action_paths.mjs";
@@ -36,6 +39,10 @@ export const adminSpineReadinessEvidenceEnv = {
     "target/dev-test-game/hosted-ops-signals.json",
   FMARCH_DEV_TEST_GAME_HOSTED_OPS_SIGNALS_ADMIN_PROOF:
     "target/dev-test-game/hosted-ops-signals-admin-proof.json",
+  FMARCH_DEV_TEST_GAME_REAL_HOSTED_OBSERVABILITY_HANDOFF:
+    devTestGameRealHostedObservabilityHandoffPath,
+  FMARCH_DEV_TEST_GAME_REAL_HOSTED_OBSERVABILITY_HANDOFF_ADMIN_PROOF:
+    "target/dev-test-game/real-hosted-observability-handoff-admin-proof.json",
   FMARCH_DEV_TEST_GAME_SEED_FIXTURE_SUMMARY:
     "target/dev-test-game/seed-fixture-summary.json",
   FMARCH_DEV_TEST_GAME_SEED_ADMIN_PROOF: "target/dev-test-game/seed-admin-proof.json",
@@ -103,6 +110,7 @@ export async function runDevTestGameAdminSpine() {
   await runNodeScript("tools/dev_test_game_hosted_evidence_lane.mjs");
   await runNodeScript("tools/dev_test_game_hosted_evidence_lane_demo_proof.mjs");
   await runNodeScript("tools/dev_test_game_hosted_ops_signals.mjs");
+  await runNodeScript("tools/dev_test_game_real_hosted_observability_handoff.mjs");
   await runNodeScript("tools/dev_test_game_release_runbook.mjs");
   const evidence = await runAdminSpineProof();
   console.log(`wrote ${adminSpineProofPath} (${evidence.status})`);

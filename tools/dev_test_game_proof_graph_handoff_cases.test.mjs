@@ -26,6 +26,10 @@ import {
   hostedOpsSignalRelatedAuditIds,
 } from "./dev_test_game_hosted_ops_signal_cases.mjs";
 import {
+  realHostedObservabilityHandoffCase,
+  realHostedObservabilityHandoffCheckIds,
+} from "./dev_test_game_real_hosted_observability_handoff_cases.mjs";
+import {
   seedScenarioCoverageGroups,
 } from "./dev_test_game_seed_scenario_cases.mjs";
 import {
@@ -64,6 +68,10 @@ test("admin proof destination handoff cases share link and audit rows", () => {
       localAdminAuditIds.hostedConcurrentRaceMatrix,
     ],
     ["admin-proof:hosted-ops-signals", localAdminAuditIds.hostedOpsSignals],
+    [
+      "admin-proof:real-hosted-observability-handoff",
+      localAdminAuditIds.realHostedObservabilityHandoff,
+    ],
     ["admin-proof:spine-manifest", localAdminAuditIds.spineManifest],
   ]);
   assert.equal(
@@ -145,6 +153,30 @@ test("admin proof destination handoff cases carry shared row requirements", () =
     hostedOpsSignalRelatedAuditIds,
   );
   assert.deepEqual(
+    adminProofDestinationRequirementForLink(
+      "admin-proof:real-hosted-observability-handoff",
+    ).requiredCheckIds,
+    realHostedObservabilityHandoffCheckIds,
+  );
+  assert.deepEqual(
+    adminProofDestinationRequirementForLink(
+      "admin-proof:real-hosted-observability-handoff",
+    ).requiredHostedHandoffInputs,
+    realHostedObservabilityHandoffCase().inputIds,
+  );
+  assert.deepEqual(
+    adminProofDestinationRequirementForLink(
+      "admin-proof:real-hosted-observability-handoff",
+    ).requiredHostedHandoffBlockedChecks,
+    realHostedObservabilityHandoffCase().blockedCheckIds,
+  );
+  assert.deepEqual(
+    adminProofDestinationRequirementForLink(
+      "admin-proof:real-hosted-observability-handoff",
+    ).requiredRelatedLinkIds,
+    [localAdminAuditIds.hostedOpsSignals, localAdminAuditIds.nextAction],
+  );
+  assert.deepEqual(
     adminProofDestinationRequirementForLink("admin-proof:release")
       .requiredLocalPrerequisiteDestinations,
     [
@@ -197,6 +229,18 @@ test("admin proof destination handoff cases return cloned mutable rows", () => {
   requirements
     .find((item) => item.linkId === "admin-proof:hosted-identity-evidence")
     .requiredHostedHandoffBlockedChecks.push("mutated");
+  requirements
+    .find(
+      (item) =>
+        item.linkId === "admin-proof:real-hosted-observability-handoff",
+    )
+    .requiredHostedHandoffInputs.push("mutated");
+  requirements
+    .find(
+      (item) =>
+        item.linkId === "admin-proof:real-hosted-observability-handoff",
+    )
+    .requiredHostedHandoffBlockedChecks.push("mutated");
   assert.equal(
     adminProofDestinationRequirementForLink("admin-proof:release")
       .requiredCheckIds.includes("mutated"),
@@ -221,6 +265,18 @@ test("admin proof destination handoff cases return cloned mutable rows", () => {
   assert.equal(
     adminProofDestinationRequirementForLink(
       "admin-proof:hosted-identity-evidence",
+    ).requiredHostedHandoffBlockedChecks.includes("mutated"),
+    false,
+  );
+  assert.equal(
+    adminProofDestinationRequirementForLink(
+      "admin-proof:real-hosted-observability-handoff",
+    ).requiredHostedHandoffInputs.includes("mutated"),
+    false,
+  );
+  assert.equal(
+    adminProofDestinationRequirementForLink(
+      "admin-proof:real-hosted-observability-handoff",
     ).requiredHostedHandoffBlockedChecks.includes("mutated"),
     false,
   );

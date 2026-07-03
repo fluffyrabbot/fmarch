@@ -96,6 +96,13 @@ import {
   hostedOpsTelemetryBoundaryCheckId,
 } from "./dev_test_game_hosted_ops_signal_cases.mjs";
 import {
+  devTestGameRealHostedObservabilityHandoffCommand,
+  devTestGameRealHostedObservabilityHandoffPath,
+  realHostedObservabilityHandoffCase,
+  realHostedObservabilityHandoffCheckIds,
+  realHostedObservabilityHandoffInputIds,
+} from "./dev_test_game_real_hosted_observability_handoff_cases.mjs";
+import {
   releaseAdminProofFallbackUnprovenIds,
   releaseReadinessHostedConcurrentRaceMatrixCommand,
 } from "./dev_test_game_release_readiness_cases.mjs";
@@ -120,7 +127,11 @@ import {
 } from "./dev_test_game_stale_conflict_scenarios.mjs";
 import {
   hostedMatrixAdminRequiredCheckIds,
+  hostedMatrixExternalEvidenceProofTarget,
   hostedMatrixProgressCheckIds,
+  hostedMatrixRealHostedBlockedCheckIds,
+  hostedMatrixRealHostedEvidenceCommand,
+  hostedMatrixRealHostedHandoffChecklist,
   hostedMatrixReconnectLaneIds,
   hostedMatrixRelatedAuditIds,
   hostedMatrixRequestedEvidenceIds,
@@ -414,6 +425,10 @@ test("dev test-game spine orchestrators expose stable proof order and env maps",
       "target/dev-test-game/hosted-ops-signals.json",
     FMARCH_DEV_TEST_GAME_HOSTED_OPS_SIGNALS_ADMIN_PROOF:
       "target/dev-test-game/hosted-ops-signals-admin-proof.json",
+    FMARCH_DEV_TEST_GAME_REAL_HOSTED_OBSERVABILITY_HANDOFF:
+      devTestGameRealHostedObservabilityHandoffPath,
+    FMARCH_DEV_TEST_GAME_REAL_HOSTED_OBSERVABILITY_HANDOFF_ADMIN_PROOF:
+      "target/dev-test-game/real-hosted-observability-handoff-admin-proof.json",
     FMARCH_DEV_TEST_GAME_SEED_FIXTURE_SUMMARY:
       "target/dev-test-game/seed-fixture-summary.json",
     FMARCH_DEV_TEST_GAME_SEED_ADMIN_PROOF:
@@ -581,13 +596,110 @@ test("hosted identity evidence lane records blocked and passed handoffs", async 
       status: "passed",
       releaseReady: false,
       productionReady: false,
+      redaction: {
+        packetKind: "redacted-hosted-identity-intake",
+        rawInviteTokensIncluded: false,
+        rawSessionSecretsIncluded: false,
+        rawPasswordHashesIncluded: false,
+        rawPersonalContactIncluded: false,
+      },
       hostedIdentity: {
-        accountLifecycle: true,
-        inviteDelivery: true,
-        accountRecovery: true,
-        abuseAndRateLimitPolicy: true,
-        sessionSecretPolicy: true,
-        hostedAuditRetentionExport: true,
+        accountLifecycle: {
+          status: "provided",
+          inputs: {
+            createAccount: "redacted-account-create-event",
+            login: "redacted-login-event",
+            disableAccount: "redacted-disable-event",
+            enableAccount: "redacted-enable-event",
+          },
+          redactedEvidenceRefs: [
+            {
+              id: "account-lifecycle-redacted-log",
+              kind: "audit-log",
+              locator: "s3://redacted/fmarch/identity/account-lifecycle.json",
+              redacted: true,
+            },
+          ],
+        },
+        inviteDelivery: {
+          status: "provided",
+          inputs: {
+            deliveryChannels: ["email"],
+            revocationCovered: true,
+          },
+          rawInviteTokensIncluded: false,
+          redactedEvidenceRefs: [
+            {
+              id: "invite-delivery-redacted-log",
+              kind: "mail-provider-event-export",
+              locator: "s3://redacted/fmarch/identity/invites.json",
+              redacted: true,
+            },
+          ],
+        },
+        accountRecovery: {
+          status: "provided",
+          inputs: {
+            recoveryMethods: ["operator-assisted-reset"],
+            recoveredSessionsPreserveRoleSurfaceAdapter: true,
+          },
+          redactedEvidenceRefs: [
+            {
+              id: "account-recovery-redacted-log",
+              kind: "audit-log",
+              locator: "s3://redacted/fmarch/identity/recovery.json",
+              redacted: true,
+            },
+          ],
+        },
+        abuseAndRateLimitPolicy: {
+          status: "provided",
+          inputs: {
+            protectedOperations: ["login", "invite", "session-lifecycle"],
+            rateLimitPolicyRef: "ops/runbooks/identity-rate-limit.redacted.md",
+          },
+          redactedEvidenceRefs: [
+            {
+              id: "abuse-rate-limit-redacted-policy",
+              kind: "policy-export",
+              locator: "s3://redacted/fmarch/identity/abuse-rate-limit.json",
+              redacted: true,
+            },
+          ],
+        },
+        sessionSecretPolicy: {
+          status: "provided",
+          inputs: {
+            storage: "managed-secret-store",
+            rotation: "operator-triggered-rotation",
+            deploymentSecretSource: "hosted-platform-secret-binding",
+          },
+          rawSessionSecretsIncluded: false,
+          redactedEvidenceRefs: [
+            {
+              id: "session-secret-redacted-policy",
+              kind: "secret-policy-export",
+              locator: "s3://redacted/fmarch/identity/session-secret.json",
+              redacted: true,
+            },
+          ],
+        },
+        hostedAuditRetentionExport: {
+          status: "provided",
+          inputs: {
+            eventFamilies: ["account", "invite", "session"],
+            retentionWindow: "90d",
+            exportRef: "s3://redacted/fmarch/identity/audit-retention.json",
+          },
+          redactedEvidenceRefs: [
+            {
+              id: "audit-retention-redacted-export",
+              kind: "audit-retention-export",
+              locator: "s3://redacted/fmarch/identity/audit-retention.json",
+              redacted: true,
+            },
+          ],
+        },
         roleSurfaceArchitectureChanged: false,
       },
     })}\n`,
@@ -600,6 +712,22 @@ test("hosted identity evidence lane records blocked and passed handoffs", async 
   assert.equal(passed.status, "passed");
   assert.equal(passed.hostedHandoffChecklist.status, "passed");
   assert.deepEqual(passed.hostedHandoffChecklist.blockedCheckIds, []);
+  assert.deepEqual(
+    passed.target.redactedIntakePacket.sections.map((section) => [
+      section.id,
+      section.status,
+      section.redactedEvidenceRefCount,
+      section.missingInputs,
+    ]),
+    [
+      ["accountLifecycle", "provided", 1, []],
+      ["inviteDelivery", "provided", 1, []],
+      ["accountRecovery", "provided", 1, []],
+      ["abuseAndRateLimitPolicy", "provided", 1, []],
+      ["sessionSecretPolicy", "provided", 1, []],
+      ["hostedAuditRetentionExport", "provided", 1, []],
+    ],
+  );
 });
 
 test("dev test-game spine manifest records command order and evidence wiring", () => {
@@ -714,6 +842,21 @@ test("dev test-game spine manifest records command order and evidence wiring", (
       "target/dev-test-game/release-readiness-checklist.json",
       devTestGameHostedConcurrentRaceMatrixPath,
     ],
+  });
+  assert.deepEqual(manifest.commands.realHostedObservabilityHandoff, {
+    script: devTestGameRealHostedObservabilityHandoffCommand,
+    proofArtifact: devTestGameRealHostedObservabilityHandoffPath,
+    dependsOn: [devTestGameHostedOpsSignalsPath],
+    roleUrl:
+      "/admin/audit/local-real-hosted-observability-handoff?game=<seeded-game>",
+  });
+  assert.deepEqual(manifest.commands.realHostedObservabilityHandoffAdminProof, {
+    script: "test:dev-test-game-real-hosted-observability-handoff-admin-proof",
+    proofArtifact:
+      "target/dev-test-game/real-hosted-observability-handoff-admin-proof.json",
+    dependsOn: [devTestGameRealHostedObservabilityHandoffPath],
+    roleUrl:
+      "/admin/audit/local-real-hosted-observability-handoff?game=<seeded-game>",
   });
   assert.deepEqual(manifest.commands.hostedTargetPreflight, {
     script: devTestGameHostedTargetPreflightCommand,
@@ -1763,6 +1906,21 @@ test("dev test-game next-action advances hosted deployment after target prefligh
     externalHostedMatrixAction.nextAction.unproven.realHostedEvidenceStatus,
     "unproven",
   );
+  assert.deepEqual(
+    externalHostedMatrixAction.nextAction.unproven.hostedHandoffChecklist
+      .blockedCheckIds,
+    hostedMatrixRealHostedBlockedCheckIds,
+  );
+  assert.equal(
+    externalHostedMatrixAction.nextAction.unproven.realHostedEvidenceInputs
+      .command,
+    hostedMatrixRealHostedEvidenceCommand,
+  );
+  assert.deepEqual(
+    externalHostedMatrixAction.releaseReadinessTrace.candidates[0]
+      .hostedHandoffChecklist,
+    externalHostedMatrixAction.nextAction.unproven.hostedHandoffChecklist,
+  );
 
   const passedPreflightAction = buildDevTestGameNextAction(freshManifest, {
     generatedAt: "2026-06-26T00:00:01.000Z",
@@ -2168,9 +2326,9 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
     graph,
     releaseReadiness,
   );
-  assert.equal(graph.summary.nodeCount, 40);
-  assert.equal(graph.summary.roleUrlCount, 40);
-  assert.equal(graph.summary.productionFeatureTargetCount, 21);
+  assert.equal(graph.summary.nodeCount, 42);
+  assert.equal(graph.summary.roleUrlCount, 42);
+  assert.equal(graph.summary.productionFeatureTargetCount, 22);
   assert.deepEqual(
     graph.nodes
       .filter((node) => node.kind === "admin-proof-surface")
@@ -3220,6 +3378,58 @@ test("session card and markdown include role credential URLs and tokens", async 
           needed: 2,
         },
         d03RevoteApiStaleD03NoLynchRow: null,
+        hostBeforeResolveD03R1: {
+          phase: { id: "D03R1", locked: false },
+          phaseActions: ["resolve_phase", "lock_thread"],
+          votecount: [{ phaseId: "D03R1", target: "no_lynch", count: 1 }],
+        },
+        resolveD03R1: { commandStatus: { state: "ack" } },
+        hostAfterResolveD03R1: {
+          phase: { id: "D03R1", locked: true },
+          phaseActions: ["advance_phase"],
+          hostPrompts: [
+            {
+              id: "D03:revote:NoMajority",
+              label: "revote",
+              value: "no_majority",
+              status: "resolved",
+            },
+            {
+              id: "D03R1:revote:NoMajority",
+              label: "revote",
+              value: "no_majority",
+              status: "pending",
+            },
+          ],
+          promptActions: ["resolve_host_prompt-D03R1-revote-NoMajority"],
+          dayVoteOutcomes: [
+            {
+              phaseId: "D03R1",
+              status: "NoMajority",
+              winnerSlot: null,
+              tallies: { no_lynch: 1 },
+            },
+          ],
+          votecount: [{ phaseId: "D03R1", target: "no_lynch", count: 1 }],
+          outcomePanel: "D03R1 NoMajority\nNoMajority",
+        },
+        d03R1DayVoteOutcome: {
+          phaseId: "D03R1",
+          status: "NoMajority",
+          winnerSlot: null,
+          tallies: { no_lynch: 1 },
+        },
+        d03R1RevotePrompt: {
+          id: "D03R1:revote:NoMajority",
+          label: "revote",
+          value: "no_majority",
+          status: "pending",
+        },
+        d03R1RevotePromptActionId: "resolve_host_prompt-D03R1-revote-NoMajority",
+        apiPromptsAfterResolveD03R1: [
+          { id: "D03:revote:NoMajority", status: "resolved" },
+          { id: "D03R1:revote:NoMajority", status: "pending" },
+        ],
       },
       staleActionConflict: {
         reject: { error: "PhaseLocked" },
@@ -8805,6 +9015,37 @@ test("session card and markdown include role credential URLs and tokens", async 
   );
   assert.equal(hostedMatrix.summary.realHostedEvidenceStatus, "unproven");
   assert.equal(hostedMatrix.summary.realHostedDeploymentStatus, "unproven");
+  assert.equal(
+    hostedMatrix.realHostedEvidenceInputs.command,
+    hostedMatrixRealHostedEvidenceCommand,
+  );
+  assert.equal(
+    hostedMatrix.realHostedEvidenceInputs.proofTarget,
+    hostedMatrixExternalEvidenceProofTarget,
+  );
+  assert.equal(hostedMatrix.hostedHandoffChecklist.status, "blocked");
+  assert.equal(
+    hostedMatrix.hostedHandoffChecklist.preflightStatus,
+    "not_configured",
+  );
+  assert.deepEqual(
+    hostedMatrix.hostedHandoffChecklist.blockedCheckIds,
+    hostedMatrixRealHostedBlockedCheckIds,
+  );
+  assert.deepEqual(
+    hostedMatrix.hostedHandoffChecklist.blockedReceipt.missingRequiredInputs,
+    [
+      "FMARCH_HOSTED_MATRIX_FRONTEND_URL",
+      "FMARCH_HOSTED_MATRIX_API_URL",
+      "FMARCH_HOSTED_MATRIX_RAW_EVIDENCE_PATH",
+    ],
+  );
+  assert.match(
+    hostedMatrix.hostedHandoffChecklist.blockedChecks.find(
+      (check) => check.id === "real-hosted-stale-client-proof-inputs",
+    )?.requiredEvidence ?? "",
+    /stale-client conflict messages/,
+  );
   assert.equal(hostedMatrix.externalHostedEvidence.status, "not_configured");
   assert(
     hostedMatrix.hostedLikeTarget.roleSurfaces.every(
@@ -8880,6 +9121,10 @@ test("session card and markdown include role credential URLs and tokens", async 
   assert.equal(
     hostedMatrixWithExternalTarget.summary.realHostedEvidenceStatus,
     "passed",
+  );
+  assert.equal(
+    hostedMatrixWithExternalTarget.hostedHandoffChecklist,
+    undefined,
   );
   assert.equal(hostedMatrixWithExternalTarget.externalHostedEvidence.status, "passed");
   assert.deepEqual(
@@ -9229,6 +9474,11 @@ test("session card and markdown include role credential URLs and tokens", async 
   assert.equal(
     refreshedHostedMatrix.requestedEvidence.id,
     "real-hosted-concurrent-race-matrix",
+  );
+  assert.equal(refreshedHostedMatrix.hostedHandoffChecklist.status, "blocked");
+  assert.equal(
+    refreshedHostedMatrix.hostedHandoffChecklist.command,
+    hostedMatrixRealHostedEvidenceCommand,
   );
   const opsArtifacts = buildDevTestGameOpsArtifacts({
     session: card,
@@ -9634,7 +9884,7 @@ test("session card and markdown include role credential URLs and tokens", async 
   );
   assert.equal(
     adminSpineReadiness.localDevelopmentSpine.evidence.adminProofSpine.proofCount,
-    15,
+    16,
   );
   assert.equal(
     adminSpineReadiness.localDevelopmentSpine.evidence.adminProofSpine.recovery.nextCommand,
@@ -9655,6 +9905,7 @@ test("session card and markdown include role credential URLs and tokens", async 
     "hosted-evidence-lane",
     "hosted-concurrent-race-matrix",
     "hosted-ops-signals",
+    "real-hosted-observability-handoff",
     "spine-manifest",
   ]);
   const proofGraphHandoffReadiness = buildDevTestGameReleaseReadiness(proofRun, {
@@ -10796,7 +11047,7 @@ function coreLoopAdminProofFixture() {
       proofRun: "target/dev-test-game/proof-run.json",
       game: "00000000-0000-0000-0000-000000000001",
       coreLoopSpineStatus:
-        "passed: D01 -> N01 -> D02, vote ack, N02 action ack, next D03, terminal advance InvalidTarget, reload D03, revote D03R1, revote vote ack",
+        "passed: D01 -> N01 -> D02, vote ack, N02 action ack, next D03, terminal advance InvalidTarget, reload D03, revote D03R1, revote vote ack, revote resolve ack",
       completedGameHardeningCoverageStatus: "passed: 10/10 lanes across 4 families",
       hostControlFamily: coreLoopHostControlScenarioFamily(),
       playerActionRecoveryFamily:
@@ -10883,6 +11134,7 @@ function coreLoopAdminProofFixture() {
           "n02-d03-d03-terminal-reload-recovery",
           "n02-d03-d03-revote-prompt-resolved",
           "n02-d03-d03r1-revote-ballot-submitted",
+          "n02-d03-d03r1-revote-resolved-no-majority",
         ],
         recoveryHooks: [
           "staleLockedVoteReject",
@@ -10903,7 +11155,7 @@ function coreLoopAdminProofFixture() {
       visibleChecks: [...coreLoopAdminCheckIds],
       visibleCheckStatuses: {
         "core-loop-spine":
-          "passed: D01 -> N01 -> D02, vote ack, N02 action ack, next D03, terminal advance InvalidTarget, reload D03, revote D03R1, revote vote ack",
+          "passed: D01 -> N01 -> D02, vote ack, N02 action ack, next D03, terminal advance InvalidTarget, reload D03, revote D03R1, revote vote ack, revote resolve ack",
         "completed-game-hardening-coverage":
           "passed: 10/10 lanes across 4 families",
       },
@@ -10939,6 +11191,7 @@ function coreLoopAdminProofFixture() {
         "n02-d03-d03-terminal-reload-recovery",
         "n02-d03-d03-revote-prompt-resolved",
         "n02-d03-d03r1-revote-ballot-submitted",
+        "n02-d03-d03r1-revote-resolved-no-majority",
       ],
       visibleSpineRecoveryHooks: [
         "staleLockedVoteReject",
@@ -12739,6 +12992,7 @@ function coreLoopSpineTargetsFixture() {
       "n02-d03-d03-terminal-reload-recovery",
       "n02-d03-d03-revote-prompt-resolved",
       "n02-d03-d03r1-revote-ballot-submitted",
+      "n02-d03-d03r1-revote-resolved-no-majority",
     ],
     recoveryHookIds: [
       "staleLockedVoteReject",
@@ -13138,6 +13392,49 @@ function hostedOpsSignalsAdminProofFixture() {
       clickedThroughFromOverview: true,
       visibleChecks: [...hostedOpsSignalCheckIds],
       visibleRelatedLinks: [...hostedOpsSignalRelatedAuditIds],
+      rawInviteTokensVisible: false,
+      releaseReady: false,
+      productionReady: false,
+    },
+  };
+}
+
+function realHostedObservabilityHandoffAdminProofFixture() {
+  const handoff = realHostedObservabilityHandoffCase();
+  return {
+    version: 1,
+    proof: "dev-test-game-real-hosted-observability-handoff-admin-proof",
+    status: "passed",
+    releaseReady: false,
+    productionReady: false,
+    scope: "local-dev-test-game-real-hosted-observability-handoff-admin-surface",
+    proofBoundary: "Local admin real hosted observability handoff proof only.",
+    generatedFrom: {
+      handoff: devTestGameRealHostedObservabilityHandoffPath,
+      game: "00000000-0000-0000-0000-000000000001",
+      checkIds: [...realHostedObservabilityHandoffCheckIds],
+      blockedCheckIds: [...handoff.blockedCheckIds],
+      hostedHandoffInputIds: [...realHostedObservabilityHandoffInputIds],
+      hostedHandoffBlockedCheckIds: [...handoff.blockedCheckIds],
+      hostedHandoffGroupIds: handoff.requirementGroups.map((group) => group.id),
+      relatedAuditIds: ["local-hosted-ops-signals", "local-next-action"],
+    },
+    adminRoleSurface: {
+      status: "passed",
+      overviewRoleUrl: "/admin?game=<seeded-game>",
+      detailRoleUrl:
+        "/admin/audit/local-real-hosted-observability-handoff?game=<seeded-game>",
+      linkTestId: "admin-audit-link-local-real-hosted-observability-handoff",
+      surfaceTestId: "admin-audit-detail-surface",
+      clickedThroughFromOverview: true,
+      visibleChecks: [...realHostedObservabilityHandoffCheckIds],
+      visibleUnproven: [...handoff.blockedCheckIds],
+      visibleHostedHandoffInputs: [...realHostedObservabilityHandoffInputIds],
+      visibleHostedHandoffBlockedChecks: [...handoff.blockedCheckIds],
+      visibleHostedHandoffGroups: handoff.requirementGroups.map(
+        (group) => group.id,
+      ),
+      visibleRelatedLinks: ["local-hosted-ops-signals", "local-next-action"],
       rawInviteTokensVisible: false,
       releaseReady: false,
       productionReady: false,
@@ -13643,6 +13940,7 @@ function raceCoverageAdminProofFixture() {
 }
 
 function hostedConcurrentRaceMatrixAdminProofFixture() {
+  const hostedHandoffChecklist = hostedMatrixRealHostedHandoffChecklist();
   return {
     version: 1,
     proof: "dev-test-game-hosted-concurrent-race-matrix-admin-proof",
@@ -13677,6 +13975,16 @@ function hostedConcurrentRaceMatrixAdminProofFixture() {
       hostedEvidenceMode: "not_configured",
       localDemoHostedEvidenceStatus: "not_applicable",
       realHostedEvidenceStatus: "unproven",
+      realHostedEvidenceInputIds: hostedHandoffChecklist.inputIds,
+      hostedHandoffInputIds: hostedHandoffChecklist.inputIds,
+      hostedHandoffBlockedCheckIds: hostedHandoffChecklist.blockedCheckIds,
+      hostedHandoffSummary: {
+        status: hostedHandoffChecklist.status,
+        preflightStatus: hostedHandoffChecklist.preflightStatus,
+        command: hostedHandoffChecklist.command,
+        proofTarget: hostedHandoffChecklist.proofTarget,
+      },
+      hostedHandoffBlockedReceipt: hostedHandoffChecklist.blockedReceipt,
       realHostedDeploymentStatus: "unproven",
     },
     adminRoleSurface: {
@@ -13701,6 +14009,25 @@ function hostedConcurrentRaceMatrixAdminProofFixture() {
         "remaining-gap-2",
       ],
       visibleRelatedLinks: hostedMatrixRelatedAuditIds,
+      visibleRealHostedEvidenceInputs: hostedHandoffChecklist.inputIds,
+      visibleHostedHandoffInputs: hostedHandoffChecklist.inputIds,
+      visibleHostedHandoffBlockedChecks:
+        hostedHandoffChecklist.blockedCheckIds,
+      visibleHostedHandoffSummary: {
+        status: hostedHandoffChecklist.status,
+        preflightStatus: hostedHandoffChecklist.preflightStatus,
+        command: hostedHandoffChecklist.command,
+        proofTarget: hostedHandoffChecklist.proofTarget,
+      },
+      visibleHostedHandoffBlockedReceipt: {
+        status: hostedHandoffChecklist.blockedReceipt.status,
+        operatorAction: hostedHandoffChecklist.blockedReceipt.operatorAction,
+        localVsHostedBoundary:
+          hostedHandoffChecklist.blockedReceipt.localVsHostedBoundary,
+        nextProofTarget: hostedHandoffChecklist.blockedReceipt.nextProofTarget,
+        missingRequiredInputs:
+          hostedHandoffChecklist.blockedReceipt.missingRequiredInputs,
+      },
       rawInviteTokensVisible: false,
       releaseReady: false,
       productionReady: false,
@@ -14316,6 +14643,10 @@ function adminSpineProofFixture() {
       hostedConcurrentRaceMatrixAdminProofFixture(),
     ],
     ["hosted-ops-signals", hostedOpsSignalsAdminProofFixture()],
+    [
+      "real-hosted-observability-handoff",
+      realHostedObservabilityHandoffAdminProofFixture(),
+    ],
     ["spine-manifest", spineManifestAdminProofFixture()],
   ];
   return {

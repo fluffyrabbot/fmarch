@@ -55,6 +55,52 @@ export const hostedMatrixRealHostedEvidenceInputIds = Object.freeze([
   ...realHostedEvidenceInputIds,
 ]);
 
+export const hostedMatrixRealHostedEvidenceCommand =
+  "npm run test:dev-test-game-hosted-matrix-external-evidence";
+export const hostedMatrixExternalEvidenceProofTarget =
+  "target/dev-test-game/hosted-matrix-external.json";
+
+export const hostedMatrixRealHostedBlockedCheckIds = Object.freeze([
+  "real-hosted-targets-externally-reachable",
+  "real-hosted-command-race-evidence",
+  "real-hosted-reload-coverage-evidence",
+  "real-hosted-reconnect-coverage-evidence",
+  "real-hosted-stale-client-proof-inputs",
+]);
+
+const hostedMatrixRealHostedBlockedChecks = Object.freeze([
+  Object.freeze({
+    id: "real-hosted-targets-externally-reachable",
+    status: "blocked",
+    requiredEvidence:
+      "Externally reachable hosted frontend and API base URLs for the same deployment, with non-local health evidence.",
+  }),
+  Object.freeze({
+    id: "real-hosted-command-race-evidence",
+    status: "blocked",
+    requiredEvidence:
+      "Raw hosted matrix evidence with command races captured against the externally reachable deployment for the selected matrix group.",
+  }),
+  Object.freeze({
+    id: "real-hosted-reload-coverage-evidence",
+    status: "blocked",
+    requiredEvidence:
+      "Raw hosted matrix evidence with reload recovery coverage for every selected race cell after the hosted command races.",
+  }),
+  Object.freeze({
+    id: "real-hosted-reconnect-coverage-evidence",
+    status: "blocked",
+    requiredEvidence:
+      "Raw hosted matrix evidence with hosted reconnect recovery after the selected race group.",
+  }),
+  Object.freeze({
+    id: "real-hosted-stale-client-proof-inputs",
+    status: "blocked",
+    requiredEvidence:
+      "Raw hosted matrix evidence with stale-client conflict messages for stale player, replacement, cohost, and host surfaces.",
+  }),
+]);
+
 const staleConflictProgressCheckId = "stale-client-conflict-messages";
 
 export const hostedMatrixStaleConflictMilestoneCaseDefinitions = Object.freeze(
@@ -87,4 +133,66 @@ export function hostedMatrixStaleConflictMilestoneCases() {
 
 export function hostedMatrixStaleConflictMilestoneLaneIds() {
   return hostedMatrixStaleConflictMilestoneCases().map((scenario) => scenario.laneId);
+}
+
+export function hostedMatrixRealHostedHandoffChecklist({
+  command = hostedMatrixRealHostedEvidenceCommand,
+  proofTarget = hostedMatrixExternalEvidenceProofTarget,
+  preflightStatus = "blocked",
+} = {}) {
+  return {
+    status: "blocked",
+    preflightStatus,
+    command,
+    proofTarget,
+    inputIds: [...hostedMatrixRealHostedEvidenceInputIds],
+    blockedCheckIds: [...hostedMatrixRealHostedBlockedCheckIds],
+    blockedChecks: hostedMatrixRealHostedBlockedChecks.map((check) => ({
+      ...check,
+    })),
+    blockedReceipt: {
+      status: "blocked",
+      blockedCheckIds: [...hostedMatrixRealHostedBlockedCheckIds],
+      command,
+      proofTarget,
+      nextProofTarget: proofTarget,
+      requiredInputs: [
+        {
+          name: "FMARCH_HOSTED_MATRIX_FRONTEND_URL",
+          value: null,
+          required: true,
+          purpose: "Externally reachable frontend base URL.",
+        },
+        {
+          name: "FMARCH_HOSTED_MATRIX_API_URL",
+          value: null,
+          required: true,
+          purpose:
+            "Externally reachable API base URL for the same hosted deployment.",
+        },
+        {
+          name: "FMARCH_HOSTED_MATRIX_GROUP_ID",
+          value: "replacement-race-reload",
+          required: true,
+          purpose: "Hosted matrix group to prove.",
+        },
+        {
+          name: "FMARCH_HOSTED_MATRIX_RAW_EVIDENCE_PATH",
+          value: null,
+          required: true,
+          purpose:
+            "Readable raw hosted race, reload, reconnect, and stale-client evidence captured from the real target.",
+        },
+      ],
+      missingRequiredInputs: [
+        "FMARCH_HOSTED_MATRIX_FRONTEND_URL",
+        "FMARCH_HOSTED_MATRIX_API_URL",
+        "FMARCH_HOSTED_MATRIX_RAW_EVIDENCE_PATH",
+      ],
+      operatorAction:
+        "Configure externally reachable hosted frontend/API URLs plus raw hosted matrix evidence covering races, reload, reconnect, and stale-client conflicts, then rerun npm run test:dev-test-game-hosted-matrix-external-evidence.",
+      localVsHostedBoundary:
+        "Local hosted-like matrix artifacts, local-or-loopback evidence, and synthetic demo evidence can prove the handoff shape, but they cannot satisfy real hosted race evidence.",
+    },
+  };
 }

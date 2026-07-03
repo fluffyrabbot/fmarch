@@ -54,11 +54,23 @@ import {
   hostedEvidenceRealHostedInputsFixture,
 } from "../../../../tools/dev_test_game_hosted_handoff_cases.mjs";
 import {
+  hostedMatrixRealHostedEvidenceCommand,
+  hostedMatrixExternalEvidenceProofTarget,
+  hostedMatrixRealHostedHandoffChecklist,
+} from "../../../../tools/dev_test_game_hosted_concurrent_race_matrix_cases.mjs";
+import {
+  buildRealHostedEvidenceInputs,
+} from "../../../../tools/dev_test_game_real_hosted_evidence_inputs.mjs";
+import {
   hostedOpsSignalCheckStatusRows,
 } from "../../../../tools/dev_test_game_hosted_ops_signal_cases.mjs";
 import {
+  realHostedObservabilityHandoffCase,
+} from "../../../../tools/dev_test_game_real_hosted_observability_handoff_cases.mjs";
+import {
   hostedIdentityEvidenceBlockedChecks,
   hostedIdentityEvidenceInputIds,
+  hostedIdentityEvidencePacketSectionDefinitions,
   hostedIdentityEvidencePlaceholderFixturePath,
   hostedIdentityEvidenceRequirementGroups,
 } from "../../../../tools/dev_test_game_hosted_identity_evidence.mjs";
@@ -719,6 +731,50 @@ test("admin route data exposes local hosted ops signals as a native audit row", 
   });
 });
 
+test("admin route data exposes real hosted observability handoff as a native audit row", async () => {
+  const data = await buildAdminRouteData({
+    principalUserId: "admin_a",
+    capabilities: [{ kind: "GlobalAdmin" }],
+    hostedOpsSignals: localHostedOpsSignalsFixture(),
+    realHostedObservabilityHandoff:
+      localRealHostedObservabilityHandoffFixture(),
+  });
+
+  const handoff = data.audit.find(
+    (item) => item.id === localAdminAuditIds.realHostedObservabilityHandoff,
+  );
+  assert.equal(handoff.label, "Real hosted observability handoff");
+  assert.equal(handoff.status, "blocked: 1 passed, 9 blocked");
+  assert.equal(handoff.authority, "GlobalAdmin or GlobalMod");
+  assert.equal(
+    handoff.inspectHref,
+    localAdminAuditRoleUrl(localAdminAuditIds.realHostedObservabilityHandoff, {
+      game: "midsummer",
+    }),
+  );
+  assert.deepEqual(
+    handoff.relatedLinks.map((link) => link.id),
+    [localAdminAuditIds.hostedOpsSignals, localAdminAuditIds.nextAction],
+  );
+  assert.equal(
+    handoff.hostedHandoffChecklist.blockedReceipt.localVsHostedBoundary,
+    "The local hosted-like ops signal bundle is baseline evidence only; it cannot satisfy real hosted observability.",
+  );
+  assert.deepEqual(handoff.artifactSummary, {
+    game: "game-a",
+    rawEvidencePath: "",
+    rawEvidenceStatus: "blocked",
+    localHostedOpsSignalsPath: "target/dev-test-game/hosted-ops-signals.json",
+    localHostedLikeSignalsOnlyBaseline: true,
+    blockedCheckCount: 9,
+    nextCommand: "npm run test:dev-test-game-real-hosted-observability-handoff",
+    nextProofTarget:
+      "target/dev-test-game/real-hosted-observability-handoff.json",
+    releaseReady: false,
+    productionReady: false,
+  });
+});
+
 test("admin route data exposes hosted target preflight as a native audit row", async () => {
   const data = await buildAdminRouteData({
     principalUserId: "admin_a",
@@ -889,6 +945,23 @@ test("admin route data exposes hosted identity evidence as a native audit row", 
   assert.equal(
     identity.artifactSummary.placeholderFixturePath,
     hostedIdentityEvidencePlaceholderFixturePath,
+  );
+  assert.deepEqual(identity.artifactSummary.redactedIntakePacket, {
+    ...localHostedIdentityRedactedIntakePacketFixture(),
+  });
+  assert.deepEqual(
+    identity.artifactSummary.redactedIntakePacket.sections.map((section) => [
+      section.id,
+      section.status,
+      section.redactedEvidenceRefCount,
+      section.missingInputs,
+    ]),
+    hostedIdentityEvidencePacketSectionDefinitions.map((section) => [
+      section.field,
+      "missing",
+      0,
+      ["status-provided", ...section.requiredInputIds, "redactedEvidenceRefs"],
+    ]),
   );
 });
 
@@ -1338,7 +1411,7 @@ test("admin route data exposes local hosted matrix as a native audit row", async
     realHostedEvidenceStatus: "unproven",
     realHostedDeploymentStatus: "unproven",
     externalHostedEvidenceStatus: "not_configured",
-    realHostedEvidenceCommand: "npm run test:dev-test-game-hosted-evidence-lane",
+    realHostedEvidenceCommand: hostedMatrixRealHostedEvidenceCommand,
     realHostedEvidenceProofTarget:
       "target/dev-test-game/hosted-matrix-external.json",
     nextCommand: "test:dev-test-game-hosted-concurrent-race-matrix",
@@ -1399,8 +1472,8 @@ test("admin local hosted matrix detail data carries progress and gap rows", asyn
       item.required,
     ]),
     [
-      ["command", "npm run test:dev-test-game-hosted-evidence-lane", true],
-      ["proof-target", "target/dev-test-game/hosted-matrix-external.json", true],
+      ["command", hostedMatrixRealHostedEvidenceCommand, true],
+      ["proof-target", hostedMatrixExternalEvidenceProofTarget, true],
       [
         "FMARCH_HOSTED_MATRIX_FRONTEND_URL",
         "Externally reachable frontend base URL.",
@@ -1423,6 +1496,37 @@ test("admin local hosted matrix detail data carries progress and gap rows", asyn
         false,
       ],
     ],
+  );
+  assert.equal(data.audit.hostedHandoffChecklist.status, "blocked");
+  assert.equal(
+    data.audit.hostedHandoffChecklist.preflightStatus,
+    "not_configured",
+  );
+  assert.equal(
+    data.audit.hostedHandoffChecklist.command,
+    hostedMatrixRealHostedEvidenceCommand,
+  );
+  assert.deepEqual(
+    data.audit.hostedHandoffChecklist.blockedChecks.map((item) => [
+      item.id,
+      item.status,
+    ]),
+    hostedMatrixRealHostedHandoffChecklist().blockedCheckIds.map((id) => [
+      id,
+      "blocked",
+    ]),
+  );
+  assert.deepEqual(
+    data.audit.hostedHandoffChecklist.blockedReceipt.missingRequiredInputs,
+    [
+      "FMARCH_HOSTED_MATRIX_FRONTEND_URL",
+      "FMARCH_HOSTED_MATRIX_API_URL",
+      "FMARCH_HOSTED_MATRIX_RAW_EVIDENCE_PATH",
+    ],
+  );
+  assert.match(
+    data.audit.hostedHandoffChecklist.blockedReceipt.localVsHostedBoundary,
+    /cannot satisfy real hosted race evidence/,
   );
   assert.deepEqual(
     data.audit.reconnectLanes.map((lane) => [lane.id, lane.status]),
@@ -2306,6 +2410,10 @@ test("admin local core loop detail data carries lane rows", async () => {
             "d03r1-revote-ballot-submitted",
             "phase D03R1, open, actor slot_4, vote target NoLynch, vote ack, current vote no_lynch, count 1, api phase D03R1, api target no_lynch, api count 1, stale D03 target slot_4, stale D03 count 1",
           ],
+          [
+            "d03r1-revote-resolved-no-majority",
+            "phase D03R1, locked, resolve ack, prompt D03R1:revote:NoMajority, prompt status pending, original prompt status resolved, outcome NoMajority, count 1, prompt action visible",
+          ],
         ],
       ],
     ],
@@ -2332,7 +2440,7 @@ test("admin local core loop detail data carries lane rows", async () => {
     [
       [
         "core-loop-spine",
-        "passed: D01 -> N01 -> D02, vote ack, N02 action ack, next D03, terminal advance InvalidTarget, reload D03, revote D03R1, revote vote ack",
+        "passed: D01 -> N01 -> D02, vote ack, N02 action ack, next D03, terminal advance InvalidTarget, reload D03, revote D03R1, revote vote ack, revote resolve ack",
       ],
       ["core-loop", "passed: PhaseLocked vote receipt, unchanged unknown, lock ack/unlock ack"],
       ["action-loop", "passed: role URL false, night unknown, receipt unknown, D02 unknown, next unknown"],
@@ -2378,8 +2486,8 @@ test("admin local core loop detail data carries lane rows", async () => {
     [
       [
         "core-loop-spine",
-        "passed: D01 -> N01 -> D02, vote ack, N02 action ack, next D03, terminal advance InvalidTarget, reload D03, revote D03R1, revote vote ack",
-        "passed: D01 -> N01 -> D02, vote ack, N02 action ack, next D03, terminal advance InvalidTarget, reload D03, revote D03R1, revote vote ack",
+        "passed: D01 -> N01 -> D02, vote ack, N02 action ack, next D03, terminal advance InvalidTarget, reload D03, revote D03R1, revote vote ack, revote resolve ack",
+        "passed: D01 -> N01 -> D02, vote ack, N02 action ack, next D03, terminal advance InvalidTarget, reload D03, revote D03R1, revote vote ack, revote resolve ack",
       ],
       [
         "core-loop",
@@ -2639,6 +2747,57 @@ test("admin local hosted ops signals detail data carries signal rows", async () 
   assert.deepEqual(
     data.audit.relatedLinks.map((link) => link.id),
     [localAdminAuditIds.hostedConcurrentRaceMatrix, localAdminAuditIds.opsArtifacts],
+  );
+});
+
+test("admin real hosted observability handoff detail data carries blocked evidence rows", async () => {
+  const data = await buildAdminAuditDetailData({
+    audit: localAdminAuditIds.realHostedObservabilityHandoff,
+    principalUserId: "admin_a",
+    capabilities: [{ kind: "GlobalAdmin" }],
+    realHostedObservabilityHandoff:
+      localRealHostedObservabilityHandoffFixture(),
+  });
+
+  assert.equal(data.status, "available");
+  assert.equal(data.surfaceHeader.title, "Real hosted observability handoff");
+  assert.equal(data.audit.id, localAdminAuditIds.realHostedObservabilityHandoff);
+  assert.equal(data.audit.checks.length, 10);
+  assert.deepEqual(
+    data.audit.unproven.map((item) => item.id),
+    realHostedObservabilityHandoffCase().blockedCheckIds,
+  );
+  assert.deepEqual(
+    data.audit.hostedHandoffChecklist.inputs.map((input) => [
+      input.id,
+      input.value,
+    ]),
+    [
+      [
+        "command",
+        "npm run test:dev-test-game-real-hosted-observability-handoff",
+      ],
+      [
+        "proof-target",
+        "target/dev-test-game/real-hosted-observability-handoff.json",
+      ],
+      [
+        "FMARCH_REAL_HOSTED_OBSERVABILITY_EVIDENCE_PATH",
+        "externally reachable hosted logs/metrics/traces/paging/SLO/incident-response evidence JSON",
+      ],
+      [
+        "FMARCH_DEV_TEST_GAME_HOSTED_OPS_SIGNALS",
+        "target/dev-test-game/hosted-ops-signals.json",
+      ],
+    ],
+  );
+  assert.deepEqual(
+    data.audit.hostedHandoffChecklist.groups.map((group) => group.id),
+    realHostedObservabilityHandoffCase().requirementGroups.map((group) => group.id),
+  );
+  assert.deepEqual(
+    data.audit.relatedLinks.map((link) => link.id),
+    [localAdminAuditIds.hostedOpsSignals, localAdminAuditIds.nextAction],
   );
 });
 
@@ -3706,6 +3865,20 @@ function proofRunFixture() {
               staleD03Count: 1,
               staleD03NoLynchCount: null,
             },
+            {
+              id: "d03r1-revote-resolved-no-majority",
+              phase: "D03R1",
+              locked: true,
+              resolveState: "ack",
+              outcomeStatus: "NoMajority",
+              winnerSlot: null,
+              projectedCount: 1,
+              promptId: "D03R1:revote:NoMajority",
+              promptActionId: "resolve_host_prompt-D03R1-revote-NoMajority",
+              promptStatusAfter: "pending",
+              originalPromptStatus: "resolved",
+              promptActionVisible: true,
+            },
           ],
         },
       ],
@@ -3903,6 +4076,45 @@ function localHostedOpsSignalsFixture() {
   };
 }
 
+function localRealHostedObservabilityHandoffFixture() {
+  const checklist = realHostedObservabilityHandoffCase();
+  return {
+    version: 1,
+    proof: "dev-test-game-real-hosted-observability-handoff",
+    status: "blocked",
+    releaseReady: false,
+    productionReady: false,
+    scope: "real-hosted-observability-handoff",
+    proofBoundary:
+      "Real hosted observability evidence intake with local hosted-like ops signals as baseline only.",
+    generatedFrom: {
+      game: "game-a",
+      hostedOpsSignals: "target/dev-test-game/hosted-ops-signals.json",
+      baselineScope: "local-hosted-like-ops-signals",
+      realHostedDeploymentStatus: "unproven",
+    },
+    target: {
+      rawEvidencePath: null,
+      rawEvidenceStatus: "blocked",
+      localHostedOpsSignalsPath: "target/dev-test-game/hosted-ops-signals.json",
+      localHostedLikeSignalsOnlyBaseline: true,
+    },
+    checks: [
+      {
+        id: "local-hosted-ops-signals-baseline-carried",
+        status: "passed",
+        evidence: "target/dev-test-game/hosted-ops-signals.json",
+        baselineOnly: true,
+      },
+      ...checklist.blockedChecks,
+    ],
+    hostedHandoffChecklist: checklist,
+    nextCommand: "npm run test:dev-test-game-real-hosted-observability-handoff",
+    nextProofTarget:
+      "target/dev-test-game/real-hosted-observability-handoff.json",
+  };
+}
+
 function localHostedTargetPreflightFixture() {
   return {
     version: 1,
@@ -3979,6 +4191,7 @@ function localHostedIdentityEvidenceFixture() {
       rawEvidencePath: null,
       rawEvidenceStatus: "blocked",
       placeholderFixturePath: hostedIdentityEvidencePlaceholderFixturePath,
+      redactedIntakePacket: localHostedIdentityRedactedIntakePacketFixture(),
     },
     checks: hostedIdentityEvidenceBlockedChecks.map((check) => ({
       id: check.id,
@@ -4006,6 +4219,31 @@ function localHostedIdentityEvidenceFixture() {
     },
     nextCommand: "npm run test:dev-test-game-hosted-identity-evidence",
     nextProofTarget: HOSTED_IDENTITY_EVIDENCE_PROOF_TARGET,
+  };
+}
+
+function localHostedIdentityRedactedIntakePacketFixture() {
+  return {
+    kind: "redacted-hosted-identity-intake",
+    rawInviteTokensIncluded: false,
+    rawSessionSecretsIncluded: false,
+    rawPasswordHashesIncluded: false,
+    rawPersonalContactIncluded: false,
+    roleSurfaceArchitectureChanged: false,
+    sections: hostedIdentityEvidencePacketSectionDefinitions.map((section) => ({
+      id: section.field,
+      checkId: section.checkId,
+      label: section.label,
+      status: "missing",
+      requiredInputIds: [...section.requiredInputIds],
+      providedInputIds: [],
+      redactedEvidenceRefCount: 0,
+      missingInputs: [
+        "status-provided",
+        ...section.requiredInputIds,
+        "redactedEvidenceRefs",
+      ],
+    })),
   };
 }
 
@@ -4908,7 +5146,13 @@ function hostedConcurrentRaceMatrixFixture() {
       { id: "real-hosted-evidence-required", status: "unproven" },
       { id: "real-hosted-deployment", status: "unproven" },
     ],
-    realHostedEvidenceInputs: realHostedEvidenceInputsFixture(),
+    realHostedEvidenceInputs: realHostedEvidenceInputsFixture({
+      command: hostedMatrixRealHostedEvidenceCommand,
+      proofTarget: hostedMatrixExternalEvidenceProofTarget,
+    }),
+    hostedHandoffChecklist: hostedMatrixRealHostedHandoffChecklist({
+      preflightStatus: "not_configured",
+    }),
     externalHostedEvidence: {
       status: "not_configured",
       frontendBaseUrl: null,
@@ -4981,7 +5225,17 @@ function hostedConcurrentRaceMatrixFixture() {
   };
 }
 
-function realHostedEvidenceInputsFixture() {
+function realHostedEvidenceInputsFixture(options = {}) {
+  if (
+    options.command !== undefined ||
+    options.proofTarget !== undefined
+  ) {
+    return buildRealHostedEvidenceInputs({
+      status: "unproven",
+      mode: "not_configured",
+      ...options,
+    });
+  }
   return hostedEvidenceRealHostedInputsFixture();
 }
 

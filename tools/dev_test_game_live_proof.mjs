@@ -185,6 +185,27 @@ assert.equal(proofRunSpineThirdCycle.checkpoints[7].apiCount, 1);
 assert.equal(proofRunSpineThirdCycle.checkpoints[7].staleD03Target, "slot_4");
 assert.equal(proofRunSpineThirdCycle.checkpoints[7].staleD03Count, 1);
 assert.equal(proofRunSpineThirdCycle.checkpoints[7].staleD03NoLynchCount, null);
+assert.equal(
+  proofRunSpineThirdCycle.checkpoints[8].id,
+  "d03r1-revote-resolved-no-majority",
+);
+assert.equal(proofRunSpineThirdCycle.checkpoints[8].phase, "D03R1");
+assert.equal(proofRunSpineThirdCycle.checkpoints[8].locked, true);
+assert.equal(proofRunSpineThirdCycle.checkpoints[8].resolveState, "ack");
+assert.equal(proofRunSpineThirdCycle.checkpoints[8].outcomeStatus, "NoMajority");
+assert.equal(proofRunSpineThirdCycle.checkpoints[8].winnerSlot, null);
+assert.equal(proofRunSpineThirdCycle.checkpoints[8].projectedCount, 1);
+assert.equal(
+  proofRunSpineThirdCycle.checkpoints[8].promptId,
+  "D03R1:revote:NoMajority",
+);
+assert.equal(
+  proofRunSpineThirdCycle.checkpoints[8].promptActionId,
+  "resolve_host_prompt-D03R1-revote-NoMajority",
+);
+assert.equal(proofRunSpineThirdCycle.checkpoints[8].promptStatusAfter, "pending");
+assert.equal(proofRunSpineThirdCycle.checkpoints[8].originalPromptStatus, "resolved");
+assert.equal(proofRunSpineThirdCycle.checkpoints[8].promptActionVisible, true);
 assert.equal(proofRun.coreLoopSpine.recoveryHooks.staleLockedVoteReject, "PhaseLocked");
 assert.equal(proofRun.coreLoopSpine.recoveryHooks.invalidActionReject, "InvalidTarget");
 assert.equal(

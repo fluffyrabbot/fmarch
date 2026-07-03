@@ -11,6 +11,11 @@ import {
   hostedMatrixStaleConflictMilestoneCases,
 } from "./dev_test_game_hosted_concurrent_race_matrix_cases.mjs";
 import {
+  hostedEvidenceHandoffBlockedCheckRequiredEvidence,
+  hostedEvidenceHandoffInputValues,
+  hostedEvidenceHandoffSummary,
+} from "./dev_test_game_hosted_handoff_cases.mjs";
+import {
   artifactDir,
   proveAdminAuditDetail,
   readJson,
@@ -54,8 +59,27 @@ await runAdminAuditProof({
     ),
     proofRun: assertDevTestGameProofRun(await readJson(proofRunPath)),
   }),
-  prove: async ({ browser, frontendBaseUrl, source }) =>
-    await proveAdminAuditDetail({
+  prove: async ({ browser, frontendBaseUrl, source }) => {
+    const hostedHandoffInputValues = hostedEvidenceHandoffInputValues(
+      source.hostedMatrix.realHostedEvidenceInputs,
+    );
+    const hostedHandoffBlockedCheckRequiredEvidence =
+      hostedEvidenceHandoffBlockedCheckRequiredEvidence(
+        source.hostedMatrix.hostedHandoffChecklist?.blockedChecks ?? [],
+        source.hostedMatrix.hostedHandoffChecklist?.blockedCheckIds ?? [],
+      );
+    const hostedHandoffSummary =
+      source.hostedMatrix.hostedHandoffChecklist === undefined
+        ? null
+        : hostedEvidenceHandoffSummary({
+            status: source.hostedMatrix.hostedHandoffChecklist.status,
+            preflightStatus:
+              source.hostedMatrix.hostedHandoffChecklist.preflightStatus,
+            inputs: source.hostedMatrix.realHostedEvidenceInputs,
+            command: source.hostedMatrix.hostedHandoffChecklist.command,
+            proofTarget: source.hostedMatrix.hostedHandoffChecklist.proofTarget,
+          });
+    return await proveAdminAuditDetail({
       browser,
       frontendBaseUrl,
       game: source.proofRun.session.game,
@@ -85,8 +109,19 @@ await runAdminAuditProof({
         ),
       ],
       requiredRealHostedEvidenceInputs,
+      requiredHostedHandoffInputs:
+        source.hostedMatrix.hostedHandoffChecklist?.inputIds ?? [],
+      requiredHostedHandoffInputValues: hostedHandoffInputValues,
+      requiredHostedHandoffBlockedChecks:
+        source.hostedMatrix.hostedHandoffChecklist?.blockedCheckIds ?? [],
+      requiredHostedHandoffBlockedCheckStatuses:
+        hostedHandoffBlockedCheckRequiredEvidence,
+      requiredHostedHandoffSummary: hostedHandoffSummary,
+      requiredHostedHandoffBlockedReceipt:
+        source.hostedMatrix.hostedHandoffChecklist?.blockedReceipt ?? null,
       requiredRelatedLinks,
-    }),
+    });
+  },
   buildEvidence: ({ source, adminRoleSurface }) => ({
     version: 1,
     proof: "dev-test-game-hosted-concurrent-race-matrix-admin-proof",
@@ -122,6 +157,33 @@ await runAdminAuditProof({
       realHostedEvidenceStatus:
         source.hostedMatrix.summary.realHostedEvidenceStatus,
       realHostedEvidenceInputIds: requiredRealHostedEvidenceInputs,
+      hostedHandoffInputIds:
+        source.hostedMatrix.hostedHandoffChecklist?.inputIds ?? [],
+      hostedHandoffInputValues: hostedEvidenceHandoffInputValues(
+        source.hostedMatrix.realHostedEvidenceInputs,
+      ),
+      hostedHandoffBlockedCheckIds:
+        source.hostedMatrix.hostedHandoffChecklist?.blockedCheckIds ?? [],
+      hostedHandoffBlockedCheckRequiredEvidence:
+        hostedEvidenceHandoffBlockedCheckRequiredEvidence(
+          source.hostedMatrix.hostedHandoffChecklist?.blockedChecks ?? [],
+          source.hostedMatrix.hostedHandoffChecklist?.blockedCheckIds ?? [],
+        ),
+      ...(source.hostedMatrix.hostedHandoffChecklist === undefined
+        ? {}
+        : {
+            hostedHandoffSummary: hostedEvidenceHandoffSummary({
+              status: source.hostedMatrix.hostedHandoffChecklist.status,
+              preflightStatus:
+                source.hostedMatrix.hostedHandoffChecklist.preflightStatus,
+              inputs: source.hostedMatrix.realHostedEvidenceInputs,
+              command: source.hostedMatrix.hostedHandoffChecklist.command,
+              proofTarget:
+                source.hostedMatrix.hostedHandoffChecklist.proofTarget,
+            }),
+            hostedHandoffBlockedReceipt:
+              source.hostedMatrix.hostedHandoffChecklist.blockedReceipt,
+          }),
       realHostedDeploymentStatus:
         source.hostedMatrix.summary.realHostedDeploymentStatus,
     },
@@ -222,6 +284,93 @@ export function assertHostedConcurrentRaceMatrixAdminProof(evidence) {
       throw new Error(
         `hosted concurrent race matrix admin proof missing real hosted input: ${inputId}`,
       );
+    }
+  }
+  for (const inputId of evidence.generatedFrom?.hostedHandoffInputIds ?? []) {
+    if (
+      !evidence.adminRoleSurface?.visibleHostedHandoffInputs?.includes(inputId)
+    ) {
+      throw new Error(
+        `hosted concurrent race matrix admin proof missing handoff input: ${inputId}`,
+      );
+    }
+  }
+  for (const checkId of evidence.generatedFrom?.hostedHandoffBlockedCheckIds ?? []) {
+    if (
+      !evidence.adminRoleSurface?.visibleHostedHandoffBlockedChecks?.includes(
+        checkId,
+      )
+    ) {
+      throw new Error(
+        `hosted concurrent race matrix admin proof missing handoff blocked check: ${checkId}`,
+      );
+    }
+  }
+  for (const [inputId, expectedValue] of Object.entries(
+    evidence.generatedFrom?.hostedHandoffInputValues ?? {},
+  )) {
+    const visibleValue =
+      evidence.adminRoleSurface?.visibleHostedHandoffInputValues?.[inputId];
+    if (typeof visibleValue !== "string" || !visibleValue.includes(expectedValue)) {
+      throw new Error(
+        `hosted concurrent race matrix admin proof missing handoff input value: ${inputId}`,
+      );
+    }
+  }
+  for (const [checkId, expectedText] of Object.entries(
+    evidence.generatedFrom?.hostedHandoffBlockedCheckRequiredEvidence ?? {},
+  )) {
+    const visibleText =
+      evidence.adminRoleSurface?.visibleHostedHandoffBlockedCheckStatuses?.[
+        checkId
+      ];
+    if (typeof visibleText !== "string" || !visibleText.includes(expectedText)) {
+      throw new Error(
+        `hosted concurrent race matrix admin proof missing blocked check evidence: ${checkId}`,
+      );
+    }
+  }
+  const expectedSummary = evidence.generatedFrom?.hostedHandoffSummary;
+  if (expectedSummary !== undefined) {
+    for (const [key, expectedValue] of Object.entries(expectedSummary)) {
+      if (
+        evidence.adminRoleSurface?.visibleHostedHandoffSummary?.[key] !==
+        String(expectedValue)
+      ) {
+        throw new Error(
+          `hosted concurrent race matrix admin proof missing handoff summary: ${key}`,
+        );
+      }
+    }
+  }
+  const expectedBlockedReceipt =
+    evidence.generatedFrom?.hostedHandoffBlockedReceipt;
+  if (expectedBlockedReceipt !== undefined) {
+    const visibleReceipt =
+      evidence.adminRoleSurface?.visibleHostedHandoffBlockedReceipt;
+    if (visibleReceipt === undefined) {
+      throw new Error(
+        "hosted concurrent race matrix admin proof missing blocked receipt",
+      );
+    }
+    for (const key of [
+      "status",
+      "operatorAction",
+      "localVsHostedBoundary",
+      "nextProofTarget",
+    ]) {
+      if (visibleReceipt[key] !== String(expectedBlockedReceipt[key] ?? "")) {
+        throw new Error(
+          `hosted concurrent race matrix admin proof missing blocked receipt field: ${key}`,
+        );
+      }
+    }
+    for (const input of expectedBlockedReceipt.missingRequiredInputs ?? []) {
+      if (!visibleReceipt.missingRequiredInputs?.includes(String(input))) {
+        throw new Error(
+          `hosted concurrent race matrix admin proof missing blocked receipt input: ${input}`,
+        );
+      }
     }
   }
   return evidence;

@@ -144,6 +144,14 @@ const coreLoopFeatureSpineLaneRows = Object.freeze([
     adminCheckId: "core-loop",
   }),
   Object.freeze({
+    targetKey: "dayThreeRevoteResolution",
+    featureSlotId: "day-three-revote-resolution",
+    cycleId: nightTwoDayThree,
+    role: "host",
+    checkpointId: `${nightTwoDayThree}-d03r1-revote-resolved-no-majority`,
+    adminCheckId: "core-loop",
+  }),
+  Object.freeze({
     targetKey: "invalidActionRecovery",
     featureSlotId: playerInvalidActionRecoveryLaneId,
     cycleId: dayTwoNightTwo,

@@ -1,0 +1,170 @@
+import path from "node:path";
+import {
+  assertDevTestGameRealHostedObservabilityHandoff,
+} from "./dev_test_game_real_hosted_observability_handoff.mjs";
+import {
+  realHostedObservabilityBaselineEnv,
+  realHostedObservabilityEvidenceEnv,
+  realHostedObservabilityHandoffInputIds,
+} from "./dev_test_game_real_hosted_observability_handoff_cases.mjs";
+import {
+  artifactDir,
+  proveAdminAuditDetail,
+  readJson,
+  repoRoot,
+  runAdminAuditProof,
+} from "./dev_test_game_admin_audit_proof_helper.mjs";
+
+const handoffPath = path.resolve(
+  repoRoot,
+  process.env.FMARCH_DEV_TEST_GAME_REAL_HOSTED_OBSERVABILITY_HANDOFF ??
+    "target/dev-test-game/real-hosted-observability-handoff.json",
+);
+const handoffRelativePath = path.relative(repoRoot, handoffPath);
+const evidencePath = path.join(
+  artifactDir,
+  "real-hosted-observability-handoff-admin-proof.json",
+);
+const requiredRelatedLinks = [
+  "local-hosted-ops-signals",
+  "local-next-action",
+];
+
+await runAdminAuditProof({
+  smokeName: "dev-test-game-real-hosted-observability-handoff-admin-proof",
+  stage: "real-hosted-observability-handoff-admin-proof-listen",
+  evidencePath,
+  envOverrides: {
+    FMARCH_DEV_TEST_GAME_REAL_HOSTED_OBSERVABILITY_HANDOFF:
+      handoffRelativePath,
+  },
+  loadSource: async () =>
+    assertDevTestGameRealHostedObservabilityHandoff(await readJson(handoffPath)),
+  prove: async ({ browser, frontendBaseUrl, source }) =>
+    await proveAdminAuditDetail({
+      browser,
+      frontendBaseUrl,
+      game: source.generatedFrom.game,
+      auditId: "local-real-hosted-observability-handoff",
+      requiredChecks: source.checks.map((check) => check.id),
+      requiredCheckStatuses: Object.fromEntries(
+        source.checks.map((check) => [check.id, check.status]),
+      ),
+      requiredUnproven: source.hostedHandoffChecklist.blockedCheckIds,
+      requiredHostedHandoffInputs: realHostedObservabilityHandoffInputIds,
+      requiredHostedHandoffInputValues: {
+        [realHostedObservabilityEvidenceEnv]:
+          "externally reachable hosted logs/metrics/traces/paging/SLO/incident-response evidence JSON",
+        [realHostedObservabilityBaselineEnv]:
+          source.target.localHostedOpsSignalsPath,
+      },
+      requiredHostedHandoffBlockedChecks:
+        source.hostedHandoffChecklist.blockedCheckIds,
+      requiredHostedHandoffGroups:
+        source.hostedHandoffChecklist.requirementGroups.map((group) => group.id),
+      requiredHostedHandoffBlockedReceipt:
+        source.hostedHandoffChecklist.blockedReceipt,
+      requiredRelatedLinks,
+    }),
+  buildEvidence: ({ source, adminRoleSurface }) => ({
+    version: 1,
+    proof: "dev-test-game-real-hosted-observability-handoff-admin-proof",
+    status: "passed",
+    releaseReady: false,
+    productionReady: false,
+    scope: "local-dev-test-game-real-hosted-observability-handoff-admin-surface",
+    proofBoundary:
+      "Local SvelteKit admin role URL with fixture admin authority over the real hosted observability handoff. Proves the blocked intake receipt is discoverable from the seeded admin overview and inspectable in a native admin audit detail route with externally reachable logs, metrics, traces, paging/SLO, incident-response, and baseline-only boundary rows visible; it does not prove real hosted observability, beta readiness, release readiness, or production readiness.",
+    generatedFrom: {
+      handoff: handoffRelativePath,
+      game: source.generatedFrom.game,
+      status: source.status,
+      rawEvidenceStatus: source.target.rawEvidenceStatus,
+      checkIds: source.checks.map((check) => check.id),
+      checkStatuses: Object.fromEntries(
+        source.checks.map((check) => [check.id, check.status]),
+      ),
+      blockedCheckIds: source.hostedHandoffChecklist.blockedCheckIds,
+      hostedHandoffInputIds: realHostedObservabilityHandoffInputIds,
+      hostedHandoffBlockedCheckIds:
+        source.hostedHandoffChecklist.blockedCheckIds,
+      hostedHandoffGroupIds:
+        source.hostedHandoffChecklist.requirementGroups.map((group) => group.id),
+      relatedAuditIds: requiredRelatedLinks,
+    },
+    adminRoleSurface,
+  }),
+  assertEvidence: assertRealHostedObservabilityHandoffAdminProof,
+});
+
+export function assertRealHostedObservabilityHandoffAdminProof(evidence) {
+  if (
+    evidence?.version !== 1 ||
+    evidence.proof !==
+      "dev-test-game-real-hosted-observability-handoff-admin-proof" ||
+    evidence.status !== "passed" ||
+    evidence.releaseReady !== false ||
+    evidence.productionReady !== false ||
+    evidence.scope !==
+      "local-dev-test-game-real-hosted-observability-handoff-admin-surface"
+  ) {
+    throw new Error("real hosted observability handoff admin proof shape drifted");
+  }
+  if (
+    evidence.adminRoleSurface?.clickedThroughFromOverview !== true ||
+    evidence.adminRoleSurface?.rawInviteTokensVisible !== false
+  ) {
+    throw new Error(
+      "real hosted observability handoff admin proof did not prove admin overview click-through",
+    );
+  }
+  for (const checkId of evidence.generatedFrom?.checkIds ?? []) {
+    if (!evidence.adminRoleSurface?.visibleChecks?.includes(checkId)) {
+      throw new Error(
+        `real hosted observability handoff admin proof missing visible check: ${checkId}`,
+      );
+    }
+  }
+  for (const checkId of evidence.generatedFrom?.blockedCheckIds ?? []) {
+    if (!evidence.adminRoleSurface?.visibleUnproven?.includes(checkId)) {
+      throw new Error(
+        `real hosted observability handoff admin proof missing blocked row: ${checkId}`,
+      );
+    }
+  }
+  for (const inputId of evidence.generatedFrom?.hostedHandoffInputIds ?? []) {
+    if (!evidence.adminRoleSurface?.visibleHostedHandoffInputs?.includes(inputId)) {
+      throw new Error(
+        `real hosted observability handoff admin proof missing handoff input: ${inputId}`,
+      );
+    }
+  }
+  for (const checkId of evidence.generatedFrom?.hostedHandoffBlockedCheckIds ?? []) {
+    if (
+      !evidence.adminRoleSurface?.visibleHostedHandoffBlockedChecks?.includes(
+        checkId,
+      )
+    ) {
+      throw new Error(
+        `real hosted observability handoff admin proof missing handoff blocked check: ${checkId}`,
+      );
+    }
+  }
+  for (const groupId of evidence.generatedFrom?.hostedHandoffGroupIds ?? []) {
+    if (
+      !evidence.adminRoleSurface?.visibleHostedHandoffGroups?.includes(groupId)
+    ) {
+      throw new Error(
+        `real hosted observability handoff admin proof missing handoff group: ${groupId}`,
+      );
+    }
+  }
+  for (const linkId of evidence.generatedFrom?.relatedAuditIds ?? []) {
+    if (!evidence.adminRoleSurface?.visibleRelatedLinks?.includes(linkId)) {
+      throw new Error(
+        `real hosted observability handoff admin proof missing related link: ${linkId}`,
+      );
+    }
+  }
+  return evidence;
+}

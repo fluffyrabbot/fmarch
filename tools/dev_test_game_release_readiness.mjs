@@ -75,6 +75,10 @@ import {
   hostedOpsTelemetryBoundaryCheckId,
 } from "./dev_test_game_hosted_ops_signal_cases.mjs";
 import {
+  realHostedObservabilityHandoffCheckIds,
+  realHostedObservabilityHandoffInputIds,
+} from "./dev_test_game_real_hosted_observability_handoff_cases.mjs";
+import {
   buildReleaseReadinessUnprovenItems,
   releaseAdminProofFallbackUnprovenIds,
   releaseReadinessProductionFeatureSpineTargets,
@@ -3284,6 +3288,69 @@ export function validateDevTestGameHostedOpsSignalsAdminProof(proof, options = {
   };
 }
 
+export function validateDevTestGameRealHostedObservabilityHandoffAdminProof(
+  proof,
+  options = {},
+) {
+  const requiredChecks = realHostedObservabilityHandoffCheckIds;
+  if (
+    proof?.version !== 1 ||
+    proof.proof !==
+      "dev-test-game-real-hosted-observability-handoff-admin-proof" ||
+    proof.status !== "passed" ||
+    proof.scope !==
+      "local-dev-test-game-real-hosted-observability-handoff-admin-surface"
+  ) {
+    throw new Error("real hosted observability handoff admin proof shape drifted");
+  }
+  if (proof.productionReady !== false || proof.releaseReady !== false) {
+    throw new Error(
+      "real hosted observability handoff admin proof must not claim readiness",
+    );
+  }
+  if (
+    proof.adminRoleSurface?.clickedThroughFromOverview !== true ||
+    proof.adminRoleSurface?.rawInviteTokensVisible !== false
+  ) {
+    throw new Error(
+      "real hosted observability handoff admin proof did not prove admin overview click-through",
+    );
+  }
+  for (const checkId of requiredChecks) {
+    if (!proof.adminRoleSurface?.visibleChecks?.includes(checkId)) {
+      throw new Error(
+        `real hosted observability handoff admin proof missing visible check: ${checkId}`,
+      );
+    }
+  }
+  for (const inputId of realHostedObservabilityHandoffInputIds) {
+    if (
+      !proof.adminRoleSurface?.visibleHostedHandoffInputs?.includes(inputId)
+    ) {
+      throw new Error(
+        `real hosted observability handoff admin proof missing input: ${inputId}`,
+      );
+    }
+  }
+  return {
+    status: "passed",
+    path:
+      options.path ??
+      "target/dev-test-game/real-hosted-observability-handoff-admin-proof.json",
+    proofBoundary: proof.proofBoundary,
+    overviewRoleUrl: proof.adminRoleSurface.overviewRoleUrl,
+    detailRoleUrl: proof.adminRoleSurface.detailRoleUrl,
+    visibleChecks: proof.adminRoleSurface.visibleChecks,
+    visibleUnproven: proof.adminRoleSurface.visibleUnproven,
+    visibleHostedHandoffInputs:
+      proof.adminRoleSurface.visibleHostedHandoffInputs,
+    visibleHostedHandoffBlockedChecks:
+      proof.adminRoleSurface.visibleHostedHandoffBlockedChecks,
+    visibleRelatedLinks: proof.adminRoleSurface.visibleRelatedLinks,
+    ...(options.artifact === undefined ? {} : { artifact: options.artifact }),
+  };
+}
+
 export function validateDevTestGameHostedTargetPreflightAdminProof(
   proof,
   options = {},
@@ -4989,6 +5056,7 @@ export function validateDevTestGameAdminSpineProof(proof, options = {}) {
     "hosted-evidence-lane",
     "hosted-concurrent-race-matrix",
     "hosted-ops-signals",
+    "real-hosted-observability-handoff",
     "spine-manifest",
   ];
   if (proof?.version !== 1) {

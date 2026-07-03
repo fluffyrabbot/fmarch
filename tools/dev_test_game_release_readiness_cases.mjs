@@ -2,6 +2,11 @@ import {
   buildRealHostedEvidenceInputs,
 } from "./dev_test_game_real_hosted_evidence_inputs.mjs";
 import {
+  hostedMatrixExternalEvidenceProofTarget,
+  hostedMatrixRealHostedEvidenceCommand,
+  hostedMatrixRealHostedHandoffChecklist,
+} from "./dev_test_game_hosted_concurrent_race_matrix_cases.mjs";
+import {
   hostedEvidenceBlockedHandoffChecklistFromPreflight,
   hostedEvidenceLaneCommand,
   hostedEvidenceLanePath,
@@ -16,6 +21,11 @@ import {
   devTestGameHostedIdentityEvidencePath,
   hostedIdentityEvidenceHandoffCase,
 } from "./dev_test_game_hosted_identity_evidence_cases.mjs";
+import {
+  devTestGameRealHostedObservabilityHandoffCommand,
+  devTestGameRealHostedObservabilityHandoffPath,
+  realHostedObservabilityHandoffCase,
+} from "./dev_test_game_real_hosted_observability_handoff_cases.mjs";
 import {
   coreLoopFeatureSpineTargetRows,
 } from "./dev_test_game_core_loop_feature_spine_targets.mjs";
@@ -452,6 +462,32 @@ const localBuildableReleaseReadinessItems = new Map([
       proofBoundary:
         "External hosted matrix handoff. Passing requires normalized raw evidence from a real hosted target; local browser/API proof artifacts are only the baseline.",
       realHostedEvidenceStatus: "unproven",
+      realHostedEvidenceInputs: buildRealHostedEvidenceInputs({
+        status: "unproven",
+        mode: "real-hosted-handoff",
+        command: hostedMatrixRealHostedEvidenceCommand,
+        proofTarget: hostedMatrixExternalEvidenceProofTarget,
+      }),
+      hostedHandoffChecklist: hostedMatrixRealHostedHandoffChecklist(),
+    },
+  ],
+  [
+    "real-hosted-observability-and-operations",
+    {
+      priority: 12,
+      command: `npm run ${devTestGameRealHostedObservabilityHandoffCommand}`,
+      buildSlice:
+        "Create the real-hosted observability handoff receipt; it keeps local hosted-like ops signals as baseline only and blocks until externally reachable logs, metrics, traces, paging/SLO, and incident-response evidence are attached.",
+      proofTarget: devTestGameRealHostedObservabilityHandoffPath,
+      roleUrl: localAdminAuditRoleUrl(
+        localAdminAuditIds.realHostedObservabilityHandoff,
+      ),
+      proofGraphNodeId: "admin-proof:real-hosted-observability-handoff",
+      productionFeatureSpineTarget:
+        releaseReadinessProductionFeatureSpineTargets.privateChannel,
+      proofBoundary:
+        "Real hosted observability handoff only. The local hosted-like ops signal bundle remains baseline evidence and does not prove hosted logs, metrics, traces, paging/SLO, incident response, release readiness, or production readiness.",
+      hostedHandoffChecklist: realHostedObservabilityHandoffCase(),
     },
   ],
   [

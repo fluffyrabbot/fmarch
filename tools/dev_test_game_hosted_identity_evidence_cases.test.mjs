@@ -41,7 +41,11 @@ test("hosted identity evidence cases share handoff inputs and blocked groups", (
   );
   assert.equal(hostedIdentityEvidencePlaceholderSchema.properties.version.const, 1);
   assert.equal(
+    hostedIdentityEvidencePlaceholderSchema.properties.releaseReady.const,
+    false,
+  );
+  assert.equal(
     requiredHostedIdentityEvidenceForCheck("invite-delivery-evidence"),
-    "Hosted invite delivery and revocation evidence without exposing raw invite tokens in role URLs or admin surfaces.",
+    "Redacted hosted invite delivery and revocation intake packet without raw invite tokens in role URLs or admin surfaces.",
   );
 });

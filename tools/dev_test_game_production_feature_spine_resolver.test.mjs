@@ -86,6 +86,7 @@ test("production feature spine resolver builds and validates source collections"
     "day-three-terminal-recovery",
     "day-three-no-majority-revote",
     "day-three-revote-ballot",
+    "day-three-revote-resolution",
     "invalid-action-recovery",
     "player-action-boundary",
     "private-channel",
@@ -212,6 +213,21 @@ test("production feature spine resolver builds and validates source collections"
   );
   assert.deepEqual(
     {
+      roleUrlId:
+        collection.bySlotId["day-three-revote-resolution"].roleUrlId,
+      checkpointId:
+        collection.bySlotId["day-three-revote-resolution"].checkpointId,
+      adminCheckId:
+        collection.bySlotId["day-three-revote-resolution"].adminCheckId,
+    },
+    {
+      roleUrlId: "n02-d03-host",
+      checkpointId: "n02-d03-d03r1-revote-resolved-no-majority",
+      adminCheckId: "core-loop",
+    },
+  );
+  assert.deepEqual(
+    {
       roleUrlId: collection.bySlotId["player-action-boundary"].roleUrlId,
       checkpointId: collection.bySlotId["player-action-boundary"].checkpointId,
       recoveryHookId:
@@ -293,6 +309,7 @@ function coreLoopSourceTargetFixture() {
       "n02-d03-d03-terminal-reload-recovery",
       "n02-d03-d03-revote-prompt-resolved",
       "n02-d03-d03r1-revote-ballot-submitted",
+      "n02-d03-d03r1-revote-resolved-no-majority",
     ],
     recoveryHookIds: [
       "staleLockedVoteReject",

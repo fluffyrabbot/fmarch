@@ -33,6 +33,13 @@ import {
   hostedEvidenceHandoffInputRows,
 } from "../../../../tools/dev_test_game_hosted_handoff_cases.mjs";
 import {
+  devTestGameRealHostedObservabilityHandoffCommand,
+  devTestGameRealHostedObservabilityHandoffPath,
+  realHostedObservabilityBaselineEnv,
+  realHostedObservabilityEvidenceEnv,
+  realHostedObservabilityHandoffInputIds,
+} from "../../../../tools/dev_test_game_real_hosted_observability_handoff_cases.mjs";
+import {
   localAdminAuditHandoffCheckIds,
   localAdminAuditIds,
 } from "../../../../tools/dev_test_game_admin_audit_surface_ids.mjs";
@@ -72,6 +79,7 @@ export async function buildAdminRouteData({
   raceCoverage = null,
   hostedConcurrentRaceMatrix = null,
   hostedOpsSignals = null,
+  realHostedObservabilityHandoff = null,
   hostedTargetPreflight = null,
   hostedEvidenceLane = null,
   hostedEvidenceLaneDemoProof = null,
@@ -176,77 +184,81 @@ export async function buildAdminRouteData({
     ...coldData,
     audit: withAdminAuditInspectLinks(
       appendLocalNextActionAudit(
-        appendLocalHostedOpsSignalsAudit(
-          appendLocalHostedEvidenceLaneAudit(
-            appendLocalHostedTargetPreflightAudit(
-              appendLocalHostedConcurrentRaceMatrixAudit(
-                appendLocalRaceCoverageAudit(
-                  appendLocalProofGraphAudit(
-                    appendLocalProofFreshnessAudit(
-                      appendLocalAdminSpineAudit(
-                        appendLocalSpineManifestAudit(
-                          appendLocalHostedIdentityEvidenceAudit(
-                            appendLocalIdentityAdapterAudit(
-                              appendLocalBackupRestoreAudit(
-                                appendLocalReleaseRunbookAudit(
-                                  appendLocalReleaseReadinessAudit(
-                                    appendLocalSeedFixtureAudit(
-                                      appendLocalOpsArtifactsAudit(
-                                        appendLocalPlayerRecoveryAudit(
-                                          appendLocalHardeningAudit(
-                                            appendLocalCoreLoopAudit(coldData.audit, proofRun, { game }),
+        appendLocalRealHostedObservabilityHandoffAudit(
+          appendLocalHostedOpsSignalsAudit(
+            appendLocalHostedEvidenceLaneAudit(
+              appendLocalHostedTargetPreflightAudit(
+                appendLocalHostedConcurrentRaceMatrixAudit(
+                  appendLocalRaceCoverageAudit(
+                    appendLocalProofGraphAudit(
+                      appendLocalProofFreshnessAudit(
+                        appendLocalAdminSpineAudit(
+                          appendLocalSpineManifestAudit(
+                            appendLocalHostedIdentityEvidenceAudit(
+                              appendLocalIdentityAdapterAudit(
+                                appendLocalBackupRestoreAudit(
+                                  appendLocalReleaseRunbookAudit(
+                                    appendLocalReleaseReadinessAudit(
+                                      appendLocalSeedFixtureAudit(
+                                        appendLocalOpsArtifactsAudit(
+                                          appendLocalPlayerRecoveryAudit(
+                                            appendLocalHardeningAudit(
+                                              appendLocalCoreLoopAudit(coldData.audit, proofRun, { game }),
+                                              proofRun,
+                                              { game },
+                                            ),
                                             proofRun,
                                             { game },
                                           ),
-                                          proofRun,
+                                          opsArtifacts,
                                           { game },
                                         ),
-                                        opsArtifacts,
+                                        seedFixtureSummary,
                                         { game },
                                       ),
-                                      seedFixtureSummary,
+                                      releaseReadinessChecklist,
                                       { game },
                                     ),
-                                    releaseReadinessChecklist,
+                                    releaseRunbook,
                                     { game },
                                   ),
-                                  releaseRunbook,
+                                  backupRestoreProof,
                                   { game },
                                 ),
-                                backupRestoreProof,
+                                identityAdapterProof,
                                 { game },
                               ),
-                              identityAdapterProof,
+                              hostedIdentityEvidence,
                               { game },
                             ),
-                            hostedIdentityEvidence,
+                            spineManifest,
                             { game },
                           ),
-                          spineManifest,
+                          adminSpineProof,
                           { game },
                         ),
-                        adminSpineProof,
-                        { game },
+                        proofFreshness,
+                        { game, nextAction },
                       ),
-                      proofFreshness,
-                      { game, nextAction },
+                      proofGraph,
+                      { game },
                     ),
-                    proofGraph,
+                    raceCoverage,
                     { game },
                   ),
-                  raceCoverage,
+                  hostedConcurrentRaceMatrix,
                   { game },
                 ),
-                hostedConcurrentRaceMatrix,
+                hostedTargetPreflight,
                 { game },
               ),
-              hostedTargetPreflight,
-              { game },
+              hostedEvidenceLane,
+              { game, hostedEvidenceLaneDemoProof },
             ),
-            hostedEvidenceLane,
-            { game, hostedEvidenceLaneDemoProof },
+            hostedOpsSignals,
+            { game },
           ),
-          hostedOpsSignals,
+          realHostedObservabilityHandoff,
           { game },
         ),
         nextAction,
@@ -310,6 +322,7 @@ export async function buildAdminAuditDetailData({
   raceCoverage = null,
   hostedConcurrentRaceMatrix = null,
   hostedOpsSignals = null,
+  realHostedObservabilityHandoff = null,
   hostedTargetPreflight = null,
   hostedEvidenceLane = null,
   hostedEvidenceLaneDemoProof = null,
@@ -338,6 +351,7 @@ export async function buildAdminAuditDetailData({
     raceCoverage,
     hostedConcurrentRaceMatrix,
     hostedOpsSignals,
+    realHostedObservabilityHandoff,
     hostedTargetPreflight,
     hostedEvidenceLane,
     hostedEvidenceLaneDemoProof,
@@ -475,6 +489,21 @@ export function appendLocalOpsArtifactsAudit(audit, opsArtifacts, { game }) {
 
 export function appendLocalHostedOpsSignalsAudit(audit, hostedOpsSignals, { game }) {
   const row = normalizeLocalHostedOpsSignalsAudit(hostedOpsSignals, { game });
+  if (row === null) {
+    return audit;
+  }
+  return Object.freeze([...audit.filter((item) => item.id !== row.id), row]);
+}
+
+export function appendLocalRealHostedObservabilityHandoffAudit(
+  audit,
+  realHostedObservabilityHandoff,
+  { game },
+) {
+  const row = normalizeLocalRealHostedObservabilityHandoffAudit(
+    realHostedObservabilityHandoff,
+    { game },
+  );
   if (row === null) {
     return audit;
   }
@@ -700,6 +729,9 @@ export function normalizeLocalHostedIdentityEvidenceAudit(
       nextProofTarget: String(hostedIdentityEvidence.nextProofTarget ?? ""),
       releaseReady: hostedIdentityEvidence.releaseReady === true,
       productionReady: hostedIdentityEvidence.productionReady === true,
+      redactedIntakePacket: normalizeHostedIdentityRedactedIntakePacket(
+        hostedIdentityEvidence.target?.redactedIntakePacket,
+      ),
     }),
   });
 }
@@ -1069,6 +1101,174 @@ export function normalizeLocalHostedOpsSignalsAudit(hostedOpsSignals, { game }) 
   });
 }
 
+export function normalizeLocalRealHostedObservabilityHandoffAudit(
+  realHostedObservabilityHandoff,
+  { game },
+) {
+  if (
+    realHostedObservabilityHandoff === null ||
+    typeof realHostedObservabilityHandoff !== "object" ||
+    realHostedObservabilityHandoff.version !== 1 ||
+    realHostedObservabilityHandoff.proof !==
+      "dev-test-game-real-hosted-observability-handoff" ||
+    !["passed", "blocked"].includes(realHostedObservabilityHandoff.status) ||
+    realHostedObservabilityHandoff.scope !== "real-hosted-observability-handoff" ||
+    realHostedObservabilityHandoff.releaseReady !== false ||
+    realHostedObservabilityHandoff.productionReady !== false
+  ) {
+    return null;
+  }
+  const checks = Array.isArray(realHostedObservabilityHandoff.checks)
+    ? realHostedObservabilityHandoff.checks
+    : [];
+  const passedChecks = checks.filter((check) => check?.status === "passed");
+  const blockedCheckIds = Array.isArray(
+    realHostedObservabilityHandoff.hostedHandoffChecklist?.blockedCheckIds,
+  )
+    ? realHostedObservabilityHandoff.hostedHandoffChecklist.blockedCheckIds.map(
+        (id) => String(id),
+      )
+    : checks
+        .filter((check) => check?.status === "blocked")
+        .map((check) => String(check.id));
+  const blockedCheckIdSet = new Set(blockedCheckIds);
+  const hostedHandoffChecklist =
+    normalizeRealHostedObservabilityHandoffChecklist({
+      realHostedObservabilityHandoff,
+      blockedChecks: checks.filter((check) =>
+        blockedCheckIdSet.has(String(check.id)),
+      ),
+    });
+  return Object.freeze({
+    id: localAdminAuditIds.realHostedObservabilityHandoff,
+    label: "Real hosted observability handoff",
+    status: `${realHostedObservabilityHandoff.status}: ${passedChecks.length} passed, ${blockedCheckIds.length} blocked`,
+    authority: "GlobalAdmin or GlobalMod",
+    boundary: "Real hosted observability handoff",
+    boundaryDetail:
+      realHostedObservabilityHandoff.proofBoundary ??
+      "Real hosted observability handoff without hosted telemetry or release claims.",
+    href: devTestGameRealHostedObservabilityHandoffPath,
+    inspectHref: adminAuditInspectHref({
+      game,
+      audit: localAdminAuditIds.realHostedObservabilityHandoff,
+    }),
+    checks: Object.freeze(
+      checks.map((check) =>
+        Object.freeze({
+          id: String(check.id),
+          status: String(check.status),
+        }),
+      ),
+    ),
+    unproven: Object.freeze(
+      checks
+        .filter((check) => blockedCheckIdSet.has(String(check.id)))
+        .map((check) =>
+          Object.freeze({
+            id: String(check.id),
+            status: "blocked",
+            requiredEvidence: String(check.requiredEvidence ?? ""),
+          }),
+        ),
+    ),
+    relatedLinks: Object.freeze([
+      Object.freeze({
+        id: localAdminAuditIds.hostedOpsSignals,
+        label: "Local hosted ops signals",
+        href: adminAuditInspectHref({
+          game,
+          audit: localAdminAuditIds.hostedOpsSignals,
+        }),
+        status: "baseline",
+        command: "test:dev-test-game-hosted-ops-signals",
+      }),
+      Object.freeze({
+        id: localAdminAuditIds.nextAction,
+        label: "Ranked next action",
+        href: adminAuditInspectHref({ game, audit: localAdminAuditIds.nextAction }),
+        status: String(realHostedObservabilityHandoff.status ?? "unknown"),
+        command: "test:dev-test-game-next-action",
+      }),
+    ]),
+    hostedHandoffChecklist,
+    artifactSummary: Object.freeze({
+      game: String(realHostedObservabilityHandoff.generatedFrom?.game ?? ""),
+      rawEvidencePath: String(
+        realHostedObservabilityHandoff.target?.rawEvidencePath ?? "",
+      ),
+      rawEvidenceStatus: String(
+        realHostedObservabilityHandoff.target?.rawEvidenceStatus ?? "unknown",
+      ),
+      localHostedOpsSignalsPath: String(
+        realHostedObservabilityHandoff.target?.localHostedOpsSignalsPath ?? "",
+      ),
+      localHostedLikeSignalsOnlyBaseline:
+        realHostedObservabilityHandoff.target
+          ?.localHostedLikeSignalsOnlyBaseline === true,
+      blockedCheckCount: blockedCheckIds.length,
+      nextCommand: String(realHostedObservabilityHandoff.nextCommand ?? ""),
+      nextProofTarget: String(realHostedObservabilityHandoff.nextProofTarget ?? ""),
+      releaseReady: realHostedObservabilityHandoff.releaseReady === true,
+      productionReady: realHostedObservabilityHandoff.productionReady === true,
+    }),
+  });
+}
+
+function normalizeRealHostedObservabilityHandoffChecklist({
+  realHostedObservabilityHandoff,
+  blockedChecks,
+}) {
+  const checklist = realHostedObservabilityHandoff.hostedHandoffChecklist;
+  const inputIds = Array.isArray(checklist?.inputIds)
+    ? checklist.inputIds
+    : realHostedObservabilityHandoffInputIds;
+  return Object.freeze({
+    status: String(realHostedObservabilityHandoff.status ?? "unknown"),
+    preflightStatus: String(
+      checklist?.preflightStatus ??
+        realHostedObservabilityHandoff.status ??
+        "unknown",
+    ),
+    command: String(
+      checklist?.command ??
+        realHostedObservabilityHandoff.nextCommand ??
+        `npm run ${devTestGameRealHostedObservabilityHandoffCommand}`,
+    ),
+    proofTarget: String(
+      checklist?.proofTarget ??
+        realHostedObservabilityHandoff.nextProofTarget ??
+        devTestGameRealHostedObservabilityHandoffPath,
+    ),
+    inputCount: inputIds.length,
+    blockedCheckCount: blockedChecks.length,
+    inputs: Object.freeze(
+      inputIds.map((id) =>
+        Object.freeze({
+          id: String(id),
+          label: String(id),
+          value: realHostedObservabilityHandoffInputValue({
+            id,
+            realHostedObservabilityHandoff,
+          }),
+          required: true,
+        }),
+      ),
+    ),
+    blockedChecks: Object.freeze(
+      blockedChecks.map((check) =>
+        Object.freeze({
+          id: String(check.id),
+          status: "blocked",
+          requiredEvidence: String(check.requiredEvidence ?? ""),
+        }),
+      ),
+    ),
+    groups: normalizeHostedHandoffGroups(checklist?.requirementGroups),
+    blockedReceipt: normalizeHostedHandoffBlockedReceipt(checklist?.blockedReceipt),
+  });
+}
+
 export function appendLocalProofFreshnessAudit(
   audit,
   proofFreshness,
@@ -1167,6 +1367,10 @@ export function normalizeLocalHostedConcurrentRaceMatrixAudit(
   const realHostedEvidenceInputs = normalizeRealHostedEvidenceInputs(
     hostedConcurrentRaceMatrix.realHostedEvidenceInputs,
   );
+  const hostedHandoffChecklist = normalizeHostedMatrixHandoffChecklist({
+    hostedConcurrentRaceMatrix,
+    realHostedEvidenceInputs,
+  });
   return Object.freeze({
     id: localAdminAuditIds.hostedConcurrentRaceMatrix,
     label: "Local hosted matrix",
@@ -1257,6 +1461,7 @@ export function normalizeLocalHostedConcurrentRaceMatrixAudit(
       ],
     ),
     realHostedEvidenceInputs,
+    hostedHandoffChecklist,
     artifactSummary: Object.freeze({
       game: String(hostedConcurrentRaceMatrix.hostedLikeTarget?.game ?? ""),
       cellCount: Number(hostedConcurrentRaceMatrix.summary?.cellCount ?? cells.length),
@@ -1305,6 +1510,62 @@ export function normalizeLocalHostedConcurrentRaceMatrixAudit(
       releaseReady: hostedConcurrentRaceMatrix.releaseReady === true,
       productionReady: hostedConcurrentRaceMatrix.productionReady === true,
     }),
+  });
+}
+
+function normalizeHostedMatrixHandoffChecklist({
+  hostedConcurrentRaceMatrix,
+  realHostedEvidenceInputs,
+}) {
+  const checklist = hostedConcurrentRaceMatrix.hostedHandoffChecklist;
+  if (checklist === null || typeof checklist !== "object") {
+    return null;
+  }
+  const blockedChecks = Array.isArray(checklist.blockedChecks)
+    ? checklist.blockedChecks
+    : [];
+  const checklistInputs =
+    realHostedEvidenceInputs.length > 0
+      ? realHostedEvidenceInputs
+      : Array.isArray(checklist.inputIds)
+        ? checklist.inputIds.map((id) =>
+            Object.freeze({
+              id: String(id ?? ""),
+              label: String(id ?? ""),
+              value: "required",
+              required: true,
+            }),
+          )
+        : [];
+  return Object.freeze({
+    status: String(checklist.status ?? "unknown"),
+    preflightStatus: String(checklist.preflightStatus ?? "unknown"),
+    command: String(checklist.command ?? ""),
+    proofTarget: String(checklist.proofTarget ?? ""),
+    inputCount: checklistInputs.length,
+    blockedCheckCount: blockedChecks.length,
+    inputs: Object.freeze(
+      checklistInputs.map((input) =>
+        Object.freeze({
+          id: input.id,
+          label: input.label,
+          value: input.value,
+          required: input.required,
+        }),
+      ),
+    ),
+    blockedChecks: Object.freeze(
+      blockedChecks.map((check) =>
+        Object.freeze({
+          id: String(check.id ?? ""),
+          status: String(check.status ?? "unknown"),
+          requiredEvidence: String(check.requiredEvidence ?? ""),
+        }),
+      ),
+    ),
+    blockedReceipt: normalizeHostedHandoffBlockedReceipt(
+      checklist.blockedReceipt,
+    ),
   });
 }
 
@@ -2090,6 +2351,86 @@ function hostedIdentityHandoffInputValue({ id, hostedIdentityEvidence }) {
           "required",
       )
     : "required";
+}
+
+function realHostedObservabilityHandoffInputValue({
+  id,
+  realHostedObservabilityHandoff,
+}) {
+  if (id === "command") {
+    return String(
+      realHostedObservabilityHandoff.hostedHandoffChecklist?.command ??
+        realHostedObservabilityHandoff.nextCommand ??
+        `npm run ${devTestGameRealHostedObservabilityHandoffCommand}`,
+    );
+  }
+  if (id === "proof-target") {
+    return String(
+      realHostedObservabilityHandoff.hostedHandoffChecklist?.proofTarget ??
+        realHostedObservabilityHandoff.nextProofTarget ??
+        devTestGameRealHostedObservabilityHandoffPath,
+    );
+  }
+  if (id === realHostedObservabilityEvidenceEnv) {
+    return String(
+      realHostedObservabilityHandoff.target?.rawEvidencePath ??
+        "externally reachable hosted logs/metrics/traces/paging/SLO/incident-response evidence JSON",
+    );
+  }
+  if (id === realHostedObservabilityBaselineEnv) {
+    return String(
+      realHostedObservabilityHandoff.target?.localHostedOpsSignalsPath ??
+        "target/dev-test-game/hosted-ops-signals.json",
+    );
+  }
+  return "required";
+}
+
+function normalizeHostedIdentityRedactedIntakePacket(packet) {
+  if (packet === null || typeof packet !== "object") {
+    return null;
+  }
+  return Object.freeze({
+    kind: String(packet.kind ?? ""),
+    rawInviteTokensIncluded: packet.rawInviteTokensIncluded === true,
+    rawSessionSecretsIncluded: packet.rawSessionSecretsIncluded === true,
+    rawPasswordHashesIncluded: packet.rawPasswordHashesIncluded === true,
+    rawPersonalContactIncluded: packet.rawPersonalContactIncluded === true,
+    roleSurfaceArchitectureChanged:
+      packet.roleSurfaceArchitectureChanged === true,
+    sections: Object.freeze(
+      (Array.isArray(packet.sections) ? packet.sections : []).map((section) =>
+        Object.freeze({
+          id: String(section.id ?? ""),
+          checkId: String(section.checkId ?? ""),
+          label: String(section.label ?? section.id ?? ""),
+          status: String(section.status ?? "unknown"),
+          requiredInputIds: Object.freeze(
+            (Array.isArray(section.requiredInputIds)
+              ? section.requiredInputIds
+              : []
+            ).map((id) => String(id)),
+          ),
+          providedInputIds: Object.freeze(
+            (Array.isArray(section.providedInputIds)
+              ? section.providedInputIds
+              : []
+            ).map((id) => String(id)),
+          ),
+          redactedEvidenceRefCount: Number.isInteger(
+            section.redactedEvidenceRefCount,
+          )
+            ? section.redactedEvidenceRefCount
+            : 0,
+          missingInputs: Object.freeze(
+            (Array.isArray(section.missingInputs) ? section.missingInputs : []).map(
+              (id) => String(id),
+            ),
+          ),
+        }),
+      ),
+    ),
+  });
 }
 
 function normalizeHostedHandoffGroups(groups) {
@@ -3586,6 +3927,7 @@ function formatCoreLoopSpineCheckpointStatus(checkpoint) {
   pushField(parts, "reject", checkpoint?.rejectError);
   pushField(parts, "prompt", checkpoint?.promptId);
   pushField(parts, "prompt status", checkpoint?.promptStatusAfter);
+  pushField(parts, "original prompt status", checkpoint?.originalPromptStatus);
   pushField(parts, "stream seqs", checkpoint?.streamSeqCount);
   pushField(parts, "action", checkpoint?.actionTemplate);
   pushField(parts, "action", checkpoint?.actionState);
@@ -3612,6 +3954,9 @@ function formatCoreLoopSpineCheckpointStatus(checkpoint) {
   pushField(parts, "api count", checkpoint?.apiCount);
   pushField(parts, "stale D03 target", checkpoint?.staleD03Target);
   pushField(parts, "stale D03 count", checkpoint?.staleD03Count);
+  if (typeof checkpoint?.promptActionVisible === "boolean") {
+    parts.push(`prompt action ${checkpoint.promptActionVisible ? "visible" : "hidden"}`);
+  }
   pushField(parts, "route", checkpoint?.routeResponseStatus);
   pushField(parts, "reject receipt", checkpoint?.rejectReceiptStatus);
   if (typeof checkpoint?.normalPlayerFactionalKillVisible === "boolean") {

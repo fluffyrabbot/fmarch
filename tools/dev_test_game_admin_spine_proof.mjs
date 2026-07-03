@@ -15,6 +15,7 @@ import {
   validateDevTestGameIdentityAdminProof,
   validateDevTestGameOpsAdminProof,
   validateDevTestGameRaceCoverageAdminProof,
+  validateDevTestGameRealHostedObservabilityHandoffAdminProof,
   validateDevTestGameReleaseAdminProof,
   validateDevTestGameReleaseRunbookAdminProof,
   validateDevTestGameSeedAdminProof,
@@ -139,6 +140,15 @@ export const devTestGameAdminSpineProofPlan = [
     rerunCommand: "npm run test:dev-test-game-hosted-ops-signals-admin-proof",
     path: "target/dev-test-game/hosted-ops-signals-admin-proof.json",
     validate: validateDevTestGameHostedOpsSignalsAdminProof,
+  },
+  {
+    id: "real-hosted-observability-handoff",
+    label: "Real hosted observability handoff admin role surface",
+    script: "tools/dev_test_game_real_hosted_observability_handoff_admin_proof.mjs",
+    rerunCommand:
+      "npm run test:dev-test-game-real-hosted-observability-handoff-admin-proof",
+    path: "target/dev-test-game/real-hosted-observability-handoff-admin-proof.json",
+    validate: validateDevTestGameRealHostedObservabilityHandoffAdminProof,
   },
   {
     id: "spine-manifest",

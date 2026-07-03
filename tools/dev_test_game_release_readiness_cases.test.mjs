@@ -12,6 +12,16 @@ import {
   hostedIdentityEvidencePlaceholderFixturePath,
 } from "./dev_test_game_hosted_identity_evidence_cases.mjs";
 import {
+  devTestGameRealHostedObservabilityHandoffCommand,
+  devTestGameRealHostedObservabilityHandoffPath,
+  realHostedObservabilityHandoffCase,
+} from "./dev_test_game_real_hosted_observability_handoff_cases.mjs";
+import {
+  hostedMatrixExternalEvidenceProofTarget,
+  hostedMatrixRealHostedBlockedCheckIds,
+  hostedMatrixRealHostedEvidenceCommand,
+} from "./dev_test_game_hosted_concurrent_race_matrix_cases.mjs";
+import {
   buildReleaseReadinessUnprovenItems,
   devTestGameReleaseRunbookCommand,
   devTestGameReleaseRunbookPath,
@@ -218,10 +228,52 @@ test("release readiness buildable cases share next-action commands and spine tar
     "real-hosted-concurrent-race-matrix",
   );
   assert.equal(realHostedMatrix.realHostedEvidenceStatus, "unproven");
+  assert.equal(realHostedMatrix.command, hostedMatrixRealHostedEvidenceCommand);
+  assert.equal(
+    realHostedMatrix.proofTarget,
+    hostedMatrixExternalEvidenceProofTarget,
+  );
+  assert.equal(
+    realHostedMatrix.realHostedEvidenceInputs.command,
+    hostedMatrixRealHostedEvidenceCommand,
+  );
+  assert.deepEqual(
+    realHostedMatrix.hostedHandoffChecklist.blockedCheckIds,
+    hostedMatrixRealHostedBlockedCheckIds,
+  );
+  assert.match(
+    realHostedMatrix.hostedHandoffChecklist.blockedReceipt.operatorAction,
+    /races, reload, reconnect, and stale-client conflicts/,
+  );
   assert.deepEqual(
     realHostedMatrix.productionFeatureSpineTarget,
     releaseReadinessProductionFeatureSpineTargets
       .replacementStaleConflictMessage,
+  );
+
+  const realHostedObservability = releaseReadinessBuildableItemForId(
+    "real-hosted-observability-and-operations",
+  );
+  assert.equal(
+    realHostedObservability.command,
+    `npm run ${devTestGameRealHostedObservabilityHandoffCommand}`,
+  );
+  assert.equal(
+    realHostedObservability.proofTarget,
+    devTestGameRealHostedObservabilityHandoffPath,
+  );
+  assert.equal(
+    realHostedObservability.roleUrl,
+    localAdminAuditRoleUrl(localAdminAuditIds.realHostedObservabilityHandoff),
+  );
+  assert.equal(realHostedObservability.priority, 12);
+  assert.match(
+    realHostedObservability.proofBoundary,
+    /local hosted-like ops signal bundle remains baseline evidence/,
+  );
+  assert.deepEqual(
+    realHostedObservability.hostedHandoffChecklist.blockedCheckIds,
+    realHostedObservabilityHandoffCase().blockedCheckIds,
   );
 
   const hostedIdentity = releaseReadinessBuildableItemForId(

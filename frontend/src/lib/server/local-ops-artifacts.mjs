@@ -31,6 +31,10 @@ const DEFAULT_HOSTED_IDENTITY_EVIDENCE_ADMIN_PROOF =
   "target/dev-test-game/hosted-identity-evidence-admin-proof.json";
 const DEFAULT_HOSTED_OPS_SIGNALS =
   "target/dev-test-game/hosted-ops-signals.json";
+const DEFAULT_REAL_HOSTED_OBSERVABILITY_HANDOFF =
+  "target/dev-test-game/real-hosted-observability-handoff.json";
+const DEFAULT_REAL_HOSTED_OBSERVABILITY_HANDOFF_ADMIN_PROOF =
+  "target/dev-test-game/real-hosted-observability-handoff-admin-proof.json";
 const DEFAULT_HOSTED_TARGET_PREFLIGHT =
   "target/dev-test-game/hosted-target-preflight.json";
 const DEFAULT_HOSTED_TARGET_PREFLIGHT_ADMIN_PROOF =
@@ -210,6 +214,18 @@ const LOCAL_PROOF_FRESHNESS_ARTIFACTS = Object.freeze([
     fallback: DEFAULT_HOSTED_OPS_SIGNALS,
   }),
   Object.freeze({
+    id: "real-hosted-observability-handoff",
+    label: "Real hosted observability handoff",
+    env: "FMARCH_DEV_TEST_GAME_REAL_HOSTED_OBSERVABILITY_HANDOFF",
+    fallback: DEFAULT_REAL_HOSTED_OBSERVABILITY_HANDOFF,
+  }),
+  Object.freeze({
+    id: "real-hosted-observability-handoff-admin",
+    label: "Real hosted observability handoff admin proof",
+    env: "FMARCH_DEV_TEST_GAME_REAL_HOSTED_OBSERVABILITY_HANDOFF_ADMIN_PROOF",
+    fallback: DEFAULT_REAL_HOSTED_OBSERVABILITY_HANDOFF_ADMIN_PROOF,
+  }),
+  Object.freeze({
     id: "hosted-target-preflight",
     label: "Hosted target preflight",
     env: "FMARCH_DEV_TEST_GAME_HOSTED_TARGET_PREFLIGHT",
@@ -264,6 +280,15 @@ export async function readLocalHostedOpsSignals({ env = process.env } = {}) {
   return await readLocalJsonArtifact({
     pathValue: env.FMARCH_DEV_TEST_GAME_HOSTED_OPS_SIGNALS,
     fallback: DEFAULT_HOSTED_OPS_SIGNALS,
+  });
+}
+
+export async function readLocalRealHostedObservabilityHandoff({
+  env = process.env,
+} = {}) {
+  return await readLocalJsonArtifact({
+    pathValue: env.FMARCH_DEV_TEST_GAME_REAL_HOSTED_OBSERVABILITY_HANDOFF,
+    fallback: DEFAULT_REAL_HOSTED_OBSERVABILITY_HANDOFF,
   });
 }
 

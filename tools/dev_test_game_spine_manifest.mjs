@@ -45,6 +45,10 @@ import {
   devTestGameHostedOpsSignalsPath,
 } from "./dev_test_game_hosted_ops_signals.mjs";
 import {
+  devTestGameRealHostedObservabilityHandoffCommand,
+  devTestGameRealHostedObservabilityHandoffPath,
+} from "./dev_test_game_real_hosted_observability_handoff.mjs";
+import {
   devTestGameHostedTargetPreflightCommand,
   devTestGameHostedTargetPreflightPath,
 } from "./dev_test_game_hosted_target_preflight.mjs";
@@ -197,6 +201,22 @@ export function buildDevTestGameSpineManifest({
           devTestGameHostedConcurrentRaceMatrixPath,
         ],
       },
+      realHostedObservabilityHandoff: {
+        script: devTestGameRealHostedObservabilityHandoffCommand,
+        proofArtifact: devTestGameRealHostedObservabilityHandoffPath,
+        dependsOn: [devTestGameHostedOpsSignalsPath],
+        roleUrl:
+          "/admin/audit/local-real-hosted-observability-handoff?game=<seeded-game>",
+      },
+      realHostedObservabilityHandoffAdminProof: {
+        script:
+          "test:dev-test-game-real-hosted-observability-handoff-admin-proof",
+        proofArtifact:
+          "target/dev-test-game/real-hosted-observability-handoff-admin-proof.json",
+        dependsOn: [devTestGameRealHostedObservabilityHandoffPath],
+        roleUrl:
+          "/admin/audit/local-real-hosted-observability-handoff?game=<seeded-game>",
+      },
       hostedTargetPreflight: {
         script: devTestGameHostedTargetPreflightCommand,
         proofArtifact: devTestGameHostedTargetPreflightPath,
@@ -344,6 +364,7 @@ export function buildDevTestGameSpineManifest({
       devTestGameHostedEvidenceLaneDemoBlockedPath,
       devTestGameHostedEvidenceLaneDemoPassedPath,
       devTestGameHostedOpsSignalsPath,
+      devTestGameRealHostedObservabilityHandoffPath,
       devTestGameReleaseRunbookPath,
       devTestGameProofGraphPath,
       devTestGameProofGraphAdminProofPath,
@@ -540,6 +561,7 @@ export function assertDevTestGameSpineManifest(manifest) {
     "tools/dev_test_game_hosted_evidence_lane_admin_proof.mjs",
     "tools/dev_test_game_hosted_concurrent_race_matrix_admin_proof.mjs",
     "tools/dev_test_game_hosted_ops_signals_admin_proof.mjs",
+    "tools/dev_test_game_real_hosted_observability_handoff_admin_proof.mjs",
     "tools/dev_test_game_spine_manifest_admin_proof.mjs",
   ]);
   if (manifest.commands?.proofFreshness?.script !== proofFreshnessAdminProofCommand) {
@@ -618,6 +640,30 @@ export function assertDevTestGameSpineManifest(manifest) {
   if (manifest.commands.hostedOpsSignals.proofArtifact !== devTestGameHostedOpsSignalsPath) {
     throw new Error(
       `spine manifest hosted ops signals artifact drifted: ${manifest.commands.hostedOpsSignals.proofArtifact}`,
+    );
+  }
+  if (
+    manifest.commands?.realHostedObservabilityHandoff?.script !==
+    devTestGameRealHostedObservabilityHandoffCommand
+  ) {
+    throw new Error(
+      `spine manifest real hosted observability handoff command drifted: ${manifest.commands?.realHostedObservabilityHandoff?.script}`,
+    );
+  }
+  if (
+    manifest.commands.realHostedObservabilityHandoff.proofArtifact !==
+    devTestGameRealHostedObservabilityHandoffPath
+  ) {
+    throw new Error(
+      `spine manifest real hosted observability handoff artifact drifted: ${manifest.commands.realHostedObservabilityHandoff.proofArtifact}`,
+    );
+  }
+  if (
+    manifest.commands?.realHostedObservabilityHandoffAdminProof?.script !==
+    "test:dev-test-game-real-hosted-observability-handoff-admin-proof"
+  ) {
+    throw new Error(
+      `spine manifest real hosted observability handoff admin proof command drifted: ${manifest.commands?.realHostedObservabilityHandoffAdminProof?.script}`,
     );
   }
   if (
@@ -747,6 +793,7 @@ export function assertDevTestGameSpineManifest(manifest) {
     devTestGameHostedEvidenceLaneDemoBlockedPath,
     devTestGameHostedEvidenceLaneDemoPassedPath,
     devTestGameHostedOpsSignalsPath,
+    devTestGameRealHostedObservabilityHandoffPath,
     devTestGameReleaseRunbookPath,
     devTestGameProofGraphPath,
     devTestGameProofGraphAdminProofPath,
@@ -758,6 +805,7 @@ export function assertDevTestGameSpineManifest(manifest) {
     "target/dev-test-game/hosted-target-preflight-admin-proof.json",
     "target/dev-test-game/hosted-concurrent-race-matrix-admin-proof.json",
     "target/dev-test-game/hosted-ops-signals-admin-proof.json",
+    "target/dev-test-game/real-hosted-observability-handoff-admin-proof.json",
     "target/dev-test-game/spine-manifest-admin-proof.json",
     "target/dev-test-game/admin-spine-admin-proof.json",
     "target/live-stack-backup-restore-drill/local-backup-restore-proof.json",

@@ -14,6 +14,7 @@ export const localAdminAuditIds = Object.freeze({
   hostedEvidenceLane: "local-hosted-evidence-lane",
   hostedConcurrentRaceMatrix: "local-hosted-concurrent-race-matrix",
   hostedOpsSignals: "local-hosted-ops-signals",
+  realHostedObservabilityHandoff: "local-real-hosted-observability-handoff",
   adminSpine: "local-admin-spine",
   spineManifest: "local-spine-manifest",
   proofGraph: "local-proof-graph",

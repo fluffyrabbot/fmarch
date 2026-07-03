@@ -13,12 +13,17 @@ export const realHostedEvidenceInputIds = Object.freeze([
   "FMARCH_HOSTED_MATRIX_EVIDENCE_PATH",
 ]);
 
-export function buildRealHostedEvidenceInputs({ status, mode }) {
+export function buildRealHostedEvidenceInputs({
+  status,
+  mode,
+  command = `npm run ${devTestGameHostedEvidenceLaneCommand}`,
+  proofTarget = devTestGameHostedMatrixExternalEvidencePath,
+} = {}) {
   return assertRealHostedEvidenceInputs({
     status,
     mode,
-    command: `npm run ${devTestGameHostedEvidenceLaneCommand}`,
-    proofTarget: devTestGameHostedMatrixExternalEvidencePath,
+    command,
+    proofTarget,
     requiredEvidence:
       "Raw hosted matrix evidence from a real externally reachable hosted target.",
     env: [

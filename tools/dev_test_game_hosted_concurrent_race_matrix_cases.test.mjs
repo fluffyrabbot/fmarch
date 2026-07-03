@@ -3,8 +3,12 @@ import { readFile } from "node:fs/promises";
 import { test } from "node:test";
 import {
   hostedMatrixAdminRequiredCheckIds,
+  hostedMatrixExternalEvidenceProofTarget,
   hostedMatrixProgressCheckIds,
+  hostedMatrixRealHostedBlockedCheckIds,
+  hostedMatrixRealHostedEvidenceCommand,
   hostedMatrixRealHostedEvidenceInputIds,
+  hostedMatrixRealHostedHandoffChecklist,
   hostedMatrixReconnectLaneIds,
   hostedMatrixRelatedAuditIds,
   hostedMatrixRequestedEvidenceIds,
@@ -51,6 +55,36 @@ test("hosted concurrent matrix cases share progress and handoff IDs", () => {
   assert.deepEqual(
     hostedMatrixRealHostedEvidenceInputIds,
     realHostedEvidenceInputIds,
+  );
+  assert.equal(
+    hostedMatrixRealHostedEvidenceCommand,
+    "npm run test:dev-test-game-hosted-matrix-external-evidence",
+  );
+  assert.equal(
+    hostedMatrixExternalEvidenceProofTarget,
+    "target/dev-test-game/hosted-matrix-external.json",
+  );
+  assert.deepEqual(hostedMatrixRealHostedBlockedCheckIds, [
+    "real-hosted-targets-externally-reachable",
+    "real-hosted-command-race-evidence",
+    "real-hosted-reload-coverage-evidence",
+    "real-hosted-reconnect-coverage-evidence",
+    "real-hosted-stale-client-proof-inputs",
+  ]);
+  const handoff = hostedMatrixRealHostedHandoffChecklist();
+  assert.equal(handoff.status, "blocked");
+  assert.deepEqual(handoff.inputIds, realHostedEvidenceInputIds);
+  assert.deepEqual(handoff.blockedCheckIds, hostedMatrixRealHostedBlockedCheckIds);
+  assert.deepEqual(handoff.blockedReceipt.missingRequiredInputs, [
+    "FMARCH_HOSTED_MATRIX_FRONTEND_URL",
+    "FMARCH_HOSTED_MATRIX_API_URL",
+    "FMARCH_HOSTED_MATRIX_RAW_EVIDENCE_PATH",
+  ]);
+  assert.match(
+    handoff.blockedChecks.find(
+      (check) => check.id === "real-hosted-reload-coverage-evidence",
+    )?.requiredEvidence ?? "",
+    /reload recovery coverage/,
   );
   assert.equal(hostedMatrixReconnectLaneIds.length, 11);
   assert.equal(hostedMatrixStaleConflictLaneIds.length, 6);

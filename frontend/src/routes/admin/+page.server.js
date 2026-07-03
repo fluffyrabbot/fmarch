@@ -10,6 +10,7 @@ import {
   readLocalHostedEvidenceLaneDemoProof,
   readLocalHostedIdentityEvidence,
   readLocalHostedOpsSignals,
+  readLocalRealHostedObservabilityHandoff,
   readLocalHostedTargetPreflight,
   readLocalIdentityAdapterProof,
   readLocalNextAction,
@@ -56,6 +57,8 @@ export async function load({ cookies, locals, fetch, url }) {
     hostedEvidenceLaneDemoProof: await readLocalHostedEvidenceLaneDemoProof(),
     hostedIdentityEvidence: await readLocalHostedIdentityEvidence(),
     hostedOpsSignals: await readLocalHostedOpsSignals(),
+    realHostedObservabilityHandoff:
+      await readLocalRealHostedObservabilityHandoff(),
     hostedTargetPreflight: await readLocalHostedTargetPreflight(),
     nextAction: await readLocalNextAction(),
     proofFreshness: await readLocalProofFreshness(),

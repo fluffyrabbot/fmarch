@@ -10,6 +10,7 @@ export {
   hostedIdentityEvidenceCheckIds,
   hostedIdentityEvidenceHandoffCase,
   hostedIdentityEvidenceInputIds,
+  hostedIdentityEvidencePacketSectionDefinitions,
   hostedIdentityEvidencePlaceholderFixturePath,
   hostedIdentityEvidencePlaceholderSchema,
   hostedIdentityEvidenceRequirementGroupDefinitions,
@@ -21,6 +22,7 @@ import {
   devTestGameHostedIdentityEvidencePath,
   hostedIdentityEvidenceCheckIds,
   hostedIdentityEvidenceHandoffCase,
+  hostedIdentityEvidencePacketSectionDefinitions,
   hostedIdentityEvidencePlaceholderFixturePath,
   hostedIdentityEvidencePlaceholderSchema,
   hostedIdentityEvidenceRequirementGroupDefinitions,
@@ -68,32 +70,32 @@ export async function buildDevTestGameHostedIdentityEvidence({
         ? {}
         : { requiredEvidence: rawEvidence.requiredEvidence }),
     },
-    hostedIdentityBooleanCheck({
+    hostedIdentityPacketSectionCheck({
       source,
       field: "accountLifecycle",
       id: "hosted-account-lifecycle-evidence",
     }),
-    hostedIdentityBooleanCheck({
+    hostedIdentityPacketSectionCheck({
       source,
       field: "inviteDelivery",
       id: "invite-delivery-evidence",
     }),
-    hostedIdentityBooleanCheck({
+    hostedIdentityPacketSectionCheck({
       source,
       field: "accountRecovery",
       id: "account-recovery-evidence",
     }),
-    hostedIdentityBooleanCheck({
+    hostedIdentityPacketSectionCheck({
       source,
       field: "abuseAndRateLimitPolicy",
       id: "abuse-and-rate-limit-evidence",
     }),
-    hostedIdentityBooleanCheck({
+    hostedIdentityPacketSectionCheck({
       source,
       field: "sessionSecretPolicy",
       id: "session-secret-policy-evidence",
     }),
-    hostedIdentityBooleanCheck({
+    hostedIdentityPacketSectionCheck({
       source,
       field: "hostedAuditRetentionExport",
       id: "hosted-audit-retention-export-evidence",
@@ -134,7 +136,7 @@ export async function buildDevTestGameHostedIdentityEvidence({
     generatedAt,
     scope: "hosted-identity-evidence-handoff",
     proofBoundary:
-      "Hosted identity evidence intake for the dev-test-game identity spine. Passing means a hosted identity evidence file proves account lifecycle, invite delivery, recovery, abuse/rate-limit, session-secret, and audit retention inputs while preserving the role-surface adapter; it does not prove beta readiness, release readiness, or production readiness.",
+      "Hosted identity evidence intake for the dev-test-game identity spine. Passing means a redacted hosted identity intake packet contains machine-checkable account lifecycle, invite delivery, recovery, abuse/rate-limit, session-secret, and audit retention inputs while preserving the role-surface adapter; it does not prove hosted identity live traffic, beta readiness, release readiness, or production readiness.",
     requiredEvidence:
       "Set FMARCH_HOSTED_IDENTITY_EVIDENCE_PATH to a hosted identity evidence JSON file and rerun this command.",
     target: {
@@ -142,6 +144,7 @@ export async function buildDevTestGameHostedIdentityEvidence({
       rawEvidenceStatus: rawEvidence.status,
       placeholderFixturePath: hostedIdentityEvidencePlaceholderFixturePath,
       placeholderSchema: hostedIdentityEvidencePlaceholderSchema,
+      redactedIntakePacket: summarizeHostedIdentityRedactedIntakePacket(source),
     },
     checks,
     hostedHandoffChecklist: hostedIdentityEvidenceHandoffCase({
@@ -194,8 +197,43 @@ export function assertDevTestGameHostedIdentityEvidence(evidence) {
   ) {
     throw new Error("hosted identity evidence handoff checklist drifted");
   }
+  assertHostedIdentityRedactedIntakePacketSummary(evidence);
   assertHostedIdentityEvidenceRequirementGroups(evidence);
   return evidence;
+}
+
+function assertHostedIdentityRedactedIntakePacketSummary(evidence) {
+  const summary = evidence.target?.redactedIntakePacket;
+  if (summary === null || summary === undefined) {
+    return;
+  }
+  if (
+    summary.kind !== "redacted-hosted-identity-intake" ||
+    summary.rawInviteTokensIncluded !== false ||
+    summary.rawSessionSecretsIncluded !== false ||
+    summary.rawPasswordHashesIncluded !== false ||
+    summary.rawPersonalContactIncluded !== false
+  ) {
+    throw new Error("hosted identity redacted intake summary drifted");
+  }
+  const sectionsById = new Map(
+    (summary.sections ?? []).map((section) => [section.id, section]),
+  );
+  for (const definition of hostedIdentityEvidencePacketSectionDefinitions) {
+    const section = sectionsById.get(definition.field);
+    if (
+      section === undefined ||
+      section.label !== definition.label ||
+      !["provided", "missing", "unknown"].includes(section.status) ||
+      !sameStringArray(section.requiredInputIds, definition.requiredInputIds) ||
+      !Array.isArray(section.providedInputIds) ||
+      !Number.isInteger(section.redactedEvidenceRefCount)
+    ) {
+      throw new Error(
+        `hosted identity redacted intake summary missing section: ${definition.field}`,
+      );
+    }
+  }
 }
 
 function assertHostedIdentityEvidenceRequirementGroups(evidence) {
@@ -276,13 +314,47 @@ export function validateHostedIdentityEvidencePlaceholder(source) {
     "proof",
     errors,
   );
-  requireBoolean(source.releaseReady, "releaseReady", errors);
-  requireBoolean(source.productionReady, "productionReady", errors);
+  requireConst(source.releaseReady, false, "releaseReady", errors);
+  requireConst(source.productionReady, false, "productionReady", errors);
+  requireObject(source.redaction, "redaction", errors);
+  if (source.redaction !== null && typeof source.redaction === "object") {
+    requireConst(
+      source.redaction.packetKind,
+      "redacted-hosted-identity-intake",
+      "redaction.packetKind",
+      errors,
+    );
+    for (const field of [
+      "rawInviteTokensIncluded",
+      "rawSessionSecretsIncluded",
+      "rawPasswordHashesIncluded",
+      "rawPersonalContactIncluded",
+    ]) {
+      requireConst(source.redaction[field], false, `redaction.${field}`, errors);
+    }
+  }
   requireObject(source.hostedIdentity, "hostedIdentity", errors);
   if (source.hostedIdentity !== null && typeof source.hostedIdentity === "object") {
     for (const field of hostedIdentityEvidencePlaceholderSchema.properties
       .hostedIdentity.required) {
-      requireBoolean(source.hostedIdentity[field], `hostedIdentity.${field}`, errors);
+      if (field === "roleSurfaceArchitectureChanged") {
+        requireBoolean(
+          source.hostedIdentity[field],
+          `hostedIdentity.${field}`,
+          errors,
+        );
+      } else {
+        requireObject(
+          source.hostedIdentity[field],
+          `hostedIdentity.${field}`,
+          errors,
+        );
+        validateHostedIdentityPacketSectionShape({
+          section: source.hostedIdentity[field],
+          field: `hostedIdentity.${field}`,
+          errors,
+        });
+      }
     }
   }
   return errors;
@@ -306,14 +378,147 @@ function requireBoolean(value, field, errors) {
   }
 }
 
-function hostedIdentityBooleanCheck({ source, field, id }) {
+function requireArray(value, field, errors) {
+  if (!Array.isArray(value)) {
+    errors.push(`${field} must be an array`);
+  }
+}
+
+function validateHostedIdentityPacketSectionShape({ section, field, errors }) {
+  if (section === null || typeof section !== "object" || Array.isArray(section)) {
+    return;
+  }
+  if (!["provided", "missing"].includes(section.status)) {
+    errors.push(`${field}.status must be provided or missing`);
+  }
+  requireObject(section.inputs, `${field}.inputs`, errors);
+  requireArray(section.redactedEvidenceRefs, `${field}.redactedEvidenceRefs`, errors);
+}
+
+function hostedIdentityPacketSectionCheck({ source, field, id }) {
+  const section = source?.hostedIdentity?.[field];
+  const missingInputs = hostedIdentityPacketSectionMissingInputs({ field, section });
   return {
     id,
-    status: source?.hostedIdentity?.[field] === true ? "passed" : "blocked",
+    status: missingInputs.length === 0 ? "passed" : "blocked",
     requiredEvidence: requiredHostedIdentityEvidenceForCheck(id),
+    ...(missingInputs.length === 0 ? {} : { missingInputs }),
   };
 }
 
 function optionalEnv(value) {
   return typeof value === "string" && value.trim() !== "" ? value.trim() : null;
+}
+
+function hostedIdentityPacketSectionMissingInputs({ field, section }) {
+  const missing = [];
+  if (section === null || typeof section !== "object" || Array.isArray(section)) {
+    return ["section-object"];
+  }
+  if (section.status !== "provided") {
+    missing.push("status-provided");
+  }
+  const definition = hostedIdentityEvidencePacketSectionDefinitions.find(
+    (candidate) => candidate.field === field,
+  );
+  for (const inputId of definition?.requiredInputIds ?? []) {
+    if (!hasProvidedInput(section.inputs?.[inputId])) {
+      missing.push(inputId);
+    }
+  }
+  const redactedEvidenceRefs = Array.isArray(section.redactedEvidenceRefs)
+    ? section.redactedEvidenceRefs
+    : [];
+  if (redactedEvidenceRefs.length === 0) {
+    missing.push("redactedEvidenceRefs");
+  }
+  for (const [index, ref] of redactedEvidenceRefs.entries()) {
+    if (
+      ref === null ||
+      typeof ref !== "object" ||
+      Array.isArray(ref) ||
+      String(ref.id ?? "").trim() === "" ||
+      String(ref.kind ?? "").trim() === "" ||
+      String(ref.locator ?? "").trim() === "" ||
+      ref.redacted !== true
+    ) {
+      missing.push(`redactedEvidenceRefs[${index}]`);
+    }
+  }
+  for (const flag of redactionFlagsForSection(field)) {
+    if (section[flag] !== false) {
+      missing.push(flag);
+    }
+  }
+  return missing;
+}
+
+function hasProvidedInput(value) {
+  if (typeof value === "boolean") {
+    return value === true;
+  }
+  if (typeof value === "string") {
+    return value.trim() !== "";
+  }
+  if (Array.isArray(value)) {
+    return value.length > 0 && value.every(hasProvidedInput);
+  }
+  if (value !== null && typeof value === "object") {
+    return Object.keys(value).length > 0;
+  }
+  return false;
+}
+
+function redactionFlagsForSection(field) {
+  if (field === "inviteDelivery") {
+    return ["rawInviteTokensIncluded"];
+  }
+  if (field === "sessionSecretPolicy") {
+    return ["rawSessionSecretsIncluded"];
+  }
+  return [];
+}
+
+function summarizeHostedIdentityRedactedIntakePacket(source) {
+  if (source === null || typeof source !== "object") {
+    return null;
+  }
+  return {
+    kind: String(source.redaction?.packetKind ?? "unknown"),
+    rawInviteTokensIncluded: source.redaction?.rawInviteTokensIncluded === true,
+    rawSessionSecretsIncluded: source.redaction?.rawSessionSecretsIncluded === true,
+    rawPasswordHashesIncluded: source.redaction?.rawPasswordHashesIncluded === true,
+    rawPersonalContactIncluded: source.redaction?.rawPersonalContactIncluded === true,
+    roleSurfaceArchitectureChanged:
+      source.hostedIdentity?.roleSurfaceArchitectureChanged === true,
+    sections: hostedIdentityEvidencePacketSectionDefinitions.map((definition) => {
+      const section = source.hostedIdentity?.[definition.field];
+      const inputs =
+        section !== null && typeof section === "object" && !Array.isArray(section)
+          ? section.inputs
+          : null;
+      return {
+        id: definition.field,
+        checkId: definition.checkId,
+        label: definition.label,
+        status:
+          section !== null &&
+          typeof section === "object" &&
+          ["provided", "missing"].includes(section.status)
+            ? section.status
+            : "unknown",
+        requiredInputIds: [...definition.requiredInputIds],
+        providedInputIds: (definition.requiredInputIds ?? []).filter((inputId) =>
+          hasProvidedInput(inputs?.[inputId]),
+        ),
+        redactedEvidenceRefCount: Array.isArray(section?.redactedEvidenceRefs)
+          ? section.redactedEvidenceRefs.length
+          : 0,
+        missingInputs: hostedIdentityPacketSectionMissingInputs({
+          field: definition.field,
+          section,
+        }),
+      };
+    }),
+  };
 }

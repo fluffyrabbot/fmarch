@@ -16,6 +16,9 @@ import {
 } from "./dev_test_game_hosted_target_url_policy.mjs";
 import {
   hostedMatrixProgressCheckIds,
+  hostedMatrixRealHostedEvidenceCommand,
+  hostedMatrixExternalEvidenceProofTarget,
+  hostedMatrixRealHostedHandoffChecklist,
   hostedMatrixReconnectLaneIds,
   hostedMatrixRequestedEvidenceIds,
   hostedMatrixStaleConflictMilestoneCases,
@@ -114,7 +117,14 @@ export function buildDevTestGameHostedConcurrentRaceMatrixEvidence(
   const realHostedEvidenceInputs = buildRealHostedEvidenceInputs({
     status: realHostedEvidenceStatus,
     mode: externalHostedEvidence.hostedEvidenceMode,
+    command: hostedMatrixRealHostedEvidenceCommand,
+    proofTarget: hostedMatrixExternalEvidenceProofTarget,
   });
+  const hostedHandoffChecklist = realHostedDeploymentPassed
+    ? undefined
+    : hostedMatrixRealHostedHandoffChecklist({
+        preflightStatus: externalHostedEvidence.status,
+      });
   const evidence = {
     version: DEV_TEST_GAME_HOSTED_CONCURRENT_RACE_MATRIX_VERSION,
     proof: "dev-test-game-hosted-concurrent-race-matrix",
@@ -248,6 +258,7 @@ export function buildDevTestGameHostedConcurrentRaceMatrixEvidence(
       },
     ],
     realHostedEvidenceInputs,
+    ...(hostedHandoffChecklist === undefined ? {} : { hostedHandoffChecklist }),
     externalHostedEvidence,
     cells,
     reconnectLanes,
@@ -335,6 +346,9 @@ export function assertDevTestGameHostedConcurrentRaceMatrixEvidence(evidence) {
     throw new Error("hosted concurrent race matrix summary drifted");
   }
   assertRealHostedEvidenceInputs(evidence.realHostedEvidenceInputs);
+  if (evidence.summary.realHostedDeploymentStatus === "unproven") {
+    assertHostedMatrixRealHostedHandoffChecklist(evidence.hostedHandoffChecklist);
+  }
   assertExternalHostedEvidence(evidence.externalHostedEvidence, promoted);
   if (
     evidence.hostedLikeTarget?.status !== "passed" ||
@@ -387,6 +401,41 @@ export function assertDevTestGameHostedConcurrentRaceMatrixEvidence(evidence) {
     throw new Error("hosted concurrent race matrix next slice drifted");
   }
   return evidence;
+}
+
+function assertHostedMatrixRealHostedHandoffChecklist(checklist) {
+  if (
+    checklist === null ||
+    typeof checklist !== "object" ||
+    checklist.status !== "blocked" ||
+    typeof checklist.preflightStatus !== "string" ||
+    checklist.preflightStatus === "" ||
+    checklist.command !== hostedMatrixRealHostedEvidenceCommand ||
+    checklist.proofTarget !== hostedMatrixExternalEvidenceProofTarget ||
+    !Array.isArray(checklist.inputIds) ||
+    checklist.inputIds.length === 0 ||
+    !Array.isArray(checklist.blockedCheckIds) ||
+    checklist.blockedCheckIds.length === 0 ||
+    !Array.isArray(checklist.blockedChecks) ||
+    checklist.blockedChecks.length !== checklist.blockedCheckIds.length ||
+    checklist.blockedReceipt?.status !== "blocked" ||
+    checklist.blockedReceipt.nextProofTarget !==
+      hostedMatrixExternalEvidenceProofTarget
+  ) {
+    throw new Error("hosted concurrent race matrix handoff checklist drifted");
+  }
+  for (const checkId of checklist.blockedCheckIds) {
+    const check = checklist.blockedChecks.find((item) => item.id === checkId);
+    if (
+      check?.status !== "blocked" ||
+      typeof check.requiredEvidence !== "string" ||
+      check.requiredEvidence.trim() === ""
+    ) {
+      throw new Error(
+        `hosted concurrent race matrix handoff missing blocked check: ${checkId}`,
+      );
+    }
+  }
 }
 
 export function hostedMatrixTargetFromEnv(env = process.env) {

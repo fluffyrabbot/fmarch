@@ -4,13 +4,68 @@
   "status": "placeholder",
   "releaseReady": false,
   "productionReady": false,
+  "redaction": {
+    "packetKind": "redacted-hosted-identity-intake",
+    "rawInviteTokensIncluded": false,
+    "rawSessionSecretsIncluded": false,
+    "rawPasswordHashesIncluded": false,
+    "rawPersonalContactIncluded": false
+  },
   "hostedIdentity": {
-    "accountLifecycle": false,
-    "inviteDelivery": false,
-    "accountRecovery": false,
-    "abuseAndRateLimitPolicy": false,
-    "sessionSecretPolicy": false,
-    "hostedAuditRetentionExport": false,
+    "accountLifecycle": {
+      "status": "missing",
+      "inputs": {
+        "createAccount": "",
+        "login": "",
+        "disableAccount": "",
+        "enableAccount": ""
+      },
+      "redactedEvidenceRefs": []
+    },
+    "inviteDelivery": {
+      "status": "missing",
+      "inputs": {
+        "deliveryChannels": [],
+        "revocationCovered": false
+      },
+      "rawInviteTokensIncluded": false,
+      "redactedEvidenceRefs": []
+    },
+    "accountRecovery": {
+      "status": "missing",
+      "inputs": {
+        "recoveryMethods": [],
+        "recoveredSessionsPreserveRoleSurfaceAdapter": false
+      },
+      "redactedEvidenceRefs": []
+    },
+    "abuseAndRateLimitPolicy": {
+      "status": "missing",
+      "inputs": {
+        "protectedOperations": [],
+        "rateLimitPolicyRef": ""
+      },
+      "redactedEvidenceRefs": []
+    },
+    "sessionSecretPolicy": {
+      "status": "missing",
+      "inputs": {
+        "storage": "",
+        "rotation": "",
+        "deploymentSecretSource": ""
+      },
+      "rawSessionSecretsIncluded": false,
+      "redactedEvidenceRefs": []
+    },
+    "hostedAuditRetentionExport": {
+      "status": "missing",
+      "inputs": {
+        "eventFamilies": [],
+        "retentionWindow": "",
+        "exportRef": ""
+      },
+      "redactedEvidenceRefs": []
+    },
     "roleSurfaceArchitectureChanged": false
   }
 }

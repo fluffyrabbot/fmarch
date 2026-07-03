@@ -9,6 +9,10 @@ import {
   devTestGameReleaseRunbookPath,
 } from "./dev_test_game_release_readiness_cases.mjs";
 import {
+  devTestGameRealHostedObservabilityHandoffCommand,
+  devTestGameRealHostedObservabilityHandoffPath,
+} from "./dev_test_game_real_hosted_observability_handoff_cases.mjs";
+import {
   localAdminAuditIds,
   localAdminAuditRoleUrl,
 } from "./dev_test_game_admin_audit_surface_ids.mjs";
@@ -262,11 +266,13 @@ const releaseRunbookItemConfig = new Map([
     "real-hosted-observability-and-operations",
     {
       owner: "ops-owner",
-      command: "npm run test:dev-test-game-hosted-ops-signals",
-      proofTarget: "target/dev-test-game/hosted-ops-signals.json",
-      roleUrl: localAdminAuditRoleUrl(localAdminAuditIds.hostedOpsSignals),
+      command: `npm run ${devTestGameRealHostedObservabilityHandoffCommand}`,
+      proofTarget: devTestGameRealHostedObservabilityHandoffPath,
+      roleUrl: localAdminAuditRoleUrl(
+        localAdminAuditIds.realHostedObservabilityHandoff,
+      ),
       evidenceBoundary:
-        "Local hosted-like ops signals are present; hosted logs, metrics, traces, SLOs, paging, and incident response evidence remain required.",
+        "Local hosted-like ops signals are baseline only; externally reachable hosted logs, metrics, traces, SLOs, paging, and incident response evidence remain required.",
     },
   ],
   [
