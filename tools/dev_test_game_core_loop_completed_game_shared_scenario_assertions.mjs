@@ -8,6 +8,10 @@ import {
 } from "./dev_test_game_core_loop_completed_game_shared_case_definitions.mjs";
 
 export {
+  assertCompletedGameEndgameSurfaceProof,
+} from "./dev_test_game_core_loop_completed_recovery_scenario_assertions.mjs";
+
+export {
   completedHostStaleCommandCaseDefinitions,
   completedHostStaleCommandCases,
   completedPlayerReloadCaseDefinitions,

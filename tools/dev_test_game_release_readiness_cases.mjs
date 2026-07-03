@@ -31,7 +31,7 @@ import {
 } from "./dev_test_game_core_loop_completed_game_cases.mjs";
 import {
   completedGameStaleRecoverySpineLaneCase,
-} from "./dev_test_game_core_loop_completed_game_shared_scenarios.mjs";
+} from "./dev_test_game_core_loop_completed_game_shared_case_definitions.mjs";
 import {
   replacementStaleConflictMessageSpineLaneCase,
 } from "./dev_test_game_stale_conflict_scenarios.mjs";

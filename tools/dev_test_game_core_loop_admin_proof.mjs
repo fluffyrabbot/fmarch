@@ -8,7 +8,7 @@ import {
   completedGameEndgameProofScenarioCases,
   completedGameEndgameScenarioCaseFamilies,
   completedGameEndgameTransition,
-} from "./dev_test_game_core_loop_completed_game_shared_scenarios.mjs";
+} from "./dev_test_game_core_loop_completed_game_shared_scenario_assertions.mjs";
 import {
   assertPlayerStaleActionAfterTransitionProofCase,
   assertPlayerStaleVoteAfterTransitionProofCase,

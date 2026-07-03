@@ -112,8 +112,10 @@ import {
 import {
   assertCompletedGameEndgameSurfaceProof,
   completedGameEndgameScenarioCaseFamilies,
+} from "./dev_test_game_core_loop_completed_game_shared_scenario_assertions.mjs";
+import {
   completedGameStaleRecoverySpineLaneCase,
-} from "./dev_test_game_core_loop_completed_game_shared_scenarios.mjs";
+} from "./dev_test_game_core_loop_completed_game_shared_case_definitions.mjs";
 import {
   completedGameHardeningSpineCycleId,
   completedGameHardeningSpineLaneCases,
