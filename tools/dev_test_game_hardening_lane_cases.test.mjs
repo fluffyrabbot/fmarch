@@ -57,6 +57,7 @@ import {
 import {
   playerActionConflictRecoveryLaneIds,
   playerActionFoundationLaneIds,
+  playerRecoveryRaceLaneIds,
   promotedStalePlayerCommandLaneIds,
   stalePlayerCommandLaneIds,
 } from "./dev_test_game_player_recovery_scenarios.mjs";
@@ -65,6 +66,11 @@ import {
   completedGameHardeningSpineLaneCases,
   completedGameStaleRecoverySpineLaneCase,
 } from "./dev_test_game_core_loop_completed_game_cases.mjs";
+import {
+  cohostHostRaceLaneIds,
+  crossRoleRaceLaneIds,
+  playerHostRaceLaneIds,
+} from "./dev_test_game_cross_role_race_scenarios.mjs";
 
 test("hardening lane cases share stale conflict-message IDs", () => {
   assert.deepEqual(staleConflictMessageLaneIds, [
@@ -714,6 +720,41 @@ test("hardening lane cases share player action foundation IDs", () => {
     "concurrent-action-race-reload",
     "reconnect-recovery",
   ]);
+});
+
+test("hardening lane cases share cross-role race IDs", async () => {
+  assert.deepEqual(playerHostRaceLaneIds, [
+    "concurrent-player-vote-resolve-race",
+    "concurrent-player-vote-resolve-race-reload",
+    "concurrent-player-action-advance-race",
+    "concurrent-player-action-advance-race-reload",
+  ]);
+  assert.deepEqual(cohostHostRaceLaneIds, [
+    "concurrent-cohost-deadline-resolve-race",
+    "concurrent-cohost-deadline-resolve-race-reload",
+  ]);
+  assert.deepEqual(crossRoleRaceLaneIds, [
+    ...playerHostRaceLaneIds,
+    ...cohostHostRaceLaneIds,
+  ]);
+  assert.deepEqual(playerRecoveryRaceLaneIds, [
+    "concurrent-vote-race",
+    "concurrent-vote-race-reload",
+    ...playerHostRaceLaneIds,
+  ]);
+
+  for (const callerPath of [
+    "tools/dev_test_game_hardening_scenarios.mjs",
+    "tools/dev_test_game_seed_scenario_cases.mjs",
+    "tools/dev_test_game_player_recovery_scenarios.mjs",
+    "tools/dev_test_game_proof_contract.mjs",
+  ]) {
+    const source = await readFile(callerPath, "utf8");
+    assert(
+      source.includes("./dev_test_game_cross_role_race_scenarios.mjs"),
+      `${callerPath} should import cross-role race lanes from the shared scenario module`,
+    );
+  }
 });
 
 test("hardening lane cases share stale player command IDs", () => {

@@ -2,6 +2,10 @@ import {
   completedGameHardeningLaneIds,
 } from "./dev_test_game_core_loop_completed_scenarios.mjs";
 import {
+  cohostHostRaceLaneIds,
+  playerHostRaceLaneIds,
+} from "./dev_test_game_cross_role_race_scenarios.mjs";
+import {
   cohostDeadlineRecoveryLaneIds,
   hostGenericStaleControlLaneIds,
   hostLifecycleRaceLaneIds,
@@ -36,12 +40,8 @@ export const hardeningAuditLaneIds = Object.freeze(uniqueLaneIds([
   ...promotedStalePlayerCommandLaneIds,
   "concurrent-vote-race",
   "concurrent-vote-race-reload",
-  "concurrent-player-vote-resolve-race",
-  "concurrent-player-vote-resolve-race-reload",
-  "concurrent-player-action-advance-race",
-  "concurrent-player-action-advance-race-reload",
-  "concurrent-cohost-deadline-resolve-race",
-  "concurrent-cohost-deadline-resolve-race-reload",
+  ...playerHostRaceLaneIds,
+  ...cohostHostRaceLaneIds,
   ...replacementPrivatePostRaceLaneIds,
   "concurrent-replacement-vote-race",
   "concurrent-replacement-vote-race-reload",

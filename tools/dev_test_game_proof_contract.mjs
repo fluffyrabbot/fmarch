@@ -6,6 +6,9 @@ import {
   completedGameHardeningLaneIds,
 } from "./dev_test_game_core_loop_completed_game_scenario_assertions.mjs";
 import {
+  crossRoleRaceLaneIds,
+} from "./dev_test_game_cross_role_race_scenarios.mjs";
+import {
   coreLoopCompletedGameHardeningLaneDescriptors,
 } from "./dev_test_game_core_loop_completed_endgame_progression_scenarios.mjs";
 import {
@@ -156,12 +159,7 @@ const requiredLaneIds = Object.freeze([
   "replacement-incoming-player",
   ...playerActionFoundationLaneIds,
   ...stalePlayerCommandLaneIds,
-  "concurrent-player-vote-resolve-race",
-  "concurrent-player-vote-resolve-race-reload",
-  "concurrent-player-action-advance-race",
-  "concurrent-player-action-advance-race-reload",
-  "concurrent-cohost-deadline-resolve-race",
-  "concurrent-cohost-deadline-resolve-race-reload",
+  ...crossRoleRaceLaneIds,
   ...replacementPrivatePostRaceLaneIds,
   "concurrent-replacement-vote-race",
   "concurrent-replacement-vote-race-reload",

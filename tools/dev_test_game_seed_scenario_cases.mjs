@@ -8,6 +8,10 @@ import {
   completedGameSeedRequiredScenarioIds,
 } from "./dev_test_game_core_loop_completed_scenarios.mjs";
 import {
+  cohostHostRaceLaneIds,
+  playerHostRaceLaneIds,
+} from "./dev_test_game_cross_role_race_scenarios.mjs";
+import {
   hostCohostRaceRecoveryLaneIds,
   hostLifecycleRaceLaneIds,
   hostPublishRaceLaneIds,
@@ -35,12 +39,8 @@ export const seedRequiredScenarioIds = Object.freeze([
   "action-idempotent-retry",
   "concurrent-action-race",
   "concurrent-action-race-reload",
-  "concurrent-player-vote-resolve-race",
-  "concurrent-player-vote-resolve-race-reload",
-  "concurrent-player-action-advance-race",
-  "concurrent-player-action-advance-race-reload",
-  "concurrent-cohost-deadline-resolve-race",
-  "concurrent-cohost-deadline-resolve-race-reload",
+  ...playerHostRaceLaneIds,
+  ...cohostHostRaceLaneIds,
   "concurrent-replacement-private-post-race",
   "concurrent-replacement-private-post-race-reload",
   "concurrent-replacement-vote-race",

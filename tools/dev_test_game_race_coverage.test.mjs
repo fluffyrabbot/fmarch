@@ -6,6 +6,12 @@ import {
   completedGameRaceCoverageCellDefinitions,
 } from "./dev_test_game_core_loop_completed_scenarios.mjs";
 import {
+  cohostHostRaceCoverageCellCases,
+  cohostHostRaceCoverageCellDefinitions,
+  playerHostRaceCoverageCellCases,
+  playerHostRaceCoverageCellDefinitions,
+} from "./dev_test_game_cross_role_race_scenarios.mjs";
+import {
   hostPhaseRaceCoverageCellCases,
   hostPhaseRaceCoverageCellDefinitions,
   hostStandaloneRaceCoverageCellCases,
@@ -136,6 +142,83 @@ test("race coverage imports standalone host race cells from shared scenarios", a
       ),
     "race coverage should not locally own standalone host race cells",
   );
+});
+
+test("race coverage imports cross-role race cells from shared scenarios", async () => {
+  assert(Object.isFrozen(playerHostRaceCoverageCellDefinitions));
+  assert(Object.isFrozen(cohostHostRaceCoverageCellDefinitions));
+  assert.deepEqual(
+    [
+      ...playerHostRaceCoverageCellCases(),
+      ...cohostHostRaceCoverageCellCases(),
+    ].map((cell) => ({
+      id: cell.id,
+      raceLaneId: cell.raceLaneId,
+      reloadLaneId: cell.reloadLaneId,
+      actorPair: cell.actorPair,
+      commandFamily: cell.commandFamily,
+      roleSurfaces: cell.roleSurfaces,
+      commandFacts: cell.commandFacts,
+    })),
+    [
+      {
+        id: "player-vote-vs-host-resolve",
+        raceLaneId: "concurrent-player-vote-resolve-race",
+        reloadLaneId: "concurrent-player-vote-resolve-race-reload",
+        actorPair: "player vs host",
+        commandFamily: "vote resolution",
+        roleSurfaces: ["player", "host"],
+        commandFacts: [],
+      },
+      {
+        id: "player-action-vs-host-advance",
+        raceLaneId: "concurrent-player-action-advance-race",
+        reloadLaneId: "concurrent-player-action-advance-race-reload",
+        actorPair: "player vs host",
+        commandFamily: "action submission and phase advance",
+        roleSurfaces: ["player", "host"],
+        commandFacts: [],
+      },
+      {
+        id: "cohost-deadline-vs-host-resolve",
+        raceLaneId: "concurrent-cohost-deadline-resolve-race",
+        reloadLaneId: "concurrent-cohost-deadline-resolve-race-reload",
+        actorPair: "cohost vs host",
+        commandFamily: "deadline and resolution",
+        roleSurfaces: ["cohost", "host"],
+        commandFacts: [],
+      },
+    ],
+  );
+  assert.notEqual(
+    playerHostRaceCoverageCellCases()[0],
+    playerHostRaceCoverageCellDefinitions[0],
+  );
+
+  const source = await readFile("tools/dev_test_game_race_coverage.mjs", "utf8");
+  assert(
+    importsFromModule({
+      source,
+      importedName: "playerHostRaceCoverageCellCases",
+      moduleSpecifier: "./dev_test_game_cross_role_race_scenarios.mjs",
+    }) &&
+      importsFromModule({
+        source,
+        importedName: "cohostHostRaceCoverageCellCases",
+        moduleSpecifier: "./dev_test_game_cross_role_race_scenarios.mjs",
+      }),
+    "race coverage should import cross-role race cells from the shared scenario module",
+  );
+  for (const commandFamily of [
+    'commandFamily: "vote resolution"',
+    'commandFamily: "action submission and phase advance"',
+    'commandFamily: "deadline and resolution"',
+  ]) {
+    assert(
+      !source.includes(commandFamily),
+      `race coverage should not locally own ${commandFamily}`,
+    );
+  }
 });
 
 test("race coverage imports completed-game cells from shared scenarios", () => {

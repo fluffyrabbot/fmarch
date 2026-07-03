@@ -1,6 +1,9 @@
 import {
   completedPlayerRecoveryLaneIds as completedGamePlayerRecoveryLaneIds,
 } from "./dev_test_game_core_loop_completed_scenarios.mjs";
+import {
+  playerHostRaceLaneIds,
+} from "./dev_test_game_cross_role_race_scenarios.mjs";
 
 export const playerActionFoundationLaneIds = Object.freeze([
   "idempotent-retry",
@@ -33,10 +36,7 @@ export const corePlayerRecoveryLaneIds = Object.freeze([
 export const playerRecoveryRaceLaneIds = Object.freeze([
   "concurrent-vote-race",
   "concurrent-vote-race-reload",
-  "concurrent-player-vote-resolve-race",
-  "concurrent-player-vote-resolve-race-reload",
-  "concurrent-player-action-advance-race",
-  "concurrent-player-action-advance-race-reload",
+  ...playerHostRaceLaneIds,
 ]);
 
 export const completedPlayerRecoveryLaneIds = Object.freeze([

@@ -6,6 +6,12 @@ import {
   completedGameRaceCoverageCellIdsForPromotedGroup,
 } from "./dev_test_game_core_loop_completed_scenarios.mjs";
 import {
+  cohostHostRaceCoverageCellCases,
+  cohostHostRaceCoverageCellIds,
+  playerHostRaceCoverageCellCases,
+  playerHostRaceCoverageCellIds,
+} from "./dev_test_game_cross_role_race_scenarios.mjs";
+import {
   hostPhaseRaceCoverageCellCases,
   hostPhaseRaceCoverageCellIds,
   hostStandaloneRaceCoverageCellCases,
@@ -23,6 +29,10 @@ const raceCoverageJsonPath = path.join(repoRoot, devTestGameRaceCoveragePath);
 const hostPhaseRaceCoverageCells = hostPhaseRaceCoverageCellCases().map(raceCell);
 const hostStandaloneRaceCoverageCells =
   hostStandaloneRaceCoverageCellCases().map(raceCell);
+const playerHostRaceCoverageCells =
+  playerHostRaceCoverageCellCases().map(raceCell);
+const cohostHostRaceCoverageCells =
+  cohostHostRaceCoverageCellCases().map(raceCell);
 const hostMixedAdvanceRaceCoverageCellId = "host-mixed-advance";
 const hostLifecycleRaceCoverageCellId = "host-lifecycle";
 const hostVotecountPublicationRaceCoverageCellId =
@@ -45,30 +55,8 @@ const raceCells = Object.freeze([
     reloadLaneId: "concurrent-action-race-reload",
     roleSurfaces: ["player", "host"],
   }),
-  raceCell({
-    id: "player-vote-vs-host-resolve",
-    actorPair: "player vs host",
-    commandFamily: "vote resolution",
-    raceLaneId: "concurrent-player-vote-resolve-race",
-    reloadLaneId: "concurrent-player-vote-resolve-race-reload",
-    roleSurfaces: ["player", "host"],
-  }),
-  raceCell({
-    id: "player-action-vs-host-advance",
-    actorPair: "player vs host",
-    commandFamily: "action submission and phase advance",
-    raceLaneId: "concurrent-player-action-advance-race",
-    reloadLaneId: "concurrent-player-action-advance-race-reload",
-    roleSurfaces: ["player", "host"],
-  }),
-  raceCell({
-    id: "cohost-deadline-vs-host-resolve",
-    actorPair: "cohost vs host",
-    commandFamily: "deadline and resolution",
-    raceLaneId: "concurrent-cohost-deadline-resolve-race",
-    reloadLaneId: "concurrent-cohost-deadline-resolve-race-reload",
-    roleSurfaces: ["cohost", "host"],
-  }),
+  ...playerHostRaceCoverageCells,
+  ...cohostHostRaceCoverageCells,
   raceCell({
     id: "replacement-private-post",
     actorPair: "replacement vs outgoing player",
@@ -142,8 +130,7 @@ export const raceCoveragePromotedReloadGroups = Object.freeze(
       cellIds: [
         "player-vote-change",
         "player-night-action",
-        "player-vote-vs-host-resolve",
-        "player-action-vs-host-advance",
+        ...playerHostRaceCoverageCellIds(),
         ...completedGameRaceCoverageCellIdsForPromotedGroup(
           "player-concurrent-action-reload",
         ),
@@ -152,7 +139,7 @@ export const raceCoveragePromotedReloadGroups = Object.freeze(
     {
       id: "cohost-deadline-race-reload",
       label: "Cohost deadline race reload",
-      cellIds: ["cohost-deadline-vs-host-resolve"],
+      cellIds: cohostHostRaceCoverageCellIds(),
     },
   ].map((group) =>
     Object.freeze({
