@@ -1,3 +1,7 @@
+import {
+  localAdminAuditIds,
+} from "./dev_test_game_admin_audit_surface_ids.mjs";
+
 export const hostedOpsTelemetryBoundaryCheckId =
   "hosted-telemetry-boundary-carried";
 export const hostedOpsReadinessBoundaryCheckId = "readiness-boundary-carried";
@@ -11,8 +15,8 @@ export const hostedOpsSignalCheckIds = Object.freeze([
 ]);
 
 export const hostedOpsSignalRelatedAuditIds = Object.freeze([
-  "local-hosted-concurrent-race-matrix",
-  "local-ops-artifacts",
+  localAdminAuditIds.hostedConcurrentRaceMatrix,
+  localAdminAuditIds.opsArtifacts,
 ]);
 
 export function hostedOpsTelemetryBoundaryStatus(realHostedDeploymentStatus) {

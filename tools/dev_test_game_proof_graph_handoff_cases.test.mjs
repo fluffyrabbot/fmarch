@@ -41,23 +41,29 @@ import {
 
 test("admin proof destination handoff cases share link and audit rows", () => {
   assert.deepEqual(adminProofDestinationRequirementLinkRows, [
-    ["admin-proof:core-loop", "local-core-loop"],
-    ["admin-proof:hardening", "local-hardening"],
-    ["admin-proof:identity", "local-identity-adapter"],
-    ["admin-proof:hosted-identity-evidence", "local-hosted-identity-evidence"],
-    ["admin-proof:backup", "local-backup-restore"],
-    ["admin-proof:ops", "local-ops-artifacts"],
-    ["admin-proof:seed", "local-seed-fixtures"],
-    ["admin-proof:release", "local-release-readiness"],
-    ["admin-proof:release-runbook", "local-release-runbook"],
-    ["admin-proof:race-coverage", "local-race-coverage"],
-    ["admin-proof:hosted-target-preflight", "local-hosted-target-preflight"],
-    ["admin-proof:hosted-evidence-lane", "local-hosted-evidence-lane"],
+    ["admin-proof:core-loop", localAdminAuditIds.coreLoop],
+    ["admin-proof:hardening", localAdminAuditIds.hardening],
+    ["admin-proof:identity", localAdminAuditIds.identityAdapter],
+    [
+      "admin-proof:hosted-identity-evidence",
+      localAdminAuditIds.hostedIdentityEvidence,
+    ],
+    ["admin-proof:backup", localAdminAuditIds.backupRestore],
+    ["admin-proof:ops", localAdminAuditIds.opsArtifacts],
+    ["admin-proof:seed", localAdminAuditIds.seedFixtures],
+    ["admin-proof:release", localAdminAuditIds.releaseReadiness],
+    ["admin-proof:release-runbook", localAdminAuditIds.releaseRunbook],
+    ["admin-proof:race-coverage", localAdminAuditIds.raceCoverage],
+    [
+      "admin-proof:hosted-target-preflight",
+      localAdminAuditIds.hostedTargetPreflight,
+    ],
+    ["admin-proof:hosted-evidence-lane", localAdminAuditIds.hostedEvidenceLane],
     [
       "admin-proof:hosted-concurrent-race-matrix",
-      "local-hosted-concurrent-race-matrix",
+      localAdminAuditIds.hostedConcurrentRaceMatrix,
     ],
-    ["admin-proof:hosted-ops-signals", "local-hosted-ops-signals"],
+    ["admin-proof:hosted-ops-signals", localAdminAuditIds.hostedOpsSignals],
     ["admin-proof:spine-manifest", localAdminAuditIds.spineManifest],
   ]);
   assert.equal(
@@ -74,7 +80,7 @@ test("admin proof destination handoff cases share link and audit rows", () => {
   );
   assert.equal(
     adminProofDestinationRoleUrl({
-      auditId: "local-core-loop",
+      auditId: localAdminAuditIds.coreLoop,
       game: "midsummer",
     }),
     "/admin/audit/local-core-loop?game=midsummer",
@@ -156,7 +162,7 @@ test("admin proof destination handoff cases carry shared row requirements", () =
       },
       {
         id: localHostedEvidenceLaneDemoProofCheckId,
-        auditId: "local-hosted-evidence-lane",
+        auditId: localAdminAuditIds.hostedEvidenceLane,
       },
     ],
   );

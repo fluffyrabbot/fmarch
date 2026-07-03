@@ -34,7 +34,7 @@ import {
 export const adminProofDestinationRequirementCases = Object.freeze([
   Object.freeze({
     linkId: "admin-proof:core-loop",
-    auditId: "local-core-loop",
+    auditId: localAdminAuditIds.coreLoop,
     requiredCheckIds: Object.freeze([
       "core-loop",
       "private-channel",
@@ -43,7 +43,7 @@ export const adminProofDestinationRequirementCases = Object.freeze([
   }),
   Object.freeze({
     linkId: "admin-proof:hardening",
-    auditId: "local-hardening",
+    auditId: localAdminAuditIds.hardening,
     requiredCheckIds: Object.freeze([
       "idempotent-retry",
       "concurrent-action-race",
@@ -52,13 +52,13 @@ export const adminProofDestinationRequirementCases = Object.freeze([
   }),
   Object.freeze({
     linkId: "admin-proof:identity",
-    auditId: "local-identity-adapter",
+    auditId: localAdminAuditIds.identityAdapter,
     requiredCheckIds: Object.freeze(["session-rotation", "invite-revocation"]),
     requiredSessionIds: Object.freeze(["admin", "host", "player"]),
   }),
   Object.freeze({
     linkId: "admin-proof:hosted-identity-evidence",
-    auditId: "local-hosted-identity-evidence",
+    auditId: localAdminAuditIds.hostedIdentityEvidence,
     requiredCheckIds: Object.freeze([...hostedIdentityEvidenceCheckIds]),
     requiredUnprovenIds: Object.freeze([...hostedIdentityEvidenceCheckIds]),
     requiredHostedHandoffInputs: Object.freeze([
@@ -70,13 +70,13 @@ export const adminProofDestinationRequirementCases = Object.freeze([
   }),
   Object.freeze({
     linkId: "admin-proof:backup",
-    auditId: "local-backup-restore",
+    auditId: localAdminAuditIds.backupRestore,
     requiredCheckIds: Object.freeze(["dump-created", "auth-sessions-restored"]),
     requiredSessionIds: Object.freeze(["host", "player", "admin"]),
   }),
   Object.freeze({
     linkId: "admin-proof:ops",
-    auditId: "local-ops-artifacts",
+    auditId: localAdminAuditIds.opsArtifacts,
     requiredCheckIds: Object.freeze([
       "source-artifacts-checksummed",
       "release-boundary-carried",
@@ -84,12 +84,12 @@ export const adminProofDestinationRequirementCases = Object.freeze([
   }),
   Object.freeze({
     linkId: "admin-proof:seed",
-    auditId: "local-seed-fixtures",
+    auditId: localAdminAuditIds.seedFixtures,
     requiredScenarioIds: Object.freeze([...seedScenarioCoverageGroups.allDemo]),
   }),
   Object.freeze({
     linkId: "admin-proof:release",
-    auditId: "local-release-readiness",
+    auditId: localAdminAuditIds.releaseReadiness,
     requiredCheckIds: Object.freeze([
       "local-role-url-browser-proof",
       "local-core-loop-proof",
@@ -111,7 +111,7 @@ export const adminProofDestinationRequirementCases = Object.freeze([
       }),
       Object.freeze({
         id: localHostedEvidenceLaneDemoProofCheckId,
-        auditId: "local-hosted-evidence-lane",
+        auditId: localAdminAuditIds.hostedEvidenceLane,
       }),
     ]),
     requiredUnprovenIds: Object.freeze([
@@ -121,7 +121,7 @@ export const adminProofDestinationRequirementCases = Object.freeze([
   }),
   Object.freeze({
     linkId: "admin-proof:release-runbook",
-    auditId: "local-release-runbook",
+    auditId: localAdminAuditIds.releaseRunbook,
     requiredCheckIds: Object.freeze([
       "remaining-readiness-gaps-mapped",
       "rollback-path-carried",
@@ -130,25 +130,25 @@ export const adminProofDestinationRequirementCases = Object.freeze([
       "human-approval-boundary-carried",
     ]),
     requiredUnprovenIds: Object.freeze(["human-release-approval"]),
-    requiredRelatedLinkIds: Object.freeze(["local-release-readiness"]),
+    requiredRelatedLinkIds: Object.freeze([localAdminAuditIds.releaseReadiness]),
   }),
   Object.freeze({
     linkId: "admin-proof:race-coverage",
-    auditId: "local-race-coverage",
+    auditId: localAdminAuditIds.raceCoverage,
     requiredCheckIds: Object.freeze(["player-vote-change", "player-night-action"]),
   }),
   Object.freeze({
     linkId: "admin-proof:hosted-target-preflight",
-    auditId: "local-hosted-target-preflight",
+    auditId: localAdminAuditIds.hostedTargetPreflight,
     requiredCheckIds: Object.freeze([...hostedTargetPreflightCheckIds]),
     requiredRelatedLinkIds: Object.freeze([
-      "local-hosted-concurrent-race-matrix",
+      localAdminAuditIds.hostedConcurrentRaceMatrix,
       localAdminAuditIds.nextAction,
     ]),
   }),
   Object.freeze({
     linkId: "admin-proof:hosted-evidence-lane",
-    auditId: "local-hosted-evidence-lane",
+    auditId: localAdminAuditIds.hostedEvidenceLane,
     requiredCheckIds: Object.freeze([
       "hosted-target-preflight",
       ...hostedTargetPreflightBlockingCheckIds,
@@ -160,19 +160,19 @@ export const adminProofDestinationRequirementCases = Object.freeze([
       ...hostedEvidenceHandoffCase().blockedCheckIds,
     ]),
     requiredRelatedLinkIds: Object.freeze([
-      "local-hosted-target-preflight",
-      "local-hosted-concurrent-race-matrix",
+      localAdminAuditIds.hostedTargetPreflight,
+      localAdminAuditIds.hostedConcurrentRaceMatrix,
       localAdminAuditIds.nextAction,
     ]),
   }),
   Object.freeze({
     linkId: "admin-proof:hosted-concurrent-race-matrix",
-    auditId: "local-hosted-concurrent-race-matrix",
+    auditId: localAdminAuditIds.hostedConcurrentRaceMatrix,
     fromHostedMatrix: true,
   }),
   Object.freeze({
     linkId: "admin-proof:hosted-ops-signals",
-    auditId: "local-hosted-ops-signals",
+    auditId: localAdminAuditIds.hostedOpsSignals,
     requiredCheckIds: Object.freeze([...hostedOpsSignalCheckIds]),
     requiredRelatedLinkIds: Object.freeze([...hostedOpsSignalRelatedAuditIds]),
   }),

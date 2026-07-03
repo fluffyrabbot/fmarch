@@ -8,6 +8,9 @@ import {
 import {
   realHostedEvidenceInputIds,
 } from "./dev_test_game_real_hosted_evidence_inputs.mjs";
+import {
+  localAdminAuditIds,
+} from "./dev_test_game_admin_audit_surface_ids.mjs";
 
 const cloneMilestoneCase = (scenario) => ({ ...scenario });
 
@@ -39,8 +42,8 @@ export const hostedMatrixAdminRequiredCheckIds = Object.freeze([
 ]);
 
 export const hostedMatrixRelatedAuditIds = Object.freeze([
-  "local-race-coverage",
-  "local-next-action",
+  localAdminAuditIds.raceCoverage,
+  localAdminAuditIds.nextAction,
 ]);
 
 export const hostedMatrixRequestedEvidenceIds = Object.freeze([
