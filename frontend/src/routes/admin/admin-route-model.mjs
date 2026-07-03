@@ -948,6 +948,9 @@ function normalizeHostedEvidenceLaneHandoffChecklist({
         }),
       ),
     ),
+    blockedReceipt: normalizeHostedHandoffBlockedReceipt(
+      hostedEvidenceLane.blockedReceipt,
+    ),
   });
 }
 
@@ -2041,7 +2044,41 @@ function normalizeNextActionHostedHandoffChecklist({
         }),
       ),
     ),
+    blockedReceipt: normalizeHostedHandoffBlockedReceipt(checklist.blockedReceipt),
     groups: normalizeHostedHandoffGroups(checklist.requirementGroups),
+  });
+}
+
+function normalizeHostedHandoffBlockedReceipt(receipt) {
+  if (receipt === null || typeof receipt !== "object") {
+    return null;
+  }
+  const requiredInputs = Array.isArray(receipt.requiredInputs)
+    ? receipt.requiredInputs
+    : [];
+  return Object.freeze({
+    status: String(receipt.status ?? "unknown"),
+    command: String(receipt.command ?? ""),
+    proofTarget: String(receipt.proofTarget ?? ""),
+    nextProofTarget: String(receipt.nextProofTarget ?? ""),
+    operatorAction: String(receipt.operatorAction ?? ""),
+    localVsHostedBoundary: String(receipt.localVsHostedBoundary ?? ""),
+    missingRequiredInputs: Object.freeze(
+      (Array.isArray(receipt.missingRequiredInputs)
+        ? receipt.missingRequiredInputs
+        : []
+      ).map((input) => String(input)),
+    ),
+    requiredInputs: Object.freeze(
+      requiredInputs.map((input) =>
+        Object.freeze({
+          name: String(input?.name ?? ""),
+          value: input?.value === null ? "" : String(input?.value ?? ""),
+          required: input?.required === true,
+          purpose: String(input?.purpose ?? ""),
+        }),
+      ),
+    ),
   });
 }
 

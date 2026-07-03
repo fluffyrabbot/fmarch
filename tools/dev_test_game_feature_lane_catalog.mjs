@@ -38,16 +38,12 @@ export const coreLoopFeatureSpineCycleIds = Object.freeze({
   dayTwoNightTwo: "d02-n02",
   dayOneNightOneDayTwo: "d01-n01-d02",
   nightTwoDayThree: "n02-d03",
-  dayThreeNightThree: "d03-n03",
-  nightThreeDayFour: "n03-d04",
 });
 
 const dayTwoNightTwo = coreLoopFeatureSpineCycleIds.dayTwoNightTwo;
 const dayOneNightOneDayTwo =
   coreLoopFeatureSpineCycleIds.dayOneNightOneDayTwo;
 const nightTwoDayThree = coreLoopFeatureSpineCycleIds.nightTwoDayThree;
-const dayThreeNightThree = coreLoopFeatureSpineCycleIds.dayThreeNightThree;
-const nightThreeDayFour = coreLoopFeatureSpineCycleIds.nightThreeDayFour;
 
 const coreLoopFeatureSpineLaneRows = Object.freeze([
   Object.freeze({
@@ -100,25 +96,6 @@ const coreLoopFeatureSpineLaneRows = Object.freeze([
     role: "host",
     checkpointId: `${nightTwoDayThree}-n02-resolved-target-killed`,
     adminCheckId: "core-loop",
-  }),
-  Object.freeze({
-    targetKey: "dayThreeVoteNightTransition",
-    featureSlotId: "day-three-vote-night-transition",
-    cycleId: dayThreeNightThree,
-    role: "voter",
-    checkpointId: `${dayThreeNightThree}-n03-action-open`,
-    adminCheckId: dayThreeVoteResolutionLaneId,
-  }),
-  Object.freeze({
-    targetKey: "nightThreeActionResolution",
-    featureSlotId: nightThreeActionResolutionLaneId,
-    cycleId: nightThreeDayFour,
-    role: "survivor",
-    checkpointId: `${nightThreeDayFour}-d04-day-controls-return`,
-    adminCheckId: nightThreeActionResolutionLaneId,
-    seedMembership: "demoOnly",
-    seedOrder: 30,
-    seedRoleOverride: "actionPlayer",
   }),
   Object.freeze({
     targetKey: "invalidActionRecovery",

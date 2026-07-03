@@ -121,6 +121,7 @@ export async function proveAdminAuditDetail({
   requiredHostedHandoffBlockedCheckStatuses = {},
   requiredHostedHandoffGroups = [],
   requiredHostedHandoffSummary = null,
+  requiredHostedHandoffBlockedReceipt = null,
   requiredRelatedLinks = [],
   requiredRelatedDestinations = [],
   requiredUnprovenStatuses = {},
@@ -278,6 +279,11 @@ export async function proveAdminAuditDetail({
       page,
       expected: requiredHostedHandoffSummary,
     });
+    const visibleHostedHandoffBlockedReceipt =
+      await waitForHostedHandoffBlockedReceipt({
+        page,
+        expected: requiredHostedHandoffBlockedReceipt,
+      });
     const visibleRelatedLinks = await waitForRows({
       page,
       prefix: "admin-audit-related-link",
@@ -527,6 +533,9 @@ export async function proveAdminAuditDetail({
       ...(visibleHostedHandoffSummary === null
         ? {}
         : { visibleHostedHandoffSummary }),
+      ...(visibleHostedHandoffBlockedReceipt === null
+        ? {}
+        : { visibleHostedHandoffBlockedReceipt }),
       ...(visibleRelatedLinks.length === 0 ? {} : { visibleRelatedLinks }),
       ...(visibleRelatedDestinations.length === 0
         ? {}
@@ -613,6 +622,41 @@ async function waitForHostedHandoffSummary({ page, expected }) {
     }
   }
   return summary;
+}
+
+async function waitForHostedHandoffBlockedReceipt({ page, expected }) {
+  if (expected === null || expected === undefined) {
+    return null;
+  }
+  const row = page.getByTestId("admin-audit-hosted-handoff-blocked-receipt");
+  await row.waitFor({
+    state: "visible",
+    timeout: 15000,
+  });
+  const text = await row.innerText();
+  const receipt = {
+    status: String(expected.status ?? ""),
+    operatorAction: String(expected.operatorAction ?? ""),
+    localVsHostedBoundary: String(expected.localVsHostedBoundary ?? ""),
+    nextProofTarget: String(expected.nextProofTarget ?? ""),
+    missingRequiredInputs: Array.isArray(expected.missingRequiredInputs)
+      ? expected.missingRequiredInputs.map((input) => String(input))
+      : [],
+  };
+  for (const value of [
+    receipt.status,
+    receipt.operatorAction,
+    receipt.localVsHostedBoundary,
+    receipt.nextProofTarget,
+    ...receipt.missingRequiredInputs,
+  ]) {
+    if (value === "" || !text.includes(value)) {
+      throw new Error(
+        `admin-audit-hosted-handoff-blocked-receipt missing expected text ${value}: ${text}`,
+      );
+    }
+  }
+  return receipt;
 }
 
 async function waitForLocalPrerequisiteRoleUrls({ page, ids }) {

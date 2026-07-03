@@ -91,6 +91,7 @@ export function assertDevTestGameHostedEvidenceLane(evidence) {
       evidence.blockedCheckIds.length === 0 ||
       evidence.hostedEvidence?.realHostedEvidenceStatus !== "unproven" ||
       evidence.hostedEvidence?.realHostedEvidenceInputs === undefined ||
+      evidence.blockedReceipt?.status !== "blocked" ||
       evidence.nextCommand !== `npm run ${devTestGameHostedEvidenceLaneCommand}` ||
       evidence.nextProofTarget !== devTestGameHostedEvidenceLanePath
     ) {
@@ -146,6 +147,15 @@ function buildBlockedHostedEvidenceLane({ preflight, generatedAt }) {
       .filter((check) => check.status === "blocked")
       .map((check) => check.id),
     target: { ...preflight.target },
+    ...(preflight.blockedReceipt === undefined
+      ? {}
+      : {
+          blockedReceipt: {
+            ...preflight.blockedReceipt,
+            command: `npm run ${devTestGameHostedEvidenceLaneCommand}`,
+            nextProofTarget: devTestGameHostedEvidenceLanePath,
+          },
+        }),
     hostedEvidence: {
       status: "blocked",
       mode: "blocked",

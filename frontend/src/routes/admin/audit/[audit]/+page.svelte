@@ -349,6 +349,18 @@
               <span>{input.required ? "required" : "optional"}</span>
             </li>
           {/each}
+          {#if data.audit.hostedHandoffChecklist.blockedReceipt}
+            <li
+              class="admin-audit-detail__entry admin-audit-detail__entry--stack"
+              data-testid="admin-audit-hosted-handoff-blocked-receipt"
+            >
+              <strong>{data.audit.hostedHandoffChecklist.blockedReceipt.status}</strong>
+              <span>{data.audit.hostedHandoffChecklist.blockedReceipt.operatorAction}</span>
+              <span>{data.audit.hostedHandoffChecklist.blockedReceipt.localVsHostedBoundary}</span>
+              <span>{data.audit.hostedHandoffChecklist.blockedReceipt.missingRequiredInputs.join(", ")}</span>
+              <span>{data.audit.hostedHandoffChecklist.blockedReceipt.nextProofTarget}</span>
+            </li>
+          {/if}
           {#each data.audit.hostedHandoffChecklist.groups ?? [] as group}
             <li
               class="admin-audit-detail__entry admin-audit-detail__entry--stack"

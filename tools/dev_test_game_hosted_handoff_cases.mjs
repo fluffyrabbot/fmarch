@@ -1,5 +1,9 @@
 import {
   hostedTargetPreflightBlockingCheckIds,
+  hostedTargetPreflightExternalTargetsRequiredEvidence,
+  hostedTargetPreflightMissingApiUrlRequiredEvidence,
+  hostedTargetPreflightMissingFrontendUrlRequiredEvidence,
+  hostedTargetPreflightMissingRawEvidencePathRequiredEvidence,
 } from "./dev_test_game_hosted_target_preflight_cases.mjs";
 import {
   buildRealHostedEvidenceInputs,
@@ -20,28 +24,27 @@ const hostedEvidenceHandoffBlockedChecks = Object.freeze([
   {
     id: "hosted-frontend-url-configured",
     status: "blocked",
-    requiredEvidence: "Set FMARCH_HOSTED_MATRIX_FRONTEND_URL.",
+    requiredEvidence: hostedTargetPreflightMissingFrontendUrlRequiredEvidence,
   },
   {
     id: "hosted-api-url-configured",
     status: "blocked",
-    requiredEvidence: "Set FMARCH_HOSTED_MATRIX_API_URL.",
+    requiredEvidence: hostedTargetPreflightMissingApiUrlRequiredEvidence,
   },
   {
     id: "hosted-targets-external",
     status: "blocked",
-    requiredEvidence:
-      "Both hosted target URLs must be externally reachable http(s) URLs, not localhost, loopback, private-network, link-local, or reserved IP targets.",
+    requiredEvidence: hostedTargetPreflightExternalTargetsRequiredEvidence(),
   },
   {
     id: "raw-evidence-path-configured",
     status: "blocked",
-    requiredEvidence: "Set FMARCH_HOSTED_MATRIX_RAW_EVIDENCE_PATH.",
+    requiredEvidence: hostedTargetPreflightMissingRawEvidencePathRequiredEvidence,
   },
   {
     id: "raw-evidence-readable",
     status: "blocked",
-    requiredEvidence: "Set FMARCH_HOSTED_MATRIX_RAW_EVIDENCE_PATH.",
+    requiredEvidence: hostedTargetPreflightMissingRawEvidencePathRequiredEvidence,
   },
 ]);
 
@@ -176,6 +179,7 @@ export function hostedEvidenceBlockedHandoffChecklistFixture({
   proofTarget = hostedEvidenceLanePath,
   blockedCheckIds = hostedEvidenceHandoffBlockedCheckIds,
   blockedChecks = hostedEvidenceHandoffBlockedChecks,
+  blockedReceipt = null,
 } = {}) {
   const blockedCheckIdSet = new Set(blockedCheckIds);
   return assertHostedEvidenceHandoffChecklist({
@@ -188,6 +192,7 @@ export function hostedEvidenceBlockedHandoffChecklistFixture({
     blockedChecks: blockedChecks
       .filter((check) => blockedCheckIdSet.has(check.id))
       .map((check) => ({ ...check })),
+    ...(blockedReceipt === null ? {} : { blockedReceipt }),
   });
 }
 
@@ -210,6 +215,14 @@ export function hostedEvidenceBlockedHandoffChecklistFromPreflight({
     proofTarget,
     blockedCheckIds: blockedChecks.map((check) => check.id),
     blockedChecks,
+    blockedReceipt:
+      preflight?.blockedReceipt === undefined
+        ? null
+        : {
+            ...preflight.blockedReceipt,
+            command,
+            nextProofTarget: proofTarget,
+          },
   });
 }
 

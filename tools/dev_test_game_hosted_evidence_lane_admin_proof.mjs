@@ -99,6 +99,7 @@ await runAdminAuditProof({
       requiredHostedHandoffBlockedCheckStatuses:
         hostedHandoffBlockedCheckStatuses,
       requiredHostedHandoffSummary: hostedHandoffSummary,
+      requiredHostedHandoffBlockedReceipt: source.lane.blockedReceipt ?? null,
       requiredRelatedLinks,
     });
   },
@@ -151,6 +152,9 @@ await runAdminAuditProof({
         command: source.lane.nextCommand,
         proofTarget: source.lane.nextProofTarget,
       }),
+      ...(source.lane.blockedReceipt === undefined
+        ? {}
+        : { hostedHandoffBlockedReceipt: source.lane.blockedReceipt }),
       relatedAuditIds: requiredRelatedLinks,
     },
     adminRoleSurface,
@@ -264,6 +268,34 @@ export function assertHostedEvidenceLaneAdminProof(evidence) {
       ) {
         throw new Error(
           `hosted evidence lane admin proof missing handoff summary: ${key}`,
+        );
+      }
+    }
+  }
+  const expectedBlockedReceipt =
+    evidence.generatedFrom?.hostedHandoffBlockedReceipt;
+  if (expectedBlockedReceipt !== undefined) {
+    const visibleReceipt =
+      evidence.adminRoleSurface?.visibleHostedHandoffBlockedReceipt;
+    if (visibleReceipt === undefined) {
+      throw new Error("hosted evidence lane admin proof missing blocked receipt");
+    }
+    for (const key of [
+      "status",
+      "operatorAction",
+      "localVsHostedBoundary",
+      "nextProofTarget",
+    ]) {
+      if (visibleReceipt[key] !== String(expectedBlockedReceipt[key] ?? "")) {
+        throw new Error(
+          `hosted evidence lane admin proof missing blocked receipt field: ${key}`,
+        );
+      }
+    }
+    for (const input of expectedBlockedReceipt.missingRequiredInputs ?? []) {
+      if (!visibleReceipt.missingRequiredInputs?.includes(String(input))) {
+        throw new Error(
+          `hosted evidence lane admin proof missing blocked receipt input: ${input}`,
         );
       }
     }

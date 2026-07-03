@@ -12,9 +12,17 @@ import {
 export {
   hostedTargetPreflightBlockingCheckIds,
   hostedTargetPreflightCheckIds,
+  hostedTargetPreflightExternalTargetsRequiredEvidence,
+  hostedTargetPreflightMissingApiUrlRequiredEvidence,
+  hostedTargetPreflightMissingFrontendUrlRequiredEvidence,
+  hostedTargetPreflightMissingRawEvidencePathRequiredEvidence,
 } from "./dev_test_game_hosted_target_preflight_cases.mjs";
 import {
+  hostedTargetPreflightExternalTargetsRequiredEvidence,
   hostedTargetPreflightCheckIds,
+  hostedTargetPreflightMissingApiUrlRequiredEvidence,
+  hostedTargetPreflightMissingFrontendUrlRequiredEvidence,
+  hostedTargetPreflightMissingRawEvidencePathRequiredEvidence,
 } from "./dev_test_game_hosted_target_preflight_cases.mjs";
 import {
   isExternallyHostedUrl,
@@ -56,14 +64,20 @@ export async function buildDevTestGameHostedTargetPreflight({
       id: "hosted-frontend-url-configured",
       status: frontendBaseUrl === null ? "blocked" : "passed",
       ...(frontendBaseUrl === null
-        ? { requiredEvidence: "Set FMARCH_HOSTED_MATRIX_FRONTEND_URL." }
+        ? {
+            requiredEvidence:
+              hostedTargetPreflightMissingFrontendUrlRequiredEvidence,
+          }
         : { evidence: frontendBaseUrl }),
     },
     {
       id: "hosted-api-url-configured",
       status: apiBaseUrl === null ? "blocked" : "passed",
       ...(apiBaseUrl === null
-        ? { requiredEvidence: "Set FMARCH_HOSTED_MATRIX_API_URL." }
+        ? {
+            requiredEvidence:
+              hostedTargetPreflightMissingApiUrlRequiredEvidence,
+          }
         : { evidence: apiBaseUrl }),
     },
     {
@@ -75,14 +89,19 @@ export async function buildDevTestGameHostedTargetPreflight({
         isExternallyHostedUrl(apiBaseUrl)
           ? "passed"
           : "blocked",
-      requiredEvidence:
-        "Both hosted target URLs must be externally reachable http(s) URLs, not localhost, loopback, private-network, link-local, or reserved IP targets.",
+      requiredEvidence: hostedTargetPreflightExternalTargetsRequiredEvidence({
+        frontendBaseUrl,
+        apiBaseUrl,
+      }),
     },
     {
       id: "raw-evidence-path-configured",
       status: rawEvidencePath === null ? "blocked" : "passed",
       ...(rawEvidencePath === null
-        ? { requiredEvidence: "Set FMARCH_HOSTED_MATRIX_RAW_EVIDENCE_PATH." }
+        ? {
+            requiredEvidence:
+              hostedTargetPreflightMissingRawEvidencePathRequiredEvidence,
+          }
         : { evidence: rawEvidencePath }),
     },
     {
@@ -101,6 +120,9 @@ export async function buildDevTestGameHostedTargetPreflight({
     },
   ];
   const status = checks.every((check) => check.status === "passed") ? "passed" : "blocked";
+  const blockedCheckIds = checks
+    .filter((check) => check.status === "blocked")
+    .map((check) => check.id);
   const preflight = {
     version: DEV_TEST_GAME_HOSTED_TARGET_PREFLIGHT_VERSION,
     proof: "dev-test-game-hosted-target-preflight",
@@ -121,6 +143,17 @@ export async function buildDevTestGameHostedTargetPreflight({
         rawEvidence.syntheticExternalTarget === true,
     },
     checks,
+    ...(status === "blocked"
+      ? {
+          blockedReceipt: buildBlockedReceipt({
+            blockedCheckIds,
+            frontendBaseUrl,
+            apiBaseUrl,
+            groupId,
+            rawEvidencePath,
+          }),
+        }
+      : {}),
     nextCommand:
       status === "passed"
         ? `npm run ${devTestGameHostedMatrixExternalEvidenceCommand}`
@@ -161,14 +194,63 @@ export function assertDevTestGameHostedTargetPreflight(preflight) {
   if (preflight.status === "blocked" && allPassed) {
     throw new Error("hosted target preflight blocked without blocked checks");
   }
+  if (preflight.status === "blocked") {
+    assertBlockedReceipt(preflight.blockedReceipt, {
+      blockedCheckIds: Array.from(checks.values())
+        .filter((check) => check.status === "blocked")
+        .map((check) => check.id),
+    });
+  } else if (preflight.blockedReceipt !== undefined) {
+    throw new Error("hosted target preflight passed with blocked receipt");
+  }
   return preflight;
+}
+
+function assertBlockedReceipt(receipt, { blockedCheckIds }) {
+  if (
+    receipt === null ||
+    typeof receipt !== "object" ||
+    receipt.status !== "blocked" ||
+    receipt.command !== "npm run test:dev-test-game-hosted-evidence-lane" ||
+    receipt.proofTarget !== devTestGameHostedTargetPreflightPath ||
+    receipt.nextProofTarget !== devTestGameHostedTargetPreflightPath ||
+    !Array.isArray(receipt.requiredInputs) ||
+    receipt.requiredInputs.length === 0 ||
+    !Array.isArray(receipt.missingRequiredInputs) ||
+    !Array.isArray(receipt.blockedCheckIds)
+  ) {
+    throw new Error("hosted target preflight blocked receipt shape drifted");
+  }
+  if (JSON.stringify(receipt.blockedCheckIds) !== JSON.stringify(blockedCheckIds)) {
+    throw new Error("hosted target preflight blocked receipt check ids drifted");
+  }
+  const missingRequiredInputs = receipt.requiredInputs
+    .filter((input) => input?.required === true && input.value === null)
+    .map((input) => input.name);
+  if (
+    JSON.stringify(receipt.missingRequiredInputs) !==
+    JSON.stringify(missingRequiredInputs)
+  ) {
+    throw new Error("hosted target preflight blocked receipt missing inputs drifted");
+  }
+  for (const name of [
+    "FMARCH_HOSTED_MATRIX_FRONTEND_URL",
+    "FMARCH_HOSTED_MATRIX_API_URL",
+    "FMARCH_HOSTED_MATRIX_GROUP_ID",
+    "FMARCH_HOSTED_MATRIX_RAW_EVIDENCE_PATH",
+  ]) {
+    if (!receipt.requiredInputs.some((input) => input.name === name)) {
+      throw new Error(`hosted target preflight blocked receipt missing input: ${name}`);
+    }
+  }
 }
 
 async function readRawEvidence({ rawEvidencePath, frontendBaseUrl, apiBaseUrl, groupId }) {
   if (rawEvidencePath === null) {
     return {
       status: "blocked",
-      requiredEvidence: "Set FMARCH_HOSTED_MATRIX_RAW_EVIDENCE_PATH.",
+      requiredEvidence:
+        hostedTargetPreflightMissingRawEvidencePathRequiredEvidence,
     };
   }
   const resolved = path.resolve(repoRoot, rawEvidencePath);
@@ -194,11 +276,67 @@ async function readRawEvidence({ rawEvidencePath, frontendBaseUrl, apiBaseUrl, g
   } catch (error) {
     return {
       status: "blocked",
-      requiredEvidence: `Readable raw hosted matrix evidence JSON matching the configured target: ${error.message}`,
+      requiredEvidence: `Readable raw hosted matrix evidence JSON matching FMARCH_HOSTED_MATRIX_FRONTEND_URL, FMARCH_HOSTED_MATRIX_API_URL, and FMARCH_HOSTED_MATRIX_GROUP_ID; observed ${rawEvidencePath}: ${error.message}. Rerun npm run test:dev-test-game-hosted-evidence-lane after replacing it.`,
     };
   }
 }
 
 function optionalEnv(value) {
   return typeof value === "string" && value.trim() !== "" ? value.trim() : null;
+}
+
+function buildBlockedReceipt({
+  blockedCheckIds,
+  frontendBaseUrl,
+  apiBaseUrl,
+  groupId,
+  rawEvidencePath,
+}) {
+  const requiredInputs = [
+    {
+      name: "FMARCH_HOSTED_MATRIX_FRONTEND_URL",
+      value: frontendBaseUrl,
+      required: true,
+      purpose: "Externally reachable frontend base URL.",
+    },
+    {
+      name: "FMARCH_HOSTED_MATRIX_API_URL",
+      value: apiBaseUrl,
+      required: true,
+      purpose: "Externally reachable API base URL for the same hosted deployment.",
+    },
+    {
+      name: "FMARCH_HOSTED_MATRIX_GROUP_ID",
+      value: groupId,
+      required: true,
+      purpose: "Hosted matrix group to prove.",
+    },
+    {
+      name: "FMARCH_HOSTED_MATRIX_RAW_EVIDENCE_PATH",
+      value: rawEvidencePath,
+      required: true,
+      purpose: "Readable raw hosted matrix evidence captured from the real target.",
+    },
+    {
+      name: "FMARCH_HOSTED_MATRIX_EVIDENCE_PATH",
+      value: null,
+      required: false,
+      purpose: "Optional normalized hosted matrix evidence output path.",
+    },
+  ];
+  return {
+    status: "blocked",
+    blockedCheckIds,
+    command: "npm run test:dev-test-game-hosted-evidence-lane",
+    proofTarget: devTestGameHostedTargetPreflightPath,
+    nextProofTarget: devTestGameHostedTargetPreflightPath,
+    requiredInputs,
+    missingRequiredInputs: requiredInputs
+      .filter((input) => input.required && input.value === null)
+      .map((input) => input.name),
+    operatorAction:
+      "Configure the hosted frontend/API URLs plus a readable raw hosted matrix evidence JSON from that same deployment, then rerun npm run test:dev-test-game-hosted-evidence-lane.",
+    localVsHostedBoundary:
+      "Local hosted-like matrix artifacts and synthetic demo evidence can prove the handoff path, but they cannot satisfy hosted deployment evidence.",
+  };
 }

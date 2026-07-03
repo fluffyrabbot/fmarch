@@ -55,11 +55,10 @@ test("seed scenario cases include reload and stale-reject proof rows", () => {
 });
 
 test("seed scenario cases expose generated demo scenario fixture rows", () => {
-  assert.equal(seedDemoScenarioIds.length, 123);
+  assert.equal(seedDemoScenarioIds.length, 122);
   assert.deepEqual(seedDemoOnlyScenarioIds, [
     "day-vote-resolution",
     "day-vote-no-lynch",
-    "night-three-action-resolution",
     "host-deadline-advance",
     "stale-deadline-advance",
     "private-channel",
@@ -121,64 +120,65 @@ test("seed scenario cases expose generated demo scenario fixture rows", () => {
     "player-vote-recovery",
     "day-vote-resolution",
     "day-vote-no-lynch",
-    "night-three-action-resolution",
+    "host-deadline-advance",
   ]);
-  assert.deepEqual(seedDemoScenarioIds.slice(6, 11), [
+  assert.deepEqual(seedDemoScenarioIds.slice(5, 10), [
     "host-deadline-advance",
     "stale-deadline-advance",
     "private-channel",
     "private-channel-stale-post-after-transition",
     "private-channel-completed-game-recovery",
   ]);
-  assert.deepEqual(seedDemoScenarioIds.slice(11, 14), [
+  assert.deepEqual(seedDemoScenarioIds.slice(10, 14), [
     "private-channel-invalid-action-recovery",
     "resolution-receipts",
     "player-action-boundary",
+    "host-votecount-publication",
   ]);
   assert.deepEqual(seedDemoScenarioIds.slice(14, 17), [
-    "host-votecount-publication",
     "concurrent-host-publish-race",
     "concurrent-host-publish-race-reload",
+    "host-lifecycle-control",
   ]);
   assert.deepEqual(seedDemoScenarioIds.slice(17, 20), [
-    "host-lifecycle-control",
     "host-modkill-control",
     "stale-host-publish-after-change",
+    "stale-host-publish",
   ]);
   assert.deepEqual(seedDemoScenarioIds.slice(20, 23), [
-    "stale-host-publish",
     "stale-host-lifecycle",
     "stale-host-lifecycle-reload",
+    "stale-host-modkill",
   ]);
   assert.deepEqual(seedDemoScenarioIds.slice(23, 26), [
-    "stale-host-modkill",
     "stale-host-modkill-reload",
     "stale-host-prompt",
+    "stale-host-complete",
   ]);
   assert.deepEqual(seedDemoScenarioIds.slice(26, 29), [
-    "stale-host-complete",
     "stale-host-control",
     "stale-host-resolve",
+    "stale-host-advance",
   ]);
   assert.deepEqual(seedDemoScenarioIds.slice(29, 32), [
-    "stale-host-advance",
     "stale-host-deadline",
     "stale-cohost-deadline",
+    "stale-player-vote",
   ]);
   assert.deepEqual(seedDemoScenarioIds.slice(32, 35), [
-    "stale-player-vote",
     "stale-player-vote-after-change",
     "stale-player-post-after-phase-closure",
+    "stale-player-withdraw-after-change",
   ]);
   assert.deepEqual(seedDemoScenarioIds.slice(35, 37), [
     "player-action-denied",
     "invalid-action-recovery",
   ]);
-  assert.deepEqual(seedDemoScenarioIds.slice(44, 46), [
+  assert.deepEqual(seedDemoScenarioIds.slice(43, 45), [
     "stale-player-withdraw-after-phase-closure",
     "stale-player-vote-after-phase-closure",
   ]);
-  assert.deepEqual(seedDemoScenarioIds.slice(45, 48), [
+  assert.deepEqual(seedDemoScenarioIds.slice(44, 47), [
     "stale-player-vote-after-phase-closure",
     "stale-player-complete",
     "stale-dead-target-vote",
@@ -208,7 +208,6 @@ test("seed scenario cases expose production fixture metadata", () => {
       .filter((scenario) =>
         [
           "day-vote-resolution",
-          "night-three-action-resolution",
           "private-channel",
           "private-channel-stale-post-after-transition",
           "private-channel-completed-game-recovery",
@@ -253,11 +252,6 @@ test("seed scenario cases expose production fixture metadata", () => {
       .map((scenario) => [scenario.id, scenario.role, scenario.roleUrlRedacted]),
     [
       ["day-vote-resolution", "actionPlayer", "/redacted/actionPlayer"],
-      [
-        "night-three-action-resolution",
-        "actionPlayer",
-        "/redacted/actionPlayer",
-      ],
       ["stale-deadline-advance", "host", "/redacted/host"],
       ["private-channel", "player", "/redacted/player"],
       [
@@ -298,8 +292,8 @@ test("seed scenario cases expose production fixture metadata", () => {
       ["stale-player-vote", "player", "/redacted/player"],
       ["stale-player-vote-after-change", "player", "/redacted/player"],
       ["stale-player-post-after-phase-closure", "player", "/redacted/player"],
-      ["player-action-denied", "player", "/redacted/player"],
       ["stale-player-withdraw-after-change", "player", "/redacted/player"],
+      ["player-action-denied", "player", "/redacted/player"],
       [
         "stale-player-withdraw-after-phase-closure",
         "player",

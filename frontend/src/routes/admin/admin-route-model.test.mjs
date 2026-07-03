@@ -86,6 +86,12 @@ import {
   localAdminAuditIds,
   localAdminAuditRoleUrl,
 } from "../../../../tools/dev_test_game_admin_audit_surface_ids.mjs";
+import {
+  hostedTargetPreflightExternalTargetsRequiredEvidence,
+  hostedTargetPreflightMissingApiUrlRequiredEvidence,
+  hostedTargetPreflightMissingFrontendUrlRequiredEvidence,
+  hostedTargetPreflightMissingRawEvidencePathRequiredEvidence,
+} from "../../../../tools/dev_test_game_hosted_target_preflight.mjs";
 
 const LOCAL_RACE_COMMAND =
   "npm run test:dev-test-game-hosted-concurrent-race-matrix";
@@ -1970,6 +1976,18 @@ test("admin local next action detail data carries hosted evidence handoff checkl
     data.audit.hostedHandoffChecklist.blockedChecks.map((item) => item.id),
     unproven.hostedHandoffChecklist.blockedCheckIds,
   );
+  assert.deepEqual(
+    data.audit.hostedHandoffChecklist.blockedReceipt.missingRequiredInputs,
+    [
+      "FMARCH_HOSTED_MATRIX_FRONTEND_URL",
+      "FMARCH_HOSTED_MATRIX_API_URL",
+      "FMARCH_HOSTED_MATRIX_RAW_EVIDENCE_PATH",
+    ],
+  );
+  assert.equal(
+    data.audit.hostedHandoffChecklist.blockedReceipt.localVsHostedBoundary,
+    "Local hosted-like matrix artifacts and synthetic demo evidence can prove the handoff path, but they cannot satisfy hosted deployment evidence.",
+  );
   assert.equal(
     data.audit.artifactSummary.selectedRoleHref,
     localAdminAuditRoleUrl(localAdminAuditIds.hostedEvidenceLane, { game: "midsummer" }),
@@ -2633,27 +2651,27 @@ test("admin hosted target preflight detail data carries blocked setup rows", asy
       [
         "hosted-frontend-url-configured",
         "blocked",
-        "Set FMARCH_HOSTED_MATRIX_FRONTEND_URL.",
+        hostedTargetPreflightMissingFrontendUrlRequiredEvidence,
       ],
       [
         "hosted-api-url-configured",
         "blocked",
-        "Set FMARCH_HOSTED_MATRIX_API_URL.",
+        hostedTargetPreflightMissingApiUrlRequiredEvidence,
       ],
       [
         "hosted-targets-external",
         "blocked",
-        "Both hosted target URLs must be externally reachable http(s) URLs, not localhost, loopback, private-network, link-local, or reserved IP targets.",
+        hostedTargetPreflightExternalTargetsRequiredEvidence(),
       ],
       [
         "raw-evidence-path-configured",
         "blocked",
-        "Set FMARCH_HOSTED_MATRIX_RAW_EVIDENCE_PATH.",
+        hostedTargetPreflightMissingRawEvidencePathRequiredEvidence,
       ],
       [
         "raw-evidence-readable",
         "blocked",
-        "Set FMARCH_HOSTED_MATRIX_RAW_EVIDENCE_PATH.",
+        hostedTargetPreflightMissingRawEvidencePathRequiredEvidence,
       ],
     ],
   );
@@ -2768,29 +2786,41 @@ test("admin hosted evidence lane detail data carries blocked setup rows", async 
       [
         "hosted-frontend-url-configured",
         "blocked",
-        "Set FMARCH_HOSTED_MATRIX_FRONTEND_URL.",
+        hostedTargetPreflightMissingFrontendUrlRequiredEvidence,
       ],
       [
         "hosted-api-url-configured",
         "blocked",
-        "Set FMARCH_HOSTED_MATRIX_API_URL.",
+        hostedTargetPreflightMissingApiUrlRequiredEvidence,
       ],
       [
         "hosted-targets-external",
         "blocked",
-        "Both hosted target URLs must be externally reachable http(s) URLs, not localhost, loopback, private-network, link-local, or reserved IP targets.",
+        hostedTargetPreflightExternalTargetsRequiredEvidence(),
       ],
       [
         "raw-evidence-path-configured",
         "blocked",
-        "Set FMARCH_HOSTED_MATRIX_RAW_EVIDENCE_PATH.",
+        hostedTargetPreflightMissingRawEvidencePathRequiredEvidence,
       ],
       [
         "raw-evidence-readable",
         "blocked",
-        "Set FMARCH_HOSTED_MATRIX_RAW_EVIDENCE_PATH.",
+        hostedTargetPreflightMissingRawEvidencePathRequiredEvidence,
       ],
     ],
+  );
+  assert.deepEqual(
+    data.audit.hostedHandoffChecklist.blockedReceipt.missingRequiredInputs,
+    [
+      "FMARCH_HOSTED_MATRIX_FRONTEND_URL",
+      "FMARCH_HOSTED_MATRIX_API_URL",
+      "FMARCH_HOSTED_MATRIX_RAW_EVIDENCE_PATH",
+    ],
+  );
+  assert.equal(
+    data.audit.hostedHandoffChecklist.blockedReceipt.operatorAction,
+    "Configure the hosted frontend/API URLs plus a readable raw hosted matrix evidence JSON from that same deployment, then rerun npm run test:dev-test-game-hosted-evidence-lane.",
   );
   assert.equal(data.audit.artifactSummary.demoProofStatus, "passed");
   assert.equal(data.audit.artifactSummary.demoOnly, true);
@@ -3818,28 +3848,30 @@ function localHostedTargetPreflightFixture() {
       {
         id: "hosted-frontend-url-configured",
         status: "blocked",
-        requiredEvidence: "Set FMARCH_HOSTED_MATRIX_FRONTEND_URL.",
+        requiredEvidence:
+          hostedTargetPreflightMissingFrontendUrlRequiredEvidence,
       },
       {
         id: "hosted-api-url-configured",
         status: "blocked",
-        requiredEvidence: "Set FMARCH_HOSTED_MATRIX_API_URL.",
+        requiredEvidence: hostedTargetPreflightMissingApiUrlRequiredEvidence,
       },
       {
         id: "hosted-targets-external",
         status: "blocked",
-        requiredEvidence:
-          "Both hosted target URLs must be externally reachable http(s) URLs, not localhost, loopback, private-network, link-local, or reserved IP targets.",
+        requiredEvidence: hostedTargetPreflightExternalTargetsRequiredEvidence(),
       },
       {
         id: "raw-evidence-path-configured",
         status: "blocked",
-        requiredEvidence: "Set FMARCH_HOSTED_MATRIX_RAW_EVIDENCE_PATH.",
+        requiredEvidence:
+          hostedTargetPreflightMissingRawEvidencePathRequiredEvidence,
       },
       {
         id: "raw-evidence-readable",
         status: "blocked",
-        requiredEvidence: "Set FMARCH_HOSTED_MATRIX_RAW_EVIDENCE_PATH.",
+        requiredEvidence:
+          hostedTargetPreflightMissingRawEvidencePathRequiredEvidence,
       },
       {
         id: "release-claim-boundary-carried",
@@ -3848,6 +3880,10 @@ function localHostedTargetPreflightFixture() {
         productionReady: false,
       },
     ],
+    blockedReceipt: hostedBlockedReceiptFixture({
+      proofTarget: HOSTED_TARGET_PREFLIGHT_PROOF_TARGET,
+      nextProofTarget: HOSTED_TARGET_PREFLIGHT_PROOF_TARGET,
+    }),
     nextCommand: "npm run test:dev-test-game-hosted-target-preflight",
     nextProofTarget: HOSTED_TARGET_PREFLIGHT_PROOF_TARGET,
   };
@@ -3941,28 +3977,30 @@ function localHostedEvidenceLaneFixture() {
       {
         id: "hosted-frontend-url-configured",
         status: "blocked",
-        requiredEvidence: "Set FMARCH_HOSTED_MATRIX_FRONTEND_URL.",
+        requiredEvidence:
+          hostedTargetPreflightMissingFrontendUrlRequiredEvidence,
       },
       {
         id: "hosted-api-url-configured",
         status: "blocked",
-        requiredEvidence: "Set FMARCH_HOSTED_MATRIX_API_URL.",
+        requiredEvidence: hostedTargetPreflightMissingApiUrlRequiredEvidence,
       },
       {
         id: "hosted-targets-external",
         status: "blocked",
-        requiredEvidence:
-          "Both hosted target URLs must be externally reachable http(s) URLs, not localhost, loopback, private-network, link-local, or reserved IP targets.",
+        requiredEvidence: hostedTargetPreflightExternalTargetsRequiredEvidence(),
       },
       {
         id: "raw-evidence-path-configured",
         status: "blocked",
-        requiredEvidence: "Set FMARCH_HOSTED_MATRIX_RAW_EVIDENCE_PATH.",
+        requiredEvidence:
+          hostedTargetPreflightMissingRawEvidencePathRequiredEvidence,
       },
       {
         id: "raw-evidence-readable",
         status: "blocked",
-        requiredEvidence: "Set FMARCH_HOSTED_MATRIX_RAW_EVIDENCE_PATH.",
+        requiredEvidence:
+          hostedTargetPreflightMissingRawEvidencePathRequiredEvidence,
       },
       {
         id: "release-claim-boundary-carried",
@@ -3971,6 +4009,10 @@ function localHostedEvidenceLaneFixture() {
         productionReady: false,
       },
     ],
+    blockedReceipt: hostedBlockedReceiptFixture({
+      proofTarget: HOSTED_TARGET_PREFLIGHT_PROOF_TARGET,
+      nextProofTarget: HOSTED_EVIDENCE_LANE_PROOF_TARGET,
+    }),
     generatedFrom: {
       hostedTargetPreflight: HOSTED_TARGET_PREFLIGHT_PROOF_TARGET,
     },
@@ -4974,7 +5016,62 @@ function hostedEvidenceLaneUnprovenFixture() {
 function hostedHandoffChecklistFixture() {
   return hostedEvidenceBlockedHandoffChecklistFixture({
     proofTarget: HOSTED_EVIDENCE_LANE_PROOF_TARGET,
+    blockedReceipt: hostedBlockedReceiptFixture({
+      proofTarget: HOSTED_TARGET_PREFLIGHT_PROOF_TARGET,
+      nextProofTarget: HOSTED_EVIDENCE_LANE_PROOF_TARGET,
+    }),
   });
+}
+
+function hostedBlockedReceiptFixture({ proofTarget, nextProofTarget }) {
+  return {
+    status: "blocked",
+    blockedCheckIds: [
+      "hosted-frontend-url-configured",
+      "hosted-api-url-configured",
+      "hosted-targets-external",
+      "raw-evidence-path-configured",
+      "raw-evidence-readable",
+    ],
+    command: "npm run test:dev-test-game-hosted-evidence-lane",
+    proofTarget,
+    nextProofTarget,
+    requiredInputs: [
+      {
+        name: "FMARCH_HOSTED_MATRIX_FRONTEND_URL",
+        value: null,
+        required: true,
+        purpose: "Externally reachable frontend base URL.",
+      },
+      {
+        name: "FMARCH_HOSTED_MATRIX_API_URL",
+        value: null,
+        required: true,
+        purpose: "Externally reachable API base URL for the same hosted deployment.",
+      },
+      {
+        name: "FMARCH_HOSTED_MATRIX_GROUP_ID",
+        value: "replacement-race-reload",
+        required: true,
+        purpose: "Hosted matrix group to prove.",
+      },
+      {
+        name: "FMARCH_HOSTED_MATRIX_RAW_EVIDENCE_PATH",
+        value: null,
+        required: true,
+        purpose: "Readable raw hosted matrix evidence captured from the real target.",
+      },
+    ],
+    missingRequiredInputs: [
+      "FMARCH_HOSTED_MATRIX_FRONTEND_URL",
+      "FMARCH_HOSTED_MATRIX_API_URL",
+      "FMARCH_HOSTED_MATRIX_RAW_EVIDENCE_PATH",
+    ],
+    operatorAction:
+      "Configure the hosted frontend/API URLs plus a readable raw hosted matrix evidence JSON from that same deployment, then rerun npm run test:dev-test-game-hosted-evidence-lane.",
+    localVsHostedBoundary:
+      "Local hosted-like matrix artifacts and synthetic demo evidence can prove the handoff path, but they cannot satisfy hosted deployment evidence.",
+  };
 }
 
 function playerActionSubmissionSpineFixture() {
