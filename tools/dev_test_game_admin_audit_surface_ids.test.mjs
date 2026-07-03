@@ -11,6 +11,7 @@ test("local admin audit surface ids build stable seeded role URLs", () => {
   assert.deepEqual(localAdminAuditIds, {
     coreLoop: "local-core-loop",
     hardening: "local-hardening",
+    playerRecovery: "local-player-recovery",
     identityAdapter: "local-identity-adapter",
     hostedIdentityEvidence: "local-hosted-identity-evidence",
     backupRestore: "local-backup-restore",
@@ -83,6 +84,7 @@ test("admin proof handoff builders use shared audit surface ids", async () => {
     "dev_test_game_proof_graph_handoff_cases.mjs",
     "dev_test_game_proof_graph_admin_proof.mjs",
     "dev_test_game_admin_audit_handoff_contract.mjs",
+    "dev_test_game_hardening_admin_proof.mjs",
     "dev_test_game_hosted_concurrent_race_matrix_cases.mjs",
     "dev_test_game_hosted_ops_signal_cases.mjs",
     "../frontend/src/routes/admin/admin-route-model.mjs",

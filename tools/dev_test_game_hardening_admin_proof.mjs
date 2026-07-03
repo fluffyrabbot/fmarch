@@ -14,6 +14,9 @@ import {
   staleConflictMessageLaneIds,
 } from "./dev_test_game_stale_conflict_scenarios.mjs";
 import {
+  localAdminAuditIds,
+} from "./dev_test_game_admin_audit_surface_ids.mjs";
+import {
   artifactDir,
   proveAdminAuditDetail,
   readJson,
@@ -49,7 +52,7 @@ await runAdminAuditProof({
       browser,
       frontendBaseUrl,
       game: proofRun.session.game,
-      auditId: "local-hardening",
+      auditId: localAdminAuditIds.hardening,
       requiredChecks,
       requiredCheckStatuses: highlightedLaneEvidence,
     });
@@ -57,10 +60,13 @@ await runAdminAuditProof({
       browser,
       frontendBaseUrl,
       game: proofRun.session.game,
-      auditId: "local-player-recovery",
+      auditId: localAdminAuditIds.playerRecovery,
       requiredChecks: playerRecoveryAuditLaneIds,
       requiredCheckStatuses: playerRecoveryHighlightedLaneEvidence,
-      requiredRelatedLinks: ["local-core-loop", "local-hardening"],
+      requiredRelatedLinks: [
+        localAdminAuditIds.coreLoop,
+        localAdminAuditIds.hardening,
+      ],
     });
     return { adminRoleSurface, playerRecoveryRoleSurface };
   },
@@ -129,7 +135,10 @@ export function assertHardeningAdminProof(evidence) {
       throw new Error(`player recovery admin proof missing visible check: ${checkId}`);
     }
   }
-  for (const relatedLinkId of ["local-core-loop", "local-hardening"]) {
+  for (const relatedLinkId of [
+    localAdminAuditIds.coreLoop,
+    localAdminAuditIds.hardening,
+  ]) {
     if (
       !evidence.playerRecoveryRoleSurface?.visibleRelatedLinks?.includes(relatedLinkId)
     ) {

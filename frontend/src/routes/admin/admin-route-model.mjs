@@ -3623,7 +3623,7 @@ export function normalizeLocalPlayerRecoveryAudit(proofRun, { game }) {
     return null;
   }
   return Object.freeze({
-    id: "local-player-recovery",
+    id: localAdminAuditIds.playerRecovery,
     label: "Local player recovery",
     status: `${LOCAL_PLAYER_RECOVERY_AUDIT_LANE_IDS.length} player recovery lanes passed`,
     authority: "GlobalAdmin or GlobalMod",
@@ -3633,7 +3633,7 @@ export function normalizeLocalPlayerRecoveryAudit(proofRun, { game }) {
     href: proofRun.artifacts?.proofRun ?? "target/dev-test-game/proof-run.json",
     inspectHref: adminAuditInspectHref({
       game,
-      audit: "local-player-recovery",
+      audit: localAdminAuditIds.playerRecovery,
     }),
     checks: Object.freeze(
       LOCAL_PLAYER_RECOVERY_AUDIT_LANE_IDS.map((id) => {

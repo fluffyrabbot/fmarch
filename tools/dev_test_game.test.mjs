@@ -154,6 +154,10 @@ import {
   playerRecoveryAuditLaneIds,
 } from "./dev_test_game_player_recovery_scenarios.mjs";
 import {
+  localAdminAuditIds,
+  localAdminAuditRoleUrl,
+} from "./dev_test_game_admin_audit_surface_ids.mjs";
+import {
   coreLoopAuditLaneIds,
   coreLoopAdminCheckIds,
 } from "./dev_test_game_core_loop_scenarios.mjs";
@@ -12745,12 +12749,15 @@ function hardeningAdminProofFixture() {
     playerRecoveryRoleSurface: {
       status: "passed",
       overviewRoleUrl: "/admin?game=<seeded-game>",
-      detailRoleUrl: "/admin/audit/local-player-recovery?game=<seeded-game>",
-      linkTestId: "admin-audit-link-local-player-recovery",
+      detailRoleUrl: localAdminAuditRoleUrl(localAdminAuditIds.playerRecovery),
+      linkTestId: `admin-audit-link-${localAdminAuditIds.playerRecovery}`,
       surfaceTestId: "admin-audit-detail-surface",
       clickedThroughFromOverview: true,
       visibleChecks: [...playerRecoveryAuditLaneIds],
-      visibleRelatedLinks: ["local-core-loop", "local-hardening"],
+      visibleRelatedLinks: [
+        localAdminAuditIds.coreLoop,
+        localAdminAuditIds.hardening,
+      ],
       rawInviteTokensVisible: false,
       releaseReady: false,
       productionReady: false,

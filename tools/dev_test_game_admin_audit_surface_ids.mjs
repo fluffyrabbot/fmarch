@@ -1,6 +1,7 @@
 export const localAdminAuditIds = Object.freeze({
   coreLoop: "local-core-loop",
   hardening: "local-hardening",
+  playerRecovery: "local-player-recovery",
   identityAdapter: "local-identity-adapter",
   hostedIdentityEvidence: "local-hosted-identity-evidence",
   backupRestore: "local-backup-restore",

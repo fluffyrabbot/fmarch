@@ -2137,7 +2137,7 @@ test("admin route data exposes local player recovery proof as a focused audit ro
   });
 
   const playerRecovery = data.audit.find(
-    (item) => item.id === "local-player-recovery",
+    (item) => item.id === localAdminAuditIds.playerRecovery,
   );
   assert.deepEqual(LOCAL_PLAYER_RECOVERY_AUDIT_LANE_IDS, playerRecoveryAuditLaneIds);
   assert.equal(playerRecovery.label, "Local player recovery");
@@ -2148,7 +2148,9 @@ test("admin route data exposes local player recovery proof as a focused audit ro
   assert.equal(playerRecovery.authority, "GlobalAdmin or GlobalMod");
   assert.equal(
     playerRecovery.inspectHref,
-    "/admin/audit/local-player-recovery?game=midsummer",
+    localAdminAuditRoleUrl(localAdminAuditIds.playerRecovery, {
+      game: "midsummer",
+    }),
   );
   assert.deepEqual(
     playerRecovery.checks.map((check) => check.id),
@@ -2420,7 +2422,7 @@ test("admin local core loop detail data carries lane rows", async () => {
 
 test("admin local player recovery detail data carries focused lane rows", async () => {
   const data = await buildAdminAuditDetailData({
-    audit: "local-player-recovery",
+    audit: localAdminAuditIds.playerRecovery,
     principalUserId: "admin_a",
     capabilities: [{ kind: "GlobalAdmin" }],
     proofRun: proofRunFixture(),
@@ -2428,7 +2430,7 @@ test("admin local player recovery detail data carries focused lane rows", async 
 
   assert.equal(data.status, "available");
   assert.equal(data.surfaceHeader.title, "Local player recovery");
-  assert.equal(data.audit.id, "local-player-recovery");
+  assert.equal(data.audit.id, localAdminAuditIds.playerRecovery);
   assert.equal(data.audit.checks.length, playerRecoveryAuditLaneIds.length);
   assert.deepEqual(
     data.audit.checks.map((check) => [check.id, check.status]),
