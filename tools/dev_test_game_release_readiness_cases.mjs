@@ -38,12 +38,16 @@ import {
   featureSpineRecoveryHookTarget,
   featureSpineTargetBySlotId,
 } from "./dev_test_game_feature_spine_targets.mjs";
+import {
+  localAdminAuditIds,
+  localAdminAuditRoleUrl,
+} from "./dev_test_game_admin_audit_surface_ids.mjs";
 
 export const devTestGameReleaseRunbookPath =
   "target/dev-test-game/release-runbook.json";
 export const devTestGameReleaseRunbookCommand = "test:dev-test-game-release-runbook";
 export const releaseReadinessHostedEvidenceLaneRoleUrl =
-  "/admin/audit/local-hosted-evidence-lane?game=<seeded-game>";
+  localAdminAuditRoleUrl(localAdminAuditIds.hostedEvidenceLane);
 export const releaseReadinessHostedEvidenceLaneProofGraphNodeId =
   "admin-proof:hosted-evidence-lane";
 export const releaseReadinessHostedEvidenceLaneProofTarget =
@@ -51,7 +55,7 @@ export const releaseReadinessHostedEvidenceLaneProofTarget =
 export const releaseReadinessHostedConcurrentRaceMatrixCommand =
   "npm run test:dev-test-game-hosted-concurrent-race-matrix";
 export const releaseReadinessHostedConcurrentRaceMatrixRoleUrl =
-  "/admin/audit/local-hosted-concurrent-race-matrix?game=<seeded-game>";
+  localAdminAuditRoleUrl(localAdminAuditIds.hostedConcurrentRaceMatrix);
 export const releaseReadinessHostedConcurrentRaceMatrixProofGraphNodeId =
   "admin-proof:hosted-concurrent-race-matrix";
 export const releaseReadinessHostedConcurrentRaceMatrixProofTarget =
@@ -383,7 +387,7 @@ function hostedProductionIdentityBuildable() {
     buildSlice:
       "Run the hosted identity evidence intake; it records a blocked handoff until hosted account lifecycle, invite delivery, recovery, abuse/rate-limit, session-secret, and audit retention evidence are attached without changing role surfaces.",
     proofTarget: devTestGameHostedIdentityEvidencePath,
-    roleUrl: "/admin/audit/local-hosted-identity-evidence?game=<seeded-game>",
+    roleUrl: localAdminAuditRoleUrl(localAdminAuditIds.hostedIdentityEvidence),
     proofGraphNodeId: "admin-proof:hosted-identity-evidence",
     productionFeatureSpineTarget:
       releaseReadinessProductionFeatureSpineTargets.identityAdapter,
@@ -462,7 +466,7 @@ const localBuildableReleaseReadinessItems = new Map([
       buildSlice:
         "Create the local release-runbook rehearsal that maps remaining readiness gaps to rollback, support, owner, and evidence boundaries.",
       proofTarget: devTestGameReleaseRunbookPath,
-      roleUrl: "/admin/audit/local-release-runbook?game=<seeded-game>",
+      roleUrl: localAdminAuditRoleUrl(localAdminAuditIds.releaseRunbook),
       proofGraphNodeId: "admin-proof:release-runbook",
       productionFeatureSpineTarget:
         releaseReadinessProductionFeatureSpineTargets.privateChannel,

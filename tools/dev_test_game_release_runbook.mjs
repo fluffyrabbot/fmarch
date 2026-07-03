@@ -8,6 +8,10 @@ import {
   devTestGameReleaseRunbookCommand,
   devTestGameReleaseRunbookPath,
 } from "./dev_test_game_release_readiness_cases.mjs";
+import {
+  localAdminAuditIds,
+  localAdminAuditRoleUrl,
+} from "./dev_test_game_admin_audit_surface_ids.mjs";
 import { repoRoot } from "./dev_test_game_spine_runner.mjs";
 
 export const DEV_TEST_GAME_RELEASE_RUNBOOK_VERSION = 1;
@@ -107,7 +111,7 @@ export function buildDevTestGameReleaseRunbook({
       buildSlice:
         "Refresh the local release-runbook rehearsal after readiness evidence changes, then collect real human approval outside the local proof spine.",
       proofTarget: devTestGameReleaseRunbookPath,
-      roleUrl: "/admin/audit/local-release-runbook?game=<seeded-game>",
+      roleUrl: localAdminAuditRoleUrl(localAdminAuditIds.releaseRunbook),
     },
   };
   assertDevTestGameReleaseRunbook(runbook);
@@ -175,7 +179,7 @@ function releaseRunbookItem(item, { rank, game }) {
     owner: "release-owner",
     command: "npm run test:dev-test-game-admin-spine",
     proofTarget: "target/dev-test-game/release-readiness-checklist.json",
-    roleUrl: "/admin/audit/local-release-readiness?game=<seeded-game>",
+    roleUrl: localAdminAuditRoleUrl(localAdminAuditIds.releaseReadiness),
     evidenceBoundary:
       "Collect external evidence for this readiness gap, then regenerate the local release-readiness checklist.",
   };
@@ -200,7 +204,7 @@ const releaseRunbookItemConfig = new Map([
       owner: "identity-owner",
       command: "npm run test:dev-test-game-identity",
       proofTarget: "target/auth-invite-role-proof/invite-role-proof.json",
-      roleUrl: "/admin/audit/local-identity-adapter?game=<seeded-game>",
+      roleUrl: localAdminAuditRoleUrl(localAdminAuditIds.identityAdapter),
       evidenceBoundary:
         "Local adapter proof is present; hosted account lifecycle, invite delivery, recovery, abuse controls, and audit export still require external evidence.",
     },
@@ -211,7 +215,9 @@ const releaseRunbookItemConfig = new Map([
       owner: "release-owner",
       command: "npm run test:dev-test-game-hosted-matrix-external-evidence",
       proofTarget: "target/dev-test-game/hosted-matrix-external.json",
-      roleUrl: "/admin/audit/local-hosted-concurrent-race-matrix?game=<seeded-game>",
+      roleUrl: localAdminAuditRoleUrl(
+        localAdminAuditIds.hostedConcurrentRaceMatrix,
+      ),
       evidenceBoundary:
         "Requires externally reachable frontend/API health checks and deployment evidence; local hosted-like URLs are not enough.",
     },
@@ -222,7 +228,7 @@ const releaseRunbookItemConfig = new Map([
       owner: "demo-owner",
       command: "npm run test:dev-test-game-seed-fixture",
       proofTarget: "target/dev-test-game/seed-fixture-summary.json",
-      roleUrl: "/admin/audit/local-seed-fixtures?game=<seeded-game>",
+      roleUrl: localAdminAuditRoleUrl(localAdminAuditIds.seedFixtures),
       evidenceBoundary:
         "Local seeded fixture inventory is present; hosted/demo sanitized data and invite delivery policy remain external release evidence.",
     },
@@ -234,7 +240,7 @@ const releaseRunbookItemConfig = new Map([
       command: "npm run test:dev-test-game-backup-restore",
       proofTarget:
         "target/live-stack-backup-restore-drill/local-backup-restore-proof.json",
-      roleUrl: "/admin/audit/local-backup-restore?game=<seeded-game>",
+      roleUrl: localAdminAuditRoleUrl(localAdminAuditIds.backupRestore),
       evidenceBoundary:
         "Local dump/restore is rehearsed; production-like backup storage, PITR, escrow, and secret rotation remain external release evidence.",
     },
@@ -245,7 +251,9 @@ const releaseRunbookItemConfig = new Map([
       owner: "multiplayer-owner",
       command: "npm run test:dev-test-game-hosted-concurrent-race-matrix",
       proofTarget: "target/dev-test-game/hosted-concurrent-race-matrix.json",
-      roleUrl: "/admin/audit/local-hosted-concurrent-race-matrix?game=<seeded-game>",
+      roleUrl: localAdminAuditRoleUrl(
+        localAdminAuditIds.hostedConcurrentRaceMatrix,
+      ),
       evidenceBoundary:
         "Local hosted-like matrix is present; externally reachable multi-node race/reconnect/stale-client evidence remains required.",
     },
@@ -256,7 +264,7 @@ const releaseRunbookItemConfig = new Map([
       owner: "ops-owner",
       command: "npm run test:dev-test-game-hosted-ops-signals",
       proofTarget: "target/dev-test-game/hosted-ops-signals.json",
-      roleUrl: "/admin/audit/local-hosted-ops-signals?game=<seeded-game>",
+      roleUrl: localAdminAuditRoleUrl(localAdminAuditIds.hostedOpsSignals),
       evidenceBoundary:
         "Local hosted-like ops signals are present; hosted logs, metrics, traces, SLOs, paging, and incident response evidence remain required.",
     },
@@ -267,7 +275,7 @@ const releaseRunbookItemConfig = new Map([
       owner: "release-owner",
       command: `npm run ${devTestGameReleaseRunbookCommand}`,
       proofTarget: devTestGameReleaseRunbookPath,
-      roleUrl: "/admin/audit/local-release-runbook?game=<seeded-game>",
+      roleUrl: localAdminAuditRoleUrl(localAdminAuditIds.releaseRunbook),
       evidenceBoundary:
         "This artifact rehearses the runbook locally; a human release owner must still execute it and record explicit approval.",
     },
@@ -278,7 +286,7 @@ const releaseRunbookItemConfig = new Map([
       owner: "release-owner",
       command: `npm run ${devTestGameReleaseRunbookCommand}`,
       proofTarget: devTestGameReleaseRunbookPath,
-      roleUrl: "/admin/audit/local-release-runbook?game=<seeded-game>",
+      roleUrl: localAdminAuditRoleUrl(localAdminAuditIds.releaseRunbook),
       evidenceBoundary:
         "Local runbook rehearsal is present; human signoff, support staffing, and release/rollback decision authority remain external approval evidence.",
     },

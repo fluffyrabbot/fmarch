@@ -111,6 +111,33 @@ test("next-action spine fixtures use shared feature audit role URLs", async () =
   }
 });
 
+test("release readiness fixtures use shared admin audit role URLs", async () => {
+  const rawRoleUrls = [
+    localAdminAuditRoleUrl(localAdminAuditIds.releaseRunbook),
+    localAdminAuditRoleUrl(localAdminAuditIds.releaseReadiness),
+    localAdminAuditRoleUrl(localAdminAuditIds.identityAdapter),
+    localAdminAuditRoleUrl(localAdminAuditIds.hostedIdentityEvidence),
+    localAdminAuditRoleUrl(localAdminAuditIds.hostedConcurrentRaceMatrix),
+    localAdminAuditRoleUrl(localAdminAuditIds.hostedEvidenceLane),
+    localAdminAuditRoleUrl(localAdminAuditIds.seedFixtures),
+    localAdminAuditRoleUrl(localAdminAuditIds.backupRestore),
+    localAdminAuditRoleUrl(localAdminAuditIds.hostedOpsSignals),
+  ];
+  for (const sourceFile of [
+    "dev_test_game_release_readiness_cases.mjs",
+    "dev_test_game_release_runbook.mjs",
+  ]) {
+    const source = await readFile(new URL(sourceFile, import.meta.url), "utf8");
+    for (const rawValue of rawRoleUrls) {
+      assert.equal(
+        source.includes(JSON.stringify(rawValue)),
+        false,
+        `${sourceFile} should derive ${rawValue} from shared admin audit ids`,
+      );
+    }
+  }
+});
+
 test("admin proof handoff builders use shared audit surface ids", async () => {
   const rawIds = [
     ...Object.values(localAdminAuditIds),

@@ -16,12 +16,18 @@ import {
   devTestGameReleaseRunbookCommand,
   devTestGameReleaseRunbookPath,
   releaseReadinessBuildableItemForId,
+  releaseReadinessHostedConcurrentRaceMatrixRoleUrl,
+  releaseReadinessHostedEvidenceLaneRoleUrl,
   releaseAdminProofFallbackUnprovenIds,
   releaseReadinessProductionFeatureSpineTargets,
   releaseReadinessUnprovenCaseIds,
   releaseReadinessUnprovenItem,
   releaseReadinessUnprovenStatusRows,
 } from "./dev_test_game_release_readiness_cases.mjs";
+import {
+  localAdminAuditIds,
+  localAdminAuditRoleUrl,
+} from "./dev_test_game_admin_audit_surface_ids.mjs";
 import {
   completedGameHardeningSpineCycleId,
   completedGameStaleRecoverySpineLaneCase,
@@ -226,7 +232,7 @@ test("release readiness buildable cases share next-action commands and spine tar
   assert.equal(hostedIdentity.proofTarget, devTestGameHostedIdentityEvidencePath);
   assert.equal(
     hostedIdentity.roleUrl,
-    "/admin/audit/local-hosted-identity-evidence?game=<seeded-game>",
+    localAdminAuditRoleUrl(localAdminAuditIds.hostedIdentityEvidence),
   );
   assert.equal(hostedIdentity.priority, 15);
   assert.deepEqual(
@@ -399,7 +405,7 @@ test("hosted deployment buildable case carries blocked and passed preflight stat
   assert.equal(passed.proofTarget, devTestGameHostedEvidenceLaneDemoProofPath);
   assert.equal(
     passed.roleUrl,
-    "/admin/audit/local-hosted-evidence-lane?game=<seeded-game>",
+    releaseReadinessHostedEvidenceLaneRoleUrl,
   );
   assert.equal(passed.proofGraphNodeId, "admin-proof:hosted-evidence-lane");
   assert.equal(passed.hostedEvidenceMode, "synthetic-demo");
@@ -414,7 +420,7 @@ test("hosted deployment buildable case carries blocked and passed preflight stat
   );
   assert.equal(
     realPassed.roleUrl,
-    "/admin/audit/local-hosted-concurrent-race-matrix?game=<seeded-game>",
+    releaseReadinessHostedConcurrentRaceMatrixRoleUrl,
   );
   assert.equal(
     realPassed.proofGraphNodeId,
