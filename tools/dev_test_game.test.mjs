@@ -2148,9 +2148,9 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
     graph,
     releaseReadiness,
   );
-  assert.equal(graph.summary.nodeCount, 32);
-  assert.equal(graph.summary.roleUrlCount, 32);
-  assert.equal(graph.summary.productionFeatureTargetCount, 13);
+  assert.equal(graph.summary.nodeCount, 33);
+  assert.equal(graph.summary.roleUrlCount, 33);
+  assert.equal(graph.summary.productionFeatureTargetCount, 14);
   assert.deepEqual(
     graph.nodes
       .filter((node) => node.kind === "admin-proof-surface")
@@ -12433,6 +12433,7 @@ function coreLoopProductionFeatureTargetsFixture(roleUrlHrefs) {
   const slotIds = [
     "host-phase-control",
     "day-vote-resolution",
+    "post-day-three-transition",
     "player-action-submission",
     "invalid-action-recovery",
     "player-action-boundary",

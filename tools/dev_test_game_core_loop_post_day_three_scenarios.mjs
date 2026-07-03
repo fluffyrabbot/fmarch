@@ -6,6 +6,8 @@ import {
   privateReceiptScenario,
 } from "./dev_test_game_core_loop_private_receipt_scenarios.mjs";
 
+export const postDayThreeTransitionLaneId = "post-day-three-transition";
+
 const clonePostDayThreeResolutionSurfaceCase = (surfaceCase) => ({
   ...surfaceCase,
   transitionFragments: [...surfaceCase.transitionFragments],

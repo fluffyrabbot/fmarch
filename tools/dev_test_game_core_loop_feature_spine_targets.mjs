@@ -9,6 +9,9 @@ import {
   coreLoopPrivateChannelPostLaneId,
 } from "./dev_test_game_core_loop_private_channel_recovery_scenarios.mjs";
 import {
+  postDayThreeTransitionLaneId,
+} from "./dev_test_game_core_loop_post_day_three_scenarios.mjs";
+import {
   dayThreeVoteResolutionLaneId,
 } from "./dev_test_game_core_loop_vote_resolution_scenarios.mjs";
 
@@ -69,6 +72,13 @@ export const coreLoopFeatureSpineTargetRows = Object.freeze({
     roleUrlId: `${dayTwoNightTwo}-actionPlayer`,
     checkpointId: `${dayTwoNightTwo}-d02-deciding-vote-submitted`,
     adminCheckId: dayThreeVoteResolutionLaneId,
+  }),
+  postDayThreeTransition: checkpointRow({
+    featureSlotId: postDayThreeTransitionLaneId,
+    cycleId: dayTwoNightTwo,
+    roleUrlId: `${dayTwoNightTwo}-host`,
+    checkpointId: `${dayTwoNightTwo}-d02-resolved-target-killed`,
+    adminCheckId: "core-loop",
   }),
   playerActionSubmission: checkpointRow({
     featureSlotId: "player-action-submission",

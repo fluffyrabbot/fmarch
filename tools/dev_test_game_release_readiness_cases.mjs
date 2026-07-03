@@ -81,6 +81,9 @@ export const releaseReadinessProductionFeatureSpineTargets = Object.freeze({
   dayVoteResolution: featureSpineCheckpointTarget({
     ...coreLoopSpineRows.dayVoteResolution,
   }),
+  postDayThreeTransition: featureSpineCheckpointTarget({
+    ...coreLoopSpineRows.postDayThreeTransition,
+  }),
   playerActionSubmission: featureSpineCheckpointTarget({
     ...coreLoopSpineRows.playerActionSubmission,
   }),

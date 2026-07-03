@@ -77,6 +77,7 @@ test("production feature spine resolver builds and validates source collections"
   assert.deepEqual(collection.slotIds, [
     "host-phase-control",
     "day-vote-resolution",
+    "post-day-three-transition",
     "player-action-submission",
     "invalid-action-recovery",
     "player-action-boundary",
@@ -100,6 +101,20 @@ test("production feature spine resolver builds and validates source collections"
       roleUrlId: "d02-n02-actionPlayer",
       checkpointId: "d02-n02-d02-deciding-vote-submitted",
       adminCheckId: "day-vote-resolution",
+    },
+  );
+  assert.deepEqual(
+    {
+      roleUrlId: collection.bySlotId["post-day-three-transition"].roleUrlId,
+      checkpointId:
+        collection.bySlotId["post-day-three-transition"].checkpointId,
+      adminCheckId:
+        collection.bySlotId["post-day-three-transition"].adminCheckId,
+    },
+    {
+      roleUrlId: "d02-n02-host",
+      checkpointId: "d02-n02-d02-resolved-target-killed",
+      adminCheckId: "core-loop",
     },
   );
   assert.deepEqual(
@@ -182,6 +197,7 @@ function coreLoopSourceTargetFixture() {
       "staleActionConflictReject",
     ],
     visibleAdminCheckIds: [
+      "core-loop",
       "completed-game-hardening-coverage",
       "host-lifecycle-control",
       "day-vote-resolution",
