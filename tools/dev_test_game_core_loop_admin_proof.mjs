@@ -4,11 +4,11 @@ import {
   coreLoopSpineStatus,
 } from "../frontend/src/lib/app/local-proof-lane-status.mjs";
 import {
-  assertCompletedGameEndgameSurfaceProof,
-  completedGameEndgameProofScenarioCases,
-  completedGameEndgameScenarioCaseFamilies,
-  completedGameEndgameTransition,
-} from "./dev_test_game_core_loop_completed_game_shared_recovery_scenarios.mjs";
+  assertCompletedGameProofReadinessSurfaceProof,
+  completedGameProofReadinessProofScenarioCases,
+  completedGameProofReadinessScenarioFamilies,
+  completedGameProofReadinessTransition,
+} from "./dev_test_game_core_loop_completed_game_proof_readiness_contract.mjs";
 import {
   assertPlayerStaleActionAfterTransitionProofCase,
   assertPlayerStaleVoteAfterTransitionProofCase,
@@ -1801,9 +1801,9 @@ async function proveCompletedGameEndgameSurface({
   normalPlayerRoleUrl,
   deadPlayerRoleUrl,
 }) {
-  const scenarioFamilies = completedGameEndgameScenarioCaseFamilies();
+  const scenarioFamilies = completedGameProofReadinessScenarioFamilies();
   const completedScenarioCases =
-    completedGameEndgameProofScenarioCases({
+    completedGameProofReadinessProofScenarioCases({
       actionPlayerRoleUrl,
       normalPlayerRoleUrl,
       deadPlayerRoleUrl,
@@ -1875,7 +1875,7 @@ async function proveCompletedGameEndgameSurface({
     sourceNormalPlayerRoleUrl: String(normalPlayerRoleUrl),
     sourceDeadPlayerRoleUrl: String(deadPlayerRoleUrl),
     clickedThroughFromRoleUrl: true,
-    transition: completedGameEndgameTransition({
+    transition: completedGameProofReadinessTransition({
       scenarioFamilies,
     }),
     hostCompleteProof,
@@ -10194,8 +10194,8 @@ function assertDayFiveNoLynchResolutionSurface(dayFiveNoLynchResolutionSurface) 
   });
 }
 function assertCompletedGameEndgameSurface(completedGameEndgameSurface) {
-  const scenarioFamilies = completedGameEndgameScenarioCaseFamilies();
-  assertCompletedGameEndgameSurfaceProof({
+  const scenarioFamilies = completedGameProofReadinessScenarioFamilies();
+  assertCompletedGameProofReadinessSurfaceProof({
     completedGameEndgameSurface,
     scenarioFamilies,
     assertHostPhaseTransitionActionProof,

@@ -119,10 +119,10 @@ import {
   localAdminAuditRoleUrl,
 } from "./dev_test_game_admin_audit_surface_ids.mjs";
 import {
-  assertCompletedGameEndgameSurfaceProof,
-  completedGameEndgameScenarioCaseFamilies,
+  assertCompletedGameProofReadinessSurfaceProof,
+  completedGameProofReadinessScenarioFamilies,
   completedGameStaleRecoverySpineLaneCase,
-} from "./dev_test_game_core_loop_completed_game_shared_recovery_scenarios.mjs";
+} from "./dev_test_game_core_loop_completed_game_proof_readiness_contract.mjs";
 import {
   completedGameHardeningSpineCycleId,
   completedGameHardeningSpineLaneCases,
@@ -2645,8 +2645,8 @@ function assertCoreLoopDayFiveNoLynchResolutionSurface(
   });
 }
 function assertCoreLoopCompletedGameEndgameSurface(completedGameEndgameSurface) {
-  const scenarioFamilies = completedGameEndgameScenarioCaseFamilies();
-  assertCompletedGameEndgameSurfaceProof({
+  const scenarioFamilies = completedGameProofReadinessScenarioFamilies();
+  assertCompletedGameProofReadinessSurfaceProof({
     completedGameEndgameSurface,
     scenarioFamilies,
     assertPostDayThreePlayerSurfaceProof:
