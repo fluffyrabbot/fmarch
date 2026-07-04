@@ -16,6 +16,7 @@ import {
 import {
   assertDevTestGameReleaseReadiness,
   buildDevTestGameReleaseReadiness,
+  validateDevTestGameAdminSpineProof,
 } from "./dev_test_game_release_readiness.mjs";
 import {
   completedGameHardeningSpineCycleId,
@@ -2831,6 +2832,31 @@ test("dev test-game next-action prioritizes development-spine recovery over mani
 
 test("dev test-game proof graph records local proof role URLs and recovery edges", () => {
   const adminSpineProof = adminSpineProofFixture();
+  const validatedAdminSpineProof = validateDevTestGameAdminSpineProof(
+    adminSpineProof,
+  );
+  assert.deepEqual(
+    validatedAdminSpineProof.batches.map((batch) => [
+      batch.label,
+      batch.caseCount,
+      batch.sharedFrontendSession,
+      batch.sharedChromiumSession,
+    ]),
+    [
+      [
+        "Aggregate pre-release admin proof batch",
+        7,
+        true,
+        true,
+      ],
+      [
+        "Aggregate release and hosted admin proof batch",
+        9,
+        true,
+        true,
+      ],
+    ],
+  );
   const releaseReadiness = devTestGameReleaseReadinessChecklistFixture({
     unproven: [
       {
@@ -16152,6 +16178,7 @@ function adminSpineProofFixture() {
     ],
     ["spine-manifest", spineManifestAdminProofFixture()],
   ];
+  const batches = adminSpineProofBatchFixtures(fixtures);
   return {
     version: 1,
     proof: "dev-test-game-admin-spine-proof",
@@ -16178,10 +16205,20 @@ function adminSpineProofFixture() {
       releaseReady: false,
       productionReady: false,
     })),
+    batches,
     recovery: {
       status: "passed",
       surfaceCount: fixtures.length,
       refreshedCount: fixtures.length,
+      batchCount: batches.length,
+      batches: batches.map((batch) => ({
+        label: batch.label,
+        reason: batch.reason,
+        status: batch.status,
+        caseCount: batch.caseCount,
+        elapsedMs: batch.elapsedMs,
+        artifactPaths: batch.artifactPaths,
+      })),
       nextCommand: "npm run test:dev-test-game-admin-spine",
       proofBoundary: "Local aggregate recovery commands only.",
       surfaces: fixtures.map(([id]) => ({
@@ -16196,6 +16233,69 @@ function adminSpineProofFixture() {
       })),
     },
     proofBoundary: "Local aggregate admin spine proof only.",
+  };
+}
+
+function adminSpineProofBatchFixtures(fixtures) {
+  const fixtureMap = new Map(fixtures);
+  return [
+    adminSpineProofBatchFixture({
+      label: "Aggregate pre-release admin proof batch",
+      reason:
+        "core, hardening, identity, backup, ops, and seed admin surfaces share the pre-readiness local proof inputs",
+      proofIds: [
+        "core-loop",
+        "hardening",
+        "identity",
+        "hosted-identity-evidence",
+        "backup",
+        "ops",
+        "seed",
+      ],
+      fixtureMap,
+      elapsedMs: 1200,
+    }),
+    adminSpineProofBatchFixture({
+      label: "Aggregate release and hosted admin proof batch",
+      reason:
+        "release, hosted, race coverage, and manifest admin surfaces share the post-readiness rollup inputs",
+      proofIds: [
+        "release",
+        "release-runbook",
+        "race-coverage",
+        "hosted-target-preflight",
+        "hosted-evidence-lane",
+        "hosted-concurrent-race-matrix",
+        "hosted-ops-signals",
+        "real-hosted-observability-handoff",
+        "spine-manifest",
+      ],
+      fixtureMap,
+      elapsedMs: 1800,
+    }),
+  ];
+}
+
+function adminSpineProofBatchFixture({
+  label,
+  reason,
+  proofIds,
+  fixtureMap,
+  elapsedMs,
+}) {
+  return {
+    label,
+    reason,
+    status: "passed",
+    caseCount: proofIds.length,
+    caseSmokeNames: proofIds.map((id) => fixtureMap.get(id).proof),
+    proofIds,
+    artifactPaths: proofIds.map((id) => proofPathFor(id)),
+    elapsedMs,
+    sharedFrontendSession: true,
+    sharedChromiumSession: true,
+    releaseReady: false,
+    productionReady: false,
   };
 }
 

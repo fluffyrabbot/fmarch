@@ -263,16 +263,19 @@ export async function runAdminSpineProof() {
   await mkdir(artifactDir, { recursive: true });
   await runNodeScript("tools/dev_test_game_spine_manifest.mjs");
   const entries = [];
+  const batches = [];
   const [preReleaseBatch, releaseAndHostedBatch] =
     devTestGameAdminSpineProofBatchPlans();
   await runAdminSpineProofBatch({
     batchPlan: preReleaseBatch,
     entries,
+    batches,
   });
   await runNodeScript("tools/dev_test_game_release_readiness.mjs");
   await runAdminSpineProofBatch({
     batchPlan: releaseAndHostedBatch,
     entries,
+    batches,
   });
   const evidence = {
     version: 1,
@@ -287,9 +290,10 @@ export async function runAdminSpineProof() {
       proofs: Object.fromEntries(entries.map((entry) => [entry.id, entry.path])),
     },
     adminProofs: entries,
+    batches,
     proofBoundary:
       "Runs the local dev-test-game admin browser proof scripts in readiness-spine order and validates the saved admin role-surface artifacts. Passing means the seeded local admin surfaces are reachable and coherent; it does not prove hosted identity, hosted operations, beta readiness, release readiness, or production readiness.",
-    recovery: buildAdminSpineRecovery(entries),
+    recovery: buildAdminSpineRecovery({ entries, batches }),
   };
   validateDevTestGameAdminSpineProof(evidence, {
     path: "target/dev-test-game/admin-spine-proof.json",
@@ -298,11 +302,34 @@ export async function runAdminSpineProof() {
   return evidence;
 }
 
-async function runAdminSpineProofBatch({ batchPlan, entries }) {
+async function runAdminSpineProofBatch({ batchPlan, entries, batches }) {
+  const startedAt = Date.now();
   await runAdminAuditProofBatchPlan(batchPlan);
+  const elapsedMs = Date.now() - startedAt;
+  const batchEntries = [];
   for (const spec of batchPlan.specs) {
-    entries.push(await readAdminSpineProofEntry(spec));
+    const entry = await readAdminSpineProofEntry(spec);
+    entries.push(entry);
+    batchEntries.push(entry);
   }
+  batches.push(adminSpineBatchEvidence({ batchPlan, entries: batchEntries, elapsedMs }));
+}
+
+function adminSpineBatchEvidence({ batchPlan, entries, elapsedMs }) {
+  return {
+    label: batchPlan.label,
+    reason: batchPlan.reason,
+    status: "passed",
+    caseCount: entries.length,
+    caseSmokeNames: batchPlan.cases.map((caseFactory) => caseFactory().smokeName),
+    proofIds: entries.map((entry) => entry.id),
+    artifactPaths: entries.map((entry) => entry.path),
+    elapsedMs,
+    sharedFrontendSession: true,
+    sharedChromiumSession: true,
+    releaseReady: false,
+    productionReady: false,
+  };
 }
 
 async function readAdminSpineProofEntry(spec) {
@@ -339,7 +366,7 @@ async function readAdminSpineProofEntry(spec) {
   };
 }
 
-function buildAdminSpineRecovery(entries) {
+function buildAdminSpineRecovery({ entries, batches }) {
   const surfaces = entries.map((entry) => ({
     id: entry.id,
     label: entry.label,
@@ -356,6 +383,15 @@ function buildAdminSpineRecovery(entries) {
     status: "passed",
     surfaceCount: surfaces.length,
     refreshedCount: surfaces.filter((surface) => surface.refreshedInCurrentRun).length,
+    batchCount: batches.length,
+    batches: batches.map((batch) => ({
+      label: batch.label,
+      reason: batch.reason,
+      status: batch.status,
+      caseCount: batch.caseCount,
+      elapsedMs: batch.elapsedMs,
+      artifactPaths: batch.artifactPaths,
+    })),
     nextCommand: "npm run test:dev-test-game-admin-spine",
     proofBoundary:
       "Local recovery map for aggregate admin proof surfaces. Commands rerun local browser proof lanes only; they do not prove hosted operations, beta readiness, release readiness, or production readiness.",

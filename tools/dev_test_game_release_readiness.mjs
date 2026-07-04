@@ -4993,6 +4993,34 @@ export function validateDevTestGameAdminSpineProof(proof, options = {}) {
     "real-hosted-observability-handoff",
     "spine-manifest",
   ];
+  const requiredBatches = [
+    {
+      label: "Aggregate pre-release admin proof batch",
+      proofIds: [
+        "core-loop",
+        "hardening",
+        "identity",
+        "hosted-identity-evidence",
+        "backup",
+        "ops",
+        "seed",
+      ],
+    },
+    {
+      label: "Aggregate release and hosted admin proof batch",
+      proofIds: [
+        "release",
+        "release-runbook",
+        "race-coverage",
+        "hosted-target-preflight",
+        "hosted-evidence-lane",
+        "hosted-concurrent-race-matrix",
+        "hosted-ops-signals",
+        "real-hosted-observability-handoff",
+        "spine-manifest",
+      ],
+    },
+  ];
   if (proof?.version !== 1) {
     throw new Error(`admin spine proof version drifted: ${proof?.version}`);
   }
@@ -5067,6 +5095,11 @@ export function validateDevTestGameAdminSpineProof(proof, options = {}) {
   if (Number(proof.recovery?.surfaceCount) !== requiredProofs.length) {
     throw new Error(`admin spine proof recovery surface count drifted`);
   }
+  validateAdminSpineProofBatches({
+    proofBatches: proof.batches,
+    recoveryBatches: proof.recovery?.batches,
+    requiredBatches,
+  });
   return {
     status: "passed",
     path: options.path ?? "target/dev-test-game/admin-spine-proof.json",
@@ -5077,7 +5110,14 @@ export function validateDevTestGameAdminSpineProof(proof, options = {}) {
       status: proof.recovery.status,
       surfaceCount: proof.recovery.surfaceCount,
       refreshedCount: proof.recovery.refreshedCount,
+      batchCount: proof.recovery.batchCount,
       nextCommand: proof.recovery.nextCommand,
+      batches: proof.recovery.batches.map((batch) => ({
+        label: batch.label,
+        status: batch.status,
+        caseCount: batch.caseCount,
+        artifactPaths: batch.artifactPaths,
+      })),
       surfaces: proof.recovery.surfaces.map((surface) => ({
         id: surface.id,
         status: surface.status,
@@ -5086,8 +5126,119 @@ export function validateDevTestGameAdminSpineProof(proof, options = {}) {
         refreshedInCurrentRun: surface.refreshedInCurrentRun === true,
       })),
     },
+    batches: proof.batches.map((batch) => ({
+      label: batch.label,
+      status: batch.status,
+      caseCount: batch.caseCount,
+      proofIds: batch.proofIds,
+      artifactPaths: batch.artifactPaths,
+      sharedFrontendSession: batch.sharedFrontendSession === true,
+      sharedChromiumSession: batch.sharedChromiumSession === true,
+    })),
     ...(options.artifact === undefined ? {} : { artifact: options.artifact }),
   };
+}
+
+function validateAdminSpineProofBatches({
+  proofBatches,
+  recoveryBatches,
+  requiredBatches,
+}) {
+  if (!Array.isArray(proofBatches) || proofBatches.length !== requiredBatches.length) {
+    throw new Error("admin spine proof batch count drifted");
+  }
+  if (
+    !Array.isArray(recoveryBatches) ||
+    recoveryBatches.length !== requiredBatches.length
+  ) {
+    throw new Error("admin spine proof recovery batch count drifted");
+  }
+  for (const [index, expected] of requiredBatches.entries()) {
+    const batch = proofBatches[index];
+    const recoveryBatch = recoveryBatches[index];
+    if (
+      batch?.label !== expected.label ||
+      recoveryBatch?.label !== expected.label ||
+      batch.status !== "passed" ||
+      recoveryBatch.status !== "passed"
+    ) {
+      throw new Error(`admin spine proof batch ${expected.label} drifted`);
+    }
+    if (typeof batch.reason !== "string" || batch.reason.trim() === "") {
+      throw new Error(`admin spine proof batch ${expected.label} is missing reason`);
+    }
+    if (typeof recoveryBatch.reason !== "string" || recoveryBatch.reason.trim() === "") {
+      throw new Error(
+        `admin spine proof recovery batch ${expected.label} is missing reason`,
+      );
+    }
+    if (
+      batch.releaseReady !== false ||
+      batch.productionReady !== false ||
+      batch.sharedFrontendSession !== true ||
+      batch.sharedChromiumSession !== true
+    ) {
+      throw new Error(`admin spine proof batch ${expected.label} made invalid claims`);
+    }
+    if (
+      Number(batch.caseCount) !== expected.proofIds.length ||
+      Number(recoveryBatch.caseCount) !== expected.proofIds.length
+    ) {
+      throw new Error(`admin spine proof batch ${expected.label} count drifted`);
+    }
+    if (
+      !Number.isInteger(batch.elapsedMs) ||
+      batch.elapsedMs < 0 ||
+      !Number.isInteger(recoveryBatch.elapsedMs) ||
+      recoveryBatch.elapsedMs < 0
+    ) {
+      throw new Error(`admin spine proof batch ${expected.label} timing drifted`);
+    }
+    if (
+      JSON.stringify(batch.proofIds) !== JSON.stringify(expected.proofIds) ||
+      !Array.isArray(batch.caseSmokeNames) ||
+      batch.caseSmokeNames.length !== expected.proofIds.length
+    ) {
+      throw new Error(`admin spine proof batch ${expected.label} proof order drifted`);
+    }
+    const expectedArtifactPaths = expected.proofIds.map((id) =>
+      adminSpineProofArtifactPath(id),
+    );
+    if (
+      JSON.stringify(batch.artifactPaths) !== JSON.stringify(expectedArtifactPaths) ||
+      JSON.stringify(recoveryBatch.artifactPaths) !==
+        JSON.stringify(expectedArtifactPaths)
+    ) {
+      throw new Error(`admin spine proof batch ${expected.label} artifact drifted`);
+    }
+  }
+}
+
+function adminSpineProofArtifactPath(id) {
+  return {
+    "core-loop": "target/dev-test-game/core-loop-admin-proof.json",
+    hardening: "target/dev-test-game/hardening-admin-proof.json",
+    identity: "target/dev-test-game/identity-admin-proof.json",
+    "hosted-identity-evidence":
+      "target/dev-test-game/hosted-identity-evidence-admin-proof.json",
+    backup: "target/dev-test-game/backup-admin-proof.json",
+    ops: "target/dev-test-game/ops-admin-proof.json",
+    seed: "target/dev-test-game/seed-admin-proof.json",
+    release: "target/dev-test-game/release-admin-proof.json",
+    "release-runbook": "target/dev-test-game/release-runbook-admin-proof.json",
+    "race-coverage": "target/dev-test-game/race-coverage-admin-proof.json",
+    "hosted-target-preflight":
+      "target/dev-test-game/hosted-target-preflight-admin-proof.json",
+    "hosted-evidence-lane":
+      "target/dev-test-game/hosted-evidence-lane-admin-proof.json",
+    "hosted-concurrent-race-matrix":
+      "target/dev-test-game/hosted-concurrent-race-matrix-admin-proof.json",
+    "hosted-ops-signals":
+      "target/dev-test-game/hosted-ops-signals-admin-proof.json",
+    "real-hosted-observability-handoff":
+      "target/dev-test-game/real-hosted-observability-handoff-admin-proof.json",
+    "spine-manifest": "target/dev-test-game/spine-manifest-admin-proof.json",
+  }[id];
 }
 
 export function validateDevTestGameAdminSpineAdminProof(proof, options = {}) {
