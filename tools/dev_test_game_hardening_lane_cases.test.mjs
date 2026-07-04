@@ -49,13 +49,22 @@ import {
   assertStaleConflictMessageSurfaceCoverage,
   buildStaleConflictMessageCoverageSummary,
   hostedMatrixStaleConflictLaneIds,
+  hardeningStaleConflictHighlightedLaneIds,
+  replacementStaleConflictMessageLaneId,
+  staleCohostDeadlineConflictLaneId,
   staleConflictMessageCoverageFamilies,
   staleConflictMessageCoverageFamilyDefinitions,
   staleConflictMessageNoSurfaceYetCases,
+  staleActionConflictLaneId,
+  staleActionConflictMessageLaneId,
+  staleConflictMessageStatusExpectations,
   replacementStaleConflictMessageSpineLaneCase,
+  staleDeadActionConflictLaneId,
+  staleHostDeadlineConflictLaneId,
   staleConflictMessageSurfaceCases,
   staleConflictMessageSurfaceCheckIds,
   staleConflictMessageLaneIds,
+  staleSameActionRecoveryLaneId,
 } from "./dev_test_game_stale_conflict_scenarios.mjs";
 import {
   replacementSessionRecoveryLaneIds,
@@ -245,6 +254,92 @@ test("hardening lane cases summarize stale conflict-message coverage", () => {
   assert.doesNotThrow(() =>
     assertStaleConflictMessageCoverageSummary({ summary, lanes }),
   );
+});
+
+test("hardening lane cases share stale conflict-message status expectations", () => {
+  assert.deepEqual(
+    staleConflictMessageStatusExpectations().map((expectation) => ({
+      laneId: expectation.laneId,
+      role: expectation.role,
+      rejectError: expectation.rejectError,
+      receiptStatusText: expectation.receiptStatusText,
+      receiptFragment: expectation.receiptFragment,
+      rejectMessageFragment: expectation.rejectMessageFragment,
+      actorStatusAfterReject: expectation.actorStatusAfterReject,
+      actionVisibleAfterRefresh: expectation.actionVisibleAfterRefresh,
+      refreshedPhase: expectation.refreshedPhase,
+      currentOccupant: expectation.currentOccupant,
+    })),
+    [
+      {
+        laneId: replacementStaleConflictMessageLaneId,
+        role: "host",
+        rejectError: "InvalidTarget",
+        receiptStatusText: undefined,
+        receiptFragment: "replacement target is stale",
+        rejectMessageFragment: undefined,
+        actorStatusAfterReject: undefined,
+        actionVisibleAfterRefresh: undefined,
+        refreshedPhase: undefined,
+        currentOccupant: "player-rowan",
+      },
+      {
+        laneId: staleActionConflictMessageLaneId,
+        role: "player",
+        rejectError: "PhaseLocked",
+        receiptStatusText:
+          "Reject PhaseLocked: phase locked; stale action state, refresh and use current action controls",
+        receiptFragment: undefined,
+        rejectMessageFragment: undefined,
+        actorStatusAfterReject: undefined,
+        actionVisibleAfterRefresh: undefined,
+        refreshedPhase: "D02",
+        currentOccupant: undefined,
+      },
+      {
+        laneId: staleDeadActionConflictLaneId,
+        role: "player",
+        rejectError: "SlotNotAlive",
+        receiptStatusText: undefined,
+        receiptFragment: undefined,
+        rejectMessageFragment: "actor is no longer alive",
+        actorStatusAfterReject: "dead",
+        actionVisibleAfterRefresh: false,
+        refreshedPhase: undefined,
+        currentOccupant: undefined,
+      },
+      {
+        laneId: staleHostDeadlineConflictLaneId,
+        role: "host",
+        rejectError: "PhaseLocked",
+        receiptStatusText: undefined,
+        receiptFragment: "stale phase state",
+        rejectMessageFragment: undefined,
+        actorStatusAfterReject: undefined,
+        actionVisibleAfterRefresh: undefined,
+        refreshedPhase: undefined,
+        currentOccupant: undefined,
+      },
+      {
+        laneId: staleCohostDeadlineConflictLaneId,
+        role: "cohost",
+        rejectError: "PhaseLocked",
+        receiptStatusText: undefined,
+        receiptFragment: "stale phase state",
+        rejectMessageFragment: undefined,
+        actorStatusAfterReject: undefined,
+        actionVisibleAfterRefresh: undefined,
+        refreshedPhase: undefined,
+        currentOccupant: undefined,
+      },
+    ],
+  );
+  assert.deepEqual(hardeningStaleConflictHighlightedLaneIds, [
+    staleSameActionRecoveryLaneId,
+    staleDeadActionConflictLaneId,
+    staleActionConflictLaneId,
+    staleActionConflictMessageLaneId,
+  ]);
 });
 
 test("hardening lane cases share host stale-control IDs", () => {

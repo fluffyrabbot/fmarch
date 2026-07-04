@@ -27,6 +27,12 @@ import {
   stalePlayerActionReconnectLaneId,
 } from "../../../../tools/dev_test_game_stale_client_reconnect_scenarios.mjs";
 import {
+  hardeningStaleConflictHighlightedLaneIds,
+  staleActionConflictMessageLaneId,
+  staleConflictMessageStatusExpectationForLane,
+  staleDeadActionConflictLaneId,
+} from "../../../../tools/dev_test_game_stale_conflict_scenarios.mjs";
+import {
   CORE_LOOP_COMPLETED_GAME_HIGHLIGHTED_LANE_IDS,
   CORE_LOOP_HIGHLIGHTED_LANE_IDS,
   HARDENING_HIGHLIGHTED_LANE_IDS,
@@ -76,6 +82,31 @@ function hostStaleControlEvidence(laneId) {
   };
 }
 
+function staleConflictEvidence(laneId) {
+  const expectation = staleConflictMessageStatusExpectationForLane(laneId);
+  return {
+    roleUrl: "http://127.0.0.1:5173/g/game-id",
+    ...(Object.hasOwn(expectation, "rejectError")
+      ? { rejectError: expectation.rejectError }
+      : {}),
+    ...(Object.hasOwn(expectation, "receiptStatusText")
+      ? { receiptStatusText: expectation.receiptStatusText }
+      : {}),
+    ...(Object.hasOwn(expectation, "rejectMessageFragment")
+      ? { rejectMessage: expectation.rejectMessageFragment }
+      : {}),
+    ...(Object.hasOwn(expectation, "actorStatusAfterReject")
+      ? { actorStatusAfterReject: expectation.actorStatusAfterReject }
+      : {}),
+    ...(Object.hasOwn(expectation, "actionVisibleAfterRefresh")
+      ? { actionVisibleAfterRefresh: expectation.actionVisibleAfterRefresh }
+      : {}),
+    ...(Object.hasOwn(expectation, "refreshedPhase")
+      ? { refreshedPhase: expectation.refreshedPhase }
+      : {}),
+  };
+}
+
 test("core loop highlighted completed-game lanes come from shared scenarios", () => {
   assert.deepEqual(
     CORE_LOOP_COMPLETED_GAME_HIGHLIGHTED_LANE_IDS,
@@ -103,6 +134,15 @@ test("highlighted host stale-command lanes come from shared scenarios", () => {
     assert(
       HARDENING_HIGHLIGHTED_LANE_IDS.includes(laneId),
       `missing hardening host stale lane ${laneId}`,
+    );
+  }
+});
+
+test("highlighted stale-conflict lanes come from shared scenarios", () => {
+  for (const laneId of hardeningStaleConflictHighlightedLaneIds) {
+    assert(
+      HARDENING_HIGHLIGHTED_LANE_IDS.includes(laneId),
+      `missing hardening stale-conflict lane ${laneId}`,
     );
   }
 });
@@ -298,13 +338,9 @@ test("hardening lane status formats stale and concurrent conflict evidence", () 
 
   assert.equal(
     hardeningLaneStatus({
-      id: "stale-action-conflict-message",
+      id: staleActionConflictMessageLaneId,
       status: "passed",
-      evidence: {
-        roleUrl: "http://127.0.0.1:5173/g/game-id",
-        receiptStatusText:
-          "Reject PhaseLocked: phase locked; stale action state, refresh and use current action controls",
-      },
+      evidence: staleConflictEvidence(staleActionConflictMessageLaneId),
     }),
     "passed: role URL true, Reject PhaseLocked: phase locked; stale action state, refresh and use current action controls",
   );
@@ -361,13 +397,9 @@ test("hardening lane status formats stale and concurrent conflict evidence", () 
   );
   assert.equal(
     hardeningLaneStatus({
-      id: "stale-dead-action-conflict",
+      id: staleDeadActionConflictLaneId,
       status: "passed",
-      evidence: {
-        rejectError: "SlotNotAlive",
-        roleUrl: "http://127.0.0.1:5173/g/game-id",
-        actorStatusAfterReject: "dead",
-      },
+      evidence: staleConflictEvidence(staleDeadActionConflictLaneId),
     }),
     "passed: Reject SlotNotAlive, role URL true, actor dead",
   );
@@ -453,13 +485,9 @@ test("highlighted lane evidence maps keep browser proof assertions aligned", () 
         },
       },
       {
-        id: "stale-action-conflict-message",
+        id: staleActionConflictMessageLaneId,
         status: "passed",
-        evidence: {
-          roleUrl: "http://127.0.0.1:5173/g/game-id",
-          receiptStatusText:
-            "Reject PhaseLocked: phase locked; stale action state, refresh and use current action controls",
-        },
+        evidence: staleConflictEvidence(staleActionConflictMessageLaneId),
       },
       {
         id: stalePlayerActionReconnectLaneId,
@@ -660,7 +688,7 @@ test("highlighted lane evidence maps keep browser proof assertions aligned", () 
     "passed: Reject InvalidTarget: invalid target; stale phase state, refresh and use current controls, locked false",
   );
   assert.equal(
-    hardeningHighlightedLaneEvidence(proofRun)["stale-action-conflict-message"],
+    hardeningHighlightedLaneEvidence(proofRun)[staleActionConflictMessageLaneId],
     "passed: role URL true, Reject PhaseLocked: phase locked; stale action state, refresh and use current action controls",
   );
   assert.equal(

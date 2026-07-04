@@ -12,6 +12,13 @@ import {
   hostStaleResolveReloadLaneId,
 } from "../../../../tools/dev_test_game_host_stale_control_scenarios.mjs";
 import {
+  hardeningStaleConflictHighlightedLaneIds,
+  staleActionConflictLaneId,
+  staleActionConflictMessageLaneId,
+  staleDeadActionConflictLaneId,
+  staleSameActionRecoveryLaneId,
+} from "../../../../tools/dev_test_game_stale_conflict_scenarios.mjs";
+import {
   playerActionBoundaryLaneId,
   playerActionLoopLaneId,
   playerInvalidActionRecoveryLaneId,
@@ -49,10 +56,7 @@ export const CORE_LOOP_HIGHLIGHTED_LANE_IDS = Object.freeze([
 export const HARDENING_HIGHLIGHTED_LANE_IDS = Object.freeze([
   "concurrent-action-race",
   "concurrent-action-race-reload",
-  "stale-same-action-recovery",
-  "stale-dead-action-conflict",
-  "stale-action-conflict",
-  "stale-action-conflict-message",
+  ...hardeningStaleConflictHighlightedLaneIds,
   ...staleClientReconnectHighlightedLaneIds,
   "stale-host-control",
   "concurrent-host-resolve-race",
@@ -170,13 +174,13 @@ export function hardeningLaneStatus(lane) {
       return `${status}: target ${String(evidence.targetSlot ?? "unknown")}, alive ${String(evidence.apiTargetAlive ?? "unknown")}`;
     case "reconnect-recovery":
       return `${status}: ${String(evidence.reconnectingState ?? "unknown")} -> ${String(evidence.recoveryState ?? "unknown")}`;
-    case "stale-same-action-recovery":
+    case staleSameActionRecoveryLaneId:
       return `${status}: Reject ${String(evidence.rejectError ?? "unknown")}, role URL ${typeof evidence.roleUrl === "string"}, visible ${String(evidence.actionVisibleAfterRefresh ?? "unknown")}`;
-    case "stale-dead-action-conflict":
+    case staleDeadActionConflictLaneId:
       return `${status}: Reject ${String(evidence.rejectError ?? "unknown")}, role URL ${typeof evidence.roleUrl === "string"}, actor ${String(evidence.actorStatusAfterReject ?? "unknown")}`;
-    case "stale-action-conflict":
+    case staleActionConflictLaneId:
       return `${status}: Reject ${String(evidence.rejectError ?? "unknown")}, role URL ${typeof evidence.roleUrl === "string"}, refreshed ${String(evidence.refreshedPhase ?? "unknown")}`;
-    case "stale-action-conflict-message":
+    case staleActionConflictMessageLaneId:
       return `${status}: role URL ${typeof evidence.roleUrl === "string"}, ${String(evidence.receiptStatusText ?? evidence.rejectMessage ?? "unknown")}`;
     case stalePlayerActionReconnectLaneId:
       return `${status}: role URL ${typeof evidence.roleUrl === "string"}, ${String(evidence.reconnectingState ?? "unknown")} -> ${String(evidence.recoveryState ?? "unknown")}, phase ${String(evidence.recoveredPhase ?? "unknown")}`;

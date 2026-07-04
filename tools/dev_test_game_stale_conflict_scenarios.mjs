@@ -8,33 +8,47 @@ import {
 } from "./dev_test_game_lane_coverage.mjs";
 
 const cloneScenarioCase = (scenario) => ({ ...scenario });
+const cloneStatusExpectation = (expectation) => ({ ...expectation });
+
+export const replacementStaleConflictMessageLaneId =
+  "replacement-stale-conflict-message";
+export const staleActionConflictMessageLaneId =
+  "stale-action-conflict-message";
+export const staleDeadActionConflictLaneId = "stale-dead-action-conflict";
+export const staleHostDeadlineConflictLaneId = "stale-host-deadline";
+export const staleCohostDeadlineConflictLaneId = "stale-cohost-deadline";
+export const staleSameActionRecoveryLaneId = "stale-same-action-recovery";
+export const staleActionConflictLaneId = "stale-action-conflict";
 
 export const staleConflictMessageLaneIds = Object.freeze([
-  "replacement-stale-conflict-message",
-  "stale-action-conflict-message",
-  "stale-dead-action-conflict",
-  "stale-host-deadline",
-  "stale-cohost-deadline",
+  replacementStaleConflictMessageLaneId,
+  staleActionConflictMessageLaneId,
+  staleDeadActionConflictLaneId,
+  staleHostDeadlineConflictLaneId,
+  staleCohostDeadlineConflictLaneId,
 ]);
 
 export const staleConflictMessageCoverageFamilyDefinitions = Object.freeze([
   Object.freeze({
     id: "replacement-conflict-message",
     label: "Replacement stale conflict message",
-    laneIds: Object.freeze(["replacement-stale-conflict-message"]),
+    laneIds: Object.freeze([replacementStaleConflictMessageLaneId]),
   }),
   Object.freeze({
     id: "player-action-conflict-messages",
     label: "Player action stale conflict messages",
     laneIds: Object.freeze([
-      "stale-action-conflict-message",
-      "stale-dead-action-conflict",
+      staleActionConflictMessageLaneId,
+      staleDeadActionConflictLaneId,
     ]),
   }),
   Object.freeze({
     id: "host-deadline-conflict-messages",
     label: "Host deadline stale conflict messages",
-    laneIds: Object.freeze(["stale-host-deadline", "stale-cohost-deadline"]),
+    laneIds: Object.freeze([
+      staleHostDeadlineConflictLaneId,
+      staleCohostDeadlineConflictLaneId,
+    ]),
   }),
 ]);
 
@@ -71,7 +85,7 @@ export const staleConflictMessageSurfaceCaseDefinitions = Object.freeze([
   Object.freeze({
     id: "replacement-stale-conflict-message-surface",
     checkId: "stale-conflict-message-surface-replacement-stale-conflict-message",
-    laneId: "replacement-stale-conflict-message",
+    laneId: replacementStaleConflictMessageLaneId,
     label: "Replacement stale conflict message surface",
     role: "host",
     expectedRejectError: "InvalidTarget",
@@ -87,7 +101,7 @@ export const staleConflictMessageSurfaceCaseDefinitions = Object.freeze([
   Object.freeze({
     id: "stale-action-conflict-message-surface",
     checkId: "stale-conflict-message-surface-stale-action-conflict-message",
-    laneId: "stale-action-conflict-message",
+    laneId: staleActionConflictMessageLaneId,
     label: "Stale action conflict message surface",
     role: "player",
     expectedRejectError: "PhaseLocked",
@@ -101,7 +115,7 @@ export const staleConflictMessageSurfaceCaseDefinitions = Object.freeze([
   Object.freeze({
     id: "stale-dead-action-conflict-surface",
     checkId: "stale-conflict-message-surface-stale-dead-action-conflict",
-    laneId: "stale-dead-action-conflict",
+    laneId: staleDeadActionConflictLaneId,
     label: "Stale dead-action conflict message surface",
     role: "player",
     expectedRejectError: "SlotNotAlive",
@@ -117,7 +131,7 @@ export const staleConflictMessageSurfaceCaseDefinitions = Object.freeze([
   Object.freeze({
     id: "stale-host-deadline-surface",
     checkId: "stale-conflict-message-surface-stale-host-deadline",
-    laneId: "stale-host-deadline",
+    laneId: staleHostDeadlineConflictLaneId,
     label: "Stale host deadline conflict message surface",
     role: "host",
     expectedRejectError: "PhaseLocked",
@@ -136,7 +150,7 @@ export const staleConflictMessageSurfaceCaseDefinitions = Object.freeze([
   Object.freeze({
     id: "stale-cohost-deadline-surface",
     checkId: "stale-conflict-message-surface-stale-cohost-deadline",
-    laneId: "stale-cohost-deadline",
+    laneId: staleCohostDeadlineConflictLaneId,
     label: "Stale cohost deadline conflict message surface",
     role: "cohost",
     expectedRejectError: "PhaseLocked",
@@ -160,7 +174,7 @@ export function staleConflictMessageSurfaceCases() {
 
 export function replacementStaleConflictMessageSpineLaneCase() {
   const cases = staleConflictMessageSurfaceCases().filter(
-    (scenario) => scenario.laneId === "replacement-stale-conflict-message",
+    (scenario) => scenario.laneId === replacementStaleConflictMessageLaneId,
   );
   if (cases.length !== 1) {
     throw new Error("replacement stale conflict-message spine lane drifted");
@@ -175,6 +189,78 @@ export function staleConflictMessageSurfaceCheckIds() {
 export function staleConflictMessageNoSurfaceYetCases() {
   return staleConflictMessageNoSurfaceYetDefinitions.map(cloneScenarioCase);
 }
+
+function actionConflictReceiptText({ rejectError, receiptFragment }) {
+  const reason = rejectError === "InvalidTarget" ? "invalid target" : "phase locked";
+  return `Reject ${rejectError}: ${reason}; ${receiptFragment}, refresh and use current action controls`;
+}
+
+function conflictStatusExpectation(scenario) {
+  if (scenario.laneId === staleActionConflictMessageLaneId) {
+    return Object.freeze({
+      laneId: scenario.laneId,
+      role: scenario.role,
+      rejectError: scenario.expectedRejectError,
+      receiptStatusText: actionConflictReceiptText({
+        rejectError: scenario.expectedRejectError,
+        receiptFragment: scenario.expectedReceiptFragment,
+      }),
+      refreshedPhase: scenario.expectedRefreshedPhase,
+    });
+  }
+  if (scenario.laneId === staleDeadActionConflictLaneId) {
+    return Object.freeze({
+      laneId: scenario.laneId,
+      role: scenario.role,
+      rejectError: scenario.expectedRejectError,
+      rejectMessageFragment: scenario.expectedRejectMessageFragment,
+      actorStatusAfterReject: scenario.expectedActorStatusAfterReject,
+      actionVisibleAfterRefresh: scenario.expectedActionVisibleAfterRefresh,
+    });
+  }
+  if (scenario.laneId === replacementStaleConflictMessageLaneId) {
+    return Object.freeze({
+      laneId: scenario.laneId,
+      role: scenario.role,
+      rejectError: scenario.expectedRejectError,
+      receiptFragment: scenario.expectedReceiptFragment,
+      currentOccupant: scenario.expectedCurrentOccupant,
+    });
+  }
+  return Object.freeze({
+    laneId: scenario.laneId,
+    role: scenario.role,
+    rejectError: scenario.expectedRejectError,
+    receiptFragment: scenario.expectedReceiptFragment,
+  });
+}
+
+export const staleConflictMessageStatusExpectationDefinitions = Object.freeze(
+  staleConflictMessageSurfaceCaseDefinitions.map(conflictStatusExpectation),
+);
+
+export function staleConflictMessageStatusExpectations() {
+  return staleConflictMessageStatusExpectationDefinitions.map(
+    cloneStatusExpectation,
+  );
+}
+
+export function staleConflictMessageStatusExpectationForLane(laneId) {
+  const expectation = staleConflictMessageStatusExpectationDefinitions.find(
+    (candidate) => candidate.laneId === laneId,
+  );
+  if (expectation === undefined) {
+    throw new Error(`unknown stale conflict-message status lane: ${laneId}`);
+  }
+  return cloneStatusExpectation(expectation);
+}
+
+export const hardeningStaleConflictHighlightedLaneIds = Object.freeze([
+  staleSameActionRecoveryLaneId,
+  staleDeadActionConflictLaneId,
+  staleActionConflictLaneId,
+  staleActionConflictMessageLaneId,
+]);
 
 export function assertStaleConflictMessageSurfaceCoverage() {
   const expectedLaneIds = new Set(staleConflictMessageLaneIds);
