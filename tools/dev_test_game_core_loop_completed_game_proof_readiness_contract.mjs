@@ -3,17 +3,13 @@ import {
   completedGameHardeningLaneCases,
   completedGameHardeningSpineCycleId,
   completedGameHardeningSpineLaneCases,
-} from "./dev_test_game_core_loop_completed_game_cases.mjs";
-import {
+  completedGameProofReadinessScenarioFamilies,
+  completedGameProofReadinessScenarioFamily as completedGameProofReadinessCaseScenarioFamily,
   completedGameStaleRecoverySpineLaneCase,
 } from "./dev_test_game_core_loop_completed_terminal_scenario_assertions.mjs";
 import {
-  completedGameProofReadinessScenarioFamily as completedGameProofReadinessCaseScenarioFamily,
-} from "./dev_test_game_core_loop_completed_terminal_scenario_assertions.mjs";
-
-export {
-  assertCompletedGameProofReadinessSurfaceProof,
-} from "./dev_test_game_core_loop_completed_game_shared_scenario_assertions.mjs";
+  assertCompletedGameEndgameSurfaceProof,
+} from "./dev_test_game_core_loop_completed_scenarios.mjs";
 
 export {
   completedGameProofReadinessCaseGroupDefinitions,
@@ -46,4 +42,14 @@ export function completedGameProofReadinessScenarioFamily(options = {}) {
     ...completedGameProofReadinessCaseScenarioFamily(options),
     laneIds: completedGameHardeningLaneIds(),
   };
+}
+
+export function assertCompletedGameProofReadinessSurfaceProof({
+  scenarioFamilies = completedGameProofReadinessScenarioFamilies(),
+  ...proofArgs
+}) {
+  assertCompletedGameEndgameSurfaceProof({
+    ...proofArgs,
+    scenarioFamilies,
+  });
 }

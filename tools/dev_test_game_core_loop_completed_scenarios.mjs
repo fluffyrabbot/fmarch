@@ -5,7 +5,7 @@ import {
   completedDeadPlayerStaleVoteCase,
   completedGameEndgameScenarioCaseFamilies,
   completedGameEndgameSurfaceAssertionCases,
-} from "./dev_test_game_core_loop_completed_game_cases.mjs";
+} from "./dev_test_game_core_loop_completed_terminal_scenario_assertions.mjs";
 import {
   hostCompleteGameCommandFacts,
 } from "./dev_test_game_core_loop_host_phase_scenarios.mjs";
@@ -61,7 +61,7 @@ export {
   staleCompletedGamePlayerCommandCaseDefinitions,
   staleCompletedGamePlayerCommandCases,
   staleCompletedGamePlayerCommandProofArgs,
-} from "./dev_test_game_core_loop_completed_game_cases.mjs";
+} from "./dev_test_game_core_loop_completed_terminal_scenario_assertions.mjs";
 
 export function assertCompletedGameEndgameSurfaceProof({
   completedGameEndgameSurface,

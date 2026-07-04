@@ -5,6 +5,7 @@ import {
   assertCompletedActionPlayerSurfaceProofCase,
   assertCompletedHostReloadProofCase,
   assertHostCompleteGameProofCase,
+  assertCompletedGameEndgameSurfaceProof,
 } from "./dev_test_game_core_loop_completed_scenarios.mjs";
 import {
   hostPhaseTransitionActionFixture,
@@ -21,7 +22,6 @@ import {
   completedHardeningProofFixture,
 } from "./dev_test_game_core_loop_completed_game_fixtures.mjs";
 import {
-  assertCompletedGameEndgameSurfaceProof,
   assertCompletedGameEndgameSurfaceAssertionCases,
   assertCompletedGameEndgameTransition,
   completedActionPlayerSurfaceAssertionCase,
@@ -66,7 +66,7 @@ import {
   staleCompletedGamePlayerCommandCases,
   staleCompletedGamePlayerCommandAssertionCases,
   staleCompletedGamePlayerCommandProofArgs,
-} from "./dev_test_game_core_loop_completed_game_scenario_assertions.mjs";
+} from "./dev_test_game_core_loop_completed_terminal_scenario_assertions.mjs";
 import {
   completedHostReloadProofFixture,
   completedHostReloadSnapshotFixture,
@@ -407,22 +407,29 @@ test("completed-game scenario module derives shared hardening lane groups", () =
   );
 });
 
-test("completed-game production harness callers share extracted recovery cases", async () => {
-  const scenarioCallerPaths = [
+test("completed-game production harness callers source terminal recovery canonically", async () => {
+  const canonicalCallerImports = [
     [
-      "tools/dev_test_game_proof_contract.mjs",
+      "tools/dev_test_game_core_loop_completed_scenarios.mjs",
       [
-        "completedGameHardeningLaneCases",
-        "completedGameHardeningLaneIds",
+        "completedGameEndgameScenarioCaseFamilies",
+        "completedGameEndgameSurfaceAssertionCases",
       ],
-      "./dev_test_game_core_loop_completed_game_proof_readiness_contract.mjs",
+      "./dev_test_game_core_loop_completed_terminal_scenario_assertions.mjs",
     ],
     [
-      "tools/dev_test_game_core_loop_admin_proof.mjs",
+      "tools/dev_test_game_core_loop_completed_game_proof_readiness_contract.mjs",
       [
-        "assertCompletedGameProofReadinessSurfaceProof",
+        "completedGameHardeningLaneIds",
+        "completedGameProofReadinessScenarioFamilies",
+        "completedGameStaleRecoverySpineLaneCase",
       ],
-      "./dev_test_game_core_loop_completed_game_proof_readiness_contract.mjs",
+      "./dev_test_game_core_loop_completed_terminal_scenario_assertions.mjs",
+    ],
+    [
+      "tools/dev_test_game_core_loop_completed_game_proof_readiness_contract.mjs",
+      ["assertCompletedGameEndgameSurfaceProof"],
+      "./dev_test_game_core_loop_completed_scenarios.mjs",
     ],
     [
       "tools/dev_test_game_core_loop_admin_proof.mjs",
@@ -435,277 +442,65 @@ test("completed-game production harness callers share extracted recovery cases",
     ],
     [
       "tools/dev_test_game_release_readiness.mjs",
-      [
-        "assertCompletedGameProofReadinessSurfaceProof",
-      ],
-      "./dev_test_game_core_loop_completed_game_proof_readiness_contract.mjs",
-    ],
-    [
-      "tools/dev_test_game_release_readiness.mjs",
       ["completedGameProofReadinessScenarioFamilies"],
       "./dev_test_game_core_loop_completed_terminal_scenario_assertions.mjs",
     ],
     [
-      "tools/dev_test_game_release_readiness.mjs",
-      [
-        "completedGameHardeningSpineCycleId",
-        "completedGameHardeningSpineLaneCases",
-      ],
-      "./dev_test_game_core_loop_completed_game_proof_readiness_contract.mjs",
-    ],
-    [
-      "tools/dev_test_game_release_readiness_cases.mjs",
-      [
-        "completedGameHardeningSpineCycleId",
-        "completedGameStaleRecoverySpineLaneCase",
-      ],
-      "./dev_test_game_core_loop_completed_game_proof_readiness_contract.mjs",
+      "tools/dev_test_game_feature_lane_catalog.mjs",
+      ["completedGameRecoveryFeatureSpineRow"],
+      "./dev_test_game_core_loop_completed_terminal_scenario_assertions.mjs",
     ],
   ];
 
-  for (const [callerPath, importedNames, moduleSpecifier] of scenarioCallerPaths) {
-    const source = await readFile(callerPath, "utf8");
+  for (const [callerPath, importedNames, moduleSpecifier] of canonicalCallerImports) {
+    const callerSource = await readFile(callerPath, "utf8");
     for (const importedName of importedNames) {
       assert(
         importsFromModule({
-          source,
+          source: callerSource,
           importedName,
           moduleSpecifier,
         }),
         `${callerPath} should import ${importedName} from ${moduleSpecifier}`,
       );
     }
-    assert(
-      !source.includes(
-        "./dev_test_game_core_loop_completed_game_shared_scenarios.mjs",
-      ),
-      `${callerPath} should not import completed-game proof/readiness cases through the compatibility shared-scenarios barrel`,
-    );
-    assert(
-      !source.includes(
-        "./dev_test_game_core_loop_completed_game_shared_recovery_scenarios.mjs",
-      ),
-      `${callerPath} should not import completed recovery cases directly from the lower-level shared scenario/assertion module`,
-    );
-    assert(
-      !importsFromModule({
-        source,
-        importedName: "coreLoopCompletedEndgameProgressionScenarioFamilies",
-        moduleSpecifier:
-          "./dev_test_game_core_loop_completed_endgame_progression_scenarios.mjs",
-      }),
-      `${callerPath} should not import completed-game proof/readiness families from the broader progression module`,
-    );
-    assert(
-      !importsFromModule({
-        source,
-        importedName: "assertCoreLoopCompletedEndgameProgressionSurfaceProof",
-        moduleSpecifier:
-          "./dev_test_game_core_loop_completed_endgame_progression_scenarios.mjs",
-      }),
-      `${callerPath} should not import completed-game proof/readiness assertions from the broader progression module`,
-    );
-    assert(
-      !importsFromModule({
-        source,
-        importedName: "completedGameEndgameScenarioCaseFamilies",
-        moduleSpecifier:
-          "./dev_test_game_core_loop_completed_recovery_scenario_assertions.mjs",
-      }),
-      `${callerPath} should not import completed-game recovery case families through the lower-level scenario/assertion module`,
-    );
-    assert(
-      !importsFromModule({
-        source,
-        importedName: "assertCompletedGameEndgameSurfaceProof",
-        moduleSpecifier:
-          "./dev_test_game_core_loop_completed_recovery_scenario_assertions.mjs",
-      }),
-      `${callerPath} should not import completed-game assertions through the lower-level scenario/assertion module`,
-    );
-    assert(
-      !importsFromModule({
-        source,
-        importedName: "completedGameEndgameScenarioCaseFamilies",
-        moduleSpecifier:
-          "./dev_test_game_core_loop_completed_recovery_scenario_cases.mjs",
-      }),
-      `${callerPath} should not import completed-game recovery case families separately from the progression module`,
-    );
-    assert(
-      !importsFromModule({
-        source,
-        importedName: "completedGameEndgameScenarioCaseFamilies",
-        moduleSpecifier:
-          "./dev_test_game_core_loop_completed_recovery_scenario_cases.mjs",
-      }),
-      `${callerPath} should not import completed-game recovery case families separately from the shared scenario/assertion module`,
-    );
-    assert(
-      !importsFromModule({
-        source,
-        importedName: "completedGameEndgameProofScenarioCases",
-        moduleSpecifier:
-          "./dev_test_game_core_loop_completed_recovery_scenario_cases.mjs",
-      }),
-      `${callerPath} should not import completed-game proof cases separately from the progression module`,
-    );
-    assert(
-      !importsFromModule({
-        source,
-        importedName: "completedGameEndgameTransition",
-        moduleSpecifier:
-          "./dev_test_game_core_loop_completed_recovery_scenario_cases.mjs",
-      }),
-      `${callerPath} should not import completed-game transitions separately from the progression module`,
-    );
-    assert(
-      !source.includes(
-        "./dev_test_game_core_loop_completed_game_proof_readiness_scenarios.mjs",
-      ),
-      `${callerPath} should not import through the compatibility proof/readiness scenario barrel`,
-    );
-    assert(
-      !source.includes(
-        "./dev_test_game_core_loop_completed_game_proof_readiness_shared.mjs",
-      ),
-      `${callerPath} should not import through the compatibility proof/readiness shared barrel`,
-    );
-    assert(
-      !source.includes(
-        "./dev_test_game_core_loop_completed_game_proof_readiness_case_definitions.mjs",
-      ),
-      `${callerPath} should not import through the removed proof/readiness case-definition barrel`,
-    );
-    assert(
-      !source.includes(
-        "./dev_test_game_core_loop_completed_recovery_case_definitions.mjs",
-      ),
-      `${callerPath} should not import completed recovery definitions separately from the shared proof/readiness module`,
-    );
-    assert(
-      !source.includes("./dev_test_game_core_loop_completed_recovery_cases.mjs"),
-      `${callerPath} should not import completed-game recovery definitions directly`,
-    );
-    assert(
-      !source.includes("./dev_test_game_core_loop_completed_endgame_scenarios.mjs"),
-      `${callerPath} should not import completed recovery definitions through the lower-level endgame adapter`,
-    );
-    assert(
-      !importsFromModule({
-        source,
-        importedName: "assertCompletedGameEndgameSurfaceProof",
-        moduleSpecifier: "./dev_test_game_core_loop_completed_game_cases.mjs",
-      }),
-      `${callerPath} should not import completed-game assertion helpers directly`,
-    );
   }
 
-  const proofContractSource = await readFile(
+  const allowedCompletedScenarioSpecifiers = new Set([
+    "./dev_test_game_core_loop_completed_scenarios.mjs",
+    "./dev_test_game_core_loop_completed_terminal_scenario_assertions.mjs",
+    "./dev_test_game_core_loop_completed_game_proof_readiness_contract.mjs",
+    "./dev_test_game_core_loop_completed_game_fixtures.mjs",
+    "./dev_test_game_core_loop_completed_endgame_progression_scenarios.mjs",
+  ]);
+  for (const callerPath of [
+    "tools/dev_test_game.test.mjs",
+    "tools/dev_test_game_core_loop_admin_proof.mjs",
+    "tools/dev_test_game_core_loop_completed_scenarios.mjs",
+    "tools/dev_test_game_core_loop_completed_game_proof_readiness_contract.mjs",
+    "tools/dev_test_game_core_loop_completed_endgame_progression_scenarios.mjs",
+    "tools/dev_test_game_feature_lane_catalog.mjs",
     "tools/dev_test_game_proof_contract.mjs",
-    "utf8",
-  );
-  assert(
-    !proofContractSource.includes(
-      "./dev_test_game_core_loop_completed_game_scenario_assertions.mjs",
-    ),
-    "proof contract should not import completed-game proof/readiness lane metadata through the older scenario facade",
-  );
+    "tools/dev_test_game_release_readiness.mjs",
+    "tools/dev_test_game_release_readiness_cases.mjs",
+  ]) {
+    const callerSource = await readFile(callerPath, "utf8");
+    for (const moduleSpecifier of importSpecifiers(callerSource).filter(
+      (specifier) =>
+        specifier.includes("dev_test_game_core_loop_completed_") &&
+        !specifier.endsWith("_fixtures.mjs"),
+    )) {
+      assert(
+        allowedCompletedScenarioSpecifiers.has(moduleSpecifier),
+        `${callerPath} should import completed-game recovery through a canonical module, found ${moduleSpecifier}`,
+      );
+    }
+  }
 
   const proofReadinessContractSource = await readFile(
     "tools/dev_test_game_core_loop_completed_game_proof_readiness_contract.mjs",
     "utf8",
   );
-  for (const importedName of [
-    "completedHostStaleCommandCases",
-    "completedPlayerReloadCases",
-    "staleCompletedGamePlayerCommandCases",
-    "completedGameProofReadinessScenarioFamilies",
-    "completedGameProofReadinessProofScenarioCases",
-    "completedGameProofReadinessTransition",
-  ]) {
-    assert(
-      importsFromModule({
-        source: proofReadinessContractSource,
-        importedName,
-        moduleSpecifier:
-          "./dev_test_game_core_loop_completed_terminal_scenario_assertions.mjs",
-      }),
-      `proof/readiness contract should import ${importedName} from the canonical completed terminal scenario/assertion module`,
-    );
-  }
-  assert(
-    importsFromModule({
-      source: proofReadinessContractSource,
-      importedName: "assertCompletedGameProofReadinessSurfaceProof",
-      moduleSpecifier:
-        "./dev_test_game_core_loop_completed_game_shared_scenario_assertions.mjs",
-    }),
-    "proof/readiness contract should keep the surface assertion on the proof/readiness facade",
-  );
-  for (const importedName of [
-    "completedGameEndgameProofScenarioCases",
-    "completedGameEndgameScenarioCaseFamilies",
-    "completedGameEndgameTransition",
-    "completedGameEndgameTransitionTokens",
-  ]) {
-    assert(
-      !importsFromModule({
-        source: proofReadinessContractSource,
-        importedName,
-        moduleSpecifier:
-          "./dev_test_game_core_loop_completed_game_shared_scenario_assertions.mjs",
-      }),
-      `proof/readiness contract should not source ${importedName} directly from the lower-level completed-game scenario/assertion module`,
-    );
-  }
-  assert(
-    importsFromModule({
-      source: proofReadinessContractSource,
-      importedName: "completedGameStaleRecoverySpineLaneCase",
-      moduleSpecifier:
-        "./dev_test_game_core_loop_completed_terminal_scenario_assertions.mjs",
-    }),
-    "proof/readiness contract should source stale recovery spine lane from the terminal scenario/assertion module",
-  );
-  for (const importedName of [
-    "completedHostStaleCommandCases",
-    "completedPlayerReloadCases",
-    "staleCompletedGamePlayerCommandCases",
-    "completedGameEndgameProofScenarioCases",
-    "completedGameEndgameScenarioCaseFamilies",
-    "completedGameEndgameTransition",
-    "completedGameEndgameTransitionTokens",
-    "completedGameStaleRecoverySpineLaneCase",
-  ]) {
-    assert(
-      !importsFromModule({
-        source: proofReadinessContractSource,
-        importedName,
-        moduleSpecifier:
-          "./dev_test_game_core_loop_completed_recovery_scenario_cases.mjs",
-      }),
-      `proof/readiness contract should not source ${importedName} from the recovery adapter`,
-    );
-    assert(
-      !importsFromModule({
-        source: proofReadinessContractSource,
-        importedName,
-        moduleSpecifier:
-          "./dev_test_game_core_loop_completed_game_shared_recovery_scenarios.mjs",
-      }),
-      `proof/readiness contract should not bypass the terminal scenario/assertion module for ${importedName}`,
-    );
-    assert(
-      !importsFromModule({
-        source: proofReadinessContractSource,
-        importedName,
-        moduleSpecifier:
-          "./dev_test_game_core_loop_completed_game_shared_case_definitions.mjs",
-      }),
-      `proof/readiness contract should not bypass the terminal scenario/assertion module for ${importedName}`,
-    );
-  }
   for (const localScenarioLiteral of [
     "completedHostStaleResolveRecoveryProof",
     "completed-host-stale-resolve",
@@ -721,108 +516,25 @@ test("completed-game production harness callers share extracted recovery cases",
     );
   }
 
-  for (const retiredPath of [
-    "tools/dev_test_game_core_loop_completed_game_shared_recovery_scenarios.mjs",
-    "tools/dev_test_game_core_loop_completed_game_proof_readiness_case_definitions.mjs",
-    "tools/dev_test_game_core_loop_completed_game_proof_readiness_scenarios.mjs",
-    "tools/dev_test_game_core_loop_completed_game_proof_readiness_shared.mjs",
-  ]) {
-    await assert.rejects(
-      readFile(retiredPath, "utf8"),
-      { code: "ENOENT" },
-      `${retiredPath} should stay retired so proof/readiness cases have one shared module`,
-    );
-  }
-
-  for (const callerPath of [
-    "tools/dev_test_game_release_readiness.mjs",
-    "tools/dev_test_game_release_readiness_cases.mjs",
-  ]) {
-    const source = await readFile(callerPath, "utf8");
-    assert(
-      importsFromModule({
-        source,
-        importedName: "completedGameStaleRecoverySpineLaneCase",
-        moduleSpecifier:
-          "./dev_test_game_core_loop_completed_game_proof_readiness_contract.mjs",
-      }),
-      `${callerPath} should import completed-game stale recovery from the shared proof/readiness contract`,
-    );
-    assert(
-      !importsFromModule({
-        source,
-        importedName: "completedGameStaleRecoverySpineLaneCase",
-        moduleSpecifier:
-          "./dev_test_game_core_loop_completed_game_shared_recovery_scenarios.mjs",
-      }),
-      `${callerPath} should not import completed-game stale recovery from the lower-level shared scenario/assertion module`,
-    );
-    assert(
-      !importsFromModule({
-        source,
-        importedName: "completedGameStaleRecoverySpineLaneCase",
-        moduleSpecifier:
-          "./dev_test_game_core_loop_completed_game_shared_case_definitions.mjs",
-      }),
-      `${callerPath} should not bypass the shared scenario/assertion module for completed-game stale recovery`,
-    );
-    assert(
-      !importsFromModule({
-        source,
-        importedName: "completedGameStaleRecoverySpineLaneCase",
-        moduleSpecifier:
-          "./dev_test_game_core_loop_completed_game_proof_readiness_scenarios.mjs",
-      }),
-      `${callerPath} should not import completed-game stale recovery from the compatibility scenario barrel`,
-    );
-    assert(
-      !importsFromModule({
-        source,
-        importedName: "completedGameStaleRecoverySpineLaneCase",
-        moduleSpecifier: "./dev_test_game_core_loop_completed_game_cases.mjs",
-      }),
-      `${callerPath} should not import completed-game stale recovery from the broad completed-game cases barrel`,
-    );
-  }
-
-  const recoveryDefinitionSource = await readFile(
-    "tools/dev_test_game_core_loop_completed_recovery_case_definitions.mjs",
+  const terminalAssertionSource = await readFile(
+    "tools/dev_test_game_core_loop_completed_terminal_scenario_assertions.mjs",
     "utf8",
   );
-  assert(
-    recoveryDefinitionSource.includes(
-      "./dev_test_game_core_loop_completed_terminal_scenario_assertions.mjs",
-    ),
-    "broader completed recovery definitions should re-export the terminal completed-game scenario/assertion module",
-  );
-  const recoveryScenarioCaseSource = await readFile(
-    "tools/dev_test_game_core_loop_completed_recovery_scenario_cases.mjs",
-    "utf8",
-  );
-  assert(
-    recoveryScenarioCaseSource.includes(
-      "./dev_test_game_core_loop_completed_terminal_scenario_assertions.mjs",
-    ),
-    "broader completed recovery scenario cases should re-export the terminal completed-game scenario/assertion module",
-  );
-  assert(
-    !recoveryScenarioCaseSource.includes(
-      "./dev_test_game_core_loop_completed_recovery_case_definitions.mjs",
-    ),
-    "broader completed recovery scenario cases should not source a second completed-game case table",
-  );
-  for (const commandFactName of [
-    "hostResolvePhaseCommandFacts",
-    "hostAdvancePhaseCommandFacts",
-    "hostCompleteGameCommandFacts",
+  for (const terminalScenarioLiteral of [
+    "completedHostStaleResolveRecoveryProof",
+    "completed-host-stale-resolve",
+    "host:stale_resolve_phase:reject:GameAlreadyCompleted",
+    "completedPlayerReloadProof",
+    "actionPlayer:reload:complete",
+    "staleCompletedVoteRecoveryProof",
+    "stale:D05:submit_vote:reject:GameAlreadyCompleted",
   ]) {
     assert(
-      !recoveryDefinitionSource.includes(commandFactName),
-      `broader completed recovery definitions should not own ${commandFactName}`,
+      terminalAssertionSource.includes(terminalScenarioLiteral),
+      `terminal assertion source should own completed-game scenario literal ${terminalScenarioLiteral}`,
     );
   }
 });
-
 test("completed-game proof/readiness facade exposes one completed recovery table", () => {
   assert(Object.isFrozen(completedGameProofReadinessCaseGroupDefinitions));
   assert.equal(
@@ -876,25 +588,6 @@ test("completed-game progression facade shares proof and readiness cases", async
       `completed-game progression should import ${importedName} from the shared proof/readiness contract`,
     );
   }
-  assert(
-    !progressionSource.includes(
-      "./dev_test_game_core_loop_completed_game_shared_scenario_assertions.mjs",
-    ),
-    "completed-game progression should not bypass the proof/readiness contract for shared completed-game cases",
-  );
-  assert(
-    !progressionSource.includes(
-      "./dev_test_game_core_loop_completed_game_shared_recovery_scenarios.mjs",
-    ),
-    "completed-game progression should not import proof/readiness cases from the lower-level shared recovery module",
-  );
-  assert(
-    !progressionSource.includes(
-      "./dev_test_game_core_loop_completed_recovery_scenario_assertions.mjs",
-    ),
-    "completed-game progression should not import proof/readiness assertions from the lower-level recovery assertion module",
-  );
-
   assert.deepEqual(
     coreLoopCompletedEndgameProgressionScenarioFamilies(),
     completedGameProofReadinessScenarioFamilies(),
@@ -1000,8 +693,8 @@ test("completed-game test fixtures live outside the assertion facade", async () 
     }
   }
 
-  const assertionFacadeSource = await readFile(
-    "tools/dev_test_game_core_loop_completed_game_scenario_assertions.mjs",
+  const terminalScenarioAssertionSource = await readFile(
+    "tools/dev_test_game_core_loop_completed_terminal_scenario_assertions.mjs",
     "utf8",
   );
   const fixtureModuleSource = await readFile(
@@ -1032,24 +725,6 @@ test("completed-game test fixtures live outside the assertion facade", async () 
     }),
     "completed-game fixtures should derive cases from shared family entries, not readiness case groups",
   );
-  assert(
-    !fixtureModuleSource.includes(
-      "./dev_test_game_core_loop_completed_game_shared_scenarios.mjs",
-    ),
-    "completed-game fixtures should not import through the compatibility shared-scenarios barrel",
-  );
-  assert(
-    !fixtureModuleSource.includes(
-      "./dev_test_game_core_loop_completed_game_shared_recovery_scenarios.mjs",
-    ),
-    "completed-game fixtures should not import lower-level shared recovery cases directly",
-  );
-  assert(
-    !fixtureModuleSource.includes(
-      "./dev_test_game_core_loop_completed_recovery_scenario_cases.mjs",
-    ),
-    "completed-game fixtures should not import lower-level recovery case tables directly",
-  );
   for (const fixtureName of [
     "completedDeadPlayerStaleVoteRecoveryProofFixture",
     "completedGameDayVoteOutcomesFixture",
@@ -1059,9 +734,9 @@ test("completed-game test fixtures live outside the assertion facade", async () 
   ]) {
     assert(
       !new RegExp(`export\\s+function\\s+${fixtureName}\\b`).test(
-        assertionFacadeSource,
+        terminalScenarioAssertionSource,
       ),
-      `assertion facade should not export fixture builder ${fixtureName}`,
+      `terminal scenario/assertion module should not export fixture builder ${fixtureName}`,
     );
   }
 });
@@ -1079,6 +754,12 @@ function importsFromModule({ source, importedName, moduleSpecifier }) {
         new RegExp(`\\b${escapeRegExp(importedName)}\\b`).test(entry),
       ),
   );
+}
+
+function importSpecifiers(source) {
+  const importPattern =
+    /(?:import|export)\s*(?:\{[^}]*\}\s*)?from\s*"([^"]+)";/g;
+  return Array.from(source.matchAll(importPattern), (match) => match[1]);
 }
 
 test("completed-game proof contract uses shared hardening lane metadata", async () => {

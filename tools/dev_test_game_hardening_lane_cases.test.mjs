@@ -105,7 +105,7 @@ import {
   completedGameHardeningSpineCycleId,
   completedGameHardeningSpineLaneCases,
   completedGameStaleRecoverySpineLaneCase,
-} from "./dev_test_game_core_loop_completed_game_cases.mjs";
+} from "./dev_test_game_core_loop_completed_terminal_scenario_assertions.mjs";
 import {
   cohostHostRaceLaneIds,
   crossRoleRaceLaneIds,

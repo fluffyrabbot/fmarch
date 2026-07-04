@@ -22,7 +22,7 @@ import {
   completedGameRaceCoverageCellCases,
   completedGameRaceCoverageCellIds,
   completedGameHardeningSpineLaneCases,
-} from "./dev_test_game_core_loop_completed_game_scenario_assertions.mjs";
+} from "./dev_test_game_core_loop_completed_terminal_scenario_assertions.mjs";
 import {
   coreLoopHostControlScenarioFamily,
 } from "./dev_test_game_core_loop_host_control_scenarios.mjs";

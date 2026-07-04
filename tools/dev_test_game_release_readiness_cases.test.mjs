@@ -43,7 +43,7 @@ import {
 } from "./dev_test_game_admin_audit_surface_ids.mjs";
 import {
   completedGameHardeningSpineCycleId,
-} from "./dev_test_game_core_loop_completed_game_cases.mjs";
+} from "./dev_test_game_core_loop_completed_terminal_scenario_assertions.mjs";
 import {
   completedGameStaleRecoverySpineLaneCase,
 } from "./dev_test_game_core_loop_completed_game_proof_readiness_contract.mjs";

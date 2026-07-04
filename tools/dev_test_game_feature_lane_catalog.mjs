@@ -12,7 +12,7 @@ import {
 } from "./dev_test_game_core_loop_host_control_scenarios.mjs";
 import {
   completedGameRecoveryFeatureSpineRow,
-} from "./dev_test_game_core_loop_completed_game_cases.mjs";
+} from "./dev_test_game_core_loop_completed_terminal_scenario_assertions.mjs";
 import {
   dayVoteNoLynchFeatureSpineRow,
   dayVoteNoLynchLaneId,
