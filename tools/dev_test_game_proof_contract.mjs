@@ -26,6 +26,7 @@ import {
   hostStaleResolveControlLaneId,
 } from "./dev_test_game_host_stale_control_scenarios.mjs";
 import {
+  hostStaleReconnectExpectationForLane,
   privateChannelStaleActionReconnectExpectation,
   privateChannelStaleActionReconnectLaneId,
   stalePlayerActionReconnectExpectation,
@@ -7392,6 +7393,9 @@ function hostPhaseStaleReloadActionEvidence({ reloadProof, scenario }) {
 function hostPhaseStaleReconnectLane({ hardening, session, scenario }) {
   const proof = hardening?.[scenario.proofField];
   const reconnectProof = proof?.reconnectAfterReject;
+  const expectation = hostStaleReconnectExpectationForLane(
+    scenario.reconnectLaneId,
+  );
   return lane(scenario.reconnectLaneId, scenario.reconnectLabel, {
     game: session.game ?? null,
     reconnectingState: reconnectProof?.reconnectingStatus?.state ?? null,
@@ -7400,7 +7404,13 @@ function hostPhaseStaleReconnectLane({ hardening, session, scenario }) {
     recoveredLocked:
       reconnectProof?.recoveredHostProjection?.phase?.locked ?? null,
     ...hostPhaseStaleReconnectActionEvidence({ proof, scenario }),
-    passed: hostPhaseStaleReconnectPassed({ proof, reconnectProof, scenario }),
+    passed:
+      hostPhaseStaleReconnectPassed({ proof, reconnectProof, scenario }) &&
+      hostStaleReconnectExpectationPassed({
+        proof,
+        reconnectProof,
+        expectation,
+      }),
   });
 }
 
@@ -7462,6 +7472,9 @@ function cohostDeadlineStaleReloadLane({ hardening, scenario }) {
 function cohostDeadlineStaleReconnectLane({ hardening, session, scenario }) {
   const proof = hardening?.[scenario.proofField];
   const reconnectProof = proof?.reconnectAfterReject;
+  const expectation = hostStaleReconnectExpectationForLane(
+    scenario.reconnectLaneId,
+  );
   return lane(scenario.reconnectLaneId, scenario.reconnectLabel, {
     game: session.game ?? null,
     reconnectingState: reconnectProof?.reconnectingStatus?.state ?? null,
@@ -7476,8 +7489,54 @@ function cohostDeadlineStaleReconnectLane({ hardening, session, scenario }) {
       proof,
       reconnectProof,
       scenario,
-    }),
+    }) &&
+      hostStaleReconnectExpectationPassed({
+        proof,
+        reconnectProof,
+        expectation,
+      }),
   });
+}
+
+function hostStaleReconnectExpectationPassed({
+  proof,
+  reconnectProof,
+  expectation,
+}) {
+  if (
+    reconnectProof?.reconnectingStatus?.state !== expectation.reconnectingState ||
+    reconnectProof?.reconnectRecoveryEvent?.state !== expectation.recoveryState ||
+    reconnectProof?.reconnectRecoveryEvent?.attempt !==
+      expectation.reconnectAttempt ||
+    reconnectProof?.recoveredHostProjection?.phase?.id !==
+      expectation.recoveredPhaseId ||
+    reconnectProof?.recoveredHostProjection?.phase?.locked !==
+      expectation.recoveredLocked
+  ) {
+    return false;
+  }
+  if (
+    Object.hasOwn(expectation, "apiDeadline") &&
+    proof?.apiPhaseAfterReconnect?.deadline !== expectation.apiDeadline
+  ) {
+    return false;
+  }
+  if (
+    Object.hasOwn(expectation, "phaseActions") &&
+    arrayShallowEqual(proof?.phaseActionsAfterReconnect, expectation.phaseActions) ===
+      false
+  ) {
+    return false;
+  }
+  return true;
+}
+
+function arrayShallowEqual(actual, expected) {
+  return (
+    Array.isArray(actual) &&
+    actual.length === expected.length &&
+    actual.every((value, index) => value === expected[index])
+  );
 }
 
 function completedGameHardeningProofLanes({ hardening }) {

@@ -6,14 +6,20 @@ import {
 } from "./dev_test_game_replacement_private_scenarios.mjs";
 
 const cloneScenarioCase = (scenario) => ({ ...scenario });
-const cloneExpectation = (expectation) => ({
-  ...expectation,
-  messageFragments: [...(expectation.messageFragments ?? [])],
-  dispatchRefreshKeys: [...(expectation.dispatchRefreshKeys ?? [])],
-  receiptRefreshKeys: [...(expectation.receiptRefreshKeys ?? [])],
-  browserCommandState: { ...(expectation.browserCommandState ?? {}) },
-  apiCommandState: { ...(expectation.apiCommandState ?? {}) },
-});
+const cloneExpectation = (expectation) => {
+  const cloned = {
+    ...expectation,
+    messageFragments: [...(expectation.messageFragments ?? [])],
+    dispatchRefreshKeys: [...(expectation.dispatchRefreshKeys ?? [])],
+    receiptRefreshKeys: [...(expectation.receiptRefreshKeys ?? [])],
+    browserCommandState: { ...(expectation.browserCommandState ?? {}) },
+    apiCommandState: { ...(expectation.apiCommandState ?? {}) },
+  };
+  if (Object.hasOwn(expectation, "phaseActions")) {
+    cloned.phaseActions = [...expectation.phaseActions];
+  }
+  return cloned;
+};
 
 export const playerLiveReconnectLaneId = "reconnect-recovery";
 export const replacementSessionReconnectLaneId =
@@ -84,6 +90,51 @@ export const privateChannelStaleActionReconnectExpectationDefinition =
     channelId: "private:mafia_day_chat",
     privateThreadPagerVisible: true,
   });
+
+const sharedHostStaleReconnectExpectation = Object.freeze({
+  reconnectingState: "reconnecting",
+  recoveryState: "recovered",
+  reconnectAttempt: 1,
+  recoveredPhaseId: "D02",
+});
+
+export const hostStaleResolveReconnectExpectationDefinition = Object.freeze({
+  ...sharedHostStaleReconnectExpectation,
+  laneId: hostStaleResolveReconnectLaneId,
+  role: "host",
+  recoveredLocked: true,
+});
+
+export const hostStaleAdvanceReconnectExpectationDefinition = Object.freeze({
+  ...sharedHostStaleReconnectExpectation,
+  laneId: hostStaleAdvanceReconnectLaneId,
+  role: "host",
+  recoveredLocked: false,
+});
+
+export const hostStaleDeadlineReconnectExpectationDefinition = Object.freeze({
+  ...sharedHostStaleReconnectExpectation,
+  laneId: hostStaleDeadlineReconnectLaneId,
+  role: "host",
+  recoveredLocked: false,
+  apiDeadline: null,
+});
+
+export const cohostStaleDeadlineReconnectExpectationDefinition = Object.freeze({
+  ...sharedHostStaleReconnectExpectation,
+  laneId: cohostStaleDeadlineReconnectLaneId,
+  role: "cohost",
+  recoveredLocked: false,
+  apiDeadline: null,
+  phaseActions: Object.freeze([]),
+});
+
+export const hostStaleReconnectExpectationDefinitions = Object.freeze([
+  hostStaleResolveReconnectExpectationDefinition,
+  hostStaleAdvanceReconnectExpectationDefinition,
+  hostStaleDeadlineReconnectExpectationDefinition,
+  cohostStaleDeadlineReconnectExpectationDefinition,
+]);
 
 export const staleClientReconnectCaseDefinitions = Object.freeze([
   Object.freeze({
@@ -181,6 +232,20 @@ export function privateChannelStaleActionReconnectExpectation() {
   return cloneExpectation(
     privateChannelStaleActionReconnectExpectationDefinition,
   );
+}
+
+export function hostStaleReconnectExpectations() {
+  return hostStaleReconnectExpectationDefinitions.map(cloneExpectation);
+}
+
+export function hostStaleReconnectExpectationForLane(laneId) {
+  const expectation = hostStaleReconnectExpectationDefinitions.find(
+    (candidate) => candidate.laneId === laneId,
+  );
+  if (expectation === undefined) {
+    throw new Error(`unknown host stale reconnect lane: ${laneId}`);
+  }
+  return cloneExpectation(expectation);
 }
 
 export const staleClientReconnectHighlightedLaneIds = Object.freeze([

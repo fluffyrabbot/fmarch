@@ -7,6 +7,10 @@ import {
   playerInvalidActionRecoveryLaneId,
 } from "../../../../tools/dev_test_game_core_loop_action_scenarios.mjs";
 import {
+  cohostStaleDeadlineReconnectLaneId,
+  hostStaleAdvanceReconnectLaneId,
+  hostStaleDeadlineReconnectLaneId,
+  hostStaleResolveReconnectLaneId,
   privateChannelStaleActionReconnectLaneId,
   staleClientReconnectHighlightedLaneIds,
   stalePlayerActionReconnectLaneId,
@@ -191,19 +195,19 @@ export function hardeningLaneStatus(lane) {
       return `${status}: Reject ${String(evidence.rejectError ?? "unknown")}, role URL ${typeof evidence.roleUrl === "string"}, locked ${String(evidence.locked ?? "unknown")}`;
     case "stale-host-resolve-reload":
       return `${status}: ${String(evidence.rejectReceipt ?? "unknown")}`;
-    case "stale-host-resolve-reconnect-recovery":
+    case hostStaleResolveReconnectLaneId:
       return `${status}: ${String(evidence.reconnectingState ?? "unknown")} -> ${String(evidence.recoveryState ?? "unknown")}, locked ${String(evidence.recoveredLocked ?? "unknown")}`;
     case "stale-host-advance":
       return `${status}: Reject ${String(evidence.rejectError ?? "unknown")}, role URL ${typeof evidence.roleUrl === "string"}, locked ${String(evidence.locked ?? "unknown")}`;
-    case "stale-host-advance-reconnect-recovery":
+    case hostStaleAdvanceReconnectLaneId:
       return `${status}: ${String(evidence.reconnectingState ?? "unknown")} -> ${String(evidence.recoveryState ?? "unknown")}, locked ${String(evidence.recoveredLocked ?? "unknown")}`;
     case "stale-host-deadline":
       return `${status}: Reject ${String(evidence.rejectError ?? "unknown")}, role URL ${typeof evidence.roleUrl === "string"}, deadline ${evidence.apiDeadline === undefined ? "unknown" : String(evidence.apiDeadline)}`;
-    case "stale-host-deadline-reconnect-recovery":
+    case hostStaleDeadlineReconnectLaneId:
       return `${status}: ${String(evidence.reconnectingState ?? "unknown")} -> ${String(evidence.recoveryState ?? "unknown")}, deadline ${evidence.apiDeadline === undefined ? "unknown" : String(evidence.apiDeadline)}`;
     case "stale-cohost-deadline":
       return `${status}: Reject ${String(evidence.rejectError ?? "unknown")}, role URL ${typeof evidence.roleUrl === "string"}, phase controls ${Array.isArray(evidence.phaseActions) ? evidence.phaseActions.length : "unknown"}`;
-    case "stale-cohost-deadline-reconnect-recovery":
+    case cohostStaleDeadlineReconnectLaneId:
       return `${status}: ${String(evidence.reconnectingState ?? "unknown")} -> ${String(evidence.recoveryState ?? "unknown")}, deadline ${evidence.apiDeadline === undefined ? "unknown" : String(evidence.apiDeadline)}, phase controls ${Array.isArray(evidence.phaseActions) ? evidence.phaseActions.length : "unknown"}`;
     default:
       return status;
