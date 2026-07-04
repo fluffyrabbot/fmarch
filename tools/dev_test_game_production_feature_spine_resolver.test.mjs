@@ -150,12 +150,15 @@ test("production feature spine resolver builds and validates source collections"
         collection.bySlotId["stale-vote-transition-recovery"].roleUrlId,
       checkpointId:
         collection.bySlotId["stale-vote-transition-recovery"].checkpointId,
+      recoveryHookId:
+        collection.bySlotId["stale-vote-transition-recovery"].recoveryHookId,
       adminCheckId:
         collection.bySlotId["stale-vote-transition-recovery"].adminCheckId,
     },
     {
       roleUrlId: "d02-n02-actionPlayer",
       checkpointId: "d02-n02-n02-action-open",
+      recoveryHookId: "staleVoteTransitionReject",
       adminCheckId: "action-loop",
     },
   );
@@ -165,12 +168,15 @@ test("production feature spine resolver builds and validates source collections"
         collection.bySlotId["stale-action-transition-recovery"].roleUrlId,
       checkpointId:
         collection.bySlotId["stale-action-transition-recovery"].checkpointId,
+      recoveryHookId:
+        collection.bySlotId["stale-action-transition-recovery"].recoveryHookId,
       adminCheckId:
         collection.bySlotId["stale-action-transition-recovery"].adminCheckId,
     },
     {
-      roleUrlId: "d02-n02-actionPlayer",
-      checkpointId: "d02-n02-n02-action-open",
+      roleUrlId: "d01-n01-d02-actionPlayer",
+      checkpointId: "d01-n01-d02-n01-action-open",
+      recoveryHookId: "staleActionTransitionReject",
       adminCheckId: "action-loop",
     },
   );
@@ -502,6 +508,8 @@ function coreLoopSourceTargetFixture() {
       "invalidActionReject",
       "normalPlayerDirectActionReject",
       "staleActionConflictReject",
+      "staleVoteTransitionReject",
+      "staleActionTransitionReject",
       "d03TerminalAdvanceReject",
     ],
     visibleAdminCheckIds: [

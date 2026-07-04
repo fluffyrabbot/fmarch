@@ -3808,6 +3808,14 @@ async function verifySeededD02VoteNightTransition({
       );
     }
 
+    const staleD02VoteTransitionPage = await actionEntry.context.newPage();
+    const staleD02VoteTransitionSetup =
+      await freezeStaleD02VoteTransitionPage({
+        page: staleD02VoteTransitionPage,
+        game: transitionGame,
+        voteTarget,
+      });
+
     await actionEntry.page
       .locator('[data-action="submit_vote"]', { hasText: voteTarget.label })
       .first()
@@ -3978,6 +3986,11 @@ async function verifySeededD02VoteNightTransition({
         .isVisible()
         .catch(() => false),
     };
+    const staleD02VoteAfterTransition =
+      await submitStaleD02VoteAfterTransition({
+        page: staleD02VoteTransitionPage,
+        voteTarget,
+      });
 
     if (
       resolveD02.commandStatus?.state !== "ack" ||
@@ -4020,7 +4033,28 @@ async function verifySeededD02VoteNightTransition({
       ) ||
       n02NormalPlayerSurface.commandState?.actorSlot !== "slot-7" ||
       n02NormalPlayerSurface.commandState?.phase?.phaseId !== "N02" ||
-      n02NormalPlayerSurface.factionalKillVisible !== false
+      n02NormalPlayerSurface.factionalKillVisible !== false ||
+      staleD02VoteTransitionSetup.commandState?.phase?.phaseId !== "D02" ||
+      staleD02VoteTransitionSetup.voteButton?.action !== "submit_vote" ||
+      staleD02VoteTransitionSetup.closedStatus?.state !== "closed" ||
+      staleD02VoteAfterTransition.reject?.state !== "reject" ||
+      staleD02VoteAfterTransition.reject?.error !== "PhaseLocked" ||
+      !String(staleD02VoteAfterTransition.reject?.message ?? "").includes(
+        "stale vote state",
+      ) ||
+      staleD02VoteAfterTransition.commandStateAfterReject?.phase?.phaseId !==
+        "N02" ||
+      !staleD02VoteAfterTransition.buttonsAfterReject.some(
+        (button) =>
+          button.action === "submit_action:factional_kill" &&
+          button.disabled === false,
+      ) ||
+      !staleD02VoteAfterTransition.dispatchPlan?.projectionRefreshKeys?.includes(
+        "commandState",
+      ) ||
+      !staleD02VoteAfterTransition.receiptStatusText.includes(
+        "Reject PhaseLocked",
+      )
     ) {
       throw new Error(
         `D02 vote/night transition drifted: ${JSON.stringify({
@@ -4033,6 +4067,8 @@ async function verifySeededD02VoteNightTransition({
           n02HostSurface,
           n02ActionSurface,
           n02NormalPlayerSurface,
+          staleD02VoteTransitionSetup,
+          staleD02VoteAfterTransition,
         })}`,
       );
     }
@@ -4916,6 +4952,8 @@ async function verifySeededD02VoteNightTransition({
       n02HostSurface,
       n02ActionSurface,
       n02NormalPlayerSurface,
+      staleD02VoteTransitionSetup,
+      staleD02VoteAfterTransition,
       n02ActionTarget,
       n02ActionSubmission,
       n02ActionAfterSubmit,
@@ -5015,6 +5053,100 @@ async function verifySeededD02VoteNightTransition({
     await playerEntry.context.close().catch(() => {});
     await targetEntry.context.close().catch(() => {});
   }
+}
+
+async function freezeStaleD02VoteTransitionPage({ page, game, voteTarget }) {
+  await gotoPlayerBoard(page, game);
+  await page.waitForFunction(
+    ({ targetSlot }) =>
+      window.__fmarchPlayerProjection?.commandState?.phase?.phaseId === "D02" &&
+      window.__fmarchPlayerProjection?.commandState?.phase?.locked === false &&
+      window.__fmarchPlayerProjection?.commandState?.voteTargets?.some(
+        (target) => target.kind === "slot" && target.slotId === targetSlot,
+      ),
+    { targetSlot: voteTarget.slotId },
+    { timeout: 15000 },
+  );
+  await page.locator('[data-action="submit_vote"]', {
+    hasText: voteTarget.label,
+  }).first().waitFor({ state: "visible", timeout: 15000 });
+  const roleUrl = page.url();
+  const commandState = await page.evaluate(
+    () => window.__fmarchPlayerProjection?.commandState,
+  );
+  const buttons = await playerCommandButtons(page);
+  const voteButton =
+    buttons.find(
+      (button) =>
+        button.action === "submit_vote" &&
+        button.text?.includes(voteTarget.label) &&
+        button.disabled === false,
+    ) ?? null;
+  await page.waitForFunction(
+    () => typeof window.__fmarchClosePlayerLiveProjection === "function",
+    null,
+    { timeout: 15000 },
+  );
+  const closedStatus = await page.evaluate(
+    () => window.__fmarchClosePlayerLiveProjection(),
+  );
+  return {
+    roleUrl,
+    visitedRolePath: rolePathFromUrl(roleUrl),
+    commandState,
+    buttons,
+    voteButton,
+    closedStatus,
+  };
+}
+
+async function submitStaleD02VoteAfterTransition({ page, voteTarget }) {
+  await page
+    .locator('[data-action="submit_vote"]', { hasText: voteTarget.label })
+    .first()
+    .click();
+  await page.waitForFunction(
+    () =>
+      window.__fmarchPlayerCommandStatus?.state === "reject" &&
+      window.__fmarchPlayerCommandStatus?.error === "PhaseLocked" &&
+      window.__fmarchPlayerProjection?.commandState?.phase?.phaseId === "N02",
+    null,
+    { timeout: 15000 },
+  );
+  await page.waitForFunction(
+    () =>
+      document.querySelector(
+        '[data-action="submit_action:factional_kill"]:not([disabled])',
+      ) !== null,
+    null,
+    { timeout: 15000 },
+  );
+  const reject = await page.evaluate(() => window.__fmarchPlayerCommandStatus);
+  const dispatchPlan = await page.evaluate(
+    () => window.__fmarchPlayerCommandDispatchBridgePlan,
+  );
+  const commandStateAfterReject = await page.evaluate(
+    () => window.__fmarchPlayerProjection?.commandState,
+  );
+  const currentReceipt = await page.evaluate(
+    () => window.__fmarchPlayerProjection?.currentReceipt ?? null,
+  );
+  const receiptStatusText = await page
+    .getByTestId("player-command-status")
+    .innerText();
+  const buttonsAfterReject = await playerCommandButtons(page);
+  const currentVoteAfterReject = await playerCurrentVoteSnapshot(page);
+  return {
+    status: "passed",
+    clickedAction: "submit_vote",
+    reject,
+    dispatchPlan,
+    commandStateAfterReject,
+    currentReceipt,
+    receiptStatusText,
+    buttonsAfterReject,
+    currentVoteAfterReject,
+  };
 }
 
 async function seedD02VoteNightTransitionGame({ game }) {

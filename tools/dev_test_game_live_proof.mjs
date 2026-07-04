@@ -8,6 +8,8 @@ import {
 } from "./dev_test_game_core_loop_phase_progression_scenarios.mjs";
 import {
   playerInvalidActionRecoveryMessage,
+  playerStaleActionTransitionRecoveryHookId,
+  playerStaleVoteTransitionRecoveryHookId,
 } from "./dev_test_game_core_loop_action_scenarios.mjs";
 import {
   replacementActionReconnectScenario,
@@ -411,6 +413,14 @@ assert.equal(
   "InvalidTarget",
 );
 assert.equal(proofRun.coreLoopSpine.recoveryHooks.staleActionConflictReject, "PhaseLocked");
+assert.equal(
+  proofRun.coreLoopSpine.recoveryHooks[playerStaleVoteTransitionRecoveryHookId],
+  "PhaseLocked",
+);
+assert.equal(
+  proofRun.coreLoopSpine.recoveryHooks[playerStaleActionTransitionRecoveryHookId],
+  "PhaseLocked",
+);
 assert.equal(proofRun.coreLoopSpine.recoveryHooks.d03TerminalAdvanceReject, "InvalidTarget");
 assert.deepEqual(session.verification.roles, [
   "host",

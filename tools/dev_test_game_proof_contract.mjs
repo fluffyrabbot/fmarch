@@ -45,6 +45,8 @@ import {
   playerActionLoopLaneId,
   playerInvalidActionRecoveryMessage,
   playerInvalidActionRecoveryLaneId,
+  playerStaleActionTransitionRecoveryHookId,
+  playerStaleVoteTransitionRecoveryHookId,
 } from "./dev_test_game_core_loop_action_scenarios.mjs";
 import {
   coreLoopPhaseProgressionLaneIds,
@@ -7365,6 +7367,10 @@ function buildCoreLoopSpineSummary({ session, verification }) {
     normalPlayerDirectActionReject:
       dayNight.normalPlayerNightSurface?.directRejectError ?? null,
     staleActionConflictReject: actionLoop.staleActionConflict?.reject?.error ?? null,
+    [playerStaleVoteTransitionRecoveryHookId]:
+      d02VoteNight.staleD02VoteAfterTransition?.reject?.error ?? null,
+    [playerStaleActionTransitionRecoveryHookId]:
+      actionLoop.staleActionConflict?.reject?.error ?? null,
     d03TerminalAdvanceReject:
       d02VoteNight.d03TerminalAdvanceReject?.commandStatus?.error ?? null,
   };
@@ -7637,6 +7643,8 @@ function buildCoreLoopSpineSummary({ session, verification }) {
     recoveryHooks.invalidActionReject === "InvalidTarget" &&
     recoveryHooks.normalPlayerDirectActionReject === "InvalidTarget" &&
     recoveryHooks.staleActionConflictReject === "PhaseLocked" &&
+    recoveryHooks[playerStaleVoteTransitionRecoveryHookId] === "PhaseLocked" &&
+    recoveryHooks[playerStaleActionTransitionRecoveryHookId] === "PhaseLocked" &&
     recoveryHooks.d03TerminalAdvanceReject === "InvalidTarget";
   return {
     status: passed ? "passed" : "failed",
@@ -7695,6 +7703,10 @@ function assertCoreLoopSpineSummary(summary) {
     summary.recoveryHooks?.invalidActionReject !== "InvalidTarget" ||
     summary.recoveryHooks?.normalPlayerDirectActionReject !== "InvalidTarget" ||
     summary.recoveryHooks?.staleActionConflictReject !== "PhaseLocked" ||
+    summary.recoveryHooks?.[playerStaleVoteTransitionRecoveryHookId] !==
+      "PhaseLocked" ||
+    summary.recoveryHooks?.[playerStaleActionTransitionRecoveryHookId] !==
+      "PhaseLocked" ||
     summary.recoveryHooks?.d03TerminalAdvanceReject !== "InvalidTarget"
   ) {
     throw new Error(

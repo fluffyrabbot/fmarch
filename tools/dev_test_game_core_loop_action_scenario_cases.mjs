@@ -10,6 +10,10 @@ export const playerStaleVoteTransitionRecoveryFeatureSlotId =
   "stale-vote-transition-recovery";
 export const playerStaleActionTransitionRecoveryFeatureSlotId =
   "stale-action-transition-recovery";
+export const playerStaleVoteTransitionRecoveryHookId =
+  "staleVoteTransitionReject";
+export const playerStaleActionTransitionRecoveryHookId =
+  "staleActionTransitionReject";
 
 export function invalidActionRecoveryFeatureSpineRow({ cycleId }) {
   return {
@@ -30,6 +34,7 @@ export function staleVoteTransitionRecoveryFeatureSpineRow({ cycleId }) {
     cycleId,
     role: "actionPlayer",
     checkpointId: `${cycleId}-n02-action-open`,
+    recoveryHookId: playerStaleVoteTransitionRecoveryHookId,
     adminCheckId: playerActionLoopLaneId,
   };
 }
@@ -40,7 +45,8 @@ export function staleActionTransitionRecoveryFeatureSpineRow({ cycleId }) {
     featureSlotId: playerStaleActionTransitionRecoveryFeatureSlotId,
     cycleId,
     role: "actionPlayer",
-    checkpointId: `${cycleId}-n02-action-open`,
+    checkpointId: `${cycleId}-n01-action-open`,
+    recoveryHookId: playerStaleActionTransitionRecoveryHookId,
     adminCheckId: playerActionLoopLaneId,
   };
 }

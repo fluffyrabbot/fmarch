@@ -2750,6 +2750,8 @@ test("admin local core loop detail data carries lane rows", async () => {
       ["invalidActionReject", "InvalidTarget"],
       ["normalPlayerDirectActionReject", "InvalidTarget"],
       ["staleActionConflictReject", "PhaseLocked"],
+      ["staleVoteTransitionReject", "PhaseLocked"],
+      ["staleActionTransitionReject", "PhaseLocked"],
       ["d03TerminalAdvanceReject", "InvalidTarget"],
     ],
   );
@@ -4465,6 +4467,8 @@ function proofRunFixture() {
         invalidActionReject: "InvalidTarget",
         normalPlayerDirectActionReject: "InvalidTarget",
         staleActionConflictReject: "PhaseLocked",
+        staleVoteTransitionReject: "PhaseLocked",
+        staleActionTransitionReject: "PhaseLocked",
         d03TerminalAdvanceReject: "InvalidTarget",
       },
     },

@@ -12,7 +12,9 @@ import {
   playerActionSubmissionScenario,
   playerInvalidActionRecoveryLaneId,
   playerInvalidActionRecoveryScenario,
+  playerStaleActionTransitionRecoveryHookId,
   playerStaleActionTransitionRecoveryFeatureSlotId,
+  playerStaleVoteTransitionRecoveryHookId,
   playerStaleVoteTransitionRecoveryFeatureSlotId,
   playerSlotVoteCommandFacts,
   staleActionTransitionRecoveryFeatureSpineRow,
@@ -30,8 +32,16 @@ test("player action scenario module exports proof lane ids", () => {
     "stale-vote-transition-recovery",
   );
   assert.equal(
+    playerStaleVoteTransitionRecoveryHookId,
+    "staleVoteTransitionReject",
+  );
+  assert.equal(
     playerStaleActionTransitionRecoveryFeatureSlotId,
     "stale-action-transition-recovery",
+  );
+  assert.equal(
+    playerStaleActionTransitionRecoveryHookId,
+    "staleActionTransitionReject",
   );
 });
 
@@ -98,17 +108,19 @@ test("player stale transition recovery feature rows target the action-player rol
       cycleId: "d02-n02",
       role: "actionPlayer",
       checkpointId: "d02-n02-n02-action-open",
+      recoveryHookId: playerStaleVoteTransitionRecoveryHookId,
       adminCheckId: playerActionLoopLaneId,
     },
   );
   assert.deepEqual(
-    staleActionTransitionRecoveryFeatureSpineRow({ cycleId: "d02-n02" }),
+    staleActionTransitionRecoveryFeatureSpineRow({ cycleId: "d01-n01-d02" }),
     {
       targetKey: "staleActionTransitionRecovery",
       featureSlotId: playerStaleActionTransitionRecoveryFeatureSlotId,
-      cycleId: "d02-n02",
+      cycleId: "d01-n01-d02",
       role: "actionPlayer",
-      checkpointId: "d02-n02-n02-action-open",
+      checkpointId: "d01-n01-d02-n01-action-open",
+      recoveryHookId: playerStaleActionTransitionRecoveryHookId,
       adminCheckId: playerActionLoopLaneId,
     },
   );

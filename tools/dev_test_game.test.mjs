@@ -4191,6 +4191,35 @@ test("session card and markdown include role credential URLs and tokens", async 
           },
           factionalKillVisible: false,
         },
+        staleD02VoteTransitionSetup: {
+          commandState: { phase: { phaseId: "D02", locked: false } },
+          voteButton: { action: "submit_vote", disabled: false },
+          closedStatus: { state: "closed" },
+        },
+        staleD02VoteAfterTransition: {
+          status: "passed",
+          reject: {
+            state: "reject",
+            error: "PhaseLocked",
+            message:
+              "Reject PhaseLocked: phase locked; stale vote state, refresh and use current vote controls",
+          },
+          dispatchPlan: {
+            projectionRefreshKeys: [
+              "votecount",
+              "commandState",
+              "dayVoteOutcomes",
+            ],
+          },
+          commandStateAfterReject: {
+            phase: { phaseId: "N02", locked: false },
+          },
+          buttonsAfterReject: [
+            { action: "submit_action:factional_kill", disabled: false },
+          ],
+          receiptStatusText:
+            "Reject PhaseLocked: phase locked; stale vote state, refresh and use current vote controls",
+        },
         n02ActionTarget: "slot-3",
         n02ActionSubmission: {
           state: "ack",
@@ -12831,6 +12860,8 @@ function coreLoopAdminProofFixture() {
           "invalidActionReject",
           "normalPlayerDirectActionReject",
           "staleActionConflictReject",
+          "staleVoteTransitionReject",
+          "staleActionTransitionReject",
           "d03TerminalAdvanceReject",
         ],
       },
@@ -12911,6 +12942,8 @@ function coreLoopAdminProofFixture() {
         "invalidActionReject",
         "normalPlayerDirectActionReject",
         "staleActionConflictReject",
+        "staleVoteTransitionReject",
+        "staleActionTransitionReject",
         "d03TerminalAdvanceReject",
       ],
       rawInviteTokensVisible: false,
@@ -14747,6 +14780,8 @@ function coreLoopSpineTargetsFixture() {
       "invalidActionReject",
       "normalPlayerDirectActionReject",
       "staleActionConflictReject",
+      "staleVoteTransitionReject",
+      "staleActionTransitionReject",
       "d03TerminalAdvanceReject",
     ],
     visibleAdminCheckIds: [...coreLoopAdminCheckIds],

@@ -90,7 +90,9 @@ const coreLoopFeatureSpineLaneRows = Object.freeze([
     staleVoteTransitionRecoveryFeatureSpineRow({ cycleId: dayTwoNightTwo }),
   ),
   Object.freeze(
-    staleActionTransitionRecoveryFeatureSpineRow({ cycleId: dayTwoNightTwo }),
+    staleActionTransitionRecoveryFeatureSpineRow({
+      cycleId: dayOneNightOneDayTwo,
+    }),
   ),
   ...dayOneNightOneSpineRows.slice(1),
   Object.freeze(
