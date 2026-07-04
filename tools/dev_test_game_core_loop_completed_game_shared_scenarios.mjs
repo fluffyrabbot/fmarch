@@ -24,7 +24,7 @@ export {
   completedPlayerReloadProofCases,
   staleCompletedGamePlayerCommandAssertionCases,
   staleCompletedGamePlayerCommandProofArgs,
-} from "./dev_test_game_core_loop_completed_game_shared_recovery_scenarios.mjs";
+} from "./dev_test_game_core_loop_completed_terminal_scenario_assertions.mjs";
 
 export {
   completedGameStaleRecoverySpineLaneCase,
@@ -40,7 +40,7 @@ export {
   staleCompletedGamePlayerCommandHardeningLaneCases,
   staleCompletedGamePlayerCommandCaseDefinitions,
   staleCompletedGamePlayerCommandCases,
-} from "./dev_test_game_core_loop_completed_game_shared_recovery_scenarios.mjs";
+} from "./dev_test_game_core_loop_completed_terminal_scenario_assertions.mjs";
 
 export {
   assertCompletedGameProofReadinessSurfaceProof,

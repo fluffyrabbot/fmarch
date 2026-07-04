@@ -722,6 +722,7 @@ test("completed-game production harness callers share extracted recovery cases",
   }
 
   for (const retiredPath of [
+    "tools/dev_test_game_core_loop_completed_game_shared_recovery_scenarios.mjs",
     "tools/dev_test_game_core_loop_completed_game_proof_readiness_case_definitions.mjs",
     "tools/dev_test_game_core_loop_completed_game_proof_readiness_scenarios.mjs",
     "tools/dev_test_game_core_loop_completed_game_proof_readiness_shared.mjs",
