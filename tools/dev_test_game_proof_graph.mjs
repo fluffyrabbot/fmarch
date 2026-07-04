@@ -5,10 +5,6 @@ import {
   assertDevTestGameReleaseReadiness,
   validateDevTestGameAdminSpineProof,
   validateDevTestGameAdminSpineTerminalBatches,
-  validateDevTestGamePrivateChannelRecoveryReceipt,
-  validateDevTestGameReplacementActionRecoveryReceipt,
-  validateDevTestGameReplacementHandoffRecoveryReceipt,
-  validateDevTestGameReplacementPrivateRecoveryReceipt,
 } from "./dev_test_game_release_readiness.mjs";
 import {
   assertDevTestGameNextAction,
@@ -45,23 +41,12 @@ import {
   localAdminAuditRoleUrl,
 } from "./dev_test_game_admin_audit_surface_ids.mjs";
 import {
-  devTestGamePrivateChannelRecoveryReceiptPath,
-} from "./dev_test_game_private_channel_recovery_receipt.mjs";
-import {
-  devTestGameReplacementPrivateRecoveryReceiptPath,
-} from "./dev_test_game_replacement_private_recovery_receipt.mjs";
-import {
-  devTestGameReplacementActionRecoveryReceiptPath,
-} from "./dev_test_game_replacement_action_recovery_receipt.mjs";
-import {
-  devTestGameReplacementHandoffRecoveryReceiptPath,
-} from "./dev_test_game_replacement_handoff_recovery_receipt.mjs";
-import {
   assertProofGraphCoversRecoveryReceipt,
   buildRecoveryReceiptGraphEdges,
   buildRecoveryReceiptGraphNode,
   recoveryReceiptGraphDescriptorByReceiptKey,
   recoveryReceiptGraphDescriptors,
+  validateRecoveryReceiptArtifact,
 } from "./dev_test_game_recovery_receipt_graph_surfaces.mjs";
 export {
   devTestGameProofGraphAdminProofCommand,
@@ -77,14 +62,6 @@ export const DEV_TEST_GAME_PROOF_GRAPH_VERSION = 1;
 const proofGraphJsonPath = path.join(repoRoot, devTestGameProofGraphPath);
 const defaultAdminSpineTerminalBatchProofPath =
   "target/dev-test-game/admin-spine-terminal-batches.json";
-const defaultPrivateChannelRecoveryReceiptPath =
-  devTestGamePrivateChannelRecoveryReceiptPath;
-const defaultReplacementPrivateRecoveryReceiptPath =
-  devTestGameReplacementPrivateRecoveryReceiptPath;
-const defaultReplacementActionRecoveryReceiptPath =
-  devTestGameReplacementActionRecoveryReceiptPath;
-const defaultReplacementHandoffRecoveryReceiptPath =
-  devTestGameReplacementHandoffRecoveryReceiptPath;
 
 export function buildDevTestGameProofGraph(
   {
@@ -104,13 +81,13 @@ export function buildDevTestGameProofGraph(
     adminSpineProofSource = "target/dev-test-game/admin-spine-proof.json",
     adminSpineTerminalBatchesSource = defaultAdminSpineTerminalBatchProofPath,
     privateChannelRecoveryReceiptSource =
-      defaultPrivateChannelRecoveryReceiptPath,
+      defaultRecoveryReceiptPath("privateChannelRecoveryReceipt"),
     replacementActionRecoveryReceiptSource =
-      defaultReplacementActionRecoveryReceiptPath,
+      defaultRecoveryReceiptPath("replacementActionRecoveryReceipt"),
     replacementHandoffRecoveryReceiptSource =
-      defaultReplacementHandoffRecoveryReceiptPath,
+      defaultRecoveryReceiptPath("replacementHandoffRecoveryReceipt"),
     replacementPrivateRecoveryReceiptSource =
-      defaultReplacementPrivateRecoveryReceiptPath,
+      defaultRecoveryReceiptPath("replacementPrivateRecoveryReceipt"),
     nextActionSource = devTestGameNextActionPath,
     releaseReadinessSource = devTestGameReleaseReadinessPath,
   } = {},
@@ -127,42 +104,25 @@ export function buildDevTestGameProofGraph(
       : validateDevTestGameAdminSpineTerminalBatches(adminSpineTerminalBatches, {
           path: adminSpineTerminalBatchesSource,
         });
+  const recoveryReceiptEvidenceByKey =
+    validateRecoveryReceiptsForProofGraph({
+      privateChannelRecoveryReceipt,
+      privateChannelRecoveryReceiptSource,
+      replacementActionRecoveryReceipt,
+      replacementActionRecoveryReceiptSource,
+      replacementHandoffRecoveryReceipt,
+      replacementHandoffRecoveryReceiptSource,
+      replacementPrivateRecoveryReceipt,
+      replacementPrivateRecoveryReceiptSource,
+    });
   const privateChannelRecoveryReceiptEvidence =
-    privateChannelRecoveryReceipt === null
-      ? null
-      : validateDevTestGamePrivateChannelRecoveryReceipt(
-          privateChannelRecoveryReceipt,
-          {
-            path: privateChannelRecoveryReceiptSource,
-          },
-        );
-  const replacementPrivateRecoveryReceiptEvidence =
-    replacementPrivateRecoveryReceipt === null
-      ? null
-      : validateDevTestGameReplacementPrivateRecoveryReceipt(
-          replacementPrivateRecoveryReceipt,
-          {
-            path: replacementPrivateRecoveryReceiptSource,
-          },
-        );
+    recoveryReceiptEvidenceByKey.privateChannelRecoveryReceipt;
   const replacementActionRecoveryReceiptEvidence =
-    replacementActionRecoveryReceipt === null
-      ? null
-      : validateDevTestGameReplacementActionRecoveryReceipt(
-          replacementActionRecoveryReceipt,
-          {
-            path: replacementActionRecoveryReceiptSource,
-          },
-        );
+    recoveryReceiptEvidenceByKey.replacementActionRecoveryReceipt;
   const replacementHandoffRecoveryReceiptEvidence =
-    replacementHandoffRecoveryReceipt === null
-      ? null
-      : validateDevTestGameReplacementHandoffRecoveryReceipt(
-          replacementHandoffRecoveryReceipt,
-          {
-            path: replacementHandoffRecoveryReceiptSource,
-          },
-        );
+    recoveryReceiptEvidenceByKey.replacementHandoffRecoveryReceipt;
+  const replacementPrivateRecoveryReceiptEvidence =
+    recoveryReceiptEvidenceByKey.replacementPrivateRecoveryReceipt;
   const releaseReadinessChecklist =
     assertDevTestGameReleaseReadiness(releaseReadiness);
   const adminSpine = adminSpineProof;
@@ -213,30 +173,19 @@ export function buildDevTestGameProofGraph(
       ...(adminSpineTerminalBatchEvidence === null
         ? {}
         : { adminSpineTerminalBatches: adminSpineTerminalBatchesSource }),
-      ...(privateChannelRecoveryReceiptEvidence === null
-        ? {}
-        : {
-            privateChannelRecoveryReceipt:
-              privateChannelRecoveryReceiptSource,
-          }),
-      ...(replacementPrivateRecoveryReceiptEvidence === null
-        ? {}
-        : {
-            replacementPrivateRecoveryReceipt:
-              replacementPrivateRecoveryReceiptSource,
-          }),
-      ...(replacementActionRecoveryReceiptEvidence === null
-        ? {}
-        : {
-            replacementActionRecoveryReceipt:
-              replacementActionRecoveryReceiptSource,
-          }),
-      ...(replacementHandoffRecoveryReceiptEvidence === null
-        ? {}
-        : {
-            replacementHandoffRecoveryReceipt:
-              replacementHandoffRecoveryReceiptSource,
-          }),
+      ...recoveryReceiptGeneratedFromSources({
+        privateChannelRecoveryReceipt: privateChannelRecoveryReceiptEvidence,
+        privateChannelRecoveryReceiptSource,
+        replacementActionRecoveryReceipt:
+          replacementActionRecoveryReceiptEvidence,
+        replacementActionRecoveryReceiptSource,
+        replacementHandoffRecoveryReceipt:
+          replacementHandoffRecoveryReceiptEvidence,
+        replacementHandoffRecoveryReceiptSource,
+        replacementPrivateRecoveryReceipt:
+          replacementPrivateRecoveryReceiptEvidence,
+        replacementPrivateRecoveryReceiptSource,
+      }),
       ...(nextActionEvidence === null ? {} : { nextAction: nextActionSource }),
       releaseReadiness: releaseReadinessSource,
       manifestGeneratedAt: manifest.generatedAt,
@@ -582,17 +531,13 @@ export async function writeDevTestGameProofGraph({
     process.env.FMARCH_DEV_TEST_GAME_ADMIN_SPINE_TERMINAL_BATCHES ??
     defaultAdminSpineTerminalBatchProofPath,
   privateChannelRecoveryReceiptPath =
-    process.env.FMARCH_DEV_TEST_GAME_PRIVATE_CHANNEL_RECOVERY_RECEIPT ??
-    defaultPrivateChannelRecoveryReceiptPath,
+    defaultRecoveryReceiptPath("privateChannelRecoveryReceipt"),
   replacementActionRecoveryReceiptPath =
-    process.env.FMARCH_DEV_TEST_GAME_REPLACEMENT_ACTION_RECOVERY_RECEIPT ??
-    defaultReplacementActionRecoveryReceiptPath,
+    defaultRecoveryReceiptPath("replacementActionRecoveryReceipt"),
   replacementHandoffRecoveryReceiptPath =
-    process.env.FMARCH_DEV_TEST_GAME_REPLACEMENT_HANDOFF_RECOVERY_RECEIPT ??
-    defaultReplacementHandoffRecoveryReceiptPath,
+    defaultRecoveryReceiptPath("replacementHandoffRecoveryReceipt"),
   replacementPrivateRecoveryReceiptPath =
-    process.env.FMARCH_DEV_TEST_GAME_REPLACEMENT_PRIVATE_RECOVERY_RECEIPT ??
-    defaultReplacementPrivateRecoveryReceiptPath,
+    defaultRecoveryReceiptPath("replacementPrivateRecoveryReceipt"),
   nextActionPath = process.env.FMARCH_DEV_TEST_GAME_NEXT_ACTION ??
     devTestGameNextActionPath,
   releaseReadinessPath = process.env.FMARCH_DEV_TEST_GAME_RELEASE_READINESS ??
@@ -604,21 +549,14 @@ export async function writeDevTestGameProofGraph({
     repoRoot,
     adminSpineTerminalBatchesPath,
   );
-  const absolutePrivateChannelRecoveryReceiptPath = path.resolve(
-    repoRoot,
-    privateChannelRecoveryReceiptPath,
-  );
-  const absoluteReplacementActionRecoveryReceiptPath = path.resolve(
-    repoRoot,
-    replacementActionRecoveryReceiptPath,
-  );
-  const absoluteReplacementHandoffRecoveryReceiptPath = path.resolve(
-    repoRoot,
-    replacementHandoffRecoveryReceiptPath,
-  );
-  const absoluteReplacementPrivateRecoveryReceiptPath = path.resolve(
-    repoRoot,
-    replacementPrivateRecoveryReceiptPath,
+  const recoveryReceiptPathInputs = {
+    privateChannelRecoveryReceipt: privateChannelRecoveryReceiptPath,
+    replacementActionRecoveryReceipt: replacementActionRecoveryReceiptPath,
+    replacementHandoffRecoveryReceipt: replacementHandoffRecoveryReceiptPath,
+    replacementPrivateRecoveryReceipt: replacementPrivateRecoveryReceiptPath,
+  };
+  const recoveryReceiptInputs = await readRecoveryReceiptInputs(
+    recoveryReceiptPathInputs,
   );
   const absoluteNextActionPath = path.resolve(repoRoot, nextActionPath);
   const absoluteReleaseReadinessPath = path.resolve(repoRoot, releaseReadinessPath);
@@ -626,18 +564,6 @@ export async function writeDevTestGameProofGraph({
   const adminSpineProof = JSON.parse(await readFile(absoluteAdminSpineProofPath, "utf8"));
   const adminSpineTerminalBatches = await readOptionalJson(
     absoluteAdminSpineTerminalBatchesPath,
-  );
-  const privateChannelRecoveryReceipt = await readOptionalJson(
-    absolutePrivateChannelRecoveryReceiptPath,
-  );
-  const replacementActionRecoveryReceipt = await readOptionalJson(
-    absoluteReplacementActionRecoveryReceiptPath,
-  );
-  const replacementHandoffRecoveryReceipt = await readOptionalJson(
-    absoluteReplacementHandoffRecoveryReceiptPath,
-  );
-  const replacementPrivateRecoveryReceipt = await readOptionalJson(
-    absoluteReplacementPrivateRecoveryReceiptPath,
   );
   const nextAction = JSON.parse(await readFile(absoluteNextActionPath, "utf8"));
   const releaseReadiness = JSON.parse(
@@ -648,10 +574,7 @@ export async function writeDevTestGameProofGraph({
       spineManifest,
       adminSpineProof,
       adminSpineTerminalBatches,
-      privateChannelRecoveryReceipt,
-      replacementActionRecoveryReceipt,
-      replacementHandoffRecoveryReceipt,
-      replacementPrivateRecoveryReceipt,
+      ...recoveryReceiptInputs.receipts,
       nextAction,
       releaseReadiness,
     },
@@ -663,22 +586,7 @@ export async function writeDevTestGameProofGraph({
         repoRoot,
         absoluteAdminSpineTerminalBatchesPath,
       ),
-      privateChannelRecoveryReceiptSource: path.relative(
-        repoRoot,
-        absolutePrivateChannelRecoveryReceiptPath,
-      ),
-      replacementActionRecoveryReceiptSource: path.relative(
-        repoRoot,
-        absoluteReplacementActionRecoveryReceiptPath,
-      ),
-      replacementHandoffRecoveryReceiptSource: path.relative(
-        repoRoot,
-        absoluteReplacementHandoffRecoveryReceiptPath,
-      ),
-      replacementPrivateRecoveryReceiptSource: path.relative(
-        repoRoot,
-        absoluteReplacementPrivateRecoveryReceiptPath,
-      ),
+      ...recoveryReceiptInputs.sources,
       nextActionSource: path.relative(repoRoot, absoluteNextActionPath),
       releaseReadinessSource: path.relative(repoRoot, absoluteReleaseReadinessPath),
     },
@@ -891,11 +799,38 @@ function buildRecoveryReceiptGraphNodes(inputs) {
     .filter((node) => node !== null);
 }
 
+function validateRecoveryReceiptsForProofGraph(inputs) {
+  return Object.fromEntries(
+    recoveryReceiptGraphDescriptors.map((descriptor) => {
+      const receipt = inputs[descriptor.receiptKey];
+      return [
+        descriptor.receiptKey,
+        receipt === null
+          ? null
+          : validateRecoveryReceiptArtifact(receipt, descriptor, {
+              path: inputs[descriptor.sourceKey],
+            }),
+      ];
+    }),
+  );
+}
+
 function buildRecoveryReceiptGraphEdgeRows(inputs) {
   return recoveryReceiptGraphDescriptors.flatMap((descriptor) =>
     buildRecoveryReceiptGraphEdges({
       descriptor,
       receipt: inputs[descriptor.receiptKey] ?? null,
+    }),
+  );
+}
+
+function recoveryReceiptGeneratedFromSources(inputs) {
+  return Object.fromEntries(
+    recoveryReceiptGraphDescriptors.flatMap((descriptor) => {
+      const receipt = inputs[descriptor.receiptKey];
+      return receipt === null
+        ? []
+        : [[descriptor.receiptKey, inputs[descriptor.sourceKey]]];
     }),
   );
 }
@@ -907,6 +842,38 @@ function recoveryReceiptSummaryLaneCounts(inputs) {
       inputs[descriptor.receiptKey]?.laneCount ?? 0,
     ]),
   );
+}
+
+async function readRecoveryReceiptInputs(pathInputs) {
+  const entries = await Promise.all(
+    recoveryReceiptGraphDescriptors.map(async (descriptor) => {
+      const absolutePath = path.resolve(
+        repoRoot,
+        pathInputs[descriptor.receiptKey],
+      );
+      return [
+        descriptor,
+        absolutePath,
+        await readOptionalJson(absolutePath),
+      ];
+    }),
+  );
+  return {
+    receipts: Object.fromEntries(
+      entries.map(([descriptor, , receipt]) => [descriptor.receiptKey, receipt]),
+    ),
+    sources: Object.fromEntries(
+      entries.map(([descriptor, absolutePath]) => [
+        descriptor.sourceKey,
+        path.relative(repoRoot, absolutePath),
+      ]),
+    ),
+  };
+}
+
+function defaultRecoveryReceiptPath(receiptKey) {
+  const descriptor = recoveryReceiptGraphDescriptorByReceiptKey(receiptKey);
+  return process.env[descriptor.envVar] ?? descriptor.proofTarget;
 }
 
 function terminalBatchEdges(adminSpineTerminalBatches) {

@@ -15,18 +15,22 @@ import {
   localAdminAuditRoleUrl,
 } from "./dev_test_game_admin_audit_surface_ids.mjs";
 import {
+  assertDevTestGamePrivateChannelRecoveryReceipt,
   devTestGamePrivateChannelRecoveryReceiptCommand,
   devTestGamePrivateChannelRecoveryReceiptPath,
 } from "./dev_test_game_private_channel_recovery_receipt.mjs";
 import {
+  assertDevTestGameReplacementActionRecoveryReceipt,
   devTestGameReplacementActionRecoveryReceiptCommand,
   devTestGameReplacementActionRecoveryReceiptPath,
 } from "./dev_test_game_replacement_action_recovery_receipt.mjs";
 import {
+  assertDevTestGameReplacementHandoffRecoveryReceipt,
   devTestGameReplacementHandoffRecoveryReceiptCommand,
   devTestGameReplacementHandoffRecoveryReceiptPath,
 } from "./dev_test_game_replacement_handoff_recovery_receipt.mjs";
 import {
+  assertDevTestGameReplacementPrivateRecoveryReceipt,
   devTestGameReplacementPrivateRecoveryReceiptCommand,
   devTestGameReplacementPrivateRecoveryReceiptPath,
 } from "./dev_test_game_replacement_private_recovery_receipt.mjs";
@@ -43,7 +47,12 @@ export const recoveryReceiptGraphDescriptors = Object.freeze([
     sourceKey: "privateChannelRecoveryReceiptSource",
     nextActionGeneratedFromKey: "privateChannelRecoveryGraph",
     summaryLaneCountKey: "privateChannelRecoveryLaneCount",
+    envVar: "FMARCH_DEV_TEST_GAME_PRIVATE_CHANNEL_RECOVERY_RECEIPT",
+    pathOptionKey: "privateChannelRecoveryReceiptPath",
+    artifactOptionKey: "privateChannelRecoveryReceiptArtifact",
     checkId: "private-channel-recovery-graph",
+    readinessCheckId: "local-private-channel-recovery-receipt",
+    readinessLabel: "Local private-channel recovery receipt",
     nodeId: "private-channel-recovery-receipt",
     label: "Private-channel recovery receipt",
     kind: "private-channel-recovery-receipt",
@@ -53,13 +62,19 @@ export const recoveryReceiptGraphDescriptors = Object.freeze([
     proofTarget: devTestGamePrivateChannelRecoveryReceiptPath,
     familyId: "core-loop-private-channel-recovery",
     laneIds: coreLoopPrivateChannelRecoveryLaneIds,
+    assertReceipt: assertDevTestGamePrivateChannelRecoveryReceipt,
   }),
   recoveryReceiptGraphDescriptor({
     receiptKey: "replacementActionRecoveryReceipt",
     sourceKey: "replacementActionRecoveryReceiptSource",
     nextActionGeneratedFromKey: "replacementActionRecoveryGraph",
     summaryLaneCountKey: "replacementActionRecoveryLaneCount",
+    envVar: "FMARCH_DEV_TEST_GAME_REPLACEMENT_ACTION_RECOVERY_RECEIPT",
+    pathOptionKey: "replacementActionRecoveryReceiptPath",
+    artifactOptionKey: "replacementActionRecoveryReceiptArtifact",
     checkId: "replacement-action-recovery-graph",
+    readinessCheckId: "local-replacement-action-recovery-receipt",
+    readinessLabel: "Local replacement action recovery receipt",
     nodeId: "replacement-action-recovery-receipt",
     label: "Replacement action recovery receipt",
     kind: "replacement-action-recovery-receipt",
@@ -69,13 +84,19 @@ export const recoveryReceiptGraphDescriptors = Object.freeze([
     proofTarget: devTestGameReplacementActionRecoveryReceiptPath,
     familyId: "replacement-action-recovery",
     laneIds: replacementActionLaneIds,
+    assertReceipt: assertDevTestGameReplacementActionRecoveryReceipt,
   }),
   recoveryReceiptGraphDescriptor({
     receiptKey: "replacementHandoffRecoveryReceipt",
     sourceKey: "replacementHandoffRecoveryReceiptSource",
     nextActionGeneratedFromKey: "replacementHandoffRecoveryGraph",
     summaryLaneCountKey: "replacementHandoffRecoveryLaneCount",
+    envVar: "FMARCH_DEV_TEST_GAME_REPLACEMENT_HANDOFF_RECOVERY_RECEIPT",
+    pathOptionKey: "replacementHandoffRecoveryReceiptPath",
+    artifactOptionKey: "replacementHandoffRecoveryReceiptArtifact",
     checkId: "replacement-handoff-recovery-graph",
+    readinessCheckId: "local-replacement-handoff-recovery-receipt",
+    readinessLabel: "Local replacement handoff recovery receipt",
     nodeId: "replacement-handoff-recovery-receipt",
     label: "Replacement handoff recovery receipt",
     kind: "replacement-handoff-recovery-receipt",
@@ -85,13 +106,19 @@ export const recoveryReceiptGraphDescriptors = Object.freeze([
     proofTarget: devTestGameReplacementHandoffRecoveryReceiptPath,
     familyId: "replacement-handoff-recovery",
     laneIds: replacementHandoffRecoveryLaneIds,
+    assertReceipt: assertDevTestGameReplacementHandoffRecoveryReceipt,
   }),
   recoveryReceiptGraphDescriptor({
     receiptKey: "replacementPrivateRecoveryReceipt",
     sourceKey: "replacementPrivateRecoveryReceiptSource",
     nextActionGeneratedFromKey: "replacementPrivateRecoveryGraph",
     summaryLaneCountKey: "replacementPrivateRecoveryLaneCount",
+    envVar: "FMARCH_DEV_TEST_GAME_REPLACEMENT_PRIVATE_RECOVERY_RECEIPT",
+    pathOptionKey: "replacementPrivateRecoveryReceiptPath",
+    artifactOptionKey: "replacementPrivateRecoveryReceiptArtifact",
     checkId: "replacement-private-recovery-graph",
+    readinessCheckId: "local-replacement-private-recovery-receipt",
+    readinessLabel: "Local replacement private-channel recovery receipt",
     nodeId: "replacement-private-recovery-receipt",
     label: "Replacement private-channel recovery receipt",
     kind: "replacement-private-recovery-receipt",
@@ -101,6 +128,7 @@ export const recoveryReceiptGraphDescriptors = Object.freeze([
     proofTarget: devTestGameReplacementPrivateRecoveryReceiptPath,
     familyId: "replacement-private-channel-recovery",
     laneIds: replacementPrivateChannelRecoveryLaneIds,
+    assertReceipt: assertDevTestGameReplacementPrivateRecoveryReceipt,
   }),
 ]);
 
@@ -134,6 +162,96 @@ export function buildRecoveryReceiptGraphNode({
     familyId: receipt.familyId,
     laneCount: receipt.laneCount,
     laneIds: receipt.laneIds,
+  };
+}
+
+export function validateRecoveryReceiptArtifact(
+  proof,
+  descriptor,
+  options = {},
+) {
+  const receipt = descriptor.assertReceipt(proof);
+  return {
+    status: "passed",
+    path: options.path ?? descriptor.proofTarget,
+    proofBoundary: receipt.proofBoundary,
+    roleUrl: receipt.generatedFrom.roleUrl,
+    familyId: receipt.generatedFrom.family.id,
+    laneCount: receipt.summary.laneCount,
+    passedLaneCount: receipt.summary.passedLaneCount,
+    laneIds: [...receipt.laneIds],
+    ...(options.artifact === undefined ? {} : { artifact: options.artifact }),
+  };
+}
+
+export function recoveryReceiptReadinessCheck(receiptEvidence, descriptor) {
+  if (receiptEvidence === undefined) {
+    return null;
+  }
+  return {
+    id: descriptor.readinessCheckId,
+    label: descriptor.readinessLabel,
+    status: "passed",
+    evidence: receiptEvidence.path,
+    proofBoundary: receiptEvidence.proofBoundary,
+    roleUrl: receiptEvidence.roleUrl,
+    laneCount: receiptEvidence.laneCount,
+    laneIds: receiptEvidence.laneIds,
+  };
+}
+
+export function recoveryReceiptEvidenceByKeyFromOptions(options) {
+  return Object.fromEntries(
+    recoveryReceiptGraphDescriptors.map((descriptor) => [
+      descriptor.receiptKey,
+      options[descriptor.receiptKey]
+        ? validateRecoveryReceiptArtifact(options[descriptor.receiptKey], descriptor, {
+            path: options[descriptor.pathOptionKey] ?? descriptor.proofTarget,
+            artifact: options[descriptor.artifactOptionKey],
+          })
+        : undefined,
+    ]),
+  );
+}
+
+export function recoveryReceiptGeneratedFromPaths(evidenceByKey) {
+  return Object.fromEntries(
+    recoveryReceiptGraphDescriptors.flatMap((descriptor) => {
+      const evidence = evidenceByKey[descriptor.receiptKey];
+      return evidence === undefined
+        ? []
+        : [[descriptor.receiptKey, evidence.path]];
+    }),
+  );
+}
+
+export function recoveryReceiptEvidenceSnapshots(evidenceByKey) {
+  return Object.fromEntries(
+    recoveryReceiptGraphDescriptors.flatMap((descriptor) => {
+      const evidence = evidenceByKey[descriptor.receiptKey];
+      return evidence === undefined
+        ? []
+        : [[descriptor.receiptKey, evidence]];
+    }),
+  );
+}
+
+export function recoveryReceiptOptionalReadinessArtifactDescriptor({
+  descriptor,
+  repoRoot,
+}) {
+  return {
+    id: descriptor.receiptKey,
+    envVar: descriptor.envVar,
+    defaultPath: `${repoRoot}/${descriptor.proofTarget}`,
+    outputKeys: {
+      data: descriptor.receiptKey,
+      path: descriptor.pathOptionKey,
+      freshnessMetadata: descriptor.artifactOptionKey,
+    },
+    validator: (proof, options = {}) =>
+      validateRecoveryReceiptArtifact(proof, descriptor, options),
+    ignoreInvalidDefault: true,
   };
 }
 
