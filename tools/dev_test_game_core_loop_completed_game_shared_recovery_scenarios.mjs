@@ -71,6 +71,40 @@ export function completedGameEndgameScenarioCaseFamilies({
   });
 }
 
+export const completedGameEndgameScenarioCaseFamilyDefinitions = Object.freeze([
+  Object.freeze({
+    id: "completedHostStaleCommandCases",
+    label: "Completed host stale commands",
+    role: "host",
+    recoveryKind: "stale-command",
+  }),
+  Object.freeze({
+    id: "completedPlayerReloadCases",
+    label: "Completed player reloads",
+    role: "player",
+    recoveryKind: "reload",
+  }),
+  Object.freeze({
+    id: "staleCompletedGamePlayerCommandCases",
+    label: "Stale completed-game player commands",
+    role: "player",
+    recoveryKind: "stale-command",
+  }),
+]);
+
+export const completedGameEndgameScenarioCaseFamilyIds = Object.freeze(
+  completedGameEndgameScenarioCaseFamilyDefinitions.map(({ id }) => id),
+);
+
+export function completedGameEndgameScenarioCaseFamilyEntries({
+  scenarioFamilies = completedGameEndgameScenarioCaseFamilies(),
+} = {}) {
+  return completedGameEndgameScenarioCaseFamilyDefinitions.map(({ id }) => [
+    id,
+    Object.freeze([...scenarioFamilies[id]]),
+  ]);
+}
+
 export function completedPlayerReloadAssertionCases({
   completedGameEndgameSurface,
   expectedGame,

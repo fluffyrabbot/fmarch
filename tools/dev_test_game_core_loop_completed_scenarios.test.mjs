@@ -33,6 +33,9 @@ import {
   completedGameEndgameScenarioCaseFamilies,
   completedGameEndgameStaleRejectAssertionCases,
   completedGameEndgameProofScenarioCases,
+  completedGameEndgameScenarioCaseFamilyDefinitions,
+  completedGameEndgameScenarioCaseFamilyEntries,
+  completedGameEndgameScenarioCaseFamilyIds,
   completedGameEndgameSurfaceAssertionCases,
   completedGameEndgameTransition,
   completedGameHardeningLaneCase,
@@ -179,6 +182,34 @@ test("completed-game scenario module exposes shared frozen definitions", () => {
 test("completed-game scenario module groups shared recovery case families", () => {
   const scenarioFamilies = completedGameEndgameScenarioCaseFamilies();
 
+  assert(Object.isFrozen(completedGameEndgameScenarioCaseFamilyDefinitions));
+  assert.deepEqual(completedGameEndgameScenarioCaseFamilyIds, [
+    "completedHostStaleCommandCases",
+    "completedPlayerReloadCases",
+    "staleCompletedGamePlayerCommandCases",
+  ]);
+  assert.deepEqual(
+    completedGameEndgameScenarioCaseFamilyDefinitions.map(
+      ({ id, role, recoveryKind }) => ({ id, role, recoveryKind }),
+    ),
+    [
+      {
+        id: "completedHostStaleCommandCases",
+        role: "host",
+        recoveryKind: "stale-command",
+      },
+      {
+        id: "completedPlayerReloadCases",
+        role: "player",
+        recoveryKind: "reload",
+      },
+      {
+        id: "staleCompletedGamePlayerCommandCases",
+        role: "player",
+        recoveryKind: "stale-command",
+      },
+    ],
+  );
   assert(Object.isFrozen(scenarioFamilies));
   assert(Object.isFrozen(scenarioFamilies.completedHostStaleCommandCases));
   assert(Object.isFrozen(scenarioFamilies.completedHostStaleCommandCases[0]));
@@ -220,6 +251,18 @@ test("completed-game scenario module groups shared recovery case families", () =
   assert.notEqual(
     scenarioFamilies.completedDeadPlayerStaleVoteCase,
     completedDeadPlayerStaleVoteCaseDefinition,
+  );
+  assert.deepEqual(
+    Object.fromEntries(
+      completedGameEndgameScenarioCaseFamilyEntries({ scenarioFamilies }),
+    ),
+    {
+      completedHostStaleCommandCases:
+        scenarioFamilies.completedHostStaleCommandCases,
+      completedPlayerReloadCases: scenarioFamilies.completedPlayerReloadCases,
+      staleCompletedGamePlayerCommandCases:
+        scenarioFamilies.staleCompletedGamePlayerCommandCases,
+    },
   );
 });
 
@@ -763,6 +806,14 @@ test("completed-game production harness callers share extracted recovery cases",
 
 test("completed-game proof/readiness facade exposes one completed recovery table", () => {
   assert(Object.isFrozen(completedGameProofReadinessCaseGroupDefinitions));
+  assert.equal(
+    completedGameProofReadinessCaseGroupDefinitions,
+    completedGameEndgameScenarioCaseFamilyDefinitions,
+  );
+  assert.equal(
+    completedGameProofReadinessCaseGroupIds,
+    completedGameEndgameScenarioCaseFamilyIds,
+  );
   assert.deepEqual(
     completedGameProofReadinessCaseGroupDefinitions.map(({ id }) => id),
     completedGameProofReadinessCaseGroupIds,

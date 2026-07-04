@@ -1,6 +1,9 @@
 import {
   assertCompletedGameEndgameSurfaceProof,
   completedGameEndgameProofScenarioCases,
+  completedGameEndgameScenarioCaseFamilyDefinitions,
+  completedGameEndgameScenarioCaseFamilyEntries,
+  completedGameEndgameScenarioCaseFamilyIds,
   completedGameEndgameScenarioCaseFamilies,
   completedGameEndgameTransition,
   completedGameEndgameTransitionTokens,
@@ -15,6 +18,9 @@ export {
   completedDeadPlayerStaleVoteCaseDefinition,
   completedDeadPlayerStaleVoteProofArgs,
   completedGameEndgameProofScenarioCases,
+  completedGameEndgameScenarioCaseFamilyDefinitions,
+  completedGameEndgameScenarioCaseFamilyEntries,
+  completedGameEndgameScenarioCaseFamilyIds,
   completedGameEndgameScenarioCaseFamilies,
   completedGameEndgameStaleRejectAssertionCases,
   completedGameEndgameTransition,
@@ -41,15 +47,11 @@ export {
   staleCompletedGamePlayerCommandProofArgs,
 } from "./dev_test_game_core_loop_completed_game_shared_recovery_scenarios.mjs";
 
-export const completedGameProofReadinessCaseGroupDefinitions = Object.freeze([
-  Object.freeze({ id: "completedHostStaleCommandCases" }),
-  Object.freeze({ id: "completedPlayerReloadCases" }),
-  Object.freeze({ id: "staleCompletedGamePlayerCommandCases" }),
-]);
+export const completedGameProofReadinessCaseGroupDefinitions =
+  completedGameEndgameScenarioCaseFamilyDefinitions;
 
-export const completedGameProofReadinessCaseGroupIds = Object.freeze(
-  completedGameProofReadinessCaseGroupDefinitions.map(({ id }) => id),
-);
+export const completedGameProofReadinessCaseGroupIds =
+  completedGameEndgameScenarioCaseFamilyIds;
 
 export function completedGameProofReadinessScenarioFamilies() {
   return completedGameEndgameScenarioCaseFamilies();
@@ -60,10 +62,7 @@ export function completedGameProofReadinessCaseGroups({
 } = {}) {
   return Object.freeze(
     Object.fromEntries(
-      completedGameProofReadinessCaseGroupDefinitions.map(({ id }) => [
-        id,
-        Object.freeze([...scenarioFamilies[id]]),
-      ]),
+      completedGameEndgameScenarioCaseFamilyEntries({ scenarioFamilies }),
     ),
   );
 }
