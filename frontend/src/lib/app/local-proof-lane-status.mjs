@@ -43,6 +43,9 @@ import {
 import {
   terminalRecoveryCompactStatus,
 } from "../../../../tools/dev_test_game_core_loop_terminal_recovery_scenarios.mjs";
+import {
+  nightTwoProgressionCompactStatus,
+} from "../../../../tools/dev_test_game_core_loop_night_two_progression_scenarios.mjs";
 
 const CORE_LOOP_FOUNDATION_HIGHLIGHTED_LANE_IDS = Object.freeze([
   "core-loop",
@@ -93,9 +96,7 @@ export function coreLoopSpineStatus(proofRun) {
   const firstDay = checkpointById(firstCycle, "d02-day-controls-return");
   const secondVote = checkpointById(secondCycle, "d02-deciding-vote-submitted");
   const secondNight = checkpointById(secondCycle, "n02-action-open");
-  const thirdAction = checkpointById(thirdCycle, "n02-action-submitted");
-  const thirdDay = checkpointById(thirdCycle, "d03-day-controls-return");
-  return `${status}: ${String(firstStart?.phase ?? "unknown")} -> ${String(firstNight?.phase ?? "unknown")} -> ${String(firstDay?.phase ?? "unknown")}, vote ${String(secondVote?.voteState ?? "unknown")}, ${String(secondNight?.phase ?? "unknown")} action ${String(thirdAction?.actionState ?? "unknown")}, next ${String(thirdDay?.phase ?? "unknown")}, ${terminalRecoveryCompactStatus(thirdCycle)}, ${revoteProgressionCompactStatus(thirdCycle)}`;
+  return `${status}: ${String(firstStart?.phase ?? "unknown")} -> ${String(firstNight?.phase ?? "unknown")} -> ${String(firstDay?.phase ?? "unknown")}, vote ${String(secondVote?.voteState ?? "unknown")}, ${nightTwoProgressionCompactStatus(thirdCycle, { actionPhase: secondNight?.phase })}, ${terminalRecoveryCompactStatus(thirdCycle)}, ${revoteProgressionCompactStatus(thirdCycle)}`;
 }
 
 export function hardeningHighlightedLaneEvidence(proofRun) {

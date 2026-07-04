@@ -83,6 +83,7 @@ test("production feature spine resolver builds and validates source collections"
     "player-action-submission",
     "host-night-action-transition",
     "night-two-action-resolution",
+    "day-three-controls-return",
     "day-three-terminal-boundary",
     "day-three-terminal-recovery",
     "day-three-stale-continue-policy-recovery",
@@ -165,6 +166,32 @@ test("production feature spine resolver builds and validates source collections"
     {
       roleUrlId: "d02-n02-host",
       checkpointId: "d02-n02-n02-action-open",
+      adminCheckId: "core-loop",
+    },
+  );
+  assert.deepEqual(
+    {
+      roleUrlId: collection.bySlotId["night-two-action-resolution"].roleUrlId,
+      checkpointId:
+        collection.bySlotId["night-two-action-resolution"].checkpointId,
+      adminCheckId:
+        collection.bySlotId["night-two-action-resolution"].adminCheckId,
+    },
+    {
+      roleUrlId: "n02-d03-host",
+      checkpointId: "n02-d03-n02-resolved-target-killed",
+      adminCheckId: "core-loop",
+    },
+  );
+  assert.deepEqual(
+    {
+      roleUrlId: collection.bySlotId["day-three-controls-return"].roleUrlId,
+      checkpointId: collection.bySlotId["day-three-controls-return"].checkpointId,
+      adminCheckId: collection.bySlotId["day-three-controls-return"].adminCheckId,
+    },
+    {
+      roleUrlId: "n02-d03-actionPlayer",
+      checkpointId: "n02-d03-d03-day-controls-return",
       adminCheckId: "core-loop",
     },
   );

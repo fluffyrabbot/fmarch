@@ -26,6 +26,9 @@ import {
 import {
   terminalRecoveryFeatureSpineRows,
 } from "./dev_test_game_core_loop_terminal_recovery_scenarios.mjs";
+import {
+  nightTwoProgressionFeatureSpineRows,
+} from "./dev_test_game_core_loop_night_two_progression_scenarios.mjs";
 
 export const nightThreeActionResolutionLaneId =
   "night-three-action-resolution";
@@ -110,14 +113,7 @@ const coreLoopFeatureSpineLaneRows = Object.freeze([
     checkpointId: `${dayTwoNightTwo}-n02-action-open`,
     adminCheckId: "core-loop",
   }),
-  Object.freeze({
-    targetKey: "nightTwoActionResolution",
-    featureSlotId: "night-two-action-resolution",
-    cycleId: nightTwoDayThree,
-    role: "host",
-    checkpointId: `${nightTwoDayThree}-n02-resolved-target-killed`,
-    adminCheckId: "core-loop",
-  }),
+  ...nightTwoProgressionFeatureSpineRows({ cycleId: nightTwoDayThree }),
   ...terminalRecoveryFeatureSpineRows({ cycleId: nightTwoDayThree }),
   ...revoteProgressionFeatureSpineRows({ cycleId: nightTwoDayThree }),
   Object.freeze({
