@@ -21,6 +21,9 @@ import {
 import {
   privateChannelStaleActionReconnectExpectation,
 } from "./dev_test_game_stale_client_reconnect_scenarios.mjs";
+import {
+  privateChannelInvalidActionRecoveryScenario,
+} from "./dev_test_game_core_loop_private_channel_recovery_scenarios.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const sessionPath = path.join(repoRoot, "target", "dev-test-game", "session.json");
@@ -35,6 +38,8 @@ const replacementStaleActionAfterResolveCase =
   replacementStaleActionAfterResolveScenario();
 const privateChannelReconnectExpectation =
   privateChannelStaleActionReconnectExpectation();
+const privateChannelInvalidActionRecovery =
+  privateChannelInvalidActionRecoveryScenario();
 
 const devTestGameArgs = [
   "--name",
@@ -766,30 +771,38 @@ assert.equal(
 );
 assert.equal(
   session.verification.actionLoop.privateChannelInvalidActionRecovery.laneId,
-  "private-channel-invalid-action-recovery",
+  privateChannelInvalidActionRecovery.laneId,
 );
 assert.equal(
   session.verification.actionLoop.privateChannelInvalidActionRecovery.channel,
-  "private:mafia_day_chat",
+  privateChannelInvalidActionRecovery.channelId,
 );
 assert.equal(
   session.verification.actionLoop.privateChannelInvalidActionRecovery.reject.error,
-  "InvalidTarget",
+  privateChannelInvalidActionRecovery.commandError,
+);
+assert.equal(
+  session.verification.actionLoop.privateChannelInvalidActionRecovery.receiptStatusText.includes(
+    privateChannelInvalidActionRecovery.commandMessage,
+  ),
+  true,
 );
 assert.equal(
   session.verification.actionLoop.privateChannelInvalidActionRecovery
     .afterRejectSnapshot.channelContext.channelId,
-  "private:mafia_day_chat",
+  privateChannelInvalidActionRecovery.channelId,
 );
 assert.equal(
   session.verification.actionLoop.privateChannelInvalidActionRecovery
     .afterRejectSnapshot.channelContext.actorSlot,
-  "slot_4",
+  privateChannelInvalidActionRecovery.actorSlot,
 );
 assert.equal(
   session.verification.actionLoop.privateChannelInvalidActionRecovery
     .afterRejectSnapshot.commandState.actions.some(
-      (action) => action.templateId === "factional_kill",
+      (action) =>
+        action.templateId ===
+        privateChannelInvalidActionRecovery.expectedActionTemplateId,
     ),
   true,
 );

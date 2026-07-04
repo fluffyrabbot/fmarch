@@ -15,6 +15,7 @@ import {
   coreLoopPrivateChannelRecoveryScenarioFamily,
   coreLoopPrivateChannelPostLaneId,
   coreLoopPrivateChannelStalePostLaneId,
+  privateChannelInvalidActionRecoveryScenario,
   privateChannelSubmitPostScenario,
   staleCompletedPrivatePostScenario,
   stalePrivateChannelPostPhaseLockedScenario,
@@ -58,12 +59,20 @@ test("private-channel recovery family shares post, reload, and stale recovery ca
     stalePrivateChannelPostPhaseLockedScenario(),
   );
   assert.deepEqual(
+    family.scenarios.invalidActionRecovery,
+    privateChannelInvalidActionRecoveryScenario(),
+  );
+  assert.deepEqual(
     family.reloads.completedPrivateChannel,
     completedPrivateChannelReloadScenario(),
   );
   assert.deepEqual(
     family.staleRejects.staleCompletedPrivatePost,
     staleCompletedPrivatePostScenario(),
+  );
+  assert.deepEqual(
+    family.staleRejects.invalidActionRecovery,
+    privateChannelInvalidActionRecoveryScenario(),
   );
 });
 

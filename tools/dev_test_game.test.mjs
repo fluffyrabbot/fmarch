@@ -67,6 +67,7 @@ import {
   coreLoopPrivateChannelRecoveryLaneIds,
   coreLoopPrivateChannelRecoveryScenarioFamily,
   coreLoopPrivateChannelStalePostLaneId,
+  privateChannelInvalidActionRecoveryScenario,
   staleCompletedPrivatePostScenario,
 } from "./dev_test_game_core_loop_private_channel_recovery_scenarios.mjs";
 import {
@@ -4421,19 +4422,24 @@ test("session card and markdown include role credential URLs and tokens", async 
       d02Phase: { phaseId: "D02" },
       privateChannelInvalidActionRecovery: {
         status: "passed",
-        laneId: coreLoopPrivateChannelInvalidActionLaneId,
-        channel: "private:mafia_day_chat",
+        laneId: privateChannelInvalidActionRecoveryScenario().laneId,
+        channel: privateChannelInvalidActionRecoveryScenario().channelId,
         reject: {
           state: "reject",
-          error: "InvalidTarget",
+          error: privateChannelInvalidActionRecoveryScenario().commandError,
           requestEnvelope: {
             body: {
               body: {
                 command: {
                   SubmitAction: {
-                    actor_slot: "slot_4",
-                    template_id: "factional_kill",
-                    targets: ["slot_4"],
+                    actor_slot:
+                      privateChannelInvalidActionRecoveryScenario().actorSlot,
+                    template_id:
+                      privateChannelInvalidActionRecoveryScenario()
+                        .expectedActionTemplateId,
+                    targets: [
+                      privateChannelInvalidActionRecoveryScenario().actorSlot,
+                    ],
                   },
                 },
               },
@@ -4442,21 +4448,33 @@ test("session card and markdown include role credential URLs and tokens", async 
         },
         afterRejectSnapshot: {
           channelContext: {
-            channelId: "private:mafia_day_chat",
-            actorSlot: "slot_4",
+            channelId: privateChannelInvalidActionRecoveryScenario().channelId,
+            actorSlot: privateChannelInvalidActionRecoveryScenario().actorSlot,
           },
           commandState: {
-            phase: { phaseId: "N01" },
-            actions: [{ templateId: "factional_kill" }],
+            phase: {
+              phaseId: privateChannelInvalidActionRecoveryScenario()
+                .expectedPhaseId,
+            },
+            actions: [
+              {
+                templateId:
+                  privateChannelInvalidActionRecoveryScenario()
+                    .expectedActionTemplateId,
+              },
+            ],
           },
         },
         currentReceipt: {
-          actionId: "submit_invalid_action:factional_kill",
+          actionId: privateChannelInvalidActionRecoveryScenario().clickedAction,
           state: "reject",
           commandTrace: {
-            projectionRefreshKeys: ["commandState"],
+            projectionRefreshKeys:
+              privateChannelInvalidActionRecoveryScenario().expectedRefreshKeys,
           },
         },
+        receiptStatusText:
+          privateChannelInvalidActionRecoveryScenario().commandMessage,
         legalActionVisibleAfterReject: true,
         privateThreadPagerVisible: true,
       },

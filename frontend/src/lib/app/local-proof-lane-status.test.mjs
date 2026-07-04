@@ -42,6 +42,10 @@ import {
   playerInvalidActionRecoveryMessage,
 } from "../../../../tools/dev_test_game_core_loop_action_scenarios.mjs";
 import {
+  coreLoopPrivateChannelInvalidActionLaneId,
+  privateChannelInvalidActionRecoveryScenario,
+} from "../../../../tools/dev_test_game_core_loop_private_channel_recovery_scenarios.mjs";
+import {
   CORE_LOOP_COMPLETED_GAME_HIGHLIGHTED_LANE_IDS,
   CORE_LOOP_HIGHLIGHTED_LANE_IDS,
   HARDENING_HIGHLIGHTED_LANE_IDS,
@@ -199,6 +203,7 @@ test("highlighted player recovery lanes come from shared scenarios", () => {
 });
 
 test("core loop lane status formats seeded recovery evidence", () => {
+  const privateInvalidAction = privateChannelInvalidActionRecoveryScenario();
   assert.equal(
     coreLoopLaneStatus({
       id: "core-loop",
@@ -223,6 +228,19 @@ test("core loop lane status formats seeded recovery evidence", () => {
       },
     }),
     `passed: ${playerInvalidActionRecoveryMessage}, legal action visible true`,
+  );
+  assert.equal(
+    coreLoopLaneStatus({
+      id: coreLoopPrivateChannelInvalidActionLaneId,
+      status: "passed",
+      evidence: {
+        channel: privateInvalidAction.channelId,
+        error: privateInvalidAction.commandError,
+        receiptStatusText: privateInvalidAction.commandMessage,
+        legalActionVisible: true,
+      },
+    }),
+    `passed: channel ${privateInvalidAction.channelId}, ${privateInvalidAction.commandMessage}, legal action visible true`,
   );
   assert.equal(
     coreLoopLaneStatus({
@@ -565,6 +583,7 @@ test("hardening lane status formats stale and concurrent conflict evidence", () 
 test("highlighted lane evidence maps keep browser proof assertions aligned", () => {
   const staleReconnect = stalePlayerActionReconnectExpectation();
   const privateReconnect = privateChannelStaleActionReconnectExpectation();
+  const privateInvalidAction = privateChannelInvalidActionRecoveryScenario();
 
   const proofRun = {
     lanes: [
@@ -574,6 +593,16 @@ test("highlighted lane evidence maps keep browser proof assertions aligned", () 
         evidence: {
           rejectError: "InvalidTarget",
           receiptStatusText: playerInvalidActionRecoveryMessage,
+          legalActionVisible: true,
+        },
+      },
+      {
+        id: coreLoopPrivateChannelInvalidActionLaneId,
+        status: "passed",
+        evidence: {
+          channel: privateInvalidAction.channelId,
+          error: privateInvalidAction.commandError,
+          receiptStatusText: privateInvalidAction.commandMessage,
           legalActionVisible: true,
         },
       },
@@ -729,6 +758,12 @@ test("highlighted lane evidence maps keep browser proof assertions aligned", () 
   assert.equal(
     coreLoopHighlightedLaneEvidence(proofRun)["invalid-action-recovery"],
     `passed: ${playerInvalidActionRecoveryMessage}, legal action visible true`,
+  );
+  assert.equal(
+    coreLoopHighlightedLaneEvidence(proofRun)[
+      coreLoopPrivateChannelInvalidActionLaneId
+    ],
+    `passed: channel ${privateInvalidAction.channelId}, ${privateInvalidAction.commandMessage}, legal action visible true`,
   );
   assert.equal(
     coreLoopHighlightedLaneEvidence(proofRun)["stale-host-complete-reload"],

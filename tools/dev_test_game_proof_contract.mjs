@@ -123,6 +123,7 @@ import {
   coreLoopPrivateChannelPostLaneId,
   coreLoopPrivateChannelRecoveryLaneIds,
   coreLoopPrivateChannelStalePostLaneId,
+  privateChannelInvalidActionRecoveryScenario,
 } from "./dev_test_game_core_loop_private_channel_recovery_scenarios.mjs";
 
 export const DEV_TEST_GAME_PROOF_VERSION = 1;
@@ -134,6 +135,8 @@ const hostUnlockThreadActionId = hostUnlockThreadCommandFacts().actionId;
 const hostExtendDeadlineActionId = hostExtendDeadlineCommandFacts().actionId;
 const hostAdvanceByDeadlineActionId =
   hostAdvanceByDeadlineCommandFacts().actionId;
+const privateChannelInvalidActionRecovery =
+  privateChannelInvalidActionRecoveryScenario();
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const defaultSessionPath = path.join(repoRoot, "target", "dev-test-game", "session.json");
@@ -1325,6 +1328,9 @@ export function buildDevTestGameProofRun(session, options = {}) {
         error:
           verification.actionLoop?.privateChannelInvalidActionRecovery
             ?.reject?.error ?? null,
+        receiptStatusText:
+          verification.actionLoop?.privateChannelInvalidActionRecovery
+            ?.receiptStatusText ?? null,
         phase:
           verification.actionLoop?.privateChannelInvalidActionRecovery
             ?.afterRejectSnapshot?.commandState?.phase?.phaseId ?? null,
@@ -1338,41 +1344,53 @@ export function buildDevTestGameProofRun(session, options = {}) {
           verification.actionLoop?.privateChannelInvalidActionRecovery
             ?.status === "passed" &&
           verification.actionLoop?.privateChannelInvalidActionRecovery
-            ?.laneId === coreLoopPrivateChannelInvalidActionLaneId &&
+            ?.laneId === privateChannelInvalidActionRecovery.laneId &&
           verification.actionLoop?.privateChannelInvalidActionRecovery
-            ?.channel === "private:mafia_day_chat" &&
+            ?.channel === privateChannelInvalidActionRecovery.channelId &&
           verification.actionLoop?.privateChannelInvalidActionRecovery
             ?.reject?.state === "reject" &&
           verification.actionLoop?.privateChannelInvalidActionRecovery
-            ?.reject?.error === "InvalidTarget" &&
+            ?.reject?.error === privateChannelInvalidActionRecovery.commandError &&
           verification.actionLoop?.privateChannelInvalidActionRecovery
             ?.reject?.requestEnvelope?.body?.body?.command?.SubmitAction
-            ?.actor_slot === "slot_4" &&
+            ?.actor_slot === privateChannelInvalidActionRecovery.actorSlot &&
           verification.actionLoop?.privateChannelInvalidActionRecovery
             ?.reject?.requestEnvelope?.body?.body?.command?.SubmitAction
-            ?.template_id === "factional_kill" &&
+            ?.template_id ===
+            privateChannelInvalidActionRecovery.expectedActionTemplateId &&
           verification.actionLoop?.privateChannelInvalidActionRecovery
             ?.reject?.requestEnvelope?.body?.body?.command?.SubmitAction
-            ?.targets?.[0] === "slot_4" &&
+            ?.targets?.[0] === privateChannelInvalidActionRecovery.actorSlot &&
           verification.actionLoop?.privateChannelInvalidActionRecovery
             ?.currentReceipt?.actionId ===
-            "submit_invalid_action:factional_kill" &&
+            privateChannelInvalidActionRecovery.clickedAction &&
           verification.actionLoop?.privateChannelInvalidActionRecovery
             ?.currentReceipt?.state === "reject" &&
+          privateChannelInvalidActionRecovery.expectedRefreshKeys.every(
+            (key) =>
+              verification.actionLoop?.privateChannelInvalidActionRecovery
+                ?.currentReceipt?.commandTrace?.projectionRefreshKeys?.includes(
+                  key,
+                ) === true,
+          ) &&
           verification.actionLoop?.privateChannelInvalidActionRecovery
-            ?.currentReceipt?.commandTrace?.projectionRefreshKeys?.includes(
-              "commandState",
+            ?.receiptStatusText?.includes(
+              privateChannelInvalidActionRecovery.commandMessage,
             ) === true &&
           verification.actionLoop?.privateChannelInvalidActionRecovery
             ?.afterRejectSnapshot?.channelContext?.channelId ===
-            "private:mafia_day_chat" &&
+            privateChannelInvalidActionRecovery.channelId &&
           verification.actionLoop?.privateChannelInvalidActionRecovery
-            ?.afterRejectSnapshot?.channelContext?.actorSlot === "slot_4" &&
+            ?.afterRejectSnapshot?.channelContext?.actorSlot ===
+            privateChannelInvalidActionRecovery.actorSlot &&
           verification.actionLoop?.privateChannelInvalidActionRecovery
-            ?.afterRejectSnapshot?.commandState?.phase?.phaseId === "N01" &&
+            ?.afterRejectSnapshot?.commandState?.phase?.phaseId ===
+            privateChannelInvalidActionRecovery.expectedPhaseId &&
           verification.actionLoop?.privateChannelInvalidActionRecovery
             ?.afterRejectSnapshot?.commandState?.actions?.some(
-              (action) => action.templateId === "factional_kill",
+              (action) =>
+                action.templateId ===
+                privateChannelInvalidActionRecovery.expectedActionTemplateId,
             ) === true &&
           verification.actionLoop?.privateChannelInvalidActionRecovery
             ?.legalActionVisibleAfterReject === true &&

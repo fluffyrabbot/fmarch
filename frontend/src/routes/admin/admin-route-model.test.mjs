@@ -48,6 +48,10 @@ import {
   playerInvalidActionRecoveryMessage,
 } from "../../../../tools/dev_test_game_core_loop_action_scenarios.mjs";
 import {
+  coreLoopPrivateChannelInvalidActionLaneId,
+  privateChannelInvalidActionRecoveryScenario,
+} from "../../../../tools/dev_test_game_core_loop_private_channel_recovery_scenarios.mjs";
+import {
   seedAggregateOnlyProofLaneIds,
   seedAliasOnlyProofLaneIds,
   seedDemoScenarioFixtureRows,
@@ -2601,6 +2605,10 @@ test("admin local core loop detail data carries lane rows", async () => {
       ["player-action-boundary", "passed: 0 unowned actions, direct reject InvalidTarget"],
       ["private-channel", "passed: private:mafia_day_chat, denied 403"],
       [
+        coreLoopPrivateChannelInvalidActionLaneId,
+        `passed: channel ${privateChannelInvalidActionRecoveryScenario().channelId}, ${privateChannelInvalidActionRecoveryScenario().commandMessage}, legal action visible true`,
+      ],
+      [
         "stale-host-complete-reload",
         "passed: Reject GameAlreadyCompleted: game already completed, revealed 1, complete visible false",
       ],
@@ -2674,6 +2682,11 @@ test("admin local core loop detail data carries lane rows", async () => {
         "private-channel",
         "passed: private:mafia_day_chat, denied 403",
         "passed: private:mafia_day_chat, denied 403",
+      ],
+      [
+        coreLoopPrivateChannelInvalidActionLaneId,
+        `passed: channel ${privateChannelInvalidActionRecoveryScenario().channelId}, ${privateChannelInvalidActionRecoveryScenario().commandMessage}, legal action visible true`,
+        `passed: channel ${privateChannelInvalidActionRecoveryScenario().channelId}, ${privateChannelInvalidActionRecoveryScenario().commandMessage}, legal action visible true`,
       ],
       [
         "stale-host-complete-reload",
@@ -3777,6 +3790,16 @@ function proofRunFixture() {
       channel: "private:mafia_day_chat",
       allowedState: "ack",
       deniedStatus: 403,
+    },
+    [coreLoopPrivateChannelInvalidActionLaneId]: {
+      channel: privateChannelInvalidActionRecoveryScenario().channelId,
+      state: "reject",
+      error: privateChannelInvalidActionRecoveryScenario().commandError,
+      receiptStatusText:
+        privateChannelInvalidActionRecoveryScenario().commandMessage,
+      phase: privateChannelInvalidActionRecoveryScenario().expectedPhaseId,
+      legalActionVisible: true,
+      privateThreadPagerVisible: true,
     },
     "concurrent-action-race": {
       ackState: "ack",

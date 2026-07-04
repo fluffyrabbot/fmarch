@@ -6,6 +6,9 @@ import {
   stalePrivateChannelPostPhaseLockedScenario,
 } from "./dev_test_game_core_loop_private_channel_scenario_case_definitions.mjs";
 import {
+  playerInvalidActionRecoveryMessage,
+} from "./dev_test_game_core_loop_action_scenarios.mjs";
+import {
   assertLaneCoverageSummary,
   buildLaneCoverageSummary,
   cloneLaneCoverageFamilies,
@@ -30,6 +33,21 @@ export const coreLoopPrivateChannelCompletedPostLaneId =
   "private-channel-completed-game-recovery";
 export const coreLoopPrivateChannelInvalidActionLaneId =
   "private-channel-invalid-action-recovery";
+
+export function privateChannelInvalidActionRecoveryScenario() {
+  return {
+    laneId: coreLoopPrivateChannelInvalidActionLaneId,
+    channelId: "private:mafia_day_chat",
+    actorSlot: "slot_4",
+    clickedAction: "submit_invalid_action:factional_kill",
+    commandKind: "SubmitAction",
+    commandError: "InvalidTarget",
+    commandMessage: playerInvalidActionRecoveryMessage,
+    expectedActionTemplateId: "factional_kill",
+    expectedRefreshKeys: ["commandState"],
+    expectedPhaseId: "N01",
+  };
+}
 
 export const coreLoopPrivateChannelRecoveryLaneIds = Object.freeze([
   coreLoopPrivateChannelPostLaneId,
@@ -95,6 +113,7 @@ export function coreLoopPrivateChannelRecoveryScenarioFamily() {
     stalePrivateChannelPostPhaseLockedScenario();
   const completedPrivateChannelReload = completedPrivateChannelReloadScenario();
   const staleCompletedPrivatePost = staleCompletedPrivatePostScenario();
+  const invalidActionRecovery = privateChannelInvalidActionRecoveryScenario();
   return {
     id: coreLoopPrivateChannelRecoveryFamilyId,
     laneIds: [...coreLoopPrivateChannelRecoveryLaneIds],
@@ -104,10 +123,12 @@ export function coreLoopPrivateChannelRecoveryScenarioFamily() {
       stalePostAfterPhaseTransition,
       completedPrivateChannelReload,
       staleCompletedPrivatePost,
+      invalidActionRecovery,
     },
     staleRejects: {
       stalePostAfterPhaseTransition,
       staleCompletedPrivatePost,
+      invalidActionRecovery,
     },
     reloads: {
       completedPrivateChannel: completedPrivateChannelReload,
