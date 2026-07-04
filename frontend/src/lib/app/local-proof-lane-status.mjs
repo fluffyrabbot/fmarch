@@ -37,6 +37,9 @@ import {
   staleClientReconnectHighlightedLaneIds,
   stalePlayerActionReconnectLaneId,
 } from "../../../../tools/dev_test_game_stale_client_reconnect_scenarios.mjs";
+import {
+  revoteProgressionCompactStatus,
+} from "../../../../tools/dev_test_game_core_loop_revote_progression_scenarios.mjs";
 
 const CORE_LOOP_FOUNDATION_HIGHLIGHTED_LANE_IDS = Object.freeze([
   "core-loop",
@@ -94,25 +97,7 @@ export function coreLoopSpineStatus(proofRun) {
     thirdCycle,
     "d03-terminal-reload-recovery",
   );
-  const revote = checkpointById(thirdCycle, "d03-revote-prompt-resolved");
-  const revoteBallot = checkpointById(thirdCycle, "d03r1-revote-ballot-submitted");
-  const revoteResolution = checkpointById(
-    thirdCycle,
-    "d03r1-revote-resolved-no-majority",
-  );
-  const secondRevote = checkpointById(
-    thirdCycle,
-    "d03r2-revote-prompt-resolved",
-  );
-  const secondRevoteBallot = checkpointById(
-    thirdCycle,
-    "d03r2-revote-ballot-submitted",
-  );
-  const secondRevoteResolution = checkpointById(
-    thirdCycle,
-    "d03r2-revote-resolved-no-majority",
-  );
-  return `${status}: ${String(firstStart?.phase ?? "unknown")} -> ${String(firstNight?.phase ?? "unknown")} -> ${String(firstDay?.phase ?? "unknown")}, vote ${String(secondVote?.voteState ?? "unknown")}, ${String(secondNight?.phase ?? "unknown")} action ${String(thirdAction?.actionState ?? "unknown")}, next ${String(thirdDay?.phase ?? "unknown")}, terminal advance ${String(terminal?.rejectError ?? "unknown")}, reload ${String(terminalReload?.phase ?? "unknown")}, revote ${String(revote?.phase ?? "unknown")} via ${String(revote?.decisionPolicy ?? "unknown")}, revote vote ${String(revoteBallot?.voteState ?? "unknown")}, revote resolve ${String(revoteResolution?.resolveState ?? "unknown")}, second revote ${String(secondRevote?.phase ?? "unknown")} via ${String(secondRevote?.decisionPolicy ?? "unknown")}, second vote ${String(secondRevoteBallot?.voteState ?? "unknown")}, second resolve ${String(secondRevoteResolution?.resolveState ?? "unknown")}, policy ${String(secondRevoteResolution?.decisionPolicy ?? "unknown")} -> ${String(secondRevoteResolution?.nextPhase ?? "unknown")}`;
+  return `${status}: ${String(firstStart?.phase ?? "unknown")} -> ${String(firstNight?.phase ?? "unknown")} -> ${String(firstDay?.phase ?? "unknown")}, vote ${String(secondVote?.voteState ?? "unknown")}, ${String(secondNight?.phase ?? "unknown")} action ${String(thirdAction?.actionState ?? "unknown")}, next ${String(thirdDay?.phase ?? "unknown")}, terminal advance ${String(terminal?.rejectError ?? "unknown")}, reload ${String(terminalReload?.phase ?? "unknown")}, ${revoteProgressionCompactStatus(thirdCycle)}`;
 }
 
 export function hardeningHighlightedLaneEvidence(proofRun) {

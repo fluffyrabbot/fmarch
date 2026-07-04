@@ -18,10 +18,14 @@ import {
   coreLoopVoteResolutionLaneIds,
   dayThreeVoteResolutionLaneId,
 } from "./dev_test_game_core_loop_vote_resolution_scenarios.mjs";
+import {
+  dayVoteNoLynchFeatureSpineRow,
+  dayVoteNoLynchLaneId,
+  revoteProgressionFeatureSpineRows,
+} from "./dev_test_game_core_loop_revote_progression_scenarios.mjs";
 
 export const nightThreeActionResolutionLaneId =
   "night-three-action-resolution";
-export const dayVoteNoLynchLaneId = "day-vote-no-lynch";
 
 export const coreLoopFeatureSpineSourceCheckId = "local-core-loop-proof";
 export const devTestGameCoreLoopAdminProofCommand =
@@ -66,16 +70,7 @@ const coreLoopFeatureSpineLaneRows = Object.freeze([
     seedOrder: 10,
     seedRoleOverride: "actionPlayer",
   }),
-  Object.freeze({
-    targetKey: "dayVoteNoLynch",
-    featureSlotId: dayVoteNoLynchLaneId,
-    cycleId: nightTwoDayThree,
-    role: "actionPlayer",
-    checkpointId: `${nightTwoDayThree}-d03r1-revote-ballot-submitted`,
-    adminCheckId: "core-loop",
-    seedMembership: "demoOnly",
-    seedOrder: 20,
-  }),
+  Object.freeze(dayVoteNoLynchFeatureSpineRow({ cycleId: nightTwoDayThree })),
   Object.freeze({
     targetKey: "postDayThreeTransition",
     featureSlotId: postDayThreeTransitionLaneId,
@@ -138,54 +133,7 @@ const coreLoopFeatureSpineLaneRows = Object.freeze([
     recoveryHookId: "d03TerminalAdvanceReject",
     adminCheckId: "core-loop",
   }),
-  Object.freeze({
-    targetKey: "dayThreeNoMajorityRevote",
-    featureSlotId: "day-three-no-majority-revote",
-    cycleId: nightTwoDayThree,
-    role: "host",
-    checkpointId: `${nightTwoDayThree}-d03-revote-prompt-resolved`,
-    adminCheckId: "core-loop",
-  }),
-  Object.freeze({
-    targetKey: "dayThreeRevoteBallot",
-    featureSlotId: "day-three-revote-ballot",
-    cycleId: nightTwoDayThree,
-    role: "actionPlayer",
-    checkpointId: `${nightTwoDayThree}-d03r1-revote-ballot-submitted`,
-    adminCheckId: "core-loop",
-  }),
-  Object.freeze({
-    targetKey: "dayThreeRevoteResolution",
-    featureSlotId: "day-three-revote-resolution",
-    cycleId: nightTwoDayThree,
-    role: "host",
-    checkpointId: `${nightTwoDayThree}-d03r1-revote-resolved-no-majority`,
-    adminCheckId: "core-loop",
-  }),
-  Object.freeze({
-    targetKey: "dayThreeSecondRevote",
-    featureSlotId: "day-three-second-revote",
-    cycleId: nightTwoDayThree,
-    role: "host",
-    checkpointId: `${nightTwoDayThree}-d03r2-revote-prompt-resolved`,
-    adminCheckId: "core-loop",
-  }),
-  Object.freeze({
-    targetKey: "dayThreeSecondRevoteBallot",
-    featureSlotId: "day-three-second-revote-ballot",
-    cycleId: nightTwoDayThree,
-    role: "actionPlayer",
-    checkpointId: `${nightTwoDayThree}-d03r2-revote-ballot-submitted`,
-    adminCheckId: "core-loop",
-  }),
-  Object.freeze({
-    targetKey: "dayThreeSecondRevoteResolution",
-    featureSlotId: "day-three-second-revote-resolution",
-    cycleId: nightTwoDayThree,
-    role: "host",
-    checkpointId: `${nightTwoDayThree}-d03r2-revote-resolved-no-majority`,
-    adminCheckId: "core-loop",
-  }),
+  ...revoteProgressionFeatureSpineRows({ cycleId: nightTwoDayThree }),
   Object.freeze({
     targetKey: "invalidActionRecovery",
     featureSlotId: playerInvalidActionRecoveryLaneId,
