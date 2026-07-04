@@ -1,0 +1,113 @@
+{
+  "version": 1,
+  "proof": "hosted-production-identity-evidence",
+  "status": "passed",
+  "releaseReady": false,
+  "productionReady": false,
+  "redaction": {
+    "packetKind": "redacted-hosted-identity-intake",
+    "rawInviteTokensIncluded": false,
+    "rawSessionSecretsIncluded": false,
+    "rawPasswordHashesIncluded": false,
+    "rawPersonalContactIncluded": false
+  },
+  "hostedIdentity": {
+    "accountLifecycle": {
+      "status": "provided",
+      "inputs": {
+        "createAccount": "redacted-account-create-event",
+        "login": "redacted-login-event",
+        "disableAccount": "redacted-disable-event",
+        "enableAccount": "redacted-enable-event"
+      },
+      "redactedEvidenceRefs": [
+        {
+          "id": "account-lifecycle-redacted-log",
+          "kind": "audit-log",
+          "locator": "s3://redacted/fmarch/identity/account-lifecycle.json",
+          "redacted": true
+        }
+      ]
+    },
+    "inviteDelivery": {
+      "status": "provided",
+      "inputs": {
+        "deliveryChannels": ["email"],
+        "revocationCovered": true
+      },
+      "rawInviteTokensIncluded": false,
+      "redactedEvidenceRefs": [
+        {
+          "id": "invite-delivery-redacted-log",
+          "kind": "mail-provider-event-export",
+          "locator": "s3://redacted/fmarch/identity/invites.json",
+          "redacted": true
+        }
+      ]
+    },
+    "accountRecovery": {
+      "status": "provided",
+      "inputs": {
+        "recoveryMethods": ["operator-assisted-reset"],
+        "recoveredSessionsPreserveRoleSurfaceAdapter": true
+      },
+      "redactedEvidenceRefs": [
+        {
+          "id": "account-recovery-redacted-log",
+          "kind": "audit-log",
+          "locator": "s3://redacted/fmarch/identity/recovery.json",
+          "redacted": true
+        }
+      ]
+    },
+    "abuseAndRateLimitPolicy": {
+      "status": "provided",
+      "inputs": {
+        "protectedOperations": ["login", "invite", "session-lifecycle"],
+        "rateLimitPolicyRef": "ops/runbooks/identity-rate-limit.redacted.md"
+      },
+      "redactedEvidenceRefs": [
+        {
+          "id": "abuse-rate-limit-redacted-policy",
+          "kind": "policy-export",
+          "locator": "s3://redacted/fmarch/identity/abuse-rate-limit.json",
+          "redacted": true
+        }
+      ]
+    },
+    "sessionSecretPolicy": {
+      "status": "provided",
+      "inputs": {
+        "storage": "managed-secret-store",
+        "rotation": "operator-triggered-rotation",
+        "deploymentSecretSource": "hosted-platform-secret-binding"
+      },
+      "rawSessionSecretsIncluded": false,
+      "redactedEvidenceRefs": [
+        {
+          "id": "session-secret-redacted-policy",
+          "kind": "secret-policy-export",
+          "locator": "s3://redacted/fmarch/identity/session-secret.json",
+          "redacted": true
+        }
+      ]
+    },
+    "hostedAuditRetentionExport": {
+      "status": "provided",
+      "inputs": {
+        "eventFamilies": ["account", "invite", "session"],
+        "retentionWindow": "90d",
+        "exportRef": "s3://redacted/fmarch/identity/audit-retention.json"
+      },
+      "redactedEvidenceRefs": [
+        {
+          "id": "audit-retention-redacted-export",
+          "kind": "audit-retention-export",
+          "locator": "s3://redacted/fmarch/identity/audit-retention.json",
+          "redacted": true
+        }
+      ]
+    },
+    "roleSurfaceArchitectureChanged": false
+  }
+}

@@ -4,6 +4,8 @@ export const devTestGameHostedIdentityEvidenceCommand =
   "test:dev-test-game-hosted-identity-evidence";
 export const hostedIdentityEvidencePlaceholderFixturePath =
   "tools/fixtures/dev_test_game_hosted_identity_evidence.placeholder.json";
+export const hostedIdentityEvidenceRedactedPassFixturePath =
+  "tools/fixtures/dev_test_game_hosted_identity_evidence.redacted-pass.json";
 
 export const hostedIdentityEvidencePlaceholderSchema = Object.freeze({
   type: "object",

@@ -120,6 +120,7 @@ export async function proveAdminAuditDetail({
   requiredHostedHandoffBlockedChecks = [],
   requiredHostedHandoffBlockedCheckStatuses = {},
   requiredHostedHandoffGroups = [],
+  requiredHostedHandoffGroupStatuses = {},
   requiredHostedHandoffSummary = null,
   requiredHostedHandoffBlockedReceipt = null,
   requiredRelatedLinks = [],
@@ -274,6 +275,12 @@ export async function proveAdminAuditDetail({
       page,
       prefix: "admin-audit-hosted-handoff-group",
       ids: requiredHostedHandoffGroups,
+      expectedStatuses: requiredHostedHandoffGroupStatuses,
+    });
+    const visibleHostedHandoffGroupStatuses = await readRowStatuses({
+      page,
+      prefix: "admin-audit-hosted-handoff-group",
+      ids: Object.keys(requiredHostedHandoffGroupStatuses),
     });
     const visibleHostedHandoffSummary = await waitForHostedHandoffSummary({
       page,
@@ -530,6 +537,9 @@ export async function proveAdminAuditDetail({
       ...(visibleHostedHandoffGroups.length === 0
         ? {}
         : { visibleHostedHandoffGroups }),
+      ...(Object.keys(visibleHostedHandoffGroupStatuses).length === 0
+        ? {}
+        : { visibleHostedHandoffGroupStatuses }),
       ...(visibleHostedHandoffSummary === null
         ? {}
         : { visibleHostedHandoffSummary }),

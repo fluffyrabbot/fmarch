@@ -76,6 +76,11 @@ await runAdminAuditProof({
         source.hostedIdentityEvidence.hostedHandoffChecklist.requirementGroups.map(
           (group) => group.id,
         ),
+      requiredHostedHandoffGroupStatuses: Object.fromEntries(
+        source.hostedIdentityEvidence.hostedHandoffChecklist.requirementGroups.map(
+          (group) => [group.id, group.status],
+        ),
+      ),
       requiredRelatedLinks,
     }),
   buildEvidence: ({ source, adminRoleSurface }) => ({
@@ -113,6 +118,11 @@ await runAdminAuditProof({
         source.hostedIdentityEvidence.hostedHandoffChecklist.requirementGroups.map(
           (group) => group.id,
         ),
+      hostedHandoffGroupStatuses: Object.fromEntries(
+        source.hostedIdentityEvidence.hostedHandoffChecklist.requirementGroups.map(
+          (group) => [group.id, group.status],
+        ),
+      ),
       relatedAuditIds: requiredRelatedLinks,
     },
     adminRoleSurface,
@@ -190,6 +200,19 @@ export function assertHostedIdentityEvidenceAdminProof(evidence) {
     ) {
       throw new Error(
         `hosted identity evidence admin proof missing handoff group: ${groupId}`,
+      );
+    }
+  }
+  for (const [groupId, status] of Object.entries(
+    evidence.generatedFrom?.hostedHandoffGroupStatuses ?? {},
+  )) {
+    if (
+      !evidence.adminRoleSurface?.visibleHostedHandoffGroupStatuses?.[
+        groupId
+      ]?.includes(status)
+    ) {
+      throw new Error(
+        `hosted identity evidence admin proof missing handoff group status: ${groupId}`,
       );
     }
   }

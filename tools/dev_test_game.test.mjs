@@ -194,6 +194,7 @@ import {
   hostedIdentityEvidenceInputIds,
   hostedIdentityEvidencePlaceholderFixturePath,
   hostedIdentityEvidencePlaceholderSchema,
+  hostedIdentityEvidenceRedactedPassFixturePath,
   validateHostedIdentityEvidencePlaceholder,
 } from "./dev_test_game_hosted_identity_evidence.mjs";
 import { devTestGameLiveSpinePlan } from "./dev_test_game_live_spine.mjs";
@@ -564,6 +565,10 @@ test("hosted identity evidence lane records blocked and passed handoffs", async 
     await readFile(hostedIdentityEvidencePlaceholderFixturePath, "utf8"),
   );
   assert.deepEqual(validateHostedIdentityEvidencePlaceholder(placeholderSource), []);
+  const redactedPassSource = JSON.parse(
+    await readFile(hostedIdentityEvidenceRedactedPassFixturePath, "utf8"),
+  );
+  assert.deepEqual(validateHostedIdentityEvidencePlaceholder(redactedPassSource), []);
   const placeholder = await buildDevTestGameHostedIdentityEvidence({
     env: {
       FMARCH_HOSTED_IDENTITY_EVIDENCE_PATH:
@@ -14603,6 +14608,9 @@ function hostedIdentityEvidenceAdminProofFixture() {
       },
       hostedHandoffBlockedCheckIds: handoff.blockedCheckIds,
       hostedHandoffGroupIds: handoffGroupIds,
+      hostedHandoffGroupStatuses: Object.fromEntries(
+        handoff.requirementGroups.map((group) => [group.id, group.status]),
+      ),
       relatedAuditIds: ["local-identity-adapter", "local-next-action"],
     },
     adminRoleSurface: {
@@ -14622,6 +14630,12 @@ function hostedIdentityEvidenceAdminProofFixture() {
       },
       visibleHostedHandoffBlockedChecks: handoff.blockedCheckIds,
       visibleHostedHandoffGroups: handoffGroupIds,
+      visibleHostedHandoffGroupStatuses: Object.fromEntries(
+        handoff.requirementGroups.map((group) => [
+          group.id,
+          `${group.label} ${group.status}`,
+        ]),
+      ),
       visibleRelatedLinks: ["local-identity-adapter", "local-next-action"],
       rawInviteTokensVisible: false,
       releaseReady: false,
