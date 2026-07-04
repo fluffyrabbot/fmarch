@@ -1,10 +1,8 @@
 import {
-  completedDeadPlayerStaleVoteCase,
-  completedGameEndgameTransition,
-  completedHostStaleCommandCases,
-  completedPlayerReloadCases,
-  staleCompletedGamePlayerCommandCases,
-} from "./dev_test_game_core_loop_completed_game_shared_scenarios.mjs";
+  completedGameProofReadinessCaseGroups,
+  completedGameProofReadinessScenarioFamilies,
+  completedGameProofReadinessTransition,
+} from "./dev_test_game_core_loop_completed_game_proof_readiness_contract.mjs";
 import {
   hostPhaseTransitionActionFixture,
   seededCoreLoopHostSurfaceFixture,
@@ -42,7 +40,7 @@ export function completedGameEndgameSurfaceFixture({
     sourceHostRoleUrl: `${baseRoleUrl}/host`,
     ...completedRoleUrls,
     clickedThroughFromRoleUrl: true,
-    transition: completedGameEndgameTransition(),
+    transition: completedGameProofReadinessTransition(),
     hostCompleteProof: seededCoreLoopHostSurfaceFixture({
       game,
       setupResyncFromSeq: 920,
@@ -151,18 +149,18 @@ export function completedGameEndgameSurfaceProofFieldsFixture({
     completedHostReloadProof: { id: "host-reload" },
     actionPlayerCompletedProof,
     ...completedScenarioProofFieldFixtures({
-      cases: completedPlayerReloadCases(),
+      cases: completedPlayerReloadFixtureCases(),
       idPrefix: "reload",
     }),
     ...completedScenarioProofFieldFixtures({
-      cases: completedHostStaleCommandCases(),
+      cases: completedHostStaleCommandFixtureCases(),
       idPrefix: "host-stale",
     }),
-    [completedDeadPlayerStaleVoteCase().proofField]: {
+    [completedDeadPlayerStaleVoteFixtureCase().proofField]: {
       id: "dead-player-stale-vote",
     },
     ...completedScenarioProofFieldFixtures({
-      cases: staleCompletedGamePlayerCommandCases(),
+      cases: staleCompletedGamePlayerCommandFixtureCases(),
       idPrefix: "player-stale",
     }),
     sourceHostRoleUrl,
@@ -657,7 +655,7 @@ export function completedHostStaleCommandProofFixtures({
   snapshot,
 }) {
   return Object.fromEntries(
-    completedHostStaleCommandCases().map((scenario) => [
+    completedHostStaleCommandFixtureCases().map((scenario) => [
       scenario.proofField,
       completedHostStaleCommandProofFixture({
         sourceRoleUrl,
@@ -722,7 +720,7 @@ export function completedPlayerReloadSnapshotsFixture({
   dayVoteOutcomes = completedGameDayVoteOutcomesFixture(),
 }) {
   return Object.fromEntries(
-    completedPlayerReloadCases().map((scenario) => [
+    completedPlayerReloadFixtureCases().map((scenario) => [
       scenario.proofField,
       completedPlayerReloadSnapshotFixture({
         game,
@@ -791,7 +789,7 @@ export function completedPlayerReloadSnapshotFixture({
 
 export function completedPlayerReloadProofFixtures({ roleUrls, snapshots }) {
   return Object.fromEntries(
-    completedPlayerReloadCases().map((scenario) => {
+    completedPlayerReloadFixtureCases().map((scenario) => {
       const sourceRoleUrl = roleUrls[scenario.sourceRoleUrlField];
       return [
         scenario.proofField,
@@ -889,7 +887,7 @@ export function staleCompletedPlayerCommandProofFixtures({
   game,
 }) {
   return Object.fromEntries(
-    staleCompletedGamePlayerCommandCases().map((scenario) => [
+    staleCompletedGamePlayerCommandFixtureCases().map((scenario) => [
       scenario.proofField,
       staleCompletedPlayerCommandProofFixture({
         sourceRoleUrl,
@@ -903,6 +901,24 @@ export function staleCompletedPlayerCommandProofFixtures({
       }),
     ]),
   );
+}
+
+function completedHostStaleCommandFixtureCases() {
+  return completedGameProofReadinessCaseGroups().completedHostStaleCommandCases;
+}
+
+function completedPlayerReloadFixtureCases() {
+  return completedGameProofReadinessCaseGroups().completedPlayerReloadCases;
+}
+
+function completedDeadPlayerStaleVoteFixtureCase() {
+  return completedGameProofReadinessScenarioFamilies()
+    .completedDeadPlayerStaleVoteCase;
+}
+
+function staleCompletedGamePlayerCommandFixtureCases() {
+  return completedGameProofReadinessCaseGroups()
+    .staleCompletedGamePlayerCommandCases;
 }
 
 export function staleCompletedPlayerCommandFixture({ game, scenario }) {

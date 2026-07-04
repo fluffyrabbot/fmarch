@@ -798,11 +798,32 @@ test("completed-game test fixtures live outside the assertion facade", async () 
     "tools/dev_test_game_core_loop_completed_game_fixtures.mjs",
     "utf8",
   );
+  for (const importedName of [
+    "completedGameProofReadinessCaseGroups",
+    "completedGameProofReadinessScenarioFamilies",
+    "completedGameProofReadinessTransition",
+  ]) {
+    assert(
+      importsFromModule({
+        source: fixtureModuleSource,
+        importedName,
+        moduleSpecifier:
+          "./dev_test_game_core_loop_completed_game_proof_readiness_contract.mjs",
+      }),
+      `completed-game fixtures should import ${importedName} from the proof/readiness contract`,
+    );
+  }
   assert(
-    fixtureModuleSource.includes(
+    !fixtureModuleSource.includes(
       "./dev_test_game_core_loop_completed_game_shared_scenarios.mjs",
     ),
-    "completed-game fixtures should derive proof fields from the shared scenario/assertion module",
+    "completed-game fixtures should not import through the compatibility shared-scenarios barrel",
+  );
+  assert(
+    !fixtureModuleSource.includes(
+      "./dev_test_game_core_loop_completed_game_shared_recovery_scenarios.mjs",
+    ),
+    "completed-game fixtures should not import lower-level shared recovery cases directly",
   );
   assert(
     !fixtureModuleSource.includes(
