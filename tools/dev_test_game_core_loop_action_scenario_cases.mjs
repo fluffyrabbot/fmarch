@@ -6,6 +6,10 @@ export const playerInvalidActionRecoveryMessage =
 export const playerActionBoundaryLaneId = "player-action-boundary";
 export const playerActionBoundaryRecoveryHookId =
   "normalPlayerDirectActionReject";
+export const playerStaleVoteTransitionRecoveryFeatureSlotId =
+  "stale-vote-transition-recovery";
+export const playerStaleActionTransitionRecoveryFeatureSlotId =
+  "stale-action-transition-recovery";
 
 export function invalidActionRecoveryFeatureSpineRow({ cycleId }) {
   return {
@@ -16,6 +20,28 @@ export function invalidActionRecoveryFeatureSpineRow({ cycleId }) {
     checkpointId: `${cycleId}-n02-action-open`,
     recoveryHookId: playerInvalidActionRecoveryHookId,
     adminCheckId: playerInvalidActionRecoveryLaneId,
+  };
+}
+
+export function staleVoteTransitionRecoveryFeatureSpineRow({ cycleId }) {
+  return {
+    targetKey: "staleVoteTransitionRecovery",
+    featureSlotId: playerStaleVoteTransitionRecoveryFeatureSlotId,
+    cycleId,
+    role: "actionPlayer",
+    checkpointId: `${cycleId}-n02-action-open`,
+    adminCheckId: playerActionLoopLaneId,
+  };
+}
+
+export function staleActionTransitionRecoveryFeatureSpineRow({ cycleId }) {
+  return {
+    targetKey: "staleActionTransitionRecovery",
+    featureSlotId: playerStaleActionTransitionRecoveryFeatureSlotId,
+    cycleId,
+    role: "actionPlayer",
+    checkpointId: `${cycleId}-n02-action-open`,
+    adminCheckId: playerActionLoopLaneId,
   };
 }
 

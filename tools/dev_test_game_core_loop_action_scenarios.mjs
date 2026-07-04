@@ -15,10 +15,14 @@ export {
   playerInvalidActionRecoveryMessage,
   playerInvalidActionRecoveryLaneId,
   playerInvalidActionRecoveryScenario,
+  playerStaleActionTransitionRecoveryFeatureSlotId,
+  playerStaleVoteTransitionRecoveryFeatureSlotId,
   playerSlotVoteCommandFacts,
+  staleActionTransitionRecoveryFeatureSpineRow,
   staleDayTwoVoteAfterTransitionRecoveryScenario,
   staleNightFourActionRecoveryScenario,
   staleNightOneActionAfterTransitionRecoveryScenario,
+  staleVoteTransitionRecoveryFeatureSpineRow,
 } from "./dev_test_game_core_loop_action_scenario_cases.mjs";
 
 export function assertPlayerActionSubmissionClickProofCase({

@@ -3150,9 +3150,9 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
     graph,
     releaseReadiness,
   );
-  assert.equal(graph.summary.nodeCount, 56);
-  assert.equal(graph.summary.roleUrlCount, 56);
-  assert.equal(graph.summary.productionFeatureTargetCount, 30);
+  assert.equal(graph.summary.nodeCount, 58);
+  assert.equal(graph.summary.roleUrlCount, 58);
+  assert.equal(graph.summary.productionFeatureTargetCount, 32);
   assert.equal(graph.summary.terminalBatchCount, 2);
   for (const descriptor of recoveryReceiptGraphDescriptors) {
     assert.equal(

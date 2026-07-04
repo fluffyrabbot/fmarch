@@ -12,15 +12,27 @@ import {
   playerActionSubmissionScenario,
   playerInvalidActionRecoveryLaneId,
   playerInvalidActionRecoveryScenario,
+  playerStaleActionTransitionRecoveryFeatureSlotId,
+  playerStaleVoteTransitionRecoveryFeatureSlotId,
   playerSlotVoteCommandFacts,
+  staleActionTransitionRecoveryFeatureSpineRow,
   staleDayTwoVoteAfterTransitionRecoveryScenario,
   staleNightOneActionAfterTransitionRecoveryScenario,
+  staleVoteTransitionRecoveryFeatureSpineRow,
 } from "./dev_test_game_core_loop_action_scenarios.mjs";
 
 test("player action scenario module exports proof lane ids", () => {
   assert.equal(playerActionLoopLaneId, "action-loop");
   assert.equal(playerInvalidActionRecoveryLaneId, "invalid-action-recovery");
   assert.equal(playerActionBoundaryLaneId, "player-action-boundary");
+  assert.equal(
+    playerStaleVoteTransitionRecoveryFeatureSlotId,
+    "stale-vote-transition-recovery",
+  );
+  assert.equal(
+    playerStaleActionTransitionRecoveryFeatureSlotId,
+    "stale-action-transition-recovery",
+  );
 });
 
 test("player action assertions import case-only scenario definitions", async () => {
@@ -73,6 +85,31 @@ test("player command fact helpers derive reusable vote and action vocabulary", (
       commandKind: "SubmitAction",
       templateId: "factional_kill",
       phaseId: "N01",
+    },
+  );
+});
+
+test("player stale transition recovery feature rows target the action-player role surface", () => {
+  assert.deepEqual(
+    staleVoteTransitionRecoveryFeatureSpineRow({ cycleId: "d02-n02" }),
+    {
+      targetKey: "staleVoteTransitionRecovery",
+      featureSlotId: playerStaleVoteTransitionRecoveryFeatureSlotId,
+      cycleId: "d02-n02",
+      role: "actionPlayer",
+      checkpointId: "d02-n02-n02-action-open",
+      adminCheckId: playerActionLoopLaneId,
+    },
+  );
+  assert.deepEqual(
+    staleActionTransitionRecoveryFeatureSpineRow({ cycleId: "d02-n02" }),
+    {
+      targetKey: "staleActionTransitionRecovery",
+      featureSlotId: playerStaleActionTransitionRecoveryFeatureSlotId,
+      cycleId: "d02-n02",
+      role: "actionPlayer",
+      checkpointId: "d02-n02-n02-action-open",
+      adminCheckId: playerActionLoopLaneId,
     },
   );
 });

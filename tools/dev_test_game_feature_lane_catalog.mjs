@@ -1,6 +1,8 @@
 import {
   invalidActionRecoveryFeatureSpineRow,
   playerActionLoopLaneId,
+  staleActionTransitionRecoveryFeatureSpineRow,
+  staleVoteTransitionRecoveryFeatureSpineRow,
 } from "./dev_test_game_core_loop_action_scenario_cases.mjs";
 import {
   coreLoopVoteResolutionLaneIds,
@@ -83,6 +85,12 @@ const coreLoopFeatureSpineLaneRows = Object.freeze([
   ...nightThreeProgressionFeatureSpineRows({ cycleId: nightThreeDayFour }),
   Object.freeze(
     invalidActionRecoveryFeatureSpineRow({ cycleId: dayTwoNightTwo }),
+  ),
+  Object.freeze(
+    staleVoteTransitionRecoveryFeatureSpineRow({ cycleId: dayTwoNightTwo }),
+  ),
+  Object.freeze(
+    staleActionTransitionRecoveryFeatureSpineRow({ cycleId: dayTwoNightTwo }),
   ),
   ...dayOneNightOneSpineRows.slice(1),
   Object.freeze(

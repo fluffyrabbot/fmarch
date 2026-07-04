@@ -119,6 +119,8 @@ test("production feature spine resolver builds and validates source collections"
     "night-three-action-resolution",
     "day-four-controls-return",
     "invalid-action-recovery",
+    "stale-vote-transition-recovery",
+    "stale-action-transition-recovery",
     "player-action-boundary",
     "private-channel",
     "resolution-receipts",
@@ -140,6 +142,36 @@ test("production feature spine resolver builds and validates source collections"
       roleUrlId: "d02-n02-actionPlayer",
       checkpointId: "d02-n02-d02-deciding-vote-submitted",
       adminCheckId: "day-vote-resolution",
+    },
+  );
+  assert.deepEqual(
+    {
+      roleUrlId:
+        collection.bySlotId["stale-vote-transition-recovery"].roleUrlId,
+      checkpointId:
+        collection.bySlotId["stale-vote-transition-recovery"].checkpointId,
+      adminCheckId:
+        collection.bySlotId["stale-vote-transition-recovery"].adminCheckId,
+    },
+    {
+      roleUrlId: "d02-n02-actionPlayer",
+      checkpointId: "d02-n02-n02-action-open",
+      adminCheckId: "action-loop",
+    },
+  );
+  assert.deepEqual(
+    {
+      roleUrlId:
+        collection.bySlotId["stale-action-transition-recovery"].roleUrlId,
+      checkpointId:
+        collection.bySlotId["stale-action-transition-recovery"].checkpointId,
+      adminCheckId:
+        collection.bySlotId["stale-action-transition-recovery"].adminCheckId,
+    },
+    {
+      roleUrlId: "d02-n02-actionPlayer",
+      checkpointId: "d02-n02-n02-action-open",
+      adminCheckId: "action-loop",
     },
   );
   assert.deepEqual(
