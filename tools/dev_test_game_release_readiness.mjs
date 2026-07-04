@@ -5559,228 +5559,354 @@ function markdownChecklist(checklist) {
   return `${lines.join("\n")}\n`;
 }
 
-if (pathToFileURL(process.argv[1] ?? "").href === import.meta.url) {
-  const proofPath = process.argv[2]
-    ? path.resolve(process.cwd(), process.argv[2])
-    : defaultProofPath;
-  const proofRun = JSON.parse(await readFile(proofPath, "utf8"));
-  const [
-    coreLoopAdminProofOptions,
-    hardeningAdminProofOptions,
-    backupRestoreOptions,
-    backupAdminProofOptions,
-    opsArtifactsOptions,
-    seedFixtureOptions,
-    identityAdapterOptions,
-    identityAdminProofOptions,
-    hostedIdentityEvidenceAdminProofOptions,
-    opsAdminProofOptions,
-    hostedOpsSignalsOptions,
-    hostedOpsSignalsAdminProofOptions,
-    seedAdminProofOptions,
-    spineManifestOptions,
-    spineManifestAdminProofOptions,
-    adminSpineProofOptions,
-    adminSpineAdminProofOptions,
-    raceCoverageOptions,
-    hostedConcurrentRaceMatrixOptions,
-    raceCoverageAdminProofOptions,
-    hostedConcurrentRaceMatrixAdminProofOptions,
-    hostedEvidenceLaneAdminProofOptions,
-    hostedEvidenceLaneDemoProofOptions,
-    proofGraphAdminProofOptions,
-    proofFreshnessAdminProofOptions,
-    nextActionAdminProofOptions,
-    releaseRunbookOptions,
-    releaseRunbookAdminProofOptions,
-  ] = await Promise.all([
-    readOptionalCoreLoopAdminProof(),
-    readOptionalHardeningAdminProof(),
-    readOptionalBackupRestoreArtifacts(),
-    readOptionalBackupAdminProof(),
-    readOptionalOpsArtifacts(),
-    readOptionalSeedFixtureSummary({ expectedGame: proofRun?.session?.game }),
-    readOptionalIdentityAdapterProof(),
-    readOptionalIdentityAdminProof(),
-    readOptionalHostedIdentityEvidenceAdminProof(),
-    readOptionalOpsAdminProof(),
-    readOptionalHostedOpsSignals(),
-    readOptionalHostedOpsSignalsAdminProof(),
-    readOptionalSeedAdminProof({ expectedGame: proofRun?.session?.game }),
-    readOptionalSpineManifest(),
-    readOptionalSpineManifestAdminProof(),
-    readOptionalAdminSpineProof(),
-    readOptionalAdminSpineAdminProof(),
-    readOptionalRaceCoverage(),
-    readOptionalHostedConcurrentRaceMatrix(),
-    readOptionalRaceCoverageAdminProof(),
-    readOptionalHostedConcurrentRaceMatrixAdminProof(),
-    readOptionalHostedEvidenceLaneAdminProof(),
-    readOptionalHostedEvidenceLaneDemoProof(),
-    readOptionalProofGraphAdminProof(),
-    readOptionalProofFreshnessAdminProof(),
-    readOptionalNextActionAdminProof(),
-    readOptionalReleaseRunbook(),
-    readOptionalReleaseRunbookAdminProof(),
-  ]);
-  const checklist = buildDevTestGameReleaseReadiness(proofRun, {
-    sourcePath: path.relative(repoRoot, proofPath),
-    ...(coreLoopAdminProofOptions ?? {}),
-    ...(hardeningAdminProofOptions ?? {}),
-    ...(backupRestoreOptions ?? {}),
-    ...(backupAdminProofOptions ?? {}),
-    ...(opsArtifactsOptions ?? {}),
-    ...(seedFixtureOptions ?? {}),
-    ...(identityAdapterOptions ?? {}),
-    ...(identityAdminProofOptions ?? {}),
-    ...(hostedIdentityEvidenceAdminProofOptions ?? {}),
-    ...(opsAdminProofOptions ?? {}),
-    ...(hostedOpsSignalsOptions ?? {}),
-    ...(hostedOpsSignalsAdminProofOptions ?? {}),
-    ...(seedAdminProofOptions ?? {}),
-    ...(spineManifestOptions ?? {}),
-    ...(spineManifestAdminProofOptions ?? {}),
-    ...(adminSpineProofOptions ?? {}),
-    ...(adminSpineAdminProofOptions ?? {}),
-    ...(raceCoverageOptions ?? {}),
-    ...(hostedConcurrentRaceMatrixOptions ?? {}),
-    ...(raceCoverageAdminProofOptions ?? {}),
-    ...(hostedConcurrentRaceMatrixAdminProofOptions ?? {}),
-    ...(hostedEvidenceLaneAdminProofOptions ?? {}),
-    ...(hostedEvidenceLaneDemoProofOptions ?? {}),
-    ...(proofGraphAdminProofOptions ?? {}),
-    ...(proofFreshnessAdminProofOptions ?? {}),
-    ...(nextActionAdminProofOptions ?? {}),
-    ...(releaseRunbookOptions ?? {}),
-    ...(releaseRunbookAdminProofOptions ?? {}),
-  });
-  assertDevTestGameReleaseReadiness(checklist);
-  await mkdir(artifactDir, { recursive: true });
-  await writeFile(jsonPath, `${JSON.stringify(checklist, null, 2)}\n`);
-  await writeFile(markdownPath, markdownChecklist(checklist));
-  console.log(
-    `wrote ${path.relative(repoRoot, jsonPath)} (${checklist.releaseReadiness.status})`,
-  );
+const optionalReadinessArtifactRegistry = Object.freeze([
+  optionalReadinessArtifact({
+    id: "coreLoopAdminProof",
+    envVar: "FMARCH_DEV_TEST_GAME_CORE_LOOP_ADMIN_PROOF",
+    defaultPath: defaultCoreLoopAdminProofPath,
+    outputKeys: {
+      data: "coreLoopAdminProof",
+      path: "coreLoopAdminProofPath",
+      freshnessMetadata: "coreLoopAdminProofArtifact",
+    },
+  }),
+  optionalReadinessArtifact({
+    id: "hardeningAdminProof",
+    envVar: "FMARCH_DEV_TEST_GAME_HARDENING_ADMIN_PROOF",
+    defaultPath: defaultHardeningAdminProofPath,
+    outputKeys: {
+      data: "hardeningAdminProof",
+      path: "hardeningAdminProofPath",
+      freshnessMetadata: "hardeningAdminProofArtifact",
+    },
+  }),
+  optionalReadinessArtifact({
+    id: "backupAdminProof",
+    envVar: "FMARCH_DEV_TEST_GAME_BACKUP_ADMIN_PROOF",
+    defaultPath: defaultBackupAdminProofPath,
+    outputKeys: {
+      data: "backupAdminProof",
+      path: "backupAdminProofPath",
+      freshnessMetadata: "backupAdminProofArtifact",
+    },
+  }),
+  optionalReadinessArtifact({
+    id: "opsArtifacts",
+    envVar: "FMARCH_DEV_TEST_GAME_OPS_ARTIFACTS",
+    defaultPath: defaultOpsArtifactsPath,
+    outputKeys: {
+      data: "opsArtifacts",
+      path: "opsArtifactsPath",
+      freshnessMetadata: "opsArtifactsArtifact",
+    },
+  }),
+  optionalReadinessArtifact({
+    id: "identityAdapterProof",
+    envVar: "FMARCH_DEV_TEST_GAME_IDENTITY_ADAPTER_PROOF",
+    defaultPath: defaultIdentityAdapterProofPath,
+    outputKeys: {
+      data: "identityAdapterProof",
+      path: "identityAdapterProofPath",
+      freshnessMetadata: "identityAdapterProofArtifact",
+    },
+  }),
+  optionalReadinessArtifact({
+    id: "identityAdminProof",
+    envVar: "FMARCH_DEV_TEST_GAME_IDENTITY_ADMIN_PROOF",
+    defaultPath: defaultIdentityAdminProofPath,
+    outputKeys: {
+      data: "identityAdminProof",
+      path: "identityAdminProofPath",
+      freshnessMetadata: "identityAdminProofArtifact",
+    },
+  }),
+  optionalReadinessArtifact({
+    id: "hostedIdentityEvidenceAdminProof",
+    envVar: "FMARCH_DEV_TEST_GAME_HOSTED_IDENTITY_EVIDENCE_ADMIN_PROOF",
+    defaultPath: defaultHostedIdentityEvidenceAdminProofPath,
+    outputKeys: {
+      data: "hostedIdentityEvidenceAdminProof",
+      path: "hostedIdentityEvidenceAdminProofPath",
+      freshnessMetadata: "hostedIdentityEvidenceAdminProofArtifact",
+    },
+  }),
+  optionalReadinessArtifact({
+    id: "opsAdminProof",
+    envVar: "FMARCH_DEV_TEST_GAME_OPS_ADMIN_PROOF",
+    defaultPath: defaultOpsAdminProofPath,
+    outputKeys: {
+      data: "opsAdminProof",
+      path: "opsAdminProofPath",
+      freshnessMetadata: "opsAdminProofArtifact",
+    },
+  }),
+  optionalReadinessArtifact({
+    id: "hostedOpsSignals",
+    envVar: "FMARCH_DEV_TEST_GAME_HOSTED_OPS_SIGNALS",
+    defaultPath: defaultHostedOpsSignalsPath,
+    outputKeys: {
+      data: "hostedOpsSignals",
+      path: "hostedOpsSignalsPath",
+      freshnessMetadata: "hostedOpsSignalsArtifact",
+    },
+  }),
+  optionalReadinessArtifact({
+    id: "hostedOpsSignalsAdminProof",
+    envVar: "FMARCH_DEV_TEST_GAME_HOSTED_OPS_SIGNALS_ADMIN_PROOF",
+    defaultPath: defaultHostedOpsSignalsAdminProofPath,
+    outputKeys: {
+      data: "hostedOpsSignalsAdminProof",
+      path: "hostedOpsSignalsAdminProofPath",
+      freshnessMetadata: "hostedOpsSignalsAdminProofArtifact",
+    },
+  }),
+  optionalReadinessArtifact({
+    id: "spineManifest",
+    envVar: "FMARCH_DEV_TEST_GAME_SPINE_MANIFEST",
+    defaultPath: defaultSpineManifestPath,
+    outputKeys: {
+      data: "spineManifest",
+      path: "spineManifestPath",
+      freshnessMetadata: "spineManifestArtifact",
+    },
+  }),
+  optionalReadinessArtifact({
+    id: "spineManifestAdminProof",
+    envVar: "FMARCH_DEV_TEST_GAME_SPINE_MANIFEST_ADMIN_PROOF",
+    defaultPath: defaultSpineManifestAdminProofPath,
+    outputKeys: {
+      data: "spineManifestAdminProof",
+      path: "spineManifestAdminProofPath",
+      freshnessMetadata: "spineManifestAdminProofArtifact",
+    },
+  }),
+  optionalReadinessArtifact({
+    id: "adminSpineProof",
+    envVar: "FMARCH_DEV_TEST_GAME_ADMIN_SPINE_PROOF",
+    defaultPath: defaultAdminSpineProofPath,
+    outputKeys: {
+      data: "adminSpineProof",
+      path: "adminSpineProofPath",
+      freshnessMetadata: "adminSpineProofArtifact",
+    },
+    validator: validateDevTestGameAdminSpineProof,
+    ignoreInvalidDefault: true,
+  }),
+  optionalReadinessArtifact({
+    id: "adminSpineAdminProof",
+    envVar: "FMARCH_DEV_TEST_GAME_ADMIN_SPINE_ADMIN_PROOF",
+    defaultPath: defaultAdminSpineAdminProofPath,
+    outputKeys: {
+      data: "adminSpineAdminProof",
+      path: "adminSpineAdminProofPath",
+      freshnessMetadata: "adminSpineAdminProofArtifact",
+    },
+    validator: validateDevTestGameAdminSpineAdminProof,
+    ignoreInvalidDefault: true,
+  }),
+  optionalReadinessArtifact({
+    id: "raceCoverage",
+    envVar: "FMARCH_DEV_TEST_GAME_RACE_COVERAGE",
+    defaultPath: defaultRaceCoveragePath,
+    outputKeys: {
+      data: "raceCoverage",
+      path: "raceCoveragePath",
+      freshnessMetadata: "raceCoverageArtifact",
+    },
+  }),
+  optionalReadinessArtifact({
+    id: "hostedConcurrentRaceMatrix",
+    envVar: "FMARCH_DEV_TEST_GAME_HOSTED_CONCURRENT_RACE_MATRIX",
+    defaultPath: defaultHostedConcurrentRaceMatrixPath,
+    outputKeys: {
+      data: "hostedConcurrentRaceMatrix",
+      path: "hostedConcurrentRaceMatrixPath",
+      freshnessMetadata: "hostedConcurrentRaceMatrixArtifact",
+    },
+  }),
+  optionalReadinessArtifact({
+    id: "raceCoverageAdminProof",
+    envVar: "FMARCH_DEV_TEST_GAME_RACE_COVERAGE_ADMIN_PROOF",
+    defaultPath: defaultRaceCoverageAdminProofPath,
+    outputKeys: {
+      data: "raceCoverageAdminProof",
+      path: "raceCoverageAdminProofPath",
+      freshnessMetadata: "raceCoverageAdminProofArtifact",
+    },
+  }),
+  optionalReadinessArtifact({
+    id: "hostedConcurrentRaceMatrixAdminProof",
+    envVar: "FMARCH_DEV_TEST_GAME_HOSTED_CONCURRENT_RACE_MATRIX_ADMIN_PROOF",
+    defaultPath: defaultHostedConcurrentRaceMatrixAdminProofPath,
+    outputKeys: {
+      data: "hostedConcurrentRaceMatrixAdminProof",
+      path: "hostedConcurrentRaceMatrixAdminProofPath",
+      freshnessMetadata: "hostedConcurrentRaceMatrixAdminProofArtifact",
+    },
+  }),
+  optionalReadinessArtifact({
+    id: "hostedEvidenceLaneAdminProof",
+    envVar: "FMARCH_DEV_TEST_GAME_HOSTED_EVIDENCE_LANE_ADMIN_PROOF",
+    defaultPath: defaultHostedEvidenceLaneAdminProofPath,
+    outputKeys: {
+      data: "hostedEvidenceLaneAdminProof",
+      path: "hostedEvidenceLaneAdminProofPath",
+      freshnessMetadata: "hostedEvidenceLaneAdminProofArtifact",
+    },
+  }),
+  optionalReadinessArtifact({
+    id: "hostedEvidenceLaneDemoProof",
+    envVar: "FMARCH_DEV_TEST_GAME_HOSTED_EVIDENCE_LANE_DEMO_PROOF",
+    defaultPath: defaultHostedEvidenceLaneDemoProofPath,
+    outputKeys: {
+      data: "hostedEvidenceLaneDemoProof",
+      path: "hostedEvidenceLaneDemoProofPath",
+      freshnessMetadata: "hostedEvidenceLaneDemoProofArtifact",
+    },
+  }),
+  optionalReadinessArtifact({
+    id: "proofGraphAdminProof",
+    envVar: "FMARCH_DEV_TEST_GAME_PROOF_GRAPH_ADMIN_PROOF",
+    defaultPath: defaultProofGraphAdminProofPath,
+    outputKeys: {
+      data: "proofGraphAdminProof",
+      path: "proofGraphAdminProofPath",
+      freshnessMetadata: "proofGraphAdminProofArtifact",
+    },
+  }),
+  optionalReadinessArtifact({
+    id: "proofFreshnessAdminProof",
+    envVar: "FMARCH_DEV_TEST_GAME_PROOF_FRESHNESS_ADMIN_PROOF",
+    defaultPath: defaultProofFreshnessAdminProofPath,
+    outputKeys: {
+      data: "proofFreshnessAdminProof",
+      path: "proofFreshnessAdminProofPath",
+      freshnessMetadata: "proofFreshnessAdminProofArtifact",
+    },
+  }),
+  optionalReadinessArtifact({
+    id: "nextActionAdminProof",
+    envVar: "FMARCH_DEV_TEST_GAME_NEXT_ACTION_ADMIN_PROOF",
+    defaultPath: defaultNextActionAdminProofPath,
+    outputKeys: {
+      data: "nextActionAdminProof",
+      path: "nextActionAdminProofPath",
+      freshnessMetadata: "nextActionAdminProofArtifact",
+    },
+  }),
+  optionalReadinessArtifact({
+    id: "releaseRunbook",
+    envVar: "FMARCH_DEV_TEST_GAME_RELEASE_RUNBOOK",
+    defaultPath: defaultReleaseRunbookPath,
+    outputKeys: {
+      data: "releaseRunbook",
+      path: "releaseRunbookPath",
+      freshnessMetadata: "releaseRunbookArtifact",
+    },
+  }),
+  optionalReadinessArtifact({
+    id: "releaseRunbookAdminProof",
+    envVar: "FMARCH_DEV_TEST_GAME_RELEASE_RUNBOOK_ADMIN_PROOF",
+    defaultPath: defaultReleaseRunbookAdminProofPath,
+    outputKeys: {
+      data: "releaseRunbookAdminProof",
+      path: "releaseRunbookAdminProofPath",
+      freshnessMetadata: "releaseRunbookAdminProofArtifact",
+    },
+  }),
+]);
+
+const optionalReadinessArtifactById = new Map(
+  optionalReadinessArtifactRegistry.map((artifact) => [artifact.id, artifact]),
+);
+
+const optionalReadinessArtifactLoadPlan = Object.freeze([
+  "coreLoopAdminProof",
+  "hardeningAdminProof",
+  readOptionalBackupRestoreArtifacts,
+  "backupAdminProof",
+  "opsArtifacts",
+  readOptionalSeedFixtureSummary,
+  "identityAdapterProof",
+  "identityAdminProof",
+  "hostedIdentityEvidenceAdminProof",
+  "opsAdminProof",
+  "hostedOpsSignals",
+  "hostedOpsSignalsAdminProof",
+  readOptionalSeedAdminProof,
+  "spineManifest",
+  "spineManifestAdminProof",
+  "adminSpineProof",
+  "adminSpineAdminProof",
+  "raceCoverage",
+  "hostedConcurrentRaceMatrix",
+  "raceCoverageAdminProof",
+  "hostedConcurrentRaceMatrixAdminProof",
+  "hostedEvidenceLaneAdminProof",
+  "hostedEvidenceLaneDemoProof",
+  "proofGraphAdminProof",
+  "proofFreshnessAdminProof",
+  "nextActionAdminProof",
+  "releaseRunbook",
+  "releaseRunbookAdminProof",
+]);
+
+function optionalReadinessArtifact(descriptor) {
+  return Object.freeze(descriptor);
 }
 
-async function readOptionalCoreLoopAdminProof() {
-  const override = process.env.FMARCH_DEV_TEST_GAME_CORE_LOOP_ADMIN_PROOF;
-  const proofPath = await resolveOptionalDefaultArtifactPath(
+async function readOptionalReleaseReadinessArtifacts({ expectedGame } = {}) {
+  const optionParts = await Promise.all(
+    optionalReadinessArtifactLoadPlan.map((loader) => {
+      if (typeof loader === "function") {
+        return loader({ expectedGame });
+      }
+      return readOptionalReadinessArtifact(loader);
+    }),
+  );
+  return Object.assign({}, ...optionParts.filter(Boolean));
+}
+
+async function readOptionalReadinessArtifact(id) {
+  const descriptor = optionalReadinessArtifactById.get(id);
+  if (descriptor === undefined) {
+    throw new Error(`unknown optional readiness artifact: ${id}`);
+  }
+  const override = process.env[descriptor.envVar];
+  const artifactPath = await resolveOptionalDefaultArtifactPath(
     override,
-    defaultCoreLoopAdminProofPath,
+    descriptor.defaultPath,
   );
-  if (proofPath === undefined) {
+  if (artifactPath === undefined) {
     return undefined;
   }
   const now = new Date();
-  const artifact = await readFreshArtifactMetadata(proofPath, now);
+  const artifact = await readFreshArtifactMetadata(artifactPath, now);
+  const payload = JSON.parse(await readFile(artifactPath, "utf8"));
+  const relativePath = path.relative(repoRoot, artifactPath);
+  if (descriptor.validator !== undefined) {
+    try {
+      descriptor.validator(payload, { path: relativePath, artifact });
+    } catch (error) {
+      if (
+        descriptor.ignoreInvalidDefault === true &&
+        optionalArtifactEnvUnset(override)
+      ) {
+        return undefined;
+      }
+      throw error;
+    }
+  }
+  const { data, path: pathKey, freshnessMetadata } = descriptor.outputKeys;
   return {
-    coreLoopAdminProof: JSON.parse(await readFile(proofPath, "utf8")),
-    coreLoopAdminProofPath: path.relative(repoRoot, proofPath),
-    coreLoopAdminProofArtifact: artifact,
+    [data]: payload,
+    [pathKey]: relativePath,
+    [freshnessMetadata]: artifact,
   };
 }
 
-async function readOptionalHardeningAdminProof() {
-  const override = process.env.FMARCH_DEV_TEST_GAME_HARDENING_ADMIN_PROOF;
-  const proofPath = await resolveOptionalDefaultArtifactPath(
-    override,
-    defaultHardeningAdminProofPath,
-  );
-  if (proofPath === undefined) {
-    return undefined;
-  }
-  const now = new Date();
-  const artifact = await readFreshArtifactMetadata(proofPath, now);
-  return {
-    hardeningAdminProof: JSON.parse(await readFile(proofPath, "utf8")),
-    hardeningAdminProofPath: path.relative(repoRoot, proofPath),
-    hardeningAdminProofArtifact: artifact,
-  };
-}
-
-async function readOptionalOpsArtifacts() {
-  const override = process.env.FMARCH_DEV_TEST_GAME_OPS_ARTIFACTS;
-  const opsPath = await resolveOptionalDefaultArtifactPath(override, defaultOpsArtifactsPath);
-  if (opsPath === undefined) {
-    return undefined;
-  }
-  const now = new Date();
-  const artifact = await readFreshArtifactMetadata(opsPath, now);
-  return {
-    opsArtifacts: JSON.parse(await readFile(opsPath, "utf8")),
-    opsArtifactsPath: path.relative(repoRoot, opsPath),
-    opsArtifactsArtifact: artifact,
-  };
-}
-
-async function readOptionalBackupAdminProof() {
-  const override = process.env.FMARCH_DEV_TEST_GAME_BACKUP_ADMIN_PROOF;
-  const proofPath = await resolveOptionalDefaultArtifactPath(
-    override,
-    defaultBackupAdminProofPath,
-  );
-  if (proofPath === undefined) {
-    return undefined;
-  }
-  const now = new Date();
-  const artifact = await readFreshArtifactMetadata(proofPath, now);
-  return {
-    backupAdminProof: JSON.parse(await readFile(proofPath, "utf8")),
-    backupAdminProofPath: path.relative(repoRoot, proofPath),
-    backupAdminProofArtifact: artifact,
-  };
-}
-
-async function readOptionalOpsAdminProof() {
-  const override = process.env.FMARCH_DEV_TEST_GAME_OPS_ADMIN_PROOF;
-  const proofPath = await resolveOptionalDefaultArtifactPath(override, defaultOpsAdminProofPath);
-  if (proofPath === undefined) {
-    return undefined;
-  }
-  const now = new Date();
-  const artifact = await readFreshArtifactMetadata(proofPath, now);
-  return {
-    opsAdminProof: JSON.parse(await readFile(proofPath, "utf8")),
-    opsAdminProofPath: path.relative(repoRoot, proofPath),
-    opsAdminProofArtifact: artifact,
-  };
-}
-
-async function readOptionalHostedOpsSignals() {
-  const override = process.env.FMARCH_DEV_TEST_GAME_HOSTED_OPS_SIGNALS;
-  const signalsPath = await resolveOptionalDefaultArtifactPath(
-    override,
-    defaultHostedOpsSignalsPath,
-  );
-  if (signalsPath === undefined) {
-    return undefined;
-  }
-  const now = new Date();
-  const artifact = await readFreshArtifactMetadata(signalsPath, now);
-  return {
-    hostedOpsSignals: JSON.parse(await readFile(signalsPath, "utf8")),
-    hostedOpsSignalsPath: path.relative(repoRoot, signalsPath),
-    hostedOpsSignalsArtifact: artifact,
-  };
-}
-
-async function readOptionalHostedOpsSignalsAdminProof() {
-  const override = process.env.FMARCH_DEV_TEST_GAME_HOSTED_OPS_SIGNALS_ADMIN_PROOF;
-  const proofPath = await resolveOptionalDefaultArtifactPath(
-    override,
-    defaultHostedOpsSignalsAdminProofPath,
-  );
-  if (proofPath === undefined) {
-    return undefined;
-  }
-  const now = new Date();
-  const artifact = await readFreshArtifactMetadata(proofPath, now);
-  return {
-    hostedOpsSignalsAdminProof: JSON.parse(await readFile(proofPath, "utf8")),
-    hostedOpsSignalsAdminProofPath: path.relative(repoRoot, proofPath),
-    hostedOpsSignalsAdminProofArtifact: artifact,
-  };
+function optionalArtifactEnvUnset(value) {
+  return value === undefined || value.trim() === "";
 }
 
 async function readOptionalSeedAdminProof({ expectedGame } = {}) {
@@ -5856,97 +5982,6 @@ function defaultSeedAdminProofMatchesCurrentProof(proof, { expectedGame } = {}) 
   return seedDemoScenarioIds.every((id) => visibleScenarios.has(id));
 }
 
-async function readOptionalIdentityAdapterProof() {
-  const override = process.env.FMARCH_DEV_TEST_GAME_IDENTITY_ADAPTER_PROOF;
-  const proofPath = await resolveOptionalDefaultArtifactPath(
-    override,
-    defaultIdentityAdapterProofPath,
-  );
-  if (proofPath === undefined) {
-    return undefined;
-  }
-  const now = new Date();
-  const artifact = await readFreshArtifactMetadata(proofPath, now);
-  return {
-    identityAdapterProof: JSON.parse(await readFile(proofPath, "utf8")),
-    identityAdapterProofPath: path.relative(repoRoot, proofPath),
-    identityAdapterProofArtifact: artifact,
-  };
-}
-
-async function readOptionalIdentityAdminProof() {
-  const override = process.env.FMARCH_DEV_TEST_GAME_IDENTITY_ADMIN_PROOF;
-  const proofPath = await resolveOptionalDefaultArtifactPath(
-    override,
-    defaultIdentityAdminProofPath,
-  );
-  if (proofPath === undefined) {
-    return undefined;
-  }
-  const now = new Date();
-  const artifact = await readFreshArtifactMetadata(proofPath, now);
-  return {
-    identityAdminProof: JSON.parse(await readFile(proofPath, "utf8")),
-    identityAdminProofPath: path.relative(repoRoot, proofPath),
-    identityAdminProofArtifact: artifact,
-  };
-}
-
-async function readOptionalHostedIdentityEvidenceAdminProof() {
-  const override =
-    process.env.FMARCH_DEV_TEST_GAME_HOSTED_IDENTITY_EVIDENCE_ADMIN_PROOF;
-  const proofPath = await resolveOptionalDefaultArtifactPath(
-    override,
-    defaultHostedIdentityEvidenceAdminProofPath,
-  );
-  if (proofPath === undefined) {
-    return undefined;
-  }
-  const now = new Date();
-  const artifact = await readFreshArtifactMetadata(proofPath, now);
-  return {
-    hostedIdentityEvidenceAdminProof: JSON.parse(await readFile(proofPath, "utf8")),
-    hostedIdentityEvidenceAdminProofPath: path.relative(repoRoot, proofPath),
-    hostedIdentityEvidenceAdminProofArtifact: artifact,
-  };
-}
-
-async function readOptionalSpineManifest() {
-  const override = process.env.FMARCH_DEV_TEST_GAME_SPINE_MANIFEST;
-  const manifestPath = await resolveOptionalDefaultArtifactPath(
-    override,
-    defaultSpineManifestPath,
-  );
-  if (manifestPath === undefined) {
-    return undefined;
-  }
-  const now = new Date();
-  const artifact = await readFreshArtifactMetadata(manifestPath, now);
-  return {
-    spineManifest: JSON.parse(await readFile(manifestPath, "utf8")),
-    spineManifestPath: path.relative(repoRoot, manifestPath),
-    spineManifestArtifact: artifact,
-  };
-}
-
-async function readOptionalSpineManifestAdminProof() {
-  const override = process.env.FMARCH_DEV_TEST_GAME_SPINE_MANIFEST_ADMIN_PROOF;
-  const proofPath = await resolveOptionalDefaultArtifactPath(
-    override,
-    defaultSpineManifestAdminProofPath,
-  );
-  if (proofPath === undefined) {
-    return undefined;
-  }
-  const now = new Date();
-  const artifact = await readFreshArtifactMetadata(proofPath, now);
-  return {
-    spineManifestAdminProof: JSON.parse(await readFile(proofPath, "utf8")),
-    spineManifestAdminProofPath: path.relative(repoRoot, proofPath),
-    spineManifestAdminProofArtifact: artifact,
-  };
-}
-
 async function readOptionalBackupRestoreArtifacts() {
   const proofOverride = process.env.FMARCH_DEV_TEST_GAME_BACKUP_RESTORE_PROOF;
   const dumpOverride = process.env.FMARCH_DEV_TEST_GAME_BACKUP_RESTORE_DUMP;
@@ -5983,269 +6018,6 @@ async function readOptionalBackupRestoreArtifacts() {
     backupRestoreDumpPath: path.relative(repoRoot, dumpPath),
     backupRestoreProofArtifact: proofArtifact,
     backupRestoreDumpArtifact: dumpArtifact,
-  };
-}
-
-async function readOptionalAdminSpineProof() {
-  const override = process.env.FMARCH_DEV_TEST_GAME_ADMIN_SPINE_PROOF;
-  const proofPath = await resolveOptionalDefaultArtifactPath(
-    override,
-    defaultAdminSpineProofPath,
-  );
-  if (proofPath === undefined) {
-    return undefined;
-  }
-  const now = new Date();
-  const artifact = await readFreshArtifactMetadata(proofPath, now);
-  const proof = JSON.parse(await readFile(proofPath, "utf8"));
-  const relativePath = path.relative(repoRoot, proofPath);
-  try {
-    validateDevTestGameAdminSpineProof(proof, {
-      path: relativePath,
-      artifact,
-    });
-  } catch (error) {
-    if (override === undefined || override.trim() === "") {
-      return undefined;
-    }
-    throw error;
-  }
-  return {
-    adminSpineProof: proof,
-    adminSpineProofPath: relativePath,
-    adminSpineProofArtifact: artifact,
-  };
-}
-
-async function readOptionalAdminSpineAdminProof() {
-  const override = process.env.FMARCH_DEV_TEST_GAME_ADMIN_SPINE_ADMIN_PROOF;
-  const proofPath = await resolveOptionalDefaultArtifactPath(
-    override,
-    defaultAdminSpineAdminProofPath,
-  );
-  if (proofPath === undefined) {
-    return undefined;
-  }
-  const now = new Date();
-  const artifact = await readFreshArtifactMetadata(proofPath, now);
-  const proof = JSON.parse(await readFile(proofPath, "utf8"));
-  const relativePath = path.relative(repoRoot, proofPath);
-  try {
-    validateDevTestGameAdminSpineAdminProof(proof, {
-      path: relativePath,
-      artifact,
-    });
-  } catch (error) {
-    if (override === undefined || override.trim() === "") {
-      return undefined;
-    }
-    throw error;
-  }
-  return {
-    adminSpineAdminProof: proof,
-    adminSpineAdminProofPath: relativePath,
-    adminSpineAdminProofArtifact: artifact,
-  };
-}
-
-async function readOptionalRaceCoverage() {
-  const override = process.env.FMARCH_DEV_TEST_GAME_RACE_COVERAGE;
-  const proofPath = await resolveOptionalDefaultArtifactPath(
-    override,
-    defaultRaceCoveragePath,
-  );
-  if (proofPath === undefined) {
-    return undefined;
-  }
-  const now = new Date();
-  const artifact = await readFreshArtifactMetadata(proofPath, now);
-  return {
-    raceCoverage: JSON.parse(await readFile(proofPath, "utf8")),
-    raceCoveragePath: path.relative(repoRoot, proofPath),
-    raceCoverageArtifact: artifact,
-  };
-}
-
-async function readOptionalHostedConcurrentRaceMatrix() {
-  const override = process.env.FMARCH_DEV_TEST_GAME_HOSTED_CONCURRENT_RACE_MATRIX;
-  const proofPath = await resolveOptionalDefaultArtifactPath(
-    override,
-    defaultHostedConcurrentRaceMatrixPath,
-  );
-  if (proofPath === undefined) {
-    return undefined;
-  }
-  const now = new Date();
-  const artifact = await readFreshArtifactMetadata(proofPath, now);
-  return {
-    hostedConcurrentRaceMatrix: JSON.parse(await readFile(proofPath, "utf8")),
-    hostedConcurrentRaceMatrixPath: path.relative(repoRoot, proofPath),
-    hostedConcurrentRaceMatrixArtifact: artifact,
-  };
-}
-
-async function readOptionalRaceCoverageAdminProof() {
-  const override = process.env.FMARCH_DEV_TEST_GAME_RACE_COVERAGE_ADMIN_PROOF;
-  const proofPath = await resolveOptionalDefaultArtifactPath(
-    override,
-    defaultRaceCoverageAdminProofPath,
-  );
-  if (proofPath === undefined) {
-    return undefined;
-  }
-  const now = new Date();
-  const artifact = await readFreshArtifactMetadata(proofPath, now);
-  return {
-    raceCoverageAdminProof: JSON.parse(await readFile(proofPath, "utf8")),
-    raceCoverageAdminProofPath: path.relative(repoRoot, proofPath),
-    raceCoverageAdminProofArtifact: artifact,
-  };
-}
-
-async function readOptionalHostedConcurrentRaceMatrixAdminProof() {
-  const override =
-    process.env.FMARCH_DEV_TEST_GAME_HOSTED_CONCURRENT_RACE_MATRIX_ADMIN_PROOF;
-  const proofPath = await resolveOptionalDefaultArtifactPath(
-    override,
-    defaultHostedConcurrentRaceMatrixAdminProofPath,
-  );
-  if (proofPath === undefined) {
-    return undefined;
-  }
-  const now = new Date();
-  const artifact = await readFreshArtifactMetadata(proofPath, now);
-  return {
-    hostedConcurrentRaceMatrixAdminProof: JSON.parse(
-      await readFile(proofPath, "utf8"),
-    ),
-    hostedConcurrentRaceMatrixAdminProofPath: path.relative(repoRoot, proofPath),
-    hostedConcurrentRaceMatrixAdminProofArtifact: artifact,
-  };
-}
-
-async function readOptionalHostedEvidenceLaneAdminProof() {
-  const override = process.env.FMARCH_DEV_TEST_GAME_HOSTED_EVIDENCE_LANE_ADMIN_PROOF;
-  const proofPath = await resolveOptionalDefaultArtifactPath(
-    override,
-    defaultHostedEvidenceLaneAdminProofPath,
-  );
-  if (proofPath === undefined) {
-    return undefined;
-  }
-  const now = new Date();
-  const artifact = await readFreshArtifactMetadata(proofPath, now);
-  return {
-    hostedEvidenceLaneAdminProof: JSON.parse(await readFile(proofPath, "utf8")),
-    hostedEvidenceLaneAdminProofPath: path.relative(repoRoot, proofPath),
-    hostedEvidenceLaneAdminProofArtifact: artifact,
-  };
-}
-
-async function readOptionalHostedEvidenceLaneDemoProof() {
-  const override = process.env.FMARCH_DEV_TEST_GAME_HOSTED_EVIDENCE_LANE_DEMO_PROOF;
-  const proofPath = await resolveOptionalDefaultArtifactPath(
-    override,
-    defaultHostedEvidenceLaneDemoProofPath,
-  );
-  if (proofPath === undefined) {
-    return undefined;
-  }
-  const now = new Date();
-  const artifact = await readFreshArtifactMetadata(proofPath, now);
-  return {
-    hostedEvidenceLaneDemoProof: JSON.parse(await readFile(proofPath, "utf8")),
-    hostedEvidenceLaneDemoProofPath: path.relative(repoRoot, proofPath),
-    hostedEvidenceLaneDemoProofArtifact: artifact,
-  };
-}
-
-async function readOptionalProofGraphAdminProof() {
-  const override = process.env.FMARCH_DEV_TEST_GAME_PROOF_GRAPH_ADMIN_PROOF;
-  const proofPath = await resolveOptionalDefaultArtifactPath(
-    override,
-    defaultProofGraphAdminProofPath,
-  );
-  if (proofPath === undefined) {
-    return undefined;
-  }
-  const now = new Date();
-  const artifact = await readFreshArtifactMetadata(proofPath, now);
-  return {
-    proofGraphAdminProof: JSON.parse(await readFile(proofPath, "utf8")),
-    proofGraphAdminProofPath: path.relative(repoRoot, proofPath),
-    proofGraphAdminProofArtifact: artifact,
-  };
-}
-
-async function readOptionalProofFreshnessAdminProof() {
-  const override = process.env.FMARCH_DEV_TEST_GAME_PROOF_FRESHNESS_ADMIN_PROOF;
-  const proofPath = await resolveOptionalDefaultArtifactPath(
-    override,
-    defaultProofFreshnessAdminProofPath,
-  );
-  if (proofPath === undefined) {
-    return undefined;
-  }
-  const now = new Date();
-  const artifact = await readFreshArtifactMetadata(proofPath, now);
-  return {
-    proofFreshnessAdminProof: JSON.parse(await readFile(proofPath, "utf8")),
-    proofFreshnessAdminProofPath: path.relative(repoRoot, proofPath),
-    proofFreshnessAdminProofArtifact: artifact,
-  };
-}
-
-async function readOptionalNextActionAdminProof() {
-  const override = process.env.FMARCH_DEV_TEST_GAME_NEXT_ACTION_ADMIN_PROOF;
-  const proofPath = await resolveOptionalDefaultArtifactPath(
-    override,
-    defaultNextActionAdminProofPath,
-  );
-  if (proofPath === undefined) {
-    return undefined;
-  }
-  const now = new Date();
-  const artifact = await readFreshArtifactMetadata(proofPath, now);
-  return {
-    nextActionAdminProof: JSON.parse(await readFile(proofPath, "utf8")),
-    nextActionAdminProofPath: path.relative(repoRoot, proofPath),
-    nextActionAdminProofArtifact: artifact,
-  };
-}
-
-async function readOptionalReleaseRunbook() {
-  const override = process.env.FMARCH_DEV_TEST_GAME_RELEASE_RUNBOOK;
-  const proofPath = await resolveOptionalDefaultArtifactPath(
-    override,
-    defaultReleaseRunbookPath,
-  );
-  if (proofPath === undefined) {
-    return undefined;
-  }
-  const now = new Date();
-  const artifact = await readFreshArtifactMetadata(proofPath, now);
-  return {
-    releaseRunbook: JSON.parse(await readFile(proofPath, "utf8")),
-    releaseRunbookPath: path.relative(repoRoot, proofPath),
-    releaseRunbookArtifact: artifact,
-  };
-}
-
-async function readOptionalReleaseRunbookAdminProof() {
-  const override = process.env.FMARCH_DEV_TEST_GAME_RELEASE_RUNBOOK_ADMIN_PROOF;
-  const proofPath = await resolveOptionalDefaultArtifactPath(
-    override,
-    defaultReleaseRunbookAdminProofPath,
-  );
-  if (proofPath === undefined) {
-    return undefined;
-  }
-  const now = new Date();
-  const artifact = await readFreshArtifactMetadata(proofPath, now);
-  return {
-    releaseRunbookAdminProof: JSON.parse(await readFile(proofPath, "utf8")),
-    releaseRunbookAdminProofPath: path.relative(repoRoot, proofPath),
-    releaseRunbookAdminProofArtifact: artifact,
   };
 }
 
@@ -6310,4 +6082,25 @@ function formatAge(ageMs) {
   const hours = Math.floor(ageMs / (60 * 60 * 1000));
   const minutes = Math.floor((ageMs % (60 * 60 * 1000)) / (60 * 1000));
   return `${hours}h ${minutes}m`;
+}
+
+if (pathToFileURL(process.argv[1] ?? "").href === import.meta.url) {
+  const proofPath = process.argv[2]
+    ? path.resolve(process.cwd(), process.argv[2])
+    : defaultProofPath;
+  const proofRun = JSON.parse(await readFile(proofPath, "utf8"));
+  const optionalArtifactOptions = await readOptionalReleaseReadinessArtifacts({
+    expectedGame: proofRun?.session?.game,
+  });
+  const checklist = buildDevTestGameReleaseReadiness(proofRun, {
+    sourcePath: path.relative(repoRoot, proofPath),
+    ...optionalArtifactOptions,
+  });
+  assertDevTestGameReleaseReadiness(checklist);
+  await mkdir(artifactDir, { recursive: true });
+  await writeFile(jsonPath, `${JSON.stringify(checklist, null, 2)}\n`);
+  await writeFile(markdownPath, markdownChecklist(checklist));
+  console.log(
+    `wrote ${path.relative(repoRoot, jsonPath)} (${checklist.releaseReadiness.status})`,
+  );
 }
