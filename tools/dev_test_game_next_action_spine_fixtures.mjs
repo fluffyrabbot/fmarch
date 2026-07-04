@@ -300,6 +300,12 @@ export function releaseReadinessUnprovenFixture({
 }
 
 function actionStatusForBuildable(buildable) {
+  if (
+    buildable?.actionStatus === "ready" ||
+    buildable?.actionStatus === "blocked"
+  ) {
+    return buildable.actionStatus;
+  }
   return buildable?.hostedHandoffChecklist?.status === "blocked" ||
     buildable?.realHostedEvidenceStatus === "unproven"
     ? "blocked"

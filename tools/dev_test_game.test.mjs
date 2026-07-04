@@ -104,7 +104,6 @@ import {
 } from "./dev_test_game_real_hosted_observability_handoff_cases.mjs";
 import {
   releaseAdminProofFallbackUnprovenIds,
-  releaseReadinessHostedConcurrentRaceMatrixCommand,
 } from "./dev_test_game_release_readiness_cases.mjs";
 import {
   assertDevTestGameSeedFixtureSummary,
@@ -1236,10 +1235,10 @@ test("dev test-game next-action derives one local recovery command from the mani
       hostedHandoffChecklist: hostedIdentityHandoffChecklistFixture(),
     });
   assert.deepEqual(freshAction.nextAction, {
-    command: releaseReadinessHostedConcurrentRaceMatrixCommand,
+    command: `npm run ${devTestGameHostedIdentityEvidenceCommand}`,
     reason: "release-readiness-unproven",
     status: "ready",
-    unproven: hostedConcurrentMatrixUnproven,
+    unproven: hostedProductionIdentityUnproven,
   });
   assert.deepEqual(freshAction.selectionTrace, {
     strategy: "development-spine-priority",
@@ -1281,28 +1280,28 @@ test("dev test-game next-action derives one local recovery command from the mani
   assert.deepEqual(freshAction.releaseReadinessTrace, {
     strategy: "local-dev-release-readiness-priority",
     candidateCount: 2,
-    selectedUnprovenId: "hosted-concurrent-race-matrix",
+    selectedUnprovenId: "hosted-production-identity",
     candidates: [
       releaseReadinessTraceCandidateFixture({
         rank: 1,
-        id: hostedConcurrentMatrixUnproven.id,
-        selected: true,
-        proofTarget: devTestGameHostedConcurrentRaceMatrixPath,
-        spineRoleUrl:
-          coreLoopSpineTargetsFixture().roleUrlHrefs["d02-n02-actionPlayer"],
-        browserProofCommand: devTestGameLiveProofCommand,
-        includeTargetRerunCommand: true,
-      }),
-      releaseReadinessTraceCandidateFixture({
-        rank: 2,
         id: hostedProductionIdentityUnproven.id,
-        selected: false,
+        selected: true,
         proofTarget: devTestGameHostedIdentityEvidencePath,
         browserProofCommand: devTestGameLiveProofCommand,
         rerunCommand: devTestGameIdentityAdminProofCommand,
         includeTargetRerunCommand: true,
         requiredEvidence: "Hosted account lifecycle",
         hostedHandoffChecklist: hostedIdentityHandoffChecklistFixture(),
+      }),
+      releaseReadinessTraceCandidateFixture({
+        rank: 2,
+        id: hostedConcurrentMatrixUnproven.id,
+        selected: false,
+        proofTarget: devTestGameHostedConcurrentRaceMatrixPath,
+        spineRoleUrl:
+          coreLoopSpineTargetsFixture().roleUrlHrefs["d02-n02-actionPlayer"],
+        browserProofCommand: devTestGameLiveProofCommand,
+        includeTargetRerunCommand: true,
       }),
     ],
   });

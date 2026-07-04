@@ -288,7 +288,8 @@ test("release readiness buildable cases share next-action commands and spine tar
     hostedIdentity.roleUrl,
     localAdminAuditRoleUrl(localAdminAuditIds.hostedIdentityEvidence),
   );
-  assert.equal(hostedIdentity.priority, 15);
+  assert.equal(hostedIdentity.priority, -10);
+  assert.equal(hostedIdentity.actionStatus, "ready");
   assert.deepEqual(
     hostedIdentity.productionFeatureSpineTarget,
     releaseReadinessProductionFeatureSpineTargets.identityAdapter,

@@ -388,7 +388,8 @@ function hostedDeploymentBuildable({ hostedTargetPreflight }) {
 function hostedProductionIdentityBuildable() {
   const command = `npm run ${devTestGameHostedIdentityEvidenceCommand}`;
   return {
-    priority: 15,
+    priority: -10,
+    actionStatus: "ready",
     command,
     buildSlice:
       "Run the hosted identity evidence intake; it records a blocked handoff until hosted account lifecycle, invite delivery, recovery, abuse/rate-limit, session-secret, and audit retention evidence are attached without changing role surfaces.",

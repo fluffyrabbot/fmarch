@@ -1415,6 +1415,12 @@ function assertReleaseReadinessTrace(releaseReadinessTrace, nextAction) {
 }
 
 function releaseReadinessActionStatus(buildable) {
+  if (
+    buildable?.actionStatus === "ready" ||
+    buildable?.actionStatus === "blocked"
+  ) {
+    return buildable.actionStatus;
+  }
   return (
     buildable?.hostedHandoffChecklist?.status === "blocked" ||
     buildable?.realHostedEvidenceStatus === "unproven"
