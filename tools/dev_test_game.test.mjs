@@ -1164,6 +1164,89 @@ test("dev test-game spine manifest records command order and evidence wiring", (
   );
 });
 
+test("dev test-game spine manifest blocks freshness on proof-run session drift", () => {
+  const manifest = buildDevTestGameSpineManifest({
+    generatedAt: "2026-06-26T00:00:00.000Z",
+    proofRunContract: {
+      status: "failed",
+      proofPath: "target/dev-test-game/proof-run.json",
+      sessionPath: "target/dev-test-game/session.json",
+      reason: "proof-run-session-mismatch",
+      message:
+        "target/dev-test-game/proof-run.json is stale or does not match target/dev-test-game/session.json",
+    },
+    proofFreshness: {
+      version: 1,
+      proof: "dev-test-game-proof-freshness",
+      status: "passed",
+      generatedAt: "2026-06-26T00:00:00.000Z",
+      maxAgeHours: 24,
+      proofBoundary: "test freshness boundary",
+      summary: {
+        artifactCount: 1,
+        freshCount: 1,
+        staleCount: 0,
+        missingCount: 0,
+      },
+      artifacts: [
+        {
+          id: "spine-manifest",
+          label: "Spine manifest",
+          path: "target/dev-test-game/spine-manifest.json",
+          status: "fresh",
+          mtime: "2026-06-26T00:00:00.000Z",
+          ageSeconds: 0,
+          maxAgeSeconds: 86400,
+        },
+      ],
+    },
+  });
+  assertDevTestGameSpineManifest(manifest);
+  assert.equal(manifest.artifactFreshness.status, "blocked");
+  assert.equal(
+    manifest.artifactFreshness.nextCommand,
+    "DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch npm run test:dev-test-game-live",
+  );
+  assert.deepEqual(manifest.artifactFreshness.proofRunContract, {
+    status: "failed",
+    proofPath: "target/dev-test-game/proof-run.json",
+    sessionPath: "target/dev-test-game/session.json",
+    reason: "proof-run-session-mismatch",
+    message:
+      "target/dev-test-game/proof-run.json is stale or does not match target/dev-test-game/session.json",
+  });
+  assert.deepEqual(
+    manifest.artifactFreshness.artifacts.map((artifact) => ({
+      id: artifact.id,
+      status: artifact.status,
+      refreshCommand: artifact.refreshCommand,
+      nextCommand: artifact.nextCommand,
+      contractReason: artifact.contractReason,
+      sessionPath: artifact.sessionPath,
+    })),
+    [
+      {
+        id: "proof-run",
+        status: "stale",
+        refreshCommand:
+          "DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch npm run test:dev-test-game-live",
+        nextCommand:
+          "DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch npm run test:dev-test-game-live",
+        contractReason: "proof-run-session-mismatch",
+        sessionPath: "target/dev-test-game/session.json",
+      },
+      {
+        id: "spine-manifest",
+        status: "fresh",
+        refreshCommand: "npm run test:dev-test-game-spine-manifest",
+        nextCommand: undefined,
+        contractReason: undefined,
+        sessionPath: undefined,
+      },
+    ],
+  );
+});
+
 test("dev test-game next-action derives one local recovery command from the manifest", () => {
   const staleManifest = buildDevTestGameSpineManifest({
     generatedAt: "2026-06-26T00:00:00.000Z",
@@ -1820,6 +1903,81 @@ test("dev test-game next-action derives one local recovery command from the mani
     gapCount: 0,
     laneIds: [...hostStaleControlLaneIds],
   });
+});
+
+test("spine manifest blocks freshness when proof-run no longer matches session", () => {
+  const manifest = buildDevTestGameSpineManifest({
+    generatedAt: "2026-06-26T00:00:00.000Z",
+    proofFreshness: {
+      version: 1,
+      proof: "dev-test-game-proof-freshness",
+      status: "passed",
+      generatedAt: "2026-06-26T00:00:00.000Z",
+      maxAgeHours: 24,
+      proofBoundary: "test freshness boundary",
+      summary: {
+        artifactCount: 1,
+        freshCount: 1,
+        staleCount: 0,
+        missingCount: 0,
+      },
+      artifacts: [
+        {
+          id: "proof-run",
+          label: "Proof run",
+          path: "target/dev-test-game/proof-run.json",
+          status: "fresh",
+          mtime: "2026-06-26T00:00:00.000Z",
+          ageSeconds: 0,
+          maxAgeSeconds: 86400,
+        },
+      ],
+    },
+    proofRunContract: {
+      status: "failed",
+      proofPath: "target/dev-test-game/proof-run.json",
+      sessionPath: "target/dev-test-game/session.json",
+      reason: "proof-run-session-mismatch",
+      message:
+        "target/dev-test-game/proof-run.json is stale or does not match target/dev-test-game/session.json",
+    },
+  });
+
+  assertDevTestGameSpineManifest(manifest);
+  assert.equal(manifest.artifactFreshness.status, "blocked");
+  assert.equal(
+    manifest.artifactFreshness.nextCommand,
+    "DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch npm run test:dev-test-game-live",
+  );
+  assert.deepEqual(manifest.artifactFreshness.proofRunContract, {
+    status: "failed",
+    proofPath: "target/dev-test-game/proof-run.json",
+    sessionPath: "target/dev-test-game/session.json",
+    reason: "proof-run-session-mismatch",
+    message:
+      "target/dev-test-game/proof-run.json is stale or does not match target/dev-test-game/session.json",
+  });
+  assert.deepEqual(manifest.artifactFreshness.artifacts, [
+    {
+      id: "proof-run",
+      label: "Proof run and session contract",
+      path: "target/dev-test-game/proof-run.json",
+      status: "stale",
+      mtime: "2026-06-26T00:00:00.000Z",
+      ageSeconds: 0,
+      maxAgeSeconds: 86400,
+      refreshCommand:
+        "DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch npm run test:dev-test-game-live",
+      refreshSource: "manifest-default",
+      nextCommand:
+        "DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch npm run test:dev-test-game-live",
+      contractStatus: "failed",
+      contractReason: "proof-run-session-mismatch",
+      contractMessage:
+        "target/dev-test-game/proof-run.json is stale or does not match target/dev-test-game/session.json",
+      sessionPath: "target/dev-test-game/session.json",
+    },
+  ]);
 });
 
 test("dev test-game next-action advances hosted deployment after target preflight passes", () => {

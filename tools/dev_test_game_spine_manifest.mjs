@@ -1,4 +1,4 @@
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import {
@@ -78,6 +78,10 @@ import {
   proofFreshnessAdminProofPath,
 } from "./dev_test_game_next_action_paths.mjs";
 import {
+  assertDevTestGameProofRun,
+  buildDevTestGameProofRun,
+} from "./dev_test_game_proof_contract.mjs";
+import {
   localAdminAuditIds,
   localAdminAuditRoleUrl,
 } from "./dev_test_game_admin_audit_surface_ids.mjs";
@@ -103,6 +107,7 @@ export function buildDevTestGameSpineManifest({
   generatedAt = new Date().toISOString(),
   proofFreshness,
   adminSpineProof,
+  proofRunContract,
 } = {}) {
   const adminSpineRecoveryCommands = recoveryCommandsFromAdminSpineProof(adminSpineProof);
   const evidenceEnv = {
@@ -288,6 +293,7 @@ export function buildDevTestGameSpineManifest({
     evidenceEnv,
     artifactFreshness: buildArtifactFreshnessReport(proofFreshness, {
       recoveryCommands: adminSpineRecoveryCommands,
+      proofRunContract,
     }),
     terminalArtifacts: [
       {
@@ -900,15 +906,55 @@ export async function writeDevTestGameSpineManifest({
 } = {}) {
   const proofFreshness = await readLocalProofFreshness();
   const adminSpineProof = await readLocalAdminSpineProof();
+  const proofRunContract = await readProofRunContractStatus();
   const manifest = buildDevTestGameSpineManifest({
     generatedAt,
     proofFreshness,
     adminSpineProof,
+    proofRunContract,
   });
   await mkdir(path.dirname(manifestJsonPath), { recursive: true });
   await writeFile(manifestJsonPath, `${JSON.stringify(manifest, null, 2)}\n`);
   await writeFile(manifestMarkdownPath, markdownSpineManifest(manifest));
   return manifest;
+}
+
+async function readProofRunContractStatus({
+  proofPath = "target/dev-test-game/proof-run.json",
+  sessionPath = "target/dev-test-game/session.json",
+} = {}) {
+  try {
+    const [proof, session] = await Promise.all([
+      readJson(path.join(repoRoot, proofPath)),
+      readJson(path.join(repoRoot, sessionPath)),
+    ]);
+    assertDevTestGameProofRun(proof);
+    const expected = buildDevTestGameProofRun(session, {
+      generatedAt: proof.generatedAt,
+    });
+    if (JSON.stringify(proof) !== JSON.stringify(expected)) {
+      return {
+        status: "failed",
+        proofPath,
+        sessionPath,
+        reason: "proof-run-session-mismatch",
+        message: `${proofPath} is stale or does not match ${sessionPath}`,
+      };
+    }
+    return {
+      status: "passed",
+      proofPath,
+      sessionPath,
+    };
+  } catch (error) {
+    return {
+      status: "failed",
+      proofPath,
+      sessionPath,
+      reason: "proof-run-contract-error",
+      message: error?.message ?? String(error),
+    };
+  }
 }
 
 function assertPlanScripts(plan, expectedScripts) {
@@ -931,6 +977,10 @@ function cloneAdminProofPlan(plan) {
   return plan.map(({ id, label, script, path }) => ({ id, label, script, path }));
 }
 
+async function readJson(filePath) {
+  return JSON.parse(await readFile(filePath, "utf8"));
+}
+
 function envValues(env) {
   return Object.values(env ?? {}).filter((value) => typeof value === "string");
 }
@@ -939,51 +989,118 @@ function uniqueSorted(values) {
   return Array.from(new Set(values)).sort();
 }
 
-function buildArtifactFreshnessReport(proofFreshness, { recoveryCommands = new Map() } = {}) {
+function buildArtifactFreshnessReport(
+  proofFreshness,
+  { recoveryCommands = new Map(), proofRunContract } = {},
+) {
   if (proofFreshness === undefined || proofFreshness === null) {
     return {
-      status: "unknown",
+      status: proofRunContract?.status === "failed" ? "blocked" : "unknown",
       proof: "dev-test-game-proof-freshness",
       proofCommand: proofFreshnessAdminProofCommand,
       proofArtifact: proofFreshnessAdminProofPath,
-      nextCommand: proofFreshnessAdminProofCommand,
+      nextCommand:
+        proofRunContract?.status === "failed"
+          ? artifactRefreshCommands["proof-run"]
+          : proofFreshnessAdminProofCommand,
       proofBoundary:
         "No local proof freshness dashboard was readable while generating this manifest.",
-      artifacts: [],
+      proofRunContract,
+      summary: artifactFreshnessSummary(
+        proofRunContract?.status === "failed"
+          ? [proofRunContractArtifact(proofRunContract)]
+          : [],
+      ),
+      artifacts:
+        proofRunContract?.status === "failed"
+          ? [proofRunContractArtifact(proofRunContract)]
+          : [],
     };
   }
-  const artifacts = (proofFreshness.artifacts ?? []).map((artifact) => {
-    const recoveryCommand = recoveryCommands.get(artifact.id) ?? recoveryCommands.get(artifact.path);
-    const refreshCommand = recoveryCommand ?? refreshCommandForArtifact(artifact);
-    return {
-      id: artifact.id,
-      label: artifact.label,
-      path: artifact.path,
-      status: artifact.status,
-      ...(artifact.mtime === undefined ? {} : { mtime: artifact.mtime }),
-      ...(artifact.ageSeconds === undefined ? {} : { ageSeconds: artifact.ageSeconds }),
-      ...(artifact.maxAgeSeconds === undefined
-        ? {}
-        : { maxAgeSeconds: artifact.maxAgeSeconds }),
-      refreshCommand,
-      refreshSource: recoveryCommand === undefined ? "manifest-default" : "admin-spine-recovery",
-      ...(artifact.status === "fresh" ? {} : { nextCommand: refreshCommand }),
-    };
-  });
+  const artifacts = applyProofRunContract(
+    (proofFreshness.artifacts ?? []).map((artifact) => {
+      const recoveryCommand =
+        recoveryCommands.get(artifact.id) ?? recoveryCommands.get(artifact.path);
+      const refreshCommand = recoveryCommand ?? refreshCommandForArtifact(artifact);
+      return {
+        id: artifact.id,
+        label: artifact.label,
+        path: artifact.path,
+        status: artifact.status,
+        ...(artifact.mtime === undefined ? {} : { mtime: artifact.mtime }),
+        ...(artifact.ageSeconds === undefined
+          ? {}
+          : { ageSeconds: artifact.ageSeconds }),
+        ...(artifact.maxAgeSeconds === undefined
+          ? {}
+          : { maxAgeSeconds: artifact.maxAgeSeconds }),
+        refreshCommand,
+        refreshSource:
+          recoveryCommand === undefined ? "manifest-default" : "admin-spine-recovery",
+        ...(artifact.status === "fresh" ? {} : { nextCommand: refreshCommand }),
+      };
+    }),
+    proofRunContract,
+  );
+  const status =
+    proofRunContract?.status === "failed" ? "blocked" : proofFreshness.status;
   return {
-    status: proofFreshness.status,
+    status,
     proof: proofFreshness.proof,
     generatedAt: proofFreshness.generatedAt,
     maxAgeHours: proofFreshness.maxAgeHours,
-    summary: { ...proofFreshness.summary },
+    summary: artifactFreshnessSummary(artifacts),
+    proofRunContract,
     proofCommand: proofFreshnessAdminProofCommand,
     proofArtifact: proofFreshnessAdminProofPath,
     nextCommand:
-      proofFreshness.status === "passed"
+      status === "passed"
         ? proofFreshnessAdminProofCommand
         : firstNextCommand(artifacts) ?? proofFreshnessAdminProofCommand,
     proofBoundary: proofFreshness.proofBoundary,
     artifacts,
+  };
+}
+
+function artifactFreshnessSummary(artifacts) {
+  return {
+    artifactCount: artifacts.length,
+    freshCount: artifacts.filter((artifact) => artifact.status === "fresh").length,
+    staleCount: artifacts.filter((artifact) => artifact.status === "stale").length,
+    missingCount: artifacts.filter((artifact) => artifact.status === "missing").length,
+  };
+}
+
+function applyProofRunContract(artifacts, proofRunContract) {
+  if (proofRunContract?.status !== "failed") {
+    return artifacts;
+  }
+  const proofRunIndex = artifacts.findIndex(
+    (artifact) =>
+      artifact.id === "proof-run" || artifact.path === proofRunContract.proofPath,
+  );
+  const staleArtifact = proofRunContractArtifact(proofRunContract);
+  if (proofRunIndex === -1) {
+    return [staleArtifact, ...artifacts];
+  }
+  return artifacts.map((artifact, index) =>
+    index === proofRunIndex ? { ...artifact, ...staleArtifact } : artifact,
+  );
+}
+
+function proofRunContractArtifact(proofRunContract) {
+  return {
+    id: "proof-run",
+    label: "Proof run and session contract",
+    path: proofRunContract.proofPath ?? "target/dev-test-game/proof-run.json",
+    status: "stale",
+    refreshCommand: artifactRefreshCommands["proof-run"],
+    refreshSource: "manifest-default",
+    nextCommand: artifactRefreshCommands["proof-run"],
+    contractStatus: proofRunContract.status,
+    contractReason: proofRunContract.reason,
+    contractMessage: proofRunContract.message,
+    sessionPath: proofRunContract.sessionPath,
   };
 }
 
