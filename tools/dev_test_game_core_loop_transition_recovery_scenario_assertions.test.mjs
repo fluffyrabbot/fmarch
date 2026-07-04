@@ -3,7 +3,12 @@ import { readFile } from "node:fs/promises";
 import { test } from "node:test";
 import {
   assertHostPhaseTransitionSurfaceProof,
+  assertLiveStaleD02VoteTransitionRecovery,
+  liveStaleD02VoteTransitionRecoveryProof,
 } from "./dev_test_game_core_loop_transition_recovery_scenario_assertions.mjs";
+import {
+  staleDayTwoVoteAfterTransitionRecoveryScenario,
+} from "./dev_test_game_core_loop_action_scenarios.mjs";
 
 test("core-loop proof and readiness share transition recovery assertions", async () => {
   const callerPaths = [
@@ -90,6 +95,59 @@ test("shared host phase transition surface assertion composes stale recovery cas
   );
 });
 
+test("shared live stale D02 vote transition assertion adapts raw browser evidence", () => {
+  const scenario = {
+    ...staleDayTwoVoteAfterTransitionRecoveryScenario(),
+    actorSlot: "slot_4",
+  };
+  const setup = liveStaleVoteSetupFixture();
+  const recovery = liveStaleVoteRecoveryFixture();
+  const proof = liveStaleD02VoteTransitionRecoveryProof({
+    setup,
+    recovery,
+    expectedGame: "game-a",
+    scenario,
+  });
+
+  assert.deepEqual(
+    {
+      actorSlot: proof.command.actor_slot,
+      targetSlot: proof.command.target.Slot,
+      phase: proof.projectionCommandState.phase.phaseId,
+      actionState: proof.checkpointActionStateAfterReject,
+      targetSlots: proof.checkpointTargetSlotsAfterReject,
+    },
+    {
+      actorSlot: "slot_4",
+      targetSlot: "slot-2",
+      phase: "N02",
+      actionState: "enabled:submit_action:factional_kill",
+      targetSlots: "slot-3",
+    },
+  );
+  assert.doesNotThrow(() =>
+    assertLiveStaleD02VoteTransitionRecovery({
+      setup,
+      recovery,
+      expectedGame: "game-a",
+      scenario,
+    }),
+  );
+  assert.throws(
+    () =>
+      assertLiveStaleD02VoteTransitionRecovery({
+        setup: {
+          ...setup,
+          closedStatus: { state: "open" },
+        },
+        recovery,
+        expectedGame: "game-a",
+        scenario,
+      }),
+    /stale D02 vote transition setup/,
+  );
+});
+
 function hostStaleAdvanceProofFixture() {
   return {
     status: "passed",
@@ -129,6 +187,56 @@ function hostStaleAdvanceProofFixture() {
     checkpointPhaseStateAfterReject: "open",
     checkpointDeadlineAffordanceAfterReject: "resolve_phase,lock_thread",
     activityStatusText: "Reject InvalidTarget: invalid target",
+  };
+}
+
+function liveStaleVoteSetupFixture() {
+  return {
+    commandState: {
+      actorSlot: "slot_4",
+      phase: { phaseId: "D02", locked: false },
+      voteTargets: [{ kind: "slot", slotId: "slot-2", label: "Slot 2" }],
+    },
+    voteButton: { action: "submit_vote", disabled: false, text: "Vote Slot 2" },
+    closedStatus: { state: "closed" },
+  };
+}
+
+function liveStaleVoteRecoveryFixture() {
+  return {
+    status: "passed",
+    reject: {
+      state: "reject",
+      error: "PhaseLocked",
+      message:
+        "Reject PhaseLocked: phase locked; stale vote state, refresh and use current vote controls",
+      requestEnvelope: {
+        body: {
+          body: {
+            command: {
+              SubmitVote: {
+                actor_slot: "slot_4",
+                target: { Slot: "slot-2" },
+              },
+            },
+          },
+        },
+      },
+    },
+    dispatchPlan: {
+      projectionRefreshKeys: ["votecount", "commandState", "dayVoteOutcomes"],
+    },
+    commandStateAfterReject: {
+      phase: { phaseId: "N02", locked: false },
+      actions: [{ templateId: "factional_kill", targets: ["slot-3"] }],
+      boundary: "Role-action availability is derived from committed state.",
+    },
+    currentReceipt: { state: "reject" },
+    receiptStatusText:
+      "Reject PhaseLocked: phase locked; stale vote state, refresh and use current vote controls",
+    buttonsAfterReject: [
+      { action: "submit_action:factional_kill", disabled: false },
+    ],
   };
 }
 

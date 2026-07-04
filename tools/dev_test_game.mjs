@@ -24,7 +24,11 @@ import {
 } from "./dev_test_game_replacement_private_scenario_cases.mjs";
 import {
   playerInvalidActionRecoveryMessage,
+  staleDayTwoVoteAfterTransitionRecoveryScenario,
 } from "./dev_test_game_core_loop_action_scenarios.mjs";
+import {
+  assertLiveStaleD02VoteTransitionRecovery,
+} from "./dev_test_game_core_loop_transition_recovery_scenario_assertions.mjs";
 import {
   coreLoopPrivateChannelCompletedPostLaneId,
   coreLoopPrivateChannelInvalidActionLaneId,
@@ -3991,6 +3995,17 @@ async function verifySeededD02VoteNightTransition({
         page: staleD02VoteTransitionPage,
         voteTarget,
       });
+    const staleD02VoteTransitionScenario = {
+      ...staleDayTwoVoteAfterTransitionRecoveryScenario(),
+      actorSlot: "slot_4",
+    };
+    assertLiveStaleD02VoteTransitionRecovery({
+      setup: staleD02VoteTransitionSetup,
+      recovery: staleD02VoteAfterTransition,
+      expectedGame: transitionGame,
+      scenario: staleD02VoteTransitionScenario,
+      includeEvidenceInError: true,
+    });
 
     if (
       resolveD02.commandStatus?.state !== "ack" ||
@@ -4033,28 +4048,7 @@ async function verifySeededD02VoteNightTransition({
       ) ||
       n02NormalPlayerSurface.commandState?.actorSlot !== "slot-7" ||
       n02NormalPlayerSurface.commandState?.phase?.phaseId !== "N02" ||
-      n02NormalPlayerSurface.factionalKillVisible !== false ||
-      staleD02VoteTransitionSetup.commandState?.phase?.phaseId !== "D02" ||
-      staleD02VoteTransitionSetup.voteButton?.action !== "submit_vote" ||
-      staleD02VoteTransitionSetup.closedStatus?.state !== "closed" ||
-      staleD02VoteAfterTransition.reject?.state !== "reject" ||
-      staleD02VoteAfterTransition.reject?.error !== "PhaseLocked" ||
-      !String(staleD02VoteAfterTransition.reject?.message ?? "").includes(
-        "stale vote state",
-      ) ||
-      staleD02VoteAfterTransition.commandStateAfterReject?.phase?.phaseId !==
-        "N02" ||
-      !staleD02VoteAfterTransition.buttonsAfterReject.some(
-        (button) =>
-          button.action === "submit_action:factional_kill" &&
-          button.disabled === false,
-      ) ||
-      !staleD02VoteAfterTransition.dispatchPlan?.projectionRefreshKeys?.includes(
-        "commandState",
-      ) ||
-      !staleD02VoteAfterTransition.receiptStatusText.includes(
-        "Reject PhaseLocked",
-      )
+      n02NormalPlayerSurface.factionalKillVisible !== false
     ) {
       throw new Error(
         `D02 vote/night transition drifted: ${JSON.stringify({

@@ -3,6 +3,7 @@ import {
   assertPlayerStaleVoteAfterTransitionProofCase,
 } from "./dev_test_game_core_loop_action_scenarios.mjs";
 import {
+  staleDayTwoVoteAfterTransitionRecoveryScenario,
   staleNightFourActionRecoveryScenario,
 } from "./dev_test_game_core_loop_action_scenario_cases.mjs";
 import {
@@ -175,6 +176,113 @@ export function assertStaleNightFourActionRecoveryProofCase({
       includeEvidenceInError,
     });
   }
+}
+
+export function liveStaleD02VoteTransitionRecoveryProof({
+  setup,
+  recovery,
+  expectedGame,
+  scenario = staleDayTwoVoteAfterTransitionRecoveryScenario(),
+}) {
+  const command = recovery?.reject?.requestEnvelope?.body?.body?.command?.SubmitVote;
+  const actorSlot = command?.actor_slot ?? setup?.commandState?.actorSlot;
+  const targetSlot = command?.target?.Slot ?? scenario.targetSlot;
+  const actionStateAfterReject = recovery?.buttonsAfterReject?.some(
+    (button) =>
+      button.action === "submit_action:factional_kill" &&
+      button.disabled === false,
+  )
+    ? "enabled:submit_action:factional_kill"
+    : "disabled:no legal action available";
+  const refreshedTargetSlots =
+    recovery?.commandStateAfterReject?.actions
+      ?.flatMap((action) => action.targets ?? [])
+      .filter((slot) => typeof slot === "string")
+      .join(",") || scenario.checkpointTargetSlots;
+  return {
+    status: recovery?.status ?? "passed",
+    clickedAction: scenario.clickedAction,
+    commandKind: scenario.commandKind,
+    setupResyncFromSeq: scenario.setupResyncFromSeq,
+    setupSnapshotCommandState: setup?.commandState,
+    command: {
+      game: expectedGame,
+      actor_slot: actorSlot,
+      target: { Slot: targetSlot },
+    },
+    commandStatus: recovery?.reject,
+    bridgePlan: {
+      role: "player",
+      commandKind: scenario.commandKind,
+      commandEndpoint: "/commands",
+      finalState: scenario.finalState,
+      projectionRefreshKeys:
+        recovery?.dispatchPlan?.projectionRefreshKeys ?? [],
+    },
+    receipts: [{ state: recovery?.reject?.state }],
+    projectionCommandState: {
+      ...recovery?.commandStateAfterReject,
+      boundary: transitionRecoveryBoundary({
+        boundary: recovery?.commandStateAfterReject?.boundary,
+        scenario,
+      }),
+    },
+    checkpointReceiptState:
+      recovery?.currentReceipt?.state === scenario.finalState
+        ? `${scenario.finalState}:${scenario.error}`
+        : scenario.checkpointReceiptState,
+    checkpointPhaseIdAfterReject:
+      recovery?.commandStateAfterReject?.phase?.phaseId,
+    checkpointActionStateAfterReject: actionStateAfterReject,
+    checkpointTargetSlotsAfterReject: refreshedTargetSlots,
+    recoveryText: recovery?.receiptStatusText,
+    receiptCount: scenario.receiptCount,
+    receiptStatusText: recovery?.receiptStatusText,
+  };
+}
+
+export function assertLiveStaleD02VoteTransitionRecovery({
+  setup,
+  recovery,
+  expectedGame,
+  scenario = staleDayTwoVoteAfterTransitionRecoveryScenario(),
+  includeEvidenceInError = false,
+}) {
+  const proof = liveStaleD02VoteTransitionRecoveryProof({
+    setup,
+    recovery,
+    expectedGame,
+    scenario,
+  });
+  if (
+    setup?.commandState?.phase?.phaseId !== scenario.setupPhaseId ||
+    setup?.voteButton?.action !== scenario.clickedAction ||
+    setup?.voteButton?.disabled !== false ||
+    setup?.closedStatus?.state !== "closed"
+  ) {
+    throwTransitionRecoveryAssertionError({
+      message: "core-loop live proof missing stale D02 vote transition setup",
+      evidence: { setup, scenario },
+      includeEvidenceInError,
+    });
+  }
+  assertPlayerStaleVoteAfterTransitionProofCase({
+    proof,
+    expectedGame,
+    scenario,
+    includeEvidenceInError,
+  });
+  return proof;
+}
+
+function transitionRecoveryBoundary({ boundary, scenario }) {
+  const rawBoundary = String(boundary ?? "");
+  if (rawBoundary.includes(scenario.refreshedBoundary)) {
+    return rawBoundary;
+  }
+  return [scenario.refreshedBoundary, rawBoundary]
+    .filter((value) => value.length > 0)
+    .join(": ");
 }
 
 function assertPhaseTransitionPlayerObservationProof({
