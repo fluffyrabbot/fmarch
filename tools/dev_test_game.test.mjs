@@ -5367,6 +5367,53 @@ test("session card and markdown include role credential URLs and tokens", async 
             },
           ],
         },
+        submitPostAckProof: {
+          status: "passed",
+          clickedAction: "submit_post",
+          commandKind: "SubmitPost",
+          command: {
+            game,
+            channel_id: "private:mafia_day_chat",
+            actor_slot: "slot-7",
+            body: "Stale private-channel post after D01 phase closure fixture.",
+          },
+          commandStatus: {
+            state: "ack",
+            message: "Ack: stream seqs 43",
+          },
+          bridgePlan: {
+            role: "player",
+            commandKind: "SubmitPost",
+            commandEndpoint: "/commands",
+            finalState: "ack",
+            projectionRefreshKeys: [
+              "thread",
+              "votecount",
+              "commandState",
+              "dayVoteOutcomes",
+            ],
+          },
+          receipts: [
+            {
+              actionId: "submit_post",
+              state: "ack",
+            },
+          ],
+          projectionThread: {
+            posts: [
+              {
+                body:
+                  "Stale private-channel post after D01 phase closure fixture.",
+              },
+            ],
+          },
+          privatePostBody:
+            "Stale private-channel post after D01 phase closure fixture.",
+          receiptCount: 1,
+          receiptStatusText: "Ack: stream seqs 43",
+          receiptRefreshKeys:
+            "thread,votecount,commandState,dayVoteOutcomes",
+        },
       },
       completedGameRecovery: {
         status: "passed",
@@ -5418,6 +5465,110 @@ test("session card and markdown include role credential URLs and tokens", async 
           ],
           reloadRejectedPostVisible: false,
           apiThreadPostBodiesAfterReload: [],
+        },
+        completedPostRejectProof: {
+          status: "passed",
+          clickedThroughFromRoleUrl: true,
+          rawInviteTokensVisible: false,
+          sourceRoleUrl:
+            `http://127.0.0.1:5173/g/${game}/c/private%3Amafia_day_chat`,
+          visitedRolePath: `/g/${game}/c/private%3Amafia_day_chat`,
+          clickedAction: "submit_post",
+          commandKind: "SubmitPost",
+          command: {
+            game,
+            channel_id: "private:mafia_day_chat",
+            actor_slot: "slot-7",
+            body: "Completed private-channel stale post fixture.",
+          },
+          commandStatus: {
+            state: "reject",
+            error: "GameAlreadyCompleted",
+            message: "Reject GameAlreadyCompleted: game already completed",
+          },
+          bridgePlan: {
+            role: "player",
+            commandKind: "SubmitPost",
+            commandEndpoint: "/commands",
+            finalState: "reject",
+            projectionRefreshKeys: [
+              "commandState",
+            ],
+          },
+          receipts: [
+            {
+              actionId: "submit_post",
+              state: "reject",
+            },
+          ],
+          stalePrivatePostBody: "Completed private-channel stale post fixture.",
+          submitDisabledBeforeReject: false,
+          snapshotAfterReject: {
+            checkpoint: {
+              phaseId: "D01",
+              phaseState: "open",
+              actorSlot: "slot-7",
+              actionState: "disabled:game complete",
+              receiptState: "reject:GameAlreadyCompleted",
+            },
+            commandPanelChannelId: "private:mafia_day_chat",
+            channelContext: {
+              channelId: "private:mafia_day_chat",
+              actorSlot: "slot-7",
+              capabilityLabel: "ChannelMember(private:mafia_day_chat)",
+              actorStatus: "alive",
+            },
+            commandState: {
+              actorSlot: "slot-7",
+              gameCompleted: true,
+              actions: [],
+              voteTargets: [],
+              boundary:
+                staleCompletedPrivatePostScenario().routeBoundary,
+            },
+            threadPostBodies: ["Completed private channel remains readable."],
+            buttons: [
+              { action: "withdraw_vote", disabled: true, reason: "" },
+              { action: "submit_post", disabled: true, reason: "" },
+            ],
+            enabledMutatingButtons: [],
+          },
+          snapshotAfterReload: {
+            checkpoint: {
+              phaseId: "D01",
+              phaseState: "open",
+              actorSlot: "slot-7",
+              actionState: "disabled:game complete",
+              receiptState: "reject:GameAlreadyCompleted",
+            },
+            commandPanelChannelId: "private:mafia_day_chat",
+            channelContext: {
+              channelId: "private:mafia_day_chat",
+              actorSlot: "slot-7",
+              capabilityLabel: "ChannelMember(private:mafia_day_chat)",
+              actorStatus: "alive",
+            },
+            commandState: {
+              actorSlot: "slot-7",
+              gameCompleted: true,
+              actions: [],
+              voteTargets: [],
+              boundary:
+                staleCompletedPrivatePostScenario().routeBoundary,
+            },
+            threadPostBodies: ["Completed private channel remains readable."],
+            buttons: [
+              { action: "withdraw_vote", disabled: true, reason: "" },
+              { action: "submit_post", disabled: true, reason: "" },
+            ],
+            enabledMutatingButtons: [],
+          },
+          reloadedResyncSnapshotCommandState: {
+            gameCompleted: true,
+          },
+          receiptStatusText:
+            "Reject GameAlreadyCompleted: game already completed",
+          receiptRefreshKeys: "commandState",
         },
       },
     },
@@ -10207,6 +10358,38 @@ test("session card and markdown include role credential URLs and tokens", async 
   assert.equal(proofRun.identityBootstrap.rootSessionSource, "auth_session");
   assert.equal(proofRun.productionReady, false);
   assert.equal(proofRun.releaseReady, false);
+  const stalePrivatePostLane = proofRun.lanes.find(
+    (lane) => lane.id === coreLoopPrivateChannelStalePostLaneId,
+  );
+  assert.equal(stalePrivatePostLane.status, "passed");
+  assert.equal(
+    stalePrivatePostLane.evidence.normalizedProofStatus,
+    "passed",
+  );
+  assert.equal(
+    stalePrivatePostLane.evidence.submitPostAckProof.command.channel_id,
+    "private:mafia_day_chat",
+  );
+  assert.equal(
+    stalePrivatePostLane.evidence.submitPostAckProof.receiptRefreshKeys,
+    "thread,votecount,commandState,dayVoteOutcomes",
+  );
+  const completedPrivatePostLane = proofRun.lanes.find(
+    (lane) => lane.id === coreLoopPrivateChannelCompletedPostLaneId,
+  );
+  assert.equal(completedPrivatePostLane.status, "passed");
+  assert.equal(
+    completedPrivatePostLane.evidence.normalizedProofStatus,
+    "passed",
+  );
+  assert.equal(
+    completedPrivatePostLane.evidence.completedPostRejectProof.commandStatus.error,
+    "GameAlreadyCompleted",
+  );
+  assert.equal(
+    completedPrivatePostLane.evidence.completedPostRejectProof.receiptRefreshKeys,
+    "commandState",
+  );
   for (const descriptor of recoveryReceiptGraphDescriptors) {
     const receipt = descriptor.buildReceipt(proofRun, {
       generatedAt: "2026-06-26T00:00:00.000Z",

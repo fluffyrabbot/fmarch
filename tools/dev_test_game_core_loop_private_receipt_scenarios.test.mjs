@@ -337,6 +337,10 @@ test("private-channel production harness callers use shared scenario definitions
     "tools/dev_test_game_release_readiness.mjs",
     "utf8",
   );
+  const proofContractSource = await readFile(
+    "tools/dev_test_game_proof_contract.mjs",
+    "utf8",
+  );
   const assertionFacadeSource = await readFile(
     "tools/dev_test_game_core_loop_private_receipt_scenarios.mjs",
     "utf8",
@@ -372,6 +376,18 @@ test("private-channel production harness callers use shared scenario definitions
       "./dev_test_game_core_loop_private_receipt_scenarios.mjs",
     ),
     "release readiness should keep using the private-channel assertion facade",
+  );
+  assert(
+    proofContractSource.includes(
+      "./dev_test_game_core_loop_private_receipt_scenarios.mjs",
+    ) &&
+      proofContractSource.includes("assertPrivateChannelSubmitPostProofCase") &&
+      proofContractSource.includes(
+        "assertStaleCompletedPrivatePostRecoveryProofCase",
+      ) &&
+      proofContractSource.includes("submitPostAckProof") &&
+      proofContractSource.includes("completedPostRejectProof"),
+    "proof contract should assert normalized private-channel live proof objects",
   );
   assert(
     assertionFacadeSource.includes(

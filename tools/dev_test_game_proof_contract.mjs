@@ -118,6 +118,12 @@ import {
   replacementResolvedPrivatePostReconnectMatches,
 } from "./dev_test_game_replacement_private_post_assertions.mjs";
 import {
+  assertPrivateChannelSubmitPostProofCase,
+  assertStaleCompletedPrivatePostRecoveryProofCase,
+  completedPrivateChannelReloadScenario,
+  privateChannelSubmitPostScenario,
+} from "./dev_test_game_core_loop_private_receipt_scenarios.mjs";
+import {
   assertCoreLoopPrivateChannelRecoveryCoverageSummary,
   buildCoreLoopPrivateChannelRecoveryCoverageSummary,
   coreLoopPrivateChannelCompletedPostLaneId,
@@ -229,6 +235,18 @@ export function buildDevTestGameProofRun(session, options = {}) {
   const staleActionReconnectExpectation = stalePlayerActionReconnectExpectation();
   const privateStaleActionReconnectExpectation =
     privateChannelStaleActionReconnectExpectation();
+  const privateChannelSubmitPostAckProof =
+    verification.privateChannel?.stalePostAfterPhaseTransition?.submitPostAckProof;
+  const privateChannelCompletedPostRejectProof =
+    verification.privateChannel?.completedGameRecovery?.completedPostRejectProof;
+  const privateChannelSubmitPostAckProofPassed =
+    normalizedPrivateChannelSubmitPostAckProofPassed(
+      privateChannelSubmitPostAckProof,
+    );
+  const privateChannelCompletedPostRejectProofPassed =
+    normalizedCompletedPrivateChannelPostRejectProofPassed(
+      privateChannelCompletedPostRejectProof,
+    );
   const lanes = [
     lane("browser-entry", "Role URLs open verified browser sessions", {
       roles: verification.roles ?? [],
@@ -1206,9 +1224,12 @@ export function buildDevTestGameProofRun(session, options = {}) {
         projectedPostBody:
           verification.privateChannel?.stalePostAfterPhaseTransition
             ?.projectedPost?.body ?? null,
+        normalizedProofStatus: privateChannelSubmitPostAckProof?.status ?? null,
+        submitPostAckProof: privateChannelSubmitPostAckProof ?? null,
         passed:
           verification.privateChannel?.stalePostAfterPhaseTransition?.status ===
             "passed" &&
+          privateChannelSubmitPostAckProofPassed &&
           verification.privateChannel?.stalePostAfterPhaseTransition?.laneId ===
             coreLoopPrivateChannelStalePostLaneId &&
           verification.privateChannel?.stalePostAfterPhaseTransition?.channel ===
@@ -1281,9 +1302,13 @@ export function buildDevTestGameProofRun(session, options = {}) {
         reloadRejectedPostVisible:
           verification.privateChannel?.completedGameRecovery?.reloadAfterReject
             ?.reloadRejectedPostVisible ?? null,
+        normalizedProofStatus:
+          privateChannelCompletedPostRejectProof?.status ?? null,
+        completedPostRejectProof: privateChannelCompletedPostRejectProof ?? null,
         passed:
           verification.privateChannel?.completedGameRecovery?.status ===
             "passed" &&
+          privateChannelCompletedPostRejectProofPassed &&
           verification.privateChannel?.completedGameRecovery?.laneId ===
             coreLoopPrivateChannelCompletedPostLaneId &&
           verification.privateChannel?.completedGameRecovery?.channel ===
@@ -6603,6 +6628,87 @@ export function assertDevTestGameProofRun(proof) {
     }
   }
   return proof;
+}
+
+function normalizedPrivateChannelSubmitPostAckProofPassed(proof) {
+  if (proof === null || typeof proof !== "object") {
+    return false;
+  }
+  const ackSeq = ackSeqFromCommandStatus(proof.commandStatus);
+  if (!Number.isInteger(ackSeq)) {
+    return false;
+  }
+  try {
+    assertPrivateChannelSubmitPostProofCase({
+      proof,
+      expectedGame: proof.command?.game,
+      scenario: {
+        ...privateChannelSubmitPostScenario(),
+        channelId: proof.command?.channel_id,
+        actorSlot: proof.command?.actor_slot,
+        postBody: proof.privatePostBody,
+        ackSeq,
+        expectedRefreshKeys: proof.bridgePlan?.projectionRefreshKeys ?? [],
+      },
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function normalizedCompletedPrivateChannelPostRejectProofPassed(proof) {
+  if (proof === null || typeof proof !== "object") {
+    return false;
+  }
+  const scenario = {
+    ...staleCompletedPrivatePostScenario(),
+    channelId: proof.command?.channel_id,
+    actorSlot: proof.command?.actor_slot,
+    stalePostBody: proof.stalePrivatePostBody,
+    expectedRefreshKeys: proof.bridgePlan?.projectionRefreshKeys ?? [],
+  };
+  try {
+    assertStaleCompletedPrivatePostRecoveryProofCase({
+      proof,
+      expectedGame: proof.command?.game,
+      sourceRoleUrl: proof.sourceRoleUrl,
+      visitedRolePath: proof.visitedRolePath,
+      scenario,
+      completedReloadScenario:
+        completedPrivateChannelReloadScenarioForNormalizedProof(proof, scenario),
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function completedPrivateChannelReloadScenarioForNormalizedProof(proof, scenario) {
+  const snapshot = proof.snapshotAfterReject ?? proof.snapshotAfterReload ?? {};
+  const base = completedPrivateChannelReloadScenario();
+  return {
+    ...base,
+    channelId: scenario.channelId,
+    actorSlot: scenario.actorSlot,
+    actorStatus: snapshot.channelContext?.actorStatus ?? base.actorStatus,
+    completedPhaseId: snapshot.checkpoint?.phaseId ?? base.completedPhaseId,
+    completedPhaseState:
+      snapshot.checkpoint?.phaseState ?? base.completedPhaseState,
+    completedActionState:
+      snapshot.checkpoint?.actionState ?? base.completedActionState,
+    completedThreadBody:
+      snapshot.threadPostBodies?.[0] ?? base.completedThreadBody,
+  };
+}
+
+function ackSeqFromCommandStatus(commandStatus) {
+  const streamSeq = commandStatus?.streamSeqs?.[0];
+  if (Number.isInteger(streamSeq)) {
+    return streamSeq;
+  }
+  const match = String(commandStatus?.message ?? "").match(/Ack: stream seqs (\d+)/);
+  return match === null ? undefined : Number.parseInt(match[1], 10);
 }
 
 function buildCompletedGameHardeningCoverage(lanes) {
