@@ -2,8 +2,10 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { test } from "node:test";
 import {
+  assertTerminalRecoveryBrowserProof,
   assertTerminalRecoveryCheckpointEvidence,
   terminalAdvanceRejectRecoveryHookId,
+  terminalRecoveryBrowserScenario,
   terminalRecoveryAdminCheckId,
   terminalRecoveryCheckpointCases,
   terminalRecoveryCompactStatus,
@@ -106,6 +108,121 @@ test("terminal recovery cases share feature rows and checkpoint expectations", (
     ],
   );
 });
+
+test("terminal recovery browser assertion owns D03 reject and reload proof shape", () => {
+  const scenario = terminalRecoveryBrowserScenario();
+  assert.deepEqual(scenario, {
+    expectedVotePrincipalUserId: "player-mira",
+    expectedVoteActorSlot: "slot-7",
+    expectedPhaseId: "D03",
+    expectedOutcomeStatus: "NoMajority",
+    expectedRejectError: "InvalidTarget",
+    expectedPromptId: "D03:revote:NoMajority",
+    expectedPromptLabel: "revote",
+    expectedPromptValue: "no_majority",
+  });
+  assert.doesNotThrow(() =>
+    assertTerminalRecoveryBrowserProof({
+      proof: terminalRecoveryBrowserProofFixture(),
+      scenario,
+    }),
+  );
+  assert.throws(
+    () =>
+      assertTerminalRecoveryBrowserProof({
+        proof: {
+          ...terminalRecoveryBrowserProofFixture(),
+          d03TerminalHostReloadAfterReject: {
+            ...terminalRecoveryBrowserProofFixture()
+              .d03TerminalHostReloadAfterReject,
+            phaseActions: ["advance_phase", "unlock_thread", "resolve_phase"],
+          },
+        },
+        scenario,
+      }),
+    /terminal reload controls mismatch/,
+  );
+});
+
+function terminalRecoveryBrowserProofFixture() {
+  const prompt = {
+    id: "D03:revote:NoMajority",
+    label: "revote",
+    status: "pending",
+    value: "no_majority",
+  };
+  const outcome = {
+    phaseId: "D03",
+    status: "NoMajority",
+    winnerSlot: null,
+    tallies: { "slot-4": 1 },
+  };
+  return {
+    d03TerminalVoteTarget: { slotId: "slot-4" },
+    d03TerminalVoteSubmission: {
+      state: "ack",
+      requestEnvelope: {
+        body: {
+          body: {
+            principal_user_id: "player-mira",
+            command: {
+              SubmitVote: {
+                actor_slot: "slot-7",
+                target: { Slot: "slot-4" },
+              },
+            },
+          },
+        },
+      },
+    },
+    d03TerminalPlayerAfterVote: {
+      commandState: { currentVote: { slotId: "slot-4" } },
+      currentVote: { hasVote: "true" },
+    },
+    d03TerminalApiVoteRow: { count: 1 },
+    resolveD03: { commandStatus: { state: "ack" } },
+    hostAfterResolveD03: {
+      phase: { id: "D03", locked: true },
+      promptActions: ["host_prompt:D03:continue"],
+    },
+    d03RevotePrompt: prompt,
+    d03RevotePromptActionId: "host_prompt:D03:continue",
+    d03TerminalDayVoteOutcome: outcome,
+    d03TerminalResolvedSlot: {
+      slot_id: "slot-4",
+      alive: true,
+      status: "alive",
+    },
+    d03TerminalAdvanceReject: {
+      commandStatus: { state: "reject", error: "InvalidTarget" },
+    },
+    hostAfterTerminalAdvanceReject: {
+      phase: { id: "D03", locked: true },
+      phaseActions: ["advance_phase"],
+    },
+    d03TerminalActivityStatusText:
+      "Reject InvalidTarget: stale phase state",
+    d03TerminalActivityRow: {
+      source: "outcome",
+      actionId: "advance_phase",
+      dispatchKind: "advance_phase",
+    },
+    d03TerminalDispatchPlan: { projectionRefreshKeys: ["host"] },
+    d03TerminalApiHostStateAfterReject: {
+      phase: { id: "D03", locked: true },
+    },
+    d03TerminalHostReloadAfterReject: {
+      routeResponseStatus: 200,
+      phase: { id: "D03", locked: true },
+      phaseActions: ["advance_phase", "unlock_thread"],
+      hostPrompts: [prompt],
+      promptActions: ["host_prompt:D03:continue"],
+      dayVoteOutcomes: [outcome],
+      outcomePanel: "D03 NoMajority",
+      apiPhase: { id: "D03", locked: true },
+    },
+  };
+}
 
 test("terminal recovery assertions cover the saved core-loop spine proof", async () => {
   const proofRun = JSON.parse(

@@ -40,6 +40,10 @@ import {
   revoteProgressionVoteActionId,
 } from "./dev_test_game_core_loop_revote_progression_scenarios.mjs";
 import {
+  assertTerminalRecoveryBrowserProof,
+  terminalRecoveryBrowserScenario,
+} from "./dev_test_game_core_loop_terminal_recovery_scenarios.mjs";
+import {
   createUnexpectedMediaResponseGuard,
 } from "./dev_test_game_media_response_guard.mjs";
 
@@ -3697,6 +3701,30 @@ async function verifySeededD02VoteNightTransition({
         .innerText(),
       apiPhase: d03TerminalApiHostStateAfterReject.phase,
     };
+    const terminalScenario = terminalRecoveryBrowserScenario();
+    assertTerminalRecoveryBrowserProof({
+      proof: {
+        d03TerminalVoteTarget,
+        d03TerminalVoteSubmission,
+        d03TerminalPlayerAfterVote,
+        d03TerminalApiVoteRow,
+        resolveD03,
+        hostAfterResolveD03,
+        d03RevotePrompt,
+        d03RevotePromptActionId,
+        d03TerminalDayVoteOutcome,
+        d03TerminalResolvedSlot,
+        d03TerminalAdvanceReject,
+        hostAfterTerminalAdvanceReject,
+        d03TerminalActivityStatusText,
+        d03TerminalActivityRow,
+        d03TerminalDispatchPlan,
+        d03TerminalApiHostStateAfterReject,
+        d03TerminalHostReloadAfterReject,
+      },
+      scenario: terminalScenario,
+      includeEvidenceInError: true,
+    });
     const d03RevotePromptResolution =
       d03RevotePromptActionId === null
         ? null
@@ -4360,155 +4388,6 @@ async function verifySeededD02VoteNightTransition({
       scenario: n03Scenario,
       includeEvidenceInError: true,
     });
-
-    if (
-      d03TerminalVoteSubmission?.state !== "ack" ||
-      d03TerminalVoteSubmission?.requestEnvelope?.body?.body?.principal_user_id !==
-        "player-mira" ||
-      d03TerminalVoteSubmission?.requestEnvelope?.body?.body?.command?.SubmitVote
-        ?.actor_slot !== "slot-7" ||
-      d03TerminalVoteSubmission?.requestEnvelope?.body?.body?.command?.SubmitVote
-        ?.target?.Slot !== d03TerminalVoteTarget.slotId ||
-      d03TerminalPlayerAfterVote.commandState?.currentVote?.slotId !==
-        d03TerminalVoteTarget.slotId ||
-      d03TerminalPlayerAfterVote.currentVote.hasVote !== "true" ||
-      d03TerminalApiVoteRow?.count === undefined ||
-      resolveD03.commandStatus?.state !== "ack" ||
-      hostAfterResolveD03.phase?.id !== "D03" ||
-      hostAfterResolveD03.phase?.locked !== true ||
-      d03RevotePrompt?.id !== "D03:revote:NoMajority" ||
-      d03RevotePrompt?.label !== "revote" ||
-      d03RevotePrompt?.status !== "pending" ||
-      d03RevotePrompt?.value !== "no_majority" ||
-      !hostAfterResolveD03.promptActions.includes(d03RevotePromptActionId) ||
-      d03TerminalDayVoteOutcome?.status !== "NoMajority" ||
-      d03TerminalDayVoteOutcome?.winnerSlot !== null ||
-      d03TerminalDayVoteOutcome?.tallies?.[d03TerminalVoteTarget.slotId] !== 1 ||
-      d03TerminalResolvedSlot?.slot_id !== d03TerminalVoteTarget.slotId ||
-      d03TerminalResolvedSlot?.alive !== true ||
-      d03TerminalResolvedSlot?.status !== "alive" ||
-      d03TerminalAdvanceReject.commandStatus?.state !== "reject" ||
-      d03TerminalAdvanceReject.commandStatus?.error !== "InvalidTarget" ||
-      hostAfterTerminalAdvanceReject.phase?.id !== "D03" ||
-      hostAfterTerminalAdvanceReject.phase?.locked !== true ||
-      !hostAfterTerminalAdvanceReject.phaseActions.includes("advance_phase") ||
-      !d03TerminalActivityStatusText.includes("Reject InvalidTarget") ||
-      !d03TerminalActivityStatusText.includes("stale phase state") ||
-      d03TerminalActivityRow.source !== "outcome" ||
-      d03TerminalActivityRow.actionId !== "advance_phase" ||
-      d03TerminalActivityRow.dispatchKind !== "advance_phase" ||
-      !d03TerminalDispatchPlan?.projectionRefreshKeys?.includes("host") ||
-      (d03TerminalApiHostStateAfterReject.phase?.id ??
-        d03TerminalApiHostStateAfterReject.phase?.phase_id) !== "D03" ||
-      d03TerminalApiHostStateAfterReject.phase?.locked !== true ||
-      d03TerminalHostReloadAfterReject.routeResponseStatus !== 200 ||
-      d03TerminalHostReloadAfterReject.phase?.id !== "D03" ||
-      d03TerminalHostReloadAfterReject.phase?.locked !== true ||
-      !d03TerminalHostReloadAfterReject.phaseActions.includes("advance_phase") ||
-      !d03TerminalHostReloadAfterReject.phaseActions.includes("unlock_thread") ||
-      d03TerminalHostReloadAfterReject.phaseActions.includes("resolve_phase") ||
-      d03TerminalHostReloadAfterReject.hostPrompts.find(
-        (prompt) => prompt.id === d03RevotePrompt.id,
-      )?.status !== "pending" ||
-      !d03TerminalHostReloadAfterReject.promptActions.includes(
-        d03RevotePromptActionId,
-      ) ||
-      !d03TerminalHostReloadAfterReject.dayVoteOutcomes.some(
-        (row) =>
-          row.phaseId === "D03" &&
-          row.status === "NoMajority" &&
-          row.winnerSlot === null &&
-          row.tallies?.[d03TerminalVoteTarget.slotId] === 1,
-      ) ||
-      !d03TerminalHostReloadAfterReject.outcomePanel.includes("D03 NoMajority") ||
-      (d03TerminalHostReloadAfterReject.apiPhase?.id ??
-        d03TerminalHostReloadAfterReject.apiPhase?.phase_id) !== "D03" ||
-      d03TerminalHostReloadAfterReject.apiPhase?.locked !== true
-    ) {
-      throw new Error(
-        `D03 revote boundary drifted: ${JSON.stringify({
-          transitionGame,
-          d03TerminalVoteTarget,
-          d03TerminalVoteButton,
-          d03TerminalVoteSubmission,
-          d03TerminalPlayerAfterVote,
-          d03TerminalApiVoteRow,
-          resolveD03,
-          hostAfterResolveD03,
-          d03RevotePrompt,
-          d03RevotePromptActionId,
-          d03TerminalDayVoteOutcome,
-          d03TerminalResolvedSlot,
-          d03TerminalAdvanceReject,
-          hostAfterTerminalAdvanceReject,
-          d03TerminalActivityStatusText,
-          d03TerminalActivityRow,
-          d03TerminalDispatchPlan,
-          d03TerminalApiHostStateAfterReject,
-          d03TerminalHostReloadAfterReject,
-          d03RevotePromptResolution,
-          hostAfterD03RevotePrompt,
-          actionAfterD03RevotePrompt,
-          normalAfterD03RevotePrompt,
-          apiPromptsAfterD03Revote,
-          d03RevoteBallotTarget,
-          d03RevoteNoLynchButton,
-          d03RevoteVoteSubmission,
-          d03RevoteActionAfterVote,
-          d03RevoteApiVotecountAfterVote,
-          d03RevoteApiNoLynchRow,
-          d03RevoteApiOriginalD03Row,
-          d03RevoteApiStaleD03NoLynchRow,
-          hostBeforeResolveD03R1,
-          resolveD03R1,
-          hostAfterResolveD03R1,
-          d03R1DayVoteOutcome,
-          d03R1RevotePrompt,
-          d03R1RevotePromptActionId,
-          apiPromptsAfterResolveD03R1,
-          d03R1RevotePromptResolution,
-          hostAfterD03R1RevotePrompt,
-          actionAfterD03R1RevotePrompt,
-          normalAfterD03R1RevotePrompt,
-          apiPromptsAfterD03R1Revote,
-          d03R2RevoteBallotTarget,
-          d03R2RevoteNoLynchButton,
-          d03R2RevoteVoteSubmission,
-          d03R2RevoteActionAfterVote,
-          d03R2RevoteApiVotecountAfterVote,
-          d03R2RevoteApiNoLynchRow,
-          d03R2RevoteApiOriginalD03Row,
-          d03R2RevoteApiD03R1NoLynchRow,
-          d03R2RevoteApiStaleD03NoLynchRow,
-          hostBeforeResolveD03R2,
-          resolveD03R2,
-          hostAfterResolveD03R2,
-          d03R2DayVoteOutcome,
-          d03R2RevotePrompt,
-          d03R2RevotePromptActionId,
-          apiPromptsAfterResolveD03R2,
-          d03R2NoLynchPolicyResolution,
-          hostAfterD03R2NoLynchPolicy,
-          actionAfterD03R2NoLynchPolicy,
-          normalAfterD03R2NoLynchPolicy,
-          apiPromptsAfterD03R2NoLynchPolicy,
-          d03R2StaleContinuePolicyActionId,
-          d03R2StaleContinuePolicySetup,
-          d03R2StaleContinuePolicyRecovery,
-          n03ActionTarget,
-          n03ActionSubmission,
-          n03ActionAfterSubmit,
-          hostBeforeResolveN03,
-          resolveN03,
-          hostAfterResolveN03,
-          n03ResolvedTargetSlot,
-          advanceD04,
-          d04HostSurface,
-          d04ActionSurface,
-          d04TargetSurface,
-        })}`,
-      );
-    }
 
     return {
       status: "passed",

@@ -1,6 +1,16 @@
 export const terminalRecoveryCycleId = "d03-n03";
 export const terminalRecoveryAdminCheckId = "core-loop";
 export const terminalAdvanceRejectRecoveryHookId = "d03TerminalAdvanceReject";
+export const terminalRecoveryBrowserScenarioDefinition = Object.freeze({
+  expectedVotePrincipalUserId: "player-mira",
+  expectedVoteActorSlot: "slot-7",
+  expectedPhaseId: "D03",
+  expectedOutcomeStatus: "NoMajority",
+  expectedRejectError: "InvalidTarget",
+  expectedPromptId: "D03:revote:NoMajority",
+  expectedPromptLabel: "revote",
+  expectedPromptValue: "no_majority",
+});
 
 const cloneCase = (scenario) => ({
   ...scenario,
@@ -97,6 +107,200 @@ export function terminalRecoveryFeatureSpineRows({
   );
 }
 
+export function terminalRecoveryBrowserScenario() {
+  return { ...terminalRecoveryBrowserScenarioDefinition };
+}
+
+export function assertTerminalRecoveryBrowserProof({
+  proof,
+  scenario = terminalRecoveryBrowserScenarioDefinition,
+  includeEvidenceInError = false,
+}) {
+  const submitVote =
+    proof?.d03TerminalVoteSubmission?.requestEnvelope?.body?.body?.command
+      ?.SubmitVote;
+  const targetSlot = proof?.d03TerminalVoteTarget?.slotId;
+  const checks = [
+    [
+      proof?.d03TerminalVoteSubmission?.state === "ack",
+      "terminal vote did not ack",
+    ],
+    [
+      proof?.d03TerminalVoteSubmission?.requestEnvelope?.body?.body
+        ?.principal_user_id === scenario.expectedVotePrincipalUserId,
+      "terminal vote principal mismatch",
+    ],
+    [
+      submitVote?.actor_slot === scenario.expectedVoteActorSlot,
+      "terminal vote actor slot mismatch",
+    ],
+    [
+      submitVote?.target?.Slot === targetSlot,
+      "terminal vote target mismatch",
+    ],
+    [
+      proof?.d03TerminalPlayerAfterVote?.commandState?.currentVote?.slotId ===
+        targetSlot,
+      "terminal current vote target mismatch",
+    ],
+    [
+      proof?.d03TerminalPlayerAfterVote?.currentVote?.hasVote === "true",
+      "terminal current vote missing",
+    ],
+    [
+      proof?.d03TerminalApiVoteRow?.count !== undefined,
+      "terminal API vote row missing",
+    ],
+    [
+      proof?.resolveD03?.commandStatus?.state === "ack",
+      "terminal D03 resolve did not ack",
+    ],
+    [
+      proof?.hostAfterResolveD03?.phase?.id === scenario.expectedPhaseId,
+      "terminal host resolved phase mismatch",
+    ],
+    [
+      proof?.hostAfterResolveD03?.phase?.locked === true,
+      "terminal host resolved lock mismatch",
+    ],
+    [
+      proof?.d03RevotePrompt?.id === scenario.expectedPromptId &&
+        proof?.d03RevotePrompt?.label === scenario.expectedPromptLabel &&
+        proof?.d03RevotePrompt?.status === "pending" &&
+        proof?.d03RevotePrompt?.value === scenario.expectedPromptValue,
+      "terminal revote prompt mismatch",
+    ],
+    [
+      proof?.hostAfterResolveD03?.promptActions?.includes(
+        proof?.d03RevotePromptActionId,
+      ),
+      "terminal revote prompt action missing",
+    ],
+    [
+      proof?.d03TerminalDayVoteOutcome?.status ===
+        scenario.expectedOutcomeStatus &&
+        proof?.d03TerminalDayVoteOutcome?.winnerSlot === null &&
+        proof?.d03TerminalDayVoteOutcome?.tallies?.[targetSlot] === 1,
+      "terminal outcome mismatch",
+    ],
+    [
+      proof?.d03TerminalResolvedSlot?.slot_id === targetSlot &&
+        proof?.d03TerminalResolvedSlot?.alive === true &&
+        proof?.d03TerminalResolvedSlot?.status === "alive",
+      "terminal resolved slot mismatch",
+    ],
+    [
+      proof?.d03TerminalAdvanceReject?.commandStatus?.state === "reject" &&
+        proof?.d03TerminalAdvanceReject?.commandStatus?.error ===
+          scenario.expectedRejectError,
+      "terminal advance rejection mismatch",
+    ],
+    [
+      proof?.hostAfterTerminalAdvanceReject?.phase?.id ===
+        scenario.expectedPhaseId &&
+        proof?.hostAfterTerminalAdvanceReject?.phase?.locked === true,
+      "terminal post-reject host phase mismatch",
+    ],
+    [
+      proof?.hostAfterTerminalAdvanceReject?.phaseActions?.includes(
+        "advance_phase",
+      ),
+      "terminal post-reject advance control missing",
+    ],
+    [
+      String(proof?.d03TerminalActivityStatusText ?? "").includes(
+        "Reject InvalidTarget",
+      ) &&
+        String(proof?.d03TerminalActivityStatusText ?? "").includes(
+          "stale phase state",
+        ),
+      "terminal rejection receipt text mismatch",
+    ],
+    [
+      proof?.d03TerminalActivityRow?.source === "outcome" &&
+        proof?.d03TerminalActivityRow?.actionId === "advance_phase" &&
+        proof?.d03TerminalActivityRow?.dispatchKind === "advance_phase",
+      "terminal rejection activity row mismatch",
+    ],
+    [
+      proof?.d03TerminalDispatchPlan?.projectionRefreshKeys?.includes("host"),
+      "terminal rejection refresh keys missing host",
+    ],
+    [
+      phaseId(proof?.d03TerminalApiHostStateAfterReject?.phase) ===
+        scenario.expectedPhaseId &&
+        proof?.d03TerminalApiHostStateAfterReject?.phase?.locked === true,
+      "terminal API host state mismatch",
+    ],
+    [
+      proof?.d03TerminalHostReloadAfterReject?.routeResponseStatus === 200,
+      "terminal reload response mismatch",
+    ],
+    [
+      proof?.d03TerminalHostReloadAfterReject?.phase?.id ===
+        scenario.expectedPhaseId &&
+        proof?.d03TerminalHostReloadAfterReject?.phase?.locked === true,
+      "terminal reload phase mismatch",
+    ],
+    [
+      proof?.d03TerminalHostReloadAfterReject?.phaseActions?.includes(
+        "advance_phase",
+      ) &&
+        proof?.d03TerminalHostReloadAfterReject?.phaseActions?.includes(
+          "unlock_thread",
+        ) &&
+        !proof?.d03TerminalHostReloadAfterReject?.phaseActions?.includes(
+          "resolve_phase",
+        ),
+      "terminal reload controls mismatch",
+    ],
+    [
+      promptStatus(
+        proof?.d03TerminalHostReloadAfterReject?.hostPrompts,
+        proof?.d03RevotePrompt?.id,
+      ) === "pending",
+      "terminal reload prompt status mismatch",
+    ],
+    [
+      proof?.d03TerminalHostReloadAfterReject?.promptActions?.includes(
+        proof?.d03RevotePromptActionId,
+      ),
+      "terminal reload prompt action missing",
+    ],
+    [
+      proof?.d03TerminalHostReloadAfterReject?.dayVoteOutcomes?.some(
+        (row) =>
+          row.phaseId === scenario.expectedPhaseId &&
+          row.status === scenario.expectedOutcomeStatus &&
+          row.winnerSlot === null &&
+          row.tallies?.[targetSlot] === 1,
+      ),
+      "terminal reload outcome missing",
+    ],
+    [
+      String(proof?.d03TerminalHostReloadAfterReject?.outcomePanel ?? "").includes(
+        "D03 NoMajority",
+      ),
+      "terminal reload outcome panel mismatch",
+    ],
+    [
+      phaseId(proof?.d03TerminalHostReloadAfterReject?.apiPhase) ===
+        scenario.expectedPhaseId &&
+        proof?.d03TerminalHostReloadAfterReject?.apiPhase?.locked === true,
+      "terminal reload API phase mismatch",
+    ],
+  ];
+  for (const [passed, message] of checks) {
+    if (!passed) {
+      throwTerminalRecoveryAssertionError({
+        message,
+        evidence: proof,
+        includeEvidenceInError,
+      });
+    }
+  }
+}
+
 export function terminalRecoveryCompactStatus(cycle) {
   const terminal = checkpointById(
     cycle,
@@ -169,6 +373,17 @@ function featureRowFromCase(scenario, { cycleId }) {
 
 function checkpointById(cycle, id) {
   return cycle?.checkpoints?.find((checkpoint) => checkpoint.id === id) ?? null;
+}
+
+function phaseId(phase) {
+  return phase?.id ?? phase?.phase_id;
+}
+
+function promptStatus(prompts, promptId) {
+  return Array.isArray(prompts)
+    ? prompts.find((prompt) => (prompt.id ?? prompt.prompt_id) === promptId)
+        ?.status
+    : undefined;
 }
 
 function throwTerminalRecoveryAssertionError({
