@@ -3161,11 +3161,8 @@ async function proveCompletedDeadPlayerStaleVoteRecovery({
       state: "visible",
       timeout: 15000,
     });
-    const setupResyncSnapshot = await page.evaluate(async () => {
-      if (typeof window.__fmarchTriggerPlayerResync !== "function") {
-        throw new Error("player resync hook is unavailable");
-      }
-      return window.__fmarchTriggerPlayerResync(921);
+    const setupResyncSnapshot = await triggerPlayerResync(page, 921, {
+      unavailableMessage: "player resync hook is unavailable",
     });
     await page.waitForFunction(
       (expectedSlot) =>
@@ -3205,11 +3202,8 @@ async function proveCompletedDeadPlayerStaleVoteRecovery({
       },
       { expectedGame, scenario },
     );
-    const recoveryResyncSnapshot = await page.evaluate(async () => {
-      if (typeof window.__fmarchTriggerPlayerResync !== "function") {
-        throw new Error("player resync hook is unavailable after reject");
-      }
-      return window.__fmarchTriggerPlayerResync(921);
+    const recoveryResyncSnapshot = await triggerPlayerResync(page, 921, {
+      unavailableMessage: "player resync hook is unavailable after reject",
     });
     await page.waitForFunction(
       () =>
@@ -3255,6 +3249,26 @@ async function proveCompletedDeadPlayerStaleVoteRecovery({
   } finally {
     await page.close();
   }
+}
+
+async function triggerPlayerResync(
+  page,
+  fromSeq,
+  { unavailableMessage = "player resync hook is unavailable" } = {},
+) {
+  try {
+    await page.waitForFunction(
+      () => typeof window.__fmarchTriggerPlayerResync === "function",
+      null,
+      { timeout: 15000 },
+    );
+  } catch {
+    throw new Error(unavailableMessage);
+  }
+  return await page.evaluate(
+    async (seq) => window.__fmarchTriggerPlayerResync(seq),
+    fromSeq,
+  );
 }
 
 async function proveNightFourPlayerActionSubmission({
