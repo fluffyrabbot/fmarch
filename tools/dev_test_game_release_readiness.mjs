@@ -120,13 +120,11 @@ import {
 } from "./dev_test_game_admin_audit_surface_ids.mjs";
 import {
   assertCompletedGameProofReadinessSurfaceProof,
+  completedGameHardeningSpineCycleId,
+  completedGameHardeningSpineLaneCases,
   completedGameProofReadinessScenarioFamilies,
   completedGameStaleRecoverySpineLaneCase,
 } from "./dev_test_game_core_loop_completed_game_proof_readiness_contract.mjs";
-import {
-  completedGameHardeningSpineCycleId,
-  completedGameHardeningSpineLaneCases,
-} from "./dev_test_game_core_loop_completed_game_cases.mjs";
 import {
   assertPlayerStaleActionAfterTransitionProofCase,
   assertPlayerStaleVoteAfterTransitionProofCase,

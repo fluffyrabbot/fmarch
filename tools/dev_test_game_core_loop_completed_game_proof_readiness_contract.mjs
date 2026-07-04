@@ -13,9 +13,16 @@ import {
 } from "./dev_test_game_core_loop_completed_game_shared_recovery_scenarios.mjs";
 import {
   completedGameHardeningLaneIds,
+  completedGameHardeningLaneCases,
+  completedGameHardeningSpineCycleId,
+  completedGameHardeningSpineLaneCases,
 } from "./dev_test_game_core_loop_completed_game_cases.mjs";
 
 export {
+  completedGameHardeningLaneCases,
+  completedGameHardeningLaneIds,
+  completedGameHardeningSpineCycleId,
+  completedGameHardeningSpineLaneCases,
   completedGameStaleRecoverySpineLaneCase,
   completedHostStaleCommandCases,
   completedPlayerReloadCases,

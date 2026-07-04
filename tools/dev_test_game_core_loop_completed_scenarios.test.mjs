@@ -367,6 +367,13 @@ test("completed-game scenario module derives shared hardening lane groups", () =
 test("completed-game production harness callers share extracted recovery cases", async () => {
   const scenarioCallerPaths = new Map([
     [
+      "tools/dev_test_game_proof_contract.mjs",
+      [
+        "completedGameHardeningLaneCases",
+        "completedGameHardeningLaneIds",
+      ],
+    ],
+    [
       "tools/dev_test_game_core_loop_admin_proof.mjs",
       [
         "assertCompletedGameProofReadinessSurfaceProof",
@@ -379,7 +386,16 @@ test("completed-game production harness callers share extracted recovery cases",
       "tools/dev_test_game_release_readiness.mjs",
       [
         "assertCompletedGameProofReadinessSurfaceProof",
+        "completedGameHardeningSpineCycleId",
+        "completedGameHardeningSpineLaneCases",
         "completedGameProofReadinessScenarioFamilies",
+      ],
+    ],
+    [
+      "tools/dev_test_game_release_readiness_cases.mjs",
+      [
+        "completedGameHardeningSpineCycleId",
+        "completedGameStaleRecoverySpineLaneCase",
       ],
     ],
   ]);
@@ -534,10 +550,10 @@ test("completed-game production harness callers share extracted recovery cases",
     "utf8",
   );
   assert(
-    proofContractSource.includes(
+    !proofContractSource.includes(
       "./dev_test_game_core_loop_completed_game_scenario_assertions.mjs",
     ),
-    "proof contract should keep using the completed-game public scenario facade",
+    "proof contract should not import completed-game proof/readiness lane metadata through the older scenario facade",
   );
 
   const proofReadinessContractSource = await readFile(

@@ -38,8 +38,6 @@ import {
 } from "./dev_test_game_hardening_feature_spine_targets.mjs";
 import {
   completedGameHardeningSpineCycleId,
-} from "./dev_test_game_core_loop_completed_game_cases.mjs";
-import {
   completedGameStaleRecoverySpineLaneCase,
 } from "./dev_test_game_core_loop_completed_game_proof_readiness_contract.mjs";
 import {

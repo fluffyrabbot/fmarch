@@ -4,7 +4,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import {
   completedGameHardeningLaneCases,
   completedGameHardeningLaneIds,
-} from "./dev_test_game_core_loop_completed_game_scenario_assertions.mjs";
+} from "./dev_test_game_core_loop_completed_game_proof_readiness_contract.mjs";
 import {
   crossRoleRaceLaneIds,
 } from "./dev_test_game_cross_role_race_scenarios.mjs";
