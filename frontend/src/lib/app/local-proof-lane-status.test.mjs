@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import { test } from "node:test";
 import {
   completedGameSeedRequiredScenarioIds,
@@ -141,6 +142,23 @@ test("core loop highlighted completed-game lanes come from shared scenarios", ()
   assert.deepEqual(
     CORE_LOOP_COMPLETED_GAME_HIGHLIGHTED_LANE_IDS,
     completedGameSeedRequiredScenarioIds(),
+  );
+});
+
+test("completed-game lane status is keyed by shared metadata, not lane literals", async () => {
+  const source = await readFile(
+    new URL("./local-proof-lane-status.mjs", import.meta.url),
+    "utf8",
+  );
+  for (const laneId of completedGameSeedRequiredScenarioIds()) {
+    assert(
+      !source.includes(`case "${laneId}"`),
+      `completed-game status should not switch directly on ${laneId}`,
+    );
+  }
+  assert(
+    source.includes("completedGameHardeningLaneCases"),
+    "completed-game status should resolve shared hardening lane cases",
   );
 });
 

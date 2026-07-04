@@ -260,6 +260,7 @@ test("host console route data uses host prompt and votecount cold-loads when ava
       phaseId: "D01",
       subjectSlot: "slot_2",
       decisionKind: "acknowledge",
+      metadata: {},
     },
   ]);
   assert.equal(

@@ -1,4 +1,5 @@
 import {
+  completedGameHardeningLaneCases,
   completedGameSeedRequiredScenarioIds,
 } from "../../../../tools/dev_test_game_core_loop_completed_scenarios.mjs";
 import {
@@ -54,6 +55,10 @@ const CORE_LOOP_FOUNDATION_HIGHLIGHTED_LANE_IDS = Object.freeze([
   "private-channel",
 ]);
 
+const COMPLETED_GAME_HARDENING_LANE_CASES_BY_ID = new Map(
+  completedGameHardeningLaneCases().map((scenario) => [scenario.id, scenario]),
+);
+
 export const CORE_LOOP_COMPLETED_GAME_HIGHLIGHTED_LANE_IDS = Object.freeze([
   ...completedGameSeedRequiredScenarioIds(),
 ]);
@@ -106,6 +111,14 @@ export function hardeningHighlightedLaneEvidence(proofRun) {
 export function coreLoopLaneStatus(lane) {
   const status = laneStatus(lane);
   const evidence = laneEvidence(lane);
+  const completedGameStatus = completedGameCoreLoopLaneStatus({
+    lane,
+    status,
+    evidence,
+  });
+  if (completedGameStatus !== null) {
+    return completedGameStatus;
+  }
   switch (lane?.id) {
     case "core-loop":
       return `${status}: ${String(evidence.rejectedVoteError ?? "unknown")} vote receipt, unchanged ${String(evidence.staleVoteVotecountUnchanged ?? "unknown")}, lock ${String(evidence.lockState ?? "unknown")}/unlock ${String(evidence.unlockState ?? "unknown")}`;
@@ -121,20 +134,6 @@ export function coreLoopLaneStatus(lane) {
       return `${status}: ${String(evidence.channel ?? "unknown")}, denied ${String(evidence.deniedStatus ?? "unknown")}`;
     case "resolution-receipts":
       return `${status}: ${String(evidence.targetNoticeStatus ?? "unknown")} receipt, target ${String(evidence.targetSlot ?? "unknown")}`;
-    case "stale-host-complete-reload":
-      return `${status}: ${String(evidence.rejectReceipt ?? "unknown")}, revealed ${String(evidence.revealedSlots ?? "unknown")}, complete visible ${String(evidence.completeActionVisible ?? "unknown")}`;
-    case "stale-host-complete-reconnect-recovery":
-      return `${status}: ${String(evidence.reconnectingState ?? "unknown")} -> ${String(evidence.recoveryState ?? "unknown")}, completed ${String(evidence.recoveredCompleted ?? "unknown")}, revealed ${String(evidence.revealedSlots ?? "unknown")}`;
-    case "concurrent-host-complete-race":
-      return `${status}: reject ${String(evidence.rejectError ?? "unknown")}, completed ${String(evidence.apiCompleted ?? "unknown")}, revealed ${String(evidence.apiRevealedSlots ?? "unknown")}`;
-    case "concurrent-host-complete-race-reload":
-      return `${status}: completed ${String(evidence.apiCompleted ?? "unknown")}, revealed ${String(evidence.firstRevealedSlots ?? "unknown")}/${String(evidence.secondRevealedSlots ?? "unknown")}`;
-    case "concurrent-player-complete-race":
-      return `${status}: post ${String(evidence.postError ?? "unknown")}, completed ${String(evidence.apiCompleted ?? "unknown")}, thread post ${String(evidence.apiThreadHasPost ?? "unknown")}`;
-    case "public-player-complete-reload":
-      return `${status}: completed ${String(evidence.gameCompleted ?? "unknown")}, posts ${String(evidence.reloadPostCount ?? "unknown")}`;
-    case "stale-player-complete-reload":
-      return `${status}: completed ${String(evidence.gameCompleted ?? "unknown")}, vote ${String(evidence.currentVote ?? "unknown")}, posts ${String(evidence.threadPostCount ?? "unknown")}`;
     case hostStaleResolveControlLaneId:
       return `${status}: Reject ${String(evidence.rejectError ?? "unknown")}, role URL ${typeof evidence.roleUrl === "string"}, locked ${String(evidence.locked ?? "unknown")}`;
     case hostStaleResolveReloadLaneId:
@@ -151,6 +150,14 @@ export function coreLoopLaneStatus(lane) {
 export function hardeningLaneStatus(lane) {
   const status = laneStatus(lane);
   const evidence = laneEvidence(lane);
+  const completedGameStatus = completedGameHardeningLaneStatus({
+    lane,
+    status,
+    evidence,
+  });
+  if (completedGameStatus !== null) {
+    return completedGameStatus;
+  }
   switch (lane?.id) {
     case concurrentActionRaceLaneId:
       return `${status}: ${String(evidence.ackState ?? "unknown")} action, reject ${String(evidence.rejectError ?? "unknown")}`;
@@ -170,8 +177,6 @@ export function hardeningLaneStatus(lane) {
       return `${status}: role URL ${typeof evidence.roleUrl === "string"}, ${String(evidence.reconnectingState ?? "unknown")} -> ${String(evidence.recoveryState ?? "unknown")}, phase ${String(evidence.recoveredPhase ?? "unknown")}`;
     case privateChannelStaleActionReconnectLaneId:
       return `${status}: role URL ${typeof evidence.roleUrl === "string"}, channel ${String(evidence.channelAfterReject ?? evidence.channel ?? "unknown")}, reject ${String(evidence.rejectError ?? "unknown")}, recovered ${String(evidence.reconnectChannel ?? "unknown")} ${String(evidence.recoveredPhase ?? "unknown")}`;
-    case "stale-host-complete-reconnect-recovery":
-      return `${status}: ${String(evidence.reconnectingState ?? "unknown")} -> ${String(evidence.recoveryState ?? "unknown")}, completed ${String(evidence.recoveredCompleted ?? "unknown")}`;
     case "stale-host-control":
       return `${status}: Reject ${String(evidence.rejectError ?? "unknown")}, current ${String(evidence.phaseId ?? "unknown")}`;
     case "concurrent-host-resolve-race":
@@ -199,6 +204,55 @@ export function hardeningLaneStatus(lane) {
     default:
       return status;
   }
+}
+
+function completedGameCoreLoopLaneStatus({ lane, status, evidence }) {
+  const scenario = completedGameLaneCaseFor(lane?.id);
+  if (scenario === null) {
+    return null;
+  }
+  switch (completedGameLaneKey(scenario)) {
+    case "stale-host-complete:reload":
+      return `${status}: ${String(evidence.rejectReceipt ?? "unknown")}, revealed ${String(evidence.revealedSlots ?? "unknown")}, complete visible ${String(evidence.completeActionVisible ?? "unknown")}`;
+    case "stale-host-complete:reconnect":
+      return `${status}: ${String(evidence.reconnectingState ?? "unknown")} -> ${String(evidence.recoveryState ?? "unknown")}, completed ${String(evidence.recoveredCompleted ?? "unknown")}, revealed ${String(evidence.revealedSlots ?? "unknown")}`;
+    case "host-complete-race:race":
+      return `${status}: reject ${String(evidence.rejectError ?? "unknown")}, completed ${String(evidence.apiCompleted ?? "unknown")}, revealed ${String(evidence.apiRevealedSlots ?? "unknown")}`;
+    case "host-complete-race:reload":
+      return `${status}: completed ${String(evidence.apiCompleted ?? "unknown")}, revealed ${String(evidence.firstRevealedSlots ?? "unknown")}/${String(evidence.secondRevealedSlots ?? "unknown")}`;
+    case "player-complete-race:race":
+      return `${status}: post ${String(evidence.postError ?? "unknown")}, completed ${String(evidence.apiCompleted ?? "unknown")}, thread post ${String(evidence.apiThreadHasPost ?? "unknown")}`;
+    case "player-complete-race:reload":
+      return `${status}: completed ${String(evidence.gameCompleted ?? "unknown")}, posts ${String(evidence.reloadPostCount ?? "unknown")}`;
+    case "stale-player-complete:reload":
+      return `${status}: completed ${String(evidence.gameCompleted ?? "unknown")}, vote ${String(evidence.currentVote ?? "unknown")}, posts ${String(evidence.threadPostCount ?? "unknown")}`;
+    default:
+      return null;
+  }
+}
+
+function completedGameHardeningLaneStatus({ lane, status, evidence }) {
+  const scenario = completedGameLaneCaseFor(lane?.id);
+  if (scenario === null) {
+    return null;
+  }
+  switch (completedGameLaneKey(scenario)) {
+    case "stale-host-complete:reconnect":
+      return `${status}: ${String(evidence.reconnectingState ?? "unknown")} -> ${String(evidence.recoveryState ?? "unknown")}, completed ${String(evidence.recoveredCompleted ?? "unknown")}`;
+    default:
+      return null;
+  }
+}
+
+function completedGameLaneCaseFor(id) {
+  if (typeof id !== "string") {
+    return null;
+  }
+  return COMPLETED_GAME_HARDENING_LANE_CASES_BY_ID.get(id) ?? null;
+}
+
+function completedGameLaneKey(scenario) {
+  return `${scenario.proofGroup}:${scenario.proofStep}`;
 }
 
 function highlightedLaneEvidence({ proofRun, laneIds, formatter }) {
