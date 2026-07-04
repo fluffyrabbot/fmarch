@@ -232,6 +232,13 @@ import {
   devTestGamePrivateChannelRecoveryReceiptRoleUrl,
 } from "./dev_test_game_private_channel_recovery_receipt.mjs";
 import {
+  assertDevTestGameReplacementActionRecoveryReceipt,
+  buildDevTestGameReplacementActionRecoveryReceipt,
+  devTestGameReplacementActionRecoveryReceiptCommand,
+  devTestGameReplacementActionRecoveryReceiptPath,
+  devTestGameReplacementActionRecoveryReceiptRoleUrl,
+} from "./dev_test_game_replacement_action_recovery_receipt.mjs";
+import {
   assertDevTestGameReplacementPrivateRecoveryReceipt,
   buildDevTestGameReplacementPrivateRecoveryReceipt,
   devTestGameReplacementPrivateRecoveryReceiptCommand,
@@ -462,6 +469,12 @@ test("dev test-game spine orchestrators expose stable proof order and env maps",
   );
   assert.equal(
     packageJson.scripts[
+      "test:dev-test-game-replacement-action-recovery-receipt"
+    ],
+    "node tools/dev_test_game_replacement_action_recovery_receipt.mjs",
+  );
+  assert.equal(
+    packageJson.scripts[
       "test:dev-test-game-replacement-private-recovery-receipt"
     ],
     "node tools/dev_test_game_replacement_private_recovery_receipt.mjs",
@@ -616,6 +629,10 @@ test("dev test-game spine orchestrators expose stable proof order and env maps",
     { kind: "node", script: "tools/dev_test_game_hardening_admin_proof.mjs" },
     {
       kind: "node",
+      script: "tools/dev_test_game_replacement_action_recovery_receipt.mjs",
+    },
+    {
+      kind: "node",
       script: "tools/dev_test_game_replacement_private_recovery_receipt.mjs",
     },
     {
@@ -627,6 +644,7 @@ test("dev test-game spine orchestrators expose stable proof order and env maps",
         "target/dev-test-game/core-loop-admin-proof.json",
         "target/dev-test-game/private-channel-recovery-receipt.json",
         "target/dev-test-game/hardening-admin-proof.json",
+        "target/dev-test-game/replacement-action-recovery-receipt.json",
         "target/dev-test-game/replacement-private-channel-recovery-receipt.json",
       ],
     },
@@ -1346,6 +1364,15 @@ test("dev test-game spine manifest records command order and evidence wiring", (
       "target/dev-test-game/core-loop-admin-proof.json",
     ],
     roleUrl: devTestGamePrivateChannelRecoveryReceiptRoleUrl,
+  });
+  assert.deepEqual(manifest.commands.replacementActionRecoveryReceipt, {
+    script: devTestGameReplacementActionRecoveryReceiptCommand,
+    proofArtifact: devTestGameReplacementActionRecoveryReceiptPath,
+    dependsOn: [
+      "target/dev-test-game/proof-run.json",
+      "target/dev-test-game/hardening-admin-proof.json",
+    ],
+    roleUrl: devTestGameReplacementActionRecoveryReceiptRoleUrl,
   });
   assert.deepEqual(manifest.commands.replacementPrivateRecoveryReceipt, {
     script: devTestGameReplacementPrivateRecoveryReceiptCommand,
@@ -3003,6 +3030,8 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
       adminSpineTerminalBatches: adminSpineTerminalBatchesFixture(),
       privateChannelRecoveryReceipt:
         privateChannelRecoveryReceiptFixture(),
+      replacementActionRecoveryReceipt:
+        replacementActionRecoveryReceiptFixture(),
       replacementPrivateRecoveryReceipt:
         replacementPrivateRecoveryReceiptFixture(),
       releaseReadiness,
@@ -3018,11 +3047,12 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
     graph,
     releaseReadiness,
   );
-  assert.equal(graph.summary.nodeCount, 54);
-  assert.equal(graph.summary.roleUrlCount, 54);
+  assert.equal(graph.summary.nodeCount, 55);
+  assert.equal(graph.summary.roleUrlCount, 55);
   assert.equal(graph.summary.productionFeatureTargetCount, 30);
   assert.equal(graph.summary.terminalBatchCount, 2);
   assert.equal(graph.summary.privateChannelRecoveryLaneCount, 4);
+  assert.equal(graph.summary.replacementActionRecoveryLaneCount, 3);
   assert.equal(graph.summary.replacementPrivateRecoveryLaneCount, 6);
   assert.equal(
     graph.generatedFrom.adminSpineTerminalBatches,
@@ -3031,6 +3061,10 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
   assert.equal(
     graph.generatedFrom.privateChannelRecoveryReceipt,
     devTestGamePrivateChannelRecoveryReceiptPath,
+  );
+  assert.equal(
+    graph.generatedFrom.replacementActionRecoveryReceipt,
+    devTestGameReplacementActionRecoveryReceiptPath,
   );
   assert.equal(
     graph.generatedFrom.replacementPrivateRecoveryReceipt,
@@ -3058,6 +3092,7 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
           "next-action",
           "admin-spine-terminal-batches",
           "private-channel-recovery-receipt",
+          "replacement-action-recovery-receipt",
           "replacement-private-recovery-receipt",
         ].includes(node.id),
       )
@@ -3117,6 +3152,13 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
         devTestGamePrivateChannelRecoveryReceiptPath,
         devTestGamePrivateChannelRecoveryReceiptRoleUrl,
         devTestGamePrivateChannelRecoveryReceiptCommand,
+      ],
+      [
+        "replacement-action-recovery-receipt",
+        "replacement-action-recovery-receipt",
+        devTestGameReplacementActionRecoveryReceiptPath,
+        devTestGameReplacementActionRecoveryReceiptRoleUrl,
+        devTestGameReplacementActionRecoveryReceiptCommand,
       ],
       [
         "replacement-private-recovery-receipt",
@@ -3233,6 +3275,24 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
       ],
       ["replacement-private-recovery-receipt", "proof-graph", "records"],
       ["replacement-private-recovery-receipt", "next-action", "summarizes-into"],
+    ],
+  );
+  assert.deepEqual(
+    graph.edges
+      .filter(
+        (edge) =>
+          edge.from === "replacement-action-recovery-receipt" ||
+          edge.to === "replacement-action-recovery-receipt",
+      )
+      .map((edge) => [edge.from, edge.to, edge.relationship]),
+    [
+      [
+        "admin-proof:hardening",
+        "replacement-action-recovery-receipt",
+        "proves",
+      ],
+      ["replacement-action-recovery-receipt", "proof-graph", "records"],
+      ["replacement-action-recovery-receipt", "next-action", "summarizes-into"],
     ],
   );
   assert(
@@ -10001,6 +10061,22 @@ test("session card and markdown include role credential URLs and tokens", async 
     privateChannelRecoveryReceipt.laneIds,
     coreLoopPrivateChannelRecoveryLaneIds,
   );
+  const replacementActionRecoveryReceipt =
+    buildDevTestGameReplacementActionRecoveryReceipt(proofRun, {
+      generatedAt: "2026-06-26T00:00:00.000Z",
+    });
+  assertDevTestGameReplacementActionRecoveryReceipt(
+    replacementActionRecoveryReceipt,
+  );
+  assert.equal(replacementActionRecoveryReceipt.status, "passed");
+  assert.equal(
+    replacementActionRecoveryReceipt.generatedFrom.roleUrl,
+    devTestGameReplacementActionRecoveryReceiptRoleUrl,
+  );
+  assert.deepEqual(
+    replacementActionRecoveryReceipt.laneIds,
+    replacementActionLaneIds,
+  );
   const replacementPrivateRecoveryReceipt =
     buildDevTestGameReplacementPrivateRecoveryReceipt(proofRun, {
       generatedAt: "2026-06-26T00:00:00.000Z",
@@ -11214,6 +11290,10 @@ test("session card and markdown include role credential URLs and tokens", async 
     privateChannelRecoveryReceiptPath:
       devTestGamePrivateChannelRecoveryReceiptPath,
     privateChannelRecoveryReceipt: privateChannelRecoveryReceiptFixture(),
+    replacementActionRecoveryReceiptPath:
+      devTestGameReplacementActionRecoveryReceiptPath,
+    replacementActionRecoveryReceipt:
+      replacementActionRecoveryReceiptFixture(),
     replacementPrivateRecoveryReceiptPath:
       devTestGameReplacementPrivateRecoveryReceiptPath,
     replacementPrivateRecoveryReceipt:
@@ -11237,6 +11317,10 @@ test("session card and markdown include role credential URLs and tokens", async 
     devTestGamePrivateChannelRecoveryReceiptPath,
   );
   assert.equal(
+    adminSpineReadiness.generatedFrom.replacementActionRecoveryReceipt,
+    devTestGameReplacementActionRecoveryReceiptPath,
+  );
+  assert.equal(
     adminSpineReadiness.generatedFrom.replacementPrivateRecoveryReceipt,
     devTestGameReplacementPrivateRecoveryReceiptPath,
   );
@@ -11250,6 +11334,17 @@ test("session card and markdown include role credential URLs and tokens", async 
     adminSpineReadiness.localDevelopmentSpine.evidence
       .privateChannelRecoveryReceipt.laneCount,
     4,
+  );
+  assert.equal(
+    adminSpineReadiness.localDevelopmentSpine.checks.find(
+      (item) => item.id === "local-replacement-action-recovery-receipt",
+    ).roleUrl,
+    devTestGameReplacementActionRecoveryReceiptRoleUrl,
+  );
+  assert.equal(
+    adminSpineReadiness.localDevelopmentSpine.evidence
+      .replacementActionRecoveryReceipt.laneCount,
+    3,
   );
   assert.equal(
     adminSpineReadiness.localDevelopmentSpine.checks.find(
@@ -16562,6 +16657,45 @@ function privateChannelRecoveryReceiptFixture() {
       status: "passed",
       compactStatus: `passed:${laneId}`,
       evidence: { channel: "private:mafia_day_chat" },
+    })),
+  };
+}
+
+function replacementActionRecoveryReceiptFixture() {
+  return {
+    version: 1,
+    proof: "dev-test-game-replacement-action-recovery-receipt",
+    status: "passed",
+    releaseReady: false,
+    productionReady: false,
+    generatedAt: "2026-06-26T00:00:00.000Z",
+    scope: "local-dev-test-game-replacement-action-recovery",
+    proofBoundary: "Local replacement action recovery receipt.",
+    generatedFrom: {
+      proofRun: "target/dev-test-game/proof-run.json",
+      hardeningAdminProof: "target/dev-test-game/hardening-admin-proof.json",
+      game: "00000000-0000-0000-0000-000000000001",
+      family: {
+        id: "replacement-action-recovery",
+        laneIds: [...replacementActionLaneIds],
+      },
+      roleUrl: devTestGameReplacementActionRecoveryReceiptRoleUrl,
+    },
+    summary: {
+      status: "passed",
+      laneCount: 3,
+      passedLaneCount: 3,
+      familyCount: 3,
+      expectedLaneCount: 3,
+      expectedFamilyCount: 3,
+    },
+    laneIds: [...replacementActionLaneIds],
+    lanes: replacementActionLaneIds.map((laneId) => ({
+      id: laneId,
+      label: laneId,
+      status: "passed",
+      compactStatus: `passed:${laneId}`,
+      evidence: { targetSlot: "slot-2" },
     })),
   };
 }

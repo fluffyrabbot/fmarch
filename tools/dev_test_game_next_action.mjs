@@ -115,6 +115,8 @@ export function buildDevTestGameNextAction(
   const terminalBatchGraph = terminalBatchGraphFromProofGraph(graph);
   const privateChannelRecoveryGraph =
     privateChannelRecoveryGraphFromProofGraph(graph);
+  const replacementActionRecoveryGraph =
+    replacementActionRecoveryGraphFromProofGraph(graph);
   const replacementPrivateRecoveryGraph =
     replacementPrivateRecoveryGraphFromProofGraph(graph);
   const sourceTargetsByCheckId =
@@ -396,6 +398,9 @@ export function buildDevTestGameNextAction(
             ...(privateChannelRecoveryGraph === null
               ? {}
               : { privateChannelRecoveryGraph }),
+            ...(replacementActionRecoveryGraph === null
+              ? {}
+              : { replacementActionRecoveryGraph }),
             ...(replacementPrivateRecoveryGraph === null
               ? {}
               : { replacementPrivateRecoveryGraph }),
@@ -583,6 +588,9 @@ export function assertDevTestGameNextAction(evidence) {
   assertTerminalBatchGraph(evidence.generatedFrom?.terminalBatchGraph);
   assertPrivateChannelRecoveryGraph(
     evidence.generatedFrom?.privateChannelRecoveryGraph,
+  );
+  assertReplacementActionRecoveryGraph(
+    evidence.generatedFrom?.replacementActionRecoveryGraph,
   );
   assertReplacementPrivateRecoveryGraph(
     evidence.generatedFrom?.replacementPrivateRecoveryGraph,
@@ -893,6 +901,43 @@ function replacementPrivateRecoveryGraphFromProofGraph(proofGraph) {
   };
 }
 
+function replacementActionRecoveryGraphFromProofGraph(proofGraph) {
+  if (proofGraph === null) {
+    return null;
+  }
+  const node = proofGraph.nodes.find(
+    (candidate) => candidate?.id === "replacement-action-recovery-receipt",
+  );
+  if (node === undefined) {
+    return null;
+  }
+  const edges = proofGraph.edges.filter(
+    (candidate) =>
+      (candidate?.from === "replacement-action-recovery-receipt" ||
+        candidate?.to === "replacement-action-recovery-receipt") &&
+      [
+        "proves",
+        "records",
+        "summarizes-into",
+      ].includes(String(candidate?.relationship ?? "")),
+  );
+  return {
+    nodeId: node.id,
+    status: String(node.status ?? "unknown"),
+    proofTarget: String(node.artifact ?? ""),
+    roleUrl: String(node.roleUrl ?? ""),
+    familyId: String(node.familyId ?? ""),
+    laneCount: Number(node.laneCount ?? 0),
+    laneIds: Array.isArray(node.laneIds)
+      ? node.laneIds.map((laneId) => String(laneId))
+      : [],
+    edgeCount: edges.length,
+    edgeTargets: edges.map((edge) =>
+      String(edge.from === node.id ? edge.to : edge.from),
+    ),
+  };
+}
+
 function assertTerminalBatchGraph(terminalBatchGraph) {
   if (terminalBatchGraph === undefined) {
     return;
@@ -964,6 +1009,34 @@ function assertReplacementPrivateRecoveryGraph(replacementPrivateRecoveryGraph) 
   ) {
     throw new Error(
       "next-action replacement private recovery graph summary drifted",
+    );
+  }
+}
+
+function assertReplacementActionRecoveryGraph(replacementActionRecoveryGraph) {
+  if (replacementActionRecoveryGraph === undefined) {
+    return;
+  }
+  if (
+    replacementActionRecoveryGraph === null ||
+    replacementActionRecoveryGraph.nodeId !==
+      "replacement-action-recovery-receipt" ||
+    replacementActionRecoveryGraph.status !== "passed" ||
+    replacementActionRecoveryGraph.proofTarget !==
+      "target/dev-test-game/replacement-action-recovery-receipt.json" ||
+    replacementActionRecoveryGraph.roleUrl !==
+      "/admin/audit/local-hardening?game=<seeded-game>" ||
+    replacementActionRecoveryGraph.familyId !==
+      "replacement-action-recovery" ||
+    replacementActionRecoveryGraph.laneCount !== 3 ||
+    !Array.isArray(replacementActionRecoveryGraph.laneIds) ||
+    replacementActionRecoveryGraph.laneIds.length !== 3 ||
+    replacementActionRecoveryGraph.edgeCount !== 3 ||
+    JSON.stringify(replacementActionRecoveryGraph.edgeTargets) !==
+      JSON.stringify(["admin-proof:hardening", "proof-graph", "next-action"])
+  ) {
+    throw new Error(
+      "next-action replacement action recovery graph summary drifted",
     );
   }
 }

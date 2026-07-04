@@ -6,6 +6,7 @@ import {
   validateDevTestGameAdminSpineProof,
   validateDevTestGameAdminSpineTerminalBatches,
   validateDevTestGamePrivateChannelRecoveryReceipt,
+  validateDevTestGameReplacementActionRecoveryReceipt,
   validateDevTestGameReplacementPrivateRecoveryReceipt,
 } from "./dev_test_game_release_readiness.mjs";
 import {
@@ -50,6 +51,10 @@ import {
   devTestGameReplacementPrivateRecoveryReceiptCommand,
   devTestGameReplacementPrivateRecoveryReceiptPath,
 } from "./dev_test_game_replacement_private_recovery_receipt.mjs";
+import {
+  devTestGameReplacementActionRecoveryReceiptCommand,
+  devTestGameReplacementActionRecoveryReceiptPath,
+} from "./dev_test_game_replacement_action_recovery_receipt.mjs";
 export {
   devTestGameProofGraphAdminProofCommand,
   devTestGameProofGraphAdminProofPath,
@@ -68,6 +73,8 @@ const defaultPrivateChannelRecoveryReceiptPath =
   devTestGamePrivateChannelRecoveryReceiptPath;
 const defaultReplacementPrivateRecoveryReceiptPath =
   devTestGameReplacementPrivateRecoveryReceiptPath;
+const defaultReplacementActionRecoveryReceiptPath =
+  devTestGameReplacementActionRecoveryReceiptPath;
 
 export function buildDevTestGameProofGraph(
   {
@@ -75,6 +82,7 @@ export function buildDevTestGameProofGraph(
     adminSpineProof,
     adminSpineTerminalBatches = null,
     privateChannelRecoveryReceipt = null,
+    replacementActionRecoveryReceipt = null,
     replacementPrivateRecoveryReceipt = null,
     nextAction = null,
     releaseReadiness,
@@ -86,6 +94,8 @@ export function buildDevTestGameProofGraph(
     adminSpineTerminalBatchesSource = defaultAdminSpineTerminalBatchProofPath,
     privateChannelRecoveryReceiptSource =
       defaultPrivateChannelRecoveryReceiptPath,
+    replacementActionRecoveryReceiptSource =
+      defaultReplacementActionRecoveryReceiptPath,
     replacementPrivateRecoveryReceiptSource =
       defaultReplacementPrivateRecoveryReceiptPath,
     nextActionSource = devTestGameNextActionPath,
@@ -122,6 +132,15 @@ export function buildDevTestGameProofGraph(
             path: replacementPrivateRecoveryReceiptSource,
           },
         );
+  const replacementActionRecoveryReceiptEvidence =
+    replacementActionRecoveryReceipt === null
+      ? null
+      : validateDevTestGameReplacementActionRecoveryReceipt(
+          replacementActionRecoveryReceipt,
+          {
+            path: replacementActionRecoveryReceiptSource,
+          },
+        );
   const releaseReadinessChecklist =
     assertDevTestGameReleaseReadiness(releaseReadiness);
   const adminSpine = adminSpineProof;
@@ -132,6 +151,9 @@ export function buildDevTestGameProofGraph(
     adminSpineTerminalBatchesSource,
     privateChannelRecoveryReceipt: privateChannelRecoveryReceiptEvidence,
     privateChannelRecoveryReceiptSource,
+    replacementActionRecoveryReceipt:
+      replacementActionRecoveryReceiptEvidence,
+    replacementActionRecoveryReceiptSource,
     replacementPrivateRecoveryReceipt:
       replacementPrivateRecoveryReceiptEvidence,
     replacementPrivateRecoveryReceiptSource,
@@ -143,6 +165,8 @@ export function buildDevTestGameProofGraph(
     nextAction: nextActionEvidence,
     adminSpineTerminalBatches: adminSpineTerminalBatchEvidence,
     privateChannelRecoveryReceipt: privateChannelRecoveryReceiptEvidence,
+    replacementActionRecoveryReceipt:
+      replacementActionRecoveryReceiptEvidence,
     replacementPrivateRecoveryReceipt:
       replacementPrivateRecoveryReceiptEvidence,
   });
@@ -174,6 +198,12 @@ export function buildDevTestGameProofGraph(
             replacementPrivateRecoveryReceipt:
               replacementPrivateRecoveryReceiptSource,
           }),
+      ...(replacementActionRecoveryReceiptEvidence === null
+        ? {}
+        : {
+            replacementActionRecoveryReceipt:
+              replacementActionRecoveryReceiptSource,
+          }),
       ...(nextActionEvidence === null ? {} : { nextAction: nextActionSource }),
       releaseReadiness: releaseReadinessSource,
       manifestGeneratedAt: manifest.generatedAt,
@@ -196,6 +226,8 @@ export function buildDevTestGameProofGraph(
         privateChannelRecoveryReceiptEvidence?.laneCount ?? 0,
       replacementPrivateRecoveryLaneCount:
         replacementPrivateRecoveryReceiptEvidence?.laneCount ?? 0,
+      replacementActionRecoveryLaneCount:
+        replacementActionRecoveryReceiptEvidence?.laneCount ?? 0,
     },
     nodes,
     edges,
@@ -293,6 +325,7 @@ export function assertDevTestGameProofGraph(
   assertDevTestGameProofGraphCoversTerminalBatches(evidence);
   assertDevTestGameProofGraphCoversPrivateChannelRecoveryReceipt(evidence);
   assertDevTestGameProofGraphCoversReplacementPrivateRecoveryReceipt(evidence);
+  assertDevTestGameProofGraphCoversReplacementActionRecoveryReceipt(evidence);
   if (releaseReadiness !== undefined) {
     assertDevTestGameProofGraphCoversProductionFeatureTargets(
       evidence,
@@ -301,6 +334,54 @@ export function assertDevTestGameProofGraph(
   }
   assertProductionFacingSurfaceGraphCoverage({ proofGraph: evidence });
   return evidence;
+}
+
+export function assertDevTestGameProofGraphCoversReplacementActionRecoveryReceipt(
+  graph,
+) {
+  const node = (graph?.nodes ?? []).find(
+    (candidate) => candidate.id === "replacement-action-recovery-receipt",
+  );
+  if (graph?.generatedFrom?.replacementActionRecoveryReceipt === undefined) {
+    if (
+      node !== undefined ||
+      graph.summary?.replacementActionRecoveryLaneCount !== 0
+    ) {
+      throw new Error("proof graph replacement action receipt summary drifted");
+    }
+    return graph;
+  }
+  if (
+    node?.kind !== "replacement-action-recovery-receipt" ||
+    node.status !== "passed" ||
+    node.artifact !== graph.generatedFrom.replacementActionRecoveryReceipt ||
+    node.roleUrl !== localAdminAuditRoleUrl(localAdminAuditIds.hardening) ||
+    node.proofCommand !== devTestGameReplacementActionRecoveryReceiptCommand ||
+    node.recoveryCommand !==
+      devTestGameReplacementActionRecoveryReceiptCommand ||
+    node.laneCount !== graph.summary.replacementActionRecoveryLaneCount
+  ) {
+    throw new Error("proof graph replacement action receipt node drifted");
+  }
+  for (const [from, to, relationship] of [
+    ["admin-proof:hardening", "replacement-action-recovery-receipt", "proves"],
+    ["replacement-action-recovery-receipt", "proof-graph", "records"],
+    ["replacement-action-recovery-receipt", "next-action", "summarizes-into"],
+  ]) {
+    if (
+      !(graph.edges ?? []).some(
+        (edge) =>
+          edge.from === from &&
+          edge.to === to &&
+          edge.relationship === relationship,
+      )
+    ) {
+      throw new Error(
+        `proof graph replacement action receipt edge missing: ${from}->${to}`,
+      );
+    }
+  }
+  return graph;
 }
 
 export function assertDevTestGameProofGraphCoversReplacementPrivateRecoveryReceipt(
@@ -567,6 +648,9 @@ export async function writeDevTestGameProofGraph({
   privateChannelRecoveryReceiptPath =
     process.env.FMARCH_DEV_TEST_GAME_PRIVATE_CHANNEL_RECOVERY_RECEIPT ??
     defaultPrivateChannelRecoveryReceiptPath,
+  replacementActionRecoveryReceiptPath =
+    process.env.FMARCH_DEV_TEST_GAME_REPLACEMENT_ACTION_RECOVERY_RECEIPT ??
+    defaultReplacementActionRecoveryReceiptPath,
   replacementPrivateRecoveryReceiptPath =
     process.env.FMARCH_DEV_TEST_GAME_REPLACEMENT_PRIVATE_RECOVERY_RECEIPT ??
     defaultReplacementPrivateRecoveryReceiptPath,
@@ -585,6 +669,10 @@ export async function writeDevTestGameProofGraph({
     repoRoot,
     privateChannelRecoveryReceiptPath,
   );
+  const absoluteReplacementActionRecoveryReceiptPath = path.resolve(
+    repoRoot,
+    replacementActionRecoveryReceiptPath,
+  );
   const absoluteReplacementPrivateRecoveryReceiptPath = path.resolve(
     repoRoot,
     replacementPrivateRecoveryReceiptPath,
@@ -599,6 +687,9 @@ export async function writeDevTestGameProofGraph({
   const privateChannelRecoveryReceipt = await readOptionalJson(
     absolutePrivateChannelRecoveryReceiptPath,
   );
+  const replacementActionRecoveryReceipt = await readOptionalJson(
+    absoluteReplacementActionRecoveryReceiptPath,
+  );
   const replacementPrivateRecoveryReceipt = await readOptionalJson(
     absoluteReplacementPrivateRecoveryReceiptPath,
   );
@@ -612,6 +703,7 @@ export async function writeDevTestGameProofGraph({
       adminSpineProof,
       adminSpineTerminalBatches,
       privateChannelRecoveryReceipt,
+      replacementActionRecoveryReceipt,
       replacementPrivateRecoveryReceipt,
       nextAction,
       releaseReadiness,
@@ -627,6 +719,10 @@ export async function writeDevTestGameProofGraph({
       privateChannelRecoveryReceiptSource: path.relative(
         repoRoot,
         absolutePrivateChannelRecoveryReceiptPath,
+      ),
+      replacementActionRecoveryReceiptSource: path.relative(
+        repoRoot,
+        absoluteReplacementActionRecoveryReceiptPath,
       ),
       replacementPrivateRecoveryReceiptSource: path.relative(
         repoRoot,
@@ -648,6 +744,8 @@ function buildProofGraphNodes({
   adminSpineTerminalBatchesSource,
   privateChannelRecoveryReceipt,
   privateChannelRecoveryReceiptSource,
+  replacementActionRecoveryReceipt,
+  replacementActionRecoveryReceiptSource,
   replacementPrivateRecoveryReceipt,
   replacementPrivateRecoveryReceiptSource,
   releaseReadiness,
@@ -741,6 +839,25 @@ function buildProofGraphNodes({
             laneIds: replacementPrivateRecoveryReceipt.laneIds,
           },
         ];
+  const replacementActionRecoveryReceiptNode =
+    replacementActionRecoveryReceipt === null
+      ? []
+      : [
+          {
+            id: "replacement-action-recovery-receipt",
+            label: "Replacement action recovery receipt",
+            kind: "replacement-action-recovery-receipt",
+            status: replacementActionRecoveryReceipt.status,
+            artifact: replacementActionRecoveryReceiptSource,
+            roleUrl: replacementActionRecoveryReceipt.roleUrl,
+            proofCommand: devTestGameReplacementActionRecoveryReceiptCommand,
+            recoveryCommand:
+              devTestGameReplacementActionRecoveryReceiptCommand,
+            familyId: replacementActionRecoveryReceipt.familyId,
+            laneCount: replacementActionRecoveryReceipt.laneCount,
+            laneIds: replacementActionRecoveryReceipt.laneIds,
+          },
+        ];
   return [
     {
       id: "admin-spine",
@@ -794,6 +911,7 @@ function buildProofGraphNodes({
     },
     ...terminalBatchNode,
     ...privateChannelRecoveryReceiptNode,
+    ...replacementActionRecoveryReceiptNode,
     ...replacementPrivateRecoveryReceiptNode,
     ...adminProofNodes,
     ...productionFeatureTargetNodes,
@@ -809,6 +927,7 @@ function buildProofGraphEdges({
   nextAction = null,
   adminSpineTerminalBatches = null,
   privateChannelRecoveryReceipt = null,
+  replacementActionRecoveryReceipt = null,
   replacementPrivateRecoveryReceipt = null,
 }) {
   const nodeIds = new Set(nodes.map((node) => node.id));
@@ -820,6 +939,9 @@ function buildProofGraphEdges({
     ["proof-freshness", "next-action", "recovers-through"],
     ...terminalBatchEdges(adminSpineTerminalBatches),
     ...privateChannelRecoveryReceiptEdges(privateChannelRecoveryReceipt),
+    ...replacementActionRecoveryReceiptEdges(
+      replacementActionRecoveryReceipt,
+    ),
     ...replacementPrivateRecoveryReceiptEdges(
       replacementPrivateRecoveryReceipt,
     ),
@@ -850,6 +972,35 @@ function buildProofGraphEdges({
         ),
       ),
     );
+}
+
+function replacementActionRecoveryReceiptEdges(replacementActionRecoveryReceipt) {
+  if (replacementActionRecoveryReceipt === null) {
+    return [];
+  }
+  return [
+    [
+      "admin-proof:hardening",
+      "replacement-action-recovery-receipt",
+      "proves",
+      {
+        roleUrl: replacementActionRecoveryReceipt.roleUrl,
+        proofTarget: replacementActionRecoveryReceipt.path,
+      },
+    ],
+    [
+      "replacement-action-recovery-receipt",
+      "proof-graph",
+      "records",
+      { proofTarget: replacementActionRecoveryReceipt.path },
+    ],
+    [
+      "replacement-action-recovery-receipt",
+      "next-action",
+      "summarizes-into",
+      { proofTarget: replacementActionRecoveryReceipt.path },
+    ],
+  ];
 }
 
 function replacementPrivateRecoveryReceiptEdges(replacementPrivateRecoveryReceipt) {

@@ -162,6 +162,8 @@ export function nextActionAdminProofCase() {
       terminalBatchGraph: source.nextAction.generatedFrom?.terminalBatchGraph ?? null,
       privateChannelRecoveryGraph:
         source.nextAction.generatedFrom?.privateChannelRecoveryGraph ?? null,
+      replacementActionRecoveryGraph:
+        source.nextAction.generatedFrom?.replacementActionRecoveryGraph ?? null,
       replacementPrivateRecoveryGraph:
         source.nextAction.generatedFrom?.replacementPrivateRecoveryGraph ?? null,
       relatedHandoffs: relatedHandoffsForNextAction({
@@ -533,6 +535,22 @@ export function assertNextActionAdminProof(evidence) {
       "next-action admin proof replacement private recovery graph summary drifted",
     );
   }
+  const replacementActionRecoveryGraph =
+    evidence.generatedFrom?.replacementActionRecoveryGraph;
+  if (
+    replacementActionRecoveryGraph !== null &&
+    replacementActionRecoveryGraph !== undefined &&
+    (replacementActionRecoveryGraph.nodeId !==
+      "replacement-action-recovery-receipt" ||
+      replacementActionRecoveryGraph.status !== "passed" ||
+      replacementActionRecoveryGraph.laneCount !== 3 ||
+      !Array.isArray(replacementActionRecoveryGraph.laneIds) ||
+      replacementActionRecoveryGraph.laneIds.length !== 3)
+  ) {
+    throw new Error(
+      "next-action admin proof replacement action recovery graph summary drifted",
+    );
+  }
   for (const checkId of requiredChecksForEvidence(evidence)) {
     if (!evidence.adminRoleSurface?.visibleChecks?.includes(checkId)) {
       throw new Error(`next-action admin proof missing visible check: ${checkId}`);
@@ -781,6 +799,9 @@ function requiredChecksForNextAction(nextAction) {
   }
   if (nextAction.generatedFrom?.privateChannelRecoveryGraph !== undefined) {
     checks.push("private-channel-recovery-graph");
+  }
+  if (nextAction.generatedFrom?.replacementActionRecoveryGraph !== undefined) {
+    checks.push("replacement-action-recovery-graph");
   }
   if (nextAction.generatedFrom?.replacementPrivateRecoveryGraph !== undefined) {
     checks.push("replacement-private-recovery-graph");
@@ -1077,6 +1098,10 @@ function requiredChecksForEvidence(evidence) {
     evidence.generatedFrom?.privateChannelRecoveryGraph === undefined
       ? []
       : ["private-channel-recovery-graph"]),
+    ...(evidence.generatedFrom?.replacementActionRecoveryGraph === null ||
+    evidence.generatedFrom?.replacementActionRecoveryGraph === undefined
+      ? []
+      : ["replacement-action-recovery-graph"]),
     ...(evidence.generatedFrom?.replacementPrivateRecoveryGraph === null ||
     evidence.generatedFrom?.replacementPrivateRecoveryGraph === undefined
       ? []

@@ -1838,6 +1838,8 @@ test("admin route data exposes local next action as a native audit row", async (
     nextAction: nextActionFixture({
       terminalBatchGraph: terminalBatchGraphFixture(),
       privateChannelRecoveryGraph: privateChannelRecoveryGraphFixture(),
+      replacementActionRecoveryGraph:
+        replacementActionRecoveryGraphFixture(),
       replacementPrivateRecoveryGraph:
         replacementPrivateRecoveryGraphFixture(),
     }),
@@ -1891,6 +1893,7 @@ test("admin route data exposes local next action as a native audit row", async (
       ],
       ["terminal-proof-batch-graph", "passed:3 edges"],
       ["private-channel-recovery-graph", "passed:4 lanes"],
+      ["replacement-action-recovery-graph", "passed:3 lanes"],
       ["replacement-private-recovery-graph", "passed:6 lanes"],
       ["selection-trace", "0 candidates"],
       ["release-readiness-selection-trace", "1 buildable candidates"],
@@ -1997,6 +2000,7 @@ test("admin route data exposes local next action as a native audit row", async (
       edgeTargets: ["proof-graph", "proof-freshness", "next-action"],
     },
     privateChannelRecoveryGraph: privateChannelRecoveryGraphFixture(),
+    replacementActionRecoveryGraph: replacementActionRecoveryGraphFixture(),
     replacementPrivateRecoveryGraph: replacementPrivateRecoveryGraphFixture(),
     stabilitySource: "",
     stabilityBuildSlice: "",
@@ -5222,6 +5226,7 @@ function nextActionFixture({
   hostStaleControlTrace = hostStaleControlTraceFixture(),
   terminalBatchGraph,
   privateChannelRecoveryGraph,
+  replacementActionRecoveryGraph,
   replacementPrivateRecoveryGraph,
 } = {}) {
   return {
@@ -5292,6 +5297,9 @@ function nextActionFixture({
       ...(privateChannelRecoveryGraph === undefined
         ? {}
         : { privateChannelRecoveryGraph }),
+      ...(replacementActionRecoveryGraph === undefined
+        ? {}
+        : { replacementActionRecoveryGraph }),
       ...(replacementPrivateRecoveryGraph === undefined
         ? {}
         : { replacementPrivateRecoveryGraph }),
@@ -5520,6 +5528,24 @@ function privateChannelRecoveryGraphFixture() {
     ],
     edgeCount: 3,
     edgeTargets: ["admin-proof:core-loop", "proof-graph", "next-action"],
+  };
+}
+
+function replacementActionRecoveryGraphFixture() {
+  return {
+    nodeId: "replacement-action-recovery-receipt",
+    status: "passed",
+    proofTarget: "target/dev-test-game/replacement-action-recovery-receipt.json",
+    roleUrl: localAdminAuditRoleUrl(localAdminAuditIds.hardening),
+    familyId: "replacement-action-recovery",
+    laneCount: 3,
+    laneIds: [
+      "replacement-incoming-action",
+      "replacement-action-reconnect",
+      "replacement-stale-action-after-resolve",
+    ],
+    edgeCount: 3,
+    edgeTargets: ["admin-proof:hardening", "proof-graph", "next-action"],
   };
 }
 

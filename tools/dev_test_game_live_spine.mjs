@@ -17,6 +17,10 @@ export const devTestGameCoreLiveSpinePlan = [
   { kind: "node", script: "tools/dev_test_game_hardening_admin_proof.mjs" },
   {
     kind: "node",
+    script: "tools/dev_test_game_replacement_action_recovery_receipt.mjs",
+  },
+  {
+    kind: "node",
     script: "tools/dev_test_game_replacement_private_recovery_receipt.mjs",
   },
   releaseReadinessStep({
@@ -26,6 +30,7 @@ export const devTestGameCoreLiveSpinePlan = [
       "target/dev-test-game/core-loop-admin-proof.json",
       "target/dev-test-game/private-channel-recovery-receipt.json",
       "target/dev-test-game/hardening-admin-proof.json",
+      "target/dev-test-game/replacement-action-recovery-receipt.json",
       "target/dev-test-game/replacement-private-channel-recovery-receipt.json",
     ],
   }),

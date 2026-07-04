@@ -1872,6 +1872,10 @@ export function normalizeLocalNextActionAudit(nextAction, { game, proofGraph = n
     normalizeNextActionPrivateChannelRecoveryGraph(
       nextAction.generatedFrom?.privateChannelRecoveryGraph,
     );
+  const replacementActionRecoveryGraph =
+    normalizeNextActionReplacementActionRecoveryGraph(
+      nextAction.generatedFrom?.replacementActionRecoveryGraph,
+    );
   const replacementPrivateRecoveryGraph =
     normalizeNextActionReplacementPrivateRecoveryGraph(
       nextAction.generatedFrom?.replacementPrivateRecoveryGraph,
@@ -1983,6 +1987,14 @@ export function normalizeLocalNextActionAudit(nextAction, { game, proofGraph = n
           Object.freeze({
             id: "private-channel-recovery-graph",
             status: `${privateChannelRecoveryGraph.status}:${privateChannelRecoveryGraph.laneCount} lanes`,
+          }),
+        ]),
+    ...(replacementActionRecoveryGraph.nodeId === ""
+      ? []
+      : [
+          Object.freeze({
+            id: "replacement-action-recovery-graph",
+            status: `${replacementActionRecoveryGraph.status}:${replacementActionRecoveryGraph.laneCount} lanes`,
           }),
         ]),
     ...(replacementPrivateRecoveryGraph.nodeId === ""
@@ -2331,6 +2343,9 @@ export function normalizeLocalNextActionAudit(nextAction, { game, proofGraph = n
       ...(privateChannelRecoveryGraph.nodeId === ""
         ? {}
         : { privateChannelRecoveryGraph }),
+      ...(replacementActionRecoveryGraph.nodeId === ""
+        ? {}
+        : { replacementActionRecoveryGraph }),
       ...(replacementPrivateRecoveryGraph.nodeId === ""
         ? {}
         : { replacementPrivateRecoveryGraph }),
@@ -2454,6 +2469,48 @@ function normalizeNextActionReplacementPrivateRecoveryGraph(
     edgeTargets: Object.freeze(
       Array.isArray(replacementPrivateRecoveryGraph.edgeTargets)
         ? replacementPrivateRecoveryGraph.edgeTargets.map((target) =>
+            String(target),
+          )
+        : [],
+    ),
+  });
+}
+
+function normalizeNextActionReplacementActionRecoveryGraph(
+  replacementActionRecoveryGraph,
+) {
+  if (
+    replacementActionRecoveryGraph === null ||
+    typeof replacementActionRecoveryGraph !== "object"
+  ) {
+    return Object.freeze({
+      nodeId: "",
+      status: "",
+      proofTarget: "",
+      roleUrl: "",
+      familyId: "",
+      laneCount: 0,
+      laneIds: Object.freeze([]),
+      edgeCount: 0,
+      edgeTargets: Object.freeze([]),
+    });
+  }
+  return Object.freeze({
+    nodeId: String(replacementActionRecoveryGraph.nodeId ?? ""),
+    status: String(replacementActionRecoveryGraph.status ?? ""),
+    proofTarget: String(replacementActionRecoveryGraph.proofTarget ?? ""),
+    roleUrl: String(replacementActionRecoveryGraph.roleUrl ?? ""),
+    familyId: String(replacementActionRecoveryGraph.familyId ?? ""),
+    laneCount: Number(replacementActionRecoveryGraph.laneCount ?? 0),
+    laneIds: Object.freeze(
+      Array.isArray(replacementActionRecoveryGraph.laneIds)
+        ? replacementActionRecoveryGraph.laneIds.map((laneId) => String(laneId))
+        : [],
+    ),
+    edgeCount: Number(replacementActionRecoveryGraph.edgeCount ?? 0),
+    edgeTargets: Object.freeze(
+      Array.isArray(replacementActionRecoveryGraph.edgeTargets)
+        ? replacementActionRecoveryGraph.edgeTargets.map((target) =>
             String(target),
           )
         : [],
