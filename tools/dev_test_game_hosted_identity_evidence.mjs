@@ -169,10 +169,7 @@ export async function buildDevTestGameHostedIdentityEvidence({
       expectedRoleSurfaceContract: hostedIdentityExpectedRoleSurfaceContract,
       roleSurfaceContractDiff,
       identityAdapterContractComparison,
-      redactedIntakePacket:
-        rawEvidence.status === "passed"
-          ? summarizeHostedIdentityRedactedIntakePacket(source)
-          : null,
+      redactedIntakePacket: summarizeHostedIdentityRedactedIntakePacket(source),
     },
     checks,
     hostedHandoffChecklist: hostedIdentityEvidenceHandoffCase({
@@ -555,15 +552,21 @@ function optionalEnv(value) {
 
 function hostedIdentityPacketSectionMissingInputs({ field, section }) {
   const missing = [];
+  const definition = hostedIdentityEvidencePacketSectionDefinitions.find(
+    (candidate) => candidate.field === field,
+  );
   if (section === null || typeof section !== "object" || Array.isArray(section)) {
-    return ["section-object"];
+    return [
+      "section-object",
+      "status-provided",
+      ...(definition?.requiredInputIds ?? []),
+      "redactedEvidenceRefs",
+      ...redactionFlagsForSection(field),
+    ];
   }
   if (section.status !== "provided") {
     missing.push("status-provided");
   }
-  const definition = hostedIdentityEvidencePacketSectionDefinitions.find(
-    (candidate) => candidate.field === field,
-  );
   for (const inputId of definition?.requiredInputIds ?? []) {
     if (!hasProvidedInput(section.inputs?.[inputId])) {
       missing.push(inputId);
@@ -695,19 +698,26 @@ function validRedactedIdentityEvidenceLocator(value) {
 }
 
 function summarizeHostedIdentityRedactedIntakePacket(source) {
-  if (source === null || typeof source !== "object") {
-    return null;
-  }
+  const packetSource =
+    source !== null && typeof source === "object" && !Array.isArray(source)
+      ? source
+      : null;
   return {
-    kind: String(source.redaction?.packetKind ?? "unknown"),
-    rawInviteTokensIncluded: source.redaction?.rawInviteTokensIncluded === true,
-    rawSessionSecretsIncluded: source.redaction?.rawSessionSecretsIncluded === true,
-    rawPasswordHashesIncluded: source.redaction?.rawPasswordHashesIncluded === true,
-    rawPersonalContactIncluded: source.redaction?.rawPersonalContactIncluded === true,
+    kind: String(
+      packetSource?.redaction?.packetKind ?? "redacted-hosted-identity-intake",
+    ),
+    rawInviteTokensIncluded:
+      packetSource?.redaction?.rawInviteTokensIncluded === true,
+    rawSessionSecretsIncluded:
+      packetSource?.redaction?.rawSessionSecretsIncluded === true,
+    rawPasswordHashesIncluded:
+      packetSource?.redaction?.rawPasswordHashesIncluded === true,
+    rawPersonalContactIncluded:
+      packetSource?.redaction?.rawPersonalContactIncluded === true,
     roleSurfaceArchitectureChanged:
-      source.hostedIdentity?.roleSurfaceArchitectureChanged === true,
+      packetSource?.hostedIdentity?.roleSurfaceArchitectureChanged === true,
     sections: hostedIdentityEvidencePacketSectionDefinitions.map((definition) => {
-      const section = source.hostedIdentity?.[definition.field];
+      const section = packetSource?.hostedIdentity?.[definition.field];
       const inputs =
         section !== null && typeof section === "object" && !Array.isArray(section)
           ? section.inputs
@@ -721,7 +731,7 @@ function summarizeHostedIdentityRedactedIntakePacket(source) {
           typeof section === "object" &&
           ["provided", "missing"].includes(section.status)
             ? section.status
-            : "unknown",
+            : "missing",
         requiredInputIds: [...definition.requiredInputIds],
         providedInputIds: (definition.requiredInputIds ?? []).filter((inputId) =>
           hasProvidedInput(inputs?.[inputId]),

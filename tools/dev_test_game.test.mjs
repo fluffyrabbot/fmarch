@@ -574,6 +574,33 @@ test("hosted identity evidence lane records blocked and passed handoffs", async 
       "hosted-identity-evidence-readable",
     ],
   );
+  assert.deepEqual(
+    blocked.target.redactedIntakePacket.sections.map((section) => [
+      section.id,
+      section.status,
+      section.requiredInputIds,
+      section.providedInputIds,
+      section.redactedEvidenceRefCount,
+      section.missingInputs,
+    ]),
+    hostedIdentityEvidencePacketSectionDefinitions.map((section) => [
+      section.field,
+      "missing",
+      [...section.requiredInputIds],
+      [],
+      0,
+      [
+        "section-object",
+        "status-provided",
+        ...section.requiredInputIds,
+        "redactedEvidenceRefs",
+        ...(section.field === "inviteDelivery" ? ["rawInviteTokensIncluded"] : []),
+        ...(section.field === "sessionSecretPolicy"
+          ? ["rawSessionSecretsIncluded"]
+          : []),
+      ],
+    ]),
+  );
 
   assert.equal(hostedIdentityEvidencePlaceholderSchema.properties.version.const, 1);
   const malformedPath =
