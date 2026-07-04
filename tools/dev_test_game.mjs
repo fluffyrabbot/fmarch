@@ -1031,8 +1031,10 @@ async function verifySessionCard(card) {
       roles.push(role);
     }
     hostSetup = await verifySeededHostSetupRoute({
+      browser,
       setupPage: roleEntries.hostSetup.page,
       game: card.game,
+      apiBaseUrl: card.apiBaseUrl,
       frontendBaseUrl: card.frontendBaseUrl,
     });
     concurrentActionPage = await roleEntries.actionPlayer.context.newPage();
@@ -1195,7 +1197,13 @@ async function verifySessionCard(card) {
   };
 }
 
-async function verifySeededHostSetupRoute({ setupPage, game, frontendBaseUrl }) {
+async function verifySeededHostSetupRoute({
+  browser,
+  setupPage,
+  game,
+  apiBaseUrl,
+  frontendBaseUrl,
+}) {
   const roleUrl = `${frontendBaseUrl}/g/${game}/setup`;
   await setupPage.getByTestId("host-setup-surface").waitFor({
     state: "visible",
@@ -1276,6 +1284,11 @@ async function verifySeededHostSetupRoute({ setupPage, game, frontendBaseUrl }) 
   }
 
   const policyCommand = await verifyHostSetupPolicyCommandRoundTrip(setupPage);
+  const setupMutationCommand = await verifyDisposableHostSetupRosterRoleCommand({
+    browser,
+    apiBaseUrl,
+    frontendBaseUrl,
+  });
 
   return {
     status: "passed",
@@ -1291,9 +1304,266 @@ async function verifySeededHostSetupRoute({ setupPage, game, frontendBaseUrl }) 
     roleKeys,
     mainPolicyText,
     policyCommand,
+    setupMutationCommand,
     readyCheckIds: checks
       .filter((check) => check.state === "ready")
       .map((check) => check.id),
+  };
+}
+
+async function verifyDisposableHostSetupRosterRoleCommand({
+  browser,
+  apiBaseUrl,
+  frontendBaseUrl,
+}) {
+  const setupGame = crypto.randomUUID();
+  const seed = await seedHostSetupRosterRoleGame({ setupGame });
+  const setupSession = await createSessionGrantCredential({
+    token: `${tokenPrefix}-host-setup-mutation-${setupGame}`,
+    principalUserId: "host_h",
+    returnTo: `/g/${setupGame}/setup`,
+    expectedCapabilityKind: "HostOf",
+    issuedBy: {
+      principalUserId: "root_admin",
+      capabilityKind: "GlobalAdmin",
+      surface: "/auth/session-grants",
+    },
+  });
+  const entry = await openVerifiedRoleEntry({
+    browser,
+    session: setupSession,
+    game: setupGame,
+    apiBaseUrl,
+    frontendBaseUrl,
+  });
+  const page = entry.page;
+  const addedSlotId = "slot_extra";
+  const assignedPrincipalUserId = "setup-extra-player";
+  const assignedRoleKey = "mafia_goon";
+  try {
+    await page.getByTestId("host-setup-surface").waitFor({
+      state: "visible",
+      timeout: 15000,
+    });
+    const initialSummary = await page
+      .getByTestId("host-setup-readiness-summary")
+      .innerText();
+    const initialState = await page.evaluate(
+      () => window.__fmarchHostSetupState ?? null,
+    );
+
+    await page
+      .locator('section[aria-label="Roster"] input[name="slotId"]:not([type="hidden"])')
+      .fill(addedSlotId);
+    await page.getByRole("button", { name: "Add slot" }).click();
+    const addSlot = await waitForHostSetupCommand({
+      setupPage: page,
+      statusTestId: "host-setup-add-slot-status",
+      commandKind: "AddSlot",
+      commandPredicate: (command) => command?.slot === addedSlotId,
+      statePredicate: (state) =>
+        (state?.slots ?? []).some((slot) => slot.slotId === addedSlotId),
+    });
+
+    const rosterRow = page.getByTestId(`host-setup-slot-${addedSlotId}`);
+    await rosterRow.locator('input[name="principalUserId"]').fill(
+      assignedPrincipalUserId,
+    );
+    await rosterRow.getByRole("button", { name: "Assign" }).click();
+    const assignSlot = await waitForHostSetupCommand({
+      setupPage: page,
+      statusTestId: "host-setup-assign-slot-status",
+      commandKind: "AssignSlot",
+      commandPredicate: (command) =>
+        command?.slot === addedSlotId &&
+        command?.user === assignedPrincipalUserId,
+      statePredicate: (state) =>
+        (state?.slots ?? []).some(
+          (slot) =>
+            slot.slotId === addedSlotId &&
+            slot.occupantUserId === assignedPrincipalUserId,
+        ),
+    });
+
+    const roleRow = page.getByTestId(`host-setup-role-${addedSlotId}`);
+    await roleRow.locator('select[name="roleKey"]').selectOption(assignedRoleKey);
+    await roleRow.getByRole("button", { name: "Assign role" }).click();
+    const assignRole = await waitForHostSetupCommand({
+      setupPage: page,
+      statusTestId: "host-setup-assign-role-status",
+      commandKind: "AssignRole",
+      commandPredicate: (command) =>
+        command?.slot === addedSlotId &&
+        command?.role_key === assignedRoleKey,
+      statePredicate: (state) =>
+        (state?.slots ?? []).some(
+          (slot) =>
+            slot.slotId === addedSlotId &&
+            slot.occupantUserId === assignedPrincipalUserId &&
+            slot.roleKey === assignedRoleKey,
+        ),
+    });
+
+    const finalState = await page.evaluate(
+      () => window.__fmarchHostSetupState ?? null,
+    );
+    const finalReadiness = await page.evaluate(
+      () => window.__fmarchHostSetupReadiness ?? null,
+    );
+    const finalSlot = (finalState?.slots ?? []).find(
+      (slot) => slot.slotId === addedSlotId,
+    );
+    if (
+      page.url() !== `${frontendBaseUrl}/g/${setupGame}/setup` ||
+      initialSummary !== "Ready to start" ||
+      initialState?.phase !== null ||
+      finalSlot?.occupantUserId !== assignedPrincipalUserId ||
+      finalSlot?.roleKey !== assignedRoleKey ||
+      finalReadiness?.summary !== "Ready to start" ||
+      finalReadiness?.startAvailable !== true
+    ) {
+      throw new Error(
+        `host setup roster/role command proof drifted: ${JSON.stringify({
+          url: page.url(),
+          expectedUrl: `${frontendBaseUrl}/g/${setupGame}/setup`,
+          initialSummary,
+          initialState,
+          finalState,
+          finalReadiness,
+        })}`,
+      );
+    }
+    return {
+      status: "passed",
+      proof:
+        "A disposable pre-start setup role URL added a slot, assigned its occupant, assigned its role, and refreshed to ready setup state.",
+      game: setupGame,
+      roleUrl: `${frontendBaseUrl}/g/${setupGame}/setup`,
+      sessionPrincipalUserId: setupSession.principalUserId,
+      seed,
+      addedSlotId,
+      assignedPrincipalUserId,
+      assignedRoleKey,
+      initialSummary,
+      finalSummary: finalReadiness.summary,
+      finalStartAvailable: finalReadiness.startAvailable,
+      finalSlot,
+      commands: {
+        addSlot,
+        assignSlot,
+        assignRole,
+      },
+    };
+  } finally {
+    await entry.context.close().catch(() => {});
+  }
+}
+
+async function seedHostSetupRosterRoleGame({ setupGame }) {
+  const plan = [
+    ["host_h", { CreateGame: { game: setupGame, pack: "mafiascum" } }],
+    ["host_h", { AddSlot: { game: setupGame, slot: "slot_1" } }],
+    [
+      "host_h",
+      { AssignSlot: { game: setupGame, slot: "slot_1", user: "setup-player-one" } },
+    ],
+    [
+      "host_h",
+      {
+        AssignRole: {
+          game: setupGame,
+          slot: "slot_1",
+          role_key: "vanilla_townie",
+        },
+      },
+    ],
+  ];
+  const commands = [];
+  for (const [principalUserId, command] of plan) {
+    commands.push(await sendCommand(principalUserId, command));
+  }
+  return {
+    game: setupGame,
+    commands: commands.length,
+    initialSlotId: "slot_1",
+    initialPrincipalUserId: "setup-player-one",
+    initialRoleKey: "vanilla_townie",
+  };
+}
+
+async function waitForHostSetupCommand({
+  setupPage,
+  statusTestId,
+  commandKind,
+  commandPredicate,
+  statePredicate,
+}) {
+  try {
+    await setupPage.waitForFunction(
+      ({ commandKind: expectedKind }) => {
+        const outcome = window.__fmarchHostSetupCommandOutcome;
+        if (outcome?.state !== "ack") {
+          return false;
+        }
+        const command = outcome?.requestEnvelope?.body?.body?.command?.[expectedKind];
+        return command !== undefined;
+      },
+      { commandKind },
+      { timeout: 15000 },
+    );
+    await setupPage.waitForFunction(
+      ({ commandKind: expectedKind }) => {
+        const outcome = window.__fmarchHostSetupCommandOutcome;
+        const command = outcome?.requestEnvelope?.body?.body?.command?.[expectedKind];
+        return command !== undefined && window.__fmarchHostSetupState !== undefined;
+      },
+      { commandKind },
+      { timeout: 15000 },
+    );
+  } catch (error) {
+    throw new Error(
+      `host setup ${commandKind} command wait timed out: ${JSON.stringify({
+        statusTestId,
+        snapshot: await hostSetupPolicyCommandSnapshot(setupPage),
+        error: error instanceof Error ? error.message : String(error),
+      })}`,
+    );
+  }
+  const [statusState, statusText, outcome, setupState, readiness] =
+    await Promise.all([
+      setupPage.getByTestId(statusTestId).getAttribute("data-state"),
+      setupPage.getByTestId(statusTestId).innerText(),
+      setupPage.evaluate(() => window.__fmarchHostSetupCommandOutcome ?? null),
+      setupPage.evaluate(() => window.__fmarchHostSetupState ?? null),
+      setupPage.evaluate(() => window.__fmarchHostSetupReadiness ?? null),
+    ]);
+  const command =
+    outcome?.requestEnvelope?.body?.body?.command?.[commandKind] ?? null;
+  if (
+    statusState !== "ack" ||
+    commandPredicate(command) !== true ||
+    statePredicate(setupState) !== true
+  ) {
+    throw new Error(
+      `host setup ${commandKind} command drifted: ${JSON.stringify({
+        statusState,
+        statusText,
+        command,
+        setupState,
+        readiness,
+        outcome,
+      })}`,
+    );
+  }
+  return {
+    status: statusState,
+    statusText,
+    commandKind,
+    command,
+    streamSeqs: outcome.streamSeqs,
+    requestEnvelope: outcome.requestEnvelope,
+    serverEnvelope: outcome.serverEnvelope,
+    readinessSummary: readiness?.summary ?? null,
   };
 }
 

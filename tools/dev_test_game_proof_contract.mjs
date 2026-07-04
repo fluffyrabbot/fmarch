@@ -238,6 +238,7 @@ export function buildDevTestGameProofRun(session, options = {}) {
       roleKeys: verification.hostSetup?.roleKeys ?? null,
       mainPolicyText: verification.hostSetup?.mainPolicyText ?? null,
       policyCommand: verification.hostSetup?.policyCommand ?? null,
+      setupMutationCommand: verification.hostSetup?.setupMutationCommand ?? null,
       passed:
         verification.hostSetup?.status === "passed" &&
         verification.hostSetup?.roleUrl?.includes(`/g/${session?.game ?? ""}/setup`) ===
@@ -273,6 +274,38 @@ export function buildDevTestGameProofRun(session, options = {}) {
           ?.command?.SetPostPolicy?.allow_media_only === false &&
         verification.hostSetup?.policyCommand?.restored?.refreshedAllowMediaOnly ===
           false &&
+        verification.hostSetup?.setupMutationCommand?.status === "passed" &&
+        verification.hostSetup?.setupMutationCommand?.sessionPrincipalUserId ===
+          "host_h" &&
+        verification.hostSetup?.setupMutationCommand?.initialSummary ===
+          "Ready to start" &&
+        verification.hostSetup?.setupMutationCommand?.finalSummary ===
+          "Ready to start" &&
+        verification.hostSetup?.setupMutationCommand?.finalStartAvailable === true &&
+        verification.hostSetup?.setupMutationCommand?.addedSlotId ===
+          "slot_extra" &&
+        verification.hostSetup?.setupMutationCommand?.assignedPrincipalUserId ===
+          "setup-extra-player" &&
+        verification.hostSetup?.setupMutationCommand?.assignedRoleKey ===
+          "mafia_goon" &&
+        verification.hostSetup?.setupMutationCommand?.finalSlot?.slotId ===
+          "slot_extra" &&
+        verification.hostSetup?.setupMutationCommand?.finalSlot?.occupantUserId ===
+          "setup-extra-player" &&
+        verification.hostSetup?.setupMutationCommand?.finalSlot?.roleKey ===
+          "mafia_goon" &&
+        verification.hostSetup?.setupMutationCommand?.commands?.addSlot?.status ===
+          "ack" &&
+        verification.hostSetup?.setupMutationCommand?.commands?.addSlot?.command
+          ?.slot === "slot_extra" &&
+        verification.hostSetup?.setupMutationCommand?.commands?.assignSlot?.status ===
+          "ack" &&
+        verification.hostSetup?.setupMutationCommand?.commands?.assignSlot?.command
+          ?.user === "setup-extra-player" &&
+        verification.hostSetup?.setupMutationCommand?.commands?.assignRole?.status ===
+          "ack" &&
+        verification.hostSetup?.setupMutationCommand?.commands?.assignRole?.command
+          ?.role_key === "mafia_goon" &&
         verification.hostSetup?.readyCheckIds?.length === 7,
     }),
     lane("cohost-console", "Cohost role URL opens delegated host console controls", {

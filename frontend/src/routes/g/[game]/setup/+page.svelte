@@ -250,7 +250,7 @@
       </header>
       <div class="host-setup__table" data-testid="host-setup-roles">
         {#each setupState.slots as slot}
-          <article class="host-setup__row">
+          <article class="host-setup__row" data-testid={`host-setup-role-${slot.slotId}`}>
             <div>
               <strong>{slot.slotId}</strong>
               <span>{slot.roleKey ?? "No role assigned"}</span>

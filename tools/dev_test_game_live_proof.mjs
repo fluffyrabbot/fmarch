@@ -495,6 +495,59 @@ assert.equal(
   session.verification.hostSetup.policyCommand.restored.refreshedAllowMediaOnly,
   false,
 );
+assert.equal(session.verification.hostSetup.setupMutationCommand.status, "passed");
+assert.match(
+  session.verification.hostSetup.setupMutationCommand.roleUrl,
+  /\/g\/[0-9a-f-]+\/setup$/,
+);
+assert.equal(
+  session.verification.hostSetup.setupMutationCommand.sessionPrincipalUserId,
+  "host_h",
+);
+assert.equal(
+  session.verification.hostSetup.setupMutationCommand.initialSummary,
+  "Ready to start",
+);
+assert.equal(
+  session.verification.hostSetup.setupMutationCommand.finalSummary,
+  "Ready to start",
+);
+assert.equal(
+  session.verification.hostSetup.setupMutationCommand.finalStartAvailable,
+  true,
+);
+assert.equal(
+  session.verification.hostSetup.setupMutationCommand.addedSlotId,
+  "slot_extra",
+);
+assert.equal(
+  session.verification.hostSetup.setupMutationCommand.assignedPrincipalUserId,
+  "setup-extra-player",
+);
+assert.equal(
+  session.verification.hostSetup.setupMutationCommand.assignedRoleKey,
+  "mafia_goon",
+);
+assert.equal(
+  session.verification.hostSetup.setupMutationCommand.finalSlot.occupantUserId,
+  "setup-extra-player",
+);
+assert.equal(
+  session.verification.hostSetup.setupMutationCommand.finalSlot.roleKey,
+  "mafia_goon",
+);
+assert.equal(
+  session.verification.hostSetup.setupMutationCommand.commands.addSlot.commandKind,
+  "AddSlot",
+);
+assert.equal(
+  session.verification.hostSetup.setupMutationCommand.commands.assignSlot.commandKind,
+  "AssignSlot",
+);
+assert.equal(
+  session.verification.hostSetup.setupMutationCommand.commands.assignRole.commandKind,
+  "AssignRole",
+);
 assert.equal(session.verification.hostSetup.readyCheckIds.length, 7);
 assert.equal(session.verification.hostSetup.slotIds.includes("slot-7"), true);
 assert.equal(session.verification.hostSetup.slotIds.includes("slot_4"), true);

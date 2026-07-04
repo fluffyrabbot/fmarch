@@ -2859,6 +2859,70 @@ test("session card and markdown include role credential URLs and tokens", async 
           },
         },
       },
+      setupMutationCommand: {
+        status: "passed",
+        proof:
+          "A disposable pre-start setup role URL added a slot, assigned its occupant, assigned its role, and refreshed to ready setup state.",
+        game: "77777777-7777-4777-8777-777777777777",
+        roleUrl:
+          "http://127.0.0.1:4102/g/77777777-7777-4777-8777-777777777777/setup",
+        sessionPrincipalUserId: "host_h",
+        seed: {
+          game: "77777777-7777-4777-8777-777777777777",
+          commands: 4,
+          initialSlotId: "slot_1",
+          initialPrincipalUserId: "setup-player-one",
+          initialRoleKey: "vanilla_townie",
+        },
+        addedSlotId: "slot_extra",
+        assignedPrincipalUserId: "setup-extra-player",
+        assignedRoleKey: "mafia_goon",
+        initialSummary: "Ready to start",
+        finalSummary: "Ready to start",
+        finalStartAvailable: true,
+        finalSlot: {
+          slotId: "slot_extra",
+          occupantUserId: "setup-extra-player",
+          alive: true,
+          status: "alive",
+          statusTags: [],
+          roleKey: "mafia_goon",
+        },
+        commands: {
+          addSlot: {
+            status: "ack",
+            commandKind: "AddSlot",
+            command: {
+              game: "77777777-7777-4777-8777-777777777777",
+              slot: "slot_extra",
+            },
+            streamSeqs: [5],
+            readinessSummary: "Setup still needs attention",
+          },
+          assignSlot: {
+            status: "ack",
+            commandKind: "AssignSlot",
+            command: {
+              game: "77777777-7777-4777-8777-777777777777",
+              slot: "slot_extra",
+              user: "setup-extra-player",
+            },
+            streamSeqs: [6],
+            readinessSummary: "Setup still needs attention",
+          },
+          assignRole: {
+            status: "ack",
+            commandKind: "AssignRole",
+            command: {
+              game: "77777777-7777-4777-8777-777777777777",
+              slot: "slot_extra",
+              role_key: "mafia_goon",
+            },
+            streamSeqs: [7],
+            readinessSummary: "Ready to start",
+          },
+        },
+      },
       readyCheckIds: [
         "game-created",
         "pack-valid",
