@@ -1,4 +1,5 @@
 import path from "node:path";
+import { pathToFileURL } from "node:url";
 import { assertDevTestGameProofRun } from "./dev_test_game_proof_contract.mjs";
 import {
   assertDevTestGameHostedTargetPreflight,
@@ -41,134 +42,140 @@ const requiredRelatedLinks = [
   "local-next-action",
 ];
 
-await runAdminAuditProof({
-  smokeName: "dev-test-game-hosted-target-preflight-admin-proof",
-  stage: "hosted-target-preflight-admin-proof-listen",
-  evidencePath,
-  envOverrides: {
-    FMARCH_DEV_TEST_GAME_HOSTED_TARGET_PREFLIGHT: preflightRelativePath,
-  },
-  loadSource: async () => ({
-    preflight: assertDevTestGameHostedTargetPreflight(await readJson(preflightPath)),
-    proofRun: assertDevTestGameProofRun(await readJson(proofRunPath)),
-  }),
-  prove: async ({ browser, frontendBaseUrl, source }) => {
-    const blockedRequiredEvidence = blockedCheckRequiredEvidence(
-      source.preflight.checks,
-    );
-    const hostedHandoffInputSections =
-      source.preflight.hostedHandoffChecklist?.inputSections ?? [];
-    const hostedHandoffSectionInputRows =
-      hostedEvidenceHandoffSectionInputRows(hostedHandoffInputSections);
-    return await proveAdminAuditDetail({
-      browser,
-      frontendBaseUrl,
-      game: source.proofRun.session.game,
-      auditId: "local-hosted-target-preflight",
-      requiredChecks,
-      requiredCheckStatuses: Object.fromEntries(
-        source.preflight.checks.map((check) => [check.id, check.status]),
-      ),
-      requiredUnproven: source.preflight.checks
-        .filter((check) => check.status === "blocked")
-        .map((check) => check.id),
-      requiredUnprovenStatuses: blockedRequiredEvidence,
-      requiredHostedHandoffInputs: hostedEvidenceHandoffInputIds,
-      requiredHostedHandoffBlockedChecks:
-        source.preflight.hostedHandoffChecklist?.blockedCheckIds ?? [],
-      requiredHostedHandoffBlockedCheckStatuses:
-        source.preflight.hostedHandoffChecklist === undefined
-          ? {}
-          : blockedCheckRequiredEvidence(
-              source.preflight.hostedHandoffChecklist.blockedChecks,
-            ),
-      requiredHostedHandoffSummary: hostedEvidenceHandoffSummary({
-        status: source.preflight.hostedHandoffChecklist?.status,
-        preflightStatus:
-          source.preflight.hostedHandoffChecklist?.preflightStatus,
-        command: source.preflight.hostedHandoffChecklist?.command,
-        proofTarget: source.preflight.hostedHandoffChecklist?.proofTarget,
-      }),
-      requiredHostedHandoffBlockedReceipt:
-        source.preflight.hostedHandoffChecklist?.blockedReceipt ?? null,
-      requiredHostedHandoffInputSections: hostedHandoffInputSections.map(
-        (section) => section.id,
-      ),
-      requiredHostedHandoffInputSectionStatuses:
-        hostedEvidenceHandoffInputSectionStatuses(hostedHandoffInputSections),
-      requiredHostedHandoffSectionInputs: hostedHandoffSectionInputRows.map(
-        (row) => row.id,
-      ),
-      requiredHostedHandoffSectionInputStatuses:
-        hostedEvidenceHandoffSectionInputStatuses(hostedHandoffInputSections),
-      requiredRelatedLinks,
-    });
-  },
-  buildEvidence: ({ source, adminRoleSurface }) => ({
-    version: 1,
-    proof: "dev-test-game-hosted-target-preflight-admin-proof",
-    status: "passed",
-    releaseReady: false,
-    productionReady: false,
-    scope: "local-dev-test-game-hosted-target-preflight-admin-surface",
-    proofBoundary:
-      "Local SvelteKit admin role URL with fixture admin authority over the hosted target preflight handoff. Proves configured, blocked, and release-boundary checks are discoverable from the seeded admin overview and inspectable in a native admin audit detail route; it does not prove hosted deployment, hosted telemetry, beta readiness, release readiness, or production readiness.",
-    generatedFrom: {
-      hostedTargetPreflight: preflightRelativePath,
-      proofRun: proofRunRelativePath,
-      game: source.proofRun.session.game,
-      status: source.preflight.status,
-      checkIds: requiredChecks,
-      checkStatuses: Object.fromEntries(
-        source.preflight.checks.map((check) => [check.id, check.status]),
-      ),
-      blockedCheckIds: source.preflight.checks
-        .filter((check) => check.status === "blocked")
-        .map((check) => check.id),
-      blockedCheckRequiredEvidence: blockedCheckRequiredEvidence(
-        source.preflight.checks,
-      ),
-      hostedHandoffInputIds: hostedEvidenceHandoffInputIds,
-      hostedHandoffBlockedCheckIds:
-        source.preflight.hostedHandoffChecklist?.blockedCheckIds ?? [],
-      hostedHandoffBlockedCheckRequiredEvidence:
-        blockedCheckRequiredEvidence(
-          source.preflight.hostedHandoffChecklist?.blockedChecks ?? [],
-        ),
-      hostedHandoffSummary: hostedEvidenceHandoffSummary({
-        status: source.preflight.hostedHandoffChecklist?.status,
-        preflightStatus:
-          source.preflight.hostedHandoffChecklist?.preflightStatus,
-        command: source.preflight.hostedHandoffChecklist?.command,
-        proofTarget: source.preflight.hostedHandoffChecklist?.proofTarget,
-      }),
-      hostedHandoffInputSectionIds:
-        source.preflight.hostedHandoffChecklist?.inputSections?.map(
-          (section) => section.id,
-        ) ?? [],
-      hostedHandoffInputSectionStatuses:
-        hostedEvidenceHandoffInputSectionStatuses(
-          source.preflight.hostedHandoffChecklist?.inputSections ?? [],
-        ),
-      hostedHandoffSectionInputIds: hostedEvidenceHandoffSectionInputRows(
-        source.preflight.hostedHandoffChecklist?.inputSections ?? [],
-      ).map((row) => row.id),
-      hostedHandoffSectionInputStatuses:
-        hostedEvidenceHandoffSectionInputStatuses(
-          source.preflight.hostedHandoffChecklist?.inputSections ?? [],
-        ),
-      ...(source.preflight.hostedHandoffChecklist?.blockedReceipt === undefined
-        ? {}
-        : {
-            hostedHandoffBlockedReceipt:
-              source.preflight.hostedHandoffChecklist.blockedReceipt,
-          }),
-      relatedAuditIds: requiredRelatedLinks,
+export function hostedTargetPreflightAdminProofCase() {
+  return {
+    smokeName: "dev-test-game-hosted-target-preflight-admin-proof",
+    stage: "hosted-target-preflight-admin-proof-listen",
+    evidencePath,
+    envOverrides: {
+      FMARCH_DEV_TEST_GAME_HOSTED_TARGET_PREFLIGHT: preflightRelativePath,
     },
-    adminRoleSurface,
-  }),
-  assertEvidence: assertHostedTargetPreflightAdminProof,
-});
+    loadSource: async () => ({
+      preflight: assertDevTestGameHostedTargetPreflight(await readJson(preflightPath)),
+      proofRun: assertDevTestGameProofRun(await readJson(proofRunPath)),
+    }),
+    prove: async ({ browser, frontendBaseUrl, source }) => {
+      const blockedRequiredEvidence = blockedCheckRequiredEvidence(
+        source.preflight.checks,
+      );
+      const hostedHandoffInputSections =
+        source.preflight.hostedHandoffChecklist?.inputSections ?? [];
+      const hostedHandoffSectionInputRows =
+        hostedEvidenceHandoffSectionInputRows(hostedHandoffInputSections);
+      return await proveAdminAuditDetail({
+        browser,
+        frontendBaseUrl,
+        game: source.proofRun.session.game,
+        auditId: "local-hosted-target-preflight",
+        requiredChecks,
+        requiredCheckStatuses: Object.fromEntries(
+          source.preflight.checks.map((check) => [check.id, check.status]),
+        ),
+        requiredUnproven: source.preflight.checks
+          .filter((check) => check.status === "blocked")
+          .map((check) => check.id),
+        requiredUnprovenStatuses: blockedRequiredEvidence,
+        requiredHostedHandoffInputs: hostedEvidenceHandoffInputIds,
+        requiredHostedHandoffBlockedChecks:
+          source.preflight.hostedHandoffChecklist?.blockedCheckIds ?? [],
+        requiredHostedHandoffBlockedCheckStatuses:
+          source.preflight.hostedHandoffChecklist === undefined
+            ? {}
+            : blockedCheckRequiredEvidence(
+                source.preflight.hostedHandoffChecklist.blockedChecks,
+              ),
+        requiredHostedHandoffSummary: hostedEvidenceHandoffSummary({
+          status: source.preflight.hostedHandoffChecklist?.status,
+          preflightStatus:
+            source.preflight.hostedHandoffChecklist?.preflightStatus,
+          command: source.preflight.hostedHandoffChecklist?.command,
+          proofTarget: source.preflight.hostedHandoffChecklist?.proofTarget,
+        }),
+        requiredHostedHandoffBlockedReceipt:
+          source.preflight.hostedHandoffChecklist?.blockedReceipt ?? null,
+        requiredHostedHandoffInputSections: hostedHandoffInputSections.map(
+          (section) => section.id,
+        ),
+        requiredHostedHandoffInputSectionStatuses:
+          hostedEvidenceHandoffInputSectionStatuses(hostedHandoffInputSections),
+        requiredHostedHandoffSectionInputs: hostedHandoffSectionInputRows.map(
+          (row) => row.id,
+        ),
+        requiredHostedHandoffSectionInputStatuses:
+          hostedEvidenceHandoffSectionInputStatuses(hostedHandoffInputSections),
+        requiredRelatedLinks,
+      });
+    },
+    buildEvidence: ({ source, adminRoleSurface }) => ({
+      version: 1,
+      proof: "dev-test-game-hosted-target-preflight-admin-proof",
+      status: "passed",
+      releaseReady: false,
+      productionReady: false,
+      scope: "local-dev-test-game-hosted-target-preflight-admin-surface",
+      proofBoundary:
+        "Local SvelteKit admin role URL with fixture admin authority over the hosted target preflight handoff. Proves configured, blocked, and release-boundary checks are discoverable from the seeded admin overview and inspectable in a native admin audit detail route; it does not prove hosted deployment, hosted telemetry, beta readiness, release readiness, or production readiness.",
+      generatedFrom: {
+        hostedTargetPreflight: preflightRelativePath,
+        proofRun: proofRunRelativePath,
+        game: source.proofRun.session.game,
+        status: source.preflight.status,
+        checkIds: requiredChecks,
+        checkStatuses: Object.fromEntries(
+          source.preflight.checks.map((check) => [check.id, check.status]),
+        ),
+        blockedCheckIds: source.preflight.checks
+          .filter((check) => check.status === "blocked")
+          .map((check) => check.id),
+        blockedCheckRequiredEvidence: blockedCheckRequiredEvidence(
+          source.preflight.checks,
+        ),
+        hostedHandoffInputIds: hostedEvidenceHandoffInputIds,
+        hostedHandoffBlockedCheckIds:
+          source.preflight.hostedHandoffChecklist?.blockedCheckIds ?? [],
+        hostedHandoffBlockedCheckRequiredEvidence:
+          blockedCheckRequiredEvidence(
+            source.preflight.hostedHandoffChecklist?.blockedChecks ?? [],
+          ),
+        hostedHandoffSummary: hostedEvidenceHandoffSummary({
+          status: source.preflight.hostedHandoffChecklist?.status,
+          preflightStatus:
+            source.preflight.hostedHandoffChecklist?.preflightStatus,
+          command: source.preflight.hostedHandoffChecklist?.command,
+          proofTarget: source.preflight.hostedHandoffChecklist?.proofTarget,
+        }),
+        hostedHandoffInputSectionIds:
+          source.preflight.hostedHandoffChecklist?.inputSections?.map(
+            (section) => section.id,
+          ) ?? [],
+        hostedHandoffInputSectionStatuses:
+          hostedEvidenceHandoffInputSectionStatuses(
+            source.preflight.hostedHandoffChecklist?.inputSections ?? [],
+          ),
+        hostedHandoffSectionInputIds: hostedEvidenceHandoffSectionInputRows(
+          source.preflight.hostedHandoffChecklist?.inputSections ?? [],
+        ).map((row) => row.id),
+        hostedHandoffSectionInputStatuses:
+          hostedEvidenceHandoffSectionInputStatuses(
+            source.preflight.hostedHandoffChecklist?.inputSections ?? [],
+          ),
+        ...(source.preflight.hostedHandoffChecklist?.blockedReceipt === undefined
+          ? {}
+          : {
+              hostedHandoffBlockedReceipt:
+                source.preflight.hostedHandoffChecklist.blockedReceipt,
+            }),
+        relatedAuditIds: requiredRelatedLinks,
+      },
+      adminRoleSurface,
+    }),
+    assertEvidence: assertHostedTargetPreflightAdminProof,
+  };
+}
+
+if (pathToFileURL(process.argv[1] ?? "").href === import.meta.url) {
+  await runAdminAuditProof(hostedTargetPreflightAdminProofCase());
+}
 
 export function assertHostedTargetPreflightAdminProof(evidence) {
   if (

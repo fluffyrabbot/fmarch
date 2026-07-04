@@ -1,4 +1,5 @@
 import path from "node:path";
+import { pathToFileURL } from "node:url";
 import { assertDevTestGameOpsArtifacts } from "./dev_test_game_ops_artifacts.mjs";
 import {
   artifactDir,
@@ -23,40 +24,46 @@ const requiredChecks = [
   "release-boundary-carried",
 ];
 
-await runAdminAuditProof({
-  smokeName: "dev-test-game-ops-admin-proof",
-  stage: "ops-admin-proof-listen",
-  evidencePath,
-  envOverrides: {
-    FMARCH_DEV_TEST_GAME_OPS_ARTIFACTS: opsArtifactsRelativePath,
-  },
-  loadSource: async () =>
-    assertDevTestGameOpsArtifacts(await readJson(opsArtifactsPath)),
-  prove: async ({ browser, frontendBaseUrl, source: opsArtifacts }) =>
-    await proveAdminAuditDetail({
-      browser,
-      frontendBaseUrl,
-      game: opsArtifacts.run.game,
-      auditId: "local-ops-artifacts",
-      requiredChecks,
-    }),
-  buildEvidence: ({ source: opsArtifacts, adminRoleSurface }) => ({
-    version: 1,
-    proof: "dev-test-game-ops-admin-proof",
-    status: "passed",
-    releaseReady: false,
-    productionReady: false,
-    scope: "local-dev-test-game-ops-admin-surface",
-    proofBoundary:
-      "Local SvelteKit admin role URL with fixture admin authority over a saved dev-test-game ops artifact. Proves the local ops artifact bundle is discoverable from the seeded admin overview and inspectable in a native admin audit detail route; it does not prove hosted observability, centralized logs, paging, SLOs, incident response, or release readiness.",
-    generatedFrom: {
-      opsArtifacts: opsArtifactsRelativePath,
-      game: opsArtifacts.run.game,
+export function opsAdminProofCase() {
+  return {
+    smokeName: "dev-test-game-ops-admin-proof",
+    stage: "ops-admin-proof-listen",
+    evidencePath,
+    envOverrides: {
+      FMARCH_DEV_TEST_GAME_OPS_ARTIFACTS: opsArtifactsRelativePath,
     },
-    adminRoleSurface,
-  }),
-  assertEvidence: assertOpsAdminProof,
-});
+    loadSource: async () =>
+      assertDevTestGameOpsArtifacts(await readJson(opsArtifactsPath)),
+    prove: async ({ browser, frontendBaseUrl, source: opsArtifacts }) =>
+      await proveAdminAuditDetail({
+        browser,
+        frontendBaseUrl,
+        game: opsArtifacts.run.game,
+        auditId: "local-ops-artifacts",
+        requiredChecks,
+      }),
+    buildEvidence: ({ source: opsArtifacts, adminRoleSurface }) => ({
+      version: 1,
+      proof: "dev-test-game-ops-admin-proof",
+      status: "passed",
+      releaseReady: false,
+      productionReady: false,
+      scope: "local-dev-test-game-ops-admin-surface",
+      proofBoundary:
+        "Local SvelteKit admin role URL with fixture admin authority over a saved dev-test-game ops artifact. Proves the local ops artifact bundle is discoverable from the seeded admin overview and inspectable in a native admin audit detail route; it does not prove hosted observability, centralized logs, paging, SLOs, incident response, or release readiness.",
+      generatedFrom: {
+        opsArtifacts: opsArtifactsRelativePath,
+        game: opsArtifacts.run.game,
+      },
+      adminRoleSurface,
+    }),
+    assertEvidence: assertOpsAdminProof,
+  };
+}
+
+if (pathToFileURL(process.argv[1] ?? "").href === import.meta.url) {
+  await runAdminAuditProof(opsAdminProofCase());
+}
 
 export function assertOpsAdminProof(evidence) {
   if (

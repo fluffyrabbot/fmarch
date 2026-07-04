@@ -1,4 +1,5 @@
 import path from "node:path";
+import { pathToFileURL } from "node:url";
 import { assertDevTestGameProofRun } from "./dev_test_game_proof_contract.mjs";
 import {
   assertDevTestGameHostedIdentityEvidence,
@@ -74,191 +75,197 @@ function hostedIdentityPacketInputStatuses(hostedIdentityEvidence) {
   );
 }
 
-await runAdminAuditProof({
-  smokeName: "dev-test-game-hosted-identity-evidence-admin-proof",
-  stage: "hosted-identity-evidence-admin-proof-listen",
-  evidencePath,
-  envOverrides: {
-    FMARCH_DEV_TEST_GAME_HOSTED_IDENTITY_EVIDENCE:
-      hostedIdentityEvidenceRelativePath,
-  },
-  loadSource: async () => ({
-    hostedIdentityEvidence: assertDevTestGameHostedIdentityEvidence(
-      await readJson(hostedIdentityEvidencePath),
-    ),
-    proofRun: assertDevTestGameProofRun(await readJson(proofRunPath)),
-  }),
-  prove: async ({ browser, frontendBaseUrl, source }) =>
-    {
-      const hostedHandoffInputSections =
-        source.hostedIdentityEvidence.hostedHandoffChecklist.inputSections ?? [];
-      const hostedHandoffSectionInputRows =
-        hostedIdentityEvidenceSectionInputRows(hostedHandoffInputSections);
-      return await proveAdminAuditDetail({
-      browser,
-      frontendBaseUrl,
-      game: source.proofRun.session.game,
-      auditId: "local-hosted-identity-evidence",
-      requiredChecks: source.hostedIdentityEvidence.checks.map((check) => check.id),
-      requiredCheckStatuses: Object.fromEntries(
-        source.hostedIdentityEvidence.checks.map((check) => [
-          check.id,
-          check.status,
-        ]),
-      ),
-      requiredUnproven:
-        source.hostedIdentityEvidence.hostedHandoffChecklist.blockedCheckIds,
-      requiredHostedHandoffInputs: hostedIdentityEvidenceInputIds,
-      requiredHostedHandoffInputValues: {
-        FMARCH_HOSTED_IDENTITY_EVIDENCE_PATH:
-          hostedIdentityEvidencePlaceholderFixturePath,
-      },
-      requiredHostedHandoffBlockedChecks:
-        source.hostedIdentityEvidence.hostedHandoffChecklist.blockedCheckIds,
-      requiredHostedHandoffGroups:
-        source.hostedIdentityEvidence.hostedHandoffChecklist.requirementGroups.map(
-          (group) => group.id,
-        ),
-      requiredHostedHandoffGroupStatuses: Object.fromEntries(
-        source.hostedIdentityEvidence.hostedHandoffChecklist.requirementGroups.map(
-          (group) => [group.id, group.status],
-        ),
-      ),
-      requiredHostedHandoffInputSections: hostedHandoffInputSections.map(
-        (section) => section.id,
-      ),
-      requiredHostedHandoffInputSectionStatuses:
-        hostedIdentityEvidenceInputSectionStatuses(hostedHandoffInputSections),
-      requiredHostedHandoffSectionInputs: hostedHandoffSectionInputRows.map(
-        (row) => row.id,
-      ),
-      requiredHostedHandoffSectionInputStatuses:
-        hostedIdentityEvidenceSectionInputStatuses(hostedHandoffInputSections),
-      requiredHostedIdentityPacketSections:
-        hostedIdentityPacketSectionRows(source.hostedIdentityEvidence).map(
-          (section) => section.id,
-        ),
-      requiredHostedIdentityPacketSectionStatuses: Object.fromEntries(
-        hostedIdentityPacketSectionRows(source.hostedIdentityEvidence).map(
-          (section) => [section.id, section.status],
-        ),
-      ),
-      requiredHostedIdentityPacketInputs: hostedIdentityPacketInputEntries(
-        source.hostedIdentityEvidence,
-      ).map((input) => input.rowId),
-      requiredHostedIdentityPacketInputStatuses: hostedIdentityPacketInputStatuses(
-        source.hostedIdentityEvidence,
-      ),
-      requiredHostedIdentityPacketRefs: hostedIdentityPacketRefEntries(
-        source.hostedIdentityEvidence,
-      ).map((ref) => ref.rowId),
-      requiredHostedIdentityPacketRefStatuses: Object.fromEntries(
-        hostedIdentityPacketRefEntries(source.hostedIdentityEvidence).map(
-          (ref) => [ref.rowId, ref.evidenceFamily],
-        ),
-      ),
-      requiredHostedIdentityRoleSurfaceContractDiffStatus:
-        source.hostedIdentityEvidence.target.roleSurfaceContractDiff.status,
-      requiredHostedIdentityRoleSurfaceContractMismatches:
-        source.hostedIdentityEvidence.target.roleSurfaceContractDiff.mismatches.map(
-          (mismatch) => mismatch.id,
-        ),
-      requiredHostedIdentityAdapterContractComparisonStatus:
-        source.hostedIdentityEvidence.target.identityAdapterContractComparison.status,
-      requiredHostedIdentityAdapterContractComparisonMismatches:
-        source.hostedIdentityEvidence.target.identityAdapterContractComparison.mismatches.map(
-          (mismatch) => mismatch.id,
-        ),
-      requiredRelatedLinks,
-      });
+export function hostedIdentityEvidenceAdminProofCase() {
+  return {
+    smokeName: "dev-test-game-hosted-identity-evidence-admin-proof",
+    stage: "hosted-identity-evidence-admin-proof-listen",
+    evidencePath,
+    envOverrides: {
+      FMARCH_DEV_TEST_GAME_HOSTED_IDENTITY_EVIDENCE:
+        hostedIdentityEvidenceRelativePath,
     },
-  buildEvidence: ({ source, adminRoleSurface }) => ({
-    version: 1,
-    proof: "dev-test-game-hosted-identity-evidence-admin-proof",
-    status: "passed",
-    releaseReady: false,
-    productionReady: false,
-    scope: "local-dev-test-game-hosted-identity-evidence-admin-surface",
-    proofBoundary:
-      "Local SvelteKit admin role URL with fixture admin authority over the hosted identity evidence handoff. Proves the hosted identity evidence receipt is discoverable from the seeded admin overview and inspectable in a native admin audit detail route with blocked hosted account, invite, recovery, abuse/rate-limit, session-secret, and audit-retention rows visible; it does not prove hosted identity, beta readiness, release readiness, or production readiness.",
-    generatedFrom: {
-      hostedIdentityEvidence: hostedIdentityEvidenceRelativePath,
-      proofRun: proofRunRelativePath,
-      game: source.proofRun.session.game,
-      status: source.hostedIdentityEvidence.status,
-      rawEvidencePath: source.hostedIdentityEvidence.target.rawEvidencePath,
-      rawEvidenceStatus: source.hostedIdentityEvidence.target.rawEvidenceStatus,
-      checkIds: source.hostedIdentityEvidence.checks.map((check) => check.id),
-      checkStatuses: Object.fromEntries(
-        source.hostedIdentityEvidence.checks.map((check) => [
-          check.id,
-          check.status,
-        ]),
+    loadSource: async () => ({
+      hostedIdentityEvidence: assertDevTestGameHostedIdentityEvidence(
+        await readJson(hostedIdentityEvidencePath),
       ),
-      blockedCheckIds:
-        source.hostedIdentityEvidence.hostedHandoffChecklist.blockedCheckIds,
-      hostedHandoffInputIds: hostedIdentityEvidenceInputIds,
-      hostedHandoffInputValues: {
-        FMARCH_HOSTED_IDENTITY_EVIDENCE_PATH:
-          hostedIdentityEvidencePlaceholderFixturePath,
+      proofRun: assertDevTestGameProofRun(await readJson(proofRunPath)),
+    }),
+    prove: async ({ browser, frontendBaseUrl, source }) =>
+      {
+        const hostedHandoffInputSections =
+          source.hostedIdentityEvidence.hostedHandoffChecklist.inputSections ?? [];
+        const hostedHandoffSectionInputRows =
+          hostedIdentityEvidenceSectionInputRows(hostedHandoffInputSections);
+        return await proveAdminAuditDetail({
+        browser,
+        frontendBaseUrl,
+        game: source.proofRun.session.game,
+        auditId: "local-hosted-identity-evidence",
+        requiredChecks: source.hostedIdentityEvidence.checks.map((check) => check.id),
+        requiredCheckStatuses: Object.fromEntries(
+          source.hostedIdentityEvidence.checks.map((check) => [
+            check.id,
+            check.status,
+          ]),
+        ),
+        requiredUnproven:
+          source.hostedIdentityEvidence.hostedHandoffChecklist.blockedCheckIds,
+        requiredHostedHandoffInputs: hostedIdentityEvidenceInputIds,
+        requiredHostedHandoffInputValues: {
+          FMARCH_HOSTED_IDENTITY_EVIDENCE_PATH:
+            hostedIdentityEvidencePlaceholderFixturePath,
+        },
+        requiredHostedHandoffBlockedChecks:
+          source.hostedIdentityEvidence.hostedHandoffChecklist.blockedCheckIds,
+        requiredHostedHandoffGroups:
+          source.hostedIdentityEvidence.hostedHandoffChecklist.requirementGroups.map(
+            (group) => group.id,
+          ),
+        requiredHostedHandoffGroupStatuses: Object.fromEntries(
+          source.hostedIdentityEvidence.hostedHandoffChecklist.requirementGroups.map(
+            (group) => [group.id, group.status],
+          ),
+        ),
+        requiredHostedHandoffInputSections: hostedHandoffInputSections.map(
+          (section) => section.id,
+        ),
+        requiredHostedHandoffInputSectionStatuses:
+          hostedIdentityEvidenceInputSectionStatuses(hostedHandoffInputSections),
+        requiredHostedHandoffSectionInputs: hostedHandoffSectionInputRows.map(
+          (row) => row.id,
+        ),
+        requiredHostedHandoffSectionInputStatuses:
+          hostedIdentityEvidenceSectionInputStatuses(hostedHandoffInputSections),
+        requiredHostedIdentityPacketSections:
+          hostedIdentityPacketSectionRows(source.hostedIdentityEvidence).map(
+            (section) => section.id,
+          ),
+        requiredHostedIdentityPacketSectionStatuses: Object.fromEntries(
+          hostedIdentityPacketSectionRows(source.hostedIdentityEvidence).map(
+            (section) => [section.id, section.status],
+          ),
+        ),
+        requiredHostedIdentityPacketInputs: hostedIdentityPacketInputEntries(
+          source.hostedIdentityEvidence,
+        ).map((input) => input.rowId),
+        requiredHostedIdentityPacketInputStatuses: hostedIdentityPacketInputStatuses(
+          source.hostedIdentityEvidence,
+        ),
+        requiredHostedIdentityPacketRefs: hostedIdentityPacketRefEntries(
+          source.hostedIdentityEvidence,
+        ).map((ref) => ref.rowId),
+        requiredHostedIdentityPacketRefStatuses: Object.fromEntries(
+          hostedIdentityPacketRefEntries(source.hostedIdentityEvidence).map(
+            (ref) => [ref.rowId, ref.evidenceFamily],
+          ),
+        ),
+        requiredHostedIdentityRoleSurfaceContractDiffStatus:
+          source.hostedIdentityEvidence.target.roleSurfaceContractDiff.status,
+        requiredHostedIdentityRoleSurfaceContractMismatches:
+          source.hostedIdentityEvidence.target.roleSurfaceContractDiff.mismatches.map(
+            (mismatch) => mismatch.id,
+          ),
+        requiredHostedIdentityAdapterContractComparisonStatus:
+          source.hostedIdentityEvidence.target.identityAdapterContractComparison.status,
+        requiredHostedIdentityAdapterContractComparisonMismatches:
+          source.hostedIdentityEvidence.target.identityAdapterContractComparison.mismatches.map(
+            (mismatch) => mismatch.id,
+          ),
+        requiredRelatedLinks,
+        });
       },
-      hostedHandoffBlockedCheckIds:
-        source.hostedIdentityEvidence.hostedHandoffChecklist.blockedCheckIds,
-      hostedHandoffGroupIds:
-        source.hostedIdentityEvidence.hostedHandoffChecklist.requirementGroups.map(
-          (group) => group.id,
+    buildEvidence: ({ source, adminRoleSurface }) => ({
+      version: 1,
+      proof: "dev-test-game-hosted-identity-evidence-admin-proof",
+      status: "passed",
+      releaseReady: false,
+      productionReady: false,
+      scope: "local-dev-test-game-hosted-identity-evidence-admin-surface",
+      proofBoundary:
+        "Local SvelteKit admin role URL with fixture admin authority over the hosted identity evidence handoff. Proves the hosted identity evidence receipt is discoverable from the seeded admin overview and inspectable in a native admin audit detail route with blocked hosted account, invite, recovery, abuse/rate-limit, session-secret, and audit-retention rows visible; it does not prove hosted identity, beta readiness, release readiness, or production readiness.",
+      generatedFrom: {
+        hostedIdentityEvidence: hostedIdentityEvidenceRelativePath,
+        proofRun: proofRunRelativePath,
+        game: source.proofRun.session.game,
+        status: source.hostedIdentityEvidence.status,
+        rawEvidencePath: source.hostedIdentityEvidence.target.rawEvidencePath,
+        rawEvidenceStatus: source.hostedIdentityEvidence.target.rawEvidenceStatus,
+        checkIds: source.hostedIdentityEvidence.checks.map((check) => check.id),
+        checkStatuses: Object.fromEntries(
+          source.hostedIdentityEvidence.checks.map((check) => [
+            check.id,
+            check.status,
+          ]),
         ),
-      hostedHandoffGroupStatuses: Object.fromEntries(
-        source.hostedIdentityEvidence.hostedHandoffChecklist.requirementGroups.map(
-          (group) => [group.id, group.status],
+        blockedCheckIds:
+          source.hostedIdentityEvidence.hostedHandoffChecklist.blockedCheckIds,
+        hostedHandoffInputIds: hostedIdentityEvidenceInputIds,
+        hostedHandoffInputValues: {
+          FMARCH_HOSTED_IDENTITY_EVIDENCE_PATH:
+            hostedIdentityEvidencePlaceholderFixturePath,
+        },
+        hostedHandoffBlockedCheckIds:
+          source.hostedIdentityEvidence.hostedHandoffChecklist.blockedCheckIds,
+        hostedHandoffGroupIds:
+          source.hostedIdentityEvidence.hostedHandoffChecklist.requirementGroups.map(
+            (group) => group.id,
+          ),
+        hostedHandoffGroupStatuses: Object.fromEntries(
+          source.hostedIdentityEvidence.hostedHandoffChecklist.requirementGroups.map(
+            (group) => [group.id, group.status],
+          ),
         ),
-      ),
-      hostedHandoffInputSectionIds:
-        source.hostedIdentityEvidence.hostedHandoffChecklist.inputSections.map(
-          (section) => section.id,
-        ),
-      hostedHandoffInputSectionStatuses:
-        hostedIdentityEvidenceInputSectionStatuses(
+        hostedHandoffInputSectionIds:
+          source.hostedIdentityEvidence.hostedHandoffChecklist.inputSections.map(
+            (section) => section.id,
+          ),
+        hostedHandoffInputSectionStatuses:
+          hostedIdentityEvidenceInputSectionStatuses(
+            source.hostedIdentityEvidence.hostedHandoffChecklist.inputSections,
+          ),
+        hostedHandoffSectionInputIds: hostedIdentityEvidenceSectionInputRows(
           source.hostedIdentityEvidence.hostedHandoffChecklist.inputSections,
+        ).map((row) => row.id),
+        hostedHandoffSectionInputStatuses:
+          hostedIdentityEvidenceSectionInputStatuses(
+            source.hostedIdentityEvidence.hostedHandoffChecklist.inputSections,
+          ),
+        hostedIdentityPacketSectionIds:
+          hostedIdentityPacketSectionRows(source.hostedIdentityEvidence).map(
+            (section) => section.id,
+          ),
+        hostedIdentityPacketInputIds: hostedIdentityPacketInputEntries(
+          source.hostedIdentityEvidence,
+        ).map((input) => input.rowId),
+        hostedIdentityPacketInputStatuses: hostedIdentityPacketInputStatuses(
+          source.hostedIdentityEvidence,
         ),
-      hostedHandoffSectionInputIds: hostedIdentityEvidenceSectionInputRows(
-        source.hostedIdentityEvidence.hostedHandoffChecklist.inputSections,
-      ).map((row) => row.id),
-      hostedHandoffSectionInputStatuses:
-        hostedIdentityEvidenceSectionInputStatuses(
-          source.hostedIdentityEvidence.hostedHandoffChecklist.inputSections,
-        ),
-      hostedIdentityPacketSectionIds:
-        hostedIdentityPacketSectionRows(source.hostedIdentityEvidence).map(
-          (section) => section.id,
-        ),
-      hostedIdentityPacketInputIds: hostedIdentityPacketInputEntries(
-        source.hostedIdentityEvidence,
-      ).map((input) => input.rowId),
-      hostedIdentityPacketInputStatuses: hostedIdentityPacketInputStatuses(
-        source.hostedIdentityEvidence,
-      ),
-      hostedIdentityPacketRefIds: hostedIdentityPacketRefEntries(
-        source.hostedIdentityEvidence,
-      ).map((ref) => ref.rowId),
-      hostedIdentityRoleSurfaceContractDiffStatus:
-        source.hostedIdentityEvidence.target.roleSurfaceContractDiff.status,
-      hostedIdentityRoleSurfaceContractMismatchIds:
-        source.hostedIdentityEvidence.target.roleSurfaceContractDiff.mismatches.map(
-          (mismatch) => mismatch.id,
-        ),
-      hostedIdentityAdapterContractComparisonStatus:
-        source.hostedIdentityEvidence.target.identityAdapterContractComparison.status,
-      hostedIdentityAdapterContractComparisonMismatchIds:
-        source.hostedIdentityEvidence.target.identityAdapterContractComparison.mismatches.map(
-          (mismatch) => mismatch.id,
-        ),
-      relatedAuditIds: requiredRelatedLinks,
-    },
-    adminRoleSurface,
-  }),
-  assertEvidence: assertHostedIdentityEvidenceAdminProof,
-});
+        hostedIdentityPacketRefIds: hostedIdentityPacketRefEntries(
+          source.hostedIdentityEvidence,
+        ).map((ref) => ref.rowId),
+        hostedIdentityRoleSurfaceContractDiffStatus:
+          source.hostedIdentityEvidence.target.roleSurfaceContractDiff.status,
+        hostedIdentityRoleSurfaceContractMismatchIds:
+          source.hostedIdentityEvidence.target.roleSurfaceContractDiff.mismatches.map(
+            (mismatch) => mismatch.id,
+          ),
+        hostedIdentityAdapterContractComparisonStatus:
+          source.hostedIdentityEvidence.target.identityAdapterContractComparison.status,
+        hostedIdentityAdapterContractComparisonMismatchIds:
+          source.hostedIdentityEvidence.target.identityAdapterContractComparison.mismatches.map(
+            (mismatch) => mismatch.id,
+          ),
+        relatedAuditIds: requiredRelatedLinks,
+      },
+      adminRoleSurface,
+    }),
+    assertEvidence: assertHostedIdentityEvidenceAdminProof,
+  };
+}
+
+if (pathToFileURL(process.argv[1] ?? "").href === import.meta.url) {
+  await runAdminAuditProof(hostedIdentityEvidenceAdminProofCase());
+}
 
 export function assertHostedIdentityEvidenceAdminProof(evidence) {
   if (

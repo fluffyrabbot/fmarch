@@ -1,4 +1,5 @@
 import path from "node:path";
+import { pathToFileURL } from "node:url";
 import { assertDevTestGameReleaseReadiness } from "./dev_test_game_release_readiness.mjs";
 import {
   releaseAdminProofFallbackUnprovenIds,
@@ -31,49 +32,55 @@ const requiredLocalPrerequisites = [
 ];
 const requiredUnprovenItems = releaseAdminProofFallbackUnprovenIds;
 
-await runAdminAuditProof({
-  smokeName: "dev-test-game-release-admin-proof",
-  stage: "release-admin-proof-listen",
-  evidencePath,
-  envOverrides: {
-    FMARCH_DEV_TEST_GAME_RELEASE_READINESS: readinessRelativePath,
-  },
-  loadSource: async () =>
-    assertDevTestGameReleaseReadiness(await readJson(readinessPath)),
-  prove: async ({ browser, frontendBaseUrl, source: readiness }) =>
-    await proveAdminAuditDetail({
-      browser,
-      frontendBaseUrl,
-      game: readiness.generatedFrom.game,
-      auditId: "local-release-readiness",
-      requiredChecks: readiness.localDevelopmentSpine.checks.map((check) => check.id),
-      requiredLocalPrerequisites: readiness.localDevelopmentSpine.checks
-        .filter((check) => check.dependencyGated === true)
-        .map((check) => check.id),
-      requiredUnproven: readiness.releaseReadiness.unproven.map((item) => item.id),
-    }),
-  buildEvidence: ({ source: readiness, adminRoleSurface }) => ({
-    version: 1,
-    proof: "dev-test-game-release-admin-proof",
-    status: "passed",
-    releaseReady: false,
-    productionReady: false,
-    scope: "local-dev-test-game-release-admin-surface",
-    proofBoundary:
-      "Local SvelteKit admin role URL with fixture admin authority over the dev-test-game release-readiness checklist. Proves the local checklist is discoverable from the seeded admin overview and inspectable in a native admin audit detail route with local checks and remaining unproven release items visible; it does not prove hosted deployment, hosted identity, hosted operations, production backup/PITR, exhaustive race coverage, human release approval, beta readiness, or production readiness.",
-    generatedFrom: {
-      releaseReadinessChecklist: readinessRelativePath,
-      game: readiness.generatedFrom.game,
-      localCheckIds: readiness.localDevelopmentSpine.checks.map((check) => check.id),
-      localPrerequisiteIds: readiness.localDevelopmentSpine.checks
-        .filter((check) => check.dependencyGated === true)
-        .map((check) => check.id),
-      unprovenIds: readiness.releaseReadiness.unproven.map((item) => item.id),
+export function releaseAdminProofCase() {
+  return {
+    smokeName: "dev-test-game-release-admin-proof",
+    stage: "release-admin-proof-listen",
+    evidencePath,
+    envOverrides: {
+      FMARCH_DEV_TEST_GAME_RELEASE_READINESS: readinessRelativePath,
     },
-    adminRoleSurface,
-  }),
-  assertEvidence: assertReleaseAdminProof,
-});
+    loadSource: async () =>
+      assertDevTestGameReleaseReadiness(await readJson(readinessPath)),
+    prove: async ({ browser, frontendBaseUrl, source: readiness }) =>
+      await proveAdminAuditDetail({
+        browser,
+        frontendBaseUrl,
+        game: readiness.generatedFrom.game,
+        auditId: "local-release-readiness",
+        requiredChecks: readiness.localDevelopmentSpine.checks.map((check) => check.id),
+        requiredLocalPrerequisites: readiness.localDevelopmentSpine.checks
+          .filter((check) => check.dependencyGated === true)
+          .map((check) => check.id),
+        requiredUnproven: readiness.releaseReadiness.unproven.map((item) => item.id),
+      }),
+    buildEvidence: ({ source: readiness, adminRoleSurface }) => ({
+      version: 1,
+      proof: "dev-test-game-release-admin-proof",
+      status: "passed",
+      releaseReady: false,
+      productionReady: false,
+      scope: "local-dev-test-game-release-admin-surface",
+      proofBoundary:
+        "Local SvelteKit admin role URL with fixture admin authority over the dev-test-game release-readiness checklist. Proves the local checklist is discoverable from the seeded admin overview and inspectable in a native admin audit detail route with local checks and remaining unproven release items visible; it does not prove hosted deployment, hosted identity, hosted operations, production backup/PITR, exhaustive race coverage, human release approval, beta readiness, or production readiness.",
+      generatedFrom: {
+        releaseReadinessChecklist: readinessRelativePath,
+        game: readiness.generatedFrom.game,
+        localCheckIds: readiness.localDevelopmentSpine.checks.map((check) => check.id),
+        localPrerequisiteIds: readiness.localDevelopmentSpine.checks
+          .filter((check) => check.dependencyGated === true)
+          .map((check) => check.id),
+        unprovenIds: readiness.releaseReadiness.unproven.map((item) => item.id),
+      },
+      adminRoleSurface,
+    }),
+    assertEvidence: assertReleaseAdminProof,
+  };
+}
+
+if (pathToFileURL(process.argv[1] ?? "").href === import.meta.url) {
+  await runAdminAuditProof(releaseAdminProofCase());
+}
 
 export function assertReleaseAdminProof(evidence) {
   if (

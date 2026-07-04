@@ -1,4 +1,5 @@
 import path from "node:path";
+import { pathToFileURL } from "node:url";
 import { assertDevTestGameProofRun } from "./dev_test_game_proof_contract.mjs";
 import {
   assertDevTestGameHostedConcurrentRaceMatrixEvidence,
@@ -46,151 +47,157 @@ const requiredRealHostedEvidenceInputs =
 const requiredStaleConflictMilestones =
   hostedMatrixStaleConflictMilestoneCases();
 
-await runAdminAuditProof({
-  smokeName: "dev-test-game-hosted-concurrent-race-matrix-admin-proof",
-  stage: "hosted-concurrent-race-matrix-admin-proof-listen",
-  evidencePath,
-  envOverrides: {
-    FMARCH_DEV_TEST_GAME_HOSTED_CONCURRENT_RACE_MATRIX: hostedMatrixRelativePath,
-  },
-  loadSource: async () => ({
-    hostedMatrix: assertDevTestGameHostedConcurrentRaceMatrixEvidence(
-      await readJson(hostedMatrixPath),
-    ),
-    proofRun: assertDevTestGameProofRun(await readJson(proofRunPath)),
-  }),
-  prove: async ({ browser, frontendBaseUrl, source }) => {
-    const hostedHandoffInputValues = hostedEvidenceHandoffInputValues(
-      source.hostedMatrix.realHostedEvidenceInputs,
-    );
-    const hostedHandoffBlockedCheckRequiredEvidence =
-      hostedEvidenceHandoffBlockedCheckRequiredEvidence(
-        source.hostedMatrix.hostedHandoffChecklist?.blockedChecks ?? [],
-        source.hostedMatrix.hostedHandoffChecklist?.blockedCheckIds ?? [],
-      );
-    const hostedHandoffSummary =
-      source.hostedMatrix.hostedHandoffChecklist === undefined
-        ? null
-        : hostedEvidenceHandoffSummary({
-            status: source.hostedMatrix.hostedHandoffChecklist.status,
-            preflightStatus:
-              source.hostedMatrix.hostedHandoffChecklist.preflightStatus,
-            inputs: source.hostedMatrix.realHostedEvidenceInputs,
-            command: source.hostedMatrix.hostedHandoffChecklist.command,
-            proofTarget: source.hostedMatrix.hostedHandoffChecklist.proofTarget,
-          });
-    return await proveAdminAuditDetail({
-      browser,
-      frontendBaseUrl,
-      game: source.proofRun.session.game,
-      auditId: "local-hosted-concurrent-race-matrix",
-      requiredChecks: [
-        ...requiredProgressChecks,
-        ...source.hostedMatrix.cells.map((cell) => cell.id),
-      ],
-      requiredReconnectLanes: source.hostedMatrix.reconnectLanes.map(
-        (lane) => lane.id,
+export function hostedConcurrentRaceMatrixAdminProofCase() {
+  return {
+    smokeName: "dev-test-game-hosted-concurrent-race-matrix-admin-proof",
+    stage: "hosted-concurrent-race-matrix-admin-proof-listen",
+    evidencePath,
+    envOverrides: {
+      FMARCH_DEV_TEST_GAME_HOSTED_CONCURRENT_RACE_MATRIX: hostedMatrixRelativePath,
+    },
+    loadSource: async () => ({
+      hostedMatrix: assertDevTestGameHostedConcurrentRaceMatrixEvidence(
+        await readJson(hostedMatrixPath),
       ),
-      requiredStaleConflictLanes: source.hostedMatrix.staleConflictLanes.map(
-        (lane) => lane.id,
-      ),
-      requiredCheckStatuses: {
-        "local-demo-hosted-evidence":
-          source.hostedMatrix.summary.localDemoHostedEvidenceStatus,
-        "real-hosted-evidence-required":
-          source.hostedMatrix.summary.realHostedEvidenceStatus,
-        "real-hosted-deployment":
-          source.hostedMatrix.summary.realHostedDeploymentStatus,
-      },
-      requiredUnproven: [
-        source.hostedMatrix.requestedEvidence.id,
-        ...source.hostedMatrix.remainingGaps.map(
-          (_gap, index) => `remaining-gap-${index + 1}`,
-        ),
-      ],
-      requiredRealHostedEvidenceInputs,
-      requiredHostedHandoffInputs:
-        source.hostedMatrix.hostedHandoffChecklist?.inputIds ?? [],
-      requiredHostedHandoffInputValues: hostedHandoffInputValues,
-      requiredHostedHandoffBlockedChecks:
-        source.hostedMatrix.hostedHandoffChecklist?.blockedCheckIds ?? [],
-      requiredHostedHandoffBlockedCheckStatuses:
-        hostedHandoffBlockedCheckRequiredEvidence,
-      requiredHostedHandoffSummary: hostedHandoffSummary,
-      requiredHostedHandoffBlockedReceipt:
-        source.hostedMatrix.hostedHandoffChecklist?.blockedReceipt ?? null,
-      requiredRelatedLinks,
-    });
-  },
-  buildEvidence: ({ source, adminRoleSurface }) => ({
-    version: 1,
-    proof: "dev-test-game-hosted-concurrent-race-matrix-admin-proof",
-    status: "passed",
-    releaseReady: false,
-    productionReady: false,
-    scope: "local-dev-test-game-hosted-concurrent-race-matrix-admin-surface",
-    proofBoundary:
-      "Local SvelteKit admin role URL with fixture admin authority over the generated hosted-like concurrent race matrix. Proves the local matrix artifact is discoverable from the seeded admin overview and inspectable in a native admin audit detail route, including the unproven real-hosted-deployment boundary; it does not prove hosted deployment, multi-node storage, beta readiness, release readiness, production operations, or human rollback readiness.",
-    generatedFrom: {
-      hostedConcurrentRaceMatrix: hostedMatrixRelativePath,
-      proofRun: proofRunRelativePath,
-      game: source.proofRun.session.game,
-      cellIds: source.hostedMatrix.cells.map((cell) => cell.id),
-      reconnectLaneIds: source.hostedMatrix.reconnectLanes.map((lane) => lane.id),
-      staleConflictLaneIds: source.hostedMatrix.staleConflictLanes.map(
-        (lane) => lane.id,
-      ),
-      staleConflictMilestones: source.hostedMatrix.staleConflictMilestones.map(
-        (milestone) => ({
-          id: milestone.id,
-          laneId: milestone.laneId,
-          progressCheckId: milestone.progressCheckId,
-        }),
-      ),
-      progressCheckIds: requiredProgressChecks,
-      relatedAuditIds: requiredRelatedLinks,
-      requestedEvidenceId: source.hostedMatrix.requestedEvidence.id,
-      hostedEvidenceStatus: source.hostedMatrix.summary.hostedEvidenceStatus,
-      hostedEvidenceMode: source.hostedMatrix.summary.hostedEvidenceMode,
-      localDemoHostedEvidenceStatus:
-        source.hostedMatrix.summary.localDemoHostedEvidenceStatus,
-      realHostedEvidenceStatus:
-        source.hostedMatrix.summary.realHostedEvidenceStatus,
-      realHostedEvidenceInputIds: requiredRealHostedEvidenceInputs,
-      hostedHandoffInputIds:
-        source.hostedMatrix.hostedHandoffChecklist?.inputIds ?? [],
-      hostedHandoffInputValues: hostedEvidenceHandoffInputValues(
+      proofRun: assertDevTestGameProofRun(await readJson(proofRunPath)),
+    }),
+    prove: async ({ browser, frontendBaseUrl, source }) => {
+      const hostedHandoffInputValues = hostedEvidenceHandoffInputValues(
         source.hostedMatrix.realHostedEvidenceInputs,
-      ),
-      hostedHandoffBlockedCheckIds:
-        source.hostedMatrix.hostedHandoffChecklist?.blockedCheckIds ?? [],
-      hostedHandoffBlockedCheckRequiredEvidence:
+      );
+      const hostedHandoffBlockedCheckRequiredEvidence =
         hostedEvidenceHandoffBlockedCheckRequiredEvidence(
           source.hostedMatrix.hostedHandoffChecklist?.blockedChecks ?? [],
           source.hostedMatrix.hostedHandoffChecklist?.blockedCheckIds ?? [],
-        ),
-      ...(source.hostedMatrix.hostedHandoffChecklist === undefined
-        ? {}
-        : {
-            hostedHandoffSummary: hostedEvidenceHandoffSummary({
+        );
+      const hostedHandoffSummary =
+        source.hostedMatrix.hostedHandoffChecklist === undefined
+          ? null
+          : hostedEvidenceHandoffSummary({
               status: source.hostedMatrix.hostedHandoffChecklist.status,
               preflightStatus:
                 source.hostedMatrix.hostedHandoffChecklist.preflightStatus,
               inputs: source.hostedMatrix.realHostedEvidenceInputs,
               command: source.hostedMatrix.hostedHandoffChecklist.command,
-              proofTarget:
-                source.hostedMatrix.hostedHandoffChecklist.proofTarget,
-            }),
-            hostedHandoffBlockedReceipt:
-              source.hostedMatrix.hostedHandoffChecklist.blockedReceipt,
-          }),
-      realHostedDeploymentStatus:
-        source.hostedMatrix.summary.realHostedDeploymentStatus,
+              proofTarget: source.hostedMatrix.hostedHandoffChecklist.proofTarget,
+            });
+      return await proveAdminAuditDetail({
+        browser,
+        frontendBaseUrl,
+        game: source.proofRun.session.game,
+        auditId: "local-hosted-concurrent-race-matrix",
+        requiredChecks: [
+          ...requiredProgressChecks,
+          ...source.hostedMatrix.cells.map((cell) => cell.id),
+        ],
+        requiredReconnectLanes: source.hostedMatrix.reconnectLanes.map(
+          (lane) => lane.id,
+        ),
+        requiredStaleConflictLanes: source.hostedMatrix.staleConflictLanes.map(
+          (lane) => lane.id,
+        ),
+        requiredCheckStatuses: {
+          "local-demo-hosted-evidence":
+            source.hostedMatrix.summary.localDemoHostedEvidenceStatus,
+          "real-hosted-evidence-required":
+            source.hostedMatrix.summary.realHostedEvidenceStatus,
+          "real-hosted-deployment":
+            source.hostedMatrix.summary.realHostedDeploymentStatus,
+        },
+        requiredUnproven: [
+          source.hostedMatrix.requestedEvidence.id,
+          ...source.hostedMatrix.remainingGaps.map(
+            (_gap, index) => `remaining-gap-${index + 1}`,
+          ),
+        ],
+        requiredRealHostedEvidenceInputs,
+        requiredHostedHandoffInputs:
+          source.hostedMatrix.hostedHandoffChecklist?.inputIds ?? [],
+        requiredHostedHandoffInputValues: hostedHandoffInputValues,
+        requiredHostedHandoffBlockedChecks:
+          source.hostedMatrix.hostedHandoffChecklist?.blockedCheckIds ?? [],
+        requiredHostedHandoffBlockedCheckStatuses:
+          hostedHandoffBlockedCheckRequiredEvidence,
+        requiredHostedHandoffSummary: hostedHandoffSummary,
+        requiredHostedHandoffBlockedReceipt:
+          source.hostedMatrix.hostedHandoffChecklist?.blockedReceipt ?? null,
+        requiredRelatedLinks,
+      });
     },
-    adminRoleSurface,
-  }),
-  assertEvidence: assertHostedConcurrentRaceMatrixAdminProof,
-});
+    buildEvidence: ({ source, adminRoleSurface }) => ({
+      version: 1,
+      proof: "dev-test-game-hosted-concurrent-race-matrix-admin-proof",
+      status: "passed",
+      releaseReady: false,
+      productionReady: false,
+      scope: "local-dev-test-game-hosted-concurrent-race-matrix-admin-surface",
+      proofBoundary:
+        "Local SvelteKit admin role URL with fixture admin authority over the generated hosted-like concurrent race matrix. Proves the local matrix artifact is discoverable from the seeded admin overview and inspectable in a native admin audit detail route, including the unproven real-hosted-deployment boundary; it does not prove hosted deployment, multi-node storage, beta readiness, release readiness, production operations, or human rollback readiness.",
+      generatedFrom: {
+        hostedConcurrentRaceMatrix: hostedMatrixRelativePath,
+        proofRun: proofRunRelativePath,
+        game: source.proofRun.session.game,
+        cellIds: source.hostedMatrix.cells.map((cell) => cell.id),
+        reconnectLaneIds: source.hostedMatrix.reconnectLanes.map((lane) => lane.id),
+        staleConflictLaneIds: source.hostedMatrix.staleConflictLanes.map(
+          (lane) => lane.id,
+        ),
+        staleConflictMilestones: source.hostedMatrix.staleConflictMilestones.map(
+          (milestone) => ({
+            id: milestone.id,
+            laneId: milestone.laneId,
+            progressCheckId: milestone.progressCheckId,
+          }),
+        ),
+        progressCheckIds: requiredProgressChecks,
+        relatedAuditIds: requiredRelatedLinks,
+        requestedEvidenceId: source.hostedMatrix.requestedEvidence.id,
+        hostedEvidenceStatus: source.hostedMatrix.summary.hostedEvidenceStatus,
+        hostedEvidenceMode: source.hostedMatrix.summary.hostedEvidenceMode,
+        localDemoHostedEvidenceStatus:
+          source.hostedMatrix.summary.localDemoHostedEvidenceStatus,
+        realHostedEvidenceStatus:
+          source.hostedMatrix.summary.realHostedEvidenceStatus,
+        realHostedEvidenceInputIds: requiredRealHostedEvidenceInputs,
+        hostedHandoffInputIds:
+          source.hostedMatrix.hostedHandoffChecklist?.inputIds ?? [],
+        hostedHandoffInputValues: hostedEvidenceHandoffInputValues(
+          source.hostedMatrix.realHostedEvidenceInputs,
+        ),
+        hostedHandoffBlockedCheckIds:
+          source.hostedMatrix.hostedHandoffChecklist?.blockedCheckIds ?? [],
+        hostedHandoffBlockedCheckRequiredEvidence:
+          hostedEvidenceHandoffBlockedCheckRequiredEvidence(
+            source.hostedMatrix.hostedHandoffChecklist?.blockedChecks ?? [],
+            source.hostedMatrix.hostedHandoffChecklist?.blockedCheckIds ?? [],
+          ),
+        ...(source.hostedMatrix.hostedHandoffChecklist === undefined
+          ? {}
+          : {
+              hostedHandoffSummary: hostedEvidenceHandoffSummary({
+                status: source.hostedMatrix.hostedHandoffChecklist.status,
+                preflightStatus:
+                  source.hostedMatrix.hostedHandoffChecklist.preflightStatus,
+                inputs: source.hostedMatrix.realHostedEvidenceInputs,
+                command: source.hostedMatrix.hostedHandoffChecklist.command,
+                proofTarget:
+                  source.hostedMatrix.hostedHandoffChecklist.proofTarget,
+              }),
+              hostedHandoffBlockedReceipt:
+                source.hostedMatrix.hostedHandoffChecklist.blockedReceipt,
+            }),
+        realHostedDeploymentStatus:
+          source.hostedMatrix.summary.realHostedDeploymentStatus,
+      },
+      adminRoleSurface,
+    }),
+    assertEvidence: assertHostedConcurrentRaceMatrixAdminProof,
+  };
+}
+
+if (pathToFileURL(process.argv[1] ?? "").href === import.meta.url) {
+  await runAdminAuditProof(hostedConcurrentRaceMatrixAdminProofCase());
+}
 
 export function assertHostedConcurrentRaceMatrixAdminProof(evidence) {
   if (

@@ -1113,6 +1113,13 @@ test("dev test-game spine manifest records command order and evidence wiring", (
     })),
   );
   assert.deepEqual(
+    devTestGameAdminSpineProofPlan.map(({ id, caseFactory }) => [
+      id,
+      typeof caseFactory,
+    ]),
+    devTestGameAdminSpineProofPlan.map(({ id }) => [id, "function"]),
+  );
+  assert.deepEqual(
     manifest.commands.adminSpine.readinessEnv,
     adminSpineReadinessEvidenceEnv,
   );

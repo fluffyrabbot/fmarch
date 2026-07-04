@@ -1,4 +1,5 @@
 import path from "node:path";
+import { pathToFileURL } from "node:url";
 import { assertDevTestGameProofRun } from "./dev_test_game_proof_contract.mjs";
 import { assertDevTestGameHostedEvidenceLane } from "./dev_test_game_hosted_evidence_lane.mjs";
 import {
@@ -47,154 +48,160 @@ const requiredRelatedLinks = [
   "local-next-action",
 ];
 
-await runAdminAuditProof({
-  smokeName: "dev-test-game-hosted-evidence-lane-admin-proof",
-  stage: "hosted-evidence-lane-admin-proof-listen",
-  evidencePath,
-  envOverrides: {
-    FMARCH_DEV_TEST_GAME_HOSTED_EVIDENCE_LANE: laneRelativePath,
-    FMARCH_DEV_TEST_GAME_HOSTED_EVIDENCE_LANE_DEMO_PROOF:
-      demoProofRelativePath,
-  },
-  loadSource: async () => ({
-    lane: assertDevTestGameHostedEvidenceLane(await readJson(lanePath)),
-    demoProof: assertDevTestGameHostedEvidenceLaneDemoProof(
-      await readJson(demoProofPath),
-    ),
-    proofRun: assertDevTestGameProofRun(await readJson(proofRunPath)),
-  }),
-  prove: async ({ browser, frontendBaseUrl, source }) => {
-    const hostedHandoffInputValues = hostedEvidenceHandoffInputValues(
-      source.lane.hostedEvidence?.realHostedEvidenceInputs,
-    );
-    const hostedHandoffBlockedCheckStatuses =
-      hostedEvidenceHandoffBlockedCheckRequiredEvidence(
-        source.lane.checks,
-        source.lane.blockedCheckIds,
-      );
-    const hostedHandoffSummary = hostedEvidenceHandoffSummary({
-      status: source.lane.hostedHandoffChecklist?.status,
-      preflightStatus: source.lane.hostedHandoffChecklist?.preflightStatus,
-      command: source.lane.hostedHandoffChecklist?.command,
-      proofTarget: source.lane.hostedHandoffChecklist?.proofTarget,
-    });
-    const hostedHandoffInputSections =
-      source.lane.hostedHandoffChecklist?.inputSections ?? [];
-    const hostedHandoffSectionInputRows =
-      hostedEvidenceHandoffSectionInputRows(hostedHandoffInputSections);
-    return await proveAdminAuditDetail({
-      browser,
-      frontendBaseUrl,
-      game: source.proofRun.session.game,
-      auditId: "local-hosted-evidence-lane",
-      requiredChecks: [
-        ...source.lane.checks.map((check) => check.id),
-        ...hostedEvidenceLaneDemoProofCheckIds(source.demoProof),
-      ],
-      requiredCheckStatuses: Object.fromEntries(
-        [
-          ...source.lane.checks.map((check) => [check.id, check.status]),
-          ...hostedEvidenceLaneDemoProofCheckStatuses(source.demoProof),
-        ],
+export function hostedEvidenceLaneAdminProofCase() {
+  return {
+    smokeName: "dev-test-game-hosted-evidence-lane-admin-proof",
+    stage: "hosted-evidence-lane-admin-proof-listen",
+    evidencePath,
+    envOverrides: {
+      FMARCH_DEV_TEST_GAME_HOSTED_EVIDENCE_LANE: laneRelativePath,
+      FMARCH_DEV_TEST_GAME_HOSTED_EVIDENCE_LANE_DEMO_PROOF:
+        demoProofRelativePath,
+    },
+    loadSource: async () => ({
+      lane: assertDevTestGameHostedEvidenceLane(await readJson(lanePath)),
+      demoProof: assertDevTestGameHostedEvidenceLaneDemoProof(
+        await readJson(demoProofPath),
       ),
-      requiredUnproven: source.lane.blockedCheckIds,
-      requiredRealHostedEvidenceInputs: hostedEvidenceHandoffInputIds,
-      requiredHostedHandoffInputs: hostedEvidenceHandoffInputIds,
-      requiredHostedHandoffInputValues: hostedHandoffInputValues,
-      requiredHostedHandoffBlockedChecks: source.lane.blockedCheckIds,
-      requiredHostedHandoffBlockedCheckStatuses:
-        hostedHandoffBlockedCheckStatuses,
-      requiredHostedHandoffSummary: hostedHandoffSummary,
-      requiredHostedHandoffBlockedReceipt:
-        source.lane.hostedHandoffChecklist?.blockedReceipt ?? null,
-      requiredHostedHandoffInputSections: hostedHandoffInputSections.map(
-        (section) => section.id,
-      ),
-      requiredHostedHandoffInputSectionStatuses:
-        hostedEvidenceHandoffInputSectionStatuses(hostedHandoffInputSections),
-      requiredHostedHandoffSectionInputs: hostedHandoffSectionInputRows.map(
-        (row) => row.id,
-      ),
-      requiredHostedHandoffSectionInputStatuses:
-        hostedEvidenceHandoffSectionInputStatuses(hostedHandoffInputSections),
-      requiredRelatedLinks,
-    });
-  },
-  buildEvidence: ({ source, adminRoleSurface }) => ({
-    version: 1,
-    proof: "dev-test-game-hosted-evidence-lane-admin-proof",
-    status: "passed",
-    releaseReady: false,
-    productionReady: false,
-    scope: "local-dev-test-game-hosted-evidence-lane-admin-surface",
-    proofBoundary:
-      "Local SvelteKit admin role URL with fixture admin authority over the hosted evidence lane. Proves the lane is discoverable from the seeded admin overview and inspectable in a native admin audit detail route with blocked preflight rows and local demo proof blocked-to-passed rows visible; it does not prove hosted deployment, hosted telemetry, beta readiness, release readiness, or production readiness.",
-    generatedFrom: {
-      hostedEvidenceLane: laneRelativePath,
-      hostedEvidenceLaneDemoProof: demoProofRelativePath,
-      proofRun: proofRunRelativePath,
-      game: source.proofRun.session.game,
-      status: source.lane.status,
-      preflightStatus: source.lane.preflightStatus,
-      checkIds: source.lane.checks.map((check) => check.id),
-      demoProofCheckIds: hostedEvidenceLaneDemoProofCheckIds(source.demoProof),
-      checkStatuses: Object.fromEntries(
-        [
-          ...source.lane.checks.map((check) => [check.id, check.status]),
-          ...hostedEvidenceLaneDemoProofCheckStatuses(source.demoProof),
-        ],
-      ),
-      demoProofStatus: source.demoProof.status,
-      demoProofTarget: devTestGameHostedEvidenceLaneDemoProofPath,
-      demoProofBlockedLaneStatus: source.demoProof.blockedLane.status,
-      demoProofPassedLaneStatus: source.demoProof.passedLane.status,
-      demoProofSyntheticExternalTarget:
-        source.demoProof.target.syntheticExternalTarget,
-      blockedCheckIds: source.lane.blockedCheckIds,
-      realHostedEvidenceInputIds: hostedEvidenceHandoffInputIds,
-      hostedHandoffInputIds: hostedEvidenceHandoffInputIds,
-      hostedHandoffInputValues: hostedEvidenceHandoffInputValues(
+      proofRun: assertDevTestGameProofRun(await readJson(proofRunPath)),
+    }),
+    prove: async ({ browser, frontendBaseUrl, source }) => {
+      const hostedHandoffInputValues = hostedEvidenceHandoffInputValues(
         source.lane.hostedEvidence?.realHostedEvidenceInputs,
-      ),
-      hostedHandoffBlockedCheckIds: source.lane.blockedCheckIds,
-      hostedHandoffBlockedCheckRequiredEvidence:
+      );
+      const hostedHandoffBlockedCheckStatuses =
         hostedEvidenceHandoffBlockedCheckRequiredEvidence(
           source.lane.checks,
           source.lane.blockedCheckIds,
-        ),
-      hostedHandoffSummary: hostedEvidenceHandoffSummary({
+        );
+      const hostedHandoffSummary = hostedEvidenceHandoffSummary({
         status: source.lane.hostedHandoffChecklist?.status,
         preflightStatus: source.lane.hostedHandoffChecklist?.preflightStatus,
         command: source.lane.hostedHandoffChecklist?.command,
         proofTarget: source.lane.hostedHandoffChecklist?.proofTarget,
-      }),
-      hostedHandoffInputSectionIds:
-        source.lane.hostedHandoffChecklist?.inputSections?.map(
+      });
+      const hostedHandoffInputSections =
+        source.lane.hostedHandoffChecklist?.inputSections ?? [];
+      const hostedHandoffSectionInputRows =
+        hostedEvidenceHandoffSectionInputRows(hostedHandoffInputSections);
+      return await proveAdminAuditDetail({
+        browser,
+        frontendBaseUrl,
+        game: source.proofRun.session.game,
+        auditId: "local-hosted-evidence-lane",
+        requiredChecks: [
+          ...source.lane.checks.map((check) => check.id),
+          ...hostedEvidenceLaneDemoProofCheckIds(source.demoProof),
+        ],
+        requiredCheckStatuses: Object.fromEntries(
+          [
+            ...source.lane.checks.map((check) => [check.id, check.status]),
+            ...hostedEvidenceLaneDemoProofCheckStatuses(source.demoProof),
+          ],
+        ),
+        requiredUnproven: source.lane.blockedCheckIds,
+        requiredRealHostedEvidenceInputs: hostedEvidenceHandoffInputIds,
+        requiredHostedHandoffInputs: hostedEvidenceHandoffInputIds,
+        requiredHostedHandoffInputValues: hostedHandoffInputValues,
+        requiredHostedHandoffBlockedChecks: source.lane.blockedCheckIds,
+        requiredHostedHandoffBlockedCheckStatuses:
+          hostedHandoffBlockedCheckStatuses,
+        requiredHostedHandoffSummary: hostedHandoffSummary,
+        requiredHostedHandoffBlockedReceipt:
+          source.lane.hostedHandoffChecklist?.blockedReceipt ?? null,
+        requiredHostedHandoffInputSections: hostedHandoffInputSections.map(
           (section) => section.id,
-        ) ?? [],
-      hostedHandoffInputSectionStatuses:
-        hostedEvidenceHandoffInputSectionStatuses(
-          source.lane.hostedHandoffChecklist?.inputSections ?? [],
         ),
-      hostedHandoffSectionInputIds: hostedEvidenceHandoffSectionInputRows(
-        source.lane.hostedHandoffChecklist?.inputSections ?? [],
-      ).map((row) => row.id),
-      hostedHandoffSectionInputStatuses:
-        hostedEvidenceHandoffSectionInputStatuses(
-          source.lane.hostedHandoffChecklist?.inputSections ?? [],
+        requiredHostedHandoffInputSectionStatuses:
+          hostedEvidenceHandoffInputSectionStatuses(hostedHandoffInputSections),
+        requiredHostedHandoffSectionInputs: hostedHandoffSectionInputRows.map(
+          (row) => row.id,
         ),
-      ...(source.lane.hostedHandoffChecklist?.blockedReceipt === undefined
-        ? {}
-        : {
-            hostedHandoffBlockedReceipt:
-              source.lane.hostedHandoffChecklist.blockedReceipt,
-          }),
-      relatedAuditIds: requiredRelatedLinks,
+        requiredHostedHandoffSectionInputStatuses:
+          hostedEvidenceHandoffSectionInputStatuses(hostedHandoffInputSections),
+        requiredRelatedLinks,
+      });
     },
-    adminRoleSurface,
-  }),
-  assertEvidence: assertHostedEvidenceLaneAdminProof,
-});
+    buildEvidence: ({ source, adminRoleSurface }) => ({
+      version: 1,
+      proof: "dev-test-game-hosted-evidence-lane-admin-proof",
+      status: "passed",
+      releaseReady: false,
+      productionReady: false,
+      scope: "local-dev-test-game-hosted-evidence-lane-admin-surface",
+      proofBoundary:
+        "Local SvelteKit admin role URL with fixture admin authority over the hosted evidence lane. Proves the lane is discoverable from the seeded admin overview and inspectable in a native admin audit detail route with blocked preflight rows and local demo proof blocked-to-passed rows visible; it does not prove hosted deployment, hosted telemetry, beta readiness, release readiness, or production readiness.",
+      generatedFrom: {
+        hostedEvidenceLane: laneRelativePath,
+        hostedEvidenceLaneDemoProof: demoProofRelativePath,
+        proofRun: proofRunRelativePath,
+        game: source.proofRun.session.game,
+        status: source.lane.status,
+        preflightStatus: source.lane.preflightStatus,
+        checkIds: source.lane.checks.map((check) => check.id),
+        demoProofCheckIds: hostedEvidenceLaneDemoProofCheckIds(source.demoProof),
+        checkStatuses: Object.fromEntries(
+          [
+            ...source.lane.checks.map((check) => [check.id, check.status]),
+            ...hostedEvidenceLaneDemoProofCheckStatuses(source.demoProof),
+          ],
+        ),
+        demoProofStatus: source.demoProof.status,
+        demoProofTarget: devTestGameHostedEvidenceLaneDemoProofPath,
+        demoProofBlockedLaneStatus: source.demoProof.blockedLane.status,
+        demoProofPassedLaneStatus: source.demoProof.passedLane.status,
+        demoProofSyntheticExternalTarget:
+          source.demoProof.target.syntheticExternalTarget,
+        blockedCheckIds: source.lane.blockedCheckIds,
+        realHostedEvidenceInputIds: hostedEvidenceHandoffInputIds,
+        hostedHandoffInputIds: hostedEvidenceHandoffInputIds,
+        hostedHandoffInputValues: hostedEvidenceHandoffInputValues(
+          source.lane.hostedEvidence?.realHostedEvidenceInputs,
+        ),
+        hostedHandoffBlockedCheckIds: source.lane.blockedCheckIds,
+        hostedHandoffBlockedCheckRequiredEvidence:
+          hostedEvidenceHandoffBlockedCheckRequiredEvidence(
+            source.lane.checks,
+            source.lane.blockedCheckIds,
+          ),
+        hostedHandoffSummary: hostedEvidenceHandoffSummary({
+          status: source.lane.hostedHandoffChecklist?.status,
+          preflightStatus: source.lane.hostedHandoffChecklist?.preflightStatus,
+          command: source.lane.hostedHandoffChecklist?.command,
+          proofTarget: source.lane.hostedHandoffChecklist?.proofTarget,
+        }),
+        hostedHandoffInputSectionIds:
+          source.lane.hostedHandoffChecklist?.inputSections?.map(
+            (section) => section.id,
+          ) ?? [],
+        hostedHandoffInputSectionStatuses:
+          hostedEvidenceHandoffInputSectionStatuses(
+            source.lane.hostedHandoffChecklist?.inputSections ?? [],
+          ),
+        hostedHandoffSectionInputIds: hostedEvidenceHandoffSectionInputRows(
+          source.lane.hostedHandoffChecklist?.inputSections ?? [],
+        ).map((row) => row.id),
+        hostedHandoffSectionInputStatuses:
+          hostedEvidenceHandoffSectionInputStatuses(
+            source.lane.hostedHandoffChecklist?.inputSections ?? [],
+          ),
+        ...(source.lane.hostedHandoffChecklist?.blockedReceipt === undefined
+          ? {}
+          : {
+              hostedHandoffBlockedReceipt:
+                source.lane.hostedHandoffChecklist.blockedReceipt,
+            }),
+        relatedAuditIds: requiredRelatedLinks,
+      },
+      adminRoleSurface,
+    }),
+    assertEvidence: assertHostedEvidenceLaneAdminProof,
+  };
+}
+
+if (pathToFileURL(process.argv[1] ?? "").href === import.meta.url) {
+  await runAdminAuditProof(hostedEvidenceLaneAdminProofCase());
+}
 
 export function assertHostedEvidenceLaneAdminProof(evidence) {
   if (

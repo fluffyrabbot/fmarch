@@ -1,4 +1,5 @@
 import path from "node:path";
+import { pathToFileURL } from "node:url";
 import { assertDevTestGameHostedOpsSignals } from "./dev_test_game_hosted_ops_signals.mjs";
 import {
   hostedOpsSignalCheckIds,
@@ -24,49 +25,55 @@ const evidencePath = path.join(artifactDir, "hosted-ops-signals-admin-proof.json
 const requiredChecks = hostedOpsSignalCheckIds;
 const requiredRelatedLinks = hostedOpsSignalRelatedAuditIds;
 
-await runAdminAuditProof({
-  smokeName: "dev-test-game-hosted-ops-signals-admin-proof",
-  stage: "hosted-ops-signals-admin-proof-listen",
-  evidencePath,
-  envOverrides: {
-    FMARCH_DEV_TEST_GAME_HOSTED_OPS_SIGNALS: hostedOpsSignalsRelativePath,
-  },
-  loadSource: async () =>
-    assertDevTestGameHostedOpsSignals(await readJson(hostedOpsSignalsPath)),
-  prove: async ({ browser, frontendBaseUrl, source: hostedOpsSignals }) =>
-    await proveAdminAuditDetail({
-      browser,
-      frontendBaseUrl,
-      game: hostedOpsSignals.target.game,
-      auditId: "local-hosted-ops-signals",
-      requiredChecks,
-      requiredCheckStatuses: {
-        [hostedOpsTelemetryBoundaryCheckId]: hostedOpsTelemetryBoundaryStatus(
-          hostedOpsSignals.target.realHostedDeploymentStatus,
-        ),
-      },
-      requiredRelatedLinks,
-    }),
-  buildEvidence: ({ source: hostedOpsSignals, adminRoleSurface }) => ({
-    version: 1,
-    proof: "dev-test-game-hosted-ops-signals-admin-proof",
-    status: "passed",
-    releaseReady: false,
-    productionReady: false,
-    scope: "local-dev-test-game-hosted-ops-signals-admin-surface",
-    proofBoundary:
-      "Local SvelteKit admin role URL with fixture admin authority over a saved hosted-like ops signal bundle. Proves the local signal artifact is discoverable from the seeded admin overview and inspectable in a native admin audit detail route with the hosted telemetry boundary visible; it does not prove hosted telemetry, paging/SLOs, production incident response, release readiness, or production readiness.",
-    generatedFrom: {
-      hostedOpsSignals: hostedOpsSignalsRelativePath,
-      game: hostedOpsSignals.target.game,
-      checkIds: requiredChecks,
-      relatedAuditIds: requiredRelatedLinks,
-      realHostedDeploymentStatus: hostedOpsSignals.target.realHostedDeploymentStatus,
+export function hostedOpsSignalsAdminProofCase() {
+  return {
+    smokeName: "dev-test-game-hosted-ops-signals-admin-proof",
+    stage: "hosted-ops-signals-admin-proof-listen",
+    evidencePath,
+    envOverrides: {
+      FMARCH_DEV_TEST_GAME_HOSTED_OPS_SIGNALS: hostedOpsSignalsRelativePath,
     },
-    adminRoleSurface,
-  }),
-  assertEvidence: assertHostedOpsSignalsAdminProof,
-});
+    loadSource: async () =>
+      assertDevTestGameHostedOpsSignals(await readJson(hostedOpsSignalsPath)),
+    prove: async ({ browser, frontendBaseUrl, source: hostedOpsSignals }) =>
+      await proveAdminAuditDetail({
+        browser,
+        frontendBaseUrl,
+        game: hostedOpsSignals.target.game,
+        auditId: "local-hosted-ops-signals",
+        requiredChecks,
+        requiredCheckStatuses: {
+          [hostedOpsTelemetryBoundaryCheckId]: hostedOpsTelemetryBoundaryStatus(
+            hostedOpsSignals.target.realHostedDeploymentStatus,
+          ),
+        },
+        requiredRelatedLinks,
+      }),
+    buildEvidence: ({ source: hostedOpsSignals, adminRoleSurface }) => ({
+      version: 1,
+      proof: "dev-test-game-hosted-ops-signals-admin-proof",
+      status: "passed",
+      releaseReady: false,
+      productionReady: false,
+      scope: "local-dev-test-game-hosted-ops-signals-admin-surface",
+      proofBoundary:
+        "Local SvelteKit admin role URL with fixture admin authority over a saved hosted-like ops signal bundle. Proves the local signal artifact is discoverable from the seeded admin overview and inspectable in a native admin audit detail route with the hosted telemetry boundary visible; it does not prove hosted telemetry, paging/SLOs, production incident response, release readiness, or production readiness.",
+      generatedFrom: {
+        hostedOpsSignals: hostedOpsSignalsRelativePath,
+        game: hostedOpsSignals.target.game,
+        checkIds: requiredChecks,
+        relatedAuditIds: requiredRelatedLinks,
+        realHostedDeploymentStatus: hostedOpsSignals.target.realHostedDeploymentStatus,
+      },
+      adminRoleSurface,
+    }),
+    assertEvidence: assertHostedOpsSignalsAdminProof,
+  };
+}
+
+if (pathToFileURL(process.argv[1] ?? "").href === import.meta.url) {
+  await runAdminAuditProof(hostedOpsSignalsAdminProofCase());
+}
 
 export function assertHostedOpsSignalsAdminProof(evidence) {
   if (

@@ -21,6 +21,57 @@ import {
   validateDevTestGameSeedAdminProof,
   validateDevTestGameSpineManifestAdminProof,
 } from "./dev_test_game_release_readiness.mjs";
+import {
+  runAdminAuditProofBatch,
+} from "./dev_test_game_admin_audit_proof_helper.mjs";
+import {
+  coreLoopAdminProofCase,
+} from "./dev_test_game_core_loop_admin_proof.mjs";
+import {
+  hardeningAdminProofCase,
+} from "./dev_test_game_hardening_admin_proof.mjs";
+import {
+  identityAdminProofCase,
+} from "./dev_test_game_identity_admin_proof.mjs";
+import {
+  hostedIdentityEvidenceAdminProofCase,
+} from "./dev_test_game_hosted_identity_evidence_admin_proof.mjs";
+import {
+  backupAdminProofCase,
+} from "./dev_test_game_backup_admin_proof.mjs";
+import {
+  opsAdminProofCase,
+} from "./dev_test_game_ops_admin_proof.mjs";
+import {
+  seedAdminProofCase,
+} from "./dev_test_game_seed_admin_proof.mjs";
+import {
+  releaseAdminProofCase,
+} from "./dev_test_game_release_admin_proof.mjs";
+import {
+  releaseRunbookAdminProofCase,
+} from "./dev_test_game_release_runbook_admin_proof.mjs";
+import {
+  raceCoverageAdminProofCase,
+} from "./dev_test_game_race_coverage_admin_proof.mjs";
+import {
+  hostedTargetPreflightAdminProofCase,
+} from "./dev_test_game_hosted_target_preflight_admin_proof.mjs";
+import {
+  hostedEvidenceLaneAdminProofCase,
+} from "./dev_test_game_hosted_evidence_lane_admin_proof.mjs";
+import {
+  hostedConcurrentRaceMatrixAdminProofCase,
+} from "./dev_test_game_hosted_concurrent_race_matrix_admin_proof.mjs";
+import {
+  hostedOpsSignalsAdminProofCase,
+} from "./dev_test_game_hosted_ops_signals_admin_proof.mjs";
+import {
+  realHostedObservabilityHandoffAdminProofCase,
+} from "./dev_test_game_real_hosted_observability_handoff_admin_proof.mjs";
+import {
+  spineManifestAdminProofCase,
+} from "./dev_test_game_spine_manifest_admin_proof.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const artifactDir = path.join(repoRoot, "target", "dev-test-game");
@@ -34,6 +85,7 @@ export const devTestGameAdminSpineProofPlan = [
     rerunCommand: "npm run test:dev-test-game-core-loop-admin-proof",
     path: "target/dev-test-game/core-loop-admin-proof.json",
     validate: validateDevTestGameCoreLoopAdminProof,
+    caseFactory: coreLoopAdminProofCase,
   },
   {
     id: "hardening",
@@ -42,6 +94,7 @@ export const devTestGameAdminSpineProofPlan = [
     rerunCommand: "npm run test:dev-test-game-hardening-admin-proof",
     path: "target/dev-test-game/hardening-admin-proof.json",
     validate: validateDevTestGameHardeningAdminProof,
+    caseFactory: hardeningAdminProofCase,
   },
   {
     id: "identity",
@@ -50,6 +103,7 @@ export const devTestGameAdminSpineProofPlan = [
     rerunCommand: "npm run test:dev-test-game-identity-admin-proof",
     path: "target/dev-test-game/identity-admin-proof.json",
     validate: validateDevTestGameIdentityAdminProof,
+    caseFactory: identityAdminProofCase,
   },
   {
     id: "hosted-identity-evidence",
@@ -59,6 +113,7 @@ export const devTestGameAdminSpineProofPlan = [
       "npm run test:dev-test-game-hosted-identity-evidence-admin-proof",
     path: "target/dev-test-game/hosted-identity-evidence-admin-proof.json",
     validate: validateDevTestGameHostedIdentityEvidenceAdminProof,
+    caseFactory: hostedIdentityEvidenceAdminProofCase,
   },
   {
     id: "backup",
@@ -67,6 +122,7 @@ export const devTestGameAdminSpineProofPlan = [
     rerunCommand: "npm run test:dev-test-game-backup-admin-proof",
     path: "target/dev-test-game/backup-admin-proof.json",
     validate: validateDevTestGameBackupAdminProof,
+    caseFactory: backupAdminProofCase,
   },
   {
     id: "ops",
@@ -75,6 +131,7 @@ export const devTestGameAdminSpineProofPlan = [
     rerunCommand: "npm run test:dev-test-game-ops-admin-proof",
     path: "target/dev-test-game/ops-admin-proof.json",
     validate: validateDevTestGameOpsAdminProof,
+    caseFactory: opsAdminProofCase,
   },
   {
     id: "seed",
@@ -83,6 +140,7 @@ export const devTestGameAdminSpineProofPlan = [
     rerunCommand: "npm run test:dev-test-game-seed-admin-proof",
     path: "target/dev-test-game/seed-admin-proof.json",
     validate: validateDevTestGameSeedAdminProof,
+    caseFactory: seedAdminProofCase,
   },
   {
     id: "release",
@@ -91,6 +149,7 @@ export const devTestGameAdminSpineProofPlan = [
     rerunCommand: "npm run test:dev-test-game-release-admin-proof",
     path: "target/dev-test-game/release-admin-proof.json",
     validate: validateDevTestGameReleaseAdminProof,
+    caseFactory: releaseAdminProofCase,
   },
   {
     id: "release-runbook",
@@ -99,6 +158,7 @@ export const devTestGameAdminSpineProofPlan = [
     rerunCommand: "npm run test:dev-test-game-release-runbook-admin-proof",
     path: "target/dev-test-game/release-runbook-admin-proof.json",
     validate: validateDevTestGameReleaseRunbookAdminProof,
+    caseFactory: releaseRunbookAdminProofCase,
   },
   {
     id: "race-coverage",
@@ -107,6 +167,7 @@ export const devTestGameAdminSpineProofPlan = [
     rerunCommand: "npm run test:dev-test-game-race-coverage-admin-proof",
     path: "target/dev-test-game/race-coverage-admin-proof.json",
     validate: validateDevTestGameRaceCoverageAdminProof,
+    caseFactory: raceCoverageAdminProofCase,
   },
   {
     id: "hosted-target-preflight",
@@ -115,6 +176,7 @@ export const devTestGameAdminSpineProofPlan = [
     rerunCommand: "npm run test:dev-test-game-hosted-target-preflight-admin-proof",
     path: "target/dev-test-game/hosted-target-preflight-admin-proof.json",
     validate: validateDevTestGameHostedTargetPreflightAdminProof,
+    caseFactory: hostedTargetPreflightAdminProofCase,
   },
   {
     id: "hosted-evidence-lane",
@@ -123,6 +185,7 @@ export const devTestGameAdminSpineProofPlan = [
     rerunCommand: "npm run test:dev-test-game-hosted-evidence-lane-admin-proof",
     path: "target/dev-test-game/hosted-evidence-lane-admin-proof.json",
     validate: validateDevTestGameHostedEvidenceLaneAdminProof,
+    caseFactory: hostedEvidenceLaneAdminProofCase,
   },
   {
     id: "hosted-concurrent-race-matrix",
@@ -132,6 +195,7 @@ export const devTestGameAdminSpineProofPlan = [
       "npm run test:dev-test-game-hosted-concurrent-race-matrix-admin-proof",
     path: "target/dev-test-game/hosted-concurrent-race-matrix-admin-proof.json",
     validate: validateDevTestGameHostedConcurrentRaceMatrixAdminProof,
+    caseFactory: hostedConcurrentRaceMatrixAdminProofCase,
   },
   {
     id: "hosted-ops-signals",
@@ -140,6 +204,7 @@ export const devTestGameAdminSpineProofPlan = [
     rerunCommand: "npm run test:dev-test-game-hosted-ops-signals-admin-proof",
     path: "target/dev-test-game/hosted-ops-signals-admin-proof.json",
     validate: validateDevTestGameHostedOpsSignalsAdminProof,
+    caseFactory: hostedOpsSignalsAdminProofCase,
   },
   {
     id: "real-hosted-observability-handoff",
@@ -149,6 +214,7 @@ export const devTestGameAdminSpineProofPlan = [
       "npm run test:dev-test-game-real-hosted-observability-handoff-admin-proof",
     path: "target/dev-test-game/real-hosted-observability-handoff-admin-proof.json",
     validate: validateDevTestGameRealHostedObservabilityHandoffAdminProof,
+    caseFactory: realHostedObservabilityHandoffAdminProofCase,
   },
   {
     id: "spine-manifest",
@@ -157,6 +223,7 @@ export const devTestGameAdminSpineProofPlan = [
     rerunCommand: "npm run test:dev-test-game-spine-manifest-admin-proof",
     path: "target/dev-test-game/spine-manifest-admin-proof.json",
     validate: validateDevTestGameSpineManifestAdminProof,
+    caseFactory: spineManifestAdminProofCase,
   },
 ];
 
@@ -169,43 +236,21 @@ export async function runAdminSpineProof() {
   await mkdir(artifactDir, { recursive: true });
   await runNodeScript("tools/dev_test_game_spine_manifest.mjs");
   const entries = [];
-  for (const spec of devTestGameAdminSpineProofPlan) {
-    if (spec.id === "release") {
-      await runNodeScript("tools/dev_test_game_release_readiness.mjs");
-    }
-    await runNodeScript(spec.script);
-    const proofPath = path.join(repoRoot, spec.path);
-    const proof = JSON.parse(await readFile(proofPath, "utf8"));
-    const validated = spec.validate(proof, { path: spec.path });
-    const artifact = await readArtifactMetadata(proofPath);
-    entries.push({
-      id: spec.id,
-      label: spec.label,
-      proof: proof.proof,
-      status: validated.status,
-      path: validated.path,
-      rerunCommand: spec.rerunCommand,
-      refreshedInCurrentRun: true,
-      game: proof.generatedFrom?.game,
-      artifact,
-      overviewRoleUrl: validated.overviewRoleUrl,
-      detailRoleUrl: validated.detailRoleUrl,
-      ...(validated.visibleChecks === undefined
-        ? {}
-        : { visibleChecks: validated.visibleChecks }),
-      ...(validated.visibleScenarios === undefined
-        ? {}
-        : { visibleScenarios: validated.visibleScenarios }),
-      ...(validated.visibleSessions === undefined
-        ? {}
-        : { visibleSessions: validated.visibleSessions }),
-      ...(validated.visibleUnproven === undefined
-        ? {}
-        : { visibleUnproven: validated.visibleUnproven }),
-      releaseReady: false,
-      productionReady: false,
-    });
+  const releaseIndex = devTestGameAdminSpineProofPlan.findIndex(
+    (spec) => spec.id === "release",
+  );
+  if (releaseIndex < 0) {
+    throw new Error("admin spine proof plan is missing the release proof boundary");
   }
+  await runAdminSpineProofBatch({
+    specs: devTestGameAdminSpineProofPlan.slice(0, releaseIndex),
+    entries,
+  });
+  await runNodeScript("tools/dev_test_game_release_readiness.mjs");
+  await runAdminSpineProofBatch({
+    specs: devTestGameAdminSpineProofPlan.slice(releaseIndex),
+    entries,
+  });
   const evidence = {
     version: 1,
     proof: "dev-test-game-admin-spine-proof",
@@ -228,6 +273,47 @@ export async function runAdminSpineProof() {
   });
   await writeFile(evidencePath, `${JSON.stringify(evidence, null, 2)}\n`);
   return evidence;
+}
+
+async function runAdminSpineProofBatch({ specs, entries }) {
+  await runAdminAuditProofBatch(specs.map((spec) => spec.caseFactory()));
+  for (const spec of specs) {
+    entries.push(await readAdminSpineProofEntry(spec));
+  }
+}
+
+async function readAdminSpineProofEntry(spec) {
+  const proofPath = path.join(repoRoot, spec.path);
+  const proof = JSON.parse(await readFile(proofPath, "utf8"));
+  const validated = spec.validate(proof, { path: spec.path });
+  const artifact = await readArtifactMetadata(proofPath);
+  return {
+    id: spec.id,
+    label: spec.label,
+    proof: proof.proof,
+    status: validated.status,
+    path: validated.path,
+    rerunCommand: spec.rerunCommand,
+    refreshedInCurrentRun: true,
+    game: proof.generatedFrom?.game,
+    artifact,
+    overviewRoleUrl: validated.overviewRoleUrl,
+    detailRoleUrl: validated.detailRoleUrl,
+    ...(validated.visibleChecks === undefined
+      ? {}
+      : { visibleChecks: validated.visibleChecks }),
+    ...(validated.visibleScenarios === undefined
+      ? {}
+      : { visibleScenarios: validated.visibleScenarios }),
+    ...(validated.visibleSessions === undefined
+      ? {}
+      : { visibleSessions: validated.visibleSessions }),
+    ...(validated.visibleUnproven === undefined
+      ? {}
+      : { visibleUnproven: validated.visibleUnproven }),
+    releaseReady: false,
+    productionReady: false,
+  };
 }
 
 function buildAdminSpineRecovery(entries) {

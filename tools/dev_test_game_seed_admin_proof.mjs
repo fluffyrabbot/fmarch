@@ -1,4 +1,5 @@
 import path from "node:path";
+import { pathToFileURL } from "node:url";
 import { assertDevTestGameSeedFixtureSummary } from "./dev_test_game_seed_fixture_summary.mjs";
 import {
   seedScenarioCoverageGroups,
@@ -26,42 +27,48 @@ const requiredProofLaneCoverage = [
   "unclassified",
 ];
 
-await runAdminAuditProof({
-  smokeName: "dev-test-game-seed-admin-proof",
-  stage: "seed-admin-proof-listen",
-  evidencePath,
-  envOverrides: {
-    FMARCH_DEV_TEST_GAME_SEED_FIXTURE_SUMMARY: seedFixtureRelativePath,
-  },
-  loadSource: async () =>
-    assertDevTestGameSeedFixtureSummary(await readJson(seedFixturePath)),
-  prove: async ({ browser, frontendBaseUrl, source: seedFixture }) =>
-    await proveAdminAuditDetail({
-      browser,
-      frontendBaseUrl,
-      game: seedFixture.fixture.game,
-      auditId: "local-seed-fixtures",
-      requiredScenarios,
-      requiredProofLaneCoverage,
-    }),
-  buildEvidence: ({ source: seedFixture, adminRoleSurface }) => ({
-    version: 1,
-    proof: "dev-test-game-seed-admin-proof",
-    status: "passed",
-    releaseReady: false,
-    productionReady: false,
-    scope: "local-dev-test-game-seed-admin-surface",
-    proofBoundary:
-      "Local SvelteKit admin role URL with fixture admin authority over a saved dev-test-game seed/demo fixture summary. Proves the local seed/demo fixture inventory is discoverable from the seeded admin overview and inspectable in a native admin audit detail route; it does not prove hosted demo data, sanitized demo-data policy, invite delivery, beta readiness, or release readiness.",
-    generatedFrom: {
-      seedFixtureSummary: seedFixtureRelativePath,
-      game: seedFixture.fixture.game,
-      proofLaneCoverage: seedFixture.proofLaneCoverage,
+export function seedAdminProofCase() {
+  return {
+    smokeName: "dev-test-game-seed-admin-proof",
+    stage: "seed-admin-proof-listen",
+    evidencePath,
+    envOverrides: {
+      FMARCH_DEV_TEST_GAME_SEED_FIXTURE_SUMMARY: seedFixtureRelativePath,
     },
-    adminRoleSurface,
-  }),
-  assertEvidence: assertSeedAdminProof,
-});
+    loadSource: async () =>
+      assertDevTestGameSeedFixtureSummary(await readJson(seedFixturePath)),
+    prove: async ({ browser, frontendBaseUrl, source: seedFixture }) =>
+      await proveAdminAuditDetail({
+        browser,
+        frontendBaseUrl,
+        game: seedFixture.fixture.game,
+        auditId: "local-seed-fixtures",
+        requiredScenarios,
+        requiredProofLaneCoverage,
+      }),
+    buildEvidence: ({ source: seedFixture, adminRoleSurface }) => ({
+      version: 1,
+      proof: "dev-test-game-seed-admin-proof",
+      status: "passed",
+      releaseReady: false,
+      productionReady: false,
+      scope: "local-dev-test-game-seed-admin-surface",
+      proofBoundary:
+        "Local SvelteKit admin role URL with fixture admin authority over a saved dev-test-game seed/demo fixture summary. Proves the local seed/demo fixture inventory is discoverable from the seeded admin overview and inspectable in a native admin audit detail route; it does not prove hosted demo data, sanitized demo-data policy, invite delivery, beta readiness, or release readiness.",
+      generatedFrom: {
+        seedFixtureSummary: seedFixtureRelativePath,
+        game: seedFixture.fixture.game,
+        proofLaneCoverage: seedFixture.proofLaneCoverage,
+      },
+      adminRoleSurface,
+    }),
+    assertEvidence: assertSeedAdminProof,
+  };
+}
+
+if (pathToFileURL(process.argv[1] ?? "").href === import.meta.url) {
+  await runAdminAuditProof(seedAdminProofCase());
+}
 
 export function assertSeedAdminProof(evidence) {
   if (

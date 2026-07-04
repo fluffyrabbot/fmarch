@@ -1,4 +1,5 @@
 import path from "node:path";
+import { pathToFileURL } from "node:url";
 import {
   coreLoopHighlightedLaneEvidence,
   coreLoopSpineStatus,
@@ -183,307 +184,313 @@ function completedGameHardeningCoverageStatus(proofRun) {
   return `${status}: ${passedLaneCount}/${laneCount} completed-game lanes across ${familyCount} families`;
 }
 
-await runAdminAuditProof({
-  smokeName: "dev-test-game-core-loop-admin-proof",
-  stage: "core-loop-admin-proof-listen",
-  evidencePath,
-  envOverrides: {
-    FMARCH_DEV_TEST_GAME_PROOF_RUN: proofRunRelativePath,
-  },
-  loadSource: async () => assertDevTestGameProofRun(await readJson(proofRunPath)),
-  prove: async ({ browser, frontendBaseUrl, source: proofRun }) => {
-    const spineRows = requiredSpineRows(proofRun);
-    const adminRoleSurface = await proveAdminAuditDetail({
-      browser,
-      frontendBaseUrl,
-      game: proofRun.session.game,
-      auditId: "local-core-loop",
-      requiredChecks,
-      requiredCheckStatuses: {
-        [coreLoopSpineCheckId]: coreLoopSpineStatus(proofRun),
-        [coreLoopCompletedGameCoverageCheckId]:
-          completedGameHardeningCoverageStatus(proofRun),
-        ...coreLoopHighlightedLaneEvidence(proofRun),
-      },
-      requiredSpineCycles: spineRows.cycles,
-      requiredSpineRoleUrls: spineRows.roleUrls,
-      requiredSpineCheckpoints: spineRows.checkpoints,
-      requiredSpineRecoveryHooks: spineRows.recoveryHooks,
-    });
-    const hostRoleSurface = await proveHostLifecycleControlCheckpoint({
-      browser,
-      frontendBaseUrl,
-      game: proofRun.session.game,
-      roleUrl: spineRows.roleUrlHrefs["d02-n02-host"],
-    });
-    const playerRoleSurface = await provePlayerActionSubmissionCheckpoint({
-      browser,
-      frontendBaseUrl,
-      roleUrl: spineRows.roleUrlHrefs["d02-n02-actionPlayer"],
-    });
-    const targetResolutionReceiptSurface =
-      await proveTargetResolutionReceiptSurface({
+export function coreLoopAdminProofCase() {
+  return {
+    smokeName: "dev-test-game-core-loop-admin-proof",
+    stage: "core-loop-admin-proof-listen",
+    evidencePath,
+    envOverrides: {
+      FMARCH_DEV_TEST_GAME_PROOF_RUN: proofRunRelativePath,
+    },
+    loadSource: async () => assertDevTestGameProofRun(await readJson(proofRunPath)),
+    prove: async ({ browser, frontendBaseUrl, source: proofRun }) => {
+      const spineRows = requiredSpineRows(proofRun);
+      const adminRoleSurface = await proveAdminAuditDetail({
         browser,
         frontendBaseUrl,
-        roleUrl: targetResolutionReceiptRoleUrl(
-          spineRows.roleUrlHrefs["d01-n01-d02-target"],
-        ),
+        game: proofRun.session.game,
+        auditId: "local-core-loop",
+        requiredChecks,
+        requiredCheckStatuses: {
+          [coreLoopSpineCheckId]: coreLoopSpineStatus(proofRun),
+          [coreLoopCompletedGameCoverageCheckId]:
+            completedGameHardeningCoverageStatus(proofRun),
+          ...coreLoopHighlightedLaneEvidence(proofRun),
+        },
+        requiredSpineCycles: spineRows.cycles,
+        requiredSpineRoleUrls: spineRows.roleUrls,
+        requiredSpineCheckpoints: spineRows.checkpoints,
+        requiredSpineRecoveryHooks: spineRows.recoveryHooks,
       });
-    const normalResolutionPrivacySurface =
-      await proveNormalResolutionPrivacySurface({
+      const hostRoleSurface = await proveHostLifecycleControlCheckpoint({
         browser,
         frontendBaseUrl,
-        roleUrl: normalResolutionPrivacyRoleUrl(
-          spineRows.roleUrlHrefs["d01-n01-d02-normalPlayer"],
-        ),
+        game: proofRun.session.game,
+        roleUrl: spineRows.roleUrlHrefs["d02-n02-host"],
       });
-    const targetDayVoteReceiptSurface = await proveTargetDayVoteReceiptSurface({
-      browser,
-      frontendBaseUrl,
-      roleUrl: targetResolutionReceiptRoleUrl(
-        spineRows.roleUrlHrefs["d02-n02-target"],
-      ),
-    });
-    const normalDayVotePrivacySurface = await proveNormalDayVotePrivacySurface({
-      browser,
-      frontendBaseUrl,
-      roleUrl: normalResolutionPrivacyRoleUrl(
-        spineRows.roleUrlHrefs["d02-n02-normalPlayer"],
-      ),
-    });
-    const hostPhaseTransitionSurface = await proveHostPhaseTransitionSurface({
-      browser,
-      frontendBaseUrl,
-      hostRoleUrl: spineRows.roleUrlHrefs["d02-n02-host"],
-      playerRoleUrl: spineRows.roleUrlHrefs["d02-n02-actionPlayer"],
-    });
-    const targetPostDayVoteAdvanceSurface =
-      await proveTargetPostDayVoteAdvanceSurface({
+      const playerRoleSurface = await provePlayerActionSubmissionCheckpoint({
+        browser,
+        frontendBaseUrl,
+        roleUrl: spineRows.roleUrlHrefs["d02-n02-actionPlayer"],
+      });
+      const targetResolutionReceiptSurface =
+        await proveTargetResolutionReceiptSurface({
+          browser,
+          frontendBaseUrl,
+          roleUrl: targetResolutionReceiptRoleUrl(
+            spineRows.roleUrlHrefs["d01-n01-d02-target"],
+          ),
+        });
+      const normalResolutionPrivacySurface =
+        await proveNormalResolutionPrivacySurface({
+          browser,
+          frontendBaseUrl,
+          roleUrl: normalResolutionPrivacyRoleUrl(
+            spineRows.roleUrlHrefs["d01-n01-d02-normalPlayer"],
+          ),
+        });
+      const targetDayVoteReceiptSurface = await proveTargetDayVoteReceiptSurface({
         browser,
         frontendBaseUrl,
         roleUrl: targetResolutionReceiptRoleUrl(
           spineRows.roleUrlHrefs["d02-n02-target"],
         ),
       });
-    const normalPostDayVoteAdvanceSurface =
-      await proveNormalPostDayVoteAdvanceSurface({
+      const normalDayVotePrivacySurface = await proveNormalDayVotePrivacySurface({
         browser,
         frontendBaseUrl,
         roleUrl: normalResolutionPrivacyRoleUrl(
           spineRows.roleUrlHrefs["d02-n02-normalPlayer"],
         ),
       });
-    const nightActionResolutionReceiptSurface =
-      await proveNightActionResolutionReceiptSurface({
+      const hostPhaseTransitionSurface = await proveHostPhaseTransitionSurface({
         browser,
         frontendBaseUrl,
-        roleUrl: targetResolutionReceiptRoleUrl(
-          spineRows.roleUrlHrefs["d02-n02-actionPlayer"],
-        ),
+        hostRoleUrl: spineRows.roleUrlHrefs["d02-n02-host"],
+        playerRoleUrl: spineRows.roleUrlHrefs["d02-n02-actionPlayer"],
       });
-    const normalNightActionResolutionPrivacySurface =
-      await proveNormalNightActionResolutionPrivacySurface({
+      const targetPostDayVoteAdvanceSurface =
+        await proveTargetPostDayVoteAdvanceSurface({
+          browser,
+          frontendBaseUrl,
+          roleUrl: targetResolutionReceiptRoleUrl(
+            spineRows.roleUrlHrefs["d02-n02-target"],
+          ),
+        });
+      const normalPostDayVoteAdvanceSurface =
+        await proveNormalPostDayVoteAdvanceSurface({
+          browser,
+          frontendBaseUrl,
+          roleUrl: normalResolutionPrivacyRoleUrl(
+            spineRows.roleUrlHrefs["d02-n02-normalPlayer"],
+          ),
+        });
+      const nightActionResolutionReceiptSurface =
+        await proveNightActionResolutionReceiptSurface({
+          browser,
+          frontendBaseUrl,
+          roleUrl: targetResolutionReceiptRoleUrl(
+            spineRows.roleUrlHrefs["d02-n02-actionPlayer"],
+          ),
+        });
+      const normalNightActionResolutionPrivacySurface =
+        await proveNormalNightActionResolutionPrivacySurface({
+          browser,
+          frontendBaseUrl,
+          roleUrl: normalResolutionPrivacyRoleUrl(
+            spineRows.roleUrlHrefs["d02-n02-normalPlayer"],
+          ),
+        });
+      const hostNightActionTransitionSurface =
+        await proveHostNightActionTransitionSurface({
+          browser,
+          frontendBaseUrl,
+          hostRoleUrl: spineRows.roleUrlHrefs["d02-n02-host"],
+          actionPlayerRoleUrl: spineRows.roleUrlHrefs["d02-n02-actionPlayer"],
+          nightTargetRoleUrl: targetResolutionReceiptRoleUrl(
+            spineRows.roleUrlHrefs["d02-n02-actionPlayer"],
+          ),
+          normalRoleUrl: normalResolutionPrivacyRoleUrl(
+            spineRows.roleUrlHrefs["d02-n02-normalPlayer"],
+          ),
+        });
+      const dayThreeVoteResolutionSurface =
+        await proveDayThreeVoteResolutionSurface({
+          browser,
+          frontendBaseUrl,
+          actionPlayerRoleUrl: spineRows.roleUrlHrefs["d02-n02-actionPlayer"],
+          hostRoleUrl: spineRows.roleUrlHrefs["d02-n02-host"],
+        });
+      const postDayThreeResolutionSurface =
+        await provePostDayThreeResolutionSurface({
+          browser,
+          frontendBaseUrl,
+          hostRoleUrl: spineRows.roleUrlHrefs["d02-n02-host"],
+          actionPlayerRoleUrl: spineRows.roleUrlHrefs["d02-n02-actionPlayer"],
+          targetRoleUrl: targetResolutionReceiptRoleUrl(
+            spineRows.roleUrlHrefs["d02-n02-normalPlayer"],
+          ),
+        });
+      const nightThreeEmptyResolutionSurface =
+        await proveNightThreeEmptyResolutionSurface({
+          browser,
+          frontendBaseUrl,
+          hostRoleUrl: spineRows.roleUrlHrefs["d02-n02-host"],
+          actionPlayerRoleUrl: spineRows.roleUrlHrefs["d02-n02-actionPlayer"],
+        });
+      const dayFourSurvivorRoleSurface = await proveDayFourSurvivorRoleSurface({
         browser,
         frontendBaseUrl,
-        roleUrl: normalResolutionPrivacyRoleUrl(
-          spineRows.roleUrlHrefs["d02-n02-normalPlayer"],
-        ),
+        roleUrl: spineRows.roleUrlHrefs["d02-n02-actionPlayer"],
       });
-    const hostNightActionTransitionSurface =
-      await proveHostNightActionTransitionSurface({
+      const nightFourActionSubmissionSurface =
+        await proveNightFourActionSubmissionSurface({
+          browser,
+          frontendBaseUrl,
+          hostRoleUrl: spineRows.roleUrlHrefs["d02-n02-host"],
+          actionPlayerRoleUrl: spineRows.roleUrlHrefs["d02-n02-actionPlayer"],
+        });
+      const nightFourResolutionReceiptSurface =
+        await proveNightFourResolutionReceiptSurface({
+          browser,
+          frontendBaseUrl,
+          hostRoleUrl: spineRows.roleUrlHrefs["d02-n02-host"],
+          actionPlayerRoleUrl: spineRows.roleUrlHrefs["d02-n02-actionPlayer"],
+          survivorRoleUrl: targetResolutionReceiptRoleUrl(
+            spineRows.roleUrlHrefs["d02-n02-actionPlayer"],
+          ),
+        });
+      const postNightFourTransitionSurface =
+        await provePostNightFourTransitionSurface({
+          browser,
+          frontendBaseUrl,
+          hostRoleUrl: spineRows.roleUrlHrefs["d02-n02-host"],
+          actionPlayerRoleUrl: spineRows.roleUrlHrefs["d02-n02-actionPlayer"],
+          survivorRoleUrl: targetResolutionReceiptRoleUrl(
+            spineRows.roleUrlHrefs["d02-n02-actionPlayer"],
+          ),
+        });
+      const dayFiveNoLynchResolutionSurface =
+        await proveDayFiveNoLynchResolutionSurface({
+          browser,
+          frontendBaseUrl,
+          hostRoleUrl: spineRows.roleUrlHrefs["d02-n02-host"],
+          actionPlayerRoleUrl: spineRows.roleUrlHrefs["d02-n02-actionPlayer"],
+        });
+      const completedGameEndgameSurface = await proveCompletedGameEndgameSurface({
         browser,
         frontendBaseUrl,
         hostRoleUrl: spineRows.roleUrlHrefs["d02-n02-host"],
         actionPlayerRoleUrl: spineRows.roleUrlHrefs["d02-n02-actionPlayer"],
-        nightTargetRoleUrl: targetResolutionReceiptRoleUrl(
-          spineRows.roleUrlHrefs["d02-n02-actionPlayer"],
-        ),
-        normalRoleUrl: normalResolutionPrivacyRoleUrl(
-          spineRows.roleUrlHrefs["d02-n02-normalPlayer"],
+        normalPlayerRoleUrl: spineRows.roleUrlHrefs["d02-n02-normalPlayer"],
+        deadPlayerRoleUrl: targetResolutionReceiptRoleUrl(
+          spineRows.roleUrlHrefs["d02-n02-target"],
         ),
       });
-    const dayThreeVoteResolutionSurface =
-      await proveDayThreeVoteResolutionSurface({
+      const privateChannelRoleSurface = await provePrivateChannelRoleSurface({
         browser,
         frontendBaseUrl,
-        actionPlayerRoleUrl: spineRows.roleUrlHrefs["d02-n02-actionPlayer"],
-        hostRoleUrl: spineRows.roleUrlHrefs["d02-n02-host"],
+        roleUrl:
+          spineRows.roleUrlHrefs["d01-n01-d02-privateChannel"] ??
+          privateChannelRoleUrlFromPlayerRoleUrl(
+            spineRows.roleUrlHrefs["d02-n02-actionPlayer"],
+          ),
       });
-    const postDayThreeResolutionSurface =
-      await provePostDayThreeResolutionSurface({
-        browser,
-        frontendBaseUrl,
-        hostRoleUrl: spineRows.roleUrlHrefs["d02-n02-host"],
-        actionPlayerRoleUrl: spineRows.roleUrlHrefs["d02-n02-actionPlayer"],
-        targetRoleUrl: targetResolutionReceiptRoleUrl(
-          spineRows.roleUrlHrefs["d02-n02-normalPlayer"],
-        ),
-      });
-    const nightThreeEmptyResolutionSurface =
-      await proveNightThreeEmptyResolutionSurface({
-        browser,
-        frontendBaseUrl,
-        hostRoleUrl: spineRows.roleUrlHrefs["d02-n02-host"],
-        actionPlayerRoleUrl: spineRows.roleUrlHrefs["d02-n02-actionPlayer"],
-      });
-    const dayFourSurvivorRoleSurface = await proveDayFourSurvivorRoleSurface({
-      browser,
-      frontendBaseUrl,
-      roleUrl: spineRows.roleUrlHrefs["d02-n02-actionPlayer"],
-    });
-    const nightFourActionSubmissionSurface =
-      await proveNightFourActionSubmissionSurface({
-        browser,
-        frontendBaseUrl,
-        hostRoleUrl: spineRows.roleUrlHrefs["d02-n02-host"],
-        actionPlayerRoleUrl: spineRows.roleUrlHrefs["d02-n02-actionPlayer"],
-      });
-    const nightFourResolutionReceiptSurface =
-      await proveNightFourResolutionReceiptSurface({
-        browser,
-        frontendBaseUrl,
-        hostRoleUrl: spineRows.roleUrlHrefs["d02-n02-host"],
-        actionPlayerRoleUrl: spineRows.roleUrlHrefs["d02-n02-actionPlayer"],
-        survivorRoleUrl: targetResolutionReceiptRoleUrl(
-          spineRows.roleUrlHrefs["d02-n02-actionPlayer"],
-        ),
-      });
-    const postNightFourTransitionSurface =
-      await provePostNightFourTransitionSurface({
-        browser,
-        frontendBaseUrl,
-        hostRoleUrl: spineRows.roleUrlHrefs["d02-n02-host"],
-        actionPlayerRoleUrl: spineRows.roleUrlHrefs["d02-n02-actionPlayer"],
-        survivorRoleUrl: targetResolutionReceiptRoleUrl(
-          spineRows.roleUrlHrefs["d02-n02-actionPlayer"],
-        ),
-      });
-    const dayFiveNoLynchResolutionSurface =
-      await proveDayFiveNoLynchResolutionSurface({
-        browser,
-        frontendBaseUrl,
-        hostRoleUrl: spineRows.roleUrlHrefs["d02-n02-host"],
-        actionPlayerRoleUrl: spineRows.roleUrlHrefs["d02-n02-actionPlayer"],
-      });
-    const completedGameEndgameSurface = await proveCompletedGameEndgameSurface({
-      browser,
-      frontendBaseUrl,
-      hostRoleUrl: spineRows.roleUrlHrefs["d02-n02-host"],
-      actionPlayerRoleUrl: spineRows.roleUrlHrefs["d02-n02-actionPlayer"],
-      normalPlayerRoleUrl: spineRows.roleUrlHrefs["d02-n02-normalPlayer"],
-      deadPlayerRoleUrl: targetResolutionReceiptRoleUrl(
-        spineRows.roleUrlHrefs["d02-n02-target"],
-      ),
-    });
-    const privateChannelRoleSurface = await provePrivateChannelRoleSurface({
-      browser,
-      frontendBaseUrl,
-      roleUrl:
-        spineRows.roleUrlHrefs["d01-n01-d02-privateChannel"] ??
-        privateChannelRoleUrlFromPlayerRoleUrl(
-          spineRows.roleUrlHrefs["d02-n02-actionPlayer"],
-        ),
-    });
-    return {
-      adminRoleSurface,
-      hostRoleSurface,
-      playerRoleSurface,
-      targetResolutionReceiptSurface,
-      normalResolutionPrivacySurface,
-      targetDayVoteReceiptSurface,
-      normalDayVotePrivacySurface,
-      hostPhaseTransitionSurface,
-      targetPostDayVoteAdvanceSurface,
-      normalPostDayVoteAdvanceSurface,
-      nightActionResolutionReceiptSurface,
-      normalNightActionResolutionPrivacySurface,
-      hostNightActionTransitionSurface,
-      dayThreeVoteResolutionSurface,
-      postDayThreeResolutionSurface,
-      nightThreeEmptyResolutionSurface,
-      dayFourSurvivorRoleSurface,
-      nightFourActionSubmissionSurface,
-      nightFourResolutionReceiptSurface,
-      postNightFourTransitionSurface,
-      dayFiveNoLynchResolutionSurface,
-      completedGameEndgameSurface,
-      privateChannelRoleSurface,
-    };
-  },
-  buildEvidence: ({ source: proofRun, adminRoleSurface: surfaces }) => ({
-    version: 1,
-    proof: "dev-test-game-core-loop-admin-proof",
-    status: "passed",
-    releaseReady: false,
-    productionReady: false,
-    scope: "local-dev-test-game-core-loop-admin-surface",
-    proofBoundary:
-      "Local SvelteKit admin role URL with fixture admin authority over the dev-test-game core-loop proof-run lanes. Proves the saved host-control, lynch and no-lynch day-vote resolution, player-action, day/night, second-night action-resolution receipt/privacy, host Night 2 resolution to Day 3 transition, Day 3 player-vote submission and host resolution, post-Day 3 receipt/privacy and advance to Night 3, empty Night 3 host resolution and advance to Day 4 player vote controls, a living Day 4 survivor role URL, Day 4 no-lynch resolution into Night 4, Night 4 action submission against the survivor, Night 4 target receipt/privacy after host resolution, post-Night 4 advance to Day 5 with dead-player/no-lynch surfaces plus stale Night 4 action recovery, Day 5 no-lynch resolution into Night 5 with stale Day 5 vote recovery, and host CompleteGame into completed endgame host/player surfaces with role URL reload closure plus stale completed-game vote recovery; official-votecount publication, private-channel, replacement, stale outgoing-player recovery, and incoming replacement-player evidence is discoverable from the seeded admin overview and inspectable in a native admin audit detail route; it does not prove hosted deployment, production identity, exhaustive action/race coverage, beta readiness, or production readiness.",
-    generatedFrom: {
-      proofRun: proofRunRelativePath,
-      game: proofRun.session.game,
-      coreLoopSpineStatus: coreLoopSpineStatus(proofRun),
-      coreLoopSpineRows: requiredSpineRows(proofRun),
-      completedGameHardeningCoverage:
-        proofRun.completedGameHardeningCoverage,
-      completedGameHardeningCoverageStatus:
-        completedGameHardeningCoverageStatus(proofRun),
-      hostControlFamily: coreLoopHostControlScenarioFamily(),
-      playerActionRecoveryFamily:
-        coreLoopPlayerActionRecoveryScenarioFamily(),
-      privateReceiptSurfaceFamily:
-        coreLoopPrivateReceiptSurfaceScenarioFamily(),
-      postDayVoteAdvanceFamily:
-        coreLoopPostDayVoteAdvanceScenarioFamily(),
-      voteResolutionFamily: coreLoopVoteResolutionScenarioFamily(),
-      phaseProgressionFamily: coreLoopPhaseProgressionScenarioFamily(),
-      lateActionProgressionFamily:
-        coreLoopLateActionProgressionScenarioFamily(),
-      resolutionReceiptPrivacyFamily:
-        coreLoopResolutionReceiptPrivacyScenarioFamily(),
-      noLynchProgressionFamily:
-        coreLoopNoLynchProgressionScenarioFamily(),
-      dayFiveProgressionFamily: coreLoopDayFiveProgressionScenarioFamily(),
-      completedEndgameProgressionFamily:
-        coreLoopCompletedEndgameProgressionScenarioFamily(),
-      privateChannelRecoveryFamily:
-        coreLoopPrivateChannelRecoveryScenarioFamily(),
-      highlightedLaneEvidence: coreLoopHighlightedLaneEvidence(proofRun),
+      return {
+        adminRoleSurface,
+        hostRoleSurface,
+        playerRoleSurface,
+        targetResolutionReceiptSurface,
+        normalResolutionPrivacySurface,
+        targetDayVoteReceiptSurface,
+        normalDayVotePrivacySurface,
+        hostPhaseTransitionSurface,
+        targetPostDayVoteAdvanceSurface,
+        normalPostDayVoteAdvanceSurface,
+        nightActionResolutionReceiptSurface,
+        normalNightActionResolutionPrivacySurface,
+        hostNightActionTransitionSurface,
+        dayThreeVoteResolutionSurface,
+        postDayThreeResolutionSurface,
+        nightThreeEmptyResolutionSurface,
+        dayFourSurvivorRoleSurface,
+        nightFourActionSubmissionSurface,
+        nightFourResolutionReceiptSurface,
+        postNightFourTransitionSurface,
+        dayFiveNoLynchResolutionSurface,
+        completedGameEndgameSurface,
+        privateChannelRoleSurface,
+      };
     },
-    adminRoleSurface: surfaces.adminRoleSurface,
-    hostRoleSurface: surfaces.hostRoleSurface,
-    playerRoleSurface: surfaces.playerRoleSurface,
-    targetResolutionReceiptSurface: surfaces.targetResolutionReceiptSurface,
-    normalResolutionPrivacySurface: surfaces.normalResolutionPrivacySurface,
-    targetDayVoteReceiptSurface: surfaces.targetDayVoteReceiptSurface,
-    normalDayVotePrivacySurface: surfaces.normalDayVotePrivacySurface,
-    hostPhaseTransitionSurface: surfaces.hostPhaseTransitionSurface,
-    targetPostDayVoteAdvanceSurface: surfaces.targetPostDayVoteAdvanceSurface,
-    normalPostDayVoteAdvanceSurface: surfaces.normalPostDayVoteAdvanceSurface,
-    nightActionResolutionReceiptSurface:
-      surfaces.nightActionResolutionReceiptSurface,
-    normalNightActionResolutionPrivacySurface:
-      surfaces.normalNightActionResolutionPrivacySurface,
-    hostNightActionTransitionSurface: surfaces.hostNightActionTransitionSurface,
-    dayThreeVoteResolutionSurface: surfaces.dayThreeVoteResolutionSurface,
-    postDayThreeResolutionSurface: surfaces.postDayThreeResolutionSurface,
-    nightThreeEmptyResolutionSurface:
-      surfaces.nightThreeEmptyResolutionSurface,
-    dayFourSurvivorRoleSurface: surfaces.dayFourSurvivorRoleSurface,
-    nightFourActionSubmissionSurface:
-      surfaces.nightFourActionSubmissionSurface,
-    nightFourResolutionReceiptSurface:
-      surfaces.nightFourResolutionReceiptSurface,
-    postNightFourTransitionSurface:
-      surfaces.postNightFourTransitionSurface,
-    dayFiveNoLynchResolutionSurface:
-      surfaces.dayFiveNoLynchResolutionSurface,
-    completedGameEndgameSurface:
-      surfaces.completedGameEndgameSurface,
-    privateChannelRoleSurface: surfaces.privateChannelRoleSurface,
-  }),
-  assertEvidence: assertCoreLoopAdminProof,
-});
+    buildEvidence: ({ source: proofRun, adminRoleSurface: surfaces }) => ({
+      version: 1,
+      proof: "dev-test-game-core-loop-admin-proof",
+      status: "passed",
+      releaseReady: false,
+      productionReady: false,
+      scope: "local-dev-test-game-core-loop-admin-surface",
+      proofBoundary:
+        "Local SvelteKit admin role URL with fixture admin authority over the dev-test-game core-loop proof-run lanes. Proves the saved host-control, lynch and no-lynch day-vote resolution, player-action, day/night, second-night action-resolution receipt/privacy, host Night 2 resolution to Day 3 transition, Day 3 player-vote submission and host resolution, post-Day 3 receipt/privacy and advance to Night 3, empty Night 3 host resolution and advance to Day 4 player vote controls, a living Day 4 survivor role URL, Day 4 no-lynch resolution into Night 4, Night 4 action submission against the survivor, Night 4 target receipt/privacy after host resolution, post-Night 4 advance to Day 5 with dead-player/no-lynch surfaces plus stale Night 4 action recovery, Day 5 no-lynch resolution into Night 5 with stale Day 5 vote recovery, and host CompleteGame into completed endgame host/player surfaces with role URL reload closure plus stale completed-game vote recovery; official-votecount publication, private-channel, replacement, stale outgoing-player recovery, and incoming replacement-player evidence is discoverable from the seeded admin overview and inspectable in a native admin audit detail route; it does not prove hosted deployment, production identity, exhaustive action/race coverage, beta readiness, or production readiness.",
+      generatedFrom: {
+        proofRun: proofRunRelativePath,
+        game: proofRun.session.game,
+        coreLoopSpineStatus: coreLoopSpineStatus(proofRun),
+        coreLoopSpineRows: requiredSpineRows(proofRun),
+        completedGameHardeningCoverage:
+          proofRun.completedGameHardeningCoverage,
+        completedGameHardeningCoverageStatus:
+          completedGameHardeningCoverageStatus(proofRun),
+        hostControlFamily: coreLoopHostControlScenarioFamily(),
+        playerActionRecoveryFamily:
+          coreLoopPlayerActionRecoveryScenarioFamily(),
+        privateReceiptSurfaceFamily:
+          coreLoopPrivateReceiptSurfaceScenarioFamily(),
+        postDayVoteAdvanceFamily:
+          coreLoopPostDayVoteAdvanceScenarioFamily(),
+        voteResolutionFamily: coreLoopVoteResolutionScenarioFamily(),
+        phaseProgressionFamily: coreLoopPhaseProgressionScenarioFamily(),
+        lateActionProgressionFamily:
+          coreLoopLateActionProgressionScenarioFamily(),
+        resolutionReceiptPrivacyFamily:
+          coreLoopResolutionReceiptPrivacyScenarioFamily(),
+        noLynchProgressionFamily:
+          coreLoopNoLynchProgressionScenarioFamily(),
+        dayFiveProgressionFamily: coreLoopDayFiveProgressionScenarioFamily(),
+        completedEndgameProgressionFamily:
+          coreLoopCompletedEndgameProgressionScenarioFamily(),
+        privateChannelRecoveryFamily:
+          coreLoopPrivateChannelRecoveryScenarioFamily(),
+        highlightedLaneEvidence: coreLoopHighlightedLaneEvidence(proofRun),
+      },
+      adminRoleSurface: surfaces.adminRoleSurface,
+      hostRoleSurface: surfaces.hostRoleSurface,
+      playerRoleSurface: surfaces.playerRoleSurface,
+      targetResolutionReceiptSurface: surfaces.targetResolutionReceiptSurface,
+      normalResolutionPrivacySurface: surfaces.normalResolutionPrivacySurface,
+      targetDayVoteReceiptSurface: surfaces.targetDayVoteReceiptSurface,
+      normalDayVotePrivacySurface: surfaces.normalDayVotePrivacySurface,
+      hostPhaseTransitionSurface: surfaces.hostPhaseTransitionSurface,
+      targetPostDayVoteAdvanceSurface: surfaces.targetPostDayVoteAdvanceSurface,
+      normalPostDayVoteAdvanceSurface: surfaces.normalPostDayVoteAdvanceSurface,
+      nightActionResolutionReceiptSurface:
+        surfaces.nightActionResolutionReceiptSurface,
+      normalNightActionResolutionPrivacySurface:
+        surfaces.normalNightActionResolutionPrivacySurface,
+      hostNightActionTransitionSurface: surfaces.hostNightActionTransitionSurface,
+      dayThreeVoteResolutionSurface: surfaces.dayThreeVoteResolutionSurface,
+      postDayThreeResolutionSurface: surfaces.postDayThreeResolutionSurface,
+      nightThreeEmptyResolutionSurface:
+        surfaces.nightThreeEmptyResolutionSurface,
+      dayFourSurvivorRoleSurface: surfaces.dayFourSurvivorRoleSurface,
+      nightFourActionSubmissionSurface:
+        surfaces.nightFourActionSubmissionSurface,
+      nightFourResolutionReceiptSurface:
+        surfaces.nightFourResolutionReceiptSurface,
+      postNightFourTransitionSurface:
+        surfaces.postNightFourTransitionSurface,
+      dayFiveNoLynchResolutionSurface:
+        surfaces.dayFiveNoLynchResolutionSurface,
+      completedGameEndgameSurface:
+        surfaces.completedGameEndgameSurface,
+      privateChannelRoleSurface: surfaces.privateChannelRoleSurface,
+    }),
+    assertEvidence: assertCoreLoopAdminProof,
+  };
+}
+
+if (pathToFileURL(process.argv[1] ?? "").href === import.meta.url) {
+  await runAdminAuditProof(coreLoopAdminProofCase());
+}
 
 async function proveHostLifecycleControlCheckpoint({
   browser,

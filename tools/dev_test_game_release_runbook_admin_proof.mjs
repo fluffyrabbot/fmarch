@@ -1,4 +1,5 @@
 import path from "node:path";
+import { pathToFileURL } from "node:url";
 import { assertDevTestGameProofRun } from "./dev_test_game_proof_contract.mjs";
 import { assertDevTestGameReleaseRunbook } from "./dev_test_game_release_runbook.mjs";
 import {
@@ -31,48 +32,54 @@ const requiredChecks = [
 ];
 const requiredRelatedLinks = ["local-release-readiness"];
 
-await runAdminAuditProof({
-  smokeName: "dev-test-game-release-runbook-admin-proof",
-  stage: "release-runbook-admin-proof-listen",
-  evidencePath,
-  envOverrides: {
-    FMARCH_DEV_TEST_GAME_RELEASE_RUNBOOK: releaseRunbookRelativePath,
-  },
-  loadSource: async () => ({
-    releaseRunbook: assertDevTestGameReleaseRunbook(await readJson(releaseRunbookPath)),
-    proofRun: assertDevTestGameProofRun(await readJson(proofRunPath)),
-  }),
-  prove: async ({ browser, frontendBaseUrl, source }) =>
-    await proveAdminAuditDetail({
-      browser,
-      frontendBaseUrl,
-      game: source.proofRun.session.game,
-      auditId: "local-release-runbook",
-      requiredChecks,
-      requiredUnproven: source.releaseRunbook.runbookItems.map((item) => item.id),
-      requiredRelatedLinks,
-    }),
-  buildEvidence: ({ source, adminRoleSurface }) => ({
-    version: 1,
-    proof: "dev-test-game-release-runbook-admin-proof",
-    status: "passed",
-    releaseReady: false,
-    productionReady: false,
-    scope: "local-dev-test-game-release-runbook-admin-surface",
-    proofBoundary:
-      "Local SvelteKit admin role URL with fixture admin authority over the release-runbook rehearsal artifact. Proves the runbook checks, rehearsed readiness gaps, and release-readiness handoff are discoverable from the seeded admin overview and inspectable in a native admin audit detail route; it does not prove human approval, hosted deployment, beta readiness, release readiness, or production readiness.",
-    generatedFrom: {
-      releaseRunbook: releaseRunbookRelativePath,
-      proofRun: proofRunRelativePath,
-      game: source.proofRun.session.game,
-      checkIds: requiredChecks,
-      runbookItemIds: source.releaseRunbook.runbookItems.map((item) => item.id),
-      relatedAuditIds: requiredRelatedLinks,
+export function releaseRunbookAdminProofCase() {
+  return {
+    smokeName: "dev-test-game-release-runbook-admin-proof",
+    stage: "release-runbook-admin-proof-listen",
+    evidencePath,
+    envOverrides: {
+      FMARCH_DEV_TEST_GAME_RELEASE_RUNBOOK: releaseRunbookRelativePath,
     },
-    adminRoleSurface,
-  }),
-  assertEvidence: assertReleaseRunbookAdminProof,
-});
+    loadSource: async () => ({
+      releaseRunbook: assertDevTestGameReleaseRunbook(await readJson(releaseRunbookPath)),
+      proofRun: assertDevTestGameProofRun(await readJson(proofRunPath)),
+    }),
+    prove: async ({ browser, frontendBaseUrl, source }) =>
+      await proveAdminAuditDetail({
+        browser,
+        frontendBaseUrl,
+        game: source.proofRun.session.game,
+        auditId: "local-release-runbook",
+        requiredChecks,
+        requiredUnproven: source.releaseRunbook.runbookItems.map((item) => item.id),
+        requiredRelatedLinks,
+      }),
+    buildEvidence: ({ source, adminRoleSurface }) => ({
+      version: 1,
+      proof: "dev-test-game-release-runbook-admin-proof",
+      status: "passed",
+      releaseReady: false,
+      productionReady: false,
+      scope: "local-dev-test-game-release-runbook-admin-surface",
+      proofBoundary:
+        "Local SvelteKit admin role URL with fixture admin authority over the release-runbook rehearsal artifact. Proves the runbook checks, rehearsed readiness gaps, and release-readiness handoff are discoverable from the seeded admin overview and inspectable in a native admin audit detail route; it does not prove human approval, hosted deployment, beta readiness, release readiness, or production readiness.",
+      generatedFrom: {
+        releaseRunbook: releaseRunbookRelativePath,
+        proofRun: proofRunRelativePath,
+        game: source.proofRun.session.game,
+        checkIds: requiredChecks,
+        runbookItemIds: source.releaseRunbook.runbookItems.map((item) => item.id),
+        relatedAuditIds: requiredRelatedLinks,
+      },
+      adminRoleSurface,
+    }),
+    assertEvidence: assertReleaseRunbookAdminProof,
+  };
+}
+
+if (pathToFileURL(process.argv[1] ?? "").href === import.meta.url) {
+  await runAdminAuditProof(releaseRunbookAdminProofCase());
+}
 
 export function assertReleaseRunbookAdminProof(evidence) {
   if (

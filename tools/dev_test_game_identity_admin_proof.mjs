@@ -1,4 +1,5 @@
 import path from "node:path";
+import { pathToFileURL } from "node:url";
 import { validateDevTestGameIdentityAdapterProof } from "./dev_test_game_release_readiness.mjs";
 import {
   artifactDir,
@@ -27,58 +28,64 @@ const requiredChecks = [
 ];
 const requiredSessions = ["admin", "host", "player"];
 
-await runAdminAuditProof({
-  smokeName: "dev-test-game-identity-admin-proof",
-  stage: "identity-admin-proof-listen",
-  evidencePath,
-  envOverrides: {
-    FMARCH_DEV_TEST_GAME_IDENTITY_ADAPTER_PROOF: identityProofRelativePath,
-  },
-  loadSource: async () => {
-    const identityProof = await readJson(identityProofPath);
-    validateDevTestGameIdentityAdapterProof(identityProof, {
-      path: identityProofRelativePath,
-    });
-    return identityProof;
-  },
-  prove: async ({ browser, frontendBaseUrl, source: identityProof }) =>
-    await proveAdminAuditDetail({
-      browser,
-      frontendBaseUrl,
-      game: identityProof.game,
-      auditId: "local-identity-adapter",
-      requiredChecks,
-      requiredSessions,
-      requiredIdentityAdapterContractStatus:
-        identityProof.identityAdapterContract.status,
-      requiredIdentityAdapterContractMismatches:
-        identityProof.identityAdapterContractDiff.mismatches.map(
-          (mismatch) => mismatch.id,
-        ),
-      forbiddenText: inviteTokens(identityProof),
-    }),
-  buildEvidence: ({ source: identityProof, adminRoleSurface }) => ({
-    version: 1,
-    proof: "dev-test-game-identity-admin-proof",
-    status: "passed",
-    releaseReady: false,
-    productionReady: false,
-    scope: "local-dev-test-game-identity-admin-surface",
-    proofBoundary:
-      "Local SvelteKit admin role URL with fixture admin authority over the auth invite-role identity adapter proof. Proves the saved local identity-adapter evidence is discoverable from the seeded admin overview and inspectable in a native admin audit detail route with role surfaces and lifecycle checks visible; it does not prove hosted accounts, invite delivery, account recovery, abuse controls, hosted audit retention/export, beta readiness, or production readiness.",
-    generatedFrom: {
-      identityAdapterProof: identityProofRelativePath,
-      game: identityProof.game,
-      identityAdapterContractStatus: identityProof.identityAdapterContract.status,
-      identityAdapterContractMismatchIds:
-        identityProof.identityAdapterContractDiff.mismatches.map(
-          (mismatch) => mismatch.id,
-        ),
+export function identityAdminProofCase() {
+  return {
+    smokeName: "dev-test-game-identity-admin-proof",
+    stage: "identity-admin-proof-listen",
+    evidencePath,
+    envOverrides: {
+      FMARCH_DEV_TEST_GAME_IDENTITY_ADAPTER_PROOF: identityProofRelativePath,
     },
-    adminRoleSurface,
-  }),
-  assertEvidence: assertIdentityAdminProof,
-});
+    loadSource: async () => {
+      const identityProof = await readJson(identityProofPath);
+      validateDevTestGameIdentityAdapterProof(identityProof, {
+        path: identityProofRelativePath,
+      });
+      return identityProof;
+    },
+    prove: async ({ browser, frontendBaseUrl, source: identityProof }) =>
+      await proveAdminAuditDetail({
+        browser,
+        frontendBaseUrl,
+        game: identityProof.game,
+        auditId: "local-identity-adapter",
+        requiredChecks,
+        requiredSessions,
+        requiredIdentityAdapterContractStatus:
+          identityProof.identityAdapterContract.status,
+        requiredIdentityAdapterContractMismatches:
+          identityProof.identityAdapterContractDiff.mismatches.map(
+            (mismatch) => mismatch.id,
+          ),
+        forbiddenText: inviteTokens(identityProof),
+      }),
+    buildEvidence: ({ source: identityProof, adminRoleSurface }) => ({
+      version: 1,
+      proof: "dev-test-game-identity-admin-proof",
+      status: "passed",
+      releaseReady: false,
+      productionReady: false,
+      scope: "local-dev-test-game-identity-admin-surface",
+      proofBoundary:
+        "Local SvelteKit admin role URL with fixture admin authority over the auth invite-role identity adapter proof. Proves the saved local identity-adapter evidence is discoverable from the seeded admin overview and inspectable in a native admin audit detail route with role surfaces and lifecycle checks visible; it does not prove hosted accounts, invite delivery, account recovery, abuse controls, hosted audit retention/export, beta readiness, or production readiness.",
+      generatedFrom: {
+        identityAdapterProof: identityProofRelativePath,
+        game: identityProof.game,
+        identityAdapterContractStatus: identityProof.identityAdapterContract.status,
+        identityAdapterContractMismatchIds:
+          identityProof.identityAdapterContractDiff.mismatches.map(
+            (mismatch) => mismatch.id,
+          ),
+      },
+      adminRoleSurface,
+    }),
+    assertEvidence: assertIdentityAdminProof,
+  };
+}
+
+if (pathToFileURL(process.argv[1] ?? "").href === import.meta.url) {
+  await runAdminAuditProof(identityAdminProofCase());
+}
 
 export function assertIdentityAdminProof(evidence) {
   if (

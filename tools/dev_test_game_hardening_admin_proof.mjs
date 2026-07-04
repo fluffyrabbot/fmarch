@@ -1,4 +1,5 @@
 import path from "node:path";
+import { pathToFileURL } from "node:url";
 import { hardeningHighlightedLaneEvidence } from "../frontend/src/lib/app/local-proof-lane-status.mjs";
 import { assertDevTestGameProofRun } from "./dev_test_game_proof_contract.mjs";
 import {
@@ -34,65 +35,71 @@ const proofRunRelativePath = path.relative(repoRoot, proofRunPath);
 const evidencePath = path.join(artifactDir, "hardening-admin-proof.json");
 const requiredChecks = hardeningAuditLaneIds;
 
-await runAdminAuditProof({
-  smokeName: "dev-test-game-hardening-admin-proof",
-  stage: "hardening-admin-proof-listen",
-  evidencePath,
-  envOverrides: {
-    FMARCH_DEV_TEST_GAME_PROOF_RUN: proofRunRelativePath,
-  },
-  loadSource: async () => assertDevTestGameProofRun(await readJson(proofRunPath)),
-  prove: async ({ browser, frontendBaseUrl, source: proofRun }) => {
-    const highlightedLaneEvidence = hardeningHighlightedLaneEvidence(proofRun);
-    const playerRecoveryHighlightedLaneEvidence = Object.fromEntries(
-      playerRecoveryAuditLaneIds
-        .filter((id) => highlightedLaneEvidence[id] !== undefined)
-        .map((id) => [id, highlightedLaneEvidence[id]]),
-    );
-    const adminRoleSurface = await proveAdminAuditDetail({
-      browser,
-      frontendBaseUrl,
-      game: proofRun.session.game,
-      auditId: localAdminAuditIds.hardening,
-      requiredChecks,
-      requiredCheckStatuses: highlightedLaneEvidence,
-    });
-    const playerRecoveryRoleSurface = await proveAdminAuditDetail({
-      browser,
-      frontendBaseUrl,
-      game: proofRun.session.game,
-      auditId: localAdminAuditIds.playerRecovery,
-      requiredChecks: playerRecoveryAuditLaneIds,
-      requiredCheckStatuses: playerRecoveryHighlightedLaneEvidence,
-      requiredRelatedLinks: [
-        localAdminAuditIds.coreLoop,
-        localAdminAuditIds.hardening,
-      ],
-    });
-    return { adminRoleSurface, playerRecoveryRoleSurface };
-  },
-  buildEvidence: ({ source: proofRun, adminRoleSurface: surfaces }) => ({
-    version: 1,
-    proof: "dev-test-game-hardening-admin-proof",
-    status: "passed",
-    releaseReady: false,
-    productionReady: false,
-    scope: "local-dev-test-game-hardening-admin-surface",
-    proofBoundary:
-      "Local SvelteKit admin role URL with fixture admin authority over the dev-test-game multiplayer-hardening proof-run lanes. Proves the saved local hardening evidence and focused player-recovery matrix are discoverable from the seeded admin overview and inspectable in native admin audit detail routes; it does not prove exhaustive race coverage, hosted reconnect behavior, multi-node concurrency, beta readiness, or production readiness.",
-    generatedFrom: {
-      proofRun: proofRunRelativePath,
-      game: proofRun.session.game,
-      highlightedLaneEvidence: hardeningHighlightedLaneEvidence(proofRun),
-      hostStaleControlLaneIds: [...hostStaleControlLaneIds],
-      hardeningRecoveryAuditLaneIds: [...hardeningRecoveryAuditLaneIds],
-      staleConflictMessageLaneIds: [...staleConflictMessageLaneIds],
+export function hardeningAdminProofCase() {
+  return {
+    smokeName: "dev-test-game-hardening-admin-proof",
+    stage: "hardening-admin-proof-listen",
+    evidencePath,
+    envOverrides: {
+      FMARCH_DEV_TEST_GAME_PROOF_RUN: proofRunRelativePath,
     },
-    adminRoleSurface: surfaces.adminRoleSurface,
-    playerRecoveryRoleSurface: surfaces.playerRecoveryRoleSurface,
-  }),
-  assertEvidence: assertHardeningAdminProof,
-});
+    loadSource: async () => assertDevTestGameProofRun(await readJson(proofRunPath)),
+    prove: async ({ browser, frontendBaseUrl, source: proofRun }) => {
+      const highlightedLaneEvidence = hardeningHighlightedLaneEvidence(proofRun);
+      const playerRecoveryHighlightedLaneEvidence = Object.fromEntries(
+        playerRecoveryAuditLaneIds
+          .filter((id) => highlightedLaneEvidence[id] !== undefined)
+          .map((id) => [id, highlightedLaneEvidence[id]]),
+      );
+      const adminRoleSurface = await proveAdminAuditDetail({
+        browser,
+        frontendBaseUrl,
+        game: proofRun.session.game,
+        auditId: localAdminAuditIds.hardening,
+        requiredChecks,
+        requiredCheckStatuses: highlightedLaneEvidence,
+      });
+      const playerRecoveryRoleSurface = await proveAdminAuditDetail({
+        browser,
+        frontendBaseUrl,
+        game: proofRun.session.game,
+        auditId: localAdminAuditIds.playerRecovery,
+        requiredChecks: playerRecoveryAuditLaneIds,
+        requiredCheckStatuses: playerRecoveryHighlightedLaneEvidence,
+        requiredRelatedLinks: [
+          localAdminAuditIds.coreLoop,
+          localAdminAuditIds.hardening,
+        ],
+      });
+      return { adminRoleSurface, playerRecoveryRoleSurface };
+    },
+    buildEvidence: ({ source: proofRun, adminRoleSurface: surfaces }) => ({
+      version: 1,
+      proof: "dev-test-game-hardening-admin-proof",
+      status: "passed",
+      releaseReady: false,
+      productionReady: false,
+      scope: "local-dev-test-game-hardening-admin-surface",
+      proofBoundary:
+        "Local SvelteKit admin role URL with fixture admin authority over the dev-test-game multiplayer-hardening proof-run lanes. Proves the saved local hardening evidence and focused player-recovery matrix are discoverable from the seeded admin overview and inspectable in native admin audit detail routes; it does not prove exhaustive race coverage, hosted reconnect behavior, multi-node concurrency, beta readiness, or production readiness.",
+      generatedFrom: {
+        proofRun: proofRunRelativePath,
+        game: proofRun.session.game,
+        highlightedLaneEvidence: hardeningHighlightedLaneEvidence(proofRun),
+        hostStaleControlLaneIds: [...hostStaleControlLaneIds],
+        hardeningRecoveryAuditLaneIds: [...hardeningRecoveryAuditLaneIds],
+        staleConflictMessageLaneIds: [...staleConflictMessageLaneIds],
+      },
+      adminRoleSurface: surfaces.adminRoleSurface,
+      playerRecoveryRoleSurface: surfaces.playerRecoveryRoleSurface,
+    }),
+    assertEvidence: assertHardeningAdminProof,
+  };
+}
+
+if (pathToFileURL(process.argv[1] ?? "").href === import.meta.url) {
+  await runAdminAuditProof(hardeningAdminProofCase());
+}
 
 export function assertHardeningAdminProof(evidence) {
   if (
