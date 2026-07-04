@@ -10,6 +10,7 @@ import {
   devTestGameHostedIdentityEvidencePath,
   hostedIdentityEvidenceHandoffCase,
   hostedIdentityEvidencePlaceholderFixturePath,
+  hostedIdentityEvidenceRedactedPassFixturePath,
 } from "./dev_test_game_hosted_identity_evidence_cases.mjs";
 import {
   devTestGameRealHostedObservabilityHandoffCommand,
@@ -25,6 +26,8 @@ import {
   buildReleaseReadinessUnprovenItems,
   devTestGameReleaseRunbookCommand,
   devTestGameReleaseRunbookPath,
+  hostedIdentityEvidencePathKind,
+  hostedIdentityEvidenceSatisfiesProductionIdentity,
   releaseReadinessBuildableItemForId,
   releaseReadinessHostedConcurrentRaceMatrixRoleUrl,
   releaseReadinessHostedEvidenceLaneRoleUrl,
@@ -123,6 +126,91 @@ test("release readiness unproven case builder follows local evidence transitions
       "real-hosted-observability-and-operations",
       "human-release-approval",
     ],
+  );
+});
+
+test("release readiness keeps hosted identity fixture evidence out of release transitions", () => {
+  const identityAdapterEvidence = { status: "passed" };
+  const blockedHostedIdentityEvidence = {
+    evidenceStatus: "blocked",
+    rawEvidenceStatus: "blocked",
+    rawEvidencePath: "",
+    fixtureEvidence: false,
+  };
+  const fixtureHostedIdentityEvidence = {
+    evidenceStatus: "passed",
+    rawEvidenceStatus: "passed",
+    rawEvidencePath: hostedIdentityEvidenceRedactedPassFixturePath,
+    fixtureEvidence: true,
+  };
+  const operatorHostedIdentityEvidence = {
+    evidenceStatus: "passed",
+    rawEvidenceStatus: "passed",
+    rawEvidencePath: "target/operator-evidence/hosted-identity-redacted.json",
+    fixtureEvidence: false,
+  };
+
+  assert.equal(hostedIdentityEvidencePathKind(""), "missing");
+  assert.equal(
+    hostedIdentityEvidencePathKind(hostedIdentityEvidencePlaceholderFixturePath),
+    "fixture",
+  );
+  assert.equal(
+    hostedIdentityEvidencePathKind(hostedIdentityEvidenceRedactedPassFixturePath),
+    "fixture",
+  );
+  assert.equal(
+    hostedIdentityEvidencePathKind(
+      "target/operator-evidence/hosted-identity-redacted.json",
+    ),
+    "operator-provided",
+  );
+  assert.equal(
+    hostedIdentityEvidenceSatisfiesProductionIdentity(
+      blockedHostedIdentityEvidence,
+    ),
+    false,
+  );
+  assert.equal(
+    hostedIdentityEvidenceSatisfiesProductionIdentity(
+      fixtureHostedIdentityEvidence,
+    ),
+    false,
+  );
+  assert.equal(
+    hostedIdentityEvidenceSatisfiesProductionIdentity(
+      operatorHostedIdentityEvidence,
+    ),
+    true,
+  );
+
+  assert(
+    buildReleaseReadinessUnprovenItems({
+      identityAdapterEvidence,
+      hostedIdentityEvidenceAdminProofEvidence: blockedHostedIdentityEvidence,
+    }).some((item) => item.id === "hosted-production-identity"),
+  );
+  assert(
+    buildReleaseReadinessUnprovenItems({
+      identityAdapterEvidence,
+      hostedIdentityEvidenceAdminProofEvidence: fixtureHostedIdentityEvidence,
+    }).some((item) => item.id === "hosted-production-identity"),
+  );
+  assert.equal(
+    buildReleaseReadinessUnprovenItems({
+      identityAdapterEvidence,
+      hostedIdentityEvidenceAdminProofEvidence: operatorHostedIdentityEvidence,
+    }).some((item) => item.id === "hosted-production-identity"),
+    false,
+  );
+  assert.deepEqual(
+    buildReleaseReadinessUnprovenItems({
+      identityAdapterEvidence,
+      hostedIdentityEvidenceAdminProofEvidence: operatorHostedIdentityEvidence,
+    })
+      .slice(0, 2)
+      .map((item) => item.id),
+    ["hosted-deployment", "seed-demo-fixtures"],
   );
 });
 

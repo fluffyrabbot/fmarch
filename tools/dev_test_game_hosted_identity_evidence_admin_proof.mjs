@@ -140,6 +140,7 @@ await runAdminAuditProof({
       proofRun: proofRunRelativePath,
       game: source.proofRun.session.game,
       status: source.hostedIdentityEvidence.status,
+      rawEvidencePath: source.hostedIdentityEvidence.target.rawEvidencePath,
       rawEvidenceStatus: source.hostedIdentityEvidence.target.rawEvidenceStatus,
       checkIds: source.hostedIdentityEvidence.checks.map((check) => check.id),
       checkStatuses: Object.fromEntries(

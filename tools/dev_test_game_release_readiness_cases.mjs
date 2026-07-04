@@ -20,6 +20,8 @@ import {
   devTestGameHostedIdentityEvidenceCommand,
   devTestGameHostedIdentityEvidencePath,
   hostedIdentityEvidenceHandoffCase,
+  hostedIdentityEvidencePlaceholderFixturePath,
+  hostedIdentityEvidenceRedactedPassFixturePath,
 } from "./dev_test_game_hosted_identity_evidence_cases.mjs";
 import {
   devTestGameRealHostedObservabilityHandoffCommand,
@@ -240,6 +242,7 @@ export function releaseReadinessUnprovenStatusRows(ids) {
 
 export function buildReleaseReadinessUnprovenItems({
   identityAdapterEvidence,
+  hostedIdentityEvidenceAdminProofEvidence,
   seedFixtureEvidence,
   backupRestoreEvidence,
   raceCoverageEvidence,
@@ -249,11 +252,10 @@ export function buildReleaseReadinessUnprovenItems({
   releaseRunbookEvidence,
 }) {
   return [
-    releaseReadinessUnprovenItem(
-      identityAdapterEvidence === undefined
-        ? "production-identity"
-        : "hosted-production-identity",
-    ),
+    ...identityUnprovenItems({
+      identityAdapterEvidence,
+      hostedIdentityEvidenceAdminProofEvidence,
+    }),
     releaseReadinessUnprovenItem("hosted-deployment"),
     releaseReadinessUnprovenItem(
       seedFixtureEvidence === undefined
@@ -275,6 +277,48 @@ export function buildReleaseReadinessUnprovenItems({
     }),
     ...humanReleaseUnprovenItems({ releaseRunbookEvidence }),
   ];
+}
+
+function identityUnprovenItems({
+  identityAdapterEvidence,
+  hostedIdentityEvidenceAdminProofEvidence,
+}) {
+  if (identityAdapterEvidence === undefined) {
+    return [releaseReadinessUnprovenItem("production-identity")];
+  }
+  if (
+    hostedIdentityEvidenceAdminProofEvidence === undefined ||
+    !hostedIdentityEvidenceSatisfiesProductionIdentity(
+      hostedIdentityEvidenceAdminProofEvidence,
+    )
+  ) {
+    return [releaseReadinessUnprovenItem("hosted-production-identity")];
+  }
+  return [];
+}
+
+export function hostedIdentityEvidenceSatisfiesProductionIdentity(evidence) {
+  return (
+    evidence?.evidenceStatus === "passed" &&
+    evidence.rawEvidenceStatus === "passed" &&
+    evidence.fixtureEvidence !== true &&
+    hostedIdentityEvidencePathKind(evidence.rawEvidencePath) ===
+      "operator-provided"
+  );
+}
+
+export function hostedIdentityEvidencePathKind(rawEvidencePath) {
+  const normalized = String(rawEvidencePath ?? "").trim();
+  if (normalized === "") {
+    return "missing";
+  }
+  if (
+    normalized === hostedIdentityEvidencePlaceholderFixturePath ||
+    normalized === hostedIdentityEvidenceRedactedPassFixturePath
+  ) {
+    return "fixture";
+  }
+  return "operator-provided";
 }
 
 export function releaseReadinessBuildableItemForId(

@@ -85,6 +85,8 @@ import {
 } from "./dev_test_game_real_hosted_observability_handoff_cases.mjs";
 import {
   buildReleaseReadinessUnprovenItems,
+  hostedIdentityEvidenceSatisfiesProductionIdentity,
+  hostedIdentityEvidencePathKind,
   releaseAdminProofFallbackUnprovenIds,
   releaseReadinessProductionFeatureSpineTargets,
 } from "./dev_test_game_release_readiness_cases.mjs";
@@ -842,6 +844,11 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
       evidenceStatus: hostedIdentityEvidenceAdminProofEvidence.evidenceStatus,
       rawEvidenceStatus:
         hostedIdentityEvidenceAdminProofEvidence.rawEvidenceStatus,
+      rawEvidencePath: hostedIdentityEvidenceAdminProofEvidence.rawEvidencePath,
+      rawEvidencePathKind:
+        hostedIdentityEvidenceAdminProofEvidence.rawEvidencePathKind,
+      fixtureEvidence:
+        hostedIdentityEvidenceAdminProofEvidence.fixtureEvidence,
       blockedCheckCount:
         hostedIdentityEvidenceAdminProofEvidence.visibleUnproven?.length ?? 0,
       adminRoleSurface: hostedIdentityEvidenceAdminProofEvidence,
@@ -1042,6 +1049,7 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
   }
   const unproven = buildReleaseReadinessUnprovenItems({
     identityAdapterEvidence,
+    hostedIdentityEvidenceAdminProofEvidence,
     seedFixtureEvidence,
     backupRestoreEvidence,
     raceCoverageEvidence,
@@ -1057,6 +1065,7 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
     hostedOpsSignalsEvidence,
     seedFixtureEvidence,
     identityAdapterEvidence,
+    hostedIdentityEvidenceAdminProofEvidence,
     spineManifestEvidence,
     raceCoverageEvidence,
     hostedConcurrentRaceMatrixEvidence,
@@ -1452,6 +1461,7 @@ function releaseReadinessReason({
   hostedOpsSignalsEvidence,
   seedFixtureEvidence,
   identityAdapterEvidence,
+  hostedIdentityEvidenceAdminProofEvidence,
   spineManifestEvidence,
   raceCoverageEvidence,
   hostedConcurrentRaceMatrixEvidence,
@@ -1469,6 +1479,11 @@ function releaseReadinessReason({
       : ["local hosted-like ops signals"]),
     ...(seedFixtureEvidence === undefined ? [] : ["local seed/demo fixture"]),
     ...(identityAdapterEvidence === undefined ? [] : ["local identity adapter"]),
+    ...(hostedIdentityEvidenceSatisfiesProductionIdentity(
+      hostedIdentityEvidenceAdminProofEvidence,
+    )
+      ? ["hosted identity evidence"]
+      : []),
     ...(spineManifestEvidence === undefined ? [] : ["local spine manifest"]),
     ...(raceCoverageEvidence === undefined ? [] : ["local race coverage inventory"]),
     ...(hostedConcurrentRaceMatrixEvidence === undefined
@@ -1490,7 +1505,11 @@ function releaseReadinessReason({
   const missing = [
     identityAdapterEvidence === undefined
       ? "production identity"
-      : "hosted identity lifecycle",
+      : hostedIdentityEvidenceSatisfiesProductionIdentity(
+            hostedIdentityEvidenceAdminProofEvidence,
+          )
+        ? null
+        : "hosted identity lifecycle",
     "hosted operations",
     seedFixtureEvidence === undefined ? "seed/demo fixtures" : "hosted demo fixtures",
     backupRestoreEvidence === undefined ? "backup/restore" : "production backup/PITR",
@@ -1507,7 +1526,7 @@ function releaseReadinessReason({
     releaseRunbookEvidence === undefined
       ? "human release runbook"
       : "human release approval",
-  ];
+  ].filter((item) => item !== null);
   return `${joinEnglish(passed)} passed, but ${joinEnglish(missing)} remain unproven.`;
 }
 
@@ -3522,6 +3541,13 @@ export function validateDevTestGameHostedIdentityEvidenceAdminProof(
     visibleHostedHandoffGroups:
       proof.adminRoleSurface.visibleHostedHandoffGroups ?? [],
     evidenceStatus: String(proof.generatedFrom?.status ?? "unknown"),
+    rawEvidencePath: String(proof.generatedFrom?.rawEvidencePath ?? ""),
+    rawEvidencePathKind: hostedIdentityEvidencePathKind(
+      proof.generatedFrom?.rawEvidencePath,
+    ),
+    fixtureEvidence:
+      hostedIdentityEvidencePathKind(proof.generatedFrom?.rawEvidencePath) ===
+      "fixture",
     rawEvidenceStatus: String(
       proof.generatedFrom?.rawEvidenceStatus ?? "unknown",
     ),
