@@ -53,6 +53,8 @@ const artifactDir = path.join(repoRoot, "target", "dev-test-game");
 const sessionJsonPath = path.join(artifactDir, "session.json");
 const sessionMdPath = path.join(artifactDir, "session.md");
 const proofRunJsonPath = path.join(artifactDir, "proof-run.json");
+const hostSetupSessionJsonPath = path.join(artifactDir, "host-setup-session.json");
+const hostSetupSessionMdPath = path.join(artifactDir, "host-setup-session.md");
 const hostSetupProofJsonPath = path.join(artifactDir, "host-setup-proof.json");
 const namedGamesPath = path.join(artifactDir, "named-games.json");
 export const defaultDatabaseUrl = "postgres://fmarch:fmarch@localhost:5544/fmarch";
@@ -127,6 +129,17 @@ export async function main(rawArgs = process.argv.slice(2), env = process.env) {
 
   const seedResult = await seedGame();
   const sessions = await createSessions();
+  const sessionArtifacts = args.verifyHostSetupOnly
+    ? sessionArtifactsForPaths({
+        jsonPath: hostSetupSessionJsonPath,
+        markdownPath: hostSetupSessionMdPath,
+        proofRunPath: hostSetupProofJsonPath,
+      })
+    : sessionArtifactsForPaths({
+        jsonPath: sessionJsonPath,
+        markdownPath: sessionMdPath,
+        proofRunPath: proofRunJsonPath,
+      });
 
   if (frontendBaseUrl === undefined) {
     frontendBaseUrl = await startFrontend(apiBaseUrl);
@@ -142,9 +155,9 @@ export async function main(rawArgs = process.argv.slice(2), env = process.env) {
     seedCommands: seedResult.commands,
     identityBootstrap,
     sessions,
+    artifacts: sessionArtifacts,
   });
-  await writeFile(sessionJsonPath, `${JSON.stringify(card, null, 2)}\n`);
-  await writeFile(sessionMdPath, markdownSessionCard(card));
+  await writeSessionArtifacts(card, sessionArtifacts);
   await writeNamedGame(gameName, card);
   printSessionCard(card);
 
@@ -153,8 +166,7 @@ export async function main(rawArgs = process.argv.slice(2), env = process.env) {
       ? await verifyHostSetupOnly(card)
       : await verifySessionCard(card);
     card.verification = verification;
-    await writeFile(sessionJsonPath, `${JSON.stringify(card, null, 2)}\n`);
-    await writeFile(sessionMdPath, markdownSessionCard(card));
+    await writeSessionArtifacts(card, sessionArtifacts);
     if (args.verifyHostSetupOnly) {
       const proof = {
         proof: "dev-test-game-host-setup-proof",
@@ -602,6 +614,11 @@ export function buildSessionCard({
   seedCommands,
   identityBootstrap = null,
   sessions,
+  artifacts = sessionArtifactsForPaths({
+    jsonPath: sessionJsonPath,
+    markdownPath: sessionMdPath,
+    proofRunPath: proofRunJsonPath,
+  }),
 }) {
   const withFrontendUrls = Object.fromEntries(
     Object.entries(sessions).map(([role, session]) => [
@@ -626,12 +643,24 @@ export function buildSessionCard({
     seedCommandCount: seedCommands.length,
     identityBootstrap,
     sessions: withFrontendUrls,
-    artifacts: {
-      json: path.relative(repoRoot, sessionJsonPath),
-      markdown: path.relative(repoRoot, sessionMdPath),
-      proofRun: path.relative(repoRoot, proofRunJsonPath),
-    },
+    artifacts,
   };
+}
+
+function sessionArtifactsForPaths({ jsonPath, markdownPath, proofRunPath }) {
+  return Object.freeze({
+    json: path.relative(repoRoot, jsonPath),
+    markdown: path.relative(repoRoot, markdownPath),
+    proofRun: path.relative(repoRoot, proofRunPath),
+  });
+}
+
+async function writeSessionArtifacts(card, artifacts) {
+  await writeFile(
+    path.join(repoRoot, artifacts.json),
+    `${JSON.stringify(card, null, 2)}\n`,
+  );
+  await writeFile(path.join(repoRoot, artifacts.markdown), markdownSessionCard(card));
 }
 
 function printSessionCard(card) {

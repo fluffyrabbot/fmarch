@@ -346,6 +346,57 @@ test("dev test-game args expose reset reuse naming and verification controls", (
   assert.throws(() => parseArgs(["--frontend-port", "nope"]), /positive integer/);
 });
 
+test("session cards can target focused proof artifacts without clobbering canonical proof inputs", () => {
+  const game = "45454545-4545-4545-8545-454545454545";
+  const sessions = {
+    hostSetup: {
+      principalUserId: "host_h",
+      credentialKind: "invite",
+      token: "host-setup-token",
+      inviteToken: "host-setup-token",
+      returnTo: `/g/${game}/setup`,
+      expectedCapabilityKind: "HostOf",
+    },
+  };
+
+  const canonical = buildSessionCard({
+    gameName: "canonical",
+    game,
+    seedMode: "seeded",
+    databaseUrl: "postgres://db/fmarch",
+    apiBaseUrl: "http://127.0.0.1:4101",
+    frontendBaseUrl: "http://127.0.0.1:4102",
+    seedCommands: [],
+    sessions,
+  });
+  assert.deepEqual(canonical.artifacts, {
+    json: "target/dev-test-game/session.json",
+    markdown: "target/dev-test-game/session.md",
+    proofRun: "target/dev-test-game/proof-run.json",
+  });
+
+  const focused = buildSessionCard({
+    gameName: "host-setup",
+    game,
+    seedMode: "seeded",
+    databaseUrl: "postgres://db/fmarch",
+    apiBaseUrl: "http://127.0.0.1:4101",
+    frontendBaseUrl: "http://127.0.0.1:4102",
+    seedCommands: [],
+    sessions,
+    artifacts: {
+      json: "target/dev-test-game/host-setup-session.json",
+      markdown: "target/dev-test-game/host-setup-session.md",
+      proofRun: "target/dev-test-game/host-setup-proof.json",
+    },
+  });
+  assert.deepEqual(focused.artifacts, {
+    json: "target/dev-test-game/host-setup-session.json",
+    markdown: "target/dev-test-game/host-setup-session.md",
+    proofRun: "target/dev-test-game/host-setup-proof.json",
+  });
+});
+
 test("dev test-game spine orchestrators expose stable proof order and env maps", () => {
   assert.deepEqual(
     devTestGameBackupRestoreSpinePlan.map((step) => step.script),
