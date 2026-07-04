@@ -17,6 +17,7 @@ import {
   assertDevTestGameReleaseReadiness,
   buildDevTestGameReleaseReadiness,
   validateDevTestGameAdminSpineProof,
+  validateDevTestGameAdminSpineTerminalBatches,
 } from "./dev_test_game_release_readiness.mjs";
 import {
   completedGameHardeningSpineCycleId,
@@ -177,6 +178,8 @@ import {
 import {
   adminSpinePreGraphReadinessEvidenceEnv,
   adminSpineReadinessEvidenceEnv,
+  adminSpineTerminalBatchProofPath,
+  adminSpineTerminalBatchReadinessEvidenceEnv,
   devTestGameAdminSpinePlan,
   terminalAdminProofBatchPlan,
   terminalRefreshAdminProofBatchPlan,
@@ -571,6 +574,11 @@ test("dev test-game spine orchestrators expose stable proof order and env maps",
     FMARCH_DEV_TEST_GAME_NEXT_ACTION_ADMIN_PROOF:
       "target/dev-test-game/next-action-admin-proof.json",
   });
+  assert.deepEqual(adminSpineTerminalBatchReadinessEvidenceEnv, {
+    ...adminSpineReadinessEvidenceEnv,
+    FMARCH_DEV_TEST_GAME_ADMIN_SPINE_TERMINAL_BATCHES:
+      adminSpineTerminalBatchProofPath,
+  });
   assert.deepEqual(devTestGameCoreLiveSpinePlan, [
     { kind: "npm", script: "dev:test-game:prebuild" },
     { kind: "node", script: "tools/dev_test_game_live_proof.mjs" },
@@ -619,6 +627,7 @@ test("dev test-game spine orchestrators expose stable proof order and env maps",
       devTestGameReleaseReadinessScript,
       "tools/dev_test_game_next_action.mjs",
       "terminal-refresh-admin-proof-batch",
+      "tools/dev_test_game_admin_spine_admin_proof.mjs",
       devTestGameReleaseReadinessScript,
     ],
   );
@@ -713,7 +722,7 @@ test("dev test-game spine orchestrators expose stable proof order and env maps",
   }
   assert.equal(
     devTestGameAdminSpinePlan.at(-1).env,
-    adminSpineReadinessEvidenceEnv,
+    adminSpineTerminalBatchReadinessEvidenceEnv,
   );
   assertReleaseReadinessStepMetadata({
     backupRestore: devTestGameBackupRestoreSpinePlan,
@@ -1206,7 +1215,11 @@ test("dev test-game spine manifest records command order and evidence wiring", (
   );
   assert.deepEqual(
     manifest.commands.adminSpine.readinessEnv,
-    adminSpineReadinessEvidenceEnv,
+    adminSpineTerminalBatchReadinessEvidenceEnv,
+  );
+  assert.equal(
+    manifest.commands.adminSpine.terminalBatchProofArtifact,
+    adminSpineTerminalBatchProofPath,
   );
   assert.deepEqual(manifest.commands.proofFreshness, {
     script: proofFreshnessAdminProofCommand,
@@ -2852,6 +2865,34 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
       [
         "Aggregate release and hosted admin proof batch",
         9,
+        true,
+        true,
+      ],
+    ],
+  );
+  const terminalBatches = validateDevTestGameAdminSpineTerminalBatches(
+    adminSpineTerminalBatchesFixture(),
+  );
+  assert.deepEqual(
+    terminalBatches.batches.map((batch) => [
+      batch.label,
+      batch.caseCount,
+      batch.proofIds,
+      batch.sharedFrontendSession,
+      batch.sharedChromiumSession,
+    ]),
+    [
+      [
+        "Terminal admin proof batch",
+        3,
+        ["proof-graph", "proof-freshness", "next-action"],
+        true,
+        true,
+      ],
+      [
+        "Terminal refresh admin proof batch",
+        2,
+        ["proof-freshness", "next-action"],
         true,
         true,
       ],
@@ -10979,6 +11020,9 @@ test("session card and markdown include role credential URLs and tokens", async 
     adminSpineProof: adminSpineProofFixture(),
     adminSpineAdminProofPath: "target/dev-test-game/admin-spine-admin-proof.json",
     adminSpineAdminProof: adminSpineAdminProofFixture(),
+    adminSpineTerminalBatchesPath:
+      "target/dev-test-game/admin-spine-terminal-batches.json",
+    adminSpineTerminalBatches: adminSpineTerminalBatchesFixture(),
   });
   assertDevTestGameReleaseReadiness(adminSpineReadiness);
   assert.equal(
@@ -10988,6 +11032,10 @@ test("session card and markdown include role credential URLs and tokens", async 
   assert.equal(
     adminSpineReadiness.generatedFrom.adminSpineAdminProof,
     "target/dev-test-game/admin-spine-admin-proof.json",
+  );
+  assert.equal(
+    adminSpineReadiness.generatedFrom.adminSpineTerminalBatches,
+    "target/dev-test-game/admin-spine-terminal-batches.json",
   );
   assert.equal(
     adminSpineReadiness.localDevelopmentSpine.checks.find(
@@ -11002,6 +11050,11 @@ test("session card and markdown include role credential URLs and tokens", async 
   assert.equal(
     adminSpineReadiness.localDevelopmentSpine.evidence.adminProofSpine.recovery.nextCommand,
     "npm run test:dev-test-game-admin-spine",
+  );
+  assert.equal(
+    adminSpineReadiness.localDevelopmentSpine.evidence.adminProofSpine
+      .terminalBatches.batchCount,
+    2,
   );
   assert.deepEqual(adminSpineReadiness.localDevelopmentSpine.evidence.adminProofSpine.proofIds, [
     "core-loop",
@@ -16178,6 +16231,74 @@ function adminSpineAdminProofFixture() {
       releaseReady: false,
       productionReady: false,
     },
+  };
+}
+
+function adminSpineTerminalBatchesFixture() {
+  return {
+    version: 1,
+    proof: "dev-test-game-admin-spine-terminal-batches",
+    status: "passed",
+    releaseReady: false,
+    productionReady: false,
+    generatedAt: "2026-06-26T00:00:00.000Z",
+    scope: "local-dev-test-game-admin-spine-terminal-batches",
+    proofBoundary: "Local admin spine terminal proof-batch receipt.",
+    generatedFrom: {
+      adminSpineProof: "target/dev-test-game/admin-spine-proof.json",
+      proofGraph: "target/dev-test-game/proof-graph.json",
+      nextAction: "target/dev-test-game/next-action.json",
+      proofFreshnessAdminProof:
+        "target/dev-test-game/proof-freshness-admin-proof.json",
+      nextActionAdminProof: "target/dev-test-game/next-action-admin-proof.json",
+      batchCount: 2,
+    },
+    batches: [
+      {
+        label: "Terminal admin proof batch",
+        reason:
+          "terminal graph, freshness, and next-action admin surfaces share the generated proof graph inputs",
+        status: "passed",
+        caseCount: 3,
+        caseSmokeNames: [
+          "dev-test-game-proof-graph-admin-proof",
+          "dev-test-game-proof-freshness-admin-proof",
+          "dev-test-game-next-action-admin-proof",
+        ],
+        proofIds: ["proof-graph", "proof-freshness", "next-action"],
+        artifactPaths: [
+          "target/dev-test-game/proof-graph-admin-proof.json",
+          "target/dev-test-game/proof-freshness-admin-proof.json",
+          "target/dev-test-game/next-action-admin-proof.json",
+        ],
+        elapsedMs: 2400,
+        sharedFrontendSession: true,
+        sharedChromiumSession: true,
+        releaseReady: false,
+        productionReady: false,
+      },
+      {
+        label: "Terminal refresh admin proof batch",
+        reason:
+          "freshness and next-action admin surfaces share the refreshed next-action input",
+        status: "passed",
+        caseCount: 2,
+        caseSmokeNames: [
+          "dev-test-game-proof-freshness-admin-proof",
+          "dev-test-game-next-action-admin-proof",
+        ],
+        proofIds: ["proof-freshness", "next-action"],
+        artifactPaths: [
+          "target/dev-test-game/proof-freshness-admin-proof.json",
+          "target/dev-test-game/next-action-admin-proof.json",
+        ],
+        elapsedMs: 1600,
+        sharedFrontendSession: true,
+        sharedChromiumSession: true,
+        releaseReady: false,
+        productionReady: false,
+      },
+    ],
   };
 }
 

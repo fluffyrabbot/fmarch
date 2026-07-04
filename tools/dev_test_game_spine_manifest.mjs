@@ -8,6 +8,8 @@ import {
 import {
   adminSpineProofPath,
   adminSpineReadinessEvidenceEnv,
+  adminSpineTerminalBatchProofPath,
+  adminSpineTerminalBatchReadinessEvidenceEnv,
 } from "./dev_test_game_admin_spine.mjs";
 import { devTestGameAdminSpineProofPlan } from "./dev_test_game_admin_spine_proof.mjs";
 import {
@@ -126,6 +128,7 @@ export function buildDevTestGameSpineManifest({
     },
     adminSpine: {
       adminSpineReadinessEvidenceEnv,
+      adminSpineTerminalBatchReadinessEvidenceEnv,
     },
   };
   const manifest = {
@@ -159,7 +162,8 @@ export function buildDevTestGameSpineManifest({
         script: "test:dev-test-game-admin-spine",
         plan: cloneAdminProofPlan(devTestGameAdminSpineProofPlan),
         proofArtifact: adminSpineProofPath,
-        readinessEnv: { ...adminSpineReadinessEvidenceEnv },
+        terminalBatchProofArtifact: adminSpineTerminalBatchProofPath,
+        readinessEnv: { ...adminSpineTerminalBatchReadinessEvidenceEnv },
       },
       proofFreshness: {
         script: proofFreshnessAdminProofCommand,
@@ -388,7 +392,9 @@ export function buildDevTestGameSpineManifest({
       ...envValues(evidenceEnv.backupRestore.seedReadinessEnv),
       ...envValues(evidenceEnv.backupRestore.backupRestoreFinalReadinessEnv),
       ...envValues(evidenceEnv.identity.identityReadinessEnv),
-      ...envValues(evidenceEnv.adminSpine.adminSpineReadinessEvidenceEnv),
+      ...envValues(
+        evidenceEnv.adminSpine.adminSpineTerminalBatchReadinessEvidenceEnv,
+      ),
     ]),
     checks: [
       {
@@ -413,7 +419,7 @@ export function buildDevTestGameSpineManifest({
       {
         id: "evidence-env-wiring-recorded",
         status: "passed",
-        evidence: Object.keys(adminSpineReadinessEvidenceEnv),
+        evidence: Object.keys(adminSpineTerminalBatchReadinessEvidenceEnv),
       },
       {
         id: "freshness-proof-recorded",

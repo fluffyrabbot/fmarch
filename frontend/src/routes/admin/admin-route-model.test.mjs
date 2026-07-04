@@ -1181,6 +1181,7 @@ test("admin route data exposes local admin spine proof as a native audit row", a
     principalUserId: "admin_a",
     capabilities: [{ kind: "GlobalAdmin" }],
     adminSpineProof: adminSpineProofFixture(),
+    adminSpineTerminalBatches: adminSpineTerminalBatchesFixture(),
   });
 
   const adminSpine = data.audit.find((item) => item.id === localAdminAuditIds.adminSpine);
@@ -1217,7 +1218,7 @@ test("admin route data exposes local admin spine proof as a native audit row", a
   assert.deepEqual(adminSpine.artifactSummary, {
     game: "game-a",
     proofCount: 10,
-    batchCount: 2,
+    batchCount: 4,
     recoveryStatus: "passed",
     refreshedCount: 10,
     nextCommand: "npm run test:dev-test-game-admin-spine",
@@ -1233,13 +1234,14 @@ test("admin local admin spine detail data carries aggregate proof rows", async (
     principalUserId: "admin_a",
     capabilities: [{ kind: "GlobalAdmin" }],
     adminSpineProof: adminSpineProofFixture(),
+    adminSpineTerminalBatches: adminSpineTerminalBatchesFixture(),
   });
 
   assert.equal(data.status, "available");
   assert.equal(data.surfaceHeader.title, "Local admin spine");
   assert.equal(data.audit.id, localAdminAuditIds.adminSpine);
   assert.equal(data.audit.checks.length, 12);
-  assert.equal(data.audit.batches.length, 2);
+  assert.equal(data.audit.batches.length, 4);
   assert.deepEqual(
     data.audit.batches.map((batch) => [
       batch.id,
@@ -1260,6 +1262,20 @@ test("admin local admin spine detail data carries aggregate proof rows", async (
         "aggregate-release-and-hosted-admin-proof-batch",
         "passed",
         4,
+        true,
+        true,
+      ],
+      [
+        "terminal-admin-proof-batch",
+        "passed",
+        3,
+        true,
+        true,
+      ],
+      [
+        "terminal-refresh-admin-proof-batch",
+        "passed",
+        2,
         true,
         true,
       ],
@@ -6439,6 +6455,74 @@ function adminSpineProofFixture() {
       ],
     },
     proofBoundary: "Local aggregate admin spine proof only.",
+  };
+}
+
+function adminSpineTerminalBatchesFixture() {
+  return {
+    version: 1,
+    proof: "dev-test-game-admin-spine-terminal-batches",
+    status: "passed",
+    releaseReady: false,
+    productionReady: false,
+    generatedAt: "2026-06-26T00:00:00.000Z",
+    scope: "local-dev-test-game-admin-spine-terminal-batches",
+    proofBoundary: "Local admin spine terminal proof-batch receipt.",
+    generatedFrom: {
+      adminSpineProof: "target/dev-test-game/admin-spine-proof.json",
+      proofGraph: "target/dev-test-game/proof-graph.json",
+      nextAction: "target/dev-test-game/next-action.json",
+      proofFreshnessAdminProof:
+        "target/dev-test-game/proof-freshness-admin-proof.json",
+      nextActionAdminProof: "target/dev-test-game/next-action-admin-proof.json",
+      batchCount: 2,
+    },
+    batches: [
+      {
+        label: "Terminal admin proof batch",
+        reason:
+          "terminal graph, freshness, and next-action admin surfaces share the generated proof graph inputs",
+        status: "passed",
+        caseCount: 3,
+        caseSmokeNames: [
+          "dev-test-game-proof-graph-admin-proof",
+          "dev-test-game-proof-freshness-admin-proof",
+          "dev-test-game-next-action-admin-proof",
+        ],
+        proofIds: ["proof-graph", "proof-freshness", "next-action"],
+        artifactPaths: [
+          "target/dev-test-game/proof-graph-admin-proof.json",
+          "target/dev-test-game/proof-freshness-admin-proof.json",
+          "target/dev-test-game/next-action-admin-proof.json",
+        ],
+        elapsedMs: 2400,
+        sharedFrontendSession: true,
+        sharedChromiumSession: true,
+        releaseReady: false,
+        productionReady: false,
+      },
+      {
+        label: "Terminal refresh admin proof batch",
+        reason:
+          "freshness and next-action admin surfaces share the refreshed next-action input",
+        status: "passed",
+        caseCount: 2,
+        caseSmokeNames: [
+          "dev-test-game-proof-freshness-admin-proof",
+          "dev-test-game-next-action-admin-proof",
+        ],
+        proofIds: ["proof-freshness", "next-action"],
+        artifactPaths: [
+          "target/dev-test-game/proof-freshness-admin-proof.json",
+          "target/dev-test-game/next-action-admin-proof.json",
+        ],
+        elapsedMs: 1600,
+        sharedFrontendSession: true,
+        sharedChromiumSession: true,
+        releaseReady: false,
+        productionReady: false,
+      },
+    ],
   };
 }
 

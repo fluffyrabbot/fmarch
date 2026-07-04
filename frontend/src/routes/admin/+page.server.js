@@ -4,6 +4,7 @@ import { resolveFixtureRouteState } from "../../lib/app/app-route-state-model.mj
 import {
   readLocalBackupRestoreProof,
   readLocalAdminSpineProof,
+  readLocalAdminSpineTerminalBatches,
   readLocalDevTestGameProofRun,
   readLocalHostedConcurrentRaceMatrix,
   readLocalHostedEvidenceLane,
@@ -50,6 +51,7 @@ export async function load({ cookies, locals, fetch, url }) {
     identityAdapterProof: await readLocalIdentityAdapterProof(),
     spineManifest: await readLocalSpineManifest(),
     adminSpineProof: await readLocalAdminSpineProof(),
+    adminSpineTerminalBatches: await readLocalAdminSpineTerminalBatches(),
     proofGraph: await readLocalProofGraph(),
     raceCoverage: await readLocalRaceCoverage(),
     hostedConcurrentRaceMatrix: await readLocalHostedConcurrentRaceMatrix(),

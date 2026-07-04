@@ -91,6 +91,7 @@ export async function buildAdminRouteData({
   identityAdapterProof = null,
   spineManifest = null,
   adminSpineProof = null,
+  adminSpineTerminalBatches = null,
   proofGraph = null,
   raceCoverage = null,
   hostedConcurrentRaceMatrix = null,
@@ -262,7 +263,7 @@ export async function buildAdminRouteData({
                             { game },
                           ),
                           adminSpineProof,
-                          { game },
+                          { game, terminalBatchProof: adminSpineTerminalBatches },
                         ),
                         proofFreshness,
                         { game, nextAction },
@@ -345,6 +346,7 @@ export async function buildAdminAuditDetailData({
   identityAdapterProof = null,
   spineManifest = null,
   adminSpineProof = null,
+  adminSpineTerminalBatches = null,
   proofGraph = null,
   raceCoverage = null,
   hostedConcurrentRaceMatrix = null,
@@ -374,6 +376,7 @@ export async function buildAdminAuditDetailData({
     identityAdapterProof,
     spineManifest,
     adminSpineProof,
+    adminSpineTerminalBatches,
     proofGraph,
     raceCoverage,
     hostedConcurrentRaceMatrix,
@@ -3557,15 +3560,25 @@ export function normalizeLocalSpineManifestAudit(spineManifest, { game }) {
   });
 }
 
-export function appendLocalAdminSpineAudit(audit, adminSpineProof, { game }) {
-  const row = normalizeLocalAdminSpineAudit(adminSpineProof, { game });
+export function appendLocalAdminSpineAudit(
+  audit,
+  adminSpineProof,
+  { game, terminalBatchProof = null },
+) {
+  const row = normalizeLocalAdminSpineAudit(adminSpineProof, {
+    game,
+    terminalBatchProof,
+  });
   if (row === null) {
     return audit;
   }
   return Object.freeze([...audit.filter((item) => item.id !== row.id), row]);
 }
 
-export function normalizeLocalAdminSpineAudit(adminSpineProof, { game }) {
+export function normalizeLocalAdminSpineAudit(
+  adminSpineProof,
+  { game, terminalBatchProof = null },
+) {
   if (
     adminSpineProof === null ||
     typeof adminSpineProof !== "object" ||
@@ -3585,11 +3598,15 @@ export function normalizeLocalAdminSpineAudit(adminSpineProof, { game }) {
     adminSpineProof.recovery !== null && typeof adminSpineProof.recovery === "object"
       ? adminSpineProof.recovery
       : {};
-  const batches = Array.isArray(adminSpineProof.batches)
-    ? adminSpineProof.batches.map((batch, index) =>
-        normalizeAdminSpineBatch(batch, index),
-      )
+  const aggregateBatches = Array.isArray(adminSpineProof.batches)
+    ? adminSpineProof.batches
     : [];
+  const terminalBatches = validAdminSpineTerminalBatchProof(terminalBatchProof)
+    ? terminalBatchProof.batches
+    : [];
+  const batches = [...aggregateBatches, ...terminalBatches].map((batch, index) =>
+    normalizeAdminSpineBatch(batch, index),
+  );
   const adminSpineRelatedLinks = Object.freeze([
     Object.freeze({
       id: localAdminAuditIds.spineManifest,
@@ -3660,6 +3677,20 @@ export function normalizeLocalAdminSpineAudit(adminSpineProof, { game }) {
       productionReady: adminSpineProof.productionReady === true,
     }),
   });
+}
+
+function validAdminSpineTerminalBatchProof(proof) {
+  return (
+    proof !== null &&
+    typeof proof === "object" &&
+    proof.version === 1 &&
+    proof.proof === "dev-test-game-admin-spine-terminal-batches" &&
+    proof.status === "passed" &&
+    proof.scope === "local-dev-test-game-admin-spine-terminal-batches" &&
+    proof.releaseReady === false &&
+    proof.productionReady === false &&
+    Array.isArray(proof.batches)
+  );
 }
 
 function normalizeAdminSpineBatch(batch, index) {

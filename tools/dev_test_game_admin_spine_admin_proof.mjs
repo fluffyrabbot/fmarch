@@ -1,6 +1,9 @@
 import path from "node:path";
 import { assertDevTestGameProofRun } from "./dev_test_game_proof_contract.mjs";
-import { validateDevTestGameAdminSpineProof } from "./dev_test_game_release_readiness.mjs";
+import {
+  validateDevTestGameAdminSpineProof,
+  validateDevTestGameAdminSpineTerminalBatches,
+} from "./dev_test_game_release_readiness.mjs";
 import {
   artifactDir,
   proveAdminAuditDetail,
@@ -22,8 +25,17 @@ const proofRunPath = path.resolve(
   repoRoot,
   process.env.FMARCH_DEV_TEST_GAME_PROOF_RUN ?? "target/dev-test-game/proof-run.json",
 );
+const adminSpineTerminalBatchesPath = path.resolve(
+  repoRoot,
+  process.env.FMARCH_DEV_TEST_GAME_ADMIN_SPINE_TERMINAL_BATCHES ??
+    "target/dev-test-game/admin-spine-terminal-batches.json",
+);
 const adminSpineProofRelativePath = path.relative(repoRoot, adminSpineProofPath);
 const proofRunRelativePath = path.relative(repoRoot, proofRunPath);
+const adminSpineTerminalBatchesRelativePath = path.relative(
+  repoRoot,
+  adminSpineTerminalBatchesPath,
+);
 const evidencePath = path.join(artifactDir, "admin-spine-admin-proof.json");
 const requiredChecks = [
   "core-loop",
@@ -47,9 +59,6 @@ const requiredAdminSpineBatches = [
   "aggregate-pre-release-admin-proof-batch",
   "aggregate-release-and-hosted-admin-proof-batch",
 ];
-const requiredAdminSpineBatchStatuses = Object.fromEntries(
-  requiredAdminSpineBatches.map((id) => [id, "passed"]),
-);
 
 await runAdminAuditProof({
   smokeName: "dev-test-game-admin-spine-admin-proof",
@@ -57,22 +66,32 @@ await runAdminAuditProof({
   evidencePath,
   envOverrides: {
     FMARCH_DEV_TEST_GAME_ADMIN_SPINE_PROOF: adminSpineProofRelativePath,
+    FMARCH_DEV_TEST_GAME_ADMIN_SPINE_TERMINAL_BATCHES:
+      adminSpineTerminalBatchesRelativePath,
   },
   loadSource: async () => ({
     adminSpineProof: await readAdminSpineProof(),
+    adminSpineTerminalBatches: await readAdminSpineTerminalBatches(),
     proofRun: assertDevTestGameProofRun(await readJson(proofRunPath)),
   }),
-  prove: async ({ browser, frontendBaseUrl, source }) =>
-    await proveAdminAuditDetail({
+  prove: async ({ browser, frontendBaseUrl, source }) => {
+    const requiredBatchIds = [
+      ...requiredAdminSpineBatches,
+      ...adminSpineTerminalBatchIds(source.adminSpineTerminalBatches),
+    ];
+    return await proveAdminAuditDetail({
       browser,
       frontendBaseUrl,
       game: source.proofRun.session.game,
       auditId: localAdminAuditIds.adminSpine,
       requiredChecks,
       requiredRelatedLinks,
-      requiredAdminSpineBatches,
-      requiredAdminSpineBatchStatuses,
-    }),
+      requiredAdminSpineBatches: requiredBatchIds,
+      requiredAdminSpineBatchStatuses: Object.fromEntries(
+        requiredBatchIds.map((id) => [id, "passed"]),
+      ),
+    });
+  },
   buildEvidence: ({ source, adminRoleSurface }) => ({
     version: 1,
     proof: "dev-test-game-admin-spine-admin-proof",
@@ -84,12 +103,28 @@ await runAdminAuditProof({
       "Local SvelteKit admin role URL with fixture admin authority over the aggregate dev-test-game admin-spine proof. Proves the ordered aggregate admin proof artifact and recovery command summary are discoverable from the seeded admin overview and inspectable in a native admin audit detail route; it does not prove hosted identity, hosted operations, beta readiness, release readiness, or production readiness.",
     generatedFrom: {
       adminSpineProof: adminSpineProofRelativePath,
+      ...(source.adminSpineTerminalBatches === null
+        ? {}
+        : {
+            adminSpineTerminalBatches: adminSpineTerminalBatchesRelativePath,
+          }),
       proofRun: proofRunRelativePath,
       game: source.proofRun.session.game,
       proofIds: source.adminSpineProof.proofIds,
-      batchIds: requiredAdminSpineBatches,
-      batchLabels: source.adminSpineProof.batches.map((batch) => batch.label),
-      batchCaseCounts: source.adminSpineProof.batches.map((batch) => ({
+      batchIds: [
+        ...requiredAdminSpineBatches,
+        ...adminSpineTerminalBatchIds(source.adminSpineTerminalBatches),
+      ],
+      batchLabels: [
+        ...source.adminSpineProof.batches.map((batch) => batch.label),
+        ...(source.adminSpineTerminalBatches?.batches ?? []).map(
+          (batch) => batch.label,
+        ),
+      ],
+      batchCaseCounts: [
+        ...source.adminSpineProof.batches,
+        ...(source.adminSpineTerminalBatches?.batches ?? []),
+      ].map((batch) => ({
         label: batch.label,
         caseCount: batch.caseCount,
       })),
@@ -104,6 +139,25 @@ async function readAdminSpineProof() {
   return validateDevTestGameAdminSpineProof(await readJson(adminSpineProofPath), {
     path: adminSpineProofRelativePath,
   });
+}
+
+async function readAdminSpineTerminalBatches() {
+  let payload;
+  try {
+    payload = await readJson(adminSpineTerminalBatchesPath);
+  } catch (error) {
+    if (error?.code === "ENOENT") {
+      return null;
+    }
+    throw error;
+  }
+  return validateDevTestGameAdminSpineTerminalBatches(payload, {
+    path: adminSpineTerminalBatchesRelativePath,
+  });
+}
+
+function adminSpineTerminalBatchIds(terminalBatches) {
+  return terminalBatches?.batchIds ?? [];
 }
 
 export function assertAdminSpineAdminProof(evidence) {

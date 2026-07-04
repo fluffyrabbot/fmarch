@@ -1,3 +1,5 @@
+import { mkdir, rm, writeFile } from "node:fs/promises";
+import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { devTestGameRaceCoveragePath } from "./dev_test_game_race_coverage.mjs";
 import { devTestGameHostedConcurrentRaceMatrixPath } from "./dev_test_game_hosted_concurrent_race_matrix.mjs";
@@ -19,6 +21,8 @@ import {
   proofFreshnessAdminProofPath,
 } from "./dev_test_game_next_action_paths.mjs";
 import {
+  artifactDir,
+  repoRoot,
   runAdminAuditProofBatchPlan,
 } from "./dev_test_game_admin_audit_proof_helper.mjs";
 import {
@@ -34,6 +38,8 @@ import { releaseReadinessStep } from "./dev_test_game_spine_readiness_steps.mjs"
 import { runSpinePlan } from "./dev_test_game_spine_runner.mjs";
 
 export const adminSpineProofPath = "target/dev-test-game/admin-spine-proof.json";
+export const adminSpineTerminalBatchProofPath =
+  "target/dev-test-game/admin-spine-terminal-batches.json";
 
 export const adminSpineReadinessEvidenceEnv = {
   FMARCH_DEV_TEST_GAME_CORE_LOOP_ADMIN_PROOF:
@@ -96,6 +102,12 @@ export const adminSpineReadinessEvidenceEnv = {
   FMARCH_DEV_TEST_GAME_PROOF_GRAPH_ADMIN_PROOF: devTestGameProofGraphAdminProofPath,
   FMARCH_DEV_TEST_GAME_PROOF_FRESHNESS_ADMIN_PROOF: proofFreshnessAdminProofPath,
   FMARCH_DEV_TEST_GAME_NEXT_ACTION_ADMIN_PROOF: nextActionAdminProofPath,
+};
+
+export const adminSpineTerminalBatchReadinessEvidenceEnv = {
+  ...adminSpineReadinessEvidenceEnv,
+  FMARCH_DEV_TEST_GAME_ADMIN_SPINE_TERMINAL_BATCHES:
+    adminSpineTerminalBatchProofPath,
 };
 
 export const adminSpinePreGraphReadinessEvidenceEnv = Object.fromEntries(
@@ -193,18 +205,23 @@ export const devTestGameAdminSpinePlan = [
     script: "terminal-refresh-admin-proof-batch",
     label: "Terminal refresh admin proof batch",
   },
+  { kind: "node", script: "tools/dev_test_game_admin_spine_admin_proof.mjs" },
   releaseReadinessStep({
     reason: "terminal-next-action-and-freshness-refresh",
     changedInputs: [
       "target/dev-test-game/next-action.json",
       proofFreshnessAdminProofPath,
       nextActionAdminProofPath,
+      adminSpineTerminalBatchProofPath,
+      "target/dev-test-game/admin-spine-admin-proof.json",
     ],
-    env: adminSpineReadinessEvidenceEnv,
+    env: adminSpineTerminalBatchReadinessEvidenceEnv,
   }),
 ];
 
 export async function runDevTestGameAdminSpine() {
+  const terminalBatchEvidence = [];
+  await clearAdminSpineTerminalBatchProof();
   await runSpinePlan(devTestGameAdminSpinePlan, {
     custom: {
       "admin-spine-proof": async () => {
@@ -212,13 +229,58 @@ export async function runDevTestGameAdminSpine() {
         console.log(`wrote ${adminSpineProofPath} (${evidence.status})`);
       },
       "terminal-admin-proof-batch": async () => {
-        await runAdminAuditProofBatchPlan(terminalAdminProofBatchPlan);
+        terminalBatchEvidence.push(
+          await runAdminAuditProofBatchPlan(terminalAdminProofBatchPlan),
+        );
       },
       "terminal-refresh-admin-proof-batch": async () => {
-        await runAdminAuditProofBatchPlan(terminalRefreshAdminProofBatchPlan);
+        terminalBatchEvidence.push(
+          await runAdminAuditProofBatchPlan(terminalRefreshAdminProofBatchPlan),
+        );
+        const evidence = await writeAdminSpineTerminalBatchProof(
+          terminalBatchEvidence,
+        );
+        console.log(
+          `wrote ${adminSpineTerminalBatchProofPath} (${evidence.status})`,
+        );
       },
     },
   });
+}
+
+async function clearAdminSpineTerminalBatchProof() {
+  await rm(path.join(repoRoot, adminSpineTerminalBatchProofPath), {
+    force: true,
+  });
+}
+
+async function writeAdminSpineTerminalBatchProof(batches) {
+  const evidence = {
+    version: 1,
+    proof: "dev-test-game-admin-spine-terminal-batches",
+    status: "passed",
+    releaseReady: false,
+    productionReady: false,
+    generatedAt: new Date().toISOString(),
+    scope: "local-dev-test-game-admin-spine-terminal-batches",
+    proofBoundary:
+      "Local admin spine terminal proof-batch receipt. It records the batched browser proofs for proof graph, proof freshness, and next-action admin surfaces after the terminal graph/refresh phase; it does not prove hosted deployment, hosted operations, beta readiness, release readiness, or production readiness.",
+    generatedFrom: {
+      adminSpineProof: adminSpineProofPath,
+      proofGraph: devTestGameProofGraphPath,
+      nextAction: "target/dev-test-game/next-action.json",
+      proofFreshnessAdminProof: proofFreshnessAdminProofPath,
+      nextActionAdminProof: nextActionAdminProofPath,
+      batchCount: batches.length,
+    },
+    batches,
+  };
+  await mkdir(artifactDir, { recursive: true });
+  await writeFile(
+    path.join(repoRoot, adminSpineTerminalBatchProofPath),
+    `${JSON.stringify(evidence, null, 2)}\n`,
+  );
+  return evidence;
 }
 
 if (pathToFileURL(process.argv[1] ?? "").href === import.meta.url) {

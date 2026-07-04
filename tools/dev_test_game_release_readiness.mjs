@@ -278,6 +278,10 @@ const defaultAdminSpineAdminProofPath = path.join(
   artifactDir,
   "admin-spine-admin-proof.json",
 );
+const defaultAdminSpineTerminalBatchProofPath = path.join(
+  artifactDir,
+  "admin-spine-terminal-batches.json",
+);
 const defaultRaceCoveragePath = path.join(artifactDir, "race-coverage.json");
 const defaultRaceCoverageAdminProofPath = path.join(
   artifactDir,
@@ -488,6 +492,17 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
           "target/dev-test-game/admin-spine-admin-proof.json",
         artifact: options.adminSpineAdminProofArtifact,
       })
+    : undefined;
+  const adminSpineTerminalBatchEvidence = options.adminSpineTerminalBatches
+    ? validateDevTestGameAdminSpineTerminalBatches(
+        options.adminSpineTerminalBatches,
+        {
+          path:
+            options.adminSpineTerminalBatchesPath ??
+            "target/dev-test-game/admin-spine-terminal-batches.json",
+          artifact: options.adminSpineTerminalBatchesArtifact,
+        },
+      )
     : undefined;
   const raceCoverageEvidence = options.raceCoverage
     ? validateDevTestGameRaceCoverage(options.raceCoverage, {
@@ -764,6 +779,18 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
         : { adminRoleSurface: adminSpineAdminProofEvidence }),
     });
   }
+  if (adminSpineTerminalBatchEvidence !== undefined) {
+    localChecks.push({
+      id: "local-admin-spine-terminal-batches",
+      label: "Local admin spine terminal proof batches",
+      status: "passed",
+      evidence: adminSpineTerminalBatchEvidence.path,
+      proofBoundary: adminSpineTerminalBatchEvidence.proofBoundary,
+      batchCount: adminSpineTerminalBatchEvidence.batchCount,
+      batchIds: adminSpineTerminalBatchEvidence.batchIds,
+      artifactPaths: adminSpineTerminalBatchEvidence.artifactPaths,
+    });
+  }
   if (raceCoverageEvidence !== undefined) {
     localChecks.push({
       id: "local-race-coverage-inventory",
@@ -1029,6 +1056,12 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
             ...(adminSpineAdminProofEvidence === undefined
               ? {}
               : { adminSpineAdminProof: adminSpineAdminProofEvidence.path }),
+            ...(adminSpineTerminalBatchEvidence === undefined
+              ? {}
+              : {
+                  adminSpineTerminalBatches:
+                    adminSpineTerminalBatchEvidence.path,
+                }),
           }),
       ...(raceCoverageEvidence === undefined
         ? {}
@@ -1182,6 +1215,9 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
                       ...(adminSpineAdminProofEvidence === undefined
                         ? {}
                         : { adminRoleSurface: adminSpineAdminProofEvidence }),
+                      ...(adminSpineTerminalBatchEvidence === undefined
+                        ? {}
+                        : { terminalBatches: adminSpineTerminalBatchEvidence }),
                     },
                   }),
               ...(raceCoverageEvidence === undefined
@@ -5241,6 +5277,113 @@ function adminSpineProofArtifactPath(id) {
   }[id];
 }
 
+export function validateDevTestGameAdminSpineTerminalBatches(
+  proof,
+  options = {},
+) {
+  const requiredBatches = [
+    {
+      label: "Terminal admin proof batch",
+      proofIds: ["proof-graph", "proof-freshness", "next-action"],
+      artifactPaths: [
+        "target/dev-test-game/proof-graph-admin-proof.json",
+        "target/dev-test-game/proof-freshness-admin-proof.json",
+        "target/dev-test-game/next-action-admin-proof.json",
+      ],
+    },
+    {
+      label: "Terminal refresh admin proof batch",
+      proofIds: ["proof-freshness", "next-action"],
+      artifactPaths: [
+        "target/dev-test-game/proof-freshness-admin-proof.json",
+        "target/dev-test-game/next-action-admin-proof.json",
+      ],
+    },
+  ];
+  if (proof?.version !== 1) {
+    throw new Error(
+      `admin spine terminal batch proof version drifted: ${proof?.version}`,
+    );
+  }
+  if (proof.proof !== "dev-test-game-admin-spine-terminal-batches") {
+    throw new Error(`unexpected admin spine terminal batch proof id: ${proof.proof}`);
+  }
+  if (proof.status !== "passed") {
+    throw new Error(`admin spine terminal batch proof status is ${proof.status}`);
+  }
+  if (proof.scope !== "local-dev-test-game-admin-spine-terminal-batches") {
+    throw new Error(
+      `admin spine terminal batch proof scope drifted: ${proof.scope}`,
+    );
+  }
+  if (proof.productionReady !== false || proof.releaseReady !== false) {
+    throw new Error(
+      "admin spine terminal batch proof must not claim production or release readiness",
+    );
+  }
+  if (!Array.isArray(proof.batches) || proof.batches.length !== requiredBatches.length) {
+    throw new Error("admin spine terminal batch proof count drifted");
+  }
+  for (const [index, expected] of requiredBatches.entries()) {
+    const batch = proof.batches[index];
+    if (batch?.label !== expected.label || batch.status !== "passed") {
+      throw new Error(`admin spine terminal batch ${expected.label} drifted`);
+    }
+    if (typeof batch.reason !== "string" || batch.reason.trim() === "") {
+      throw new Error(
+        `admin spine terminal batch ${expected.label} is missing reason`,
+      );
+    }
+    if (
+      batch.releaseReady !== false ||
+      batch.productionReady !== false ||
+      batch.sharedFrontendSession !== true ||
+      batch.sharedChromiumSession !== true
+    ) {
+      throw new Error(`admin spine terminal batch ${expected.label} made invalid claims`);
+    }
+    if (
+      Number(batch.caseCount) !== expected.proofIds.length ||
+      JSON.stringify(batch.proofIds) !== JSON.stringify(expected.proofIds) ||
+      JSON.stringify(batch.artifactPaths) !== JSON.stringify(expected.artifactPaths)
+    ) {
+      throw new Error(`admin spine terminal batch ${expected.label} case drifted`);
+    }
+    if (
+      !Array.isArray(batch.caseSmokeNames) ||
+      batch.caseSmokeNames.length !== expected.proofIds.length ||
+      !Number.isInteger(batch.elapsedMs) ||
+      batch.elapsedMs < 0
+    ) {
+      throw new Error(`admin spine terminal batch ${expected.label} metadata drifted`);
+    }
+  }
+  return {
+    status: "passed",
+    path:
+      options.path ?? "target/dev-test-game/admin-spine-terminal-batches.json",
+    proofBoundary: proof.proofBoundary,
+    batchCount: requiredBatches.length,
+    batchIds: requiredBatches.map((batch) =>
+      batch.label
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/^-+|-+$/g, ""),
+    ),
+    batches: proof.batches.map((batch) => ({
+      label: batch.label,
+      status: batch.status,
+      caseCount: batch.caseCount,
+      proofIds: batch.proofIds,
+      artifactPaths: batch.artifactPaths,
+      sharedFrontendSession: batch.sharedFrontendSession === true,
+      sharedChromiumSession: batch.sharedChromiumSession === true,
+    })),
+    artifactPaths: proof.batches.flatMap((batch) => batch.artifactPaths),
+    ...(options.artifact === undefined ? {} : { artifact: options.artifact }),
+  };
+}
+
 export function validateDevTestGameAdminSpineAdminProof(proof, options = {}) {
   const requiredChecks = [
     "core-loop",
@@ -5866,6 +6009,18 @@ const optionalReadinessArtifactRegistry = Object.freeze([
     ignoreInvalidDefault: true,
   }),
   optionalReadinessArtifact({
+    id: "adminSpineTerminalBatches",
+    envVar: "FMARCH_DEV_TEST_GAME_ADMIN_SPINE_TERMINAL_BATCHES",
+    defaultPath: defaultAdminSpineTerminalBatchProofPath,
+    outputKeys: {
+      data: "adminSpineTerminalBatches",
+      path: "adminSpineTerminalBatchesPath",
+      freshnessMetadata: "adminSpineTerminalBatchesArtifact",
+    },
+    validator: validateDevTestGameAdminSpineTerminalBatches,
+    ignoreInvalidDefault: true,
+  }),
+  optionalReadinessArtifact({
     id: "raceCoverage",
     envVar: "FMARCH_DEV_TEST_GAME_RACE_COVERAGE",
     defaultPath: defaultRaceCoveragePath,
@@ -5999,6 +6154,7 @@ const optionalReadinessArtifactLoadPlan = Object.freeze([
   "spineManifestAdminProof",
   "adminSpineProof",
   "adminSpineAdminProof",
+  "adminSpineTerminalBatches",
   "raceCoverage",
   "hostedConcurrentRaceMatrix",
   "raceCoverageAdminProof",

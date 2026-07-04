@@ -47,12 +47,18 @@ export async function runAdminAuditProof({
 }
 
 export async function runAdminAuditProofBatch(cases) {
-  const { cases: proofCases, envOverrides } = resolveAdminAuditProofBatchPlan({
+  const plan = resolveAdminAuditProofBatchPlan({
     label: "admin audit proof batch",
     reason: "direct proof batch",
     cases,
   });
+  return await runResolvedAdminAuditProofBatch(plan);
+}
+
+async function runResolvedAdminAuditProofBatch(plan) {
+  const { cases: proofCases, envOverrides } = plan;
   const firstCase = proofCases[0];
+  const startedAt = Date.now();
 
   await preflightLocalhostBindOrExit({
     host,
@@ -114,11 +120,16 @@ export async function runAdminAuditProofBatch(cases) {
       restoreEnv(name, previous);
     }
   }
+  return adminAuditProofBatchEvidence({
+    plan,
+    elapsedMs: Date.now() - startedAt,
+  });
 }
 
 export async function runAdminAuditProofBatchPlan(plan) {
-  const { cases } = resolveAdminAuditProofBatchPlan(plan);
-  await runAdminAuditProofBatch(cases);
+  return await runResolvedAdminAuditProofBatch(
+    resolveAdminAuditProofBatchPlan(plan),
+  );
 }
 
 export function resolveAdminAuditProofBatchPlan(plan) {
@@ -136,6 +147,38 @@ export function resolveAdminAuditProofBatchPlan(plan) {
     cases,
     envOverrides,
   };
+}
+
+function adminAuditProofBatchEvidence({ plan, elapsedMs }) {
+  return Object.freeze({
+    label: plan.label,
+    reason: plan.reason,
+    status: "passed",
+    caseCount: plan.cases.length,
+    caseSmokeNames: Object.freeze(
+      plan.cases.map((proofCase) => proofCase.smokeName),
+    ),
+    proofIds: Object.freeze(
+      plan.cases.map((proofCase) =>
+        proofIdFromAdminAuditEvidencePath(proofCase.evidencePath),
+      ),
+    ),
+    artifactPaths: Object.freeze(
+      plan.cases.map((proofCase) => path.relative(repoRoot, proofCase.evidencePath)),
+    ),
+    elapsedMs: Math.max(0, Math.round(elapsedMs)),
+    sharedFrontendSession: true,
+    sharedChromiumSession: true,
+    releaseReady: false,
+    productionReady: false,
+  });
+}
+
+function proofIdFromAdminAuditEvidencePath(evidencePath) {
+  const baseName = path.basename(evidencePath, ".json");
+  return baseName.endsWith("-admin-proof")
+    ? baseName.slice(0, -"admin-proof".length).replace(/-$/u, "")
+    : baseName;
 }
 
 function assertAdminAuditProofBatchPlanShape(plan) {

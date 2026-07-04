@@ -14,6 +14,8 @@ const DEFAULT_SPINE_MANIFEST = "target/dev-test-game/spine-manifest.json";
 const DEFAULT_ADMIN_SPINE_PROOF = "target/dev-test-game/admin-spine-proof.json";
 const DEFAULT_ADMIN_SPINE_ADMIN_PROOF =
   "target/dev-test-game/admin-spine-admin-proof.json";
+const DEFAULT_ADMIN_SPINE_TERMINAL_BATCHES =
+  "target/dev-test-game/admin-spine-terminal-batches.json";
 const DEFAULT_NEXT_ACTION = "target/dev-test-game/next-action.json";
 const DEFAULT_PROOF_GRAPH = "target/dev-test-game/proof-graph.json";
 const DEFAULT_PROOF_GRAPH_ADMIN_PROOF =
@@ -379,6 +381,15 @@ export async function readLocalAdminSpineProof({ env = process.env } = {}) {
   return await readLocalJsonArtifact({
     pathValue: env.FMARCH_DEV_TEST_GAME_ADMIN_SPINE_PROOF,
     fallback: DEFAULT_ADMIN_SPINE_PROOF,
+  });
+}
+
+export async function readLocalAdminSpineTerminalBatches({
+  env = process.env,
+} = {}) {
+  return await readLocalJsonArtifact({
+    pathValue: env.FMARCH_DEV_TEST_GAME_ADMIN_SPINE_TERMINAL_BATCHES,
+    fallback: DEFAULT_ADMIN_SPINE_TERMINAL_BATCHES,
   });
 }
 
