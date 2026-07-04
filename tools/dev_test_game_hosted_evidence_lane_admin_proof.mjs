@@ -8,7 +8,10 @@ import {
 import {
   hostedEvidenceHandoffBlockedCheckRequiredEvidence,
   hostedEvidenceHandoffInputIds,
+  hostedEvidenceHandoffInputSectionStatuses,
   hostedEvidenceHandoffInputValues,
+  hostedEvidenceHandoffSectionInputRows,
+  hostedEvidenceHandoffSectionInputStatuses,
   hostedEvidenceHandoffSummary,
 } from "./dev_test_game_hosted_handoff_cases.mjs";
 import {
@@ -70,12 +73,15 @@ await runAdminAuditProof({
         source.lane.blockedCheckIds,
       );
     const hostedHandoffSummary = hostedEvidenceHandoffSummary({
-      status: source.lane.status,
-      preflightStatus: source.lane.preflightStatus,
-      inputs: source.lane.hostedEvidence?.realHostedEvidenceInputs,
-      command: source.lane.nextCommand,
-      proofTarget: source.lane.nextProofTarget,
+      status: source.lane.hostedHandoffChecklist?.status,
+      preflightStatus: source.lane.hostedHandoffChecklist?.preflightStatus,
+      command: source.lane.hostedHandoffChecklist?.command,
+      proofTarget: source.lane.hostedHandoffChecklist?.proofTarget,
     });
+    const hostedHandoffInputSections =
+      source.lane.hostedHandoffChecklist?.inputSections ?? [];
+    const hostedHandoffSectionInputRows =
+      hostedEvidenceHandoffSectionInputRows(hostedHandoffInputSections);
     return await proveAdminAuditDetail({
       browser,
       frontendBaseUrl,
@@ -99,7 +105,18 @@ await runAdminAuditProof({
       requiredHostedHandoffBlockedCheckStatuses:
         hostedHandoffBlockedCheckStatuses,
       requiredHostedHandoffSummary: hostedHandoffSummary,
-      requiredHostedHandoffBlockedReceipt: source.lane.blockedReceipt ?? null,
+      requiredHostedHandoffBlockedReceipt:
+        source.lane.hostedHandoffChecklist?.blockedReceipt ?? null,
+      requiredHostedHandoffInputSections: hostedHandoffInputSections.map(
+        (section) => section.id,
+      ),
+      requiredHostedHandoffInputSectionStatuses:
+        hostedEvidenceHandoffInputSectionStatuses(hostedHandoffInputSections),
+      requiredHostedHandoffSectionInputs: hostedHandoffSectionInputRows.map(
+        (row) => row.id,
+      ),
+      requiredHostedHandoffSectionInputStatuses:
+        hostedEvidenceHandoffSectionInputStatuses(hostedHandoffInputSections),
       requiredRelatedLinks,
     });
   },
@@ -146,15 +163,32 @@ await runAdminAuditProof({
           source.lane.blockedCheckIds,
         ),
       hostedHandoffSummary: hostedEvidenceHandoffSummary({
-        status: source.lane.status,
-        preflightStatus: source.lane.preflightStatus,
-        inputs: source.lane.hostedEvidence?.realHostedEvidenceInputs,
-        command: source.lane.nextCommand,
-        proofTarget: source.lane.nextProofTarget,
+        status: source.lane.hostedHandoffChecklist?.status,
+        preflightStatus: source.lane.hostedHandoffChecklist?.preflightStatus,
+        command: source.lane.hostedHandoffChecklist?.command,
+        proofTarget: source.lane.hostedHandoffChecklist?.proofTarget,
       }),
-      ...(source.lane.blockedReceipt === undefined
+      hostedHandoffInputSectionIds:
+        source.lane.hostedHandoffChecklist?.inputSections?.map(
+          (section) => section.id,
+        ) ?? [],
+      hostedHandoffInputSectionStatuses:
+        hostedEvidenceHandoffInputSectionStatuses(
+          source.lane.hostedHandoffChecklist?.inputSections ?? [],
+        ),
+      hostedHandoffSectionInputIds: hostedEvidenceHandoffSectionInputRows(
+        source.lane.hostedHandoffChecklist?.inputSections ?? [],
+      ).map((row) => row.id),
+      hostedHandoffSectionInputStatuses:
+        hostedEvidenceHandoffSectionInputStatuses(
+          source.lane.hostedHandoffChecklist?.inputSections ?? [],
+        ),
+      ...(source.lane.hostedHandoffChecklist?.blockedReceipt === undefined
         ? {}
-        : { hostedHandoffBlockedReceipt: source.lane.blockedReceipt }),
+        : {
+            hostedHandoffBlockedReceipt:
+              source.lane.hostedHandoffChecklist.blockedReceipt,
+          }),
       relatedAuditIds: requiredRelatedLinks,
     },
     adminRoleSurface,
@@ -256,6 +290,55 @@ export function assertHostedEvidenceLaneAdminProof(evidence) {
     if (typeof visibleText !== "string" || !visibleText.includes(expectedText)) {
       throw new Error(
         `hosted evidence lane admin proof missing blocked check evidence: ${checkId}`,
+      );
+    }
+  }
+  for (const sectionId of evidence.generatedFrom?.hostedHandoffInputSectionIds ??
+    []) {
+    if (
+      !evidence.adminRoleSurface?.visibleHostedHandoffInputSections?.includes(
+        sectionId,
+      )
+    ) {
+      throw new Error(
+        `hosted evidence lane admin proof missing handoff input section: ${sectionId}`,
+      );
+    }
+  }
+  for (const [sectionId, expectedStatus] of Object.entries(
+    evidence.generatedFrom?.hostedHandoffInputSectionStatuses ?? {},
+  )) {
+    const visibleText =
+      evidence.adminRoleSurface?.visibleHostedHandoffInputSectionStatuses?.[
+        sectionId
+      ];
+    if (typeof visibleText !== "string" || !visibleText.includes(expectedStatus)) {
+      throw new Error(
+        `hosted evidence lane admin proof missing handoff input section status: ${sectionId}`,
+      );
+    }
+  }
+  for (const rowId of evidence.generatedFrom?.hostedHandoffSectionInputIds ?? []) {
+    if (
+      !evidence.adminRoleSurface?.visibleHostedHandoffSectionInputs?.includes(
+        rowId,
+      )
+    ) {
+      throw new Error(
+        `hosted evidence lane admin proof missing handoff section input: ${rowId}`,
+      );
+    }
+  }
+  for (const [rowId, expectedStatus] of Object.entries(
+    evidence.generatedFrom?.hostedHandoffSectionInputStatuses ?? {},
+  )) {
+    const visibleText =
+      evidence.adminRoleSurface?.visibleHostedHandoffSectionInputStatuses?.[
+        rowId
+      ];
+    if (typeof visibleText !== "string" || !visibleText.includes(expectedStatus)) {
+      throw new Error(
+        `hosted evidence lane admin proof missing handoff section input status: ${rowId}`,
       );
     }
   }

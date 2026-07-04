@@ -283,8 +283,12 @@ import {
 } from "./dev_test_game_hosted_evidence_lane.mjs";
 import {
   hostedEvidenceBlockedHandoffChecklistFixture,
+  hostedEvidenceHandoffChecklistFromPreflight,
   hostedEvidenceHandoffBlockedCheckIds,
   hostedEvidenceHandoffInputIds,
+  hostedEvidenceHandoffInputSectionStatuses,
+  hostedEvidenceHandoffSectionInputRows,
+  hostedEvidenceHandoffSectionInputStatuses,
 } from "./dev_test_game_hosted_handoff_cases.mjs";
 import {
   assertDevTestGameHostedEvidenceLaneDemoProof,
@@ -15244,11 +15248,15 @@ function spineManifestAdminProofFixture() {
 }
 
 function hostedTargetPreflightAdminProofFixture() {
+  const handoff = hostedEvidenceBlockedHandoffChecklistFixture();
   const blockedCheckRequiredEvidence = Object.fromEntries(
-    hostedEvidenceBlockedHandoffChecklistFixture().blockedChecks.map((check) => [
+    handoff.blockedChecks.map((check) => [
       check.id,
       check.requiredEvidence,
     ]),
+  );
+  const sectionInputRows = hostedEvidenceHandoffSectionInputRows(
+    handoff.inputSections,
   );
   return {
     version: 1,
@@ -15266,6 +15274,26 @@ function hostedTargetPreflightAdminProofFixture() {
       checkIds: [...hostedTargetPreflightCheckIds],
       blockedCheckIds: [...hostedTargetPreflightBlockingCheckIds],
       blockedCheckRequiredEvidence,
+      hostedHandoffInputIds: handoff.inputIds,
+      hostedHandoffBlockedCheckIds: handoff.blockedCheckIds,
+      hostedHandoffBlockedCheckRequiredEvidence: blockedCheckRequiredEvidence,
+      hostedHandoffSummary: {
+        status: handoff.status,
+        preflightStatus: handoff.preflightStatus,
+        command: handoff.command,
+        proofTarget: handoff.proofTarget,
+      },
+      hostedHandoffInputSectionIds: handoff.inputSections.map(
+        (section) => section.id,
+      ),
+      hostedHandoffInputSectionStatuses:
+        hostedEvidenceHandoffInputSectionStatuses(handoff.inputSections),
+      hostedHandoffSectionInputIds: sectionInputRows.map((row) => row.id),
+      hostedHandoffSectionInputStatuses:
+        hostedEvidenceHandoffSectionInputStatuses(handoff.inputSections),
+      ...(handoff.blockedReceipt === undefined
+        ? {}
+        : { hostedHandoffBlockedReceipt: handoff.blockedReceipt }),
       relatedAuditIds: [
         "local-hosted-concurrent-race-matrix",
         "local-next-action",
@@ -15287,6 +15315,39 @@ function hostedTargetPreflightAdminProofFixture() {
           `${checkId}\nblocked\n${evidence}`,
         ]),
       ),
+      visibleHostedHandoffInputs: handoff.inputIds,
+      visibleHostedHandoffBlockedChecks: handoff.blockedCheckIds,
+      visibleHostedHandoffBlockedCheckStatuses: Object.fromEntries(
+        Object.entries(blockedCheckRequiredEvidence).map(([checkId, evidence]) => [
+          checkId,
+          `${checkId}\nblocked\n${evidence}`,
+        ]),
+      ),
+      visibleHostedHandoffSummary: {
+        status: handoff.status,
+        preflightStatus: handoff.preflightStatus,
+        command: handoff.command,
+        proofTarget: handoff.proofTarget,
+      },
+      visibleHostedHandoffInputSections: handoff.inputSections.map(
+        (section) => section.id,
+      ),
+      visibleHostedHandoffInputSectionStatuses:
+        hostedEvidenceHandoffInputSectionStatuses(handoff.inputSections),
+      visibleHostedHandoffSectionInputs: sectionInputRows.map((row) => row.id),
+      visibleHostedHandoffSectionInputStatuses:
+        hostedEvidenceHandoffSectionInputStatuses(handoff.inputSections),
+      ...(handoff.blockedReceipt === undefined
+        ? {}
+        : {
+            visibleHostedHandoffBlockedReceipt: {
+              status: handoff.blockedReceipt.status,
+              operatorAction: handoff.blockedReceipt.operatorAction,
+              localVsHostedBoundary: handoff.blockedReceipt.localVsHostedBoundary,
+              nextProofTarget: handoff.blockedReceipt.nextProofTarget,
+              missingRequiredInputs: handoff.blockedReceipt.missingRequiredInputs,
+            },
+          }),
       visibleRelatedLinks: [
         "local-hosted-concurrent-race-matrix",
         "local-next-action",
@@ -15397,6 +15458,10 @@ function hostedIdentityPacketInputRowsFixture() {
 }
 
 function hostedEvidenceLaneAdminProofFixture() {
+  const handoff = hostedEvidenceBlockedHandoffChecklistFixture();
+  const sectionInputRows = hostedEvidenceHandoffSectionInputRows(
+    handoff.inputSections,
+  );
   return {
     version: 1,
     proof: "dev-test-game-hosted-evidence-lane-admin-proof",
@@ -15418,8 +15483,16 @@ function hostedEvidenceLaneAdminProofFixture() {
       ],
       blockedCheckIds: [...hostedTargetPreflightBlockingCheckIds],
       realHostedEvidenceInputIds: [...hostedEvidenceHandoffInputIds],
-      hostedHandoffInputIds: [...hostedEvidenceHandoffInputIds],
-      hostedHandoffBlockedCheckIds: [...hostedEvidenceHandoffBlockedCheckIds],
+      hostedHandoffInputIds: handoff.inputIds,
+      hostedHandoffBlockedCheckIds: handoff.blockedCheckIds,
+      hostedHandoffInputSectionIds: handoff.inputSections.map(
+        (section) => section.id,
+      ),
+      hostedHandoffInputSectionStatuses:
+        hostedEvidenceHandoffInputSectionStatuses(handoff.inputSections),
+      hostedHandoffSectionInputIds: sectionInputRows.map((row) => row.id),
+      hostedHandoffSectionInputStatuses:
+        hostedEvidenceHandoffSectionInputStatuses(handoff.inputSections),
       relatedAuditIds: [
         "local-hosted-target-preflight",
         "local-hosted-concurrent-race-matrix",
@@ -15440,10 +15513,16 @@ function hostedEvidenceLaneAdminProofFixture() {
       ],
       visibleUnproven: [...hostedTargetPreflightBlockingCheckIds],
       visibleRealHostedEvidenceInputs: [...hostedEvidenceHandoffInputIds],
-      visibleHostedHandoffInputs: [...hostedEvidenceHandoffInputIds],
-      visibleHostedHandoffBlockedChecks: [
-        ...hostedEvidenceHandoffBlockedCheckIds,
-      ],
+      visibleHostedHandoffInputs: handoff.inputIds,
+      visibleHostedHandoffBlockedChecks: handoff.blockedCheckIds,
+      visibleHostedHandoffInputSections: handoff.inputSections.map(
+        (section) => section.id,
+      ),
+      visibleHostedHandoffInputSectionStatuses:
+        hostedEvidenceHandoffInputSectionStatuses(handoff.inputSections),
+      visibleHostedHandoffSectionInputs: sectionInputRows.map((row) => row.id),
+      visibleHostedHandoffSectionInputStatuses:
+        hostedEvidenceHandoffSectionInputStatuses(handoff.inputSections),
       visibleRelatedLinks: [
         "local-hosted-target-preflight",
         "local-hosted-concurrent-race-matrix",
@@ -15565,6 +15644,77 @@ function hostedTargetPreflightFixture({
   rawEvidenceSyntheticExternalTarget = false,
 }) {
   const passed = status === "passed";
+  const target = {
+    frontendBaseUrl: passed ? "https://fmarch.example.test" : null,
+    apiBaseUrl: passed ? "https://api.fmarch.example.test" : null,
+    groupId: "replacement-race-reload",
+    rawEvidencePath: passed
+      ? "target/dev-test-game/hosted-matrix-raw-evidence.json"
+      : null,
+    rawEvidenceStatus: passed ? "passed" : "blocked",
+    rawEvidenceSyntheticExternalTarget,
+  };
+  const checks = [
+    ...hostedTargetPreflightBlockingCheckIds.map((id) => ({
+      id,
+      status: passed ? "passed" : "blocked",
+      ...(passed
+        ? {}
+        : { requiredEvidence: hostedTargetPreflightRequiredEvidence(id) }),
+    })),
+    {
+      id: "release-claim-boundary-carried",
+      status: "passed",
+      releaseReady: false,
+      productionReady: false,
+    },
+  ];
+  const blockedReceipt = passed
+    ? undefined
+    : {
+        status: "blocked",
+        blockedCheckIds: [...hostedTargetPreflightBlockingCheckIds],
+        command: "npm run test:dev-test-game-hosted-evidence-lane",
+        proofTarget: devTestGameHostedTargetPreflightPath,
+        nextProofTarget: devTestGameHostedTargetPreflightPath,
+        requiredInputs: [
+          {
+            name: "FMARCH_HOSTED_MATRIX_FRONTEND_URL",
+            value: null,
+            required: true,
+            purpose: "Externally reachable frontend base URL.",
+          },
+          {
+            name: "FMARCH_HOSTED_MATRIX_API_URL",
+            value: null,
+            required: true,
+            purpose:
+              "Externally reachable API base URL for the same hosted deployment.",
+          },
+          {
+            name: "FMARCH_HOSTED_MATRIX_GROUP_ID",
+            value: "replacement-race-reload",
+            required: true,
+            purpose: "Hosted matrix group to prove.",
+          },
+          {
+            name: "FMARCH_HOSTED_MATRIX_RAW_EVIDENCE_PATH",
+            value: null,
+            required: true,
+            purpose:
+              "Readable raw hosted matrix evidence captured from the real target.",
+          },
+        ],
+        missingRequiredInputs: [
+          "FMARCH_HOSTED_MATRIX_FRONTEND_URL",
+          "FMARCH_HOSTED_MATRIX_API_URL",
+          "FMARCH_HOSTED_MATRIX_RAW_EVIDENCE_PATH",
+        ],
+        operatorAction:
+          "Configure the hosted frontend/API URLs plus a readable raw hosted matrix evidence JSON from that same deployment, then rerun npm run test:dev-test-game-hosted-evidence-lane.",
+        localVsHostedBoundary:
+          "Local hosted-like matrix artifacts and synthetic demo evidence can prove the handoff path, but they cannot satisfy hosted deployment evidence.",
+      };
   return {
     version: 1,
     proof: "dev-test-game-hosted-target-preflight",
@@ -15574,79 +15724,19 @@ function hostedTargetPreflightFixture({
     generatedAt: "2026-06-26T00:00:00.000Z",
     scope: "hosted-target-preflight",
     proofBoundary: "Hosted target preflight fixture without release claims.",
-    target: {
-      frontendBaseUrl: passed ? "https://fmarch.example.test" : null,
-      apiBaseUrl: passed ? "https://api.fmarch.example.test" : null,
-      groupId: "replacement-race-reload",
-      rawEvidencePath: passed
-        ? "target/dev-test-game/hosted-matrix-raw-evidence.json"
-        : null,
-      rawEvidenceStatus: passed ? "passed" : "blocked",
-      rawEvidenceSyntheticExternalTarget,
-    },
-    checks: [
-      ...hostedTargetPreflightBlockingCheckIds.map((id) => ({
-        id,
-        status: passed ? "passed" : "blocked",
-        ...(passed
-          ? {}
-          : { requiredEvidence: hostedTargetPreflightRequiredEvidence(id) }),
-      })),
-      {
-        id: "release-claim-boundary-carried",
-        status: "passed",
-        releaseReady: false,
-        productionReady: false,
-      },
-    ],
+    target,
+    checks,
     ...(passed
       ? {}
-      : {
-          blockedReceipt: {
-            status: "blocked",
-            blockedCheckIds: [...hostedTargetPreflightBlockingCheckIds],
-            command: "npm run test:dev-test-game-hosted-evidence-lane",
-            proofTarget: devTestGameHostedTargetPreflightPath,
-            nextProofTarget: devTestGameHostedTargetPreflightPath,
-            requiredInputs: [
-              {
-                name: "FMARCH_HOSTED_MATRIX_FRONTEND_URL",
-                value: null,
-                required: true,
-                purpose: "Externally reachable frontend base URL.",
-              },
-              {
-                name: "FMARCH_HOSTED_MATRIX_API_URL",
-                value: null,
-                required: true,
-                purpose:
-                  "Externally reachable API base URL for the same hosted deployment.",
-              },
-              {
-                name: "FMARCH_HOSTED_MATRIX_GROUP_ID",
-                value: "replacement-race-reload",
-                required: true,
-                purpose: "Hosted matrix group to prove.",
-              },
-              {
-                name: "FMARCH_HOSTED_MATRIX_RAW_EVIDENCE_PATH",
-                value: null,
-                required: true,
-                purpose:
-                  "Readable raw hosted matrix evidence captured from the real target.",
-              },
-            ],
-            missingRequiredInputs: [
-              "FMARCH_HOSTED_MATRIX_FRONTEND_URL",
-              "FMARCH_HOSTED_MATRIX_API_URL",
-              "FMARCH_HOSTED_MATRIX_RAW_EVIDENCE_PATH",
-            ],
-            operatorAction:
-              "Configure the hosted frontend/API URLs plus a readable raw hosted matrix evidence JSON from that same deployment, then rerun npm run test:dev-test-game-hosted-evidence-lane.",
-            localVsHostedBoundary:
-              "Local hosted-like matrix artifacts and synthetic demo evidence can prove the handoff path, but they cannot satisfy hosted deployment evidence.",
-          },
-        }),
+      : { blockedReceipt }),
+    hostedHandoffChecklist: hostedEvidenceHandoffChecklistFromPreflight({
+      preflight: {
+        status,
+        checks,
+        target,
+        ...(blockedReceipt === undefined ? {} : { blockedReceipt }),
+      },
+    }),
     nextCommand: passed
       ? `npm run ${devTestGameHostedMatrixExternalEvidenceCommand}`
       : `npm run ${devTestGameHostedTargetPreflightCommand}`,

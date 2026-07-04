@@ -20,6 +20,34 @@ export const hostedEvidenceLanePath =
 export const hostedMatrixExternalEvidencePath =
   "target/dev-test-game/hosted-matrix-external.json";
 
+export const hostedEvidenceHandoffInputSectionDefinitions = Object.freeze([
+  Object.freeze({
+    id: "proof-command",
+    label: "Proof command",
+    requiredInputIds: Object.freeze(["command", "proof-target"]),
+  }),
+  Object.freeze({
+    id: "hosted-target",
+    label: "Hosted target",
+    requiredInputIds: Object.freeze([
+      "FMARCH_HOSTED_MATRIX_FRONTEND_URL",
+      "FMARCH_HOSTED_MATRIX_API_URL",
+      "FMARCH_HOSTED_MATRIX_GROUP_ID",
+    ]),
+  }),
+  Object.freeze({
+    id: "raw-evidence",
+    label: "Raw evidence",
+    requiredInputIds: Object.freeze([
+      "FMARCH_HOSTED_MATRIX_RAW_EVIDENCE_PATH",
+    ]),
+  }),
+]);
+
+export const hostedEvidenceHandoffInputSectionIds = Object.freeze(
+  hostedEvidenceHandoffInputSectionDefinitions.map((section) => section.id),
+);
+
 const hostedEvidenceHandoffBlockedChecks = Object.freeze([
   {
     id: "hosted-frontend-url-configured",
@@ -52,6 +80,7 @@ export function hostedEvidenceHandoffCase() {
   return {
     inputIds: [...hostedEvidenceHandoffInputIds],
     blockedCheckIds: [...hostedEvidenceHandoffBlockedCheckIds],
+    inputSections: hostedEvidenceHandoffInputSections(),
   };
 }
 
@@ -114,6 +143,90 @@ export function hostedEvidenceHandoffInputValues(inputs) {
   );
 }
 
+export function hostedEvidenceHandoffInputSections({
+  providedInputIds = ["command", "proof-target"],
+} = {}) {
+  const providedInputIdSet = new Set(providedInputIds.map((id) => String(id)));
+  return hostedEvidenceHandoffInputSectionDefinitions.map((section) => {
+    const requiredInputIds = [...section.requiredInputIds];
+    const providedSectionInputIds = requiredInputIds.filter((inputId) =>
+      providedInputIdSet.has(inputId),
+    );
+    const missingInputs = requiredInputIds.filter(
+      (inputId) => !providedSectionInputIds.includes(inputId),
+    );
+    return {
+      id: section.id,
+      label: section.label,
+      status: missingInputs.length === 0 ? "provided" : "missing",
+      requiredInputIds,
+      providedInputIds: providedSectionInputIds,
+      missingInputs,
+    };
+  });
+}
+
+export function hostedEvidenceHandoffInputSectionStatuses(sections) {
+  return Object.fromEntries(
+    (Array.isArray(sections) ? sections : []).map((section) => [
+      String(section.id),
+      String(section.status ?? ""),
+    ]),
+  );
+}
+
+export function hostedEvidenceHandoffSectionInputRows(sections) {
+  return (Array.isArray(sections) ? sections : []).flatMap((section) =>
+    (Array.isArray(section.requiredInputIds)
+      ? section.requiredInputIds
+      : []
+    ).map((inputId) => ({
+      id: `${section.id}-${inputId}`,
+      status: Array.isArray(section.providedInputIds) &&
+        section.providedInputIds.includes(inputId)
+        ? "provided"
+        : "missing",
+    })),
+  );
+}
+
+export function hostedEvidenceHandoffSectionInputStatuses(sections) {
+  return Object.fromEntries(
+    hostedEvidenceHandoffSectionInputRows(sections).map((row) => [
+      row.id,
+      row.status,
+    ]),
+  );
+}
+
+export function hostedEvidenceProvidedInputIdsFromPreflight(preflight) {
+  const checks = new Map(
+    (Array.isArray(preflight?.checks) ? preflight.checks : []).map((check) => [
+      String(check.id ?? ""),
+      check,
+    ]),
+  );
+  const target = preflight?.target ?? {};
+  return [
+    "command",
+    "proof-target",
+    ...(checks.get("hosted-frontend-url-configured")?.status === "passed"
+      ? ["FMARCH_HOSTED_MATRIX_FRONTEND_URL"]
+      : []),
+    ...(checks.get("hosted-api-url-configured")?.status === "passed"
+      ? ["FMARCH_HOSTED_MATRIX_API_URL"]
+      : []),
+    ...(typeof target.groupId === "string" && target.groupId !== ""
+      ? ["FMARCH_HOSTED_MATRIX_GROUP_ID"]
+      : []),
+    ...(checks.get("raw-evidence-readable")?.status === "passed" &&
+    typeof target.rawEvidencePath === "string" &&
+    target.rawEvidencePath !== ""
+      ? ["FMARCH_HOSTED_MATRIX_RAW_EVIDENCE_PATH"]
+      : []),
+  ];
+}
+
 export function hostedEvidenceHandoffBlockedCheckRequiredEvidence(
   checks,
   blockedCheckIds = [],
@@ -160,7 +273,8 @@ export function assertHostedEvidenceHandoffChecklist(checklist) {
     checklist.proofTarget === "" ||
     !Array.isArray(checklist.inputIds) ||
     !Array.isArray(checklist.blockedCheckIds) ||
-    !Array.isArray(checklist.blockedChecks)
+    !Array.isArray(checklist.blockedChecks) ||
+    !Array.isArray(checklist.inputSections)
   ) {
     throw new Error("hosted evidence handoff checklist drifted");
   }
@@ -173,17 +287,19 @@ export function assertHostedEvidenceHandoffChecklist(checklist) {
   return checklist;
 }
 
-export function hostedEvidenceBlockedHandoffChecklistFixture({
+export function hostedEvidenceHandoffChecklistFixture({
+  status = "blocked",
   preflightStatus = "blocked",
   command = hostedEvidenceLaneCommand,
   proofTarget = hostedEvidenceLanePath,
   blockedCheckIds = hostedEvidenceHandoffBlockedCheckIds,
   blockedChecks = hostedEvidenceHandoffBlockedChecks,
+  inputSections = hostedEvidenceHandoffInputSections(),
   blockedReceipt = null,
 } = {}) {
   const blockedCheckIdSet = new Set(blockedCheckIds);
   return assertHostedEvidenceHandoffChecklist({
-    status: "blocked",
+    status,
     preflightStatus,
     command,
     proofTarget,
@@ -192,14 +308,22 @@ export function hostedEvidenceBlockedHandoffChecklistFixture({
     blockedChecks: blockedChecks
       .filter((check) => blockedCheckIdSet.has(check.id))
       .map((check) => ({ ...check })),
+    inputSections,
     ...(blockedReceipt === null ? {} : { blockedReceipt }),
   });
 }
 
-export function hostedEvidenceBlockedHandoffChecklistFromPreflight({
+export function hostedEvidenceBlockedHandoffChecklistFixture(options = {}) {
+  return hostedEvidenceHandoffChecklistFixture({ ...options, status: "blocked" });
+}
+
+export function hostedEvidenceHandoffChecklistFromPreflight({
   preflight,
   command = hostedEvidenceLaneCommand,
   proofTarget = hostedEvidenceLanePath,
+  inputSections = hostedEvidenceHandoffInputSections({
+    providedInputIds: hostedEvidenceProvidedInputIdsFromPreflight(preflight),
+  }),
 }) {
   const blockedChecks = (preflight?.checks ?? [])
     .filter((check) => check?.status === "blocked")
@@ -209,12 +333,14 @@ export function hostedEvidenceBlockedHandoffChecklistFromPreflight({
       requiredEvidence: String(check.requiredEvidence ?? ""),
     }))
     .filter((check) => check.id !== "");
-  return hostedEvidenceBlockedHandoffChecklistFixture({
+  return hostedEvidenceHandoffChecklistFixture({
+    status: String(preflight?.status ?? "unknown"),
     preflightStatus: String(preflight?.status ?? "unknown"),
     command,
     proofTarget,
     blockedCheckIds: blockedChecks.map((check) => check.id),
     blockedChecks,
+    inputSections,
     blockedReceipt:
       preflight?.blockedReceipt === undefined
         ? null
@@ -222,8 +348,12 @@ export function hostedEvidenceBlockedHandoffChecklistFromPreflight({
             ...preflight.blockedReceipt,
             command,
             nextProofTarget: proofTarget,
-          },
+      },
   });
+}
+
+export function hostedEvidenceBlockedHandoffChecklistFromPreflight(options) {
+  return hostedEvidenceHandoffChecklistFromPreflight(options);
 }
 
 export function hostedEvidenceLaneHandoffFixture({
@@ -239,5 +369,8 @@ export function hostedEvidenceLaneHandoffFixture({
         mode: realHostedEvidenceInputMode,
       }),
     },
+    hostedHandoffChecklist: hostedEvidenceBlockedHandoffChecklistFixture({
+      blockedCheckIds,
+    }),
   };
 }

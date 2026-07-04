@@ -570,6 +570,12 @@ export function normalizeLocalHostedTargetPreflightAudit(
     : [];
   const passedChecks = checks.filter((check) => check?.status === "passed");
   const blockedChecks = checks.filter((check) => check?.status === "blocked");
+  const hostedHandoffChecklist = normalizeNextActionHostedHandoffChecklist({
+    unproven: {
+      hostedHandoffChecklist: hostedTargetPreflight.hostedHandoffChecklist,
+    },
+    realHostedEvidenceInputs: [],
+  });
   return Object.freeze({
     id: localAdminAuditIds.hostedTargetPreflight,
     label: "Hosted target preflight",
@@ -620,6 +626,7 @@ export function normalizeLocalHostedTargetPreflightAudit(
         command: "test:dev-test-game-next-action",
       }),
     ]),
+    ...(hostedHandoffChecklist === null ? {} : { hostedHandoffChecklist }),
     artifactSummary: Object.freeze({
       frontendBaseUrl: String(hostedTargetPreflight.target?.frontendBaseUrl ?? ""),
       apiBaseUrl: String(hostedTargetPreflight.target?.apiBaseUrl ?? ""),
@@ -980,16 +987,25 @@ function normalizeHostedEvidenceLaneHandoffChecklist({
   blockedChecks,
   realHostedEvidenceInputs,
 }) {
+  const checklist =
+    hostedEvidenceLane.hostedHandoffChecklist !== null &&
+    typeof hostedEvidenceLane.hostedHandoffChecklist === "object"
+      ? hostedEvidenceLane.hostedHandoffChecklist
+      : null;
   return Object.freeze({
-    status: String(hostedEvidenceLane.status ?? "unknown"),
-    preflightStatus: String(hostedEvidenceLane.preflightStatus ?? "unknown"),
+    status: String(checklist?.status ?? hostedEvidenceLane.status ?? "unknown"),
+    preflightStatus: String(
+      checklist?.preflightStatus ?? hostedEvidenceLane.preflightStatus ?? "unknown",
+    ),
     command: String(
-      hostedEvidenceLane.hostedEvidence?.realHostedEvidenceInputs?.command ??
+      checklist?.command ??
+        hostedEvidenceLane.hostedEvidence?.realHostedEvidenceInputs?.command ??
         hostedEvidenceLane.nextCommand ??
         "",
     ),
     proofTarget: String(
-      hostedEvidenceLane.hostedEvidence?.realHostedEvidenceInputs?.proofTarget ??
+      checklist?.proofTarget ??
+        hostedEvidenceLane.hostedEvidence?.realHostedEvidenceInputs?.proofTarget ??
         hostedEvidenceLane.nextProofTarget ??
         "",
     ),
@@ -1015,8 +1031,9 @@ function normalizeHostedEvidenceLaneHandoffChecklist({
       ),
     ),
     blockedReceipt: normalizeHostedHandoffBlockedReceipt(
-      hostedEvidenceLane.blockedReceipt,
+      checklist?.blockedReceipt ?? hostedEvidenceLane.blockedReceipt,
     ),
+    inputSections: normalizeHostedHandoffInputSections(checklist?.inputSections),
   });
 }
 

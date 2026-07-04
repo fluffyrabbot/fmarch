@@ -25,6 +25,10 @@ import {
   hostedTargetPreflightMissingRawEvidencePathRequiredEvidence,
 } from "./dev_test_game_hosted_target_preflight_cases.mjs";
 import {
+  assertHostedEvidenceHandoffChecklist,
+  hostedEvidenceHandoffChecklistFromPreflight,
+} from "./dev_test_game_hosted_handoff_cases.mjs";
+import {
   isExternallyHostedUrl,
 } from "./dev_test_game_hosted_target_url_policy.mjs";
 import { repoRoot } from "./dev_test_game_spine_runner.mjs";
@@ -154,6 +158,19 @@ export async function buildDevTestGameHostedTargetPreflight({
           }),
         }
       : {}),
+    hostedHandoffChecklist: hostedEvidenceHandoffChecklistFromPreflight({
+      preflight: {
+        status,
+        checks,
+        target: {
+          frontendBaseUrl,
+          apiBaseUrl,
+          groupId,
+          rawEvidencePath,
+          rawEvidenceStatus: rawEvidence.status,
+        },
+      },
+    }),
     nextCommand:
       status === "passed"
         ? `npm run ${devTestGameHostedMatrixExternalEvidenceCommand}`
@@ -203,6 +220,7 @@ export function assertDevTestGameHostedTargetPreflight(preflight) {
   } else if (preflight.blockedReceipt !== undefined) {
     throw new Error("hosted target preflight passed with blocked receipt");
   }
+  assertHostedEvidenceHandoffChecklist(preflight.hostedHandoffChecklist);
   return preflight;
 }
 

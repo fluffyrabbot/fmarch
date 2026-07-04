@@ -9,6 +9,10 @@ import {
   hostedEvidenceHandoffCase,
   hostedEvidenceHandoffInputRows,
   hostedEvidenceHandoffInputIds,
+  hostedEvidenceHandoffInputSectionIds,
+  hostedEvidenceHandoffInputSectionStatuses,
+  hostedEvidenceHandoffSectionInputRows,
+  hostedEvidenceHandoffSectionInputStatuses,
   hostedEvidenceHandoffInputValues,
   hostedEvidenceHandoffSummary,
   hostedEvidenceLaneCommand,
@@ -22,6 +26,40 @@ test("hosted evidence handoff cases share real hosted input and blocked check ID
   const handoff = hostedEvidenceHandoffCase();
   assert.deepEqual(handoff.inputIds, hostedEvidenceHandoffInputIds);
   assert.deepEqual(handoff.blockedCheckIds, hostedEvidenceHandoffBlockedCheckIds);
+  assert.deepEqual(
+    handoff.inputSections.map((section) => section.id),
+    hostedEvidenceHandoffInputSectionIds,
+  );
+  assert.deepEqual(hostedEvidenceHandoffInputSectionStatuses(handoff.inputSections), {
+    "proof-command": "provided",
+    "hosted-target": "missing",
+    "raw-evidence": "missing",
+  });
+  assert.deepEqual(hostedEvidenceHandoffSectionInputRows(handoff.inputSections), [
+    { id: "proof-command-command", status: "provided" },
+    { id: "proof-command-proof-target", status: "provided" },
+    {
+      id: "hosted-target-FMARCH_HOSTED_MATRIX_FRONTEND_URL",
+      status: "missing",
+    },
+    { id: "hosted-target-FMARCH_HOSTED_MATRIX_API_URL", status: "missing" },
+    { id: "hosted-target-FMARCH_HOSTED_MATRIX_GROUP_ID", status: "missing" },
+    {
+      id: "raw-evidence-FMARCH_HOSTED_MATRIX_RAW_EVIDENCE_PATH",
+      status: "missing",
+    },
+  ]);
+  assert.deepEqual(
+    hostedEvidenceHandoffSectionInputStatuses(handoff.inputSections),
+    {
+      "proof-command-command": "provided",
+      "proof-command-proof-target": "provided",
+      "hosted-target-FMARCH_HOSTED_MATRIX_FRONTEND_URL": "missing",
+      "hosted-target-FMARCH_HOSTED_MATRIX_API_URL": "missing",
+      "hosted-target-FMARCH_HOSTED_MATRIX_GROUP_ID": "missing",
+      "raw-evidence-FMARCH_HOSTED_MATRIX_RAW_EVIDENCE_PATH": "missing",
+    },
+  );
 
   const inputs = hostedEvidenceRealHostedInputsFixture();
   assert.equal(inputs.status, "unproven");
@@ -85,6 +123,10 @@ test("hosted evidence handoff cases share real hosted input and blocked check ID
   assert.equal(checklist.proofTarget, hostedEvidenceLanePath);
   assert.deepEqual(checklist.inputIds, hostedEvidenceHandoffInputIds);
   assert.deepEqual(checklist.blockedCheckIds, hostedEvidenceHandoffBlockedCheckIds);
+  assert.deepEqual(
+    checklist.inputSections.map((section) => section.id),
+    hostedEvidenceHandoffInputSectionIds,
+  );
   assert.deepEqual(
     checklist.blockedChecks.map((check) => [check.id, check.status]),
     hostedEvidenceHandoffBlockedCheckIds.map((id) => [id, "blocked"]),
@@ -150,6 +192,39 @@ test("hosted evidence handoff builds blocked checklist from preflight rows", () 
     preflightStatus: "blocked",
     command: "npm run test:dev-test-game-hosted-evidence-lane",
     proofTarget: "target/dev-test-game/hosted-evidence-lane.json",
+    inputSections: [
+      {
+        id: "proof-command",
+        label: "Proof command",
+        status: "provided",
+        requiredInputIds: ["command", "proof-target"],
+        providedInputIds: ["command", "proof-target"],
+        missingInputs: [],
+      },
+      {
+        id: "hosted-target",
+        label: "Hosted target",
+        status: "missing",
+        requiredInputIds: [
+          "FMARCH_HOSTED_MATRIX_FRONTEND_URL",
+          "FMARCH_HOSTED_MATRIX_API_URL",
+          "FMARCH_HOSTED_MATRIX_GROUP_ID",
+        ],
+        providedInputIds: ["FMARCH_HOSTED_MATRIX_FRONTEND_URL"],
+        missingInputs: [
+          "FMARCH_HOSTED_MATRIX_API_URL",
+          "FMARCH_HOSTED_MATRIX_GROUP_ID",
+        ],
+      },
+      {
+        id: "raw-evidence",
+        label: "Raw evidence",
+        status: "missing",
+        requiredInputIds: ["FMARCH_HOSTED_MATRIX_RAW_EVIDENCE_PATH"],
+        providedInputIds: [],
+        missingInputs: ["FMARCH_HOSTED_MATRIX_RAW_EVIDENCE_PATH"],
+      },
+    ],
     inputIds: hostedEvidenceHandoffInputIds,
     blockedCheckIds: ["hosted-targets-external", "raw-evidence-readable"],
     blockedChecks: [

@@ -15,6 +15,11 @@ import {
   assertRealHostedEvidenceInputs,
   buildRealHostedEvidenceInputs,
 } from "./dev_test_game_real_hosted_evidence_inputs.mjs";
+import {
+  assertHostedEvidenceHandoffChecklist,
+  hostedEvidenceHandoffChecklistFromPreflight,
+  hostedEvidenceHandoffInputSections,
+} from "./dev_test_game_hosted_handoff_cases.mjs";
 import { repoRoot } from "./dev_test_game_spine_runner.mjs";
 
 export const DEV_TEST_GAME_HOSTED_EVIDENCE_LANE_VERSION = 1;
@@ -92,6 +97,7 @@ export function assertDevTestGameHostedEvidenceLane(evidence) {
       evidence.hostedEvidence?.realHostedEvidenceStatus !== "unproven" ||
       evidence.hostedEvidence?.realHostedEvidenceInputs === undefined ||
       evidence.blockedReceipt?.status !== "blocked" ||
+      evidence.hostedHandoffChecklist === undefined ||
       evidence.nextCommand !== `npm run ${devTestGameHostedEvidenceLaneCommand}` ||
       evidence.nextProofTarget !== devTestGameHostedEvidenceLanePath
     ) {
@@ -110,6 +116,7 @@ export function assertDevTestGameHostedEvidenceLane(evidence) {
       }
     }
     assertRealHostedEvidenceInputs(evidence.hostedEvidence.realHostedEvidenceInputs);
+    assertHostedEvidenceHandoffChecklist(evidence.hostedHandoffChecklist);
   }
   if (evidence.status === "passed") {
     if (
@@ -120,6 +127,7 @@ export function assertDevTestGameHostedEvidenceLane(evidence) {
         evidence.hostedEvidence?.realHostedEvidenceStatus,
       ) ||
       evidence.hostedEvidence?.realHostedEvidenceInputs === undefined ||
+      evidence.hostedHandoffChecklist === undefined ||
       evidence.nextCommand !==
         `npm run ${devTestGameHostedMatrixExternalEvidenceCommand}` ||
       !isNonEmptyString(evidence.nextProofTarget)
@@ -127,6 +135,7 @@ export function assertDevTestGameHostedEvidenceLane(evidence) {
       throw new Error("passed hosted evidence lane drifted");
     }
     assertRealHostedEvidenceInputs(evidence.hostedEvidence.realHostedEvidenceInputs);
+    assertHostedEvidenceHandoffChecklist(evidence.hostedHandoffChecklist);
   }
   return evidence;
 }
@@ -168,6 +177,11 @@ function buildBlockedHostedEvidenceLane({ preflight, generatedAt }) {
       requiredEvidence:
         "Passed hosted target preflight and normalized hosted matrix evidence.",
     },
+    hostedHandoffChecklist: hostedEvidenceHandoffChecklistFromPreflight({
+      preflight,
+      command: `npm run ${devTestGameHostedEvidenceLaneCommand}`,
+      proofTarget: devTestGameHostedEvidenceLanePath,
+    }),
     checks: [
       {
         id: "hosted-target-preflight",
@@ -248,6 +262,24 @@ function buildPassedHostedEvidenceLane({
           }
         : { evidence: externalEvidencePath }),
     },
+    hostedHandoffChecklist: hostedEvidenceHandoffChecklistFromPreflight({
+      preflight,
+      command: `npm run ${devTestGameHostedEvidenceLaneCommand}`,
+      proofTarget: externalEvidencePath,
+      inputSections: hostedEvidenceHandoffInputSections({
+        providedInputIds:
+          realHostedEvidenceStatus === "passed"
+            ? [
+                "command",
+                "proof-target",
+                "FMARCH_HOSTED_MATRIX_FRONTEND_URL",
+                "FMARCH_HOSTED_MATRIX_API_URL",
+                "FMARCH_HOSTED_MATRIX_GROUP_ID",
+                "FMARCH_HOSTED_MATRIX_RAW_EVIDENCE_PATH",
+              ]
+            : ["command", "proof-target"],
+      }),
+    }),
     checks: [
       {
         id: "hosted-target-preflight",
