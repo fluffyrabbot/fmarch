@@ -7,7 +7,9 @@ import {
   playerInvalidActionRecoveryLaneId,
 } from "../../../../tools/dev_test_game_core_loop_action_scenarios.mjs";
 import {
+  privateChannelStaleActionReconnectLaneId,
   staleClientReconnectHighlightedLaneIds,
+  stalePlayerActionReconnectLaneId,
 } from "../../../../tools/dev_test_game_stale_client_reconnect_scenarios.mjs";
 
 const CORE_LOOP_FOUNDATION_HIGHLIGHTED_LANE_IDS = Object.freeze([
@@ -173,9 +175,9 @@ export function hardeningLaneStatus(lane) {
       return `${status}: Reject ${String(evidence.rejectError ?? "unknown")}, role URL ${typeof evidence.roleUrl === "string"}, refreshed ${String(evidence.refreshedPhase ?? "unknown")}`;
     case "stale-action-conflict-message":
       return `${status}: role URL ${typeof evidence.roleUrl === "string"}, ${String(evidence.receiptStatusText ?? evidence.rejectMessage ?? "unknown")}`;
-    case "stale-action-reconnect-recovery":
+    case stalePlayerActionReconnectLaneId:
       return `${status}: role URL ${typeof evidence.roleUrl === "string"}, ${String(evidence.reconnectingState ?? "unknown")} -> ${String(evidence.recoveryState ?? "unknown")}, phase ${String(evidence.recoveredPhase ?? "unknown")}`;
-    case "private-channel-stale-action-reconnect-recovery":
+    case privateChannelStaleActionReconnectLaneId:
       return `${status}: role URL ${typeof evidence.roleUrl === "string"}, channel ${String(evidence.channelAfterReject ?? evidence.channel ?? "unknown")}, reject ${String(evidence.rejectError ?? "unknown")}, recovered ${String(evidence.reconnectChannel ?? "unknown")} ${String(evidence.recoveredPhase ?? "unknown")}`;
     case "stale-host-complete-reconnect-recovery":
       return `${status}: ${String(evidence.reconnectingState ?? "unknown")} -> ${String(evidence.recoveryState ?? "unknown")}, completed ${String(evidence.recoveredCompleted ?? "unknown")}`;

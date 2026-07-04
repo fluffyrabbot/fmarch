@@ -26,6 +26,12 @@ import {
   hostStaleResolveControlLaneId,
 } from "./dev_test_game_host_stale_control_scenarios.mjs";
 import {
+  privateChannelStaleActionReconnectExpectation,
+  privateChannelStaleActionReconnectLaneId,
+  stalePlayerActionReconnectExpectation,
+  stalePlayerActionReconnectLaneId,
+} from "./dev_test_game_stale_client_reconnect_scenarios.mjs";
+import {
   hostAdvanceByDeadlineCommandFacts,
   hostAdvancePhaseCommandFacts,
   hostExtendDeadlineCommandFacts,
@@ -208,6 +214,9 @@ export function buildDevTestGameProofRun(session, options = {}) {
   const replacementActionReconnectCase = replacementActionReconnectScenario();
   const replacementStaleActionAfterResolveCase =
     replacementStaleActionAfterResolveScenario();
+  const staleActionReconnectExpectation = stalePlayerActionReconnectExpectation();
+  const privateStaleActionReconnectExpectation =
+    privateChannelStaleActionReconnectExpectation();
   const lanes = [
     lane("browser-entry", "Role URLs open verified browser sessions", {
       roles: verification.roles ?? [],
@@ -5275,7 +5284,10 @@ export function buildDevTestGameProofRun(session, options = {}) {
           0 &&
         hardening.staleActionConflict?.actionVisibleAfterRefresh === false,
     }),
-    lane("stale-action-reconnect-recovery", "Stale player action reconnect recovers current state", {
+    lane(
+      stalePlayerActionReconnectLaneId,
+      "Stale player action reconnect recovers current state",
+      {
       roleUrl: hardening.staleActionConflict?.sourceRoleUrl ?? null,
       visitedRolePath: hardening.staleActionConflict?.visitedRolePath ?? null,
       rejectError: hardening.staleActionConflict?.reject?.error ?? null,
@@ -5297,35 +5309,44 @@ export function buildDevTestGameProofRun(session, options = {}) {
       passed:
         hardening.staleActionConflict?.status === "passed" &&
         typeof hardening.staleActionConflict?.sourceRoleUrl === "string" &&
-        hardening.staleActionConflict.sourceRoleUrl.includes("/g/") &&
+        hardening.staleActionConflict.sourceRoleUrl.includes(
+          staleActionReconnectExpectation.roleUrlFragment,
+        ) &&
         typeof hardening.staleActionConflict?.visitedRolePath === "string" &&
-        hardening.staleActionConflict.visitedRolePath.includes("/g/") &&
-        hardening.staleActionConflict?.reject?.error === "PhaseLocked" &&
+        hardening.staleActionConflict.visitedRolePath.includes(
+          staleActionReconnectExpectation.roleUrlFragment,
+        ) &&
+        hardening.staleActionConflict?.reject?.error ===
+          staleActionReconnectExpectation.rejectError &&
         hardening.staleActionConflict?.reconnectAfterReject?.status === "passed" &&
         hardening.staleActionConflict?.reconnectAfterReject?.reconnectingStatus
-          ?.state === "reconnecting" &&
+          ?.state === staleActionReconnectExpectation.reconnectingState &&
         hardening.staleActionConflict?.reconnectAfterReject?.reconnectRecoveryEvent
-          ?.state === "recovered" &&
+          ?.state === staleActionReconnectExpectation.recoveryState &&
         hardening.staleActionConflict?.reconnectAfterReject?.reconnectRecoveryEvent
-          ?.attempt === 1 &&
+          ?.attempt === staleActionReconnectExpectation.reconnectAttempt &&
         hardening.staleActionConflict?.reconnectAfterReject
-          ?.recoveredSnapshotContainsPost === true &&
+          ?.recoveredSnapshotContainsPost ===
+          staleActionReconnectExpectation.recoveredSnapshotContainsPost &&
         hardening.staleActionConflict?.reconnectAfterReject?.recoveredCommandState
-          ?.actorSlot === "slot_4" &&
+          ?.actorSlot === staleActionReconnectExpectation.actorSlot &&
         hardening.staleActionConflict?.reconnectAfterReject?.recoveredCommandState
           ?.actorAlive === true &&
         hardening.staleActionConflict?.reconnectAfterReject?.recoveredCommandState
-          ?.phase?.phaseId === "D02" &&
+          ?.phase?.phaseId === staleActionReconnectExpectation.recoveredPhaseId &&
         hardening.staleActionConflict?.reconnectAfterReject?.recoveredCommandState
-          ?.phase?.locked === false &&
+          ?.phase?.locked === staleActionReconnectExpectation.recoveredLocked &&
         hardening.staleActionConflict?.reconnectAfterReject?.recoveredCommandState
-          ?.actions?.length === 0 &&
+          ?.actions?.length ===
+          staleActionReconnectExpectation.recoveredActionCount &&
         hardening.staleActionConflict?.buttonsAfterReconnect?.some(
-          (button) => button.action === "submit_action:factional_kill",
+          (button) =>
+            button.action === staleActionReconnectExpectation.commandAction,
         ) !== true,
-    }),
+      },
+    ),
     lane(
-      "private-channel-stale-action-reconnect-recovery",
+      privateChannelStaleActionReconnectLaneId,
       "Private channel stale action reconnect preserves scope",
       {
         roleUrl:
@@ -5361,75 +5382,66 @@ export function buildDevTestGameProofRun(session, options = {}) {
           typeof hardening.privateChannelStaleActionReconnectRecovery
             ?.sourceRoleUrl === "string" &&
           hardening.privateChannelStaleActionReconnectRecovery.sourceRoleUrl
-            .includes("/c/private%3Amafia_day_chat") &&
+            .includes(privateStaleActionReconnectExpectation.roleUrlFragment) &&
           staleActionRejectRecoveryMatches(
             hardening.privateChannelStaleActionReconnectRecovery,
             {
-              error: "PhaseLocked",
-              actorSlot: "slot_4",
-              templateId: "factional_kill",
-              commandAction: "submit_action:factional_kill",
-              messageFragments: [
-                "stale action state",
-                "current action controls",
-              ],
-              dispatchRefreshKeys: ["commandState", "dayVoteOutcomes"],
-              receiptRefreshKeys: ["commandState"],
-              stalePhaseId: "N01",
-              browserCommandState: {
-                actorSlot: "slot_4",
-                actorAlive: true,
-                actorStatus: "alive",
-                phaseId: "D02",
-                locked: false,
-                actionCount: 0,
-              },
-              apiCommandState: {
-                actorSlot: "slot_4",
-                actorAlive: true,
-                actorStatus: "alive",
-                phaseId: "D02",
-                locked: false,
-                actionCount: 0,
-              },
+              error: privateStaleActionReconnectExpectation.rejectError,
+              actorSlot: privateStaleActionReconnectExpectation.actorSlot,
+              templateId: privateStaleActionReconnectExpectation.templateId,
+              commandAction: privateStaleActionReconnectExpectation.commandAction,
+              messageFragments:
+                privateStaleActionReconnectExpectation.messageFragments,
+              dispatchRefreshKeys:
+                privateStaleActionReconnectExpectation.dispatchRefreshKeys,
+              receiptRefreshKeys:
+                privateStaleActionReconnectExpectation.receiptRefreshKeys,
+              stalePhaseId: privateStaleActionReconnectExpectation.stalePhaseId,
+              browserCommandState:
+                privateStaleActionReconnectExpectation.browserCommandState,
+              apiCommandState:
+                privateStaleActionReconnectExpectation.apiCommandState,
             },
           ) &&
           hardening.privateChannelStaleActionReconnectRecovery
             ?.channelContextBeforeClose?.channelId ===
-            "private:mafia_day_chat" &&
+            privateStaleActionReconnectExpectation.channelId &&
           hardening.privateChannelStaleActionReconnectRecovery
             ?.channelContextAfterReject?.channelId ===
-            "private:mafia_day_chat" &&
+            privateStaleActionReconnectExpectation.channelId &&
           hardening.privateChannelStaleActionReconnectRecovery
             ?.channelContextAfterReject?.actorSlot === "slot_4" &&
           hardening.privateChannelStaleActionReconnectRecovery
             ?.privateThreadPagerVisibleAfterReject === true &&
           hardening.privateChannelStaleActionReconnectRecovery
             ?.reconnectAfterReject?.reconnectCommand?.command?.SubmitPost
-            ?.channel_id === "private:mafia_day_chat" &&
+            ?.channel_id === privateStaleActionReconnectExpectation.channelId &&
           hardening.privateChannelStaleActionReconnectRecovery
             ?.reconnectAfterReject?.reconnectRecoveryEvent?.state ===
-            "recovered" &&
+            privateStaleActionReconnectExpectation.recoveryState &&
           hardening.privateChannelStaleActionReconnectRecovery
             ?.reconnectAfterReject?.reconnectRecoveryEvent?.attempt === 1 &&
           hardening.privateChannelStaleActionReconnectRecovery
             ?.reconnectAfterReject?.recoveredSnapshotContainsPost === true &&
           hardening.privateChannelStaleActionReconnectRecovery
             ?.reconnectAfterReject?.recoveredCommandState?.actorSlot ===
-            "slot_4" &&
+            privateStaleActionReconnectExpectation.actorSlot &&
           hardening.privateChannelStaleActionReconnectRecovery
             ?.reconnectAfterReject?.recoveredCommandState?.phase?.phaseId ===
-            "D02" &&
+            privateStaleActionReconnectExpectation.recoveredPhaseId &&
           hardening.privateChannelStaleActionReconnectRecovery
             ?.reconnectAfterReject?.recoveredCommandState?.actions?.length ===
-            0 &&
+            privateStaleActionReconnectExpectation.recoveredActionCount &&
           hardening.privateChannelStaleActionReconnectRecovery
-            ?.reconnectChannelContext?.channelId === "private:mafia_day_chat" &&
+            ?.reconnectChannelContext?.channelId ===
+            privateStaleActionReconnectExpectation.channelId &&
           hardening.privateChannelStaleActionReconnectRecovery
             ?.privateThreadPagerVisibleAfterReconnect === true &&
           hardening.privateChannelStaleActionReconnectRecovery
             ?.buttonsAfterReconnect?.some(
-              (button) => button.action === "submit_action:factional_kill",
+              (button) =>
+                button.action ===
+                privateStaleActionReconnectExpectation.commandAction,
             ) !== true,
       },
     ),

@@ -4,7 +4,11 @@ import {
   completedGameSeedRequiredScenarioIds,
 } from "../../../../tools/dev_test_game_core_loop_completed_scenarios.mjs";
 import {
+  privateChannelStaleActionReconnectExpectation,
+  privateChannelStaleActionReconnectLaneId,
   staleClientReconnectHighlightedLaneIds,
+  stalePlayerActionReconnectExpectation,
+  stalePlayerActionReconnectLaneId,
 } from "../../../../tools/dev_test_game_stale_client_reconnect_scenarios.mjs";
 import {
   CORE_LOOP_COMPLETED_GAME_HIGHLIGHTED_LANE_IDS,
@@ -235,6 +239,9 @@ test("core loop spine status formats compact live spine evidence", () => {
 });
 
 test("hardening lane status formats stale and concurrent conflict evidence", () => {
+  const staleReconnect = stalePlayerActionReconnectExpectation();
+  const privateReconnect = privateChannelStaleActionReconnectExpectation();
+
   assert.equal(
     hardeningLaneStatus({
       id: "stale-action-conflict-message",
@@ -261,27 +268,27 @@ test("hardening lane status formats stale and concurrent conflict evidence", () 
   );
   assert.equal(
     hardeningLaneStatus({
-      id: "stale-action-reconnect-recovery",
+      id: stalePlayerActionReconnectLaneId,
       status: "passed",
       evidence: {
         roleUrl: "http://127.0.0.1:5173/g/game-id",
-        reconnectingState: "reconnecting",
-        recoveryState: "recovered",
-        recoveredPhase: "D02",
+        reconnectingState: staleReconnect.reconnectingState,
+        recoveryState: staleReconnect.recoveryState,
+        recoveredPhase: staleReconnect.recoveredPhaseId,
       },
     }),
     "passed: role URL true, reconnecting -> recovered, phase D02",
   );
   assert.equal(
     hardeningLaneStatus({
-      id: "private-channel-stale-action-reconnect-recovery",
+      id: privateChannelStaleActionReconnectLaneId,
       status: "passed",
       evidence: {
         roleUrl: "http://127.0.0.1:5173/g/game-id/c/private%3Amafia_day_chat",
-        channelAfterReject: "private:mafia_day_chat",
-        reconnectChannel: "private:mafia_day_chat",
-        rejectError: "PhaseLocked",
-        recoveredPhase: "D02",
+        channelAfterReject: privateReconnect.channelId,
+        reconnectChannel: privateReconnect.channelId,
+        rejectError: privateReconnect.rejectError,
+        recoveredPhase: privateReconnect.recoveredPhaseId,
       },
     }),
     "passed: role URL true, channel private:mafia_day_chat, reject PhaseLocked, recovered private:mafia_day_chat D02",
@@ -411,6 +418,9 @@ test("hardening lane status formats stale and concurrent conflict evidence", () 
 });
 
 test("highlighted lane evidence maps keep browser proof assertions aligned", () => {
+  const staleReconnect = stalePlayerActionReconnectExpectation();
+  const privateReconnect = privateChannelStaleActionReconnectExpectation();
+
   const proofRun = {
     lanes: [
       {
@@ -431,25 +441,25 @@ test("highlighted lane evidence maps keep browser proof assertions aligned", () 
         },
       },
       {
-        id: "stale-action-reconnect-recovery",
+        id: stalePlayerActionReconnectLaneId,
         status: "passed",
         evidence: {
           roleUrl: "http://127.0.0.1:5173/g/game-id",
-          reconnectingState: "reconnecting",
-          recoveryState: "recovered",
-          recoveredPhase: "D02",
+          reconnectingState: staleReconnect.reconnectingState,
+          recoveryState: staleReconnect.recoveryState,
+          recoveredPhase: staleReconnect.recoveredPhaseId,
         },
       },
       {
-        id: "private-channel-stale-action-reconnect-recovery",
+        id: privateChannelStaleActionReconnectLaneId,
         status: "passed",
         evidence: {
           roleUrl:
             "http://127.0.0.1:5173/g/game-id/c/private%3Amafia_day_chat",
-          channelAfterReject: "private:mafia_day_chat",
-          reconnectChannel: "private:mafia_day_chat",
-          rejectError: "PhaseLocked",
-          recoveredPhase: "D02",
+          channelAfterReject: privateReconnect.channelId,
+          reconnectChannel: privateReconnect.channelId,
+          rejectError: privateReconnect.rejectError,
+          recoveredPhase: privateReconnect.recoveredPhaseId,
         },
       },
       {

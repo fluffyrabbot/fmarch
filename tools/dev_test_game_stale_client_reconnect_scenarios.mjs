@@ -6,6 +6,14 @@ import {
 } from "./dev_test_game_replacement_private_scenarios.mjs";
 
 const cloneScenarioCase = (scenario) => ({ ...scenario });
+const cloneExpectation = (expectation) => ({
+  ...expectation,
+  messageFragments: [...(expectation.messageFragments ?? [])],
+  dispatchRefreshKeys: [...(expectation.dispatchRefreshKeys ?? [])],
+  receiptRefreshKeys: [...(expectation.receiptRefreshKeys ?? [])],
+  browserCommandState: { ...(expectation.browserCommandState ?? {}) },
+  apiCommandState: { ...(expectation.apiCommandState ?? {}) },
+});
 
 export const playerLiveReconnectLaneId = "reconnect-recovery";
 export const replacementSessionReconnectLaneId =
@@ -27,6 +35,55 @@ export const hostStaleDeadlineReconnectLaneId =
   "stale-host-deadline-reconnect-recovery";
 export const cohostStaleDeadlineReconnectLaneId =
   "stale-cohost-deadline-reconnect-recovery";
+
+const sharedStaleActionReconnectExpectation = Object.freeze({
+  rejectError: "PhaseLocked",
+  actorSlot: "slot_4",
+  templateId: "factional_kill",
+  commandAction: "submit_action:factional_kill",
+  messageFragments: Object.freeze(["stale action state", "current action controls"]),
+  dispatchRefreshKeys: Object.freeze(["commandState", "dayVoteOutcomes"]),
+  receiptRefreshKeys: Object.freeze(["commandState"]),
+  stalePhaseId: "N01",
+  recoveredPhaseId: "D02",
+  recoveredLocked: false,
+  recoveredActionCount: 0,
+  reconnectingState: "reconnecting",
+  recoveryState: "recovered",
+  reconnectAttempt: 1,
+  recoveredSnapshotContainsPost: true,
+  browserCommandState: Object.freeze({
+    actorSlot: "slot_4",
+    actorAlive: true,
+    actorStatus: "alive",
+    phaseId: "D02",
+    locked: false,
+    actionCount: 0,
+  }),
+  apiCommandState: Object.freeze({
+    actorSlot: "slot_4",
+    actorAlive: true,
+    actorStatus: "alive",
+    phaseId: "D02",
+    locked: false,
+    actionCount: 0,
+  }),
+});
+
+export const stalePlayerActionReconnectExpectationDefinition = Object.freeze({
+  ...sharedStaleActionReconnectExpectation,
+  laneId: stalePlayerActionReconnectLaneId,
+  roleUrlFragment: "/g/",
+});
+
+export const privateChannelStaleActionReconnectExpectationDefinition =
+  Object.freeze({
+    ...sharedStaleActionReconnectExpectation,
+    laneId: privateChannelStaleActionReconnectLaneId,
+    roleUrlFragment: "/c/private%3Amafia_day_chat",
+    channelId: "private:mafia_day_chat",
+    privateThreadPagerVisible: true,
+  });
 
 export const staleClientReconnectCaseDefinitions = Object.freeze([
   Object.freeze({
@@ -114,6 +171,16 @@ export function staleClientReconnectCases() {
 
 export function staleClientReconnectLaneIds() {
   return staleClientReconnectCases().map((scenario) => scenario.laneId);
+}
+
+export function stalePlayerActionReconnectExpectation() {
+  return cloneExpectation(stalePlayerActionReconnectExpectationDefinition);
+}
+
+export function privateChannelStaleActionReconnectExpectation() {
+  return cloneExpectation(
+    privateChannelStaleActionReconnectExpectationDefinition,
+  );
 }
 
 export const staleClientReconnectHighlightedLaneIds = Object.freeze([

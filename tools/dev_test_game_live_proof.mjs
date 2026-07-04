@@ -15,6 +15,9 @@ import {
   replacementConcurrentActionRaceScenario,
   replacementConcurrentVoteRaceScenario,
 } from "./dev_test_game_replacement_private_scenario_cases.mjs";
+import {
+  privateChannelStaleActionReconnectExpectation,
+} from "./dev_test_game_stale_client_reconnect_scenarios.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const sessionPath = path.join(repoRoot, "target", "dev-test-game", "session.json");
@@ -27,6 +30,8 @@ const replacementIncomingActionCase = replacementIncomingActionScenario();
 const replacementActionReconnectCase = replacementActionReconnectScenario();
 const replacementStaleActionAfterResolveCase =
   replacementStaleActionAfterResolveScenario();
+const privateChannelReconnectExpectation =
+  privateChannelStaleActionReconnectExpectation();
 
 const devTestGameArgs = [
   "--name",
@@ -5206,36 +5211,36 @@ assert.equal(
 assert.equal(
   session.verification.multiplayerHardening
     .privateChannelStaleActionReconnectRecovery.channel,
-  "private:mafia_day_chat",
+  privateChannelReconnectExpectation.channelId,
 );
 assert.equal(
   session.verification.multiplayerHardening
     .privateChannelStaleActionReconnectRecovery.reject.error,
-  "PhaseLocked",
+  privateChannelReconnectExpectation.rejectError,
 );
 assert.equal(
   session.verification.multiplayerHardening
     .privateChannelStaleActionReconnectRecovery.channelContextAfterReject
     .channelId,
-  "private:mafia_day_chat",
+  privateChannelReconnectExpectation.channelId,
 );
 assert.equal(
   session.verification.multiplayerHardening
     .privateChannelStaleActionReconnectRecovery.reconnectAfterReject
     .reconnectCommand.command.SubmitPost.channel_id,
-  "private:mafia_day_chat",
+  privateChannelReconnectExpectation.channelId,
 );
 assert.equal(
   session.verification.multiplayerHardening
     .privateChannelStaleActionReconnectRecovery.reconnectChannelContext
     .channelId,
-  "private:mafia_day_chat",
+  privateChannelReconnectExpectation.channelId,
 );
 assert.equal(
   session.verification.multiplayerHardening
     .privateChannelStaleActionReconnectRecovery
     .privateThreadPagerVisibleAfterReconnect,
-  true,
+  privateChannelReconnectExpectation.privateThreadPagerVisible,
 );
 assert.equal(
   session.verification.multiplayerHardening.staleHostControl.status,

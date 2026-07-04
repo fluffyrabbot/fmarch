@@ -61,6 +61,7 @@ import {
   hostStaleDeadlineReconnectLaneId,
   hostStaleResolveReconnectLaneId,
   playerLiveReconnectLaneId,
+  privateChannelStaleActionReconnectExpectation,
   privateChannelStaleActionReconnectLaneId,
   replacementActionReconnectLaneId,
   replacementPrivatePostReconnectLaneId,
@@ -68,6 +69,7 @@ import {
   staleClientReconnectCases,
   staleClientReconnectCaseDefinitions,
   staleClientReconnectLaneIds,
+  stalePlayerActionReconnectExpectation,
   stalePlayerActionReconnectLaneId,
 } from "./dev_test_game_stale_client_reconnect_scenarios.mjs";
 import {
@@ -872,6 +874,41 @@ test("hardening lane cases share stale-client reconnect scenarios", async () => 
     ],
   );
   assert.deepEqual(staleClientReconnectLaneIds(), hostedMatrixReconnectLaneIds);
+  assert.deepEqual(
+    {
+      laneId: stalePlayerActionReconnectExpectation().laneId,
+      rejectError: stalePlayerActionReconnectExpectation().rejectError,
+      commandAction: stalePlayerActionReconnectExpectation().commandAction,
+      recoveredPhaseId:
+        stalePlayerActionReconnectExpectation().recoveredPhaseId,
+      recoveredActionCount:
+        stalePlayerActionReconnectExpectation().recoveredActionCount,
+    },
+    {
+      laneId: stalePlayerActionReconnectLaneId,
+      rejectError: "PhaseLocked",
+      commandAction: "submit_action:factional_kill",
+      recoveredPhaseId: "D02",
+      recoveredActionCount: 0,
+    },
+  );
+  assert.deepEqual(
+    {
+      laneId: privateChannelStaleActionReconnectExpectation().laneId,
+      channelId: privateChannelStaleActionReconnectExpectation().channelId,
+      roleUrlFragment:
+        privateChannelStaleActionReconnectExpectation().roleUrlFragment,
+      privateThreadPagerVisible:
+        privateChannelStaleActionReconnectExpectation()
+          .privateThreadPagerVisible,
+    },
+    {
+      laneId: privateChannelStaleActionReconnectLaneId,
+      channelId: "private:mafia_day_chat",
+      roleUrlFragment: "/c/private%3Amafia_day_chat",
+      privateThreadPagerVisible: true,
+    },
+  );
 
   for (const callerPath of [
     "tools/dev_test_game_hosted_concurrent_race_matrix_cases.mjs",
