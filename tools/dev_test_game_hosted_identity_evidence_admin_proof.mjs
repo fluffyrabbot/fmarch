@@ -6,6 +6,9 @@ import {
 import {
   hostedIdentityEvidencePlaceholderFixturePath,
   hostedIdentityEvidenceInputIds,
+  hostedIdentityEvidenceInputSectionStatuses,
+  hostedIdentityEvidenceSectionInputRows,
+  hostedIdentityEvidenceSectionInputStatuses,
 } from "./dev_test_game_hosted_identity_evidence_cases.mjs";
 import {
   artifactDir,
@@ -86,7 +89,12 @@ await runAdminAuditProof({
     proofRun: assertDevTestGameProofRun(await readJson(proofRunPath)),
   }),
   prove: async ({ browser, frontendBaseUrl, source }) =>
-    await proveAdminAuditDetail({
+    {
+      const hostedHandoffInputSections =
+        source.hostedIdentityEvidence.hostedHandoffChecklist.inputSections ?? [];
+      const hostedHandoffSectionInputRows =
+        hostedIdentityEvidenceSectionInputRows(hostedHandoffInputSections);
+      return await proveAdminAuditDetail({
       browser,
       frontendBaseUrl,
       game: source.proofRun.session.game,
@@ -116,6 +124,16 @@ await runAdminAuditProof({
           (group) => [group.id, group.status],
         ),
       ),
+      requiredHostedHandoffInputSections: hostedHandoffInputSections.map(
+        (section) => section.id,
+      ),
+      requiredHostedHandoffInputSectionStatuses:
+        hostedIdentityEvidenceInputSectionStatuses(hostedHandoffInputSections),
+      requiredHostedHandoffSectionInputs: hostedHandoffSectionInputRows.map(
+        (row) => row.id,
+      ),
+      requiredHostedHandoffSectionInputStatuses:
+        hostedIdentityEvidenceSectionInputStatuses(hostedHandoffInputSections),
       requiredHostedIdentityPacketSections:
         hostedIdentityPacketSectionRows(source.hostedIdentityEvidence).map(
           (section) => section.id,
@@ -152,7 +170,8 @@ await runAdminAuditProof({
           (mismatch) => mismatch.id,
         ),
       requiredRelatedLinks,
-    }),
+      });
+    },
   buildEvidence: ({ source, adminRoleSurface }) => ({
     version: 1,
     proof: "dev-test-game-hosted-identity-evidence-admin-proof",
@@ -194,6 +213,21 @@ await runAdminAuditProof({
           (group) => [group.id, group.status],
         ),
       ),
+      hostedHandoffInputSectionIds:
+        source.hostedIdentityEvidence.hostedHandoffChecklist.inputSections.map(
+          (section) => section.id,
+        ),
+      hostedHandoffInputSectionStatuses:
+        hostedIdentityEvidenceInputSectionStatuses(
+          source.hostedIdentityEvidence.hostedHandoffChecklist.inputSections,
+        ),
+      hostedHandoffSectionInputIds: hostedIdentityEvidenceSectionInputRows(
+        source.hostedIdentityEvidence.hostedHandoffChecklist.inputSections,
+      ).map((row) => row.id),
+      hostedHandoffSectionInputStatuses:
+        hostedIdentityEvidenceSectionInputStatuses(
+          source.hostedIdentityEvidence.hostedHandoffChecklist.inputSections,
+        ),
       hostedIdentityPacketSectionIds:
         hostedIdentityPacketSectionRows(source.hostedIdentityEvidence).map(
           (section) => section.id,
@@ -309,6 +343,55 @@ export function assertHostedIdentityEvidenceAdminProof(evidence) {
     ) {
       throw new Error(
         `hosted identity evidence admin proof missing handoff group status: ${groupId}`,
+      );
+    }
+  }
+  for (const sectionId of evidence.generatedFrom?.hostedHandoffInputSectionIds ??
+    []) {
+    if (
+      !evidence.adminRoleSurface?.visibleHostedHandoffInputSections?.includes(
+        sectionId,
+      )
+    ) {
+      throw new Error(
+        `hosted identity evidence admin proof missing handoff input section: ${sectionId}`,
+      );
+    }
+  }
+  for (const [sectionId, expectedStatus] of Object.entries(
+    evidence.generatedFrom?.hostedHandoffInputSectionStatuses ?? {},
+  )) {
+    const visibleText =
+      evidence.adminRoleSurface?.visibleHostedHandoffInputSectionStatuses?.[
+        sectionId
+      ] ?? "";
+    if (!visibleText.includes(expectedStatus)) {
+      throw new Error(
+        `hosted identity evidence admin proof missing handoff input section status: ${sectionId}`,
+      );
+    }
+  }
+  for (const rowId of evidence.generatedFrom?.hostedHandoffSectionInputIds ?? []) {
+    if (
+      !evidence.adminRoleSurface?.visibleHostedHandoffSectionInputs?.includes(
+        rowId,
+      )
+    ) {
+      throw new Error(
+        `hosted identity evidence admin proof missing handoff section input: ${rowId}`,
+      );
+    }
+  }
+  for (const [rowId, expectedStatus] of Object.entries(
+    evidence.generatedFrom?.hostedHandoffSectionInputStatuses ?? {},
+  )) {
+    const visibleText =
+      evidence.adminRoleSurface?.visibleHostedHandoffSectionInputStatuses?.[
+        rowId
+      ] ?? "";
+    if (!visibleText.includes(expectedStatus)) {
+      throw new Error(
+        `hosted identity evidence admin proof missing handoff section input status: ${rowId}`,
       );
     }
   }

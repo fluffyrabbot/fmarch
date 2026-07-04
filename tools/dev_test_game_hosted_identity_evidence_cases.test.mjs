@@ -7,11 +7,15 @@ import {
   hostedIdentityEvidenceBlockedChecks,
   hostedIdentityEvidenceHandoffCase,
   hostedIdentityEvidenceInputIds,
+  hostedIdentityEvidenceInputSectionIds,
+  hostedIdentityEvidenceInputSectionStatuses,
   hostedIdentityExpectedRoleSurfaceContract,
   hostedIdentityEvidencePlaceholderFixturePath,
   hostedIdentityEvidencePlaceholderSchema,
   hostedIdentityEvidenceRedactedPassFixturePath,
   hostedIdentityEvidenceRequirementGroups,
+  hostedIdentityEvidenceSectionInputRows,
+  hostedIdentityEvidenceSectionInputStatuses,
   hostedIdentityRoleSurfaceContractDiff,
   requiredHostedIdentityEvidenceForCheck,
 } from "./dev_test_game_hosted_identity_evidence_cases.mjs";
@@ -30,6 +34,73 @@ test("hosted identity evidence cases share handoff inputs and blocked groups", (
     hostedIdentityEvidencePlaceholderFixturePath,
   );
   assert.deepEqual(handoff.inputIds, hostedIdentityEvidenceInputIds);
+  assert.deepEqual(
+    handoff.inputSections.map((section) => section.id),
+    hostedIdentityEvidenceInputSectionIds,
+  );
+  assert.deepEqual(hostedIdentityEvidenceInputSectionStatuses(handoff.inputSections), {
+    "proof-command": "provided",
+    "evidence-file": "missing",
+    "role-surface-contracts": "missing",
+    "identity-operations": "missing",
+  });
+  assert.deepEqual(hostedIdentityEvidenceSectionInputRows(handoff.inputSections), [
+    { id: "proof-command-command", status: "provided" },
+    { id: "proof-command-proof-target", status: "provided" },
+    {
+      id: "evidence-file-FMARCH_HOSTED_IDENTITY_EVIDENCE_PATH",
+      status: "missing",
+    },
+    {
+      id: "role-surface-contracts-redacted-role-surface-contract-packet",
+      status: "missing",
+    },
+    {
+      id: "role-surface-contracts-redacted-identity-adapter-contract-packet",
+      status: "missing",
+    },
+    {
+      id: "identity-operations-redacted-account-lifecycle-packet",
+      status: "missing",
+    },
+    {
+      id: "identity-operations-redacted-invite-delivery-packet",
+      status: "missing",
+    },
+    {
+      id: "identity-operations-redacted-account-recovery-packet",
+      status: "missing",
+    },
+    {
+      id: "identity-operations-redacted-abuse-rate-limit-packet",
+      status: "missing",
+    },
+    {
+      id: "identity-operations-redacted-session-secret-packet",
+      status: "missing",
+    },
+    {
+      id: "identity-operations-redacted-audit-retention-packet",
+      status: "missing",
+    },
+  ]);
+  assert.deepEqual(
+    hostedIdentityEvidenceSectionInputStatuses(handoff.inputSections),
+    {
+      "proof-command-command": "provided",
+      "proof-command-proof-target": "provided",
+      "evidence-file-FMARCH_HOSTED_IDENTITY_EVIDENCE_PATH": "missing",
+      "role-surface-contracts-redacted-role-surface-contract-packet": "missing",
+      "role-surface-contracts-redacted-identity-adapter-contract-packet":
+        "missing",
+      "identity-operations-redacted-account-lifecycle-packet": "missing",
+      "identity-operations-redacted-invite-delivery-packet": "missing",
+      "identity-operations-redacted-account-recovery-packet": "missing",
+      "identity-operations-redacted-abuse-rate-limit-packet": "missing",
+      "identity-operations-redacted-session-secret-packet": "missing",
+      "identity-operations-redacted-audit-retention-packet": "missing",
+    },
+  );
   assert.deepEqual(
     handoff.blockedCheckIds,
     hostedIdentityEvidenceBlockedChecks.map((check) => check.id),

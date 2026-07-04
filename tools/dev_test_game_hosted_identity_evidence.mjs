@@ -15,12 +15,17 @@ export {
   hostedIdentityEvidenceCheckIds,
   hostedIdentityEvidenceHandoffCase,
   hostedIdentityEvidenceInputIds,
+  hostedIdentityEvidenceInputSectionDefinitions,
+  hostedIdentityEvidenceInputSectionIds,
+  hostedIdentityEvidenceInputSectionStatuses,
   hostedIdentityEvidencePacketSectionDefinitions,
   hostedIdentityEvidencePlaceholderFixturePath,
   hostedIdentityEvidencePlaceholderSchema,
   hostedIdentityEvidenceRedactedPassFixturePath,
   hostedIdentityEvidenceRequirementGroupDefinitions,
   hostedIdentityEvidenceRequirementGroups,
+  hostedIdentityEvidenceSectionInputRows,
+  hostedIdentityEvidenceSectionInputStatuses,
   hostedIdentityExpectedRoleSurfaceContract,
   hostedIdentityRoleSurfaceContractDiff,
   requiredHostedIdentityEvidenceForCheck,
@@ -30,6 +35,7 @@ import {
   devTestGameHostedIdentityEvidencePath,
   hostedIdentityEvidenceCheckIds,
   hostedIdentityEvidenceHandoffCase,
+  hostedIdentityEvidenceInputSectionDefinitions,
   hostedIdentityEvidencePacketSectionDefinitions,
   hostedIdentityEvidencePlaceholderFixturePath,
   hostedIdentityEvidencePlaceholderSchema,
@@ -221,6 +227,28 @@ export function assertDevTestGameHostedIdentityEvidence(evidence) {
       devTestGameHostedIdentityEvidencePath
   ) {
     throw new Error("hosted identity evidence handoff checklist drifted");
+  }
+  const inputSections = evidence.hostedHandoffChecklist?.inputSections;
+  if (!Array.isArray(inputSections)) {
+    throw new Error("hosted identity evidence missing handoff input sections");
+  }
+  const inputSectionsById = new Map(
+    inputSections.map((section) => [section.id, section]),
+  );
+  for (const definition of hostedIdentityEvidenceInputSectionDefinitions) {
+    const section = inputSectionsById.get(definition.id);
+    if (
+      section === undefined ||
+      section.label !== definition.label ||
+      !["provided", "missing"].includes(section.status) ||
+      !sameStringArray(section.requiredInputIds, definition.requiredInputIds) ||
+      !Array.isArray(section.providedInputIds) ||
+      !Array.isArray(section.missingInputs)
+    ) {
+      throw new Error(
+        `hosted identity evidence handoff input section drifted: ${definition.id}`,
+      );
+    }
   }
   assertHostedIdentityRedactedIntakePacketSummary(evidence);
   assertHostedIdentityRoleSurfaceContractDiff(evidence);

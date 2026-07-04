@@ -3439,6 +3439,26 @@ export function validateDevTestGameHostedEvidenceLaneAdminProof(proof, options =
       );
     }
   }
+  for (const sectionId of proof.generatedFrom?.hostedHandoffInputSectionIds ?? []) {
+    if (
+      !proof.adminRoleSurface?.visibleHostedHandoffInputSections?.includes(
+        sectionId,
+      )
+    ) {
+      throw new Error(
+        `hosted identity evidence admin proof missing handoff input section: ${sectionId}`,
+      );
+    }
+  }
+  for (const rowId of proof.generatedFrom?.hostedHandoffSectionInputIds ?? []) {
+    if (
+      !proof.adminRoleSurface?.visibleHostedHandoffSectionInputs?.includes(rowId)
+    ) {
+      throw new Error(
+        `hosted identity evidence admin proof missing handoff section input: ${rowId}`,
+      );
+    }
+  }
   return {
     status: "passed",
     path:
@@ -3542,6 +3562,10 @@ export function validateDevTestGameHostedIdentityEvidenceAdminProof(
       proof.adminRoleSurface.visibleHostedHandoffBlockedChecks ?? [],
     visibleHostedHandoffGroups:
       proof.adminRoleSurface.visibleHostedHandoffGroups ?? [],
+    visibleHostedHandoffInputSections:
+      proof.adminRoleSurface.visibleHostedHandoffInputSections ?? [],
+    visibleHostedHandoffSectionInputs:
+      proof.adminRoleSurface.visibleHostedHandoffSectionInputs ?? [],
     evidenceStatus: String(proof.generatedFrom?.status ?? "unknown"),
     rawEvidencePath: String(proof.generatedFrom?.rawEvidencePath ?? ""),
     rawEvidencePathKind: hostedIdentityEvidencePathKind(
@@ -4675,6 +4699,28 @@ export function validateDevTestGameNextActionAdminProof(proof, options = {}) {
         );
       }
     }
+    for (const section of hostedHandoffInputSections(checklist)) {
+      if (
+        !proof.adminRoleSurface?.visibleHostedHandoffInputSections?.includes(
+          section.id,
+        )
+      ) {
+        throw new Error(
+          `next-action admin proof missing hosted handoff input section: ${section.id}`,
+        );
+      }
+    }
+    for (const row of hostedHandoffSectionInputRows(checklist)) {
+      if (
+        !proof.adminRoleSurface?.visibleHostedHandoffSectionInputs?.includes(
+          row.id,
+        )
+      ) {
+        throw new Error(
+          `next-action admin proof missing hosted handoff section input: ${row.id}`,
+        );
+      }
+    }
     const summary = proof.adminRoleSurface?.visibleHostedHandoffSummary;
     if (
       summary?.status !== checklist.status ||
@@ -4705,6 +4751,10 @@ export function validateDevTestGameNextActionAdminProof(proof, options = {}) {
       proof.adminRoleSurface.visibleHostedHandoffBlockedChecks ?? [],
     visibleHostedHandoffGroups:
       proof.adminRoleSurface.visibleHostedHandoffGroups ?? [],
+    visibleHostedHandoffInputSections:
+      proof.adminRoleSurface.visibleHostedHandoffInputSections ?? [],
+    visibleHostedHandoffSectionInputs:
+      proof.adminRoleSurface.visibleHostedHandoffSectionInputs ?? [],
     visibleHostedHandoffSummary:
       proof.adminRoleSurface.visibleHostedHandoffSummary ?? null,
     command: String(proof.generatedFrom?.command ?? ""),
@@ -4723,6 +4773,31 @@ export function validateDevTestGameNextActionAdminProof(proof, options = {}) {
 function hostedHandoffGroupIds(checklist) {
   const groups = checklist?.requirementGroups;
   return Array.isArray(groups) ? groups.map((group) => String(group.id)) : [];
+}
+
+function hostedHandoffInputSections(checklist) {
+  return Array.isArray(checklist?.inputSections)
+    ? checklist.inputSections.map((section) => ({
+        id: String(section.id),
+        requiredInputIds: Array.isArray(section.requiredInputIds)
+          ? section.requiredInputIds.map((inputId) => String(inputId))
+          : [],
+        providedInputIds: Array.isArray(section.providedInputIds)
+          ? section.providedInputIds.map((inputId) => String(inputId))
+          : [],
+      }))
+    : [];
+}
+
+function hostedHandoffSectionInputRows(checklist) {
+  return hostedHandoffInputSections(checklist).flatMap((section) =>
+    section.requiredInputIds.map((inputId) => ({
+      id: `${section.id}-${inputId}`,
+      status: section.providedInputIds.includes(inputId)
+        ? "provided"
+        : "missing",
+    })),
+  );
 }
 
 function hostedHandoffInputValues(checklist) {

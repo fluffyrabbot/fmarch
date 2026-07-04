@@ -830,6 +830,9 @@ function normalizeHostedIdentityEvidenceHandoffChecklist({
     groups: normalizeHostedHandoffGroups(
       hostedIdentityEvidence.hostedHandoffChecklist?.requirementGroups,
     ),
+    inputSections: normalizeHostedHandoffInputSections(
+      hostedIdentityEvidence.hostedHandoffChecklist?.inputSections,
+    ),
   });
 }
 

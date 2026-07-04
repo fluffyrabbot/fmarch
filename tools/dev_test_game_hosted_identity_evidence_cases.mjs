@@ -130,6 +130,58 @@ export const hostedIdentityEvidenceInputIds = Object.freeze([
   "redacted-audit-retention-packet",
 ]);
 
+export const hostedIdentityEvidenceInputSectionDefinitions = Object.freeze([
+  Object.freeze({
+    id: "proof-command",
+    label: "Proof command",
+    requiredInputIds: Object.freeze(["command", "proof-target"]),
+  }),
+  Object.freeze({
+    id: "evidence-file",
+    label: "Evidence file",
+    requiredInputIds: Object.freeze(["FMARCH_HOSTED_IDENTITY_EVIDENCE_PATH"]),
+  }),
+  Object.freeze({
+    id: "role-surface-contracts",
+    label: "Role-surface contracts",
+    requiredInputIds: Object.freeze([
+      "redacted-role-surface-contract-packet",
+      "redacted-identity-adapter-contract-packet",
+    ]),
+  }),
+  Object.freeze({
+    id: "identity-operations",
+    label: "Identity operations",
+    requiredInputIds: Object.freeze([
+      "redacted-account-lifecycle-packet",
+      "redacted-invite-delivery-packet",
+      "redacted-account-recovery-packet",
+      "redacted-abuse-rate-limit-packet",
+      "redacted-session-secret-packet",
+      "redacted-audit-retention-packet",
+    ]),
+  }),
+]);
+
+export const hostedIdentityEvidenceInputSectionIds = Object.freeze(
+  hostedIdentityEvidenceInputSectionDefinitions.map((section) => section.id),
+);
+
+const hostedIdentityInputCheckIds = Object.freeze({
+  FMARCH_HOSTED_IDENTITY_EVIDENCE_PATH:
+    "hosted-identity-evidence-path-configured",
+  "redacted-role-surface-contract-packet": "role-surface-adapter-preserved",
+  "redacted-identity-adapter-contract-packet":
+    "identity-adapter-contract-compatible",
+  "redacted-account-lifecycle-packet": "hosted-account-lifecycle-evidence",
+  "redacted-invite-delivery-packet": "invite-delivery-evidence",
+  "redacted-account-recovery-packet": "account-recovery-evidence",
+  "redacted-abuse-rate-limit-packet": "abuse-and-rate-limit-evidence",
+  "redacted-session-secret-packet": "session-secret-policy-evidence",
+  "redacted-audit-retention-packet":
+    "hosted-audit-retention-export-evidence",
+});
+
 export const hostedIdentityEvidencePacketSectionDefinitions = Object.freeze([
   Object.freeze({
     field: "accountLifecycle",
@@ -330,6 +382,7 @@ export function hostedIdentityEvidenceHandoffCase({
   preflightStatus = status,
   blockedChecks = hostedIdentityEvidenceBlockedCheckRows(),
   requirementGroups = hostedIdentityEvidenceRequirementGroups(blockedChecks),
+  inputSections = hostedIdentityEvidenceInputSections({ checks: blockedChecks }),
 } = {}) {
   return {
     status,
@@ -345,7 +398,66 @@ export function hostedIdentityEvidenceHandoffCase({
       requiredEvidence: String(check.requiredEvidence ?? ""),
     })),
     requirementGroups,
+    inputSections,
   };
+}
+
+export function hostedIdentityEvidenceInputSections({ checks = [] } = {}) {
+  const checksById = new Map((checks ?? []).map((check) => [check.id, check]));
+  return hostedIdentityEvidenceInputSectionDefinitions.map((section) => {
+    const requiredInputIds = [...section.requiredInputIds];
+    const providedInputIds = requiredInputIds.filter((inputId) => {
+      if (inputId === "command" || inputId === "proof-target") {
+        return true;
+      }
+      const checkId = hostedIdentityInputCheckIds[inputId];
+      return checkId !== undefined && checksById.get(checkId)?.status === "passed";
+    });
+    const missingInputs = requiredInputIds.filter(
+      (inputId) => !providedInputIds.includes(inputId),
+    );
+    return {
+      id: section.id,
+      label: section.label,
+      status: missingInputs.length === 0 ? "provided" : "missing",
+      requiredInputIds,
+      providedInputIds,
+      missingInputs,
+    };
+  });
+}
+
+export function hostedIdentityEvidenceInputSectionStatuses(sections) {
+  return Object.fromEntries(
+    (Array.isArray(sections) ? sections : []).map((section) => [
+      String(section.id),
+      String(section.status ?? ""),
+    ]),
+  );
+}
+
+export function hostedIdentityEvidenceSectionInputRows(sections) {
+  return (Array.isArray(sections) ? sections : []).flatMap((section) =>
+    (Array.isArray(section.requiredInputIds)
+      ? section.requiredInputIds
+      : []
+    ).map((inputId) => ({
+      id: `${section.id}-${inputId}`,
+      status: Array.isArray(section.providedInputIds) &&
+        section.providedInputIds.includes(inputId)
+        ? "provided"
+        : "missing",
+    })),
+  );
+}
+
+export function hostedIdentityEvidenceSectionInputStatuses(sections) {
+  return Object.fromEntries(
+    hostedIdentityEvidenceSectionInputRows(sections).map((row) => [
+      row.id,
+      row.status,
+    ]),
+  );
 }
 
 export function hostedIdentityEvidenceRequirementGroups(checks) {

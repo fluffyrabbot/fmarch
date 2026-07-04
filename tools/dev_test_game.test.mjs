@@ -198,11 +198,14 @@ import {
   hostedIdentityEvidenceBlockedChecks,
   hostedIdentityEvidenceHandoffCase,
   hostedIdentityEvidenceInputIds,
+  hostedIdentityEvidenceInputSectionStatuses,
   hostedIdentityEvidencePacketSectionDefinitions,
   hostedIdentityExpectedRoleSurfaceContract,
   hostedIdentityEvidencePlaceholderFixturePath,
   hostedIdentityEvidencePlaceholderSchema,
   hostedIdentityEvidenceRedactedPassFixturePath,
+  hostedIdentityEvidenceSectionInputRows,
+  hostedIdentityEvidenceSectionInputStatuses,
   validateHostedIdentityEvidencePlaceholder,
 } from "./dev_test_game_hosted_identity_evidence.mjs";
 import { devTestGameLiveSpinePlan } from "./dev_test_game_live_spine.mjs";
@@ -14796,6 +14799,9 @@ function nextActionAdminProofFixture() {
     command: "npm run test:dev-test-game-hosted-concurrent-race-matrix",
     proofTarget: "target/dev-test-game/hosted-concurrent-race-matrix.json",
   });
+  const handoffSectionInputRows = hostedEvidenceHandoffSectionInputRows(
+    hostedHandoffChecklist.inputSections,
+  );
   const invalidActionRecoveryUnproven =
     invalidActionRecoveryHostedConcurrentRaceMatrixUnprovenFixture({
       proofTarget: devTestGameHostedConcurrentRaceMatrixPath,
@@ -14917,6 +14923,20 @@ function nextActionAdminProofFixture() {
       ],
       visibleHostedHandoffInputs: hostedHandoffChecklist.inputIds,
       visibleHostedHandoffBlockedChecks: hostedHandoffChecklist.blockedCheckIds,
+      visibleHostedHandoffInputSections: hostedHandoffChecklist.inputSections.map(
+        (section) => section.id,
+      ),
+      visibleHostedHandoffInputSectionStatuses:
+        hostedEvidenceHandoffInputSectionStatuses(
+          hostedHandoffChecklist.inputSections,
+        ),
+      visibleHostedHandoffSectionInputs: handoffSectionInputRows.map(
+        (row) => row.id,
+      ),
+      visibleHostedHandoffSectionInputStatuses:
+        hostedEvidenceHandoffSectionInputStatuses(
+          hostedHandoffChecklist.inputSections,
+        ),
       visibleHostedHandoffSummary: {
         status: hostedHandoffChecklist.status,
         preflightStatus: hostedHandoffChecklist.preflightStatus,
@@ -15362,6 +15382,9 @@ function hostedTargetPreflightAdminProofFixture() {
 function hostedIdentityEvidenceAdminProofFixture() {
   const handoff = hostedIdentityEvidenceHandoffCase();
   const handoffGroupIds = handoff.requirementGroups.map((group) => group.id);
+  const handoffSectionInputRows = hostedIdentityEvidenceSectionInputRows(
+    handoff.inputSections,
+  );
   const packetInputRows = hostedIdentityPacketInputRowsFixture();
   return {
     version: 1,
@@ -15392,6 +15415,14 @@ function hostedIdentityEvidenceAdminProofFixture() {
       hostedHandoffGroupStatuses: Object.fromEntries(
         handoff.requirementGroups.map((group) => [group.id, group.status]),
       ),
+      hostedHandoffInputSectionIds: handoff.inputSections.map(
+        (section) => section.id,
+      ),
+      hostedHandoffInputSectionStatuses:
+        hostedIdentityEvidenceInputSectionStatuses(handoff.inputSections),
+      hostedHandoffSectionInputIds: handoffSectionInputRows.map((row) => row.id),
+      hostedHandoffSectionInputStatuses:
+        hostedIdentityEvidenceSectionInputStatuses(handoff.inputSections),
       hostedIdentityPacketSectionIds: hostedIdentityEvidencePacketSectionDefinitions.map(
         (section) => section.field,
       ),
@@ -15428,6 +15459,21 @@ function hostedIdentityEvidenceAdminProofFixture() {
           group.id,
           `${group.label} ${group.status}`,
         ]),
+      ),
+      visibleHostedHandoffInputSections: handoff.inputSections.map(
+        (section) => section.id,
+      ),
+      visibleHostedHandoffInputSectionStatuses: Object.fromEntries(
+        handoff.inputSections.map((section) => [
+          section.id,
+          `${section.label} ${section.status}`,
+        ]),
+      ),
+      visibleHostedHandoffSectionInputs: handoffSectionInputRows.map(
+        (row) => row.id,
+      ),
+      visibleHostedHandoffSectionInputStatuses: Object.fromEntries(
+        handoffSectionInputRows.map((row) => [row.id, `${row.id} ${row.status}`]),
       ),
       visibleHostedIdentityPacketSections:
         hostedIdentityEvidencePacketSectionDefinitions.map((section) => section.field),

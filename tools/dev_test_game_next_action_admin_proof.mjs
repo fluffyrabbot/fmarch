@@ -93,6 +93,14 @@ await runAdminAuditProof({
         requiredHostedHandoffGroupIdsForNextAction(source.nextAction),
       requiredHostedHandoffSummary:
         requiredHostedHandoffSummaryForNextAction(source.nextAction),
+      requiredHostedHandoffInputSections:
+        requiredHostedHandoffInputSectionIdsForNextAction(source.nextAction),
+      requiredHostedHandoffInputSectionStatuses:
+        requiredHostedHandoffInputSectionStatusesForNextAction(source.nextAction),
+      requiredHostedHandoffSectionInputs:
+        requiredHostedHandoffSectionInputIdsForNextAction(source.nextAction),
+      requiredHostedHandoffSectionInputStatuses:
+        requiredHostedHandoffSectionInputStatusesForNextAction(source.nextAction),
       requiredRelatedDestinations: requiredRelatedDestinationsForHandoffs(
         relatedHandoffsForNextAction({
           nextAction: source.nextAction,
@@ -647,6 +655,28 @@ export function assertNextActionAdminProof(evidence) {
         );
       }
     }
+    for (const section of hostedHandoffInputSections(checklist)) {
+      if (
+        !evidence.adminRoleSurface?.visibleHostedHandoffInputSections?.includes(
+          section.id,
+        )
+      ) {
+        throw new Error(
+          `next-action admin proof missing hosted handoff input section: ${section.id}`,
+        );
+      }
+    }
+    for (const row of hostedHandoffSectionInputRows(checklist)) {
+      if (
+        !evidence.adminRoleSurface?.visibleHostedHandoffSectionInputs?.includes(
+          row.id,
+        )
+      ) {
+        throw new Error(
+          `next-action admin proof missing hosted handoff section input: ${row.id}`,
+        );
+      }
+    }
     const summary = evidence.adminRoleSurface?.visibleHostedHandoffSummary;
     if (
       summary?.status !== checklist.status ||
@@ -813,6 +843,60 @@ function requiredHostedHandoffGroupIdsForNextAction(nextAction) {
 function hostedHandoffGroupIds(checklist) {
   const groups = checklist?.requirementGroups;
   return Array.isArray(groups) ? groups.map((group) => String(group.id)) : [];
+}
+
+function requiredHostedHandoffInputSectionIdsForNextAction(nextAction) {
+  return hostedHandoffInputSections(
+    nextAction.nextAction.unproven?.hostedHandoffChecklist,
+  ).map((section) => section.id);
+}
+
+function requiredHostedHandoffInputSectionStatusesForNextAction(nextAction) {
+  return Object.fromEntries(
+    hostedHandoffInputSections(
+      nextAction.nextAction.unproven?.hostedHandoffChecklist,
+    ).map((section) => [section.id, section.status]),
+  );
+}
+
+function requiredHostedHandoffSectionInputIdsForNextAction(nextAction) {
+  return hostedHandoffSectionInputRows(
+    nextAction.nextAction.unproven?.hostedHandoffChecklist,
+  ).map((row) => row.id);
+}
+
+function requiredHostedHandoffSectionInputStatusesForNextAction(nextAction) {
+  return Object.fromEntries(
+    hostedHandoffSectionInputRows(
+      nextAction.nextAction.unproven?.hostedHandoffChecklist,
+    ).map((row) => [row.id, row.status]),
+  );
+}
+
+function hostedHandoffInputSections(checklist) {
+  return Array.isArray(checklist?.inputSections)
+    ? checklist.inputSections.map((section) => ({
+        id: String(section.id),
+        status: String(section.status ?? ""),
+        requiredInputIds: Array.isArray(section.requiredInputIds)
+          ? section.requiredInputIds.map((inputId) => String(inputId))
+          : [],
+        providedInputIds: Array.isArray(section.providedInputIds)
+          ? section.providedInputIds.map((inputId) => String(inputId))
+          : [],
+      }))
+    : [];
+}
+
+function hostedHandoffSectionInputRows(checklist) {
+  return hostedHandoffInputSections(checklist).flatMap((section) =>
+    section.requiredInputIds.map((inputId) => ({
+      id: `${section.id}-${inputId}`,
+      status: section.providedInputIds.includes(inputId)
+        ? "provided"
+        : "missing",
+    })),
+  );
 }
 
 function requiredHostedHandoffSummaryForNextAction(nextAction) {

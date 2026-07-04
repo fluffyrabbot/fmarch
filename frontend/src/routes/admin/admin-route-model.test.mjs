@@ -73,7 +73,9 @@ import {
 } from "../../../../tools/dev_test_game_real_hosted_observability_handoff_cases.mjs";
 import {
   hostedIdentityEvidenceBlockedChecks,
+  hostedIdentityEvidenceHandoffCase,
   hostedIdentityEvidenceInputIds,
+  hostedIdentityEvidenceInputSectionIds,
   hostedIdentityExpectedRoleSurfaceContract,
   hostedIdentityEvidencePacketSectionDefinitions,
   hostedIdentityEvidencePlaceholderFixturePath,
@@ -949,6 +951,69 @@ test("admin route data exposes hosted identity evidence as a native audit row", 
         status: "blocked",
       })),
     ).map((group) => [group.id, "blocked", group.checkIds]),
+  );
+  assert.deepEqual(
+    identity.hostedHandoffChecklist.inputSections.map((section) => [
+      section.id,
+      section.status,
+      section.requiredInputIds,
+      section.providedInputIds,
+      section.missingInputs,
+    ]),
+    [
+      [
+        "proof-command",
+        "provided",
+        ["command", "proof-target"],
+        ["command", "proof-target"],
+        [],
+      ],
+      [
+        "evidence-file",
+        "missing",
+        ["FMARCH_HOSTED_IDENTITY_EVIDENCE_PATH"],
+        [],
+        ["FMARCH_HOSTED_IDENTITY_EVIDENCE_PATH"],
+      ],
+      [
+        "role-surface-contracts",
+        "missing",
+        [
+          "redacted-role-surface-contract-packet",
+          "redacted-identity-adapter-contract-packet",
+        ],
+        [],
+        [
+          "redacted-role-surface-contract-packet",
+          "redacted-identity-adapter-contract-packet",
+        ],
+      ],
+      [
+        "identity-operations",
+        "missing",
+        [
+          "redacted-account-lifecycle-packet",
+          "redacted-invite-delivery-packet",
+          "redacted-account-recovery-packet",
+          "redacted-abuse-rate-limit-packet",
+          "redacted-session-secret-packet",
+          "redacted-audit-retention-packet",
+        ],
+        [],
+        [
+          "redacted-account-lifecycle-packet",
+          "redacted-invite-delivery-packet",
+          "redacted-account-recovery-packet",
+          "redacted-abuse-rate-limit-packet",
+          "redacted-session-secret-packet",
+          "redacted-audit-retention-packet",
+        ],
+      ],
+    ],
+  );
+  assert.deepEqual(
+    identity.hostedHandoffChecklist.inputSections.map((section) => section.id),
+    hostedIdentityEvidenceInputSectionIds,
   );
   assert.equal(
     identity.artifactSummary.nextProofTarget,
@@ -4468,6 +4533,7 @@ function localHostedTargetPreflightFixture() {
 
 function localHostedIdentityEvidenceFixture() {
   const identityAdapterContract = buildDevTestGameIdentityAdapterContractPacket();
+  const hostedHandoffChecklist = hostedIdentityEvidenceHandoffCase();
   return {
     version: 1,
     proof: "dev-test-game-hosted-identity-evidence",
@@ -4506,25 +4572,7 @@ function localHostedIdentityEvidenceFixture() {
       status: "blocked",
       requiredEvidence: check.requiredEvidence,
     })),
-    hostedHandoffChecklist: {
-      status: "blocked",
-      preflightStatus: "blocked",
-      command: "npm run test:dev-test-game-hosted-identity-evidence",
-      proofTarget: HOSTED_IDENTITY_EVIDENCE_PROOF_TARGET,
-      placeholderFixturePath: hostedIdentityEvidencePlaceholderFixturePath,
-      inputIds: [...hostedIdentityEvidenceInputIds],
-      blockedCheckIds: hostedIdentityEvidenceBlockedChecks.map((check) => check.id),
-      blockedChecks: hostedIdentityEvidenceBlockedChecks.map((check) => ({
-        ...check,
-        status: "blocked",
-      })),
-      requirementGroups: hostedIdentityEvidenceRequirementGroups(
-        hostedIdentityEvidenceBlockedChecks.map((check) => ({
-          ...check,
-          status: "blocked",
-        })),
-      ),
-    },
+    hostedHandoffChecklist,
     nextCommand: "npm run test:dev-test-game-hosted-identity-evidence",
     nextProofTarget: HOSTED_IDENTITY_EVIDENCE_PROOF_TARGET,
   };
