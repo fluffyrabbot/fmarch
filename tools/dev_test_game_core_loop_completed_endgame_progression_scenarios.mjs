@@ -1,9 +1,10 @@
 import {
-  completedGameEndgameProofScenarioCases,
-  completedGameEndgameScenarioCaseFamilies,
-  completedGameEndgameTransition,
-  completedGameEndgameTransitionTokens,
-} from "./dev_test_game_core_loop_completed_game_shared_recovery_scenarios.mjs";
+  assertCompletedGameProofReadinessSurfaceProof,
+  completedGameProofReadinessProofScenarioCases,
+  completedGameProofReadinessScenarioFamilies,
+  completedGameProofReadinessScenarioFamily,
+  completedGameProofReadinessTransition,
+} from "./dev_test_game_core_loop_completed_game_proof_readiness_contract.mjs";
 import {
   completedHostCompleteRaceHardeningLaneCases,
   completedGameHardeningLaneIds,
@@ -11,20 +12,6 @@ import {
   completedPlayerCompleteRaceHardeningLaneCases,
   completedStalePlayerCompleteHardeningLaneCases,
 } from "./dev_test_game_core_loop_completed_game_cases.mjs";
-import {
-  assertCompletedGameEndgameSurfaceProof,
-} from "./dev_test_game_core_loop_completed_recovery_scenario_assertions.mjs";
-
-export {
-  completedDeadPlayerStaleVoteCase,
-  completedDeadPlayerStaleVoteCaseDefinition,
-  completedHostStaleCommandCaseDefinitions,
-  completedHostStaleCommandCases,
-  completedPlayerReloadCaseDefinitions,
-  completedPlayerReloadCases,
-  staleCompletedGamePlayerCommandCaseDefinitions,
-  staleCompletedGamePlayerCommandCases,
-} from "./dev_test_game_core_loop_completed_game_shared_recovery_scenarios.mjs";
 
 export const coreLoopCompletedEndgameProgressionFamilyId =
   "core-loop-completed-endgame-progression";
@@ -34,7 +21,7 @@ export const coreLoopCompletedEndgameProgressionLaneIds = Object.freeze(
 );
 
 export function coreLoopCompletedEndgameProgressionScenarioFamilies() {
-  return completedGameEndgameScenarioCaseFamilies();
+  return completedGameProofReadinessScenarioFamilies();
 }
 
 export function coreLoopCompletedEndgameProgressionProofScenarioCases({
@@ -44,7 +31,7 @@ export function coreLoopCompletedEndgameProgressionProofScenarioCases({
   commandStateBuilders,
   scenarioFamilies = coreLoopCompletedEndgameProgressionScenarioFamilies(),
 }) {
-  return completedGameEndgameProofScenarioCases({
+  return completedGameProofReadinessProofScenarioCases({
     actionPlayerRoleUrl,
     normalPlayerRoleUrl,
     deadPlayerRoleUrl,
@@ -57,7 +44,7 @@ export function assertCoreLoopCompletedEndgameProgressionSurfaceProof({
   scenarioFamilies = coreLoopCompletedEndgameProgressionScenarioFamilies(),
   ...proofArgs
 }) {
-  assertCompletedGameEndgameSurfaceProof({
+  assertCompletedGameProofReadinessSurfaceProof({
     ...proofArgs,
     scenarioFamilies,
   });
@@ -726,30 +713,16 @@ function completedGameLaneDescriptor(scenario, evidence) {
 export function coreLoopCompletedEndgameProgressionTransition({
   scenarioFamilies = coreLoopCompletedEndgameProgressionScenarioFamilies(),
 } = {}) {
-  return completedGameEndgameTransition({ scenarioFamilies });
+  return completedGameProofReadinessTransition({ scenarioFamilies });
 }
 
 export function coreLoopCompletedEndgameProgressionScenarioFamily({
   scenarioFamilies = coreLoopCompletedEndgameProgressionScenarioFamilies(),
 } = {}) {
+  const family = completedGameProofReadinessScenarioFamily({ scenarioFamilies });
   return {
+    ...family,
     id: coreLoopCompletedEndgameProgressionFamilyId,
     laneIds: [...coreLoopCompletedEndgameProgressionLaneIds],
-    transitionTokens: completedGameEndgameTransitionTokens({
-      scenarioFamilies,
-    }),
-    staleRejects: {
-      completedHostStaleCommands: [
-        ...scenarioFamilies.completedHostStaleCommandCases,
-      ],
-      completedDeadPlayerStaleVote:
-        scenarioFamilies.completedDeadPlayerStaleVoteCase,
-      staleCompletedGamePlayerCommands: [
-        ...scenarioFamilies.staleCompletedGamePlayerCommandCases,
-      ],
-    },
-    reloads: {
-      completedPlayers: [...scenarioFamilies.completedPlayerReloadCases],
-    },
   };
 }

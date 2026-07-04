@@ -8,9 +8,12 @@ import {
 } from "./dev_test_game_core_loop_completed_endgame_progression_scenarios.mjs";
 import {
   completedGameEndgameScenarioCaseFamilies,
-  completedGameEndgameTransitionTokens,
   completedGameHardeningLaneIds,
 } from "./dev_test_game_core_loop_completed_game_scenario_assertions.mjs";
+import {
+  completedGameProofReadinessScenarioFamilies,
+  completedGameProofReadinessScenarioFamily,
+} from "./dev_test_game_core_loop_completed_game_proof_readiness_contract.mjs";
 
 test("completed endgame progression family shares reload and stale command cases", () => {
   assert.equal(
@@ -23,8 +26,12 @@ test("completed endgame progression family shares reload and stale command cases
   );
 
   const scenarioFamilies = coreLoopCompletedEndgameProgressionScenarioFamilies();
+  assert.deepEqual(scenarioFamilies, completedGameProofReadinessScenarioFamilies());
   assert.deepEqual(scenarioFamilies, completedGameEndgameScenarioCaseFamilies());
   const family = coreLoopCompletedEndgameProgressionScenarioFamily({
+    scenarioFamilies,
+  });
+  const contractFamily = completedGameProofReadinessScenarioFamily({
     scenarioFamilies,
   });
 
@@ -32,7 +39,7 @@ test("completed endgame progression family shares reload and stale command cases
   assert.deepEqual(family.laneIds, coreLoopCompletedEndgameProgressionLaneIds);
   assert.deepEqual(
     family.transitionTokens,
-    completedGameEndgameTransitionTokens({ scenarioFamilies }),
+    contractFamily.transitionTokens,
   );
   assert.deepEqual(
     family.staleRejects.completedHostStaleCommands.map(

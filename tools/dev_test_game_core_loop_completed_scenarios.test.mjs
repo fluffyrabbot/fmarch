@@ -81,6 +81,7 @@ import {
   coreLoopCompletedGameHardeningLaneDescriptors,
   coreLoopCompletedEndgameProgressionProofScenarioCases,
   coreLoopCompletedEndgameProgressionScenarioFamilies,
+  coreLoopCompletedEndgameProgressionScenarioFamily,
   coreLoopCompletedEndgameProgressionTransition,
 } from "./dev_test_game_core_loop_completed_endgame_progression_scenarios.mjs";
 import {
@@ -90,6 +91,7 @@ import {
   completedGameProofReadinessCaseGroups,
   completedGameProofReadinessProofScenarioCases,
   completedGameProofReadinessScenarioFamilies,
+  completedGameProofReadinessScenarioFamily,
   completedGameProofReadinessTransition,
 } from "./dev_test_game_core_loop_completed_game_proof_readiness_contract.mjs";
 import {
@@ -705,10 +707,44 @@ test("completed-game proof/readiness facade exposes one completed recovery table
   });
 });
 
-test("completed-game progression facade shares proof and readiness cases", () => {
+test("completed-game progression facade shares proof and readiness cases", async () => {
+  const progressionSource = await readFile(
+    "tools/dev_test_game_core_loop_completed_endgame_progression_scenarios.mjs",
+    "utf8",
+  );
+  for (const importedName of [
+    "assertCompletedGameProofReadinessSurfaceProof",
+    "completedGameProofReadinessProofScenarioCases",
+    "completedGameProofReadinessScenarioFamilies",
+    "completedGameProofReadinessScenarioFamily",
+    "completedGameProofReadinessTransition",
+  ]) {
+    assert(
+      importsFromModule({
+        source: progressionSource,
+        importedName,
+        moduleSpecifier:
+          "./dev_test_game_core_loop_completed_game_proof_readiness_contract.mjs",
+      }),
+      `completed-game progression should import ${importedName} from the proof/readiness contract`,
+    );
+  }
+  assert(
+    !progressionSource.includes(
+      "./dev_test_game_core_loop_completed_game_shared_recovery_scenarios.mjs",
+    ),
+    "completed-game progression should not import proof/readiness cases from the lower-level shared recovery module",
+  );
+  assert(
+    !progressionSource.includes(
+      "./dev_test_game_core_loop_completed_recovery_scenario_assertions.mjs",
+    ),
+    "completed-game progression should not import proof/readiness assertions from the lower-level recovery assertion module",
+  );
+
   assert.deepEqual(
     coreLoopCompletedEndgameProgressionScenarioFamilies(),
-    completedGameEndgameScenarioCaseFamilies(),
+    completedGameProofReadinessScenarioFamilies(),
   );
   const scenarioFamilies = completedGameEndgameScenarioCaseFamilies({
     hostStaleCommandCases: [completedHostStaleCommandCases()[2]],
@@ -723,9 +759,30 @@ test("completed-game progression facade shares proof and readiness cases", () =>
     commandStateBuilders: commandStateBuildersFixture(),
     scenarioFamilies,
   });
+  const progressionProofCases =
+    coreLoopCompletedEndgameProgressionProofScenarioCases({
+      actionPlayerRoleUrl: "http://127.0.0.1/g/game-a/action",
+      normalPlayerRoleUrl: "http://127.0.0.1/g/game-a/normal",
+      deadPlayerRoleUrl: "http://127.0.0.1/g/game-a/dead",
+      commandStateBuilders: commandStateBuildersFixture(),
+      scenarioFamilies,
+    });
   const transition = completedGameProofReadinessTransition({
     scenarioFamilies,
   });
+  const progressionTransition = coreLoopCompletedEndgameProgressionTransition({
+    scenarioFamilies,
+  });
+  const progressionFamily = coreLoopCompletedEndgameProgressionScenarioFamily({
+    scenarioFamilies,
+  });
+
+  assert.deepEqual(progressionProofCases, proofCases);
+  assert.equal(progressionTransition, transition);
+  assert.deepEqual(
+    progressionFamily.transitionTokens,
+    completedGameProofReadinessScenarioFamily({ scenarioFamilies }).transitionTokens,
+  );
 
   assert.deepEqual(
     proofCases.completedHostStaleCommandCases.map(
