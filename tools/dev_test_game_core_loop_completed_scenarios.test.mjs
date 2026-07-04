@@ -107,7 +107,7 @@ import {
   staleCompletedGamePlayerCommandHardeningLaneCaseDefinitions as extractedStaleCompletedGamePlayerCommandHardeningLaneCaseDefinitions,
   staleCompletedGamePlayerCommandCaseDefinitions as extractedStaleCompletedGamePlayerCommandCaseDefinitions,
   staleCompletedGamePlayerCommandCases as extractedStaleCompletedGamePlayerCommandCases,
-} from "./dev_test_game_core_loop_completed_terminal_scenario_assertions.mjs";
+} from "./dev_test_game_core_loop_completed_game_recovery_scenarios.mjs";
 
 test("completed-game scenario module exposes shared frozen definitions", () => {
   assert.equal(
@@ -407,8 +407,18 @@ test("completed-game scenario module derives shared hardening lane groups", () =
   );
 });
 
-test("completed-game production harness callers source terminal recovery canonically", async () => {
+test("completed-game production harness callers source recovery cases canonically", async () => {
   const canonicalCallerImports = [
+    [
+      "tools/dev_test_game_core_loop_completed_terminal_scenario_assertions.mjs",
+      [
+        "completedGameEndgameScenarioCaseFamilies",
+        "completedHostStaleCommandHardeningLaneCaseDefinitions",
+        "completedPlayerReloadHardeningLaneCaseDefinitions",
+        "staleCompletedGamePlayerCommandHardeningLaneCaseDefinitions",
+      ],
+      "./dev_test_game_core_loop_completed_game_recovery_scenarios.mjs",
+    ],
     [
       "tools/dev_test_game_core_loop_completed_scenarios.mjs",
       [
@@ -434,16 +444,16 @@ test("completed-game production harness callers source terminal recovery canonic
     [
       "tools/dev_test_game_core_loop_admin_proof.mjs",
       [
-        "completedGameProofReadinessProofScenarioCases",
-        "completedGameProofReadinessScenarioFamilies",
-        "completedGameProofReadinessTransition",
+        "completedGameEndgameProofScenarioCases",
+        "completedGameEndgameScenarioCaseFamilies",
+        "completedGameEndgameTransition",
       ],
-      "./dev_test_game_core_loop_completed_terminal_scenario_assertions.mjs",
+      "./dev_test_game_core_loop_completed_game_recovery_scenarios.mjs",
     ],
     [
       "tools/dev_test_game_release_readiness.mjs",
-      ["completedGameProofReadinessScenarioFamilies"],
-      "./dev_test_game_core_loop_completed_terminal_scenario_assertions.mjs",
+      ["completedGameEndgameScenarioCaseFamilies"],
+      "./dev_test_game_core_loop_completed_game_recovery_scenarios.mjs",
     ],
     [
       "tools/dev_test_game_feature_lane_catalog.mjs",
@@ -469,6 +479,7 @@ test("completed-game production harness callers source terminal recovery canonic
   const allowedCompletedScenarioSpecifiers = new Set([
     "./dev_test_game_core_loop_completed_scenarios.mjs",
     "./dev_test_game_core_loop_completed_terminal_scenario_assertions.mjs",
+    "./dev_test_game_core_loop_completed_game_recovery_scenarios.mjs",
     "./dev_test_game_core_loop_completed_game_proof_readiness_contract.mjs",
     "./dev_test_game_core_loop_completed_game_fixtures.mjs",
     "./dev_test_game_core_loop_completed_endgame_progression_scenarios.mjs",
@@ -516,11 +527,15 @@ test("completed-game production harness callers source terminal recovery canonic
     );
   }
 
+  const recoveryScenarioSource = await readFile(
+    "tools/dev_test_game_core_loop_completed_game_recovery_scenarios.mjs",
+    "utf8",
+  );
   const terminalAssertionSource = await readFile(
     "tools/dev_test_game_core_loop_completed_terminal_scenario_assertions.mjs",
     "utf8",
   );
-  for (const terminalScenarioLiteral of [
+  for (const recoveryScenarioLiteral of [
     "completedHostStaleResolveRecoveryProof",
     "completed-host-stale-resolve",
     "host:stale_resolve_phase:reject:GameAlreadyCompleted",
@@ -529,9 +544,14 @@ test("completed-game production harness callers source terminal recovery canonic
     "staleCompletedVoteRecoveryProof",
     "stale:D05:submit_vote:reject:GameAlreadyCompleted",
   ]) {
+    const quotedScenarioLiteral = `"${recoveryScenarioLiteral}"`;
     assert(
-      terminalAssertionSource.includes(terminalScenarioLiteral),
-      `terminal assertion source should own completed-game scenario literal ${terminalScenarioLiteral}`,
+      recoveryScenarioSource.includes(quotedScenarioLiteral),
+      `recovery scenario source should own completed-game scenario literal ${recoveryScenarioLiteral}`,
+    );
+    assert(
+      !terminalAssertionSource.includes(quotedScenarioLiteral),
+      `terminal assertion source should not define local completed-game scenario literal ${recoveryScenarioLiteral}`,
     );
   }
 });

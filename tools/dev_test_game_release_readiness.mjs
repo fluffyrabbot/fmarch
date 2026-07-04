@@ -123,8 +123,8 @@ import {
   assertCompletedGameProofReadinessSurfaceProof,
 } from "./dev_test_game_core_loop_completed_game_proof_readiness_contract.mjs";
 import {
-  completedGameProofReadinessScenarioFamilies,
-} from "./dev_test_game_core_loop_completed_terminal_scenario_assertions.mjs";
+  completedGameEndgameScenarioCaseFamilies as completedGameProofReadinessScenarioFamilies,
+} from "./dev_test_game_core_loop_completed_game_recovery_scenarios.mjs";
 import {
   completedGameHardeningSpineCycleId,
   completedGameHardeningSpineLaneCases,
