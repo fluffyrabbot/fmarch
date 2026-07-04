@@ -60,6 +60,10 @@ import {
 import {
   createUnexpectedMediaResponseGuard,
 } from "./dev_test_game_media_response_guard.mjs";
+import {
+  assertLiveCompletedPrivateChannelPostRejectOutcome,
+  assertLivePrivateChannelSubmitPostAckOutcome,
+} from "./dev_test_game_core_loop_private_receipt_scenarios.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const frontendRoot = path.join(repoRoot, "frontend");
@@ -7393,6 +7397,11 @@ async function verifyStalePrivateChannelPostAfterPhaseTransition({
     const dispatchPlan = await playerEntry.page.evaluate(
       () => window.__fmarchPlayerCommandDispatchBridgePlan,
     );
+    const currentReceipt = await playerEntry.page.evaluate(() =>
+      window.__fmarchPlayerCommandReceipts?.find(
+        (receipt) => receipt.current === true,
+      ),
+    );
     const buttonsAfterAck = await playerCommandButtons(playerEntry.page);
     const dayVoteOutcomesAfterAck = await playerEntry.page.evaluate(
       () => window.__fmarchPlayerProjection?.dayVoteOutcomes ?? [],
@@ -7409,59 +7418,26 @@ async function verifyStalePrivateChannelPostAfterPhaseTransition({
         game: phaseClosureGame,
         principalUserId: "player-mira",
       });
-    if (
-      stalePost?.state !== "ack" ||
-      stalePost?.serverEnvelope?.body?.kind !== "Ack" ||
-      stalePost?.requestEnvelope?.body?.body?.command?.SubmitPost?.actor_slot !==
-        "slot-7" ||
-      stalePost?.requestEnvelope?.body?.body?.command?.SubmitPost?.channel_id !==
-        factionDayChatChannel ||
-      stalePost?.requestEnvelope?.body?.body?.command?.SubmitPost?.body !== postBody ||
-      !receiptStatusText.includes("Ack") ||
-      dispatchPlan?.projectionRefreshKeys?.includes("thread") !== true ||
-      dispatchPlan?.projectionRefreshKeys?.includes("votecount") !== true ||
-      dispatchPlan?.projectionRefreshKeys?.includes("commandState") !== true ||
-      dispatchPlan?.projectionRefreshKeys?.includes("dayVoteOutcomes") !== true ||
-      projectedPost?.authorSlot !== "slot-7" ||
-      commandStateAfterAck?.phase?.phaseId !== "D01" ||
-      commandStateAfterAck?.phase?.locked !== true ||
-      commandStateAfterAck?.currentVote !== null ||
-      commandStateAfterAck?.voteTargets?.length !== 0 ||
-      buttonsAfterAck.some((button) => button.action?.startsWith("submit_vote")) ||
-      !buttonsAfterAck.some(
-        (button) => button.action === "submit_post" && button.disabled === false,
-      ) ||
-      !dayVoteOutcomesAfterAck.some(
-        (row) =>
-          row.phaseId === "D01" &&
-          row.status === "Lynch" &&
-          row.winnerSlot === "slot-2",
-      ) ||
-      apiCommandStateAfterAck?.phase?.locked !== true ||
-      apiCommandStateAfterAck?.vote_targets?.length !== 0 ||
-      apiCommandStateAfterAck?.current_vote !== null ||
-      !apiThreadAfterAck.posts?.some(
-        (post) => post.body === postBody && post.author_slot === "slot-7",
-      )
-    ) {
-      throw new Error(
-        `stale private-channel post recovery drifted: ${JSON.stringify({
-          phaseClosureGame,
-          postBody,
-          stalePost,
-          receiptStatusText,
-          projectedPost,
-          channelContextAfterAck,
-          commandStateAfterAck,
-          dispatchPlan,
-          buttonsAfterAck,
-          dayVoteOutcomesAfterAck,
-          apiCommandStateAfterAck,
-          apiThreadAfterAck,
-        })}`,
-      );
-    }
-
+    assertLivePrivateChannelSubmitPostAckOutcome({
+      outcome: {
+        commandStatus: stalePost,
+        receiptStatusText,
+        dispatchPlan,
+        currentReceipt,
+        projectedPost,
+        commandStateAfterAck,
+        buttonsAfterAck,
+        dayVoteOutcomesAfterAck,
+        apiCommandStateAfterAck,
+        apiThreadAfterAck,
+      },
+      expectedGame: phaseClosureGame,
+      postBody,
+      expectedChannelId: factionDayChatChannel,
+      expectedActorSlot: "slot-7",
+      expectedWinnerSlot: "slot-2",
+      includeEvidenceInError: true,
+    });
     return {
       status: "passed",
       laneId: coreLoopPrivateChannelStalePostLaneId,
@@ -7738,6 +7714,25 @@ async function verifyCompletedPrivateChannelRecovery({
       label: "completed private-channel reload recovery",
       includeEvidenceInError: true,
     });
+    assertLiveCompletedPrivateChannelPostRejectOutcome({
+      outcome: {
+        commandStatus: reject,
+        dispatchPlan,
+        currentReceipt,
+        receiptStatusText,
+        commandStateAfterReject,
+        buttonsAfterReject,
+        apiCommandStateAfterReject,
+        apiThreadPostBodies,
+        reloadAfterReject,
+      },
+      expectedGame: completeGame,
+      postBody,
+      expectedChannelId: factionDayChatChannel,
+      expectedActorSlot: "slot-7",
+      expectedPrincipalUserId: "player-mira",
+      includeEvidenceInError: true,
+    });
 
     if (
       seed.privateChannel !== factionDayChatChannel ||
@@ -7752,46 +7747,7 @@ async function verifyCompletedPrivateChannelRecovery({
         (slot) => slot.role_revealed !== true || slot.alignment_revealed !== true,
       ) ||
       hostActionsAfterComplete.includes("complete_game") ||
-      apiStateAfterComplete.completed !== true ||
-      reject?.state !== "reject" ||
-      reject?.error !== "GameAlreadyCompleted" ||
-      reject?.serverEnvelope?.body?.kind !== "Reject" ||
-      Array.isArray(reject?.streamSeqs) ||
-      reject?.requestEnvelope?.body?.body?.principal_user_id !== "player-mira" ||
-      reject?.requestEnvelope?.body?.body?.command?.SubmitPost?.channel_id !==
-        factionDayChatChannel ||
-      reject?.requestEnvelope?.body?.body?.command?.SubmitPost?.actor_slot !==
-        "slot-7" ||
-      reject?.requestEnvelope?.body?.body?.command?.SubmitPost?.body !== postBody ||
-      dispatchPlan?.projectionRefreshKeys?.includes("commandState") !== true ||
-      currentReceipt?.actionId !== "submit_post" ||
-      currentReceipt?.state !== "reject" ||
-      !receiptStatusText.includes("Reject GameAlreadyCompleted") ||
-      commandStateAfterReject?.actorSlot !== "slot-7" ||
-      commandStateAfterReject?.gameCompleted !== true ||
-      commandStateAfterReject?.actions?.length !== 0 ||
-      commandStateAfterReject?.voteTargets?.length !== 0 ||
-      !commandStateAfterReject?.boundary?.includes("game is complete") ||
-      buttonsAfterReject.some((button) => button.disabled !== true) ||
-      apiCommandStateAfterReject?.game_completed !== true ||
-      apiCommandStateAfterReject?.actions?.length !== 0 ||
-      apiCommandStateAfterReject?.vote_targets?.length !== 0 ||
-      apiThreadPostBodies.includes(postBody) ||
-      reloadAfterReject.routeResponseStatus !== 200 ||
-      reloadAfterReject.recoveredCommandState?.actorSlot !== "slot-7" ||
-      reloadAfterReject.recoveredCommandState?.gameCompleted !== true ||
-      reloadAfterReject.recoveredCommandState?.actions?.length !== 0 ||
-      reloadAfterReject.recoveredCommandState?.voteTargets?.length !== 0 ||
-      !reloadAfterReject.recoveredCommandState?.boundary?.includes(
-        "game is complete",
-      ) ||
-      reloadAfterReject.reloadButtons.some((button) => button.disabled !== true) ||
-      reloadAfterReject.reloadRejectedPostVisible !== false ||
-      reloadAfterReject.reloadThreadPostBodies.includes(postBody) ||
-      reloadAfterReject.apiCommandStateAfterReload?.game_completed !== true ||
-      reloadAfterReject.apiCommandStateAfterReload?.actions?.length !== 0 ||
-      reloadAfterReject.apiCommandStateAfterReload?.vote_targets?.length !== 0 ||
-      reloadAfterReject.apiThreadPostBodiesAfterReload.includes(postBody)
+      apiStateAfterComplete.completed !== true
     ) {
       throw new Error(
         `completed private-channel recovery drifted: ${JSON.stringify({

@@ -4,6 +4,8 @@ import { test } from "node:test";
 import {
   assertCompletedPrivateChannelProofCases,
   assertDayThreePlayerObservationProofCase,
+  assertLiveCompletedPrivateChannelPostRejectOutcome,
+  assertLivePrivateChannelSubmitPostAckOutcome,
   assertPostDayThreePlayerSurfaceProofCase,
   assertPrivateChannelSubmitPostProofCase,
   assertPrivateReceiptRoleSurfaceCase,
@@ -518,6 +520,173 @@ test("private-channel SubmitPost ACK assertion covers projected private post", (
         expectedGame: "game-a",
       }),
     /private channel SubmitPost ACK/,
+  );
+});
+
+test("live private-channel SubmitPost ACK outcome assertion covers refresh evidence", () => {
+  const postBody = "Stale private-channel post after D01 phase closure fixture.";
+  const outcome = {
+    commandStatus: {
+      state: "ack",
+      streamSeqs: [43],
+      serverEnvelope: { body: { kind: "Ack" } },
+      requestEnvelope: {
+        body: {
+          body: {
+            command: {
+              SubmitPost: {
+                game: "game-a",
+                channel_id: "private:mafia_day_chat",
+                actor_slot: "slot-7",
+                body: postBody,
+              },
+            },
+          },
+        },
+      },
+    },
+    receiptStatusText: "Ack: stream seqs 43",
+    dispatchPlan: {
+      projectionRefreshKeys: [
+        "thread",
+        "votecount",
+        "commandState",
+        "dayVoteOutcomes",
+      ],
+    },
+    currentReceipt: { actionId: "submit_post", state: "ack" },
+    projectedPost: { authorSlot: "slot-7", body: postBody },
+    commandStateAfterAck: {
+      phase: { phaseId: "D01", locked: true },
+      currentVote: null,
+      voteTargets: [],
+    },
+    buttonsAfterAck: [{ action: "submit_post", disabled: false }],
+    dayVoteOutcomesAfterAck: [
+      { phaseId: "D01", status: "Lynch", winnerSlot: "slot-2" },
+    ],
+    apiCommandStateAfterAck: {
+      phase: { phase_id: "D01", locked: true },
+      current_vote: null,
+      vote_targets: [],
+    },
+    apiThreadAfterAck: {
+      posts: [{ author_slot: "slot-7", body: postBody }],
+    },
+  };
+
+  assert.doesNotThrow(() =>
+    assertLivePrivateChannelSubmitPostAckOutcome({
+      outcome,
+      expectedGame: "game-a",
+      postBody,
+      expectedChannelId: "private:mafia_day_chat",
+      expectedActorSlot: "slot-7",
+      expectedWinnerSlot: "slot-2",
+      requireStreamSeq: true,
+    }),
+  );
+  assert.throws(
+    () =>
+      assertLivePrivateChannelSubmitPostAckOutcome({
+        outcome: {
+          ...outcome,
+          projectedPost: { authorSlot: "slot-7", body: "wrong" },
+        },
+        expectedGame: "game-a",
+        postBody,
+        expectedChannelId: "private:mafia_day_chat",
+        expectedActorSlot: "slot-7",
+      }),
+    /private SubmitPost ACK refresh/,
+  );
+});
+
+test("live completed private-channel reject outcome assertion covers reload closure", () => {
+  const scenario = staleCompletedPrivatePostScenario();
+  const postBody = "Completed private-channel stale post fixture.";
+  const outcome = {
+    commandStatus: {
+      state: "reject",
+      error: scenario.commandError,
+      serverEnvelope: { body: { kind: "Reject" } },
+      requestEnvelope: {
+        body: {
+          body: {
+            principal_user_id: "player-mira",
+            command: {
+              SubmitPost: {
+                game: "game-a",
+                channel_id: "private:mafia_day_chat",
+                actor_slot: "slot-7",
+                body: postBody,
+              },
+            },
+          },
+        },
+      },
+    },
+    dispatchPlan: { projectionRefreshKeys: ["commandState"] },
+    currentReceipt: { actionId: "submit_post", state: "reject" },
+    receiptStatusText: scenario.commandMessage,
+    commandStateAfterReject: {
+      actorSlot: "slot-7",
+      gameCompleted: true,
+      actions: [],
+      voteTargets: [],
+      boundary: "The game is complete.",
+    },
+    buttonsAfterReject: [{ action: "submit_post", disabled: true }],
+    apiCommandStateAfterReject: {
+      game_completed: true,
+      actions: [],
+      vote_targets: [],
+    },
+    apiThreadPostBodies: [],
+    reloadAfterReject: {
+      routeResponseStatus: 200,
+      recoveredCommandState: {
+        actorSlot: "slot-7",
+        gameCompleted: true,
+        actions: [],
+        voteTargets: [],
+        boundary: "The game is complete.",
+      },
+      reloadButtons: [{ action: "submit_post", disabled: true }],
+      reloadRejectedPostVisible: false,
+      reloadThreadPostBodies: [],
+      apiCommandStateAfterReload: {
+        game_completed: true,
+        actions: [],
+        vote_targets: [],
+      },
+      apiThreadPostBodiesAfterReload: [],
+    },
+  };
+
+  assert.doesNotThrow(() =>
+    assertLiveCompletedPrivateChannelPostRejectOutcome({
+      outcome,
+      expectedGame: "game-a",
+      postBody,
+      expectedChannelId: "private:mafia_day_chat",
+      expectedActorSlot: "slot-7",
+      expectedPrincipalUserId: "player-mira",
+    }),
+  );
+  assert.throws(
+    () =>
+      assertLiveCompletedPrivateChannelPostRejectOutcome({
+        outcome: {
+          ...outcome,
+          apiThreadPostBodies: [postBody],
+        },
+        expectedGame: "game-a",
+        postBody,
+        expectedChannelId: "private:mafia_day_chat",
+        expectedActorSlot: "slot-7",
+      }),
+    /completed private SubmitPost reject reload/,
   );
 });
 

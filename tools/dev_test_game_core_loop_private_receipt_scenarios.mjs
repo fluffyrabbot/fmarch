@@ -435,6 +435,83 @@ export function assertPrivateChannelSubmitPostProofCase({
   }
 }
 
+export function assertLivePrivateChannelSubmitPostAckOutcome({
+  outcome,
+  expectedGame,
+  postBody,
+  expectedChannelId = privateChannelSubmitPostScenario().channelId,
+  expectedActorSlot = privateChannelSubmitPostScenario().actorSlot,
+  expectedRefreshKeys = privateChannelSubmitPostScenario().expectedRefreshKeys,
+  expectedPhaseId = "D01",
+  expectedLocked = true,
+  expectedWinnerSlot,
+  requireStreamSeq = false,
+  includeEvidenceInError = false,
+}) {
+  const command =
+    outcome?.commandStatus?.requestEnvelope?.body?.body?.command?.SubmitPost;
+  if (
+    outcome?.commandStatus?.state !== "ack" ||
+    outcome?.commandStatus?.serverEnvelope?.body?.kind !== "Ack" ||
+    (requireStreamSeq === true &&
+      (!Array.isArray(outcome.commandStatus.streamSeqs) ||
+        outcome.commandStatus.streamSeqs.length === 0)) ||
+    command?.game !== expectedGame ||
+    command?.channel_id !== expectedChannelId ||
+    command?.actor_slot !== expectedActorSlot ||
+    command?.body !== postBody ||
+    !String(outcome?.receiptStatusText ?? "").includes("Ack") ||
+    !expectedRefreshKeys.every((key) =>
+      outcome?.dispatchPlan?.projectionRefreshKeys?.includes(key),
+    ) ||
+    outcome?.currentReceipt?.actionId !== "submit_post" ||
+    (outcome?.currentReceipt !== undefined &&
+      outcome.currentReceipt?.state !== "ack") ||
+    outcome?.projectedPost?.authorSlot !== expectedActorSlot ||
+    outcome?.projectedPost?.body !== postBody ||
+    outcome?.commandStateAfterAck?.phase?.phaseId !== expectedPhaseId ||
+    outcome?.commandStateAfterAck?.phase?.locked !== expectedLocked ||
+    outcome?.commandStateAfterAck?.currentVote !== null ||
+    outcome?.commandStateAfterAck?.voteTargets?.length !== 0 ||
+    outcome?.buttonsAfterAck?.some((button) =>
+      button.action?.startsWith("submit_vote"),
+    ) ||
+    outcome?.buttonsAfterAck?.some(
+      (button) => button.action === "withdraw_vote" && button.disabled === false,
+    ) ||
+    !outcome?.buttonsAfterAck?.some(
+      (button) => button.action === "submit_post" && button.disabled === false,
+    ) ||
+    (expectedWinnerSlot !== undefined &&
+      !outcome?.dayVoteOutcomesAfterAck?.some(
+        (row) =>
+          row.phaseId === expectedPhaseId &&
+          row.status === "Lynch" &&
+          row.winnerSlot === expectedWinnerSlot,
+      )) ||
+    outcome?.apiCommandStateAfterAck?.phase?.phase_id !== expectedPhaseId ||
+    outcome?.apiCommandStateAfterAck?.phase?.locked !== expectedLocked ||
+    outcome?.apiCommandStateAfterAck?.vote_targets?.length !== 0 ||
+    outcome?.apiCommandStateAfterAck?.current_vote !== null ||
+    !outcome?.apiThreadAfterAck?.posts?.some(
+      (post) =>
+        post.body === postBody && post.author_slot === expectedActorSlot,
+    )
+  ) {
+    throwPrivateChannelScenarioAssertionError({
+      message: "core-loop live proof missing private SubmitPost ACK refresh",
+      evidence: {
+        outcome,
+        expectedGame,
+        postBody,
+        expectedChannelId,
+        expectedActorSlot,
+      },
+      includeEvidenceInError,
+    });
+  }
+}
+
 export function assertStalePrivateChannelPostPhaseLockedProofCase({
   proof,
   expectedGame,
@@ -492,6 +569,85 @@ export function assertStalePrivateChannelPostPhaseLockedProofCase({
     throwPrivateChannelScenarioAssertionError({
       message: "core-loop admin proof missing private channel stale post recovery",
       evidence: proof,
+      includeEvidenceInError,
+    });
+  }
+}
+
+export function assertLiveCompletedPrivateChannelPostRejectOutcome({
+  outcome,
+  expectedGame,
+  postBody,
+  expectedChannelId = staleCompletedPrivatePostScenario().channelId,
+  expectedActorSlot = staleCompletedPrivatePostScenario().actorSlot,
+  expectedPrincipalUserId,
+  scenario = staleCompletedPrivatePostScenario(),
+  expectedBoundaryFragment =
+    completedPrivateChannelReloadScenario().completedCommandStateBoundaryFragment,
+  includeEvidenceInError = false,
+}) {
+  const command =
+    outcome?.commandStatus?.requestEnvelope?.body?.body?.command?.SubmitPost;
+  if (
+    outcome?.commandStatus?.state !== "reject" ||
+    outcome?.commandStatus?.error !== scenario.commandError ||
+    outcome?.commandStatus?.serverEnvelope?.body?.kind !== "Reject" ||
+    Array.isArray(outcome?.commandStatus?.streamSeqs) ||
+    (expectedPrincipalUserId !== undefined &&
+      outcome?.commandStatus?.requestEnvelope?.body?.body?.principal_user_id !==
+        expectedPrincipalUserId) ||
+    command?.game !== expectedGame ||
+    command?.channel_id !== expectedChannelId ||
+    command?.actor_slot !== expectedActorSlot ||
+    command?.body !== postBody ||
+    !outcome?.dispatchPlan?.projectionRefreshKeys?.includes("commandState") ||
+    outcome?.currentReceipt?.actionId !== scenario.clickedAction ||
+    outcome?.currentReceipt?.state !== "reject" ||
+    !String(outcome?.receiptStatusText ?? "").includes(scenario.commandMessage) ||
+    outcome?.commandStateAfterReject?.actorSlot !== expectedActorSlot ||
+    outcome?.commandStateAfterReject?.gameCompleted !== true ||
+    outcome?.commandStateAfterReject?.actions?.length !== 0 ||
+    outcome?.commandStateAfterReject?.voteTargets?.length !== 0 ||
+    !String(outcome?.commandStateAfterReject?.boundary ?? "").includes(
+      expectedBoundaryFragment,
+    ) ||
+    outcome?.buttonsAfterReject?.some((button) => button.disabled !== true) ||
+    outcome?.apiCommandStateAfterReject?.game_completed !== true ||
+    outcome?.apiCommandStateAfterReject?.actions?.length !== 0 ||
+    outcome?.apiCommandStateAfterReject?.vote_targets?.length !== 0 ||
+    outcome?.apiThreadPostBodies?.includes(postBody) ||
+    outcome?.reloadAfterReject?.routeResponseStatus !== 200 ||
+    outcome?.reloadAfterReject?.recoveredCommandState?.actorSlot !==
+      expectedActorSlot ||
+    outcome?.reloadAfterReject?.recoveredCommandState?.gameCompleted !== true ||
+    outcome?.reloadAfterReject?.recoveredCommandState?.actions?.length !== 0 ||
+    outcome?.reloadAfterReject?.recoveredCommandState?.voteTargets?.length !== 0 ||
+    !String(
+      outcome?.reloadAfterReject?.recoveredCommandState?.boundary ?? "",
+    ).includes(expectedBoundaryFragment) ||
+    outcome?.reloadAfterReject?.reloadButtons?.some(
+      (button) => button.disabled !== true,
+    ) ||
+    outcome?.reloadAfterReject?.reloadRejectedPostVisible !== false ||
+    outcome?.reloadAfterReject?.reloadThreadPostBodies?.includes(postBody) ||
+    outcome?.reloadAfterReject?.apiCommandStateAfterReload?.game_completed !==
+      true ||
+    outcome?.reloadAfterReject?.apiCommandStateAfterReload?.actions?.length !==
+      0 ||
+    outcome?.reloadAfterReject?.apiCommandStateAfterReload?.vote_targets?.length !==
+      0 ||
+    outcome?.reloadAfterReject?.apiThreadPostBodiesAfterReload?.includes(postBody)
+  ) {
+    throwPrivateChannelScenarioAssertionError({
+      message:
+        "core-loop live proof missing completed private SubmitPost reject reload",
+      evidence: {
+        outcome,
+        expectedGame,
+        postBody,
+        expectedChannelId,
+        expectedActorSlot,
+      },
       includeEvidenceInError,
     });
   }

@@ -448,6 +448,10 @@ test("private-channel stale action recovery uses shared transition assertion", a
     ),
     "dev-test-game live harness should import shared private-channel context assertions",
   );
+  assert(
+    source.includes("./dev_test_game_core_loop_private_receipt_scenarios.mjs"),
+    "dev-test-game live harness should import shared private-channel command outcome assertions",
+  );
   const start = source.indexOf(
     "async function submitPrivateChannelStaleActionReconnectRecovery",
   );
@@ -489,7 +493,10 @@ test("private-channel recovery wrappers share channel context assertions", async
     {
       start: "async function verifyStalePrivateChannelPostAfterPhaseTransition",
       end: "async function verifyCompletedPrivateChannelRecovery",
-      expected: ["assertPrivateChannelId"],
+      expected: [
+        "assertPrivateChannelId",
+        "assertLivePrivateChannelSubmitPostAckOutcome",
+      ],
     },
     {
       start: "async function verifyCompletedPrivateChannelRecovery",
@@ -497,6 +504,7 @@ test("private-channel recovery wrappers share channel context assertions", async
       expected: [
         "assertPrivateChannelContext",
         "assertPrivateChannelRouteContext",
+        "assertLiveCompletedPrivateChannelPostRejectOutcome",
       ],
     },
   ];
