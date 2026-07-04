@@ -392,6 +392,15 @@ function privateChannelScenarioForChannel({ scenario, channelId }) {
   };
 }
 
+function ackSeqFromCommandStatus(commandStatus) {
+  const streamSeq = commandStatus?.streamSeqs?.[0];
+  if (Number.isInteger(streamSeq)) {
+    return streamSeq;
+  }
+  const match = String(commandStatus?.message ?? "").match(/Ack: stream seqs (\d+)/);
+  return match === null ? undefined : Number.parseInt(match[1], 10);
+}
+
 export function assertPrivateChannelSubmitPostProofCase({
   proof,
   expectedGame,
@@ -448,6 +457,27 @@ export function assertLivePrivateChannelSubmitPostAckOutcome({
   requireStreamSeq = false,
   includeEvidenceInError = false,
 }) {
+  const ackSeq = ackSeqFromCommandStatus(outcome?.commandStatus);
+  const proof = livePrivateChannelSubmitPostAckProof({
+    outcome,
+    expectedGame,
+    postBody,
+    expectedChannelId,
+    expectedActorSlot,
+  });
+  assertPrivateChannelSubmitPostProofCase({
+    proof,
+    expectedGame,
+    scenario: {
+      ...privateChannelSubmitPostScenario(),
+      channelId: expectedChannelId,
+      actorSlot: expectedActorSlot,
+      postBody,
+      ackSeq,
+      expectedRefreshKeys,
+    },
+    includeEvidenceInError,
+  });
   const command =
     outcome?.commandStatus?.requestEnvelope?.body?.body?.command?.SubmitPost;
   if (
@@ -510,6 +540,53 @@ export function assertLivePrivateChannelSubmitPostAckOutcome({
       includeEvidenceInError,
     });
   }
+  return proof;
+}
+
+export function livePrivateChannelSubmitPostAckProof({
+  outcome,
+  expectedGame,
+  postBody,
+  expectedChannelId = privateChannelSubmitPostScenario().channelId,
+  expectedActorSlot = privateChannelSubmitPostScenario().actorSlot,
+}) {
+  const refreshKeys = outcome?.dispatchPlan?.projectionRefreshKeys ?? [];
+  return {
+    status: "passed",
+    clickedAction: privateChannelSubmitPostScenario().clickedAction,
+    commandKind: privateChannelSubmitPostScenario().commandKind,
+    command: {
+      game: expectedGame,
+      channel_id: expectedChannelId,
+      actor_slot: expectedActorSlot,
+      body: postBody,
+    },
+    commandStatus: {
+      ...outcome?.commandStatus,
+      message:
+        outcome?.commandStatus?.message ?? outcome?.receiptStatusText,
+    },
+    bridgePlan: {
+      role: "player",
+      commandKind: privateChannelSubmitPostScenario().commandKind,
+      commandEndpoint: "/commands",
+      finalState: "ack",
+      projectionRefreshKeys: refreshKeys,
+    },
+    receipts: [
+      outcome?.currentReceipt ?? {
+        actionId: privateChannelSubmitPostScenario().clickedAction,
+        state: outcome?.commandStatus?.state,
+      },
+    ],
+    projectionThread: {
+      posts: [outcome?.projectedPost].filter(Boolean),
+    },
+    privatePostBody: postBody,
+    receiptCount: 1,
+    receiptStatusText: outcome?.receiptStatusText,
+    receiptRefreshKeys: refreshKeys.join(","),
+  };
 }
 
 export function assertStalePrivateChannelPostPhaseLockedProofCase({
@@ -578,6 +655,8 @@ export function assertLiveCompletedPrivateChannelPostRejectOutcome({
   outcome,
   expectedGame,
   postBody,
+  sourceRoleUrl,
+  visitedRolePath,
   expectedChannelId = staleCompletedPrivatePostScenario().channelId,
   expectedActorSlot = staleCompletedPrivatePostScenario().actorSlot,
   expectedPrincipalUserId,
@@ -586,6 +665,40 @@ export function assertLiveCompletedPrivateChannelPostRejectOutcome({
     completedPrivateChannelReloadScenario().completedCommandStateBoundaryFragment,
   includeEvidenceInError = false,
 }) {
+  const completedReloadScenario = liveCompletedPrivateChannelReloadScenario({
+    outcome,
+    expectedChannelId,
+    expectedActorSlot,
+    expectedBoundaryFragment,
+  });
+  const liveScenario = {
+    ...scenario,
+    channelId: expectedChannelId,
+    actorSlot: expectedActorSlot,
+    stalePostBody: postBody,
+    expectedRefreshKeys: outcome?.dispatchPlan?.projectionRefreshKeys ?? [],
+    routeBoundary: scenario.routeBoundary,
+  };
+  const proof = liveCompletedPrivateChannelPostRejectProof({
+    outcome,
+    expectedGame,
+    postBody,
+    sourceRoleUrl,
+    visitedRolePath,
+    expectedChannelId,
+    expectedActorSlot,
+    scenario: liveScenario,
+    completedReloadScenario,
+  });
+  assertStaleCompletedPrivatePostRecoveryProofCase({
+    proof,
+    expectedGame,
+    sourceRoleUrl,
+    visitedRolePath,
+    scenario: liveScenario,
+    completedReloadScenario,
+    includeEvidenceInError,
+  });
   const command =
     outcome?.commandStatus?.requestEnvelope?.body?.body?.command?.SubmitPost;
   if (
@@ -651,6 +764,109 @@ export function assertLiveCompletedPrivateChannelPostRejectOutcome({
       includeEvidenceInError,
     });
   }
+  return proof;
+}
+
+export function liveCompletedPrivateChannelPostRejectProof({
+  outcome,
+  expectedGame,
+  postBody,
+  sourceRoleUrl,
+  visitedRolePath,
+  expectedChannelId = staleCompletedPrivatePostScenario().channelId,
+  expectedActorSlot = staleCompletedPrivatePostScenario().actorSlot,
+  scenario = {
+    ...staleCompletedPrivatePostScenario(),
+    channelId: expectedChannelId,
+    actorSlot: expectedActorSlot,
+    stalePostBody: postBody,
+    expectedRefreshKeys: outcome?.dispatchPlan?.projectionRefreshKeys ?? [],
+  },
+  completedReloadScenario = liveCompletedPrivateChannelReloadScenario({
+    outcome,
+    expectedChannelId,
+    expectedActorSlot,
+  }),
+}) {
+  const refreshKeys = outcome?.dispatchPlan?.projectionRefreshKeys ?? [];
+  const snapshotAfterReject = completedPrivateChannelSnapshot({
+    scenario: completedReloadScenario,
+    receiptState: `reject:${scenario.commandError}`,
+    boundary: scenario.routeBoundary,
+  });
+  const snapshotAfterReload = completedPrivateChannelSnapshot({
+    scenario: completedReloadScenario,
+    receiptState: `reject:${scenario.commandError}`,
+    boundary: scenario.routeBoundary,
+  });
+  return {
+    status: "passed",
+    clickedThroughFromRoleUrl: true,
+    rawInviteTokensVisible: false,
+    sourceRoleUrl,
+    visitedRolePath,
+    clickedAction: scenario.clickedAction,
+    commandKind: scenario.commandKind,
+    command: {
+      game: expectedGame,
+      channel_id: expectedChannelId,
+      actor_slot: expectedActorSlot,
+      body: postBody,
+    },
+    commandStatus: outcome?.commandStatus,
+    bridgePlan: {
+      role: "player",
+      commandKind: scenario.commandKind,
+      commandEndpoint: "/commands",
+      finalState: "reject",
+      projectionRefreshKeys: refreshKeys,
+    },
+    receipts: [
+      outcome?.currentReceipt ?? {
+        actionId: scenario.clickedAction,
+        state: outcome?.commandStatus?.state,
+      },
+    ],
+    stalePrivatePostBody: postBody,
+    submitDisabledBeforeReject: outcome?.submitDisabledBeforeReject ?? false,
+    snapshotAfterReject,
+    snapshotAfterReload,
+    reloadedResyncSnapshotCommandState:
+      outcome?.reloadAfterReject?.recoveredCommandState,
+    receiptStatusText: outcome?.receiptStatusText,
+    receiptRefreshKeys: refreshKeys.join(","),
+  };
+}
+
+function liveCompletedPrivateChannelReloadScenario({
+  outcome,
+  expectedChannelId,
+  expectedActorSlot,
+  expectedBoundaryFragment =
+    completedPrivateChannelReloadScenario().completedCommandStateBoundaryFragment,
+}) {
+  const commandState = outcome?.reloadAfterReject?.recoveredCommandState ??
+    outcome?.commandStateAfterReject;
+  const phase = commandState?.phase ?? {};
+  const completedThreadBody =
+    outcome?.threadPostBodiesAfterReject?.[0] ??
+    outcome?.reloadAfterReject?.reloadThreadPostBodies?.[0] ??
+    completedPrivateChannelReloadScenario().completedThreadBody;
+  return {
+    ...completedPrivateChannelReloadScenario(),
+    channelId: expectedChannelId,
+    actorSlot: expectedActorSlot,
+    actorStatus:
+      outcome?.reloadAfterReject?.reloadChannelContext?.actorStatus ??
+      commandState?.actorStatus ??
+      completedPrivateChannelReloadScenario().actorStatus,
+    completedPhaseId:
+      phase.phaseId ?? completedPrivateChannelReloadScenario().completedPhaseId,
+    completedPhaseState: phase.locked === true ? "locked" : "open",
+    completedThreadBody,
+    completedCommandStateBoundaryFragment: expectedBoundaryFragment,
+    completedCommandStateBoundary: expectedBoundaryFragment,
+  };
 }
 
 export function assertCompletedPrivateChannelReloadProofCase({
@@ -697,6 +913,7 @@ export function assertStaleCompletedPrivatePostRecoveryProofCase({
   sourceRoleUrl,
   visitedRolePath,
   scenario = staleCompletedPrivatePostScenario(),
+  completedReloadScenario = completedPrivateChannelReloadScenario(),
   includeEvidenceInError = false,
 }) {
   if (
@@ -746,7 +963,7 @@ export function assertStaleCompletedPrivatePostRecoveryProofCase({
     assertCompletedPrivateChannelSnapshotCase({
       ...snapshotCase,
       scenario: privateChannelScenarioForChannel({
-        scenario: completedPrivateChannelReloadScenario(),
+        scenario: completedReloadScenario,
         channelId: scenario.channelId,
       }),
       includeEvidenceInError,

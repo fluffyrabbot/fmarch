@@ -10,6 +10,8 @@ import {
   assertPrivateChannelSubmitPostProofCase,
   assertPrivateReceiptRoleSurfaceCase,
   assertStalePrivateChannelPostPhaseLockedProofCase,
+  liveCompletedPrivateChannelPostRejectProof,
+  livePrivateChannelSubmitPostAckProof,
   privateReceiptAssertionArgs,
   privateReceiptScenario,
 } from "./dev_test_game_core_loop_private_receipt_scenarios.mjs";
@@ -598,7 +600,22 @@ test("live private-channel SubmitPost ACK outcome assertion covers refresh evide
         expectedChannelId: "private:mafia_day_chat",
         expectedActorSlot: "slot-7",
       }),
-    /private SubmitPost ACK refresh/,
+    /private channel SubmitPost ACK/,
+  );
+  assert.deepEqual(
+    livePrivateChannelSubmitPostAckProof({
+      outcome,
+      expectedGame: "game-a",
+      postBody,
+      expectedChannelId: "private:mafia_day_chat",
+      expectedActorSlot: "slot-7",
+    }).command,
+    {
+      game: "game-a",
+      channel_id: "private:mafia_day_chat",
+      actor_slot: "slot-7",
+      body: postBody,
+    },
   );
 });
 
@@ -609,6 +626,7 @@ test("live completed private-channel reject outcome assertion covers reload clos
     commandStatus: {
       state: "reject",
       error: scenario.commandError,
+      message: scenario.commandMessage,
       serverEnvelope: { body: { kind: "Reject" } },
       requestEnvelope: {
         body: {
@@ -669,6 +687,8 @@ test("live completed private-channel reject outcome assertion covers reload clos
       outcome,
       expectedGame: "game-a",
       postBody,
+      sourceRoleUrl: "http://127.0.0.1:5173/g/game-a/c/private%3Amafia_day_chat",
+      visitedRolePath: "/g/game-a/c/private%3Amafia_day_chat",
       expectedChannelId: "private:mafia_day_chat",
       expectedActorSlot: "slot-7",
       expectedPrincipalUserId: "player-mira",
@@ -683,10 +703,25 @@ test("live completed private-channel reject outcome assertion covers reload clos
         },
         expectedGame: "game-a",
         postBody,
+        sourceRoleUrl:
+          "http://127.0.0.1:5173/g/game-a/c/private%3Amafia_day_chat",
+        visitedRolePath: "/g/game-a/c/private%3Amafia_day_chat",
         expectedChannelId: "private:mafia_day_chat",
         expectedActorSlot: "slot-7",
       }),
     /completed private SubmitPost reject reload/,
+  );
+  assert.equal(
+    liveCompletedPrivateChannelPostRejectProof({
+      outcome,
+      expectedGame: "game-a",
+      postBody,
+      sourceRoleUrl: "http://127.0.0.1:5173/g/game-a/c/private%3Amafia_day_chat",
+      visitedRolePath: "/g/game-a/c/private%3Amafia_day_chat",
+      expectedChannelId: "private:mafia_day_chat",
+      expectedActorSlot: "slot-7",
+    }).stalePrivatePostBody,
+    postBody,
   );
 });
 

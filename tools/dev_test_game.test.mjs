@@ -496,6 +496,7 @@ test("private-channel recovery wrappers share channel context assertions", async
       expected: [
         "assertPrivateChannelId",
         "assertLivePrivateChannelSubmitPostAckOutcome",
+        "submitPostAckProof",
       ],
     },
     {
@@ -505,6 +506,7 @@ test("private-channel recovery wrappers share channel context assertions", async
         "assertPrivateChannelContext",
         "assertPrivateChannelRouteContext",
         "assertLiveCompletedPrivateChannelPostRejectOutcome",
+        "completedPostRejectProof",
       ],
     },
   ];

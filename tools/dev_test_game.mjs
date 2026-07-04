@@ -7418,7 +7418,7 @@ async function verifyStalePrivateChannelPostAfterPhaseTransition({
         game: phaseClosureGame,
         principalUserId: "player-mira",
       });
-    assertLivePrivateChannelSubmitPostAckOutcome({
+    const submitPostAckProof = assertLivePrivateChannelSubmitPostAckOutcome({
       outcome: {
         commandStatus: stalePost,
         receiptStatusText,
@@ -7477,6 +7477,7 @@ async function verifyStalePrivateChannelPostAfterPhaseTransition({
       dayVoteOutcomesAfterAck,
       apiCommandStateAfterAck,
       apiThreadAfterAck,
+      submitPostAckProof,
       proof:
         "A disposable private-channel role URL froze on the faction day chat, a disposable host role URL resolved D01 and locked the phase, then the stale private SubmitPost ACKed while refreshing the private thread, locked commandState, and day-vote outcome truth.",
     };
@@ -7544,12 +7545,14 @@ async function verifyCompletedPrivateChannelRecovery({
       .getByTestId("critical-host-action-complete_game")
       .waitFor({ state: "visible" });
 
-    await openPrivateChannelRoleSurface({
+    const completedRoute = await openPrivateChannelRoleSurface({
       page: playerEntry.page,
       frontendBaseUrl,
       game: completeGame,
       proofLabel: "completed",
     });
+    const sourceRoleUrl = completedRoute.url;
+    const visitedRolePath = rolePathFromUrl(sourceRoleUrl);
     await playerEntry.page.waitForFunction(
       () =>
         window.__fmarchPlayerProjection?.commandState?.actorSlot === "slot-7" &&
@@ -7617,6 +7620,11 @@ async function verifyCompletedPrivateChannelRecovery({
     const receiptStatusText = await playerEntry.page
       .getByTestId("player-command-status")
       .innerText();
+    const threadPostBodiesAfterReject = await playerEntry.page.evaluate(() =>
+      (window.__fmarchPlayerProjection?.thread?.posts ?? []).map(
+        (post) => post.body,
+      ),
+    );
     const apiCommandStateAfterReject = await fetchPlayerSlotCommandState({
       apiBaseUrl,
       game: completeGame,
@@ -7714,7 +7722,8 @@ async function verifyCompletedPrivateChannelRecovery({
       label: "completed private-channel reload recovery",
       includeEvidenceInError: true,
     });
-    assertLiveCompletedPrivateChannelPostRejectOutcome({
+    const completedPostRejectProof =
+      assertLiveCompletedPrivateChannelPostRejectOutcome({
       outcome: {
         commandStatus: reject,
         dispatchPlan,
@@ -7725,9 +7734,13 @@ async function verifyCompletedPrivateChannelRecovery({
         apiCommandStateAfterReject,
         apiThreadPostBodies,
         reloadAfterReject,
+        submitDisabledBeforeReject: submitPostBeforeComplete?.disabled,
+        threadPostBodiesAfterReject,
       },
       expectedGame: completeGame,
       postBody,
+      sourceRoleUrl,
+      visitedRolePath,
       expectedChannelId: factionDayChatChannel,
       expectedActorSlot: "slot-7",
       expectedPrincipalUserId: "player-mira",
@@ -7795,6 +7808,8 @@ async function verifyCompletedPrivateChannelRecovery({
       },
       hostEntry: hostEntry.verification,
       playerEntry: playerEntry.verification,
+      sourceRoleUrl,
+      visitedRolePath,
       commandStateBeforeComplete,
       channelContextBeforeComplete,
       buttonsBeforeComplete,
@@ -7815,7 +7830,9 @@ async function verifyCompletedPrivateChannelRecovery({
       apiCommandStateAfterReject,
       apiThreadAfterReject,
       apiThreadPostBodies,
+      threadPostBodiesAfterReject,
       reloadAfterReject,
+      completedPostRejectProof,
       proof:
         "A disposable private-channel role URL froze on the faction day chat, a disposable host role URL completed the game, then the stale private SubmitPost rejected GameAlreadyCompleted and the private-channel role URL reloaded into completed disabled controls without appending the rejected post.",
     };
