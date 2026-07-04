@@ -1830,6 +1830,7 @@ test("dev test-game next-action derives one local recovery command from the mani
         "Keep hosted production identity deferred while the local seeded capability model remains the active architecture sequence; refresh the core-live role proof before replacing dev tokens with hosted accounts, sessions, and invites.",
       requiredBeforeHostedIdentity:
         "The local core gameplay, hardening, and local ops proof spine should remain the trusted development surface before production identity replaces dev tokens.",
+      localCapabilityConfidence: hostedIdentityLocalCapabilityConfidenceFixture(),
       proofBoundary:
         "Sequencing hold only. This records that hosted production identity is a real release-readiness blocker, but not the next local-development command; it does not prove hosted account lifecycle, invite delivery, release readiness, or production readiness.",
     },
@@ -11931,6 +11932,70 @@ function seedProofLaneCoverageFixture({ unclassifiedLaneIds = [] } = {}) {
       count: unclassifiedLaneIds.length,
       laneIds: unclassifiedLaneIds,
     },
+  };
+}
+
+function hostedIdentityLocalCapabilityConfidenceFixture() {
+  return {
+    status: "blocked",
+    source: devTestGameReleaseReadinessPath,
+    requiredCheckIds: [
+      "local-core-loop-proof",
+      "local-hardening-proof",
+      "local-ops-artifact-bundle",
+      "local-seed-demo-fixture",
+      "local-identity-adapter-proof",
+    ],
+    checkCount: 5,
+    passedCheckCount: 4,
+    checks: [
+      {
+        id: "local-core-loop-proof",
+        label:
+          "Host controls, replacement, player actions, private channels, and day/night loop",
+        status: "passed",
+        evidence: "target/dev-test-game/proof-run.json",
+        roleUrl: "/admin/audit/local-core-loop?game=<seeded-game>",
+        proofBoundary: "",
+      },
+      {
+        id: "local-hardening-proof",
+        label:
+          "Idempotency, reconnect, stale-client, and local concurrent race matrix",
+        status: "passed",
+        evidence: "target/dev-test-game/proof-run.json",
+        roleUrl: "/admin/audit/local-hardening?game=<seeded-game>",
+        proofBoundary: "",
+      },
+      {
+        id: "local-ops-artifact-bundle",
+        label: "local-ops-artifact-bundle",
+        status: "missing",
+        evidence: "",
+        roleUrl: "",
+        proofBoundary: "",
+      },
+      {
+        id: "local-seed-demo-fixture",
+        label: "Local seed/demo fixture summary",
+        status: "passed",
+        evidence: "target/dev-test-game/seed-fixture-summary.json",
+        roleUrl: devTestGameSeedFixtureRoleUrl,
+        proofBoundary:
+          "Local seed/demo fixture inventory for one dev-test-game run.",
+      },
+      {
+        id: "local-identity-adapter-proof",
+        label: "Local production-identity adapter proof",
+        status: "passed",
+        evidence: "target/auth-invite-role-proof/invite-role-proof.json",
+        roleUrl: "/admin/audit/local-identity-adapter?game=<seeded-game>",
+        proofBoundary:
+          "Local identity adapter proof keeps role surfaces stable.",
+      },
+    ],
+    proofBoundary:
+      "Local capability-model confidence is derived from the current release-readiness checklist. It requires passed core-loop, hardening, local ops, seed/demo fixture, and local identity-adapter rows before hosted identity can move out of sequencing deferral; it does not prove hosted accounts, sessions, invites, release readiness, or production readiness.",
   };
 }
 

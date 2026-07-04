@@ -778,6 +778,16 @@ function requiredChecksForNextAction(nextAction) {
   }
   if (nextAction.nextAction.sequenceDeferral !== undefined) {
     checks.push("hosted-identity-sequence-deferral");
+    if (
+      nextAction.nextAction.sequenceDeferral.localCapabilityConfidence !==
+      undefined
+    ) {
+      checks.push("hosted-identity-local-capability-confidence");
+      for (const check of nextAction.nextAction.sequenceDeferral
+        .localCapabilityConfidence.checks ?? []) {
+        checks.push(`hosted-identity-local-capability-${check.id}`);
+      }
+    }
   }
   if (nextAction.generatedFrom?.terminalBatchGraph !== undefined) {
     checks.push("terminal-proof-batch-graph");

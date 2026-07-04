@@ -1787,6 +1787,11 @@ export function normalizeLocalNextActionAudit(nextAction, { game, proofGraph = n
     typeof action.sequenceDeferral === "object"
       ? action.sequenceDeferral
       : null;
+  const localCapabilityConfidence =
+    sequenceDeferral?.localCapabilityConfidence !== null &&
+    typeof sequenceDeferral?.localCapabilityConfidence === "object"
+      ? sequenceDeferral.localCapabilityConfidence
+      : null;
   const realHostedEvidenceInputs = normalizeRealHostedEvidenceInputs(
     unproven?.realHostedEvidenceInputs,
   );
@@ -2058,6 +2063,26 @@ export function normalizeLocalNextActionAudit(nextAction, { game, proofGraph = n
               String(sequenceDeferral.deferredUnprovenId ?? "unknown")
             }`,
           }),
+        ]),
+    ...(localCapabilityConfidence === null
+      ? []
+      : [
+          Object.freeze({
+            id: "hosted-identity-local-capability-confidence",
+            status: `${String(localCapabilityConfidence.status ?? "unknown")}:${
+              Number(localCapabilityConfidence.passedCheckCount ?? 0)
+            }/${Number(localCapabilityConfidence.checkCount ?? 0)}`,
+          }),
+          ...(
+            Array.isArray(localCapabilityConfidence.checks)
+              ? localCapabilityConfidence.checks
+              : []
+          ).map((check) =>
+            Object.freeze({
+              id: `hosted-identity-local-capability-${String(check.id ?? "")}`,
+              status: String(check.status ?? "unknown"),
+            }),
+          ),
         ]),
     Object.freeze({
       id: "selection-trace",
@@ -2384,6 +2409,42 @@ export function normalizeLocalNextActionAudit(nextAction, { game, proofGraph = n
               sequenceDeferral.requiredBeforeHostedIdentity ?? "",
             ),
             sequenceProofBoundary: String(sequenceDeferral.proofBoundary ?? ""),
+            sequenceLocalCapabilityConfidenceStatus: String(
+              localCapabilityConfidence?.status ?? "",
+            ),
+            sequenceLocalCapabilityConfidenceSource: String(
+              localCapabilityConfidence?.source ?? "",
+            ),
+            sequenceLocalCapabilityConfidencePassedCheckCount: Number(
+              localCapabilityConfidence?.passedCheckCount ?? 0,
+            ),
+            sequenceLocalCapabilityConfidenceCheckCount: Number(
+              localCapabilityConfidence?.checkCount ?? 0,
+            ),
+            sequenceLocalCapabilityConfidenceRequiredCheckIds: Object.freeze(
+              Array.isArray(localCapabilityConfidence?.requiredCheckIds)
+                ? localCapabilityConfidence.requiredCheckIds.map((id) =>
+                    String(id),
+                  )
+                : [],
+            ),
+            sequenceLocalCapabilityConfidenceChecks: Object.freeze(
+              Array.isArray(localCapabilityConfidence?.checks)
+                ? localCapabilityConfidence.checks.map((check) =>
+                    Object.freeze({
+                      id: String(check.id ?? ""),
+                      label: String(check.label ?? ""),
+                      status: String(check.status ?? ""),
+                      evidence: String(check.evidence ?? ""),
+                      roleUrl: String(check.roleUrl ?? ""),
+                      proofBoundary: String(check.proofBoundary ?? ""),
+                    }),
+                  )
+                : [],
+            ),
+            sequenceLocalCapabilityConfidenceProofBoundary: String(
+              localCapabilityConfidence?.proofBoundary ?? "",
+            ),
           }),
       selectedUnprovenId: String(unproven?.id ?? ""),
       selectedBuildSlice: String(unproven?.buildSlice ?? ""),

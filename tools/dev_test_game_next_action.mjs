@@ -175,8 +175,12 @@ export function buildDevTestGameNextAction(
   const hostStaleControlTrace = buildHostStaleControlTrace(readiness);
   const selectedUnproven = releaseReadinessCandidates[0];
   const selectedLocalReadinessDependency = localReadinessDependencyCandidates[0];
+  const localCapabilityConfidence =
+    localCapabilityConfidenceFromReadiness(readiness);
   const hostedIdentitySequenceDeferral =
-    hostedIdentitySequenceDeferralFor(selectedUnproven);
+    hostedIdentitySequenceDeferralFor(selectedUnproven, {
+      localCapabilityConfidence,
+    });
   const nextAction =
     artifact !== undefined
       ? {
@@ -1535,7 +1539,57 @@ function releaseReadinessActionStatus(buildable) {
     : "ready";
 }
 
-function hostedIdentitySequenceDeferralFor(selectedUnproven) {
+const hostedIdentityLocalCapabilityCheckIds = Object.freeze([
+  "local-core-loop-proof",
+  "local-hardening-proof",
+  "local-ops-artifact-bundle",
+  "local-seed-demo-fixture",
+  "local-identity-adapter-proof",
+]);
+
+function localCapabilityConfidenceFromReadiness(readiness) {
+  const checksById = new Map(
+    (readiness?.localDevelopmentSpine?.checks ?? []).map((check) => [
+      check.id,
+      check,
+    ]),
+  );
+  const checks = hostedIdentityLocalCapabilityCheckIds.map((id) => {
+    const check = checksById.get(id);
+    return {
+      id,
+      label: String(check?.label ?? id),
+      status: String(check?.status ?? "missing"),
+      evidence: String(check?.evidence ?? ""),
+      roleUrl: String(
+        check?.adminRoleSurface?.detailRoleUrl ??
+          check?.recovery?.roleUrl ??
+          "",
+      ),
+      proofBoundary: String(check?.proofBoundary ?? ""),
+    };
+  });
+  const passedCheckCount = checks.filter((check) => check.status === "passed").length;
+  return {
+    status:
+      readiness !== null &&
+      passedCheckCount === hostedIdentityLocalCapabilityCheckIds.length
+        ? "passed"
+        : "blocked",
+    source: readiness === null ? "" : devTestGameReleaseReadinessPath,
+    requiredCheckIds: hostedIdentityLocalCapabilityCheckIds,
+    checkCount: hostedIdentityLocalCapabilityCheckIds.length,
+    passedCheckCount,
+    checks,
+    proofBoundary:
+      "Local capability-model confidence is derived from the current release-readiness checklist. It requires passed core-loop, hardening, local ops, seed/demo fixture, and local identity-adapter rows before hosted identity can move out of sequencing deferral; it does not prove hosted accounts, sessions, invites, release readiness, or production readiness.",
+  };
+}
+
+function hostedIdentitySequenceDeferralFor(
+  selectedUnproven,
+  { localCapabilityConfidence },
+) {
   if (selectedUnproven?.item?.id !== "hosted-production-identity") {
     return null;
   }
@@ -1553,6 +1607,7 @@ function hostedIdentitySequenceDeferralFor(selectedUnproven) {
       "Keep hosted production identity deferred while the local seeded capability model remains the active architecture sequence; refresh the core-live role proof before replacing dev tokens with hosted accounts, sessions, and invites.",
     requiredBeforeHostedIdentity:
       "The local core gameplay, hardening, and local ops proof spine should remain the trusted development surface before production identity replaces dev tokens.",
+    localCapabilityConfidence,
     proofBoundary:
       "Sequencing hold only. This records that hosted production identity is a real release-readiness blocker, but not the next local-development command; it does not prove hosted account lifecycle, invite delivery, release readiness, or production readiness.",
   };
@@ -1579,11 +1634,44 @@ function assertHostedIdentitySequenceDeferral(deferral) {
     deferral.buildSlice.length === 0 ||
     typeof deferral.requiredBeforeHostedIdentity !== "string" ||
     deferral.requiredBeforeHostedIdentity.length === 0 ||
+    !validHostedIdentityLocalCapabilityConfidence(
+      deferral.localCapabilityConfidence,
+    ) ||
     typeof deferral.proofBoundary !== "string" ||
     deferral.proofBoundary.length === 0
   ) {
     throw new Error("next-action hosted identity sequence deferral is malformed");
   }
+}
+
+function validHostedIdentityLocalCapabilityConfidence(confidence) {
+  return (
+    confidence !== null &&
+    typeof confidence === "object" &&
+    ["passed", "blocked"].includes(confidence.status) &&
+    typeof confidence.source === "string" &&
+    Array.isArray(confidence.requiredCheckIds) &&
+    JSON.stringify(confidence.requiredCheckIds) ===
+      JSON.stringify(hostedIdentityLocalCapabilityCheckIds) &&
+    confidence.checkCount === hostedIdentityLocalCapabilityCheckIds.length &&
+    Number.isInteger(confidence.passedCheckCount) &&
+    confidence.passedCheckCount >= 0 &&
+    confidence.passedCheckCount <= confidence.checkCount &&
+    Array.isArray(confidence.checks) &&
+    confidence.checks.length === confidence.checkCount &&
+    confidence.checks.every(
+      (check, index) =>
+        check.id === hostedIdentityLocalCapabilityCheckIds[index] &&
+        typeof check.label === "string" &&
+        check.label.length > 0 &&
+        typeof check.status === "string" &&
+        typeof check.evidence === "string" &&
+        typeof check.roleUrl === "string" &&
+        typeof check.proofBoundary === "string",
+    ) &&
+    typeof confidence.proofBoundary === "string" &&
+    confidence.proofBoundary.length > 0
+  );
 }
 
 function validHostedHandoffChecklist(checklist) {
