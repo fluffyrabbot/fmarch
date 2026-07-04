@@ -136,7 +136,7 @@ export function coreLoopLaneStatus(lane) {
     case "host-deadline-advance":
       return `${status}: ${String(evidence.commandPhase ?? "unknown")} deadline -> ${String(evidence.browserPhaseAfter ?? "unknown")}`;
     case playerInvalidActionRecoveryLaneId:
-      return `${status}: Reject ${String(evidence.rejectError ?? "unknown")}, legal action visible ${String(evidence.legalActionVisible ?? "unknown")}`;
+      return `${status}: ${String(evidence.receiptStatusText ?? `Reject ${String(evidence.rejectError ?? "unknown")}`)}, legal action visible ${String(evidence.legalActionVisible ?? "unknown")}`;
     case playerActionBoundaryLaneId:
       return `${status}: ${Number(evidence.commandActionCount ?? 0)} unowned actions, direct reject ${String(evidence.directRejectError ?? "unknown")}`;
     case "private-channel":

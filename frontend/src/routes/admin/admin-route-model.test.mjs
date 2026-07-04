@@ -45,6 +45,9 @@ import {
   replacementHandoffRecoveryLaneIds,
 } from "../../../../tools/dev_test_game_replacement_handoff_scenario_cases.mjs";
 import {
+  playerInvalidActionRecoveryMessage,
+} from "../../../../tools/dev_test_game_core_loop_action_scenarios.mjs";
+import {
   seedAggregateOnlyProofLaneIds,
   seedAliasOnlyProofLaneIds,
   seedDemoScenarioFixtureRows,
@@ -2590,7 +2593,10 @@ test("admin local core loop detail data carries lane rows", async () => {
       ["core-loop", "passed: PhaseLocked vote receipt, unchanged unknown, lock ack/unlock ack"],
       ["action-loop", "passed: role URL false, night unknown, receipt unknown, D02 unknown, next unknown"],
       ["host-deadline-advance", "passed: D01 deadline -> N01"],
-      ["invalid-action-recovery", "passed: Reject InvalidTarget, legal action visible true"],
+      [
+        "invalid-action-recovery",
+        `passed: ${playerInvalidActionRecoveryMessage}, legal action visible true`,
+      ],
       ["resolution-receipts", "passed: factional_kill receipt, target slot-2"],
       ["player-action-boundary", "passed: 0 unowned actions, direct reject InvalidTarget"],
       ["private-channel", "passed: private:mafia_day_chat, denied 403"],
@@ -2651,8 +2657,8 @@ test("admin local core loop detail data carries lane rows", async () => {
       ],
       [
         "invalid-action-recovery",
-        "passed: Reject InvalidTarget, legal action visible true",
-        "passed: Reject InvalidTarget, legal action visible true",
+        `passed: ${playerInvalidActionRecoveryMessage}, legal action visible true`,
+        `passed: ${playerInvalidActionRecoveryMessage}, legal action visible true`,
       ],
       [
         "resolution-receipts",
@@ -2750,7 +2756,7 @@ test("admin local player recovery detail data carries focused lane rows", async 
       ],
       [
         "invalid-action-recovery",
-        "passed: Reject InvalidTarget, legal action visible true",
+        `passed: ${playerInvalidActionRecoveryMessage}, legal action visible true`,
       ],
       ["dead-player-recovery", "passed"],
       ["player-action-boundary", "passed: 0 unowned actions, direct reject InvalidTarget"],
@@ -3750,6 +3756,7 @@ function proofRunFixture() {
       rejectError: "InvalidTarget",
       receiptActionId: "submit_invalid_action:factional_kill",
       receiptState: "reject",
+      receiptStatusText: playerInvalidActionRecoveryMessage,
       phase: "N01",
       actionCount: 1,
       legalActionVisible: true,

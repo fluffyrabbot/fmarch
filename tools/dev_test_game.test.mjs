@@ -28,6 +28,7 @@ import {
 } from "./dev_test_game_core_loop_host_control_scenarios.mjs";
 import {
   coreLoopPlayerActionRecoveryScenarioFamily,
+  playerInvalidActionRecoveryMessage,
 } from "./dev_test_game_core_loop_player_action_recovery_scenarios.mjs";
 import {
   coreLoopPrivateReceiptSurfaceScenarioFamily,
@@ -3483,7 +3484,10 @@ test("session card and markdown include role credential URLs and tokens", async 
     actionLoop: {
       status: "passed",
       proof: "host resolved N01 and action player advanced to D02",
-      invalidAction: { error: "InvalidTarget", message: "Reject InvalidTarget: invalid target" },
+      invalidAction: {
+        error: "InvalidTarget",
+        message: playerInvalidActionRecoveryMessage,
+      },
       legalAction: { state: "ack", message: "Ack: stream seqs 42" },
       dayNightTransition: {
         status: "passed",
@@ -4463,7 +4467,7 @@ test("session card and markdown include role credential URLs and tokens", async 
       reject: {
         state: "reject",
         error: "InvalidTarget",
-        message: "Reject InvalidTarget: invalid target",
+        message: playerInvalidActionRecoveryMessage,
       },
       commandState: {
         phase: { phaseId: "N01" },
@@ -4473,12 +4477,12 @@ test("session card and markdown include role credential URLs and tokens", async 
       currentReceipt: {
         actionId: "submit_invalid_action:factional_kill",
         state: "reject",
-        message: "Reject InvalidTarget: invalid target",
+        message: playerInvalidActionRecoveryMessage,
         commandTrace: {
           projectionRefreshKeys: ["notifications", "investigationResults", "commandState"],
         },
       },
-      receiptStatusText: "Reject InvalidTarget: invalid target",
+      receiptStatusText: playerInvalidActionRecoveryMessage,
     },
     resolutionReceipts: {
       status: "passed",
@@ -9431,7 +9435,7 @@ test("session card and markdown include role credential URLs and tokens", async 
   assert(markdown.includes("## Action Loop Proof"));
   assert(markdown.includes("Reject InvalidTarget: invalid target"));
   assert(markdown.includes("## Invalid Action Recovery Proof"));
-  assert(markdown.includes("Receipt: Reject InvalidTarget: invalid target"));
+  assert(markdown.includes(`Receipt: ${playerInvalidActionRecoveryMessage}`));
   assert(markdown.includes("Legal action visible: true"));
   assert(markdown.includes("## Resolution Receipt Proof"));
   assert(markdown.includes("Target notice: player_killed factional_kill"));
@@ -12413,7 +12417,7 @@ function playerActionRoleSurfaceFixture() {
       commandStatus: {
         state: "reject",
         error: "InvalidTarget",
-        message: "Reject InvalidTarget: invalid target",
+        message: playerInvalidActionRecoveryMessage,
       },
       bridgePlan: {
         role: "player",
@@ -12430,7 +12434,7 @@ function playerActionRoleSurfaceFixture() {
         {
           actionId: "submit_invalid_action:factional_kill",
           state: "reject",
-          message: "Reject InvalidTarget: invalid target",
+          message: playerInvalidActionRecoveryMessage,
           current: true,
         },
       ],
@@ -12448,7 +12452,7 @@ function playerActionRoleSurfaceFixture() {
       checkpointActionStateAfterReject: "enabled:submit_action:factional_kill",
       checkpointTargetSlotsAfterReject: "slot-3",
       receiptCount: 1,
-      receiptStatusText: "Reject InvalidTarget: invalid target",
+      receiptStatusText: playerInvalidActionRecoveryMessage,
     },
     releaseReady: false,
     productionReady: false,

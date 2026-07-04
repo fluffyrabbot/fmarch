@@ -7,6 +7,9 @@ import {
   coreLoopPhaseProgressionSpineSourceLaneIds,
 } from "./dev_test_game_core_loop_phase_progression_scenarios.mjs";
 import {
+  playerInvalidActionRecoveryMessage,
+} from "./dev_test_game_core_loop_action_scenarios.mjs";
+import {
   replacementActionReconnectScenario,
   replacementIncomingActionScenario,
   replacementStaleActionAfterResolveScenario,
@@ -1134,9 +1137,11 @@ assert.equal(
   true,
 );
 assert.equal(session.verification.invalidActionRecovery.legalActionVisible, true);
-assert.match(
-  session.verification.invalidActionRecovery.receiptStatusText,
-  /Reject InvalidTarget/,
+assert.equal(
+  session.verification.invalidActionRecovery.receiptStatusText.includes(
+    playerInvalidActionRecoveryMessage,
+  ),
+  true,
 );
 assert.equal(session.verification.actionLoop.legalAction.state, "ack");
 assert.equal(

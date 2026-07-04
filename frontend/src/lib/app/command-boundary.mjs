@@ -250,6 +250,12 @@ function rejectMessage(reject, retryable, { requestEnvelope } = {}) {
     return `${base}; vote target is no longer valid, refresh and use current vote controls`;
   }
   if (
+    reject.error === "InvalidTarget" &&
+    requestEnvelope?.body?.body?.command?.SubmitAction !== undefined
+  ) {
+    return `${base}; action target is no longer valid, refresh and use current action controls`;
+  }
+  if (
     reject.error === "SlotNotAlive" &&
     requestEnvelope?.body?.body?.command?.SubmitAction !== undefined
   ) {

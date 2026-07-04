@@ -23,6 +23,9 @@ import {
   replacementStalePrivatePostAfterCompleteScenario,
 } from "./dev_test_game_replacement_private_scenario_cases.mjs";
 import {
+  playerInvalidActionRecoveryMessage,
+} from "./dev_test_game_core_loop_action_scenarios.mjs";
+import {
   coreLoopPrivateChannelCompletedPostLaneId,
   coreLoopPrivateChannelInvalidActionLaneId,
   coreLoopPrivateChannelStalePostLaneId,
@@ -5324,7 +5327,7 @@ async function verifySeededInvalidActionRecovery({ actionPage }) {
     currentReceipt?.actionId !== "submit_invalid_action:factional_kill" ||
     currentReceipt?.state !== "reject" ||
     currentReceipt?.commandTrace?.projectionRefreshKeys?.includes("commandState") !== true ||
-    !receiptStatusText.includes("Reject InvalidTarget")
+    !receiptStatusText.includes(playerInvalidActionRecoveryMessage)
   ) {
     throw new Error(
       `invalid action recovery drifted: ${JSON.stringify({
@@ -5447,7 +5450,7 @@ async function verifyPrivateChannelInvalidActionRecovery({
     currentReceipt?.commandTrace?.projectionRefreshKeys?.includes(
       "commandState",
     ) !== true ||
-    !receiptStatusText.includes("Reject InvalidTarget") ||
+    !receiptStatusText.includes(playerInvalidActionRecoveryMessage) ||
     afterRejectSnapshot.channelContext.channelId !== factionDayChatChannel ||
     afterRejectSnapshot.channelContext.actorSlot !== "slot_4" ||
     afterRejectSnapshot.commandState?.phase?.phaseId !== "N01" ||

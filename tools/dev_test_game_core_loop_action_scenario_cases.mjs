@@ -1,6 +1,8 @@
 export const playerActionLoopLaneId = "action-loop";
 export const playerInvalidActionRecoveryLaneId = "invalid-action-recovery";
 export const playerInvalidActionRecoveryHookId = "invalidActionReject";
+export const playerInvalidActionRecoveryMessage =
+  "Reject InvalidTarget: invalid target; action target is no longer valid, refresh and use current action controls";
 export const playerActionBoundaryLaneId = "player-action-boundary";
 export const playerActionBoundaryRecoveryHookId =
   "normalPlayerDirectActionReject";
@@ -85,7 +87,7 @@ export function playerInvalidActionRecoveryScenario() {
     grantId: "grant-factional-kill",
     finalState: "reject",
     error: "InvalidTarget",
-    messageIncludes: "Reject InvalidTarget: invalid target",
+    messageIncludes: playerInvalidActionRecoveryMessage,
     expectedRefreshKeys: [
       "notifications",
       "investigationResults",

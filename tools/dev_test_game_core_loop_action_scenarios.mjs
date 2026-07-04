@@ -12,6 +12,7 @@ export {
   playerActionLoopLaneId,
   playerActionSubmissionScenario,
   playerFactionalKillActionCommandFacts,
+  playerInvalidActionRecoveryMessage,
   playerInvalidActionRecoveryLaneId,
   playerInvalidActionRecoveryScenario,
   playerSlotVoteCommandFacts,

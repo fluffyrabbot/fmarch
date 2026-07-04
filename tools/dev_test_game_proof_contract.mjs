@@ -43,6 +43,7 @@ import {
 import {
   playerActionBoundaryLaneId,
   playerActionLoopLaneId,
+  playerInvalidActionRecoveryMessage,
   playerInvalidActionRecoveryLaneId,
 } from "./dev_test_game_core_loop_action_scenarios.mjs";
 import {
@@ -1038,6 +1039,8 @@ export function buildDevTestGameProofRun(session, options = {}) {
       rejectError: verification.invalidActionRecovery?.reject?.error ?? null,
       receiptActionId: verification.invalidActionRecovery?.currentReceipt?.actionId ?? null,
       receiptState: verification.invalidActionRecovery?.currentReceipt?.state ?? null,
+      receiptStatusText:
+        verification.invalidActionRecovery?.receiptStatusText ?? null,
       phase: verification.invalidActionRecovery?.commandState?.phase?.phaseId ?? null,
       actionCount: verification.invalidActionRecovery?.commandState?.actions?.length ?? null,
       legalActionVisible: verification.invalidActionRecovery?.legalActionVisible ?? null,
@@ -1059,7 +1062,7 @@ export function buildDevTestGameProofRun(session, options = {}) {
         ) === true &&
         verification.invalidActionRecovery?.legalActionVisible === true &&
         verification.invalidActionRecovery?.receiptStatusText?.includes(
-          "Reject InvalidTarget",
+          playerInvalidActionRecoveryMessage,
         ) === true,
     }),
     lane("resolution-receipts", "Role-scoped resolution receipts after night kill", {

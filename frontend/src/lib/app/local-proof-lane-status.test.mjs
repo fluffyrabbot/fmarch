@@ -39,6 +39,9 @@ import {
   staleSameActionRecoveryLaneId,
 } from "../../../../tools/dev_test_game_player_recovery_scenarios.mjs";
 import {
+  playerInvalidActionRecoveryMessage,
+} from "../../../../tools/dev_test_game_core_loop_action_scenarios.mjs";
+import {
   CORE_LOOP_COMPLETED_GAME_HIGHLIGHTED_LANE_IDS,
   CORE_LOOP_HIGHLIGHTED_LANE_IDS,
   HARDENING_HIGHLIGHTED_LANE_IDS,
@@ -215,10 +218,11 @@ test("core loop lane status formats seeded recovery evidence", () => {
       status: "passed",
       evidence: {
         rejectError: "InvalidTarget",
+        receiptStatusText: playerInvalidActionRecoveryMessage,
         legalActionVisible: true,
       },
     }),
-    "passed: Reject InvalidTarget, legal action visible true",
+    `passed: ${playerInvalidActionRecoveryMessage}, legal action visible true`,
   );
   assert.equal(
     coreLoopLaneStatus({
@@ -569,6 +573,7 @@ test("highlighted lane evidence maps keep browser proof assertions aligned", () 
         status: "passed",
         evidence: {
           rejectError: "InvalidTarget",
+          receiptStatusText: playerInvalidActionRecoveryMessage,
           legalActionVisible: true,
         },
       },
@@ -723,7 +728,7 @@ test("highlighted lane evidence maps keep browser proof assertions aligned", () 
   ]);
   assert.equal(
     coreLoopHighlightedLaneEvidence(proofRun)["invalid-action-recovery"],
-    "passed: Reject InvalidTarget, legal action visible true",
+    `passed: ${playerInvalidActionRecoveryMessage}, legal action visible true`,
   );
   assert.equal(
     coreLoopHighlightedLaneEvidence(proofRun)["stale-host-complete-reload"],
