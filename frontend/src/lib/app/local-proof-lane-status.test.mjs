@@ -43,6 +43,7 @@ import {
 } from "../../../../tools/dev_test_game_core_loop_action_scenarios.mjs";
 import {
   coreLoopPrivateChannelInvalidActionLaneId,
+  coreLoopPrivateChannelStalePostLaneId,
   privateChannelInvalidActionRecoveryScenario,
 } from "../../../../tools/dev_test_game_core_loop_private_channel_recovery_scenarios.mjs";
 import {
@@ -241,6 +242,18 @@ test("core loop lane status formats seeded recovery evidence", () => {
       },
     }),
     `passed: channel ${privateInvalidAction.channelId}, ${privateInvalidAction.commandMessage}, legal action visible true`,
+  );
+  assert.equal(
+    coreLoopLaneStatus({
+      id: coreLoopPrivateChannelStalePostLaneId,
+      status: "passed",
+      evidence: {
+        channel: "private:mafia_day_chat",
+        receiptStatusText: "Ack: stream seqs 43",
+        refreshedLocked: true,
+      },
+    }),
+    "passed: channel private:mafia_day_chat, Ack: stream seqs 43, locked true",
   );
   assert.equal(
     coreLoopLaneStatus({
@@ -607,6 +620,15 @@ test("highlighted lane evidence maps keep browser proof assertions aligned", () 
         },
       },
       {
+        id: coreLoopPrivateChannelStalePostLaneId,
+        status: "passed",
+        evidence: {
+          channel: "private:mafia_day_chat",
+          receiptStatusText: "Ack: stream seqs 43",
+          refreshedLocked: true,
+        },
+      },
+      {
         id: staleActionConflictMessageLaneId,
         status: "passed",
         evidence: staleConflictEvidence(staleActionConflictMessageLaneId),
@@ -764,6 +786,12 @@ test("highlighted lane evidence maps keep browser proof assertions aligned", () 
       coreLoopPrivateChannelInvalidActionLaneId
     ],
     `passed: channel ${privateInvalidAction.channelId}, ${privateInvalidAction.commandMessage}, legal action visible true`,
+  );
+  assert.equal(
+    coreLoopHighlightedLaneEvidence(proofRun)[
+      coreLoopPrivateChannelStalePostLaneId
+    ],
+    "passed: channel private:mafia_day_chat, Ack: stream seqs 43, locked true",
   );
   assert.equal(
     coreLoopHighlightedLaneEvidence(proofRun)["stale-host-complete-reload"],

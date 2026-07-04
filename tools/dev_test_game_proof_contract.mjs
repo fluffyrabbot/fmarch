@@ -1191,6 +1191,9 @@ export function buildDevTestGameProofRun(session, options = {}) {
         state:
           verification.privateChannel?.stalePostAfterPhaseTransition?.stalePost
             ?.state ?? null,
+        receiptStatusText:
+          verification.privateChannel?.stalePostAfterPhaseTransition
+            ?.receiptStatusText ?? null,
         refreshedPhase:
           verification.privateChannel?.stalePostAfterPhaseTransition
             ?.commandStateAfterAck?.phase?.phaseId ?? null,
@@ -1215,6 +1218,8 @@ export function buildDevTestGameProofRun(session, options = {}) {
           verification.privateChannel?.stalePostAfterPhaseTransition?.stalePost
             ?.requestEnvelope?.body?.body?.command?.SubmitPost?.body ===
             verification.privateChannel?.stalePostAfterPhaseTransition?.postBody &&
+          verification.privateChannel?.stalePostAfterPhaseTransition
+            ?.receiptStatusText?.includes("Ack") === true &&
           verification.privateChannel?.stalePostAfterPhaseTransition
             ?.commandStateAfterAck?.phase?.locked === true &&
           verification.privateChannel?.stalePostAfterPhaseTransition

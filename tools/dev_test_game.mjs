@@ -7163,6 +7163,9 @@ async function verifyStalePrivateChannelPostAfterPhaseTransition({
       postBody,
       expectedState: "ack",
     });
+    const receiptStatusText = await playerEntry.page
+      .getByTestId("player-command-status")
+      .innerText();
     await playerEntry.page.waitForFunction(
       ({ expectedBody }) =>
         window.__fmarchPlayerProjection?.thread?.posts?.some(
@@ -7220,6 +7223,7 @@ async function verifyStalePrivateChannelPostAfterPhaseTransition({
       stalePost?.requestEnvelope?.body?.body?.command?.SubmitPost?.channel_id !==
         factionDayChatChannel ||
       stalePost?.requestEnvelope?.body?.body?.command?.SubmitPost?.body !== postBody ||
+      !receiptStatusText.includes("Ack") ||
       dispatchPlan?.projectionRefreshKeys?.includes("thread") !== true ||
       dispatchPlan?.projectionRefreshKeys?.includes("votecount") !== true ||
       dispatchPlan?.projectionRefreshKeys?.includes("commandState") !== true ||
@@ -7252,6 +7256,7 @@ async function verifyStalePrivateChannelPostAfterPhaseTransition({
           phaseClosureGame,
           postBody,
           stalePost,
+          receiptStatusText,
           projectedPost,
           channelContextAfterAck,
           commandStateAfterAck,
@@ -7294,6 +7299,7 @@ async function verifyStalePrivateChannelPostAfterPhaseTransition({
       apiDayVoteOutcomesAfterResolve,
       postBody,
       stalePost,
+      receiptStatusText,
       projectedPost,
       channelContextAfterAck,
       commandStateAfterAck,

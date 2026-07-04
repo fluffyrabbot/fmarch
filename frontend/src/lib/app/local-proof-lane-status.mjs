@@ -37,6 +37,7 @@ import {
 } from "../../../../tools/dev_test_game_core_loop_action_scenarios.mjs";
 import {
   coreLoopPrivateChannelInvalidActionLaneId,
+  coreLoopPrivateChannelStalePostLaneId,
   privateChannelInvalidActionRecoveryScenario,
 } from "../../../../tools/dev_test_game_core_loop_private_channel_recovery_scenarios.mjs";
 import {
@@ -60,6 +61,7 @@ const CORE_LOOP_FOUNDATION_HIGHLIGHTED_LANE_IDS = Object.freeze([
   "resolution-receipts",
   playerActionBoundaryLaneId,
   "private-channel",
+  coreLoopPrivateChannelStalePostLaneId,
   coreLoopPrivateChannelInvalidActionLaneId,
 ]);
 
@@ -146,6 +148,8 @@ export function coreLoopLaneStatus(lane) {
       return `${status}: ${Number(evidence.commandActionCount ?? 0)} unowned actions, direct reject ${String(evidence.directRejectError ?? "unknown")}`;
     case "private-channel":
       return `${status}: ${String(evidence.channel ?? "unknown")}, denied ${String(evidence.deniedStatus ?? "unknown")}`;
+    case coreLoopPrivateChannelStalePostLaneId:
+      return `${status}: channel ${String(evidence.channel ?? "unknown")}, ${String(evidence.receiptStatusText ?? "unknown receipt")}, locked ${String(evidence.refreshedLocked ?? "unknown")}`;
     case coreLoopPrivateChannelInvalidActionLaneId: {
       const scenario = privateChannelInvalidActionRecoveryScenario();
       return `${status}: channel ${String(evidence.channel ?? "unknown")}, ${String(evidence.receiptStatusText ?? `Reject ${String(evidence.error ?? scenario.commandError)}`)}, legal action visible ${String(evidence.legalActionVisible ?? "unknown")}`;

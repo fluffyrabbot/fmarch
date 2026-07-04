@@ -716,6 +716,12 @@ assert.equal(
   "ack",
 );
 assert.equal(
+  session.verification.privateChannel.stalePostAfterPhaseTransition.receiptStatusText.includes(
+    "Ack",
+  ),
+  true,
+);
+assert.equal(
   session.verification.privateChannel.stalePostAfterPhaseTransition.stalePost
     .requestEnvelope.body.body.command.SubmitPost.channel_id,
   "private:mafia_day_chat",

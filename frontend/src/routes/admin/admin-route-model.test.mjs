@@ -49,6 +49,7 @@ import {
 } from "../../../../tools/dev_test_game_core_loop_action_scenarios.mjs";
 import {
   coreLoopPrivateChannelInvalidActionLaneId,
+  coreLoopPrivateChannelStalePostLaneId,
   privateChannelInvalidActionRecoveryScenario,
 } from "../../../../tools/dev_test_game_core_loop_private_channel_recovery_scenarios.mjs";
 import {
@@ -2605,6 +2606,10 @@ test("admin local core loop detail data carries lane rows", async () => {
       ["player-action-boundary", "passed: 0 unowned actions, direct reject InvalidTarget"],
       ["private-channel", "passed: private:mafia_day_chat, denied 403"],
       [
+        coreLoopPrivateChannelStalePostLaneId,
+        "passed: channel private:mafia_day_chat, Ack: stream seqs 43, locked true",
+      ],
+      [
         coreLoopPrivateChannelInvalidActionLaneId,
         `passed: channel ${privateChannelInvalidActionRecoveryScenario().channelId}, ${privateChannelInvalidActionRecoveryScenario().commandMessage}, legal action visible true`,
       ],
@@ -2682,6 +2687,11 @@ test("admin local core loop detail data carries lane rows", async () => {
         "private-channel",
         "passed: private:mafia_day_chat, denied 403",
         "passed: private:mafia_day_chat, denied 403",
+      ],
+      [
+        coreLoopPrivateChannelStalePostLaneId,
+        "passed: channel private:mafia_day_chat, Ack: stream seqs 43, locked true",
+        "passed: channel private:mafia_day_chat, Ack: stream seqs 43, locked true",
       ],
       [
         coreLoopPrivateChannelInvalidActionLaneId,
@@ -3790,6 +3800,14 @@ function proofRunFixture() {
       channel: "private:mafia_day_chat",
       allowedState: "ack",
       deniedStatus: 403,
+    },
+    [coreLoopPrivateChannelStalePostLaneId]: {
+      channel: "private:mafia_day_chat",
+      state: "ack",
+      receiptStatusText: "Ack: stream seqs 43",
+      refreshedPhase: "D01",
+      refreshedLocked: true,
+      projectedPostBody: "Stale private-channel post after D01 phase closure fixture.",
     },
     [coreLoopPrivateChannelInvalidActionLaneId]: {
       channel: privateChannelInvalidActionRecoveryScenario().channelId,

@@ -4649,6 +4649,7 @@ test("session card and markdown include role credential URLs and tokens", async 
         postBody: "Stale private-channel post after D01 phase closure fixture.",
         stalePost: {
           state: "ack",
+          message: "Ack: stream seqs 43",
           requestEnvelope: {
             body: {
               body: {
@@ -4664,6 +4665,7 @@ test("session card and markdown include role credential URLs and tokens", async 
           },
           serverEnvelope: { body: { kind: "Ack" } },
         },
+        receiptStatusText: "Ack: stream seqs 43",
         commandStateAfterAck: {
           phase: { phaseId: "D01", locked: true },
           currentVote: null,
