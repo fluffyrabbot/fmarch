@@ -20,7 +20,7 @@ export {
   completedHostStaleCommandCases,
   completedPlayerReloadCases,
   staleCompletedGamePlayerCommandCases,
-} from "./dev_test_game_core_loop_completed_game_shared_scenario_assertions.mjs";
+};
 
 export const completedGameProofReadinessCaseGroupDefinitions = Object.freeze([
   Object.freeze({ id: "completedHostStaleCommandCases" }),
@@ -33,11 +33,7 @@ export const completedGameProofReadinessCaseGroupIds = Object.freeze(
 );
 
 export function completedGameProofReadinessScenarioFamilies() {
-  return completedGameEndgameScenarioCaseFamilies({
-    hostStaleCommandCases: completedHostStaleCommandCases(),
-    playerReloadCases: completedPlayerReloadCases(),
-    playerStaleCommandCases: staleCompletedGamePlayerCommandCases(),
-  });
+  return completedGameEndgameScenarioCaseFamilies();
 }
 
 export function completedGameProofReadinessCaseGroups({
