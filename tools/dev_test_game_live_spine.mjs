@@ -10,12 +10,17 @@ export const devTestGameCoreLiveSpinePlan = [
   { kind: "node", script: "tools/dev_test_game_live_proof.mjs" },
   { kind: "node", script: "tools/dev_test_game_proof_contract.mjs" },
   { kind: "node", script: "tools/dev_test_game_core_loop_admin_proof.mjs" },
+  {
+    kind: "node",
+    script: "tools/dev_test_game_private_channel_recovery_receipt.mjs",
+  },
   { kind: "node", script: "tools/dev_test_game_hardening_admin_proof.mjs" },
   releaseReadinessStep({
     reason: "core-live-gameplay-admin-surfaces",
     changedInputs: [
       "target/dev-test-game/proof-run.json",
       "target/dev-test-game/core-loop-admin-proof.json",
+      "target/dev-test-game/private-channel-recovery-receipt.json",
       "target/dev-test-game/hardening-admin-proof.json",
     ],
   }),

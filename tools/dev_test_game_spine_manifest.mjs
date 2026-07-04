@@ -75,6 +75,11 @@ import {
   devTestGameLiveSpinePlan,
 } from "./dev_test_game_live_spine.mjs";
 import {
+  devTestGamePrivateChannelRecoveryReceiptCommand,
+  devTestGamePrivateChannelRecoveryReceiptPath,
+  devTestGamePrivateChannelRecoveryReceiptRoleUrl,
+} from "./dev_test_game_private_channel_recovery_receipt.mjs";
+import {
   nextActionAdminProofCommand,
   nextActionAdminProofPath,
   nextActionCommand,
@@ -255,6 +260,15 @@ export function buildDevTestGameSpineManifest({
         demoOnly: true,
         roleUrl: "/admin/audit/local-hosted-evidence-lane?game=<seeded-game>",
       },
+      privateChannelRecoveryReceipt: {
+        script: devTestGamePrivateChannelRecoveryReceiptCommand,
+        proofArtifact: devTestGamePrivateChannelRecoveryReceiptPath,
+        dependsOn: [
+          "target/dev-test-game/proof-run.json",
+          "target/dev-test-game/core-loop-admin-proof.json",
+        ],
+        roleUrl: devTestGamePrivateChannelRecoveryReceiptRoleUrl,
+      },
       releaseRunbook: {
         script: devTestGameReleaseRunbookCommand,
         proofArtifact: devTestGameReleaseRunbookPath,
@@ -380,6 +394,7 @@ export function buildDevTestGameSpineManifest({
       devTestGameHostedEvidenceLaneDemoExternalEvidencePath,
       devTestGameHostedEvidenceLaneDemoBlockedPath,
       devTestGameHostedEvidenceLaneDemoPassedPath,
+      devTestGamePrivateChannelRecoveryReceiptPath,
       devTestGameHostedOpsSignalsPath,
       devTestGameRealHostedObservabilityHandoffPath,
       devTestGameReleaseRunbookPath,
@@ -544,6 +559,7 @@ export function assertDevTestGameSpineManifest(manifest) {
     "tools/dev_test_game_live_proof.mjs",
     "tools/dev_test_game_proof_contract.mjs",
     "tools/dev_test_game_core_loop_admin_proof.mjs",
+    "tools/dev_test_game_private_channel_recovery_receipt.mjs",
     "tools/dev_test_game_hardening_admin_proof.mjs",
     "tools/dev_test_game_release_readiness.mjs",
   ]);
@@ -553,6 +569,7 @@ export function assertDevTestGameSpineManifest(manifest) {
     "tools/dev_test_game_live_proof.mjs",
     "tools/dev_test_game_proof_contract.mjs",
     "tools/dev_test_game_core_loop_admin_proof.mjs",
+    "tools/dev_test_game_private_channel_recovery_receipt.mjs",
     "tools/dev_test_game_hardening_admin_proof.mjs",
     "tools/dev_test_game_release_readiness.mjs",
     "tools/dev_test_game_seed_fixture_summary.mjs",
@@ -747,6 +764,22 @@ export function assertDevTestGameSpineManifest(manifest) {
   }
   if (manifest.commands.hostedEvidenceLaneDemoProof.demoOnly !== true) {
     throw new Error("spine manifest hosted evidence lane demo must stay demo-only");
+  }
+  if (
+    manifest.commands?.privateChannelRecoveryReceipt?.script !==
+    devTestGamePrivateChannelRecoveryReceiptCommand
+  ) {
+    throw new Error(
+      `spine manifest private-channel recovery command drifted: ${manifest.commands?.privateChannelRecoveryReceipt?.script}`,
+    );
+  }
+  if (
+    manifest.commands.privateChannelRecoveryReceipt.proofArtifact !==
+    devTestGamePrivateChannelRecoveryReceiptPath
+  ) {
+    throw new Error(
+      `spine manifest private-channel recovery artifact drifted: ${manifest.commands.privateChannelRecoveryReceipt.proofArtifact}`,
+    );
   }
   if (manifest.commands?.releaseRunbook?.script !== devTestGameReleaseRunbookCommand) {
     throw new Error(

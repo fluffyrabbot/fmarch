@@ -5,6 +5,7 @@ import {
   assertDevTestGameReleaseReadiness,
   validateDevTestGameAdminSpineProof,
   validateDevTestGameAdminSpineTerminalBatches,
+  validateDevTestGamePrivateChannelRecoveryReceipt,
 } from "./dev_test_game_release_readiness.mjs";
 import {
   assertDevTestGameNextAction,
@@ -40,6 +41,10 @@ import {
   localAdminAuditIds,
   localAdminAuditRoleUrl,
 } from "./dev_test_game_admin_audit_surface_ids.mjs";
+import {
+  devTestGamePrivateChannelRecoveryReceiptCommand,
+  devTestGamePrivateChannelRecoveryReceiptPath,
+} from "./dev_test_game_private_channel_recovery_receipt.mjs";
 export {
   devTestGameProofGraphAdminProofCommand,
   devTestGameProofGraphAdminProofPath,
@@ -54,12 +59,15 @@ export const DEV_TEST_GAME_PROOF_GRAPH_VERSION = 1;
 const proofGraphJsonPath = path.join(repoRoot, devTestGameProofGraphPath);
 const defaultAdminSpineTerminalBatchProofPath =
   "target/dev-test-game/admin-spine-terminal-batches.json";
+const defaultPrivateChannelRecoveryReceiptPath =
+  devTestGamePrivateChannelRecoveryReceiptPath;
 
 export function buildDevTestGameProofGraph(
   {
     spineManifest,
     adminSpineProof,
     adminSpineTerminalBatches = null,
+    privateChannelRecoveryReceipt = null,
     nextAction = null,
     releaseReadiness,
   },
@@ -68,6 +76,8 @@ export function buildDevTestGameProofGraph(
     spineManifestSource = "target/dev-test-game/spine-manifest.json",
     adminSpineProofSource = "target/dev-test-game/admin-spine-proof.json",
     adminSpineTerminalBatchesSource = defaultAdminSpineTerminalBatchProofPath,
+    privateChannelRecoveryReceiptSource =
+      defaultPrivateChannelRecoveryReceiptPath,
     nextActionSource = devTestGameNextActionPath,
     releaseReadinessSource = devTestGameReleaseReadinessPath,
   } = {},
@@ -84,6 +94,15 @@ export function buildDevTestGameProofGraph(
       : validateDevTestGameAdminSpineTerminalBatches(adminSpineTerminalBatches, {
           path: adminSpineTerminalBatchesSource,
         });
+  const privateChannelRecoveryReceiptEvidence =
+    privateChannelRecoveryReceipt === null
+      ? null
+      : validateDevTestGamePrivateChannelRecoveryReceipt(
+          privateChannelRecoveryReceipt,
+          {
+            path: privateChannelRecoveryReceiptSource,
+          },
+        );
   const releaseReadinessChecklist =
     assertDevTestGameReleaseReadiness(releaseReadiness);
   const adminSpine = adminSpineProof;
@@ -92,6 +111,8 @@ export function buildDevTestGameProofGraph(
     adminSpine,
     adminSpineTerminalBatches: adminSpineTerminalBatchEvidence,
     adminSpineTerminalBatchesSource,
+    privateChannelRecoveryReceipt: privateChannelRecoveryReceiptEvidence,
+    privateChannelRecoveryReceiptSource,
     releaseReadiness: releaseReadinessChecklist,
     releaseReadinessSource,
   });
@@ -99,6 +120,7 @@ export function buildDevTestGameProofGraph(
     nodes,
     nextAction: nextActionEvidence,
     adminSpineTerminalBatches: adminSpineTerminalBatchEvidence,
+    privateChannelRecoveryReceipt: privateChannelRecoveryReceiptEvidence,
   });
   const evidence = {
     version: DEV_TEST_GAME_PROOF_GRAPH_VERSION,
@@ -116,6 +138,12 @@ export function buildDevTestGameProofGraph(
       ...(adminSpineTerminalBatchEvidence === null
         ? {}
         : { adminSpineTerminalBatches: adminSpineTerminalBatchesSource }),
+      ...(privateChannelRecoveryReceiptEvidence === null
+        ? {}
+        : {
+            privateChannelRecoveryReceipt:
+              privateChannelRecoveryReceiptSource,
+          }),
       ...(nextActionEvidence === null ? {} : { nextAction: nextActionSource }),
       releaseReadiness: releaseReadinessSource,
       manifestGeneratedAt: manifest.generatedAt,
@@ -134,6 +162,8 @@ export function buildDevTestGameProofGraph(
         (node) => node.kind === "production-feature-spine-target",
       ).length,
       terminalBatchCount: adminSpineTerminalBatchEvidence?.batchCount ?? 0,
+      privateChannelRecoveryLaneCount:
+        privateChannelRecoveryReceiptEvidence?.laneCount ?? 0,
     },
     nodes,
     edges,
@@ -229,6 +259,7 @@ export function assertDevTestGameProofGraph(
     assertDevTestGameProofGraphCoversAdminSpine(evidence, adminSpineProof);
   }
   assertDevTestGameProofGraphCoversTerminalBatches(evidence);
+  assertDevTestGameProofGraphCoversPrivateChannelRecoveryReceipt(evidence);
   if (releaseReadiness !== undefined) {
     assertDevTestGameProofGraphCoversProductionFeatureTargets(
       evidence,
@@ -237,6 +268,53 @@ export function assertDevTestGameProofGraph(
   }
   assertProductionFacingSurfaceGraphCoverage({ proofGraph: evidence });
   return evidence;
+}
+
+export function assertDevTestGameProofGraphCoversPrivateChannelRecoveryReceipt(
+  graph,
+) {
+  const node = (graph?.nodes ?? []).find(
+    (candidate) => candidate.id === "private-channel-recovery-receipt",
+  );
+  if (graph?.generatedFrom?.privateChannelRecoveryReceipt === undefined) {
+    if (
+      node !== undefined ||
+      graph.summary?.privateChannelRecoveryLaneCount !== 0
+    ) {
+      throw new Error("proof graph private-channel receipt summary drifted");
+    }
+    return graph;
+  }
+  if (
+    node?.kind !== "private-channel-recovery-receipt" ||
+    node.status !== "passed" ||
+    node.artifact !== graph.generatedFrom.privateChannelRecoveryReceipt ||
+    node.roleUrl !== localAdminAuditRoleUrl(localAdminAuditIds.coreLoop) ||
+    node.proofCommand !== devTestGamePrivateChannelRecoveryReceiptCommand ||
+    node.recoveryCommand !== devTestGamePrivateChannelRecoveryReceiptCommand ||
+    node.laneCount !== graph.summary.privateChannelRecoveryLaneCount
+  ) {
+    throw new Error("proof graph private-channel receipt node drifted");
+  }
+  for (const [from, to, relationship] of [
+    ["admin-proof:core-loop", "private-channel-recovery-receipt", "proves"],
+    ["private-channel-recovery-receipt", "proof-graph", "records"],
+    ["private-channel-recovery-receipt", "next-action", "summarizes-into"],
+  ]) {
+    if (
+      !(graph.edges ?? []).some(
+        (edge) =>
+          edge.from === from &&
+          edge.to === to &&
+          edge.relationship === relationship,
+      )
+    ) {
+      throw new Error(
+        `proof graph private-channel receipt edge missing: ${from}->${to}`,
+      );
+    }
+  }
+  return graph;
 }
 
 export function assertDevTestGameProofGraphCoversTerminalBatches(graph) {
@@ -405,6 +483,9 @@ export async function writeDevTestGameProofGraph({
   adminSpineTerminalBatchesPath =
     process.env.FMARCH_DEV_TEST_GAME_ADMIN_SPINE_TERMINAL_BATCHES ??
     defaultAdminSpineTerminalBatchProofPath,
+  privateChannelRecoveryReceiptPath =
+    process.env.FMARCH_DEV_TEST_GAME_PRIVATE_CHANNEL_RECOVERY_RECEIPT ??
+    defaultPrivateChannelRecoveryReceiptPath,
   nextActionPath = process.env.FMARCH_DEV_TEST_GAME_NEXT_ACTION ??
     devTestGameNextActionPath,
   releaseReadinessPath = process.env.FMARCH_DEV_TEST_GAME_RELEASE_READINESS ??
@@ -416,12 +497,19 @@ export async function writeDevTestGameProofGraph({
     repoRoot,
     adminSpineTerminalBatchesPath,
   );
+  const absolutePrivateChannelRecoveryReceiptPath = path.resolve(
+    repoRoot,
+    privateChannelRecoveryReceiptPath,
+  );
   const absoluteNextActionPath = path.resolve(repoRoot, nextActionPath);
   const absoluteReleaseReadinessPath = path.resolve(repoRoot, releaseReadinessPath);
   const spineManifest = JSON.parse(await readFile(absoluteSpineManifestPath, "utf8"));
   const adminSpineProof = JSON.parse(await readFile(absoluteAdminSpineProofPath, "utf8"));
   const adminSpineTerminalBatches = await readOptionalJson(
     absoluteAdminSpineTerminalBatchesPath,
+  );
+  const privateChannelRecoveryReceipt = await readOptionalJson(
+    absolutePrivateChannelRecoveryReceiptPath,
   );
   const nextAction = JSON.parse(await readFile(absoluteNextActionPath, "utf8"));
   const releaseReadiness = JSON.parse(
@@ -432,6 +520,7 @@ export async function writeDevTestGameProofGraph({
       spineManifest,
       adminSpineProof,
       adminSpineTerminalBatches,
+      privateChannelRecoveryReceipt,
       nextAction,
       releaseReadiness,
     },
@@ -442,6 +531,10 @@ export async function writeDevTestGameProofGraph({
       adminSpineTerminalBatchesSource: path.relative(
         repoRoot,
         absoluteAdminSpineTerminalBatchesPath,
+      ),
+      privateChannelRecoveryReceiptSource: path.relative(
+        repoRoot,
+        absolutePrivateChannelRecoveryReceiptPath,
       ),
       nextActionSource: path.relative(repoRoot, absoluteNextActionPath),
       releaseReadinessSource: path.relative(repoRoot, absoluteReleaseReadinessPath),
@@ -457,6 +550,8 @@ function buildProofGraphNodes({
   adminSpine,
   adminSpineTerminalBatches,
   adminSpineTerminalBatchesSource,
+  privateChannelRecoveryReceipt,
+  privateChannelRecoveryReceiptSource,
   releaseReadiness,
   releaseReadinessSource,
 }) {
@@ -511,6 +606,24 @@ function buildProofGraphNodes({
             ],
           },
         ];
+  const privateChannelRecoveryReceiptNode =
+    privateChannelRecoveryReceipt === null
+      ? []
+      : [
+          {
+            id: "private-channel-recovery-receipt",
+            label: "Private-channel recovery receipt",
+            kind: "private-channel-recovery-receipt",
+            status: privateChannelRecoveryReceipt.status,
+            artifact: privateChannelRecoveryReceiptSource,
+            roleUrl: privateChannelRecoveryReceipt.roleUrl,
+            proofCommand: devTestGamePrivateChannelRecoveryReceiptCommand,
+            recoveryCommand: devTestGamePrivateChannelRecoveryReceiptCommand,
+            familyId: privateChannelRecoveryReceipt.familyId,
+            laneCount: privateChannelRecoveryReceipt.laneCount,
+            laneIds: privateChannelRecoveryReceipt.laneIds,
+          },
+        ];
   return [
     {
       id: "admin-spine",
@@ -563,6 +676,7 @@ function buildProofGraphNodes({
       recoveryCommand: manifest.commands?.proofFreshness?.script,
     },
     ...terminalBatchNode,
+    ...privateChannelRecoveryReceiptNode,
     ...adminProofNodes,
     ...productionFeatureTargetNodes,
   ].map((node) =>
@@ -576,6 +690,7 @@ function buildProofGraphEdges({
   nodes,
   nextAction = null,
   adminSpineTerminalBatches = null,
+  privateChannelRecoveryReceipt = null,
 }) {
   const nodeIds = new Set(nodes.map((node) => node.id));
   const edges = [
@@ -585,6 +700,7 @@ function buildProofGraphEdges({
     ["spine-manifest", "next-action", "records"],
     ["proof-freshness", "next-action", "recovers-through"],
     ...terminalBatchEdges(adminSpineTerminalBatches),
+    ...privateChannelRecoveryReceiptEdges(privateChannelRecoveryReceipt),
     ...nextActionRecoveryEdges(nextAction),
     ...nodes
       .filter((node) => node.kind === "admin-proof-surface")
@@ -612,6 +728,35 @@ function buildProofGraphEdges({
         ),
       ),
     );
+}
+
+function privateChannelRecoveryReceiptEdges(privateChannelRecoveryReceipt) {
+  if (privateChannelRecoveryReceipt === null) {
+    return [];
+  }
+  return [
+    [
+      "admin-proof:core-loop",
+      "private-channel-recovery-receipt",
+      "proves",
+      {
+        roleUrl: privateChannelRecoveryReceipt.roleUrl,
+        proofTarget: privateChannelRecoveryReceipt.path,
+      },
+    ],
+    [
+      "private-channel-recovery-receipt",
+      "proof-graph",
+      "records",
+      { proofTarget: privateChannelRecoveryReceipt.path },
+    ],
+    [
+      "private-channel-recovery-receipt",
+      "next-action",
+      "summarizes-into",
+      { proofTarget: privateChannelRecoveryReceipt.path },
+    ],
+  ];
 }
 
 function terminalBatchEdges(adminSpineTerminalBatches) {

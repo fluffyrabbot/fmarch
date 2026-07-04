@@ -224,6 +224,13 @@ import {
   devTestGameLiveSpinePlan,
 } from "./dev_test_game_live_spine.mjs";
 import {
+  assertDevTestGamePrivateChannelRecoveryReceipt,
+  buildDevTestGamePrivateChannelRecoveryReceipt,
+  devTestGamePrivateChannelRecoveryReceiptCommand,
+  devTestGamePrivateChannelRecoveryReceiptPath,
+  devTestGamePrivateChannelRecoveryReceiptRoleUrl,
+} from "./dev_test_game_private_channel_recovery_receipt.mjs";
+import {
   devTestGameReleaseReadinessScript,
   releaseReadinessSteps,
 } from "./dev_test_game_spine_readiness_steps.mjs";
@@ -441,6 +448,10 @@ test("dev test-game spine orchestrators expose stable proof order and env maps",
     packageJson.scripts["test:dev-test-game-live"],
     "node tools/dev_test_game_live_spine.mjs",
   );
+  assert.equal(
+    packageJson.scripts["test:dev-test-game-private-channel-recovery-receipt"],
+    "node tools/dev_test_game_private_channel_recovery_receipt.mjs",
+  );
   assert.deepEqual(
     devTestGameBackupRestoreSpinePlan.map((step) => step.script),
     [
@@ -584,6 +595,10 @@ test("dev test-game spine orchestrators expose stable proof order and env maps",
     { kind: "node", script: "tools/dev_test_game_live_proof.mjs" },
     { kind: "node", script: "tools/dev_test_game_proof_contract.mjs" },
     { kind: "node", script: "tools/dev_test_game_core_loop_admin_proof.mjs" },
+    {
+      kind: "node",
+      script: "tools/dev_test_game_private_channel_recovery_receipt.mjs",
+    },
     { kind: "node", script: "tools/dev_test_game_hardening_admin_proof.mjs" },
     {
       kind: "node",
@@ -592,6 +607,7 @@ test("dev test-game spine orchestrators expose stable proof order and env maps",
       changedInputs: [
         "target/dev-test-game/proof-run.json",
         "target/dev-test-game/core-loop-admin-proof.json",
+        "target/dev-test-game/private-channel-recovery-receipt.json",
         "target/dev-test-game/hardening-admin-proof.json",
       ],
     },
@@ -1302,6 +1318,15 @@ test("dev test-game spine manifest records command order and evidence wiring", (
     dependsOn: [devTestGameHostedConcurrentRaceMatrixPath],
     demoOnly: true,
     roleUrl: "/admin/audit/local-hosted-evidence-lane?game=<seeded-game>",
+  });
+  assert.deepEqual(manifest.commands.privateChannelRecoveryReceipt, {
+    script: devTestGamePrivateChannelRecoveryReceiptCommand,
+    proofArtifact: devTestGamePrivateChannelRecoveryReceiptPath,
+    dependsOn: [
+      "target/dev-test-game/proof-run.json",
+      "target/dev-test-game/core-loop-admin-proof.json",
+    ],
+    roleUrl: devTestGamePrivateChannelRecoveryReceiptRoleUrl,
   });
   assert.deepEqual(manifest.commands.releaseRunbook, {
     script: devTestGameReleaseRunbookCommand,
@@ -2948,6 +2973,8 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
       spineManifest,
       adminSpineProof,
       adminSpineTerminalBatches: adminSpineTerminalBatchesFixture(),
+      privateChannelRecoveryReceipt:
+        privateChannelRecoveryReceiptFixture(),
       releaseReadiness,
     },
     {
@@ -2961,13 +2988,18 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
     graph,
     releaseReadiness,
   );
-  assert.equal(graph.summary.nodeCount, 52);
-  assert.equal(graph.summary.roleUrlCount, 52);
+  assert.equal(graph.summary.nodeCount, 53);
+  assert.equal(graph.summary.roleUrlCount, 53);
   assert.equal(graph.summary.productionFeatureTargetCount, 30);
   assert.equal(graph.summary.terminalBatchCount, 2);
+  assert.equal(graph.summary.privateChannelRecoveryLaneCount, 4);
   assert.equal(
     graph.generatedFrom.adminSpineTerminalBatches,
     "target/dev-test-game/admin-spine-terminal-batches.json",
+  );
+  assert.equal(
+    graph.generatedFrom.privateChannelRecoveryReceipt,
+    devTestGamePrivateChannelRecoveryReceiptPath,
   );
   assert.deepEqual(
     graph.nodes
@@ -2990,6 +3022,7 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
           "proof-freshness",
           "next-action",
           "admin-spine-terminal-batches",
+          "private-channel-recovery-receipt",
         ].includes(node.id),
       )
       .map((node) => [
@@ -3041,6 +3074,13 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
         "target/dev-test-game/admin-spine-terminal-batches.json",
         "/admin/audit/local-admin-spine?game=<seeded-game>",
         "npm run test:dev-test-game-admin-spine",
+      ],
+      [
+        "private-channel-recovery-receipt",
+        "private-channel-recovery-receipt",
+        devTestGamePrivateChannelRecoveryReceiptPath,
+        devTestGamePrivateChannelRecoveryReceiptRoleUrl,
+        devTestGamePrivateChannelRecoveryReceiptCommand,
       ],
     ],
   );
@@ -3114,6 +3154,24 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
       ["proof-graph", "terminal-browser-proof"],
       ["proof-freshness", "terminal-browser-proof"],
       ["next-action", "terminal-browser-proof"],
+    ],
+  );
+  assert.deepEqual(
+    graph.edges
+      .filter(
+        (edge) =>
+          edge.from === "private-channel-recovery-receipt" ||
+          edge.to === "private-channel-recovery-receipt",
+      )
+      .map((edge) => [edge.from, edge.to, edge.relationship]),
+    [
+      [
+        "admin-proof:core-loop",
+        "private-channel-recovery-receipt",
+        "proves",
+      ],
+      ["private-channel-recovery-receipt", "proof-graph", "records"],
+      ["private-channel-recovery-receipt", "next-action", "summarizes-into"],
     ],
   );
   assert(
@@ -9868,6 +9926,20 @@ test("session card and markdown include role credential URLs and tokens", async 
   assert.equal(proofRun.identityBootstrap.rootSessionSource, "auth_session");
   assert.equal(proofRun.productionReady, false);
   assert.equal(proofRun.releaseReady, false);
+  const privateChannelRecoveryReceipt =
+    buildDevTestGamePrivateChannelRecoveryReceipt(proofRun, {
+      generatedAt: "2026-06-26T00:00:00.000Z",
+    });
+  assertDevTestGamePrivateChannelRecoveryReceipt(privateChannelRecoveryReceipt);
+  assert.equal(privateChannelRecoveryReceipt.status, "passed");
+  assert.equal(
+    privateChannelRecoveryReceipt.generatedFrom.roleUrl,
+    devTestGamePrivateChannelRecoveryReceiptRoleUrl,
+  );
+  assert.deepEqual(
+    privateChannelRecoveryReceipt.laneIds,
+    coreLoopPrivateChannelRecoveryLaneIds,
+  );
   assert.deepEqual(
     proofRun.lanes.map((lane) => lane.id),
     [
@@ -11062,6 +11134,9 @@ test("session card and markdown include role credential URLs and tokens", async 
     adminSpineTerminalBatchesPath:
       "target/dev-test-game/admin-spine-terminal-batches.json",
     adminSpineTerminalBatches: adminSpineTerminalBatchesFixture(),
+    privateChannelRecoveryReceiptPath:
+      devTestGamePrivateChannelRecoveryReceiptPath,
+    privateChannelRecoveryReceipt: privateChannelRecoveryReceiptFixture(),
   });
   assertDevTestGameReleaseReadiness(adminSpineReadiness);
   assert.equal(
@@ -11075,6 +11150,21 @@ test("session card and markdown include role credential URLs and tokens", async 
   assert.equal(
     adminSpineReadiness.generatedFrom.adminSpineTerminalBatches,
     "target/dev-test-game/admin-spine-terminal-batches.json",
+  );
+  assert.equal(
+    adminSpineReadiness.generatedFrom.privateChannelRecoveryReceipt,
+    devTestGamePrivateChannelRecoveryReceiptPath,
+  );
+  assert.equal(
+    adminSpineReadiness.localDevelopmentSpine.checks.find(
+      (item) => item.id === "local-private-channel-recovery-receipt",
+    ).roleUrl,
+    devTestGamePrivateChannelRecoveryReceiptRoleUrl,
+  );
+  assert.equal(
+    adminSpineReadiness.localDevelopmentSpine.evidence
+      .privateChannelRecoveryReceipt.laneCount,
+    4,
   );
   assert.equal(
     adminSpineReadiness.localDevelopmentSpine.checks.find(
@@ -16338,6 +16428,45 @@ function adminSpineTerminalBatchesFixture() {
         productionReady: false,
       },
     ],
+  };
+}
+
+function privateChannelRecoveryReceiptFixture() {
+  return {
+    version: 1,
+    proof: "dev-test-game-private-channel-recovery-receipt",
+    status: "passed",
+    releaseReady: false,
+    productionReady: false,
+    generatedAt: "2026-06-26T00:00:00.000Z",
+    scope: "local-dev-test-game-private-channel-recovery",
+    proofBoundary: "Local private-channel recovery receipt.",
+    generatedFrom: {
+      proofRun: "target/dev-test-game/proof-run.json",
+      coreLoopAdminProof: "target/dev-test-game/core-loop-admin-proof.json",
+      game: "00000000-0000-0000-0000-000000000001",
+      family: {
+        id: "core-loop-private-channel-recovery",
+        laneIds: [...coreLoopPrivateChannelRecoveryLaneIds],
+      },
+      roleUrl: devTestGamePrivateChannelRecoveryReceiptRoleUrl,
+    },
+    summary: {
+      status: "passed",
+      laneCount: 4,
+      passedLaneCount: 4,
+      familyCount: 4,
+      expectedLaneCount: 4,
+      expectedFamilyCount: 4,
+    },
+    laneIds: [...coreLoopPrivateChannelRecoveryLaneIds],
+    lanes: coreLoopPrivateChannelRecoveryLaneIds.map((laneId) => ({
+      id: laneId,
+      label: laneId,
+      status: "passed",
+      compactStatus: `passed:${laneId}`,
+      evidence: { channel: "private:mafia_day_chat" },
+    })),
   };
 }
 

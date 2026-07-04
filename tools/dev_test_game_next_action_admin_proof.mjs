@@ -160,6 +160,8 @@ export function nextActionAdminProofCase() {
         proofGraph: source.proofGraph,
       }),
       terminalBatchGraph: source.nextAction.generatedFrom?.terminalBatchGraph ?? null,
+      privateChannelRecoveryGraph:
+        source.nextAction.generatedFrom?.privateChannelRecoveryGraph ?? null,
       relatedHandoffs: relatedHandoffsForNextAction({
         nextAction: source.nextAction,
         proofGraph: source.proofGraph,
@@ -497,6 +499,22 @@ export function assertNextActionAdminProof(evidence) {
       "next-action admin proof is missing host stale-control trace evidence",
     );
   }
+  const privateChannelRecoveryGraph =
+    evidence.generatedFrom?.privateChannelRecoveryGraph;
+  if (
+    privateChannelRecoveryGraph !== null &&
+    privateChannelRecoveryGraph !== undefined &&
+    (privateChannelRecoveryGraph.nodeId !==
+      "private-channel-recovery-receipt" ||
+      privateChannelRecoveryGraph.status !== "passed" ||
+      privateChannelRecoveryGraph.laneCount !== 4 ||
+      !Array.isArray(privateChannelRecoveryGraph.laneIds) ||
+      privateChannelRecoveryGraph.laneIds.length !== 4)
+  ) {
+    throw new Error(
+      "next-action admin proof private-channel recovery graph summary drifted",
+    );
+  }
   for (const checkId of requiredChecksForEvidence(evidence)) {
     if (!evidence.adminRoleSurface?.visibleChecks?.includes(checkId)) {
       throw new Error(`next-action admin proof missing visible check: ${checkId}`);
@@ -742,6 +760,9 @@ function requiredChecksForNextAction(nextAction) {
   }
   if (nextAction.generatedFrom?.terminalBatchGraph !== undefined) {
     checks.push("terminal-proof-batch-graph");
+  }
+  if (nextAction.generatedFrom?.privateChannelRecoveryGraph !== undefined) {
+    checks.push("private-channel-recovery-graph");
   }
   if (nextAction.seedProofLaneCoverageTrace?.status !== "unavailable") {
     checks.push("seed-proof-lane-coverage-trace");
@@ -1031,6 +1052,10 @@ function requiredChecksForEvidence(evidence) {
     evidence.generatedFrom?.terminalBatchGraph === undefined
       ? []
       : ["terminal-proof-batch-graph"]),
+    ...(evidence.generatedFrom?.privateChannelRecoveryGraph === null ||
+    evidence.generatedFrom?.privateChannelRecoveryGraph === undefined
+      ? []
+      : ["private-channel-recovery-graph"]),
     ...(evidence.generatedFrom?.seedProofLaneCoverageTrace?.status !==
       "unavailable"
       ? [

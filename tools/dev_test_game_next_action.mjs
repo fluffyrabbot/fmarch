@@ -113,6 +113,8 @@ export function buildDevTestGameNextAction(
       : assertDevTestGameHostedTargetPreflight(hostedTargetPreflight);
   const graph = proofGraph === null ? null : assertProofGraphForNextAction(proofGraph);
   const terminalBatchGraph = terminalBatchGraphFromProofGraph(graph);
+  const privateChannelRecoveryGraph =
+    privateChannelRecoveryGraphFromProofGraph(graph);
   const sourceTargetsByCheckId =
     productionFeatureSourceTargetsByCheckIdFromReadiness(readiness, {
       defaultBrowserProofCommand: devTestGameLiveProofCommand,
@@ -389,6 +391,9 @@ export function buildDevTestGameNextAction(
             ...(terminalBatchGraph === null
               ? {}
               : { terminalBatchGraph }),
+            ...(privateChannelRecoveryGraph === null
+              ? {}
+              : { privateChannelRecoveryGraph }),
           }),
     },
     nextAction,
@@ -571,6 +576,9 @@ export function assertDevTestGameNextAction(evidence) {
   assertStaleConflictMessageTrace(evidence.staleConflictMessageTrace);
   assertHostStaleControlTrace(evidence.hostStaleControlTrace);
   assertTerminalBatchGraph(evidence.generatedFrom?.terminalBatchGraph);
+  assertPrivateChannelRecoveryGraph(
+    evidence.generatedFrom?.privateChannelRecoveryGraph,
+  );
   return evidence;
 }
 
@@ -803,6 +811,43 @@ function terminalBatchGraphFromProofGraph(proofGraph) {
   };
 }
 
+function privateChannelRecoveryGraphFromProofGraph(proofGraph) {
+  if (proofGraph === null) {
+    return null;
+  }
+  const node = proofGraph.nodes.find(
+    (candidate) => candidate?.id === "private-channel-recovery-receipt",
+  );
+  if (node === undefined) {
+    return null;
+  }
+  const edges = proofGraph.edges.filter(
+    (candidate) =>
+      (candidate?.from === "private-channel-recovery-receipt" ||
+        candidate?.to === "private-channel-recovery-receipt") &&
+      [
+        "proves",
+        "records",
+        "summarizes-into",
+      ].includes(String(candidate?.relationship ?? "")),
+  );
+  return {
+    nodeId: node.id,
+    status: String(node.status ?? "unknown"),
+    proofTarget: String(node.artifact ?? ""),
+    roleUrl: String(node.roleUrl ?? ""),
+    familyId: String(node.familyId ?? ""),
+    laneCount: Number(node.laneCount ?? 0),
+    laneIds: Array.isArray(node.laneIds)
+      ? node.laneIds.map((laneId) => String(laneId))
+      : [],
+    edgeCount: edges.length,
+    edgeTargets: edges.map((edge) =>
+      String(edge.from === node.id ? edge.to : edge.from),
+    ),
+  };
+}
+
 function assertTerminalBatchGraph(terminalBatchGraph) {
   if (terminalBatchGraph === undefined) {
     return;
@@ -822,6 +867,31 @@ function assertTerminalBatchGraph(terminalBatchGraph) {
       JSON.stringify(["proof-graph", "proof-freshness", "next-action"])
   ) {
     throw new Error("next-action terminal batch graph summary drifted");
+  }
+}
+
+function assertPrivateChannelRecoveryGraph(privateChannelRecoveryGraph) {
+  if (privateChannelRecoveryGraph === undefined) {
+    return;
+  }
+  if (
+    privateChannelRecoveryGraph === null ||
+    privateChannelRecoveryGraph.nodeId !== "private-channel-recovery-receipt" ||
+    privateChannelRecoveryGraph.status !== "passed" ||
+    privateChannelRecoveryGraph.proofTarget !==
+      "target/dev-test-game/private-channel-recovery-receipt.json" ||
+    privateChannelRecoveryGraph.roleUrl !==
+      "/admin/audit/local-core-loop?game=<seeded-game>" ||
+    privateChannelRecoveryGraph.familyId !==
+      "core-loop-private-channel-recovery" ||
+    privateChannelRecoveryGraph.laneCount !== 4 ||
+    !Array.isArray(privateChannelRecoveryGraph.laneIds) ||
+    privateChannelRecoveryGraph.laneIds.length !== 4 ||
+    privateChannelRecoveryGraph.edgeCount !== 3 ||
+    JSON.stringify(privateChannelRecoveryGraph.edgeTargets) !==
+      JSON.stringify(["admin-proof:core-loop", "proof-graph", "next-action"])
+  ) {
+    throw new Error("next-action private-channel recovery graph summary drifted");
   }
 }
 

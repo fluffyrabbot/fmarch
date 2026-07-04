@@ -210,6 +210,10 @@ import {
   coreLoopPrivateChannelRecoveryLaneIds,
   coreLoopPrivateChannelRecoveryScenarioFamily,
 } from "./dev_test_game_core_loop_private_channel_recovery_scenarios.mjs";
+import {
+  assertDevTestGamePrivateChannelRecoveryReceipt,
+  devTestGamePrivateChannelRecoveryReceiptPath,
+} from "./dev_test_game_private_channel_recovery_receipt.mjs";
 export const DEV_TEST_GAME_RELEASE_READINESS_VERSION = 1;
 const devTestGameSeededBrowserProofCommand =
   devTestGameProductionFeatureBrowserProofCommand;
@@ -228,6 +232,10 @@ const defaultCoreLoopAdminProofPath = path.join(
 const defaultHardeningAdminProofPath = path.join(
   artifactDir,
   "hardening-admin-proof.json",
+);
+const defaultPrivateChannelRecoveryReceiptPath = path.join(
+  repoRoot,
+  devTestGamePrivateChannelRecoveryReceiptPath,
 );
 const defaultBackupRestoreProofPath = path.join(
   repoRoot,
@@ -504,6 +512,18 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
         },
       )
     : undefined;
+  const privateChannelRecoveryReceiptEvidence =
+    options.privateChannelRecoveryReceipt
+      ? validateDevTestGamePrivateChannelRecoveryReceipt(
+          options.privateChannelRecoveryReceipt,
+          {
+            path:
+              options.privateChannelRecoveryReceiptPath ??
+              devTestGamePrivateChannelRecoveryReceiptPath,
+            artifact: options.privateChannelRecoveryReceiptArtifact,
+          },
+        )
+      : undefined;
   const raceCoverageEvidence = options.raceCoverage
     ? validateDevTestGameRaceCoverage(options.raceCoverage, {
         path: options.raceCoveragePath ?? "target/dev-test-game/race-coverage.json",
@@ -791,6 +811,18 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
       artifactPaths: adminSpineTerminalBatchEvidence.artifactPaths,
     });
   }
+  if (privateChannelRecoveryReceiptEvidence !== undefined) {
+    localChecks.push({
+      id: "local-private-channel-recovery-receipt",
+      label: "Local private-channel recovery receipt",
+      status: "passed",
+      evidence: privateChannelRecoveryReceiptEvidence.path,
+      proofBoundary: privateChannelRecoveryReceiptEvidence.proofBoundary,
+      roleUrl: privateChannelRecoveryReceiptEvidence.roleUrl,
+      laneCount: privateChannelRecoveryReceiptEvidence.laneCount,
+      laneIds: privateChannelRecoveryReceiptEvidence.laneIds,
+    });
+  }
   if (raceCoverageEvidence !== undefined) {
     localChecks.push({
       id: "local-race-coverage-inventory",
@@ -1063,6 +1095,12 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
                     adminSpineTerminalBatchEvidence.path,
                 }),
           }),
+      ...(privateChannelRecoveryReceiptEvidence === undefined
+        ? {}
+        : {
+            privateChannelRecoveryReceipt:
+              privateChannelRecoveryReceiptEvidence.path,
+          }),
       ...(raceCoverageEvidence === undefined
         ? {}
         : {
@@ -1219,6 +1257,12 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
                         ? {}
                         : { terminalBatches: adminSpineTerminalBatchEvidence }),
                     },
+                  }),
+              ...(privateChannelRecoveryReceiptEvidence === undefined
+                ? {}
+                : {
+                    privateChannelRecoveryReceipt:
+                      privateChannelRecoveryReceiptEvidence,
                   }),
               ...(raceCoverageEvidence === undefined
                 ? {}
@@ -5384,6 +5428,24 @@ export function validateDevTestGameAdminSpineTerminalBatches(
   };
 }
 
+export function validateDevTestGamePrivateChannelRecoveryReceipt(
+  proof,
+  options = {},
+) {
+  const receipt = assertDevTestGamePrivateChannelRecoveryReceipt(proof);
+  return {
+    status: "passed",
+    path: options.path ?? devTestGamePrivateChannelRecoveryReceiptPath,
+    proofBoundary: receipt.proofBoundary,
+    roleUrl: receipt.generatedFrom.roleUrl,
+    familyId: receipt.generatedFrom.family.id,
+    laneCount: receipt.summary.laneCount,
+    passedLaneCount: receipt.summary.passedLaneCount,
+    laneIds: [...receipt.laneIds],
+    ...(options.artifact === undefined ? {} : { artifact: options.artifact }),
+  };
+}
+
 export function validateDevTestGameAdminSpineAdminProof(proof, options = {}) {
   const requiredChecks = [
     "core-loop",
@@ -6021,6 +6083,18 @@ const optionalReadinessArtifactRegistry = Object.freeze([
     ignoreInvalidDefault: true,
   }),
   optionalReadinessArtifact({
+    id: "privateChannelRecoveryReceipt",
+    envVar: "FMARCH_DEV_TEST_GAME_PRIVATE_CHANNEL_RECOVERY_RECEIPT",
+    defaultPath: defaultPrivateChannelRecoveryReceiptPath,
+    outputKeys: {
+      data: "privateChannelRecoveryReceipt",
+      path: "privateChannelRecoveryReceiptPath",
+      freshnessMetadata: "privateChannelRecoveryReceiptArtifact",
+    },
+    validator: validateDevTestGamePrivateChannelRecoveryReceipt,
+    ignoreInvalidDefault: true,
+  }),
+  optionalReadinessArtifact({
     id: "raceCoverage",
     envVar: "FMARCH_DEV_TEST_GAME_RACE_COVERAGE",
     defaultPath: defaultRaceCoveragePath,
@@ -6155,6 +6229,7 @@ const optionalReadinessArtifactLoadPlan = Object.freeze([
   "adminSpineProof",
   "adminSpineAdminProof",
   "adminSpineTerminalBatches",
+  "privateChannelRecoveryReceipt",
   "raceCoverage",
   "hostedConcurrentRaceMatrix",
   "raceCoverageAdminProof",

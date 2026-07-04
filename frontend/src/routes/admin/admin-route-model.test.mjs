@@ -1837,6 +1837,7 @@ test("admin route data exposes local next action as a native audit row", async (
     capabilities: [{ kind: "GlobalAdmin" }],
     nextAction: nextActionFixture({
       terminalBatchGraph: terminalBatchGraphFixture(),
+      privateChannelRecoveryGraph: privateChannelRecoveryGraphFixture(),
     }),
     proofGraph: proofGraphFixture(),
   });
@@ -1887,6 +1888,7 @@ test("admin route data exposes local next action as a native audit row", async (
         "admin-proof:core-loop->production-feature:player-action-submission",
       ],
       ["terminal-proof-batch-graph", "passed:3 edges"],
+      ["private-channel-recovery-graph", "passed:4 lanes"],
       ["selection-trace", "0 candidates"],
       ["release-readiness-selection-trace", "1 buildable candidates"],
       ["release-readiness-hosted-concurrent-race-matrix", "selected:unproven"],
@@ -1991,6 +1993,7 @@ test("admin route data exposes local next action as a native audit row", async (
       edgeCount: 3,
       edgeTargets: ["proof-graph", "proof-freshness", "next-action"],
     },
+    privateChannelRecoveryGraph: privateChannelRecoveryGraphFixture(),
     stabilitySource: "",
     stabilityBuildSlice: "",
     stabilityProofTarget: "",
@@ -5214,6 +5217,7 @@ function nextActionFixture({
   staleConflictMessageTrace = staleConflictMessageTraceFixture(),
   hostStaleControlTrace = hostStaleControlTraceFixture(),
   terminalBatchGraph,
+  privateChannelRecoveryGraph,
 } = {}) {
   return {
     version: 1,
@@ -5280,6 +5284,9 @@ function nextActionFixture({
         failureCount: Number(stability?.failureCount ?? 0),
       },
       ...(terminalBatchGraph === undefined ? {} : { terminalBatchGraph }),
+      ...(privateChannelRecoveryGraph === undefined
+        ? {}
+        : { privateChannelRecoveryGraph }),
       seedProofLaneCoverageStatus: seedProofLaneCoverageTrace.status,
       seedProofLaneCoverageUnclassifiedCount:
         seedProofLaneCoverageTrace.unclassifiedLaneCount,
@@ -5486,6 +5493,25 @@ function terminalBatchGraphFixture() {
     proofIds: ["proof-graph", "proof-freshness", "next-action"],
     edgeCount: 3,
     edgeTargets: ["proof-graph", "proof-freshness", "next-action"],
+  };
+}
+
+function privateChannelRecoveryGraphFixture() {
+  return {
+    nodeId: "private-channel-recovery-receipt",
+    status: "passed",
+    proofTarget: "target/dev-test-game/private-channel-recovery-receipt.json",
+    roleUrl: localAdminAuditRoleUrl(localAdminAuditIds.coreLoop),
+    familyId: "core-loop-private-channel-recovery",
+    laneCount: 4,
+    laneIds: [
+      "private-channel",
+      "private-channel-stale-post-after-transition",
+      "private-channel-completed-game-recovery",
+      "private-channel-invalid-action-recovery",
+    ],
+    edgeCount: 3,
+    edgeTargets: ["admin-proof:core-loop", "proof-graph", "next-action"],
   };
 }
 
