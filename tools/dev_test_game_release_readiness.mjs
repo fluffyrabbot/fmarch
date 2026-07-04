@@ -3345,6 +3345,65 @@ export function validateDevTestGameHostedTargetPreflightAdminProof(
       );
     }
   }
+  for (const linkId of proof.generatedFrom?.relatedAuditIds ?? []) {
+    if (!proof.adminRoleSurface?.visibleRelatedLinks?.includes(linkId)) {
+      throw new Error(
+        `hosted target preflight admin proof missing related link: ${linkId}`,
+      );
+    }
+  }
+  for (const inputId of proof.generatedFrom?.hostedHandoffInputIds ?? []) {
+    if (!proof.adminRoleSurface?.visibleHostedHandoffInputs?.includes(inputId)) {
+      throw new Error(
+        `hosted target preflight admin proof missing handoff input: ${inputId}`,
+      );
+    }
+  }
+  for (const checkId of proof.generatedFrom?.hostedHandoffBlockedCheckIds ?? []) {
+    if (
+      !proof.adminRoleSurface?.visibleHostedHandoffBlockedChecks?.includes(
+        checkId,
+      )
+    ) {
+      throw new Error(
+        `hosted target preflight admin proof missing handoff blocked check: ${checkId}`,
+      );
+    }
+  }
+  for (const sectionId of proof.generatedFrom?.hostedHandoffInputSectionIds ?? []) {
+    if (
+      !proof.adminRoleSurface?.visibleHostedHandoffInputSections?.includes(
+        sectionId,
+      )
+    ) {
+      throw new Error(
+        `hosted target preflight admin proof missing handoff input section: ${sectionId}`,
+      );
+    }
+  }
+  for (const rowId of proof.generatedFrom?.hostedHandoffSectionInputIds ?? []) {
+    if (
+      !proof.adminRoleSurface?.visibleHostedHandoffSectionInputs?.includes(rowId)
+    ) {
+      throw new Error(
+        `hosted target preflight admin proof missing handoff section input: ${rowId}`,
+      );
+    }
+  }
+  const expectedSummary = proof.generatedFrom?.hostedHandoffSummary;
+  if (expectedSummary !== undefined) {
+    const summary = proof.adminRoleSurface?.visibleHostedHandoffSummary;
+    if (
+      summary?.status !== expectedSummary.status ||
+      summary?.preflightStatus !== expectedSummary.preflightStatus ||
+      summary?.command !== expectedSummary.command ||
+      summary?.proofTarget !== expectedSummary.proofTarget
+    ) {
+      throw new Error(
+        "hosted target preflight admin proof missing hosted handoff summary",
+      );
+    }
+  }
   return {
     status: "passed",
     path:
@@ -3355,6 +3414,17 @@ export function validateDevTestGameHostedTargetPreflightAdminProof(
     detailRoleUrl: proof.adminRoleSurface.detailRoleUrl,
     visibleChecks: proof.adminRoleSurface.visibleChecks,
     visibleUnproven: proof.adminRoleSurface.visibleUnproven,
+    visibleRelatedLinks: proof.adminRoleSurface.visibleRelatedLinks ?? [],
+    visibleHostedHandoffInputs:
+      proof.adminRoleSurface.visibleHostedHandoffInputs ?? [],
+    visibleHostedHandoffBlockedChecks:
+      proof.adminRoleSurface.visibleHostedHandoffBlockedChecks ?? [],
+    visibleHostedHandoffInputSections:
+      proof.adminRoleSurface.visibleHostedHandoffInputSections ?? [],
+    visibleHostedHandoffSectionInputs:
+      proof.adminRoleSurface.visibleHostedHandoffSectionInputs ?? [],
+    visibleHostedHandoffSummary:
+      proof.adminRoleSurface.visibleHostedHandoffSummary ?? null,
     preflightStatus: String(proof.generatedFrom?.status ?? "unknown"),
     ...(options.artifact === undefined ? {} : { artifact: options.artifact }),
   };
@@ -3415,7 +3485,7 @@ export function validateDevTestGameHostedEvidenceLaneAdminProof(proof, options =
       proof.adminRoleSurface?.visibleHostedHandoffInputValues?.[inputId] ?? "";
     if (!visibleText.includes(expected)) {
       throw new Error(
-        `hosted identity evidence admin proof missing handoff input value: ${inputId}`,
+        `hosted evidence lane admin proof missing handoff input value: ${inputId}`,
       );
     }
   }
@@ -3435,7 +3505,7 @@ export function validateDevTestGameHostedEvidenceLaneAdminProof(proof, options =
       !proof.adminRoleSurface?.visibleHostedHandoffGroups?.includes(groupId)
     ) {
       throw new Error(
-        `hosted identity evidence admin proof missing handoff group: ${groupId}`,
+        `hosted evidence lane admin proof missing handoff group: ${groupId}`,
       );
     }
   }
@@ -3446,7 +3516,7 @@ export function validateDevTestGameHostedEvidenceLaneAdminProof(proof, options =
       )
     ) {
       throw new Error(
-        `hosted identity evidence admin proof missing handoff input section: ${sectionId}`,
+        `hosted evidence lane admin proof missing handoff input section: ${sectionId}`,
       );
     }
   }
@@ -3455,7 +3525,7 @@ export function validateDevTestGameHostedEvidenceLaneAdminProof(proof, options =
       !proof.adminRoleSurface?.visibleHostedHandoffSectionInputs?.includes(rowId)
     ) {
       throw new Error(
-        `hosted identity evidence admin proof missing handoff section input: ${rowId}`,
+        `hosted evidence lane admin proof missing handoff section input: ${rowId}`,
       );
     }
   }
@@ -3476,6 +3546,14 @@ export function validateDevTestGameHostedEvidenceLaneAdminProof(proof, options =
       proof.adminRoleSurface.visibleHostedHandoffInputValues ?? {},
     visibleHostedHandoffBlockedChecks:
       proof.adminRoleSurface.visibleHostedHandoffBlockedChecks ?? [],
+    visibleHostedHandoffGroups:
+      proof.adminRoleSurface.visibleHostedHandoffGroups ?? [],
+    visibleHostedHandoffInputSections:
+      proof.adminRoleSurface.visibleHostedHandoffInputSections ?? [],
+    visibleHostedHandoffSectionInputs:
+      proof.adminRoleSurface.visibleHostedHandoffSectionInputs ?? [],
+    visibleHostedHandoffSummary:
+      proof.adminRoleSurface.visibleHostedHandoffSummary ?? null,
     laneStatus: String(proof.generatedFrom?.status ?? "unknown"),
     preflightStatus: String(proof.generatedFrom?.preflightStatus ?? "unknown"),
     ...(options.artifact === undefined ? {} : { artifact: options.artifact }),
