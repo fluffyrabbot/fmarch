@@ -4428,6 +4428,9 @@ async function verifySeededD02VoteNightTransition({
       !d03R2StaleContinuePolicyRecovery?.activityStatusText?.includes(
         "Reject PromptAlreadyResolved",
       ) ||
+      !d03R2StaleContinuePolicyRecovery?.activityStatusText?.includes(
+        "host prompt selection is stale",
+      ) ||
       d03R2StaleContinuePolicyRecovery?.staleHostPromptReloadAfterReject?.phase
         ?.id !== "N03" ||
       d03R2StaleContinuePolicyRecovery?.staleHostPromptReloadAfterReject?.phase
@@ -8077,6 +8080,7 @@ async function submitStaleHostPromptRecovery({
     promptsAfterReject.find((prompt) => prompt.id === promptId)?.status !== "resolved" ||
     promptActionsAfterReject.includes(actionId) ||
     !activityStatusText.includes("Reject PromptAlreadyResolved") ||
+    !activityStatusText.includes("host prompt selection is stale") ||
     activityRow.source !== "outcome" ||
     activityRow.actionId !== actionId ||
     activityRow.dispatchKind !== "resolve_host_prompt" ||
@@ -8086,6 +8090,9 @@ async function submitStaleHostPromptRecovery({
     staleHostPromptReloadAfterReject.routeResponseStatus !== 200 ||
     !staleHostPromptReloadAfterReject.rejectReceiptStatusText.includes(
       "Reject PromptAlreadyResolved",
+    ) ||
+    !staleHostPromptReloadAfterReject.rejectReceiptStatusText.includes(
+      "host prompt selection is stale",
     ) ||
     staleHostPromptReloadAfterReject.promptsAfterReload.find(
       (prompt) => prompt.id === promptId,

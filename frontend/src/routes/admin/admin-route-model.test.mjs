@@ -3964,7 +3964,7 @@ function proofRunFixture() {
               rejectState: "reject",
               rejectError: "PromptAlreadyResolved",
               activityStatusText:
-                "Reject PromptAlreadyResolved: prompt already resolved",
+                "Reject PromptAlreadyResolved: prompt already resolved; host prompt selection is stale, refresh the host console and use current prompt controls",
               promptStatusAfterReject: "resolved",
               promptActionVisibleAfterReject: false,
               reloadStatus: "passed",

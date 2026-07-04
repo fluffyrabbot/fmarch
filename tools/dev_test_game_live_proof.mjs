@@ -308,6 +308,10 @@ assert.match(
   proofRunSpineThirdCycle.checkpoints[12].activityStatusText,
   /Reject PromptAlreadyResolved/,
 );
+assert.match(
+  proofRunSpineThirdCycle.checkpoints[12].activityStatusText,
+  /host prompt selection is stale/,
+);
 assert.equal(
   proofRunSpineThirdCycle.checkpoints[12].promptStatusAfterReject,
   "resolved",
@@ -4465,6 +4469,10 @@ assert.match(
   session.verification.multiplayerHardening.staleHostPrompt.activityStatusText,
   /Reject PromptAlreadyResolved/,
 );
+assert.match(
+  session.verification.multiplayerHardening.staleHostPrompt.activityStatusText,
+  /host prompt selection is stale/,
+);
 assert.equal(
   session.verification.multiplayerHardening.staleHostPrompt
     .staleHostPromptReloadAfterReject.status,
@@ -4479,6 +4487,11 @@ assert.match(
   session.verification.multiplayerHardening.staleHostPrompt
     .staleHostPromptReloadAfterReject.rejectReceiptStatusText,
   /Reject PromptAlreadyResolved/,
+);
+assert.match(
+  session.verification.multiplayerHardening.staleHostPrompt
+    .staleHostPromptReloadAfterReject.rejectReceiptStatusText,
+  /host prompt selection is stale/,
 );
 assert.equal(
   session.verification.multiplayerHardening.staleHostPrompt

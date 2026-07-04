@@ -3708,7 +3708,7 @@ test("session card and markdown include role credential URLs and tokens", async 
           reject: {
             state: "reject",
             error: "PromptAlreadyResolved",
-            message: "Reject PromptAlreadyResolved: prompt already resolved",
+            message: "Reject PromptAlreadyResolved: prompt already resolved; host prompt selection is stale, refresh the host console and use current prompt controls",
             serverEnvelope: { body: { kind: "Reject" } },
           },
           commandOutcomes: [
@@ -3726,7 +3726,7 @@ test("session card and markdown include role credential URLs and tokens", async 
           ],
           promptActionsAfterReject: [],
           activityStatusText:
-            "Reject PromptAlreadyResolved: prompt already resolved",
+            "Reject PromptAlreadyResolved: prompt already resolved; host prompt selection is stale, refresh the host console and use current prompt controls",
           activityRow: {
             source: "outcome",
             actionId:
@@ -3745,7 +3745,7 @@ test("session card and markdown include role credential URLs and tokens", async 
             status: "passed",
             routeResponseStatus: 200,
             rejectReceiptStatusText:
-              "Reject PromptAlreadyResolved: prompt already resolved",
+              "Reject PromptAlreadyResolved: prompt already resolved; host prompt selection is stale, refresh the host console and use current prompt controls",
             surfaceText: "Host console",
             promptsAfterReload: [
               { id: "D03:revote:NoMajority", status: "resolved" },
@@ -8214,7 +8214,7 @@ test("session card and markdown include role credential URLs and tokens", async 
         reject: {
           state: "reject",
           error: "PromptAlreadyResolved",
-          message: "Reject PromptAlreadyResolved: prompt already resolved",
+          message: "Reject PromptAlreadyResolved: prompt already resolved; host prompt selection is stale, refresh the host console and use current prompt controls",
           serverEnvelope: { body: { kind: "Reject" } },
         },
         commandOutcomes: [
@@ -8231,7 +8231,7 @@ test("session card and markdown include role credential URLs and tokens", async 
           },
         ],
         promptActionsAfterReject: [],
-        activityStatusText: "Reject PromptAlreadyResolved: prompt already resolved",
+        activityStatusText: "Reject PromptAlreadyResolved: prompt already resolved; host prompt selection is stale, refresh the host console and use current prompt controls",
         activityRow: {
           source: "outcome",
           actionId: "resolve_host_prompt-D01-skip_next_day-slot_1",
@@ -8250,7 +8250,7 @@ test("session card and markdown include role credential URLs and tokens", async 
           status: "passed",
           routeResponseStatus: 200,
           rejectReceiptStatusText:
-            "Reject PromptAlreadyResolved: prompt already resolved",
+            "Reject PromptAlreadyResolved: prompt already resolved; host prompt selection is stale, refresh the host console and use current prompt controls",
           surfaceText: "Host console",
           promptsAfterReload: [
             {

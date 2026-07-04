@@ -467,6 +467,33 @@ test("host command sender normalizes Ack and Reject server truth", async () => {
     "Reject InvalidTarget: invalid target; deadline target is stale, refresh the host console and use current phase controls",
   );
 
+  const stalePromptReject = await sendHostActionCommand({
+    actionEvent: RESOLVE_PROMPT_SELECT_POLICY_EVENT,
+    principalUserId: "host_h",
+    commandIdFactory: () => "77777777-7777-4777-8777-777777777777",
+    envelopeIdFactory: () => 13,
+    fetchImpl: async () =>
+      jsonResponse({
+        v: 1,
+        id: 13,
+        body: {
+          kind: "Reject",
+          body: {
+            error: "PromptAlreadyResolved",
+            retryable: false,
+            message: "prompt already resolved",
+          },
+        },
+      }),
+  });
+
+  assert.equal(stalePromptReject.state, "reject");
+  assert.equal(stalePromptReject.error, "PromptAlreadyResolved");
+  assert.equal(
+    stalePromptReject.message,
+    "Reject PromptAlreadyResolved: prompt already resolved; host prompt selection is stale, refresh the host console and use current prompt controls",
+  );
+
   const retryableReject = await sendHostActionCommand({
     actionEvent: REPLACEMENT_EVENT,
     principalUserId: "host_h",

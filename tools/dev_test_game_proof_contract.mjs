@@ -4983,6 +4983,9 @@ export function buildDevTestGameProofRun(session, options = {}) {
         hardening.staleHostPrompt?.promptActionsAfterReject?.includes(
           "resolve_host_prompt-D01-skip_next_day-slot_1",
         ) === false &&
+        hardening.staleHostPrompt?.activityStatusText?.includes(
+          "host prompt selection is stale",
+        ) === true &&
         hardening.staleHostPrompt?.activityRow?.source === "outcome" &&
         hardening.staleHostPrompt?.activityRow?.actionId ===
           "resolve_host_prompt-D01-skip_next_day-slot_1" &&
@@ -5033,6 +5036,9 @@ export function buildDevTestGameProofRun(session, options = {}) {
             ?.routeResponseStatus === 200 &&
           hardening.staleHostPrompt?.staleHostPromptReloadAfterReject
             ?.rejectReceiptStatusText?.includes("Reject PromptAlreadyResolved") ===
+            true &&
+          hardening.staleHostPrompt?.staleHostPromptReloadAfterReject
+            ?.rejectReceiptStatusText?.includes("host prompt selection is stale") ===
             true &&
           hardening.staleHostPrompt?.staleHostPromptReloadAfterReject
             ?.promptsAfterReload?.find(
@@ -7189,6 +7195,9 @@ function buildCoreLoopSpineSummary({ session, verification }) {
     cycles[2]?.checkpoints?.[12]?.rejectError === "PromptAlreadyResolved" &&
     String(cycles[2]?.checkpoints?.[12]?.activityStatusText ?? "").includes(
       "Reject PromptAlreadyResolved",
+    ) &&
+    String(cycles[2]?.checkpoints?.[12]?.activityStatusText ?? "").includes(
+      "host prompt selection is stale",
     ) &&
     cycles[2]?.checkpoints?.[12]?.promptStatusAfterReject === "resolved" &&
     cycles[2]?.checkpoints?.[12]?.promptActionVisibleAfterReject === false &&

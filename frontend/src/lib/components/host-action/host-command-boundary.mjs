@@ -255,6 +255,12 @@ function rejectMessage(reject, retryable, { requestEnvelope } = {}) {
   ) {
     return `${base}; deadline target is stale, refresh the host console and use current phase controls`;
   }
+  if (
+    reject.error === "PromptAlreadyResolved" &&
+    requestEnvelope?.body?.body?.command?.ResolveHostPrompt !== undefined
+  ) {
+    return `${base}; host prompt selection is stale, refresh the host console and use current prompt controls`;
+  }
   return retryable ? `${base}; reload and retry` : base;
 }
 
