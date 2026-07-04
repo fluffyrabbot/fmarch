@@ -192,6 +192,7 @@ import {
   hostedIdentityEvidenceBlockedChecks,
   hostedIdentityEvidenceHandoffCase,
   hostedIdentityEvidenceInputIds,
+  hostedIdentityExpectedRoleSurfaceContract,
   hostedIdentityEvidencePlaceholderFixturePath,
   hostedIdentityEvidencePlaceholderSchema,
   hostedIdentityEvidenceRedactedPassFixturePath,
@@ -551,7 +552,7 @@ test("hosted identity evidence lane records blocked and passed handoffs", async 
       ["session-secret-policy-evidence", "blocked"],
       ["hosted-audit-retention-export-evidence", "blocked"],
       ["role-surface-adapter-preserved", "blocked"],
-      ["release-claim-boundary-carried", "blocked"],
+      ["release-claim-boundary-carried", "passed"],
     ],
   );
   assert.match(
@@ -578,6 +579,7 @@ test("hosted identity evidence lane records blocked and passed handoffs", async 
   });
   assertDevTestGameHostedIdentityEvidence(placeholder);
   assert.equal(placeholder.status, "blocked");
+  assert.equal(placeholder.target.roleSurfaceContractDiff.status, "passed");
   assert.deepEqual(
     placeholder.hostedHandoffChecklist.requirementGroups.find(
       (group) => group.id === "hosted-identity-evidence-intake",
@@ -602,6 +604,12 @@ test("hosted identity evidence lane records blocked and passed handoffs", async 
   });
   assertDevTestGameHostedIdentityEvidence(passed);
   assert.equal(passed.status, "passed");
+  assert.deepEqual(
+    passed.target.expectedRoleSurfaceContract,
+    hostedIdentityExpectedRoleSurfaceContract,
+  );
+  assert.equal(passed.target.roleSurfaceContractDiff.status, "passed");
+  assert.deepEqual(passed.target.roleSurfaceContractDiff.mismatches, []);
   assert.equal(passed.hostedHandoffChecklist.status, "passed");
   assert.deepEqual(passed.hostedHandoffChecklist.blockedCheckIds, []);
   assert.deepEqual(
@@ -702,6 +710,40 @@ test("hosted identity evidence lane records blocked and passed handoffs", async 
           ],
         ],
       ],
+    ],
+  );
+
+  const changedRoleSurfaceSource = JSON.parse(JSON.stringify(redactedPassSource));
+  changedRoleSurfaceSource.hostedIdentity.roleSurfaceArchitectureChanged = true;
+  changedRoleSurfaceSource.hostedIdentity.roleSurfaceContract.roleUrlPatterns = [
+    ...changedRoleSurfaceSource.hostedIdentity.roleSurfaceContract.roleUrlPatterns,
+    { id: "invite-token-url", href: "/invite/:token" },
+  ];
+  const changedRoleSurfacePath =
+    "target/dev-test-game/hosted-identity-role-surface-changed.test.json";
+  await writeFile(
+    changedRoleSurfacePath,
+    `${JSON.stringify(changedRoleSurfaceSource)}\n`,
+  );
+  const changedRoleSurface = await buildDevTestGameHostedIdentityEvidence({
+    env: { FMARCH_HOSTED_IDENTITY_EVIDENCE_PATH: changedRoleSurfacePath },
+    generatedAt: "2026-07-01T00:00:01.500Z",
+  });
+  assertDevTestGameHostedIdentityEvidence(changedRoleSurface);
+  assert.equal(changedRoleSurface.status, "blocked");
+  assert.equal(
+    changedRoleSurface.checks.find(
+      (check) => check.id === "role-surface-adapter-preserved",
+    )?.status,
+    "blocked",
+  );
+  assert.deepEqual(
+    changedRoleSurface.target.roleSurfaceContractDiff.mismatches.map(
+      (mismatch) => mismatch.path,
+    ),
+    [
+      "hostedIdentity.roleSurfaceArchitectureChanged",
+      "hostedIdentity.roleSurfaceContract.roleUrlPatterns.length",
     ],
   );
 });
@@ -14583,6 +14625,11 @@ function hostedIdentityEvidenceAdminProofFixture() {
       hostedHandoffGroupStatuses: Object.fromEntries(
         handoff.requirementGroups.map((group) => [group.id, group.status]),
       ),
+      hostedIdentityRoleSurfaceContractDiffStatus: "blocked",
+      hostedIdentityRoleSurfaceContractMismatchIds: [
+        "hostedIdentity-roleSurfaceArchitectureChanged",
+        "hostedIdentity-roleSurfaceContract",
+      ],
       relatedAuditIds: ["local-identity-adapter", "local-next-action"],
     },
     adminRoleSurface: {
@@ -14608,6 +14655,11 @@ function hostedIdentityEvidenceAdminProofFixture() {
           `${group.label} ${group.status}`,
         ]),
       ),
+      visibleHostedIdentityRoleSurfaceContractDiff: { status: "blocked" },
+      visibleHostedIdentityRoleSurfaceContractMismatches: [
+        "hostedIdentity-roleSurfaceArchitectureChanged",
+        "hostedIdentity-roleSurfaceContract",
+      ],
       visibleRelatedLinks: ["local-identity-adapter", "local-next-action"],
       rawInviteTokensVisible: false,
       releaseReady: false,

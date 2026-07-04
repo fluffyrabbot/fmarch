@@ -7,10 +7,12 @@ import {
   hostedIdentityEvidenceBlockedChecks,
   hostedIdentityEvidenceHandoffCase,
   hostedIdentityEvidenceInputIds,
+  hostedIdentityExpectedRoleSurfaceContract,
   hostedIdentityEvidencePlaceholderFixturePath,
   hostedIdentityEvidencePlaceholderSchema,
   hostedIdentityEvidenceRedactedPassFixturePath,
   hostedIdentityEvidenceRequirementGroups,
+  hostedIdentityRoleSurfaceContractDiff,
   requiredHostedIdentityEvidenceForCheck,
 } from "./dev_test_game_hosted_identity_evidence_cases.mjs";
 
@@ -48,6 +50,29 @@ test("hosted identity evidence cases share handoff inputs and blocked groups", (
   assert.equal(
     requiredHostedIdentityEvidenceForCheck("invite-delivery-evidence"),
     "Redacted hosted invite delivery and revocation intake packet without raw invite tokens in role URLs or admin surfaces.",
+  );
+  assert.deepEqual(
+    hostedIdentityRoleSurfaceContractDiff({
+      roleSurfaceArchitectureChanged: false,
+      roleSurfaceContract: hostedIdentityExpectedRoleSurfaceContract,
+    }).mismatches,
+    [],
+  );
+  assert.deepEqual(
+    hostedIdentityRoleSurfaceContractDiff({
+      roleSurfaceArchitectureChanged: true,
+      roleSurfaceContract: {
+        ...hostedIdentityExpectedRoleSurfaceContract,
+        roleUrlPatterns: [
+          ...hostedIdentityExpectedRoleSurfaceContract.roleUrlPatterns,
+          { id: "invite-token-url", href: "/invite/:token" },
+        ],
+      },
+    }).mismatches.map((mismatch) => mismatch.path),
+    [
+      "hostedIdentity.roleSurfaceArchitectureChanged",
+      "hostedIdentity.roleSurfaceContract.roleUrlPatterns.length",
+    ],
   );
   assert.equal(
     hostedIdentityEvidenceRedactedPassFixturePath,

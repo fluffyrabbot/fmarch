@@ -16,6 +16,8 @@ export {
   hostedIdentityEvidenceRedactedPassFixturePath,
   hostedIdentityEvidenceRequirementGroupDefinitions,
   hostedIdentityEvidenceRequirementGroups,
+  hostedIdentityExpectedRoleSurfaceContract,
+  hostedIdentityRoleSurfaceContractDiff,
   requiredHostedIdentityEvidenceForCheck,
 } from "./dev_test_game_hosted_identity_evidence_cases.mjs";
 import {
@@ -29,6 +31,8 @@ import {
   hostedIdentityEvidenceRedactedPassFixturePath,
   hostedIdentityEvidenceRequirementGroupDefinitions,
   hostedIdentityEvidenceRequirementGroups,
+  hostedIdentityExpectedRoleSurfaceContract,
+  hostedIdentityRoleSurfaceContractDiff,
   requiredHostedIdentityEvidenceForCheck,
 } from "./dev_test_game_hosted_identity_evidence_cases.mjs";
 
@@ -54,6 +58,9 @@ export async function buildDevTestGameHostedIdentityEvidence({
   const rawEvidencePath = optionalEnv(env.FMARCH_HOSTED_IDENTITY_EVIDENCE_PATH);
   const rawEvidence = await readRawHostedIdentityEvidence(rawEvidencePath);
   const source = rawEvidence.source ?? null;
+  const roleSurfaceContractDiff = hostedIdentityRoleSurfaceContractDiff(
+    source?.hostedIdentity,
+  );
   const checks = [
     {
       id: "hosted-identity-evidence-path-configured",
@@ -104,10 +111,8 @@ export async function buildDevTestGameHostedIdentityEvidence({
     }),
     {
       id: "role-surface-adapter-preserved",
-      status:
-        source?.hostedIdentity?.roleSurfaceArchitectureChanged === false
-          ? "passed"
-          : "blocked",
+      status: roleSurfaceContractDiff.status,
+      roleSurfaceContractDiff,
       requiredEvidence: requiredHostedIdentityEvidenceForCheck(
         "role-surface-adapter-preserved",
       ),
@@ -146,7 +151,12 @@ export async function buildDevTestGameHostedIdentityEvidence({
       rawEvidenceStatus: rawEvidence.status,
       placeholderFixturePath: hostedIdentityEvidencePlaceholderFixturePath,
       placeholderSchema: hostedIdentityEvidencePlaceholderSchema,
-      redactedIntakePacket: summarizeHostedIdentityRedactedIntakePacket(source),
+      expectedRoleSurfaceContract: hostedIdentityExpectedRoleSurfaceContract,
+      roleSurfaceContractDiff,
+      redactedIntakePacket:
+        rawEvidence.status === "passed"
+          ? summarizeHostedIdentityRedactedIntakePacket(source)
+          : null,
     },
     checks,
     hostedHandoffChecklist: hostedIdentityEvidenceHandoffCase({
@@ -200,8 +210,27 @@ export function assertDevTestGameHostedIdentityEvidence(evidence) {
     throw new Error("hosted identity evidence handoff checklist drifted");
   }
   assertHostedIdentityRedactedIntakePacketSummary(evidence);
+  assertHostedIdentityRoleSurfaceContractDiff(evidence);
   assertHostedIdentityEvidenceRequirementGroups(evidence);
   return evidence;
+}
+
+function assertHostedIdentityRoleSurfaceContractDiff(evidence) {
+  const diff = evidence.target?.roleSurfaceContractDiff;
+  const check = (evidence.checks ?? []).find(
+    (candidate) => candidate.id === "role-surface-adapter-preserved",
+  );
+  if (
+    diff === null ||
+    typeof diff !== "object" ||
+    !["passed", "blocked"].includes(diff.status) ||
+    diff.architectureId !== hostedIdentityExpectedRoleSurfaceContract.architectureId ||
+    !Array.isArray(diff.mismatches) ||
+    check?.roleSurfaceContractDiff?.status !== diff.status ||
+    check?.status !== diff.status
+  ) {
+    throw new Error("hosted identity role-surface contract diff drifted");
+  }
 }
 
 function assertHostedIdentityRedactedIntakePacketSummary(evidence) {
@@ -288,6 +317,7 @@ async function readRawHostedIdentityEvidence(rawEvidencePath) {
     if (schemaErrors.length > 0) {
       return {
         status: "blocked",
+        source,
         requiredEvidence:
           `Readable hosted identity evidence JSON matching ${hostedIdentityEvidencePlaceholderFixturePath}: ${schemaErrors.join("; ")}`,
       };
@@ -351,6 +381,12 @@ export function validateHostedIdentityEvidencePlaceholder(source) {
           `hostedIdentity.${field}`,
           errors,
         );
+      } else if (field === "roleSurfaceContract") {
+        requireObject(
+          source.hostedIdentity[field],
+          `hostedIdentity.${field}`,
+          errors,
+        );
       } else {
         requireObject(
           source.hostedIdentity[field],
@@ -363,6 +399,12 @@ export function validateHostedIdentityEvidencePlaceholder(source) {
           errors,
         });
       }
+    }
+    const diff = hostedIdentityRoleSurfaceContractDiff(source.hostedIdentity);
+    for (const mismatch of diff.mismatches) {
+      errors.push(
+        `${mismatch.path} must match ${hostedIdentityExpectedRoleSurfaceContract.architectureId}`,
+      );
     }
   }
   return errors;

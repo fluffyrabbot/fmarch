@@ -51,6 +51,7 @@ export const hostedIdentityEvidencePlaceholderSchema = Object.freeze({
         "sessionSecretPolicy",
         "hostedAuditRetentionExport",
         "roleSurfaceArchitectureChanged",
+        "roleSurfaceContract",
       ]),
       properties: Object.freeze({
         accountLifecycle: Object.freeze({ type: "object" }),
@@ -60,15 +61,64 @@ export const hostedIdentityEvidencePlaceholderSchema = Object.freeze({
         sessionSecretPolicy: Object.freeze({ type: "object" }),
         hostedAuditRetentionExport: Object.freeze({ type: "object" }),
         roleSurfaceArchitectureChanged: Object.freeze({ type: "boolean" }),
+        roleSurfaceContract: Object.freeze({ type: "object" }),
       }),
     }),
   }),
+});
+
+export const hostedIdentityExpectedRoleSurfaceContract = deepFreeze({
+  version: 1,
+  architectureId: "seeded-role-url-plus-session-adapter-v1",
+  seededGamePlaceholder: "<seeded-game>",
+  roleUrlPatterns: [
+    {
+      id: "admin-audit",
+      href: "/admin/audit/:audit?game=<seeded-game>",
+    },
+    {
+      id: "admin-overview",
+      href: "/admin?game=<seeded-game>",
+    },
+    {
+      id: "host",
+      href: "/g/<seeded-game>/host",
+    },
+    {
+      id: "player",
+      href: "/g/<seeded-game>",
+    },
+    {
+      id: "channel",
+      href: "/g/<seeded-game>/c/:channel",
+    },
+  ],
+  authBoundaries: [
+    {
+      id: "login",
+      path: "/auth/login",
+    },
+    {
+      id: "session",
+      path: "/auth/session",
+    },
+    {
+      id: "session-grants",
+      path: "/auth/session-grants",
+    },
+  ],
+  credentialPolicy: {
+    rawInviteTokensInRoleUrls: false,
+    rawSessionSecretsInRoleUrls: false,
+    accountIdentifiersChangeRoleUrls: false,
+  },
 });
 
 export const hostedIdentityEvidenceInputIds = Object.freeze([
   "command",
   "proof-target",
   "FMARCH_HOSTED_IDENTITY_EVIDENCE_PATH",
+  "redacted-role-surface-contract-packet",
   "redacted-account-lifecycle-packet",
   "redacted-invite-delivery-packet",
   "redacted-account-recovery-packet",
@@ -193,7 +243,7 @@ export const hostedIdentityEvidenceBlockedChecks = Object.freeze([
   Object.freeze({
     id: "role-surface-adapter-preserved",
     requiredEvidence:
-      "Hosted identity must preserve the existing role URL and adapter architecture.",
+      "Hosted identity must preserve the existing role URL and adapter architecture by matching the shared role-surface contract.",
   }),
   Object.freeze({
     id: "release-claim-boundary-carried",
@@ -311,4 +361,103 @@ export function requiredHostedIdentityEvidenceForCheck(id) {
     hostedIdentityEvidenceBlockedChecks.find((check) => check.id === id)
       ?.requiredEvidence ?? "Hosted identity evidence."
   );
+}
+
+export function hostedIdentityRoleSurfaceContractDiff(hostedIdentity) {
+  const expected = {
+    roleSurfaceArchitectureChanged: false,
+    roleSurfaceContract: hostedIdentityExpectedRoleSurfaceContract,
+  };
+  const actual = {
+    roleSurfaceArchitectureChanged:
+      hostedIdentity !== null &&
+      typeof hostedIdentity === "object" &&
+      !Array.isArray(hostedIdentity)
+        ? hostedIdentity.roleSurfaceArchitectureChanged
+        : undefined,
+    roleSurfaceContract:
+      hostedIdentity !== null &&
+      typeof hostedIdentity === "object" &&
+      !Array.isArray(hostedIdentity)
+        ? hostedIdentity.roleSurfaceContract
+        : undefined,
+  };
+  const mismatches = contractMismatches({
+    expected,
+    actual,
+    path: "hostedIdentity",
+  });
+  return {
+    status: mismatches.length === 0 ? "passed" : "blocked",
+    architectureId: hostedIdentityExpectedRoleSurfaceContract.architectureId,
+    expected,
+    actual: normalizeContractActual(actual),
+    mismatches,
+  };
+}
+
+function contractMismatches({ expected, actual, path }) {
+  if (Array.isArray(expected)) {
+    if (!Array.isArray(actual)) {
+      return [contractMismatch({ path, expected, actual })];
+    }
+    const mismatches = [];
+    if (actual.length !== expected.length) {
+      mismatches.push(
+        contractMismatch({
+          path: `${path}.length`,
+          expected: expected.length,
+          actual: actual.length,
+        }),
+      );
+    }
+    expected.forEach((value, index) => {
+      mismatches.push(
+        ...contractMismatches({
+          expected: value,
+          actual: actual[index],
+          path: `${path}[${index}]`,
+        }),
+      );
+    });
+    return mismatches;
+  }
+  if (expected !== null && typeof expected === "object") {
+    if (actual === null || typeof actual !== "object" || Array.isArray(actual)) {
+      return [contractMismatch({ path, expected, actual })];
+    }
+    return Object.keys(expected).flatMap((key) =>
+      contractMismatches({
+        expected: expected[key],
+        actual: actual[key],
+        path: `${path}.${key}`,
+      }),
+    );
+  }
+  return actual === expected ? [] : [contractMismatch({ path, expected, actual })];
+}
+
+function contractMismatch({ path, expected, actual }) {
+  return {
+    id: path.replace(/[^A-Za-z0-9]+/g, "-").replace(/^-|-$/g, ""),
+    path,
+    expected,
+    actual: actual === undefined ? null : actual,
+  };
+}
+
+function normalizeContractActual(actual) {
+  return JSON.parse(
+    JSON.stringify(actual, (_key, value) => (value === undefined ? null : value)),
+  );
+}
+
+function deepFreeze(value) {
+  if (value !== null && typeof value === "object") {
+    Object.freeze(value);
+    for (const child of Object.values(value)) {
+      deepFreeze(child);
+    }
+  }
+  return value;
 }

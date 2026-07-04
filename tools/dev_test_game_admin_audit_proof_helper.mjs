@@ -125,6 +125,8 @@ export async function proveAdminAuditDetail({
   requiredHostedIdentityPacketSectionStatuses = {},
   requiredHostedIdentityPacketRefs = [],
   requiredHostedIdentityPacketRefStatuses = {},
+  requiredHostedIdentityRoleSurfaceContractDiffStatus = null,
+  requiredHostedIdentityRoleSurfaceContractMismatches = [],
   requiredHostedHandoffSummary = null,
   requiredHostedHandoffBlockedReceipt = null,
   requiredRelatedLinks = [],
@@ -297,6 +299,16 @@ export async function proveAdminAuditDetail({
       prefix: "admin-audit-hosted-identity-packet-ref",
       ids: requiredHostedIdentityPacketRefs,
       expectedStatuses: requiredHostedIdentityPacketRefStatuses,
+    });
+    const visibleHostedIdentityRoleSurfaceContractDiff =
+      await waitForHostedIdentityRoleSurfaceContractDiff({
+        page,
+        expectedStatus: requiredHostedIdentityRoleSurfaceContractDiffStatus,
+      });
+    const visibleHostedIdentityRoleSurfaceContractMismatches = await waitForRows({
+      page,
+      prefix: "admin-audit-hosted-identity-role-surface-contract-mismatch",
+      ids: requiredHostedIdentityRoleSurfaceContractMismatches,
     });
     const visibleHostedHandoffSummary = await waitForHostedHandoffSummary({
       page,
@@ -562,6 +574,15 @@ export async function proveAdminAuditDetail({
       ...(visibleHostedIdentityPacketRefs.length === 0
         ? {}
         : { visibleHostedIdentityPacketRefs }),
+      ...(visibleHostedIdentityRoleSurfaceContractDiff === null
+        ? {}
+        : { visibleHostedIdentityRoleSurfaceContractDiff }),
+      ...(visibleHostedIdentityRoleSurfaceContractMismatches.length === 0
+        ? {}
+        : {
+            visibleHostedIdentityRoleSurfaceContractMismatches:
+              visibleHostedIdentityRoleSurfaceContractMismatches,
+          }),
       ...(visibleHostedHandoffSummary === null
         ? {}
         : { visibleHostedHandoffSummary }),
@@ -579,6 +600,29 @@ export async function proveAdminAuditDetail({
   } finally {
     await page.close();
   }
+}
+
+async function waitForHostedIdentityRoleSurfaceContractDiff({
+  page,
+  expectedStatus,
+}) {
+  if (expectedStatus === null || expectedStatus === undefined) {
+    return null;
+  }
+  const row = page.getByTestId(
+    "admin-audit-hosted-identity-role-surface-contract-diff-summary",
+  );
+  await row.waitFor({
+    state: "visible",
+    timeout: 15000,
+  });
+  const text = await row.innerText();
+  if (!text.includes(expectedStatus)) {
+    throw new Error(
+      `hosted identity role-surface contract diff missing ${expectedStatus}: ${text}`,
+    );
+  }
+  return { status: expectedStatus };
 }
 
 async function assertAdminAuditBodyText({ page, auditId, forbiddenText }) {

@@ -729,6 +729,9 @@ export function normalizeLocalHostedIdentityEvidenceAudit(
       nextProofTarget: String(hostedIdentityEvidence.nextProofTarget ?? ""),
       releaseReady: hostedIdentityEvidence.releaseReady === true,
       productionReady: hostedIdentityEvidence.productionReady === true,
+      roleSurfaceContractDiff: normalizeHostedIdentityRoleSurfaceContractDiff(
+        hostedIdentityEvidence.target?.roleSurfaceContractDiff,
+      ),
       redactedIntakePacket: normalizeHostedIdentityRedactedIntakePacket(
         hostedIdentityEvidence.target?.redactedIntakePacket,
       ),
@@ -2448,6 +2451,37 @@ function normalizeHostedIdentityRedactedIntakePacket(packet) {
       ),
     ),
   });
+}
+
+function normalizeHostedIdentityRoleSurfaceContractDiff(diff) {
+  if (diff === null || typeof diff !== "object") {
+    return null;
+  }
+  return Object.freeze({
+    status: String(diff.status ?? "unknown"),
+    architectureId: String(diff.architectureId ?? ""),
+    mismatchCount: Array.isArray(diff.mismatches) ? diff.mismatches.length : 0,
+    mismatches: Object.freeze(
+      (Array.isArray(diff.mismatches) ? diff.mismatches : []).map((mismatch) =>
+        Object.freeze({
+          id: String(mismatch.id ?? ""),
+          path: String(mismatch.path ?? ""),
+          expected: stringifyAuditValue(mismatch.expected),
+          actual: stringifyAuditValue(mismatch.actual),
+        }),
+      ),
+    ),
+  });
+}
+
+function stringifyAuditValue(value) {
+  if (typeof value === "string") {
+    return value;
+  }
+  if (value === null || value === undefined) {
+    return "";
+  }
+  return JSON.stringify(value);
 }
 
 function normalizeHostedHandoffGroups(groups) {

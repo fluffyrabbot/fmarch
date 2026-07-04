@@ -359,6 +359,34 @@
         </ol>
       </section>
     {/if}
+    {#if data.audit.artifactSummary?.roleSurfaceContractDiff}
+      <section
+        class="admin-audit-detail__group"
+        data-testid="admin-audit-detail-hosted-identity-role-surface-contract"
+      >
+        <h2>Role-surface contract</h2>
+        <ol class="admin-audit-detail__entries">
+          <li
+            class="admin-audit-detail__entry admin-audit-detail__entry--stack"
+            data-testid="admin-audit-hosted-identity-role-surface-contract-diff-summary"
+          >
+            <strong>{data.audit.artifactSummary.roleSurfaceContractDiff.status}</strong>
+            <span>{data.audit.artifactSummary.roleSurfaceContractDiff.architectureId}</span>
+            <span>{data.audit.artifactSummary.roleSurfaceContractDiff.mismatchCount} mismatches</span>
+          </li>
+          {#each data.audit.artifactSummary.roleSurfaceContractDiff.mismatches as mismatch}
+            <li
+              class="admin-audit-detail__entry admin-audit-detail__entry--stack"
+              data-testid={`admin-audit-hosted-identity-role-surface-contract-mismatch-${mismatch.id}`}
+            >
+              <strong>{mismatch.path}</strong>
+              <span>{mismatch.expected}</span>
+              <span>{mismatch.actual}</span>
+            </li>
+          {/each}
+        </ol>
+      </section>
+    {/if}
     {#if data.audit.hostedHandoffChecklist?.inputs?.length > 0 || data.audit.hostedHandoffChecklist?.blockedChecks?.length > 0}
       <section
         class="admin-audit-detail__group"

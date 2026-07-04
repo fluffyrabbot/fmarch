@@ -70,9 +70,11 @@ import {
 import {
   hostedIdentityEvidenceBlockedChecks,
   hostedIdentityEvidenceInputIds,
+  hostedIdentityExpectedRoleSurfaceContract,
   hostedIdentityEvidencePacketSectionDefinitions,
   hostedIdentityEvidencePlaceholderFixturePath,
   hostedIdentityEvidenceRequirementGroups,
+  hostedIdentityRoleSurfaceContractDiff,
 } from "../../../../tools/dev_test_game_hosted_identity_evidence.mjs";
 import {
   releaseReadinessUnprovenItem,
@@ -946,6 +948,12 @@ test("admin route data exposes hosted identity evidence as a native audit row", 
     identity.artifactSummary.placeholderFixturePath,
     hostedIdentityEvidencePlaceholderFixturePath,
   );
+  assert.deepEqual(identity.artifactSummary.roleSurfaceContractDiff, {
+    status: "passed",
+    architectureId: "seeded-role-url-plus-session-adapter-v1",
+    mismatchCount: 0,
+    mismatches: [],
+  });
   assert.deepEqual(identity.artifactSummary.redactedIntakePacket, {
     ...localHostedIdentityRedactedIntakePacketFixture(),
   });
@@ -4286,6 +4294,10 @@ function localHostedIdentityEvidenceFixture() {
       rawEvidencePath: null,
       rawEvidenceStatus: "blocked",
       placeholderFixturePath: hostedIdentityEvidencePlaceholderFixturePath,
+      roleSurfaceContractDiff: hostedIdentityRoleSurfaceContractDiff({
+        roleSurfaceArchitectureChanged: false,
+        roleSurfaceContract: hostedIdentityExpectedRoleSurfaceContract,
+      }),
       redactedIntakePacket: localHostedIdentityRedactedIntakePacketFixture(),
     },
     checks: hostedIdentityEvidenceBlockedChecks.map((check) => ({

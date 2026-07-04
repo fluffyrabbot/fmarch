@@ -112,6 +112,12 @@ await runAdminAuditProof({
           (ref) => [ref.rowId, ref.evidenceFamily],
         ),
       ),
+      requiredHostedIdentityRoleSurfaceContractDiffStatus:
+        source.hostedIdentityEvidence.target.roleSurfaceContractDiff.status,
+      requiredHostedIdentityRoleSurfaceContractMismatches:
+        source.hostedIdentityEvidence.target.roleSurfaceContractDiff.mismatches.map(
+          (mismatch) => mismatch.id,
+        ),
       requiredRelatedLinks,
     }),
   buildEvidence: ({ source, adminRoleSurface }) => ({
@@ -161,6 +167,12 @@ await runAdminAuditProof({
       hostedIdentityPacketRefIds: hostedIdentityPacketRefEntries(
         source.hostedIdentityEvidence,
       ).map((ref) => ref.rowId),
+      hostedIdentityRoleSurfaceContractDiffStatus:
+        source.hostedIdentityEvidence.target.roleSurfaceContractDiff.status,
+      hostedIdentityRoleSurfaceContractMismatchIds:
+        source.hostedIdentityEvidence.target.roleSurfaceContractDiff.mismatches.map(
+          (mismatch) => mismatch.id,
+        ),
       relatedAuditIds: requiredRelatedLinks,
     },
     adminRoleSurface,
@@ -272,6 +284,27 @@ export function assertHostedIdentityEvidenceAdminProof(evidence) {
     ) {
       throw new Error(
         `hosted identity evidence admin proof missing packet ref: ${refId}`,
+      );
+    }
+  }
+  if (
+    evidence.generatedFrom?.hostedIdentityRoleSurfaceContractDiffStatus !==
+    evidence.adminRoleSurface?.visibleHostedIdentityRoleSurfaceContractDiff?.status
+  ) {
+    throw new Error(
+      "hosted identity evidence admin proof missing role-surface contract diff",
+    );
+  }
+  for (const mismatchId of evidence.generatedFrom
+    ?.hostedIdentityRoleSurfaceContractMismatchIds ?? []) {
+    if (
+      !evidence.adminRoleSurface
+        ?.visibleHostedIdentityRoleSurfaceContractMismatches?.includes(
+          mismatchId,
+        )
+    ) {
+      throw new Error(
+        `hosted identity evidence admin proof missing role-surface mismatch: ${mismatchId}`,
       );
     }
   }
