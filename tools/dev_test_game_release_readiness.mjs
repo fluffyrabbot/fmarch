@@ -5259,6 +5259,10 @@ export function validateDevTestGameAdminSpineAdminProof(proof, options = {}) {
     "recovery",
     localAdminAuditHandoffCheckIds.spineManifest,
   ];
+  const requiredBatches = [
+    "aggregate-pre-release-admin-proof-batch",
+    "aggregate-release-and-hosted-admin-proof-batch",
+  ];
   if (proof?.version !== 1) {
     throw new Error(`admin spine admin proof version drifted: ${proof?.version}`);
   }
@@ -5287,6 +5291,11 @@ export function validateDevTestGameAdminSpineAdminProof(proof, options = {}) {
       throw new Error(`admin spine admin proof missing visible check: ${checkId}`);
     }
   }
+  for (const batchId of requiredBatches) {
+    if (!proof.adminRoleSurface?.visibleAdminSpineBatches?.includes(batchId)) {
+      throw new Error(`admin spine admin proof missing visible batch: ${batchId}`);
+    }
+  }
   return {
     status: "passed",
     path: options.path ?? "target/dev-test-game/admin-spine-admin-proof.json",
@@ -5294,6 +5303,7 @@ export function validateDevTestGameAdminSpineAdminProof(proof, options = {}) {
     overviewRoleUrl: proof.adminRoleSurface.overviewRoleUrl,
     detailRoleUrl: proof.adminRoleSurface.detailRoleUrl,
     visibleChecks: proof.adminRoleSurface.visibleChecks,
+    visibleAdminSpineBatches: proof.adminRoleSurface.visibleAdminSpineBatches,
     ...(options.artifact === undefined ? {} : { artifact: options.artifact }),
   };
 }

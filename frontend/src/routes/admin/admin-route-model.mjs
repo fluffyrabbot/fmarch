@@ -3585,6 +3585,11 @@ export function normalizeLocalAdminSpineAudit(adminSpineProof, { game }) {
     adminSpineProof.recovery !== null && typeof adminSpineProof.recovery === "object"
       ? adminSpineProof.recovery
       : {};
+  const batches = Array.isArray(adminSpineProof.batches)
+    ? adminSpineProof.batches.map((batch, index) =>
+        normalizeAdminSpineBatch(batch, index),
+      )
+    : [];
   const adminSpineRelatedLinks = Object.freeze([
     Object.freeze({
       id: localAdminAuditIds.spineManifest,
@@ -3638,10 +3643,12 @@ export function normalizeLocalAdminSpineAudit(adminSpineProof, { game }) {
         }),
       ],
     ),
+    batches: Object.freeze(batches),
     relatedLinks: adminSpineRelatedLinks,
     artifactSummary: Object.freeze({
       game: String(adminSpineProof.generatedFrom?.game ?? ""),
       proofCount: proofs.length,
+      batchCount: batches.length,
       recoveryStatus: String(recovery.status ?? "unknown"),
       refreshedCount: Number(recovery.refreshedCount ?? 0),
       nextCommand: String(recovery.nextCommand ?? ""),
@@ -3653,6 +3660,41 @@ export function normalizeLocalAdminSpineAudit(adminSpineProof, { game }) {
       productionReady: adminSpineProof.productionReady === true,
     }),
   });
+}
+
+function normalizeAdminSpineBatch(batch, index) {
+  const label = String(batch?.label ?? `Admin spine batch ${index + 1}`);
+  return Object.freeze({
+    id: adminSpineBatchId(label, index),
+    label,
+    reason: String(batch?.reason ?? ""),
+    status: String(batch?.status ?? "unknown"),
+    caseCount: Number(batch?.caseCount ?? 0),
+    elapsedMs: Number(batch?.elapsedMs ?? 0),
+    sharedFrontendSession: batch?.sharedFrontendSession === true,
+    sharedChromiumSession: batch?.sharedChromiumSession === true,
+    caseSmokeNames: Object.freeze(
+      Array.isArray(batch?.caseSmokeNames)
+        ? batch.caseSmokeNames.map((name) => String(name))
+        : [],
+    ),
+    proofIds: Object.freeze(
+      Array.isArray(batch?.proofIds) ? batch.proofIds.map((id) => String(id)) : [],
+    ),
+    artifactPaths: Object.freeze(
+      Array.isArray(batch?.artifactPaths)
+        ? batch.artifactPaths.map((artifactPath) => String(artifactPath))
+        : [],
+    ),
+  });
+}
+
+function adminSpineBatchId(label, index) {
+  const normalized = label
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  return normalized === "" ? `admin-spine-batch-${index + 1}` : normalized;
 }
 
 export function appendLocalSeedFixtureAudit(audit, seedFixtureSummary, { game }) {

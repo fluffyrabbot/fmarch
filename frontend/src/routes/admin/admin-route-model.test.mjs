@@ -1217,6 +1217,7 @@ test("admin route data exposes local admin spine proof as a native audit row", a
   assert.deepEqual(adminSpine.artifactSummary, {
     game: "game-a",
     proofCount: 10,
+    batchCount: 2,
     recoveryStatus: "passed",
     refreshedCount: 10,
     nextCommand: "npm run test:dev-test-game-admin-spine",
@@ -1238,6 +1239,32 @@ test("admin local admin spine detail data carries aggregate proof rows", async (
   assert.equal(data.surfaceHeader.title, "Local admin spine");
   assert.equal(data.audit.id, localAdminAuditIds.adminSpine);
   assert.equal(data.audit.checks.length, 12);
+  assert.equal(data.audit.batches.length, 2);
+  assert.deepEqual(
+    data.audit.batches.map((batch) => [
+      batch.id,
+      batch.status,
+      batch.caseCount,
+      batch.sharedFrontendSession,
+      batch.sharedChromiumSession,
+    ]),
+    [
+      [
+        "aggregate-pre-release-admin-proof-batch",
+        "passed",
+        6,
+        true,
+        true,
+      ],
+      [
+        "aggregate-release-and-hosted-admin-proof-batch",
+        "passed",
+        4,
+        true,
+        true,
+      ],
+    ],
+  );
   assert.deepEqual(
     data.audit.checks.map((check) => [check.id, check.status]),
     [
@@ -6332,6 +6359,65 @@ function adminSpineProofFixture() {
       adminSpineProofRow("race-coverage"),
       adminSpineProofRow("hosted-concurrent-race-matrix"),
       adminSpineProofRow("spine-manifest"),
+    ],
+    batches: [
+      {
+        label: "Aggregate pre-release admin proof batch",
+        reason: "pre-readiness local proof inputs",
+        status: "passed",
+        caseCount: 6,
+        caseSmokeNames: [
+          "dev-test-game-core-loop-admin-proof",
+          "dev-test-game-hardening-admin-proof",
+          "dev-test-game-identity-admin-proof",
+          "dev-test-game-backup-admin-proof",
+          "dev-test-game-ops-admin-proof",
+          "dev-test-game-seed-admin-proof",
+        ],
+        proofIds: ["core-loop", "hardening", "identity", "backup", "ops", "seed"],
+        artifactPaths: [
+          "target/dev-test-game/core-loop-admin-proof.json",
+          "target/dev-test-game/hardening-admin-proof.json",
+          "target/dev-test-game/identity-admin-proof.json",
+          "target/dev-test-game/backup-admin-proof.json",
+          "target/dev-test-game/ops-admin-proof.json",
+          "target/dev-test-game/seed-admin-proof.json",
+        ],
+        elapsedMs: 1200,
+        sharedFrontendSession: true,
+        sharedChromiumSession: true,
+        releaseReady: false,
+        productionReady: false,
+      },
+      {
+        label: "Aggregate release and hosted admin proof batch",
+        reason: "post-readiness rollup inputs",
+        status: "passed",
+        caseCount: 4,
+        caseSmokeNames: [
+          "dev-test-game-release-admin-proof",
+          "dev-test-game-race-coverage-admin-proof",
+          "dev-test-game-hosted-concurrent-race-matrix-admin-proof",
+          "dev-test-game-spine-manifest-admin-proof",
+        ],
+        proofIds: [
+          "release",
+          "race-coverage",
+          "hosted-concurrent-race-matrix",
+          "spine-manifest",
+        ],
+        artifactPaths: [
+          "target/dev-test-game/release-admin-proof.json",
+          "target/dev-test-game/race-coverage-admin-proof.json",
+          "target/dev-test-game/hosted-concurrent-race-matrix-admin-proof.json",
+          "target/dev-test-game/spine-manifest-admin-proof.json",
+        ],
+        elapsedMs: 1800,
+        sharedFrontendSession: true,
+        sharedChromiumSession: true,
+        releaseReady: false,
+        productionReady: false,
+      },
     ],
     recovery: {
       status: "passed",

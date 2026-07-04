@@ -16121,6 +16121,24 @@ function adminSpineAdminProofFixture() {
         "hosted-ops-signals",
         "spine-manifest",
       ],
+      batchIds: [
+        "aggregate-pre-release-admin-proof-batch",
+        "aggregate-release-and-hosted-admin-proof-batch",
+      ],
+      batchLabels: [
+        "Aggregate pre-release admin proof batch",
+        "Aggregate release and hosted admin proof batch",
+      ],
+      batchCaseCounts: [
+        {
+          label: "Aggregate pre-release admin proof batch",
+          caseCount: 7,
+        },
+        {
+          label: "Aggregate release and hosted admin proof batch",
+          caseCount: 9,
+        },
+      ],
     },
     adminRoleSurface: {
       status: "passed",
@@ -16146,6 +16164,16 @@ function adminSpineAdminProofFixture() {
         "recovery",
         "spine-manifest-handoff",
       ],
+      visibleAdminSpineBatches: [
+        "aggregate-pre-release-admin-proof-batch",
+        "aggregate-release-and-hosted-admin-proof-batch",
+      ],
+      visibleAdminSpineBatchStatuses: {
+        "aggregate-pre-release-admin-proof-batch":
+          "Aggregate pre-release admin proof batch passed 7 cases shared frontend shared chromium",
+        "aggregate-release-and-hosted-admin-proof-batch":
+          "Aggregate release and hosted admin proof batch passed 9 cases shared frontend shared chromium",
+      },
       rawInviteTokensVisible: false,
       releaseReady: false,
       productionReady: false,

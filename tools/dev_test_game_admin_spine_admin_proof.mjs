@@ -43,6 +43,13 @@ const requiredChecks = [
   localAdminAuditHandoffCheckIds.spineManifest,
 ];
 const requiredRelatedLinks = [localAdminAuditIds.spineManifest];
+const requiredAdminSpineBatches = [
+  "aggregate-pre-release-admin-proof-batch",
+  "aggregate-release-and-hosted-admin-proof-batch",
+];
+const requiredAdminSpineBatchStatuses = Object.fromEntries(
+  requiredAdminSpineBatches.map((id) => [id, "passed"]),
+);
 
 await runAdminAuditProof({
   smokeName: "dev-test-game-admin-spine-admin-proof",
@@ -63,6 +70,8 @@ await runAdminAuditProof({
       auditId: localAdminAuditIds.adminSpine,
       requiredChecks,
       requiredRelatedLinks,
+      requiredAdminSpineBatches,
+      requiredAdminSpineBatchStatuses,
     }),
   buildEvidence: ({ source, adminRoleSurface }) => ({
     version: 1,
@@ -78,6 +87,12 @@ await runAdminAuditProof({
       proofRun: proofRunRelativePath,
       game: source.proofRun.session.game,
       proofIds: source.adminSpineProof.proofIds,
+      batchIds: requiredAdminSpineBatches,
+      batchLabels: source.adminSpineProof.batches.map((batch) => batch.label),
+      batchCaseCounts: source.adminSpineProof.batches.map((batch) => ({
+        label: batch.label,
+        caseCount: batch.caseCount,
+      })),
       relatedAuditIds: requiredRelatedLinks,
     },
     adminRoleSurface,
@@ -116,6 +131,16 @@ export function assertAdminSpineAdminProof(evidence) {
   for (const linkId of evidence.generatedFrom?.relatedAuditIds ?? []) {
     if (!evidence.adminRoleSurface?.visibleRelatedLinks?.includes(linkId)) {
       throw new Error(`admin spine admin proof missing related link: ${linkId}`);
+    }
+  }
+  for (const batchId of evidence.generatedFrom?.batchIds ?? []) {
+    if (!evidence.adminRoleSurface?.visibleAdminSpineBatches?.includes(batchId)) {
+      throw new Error(`admin spine admin proof missing batch row: ${batchId}`);
+    }
+    const visibleText =
+      evidence.adminRoleSurface?.visibleAdminSpineBatchStatuses?.[batchId] ?? "";
+    if (!visibleText.includes("passed") || !visibleText.includes("shared frontend")) {
+      throw new Error(`admin spine admin proof missing batch status: ${batchId}`);
     }
   }
   return evidence;
