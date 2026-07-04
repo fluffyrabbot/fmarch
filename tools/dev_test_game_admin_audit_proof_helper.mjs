@@ -121,6 +121,10 @@ export async function proveAdminAuditDetail({
   requiredHostedHandoffBlockedCheckStatuses = {},
   requiredHostedHandoffGroups = [],
   requiredHostedHandoffGroupStatuses = {},
+  requiredHostedIdentityPacketSections = [],
+  requiredHostedIdentityPacketSectionStatuses = {},
+  requiredHostedIdentityPacketRefs = [],
+  requiredHostedIdentityPacketRefStatuses = {},
   requiredHostedHandoffSummary = null,
   requiredHostedHandoffBlockedReceipt = null,
   requiredRelatedLinks = [],
@@ -281,6 +285,18 @@ export async function proveAdminAuditDetail({
       page,
       prefix: "admin-audit-hosted-handoff-group",
       ids: Object.keys(requiredHostedHandoffGroupStatuses),
+    });
+    const visibleHostedIdentityPacketSections = await waitForRows({
+      page,
+      prefix: "admin-audit-hosted-identity-packet-section",
+      ids: requiredHostedIdentityPacketSections,
+      expectedStatuses: requiredHostedIdentityPacketSectionStatuses,
+    });
+    const visibleHostedIdentityPacketRefs = await waitForRows({
+      page,
+      prefix: "admin-audit-hosted-identity-packet-ref",
+      ids: requiredHostedIdentityPacketRefs,
+      expectedStatuses: requiredHostedIdentityPacketRefStatuses,
     });
     const visibleHostedHandoffSummary = await waitForHostedHandoffSummary({
       page,
@@ -540,6 +556,12 @@ export async function proveAdminAuditDetail({
       ...(Object.keys(visibleHostedHandoffGroupStatuses).length === 0
         ? {}
         : { visibleHostedHandoffGroupStatuses }),
+      ...(visibleHostedIdentityPacketSections.length === 0
+        ? {}
+        : { visibleHostedIdentityPacketSections }),
+      ...(visibleHostedIdentityPacketRefs.length === 0
+        ? {}
+        : { visibleHostedIdentityPacketRefs }),
       ...(visibleHostedHandoffSummary === null
         ? {}
         : { visibleHostedHandoffSummary }),

@@ -2422,6 +2422,23 @@ function normalizeHostedIdentityRedactedIntakePacket(packet) {
           )
             ? section.redactedEvidenceRefCount
             : 0,
+          redactedEvidenceRefs: Object.freeze(
+            (Array.isArray(section.redactedEvidenceRefs)
+              ? section.redactedEvidenceRefs
+              : []
+            ).map((ref) =>
+              Object.freeze({
+                id: String(ref.id ?? ""),
+                kind: String(ref.kind ?? ""),
+                evidenceFamily: String(ref.evidenceFamily ?? ""),
+                capturedAt: String(ref.capturedAt ?? ""),
+                retentionWindow: String(ref.retentionWindow ?? ""),
+                locator: String(ref.locator ?? ""),
+                exportLocator: String(ref.exportLocator ?? ""),
+                redacted: ref.redacted === true,
+              }),
+            ),
+          ),
           missingInputs: Object.freeze(
             (Array.isArray(section.missingInputs) ? section.missingInputs : []).map(
               (id) => String(id),

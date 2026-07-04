@@ -4333,6 +4333,7 @@ function localHostedIdentityRedactedIntakePacketFixture() {
       requiredInputIds: [...section.requiredInputIds],
       providedInputIds: [],
       redactedEvidenceRefCount: 0,
+      redactedEvidenceRefs: [],
       missingInputs: [
         "status-provided",
         ...section.requiredInputIds,

@@ -36,6 +36,20 @@ const evidencePath = path.join(
 );
 const requiredRelatedLinks = ["local-identity-adapter", "local-next-action"];
 
+function hostedIdentityPacketSectionRows(hostedIdentityEvidence) {
+  return hostedIdentityEvidence.target?.redactedIntakePacket?.sections ?? [];
+}
+
+function hostedIdentityPacketRefEntries(hostedIdentityEvidence) {
+  return hostedIdentityPacketSectionRows(hostedIdentityEvidence).flatMap(
+    (section) =>
+      (section.redactedEvidenceRefs ?? []).map((ref) => ({
+        rowId: `${section.id}-${ref.id}`,
+        evidenceFamily: ref.evidenceFamily,
+      })),
+  );
+}
+
 await runAdminAuditProof({
   smokeName: "dev-test-game-hosted-identity-evidence-admin-proof",
   stage: "hosted-identity-evidence-admin-proof-listen",
@@ -81,6 +95,23 @@ await runAdminAuditProof({
           (group) => [group.id, group.status],
         ),
       ),
+      requiredHostedIdentityPacketSections:
+        hostedIdentityPacketSectionRows(source.hostedIdentityEvidence).map(
+          (section) => section.id,
+        ),
+      requiredHostedIdentityPacketSectionStatuses: Object.fromEntries(
+        hostedIdentityPacketSectionRows(source.hostedIdentityEvidence).map(
+          (section) => [section.id, section.status],
+        ),
+      ),
+      requiredHostedIdentityPacketRefs: hostedIdentityPacketRefEntries(
+        source.hostedIdentityEvidence,
+      ).map((ref) => ref.rowId),
+      requiredHostedIdentityPacketRefStatuses: Object.fromEntries(
+        hostedIdentityPacketRefEntries(source.hostedIdentityEvidence).map(
+          (ref) => [ref.rowId, ref.evidenceFamily],
+        ),
+      ),
       requiredRelatedLinks,
     }),
   buildEvidence: ({ source, adminRoleSurface }) => ({
@@ -123,6 +154,13 @@ await runAdminAuditProof({
           (group) => [group.id, group.status],
         ),
       ),
+      hostedIdentityPacketSectionIds:
+        hostedIdentityPacketSectionRows(source.hostedIdentityEvidence).map(
+          (section) => section.id,
+        ),
+      hostedIdentityPacketRefIds: hostedIdentityPacketRefEntries(
+        source.hostedIdentityEvidence,
+      ).map((ref) => ref.rowId),
       relatedAuditIds: requiredRelatedLinks,
     },
     adminRoleSurface,
@@ -213,6 +251,27 @@ export function assertHostedIdentityEvidenceAdminProof(evidence) {
     ) {
       throw new Error(
         `hosted identity evidence admin proof missing handoff group status: ${groupId}`,
+      );
+    }
+  }
+  for (const sectionId of evidence.generatedFrom?.hostedIdentityPacketSectionIds ??
+    []) {
+    if (
+      !evidence.adminRoleSurface?.visibleHostedIdentityPacketSections?.includes(
+        sectionId,
+      )
+    ) {
+      throw new Error(
+        `hosted identity evidence admin proof missing packet section: ${sectionId}`,
+      );
+    }
+  }
+  for (const refId of evidence.generatedFrom?.hostedIdentityPacketRefIds ?? []) {
+    if (
+      !evidence.adminRoleSurface?.visibleHostedIdentityPacketRefs?.includes(refId)
+    ) {
+      throw new Error(
+        `hosted identity evidence admin proof missing packet ref: ${refId}`,
       );
     }
   }

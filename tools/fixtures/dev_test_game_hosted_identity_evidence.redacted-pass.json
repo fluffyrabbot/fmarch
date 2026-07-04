@@ -24,7 +24,11 @@
         {
           "id": "account-lifecycle-redacted-log",
           "kind": "audit-log",
+          "evidenceFamily": "account-lifecycle",
+          "capturedAt": "2026-07-01T00:00:00.000Z",
           "locator": "s3://redacted/fmarch/identity/account-lifecycle.json",
+          "retentionWindow": "90d",
+          "exportLocator": "s3://redacted/fmarch/identity/account-lifecycle.json",
           "redacted": true
         }
       ]
@@ -40,7 +44,11 @@
         {
           "id": "invite-delivery-redacted-log",
           "kind": "mail-provider-event-export",
+          "evidenceFamily": "invite-delivery",
+          "capturedAt": "2026-07-01T00:00:00.000Z",
           "locator": "s3://redacted/fmarch/identity/invites.json",
+          "retentionWindow": "90d",
+          "exportLocator": "s3://redacted/fmarch/identity/invites.json",
           "redacted": true
         }
       ]
@@ -55,7 +63,11 @@
         {
           "id": "account-recovery-redacted-log",
           "kind": "audit-log",
+          "evidenceFamily": "account-recovery",
+          "capturedAt": "2026-07-01T00:00:00.000Z",
           "locator": "s3://redacted/fmarch/identity/recovery.json",
+          "retentionWindow": "90d",
+          "exportLocator": "s3://redacted/fmarch/identity/recovery.json",
           "redacted": true
         }
       ]
@@ -70,7 +82,11 @@
         {
           "id": "abuse-rate-limit-redacted-policy",
           "kind": "policy-export",
+          "evidenceFamily": "abuse-rate-limit",
+          "capturedAt": "2026-07-01T00:00:00.000Z",
           "locator": "s3://redacted/fmarch/identity/abuse-rate-limit.json",
+          "retentionWindow": "90d",
+          "exportLocator": "s3://redacted/fmarch/identity/abuse-rate-limit.json",
           "redacted": true
         }
       ]
@@ -87,7 +103,11 @@
         {
           "id": "session-secret-redacted-policy",
           "kind": "secret-policy-export",
+          "evidenceFamily": "session-secret-policy",
+          "capturedAt": "2026-07-01T00:00:00.000Z",
           "locator": "s3://redacted/fmarch/identity/session-secret.json",
+          "retentionWindow": "90d",
+          "exportLocator": "s3://redacted/fmarch/identity/session-secret.json",
           "redacted": true
         }
       ]
@@ -103,7 +123,11 @@
         {
           "id": "audit-retention-redacted-export",
           "kind": "audit-retention-export",
+          "evidenceFamily": "audit-retention-export",
+          "capturedAt": "2026-07-01T00:00:00.000Z",
           "locator": "s3://redacted/fmarch/identity/audit-retention.json",
+          "retentionWindow": "90d",
+          "exportLocator": "s3://redacted/fmarch/identity/audit-retention.json",
           "redacted": true
         }
       ]

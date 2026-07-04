@@ -80,6 +80,7 @@ export const hostedIdentityEvidenceInputIds = Object.freeze([
 export const hostedIdentityEvidencePacketSectionDefinitions = Object.freeze([
   Object.freeze({
     field: "accountLifecycle",
+    evidenceFamily: "account-lifecycle",
     checkId: "hosted-account-lifecycle-evidence",
     label: "Account lifecycle",
     requiredInputIds: Object.freeze([
@@ -91,12 +92,14 @@ export const hostedIdentityEvidencePacketSectionDefinitions = Object.freeze([
   }),
   Object.freeze({
     field: "inviteDelivery",
+    evidenceFamily: "invite-delivery",
     checkId: "invite-delivery-evidence",
     label: "Invite delivery",
     requiredInputIds: Object.freeze(["deliveryChannels", "revocationCovered"]),
   }),
   Object.freeze({
     field: "accountRecovery",
+    evidenceFamily: "account-recovery",
     checkId: "account-recovery-evidence",
     label: "Account recovery",
     requiredInputIds: Object.freeze([
@@ -106,12 +109,14 @@ export const hostedIdentityEvidencePacketSectionDefinitions = Object.freeze([
   }),
   Object.freeze({
     field: "abuseAndRateLimitPolicy",
+    evidenceFamily: "abuse-rate-limit",
     checkId: "abuse-and-rate-limit-evidence",
     label: "Abuse and rate limit",
     requiredInputIds: Object.freeze(["protectedOperations", "rateLimitPolicyRef"]),
   }),
   Object.freeze({
     field: "sessionSecretPolicy",
+    evidenceFamily: "session-secret-policy",
     checkId: "session-secret-policy-evidence",
     label: "Session secret policy",
     requiredInputIds: Object.freeze([
@@ -122,6 +127,7 @@ export const hostedIdentityEvidencePacketSectionDefinitions = Object.freeze([
   }),
   Object.freeze({
     field: "hostedAuditRetentionExport",
+    evidenceFamily: "audit-retention-export",
     checkId: "hosted-audit-retention-export-evidence",
     label: "Audit retention and export",
     requiredInputIds: Object.freeze([

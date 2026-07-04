@@ -323,6 +323,42 @@
         </ol>
       </section>
     {/if}
+    {#if data.audit.artifactSummary?.redactedIntakePacket?.sections?.length > 0}
+      <section
+        class="admin-audit-detail__group"
+        data-testid="admin-audit-detail-hosted-identity-packet"
+      >
+        <h2>Hosted identity packet</h2>
+        <ol class="admin-audit-detail__entries">
+          {#each data.audit.artifactSummary.redactedIntakePacket.sections as section}
+            <li
+              class="admin-audit-detail__entry admin-audit-detail__entry--stack"
+              data-testid={`admin-audit-hosted-identity-packet-section-${section.id}`}
+            >
+              <strong>{section.label}</strong>
+              <span>{section.status}</span>
+              <span>{section.redactedEvidenceRefCount} redacted refs</span>
+              <span>{section.missingInputs.join(", ")}</span>
+              {#if section.redactedEvidenceRefs?.length > 0}
+                <ol class="admin-audit-detail__subentries">
+                  {#each section.redactedEvidenceRefs as ref}
+                    <li
+                      data-testid={`admin-audit-hosted-identity-packet-ref-${section.id}-${ref.id}`}
+                    >
+                      <strong>{ref.evidenceFamily}</strong>
+                      <span>{ref.kind}</span>
+                      <span>{ref.capturedAt}</span>
+                      <span>{ref.retentionWindow}</span>
+                      <span>{ref.exportLocator}</span>
+                    </li>
+                  {/each}
+                </ol>
+              {/if}
+            </li>
+          {/each}
+        </ol>
+      </section>
+    {/if}
     {#if data.audit.hostedHandoffChecklist?.inputs?.length > 0 || data.audit.hostedHandoffChecklist?.blockedChecks?.length > 0}
       <section
         class="admin-audit-detail__group"

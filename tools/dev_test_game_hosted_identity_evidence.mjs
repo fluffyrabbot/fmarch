@@ -224,12 +224,18 @@ function assertHostedIdentityRedactedIntakePacketSummary(evidence) {
   for (const definition of hostedIdentityEvidencePacketSectionDefinitions) {
     const section = sectionsById.get(definition.field);
     if (
-      section === undefined ||
-      section.label !== definition.label ||
-      !["provided", "missing", "unknown"].includes(section.status) ||
-      !sameStringArray(section.requiredInputIds, definition.requiredInputIds) ||
-      !Array.isArray(section.providedInputIds) ||
-      !Number.isInteger(section.redactedEvidenceRefCount)
+          section === undefined ||
+          section.label !== definition.label ||
+          !["provided", "missing", "unknown"].includes(section.status) ||
+          !sameStringArray(section.requiredInputIds, definition.requiredInputIds) ||
+          !Array.isArray(section.providedInputIds) ||
+          !Number.isInteger(section.redactedEvidenceRefCount) ||
+          !Array.isArray(section.redactedEvidenceRefs) ||
+          section.redactedEvidenceRefs.length !==
+            section.redactedEvidenceRefCount ||
+          section.redactedEvidenceRefs.some(
+            (ref) => !validHostedIdentityRedactedEvidenceRef(ref, definition),
+          )
     ) {
       throw new Error(
         `hosted identity redacted intake summary missing section: ${definition.field}`,
@@ -395,6 +401,20 @@ function validateHostedIdentityPacketSectionShape({ section, field, errors }) {
   }
   requireObject(section.inputs, `${field}.inputs`, errors);
   requireArray(section.redactedEvidenceRefs, `${field}.redactedEvidenceRefs`, errors);
+  const sourceField = field.replace(/^hostedIdentity\./, "");
+  const definition = hostedIdentityEvidencePacketSectionDefinitions.find(
+    (candidate) => candidate.field === sourceField,
+  );
+  if (Array.isArray(section.redactedEvidenceRefs)) {
+    section.redactedEvidenceRefs.forEach((ref, index) => {
+      validateHostedIdentityRedactedEvidenceRefShape({
+        ref,
+        field: `${field}.redactedEvidenceRefs[${index}]`,
+        expectedFamily: definition?.evidenceFamily,
+        errors,
+      });
+    });
+  }
 }
 
 function hostedIdentityPacketSectionCheck({ source, field, id }) {
@@ -435,15 +455,7 @@ function hostedIdentityPacketSectionMissingInputs({ field, section }) {
     missing.push("redactedEvidenceRefs");
   }
   for (const [index, ref] of redactedEvidenceRefs.entries()) {
-    if (
-      ref === null ||
-      typeof ref !== "object" ||
-      Array.isArray(ref) ||
-      String(ref.id ?? "").trim() === "" ||
-      String(ref.kind ?? "").trim() === "" ||
-      String(ref.locator ?? "").trim() === "" ||
-      ref.redacted !== true
-    ) {
+    if (!validHostedIdentityRedactedEvidenceRef(ref, definition)) {
       missing.push(`redactedEvidenceRefs[${index}]`);
     }
   }
@@ -481,6 +493,86 @@ function redactionFlagsForSection(field) {
   return [];
 }
 
+function validateHostedIdentityRedactedEvidenceRefShape({
+  ref,
+  field,
+  expectedFamily,
+  errors,
+}) {
+  if (ref === null || typeof ref !== "object" || Array.isArray(ref)) {
+    errors.push(`${field} must be an object`);
+    return;
+  }
+  for (const key of [
+    "id",
+    "kind",
+    "evidenceFamily",
+    "capturedAt",
+    "locator",
+    "retentionWindow",
+    "exportLocator",
+  ]) {
+    if (String(ref[key] ?? "").trim() === "") {
+      errors.push(`${field}.${key} must be a non-empty string`);
+    }
+  }
+  if (expectedFamily !== undefined && ref.evidenceFamily !== expectedFamily) {
+    errors.push(`${field}.evidenceFamily must be ${expectedFamily}`);
+  }
+  if (!validIsoInstant(ref.capturedAt)) {
+    errors.push(`${field}.capturedAt must be an ISO timestamp`);
+  }
+  if (!validRetentionWindow(ref.retentionWindow)) {
+    errors.push(`${field}.retentionWindow must be a duration like 90d`);
+  }
+  if (!validRedactedIdentityEvidenceLocator(ref.locator)) {
+    errors.push(`${field}.locator must be a redacted identity evidence locator`);
+  }
+  if (!validRedactedIdentityEvidenceLocator(ref.exportLocator)) {
+    errors.push(
+      `${field}.exportLocator must be a redacted identity evidence locator`,
+    );
+  }
+  if (ref.redacted !== true) {
+    errors.push(`${field}.redacted must be true`);
+  }
+}
+
+function validHostedIdentityRedactedEvidenceRef(ref, definition) {
+  return (
+    ref !== null &&
+    typeof ref === "object" &&
+    !Array.isArray(ref) &&
+    String(ref.id ?? "").trim() !== "" &&
+    String(ref.kind ?? "").trim() !== "" &&
+    ref.evidenceFamily === definition?.evidenceFamily &&
+    validIsoInstant(ref.capturedAt) &&
+    validRetentionWindow(ref.retentionWindow) &&
+    validRedactedIdentityEvidenceLocator(ref.locator) &&
+    validRedactedIdentityEvidenceLocator(ref.exportLocator) &&
+    ref.redacted === true
+  );
+}
+
+function validIsoInstant(value) {
+  if (typeof value !== "string" || value.trim() === "") {
+    return false;
+  }
+  const time = Date.parse(value);
+  return Number.isFinite(time) && new Date(time).toISOString() === value;
+}
+
+function validRetentionWindow(value) {
+  return typeof value === "string" && /^[1-9][0-9]*d$/.test(value);
+}
+
+function validRedactedIdentityEvidenceLocator(value) {
+  return (
+    typeof value === "string" &&
+    /^s3:\/\/redacted\/fmarch\/identity\/[A-Za-z0-9._/-]+\.json$/.test(value)
+  );
+}
+
 function summarizeHostedIdentityRedactedIntakePacket(source) {
   if (source === null || typeof source !== "object") {
     return null;
@@ -516,6 +608,21 @@ function summarizeHostedIdentityRedactedIntakePacket(source) {
         redactedEvidenceRefCount: Array.isArray(section?.redactedEvidenceRefs)
           ? section.redactedEvidenceRefs.length
           : 0,
+        redactedEvidenceRefs: Object.freeze(
+          (Array.isArray(section?.redactedEvidenceRefs)
+            ? section.redactedEvidenceRefs
+            : []
+          ).map((ref) => ({
+            id: String(ref?.id ?? ""),
+            kind: String(ref?.kind ?? ""),
+            evidenceFamily: String(ref?.evidenceFamily ?? ""),
+            capturedAt: String(ref?.capturedAt ?? ""),
+            retentionWindow: String(ref?.retentionWindow ?? ""),
+            locator: String(ref?.locator ?? ""),
+            exportLocator: String(ref?.exportLocator ?? ""),
+            redacted: ref?.redacted === true,
+          })),
+        ),
         missingInputs: hostedIdentityPacketSectionMissingInputs({
           field: definition.field,
           section,
