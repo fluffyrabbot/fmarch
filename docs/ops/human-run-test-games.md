@@ -144,7 +144,17 @@ npm run test:dev-postgres-contract
 npm run test:dev-test-game-contract
 ```
 
-The live local gate is:
+The core gameplay live gate is the faster role-URL proof lane. It prebuilds the
+Rust API, runs the seeded live browser proof, validates `proof-run.json`, runs
+the core-loop and hardening admin proofs, and regenerates release readiness:
+
+```sh
+DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch npm run test:dev-test-game-core-live
+```
+
+The full dev-test-game spine keeps the broader local proof chain intact. It runs
+the core gameplay live gate plus seed fixtures, backup/restore, identity, admin
+spine, proof graph, next-action, and final release-readiness refreshes:
 
 ```sh
 DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch npm run test:dev-test-game-live
@@ -476,7 +486,7 @@ hosted invite delivery or production account lifecycle.
 To replay and inspect only this local evidence surface after a fresh run:
 
 ```sh
-DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch npm run test:dev-test-game-live
+DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch npm run test:dev-test-game-core-live
 node - <<'NODE'
 const proof = require("./target/dev-test-game/proof-run.json");
 const lane = proof.lanes.find((item) => item.id === "stale-host-invite-recovery");

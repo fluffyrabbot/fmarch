@@ -26,6 +26,7 @@ const spineManifestRelativePath = path.relative(repoRoot, spineManifestPath);
 const proofRunRelativePath = path.relative(repoRoot, proofRunPath);
 const evidencePath = path.join(artifactDir, "spine-manifest-admin-proof.json");
 const requiredChecks = [
+  "core-live-order-recorded",
   "live-spine-order-recorded",
   "sub-spine-orders-recorded",
   "evidence-env-wiring-recorded",

@@ -202,6 +202,7 @@ test("admin proof destination handoff cases carry shared row requirements", () =
     adminProofDestinationRequirementForLink("admin-proof:spine-manifest")
       .requiredCheckIds,
     [
+      "core-live-order-recorded",
       "live-spine-order-recorded",
       localAdminAuditHandoffCheckIds.proofFreshness,
       localAdminAuditHandoffCheckIds.nextAction,

@@ -213,7 +213,10 @@ import {
   hostedIdentityEvidenceSectionInputStatuses,
   validateHostedIdentityEvidencePlaceholder,
 } from "./dev_test_game_hosted_identity_evidence.mjs";
-import { devTestGameLiveSpinePlan } from "./dev_test_game_live_spine.mjs";
+import {
+  devTestGameCoreLiveSpinePlan,
+  devTestGameLiveSpinePlan,
+} from "./dev_test_game_live_spine.mjs";
 import {
   assertDevTestGameSpineManifest,
   buildDevTestGameSpineManifest,
@@ -412,7 +415,16 @@ test("session cards can target focused proof artifacts without clobbering canoni
   });
 });
 
-test("dev test-game spine orchestrators expose stable proof order and env maps", () => {
+test("dev test-game spine orchestrators expose stable proof order and env maps", async () => {
+  const packageJson = JSON.parse(await readFile("package.json", "utf8"));
+  assert.equal(
+    packageJson.scripts["test:dev-test-game-core-live"],
+    "node tools/dev_test_game_live_spine.mjs --core",
+  );
+  assert.equal(
+    packageJson.scripts["test:dev-test-game-live"],
+    "node tools/dev_test_game_live_spine.mjs",
+  );
   assert.deepEqual(
     devTestGameBackupRestoreSpinePlan.map((step) => step.script),
     [
@@ -547,13 +559,16 @@ test("dev test-game spine orchestrators expose stable proof order and env maps",
     FMARCH_DEV_TEST_GAME_NEXT_ACTION_ADMIN_PROOF:
       "target/dev-test-game/next-action-admin-proof.json",
   });
-  assert.deepEqual(devTestGameLiveSpinePlan, [
+  assert.deepEqual(devTestGameCoreLiveSpinePlan, [
     { kind: "npm", script: "dev:test-game:prebuild" },
     { kind: "node", script: "tools/dev_test_game_live_proof.mjs" },
     { kind: "node", script: "tools/dev_test_game_proof_contract.mjs" },
     { kind: "node", script: "tools/dev_test_game_core_loop_admin_proof.mjs" },
     { kind: "node", script: "tools/dev_test_game_hardening_admin_proof.mjs" },
     { kind: "node", script: "tools/dev_test_game_release_readiness.mjs" },
+  ]);
+  assert.deepEqual(devTestGameLiveSpinePlan, [
+    ...devTestGameCoreLiveSpinePlan,
     { kind: "node", script: "tools/dev_test_game_seed_fixture_summary.mjs" },
     { kind: "node", script: "tools/dev_test_game_seed_admin_proof.mjs" },
     { kind: "node", script: "tools/dev_test_game_release_readiness.mjs" },
@@ -1023,6 +1038,9 @@ test("dev test-game spine manifest records command order and evidence wiring", (
   assert.equal(manifest.status, "passed");
   assert.equal(manifest.releaseReady, false);
   assert.equal(manifest.productionReady, false);
+  assert.deepEqual(manifest.commands.coreLive.plan, devTestGameCoreLiveSpinePlan);
+  assert.equal(manifest.commands.coreLive.script, "test:dev-test-game-core-live");
+  assert.equal(manifest.commands.live.script, "test:dev-test-game-live");
   assert.deepEqual(manifest.commands.live.plan, devTestGameLiveSpinePlan);
   assert.deepEqual(
     manifest.commands.backupRestore.plan,
@@ -1312,7 +1330,7 @@ test("dev test-game spine manifest blocks freshness on proof-run session drift",
   assert.equal(manifest.artifactFreshness.status, "blocked");
   assert.equal(
     manifest.artifactFreshness.nextCommand,
-    "DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch npm run test:dev-test-game-live",
+    "DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch npm run test:dev-test-game-core-live",
   );
   assert.deepEqual(manifest.artifactFreshness.proofRunContract, {
     status: "failed",
@@ -1336,9 +1354,9 @@ test("dev test-game spine manifest blocks freshness on proof-run session drift",
         id: "proof-run",
         status: "stale",
         refreshCommand:
-          "DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch npm run test:dev-test-game-live",
+          "DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch npm run test:dev-test-game-core-live",
         nextCommand:
-          "DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch npm run test:dev-test-game-live",
+          "DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch npm run test:dev-test-game-core-live",
         contractReason: "proof-run-session-mismatch",
         sessionPath: "target/dev-test-game/session.json",
       },
@@ -2054,7 +2072,7 @@ test("spine manifest blocks freshness when proof-run no longer matches session",
   assert.equal(manifest.artifactFreshness.status, "blocked");
   assert.equal(
     manifest.artifactFreshness.nextCommand,
-    "DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch npm run test:dev-test-game-live",
+    "DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch npm run test:dev-test-game-core-live",
   );
   assert.deepEqual(manifest.artifactFreshness.proofRunContract, {
     status: "failed",
@@ -2074,10 +2092,10 @@ test("spine manifest blocks freshness when proof-run no longer matches session",
       ageSeconds: 0,
       maxAgeSeconds: 86400,
       refreshCommand:
-        "DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch npm run test:dev-test-game-live",
+        "DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch npm run test:dev-test-game-core-live",
       refreshSource: "manifest-default",
       nextCommand:
-        "DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch npm run test:dev-test-game-live",
+        "DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch npm run test:dev-test-game-core-live",
       contractStatus: "failed",
       contractReason: "proof-run-session-mismatch",
       contractMessage:
@@ -15221,7 +15239,14 @@ function spineManifestFixture() {
     scope: "local-dev-test-game-spine-manifest",
     proofBoundary: "Generated local dev-test-game orchestration manifest.",
     commands: {
-      live: { plan: [{ script: "dev:test-game:prebuild" }] },
+      coreLive: {
+        script: "test:dev-test-game-core-live",
+        plan: [{ script: "dev:test-game:prebuild" }],
+      },
+      live: {
+        script: "test:dev-test-game-live",
+        plan: [{ script: "dev:test-game:prebuild" }],
+      },
       backupRestore: { plan: [{ script: "tools/live_stack_backup_restore_drill.mjs" }] },
       identity: { plan: [{ script: "tools/auth_invite_role_proof.mjs" }] },
       adminSpine: {
@@ -15267,7 +15292,7 @@ function spineManifestFixture() {
         missingCount: 0,
       },
       nextCommand:
-        "DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch npm run test:dev-test-game-live",
+        "DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch npm run test:dev-test-game-core-live",
       proofBoundary: "Local proof freshness dashboard.",
       artifacts: [
         {
@@ -15276,9 +15301,9 @@ function spineManifestFixture() {
           path: "target/dev-test-game/proof-run.json",
           status: "stale",
           refreshCommand:
-            "DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch npm run test:dev-test-game-live",
+            "DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch npm run test:dev-test-game-core-live",
           nextCommand:
-            "DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch npm run test:dev-test-game-live",
+            "DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch npm run test:dev-test-game-core-live",
           refreshSource: "manifest-default",
         },
         {
@@ -15300,6 +15325,7 @@ function spineManifestFixture() {
       "target/dev-test-game/next-action-admin-proof.json",
     ],
     checks: [
+      { id: "core-live-order-recorded", status: "passed" },
       { id: "live-spine-order-recorded", status: "passed" },
       { id: "sub-spine-orders-recorded", status: "passed" },
       { id: "evidence-env-wiring-recorded", status: "passed" },
@@ -15337,6 +15363,7 @@ function spineManifestAdminProofFixture() {
       surfaceTestId: "admin-audit-detail-surface",
       clickedThroughFromOverview: true,
       visibleChecks: [
+        "core-live-order-recorded",
         "live-spine-order-recorded",
         "sub-spine-orders-recorded",
         "evidence-env-wiring-recorded",

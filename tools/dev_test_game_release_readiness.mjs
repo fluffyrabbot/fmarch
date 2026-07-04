@@ -4877,6 +4877,7 @@ export function validateDevTestGameReleaseRunbookAdminProof(proof, options = {})
 
 export function validateDevTestGameSpineManifest(manifest, options = {}) {
   const requiredChecks = [
+    "core-live-order-recorded",
     "live-spine-order-recorded",
     "sub-spine-orders-recorded",
     "evidence-env-wiring-recorded",
@@ -4928,6 +4929,7 @@ export function validateDevTestGameSpineManifest(manifest, options = {}) {
 
 export function validateDevTestGameSpineManifestAdminProof(proof, options = {}) {
   const requiredChecks = [
+    "core-live-order-recorded",
     "live-spine-order-recorded",
     "sub-spine-orders-recorded",
     "evidence-env-wiring-recorded",
@@ -5431,7 +5433,7 @@ function validCoreLoopSpineTargets(spineTargets) {
     typeof spineTargets.defaultCheckpointId === "string" &&
     spineTargets.defaultCheckpointId.length > 0 &&
     typeof spineTargets.browserProofCommand === "string" &&
-    spineTargets.browserProofCommand.includes("test:dev-test-game-live") &&
+    spineTargets.browserProofCommand.includes("test:dev-test-game-core-live") &&
     Array.isArray(spineTargets.cycleIds) &&
     spineTargets.cycleIds.includes(spineTargets.defaultCycleId) &&
     Array.isArray(spineTargets.roleUrlIds) &&
@@ -5478,7 +5480,7 @@ function validHardeningSpineTargets(spineTargets) {
     spineTargets.defaultRoleUrl.includes("/g/") &&
     spineTargets.defaultCheckpointId === replacementStaleConflictLane.laneId &&
     typeof spineTargets.browserProofCommand === "string" &&
-    spineTargets.browserProofCommand.includes("test:dev-test-game-live") &&
+    spineTargets.browserProofCommand.includes("test:dev-test-game-core-live") &&
     Array.isArray(spineTargets.cycleIds) &&
     spineTargets.cycleIds.includes("hardening-stale-conflict") &&
     spineTargets.cycleIds.includes(completedGameHardeningSpineCycleId) &&

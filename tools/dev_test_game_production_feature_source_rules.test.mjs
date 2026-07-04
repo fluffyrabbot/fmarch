@@ -73,7 +73,7 @@ test("production feature source rules cover every feature spine source", () => {
   );
   assert.ok(
     devTestGameProductionFeatureBrowserProofCommand.includes(
-      "test:dev-test-game-live",
+      "test:dev-test-game-core-live",
     ),
   );
 });

@@ -199,6 +199,7 @@ export const adminProofDestinationRequirementCases = Object.freeze([
     linkId: "admin-proof:spine-manifest",
     auditId: localAdminAuditIds.spineManifest,
     requiredCheckIds: Object.freeze([
+      "core-live-order-recorded",
       "live-spine-order-recorded",
       localAdminAuditHandoffCheckIds.proofFreshness,
       localAdminAuditHandoffCheckIds.nextAction,

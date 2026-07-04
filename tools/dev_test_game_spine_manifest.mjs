@@ -68,7 +68,10 @@ import {
   devTestGameIdentitySpinePlan,
   identityReadinessEnv,
 } from "./dev_test_game_identity_spine.mjs";
-import { devTestGameLiveSpinePlan } from "./dev_test_game_live_spine.mjs";
+import {
+  devTestGameCoreLiveSpinePlan,
+  devTestGameLiveSpinePlan,
+} from "./dev_test_game_live_spine.mjs";
 import {
   nextActionAdminProofCommand,
   nextActionAdminProofPath,
@@ -136,6 +139,10 @@ export function buildDevTestGameSpineManifest({
     proofBoundary:
       "Generated local dev-test-game orchestration manifest. It records proof command order, evidence env wiring, and current local proof freshness status; it does not prove hosted deployment, hosted identity, hosted operations, production readiness, beta readiness, or release readiness.",
     commands: {
+      coreLive: {
+        script: "test:dev-test-game-core-live",
+        plan: clonePlan(devTestGameCoreLiveSpinePlan),
+      },
       live: {
         script: "test:dev-test-game-live",
         plan: clonePlan(devTestGameLiveSpinePlan),
@@ -385,6 +392,11 @@ export function buildDevTestGameSpineManifest({
     ]),
     checks: [
       {
+        id: "core-live-order-recorded",
+        status: "passed",
+        evidence: devTestGameCoreLiveSpinePlan.map((step) => step.script),
+      },
+      {
         id: "live-spine-order-recorded",
         status: "passed",
         evidence: devTestGameLiveSpinePlan.map((step) => step.script),
@@ -520,6 +532,15 @@ export function assertDevTestGameSpineManifest(manifest) {
     throw new Error("spine manifest must not claim production or release readiness");
   }
   assertArtifactFreshnessReport(manifest.artifactFreshness);
+  const coreLivePlan = manifest.commands?.coreLive?.plan ?? [];
+  assertPlanScripts(coreLivePlan, [
+    "dev:test-game:prebuild",
+    "tools/dev_test_game_live_proof.mjs",
+    "tools/dev_test_game_proof_contract.mjs",
+    "tools/dev_test_game_core_loop_admin_proof.mjs",
+    "tools/dev_test_game_hardening_admin_proof.mjs",
+    "tools/dev_test_game_release_readiness.mjs",
+  ]);
   const livePlan = manifest.commands?.live?.plan ?? [];
   assertPlanScripts(livePlan, [
     "dev:test-game:prebuild",
@@ -823,6 +844,7 @@ export function assertDevTestGameSpineManifest(manifest) {
   }
   const checks = new Map((manifest.checks ?? []).map((check) => [check.id, check.status]));
   for (const id of [
+    "core-live-order-recorded",
     "live-spine-order-recorded",
     "sub-spine-orders-recorded",
     "evidence-env-wiring-recorded",
@@ -1167,8 +1189,8 @@ function refreshCommandForArtifact(artifact) {
 const localDatabasePrefix = "DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch";
 
 const artifactRefreshCommands = Object.freeze({
-  session: `${localDatabasePrefix} npm run test:dev-test-game-live`,
-  "proof-run": `${localDatabasePrefix} npm run test:dev-test-game-live`,
+  session: `${localDatabasePrefix} npm run test:dev-test-game-core-live`,
+  "proof-run": `${localDatabasePrefix} npm run test:dev-test-game-core-live`,
   "backup-restore": "npm run test:dev-test-game-backup-restore",
   "ops-artifacts": "npm run test:dev-test-game-ops",
   "seed-fixture": "npm run test:dev-test-game-seed-fixture",
@@ -1227,7 +1249,11 @@ function markdownSpineManifest(manifest) {
   for (const [id, command] of Object.entries(manifest.commands)) {
     lines.push(`| ${id} | ${command.plan?.length ?? 1} |`);
   }
-  lines.push("", "## Live Spine", "", "| Step | Kind | Script |", "| ---: | --- | --- |");
+  lines.push("", "## Core Live Spine", "", "| Step | Kind | Script |", "| ---: | --- | --- |");
+  manifest.commands.coreLive.plan.forEach((step, index) => {
+    lines.push(`| ${index + 1} | ${step.kind} | ${step.script} |`);
+  });
+  lines.push("", "## Full Live Spine", "", "| Step | Kind | Script |", "| ---: | --- | --- |");
   manifest.commands.live.plan.forEach((step, index) => {
     lines.push(`| ${index + 1} | ${step.kind} | ${step.script} |`);
   });

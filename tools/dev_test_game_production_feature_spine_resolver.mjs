@@ -117,7 +117,7 @@ export function validProductionFeatureSpineTarget(
     typeof target.detailRoleUrl !== "string" ||
     typeof target.roleUrl !== "string" ||
     typeof target.browserProofCommand !== "string" ||
-    !target.browserProofCommand.includes("test:dev-test-game-live")
+    !target.browserProofCommand.includes("test:dev-test-game-core-live")
   ) {
     return false;
   }
@@ -160,7 +160,7 @@ export function validProductionFeatureSpineDrilldown(
     drilldown.adminCheckId.length === 0 ||
     typeof drilldown.roleUrl !== "string" ||
     typeof drilldown.browserProofCommand !== "string" ||
-    !drilldown.browserProofCommand.includes("test:dev-test-game-live")
+    !drilldown.browserProofCommand.includes("test:dev-test-game-core-live")
   ) {
     return false;
   }
