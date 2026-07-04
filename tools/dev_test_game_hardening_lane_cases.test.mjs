@@ -256,6 +256,8 @@ test("hardening lane cases summarize stale conflict-message coverage", () => {
   assert.equal(summary.laneCount, staleConflictMessageLaneIds.length);
   assert.equal(summary.passedLaneCount, staleConflictMessageLaneIds.length);
   assert.equal(summary.familyCount, 3);
+  assert.equal(summary.expectedLaneCount, staleConflictMessageLaneIds.length);
+  assert.equal(summary.expectedFamilyCount, 3);
   assert.doesNotThrow(() =>
     assertStaleConflictMessageCoverageSummary({ summary, lanes }),
   );
@@ -426,6 +428,8 @@ test("hardening lane cases summarize host stale-control coverage", () => {
   assert.equal(summary.laneCount, hostStaleControlLaneIds.length);
   assert.equal(summary.passedLaneCount, hostStaleControlLaneIds.length);
   assert.equal(summary.familyCount, 5);
+  assert.equal(summary.expectedLaneCount, hostStaleControlLaneIds.length);
+  assert.equal(summary.expectedFamilyCount, 5);
   assert.doesNotThrow(() =>
     assertHostStaleControlCoverageSummary({ summary, lanes }),
   );

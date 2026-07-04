@@ -33,6 +33,8 @@ export function buildLaneCoverageSummary({ lanes, laneIds, families }) {
     laneCount: laneIds.length,
     passedLaneCount,
     familyCount: coverageFamilies.length,
+    expectedLaneCount: laneIds.length,
+    expectedFamilyCount: families.length,
     sourceLaneIds: [...laneIds],
     laneStatuses,
     families: coverageFamilies,
@@ -52,6 +54,8 @@ export function assertLaneCoverageSummary({
     summary.laneCount !== laneIds.length ||
     summary.passedLaneCount !== laneIds.length ||
     summary.familyCount !== familyDefinitions.length ||
+    summary.expectedLaneCount !== laneIds.length ||
+    summary.expectedFamilyCount !== familyDefinitions.length ||
     !sameArray(summary.sourceLaneIds, laneIds)
   ) {
     throw new Error(`${label} coverage summary drifted`);

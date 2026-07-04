@@ -4135,6 +4135,8 @@ function hostStaleControlCoverageFixture() {
     laneCount: hostStaleControlLaneIds.length,
     passedLaneCount: hostStaleControlLaneIds.length,
     familyCount: families.length,
+    expectedLaneCount: hostStaleControlLaneIds.length,
+    expectedFamilyCount: families.length,
     sourceLaneIds: [...hostStaleControlLaneIds],
     laneStatuses: families.flatMap((family) =>
       family.laneIds.map((laneId) => ({
@@ -4186,6 +4188,8 @@ function passedCoverageFixture({ laneIds, families }) {
     laneCount: laneIds.length,
     passedLaneCount: laneIds.length,
     familyCount: passedFamilies.length,
+    expectedLaneCount: laneIds.length,
+    expectedFamilyCount: passedFamilies.length,
     sourceLaneIds: [...laneIds],
     laneStatuses: passedFamilies.flatMap((family) =>
       family.laneIds.map((laneId) => ({
