@@ -6066,6 +6066,22 @@ async function freezeStalePrivateChannelActionPage({ page, game, frontendBaseUrl
   };
 }
 
+function liveStaleN01ToD02ActionTransitionScenario({
+  targetSlot,
+  expectedRefreshKeys = ["commandState", "dayVoteOutcomes"],
+}) {
+  return {
+    ...staleNightOneActionAfterTransitionRecoveryScenario(),
+    actorSlot: "slot_4",
+    targetSlot: targetSlot ?? "",
+    refreshedPhaseId: "D02",
+    expectedRefreshKeys,
+    checkpointActionState: "disabled:no legal action available",
+    checkpointTargetSlots: "",
+    receiptCount: 1,
+  };
+}
+
 async function submitPrivateChannelStaleActionReconnectRecovery({
   page,
   setup,
@@ -6106,33 +6122,35 @@ async function submitPrivateChannelStaleActionReconnectRecovery({
   const privateThreadPagerVisibleAfterReject = await page
     .getByTestId("player-thread-pager")
     .isVisible();
+  const submittedCommand =
+    reject?.requestEnvelope?.body?.body?.command?.SubmitAction;
+  assertLiveStaleN01ActionTransitionRecovery({
+    setup,
+    recovery: {
+      status: "passed",
+      reject,
+      commandStateAfterReject,
+      dispatchPlan,
+      currentReceipt,
+      receiptStatusText,
+      actionVisibleAfterRefresh,
+    },
+    expectedGame: game,
+    scenario: liveStaleN01ToD02ActionTransitionScenario({
+      targetSlot: submittedCommand?.targets?.[0] ?? setup.actionConfig?.targets?.[0],
+    }),
+    includeEvidenceInError: true,
+  });
   if (
-    reject?.state !== "reject" ||
-    reject?.error !== "PhaseLocked" ||
-    !reject?.message?.includes("stale action state") ||
-    !reject?.message?.includes("current action controls") ||
     reject?.requestEnvelope?.body?.body?.principal_user_id !== "player-goon-a" ||
-    reject?.requestEnvelope?.body?.body?.command?.SubmitAction?.actor_slot !==
-      "slot_4" ||
-    reject?.requestEnvelope?.body?.body?.command?.SubmitAction?.template_id !==
-      "factional_kill" ||
-    dispatchPlan?.projectionRefreshKeys?.includes("commandState") !== true ||
-    dispatchPlan?.projectionRefreshKeys?.includes("dayVoteOutcomes") !== true ||
     currentReceipt?.actionId !== "submit_action:factional_kill" ||
-    currentReceipt?.state !== "reject" ||
     currentReceipt?.commandTrace?.projectionRefreshKeys?.includes("commandState") !==
       true ||
-    !receiptStatusText.includes("Reject PhaseLocked") ||
-    !receiptStatusText.includes("stale action state") ||
-    commandStateAfterReject?.actorSlot !== "slot_4" ||
     commandStateAfterReject?.actorAlive !== true ||
     commandStateAfterReject?.actorStatus !== "alive" ||
-    commandStateAfterReject?.phase?.phaseId !== "D02" ||
     commandStateAfterReject?.phase?.locked !== false ||
-    commandStateAfterReject?.actions?.length !== 0 ||
     afterRejectSnapshot.channelContext.channelId !== factionDayChatChannel ||
     afterRejectSnapshot.channelContext.actorSlot !== "slot_4" ||
-    actionVisibleAfterRefresh !== false ||
     privateThreadPagerVisibleAfterReject !== true ||
     apiCommandStateAfterReject?.actor_slot !== "slot_4" ||
     apiCommandStateAfterReject?.actor_alive !== true ||
@@ -6766,21 +6784,6 @@ async function submitStaleActionConflict({
   );
   const submittedCommand =
     reject?.requestEnvelope?.body?.body?.command?.SubmitAction;
-  const staleActionTransitionScenario = {
-    ...staleNightOneActionAfterTransitionRecoveryScenario(),
-    actorSlot: "slot_4",
-    targetSlot: submittedCommand?.targets?.[0] ?? "",
-    refreshedPhaseId: "D02",
-    expectedRefreshKeys: [
-      "notifications",
-      "investigationResults",
-      "commandState",
-      "dayVoteOutcomes",
-    ],
-    checkpointActionState: "disabled:no legal action available",
-    checkpointTargetSlots: "",
-    receiptCount: 1,
-  };
   assertLiveStaleN01ActionTransitionRecovery({
     setup: staleActionSetup,
     recovery: {
@@ -6793,7 +6796,15 @@ async function submitStaleActionConflict({
       actionVisibleAfterRefresh: false,
     },
     expectedGame: game,
-    scenario: staleActionTransitionScenario,
+    scenario: liveStaleN01ToD02ActionTransitionScenario({
+      targetSlot: submittedCommand?.targets?.[0],
+      expectedRefreshKeys: [
+        "notifications",
+        "investigationResults",
+        "commandState",
+        "dayVoteOutcomes",
+      ],
+    }),
     includeEvidenceInError: true,
   });
   if (

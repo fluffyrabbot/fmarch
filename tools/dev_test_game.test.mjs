@@ -440,6 +440,30 @@ test("session cards can target focused proof artifacts without clobbering canoni
   });
 });
 
+test("private-channel stale action recovery uses shared transition assertion", async () => {
+  const source = await readFile("tools/dev_test_game.mjs", "utf8");
+  const start = source.indexOf(
+    "async function submitPrivateChannelStaleActionReconnectRecovery",
+  );
+  const end = source.indexOf("async function submitConcurrentActionRace", start);
+  assert(start >= 0, "private-channel stale action recovery function should exist");
+  assert(end > start, "private-channel stale action recovery function should be bounded");
+  const body = source.slice(start, end);
+
+  assert(
+    body.includes("assertLiveStaleN01ActionTransitionRecovery"),
+    "private-channel stale action recovery should reuse the shared stale action transition assertion",
+  );
+  assert(
+    body.includes("liveStaleN01ToD02ActionTransitionScenario"),
+    "private-channel stale action recovery should reuse the live N01-to-D02 scenario facts",
+  );
+  assert(
+    body.includes("reconnectChannelContext.channelId"),
+    "private-channel stale action recovery should keep channel-specific reconnect assertions local",
+  );
+});
+
 test("dev test-game spine orchestrators expose stable proof order and env maps", async () => {
   const packageJson = JSON.parse(await readFile("package.json", "utf8"));
   assert.equal(
