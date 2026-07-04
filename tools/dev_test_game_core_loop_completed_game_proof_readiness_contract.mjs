@@ -10,7 +10,7 @@ import {
   completedHostStaleCommandCases,
   completedPlayerReloadCases,
   staleCompletedGamePlayerCommandCases,
-} from "./dev_test_game_core_loop_completed_game_shared_scenario_assertions.mjs";
+} from "./dev_test_game_core_loop_completed_game_shared_recovery_scenarios.mjs";
 import {
   completedGameHardeningLaneIds,
 } from "./dev_test_game_core_loop_completed_game_cases.mjs";

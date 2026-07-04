@@ -3,7 +3,7 @@ import {
   completedGameEndgameScenarioCaseFamilies,
   completedGameEndgameTransition,
   completedGameEndgameTransitionTokens,
-} from "./dev_test_game_core_loop_completed_game_shared_scenario_assertions.mjs";
+} from "./dev_test_game_core_loop_completed_game_shared_recovery_scenarios.mjs";
 import {
   completedHostCompleteRaceHardeningLaneCases,
   completedGameHardeningLaneIds,
@@ -24,7 +24,7 @@ export {
   completedPlayerReloadCases,
   staleCompletedGamePlayerCommandCaseDefinitions,
   staleCompletedGamePlayerCommandCases,
-} from "./dev_test_game_core_loop_completed_game_shared_scenario_assertions.mjs";
+} from "./dev_test_game_core_loop_completed_game_shared_recovery_scenarios.mjs";
 
 export const coreLoopCompletedEndgameProgressionFamilyId =
   "core-loop-completed-endgame-progression";
