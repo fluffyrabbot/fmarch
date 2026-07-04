@@ -7,6 +7,7 @@ import {
   validateDevTestGameAdminSpineTerminalBatches,
   validateDevTestGamePrivateChannelRecoveryReceipt,
   validateDevTestGameReplacementActionRecoveryReceipt,
+  validateDevTestGameReplacementHandoffRecoveryReceipt,
   validateDevTestGameReplacementPrivateRecoveryReceipt,
 } from "./dev_test_game_release_readiness.mjs";
 import {
@@ -55,6 +56,10 @@ import {
   devTestGameReplacementActionRecoveryReceiptCommand,
   devTestGameReplacementActionRecoveryReceiptPath,
 } from "./dev_test_game_replacement_action_recovery_receipt.mjs";
+import {
+  devTestGameReplacementHandoffRecoveryReceiptCommand,
+  devTestGameReplacementHandoffRecoveryReceiptPath,
+} from "./dev_test_game_replacement_handoff_recovery_receipt.mjs";
 export {
   devTestGameProofGraphAdminProofCommand,
   devTestGameProofGraphAdminProofPath,
@@ -75,6 +80,8 @@ const defaultReplacementPrivateRecoveryReceiptPath =
   devTestGameReplacementPrivateRecoveryReceiptPath;
 const defaultReplacementActionRecoveryReceiptPath =
   devTestGameReplacementActionRecoveryReceiptPath;
+const defaultReplacementHandoffRecoveryReceiptPath =
+  devTestGameReplacementHandoffRecoveryReceiptPath;
 
 export function buildDevTestGameProofGraph(
   {
@@ -83,6 +90,7 @@ export function buildDevTestGameProofGraph(
     adminSpineTerminalBatches = null,
     privateChannelRecoveryReceipt = null,
     replacementActionRecoveryReceipt = null,
+    replacementHandoffRecoveryReceipt = null,
     replacementPrivateRecoveryReceipt = null,
     nextAction = null,
     releaseReadiness,
@@ -96,6 +104,8 @@ export function buildDevTestGameProofGraph(
       defaultPrivateChannelRecoveryReceiptPath,
     replacementActionRecoveryReceiptSource =
       defaultReplacementActionRecoveryReceiptPath,
+    replacementHandoffRecoveryReceiptSource =
+      defaultReplacementHandoffRecoveryReceiptPath,
     replacementPrivateRecoveryReceiptSource =
       defaultReplacementPrivateRecoveryReceiptPath,
     nextActionSource = devTestGameNextActionPath,
@@ -141,6 +151,15 @@ export function buildDevTestGameProofGraph(
             path: replacementActionRecoveryReceiptSource,
           },
         );
+  const replacementHandoffRecoveryReceiptEvidence =
+    replacementHandoffRecoveryReceipt === null
+      ? null
+      : validateDevTestGameReplacementHandoffRecoveryReceipt(
+          replacementHandoffRecoveryReceipt,
+          {
+            path: replacementHandoffRecoveryReceiptSource,
+          },
+        );
   const releaseReadinessChecklist =
     assertDevTestGameReleaseReadiness(releaseReadiness);
   const adminSpine = adminSpineProof;
@@ -154,6 +173,9 @@ export function buildDevTestGameProofGraph(
     replacementActionRecoveryReceipt:
       replacementActionRecoveryReceiptEvidence,
     replacementActionRecoveryReceiptSource,
+    replacementHandoffRecoveryReceipt:
+      replacementHandoffRecoveryReceiptEvidence,
+    replacementHandoffRecoveryReceiptSource,
     replacementPrivateRecoveryReceipt:
       replacementPrivateRecoveryReceiptEvidence,
     replacementPrivateRecoveryReceiptSource,
@@ -167,6 +189,8 @@ export function buildDevTestGameProofGraph(
     privateChannelRecoveryReceipt: privateChannelRecoveryReceiptEvidence,
     replacementActionRecoveryReceipt:
       replacementActionRecoveryReceiptEvidence,
+    replacementHandoffRecoveryReceipt:
+      replacementHandoffRecoveryReceiptEvidence,
     replacementPrivateRecoveryReceipt:
       replacementPrivateRecoveryReceiptEvidence,
   });
@@ -204,6 +228,12 @@ export function buildDevTestGameProofGraph(
             replacementActionRecoveryReceipt:
               replacementActionRecoveryReceiptSource,
           }),
+      ...(replacementHandoffRecoveryReceiptEvidence === null
+        ? {}
+        : {
+            replacementHandoffRecoveryReceipt:
+              replacementHandoffRecoveryReceiptSource,
+          }),
       ...(nextActionEvidence === null ? {} : { nextAction: nextActionSource }),
       releaseReadiness: releaseReadinessSource,
       manifestGeneratedAt: manifest.generatedAt,
@@ -228,6 +258,8 @@ export function buildDevTestGameProofGraph(
         replacementPrivateRecoveryReceiptEvidence?.laneCount ?? 0,
       replacementActionRecoveryLaneCount:
         replacementActionRecoveryReceiptEvidence?.laneCount ?? 0,
+      replacementHandoffRecoveryLaneCount:
+        replacementHandoffRecoveryReceiptEvidence?.laneCount ?? 0,
     },
     nodes,
     edges,
@@ -326,6 +358,7 @@ export function assertDevTestGameProofGraph(
   assertDevTestGameProofGraphCoversPrivateChannelRecoveryReceipt(evidence);
   assertDevTestGameProofGraphCoversReplacementPrivateRecoveryReceipt(evidence);
   assertDevTestGameProofGraphCoversReplacementActionRecoveryReceipt(evidence);
+  assertDevTestGameProofGraphCoversReplacementHandoffRecoveryReceipt(evidence);
   if (releaseReadiness !== undefined) {
     assertDevTestGameProofGraphCoversProductionFeatureTargets(
       evidence,
@@ -378,6 +411,54 @@ export function assertDevTestGameProofGraphCoversReplacementActionRecoveryReceip
     ) {
       throw new Error(
         `proof graph replacement action receipt edge missing: ${from}->${to}`,
+      );
+    }
+  }
+  return graph;
+}
+
+export function assertDevTestGameProofGraphCoversReplacementHandoffRecoveryReceipt(
+  graph,
+) {
+  const node = (graph?.nodes ?? []).find(
+    (candidate) => candidate.id === "replacement-handoff-recovery-receipt",
+  );
+  if (graph?.generatedFrom?.replacementHandoffRecoveryReceipt === undefined) {
+    if (
+      node !== undefined ||
+      graph.summary?.replacementHandoffRecoveryLaneCount !== 0
+    ) {
+      throw new Error("proof graph replacement handoff receipt summary drifted");
+    }
+    return graph;
+  }
+  if (
+    node?.kind !== "replacement-handoff-recovery-receipt" ||
+    node.status !== "passed" ||
+    node.artifact !== graph.generatedFrom.replacementHandoffRecoveryReceipt ||
+    node.roleUrl !== localAdminAuditRoleUrl(localAdminAuditIds.hardening) ||
+    node.proofCommand !== devTestGameReplacementHandoffRecoveryReceiptCommand ||
+    node.recoveryCommand !==
+      devTestGameReplacementHandoffRecoveryReceiptCommand ||
+    node.laneCount !== graph.summary.replacementHandoffRecoveryLaneCount
+  ) {
+    throw new Error("proof graph replacement handoff receipt node drifted");
+  }
+  for (const [from, to, relationship] of [
+    ["admin-proof:hardening", "replacement-handoff-recovery-receipt", "proves"],
+    ["replacement-handoff-recovery-receipt", "proof-graph", "records"],
+    ["replacement-handoff-recovery-receipt", "next-action", "summarizes-into"],
+  ]) {
+    if (
+      !(graph.edges ?? []).some(
+        (edge) =>
+          edge.from === from &&
+          edge.to === to &&
+          edge.relationship === relationship,
+      )
+    ) {
+      throw new Error(
+        `proof graph replacement handoff receipt edge missing: ${from}->${to}`,
       );
     }
   }
@@ -651,6 +732,9 @@ export async function writeDevTestGameProofGraph({
   replacementActionRecoveryReceiptPath =
     process.env.FMARCH_DEV_TEST_GAME_REPLACEMENT_ACTION_RECOVERY_RECEIPT ??
     defaultReplacementActionRecoveryReceiptPath,
+  replacementHandoffRecoveryReceiptPath =
+    process.env.FMARCH_DEV_TEST_GAME_REPLACEMENT_HANDOFF_RECOVERY_RECEIPT ??
+    defaultReplacementHandoffRecoveryReceiptPath,
   replacementPrivateRecoveryReceiptPath =
     process.env.FMARCH_DEV_TEST_GAME_REPLACEMENT_PRIVATE_RECOVERY_RECEIPT ??
     defaultReplacementPrivateRecoveryReceiptPath,
@@ -673,6 +757,10 @@ export async function writeDevTestGameProofGraph({
     repoRoot,
     replacementActionRecoveryReceiptPath,
   );
+  const absoluteReplacementHandoffRecoveryReceiptPath = path.resolve(
+    repoRoot,
+    replacementHandoffRecoveryReceiptPath,
+  );
   const absoluteReplacementPrivateRecoveryReceiptPath = path.resolve(
     repoRoot,
     replacementPrivateRecoveryReceiptPath,
@@ -690,6 +778,9 @@ export async function writeDevTestGameProofGraph({
   const replacementActionRecoveryReceipt = await readOptionalJson(
     absoluteReplacementActionRecoveryReceiptPath,
   );
+  const replacementHandoffRecoveryReceipt = await readOptionalJson(
+    absoluteReplacementHandoffRecoveryReceiptPath,
+  );
   const replacementPrivateRecoveryReceipt = await readOptionalJson(
     absoluteReplacementPrivateRecoveryReceiptPath,
   );
@@ -704,6 +795,7 @@ export async function writeDevTestGameProofGraph({
       adminSpineTerminalBatches,
       privateChannelRecoveryReceipt,
       replacementActionRecoveryReceipt,
+      replacementHandoffRecoveryReceipt,
       replacementPrivateRecoveryReceipt,
       nextAction,
       releaseReadiness,
@@ -723,6 +815,10 @@ export async function writeDevTestGameProofGraph({
       replacementActionRecoveryReceiptSource: path.relative(
         repoRoot,
         absoluteReplacementActionRecoveryReceiptPath,
+      ),
+      replacementHandoffRecoveryReceiptSource: path.relative(
+        repoRoot,
+        absoluteReplacementHandoffRecoveryReceiptPath,
       ),
       replacementPrivateRecoveryReceiptSource: path.relative(
         repoRoot,
@@ -746,6 +842,8 @@ function buildProofGraphNodes({
   privateChannelRecoveryReceiptSource,
   replacementActionRecoveryReceipt,
   replacementActionRecoveryReceiptSource,
+  replacementHandoffRecoveryReceipt,
+  replacementHandoffRecoveryReceiptSource,
   replacementPrivateRecoveryReceipt,
   replacementPrivateRecoveryReceiptSource,
   releaseReadiness,
@@ -858,6 +956,25 @@ function buildProofGraphNodes({
             laneIds: replacementActionRecoveryReceipt.laneIds,
           },
         ];
+  const replacementHandoffRecoveryReceiptNode =
+    replacementHandoffRecoveryReceipt === null
+      ? []
+      : [
+          {
+            id: "replacement-handoff-recovery-receipt",
+            label: "Replacement handoff recovery receipt",
+            kind: "replacement-handoff-recovery-receipt",
+            status: replacementHandoffRecoveryReceipt.status,
+            artifact: replacementHandoffRecoveryReceiptSource,
+            roleUrl: replacementHandoffRecoveryReceipt.roleUrl,
+            proofCommand: devTestGameReplacementHandoffRecoveryReceiptCommand,
+            recoveryCommand:
+              devTestGameReplacementHandoffRecoveryReceiptCommand,
+            familyId: replacementHandoffRecoveryReceipt.familyId,
+            laneCount: replacementHandoffRecoveryReceipt.laneCount,
+            laneIds: replacementHandoffRecoveryReceipt.laneIds,
+          },
+        ];
   return [
     {
       id: "admin-spine",
@@ -912,6 +1029,7 @@ function buildProofGraphNodes({
     ...terminalBatchNode,
     ...privateChannelRecoveryReceiptNode,
     ...replacementActionRecoveryReceiptNode,
+    ...replacementHandoffRecoveryReceiptNode,
     ...replacementPrivateRecoveryReceiptNode,
     ...adminProofNodes,
     ...productionFeatureTargetNodes,
@@ -928,6 +1046,7 @@ function buildProofGraphEdges({
   adminSpineTerminalBatches = null,
   privateChannelRecoveryReceipt = null,
   replacementActionRecoveryReceipt = null,
+  replacementHandoffRecoveryReceipt = null,
   replacementPrivateRecoveryReceipt = null,
 }) {
   const nodeIds = new Set(nodes.map((node) => node.id));
@@ -941,6 +1060,9 @@ function buildProofGraphEdges({
     ...privateChannelRecoveryReceiptEdges(privateChannelRecoveryReceipt),
     ...replacementActionRecoveryReceiptEdges(
       replacementActionRecoveryReceipt,
+    ),
+    ...replacementHandoffRecoveryReceiptEdges(
+      replacementHandoffRecoveryReceipt,
     ),
     ...replacementPrivateRecoveryReceiptEdges(
       replacementPrivateRecoveryReceipt,
@@ -972,6 +1094,35 @@ function buildProofGraphEdges({
         ),
       ),
     );
+}
+
+function replacementHandoffRecoveryReceiptEdges(replacementHandoffRecoveryReceipt) {
+  if (replacementHandoffRecoveryReceipt === null) {
+    return [];
+  }
+  return [
+    [
+      "admin-proof:hardening",
+      "replacement-handoff-recovery-receipt",
+      "proves",
+      {
+        roleUrl: replacementHandoffRecoveryReceipt.roleUrl,
+        proofTarget: replacementHandoffRecoveryReceipt.path,
+      },
+    ],
+    [
+      "replacement-handoff-recovery-receipt",
+      "proof-graph",
+      "records",
+      { proofTarget: replacementHandoffRecoveryReceipt.path },
+    ],
+    [
+      "replacement-handoff-recovery-receipt",
+      "next-action",
+      "summarizes-into",
+      { proofTarget: replacementHandoffRecoveryReceipt.path },
+    ],
+  ];
 }
 
 function replacementActionRecoveryReceiptEdges(replacementActionRecoveryReceipt) {

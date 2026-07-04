@@ -222,6 +222,10 @@ import {
   assertDevTestGameReplacementActionRecoveryReceipt,
   devTestGameReplacementActionRecoveryReceiptPath,
 } from "./dev_test_game_replacement_action_recovery_receipt.mjs";
+import {
+  assertDevTestGameReplacementHandoffRecoveryReceipt,
+  devTestGameReplacementHandoffRecoveryReceiptPath,
+} from "./dev_test_game_replacement_handoff_recovery_receipt.mjs";
 export const DEV_TEST_GAME_RELEASE_READINESS_VERSION = 1;
 const devTestGameSeededBrowserProofCommand =
   devTestGameProductionFeatureBrowserProofCommand;
@@ -252,6 +256,10 @@ const defaultReplacementPrivateRecoveryReceiptPath = path.join(
 const defaultReplacementActionRecoveryReceiptPath = path.join(
   repoRoot,
   devTestGameReplacementActionRecoveryReceiptPath,
+);
+const defaultReplacementHandoffRecoveryReceiptPath = path.join(
+  repoRoot,
+  devTestGameReplacementHandoffRecoveryReceiptPath,
 );
 const defaultBackupRestoreProofPath = path.join(
   repoRoot,
@@ -561,6 +569,18 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
               options.replacementActionRecoveryReceiptPath ??
               devTestGameReplacementActionRecoveryReceiptPath,
             artifact: options.replacementActionRecoveryReceiptArtifact,
+          },
+        )
+      : undefined;
+  const replacementHandoffRecoveryReceiptEvidence =
+    options.replacementHandoffRecoveryReceipt
+      ? validateDevTestGameReplacementHandoffRecoveryReceipt(
+          options.replacementHandoffRecoveryReceipt,
+          {
+            path:
+              options.replacementHandoffRecoveryReceiptPath ??
+              devTestGameReplacementHandoffRecoveryReceiptPath,
+            artifact: options.replacementHandoffRecoveryReceiptArtifact,
           },
         )
       : undefined;
@@ -887,6 +907,18 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
       laneIds: replacementActionRecoveryReceiptEvidence.laneIds,
     });
   }
+  if (replacementHandoffRecoveryReceiptEvidence !== undefined) {
+    localChecks.push({
+      id: "local-replacement-handoff-recovery-receipt",
+      label: "Local replacement handoff recovery receipt",
+      status: "passed",
+      evidence: replacementHandoffRecoveryReceiptEvidence.path,
+      proofBoundary: replacementHandoffRecoveryReceiptEvidence.proofBoundary,
+      roleUrl: replacementHandoffRecoveryReceiptEvidence.roleUrl,
+      laneCount: replacementHandoffRecoveryReceiptEvidence.laneCount,
+      laneIds: replacementHandoffRecoveryReceiptEvidence.laneIds,
+    });
+  }
   if (raceCoverageEvidence !== undefined) {
     localChecks.push({
       id: "local-race-coverage-inventory",
@@ -1177,6 +1209,12 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
             replacementActionRecoveryReceipt:
               replacementActionRecoveryReceiptEvidence.path,
           }),
+      ...(replacementHandoffRecoveryReceiptEvidence === undefined
+        ? {}
+        : {
+            replacementHandoffRecoveryReceipt:
+              replacementHandoffRecoveryReceiptEvidence.path,
+          }),
       ...(raceCoverageEvidence === undefined
         ? {}
         : {
@@ -1351,6 +1389,12 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
                 : {
                     replacementActionRecoveryReceipt:
                       replacementActionRecoveryReceiptEvidence,
+                  }),
+              ...(replacementHandoffRecoveryReceiptEvidence === undefined
+                ? {}
+                : {
+                    replacementHandoffRecoveryReceipt:
+                      replacementHandoffRecoveryReceiptEvidence,
                   }),
               ...(raceCoverageEvidence === undefined
                 ? {}
@@ -5570,6 +5614,24 @@ export function validateDevTestGameReplacementActionRecoveryReceipt(
   };
 }
 
+export function validateDevTestGameReplacementHandoffRecoveryReceipt(
+  proof,
+  options = {},
+) {
+  const receipt = assertDevTestGameReplacementHandoffRecoveryReceipt(proof);
+  return {
+    status: "passed",
+    path: options.path ?? devTestGameReplacementHandoffRecoveryReceiptPath,
+    proofBoundary: receipt.proofBoundary,
+    roleUrl: receipt.generatedFrom.roleUrl,
+    familyId: receipt.generatedFrom.family.id,
+    laneCount: receipt.summary.laneCount,
+    passedLaneCount: receipt.summary.passedLaneCount,
+    laneIds: [...receipt.laneIds],
+    ...(options.artifact === undefined ? {} : { artifact: options.artifact }),
+  };
+}
+
 export function validateDevTestGameAdminSpineAdminProof(proof, options = {}) {
   const requiredChecks = [
     "core-loop",
@@ -6243,6 +6305,18 @@ const optionalReadinessArtifactRegistry = Object.freeze([
     ignoreInvalidDefault: true,
   }),
   optionalReadinessArtifact({
+    id: "replacementHandoffRecoveryReceipt",
+    envVar: "FMARCH_DEV_TEST_GAME_REPLACEMENT_HANDOFF_RECOVERY_RECEIPT",
+    defaultPath: defaultReplacementHandoffRecoveryReceiptPath,
+    outputKeys: {
+      data: "replacementHandoffRecoveryReceipt",
+      path: "replacementHandoffRecoveryReceiptPath",
+      freshnessMetadata: "replacementHandoffRecoveryReceiptArtifact",
+    },
+    validator: validateDevTestGameReplacementHandoffRecoveryReceipt,
+    ignoreInvalidDefault: true,
+  }),
+  optionalReadinessArtifact({
     id: "raceCoverage",
     envVar: "FMARCH_DEV_TEST_GAME_RACE_COVERAGE",
     defaultPath: defaultRaceCoveragePath,
@@ -6380,6 +6454,7 @@ const optionalReadinessArtifactLoadPlan = Object.freeze([
   "privateChannelRecoveryReceipt",
   "replacementPrivateRecoveryReceipt",
   "replacementActionRecoveryReceipt",
+  "replacementHandoffRecoveryReceipt",
   "raceCoverage",
   "hostedConcurrentRaceMatrix",
   "raceCoverageAdminProof",

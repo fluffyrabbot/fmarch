@@ -1840,6 +1840,8 @@ test("admin route data exposes local next action as a native audit row", async (
       privateChannelRecoveryGraph: privateChannelRecoveryGraphFixture(),
       replacementActionRecoveryGraph:
         replacementActionRecoveryGraphFixture(),
+      replacementHandoffRecoveryGraph:
+        replacementHandoffRecoveryGraphFixture(),
       replacementPrivateRecoveryGraph:
         replacementPrivateRecoveryGraphFixture(),
     }),
@@ -1894,6 +1896,10 @@ test("admin route data exposes local next action as a native audit row", async (
       ["terminal-proof-batch-graph", "passed:3 edges"],
       ["private-channel-recovery-graph", "passed:4 lanes"],
       ["replacement-action-recovery-graph", "passed:3 lanes"],
+      [
+        "replacement-handoff-recovery-graph",
+        `passed:${replacementHandoffRecoveryLaneIds.length} lanes`,
+      ],
       ["replacement-private-recovery-graph", "passed:6 lanes"],
       ["selection-trace", "0 candidates"],
       ["release-readiness-selection-trace", "1 buildable candidates"],
@@ -2001,6 +2007,7 @@ test("admin route data exposes local next action as a native audit row", async (
     },
     privateChannelRecoveryGraph: privateChannelRecoveryGraphFixture(),
     replacementActionRecoveryGraph: replacementActionRecoveryGraphFixture(),
+    replacementHandoffRecoveryGraph: replacementHandoffRecoveryGraphFixture(),
     replacementPrivateRecoveryGraph: replacementPrivateRecoveryGraphFixture(),
     stabilitySource: "",
     stabilityBuildSlice: "",
@@ -5227,6 +5234,7 @@ function nextActionFixture({
   terminalBatchGraph,
   privateChannelRecoveryGraph,
   replacementActionRecoveryGraph,
+  replacementHandoffRecoveryGraph,
   replacementPrivateRecoveryGraph,
 } = {}) {
   return {
@@ -5300,6 +5308,9 @@ function nextActionFixture({
       ...(replacementActionRecoveryGraph === undefined
         ? {}
         : { replacementActionRecoveryGraph }),
+      ...(replacementHandoffRecoveryGraph === undefined
+        ? {}
+        : { replacementHandoffRecoveryGraph }),
       ...(replacementPrivateRecoveryGraph === undefined
         ? {}
         : { replacementPrivateRecoveryGraph }),
@@ -5544,6 +5555,20 @@ function replacementActionRecoveryGraphFixture() {
       "replacement-action-reconnect",
       "replacement-stale-action-after-resolve",
     ],
+    edgeCount: 3,
+    edgeTargets: ["admin-proof:hardening", "proof-graph", "next-action"],
+  };
+}
+
+function replacementHandoffRecoveryGraphFixture() {
+  return {
+    nodeId: "replacement-handoff-recovery-receipt",
+    status: "passed",
+    proofTarget: "target/dev-test-game/replacement-handoff-recovery-receipt.json",
+    roleUrl: localAdminAuditRoleUrl(localAdminAuditIds.hardening),
+    familyId: "replacement-handoff-recovery",
+    laneCount: replacementHandoffRecoveryLaneIds.length,
+    laneIds: [...replacementHandoffRecoveryLaneIds],
     edgeCount: 3,
     edgeTargets: ["admin-proof:hardening", "proof-graph", "next-action"],
   };

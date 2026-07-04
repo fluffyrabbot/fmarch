@@ -117,6 +117,8 @@ export function buildDevTestGameNextAction(
     privateChannelRecoveryGraphFromProofGraph(graph);
   const replacementActionRecoveryGraph =
     replacementActionRecoveryGraphFromProofGraph(graph);
+  const replacementHandoffRecoveryGraph =
+    replacementHandoffRecoveryGraphFromProofGraph(graph);
   const replacementPrivateRecoveryGraph =
     replacementPrivateRecoveryGraphFromProofGraph(graph);
   const sourceTargetsByCheckId =
@@ -401,6 +403,9 @@ export function buildDevTestGameNextAction(
             ...(replacementActionRecoveryGraph === null
               ? {}
               : { replacementActionRecoveryGraph }),
+            ...(replacementHandoffRecoveryGraph === null
+              ? {}
+              : { replacementHandoffRecoveryGraph }),
             ...(replacementPrivateRecoveryGraph === null
               ? {}
               : { replacementPrivateRecoveryGraph }),
@@ -591,6 +596,9 @@ export function assertDevTestGameNextAction(evidence) {
   );
   assertReplacementActionRecoveryGraph(
     evidence.generatedFrom?.replacementActionRecoveryGraph,
+  );
+  assertReplacementHandoffRecoveryGraph(
+    evidence.generatedFrom?.replacementHandoffRecoveryGraph,
   );
   assertReplacementPrivateRecoveryGraph(
     evidence.generatedFrom?.replacementPrivateRecoveryGraph,
@@ -938,6 +946,43 @@ function replacementActionRecoveryGraphFromProofGraph(proofGraph) {
   };
 }
 
+function replacementHandoffRecoveryGraphFromProofGraph(proofGraph) {
+  if (proofGraph === null) {
+    return null;
+  }
+  const node = proofGraph.nodes.find(
+    (candidate) => candidate?.id === "replacement-handoff-recovery-receipt",
+  );
+  if (node === undefined) {
+    return null;
+  }
+  const edges = proofGraph.edges.filter(
+    (candidate) =>
+      (candidate?.from === "replacement-handoff-recovery-receipt" ||
+        candidate?.to === "replacement-handoff-recovery-receipt") &&
+      [
+        "proves",
+        "records",
+        "summarizes-into",
+      ].includes(String(candidate?.relationship ?? "")),
+  );
+  return {
+    nodeId: node.id,
+    status: String(node.status ?? "unknown"),
+    proofTarget: String(node.artifact ?? ""),
+    roleUrl: String(node.roleUrl ?? ""),
+    familyId: String(node.familyId ?? ""),
+    laneCount: Number(node.laneCount ?? 0),
+    laneIds: Array.isArray(node.laneIds)
+      ? node.laneIds.map((laneId) => String(laneId))
+      : [],
+    edgeCount: edges.length,
+    edgeTargets: edges.map((edge) =>
+      String(edge.from === node.id ? edge.to : edge.from),
+    ),
+  };
+}
+
 function assertTerminalBatchGraph(terminalBatchGraph) {
   if (terminalBatchGraph === undefined) {
     return;
@@ -1037,6 +1082,34 @@ function assertReplacementActionRecoveryGraph(replacementActionRecoveryGraph) {
   ) {
     throw new Error(
       "next-action replacement action recovery graph summary drifted",
+    );
+  }
+}
+
+function assertReplacementHandoffRecoveryGraph(replacementHandoffRecoveryGraph) {
+  if (replacementHandoffRecoveryGraph === undefined) {
+    return;
+  }
+  if (
+    replacementHandoffRecoveryGraph === null ||
+    replacementHandoffRecoveryGraph.nodeId !==
+      "replacement-handoff-recovery-receipt" ||
+    replacementHandoffRecoveryGraph.status !== "passed" ||
+    replacementHandoffRecoveryGraph.proofTarget !==
+      "target/dev-test-game/replacement-handoff-recovery-receipt.json" ||
+    replacementHandoffRecoveryGraph.roleUrl !==
+      "/admin/audit/local-hardening?game=<seeded-game>" ||
+    replacementHandoffRecoveryGraph.familyId !==
+      "replacement-handoff-recovery" ||
+    replacementHandoffRecoveryGraph.laneCount !== 17 ||
+    !Array.isArray(replacementHandoffRecoveryGraph.laneIds) ||
+    replacementHandoffRecoveryGraph.laneIds.length !== 17 ||
+    replacementHandoffRecoveryGraph.edgeCount !== 3 ||
+    JSON.stringify(replacementHandoffRecoveryGraph.edgeTargets) !==
+      JSON.stringify(["admin-proof:hardening", "proof-graph", "next-action"])
+  ) {
+    throw new Error(
+      "next-action replacement handoff recovery graph summary drifted",
     );
   }
 }

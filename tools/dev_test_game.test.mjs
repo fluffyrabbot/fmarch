@@ -239,6 +239,13 @@ import {
   devTestGameReplacementActionRecoveryReceiptRoleUrl,
 } from "./dev_test_game_replacement_action_recovery_receipt.mjs";
 import {
+  assertDevTestGameReplacementHandoffRecoveryReceipt,
+  buildDevTestGameReplacementHandoffRecoveryReceipt,
+  devTestGameReplacementHandoffRecoveryReceiptCommand,
+  devTestGameReplacementHandoffRecoveryReceiptPath,
+  devTestGameReplacementHandoffRecoveryReceiptRoleUrl,
+} from "./dev_test_game_replacement_handoff_recovery_receipt.mjs";
+import {
   assertDevTestGameReplacementPrivateRecoveryReceipt,
   buildDevTestGameReplacementPrivateRecoveryReceipt,
   devTestGameReplacementPrivateRecoveryReceiptCommand,
@@ -475,6 +482,12 @@ test("dev test-game spine orchestrators expose stable proof order and env maps",
   );
   assert.equal(
     packageJson.scripts[
+      "test:dev-test-game-replacement-handoff-recovery-receipt"
+    ],
+    "node tools/dev_test_game_replacement_handoff_recovery_receipt.mjs",
+  );
+  assert.equal(
+    packageJson.scripts[
       "test:dev-test-game-replacement-private-recovery-receipt"
     ],
     "node tools/dev_test_game_replacement_private_recovery_receipt.mjs",
@@ -633,6 +646,10 @@ test("dev test-game spine orchestrators expose stable proof order and env maps",
     },
     {
       kind: "node",
+      script: "tools/dev_test_game_replacement_handoff_recovery_receipt.mjs",
+    },
+    {
+      kind: "node",
       script: "tools/dev_test_game_replacement_private_recovery_receipt.mjs",
     },
     {
@@ -645,6 +662,7 @@ test("dev test-game spine orchestrators expose stable proof order and env maps",
         "target/dev-test-game/private-channel-recovery-receipt.json",
         "target/dev-test-game/hardening-admin-proof.json",
         "target/dev-test-game/replacement-action-recovery-receipt.json",
+        "target/dev-test-game/replacement-handoff-recovery-receipt.json",
         "target/dev-test-game/replacement-private-channel-recovery-receipt.json",
       ],
     },
@@ -1374,6 +1392,15 @@ test("dev test-game spine manifest records command order and evidence wiring", (
     ],
     roleUrl: devTestGameReplacementActionRecoveryReceiptRoleUrl,
   });
+  assert.deepEqual(manifest.commands.replacementHandoffRecoveryReceipt, {
+    script: devTestGameReplacementHandoffRecoveryReceiptCommand,
+    proofArtifact: devTestGameReplacementHandoffRecoveryReceiptPath,
+    dependsOn: [
+      "target/dev-test-game/proof-run.json",
+      "target/dev-test-game/hardening-admin-proof.json",
+    ],
+    roleUrl: devTestGameReplacementHandoffRecoveryReceiptRoleUrl,
+  });
   assert.deepEqual(manifest.commands.replacementPrivateRecoveryReceipt, {
     script: devTestGameReplacementPrivateRecoveryReceiptCommand,
     proofArtifact: devTestGameReplacementPrivateRecoveryReceiptPath,
@@ -1518,6 +1545,9 @@ test("dev test-game spine manifest records command order and evidence wiring", (
   assert(manifest.artifacts.includes(nextActionAdminProofPath));
   assert(manifest.artifacts.includes(devTestGameProofGraphPath));
   assert(manifest.artifacts.includes(devTestGameProofGraphAdminProofPath));
+  assert(
+    manifest.artifacts.includes(devTestGameReplacementHandoffRecoveryReceiptPath),
+  );
   assert(manifest.artifacts.includes("target/dev-test-game/release-admin-proof.json"));
   assert(
     manifest.artifacts.includes(
@@ -3032,6 +3062,8 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
         privateChannelRecoveryReceiptFixture(),
       replacementActionRecoveryReceipt:
         replacementActionRecoveryReceiptFixture(),
+      replacementHandoffRecoveryReceipt:
+        replacementHandoffRecoveryReceiptFixture(),
       replacementPrivateRecoveryReceipt:
         replacementPrivateRecoveryReceiptFixture(),
       releaseReadiness,
@@ -3047,12 +3079,16 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
     graph,
     releaseReadiness,
   );
-  assert.equal(graph.summary.nodeCount, 55);
-  assert.equal(graph.summary.roleUrlCount, 55);
+  assert.equal(graph.summary.nodeCount, 56);
+  assert.equal(graph.summary.roleUrlCount, 56);
   assert.equal(graph.summary.productionFeatureTargetCount, 30);
   assert.equal(graph.summary.terminalBatchCount, 2);
   assert.equal(graph.summary.privateChannelRecoveryLaneCount, 4);
   assert.equal(graph.summary.replacementActionRecoveryLaneCount, 3);
+  assert.equal(
+    graph.summary.replacementHandoffRecoveryLaneCount,
+    replacementHandoffRecoveryLaneIds.length,
+  );
   assert.equal(graph.summary.replacementPrivateRecoveryLaneCount, 6);
   assert.equal(
     graph.generatedFrom.adminSpineTerminalBatches,
@@ -3065,6 +3101,10 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
   assert.equal(
     graph.generatedFrom.replacementActionRecoveryReceipt,
     devTestGameReplacementActionRecoveryReceiptPath,
+  );
+  assert.equal(
+    graph.generatedFrom.replacementHandoffRecoveryReceipt,
+    devTestGameReplacementHandoffRecoveryReceiptPath,
   );
   assert.equal(
     graph.generatedFrom.replacementPrivateRecoveryReceipt,
@@ -3093,6 +3133,7 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
           "admin-spine-terminal-batches",
           "private-channel-recovery-receipt",
           "replacement-action-recovery-receipt",
+          "replacement-handoff-recovery-receipt",
           "replacement-private-recovery-receipt",
         ].includes(node.id),
       )
@@ -3159,6 +3200,13 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
         devTestGameReplacementActionRecoveryReceiptPath,
         devTestGameReplacementActionRecoveryReceiptRoleUrl,
         devTestGameReplacementActionRecoveryReceiptCommand,
+      ],
+      [
+        "replacement-handoff-recovery-receipt",
+        "replacement-handoff-recovery-receipt",
+        devTestGameReplacementHandoffRecoveryReceiptPath,
+        devTestGameReplacementHandoffRecoveryReceiptRoleUrl,
+        devTestGameReplacementHandoffRecoveryReceiptCommand,
       ],
       [
         "replacement-private-recovery-receipt",
@@ -3293,6 +3341,24 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
       ],
       ["replacement-action-recovery-receipt", "proof-graph", "records"],
       ["replacement-action-recovery-receipt", "next-action", "summarizes-into"],
+    ],
+  );
+  assert.deepEqual(
+    graph.edges
+      .filter(
+        (edge) =>
+          edge.from === "replacement-handoff-recovery-receipt" ||
+          edge.to === "replacement-handoff-recovery-receipt",
+      )
+      .map((edge) => [edge.from, edge.to, edge.relationship]),
+    [
+      [
+        "admin-proof:hardening",
+        "replacement-handoff-recovery-receipt",
+        "proves",
+      ],
+      ["replacement-handoff-recovery-receipt", "proof-graph", "records"],
+      ["replacement-handoff-recovery-receipt", "next-action", "summarizes-into"],
     ],
   );
   assert(
@@ -10077,6 +10143,22 @@ test("session card and markdown include role credential URLs and tokens", async 
     replacementActionRecoveryReceipt.laneIds,
     replacementActionLaneIds,
   );
+  const replacementHandoffRecoveryReceipt =
+    buildDevTestGameReplacementHandoffRecoveryReceipt(proofRun, {
+      generatedAt: "2026-06-26T00:00:00.000Z",
+    });
+  assertDevTestGameReplacementHandoffRecoveryReceipt(
+    replacementHandoffRecoveryReceipt,
+  );
+  assert.equal(replacementHandoffRecoveryReceipt.status, "passed");
+  assert.equal(
+    replacementHandoffRecoveryReceipt.generatedFrom.roleUrl,
+    devTestGameReplacementHandoffRecoveryReceiptRoleUrl,
+  );
+  assert.deepEqual(
+    replacementHandoffRecoveryReceipt.laneIds,
+    replacementHandoffRecoveryLaneIds,
+  );
   const replacementPrivateRecoveryReceipt =
     buildDevTestGameReplacementPrivateRecoveryReceipt(proofRun, {
       generatedAt: "2026-06-26T00:00:00.000Z",
@@ -11294,6 +11376,10 @@ test("session card and markdown include role credential URLs and tokens", async 
       devTestGameReplacementActionRecoveryReceiptPath,
     replacementActionRecoveryReceipt:
       replacementActionRecoveryReceiptFixture(),
+    replacementHandoffRecoveryReceiptPath:
+      devTestGameReplacementHandoffRecoveryReceiptPath,
+    replacementHandoffRecoveryReceipt:
+      replacementHandoffRecoveryReceiptFixture(),
     replacementPrivateRecoveryReceiptPath:
       devTestGameReplacementPrivateRecoveryReceiptPath,
     replacementPrivateRecoveryReceipt:
@@ -11321,6 +11407,10 @@ test("session card and markdown include role credential URLs and tokens", async 
     devTestGameReplacementActionRecoveryReceiptPath,
   );
   assert.equal(
+    adminSpineReadiness.generatedFrom.replacementHandoffRecoveryReceipt,
+    devTestGameReplacementHandoffRecoveryReceiptPath,
+  );
+  assert.equal(
     adminSpineReadiness.generatedFrom.replacementPrivateRecoveryReceipt,
     devTestGameReplacementPrivateRecoveryReceiptPath,
   );
@@ -11345,6 +11435,17 @@ test("session card and markdown include role credential URLs and tokens", async 
     adminSpineReadiness.localDevelopmentSpine.evidence
       .replacementActionRecoveryReceipt.laneCount,
     3,
+  );
+  assert.equal(
+    adminSpineReadiness.localDevelopmentSpine.checks.find(
+      (item) => item.id === "local-replacement-handoff-recovery-receipt",
+    ).roleUrl,
+    devTestGameReplacementHandoffRecoveryReceiptRoleUrl,
+  );
+  assert.equal(
+    adminSpineReadiness.localDevelopmentSpine.evidence
+      .replacementHandoffRecoveryReceipt.laneCount,
+    replacementHandoffRecoveryLaneIds.length,
   );
   assert.equal(
     adminSpineReadiness.localDevelopmentSpine.checks.find(
@@ -16696,6 +16797,45 @@ function replacementActionRecoveryReceiptFixture() {
       status: "passed",
       compactStatus: `passed:${laneId}`,
       evidence: { targetSlot: "slot-2" },
+    })),
+  };
+}
+
+function replacementHandoffRecoveryReceiptFixture() {
+  return {
+    version: 1,
+    proof: "dev-test-game-replacement-handoff-recovery-receipt",
+    status: "passed",
+    releaseReady: false,
+    productionReady: false,
+    generatedAt: "2026-06-26T00:00:00.000Z",
+    scope: "local-dev-test-game-replacement-handoff-recovery",
+    proofBoundary: "Local replacement handoff recovery receipt.",
+    generatedFrom: {
+      proofRun: "target/dev-test-game/proof-run.json",
+      hardeningAdminProof: "target/dev-test-game/hardening-admin-proof.json",
+      game: "00000000-0000-0000-0000-000000000001",
+      family: {
+        id: "replacement-handoff-recovery",
+        laneIds: [...replacementHandoffRecoveryLaneIds],
+      },
+      roleUrl: devTestGameReplacementHandoffRecoveryReceiptRoleUrl,
+    },
+    summary: {
+      status: "passed",
+      laneCount: replacementHandoffRecoveryLaneIds.length,
+      passedLaneCount: replacementHandoffRecoveryLaneIds.length,
+      familyCount: replacementHandoffRecoveryCoverageFamilies().length,
+      expectedLaneCount: replacementHandoffRecoveryLaneIds.length,
+      expectedFamilyCount: replacementHandoffRecoveryCoverageFamilies().length,
+    },
+    laneIds: [...replacementHandoffRecoveryLaneIds],
+    lanes: replacementHandoffRecoveryLaneIds.map((laneId) => ({
+      id: laneId,
+      label: laneId,
+      status: "passed",
+      compactStatus: `passed:${laneId}`,
+      evidence: { slot: "slot-2" },
     })),
   };
 }

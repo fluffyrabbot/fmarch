@@ -164,6 +164,8 @@ export function nextActionAdminProofCase() {
         source.nextAction.generatedFrom?.privateChannelRecoveryGraph ?? null,
       replacementActionRecoveryGraph:
         source.nextAction.generatedFrom?.replacementActionRecoveryGraph ?? null,
+      replacementHandoffRecoveryGraph:
+        source.nextAction.generatedFrom?.replacementHandoffRecoveryGraph ?? null,
       replacementPrivateRecoveryGraph:
         source.nextAction.generatedFrom?.replacementPrivateRecoveryGraph ?? null,
       relatedHandoffs: relatedHandoffsForNextAction({
@@ -551,6 +553,22 @@ export function assertNextActionAdminProof(evidence) {
       "next-action admin proof replacement action recovery graph summary drifted",
     );
   }
+  const replacementHandoffRecoveryGraph =
+    evidence.generatedFrom?.replacementHandoffRecoveryGraph;
+  if (
+    replacementHandoffRecoveryGraph !== null &&
+    replacementHandoffRecoveryGraph !== undefined &&
+    (replacementHandoffRecoveryGraph.nodeId !==
+      "replacement-handoff-recovery-receipt" ||
+      replacementHandoffRecoveryGraph.status !== "passed" ||
+      replacementHandoffRecoveryGraph.laneCount !== 17 ||
+      !Array.isArray(replacementHandoffRecoveryGraph.laneIds) ||
+      replacementHandoffRecoveryGraph.laneIds.length !== 17)
+  ) {
+    throw new Error(
+      "next-action admin proof replacement handoff recovery graph summary drifted",
+    );
+  }
   for (const checkId of requiredChecksForEvidence(evidence)) {
     if (!evidence.adminRoleSurface?.visibleChecks?.includes(checkId)) {
       throw new Error(`next-action admin proof missing visible check: ${checkId}`);
@@ -802,6 +820,9 @@ function requiredChecksForNextAction(nextAction) {
   }
   if (nextAction.generatedFrom?.replacementActionRecoveryGraph !== undefined) {
     checks.push("replacement-action-recovery-graph");
+  }
+  if (nextAction.generatedFrom?.replacementHandoffRecoveryGraph !== undefined) {
+    checks.push("replacement-handoff-recovery-graph");
   }
   if (nextAction.generatedFrom?.replacementPrivateRecoveryGraph !== undefined) {
     checks.push("replacement-private-recovery-graph");
@@ -1102,6 +1123,10 @@ function requiredChecksForEvidence(evidence) {
     evidence.generatedFrom?.replacementActionRecoveryGraph === undefined
       ? []
       : ["replacement-action-recovery-graph"]),
+    ...(evidence.generatedFrom?.replacementHandoffRecoveryGraph === null ||
+    evidence.generatedFrom?.replacementHandoffRecoveryGraph === undefined
+      ? []
+      : ["replacement-handoff-recovery-graph"]),
     ...(evidence.generatedFrom?.replacementPrivateRecoveryGraph === null ||
     evidence.generatedFrom?.replacementPrivateRecoveryGraph === undefined
       ? []

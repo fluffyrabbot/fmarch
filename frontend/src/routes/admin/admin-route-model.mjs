@@ -1876,6 +1876,10 @@ export function normalizeLocalNextActionAudit(nextAction, { game, proofGraph = n
     normalizeNextActionReplacementActionRecoveryGraph(
       nextAction.generatedFrom?.replacementActionRecoveryGraph,
     );
+  const replacementHandoffRecoveryGraph =
+    normalizeNextActionReplacementHandoffRecoveryGraph(
+      nextAction.generatedFrom?.replacementHandoffRecoveryGraph,
+    );
   const replacementPrivateRecoveryGraph =
     normalizeNextActionReplacementPrivateRecoveryGraph(
       nextAction.generatedFrom?.replacementPrivateRecoveryGraph,
@@ -1995,6 +1999,14 @@ export function normalizeLocalNextActionAudit(nextAction, { game, proofGraph = n
           Object.freeze({
             id: "replacement-action-recovery-graph",
             status: `${replacementActionRecoveryGraph.status}:${replacementActionRecoveryGraph.laneCount} lanes`,
+          }),
+        ]),
+    ...(replacementHandoffRecoveryGraph.nodeId === ""
+      ? []
+      : [
+          Object.freeze({
+            id: "replacement-handoff-recovery-graph",
+            status: `${replacementHandoffRecoveryGraph.status}:${replacementHandoffRecoveryGraph.laneCount} lanes`,
           }),
         ]),
     ...(replacementPrivateRecoveryGraph.nodeId === ""
@@ -2346,6 +2358,9 @@ export function normalizeLocalNextActionAudit(nextAction, { game, proofGraph = n
       ...(replacementActionRecoveryGraph.nodeId === ""
         ? {}
         : { replacementActionRecoveryGraph }),
+      ...(replacementHandoffRecoveryGraph.nodeId === ""
+        ? {}
+        : { replacementHandoffRecoveryGraph }),
       ...(replacementPrivateRecoveryGraph.nodeId === ""
         ? {}
         : { replacementPrivateRecoveryGraph }),
@@ -2469,6 +2484,50 @@ function normalizeNextActionReplacementPrivateRecoveryGraph(
     edgeTargets: Object.freeze(
       Array.isArray(replacementPrivateRecoveryGraph.edgeTargets)
         ? replacementPrivateRecoveryGraph.edgeTargets.map((target) =>
+            String(target),
+          )
+        : [],
+    ),
+  });
+}
+
+function normalizeNextActionReplacementHandoffRecoveryGraph(
+  replacementHandoffRecoveryGraph,
+) {
+  if (
+    replacementHandoffRecoveryGraph === null ||
+    typeof replacementHandoffRecoveryGraph !== "object"
+  ) {
+    return Object.freeze({
+      nodeId: "",
+      status: "",
+      proofTarget: "",
+      roleUrl: "",
+      familyId: "",
+      laneCount: 0,
+      laneIds: Object.freeze([]),
+      edgeCount: 0,
+      edgeTargets: Object.freeze([]),
+    });
+  }
+  return Object.freeze({
+    nodeId: String(replacementHandoffRecoveryGraph.nodeId ?? ""),
+    status: String(replacementHandoffRecoveryGraph.status ?? ""),
+    proofTarget: String(replacementHandoffRecoveryGraph.proofTarget ?? ""),
+    roleUrl: String(replacementHandoffRecoveryGraph.roleUrl ?? ""),
+    familyId: String(replacementHandoffRecoveryGraph.familyId ?? ""),
+    laneCount: Number(replacementHandoffRecoveryGraph.laneCount ?? 0),
+    laneIds: Object.freeze(
+      Array.isArray(replacementHandoffRecoveryGraph.laneIds)
+        ? replacementHandoffRecoveryGraph.laneIds.map((laneId) =>
+            String(laneId),
+          )
+        : [],
+    ),
+    edgeCount: Number(replacementHandoffRecoveryGraph.edgeCount ?? 0),
+    edgeTargets: Object.freeze(
+      Array.isArray(replacementHandoffRecoveryGraph.edgeTargets)
+        ? replacementHandoffRecoveryGraph.edgeTargets.map((target) =>
             String(target),
           )
         : [],

@@ -90,6 +90,11 @@ import {
   devTestGameReplacementActionRecoveryReceiptRoleUrl,
 } from "./dev_test_game_replacement_action_recovery_receipt.mjs";
 import {
+  devTestGameReplacementHandoffRecoveryReceiptCommand,
+  devTestGameReplacementHandoffRecoveryReceiptPath,
+  devTestGameReplacementHandoffRecoveryReceiptRoleUrl,
+} from "./dev_test_game_replacement_handoff_recovery_receipt.mjs";
+import {
   nextActionAdminProofCommand,
   nextActionAdminProofPath,
   nextActionCommand,
@@ -288,6 +293,15 @@ export function buildDevTestGameSpineManifest({
         ],
         roleUrl: devTestGameReplacementActionRecoveryReceiptRoleUrl,
       },
+      replacementHandoffRecoveryReceipt: {
+        script: devTestGameReplacementHandoffRecoveryReceiptCommand,
+        proofArtifact: devTestGameReplacementHandoffRecoveryReceiptPath,
+        dependsOn: [
+          "target/dev-test-game/proof-run.json",
+          "target/dev-test-game/hardening-admin-proof.json",
+        ],
+        roleUrl: devTestGameReplacementHandoffRecoveryReceiptRoleUrl,
+      },
       replacementPrivateRecoveryReceipt: {
         script: devTestGameReplacementPrivateRecoveryReceiptCommand,
         proofArtifact: devTestGameReplacementPrivateRecoveryReceiptPath,
@@ -424,6 +438,7 @@ export function buildDevTestGameSpineManifest({
       devTestGameHostedEvidenceLaneDemoPassedPath,
       devTestGamePrivateChannelRecoveryReceiptPath,
       devTestGameReplacementActionRecoveryReceiptPath,
+      devTestGameReplacementHandoffRecoveryReceiptPath,
       devTestGameReplacementPrivateRecoveryReceiptPath,
       devTestGameHostedOpsSignalsPath,
       devTestGameRealHostedObservabilityHandoffPath,
@@ -592,6 +607,7 @@ export function assertDevTestGameSpineManifest(manifest) {
     "tools/dev_test_game_private_channel_recovery_receipt.mjs",
     "tools/dev_test_game_hardening_admin_proof.mjs",
     "tools/dev_test_game_replacement_action_recovery_receipt.mjs",
+    "tools/dev_test_game_replacement_handoff_recovery_receipt.mjs",
     "tools/dev_test_game_replacement_private_recovery_receipt.mjs",
     "tools/dev_test_game_release_readiness.mjs",
   ]);
@@ -604,6 +620,7 @@ export function assertDevTestGameSpineManifest(manifest) {
     "tools/dev_test_game_private_channel_recovery_receipt.mjs",
     "tools/dev_test_game_hardening_admin_proof.mjs",
     "tools/dev_test_game_replacement_action_recovery_receipt.mjs",
+    "tools/dev_test_game_replacement_handoff_recovery_receipt.mjs",
     "tools/dev_test_game_replacement_private_recovery_receipt.mjs",
     "tools/dev_test_game_release_readiness.mjs",
     "tools/dev_test_game_seed_fixture_summary.mjs",
