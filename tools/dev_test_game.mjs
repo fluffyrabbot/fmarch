@@ -28,6 +28,12 @@ import {
   coreLoopPrivateChannelStalePostLaneId,
 } from "./dev_test_game_core_loop_private_channel_recovery_scenarios.mjs";
 import {
+  assertNightThreeProgressionBrowserProof,
+  nightThreeActionTargetFromCommandState,
+  nightThreeProgressionActionId,
+  nightThreeProgressionBrowserScenario,
+} from "./dev_test_game_core_loop_night_three_progression_scenarios.mjs";
+import {
   createUnexpectedMediaResponseGuard,
 } from "./dev_test_game_media_response_guard.mjs";
 
@@ -4168,10 +4174,11 @@ async function verifySeededD02VoteNightTransition({
             },
           });
 
-    const n03ActionTarget =
-      actionAfterD03R2NoLynchPolicy.commandState?.actions?.find(
-        (action) => action.templateId === "factional_kill",
-      )?.targets?.[0] ?? null;
+    const n03Scenario = nightThreeProgressionBrowserScenario();
+    const n03ActionTarget = nightThreeActionTargetFromCommandState({
+      commandState: actionAfterD03R2NoLynchPolicy.commandState,
+      scenario: n03Scenario,
+    });
     if (typeof n03ActionTarget !== "string" || n03ActionTarget === "") {
       throw new Error(
         `N03 action target missing: ${JSON.stringify(
@@ -4179,21 +4186,22 @@ async function verifySeededD02VoteNightTransition({
         )}`,
       );
     }
-    await actionEntry.page.locator('[data-action="submit_action:factional_kill"]').click();
+    await actionEntry.page
+      .locator(`[data-action="${nightThreeProgressionActionId}"]`)
+      .click();
     await actionEntry.page.waitForFunction(
-      (targetSlot) =>
+      ({ scenario, targetSlot }) =>
         window.__fmarchPlayerCommandStatus?.state === "ack" &&
         window.__fmarchPlayerCommandStatus?.requestEnvelope?.body?.body
-          ?.principal_user_id === "player-goon-a" &&
+          ?.principal_user_id === scenario.expectedPrincipalUserId &&
         window.__fmarchPlayerCommandStatus?.requestEnvelope?.body?.body?.command
-          ?.SubmitAction?.actor_slot === "slot_4" &&
+          ?.SubmitAction?.actor_slot === scenario.expectedActorSlot &&
         window.__fmarchPlayerCommandStatus?.requestEnvelope?.body?.body?.command
-          ?.SubmitAction?.template_id === "factional_kill" &&
+          ?.SubmitAction?.template_id === scenario.templateId &&
         window.__fmarchPlayerCommandStatus?.requestEnvelope?.body?.body?.command
           ?.SubmitAction?.targets?.includes(targetSlot) &&
-        document.querySelector('[data-action="submit_action:factional_kill"]') ===
-          null,
-      n03ActionTarget,
+        document.querySelector(`[data-action="${scenario.actionId}"]`) === null,
+      { scenario: n03Scenario, targetSlot: n03ActionTarget },
     );
     const n03ActionSubmission = await actionEntry.page.evaluate(
       () => window.__fmarchPlayerCommandStatus,
@@ -4271,6 +4279,24 @@ async function verifySeededD02VoteNightTransition({
         () => window.__fmarchPlayerProjection?.notifications ?? [],
       ),
     };
+
+    assertNightThreeProgressionBrowserProof({
+      proof: {
+        n03ActionTarget,
+        n03ActionSubmission,
+        n03ActionAfterSubmit,
+        hostBeforeResolveN03,
+        resolveN03,
+        hostAfterResolveN03,
+        n03ResolvedTargetSlot,
+        advanceD04,
+        d04HostSurface,
+        d04ActionSurface,
+        d04TargetSurface,
+      },
+      scenario: n03Scenario,
+      includeEvidenceInError: true,
+    });
 
     if (
       d03TerminalVoteSubmission?.state !== "ack" ||
@@ -4542,49 +4568,7 @@ async function verifySeededD02VoteNightTransition({
       d03R2StaleContinuePolicyRecovery?.staleHostPromptReloadAfterReject
         ?.promptActionsAfterReload?.includes(d03R2StaleContinuePolicyActionId) ||
       d03R2StaleContinuePolicyRecovery?.staleHostPromptReloadAfterReject
-        ?.promptActionsAfterReload?.includes(d03R2RevotePromptActionId) ||
-      n03ActionSubmission?.state !== "ack" ||
-      n03ActionSubmission?.requestEnvelope?.body?.body?.principal_user_id !==
-        "player-goon-a" ||
-      n03ActionSubmission?.requestEnvelope?.body?.body?.command?.SubmitAction
-        ?.actor_slot !== "slot_4" ||
-      n03ActionSubmission?.requestEnvelope?.body?.body?.command?.SubmitAction
-        ?.template_id !== "factional_kill" ||
-      n03ActionSubmission?.requestEnvelope?.body?.body?.command?.SubmitAction
-        ?.targets?.[0] !== n03ActionTarget ||
-      n03ActionAfterSubmit.commandState?.phase?.phaseId !== "N03" ||
-      n03ActionAfterSubmit.buttons.some(
-        (button) => button.action === "submit_action:factional_kill",
-      ) ||
-      !n03ActionAfterSubmit.receiptStatusText.includes("Ack") ||
-      hostBeforeResolveN03.phase?.id !== "N03" ||
-      hostBeforeResolveN03.phase?.locked !== false ||
-      !hostBeforeResolveN03.phaseActions.includes("resolve_phase") ||
-      resolveN03.commandStatus?.state !== "ack" ||
-      hostAfterResolveN03.phase?.id !== "N03" ||
-      hostAfterResolveN03.phase?.locked !== true ||
-      !hostAfterResolveN03.phaseActions.includes("advance_phase") ||
-      n03ResolvedTargetSlot?.slot_id !== n03ActionTarget ||
-      n03ResolvedTargetSlot?.alive !== false ||
-      n03ResolvedTargetSlot?.status !== "dead" ||
-      advanceD04.commandStatus?.state !== "ack" ||
-      d04HostSurface.phase?.id !== "D04" ||
-      d04HostSurface.phase?.locked !== false ||
-      !d04HostSurface.phaseActions.includes("resolve_phase") ||
-      d04ActionSurface.commandState?.phase?.phaseId !== "D04" ||
-      d04ActionSurface.commandState?.phase?.locked !== false ||
-      d04ActionSurface.commandState?.actions?.length !== 0 ||
-      !d04ActionSurface.buttons.some((button) =>
-        String(button.action ?? "").startsWith("submit_vote"),
-      ) ||
-      d04TargetSurface.commandState?.phase?.phaseId !== "D04" ||
-      d04TargetSurface.commandState?.phase?.locked !== false ||
-      d04TargetSurface.commandState?.actorSlot !== n03ActionTarget ||
-      d04TargetSurface.commandState?.actorAlive !== false ||
-      d04TargetSurface.commandState?.actorStatus !== "dead" ||
-      d04TargetSurface.buttons.some((button) =>
-        String(button.action ?? "").startsWith("submit_vote"),
-      )
+        ?.promptActionsAfterReload?.includes(d03R2RevotePromptActionId)
     ) {
       throw new Error(
         `D03 revote boundary drifted: ${JSON.stringify({
