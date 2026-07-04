@@ -70,7 +70,12 @@ const CHECKS = Object.freeze([
       evidence?.browser?.player?.concurrentVoteRace?.secondOutcome?.state ===
         "ack" &&
       evidence?.browser?.player?.concurrentVoteRace?.rows?.includes("slot_4") &&
-      evidence?.browser?.player?.concurrentVoteRace?.rows?.includes("slot-7"),
+      evidence?.browser?.player?.concurrentVoteRace?.rows?.includes("slot-7") &&
+      evidence?.browser?.hostVotecountConvergence?.status === "passed" &&
+      evidence?.browser?.hostVotecountConvergence?.expectedCount === 1 &&
+      evidence?.browser?.hostVotecountConvergence?.after?.projection?.some(
+        (row) => row.target === "slot-2" && row.count === 1,
+      ),
   },
   {
     id: "player-action-resolution",

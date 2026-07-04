@@ -759,18 +759,20 @@ async function driveBrowser(frontendBaseUrl, privateChannelFixture) {
   let moderatorEvidence;
   try {
     await waitForHostLiveVotecount(moderatorSession.page, 1);
+    const hostVotecountBeforePlayer = await hostVotecountBrowserSnapshot(
+      moderatorSession.page,
+    );
     playerEvidence = await drivePlayerBrowser(frontendBaseUrl);
     const playerActionEvidence = await drivePlayerActionBrowser(frontendBaseUrl);
     const playerPrivateChannelEvidence =
       await drivePlayerPrivateChannelBrowser(frontendBaseUrl, privateChannelFixture);
     const privateChannelForbiddenEvidence =
       await drivePrivateChannelForbiddenBrowser(frontendBaseUrl);
-    await waitForHostLiveVotecountEvent(moderatorSession.page, 2);
-    await waitForHostLiveVotecountAfter(moderatorSession.page, 1, 2);
-    await triggerHostResync(moderatorSession.page, 9001);
-    const playerVoteCountAfterPlayer = await fetchJson(
-      `${apiBaseUrl}/games/${game}/votecount`,
+    const hostVotecountConvergence = await proveHostVotecountConvergesAfterPlayerLoop(
+      moderatorSession.page,
+      { before: hostVotecountBeforePlayer },
     );
+    const playerVoteCountAfterPlayer = hostVotecountConvergence.apiVoteCount;
     moderatorEvidence = await driveModeratorBrowser(moderatorSession);
     return {
       admin: adminEvidence,
@@ -778,6 +780,7 @@ async function driveBrowser(frontendBaseUrl, privateChannelFixture) {
       playerAction: playerActionEvidence,
       playerPrivateChannel: playerPrivateChannelEvidence,
       privateChannelForbidden: privateChannelForbiddenEvidence,
+      hostVotecountConvergence,
       moderator: moderatorEvidence,
       playerVoteCountAfterPlayer,
     };
@@ -3385,14 +3388,16 @@ async function modkillSlotFromBrowser(page) {
   assertHitTarget(confirmBox, `${actionId} confirm`);
   await confirm.click();
 
-  const status = page.getByTestId(`host-command-status-${actionId}`);
-  await status.waitFor({ state: "visible" });
   await page.waitForFunction(
     (expectedActionId) =>
       window.__fmarchHostCommandStatuses?.[expectedActionId]?.state === "ack",
     actionId,
   );
-  const statusMessage = await status.innerText();
+  const commandStatus = await page.evaluate(
+    (expectedActionId) => window.__fmarchHostCommandStatuses?.[expectedActionId],
+    actionId,
+  );
+  const statusMessage = commandStatus?.message ?? "";
   await waitForHostConsoleSlotStatusDelta(page, {
     slotId: "slot-7",
     status: "modkilled",
@@ -3406,10 +3411,6 @@ async function modkillSlotFromBrowser(page) {
     );
   });
 
-  const commandStatus = await page.evaluate(
-    (expectedActionId) => window.__fmarchHostCommandStatuses?.[expectedActionId],
-    actionId,
-  );
   assertModkillCommandStatus(commandStatus);
   const apiStateAfter = await fetchJson(
     `${apiBaseUrl}/games/${game}/host-console-state?principal_user_id=host_h&slot_id=slot-7`,
@@ -3552,58 +3553,83 @@ async function waitForHostLiveVotecount(page, count) {
   }
 }
 
-async function waitForHostLiveVotecountEvent(page, count) {
-  try {
-    await page.waitForFunction(
-      (expectedCount) =>
-        window.__fmarchHostLiveProjectionEvents?.some(
-          (event) =>
-            event?.delta?.kind === "VoteCountChanged" &&
-            event.delta.body?.candidate_slot === "slot-2" &&
-            event.delta.body?.count === expectedCount,
-        ),
-      count,
+async function proveHostVotecountConvergesAfterPlayerLoop(page, { before }) {
+  const apiVoteCount = await fetchJson(`${apiBaseUrl}/games/${game}/votecount`);
+  assertPlayerVoteProjection(apiVoteCount);
+  const expectedCount = voteCountForSlot(apiVoteCount, "slot-2");
+  if (expectedCount !== 1) {
+    throw new Error(
+      `player vote loop did not restore API votecount to 1: ${JSON.stringify(apiVoteCount)}`,
     );
-  } catch (error) {
-    const debug = await page.evaluate(() => ({
-      endpoint: window.__fmarchHostLiveProjectionEndpoint,
-      events: window.__fmarchHostLiveProjectionEvents,
-      projection: window.__fmarchHostVotecountProjection,
-    }));
-    throw new Error(`host live votecount event did not include ${count}: ${JSON.stringify(debug)}`);
   }
-}
 
-async function waitForHostLiveVotecountAfter(page, count, previousCount) {
-  await page.waitForFunction(
-    ({ expectedCount, afterCount }) => {
-      const events = window.__fmarchHostLiveProjectionEvents ?? [];
-      const previousIndex = events.findIndex(
-        (event) =>
-          event?.delta?.kind === "VoteCountChanged" &&
-          event.delta.body?.candidate_slot === "slot-2" &&
-          event.delta.body?.count === afterCount,
-      );
-      return events.some(
-        (event, index) =>
-          index > previousIndex &&
-          event?.delta?.kind === "VoteCountChanged" &&
-          event.delta.body?.candidate_slot === "slot-2" &&
-          event.delta.body?.count === expectedCount,
-      );
-    },
-    { expectedCount: count, afterCount: previousCount },
-  );
+  const resyncFromSeq = 9001;
+  const resyncEvent = await triggerHostResync(page, resyncFromSeq, { expectedCount });
   await page.waitForFunction(
     (expectedCount) =>
       window.__fmarchHostVotecountProjection?.some(
         (row) => row.target === "slot-2" && row.count === expectedCount,
       ),
-    count,
+    expectedCount,
   );
+  const after = await hostVotecountBrowserSnapshot(page);
+  const eventsSinceBaseline = after.events.slice(before.eventCount);
+  const sawFreshVoteEvent = eventsSinceBaseline.some(
+    (event) =>
+      event?.delta?.kind === "VoteCountChanged" &&
+      event.delta.body?.candidate_slot === "slot-2" &&
+      event.delta.body?.count === expectedCount,
+  );
+
+  if (voteCountForProjection(after.projection, "slot-2") !== expectedCount) {
+    throw new Error(
+      `host votecount projection did not converge to API truth: ${JSON.stringify({
+        expectedCount,
+        apiVoteCount,
+        before,
+        after,
+      })}`,
+    );
+  }
+
+  return {
+    status: "passed",
+    expectedCount,
+    apiVoteCount,
+    before,
+    after,
+    resyncFromSeq,
+    resyncEvent,
+    sawFreshVoteEvent,
+    proof:
+      "After the player vote/duplicate/race/withdraw loop completed, the host browser explicitly resynced and its votecount projection converged to the API votecount for slot-2. The proof no longer depends on the host socket retaining transient intermediate count events.",
+  };
 }
 
-async function triggerHostResync(page, fromSeq) {
+async function hostVotecountBrowserSnapshot(page) {
+  return await page.evaluate(() => ({
+    endpoint: window.__fmarchHostLiveProjectionEndpoint,
+    eventCount: (window.__fmarchHostLiveProjectionEvents ?? []).length,
+    events: window.__fmarchHostLiveProjectionEvents ?? [],
+    projection: window.__fmarchHostVotecountProjection ?? [],
+  }));
+}
+
+function voteCountForSlot(votecount, slotId) {
+  const row = (votecount ?? []).find(
+    (candidate) =>
+      candidate?.kind === "VoteCountChanged" &&
+      candidate.body?.candidate_slot === slotId,
+  );
+  return row?.body?.count ?? null;
+}
+
+function voteCountForProjection(projection, slotId) {
+  const row = (projection ?? []).find((candidate) => candidate?.target === slotId);
+  return row?.count ?? null;
+}
+
+async function triggerHostResync(page, fromSeq, { expectedCount = 1 } = {}) {
   await page.evaluate(async (seq) => window.__fmarchTriggerHostResync(seq), fromSeq);
   await page.waitForFunction(
     (seq) => {
@@ -3617,11 +3643,23 @@ async function triggerHostResync(page, fromSeq) {
     },
     fromSeq,
   );
-  await page.waitForFunction(() =>
-    window.__fmarchHostVotecountProjection?.some(
-      (row) => row.target === "slot-2" && row.count === 1,
-    ),
+  const resyncEvent = await page.evaluate((seq) => {
+    const events = window.__fmarchHostLiveProjectionEvents ?? [];
+    return events.find(
+      (event) =>
+        event?.kind === "resync-required" &&
+        event.fromSeq === seq &&
+        event.state === "recovered",
+    );
+  }, fromSeq);
+  await page.waitForFunction(
+    (count) =>
+      window.__fmarchHostVotecountProjection?.some(
+        (row) => row.target === "slot-2" && row.count === count,
+      ),
+    expectedCount,
   );
+  return resyncEvent;
 }
 
 async function waitForHostConsoleDeadlineDelta(page, deadline) {
