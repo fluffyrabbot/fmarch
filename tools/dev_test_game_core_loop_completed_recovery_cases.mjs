@@ -3,7 +3,7 @@ import {
   completedHostStaleCommandHardeningLaneCaseDefinitions,
   completedPlayerReloadHardeningLaneCaseDefinitions,
   staleCompletedGamePlayerCommandHardeningLaneCaseDefinitions,
-} from "./dev_test_game_core_loop_completed_game_shared_case_definitions.mjs";
+} from "./dev_test_game_core_loop_completed_game_shared_scenario_assertions.mjs";
 
 const cloneScenarioCase = (scenario) => ({ ...scenario });
 const cloneRaceCoverageCell = (cell) => ({

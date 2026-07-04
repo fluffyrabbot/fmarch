@@ -37,7 +37,7 @@ export {
   staleCompletedGamePlayerCommandHardeningLaneCases,
   staleCompletedGamePlayerCommandCaseDefinitions,
   staleCompletedGamePlayerCommandCases,
-} from "./dev_test_game_core_loop_completed_game_shared_case_definitions.mjs";
+} from "./dev_test_game_core_loop_completed_game_shared_scenario_assertions.mjs";
 
 export {
   assertCompletedGameProofReadinessSurfaceProof,

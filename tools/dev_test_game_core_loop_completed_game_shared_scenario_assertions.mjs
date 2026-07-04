@@ -1,8 +1,15 @@
 import {
+  completedGameStaleRecoverySpineLaneCase,
+  completedHostStaleCommandHardeningLaneCaseDefinitions,
+  completedHostStaleCommandHardeningLaneCases,
   completedHostStaleCommandCaseDefinitions,
   completedHostStaleCommandCases,
+  completedPlayerReloadHardeningLaneCaseDefinitions,
+  completedPlayerReloadHardeningLaneCases,
   completedPlayerReloadCaseDefinitions,
   completedPlayerReloadCases,
+  staleCompletedGamePlayerCommandHardeningLaneCaseDefinitions,
+  staleCompletedGamePlayerCommandHardeningLaneCases,
   staleCompletedGamePlayerCommandCaseDefinitions,
   staleCompletedGamePlayerCommandCases,
 } from "./dev_test_game_core_loop_completed_game_shared_case_definitions.mjs";
@@ -12,10 +19,17 @@ export {
 } from "./dev_test_game_core_loop_completed_recovery_scenario_assertions.mjs";
 
 export {
+  completedGameStaleRecoverySpineLaneCase,
+  completedHostStaleCommandHardeningLaneCaseDefinitions,
+  completedHostStaleCommandHardeningLaneCases,
   completedHostStaleCommandCaseDefinitions,
   completedHostStaleCommandCases,
+  completedPlayerReloadHardeningLaneCaseDefinitions,
+  completedPlayerReloadHardeningLaneCases,
   completedPlayerReloadCaseDefinitions,
   completedPlayerReloadCases,
+  staleCompletedGamePlayerCommandHardeningLaneCaseDefinitions,
+  staleCompletedGamePlayerCommandHardeningLaneCases,
   staleCompletedGamePlayerCommandCaseDefinitions,
   staleCompletedGamePlayerCommandCases,
 } from "./dev_test_game_core_loop_completed_game_shared_case_definitions.mjs";

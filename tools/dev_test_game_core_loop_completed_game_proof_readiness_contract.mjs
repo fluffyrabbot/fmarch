@@ -6,23 +6,21 @@ import {
   completedGameEndgameScenarioCaseFamilies,
   completedGameEndgameTransition,
   completedGameEndgameTransitionTokens,
-} from "./dev_test_game_core_loop_completed_game_shared_scenario_assertions.mjs";
-import {
-  completedGameHardeningLaneIds,
-} from "./dev_test_game_core_loop_completed_game_cases.mjs";
-import {
   completedGameStaleRecoverySpineLaneCase,
   completedHostStaleCommandCases,
   completedPlayerReloadCases,
   staleCompletedGamePlayerCommandCases,
-} from "./dev_test_game_core_loop_completed_game_shared_case_definitions.mjs";
+} from "./dev_test_game_core_loop_completed_game_shared_scenario_assertions.mjs";
+import {
+  completedGameHardeningLaneIds,
+} from "./dev_test_game_core_loop_completed_game_cases.mjs";
 
 export {
   completedGameStaleRecoverySpineLaneCase,
   completedHostStaleCommandCases,
   completedPlayerReloadCases,
   staleCompletedGamePlayerCommandCases,
-} from "./dev_test_game_core_loop_completed_game_shared_case_definitions.mjs";
+} from "./dev_test_game_core_loop_completed_game_shared_scenario_assertions.mjs";
 
 export const completedGameProofReadinessCaseGroupDefinitions = Object.freeze([
   Object.freeze({ id: "completedHostStaleCommandCases" }),
