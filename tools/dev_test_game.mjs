@@ -3375,9 +3375,11 @@ async function verifySeededD02VoteNightTransition({
         `N02 action target missing: ${JSON.stringify(n02ActionSurface.commandState)}`,
       );
     }
-    await actionEntry.page.locator('[data-action="submit_action:factional_kill"]').click();
-    await actionEntry.page.waitForFunction(
-      (targetSlot) =>
+    const n02ActionSubmission = await submitPlayerCommandAndWait({
+      page: actionEntry.page,
+      actionId: "submit_action:factional_kill",
+      waitArg: n02ActionTarget,
+      waitFor: (targetSlot) =>
         window.__fmarchPlayerCommandStatus?.state === "ack" &&
         window.__fmarchPlayerCommandStatus?.requestEnvelope?.body?.body?.command
           ?.SubmitAction?.template_id === "factional_kill" &&
@@ -3385,23 +3387,12 @@ async function verifySeededD02VoteNightTransition({
           ?.SubmitAction?.targets?.includes(targetSlot) &&
         document.querySelector('[data-action="submit_action:factional_kill"]') ===
           null,
-      n02ActionTarget,
-    );
-    const n02ActionSubmission = await actionEntry.page.evaluate(
-      () => window.__fmarchPlayerCommandStatus,
-    );
-    const n02ActionAfterSubmit = {
-      commandState: await actionEntry.page.evaluate(
-        () => window.__fmarchPlayerProjection?.commandState,
-      ),
-      buttons: await playerCommandButtons(actionEntry.page),
-      currentReceipt: await actionEntry.page.evaluate(() =>
-        window.__fmarchPlayerProjection?.currentReceipt ?? null,
-      ),
-      receiptStatusText: await actionEntry.page
-        .getByTestId("player-command-status")
-        .innerText(),
-    };
+    });
+    const n02ActionAfterSubmit = await playerProjectionSnapshot(actionEntry.page, {
+      buttons: true,
+      currentReceipt: true,
+      receiptStatusText: true,
+    });
 
     const resolveN02 = await confirmHostAction(hostEntry.page, "resolve_phase");
     await waitForHostProjectionPhase(hostEntry.page, { phaseId: "N02", locked: true });
@@ -3543,14 +3534,12 @@ async function verifySeededD02VoteNightTransition({
         })}`,
       );
     }
-    await playerEntry.page
-      .locator('[data-action="submit_vote"]', {
-        hasText: d03TerminalVoteTarget.label,
-      })
-      .first()
-      .click();
-    await playerEntry.page.waitForFunction(
-      (targetSlot) =>
+    const d03TerminalVoteSubmission = await submitPlayerCommandAndWait({
+      page: playerEntry.page,
+      actionId: "submit_vote",
+      locatorOptions: { hasText: d03TerminalVoteTarget.label },
+      waitArg: d03TerminalVoteTarget.slotId,
+      waitFor: (targetSlot) =>
         window.__fmarchPlayerCommandStatus?.state === "ack" &&
         window.__fmarchPlayerCommandStatus?.requestEnvelope?.body?.body?.command
           ?.SubmitVote?.target?.Slot === targetSlot &&
@@ -3558,20 +3547,11 @@ async function verifySeededD02VoteNightTransition({
           "slot" &&
         window.__fmarchPlayerProjection?.commandState?.currentVote?.slotId ===
           targetSlot,
-      d03TerminalVoteTarget.slotId,
+    });
+    const d03TerminalPlayerAfterVote = await playerProjectionSnapshot(
+      playerEntry.page,
+      { currentVote: true, votecount: true },
     );
-    const d03TerminalVoteSubmission = await playerEntry.page.evaluate(
-      () => window.__fmarchPlayerCommandStatus,
-    );
-    const d03TerminalPlayerAfterVote = {
-      commandState: await playerEntry.page.evaluate(
-        () => window.__fmarchPlayerProjection?.commandState,
-      ),
-      currentVote: await playerCurrentVoteSnapshot(playerEntry.page),
-      votecount: await playerEntry.page.evaluate(
-        () => window.__fmarchPlayerProjection?.votecount ?? [],
-      ),
-    };
     const d03TerminalApiVotecountAfterVote = await fetchJson(
       `${apiBaseUrl}/games/${transitionGame}/votecount`,
     );
@@ -3737,20 +3717,14 @@ async function verifySeededD02VoteNightTransition({
       promptActions: true,
       dayVoteOutcomes: true,
     });
-    const actionAfterD03RevotePrompt = {
-      roleUrl: actionEntry.page.url(),
-      commandState: await actionEntry.page.evaluate(
-        () => window.__fmarchPlayerProjection?.commandState,
-      ),
-      buttons: await playerCommandButtons(actionEntry.page),
-    };
-    const normalAfterD03RevotePrompt = {
-      roleUrl: playerEntry.page.url(),
-      commandState: await playerEntry.page.evaluate(
-        () => window.__fmarchPlayerProjection?.commandState,
-      ),
-      buttons: await playerCommandButtons(playerEntry.page),
-    };
+    const actionAfterD03RevotePrompt = await playerProjectionSnapshot(
+      actionEntry.page,
+      { roleUrl: true, buttons: true },
+    );
+    const normalAfterD03RevotePrompt = await playerProjectionSnapshot(
+      playerEntry.page,
+      { roleUrl: true, buttons: true },
+    );
     const apiPromptsAfterD03Revote = await fetchJson(
       `${apiBaseUrl}/games/${transitionGame}/host-prompts?principal_user_id=host_h`,
     );
@@ -3772,11 +3746,10 @@ async function verifySeededD02VoteNightTransition({
         })}`,
       );
     }
-    await actionEntry.page
-      .locator(`[data-action="${revoteProgressionVoteActionId}"]`)
-      .click();
-    await actionEntry.page.waitForFunction(
-      () =>
+    const d03RevoteVoteSubmission = await submitPlayerCommandAndWait({
+      page: actionEntry.page,
+      actionId: revoteProgressionVoteActionId,
+      waitFor: () =>
         window.__fmarchPlayerCommandStatus?.state === "ack" &&
         window.__fmarchPlayerCommandStatus?.requestEnvelope?.body?.body
           ?.principal_user_id === "player-goon-a" &&
@@ -3787,25 +3760,15 @@ async function verifySeededD02VoteNightTransition({
         window.__fmarchPlayerProjection?.commandState?.phase?.phaseId === "D03R1" &&
         window.__fmarchPlayerProjection?.commandState?.currentVote?.kind ===
           "no_lynch",
-    );
+    });
     await waitForPlayerVotecount(actionEntry.page, {
       target: "no_lynch",
       count: 1,
     });
-    const d03RevoteVoteSubmission = await actionEntry.page.evaluate(
-      () => window.__fmarchPlayerCommandStatus,
+    const d03RevoteActionAfterVote = await playerProjectionSnapshot(
+      actionEntry.page,
+      { roleUrl: true, currentVote: true, votecount: true, buttons: true },
     );
-    const d03RevoteActionAfterVote = {
-      roleUrl: actionEntry.page.url(),
-      commandState: await actionEntry.page.evaluate(
-        () => window.__fmarchPlayerProjection?.commandState,
-      ),
-      currentVote: await playerCurrentVoteSnapshot(actionEntry.page),
-      votecount: await actionEntry.page.evaluate(
-        () => window.__fmarchPlayerProjection?.votecount ?? [],
-      ),
-      buttons: await playerCommandButtons(actionEntry.page),
-    };
     const d03RevoteApiVotecountAfterVote = normalizedVotecountRows(
       await fetchJson(`${apiBaseUrl}/games/${transitionGame}/votecount`),
     );
@@ -3908,20 +3871,14 @@ async function verifySeededD02VoteNightTransition({
       promptActions: true,
       dayVoteOutcomes: true,
     });
-    const actionAfterD03R1RevotePrompt = {
-      roleUrl: actionEntry.page.url(),
-      commandState: await actionEntry.page.evaluate(
-        () => window.__fmarchPlayerProjection?.commandState,
-      ),
-      buttons: await playerCommandButtons(actionEntry.page),
-    };
-    const normalAfterD03R1RevotePrompt = {
-      roleUrl: playerEntry.page.url(),
-      commandState: await playerEntry.page.evaluate(
-        () => window.__fmarchPlayerProjection?.commandState,
-      ),
-      buttons: await playerCommandButtons(playerEntry.page),
-    };
+    const actionAfterD03R1RevotePrompt = await playerProjectionSnapshot(
+      actionEntry.page,
+      { roleUrl: true, buttons: true },
+    );
+    const normalAfterD03R1RevotePrompt = await playerProjectionSnapshot(
+      playerEntry.page,
+      { roleUrl: true, buttons: true },
+    );
     const apiPromptsAfterD03R1Revote = await fetchJson(
       `${apiBaseUrl}/games/${transitionGame}/host-prompts?principal_user_id=host_h`,
     );
@@ -3946,11 +3903,10 @@ async function verifySeededD02VoteNightTransition({
         })}`,
       );
     }
-    await actionEntry.page
-      .locator(`[data-action="${revoteProgressionVoteActionId}"]`)
-      .click();
-    await actionEntry.page.waitForFunction(
-      () =>
+    const d03R2RevoteVoteSubmission = await submitPlayerCommandAndWait({
+      page: actionEntry.page,
+      actionId: revoteProgressionVoteActionId,
+      waitFor: () =>
         window.__fmarchPlayerCommandStatus?.state === "ack" &&
         window.__fmarchPlayerCommandStatus?.requestEnvelope?.body?.body
           ?.principal_user_id === "player-goon-a" &&
@@ -3961,25 +3917,15 @@ async function verifySeededD02VoteNightTransition({
         window.__fmarchPlayerProjection?.commandState?.phase?.phaseId === "D03R2" &&
         window.__fmarchPlayerProjection?.commandState?.currentVote?.kind ===
           "no_lynch",
-    );
+    });
     await waitForPlayerVotecount(actionEntry.page, {
       target: "no_lynch",
       count: 1,
     });
-    const d03R2RevoteVoteSubmission = await actionEntry.page.evaluate(
-      () => window.__fmarchPlayerCommandStatus,
+    const d03R2RevoteActionAfterVote = await playerProjectionSnapshot(
+      actionEntry.page,
+      { roleUrl: true, currentVote: true, votecount: true, buttons: true },
     );
-    const d03R2RevoteActionAfterVote = {
-      roleUrl: actionEntry.page.url(),
-      commandState: await actionEntry.page.evaluate(
-        () => window.__fmarchPlayerProjection?.commandState,
-      ),
-      currentVote: await playerCurrentVoteSnapshot(actionEntry.page),
-      votecount: await actionEntry.page.evaluate(
-        () => window.__fmarchPlayerProjection?.votecount ?? [],
-      ),
-      buttons: await playerCommandButtons(actionEntry.page),
-    };
     const d03R2RevoteApiVotecountAfterVote = normalizedVotecountRows(
       await fetchJson(`${apiBaseUrl}/games/${transitionGame}/votecount`),
     );
@@ -4101,20 +4047,14 @@ async function verifySeededD02VoteNightTransition({
       dayVoteOutcomes: true,
       outcomePanel: true,
     });
-    const actionAfterD03R2NoLynchPolicy = {
-      roleUrl: actionEntry.page.url(),
-      commandState: await actionEntry.page.evaluate(
-        () => window.__fmarchPlayerProjection?.commandState,
-      ),
-      buttons: await playerCommandButtons(actionEntry.page),
-    };
-    const normalAfterD03R2NoLynchPolicy = {
-      roleUrl: playerEntry.page.url(),
-      commandState: await playerEntry.page.evaluate(
-        () => window.__fmarchPlayerProjection?.commandState,
-      ),
-      buttons: await playerCommandButtons(playerEntry.page),
-    };
+    const actionAfterD03R2NoLynchPolicy = await playerProjectionSnapshot(
+      actionEntry.page,
+      { roleUrl: true, buttons: true },
+    );
+    const normalAfterD03R2NoLynchPolicy = await playerProjectionSnapshot(
+      playerEntry.page,
+      { roleUrl: true, buttons: true },
+    );
     const apiPromptsAfterD03R2NoLynchPolicy = await fetchJson(
       `${apiBaseUrl}/games/${transitionGame}/host-prompts?principal_user_id=host_h`,
     );
@@ -4193,11 +4133,11 @@ async function verifySeededD02VoteNightTransition({
         )}`,
       );
     }
-    await actionEntry.page
-      .locator(`[data-action="${nightThreeProgressionActionId}"]`)
-      .click();
-    await actionEntry.page.waitForFunction(
-      ({ scenario, targetSlot }) =>
+    const n03ActionSubmission = await submitPlayerCommandAndWait({
+      page: actionEntry.page,
+      actionId: nightThreeProgressionActionId,
+      waitArg: { scenario: n03Scenario, targetSlot: n03ActionTarget },
+      waitFor: ({ scenario, targetSlot }) =>
         window.__fmarchPlayerCommandStatus?.state === "ack" &&
         window.__fmarchPlayerCommandStatus?.requestEnvelope?.body?.body
           ?.principal_user_id === scenario.expectedPrincipalUserId &&
@@ -4208,24 +4148,13 @@ async function verifySeededD02VoteNightTransition({
         window.__fmarchPlayerCommandStatus?.requestEnvelope?.body?.body?.command
           ?.SubmitAction?.targets?.includes(targetSlot) &&
         document.querySelector(`[data-action="${scenario.actionId}"]`) === null,
-      { scenario: n03Scenario, targetSlot: n03ActionTarget },
-    );
-    const n03ActionSubmission = await actionEntry.page.evaluate(
-      () => window.__fmarchPlayerCommandStatus,
-    );
-    const n03ActionAfterSubmit = {
-      roleUrl: actionEntry.page.url(),
-      commandState: await actionEntry.page.evaluate(
-        () => window.__fmarchPlayerProjection?.commandState,
-      ),
-      buttons: await playerCommandButtons(actionEntry.page),
-      currentReceipt: await actionEntry.page.evaluate(() =>
-        window.__fmarchPlayerProjection?.currentReceipt ?? null,
-      ),
-      receiptStatusText: await actionEntry.page
-        .getByTestId("player-command-status")
-        .innerText(),
-    };
+    });
+    const n03ActionAfterSubmit = await playerProjectionSnapshot(actionEntry.page, {
+      roleUrl: true,
+      buttons: true,
+      currentReceipt: true,
+      receiptStatusText: true,
+    });
     const hostBeforeResolveN03 = await hostProjectionSnapshot(hostEntry.page);
     const resolveN03 = await confirmHostPhaseAction(hostEntry.page, "resolve_phase", {
       phaseId: "N03",
@@ -4264,23 +4193,15 @@ async function verifySeededD02VoteNightTransition({
       slots: true,
       dayVoteOutcomes: true,
     });
-    const d04ActionSurface = {
-      roleUrl: actionEntry.page.url(),
-      commandState: await actionEntry.page.evaluate(
-        () => window.__fmarchPlayerProjection?.commandState,
-      ),
-      buttons: await playerCommandButtons(actionEntry.page),
-    };
-    const d04TargetSurface = {
-      roleUrl: playerEntry.page.url(),
-      commandState: await playerEntry.page.evaluate(
-        () => window.__fmarchPlayerProjection?.commandState,
-      ),
-      buttons: await playerCommandButtons(playerEntry.page),
-      notifications: await playerEntry.page.evaluate(
-        () => window.__fmarchPlayerProjection?.notifications ?? [],
-      ),
-    };
+    const d04ActionSurface = await playerProjectionSnapshot(actionEntry.page, {
+      roleUrl: true,
+      buttons: true,
+    });
+    const d04TargetSurface = await playerProjectionSnapshot(playerEntry.page, {
+      roleUrl: true,
+      buttons: true,
+      notifications: true,
+    });
 
     assertNightThreeProgressionBrowserProof({
       proof: {
@@ -9315,6 +9236,77 @@ async function playerCommandButtons(page) {
       text: node.textContent,
     })),
   );
+}
+
+async function submitPlayerCommandAndWait({
+  page,
+  actionId,
+  locatorOptions = {},
+  waitFor,
+  waitArg,
+  waitOptions,
+}) {
+  await page.locator(`[data-action="${actionId}"]`, locatorOptions).first().click();
+  await page.waitForFunction(waitFor, waitArg, waitOptions);
+  return page.evaluate(() => window.__fmarchPlayerCommandStatus);
+}
+
+async function playerProjectionSnapshot(
+  page,
+  {
+    roleUrl = false,
+    commandState = true,
+    buttons = false,
+    currentVote = false,
+    votecount = false,
+    currentReceipt = false,
+    receiptStatusText = false,
+    notifications = false,
+    factionalKillVisible = false,
+  } = {},
+) {
+  const snapshot = {};
+  if (roleUrl) {
+    snapshot.roleUrl = page.url();
+  }
+  if (commandState) {
+    snapshot.commandState = await page.evaluate(
+      () => window.__fmarchPlayerProjection?.commandState,
+    );
+  }
+  if (buttons) {
+    snapshot.buttons = await playerCommandButtons(page);
+  }
+  if (currentVote) {
+    snapshot.currentVote = await playerCurrentVoteSnapshot(page);
+  }
+  if (votecount) {
+    snapshot.votecount = await page.evaluate(
+      () => window.__fmarchPlayerProjection?.votecount ?? [],
+    );
+  }
+  if (currentReceipt) {
+    snapshot.currentReceipt = await page.evaluate(
+      () => window.__fmarchPlayerProjection?.currentReceipt ?? null,
+    );
+  }
+  if (receiptStatusText) {
+    snapshot.receiptStatusText = await page
+      .getByTestId("player-command-status")
+      .innerText();
+  }
+  if (notifications) {
+    snapshot.notifications = await page.evaluate(
+      () => window.__fmarchPlayerProjection?.notifications ?? [],
+    );
+  }
+  if (factionalKillVisible) {
+    snapshot.factionalKillVisible = await page
+      .locator('[data-action="submit_action:factional_kill"]')
+      .isVisible()
+      .catch(() => false);
+  }
+  return snapshot;
 }
 
 async function playerCommandControlState(page, action) {

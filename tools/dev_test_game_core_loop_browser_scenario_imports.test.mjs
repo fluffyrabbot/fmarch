@@ -138,6 +138,37 @@ test("dev test game shares host phase action and projection snapshot verbs", asy
   }
 });
 
+test("dev test game shares player command and projection snapshot verbs", async () => {
+  const source = await readFile("tools/dev_test_game.mjs", "utf8");
+
+  assert(
+    source.includes("async function submitPlayerCommandAndWait({"),
+    "dev_test_game.mjs should own one player command submit plus wait helper",
+  );
+  assert(
+    source.includes("async function playerProjectionSnapshot("),
+    "dev_test_game.mjs should own one player projection snapshot helper",
+  );
+  for (const usage of [
+    "const n02ActionSubmission = await submitPlayerCommandAndWait({",
+    "const n02ActionAfterSubmit = await playerProjectionSnapshot(actionEntry.page",
+    "const d03TerminalVoteSubmission = await submitPlayerCommandAndWait({",
+    "const d03TerminalPlayerAfterVote = await playerProjectionSnapshot(",
+    "const d03RevoteVoteSubmission = await submitPlayerCommandAndWait({",
+    "const d03RevoteActionAfterVote = await playerProjectionSnapshot(",
+    "const d03R2RevoteVoteSubmission = await submitPlayerCommandAndWait({",
+    "const d03R2RevoteActionAfterVote = await playerProjectionSnapshot(",
+    "const n03ActionSubmission = await submitPlayerCommandAndWait({",
+    "const n03ActionAfterSubmit = await playerProjectionSnapshot(actionEntry.page",
+    "const d04TargetSurface = await playerProjectionSnapshot(playerEntry.page",
+  ]) {
+    assert(
+      source.includes(usage),
+      `dev_test_game.mjs should use shared player browser verb: ${usage}`,
+    );
+  }
+});
+
 function importsFromModule({ source, importedName, moduleSpecifier }) {
   const importPattern = new RegExp(
     `import\\s*\\{([^}]*)\\}\\s*from\\s*"${escapeRegExp(moduleSpecifier)}";`,
