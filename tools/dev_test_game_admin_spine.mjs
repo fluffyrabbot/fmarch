@@ -18,6 +18,18 @@ import {
   nextActionAdminProofPath,
   proofFreshnessAdminProofPath,
 } from "./dev_test_game_next_action_paths.mjs";
+import {
+  runAdminAuditProofBatch,
+} from "./dev_test_game_admin_audit_proof_helper.mjs";
+import {
+  proofGraphAdminProofCase,
+} from "./dev_test_game_proof_graph_admin_proof.mjs";
+import {
+  proofFreshnessAdminProofCase,
+} from "./dev_test_game_proof_freshness_admin_proof.mjs";
+import {
+  nextActionAdminProofCase,
+} from "./dev_test_game_next_action_admin_proof.mjs";
 import { releaseReadinessStep } from "./dev_test_game_spine_readiness_steps.mjs";
 import { runSpinePlan } from "./dev_test_game_spine_runner.mjs";
 
@@ -142,12 +154,11 @@ export const devTestGameAdminSpinePlan = [
   { kind: "node", script: "tools/dev_test_game_spine_manifest.mjs" },
   { kind: "node", script: "tools/dev_test_game_next_action.mjs" },
   { kind: "node", script: "tools/dev_test_game_proof_graph.mjs" },
-  { kind: "node", script: "tools/dev_test_game_proof_graph_admin_proof.mjs" },
   {
-    kind: "node",
-    script: "tools/dev_test_game_proof_freshness_admin_proof.mjs",
+    kind: "custom",
+    script: "terminal-admin-proof-batch",
+    label: "Terminal admin proof batch",
   },
-  { kind: "node", script: "tools/dev_test_game_next_action_admin_proof.mjs" },
   releaseReadinessStep({
     reason: "terminal-graph-and-local-dependency-surfaces",
     changedInputs: [
@@ -162,10 +173,10 @@ export const devTestGameAdminSpinePlan = [
   }),
   { kind: "node", script: "tools/dev_test_game_next_action.mjs" },
   {
-    kind: "node",
-    script: "tools/dev_test_game_proof_freshness_admin_proof.mjs",
+    kind: "custom",
+    script: "terminal-refresh-admin-proof-batch",
+    label: "Terminal refresh admin proof batch",
   },
-  { kind: "node", script: "tools/dev_test_game_next_action_admin_proof.mjs" },
   releaseReadinessStep({
     reason: "terminal-next-action-and-freshness-refresh",
     changedInputs: [
@@ -183,6 +194,19 @@ export async function runDevTestGameAdminSpine() {
       "admin-spine-proof": async () => {
         const evidence = await runAdminSpineProof();
         console.log(`wrote ${adminSpineProofPath} (${evidence.status})`);
+      },
+      "terminal-admin-proof-batch": async () => {
+        await runAdminAuditProofBatch([
+          proofGraphAdminProofCase(),
+          proofFreshnessAdminProofCase(),
+          nextActionAdminProofCase(),
+        ]);
+      },
+      "terminal-refresh-admin-proof-batch": async () => {
+        await runAdminAuditProofBatch([
+          proofFreshnessAdminProofCase(),
+          nextActionAdminProofCase(),
+        ]);
       },
     },
   });

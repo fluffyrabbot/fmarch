@@ -32,12 +32,37 @@ export async function runAdminAuditProof({
   buildEvidence,
   assertEvidence,
 }) {
+  await runAdminAuditProofBatch([
+    {
+      smokeName,
+      stage,
+      evidencePath,
+      envOverrides,
+      loadSource,
+      prove,
+      buildEvidence,
+      assertEvidence,
+    },
+  ]);
+}
+
+export async function runAdminAuditProofBatch(cases) {
+  if (!Array.isArray(cases) || cases.length === 0) {
+    throw new Error("admin audit proof batch requires at least one proof case");
+  }
+  for (const proofCase of cases) {
+    assertAdminAuditProofCase(proofCase);
+  }
+
+  const firstCase = cases[0];
+  const envOverrides = mergeEnvOverrides(cases);
+
   await preflightLocalhostBindOrExit({
     host,
     repoRoot,
     artifactDir,
-    evidencePath,
-    smokeName,
+    evidencePath: firstCase.evidencePath,
+    smokeName: firstCase.smokeName,
   });
 
   let vite;
@@ -49,7 +74,6 @@ export async function runAdminAuditProof({
 
   try {
     await mkdir(artifactDir, { recursive: true });
-    const source = await loadSource();
     process.env.FMARCH_FRONTEND_FIXTURE_SESSION = "1";
     for (const [name, value] of Object.entries(envOverrides)) {
       process.env[name] = value;
@@ -57,27 +81,26 @@ export async function runAdminAuditProof({
     vite = await startFrontend();
     browser = await chromium.launch();
     const mediaResponseGuard = createUnexpectedMediaResponseGuard({
-      label: smokeName,
+      label: cases.map((proofCase) => proofCase.smokeName).join(","),
     });
     mediaResponseGuard.attachBrowser(browser);
-    const adminRoleSurface = await prove({
-      browser,
-      frontendBaseUrl: await frontendBaseUrl(vite),
-      source,
-    });
-    mediaResponseGuard.assertNoUnexpectedMedia404({ phase: smokeName });
-    const evidence = buildEvidence({ source, adminRoleSurface });
-    assertEvidence(evidence);
-    await writeFile(evidencePath, `${JSON.stringify(evidence, null, 2)}\n`);
-    console.log(`wrote ${path.relative(repoRoot, evidencePath)}`);
+    const baseUrl = await frontendBaseUrl(vite);
+    for (const proofCase of cases) {
+      await runAdminAuditProofCase({
+        proofCase,
+        browser,
+        frontendBaseUrl: baseUrl,
+        mediaResponseGuard,
+      });
+    }
   } catch (error) {
     const handled = await handleLocalhostBindFailure({
       error,
       repoRoot,
       artifactDir,
-      evidencePath,
-      smokeName,
-      stage,
+      evidencePath: firstCase.evidencePath,
+      smokeName: firstCase.smokeName,
+      stage: firstCase.stage,
     });
     if (!handled) {
       throw error;
@@ -94,6 +117,57 @@ export async function runAdminAuditProof({
       restoreEnv(name, previous);
     }
   }
+}
+
+async function runAdminAuditProofCase({
+  proofCase,
+  browser,
+  frontendBaseUrl,
+  mediaResponseGuard,
+}) {
+  const source = await proofCase.loadSource();
+  const adminRoleSurface = await proofCase.prove({
+    browser,
+    frontendBaseUrl,
+    source,
+  });
+  mediaResponseGuard.assertNoUnexpectedMedia404({ phase: proofCase.smokeName });
+  const evidence = proofCase.buildEvidence({ source, adminRoleSurface });
+  proofCase.assertEvidence(evidence);
+  await writeFile(proofCase.evidencePath, `${JSON.stringify(evidence, null, 2)}\n`);
+  console.log(`wrote ${path.relative(repoRoot, proofCase.evidencePath)}`);
+}
+
+function assertAdminAuditProofCase(proofCase) {
+  if (
+    typeof proofCase?.smokeName !== "string" ||
+    proofCase.smokeName.trim() === "" ||
+    typeof proofCase.stage !== "string" ||
+    proofCase.stage.trim() === "" ||
+    typeof proofCase.evidencePath !== "string" ||
+    proofCase.evidencePath.trim() === "" ||
+    typeof proofCase.loadSource !== "function" ||
+    typeof proofCase.prove !== "function" ||
+    typeof proofCase.buildEvidence !== "function" ||
+    typeof proofCase.assertEvidence !== "function"
+  ) {
+    throw new Error("admin audit proof case is missing required fields");
+  }
+}
+
+function mergeEnvOverrides(cases) {
+  const merged = {};
+  for (const proofCase of cases) {
+    for (const [name, value] of Object.entries(proofCase.envOverrides ?? {})) {
+      if (merged[name] !== undefined && merged[name] !== value) {
+        throw new Error(
+          `admin audit proof batch has conflicting env override for ${name}`,
+        );
+      }
+      merged[name] = value;
+    }
+  }
+  return merged;
 }
 
 export async function proveAdminAuditDetail({

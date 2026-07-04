@@ -1,4 +1,5 @@
 import path from "node:path";
+import { pathToFileURL } from "node:url";
 import { assertDevTestGameProofGraph } from "./dev_test_game_proof_graph.mjs";
 import { validateDevTestGameAdminSpineProof } from "./dev_test_game_release_readiness.mjs";
 import { assertDevTestGameProofRun } from "./dev_test_game_proof_contract.mjs";
@@ -67,87 +68,98 @@ const hostedEvidenceLaneRelativePath = path.relative(
 );
 const evidencePath = path.join(artifactDir, "proof-graph-admin-proof.json");
 
-await runAdminAuditProof({
-  smokeName: "dev-test-game-proof-graph-admin-proof",
-  stage: "proof-graph-admin-proof-listen",
-  evidencePath,
-  envOverrides: {
-    FMARCH_DEV_TEST_GAME_PROOF_GRAPH: proofGraphRelativePath,
-    FMARCH_DEV_TEST_GAME_ADMIN_SPINE_PROOF: adminSpineProofRelativePath,
-    FMARCH_DEV_TEST_GAME_HOSTED_CONCURRENT_RACE_MATRIX: hostedMatrixRelativePath,
-    FMARCH_DEV_TEST_GAME_HOSTED_EVIDENCE_LANE: hostedEvidenceLaneRelativePath,
-  },
-  loadSource: async () => {
-    const adminSpineProof = await readJson(adminSpineProofPath);
-    return {
-      proofGraph: assertDevTestGameProofGraph(await readJson(proofGraphPath), {
-        adminSpineProof,
-      }),
-      proofRun: assertDevTestGameProofRun(await readJson(proofRunPath)),
-      adminSpineProof: validateDevTestGameAdminSpineProof(adminSpineProof, {
-        path: adminSpineProofRelativePath,
-      }),
-      hostedMatrix: assertDevTestGameHostedConcurrentRaceMatrixEvidence(
-        await readJson(hostedMatrixPath),
-      ),
-      hostedEvidenceLane: assertDevTestGameHostedEvidenceLane(
-        await readJson(hostedEvidenceLanePath),
-      ),
-    };
-  },
-  prove: async ({ browser, frontendBaseUrl, source }) => {
-    const roleHandoffs = bootstrapProofGraphAdminRoleHandoffs({
-      proofGraph: source.proofGraph,
-      hostedMatrix: source.hostedMatrix,
-      hostedEvidenceLane: source.hostedEvidenceLane,
-    });
-    return await proveAdminAuditDetail({
-      browser,
-      frontendBaseUrl,
-      game: source.proofRun.session.game,
-      auditId: localAdminAuditIds.proofGraph,
-      requiredChecks: [
-        ...source.proofGraph.nodes.map((node) => node.id),
-        ...source.proofGraph.edges.map((edge) => proofGraphEdgeCheckId(edge)),
-      ],
-      requiredRelatedLinks: source.proofGraph.nodes
-        .filter((node) => typeof node.roleUrl === "string" && node.roleUrl.trim() !== "")
-        .map((node) => node.id),
-      requiredRelatedDestinations: requiredRelatedDestinationsForHandoffs(
-        roleHandoffs,
-      ),
-    });
-  },
-  buildEvidence: ({ source, adminRoleSurface }) => ({
-    version: 1,
-    proof: "dev-test-game-proof-graph-admin-proof",
-    status: "passed",
-    releaseReady: false,
-    productionReady: false,
-    scope: "local-dev-test-game-proof-graph-admin-surface",
-    proofBoundary:
-      "Local SvelteKit admin role URL with fixture admin authority over the generated dev-test-game proof graph. Proves the machine-readable proof graph is discoverable from the seeded admin overview and inspectable in a native admin audit detail route; it does not prove hosted operations, beta readiness, release readiness, or production readiness.",
-    generatedFrom: {
-      proofGraph: proofGraphRelativePath,
-      proofRun: proofRunRelativePath,
-      adminSpineProof: adminSpineProofRelativePath,
-      hostedConcurrentRaceMatrix: hostedMatrixRelativePath,
-      hostedEvidenceLane: hostedEvidenceLaneRelativePath,
-      game: source.proofRun.session.game,
-      nodeIds: source.proofGraph.nodes.map((node) => node.id),
-      edgeRowIds: source.proofGraph.edges.map((edge) => proofGraphEdgeCheckId(edge)),
-      edgeCount: source.proofGraph.edges.length,
-      adminProofSurfaceIds: source.adminSpineProof.proofIds,
-      adminProofRoleHandoffs: bootstrapProofGraphAdminRoleHandoffs({
+export function proofGraphAdminProofCase() {
+  return {
+    smokeName: "dev-test-game-proof-graph-admin-proof",
+    stage: "proof-graph-admin-proof-listen",
+    evidencePath,
+    envOverrides: {
+      FMARCH_DEV_TEST_GAME_PROOF_GRAPH: proofGraphRelativePath,
+      FMARCH_DEV_TEST_GAME_ADMIN_SPINE_PROOF: adminSpineProofRelativePath,
+      FMARCH_DEV_TEST_GAME_HOSTED_CONCURRENT_RACE_MATRIX:
+        hostedMatrixRelativePath,
+      FMARCH_DEV_TEST_GAME_HOSTED_EVIDENCE_LANE: hostedEvidenceLaneRelativePath,
+    },
+    loadSource: async () => {
+      const adminSpineProof = await readJson(adminSpineProofPath);
+      return {
+        proofGraph: assertDevTestGameProofGraph(await readJson(proofGraphPath), {
+          adminSpineProof,
+        }),
+        proofRun: assertDevTestGameProofRun(await readJson(proofRunPath)),
+        adminSpineProof: validateDevTestGameAdminSpineProof(adminSpineProof, {
+          path: adminSpineProofRelativePath,
+        }),
+        hostedMatrix: assertDevTestGameHostedConcurrentRaceMatrixEvidence(
+          await readJson(hostedMatrixPath),
+        ),
+        hostedEvidenceLane: assertDevTestGameHostedEvidenceLane(
+          await readJson(hostedEvidenceLanePath),
+        ),
+      };
+    },
+    prove: async ({ browser, frontendBaseUrl, source }) => {
+      const roleHandoffs = bootstrapProofGraphAdminRoleHandoffs({
         proofGraph: source.proofGraph,
         hostedMatrix: source.hostedMatrix,
         hostedEvidenceLane: source.hostedEvidenceLane,
-      }),
+      });
+      return await proveAdminAuditDetail({
+        browser,
+        frontendBaseUrl,
+        game: source.proofRun.session.game,
+        auditId: localAdminAuditIds.proofGraph,
+        requiredChecks: [
+          ...source.proofGraph.nodes.map((node) => node.id),
+          ...source.proofGraph.edges.map((edge) => proofGraphEdgeCheckId(edge)),
+        ],
+        requiredRelatedLinks: source.proofGraph.nodes
+          .filter(
+            (node) =>
+              typeof node.roleUrl === "string" && node.roleUrl.trim() !== "",
+          )
+          .map((node) => node.id),
+        requiredRelatedDestinations:
+          requiredRelatedDestinationsForHandoffs(roleHandoffs),
+      });
     },
-    adminRoleSurface,
-  }),
-  assertEvidence: assertProofGraphAdminProof,
-});
+    buildEvidence: ({ source, adminRoleSurface }) => ({
+      version: 1,
+      proof: "dev-test-game-proof-graph-admin-proof",
+      status: "passed",
+      releaseReady: false,
+      productionReady: false,
+      scope: "local-dev-test-game-proof-graph-admin-surface",
+      proofBoundary:
+        "Local SvelteKit admin role URL with fixture admin authority over the generated dev-test-game proof graph. Proves the machine-readable proof graph is discoverable from the seeded admin overview and inspectable in a native admin audit detail route; it does not prove hosted operations, beta readiness, release readiness, or production readiness.",
+      generatedFrom: {
+        proofGraph: proofGraphRelativePath,
+        proofRun: proofRunRelativePath,
+        adminSpineProof: adminSpineProofRelativePath,
+        hostedConcurrentRaceMatrix: hostedMatrixRelativePath,
+        hostedEvidenceLane: hostedEvidenceLaneRelativePath,
+        game: source.proofRun.session.game,
+        nodeIds: source.proofGraph.nodes.map((node) => node.id),
+        edgeRowIds: source.proofGraph.edges.map((edge) =>
+          proofGraphEdgeCheckId(edge),
+        ),
+        edgeCount: source.proofGraph.edges.length,
+        adminProofSurfaceIds: source.adminSpineProof.proofIds,
+        adminProofRoleHandoffs: bootstrapProofGraphAdminRoleHandoffs({
+          proofGraph: source.proofGraph,
+          hostedMatrix: source.hostedMatrix,
+          hostedEvidenceLane: source.hostedEvidenceLane,
+        }),
+      },
+      adminRoleSurface,
+    }),
+    assertEvidence: assertProofGraphAdminProof,
+  };
+}
+
+if (pathToFileURL(process.argv[1] ?? "").href === import.meta.url) {
+  await runAdminAuditProof(proofGraphAdminProofCase());
+}
 
 export function assertProofGraphAdminProof(evidence) {
   if (

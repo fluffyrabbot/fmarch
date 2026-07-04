@@ -1,4 +1,5 @@
 import path from "node:path";
+import { pathToFileURL } from "node:url";
 import { readLocalProofFreshness } from "../frontend/src/lib/server/local-ops-artifacts.mjs";
 import { assertDevTestGameNextAction } from "./dev_test_game_next_action.mjs";
 import { assertDevTestGameProofRun } from "./dev_test_game_proof_contract.mjs";
@@ -27,30 +28,30 @@ const nextActionPath = path.resolve(
 const nextActionRelativePath = path.relative(repoRoot, nextActionPath);
 const evidencePath = path.join(artifactDir, "proof-freshness-admin-proof.json");
 
-await runAdminAuditProof({
-  smokeName: "dev-test-game-proof-freshness-admin-proof",
-  stage: "proof-freshness-admin-proof-listen",
-  evidencePath,
-  envOverrides: {
-    FMARCH_DEV_TEST_GAME_NEXT_ACTION: nextActionRelativePath,
-  },
-  loadSource: async () => ({
-    freshness: assertProofFreshness(await readLocalProofFreshness()),
-    proofRun: assertDevTestGameProofRun(await readJson(proofRunPath)),
-    nextAction: assertDevTestGameNextAction(await readJson(nextActionPath)),
-  }),
-  prove: async ({ browser, frontendBaseUrl, source }) =>
-    await proveAdminAuditDetail({
-      browser,
-      frontendBaseUrl,
-      game: source.proofRun.session.game,
-      auditId: localAdminAuditIds.proofFreshness,
-      requiredChecks: [
-        ...source.freshness.artifacts.map((artifact) => artifact.id),
-        localAdminAuditHandoffCheckIds.nextAction,
-      ],
-      requiredCheckStatuses: Object.fromEntries(
-        [
+export function proofFreshnessAdminProofCase() {
+  return {
+    smokeName: "dev-test-game-proof-freshness-admin-proof",
+    stage: "proof-freshness-admin-proof-listen",
+    evidencePath,
+    envOverrides: {
+      FMARCH_DEV_TEST_GAME_NEXT_ACTION: nextActionRelativePath,
+    },
+    loadSource: async () => ({
+      freshness: assertProofFreshness(await readLocalProofFreshness()),
+      proofRun: assertDevTestGameProofRun(await readJson(proofRunPath)),
+      nextAction: assertDevTestGameNextAction(await readJson(nextActionPath)),
+    }),
+    prove: async ({ browser, frontendBaseUrl, source }) =>
+      await proveAdminAuditDetail({
+        browser,
+        frontendBaseUrl,
+        game: source.proofRun.session.game,
+        auditId: localAdminAuditIds.proofFreshness,
+        requiredChecks: [
+          ...source.freshness.artifacts.map((artifact) => artifact.id),
+          localAdminAuditHandoffCheckIds.nextAction,
+        ],
+        requiredCheckStatuses: Object.fromEntries([
           ...source.freshness.artifacts.map((artifact) => [
             artifact.id,
             artifact.status,
@@ -59,33 +60,37 @@ await runAdminAuditProof({
             localAdminAuditHandoffCheckIds.nextAction,
             source.nextAction.nextAction.status,
           ],
-        ],
-      ),
-      requiredRelatedLinks: [localAdminAuditIds.nextAction],
+        ]),
+        requiredRelatedLinks: [localAdminAuditIds.nextAction],
+      }),
+    buildEvidence: ({ source, adminRoleSurface }) => ({
+      version: 1,
+      proof: "dev-test-game-proof-freshness-admin-proof",
+      status: "passed",
+      releaseReady: false,
+      productionReady: false,
+      scope: "local-dev-test-game-proof-freshness-admin-surface",
+      proofBoundary:
+        "Local SvelteKit admin role URL with fixture admin authority over the dev-test-game proof freshness dashboard. Proves fresh generated proof artifacts are discoverable from the seeded admin overview and inspectable in a native admin audit detail route; it does not validate artifact contents, hosted operations, beta readiness, release readiness, or production readiness.",
+      generatedFrom: {
+        proofRun: proofRunRelativePath,
+        nextAction: nextActionRelativePath,
+        game: source.proofRun.session.game,
+        artifactIds: source.freshness.artifacts.map((artifact) => artifact.id),
+        maxAgeHours: source.freshness.maxAgeHours,
+        nextActionCommand: source.nextAction.nextAction.command,
+        nextActionStatus: source.nextAction.nextAction.status,
+        nextActionReason: source.nextAction.nextAction.reason,
+      },
+      adminRoleSurface,
     }),
-  buildEvidence: ({ source, adminRoleSurface }) => ({
-    version: 1,
-    proof: "dev-test-game-proof-freshness-admin-proof",
-    status: "passed",
-    releaseReady: false,
-    productionReady: false,
-    scope: "local-dev-test-game-proof-freshness-admin-surface",
-    proofBoundary:
-      "Local SvelteKit admin role URL with fixture admin authority over the dev-test-game proof freshness dashboard. Proves fresh generated proof artifacts are discoverable from the seeded admin overview and inspectable in a native admin audit detail route; it does not validate artifact contents, hosted operations, beta readiness, release readiness, or production readiness.",
-    generatedFrom: {
-      proofRun: proofRunRelativePath,
-      nextAction: nextActionRelativePath,
-      game: source.proofRun.session.game,
-      artifactIds: source.freshness.artifacts.map((artifact) => artifact.id),
-      maxAgeHours: source.freshness.maxAgeHours,
-      nextActionCommand: source.nextAction.nextAction.command,
-      nextActionStatus: source.nextAction.nextAction.status,
-      nextActionReason: source.nextAction.nextAction.reason,
-    },
-    adminRoleSurface,
-  }),
-  assertEvidence: assertProofFreshnessAdminProof,
-});
+    assertEvidence: assertProofFreshnessAdminProof,
+  };
+}
+
+if (pathToFileURL(process.argv[1] ?? "").href === import.meta.url) {
+  await runAdminAuditProof(proofFreshnessAdminProofCase());
+}
 
 function assertProofFreshness(freshness) {
   if (

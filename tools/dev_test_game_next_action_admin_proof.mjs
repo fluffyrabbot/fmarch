@@ -1,4 +1,5 @@
 import path from "node:path";
+import { pathToFileURL } from "node:url";
 import { assertDevTestGameNextAction } from "./dev_test_game_next_action.mjs";
 import { assertDevTestGameProofRun } from "./dev_test_game_proof_contract.mjs";
 import {
@@ -53,63 +54,65 @@ const proofGraphRelativePath = path.relative(repoRoot, proofGraphPath);
 const hostedMatrixRelativePath = path.relative(repoRoot, hostedMatrixPath);
 const evidencePath = path.join(artifactDir, "next-action-admin-proof.json");
 
-await runAdminAuditProof({
-  smokeName: "dev-test-game-next-action-admin-proof",
-  stage: "next-action-admin-proof-listen",
-  evidencePath,
-  envOverrides: {
-    FMARCH_DEV_TEST_GAME_NEXT_ACTION: nextActionRelativePath,
-    FMARCH_DEV_TEST_GAME_PROOF_GRAPH: proofGraphRelativePath,
-    FMARCH_DEV_TEST_GAME_HOSTED_CONCURRENT_RACE_MATRIX: hostedMatrixRelativePath,
-  },
-  loadSource: async () => ({
-    nextAction: assertDevTestGameNextAction(await readJson(nextActionPath)),
-    proofRun: assertDevTestGameProofRun(await readJson(proofRunPath)),
-    proofGraph: assertDevTestGameProofGraph(await readJson(proofGraphPath)),
-    hostedMatrix: assertDevTestGameHostedConcurrentRaceMatrixEvidence(
-      await readJson(hostedMatrixPath),
-    ),
-  }),
-  prove: async ({ browser, frontendBaseUrl, source }) =>
-    await proveAdminAuditDetail({
-      browser,
-      frontendBaseUrl,
-      game: source.proofRun.session.game,
-      auditId: localAdminAuditIds.nextAction,
-      requiredChecks: requiredChecksForNextAction(source.nextAction),
-      requiredCheckStatuses: requiredCheckStatusesForNextAction(
-        source.nextAction,
-        source.proofGraph,
-      ),
-      requiredRelatedLinks: requiredRelatedLinksForNextAction(source.nextAction),
-      requiredHostedHandoffInputs: requiredHostedHandoffInputIdsForNextAction(
-        source.nextAction,
-      ),
-      requiredHostedHandoffInputValues:
-        requiredHostedHandoffInputValuesForNextAction(source.nextAction),
-      requiredHostedHandoffBlockedChecks:
-        requiredHostedHandoffBlockedCheckIdsForNextAction(source.nextAction),
-      requiredHostedHandoffGroups:
-        requiredHostedHandoffGroupIdsForNextAction(source.nextAction),
-      requiredHostedHandoffSummary:
-        requiredHostedHandoffSummaryForNextAction(source.nextAction),
-      requiredHostedHandoffInputSections:
-        requiredHostedHandoffInputSectionIdsForNextAction(source.nextAction),
-      requiredHostedHandoffInputSectionStatuses:
-        requiredHostedHandoffInputSectionStatusesForNextAction(source.nextAction),
-      requiredHostedHandoffSectionInputs:
-        requiredHostedHandoffSectionInputIdsForNextAction(source.nextAction),
-      requiredHostedHandoffSectionInputStatuses:
-        requiredHostedHandoffSectionInputStatusesForNextAction(source.nextAction),
-      requiredRelatedDestinations: requiredRelatedDestinationsForHandoffs(
-        relatedHandoffsForNextAction({
-          nextAction: source.nextAction,
-          proofGraph: source.proofGraph,
-          hostedMatrix: source.hostedMatrix,
-        }),
+export function nextActionAdminProofCase() {
+  return {
+    smokeName: "dev-test-game-next-action-admin-proof",
+    stage: "next-action-admin-proof-listen",
+    evidencePath,
+    envOverrides: {
+      FMARCH_DEV_TEST_GAME_NEXT_ACTION: nextActionRelativePath,
+      FMARCH_DEV_TEST_GAME_PROOF_GRAPH: proofGraphRelativePath,
+      FMARCH_DEV_TEST_GAME_HOSTED_CONCURRENT_RACE_MATRIX:
+        hostedMatrixRelativePath,
+    },
+    loadSource: async () => ({
+      nextAction: assertDevTestGameNextAction(await readJson(nextActionPath)),
+      proofRun: assertDevTestGameProofRun(await readJson(proofRunPath)),
+      proofGraph: assertDevTestGameProofGraph(await readJson(proofGraphPath)),
+      hostedMatrix: assertDevTestGameHostedConcurrentRaceMatrixEvidence(
+        await readJson(hostedMatrixPath),
       ),
     }),
-  buildEvidence: ({ source, adminRoleSurface }) => ({
+    prove: async ({ browser, frontendBaseUrl, source }) =>
+      await proveAdminAuditDetail({
+        browser,
+        frontendBaseUrl,
+        game: source.proofRun.session.game,
+        auditId: localAdminAuditIds.nextAction,
+        requiredChecks: requiredChecksForNextAction(source.nextAction),
+        requiredCheckStatuses: requiredCheckStatusesForNextAction(
+          source.nextAction,
+          source.proofGraph,
+        ),
+        requiredRelatedLinks: requiredRelatedLinksForNextAction(source.nextAction),
+        requiredHostedHandoffInputs: requiredHostedHandoffInputIdsForNextAction(
+          source.nextAction,
+        ),
+        requiredHostedHandoffInputValues:
+          requiredHostedHandoffInputValuesForNextAction(source.nextAction),
+        requiredHostedHandoffBlockedChecks:
+          requiredHostedHandoffBlockedCheckIdsForNextAction(source.nextAction),
+        requiredHostedHandoffGroups:
+          requiredHostedHandoffGroupIdsForNextAction(source.nextAction),
+        requiredHostedHandoffSummary:
+          requiredHostedHandoffSummaryForNextAction(source.nextAction),
+        requiredHostedHandoffInputSections:
+          requiredHostedHandoffInputSectionIdsForNextAction(source.nextAction),
+        requiredHostedHandoffInputSectionStatuses:
+          requiredHostedHandoffInputSectionStatusesForNextAction(source.nextAction),
+        requiredHostedHandoffSectionInputs:
+          requiredHostedHandoffSectionInputIdsForNextAction(source.nextAction),
+        requiredHostedHandoffSectionInputStatuses:
+          requiredHostedHandoffSectionInputStatusesForNextAction(source.nextAction),
+        requiredRelatedDestinations: requiredRelatedDestinationsForHandoffs(
+          relatedHandoffsForNextAction({
+            nextAction: source.nextAction,
+            proofGraph: source.proofGraph,
+            hostedMatrix: source.hostedMatrix,
+          }),
+        ),
+      }),
+    buildEvidence: ({ source, adminRoleSurface }) => ({
     version: 1,
     proof: "dev-test-game-next-action-admin-proof",
     status: "passed",
@@ -294,9 +297,14 @@ await runAdminAuditProof({
       },
     },
     adminRoleSurface,
-  }),
-  assertEvidence: assertNextActionAdminProof,
-});
+    }),
+    assertEvidence: assertNextActionAdminProof,
+  };
+}
+
+if (pathToFileURL(process.argv[1] ?? "").href === import.meta.url) {
+  await runAdminAuditProof(nextActionAdminProofCase());
+}
 
 export function assertNextActionAdminProof(evidence) {
   if (

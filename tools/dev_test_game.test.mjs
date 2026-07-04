@@ -606,13 +606,10 @@ test("dev test-game spine orchestrators expose stable proof order and env maps",
       "tools/dev_test_game_spine_manifest.mjs",
       "tools/dev_test_game_next_action.mjs",
       "tools/dev_test_game_proof_graph.mjs",
-      "tools/dev_test_game_proof_graph_admin_proof.mjs",
-      "tools/dev_test_game_proof_freshness_admin_proof.mjs",
-      "tools/dev_test_game_next_action_admin_proof.mjs",
+      "terminal-admin-proof-batch",
       devTestGameReleaseReadinessScript,
       "tools/dev_test_game_next_action.mjs",
-      "tools/dev_test_game_proof_freshness_admin_proof.mjs",
-      "tools/dev_test_game_next_action_admin_proof.mjs",
+      "terminal-refresh-admin-proof-batch",
       devTestGameReleaseReadinessScript,
     ],
   );
@@ -620,6 +617,16 @@ test("dev test-game spine orchestrators expose stable proof order and env maps",
     kind: "custom",
     script: "admin-spine-proof",
     label: "Admin spine proof",
+  });
+  assert.deepEqual(devTestGameAdminSpinePlan[16], {
+    kind: "custom",
+    script: "terminal-admin-proof-batch",
+    label: "Terminal admin proof batch",
+  });
+  assert.deepEqual(devTestGameAdminSpinePlan[19], {
+    kind: "custom",
+    script: "terminal-refresh-admin-proof-batch",
+    label: "Terminal refresh admin proof batch",
   });
   assert.equal(
     devTestGameAdminSpinePlan[12].env,
