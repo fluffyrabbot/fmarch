@@ -46,6 +46,8 @@
 //! - `phase_state`    — current phase, lock, deadline (`GameStarted`/
 //!   `PhaseAdvanced`, `DeadlineSet`/`DeadlineExtended`, `ThreadLocked`/
 //!   `ThreadUnlocked`). Backs command validation (phase open/unlocked).
+//! - `post_policy`    — host-toggleable channel posting affordances, currently
+//!   whether media-only posts are accepted.
 //! - `thread_view`    — stable, paginated channel-thread posts folded from
 //!   `PostSubmitted` plus public engine announcements in `ResolutionApplied`.
 //!
@@ -354,6 +356,14 @@ pub struct PrivateChannelMemberRow {
     pub source: String,
 }
 
+/// Channel-level post policy derived from host/admin events.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PostPolicyRow {
+    pub game_id: Uuid,
+    pub channel_id: String,
+    pub allow_media_only: bool,
+}
+
 /// A projected post in the game thread.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ThreadPostRow {
@@ -600,6 +610,18 @@ async fn fold_event(
         }
         "ThreadLocked" => set_locked(tx, game_id, true).await?,
         "ThreadUnlocked" => set_locked(tx, game_id, false).await?,
+        "PostPolicyChanged" => {
+            let p = &ev.payload;
+            let channel_id = str_field(p, "channel_id", &ev.kind)?;
+            let allow_media_only = p
+                .get("allow_media_only")
+                .and_then(|v| v.as_bool())
+                .ok_or_else(|| ProjectionError::Payload {
+                    kind: ev.kind.clone(),
+                    source: serde::de::Error::custom("missing boolean field `allow_media_only`"),
+                })?;
+            upsert_post_policy(tx, game_id, &channel_id, allow_media_only).await?;
+        }
 
         // ── thread_view (channel-scoped cold-load pagination) ──
         "PostSubmitted" => {
@@ -1396,6 +1418,7 @@ async fn rebuild_in_tx(
         "slot_occupancy",
         "phase_state",
         "private_channel_member",
+        "post_policy",
         "thread_view",
     ] {
         sqlx::query(&format!("DELETE FROM {table} WHERE game_id = $1"))
@@ -1520,6 +1543,10 @@ const AUDIT_PROJECTIONS: &[AuditProjection] = &[
     AuditProjection {
         table: "private_channel_member",
         order_by: "channel_id, slot_id",
+    },
+    AuditProjection {
+        table: "post_policy",
+        order_by: "channel_id",
     },
     AuditProjection {
         table: "thread_view",
@@ -2323,6 +2350,32 @@ pub async fn private_channel_members(
         .collect())
 }
 
+pub async fn post_policy(
+    pool: &PgPool,
+    game_id: Uuid,
+    channel_id: &str,
+) -> Result<PostPolicyRow, ProjectionError> {
+    let row = sqlx::query(
+        "SELECT game_id, channel_id, allow_media_only \
+         FROM post_policy WHERE game_id = $1 AND channel_id = $2",
+    )
+    .bind(game_id)
+    .bind(channel_id)
+    .fetch_optional(pool)
+    .await?;
+    Ok(row
+        .map(|r| PostPolicyRow {
+            game_id: r.get("game_id"),
+            channel_id: r.get("channel_id"),
+            allow_media_only: r.get("allow_media_only"),
+        })
+        .unwrap_or_else(|| PostPolicyRow {
+            game_id,
+            channel_id: channel_id.to_string(),
+            allow_media_only: false,
+        }))
+}
+
 /// Whether a slot exists in the game (has a `slot_state` row).
 pub async fn slot_exists(
     pool: &PgPool,
@@ -2979,6 +3032,28 @@ async fn delete_private_channel_members(
         .bind(channel_id)
         .execute(&mut **tx)
         .await?;
+    Ok(())
+}
+
+async fn upsert_post_policy(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    game_id: Uuid,
+    channel_id: &str,
+    allow_media_only: bool,
+) -> Result<(), ProjectionError> {
+    sqlx::query(
+        r#"
+        INSERT INTO post_policy (game_id, channel_id, allow_media_only)
+        VALUES ($1, $2, $3)
+        ON CONFLICT (game_id, channel_id)
+        DO UPDATE SET allow_media_only = EXCLUDED.allow_media_only
+        "#,
+    )
+    .bind(game_id)
+    .bind(channel_id)
+    .bind(allow_media_only)
+    .execute(&mut **tx)
+    .await?;
     Ok(())
 }
 

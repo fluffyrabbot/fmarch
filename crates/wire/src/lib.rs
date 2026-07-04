@@ -256,6 +256,11 @@ pub enum Command {
         prompt_id: String,
         decision: HostPromptDecision,
     },
+    SetPostPolicy {
+        game: Uuid,
+        channel_id: String,
+        allow_media_only: bool,
+    },
     SubmitVote {
         game: Uuid,
         actor_slot: String,
@@ -351,6 +356,15 @@ impl From<Command> for commands::Command {
                 game,
                 prompt_id,
                 decision: decision.into(),
+            },
+            Command::SetPostPolicy {
+                game,
+                channel_id,
+                allow_media_only,
+            } => commands::Command::SetPostPolicy {
+                game,
+                channel_id,
+                allow_media_only,
             },
             Command::SubmitVote {
                 game,

@@ -2889,6 +2889,17 @@ async fn submit_post_uses_stream_logical_time_and_preserves_empty_text_media_pag
     pool: PgPool,
 ) {
     let game = setup_game(&pool, "host_h", "slot_1", "user_a").await;
+    handle(
+        &pool,
+        &user("host_h"),
+        Command::SetPostPolicy {
+            game,
+            channel_id: "main".into(),
+            allow_media_only: true,
+        },
+    )
+    .await
+    .expect("host enables media-only posts");
     let first_media = vec![
         thread_media(
             "canvas-sketch",
@@ -2999,6 +3010,144 @@ async fn submit_post_uses_stream_logical_time_and_preserves_empty_text_media_pag
     assert_eq!(older.posts[0].media[0]["id"], "canvas-sketch");
     assert_eq!(older.posts[0].media[0]["variants"]["tablet"]["width"], 1024);
     assert_eq!(older.posts[0].media[1]["kind"], "video");
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
+async fn submit_post_media_only_requires_enabled_post_policy(pool: PgPool) {
+    let game = setup_game(&pool, "host_h", "slot_1", "user_a").await;
+    let canvas_media = vec![thread_media(
+        "tablet-canvas-drawing",
+        "image",
+        "tablet canvas drawing",
+        &[(
+            "original",
+            "/media/live-stack/thread/tablet-canvas-drawing.png",
+            Some(2048),
+            Some(1536),
+        )],
+    )];
+
+    let default_policy = projections::post_policy(&pool, game, "main")
+        .await
+        .expect("default post policy");
+    assert!(!default_policy.allow_media_only);
+
+    let disabled_err = handle(
+        &pool,
+        &user("user_a"),
+        Command::SubmitPost {
+            game,
+            channel_id: "main".into(),
+            actor_slot: "slot_1".into(),
+            body: "".into(),
+            media: canvas_media.clone(),
+        },
+    )
+    .await
+    .expect_err("media-only post needs explicit policy");
+    assert_eq!(disabled_err, Reject::InvalidTarget);
+
+    let no_media_err = handle(
+        &pool,
+        &user("user_a"),
+        Command::SubmitPost {
+            game,
+            channel_id: "main".into(),
+            actor_slot: "slot_1".into(),
+            body: "".into(),
+            media: Vec::new(),
+        },
+    )
+    .await
+    .expect_err("empty post without media is still invalid");
+    assert_eq!(no_media_err, Reject::InvalidTarget);
+
+    handle(
+        &pool,
+        &user("host_h"),
+        Command::SetPostPolicy {
+            game,
+            channel_id: "main".into(),
+            allow_media_only: true,
+        },
+    )
+    .await
+    .expect("host enables media-only posts");
+    assert!(
+        projections::post_policy(&pool, game, "main")
+            .await
+            .unwrap()
+            .allow_media_only
+    );
+
+    handle(
+        &pool,
+        &user("user_a"),
+        Command::SubmitPost {
+            game,
+            channel_id: "main".into(),
+            actor_slot: "slot_1".into(),
+            body: "".into(),
+            media: canvas_media.clone(),
+        },
+    )
+    .await
+    .expect("media-only post after policy enable");
+    let thread = projections::thread_view(&pool, game, None, 10)
+        .await
+        .expect("thread view");
+    assert_eq!(thread.posts.len(), 1);
+    assert_eq!(thread.posts[0].body, "");
+    assert_eq!(thread.posts[0].media[0]["id"], "tablet-canvas-drawing");
+    assert_eq!(thread.posts[0].media[0]["kind"], "image");
+
+    handle(
+        &pool,
+        &user("host_h"),
+        Command::SetPostPolicy {
+            game,
+            channel_id: "main".into(),
+            allow_media_only: false,
+        },
+    )
+    .await
+    .expect("host disables media-only posts");
+    let disabled_again = handle(
+        &pool,
+        &user("user_a"),
+        Command::SubmitPost {
+            game,
+            channel_id: "main".into(),
+            actor_slot: "slot_1".into(),
+            body: "".into(),
+            media: canvas_media,
+        },
+    )
+    .await
+    .expect_err("media-only post rejected after policy disable");
+    assert_eq!(disabled_again, Reject::InvalidTarget);
+
+    let policy_before =
+        serde_json::to_string(&projections::post_policy(&pool, game, "main").await.unwrap())
+            .unwrap();
+    let thread_before = serde_json::to_string(&thread).unwrap();
+    rebuild(&pool, game).await.expect("projection rebuild");
+    assert_eq!(
+        policy_before,
+        serde_json::to_string(&projections::post_policy(&pool, game, "main").await.unwrap())
+            .unwrap(),
+        "post policy rebuild must preserve the final host toggle"
+    );
+    assert_eq!(
+        thread_before,
+        serde_json::to_string(
+            &projections::thread_view(&pool, game, None, 10)
+                .await
+                .unwrap()
+        )
+        .unwrap(),
+        "thread_view rebuild must preserve media-only post"
+    );
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]

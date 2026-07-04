@@ -2779,6 +2779,7 @@ fn command_game(command: &wire::Command) -> Option<Uuid> {
         | wire::Command::CompleteGame { game }
         | wire::Command::PublishVotecount { game }
         | wire::Command::ResolveHostPrompt { game, .. }
+        | wire::Command::SetPostPolicy { game, .. }
         | wire::Command::SubmitVote { game, .. }
         | wire::Command::WithdrawVote { game, .. }
         | wire::Command::SubmitAction { game, .. }
@@ -2803,6 +2804,7 @@ fn command_affects_host_console(command: &wire::Command) -> bool {
             | wire::Command::CompleteGame { .. }
             | wire::Command::PublishVotecount { .. }
             | wire::Command::ResolveHostPrompt { .. }
+            | wire::Command::SetPostPolicy { .. }
             | wire::Command::SubmitPost { .. }
             | wire::Command::ExtendDeadline { .. }
             | wire::Command::ProcessReplacement { .. }
@@ -2851,6 +2853,7 @@ fn command_affects_player_command_state(command: &wire::Command) -> bool {
             | wire::Command::UnlockThread { .. }
             | wire::Command::ResolvePhase { .. }
             | wire::Command::CompleteGame { .. }
+            | wire::Command::SetPostPolicy { .. }
             | wire::Command::SubmitVote { .. }
             | wire::Command::WithdrawVote { .. }
             | wire::Command::ProcessReplacement { .. }

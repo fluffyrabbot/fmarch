@@ -38,7 +38,7 @@ export function buildPlayerCommand({
           game: requiredString(game, "game"),
           channel_id: requiredString(channelId, "channelId"),
           actor_slot: requiredString(actorSlot, "actorSlot"),
-          body: requiredString(body, "body"),
+          body: postBody(body, media, actionConfig),
           ...(media.length > 0 ? { media } : {}),
         }),
       });
@@ -87,6 +87,8 @@ export function buildAdminCommand({
   game,
   pack = "mafiascum",
   user,
+  channelId = "main",
+  allowMediaOnly = false,
 }) {
   switch (action) {
     case "create_game":
@@ -101,6 +103,14 @@ export function buildAdminCommand({
         AddCohost: Object.freeze({
           game: requiredString(game, "game"),
           user: requiredString(user, "user"),
+        }),
+      });
+    case "set_post_policy":
+      return Object.freeze({
+        SetPostPolicy: Object.freeze({
+          game: requiredString(game, "game"),
+          channel_id: requiredString(channelId, "channelId"),
+          allow_media_only: Boolean(allowMediaOnly),
         }),
       });
     default:
@@ -226,6 +236,19 @@ function requiredString(value, field) {
     throw new TypeError(`${field} must be a non-empty string`);
   }
   return value;
+}
+
+function postBody(value, media, actionConfig) {
+  if (typeof value !== "string") {
+    throw new TypeError("body must be a string");
+  }
+  if (value.trim() !== "") {
+    return value;
+  }
+  if (actionConfig?.allowMediaOnlyPost === true && media.length > 0) {
+    return value;
+  }
+  throw new TypeError("body must be a non-empty string unless media-only posts are enabled");
 }
 
 function voteTargetWire(target) {

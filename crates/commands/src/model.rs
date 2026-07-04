@@ -121,6 +121,12 @@ pub enum Command {
         prompt_id: String,
         decision: HostPromptDecision,
     },
+    /// Toggle channel-level post policy. Host-gated.
+    SetPostPolicy {
+        game: Uuid,
+        channel_id: String,
+        allow_media_only: bool,
+    },
     /// Record a host/admin ITA session lifecycle control for the current Day phase. Host-gated.
     ControlItaSession {
         game: Uuid,

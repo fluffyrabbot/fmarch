@@ -586,6 +586,11 @@ async fn handle_command(
             prompt_id,
             decision,
         } => resolve_host_prompt(pool, principal, game, prompt_id, decision, receipt).await,
+        Command::SetPostPolicy {
+            game,
+            channel_id,
+            allow_media_only,
+        } => set_post_policy(pool, principal, game, channel_id, allow_media_only, receipt).await,
         Command::ControlItaSession {
             game,
             session_id,
@@ -686,6 +691,7 @@ fn game_closed_by_completion(command: &Command) -> Option<Uuid> {
         | Command::ResolvePhase { game, .. }
         | Command::PublishVotecount { game }
         | Command::ResolveHostPrompt { game, .. }
+        | Command::SetPostPolicy { game, .. }
         | Command::ControlItaSession { game, .. }
         | Command::SubmitVote { game, .. }
         | Command::WithdrawVote { game, .. }
@@ -1635,6 +1641,37 @@ async fn withdraw_action_locked(
     persist(pool, game, &[ev], receipt).await
 }
 
+async fn set_post_policy(
+    pool: &PgPool,
+    principal: &Principal,
+    game: Uuid,
+    channel_id: String,
+    allow_media_only: bool,
+    receipt: Option<&ReceiptClaim>,
+) -> Result<Ack, Reject> {
+    require_game(pool, game).await?;
+    if channel_id.trim().is_empty() {
+        return Err(Reject::InvalidTarget);
+    }
+    let caps = caps::resolve(pool, principal, game).await?;
+    require(&caps, &Capability::HostOf(game), Reject::NotHost)?;
+    let stream = eventstore::load_stream(pool, game)
+        .await
+        .map_err(|e| Reject::Internal(e.to_string()))?;
+    let occurred_at = next_stream_logical_time(&stream);
+    let ev = EventInput::new(
+        "PostPolicyChanged",
+        1,
+        serde_json::json!({
+            "channel_id": channel_id,
+            "allow_media_only": allow_media_only,
+        }),
+        ActorId::Host,
+        occurred_at,
+    );
+    persist(pool, game, &[ev], receipt).await
+}
+
 async fn submit_post(
     pool: &PgPool,
     principal: &Principal,
@@ -1668,6 +1705,12 @@ async fn submit_post_locked(
     require_slot_occupant(pool, game, &actor_slot, &caps).await?;
     require_channel_post_access(game, &channel_id, &caps)?;
     require_slot_can_post(pool, game, &actor_slot).await?;
+    if body.trim().is_empty() {
+        let policy = projections::post_policy(pool, game, &channel_id).await?;
+        if media.is_empty() || !policy.allow_media_only {
+            return Err(Reject::InvalidTarget);
+        }
+    }
     // A post is attributed to the SLOT (doc 01: post authorship attaches to the
     // slot, not the user). `slot_or_user` carries the slot id so authorship
     // survives a replacement. Phase id is recorded for partitioning.

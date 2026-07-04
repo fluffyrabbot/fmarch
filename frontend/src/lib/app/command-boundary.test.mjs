@@ -136,6 +136,54 @@ test("player actions map to Rust wire command variants", () => {
 
   assert.deepEqual(
     buildPlayerCommand({
+      action: "submit_post",
+      game: "00000000-0000-0000-0000-000000000001",
+      actorSlot: "slot-7",
+      body: "",
+      media: [
+        {
+          id: "tablet-canvas-sketch",
+          kind: "image",
+          alt: "Tablet canvas sketch",
+          variants: {
+            original: {
+              url: "/media/thread/tablet-canvas-sketch.png",
+              width: 1024,
+              height: 768,
+            },
+          },
+        },
+      ],
+      actionConfig: {
+        allowMediaOnlyPost: true,
+      },
+    }),
+    {
+      SubmitPost: {
+        game: "00000000-0000-0000-0000-000000000001",
+        channel_id: "main",
+        actor_slot: "slot-7",
+        body: "",
+        media: [
+          {
+            id: "tablet-canvas-sketch",
+            kind: "image",
+            alt: "Tablet canvas sketch",
+            variants: {
+              original: {
+                url: "/media/thread/tablet-canvas-sketch.png",
+                width: 1024,
+                height: 768,
+              },
+            },
+          },
+        ],
+      },
+    },
+  );
+
+  assert.deepEqual(
+    buildPlayerCommand({
       action: "submit_action",
       game: "00000000-0000-0000-0000-000000000001",
       actorSlot: "slot_4",
@@ -155,6 +203,40 @@ test("player actions map to Rust wire command variants", () => {
         grant_id: null,
       },
     },
+  );
+});
+
+test("player post builder requires policy affordance for media-only posts", () => {
+  assert.throws(
+    () =>
+      buildPlayerCommand({
+        action: "submit_post",
+        game: "00000000-0000-0000-0000-000000000001",
+        actorSlot: "slot-7",
+        body: "",
+        media: [
+          {
+            id: "tablet-canvas-sketch",
+            kind: "image",
+            alt: "Tablet canvas sketch",
+            variants: {},
+          },
+        ],
+      }),
+    /media-only posts are enabled/,
+  );
+  assert.throws(
+    () =>
+      buildPlayerCommand({
+        action: "submit_post",
+        game: "00000000-0000-0000-0000-000000000001",
+        actorSlot: "slot-7",
+        body: "",
+        actionConfig: {
+          allowMediaOnlyPost: true,
+        },
+      }),
+    /media-only posts are enabled/,
   );
 });
 
@@ -214,6 +296,22 @@ test("admin actions map to bootstrap wire command variants", () => {
       AddCohost: {
         game: "00000000-0000-0000-0000-000000000123",
         user: "cohost_c",
+      },
+    },
+  );
+
+  assert.deepEqual(
+    buildAdminCommand({
+      action: "set_post_policy",
+      game: "00000000-0000-0000-0000-000000000123",
+      channelId: "main",
+      allowMediaOnly: true,
+    }),
+    {
+      SetPostPolicy: {
+        game: "00000000-0000-0000-0000-000000000123",
+        channel_id: "main",
+        allow_media_only: true,
       },
     },
   );
