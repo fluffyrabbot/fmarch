@@ -285,6 +285,49 @@ assert.equal(proofRunSpineThirdCycle.checkpoints[11].nextPhase, "N03");
 assert.equal(proofRunSpineThirdCycle.checkpoints[11].nextLocked, false);
 assert.equal(proofRunSpineThirdCycle.checkpoints[11].actionNightActionControls > 0, true);
 assert.equal(proofRunSpineThirdCycle.checkpoints[11].normalNightActionControls, 0);
+assert.equal(
+  proofRunSpineThirdCycle.checkpoints[12].id,
+  "d03r2-stale-continue-policy-recovery",
+);
+assert.equal(
+  proofRunSpineThirdCycle.checkpoints[12].promptId,
+  "D03R2:revote:NoMajority",
+);
+assert.equal(
+  proofRunSpineThirdCycle.checkpoints[12].staleActionId,
+  "resolve_host_prompt-D03R2-revote-NoMajority-no_majority_continue_revote",
+);
+assert.equal(proofRunSpineThirdCycle.checkpoints[12].setupPromptStatus, "pending");
+assert.equal(proofRunSpineThirdCycle.checkpoints[12].setupActionVisible, true);
+assert.equal(proofRunSpineThirdCycle.checkpoints[12].rejectState, "reject");
+assert.equal(
+  proofRunSpineThirdCycle.checkpoints[12].rejectError,
+  "PromptAlreadyResolved",
+);
+assert.match(
+  proofRunSpineThirdCycle.checkpoints[12].activityStatusText,
+  /Reject PromptAlreadyResolved/,
+);
+assert.equal(
+  proofRunSpineThirdCycle.checkpoints[12].promptStatusAfterReject,
+  "resolved",
+);
+assert.equal(
+  proofRunSpineThirdCycle.checkpoints[12].promptActionVisibleAfterReject,
+  false,
+);
+assert.equal(proofRunSpineThirdCycle.checkpoints[12].reloadStatus, "passed");
+assert.equal(proofRunSpineThirdCycle.checkpoints[12].reloadPhase, "N03");
+assert.equal(proofRunSpineThirdCycle.checkpoints[12].reloadLocked, false);
+assert.equal(
+  proofRunSpineThirdCycle.checkpoints[12].reloadResolveControlVisible,
+  true,
+);
+assert.equal(proofRunSpineThirdCycle.checkpoints[12].reloadStaleActionVisible, false);
+assert.equal(
+  proofRunSpineThirdCycle.checkpoints[12].apiPromptStatusAfterReload,
+  "resolved",
+);
 assert.equal(proofRun.coreLoopSpine.recoveryHooks.staleLockedVoteReject, "PhaseLocked");
 assert.equal(proofRun.coreLoopSpine.recoveryHooks.invalidActionReject, "InvalidTarget");
 assert.equal(

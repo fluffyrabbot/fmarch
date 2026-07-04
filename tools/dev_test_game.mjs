@@ -4070,6 +4070,27 @@ async function verifySeededD02VoteNightTransition({
       d03R2RevotePrompt === null
         ? null
         : hostPromptPolicyActionId(d03R2RevotePrompt.id, "no_majority_no_lynch");
+    const d03R2StaleContinuePolicyActionId =
+      d03R2RevotePrompt === null
+        ? null
+        : hostPromptPolicyActionId(
+            d03R2RevotePrompt.id,
+            "no_majority_continue_revote",
+          );
+    const staleD03R2PolicyPage =
+      d03R2StaleContinuePolicyActionId === null
+        ? null
+        : await hostEntry.context.newPage();
+    const d03R2StaleContinuePolicySetup =
+      staleD03R2PolicyPage === null
+        ? null
+        : await freezeStaleHostPromptPage({
+            stalePromptPage: staleD03R2PolicyPage,
+            frontendBaseUrl,
+            promptGame: transitionGame,
+            actionId: d03R2StaleContinuePolicyActionId,
+            promptId: d03R2RevotePrompt.id,
+          });
     const apiPromptsAfterResolveD03R2 = await fetchJson(
       `${apiBaseUrl}/games/${transitionGame}/host-prompts?principal_user_id=host_h`,
     );
@@ -4128,6 +4149,24 @@ async function verifySeededD02VoteNightTransition({
     const apiPromptsAfterD03R2NoLynchPolicy = await fetchJson(
       `${apiBaseUrl}/games/${transitionGame}/host-prompts?principal_user_id=host_h`,
     );
+    const d03R2StaleContinuePolicyRecovery =
+      staleD03R2PolicyPage === null
+        ? null
+        : await submitStaleHostPromptRecovery({
+            stalePromptPage: staleD03R2PolicyPage,
+            setup: d03R2StaleContinuePolicySetup,
+            liveResolve: d03R2NoLynchPolicyResolution,
+            apiBaseUrl,
+            frontendBaseUrl,
+            promptGame: transitionGame,
+            actionId: d03R2StaleContinuePolicyActionId,
+            promptId: d03R2RevotePrompt.id,
+            expectedReloadPhase: {
+              id: "N03",
+              locked: false,
+              requiredPhaseActions: ["resolve_phase"],
+            },
+          });
 
     if (
       d03TerminalVoteSubmission?.state !== "ack" ||
@@ -4340,6 +4379,9 @@ async function verifySeededD02VoteNightTransition({
       d03R2RevotePrompt?.status !== "pending" ||
       d03R2RevotePrompt?.value !== "no_majority" ||
       !hostAfterResolveD03R2.promptActions.includes(d03R2RevotePromptActionId) ||
+      !hostAfterResolveD03R2.promptActions.includes(
+        d03R2StaleContinuePolicyActionId,
+      ) ||
       apiPromptsAfterResolveD03R2.find(
         (prompt) => (prompt.id ?? prompt.prompt_id) === d03RevotePrompt.id,
       )?.status !== "resolved" ||
@@ -4376,7 +4418,24 @@ async function verifySeededD02VoteNightTransition({
       normalAfterD03R2NoLynchPolicy.commandState?.phase?.locked !== false ||
       normalAfterD03R2NoLynchPolicy.buttons.some((button) =>
         String(button.action ?? "").startsWith("submit_action"),
-      )
+      ) ||
+      d03R2StaleContinuePolicySetup?.promptActions?.includes(
+        d03R2StaleContinuePolicyActionId,
+      ) !== true ||
+      d03R2StaleContinuePolicyRecovery?.reject?.state !== "reject" ||
+      d03R2StaleContinuePolicyRecovery?.reject?.error !==
+        "PromptAlreadyResolved" ||
+      !d03R2StaleContinuePolicyRecovery?.activityStatusText?.includes(
+        "Reject PromptAlreadyResolved",
+      ) ||
+      d03R2StaleContinuePolicyRecovery?.staleHostPromptReloadAfterReject?.phase
+        ?.id !== "N03" ||
+      d03R2StaleContinuePolicyRecovery?.staleHostPromptReloadAfterReject?.phase
+        ?.locked !== false ||
+      d03R2StaleContinuePolicyRecovery?.staleHostPromptReloadAfterReject
+        ?.promptActionsAfterReload?.includes(d03R2StaleContinuePolicyActionId) ||
+      d03R2StaleContinuePolicyRecovery?.staleHostPromptReloadAfterReject
+        ?.promptActionsAfterReload?.includes(d03R2RevotePromptActionId)
     ) {
       throw new Error(
         `D03 revote boundary drifted: ${JSON.stringify({
@@ -4445,6 +4504,9 @@ async function verifySeededD02VoteNightTransition({
           actionAfterD03R2NoLynchPolicy,
           normalAfterD03R2NoLynchPolicy,
           apiPromptsAfterD03R2NoLynchPolicy,
+          d03R2StaleContinuePolicyActionId,
+          d03R2StaleContinuePolicySetup,
+          d03R2StaleContinuePolicyRecovery,
         })}`,
       );
     }
@@ -4543,14 +4605,17 @@ async function verifySeededD02VoteNightTransition({
       d03R2DayVoteOutcome,
       d03R2RevotePrompt,
       d03R2RevotePromptActionId,
+      d03R2StaleContinuePolicyActionId,
       apiPromptsAfterResolveD03R2,
       d03R2NoLynchPolicyResolution,
       hostAfterD03R2NoLynchPolicy,
       actionAfterD03R2NoLynchPolicy,
       normalAfterD03R2NoLynchPolicy,
       apiPromptsAfterD03R2NoLynchPolicy,
+      d03R2StaleContinuePolicySetup,
+      d03R2StaleContinuePolicyRecovery,
       proof:
-        "A disposable seeded local game reached open D02 through real phase commands, the Slot 4 mafia-goon role URL submitted the deciding day vote, the host role URL resolved D02 into a day-vote kill with the target-only receipt, advanced to open N02 where the living mafia-goon role URL regained factional_kill while the normal player role URL did not, then the mafia-goon role URL submitted the N02 factional_kill, the host role URL resolved it, and the same role URLs advanced to open D03 day controls before Slot 7 submitted a D03 vote for Slot 4, host resolution recorded NoMajority and issued the D03 revote host prompt, host AdvancePhase rejected InvalidTarget instead of inventing a Night 3, the host role URL reloaded to the same locked D03 NoMajority recovery truth, resolving the revote prompt with the explicit continue-revote policy advanced the same host and player role URLs into open D03R1 controls, the action-player role URL submitted a no-lynch revote ballot whose API tally was keyed to D03R1 while the old D03 slot tally stayed separate, the host role URL resolved D03R1 back to locked NoMajority with a fresh pending D03R1 revote prompt, resolving that prompt with the explicit continue-revote policy advanced the same host and player role URLs into open D03R2 controls, then the action-player role URL submitted and the host role URL resolved a D03R2 no-lynch ballot with D03, D03R1, and D03R2 tallies kept separate before the host chose the explicit no-lynch policy and advanced the same host/player role URLs into open N03.",
+        "A disposable seeded local game reached open D02 through real phase commands, the Slot 4 mafia-goon role URL submitted the deciding day vote, the host role URL resolved D02 into a day-vote kill with the target-only receipt, advanced to open N02 where the living mafia-goon role URL regained factional_kill while the normal player role URL did not, then the mafia-goon role URL submitted the N02 factional_kill, the host role URL resolved it, and the same role URLs advanced to open D03 day controls before Slot 7 submitted a D03 vote for Slot 4, host resolution recorded NoMajority and issued the D03 revote host prompt, host AdvancePhase rejected InvalidTarget instead of inventing a Night 3, the host role URL reloaded to the same locked D03 NoMajority recovery truth, resolving the revote prompt with the explicit continue-revote policy advanced the same host and player role URLs into open D03R1 controls, the action-player role URL submitted a no-lynch revote ballot whose API tally was keyed to D03R1 while the old D03 slot tally stayed separate, the host role URL resolved D03R1 back to locked NoMajority with a fresh pending D03R1 revote prompt, resolving that prompt with the explicit continue-revote policy advanced the same host and player role URLs into open D03R2 controls, then the action-player role URL submitted and the host role URL resolved a D03R2 no-lynch ballot with D03, D03R1, and D03R2 tallies kept separate before the host chose the explicit no-lynch policy and advanced the same host/player role URLs into open N03, while a frozen stale continue-revote host policy button rejected PromptAlreadyResolved and reloaded to open N03 controls.",
     };
   } finally {
     await hostEntry.context.close().catch(() => {});
@@ -7896,6 +7961,7 @@ async function submitStaleHostPromptRecovery({
   promptGame,
   actionId,
   promptId,
+  expectedReloadPhase,
 }) {
   const action = await confirmHostAction(stalePromptPage, actionId, "reject");
   await stalePromptPage
@@ -7969,6 +8035,10 @@ async function submitStaleHostPromptRecovery({
   const promptsAfterReload = await stalePromptPage.evaluate(
     () => window.__fmarchHostPromptsProjection ?? [],
   );
+  const phaseAfterReload = await stalePromptPage.evaluate(
+    () => window.__fmarchHostProjection?.phase ?? null,
+  );
+  const phaseActionsAfterReload = await visibleHostPhaseActions(stalePromptPage);
   const promptActionsAfterReload = await visibleHostControlActions(
     stalePromptPage,
     "host-prompts",
@@ -7982,6 +8052,8 @@ async function submitStaleHostPromptRecovery({
     rejectReceiptStatusText: activityStatusText,
     surfaceText: surfaceTextAfterReload,
     promptsAfterReload,
+    phase: phaseAfterReload,
+    phaseActionsAfterReload,
     promptActionsAfterReload,
     apiPromptsAfterReload,
   };
@@ -8021,7 +8093,19 @@ async function submitStaleHostPromptRecovery({
     staleHostPromptReloadAfterReject.promptActionsAfterReload.includes(actionId) ||
     staleHostPromptReloadAfterReject.apiPromptsAfterReload.find(
       (prompt) => (prompt.id ?? prompt.prompt_id) === promptId,
-    )?.status !== "resolved"
+    )?.status !== "resolved" ||
+    (expectedReloadPhase !== undefined &&
+      ((staleHostPromptReloadAfterReject.phase?.id ??
+        staleHostPromptReloadAfterReject.phase?.phase_id) !==
+        expectedReloadPhase.id ||
+        staleHostPromptReloadAfterReject.phase?.locked !==
+          expectedReloadPhase.locked ||
+        (expectedReloadPhase.requiredPhaseActions ?? []).some(
+          (actionId) =>
+            !staleHostPromptReloadAfterReject.phaseActionsAfterReload.includes(
+              actionId,
+            ),
+        )))
   ) {
     throw new Error(
       `stale host prompt recovery drifted: ${JSON.stringify({

@@ -6910,6 +6910,64 @@ function buildCoreLoopSpineSummary({ session, verification }) {
             "submit_action",
           ),
         },
+        {
+          id: "d03r2-stale-continue-policy-recovery",
+          promptId: d02VoteNight.d03R2RevotePrompt?.id ?? null,
+          staleActionId:
+            d02VoteNight.d03R2StaleContinuePolicyActionId ?? null,
+          setupPromptStatus:
+            d02VoteNight.d03R2StaleContinuePolicySetup?.prompts?.find(
+              (prompt) => prompt.id === d02VoteNight.d03R2RevotePrompt?.id,
+            )?.status ?? null,
+          setupActionVisible:
+            d02VoteNight.d03R2StaleContinuePolicySetup?.promptActions?.includes(
+              d02VoteNight.d03R2StaleContinuePolicyActionId,
+            ) ?? null,
+          rejectState:
+            d02VoteNight.d03R2StaleContinuePolicyRecovery?.reject?.state ??
+            null,
+          rejectError:
+            d02VoteNight.d03R2StaleContinuePolicyRecovery?.reject?.error ??
+            null,
+          activityStatusText:
+            d02VoteNight.d03R2StaleContinuePolicyRecovery
+              ?.activityStatusText ?? null,
+          promptStatusAfterReject:
+            d02VoteNight.d03R2StaleContinuePolicyRecovery?.promptsAfterReject?.find(
+              (prompt) => prompt.id === d02VoteNight.d03R2RevotePrompt?.id,
+            )?.status ?? null,
+          promptActionVisibleAfterReject:
+            d02VoteNight.d03R2StaleContinuePolicyRecovery
+              ?.promptActionsAfterReject?.includes(
+                d02VoteNight.d03R2StaleContinuePolicyActionId,
+              ) ?? null,
+          reloadStatus:
+            d02VoteNight.d03R2StaleContinuePolicyRecovery
+              ?.staleHostPromptReloadAfterReject?.status ?? null,
+          reloadPhase:
+            d02VoteNight.d03R2StaleContinuePolicyRecovery
+              ?.staleHostPromptReloadAfterReject?.phase?.id ?? null,
+          reloadLocked:
+            d02VoteNight.d03R2StaleContinuePolicyRecovery
+              ?.staleHostPromptReloadAfterReject?.phase?.locked ?? null,
+          reloadResolveControlVisible:
+            d02VoteNight.d03R2StaleContinuePolicyRecovery
+              ?.staleHostPromptReloadAfterReject?.phaseActionsAfterReload?.includes(
+                "resolve_phase",
+              ) ?? null,
+          reloadStaleActionVisible:
+            d02VoteNight.d03R2StaleContinuePolicyRecovery
+              ?.staleHostPromptReloadAfterReject?.promptActionsAfterReload?.includes(
+                d02VoteNight.d03R2StaleContinuePolicyActionId,
+              ) ?? null,
+          apiPromptStatusAfterReload:
+            d02VoteNight.d03R2StaleContinuePolicyRecovery
+              ?.staleHostPromptReloadAfterReject?.apiPromptsAfterReload?.find(
+                (prompt) =>
+                  (prompt.id ?? prompt.prompt_id) ===
+                  d02VoteNight.d03R2RevotePrompt?.id,
+              )?.status ?? null,
+        },
       ],
     },
   ];
@@ -7120,6 +7178,26 @@ function buildCoreLoopSpineSummary({ session, verification }) {
     cycles[2]?.checkpoints?.[11]?.nextLocked === false &&
     cycles[2]?.checkpoints?.[11]?.actionNightActionControls > 0 &&
     cycles[2]?.checkpoints?.[11]?.normalNightActionControls === 0 &&
+    cycles[2]?.checkpoints?.[12]?.id ===
+      "d03r2-stale-continue-policy-recovery" &&
+    cycles[2]?.checkpoints?.[12]?.promptId === "D03R2:revote:NoMajority" &&
+    cycles[2]?.checkpoints?.[12]?.staleActionId ===
+      "resolve_host_prompt-D03R2-revote-NoMajority-no_majority_continue_revote" &&
+    cycles[2]?.checkpoints?.[12]?.setupPromptStatus === "pending" &&
+    cycles[2]?.checkpoints?.[12]?.setupActionVisible === true &&
+    cycles[2]?.checkpoints?.[12]?.rejectState === "reject" &&
+    cycles[2]?.checkpoints?.[12]?.rejectError === "PromptAlreadyResolved" &&
+    String(cycles[2]?.checkpoints?.[12]?.activityStatusText ?? "").includes(
+      "Reject PromptAlreadyResolved",
+    ) &&
+    cycles[2]?.checkpoints?.[12]?.promptStatusAfterReject === "resolved" &&
+    cycles[2]?.checkpoints?.[12]?.promptActionVisibleAfterReject === false &&
+    cycles[2]?.checkpoints?.[12]?.reloadStatus === "passed" &&
+    cycles[2]?.checkpoints?.[12]?.reloadPhase === "N03" &&
+    cycles[2]?.checkpoints?.[12]?.reloadLocked === false &&
+    cycles[2]?.checkpoints?.[12]?.reloadResolveControlVisible === true &&
+    cycles[2]?.checkpoints?.[12]?.reloadStaleActionVisible === false &&
+    cycles[2]?.checkpoints?.[12]?.apiPromptStatusAfterReload === "resolved" &&
     recoveryHooks.staleLockedVoteReject === "PhaseLocked" &&
     recoveryHooks.invalidActionReject === "InvalidTarget" &&
     recoveryHooks.normalPlayerDirectActionReject === "InvalidTarget" &&
@@ -7128,7 +7206,7 @@ function buildCoreLoopSpineSummary({ session, verification }) {
   return {
     status: passed ? "passed" : "failed",
     proof:
-      "Compact derived spine map for the seeded role URL core loop: D01 resolve to N01 action, N01 resolution to D02 day controls, D02 vote resolution, N02 action return, N02 action submission/resolution, D03 day controls, D03 NoMajority AdvancePhase InvalidTarget recovery, host role URL reload back to locked D03 NoMajority truth, host continue-revote policy resolution into open D03R1 controls, a D03R1 no-lynch revote ballot keyed separately from the stale D03 tally, host resolution of D03R1 back to locked NoMajority with a fresh pending revote prompt, second continue-revote policy resolution into open D03R2 controls, D03R2 no-lynch vote submission/resolution with prior revote tallies kept separate, and explicit host no-lynch policy resolution into open N03 controls.",
+      "Compact derived spine map for the seeded role URL core loop: D01 resolve to N01 action, N01 resolution to D02 day controls, D02 vote resolution, N02 action return, N02 action submission/resolution, D03 day controls, D03 NoMajority AdvancePhase InvalidTarget recovery, host role URL reload back to locked D03 NoMajority truth, host continue-revote policy resolution into open D03R1 controls, a D03R1 no-lynch revote ballot keyed separately from the stale D03 tally, host resolution of D03R1 back to locked NoMajority with a fresh pending revote prompt, second continue-revote policy resolution into open D03R2 controls, D03R2 no-lynch vote submission/resolution with prior revote tallies kept separate, explicit host no-lynch policy resolution into open N03 controls, and stale continue-revote policy recovery back to open N03.",
     sourceLaneIds: [...coreLoopPhaseProgressionSpineSourceLaneIds],
     cycles,
     recoveryHooks,
@@ -7161,7 +7239,7 @@ function assertCoreLoopSpineSummary(summary) {
       !Object.values(cycle.roleUrls).every((url) => typeof url === "string") ||
       !Array.isArray(cycle.checkpoints) ||
       (cycle.id === "n02-d03"
-        ? cycle.checkpoints.length !== 12
+        ? cycle.checkpoints.length !== 13
         : cycle.checkpoints.length !== 4)
     ) {
       throw new Error(`core loop spine cycle malformed: ${JSON.stringify(cycle)}`);

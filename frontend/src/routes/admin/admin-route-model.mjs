@@ -3926,11 +3926,15 @@ function formatCoreLoopSpineCheckpointStatus(checkpoint) {
   pushField(parts, "advance", checkpoint?.advanceState);
   pushField(parts, "reject", checkpoint?.rejectError);
   pushField(parts, "prompt", checkpoint?.promptId);
+  pushField(parts, "stale action", checkpoint?.staleActionId);
+  pushField(parts, "setup", checkpoint?.setupPromptStatus);
   pushField(parts, "prompt status", checkpoint?.promptStatusAfter);
   pushField(parts, "original prompt status", checkpoint?.originalPromptStatus);
   pushField(parts, "stream seqs", checkpoint?.streamSeqCount);
   pushField(parts, "action", checkpoint?.actionTemplate);
   pushField(parts, "action", checkpoint?.actionState);
+  pushField(parts, "reject state", checkpoint?.rejectState);
+  pushField(parts, "reload", checkpoint?.reloadPhase);
   pushField(parts, "template", checkpoint?.templateId);
   if (typeof checkpoint?.actionButtonVisible === "boolean") {
     parts.push(`action button ${checkpoint.actionButtonVisible ? "visible" : "hidden"}`);
@@ -3959,6 +3963,33 @@ function formatCoreLoopSpineCheckpointStatus(checkpoint) {
   pushField(parts, "normal vote controls", checkpoint?.normalVoteControls);
   if (typeof checkpoint?.promptActionVisible === "boolean") {
     parts.push(`prompt action ${checkpoint.promptActionVisible ? "visible" : "hidden"}`);
+  }
+  if (typeof checkpoint?.setupActionVisible === "boolean") {
+    parts.push(`setup action ${checkpoint.setupActionVisible ? "visible" : "hidden"}`);
+  }
+  if (typeof checkpoint?.promptActionVisibleAfterReject === "boolean") {
+    parts.push(
+      `post-reject prompt action ${
+        checkpoint.promptActionVisibleAfterReject ? "visible" : "hidden"
+      }`,
+    );
+  }
+  if (typeof checkpoint?.reloadLocked === "boolean") {
+    parts.push(checkpoint.reloadLocked ? "reload locked" : "reload open");
+  }
+  if (typeof checkpoint?.reloadResolveControlVisible === "boolean") {
+    parts.push(
+      `reload resolve control ${
+        checkpoint.reloadResolveControlVisible ? "visible" : "hidden"
+      }`,
+    );
+  }
+  if (typeof checkpoint?.reloadStaleActionVisible === "boolean") {
+    parts.push(
+      `reload stale action ${
+        checkpoint.reloadStaleActionVisible ? "visible" : "hidden"
+      }`,
+    );
   }
   pushField(parts, "route", checkpoint?.routeResponseStatus);
   pushField(parts, "reject receipt", checkpoint?.rejectReceiptStatus);

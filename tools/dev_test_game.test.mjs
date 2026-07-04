@@ -3613,6 +3613,8 @@ test("session card and markdown include role credential URLs and tokens", async 
         },
         d03R2RevotePromptActionId:
           "resolve_host_prompt-D03R2-revote-NoMajority-no_majority_no_lynch",
+        d03R2StaleContinuePolicyActionId:
+          "resolve_host_prompt-D03R2-revote-NoMajority-no_majority_continue_revote",
         apiPromptsAfterResolveD03R2: [
           { id: "D03:revote:NoMajority", status: "resolved" },
           { id: "D03R1:revote:NoMajority", status: "resolved" },
@@ -3682,6 +3684,84 @@ test("session card and markdown include role credential URLs and tokens", async 
           { id: "D03R1:revote:NoMajority", status: "resolved" },
           { id: "D03R2:revote:NoMajority", status: "resolved" },
         ],
+        d03R2StaleContinuePolicySetup: {
+          game,
+          promptId: "D03R2:revote:NoMajority",
+          promptActions: [
+            "resolve_host_prompt-D03R2-revote-NoMajority-no_majority_continue_revote",
+            "resolve_host_prompt-D03R2-revote-NoMajority-no_majority_no_lynch",
+          ],
+          prompts: [
+            { id: "D03:revote:NoMajority", status: "resolved" },
+            { id: "D03R1:revote:NoMajority", status: "resolved" },
+            { id: "D03R2:revote:NoMajority", status: "pending" },
+          ],
+          closedStatus: { state: "closed" },
+        },
+        d03R2StaleContinuePolicyRecovery: {
+          setup: {
+            promptActions: [
+              "resolve_host_prompt-D03R2-revote-NoMajority-no_majority_continue_revote",
+              "resolve_host_prompt-D03R2-revote-NoMajority-no_majority_no_lynch",
+            ],
+          },
+          reject: {
+            state: "reject",
+            error: "PromptAlreadyResolved",
+            message: "Reject PromptAlreadyResolved: prompt already resolved",
+            serverEnvelope: { body: { kind: "Reject" } },
+          },
+          commandOutcomes: [
+            {
+              actionId:
+                "resolve_host_prompt-D03R2-revote-NoMajority-no_majority_continue_revote",
+              state: "reject",
+              error: "PromptAlreadyResolved",
+            },
+          ],
+          promptsAfterReject: [
+            { id: "D03:revote:NoMajority", status: "resolved" },
+            { id: "D03R1:revote:NoMajority", status: "resolved" },
+            { id: "D03R2:revote:NoMajority", status: "resolved" },
+          ],
+          promptActionsAfterReject: [],
+          activityStatusText:
+            "Reject PromptAlreadyResolved: prompt already resolved",
+          activityRow: {
+            source: "outcome",
+            actionId:
+              "resolve_host_prompt-D03R2-revote-NoMajority-no_majority_continue_revote",
+            dispatchKind: "resolve_host_prompt",
+          },
+          dispatchPlan: {
+            projectionRefreshKeys: ["hostPrompts"],
+          },
+          apiPromptsAfterReject: [
+            { prompt_id: "D03:revote:NoMajority", status: "resolved" },
+            { prompt_id: "D03R1:revote:NoMajority", status: "resolved" },
+            { prompt_id: "D03R2:revote:NoMajority", status: "resolved" },
+          ],
+          staleHostPromptReloadAfterReject: {
+            status: "passed",
+            routeResponseStatus: 200,
+            rejectReceiptStatusText:
+              "Reject PromptAlreadyResolved: prompt already resolved",
+            surfaceText: "Host console",
+            promptsAfterReload: [
+              { id: "D03:revote:NoMajority", status: "resolved" },
+              { id: "D03R1:revote:NoMajority", status: "resolved" },
+              { id: "D03R2:revote:NoMajority", status: "resolved" },
+            ],
+            phase: { id: "N03", locked: false },
+            phaseActionsAfterReload: ["lock_thread", "resolve_phase"],
+            promptActionsAfterReload: [],
+            apiPromptsAfterReload: [
+              { prompt_id: "D03:revote:NoMajority", status: "resolved" },
+              { prompt_id: "D03R1:revote:NoMajority", status: "resolved" },
+              { prompt_id: "D03R2:revote:NoMajority", status: "resolved" },
+            ],
+          },
+        },
       },
       staleActionConflict: {
         reject: { error: "PhaseLocked" },
@@ -11390,6 +11470,7 @@ function coreLoopAdminProofFixture() {
           "n02-d03-d03r2-revote-prompt-resolved",
           "n02-d03-d03r2-revote-ballot-submitted",
           "n02-d03-d03r2-revote-resolved-no-majority",
+          "n02-d03-d03r2-stale-continue-policy-recovery",
         ],
         recoveryHooks: [
           "staleLockedVoteReject",
@@ -11450,6 +11531,7 @@ function coreLoopAdminProofFixture() {
         "n02-d03-d03r2-revote-prompt-resolved",
         "n02-d03-d03r2-revote-ballot-submitted",
         "n02-d03-d03r2-revote-resolved-no-majority",
+        "n02-d03-d03r2-stale-continue-policy-recovery",
       ],
       visibleSpineRecoveryHooks: [
         "staleLockedVoteReject",
@@ -13254,6 +13336,7 @@ function coreLoopSpineTargetsFixture() {
       "n02-d03-d03r2-revote-prompt-resolved",
       "n02-d03-d03r2-revote-ballot-submitted",
       "n02-d03-d03r2-revote-resolved-no-majority",
+      "n02-d03-d03r2-stale-continue-policy-recovery",
     ],
     recoveryHookIds: [
       "staleLockedVoteReject",
