@@ -382,7 +382,7 @@ test("completed-game production harness callers share extracted recovery cases",
         "completedGameProofReadinessScenarioFamilies",
         "completedGameProofReadinessTransition",
       ],
-      "./dev_test_game_core_loop_completed_game_proof_readiness_cases.mjs",
+      "./dev_test_game_core_loop_completed_game_shared_scenario_assertions.mjs",
     ],
     [
       "tools/dev_test_game_release_readiness.mjs",
@@ -390,7 +390,7 @@ test("completed-game production harness callers share extracted recovery cases",
         "assertCompletedGameProofReadinessSurfaceProof",
         "completedGameProofReadinessScenarioFamilies",
       ],
-      "./dev_test_game_core_loop_completed_game_proof_readiness_cases.mjs",
+      "./dev_test_game_core_loop_completed_game_shared_scenario_assertions.mjs",
     ],
     [
       "tools/dev_test_game_release_readiness.mjs",
@@ -577,9 +577,9 @@ test("completed-game production harness callers share extracted recovery cases",
         source: proofReadinessContractSource,
         importedName,
         moduleSpecifier:
-          "./dev_test_game_core_loop_completed_game_proof_readiness_cases.mjs",
+          "./dev_test_game_core_loop_completed_game_shared_scenario_assertions.mjs",
       }),
-      `proof/readiness contract should import ${importedName} from the canonical completed-game proof/readiness cases module`,
+      `proof/readiness contract should import ${importedName} from the canonical completed-game shared scenario/assertion module`,
     );
   }
   for (const importedName of [
@@ -801,9 +801,9 @@ test("completed-game progression facade shares proof and readiness cases", async
         source: progressionSource,
         importedName,
         moduleSpecifier:
-          "./dev_test_game_core_loop_completed_game_proof_readiness_cases.mjs",
+          "./dev_test_game_core_loop_completed_game_shared_scenario_assertions.mjs",
       }),
-      `completed-game progression should import ${importedName} from the proof/readiness cases module`,
+      `completed-game progression should import ${importedName} from the shared scenario/assertion module`,
     );
   }
   assert(
