@@ -197,6 +197,7 @@ import {
   hostedIdentityEvidenceBlockedChecks,
   hostedIdentityEvidenceHandoffCase,
   hostedIdentityEvidenceInputIds,
+  hostedIdentityEvidencePacketSectionDefinitions,
   hostedIdentityExpectedRoleSurfaceContract,
   hostedIdentityEvidencePlaceholderFixturePath,
   hostedIdentityEvidencePlaceholderSchema,
@@ -692,6 +693,8 @@ test("hosted identity evidence lane records blocked and passed handoffs", async 
     passed.target.redactedIntakePacket.sections.map((section) => [
       section.id,
       section.status,
+      section.requiredInputIds,
+      section.providedInputIds,
       section.redactedEvidenceRefCount,
       section.missingInputs,
       section.redactedEvidenceRefs.map((ref) => [
@@ -705,6 +708,8 @@ test("hosted identity evidence lane records blocked and passed handoffs", async 
       [
         "accountLifecycle",
         "provided",
+        ["createAccount", "login", "disableAccount", "enableAccount"],
+        ["createAccount", "login", "disableAccount", "enableAccount"],
         1,
         [],
         [
@@ -719,6 +724,8 @@ test("hosted identity evidence lane records blocked and passed handoffs", async 
       [
         "inviteDelivery",
         "provided",
+        ["deliveryChannels", "revocationCovered"],
+        ["deliveryChannels", "revocationCovered"],
         1,
         [],
         [
@@ -733,6 +740,8 @@ test("hosted identity evidence lane records blocked and passed handoffs", async 
       [
         "accountRecovery",
         "provided",
+        ["recoveryMethods", "recoveredSessionsPreserveRoleSurfaceAdapter"],
+        ["recoveryMethods", "recoveredSessionsPreserveRoleSurfaceAdapter"],
         1,
         [],
         [
@@ -747,6 +756,8 @@ test("hosted identity evidence lane records blocked and passed handoffs", async 
       [
         "abuseAndRateLimitPolicy",
         "provided",
+        ["protectedOperations", "rateLimitPolicyRef"],
+        ["protectedOperations", "rateLimitPolicyRef"],
         1,
         [],
         [
@@ -761,6 +772,8 @@ test("hosted identity evidence lane records blocked and passed handoffs", async 
       [
         "sessionSecretPolicy",
         "provided",
+        ["storage", "rotation", "deploymentSecretSource"],
+        ["storage", "rotation", "deploymentSecretSource"],
         1,
         [],
         [
@@ -775,6 +788,8 @@ test("hosted identity evidence lane records blocked and passed handoffs", async 
       [
         "hostedAuditRetentionExport",
         "provided",
+        ["eventFamilies", "retentionWindow", "exportRef"],
+        ["eventFamilies", "retentionWindow", "exportRef"],
         1,
         [],
         [
@@ -15214,6 +15229,7 @@ function hostedTargetPreflightAdminProofFixture() {
 function hostedIdentityEvidenceAdminProofFixture() {
   const handoff = hostedIdentityEvidenceHandoffCase();
   const handoffGroupIds = handoff.requirementGroups.map((group) => group.id);
+  const packetInputRows = hostedIdentityPacketInputRowsFixture();
   return {
     version: 1,
     proof: "dev-test-game-hosted-identity-evidence-admin-proof",
@@ -15242,6 +15258,13 @@ function hostedIdentityEvidenceAdminProofFixture() {
       hostedHandoffGroupIds: handoffGroupIds,
       hostedHandoffGroupStatuses: Object.fromEntries(
         handoff.requirementGroups.map((group) => [group.id, group.status]),
+      ),
+      hostedIdentityPacketSectionIds: hostedIdentityEvidencePacketSectionDefinitions.map(
+        (section) => section.field,
+      ),
+      hostedIdentityPacketInputIds: packetInputRows.map((row) => row.id),
+      hostedIdentityPacketInputStatuses: Object.fromEntries(
+        packetInputRows.map((row) => [row.id, row.status]),
       ),
       hostedIdentityRoleSurfaceContractDiffStatus: "blocked",
       hostedIdentityRoleSurfaceContractMismatchIds: [
@@ -15273,6 +15296,12 @@ function hostedIdentityEvidenceAdminProofFixture() {
           `${group.label} ${group.status}`,
         ]),
       ),
+      visibleHostedIdentityPacketSections:
+        hostedIdentityEvidencePacketSectionDefinitions.map((section) => section.field),
+      visibleHostedIdentityPacketInputs: packetInputRows.map((row) => row.id),
+      visibleHostedIdentityPacketInputStatuses: Object.fromEntries(
+        packetInputRows.map((row) => [row.id, `${row.id} ${row.status}`]),
+      ),
       visibleHostedIdentityRoleSurfaceContractDiff: { status: "blocked" },
       visibleHostedIdentityRoleSurfaceContractMismatches: [
         "hostedIdentity-roleSurfaceArchitectureChanged",
@@ -15284,6 +15313,15 @@ function hostedIdentityEvidenceAdminProofFixture() {
       productionReady: false,
     },
   };
+}
+
+function hostedIdentityPacketInputRowsFixture() {
+  return hostedIdentityEvidencePacketSectionDefinitions.flatMap((section) =>
+    section.requiredInputIds.map((inputId) => ({
+      id: `${section.field}-${inputId}`,
+      status: "missing",
+    })),
+  );
 }
 
 function hostedEvidenceLaneAdminProofFixture() {

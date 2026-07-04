@@ -50,6 +50,27 @@ function hostedIdentityPacketRefEntries(hostedIdentityEvidence) {
   );
 }
 
+function hostedIdentityPacketInputEntries(hostedIdentityEvidence) {
+  return hostedIdentityPacketSectionRows(hostedIdentityEvidence).flatMap(
+    (section) => {
+      const provided = new Set(section.providedInputIds ?? []);
+      return (section.requiredInputIds ?? []).map((inputId) => ({
+        rowId: `${section.id}-${inputId}`,
+        status: provided.has(inputId) ? "provided" : "missing",
+      }));
+    },
+  );
+}
+
+function hostedIdentityPacketInputStatuses(hostedIdentityEvidence) {
+  return Object.fromEntries(
+    hostedIdentityPacketInputEntries(hostedIdentityEvidence).map((input) => [
+      input.rowId,
+      input.status,
+    ]),
+  );
+}
+
 await runAdminAuditProof({
   smokeName: "dev-test-game-hosted-identity-evidence-admin-proof",
   stage: "hosted-identity-evidence-admin-proof-listen",
@@ -103,6 +124,12 @@ await runAdminAuditProof({
         hostedIdentityPacketSectionRows(source.hostedIdentityEvidence).map(
           (section) => [section.id, section.status],
         ),
+      ),
+      requiredHostedIdentityPacketInputs: hostedIdentityPacketInputEntries(
+        source.hostedIdentityEvidence,
+      ).map((input) => input.rowId),
+      requiredHostedIdentityPacketInputStatuses: hostedIdentityPacketInputStatuses(
+        source.hostedIdentityEvidence,
       ),
       requiredHostedIdentityPacketRefs: hostedIdentityPacketRefEntries(
         source.hostedIdentityEvidence,
@@ -171,6 +198,12 @@ await runAdminAuditProof({
         hostedIdentityPacketSectionRows(source.hostedIdentityEvidence).map(
           (section) => section.id,
         ),
+      hostedIdentityPacketInputIds: hostedIdentityPacketInputEntries(
+        source.hostedIdentityEvidence,
+      ).map((input) => input.rowId),
+      hostedIdentityPacketInputStatuses: hostedIdentityPacketInputStatuses(
+        source.hostedIdentityEvidence,
+      ),
       hostedIdentityPacketRefIds: hostedIdentityPacketRefEntries(
         source.hostedIdentityEvidence,
       ).map((ref) => ref.rowId),
@@ -288,6 +321,28 @@ export function assertHostedIdentityEvidenceAdminProof(evidence) {
     ) {
       throw new Error(
         `hosted identity evidence admin proof missing packet section: ${sectionId}`,
+      );
+    }
+  }
+  for (const inputId of evidence.generatedFrom?.hostedIdentityPacketInputIds ?? []) {
+    if (
+      !evidence.adminRoleSurface?.visibleHostedIdentityPacketInputs?.includes(inputId)
+    ) {
+      throw new Error(
+        `hosted identity evidence admin proof missing packet input: ${inputId}`,
+      );
+    }
+  }
+  for (const [inputId, expectedStatus] of Object.entries(
+    evidence.generatedFrom?.hostedIdentityPacketInputStatuses ?? {},
+  )) {
+    const visibleText =
+      evidence.adminRoleSurface?.visibleHostedIdentityPacketInputStatuses?.[
+        inputId
+      ] ?? "";
+    if (!visibleText.includes(expectedStatus)) {
+      throw new Error(
+        `hosted identity evidence admin proof missing packet input status: ${inputId}`,
       );
     }
   }

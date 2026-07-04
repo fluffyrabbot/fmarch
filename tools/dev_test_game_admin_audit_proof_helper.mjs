@@ -123,6 +123,8 @@ export async function proveAdminAuditDetail({
   requiredHostedHandoffGroupStatuses = {},
   requiredHostedIdentityPacketSections = [],
   requiredHostedIdentityPacketSectionStatuses = {},
+  requiredHostedIdentityPacketInputs = [],
+  requiredHostedIdentityPacketInputStatuses = {},
   requiredHostedIdentityPacketRefs = [],
   requiredHostedIdentityPacketRefStatuses = {},
   requiredHostedIdentityRoleSurfaceContractDiffStatus = null,
@@ -301,6 +303,17 @@ export async function proveAdminAuditDetail({
       prefix: "admin-audit-hosted-identity-packet-section",
       ids: requiredHostedIdentityPacketSections,
       expectedStatuses: requiredHostedIdentityPacketSectionStatuses,
+    });
+    const visibleHostedIdentityPacketInputs = await waitForRows({
+      page,
+      prefix: "admin-audit-hosted-identity-packet-input",
+      ids: requiredHostedIdentityPacketInputs,
+      expectedStatuses: requiredHostedIdentityPacketInputStatuses,
+    });
+    const visibleHostedIdentityPacketInputStatuses = await readRowStatuses({
+      page,
+      prefix: "admin-audit-hosted-identity-packet-input",
+      ids: Object.keys(requiredHostedIdentityPacketInputStatuses),
     });
     const visibleHostedIdentityPacketRefs = await waitForRows({
       page,
@@ -600,6 +613,15 @@ export async function proveAdminAuditDetail({
       ...(visibleHostedIdentityPacketSections.length === 0
         ? {}
         : { visibleHostedIdentityPacketSections }),
+      ...(visibleHostedIdentityPacketInputs.length === 0
+        ? {}
+        : { visibleHostedIdentityPacketInputs }),
+      ...(Object.keys(visibleHostedIdentityPacketInputStatuses).length === 0
+        ? {}
+        : {
+            visibleHostedIdentityPacketInputStatuses:
+              visibleHostedIdentityPacketInputStatuses,
+          }),
       ...(visibleHostedIdentityPacketRefs.length === 0
         ? {}
         : { visibleHostedIdentityPacketRefs }),

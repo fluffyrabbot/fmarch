@@ -339,6 +339,18 @@
               <span>{section.status}</span>
               <span>{section.redactedEvidenceRefCount} redacted refs</span>
               <span>{section.missingInputs.join(", ")}</span>
+              {#if section.requiredInputIds?.length > 0}
+                <ol class="admin-audit-detail__subentries">
+                  {#each section.requiredInputIds as inputId}
+                    <li
+                      data-testid={`admin-audit-hosted-identity-packet-input-${section.id}-${inputId}`}
+                    >
+                      <strong>{inputId}</strong>
+                      <span>{section.providedInputIds?.includes(inputId) ? "provided" : "missing"}</span>
+                    </li>
+                  {/each}
+                </ol>
+              {/if}
               {#if section.redactedEvidenceRefs?.length > 0}
                 <ol class="admin-audit-detail__subentries">
                   {#each section.redactedEvidenceRefs as ref}
