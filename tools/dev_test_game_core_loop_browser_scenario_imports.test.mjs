@@ -110,6 +110,34 @@ test("dev test game shares stale host prompt recovery choreography", async () =>
   );
 });
 
+test("dev test game shares host phase action and projection snapshot verbs", async () => {
+  const source = await readFile("tools/dev_test_game.mjs", "utf8");
+
+  assert(
+    source.includes("async function confirmHostPhaseAction("),
+    "dev_test_game.mjs should own one host action plus phase-wait helper",
+  );
+  assert(
+    source.includes("async function hostProjectionSnapshot("),
+    "dev_test_game.mjs should own one host projection snapshot helper",
+  );
+  for (const usage of [
+    'const resolveD03 = await confirmHostPhaseAction(hostEntry.page, "resolve_phase"',
+    "const hostAfterResolveD03 = await hostProjectionSnapshot(hostEntry.page",
+    'const resolveD03R1 = await confirmHostPhaseAction(hostEntry.page, "resolve_phase"',
+    "const hostAfterResolveD03R1 = await hostProjectionSnapshot(hostEntry.page",
+    'const resolveD03R2 = await confirmHostPhaseAction(hostEntry.page, "resolve_phase"',
+    "const hostAfterResolveD03R2 = await hostProjectionSnapshot(hostEntry.page",
+    'const resolveN03 = await confirmHostPhaseAction(hostEntry.page, "resolve_phase"',
+    "const d04HostSurface = await hostProjectionSnapshot(hostEntry.page",
+  ]) {
+    assert(
+      source.includes(usage),
+      `dev_test_game.mjs should use shared host browser verb: ${usage}`,
+    );
+  }
+});
+
 function importsFromModule({ source, importedName, moduleSpecifier }) {
   const importPattern = new RegExp(
     `import\\s*\\{([^}]*)\\}\\s*from\\s*"${escapeRegExp(moduleSpecifier)}";`,

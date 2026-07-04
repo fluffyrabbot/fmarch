@@ -3582,23 +3582,16 @@ async function verifySeededD02VoteNightTransition({
         row.phaseId === "D03" && row.target === d03TerminalVoteTarget.slotId,
     );
 
-    const resolveD03 = await confirmHostAction(hostEntry.page, "resolve_phase");
-    await waitForHostProjectionPhase(hostEntry.page, {
+    const resolveD03 = await confirmHostPhaseAction(hostEntry.page, "resolve_phase", {
       phaseId: "D03",
       locked: true,
     });
-    const hostAfterResolveD03 = {
-      phase: await hostEntry.page.evaluate(() => window.__fmarchHostProjection?.phase),
-      phaseActions: await visibleHostPhaseActions(hostEntry.page),
-      hostPrompts: await hostEntry.page.evaluate(
-        () => window.__fmarchHostPromptsProjection ?? [],
-      ),
-      promptActions: await visibleHostControlActions(hostEntry.page, "host-prompts"),
-      dayVoteOutcomes: await hostEntry.page.evaluate(
-        () => window.__fmarchHostDayVoteOutcomesProjection ?? [],
-      ),
-      slots: await hostEntry.page.evaluate(() => window.__fmarchHostProjection?.slots ?? []),
-    };
+    const hostAfterResolveD03 = await hostProjectionSnapshot(hostEntry.page, {
+      hostPrompts: true,
+      promptActions: true,
+      dayVoteOutcomes: true,
+      slots: true,
+    });
     const d03TerminalDayVoteOutcomes = await fetchJson(
       `${apiBaseUrl}/games/${transitionGame}/day-vote-outcomes`,
     );
@@ -3625,20 +3618,15 @@ async function verifySeededD02VoteNightTransition({
             "no_majority_continue_revote",
           );
 
-    const d03TerminalAdvanceReject = await confirmHostAction(
+    const d03TerminalAdvanceReject = await confirmHostPhaseAction(
       hostEntry.page,
       "advance_phase",
-      "reject",
+      { phaseId: "D03", locked: true, expectedState: "reject" },
     );
-    await waitForHostProjectionPhase(hostEntry.page, {
-      phaseId: "D03",
-      locked: true,
-    });
-    const hostAfterTerminalAdvanceReject = {
-      phase: await hostEntry.page.evaluate(() => window.__fmarchHostProjection?.phase),
-      phaseActions: await visibleHostPhaseActions(hostEntry.page),
-      slots: await hostEntry.page.evaluate(() => window.__fmarchHostProjection?.slots ?? []),
-    };
+    const hostAfterTerminalAdvanceReject = await hostProjectionSnapshot(
+      hostEntry.page,
+      { slots: true },
+    );
     const d03TerminalActivityStatusText = await hostEntry.page
       .locator('[data-testid="host-command-activity-status-advance_phase"][data-state="reject"]')
       .first()
@@ -3686,19 +3674,13 @@ async function verifySeededD02VoteNightTransition({
       status: "passed",
       routeResponseStatus: d03TerminalHostReloadResponse?.status() ?? null,
       rejectReceiptStatusText: d03TerminalActivityStatusText,
-      surfaceText: await hostEntry.page.getByTestId("host-console-surface").innerText(),
-      phase: await hostEntry.page.evaluate(() => window.__fmarchHostProjection?.phase),
-      phaseActions: await visibleHostPhaseActions(hostEntry.page),
-      dayVoteOutcomes: await hostEntry.page.evaluate(
-        () => window.__fmarchHostDayVoteOutcomesProjection ?? [],
-      ),
-      hostPrompts: await hostEntry.page.evaluate(
-        () => window.__fmarchHostPromptsProjection ?? [],
-      ),
-      promptActions: await visibleHostControlActions(hostEntry.page, "host-prompts"),
-      outcomePanel: await hostEntry.page
-        .locator('[data-testid="host-day-vote-outcome-latest"]')
-        .innerText(),
+      ...(await hostProjectionSnapshot(hostEntry.page, {
+        surfaceText: true,
+        dayVoteOutcomes: true,
+        hostPrompts: true,
+        promptActions: true,
+        outcomePanel: true,
+      })),
       apiPhase: d03TerminalApiHostStateAfterReject.phase,
     };
     const terminalScenario = terminalRecoveryBrowserScenario();
@@ -3728,11 +3710,10 @@ async function verifySeededD02VoteNightTransition({
     const d03RevotePromptResolution =
       d03RevotePromptActionId === null
         ? null
-        : await confirmHostAction(hostEntry.page, d03RevotePromptActionId);
-    await waitForHostProjectionPhase(hostEntry.page, {
-      phaseId: "D03R1",
-      locked: false,
-    });
+        : await confirmHostPhaseAction(hostEntry.page, d03RevotePromptActionId, {
+            phaseId: "D03R1",
+            locked: false,
+          });
     await Promise.all([
       gotoPlayerBoard(actionEntry.page, transitionGame),
       gotoPlayerBoard(playerEntry.page, transitionGame),
@@ -3751,17 +3732,11 @@ async function verifySeededD02VoteNightTransition({
           window.__fmarchPlayerProjection?.commandState?.phase?.locked === false,
       ),
     ]);
-    const hostAfterD03RevotePrompt = {
-      phase: await hostEntry.page.evaluate(() => window.__fmarchHostProjection?.phase),
-      phaseActions: await visibleHostPhaseActions(hostEntry.page),
-      hostPrompts: await hostEntry.page.evaluate(
-        () => window.__fmarchHostPromptsProjection ?? [],
-      ),
-      promptActions: await visibleHostControlActions(hostEntry.page, "host-prompts"),
-      dayVoteOutcomes: await hostEntry.page.evaluate(
-        () => window.__fmarchHostDayVoteOutcomesProjection ?? [],
-      ),
-    };
+    const hostAfterD03RevotePrompt = await hostProjectionSnapshot(hostEntry.page, {
+      hostPrompts: true,
+      promptActions: true,
+      dayVoteOutcomes: true,
+    });
     const actionAfterD03RevotePrompt = {
       roleUrl: actionEntry.page.url(),
       commandState: await actionEntry.page.evaluate(
@@ -3855,15 +3830,10 @@ async function verifySeededD02VoteNightTransition({
       phaseId: "D03R1",
       locked: false,
     });
-    const hostBeforeResolveD03R1 = {
-      phase: await hostEntry.page.evaluate(() => window.__fmarchHostProjection?.phase),
-      phaseActions: await visibleHostPhaseActions(hostEntry.page),
-      votecount: await hostEntry.page.evaluate(
-        () => window.__fmarchHostVotecountProjection ?? [],
-      ),
-    };
-    const resolveD03R1 = await confirmHostAction(hostEntry.page, "resolve_phase");
-    await waitForHostProjectionPhase(hostEntry.page, {
+    const hostBeforeResolveD03R1 = await hostProjectionSnapshot(hostEntry.page, {
+      votecount: true,
+    });
+    const resolveD03R1 = await confirmHostPhaseAction(hostEntry.page, "resolve_phase", {
       phaseId: "D03R1",
       locked: true,
     });
@@ -3878,23 +3848,13 @@ async function verifySeededD02VoteNightTransition({
       null,
       { timeout: 15000 },
     );
-    const hostAfterResolveD03R1 = {
-      phase: await hostEntry.page.evaluate(() => window.__fmarchHostProjection?.phase),
-      phaseActions: await visibleHostPhaseActions(hostEntry.page),
-      hostPrompts: await hostEntry.page.evaluate(
-        () => window.__fmarchHostPromptsProjection ?? [],
-      ),
-      promptActions: await visibleHostControlActions(hostEntry.page, "host-prompts"),
-      dayVoteOutcomes: await hostEntry.page.evaluate(
-        () => window.__fmarchHostDayVoteOutcomesProjection ?? [],
-      ),
-      votecount: await hostEntry.page.evaluate(
-        () => window.__fmarchHostVotecountProjection ?? [],
-      ),
-      outcomePanel: await hostEntry.page
-        .locator('[data-testid="host-day-vote-outcome-latest"]')
-        .innerText(),
-    };
+    const hostAfterResolveD03R1 = await hostProjectionSnapshot(hostEntry.page, {
+      hostPrompts: true,
+      promptActions: true,
+      dayVoteOutcomes: true,
+      votecount: true,
+      outcomePanel: true,
+    });
     const d03R1DayVoteOutcomes = normalizeDayVoteOutcomeRows(
       await fetchJson(`${apiBaseUrl}/games/${transitionGame}/day-vote-outcomes`),
     );
@@ -3921,11 +3881,10 @@ async function verifySeededD02VoteNightTransition({
     const d03R1RevotePromptResolution =
       d03R1RevotePromptActionId === null
         ? null
-        : await confirmHostAction(hostEntry.page, d03R1RevotePromptActionId);
-    await waitForHostProjectionPhase(hostEntry.page, {
-      phaseId: "D03R2",
-      locked: false,
-    });
+        : await confirmHostPhaseAction(hostEntry.page, d03R1RevotePromptActionId, {
+            phaseId: "D03R2",
+            locked: false,
+          });
     await Promise.all([
       gotoPlayerBoard(actionEntry.page, transitionGame),
       gotoPlayerBoard(playerEntry.page, transitionGame),
@@ -3944,17 +3903,11 @@ async function verifySeededD02VoteNightTransition({
           window.__fmarchPlayerProjection?.commandState?.phase?.locked === false,
       ),
     ]);
-    const hostAfterD03R1RevotePrompt = {
-      phase: await hostEntry.page.evaluate(() => window.__fmarchHostProjection?.phase),
-      phaseActions: await visibleHostPhaseActions(hostEntry.page),
-      hostPrompts: await hostEntry.page.evaluate(
-        () => window.__fmarchHostPromptsProjection ?? [],
-      ),
-      promptActions: await visibleHostControlActions(hostEntry.page, "host-prompts"),
-      dayVoteOutcomes: await hostEntry.page.evaluate(
-        () => window.__fmarchHostDayVoteOutcomesProjection ?? [],
-      ),
-    };
+    const hostAfterD03R1RevotePrompt = await hostProjectionSnapshot(hostEntry.page, {
+      hostPrompts: true,
+      promptActions: true,
+      dayVoteOutcomes: true,
+    });
     const actionAfterD03R1RevotePrompt = {
       roleUrl: actionEntry.page.url(),
       commandState: await actionEntry.page.evaluate(
@@ -4058,15 +4011,10 @@ async function verifySeededD02VoteNightTransition({
       phaseId: "D03R2",
       locked: false,
     });
-    const hostBeforeResolveD03R2 = {
-      phase: await hostEntry.page.evaluate(() => window.__fmarchHostProjection?.phase),
-      phaseActions: await visibleHostPhaseActions(hostEntry.page),
-      votecount: await hostEntry.page.evaluate(
-        () => window.__fmarchHostVotecountProjection ?? [],
-      ),
-    };
-    const resolveD03R2 = await confirmHostAction(hostEntry.page, "resolve_phase");
-    await waitForHostProjectionPhase(hostEntry.page, {
+    const hostBeforeResolveD03R2 = await hostProjectionSnapshot(hostEntry.page, {
+      votecount: true,
+    });
+    const resolveD03R2 = await confirmHostPhaseAction(hostEntry.page, "resolve_phase", {
       phaseId: "D03R2",
       locked: true,
     });
@@ -4081,23 +4029,13 @@ async function verifySeededD02VoteNightTransition({
       null,
       { timeout: 15000 },
     );
-    const hostAfterResolveD03R2 = {
-      phase: await hostEntry.page.evaluate(() => window.__fmarchHostProjection?.phase),
-      phaseActions: await visibleHostPhaseActions(hostEntry.page),
-      hostPrompts: await hostEntry.page.evaluate(
-        () => window.__fmarchHostPromptsProjection ?? [],
-      ),
-      promptActions: await visibleHostControlActions(hostEntry.page, "host-prompts"),
-      dayVoteOutcomes: await hostEntry.page.evaluate(
-        () => window.__fmarchHostDayVoteOutcomesProjection ?? [],
-      ),
-      votecount: await hostEntry.page.evaluate(
-        () => window.__fmarchHostVotecountProjection ?? [],
-      ),
-      outcomePanel: await hostEntry.page
-        .locator('[data-testid="host-day-vote-outcome-latest"]')
-        .innerText(),
-    };
+    const hostAfterResolveD03R2 = await hostProjectionSnapshot(hostEntry.page, {
+      hostPrompts: true,
+      promptActions: true,
+      dayVoteOutcomes: true,
+      votecount: true,
+      outcomePanel: true,
+    });
     const d03R2DayVoteOutcomes = normalizeDayVoteOutcomeRows(
       await fetchJson(`${apiBaseUrl}/games/${transitionGame}/day-vote-outcomes`),
     );
@@ -4137,11 +4075,10 @@ async function verifySeededD02VoteNightTransition({
     const d03R2NoLynchPolicyResolution =
       d03R2RevotePromptActionId === null
         ? null
-        : await confirmHostAction(hostEntry.page, d03R2RevotePromptActionId);
-    await waitForHostProjectionPhase(hostEntry.page, {
-      phaseId: "N03",
-      locked: false,
-    });
+        : await confirmHostPhaseAction(hostEntry.page, d03R2RevotePromptActionId, {
+            phaseId: "N03",
+            locked: false,
+          });
     await Promise.all([
       gotoPlayerBoard(actionEntry.page, transitionGame),
       gotoPlayerBoard(playerEntry.page, transitionGame),
@@ -4158,20 +4095,12 @@ async function verifySeededD02VoteNightTransition({
           window.__fmarchPlayerProjection?.commandState?.phase?.locked === false,
       ),
     ]);
-    const hostAfterD03R2NoLynchPolicy = {
-      phase: await hostEntry.page.evaluate(() => window.__fmarchHostProjection?.phase),
-      phaseActions: await visibleHostPhaseActions(hostEntry.page),
-      hostPrompts: await hostEntry.page.evaluate(
-        () => window.__fmarchHostPromptsProjection ?? [],
-      ),
-      promptActions: await visibleHostControlActions(hostEntry.page, "host-prompts"),
-      dayVoteOutcomes: await hostEntry.page.evaluate(
-        () => window.__fmarchHostDayVoteOutcomesProjection ?? [],
-      ),
-      outcomePanel: await hostEntry.page
-        .locator('[data-testid="host-day-vote-outcome-latest"]')
-        .innerText(),
-    };
+    const hostAfterD03R2NoLynchPolicy = await hostProjectionSnapshot(hostEntry.page, {
+      hostPrompts: true,
+      promptActions: true,
+      dayVoteOutcomes: true,
+      outcomePanel: true,
+    });
     const actionAfterD03R2NoLynchPolicy = {
       roleUrl: actionEntry.page.url(),
       commandState: await actionEntry.page.evaluate(
@@ -4297,24 +4226,23 @@ async function verifySeededD02VoteNightTransition({
         .getByTestId("player-command-status")
         .innerText(),
     };
-    const hostBeforeResolveN03 = {
-      phase: await hostEntry.page.evaluate(() => window.__fmarchHostProjection?.phase),
-      phaseActions: await visibleHostPhaseActions(hostEntry.page),
-    };
-    const resolveN03 = await confirmHostAction(hostEntry.page, "resolve_phase");
-    await waitForHostProjectionPhase(hostEntry.page, { phaseId: "N03", locked: true });
+    const hostBeforeResolveN03 = await hostProjectionSnapshot(hostEntry.page);
+    const resolveN03 = await confirmHostPhaseAction(hostEntry.page, "resolve_phase", {
+      phaseId: "N03",
+      locked: true,
+    });
     const n03ResolvedTargetSlot = await fetchResolvedSlotState({
       apiBaseUrl,
       game: transitionGame,
       slot: n03ActionTarget,
     });
-    const hostAfterResolveN03 = {
-      phase: await hostEntry.page.evaluate(() => window.__fmarchHostProjection?.phase),
-      phaseActions: await visibleHostPhaseActions(hostEntry.page),
-      slots: await hostEntry.page.evaluate(() => window.__fmarchHostProjection?.slots ?? []),
-    };
-    const advanceD04 = await confirmHostAction(hostEntry.page, "advance_phase");
-    await waitForHostProjectionPhase(hostEntry.page, { phaseId: "D04", locked: false });
+    const hostAfterResolveN03 = await hostProjectionSnapshot(hostEntry.page, {
+      slots: true,
+    });
+    const advanceD04 = await confirmHostPhaseAction(hostEntry.page, "advance_phase", {
+      phaseId: "D04",
+      locked: false,
+    });
     await Promise.all([
       gotoPlayerBoard(actionEntry.page, transitionGame),
       gotoPlayerBoard(playerEntry.page, transitionGame),
@@ -4331,15 +4259,11 @@ async function verifySeededD02VoteNightTransition({
           window.__fmarchPlayerProjection?.commandState?.phase?.locked === false,
       ),
     ]);
-    const d04HostSurface = {
-      roleUrl: hostEntry.page.url(),
-      phase: await hostEntry.page.evaluate(() => window.__fmarchHostProjection?.phase),
-      phaseActions: await visibleHostPhaseActions(hostEntry.page),
-      slots: await hostEntry.page.evaluate(() => window.__fmarchHostProjection?.slots ?? []),
-      dayVoteOutcomes: await hostEntry.page.evaluate(
-        () => window.__fmarchHostDayVoteOutcomesProjection ?? [],
-      ),
-    };
+    const d04HostSurface = await hostProjectionSnapshot(hostEntry.page, {
+      roleUrl: true,
+      slots: true,
+      dayVoteOutcomes: true,
+    });
     const d04ActionSurface = {
       roleUrl: actionEntry.page.url(),
       commandState: await actionEntry.page.evaluate(
@@ -23071,6 +22995,79 @@ async function waitForHostProjectionPhase(page, { phaseId, locked }) {
       window.__fmarchHostProjection?.phase?.locked === expected.locked,
     { phaseId, locked },
   );
+}
+
+async function confirmHostPhaseAction(
+  page,
+  actionId,
+  { phaseId, locked, expectedState } = {},
+) {
+  const action = await confirmHostAction(page, actionId, expectedState);
+  if (phaseId !== undefined && locked !== undefined) {
+    await waitForHostProjectionPhase(page, { phaseId, locked });
+  }
+  return action;
+}
+
+async function hostProjectionSnapshot(
+  page,
+  {
+    roleUrl = false,
+    phaseActions = true,
+    deadlineActions = false,
+    hostPrompts = false,
+    promptActions = false,
+    dayVoteOutcomes = false,
+    votecount = false,
+    slots = false,
+    outcomePanel = false,
+    surfaceText = false,
+  } = {},
+) {
+  const snapshot = {
+    phase: await page.evaluate(() => window.__fmarchHostProjection?.phase),
+  };
+  if (roleUrl) {
+    snapshot.roleUrl = page.url();
+  }
+  if (phaseActions) {
+    snapshot.phaseActions = await visibleHostPhaseActions(page);
+  }
+  if (deadlineActions) {
+    snapshot.deadlineActions = await visibleHostControlActions(page, "deadline");
+  }
+  if (hostPrompts) {
+    snapshot.hostPrompts = await page.evaluate(
+      () => window.__fmarchHostPromptsProjection ?? [],
+    );
+  }
+  if (promptActions) {
+    snapshot.promptActions = await visibleHostControlActions(page, "host-prompts");
+  }
+  if (dayVoteOutcomes) {
+    snapshot.dayVoteOutcomes = await page.evaluate(
+      () => window.__fmarchHostDayVoteOutcomesProjection ?? [],
+    );
+  }
+  if (votecount) {
+    snapshot.votecount = await page.evaluate(
+      () => window.__fmarchHostVotecountProjection ?? [],
+    );
+  }
+  if (slots) {
+    snapshot.slots = await page.evaluate(
+      () => window.__fmarchHostProjection?.slots ?? [],
+    );
+  }
+  if (outcomePanel) {
+    snapshot.outcomePanel = await page
+      .locator('[data-testid="host-day-vote-outcome-latest"]')
+      .innerText();
+  }
+  if (surfaceText) {
+    snapshot.surfaceText = await page.getByTestId("host-console-surface").innerText();
+  }
+  return snapshot;
 }
 
 async function waitForHealth(baseUrl, options = {}) {
