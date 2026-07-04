@@ -83,6 +83,8 @@ export const devTestGameSeedFixturePath =
   "target/dev-test-game/seed-fixture-summary.json";
 export const devTestGameSeedFixtureRoleUrl =
   "/admin/audit/local-seed-fixtures?game=<seeded-game>";
+export const devTestGameDefaultSequenceStage = "local-capability-model";
+export const devTestGameHostedIdentitySequenceStage = "hosted-identity";
 
 const nextActionJsonPath = path.join(repoRoot, devTestGameNextActionPath);
 
@@ -90,6 +92,7 @@ export function buildDevTestGameNextAction(
   spineManifest,
   {
     generatedAt = new Date().toISOString(),
+    sequenceStage = devTestGameDefaultSequenceStage,
     spineManifestSource = spineManifestPath,
     releaseReadinessChecklist = null,
     releaseReadinessChecklistSource = devTestGameReleaseReadinessPath,
@@ -179,6 +182,7 @@ export function buildDevTestGameNextAction(
     localCapabilityConfidenceFromReadiness(readiness);
   const hostedIdentitySequenceDeferral =
     hostedIdentitySequenceDeferralFor(selectedUnproven, {
+      sequenceStage,
       localCapabilityConfidence,
     });
   const nextAction =
@@ -351,6 +355,7 @@ export function buildDevTestGameNextAction(
       ...(readiness === null
         ? {}
         : {
+            sequenceStage,
             releaseReadinessChecklist: releaseReadinessChecklistSource,
             releaseReadinessGeneratedAt: readiness.generatedAt,
             releaseReadinessSummary,
@@ -609,6 +614,9 @@ export function assertDevTestGameNextAction(evidence) {
 
 export async function writeDevTestGameNextAction({
   generatedAt = new Date().toISOString(),
+  sequenceStage =
+    process.env.FMARCH_DEV_TEST_GAME_SEQUENCE_STAGE ??
+    devTestGameDefaultSequenceStage,
   manifestPath = process.env.FMARCH_DEV_TEST_GAME_SPINE_MANIFEST ?? spineManifestPath,
 } = {}) {
   const absoluteManifestPath = path.resolve(repoRoot, manifestPath);
@@ -656,6 +664,7 @@ export async function writeDevTestGameNextAction({
   const proofGraphSource = path.relative(repoRoot, absoluteProofGraphPath);
   const evidence = buildDevTestGameNextAction(manifest, {
     generatedAt,
+    sequenceStage,
     spineManifestSource,
     releaseReadinessChecklist,
     releaseReadinessChecklistSource,
@@ -1588,14 +1597,21 @@ function localCapabilityConfidenceFromReadiness(readiness) {
 
 function hostedIdentitySequenceDeferralFor(
   selectedUnproven,
-  { localCapabilityConfidence },
+  { sequenceStage, localCapabilityConfidence },
 ) {
   if (selectedUnproven?.item?.id !== "hosted-production-identity") {
     return null;
   }
+  if (
+    sequenceStage === devTestGameHostedIdentitySequenceStage &&
+    localCapabilityConfidence?.status === "passed"
+  ) {
+    return null;
+  }
   return {
     status: "blocked",
-    currentSequenceStage: "local-capability-model",
+    currentSequenceStage: sequenceStage,
+    requiredSequenceStage: devTestGameHostedIdentitySequenceStage,
     deferredUnprovenId: selectedUnproven.item.id,
     deferredCommand: selectedUnproven.command,
     deferredProofTarget: selectedUnproven.proofTarget,
@@ -1618,7 +1634,9 @@ function assertHostedIdentitySequenceDeferral(deferral) {
     deferral === null ||
     typeof deferral !== "object" ||
     deferral.status !== "blocked" ||
-    deferral.currentSequenceStage !== "local-capability-model" ||
+    typeof deferral.currentSequenceStage !== "string" ||
+    deferral.currentSequenceStage.length === 0 ||
+    deferral.requiredSequenceStage !== devTestGameHostedIdentitySequenceStage ||
     deferral.deferredUnprovenId !== "hosted-production-identity" ||
     typeof deferral.deferredCommand !== "string" ||
     !deferral.deferredCommand.startsWith("npm run ") ||

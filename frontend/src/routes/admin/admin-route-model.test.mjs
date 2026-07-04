@@ -2401,6 +2401,10 @@ test("admin local next action detail data exposes hosted identity sequence defer
     "npm run test:dev-test-game-hosted-identity-evidence",
   );
   assert.equal(
+    data.audit.artifactSummary.sequenceRequiredStage,
+    "hosted-identity",
+  );
+  assert.equal(
     data.audit.artifactSummary.sequenceLocalCapabilityConfidenceStatus,
     "passed",
   );
@@ -5465,6 +5469,7 @@ function hostedIdentitySequenceDeferralFixture() {
   return {
     status: "blocked",
     currentSequenceStage: "local-capability-model",
+    requiredSequenceStage: "hosted-identity",
     deferredUnprovenId: "hosted-production-identity",
     deferredCommand: "npm run test:dev-test-game-hosted-identity-evidence",
     deferredProofTarget: "target/dev-test-game/hosted-identity-evidence.json",

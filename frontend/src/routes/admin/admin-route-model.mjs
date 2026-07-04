@@ -2384,6 +2384,9 @@ export function normalizeLocalNextActionAudit(nextAction, { game, proofGraph = n
             sequenceDeferralStage: String(
               sequenceDeferral.currentSequenceStage ?? "",
             ),
+            sequenceRequiredStage: String(
+              sequenceDeferral.requiredSequenceStage ?? "",
+            ),
             sequenceDeferredUnprovenId: String(
               sequenceDeferral.deferredUnprovenId ?? "",
             ),

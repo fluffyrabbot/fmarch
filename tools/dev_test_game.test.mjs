@@ -247,7 +247,9 @@ import {
 import {
   assertDevTestGameNextAction,
   buildDevTestGameNextAction,
+  devTestGameDefaultSequenceStage,
   devTestGameHardeningAdminProofCommand,
+  devTestGameHostedIdentitySequenceStage,
   devTestGameIdentityAdminProofCommand,
   devTestGameLiveProofCommand,
   devTestGameReleaseReadinessPath,
@@ -1818,6 +1820,7 @@ test("dev test-game next-action derives one local recovery command from the mani
     sequenceDeferral: {
       status: "blocked",
       currentSequenceStage: "local-capability-model",
+      requiredSequenceStage: "hosted-identity",
       deferredUnprovenId: "hosted-production-identity",
       deferredCommand: `npm run ${devTestGameHostedIdentityEvidenceCommand}`,
       deferredProofTarget: devTestGameHostedIdentityEvidencePath,
@@ -1900,6 +1903,37 @@ test("dev test-game next-action derives one local recovery command from the mani
       }),
     ],
   });
+  const hostedIdentityStageAction = buildDevTestGameNextAction(freshManifest, {
+    generatedAt: "2026-06-26T00:00:01.000Z",
+    sequenceStage: devTestGameHostedIdentitySequenceStage,
+    opsArtifacts: devTestGameOpsArtifactsFixture(),
+    raceCoverage: devTestGameRaceCoverageFixture(),
+    releaseReadinessChecklist: devTestGameReleaseReadinessChecklistFixture({
+      includeOpsArtifactBundleCheck: true,
+      unproven: [
+        {
+          id: "hosted-production-identity",
+          status: "unproven",
+          requiredEvidence: "Hosted account lifecycle",
+        },
+      ],
+    }),
+  });
+  assertDevTestGameNextAction(hostedIdentityStageAction);
+  assert.equal(
+    hostedIdentityStageAction.generatedFrom.sequenceStage,
+    devTestGameHostedIdentitySequenceStage,
+  );
+  assert.deepEqual(hostedIdentityStageAction.nextAction, {
+    command: `npm run ${devTestGameHostedIdentityEvidenceCommand}`,
+    reason: "release-readiness-unproven",
+    status: "ready",
+    unproven: hostedProductionIdentityUnproven,
+  });
+  assert.equal(
+    freshAction.generatedFrom.sequenceStage,
+    devTestGameDefaultSequenceStage,
+  );
   const missingLocalDependencyAction = buildDevTestGameNextAction(freshManifest, {
     generatedAt: "2026-06-26T00:00:01.000Z",
     opsArtifacts: devTestGameOpsArtifactsFixture(),
@@ -11646,6 +11680,7 @@ function devTestGameReleaseReadinessChecklistFixture({
   includeProofFreshnessAdminCheck = true,
   includeNextActionAdminCheck = true,
   includeHostedEvidenceLaneDemoProofCheck = true,
+  includeOpsArtifactBundleCheck = false,
 }) {
   return {
     version: 1,
@@ -11708,6 +11743,22 @@ function devTestGameReleaseReadinessChecklistFixture({
           spineTargets: hardeningSpineTargetsFixture(),
         },
         ...recoveryMilestoneFixtureChecks(),
+        ...(includeOpsArtifactBundleCheck
+          ? [
+              {
+                id: "local-ops-artifact-bundle",
+                label: "Local ops artifact bundle",
+                status: "passed",
+                evidence: "target/dev-test-game/ops-artifacts.json",
+                proofBoundary: "Local ops artifact bundle.",
+                adminRoleSurface: {
+                  status: "passed",
+                  detailRoleUrl:
+                    "/admin/audit/local-ops-artifacts?game=<seeded-game>",
+                },
+              },
+            ]
+          : []),
         ...(seedProofLaneCoverage === null
           ? []
           : [
