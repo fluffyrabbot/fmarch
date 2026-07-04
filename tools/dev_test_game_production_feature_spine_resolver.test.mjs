@@ -88,6 +88,8 @@ test("production feature spine resolver builds and validates source collections"
     "day-three-revote-ballot",
     "day-three-revote-resolution",
     "day-three-second-revote",
+    "day-three-second-revote-ballot",
+    "day-three-second-revote-resolution",
     "invalid-action-recovery",
     "player-action-boundary",
     "private-channel",
@@ -243,6 +245,36 @@ test("production feature spine resolver builds and validates source collections"
   );
   assert.deepEqual(
     {
+      roleUrlId:
+        collection.bySlotId["day-three-second-revote-ballot"].roleUrlId,
+      checkpointId:
+        collection.bySlotId["day-three-second-revote-ballot"].checkpointId,
+      adminCheckId:
+        collection.bySlotId["day-three-second-revote-ballot"].adminCheckId,
+    },
+    {
+      roleUrlId: "n02-d03-actionPlayer",
+      checkpointId: "n02-d03-d03r2-revote-ballot-submitted",
+      adminCheckId: "core-loop",
+    },
+  );
+  assert.deepEqual(
+    {
+      roleUrlId:
+        collection.bySlotId["day-three-second-revote-resolution"].roleUrlId,
+      checkpointId:
+        collection.bySlotId["day-three-second-revote-resolution"].checkpointId,
+      adminCheckId:
+        collection.bySlotId["day-three-second-revote-resolution"].adminCheckId,
+    },
+    {
+      roleUrlId: "n02-d03-host",
+      checkpointId: "n02-d03-d03r2-revote-resolved-no-majority",
+      adminCheckId: "core-loop",
+    },
+  );
+  assert.deepEqual(
+    {
       roleUrlId: collection.bySlotId["player-action-boundary"].roleUrlId,
       checkpointId: collection.bySlotId["player-action-boundary"].checkpointId,
       recoveryHookId:
@@ -326,6 +358,8 @@ function coreLoopSourceTargetFixture() {
       "n02-d03-d03r1-revote-ballot-submitted",
       "n02-d03-d03r1-revote-resolved-no-majority",
       "n02-d03-d03r2-revote-prompt-resolved",
+      "n02-d03-d03r2-revote-ballot-submitted",
+      "n02-d03-d03r2-revote-resolved-no-majority",
     ],
     recoveryHookIds: [
       "staleLockedVoteReject",

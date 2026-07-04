@@ -6810,6 +6810,69 @@ function buildCoreLoopSpineSummary({ session, verification }) {
             "submit_vote",
           ),
         },
+        {
+          id: "d03r2-revote-ballot-submitted",
+          phase:
+            d02VoteNight.d03R2RevoteActionAfterVote?.commandState?.phase
+              ?.phaseId ?? null,
+          locked:
+            d02VoteNight.d03R2RevoteActionAfterVote?.commandState?.phase
+              ?.locked ?? null,
+          voteState:
+            d02VoteNight.d03R2RevoteVoteSubmission?.state ?? null,
+          actorSlot:
+            d02VoteNight.d03R2RevoteVoteSubmission?.requestEnvelope?.body?.body
+              ?.command?.SubmitVote?.actor_slot ?? null,
+          voteTarget:
+            d02VoteNight.d03R2RevoteVoteSubmission?.requestEnvelope?.body?.body
+              ?.command?.SubmitVote?.target ?? null,
+          currentVoteKind:
+            d02VoteNight.d03R2RevoteActionAfterVote?.commandState?.currentVote
+              ?.kind ?? null,
+          projectedCount:
+            d02VoteNight.d03R2RevoteActionAfterVote?.votecount?.find(
+              (row) => row.target === "no_lynch",
+            )?.count ?? null,
+          apiPhase: d02VoteNight.d03R2RevoteApiNoLynchRow?.phaseId ?? null,
+          apiTarget: d02VoteNight.d03R2RevoteApiNoLynchRow?.target ?? null,
+          apiCount: d02VoteNight.d03R2RevoteApiNoLynchRow?.count ?? null,
+          staleD03Target:
+            d02VoteNight.d03R2RevoteApiOriginalD03Row?.target ?? null,
+          staleD03Count:
+            d02VoteNight.d03R2RevoteApiOriginalD03Row?.count ?? null,
+          staleD03R1NoLynchCount:
+            d02VoteNight.d03R2RevoteApiD03R1NoLynchRow?.count ?? null,
+          staleD03NoLynchCount:
+            d02VoteNight.d03R2RevoteApiStaleD03NoLynchRow?.count ?? null,
+        },
+        {
+          id: "d03r2-revote-resolved-no-majority",
+          phase: d02VoteNight.hostAfterResolveD03R2?.phase?.id ?? null,
+          locked:
+            d02VoteNight.hostAfterResolveD03R2?.phase?.locked ?? null,
+          resolveState:
+            d02VoteNight.resolveD03R2?.commandStatus?.state ?? null,
+          outcomeStatus:
+            d02VoteNight.d03R2DayVoteOutcome?.status ?? null,
+          winnerSlot:
+            d02VoteNight.d03R2DayVoteOutcome?.winnerSlot ?? null,
+          projectedCount:
+            d02VoteNight.d03R2DayVoteOutcome?.tallies?.no_lynch ?? null,
+          promptId: d02VoteNight.d03R2RevotePrompt?.id ?? null,
+          promptActionId: d02VoteNight.d03R2RevotePromptActionId ?? null,
+          promptStatusAfter:
+            d02VoteNight.d03R2RevotePrompt?.status ?? null,
+          originalPromptStatus:
+            d02VoteNight.apiPromptsAfterResolveD03R2?.find(
+              (prompt) =>
+                (prompt.id ?? prompt.prompt_id) ===
+                d02VoteNight.d03R1RevotePrompt?.id,
+            )?.status ?? null,
+          promptActionVisible:
+            d02VoteNight.hostAfterResolveD03R2?.promptActions?.includes(
+              d02VoteNight.d03R2RevotePromptActionId,
+            ) ?? null,
+        },
       ],
     },
   ];
@@ -6979,6 +7042,35 @@ function buildCoreLoopSpineSummary({ session, verification }) {
     cycles[2]?.checkpoints?.[9]?.locked === false &&
     cycles[2]?.checkpoints?.[9]?.actionVoteControls > 0 &&
     cycles[2]?.checkpoints?.[9]?.normalVoteControls > 0 &&
+    cycles[2]?.checkpoints?.[10]?.id === "d03r2-revote-ballot-submitted" &&
+    cycles[2]?.checkpoints?.[10]?.phase === "D03R2" &&
+    cycles[2]?.checkpoints?.[10]?.locked === false &&
+    cycles[2]?.checkpoints?.[10]?.voteState === "ack" &&
+    cycles[2]?.checkpoints?.[10]?.actorSlot === "slot_4" &&
+    cycles[2]?.checkpoints?.[10]?.voteTarget === "NoLynch" &&
+    cycles[2]?.checkpoints?.[10]?.currentVoteKind === "no_lynch" &&
+    cycles[2]?.checkpoints?.[10]?.projectedCount === 1 &&
+    cycles[2]?.checkpoints?.[10]?.apiPhase === "D03R2" &&
+    cycles[2]?.checkpoints?.[10]?.apiTarget === "no_lynch" &&
+    cycles[2]?.checkpoints?.[10]?.apiCount === 1 &&
+    cycles[2]?.checkpoints?.[10]?.staleD03Target === "slot_4" &&
+    cycles[2]?.checkpoints?.[10]?.staleD03Count === 1 &&
+    cycles[2]?.checkpoints?.[10]?.staleD03R1NoLynchCount === 1 &&
+    cycles[2]?.checkpoints?.[10]?.staleD03NoLynchCount === null &&
+    cycles[2]?.checkpoints?.[11]?.id ===
+      "d03r2-revote-resolved-no-majority" &&
+    cycles[2]?.checkpoints?.[11]?.phase === "D03R2" &&
+    cycles[2]?.checkpoints?.[11]?.locked === true &&
+    cycles[2]?.checkpoints?.[11]?.resolveState === "ack" &&
+    cycles[2]?.checkpoints?.[11]?.outcomeStatus === "NoMajority" &&
+    cycles[2]?.checkpoints?.[11]?.winnerSlot === null &&
+    cycles[2]?.checkpoints?.[11]?.projectedCount === 1 &&
+    cycles[2]?.checkpoints?.[11]?.promptId === "D03R2:revote:NoMajority" &&
+    cycles[2]?.checkpoints?.[11]?.promptActionId ===
+      "resolve_host_prompt-D03R2-revote-NoMajority" &&
+    cycles[2]?.checkpoints?.[11]?.promptStatusAfter === "pending" &&
+    cycles[2]?.checkpoints?.[11]?.originalPromptStatus === "resolved" &&
+    cycles[2]?.checkpoints?.[11]?.promptActionVisible === true &&
     recoveryHooks.staleLockedVoteReject === "PhaseLocked" &&
     recoveryHooks.invalidActionReject === "InvalidTarget" &&
     recoveryHooks.normalPlayerDirectActionReject === "InvalidTarget" &&
@@ -6987,7 +7079,7 @@ function buildCoreLoopSpineSummary({ session, verification }) {
   return {
     status: passed ? "passed" : "failed",
     proof:
-      "Compact derived spine map for the seeded role URL core loop: D01 resolve to N01 action, N01 resolution to D02 day controls, D02 vote resolution, N02 action return, N02 action submission/resolution, D03 day controls, D03 NoMajority AdvancePhase InvalidTarget recovery, host role URL reload back to locked D03 NoMajority truth, host revote prompt resolution into open D03R1 controls, a D03R1 no-lynch revote ballot keyed separately from the stale D03 tally, host resolution of D03R1 back to locked NoMajority with a fresh pending revote prompt, and second revote prompt resolution into open D03R2 controls.",
+      "Compact derived spine map for the seeded role URL core loop: D01 resolve to N01 action, N01 resolution to D02 day controls, D02 vote resolution, N02 action return, N02 action submission/resolution, D03 day controls, D03 NoMajority AdvancePhase InvalidTarget recovery, host role URL reload back to locked D03 NoMajority truth, host revote prompt resolution into open D03R1 controls, a D03R1 no-lynch revote ballot keyed separately from the stale D03 tally, host resolution of D03R1 back to locked NoMajority with a fresh pending revote prompt, second revote prompt resolution into open D03R2 controls, and D03R2 no-lynch vote submission/resolution with prior revote tallies kept separate.",
     sourceLaneIds: [...coreLoopPhaseProgressionSpineSourceLaneIds],
     cycles,
     recoveryHooks,
@@ -7020,7 +7112,7 @@ function assertCoreLoopSpineSummary(summary) {
       !Object.values(cycle.roleUrls).every((url) => typeof url === "string") ||
       !Array.isArray(cycle.checkpoints) ||
       (cycle.id === "n02-d03"
-        ? cycle.checkpoints.length !== 10
+        ? cycle.checkpoints.length !== 12
         : cycle.checkpoints.length !== 4)
     ) {
       throw new Error(`core loop spine cycle malformed: ${JSON.stringify(cycle)}`);
