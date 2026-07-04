@@ -148,6 +148,7 @@ import {
 } from "./dev_test_game_hardening_scenarios.mjs";
 import {
   replacementPrivateChannelRecoveryLaneIds,
+  replacementPrivateChannelRecoveryCoverageFamilies,
   replacementPrivatePostRaceLaneIds,
   replacementPrivatePostRecoveryLaneIds,
   replacementStalePrivatePostAfterCompleteScenario,
@@ -224,34 +225,6 @@ import {
   devTestGameCoreLiveSpinePlan,
   devTestGameLiveSpinePlan,
 } from "./dev_test_game_live_spine.mjs";
-import {
-  assertDevTestGamePrivateChannelRecoveryReceipt,
-  buildDevTestGamePrivateChannelRecoveryReceipt,
-  devTestGamePrivateChannelRecoveryReceiptCommand,
-  devTestGamePrivateChannelRecoveryReceiptPath,
-  devTestGamePrivateChannelRecoveryReceiptRoleUrl,
-} from "./dev_test_game_private_channel_recovery_receipt.mjs";
-import {
-  assertDevTestGameReplacementActionRecoveryReceipt,
-  buildDevTestGameReplacementActionRecoveryReceipt,
-  devTestGameReplacementActionRecoveryReceiptCommand,
-  devTestGameReplacementActionRecoveryReceiptPath,
-  devTestGameReplacementActionRecoveryReceiptRoleUrl,
-} from "./dev_test_game_replacement_action_recovery_receipt.mjs";
-import {
-  assertDevTestGameReplacementHandoffRecoveryReceipt,
-  buildDevTestGameReplacementHandoffRecoveryReceipt,
-  devTestGameReplacementHandoffRecoveryReceiptCommand,
-  devTestGameReplacementHandoffRecoveryReceiptPath,
-  devTestGameReplacementHandoffRecoveryReceiptRoleUrl,
-} from "./dev_test_game_replacement_handoff_recovery_receipt.mjs";
-import {
-  assertDevTestGameReplacementPrivateRecoveryReceipt,
-  buildDevTestGameReplacementPrivateRecoveryReceipt,
-  devTestGameReplacementPrivateRecoveryReceiptCommand,
-  devTestGameReplacementPrivateRecoveryReceiptPath,
-  devTestGameReplacementPrivateRecoveryReceiptRoleUrl,
-} from "./dev_test_game_replacement_private_recovery_receipt.mjs";
 import {
   recoveryReceiptGraphDescriptors,
   recoveryReceiptProofPlanSteps,
@@ -3045,14 +3018,7 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
       spineManifest,
       adminSpineProof,
       adminSpineTerminalBatches: adminSpineTerminalBatchesFixture(),
-      privateChannelRecoveryReceipt:
-        privateChannelRecoveryReceiptFixture(),
-      replacementActionRecoveryReceipt:
-        replacementActionRecoveryReceiptFixture(),
-      replacementHandoffRecoveryReceipt:
-        replacementHandoffRecoveryReceiptFixture(),
-      replacementPrivateRecoveryReceipt:
-        replacementPrivateRecoveryReceiptFixture(),
+      ...recoveryReceiptFixtures(),
       releaseReadiness,
     },
     {
@@ -3070,33 +3036,19 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
   assert.equal(graph.summary.roleUrlCount, 56);
   assert.equal(graph.summary.productionFeatureTargetCount, 30);
   assert.equal(graph.summary.terminalBatchCount, 2);
-  assert.equal(graph.summary.privateChannelRecoveryLaneCount, 4);
-  assert.equal(graph.summary.replacementActionRecoveryLaneCount, 3);
-  assert.equal(
-    graph.summary.replacementHandoffRecoveryLaneCount,
-    replacementHandoffRecoveryLaneIds.length,
-  );
-  assert.equal(graph.summary.replacementPrivateRecoveryLaneCount, 6);
+  for (const descriptor of recoveryReceiptGraphDescriptors) {
+    assert.equal(
+      graph.summary[descriptor.summaryLaneCountKey],
+      descriptor.laneIds.length,
+    );
+  }
   assert.equal(
     graph.generatedFrom.adminSpineTerminalBatches,
     "target/dev-test-game/admin-spine-terminal-batches.json",
   );
-  assert.equal(
-    graph.generatedFrom.privateChannelRecoveryReceipt,
-    devTestGamePrivateChannelRecoveryReceiptPath,
-  );
-  assert.equal(
-    graph.generatedFrom.replacementActionRecoveryReceipt,
-    devTestGameReplacementActionRecoveryReceiptPath,
-  );
-  assert.equal(
-    graph.generatedFrom.replacementHandoffRecoveryReceipt,
-    devTestGameReplacementHandoffRecoveryReceiptPath,
-  );
-  assert.equal(
-    graph.generatedFrom.replacementPrivateRecoveryReceipt,
-    devTestGameReplacementPrivateRecoveryReceiptPath,
-  );
+  for (const descriptor of recoveryReceiptGraphDescriptors) {
+    assert.equal(graph.generatedFrom[descriptor.receiptKey], descriptor.proofTarget);
+  }
   assert.deepEqual(
     graph.nodes
       .filter((node) => node.kind === "admin-proof-surface")
@@ -3108,6 +3060,9 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
       proof.rerunCommand,
     ]),
   );
+  const proofGraphReceiptNodeIds = recoveryReceiptGraphDescriptors.map(
+    (descriptor) => descriptor.nodeId,
+  );
   assert.deepEqual(
     graph.nodes
       .filter((node) =>
@@ -3118,10 +3073,7 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
           "proof-freshness",
           "next-action",
           "admin-spine-terminal-batches",
-          "private-channel-recovery-receipt",
-          "replacement-action-recovery-receipt",
-          "replacement-handoff-recovery-receipt",
-          "replacement-private-recovery-receipt",
+          ...proofGraphReceiptNodeIds,
         ].includes(node.id),
       )
       .map((node) => [
@@ -3174,34 +3126,13 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
         "/admin/audit/local-admin-spine?game=<seeded-game>",
         "npm run test:dev-test-game-admin-spine",
       ],
-      [
-        "private-channel-recovery-receipt",
-        "private-channel-recovery-receipt",
-        devTestGamePrivateChannelRecoveryReceiptPath,
-        devTestGamePrivateChannelRecoveryReceiptRoleUrl,
-        devTestGamePrivateChannelRecoveryReceiptCommand,
-      ],
-      [
-        "replacement-action-recovery-receipt",
-        "replacement-action-recovery-receipt",
-        devTestGameReplacementActionRecoveryReceiptPath,
-        devTestGameReplacementActionRecoveryReceiptRoleUrl,
-        devTestGameReplacementActionRecoveryReceiptCommand,
-      ],
-      [
-        "replacement-handoff-recovery-receipt",
-        "replacement-handoff-recovery-receipt",
-        devTestGameReplacementHandoffRecoveryReceiptPath,
-        devTestGameReplacementHandoffRecoveryReceiptRoleUrl,
-        devTestGameReplacementHandoffRecoveryReceiptCommand,
-      ],
-      [
-        "replacement-private-recovery-receipt",
-        "replacement-private-recovery-receipt",
-        devTestGameReplacementPrivateRecoveryReceiptPath,
-        devTestGameReplacementPrivateRecoveryReceiptRoleUrl,
-        devTestGameReplacementPrivateRecoveryReceiptCommand,
-      ],
+      ...recoveryReceiptGraphDescriptors.map((descriptor) => [
+        descriptor.nodeId,
+        descriptor.kind,
+        descriptor.proofTarget,
+        descriptor.roleUrl,
+        descriptor.proofCommand,
+      ]),
     ],
   );
   const coreLoopProductionFeatureTargets =
@@ -3276,78 +3207,21 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
       ["next-action", "terminal-browser-proof"],
     ],
   );
-  assert.deepEqual(
-    graph.edges
-      .filter(
-        (edge) =>
-          edge.from === "private-channel-recovery-receipt" ||
-          edge.to === "private-channel-recovery-receipt",
-      )
-      .map((edge) => [edge.from, edge.to, edge.relationship]),
-    [
+  for (const descriptor of recoveryReceiptGraphDescriptors) {
+    assert.deepEqual(
+      graph.edges
+        .filter(
+          (edge) =>
+            edge.from === descriptor.nodeId || edge.to === descriptor.nodeId,
+        )
+        .map((edge) => [edge.from, edge.to, edge.relationship]),
       [
-        "admin-proof:core-loop",
-        "private-channel-recovery-receipt",
-        "proves",
+        [descriptor.provingNodeId, descriptor.nodeId, "proves"],
+        [descriptor.nodeId, "proof-graph", "records"],
+        [descriptor.nodeId, "next-action", "summarizes-into"],
       ],
-      ["private-channel-recovery-receipt", "proof-graph", "records"],
-      ["private-channel-recovery-receipt", "next-action", "summarizes-into"],
-    ],
-  );
-  assert.deepEqual(
-    graph.edges
-      .filter(
-        (edge) =>
-          edge.from === "replacement-private-recovery-receipt" ||
-          edge.to === "replacement-private-recovery-receipt",
-      )
-      .map((edge) => [edge.from, edge.to, edge.relationship]),
-    [
-      [
-        "admin-proof:hardening",
-        "replacement-private-recovery-receipt",
-        "proves",
-      ],
-      ["replacement-private-recovery-receipt", "proof-graph", "records"],
-      ["replacement-private-recovery-receipt", "next-action", "summarizes-into"],
-    ],
-  );
-  assert.deepEqual(
-    graph.edges
-      .filter(
-        (edge) =>
-          edge.from === "replacement-action-recovery-receipt" ||
-          edge.to === "replacement-action-recovery-receipt",
-      )
-      .map((edge) => [edge.from, edge.to, edge.relationship]),
-    [
-      [
-        "admin-proof:hardening",
-        "replacement-action-recovery-receipt",
-        "proves",
-      ],
-      ["replacement-action-recovery-receipt", "proof-graph", "records"],
-      ["replacement-action-recovery-receipt", "next-action", "summarizes-into"],
-    ],
-  );
-  assert.deepEqual(
-    graph.edges
-      .filter(
-        (edge) =>
-          edge.from === "replacement-handoff-recovery-receipt" ||
-          edge.to === "replacement-handoff-recovery-receipt",
-      )
-      .map((edge) => [edge.from, edge.to, edge.relationship]),
-    [
-      [
-        "admin-proof:hardening",
-        "replacement-handoff-recovery-receipt",
-        "proves",
-      ],
-      ["replacement-handoff-recovery-receipt", "proof-graph", "records"],
-      ["replacement-handoff-recovery-receipt", "next-action", "summarizes-into"],
-    ],
-  );
+    );
+  }
   assert(
     expectedProductionFeatureRows.every(([, slotId, sourceCheckId]) =>
       graph.edges.some(
@@ -10100,68 +9974,15 @@ test("session card and markdown include role credential URLs and tokens", async 
   assert.equal(proofRun.identityBootstrap.rootSessionSource, "auth_session");
   assert.equal(proofRun.productionReady, false);
   assert.equal(proofRun.releaseReady, false);
-  const privateChannelRecoveryReceipt =
-    buildDevTestGamePrivateChannelRecoveryReceipt(proofRun, {
+  for (const descriptor of recoveryReceiptGraphDescriptors) {
+    const receipt = descriptor.buildReceipt(proofRun, {
       generatedAt: "2026-06-26T00:00:00.000Z",
     });
-  assertDevTestGamePrivateChannelRecoveryReceipt(privateChannelRecoveryReceipt);
-  assert.equal(privateChannelRecoveryReceipt.status, "passed");
-  assert.equal(
-    privateChannelRecoveryReceipt.generatedFrom.roleUrl,
-    devTestGamePrivateChannelRecoveryReceiptRoleUrl,
-  );
-  assert.deepEqual(
-    privateChannelRecoveryReceipt.laneIds,
-    coreLoopPrivateChannelRecoveryLaneIds,
-  );
-  const replacementActionRecoveryReceipt =
-    buildDevTestGameReplacementActionRecoveryReceipt(proofRun, {
-      generatedAt: "2026-06-26T00:00:00.000Z",
-    });
-  assertDevTestGameReplacementActionRecoveryReceipt(
-    replacementActionRecoveryReceipt,
-  );
-  assert.equal(replacementActionRecoveryReceipt.status, "passed");
-  assert.equal(
-    replacementActionRecoveryReceipt.generatedFrom.roleUrl,
-    devTestGameReplacementActionRecoveryReceiptRoleUrl,
-  );
-  assert.deepEqual(
-    replacementActionRecoveryReceipt.laneIds,
-    replacementActionLaneIds,
-  );
-  const replacementHandoffRecoveryReceipt =
-    buildDevTestGameReplacementHandoffRecoveryReceipt(proofRun, {
-      generatedAt: "2026-06-26T00:00:00.000Z",
-    });
-  assertDevTestGameReplacementHandoffRecoveryReceipt(
-    replacementHandoffRecoveryReceipt,
-  );
-  assert.equal(replacementHandoffRecoveryReceipt.status, "passed");
-  assert.equal(
-    replacementHandoffRecoveryReceipt.generatedFrom.roleUrl,
-    devTestGameReplacementHandoffRecoveryReceiptRoleUrl,
-  );
-  assert.deepEqual(
-    replacementHandoffRecoveryReceipt.laneIds,
-    replacementHandoffRecoveryLaneIds,
-  );
-  const replacementPrivateRecoveryReceipt =
-    buildDevTestGameReplacementPrivateRecoveryReceipt(proofRun, {
-      generatedAt: "2026-06-26T00:00:00.000Z",
-    });
-  assertDevTestGameReplacementPrivateRecoveryReceipt(
-    replacementPrivateRecoveryReceipt,
-  );
-  assert.equal(replacementPrivateRecoveryReceipt.status, "passed");
-  assert.equal(
-    replacementPrivateRecoveryReceipt.generatedFrom.roleUrl,
-    devTestGameReplacementPrivateRecoveryReceiptRoleUrl,
-  );
-  assert.deepEqual(
-    replacementPrivateRecoveryReceipt.laneIds,
-    replacementPrivateChannelRecoveryLaneIds,
-  );
+    descriptor.assertReceipt(receipt);
+    assert.equal(receipt.status, "passed");
+    assert.equal(receipt.generatedFrom.roleUrl, descriptor.roleUrl);
+    assert.deepEqual(receipt.laneIds, descriptor.laneIds);
+  }
   assert.deepEqual(
     proofRun.lanes.map((lane) => lane.id),
     [
@@ -11356,21 +11177,7 @@ test("session card and markdown include role credential URLs and tokens", async 
     adminSpineTerminalBatchesPath:
       "target/dev-test-game/admin-spine-terminal-batches.json",
     adminSpineTerminalBatches: adminSpineTerminalBatchesFixture(),
-    privateChannelRecoveryReceiptPath:
-      devTestGamePrivateChannelRecoveryReceiptPath,
-    privateChannelRecoveryReceipt: privateChannelRecoveryReceiptFixture(),
-    replacementActionRecoveryReceiptPath:
-      devTestGameReplacementActionRecoveryReceiptPath,
-    replacementActionRecoveryReceipt:
-      replacementActionRecoveryReceiptFixture(),
-    replacementHandoffRecoveryReceiptPath:
-      devTestGameReplacementHandoffRecoveryReceiptPath,
-    replacementHandoffRecoveryReceipt:
-      replacementHandoffRecoveryReceiptFixture(),
-    replacementPrivateRecoveryReceiptPath:
-      devTestGameReplacementPrivateRecoveryReceiptPath,
-    replacementPrivateRecoveryReceipt:
-      replacementPrivateRecoveryReceiptFixture(),
+    ...recoveryReceiptFixtureOptions(),
   });
   assertDevTestGameReleaseReadiness(adminSpineReadiness);
   assert.equal(
@@ -11385,66 +11192,23 @@ test("session card and markdown include role credential URLs and tokens", async 
     adminSpineReadiness.generatedFrom.adminSpineTerminalBatches,
     "target/dev-test-game/admin-spine-terminal-batches.json",
   );
-  assert.equal(
-    adminSpineReadiness.generatedFrom.privateChannelRecoveryReceipt,
-    devTestGamePrivateChannelRecoveryReceiptPath,
-  );
-  assert.equal(
-    adminSpineReadiness.generatedFrom.replacementActionRecoveryReceipt,
-    devTestGameReplacementActionRecoveryReceiptPath,
-  );
-  assert.equal(
-    adminSpineReadiness.generatedFrom.replacementHandoffRecoveryReceipt,
-    devTestGameReplacementHandoffRecoveryReceiptPath,
-  );
-  assert.equal(
-    adminSpineReadiness.generatedFrom.replacementPrivateRecoveryReceipt,
-    devTestGameReplacementPrivateRecoveryReceiptPath,
-  );
-  assert.equal(
-    adminSpineReadiness.localDevelopmentSpine.checks.find(
-      (item) => item.id === "local-private-channel-recovery-receipt",
-    ).roleUrl,
-    devTestGamePrivateChannelRecoveryReceiptRoleUrl,
-  );
-  assert.equal(
-    adminSpineReadiness.localDevelopmentSpine.evidence
-      .privateChannelRecoveryReceipt.laneCount,
-    4,
-  );
-  assert.equal(
-    adminSpineReadiness.localDevelopmentSpine.checks.find(
-      (item) => item.id === "local-replacement-action-recovery-receipt",
-    ).roleUrl,
-    devTestGameReplacementActionRecoveryReceiptRoleUrl,
-  );
-  assert.equal(
-    adminSpineReadiness.localDevelopmentSpine.evidence
-      .replacementActionRecoveryReceipt.laneCount,
-    3,
-  );
-  assert.equal(
-    adminSpineReadiness.localDevelopmentSpine.checks.find(
-      (item) => item.id === "local-replacement-handoff-recovery-receipt",
-    ).roleUrl,
-    devTestGameReplacementHandoffRecoveryReceiptRoleUrl,
-  );
-  assert.equal(
-    adminSpineReadiness.localDevelopmentSpine.evidence
-      .replacementHandoffRecoveryReceipt.laneCount,
-    replacementHandoffRecoveryLaneIds.length,
-  );
-  assert.equal(
-    adminSpineReadiness.localDevelopmentSpine.checks.find(
-      (item) => item.id === "local-replacement-private-recovery-receipt",
-    ).roleUrl,
-    devTestGameReplacementPrivateRecoveryReceiptRoleUrl,
-  );
-  assert.equal(
-    adminSpineReadiness.localDevelopmentSpine.evidence
-      .replacementPrivateRecoveryReceipt.laneCount,
-    6,
-  );
+  for (const descriptor of recoveryReceiptGraphDescriptors) {
+    assert.equal(
+      adminSpineReadiness.generatedFrom[descriptor.receiptKey],
+      descriptor.proofTarget,
+    );
+    assert.equal(
+      adminSpineReadiness.localDevelopmentSpine.checks.find(
+        (item) => item.id === descriptor.readinessCheckId,
+      ).roleUrl,
+      descriptor.roleUrl,
+    );
+    assert.equal(
+      adminSpineReadiness.localDevelopmentSpine.evidence[descriptor.receiptKey]
+        .laneCount,
+      descriptor.laneIds.length,
+    );
+  }
   assert.equal(
     adminSpineReadiness.localDevelopmentSpine.checks.find(
       (item) => item.id === "local-admin-spine-surface",
@@ -16710,160 +16474,114 @@ function adminSpineTerminalBatchesFixture() {
   };
 }
 
-function privateChannelRecoveryReceiptFixture() {
+function recoveryReceiptFixtures() {
+  return Object.fromEntries(
+    recoveryReceiptGraphDescriptors.map((descriptor) => [
+      descriptor.receiptKey,
+      recoveryReceiptFixture(descriptor),
+    ]),
+  );
+}
+
+function recoveryReceiptFixtureOptions() {
+  return Object.fromEntries(
+    recoveryReceiptGraphDescriptors.flatMap((descriptor) => [
+      [descriptor.pathOptionKey, descriptor.proofTarget],
+      [descriptor.receiptKey, recoveryReceiptFixture(descriptor)],
+    ]),
+  );
+}
+
+function recoveryReceiptFixture(descriptor) {
+  const metadata = recoveryReceiptFixtureMetadata(descriptor);
+  const [adminProofSourceKey, adminProofSourcePath] =
+    recoveryReceiptAdminProofSourceEntry(descriptor);
   return {
     version: 1,
-    proof: "dev-test-game-private-channel-recovery-receipt",
+    proof: `dev-test-game-${descriptor.kind}`,
     status: "passed",
     releaseReady: false,
     productionReady: false,
     generatedAt: "2026-06-26T00:00:00.000Z",
-    scope: "local-dev-test-game-private-channel-recovery",
-    proofBoundary: "Local private-channel recovery receipt.",
+    scope: metadata.scope,
+    proofBoundary: `${descriptor.readinessLabel}.`,
     generatedFrom: {
       proofRun: "target/dev-test-game/proof-run.json",
-      coreLoopAdminProof: "target/dev-test-game/core-loop-admin-proof.json",
+      [adminProofSourceKey]: adminProofSourcePath,
       game: "00000000-0000-0000-0000-000000000001",
       family: {
-        id: "core-loop-private-channel-recovery",
-        laneIds: [...coreLoopPrivateChannelRecoveryLaneIds],
+        id: descriptor.familyId,
+        laneIds: [...descriptor.laneIds],
       },
-      roleUrl: devTestGamePrivateChannelRecoveryReceiptRoleUrl,
+      roleUrl: descriptor.roleUrl,
     },
     summary: {
       status: "passed",
-      laneCount: 4,
-      passedLaneCount: 4,
-      familyCount: 4,
-      expectedLaneCount: 4,
-      expectedFamilyCount: 4,
+      laneCount: descriptor.laneIds.length,
+      passedLaneCount: descriptor.laneIds.length,
+      familyCount: metadata.familyCount,
+      expectedLaneCount: descriptor.laneIds.length,
+      expectedFamilyCount: metadata.familyCount,
     },
-    laneIds: [...coreLoopPrivateChannelRecoveryLaneIds],
-    lanes: coreLoopPrivateChannelRecoveryLaneIds.map((laneId) => ({
+    laneIds: [...descriptor.laneIds],
+    lanes: descriptor.laneIds.map((laneId) => ({
       id: laneId,
       label: laneId,
       status: "passed",
       compactStatus: `passed:${laneId}`,
-      evidence: { channel: "private:mafia_day_chat" },
+      evidence: metadata.evidence,
     })),
   };
 }
 
-function replacementActionRecoveryReceiptFixture() {
-  return {
-    version: 1,
-    proof: "dev-test-game-replacement-action-recovery-receipt",
-    status: "passed",
-    releaseReady: false,
-    productionReady: false,
-    generatedAt: "2026-06-26T00:00:00.000Z",
-    scope: "local-dev-test-game-replacement-action-recovery",
-    proofBoundary: "Local replacement action recovery receipt.",
-    generatedFrom: {
-      proofRun: "target/dev-test-game/proof-run.json",
-      hardeningAdminProof: "target/dev-test-game/hardening-admin-proof.json",
-      game: "00000000-0000-0000-0000-000000000001",
-      family: {
-        id: "replacement-action-recovery",
-        laneIds: [...replacementActionLaneIds],
-      },
-      roleUrl: devTestGameReplacementActionRecoveryReceiptRoleUrl,
-    },
-    summary: {
-      status: "passed",
-      laneCount: 3,
-      passedLaneCount: 3,
-      familyCount: 3,
-      expectedLaneCount: 3,
-      expectedFamilyCount: 3,
-    },
-    laneIds: [...replacementActionLaneIds],
-    lanes: replacementActionLaneIds.map((laneId) => ({
-      id: laneId,
-      label: laneId,
-      status: "passed",
-      compactStatus: `passed:${laneId}`,
+function recoveryReceiptFixtureMetadata(descriptor) {
+  if (descriptor.receiptKey === "privateChannelRecoveryReceipt") {
+    return {
+      scope: "local-dev-test-game-private-channel-recovery",
+      familyCount: coreLoopPrivateChannelRecoveryCoverageFamilies().length,
+      evidence: { channel: "private:mafia_day_chat" },
+    };
+  }
+  if (descriptor.receiptKey === "replacementActionRecoveryReceipt") {
+    return {
+      scope: "local-dev-test-game-replacement-action-recovery",
+      familyCount: replacementActionRecoveryCoverageFamilies().length,
       evidence: { targetSlot: "slot-2" },
-    })),
-  };
-}
-
-function replacementHandoffRecoveryReceiptFixture() {
-  return {
-    version: 1,
-    proof: "dev-test-game-replacement-handoff-recovery-receipt",
-    status: "passed",
-    releaseReady: false,
-    productionReady: false,
-    generatedAt: "2026-06-26T00:00:00.000Z",
-    scope: "local-dev-test-game-replacement-handoff-recovery",
-    proofBoundary: "Local replacement handoff recovery receipt.",
-    generatedFrom: {
-      proofRun: "target/dev-test-game/proof-run.json",
-      hardeningAdminProof: "target/dev-test-game/hardening-admin-proof.json",
-      game: "00000000-0000-0000-0000-000000000001",
-      family: {
-        id: "replacement-handoff-recovery",
-        laneIds: [...replacementHandoffRecoveryLaneIds],
-      },
-      roleUrl: devTestGameReplacementHandoffRecoveryReceiptRoleUrl,
-    },
-    summary: {
-      status: "passed",
-      laneCount: replacementHandoffRecoveryLaneIds.length,
-      passedLaneCount: replacementHandoffRecoveryLaneIds.length,
+    };
+  }
+  if (descriptor.receiptKey === "replacementHandoffRecoveryReceipt") {
+    return {
+      scope: "local-dev-test-game-replacement-handoff-recovery",
       familyCount: replacementHandoffRecoveryCoverageFamilies().length,
-      expectedLaneCount: replacementHandoffRecoveryLaneIds.length,
-      expectedFamilyCount: replacementHandoffRecoveryCoverageFamilies().length,
-    },
-    laneIds: [...replacementHandoffRecoveryLaneIds],
-    lanes: replacementHandoffRecoveryLaneIds.map((laneId) => ({
-      id: laneId,
-      label: laneId,
-      status: "passed",
-      compactStatus: `passed:${laneId}`,
       evidence: { slot: "slot-2" },
-    })),
-  };
+    };
+  }
+  if (descriptor.receiptKey === "replacementPrivateRecoveryReceipt") {
+    return {
+      scope: "local-dev-test-game-replacement-private-recovery",
+      familyCount: replacementPrivateChannelRecoveryCoverageFamilies().length,
+      evidence: { channel: "private:mafia_day_chat" },
+    };
+  }
+  throw new Error(`unknown recovery receipt fixture: ${descriptor.receiptKey}`);
 }
 
-function replacementPrivateRecoveryReceiptFixture() {
-  return {
-    version: 1,
-    proof: "dev-test-game-replacement-private-recovery-receipt",
-    status: "passed",
-    releaseReady: false,
-    productionReady: false,
-    generatedAt: "2026-06-26T00:00:00.000Z",
-    scope: "local-dev-test-game-replacement-private-recovery",
-    proofBoundary: "Local replacement private-channel recovery receipt.",
-    generatedFrom: {
-      proofRun: "target/dev-test-game/proof-run.json",
-      hardeningAdminProof: "target/dev-test-game/hardening-admin-proof.json",
-      game: "00000000-0000-0000-0000-000000000001",
-      family: {
-        id: "replacement-private-channel-recovery",
-        laneIds: [...replacementPrivateChannelRecoveryLaneIds],
-      },
-      roleUrl: devTestGameReplacementPrivateRecoveryReceiptRoleUrl,
-    },
-    summary: {
-      status: "passed",
-      laneCount: 6,
-      passedLaneCount: 6,
-      familyCount: 3,
-      expectedLaneCount: 6,
-      expectedFamilyCount: 3,
-    },
-    laneIds: [...replacementPrivateChannelRecoveryLaneIds],
-    lanes: replacementPrivateChannelRecoveryLaneIds.map((laneId) => ({
-      id: laneId,
-      label: laneId,
-      status: "passed",
-      compactStatus: `passed:${laneId}`,
-      evidence: { channel: "private:mafia_day_chat" },
-    })),
-  };
+function recoveryReceiptAdminProofSourceEntry(descriptor) {
+  if (descriptor.provingNodeId === "admin-proof:core-loop") {
+    return [
+      "coreLoopAdminProof",
+      "target/dev-test-game/core-loop-admin-proof.json",
+    ];
+  }
+  if (descriptor.provingNodeId === "admin-proof:hardening") {
+    return [
+      "hardeningAdminProof",
+      "target/dev-test-game/hardening-admin-proof.json",
+    ];
+  }
+  throw new Error(
+    `unknown recovery receipt proving node: ${descriptor.provingNodeId}`,
+  );
 }
 
 function adminSpineProofFixture() {

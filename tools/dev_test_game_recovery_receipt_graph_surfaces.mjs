@@ -16,21 +16,25 @@ import {
 } from "./dev_test_game_admin_audit_surface_ids.mjs";
 import {
   assertDevTestGamePrivateChannelRecoveryReceipt,
+  buildDevTestGamePrivateChannelRecoveryReceipt,
   devTestGamePrivateChannelRecoveryReceiptCommand,
   devTestGamePrivateChannelRecoveryReceiptPath,
 } from "./dev_test_game_private_channel_recovery_receipt.mjs";
 import {
   assertDevTestGameReplacementActionRecoveryReceipt,
+  buildDevTestGameReplacementActionRecoveryReceipt,
   devTestGameReplacementActionRecoveryReceiptCommand,
   devTestGameReplacementActionRecoveryReceiptPath,
 } from "./dev_test_game_replacement_action_recovery_receipt.mjs";
 import {
   assertDevTestGameReplacementHandoffRecoveryReceipt,
+  buildDevTestGameReplacementHandoffRecoveryReceipt,
   devTestGameReplacementHandoffRecoveryReceiptCommand,
   devTestGameReplacementHandoffRecoveryReceiptPath,
 } from "./dev_test_game_replacement_handoff_recovery_receipt.mjs";
 import {
   assertDevTestGameReplacementPrivateRecoveryReceipt,
+  buildDevTestGameReplacementPrivateRecoveryReceipt,
   devTestGameReplacementPrivateRecoveryReceiptCommand,
   devTestGameReplacementPrivateRecoveryReceiptPath,
 } from "./dev_test_game_replacement_private_recovery_receipt.mjs";
@@ -67,6 +71,7 @@ export const recoveryReceiptGraphDescriptors = Object.freeze([
     ]),
     familyId: "core-loop-private-channel-recovery",
     laneIds: coreLoopPrivateChannelRecoveryLaneIds,
+    buildReceipt: buildDevTestGamePrivateChannelRecoveryReceipt,
     assertReceipt: assertDevTestGamePrivateChannelRecoveryReceipt,
   }),
   recoveryReceiptGraphDescriptor({
@@ -91,6 +96,7 @@ export const recoveryReceiptGraphDescriptors = Object.freeze([
     manifestDependsOn: replacementRecoveryReceiptManifestDependencies(),
     familyId: "replacement-action-recovery",
     laneIds: replacementActionLaneIds,
+    buildReceipt: buildDevTestGameReplacementActionRecoveryReceipt,
     assertReceipt: assertDevTestGameReplacementActionRecoveryReceipt,
   }),
   recoveryReceiptGraphDescriptor({
@@ -115,6 +121,7 @@ export const recoveryReceiptGraphDescriptors = Object.freeze([
     manifestDependsOn: replacementRecoveryReceiptManifestDependencies(),
     familyId: "replacement-handoff-recovery",
     laneIds: replacementHandoffRecoveryLaneIds,
+    buildReceipt: buildDevTestGameReplacementHandoffRecoveryReceipt,
     assertReceipt: assertDevTestGameReplacementHandoffRecoveryReceipt,
   }),
   recoveryReceiptGraphDescriptor({
@@ -139,6 +146,7 @@ export const recoveryReceiptGraphDescriptors = Object.freeze([
     manifestDependsOn: replacementRecoveryReceiptManifestDependencies(),
     familyId: "replacement-private-channel-recovery",
     laneIds: replacementPrivateChannelRecoveryLaneIds,
+    buildReceipt: buildDevTestGameReplacementPrivateRecoveryReceipt,
     assertReceipt: assertDevTestGameReplacementPrivateRecoveryReceipt,
   }),
 ]);
