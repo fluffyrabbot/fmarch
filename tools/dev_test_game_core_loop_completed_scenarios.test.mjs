@@ -444,16 +444,16 @@ test("completed-game production harness callers source recovery cases canonicall
     [
       "tools/dev_test_game_core_loop_admin_proof.mjs",
       [
-        "completedGameEndgameProofScenarioCases",
-        "completedGameEndgameScenarioCaseFamilies",
-        "completedGameEndgameTransition",
+        "completedGameProofReadinessProofScenarioCases",
+        "completedGameProofReadinessScenarioFamilies",
+        "completedGameProofReadinessTransition",
       ],
-      "./dev_test_game_core_loop_completed_game_recovery_scenarios.mjs",
+      "./dev_test_game_core_loop_completed_game_proof_readiness_contract.mjs",
     ],
     [
       "tools/dev_test_game_release_readiness.mjs",
-      ["completedGameEndgameScenarioCaseFamilies"],
-      "./dev_test_game_core_loop_completed_game_recovery_scenarios.mjs",
+      ["completedGameProofReadinessScenarioFamilies"],
+      "./dev_test_game_core_loop_completed_game_proof_readiness_contract.mjs",
     ],
     [
       "tools/dev_test_game_feature_lane_catalog.mjs",

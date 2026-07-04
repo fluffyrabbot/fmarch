@@ -121,11 +121,7 @@ import {
 } from "./dev_test_game_admin_audit_surface_ids.mjs";
 import {
   assertCompletedGameProofReadinessSurfaceProof,
-} from "./dev_test_game_core_loop_completed_game_proof_readiness_contract.mjs";
-import {
-  completedGameEndgameScenarioCaseFamilies as completedGameProofReadinessScenarioFamilies,
-} from "./dev_test_game_core_loop_completed_game_recovery_scenarios.mjs";
-import {
+  completedGameProofReadinessScenarioFamilies,
   completedGameHardeningSpineCycleId,
   completedGameHardeningSpineLaneCases,
   completedGameStaleRecoverySpineLaneCase,
