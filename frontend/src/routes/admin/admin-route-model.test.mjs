@@ -3213,6 +3213,9 @@ test("admin route data exposes local release readiness as a native audit row", a
   assert.deepEqual(readiness.artifactSummary, {
     game: "game-a",
     localCheckCount: 11,
+    coverageCheckCount: 5,
+    coverageDriftCount: 0,
+    coverageStatus: "coherent",
     localPrerequisiteCount: 3,
     unprovenCount: 2,
     releaseReady: false,
@@ -3314,6 +3317,22 @@ test("admin local release readiness flags replacement coverage drift", async () 
       (check) => check.id === "local-replacement-handoff-recovery-milestone",
     ).status,
     "drift: passed: 17/17 lanes across 5/5 shared families; expected 18 shared lanes",
+  );
+  assert.equal(
+    data.audit.status,
+    "coverage drift detected in 1/5 groups, 2 release items unproven",
+  );
+  assert.deepEqual(
+    {
+      coverageCheckCount: data.audit.artifactSummary.coverageCheckCount,
+      coverageDriftCount: data.audit.artifactSummary.coverageDriftCount,
+      coverageStatus: data.audit.artifactSummary.coverageStatus,
+    },
+    {
+      coverageCheckCount: 5,
+      coverageDriftCount: 1,
+      coverageStatus: "drift",
+    },
   );
 });
 

@@ -3730,13 +3730,18 @@ export function normalizeLocalReleaseReadinessAudit(
   const localPrerequisites = checks.filter(
     (check) => check?.dependencyGated === true,
   );
+  const coverageSummary = localReleaseReadinessCoverageSummary(checks);
   const unproven = Array.isArray(releaseReadinessChecklist.releaseReadiness?.unproven)
     ? releaseReadinessChecklist.releaseReadiness.unproven
     : [];
+  const statusPrefix =
+    coverageSummary.driftCount === 0
+      ? `${checks.length} local checks passed`
+      : `coverage drift detected in ${coverageSummary.driftCount}/${coverageSummary.coverageCheckCount} groups`;
   return Object.freeze({
     id: localAdminAuditIds.releaseReadiness,
     label: "Local release readiness",
-    status: `${checks.length} local checks passed, ${unproven.length} release items unproven`,
+    status: `${statusPrefix}, ${unproven.length} release items unproven`,
     authority: "GlobalAdmin or GlobalMod",
     boundary: "Local release-readiness checklist",
     boundaryDetail:
@@ -3793,11 +3798,29 @@ export function normalizeLocalReleaseReadinessAudit(
     artifactSummary: Object.freeze({
       game: String(releaseReadinessChecklist.generatedFrom?.game ?? ""),
       localCheckCount: checks.length,
+      coverageCheckCount: coverageSummary.coverageCheckCount,
+      coverageDriftCount: coverageSummary.driftCount,
+      coverageStatus: coverageSummary.status,
       localPrerequisiteCount: localPrerequisites.length,
       unprovenCount: unproven.length,
       releaseReady: releaseReadinessChecklist.releaseReady === true,
       productionReady: releaseReadinessChecklist.productionReady === true,
     }),
+  });
+}
+
+function localReleaseReadinessCoverageSummary(checks) {
+  const coverageChecks = checks.filter((check) => {
+    const laneIds = Array.isArray(check?.laneIds) ? check.laneIds : [];
+    return laneIds.length > 0;
+  });
+  const driftCount = coverageChecks.filter((check) =>
+    localReleaseReadinessCheckStatus(check).startsWith("drift:"),
+  ).length;
+  return Object.freeze({
+    status: driftCount === 0 ? "coherent" : "drift",
+    coverageCheckCount: coverageChecks.length,
+    driftCount,
   });
 }
 
