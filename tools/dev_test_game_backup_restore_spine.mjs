@@ -1,4 +1,5 @@
 import { pathToFileURL } from "node:url";
+import { releaseReadinessStep } from "./dev_test_game_spine_readiness_steps.mjs";
 import { runSpinePlan } from "./dev_test_game_spine_runner.mjs";
 
 export const backupRestoreEvidenceEnv = {
@@ -39,34 +40,36 @@ export const backupRestoreFinalReadinessEnv = {
 
 export const devTestGameBackupRestoreSpinePlan = [
   { kind: "node", script: "tools/live_stack_backup_restore_drill.mjs" },
-  {
-    kind: "node",
-    script: "tools/dev_test_game_release_readiness.mjs",
+  releaseReadinessStep({
+    reason: "backup-restore-evidence-for-ops-artifacts",
+    changedInputs: [
+      "target/live-stack-backup-restore-drill/local-backup-restore-proof.json",
+      "target/live-stack-backup-restore-drill/local-live-stack.dump",
+    ],
     env: backupRestoreEvidenceEnv,
-  },
+  }),
   {
     kind: "node",
     script: "tools/dev_test_game_ops_artifacts.mjs",
     env: backupAwareOpsEnv,
   },
-  {
-    kind: "node",
-    script: "tools/dev_test_game_release_readiness.mjs",
+  releaseReadinessStep({
+    reason: "ops-artifact-bundle-for-seed-fixtures",
+    changedInputs: ["target/dev-test-game/ops-artifacts.json"],
     env: opsReadinessEnv,
-  },
+  }),
   { kind: "node", script: "tools/dev_test_game_seed_fixture_summary.mjs" },
   { kind: "node", script: "tools/dev_test_game_seed_admin_proof.mjs" },
-  {
-    kind: "node",
-    script: "tools/dev_test_game_release_readiness.mjs",
-    env: seedReadinessEnv,
-  },
   { kind: "node", script: "tools/dev_test_game_backup_admin_proof.mjs" },
-  {
-    kind: "node",
-    script: "tools/dev_test_game_release_readiness.mjs",
+  releaseReadinessStep({
+    reason: "backup-seed-and-admin-surfaces-final",
+    changedInputs: [
+      "target/dev-test-game/seed-fixture-summary.json",
+      "target/dev-test-game/seed-admin-proof.json",
+      "target/dev-test-game/backup-admin-proof.json",
+    ],
     env: backupRestoreFinalReadinessEnv,
-  },
+  }),
 ];
 
 export async function runDevTestGameBackupRestoreSpine() {

@@ -2,6 +2,7 @@ import { pathToFileURL } from "node:url";
 import {
   devTestGameHostedIdentityEvidencePath,
 } from "./dev_test_game_hosted_identity_evidence.mjs";
+import { releaseReadinessStep } from "./dev_test_game_spine_readiness_steps.mjs";
 import { runSpinePlan } from "./dev_test_game_spine_runner.mjs";
 
 export const identityReadinessEnv = {
@@ -20,11 +21,15 @@ export const devTestGameIdentitySpinePlan = [
   { kind: "node", script: "tools/auth_invite_role_proof.mjs" },
   { kind: "node", script: "tools/dev_test_game_identity_admin_proof.mjs" },
   { kind: "node", script: "tools/dev_test_game_hosted_identity_evidence.mjs" },
-  {
-    kind: "node",
-    script: "tools/dev_test_game_release_readiness.mjs",
+  releaseReadinessStep({
+    reason: "identity-adapter-and-hosted-evidence",
+    changedInputs: [
+      "target/auth-invite-role-proof/invite-role-proof.json",
+      "target/dev-test-game/identity-admin-proof.json",
+      devTestGameHostedIdentityEvidencePath,
+    ],
     env: identityReadinessEnv,
-  },
+  }),
 ];
 
 export async function runDevTestGameIdentitySpine() {

@@ -551,7 +551,6 @@ export function assertDevTestGameSpineManifest(manifest) {
     "tools/dev_test_game_release_readiness.mjs",
     "tools/dev_test_game_seed_fixture_summary.mjs",
     "tools/dev_test_game_seed_admin_proof.mjs",
-    "tools/dev_test_game_release_readiness.mjs",
     "backup-restore",
     "identity",
     "admin",
@@ -563,7 +562,6 @@ export function assertDevTestGameSpineManifest(manifest) {
     "tools/dev_test_game_release_readiness.mjs",
     "tools/dev_test_game_seed_fixture_summary.mjs",
     "tools/dev_test_game_seed_admin_proof.mjs",
-    "tools/dev_test_game_release_readiness.mjs",
     "tools/dev_test_game_backup_admin_proof.mjs",
     "tools/dev_test_game_release_readiness.mjs",
   ]);

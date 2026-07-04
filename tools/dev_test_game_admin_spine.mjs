@@ -18,6 +18,7 @@ import {
   nextActionAdminProofPath,
   proofFreshnessAdminProofPath,
 } from "./dev_test_game_next_action_paths.mjs";
+import { releaseReadinessStep } from "./dev_test_game_spine_readiness_steps.mjs";
 import { runSpinePlan } from "./dev_test_game_spine_runner.mjs";
 
 export const adminSpineProofPath = "target/dev-test-game/admin-spine-proof.json";
@@ -99,7 +100,10 @@ export const adminSpinePreGraphReadinessEvidenceEnv = Object.fromEntries(
 
 export const devTestGameAdminSpinePlan = [
   { kind: "node", script: "tools/dev_test_game_race_coverage.mjs" },
-  { kind: "node", script: "tools/dev_test_game_release_readiness.mjs" },
+  releaseReadinessStep({
+    reason: "race-coverage-for-hosted-matrix",
+    changedInputs: [devTestGameRaceCoveragePath],
+  }),
   {
     kind: "node",
     script: "tools/dev_test_game_hosted_concurrent_race_matrix.mjs",
@@ -119,11 +123,22 @@ export const devTestGameAdminSpinePlan = [
   { kind: "node", script: "tools/dev_test_game_release_runbook.mjs" },
   { kind: "custom", script: "admin-spine-proof", label: "Admin spine proof" },
   { kind: "node", script: "tools/dev_test_game_admin_spine_admin_proof.mjs" },
-  {
-    kind: "node",
-    script: "tools/dev_test_game_release_readiness.mjs",
+  releaseReadinessStep({
+    reason: "pre-graph-admin-surface-rollup",
+    changedInputs: [
+      devTestGameHostedConcurrentRaceMatrixPath,
+      devTestGameHostedIdentityEvidencePath,
+      devTestGameHostedTargetPreflightPath,
+      devTestGameHostedEvidenceLanePath,
+      "target/dev-test-game/hosted-evidence-lane-demo-proof.json",
+      "target/dev-test-game/hosted-ops-signals.json",
+      devTestGameRealHostedObservabilityHandoffPath,
+      "target/dev-test-game/release-runbook.json",
+      adminSpineProofPath,
+      "target/dev-test-game/admin-spine-admin-proof.json",
+    ],
     env: adminSpinePreGraphReadinessEvidenceEnv,
-  },
+  }),
   { kind: "node", script: "tools/dev_test_game_spine_manifest.mjs" },
   { kind: "node", script: "tools/dev_test_game_next_action.mjs" },
   { kind: "node", script: "tools/dev_test_game_proof_graph.mjs" },
@@ -133,22 +148,33 @@ export const devTestGameAdminSpinePlan = [
     script: "tools/dev_test_game_proof_freshness_admin_proof.mjs",
   },
   { kind: "node", script: "tools/dev_test_game_next_action_admin_proof.mjs" },
-  {
-    kind: "node",
-    script: "tools/dev_test_game_release_readiness.mjs",
+  releaseReadinessStep({
+    reason: "terminal-graph-and-local-dependency-surfaces",
+    changedInputs: [
+      "target/dev-test-game/spine-manifest.json",
+      "target/dev-test-game/next-action.json",
+      devTestGameProofGraphPath,
+      devTestGameProofGraphAdminProofPath,
+      proofFreshnessAdminProofPath,
+      nextActionAdminProofPath,
+    ],
     env: adminSpineReadinessEvidenceEnv,
-  },
+  }),
   { kind: "node", script: "tools/dev_test_game_next_action.mjs" },
   {
     kind: "node",
     script: "tools/dev_test_game_proof_freshness_admin_proof.mjs",
   },
   { kind: "node", script: "tools/dev_test_game_next_action_admin_proof.mjs" },
-  {
-    kind: "node",
-    script: "tools/dev_test_game_release_readiness.mjs",
+  releaseReadinessStep({
+    reason: "terminal-next-action-and-freshness-refresh",
+    changedInputs: [
+      "target/dev-test-game/next-action.json",
+      proofFreshnessAdminProofPath,
+      nextActionAdminProofPath,
+    ],
     env: adminSpineReadinessEvidenceEnv,
-  },
+  }),
 ];
 
 export async function runDevTestGameAdminSpine() {

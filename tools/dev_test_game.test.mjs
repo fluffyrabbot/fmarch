@@ -218,6 +218,10 @@ import {
   devTestGameLiveSpinePlan,
 } from "./dev_test_game_live_spine.mjs";
 import {
+  devTestGameReleaseReadinessScript,
+  releaseReadinessSteps,
+} from "./dev_test_game_spine_readiness_steps.mjs";
+import {
   assertDevTestGameSpineManifest,
   buildDevTestGameSpineManifest,
   nextActionAdminProofCommand,
@@ -429,14 +433,13 @@ test("dev test-game spine orchestrators expose stable proof order and env maps",
     devTestGameBackupRestoreSpinePlan.map((step) => step.script),
     [
       "tools/live_stack_backup_restore_drill.mjs",
-      "tools/dev_test_game_release_readiness.mjs",
+      devTestGameReleaseReadinessScript,
       "tools/dev_test_game_ops_artifacts.mjs",
-      "tools/dev_test_game_release_readiness.mjs",
+      devTestGameReleaseReadinessScript,
       "tools/dev_test_game_seed_fixture_summary.mjs",
       "tools/dev_test_game_seed_admin_proof.mjs",
-      "tools/dev_test_game_release_readiness.mjs",
       "tools/dev_test_game_backup_admin_proof.mjs",
-      "tools/dev_test_game_release_readiness.mjs",
+      devTestGameReleaseReadinessScript,
     ],
   );
   assert.deepEqual(backupRestoreEvidenceEnv, {
@@ -477,7 +480,7 @@ test("dev test-game spine orchestrators expose stable proof order and env maps",
       "tools/auth_invite_role_proof.mjs",
       "tools/dev_test_game_identity_admin_proof.mjs",
       "tools/dev_test_game_hosted_identity_evidence.mjs",
-      "tools/dev_test_game_release_readiness.mjs",
+      devTestGameReleaseReadinessScript,
     ],
   );
   assert.deepEqual(identityReadinessEnv, {
@@ -565,13 +568,21 @@ test("dev test-game spine orchestrators expose stable proof order and env maps",
     { kind: "node", script: "tools/dev_test_game_proof_contract.mjs" },
     { kind: "node", script: "tools/dev_test_game_core_loop_admin_proof.mjs" },
     { kind: "node", script: "tools/dev_test_game_hardening_admin_proof.mjs" },
-    { kind: "node", script: "tools/dev_test_game_release_readiness.mjs" },
+    {
+      kind: "node",
+      script: devTestGameReleaseReadinessScript,
+      readinessReason: "core-live-gameplay-admin-surfaces",
+      changedInputs: [
+        "target/dev-test-game/proof-run.json",
+        "target/dev-test-game/core-loop-admin-proof.json",
+        "target/dev-test-game/hardening-admin-proof.json",
+      ],
+    },
   ]);
   assert.deepEqual(devTestGameLiveSpinePlan, [
     ...devTestGameCoreLiveSpinePlan,
     { kind: "node", script: "tools/dev_test_game_seed_fixture_summary.mjs" },
     { kind: "node", script: "tools/dev_test_game_seed_admin_proof.mjs" },
-    { kind: "node", script: "tools/dev_test_game_release_readiness.mjs" },
     { kind: "custom", script: "backup-restore", label: "Backup/restore spine" },
     { kind: "custom", script: "identity", label: "Identity spine" },
     { kind: "custom", script: "admin", label: "Admin spine" },
@@ -580,7 +591,7 @@ test("dev test-game spine orchestrators expose stable proof order and env maps",
     devTestGameAdminSpinePlan.map((step) => step.script),
     [
       "tools/dev_test_game_race_coverage.mjs",
-      "tools/dev_test_game_release_readiness.mjs",
+      devTestGameReleaseReadinessScript,
       "tools/dev_test_game_hosted_concurrent_race_matrix.mjs",
       "tools/dev_test_game_hosted_identity_evidence.mjs",
       "tools/dev_test_game_hosted_target_preflight.mjs",
@@ -591,18 +602,18 @@ test("dev test-game spine orchestrators expose stable proof order and env maps",
       "tools/dev_test_game_release_runbook.mjs",
       "admin-spine-proof",
       "tools/dev_test_game_admin_spine_admin_proof.mjs",
-      "tools/dev_test_game_release_readiness.mjs",
+      devTestGameReleaseReadinessScript,
       "tools/dev_test_game_spine_manifest.mjs",
       "tools/dev_test_game_next_action.mjs",
       "tools/dev_test_game_proof_graph.mjs",
       "tools/dev_test_game_proof_graph_admin_proof.mjs",
       "tools/dev_test_game_proof_freshness_admin_proof.mjs",
       "tools/dev_test_game_next_action_admin_proof.mjs",
-      "tools/dev_test_game_release_readiness.mjs",
+      devTestGameReleaseReadinessScript,
       "tools/dev_test_game_next_action.mjs",
       "tools/dev_test_game_proof_freshness_admin_proof.mjs",
       "tools/dev_test_game_next_action_admin_proof.mjs",
-      "tools/dev_test_game_release_readiness.mjs",
+      devTestGameReleaseReadinessScript,
     ],
   );
   assert.deepEqual(devTestGameAdminSpinePlan[10], {
@@ -627,7 +638,45 @@ test("dev test-game spine orchestrators expose stable proof order and env maps",
     devTestGameAdminSpinePlan.at(-1).env,
     adminSpineReadinessEvidenceEnv,
   );
+  assertReleaseReadinessStepMetadata({
+    backupRestore: devTestGameBackupRestoreSpinePlan,
+    identity: devTestGameIdentitySpinePlan,
+    admin: devTestGameAdminSpinePlan,
+    coreLive: devTestGameCoreLiveSpinePlan,
+    live: devTestGameLiveSpinePlan,
+  });
 });
+
+function assertReleaseReadinessStepMetadata(plansByName) {
+  for (const [name, plan] of Object.entries(plansByName)) {
+    const readinessSteps = releaseReadinessSteps(plan);
+    assert.notEqual(
+      readinessSteps.length,
+      0,
+      `${name} has no release-readiness steps`,
+    );
+    let previousChangedInputs = "";
+    for (const step of readinessSteps) {
+      assert.equal(step.script, devTestGameReleaseReadinessScript);
+      assert.equal(typeof step.readinessReason, "string");
+      assert.notEqual(step.readinessReason.trim(), "");
+      assert.ok(Array.isArray(step.changedInputs));
+      assert.notEqual(step.changedInputs.length, 0);
+      assert.equal(
+        new Set(step.changedInputs).size,
+        step.changedInputs.length,
+        `${name} readiness step ${step.readinessReason} repeats an input`,
+      );
+      const changedInputs = step.changedInputs.join("\0");
+      assert.notEqual(
+        changedInputs,
+        previousChangedInputs,
+        `${name} readiness step ${step.readinessReason} repeats the previous input set`,
+      );
+      previousChangedInputs = changedInputs;
+    }
+  }
+}
 
 test("hosted identity evidence lane records blocked and passed handoffs", async () => {
   const blocked = await buildDevTestGameHostedIdentityEvidence({
