@@ -34,6 +34,12 @@ import {
   nightThreeProgressionBrowserScenario,
 } from "./dev_test_game_core_loop_night_three_progression_scenarios.mjs";
 import {
+  assertRevoteProgressionBrowserProof,
+  revoteNoLynchTargetFromCommandState,
+  revoteProgressionBrowserScenario,
+  revoteProgressionVoteActionId,
+} from "./dev_test_game_core_loop_revote_progression_scenarios.mjs";
+import {
   createUnexpectedMediaResponseGuard,
 } from "./dev_test_game_media_response_guard.mjs";
 
@@ -3745,13 +3751,14 @@ async function verifySeededD02VoteNightTransition({
     const apiPromptsAfterD03Revote = await fetchJson(
       `${apiBaseUrl}/games/${transitionGame}/host-prompts?principal_user_id=host_h`,
     );
-    const d03RevoteBallotTarget =
-      actionAfterD03RevotePrompt.commandState?.voteTargets?.find(
-        (target) => target.kind === "no_lynch",
-      ) ?? null;
+    const revoteScenario = revoteProgressionBrowserScenario();
+    const d03RevoteBallotTarget = revoteNoLynchTargetFromCommandState({
+      commandState: actionAfterD03RevotePrompt.commandState,
+    });
     const d03RevoteNoLynchButton = actionAfterD03RevotePrompt.buttons.find(
       (button) =>
-        button.action === "submit_vote:no_lynch" && button.disabled === false,
+        button.action === revoteProgressionVoteActionId &&
+        button.disabled === false,
     );
     if (d03RevoteBallotTarget?.kind !== "no_lynch" || d03RevoteNoLynchButton === undefined) {
       throw new Error(
@@ -3762,7 +3769,9 @@ async function verifySeededD02VoteNightTransition({
         })}`,
       );
     }
-    await actionEntry.page.locator('[data-action="submit_vote:no_lynch"]').click();
+    await actionEntry.page
+      .locator(`[data-action="${revoteProgressionVoteActionId}"]`)
+      .click();
     await actionEntry.page.waitForFunction(
       () =>
         window.__fmarchPlayerCommandStatus?.state === "ack" &&
@@ -3935,14 +3944,14 @@ async function verifySeededD02VoteNightTransition({
     const apiPromptsAfterD03R1Revote = await fetchJson(
       `${apiBaseUrl}/games/${transitionGame}/host-prompts?principal_user_id=host_h`,
     );
-    const d03R2RevoteBallotTarget =
-      actionAfterD03R1RevotePrompt.commandState?.voteTargets?.find(
-        (target) => target.kind === "no_lynch",
-      ) ?? null;
+    const d03R2RevoteBallotTarget = revoteNoLynchTargetFromCommandState({
+      commandState: actionAfterD03R1RevotePrompt.commandState,
+    });
     const d03R2RevoteNoLynchButton =
       actionAfterD03R1RevotePrompt.buttons.find(
         (button) =>
-          button.action === "submit_vote:no_lynch" && button.disabled === false,
+          button.action === revoteProgressionVoteActionId &&
+          button.disabled === false,
       );
     if (
       d03R2RevoteBallotTarget?.kind !== "no_lynch" ||
@@ -3956,7 +3965,9 @@ async function verifySeededD02VoteNightTransition({
         })}`,
       );
     }
-    await actionEntry.page.locator('[data-action="submit_vote:no_lynch"]').click();
+    await actionEntry.page
+      .locator(`[data-action="${revoteProgressionVoteActionId}"]`)
+      .click();
     await actionEntry.page.waitForFunction(
       () =>
         window.__fmarchPlayerCommandStatus?.state === "ack" &&
@@ -4174,6 +4185,58 @@ async function verifySeededD02VoteNightTransition({
             },
           });
 
+    assertRevoteProgressionBrowserProof({
+      proof: {
+        d03RevotePrompt,
+        d03RevotePromptActionId,
+        d03RevotePromptResolution,
+        hostAfterD03RevotePrompt,
+        actionAfterD03RevotePrompt,
+        normalAfterD03RevotePrompt,
+        apiPromptsAfterD03Revote,
+        d03RevoteVoteSubmission,
+        d03RevoteActionAfterVote,
+        d03RevoteApiNoLynchRow,
+        d03RevoteApiOriginalD03Row,
+        d03RevoteApiStaleD03NoLynchRow,
+        hostBeforeResolveD03R1,
+        resolveD03R1,
+        hostAfterResolveD03R1,
+        d03R1DayVoteOutcome,
+        d03R1RevotePrompt,
+        d03R1RevotePromptActionId,
+        apiPromptsAfterResolveD03R1,
+        d03R1RevotePromptResolution,
+        hostAfterD03R1RevotePrompt,
+        actionAfterD03R1RevotePrompt,
+        normalAfterD03R1RevotePrompt,
+        apiPromptsAfterD03R1Revote,
+        d03R2RevoteVoteSubmission,
+        d03R2RevoteActionAfterVote,
+        d03R2RevoteApiNoLynchRow,
+        d03R2RevoteApiOriginalD03Row,
+        d03R2RevoteApiD03R1NoLynchRow,
+        d03R2RevoteApiStaleD03NoLynchRow,
+        hostBeforeResolveD03R2,
+        resolveD03R2,
+        hostAfterResolveD03R2,
+        d03R2DayVoteOutcome,
+        d03R2RevotePrompt,
+        d03R2RevotePromptActionId,
+        d03R2StaleContinuePolicyActionId,
+        apiPromptsAfterResolveD03R2,
+        d03R2NoLynchPolicyResolution,
+        hostAfterD03R2NoLynchPolicy,
+        actionAfterD03R2NoLynchPolicy,
+        normalAfterD03R2NoLynchPolicy,
+        apiPromptsAfterD03R2NoLynchPolicy,
+        d03R2StaleContinuePolicySetup,
+        d03R2StaleContinuePolicyRecovery,
+      },
+      scenario: revoteScenario,
+      includeEvidenceInError: true,
+    });
+
     const n03Scenario = nightThreeProgressionBrowserScenario();
     const n03ActionTarget = nightThreeActionTargetFromCommandState({
       commandState: actionAfterD03R2NoLynchPolicy.commandState,
@@ -4360,215 +4423,7 @@ async function verifySeededD02VoteNightTransition({
       !d03TerminalHostReloadAfterReject.outcomePanel.includes("D03 NoMajority") ||
       (d03TerminalHostReloadAfterReject.apiPhase?.id ??
         d03TerminalHostReloadAfterReject.apiPhase?.phase_id) !== "D03" ||
-      d03TerminalHostReloadAfterReject.apiPhase?.locked !== true ||
-      d03RevotePromptResolution?.commandStatus?.state !== "ack" ||
-      !Array.isArray(d03RevotePromptResolution.commandStatus.streamSeqs) ||
-      d03RevotePromptResolution.commandStatus.streamSeqs.length !== 2 ||
-      d03RevotePromptResolution.commandStatus.requestEnvelope?.body?.body?.command
-        ?.ResolveHostPrompt?.prompt_id !== d03RevotePrompt.id ||
-      d03RevotePromptResolution.commandStatus.requestEnvelope?.body?.body?.command
-        ?.ResolveHostPrompt?.decision?.SelectPolicy?.policy !==
-        "no_majority_continue_revote" ||
-      hostAfterD03RevotePrompt.phase?.id !== "D03R1" ||
-      hostAfterD03RevotePrompt.phase?.locked !== false ||
-      !hostAfterD03RevotePrompt.phaseActions.includes("resolve_phase") ||
-      hostAfterD03RevotePrompt.promptActions.includes(d03RevotePromptActionId) ||
-      hostAfterD03RevotePrompt.hostPrompts.find(
-        (prompt) => prompt.id === d03RevotePrompt.id,
-      )?.status !== "resolved" ||
-      apiPromptsAfterD03Revote.find(
-        (prompt) => (prompt.id ?? prompt.prompt_id) === d03RevotePrompt.id,
-      )?.status !== "resolved" ||
-      actionAfterD03RevotePrompt.commandState?.phase?.phaseId !== "D03R1" ||
-      actionAfterD03RevotePrompt.commandState?.phase?.locked !== false ||
-      !actionAfterD03RevotePrompt.buttons.some((button) =>
-        String(button.action ?? "").startsWith("submit_vote"),
-      ) ||
-      normalAfterD03RevotePrompt.commandState?.phase?.phaseId !== "D03R1" ||
-      normalAfterD03RevotePrompt.commandState?.phase?.locked !== false ||
-      !normalAfterD03RevotePrompt.buttons.some((button) =>
-        String(button.action ?? "").startsWith("submit_vote"),
-      ) ||
-      d03RevoteVoteSubmission?.state !== "ack" ||
-      d03RevoteVoteSubmission?.requestEnvelope?.body?.body?.principal_user_id !==
-        "player-goon-a" ||
-      d03RevoteVoteSubmission?.requestEnvelope?.body?.body?.command?.SubmitVote
-        ?.actor_slot !== "slot_4" ||
-      d03RevoteVoteSubmission?.requestEnvelope?.body?.body?.command?.SubmitVote
-        ?.target !== "NoLynch" ||
-      d03RevoteActionAfterVote.commandState?.phase?.phaseId !== "D03R1" ||
-      d03RevoteActionAfterVote.commandState?.phase?.locked !== false ||
-      d03RevoteActionAfterVote.commandState?.currentVote?.kind !== "no_lynch" ||
-      d03RevoteActionAfterVote.currentVote.hasVote !== "true" ||
-      !d03RevoteActionAfterVote.votecount.some(
-        (row) => row.target === "no_lynch" && row.count === 1,
-      ) ||
-      d03RevoteApiNoLynchRow?.count !== 1 ||
-      d03RevoteApiNoLynchRow?.needed === undefined ||
-      d03RevoteApiOriginalD03Row?.count !== 1 ||
-      d03RevoteApiStaleD03NoLynchRow !== undefined ||
-      hostBeforeResolveD03R1.phase?.id !== "D03R1" ||
-      hostBeforeResolveD03R1.phase?.locked !== false ||
-      !hostBeforeResolveD03R1.phaseActions.includes("resolve_phase") ||
-      resolveD03R1.commandStatus?.state !== "ack" ||
-      hostAfterResolveD03R1.phase?.id !== "D03R1" ||
-      hostAfterResolveD03R1.phase?.locked !== true ||
-      d03R1DayVoteOutcome?.status !== "NoMajority" ||
-      d03R1DayVoteOutcome?.winnerSlot !== null ||
-      d03R1DayVoteOutcome?.tallies?.no_lynch !== 1 ||
-      !hostAfterResolveD03R1.dayVoteOutcomes.some(
-        (row) =>
-          row.phaseId === "D03R1" &&
-          row.status === "NoMajority" &&
-          row.tallies?.no_lynch === 1,
-      ) ||
-      !hostAfterResolveD03R1.outcomePanel.includes("D03R1 NoMajority") ||
-      d03R1RevotePrompt?.id !== "D03R1:revote:NoMajority" ||
-      d03R1RevotePrompt?.status !== "pending" ||
-      d03R1RevotePrompt?.value !== "no_majority" ||
-      !hostAfterResolveD03R1.promptActions.includes(d03R1RevotePromptActionId) ||
-      apiPromptsAfterResolveD03R1.find(
-        (prompt) => (prompt.id ?? prompt.prompt_id) === d03RevotePrompt.id,
-      )?.status !== "resolved" ||
-      apiPromptsAfterResolveD03R1.find(
-        (prompt) => (prompt.id ?? prompt.prompt_id) === d03R1RevotePrompt.id,
-      )?.status !== "pending" ||
-      d03R1RevotePromptResolution?.commandStatus?.state !== "ack" ||
-      !Array.isArray(d03R1RevotePromptResolution.commandStatus.streamSeqs) ||
-      d03R1RevotePromptResolution.commandStatus.streamSeqs.length !== 2 ||
-      d03R1RevotePromptResolution.commandStatus.requestEnvelope?.body?.body
-        ?.command?.ResolveHostPrompt?.prompt_id !== d03R1RevotePrompt.id ||
-      d03R1RevotePromptResolution.commandStatus.requestEnvelope?.body?.body
-        ?.command?.ResolveHostPrompt?.decision?.SelectPolicy?.policy !==
-        "no_majority_continue_revote" ||
-      hostAfterD03R1RevotePrompt.phase?.id !== "D03R2" ||
-      hostAfterD03R1RevotePrompt.phase?.locked !== false ||
-      !hostAfterD03R1RevotePrompt.phaseActions.includes("resolve_phase") ||
-      hostAfterD03R1RevotePrompt.promptActions.includes(
-        d03R1RevotePromptActionId,
-      ) ||
-      hostAfterD03R1RevotePrompt.hostPrompts.find(
-        (prompt) => prompt.id === d03RevotePrompt.id,
-      )?.status !== "resolved" ||
-      hostAfterD03R1RevotePrompt.hostPrompts.find(
-        (prompt) => prompt.id === d03R1RevotePrompt.id,
-      )?.status !== "resolved" ||
-      apiPromptsAfterD03R1Revote.find(
-        (prompt) => (prompt.id ?? prompt.prompt_id) === d03RevotePrompt.id,
-      )?.status !== "resolved" ||
-      apiPromptsAfterD03R1Revote.find(
-        (prompt) => (prompt.id ?? prompt.prompt_id) === d03R1RevotePrompt.id,
-      )?.status !== "resolved" ||
-      actionAfterD03R1RevotePrompt.commandState?.phase?.phaseId !== "D03R2" ||
-      actionAfterD03R1RevotePrompt.commandState?.phase?.locked !== false ||
-      !actionAfterD03R1RevotePrompt.buttons.some((button) =>
-        String(button.action ?? "").startsWith("submit_vote"),
-      ) ||
-      normalAfterD03R1RevotePrompt.commandState?.phase?.phaseId !== "D03R2" ||
-      normalAfterD03R1RevotePrompt.commandState?.phase?.locked !== false ||
-      !normalAfterD03R1RevotePrompt.buttons.some((button) =>
-        String(button.action ?? "").startsWith("submit_vote"),
-      ) ||
-      d03R2RevoteVoteSubmission?.state !== "ack" ||
-      d03R2RevoteVoteSubmission?.requestEnvelope?.body?.body
-        ?.principal_user_id !== "player-goon-a" ||
-      d03R2RevoteVoteSubmission?.requestEnvelope?.body?.body?.command?.SubmitVote
-        ?.actor_slot !== "slot_4" ||
-      d03R2RevoteVoteSubmission?.requestEnvelope?.body?.body?.command?.SubmitVote
-        ?.target !== "NoLynch" ||
-      d03R2RevoteActionAfterVote.commandState?.phase?.phaseId !== "D03R2" ||
-      d03R2RevoteActionAfterVote.commandState?.phase?.locked !== false ||
-      d03R2RevoteActionAfterVote.commandState?.currentVote?.kind !==
-        "no_lynch" ||
-      d03R2RevoteActionAfterVote.currentVote.hasVote !== "true" ||
-      !d03R2RevoteActionAfterVote.votecount.some(
-        (row) => row.target === "no_lynch" && row.count === 1,
-      ) ||
-      d03R2RevoteApiNoLynchRow?.count !== 1 ||
-      d03R2RevoteApiNoLynchRow?.needed === undefined ||
-      d03R2RevoteApiOriginalD03Row?.count !== 1 ||
-      d03R2RevoteApiD03R1NoLynchRow?.count !== 1 ||
-      d03R2RevoteApiStaleD03NoLynchRow !== undefined ||
-      hostBeforeResolveD03R2.phase?.id !== "D03R2" ||
-      hostBeforeResolveD03R2.phase?.locked !== false ||
-      !hostBeforeResolveD03R2.phaseActions.includes("resolve_phase") ||
-      resolveD03R2.commandStatus?.state !== "ack" ||
-      hostAfterResolveD03R2.phase?.id !== "D03R2" ||
-      hostAfterResolveD03R2.phase?.locked !== true ||
-      d03R2DayVoteOutcome?.status !== "NoMajority" ||
-      d03R2DayVoteOutcome?.winnerSlot !== null ||
-      d03R2DayVoteOutcome?.tallies?.no_lynch !== 1 ||
-      !hostAfterResolveD03R2.dayVoteOutcomes.some(
-        (row) =>
-          row.phaseId === "D03R2" &&
-          row.status === "NoMajority" &&
-          row.tallies?.no_lynch === 1,
-      ) ||
-      !hostAfterResolveD03R2.outcomePanel.includes("D03R2 NoMajority") ||
-      d03R2RevotePrompt?.id !== "D03R2:revote:NoMajority" ||
-      d03R2RevotePrompt?.status !== "pending" ||
-      d03R2RevotePrompt?.value !== "no_majority" ||
-      !hostAfterResolveD03R2.promptActions.includes(d03R2RevotePromptActionId) ||
-      !hostAfterResolveD03R2.promptActions.includes(
-        d03R2StaleContinuePolicyActionId,
-      ) ||
-      apiPromptsAfterResolveD03R2.find(
-        (prompt) => (prompt.id ?? prompt.prompt_id) === d03RevotePrompt.id,
-      )?.status !== "resolved" ||
-      apiPromptsAfterResolveD03R2.find(
-        (prompt) => (prompt.id ?? prompt.prompt_id) === d03R1RevotePrompt.id,
-      )?.status !== "resolved" ||
-      apiPromptsAfterResolveD03R2.find(
-        (prompt) => (prompt.id ?? prompt.prompt_id) === d03R2RevotePrompt.id,
-      )?.status !== "pending" ||
-      d03R2NoLynchPolicyResolution?.commandStatus?.state !== "ack" ||
-      !Array.isArray(d03R2NoLynchPolicyResolution.commandStatus.streamSeqs) ||
-      d03R2NoLynchPolicyResolution.commandStatus.streamSeqs.length !== 2 ||
-      d03R2NoLynchPolicyResolution.commandStatus.requestEnvelope?.body?.body
-        ?.command?.ResolveHostPrompt?.prompt_id !== d03R2RevotePrompt.id ||
-      d03R2NoLynchPolicyResolution.commandStatus.requestEnvelope?.body?.body
-        ?.command?.ResolveHostPrompt?.decision?.SelectPolicy?.policy !==
-        "no_majority_no_lynch" ||
-      hostAfterD03R2NoLynchPolicy.phase?.id !== "N03" ||
-      hostAfterD03R2NoLynchPolicy.phase?.locked !== false ||
-      !hostAfterD03R2NoLynchPolicy.phaseActions.includes("resolve_phase") ||
-      hostAfterD03R2NoLynchPolicy.promptActions.includes(d03R2RevotePromptActionId) ||
-      hostAfterD03R2NoLynchPolicy.hostPrompts.find(
-        (prompt) => prompt.id === d03R2RevotePrompt.id,
-      )?.status !== "resolved" ||
-      apiPromptsAfterD03R2NoLynchPolicy.find(
-        (prompt) => (prompt.id ?? prompt.prompt_id) === d03R2RevotePrompt.id,
-      )?.status !== "resolved" ||
-      actionAfterD03R2NoLynchPolicy.commandState?.phase?.phaseId !== "N03" ||
-      actionAfterD03R2NoLynchPolicy.commandState?.phase?.locked !== false ||
-      !actionAfterD03R2NoLynchPolicy.buttons.some((button) =>
-        String(button.action ?? "").startsWith("submit_action"),
-      ) ||
-      normalAfterD03R2NoLynchPolicy.commandState?.phase?.phaseId !== "N03" ||
-      normalAfterD03R2NoLynchPolicy.commandState?.phase?.locked !== false ||
-      normalAfterD03R2NoLynchPolicy.buttons.some((button) =>
-        String(button.action ?? "").startsWith("submit_action"),
-      ) ||
-      d03R2StaleContinuePolicySetup?.promptActions?.includes(
-        d03R2StaleContinuePolicyActionId,
-      ) !== true ||
-      d03R2StaleContinuePolicyRecovery?.reject?.state !== "reject" ||
-      d03R2StaleContinuePolicyRecovery?.reject?.error !==
-        "PromptAlreadyResolved" ||
-      !d03R2StaleContinuePolicyRecovery?.activityStatusText?.includes(
-        "Reject PromptAlreadyResolved",
-      ) ||
-      !d03R2StaleContinuePolicyRecovery?.activityStatusText?.includes(
-        "host prompt selection is stale",
-      ) ||
-      d03R2StaleContinuePolicyRecovery?.staleHostPromptReloadAfterReject?.phase
-        ?.id !== "N03" ||
-      d03R2StaleContinuePolicyRecovery?.staleHostPromptReloadAfterReject?.phase
-        ?.locked !== false ||
-      d03R2StaleContinuePolicyRecovery?.staleHostPromptReloadAfterReject
-        ?.promptActionsAfterReload?.includes(d03R2StaleContinuePolicyActionId) ||
-      d03R2StaleContinuePolicyRecovery?.staleHostPromptReloadAfterReject
-        ?.promptActionsAfterReload?.includes(d03R2RevotePromptActionId)
+      d03TerminalHostReloadAfterReject.apiPhase?.locked !== true
     ) {
       throw new Error(
         `D03 revote boundary drifted: ${JSON.stringify({
