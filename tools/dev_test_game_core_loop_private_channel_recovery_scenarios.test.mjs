@@ -2,9 +2,13 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { test } from "node:test";
 import {
+  assertCoreLoopPrivateChannelRecoveryCoverageSummary,
+  buildCoreLoopPrivateChannelRecoveryCoverageSummary,
   completedPrivateChannelReloadScenario,
   completedPrivateChannelTransitionTokens,
   coreLoopPrivateChannelCompletedPostLaneId,
+  coreLoopPrivateChannelRecoveryCoverageFamilies,
+  coreLoopPrivateChannelRecoveryCoverageFamilyDefinitions,
   coreLoopPrivateChannelInvalidActionLaneId,
   coreLoopPrivateChannelRecoveryFamilyId,
   coreLoopPrivateChannelRecoveryLaneIds,
@@ -60,6 +64,50 @@ test("private-channel recovery family shares post, reload, and stale recovery ca
   assert.deepEqual(
     family.staleRejects.staleCompletedPrivatePost,
     staleCompletedPrivatePostScenario(),
+  );
+});
+
+test("private-channel recovery coverage uses core-loop lane families", () => {
+  assert(Object.isFrozen(coreLoopPrivateChannelRecoveryCoverageFamilyDefinitions));
+  assert.deepEqual(
+    coreLoopPrivateChannelRecoveryCoverageFamilies().map((family) => ({
+      id: family.id,
+      laneIds: family.laneIds,
+    })),
+    [
+      {
+        id: "core-loop-private-channel-post",
+        laneIds: [coreLoopPrivateChannelPostLaneId],
+      },
+      {
+        id: "core-loop-private-channel-stale-post",
+        laneIds: [coreLoopPrivateChannelStalePostLaneId],
+      },
+      {
+        id: "core-loop-private-channel-completed-game",
+        laneIds: [coreLoopPrivateChannelCompletedPostLaneId],
+      },
+      {
+        id: "core-loop-private-channel-invalid-action",
+        laneIds: [coreLoopPrivateChannelInvalidActionLaneId],
+      },
+    ],
+  );
+  const lanes = coreLoopPrivateChannelRecoveryLaneIds.map((id) => ({
+    id,
+    status: "passed",
+  }));
+  const summary = buildCoreLoopPrivateChannelRecoveryCoverageSummary(lanes);
+
+  assert.deepEqual(summary.sourceLaneIds, coreLoopPrivateChannelRecoveryLaneIds);
+  assert.equal(summary.familyCount, 4);
+  assert.equal(
+    summary.passedLaneCount,
+    coreLoopPrivateChannelRecoveryLaneIds.length,
+  );
+  assert.equal(
+    assertCoreLoopPrivateChannelRecoveryCoverageSummary({ summary, lanes }),
+    summary,
   );
 });
 

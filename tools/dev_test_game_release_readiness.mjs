@@ -45,7 +45,6 @@ import {
 } from "./dev_test_game_replacement_handoff_scenario_cases.mjs";
 import {
   assertReplacementPrivateChannelRecoveryCoverageSummary,
-  replacementPrivateChannelRecoveryLaneIds,
 } from "./dev_test_game_replacement_private_scenarios.mjs";
 import {
   assertStaleConflictMessageCoverageSummary,
@@ -208,6 +207,7 @@ import {
   coreLoopCompletedEndgameProgressionFamilyId,
 } from "./dev_test_game_core_loop_completed_endgame_progression_scenarios.mjs";
 import {
+  assertCoreLoopPrivateChannelRecoveryCoverageSummary,
   coreLoopPrivateChannelRecoveryFamilyId,
   coreLoopPrivateChannelRecoveryLaneIds,
   coreLoopPrivateChannelRecoveryScenarioFamily,
@@ -1740,8 +1740,8 @@ function buildHostStaleControlMilestone(proof, { sourcePath }) {
 function buildPrivateChannelRecoveryMilestone(proof, { sourcePath }) {
   let coverage;
   try {
-    coverage = assertReplacementPrivateChannelRecoveryCoverageSummary({
-      summary: proof.replacementPrivateChannelRecoveryCoverage,
+    coverage = assertCoreLoopPrivateChannelRecoveryCoverageSummary({
+      summary: proof.coreLoopPrivateChannelRecoveryCoverage,
       lanes: proof.lanes,
     });
   } catch (error) {
@@ -5407,7 +5407,7 @@ export function assertDevTestGameReleaseReadiness(checklist) {
     privateChannelRecoveryCheck !== undefined &&
     !sameStringArray(
       privateChannelRecoveryCheck.laneIds,
-      replacementPrivateChannelRecoveryLaneIds,
+      coreLoopPrivateChannelRecoveryLaneIds,
     )
   ) {
     throw new Error(

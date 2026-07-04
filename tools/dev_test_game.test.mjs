@@ -60,6 +60,7 @@ import {
 import {
   completedPrivateChannelReloadScenario,
   completedPrivateChannelTransition,
+  coreLoopPrivateChannelRecoveryCoverageFamilies,
   coreLoopPrivateChannelCompletedPostLaneId,
   coreLoopPrivateChannelInvalidActionLaneId,
   coreLoopPrivateChannelRecoveryLaneIds,
@@ -142,8 +143,6 @@ import {
   hardeningAuditLaneIds,
 } from "./dev_test_game_hardening_scenarios.mjs";
 import {
-  replacementPrivateChannelRecoveryCoverageFamilies,
-  replacementPrivateChannelRecoveryLaneIds,
   replacementPrivatePostRaceLaneIds,
   replacementPrivatePostRecoveryLaneIds,
   replacementStalePrivatePostAfterCompleteScenario,
@@ -9734,12 +9733,12 @@ test("session card and markdown include role credential URLs and tokens", async 
       evidence: "target/dev-test-game/proof-run.json",
       proofBoundary:
         "Local seeded-game proof that stale replacement private-channel authority, private receipts, stale private posts after phase resolution, private-channel invalid action recovery, reconnect recovery, and completed-game private-channel reloads preserve current player scope and recovery hints.",
-      laneIds: [...replacementPrivateChannelRecoveryLaneIds],
-      requiredLaneCount: replacementPrivateChannelRecoveryLaneIds.length,
-      coveredLaneCount: replacementPrivateChannelRecoveryLaneIds.length,
-      familyCount: replacementPrivateChannelRecoveryCoverageFamilies().length,
-      expectedLaneCount: replacementPrivateChannelRecoveryLaneIds.length,
-      expectedFamilyCount: replacementPrivateChannelRecoveryCoverageFamilies().length,
+      laneIds: [...coreLoopPrivateChannelRecoveryLaneIds],
+      requiredLaneCount: coreLoopPrivateChannelRecoveryLaneIds.length,
+      coveredLaneCount: coreLoopPrivateChannelRecoveryLaneIds.length,
+      familyCount: coreLoopPrivateChannelRecoveryCoverageFamilies().length,
+      expectedLaneCount: coreLoopPrivateChannelRecoveryLaneIds.length,
+      expectedFamilyCount: coreLoopPrivateChannelRecoveryCoverageFamilies().length,
     },
   );
   assert.deepEqual(
@@ -11219,11 +11218,11 @@ function devTestGameReleaseReadinessChecklistFixture({
           status: "passed",
           evidence: "target/dev-test-game/proof-run.json",
           laneIds: privateChannelRecoveryMilestoneFixture().laneIds,
-          requiredLaneCount: replacementPrivateChannelRecoveryLaneIds.length,
-          coveredLaneCount: replacementPrivateChannelRecoveryLaneIds.length,
-          familyCount: replacementPrivateChannelRecoveryCoverageFamilies().length,
-          expectedLaneCount: replacementPrivateChannelRecoveryLaneIds.length,
-          expectedFamilyCount: replacementPrivateChannelRecoveryCoverageFamilies().length,
+          requiredLaneCount: coreLoopPrivateChannelRecoveryLaneIds.length,
+          coveredLaneCount: coreLoopPrivateChannelRecoveryLaneIds.length,
+          familyCount: coreLoopPrivateChannelRecoveryCoverageFamilies().length,
+          expectedLaneCount: coreLoopPrivateChannelRecoveryLaneIds.length,
+          expectedFamilyCount: coreLoopPrivateChannelRecoveryCoverageFamilies().length,
         },
         {
           id: "local-replacement-action-recovery-milestone",
@@ -11535,14 +11534,14 @@ function hostStaleControlMilestoneFixture() {
 function privateChannelRecoveryMilestoneFixture() {
   return {
     status: "passed",
-    laneIds: [...replacementPrivateChannelRecoveryLaneIds],
-    requiredLaneCount: replacementPrivateChannelRecoveryLaneIds.length,
-    coveredLaneCount: replacementPrivateChannelRecoveryLaneIds.length,
+    laneIds: [...coreLoopPrivateChannelRecoveryLaneIds],
+    requiredLaneCount: coreLoopPrivateChannelRecoveryLaneIds.length,
+    coveredLaneCount: coreLoopPrivateChannelRecoveryLaneIds.length,
     gapCount: 0,
-    familyCount: replacementPrivateChannelRecoveryCoverageFamilies().length,
-    expectedLaneCount: replacementPrivateChannelRecoveryLaneIds.length,
-    expectedFamilyCount: replacementPrivateChannelRecoveryCoverageFamilies().length,
-    families: replacementPrivateChannelRecoveryCoverageFamilies().map((family) => ({
+    familyCount: coreLoopPrivateChannelRecoveryCoverageFamilies().length,
+    expectedLaneCount: coreLoopPrivateChannelRecoveryLaneIds.length,
+    expectedFamilyCount: coreLoopPrivateChannelRecoveryCoverageFamilies().length,
+    families: coreLoopPrivateChannelRecoveryCoverageFamilies().map((family) => ({
       ...family,
       status: "passed",
       passedLaneIds: [...family.laneIds],

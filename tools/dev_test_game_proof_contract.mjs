@@ -115,6 +115,8 @@ import {
   replacementResolvedPrivatePostReconnectMatches,
 } from "./dev_test_game_replacement_private_post_assertions.mjs";
 import {
+  assertCoreLoopPrivateChannelRecoveryCoverageSummary,
+  buildCoreLoopPrivateChannelRecoveryCoverageSummary,
   coreLoopPrivateChannelCompletedPostLaneId,
   coreLoopPrivateChannelInvalidActionLaneId,
   coreLoopPrivateChannelPostLaneId,
@@ -6405,6 +6407,8 @@ export function buildDevTestGameProofRun(session, options = {}) {
     buildHostStaleControlCoverageSummary(lanes);
   const staleConflictMessageCoverage =
     buildStaleConflictMessageCoverageSummary(lanes);
+  const coreLoopPrivateChannelRecoveryCoverage =
+    buildCoreLoopPrivateChannelRecoveryCoverageSummary(lanes);
   const replacementPrivateChannelRecoveryCoverage =
     buildReplacementPrivateChannelRecoveryCoverageSummary(lanes);
   const replacementActionRecoveryCoverage =
@@ -6438,6 +6442,7 @@ export function buildDevTestGameProofRun(session, options = {}) {
     completedGameHardeningCoverage,
     hostStaleControlCoverage,
     staleConflictMessageCoverage,
+    coreLoopPrivateChannelRecoveryCoverage,
     replacementPrivateChannelRecoveryCoverage,
     replacementActionRecoveryCoverage,
     replacementHandoffRecoveryCoverage,
@@ -6494,6 +6499,10 @@ export function assertDevTestGameProofRun(proof) {
   });
   assertStaleConflictMessageCoverageSummary({
     summary: proof.staleConflictMessageCoverage,
+    lanes: proof.lanes,
+  });
+  assertCoreLoopPrivateChannelRecoveryCoverageSummary({
+    summary: proof.coreLoopPrivateChannelRecoveryCoverage,
     lanes: proof.lanes,
   });
   assertReplacementPrivateChannelRecoveryCoverageSummary({

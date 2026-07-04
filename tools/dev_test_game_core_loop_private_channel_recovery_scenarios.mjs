@@ -5,6 +5,11 @@ import {
   staleCompletedPrivatePostScenario,
   stalePrivateChannelPostPhaseLockedScenario,
 } from "./dev_test_game_core_loop_private_channel_scenario_case_definitions.mjs";
+import {
+  assertLaneCoverageSummary,
+  buildLaneCoverageSummary,
+  cloneLaneCoverageFamilies,
+} from "./dev_test_game_lane_coverage.mjs";
 
 export {
   completedPrivateChannelReloadScenario,
@@ -32,6 +37,57 @@ export const coreLoopPrivateChannelRecoveryLaneIds = Object.freeze([
   coreLoopPrivateChannelCompletedPostLaneId,
   coreLoopPrivateChannelInvalidActionLaneId,
 ]);
+
+export const coreLoopPrivateChannelRecoveryCoverageFamilyDefinitions =
+  Object.freeze([
+    Object.freeze({
+      id: "core-loop-private-channel-post",
+      label: "Private channel post and role URL",
+      laneIds: Object.freeze([coreLoopPrivateChannelPostLaneId]),
+    }),
+    Object.freeze({
+      id: "core-loop-private-channel-stale-post",
+      label: "Private channel stale post recovery",
+      laneIds: Object.freeze([coreLoopPrivateChannelStalePostLaneId]),
+    }),
+    Object.freeze({
+      id: "core-loop-private-channel-completed-game",
+      label: "Completed private-channel recovery",
+      laneIds: Object.freeze([coreLoopPrivateChannelCompletedPostLaneId]),
+    }),
+    Object.freeze({
+      id: "core-loop-private-channel-invalid-action",
+      label: "Private channel invalid action recovery",
+      laneIds: Object.freeze([coreLoopPrivateChannelInvalidActionLaneId]),
+    }),
+  ]);
+
+export function coreLoopPrivateChannelRecoveryCoverageFamilies() {
+  return cloneLaneCoverageFamilies(
+    coreLoopPrivateChannelRecoveryCoverageFamilyDefinitions,
+  );
+}
+
+export function buildCoreLoopPrivateChannelRecoveryCoverageSummary(lanes) {
+  return buildLaneCoverageSummary({
+    lanes,
+    laneIds: coreLoopPrivateChannelRecoveryLaneIds,
+    families: coreLoopPrivateChannelRecoveryCoverageFamilyDefinitions,
+  });
+}
+
+export function assertCoreLoopPrivateChannelRecoveryCoverageSummary({
+  summary,
+  lanes,
+}) {
+  return assertLaneCoverageSummary({
+    summary,
+    lanes,
+    laneIds: coreLoopPrivateChannelRecoveryLaneIds,
+    familyDefinitions: coreLoopPrivateChannelRecoveryCoverageFamilyDefinitions,
+    label: "core-loop private-channel recovery",
+  });
+}
 
 export function coreLoopPrivateChannelRecoveryScenarioFamily() {
   const submitPost = privateChannelSubmitPostScenario();
