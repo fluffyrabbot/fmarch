@@ -61,6 +61,7 @@ export const recoveryReceiptGraphDescriptors = Object.freeze([
     checkId: "private-channel-recovery-graph",
     readinessCheckId: "local-private-channel-recovery-receipt",
     readinessLabel: "Local private-channel recovery receipt",
+    releaseReadinessOrder: 10,
     nodeId: "private-channel-recovery-receipt",
     label: "Private-channel recovery receipt",
     kind: "private-channel-recovery-receipt",
@@ -97,6 +98,7 @@ export const recoveryReceiptGraphDescriptors = Object.freeze([
     checkId: "replacement-action-recovery-graph",
     readinessCheckId: "local-replacement-action-recovery-receipt",
     readinessLabel: "Local replacement action recovery receipt",
+    releaseReadinessOrder: 30,
     nodeId: "replacement-action-recovery-receipt",
     label: "Replacement action recovery receipt",
     kind: "replacement-action-recovery-receipt",
@@ -130,6 +132,7 @@ export const recoveryReceiptGraphDescriptors = Object.freeze([
     checkId: "replacement-handoff-recovery-graph",
     readinessCheckId: "local-replacement-handoff-recovery-receipt",
     readinessLabel: "Local replacement handoff recovery receipt",
+    releaseReadinessOrder: 40,
     nodeId: "replacement-handoff-recovery-receipt",
     label: "Replacement handoff recovery receipt",
     kind: "replacement-handoff-recovery-receipt",
@@ -163,6 +166,7 @@ export const recoveryReceiptGraphDescriptors = Object.freeze([
     checkId: "replacement-private-recovery-graph",
     readinessCheckId: "local-replacement-private-recovery-receipt",
     readinessLabel: "Local replacement private-channel recovery receipt",
+    releaseReadinessOrder: 20,
     nodeId: "replacement-private-recovery-receipt",
     label: "Replacement private-channel recovery receipt",
     kind: "replacement-private-recovery-receipt",
@@ -186,6 +190,12 @@ export const recoveryReceiptGraphDescriptors = Object.freeze([
     assertReceipt: assertDevTestGameReplacementPrivateRecoveryReceipt,
   }),
 ]);
+
+export const recoveryReceiptReleaseReadinessDescriptors = Object.freeze(
+  [...recoveryReceiptGraphDescriptors].sort(
+    (left, right) => left.releaseReadinessOrder - right.releaseReadinessOrder,
+  ),
+);
 
 export function recoveryReceiptGraphDescriptorByReceiptKey(receiptKey) {
   const descriptor = recoveryReceiptGraphDescriptors.find(

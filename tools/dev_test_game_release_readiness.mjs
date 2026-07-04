@@ -215,6 +215,7 @@ import {
   recoveryReceiptGraphDescriptorByReceiptKey,
   recoveryReceiptOptionalReadinessArtifactDescriptor,
   recoveryReceiptReadinessCheck,
+  recoveryReceiptReleaseReadinessDescriptors,
   validateRecoveryReceiptArtifact,
 } from "./dev_test_game_recovery_receipt_graph_surfaces.mjs";
 export const DEV_TEST_GAME_RELEASE_READINESS_VERSION = 1;
@@ -224,13 +225,6 @@ const artifactCoverageMilestoneIds = Object.freeze([
   "local-race-coverage-proof",
   "local-seed-demo-fixture",
 ]);
-const releaseReadinessRecoveryReceiptKeys = Object.freeze([
-  "privateChannelRecoveryReceipt",
-  "replacementPrivateRecoveryReceipt",
-  "replacementActionRecoveryReceipt",
-  "replacementHandoffRecoveryReceipt",
-]);
-
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const artifactDir = path.join(repoRoot, "target", "dev-test-game");
 const defaultProofPath = path.join(artifactDir, "proof-run.json");
@@ -814,10 +808,9 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
       artifactPaths: adminSpineTerminalBatchEvidence.artifactPaths,
     });
   }
-  for (const receiptKey of releaseReadinessRecoveryReceiptKeys) {
-    const descriptor = recoveryReceiptGraphDescriptorByReceiptKey(receiptKey);
+  for (const descriptor of recoveryReceiptReleaseReadinessDescriptors) {
     const check = recoveryReceiptReadinessCheck(
-      recoveryReceiptEvidenceByKey[receiptKey],
+      recoveryReceiptEvidenceByKey[descriptor.receiptKey],
       descriptor,
     );
     if (check !== null) {
@@ -1714,18 +1707,20 @@ function buildHostStaleControlMilestone(proof, { sourcePath }) {
 
 function orderedRecoveryReceiptGeneratedFromPaths(evidenceByKey) {
   return Object.fromEntries(
-    releaseReadinessRecoveryReceiptKeys.flatMap((receiptKey) => {
-      const evidence = evidenceByKey[receiptKey];
-      return evidence === undefined ? [] : [[receiptKey, evidence.path]];
+    recoveryReceiptReleaseReadinessDescriptors.flatMap((descriptor) => {
+      const evidence = evidenceByKey[descriptor.receiptKey];
+      return evidence === undefined
+        ? []
+        : [[descriptor.receiptKey, evidence.path]];
     }),
   );
 }
 
 function orderedRecoveryReceiptEvidenceSnapshots(evidenceByKey) {
   return Object.fromEntries(
-    releaseReadinessRecoveryReceiptKeys.flatMap((receiptKey) => {
-      const evidence = evidenceByKey[receiptKey];
-      return evidence === undefined ? [] : [[receiptKey, evidence]];
+    recoveryReceiptReleaseReadinessDescriptors.flatMap((descriptor) => {
+      const evidence = evidenceByKey[descriptor.receiptKey];
+      return evidence === undefined ? [] : [[descriptor.receiptKey, evidence]];
     }),
   );
 }
@@ -6125,10 +6120,10 @@ const optionalReadinessArtifactRegistry = Object.freeze([
     validator: validateDevTestGameAdminSpineTerminalBatches,
     ignoreInvalidDefault: true,
   }),
-  ...releaseReadinessRecoveryReceiptKeys.map((receiptKey) =>
+  ...recoveryReceiptReleaseReadinessDescriptors.map((descriptor) =>
     optionalReadinessArtifact(
       recoveryReceiptOptionalReadinessArtifactDescriptor({
-        descriptor: recoveryReceiptGraphDescriptorByReceiptKey(receiptKey),
+        descriptor,
         repoRoot,
       }),
     ),
@@ -6268,10 +6263,9 @@ const optionalReadinessArtifactLoadPlan = Object.freeze([
   "adminSpineProof",
   "adminSpineAdminProof",
   "adminSpineTerminalBatches",
-  "privateChannelRecoveryReceipt",
-  "replacementPrivateRecoveryReceipt",
-  "replacementActionRecoveryReceipt",
-  "replacementHandoffRecoveryReceipt",
+  ...recoveryReceiptReleaseReadinessDescriptors.map(
+    (descriptor) => descriptor.receiptKey,
+  ),
   "raceCoverage",
   "hostedConcurrentRaceMatrix",
   "raceCoverageAdminProof",
