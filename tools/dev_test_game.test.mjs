@@ -229,7 +229,7 @@ import {
   recoveryReceiptGraphDescriptors,
   recoveryReceiptProofPlanSteps,
   recoveryReceiptProofTargets,
-} from "./dev_test_game_recovery_receipt_graph_surfaces.mjs";
+} from "./dev_test_game_recovery_receipt_catalog.mjs";
 import {
   devTestGameReleaseReadinessScript,
   releaseReadinessSteps,

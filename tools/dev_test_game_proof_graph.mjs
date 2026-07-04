@@ -47,7 +47,7 @@ import {
   recoveryReceiptGraphDescriptorByReceiptKey,
   recoveryReceiptGraphDescriptors,
   validateRecoveryReceiptArtifact,
-} from "./dev_test_game_recovery_receipt_graph_surfaces.mjs";
+} from "./dev_test_game_recovery_receipt_catalog.mjs";
 export {
   devTestGameProofGraphAdminProofCommand,
   devTestGameProofGraphAdminProofPath,

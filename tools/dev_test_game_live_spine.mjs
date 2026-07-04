@@ -7,7 +7,7 @@ import { runSpinePlan } from "./dev_test_game_spine_runner.mjs";
 import {
   recoveryReceiptProofPlanSteps,
   recoveryReceiptProofTargets,
-} from "./dev_test_game_recovery_receipt_graph_surfaces.mjs";
+} from "./dev_test_game_recovery_receipt_catalog.mjs";
 
 const coreLoopRecoveryReceiptSelector = {
   provingNodeId: "admin-proof:core-loop",

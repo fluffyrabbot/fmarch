@@ -62,7 +62,7 @@ import {
   assertRecoveryReceiptGraphSummary,
   recoveryReceiptGraphDescriptors,
   recoveryReceiptGraphSummaryFromProofGraph,
-} from "./dev_test_game_recovery_receipt_graph_surfaces.mjs";
+} from "./dev_test_game_recovery_receipt_catalog.mjs";
 
 export {
   devTestGameCoreLoopAdminProofCommand,

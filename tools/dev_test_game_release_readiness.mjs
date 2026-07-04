@@ -216,7 +216,7 @@ import {
   recoveryReceiptReadinessCheck,
   recoveryReceiptReleaseReadinessDescriptors,
   validateRecoveryReceiptArtifact,
-} from "./dev_test_game_recovery_receipt_graph_surfaces.mjs";
+} from "./dev_test_game_recovery_receipt_catalog.mjs";
 export const DEV_TEST_GAME_RELEASE_READINESS_VERSION = 1;
 const devTestGameSeededBrowserProofCommand =
   devTestGameProductionFeatureBrowserProofCommand;

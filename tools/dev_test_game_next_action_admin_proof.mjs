@@ -32,7 +32,7 @@ import {
 import {
   assertRecoveryReceiptGraphSummary,
   recoveryReceiptGraphDescriptors,
-} from "./dev_test_game_recovery_receipt_graph_surfaces.mjs";
+} from "./dev_test_game_recovery_receipt_catalog.mjs";
 
 const nextActionPath = path.resolve(
   repoRoot,

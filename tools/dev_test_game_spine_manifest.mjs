@@ -76,7 +76,7 @@ import {
 } from "./dev_test_game_live_spine.mjs";
 import {
   recoveryReceiptGraphDescriptors,
-} from "./dev_test_game_recovery_receipt_graph_surfaces.mjs";
+} from "./dev_test_game_recovery_receipt_catalog.mjs";
 import {
   nextActionAdminProofCommand,
   nextActionAdminProofPath,
