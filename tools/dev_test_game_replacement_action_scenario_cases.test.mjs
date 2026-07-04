@@ -51,6 +51,8 @@ test("replacement action recovery coverage is derived from shared lanes", () => 
   assert.equal(summary.laneCount, replacementActionLaneIds.length);
   assert.equal(summary.passedLaneCount, replacementActionLaneIds.length);
   assert.equal(summary.familyCount, 3);
+  assert.equal(summary.expectedLaneCount, replacementActionLaneIds.length);
+  assert.equal(summary.expectedFamilyCount, 3);
   assert.doesNotThrow(() =>
     assertReplacementActionRecoveryCoverageSummary({ summary, lanes }),
   );

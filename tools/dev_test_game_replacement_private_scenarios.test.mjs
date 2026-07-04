@@ -93,6 +93,11 @@ test("replacement private-channel recovery coverage is derived from shared lanes
     replacementPrivateChannelRecoveryLaneIds.length,
   );
   assert.equal(summary.familyCount, 3);
+  assert.equal(
+    summary.expectedLaneCount,
+    replacementPrivateChannelRecoveryLaneIds.length,
+  );
+  assert.equal(summary.expectedFamilyCount, 3);
   assert.doesNotThrow(() =>
     assertReplacementPrivateChannelRecoveryCoverageSummary({ summary, lanes }),
   );

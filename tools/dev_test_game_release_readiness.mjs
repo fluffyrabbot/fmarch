@@ -673,6 +673,8 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
       requiredLaneCount: staleConflictMessageMilestone.requiredLaneCount,
       coveredLaneCount: staleConflictMessageMilestone.coveredLaneCount,
       familyCount: staleConflictMessageMilestone.familyCount,
+      expectedLaneCount: staleConflictMessageMilestone.expectedLaneCount,
+      expectedFamilyCount: staleConflictMessageMilestone.expectedFamilyCount,
       surfaceCoverage: staleConflictMessageMilestone.surfaceCoverage,
       surfaces: staleConflictMessageMilestone.surfaces,
     },
@@ -716,6 +718,8 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
       requiredLaneCount: hostStaleControlMilestone.requiredLaneCount,
       coveredLaneCount: hostStaleControlMilestone.coveredLaneCount,
       familyCount: hostStaleControlMilestone.familyCount,
+      expectedLaneCount: hostStaleControlMilestone.expectedLaneCount,
+      expectedFamilyCount: hostStaleControlMilestone.expectedFamilyCount,
     },
     {
       id: "local-private-channel-recovery-milestone",
@@ -728,6 +732,8 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
       requiredLaneCount: privateChannelRecoveryMilestone.requiredLaneCount,
       coveredLaneCount: privateChannelRecoveryMilestone.coveredLaneCount,
       familyCount: privateChannelRecoveryMilestone.familyCount,
+      expectedLaneCount: privateChannelRecoveryMilestone.expectedLaneCount,
+      expectedFamilyCount: privateChannelRecoveryMilestone.expectedFamilyCount,
     },
     {
       id: "local-replacement-action-recovery-milestone",
@@ -740,6 +746,8 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
       requiredLaneCount: replacementActionRecoveryMilestone.requiredLaneCount,
       coveredLaneCount: replacementActionRecoveryMilestone.coveredLaneCount,
       familyCount: replacementActionRecoveryMilestone.familyCount,
+      expectedLaneCount: replacementActionRecoveryMilestone.expectedLaneCount,
+      expectedFamilyCount: replacementActionRecoveryMilestone.expectedFamilyCount,
     },
     {
       id: "local-replacement-handoff-recovery-milestone",
@@ -752,6 +760,8 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
       requiredLaneCount: replacementHandoffRecoveryMilestone.requiredLaneCount,
       coveredLaneCount: replacementHandoffRecoveryMilestone.coveredLaneCount,
       familyCount: replacementHandoffRecoveryMilestone.familyCount,
+      expectedLaneCount: replacementHandoffRecoveryMilestone.expectedLaneCount,
+      expectedFamilyCount: replacementHandoffRecoveryMilestone.expectedFamilyCount,
     },
   ];
   if (backupRestoreEvidence !== undefined) {
@@ -1200,53 +1210,21 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
               ? {}
               : { releaseRunbookAdminProof: releaseRunbookAdminProofEvidence.path }),
           }),
-      staleConflictMessageMilestone: {
-        status: staleConflictMessageMilestone.status,
-        laneIds: [...staleConflictMessageMilestone.laneIds],
-        requiredLaneCount: staleConflictMessageMilestone.requiredLaneCount,
-        coveredLaneCount: staleConflictMessageMilestone.coveredLaneCount,
-        gapCount: staleConflictMessageMilestone.gapCount,
-        familyCount: staleConflictMessageMilestone.familyCount,
-        families: staleConflictMessageMilestone.families,
-        surfaceCoverage: staleConflictMessageMilestone.surfaceCoverage,
-        surfaces: staleConflictMessageMilestone.surfaces,
-      },
-      hostStaleControlMilestone: {
-        status: hostStaleControlMilestone.status,
-        laneIds: [...hostStaleControlMilestone.laneIds],
-        requiredLaneCount: hostStaleControlMilestone.requiredLaneCount,
-        coveredLaneCount: hostStaleControlMilestone.coveredLaneCount,
-        gapCount: hostStaleControlMilestone.gapCount,
-        familyCount: hostStaleControlMilestone.familyCount,
-        families: hostStaleControlMilestone.families,
-      },
-      privateChannelRecoveryMilestone: {
-        status: privateChannelRecoveryMilestone.status,
-        laneIds: [...privateChannelRecoveryMilestone.laneIds],
-        requiredLaneCount: privateChannelRecoveryMilestone.requiredLaneCount,
-        coveredLaneCount: privateChannelRecoveryMilestone.coveredLaneCount,
-        gapCount: privateChannelRecoveryMilestone.gapCount,
-        familyCount: privateChannelRecoveryMilestone.familyCount,
-        families: privateChannelRecoveryMilestone.families,
-      },
-      replacementActionRecoveryMilestone: {
-        status: replacementActionRecoveryMilestone.status,
-        laneIds: [...replacementActionRecoveryMilestone.laneIds],
-        requiredLaneCount: replacementActionRecoveryMilestone.requiredLaneCount,
-        coveredLaneCount: replacementActionRecoveryMilestone.coveredLaneCount,
-        gapCount: replacementActionRecoveryMilestone.gapCount,
-        familyCount: replacementActionRecoveryMilestone.familyCount,
-        families: replacementActionRecoveryMilestone.families,
-      },
-      replacementHandoffRecoveryMilestone: {
-        status: replacementHandoffRecoveryMilestone.status,
-        laneIds: [...replacementHandoffRecoveryMilestone.laneIds],
-        requiredLaneCount: replacementHandoffRecoveryMilestone.requiredLaneCount,
-        coveredLaneCount: replacementHandoffRecoveryMilestone.coveredLaneCount,
-        gapCount: replacementHandoffRecoveryMilestone.gapCount,
-        familyCount: replacementHandoffRecoveryMilestone.familyCount,
-        families: replacementHandoffRecoveryMilestone.families,
-      },
+      staleConflictMessageMilestone: coverageMilestoneSnapshot(
+        staleConflictMessageMilestone,
+      ),
+      hostStaleControlMilestone: coverageMilestoneSnapshot(
+        hostStaleControlMilestone,
+      ),
+      privateChannelRecoveryMilestone: coverageMilestoneSnapshot(
+        privateChannelRecoveryMilestone,
+      ),
+      replacementActionRecoveryMilestone: coverageMilestoneSnapshot(
+        replacementActionRecoveryMilestone,
+      ),
+      replacementHandoffRecoveryMilestone: coverageMilestoneSnapshot(
+        replacementHandoffRecoveryMilestone,
+      ),
     },
     localDevelopmentSpine: {
       status: "passed",
@@ -1319,59 +1297,21 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
               ...(proofFreshnessAdminProofEvidence === undefined
                 ? {}
                 : { proofFreshnessAdminProof: proofFreshnessAdminProofEvidence }),
-              staleConflictMessageMilestone: {
-                status: staleConflictMessageMilestone.status,
-                laneIds: [...staleConflictMessageMilestone.laneIds],
-                requiredLaneCount: staleConflictMessageMilestone.requiredLaneCount,
-                coveredLaneCount: staleConflictMessageMilestone.coveredLaneCount,
-                gapCount: staleConflictMessageMilestone.gapCount,
-                familyCount: staleConflictMessageMilestone.familyCount,
-                families: staleConflictMessageMilestone.families,
-                surfaceCoverage: staleConflictMessageMilestone.surfaceCoverage,
-                surfaces: staleConflictMessageMilestone.surfaces,
-              },
-              hostStaleControlMilestone: {
-                status: hostStaleControlMilestone.status,
-                laneIds: [...hostStaleControlMilestone.laneIds],
-                requiredLaneCount: hostStaleControlMilestone.requiredLaneCount,
-                coveredLaneCount: hostStaleControlMilestone.coveredLaneCount,
-                gapCount: hostStaleControlMilestone.gapCount,
-                familyCount: hostStaleControlMilestone.familyCount,
-                families: hostStaleControlMilestone.families,
-              },
-              privateChannelRecoveryMilestone: {
-                status: privateChannelRecoveryMilestone.status,
-                laneIds: [...privateChannelRecoveryMilestone.laneIds],
-                requiredLaneCount:
-                  privateChannelRecoveryMilestone.requiredLaneCount,
-                coveredLaneCount:
-                  privateChannelRecoveryMilestone.coveredLaneCount,
-                gapCount: privateChannelRecoveryMilestone.gapCount,
-                familyCount: privateChannelRecoveryMilestone.familyCount,
-                families: privateChannelRecoveryMilestone.families,
-              },
-              replacementActionRecoveryMilestone: {
-                status: replacementActionRecoveryMilestone.status,
-                laneIds: [...replacementActionRecoveryMilestone.laneIds],
-                requiredLaneCount:
-                  replacementActionRecoveryMilestone.requiredLaneCount,
-                coveredLaneCount:
-                  replacementActionRecoveryMilestone.coveredLaneCount,
-                gapCount: replacementActionRecoveryMilestone.gapCount,
-                familyCount: replacementActionRecoveryMilestone.familyCount,
-                families: replacementActionRecoveryMilestone.families,
-              },
-              replacementHandoffRecoveryMilestone: {
-                status: replacementHandoffRecoveryMilestone.status,
-                laneIds: [...replacementHandoffRecoveryMilestone.laneIds],
-                requiredLaneCount:
-                  replacementHandoffRecoveryMilestone.requiredLaneCount,
-                coveredLaneCount:
-                  replacementHandoffRecoveryMilestone.coveredLaneCount,
-                gapCount: replacementHandoffRecoveryMilestone.gapCount,
-                familyCount: replacementHandoffRecoveryMilestone.familyCount,
-                families: replacementHandoffRecoveryMilestone.families,
-              },
+              staleConflictMessageMilestone: coverageMilestoneSnapshot(
+                staleConflictMessageMilestone,
+              ),
+              hostStaleControlMilestone: coverageMilestoneSnapshot(
+                hostStaleControlMilestone,
+              ),
+              privateChannelRecoveryMilestone: coverageMilestoneSnapshot(
+                privateChannelRecoveryMilestone,
+              ),
+              replacementActionRecoveryMilestone: coverageMilestoneSnapshot(
+                replacementActionRecoveryMilestone,
+              ),
+              replacementHandoffRecoveryMilestone: coverageMilestoneSnapshot(
+                replacementHandoffRecoveryMilestone,
+              ),
               ...(backupRestoreEvidence === undefined
                 ? {}
                 : {
@@ -1604,15 +1544,41 @@ function buildStaleConflictMessageMilestone(proof, { sourcePath }) {
     sourcePath,
   });
   return {
+    ...coverageMilestoneSummary(coverage, { laneIds }),
+    surfaceCoverage,
+    surfaces,
+  };
+}
+
+function coverageMilestoneSummary(coverage, { laneIds = coverage.sourceLaneIds } = {}) {
+  return {
     status: coverage.status,
-    laneIds,
+    laneIds: [...laneIds],
     requiredLaneCount: coverage.laneCount,
     coveredLaneCount: coverage.passedLaneCount,
     gapCount: coverage.laneCount - coverage.passedLaneCount,
     familyCount: coverage.familyCount,
+    expectedLaneCount: coverage.expectedLaneCount,
+    expectedFamilyCount: coverage.expectedFamilyCount,
     families: coverage.families,
-    surfaceCoverage,
-    surfaces,
+  };
+}
+
+function coverageMilestoneSnapshot(milestone) {
+  return {
+    status: milestone.status,
+    laneIds: [...milestone.laneIds],
+    requiredLaneCount: milestone.requiredLaneCount,
+    coveredLaneCount: milestone.coveredLaneCount,
+    gapCount: milestone.gapCount,
+    familyCount: milestone.familyCount,
+    expectedLaneCount: milestone.expectedLaneCount,
+    expectedFamilyCount: milestone.expectedFamilyCount,
+    families: milestone.families,
+    ...(milestone.surfaceCoverage === undefined
+      ? {}
+      : { surfaceCoverage: milestone.surfaceCoverage }),
+    ...(milestone.surfaces === undefined ? {} : { surfaces: milestone.surfaces }),
   };
 }
 
@@ -1749,15 +1715,7 @@ function buildHostStaleControlMilestone(proof, { sourcePath }) {
       `host stale-control milestone missing passed lanes from ${sourcePath}: ${error.message}`,
     );
   }
-  return {
-    status: coverage.status,
-    laneIds: [...coverage.sourceLaneIds],
-    requiredLaneCount: coverage.laneCount,
-    coveredLaneCount: coverage.passedLaneCount,
-    gapCount: coverage.laneCount - coverage.passedLaneCount,
-    familyCount: coverage.familyCount,
-    families: coverage.families,
-  };
+  return coverageMilestoneSummary(coverage);
 }
 
 function buildPrivateChannelRecoveryMilestone(proof, { sourcePath }) {
@@ -1772,15 +1730,7 @@ function buildPrivateChannelRecoveryMilestone(proof, { sourcePath }) {
       `private-channel recovery milestone missing passed lanes from ${sourcePath}: ${error.message}`,
     );
   }
-  return {
-    status: coverage.status,
-    laneIds: [...coverage.sourceLaneIds],
-    requiredLaneCount: coverage.laneCount,
-    coveredLaneCount: coverage.passedLaneCount,
-    gapCount: coverage.laneCount - coverage.passedLaneCount,
-    familyCount: coverage.familyCount,
-    families: coverage.families,
-  };
+  return coverageMilestoneSummary(coverage);
 }
 
 function buildReplacementActionRecoveryMilestone(proof, { sourcePath }) {
@@ -1795,15 +1745,7 @@ function buildReplacementActionRecoveryMilestone(proof, { sourcePath }) {
       `replacement action recovery milestone missing passed lanes from ${sourcePath}: ${error.message}`,
     );
   }
-  return {
-    status: coverage.status,
-    laneIds: [...coverage.sourceLaneIds],
-    requiredLaneCount: coverage.laneCount,
-    coveredLaneCount: coverage.passedLaneCount,
-    gapCount: coverage.laneCount - coverage.passedLaneCount,
-    familyCount: coverage.familyCount,
-    families: coverage.families,
-  };
+  return coverageMilestoneSummary(coverage);
 }
 
 function buildReplacementHandoffRecoveryMilestone(proof, { sourcePath }) {
@@ -1818,15 +1760,7 @@ function buildReplacementHandoffRecoveryMilestone(proof, { sourcePath }) {
       `replacement handoff recovery milestone missing passed lanes from ${sourcePath}: ${error.message}`,
     );
   }
-  return {
-    status: coverage.status,
-    laneIds: [...coverage.sourceLaneIds],
-    requiredLaneCount: coverage.laneCount,
-    coveredLaneCount: coverage.passedLaneCount,
-    gapCount: coverage.laneCount - coverage.passedLaneCount,
-    familyCount: coverage.familyCount,
-    families: coverage.families,
-  };
+  return coverageMilestoneSummary(coverage);
 }
 
 function buildReplacementRaceReloadMilestone(raceCoverage, { sourcePath }) {
@@ -5462,9 +5396,13 @@ function assertReleaseReadinessCoverageMilestoneConventions(checks = []) {
       !Number.isInteger(check.requiredLaneCount) ||
       !Number.isInteger(check.coveredLaneCount) ||
       !Number.isInteger(check.familyCount) ||
+      !Number.isInteger(check.expectedLaneCount) ||
+      !Number.isInteger(check.expectedFamilyCount) ||
       check.familyCount <= 0 ||
       check.requiredLaneCount !== check.laneIds.length ||
-      check.coveredLaneCount !== check.laneIds.length
+      check.coveredLaneCount !== check.laneIds.length ||
+      check.expectedLaneCount !== check.laneIds.length ||
+      check.expectedFamilyCount !== check.familyCount
     ) {
       throw new Error(
         `dev-test-game proof-run coverage milestone missing summary metadata: ${checkId}`,

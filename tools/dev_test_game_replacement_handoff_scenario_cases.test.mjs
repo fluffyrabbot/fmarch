@@ -107,6 +107,8 @@ test("replacement handoff recovery coverage is derived from shared lanes", () =>
   assert.equal(summary.laneCount, replacementHandoffRecoveryLaneIds.length);
   assert.equal(summary.passedLaneCount, replacementHandoffRecoveryLaneIds.length);
   assert.equal(summary.familyCount, 5);
+  assert.equal(summary.expectedLaneCount, replacementHandoffRecoveryLaneIds.length);
+  assert.equal(summary.expectedFamilyCount, 5);
   assert.doesNotThrow(() =>
     assertReplacementHandoffRecoveryCoverageSummary({ summary, lanes }),
   );
@@ -116,7 +118,6 @@ test("replacement handoff consumers import extracted lane IDs", async () => {
   const consumerPaths = [
     "tools/dev_test_game_core_loop_scenarios.mjs",
     "tools/dev_test_game_hardening_scenarios.mjs",
-    "tools/dev_test_game_host_stale_control_scenarios.mjs",
     "tools/dev_test_game_release_readiness.mjs",
     "tools/dev_test_game.test.mjs",
   ];
