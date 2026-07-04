@@ -6,14 +6,8 @@ import {
   playerInvalidActionRecoveryLaneId,
 } from "./dev_test_game_core_loop_action_scenario_cases.mjs";
 import {
-  hostNightActionTransitionLaneId,
-} from "./dev_test_game_core_loop_host_phase_scenarios.mjs";
-import {
   coreLoopPrivateChannelPostLaneId,
 } from "./dev_test_game_core_loop_private_channel_recovery_scenarios.mjs";
-import {
-  postDayThreeTransitionLaneId,
-} from "./dev_test_game_core_loop_post_day_three_scenarios.mjs";
 import {
   coreLoopVoteResolutionLaneIds,
   dayThreeVoteResolutionLaneId,
@@ -29,6 +23,9 @@ import {
 import {
   nightTwoProgressionFeatureSpineRows,
 } from "./dev_test_game_core_loop_night_two_progression_scenarios.mjs";
+import {
+  dayTwoNightTwoFeatureSpineRows,
+} from "./dev_test_game_core_loop_day_two_night_two_scenarios.mjs";
 
 export const nightThreeActionResolutionLaneId =
   "night-three-action-resolution";
@@ -55,6 +52,9 @@ const dayTwoNightTwo = coreLoopFeatureSpineCycleIds.dayTwoNightTwo;
 const dayOneNightOneDayTwo =
   coreLoopFeatureSpineCycleIds.dayOneNightOneDayTwo;
 const nightTwoDayThree = coreLoopFeatureSpineCycleIds.nightTwoDayThree;
+const dayTwoNightTwoSpineRows = dayTwoNightTwoFeatureSpineRows({
+  cycleId: dayTwoNightTwo,
+});
 
 const coreLoopFeatureSpineLaneRows = Object.freeze([
   Object.freeze({
@@ -77,14 +77,7 @@ const coreLoopFeatureSpineLaneRows = Object.freeze([
     seedRoleOverride: "actionPlayer",
   }),
   Object.freeze(dayVoteNoLynchFeatureSpineRow({ cycleId: nightTwoDayThree })),
-  Object.freeze({
-    targetKey: "postDayThreeTransition",
-    featureSlotId: postDayThreeTransitionLaneId,
-    cycleId: dayTwoNightTwo,
-    role: "host",
-    checkpointId: `${dayTwoNightTwo}-d02-resolved-target-killed`,
-    adminCheckId: "core-loop",
-  }),
+  Object.freeze(dayTwoNightTwoSpineRows[0]),
   Object.freeze({
     targetKey: "nightActionLoop",
     featureSlotId: "night-action-loop",
@@ -97,22 +90,7 @@ const coreLoopFeatureSpineLaneRows = Object.freeze([
       "stale-action-conflict",
     ]),
   }),
-  Object.freeze({
-    targetKey: "playerActionSubmission",
-    featureSlotId: "player-action-submission",
-    cycleId: dayTwoNightTwo,
-    role: "actionPlayer",
-    checkpointId: `${dayTwoNightTwo}-n02-action-open`,
-    adminCheckId: playerActionLoopLaneId,
-  }),
-  Object.freeze({
-    targetKey: "hostNightActionTransition",
-    featureSlotId: hostNightActionTransitionLaneId,
-    cycleId: dayTwoNightTwo,
-    role: "host",
-    checkpointId: `${dayTwoNightTwo}-n02-action-open`,
-    adminCheckId: "core-loop",
-  }),
+  ...dayTwoNightTwoSpineRows.slice(1),
   ...nightTwoProgressionFeatureSpineRows({ cycleId: nightTwoDayThree }),
   ...terminalRecoveryFeatureSpineRows({ cycleId: nightTwoDayThree }),
   ...revoteProgressionFeatureSpineRows({ cycleId: nightTwoDayThree }),
