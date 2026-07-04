@@ -7,8 +7,10 @@ import {
   buildProofFreshnessAdminSurfaceReadinessCheck,
   buildProofGraphAdminRoleHandoffsReadinessCheck,
   getLocalReadinessDependency,
+  localReadinessDependencyRecoveryFor,
   localHostedEvidenceLaneDemoProofCheckId,
   localProofGraphAdminRoleHandoffsCheckId,
+  localSeedDemoFixtureCheckId,
 } from "./dev_test_game_local_readiness_dependencies.mjs";
 import { assertDevTestGameProofRun } from "./dev_test_game_proof_contract.mjs";
 import {
@@ -723,11 +725,13 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
   }
   if (seedFixtureEvidence !== undefined) {
     localChecks.push({
-      id: "local-seed-demo-fixture",
+      id: localSeedDemoFixtureCheckId,
       label: "Local seed/demo fixture summary",
       status: "passed",
+      dependencyGated: true,
       evidence: seedFixtureEvidence.path,
       proofBoundary: seedFixtureEvidence.proofBoundary,
+      recovery: localReadinessDependencyRecoveryFor(localSeedDemoFixtureCheckId),
       scenarioCount: seedFixtureEvidence.scenarioCount,
       proofLaneCoverage: seedFixtureEvidence.proofLaneCoverage,
       ...(seedAdminProofEvidence === undefined

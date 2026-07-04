@@ -1936,6 +1936,72 @@ test("dev test-game next-action derives one local recovery command from the mani
       },
     ],
   });
+  const missingSeedFixtureDependencyAction = buildDevTestGameNextAction(
+    freshManifest,
+    {
+      generatedAt: "2026-06-26T00:00:01.000Z",
+      opsArtifacts: devTestGameOpsArtifactsFixture(),
+      raceCoverage: devTestGameRaceCoverageFixture(),
+      releaseReadinessChecklist: devTestGameReleaseReadinessChecklistFixture({
+        seedProofLaneCoverage: null,
+        unproven: [
+          {
+            id: "seed-demo-fixtures",
+            status: "unproven",
+            requiredEvidence:
+              "Machine-readable seeded local demo fixture and scenario inventory tied to this proof run",
+          },
+          {
+            id: "hosted-production-identity",
+            status: "unproven",
+            requiredEvidence: "Hosted account lifecycle",
+          },
+        ],
+      }),
+    },
+  );
+  assertDevTestGameNextAction(missingSeedFixtureDependencyAction);
+  assert.deepEqual(missingSeedFixtureDependencyAction.nextAction, {
+    command: devTestGameSeedFixtureCommand,
+    reason: "release-readiness-local-check-missing",
+    status: "blocked",
+    localCheck: {
+      id: "local-seed-demo-fixture",
+      status: "missing",
+      requiredEvidence:
+        "Passed local seed/demo fixture inventory and admin role-surface proof in the generated release-readiness checklist",
+      buildSlice:
+        "Generate the local seed/demo fixture inventory and admin proof before choosing hosted readiness work.",
+      proofTarget: devTestGameSeedFixturePath,
+      roleUrl: devTestGameSeedFixtureRoleUrl,
+    },
+  });
+  assert.deepEqual(
+    missingSeedFixtureDependencyAction.localReadinessDependencyTrace,
+    {
+      strategy: "local-readiness-dependency-before-hosted-work",
+      candidateCount: 1,
+      selectedCheckId: "local-seed-demo-fixture",
+      candidates: [
+        {
+          rank: 1,
+          id: "local-seed-demo-fixture",
+          status: "missing",
+          priority: 3,
+          selected: true,
+          command: devTestGameSeedFixtureCommand,
+          buildSlice:
+            "Generate the local seed/demo fixture inventory and admin proof before choosing hosted readiness work.",
+          proofTarget: devTestGameSeedFixturePath,
+          roleUrl: devTestGameSeedFixtureRoleUrl,
+          proofBoundary:
+            "Local seed/demo fixture inventory and admin browser proof for one dev-test-game run. This recovers the local fixture dependency only; it does not prove hosted demo data, invite delivery, release readiness, or production readiness.",
+          requiredEvidence:
+            "Passed local seed/demo fixture inventory and admin role-surface proof in the generated release-readiness checklist",
+        },
+      ],
+    },
+  );
   const unclassifiedSeedCoverageAction = buildDevTestGameNextAction(freshManifest, {
     generatedAt: "2026-06-26T00:00:01.000Z",
     opsArtifacts: devTestGameOpsArtifactsFixture(),
@@ -2166,7 +2232,7 @@ test("dev test-game next-action derives one local recovery command from the mani
           rank: 1,
           id: "local-hosted-evidence-lane-demo-proof",
           status: "missing",
-          priority: 3,
+          priority: 4,
           selected: true,
           command: `npm run ${devTestGameHostedEvidenceLaneDemoProofCommand}`,
           buildSlice:
@@ -11631,9 +11697,21 @@ function devTestGameReleaseReadinessChecklistFixture({
                 id: "local-seed-demo-fixture",
                 label: "Local seed/demo fixture summary",
                 status: "passed",
+                dependencyGated: true,
                 evidence: "target/dev-test-game/seed-fixture-summary.json",
                 proofBoundary:
                   "Local seed/demo fixture inventory for one dev-test-game run.",
+                recovery: {
+                  command: devTestGameSeedFixtureCommand,
+                  buildSlice:
+                    "Generate the local seed/demo fixture inventory and admin proof before choosing hosted readiness work.",
+                  proofTarget: devTestGameSeedFixturePath,
+                  roleUrl: devTestGameSeedFixtureRoleUrl,
+                  proofBoundary:
+                    "Local seed/demo fixture inventory and admin browser proof for one dev-test-game run. This recovers the local fixture dependency only; it does not prove hosted demo data, invite delivery, release readiness, or production readiness.",
+                  requiredEvidence:
+                    "Passed local seed/demo fixture inventory and admin role-surface proof in the generated release-readiness checklist",
+                },
                 scenarioCount: seedScenarioCoverageGroups.allDemo.length,
                 proofLaneCoverage: seedProofLaneCoverage,
               },

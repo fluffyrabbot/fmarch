@@ -19,9 +19,13 @@ export const localProofFreshnessAdminSurfaceCheckId =
   "local-proof-freshness-admin-surface";
 export const localNextActionAdminSurfaceCheckId =
   "local-next-action-admin-surface";
+export const localSeedDemoFixtureCheckId = "local-seed-demo-fixture";
 export const localHostedEvidenceLaneDemoProofCheckId =
   "local-hosted-evidence-lane-demo-proof";
 
+const devTestGameSeedFixtureCommand = "test:dev-test-game-seed-fixture";
+const devTestGameSeedFixturePath =
+  "target/dev-test-game/seed-fixture-summary.json";
 const devTestGameHostedEvidenceLaneDemoProofCommand =
   "test:dev-test-game-hosted-evidence-lane-demo-proof";
 const devTestGameHostedEvidenceLaneDemoProofPath =
@@ -71,9 +75,24 @@ export const localReadinessDependencies = Object.freeze([
       "Passed next-action admin surface check in the generated release-readiness checklist",
   }),
   Object.freeze({
+    id: localSeedDemoFixtureCheckId,
+    label: "Local seed/demo fixture summary",
+    priority: 3,
+    command: `npm run ${devTestGameSeedFixtureCommand}`,
+    buildSlice:
+      "Generate the local seed/demo fixture inventory and admin proof before choosing hosted readiness work.",
+    proofTarget: devTestGameSeedFixturePath,
+    roleUrl: localAdminAuditRoleUrl(localAdminAuditIds.seedFixtures),
+    proofBoundary:
+      "Local seed/demo fixture inventory and admin browser proof for one dev-test-game run. This recovers the local fixture dependency only; it does not prove hosted demo data, invite delivery, release readiness, or production readiness.",
+    requiredEvidence:
+      "Passed local seed/demo fixture inventory and admin role-surface proof in the generated release-readiness checklist",
+    sourceUnprovenIds: Object.freeze(["seed-demo-fixtures"]),
+  }),
+  Object.freeze({
     id: localHostedEvidenceLaneDemoProofCheckId,
     label: "Local hosted evidence lane demo proof",
-    priority: 3,
+    priority: 4,
     command: `npm run ${devTestGameHostedEvidenceLaneDemoProofCommand}`,
     buildSlice:
       "Refresh the local hosted evidence lane demo proof before choosing hosted deployment work.",
@@ -163,10 +182,15 @@ export function rankedMissingLocalReadinessDependencies(readiness) {
       { check, index },
     ]),
   );
+  const unprovenIds = new Set(
+    (readiness.releaseReadiness?.unproven ?? []).map((item) => item.id),
+  );
   return localReadinessDependencies
     .map((dependency, index) => {
       const current = localChecks.get(dependency.id);
-      return current?.check?.status === "passed"
+      const sourceUnprovenMissing =
+        dependency.sourceUnprovenIds?.some((id) => unprovenIds.has(id)) ?? false;
+      return current?.check?.status === "passed" && !sourceUnprovenMissing
         ? null
         : {
             id: dependency.id,
@@ -299,7 +323,13 @@ function assertLocalReadinessDependencyDescriptor(dependency) {
     typeof dependency.proofBoundary !== "string" ||
     dependency.proofBoundary.length === 0 ||
     typeof dependency.requiredEvidence !== "string" ||
-    dependency.requiredEvidence.length === 0
+    dependency.requiredEvidence.length === 0 ||
+    (dependency.sourceUnprovenIds !== undefined &&
+      (!Array.isArray(dependency.sourceUnprovenIds) ||
+        dependency.sourceUnprovenIds.length === 0 ||
+        dependency.sourceUnprovenIds.some(
+          (id) => typeof id !== "string" || id.length === 0,
+        )))
   ) {
     throw new Error(
       `local readiness dependency ${dependency?.id ?? "<unknown>"} is missing recovery metadata`,
