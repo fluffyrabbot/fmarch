@@ -365,13 +365,14 @@ test("completed-game scenario module derives shared hardening lane groups", () =
 });
 
 test("completed-game production harness callers share extracted recovery cases", async () => {
-  const scenarioCallerPaths = new Map([
+  const scenarioCallerPaths = [
     [
       "tools/dev_test_game_proof_contract.mjs",
       [
         "completedGameHardeningLaneCases",
         "completedGameHardeningLaneIds",
       ],
+      "./dev_test_game_core_loop_completed_game_proof_readiness_contract.mjs",
     ],
     [
       "tools/dev_test_game_core_loop_admin_proof.mjs",
@@ -381,15 +382,23 @@ test("completed-game production harness callers share extracted recovery cases",
         "completedGameProofReadinessScenarioFamilies",
         "completedGameProofReadinessTransition",
       ],
+      "./dev_test_game_core_loop_completed_game_proof_readiness_cases.mjs",
     ],
     [
       "tools/dev_test_game_release_readiness.mjs",
       [
         "assertCompletedGameProofReadinessSurfaceProof",
-        "completedGameHardeningSpineCycleId",
-        "completedGameHardeningSpineLaneCases",
         "completedGameProofReadinessScenarioFamilies",
       ],
+      "./dev_test_game_core_loop_completed_game_proof_readiness_cases.mjs",
+    ],
+    [
+      "tools/dev_test_game_release_readiness.mjs",
+      [
+        "completedGameHardeningSpineCycleId",
+        "completedGameHardeningSpineLaneCases",
+      ],
+      "./dev_test_game_core_loop_completed_game_proof_readiness_contract.mjs",
     ],
     [
       "tools/dev_test_game_release_readiness_cases.mjs",
@@ -397,20 +406,20 @@ test("completed-game production harness callers share extracted recovery cases",
         "completedGameHardeningSpineCycleId",
         "completedGameStaleRecoverySpineLaneCase",
       ],
+      "./dev_test_game_core_loop_completed_game_proof_readiness_contract.mjs",
     ],
-  ]);
+  ];
 
-  for (const [callerPath, importedNames] of scenarioCallerPaths) {
+  for (const [callerPath, importedNames, moduleSpecifier] of scenarioCallerPaths) {
     const source = await readFile(callerPath, "utf8");
     for (const importedName of importedNames) {
       assert(
         importsFromModule({
           source,
           importedName,
-          moduleSpecifier:
-            "./dev_test_game_core_loop_completed_game_proof_readiness_contract.mjs",
+          moduleSpecifier,
         }),
-        `${callerPath} should import ${importedName} from the shared proof/readiness contract`,
+        `${callerPath} should import ${importedName} from ${moduleSpecifier}`,
       );
     }
     assert(
@@ -511,12 +520,6 @@ test("completed-game production harness callers share extracted recovery cases",
     );
     assert(
       !source.includes(
-        "./dev_test_game_core_loop_completed_game_proof_readiness_cases.mjs",
-      ),
-      `${callerPath} should not import through the removed proof/readiness case barrel`,
-    );
-    assert(
-      !source.includes(
         "./dev_test_game_core_loop_completed_game_proof_readiness_case_definitions.mjs",
       ),
       `${callerPath} should not import through the removed proof/readiness case-definition barrel`,
@@ -564,21 +567,56 @@ test("completed-game production harness callers share extracted recovery cases",
     "completedHostStaleCommandCases",
     "completedPlayerReloadCases",
     "staleCompletedGamePlayerCommandCases",
-    "completedGameEndgameProofScenarioCases",
-    "completedGameEndgameScenarioCaseFamilies",
-    "completedGameEndgameTransition",
-    "completedGameEndgameTransitionTokens",
-    "completedGameStaleRecoverySpineLaneCase",
+    "completedGameProofReadinessScenarioFamilies",
+    "completedGameProofReadinessProofScenarioCases",
+    "completedGameProofReadinessTransition",
+    "assertCompletedGameProofReadinessSurfaceProof",
   ]) {
     assert(
       importsFromModule({
         source: proofReadinessContractSource,
         importedName,
         moduleSpecifier:
+          "./dev_test_game_core_loop_completed_game_proof_readiness_cases.mjs",
+      }),
+      `proof/readiness contract should import ${importedName} from the canonical completed-game proof/readiness cases module`,
+    );
+  }
+  for (const importedName of [
+    "completedGameEndgameProofScenarioCases",
+    "completedGameEndgameScenarioCaseFamilies",
+    "completedGameEndgameTransition",
+    "completedGameEndgameTransitionTokens",
+  ]) {
+    assert(
+      !importsFromModule({
+        source: proofReadinessContractSource,
+        importedName,
+        moduleSpecifier:
           "./dev_test_game_core_loop_completed_game_shared_scenario_assertions.mjs",
       }),
-      `proof/readiness contract should import ${importedName} from the canonical completed-game scenario/assertion module`,
+      `proof/readiness contract should not source ${importedName} directly from the lower-level completed-game scenario/assertion module`,
     );
+  }
+  assert(
+    importsFromModule({
+      source: proofReadinessContractSource,
+      importedName: "completedGameStaleRecoverySpineLaneCase",
+      moduleSpecifier:
+        "./dev_test_game_core_loop_completed_game_shared_scenario_assertions.mjs",
+    }),
+    "proof/readiness contract should keep stale recovery spine lane compatibility on the shared scenario/assertion module",
+  );
+  for (const importedName of [
+    "completedHostStaleCommandCases",
+    "completedPlayerReloadCases",
+    "staleCompletedGamePlayerCommandCases",
+    "completedGameEndgameProofScenarioCases",
+    "completedGameEndgameScenarioCaseFamilies",
+    "completedGameEndgameTransition",
+    "completedGameEndgameTransitionTokens",
+    "completedGameStaleRecoverySpineLaneCase",
+  ]) {
     assert(
       !importsFromModule({
         source: proofReadinessContractSource,
@@ -763,9 +801,9 @@ test("completed-game progression facade shares proof and readiness cases", async
         source: progressionSource,
         importedName,
         moduleSpecifier:
-          "./dev_test_game_core_loop_completed_game_proof_readiness_contract.mjs",
+          "./dev_test_game_core_loop_completed_game_proof_readiness_cases.mjs",
       }),
-      `completed-game progression should import ${importedName} from the proof/readiness contract`,
+      `completed-game progression should import ${importedName} from the proof/readiness cases module`,
     );
   }
   assert(
@@ -945,7 +983,7 @@ test("completed-game test fixtures live outside the assertion facade", async () 
 
 function importsFromModule({ source, importedName, moduleSpecifier }) {
   const importPattern = new RegExp(
-    `import\\s*\\{([^}]*)\\}\\s*from\\s*"${escapeRegExp(moduleSpecifier)}";`,
+    `(?:import|export)\\s*\\{([^}]*)\\}\\s*from\\s*"${escapeRegExp(moduleSpecifier)}";`,
     "g",
   );
   return Array.from(source.matchAll(importPattern)).some((match) =>
