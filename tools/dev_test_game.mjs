@@ -32,6 +32,11 @@ import {
   assertLiveStaleN01ActionTransitionRecovery,
 } from "./dev_test_game_core_loop_transition_recovery_scenario_assertions.mjs";
 import {
+  assertPrivateChannelContext,
+  assertPrivateChannelId,
+  assertPrivateChannelRouteContext,
+} from "./dev_test_game_core_loop_private_channel_context_assertions.mjs";
+import {
   coreLoopPrivateChannelCompletedPostLaneId,
   coreLoopPrivateChannelInvalidActionLaneId,
   coreLoopPrivateChannelStalePostLaneId,
@@ -5507,12 +5512,15 @@ async function verifyPrivateChannelInvalidActionRecovery({
   const legalActionButton = setupSnapshot.buttons.find(
     (button) => button.action === "submit_action:factional_kill",
   );
+  assertPrivateChannelContext({
+    context: setupSnapshot.channelContext,
+    expectedChannelId: factionDayChatChannel,
+    expectedActorSlot: "slot_4",
+    requireCapabilityLabel: true,
+    label: "private-channel invalid action setup",
+    includeEvidenceInError: true,
+  });
   if (
-    setupSnapshot.channelContext.channelId !== factionDayChatChannel ||
-    setupSnapshot.channelContext.actorSlot !== "slot_4" ||
-    !setupSnapshot.channelContext.capabilityLabel?.includes(
-      `ChannelMember(${factionDayChatChannel})`,
-    ) ||
     invalidActionButton?.disabled !== false ||
     legalActionButton?.disabled !== false
   ) {
@@ -5562,6 +5570,14 @@ async function verifyPrivateChannelInvalidActionRecovery({
   const privateThreadPagerVisible = await page
     .getByTestId("player-thread-pager")
     .isVisible();
+  assertPrivateChannelRouteContext({
+    context: afterRejectSnapshot.channelContext,
+    expectedChannelId: factionDayChatChannel,
+    expectedActorSlot: "slot_4",
+    privateThreadPagerVisible,
+    label: "private-channel invalid action recovery",
+    includeEvidenceInError: true,
+  });
 
   if (
     reject?.state !== "reject" ||
@@ -5579,8 +5595,6 @@ async function verifyPrivateChannelInvalidActionRecovery({
       "commandState",
     ) !== true ||
     !receiptStatusText.includes(playerInvalidActionRecoveryMessage) ||
-    afterRejectSnapshot.channelContext.channelId !== factionDayChatChannel ||
-    afterRejectSnapshot.channelContext.actorSlot !== "slot_4" ||
     afterRejectSnapshot.commandState?.phase?.phaseId !== "N01" ||
     afterRejectSnapshot.commandState?.phase?.locked !== false ||
     !afterRejectSnapshot.commandState?.actions?.some(
@@ -5595,8 +5609,7 @@ async function verifyPrivateChannelInvalidActionRecovery({
     apiCommandStateAfterReject?.phase?.phase_id !== "N01" ||
     apiCommandStateAfterReject?.actions?.some(
       (action) => action.template_id === "factional_kill",
-    ) !== true ||
-    privateThreadPagerVisible !== true
+    ) !== true
   ) {
     throw new Error(
       `private-channel invalid action recovery drifted: ${JSON.stringify({
@@ -6034,12 +6047,15 @@ async function freezeStalePrivateChannelActionPage({ page, game, frontendBaseUrl
     (button) => button.action === "submit_action:factional_kill",
   );
   const closedStatus = await closePlayerLiveProjection(page);
+  assertPrivateChannelContext({
+    context: snapshot.channelContext,
+    expectedChannelId: factionDayChatChannel,
+    expectedActorSlot: "slot_4",
+    requireCapabilityLabel: true,
+    label: "stale private-channel action setup",
+    includeEvidenceInError: true,
+  });
   if (
-    snapshot.channelContext.channelId !== factionDayChatChannel ||
-    snapshot.channelContext.actorSlot !== "slot_4" ||
-    !snapshot.channelContext.capabilityLabel?.includes(
-      `ChannelMember(${factionDayChatChannel})`,
-    ) ||
     actionConfig?.templateId !== "factional_kill" ||
     actionButton?.disabled !== false ||
     closedStatus?.state !== "closed"
@@ -6141,6 +6157,14 @@ async function submitPrivateChannelStaleActionReconnectRecovery({
     }),
     includeEvidenceInError: true,
   });
+  assertPrivateChannelRouteContext({
+    context: afterRejectSnapshot.channelContext,
+    expectedChannelId: factionDayChatChannel,
+    expectedActorSlot: "slot_4",
+    privateThreadPagerVisible: privateThreadPagerVisibleAfterReject,
+    label: "private-channel stale action recovery",
+    includeEvidenceInError: true,
+  });
   if (
     reject?.requestEnvelope?.body?.body?.principal_user_id !== "player-goon-a" ||
     currentReceipt?.actionId !== "submit_action:factional_kill" ||
@@ -6149,9 +6173,6 @@ async function submitPrivateChannelStaleActionReconnectRecovery({
     commandStateAfterReject?.actorAlive !== true ||
     commandStateAfterReject?.actorStatus !== "alive" ||
     commandStateAfterReject?.phase?.locked !== false ||
-    afterRejectSnapshot.channelContext.channelId !== factionDayChatChannel ||
-    afterRejectSnapshot.channelContext.actorSlot !== "slot_4" ||
-    privateThreadPagerVisibleAfterReject !== true ||
     apiCommandStateAfterReject?.actor_slot !== "slot_4" ||
     apiCommandStateAfterReject?.actor_alive !== true ||
     apiCommandStateAfterReject?.actor_status !== "alive" ||
@@ -6197,6 +6218,14 @@ async function submitPrivateChannelStaleActionReconnectRecovery({
   const privateThreadPagerVisibleAfterReconnect = await page
     .getByTestId("player-thread-pager")
     .isVisible();
+  assertPrivateChannelRouteContext({
+    context: reconnectChannelContext,
+    expectedChannelId: factionDayChatChannel,
+    expectedActorSlot: "slot_4",
+    privateThreadPagerVisible: privateThreadPagerVisibleAfterReconnect,
+    label: "private-channel stale action reconnect",
+    includeEvidenceInError: true,
+  });
   if (
     reconnectAfterReject?.status !== "passed" ||
     reconnectAfterReject?.reconnectCommand?.command?.SubmitPost?.channel_id !==
@@ -6211,9 +6240,6 @@ async function submitPrivateChannelStaleActionReconnectRecovery({
     reconnectAfterReject?.recoveredCommandState?.phase?.phaseId !== "D02" ||
     reconnectAfterReject?.recoveredCommandState?.phase?.locked !== false ||
     reconnectAfterReject?.recoveredCommandState?.actions?.length !== 0 ||
-    reconnectChannelContext.channelId !== factionDayChatChannel ||
-    reconnectChannelContext.actorSlot !== "slot_4" ||
-    privateThreadPagerVisibleAfterReconnect !== true ||
     buttonsAfterReconnect.some(
       (button) => button.action === "submit_action:factional_kill",
     )
@@ -7300,8 +7326,13 @@ async function verifyStalePrivateChannelPostAfterPhaseTransition({
     );
     const postBody =
       `Stale private-channel post after D01 phase closure ${crypto.randomUUID()}.`;
+    assertPrivateChannelId({
+      channelId: channelContextId,
+      expectedChannelId: factionDayChatChannel,
+      label: "stale private-channel post setup",
+      includeEvidenceInError: true,
+    });
     if (
-      channelContextId !== factionDayChatChannel ||
       submitPostBeforeClose?.disabled !== false
     ) {
       throw new Error(
@@ -7353,6 +7384,12 @@ async function verifyStalePrivateChannelPostAfterPhaseTransition({
     const channelContextAfterAck = await playerEntry.page
       .getByTestId("player-command-channel-context")
       .getAttribute("data-channel-id");
+    assertPrivateChannelId({
+      channelId: channelContextAfterAck,
+      expectedChannelId: factionDayChatChannel,
+      label: "stale private-channel post recovery",
+      includeEvidenceInError: true,
+    });
     const dispatchPlan = await playerEntry.page.evaluate(
       () => window.__fmarchPlayerCommandDispatchBridgePlan,
     );
@@ -7386,7 +7423,6 @@ async function verifyStalePrivateChannelPostAfterPhaseTransition({
       dispatchPlan?.projectionRefreshKeys?.includes("commandState") !== true ||
       dispatchPlan?.projectionRefreshKeys?.includes("dayVoteOutcomes") !== true ||
       projectedPost?.authorSlot !== "slot-7" ||
-      channelContextAfterAck !== factionDayChatChannel ||
       commandStateAfterAck?.phase?.phaseId !== "D01" ||
       commandStateAfterAck?.phase?.locked !== true ||
       commandStateAfterAck?.currentVote !== null ||
@@ -7678,16 +7714,35 @@ async function verifyCompletedPrivateChannelRecovery({
       apiCommandStateAfterReload,
       apiThreadPostBodiesAfterReload,
     };
+    assertPrivateChannelContext({
+      context: channelContextBeforeComplete,
+      expectedChannelId: factionDayChatChannel,
+      expectedActorSlot: "slot-7",
+      requireCapabilityLabel: true,
+      label: "completed private-channel setup",
+      includeEvidenceInError: true,
+    });
+    assertPrivateChannelContext({
+      context: channelContextAfterReject,
+      expectedChannelId: factionDayChatChannel,
+      expectedActorSlot: "slot-7",
+      label: "completed private-channel reject recovery",
+      includeEvidenceInError: true,
+    });
+    assertPrivateChannelRouteContext({
+      context: reloadAfterReject.reloadChannelContext,
+      expectedChannelId: factionDayChatChannel,
+      expectedActorSlot: "slot-7",
+      privateThreadPagerVisible: reloadAfterReject.threadPagerVisible,
+      requireCapabilityLabel: true,
+      label: "completed private-channel reload recovery",
+      includeEvidenceInError: true,
+    });
 
     if (
       seed.privateChannel !== factionDayChatChannel ||
       commandStateBeforeComplete?.actorSlot !== "slot-7" ||
       commandStateBeforeComplete?.gameCompleted !== false ||
-      channelContextBeforeComplete.channelId !== factionDayChatChannel ||
-      channelContextBeforeComplete.actorSlot !== "slot-7" ||
-      !channelContextBeforeComplete.capabilityLabel?.includes(
-        `ChannelMember(${factionDayChatChannel})`,
-      ) ||
       submitPostBeforeComplete?.disabled !== false ||
       closedStatus?.state !== "closed" ||
       complete?.commandStatus?.state !== "ack" ||
@@ -7717,26 +7772,18 @@ async function verifyCompletedPrivateChannelRecovery({
       commandStateAfterReject?.actions?.length !== 0 ||
       commandStateAfterReject?.voteTargets?.length !== 0 ||
       !commandStateAfterReject?.boundary?.includes("game is complete") ||
-      channelContextAfterReject.channelId !== factionDayChatChannel ||
-      channelContextAfterReject.actorSlot !== "slot-7" ||
       buttonsAfterReject.some((button) => button.disabled !== true) ||
       apiCommandStateAfterReject?.game_completed !== true ||
       apiCommandStateAfterReject?.actions?.length !== 0 ||
       apiCommandStateAfterReject?.vote_targets?.length !== 0 ||
       apiThreadPostBodies.includes(postBody) ||
       reloadAfterReject.routeResponseStatus !== 200 ||
-      reloadAfterReject.threadPagerVisible !== true ||
       reloadAfterReject.recoveredCommandState?.actorSlot !== "slot-7" ||
       reloadAfterReject.recoveredCommandState?.gameCompleted !== true ||
       reloadAfterReject.recoveredCommandState?.actions?.length !== 0 ||
       reloadAfterReject.recoveredCommandState?.voteTargets?.length !== 0 ||
       !reloadAfterReject.recoveredCommandState?.boundary?.includes(
         "game is complete",
-      ) ||
-      reloadAfterReject.reloadChannelContext.channelId !== factionDayChatChannel ||
-      reloadAfterReject.reloadChannelContext.actorSlot !== "slot-7" ||
-      !reloadAfterReject.reloadChannelContext.capabilityLabel?.includes(
-        `ChannelMember(${factionDayChatChannel})`,
       ) ||
       reloadAfterReject.reloadButtons.some((button) => button.disabled !== true) ||
       reloadAfterReject.reloadRejectedPostVisible !== false ||

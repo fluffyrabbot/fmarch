@@ -442,6 +442,12 @@ test("session cards can target focused proof artifacts without clobbering canoni
 
 test("private-channel stale action recovery uses shared transition assertion", async () => {
   const source = await readFile("tools/dev_test_game.mjs", "utf8");
+  assert(
+    source.includes(
+      "./dev_test_game_core_loop_private_channel_context_assertions.mjs",
+    ),
+    "dev-test-game live harness should import shared private-channel context assertions",
+  );
   const start = source.indexOf(
     "async function submitPrivateChannelStaleActionReconnectRecovery",
   );
@@ -459,9 +465,55 @@ test("private-channel stale action recovery uses shared transition assertion", a
     "private-channel stale action recovery should reuse the live N01-to-D02 scenario facts",
   );
   assert(
-    body.includes("reconnectChannelContext.channelId"),
-    "private-channel stale action recovery should keep channel-specific reconnect assertions local",
+    body.includes("assertPrivateChannelRouteContext"),
+    "private-channel stale action recovery should reuse shared channel route context assertions",
   );
+});
+
+test("private-channel recovery wrappers share channel context assertions", async () => {
+  const source = await readFile("tools/dev_test_game.mjs", "utf8");
+  const wrappers = [
+    {
+      start: "async function verifyPrivateChannelInvalidActionRecovery",
+      end: "async function verifySeededDeadPlayerRecovery",
+      expected: [
+        "assertPrivateChannelContext",
+        "assertPrivateChannelRouteContext",
+      ],
+    },
+    {
+      start: "async function submitPrivateChannelStaleActionReconnectRecovery",
+      end: "async function submitConcurrentActionRace",
+      expected: ["assertPrivateChannelRouteContext"],
+    },
+    {
+      start: "async function verifyStalePrivateChannelPostAfterPhaseTransition",
+      end: "async function verifyCompletedPrivateChannelRecovery",
+      expected: ["assertPrivateChannelId"],
+    },
+    {
+      start: "async function verifyCompletedPrivateChannelRecovery",
+      end: "async function seedPrivateChannelCompleteGame",
+      expected: [
+        "assertPrivateChannelContext",
+        "assertPrivateChannelRouteContext",
+      ],
+    },
+  ];
+
+  for (const wrapper of wrappers) {
+    const start = source.indexOf(wrapper.start);
+    const end = source.indexOf(wrapper.end, start);
+    assert(start >= 0, `${wrapper.start} should exist`);
+    assert(end > start, `${wrapper.start} should be bounded by ${wrapper.end}`);
+    const body = source.slice(start, end);
+    for (const expected of wrapper.expected) {
+      assert(
+        body.includes(expected),
+        `${wrapper.start} should use ${expected}`,
+      );
+    }
+  }
 });
 
 test("dev test-game spine orchestrators expose stable proof order and env maps", async () => {
