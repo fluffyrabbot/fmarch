@@ -557,6 +557,7 @@ test("hosted identity evidence lane records blocked and passed handoffs", async 
       ["session-secret-policy-evidence", "blocked"],
       ["hosted-audit-retention-export-evidence", "blocked"],
       ["role-surface-adapter-preserved", "blocked"],
+      ["identity-adapter-contract-compatible", "blocked"],
       ["release-claim-boundary-carried", "passed"],
     ],
   );
@@ -585,6 +586,10 @@ test("hosted identity evidence lane records blocked and passed handoffs", async 
   assertDevTestGameHostedIdentityEvidence(placeholder);
   assert.equal(placeholder.status, "blocked");
   assert.equal(placeholder.target.roleSurfaceContractDiff.status, "passed");
+  assert.equal(
+    placeholder.target.identityAdapterContractComparison.status,
+    "passed",
+  );
   assert.deepEqual(
     placeholder.hostedHandoffChecklist.requirementGroups.find(
       (group) => group.id === "hosted-identity-evidence-intake",
@@ -615,6 +620,21 @@ test("hosted identity evidence lane records blocked and passed handoffs", async 
   );
   assert.equal(passed.target.roleSurfaceContractDiff.status, "passed");
   assert.deepEqual(passed.target.roleSurfaceContractDiff.mismatches, []);
+  assert.deepEqual(
+    {
+      status: passed.target.identityAdapterContractComparison.status,
+      localAdapterId: passed.target.identityAdapterContractComparison.localAdapterId,
+      hostedAdapterId:
+        passed.target.identityAdapterContractComparison.hostedAdapterId,
+      mismatches: passed.target.identityAdapterContractComparison.mismatches,
+    },
+    {
+      status: "passed",
+      localAdapterId: "local-production-identity-adapter-v1",
+      hostedAdapterId: "local-production-identity-adapter-v1",
+      mismatches: [],
+    },
+  );
   assert.equal(passed.hostedHandoffChecklist.status, "passed");
   assert.deepEqual(passed.hostedHandoffChecklist.blockedCheckIds, []);
   assert.deepEqual(
@@ -747,6 +767,45 @@ test("hosted identity evidence lane records blocked and passed handoffs", async 
       (mismatch) => mismatch.path,
     ),
     [
+      "hostedIdentity.roleSurfaceArchitectureChanged",
+      "hostedIdentity.roleSurfaceContract.roleUrlPatterns.length",
+    ],
+  );
+
+  const changedAdapterContractSource = JSON.parse(JSON.stringify(redactedPassSource));
+  changedAdapterContractSource.hostedIdentity.identityAdapterContract.roleSurfaceArchitectureChanged =
+    true;
+  changedAdapterContractSource.hostedIdentity.identityAdapterContract.roleSurfaceContract.roleUrlPatterns =
+    [
+      ...changedAdapterContractSource.hostedIdentity.identityAdapterContract
+        .roleSurfaceContract.roleUrlPatterns,
+      { id: "account-url", href: "/accounts/:accountId" },
+    ];
+  const changedAdapterContractPath =
+    "target/dev-test-game/hosted-identity-adapter-contract-changed.test.json";
+  await writeFile(
+    changedAdapterContractPath,
+    `${JSON.stringify(changedAdapterContractSource)}\n`,
+  );
+  const changedAdapterContract = await buildDevTestGameHostedIdentityEvidence({
+    env: { FMARCH_HOSTED_IDENTITY_EVIDENCE_PATH: changedAdapterContractPath },
+    generatedAt: "2026-07-01T00:00:02.000Z",
+  });
+  assertDevTestGameHostedIdentityEvidence(changedAdapterContract);
+  assert.equal(changedAdapterContract.status, "blocked");
+  assert.equal(
+    changedAdapterContract.checks.find(
+      (check) => check.id === "identity-adapter-contract-compatible",
+    )?.status,
+    "blocked",
+  );
+  assert.deepEqual(
+    changedAdapterContract.target.identityAdapterContractComparison.mismatches.map(
+      (mismatch) => mismatch.path,
+    ),
+    [
+      "identityAdapterContract.roleSurfaceArchitectureChanged",
+      "identityAdapterContract.roleSurfaceContract.roleUrlPatterns.length",
       "hostedIdentity.roleSurfaceArchitectureChanged",
       "hostedIdentity.roleSurfaceContract.roleUrlPatterns.length",
     ],

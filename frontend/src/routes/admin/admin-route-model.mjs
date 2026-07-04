@@ -736,6 +736,10 @@ export function normalizeLocalHostedIdentityEvidenceAudit(
       roleSurfaceContractDiff: normalizeHostedIdentityRoleSurfaceContractDiff(
         hostedIdentityEvidence.target?.roleSurfaceContractDiff,
       ),
+      identityAdapterContractComparison:
+        normalizeHostedIdentityAdapterContractComparison(
+          hostedIdentityEvidence.target?.identityAdapterContractComparison,
+        ),
       redactedIntakePacket: normalizeHostedIdentityRedactedIntakePacket(
         hostedIdentityEvidence.target?.redactedIntakePacket,
       ),
@@ -2473,6 +2477,36 @@ function normalizeHostedIdentityRoleSurfaceContractDiff(diff) {
           expected: stringifyAuditValue(mismatch.expected),
           actual: stringifyAuditValue(mismatch.actual),
         }),
+      ),
+    ),
+  });
+}
+
+function normalizeHostedIdentityAdapterContractComparison(comparison) {
+  if (comparison === null || typeof comparison !== "object") {
+    return null;
+  }
+  return Object.freeze({
+    status: String(comparison.status ?? "unknown"),
+    localAdapterId: String(comparison.localAdapterId ?? ""),
+    hostedAdapterId: String(comparison.hostedAdapterId ?? ""),
+    localStatus: String(comparison.localStatus ?? "unknown"),
+    hostedStatus: String(comparison.hostedStatus ?? "unknown"),
+    roleSurfaceContractStatus: String(
+      comparison.roleSurfaceContractStatus ?? "unknown",
+    ),
+    mismatchCount: Array.isArray(comparison.mismatches)
+      ? comparison.mismatches.length
+      : 0,
+    mismatches: Object.freeze(
+      (Array.isArray(comparison.mismatches) ? comparison.mismatches : []).map(
+        (mismatch) =>
+          Object.freeze({
+            id: String(mismatch.id ?? ""),
+            path: String(mismatch.path ?? ""),
+            expected: stringifyAuditValue(mismatch.expected),
+            actual: stringifyAuditValue(mismatch.actual),
+          }),
       ),
     ),
   });

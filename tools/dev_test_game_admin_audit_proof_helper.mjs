@@ -127,6 +127,8 @@ export async function proveAdminAuditDetail({
   requiredHostedIdentityPacketRefStatuses = {},
   requiredHostedIdentityRoleSurfaceContractDiffStatus = null,
   requiredHostedIdentityRoleSurfaceContractMismatches = [],
+  requiredHostedIdentityAdapterContractComparisonStatus = null,
+  requiredHostedIdentityAdapterContractComparisonMismatches = [],
   requiredIdentityAdapterContractStatus = null,
   requiredIdentityAdapterContractMismatches = [],
   requiredHostedHandoffSummary = null,
@@ -312,6 +314,18 @@ export async function proveAdminAuditDetail({
       prefix: "admin-audit-hosted-identity-role-surface-contract-mismatch",
       ids: requiredHostedIdentityRoleSurfaceContractMismatches,
     });
+    const visibleHostedIdentityAdapterContractComparison =
+      await waitForHostedIdentityAdapterContractComparison({
+        page,
+        expectedStatus: requiredHostedIdentityAdapterContractComparisonStatus,
+      });
+    const visibleHostedIdentityAdapterContractComparisonMismatches =
+      await waitForRows({
+        page,
+        prefix:
+          "admin-audit-hosted-identity-adapter-contract-comparison-mismatch",
+        ids: requiredHostedIdentityAdapterContractComparisonMismatches,
+      });
     const visibleIdentityAdapterContract = await waitForIdentityAdapterContract({
       page,
       expectedStatus: requiredIdentityAdapterContractStatus,
@@ -594,6 +608,15 @@ export async function proveAdminAuditDetail({
             visibleHostedIdentityRoleSurfaceContractMismatches:
               visibleHostedIdentityRoleSurfaceContractMismatches,
           }),
+      ...(visibleHostedIdentityAdapterContractComparison === null
+        ? {}
+        : { visibleHostedIdentityAdapterContractComparison }),
+      ...(visibleHostedIdentityAdapterContractComparisonMismatches.length === 0
+        ? {}
+        : {
+            visibleHostedIdentityAdapterContractComparisonMismatches:
+              visibleHostedIdentityAdapterContractComparisonMismatches,
+          }),
       ...(visibleIdentityAdapterContract === null
         ? {}
         : { visibleIdentityAdapterContract }),
@@ -620,6 +643,29 @@ export async function proveAdminAuditDetail({
   } finally {
     await page.close();
   }
+}
+
+async function waitForHostedIdentityAdapterContractComparison({
+  page,
+  expectedStatus,
+}) {
+  if (expectedStatus === null || expectedStatus === undefined) {
+    return null;
+  }
+  const row = page.getByTestId(
+    "admin-audit-hosted-identity-adapter-contract-comparison-summary",
+  );
+  await row.waitFor({
+    state: "visible",
+    timeout: 15000,
+  });
+  const text = await row.innerText();
+  if (!text.includes(expectedStatus)) {
+    throw new Error(
+      `hosted identity adapter contract comparison missing ${expectedStatus}: ${text}`,
+    );
+  }
+  return { status: expectedStatus };
 }
 
 async function waitForIdentityAdapterContract({ page, expectedStatus }) {

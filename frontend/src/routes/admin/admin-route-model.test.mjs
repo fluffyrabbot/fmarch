@@ -896,7 +896,10 @@ test("admin route data exposes hosted identity evidence as a native audit row", 
     (item) => item.id === localAdminAuditIds.hostedIdentityEvidence,
   );
   assert.equal(identity.label, "Hosted identity evidence");
-  assert.equal(identity.status, "blocked: 0 passed, 10 blocked");
+  assert.equal(
+    identity.status,
+    `blocked: 0 passed, ${hostedIdentityEvidenceBlockedChecks.length} blocked`,
+  );
   assert.equal(identity.authority, "GlobalAdmin or GlobalMod");
   assert.equal(
     identity.inspectHref,
@@ -956,6 +959,16 @@ test("admin route data exposes hosted identity evidence as a native audit row", 
   assert.deepEqual(identity.artifactSummary.roleSurfaceContractDiff, {
     status: "passed",
     architectureId: "seeded-role-url-plus-session-adapter-v1",
+    mismatchCount: 0,
+    mismatches: [],
+  });
+  assert.deepEqual(identity.artifactSummary.identityAdapterContractComparison, {
+    status: "passed",
+    localAdapterId: "local-production-identity-adapter-v1",
+    hostedAdapterId: "local-production-identity-adapter-v1",
+    localStatus: "passed",
+    hostedStatus: "passed",
+    roleSurfaceContractStatus: "passed",
     mismatchCount: 0,
     mismatches: [],
   });
@@ -4293,6 +4306,7 @@ function localHostedTargetPreflightFixture() {
 }
 
 function localHostedIdentityEvidenceFixture() {
+  const identityAdapterContract = buildDevTestGameIdentityAdapterContractPacket();
   return {
     version: 1,
     proof: "dev-test-game-hosted-identity-evidence",
@@ -4311,6 +4325,19 @@ function localHostedIdentityEvidenceFixture() {
         roleSurfaceArchitectureChanged: false,
         roleSurfaceContract: hostedIdentityExpectedRoleSurfaceContract,
       }),
+      identityAdapterContractComparison: {
+        status: "passed",
+        localAdapterId: identityAdapterContract.adapterId,
+        hostedAdapterId: identityAdapterContract.adapterId,
+        localStatus: identityAdapterContract.status,
+        hostedStatus: identityAdapterContract.status,
+        roleSurfaceContractStatus: "passed",
+        local: identityAdapterContract,
+        hosted: identityAdapterContract,
+        mismatches: devTestGameIdentityAdapterContractDiff(
+          identityAdapterContract,
+        ).mismatches,
+      },
       redactedIntakePacket: localHostedIdentityRedactedIntakePacketFixture(),
     },
     checks: hostedIdentityEvidenceBlockedChecks.map((check) => ({

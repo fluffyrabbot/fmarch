@@ -2,6 +2,11 @@ import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { repoRoot } from "./dev_test_game_spine_runner.mjs";
+import {
+  buildDevTestGameIdentityAdapterContractPacket,
+  devTestGameIdentityAdapterContractDiff,
+  devTestGameIdentityAdapterExpectedContract,
+} from "./dev_test_game_identity_adapter_contract.mjs";
 export {
   devTestGameHostedIdentityEvidenceCommand,
   devTestGameHostedIdentityEvidencePath,
@@ -61,6 +66,8 @@ export async function buildDevTestGameHostedIdentityEvidence({
   const roleSurfaceContractDiff = hostedIdentityRoleSurfaceContractDiff(
     source?.hostedIdentity,
   );
+  const identityAdapterContractComparison =
+    hostedIdentityAdapterContractComparison(source?.hostedIdentity);
   const checks = [
     {
       id: "hosted-identity-evidence-path-configured",
@@ -118,6 +125,14 @@ export async function buildDevTestGameHostedIdentityEvidence({
       ),
     },
     {
+      id: "identity-adapter-contract-compatible",
+      status: identityAdapterContractComparison.status,
+      identityAdapterContractComparison,
+      requiredEvidence: requiredHostedIdentityEvidenceForCheck(
+        "identity-adapter-contract-compatible",
+      ),
+    },
+    {
       id: "release-claim-boundary-carried",
       status:
         source?.releaseReady === false && source?.productionReady === false
@@ -153,6 +168,7 @@ export async function buildDevTestGameHostedIdentityEvidence({
       placeholderSchema: hostedIdentityEvidencePlaceholderSchema,
       expectedRoleSurfaceContract: hostedIdentityExpectedRoleSurfaceContract,
       roleSurfaceContractDiff,
+      identityAdapterContractComparison,
       redactedIntakePacket:
         rawEvidence.status === "passed"
           ? summarizeHostedIdentityRedactedIntakePacket(source)
@@ -211,6 +227,7 @@ export function assertDevTestGameHostedIdentityEvidence(evidence) {
   }
   assertHostedIdentityRedactedIntakePacketSummary(evidence);
   assertHostedIdentityRoleSurfaceContractDiff(evidence);
+  assertHostedIdentityAdapterContractComparison(evidence);
   assertHostedIdentityEvidenceRequirementGroups(evidence);
   return evidence;
 }
@@ -230,6 +247,27 @@ function assertHostedIdentityRoleSurfaceContractDiff(evidence) {
     check?.status !== diff.status
   ) {
     throw new Error("hosted identity role-surface contract diff drifted");
+  }
+}
+
+function assertHostedIdentityAdapterContractComparison(evidence) {
+  const comparison = evidence.target?.identityAdapterContractComparison;
+  const check = (evidence.checks ?? []).find(
+    (candidate) => candidate.id === "identity-adapter-contract-compatible",
+  );
+  if (
+    comparison === null ||
+    typeof comparison !== "object" ||
+    !["passed", "blocked"].includes(comparison.status) ||
+    comparison.localAdapterId !== devTestGameIdentityAdapterExpectedContract.adapterId ||
+    (comparison.status === "passed" &&
+      comparison.hostedAdapterId !==
+        devTestGameIdentityAdapterExpectedContract.adapterId) ||
+    !Array.isArray(comparison.mismatches) ||
+    check?.identityAdapterContractComparison?.status !== comparison.status ||
+    check?.status !== comparison.status
+  ) {
+    throw new Error("hosted identity adapter contract comparison drifted");
   }
 }
 
@@ -387,6 +425,12 @@ export function validateHostedIdentityEvidencePlaceholder(source) {
           `hostedIdentity.${field}`,
           errors,
         );
+      } else if (field === "identityAdapterContract") {
+        requireObject(
+          source.hostedIdentity[field],
+          `hostedIdentity.${field}`,
+          errors,
+        );
       } else {
         requireObject(
           source.hostedIdentity[field],
@@ -457,6 +501,41 @@ function validateHostedIdentityPacketSectionShape({ section, field, errors }) {
       });
     });
   }
+}
+
+function hostedIdentityAdapterContractComparison(hostedIdentity) {
+  const local = buildDevTestGameIdentityAdapterContractPacket();
+  const hosted =
+    hostedIdentity !== null &&
+    typeof hostedIdentity === "object" &&
+    !Array.isArray(hostedIdentity)
+      ? hostedIdentity.identityAdapterContract
+      : null;
+  const diff = devTestGameIdentityAdapterContractDiff(hosted);
+  const roleSurfaceContractDiff = hostedIdentityRoleSurfaceContractDiff({
+    roleSurfaceArchitectureChanged: hosted?.roleSurfaceArchitectureChanged,
+    roleSurfaceContract: hosted?.roleSurfaceContract,
+  });
+  const mismatches = [...diff.mismatches];
+  for (const mismatch of roleSurfaceContractDiff.mismatches) {
+    if (!mismatches.some((candidate) => candidate.path === mismatch.path)) {
+      mismatches.push(mismatch);
+    }
+  }
+  return {
+    status:
+      diff.status === "passed" && roleSurfaceContractDiff.status === "passed"
+        ? "passed"
+        : "blocked",
+    localAdapterId: local.adapterId,
+    hostedAdapterId: String(hosted?.adapterId ?? ""),
+    localStatus: local.status,
+    hostedStatus: String(hosted?.status ?? "missing"),
+    roleSurfaceContractStatus: roleSurfaceContractDiff.status,
+    local,
+    hosted: hosted === null || hosted === undefined ? null : hosted,
+    mismatches,
+  };
 }
 
 function hostedIdentityPacketSectionCheck({ source, field, id }) {

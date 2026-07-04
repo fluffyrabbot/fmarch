@@ -118,6 +118,12 @@ await runAdminAuditProof({
         source.hostedIdentityEvidence.target.roleSurfaceContractDiff.mismatches.map(
           (mismatch) => mismatch.id,
         ),
+      requiredHostedIdentityAdapterContractComparisonStatus:
+        source.hostedIdentityEvidence.target.identityAdapterContractComparison.status,
+      requiredHostedIdentityAdapterContractComparisonMismatches:
+        source.hostedIdentityEvidence.target.identityAdapterContractComparison.mismatches.map(
+          (mismatch) => mismatch.id,
+        ),
       requiredRelatedLinks,
     }),
   buildEvidence: ({ source, adminRoleSurface }) => ({
@@ -171,6 +177,12 @@ await runAdminAuditProof({
         source.hostedIdentityEvidence.target.roleSurfaceContractDiff.status,
       hostedIdentityRoleSurfaceContractMismatchIds:
         source.hostedIdentityEvidence.target.roleSurfaceContractDiff.mismatches.map(
+          (mismatch) => mismatch.id,
+        ),
+      hostedIdentityAdapterContractComparisonStatus:
+        source.hostedIdentityEvidence.target.identityAdapterContractComparison.status,
+      hostedIdentityAdapterContractComparisonMismatchIds:
+        source.hostedIdentityEvidence.target.identityAdapterContractComparison.mismatches.map(
           (mismatch) => mismatch.id,
         ),
       relatedAuditIds: requiredRelatedLinks,
@@ -305,6 +317,28 @@ export function assertHostedIdentityEvidenceAdminProof(evidence) {
     ) {
       throw new Error(
         `hosted identity evidence admin proof missing role-surface mismatch: ${mismatchId}`,
+      );
+    }
+  }
+  if (
+    evidence.generatedFrom?.hostedIdentityAdapterContractComparisonStatus !==
+    evidence.adminRoleSurface
+      ?.visibleHostedIdentityAdapterContractComparison?.status
+  ) {
+    throw new Error(
+      "hosted identity evidence admin proof missing adapter contract comparison",
+    );
+  }
+  for (const mismatchId of evidence.generatedFrom
+    ?.hostedIdentityAdapterContractComparisonMismatchIds ?? []) {
+    if (
+      !evidence.adminRoleSurface
+        ?.visibleHostedIdentityAdapterContractComparisonMismatches?.includes(
+          mismatchId,
+        )
+    ) {
+      throw new Error(
+        `hosted identity evidence admin proof missing adapter contract mismatch: ${mismatchId}`,
       );
     }
   }

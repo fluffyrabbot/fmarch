@@ -52,6 +52,7 @@ export const hostedIdentityEvidencePlaceholderSchema = Object.freeze({
         "hostedAuditRetentionExport",
         "roleSurfaceArchitectureChanged",
         "roleSurfaceContract",
+        "identityAdapterContract",
       ]),
       properties: Object.freeze({
         accountLifecycle: Object.freeze({ type: "object" }),
@@ -62,6 +63,7 @@ export const hostedIdentityEvidencePlaceholderSchema = Object.freeze({
         hostedAuditRetentionExport: Object.freeze({ type: "object" }),
         roleSurfaceArchitectureChanged: Object.freeze({ type: "boolean" }),
         roleSurfaceContract: Object.freeze({ type: "object" }),
+        identityAdapterContract: Object.freeze({ type: "object" }),
       }),
     }),
   }),
@@ -119,6 +121,7 @@ export const hostedIdentityEvidenceInputIds = Object.freeze([
   "proof-target",
   "FMARCH_HOSTED_IDENTITY_EVIDENCE_PATH",
   "redacted-role-surface-contract-packet",
+  "redacted-identity-adapter-contract-packet",
   "redacted-account-lifecycle-packet",
   "redacted-invite-delivery-packet",
   "redacted-account-recovery-packet",
@@ -198,6 +201,7 @@ export const hostedIdentityEvidenceCheckIds = Object.freeze([
   "session-secret-policy-evidence",
   "hosted-audit-retention-export-evidence",
   "role-surface-adapter-preserved",
+  "identity-adapter-contract-compatible",
   "release-claim-boundary-carried",
 ]);
 
@@ -246,6 +250,11 @@ export const hostedIdentityEvidenceBlockedChecks = Object.freeze([
       "Hosted identity must preserve the existing role URL and adapter architecture by matching the shared role-surface contract.",
   }),
   Object.freeze({
+    id: "identity-adapter-contract-compatible",
+    requiredEvidence:
+      "Hosted identity must provide a redacted identity adapter contract packet compatible with the local invite/account/session adapter contract.",
+  }),
+  Object.freeze({
     id: "release-claim-boundary-carried",
     requiredEvidence:
       "The hosted identity evidence file must keep releaseReady and productionReady false.",
@@ -268,6 +277,7 @@ export const hostedIdentityEvidenceRequirementGroupDefinitions = Object.freeze([
     checkIds: Object.freeze([
       "hosted-account-lifecycle-evidence",
       "role-surface-adapter-preserved",
+      "identity-adapter-contract-compatible",
     ]),
     requiredEvidence:
       "Hosted account create/login/disable/enable evidence while preserving the role-surface adapter.",

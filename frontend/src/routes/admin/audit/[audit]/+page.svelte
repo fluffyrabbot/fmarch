@@ -387,6 +387,36 @@
         </ol>
       </section>
     {/if}
+    {#if data.audit.artifactSummary?.identityAdapterContractComparison}
+      <section
+        class="admin-audit-detail__group"
+        data-testid="admin-audit-detail-hosted-identity-adapter-contract-comparison"
+      >
+        <h2>Hosted adapter contract</h2>
+        <ol class="admin-audit-detail__entries">
+          <li
+            class="admin-audit-detail__entry admin-audit-detail__entry--stack"
+            data-testid="admin-audit-hosted-identity-adapter-contract-comparison-summary"
+          >
+            <strong>{data.audit.artifactSummary.identityAdapterContractComparison.status}</strong>
+            <span>{data.audit.artifactSummary.identityAdapterContractComparison.localAdapterId}</span>
+            <span>{data.audit.artifactSummary.identityAdapterContractComparison.hostedAdapterId}</span>
+            <span>{data.audit.artifactSummary.identityAdapterContractComparison.roleSurfaceContractStatus}</span>
+            <span>{data.audit.artifactSummary.identityAdapterContractComparison.mismatchCount} mismatches</span>
+          </li>
+          {#each data.audit.artifactSummary.identityAdapterContractComparison.mismatches as mismatch}
+            <li
+              class="admin-audit-detail__entry admin-audit-detail__entry--stack"
+              data-testid={`admin-audit-hosted-identity-adapter-contract-comparison-mismatch-${mismatch.id}`}
+            >
+              <strong>{mismatch.path}</strong>
+              <span>{mismatch.expected}</span>
+              <span>{mismatch.actual}</span>
+            </li>
+          {/each}
+        </ol>
+      </section>
+    {/if}
     {#if data.audit.artifactSummary?.adapterContract}
       <section
         class="admin-audit-detail__group"
