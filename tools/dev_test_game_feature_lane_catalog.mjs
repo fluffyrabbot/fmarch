@@ -25,14 +25,17 @@ import {
   nightTwoProgressionFeatureSpineRows,
 } from "./dev_test_game_core_loop_night_two_progression_scenarios.mjs";
 import {
+  nightThreeActionResolutionLaneId,
+  nightThreeProgressionFeatureSpineRows,
+} from "./dev_test_game_core_loop_night_three_progression_scenarios.mjs";
+import {
   dayTwoNightTwoFeatureSpineRows,
 } from "./dev_test_game_core_loop_day_two_night_two_scenarios.mjs";
 import {
   dayOneNightOneFeatureSpineRows,
 } from "./dev_test_game_core_loop_day_one_night_one_scenarios.mjs";
 
-export const nightThreeActionResolutionLaneId =
-  "night-three-action-resolution";
+export { nightThreeActionResolutionLaneId };
 
 export const coreLoopFeatureSpineSourceCheckId = "local-core-loop-proof";
 export const devTestGameCoreLoopAdminProofCommand =
@@ -51,6 +54,7 @@ export const coreLoopFeatureSpineCycleIds = Object.freeze({
   dayOneNightOneDayTwo: "d01-n01-d02",
   nightTwoDayThree: "n02-d03",
   dayThreeNightThree: "d03-n03",
+  nightThreeDayFour: "n03-d04",
 });
 
 const dayTwoNightTwo = coreLoopFeatureSpineCycleIds.dayTwoNightTwo;
@@ -58,6 +62,7 @@ const dayOneNightOneDayTwo =
   coreLoopFeatureSpineCycleIds.dayOneNightOneDayTwo;
 const nightTwoDayThree = coreLoopFeatureSpineCycleIds.nightTwoDayThree;
 const dayThreeNightThree = coreLoopFeatureSpineCycleIds.dayThreeNightThree;
+const nightThreeDayFour = coreLoopFeatureSpineCycleIds.nightThreeDayFour;
 const dayTwoNightTwoSpineRows = dayTwoNightTwoFeatureSpineRows({
   cycleId: dayTwoNightTwo,
 });
@@ -75,6 +80,7 @@ const coreLoopFeatureSpineLaneRows = Object.freeze([
   ...nightTwoProgressionFeatureSpineRows({ cycleId: nightTwoDayThree }),
   ...terminalRecoveryFeatureSpineRows({ cycleId: dayThreeNightThree }),
   ...revoteProgressionFeatureSpineRows({ cycleId: dayThreeNightThree }),
+  ...nightThreeProgressionFeatureSpineRows({ cycleId: nightThreeDayFour }),
   Object.freeze(
     invalidActionRecoveryFeatureSpineRow({ cycleId: dayTwoNightTwo }),
   ),
@@ -171,6 +177,7 @@ export const coreLoopFeatureSeedAliasOnlyProofLaneIds = Object.freeze(
 export const coreLoopFeaturePhaseProgressionLaneIds = Object.freeze([
   ...coreLoopVoteResolutionLaneIds,
   dayVoteNoLynchLaneId,
+  nightThreeActionResolutionLaneId,
   playerActionLoopLaneId,
 ]);
 

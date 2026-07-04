@@ -369,14 +369,22 @@ test("core loop spine status formats compact live spine evidence", () => {
               },
             ],
           },
+          {
+            id: "n03-d04",
+            checkpoints: [
+              { id: "n03-action-open", phase: "N03" },
+              { id: "n03-action-submitted", actionState: "ack" },
+              { id: "d04-day-controls-return", phase: "D04" },
+            ],
+          },
         ],
       },
     }),
-    "passed: D01 -> N01 -> D02, vote ack, N02 action ack, next D03, terminal advance InvalidTarget, reload D03, revote D03R1 via no_majority_continue_revote, revote vote ack, revote resolve ack, second revote D03R2 via no_majority_continue_revote, second vote ack, second resolve ack, policy no_majority_no_lynch -> N03",
+    "passed: D01 -> N01 -> D02, vote ack, N02 action ack, next D03, terminal advance InvalidTarget, reload D03, revote D03R1 via no_majority_continue_revote, revote vote ack, revote resolve ack, second revote D03R2 via no_majority_continue_revote, second vote ack, second resolve ack, policy no_majority_no_lynch -> N03, N03 action ack, next D04",
   );
   assert.equal(
     coreLoopSpineStatus({}),
-    "unknown: unknown -> unknown -> unknown, vote unknown, unknown action unknown, next unknown, terminal advance unknown, reload unknown, revote unknown via unknown, revote vote unknown, revote resolve unknown, second revote unknown via unknown, second vote unknown, second resolve unknown, policy unknown -> unknown",
+    "unknown: unknown -> unknown -> unknown, vote unknown, unknown action unknown, next unknown, terminal advance unknown, reload unknown, revote unknown via unknown, revote vote unknown, revote resolve unknown, second revote unknown via unknown, second vote unknown, second resolve unknown, policy unknown -> unknown, unknown action unknown, next unknown",
   );
 });
 

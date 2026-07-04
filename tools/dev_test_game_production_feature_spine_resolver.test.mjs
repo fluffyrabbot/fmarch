@@ -116,6 +116,8 @@ test("production feature spine resolver builds and validates source collections"
     "day-three-second-revote",
     "day-three-second-revote-ballot",
     "day-three-second-revote-resolution",
+    "night-three-action-resolution",
+    "day-four-controls-return",
     "invalid-action-recovery",
     "player-action-boundary",
     "private-channel",
@@ -406,7 +408,7 @@ function coreLoopSourceTargetFixture() {
     detailRoleUrl: "/admin/audit/local-core-loop?game=<seeded-game>",
     browserProofCommand,
     rerunCommand: coreLoopAdminProofCommand,
-    cycleIds: ["d01-n01-d02", "d02-n02", "n02-d03", "d03-n03"],
+    cycleIds: ["d01-n01-d02", "d02-n02", "n02-d03", "d03-n03", "n03-d04"],
     roleUrlIds: [
       "d01-n01-d02-host",
       "d01-n01-d02-actionPlayer",
@@ -423,6 +425,9 @@ function coreLoopSourceTargetFixture() {
       "d03-n03-host",
       "d03-n03-actionPlayer",
       "d03-n03-normalPlayer",
+      "n03-d04-host",
+      "n03-d04-actionPlayer",
+      "n03-d04-target",
     ],
     checkpointIds: [
       "d01-n01-d02-d01-resolved-locked",
@@ -455,6 +460,10 @@ function coreLoopSourceTargetFixture() {
       "d03-n03-d03r2-revote-ballot-submitted",
       "d03-n03-d03r2-revote-resolved-no-majority",
       "d03-n03-d03r2-stale-continue-policy-recovery",
+      "n03-d04-n03-action-open",
+      "n03-d04-n03-action-submitted",
+      "n03-d04-n03-resolved-target-killed",
+      "n03-d04-d04-day-controls-return",
     ],
     recoveryHookIds: [
       "staleLockedVoteReject",
@@ -491,6 +500,9 @@ function coreLoopSourceTargetFixture() {
       "d03-n03-host": "http://127.0.0.1:5173/g/game-b/host",
       "d03-n03-actionPlayer": "http://127.0.0.1:5173/g/game-b",
       "d03-n03-normalPlayer": "http://127.0.0.1:5173/g/game-b",
+      "n03-d04-host": "http://127.0.0.1:5173/g/game-b/host",
+      "n03-d04-actionPlayer": "http://127.0.0.1:5173/g/game-b",
+      "n03-d04-target": "http://127.0.0.1:5173/g/game-b",
       "d02-n02-target": "http://127.0.0.1:5173/g/game-b",
     },
   };

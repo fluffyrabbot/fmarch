@@ -2408,9 +2408,9 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
     graph,
     releaseReadiness,
   );
-  assert.equal(graph.summary.nodeCount, 48);
-  assert.equal(graph.summary.roleUrlCount, 48);
-  assert.equal(graph.summary.productionFeatureTargetCount, 28);
+  assert.equal(graph.summary.nodeCount, 50);
+  assert.equal(graph.summary.roleUrlCount, 50);
+  assert.equal(graph.summary.productionFeatureTargetCount, 30);
   assert.deepEqual(
     graph.nodes
       .filter((node) => node.kind === "admin-proof-surface")
@@ -3752,6 +3752,12 @@ test("session card and markdown include role credential URLs and tokens", async 
         actionAfterD03R2NoLynchPolicy: {
           commandState: {
             phase: { phaseId: "N03", locked: false },
+            actions: [
+              {
+                templateId: "factional_kill",
+                targets: ["slot-7"],
+              },
+            ],
           },
           buttons: [{ action: "submit_action:factional_kill", disabled: false }],
         },
@@ -3843,6 +3849,58 @@ test("session card and markdown include role credential URLs and tokens", async 
               { prompt_id: "D03R2:revote:NoMajority", status: "resolved" },
             ],
           },
+        },
+        n03ActionTarget: "slot-7",
+        n03ActionSubmission: {
+          state: "ack",
+          requestEnvelope: {
+            body: {
+              body: {
+                principal_user_id: "player-goon-a",
+                command: {
+                  SubmitAction: {
+                    actor_slot: "slot_4",
+                    template_id: "factional_kill",
+                    targets: ["slot-7"],
+                  },
+                },
+              },
+            },
+          },
+        },
+        n03ActionAfterSubmit: {
+          commandState: {
+            phase: { phaseId: "N03", locked: false },
+          },
+          buttons: [],
+        },
+        resolveN03: {
+          commandStatus: { state: "ack" },
+        },
+        hostAfterResolveN03: {
+          phase: { id: "N03", locked: true },
+          phaseActions: ["advance_phase", "unlock_thread"],
+        },
+        n03ResolvedTargetSlot: {
+          slot_id: "slot-7",
+          alive: false,
+          status: "dead",
+        },
+        advanceD04: {
+          commandStatus: { state: "ack" },
+        },
+        d04ActionSurface: {
+          commandState: {
+            phase: { phaseId: "D04", locked: false },
+          },
+          buttons: [{ action: "submit_vote:no_lynch", disabled: false }],
+        },
+        d04TargetSurface: {
+          commandState: {
+            actorAlive: false,
+            phase: { phaseId: "D04", locked: false },
+          },
+          buttons: [],
         },
       },
       staleActionConflict: {
@@ -9026,6 +9084,7 @@ test("session card and markdown include role credential URLs and tokens", async 
       "day-vote-resolution",
       "day-vote-no-lynch",
       "action-loop",
+      "night-three-action-resolution",
       "host-deadline-advance",
       "stale-deadline-advance",
       "invalid-action-recovery",
@@ -9919,7 +9978,7 @@ test("session card and markdown include role credential URLs and tokens", async 
   assert.equal(opsArtifacts.productionReady, false);
   assert.equal(opsArtifacts.run.game, game);
   assert.equal(opsArtifacts.run.seedCommandCount, 1);
-  assert.equal(opsArtifacts.proofRun.laneCount, 119);
+  assert.equal(opsArtifacts.proofRun.laneCount, 120);
   assert.equal(opsArtifacts.proofStability.hostConfirmClicks.total, 4);
   assert.equal(
     opsArtifacts.checks.some(
@@ -11523,7 +11582,7 @@ function coreLoopAdminProofFixture() {
       privateChannelRecoveryFamily:
         coreLoopPrivateChannelRecoveryScenarioFamily(),
       coreLoopSpineRows: {
-        cycles: ["d01-n01-d02", "d02-n02", "n02-d03", "d03-n03"],
+        cycles: ["d01-n01-d02", "d02-n02", "n02-d03", "d03-n03", "n03-d04"],
         roleUrls: [
           "d01-n01-d02-host",
           "d01-n01-d02-actionPlayer",
@@ -11540,6 +11599,9 @@ function coreLoopAdminProofFixture() {
           "d03-n03-host",
           "d03-n03-actionPlayer",
           "d03-n03-normalPlayer",
+          "n03-d04-host",
+          "n03-d04-actionPlayer",
+          "n03-d04-target",
         ],
         roleUrlHrefs: {
           "d01-n01-d02-host":
@@ -11571,6 +11633,12 @@ function coreLoopAdminProofFixture() {
           "d03-n03-actionPlayer":
             "http://127.0.0.1:5173/g/00000000-0000-0000-0000-000000000002",
           "d03-n03-normalPlayer":
+            "http://127.0.0.1:5173/g/00000000-0000-0000-0000-000000000002",
+          "n03-d04-host":
+            "http://127.0.0.1:5173/g/00000000-0000-0000-0000-000000000002/host",
+          "n03-d04-actionPlayer":
+            "http://127.0.0.1:5173/g/00000000-0000-0000-0000-000000000002",
+          "n03-d04-target":
             "http://127.0.0.1:5173/g/00000000-0000-0000-0000-000000000002",
         },
         checkpoints: [
@@ -11604,6 +11672,10 @@ function coreLoopAdminProofFixture() {
           "d03-n03-d03r2-revote-ballot-submitted",
           "d03-n03-d03r2-revote-resolved-no-majority",
           "d03-n03-d03r2-stale-continue-policy-recovery",
+          "n03-d04-n03-action-open",
+          "n03-d04-n03-action-submitted",
+          "n03-d04-n03-resolved-target-killed",
+          "n03-d04-d04-day-controls-return",
         ],
         recoveryHooks: [
           "staleLockedVoteReject",
@@ -11624,11 +11696,11 @@ function coreLoopAdminProofFixture() {
       visibleChecks: [...coreLoopAdminCheckIds],
       visibleCheckStatuses: {
         "core-loop-spine":
-          "passed: D01 -> N01 -> D02, vote ack, N02 action ack, next D03, terminal advance InvalidTarget, reload D03, revote D03R1 via no_majority_continue_revote, revote vote ack, revote resolve ack, second revote D03R2 via no_majority_continue_revote, second vote ack, second resolve ack, policy no_majority_no_lynch -> N03",
+          "passed: D01 -> N01 -> D02, vote ack, N02 action ack, next D03, terminal advance InvalidTarget, reload D03, revote D03R1 via no_majority_continue_revote, revote vote ack, revote resolve ack, second revote D03R2 via no_majority_continue_revote, second vote ack, second resolve ack, policy no_majority_no_lynch -> N03, N03 action ack, next D04",
         "completed-game-hardening-coverage":
           "passed: 10/10 lanes across 4 families",
       },
-      visibleSpineCycles: ["d01-n01-d02", "d02-n02", "n02-d03", "d03-n03"],
+      visibleSpineCycles: ["d01-n01-d02", "d02-n02", "n02-d03", "d03-n03", "n03-d04"],
       visibleSpineRoleUrls: [
         "d01-n01-d02-host",
         "d01-n01-d02-actionPlayer",
@@ -11645,6 +11717,9 @@ function coreLoopAdminProofFixture() {
         "d03-n03-host",
         "d03-n03-actionPlayer",
         "d03-n03-normalPlayer",
+        "n03-d04-host",
+        "n03-d04-actionPlayer",
+        "n03-d04-target",
       ],
       visibleSpineCheckpoints: [
         "d01-n01-d02-d01-resolved-locked",
@@ -11677,6 +11752,10 @@ function coreLoopAdminProofFixture() {
         "d03-n03-d03r2-revote-ballot-submitted",
         "d03-n03-d03r2-revote-resolved-no-majority",
         "d03-n03-d03r2-stale-continue-policy-recovery",
+        "n03-d04-n03-action-open",
+        "n03-d04-n03-action-submitted",
+        "n03-d04-n03-resolved-target-killed",
+        "n03-d04-d04-day-controls-return",
       ],
       visibleSpineRecoveryHooks: [
         "staleLockedVoteReject",
@@ -13441,6 +13520,12 @@ function coreLoopSpineTargetsFixture() {
       "http://127.0.0.1:5173/g/00000000-0000-0000-0000-000000000002",
     "d03-n03-normalPlayer":
       "http://127.0.0.1:5173/g/00000000-0000-0000-0000-000000000002",
+    "n03-d04-host":
+      "http://127.0.0.1:5173/g/00000000-0000-0000-0000-000000000002/host",
+    "n03-d04-actionPlayer":
+      "http://127.0.0.1:5173/g/00000000-0000-0000-0000-000000000002",
+    "n03-d04-target":
+      "http://127.0.0.1:5173/g/00000000-0000-0000-0000-000000000002",
   };
   return {
     status: "passed",
@@ -13451,7 +13536,7 @@ function coreLoopSpineTargetsFixture() {
       "http://127.0.0.1:5173/g/00000000-0000-0000-0000-000000000002",
     defaultCheckpointId: "d02-n02-n02-action-open",
     browserProofCommand: devTestGameLiveProofCommand,
-    cycleIds: ["d01-n01-d02", "d02-n02", "n02-d03", "d03-n03"],
+    cycleIds: ["d01-n01-d02", "d02-n02", "n02-d03", "d03-n03", "n03-d04"],
     roleUrlIds: [
       "d01-n01-d02-host",
       "d01-n01-d02-actionPlayer",
@@ -13468,6 +13553,9 @@ function coreLoopSpineTargetsFixture() {
       "d03-n03-host",
       "d03-n03-actionPlayer",
       "d03-n03-normalPlayer",
+      "n03-d04-host",
+      "n03-d04-actionPlayer",
+      "n03-d04-target",
     ],
     checkpointIds: [
       "d01-n01-d02-d01-resolved-locked",
@@ -13500,6 +13588,10 @@ function coreLoopSpineTargetsFixture() {
       "d03-n03-d03r2-revote-ballot-submitted",
       "d03-n03-d03r2-revote-resolved-no-majority",
       "d03-n03-d03r2-stale-continue-policy-recovery",
+      "n03-d04-n03-action-open",
+      "n03-d04-n03-action-submitted",
+      "n03-d04-n03-resolved-target-killed",
+      "n03-d04-d04-day-controls-return",
     ],
     recoveryHookIds: [
       "staleLockedVoteReject",

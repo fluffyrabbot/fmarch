@@ -48,6 +48,7 @@ import {
 import {
   coreLoopPhaseProgressionLaneIds,
   coreLoopPhaseProgressionSpineSourceLaneIds,
+  nightThreeActionResolutionLaneId,
 } from "./dev_test_game_core_loop_phase_progression_scenarios.mjs";
 import {
   cohostDeadlineStaleBasePassed,
@@ -761,6 +762,94 @@ export function buildDevTestGameProofRun(session, options = {}) {
         verification.actionLoop?.resolvedTargetSlot?.alive === false &&
         verification.actionLoop?.d02Phase?.phaseId === "D02",
     }),
+    lane(
+      nightThreeActionResolutionLaneId,
+      "Night 3 action resolution advances to Day 4 controls",
+      {
+        game: verification.actionLoop?.d02VoteNightTransition?.game ?? null,
+        hostRoleUrl:
+          verification.actionLoop?.d02VoteNightTransition?.hostRoleUrl ?? null,
+        actionRoleUrl:
+          verification.actionLoop?.d02VoteNightTransition?.actionRoleUrl ?? null,
+        targetRoleUrl:
+          verification.actionLoop?.d02VoteNightTransition?.playerRoleUrl ?? null,
+        actionTarget:
+          verification.actionLoop?.d02VoteNightTransition?.n03ActionTarget ?? null,
+        actionState:
+          verification.actionLoop?.d02VoteNightTransition?.n03ActionSubmission
+            ?.state ?? null,
+        resolveState:
+          verification.actionLoop?.d02VoteNightTransition?.resolveN03
+            ?.commandStatus?.state ?? null,
+        targetAlive:
+          verification.actionLoop?.d02VoteNightTransition?.n03ResolvedTargetSlot
+            ?.alive ?? null,
+        targetStatus:
+          verification.actionLoop?.d02VoteNightTransition?.n03ResolvedTargetSlot
+            ?.status ?? null,
+        advanceState:
+          verification.actionLoop?.d02VoteNightTransition?.advanceD04
+            ?.commandStatus?.state ?? null,
+        returnedPhase:
+          verification.actionLoop?.d02VoteNightTransition?.d04ActionSurface
+            ?.commandState?.phase?.phaseId ?? null,
+        returnedVoteControls: countButtonsWithPrefix(
+          verification.actionLoop?.d02VoteNightTransition?.d04ActionSurface
+            ?.buttons,
+          "submit_vote",
+        ),
+        deadTargetVoteControls: countButtonsWithPrefix(
+          verification.actionLoop?.d02VoteNightTransition?.d04TargetSurface
+            ?.buttons,
+          "submit_vote",
+        ),
+        passed:
+          verification.actionLoop?.d02VoteNightTransition?.status === "passed" &&
+          verification.actionLoop?.d02VoteNightTransition?.n03ActionTarget ===
+            "slot-7" &&
+          verification.actionLoop?.d02VoteNightTransition?.n03ActionSubmission
+            ?.state === "ack" &&
+          verification.actionLoop?.d02VoteNightTransition?.n03ActionSubmission
+            ?.requestEnvelope?.body?.body?.command?.SubmitAction?.actor_slot ===
+            "slot_4" &&
+          verification.actionLoop?.d02VoteNightTransition?.n03ActionSubmission
+            ?.requestEnvelope?.body?.body?.command?.SubmitAction?.template_id ===
+            "factional_kill" &&
+          verification.actionLoop?.d02VoteNightTransition?.n03ActionSubmission
+            ?.requestEnvelope?.body?.body?.command?.SubmitAction?.targets?.[0] ===
+            "slot-7" &&
+          verification.actionLoop?.d02VoteNightTransition?.resolveN03
+            ?.commandStatus?.state === "ack" &&
+          verification.actionLoop?.d02VoteNightTransition?.hostAfterResolveN03
+            ?.phase?.id === "N03" &&
+          verification.actionLoop?.d02VoteNightTransition?.hostAfterResolveN03
+            ?.phase?.locked === true &&
+          verification.actionLoop?.d02VoteNightTransition?.n03ResolvedTargetSlot
+            ?.slot_id === "slot-7" &&
+          verification.actionLoop?.d02VoteNightTransition?.n03ResolvedTargetSlot
+            ?.alive === false &&
+          verification.actionLoop?.d02VoteNightTransition?.n03ResolvedTargetSlot
+            ?.status === "dead" &&
+          verification.actionLoop?.d02VoteNightTransition?.advanceD04
+            ?.commandStatus?.state === "ack" &&
+          verification.actionLoop?.d02VoteNightTransition?.d04ActionSurface
+            ?.commandState?.phase?.phaseId === "D04" &&
+          verification.actionLoop?.d02VoteNightTransition?.d04ActionSurface
+            ?.commandState?.phase?.locked === false &&
+          countButtonsWithPrefix(
+            verification.actionLoop?.d02VoteNightTransition?.d04ActionSurface
+              ?.buttons,
+            "submit_vote",
+          ) > 0 &&
+          verification.actionLoop?.d02VoteNightTransition?.d04TargetSurface
+            ?.commandState?.actorAlive === false &&
+          countButtonsWithPrefix(
+            verification.actionLoop?.d02VoteNightTransition?.d04TargetSurface
+              ?.buttons,
+            "submit_vote",
+          ) === 0,
+      },
+    ),
     lane("host-deadline-advance", "Host advances locked phase by deadline evidence", {
       advanceState:
         verification.actionLoop?.deadlineAdvance?.advance?.commandStatus?.state ?? null,
@@ -7012,6 +7101,84 @@ function buildCoreLoopSpineSummary({ session, verification }) {
       .slice(4)
       .map((checkpoint) => ({ ...checkpoint })),
   });
+  cycles.push({
+    id: "n03-d04",
+    game: d02VoteNight.game ?? null,
+    roleUrls: {
+      host: d02VoteNight.hostRoleUrl ?? null,
+      actionPlayer: d02VoteNight.actionRoleUrl ?? null,
+      target: d02VoteNight.playerRoleUrl ?? null,
+    },
+    checkpoints: [
+      {
+        id: "n03-action-open",
+        phase:
+          d02VoteNight.actionAfterD03R2NoLynchPolicy?.commandState?.phase
+            ?.phaseId ?? null,
+        locked:
+          d02VoteNight.actionAfterD03R2NoLynchPolicy?.commandState?.phase
+            ?.locked ?? null,
+        actionTemplate: firstActionTemplate(
+          d02VoteNight.actionAfterD03R2NoLynchPolicy?.commandState?.actions,
+        ),
+        actionTarget: d02VoteNight.n03ActionTarget ?? null,
+        actionButtonVisible: hasEnabledButton(
+          d02VoteNight.actionAfterD03R2NoLynchPolicy?.buttons,
+          "submit_action:factional_kill",
+        ),
+        normalPlayerActionControls: countButtonsWithPrefix(
+          d02VoteNight.normalAfterD03R2NoLynchPolicy?.buttons,
+          "submit_action",
+        ),
+      },
+      {
+        id: "n03-action-submitted",
+        actionState: d02VoteNight.n03ActionSubmission?.state ?? null,
+        actorSlot:
+          d02VoteNight.n03ActionSubmission?.requestEnvelope?.body?.body?.command
+            ?.SubmitAction?.actor_slot ?? null,
+        templateId:
+          d02VoteNight.n03ActionSubmission?.requestEnvelope?.body?.body?.command
+            ?.SubmitAction?.template_id ?? null,
+        targetSlot:
+          d02VoteNight.n03ActionSubmission?.requestEnvelope?.body?.body?.command
+            ?.SubmitAction?.targets?.[0] ?? null,
+        actionButtonVisible: hasEnabledButton(
+          d02VoteNight.n03ActionAfterSubmit?.buttons,
+          "submit_action:factional_kill",
+        ),
+      },
+      {
+        id: "n03-resolved-target-killed",
+        resolveState: d02VoteNight.resolveN03?.commandStatus?.state ?? null,
+        phase: d02VoteNight.hostAfterResolveN03?.phase?.id ?? null,
+        locked: d02VoteNight.hostAfterResolveN03?.phase?.locked ?? null,
+        targetSlot: d02VoteNight.n03ResolvedTargetSlot?.slot_id ?? null,
+        targetAlive: d02VoteNight.n03ResolvedTargetSlot?.alive ?? null,
+        targetStatus: d02VoteNight.n03ResolvedTargetSlot?.status ?? null,
+      },
+      {
+        id: "d04-day-controls-return",
+        advanceState: d02VoteNight.advanceD04?.commandStatus?.state ?? null,
+        phase: d02VoteNight.d04ActionSurface?.commandState?.phase?.phaseId ?? null,
+        locked:
+          d02VoteNight.d04ActionSurface?.commandState?.phase?.locked ?? null,
+        actionSubmitControls: countButtonsWithPrefix(
+          d02VoteNight.d04ActionSurface?.buttons,
+          "submit_action",
+        ),
+        actionVoteControls: countButtonsWithPrefix(
+          d02VoteNight.d04ActionSurface?.buttons,
+          "submit_vote",
+        ),
+        targetAlive: d02VoteNight.d04TargetSurface?.commandState?.actorAlive ?? null,
+        targetVoteControls: countButtonsWithPrefix(
+          d02VoteNight.d04TargetSurface?.buttons,
+          "submit_vote",
+        ),
+      },
+    ],
+  });
   const recoveryHooks = {
     staleLockedVoteReject: verification.coreLoop?.rejectedVote?.error ?? null,
     invalidActionReject: actionLoop.invalidAction?.error ?? null,
@@ -7253,6 +7420,39 @@ function buildCoreLoopSpineSummary({ session, verification }) {
     cycles[3]?.checkpoints?.[8]?.id ===
       "d03r2-stale-continue-policy-recovery" &&
     cycles[3]?.checkpoints?.[8]?.reloadPhase === "N03" &&
+    cycles[4]?.id === "n03-d04" &&
+    cycles[4]?.game === cycles[2]?.game &&
+    cycles[4]?.roleUrls?.host === cycles[2]?.roleUrls?.host &&
+    cycles[4]?.roleUrls?.actionPlayer === cycles[2]?.roleUrls?.actionPlayer &&
+    cycles[4]?.roleUrls?.target === cycles[2]?.roleUrls?.normalPlayer &&
+    cycles[4]?.checkpoints?.[0]?.id === "n03-action-open" &&
+    cycles[4]?.checkpoints?.[0]?.phase === "N03" &&
+    cycles[4]?.checkpoints?.[0]?.locked === false &&
+    cycles[4]?.checkpoints?.[0]?.actionTemplate === "factional_kill" &&
+    cycles[4]?.checkpoints?.[0]?.actionTarget === "slot-7" &&
+    cycles[4]?.checkpoints?.[0]?.actionButtonVisible === true &&
+    cycles[4]?.checkpoints?.[0]?.normalPlayerActionControls === 0 &&
+    cycles[4]?.checkpoints?.[1]?.id === "n03-action-submitted" &&
+    cycles[4]?.checkpoints?.[1]?.actionState === "ack" &&
+    cycles[4]?.checkpoints?.[1]?.actorSlot === "slot_4" &&
+    cycles[4]?.checkpoints?.[1]?.templateId === "factional_kill" &&
+    cycles[4]?.checkpoints?.[1]?.targetSlot === "slot-7" &&
+    cycles[4]?.checkpoints?.[1]?.actionButtonVisible === false &&
+    cycles[4]?.checkpoints?.[2]?.id === "n03-resolved-target-killed" &&
+    cycles[4]?.checkpoints?.[2]?.resolveState === "ack" &&
+    cycles[4]?.checkpoints?.[2]?.phase === "N03" &&
+    cycles[4]?.checkpoints?.[2]?.locked === true &&
+    cycles[4]?.checkpoints?.[2]?.targetSlot === "slot-7" &&
+    cycles[4]?.checkpoints?.[2]?.targetAlive === false &&
+    cycles[4]?.checkpoints?.[2]?.targetStatus === "dead" &&
+    cycles[4]?.checkpoints?.[3]?.id === "d04-day-controls-return" &&
+    cycles[4]?.checkpoints?.[3]?.advanceState === "ack" &&
+    cycles[4]?.checkpoints?.[3]?.phase === "D04" &&
+    cycles[4]?.checkpoints?.[3]?.locked === false &&
+    cycles[4]?.checkpoints?.[3]?.actionSubmitControls === 0 &&
+    cycles[4]?.checkpoints?.[3]?.actionVoteControls > 0 &&
+    cycles[4]?.checkpoints?.[3]?.targetAlive === false &&
+    cycles[4]?.checkpoints?.[3]?.targetVoteControls === 0 &&
     recoveryHooks.staleLockedVoteReject === "PhaseLocked" &&
     recoveryHooks.invalidActionReject === "InvalidTarget" &&
     recoveryHooks.normalPlayerDirectActionReject === "InvalidTarget" &&
@@ -7261,7 +7461,7 @@ function buildCoreLoopSpineSummary({ session, verification }) {
   return {
     status: passed ? "passed" : "failed",
     proof:
-      "Compact derived spine map for the seeded role URL core loop: D01 resolve to N01 action, N01 resolution to D02 day controls, D02 vote resolution, N02 action return, N02 action submission/resolution, D03 day controls, D03 NoMajority AdvancePhase InvalidTarget recovery, host role URL reload back to locked D03 NoMajority truth, host continue-revote policy resolution into open D03R1 controls, a D03R1 no-lynch revote ballot keyed separately from the stale D03 tally, host resolution of D03R1 back to locked NoMajority with a fresh pending revote prompt, second continue-revote policy resolution into open D03R2 controls, D03R2 no-lynch vote submission/resolution with prior revote tallies kept separate, explicit host no-lynch policy resolution into open N03 controls, and stale continue-revote policy recovery back to open N03.",
+      "Compact derived spine map for the seeded role URL core loop: D01 resolve to N01 action, N01 resolution to D02 day controls, D02 vote resolution, N02 action return, N02 action submission/resolution, D03 day controls, D03 NoMajority AdvancePhase InvalidTarget recovery, host role URL reload back to locked D03 NoMajority truth, host continue-revote policy resolution into open D03R1 controls, a D03R1 no-lynch revote ballot keyed separately from the stale D03 tally, host resolution of D03R1 back to locked NoMajority with a fresh pending revote prompt, second continue-revote policy resolution into open D03R2 controls, D03R2 no-lynch vote submission/resolution with prior revote tallies kept separate, explicit host no-lynch policy resolution into open N03 controls, stale continue-revote policy recovery back to open N03, and real N03 action submission/resolution into open D04 day controls.",
     sourceLaneIds: [...coreLoopPhaseProgressionSpineSourceLaneIds],
     cycles,
     recoveryHooks,
@@ -7281,8 +7481,8 @@ function assertCoreLoopSpineSummary(summary) {
   ) {
     throw new Error("core loop spine summary must cite the action-loop source lane");
   }
-  if (!Array.isArray(summary.cycles) || summary.cycles.length !== 4) {
-    throw new Error("core loop spine summary must expose exactly four cycles");
+  if (!Array.isArray(summary.cycles) || summary.cycles.length !== 5) {
+    throw new Error("core loop spine summary must expose exactly five cycles");
   }
   for (const cycle of summary.cycles) {
     if (
