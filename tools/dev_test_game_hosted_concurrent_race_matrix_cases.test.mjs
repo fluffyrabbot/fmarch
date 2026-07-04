@@ -21,10 +21,8 @@ import {
 } from "./dev_test_game_real_hosted_evidence_inputs.mjs";
 import {
   staleConflictMessageSurfaceCases,
-} from "./dev_test_game_stale_conflict_scenarios.mjs";
-import {
   staleClientReconnectLaneIds,
-} from "./dev_test_game_stale_client_reconnect_scenarios.mjs";
+} from "./dev_test_game_hardening_recovery_scenarios.mjs";
 
 test("hosted concurrent matrix cases share progress and handoff IDs", () => {
   assert.deepEqual(hostedMatrixProgressCheckIds, [

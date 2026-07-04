@@ -12,10 +12,16 @@ import {
   hostStaleResolveReloadLaneId,
 } from "../../../../tools/dev_test_game_host_stale_control_scenarios.mjs";
 import {
-  hardeningStaleConflictHighlightedLaneIds,
+  cohostStaleDeadlineReconnectLaneId,
+  hardeningRecoveryHighlightedLaneIds,
   staleActionConflictMessageLaneId,
   staleDeadActionConflictLaneId,
-} from "../../../../tools/dev_test_game_stale_conflict_scenarios.mjs";
+  hostStaleAdvanceReconnectLaneId,
+  hostStaleDeadlineReconnectLaneId,
+  hostStaleResolveReconnectLaneId,
+  privateChannelStaleActionReconnectLaneId,
+  stalePlayerActionReconnectLaneId,
+} from "../../../../tools/dev_test_game_hardening_recovery_scenarios.mjs";
 import {
   concurrentActionRaceLaneId,
   concurrentActionRaceReloadLaneId,
@@ -28,15 +34,6 @@ import {
   playerActionLoopLaneId,
   playerInvalidActionRecoveryLaneId,
 } from "../../../../tools/dev_test_game_core_loop_action_scenarios.mjs";
-import {
-  cohostStaleDeadlineReconnectLaneId,
-  hostStaleAdvanceReconnectLaneId,
-  hostStaleDeadlineReconnectLaneId,
-  hostStaleResolveReconnectLaneId,
-  privateChannelStaleActionReconnectLaneId,
-  staleClientReconnectHighlightedLaneIds,
-  stalePlayerActionReconnectLaneId,
-} from "../../../../tools/dev_test_game_stale_client_reconnect_scenarios.mjs";
 import {
   revoteProgressionCompactStatus,
 } from "../../../../tools/dev_test_game_core_loop_revote_progression_scenarios.mjs";
@@ -69,8 +66,7 @@ export const CORE_LOOP_HIGHLIGHTED_LANE_IDS = Object.freeze([
 
 export const HARDENING_HIGHLIGHTED_LANE_IDS = Object.freeze([
   ...hardeningPlayerRecoveryHighlightedLaneIds,
-  ...hardeningStaleConflictHighlightedLaneIds,
-  ...staleClientReconnectHighlightedLaneIds,
+  ...hardeningRecoveryHighlightedLaneIds,
   "stale-host-control",
   "concurrent-host-resolve-race",
   "concurrent-host-resolve-race-reload",

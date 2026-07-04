@@ -11,8 +11,9 @@ import {
   hostStaleControlLaneIds,
 } from "./dev_test_game_host_stale_control_scenarios.mjs";
 import {
+  hardeningRecoveryAuditLaneIds,
   staleConflictMessageLaneIds,
-} from "./dev_test_game_stale_conflict_scenarios.mjs";
+} from "./dev_test_game_hardening_recovery_scenarios.mjs";
 import {
   localAdminAuditIds,
 } from "./dev_test_game_admin_audit_surface_ids.mjs";
@@ -84,6 +85,7 @@ await runAdminAuditProof({
       game: proofRun.session.game,
       highlightedLaneEvidence: hardeningHighlightedLaneEvidence(proofRun),
       hostStaleControlLaneIds: [...hostStaleControlLaneIds],
+      hardeningRecoveryAuditLaneIds: [...hardeningRecoveryAuditLaneIds],
       staleConflictMessageLaneIds: [...staleConflictMessageLaneIds],
     },
     adminRoleSurface: surfaces.adminRoleSurface,

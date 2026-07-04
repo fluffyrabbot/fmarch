@@ -1,10 +1,8 @@
 import {
   hostedMatrixReconnectLaneIds,
-} from "./dev_test_game_stale_client_reconnect_scenarios.mjs";
-import {
   hostedMatrixStaleConflictLaneIds,
   staleConflictMessageSurfaceCases,
-} from "./dev_test_game_stale_conflict_scenarios.mjs";
+} from "./dev_test_game_hardening_recovery_scenarios.mjs";
 import {
   realHostedEvidenceInputIds,
 } from "./dev_test_game_real_hosted_evidence_inputs.mjs";

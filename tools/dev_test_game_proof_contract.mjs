@@ -31,7 +31,7 @@ import {
   privateChannelStaleActionReconnectLaneId,
   stalePlayerActionReconnectExpectation,
   stalePlayerActionReconnectLaneId,
-} from "./dev_test_game_stale_client_reconnect_scenarios.mjs";
+} from "./dev_test_game_hardening_recovery_scenarios.mjs";
 import {
   hostAdvanceByDeadlineCommandFacts,
   hostAdvancePhaseCommandFacts,
@@ -66,7 +66,7 @@ import {
   assertStaleConflictMessageCoverageSummary,
   buildStaleConflictMessageCoverageSummary,
   staleConflictMessageLaneIds,
-} from "./dev_test_game_stale_conflict_scenarios.mjs";
+} from "./dev_test_game_hardening_recovery_scenarios.mjs";
 import {
   assertReplacementActionRecoveryCoverageSummary,
   buildReplacementActionRecoveryCoverageSummary,

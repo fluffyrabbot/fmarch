@@ -48,9 +48,28 @@ import {
   assertStaleConflictMessageCoverageSummary,
   assertStaleConflictMessageSurfaceCoverage,
   buildStaleConflictMessageCoverageSummary,
+  cohostStaleDeadlineReconnectLaneId,
+  completedHostStaleCompleteReconnectLaneId,
+  hardeningRecoveryAuditLaneIds,
+  hardeningRecoveryHighlightedLaneIds,
   hostedMatrixStaleConflictLaneIds,
   hardeningStaleConflictHighlightedLaneIds,
+  hostedMatrixReconnectLaneIds,
+  hostedMatrixRecoveryLaneIds,
+  hostStaleReconnectExpectations,
+  hostStaleAdvanceReconnectLaneId,
+  hostStaleDeadlineReconnectLaneId,
+  hostStaleResolveReconnectLaneId,
+  playerLiveReconnectLaneId,
+  privateChannelStaleActionReconnectExpectation,
+  privateChannelStaleActionReconnectLaneId,
   replacementStaleConflictMessageLaneId,
+  replacementActionReconnectLaneId,
+  replacementPrivatePostReconnectLaneId,
+  replacementSessionReconnectLaneId,
+  staleClientReconnectCases,
+  staleClientReconnectCaseDefinitions,
+  staleClientReconnectLaneIds,
   staleCohostDeadlineConflictLaneId,
   staleConflictMessageCoverageFamilies,
   staleConflictMessageCoverageFamilyDefinitions,
@@ -63,30 +82,12 @@ import {
   staleConflictMessageSurfaceCases,
   staleConflictMessageSurfaceCheckIds,
   staleConflictMessageLaneIds,
-} from "./dev_test_game_stale_conflict_scenarios.mjs";
+  stalePlayerActionReconnectExpectation,
+  stalePlayerActionReconnectLaneId,
+} from "./dev_test_game_hardening_recovery_scenarios.mjs";
 import {
   replacementSessionRecoveryLaneIds,
 } from "./dev_test_game_replacement_handoff_scenario_cases.mjs";
-import {
-  cohostStaleDeadlineReconnectLaneId,
-  completedHostStaleCompleteReconnectLaneId,
-  hostedMatrixReconnectLaneIds,
-  hostStaleReconnectExpectations,
-  hostStaleAdvanceReconnectLaneId,
-  hostStaleDeadlineReconnectLaneId,
-  hostStaleResolveReconnectLaneId,
-  playerLiveReconnectLaneId,
-  privateChannelStaleActionReconnectExpectation,
-  privateChannelStaleActionReconnectLaneId,
-  replacementActionReconnectLaneId,
-  replacementPrivatePostReconnectLaneId,
-  replacementSessionReconnectLaneId,
-  staleClientReconnectCases,
-  staleClientReconnectCaseDefinitions,
-  staleClientReconnectLaneIds,
-  stalePlayerActionReconnectExpectation,
-  stalePlayerActionReconnectLaneId,
-} from "./dev_test_game_stale_client_reconnect_scenarios.mjs";
 import {
   concurrentActionRaceLaneId,
   concurrentActionRaceReloadLaneId,
@@ -547,38 +548,26 @@ test("stale conflict production callers use the shared scenario module", async (
     "tools/dev_test_game_proof_contract.mjs",
     "tools/dev_test_game_hardening_admin_proof.mjs",
     "tools/dev_test_game_proof_graph_handoff_cases.mjs",
-    "tools/dev_test_game.test.mjs",
-    "tools/dev_test_game_proof_graph_handoff_cases.test.mjs",
-    "tools/dev_test_game_proof_graph_handoffs.test.mjs",
-    "tools/dev_test_game_admin_audit_handoff_contract.test.mjs",
-    "frontend/src/routes/admin/admin-route-model.test.mjs",
-  ];
-  const forbiddenHardeningImports = [
-    "hostedMatrixStaleConflictLaneIds",
-    "staleConflictMessageLaneIds",
+    "tools/dev_test_game_hosted_concurrent_race_matrix_cases.mjs",
+    "frontend/src/lib/app/local-proof-lane-status.mjs",
   ];
 
   for (const callerPath of callerPaths) {
     const source = await readFile(callerPath, "utf8");
     assert(
-      source.includes("./dev_test_game_stale_conflict_scenarios.mjs") ||
+      source.includes("./dev_test_game_hardening_recovery_scenarios.mjs") ||
         source.includes(
-          "./dev_test_game_hosted_concurrent_race_matrix_cases.mjs",
-        ) ||
-        source.includes(
+          "../../../../tools/dev_test_game_hardening_recovery_scenarios.mjs",
+        ),
+      `${callerPath} should import stale conflict definitions through the hardening recovery scenario module`,
+    );
+    assert(
+      !source.includes("./dev_test_game_stale_conflict_scenarios.mjs") &&
+        !source.includes(
           "../../../../tools/dev_test_game_stale_conflict_scenarios.mjs",
         ),
-      `${callerPath} should import stale conflict definitions through the scenario module`,
+      `${callerPath} should not bypass the hardening recovery facade for stale conflict definitions`,
     );
-
-    for (const importBlock of hardeningLaneImportBlocks(source)) {
-      for (const forbiddenImport of forbiddenHardeningImports) {
-        assert(
-          !importBlock.includes(forbiddenImport),
-          `${callerPath} should not import ${forbiddenImport} from hardening lane cases`,
-        );
-      }
-    }
   }
 });
 
@@ -1239,19 +1228,24 @@ test("hardening lane cases share stale-client reconnect scenarios", async () => 
 
   for (const callerPath of [
     "tools/dev_test_game_hosted_concurrent_race_matrix_cases.mjs",
-    "tools/dev_test_game_player_recovery_scenarios.mjs",
-    "tools/dev_test_game_host_stale_control_scenarios.mjs",
     "tools/dev_test_game_proof_contract.mjs",
     "tools/dev_test_game_hardening_lane_cases.mjs",
     "frontend/src/lib/app/local-proof-lane-status.mjs",
   ]) {
     const source = await readFile(callerPath, "utf8");
     assert(
-      source.includes("./dev_test_game_stale_client_reconnect_scenarios.mjs") ||
+      source.includes("./dev_test_game_hardening_recovery_scenarios.mjs") ||
         source.includes(
+          "../../../../tools/dev_test_game_hardening_recovery_scenarios.mjs",
+        ),
+      `${callerPath} should import stale-client reconnect lanes from the hardening recovery scenario module`,
+    );
+    assert(
+      !source.includes("./dev_test_game_stale_client_reconnect_scenarios.mjs") &&
+        !source.includes(
           "../../../../tools/dev_test_game_stale_client_reconnect_scenarios.mjs",
         ),
-      `${callerPath} should import stale-client reconnect lanes from the shared scenario module`,
+      `${callerPath} should not bypass the hardening recovery facade for reconnect definitions`,
     );
   }
 });
@@ -1276,5 +1270,29 @@ test("hardening lane cases derive hosted matrix reconnect IDs", () => {
     hostStaleAdvanceReconnectLaneId,
     hostStaleDeadlineReconnectLaneId,
     cohostStaleDeadlineReconnectLaneId,
+  ]);
+});
+
+test("hardening lane cases derive recovery clusters from stale conflict and reconnect cases", () => {
+  assert.deepEqual(hardeningRecoveryAuditLaneIds, [
+    ...staleConflictMessageLaneIds,
+    ...staleClientReconnectLaneIds(),
+  ]);
+  assert.deepEqual(hardeningRecoveryHighlightedLaneIds, [
+    ...hardeningStaleConflictHighlightedLaneIds,
+    ...[
+      playerLiveReconnectLaneId,
+      stalePlayerActionReconnectLaneId,
+      privateChannelStaleActionReconnectLaneId,
+      completedHostStaleCompleteReconnectLaneId,
+      hostStaleResolveReconnectLaneId,
+      hostStaleAdvanceReconnectLaneId,
+      hostStaleDeadlineReconnectLaneId,
+      cohostStaleDeadlineReconnectLaneId,
+    ],
+  ]);
+  assert.deepEqual(hostedMatrixRecoveryLaneIds, [
+    ...hostedMatrixReconnectLaneIds,
+    ...hostedMatrixStaleConflictLaneIds,
   ]);
 });

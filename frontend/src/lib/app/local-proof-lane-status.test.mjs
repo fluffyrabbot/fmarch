@@ -16,22 +16,19 @@ import {
 } from "../../../../tools/dev_test_game_host_stale_control_scenarios.mjs";
 import {
   cohostStaleDeadlineReconnectLaneId,
+  hardeningRecoveryHighlightedLaneIds,
   hostStaleAdvanceReconnectLaneId,
   hostStaleDeadlineReconnectLaneId,
   hostStaleReconnectExpectationForLane,
   hostStaleResolveReconnectLaneId,
   privateChannelStaleActionReconnectExpectation,
   privateChannelStaleActionReconnectLaneId,
-  staleClientReconnectHighlightedLaneIds,
-  stalePlayerActionReconnectExpectation,
-  stalePlayerActionReconnectLaneId,
-} from "../../../../tools/dev_test_game_stale_client_reconnect_scenarios.mjs";
-import {
-  hardeningStaleConflictHighlightedLaneIds,
   staleActionConflictMessageLaneId,
   staleConflictMessageStatusExpectationForLane,
   staleDeadActionConflictLaneId,
-} from "../../../../tools/dev_test_game_stale_conflict_scenarios.mjs";
+  stalePlayerActionReconnectExpectation,
+  stalePlayerActionReconnectLaneId,
+} from "../../../../tools/dev_test_game_hardening_recovery_scenarios.mjs";
 import {
   concurrentActionRaceLaneId,
   concurrentActionRaceReloadLaneId,
@@ -147,11 +144,11 @@ test("core loop highlighted completed-game lanes come from shared scenarios", ()
   );
 });
 
-test("hardening highlighted reconnect lanes come from shared stale-client scenarios", () => {
-  for (const laneId of staleClientReconnectHighlightedLaneIds) {
+test("hardening highlighted recovery lanes come from shared hardening scenarios", () => {
+  for (const laneId of hardeningRecoveryHighlightedLaneIds) {
     assert(
       HARDENING_HIGHLIGHTED_LANE_IDS.includes(laneId),
-      `missing highlighted reconnect lane ${laneId}`,
+      `missing highlighted hardening recovery lane ${laneId}`,
     );
   }
 });
@@ -167,15 +164,6 @@ test("highlighted host stale-command lanes come from shared scenarios", () => {
     assert(
       HARDENING_HIGHLIGHTED_LANE_IDS.includes(laneId),
       `missing hardening host stale lane ${laneId}`,
-    );
-  }
-});
-
-test("highlighted stale-conflict lanes come from shared scenarios", () => {
-  for (const laneId of hardeningStaleConflictHighlightedLaneIds) {
-    assert(
-      HARDENING_HIGHLIGHTED_LANE_IDS.includes(laneId),
-      `missing hardening stale-conflict lane ${laneId}`,
     );
   }
 });

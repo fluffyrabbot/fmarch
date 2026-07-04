@@ -28,14 +28,14 @@ import {
   replacementHandoffHardeningLaneIds,
 } from "./dev_test_game_replacement_handoff_scenario_cases.mjs";
 import {
-  staleConflictMessageLaneIds,
-} from "./dev_test_game_stale_conflict_scenarios.mjs";
+  hardeningRecoveryAuditLaneIds,
+} from "./dev_test_game_hardening_recovery_scenarios.mjs";
 
 const uniqueLaneIds = (laneIds) => [...new Set(laneIds)];
 
 export const hardeningAuditLaneIds = Object.freeze(uniqueLaneIds([
   ...replacementHandoffHardeningLaneIds,
-  ...staleConflictMessageLaneIds,
+  ...hardeningRecoveryAuditLaneIds,
   ...playerActionFoundationLaneIds,
   ...promotedStalePlayerCommandLaneIds,
   "concurrent-vote-race",
@@ -48,7 +48,6 @@ export const hardeningAuditLaneIds = Object.freeze(uniqueLaneIds([
   "concurrent-replacement-action-race",
   "concurrent-replacement-action-race-reload",
   "replacement-incoming-action",
-  "replacement-action-reconnect",
   "replacement-stale-action-after-resolve",
   ...replacementPrivatePostRecoveryLaneIds,
   ...hostPublishRaceLaneIds,

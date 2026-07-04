@@ -30,7 +30,7 @@ import {
 import {
   staleConflictMessageSurfaceCases,
   staleConflictMessageLaneIds,
-} from "./dev_test_game_stale_conflict_scenarios.mjs";
+} from "./dev_test_game_hardening_recovery_scenarios.mjs";
 import {
   assertDevTestGameHostedTargetPreflight,
   devTestGameHostedTargetPreflightPath,
