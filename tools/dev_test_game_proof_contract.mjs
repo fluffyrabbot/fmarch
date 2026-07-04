@@ -137,6 +137,7 @@ const defaultSessionPath = path.join(repoRoot, "target", "dev-test-game", "sessi
 const defaultProofPath = path.join(repoRoot, "target", "dev-test-game", "proof-run.json");
 const requiredLaneIds = Object.freeze([
   "browser-entry",
+  "host-setup-role",
   "cohost-console",
   "core-loop",
   ...coreLoopPhaseProgressionLaneIds,
@@ -224,6 +225,35 @@ export function buildDevTestGameProofRun(session, options = {}) {
       roles: verification.roles ?? [],
       sessionRoles: Object.keys(verification.sessions ?? {}),
       passed: verification.status === "passed" && requiredRolesPresent(verification),
+    }),
+    lane("host-setup-role", "Host setup role URL opens setup recovery surface", {
+      roleUrl: verification.hostSetup?.roleUrl ?? null,
+      capabilityLabel: verification.hostSetup?.capabilityLabel ?? null,
+      readinessSummary: verification.hostSetup?.readinessSummary ?? null,
+      phaseId: verification.hostSetup?.phaseId ?? null,
+      startDisabled: verification.hostSetup?.startDisabled ?? null,
+      hostHref: verification.hostSetup?.hostHref ?? null,
+      readyCheckIds: verification.hostSetup?.readyCheckIds ?? null,
+      slotIds: verification.hostSetup?.slotIds ?? null,
+      roleKeys: verification.hostSetup?.roleKeys ?? null,
+      mainPolicyText: verification.hostSetup?.mainPolicyText ?? null,
+      passed:
+        verification.hostSetup?.status === "passed" &&
+        verification.hostSetup?.roleUrl?.includes(`/g/${session?.game ?? ""}/setup`) ===
+          true &&
+        verification.hostSetup?.capabilityLabel ===
+          `HostOf(${session?.game ?? ""})` &&
+        verification.hostSetup?.readinessSummary === "Started at D01" &&
+        verification.hostSetup?.phaseId === "D01" &&
+        verification.hostSetup?.startDisabled === true &&
+        verification.hostSetup?.hostHref === `/g/${session?.game ?? ""}/host` &&
+        verification.hostSetup?.mainPolicyText ===
+          "Media-only posts are disabled." &&
+        verification.hostSetup?.slotIds?.includes("slot-7") === true &&
+        verification.hostSetup?.slotIds?.includes("slot_4") === true &&
+        verification.hostSetup?.roleKeys?.includes("mafia_goon") === true &&
+        verification.hostSetup?.roleKeys?.includes("vanilla_townie") === true &&
+        verification.hostSetup?.readyCheckIds?.length === 7,
     }),
     lane("cohost-console", "Cohost role URL opens delegated host console controls", {
       capabilityLabel: verification.cohostConsole?.capabilityLabel ?? null,
@@ -7796,6 +7826,7 @@ function lane(id, label, evidence) {
 function requiredRolesPresent(verification) {
   return [
     "host",
+    "hostSetup",
     "player",
     "actionPlayer",
     "deniedPlayer",

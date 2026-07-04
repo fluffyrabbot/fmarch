@@ -351,6 +351,12 @@ async function createSessions() {
       returnTo: `/g/${game}/host`,
       expectedCapabilityKind: "HostOf",
     }),
+    hostSetup: await createInviteCredential({
+      inviteToken: tokens.hostSetup,
+      principalUserId: "host_h",
+      returnTo: `/g/${game}/setup`,
+      expectedCapabilityKind: "HostOf",
+    }),
     player: await createInviteCredential({
       inviteToken: tokens.player,
       principalUserId: "player-mira",
@@ -434,6 +440,7 @@ export function createTokenSet(prefix) {
     rootAdmin: `${prefix}-root-admin`,
     admin: `${prefix}-admin`,
     host: `${prefix}-host`,
+    hostSetup: `${prefix}-host-setup`,
     player: `${prefix}-player`,
     actionPlayer: `${prefix}-action-player`,
     deniedPlayer: `${prefix}-denied-player`,
@@ -975,6 +982,7 @@ async function verifySessionCard(card) {
   const roles = [];
   const sessions = {};
   const roleEntries = {};
+  let hostSetup;
   let cohostConsole;
   let coreLoop;
   let dayVoteResolution;
@@ -1004,7 +1012,14 @@ async function verifySessionCard(card) {
   let staleCohostPage;
   let staleReplacementPage;
   try {
-    for (const role of ["host", "player", "actionPlayer", "deniedPlayer", "cohost"]) {
+    for (const role of [
+      "host",
+      "hostSetup",
+      "player",
+      "actionPlayer",
+      "deniedPlayer",
+      "cohost",
+    ]) {
       roleEntries[role] = await openVerifiedRoleEntry({
         browser,
         session: card.sessions[role],
@@ -1015,6 +1030,11 @@ async function verifySessionCard(card) {
       sessions[role] = roleEntries[role].verification;
       roles.push(role);
     }
+    hostSetup = await verifySeededHostSetupRoute({
+      setupPage: roleEntries.hostSetup.page,
+      game: card.game,
+      frontendBaseUrl: card.frontendBaseUrl,
+    });
     concurrentActionPage = await roleEntries.actionPlayer.context.newPage();
     privateChannelActionPage = await roleEntries.actionPlayer.context.newPage();
     privateChannelStaleActionPage =
@@ -1159,6 +1179,7 @@ async function verifySessionCard(card) {
     sessions,
     proofStability: buildProofStabilityAudit(),
     mediaResponseGuard: mediaResponseGuard.summary(),
+    hostSetup,
     cohostConsole,
     coreLoop,
     dayVoteResolution,
@@ -1171,6 +1192,105 @@ async function verifySessionCard(card) {
     playerActionBoundary,
     multiplayerHardening,
     replacementConsole,
+  };
+}
+
+async function verifySeededHostSetupRoute({ setupPage, game, frontendBaseUrl }) {
+  const roleUrl = `${frontendBaseUrl}/g/${game}/setup`;
+  await setupPage.getByTestId("host-setup-surface").waitFor({
+    state: "visible",
+    timeout: 15000,
+  });
+  await setupPage.getByTestId("host-setup-roster").waitFor({
+    state: "visible",
+    timeout: 15000,
+  });
+  await setupPage.getByTestId("host-setup-roles").waitFor({
+    state: "visible",
+    timeout: 15000,
+  });
+  await setupPage.getByTestId("host-setup-readiness-summary").waitFor({
+    state: "visible",
+    timeout: 15000,
+  });
+  await setupPage.waitForFunction(
+    () => window.__fmarchHostSetupState !== undefined,
+    { timeout: 15000 },
+  );
+
+  const [
+    surfaceGame,
+    capabilityLabel,
+    readinessSummary,
+    mainPolicyText,
+    startDisabled,
+    hostHref,
+    windowState,
+  ] = await Promise.all([
+    setupPage.getByTestId("host-setup-surface").getAttribute("data-game"),
+    setupPage.getByTestId("host-setup-capability").innerText(),
+    setupPage.getByTestId("host-setup-readiness-summary").innerText(),
+    setupPage.getByTestId("host-setup-main-policy").innerText(),
+    setupPage.getByTestId("host-setup-start-review").isDisabled(),
+    setupPage.locator(`a[href="/g/${game}/host"]`).first().getAttribute("href"),
+    setupPage.evaluate(() => ({
+      setupState: window.__fmarchHostSetupState ?? null,
+      readiness: window.__fmarchHostSetupReadiness ?? null,
+    })),
+  ]);
+  const slotIds = (windowState.setupState?.slots ?? []).map((slot) => slot.slotId);
+  const roleKeys = windowState.setupState?.pack?.roleKeys ?? [];
+  const phaseId = windowState.setupState?.phase?.phaseId ?? null;
+  const checks = windowState.readiness?.checks ?? [];
+  if (
+    setupPage.url() !== roleUrl ||
+    surfaceGame !== game ||
+    !capabilityLabel.includes(`HostOf(${game})`) ||
+    readinessSummary !== "Started at D01" ||
+    mainPolicyText !== "Media-only posts are disabled." ||
+    startDisabled !== true ||
+    hostHref !== `/g/${game}/host` ||
+    phaseId !== "D01" ||
+    !slotIds.includes("slot-7") ||
+    !slotIds.includes("slot_4") ||
+    !roleKeys.includes("mafia_goon") ||
+    !roleKeys.includes("vanilla_townie") ||
+    !checks.every((check) => check.state === "ready")
+  ) {
+    throw new Error(
+      `host setup route proof drifted: ${JSON.stringify({
+        url: setupPage.url(),
+        roleUrl,
+        surfaceGame,
+        capabilityLabel,
+        readinessSummary,
+        mainPolicyText,
+        startDisabled,
+        hostHref,
+        phaseId,
+        slotIds,
+        roleKeys,
+        checks,
+      })}`,
+    );
+  }
+
+  return {
+    status: "passed",
+    proof:
+      "Host setup role URL opens roster, role, policy, invite, and start recovery surface.",
+    roleUrl,
+    capabilityLabel,
+    readinessSummary,
+    phaseId,
+    startDisabled,
+    hostHref,
+    slotIds,
+    roleKeys,
+    mainPolicyText,
+    readyCheckIds: checks
+      .filter((check) => check.state === "ready")
+      .map((check) => check.id),
   };
 }
 

@@ -17,17 +17,17 @@ import {
 } from "./dev_test_game_seed_scenario_cases.mjs";
 
 test("seed scenario cases expose one full shared required inventory", () => {
-  assert.equal(seedRequiredScenarioIds.length, 84);
+  assert.equal(seedRequiredScenarioIds.length, 85);
   assert.equal(new Set(seedRequiredScenarioIds).size, seedRequiredScenarioIds.length);
   assert.deepEqual(seedRequiredScenarioIds.slice(0, 8), [
     "host-phase-controls",
+    "host-setup-role",
     "cohost-deadline-control",
     "player-vote-recovery",
     "player-action-denied",
     "invalid-action-recovery",
     "resolution-receipt",
     "dead-player-recovery",
-    "night-action-loop",
   ]);
   assert.deepEqual(seedRequiredScenarioIds.slice(-4), [
     "private-channel-member",
@@ -55,7 +55,7 @@ test("seed scenario cases include reload and stale-reject proof rows", () => {
 });
 
 test("seed scenario cases expose generated demo scenario fixture rows", () => {
-  assert.equal(seedDemoScenarioIds.length, 123);
+  assert.equal(seedDemoScenarioIds.length, 124);
   assert.deepEqual(seedDemoOnlyScenarioIds, [
     "day-vote-resolution",
     "day-vote-no-lynch",
@@ -116,8 +116,8 @@ test("seed scenario cases expose generated demo scenario fixture rows", () => {
   assert.equal(new Set(seedDemoScenarioIds).size, seedDemoScenarioIds.length);
   assert.deepEqual(seedDemoScenarioIds.slice(0, 6), [
     "host-phase-controls",
+    "host-setup-role",
     "cohost-deadline-control",
-    "player-vote-recovery",
     "day-vote-resolution",
     "day-vote-no-lynch",
     "host-deadline-advance",
@@ -170,7 +170,8 @@ test("seed scenario cases expose generated demo scenario fixture rows", () => {
     "stale-player-post-after-phase-closure",
     "stale-player-withdraw-after-change",
   ]);
-  assert.deepEqual(seedDemoScenarioIds.slice(35, 37), [
+  assert.deepEqual(seedDemoScenarioIds.slice(35, 38), [
+    "player-vote-recovery",
     "player-action-denied",
     "invalid-action-recovery",
   ]);

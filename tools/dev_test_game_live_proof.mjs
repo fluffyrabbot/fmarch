@@ -402,6 +402,7 @@ assert.equal(proofRun.coreLoopSpine.recoveryHooks.staleActionConflictReject, "Ph
 assert.equal(proofRun.coreLoopSpine.recoveryHooks.d03TerminalAdvanceReject, "InvalidTarget");
 assert.deepEqual(session.verification.roles, [
   "host",
+  "hostSetup",
   "player",
   "actionPlayer",
   "deniedPlayer",
@@ -414,6 +415,7 @@ for (const role of [
   "admin",
   "cohost",
   "host",
+  "hostSetup",
   "player",
   "actionPlayer",
   "deniedPlayer",
@@ -438,6 +440,30 @@ assert.equal(
   session.verification.sessions.host.capabilityKinds.includes("HostOf"),
   true,
 );
+assert.equal(
+  session.verification.sessions.hostSetup.capabilityKinds.includes("HostOf"),
+  true,
+);
+assert.equal(session.verification.hostSetup.status, "passed");
+assert.match(
+  session.verification.hostSetup.roleUrl,
+  new RegExp(`/g/${session.game}/setup$`),
+);
+assert.equal(
+  session.verification.hostSetup.capabilityLabel,
+  `HostOf(${session.game})`,
+);
+assert.equal(session.verification.hostSetup.readinessSummary, "Started at D01");
+assert.equal(session.verification.hostSetup.phaseId, "D01");
+assert.equal(session.verification.hostSetup.startDisabled, true);
+assert.equal(session.verification.hostSetup.hostHref, `/g/${session.game}/host`);
+assert.equal(
+  session.verification.hostSetup.mainPolicyText,
+  "Media-only posts are disabled.",
+);
+assert.equal(session.verification.hostSetup.readyCheckIds.length, 7);
+assert.equal(session.verification.hostSetup.slotIds.includes("slot-7"), true);
+assert.equal(session.verification.hostSetup.slotIds.includes("slot_4"), true);
 assert.equal(
   session.verification.sessions.player.capabilityKinds.includes("SlotOccupant"),
   true,

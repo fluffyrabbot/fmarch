@@ -30,6 +30,7 @@ import {
 
 export const seedRequiredScenarioIds = Object.freeze([
   "host-phase-controls",
+  "host-setup-role",
   "cohost-deadline-control",
   "player-vote-recovery",
   "player-action-denied",
@@ -153,6 +154,7 @@ export const seedScenarioCoverageGroups = Object.freeze({
 
 const seedScenarioRoleOverrides = new Map([
   ...coreLoopFeatureSeedRoleOverrideEntries,
+  ["host-setup-role", "hostSetup"],
   ["player-action-denied", "player"],
   [playerActionBoundaryLaneId, "player"],
   ["stale-deadline-advance", "host"],

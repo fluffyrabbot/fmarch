@@ -1346,8 +1346,8 @@ test("dev test-game next-action derives one local recovery command from the mani
     status: "clean",
     source: "target/dev-test-game/release-readiness-checklist.json",
     checkId: "local-seed-demo-fixture",
-    passedLaneCount: 115,
-    directSeededLaneCount: 107,
+    passedLaneCount: 116,
+    directSeededLaneCount: 108,
     aliasOnlyLaneCount: seedAliasOnlyProofLaneIds.length,
     aggregateOnlyLaneCount: seedAggregateOnlyProofLaneIds.length,
     unclassifiedLaneCount: 0,
@@ -1467,7 +1467,7 @@ test("dev test-game next-action derives one local recovery command from the mani
     seedProofLaneCoverage: {
       source: "target/dev-test-game/release-readiness-checklist.json",
       status: "drifted",
-      passedLaneCount: 116,
+      passedLaneCount: 117,
       unclassifiedLaneCount: 1,
       unclassifiedLaneIds: ["new-production-proof-lane"],
       buildSlice:
@@ -1481,8 +1481,8 @@ test("dev test-game next-action derives one local recovery command from the mani
     status: "drifted",
     source: "target/dev-test-game/release-readiness-checklist.json",
     checkId: "local-seed-demo-fixture",
-    passedLaneCount: 116,
-    directSeededLaneCount: 107,
+    passedLaneCount: 117,
+    directSeededLaneCount: 108,
     aliasOnlyLaneCount: seedAliasOnlyProofLaneIds.length,
     aggregateOnlyLaneCount: seedAggregateOnlyProofLaneIds.length,
     unclassifiedLaneCount: 1,
@@ -2725,6 +2725,14 @@ test("session card and markdown include role credential URLs and tokens", async 
         returnTo: `/g/${game}/host`,
         expectedCapabilityKind: "HostOf",
       },
+      hostSetup: {
+        principalUserId: "host_h",
+        credentialKind: "invite",
+        token: tokens.hostSetup,
+        inviteToken: tokens.hostSetup,
+        returnTo: `/g/${game}/setup`,
+        expectedCapabilityKind: "HostOf",
+      },
       player: {
         principalUserId: "player-mira",
         credentialKind: "invite",
@@ -2766,8 +2774,20 @@ test("session card and markdown include role credential URLs and tokens", async 
   assert.equal(card.sessions.player.token, "dev-test-card-player");
   card.verification = {
     status: "passed",
-    roles: ["host", "player", "actionPlayer", "deniedPlayer", "cohost", "replacementPlayer"],
+    roles: [
+      "host",
+      "hostSetup",
+      "player",
+      "actionPlayer",
+      "deniedPlayer",
+      "cohost",
+      "replacementPlayer",
+    ],
     sessions: {
+      hostSetup: {
+        capabilityKinds: ["HostOf"],
+        cookie: { valuePrefix: "invite-session-" },
+      },
       cohost: {
         capabilityKinds: ["CohostOf"],
         cookie: { valuePrefix: "invite-session-" },
@@ -2777,6 +2797,29 @@ test("session card and markdown include role credential URLs and tokens", async 
         capabilityKinds: ["SlotOccupant", "ChannelMember"],
         cookie: { valuePrefix: "invite-session-" },
       },
+    },
+    hostSetup: {
+      status: "passed",
+      proof:
+        "Host setup role URL opens roster, role, policy, invite, and start recovery surface.",
+      roleUrl: `http://127.0.0.1:4102/g/${game}/setup`,
+      capabilityLabel: `HostOf(${game})`,
+      readinessSummary: "Started at D01",
+      phaseId: "D01",
+      startDisabled: true,
+      hostHref: `/g/${game}/host`,
+      slotIds: ["slot-7", "slot_4"],
+      roleKeys: ["mafia_goon", "vanilla_townie"],
+      mainPolicyText: "Media-only posts are disabled.",
+      readyCheckIds: [
+        "game-created",
+        "pack-valid",
+        "slots-exist",
+        "slots-occupied",
+        "roles-assigned",
+        "policy-acknowledged",
+        "start-phase",
+      ],
     },
     proofStability: {
       status: "passed",
@@ -9079,6 +9122,7 @@ test("session card and markdown include role credential URLs and tokens", async 
     proofRun.lanes.map((lane) => lane.id),
     [
       "browser-entry",
+      "host-setup-role",
       "cohost-console",
       "core-loop",
       "day-vote-resolution",
@@ -9978,7 +10022,7 @@ test("session card and markdown include role credential URLs and tokens", async 
   assert.equal(opsArtifacts.productionReady, false);
   assert.equal(opsArtifacts.run.game, game);
   assert.equal(opsArtifacts.run.seedCommandCount, 1);
-  assert.equal(opsArtifacts.proofRun.laneCount, 120);
+  assert.equal(opsArtifacts.proofRun.laneCount, 121);
   assert.equal(opsArtifacts.proofStability.hostConfirmClicks.total, 4);
   assert.equal(
     opsArtifacts.checks.some(
@@ -11013,10 +11057,10 @@ function devTestGameReleaseReadinessChecklistFixture({
 function seedProofLaneCoverageFixture({ unclassifiedLaneIds = [] } = {}) {
   return {
     status: unclassifiedLaneIds.length === 0 ? "passed" : "failed",
-    passedLaneCount: 115 + unclassifiedLaneIds.length,
+    passedLaneCount: 116 + unclassifiedLaneIds.length,
     directSeeded: {
-      count: 107,
-      laneIds: seedScenarioCoverageGroups.allDemo.slice(0, 107),
+      count: 108,
+      laneIds: seedScenarioCoverageGroups.allDemo.slice(0, 108),
     },
     aliasOnly: {
       count: seedAliasOnlyProofLaneIds.length,
@@ -11454,12 +11498,12 @@ function devTestGameOpsArtifactsFixture({
       game: "midsummer",
       verificationStatus: "passed",
       seedCommandCount: 22,
-      roleCount: 6,
+      roleCount: 7,
     },
     roles: {},
     proofRun: {
       status: "passed",
-      laneCount: 119,
+      laneCount: 121,
       lanes: [],
       nonClaims: [],
     },

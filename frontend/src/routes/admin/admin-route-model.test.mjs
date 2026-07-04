@@ -3107,8 +3107,8 @@ test("admin route data exposes local seed fixture summary as a native audit row"
     scenarioCount: seedScenarioCoverageGroups.allDemo.length,
     roleCount: 7,
     slotCount: 5,
-    proofLaneCount: 115,
-    directSeededProofLaneCount: 107,
+    proofLaneCount: 116,
+    directSeededProofLaneCount: 108,
     aliasOnlyProofLaneCount: seedAliasOnlyProofLaneIds.length,
     aggregateOnlyProofLaneCount: seedAggregateOnlyProofLaneIds.length,
     unclassifiedProofLaneCount: 0,
@@ -3142,7 +3142,7 @@ test("admin local seed fixture detail data carries scenario rows", async () => {
       coverage.count,
     ]),
     [
-      ["direct-seeded", 107],
+      ["direct-seeded", 108],
       ["alias-only", seedAliasOnlyProofLaneIds.length],
       ["aggregate-only", seedAggregateOnlyProofLaneIds.length],
       ["unclassified", 0],
@@ -4697,10 +4697,10 @@ function seedFixtureSummaryFixture() {
     demoScenarios: seedDemoScenarioFixtureRows(),
     proofLaneCoverage: {
       status: "passed",
-      passedLaneCount: 115,
+      passedLaneCount: 116,
       directSeeded: {
-        count: 107,
-        laneIds: seedScenarioCoverageGroups.allDemo.slice(0, 107),
+        count: 108,
+        laneIds: seedScenarioCoverageGroups.allDemo.slice(0, 108),
       },
       aliasOnly: {
         count: seedAliasOnlyProofLaneIds.length,
@@ -5109,7 +5109,7 @@ function seedProofLaneCoverageActionFixture({ unclassifiedLaneIds }) {
   return {
     source: "target/dev-test-game/release-readiness-checklist.json",
     status: "drifted",
-    passedLaneCount: 115 + unclassifiedLaneIds.length,
+    passedLaneCount: 116 + unclassifiedLaneIds.length,
     unclassifiedLaneCount: unclassifiedLaneIds.length,
     unclassifiedLaneIds,
     buildSlice:
@@ -5779,8 +5779,8 @@ function seedProofLaneCoverageTraceFixture({ seedProofLaneCoverage } = {}) {
     source: "target/dev-test-game/release-readiness-checklist.json",
     checkId: "local-seed-demo-fixture",
     selected: seedProofLaneCoverage !== undefined,
-    passedLaneCount: Number(seedProofLaneCoverage?.passedLaneCount ?? 115),
-    directSeededLaneCount: 107,
+    passedLaneCount: Number(seedProofLaneCoverage?.passedLaneCount ?? 116),
+    directSeededLaneCount: 108,
     aliasOnlyLaneCount: seedAliasOnlyProofLaneIds.length,
     aggregateOnlyLaneCount: seedAggregateOnlyProofLaneIds.length,
     unclassifiedLaneCount: unclassifiedLaneIds.length,
