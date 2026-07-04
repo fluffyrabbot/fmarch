@@ -492,6 +492,12 @@ test("completed-game production harness callers share extracted recovery cases",
     );
     assert(
       !source.includes(
+        "./dev_test_game_core_loop_completed_game_proof_readiness_case_definitions.mjs",
+      ),
+      `${callerPath} should not import through the removed proof/readiness case-definition barrel`,
+    );
+    assert(
+      !source.includes(
         "./dev_test_game_core_loop_completed_recovery_case_definitions.mjs",
       ),
       `${callerPath} should not import completed recovery definitions separately from the shared proof/readiness module`,
@@ -568,16 +574,17 @@ test("completed-game production harness callers share extracted recovery cases",
     );
   }
 
-  const proofReadinessScenarioSource = await readFile(
+  for (const retiredPath of [
+    "tools/dev_test_game_core_loop_completed_game_proof_readiness_case_definitions.mjs",
     "tools/dev_test_game_core_loop_completed_game_proof_readiness_scenarios.mjs",
-    "utf8",
-  );
-  assert(
-    proofReadinessScenarioSource.includes(
-      "./dev_test_game_core_loop_completed_game_proof_readiness_contract.mjs",
-    ),
-    "legacy proof/readiness scenario module should re-export the contract",
-  );
+    "tools/dev_test_game_core_loop_completed_game_proof_readiness_shared.mjs",
+  ]) {
+    await assert.rejects(
+      readFile(retiredPath, "utf8"),
+      { code: "ENOENT" },
+      `${retiredPath} should stay retired so proof/readiness cases have one shared module`,
+    );
+  }
 
   for (const callerPath of [
     "tools/dev_test_game_release_readiness.mjs",
