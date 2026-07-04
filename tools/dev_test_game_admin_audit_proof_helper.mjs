@@ -165,12 +165,16 @@ export async function proveAdminAuditDetail({
       state: "visible",
       timeout: 15000,
     });
+    await page.getByTestId(linkTestId).evaluate((element) => {
+      element.scrollIntoView({ block: "center", inline: "nearest" });
+    });
+    await page.getByTestId(linkTestId).focus();
     await Promise.all([
       page.waitForURL(
         `${frontendBaseUrl}/admin/audit/${auditId}?game=${encodeURIComponent(game)}`,
         { timeout: 15000 },
       ),
-      page.getByTestId(linkTestId).click(),
+      page.keyboard.press("Enter"),
     ]);
     await page.waitForLoadState("networkidle");
     await page.getByTestId("admin-audit-detail-surface").waitFor({

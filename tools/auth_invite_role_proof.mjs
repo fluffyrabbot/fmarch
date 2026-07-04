@@ -1188,9 +1188,15 @@ async function driveAdminIdentityAuditSurface({
       state: "visible",
       timeout: 15000,
     });
+    await page
+      .getByTestId("admin-audit-link-identity-lifecycle")
+      .evaluate((element) => {
+        element.scrollIntoView({ block: "center", inline: "nearest" });
+      });
+    await page.getByTestId("admin-audit-link-identity-lifecycle").focus();
     await Promise.all([
       page.waitForURL(detailUrl, { timeout: 15000 }),
-      page.getByTestId("admin-audit-link-identity-lifecycle").click(),
+      page.keyboard.press("Enter"),
     ]);
     await page.waitForLoadState("networkidle");
     await page.getByTestId("admin-audit-detail-surface").waitFor({
