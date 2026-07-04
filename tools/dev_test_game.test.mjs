@@ -253,6 +253,9 @@ import {
   devTestGameReplacementPrivateRecoveryReceiptRoleUrl,
 } from "./dev_test_game_replacement_private_recovery_receipt.mjs";
 import {
+  recoveryReceiptGraphDescriptors,
+} from "./dev_test_game_recovery_receipt_graph_surfaces.mjs";
+import {
   devTestGameReleaseReadinessScript,
   releaseReadinessSteps,
 } from "./dev_test_game_spine_readiness_steps.mjs";
@@ -1374,42 +1377,14 @@ test("dev test-game spine manifest records command order and evidence wiring", (
     demoOnly: true,
     roleUrl: "/admin/audit/local-hosted-evidence-lane?game=<seeded-game>",
   });
-  assert.deepEqual(manifest.commands.privateChannelRecoveryReceipt, {
-    script: devTestGamePrivateChannelRecoveryReceiptCommand,
-    proofArtifact: devTestGamePrivateChannelRecoveryReceiptPath,
-    dependsOn: [
-      "target/dev-test-game/proof-run.json",
-      "target/dev-test-game/core-loop-admin-proof.json",
-    ],
-    roleUrl: devTestGamePrivateChannelRecoveryReceiptRoleUrl,
-  });
-  assert.deepEqual(manifest.commands.replacementActionRecoveryReceipt, {
-    script: devTestGameReplacementActionRecoveryReceiptCommand,
-    proofArtifact: devTestGameReplacementActionRecoveryReceiptPath,
-    dependsOn: [
-      "target/dev-test-game/proof-run.json",
-      "target/dev-test-game/hardening-admin-proof.json",
-    ],
-    roleUrl: devTestGameReplacementActionRecoveryReceiptRoleUrl,
-  });
-  assert.deepEqual(manifest.commands.replacementHandoffRecoveryReceipt, {
-    script: devTestGameReplacementHandoffRecoveryReceiptCommand,
-    proofArtifact: devTestGameReplacementHandoffRecoveryReceiptPath,
-    dependsOn: [
-      "target/dev-test-game/proof-run.json",
-      "target/dev-test-game/hardening-admin-proof.json",
-    ],
-    roleUrl: devTestGameReplacementHandoffRecoveryReceiptRoleUrl,
-  });
-  assert.deepEqual(manifest.commands.replacementPrivateRecoveryReceipt, {
-    script: devTestGameReplacementPrivateRecoveryReceiptCommand,
-    proofArtifact: devTestGameReplacementPrivateRecoveryReceiptPath,
-    dependsOn: [
-      "target/dev-test-game/proof-run.json",
-      "target/dev-test-game/hardening-admin-proof.json",
-    ],
-    roleUrl: devTestGameReplacementPrivateRecoveryReceiptRoleUrl,
-  });
+  for (const descriptor of recoveryReceiptGraphDescriptors) {
+    assert.deepEqual(manifest.commands[descriptor.receiptKey], {
+      script: descriptor.proofCommand,
+      proofArtifact: descriptor.proofTarget,
+      dependsOn: [...descriptor.manifestDependsOn],
+      roleUrl: descriptor.roleUrl,
+    });
+  }
   assert.deepEqual(manifest.commands.releaseRunbook, {
     script: devTestGameReleaseRunbookCommand,
     proofArtifact: devTestGameReleaseRunbookPath,
@@ -1545,9 +1520,9 @@ test("dev test-game spine manifest records command order and evidence wiring", (
   assert(manifest.artifacts.includes(nextActionAdminProofPath));
   assert(manifest.artifacts.includes(devTestGameProofGraphPath));
   assert(manifest.artifacts.includes(devTestGameProofGraphAdminProofPath));
-  assert(
-    manifest.artifacts.includes(devTestGameReplacementHandoffRecoveryReceiptPath),
-  );
+  for (const descriptor of recoveryReceiptGraphDescriptors) {
+    assert(manifest.artifacts.includes(descriptor.proofTarget));
+  }
   assert(manifest.artifacts.includes("target/dev-test-game/release-admin-proof.json"));
   assert(
     manifest.artifacts.includes(

@@ -75,25 +75,8 @@ import {
   devTestGameLiveSpinePlan,
 } from "./dev_test_game_live_spine.mjs";
 import {
-  devTestGamePrivateChannelRecoveryReceiptCommand,
-  devTestGamePrivateChannelRecoveryReceiptPath,
-  devTestGamePrivateChannelRecoveryReceiptRoleUrl,
-} from "./dev_test_game_private_channel_recovery_receipt.mjs";
-import {
-  devTestGameReplacementPrivateRecoveryReceiptCommand,
-  devTestGameReplacementPrivateRecoveryReceiptPath,
-  devTestGameReplacementPrivateRecoveryReceiptRoleUrl,
-} from "./dev_test_game_replacement_private_recovery_receipt.mjs";
-import {
-  devTestGameReplacementActionRecoveryReceiptCommand,
-  devTestGameReplacementActionRecoveryReceiptPath,
-  devTestGameReplacementActionRecoveryReceiptRoleUrl,
-} from "./dev_test_game_replacement_action_recovery_receipt.mjs";
-import {
-  devTestGameReplacementHandoffRecoveryReceiptCommand,
-  devTestGameReplacementHandoffRecoveryReceiptPath,
-  devTestGameReplacementHandoffRecoveryReceiptRoleUrl,
-} from "./dev_test_game_replacement_handoff_recovery_receipt.mjs";
+  recoveryReceiptGraphDescriptors,
+} from "./dev_test_game_recovery_receipt_graph_surfaces.mjs";
 import {
   nextActionAdminProofCommand,
   nextActionAdminProofPath,
@@ -275,42 +258,7 @@ export function buildDevTestGameSpineManifest({
         demoOnly: true,
         roleUrl: "/admin/audit/local-hosted-evidence-lane?game=<seeded-game>",
       },
-      privateChannelRecoveryReceipt: {
-        script: devTestGamePrivateChannelRecoveryReceiptCommand,
-        proofArtifact: devTestGamePrivateChannelRecoveryReceiptPath,
-        dependsOn: [
-          "target/dev-test-game/proof-run.json",
-          "target/dev-test-game/core-loop-admin-proof.json",
-        ],
-        roleUrl: devTestGamePrivateChannelRecoveryReceiptRoleUrl,
-      },
-      replacementActionRecoveryReceipt: {
-        script: devTestGameReplacementActionRecoveryReceiptCommand,
-        proofArtifact: devTestGameReplacementActionRecoveryReceiptPath,
-        dependsOn: [
-          "target/dev-test-game/proof-run.json",
-          "target/dev-test-game/hardening-admin-proof.json",
-        ],
-        roleUrl: devTestGameReplacementActionRecoveryReceiptRoleUrl,
-      },
-      replacementHandoffRecoveryReceipt: {
-        script: devTestGameReplacementHandoffRecoveryReceiptCommand,
-        proofArtifact: devTestGameReplacementHandoffRecoveryReceiptPath,
-        dependsOn: [
-          "target/dev-test-game/proof-run.json",
-          "target/dev-test-game/hardening-admin-proof.json",
-        ],
-        roleUrl: devTestGameReplacementHandoffRecoveryReceiptRoleUrl,
-      },
-      replacementPrivateRecoveryReceipt: {
-        script: devTestGameReplacementPrivateRecoveryReceiptCommand,
-        proofArtifact: devTestGameReplacementPrivateRecoveryReceiptPath,
-        dependsOn: [
-          "target/dev-test-game/proof-run.json",
-          "target/dev-test-game/hardening-admin-proof.json",
-        ],
-        roleUrl: devTestGameReplacementPrivateRecoveryReceiptRoleUrl,
-      },
+      ...recoveryReceiptManifestCommands(),
       releaseRunbook: {
         script: devTestGameReleaseRunbookCommand,
         proofArtifact: devTestGameReleaseRunbookPath,
@@ -436,10 +384,9 @@ export function buildDevTestGameSpineManifest({
       devTestGameHostedEvidenceLaneDemoExternalEvidencePath,
       devTestGameHostedEvidenceLaneDemoBlockedPath,
       devTestGameHostedEvidenceLaneDemoPassedPath,
-      devTestGamePrivateChannelRecoveryReceiptPath,
-      devTestGameReplacementActionRecoveryReceiptPath,
-      devTestGameReplacementHandoffRecoveryReceiptPath,
-      devTestGameReplacementPrivateRecoveryReceiptPath,
+      ...recoveryReceiptGraphDescriptors.map(
+        (descriptor) => descriptor.proofTarget,
+      ),
       devTestGameHostedOpsSignalsPath,
       devTestGameRealHostedObservabilityHandoffPath,
       devTestGameReleaseRunbookPath,
@@ -816,54 +763,7 @@ export function assertDevTestGameSpineManifest(manifest) {
   if (manifest.commands.hostedEvidenceLaneDemoProof.demoOnly !== true) {
     throw new Error("spine manifest hosted evidence lane demo must stay demo-only");
   }
-  if (
-    manifest.commands?.privateChannelRecoveryReceipt?.script !==
-    devTestGamePrivateChannelRecoveryReceiptCommand
-  ) {
-    throw new Error(
-      `spine manifest private-channel recovery command drifted: ${manifest.commands?.privateChannelRecoveryReceipt?.script}`,
-    );
-  }
-  if (
-    manifest.commands.privateChannelRecoveryReceipt.proofArtifact !==
-    devTestGamePrivateChannelRecoveryReceiptPath
-  ) {
-    throw new Error(
-      `spine manifest private-channel recovery artifact drifted: ${manifest.commands.privateChannelRecoveryReceipt.proofArtifact}`,
-    );
-  }
-  if (
-    manifest.commands?.replacementActionRecoveryReceipt?.script !==
-    devTestGameReplacementActionRecoveryReceiptCommand
-  ) {
-    throw new Error(
-      `spine manifest replacement action recovery command drifted: ${manifest.commands?.replacementActionRecoveryReceipt?.script}`,
-    );
-  }
-  if (
-    manifest.commands.replacementActionRecoveryReceipt.proofArtifact !==
-    devTestGameReplacementActionRecoveryReceiptPath
-  ) {
-    throw new Error(
-      `spine manifest replacement action recovery artifact drifted: ${manifest.commands.replacementActionRecoveryReceipt.proofArtifact}`,
-    );
-  }
-  if (
-    manifest.commands?.replacementPrivateRecoveryReceipt?.script !==
-    devTestGameReplacementPrivateRecoveryReceiptCommand
-  ) {
-    throw new Error(
-      `spine manifest replacement private recovery command drifted: ${manifest.commands?.replacementPrivateRecoveryReceipt?.script}`,
-    );
-  }
-  if (
-    manifest.commands.replacementPrivateRecoveryReceipt.proofArtifact !==
-    devTestGameReplacementPrivateRecoveryReceiptPath
-  ) {
-    throw new Error(
-      `spine manifest replacement private recovery artifact drifted: ${manifest.commands.replacementPrivateRecoveryReceipt.proofArtifact}`,
-    );
-  }
+  assertRecoveryReceiptManifestCommands(manifest.commands ?? {});
   if (manifest.commands?.releaseRunbook?.script !== devTestGameReleaseRunbookCommand) {
     throw new Error(
       `spine manifest release runbook command drifted: ${manifest.commands?.releaseRunbook?.script}`,
@@ -1105,6 +1005,49 @@ function assertPlanScripts(plan, expectedScripts) {
     throw new Error(
       `spine manifest plan drifted: expected ${expectedScripts.join(", ")}, got ${actual.join(", ")}`,
     );
+  }
+}
+
+function recoveryReceiptManifestCommands() {
+  return Object.fromEntries(
+    recoveryReceiptGraphDescriptors.map((descriptor) => [
+      descriptor.receiptKey,
+      {
+        script: descriptor.proofCommand,
+        proofArtifact: descriptor.proofTarget,
+        dependsOn: [...descriptor.manifestDependsOn],
+        roleUrl: descriptor.roleUrl,
+      },
+    ]),
+  );
+}
+
+function assertRecoveryReceiptManifestCommands(commands) {
+  for (const descriptor of recoveryReceiptGraphDescriptors) {
+    const command = commands[descriptor.receiptKey];
+    if (command?.script !== descriptor.proofCommand) {
+      throw new Error(
+        `spine manifest ${descriptor.receiptKey} command drifted: ${command?.script}`,
+      );
+    }
+    if (command.proofArtifact !== descriptor.proofTarget) {
+      throw new Error(
+        `spine manifest ${descriptor.receiptKey} artifact drifted: ${command.proofArtifact}`,
+      );
+    }
+    if (
+      JSON.stringify(command.dependsOn) !==
+      JSON.stringify(descriptor.manifestDependsOn)
+    ) {
+      throw new Error(
+        `spine manifest ${descriptor.receiptKey} dependency drifted`,
+      );
+    }
+    if (command.roleUrl !== descriptor.roleUrl) {
+      throw new Error(
+        `spine manifest ${descriptor.receiptKey} role URL drifted: ${command.roleUrl}`,
+      );
+    }
   }
 }
 

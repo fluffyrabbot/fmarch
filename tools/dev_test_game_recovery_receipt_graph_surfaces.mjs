@@ -60,6 +60,10 @@ export const recoveryReceiptGraphDescriptors = Object.freeze([
     roleUrl: localAdminAuditRoleUrl(localAdminAuditIds.coreLoop),
     proofCommand: devTestGamePrivateChannelRecoveryReceiptCommand,
     proofTarget: devTestGamePrivateChannelRecoveryReceiptPath,
+    manifestDependsOn: Object.freeze([
+      "target/dev-test-game/proof-run.json",
+      "target/dev-test-game/core-loop-admin-proof.json",
+    ]),
     familyId: "core-loop-private-channel-recovery",
     laneIds: coreLoopPrivateChannelRecoveryLaneIds,
     assertReceipt: assertDevTestGamePrivateChannelRecoveryReceipt,
@@ -82,6 +86,7 @@ export const recoveryReceiptGraphDescriptors = Object.freeze([
     roleUrl: localAdminAuditRoleUrl(localAdminAuditIds.hardening),
     proofCommand: devTestGameReplacementActionRecoveryReceiptCommand,
     proofTarget: devTestGameReplacementActionRecoveryReceiptPath,
+    manifestDependsOn: replacementRecoveryReceiptManifestDependencies(),
     familyId: "replacement-action-recovery",
     laneIds: replacementActionLaneIds,
     assertReceipt: assertDevTestGameReplacementActionRecoveryReceipt,
@@ -104,6 +109,7 @@ export const recoveryReceiptGraphDescriptors = Object.freeze([
     roleUrl: localAdminAuditRoleUrl(localAdminAuditIds.hardening),
     proofCommand: devTestGameReplacementHandoffRecoveryReceiptCommand,
     proofTarget: devTestGameReplacementHandoffRecoveryReceiptPath,
+    manifestDependsOn: replacementRecoveryReceiptManifestDependencies(),
     familyId: "replacement-handoff-recovery",
     laneIds: replacementHandoffRecoveryLaneIds,
     assertReceipt: assertDevTestGameReplacementHandoffRecoveryReceipt,
@@ -126,6 +132,7 @@ export const recoveryReceiptGraphDescriptors = Object.freeze([
     roleUrl: localAdminAuditRoleUrl(localAdminAuditIds.hardening),
     proofCommand: devTestGameReplacementPrivateRecoveryReceiptCommand,
     proofTarget: devTestGameReplacementPrivateRecoveryReceiptPath,
+    manifestDependsOn: replacementRecoveryReceiptManifestDependencies(),
     familyId: "replacement-private-channel-recovery",
     laneIds: replacementPrivateChannelRecoveryLaneIds,
     assertReceipt: assertDevTestGameReplacementPrivateRecoveryReceipt,
@@ -385,7 +392,15 @@ function recoveryReceiptGraphDescriptor(descriptor) {
   return Object.freeze({
     ...descriptor,
     laneIds: Object.freeze([...descriptor.laneIds]),
+    manifestDependsOn: Object.freeze([...descriptor.manifestDependsOn]),
   });
+}
+
+function replacementRecoveryReceiptManifestDependencies() {
+  return Object.freeze([
+    "target/dev-test-game/proof-run.json",
+    "target/dev-test-game/hardening-admin-proof.json",
+  ]);
 }
 
 function recoveryReceiptGraphEdgesForNode(proofGraph, descriptor) {
