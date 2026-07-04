@@ -4,13 +4,18 @@ import {
 import {
   playerHostRaceLaneIds,
 } from "./dev_test_game_cross_role_race_scenarios.mjs";
+import {
+  playerLiveReconnectLaneId,
+  privateChannelStaleActionReconnectLaneId,
+  stalePlayerActionReconnectLaneId,
+} from "./dev_test_game_stale_client_reconnect_scenarios.mjs";
 
 export const playerActionFoundationLaneIds = Object.freeze([
   "idempotent-retry",
   "action-idempotent-retry",
   "concurrent-action-race",
   "concurrent-action-race-reload",
-  "reconnect-recovery",
+  playerLiveReconnectLaneId,
 ]);
 
 export const stalePlayerCommandLaneIds = Object.freeze([
@@ -46,8 +51,8 @@ export const completedPlayerRecoveryLaneIds = Object.freeze([
 export const playerActionConflictRecoveryLaneIds = Object.freeze([
   "stale-same-action-recovery",
   "stale-action-conflict",
-  "stale-action-reconnect-recovery",
-  "private-channel-stale-action-reconnect-recovery",
+  stalePlayerActionReconnectLaneId,
+  privateChannelStaleActionReconnectLaneId,
 ]);
 
 export const playerRecoveryAuditLaneIds = Object.freeze([

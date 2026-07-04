@@ -1,6 +1,9 @@
 export {
   hostedMatrixReconnectLaneIds,
-} from "./dev_test_game_hosted_concurrent_race_matrix_cases.mjs";
+  staleClientReconnectCases,
+  staleClientReconnectHighlightedLaneIds,
+  staleClientReconnectLaneIds,
+} from "./dev_test_game_stale_client_reconnect_scenarios.mjs";
 
 export {
   cohostDeadlineRecoveryLaneIds,

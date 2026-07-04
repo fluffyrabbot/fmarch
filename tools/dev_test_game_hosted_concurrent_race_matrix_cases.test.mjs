@@ -22,6 +22,9 @@ import {
 import {
   staleConflictMessageSurfaceCases,
 } from "./dev_test_game_stale_conflict_scenarios.mjs";
+import {
+  staleClientReconnectLaneIds,
+} from "./dev_test_game_stale_client_reconnect_scenarios.mjs";
 
 test("hosted concurrent matrix cases share progress and handoff IDs", () => {
   assert.deepEqual(hostedMatrixProgressCheckIds, [
@@ -86,7 +89,7 @@ test("hosted concurrent matrix cases share progress and handoff IDs", () => {
     )?.requiredEvidence ?? "",
     /reload recovery coverage/,
   );
-  assert.equal(hostedMatrixReconnectLaneIds.length, 11);
+  assert.deepEqual(hostedMatrixReconnectLaneIds, staleClientReconnectLaneIds());
   assert.equal(hostedMatrixStaleConflictLaneIds.length, 6);
   assert.deepEqual(
     hostedMatrixStaleConflictMilestoneCases().slice(0, 5),

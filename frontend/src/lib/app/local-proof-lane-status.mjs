@@ -6,6 +6,9 @@ import {
   playerActionLoopLaneId,
   playerInvalidActionRecoveryLaneId,
 } from "../../../../tools/dev_test_game_core_loop_action_scenarios.mjs";
+import {
+  staleClientReconnectHighlightedLaneIds,
+} from "../../../../tools/dev_test_game_stale_client_reconnect_scenarios.mjs";
 
 const CORE_LOOP_FOUNDATION_HIGHLIGHTED_LANE_IDS = Object.freeze([
   "core-loop",
@@ -37,26 +40,19 @@ export const CORE_LOOP_HIGHLIGHTED_LANE_IDS = Object.freeze([
 export const HARDENING_HIGHLIGHTED_LANE_IDS = Object.freeze([
   "concurrent-action-race",
   "concurrent-action-race-reload",
-  "reconnect-recovery",
   "stale-same-action-recovery",
   "stale-dead-action-conflict",
   "stale-action-conflict",
   "stale-action-conflict-message",
-  "stale-action-reconnect-recovery",
-  "private-channel-stale-action-reconnect-recovery",
-  "stale-host-complete-reconnect-recovery",
+  ...staleClientReconnectHighlightedLaneIds,
   "stale-host-control",
   "concurrent-host-resolve-race",
   "concurrent-host-resolve-race-reload",
   "stale-host-resolve",
   "stale-host-resolve-reload",
-  "stale-host-resolve-reconnect-recovery",
   "stale-host-advance",
-  "stale-host-advance-reconnect-recovery",
   "stale-host-deadline",
-  "stale-host-deadline-reconnect-recovery",
   "stale-cohost-deadline",
-  "stale-cohost-deadline-reconnect-recovery",
 ]);
 
 export function coreLoopHighlightedLaneEvidence(proofRun) {

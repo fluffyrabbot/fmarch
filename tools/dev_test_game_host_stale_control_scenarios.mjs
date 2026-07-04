@@ -10,11 +10,12 @@ import {
   hostUnlockThreadCommandFacts,
 } from "./dev_test_game_core_loop_host_phase_scenarios.mjs";
 import {
-  replacementPrivatePostRecoveryLaneIds,
-} from "./dev_test_game_replacement_private_scenarios.mjs";
-import {
-  replacementSessionRecoveryLaneIds,
-} from "./dev_test_game_replacement_handoff_scenario_cases.mjs";
+  cohostStaleDeadlineReconnectLaneId,
+  hostedMatrixReconnectLaneIds,
+  hostStaleAdvanceReconnectLaneId,
+  hostStaleDeadlineReconnectLaneId,
+  hostStaleResolveReconnectLaneId,
+} from "./dev_test_game_stale_client_reconnect_scenarios.mjs";
 import {
   assertLaneCoverageSummary,
   buildLaneCoverageSummary,
@@ -114,7 +115,7 @@ export const hostPhaseStaleControlCaseDefinitions = Object.freeze([
     reloadProofField: "staleHostResolveReloadAfterReject",
     baseLaneId: "stale-host-resolve",
     reloadLaneId: "stale-host-resolve-reload",
-    reconnectLaneId: "stale-host-resolve-reconnect-recovery",
+    reconnectLaneId: hostStaleResolveReconnectLaneId,
     baseLabel: "Stale host resolve rejects after live resolution",
     reloadLabel: "Stale host resolve recovery reloads locked phase console",
     reconnectLabel: "Stale host resolve recovery reconnects locked phase console",
@@ -131,7 +132,7 @@ export const hostPhaseStaleControlCaseDefinitions = Object.freeze([
     reloadProofField: "staleHostAdvanceReloadAfterReject",
     baseLaneId: "stale-host-advance",
     reloadLaneId: "stale-host-advance-reload",
-    reconnectLaneId: "stale-host-advance-reconnect-recovery",
+    reconnectLaneId: hostStaleAdvanceReconnectLaneId,
     baseLabel: "Stale host advance rejects after live unlock",
     reloadLabel: "Stale host advance recovery reloads open phase console",
     reconnectLabel: "Stale host advance recovery reconnects open phase console",
@@ -148,7 +149,7 @@ export const hostPhaseStaleControlCaseDefinitions = Object.freeze([
     reloadProofField: "staleHostDeadlineReloadAfterReject",
     baseLaneId: "stale-host-deadline",
     reloadLaneId: "stale-host-deadline-reload",
-    reconnectLaneId: "stale-host-deadline-reconnect-recovery",
+    reconnectLaneId: hostStaleDeadlineReconnectLaneId,
     baseLabel: "Stale host deadline control rejects without drift",
     reloadLabel: "Stale host deadline recovery reloads open phase console",
     reconnectLabel: "Stale host deadline recovery reconnects open phase console",
@@ -392,7 +393,7 @@ export const cohostDeadlineStaleControlCaseDefinitions = Object.freeze([
     reloadProofField: "staleCohostDeadlineReloadAfterReject",
     baseLaneId: "stale-cohost-deadline",
     reloadLaneId: "stale-cohost-deadline-reload",
-    reconnectLaneId: "stale-cohost-deadline-reconnect-recovery",
+    reconnectLaneId: cohostStaleDeadlineReconnectLaneId,
     baseLabel: "Stale cohost deadline control rejects without drift",
     reloadLabel: "Stale cohost deadline recovery reloads delegated console",
     reconnectLabel: "Stale cohost deadline recovery reconnects delegated console",
@@ -438,16 +439,4 @@ export const hostCohostRaceRecoveryLaneIds = Object.freeze([
   "concurrent-host-mixed-advance-race-reload",
 ]);
 
-export const hostedMatrixReconnectLaneIds = Object.freeze([
-  "reconnect-recovery",
-  replacementSessionRecoveryLaneIds.at(-1),
-  "replacement-action-reconnect",
-  replacementPrivatePostRecoveryLaneIds[1],
-  "stale-action-reconnect-recovery",
-  "private-channel-stale-action-reconnect-recovery",
-  "stale-host-complete-reconnect-recovery",
-  "stale-host-resolve-reconnect-recovery",
-  "stale-host-advance-reconnect-recovery",
-  "stale-host-deadline-reconnect-recovery",
-  "stale-cohost-deadline-reconnect-recovery",
-]);
+export { hostedMatrixReconnectLaneIds };

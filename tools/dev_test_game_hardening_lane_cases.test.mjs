@@ -36,7 +36,6 @@ import {
   hostStaleResolveControlCase,
   hostStaleResolveControlLaneId,
   hostStaleResolveReloadLaneId,
-  hostedMatrixReconnectLaneIds,
 } from "./dev_test_game_host_stale_control_scenarios.mjs";
 import {
   assertStaleConflictMessageCoverageSummary,
@@ -54,6 +53,23 @@ import {
 import {
   replacementSessionRecoveryLaneIds,
 } from "./dev_test_game_replacement_handoff_scenario_cases.mjs";
+import {
+  cohostStaleDeadlineReconnectLaneId,
+  completedHostStaleCompleteReconnectLaneId,
+  hostedMatrixReconnectLaneIds,
+  hostStaleAdvanceReconnectLaneId,
+  hostStaleDeadlineReconnectLaneId,
+  hostStaleResolveReconnectLaneId,
+  playerLiveReconnectLaneId,
+  privateChannelStaleActionReconnectLaneId,
+  replacementActionReconnectLaneId,
+  replacementPrivatePostReconnectLaneId,
+  replacementSessionReconnectLaneId,
+  staleClientReconnectCases,
+  staleClientReconnectCaseDefinitions,
+  staleClientReconnectLaneIds,
+  stalePlayerActionReconnectLaneId,
+} from "./dev_test_game_stale_client_reconnect_scenarios.mjs";
 import {
   playerActionConflictRecoveryLaneIds,
   playerActionFoundationLaneIds,
@@ -361,7 +377,6 @@ test("host stale-control production callers use the shared scenario module", asy
     "hostRaceReloadLaneIds",
     "hostStandaloneStaleControlLaneIds",
     "hostStaleControlLaneIds",
-    "hostedMatrixReconnectLaneIds",
   ];
 
   for (const callerPath of callerPaths) {
@@ -718,7 +733,7 @@ test("hardening lane cases share player action foundation IDs", () => {
     "action-idempotent-retry",
     "concurrent-action-race",
     "concurrent-action-race-reload",
-    "reconnect-recovery",
+    playerLiveReconnectLaneId,
   ]);
 });
 
@@ -773,9 +788,107 @@ test("hardening lane cases share player action conflict recovery IDs", () => {
   assert.deepEqual(playerActionConflictRecoveryLaneIds, [
     "stale-same-action-recovery",
     "stale-action-conflict",
-    "stale-action-reconnect-recovery",
-    "private-channel-stale-action-reconnect-recovery",
+    stalePlayerActionReconnectLaneId,
+    privateChannelStaleActionReconnectLaneId,
   ]);
+});
+
+test("hardening lane cases share stale-client reconnect scenarios", async () => {
+  assert(Object.isFrozen(staleClientReconnectCaseDefinitions));
+  assert.deepEqual(
+    staleClientReconnectCases().map((scenario) => ({
+      id: scenario.id,
+      laneId: scenario.laneId,
+      role: scenario.role,
+      family: scenario.family,
+    })),
+    [
+      {
+        id: "player-live-projection-reconnect",
+        laneId: playerLiveReconnectLaneId,
+        role: "player",
+        family: "live-projection-reconnect",
+      },
+      {
+        id: "replacement-session-reconnect",
+        laneId: replacementSessionReconnectLaneId,
+        role: "replacement-player",
+        family: "replacement-session-reconnect",
+      },
+      {
+        id: "replacement-action-reconnect",
+        laneId: replacementActionReconnectLaneId,
+        role: "replacement-player",
+        family: "replacement-action-reconnect",
+      },
+      {
+        id: "replacement-private-post-reconnect",
+        laneId: replacementPrivatePostReconnectLaneId,
+        role: "replacement-player",
+        family: "replacement-private-channel-reconnect",
+      },
+      {
+        id: "stale-player-action-reconnect",
+        laneId: stalePlayerActionReconnectLaneId,
+        role: "player",
+        family: "stale-player-action-reconnect",
+      },
+      {
+        id: "private-channel-stale-action-reconnect",
+        laneId: privateChannelStaleActionReconnectLaneId,
+        role: "player",
+        family: "private-channel-stale-action-reconnect",
+      },
+      {
+        id: "completed-host-stale-complete-reconnect",
+        laneId: completedHostStaleCompleteReconnectLaneId,
+        role: "host",
+        family: "completed-host-stale-command-reconnect",
+      },
+      {
+        id: "host-stale-resolve-reconnect",
+        laneId: hostStaleResolveReconnectLaneId,
+        role: "host",
+        family: "host-stale-phase-reconnect",
+      },
+      {
+        id: "host-stale-advance-reconnect",
+        laneId: hostStaleAdvanceReconnectLaneId,
+        role: "host",
+        family: "host-stale-phase-reconnect",
+      },
+      {
+        id: "host-stale-deadline-reconnect",
+        laneId: hostStaleDeadlineReconnectLaneId,
+        role: "host",
+        family: "host-stale-deadline-reconnect",
+      },
+      {
+        id: "cohost-stale-deadline-reconnect",
+        laneId: cohostStaleDeadlineReconnectLaneId,
+        role: "cohost",
+        family: "cohost-stale-deadline-reconnect",
+      },
+    ],
+  );
+  assert.deepEqual(staleClientReconnectLaneIds(), hostedMatrixReconnectLaneIds);
+
+  for (const callerPath of [
+    "tools/dev_test_game_hosted_concurrent_race_matrix_cases.mjs",
+    "tools/dev_test_game_player_recovery_scenarios.mjs",
+    "tools/dev_test_game_host_stale_control_scenarios.mjs",
+    "tools/dev_test_game_hardening_lane_cases.mjs",
+    "frontend/src/lib/app/local-proof-lane-status.mjs",
+  ]) {
+    const source = await readFile(callerPath, "utf8");
+    assert(
+      source.includes("./dev_test_game_stale_client_reconnect_scenarios.mjs") ||
+        source.includes(
+          "../../../../tools/dev_test_game_stale_client_reconnect_scenarios.mjs",
+        ),
+      `${callerPath} should import stale-client reconnect lanes from the shared scenario module`,
+    );
+  }
 });
 
 test("hardening lane cases derive hosted stale-conflict matrix IDs", () => {
@@ -787,16 +900,16 @@ test("hardening lane cases derive hosted stale-conflict matrix IDs", () => {
 
 test("hardening lane cases derive hosted matrix reconnect IDs", () => {
   assert.deepEqual(hostedMatrixReconnectLaneIds, [
-    "reconnect-recovery",
+    playerLiveReconnectLaneId,
     replacementSessionRecoveryLaneIds.at(-1),
-    "replacement-action-reconnect",
-    "replacement-stale-private-post-reconnect",
-    "stale-action-reconnect-recovery",
-    "private-channel-stale-action-reconnect-recovery",
-    "stale-host-complete-reconnect-recovery",
-    "stale-host-resolve-reconnect-recovery",
-    "stale-host-advance-reconnect-recovery",
-    "stale-host-deadline-reconnect-recovery",
-    "stale-cohost-deadline-reconnect-recovery",
+    replacementActionReconnectLaneId,
+    replacementPrivatePostReconnectLaneId,
+    stalePlayerActionReconnectLaneId,
+    privateChannelStaleActionReconnectLaneId,
+    completedHostStaleCompleteReconnectLaneId,
+    hostStaleResolveReconnectLaneId,
+    hostStaleAdvanceReconnectLaneId,
+    hostStaleDeadlineReconnectLaneId,
+    cohostStaleDeadlineReconnectLaneId,
   ]);
 });
