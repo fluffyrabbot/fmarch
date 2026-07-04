@@ -59,6 +59,7 @@ export const recoveryReceiptGraphDescriptors = Object.freeze([
     provingNodeId: "admin-proof:core-loop",
     roleUrl: localAdminAuditRoleUrl(localAdminAuditIds.coreLoop),
     proofCommand: devTestGamePrivateChannelRecoveryReceiptCommand,
+    proofScript: "tools/dev_test_game_private_channel_recovery_receipt.mjs",
     proofTarget: devTestGamePrivateChannelRecoveryReceiptPath,
     manifestDependsOn: Object.freeze([
       "target/dev-test-game/proof-run.json",
@@ -85,6 +86,7 @@ export const recoveryReceiptGraphDescriptors = Object.freeze([
     provingNodeId: "admin-proof:hardening",
     roleUrl: localAdminAuditRoleUrl(localAdminAuditIds.hardening),
     proofCommand: devTestGameReplacementActionRecoveryReceiptCommand,
+    proofScript: "tools/dev_test_game_replacement_action_recovery_receipt.mjs",
     proofTarget: devTestGameReplacementActionRecoveryReceiptPath,
     manifestDependsOn: replacementRecoveryReceiptManifestDependencies(),
     familyId: "replacement-action-recovery",
@@ -108,6 +110,7 @@ export const recoveryReceiptGraphDescriptors = Object.freeze([
     provingNodeId: "admin-proof:hardening",
     roleUrl: localAdminAuditRoleUrl(localAdminAuditIds.hardening),
     proofCommand: devTestGameReplacementHandoffRecoveryReceiptCommand,
+    proofScript: "tools/dev_test_game_replacement_handoff_recovery_receipt.mjs",
     proofTarget: devTestGameReplacementHandoffRecoveryReceiptPath,
     manifestDependsOn: replacementRecoveryReceiptManifestDependencies(),
     familyId: "replacement-handoff-recovery",
@@ -131,6 +134,7 @@ export const recoveryReceiptGraphDescriptors = Object.freeze([
     provingNodeId: "admin-proof:hardening",
     roleUrl: localAdminAuditRoleUrl(localAdminAuditIds.hardening),
     proofCommand: devTestGameReplacementPrivateRecoveryReceiptCommand,
+    proofScript: "tools/dev_test_game_replacement_private_recovery_receipt.mjs",
     proofTarget: devTestGameReplacementPrivateRecoveryReceiptPath,
     manifestDependsOn: replacementRecoveryReceiptManifestDependencies(),
     familyId: "replacement-private-channel-recovery",
@@ -147,6 +151,19 @@ export function recoveryReceiptGraphDescriptorByReceiptKey(receiptKey) {
     throw new Error(`unknown recovery receipt graph descriptor: ${receiptKey}`);
   }
   return descriptor;
+}
+
+export function recoveryReceiptProofPlanSteps(options = {}) {
+  return filteredRecoveryReceiptGraphDescriptors(options).map((descriptor) => ({
+    kind: "node",
+    script: descriptor.proofScript,
+  }));
+}
+
+export function recoveryReceiptProofTargets(options = {}) {
+  return filteredRecoveryReceiptGraphDescriptors(options).map(
+    (descriptor) => descriptor.proofTarget,
+  );
 }
 
 export function buildRecoveryReceiptGraphNode({
@@ -401,6 +418,13 @@ function replacementRecoveryReceiptManifestDependencies() {
     "target/dev-test-game/proof-run.json",
     "target/dev-test-game/hardening-admin-proof.json",
   ]);
+}
+
+function filteredRecoveryReceiptGraphDescriptors({ provingNodeId } = {}) {
+  return recoveryReceiptGraphDescriptors.filter(
+    (descriptor) =>
+      provingNodeId === undefined || descriptor.provingNodeId === provingNodeId,
+  );
 }
 
 function recoveryReceiptGraphEdgesForNode(proofGraph, descriptor) {

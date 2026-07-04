@@ -254,6 +254,8 @@ import {
 } from "./dev_test_game_replacement_private_recovery_receipt.mjs";
 import {
   recoveryReceiptGraphDescriptors,
+  recoveryReceiptProofPlanSteps,
+  recoveryReceiptProofTargets,
 } from "./dev_test_game_recovery_receipt_graph_surfaces.mjs";
 import {
   devTestGameReleaseReadinessScript,
@@ -473,28 +475,12 @@ test("dev test-game spine orchestrators expose stable proof order and env maps",
     packageJson.scripts["test:dev-test-game-live"],
     "node tools/dev_test_game_live_spine.mjs",
   );
-  assert.equal(
-    packageJson.scripts["test:dev-test-game-private-channel-recovery-receipt"],
-    "node tools/dev_test_game_private_channel_recovery_receipt.mjs",
-  );
-  assert.equal(
-    packageJson.scripts[
-      "test:dev-test-game-replacement-action-recovery-receipt"
-    ],
-    "node tools/dev_test_game_replacement_action_recovery_receipt.mjs",
-  );
-  assert.equal(
-    packageJson.scripts[
-      "test:dev-test-game-replacement-handoff-recovery-receipt"
-    ],
-    "node tools/dev_test_game_replacement_handoff_recovery_receipt.mjs",
-  );
-  assert.equal(
-    packageJson.scripts[
-      "test:dev-test-game-replacement-private-recovery-receipt"
-    ],
-    "node tools/dev_test_game_replacement_private_recovery_receipt.mjs",
-  );
+  for (const descriptor of recoveryReceiptGraphDescriptors) {
+    assert.equal(
+      packageJson.scripts[descriptor.proofCommand],
+      `node ${descriptor.proofScript}`,
+    );
+  }
   assert.deepEqual(
     devTestGameBackupRestoreSpinePlan.map((step) => step.script),
     [
@@ -633,28 +619,56 @@ test("dev test-game spine orchestrators expose stable proof order and env maps",
     FMARCH_DEV_TEST_GAME_ADMIN_SPINE_TERMINAL_BATCHES:
       adminSpineTerminalBatchProofPath,
   });
+  const coreLoopRecoveryReceiptSelector = {
+    provingNodeId: "admin-proof:core-loop",
+  };
+  const hardeningRecoveryReceiptSelector = {
+    provingNodeId: "admin-proof:hardening",
+  };
+  const coreLoopRecoveryReceiptDescriptors =
+    recoveryReceiptGraphDescriptors.filter(
+      (descriptor) =>
+        descriptor.provingNodeId ===
+        coreLoopRecoveryReceiptSelector.provingNodeId,
+    );
+  const hardeningRecoveryReceiptDescriptors =
+    recoveryReceiptGraphDescriptors.filter(
+      (descriptor) =>
+        descriptor.provingNodeId ===
+        hardeningRecoveryReceiptSelector.provingNodeId,
+    );
+  assert.deepEqual(
+    recoveryReceiptProofPlanSteps(coreLoopRecoveryReceiptSelector),
+    coreLoopRecoveryReceiptDescriptors.map((descriptor) => ({
+      kind: "node",
+      script: descriptor.proofScript,
+    })),
+  );
+  assert.deepEqual(
+    recoveryReceiptProofPlanSteps(hardeningRecoveryReceiptSelector),
+    hardeningRecoveryReceiptDescriptors.map((descriptor) => ({
+      kind: "node",
+      script: descriptor.proofScript,
+    })),
+  );
+  assert.deepEqual(
+    recoveryReceiptProofTargets(coreLoopRecoveryReceiptSelector),
+    coreLoopRecoveryReceiptDescriptors.map((descriptor) => descriptor.proofTarget),
+  );
+  assert.deepEqual(
+    recoveryReceiptProofTargets(hardeningRecoveryReceiptSelector),
+    hardeningRecoveryReceiptDescriptors.map(
+      (descriptor) => descriptor.proofTarget,
+    ),
+  );
   assert.deepEqual(devTestGameCoreLiveSpinePlan, [
     { kind: "npm", script: "dev:test-game:prebuild" },
     { kind: "node", script: "tools/dev_test_game_live_proof.mjs" },
     { kind: "node", script: "tools/dev_test_game_proof_contract.mjs" },
     { kind: "node", script: "tools/dev_test_game_core_loop_admin_proof.mjs" },
-    {
-      kind: "node",
-      script: "tools/dev_test_game_private_channel_recovery_receipt.mjs",
-    },
+    ...recoveryReceiptProofPlanSteps(coreLoopRecoveryReceiptSelector),
     { kind: "node", script: "tools/dev_test_game_hardening_admin_proof.mjs" },
-    {
-      kind: "node",
-      script: "tools/dev_test_game_replacement_action_recovery_receipt.mjs",
-    },
-    {
-      kind: "node",
-      script: "tools/dev_test_game_replacement_handoff_recovery_receipt.mjs",
-    },
-    {
-      kind: "node",
-      script: "tools/dev_test_game_replacement_private_recovery_receipt.mjs",
-    },
+    ...recoveryReceiptProofPlanSteps(hardeningRecoveryReceiptSelector),
     {
       kind: "node",
       script: devTestGameReleaseReadinessScript,
@@ -662,11 +676,9 @@ test("dev test-game spine orchestrators expose stable proof order and env maps",
       changedInputs: [
         "target/dev-test-game/proof-run.json",
         "target/dev-test-game/core-loop-admin-proof.json",
-        "target/dev-test-game/private-channel-recovery-receipt.json",
+        ...recoveryReceiptProofTargets(coreLoopRecoveryReceiptSelector),
         "target/dev-test-game/hardening-admin-proof.json",
-        "target/dev-test-game/replacement-action-recovery-receipt.json",
-        "target/dev-test-game/replacement-handoff-recovery-receipt.json",
-        "target/dev-test-game/replacement-private-channel-recovery-receipt.json",
+        ...recoveryReceiptProofTargets(hardeningRecoveryReceiptSelector),
       ],
     },
   ]);

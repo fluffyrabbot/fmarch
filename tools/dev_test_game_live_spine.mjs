@@ -4,39 +4,34 @@ import { runDevTestGameBackupRestoreSpine } from "./dev_test_game_backup_restore
 import { runDevTestGameIdentitySpine } from "./dev_test_game_identity_spine.mjs";
 import { releaseReadinessStep } from "./dev_test_game_spine_readiness_steps.mjs";
 import { runSpinePlan } from "./dev_test_game_spine_runner.mjs";
+import {
+  recoveryReceiptProofPlanSteps,
+  recoveryReceiptProofTargets,
+} from "./dev_test_game_recovery_receipt_graph_surfaces.mjs";
+
+const coreLoopRecoveryReceiptSelector = {
+  provingNodeId: "admin-proof:core-loop",
+};
+const hardeningRecoveryReceiptSelector = {
+  provingNodeId: "admin-proof:hardening",
+};
 
 export const devTestGameCoreLiveSpinePlan = [
   { kind: "npm", script: "dev:test-game:prebuild" },
   { kind: "node", script: "tools/dev_test_game_live_proof.mjs" },
   { kind: "node", script: "tools/dev_test_game_proof_contract.mjs" },
   { kind: "node", script: "tools/dev_test_game_core_loop_admin_proof.mjs" },
-  {
-    kind: "node",
-    script: "tools/dev_test_game_private_channel_recovery_receipt.mjs",
-  },
+  ...recoveryReceiptProofPlanSteps(coreLoopRecoveryReceiptSelector),
   { kind: "node", script: "tools/dev_test_game_hardening_admin_proof.mjs" },
-  {
-    kind: "node",
-    script: "tools/dev_test_game_replacement_action_recovery_receipt.mjs",
-  },
-  {
-    kind: "node",
-    script: "tools/dev_test_game_replacement_handoff_recovery_receipt.mjs",
-  },
-  {
-    kind: "node",
-    script: "tools/dev_test_game_replacement_private_recovery_receipt.mjs",
-  },
+  ...recoveryReceiptProofPlanSteps(hardeningRecoveryReceiptSelector),
   releaseReadinessStep({
     reason: "core-live-gameplay-admin-surfaces",
     changedInputs: [
       "target/dev-test-game/proof-run.json",
       "target/dev-test-game/core-loop-admin-proof.json",
-      "target/dev-test-game/private-channel-recovery-receipt.json",
+      ...recoveryReceiptProofTargets(coreLoopRecoveryReceiptSelector),
       "target/dev-test-game/hardening-admin-proof.json",
-      "target/dev-test-game/replacement-action-recovery-receipt.json",
-      "target/dev-test-game/replacement-handoff-recovery-receipt.json",
-      "target/dev-test-game/replacement-private-channel-recovery-receipt.json",
+      ...recoveryReceiptProofTargets(hardeningRecoveryReceiptSelector),
     ],
   }),
 ];
