@@ -49,7 +49,7 @@ export async function load({ params, locals, fetch, url }) {
 
 export const actions = {
   issuePlayerInvite: async ({ cookies, fetch, locals, params, request, url }) =>
-    await issueHostScopedInvite({
+    await _issueHostScopedInvite({
       cookies,
       fetch,
       locals,
@@ -63,7 +63,7 @@ export const actions = {
       rejectMessage: "Player invite was rejected",
     }),
   issueReplacementInvite: async ({ cookies, fetch, locals, params, request, url }) =>
-    await issueHostScopedInvite({
+    await _issueHostScopedInvite({
       cookies,
       fetch,
       locals,
@@ -78,7 +78,7 @@ export const actions = {
     }),
 };
 
-async function issueHostScopedInvite({
+export async function _issueHostScopedInvite({
   cookies,
   fetch,
   locals,

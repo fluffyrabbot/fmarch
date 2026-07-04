@@ -15,7 +15,7 @@ use caps::{Capability, Principal};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use sqlx::postgres::PgPool;
-use std::collections::HashSet;
+use std::collections::{BTreeSet, HashSet};
 use std::path::Path as FsPath;
 use std::time::{SystemTime, UNIX_EPOCH};
 use tokio::sync::broadcast;
@@ -117,6 +117,7 @@ pub fn router_with_state(state: ApiState) -> Router {
         )
         .route("/games/{game}/host-prompts", get(host_prompts))
         .route("/games/{game}/host-console-state", get(host_console_state))
+        .route("/games/{game}/setup-state", get(host_setup_state))
         .route("/ws", get(ws))
         .with_state(state)
 }
@@ -2324,6 +2325,46 @@ pub struct HostConsoleThreadPost {
     pub body: String,
 }
 
+#[derive(Debug, Clone, Deserialize)]
+struct HostSetupStateQuery {
+    principal_user_id: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct HostSetupStateResponse {
+    pub game: Uuid,
+    pub created: bool,
+    pub pack: HostSetupPackState,
+    pub phase: Option<HostConsolePhaseState>,
+    pub slots: Vec<HostSetupSlotState>,
+    pub post_policies: Vec<HostSetupPostPolicyState>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct HostSetupPackState {
+    pub key: String,
+    pub name: String,
+    pub valid: bool,
+    pub role_keys: Vec<String>,
+    pub start_phase_options: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct HostSetupSlotState {
+    pub slot_id: String,
+    pub occupant_user_id: Option<String>,
+    pub alive: bool,
+    pub status: String,
+    pub status_tags: Vec<String>,
+    pub role_key: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct HostSetupPostPolicyState {
+    pub channel_id: String,
+    pub allow_media_only: bool,
+}
+
 impl From<HostConsoleStateResponse> for HostConsoleStateDelta {
     fn from(response: HostConsoleStateResponse) -> Self {
         HostConsoleStateDelta {
@@ -2444,6 +2485,22 @@ async fn host_console_state(
     ))
 }
 
+async fn host_setup_state(
+    State(state): State<ApiState>,
+    Path(game): Path<Uuid>,
+    Query(query): Query<HostSetupStateQuery>,
+) -> Result<Json<HostSetupStateResponse>, ApiError> {
+    require_host_audit_access(
+        &state,
+        game,
+        query.principal_user_id.as_str(),
+        "principal cannot read host setup state for this game",
+    )
+    .await?;
+
+    Ok(Json(load_host_setup_state(&state, game).await?))
+}
+
 async fn load_host_console_state(
     state: &ApiState,
     game: Uuid,
@@ -2511,6 +2568,107 @@ async fn load_host_console_state(
         slots,
         thread_posts,
     })
+}
+
+async fn load_host_setup_state(
+    state: &ApiState,
+    game: Uuid,
+) -> Result<HostSetupStateResponse, ApiError> {
+    let pack_key = pack_name_for_game(state, game).await?;
+    let pack = load_pack_by_name(&pack_key)?;
+    let phase = projections::phase_state(&state.pool, game)
+        .await?
+        .map(|row| HostConsolePhaseState {
+            phase_id: row.phase_id,
+            locked: row.locked,
+            deadline: row.deadline,
+        });
+    let slot_occupancy = projections::slot_occupancy(&state.pool, game).await?;
+    let slots = projections::slot_state(&state.pool, game)
+        .await?
+        .into_iter()
+        .map(|slot| {
+            let occupant_user_id = slot_occupancy
+                .iter()
+                .find(|occupancy| occupancy.slot_id == slot.slot_id)
+                .map(|occupancy| occupancy.occupant_user_id.clone());
+            HostSetupSlotState {
+                slot_id: slot.slot_id,
+                occupant_user_id,
+                alive: slot.alive,
+                status: slot.status,
+                status_tags: slot.status_tags,
+                role_key: slot.role_key,
+            }
+        })
+        .collect();
+    let main_policy = projections::post_policy(&state.pool, game, "main").await?;
+
+    Ok(HostSetupStateResponse {
+        game,
+        created: true,
+        pack: HostSetupPackState {
+            key: pack_key,
+            name: pack.name,
+            valid: true,
+            role_keys: pack.roles.keys().cloned().collect(),
+            start_phase_options: start_phase_options(&pack.phases),
+        },
+        phase,
+        slots,
+        post_policies: vec![HostSetupPostPolicyState {
+            channel_id: main_policy.channel_id,
+            allow_media_only: main_policy.allow_media_only,
+        }],
+    })
+}
+
+async fn pack_name_for_game(state: &ApiState, game: Uuid) -> Result<String, ApiError> {
+    sqlx::query_scalar::<_, Option<String>>(
+        "SELECT payload->>'pack' FROM events WHERE stream_id = $1 AND kind = 'GameCreated' ORDER BY stream_seq ASC LIMIT 1",
+    )
+    .bind(game)
+    .fetch_optional(&state.pool)
+    .await?
+    .flatten()
+    .ok_or_else(|| ApiError::Reject {
+        status: StatusCode::NOT_FOUND,
+        error: RejectCode::UnknownGame,
+        message: "game stream has no GameCreated pack".to_string(),
+    })
+}
+
+fn load_pack_by_name(pack_name: &str) -> Result<domain::Pack, ApiError> {
+    let path = FsPath::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../packs")
+        .join(pack_name)
+        .join("pack.json");
+    let raw = std::fs::read_to_string(&path).map_err(|err| ApiError::Reject {
+        status: StatusCode::INTERNAL_SERVER_ERROR,
+        error: RejectCode::Internal,
+        message: format!("read pack {}: {err}", path.display()),
+    })?;
+    domain::load_pack_from_json(&raw).map_err(|err| ApiError::Reject {
+        status: StatusCode::INTERNAL_SERVER_ERROR,
+        error: RejectCode::Internal,
+        message: format!("load pack {pack_name}: {err}"),
+    })
+}
+
+fn start_phase_options(phases: &domain::pack::PhasePolicy) -> Vec<String> {
+    let mut options = BTreeSet::new();
+    for kind in &phases.cadence {
+        let prefix = match kind {
+            domain::pack::PhaseKind::Day => "D",
+            domain::pack::PhaseKind::Night => "N",
+            domain::pack::PhaseKind::Twilight => "T",
+        };
+        options.insert(format!("{prefix}01"));
+    }
+    if options.is_empty() {
+        options.insert("D01".to_string());
+    }
+    options.into_iter().collect()
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -2793,7 +2951,10 @@ fn command_game(command: &wire::Command) -> Option<Uuid> {
 fn command_affects_host_console(command: &wire::Command) -> bool {
     matches!(
         command,
-        wire::Command::SetSlotStatus { .. }
+        wire::Command::AddSlot { .. }
+            | wire::Command::AssignSlot { .. }
+            | wire::Command::AssignRole { .. }
+            | wire::Command::SetSlotStatus { .. }
             | wire::Command::StartGame { .. }
             | wire::Command::OpenDayPhase { .. }
             | wire::Command::AdvancePhase { .. }

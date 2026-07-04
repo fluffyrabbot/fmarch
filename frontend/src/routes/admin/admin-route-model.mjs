@@ -173,6 +173,17 @@ export async function buildAdminRouteData({
         buttonLabel: "Review",
       }),
       Object.freeze({
+        id: "host-setup",
+        label: "Host setup workflow",
+        value: `/g/${game}/setup`,
+        authority: "HostOf(game)",
+        boundary: "Game-specific setup",
+        boundaryDetail: "Roster, roles, policy, invites, and StartGame readiness",
+        commandAction: "navigate",
+        href: `/g/${game}/setup`,
+        buttonLabel: "Open setup",
+      }),
+      Object.freeze({
         id: "session-grants",
         label: "Session grants",
         value: "GlobalMod for mod_a",

@@ -196,6 +196,7 @@ export function buildAdminSetupGridViewModel({
         return Object.freeze({
           ...baseAdminItem(item, "admin-setup"),
           buttonLabel: item.buttonLabel,
+          href: item.href ?? null,
           minTouchTargetPx: ADMIN_SURFACE_CONTRACT.minTouchTargetPx,
           status,
           statusTestId: `admin-command-status-${item.id}`,

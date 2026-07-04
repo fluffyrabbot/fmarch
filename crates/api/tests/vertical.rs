@@ -1,4 +1,4 @@
-use api::ApiState;
+use api::{ApiState, HostSetupStateResponse};
 use axum::body::{to_bytes, Body};
 use axum::http::{Request, StatusCode};
 use futures_util::StreamExt;
@@ -412,6 +412,99 @@ async fn host_can_publish_projection_derived_votecount_to_thread(pool: sqlx::PgP
     assert_eq!(official.author_user.as_deref(), Some("host"));
     assert_eq!(official.author_slot, None);
     assert!(official.body.contains("- slot_2: 1"));
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
+async fn host_setup_sequence_commits_to_setup_state(pool: sqlx::PgPool) {
+    let app = router(pool);
+    let game = Uuid::new_v4();
+    for (id, command) in [
+        (
+            1,
+            Command::CreateGame {
+                game,
+                pack: "mafiascum".into(),
+            },
+        ),
+        (
+            2,
+            Command::AddSlot {
+                game,
+                slot: "slot_1".into(),
+            },
+        ),
+        (
+            3,
+            Command::AssignSlot {
+                game,
+                slot: "slot_1".into(),
+                user: "player_mira".into(),
+            },
+        ),
+        (
+            4,
+            Command::AssignRole {
+                game,
+                slot: "slot_1".into(),
+                role_key: "vanilla_townie".into(),
+            },
+        ),
+        (
+            5,
+            Command::SetPostPolicy {
+                game,
+                channel_id: "main".into(),
+                allow_media_only: true,
+            },
+        ),
+        (
+            6,
+            Command::StartGame {
+                game,
+                phase: "D01".into(),
+            },
+        ),
+    ] {
+        expect_ack(post_command(app.clone(), id, "host_h", command).await);
+    }
+
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri(format!(
+                    "/games/{game}/setup-state?principal_user_id=host_h"
+                ))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let setup: HostSetupStateResponse = serde_json::from_slice(&bytes).unwrap();
+
+    assert_eq!(setup.game, game);
+    assert!(setup.created);
+    assert_eq!(setup.pack.key, "mafiascum");
+    assert!(setup.pack.valid);
+    assert!(setup.pack.role_keys.contains(&"vanilla_townie".to_string()));
+    assert!(setup.pack.start_phase_options.contains(&"D01".to_string()));
+    assert_eq!(setup.slots.len(), 1);
+    assert_eq!(setup.slots[0].slot_id, "slot_1");
+    assert_eq!(
+        setup.slots[0].occupant_user_id.as_deref(),
+        Some("player_mira")
+    );
+    assert_eq!(setup.slots[0].role_key.as_deref(), Some("vanilla_townie"));
+    assert_eq!(setup.post_policies.len(), 1);
+    assert_eq!(setup.post_policies[0].channel_id, "main");
+    assert!(setup.post_policies[0].allow_media_only);
+    assert_eq!(
+        setup.phase.as_ref().map(|phase| phase.phase_id.as_str()),
+        Some("D01")
+    );
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]

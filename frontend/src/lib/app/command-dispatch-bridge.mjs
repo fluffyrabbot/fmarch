@@ -4,7 +4,7 @@ export const COMMAND_DISPATCH_BRIDGE_CONTRACT = Object.freeze({
     "No-browser bridge contract for command trace metadata. It proves trace attributes can be normalized into role dispatch plans and reconciled with typed command requests, local feedback rows, and projection refresh keys. It does not prove pointer events, focus traversal, browser hydration, or network transport.",
   commandTraceKind: "command-trace",
   confirmationTraceKind: "confirmation-command-trace",
-  roles: Object.freeze(["admin", "player", "moderator"]),
+  roles: Object.freeze(["admin", "player", "moderator", "host-setup"]),
 });
 
 export function commandTraceFromAttributes(attributes) {

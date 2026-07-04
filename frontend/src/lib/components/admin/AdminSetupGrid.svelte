@@ -79,16 +79,27 @@
         <span>{item.boundaryDetail}</span>
       </p>
       <div class={item.actionTileClassName}>
-        <button
-          type="button"
-          class="fm-touch-button fm-touch-button--secondary"
-          data-min-touch-target-px={item.minTouchTargetPx}
-          data-testid={item.triggerTestId}
-          bind:this={triggerButtonRefs[item.id]}
-          on:click={() => onSetupAction(item)}
-        >
-          {item.buttonLabel}
-        </button>
+        {#if item.href}
+          <a
+            class="fm-touch-button fm-touch-button--secondary"
+            href={item.href}
+            data-min-touch-target-px={item.minTouchTargetPx}
+            data-testid={item.triggerTestId}
+          >
+            {item.buttonLabel}
+          </a>
+        {:else}
+          <button
+            type="button"
+            class="fm-touch-button fm-touch-button--secondary"
+            data-min-touch-target-px={item.minTouchTargetPx}
+            data-testid={item.triggerTestId}
+            bind:this={triggerButtonRefs[item.id]}
+            on:click={() => onSetupAction(item)}
+          >
+            {item.buttonLabel}
+          </button>
+        {/if}
         <div
           class={item.statusFloorClassName}
           data-testid={item.statusFloorTestId}

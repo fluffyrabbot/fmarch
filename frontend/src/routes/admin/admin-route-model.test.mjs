@@ -186,11 +186,13 @@ test("admin route data exposes setup, audit, and escalation work surfaces", asyn
   });
   assert.deepEqual(
     data.gameSetup.map((item) => item.id),
-    ["create-game", "session-grants", "cohost"],
+    ["create-game", "host-setup", "session-grants", "cohost"],
   );
   assert.equal(data.gameSetup[0].commandAction, "create_game");
-  assert.equal(data.gameSetup[1].commandAction, "grant_session");
-  assert.equal(data.gameSetup[2].commandAction, "add_cohost");
+  assert.equal(data.gameSetup[1].commandAction, "navigate");
+  assert.equal(data.gameSetup[1].href, "/g/midsummer/setup");
+  assert.equal(data.gameSetup[2].commandAction, "grant_session");
+  assert.equal(data.gameSetup[3].commandAction, "add_cohost");
   assert.equal(data.gameSetup[0].boundary, "Command pipeline");
   assert.equal(data.gameSetup[0].buttonLabel, "Review");
   assert.equal(data.gameSetup[0].confirmLabel, "Create game");
@@ -198,11 +200,11 @@ test("admin route data exposes setup, audit, and escalation work surfaces", asyn
     data.gameSetup[0].confirmMessage,
     "Create game midsummer from pack mafiascum",
   );
-  assert.equal(data.gameSetup[1].boundary, "Authenticated session grant");
-  assert.match(data.gameSetup[1].boundaryDetail, /GlobalAdmin session/);
-  assert.match(data.gameSetup[2].boundaryDetail, /host-gated/);
-  assert.equal(data.gameSetup[1].confirmLabel, "Grant GlobalMod");
-  assert.equal(data.gameSetup[2].confirmLabel, "Delegate cohost_c");
+  assert.equal(data.gameSetup[2].boundary, "Authenticated session grant");
+  assert.match(data.gameSetup[2].boundaryDetail, /GlobalAdmin session/);
+  assert.match(data.gameSetup[3].boundaryDetail, /host-gated/);
+  assert.equal(data.gameSetup[2].confirmLabel, "Grant GlobalMod");
+  assert.equal(data.gameSetup[3].confirmLabel, "Delegate cohost_c");
   assert.equal(
     data.audit[0].href,
     "/games/midsummer/operator/proof-runs?principal_user_id=admin_a",

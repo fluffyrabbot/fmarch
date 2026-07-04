@@ -86,9 +86,12 @@ export function buildAdminCommand({
   action,
   game,
   pack = "mafiascum",
+  slot,
+  roleKey,
   user,
   channelId = "main",
   allowMediaOnly = false,
+  phase = "D01",
 }) {
   switch (action) {
     case "create_game":
@@ -96,6 +99,29 @@ export function buildAdminCommand({
         CreateGame: Object.freeze({
           game: requiredString(game, "game"),
           pack: requiredString(pack, "pack"),
+        }),
+      });
+    case "add_slot":
+      return Object.freeze({
+        AddSlot: Object.freeze({
+          game: requiredString(game, "game"),
+          slot: requiredString(slot, "slot"),
+        }),
+      });
+    case "assign_slot":
+      return Object.freeze({
+        AssignSlot: Object.freeze({
+          game: requiredString(game, "game"),
+          slot: requiredString(slot, "slot"),
+          user: requiredString(user, "user"),
+        }),
+      });
+    case "assign_role":
+      return Object.freeze({
+        AssignRole: Object.freeze({
+          game: requiredString(game, "game"),
+          slot: requiredString(slot, "slot"),
+          role_key: requiredString(roleKey, "roleKey"),
         }),
       });
     case "add_cohost":
@@ -111,6 +137,13 @@ export function buildAdminCommand({
           game: requiredString(game, "game"),
           channel_id: requiredString(channelId, "channelId"),
           allow_media_only: Boolean(allowMediaOnly),
+        }),
+      });
+    case "start_game":
+      return Object.freeze({
+        StartGame: Object.freeze({
+          game: requiredString(game, "game"),
+          phase: requiredString(phase, "phase"),
         }),
       });
     default:

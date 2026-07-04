@@ -288,6 +288,52 @@ test("admin actions map to bootstrap wire command variants", () => {
 
   assert.deepEqual(
     buildAdminCommand({
+      action: "add_slot",
+      game: "00000000-0000-0000-0000-000000000123",
+      slot: "slot_1",
+    }),
+    {
+      AddSlot: {
+        game: "00000000-0000-0000-0000-000000000123",
+        slot: "slot_1",
+      },
+    },
+  );
+
+  assert.deepEqual(
+    buildAdminCommand({
+      action: "assign_slot",
+      game: "00000000-0000-0000-0000-000000000123",
+      slot: "slot_1",
+      user: "player_mira",
+    }),
+    {
+      AssignSlot: {
+        game: "00000000-0000-0000-0000-000000000123",
+        slot: "slot_1",
+        user: "player_mira",
+      },
+    },
+  );
+
+  assert.deepEqual(
+    buildAdminCommand({
+      action: "assign_role",
+      game: "00000000-0000-0000-0000-000000000123",
+      slot: "slot_1",
+      roleKey: "vanilla_townie",
+    }),
+    {
+      AssignRole: {
+        game: "00000000-0000-0000-0000-000000000123",
+        slot: "slot_1",
+        role_key: "vanilla_townie",
+      },
+    },
+  );
+
+  assert.deepEqual(
+    buildAdminCommand({
       action: "add_cohost",
       game: "00000000-0000-0000-0000-000000000123",
       user: "cohost_c",
@@ -312,6 +358,20 @@ test("admin actions map to bootstrap wire command variants", () => {
         game: "00000000-0000-0000-0000-000000000123",
         channel_id: "main",
         allow_media_only: true,
+      },
+    },
+  );
+
+  assert.deepEqual(
+    buildAdminCommand({
+      action: "start_game",
+      game: "00000000-0000-0000-0000-000000000123",
+      phase: "D01",
+    }),
+    {
+      StartGame: {
+        game: "00000000-0000-0000-0000-000000000123",
+        phase: "D01",
       },
     },
   );
