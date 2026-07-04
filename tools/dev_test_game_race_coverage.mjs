@@ -16,7 +16,7 @@ import {
   hostPhaseRaceCoverageCellIds,
   hostStandaloneRaceCoverageCellCases,
   hostStandaloneRaceCoverageCellIds,
-} from "./dev_test_game_host_stale_control_scenarios.mjs";
+} from "./dev_test_game_host_stale_recovery_scenarios.mjs";
 import { assertDevTestGameProofRun } from "./dev_test_game_proof_contract.mjs";
 import { repoRoot } from "./dev_test_game_spine_runner.mjs";
 

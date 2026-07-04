@@ -12,7 +12,7 @@ import {
 import {
   hostStaleControlCoverageFamilies,
   hostStaleControlLaneIds,
-} from "../../../../tools/dev_test_game_host_stale_control_scenarios.mjs";
+} from "../../../../tools/dev_test_game_host_stale_recovery_scenarios.mjs";
 import {
   hardeningAuditLaneIds,
 } from "../../../../tools/dev_test_game_hardening_scenarios.mjs";

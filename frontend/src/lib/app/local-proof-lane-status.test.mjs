@@ -4,23 +4,23 @@ import {
   completedGameSeedRequiredScenarioIds,
 } from "../../../../tools/dev_test_game_core_loop_completed_scenarios.mjs";
 import {
+  cohostStaleDeadlineReconnectLaneId,
   cohostStaleDeadlineControlLaneId,
   coreLoopHostStaleCommandHighlightedLaneIds,
   hardeningHostStaleCommandHighlightedLaneIds,
+  hostStaleAdvanceReconnectLaneId,
   hostStaleAdvanceControlLaneId,
   hostStaleAdvanceReloadLaneId,
   hostStaleControlStatusExpectationForLane,
-  hostStaleDeadlineControlLaneId,
-  hostStaleResolveControlLaneId,
-  hostStaleResolveReloadLaneId,
-} from "../../../../tools/dev_test_game_host_stale_control_scenarios.mjs";
-import {
-  cohostStaleDeadlineReconnectLaneId,
-  hardeningRecoveryHighlightedLaneIds,
-  hostStaleAdvanceReconnectLaneId,
   hostStaleDeadlineReconnectLaneId,
+  hostStaleDeadlineControlLaneId,
   hostStaleReconnectExpectationForLane,
   hostStaleResolveReconnectLaneId,
+  hostStaleResolveControlLaneId,
+  hostStaleResolveReloadLaneId,
+} from "../../../../tools/dev_test_game_host_stale_recovery_scenarios.mjs";
+import {
+  hardeningRecoveryHighlightedLaneIds,
   privateChannelStaleActionReconnectExpectation,
   privateChannelStaleActionReconnectLaneId,
   staleActionConflictMessageLaneId,

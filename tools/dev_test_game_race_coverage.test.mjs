@@ -16,7 +16,7 @@ import {
   hostPhaseRaceCoverageCellDefinitions,
   hostStandaloneRaceCoverageCellCases,
   hostStandaloneRaceCoverageCellDefinitions,
-} from "./dev_test_game_host_stale_control_scenarios.mjs";
+} from "./dev_test_game_host_stale_recovery_scenarios.mjs";
 import {
   cohostDeadlineRaceCoveragePromotedReloadGroup,
   completedHostRaceCoveragePromotedReloadGroup,
@@ -131,9 +131,9 @@ test("race coverage imports standalone host race cells from shared scenarios", a
     importsFromModule({
       source,
       importedName: "hostStandaloneRaceCoverageCellCases",
-      moduleSpecifier: "./dev_test_game_host_stale_control_scenarios.mjs",
+      moduleSpecifier: "./dev_test_game_host_stale_recovery_scenarios.mjs",
     }),
-    "race coverage should import standalone host race cells from the shared scenario module",
+    "race coverage should import standalone host race cells from the host stale recovery facade",
   );
   assert(
     !source.includes('commandFamily: "host lifecycle controls"') &&

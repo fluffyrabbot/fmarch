@@ -9,7 +9,7 @@ import {
 } from "./dev_test_game_hardening_scenarios.mjs";
 import {
   hostStaleControlLaneIds,
-} from "./dev_test_game_host_stale_control_scenarios.mjs";
+} from "./dev_test_game_host_stale_recovery_scenarios.mjs";
 import {
   hardeningRecoveryAuditLaneIds,
   staleConflictMessageLaneIds,

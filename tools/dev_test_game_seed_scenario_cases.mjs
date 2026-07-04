@@ -15,7 +15,7 @@ import {
   hostCohostRaceRecoveryLaneIds,
   hostLifecycleRaceLaneIds,
   hostPublishRaceLaneIds,
-} from "./dev_test_game_host_stale_control_scenarios.mjs";
+} from "./dev_test_game_host_stale_recovery_scenarios.mjs";
 import {
   playerActionBoundaryLaneId,
   playerInvalidActionRecoveryLaneId,

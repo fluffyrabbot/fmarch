@@ -6,7 +6,7 @@ import {
   hostStaleAdvanceReloadLaneId,
   hostStaleResolveControlLaneId,
   hostStaleResolveReloadLaneId,
-} from "./dev_test_game_host_stale_control_scenarios.mjs";
+} from "./dev_test_game_host_stale_recovery_scenarios.mjs";
 import {
   replacementCoreLoopHandoffLaneIds,
 } from "./dev_test_game_replacement_handoff_scenario_cases.mjs";

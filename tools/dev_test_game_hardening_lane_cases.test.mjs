@@ -5,6 +5,7 @@ import {
   assertHostStaleControlCoverageSummary,
   buildHostStaleControlCoverageSummary,
   cohostDeadlineRecoveryLaneIds,
+  cohostStaleDeadlineReconnectLaneId,
   cohostStaleDeadlineControlLaneId,
   cohostStaleDeadlineReloadLaneId,
   cohostDeadlineStaleControlCases,
@@ -17,6 +18,7 @@ import {
   hostLifecycleRaceLaneIds,
   hostLockedPhaseActionSet,
   hostOpenPhaseActionSet,
+  hostStaleAdvanceReconnectLaneId,
   hostPhaseRaceCoverageCellCases,
   hostPhaseRaceCoverageCellDefinitions,
   hostStaleControlCoverageFamilies,
@@ -38,17 +40,19 @@ import {
   hostStaleAdvanceControlLaneId,
   hostStaleAdvanceReloadLaneId,
   hostStaleControlStatusExpectations,
+  hostStaleDeadlineReconnectLaneId,
   hostStaleDeadlineControlLaneId,
   hostStaleDeadlineReloadLaneId,
+  hostStaleReconnectExpectations,
+  hostStaleResolveReconnectLaneId,
   hostStaleResolveControlCase,
   hostStaleResolveControlLaneId,
   hostStaleResolveReloadLaneId,
-} from "./dev_test_game_host_stale_control_scenarios.mjs";
+} from "./dev_test_game_host_stale_recovery_scenarios.mjs";
 import {
   assertStaleConflictMessageCoverageSummary,
   assertStaleConflictMessageSurfaceCoverage,
   buildStaleConflictMessageCoverageSummary,
-  cohostStaleDeadlineReconnectLaneId,
   completedHostStaleCompleteReconnectLaneId,
   hardeningRecoveryAuditLaneIds,
   hardeningRecoveryHighlightedLaneIds,
@@ -56,10 +60,6 @@ import {
   hardeningStaleConflictHighlightedLaneIds,
   hostedMatrixReconnectLaneIds,
   hostedMatrixRecoveryLaneIds,
-  hostStaleReconnectExpectations,
-  hostStaleAdvanceReconnectLaneId,
-  hostStaleDeadlineReconnectLaneId,
-  hostStaleResolveReconnectLaneId,
   playerLiveReconnectLaneId,
   privateChannelStaleActionReconnectExpectation,
   privateChannelStaleActionReconnectLaneId,
@@ -465,48 +465,37 @@ test("hardening lane cases share completed-game spine rows", () => {
   );
 });
 
-test("host stale-control production callers use the shared scenario module", async () => {
+test("host stale-control production callers use the shared recovery facade", async () => {
   const callerPaths = [
     "tools/dev_test_game_next_action.mjs",
     "tools/dev_test_game_release_readiness.mjs",
     "tools/dev_test_game_proof_contract.mjs",
     "tools/dev_test_game_core_loop_scenarios.mjs",
     "tools/dev_test_game_hardening_admin_proof.mjs",
+    "tools/dev_test_game_hardening_lane_cases.mjs",
+    "tools/dev_test_game_hardening_scenarios.mjs",
+    "tools/dev_test_game_race_coverage.mjs",
     "tools/dev_test_game_seed_scenario_cases.mjs",
-    "tools/dev_test_game.test.mjs",
     "frontend/src/routes/admin/admin-route-model.test.mjs",
-  ];
-  const forbiddenHardeningImports = [
-    "cohostDeadlineRecoveryLaneIds",
-    "cohostDeadlineStaleControlCases",
-    "hostCohostRaceRecoveryLaneIds",
-    "hostGenericStaleControlLaneIds",
-    "hostPhaseStaleControlCases",
-    "hostPhaseStaleRecoveryLaneIds",
-    "hostPromptStaleControlLaneIds",
-    "hostRaceReloadLaneIds",
-    "hostStandaloneStaleControlLaneIds",
-    "hostStaleControlLaneIds",
+    "frontend/src/lib/app/local-proof-lane-status.mjs",
   ];
 
   for (const callerPath of callerPaths) {
     const source = await readFile(callerPath, "utf8");
     assert(
-      source.includes("./dev_test_game_host_stale_control_scenarios.mjs") ||
+      source.includes("./dev_test_game_host_stale_recovery_scenarios.mjs") ||
         source.includes(
+          "../../../../tools/dev_test_game_host_stale_recovery_scenarios.mjs",
+        ),
+      `${callerPath} should import host stale-control definitions through the recovery facade`,
+    );
+    assert(
+      !source.includes("./dev_test_game_host_stale_control_scenarios.mjs") &&
+        !source.includes(
           "../../../../tools/dev_test_game_host_stale_control_scenarios.mjs",
         ),
-      `${callerPath} should import host stale-control definitions through the scenario module`,
+      `${callerPath} should not bypass the host stale recovery facade`,
     );
-
-    for (const importBlock of hardeningLaneImportBlocks(source)) {
-      for (const forbiddenImport of forbiddenHardeningImports) {
-        assert(
-          !importBlock.includes(forbiddenImport),
-          `${callerPath} should not import ${forbiddenImport} from hardening lane cases`,
-        );
-      }
-    }
   }
 });
 

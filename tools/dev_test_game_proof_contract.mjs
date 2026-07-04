@@ -23,10 +23,10 @@ import {
   hostRaceReloadLaneIds,
   hostStandaloneStaleControlLaneIds,
   hostStaleAdvanceControlLaneId,
-  hostStaleResolveControlLaneId,
-} from "./dev_test_game_host_stale_control_scenarios.mjs";
-import {
   hostStaleReconnectExpectationForLane,
+  hostStaleResolveControlLaneId,
+} from "./dev_test_game_host_stale_recovery_scenarios.mjs";
+import {
   privateChannelStaleActionReconnectExpectation,
   privateChannelStaleActionReconnectLaneId,
   stalePlayerActionReconnectExpectation,
