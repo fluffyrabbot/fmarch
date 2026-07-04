@@ -115,6 +115,8 @@ export function buildDevTestGameNextAction(
   const terminalBatchGraph = terminalBatchGraphFromProofGraph(graph);
   const privateChannelRecoveryGraph =
     privateChannelRecoveryGraphFromProofGraph(graph);
+  const replacementPrivateRecoveryGraph =
+    replacementPrivateRecoveryGraphFromProofGraph(graph);
   const sourceTargetsByCheckId =
     productionFeatureSourceTargetsByCheckIdFromReadiness(readiness, {
       defaultBrowserProofCommand: devTestGameLiveProofCommand,
@@ -394,6 +396,9 @@ export function buildDevTestGameNextAction(
             ...(privateChannelRecoveryGraph === null
               ? {}
               : { privateChannelRecoveryGraph }),
+            ...(replacementPrivateRecoveryGraph === null
+              ? {}
+              : { replacementPrivateRecoveryGraph }),
           }),
     },
     nextAction,
@@ -578,6 +583,9 @@ export function assertDevTestGameNextAction(evidence) {
   assertTerminalBatchGraph(evidence.generatedFrom?.terminalBatchGraph);
   assertPrivateChannelRecoveryGraph(
     evidence.generatedFrom?.privateChannelRecoveryGraph,
+  );
+  assertReplacementPrivateRecoveryGraph(
+    evidence.generatedFrom?.replacementPrivateRecoveryGraph,
   );
   return evidence;
 }
@@ -848,6 +856,43 @@ function privateChannelRecoveryGraphFromProofGraph(proofGraph) {
   };
 }
 
+function replacementPrivateRecoveryGraphFromProofGraph(proofGraph) {
+  if (proofGraph === null) {
+    return null;
+  }
+  const node = proofGraph.nodes.find(
+    (candidate) => candidate?.id === "replacement-private-recovery-receipt",
+  );
+  if (node === undefined) {
+    return null;
+  }
+  const edges = proofGraph.edges.filter(
+    (candidate) =>
+      (candidate?.from === "replacement-private-recovery-receipt" ||
+        candidate?.to === "replacement-private-recovery-receipt") &&
+      [
+        "proves",
+        "records",
+        "summarizes-into",
+      ].includes(String(candidate?.relationship ?? "")),
+  );
+  return {
+    nodeId: node.id,
+    status: String(node.status ?? "unknown"),
+    proofTarget: String(node.artifact ?? ""),
+    roleUrl: String(node.roleUrl ?? ""),
+    familyId: String(node.familyId ?? ""),
+    laneCount: Number(node.laneCount ?? 0),
+    laneIds: Array.isArray(node.laneIds)
+      ? node.laneIds.map((laneId) => String(laneId))
+      : [],
+    edgeCount: edges.length,
+    edgeTargets: edges.map((edge) =>
+      String(edge.from === node.id ? edge.to : edge.from),
+    ),
+  };
+}
+
 function assertTerminalBatchGraph(terminalBatchGraph) {
   if (terminalBatchGraph === undefined) {
     return;
@@ -892,6 +937,34 @@ function assertPrivateChannelRecoveryGraph(privateChannelRecoveryGraph) {
       JSON.stringify(["admin-proof:core-loop", "proof-graph", "next-action"])
   ) {
     throw new Error("next-action private-channel recovery graph summary drifted");
+  }
+}
+
+function assertReplacementPrivateRecoveryGraph(replacementPrivateRecoveryGraph) {
+  if (replacementPrivateRecoveryGraph === undefined) {
+    return;
+  }
+  if (
+    replacementPrivateRecoveryGraph === null ||
+    replacementPrivateRecoveryGraph.nodeId !==
+      "replacement-private-recovery-receipt" ||
+    replacementPrivateRecoveryGraph.status !== "passed" ||
+    replacementPrivateRecoveryGraph.proofTarget !==
+      "target/dev-test-game/replacement-private-channel-recovery-receipt.json" ||
+    replacementPrivateRecoveryGraph.roleUrl !==
+      "/admin/audit/local-hardening?game=<seeded-game>" ||
+    replacementPrivateRecoveryGraph.familyId !==
+      "replacement-private-channel-recovery" ||
+    replacementPrivateRecoveryGraph.laneCount !== 6 ||
+    !Array.isArray(replacementPrivateRecoveryGraph.laneIds) ||
+    replacementPrivateRecoveryGraph.laneIds.length !== 6 ||
+    replacementPrivateRecoveryGraph.edgeCount !== 3 ||
+    JSON.stringify(replacementPrivateRecoveryGraph.edgeTargets) !==
+      JSON.stringify(["admin-proof:hardening", "proof-graph", "next-action"])
+  ) {
+    throw new Error(
+      "next-action replacement private recovery graph summary drifted",
+    );
   }
 }
 

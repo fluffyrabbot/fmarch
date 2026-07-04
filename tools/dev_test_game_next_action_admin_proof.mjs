@@ -162,6 +162,8 @@ export function nextActionAdminProofCase() {
       terminalBatchGraph: source.nextAction.generatedFrom?.terminalBatchGraph ?? null,
       privateChannelRecoveryGraph:
         source.nextAction.generatedFrom?.privateChannelRecoveryGraph ?? null,
+      replacementPrivateRecoveryGraph:
+        source.nextAction.generatedFrom?.replacementPrivateRecoveryGraph ?? null,
       relatedHandoffs: relatedHandoffsForNextAction({
         nextAction: source.nextAction,
         proofGraph: source.proofGraph,
@@ -515,6 +517,22 @@ export function assertNextActionAdminProof(evidence) {
       "next-action admin proof private-channel recovery graph summary drifted",
     );
   }
+  const replacementPrivateRecoveryGraph =
+    evidence.generatedFrom?.replacementPrivateRecoveryGraph;
+  if (
+    replacementPrivateRecoveryGraph !== null &&
+    replacementPrivateRecoveryGraph !== undefined &&
+    (replacementPrivateRecoveryGraph.nodeId !==
+      "replacement-private-recovery-receipt" ||
+      replacementPrivateRecoveryGraph.status !== "passed" ||
+      replacementPrivateRecoveryGraph.laneCount !== 6 ||
+      !Array.isArray(replacementPrivateRecoveryGraph.laneIds) ||
+      replacementPrivateRecoveryGraph.laneIds.length !== 6)
+  ) {
+    throw new Error(
+      "next-action admin proof replacement private recovery graph summary drifted",
+    );
+  }
   for (const checkId of requiredChecksForEvidence(evidence)) {
     if (!evidence.adminRoleSurface?.visibleChecks?.includes(checkId)) {
       throw new Error(`next-action admin proof missing visible check: ${checkId}`);
@@ -763,6 +781,9 @@ function requiredChecksForNextAction(nextAction) {
   }
   if (nextAction.generatedFrom?.privateChannelRecoveryGraph !== undefined) {
     checks.push("private-channel-recovery-graph");
+  }
+  if (nextAction.generatedFrom?.replacementPrivateRecoveryGraph !== undefined) {
+    checks.push("replacement-private-recovery-graph");
   }
   if (nextAction.seedProofLaneCoverageTrace?.status !== "unavailable") {
     checks.push("seed-proof-lane-coverage-trace");
@@ -1056,6 +1077,10 @@ function requiredChecksForEvidence(evidence) {
     evidence.generatedFrom?.privateChannelRecoveryGraph === undefined
       ? []
       : ["private-channel-recovery-graph"]),
+    ...(evidence.generatedFrom?.replacementPrivateRecoveryGraph === null ||
+    evidence.generatedFrom?.replacementPrivateRecoveryGraph === undefined
+      ? []
+      : ["replacement-private-recovery-graph"]),
     ...(evidence.generatedFrom?.seedProofLaneCoverageTrace?.status !==
       "unavailable"
       ? [

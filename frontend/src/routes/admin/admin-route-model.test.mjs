@@ -1838,6 +1838,8 @@ test("admin route data exposes local next action as a native audit row", async (
     nextAction: nextActionFixture({
       terminalBatchGraph: terminalBatchGraphFixture(),
       privateChannelRecoveryGraph: privateChannelRecoveryGraphFixture(),
+      replacementPrivateRecoveryGraph:
+        replacementPrivateRecoveryGraphFixture(),
     }),
     proofGraph: proofGraphFixture(),
   });
@@ -1889,6 +1891,7 @@ test("admin route data exposes local next action as a native audit row", async (
       ],
       ["terminal-proof-batch-graph", "passed:3 edges"],
       ["private-channel-recovery-graph", "passed:4 lanes"],
+      ["replacement-private-recovery-graph", "passed:6 lanes"],
       ["selection-trace", "0 candidates"],
       ["release-readiness-selection-trace", "1 buildable candidates"],
       ["release-readiness-hosted-concurrent-race-matrix", "selected:unproven"],
@@ -1994,6 +1997,7 @@ test("admin route data exposes local next action as a native audit row", async (
       edgeTargets: ["proof-graph", "proof-freshness", "next-action"],
     },
     privateChannelRecoveryGraph: privateChannelRecoveryGraphFixture(),
+    replacementPrivateRecoveryGraph: replacementPrivateRecoveryGraphFixture(),
     stabilitySource: "",
     stabilityBuildSlice: "",
     stabilityProofTarget: "",
@@ -5218,6 +5222,7 @@ function nextActionFixture({
   hostStaleControlTrace = hostStaleControlTraceFixture(),
   terminalBatchGraph,
   privateChannelRecoveryGraph,
+  replacementPrivateRecoveryGraph,
 } = {}) {
   return {
     version: 1,
@@ -5287,6 +5292,9 @@ function nextActionFixture({
       ...(privateChannelRecoveryGraph === undefined
         ? {}
         : { privateChannelRecoveryGraph }),
+      ...(replacementPrivateRecoveryGraph === undefined
+        ? {}
+        : { replacementPrivateRecoveryGraph }),
       seedProofLaneCoverageStatus: seedProofLaneCoverageTrace.status,
       seedProofLaneCoverageUnclassifiedCount:
         seedProofLaneCoverageTrace.unclassifiedLaneCount,
@@ -5512,6 +5520,28 @@ function privateChannelRecoveryGraphFixture() {
     ],
     edgeCount: 3,
     edgeTargets: ["admin-proof:core-loop", "proof-graph", "next-action"],
+  };
+}
+
+function replacementPrivateRecoveryGraphFixture() {
+  return {
+    nodeId: "replacement-private-recovery-receipt",
+    status: "passed",
+    proofTarget:
+      "target/dev-test-game/replacement-private-channel-recovery-receipt.json",
+    roleUrl: localAdminAuditRoleUrl(localAdminAuditIds.hardening),
+    familyId: "replacement-private-channel-recovery",
+    laneCount: 6,
+    laneIds: [
+      "replacement-stale-private-channel",
+      "replacement-stale-private-receipts",
+      "replacement-stale-private-post-after-resolve",
+      "replacement-stale-private-post-reconnect",
+      "replacement-stale-private-post-after-complete",
+      "replacement-stale-private-post-after-complete-reload",
+    ],
+    edgeCount: 3,
+    edgeTargets: ["admin-proof:hardening", "proof-graph", "next-action"],
   };
 }
 

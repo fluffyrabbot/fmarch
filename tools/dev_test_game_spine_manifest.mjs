@@ -80,6 +80,11 @@ import {
   devTestGamePrivateChannelRecoveryReceiptRoleUrl,
 } from "./dev_test_game_private_channel_recovery_receipt.mjs";
 import {
+  devTestGameReplacementPrivateRecoveryReceiptCommand,
+  devTestGameReplacementPrivateRecoveryReceiptPath,
+  devTestGameReplacementPrivateRecoveryReceiptRoleUrl,
+} from "./dev_test_game_replacement_private_recovery_receipt.mjs";
+import {
   nextActionAdminProofCommand,
   nextActionAdminProofPath,
   nextActionCommand,
@@ -269,6 +274,15 @@ export function buildDevTestGameSpineManifest({
         ],
         roleUrl: devTestGamePrivateChannelRecoveryReceiptRoleUrl,
       },
+      replacementPrivateRecoveryReceipt: {
+        script: devTestGameReplacementPrivateRecoveryReceiptCommand,
+        proofArtifact: devTestGameReplacementPrivateRecoveryReceiptPath,
+        dependsOn: [
+          "target/dev-test-game/proof-run.json",
+          "target/dev-test-game/hardening-admin-proof.json",
+        ],
+        roleUrl: devTestGameReplacementPrivateRecoveryReceiptRoleUrl,
+      },
       releaseRunbook: {
         script: devTestGameReleaseRunbookCommand,
         proofArtifact: devTestGameReleaseRunbookPath,
@@ -395,6 +409,7 @@ export function buildDevTestGameSpineManifest({
       devTestGameHostedEvidenceLaneDemoBlockedPath,
       devTestGameHostedEvidenceLaneDemoPassedPath,
       devTestGamePrivateChannelRecoveryReceiptPath,
+      devTestGameReplacementPrivateRecoveryReceiptPath,
       devTestGameHostedOpsSignalsPath,
       devTestGameRealHostedObservabilityHandoffPath,
       devTestGameReleaseRunbookPath,
@@ -561,6 +576,7 @@ export function assertDevTestGameSpineManifest(manifest) {
     "tools/dev_test_game_core_loop_admin_proof.mjs",
     "tools/dev_test_game_private_channel_recovery_receipt.mjs",
     "tools/dev_test_game_hardening_admin_proof.mjs",
+    "tools/dev_test_game_replacement_private_recovery_receipt.mjs",
     "tools/dev_test_game_release_readiness.mjs",
   ]);
   const livePlan = manifest.commands?.live?.plan ?? [];
@@ -571,6 +587,7 @@ export function assertDevTestGameSpineManifest(manifest) {
     "tools/dev_test_game_core_loop_admin_proof.mjs",
     "tools/dev_test_game_private_channel_recovery_receipt.mjs",
     "tools/dev_test_game_hardening_admin_proof.mjs",
+    "tools/dev_test_game_replacement_private_recovery_receipt.mjs",
     "tools/dev_test_game_release_readiness.mjs",
     "tools/dev_test_game_seed_fixture_summary.mjs",
     "tools/dev_test_game_seed_admin_proof.mjs",
@@ -779,6 +796,22 @@ export function assertDevTestGameSpineManifest(manifest) {
   ) {
     throw new Error(
       `spine manifest private-channel recovery artifact drifted: ${manifest.commands.privateChannelRecoveryReceipt.proofArtifact}`,
+    );
+  }
+  if (
+    manifest.commands?.replacementPrivateRecoveryReceipt?.script !==
+    devTestGameReplacementPrivateRecoveryReceiptCommand
+  ) {
+    throw new Error(
+      `spine manifest replacement private recovery command drifted: ${manifest.commands?.replacementPrivateRecoveryReceipt?.script}`,
+    );
+  }
+  if (
+    manifest.commands.replacementPrivateRecoveryReceipt.proofArtifact !==
+    devTestGameReplacementPrivateRecoveryReceiptPath
+  ) {
+    throw new Error(
+      `spine manifest replacement private recovery artifact drifted: ${manifest.commands.replacementPrivateRecoveryReceipt.proofArtifact}`,
     );
   }
   if (manifest.commands?.releaseRunbook?.script !== devTestGameReleaseRunbookCommand) {
