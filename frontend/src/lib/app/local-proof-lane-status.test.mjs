@@ -33,6 +33,14 @@ import {
   staleDeadActionConflictLaneId,
 } from "../../../../tools/dev_test_game_stale_conflict_scenarios.mjs";
 import {
+  concurrentActionRaceLaneId,
+  concurrentActionRaceReloadLaneId,
+  hardeningPlayerRecoveryHighlightedLaneIds,
+  playerRecoveryStatusExpectationForLane,
+  staleActionConflictLaneId,
+  staleSameActionRecoveryLaneId,
+} from "../../../../tools/dev_test_game_player_recovery_scenarios.mjs";
+import {
   CORE_LOOP_COMPLETED_GAME_HIGHLIGHTED_LANE_IDS,
   CORE_LOOP_HIGHLIGHTED_LANE_IDS,
   HARDENING_HIGHLIGHTED_LANE_IDS,
@@ -107,6 +115,31 @@ function staleConflictEvidence(laneId) {
   };
 }
 
+function playerRecoveryEvidence(laneId) {
+  const expectation = playerRecoveryStatusExpectationForLane(laneId);
+  return {
+    roleUrl: "http://127.0.0.1:5173/g/game-id",
+    ...(Object.hasOwn(expectation, "ackState")
+      ? { ackState: expectation.ackState }
+      : {}),
+    ...(Object.hasOwn(expectation, "rejectError")
+      ? { rejectError: expectation.rejectError }
+      : {}),
+    ...(Object.hasOwn(expectation, "targetSlot")
+      ? { targetSlot: expectation.targetSlot }
+      : {}),
+    ...(Object.hasOwn(expectation, "apiTargetAlive")
+      ? { apiTargetAlive: expectation.apiTargetAlive }
+      : {}),
+    ...(Object.hasOwn(expectation, "refreshedPhase")
+      ? { refreshedPhase: expectation.refreshedPhase }
+      : {}),
+    ...(Object.hasOwn(expectation, "actionVisibleAfterRefresh")
+      ? { actionVisibleAfterRefresh: expectation.actionVisibleAfterRefresh }
+      : {}),
+  };
+}
+
 test("core loop highlighted completed-game lanes come from shared scenarios", () => {
   assert.deepEqual(
     CORE_LOOP_COMPLETED_GAME_HIGHLIGHTED_LANE_IDS,
@@ -143,6 +176,15 @@ test("highlighted stale-conflict lanes come from shared scenarios", () => {
     assert(
       HARDENING_HIGHLIGHTED_LANE_IDS.includes(laneId),
       `missing hardening stale-conflict lane ${laneId}`,
+    );
+  }
+});
+
+test("highlighted player recovery lanes come from shared scenarios", () => {
+  for (const laneId of hardeningPlayerRecoveryHighlightedLaneIds) {
+    assert(
+      HARDENING_HIGHLIGHTED_LANE_IDS.includes(laneId),
+      `missing hardening player recovery lane ${laneId}`,
     );
   }
 });
@@ -343,6 +385,38 @@ test("hardening lane status formats stale and concurrent conflict evidence", () 
       evidence: staleConflictEvidence(staleActionConflictMessageLaneId),
     }),
     "passed: role URL true, Reject PhaseLocked: phase locked; stale action state, refresh and use current action controls",
+  );
+  assert.equal(
+    hardeningLaneStatus({
+      id: concurrentActionRaceLaneId,
+      status: "passed",
+      evidence: playerRecoveryEvidence(concurrentActionRaceLaneId),
+    }),
+    "passed: ack action, reject ActionAlreadySubmitted",
+  );
+  assert.equal(
+    hardeningLaneStatus({
+      id: concurrentActionRaceReloadLaneId,
+      status: "passed",
+      evidence: playerRecoveryEvidence(concurrentActionRaceReloadLaneId),
+    }),
+    "passed: target slot-2, alive false",
+  );
+  assert.equal(
+    hardeningLaneStatus({
+      id: staleSameActionRecoveryLaneId,
+      status: "passed",
+      evidence: playerRecoveryEvidence(staleSameActionRecoveryLaneId),
+    }),
+    "passed: Reject ActionAlreadySubmitted, role URL true, visible false",
+  );
+  assert.equal(
+    hardeningLaneStatus({
+      id: staleActionConflictLaneId,
+      status: "passed",
+      evidence: playerRecoveryEvidence(staleActionConflictLaneId),
+    }),
+    "passed: Reject PhaseLocked, role URL true, refreshed D02",
   );
   assert.equal(
     hardeningLaneStatus({

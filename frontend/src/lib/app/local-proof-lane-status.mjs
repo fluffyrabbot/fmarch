@@ -13,11 +13,16 @@ import {
 } from "../../../../tools/dev_test_game_host_stale_control_scenarios.mjs";
 import {
   hardeningStaleConflictHighlightedLaneIds,
-  staleActionConflictLaneId,
   staleActionConflictMessageLaneId,
   staleDeadActionConflictLaneId,
-  staleSameActionRecoveryLaneId,
 } from "../../../../tools/dev_test_game_stale_conflict_scenarios.mjs";
+import {
+  concurrentActionRaceLaneId,
+  concurrentActionRaceReloadLaneId,
+  hardeningPlayerRecoveryHighlightedLaneIds,
+  staleActionConflictLaneId,
+  staleSameActionRecoveryLaneId,
+} from "../../../../tools/dev_test_game_player_recovery_scenarios.mjs";
 import {
   playerActionBoundaryLaneId,
   playerActionLoopLaneId,
@@ -54,8 +59,7 @@ export const CORE_LOOP_HIGHLIGHTED_LANE_IDS = Object.freeze([
 ]);
 
 export const HARDENING_HIGHLIGHTED_LANE_IDS = Object.freeze([
-  "concurrent-action-race",
-  "concurrent-action-race-reload",
+  ...hardeningPlayerRecoveryHighlightedLaneIds,
   ...hardeningStaleConflictHighlightedLaneIds,
   ...staleClientReconnectHighlightedLaneIds,
   "stale-host-control",
@@ -168,9 +172,9 @@ export function hardeningLaneStatus(lane) {
   const status = laneStatus(lane);
   const evidence = laneEvidence(lane);
   switch (lane?.id) {
-    case "concurrent-action-race":
+    case concurrentActionRaceLaneId:
       return `${status}: ${String(evidence.ackState ?? "unknown")} action, reject ${String(evidence.rejectError ?? "unknown")}`;
-    case "concurrent-action-race-reload":
+    case concurrentActionRaceReloadLaneId:
       return `${status}: target ${String(evidence.targetSlot ?? "unknown")}, alive ${String(evidence.apiTargetAlive ?? "unknown")}`;
     case "reconnect-recovery":
       return `${status}: ${String(evidence.reconnectingState ?? "unknown")} -> ${String(evidence.recoveryState ?? "unknown")}`;

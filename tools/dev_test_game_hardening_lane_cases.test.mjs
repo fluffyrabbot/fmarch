@@ -55,7 +55,6 @@ import {
   staleConflictMessageCoverageFamilies,
   staleConflictMessageCoverageFamilyDefinitions,
   staleConflictMessageNoSurfaceYetCases,
-  staleActionConflictLaneId,
   staleActionConflictMessageLaneId,
   staleConflictMessageStatusExpectations,
   replacementStaleConflictMessageSpineLaneCase,
@@ -64,7 +63,6 @@ import {
   staleConflictMessageSurfaceCases,
   staleConflictMessageSurfaceCheckIds,
   staleConflictMessageLaneIds,
-  staleSameActionRecoveryLaneId,
 } from "./dev_test_game_stale_conflict_scenarios.mjs";
 import {
   replacementSessionRecoveryLaneIds,
@@ -90,11 +88,17 @@ import {
   stalePlayerActionReconnectLaneId,
 } from "./dev_test_game_stale_client_reconnect_scenarios.mjs";
 import {
+  concurrentActionRaceLaneId,
+  concurrentActionRaceReloadLaneId,
+  hardeningPlayerRecoveryHighlightedLaneIds,
   playerActionConflictRecoveryLaneIds,
   playerActionFoundationLaneIds,
   playerRecoveryRaceLaneIds,
+  playerRecoveryStatusExpectations,
   promotedStalePlayerCommandLaneIds,
+  staleActionConflictLaneId,
   stalePlayerCommandLaneIds,
+  staleSameActionRecoveryLaneId,
 } from "./dev_test_game_player_recovery_scenarios.mjs";
 import {
   completedGameHardeningSpineCycleId,
@@ -941,9 +945,65 @@ test("hardening lane cases share player action foundation IDs", () => {
   assert.deepEqual(playerActionFoundationLaneIds, [
     "idempotent-retry",
     "action-idempotent-retry",
-    "concurrent-action-race",
-    "concurrent-action-race-reload",
+    concurrentActionRaceLaneId,
+    concurrentActionRaceReloadLaneId,
     playerLiveReconnectLaneId,
+  ]);
+});
+
+test("hardening lane cases share player recovery status expectations", () => {
+  assert.deepEqual(
+    playerRecoveryStatusExpectations().map((expectation) => ({
+      laneId: expectation.laneId,
+      ackState: expectation.ackState,
+      rejectError: expectation.rejectError,
+      targetSlot: expectation.targetSlot,
+      apiTargetAlive: expectation.apiTargetAlive,
+      refreshedPhase: expectation.refreshedPhase,
+      actionVisibleAfterRefresh: expectation.actionVisibleAfterRefresh,
+    })),
+    [
+      {
+        laneId: concurrentActionRaceLaneId,
+        ackState: "ack",
+        rejectError: "ActionAlreadySubmitted",
+        targetSlot: undefined,
+        apiTargetAlive: undefined,
+        refreshedPhase: undefined,
+        actionVisibleAfterRefresh: undefined,
+      },
+      {
+        laneId: concurrentActionRaceReloadLaneId,
+        ackState: undefined,
+        rejectError: undefined,
+        targetSlot: "slot-2",
+        apiTargetAlive: false,
+        refreshedPhase: undefined,
+        actionVisibleAfterRefresh: undefined,
+      },
+      {
+        laneId: staleSameActionRecoveryLaneId,
+        ackState: undefined,
+        rejectError: "ActionAlreadySubmitted",
+        targetSlot: undefined,
+        apiTargetAlive: undefined,
+        refreshedPhase: "N01",
+        actionVisibleAfterRefresh: false,
+      },
+      {
+        laneId: staleActionConflictLaneId,
+        ackState: undefined,
+        rejectError: "PhaseLocked",
+        targetSlot: undefined,
+        apiTargetAlive: undefined,
+        refreshedPhase: "D02",
+        actionVisibleAfterRefresh: false,
+      },
+    ],
+  );
+  assert.deepEqual(hardeningPlayerRecoveryHighlightedLaneIds, [
+    concurrentActionRaceLaneId,
+    concurrentActionRaceReloadLaneId,
   ]);
 });
 
@@ -996,8 +1056,8 @@ test("hardening lane cases share stale player command IDs", () => {
 
 test("hardening lane cases share player action conflict recovery IDs", () => {
   assert.deepEqual(playerActionConflictRecoveryLaneIds, [
-    "stale-same-action-recovery",
-    "stale-action-conflict",
+    staleSameActionRecoveryLaneId,
+    staleActionConflictLaneId,
     stalePlayerActionReconnectLaneId,
     privateChannelStaleActionReconnectLaneId,
   ]);

@@ -10,11 +10,20 @@ import {
   stalePlayerActionReconnectLaneId,
 } from "./dev_test_game_stale_client_reconnect_scenarios.mjs";
 
+const cloneStatusExpectation = (expectation) => ({ ...expectation });
+
+export const idempotentRetryLaneId = "idempotent-retry";
+export const actionIdempotentRetryLaneId = "action-idempotent-retry";
+export const concurrentActionRaceLaneId = "concurrent-action-race";
+export const concurrentActionRaceReloadLaneId = "concurrent-action-race-reload";
+export const staleSameActionRecoveryLaneId = "stale-same-action-recovery";
+export const staleActionConflictLaneId = "stale-action-conflict";
+
 export const playerActionFoundationLaneIds = Object.freeze([
-  "idempotent-retry",
-  "action-idempotent-retry",
-  "concurrent-action-race",
-  "concurrent-action-race-reload",
+  idempotentRetryLaneId,
+  actionIdempotentRetryLaneId,
+  concurrentActionRaceLaneId,
+  concurrentActionRaceReloadLaneId,
   playerLiveReconnectLaneId,
 ]);
 
@@ -49,8 +58,8 @@ export const completedPlayerRecoveryLaneIds = Object.freeze([
 ]);
 
 export const playerActionConflictRecoveryLaneIds = Object.freeze([
-  "stale-same-action-recovery",
-  "stale-action-conflict",
+  staleSameActionRecoveryLaneId,
+  staleActionConflictLaneId,
   stalePlayerActionReconnectLaneId,
   privateChannelStaleActionReconnectLaneId,
 ]);
@@ -65,3 +74,47 @@ export const playerRecoveryAuditLaneIds = Object.freeze([
   ...playerActionConflictRecoveryLaneIds,
   "stale-action-conflict-message",
 ]);
+
+export const hardeningPlayerRecoveryHighlightedLaneIds = Object.freeze([
+  concurrentActionRaceLaneId,
+  concurrentActionRaceReloadLaneId,
+]);
+
+export const playerRecoveryStatusExpectationDefinitions = Object.freeze([
+  Object.freeze({
+    laneId: concurrentActionRaceLaneId,
+    ackState: "ack",
+    rejectError: "ActionAlreadySubmitted",
+  }),
+  Object.freeze({
+    laneId: concurrentActionRaceReloadLaneId,
+    targetSlot: "slot-2",
+    apiTargetAlive: false,
+  }),
+  Object.freeze({
+    laneId: staleSameActionRecoveryLaneId,
+    rejectError: "ActionAlreadySubmitted",
+    refreshedPhase: "N01",
+    actionVisibleAfterRefresh: false,
+  }),
+  Object.freeze({
+    laneId: staleActionConflictLaneId,
+    rejectError: "PhaseLocked",
+    refreshedPhase: "D02",
+    actionVisibleAfterRefresh: false,
+  }),
+]);
+
+export function playerRecoveryStatusExpectations() {
+  return playerRecoveryStatusExpectationDefinitions.map(cloneStatusExpectation);
+}
+
+export function playerRecoveryStatusExpectationForLane(laneId) {
+  const expectation = playerRecoveryStatusExpectationDefinitions.find(
+    (candidate) => candidate.laneId === laneId,
+  );
+  if (expectation === undefined) {
+    throw new Error(`unknown player recovery status lane: ${laneId}`);
+  }
+  return cloneStatusExpectation(expectation);
+}

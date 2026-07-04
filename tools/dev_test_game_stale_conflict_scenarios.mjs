@@ -6,6 +6,10 @@ import {
   buildLaneCoverageSummary,
   cloneLaneCoverageFamilies,
 } from "./dev_test_game_lane_coverage.mjs";
+import {
+  staleActionConflictLaneId,
+  staleSameActionRecoveryLaneId,
+} from "./dev_test_game_player_recovery_scenarios.mjs";
 
 const cloneScenarioCase = (scenario) => ({ ...scenario });
 const cloneStatusExpectation = (expectation) => ({ ...expectation });
@@ -17,8 +21,6 @@ export const staleActionConflictMessageLaneId =
 export const staleDeadActionConflictLaneId = "stale-dead-action-conflict";
 export const staleHostDeadlineConflictLaneId = "stale-host-deadline";
 export const staleCohostDeadlineConflictLaneId = "stale-cohost-deadline";
-export const staleSameActionRecoveryLaneId = "stale-same-action-recovery";
-export const staleActionConflictLaneId = "stale-action-conflict";
 
 export const staleConflictMessageLaneIds = Object.freeze([
   replacementStaleConflictMessageLaneId,
