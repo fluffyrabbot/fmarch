@@ -23,6 +23,7 @@ import {
 } from "./dev_test_game_stale_client_reconnect_scenarios.mjs";
 import {
   coreLoopPrivateChannelCompletedPostLaneId,
+  coreLoopPrivateChannelInvalidActionLaneId,
   privateChannelInvalidActionRecoveryScenario,
   staleCompletedPrivatePostScenario,
 } from "./dev_test_game_core_loop_private_channel_recovery_scenarios.mjs";
@@ -847,6 +848,25 @@ assert.equal(
 assert.equal(
   session.verification.actionLoop.privateChannelInvalidActionRecovery
     .legalActionVisibleAfterReject,
+  true,
+);
+const invalidPrivateChannelProofLane = proofRun.lanes.find(
+  (lane) => lane.id === coreLoopPrivateChannelInvalidActionLaneId,
+);
+assert.ok(invalidPrivateChannelProofLane);
+assert.equal(invalidPrivateChannelProofLane.status, "passed");
+assert.equal(invalidPrivateChannelProofLane.evidence.routeStatus, 200);
+assert.equal(
+  invalidPrivateChannelProofLane.evidence.receiptStatusText,
+  privateChannelInvalidActionRecovery.commandMessage,
+);
+assert.equal(
+  invalidPrivateChannelProofLane.evidence.channelContextPreserved,
+  true,
+);
+assert.equal(invalidPrivateChannelProofLane.evidence.refreshCommandState, true);
+assert.equal(
+  invalidPrivateChannelProofLane.evidence.apiLegalActionAvailable,
   true,
 );
 assert.equal(session.verification.actionLoop.status, "passed");

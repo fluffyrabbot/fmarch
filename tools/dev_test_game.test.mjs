@@ -4424,6 +4424,9 @@ test("session card and markdown include role credential URLs and tokens", async 
         status: "passed",
         laneId: privateChannelInvalidActionRecoveryScenario().laneId,
         channel: privateChannelInvalidActionRecoveryScenario().channelId,
+        route: {
+          responseStatus: 200,
+        },
         reject: {
           state: "reject",
           error: privateChannelInvalidActionRecoveryScenario().commandError,
@@ -4475,6 +4478,15 @@ test("session card and markdown include role credential URLs and tokens", async 
         },
         receiptStatusText:
           privateChannelInvalidActionRecoveryScenario().commandMessage,
+        apiCommandStateAfterReject: {
+          actions: [
+            {
+              template_id:
+                privateChannelInvalidActionRecoveryScenario()
+                  .expectedActionTemplateId,
+            },
+          ],
+        },
         legalActionVisibleAfterReject: true,
         privateThreadPagerVisible: true,
       },

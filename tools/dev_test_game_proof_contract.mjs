@@ -1354,12 +1354,38 @@ export function buildDevTestGameProofRun(session, options = {}) {
         receiptStatusText:
           verification.actionLoop?.privateChannelInvalidActionRecovery
             ?.receiptStatusText ?? null,
+        routeStatus:
+          verification.actionLoop?.privateChannelInvalidActionRecovery?.route
+            ?.responseStatus ?? null,
+        actorSlot:
+          verification.actionLoop?.privateChannelInvalidActionRecovery
+            ?.afterRejectSnapshot?.channelContext?.actorSlot ?? null,
+        actionTemplateId:
+          verification.actionLoop?.privateChannelInvalidActionRecovery?.reject
+            ?.requestEnvelope?.body?.body?.command?.SubmitAction
+            ?.template_id ?? null,
+        refreshCommandState:
+          verification.actionLoop?.privateChannelInvalidActionRecovery
+            ?.currentReceipt?.commandTrace?.projectionRefreshKeys?.includes(
+              "commandState",
+            ) ?? null,
+        channelContextPreserved:
+          verification.actionLoop?.privateChannelInvalidActionRecovery
+            ?.afterRejectSnapshot?.channelContext?.channelId ===
+          privateChannelInvalidActionRecovery.channelId,
         phase:
           verification.actionLoop?.privateChannelInvalidActionRecovery
             ?.afterRejectSnapshot?.commandState?.phase?.phaseId ?? null,
         legalActionVisible:
           verification.actionLoop?.privateChannelInvalidActionRecovery
             ?.legalActionVisibleAfterReject ?? null,
+        apiLegalActionAvailable:
+          verification.actionLoop?.privateChannelInvalidActionRecovery
+            ?.apiCommandStateAfterReject?.actions?.some(
+              (action) =>
+                action.template_id ===
+                privateChannelInvalidActionRecovery.expectedActionTemplateId,
+            ) ?? null,
         privateThreadPagerVisible:
           verification.actionLoop?.privateChannelInvalidActionRecovery
             ?.privateThreadPagerVisible ?? null,
@@ -1370,6 +1396,8 @@ export function buildDevTestGameProofRun(session, options = {}) {
             ?.laneId === privateChannelInvalidActionRecovery.laneId &&
           verification.actionLoop?.privateChannelInvalidActionRecovery
             ?.channel === privateChannelInvalidActionRecovery.channelId &&
+          verification.actionLoop?.privateChannelInvalidActionRecovery?.route
+            ?.responseStatus === 200 &&
           verification.actionLoop?.privateChannelInvalidActionRecovery
             ?.reject?.state === "reject" &&
           verification.actionLoop?.privateChannelInvalidActionRecovery
@@ -1413,6 +1441,12 @@ export function buildDevTestGameProofRun(session, options = {}) {
             ?.afterRejectSnapshot?.commandState?.actions?.some(
               (action) =>
                 action.templateId ===
+                privateChannelInvalidActionRecovery.expectedActionTemplateId,
+            ) === true &&
+          verification.actionLoop?.privateChannelInvalidActionRecovery
+            ?.apiCommandStateAfterReject?.actions?.some(
+              (action) =>
+                action.template_id ===
                 privateChannelInvalidActionRecovery.expectedActionTemplateId,
             ) === true &&
           verification.actionLoop?.privateChannelInvalidActionRecovery

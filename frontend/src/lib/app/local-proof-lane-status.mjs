@@ -159,7 +159,7 @@ export function coreLoopLaneStatus(lane) {
     }
     case coreLoopPrivateChannelInvalidActionLaneId: {
       const scenario = privateChannelInvalidActionRecoveryScenario();
-      return `${status}: channel ${String(evidence.channel ?? "unknown")}, ${String(evidence.receiptStatusText ?? `Reject ${String(evidence.error ?? scenario.commandError)}`)}, legal action visible ${String(evidence.legalActionVisible ?? "unknown")}`;
+      return `${status}: channel ${String(evidence.channel ?? "unknown")}, ${String(evidence.receiptStatusText ?? `Reject ${String(evidence.error ?? scenario.commandError)}`)}, scope ${String(evidence.channelContextPreserved ?? "unknown")}, refresh commandState ${String(evidence.refreshCommandState ?? "unknown")}, legal action visible ${String(evidence.legalActionVisible ?? "unknown")}`;
     }
     case "resolution-receipts":
       return `${status}: ${String(evidence.targetNoticeStatus ?? "unknown")} receipt, target ${String(evidence.targetSlot ?? "unknown")}`;

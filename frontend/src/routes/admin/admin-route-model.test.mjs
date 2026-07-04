@@ -2617,7 +2617,7 @@ test("admin local core loop detail data carries lane rows", async () => {
       ],
       [
         coreLoopPrivateChannelInvalidActionLaneId,
-        `passed: channel ${privateChannelInvalidActionRecoveryScenario().channelId}, ${privateChannelInvalidActionRecoveryScenario().commandMessage}, legal action visible true`,
+        `passed: channel ${privateChannelInvalidActionRecoveryScenario().channelId}, ${privateChannelInvalidActionRecoveryScenario().commandMessage}, scope true, refresh commandState true, legal action visible true`,
       ],
       [
         "stale-host-complete-reload",
@@ -2706,8 +2706,8 @@ test("admin local core loop detail data carries lane rows", async () => {
       ],
       [
         coreLoopPrivateChannelInvalidActionLaneId,
-        `passed: channel ${privateChannelInvalidActionRecoveryScenario().channelId}, ${privateChannelInvalidActionRecoveryScenario().commandMessage}, legal action visible true`,
-        `passed: channel ${privateChannelInvalidActionRecoveryScenario().channelId}, ${privateChannelInvalidActionRecoveryScenario().commandMessage}, legal action visible true`,
+        `passed: channel ${privateChannelInvalidActionRecoveryScenario().channelId}, ${privateChannelInvalidActionRecoveryScenario().commandMessage}, scope true, refresh commandState true, legal action visible true`,
+        `passed: channel ${privateChannelInvalidActionRecoveryScenario().channelId}, ${privateChannelInvalidActionRecoveryScenario().commandMessage}, scope true, refresh commandState true, legal action visible true`,
       ],
       [
         "stale-host-complete-reload",
@@ -3838,8 +3838,15 @@ function proofRunFixture() {
       error: privateChannelInvalidActionRecoveryScenario().commandError,
       receiptStatusText:
         privateChannelInvalidActionRecoveryScenario().commandMessage,
+      routeStatus: 200,
+      actorSlot: privateChannelInvalidActionRecoveryScenario().actorSlot,
+      actionTemplateId:
+        privateChannelInvalidActionRecoveryScenario().expectedActionTemplateId,
+      refreshCommandState: true,
+      channelContextPreserved: true,
       phase: privateChannelInvalidActionRecoveryScenario().expectedPhaseId,
       legalActionVisible: true,
+      apiLegalActionAvailable: true,
       privateThreadPagerVisible: true,
     },
     "concurrent-action-race": {

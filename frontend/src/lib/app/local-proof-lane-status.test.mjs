@@ -240,10 +240,12 @@ test("core loop lane status formats seeded recovery evidence", () => {
         channel: privateInvalidAction.channelId,
         error: privateInvalidAction.commandError,
         receiptStatusText: privateInvalidAction.commandMessage,
+        channelContextPreserved: true,
+        refreshCommandState: true,
         legalActionVisible: true,
       },
     }),
-    `passed: channel ${privateInvalidAction.channelId}, ${privateInvalidAction.commandMessage}, legal action visible true`,
+    `passed: channel ${privateInvalidAction.channelId}, ${privateInvalidAction.commandMessage}, scope true, refresh commandState true, legal action visible true`,
   );
   assert.equal(
     coreLoopLaneStatus({
@@ -632,6 +634,8 @@ test("highlighted lane evidence maps keep browser proof assertions aligned", () 
           channel: privateInvalidAction.channelId,
           error: privateInvalidAction.commandError,
           receiptStatusText: privateInvalidAction.commandMessage,
+          channelContextPreserved: true,
+          refreshCommandState: true,
           legalActionVisible: true,
         },
       },
@@ -812,7 +816,7 @@ test("highlighted lane evidence maps keep browser proof assertions aligned", () 
     coreLoopHighlightedLaneEvidence(proofRun)[
       coreLoopPrivateChannelInvalidActionLaneId
     ],
-    `passed: channel ${privateInvalidAction.channelId}, ${privateInvalidAction.commandMessage}, legal action visible true`,
+    `passed: channel ${privateInvalidAction.channelId}, ${privateInvalidAction.commandMessage}, scope true, refresh commandState true, legal action visible true`,
   );
   assert.equal(
     coreLoopHighlightedLaneEvidence(proofRun)[
