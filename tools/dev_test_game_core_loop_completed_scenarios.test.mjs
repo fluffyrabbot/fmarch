@@ -425,7 +425,7 @@ test("completed-game production harness callers share extracted recovery cases",
         "completedGameProofReadinessScenarioFamilies",
         "completedGameProofReadinessTransition",
       ],
-      "./dev_test_game_core_loop_completed_game_shared_scenario_assertions.mjs",
+      "./dev_test_game_core_loop_completed_game_proof_readiness_contract.mjs",
     ],
     [
       "tools/dev_test_game_release_readiness.mjs",
@@ -433,7 +433,7 @@ test("completed-game production harness callers share extracted recovery cases",
         "assertCompletedGameProofReadinessSurfaceProof",
         "completedGameProofReadinessScenarioFamilies",
       ],
-      "./dev_test_game_core_loop_completed_game_shared_scenario_assertions.mjs",
+      "./dev_test_game_core_loop_completed_game_proof_readiness_contract.mjs",
     ],
     [
       "tools/dev_test_game_release_readiness.mjs",
@@ -852,11 +852,17 @@ test("completed-game progression facade shares proof and readiness cases", async
         source: progressionSource,
         importedName,
         moduleSpecifier:
-          "./dev_test_game_core_loop_completed_game_shared_scenario_assertions.mjs",
+          "./dev_test_game_core_loop_completed_game_proof_readiness_contract.mjs",
       }),
-      `completed-game progression should import ${importedName} from the shared scenario/assertion module`,
+      `completed-game progression should import ${importedName} from the shared proof/readiness contract`,
     );
   }
+  assert(
+    !progressionSource.includes(
+      "./dev_test_game_core_loop_completed_game_shared_scenario_assertions.mjs",
+    ),
+    "completed-game progression should not bypass the proof/readiness contract for shared completed-game cases",
+  );
   assert(
     !progressionSource.includes(
       "./dev_test_game_core_loop_completed_game_shared_recovery_scenarios.mjs",
