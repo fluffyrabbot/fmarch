@@ -1,13 +1,8 @@
 import {
   playerActionLoopLaneId,
-  playerActionBoundaryLaneId,
-  playerActionBoundaryRecoveryHookId,
   playerInvalidActionRecoveryHookId,
   playerInvalidActionRecoveryLaneId,
 } from "./dev_test_game_core_loop_action_scenario_cases.mjs";
-import {
-  coreLoopPrivateChannelPostLaneId,
-} from "./dev_test_game_core_loop_private_channel_recovery_scenarios.mjs";
 import {
   coreLoopVoteResolutionLaneIds,
   dayThreeVoteResolutionLaneId,
@@ -26,6 +21,9 @@ import {
 import {
   dayTwoNightTwoFeatureSpineRows,
 } from "./dev_test_game_core_loop_day_two_night_two_scenarios.mjs";
+import {
+  dayOneNightOneFeatureSpineRows,
+} from "./dev_test_game_core_loop_day_one_night_one_scenarios.mjs";
 
 export const nightThreeActionResolutionLaneId =
   "night-three-action-resolution";
@@ -55,6 +53,9 @@ const nightTwoDayThree = coreLoopFeatureSpineCycleIds.nightTwoDayThree;
 const dayTwoNightTwoSpineRows = dayTwoNightTwoFeatureSpineRows({
   cycleId: dayTwoNightTwo,
 });
+const dayOneNightOneSpineRows = dayOneNightOneFeatureSpineRows({
+  cycleId: dayOneNightOneDayTwo,
+});
 
 const coreLoopFeatureSpineLaneRows = Object.freeze([
   Object.freeze({
@@ -78,18 +79,7 @@ const coreLoopFeatureSpineLaneRows = Object.freeze([
   }),
   Object.freeze(dayVoteNoLynchFeatureSpineRow({ cycleId: nightTwoDayThree })),
   Object.freeze(dayTwoNightTwoSpineRows[0]),
-  Object.freeze({
-    targetKey: "nightActionLoop",
-    featureSlotId: "night-action-loop",
-    cycleId: dayOneNightOneDayTwo,
-    role: "actionPlayer",
-    checkpointId: `${dayOneNightOneDayTwo}-n01-action-open`,
-    adminCheckId: playerActionLoopLaneId,
-    proofLaneAliases: Object.freeze([
-      playerActionLoopLaneId,
-      "stale-action-conflict",
-    ]),
-  }),
+  Object.freeze(dayOneNightOneSpineRows[0]),
   ...dayTwoNightTwoSpineRows.slice(1),
   ...nightTwoProgressionFeatureSpineRows({ cycleId: nightTwoDayThree }),
   ...terminalRecoveryFeatureSpineRows({ cycleId: nightTwoDayThree }),
@@ -103,48 +93,7 @@ const coreLoopFeatureSpineLaneRows = Object.freeze([
     recoveryHookId: playerInvalidActionRecoveryHookId,
     adminCheckId: playerInvalidActionRecoveryLaneId,
   }),
-  Object.freeze({
-    targetKey: "playerActionBoundary",
-    featureSlotId: playerActionBoundaryLaneId,
-    cycleId: dayOneNightOneDayTwo,
-    role: "normalPlayer",
-    checkpointId: `${dayOneNightOneDayTwo}-n01-action-open`,
-    recoveryHookId: playerActionBoundaryRecoveryHookId,
-    adminCheckId: playerActionBoundaryLaneId,
-  }),
-  Object.freeze({
-    targetKey: "privateChannel",
-    featureSlotId: coreLoopPrivateChannelPostLaneId,
-    cycleId: dayOneNightOneDayTwo,
-    role: "privateChannel",
-    checkpointId: `${dayOneNightOneDayTwo}-n01-action-open`,
-    adminCheckId: coreLoopPrivateChannelPostLaneId,
-  }),
-  Object.freeze({
-    targetKey: "resolutionReceipts",
-    featureSlotId: "resolution-receipts",
-    cycleId: dayOneNightOneDayTwo,
-    role: "target",
-    checkpointId: `${dayOneNightOneDayTwo}-n01-resolved-target-killed`,
-    adminCheckId: "resolution-receipts",
-  }),
-  Object.freeze({
-    targetKey: "staleRecovery",
-    featureSlotId: "stale-recovery",
-    cycleId: dayOneNightOneDayTwo,
-    role: "host",
-    checkpointId: `${dayOneNightOneDayTwo}-d01-resolved-locked`,
-    adminCheckId: "stale-deadline-advance",
-  }),
-  Object.freeze({
-    targetKey: "staleActionConflictMessage",
-    featureSlotId: "stale-action-conflict-message",
-    cycleId: dayOneNightOneDayTwo,
-    role: "actionPlayer",
-    checkpointId: `${dayOneNightOneDayTwo}-n01-action-open`,
-    recoveryHookId: "staleActionConflictReject",
-    adminCheckId: playerActionLoopLaneId,
-  }),
+  ...dayOneNightOneSpineRows.slice(1),
   Object.freeze({
     targetKey: "completedGameRecovery",
     featureSlotId: "completed-game-recovery",
