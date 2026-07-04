@@ -13,6 +13,17 @@ export const coreLoopHostControlLaneIds = Object.freeze([
   "host-modkill-control",
 ]);
 
+export function hostPhaseControlFeatureSpineRow({ cycleId }) {
+  return {
+    targetKey: "hostPhaseControl",
+    featureSlotId: "host-phase-control",
+    cycleId,
+    role: "host",
+    checkpointId: `${cycleId}-d02-vote-open`,
+    adminCheckId: "host-lifecycle-control",
+  };
+}
+
 export function coreLoopHostControlScenarioFamily() {
   return {
     id: coreLoopHostControlFamilyId,

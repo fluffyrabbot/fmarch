@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import {
   releaseReadinessProductionFeatureSpineTargets,
@@ -16,6 +17,28 @@ const browserProofCommand =
   "DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch npm run test:dev-test-game-live";
 const coreLoopAdminProofCommand =
   "npm run test:dev-test-game-core-loop-admin-proof";
+
+test("core loop feature spine catalog rows are scenario-owned", () => {
+  const source = readFileSync(
+    new URL("./dev_test_game_feature_lane_catalog.mjs", import.meta.url),
+    "utf8",
+  );
+  const spineRowsStart = source.indexOf(
+    "const coreLoopFeatureSpineLaneRows = Object.freeze([",
+  );
+  const seedRowsStart = source.indexOf(
+    "const coreLoopSeedOnlyLaneRows = Object.freeze([",
+  );
+  assert.notEqual(spineRowsStart, -1);
+  assert.notEqual(seedRowsStart, -1);
+  const spineRowsBlock = source.slice(spineRowsStart, seedRowsStart);
+
+  assert.equal(spineRowsBlock.includes("targetKey:"), false);
+  assert.match(spineRowsBlock, /hostPhaseControlFeatureSpineRow/);
+  assert.match(spineRowsBlock, /dayVoteResolutionFeatureSpineRow/);
+  assert.match(spineRowsBlock, /invalidActionRecoveryFeatureSpineRow/);
+  assert.match(spineRowsBlock, /completedGameRecoveryFeatureSpineRow/);
+});
 
 test("production feature spine resolver resolves seeded role targets", () => {
   const sourceTarget = coreLoopSourceTargetFixture();

@@ -3,6 +3,7 @@ export {
   completedDeadPlayerStaleVoteCase,
   completedDeadPlayerStaleVoteCaseDefinition,
   completedGameHardeningSpineCycleId,
+  completedGameRecoveryFeatureSpineRow,
   completedGameHardeningLaneCase,
   completedGameHardeningLaneCaseDefinitions,
   completedGameHardeningLaneCases,

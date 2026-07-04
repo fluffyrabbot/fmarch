@@ -5,6 +5,18 @@ export const playerActionBoundaryLaneId = "player-action-boundary";
 export const playerActionBoundaryRecoveryHookId =
   "normalPlayerDirectActionReject";
 
+export function invalidActionRecoveryFeatureSpineRow({ cycleId }) {
+  return {
+    targetKey: "invalidActionRecovery",
+    featureSlotId: playerInvalidActionRecoveryLaneId,
+    cycleId,
+    role: "actionPlayer",
+    checkpointId: `${cycleId}-n02-action-open`,
+    recoveryHookId: playerInvalidActionRecoveryHookId,
+    adminCheckId: playerInvalidActionRecoveryLaneId,
+  };
+}
+
 export function playerActionSubmissionScenario() {
   return {
     clickedAction: "submit_action:factional_kill",

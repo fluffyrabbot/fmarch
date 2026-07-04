@@ -14,6 +14,17 @@ const cloneRaceCoverageCell = (cell) => ({
 export const completedGameHardeningSpineCycleId =
   "hardening-completed-game";
 
+export function completedGameRecoveryFeatureSpineRow({ cycleId }) {
+  return {
+    targetKey: "completedGameRecovery",
+    featureSlotId: "completed-game-recovery",
+    cycleId,
+    role: "host",
+    checkpointId: `${cycleId}-d02-resolved-target-killed`,
+    adminCheckId: "completed-game-hardening-coverage",
+  };
+}
+
 export {
   assertCompletedGameEndgameTransition,
   assertCompletedPlayerReloadCases,

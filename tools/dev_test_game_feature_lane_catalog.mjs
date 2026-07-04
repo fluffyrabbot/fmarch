@@ -1,12 +1,18 @@
 import {
+  invalidActionRecoveryFeatureSpineRow,
   playerActionLoopLaneId,
-  playerInvalidActionRecoveryHookId,
-  playerInvalidActionRecoveryLaneId,
 } from "./dev_test_game_core_loop_action_scenario_cases.mjs";
 import {
   coreLoopVoteResolutionLaneIds,
+  dayVoteResolutionFeatureSpineRow,
   dayThreeVoteResolutionLaneId,
 } from "./dev_test_game_core_loop_vote_resolution_scenarios.mjs";
+import {
+  hostPhaseControlFeatureSpineRow,
+} from "./dev_test_game_core_loop_host_control_scenarios.mjs";
+import {
+  completedGameRecoveryFeatureSpineRow,
+} from "./dev_test_game_core_loop_completed_game_cases.mjs";
 import {
   dayVoteNoLynchFeatureSpineRow,
   dayVoteNoLynchLaneId,
@@ -58,25 +64,8 @@ const dayOneNightOneSpineRows = dayOneNightOneFeatureSpineRows({
 });
 
 const coreLoopFeatureSpineLaneRows = Object.freeze([
-  Object.freeze({
-    targetKey: "hostPhaseControl",
-    featureSlotId: "host-phase-control",
-    cycleId: dayTwoNightTwo,
-    role: "host",
-    checkpointId: `${dayTwoNightTwo}-d02-vote-open`,
-    adminCheckId: "host-lifecycle-control",
-  }),
-  Object.freeze({
-    targetKey: "dayVoteResolution",
-    featureSlotId: dayThreeVoteResolutionLaneId,
-    cycleId: dayTwoNightTwo,
-    role: "actionPlayer",
-    checkpointId: `${dayTwoNightTwo}-d02-deciding-vote-submitted`,
-    adminCheckId: dayThreeVoteResolutionLaneId,
-    seedMembership: "demoOnly",
-    seedOrder: 10,
-    seedRoleOverride: "actionPlayer",
-  }),
+  Object.freeze(hostPhaseControlFeatureSpineRow({ cycleId: dayTwoNightTwo })),
+  Object.freeze(dayVoteResolutionFeatureSpineRow({ cycleId: dayTwoNightTwo })),
   Object.freeze(dayVoteNoLynchFeatureSpineRow({ cycleId: nightTwoDayThree })),
   Object.freeze(dayTwoNightTwoSpineRows[0]),
   Object.freeze(dayOneNightOneSpineRows[0]),
@@ -84,24 +73,13 @@ const coreLoopFeatureSpineLaneRows = Object.freeze([
   ...nightTwoProgressionFeatureSpineRows({ cycleId: nightTwoDayThree }),
   ...terminalRecoveryFeatureSpineRows({ cycleId: nightTwoDayThree }),
   ...revoteProgressionFeatureSpineRows({ cycleId: nightTwoDayThree }),
-  Object.freeze({
-    targetKey: "invalidActionRecovery",
-    featureSlotId: playerInvalidActionRecoveryLaneId,
-    cycleId: dayTwoNightTwo,
-    role: "actionPlayer",
-    checkpointId: `${dayTwoNightTwo}-n02-action-open`,
-    recoveryHookId: playerInvalidActionRecoveryHookId,
-    adminCheckId: playerInvalidActionRecoveryLaneId,
-  }),
+  Object.freeze(
+    invalidActionRecoveryFeatureSpineRow({ cycleId: dayTwoNightTwo }),
+  ),
   ...dayOneNightOneSpineRows.slice(1),
-  Object.freeze({
-    targetKey: "completedGameRecovery",
-    featureSlotId: "completed-game-recovery",
-    cycleId: dayTwoNightTwo,
-    role: "host",
-    checkpointId: `${dayTwoNightTwo}-d02-resolved-target-killed`,
-    adminCheckId: "completed-game-hardening-coverage",
-  }),
+  Object.freeze(
+    completedGameRecoveryFeatureSpineRow({ cycleId: dayTwoNightTwo }),
+  ),
 ]);
 
 const coreLoopSeedOnlyLaneRows = Object.freeze([

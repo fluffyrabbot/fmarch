@@ -8,6 +8,20 @@ export const coreLoopVoteResolutionLaneIds = Object.freeze([
   dayThreeVoteResolutionLaneId,
 ]);
 
+export function dayVoteResolutionFeatureSpineRow({ cycleId }) {
+  return {
+    targetKey: "dayVoteResolution",
+    featureSlotId: dayThreeVoteResolutionLaneId,
+    cycleId,
+    role: "actionPlayer",
+    checkpointId: `${cycleId}-d02-deciding-vote-submitted`,
+    adminCheckId: dayThreeVoteResolutionLaneId,
+    seedMembership: "demoOnly",
+    seedOrder: 10,
+    seedRoleOverride: "actionPlayer",
+  };
+}
+
 const cloneVoteResolutionSurfaceCase = (surfaceCase) => ({
   ...surfaceCase,
   transitionFragments: [...surfaceCase.transitionFragments],
