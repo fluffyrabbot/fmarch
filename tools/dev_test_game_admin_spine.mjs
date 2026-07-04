@@ -18,7 +18,7 @@ import {
   nextActionAdminProofPath,
   proofFreshnessAdminProofPath,
 } from "./dev_test_game_next_action_paths.mjs";
-import { runNodeScript } from "./dev_test_game_spine_runner.mjs";
+import { runSpinePlan } from "./dev_test_game_spine_runner.mjs";
 
 export const adminSpineProofPath = "target/dev-test-game/admin-spine-proof.json";
 
@@ -97,40 +97,71 @@ export const adminSpinePreGraphReadinessEvidenceEnv = Object.fromEntries(
   ),
 );
 
-if (pathToFileURL(process.argv[1] ?? "").href === import.meta.url) {
-  await runDevTestGameAdminSpine();
-}
+export const devTestGameAdminSpinePlan = [
+  { kind: "node", script: "tools/dev_test_game_race_coverage.mjs" },
+  { kind: "node", script: "tools/dev_test_game_release_readiness.mjs" },
+  {
+    kind: "node",
+    script: "tools/dev_test_game_hosted_concurrent_race_matrix.mjs",
+  },
+  { kind: "node", script: "tools/dev_test_game_hosted_identity_evidence.mjs" },
+  { kind: "node", script: "tools/dev_test_game_hosted_target_preflight.mjs" },
+  { kind: "node", script: "tools/dev_test_game_hosted_evidence_lane.mjs" },
+  {
+    kind: "node",
+    script: "tools/dev_test_game_hosted_evidence_lane_demo_proof.mjs",
+  },
+  { kind: "node", script: "tools/dev_test_game_hosted_ops_signals.mjs" },
+  {
+    kind: "node",
+    script: "tools/dev_test_game_real_hosted_observability_handoff.mjs",
+  },
+  { kind: "node", script: "tools/dev_test_game_release_runbook.mjs" },
+  { kind: "custom", script: "admin-spine-proof", label: "Admin spine proof" },
+  { kind: "node", script: "tools/dev_test_game_admin_spine_admin_proof.mjs" },
+  {
+    kind: "node",
+    script: "tools/dev_test_game_release_readiness.mjs",
+    env: adminSpinePreGraphReadinessEvidenceEnv,
+  },
+  { kind: "node", script: "tools/dev_test_game_spine_manifest.mjs" },
+  { kind: "node", script: "tools/dev_test_game_next_action.mjs" },
+  { kind: "node", script: "tools/dev_test_game_proof_graph.mjs" },
+  { kind: "node", script: "tools/dev_test_game_proof_graph_admin_proof.mjs" },
+  {
+    kind: "node",
+    script: "tools/dev_test_game_proof_freshness_admin_proof.mjs",
+  },
+  { kind: "node", script: "tools/dev_test_game_next_action_admin_proof.mjs" },
+  {
+    kind: "node",
+    script: "tools/dev_test_game_release_readiness.mjs",
+    env: adminSpineReadinessEvidenceEnv,
+  },
+  { kind: "node", script: "tools/dev_test_game_next_action.mjs" },
+  {
+    kind: "node",
+    script: "tools/dev_test_game_proof_freshness_admin_proof.mjs",
+  },
+  { kind: "node", script: "tools/dev_test_game_next_action_admin_proof.mjs" },
+  {
+    kind: "node",
+    script: "tools/dev_test_game_release_readiness.mjs",
+    env: adminSpineReadinessEvidenceEnv,
+  },
+];
 
 export async function runDevTestGameAdminSpine() {
-  await runNodeScript("tools/dev_test_game_race_coverage.mjs");
-  await runNodeScript("tools/dev_test_game_release_readiness.mjs");
-  await runNodeScript("tools/dev_test_game_hosted_concurrent_race_matrix.mjs");
-  await runNodeScript("tools/dev_test_game_hosted_identity_evidence.mjs");
-  await runNodeScript("tools/dev_test_game_hosted_target_preflight.mjs");
-  await runNodeScript("tools/dev_test_game_hosted_evidence_lane.mjs");
-  await runNodeScript("tools/dev_test_game_hosted_evidence_lane_demo_proof.mjs");
-  await runNodeScript("tools/dev_test_game_hosted_ops_signals.mjs");
-  await runNodeScript("tools/dev_test_game_real_hosted_observability_handoff.mjs");
-  await runNodeScript("tools/dev_test_game_release_runbook.mjs");
-  const evidence = await runAdminSpineProof();
-  console.log(`wrote ${adminSpineProofPath} (${evidence.status})`);
-  await runNodeScript("tools/dev_test_game_admin_spine_admin_proof.mjs");
-  await runNodeScript("tools/dev_test_game_release_readiness.mjs", {
-    env: adminSpinePreGraphReadinessEvidenceEnv,
+  await runSpinePlan(devTestGameAdminSpinePlan, {
+    custom: {
+      "admin-spine-proof": async () => {
+        const evidence = await runAdminSpineProof();
+        console.log(`wrote ${adminSpineProofPath} (${evidence.status})`);
+      },
+    },
   });
-  await runNodeScript("tools/dev_test_game_spine_manifest.mjs");
-  await runNodeScript("tools/dev_test_game_next_action.mjs");
-  await runNodeScript("tools/dev_test_game_proof_graph.mjs");
-  await runNodeScript("tools/dev_test_game_proof_graph_admin_proof.mjs");
-  await runNodeScript("tools/dev_test_game_proof_freshness_admin_proof.mjs");
-  await runNodeScript("tools/dev_test_game_next_action_admin_proof.mjs");
-  await runNodeScript("tools/dev_test_game_release_readiness.mjs", {
-    env: adminSpineReadinessEvidenceEnv,
-  });
-  await runNodeScript("tools/dev_test_game_next_action.mjs");
-  await runNodeScript("tools/dev_test_game_proof_freshness_admin_proof.mjs");
-  await runNodeScript("tools/dev_test_game_next_action_admin_proof.mjs");
-  await runNodeScript("tools/dev_test_game_release_readiness.mjs", {
-    env: adminSpineReadinessEvidenceEnv,
-  });
+}
+
+if (pathToFileURL(process.argv[1] ?? "").href === import.meta.url) {
+  await runDevTestGameAdminSpine();
 }

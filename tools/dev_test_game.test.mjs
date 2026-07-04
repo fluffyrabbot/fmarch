@@ -173,7 +173,11 @@ import {
   coreLoopAuditLaneIds,
   coreLoopAdminCheckIds,
 } from "./dev_test_game_core_loop_scenarios.mjs";
-import { adminSpineReadinessEvidenceEnv } from "./dev_test_game_admin_spine.mjs";
+import {
+  adminSpinePreGraphReadinessEvidenceEnv,
+  adminSpineReadinessEvidenceEnv,
+  devTestGameAdminSpinePlan,
+} from "./dev_test_game_admin_spine.mjs";
 import {
   backupAwareOpsEnv,
   backupRestoreEvidenceEnv,
@@ -553,10 +557,61 @@ test("dev test-game spine orchestrators expose stable proof order and env maps",
     { kind: "node", script: "tools/dev_test_game_seed_fixture_summary.mjs" },
     { kind: "node", script: "tools/dev_test_game_seed_admin_proof.mjs" },
     { kind: "node", script: "tools/dev_test_game_release_readiness.mjs" },
-    { kind: "spine", script: "backup-restore" },
-    { kind: "spine", script: "identity" },
-    { kind: "spine", script: "admin" },
+    { kind: "custom", script: "backup-restore", label: "Backup/restore spine" },
+    { kind: "custom", script: "identity", label: "Identity spine" },
+    { kind: "custom", script: "admin", label: "Admin spine" },
   ]);
+  assert.deepEqual(
+    devTestGameAdminSpinePlan.map((step) => step.script),
+    [
+      "tools/dev_test_game_race_coverage.mjs",
+      "tools/dev_test_game_release_readiness.mjs",
+      "tools/dev_test_game_hosted_concurrent_race_matrix.mjs",
+      "tools/dev_test_game_hosted_identity_evidence.mjs",
+      "tools/dev_test_game_hosted_target_preflight.mjs",
+      "tools/dev_test_game_hosted_evidence_lane.mjs",
+      "tools/dev_test_game_hosted_evidence_lane_demo_proof.mjs",
+      "tools/dev_test_game_hosted_ops_signals.mjs",
+      "tools/dev_test_game_real_hosted_observability_handoff.mjs",
+      "tools/dev_test_game_release_runbook.mjs",
+      "admin-spine-proof",
+      "tools/dev_test_game_admin_spine_admin_proof.mjs",
+      "tools/dev_test_game_release_readiness.mjs",
+      "tools/dev_test_game_spine_manifest.mjs",
+      "tools/dev_test_game_next_action.mjs",
+      "tools/dev_test_game_proof_graph.mjs",
+      "tools/dev_test_game_proof_graph_admin_proof.mjs",
+      "tools/dev_test_game_proof_freshness_admin_proof.mjs",
+      "tools/dev_test_game_next_action_admin_proof.mjs",
+      "tools/dev_test_game_release_readiness.mjs",
+      "tools/dev_test_game_next_action.mjs",
+      "tools/dev_test_game_proof_freshness_admin_proof.mjs",
+      "tools/dev_test_game_next_action_admin_proof.mjs",
+      "tools/dev_test_game_release_readiness.mjs",
+    ],
+  );
+  assert.deepEqual(devTestGameAdminSpinePlan[10], {
+    kind: "custom",
+    script: "admin-spine-proof",
+    label: "Admin spine proof",
+  });
+  assert.equal(
+    devTestGameAdminSpinePlan[12].env,
+    adminSpinePreGraphReadinessEvidenceEnv,
+  );
+  for (const key of [
+    "FMARCH_DEV_TEST_GAME_PROOF_GRAPH",
+    "FMARCH_DEV_TEST_GAME_PROOF_GRAPH_ADMIN_PROOF",
+    "FMARCH_DEV_TEST_GAME_PROOF_FRESHNESS_ADMIN_PROOF",
+    "FMARCH_DEV_TEST_GAME_NEXT_ACTION_ADMIN_PROOF",
+  ]) {
+    assert.equal(devTestGameAdminSpinePlan[12].env[key], undefined);
+    assert.equal(Object.hasOwn(devTestGameAdminSpinePlan[12].env, key), false);
+  }
+  assert.equal(
+    devTestGameAdminSpinePlan.at(-1).env,
+    adminSpineReadinessEvidenceEnv,
+  );
 });
 
 test("hosted identity evidence lane records blocked and passed handoffs", async () => {

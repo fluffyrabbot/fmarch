@@ -1,5 +1,5 @@
 import { pathToFileURL } from "node:url";
-import { runNodeScript } from "./dev_test_game_spine_runner.mjs";
+import { runSpinePlan } from "./dev_test_game_spine_runner.mjs";
 
 export const backupRestoreEvidenceEnv = {
   FMARCH_DEV_TEST_GAME_BACKUP_RESTORE_PROOF:
@@ -38,27 +38,39 @@ export const backupRestoreFinalReadinessEnv = {
 };
 
 export const devTestGameBackupRestoreSpinePlan = [
-  { script: "tools/live_stack_backup_restore_drill.mjs" },
+  { kind: "node", script: "tools/live_stack_backup_restore_drill.mjs" },
   {
+    kind: "node",
     script: "tools/dev_test_game_release_readiness.mjs",
     env: backupRestoreEvidenceEnv,
   },
-  { script: "tools/dev_test_game_ops_artifacts.mjs", env: backupAwareOpsEnv },
-  { script: "tools/dev_test_game_release_readiness.mjs", env: opsReadinessEnv },
-  { script: "tools/dev_test_game_seed_fixture_summary.mjs" },
-  { script: "tools/dev_test_game_seed_admin_proof.mjs" },
-  { script: "tools/dev_test_game_release_readiness.mjs", env: seedReadinessEnv },
-  { script: "tools/dev_test_game_backup_admin_proof.mjs" },
   {
+    kind: "node",
+    script: "tools/dev_test_game_ops_artifacts.mjs",
+    env: backupAwareOpsEnv,
+  },
+  {
+    kind: "node",
+    script: "tools/dev_test_game_release_readiness.mjs",
+    env: opsReadinessEnv,
+  },
+  { kind: "node", script: "tools/dev_test_game_seed_fixture_summary.mjs" },
+  { kind: "node", script: "tools/dev_test_game_seed_admin_proof.mjs" },
+  {
+    kind: "node",
+    script: "tools/dev_test_game_release_readiness.mjs",
+    env: seedReadinessEnv,
+  },
+  { kind: "node", script: "tools/dev_test_game_backup_admin_proof.mjs" },
+  {
+    kind: "node",
     script: "tools/dev_test_game_release_readiness.mjs",
     env: backupRestoreFinalReadinessEnv,
   },
 ];
 
 export async function runDevTestGameBackupRestoreSpine() {
-  for (const step of devTestGameBackupRestoreSpinePlan) {
-    await runNodeScript(step.script, { env: step.env });
-  }
+  await runSpinePlan(devTestGameBackupRestoreSpinePlan);
 }
 
 if (pathToFileURL(process.argv[1] ?? "").href === import.meta.url) {
