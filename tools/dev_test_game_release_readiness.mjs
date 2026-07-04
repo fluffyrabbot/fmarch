@@ -90,6 +90,10 @@ import {
   releaseReadinessProductionFeatureSpineTargets,
 } from "./dev_test_game_release_readiness_cases.mjs";
 import {
+  proofRunLaneCoverageMilestoneIds,
+  recoveryMilestoneCoverageCases,
+} from "./dev_test_game_release_readiness_milestone_cases.mjs";
+import {
   featureSpineRecoveryHookRowKind,
   featureSpineRowKind,
   validFeatureSpineDeclaration,
@@ -215,13 +219,6 @@ import {
 export const DEV_TEST_GAME_RELEASE_READINESS_VERSION = 1;
 const devTestGameSeededBrowserProofCommand =
   devTestGameProductionFeatureBrowserProofCommand;
-const proofRunLaneCoverageMilestoneIds = Object.freeze([
-  "local-stale-conflict-message-milestone",
-  "local-host-stale-control-milestone",
-  "local-private-channel-recovery-milestone",
-  "local-replacement-action-recovery-milestone",
-  "local-replacement-handoff-recovery-milestone",
-]);
 const artifactCoverageMilestoneIds = Object.freeze([
   "local-race-coverage-proof",
   "local-seed-demo-fixture",
@@ -341,24 +338,28 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
   const proof = assertDevTestGameProofRun(proofRun);
   const generatedAt = options.generatedAt ?? new Date().toISOString();
   const sourcePath = options.sourcePath ?? "target/dev-test-game/proof-run.json";
-  const staleConflictMessageMilestone = buildStaleConflictMessageMilestone(proof, {
-    sourcePath,
-  });
-  const hostStaleControlMilestone = buildHostStaleControlMilestone(proof, {
-    sourcePath,
-  });
-  const privateChannelRecoveryMilestone =
-    buildPrivateChannelRecoveryMilestone(proof, {
+  const recoveryMilestonesByGeneratedFromKey = {
+    staleConflictMessageMilestone: buildStaleConflictMessageMilestone(proof, {
       sourcePath,
-    });
-  const replacementActionRecoveryMilestone =
-    buildReplacementActionRecoveryMilestone(proof, {
+    }),
+    hostStaleControlMilestone: buildHostStaleControlMilestone(proof, {
       sourcePath,
-    });
-  const replacementHandoffRecoveryMilestone =
-    buildReplacementHandoffRecoveryMilestone(proof, {
+    }),
+    privateChannelRecoveryMilestone: buildPrivateChannelRecoveryMilestone(proof, {
       sourcePath,
-    });
+    }),
+    replacementActionRecoveryMilestone: buildReplacementActionRecoveryMilestone(
+      proof,
+      { sourcePath },
+    ),
+    replacementHandoffRecoveryMilestone: buildReplacementHandoffRecoveryMilestone(
+      proof,
+      { sourcePath },
+    ),
+  };
+  const {
+    staleConflictMessageMilestone,
+  } = recoveryMilestonesByGeneratedFromKey;
   const coreLoopAdminProofEvidence = options.coreLoopAdminProof
     ? validateDevTestGameCoreLoopAdminProof(options.coreLoopAdminProof, {
         path:
@@ -664,107 +665,11 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
             }),
           }),
     },
-    {
-      id: "local-stale-conflict-message-milestone",
-      label: "Stale-client conflict messages",
-      status: "passed",
-      evidence: sourcePath,
-      proofBoundary:
-        "Local seeded-game proof that stale replacement, player action, dead-actor action, host deadline, and cohost deadline paths show explicit conflict messages and current-control recovery hints.",
-      laneIds: [...staleConflictMessageMilestone.laneIds],
-      requiredLaneCount: staleConflictMessageMilestone.requiredLaneCount,
-      coveredLaneCount: staleConflictMessageMilestone.coveredLaneCount,
-      familyCount: staleConflictMessageMilestone.familyCount,
-      expectedLaneCount: staleConflictMessageMilestone.expectedLaneCount,
-      expectedFamilyCount: staleConflictMessageMilestone.expectedFamilyCount,
-      surfaceCoverage: staleConflictMessageMilestone.surfaceCoverage,
-      surfaces: staleConflictMessageMilestone.surfaces,
-    },
-    ...staleConflictMessageMilestone.surfaces.map((surface) => ({
-      id: surface.checkId,
-      label: surface.label,
-      status: surface.status,
-      evidence: sourcePath,
-      proofBoundary: surface.proofBoundary,
-      laneId: surface.laneId,
-      roleUrl: surface.roleUrl,
-      rejectError: surface.rejectError,
-      rejectMessage: surface.rejectMessage,
-      receiptStatusText: surface.receiptStatusText,
-      stalePhase: surface.stalePhase,
-      refreshedPhase: surface.refreshedPhase,
-      staleClickActionId: surface.staleClickActionId,
-      actionId: surface.actionId,
-      staleClickRefreshKeys: surface.staleClickRefreshKeys,
-      activitySource: surface.activitySource,
-      dispatchKind: surface.dispatchKind,
-      commandOutgoing: surface.commandOutgoing,
-      currentOccupant: surface.currentOccupant,
-      phaseId: surface.phaseId,
-      locked: surface.locked,
-      deadlineActions: surface.deadlineActions,
-      phaseActions: surface.phaseActions,
-      currentActions: surface.currentActions,
-      actorStatusAfterReject: surface.actorStatusAfterReject,
-      actionVisibleAfterRefresh: surface.actionVisibleAfterRefresh,
-      restoredActorStatus: surface.restoredActorStatus,
-    })),
-    {
-      id: "local-host-stale-control-milestone",
-      label: "Host stale-control recovery",
-      status: "passed",
-      evidence: sourcePath,
-      proofBoundary:
-        "Local seeded-game proof that stale host publish, lifecycle, modkill, prompt, complete, resolve, advance, and deadline controls reject drift and recover through current host role surfaces.",
-      laneIds: [...hostStaleControlMilestone.laneIds],
-      requiredLaneCount: hostStaleControlMilestone.requiredLaneCount,
-      coveredLaneCount: hostStaleControlMilestone.coveredLaneCount,
-      familyCount: hostStaleControlMilestone.familyCount,
-      expectedLaneCount: hostStaleControlMilestone.expectedLaneCount,
-      expectedFamilyCount: hostStaleControlMilestone.expectedFamilyCount,
-    },
-    {
-      id: "local-private-channel-recovery-milestone",
-      label: "Private-channel recovery",
-      status: "passed",
-      evidence: sourcePath,
-      proofBoundary:
-        "Local seeded-game proof that stale replacement private-channel authority, private receipts, stale private posts after phase resolution, private-channel invalid action recovery, reconnect recovery, and completed-game private-channel reloads preserve current player scope and recovery hints.",
-      laneIds: [...privateChannelRecoveryMilestone.laneIds],
-      requiredLaneCount: privateChannelRecoveryMilestone.requiredLaneCount,
-      coveredLaneCount: privateChannelRecoveryMilestone.coveredLaneCount,
-      familyCount: privateChannelRecoveryMilestone.familyCount,
-      expectedLaneCount: privateChannelRecoveryMilestone.expectedLaneCount,
-      expectedFamilyCount: privateChannelRecoveryMilestone.expectedFamilyCount,
-    },
-    {
-      id: "local-replacement-action-recovery-milestone",
-      label: "Replacement action recovery",
-      status: "passed",
-      evidence: sourcePath,
-      proofBoundary:
-        "Local seeded-game proof that incoming replacement factional_kill actions resolve, reconnect to locked post-resolution state, and stale replacement action controls reject after phase resolution without leaking target receipts.",
-      laneIds: [...replacementActionRecoveryMilestone.laneIds],
-      requiredLaneCount: replacementActionRecoveryMilestone.requiredLaneCount,
-      coveredLaneCount: replacementActionRecoveryMilestone.coveredLaneCount,
-      familyCount: replacementActionRecoveryMilestone.familyCount,
-      expectedLaneCount: replacementActionRecoveryMilestone.expectedLaneCount,
-      expectedFamilyCount: replacementActionRecoveryMilestone.expectedFamilyCount,
-    },
-    {
-      id: "local-replacement-handoff-recovery-milestone",
-      label: "Replacement handoff recovery",
-      status: "passed",
-      evidence: sourcePath,
-      proofBoundary:
-        "Local seeded-game proof that host-issued replacement role URLs, pending and invalid replacement states, replacement session recovery, stale and duplicate replacement commands, stale outgoing authority, private-channel authority, reconnect recovery, and incoming player control all preserve current slot ownership.",
-      laneIds: [...replacementHandoffRecoveryMilestone.laneIds],
-      requiredLaneCount: replacementHandoffRecoveryMilestone.requiredLaneCount,
-      coveredLaneCount: replacementHandoffRecoveryMilestone.coveredLaneCount,
-      familyCount: replacementHandoffRecoveryMilestone.familyCount,
-      expectedLaneCount: replacementHandoffRecoveryMilestone.expectedLaneCount,
-      expectedFamilyCount: replacementHandoffRecoveryMilestone.expectedFamilyCount,
-    },
+    ...recoveryMilestoneReadinessChecks({
+      cases: recoveryMilestoneCoverageCases,
+      milestonesByGeneratedFromKey: recoveryMilestonesByGeneratedFromKey,
+      sourcePath,
+    }),
   ];
   if (backupRestoreEvidence !== undefined) {
     localChecks.push({
@@ -1219,21 +1124,10 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
               ? {}
               : { releaseRunbookAdminProof: releaseRunbookAdminProofEvidence.path }),
           }),
-      staleConflictMessageMilestone: coverageMilestoneSnapshot(
-        staleConflictMessageMilestone,
-      ),
-      hostStaleControlMilestone: coverageMilestoneSnapshot(
-        hostStaleControlMilestone,
-      ),
-      privateChannelRecoveryMilestone: coverageMilestoneSnapshot(
-        privateChannelRecoveryMilestone,
-      ),
-      replacementActionRecoveryMilestone: coverageMilestoneSnapshot(
-        replacementActionRecoveryMilestone,
-      ),
-      replacementHandoffRecoveryMilestone: coverageMilestoneSnapshot(
-        replacementHandoffRecoveryMilestone,
-      ),
+      ...recoveryMilestoneGeneratedFromSnapshots({
+        cases: recoveryMilestoneCoverageCases,
+        milestonesByGeneratedFromKey: recoveryMilestonesByGeneratedFromKey,
+      }),
     },
     localDevelopmentSpine: {
       status: "passed",
@@ -1306,21 +1200,10 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
               ...(proofFreshnessAdminProofEvidence === undefined
                 ? {}
                 : { proofFreshnessAdminProof: proofFreshnessAdminProofEvidence }),
-              staleConflictMessageMilestone: coverageMilestoneSnapshot(
-                staleConflictMessageMilestone,
-              ),
-              hostStaleControlMilestone: coverageMilestoneSnapshot(
-                hostStaleControlMilestone,
-              ),
-              privateChannelRecoveryMilestone: coverageMilestoneSnapshot(
-                privateChannelRecoveryMilestone,
-              ),
-              replacementActionRecoveryMilestone: coverageMilestoneSnapshot(
-                replacementActionRecoveryMilestone,
-              ),
-              replacementHandoffRecoveryMilestone: coverageMilestoneSnapshot(
-                replacementHandoffRecoveryMilestone,
-              ),
+              ...recoveryMilestoneGeneratedFromSnapshots({
+                cases: recoveryMilestoneCoverageCases,
+                milestonesByGeneratedFromKey: recoveryMilestonesByGeneratedFromKey,
+              }),
               ...(backupRestoreEvidence === undefined
                 ? {}
                 : {
@@ -1598,6 +1481,108 @@ function coverageMilestoneSnapshot(milestone) {
       ? {}
       : { surfaceCoverage: milestone.surfaceCoverage }),
     ...(milestone.surfaces === undefined ? {} : { surfaces: milestone.surfaces }),
+  };
+}
+
+function recoveryMilestoneGeneratedFromSnapshots({
+  cases,
+  milestonesByGeneratedFromKey,
+}) {
+  return Object.fromEntries(
+    cases.map((scenario) => {
+      const milestone = milestoneForReadinessCase({
+        scenario,
+        milestonesByGeneratedFromKey,
+      });
+      return [scenario.generatedFromKey, coverageMilestoneSnapshot(milestone)];
+    }),
+  );
+}
+
+function recoveryMilestoneReadinessChecks({
+  cases,
+  milestonesByGeneratedFromKey,
+  sourcePath,
+}) {
+  return cases.flatMap((scenario) => {
+    const milestone = milestoneForReadinessCase({
+      scenario,
+      milestonesByGeneratedFromKey,
+    });
+    return [
+      recoveryMilestoneReadinessCheck({
+        scenario,
+        milestone,
+        sourcePath,
+      }),
+      ...(scenario.hasSurfaceChecks === true
+        ? milestone.surfaces.map((surface) =>
+            recoveryMilestoneSurfaceReadinessCheck({ surface, sourcePath }),
+          )
+        : []),
+    ];
+  });
+}
+
+function milestoneForReadinessCase({ scenario, milestonesByGeneratedFromKey }) {
+  const milestone = milestonesByGeneratedFromKey[scenario.generatedFromKey];
+  if (milestone === undefined) {
+    throw new Error(
+      `release readiness milestone case missing generatedFrom key: ${scenario.generatedFromKey}`,
+    );
+  }
+  return milestone;
+}
+
+function recoveryMilestoneReadinessCheck({ scenario, milestone, sourcePath }) {
+  return {
+    id: scenario.checkId,
+    label: scenario.label,
+    status: "passed",
+    evidence: sourcePath,
+    proofBoundary: scenario.proofBoundary,
+    laneIds: [...milestone.laneIds],
+    requiredLaneCount: milestone.requiredLaneCount,
+    coveredLaneCount: milestone.coveredLaneCount,
+    familyCount: milestone.familyCount,
+    expectedLaneCount: milestone.expectedLaneCount,
+    expectedFamilyCount: milestone.expectedFamilyCount,
+    ...(scenario.hasSurfaceCoverage === true
+      ? { surfaceCoverage: milestone.surfaceCoverage }
+      : {}),
+    ...(scenario.hasSurfaceChecks === true ? { surfaces: milestone.surfaces } : {}),
+  };
+}
+
+function recoveryMilestoneSurfaceReadinessCheck({ surface, sourcePath }) {
+  return {
+    id: surface.checkId,
+    label: surface.label,
+    status: surface.status,
+    evidence: sourcePath,
+    proofBoundary: surface.proofBoundary,
+    laneId: surface.laneId,
+    roleUrl: surface.roleUrl,
+    rejectError: surface.rejectError,
+    rejectMessage: surface.rejectMessage,
+    receiptStatusText: surface.receiptStatusText,
+    stalePhase: surface.stalePhase,
+    refreshedPhase: surface.refreshedPhase,
+    staleClickActionId: surface.staleClickActionId,
+    actionId: surface.actionId,
+    staleClickRefreshKeys: surface.staleClickRefreshKeys,
+    activitySource: surface.activitySource,
+    dispatchKind: surface.dispatchKind,
+    commandOutgoing: surface.commandOutgoing,
+    currentOccupant: surface.currentOccupant,
+    phaseId: surface.phaseId,
+    locked: surface.locked,
+    deadlineActions: surface.deadlineActions,
+    phaseActions: surface.phaseActions,
+    currentActions: surface.currentActions,
+    actorStatusAfterReject: surface.actorStatusAfterReject,
+    actionVisibleAfterRefresh: surface.actionVisibleAfterRefresh,
+    restoredActorStatus: surface.restoredActorStatus,
   };
 }
 
@@ -5399,51 +5384,7 @@ export function assertDevTestGameReleaseReadiness(checklist) {
   ) {
     throw new Error("dev-test-game hardening readiness check is missing spine targets");
   }
-  const privateChannelRecoveryCheck =
-    checklist.localDevelopmentSpine?.checks?.find(
-      (check) => check.id === "local-private-channel-recovery-milestone",
-    );
-  if (
-    privateChannelRecoveryCheck !== undefined &&
-    !sameStringArray(
-      privateChannelRecoveryCheck.laneIds,
-      coreLoopPrivateChannelRecoveryLaneIds,
-    )
-  ) {
-    throw new Error(
-      "dev-test-game private-channel recovery readiness check lane list drifted",
-    );
-  }
-  const replacementActionRecoveryCheck =
-    checklist.localDevelopmentSpine?.checks?.find(
-      (check) => check.id === "local-replacement-action-recovery-milestone",
-    );
-  if (
-    replacementActionRecoveryCheck !== undefined &&
-    !sameStringArray(
-      replacementActionRecoveryCheck.laneIds,
-      replacementActionLaneIds,
-    )
-  ) {
-    throw new Error(
-      "dev-test-game replacement action recovery readiness check lane list drifted",
-    );
-  }
-  const replacementHandoffRecoveryCheck =
-    checklist.localDevelopmentSpine?.checks?.find(
-      (check) => check.id === "local-replacement-handoff-recovery-milestone",
-    );
-  if (
-    replacementHandoffRecoveryCheck !== undefined &&
-    !sameStringArray(
-      replacementHandoffRecoveryCheck.laneIds,
-      replacementHandoffRecoveryLaneIds,
-    )
-  ) {
-    throw new Error(
-      "dev-test-game replacement handoff recovery readiness check lane list drifted",
-    );
-  }
+  assertRecoveryMilestoneReadinessChecksMirrorGeneratedFrom(checklist);
   if (checklist.releaseReadiness?.status !== "not_ready") {
     throw new Error("dev-test-game release readiness must remain not_ready");
   }
@@ -5593,6 +5534,58 @@ function assertReleaseReadinessCoverageMilestoneConventions(checks = []) {
     if (check !== undefined && Number.isInteger(check.familyCount)) {
       throw new Error(
         `dev-test-game artifact coverage milestone must not masquerade as proof-run lane coverage: ${checkId}`,
+      );
+    }
+  }
+}
+
+function assertRecoveryMilestoneReadinessChecksMirrorGeneratedFrom(checklist) {
+  const checkById = new Map(
+    (checklist.localDevelopmentSpine?.checks ?? []).map((check) => [
+      check.id,
+      check,
+    ]),
+  );
+  for (const scenario of recoveryMilestoneCoverageCases) {
+    const check = checkById.get(scenario.checkId);
+    const snapshot = checklist.generatedFrom?.[scenario.generatedFromKey];
+    if (check === undefined || snapshot === undefined) {
+      throw new Error(
+        `dev-test-game recovery milestone missing shared case surface: ${scenario.checkId}`,
+      );
+    }
+    if (
+      check.label !== scenario.label ||
+      check.proofBoundary !== scenario.proofBoundary ||
+      check.status !== snapshot.status ||
+      !sameStringArray(check.laneIds, snapshot.laneIds) ||
+      check.requiredLaneCount !== snapshot.requiredLaneCount ||
+      check.coveredLaneCount !== snapshot.coveredLaneCount ||
+      check.familyCount !== snapshot.familyCount ||
+      check.expectedLaneCount !== snapshot.expectedLaneCount ||
+      check.expectedFamilyCount !== snapshot.expectedFamilyCount
+    ) {
+      throw new Error(
+        `dev-test-game recovery milestone drifted from generated proof coverage: ${scenario.checkId}`,
+      );
+    }
+    if (
+      scenario.hasSurfaceCoverage === true &&
+      JSON.stringify(check.surfaceCoverage) !==
+        JSON.stringify(snapshot.surfaceCoverage)
+    ) {
+      throw new Error(
+        `dev-test-game recovery milestone surface coverage drifted: ${scenario.checkId}`,
+      );
+    }
+    if (
+      scenario.hasSurfaceChecks === true &&
+      (!Array.isArray(check.surfaces) ||
+        !Array.isArray(snapshot.surfaces) ||
+        check.surfaces.length !== snapshot.surfaces.length)
+    ) {
+      throw new Error(
+        `dev-test-game recovery milestone surface checks drifted: ${scenario.checkId}`,
       );
     }
   }
