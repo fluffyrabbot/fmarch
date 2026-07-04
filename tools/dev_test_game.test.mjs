@@ -1812,10 +1812,27 @@ test("dev test-game next-action derives one local recovery command from the mani
       hostedHandoffChecklist: hostedIdentityHandoffChecklistFixture(),
     });
   assert.deepEqual(freshAction.nextAction, {
-    command: `npm run ${devTestGameHostedIdentityEvidenceCommand}`,
-    reason: "release-readiness-unproven",
-    status: "ready",
-    unproven: hostedProductionIdentityUnproven,
+    command: devTestGameLiveProofCommand,
+    reason: "sequence-deferred-hosted-identity",
+    status: "blocked",
+    sequenceDeferral: {
+      status: "blocked",
+      currentSequenceStage: "local-capability-model",
+      deferredUnprovenId: "hosted-production-identity",
+      deferredCommand: `npm run ${devTestGameHostedIdentityEvidenceCommand}`,
+      deferredProofTarget: devTestGameHostedIdentityEvidencePath,
+      deferredRoleUrl:
+        "/admin/audit/local-hosted-identity-evidence?game=<seeded-game>",
+      nextLocalCommand: devTestGameLiveProofCommand,
+      nextLocalProofTarget: "target/dev-test-game/proof-run.json",
+      roleUrl: "/admin/audit/local-identity-adapter?game=<seeded-game>",
+      buildSlice:
+        "Keep hosted production identity deferred while the local seeded capability model remains the active architecture sequence; refresh the core-live role proof before replacing dev tokens with hosted accounts, sessions, and invites.",
+      requiredBeforeHostedIdentity:
+        "The local core gameplay, hardening, and local ops proof spine should remain the trusted development surface before production identity replaces dev tokens.",
+      proofBoundary:
+        "Sequencing hold only. This records that hosted production identity is a real release-readiness blocker, but not the next local-development command; it does not prove hosted account lifecycle, invite delivery, release readiness, or production readiness.",
+    },
   });
   assert.deepEqual(freshAction.selectionTrace, {
     strategy: "development-spine-priority",

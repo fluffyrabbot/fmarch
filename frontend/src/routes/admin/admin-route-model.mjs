@@ -1782,6 +1782,11 @@ export function normalizeLocalNextActionAudit(nextAction, { game, proofGraph = n
     typeof action.seedProofLaneCoverage === "object"
       ? action.seedProofLaneCoverage
       : null;
+  const sequenceDeferral =
+    action.sequenceDeferral !== null &&
+    typeof action.sequenceDeferral === "object"
+      ? action.sequenceDeferral
+      : null;
   const realHostedEvidenceInputs = normalizeRealHostedEvidenceInputs(
     unproven?.realHostedEvidenceInputs,
   );
@@ -1801,6 +1806,11 @@ export function normalizeLocalNextActionAudit(nextAction, { game, proofGraph = n
     typeof seedProofLaneCoverage?.roleUrl === "string" &&
     seedProofLaneCoverage.roleUrl.trim() !== ""
       ? seedProofLaneCoverage.roleUrl
+      : "";
+  const sequenceDeferralRoleUrl =
+    typeof sequenceDeferral?.deferredRoleUrl === "string" &&
+    sequenceDeferral.deferredRoleUrl.trim() !== ""
+      ? sequenceDeferral.deferredRoleUrl
       : "";
   const unprovenProofGraphNodeId =
     typeof unproven?.proofGraphNodeId === "string" &&
@@ -2039,6 +2049,16 @@ export function normalizeLocalNextActionAudit(nextAction, { game, proofGraph = n
             )} unclassified lanes`,
           }),
         ]),
+    ...(sequenceDeferral === null
+      ? []
+      : [
+          Object.freeze({
+            id: "hosted-identity-sequence-deferral",
+            status: `${String(sequenceDeferral.currentSequenceStage ?? "unknown")}:${
+              String(sequenceDeferral.deferredUnprovenId ?? "unknown")
+            }`,
+          }),
+        ]),
     Object.freeze({
       id: "selection-trace",
       status: `${selectionTrace.candidateCount} candidates`,
@@ -2194,6 +2214,7 @@ export function normalizeLocalNextActionAudit(nextAction, { game, proofGraph = n
       unprovenRoleUrl === "" &&
       localCheckRoleUrl === "" &&
       seedProofLaneCoverageRoleUrl === "" &&
+      sequenceDeferralRoleUrl === "" &&
       selectedProofGraphNode === null &&
       selectedProductionFeatureGraph.nodeId === ""
         ? Object.freeze([])
@@ -2253,6 +2274,22 @@ export function normalizeLocalNextActionAudit(nextAction, { game, proofGraph = n
                     }),
                     status: String(seedProofLaneCoverage.status ?? actionStatus),
                     command,
+                  }),
+                ]),
+            ...(sequenceDeferralRoleUrl === ""
+              ? []
+              : [
+                  Object.freeze({
+                    id: String(
+                      sequenceDeferral.deferredUnprovenId ??
+                        "hosted-identity-sequence-deferral",
+                    ),
+                    label: "Deferred hosted identity",
+                    href: seededRoleUrlToAdminHref(sequenceDeferralRoleUrl, {
+                      game,
+                    }),
+                    status: String(sequenceDeferral.status ?? actionStatus),
+                    command: String(sequenceDeferral.deferredCommand ?? command),
                   }),
                 ]),
           ]),
@@ -2315,6 +2352,39 @@ export function normalizeLocalNextActionAudit(nextAction, { game, proofGraph = n
         seedProofLaneCoverageRoleUrl === ""
           ? ""
           : seededRoleUrlToAdminHref(seedProofLaneCoverageRoleUrl, { game }),
+      ...(sequenceDeferral === null
+        ? {}
+        : {
+            sequenceDeferralStatus: String(sequenceDeferral.status ?? ""),
+            sequenceDeferralStage: String(
+              sequenceDeferral.currentSequenceStage ?? "",
+            ),
+            sequenceDeferredUnprovenId: String(
+              sequenceDeferral.deferredUnprovenId ?? "",
+            ),
+            sequenceDeferredCommand: String(
+              sequenceDeferral.deferredCommand ?? "",
+            ),
+            sequenceDeferredProofTarget: String(
+              sequenceDeferral.deferredProofTarget ?? "",
+            ),
+            sequenceDeferredRoleUrl: sequenceDeferralRoleUrl,
+            sequenceDeferredRoleHref:
+              sequenceDeferralRoleUrl === ""
+                ? ""
+                : seededRoleUrlToAdminHref(sequenceDeferralRoleUrl, { game }),
+            sequenceNextLocalCommand: String(
+              sequenceDeferral.nextLocalCommand ?? "",
+            ),
+            sequenceNextLocalProofTarget: String(
+              sequenceDeferral.nextLocalProofTarget ?? "",
+            ),
+            sequenceBuildSlice: String(sequenceDeferral.buildSlice ?? ""),
+            sequenceRequiredBeforeHostedIdentity: String(
+              sequenceDeferral.requiredBeforeHostedIdentity ?? "",
+            ),
+            sequenceProofBoundary: String(sequenceDeferral.proofBoundary ?? ""),
+          }),
       selectedUnprovenId: String(unproven?.id ?? ""),
       selectedBuildSlice: String(unproven?.buildSlice ?? ""),
       selectedProofTarget: String(unproven?.proofTarget ?? ""),

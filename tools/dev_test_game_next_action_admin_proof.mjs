@@ -144,6 +144,8 @@ export function nextActionAdminProofCase() {
       seedProofLaneCoverageUnclassifiedLaneIds:
         source.nextAction.nextAction.seedProofLaneCoverage
           ?.unclassifiedLaneIds ?? [],
+      sequenceDeferral:
+        source.nextAction.nextAction.sequenceDeferral ?? null,
       unprovenId: source.nextAction.nextAction.unproven?.id ?? null,
       unprovenRoleUrl: source.nextAction.nextAction.unproven?.roleUrl ?? null,
       unprovenProofGraphNodeId:
@@ -773,6 +775,9 @@ function requiredChecksForNextAction(nextAction) {
   }
   if (nextAction.nextAction.seedProofLaneCoverage?.source !== undefined) {
     checks.push("seed-proof-lane-coverage");
+  }
+  if (nextAction.nextAction.sequenceDeferral !== undefined) {
+    checks.push("hosted-identity-sequence-deferral");
   }
   if (nextAction.generatedFrom?.terminalBatchGraph !== undefined) {
     checks.push("terminal-proof-batch-graph");

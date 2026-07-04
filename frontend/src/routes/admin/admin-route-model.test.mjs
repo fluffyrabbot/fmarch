@@ -2327,6 +2327,77 @@ test("admin local next action detail data carries recovery check rows", async ()
   );
 });
 
+test("admin local next action detail data exposes hosted identity sequence deferral", async () => {
+  const hostedIdentityCandidate = {
+    id: "hosted-production-identity",
+    status: "unproven",
+    requiredEvidence: "Hosted account lifecycle",
+    buildSlice: "Run hosted identity evidence intake.",
+    proofTarget: "target/dev-test-game/hosted-identity-evidence.json",
+    roleUrl: localAdminAuditRoleUrl(localAdminAuditIds.hostedIdentityEvidence),
+    proofGraphNodeId: "admin-proof:hosted-identity-evidence",
+    actionStatus: "ready",
+  };
+  const data = await buildAdminAuditDetailData({
+    audit: localAdminAuditIds.nextAction,
+    principalUserId: "admin_a",
+    capabilities: [{ kind: "GlobalAdmin" }],
+    nextAction: nextActionFixture({
+      actionStatus: "blocked",
+      reason: "sequence-deferred-hosted-identity",
+      command: LIVE_BROWSER_PROOF_COMMAND,
+      sequenceDeferral: hostedIdentitySequenceDeferralFixture(),
+      unproven: undefined,
+      releaseReadinessTrace: releaseReadinessTraceFixture({
+        unproven: hostedIdentityCandidate,
+        command: "npm run test:dev-test-game-hosted-identity-evidence",
+      }),
+    }),
+  });
+
+  assert.equal(data.status, "available");
+  assert.equal(data.audit.status, `blocked: ${LIVE_BROWSER_PROOF_COMMAND}`);
+  assert.deepEqual(
+    data.audit.checks
+      .filter((check) =>
+        [
+          "sequence-deferred-hosted-identity",
+          "hosted-identity-sequence-deferral",
+          "release-readiness-hosted-production-identity",
+        ].includes(check.id),
+      )
+      .map((check) => [check.id, check.status]),
+    [
+      ["sequence-deferred-hosted-identity", "blocked"],
+      [
+        "hosted-identity-sequence-deferral",
+        "local-capability-model:hosted-production-identity",
+      ],
+      ["release-readiness-hosted-production-identity", "selected:unproven"],
+    ],
+  );
+  assert.equal(
+    data.audit.relatedLinks.find(
+      (link) => link.id === "hosted-production-identity",
+    ).href,
+    localAdminAuditRoleUrl(localAdminAuditIds.hostedIdentityEvidence, {
+      game: "midsummer",
+    }),
+  );
+  assert.equal(
+    data.audit.artifactSummary.sequenceDeferredUnprovenId,
+    "hosted-production-identity",
+  );
+  assert.equal(
+    data.audit.artifactSummary.sequenceNextLocalCommand,
+    LIVE_BROWSER_PROOF_COMMAND,
+  );
+  assert.equal(
+    data.audit.artifactSummary.sequenceDeferredCommand,
+    "npm run test:dev-test-game-hosted-identity-evidence",
+  );
+});
+
 test("admin local next action detail data carries harness stability drift rows", async () => {
   const data = await buildAdminAuditDetailData({
     audit: localAdminAuditIds.nextAction,
@@ -5193,6 +5264,7 @@ function nextActionFixture({
   command = LOCAL_RACE_COMMAND,
   artifact,
   localCheck,
+  sequenceDeferral,
   unproven =
     artifact === undefined &&
     localCheck === undefined &&
@@ -5329,6 +5401,7 @@ function nextActionFixture({
       ...(seedProofLaneCoverage === undefined
         ? {}
         : { seedProofLaneCoverage }),
+      ...(sequenceDeferral === undefined ? {} : { sequenceDeferral }),
     },
     selectionTrace,
     stabilityTrace,
@@ -5367,6 +5440,28 @@ function seedProofLaneCoverageActionFixture({ unclassifiedLaneIds }) {
       "Classify every passed proof lane as direct seeded, alias-covered, or aggregate-only before expanding the production-facing seeded proof spine.",
     proofTarget: "target/dev-test-game/seed-fixture-summary.json",
     roleUrl: localAdminAuditRoleUrl(localAdminAuditIds.seedFixtures),
+  };
+}
+
+function hostedIdentitySequenceDeferralFixture() {
+  return {
+    status: "blocked",
+    currentSequenceStage: "local-capability-model",
+    deferredUnprovenId: "hosted-production-identity",
+    deferredCommand: "npm run test:dev-test-game-hosted-identity-evidence",
+    deferredProofTarget: "target/dev-test-game/hosted-identity-evidence.json",
+    deferredRoleUrl: localAdminAuditRoleUrl(
+      localAdminAuditIds.hostedIdentityEvidence,
+    ),
+    nextLocalCommand: LIVE_BROWSER_PROOF_COMMAND,
+    nextLocalProofTarget: "target/dev-test-game/proof-run.json",
+    roleUrl: localAdminAuditRoleUrl(localAdminAuditIds.identityAdapter),
+    buildSlice:
+      "Keep hosted production identity deferred while the local seeded capability model remains the active architecture sequence; refresh the core-live role proof before replacing dev tokens with hosted accounts, sessions, and invites.",
+    requiredBeforeHostedIdentity:
+      "The local core gameplay, hardening, and local ops proof spine should remain the trusted development surface before production identity replaces dev tokens.",
+    proofBoundary:
+      "Sequencing hold only. This records that hosted production identity is a real release-readiness blocker, but not the next local-development command; it does not prove hosted account lifecycle, invite delivery, release readiness, or production readiness.",
   };
 }
 

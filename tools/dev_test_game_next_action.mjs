@@ -175,6 +175,8 @@ export function buildDevTestGameNextAction(
   const hostStaleControlTrace = buildHostStaleControlTrace(readiness);
   const selectedUnproven = releaseReadinessCandidates[0];
   const selectedLocalReadinessDependency = localReadinessDependencyCandidates[0];
+  const hostedIdentitySequenceDeferral =
+    hostedIdentitySequenceDeferralFor(selectedUnproven);
   const nextAction =
     artifact !== undefined
       ? {
@@ -240,6 +242,13 @@ export function buildDevTestGameNextAction(
               proofTarget: selectedLocalReadinessDependency.proofTarget,
               roleUrl: selectedLocalReadinessDependency.roleUrl,
             },
+          }
+      : hostedIdentitySequenceDeferral !== null
+        ? {
+            command: hostedIdentitySequenceDeferral.nextLocalCommand,
+            reason: "sequence-deferred-hosted-identity",
+            status: "blocked",
+            sequenceDeferral: hostedIdentitySequenceDeferral,
           }
       : selectedUnproven !== undefined
         ? {
@@ -447,6 +456,7 @@ export function assertDevTestGameNextAction(evidence) {
       "seed-proof-lane-coverage-drift",
       "release-readiness-local-check-missing",
       "release-readiness-unproven",
+      "sequence-deferred-hosted-identity",
     ].includes(evidence.nextAction.reason)
   ) {
     throw new Error(`next-action reason drifted: ${evidence.nextAction.reason}`);
@@ -462,6 +472,16 @@ export function assertDevTestGameNextAction(evidence) {
     typeof evidence.nextAction.unproven?.id !== "string"
   ) {
     throw new Error("next-action release-readiness recovery is missing an unproven id");
+  }
+  if (evidence.nextAction.reason === "sequence-deferred-hosted-identity") {
+    assertHostedIdentitySequenceDeferral(evidence.nextAction.sequenceDeferral);
+    if (
+      evidence.nextAction.command !==
+        evidence.nextAction.sequenceDeferral.nextLocalCommand ||
+      evidence.nextAction.status !== "blocked"
+    ) {
+      throw new Error("next-action hosted identity sequence deferral drifted");
+    }
   }
   if (
     evidence.nextAction.reason === "release-readiness-local-check-missing" &&
@@ -1513,6 +1533,57 @@ function releaseReadinessActionStatus(buildable) {
   )
     ? "blocked"
     : "ready";
+}
+
+function hostedIdentitySequenceDeferralFor(selectedUnproven) {
+  if (selectedUnproven?.item?.id !== "hosted-production-identity") {
+    return null;
+  }
+  return {
+    status: "blocked",
+    currentSequenceStage: "local-capability-model",
+    deferredUnprovenId: selectedUnproven.item.id,
+    deferredCommand: selectedUnproven.command,
+    deferredProofTarget: selectedUnproven.proofTarget,
+    deferredRoleUrl: selectedUnproven.roleUrl,
+    nextLocalCommand: devTestGameLiveProofCommand,
+    nextLocalProofTarget: "target/dev-test-game/proof-run.json",
+    roleUrl: selectedUnproven.spineTarget?.roleUrl ?? "",
+    buildSlice:
+      "Keep hosted production identity deferred while the local seeded capability model remains the active architecture sequence; refresh the core-live role proof before replacing dev tokens with hosted accounts, sessions, and invites.",
+    requiredBeforeHostedIdentity:
+      "The local core gameplay, hardening, and local ops proof spine should remain the trusted development surface before production identity replaces dev tokens.",
+    proofBoundary:
+      "Sequencing hold only. This records that hosted production identity is a real release-readiness blocker, but not the next local-development command; it does not prove hosted account lifecycle, invite delivery, release readiness, or production readiness.",
+  };
+}
+
+function assertHostedIdentitySequenceDeferral(deferral) {
+  if (
+    deferral === null ||
+    typeof deferral !== "object" ||
+    deferral.status !== "blocked" ||
+    deferral.currentSequenceStage !== "local-capability-model" ||
+    deferral.deferredUnprovenId !== "hosted-production-identity" ||
+    typeof deferral.deferredCommand !== "string" ||
+    !deferral.deferredCommand.startsWith("npm run ") ||
+    typeof deferral.deferredProofTarget !== "string" ||
+    deferral.deferredProofTarget.length === 0 ||
+    typeof deferral.deferredRoleUrl !== "string" ||
+    !deferral.deferredRoleUrl.includes("?game=<seeded-game>") ||
+    deferral.nextLocalCommand !== devTestGameLiveProofCommand ||
+    deferral.nextLocalProofTarget !== "target/dev-test-game/proof-run.json" ||
+    typeof deferral.roleUrl !== "string" ||
+    deferral.roleUrl.length === 0 ||
+    typeof deferral.buildSlice !== "string" ||
+    deferral.buildSlice.length === 0 ||
+    typeof deferral.requiredBeforeHostedIdentity !== "string" ||
+    deferral.requiredBeforeHostedIdentity.length === 0 ||
+    typeof deferral.proofBoundary !== "string" ||
+    deferral.proofBoundary.length === 0
+  ) {
+    throw new Error("next-action hosted identity sequence deferral is malformed");
+  }
 }
 
 function validHostedHandoffChecklist(checklist) {
