@@ -55,7 +55,7 @@
     "test:dev-test-game-live": "node tools/dev_test_game_live_spine.mjs",
     "operator:browser-smoke": "node tools/operator_browser_smoke.mjs",
     "test:frontend-live-role-smoke": "node tools/host_console_live_stack_smoke.mjs",
-    "test:frontend-live-role-proof-artifact": "node tools/host_console_live_stack_proof_contract.mjs",
+    "test:frontend-live-role-proof-artifact": "node --test tools/live_stack_readiness_contract.test.mjs && node tools/host_console_live_stack_proof_contract.mjs",
     "test:live-stack-backup-restore-drill": "node tools/live_stack_backup_restore_drill.mjs",
     "test:live-stack-release-readiness": "node tools/live_stack_release_readiness_checklist.mjs",
     "test:auth-invite-role-proof": "node tools/auth_invite_role_proof.mjs",

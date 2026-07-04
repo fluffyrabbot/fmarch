@@ -15,11 +15,17 @@ import {
   assertLiveStackReadiness,
   buildLiveStackReadiness,
 } from "./live_stack_readiness_contract.mjs";
+import {
+  buildLiveStackProofSummary,
+  markdownLiveStackProofSummary,
+} from "./live_stack_proof_summary.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const frontendRoot = path.join(repoRoot, "frontend");
 const artifactDir = path.join(repoRoot, "target", "host-console-live-stack-smoke");
 const evidencePath = path.join(artifactDir, "live-stack-proof.json");
+const summaryPath = path.join(artifactDir, "live-stack-summary.json");
+const summaryMarkdownPath = path.join(artifactDir, "live-stack-summary.md");
 const databaseUrl = process.env.DATABASE_URL;
 const host = "127.0.0.1";
 const smokeViewport = Object.freeze({ width: 1024, height: 768 });
@@ -154,6 +160,7 @@ try {
 
   const evidence = {
     status: "passed",
+    generatedAt: new Date().toISOString(),
     game,
     database: {
       name: smokeDatabase.name,
@@ -175,8 +182,11 @@ try {
   const readiness = buildLiveStackReadiness(evidence);
   assertLiveStackReadiness(readiness);
   evidence.readiness = readiness;
+  const summary = buildLiveStackProofSummary(evidence);
   await writeFile(evidencePath, `${JSON.stringify(evidence, null, 2)}\n`);
-  await writeProgress({ stage: "complete", evidencePath });
+  await writeFile(summaryPath, `${JSON.stringify(summary, null, 2)}\n`);
+  await writeFile(summaryMarkdownPath, markdownLiveStackProofSummary(summary));
+  await writeProgress({ stage: "complete", evidencePath, summaryPath });
   console.log(`wrote ${path.relative(repoRoot, evidencePath)}`);
 } catch (error) {
   primaryError = error;
