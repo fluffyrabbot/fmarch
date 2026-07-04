@@ -9,6 +9,12 @@ import { fileURLToPath } from "node:url";
 import { chromium } from "playwright";
 import { seedCommandPlanForGame } from "./dev_test_game.mjs";
 import {
+  assertDevTestGameIdentityAdapterContractPacket,
+  buildDevTestGameIdentityAdapterContractPacket,
+  devTestGameIdentityAdapterContractDiff,
+  devTestGameIdentityAdapterProofVersion,
+} from "./dev_test_game_identity_adapter_contract.mjs";
+import {
   handleLocalhostBindFailure,
   preflightLocalhostBindOrExit,
 } from "./frontend_smoke_bind_preflight.mjs";
@@ -100,9 +106,12 @@ try {
     hostAccount: accountCredentials.host,
   });
   const roles = redactProofRoles(proofRoles);
+  const identityAdapterContract = buildDevTestGameIdentityAdapterContractPacket({
+    lifecycleStatus: identityLifecycle.status,
+  });
 
   const evidence = {
-    version: 10,
+    version: devTestGameIdentityAdapterProofVersion,
     proof: "auth-invite-role-proof",
     status: "passed",
     releaseReady: false,
@@ -130,6 +139,9 @@ try {
       capabilityAuthority:
         "auth_session resolves principal_user_id and committed game/global capabilities at the API boundary",
     },
+    identityAdapterContract,
+    identityAdapterContractDiff:
+      devTestGameIdentityAdapterContractDiff(identityAdapterContract),
     identityLifecycle,
     game,
     database: {
@@ -1339,7 +1351,7 @@ function redactProofRoles(roles) {
 
 function assertInviteProof(evidence) {
   if (
-    evidence.version !== 10 ||
+    evidence.version !== devTestGameIdentityAdapterProofVersion ||
     evidence.proof !== "auth-invite-role-proof" ||
     evidence.status !== "passed" ||
     evidence.productionReady !== false ||
@@ -1351,6 +1363,7 @@ function assertInviteProof(evidence) {
     evidence.identityAdapter?.replacesDevTokensWithoutRoleSurfaceChange !== true ||
     evidence.identityAdapter?.browserCookieName !== "fmarch_session" ||
     evidence.identityAdapter?.accountCredentialKind !== "local-password-account" ||
+    evidence.identityAdapterContractDiff?.status !== "passed" ||
     !evidence.identityAdapter?.delegatedIssuanceControls?.includes(
       "host-scoped-invite-issuance",
     ) ||
@@ -1466,6 +1479,7 @@ function assertInviteProof(evidence) {
   ) {
     throw new Error("invite proof must preserve the role-surface identity adapter");
   }
+  assertDevTestGameIdentityAdapterContractPacket(evidence.identityAdapterContract);
   if (
     evidence.accounts?.host?.accountId !== accountCredentials.host.accountId ||
     evidence.accounts?.host?.principalUserId !== "host_h" ||

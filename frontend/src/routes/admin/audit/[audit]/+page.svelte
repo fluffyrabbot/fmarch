@@ -387,6 +387,33 @@
         </ol>
       </section>
     {/if}
+    {#if data.audit.artifactSummary?.adapterContract}
+      <section
+        class="admin-audit-detail__group"
+        data-testid="admin-audit-detail-identity-adapter-contract"
+      >
+        <h2>Identity adapter contract</h2>
+        <ol class="admin-audit-detail__entries">
+          <li
+            class="admin-audit-detail__entry admin-audit-detail__entry--stack"
+            data-testid="admin-audit-identity-adapter-contract-summary"
+          >
+            <strong>{data.audit.artifactSummary.adapterContract.status}</strong>
+            <span>{data.audit.artifactSummary.adapterContract.adapterId}</span>
+            <span>{data.audit.artifactSummary.adapterContract.roleSurfaceContractStatus}</span>
+            <span>{data.audit.artifactSummary.adapterContract.mismatchCount} mismatches</span>
+          </li>
+          {#each data.audit.artifactSummary.adapterContract.mismatches as mismatch}
+            <li
+              class="admin-audit-detail__entry admin-audit-detail__entry--stack"
+              data-testid={`admin-audit-identity-adapter-contract-mismatch-${mismatch.id}`}
+            >
+              <strong>{mismatch.path}</strong>
+            </li>
+          {/each}
+        </ol>
+      </section>
+    {/if}
     {#if data.audit.hostedHandoffChecklist?.inputs?.length > 0 || data.audit.hostedHandoffChecklist?.blockedChecks?.length > 0}
       <section
         class="admin-audit-detail__group"

@@ -49,6 +49,12 @@ await runAdminAuditProof({
       auditId: "local-identity-adapter",
       requiredChecks,
       requiredSessions,
+      requiredIdentityAdapterContractStatus:
+        identityProof.identityAdapterContract.status,
+      requiredIdentityAdapterContractMismatches:
+        identityProof.identityAdapterContractDiff.mismatches.map(
+          (mismatch) => mismatch.id,
+        ),
       forbiddenText: inviteTokens(identityProof),
     }),
   buildEvidence: ({ source: identityProof, adminRoleSurface }) => ({
@@ -63,6 +69,11 @@ await runAdminAuditProof({
     generatedFrom: {
       identityAdapterProof: identityProofRelativePath,
       game: identityProof.game,
+      identityAdapterContractStatus: identityProof.identityAdapterContract.status,
+      identityAdapterContractMismatchIds:
+        identityProof.identityAdapterContractDiff.mismatches.map(
+          (mismatch) => mismatch.id,
+        ),
     },
     adminRoleSurface,
   }),
@@ -94,6 +105,24 @@ export function assertIdentityAdminProof(evidence) {
   for (const sessionRole of requiredSessions) {
     if (!evidence.adminRoleSurface?.visibleSessions?.includes(sessionRole)) {
       throw new Error(`identity admin proof missing visible session: ${sessionRole}`);
+    }
+  }
+  if (
+    evidence.generatedFrom?.identityAdapterContractStatus !==
+    evidence.adminRoleSurface?.visibleIdentityAdapterContract?.status
+  ) {
+    throw new Error("identity admin proof missing visible adapter contract");
+  }
+  for (const mismatchId of evidence.generatedFrom
+    ?.identityAdapterContractMismatchIds ?? []) {
+    if (
+      !evidence.adminRoleSurface?.visibleIdentityAdapterContractMismatches?.includes(
+        mismatchId,
+      )
+    ) {
+      throw new Error(
+        `identity admin proof missing adapter contract mismatch: ${mismatchId}`,
+      );
     }
   }
   return evidence;

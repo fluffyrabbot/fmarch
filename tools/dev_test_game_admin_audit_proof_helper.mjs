@@ -127,6 +127,8 @@ export async function proveAdminAuditDetail({
   requiredHostedIdentityPacketRefStatuses = {},
   requiredHostedIdentityRoleSurfaceContractDiffStatus = null,
   requiredHostedIdentityRoleSurfaceContractMismatches = [],
+  requiredIdentityAdapterContractStatus = null,
+  requiredIdentityAdapterContractMismatches = [],
   requiredHostedHandoffSummary = null,
   requiredHostedHandoffBlockedReceipt = null,
   requiredRelatedLinks = [],
@@ -309,6 +311,15 @@ export async function proveAdminAuditDetail({
       page,
       prefix: "admin-audit-hosted-identity-role-surface-contract-mismatch",
       ids: requiredHostedIdentityRoleSurfaceContractMismatches,
+    });
+    const visibleIdentityAdapterContract = await waitForIdentityAdapterContract({
+      page,
+      expectedStatus: requiredIdentityAdapterContractStatus,
+    });
+    const visibleIdentityAdapterContractMismatches = await waitForRows({
+      page,
+      prefix: "admin-audit-identity-adapter-contract-mismatch",
+      ids: requiredIdentityAdapterContractMismatches,
     });
     const visibleHostedHandoffSummary = await waitForHostedHandoffSummary({
       page,
@@ -583,6 +594,15 @@ export async function proveAdminAuditDetail({
             visibleHostedIdentityRoleSurfaceContractMismatches:
               visibleHostedIdentityRoleSurfaceContractMismatches,
           }),
+      ...(visibleIdentityAdapterContract === null
+        ? {}
+        : { visibleIdentityAdapterContract }),
+      ...(visibleIdentityAdapterContractMismatches.length === 0
+        ? {}
+        : {
+            visibleIdentityAdapterContractMismatches:
+              visibleIdentityAdapterContractMismatches,
+          }),
       ...(visibleHostedHandoffSummary === null
         ? {}
         : { visibleHostedHandoffSummary }),
@@ -600,6 +620,24 @@ export async function proveAdminAuditDetail({
   } finally {
     await page.close();
   }
+}
+
+async function waitForIdentityAdapterContract({ page, expectedStatus }) {
+  if (expectedStatus === null || expectedStatus === undefined) {
+    return null;
+  }
+  const row = page.getByTestId("admin-audit-identity-adapter-contract-summary");
+  await row.waitFor({
+    state: "visible",
+    timeout: 15000,
+  });
+  const text = await row.innerText();
+  if (!text.includes(expectedStatus)) {
+    throw new Error(
+      `identity adapter contract summary missing ${expectedStatus}: ${text}`,
+    );
+  }
+  return { status: expectedStatus };
 }
 
 async function waitForHostedIdentityRoleSurfaceContractDiff({

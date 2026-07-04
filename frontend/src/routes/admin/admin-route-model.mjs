@@ -44,6 +44,10 @@ import {
   localAdminAuditIds,
 } from "../../../../tools/dev_test_game_admin_audit_surface_ids.mjs";
 import {
+  devTestGameIdentityAdapterContractDiff,
+  devTestGameIdentityAdapterProofVersion,
+} from "../../../../tools/dev_test_game_identity_adapter_contract.mjs";
+import {
   normalizeSpineRowKind,
   selectedSpineDeclarationStatus,
   selectedSpineDrilldownStatus,
@@ -4331,13 +4335,16 @@ export function normalizeLocalIdentityAdapterAudit(identityAdapterProof, { game 
   if (
     identityAdapterProof === null ||
     typeof identityAdapterProof !== "object" ||
-    identityAdapterProof.version !== 10 ||
+    identityAdapterProof.version !== devTestGameIdentityAdapterProofVersion ||
     identityAdapterProof.proof !== "auth-invite-role-proof" ||
     identityAdapterProof.status !== "passed" ||
     identityAdapterProof.scope !== "local-auth-invite-role-proof" ||
     identityAdapterProof.releaseReady !== false ||
     identityAdapterProof.productionReady !== false ||
-    identityAdapterProof.identityAdapter?.replacesDevTokensWithoutRoleSurfaceChange !== true
+    identityAdapterProof.identityAdapter?.replacesDevTokensWithoutRoleSurfaceChange !== true ||
+    devTestGameIdentityAdapterContractDiff(
+      identityAdapterProof.identityAdapterContract,
+    ).status !== "passed"
   ) {
     return null;
   }
@@ -4468,6 +4475,10 @@ export function normalizeLocalIdentityAdapterAudit(identityAdapterProof, { game 
     sessions: Object.freeze(roles),
     artifactSummary: Object.freeze({
       game: String(identityAdapterProof.game ?? ""),
+      adapterContract: normalizeIdentityAdapterContractSummary(
+        identityAdapterProof.identityAdapterContract,
+        identityAdapterProof.identityAdapterContractDiff,
+      ),
       browserCookieName: String(identityAdapterProof.identityAdapter?.browserCookieName ?? ""),
       inviteCredentialKind: String(
         identityAdapterProof.identityAdapter?.inviteCredentialKind ?? "",
@@ -4589,6 +4600,33 @@ export function normalizeLocalIdentityAdapterAudit(identityAdapterProof, { game 
       releaseReady: identityAdapterProof.releaseReady === true,
       productionReady: identityAdapterProof.productionReady === true,
     }),
+  });
+}
+
+function normalizeIdentityAdapterContractSummary(packet, diff) {
+  const computedDiff = devTestGameIdentityAdapterContractDiff(packet);
+  const sourceDiff =
+    diff !== null && typeof diff === "object" ? diff : computedDiff;
+  return Object.freeze({
+    status: String(packet?.status ?? "unknown"),
+    adapterId: String(packet?.adapterId ?? sourceDiff.adapterId ?? ""),
+    roleSurfaceArchitectureChanged:
+      packet?.roleSurfaceArchitectureChanged === true,
+    roleSurfaceContractStatus: String(
+      sourceDiff.roleSurfaceContractDiff?.status ?? "unknown",
+    ),
+    mismatchCount: Array.isArray(sourceDiff.mismatches)
+      ? sourceDiff.mismatches.length
+      : 0,
+    mismatches: Object.freeze(
+      (Array.isArray(sourceDiff.mismatches) ? sourceDiff.mismatches : []).map(
+        (mismatch) =>
+          Object.freeze({
+            id: String(mismatch.id ?? ""),
+            path: String(mismatch.path ?? ""),
+          }),
+      ),
+    ),
   });
 }
 

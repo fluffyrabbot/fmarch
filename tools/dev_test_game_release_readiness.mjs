@@ -25,6 +25,11 @@ import {
   devTestGameHostedEvidenceLaneDemoProofPath,
 } from "./dev_test_game_hosted_evidence_lane_demo_proof.mjs";
 import {
+  assertDevTestGameIdentityAdapterContractPacket,
+  devTestGameIdentityAdapterContractDiff,
+  devTestGameIdentityAdapterProofVersion,
+} from "./dev_test_game_identity_adapter_contract.mjs";
+import {
   assertHostStaleControlCoverageSummary,
 } from "./dev_test_game_host_stale_recovery_scenarios.mjs";
 import {
@@ -3807,7 +3812,7 @@ export function validateDevTestGameIdentityAdapterProof(proof, options = {}) {
     ["host", "HostOf"],
     ["player", "SlotOccupant"],
   ]);
-  if (proof?.version !== 10) {
+  if (proof?.version !== devTestGameIdentityAdapterProofVersion) {
     throw new Error(`identity adapter proof version drifted: ${proof?.version}`);
   }
   if (proof.proof !== "auth-invite-role-proof") {
@@ -3824,6 +3829,9 @@ export function validateDevTestGameIdentityAdapterProof(proof, options = {}) {
   }
   if (
     proof.identityAdapter?.replacesDevTokensWithoutRoleSurfaceChange !== true ||
+    proof.identityAdapterContractDiff?.status !== "passed" ||
+    devTestGameIdentityAdapterContractDiff(proof.identityAdapterContract).status !==
+      "passed" ||
     proof.identityAdapter?.browserCookieName !== "fmarch_session" ||
     proof.identityAdapter?.inviteCredentialKind !== "single-use-invite" ||
     proof.identityAdapter?.accountCredentialKind !== "local-password-account" ||
@@ -3839,6 +3847,7 @@ export function validateDevTestGameIdentityAdapterProof(proof, options = {}) {
   ) {
     throw new Error("identity adapter proof does not preserve the role-surface adapter");
   }
+  assertDevTestGameIdentityAdapterContractPacket(proof.identityAdapterContract);
   if (
     proof.identityLifecycle?.status !== "passed" ||
     proof.identityLifecycle?.sessionRotation?.oldSessionRejected !== true ||
@@ -3992,6 +4001,9 @@ export function validateDevTestGameIdentityAdapterProof(proof, options = {}) {
     path: options.path ?? "target/auth-invite-role-proof/invite-role-proof.json",
     roleCount: requiredRoles.size,
     roles: Array.from(requiredRoles.keys()),
+    adapterContractStatus: proof.identityAdapterContract.status,
+    roleSurfaceContractStatus:
+      proof.identityAdapterContractDiff.roleSurfaceContractDiff.status,
     proofBoundary: proof.proofBoundary,
     scope: proof.scope,
     productionReady: proof.productionReady,

@@ -185,6 +185,11 @@ import {
   identityReadinessEnv,
 } from "./dev_test_game_identity_spine.mjs";
 import {
+  buildDevTestGameIdentityAdapterContractPacket,
+  devTestGameIdentityAdapterContractDiff,
+  devTestGameIdentityAdapterProofVersion,
+} from "./dev_test_game_identity_adapter_contract.mjs";
+import {
   assertDevTestGameHostedIdentityEvidence,
   buildDevTestGameHostedIdentityEvidence,
   devTestGameHostedIdentityEvidenceCommand,
@@ -10375,8 +10380,9 @@ function artifactSummary(path) {
 }
 
 function identityAdapterProofFixture(game) {
+  const identityAdapterContract = buildDevTestGameIdentityAdapterContractPacket();
   return {
-    version: 10,
+    version: devTestGameIdentityAdapterProofVersion,
     proof: "auth-invite-role-proof",
     status: "passed",
     scope: "local-auth-invite-role-proof",
@@ -10403,6 +10409,9 @@ function identityAdapterProofFixture(game) {
       capabilityAuthority:
         "auth_session resolves principal_user_id and committed game/global capabilities at the API boundary",
     },
+    identityAdapterContract,
+    identityAdapterContractDiff:
+      devTestGameIdentityAdapterContractDiff(identityAdapterContract),
     identityLifecycle: {
       status: "passed",
       sessionRotation: {
@@ -11358,6 +11367,8 @@ function identityAdminProofFixture() {
     generatedFrom: {
       identityAdapterProof: "target/auth-invite-role-proof/invite-role-proof.json",
       game: "00000000-0000-0000-0000-000000000001",
+      identityAdapterContractStatus: "passed",
+      identityAdapterContractMismatchIds: [],
     },
     adminRoleSurface: {
       status: "passed",
@@ -11377,6 +11388,7 @@ function identityAdminProofFixture() {
         "admin-audit-surface",
       ],
       visibleSessions: ["admin", "host", "player"],
+      visibleIdentityAdapterContract: { status: "passed" },
       rawInviteTokensVisible: false,
       releaseReady: false,
       productionReady: false,

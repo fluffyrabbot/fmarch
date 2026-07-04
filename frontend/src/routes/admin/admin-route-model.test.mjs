@@ -77,6 +77,11 @@ import {
   hostedIdentityRoleSurfaceContractDiff,
 } from "../../../../tools/dev_test_game_hosted_identity_evidence.mjs";
 import {
+  buildDevTestGameIdentityAdapterContractPacket,
+  devTestGameIdentityAdapterContractDiff,
+  devTestGameIdentityAdapterProofVersion,
+} from "../../../../tools/dev_test_game_identity_adapter_contract.mjs";
+import {
   releaseReadinessUnprovenItem,
   releaseReadinessUnprovenStatusRows,
 } from "../../../../tools/dev_test_game_release_readiness_cases.mjs";
@@ -3309,6 +3314,14 @@ test("admin route data exposes local identity adapter proof as a native audit ro
   );
   assert.deepEqual(identity.artifactSummary, {
     game: "game-a",
+    adapterContract: {
+      status: "passed",
+      adapterId: "local-production-identity-adapter-v1",
+      roleSurfaceArchitectureChanged: false,
+      roleSurfaceContractStatus: "passed",
+      mismatchCount: 0,
+      mismatches: [],
+    },
     browserCookieName: "fmarch_session",
     inviteCredentialKind: "single-use-invite",
     sessionCredentialKind: "opaque-session",
@@ -6221,8 +6234,9 @@ function backupRestoreProofFixture() {
 }
 
 function identityAdapterProofFixture() {
+  const identityAdapterContract = buildDevTestGameIdentityAdapterContractPacket();
   return {
-    version: 10,
+    version: devTestGameIdentityAdapterProofVersion,
     proof: "auth-invite-role-proof",
     status: "passed",
     scope: "local-auth-invite-role-proof",
@@ -6246,6 +6260,9 @@ function identityAdapterProofFixture() {
       ],
       delegatedIssuanceControls: ["host-scoped-invite-issuance"],
     },
+    identityAdapterContract,
+    identityAdapterContractDiff:
+      devTestGameIdentityAdapterContractDiff(identityAdapterContract),
     identityLifecycle: {
       status: "passed",
       sessionRotation: {
