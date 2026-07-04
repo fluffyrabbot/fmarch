@@ -92,12 +92,14 @@ export function coreLoopSpineStatus(proofRun) {
   const firstCycle = spine?.cycles?.find((cycle) => cycle.id === "d01-n01-d02");
   const secondCycle = spine?.cycles?.find((cycle) => cycle.id === "d02-n02");
   const thirdCycle = spine?.cycles?.find((cycle) => cycle.id === "n02-d03");
+  const fourthCycle =
+    spine?.cycles?.find((cycle) => cycle.id === "d03-n03") ?? thirdCycle;
   const firstStart = checkpointById(firstCycle, "d01-resolved-locked");
   const firstNight = checkpointById(firstCycle, "n01-action-open");
   const firstDay = checkpointById(firstCycle, "d02-day-controls-return");
   const secondVote = checkpointById(secondCycle, "d02-deciding-vote-submitted");
   const secondNight = checkpointById(secondCycle, "n02-action-open");
-  return `${status}: ${String(firstStart?.phase ?? "unknown")} -> ${String(firstNight?.phase ?? "unknown")} -> ${String(firstDay?.phase ?? "unknown")}, vote ${String(secondVote?.voteState ?? "unknown")}, ${nightTwoProgressionCompactStatus(thirdCycle, { actionPhase: secondNight?.phase })}, ${terminalRecoveryCompactStatus(thirdCycle)}, ${revoteProgressionCompactStatus(thirdCycle)}`;
+  return `${status}: ${String(firstStart?.phase ?? "unknown")} -> ${String(firstNight?.phase ?? "unknown")} -> ${String(firstDay?.phase ?? "unknown")}, vote ${String(secondVote?.voteState ?? "unknown")}, ${nightTwoProgressionCompactStatus(thirdCycle, { actionPhase: secondNight?.phase })}, ${terminalRecoveryCompactStatus(fourthCycle)}, ${revoteProgressionCompactStatus(fourthCycle)}`;
 }
 
 export function hardeningHighlightedLaneEvidence(proofRun) {

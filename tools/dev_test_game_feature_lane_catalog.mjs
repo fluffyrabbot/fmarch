@@ -50,12 +50,14 @@ export const coreLoopFeatureSpineCycleIds = Object.freeze({
   dayTwoNightTwo: "d02-n02",
   dayOneNightOneDayTwo: "d01-n01-d02",
   nightTwoDayThree: "n02-d03",
+  dayThreeNightThree: "d03-n03",
 });
 
 const dayTwoNightTwo = coreLoopFeatureSpineCycleIds.dayTwoNightTwo;
 const dayOneNightOneDayTwo =
   coreLoopFeatureSpineCycleIds.dayOneNightOneDayTwo;
 const nightTwoDayThree = coreLoopFeatureSpineCycleIds.nightTwoDayThree;
+const dayThreeNightThree = coreLoopFeatureSpineCycleIds.dayThreeNightThree;
 const dayTwoNightTwoSpineRows = dayTwoNightTwoFeatureSpineRows({
   cycleId: dayTwoNightTwo,
 });
@@ -66,13 +68,13 @@ const dayOneNightOneSpineRows = dayOneNightOneFeatureSpineRows({
 const coreLoopFeatureSpineLaneRows = Object.freeze([
   Object.freeze(hostPhaseControlFeatureSpineRow({ cycleId: dayTwoNightTwo })),
   Object.freeze(dayVoteResolutionFeatureSpineRow({ cycleId: dayTwoNightTwo })),
-  Object.freeze(dayVoteNoLynchFeatureSpineRow({ cycleId: nightTwoDayThree })),
+  Object.freeze(dayVoteNoLynchFeatureSpineRow({ cycleId: dayThreeNightThree })),
   Object.freeze(dayTwoNightTwoSpineRows[0]),
   Object.freeze(dayOneNightOneSpineRows[0]),
   ...dayTwoNightTwoSpineRows.slice(1),
   ...nightTwoProgressionFeatureSpineRows({ cycleId: nightTwoDayThree }),
-  ...terminalRecoveryFeatureSpineRows({ cycleId: nightTwoDayThree }),
-  ...revoteProgressionFeatureSpineRows({ cycleId: nightTwoDayThree }),
+  ...terminalRecoveryFeatureSpineRows({ cycleId: dayThreeNightThree }),
+  ...revoteProgressionFeatureSpineRows({ cycleId: dayThreeNightThree }),
   Object.freeze(
     invalidActionRecoveryFeatureSpineRow({ cycleId: dayTwoNightTwo }),
   ),

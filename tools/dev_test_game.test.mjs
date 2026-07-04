@@ -11523,7 +11523,7 @@ function coreLoopAdminProofFixture() {
       privateChannelRecoveryFamily:
         coreLoopPrivateChannelRecoveryScenarioFamily(),
       coreLoopSpineRows: {
-        cycles: ["d01-n01-d02", "d02-n02", "n02-d03"],
+        cycles: ["d01-n01-d02", "d02-n02", "n02-d03", "d03-n03"],
         roleUrls: [
           "d01-n01-d02-host",
           "d01-n01-d02-actionPlayer",
@@ -11537,6 +11537,9 @@ function coreLoopAdminProofFixture() {
           "n02-d03-host",
           "n02-d03-actionPlayer",
           "n02-d03-normalPlayer",
+          "d03-n03-host",
+          "d03-n03-actionPlayer",
+          "d03-n03-normalPlayer",
         ],
         roleUrlHrefs: {
           "d01-n01-d02-host":
@@ -11563,6 +11566,12 @@ function coreLoopAdminProofFixture() {
             "http://127.0.0.1:5173/g/00000000-0000-0000-0000-000000000002",
           "n02-d03-normalPlayer":
             "http://127.0.0.1:5173/g/00000000-0000-0000-0000-000000000002",
+          "d03-n03-host":
+            "http://127.0.0.1:5173/g/00000000-0000-0000-0000-000000000002/host",
+          "d03-n03-actionPlayer":
+            "http://127.0.0.1:5173/g/00000000-0000-0000-0000-000000000002",
+          "d03-n03-normalPlayer":
+            "http://127.0.0.1:5173/g/00000000-0000-0000-0000-000000000002",
         },
         checkpoints: [
           "d01-n01-d02-d01-resolved-locked",
@@ -11586,6 +11595,15 @@ function coreLoopAdminProofFixture() {
           "n02-d03-d03r2-revote-ballot-submitted",
           "n02-d03-d03r2-revote-resolved-no-majority",
           "n02-d03-d03r2-stale-continue-policy-recovery",
+          "d03-n03-d03-terminal-advance-reject",
+          "d03-n03-d03-terminal-reload-recovery",
+          "d03-n03-d03-revote-prompt-resolved",
+          "d03-n03-d03r1-revote-ballot-submitted",
+          "d03-n03-d03r1-revote-resolved-no-majority",
+          "d03-n03-d03r2-revote-prompt-resolved",
+          "d03-n03-d03r2-revote-ballot-submitted",
+          "d03-n03-d03r2-revote-resolved-no-majority",
+          "d03-n03-d03r2-stale-continue-policy-recovery",
         ],
         recoveryHooks: [
           "staleLockedVoteReject",
@@ -11610,7 +11628,7 @@ function coreLoopAdminProofFixture() {
         "completed-game-hardening-coverage":
           "passed: 10/10 lanes across 4 families",
       },
-      visibleSpineCycles: ["d01-n01-d02", "d02-n02", "n02-d03"],
+      visibleSpineCycles: ["d01-n01-d02", "d02-n02", "n02-d03", "d03-n03"],
       visibleSpineRoleUrls: [
         "d01-n01-d02-host",
         "d01-n01-d02-actionPlayer",
@@ -11624,6 +11642,9 @@ function coreLoopAdminProofFixture() {
         "n02-d03-host",
         "n02-d03-actionPlayer",
         "n02-d03-normalPlayer",
+        "d03-n03-host",
+        "d03-n03-actionPlayer",
+        "d03-n03-normalPlayer",
       ],
       visibleSpineCheckpoints: [
         "d01-n01-d02-d01-resolved-locked",
@@ -11647,6 +11668,15 @@ function coreLoopAdminProofFixture() {
         "n02-d03-d03r2-revote-ballot-submitted",
         "n02-d03-d03r2-revote-resolved-no-majority",
         "n02-d03-d03r2-stale-continue-policy-recovery",
+        "d03-n03-d03-terminal-advance-reject",
+        "d03-n03-d03-terminal-reload-recovery",
+        "d03-n03-d03-revote-prompt-resolved",
+        "d03-n03-d03r1-revote-ballot-submitted",
+        "d03-n03-d03r1-revote-resolved-no-majority",
+        "d03-n03-d03r2-revote-prompt-resolved",
+        "d03-n03-d03r2-revote-ballot-submitted",
+        "d03-n03-d03r2-revote-resolved-no-majority",
+        "d03-n03-d03r2-stale-continue-policy-recovery",
       ],
       visibleSpineRecoveryHooks: [
         "staleLockedVoteReject",
@@ -13405,6 +13435,12 @@ function coreLoopSpineTargetsFixture() {
       "http://127.0.0.1:5173/g/00000000-0000-0000-0000-000000000002",
     "n02-d03-normalPlayer":
       "http://127.0.0.1:5173/g/00000000-0000-0000-0000-000000000002",
+    "d03-n03-host":
+      "http://127.0.0.1:5173/g/00000000-0000-0000-0000-000000000002/host",
+    "d03-n03-actionPlayer":
+      "http://127.0.0.1:5173/g/00000000-0000-0000-0000-000000000002",
+    "d03-n03-normalPlayer":
+      "http://127.0.0.1:5173/g/00000000-0000-0000-0000-000000000002",
   };
   return {
     status: "passed",
@@ -13415,7 +13451,7 @@ function coreLoopSpineTargetsFixture() {
       "http://127.0.0.1:5173/g/00000000-0000-0000-0000-000000000002",
     defaultCheckpointId: "d02-n02-n02-action-open",
     browserProofCommand: devTestGameLiveProofCommand,
-    cycleIds: ["d01-n01-d02", "d02-n02", "n02-d03"],
+    cycleIds: ["d01-n01-d02", "d02-n02", "n02-d03", "d03-n03"],
     roleUrlIds: [
       "d01-n01-d02-host",
       "d01-n01-d02-actionPlayer",
@@ -13429,6 +13465,9 @@ function coreLoopSpineTargetsFixture() {
       "n02-d03-host",
       "n02-d03-actionPlayer",
       "n02-d03-normalPlayer",
+      "d03-n03-host",
+      "d03-n03-actionPlayer",
+      "d03-n03-normalPlayer",
     ],
     checkpointIds: [
       "d01-n01-d02-d01-resolved-locked",
@@ -13452,6 +13491,15 @@ function coreLoopSpineTargetsFixture() {
       "n02-d03-d03r2-revote-ballot-submitted",
       "n02-d03-d03r2-revote-resolved-no-majority",
       "n02-d03-d03r2-stale-continue-policy-recovery",
+      "d03-n03-d03-terminal-advance-reject",
+      "d03-n03-d03-terminal-reload-recovery",
+      "d03-n03-d03-revote-prompt-resolved",
+      "d03-n03-d03r1-revote-ballot-submitted",
+      "d03-n03-d03r1-revote-resolved-no-majority",
+      "d03-n03-d03r2-revote-prompt-resolved",
+      "d03-n03-d03r2-revote-ballot-submitted",
+      "d03-n03-d03r2-revote-resolved-no-majority",
+      "d03-n03-d03r2-stale-continue-policy-recovery",
     ],
     recoveryHookIds: [
       "staleLockedVoteReject",

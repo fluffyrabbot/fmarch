@@ -13,15 +13,15 @@ import {
 } from "./dev_test_game_core_loop_revote_progression_scenarios.mjs";
 
 test("revote progression cases share feature rows and checkpoint expectations", () => {
-  assert.equal(revoteProgressionCycleId, "n02-d03");
+  assert.equal(revoteProgressionCycleId, "d03-n03");
   assert.equal(revoteProgressionAdminCheckId, "core-loop");
   assert.equal(dayVoteNoLynchLaneId, "day-vote-no-lynch");
   assert.deepEqual(dayVoteNoLynchFeatureSpineRow(), {
     targetKey: "dayVoteNoLynch",
     featureSlotId: "day-vote-no-lynch",
-    cycleId: "n02-d03",
+    cycleId: "d03-n03",
     role: "actionPlayer",
-    checkpointId: "n02-d03-d03r1-revote-ballot-submitted",
+    checkpointId: "d03-n03-d03r1-revote-ballot-submitted",
     adminCheckId: "core-loop",
     seedMembership: "demoOnly",
     seedOrder: 20,
@@ -30,49 +30,49 @@ test("revote progression cases share feature rows and checkpoint expectations", 
     {
       targetKey: "dayThreeNoMajorityRevote",
       featureSlotId: "day-three-no-majority-revote",
-      cycleId: "n02-d03",
+      cycleId: "d03-n03",
       role: "host",
-      checkpointId: "n02-d03-d03-revote-prompt-resolved",
+      checkpointId: "d03-n03-d03-revote-prompt-resolved",
       adminCheckId: "core-loop",
     },
     {
       targetKey: "dayThreeRevoteBallot",
       featureSlotId: "day-three-revote-ballot",
-      cycleId: "n02-d03",
+      cycleId: "d03-n03",
       role: "actionPlayer",
-      checkpointId: "n02-d03-d03r1-revote-ballot-submitted",
+      checkpointId: "d03-n03-d03r1-revote-ballot-submitted",
       adminCheckId: "core-loop",
     },
     {
       targetKey: "dayThreeRevoteResolution",
       featureSlotId: "day-three-revote-resolution",
-      cycleId: "n02-d03",
+      cycleId: "d03-n03",
       role: "host",
-      checkpointId: "n02-d03-d03r1-revote-resolved-no-majority",
+      checkpointId: "d03-n03-d03r1-revote-resolved-no-majority",
       adminCheckId: "core-loop",
     },
     {
       targetKey: "dayThreeSecondRevote",
       featureSlotId: "day-three-second-revote",
-      cycleId: "n02-d03",
+      cycleId: "d03-n03",
       role: "host",
-      checkpointId: "n02-d03-d03r2-revote-prompt-resolved",
+      checkpointId: "d03-n03-d03r2-revote-prompt-resolved",
       adminCheckId: "core-loop",
     },
     {
       targetKey: "dayThreeSecondRevoteBallot",
       featureSlotId: "day-three-second-revote-ballot",
-      cycleId: "n02-d03",
+      cycleId: "d03-n03",
       role: "actionPlayer",
-      checkpointId: "n02-d03-d03r2-revote-ballot-submitted",
+      checkpointId: "d03-n03-d03r2-revote-ballot-submitted",
       adminCheckId: "core-loop",
     },
     {
       targetKey: "dayThreeSecondRevoteResolution",
       featureSlotId: "day-three-second-revote-resolution",
-      cycleId: "n02-d03",
+      cycleId: "d03-n03",
       role: "host",
-      checkpointId: "n02-d03-d03r2-revote-resolved-no-majority",
+      checkpointId: "d03-n03-d03r2-revote-resolved-no-majority",
       adminCheckId: "core-loop",
     },
   ]);

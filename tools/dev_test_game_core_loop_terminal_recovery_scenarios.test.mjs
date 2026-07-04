@@ -12,34 +12,34 @@ import {
 } from "./dev_test_game_core_loop_terminal_recovery_scenarios.mjs";
 
 test("terminal recovery cases share feature rows and checkpoint expectations", () => {
-  assert.equal(terminalRecoveryCycleId, "n02-d03");
+  assert.equal(terminalRecoveryCycleId, "d03-n03");
   assert.equal(terminalRecoveryAdminCheckId, "core-loop");
   assert.equal(terminalAdvanceRejectRecoveryHookId, "d03TerminalAdvanceReject");
   assert.deepEqual(terminalRecoveryFeatureSpineRows(), [
     {
       targetKey: "dayThreeTerminalBoundary",
       featureSlotId: "day-three-terminal-boundary",
-      cycleId: "n02-d03",
+      cycleId: "d03-n03",
       role: "host",
-      checkpointId: "n02-d03-d03-terminal-advance-reject",
+      checkpointId: "d03-n03-d03-terminal-advance-reject",
       recoveryHookId: "d03TerminalAdvanceReject",
       adminCheckId: "core-loop",
     },
     {
       targetKey: "dayThreeTerminalRecovery",
       featureSlotId: "day-three-terminal-recovery",
-      cycleId: "n02-d03",
+      cycleId: "d03-n03",
       role: "host",
-      checkpointId: "n02-d03-d03-terminal-reload-recovery",
+      checkpointId: "d03-n03-d03-terminal-reload-recovery",
       recoveryHookId: "d03TerminalAdvanceReject",
       adminCheckId: "core-loop",
     },
     {
       targetKey: "dayThreeStaleContinuePolicyRecovery",
       featureSlotId: "day-three-stale-continue-policy-recovery",
-      cycleId: "n02-d03",
+      cycleId: "d03-n03",
       role: "host",
-      checkpointId: "n02-d03-d03r2-stale-continue-policy-recovery",
+      checkpointId: "d03-n03-d03r2-stale-continue-policy-recovery",
       adminCheckId: "core-loop",
     },
   ]);

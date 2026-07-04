@@ -1,4 +1,4 @@
-export const revoteProgressionCycleId = "n02-d03";
+export const revoteProgressionCycleId = "d03-n03";
 export const revoteProgressionAdminCheckId = "core-loop";
 export const dayVoteNoLynchLaneId = "day-vote-no-lynch";
 

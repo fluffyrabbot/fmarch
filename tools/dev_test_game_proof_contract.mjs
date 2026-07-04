@@ -6999,6 +6999,19 @@ function buildCoreLoopSpineSummary({ session, verification }) {
       ],
     },
   ];
+  const nightTwoDayThreeCycle = cycles.find((cycle) => cycle.id === "n02-d03");
+  cycles.push({
+    id: "d03-n03",
+    game: nightTwoDayThreeCycle?.game ?? null,
+    roleUrls: {
+      host: nightTwoDayThreeCycle?.roleUrls?.host ?? null,
+      actionPlayer: nightTwoDayThreeCycle?.roleUrls?.actionPlayer ?? null,
+      normalPlayer: nightTwoDayThreeCycle?.roleUrls?.normalPlayer ?? null,
+    },
+    checkpoints: (nightTwoDayThreeCycle?.checkpoints ?? [])
+      .slice(4)
+      .map((checkpoint) => ({ ...checkpoint })),
+  });
   const recoveryHooks = {
     staleLockedVoteReject: verification.coreLoop?.rejectedVote?.error ?? null,
     invalidActionReject: actionLoop.invalidAction?.error ?? null,
@@ -7229,6 +7242,17 @@ function buildCoreLoopSpineSummary({ session, verification }) {
     cycles[2]?.checkpoints?.[12]?.reloadResolveControlVisible === true &&
     cycles[2]?.checkpoints?.[12]?.reloadStaleActionVisible === false &&
     cycles[2]?.checkpoints?.[12]?.apiPromptStatusAfterReload === "resolved" &&
+    cycles[3]?.id === "d03-n03" &&
+    cycles[3]?.game === cycles[2]?.game &&
+    cycles[3]?.roleUrls?.host === cycles[2]?.roleUrls?.host &&
+    cycles[3]?.roleUrls?.actionPlayer === cycles[2]?.roleUrls?.actionPlayer &&
+    cycles[3]?.roleUrls?.normalPlayer === cycles[2]?.roleUrls?.normalPlayer &&
+    cycles[3]?.checkpoints?.length === 9 &&
+    cycles[3]?.checkpoints?.[0]?.id === "d03-terminal-advance-reject" &&
+    cycles[3]?.checkpoints?.[2]?.id === "d03-revote-prompt-resolved" &&
+    cycles[3]?.checkpoints?.[8]?.id ===
+      "d03r2-stale-continue-policy-recovery" &&
+    cycles[3]?.checkpoints?.[8]?.reloadPhase === "N03" &&
     recoveryHooks.staleLockedVoteReject === "PhaseLocked" &&
     recoveryHooks.invalidActionReject === "InvalidTarget" &&
     recoveryHooks.normalPlayerDirectActionReject === "InvalidTarget" &&
@@ -7257,8 +7281,8 @@ function assertCoreLoopSpineSummary(summary) {
   ) {
     throw new Error("core loop spine summary must cite the action-loop source lane");
   }
-  if (!Array.isArray(summary.cycles) || summary.cycles.length !== 3) {
-    throw new Error("core loop spine summary must expose exactly three cycles");
+  if (!Array.isArray(summary.cycles) || summary.cycles.length !== 4) {
+    throw new Error("core loop spine summary must expose exactly four cycles");
   }
   for (const cycle of summary.cycles) {
     if (
@@ -7271,7 +7295,9 @@ function assertCoreLoopSpineSummary(summary) {
       !Array.isArray(cycle.checkpoints) ||
       (cycle.id === "n02-d03"
         ? cycle.checkpoints.length !== 13
-        : cycle.checkpoints.length !== 4)
+        : cycle.id === "d03-n03"
+          ? cycle.checkpoints.length !== 9
+          : cycle.checkpoints.length !== 4)
     ) {
       throw new Error(`core loop spine cycle malformed: ${JSON.stringify(cycle)}`);
     }

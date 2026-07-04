@@ -147,8 +147,8 @@ test("production feature spine resolver builds and validates source collections"
       adminCheckId: collection.bySlotId["day-vote-no-lynch"].adminCheckId,
     },
     {
-      roleUrlId: "n02-d03-actionPlayer",
-      checkpointId: "n02-d03-d03r1-revote-ballot-submitted",
+      roleUrlId: "d03-n03-actionPlayer",
+      checkpointId: "d03-n03-d03r1-revote-ballot-submitted",
       adminCheckId: "core-loop",
     },
   );
@@ -229,8 +229,8 @@ test("production feature spine resolver builds and validates source collections"
         collection.bySlotId["day-three-terminal-boundary"].adminCheckId,
     },
     {
-      roleUrlId: "n02-d03-host",
-      checkpointId: "n02-d03-d03-terminal-advance-reject",
+      roleUrlId: "d03-n03-host",
+      checkpointId: "d03-n03-d03-terminal-advance-reject",
       recoveryHookId: "d03TerminalAdvanceReject",
       adminCheckId: "core-loop",
     },
@@ -246,8 +246,8 @@ test("production feature spine resolver builds and validates source collections"
         collection.bySlotId["day-three-terminal-recovery"].adminCheckId,
     },
     {
-      roleUrlId: "n02-d03-host",
-      checkpointId: "n02-d03-d03-terminal-reload-recovery",
+      roleUrlId: "d03-n03-host",
+      checkpointId: "d03-n03-d03-terminal-reload-recovery",
       recoveryHookId: "d03TerminalAdvanceReject",
       adminCheckId: "core-loop",
     },
@@ -265,8 +265,8 @@ test("production feature spine resolver builds and validates source collections"
           .adminCheckId,
     },
     {
-      roleUrlId: "n02-d03-host",
-      checkpointId: "n02-d03-d03r2-stale-continue-policy-recovery",
+      roleUrlId: "d03-n03-host",
+      checkpointId: "d03-n03-d03r2-stale-continue-policy-recovery",
       adminCheckId: "core-loop",
     },
   );
@@ -279,8 +279,8 @@ test("production feature spine resolver builds and validates source collections"
         collection.bySlotId["day-three-no-majority-revote"].adminCheckId,
     },
     {
-      roleUrlId: "n02-d03-host",
-      checkpointId: "n02-d03-d03-revote-prompt-resolved",
+      roleUrlId: "d03-n03-host",
+      checkpointId: "d03-n03-d03-revote-prompt-resolved",
       adminCheckId: "core-loop",
     },
   );
@@ -291,8 +291,8 @@ test("production feature spine resolver builds and validates source collections"
       adminCheckId: collection.bySlotId["day-three-revote-ballot"].adminCheckId,
     },
     {
-      roleUrlId: "n02-d03-actionPlayer",
-      checkpointId: "n02-d03-d03r1-revote-ballot-submitted",
+      roleUrlId: "d03-n03-actionPlayer",
+      checkpointId: "d03-n03-d03r1-revote-ballot-submitted",
       adminCheckId: "core-loop",
     },
   );
@@ -306,8 +306,8 @@ test("production feature spine resolver builds and validates source collections"
         collection.bySlotId["day-three-revote-resolution"].adminCheckId,
     },
     {
-      roleUrlId: "n02-d03-host",
-      checkpointId: "n02-d03-d03r1-revote-resolved-no-majority",
+      roleUrlId: "d03-n03-host",
+      checkpointId: "d03-n03-d03r1-revote-resolved-no-majority",
       adminCheckId: "core-loop",
     },
   );
@@ -320,8 +320,8 @@ test("production feature spine resolver builds and validates source collections"
         collection.bySlotId["day-three-second-revote"].adminCheckId,
     },
     {
-      roleUrlId: "n02-d03-host",
-      checkpointId: "n02-d03-d03r2-revote-prompt-resolved",
+      roleUrlId: "d03-n03-host",
+      checkpointId: "d03-n03-d03r2-revote-prompt-resolved",
       adminCheckId: "core-loop",
     },
   );
@@ -335,8 +335,8 @@ test("production feature spine resolver builds and validates source collections"
         collection.bySlotId["day-three-second-revote-ballot"].adminCheckId,
     },
     {
-      roleUrlId: "n02-d03-actionPlayer",
-      checkpointId: "n02-d03-d03r2-revote-ballot-submitted",
+      roleUrlId: "d03-n03-actionPlayer",
+      checkpointId: "d03-n03-d03r2-revote-ballot-submitted",
       adminCheckId: "core-loop",
     },
   );
@@ -350,8 +350,8 @@ test("production feature spine resolver builds and validates source collections"
         collection.bySlotId["day-three-second-revote-resolution"].adminCheckId,
     },
     {
-      roleUrlId: "n02-d03-host",
-      checkpointId: "n02-d03-d03r2-revote-resolved-no-majority",
+      roleUrlId: "d03-n03-host",
+      checkpointId: "d03-n03-d03r2-revote-resolved-no-majority",
       adminCheckId: "core-loop",
     },
   );
@@ -406,7 +406,7 @@ function coreLoopSourceTargetFixture() {
     detailRoleUrl: "/admin/audit/local-core-loop?game=<seeded-game>",
     browserProofCommand,
     rerunCommand: coreLoopAdminProofCommand,
-    cycleIds: ["d01-n01-d02", "d02-n02", "n02-d03"],
+    cycleIds: ["d01-n01-d02", "d02-n02", "n02-d03", "d03-n03"],
     roleUrlIds: [
       "d01-n01-d02-host",
       "d01-n01-d02-actionPlayer",
@@ -420,6 +420,9 @@ function coreLoopSourceTargetFixture() {
       "n02-d03-host",
       "n02-d03-actionPlayer",
       "n02-d03-normalPlayer",
+      "d03-n03-host",
+      "d03-n03-actionPlayer",
+      "d03-n03-normalPlayer",
     ],
     checkpointIds: [
       "d01-n01-d02-d01-resolved-locked",
@@ -443,6 +446,15 @@ function coreLoopSourceTargetFixture() {
       "n02-d03-d03r2-revote-ballot-submitted",
       "n02-d03-d03r2-revote-resolved-no-majority",
       "n02-d03-d03r2-stale-continue-policy-recovery",
+      "d03-n03-d03-terminal-advance-reject",
+      "d03-n03-d03-terminal-reload-recovery",
+      "d03-n03-d03-revote-prompt-resolved",
+      "d03-n03-d03r1-revote-ballot-submitted",
+      "d03-n03-d03r1-revote-resolved-no-majority",
+      "d03-n03-d03r2-revote-prompt-resolved",
+      "d03-n03-d03r2-revote-ballot-submitted",
+      "d03-n03-d03r2-revote-resolved-no-majority",
+      "d03-n03-d03r2-stale-continue-policy-recovery",
     ],
     recoveryHookIds: [
       "staleLockedVoteReject",
@@ -476,6 +488,9 @@ function coreLoopSourceTargetFixture() {
       "n02-d03-host": "http://127.0.0.1:5173/g/game-b/host",
       "n02-d03-actionPlayer": "http://127.0.0.1:5173/g/game-b",
       "n02-d03-normalPlayer": "http://127.0.0.1:5173/g/game-b",
+      "d03-n03-host": "http://127.0.0.1:5173/g/game-b/host",
+      "d03-n03-actionPlayer": "http://127.0.0.1:5173/g/game-b",
+      "d03-n03-normalPlayer": "http://127.0.0.1:5173/g/game-b",
       "d02-n02-target": "http://127.0.0.1:5173/g/game-b",
     },
   };

@@ -1,4 +1,4 @@
-export const terminalRecoveryCycleId = "n02-d03";
+export const terminalRecoveryCycleId = "d03-n03";
 export const terminalRecoveryAdminCheckId = "core-loop";
 export const terminalAdvanceRejectRecoveryHookId = "d03TerminalAdvanceReject";
 

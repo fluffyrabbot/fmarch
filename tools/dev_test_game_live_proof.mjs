@@ -87,11 +87,12 @@ assert.deepEqual(
 );
 assert.deepEqual(
   proofRun.coreLoopSpine.cycles.map((cycle) => cycle.id),
-  ["d01-n01-d02", "d02-n02", "n02-d03"],
+  ["d01-n01-d02", "d02-n02", "n02-d03", "d03-n03"],
 );
 const proofRunSpineFirstCycle = proofRun.coreLoopSpine.cycles[0];
 const proofRunSpineSecondCycle = proofRun.coreLoopSpine.cycles[1];
 const proofRunSpineThirdCycle = proofRun.coreLoopSpine.cycles[2];
+const proofRunSpineFourthCycle = proofRun.coreLoopSpine.cycles[3];
 assert.equal(proofRunSpineFirstCycle.game, session.game);
 assert.match(proofRunSpineFirstCycle.roleUrls.host, new RegExp(`/g/${session.game}/host`));
 assert.equal(proofRunSpineFirstCycle.checkpoints[0].id, "d01-resolved-locked");
@@ -336,6 +337,16 @@ assert.equal(proofRunSpineThirdCycle.checkpoints[12].reloadStaleActionVisible, f
 assert.equal(
   proofRunSpineThirdCycle.checkpoints[12].apiPromptStatusAfterReload,
   "resolved",
+);
+assert.equal(proofRunSpineFourthCycle.id, "d03-n03");
+assert.equal(proofRunSpineFourthCycle.game, proofRunSpineThirdCycle.game);
+assert.deepEqual(
+  proofRunSpineFourthCycle.roleUrls,
+  proofRunSpineThirdCycle.roleUrls,
+);
+assert.deepEqual(
+  proofRunSpineFourthCycle.checkpoints,
+  proofRunSpineThirdCycle.checkpoints.slice(4),
 );
 assert.equal(proofRun.coreLoopSpine.recoveryHooks.staleLockedVoteReject, "PhaseLocked");
 assert.equal(proofRun.coreLoopSpine.recoveryHooks.invalidActionReject, "InvalidTarget");
