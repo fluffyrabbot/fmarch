@@ -22,7 +22,9 @@ import {
   privateChannelStaleActionReconnectExpectation,
 } from "./dev_test_game_stale_client_reconnect_scenarios.mjs";
 import {
+  coreLoopPrivateChannelCompletedPostLaneId,
   privateChannelInvalidActionRecoveryScenario,
+  staleCompletedPrivatePostScenario,
 } from "./dev_test_game_core_loop_private_channel_recovery_scenarios.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -40,6 +42,7 @@ const privateChannelReconnectExpectation =
   privateChannelStaleActionReconnectExpectation();
 const privateChannelInvalidActionRecovery =
   privateChannelInvalidActionRecoveryScenario();
+const staleCompletedPrivatePost = staleCompletedPrivatePostScenario();
 
 const devTestGameArgs = [
   "--name",
@@ -770,6 +773,35 @@ assert.equal(
   session.verification.privateChannel.completedGameRecovery.reloadAfterReject
     .reloadButtons.some((button) => button.disabled !== true),
   false,
+);
+assert.equal(
+  session.verification.privateChannel.completedGameRecovery.receiptStatusText,
+  staleCompletedPrivatePost.commandMessage,
+);
+assert.equal(
+  session.verification.privateChannel.completedGameRecovery.apiThreadPostBodies.includes(
+    session.verification.privateChannel.completedGameRecovery.postBody,
+  ),
+  false,
+);
+assert.equal(
+  session.verification.privateChannel.completedGameRecovery.reloadAfterReject
+    .reloadRejectedPostVisible,
+  false,
+);
+const completedPrivateChannelProofLane = proofRun.lanes.find(
+  (lane) => lane.id === coreLoopPrivateChannelCompletedPostLaneId,
+);
+assert.ok(completedPrivateChannelProofLane);
+assert.equal(completedPrivateChannelProofLane.status, "passed");
+assert.equal(
+  completedPrivateChannelProofLane.evidence.receiptStatusText,
+  staleCompletedPrivatePost.commandMessage,
+);
+assert.equal(completedPrivateChannelProofLane.evidence.threadPostPresent, false);
+assert.equal(
+  completedPrivateChannelProofLane.evidence.reloadControlsDisabled,
+  true,
 );
 assert.equal(
   session.verification.actionLoop.privateChannelInvalidActionRecovery.status,

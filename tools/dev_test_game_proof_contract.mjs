@@ -124,6 +124,7 @@ import {
   coreLoopPrivateChannelRecoveryLaneIds,
   coreLoopPrivateChannelStalePostLaneId,
   privateChannelInvalidActionRecoveryScenario,
+  staleCompletedPrivatePostScenario,
 } from "./dev_test_game_core_loop_private_channel_recovery_scenarios.mjs";
 
 export const DEV_TEST_GAME_PROOF_VERSION = 1;
@@ -1249,6 +1250,9 @@ export function buildDevTestGameProofRun(session, options = {}) {
       {
         channel:
           verification.privateChannel?.completedGameRecovery?.channel ?? null,
+        receiptStatusText:
+          verification.privateChannel?.completedGameRecovery
+            ?.receiptStatusText ?? null,
         state:
           verification.privateChannel?.completedGameRecovery?.reject?.state ??
           null,
@@ -1264,6 +1268,17 @@ export function buildDevTestGameProofRun(session, options = {}) {
         reloadGameCompleted:
           verification.privateChannel?.completedGameRecovery?.reloadAfterReject
             ?.recoveredCommandState?.gameCompleted ?? null,
+        threadPostPresent:
+          verification.privateChannel?.completedGameRecovery?.apiThreadPostBodies?.includes(
+            verification.privateChannel?.completedGameRecovery?.postBody,
+          ) ?? null,
+        reloadControlsDisabled:
+          verification.privateChannel?.completedGameRecovery?.reloadAfterReject
+            ?.reloadButtons?.some((button) => button.disabled !== true) ===
+          false,
+        reloadRejectedPostVisible:
+          verification.privateChannel?.completedGameRecovery?.reloadAfterReject
+            ?.reloadRejectedPostVisible ?? null,
         passed:
           verification.privateChannel?.completedGameRecovery?.status ===
             "passed" &&
@@ -1279,6 +1294,9 @@ export function buildDevTestGameProofRun(session, options = {}) {
             "reject" &&
           verification.privateChannel?.completedGameRecovery?.reject?.error ===
             "GameAlreadyCompleted" &&
+          verification.privateChannel?.completedGameRecovery?.receiptStatusText?.includes(
+            staleCompletedPrivatePostScenario().commandMessage,
+          ) === true &&
           verification.privateChannel?.completedGameRecovery?.reject
             ?.requestEnvelope?.body?.body?.command?.SubmitPost?.channel_id ===
             "private:mafia_day_chat" &&

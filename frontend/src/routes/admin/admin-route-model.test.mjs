@@ -48,9 +48,11 @@ import {
   playerInvalidActionRecoveryMessage,
 } from "../../../../tools/dev_test_game_core_loop_action_scenarios.mjs";
 import {
+  coreLoopPrivateChannelCompletedPostLaneId,
   coreLoopPrivateChannelInvalidActionLaneId,
   coreLoopPrivateChannelStalePostLaneId,
   privateChannelInvalidActionRecoveryScenario,
+  staleCompletedPrivatePostScenario,
 } from "../../../../tools/dev_test_game_core_loop_private_channel_recovery_scenarios.mjs";
 import {
   seedAggregateOnlyProofLaneIds,
@@ -2610,6 +2612,10 @@ test("admin local core loop detail data carries lane rows", async () => {
         "passed: channel private:mafia_day_chat, Ack: stream seqs 43, locked true",
       ],
       [
+        coreLoopPrivateChannelCompletedPostLaneId,
+        `passed: channel private:mafia_day_chat, ${staleCompletedPrivatePostScenario().commandMessage}, completed true, thread post false, reload closed true`,
+      ],
+      [
         coreLoopPrivateChannelInvalidActionLaneId,
         `passed: channel ${privateChannelInvalidActionRecoveryScenario().channelId}, ${privateChannelInvalidActionRecoveryScenario().commandMessage}, legal action visible true`,
       ],
@@ -2692,6 +2698,11 @@ test("admin local core loop detail data carries lane rows", async () => {
         coreLoopPrivateChannelStalePostLaneId,
         "passed: channel private:mafia_day_chat, Ack: stream seqs 43, locked true",
         "passed: channel private:mafia_day_chat, Ack: stream seqs 43, locked true",
+      ],
+      [
+        coreLoopPrivateChannelCompletedPostLaneId,
+        `passed: channel private:mafia_day_chat, ${staleCompletedPrivatePostScenario().commandMessage}, completed true, thread post false, reload closed true`,
+        `passed: channel private:mafia_day_chat, ${staleCompletedPrivatePostScenario().commandMessage}, completed true, thread post false, reload closed true`,
       ],
       [
         coreLoopPrivateChannelInvalidActionLaneId,
@@ -3808,6 +3819,18 @@ function proofRunFixture() {
       refreshedPhase: "D01",
       refreshedLocked: true,
       projectedPostBody: "Stale private-channel post after D01 phase closure fixture.",
+    },
+    [coreLoopPrivateChannelCompletedPostLaneId]: {
+      channel: "private:mafia_day_chat",
+      state: "reject",
+      error: staleCompletedPrivatePostScenario().commandError,
+      receiptStatusText: staleCompletedPrivatePostScenario().commandMessage,
+      gameCompleted: true,
+      reloadStatus: 200,
+      reloadGameCompleted: true,
+      threadPostPresent: false,
+      reloadControlsDisabled: true,
+      reloadRejectedPostVisible: false,
     },
     [coreLoopPrivateChannelInvalidActionLaneId]: {
       channel: privateChannelInvalidActionRecoveryScenario().channelId,

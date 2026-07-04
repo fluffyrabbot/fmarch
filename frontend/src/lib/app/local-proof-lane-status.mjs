@@ -36,9 +36,11 @@ import {
   playerInvalidActionRecoveryLaneId,
 } from "../../../../tools/dev_test_game_core_loop_action_scenarios.mjs";
 import {
+  coreLoopPrivateChannelCompletedPostLaneId,
   coreLoopPrivateChannelInvalidActionLaneId,
   coreLoopPrivateChannelStalePostLaneId,
   privateChannelInvalidActionRecoveryScenario,
+  staleCompletedPrivatePostScenario,
 } from "../../../../tools/dev_test_game_core_loop_private_channel_recovery_scenarios.mjs";
 import {
   revoteProgressionCompactStatus,
@@ -62,6 +64,7 @@ const CORE_LOOP_FOUNDATION_HIGHLIGHTED_LANE_IDS = Object.freeze([
   playerActionBoundaryLaneId,
   "private-channel",
   coreLoopPrivateChannelStalePostLaneId,
+  coreLoopPrivateChannelCompletedPostLaneId,
   coreLoopPrivateChannelInvalidActionLaneId,
 ]);
 
@@ -150,6 +153,10 @@ export function coreLoopLaneStatus(lane) {
       return `${status}: ${String(evidence.channel ?? "unknown")}, denied ${String(evidence.deniedStatus ?? "unknown")}`;
     case coreLoopPrivateChannelStalePostLaneId:
       return `${status}: channel ${String(evidence.channel ?? "unknown")}, ${String(evidence.receiptStatusText ?? "unknown receipt")}, locked ${String(evidence.refreshedLocked ?? "unknown")}`;
+    case coreLoopPrivateChannelCompletedPostLaneId: {
+      const scenario = staleCompletedPrivatePostScenario();
+      return `${status}: channel ${String(evidence.channel ?? "unknown")}, ${String(evidence.receiptStatusText ?? scenario.commandMessage)}, completed ${String(evidence.gameCompleted ?? "unknown")}, thread post ${String(evidence.threadPostPresent ?? "unknown")}, reload closed ${String(evidence.reloadControlsDisabled ?? "unknown")}`;
+    }
     case coreLoopPrivateChannelInvalidActionLaneId: {
       const scenario = privateChannelInvalidActionRecoveryScenario();
       return `${status}: channel ${String(evidence.channel ?? "unknown")}, ${String(evidence.receiptStatusText ?? `Reject ${String(evidence.error ?? scenario.commandError)}`)}, legal action visible ${String(evidence.legalActionVisible ?? "unknown")}`;

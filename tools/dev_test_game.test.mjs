@@ -4719,6 +4719,7 @@ test("session card and markdown include role credential URLs and tokens", async 
             },
           },
         },
+        receiptStatusText: "Reject GameAlreadyCompleted: game already completed",
         commandStateAfterReject: {
           gameCompleted: true,
           actions: [],
