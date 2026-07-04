@@ -4,10 +4,13 @@ import { test } from "node:test";
 import {
   assertHostPhaseTransitionSurfaceProof,
   assertLiveStaleD02VoteTransitionRecovery,
+  assertLiveStaleN01ActionTransitionRecovery,
   liveStaleD02VoteTransitionRecoveryProof,
+  liveStaleN01ActionTransitionRecoveryProof,
 } from "./dev_test_game_core_loop_transition_recovery_scenario_assertions.mjs";
 import {
   staleDayTwoVoteAfterTransitionRecoveryScenario,
+  staleNightOneActionAfterTransitionRecoveryScenario,
 } from "./dev_test_game_core_loop_action_scenarios.mjs";
 
 test("core-loop proof and readiness share transition recovery assertions", async () => {
@@ -148,6 +151,70 @@ test("shared live stale D02 vote transition assertion adapts raw browser evidenc
   );
 });
 
+test("shared live stale N01 action transition assertion adapts raw browser evidence", () => {
+  const scenario = {
+    ...staleNightOneActionAfterTransitionRecoveryScenario(),
+    actorSlot: "slot_4",
+    targetSlot: "slot-2",
+    refreshedPhaseId: "D02",
+    expectedRefreshKeys: [
+      "notifications",
+      "investigationResults",
+      "commandState",
+      "dayVoteOutcomes",
+    ],
+    checkpointActionState: "disabled:no legal action available",
+    checkpointTargetSlots: "",
+    receiptCount: 1,
+  };
+  const setup = liveStaleActionSetupFixture();
+  const recovery = liveStaleActionRecoveryFixture();
+  const proof = liveStaleN01ActionTransitionRecoveryProof({
+    setup,
+    recovery,
+    expectedGame: "game-a",
+    scenario,
+  });
+
+  assert.deepEqual(
+    {
+      actorSlot: proof.command.actor_slot,
+      targetSlot: proof.command.targets[0],
+      phase: proof.projectionCommandState.phase.phaseId,
+      actionState: proof.checkpointActionStateAfterReject,
+      targetSlots: proof.checkpointTargetSlotsAfterReject,
+    },
+    {
+      actorSlot: "slot_4",
+      targetSlot: "slot-2",
+      phase: "D02",
+      actionState: "disabled:no legal action available",
+      targetSlots: "",
+    },
+  );
+  assert.doesNotThrow(() =>
+    assertLiveStaleN01ActionTransitionRecovery({
+      setup,
+      recovery,
+      expectedGame: "game-a",
+      scenario,
+    }),
+  );
+  assert.throws(
+    () =>
+      assertLiveStaleN01ActionTransitionRecovery({
+        setup: {
+          ...setup,
+          closedStatus: { state: "open" },
+        },
+        recovery,
+        expectedGame: "game-a",
+        scenario,
+      }),
+    /stale N01 action transition setup/,
+  );
+});
+
 function hostStaleAdvanceProofFixture() {
   return {
     status: "passed",
@@ -237,6 +304,63 @@ function liveStaleVoteRecoveryFixture() {
     buttonsAfterReject: [
       { action: "submit_action:factional_kill", disabled: false },
     ],
+  };
+}
+
+function liveStaleActionSetupFixture() {
+  return {
+    staleN01Phase: { phaseId: "N01", locked: false },
+    actionConfig: {
+      actionId: "role_factional_kill",
+      templateId: "factional_kill",
+      targets: ["slot-2"],
+    },
+    closedStatus: { state: "closed" },
+  };
+}
+
+function liveStaleActionRecoveryFixture() {
+  return {
+    status: "passed",
+    reject: {
+      state: "reject",
+      error: "PhaseLocked",
+      message:
+        "Reject PhaseLocked: phase locked; stale action state, refresh and use current action controls",
+      requestEnvelope: {
+        body: {
+          body: {
+            command: {
+              SubmitAction: {
+                action_id: "role_factional_kill",
+                actor_slot: "slot_4",
+                template_id: "factional_kill",
+                targets: ["slot-2"],
+                grant_id: null,
+              },
+            },
+          },
+        },
+      },
+    },
+    dispatchPlan: {
+      projectionRefreshKeys: [
+        "notifications",
+        "investigationResults",
+        "commandState",
+        "dayVoteOutcomes",
+      ],
+    },
+    commandStateAfterReject: {
+      actorSlot: "slot_4",
+      phase: { phaseId: "D02", locked: false },
+      actions: [],
+      boundary: "Role-action availability is derived from committed state.",
+    },
+    currentReceipt: { state: "reject" },
+    receiptStatusText:
+      "Reject PhaseLocked: phase locked; stale action state, refresh and use current action controls",
+    actionVisibleAfterRefresh: false,
   };
 }
 

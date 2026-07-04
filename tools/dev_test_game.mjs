@@ -25,9 +25,11 @@ import {
 import {
   playerInvalidActionRecoveryMessage,
   staleDayTwoVoteAfterTransitionRecoveryScenario,
+  staleNightOneActionAfterTransitionRecoveryScenario,
 } from "./dev_test_game_core_loop_action_scenarios.mjs";
 import {
   assertLiveStaleD02VoteTransitionRecovery,
+  assertLiveStaleN01ActionTransitionRecovery,
 } from "./dev_test_game_core_loop_transition_recovery_scenario_assertions.mjs";
 import {
   coreLoopPrivateChannelCompletedPostLaneId,
@@ -6762,34 +6764,52 @@ async function submitStaleActionConflict({
   const apiCommandStateAfterReject = await fetchJson(
     `${apiBaseUrl}/games/${game}/player-command-state?principal_user_id=player-goon-a&slot_id=slot_4`,
   );
+  const submittedCommand =
+    reject?.requestEnvelope?.body?.body?.command?.SubmitAction;
+  const staleActionTransitionScenario = {
+    ...staleNightOneActionAfterTransitionRecoveryScenario(),
+    actorSlot: "slot_4",
+    targetSlot: submittedCommand?.targets?.[0] ?? "",
+    refreshedPhaseId: "D02",
+    expectedRefreshKeys: [
+      "notifications",
+      "investigationResults",
+      "commandState",
+      "dayVoteOutcomes",
+    ],
+    checkpointActionState: "disabled:no legal action available",
+    checkpointTargetSlots: "",
+    receiptCount: 1,
+  };
+  assertLiveStaleN01ActionTransitionRecovery({
+    setup: staleActionSetup,
+    recovery: {
+      status: "passed",
+      reject,
+      commandStateAfterReject,
+      dispatchPlan,
+      currentReceipt,
+      receiptStatusText,
+      actionVisibleAfterRefresh: false,
+    },
+    expectedGame: game,
+    scenario: staleActionTransitionScenario,
+    includeEvidenceInError: true,
+  });
   if (
-    reject?.state !== "reject" ||
-    reject?.error !== "PhaseLocked" ||
     reject?.serverEnvelope?.body?.kind !== "Reject" ||
     Array.isArray(reject?.streamSeqs) ||
-    reject?.requestEnvelope?.body?.body?.command?.SubmitAction?.actor_slot !==
-      "slot_4" ||
-    reject?.requestEnvelope?.body?.body?.command?.SubmitAction?.template_id !==
-      "factional_kill" ||
     dispatchPlan?.projectionRefreshKeys?.includes("notifications") !== true ||
     dispatchPlan?.projectionRefreshKeys?.includes("investigationResults") !== true ||
-    dispatchPlan?.projectionRefreshKeys?.includes("commandState") !== true ||
-    dispatchPlan?.projectionRefreshKeys?.includes("dayVoteOutcomes") !== true ||
     currentReceipt?.actionId !== "submit_action:factional_kill" ||
-    currentReceipt?.state !== "reject" ||
     currentReceipt?.commandTrace?.projectionRefreshKeys?.includes("commandState") !==
       true ||
     currentReceipt?.commandTrace?.projectionRefreshKeys?.includes(
       "dayVoteOutcomes",
     ) === true ||
-    !receiptStatusText.includes("Reject PhaseLocked") ||
-    !receiptStatusText.includes("stale action state") ||
-    commandStateAfterReject?.actorSlot !== "slot_4" ||
     commandStateAfterReject?.actorAlive !== true ||
     commandStateAfterReject?.actorStatus !== "alive" ||
-    commandStateAfterReject?.phase?.phaseId !== "D02" ||
     commandStateAfterReject?.phase?.locked !== false ||
-    commandStateAfterReject?.actions?.length !== 0 ||
     apiCommandStateAfterReject?.actor_slot !== "slot_4" ||
     apiCommandStateAfterReject?.actor_alive !== true ||
     apiCommandStateAfterReject?.actor_status !== "alive" ||

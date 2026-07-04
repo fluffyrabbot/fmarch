@@ -5,6 +5,7 @@ import {
 import {
   staleDayTwoVoteAfterTransitionRecoveryScenario,
   staleNightFourActionRecoveryScenario,
+  staleNightOneActionAfterTransitionRecoveryScenario,
 } from "./dev_test_game_core_loop_action_scenario_cases.mjs";
 import {
   assertHostStaleAdvanceAfterTransitionProofCase,
@@ -267,6 +268,99 @@ export function assertLiveStaleD02VoteTransitionRecovery({
     });
   }
   assertPlayerStaleVoteAfterTransitionProofCase({
+    proof,
+    expectedGame,
+    scenario,
+    includeEvidenceInError,
+  });
+  return proof;
+}
+
+export function liveStaleN01ActionTransitionRecoveryProof({
+  setup,
+  recovery,
+  expectedGame,
+  scenario = staleNightOneActionAfterTransitionRecoveryScenario(),
+}) {
+  const command =
+    recovery?.reject?.requestEnvelope?.body?.body?.command?.SubmitAction;
+  const targetSlots =
+    recovery?.commandStateAfterReject?.actions
+      ?.flatMap((action) => action.targets ?? [])
+      .filter((slot) => typeof slot === "string")
+      .join(",") || scenario.checkpointTargetSlots;
+  return {
+    status: recovery?.status ?? "passed",
+    clickedAction: scenario.clickedAction,
+    commandKind: scenario.commandKind,
+    command: {
+      game: expectedGame,
+      action_id: scenario.actionId,
+      actor_slot: command?.actor_slot ?? scenario.actorSlot,
+      template_id: command?.template_id ?? scenario.templateId,
+      targets: command?.targets ?? [scenario.targetSlot],
+      grant_id: command?.grant_id ?? null,
+    },
+    commandStatus: recovery?.reject,
+    bridgePlan: {
+      role: "player",
+      commandKind: scenario.commandKind,
+      commandEndpoint: "/commands",
+      finalState: scenario.finalState,
+      projectionRefreshKeys:
+        recovery?.dispatchPlan?.projectionRefreshKeys ?? [],
+    },
+    receipts: [{ state: recovery?.currentReceipt?.state }],
+    projectionCommandState: {
+      ...recovery?.commandStateAfterReject,
+      boundary: transitionRecoveryBoundary({
+        boundary: recovery?.commandStateAfterReject?.boundary,
+        scenario,
+      }),
+    },
+    checkpointReceiptState:
+      recovery?.currentReceipt?.state === scenario.finalState
+        ? `${scenario.finalState}:${scenario.error}`
+        : scenario.checkpointReceiptState,
+    checkpointPhaseIdAfterReject:
+      recovery?.commandStateAfterReject?.phase?.phaseId,
+    checkpointActionStateAfterReject:
+      recovery?.actionVisibleAfterRefresh === false
+        ? "disabled:no legal action available"
+        : scenario.checkpointActionState,
+    checkpointTargetSlotsAfterReject: targetSlots,
+    recoveryText: recovery?.receiptStatusText,
+    receiptCount: scenario.receiptCount,
+    receiptStatusText: recovery?.receiptStatusText,
+  };
+}
+
+export function assertLiveStaleN01ActionTransitionRecovery({
+  setup,
+  recovery,
+  expectedGame,
+  scenario = staleNightOneActionAfterTransitionRecoveryScenario(),
+  includeEvidenceInError = false,
+}) {
+  const setupPhaseId = scenario.setupPhaseId ?? "N01";
+  const proof = liveStaleN01ActionTransitionRecoveryProof({
+    setup,
+    recovery,
+    expectedGame,
+    scenario,
+  });
+  if (
+    setup?.staleN01Phase?.phaseId !== setupPhaseId ||
+    setup?.actionConfig?.templateId !== scenario.templateId ||
+    setup?.closedStatus?.state !== "closed"
+  ) {
+    throwTransitionRecoveryAssertionError({
+      message: "core-loop live proof missing stale N01 action transition setup",
+      evidence: { setup, scenario },
+      includeEvidenceInError,
+    });
+  }
+  assertPlayerStaleActionAfterTransitionProofCase({
     proof,
     expectedGame,
     scenario,
