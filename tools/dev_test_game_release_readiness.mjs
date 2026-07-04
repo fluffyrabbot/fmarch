@@ -212,7 +212,6 @@ import {
 } from "./dev_test_game_core_loop_private_channel_recovery_scenarios.mjs";
 import {
   recoveryReceiptEvidenceByKeyFromOptions,
-  recoveryReceiptGraphDescriptorByReceiptKey,
   recoveryReceiptOptionalReadinessArtifactDescriptor,
   recoveryReceiptReadinessCheck,
   recoveryReceiptReleaseReadinessDescriptors,
@@ -5434,55 +5433,15 @@ export function validateDevTestGameAdminSpineTerminalBatches(
   };
 }
 
-export function validateDevTestGamePrivateChannelRecoveryReceipt(
-  proof,
-  options = {},
-) {
-  return validateRecoveryReceiptArtifact(
-    proof,
-    recoveryReceiptGraphDescriptorByReceiptKey("privateChannelRecoveryReceipt"),
-    options,
-  );
-}
-
-export function validateDevTestGameReplacementPrivateRecoveryReceipt(
-  proof,
-  options = {},
-) {
-  return validateRecoveryReceiptArtifact(
-    proof,
-    recoveryReceiptGraphDescriptorByReceiptKey(
-      "replacementPrivateRecoveryReceipt",
-    ),
-    options,
-  );
-}
-
-export function validateDevTestGameReplacementActionRecoveryReceipt(
-  proof,
-  options = {},
-) {
-  return validateRecoveryReceiptArtifact(
-    proof,
-    recoveryReceiptGraphDescriptorByReceiptKey(
-      "replacementActionRecoveryReceipt",
-    ),
-    options,
-  );
-}
-
-export function validateDevTestGameReplacementHandoffRecoveryReceipt(
-  proof,
-  options = {},
-) {
-  return validateRecoveryReceiptArtifact(
-    proof,
-    recoveryReceiptGraphDescriptorByReceiptKey(
-      "replacementHandoffRecoveryReceipt",
-    ),
-    options,
-  );
-}
+export const recoveryReceiptReleaseReadinessValidators = Object.freeze(
+  Object.fromEntries(
+    recoveryReceiptReleaseReadinessDescriptors.map((descriptor) => [
+      descriptor.receiptKey,
+      (proof, options = {}) =>
+        validateRecoveryReceiptArtifact(proof, descriptor, options),
+    ]),
+  ),
+);
 
 export function validateDevTestGameAdminSpineAdminProof(proof, options = {}) {
   const requiredChecks = [

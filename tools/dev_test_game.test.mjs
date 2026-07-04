@@ -16,6 +16,7 @@ import {
 import {
   assertDevTestGameReleaseReadiness,
   buildDevTestGameReleaseReadiness,
+  recoveryReceiptReleaseReadinessValidators,
   validateDevTestGameAdminSpineProof,
   validateDevTestGameAdminSpineTerminalBatches,
 } from "./dev_test_game_release_readiness.mjs";
@@ -11192,6 +11193,13 @@ test("session card and markdown include role credential URLs and tokens", async 
     "target/dev-test-game/admin-spine-terminal-batches.json",
   );
   for (const descriptor of recoveryReceiptGraphDescriptors) {
+    const validateReceipt =
+      recoveryReceiptReleaseReadinessValidators[descriptor.receiptKey];
+    assert.equal(typeof validateReceipt, "function");
+    assert.equal(
+      validateReceipt(recoveryReceiptFixture(descriptor)).path,
+      descriptor.proofTarget,
+    );
     assert.equal(
       adminSpineReadiness.generatedFrom[descriptor.receiptKey],
       descriptor.proofTarget,
