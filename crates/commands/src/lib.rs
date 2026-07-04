@@ -492,18 +492,7 @@ async fn handle_command(
         Command::CreateGame { game, pack } => {
             create_game(pool, principal, game, pack, receipt).await
         }
-        Command::AddSlot { game, slot } => {
-            host_lifecycle(
-                pool,
-                principal,
-                game,
-                "SlotAdded",
-                serde_json::json!({ "slot_id": slot }),
-                ActorId::Host,
-                receipt,
-            )
-            .await
-        }
+        Command::AddSlot { game, slot } => add_slot(pool, principal, game, slot, receipt).await,
         Command::AssignSlot { game, slot, user } => {
             assign_slot(pool, principal, game, slot, user, receipt).await
         }
@@ -763,6 +752,34 @@ async fn host_lifecycle(
         pool,
         game,
         &[EventInput::new(kind, 1, payload, actor, 0)],
+        receipt,
+    )
+    .await
+}
+
+async fn add_slot(
+    pool: &PgPool,
+    principal: &Principal,
+    game: Uuid,
+    slot: String,
+    receipt: Option<&ReceiptClaim>,
+) -> Result<Ack, Reject> {
+    require_game(pool, game).await?;
+    let caps = caps::resolve(pool, principal, game).await?;
+    require(&caps, &Capability::HostOf(game), Reject::NotHost)?;
+    if projections::slot_exists(pool, game, &slot).await? {
+        return Err(Reject::InvalidTarget);
+    }
+    persist(
+        pool,
+        game,
+        &[EventInput::new(
+            "SlotAdded",
+            1,
+            serde_json::json!({ "slot_id": slot }),
+            ActorId::Host,
+            0,
+        )],
         receipt,
     )
     .await

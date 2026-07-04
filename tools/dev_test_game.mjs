@@ -1329,6 +1329,17 @@ async function verifyDisposableHostSetupRosterRoleCommand({
       surface: "/auth/session-grants",
     },
   });
+  const staleSetupSession = await createSessionGrantCredential({
+    token: `${tokenPrefix}-host-setup-mutation-stale-${setupGame}`,
+    principalUserId: "host_h",
+    returnTo: `/g/${setupGame}/setup`,
+    expectedCapabilityKind: "HostOf",
+    issuedBy: {
+      principalUserId: "root_admin",
+      capabilityKind: "GlobalAdmin",
+      surface: "/auth/session-grants",
+    },
+  });
   const entry = await openVerifiedRoleEntry({
     browser,
     session: setupSession,
@@ -1336,12 +1347,24 @@ async function verifyDisposableHostSetupRosterRoleCommand({
     apiBaseUrl,
     frontendBaseUrl,
   });
+  const staleEntry = await openVerifiedRoleEntry({
+    browser,
+    session: staleSetupSession,
+    game: setupGame,
+    apiBaseUrl,
+    frontendBaseUrl,
+  });
   const page = entry.page;
+  const stalePage = staleEntry.page;
   const addedSlotId = "slot_extra";
   const assignedPrincipalUserId = "setup-extra-player";
   const assignedRoleKey = "mafia_goon";
   try {
     await page.getByTestId("host-setup-surface").waitFor({
+      state: "visible",
+      timeout: 15000,
+    });
+    await stalePage.getByTestId("host-setup-surface").waitFor({
       state: "visible",
       timeout: 15000,
     });
@@ -1364,6 +1387,28 @@ async function verifyDisposableHostSetupRosterRoleCommand({
       statePredicate: (state) =>
         (state?.slots ?? []).some((slot) => slot.slotId === addedSlotId),
     });
+
+    await stalePage
+      .locator('section[aria-label="Roster"] input[name="slotId"]:not([type="hidden"])')
+      .fill(addedSlotId);
+    await stalePage.getByRole("button", { name: "Add slot" }).click();
+    const duplicateAddSlotRecovery = await waitForHostSetupCommand({
+      setupPage: stalePage,
+      statusTestId: "host-setup-add-slot-status",
+      commandKind: "AddSlot",
+      expectedState: "reject",
+      expectedError: "InvalidTarget",
+      commandPredicate: (command) => command?.slot === addedSlotId,
+      statePredicate: (state) =>
+        (state?.slots ?? []).filter((slot) => slot.slotId === addedSlotId)
+          .length === 1,
+    });
+    const staleStateAfterDuplicateReject = await stalePage.evaluate(
+      () => window.__fmarchHostSetupState ?? null,
+    );
+    const duplicateSlotCountAfterReject = (
+      staleStateAfterDuplicateReject?.slots ?? []
+    ).filter((slot) => slot.slotId === addedSlotId).length;
 
     const rosterRow = page.getByTestId(`host-setup-slot-${addedSlotId}`);
     await rosterRow.locator('input[name="principalUserId"]').fill(
@@ -1417,6 +1462,8 @@ async function verifyDisposableHostSetupRosterRoleCommand({
       page.url() !== `${frontendBaseUrl}/g/${setupGame}/setup` ||
       initialSummary !== "Ready to start" ||
       initialState?.phase !== null ||
+      duplicateAddSlotRecovery.error !== "InvalidTarget" ||
+      duplicateSlotCountAfterReject !== 1 ||
       finalSlot?.occupantUserId !== assignedPrincipalUserId ||
       finalSlot?.roleKey !== assignedRoleKey ||
       finalReadiness?.summary !== "Ready to start" ||
@@ -1428,6 +1475,8 @@ async function verifyDisposableHostSetupRosterRoleCommand({
           expectedUrl: `${frontendBaseUrl}/g/${setupGame}/setup`,
           initialSummary,
           initialState,
+          duplicateAddSlotRecovery,
+          staleStateAfterDuplicateReject,
           finalState,
           finalReadiness,
         })}`,
@@ -1445,6 +1494,13 @@ async function verifyDisposableHostSetupRosterRoleCommand({
       assignedPrincipalUserId,
       assignedRoleKey,
       initialSummary,
+      duplicateAddSlotRecovery: {
+        ...duplicateAddSlotRecovery,
+        refreshedSlotCount: (staleStateAfterDuplicateReject?.slots ?? []).length,
+        duplicateSlotCountAfterReject,
+        refreshedReadinessSummary:
+          duplicateAddSlotRecovery.readinessSummary ?? null,
+      },
       finalSummary: finalReadiness.summary,
       finalStartAvailable: finalReadiness.startAvailable,
       finalSlot,
@@ -1456,6 +1512,7 @@ async function verifyDisposableHostSetupRosterRoleCommand({
     };
   } finally {
     await entry.context.close().catch(() => {});
+    await staleEntry.context.close().catch(() => {});
   }
 }
 
@@ -1495,29 +1552,34 @@ async function waitForHostSetupCommand({
   setupPage,
   statusTestId,
   commandKind,
+  expectedState = "ack",
+  expectedError = null,
   commandPredicate,
   statePredicate,
 }) {
   try {
     await setupPage.waitForFunction(
-      ({ commandKind: expectedKind }) => {
+      ({ commandKind: expectedKind, expectedState }) => {
         const outcome = window.__fmarchHostSetupCommandOutcome;
-        if (outcome?.state !== "ack") {
+        if (outcome?.state !== expectedState) {
           return false;
         }
         const command = outcome?.requestEnvelope?.body?.body?.command?.[expectedKind];
         return command !== undefined;
       },
-      { commandKind },
+      { commandKind, expectedState },
       { timeout: 15000 },
     );
     await setupPage.waitForFunction(
-      ({ commandKind: expectedKind }) => {
+      ({ commandKind: expectedKind, expectedState }) => {
         const outcome = window.__fmarchHostSetupCommandOutcome;
+        if (outcome?.state !== expectedState) {
+          return false;
+        }
         const command = outcome?.requestEnvelope?.body?.body?.command?.[expectedKind];
         return command !== undefined && window.__fmarchHostSetupState !== undefined;
       },
-      { commandKind },
+      { commandKind, expectedState },
       { timeout: 15000 },
     );
   } catch (error) {
@@ -1540,7 +1602,8 @@ async function waitForHostSetupCommand({
   const command =
     outcome?.requestEnvelope?.body?.body?.command?.[commandKind] ?? null;
   if (
-    statusState !== "ack" ||
+    statusState !== expectedState ||
+    (expectedError !== null && outcome?.error !== expectedError) ||
     commandPredicate(command) !== true ||
     statePredicate(setupState) !== true
   ) {
@@ -1548,6 +1611,8 @@ async function waitForHostSetupCommand({
       `host setup ${commandKind} command drifted: ${JSON.stringify({
         statusState,
         statusText,
+        expectedState,
+        expectedError,
         command,
         setupState,
         readiness,
@@ -1559,6 +1624,8 @@ async function waitForHostSetupCommand({
     status: statusState,
     statusText,
     commandKind,
+    error: outcome.error ?? null,
+    retryable: outcome.retryable ?? false,
     command,
     streamSeqs: outcome.streamSeqs,
     requestEnvelope: outcome.requestEnvelope,

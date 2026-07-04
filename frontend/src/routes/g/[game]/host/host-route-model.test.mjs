@@ -342,6 +342,22 @@ test("host console route data is allowed for CohostOf scoped to the current game
   assert.equal(data.hostLifecycleControlCheckpoint.status.state, "pending");
 });
 
+test("host console access accepts API-shaped game capabilities", () => {
+  const access = resolveHostConsoleAccess({
+    game: "midsummer",
+    capabilities: [
+      {
+        kind: "HostOf",
+        body: { game: "midsummer" },
+        source: "auth-session",
+      },
+    ],
+  });
+
+  assert.equal(access.allowed, true);
+  assert.equal(access.capabilityLabel, "HostOf(midsummer)");
+});
+
 test("host console access rejects missing and wrong-game capabilities", () => {
   assert.equal(
     resolveHostConsoleAccess({

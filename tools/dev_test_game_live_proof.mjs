@@ -509,6 +509,31 @@ assert.equal(
   "Ready to start",
 );
 assert.equal(
+  session.verification.hostSetup.setupMutationCommand.duplicateAddSlotRecovery
+    .status,
+  "reject",
+);
+assert.equal(
+  session.verification.hostSetup.setupMutationCommand.duplicateAddSlotRecovery
+    .error,
+  "InvalidTarget",
+);
+assert.equal(
+  session.verification.hostSetup.setupMutationCommand.duplicateAddSlotRecovery
+    .commandKind,
+  "AddSlot",
+);
+assert.equal(
+  session.verification.hostSetup.setupMutationCommand.duplicateAddSlotRecovery
+    .command.slot,
+  "slot_extra",
+);
+assert.equal(
+  session.verification.hostSetup.setupMutationCommand.duplicateAddSlotRecovery
+    .duplicateSlotCountAfterReject,
+  1,
+);
+assert.equal(
   session.verification.hostSetup.setupMutationCommand.finalSummary,
   "Ready to start",
 );

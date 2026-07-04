@@ -30,6 +30,24 @@ const CHECKS = Object.freeze([
         ?.valueMatchesGrantedToken === true,
   },
   {
+    id: "host-setup-workflow",
+    label: "Admin-created game setup proves roster, role, policy, StartGame, and host handoff",
+    predicate: (evidence) =>
+      evidence?.browser?.admin?.hostSetup?.status === "passed" &&
+      evidence.browser.admin.hostSetup?.commands?.addSlot?.commandKind === "AddSlot" &&
+      evidence.browser.admin.hostSetup?.commands?.assignSlot?.commandKind ===
+        "AssignSlot" &&
+      evidence.browser.admin.hostSetup?.commands?.assignRole?.command?.role_key ===
+        "vanilla_townie" &&
+      evidence.browser.admin.hostSetup?.commands?.setPostPolicy?.command
+        ?.allow_media_only === true &&
+      evidence.browser.admin.hostSetup?.commands?.startGame?.command?.phase === "D01" &&
+      evidence.browser.admin.hostSetup?.readyReadiness?.summary === "Ready to start" &&
+      evidence.browser.admin.hostSetup?.startedReadiness?.summary === "Started at D01" &&
+      evidence.browser.admin.hostSetup?.hostConsoleState?.phase?.phase_id === "D01" &&
+      evidence.browser.admin.hostSetup?.hostConsoleState?.slot?.slot_id === "slot_1",
+  },
+  {
     id: "host-phase-controls",
     label: "Host route proves lock, stale lock recovery, unlock, and phase controls",
     predicate: (evidence) =>
@@ -90,8 +108,8 @@ const CHECKS = Object.freeze([
     predicate: (evidence) =>
       evidence?.browser?.player?.staleVoteRecovery?.recovery?.outcome?.error ===
         "PhaseLocked" &&
-      evidence?.browser?.player?.staleVoteRecovery?.recovery?.statusMessage?.includes(
-        "stale projection",
+      isStalePlayerVoteRecoveryMessage(
+        evidence?.browser?.player?.staleVoteRecovery?.recovery?.statusMessage,
       ) &&
       evidence?.browser?.playerAction?.staleActionRecovery?.outcome?.error ===
         "PhaseLocked" &&
@@ -124,6 +142,14 @@ const CHECKS = Object.freeze([
       ),
   },
 ]);
+
+function isStalePlayerVoteRecoveryMessage(message) {
+  const value = String(message ?? "");
+  return (
+    value.includes("stale projection") ||
+    value.includes("stale vote state")
+  );
+}
 
 export function buildLiveStackReadiness(evidence) {
   const checks = CHECKS.map((check) =>

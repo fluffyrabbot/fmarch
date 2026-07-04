@@ -288,6 +288,16 @@ export function buildDevTestGameProofRun(session, options = {}) {
           "setup-extra-player" &&
         verification.hostSetup?.setupMutationCommand?.assignedRoleKey ===
           "mafia_goon" &&
+        verification.hostSetup?.setupMutationCommand?.duplicateAddSlotRecovery
+          ?.status === "reject" &&
+        verification.hostSetup?.setupMutationCommand?.duplicateAddSlotRecovery
+          ?.error === "InvalidTarget" &&
+        verification.hostSetup?.setupMutationCommand?.duplicateAddSlotRecovery
+          ?.commandKind === "AddSlot" &&
+        verification.hostSetup?.setupMutationCommand?.duplicateAddSlotRecovery
+          ?.command?.slot === "slot_extra" &&
+        verification.hostSetup?.setupMutationCommand?.duplicateAddSlotRecovery
+          ?.duplicateSlotCountAfterReject === 1 &&
         verification.hostSetup?.setupMutationCommand?.finalSlot?.slotId ===
           "slot_extra" &&
         verification.hostSetup?.setupMutationCommand?.finalSlot?.occupantUserId ===

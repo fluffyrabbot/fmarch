@@ -2878,6 +2878,22 @@ test("session card and markdown include role credential URLs and tokens", async 
         assignedPrincipalUserId: "setup-extra-player",
         assignedRoleKey: "mafia_goon",
         initialSummary: "Ready to start",
+        duplicateAddSlotRecovery: {
+          status: "reject",
+          statusText: "Reject InvalidTarget: invalid target",
+          commandKind: "AddSlot",
+          error: "InvalidTarget",
+          retryable: false,
+          command: {
+            game: "77777777-7777-4777-8777-777777777777",
+            slot: "slot_extra",
+          },
+          streamSeqs: [],
+          readinessSummary: "Setup still needs attention",
+          refreshedReadinessSummary: "Setup still needs attention",
+          refreshedSlotCount: 2,
+          duplicateSlotCountAfterReject: 1,
+        },
         finalSummary: "Ready to start",
         finalStartAvailable: true,
         finalSlot: {

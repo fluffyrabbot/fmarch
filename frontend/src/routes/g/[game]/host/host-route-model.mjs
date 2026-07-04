@@ -8,6 +8,10 @@ import {
 import { buildHostConsoleStateEndpoint } from "../../../../lib/components/host-action/host-command-boundary.mjs";
 import { buildAppShell } from "../../../../lib/app/app-shell-model.mjs";
 import { buildAppSurfaceHeaderViewModel } from "../../../../lib/app/app-surface-header-model.mjs";
+import {
+  capabilityLabel,
+  normalizeCapabilities,
+} from "../../../../lib/app/capabilities.mjs";
 import { LIVE_TRANSPORT_BOUNDARY } from "../../../../lib/app/projection-store.mjs";
 import { buildLiveProjectionUrl } from "../../../../lib/app/live-transport.mjs";
 import {
@@ -271,7 +275,7 @@ function buildModeratorControls({ capabilityKind, pendingPromptCount }) {
 
 export function resolveHostConsoleAccess({ game, capabilities = [] }) {
   const gameId = normalizeGame(game);
-  const normalizedCapabilities = capabilities.map(normalizeCapability);
+  const normalizedCapabilities = normalizeCapabilities(capabilities);
   const capability = normalizedCapabilities.find(
     (candidate) =>
       HOST_CONSOLE_REQUIRED_CAPABILITIES.includes(candidate.kind) &&
@@ -381,30 +385,4 @@ function normalizeSlotId(slotId) {
 function slotDisplayLabel(slotId) {
   const suffix = slotId.match(/\d+/)?.[0];
   return suffix === undefined ? slotId : `Slot ${suffix}`;
-}
-
-function normalizeCapability(capability) {
-  if (capability === null || typeof capability !== "object") {
-    throw new TypeError("resolved capabilities must be objects");
-  }
-
-  return Object.freeze({
-    kind: requiredCapabilityField(capability.kind, "kind"),
-    game: requiredCapabilityField(capability.game, "game"),
-    source:
-      typeof capability.source === "string" && capability.source.trim() !== ""
-        ? capability.source
-        : null,
-  });
-}
-
-function requiredCapabilityField(value, field) {
-  if (typeof value !== "string" || value.trim() === "") {
-    throw new TypeError(`capability ${field} must be a non-empty string`);
-  }
-  return value;
-}
-
-function capabilityLabel(capability) {
-  return `${capability.kind}(${capability.game})`;
 }

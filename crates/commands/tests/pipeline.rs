@@ -71850,6 +71850,58 @@ async fn concurrent_player_action_and_host_advance_phase_rejects_late_action(poo
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]
+async fn duplicate_add_slot_rejects_without_duplicate_event(pool: PgPool) {
+    let game = Uuid::new_v4();
+    let host = user("host_h");
+    handle(
+        &pool,
+        &host,
+        Command::CreateGame {
+            game,
+            pack: "mafiascum".into(),
+        },
+    )
+    .await
+    .expect("create setup game");
+
+    handle(
+        &pool,
+        &host,
+        Command::AddSlot {
+            game,
+            slot: "slot_extra".into(),
+        },
+    )
+    .await
+    .expect("initial slot add");
+    let duplicate = handle(
+        &pool,
+        &host,
+        Command::AddSlot {
+            game,
+            slot: "slot_extra".into(),
+        },
+    )
+    .await
+    .expect_err("stale duplicate add-slot rejects once the slot exists");
+    assert_eq!(duplicate, Reject::InvalidTarget);
+
+    let slot_added_count = sqlx::query_scalar::<_, i64>(
+        "SELECT count(*) FROM events \
+         WHERE stream_id = $1 AND kind = 'SlotAdded' \
+           AND payload->>'slot_id' = 'slot_extra'",
+    )
+    .bind(game)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        slot_added_count, 1,
+        "stale duplicate add-slot rejection must not append duplicate SlotAdded events"
+    );
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
 async fn duplicate_official_votecount_publish_rejects_without_duplicate_post(pool: PgPool) {
     let game = setup_game(&pool, "host_h", "slot_1", "user_a").await;
     let host = user("host_h");

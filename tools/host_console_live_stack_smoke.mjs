@@ -62,6 +62,7 @@ let vite;
 let browser;
 let smokeDatabase;
 let serverOutput = "";
+let primaryError = null;
 const previousSmokeAuth = process.env.FMARCH_HOST_CONSOLE_SMOKE_AUTH;
 const previousApiBaseUrl = process.env.FMARCH_API_BASE_URL;
 process.env.FMARCH_HOST_CONSOLE_SMOKE_AUTH = "1";
@@ -178,6 +179,7 @@ try {
   await writeProgress({ stage: "complete", evidencePath });
   console.log(`wrote ${path.relative(repoRoot, evidencePath)}`);
 } catch (error) {
+  primaryError = error;
   const handled = await handleLocalhostBindFailure({
     error,
     repoRoot,
@@ -197,12 +199,23 @@ try {
   if (vite !== undefined) {
     await vite.close();
   }
-  if (server !== undefined) {
-    await stopChild(server, "rust server");
-  }
   if (smokeDatabase !== undefined) {
     await writeProgress({ stage: "drop-temp-database", database: smokeDatabase.name });
-    await dropSmokeDatabase(smokeDatabase);
+    try {
+      await dropSmokeDatabase(smokeDatabase);
+    } catch (dropError) {
+      if (primaryError === null) {
+        throw dropError;
+      }
+      console.warn(
+        `warning: failed to drop smoke database after primary failure: ${
+          dropError?.message ?? dropError
+        }`,
+      );
+    }
+  }
+  if (server !== undefined) {
+    await stopChild(server, "rust server");
   }
   if (previousSmokeAuth === undefined) {
     delete process.env.FMARCH_HOST_CONSOLE_SMOKE_AUTH;
@@ -1186,6 +1199,7 @@ async function driveAdminBrowser(frontendBaseUrl) {
     );
   }
   const grantedGlobalModLogin = await driveGrantedGlobalModLogin(frontendBaseUrl);
+  const hostSetup = await driveHostSetupBrowser(page, frontendBaseUrl);
 
   await context.close();
   return {
@@ -1210,7 +1224,267 @@ async function driveAdminBrowser(frontendBaseUrl) {
       capabilityKinds: grantedGlobalModCapabilityKinds,
     },
     grantedGlobalModLogin,
+    hostSetup,
   };
+}
+
+async function driveHostSetupBrowser(page, frontendBaseUrl) {
+  const adminUrl = `${frontendBaseUrl}/admin?game=${adminCreatedGame}`;
+  if (page.url() !== adminUrl) {
+    await page.goto(adminUrl, { waitUntil: "networkidle" });
+    await page.getByTestId("admin-surface").waitFor({ state: "visible" });
+  }
+
+  const setupTrigger = page.getByTestId("admin-command-trigger-host-setup");
+  await setupTrigger.waitFor({ state: "visible" });
+  const setupTriggerBox = await setupTrigger.boundingBox();
+  assertHitTarget(setupTriggerBox, "admin host setup trigger");
+  await Promise.all([
+    page.waitForURL(`${frontendBaseUrl}/g/${adminCreatedGame}/setup`, {
+      waitUntil: "networkidle",
+    }),
+    setupTrigger.click(),
+  ]);
+
+  await page.getByTestId("host-setup-surface").waitFor({ state: "visible" });
+  const setupUrl = page.url();
+  const initialReadiness = await setupReadiness(page);
+  if (initialReadiness.summary !== "Setup still needs attention") {
+    throw new Error(
+      `admin-created setup did not start blocked: ${JSON.stringify(initialReadiness)}`,
+    );
+  }
+
+  const slotId = "slot_1";
+  const occupantUserId = "player_mira";
+  const roleKey = "vanilla_townie";
+  const addSlotInput = page.locator(
+    'section[aria-label="Roster"] input[name="slotId"]:not([type="hidden"])',
+  );
+  await addSlotInput.fill(slotId);
+  const addSlotButton = page.getByRole("button", { name: "Add slot" });
+  const addSlotBox = await addSlotButton.boundingBox();
+  assertHitTarget(addSlotBox, "host setup add slot");
+  await addSlotButton.click();
+  const addSlot = await waitForHostSetupCommand({
+    page,
+    statusTestId: "host-setup-add-slot-status",
+    commandKind: "AddSlot",
+    statePredicate: (state) =>
+      (state?.slots ?? []).some((slot) => slot.slotId === slotId),
+  });
+
+  const rosterRow = page.getByTestId(`host-setup-slot-${slotId}`);
+  await rosterRow.waitFor({ state: "visible" });
+  await rosterRow.locator('input[name="principalUserId"]').fill(occupantUserId);
+  const assignSlotButton = rosterRow.getByRole("button", { name: "Assign" });
+  const assignSlotBox = await assignSlotButton.boundingBox();
+  assertHitTarget(assignSlotBox, "host setup assign slot");
+  await assignSlotButton.click();
+  const assignSlot = await waitForHostSetupCommand({
+    page,
+    statusTestId: "host-setup-assign-slot-status",
+    commandKind: "AssignSlot",
+    statePredicate: (state) =>
+      (state?.slots ?? []).some(
+        (slot) => slot.slotId === slotId && slot.occupantUserId === occupantUserId,
+      ),
+  });
+
+  const roleRow = page.getByTestId(`host-setup-role-${slotId}`);
+  await roleRow.waitFor({ state: "visible" });
+  await roleRow.locator('select[name="roleKey"]').selectOption(roleKey);
+  const assignRoleButton = roleRow.getByRole("button", { name: "Assign role" });
+  const assignRoleBox = await assignRoleButton.boundingBox();
+  assertHitTarget(assignRoleBox, "host setup assign role");
+  await assignRoleButton.click();
+  const assignRole = await waitForHostSetupCommand({
+    page,
+    statusTestId: "host-setup-assign-role-status",
+    commandKind: "AssignRole",
+    statePredicate: (state) =>
+      (state?.slots ?? []).some(
+        (slot) => slot.slotId === slotId && slot.roleKey === roleKey,
+      ),
+  });
+
+  const policyBefore = await page.getByTestId("host-setup-main-policy").innerText();
+  if (!policyBefore.includes("disabled")) {
+    throw new Error(`host setup policy did not start disabled: ${policyBefore}`);
+  }
+  const policyButton = page.getByRole("button", { name: "Enable media-only" });
+  const policyButtonBox = await policyButton.boundingBox();
+  assertHitTarget(policyButtonBox, "host setup media-only policy");
+  await policyButton.click();
+  const setPostPolicy = await waitForHostSetupCommand({
+    page,
+    statusTestId: "host-setup-policy-status",
+    commandKind: "SetPostPolicy",
+    statePredicate: (state) =>
+      (state?.postPolicies ?? []).some(
+        (policy) => policy.channelId === "main" && policy.allowMediaOnly === true,
+      ),
+  });
+  const policyAfter = await page.getByTestId("host-setup-main-policy").innerText();
+  if (!policyAfter.includes("enabled")) {
+    throw new Error(`host setup policy did not render enabled: ${policyAfter}`);
+  }
+
+  await page.waitForFunction(
+    () => window.__fmarchHostSetupReadiness?.startAvailable === true,
+  );
+  const readyReadiness = await setupReadiness(page);
+  if (readyReadiness.summary !== "Ready to start") {
+    throw new Error(`host setup did not become ready: ${JSON.stringify(readyReadiness)}`);
+  }
+  const reviewStart = page.getByTestId("host-setup-start-review");
+  const reviewStartBox = await reviewStart.boundingBox();
+  assertHitTarget(reviewStartBox, "host setup review start");
+  await reviewStart.click();
+  await page.getByTestId("host-setup-start-confirmation").waitFor({ state: "visible" });
+  const startConfirm = page
+    .getByTestId("host-setup-start-confirmation")
+    .getByRole("button", { name: "Start game" });
+  const startConfirmBox = await startConfirm.boundingBox();
+  assertHitTarget(startConfirmBox, "host setup start confirm");
+  await startConfirm.click();
+  const startGame = await waitForHostSetupCommand({
+    page,
+    statusTestId: "host-setup-start-status",
+    commandKind: "StartGame",
+    statePredicate: (state) => state?.phase?.phaseId === "D01",
+  });
+
+  await page.waitForFunction(
+    () => window.__fmarchHostSetupReadiness?.summary === "Started at D01",
+  );
+  const startedReadiness = await setupReadiness(page);
+  const openHostConsole = page.getByRole("link", { name: "Open host console" });
+  await openHostConsole.waitFor({ state: "visible" });
+  const openHostConsoleBox = await openHostConsole.boundingBox();
+  assertHitTarget(openHostConsoleBox, "host setup open host console");
+  await Promise.all([
+    page.waitForURL(`${frontendBaseUrl}/g/${adminCreatedGame}/host`, {
+      waitUntil: "networkidle",
+    }),
+    openHostConsole.click(),
+  ]);
+  await page.getByTestId("host-console-surface").waitFor({ state: "visible" });
+  const hostConsoleUrl = page.url();
+  const hostConsoleState = await fetchJson(
+    `${apiBaseUrl}/games/${adminCreatedGame}/host-console-state?principal_user_id=admin_a&slot_id=${slotId}`,
+  );
+  if (hostConsoleState.phase?.phase_id !== "D01") {
+    throw new Error(
+      `host setup StartGame did not project into host console state: ${JSON.stringify(hostConsoleState)}`,
+    );
+  }
+
+  return {
+    status: "passed",
+    adminUrl,
+    setupUrl,
+    hostConsoleUrl,
+    setupTriggerBox,
+    controls: {
+      addSlotBox,
+      assignSlotBox,
+      assignRoleBox,
+      policyButtonBox,
+      reviewStartBox,
+      startConfirmBox,
+      openHostConsoleBox,
+    },
+    slotId,
+    occupantUserId,
+    roleKey,
+    policyBefore,
+    policyAfter,
+    initialReadiness,
+    readyReadiness,
+    startedReadiness,
+    commands: {
+      addSlot,
+      assignSlot,
+      assignRole,
+      setPostPolicy,
+      startGame,
+    },
+    hostConsoleState: {
+      phase: hostConsoleState.phase,
+      slot: hostConsoleState.slots?.find((slot) => slot.slot_id === slotId),
+    },
+  };
+}
+
+async function waitForHostSetupCommand({
+  page,
+  statusTestId,
+  commandKind,
+  statePredicate,
+}) {
+  await page.waitForFunction(
+    ({ expectedKind }) => {
+      const outcome = window.__fmarchHostSetupCommandOutcome;
+      const command = outcome?.requestEnvelope?.body?.body?.command?.[expectedKind];
+      return (
+        outcome?.state === "ack" &&
+        command !== undefined &&
+        window.__fmarchHostSetupState !== undefined &&
+        window.__fmarchHostSetupReadiness !== undefined
+      );
+    },
+    { expectedKind: commandKind },
+    { timeout: 15000 },
+  );
+  const status = page.getByTestId(statusTestId);
+  await status.waitFor({ state: "visible" });
+  await page.waitForFunction(
+    ({ testId }) =>
+      document.querySelector(`[data-testid="${testId}"]`)?.getAttribute("data-state") ===
+      "ack",
+    { testId: statusTestId },
+    { timeout: 15000 },
+  );
+
+  const statusState = await status.getAttribute("data-state");
+  const statusText = await status.innerText();
+  const outcome = await page.evaluate(() => window.__fmarchHostSetupCommandOutcome);
+  const setupState = await page.evaluate(() => window.__fmarchHostSetupState ?? null);
+  const readiness = await setupReadiness(page);
+  const command =
+    outcome?.requestEnvelope?.body?.body?.command?.[commandKind] ?? null;
+  if (
+    statusState !== "ack" ||
+    command === null ||
+    statePredicate(setupState) !== true
+  ) {
+    throw new Error(
+      `host setup ${commandKind} browser command drifted: ${JSON.stringify({
+        statusState,
+        statusText,
+        command,
+        setupState,
+        readiness,
+      })}`,
+    );
+  }
+  if (command.game !== adminCreatedGame) {
+    throw new Error(`host setup ${commandKind} used wrong game: ${JSON.stringify(command)}`);
+  }
+  return {
+    status: statusState,
+    statusText,
+    commandKind,
+    command,
+    streamSeqs: outcome.streamSeqs,
+    requestEnvelope: outcome.requestEnvelope,
+    readinessSummary: readiness.summary,
+  };
+}
+
+async function setupReadiness(page) {
+  return await page.evaluate(() => window.__fmarchHostSetupReadiness ?? null);
 }
 
 async function driveGrantedGlobalModLogin(frontendBaseUrl) {
@@ -2638,6 +2912,7 @@ async function driveHostStreamConflictBrowser(page) {
     if (
       pathname.endsWith("/host-console-state") ||
       pathname.endsWith("/votecount") ||
+      pathname.endsWith("/day-vote-outcomes") ||
       pathname.endsWith("/host-prompts")
     ) {
       projectionRequests.push({
@@ -2653,11 +2928,12 @@ async function driveHostStreamConflictBrowser(page) {
     assertHostStreamConflictRecovery(conflictEvidence.commandStatus);
     await page.waitForFunction(() =>
       window.__fmarchHostCommandDispatchBridgePlan?.projectionRefreshKeys?.join(",") ===
-      "host,votecount,hostPrompts",
+      "host,votecount,dayVoteOutcomes,hostPrompts",
     );
     await waitForProjectionRequests(projectionRequests, [
       "/host-console-state",
       "/votecount",
+      "/day-vote-outcomes",
       "/host-prompts",
     ]);
     return {
@@ -2667,7 +2943,7 @@ async function driveHostStreamConflictBrowser(page) {
         () => window.__fmarchHostCommandDispatchBridgePlan,
       ),
       proof:
-        "The live host page hit a scratch-DB forced same-stream append conflict through the real ExtendDeadline control, rendered retryable Reject StreamConflict copy with reload-and-retry guidance, and refreshed host, votecount, and host-prompt projections before the normal retry path.",
+        "The live host page hit a scratch-DB forced same-stream append conflict through the real ExtendDeadline control, rendered retryable Reject StreamConflict copy with reload-and-retry guidance, and refreshed host, votecount, day-vote-outcome, and host-prompt projections before the normal retry path.",
     };
   } finally {
     page.off("request", onRequest);
@@ -3116,6 +3392,7 @@ async function modkillSlotFromBrowser(page) {
       window.__fmarchHostCommandStatuses?.[expectedActionId]?.state === "ack",
     actionId,
   );
+  const statusMessage = await status.innerText();
   await waitForHostConsoleSlotStatusDelta(page, {
     slotId: "slot-7",
     status: "modkilled",
@@ -3144,7 +3421,7 @@ async function modkillSlotFromBrowser(page) {
     triggerBox,
     confirmBox,
     confirmationMessage,
-    statusMessage: await status.innerText(),
+    statusMessage,
     commandStatus,
     hostProjection: await page.evaluate(() => window.__fmarchHostProjection),
     apiStateAfter,
@@ -3712,13 +3989,20 @@ function assertStalePlayerVoteRecovery(outcome) {
 }
 
 function assertStalePlayerVoteRecoveryMessage({ outcome, statusMessage }) {
-  const expected = "stale projection, refresh and use current controls";
-  if (!String(outcome?.message ?? "").includes(expected)) {
+  if (!isStalePlayerVoteRecoveryMessage(outcome?.message)) {
     throw new Error(`stale player vote did not explain recovery in outcome: ${JSON.stringify(outcome)}`);
   }
-  if (!String(statusMessage ?? "").includes(expected)) {
+  if (!isStalePlayerVoteRecoveryMessage(statusMessage)) {
     throw new Error(`stale player vote did not render recovery guidance: ${statusMessage}`);
   }
+}
+
+function isStalePlayerVoteRecoveryMessage(message) {
+  const value = String(message ?? "");
+  return (
+    value.includes("stale projection, refresh and use current controls") ||
+    value.includes("stale vote state, refresh and use current vote controls")
+  );
 }
 
 function assertStaleSameActionRecovery({ outcome, winningCommandId }) {

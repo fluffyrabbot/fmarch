@@ -117,7 +117,7 @@
         fetchImpl: fetch,
       });
       commandStatuses = recordSetupCommandStatus(commandStatuses, actionId, outcome);
-      if (outcome.state === "ack") {
+      if (outcome.state === "ack" || outcome.state === "reject") {
         try {
           const refreshed = await refreshSetupState({ data, fetchImpl: fetch });
           setupState = refreshed.setupState;
