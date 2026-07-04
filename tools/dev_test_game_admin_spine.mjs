@@ -19,7 +19,7 @@ import {
   proofFreshnessAdminProofPath,
 } from "./dev_test_game_next_action_paths.mjs";
 import {
-  runAdminAuditProofBatch,
+  runAdminAuditProofBatchPlan,
 } from "./dev_test_game_admin_audit_proof_helper.mjs";
 import {
   proofGraphAdminProofCase,
@@ -110,6 +110,22 @@ export const adminSpinePreGraphReadinessEvidenceEnv = Object.fromEntries(
   ),
 );
 
+export const terminalAdminProofBatchPlan = {
+  label: "Terminal admin proof batch",
+  reason: "terminal graph, freshness, and next-action admin surfaces share the generated proof graph inputs",
+  cases: [
+    proofGraphAdminProofCase,
+    proofFreshnessAdminProofCase,
+    nextActionAdminProofCase,
+  ],
+};
+
+export const terminalRefreshAdminProofBatchPlan = {
+  label: "Terminal refresh admin proof batch",
+  reason: "freshness and next-action admin surfaces share the refreshed next-action input",
+  cases: [proofFreshnessAdminProofCase, nextActionAdminProofCase],
+};
+
 export const devTestGameAdminSpinePlan = [
   { kind: "node", script: "tools/dev_test_game_race_coverage.mjs" },
   releaseReadinessStep({
@@ -196,17 +212,10 @@ export async function runDevTestGameAdminSpine() {
         console.log(`wrote ${adminSpineProofPath} (${evidence.status})`);
       },
       "terminal-admin-proof-batch": async () => {
-        await runAdminAuditProofBatch([
-          proofGraphAdminProofCase(),
-          proofFreshnessAdminProofCase(),
-          nextActionAdminProofCase(),
-        ]);
+        await runAdminAuditProofBatchPlan(terminalAdminProofBatchPlan);
       },
       "terminal-refresh-admin-proof-batch": async () => {
-        await runAdminAuditProofBatch([
-          proofFreshnessAdminProofCase(),
-          nextActionAdminProofCase(),
-        ]);
+        await runAdminAuditProofBatchPlan(terminalRefreshAdminProofBatchPlan);
       },
     },
   });

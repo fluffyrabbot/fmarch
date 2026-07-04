@@ -22,7 +22,7 @@ import {
   validateDevTestGameSpineManifestAdminProof,
 } from "./dev_test_game_release_readiness.mjs";
 import {
-  runAdminAuditProofBatch,
+  runAdminAuditProofBatchPlan,
 } from "./dev_test_game_admin_audit_proof_helper.mjs";
 import {
   coreLoopAdminProofCase,
@@ -227,6 +227,33 @@ export const devTestGameAdminSpineProofPlan = [
   },
 ];
 
+export function devTestGameAdminSpineProofBatchPlans(
+  plan = devTestGameAdminSpineProofPlan,
+) {
+  const releaseIndex = plan.findIndex((spec) => spec.id === "release");
+  if (releaseIndex < 0) {
+    throw new Error("admin spine proof plan is missing the release proof boundary");
+  }
+  const preReleaseSpecs = plan.slice(0, releaseIndex);
+  const releaseAndHostedSpecs = plan.slice(releaseIndex);
+  return [
+    {
+      label: "Aggregate pre-release admin proof batch",
+      reason:
+        "core, hardening, identity, backup, ops, and seed admin surfaces share the pre-readiness local proof inputs",
+      specs: preReleaseSpecs,
+      cases: preReleaseSpecs.map((spec) => spec.caseFactory),
+    },
+    {
+      label: "Aggregate release and hosted admin proof batch",
+      reason:
+        "release, hosted, race coverage, and manifest admin surfaces share the post-readiness rollup inputs",
+      specs: releaseAndHostedSpecs,
+      cases: releaseAndHostedSpecs.map((spec) => spec.caseFactory),
+    },
+  ];
+}
+
 if (pathToFileURL(process.argv[1] ?? "").href === import.meta.url) {
   const evidence = await runAdminSpineProof();
   console.log(`wrote ${path.relative(repoRoot, evidencePath)} (${evidence.status})`);
@@ -236,19 +263,15 @@ export async function runAdminSpineProof() {
   await mkdir(artifactDir, { recursive: true });
   await runNodeScript("tools/dev_test_game_spine_manifest.mjs");
   const entries = [];
-  const releaseIndex = devTestGameAdminSpineProofPlan.findIndex(
-    (spec) => spec.id === "release",
-  );
-  if (releaseIndex < 0) {
-    throw new Error("admin spine proof plan is missing the release proof boundary");
-  }
+  const [preReleaseBatch, releaseAndHostedBatch] =
+    devTestGameAdminSpineProofBatchPlans();
   await runAdminSpineProofBatch({
-    specs: devTestGameAdminSpineProofPlan.slice(0, releaseIndex),
+    batchPlan: preReleaseBatch,
     entries,
   });
   await runNodeScript("tools/dev_test_game_release_readiness.mjs");
   await runAdminSpineProofBatch({
-    specs: devTestGameAdminSpineProofPlan.slice(releaseIndex),
+    batchPlan: releaseAndHostedBatch,
     entries,
   });
   const evidence = {
@@ -275,9 +298,9 @@ export async function runAdminSpineProof() {
   return evidence;
 }
 
-async function runAdminSpineProofBatch({ specs, entries }) {
-  await runAdminAuditProofBatch(specs.map((spec) => spec.caseFactory()));
-  for (const spec of specs) {
+async function runAdminSpineProofBatch({ batchPlan, entries }) {
+  await runAdminAuditProofBatchPlan(batchPlan);
+  for (const spec of batchPlan.specs) {
     entries.push(await readAdminSpineProofEntry(spec));
   }
 }

@@ -47,15 +47,12 @@ export async function runAdminAuditProof({
 }
 
 export async function runAdminAuditProofBatch(cases) {
-  if (!Array.isArray(cases) || cases.length === 0) {
-    throw new Error("admin audit proof batch requires at least one proof case");
-  }
-  for (const proofCase of cases) {
-    assertAdminAuditProofCase(proofCase);
-  }
-
-  const firstCase = cases[0];
-  const envOverrides = mergeEnvOverrides(cases);
+  const { cases: proofCases, envOverrides } = resolveAdminAuditProofBatchPlan({
+    label: "admin audit proof batch",
+    reason: "direct proof batch",
+    cases,
+  });
+  const firstCase = proofCases[0];
 
   await preflightLocalhostBindOrExit({
     host,
@@ -81,11 +78,11 @@ export async function runAdminAuditProofBatch(cases) {
     vite = await startFrontend();
     browser = await chromium.launch();
     const mediaResponseGuard = createUnexpectedMediaResponseGuard({
-      label: cases.map((proofCase) => proofCase.smokeName).join(","),
+      label: proofCases.map((proofCase) => proofCase.smokeName).join(","),
     });
     mediaResponseGuard.attachBrowser(browser);
     const baseUrl = await frontendBaseUrl(vite);
-    for (const proofCase of cases) {
+    for (const proofCase of proofCases) {
       await runAdminAuditProofCase({
         proofCase,
         browser,
@@ -116,6 +113,43 @@ export async function runAdminAuditProofBatch(cases) {
     for (const [name, previous] of previousEnv.entries()) {
       restoreEnv(name, previous);
     }
+  }
+}
+
+export async function runAdminAuditProofBatchPlan(plan) {
+  const { cases } = resolveAdminAuditProofBatchPlan(plan);
+  await runAdminAuditProofBatch(cases);
+}
+
+export function resolveAdminAuditProofBatchPlan(plan) {
+  assertAdminAuditProofBatchPlanShape(plan);
+  const cases = plan.cases.map((entry) =>
+    typeof entry === "function" ? entry() : entry,
+  );
+  for (const proofCase of cases) {
+    assertAdminAuditProofCase(proofCase);
+  }
+  const envOverrides = mergeEnvOverrides(cases);
+  return {
+    label: plan.label,
+    reason: plan.reason,
+    cases,
+    envOverrides,
+  };
+}
+
+function assertAdminAuditProofBatchPlanShape(plan) {
+  if (
+    typeof plan?.label !== "string" ||
+    plan.label.trim() === "" ||
+    typeof plan.reason !== "string" ||
+    plan.reason.trim() === "" ||
+    !Array.isArray(plan.cases) ||
+    plan.cases.length === 0
+  ) {
+    throw new Error(
+      "admin audit proof batch plan requires label, reason, and cases",
+    );
   }
 }
 

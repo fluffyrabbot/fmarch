@@ -177,6 +177,8 @@ import {
   adminSpinePreGraphReadinessEvidenceEnv,
   adminSpineReadinessEvidenceEnv,
   devTestGameAdminSpinePlan,
+  terminalAdminProofBatchPlan,
+  terminalRefreshAdminProofBatchPlan,
 } from "./dev_test_game_admin_spine.mjs";
 import {
   backupAwareOpsEnv,
@@ -334,7 +336,13 @@ import {
   devTestGameReleaseRunbookCommand,
   devTestGameReleaseRunbookPath,
 } from "./dev_test_game_release_runbook.mjs";
-import { devTestGameAdminSpineProofPlan } from "./dev_test_game_admin_spine_proof.mjs";
+import {
+  devTestGameAdminSpineProofBatchPlans,
+  devTestGameAdminSpineProofPlan,
+} from "./dev_test_game_admin_spine_proof.mjs";
+import {
+  resolveAdminAuditProofBatchPlan,
+} from "./dev_test_game_admin_audit_proof_helper.mjs";
 import {
   recoveryMilestoneCoverageCases,
 } from "./dev_test_game_release_readiness_milestone_cases.mjs";
@@ -628,6 +636,67 @@ test("dev test-game spine orchestrators expose stable proof order and env maps",
     script: "terminal-refresh-admin-proof-batch",
     label: "Terminal refresh admin proof batch",
   });
+  assertAdminAuditBatchPlan({
+    plan: terminalAdminProofBatchPlan,
+    label: "Terminal admin proof batch",
+    caseSmokeNames: [
+      "dev-test-game-proof-graph-admin-proof",
+      "dev-test-game-proof-freshness-admin-proof",
+      "dev-test-game-next-action-admin-proof",
+    ],
+  });
+  assertAdminAuditBatchPlan({
+    plan: terminalRefreshAdminProofBatchPlan,
+    label: "Terminal refresh admin proof batch",
+    caseSmokeNames: [
+      "dev-test-game-proof-freshness-admin-proof",
+      "dev-test-game-next-action-admin-proof",
+    ],
+  });
+  const aggregateAdminProofBatchPlans = devTestGameAdminSpineProofBatchPlans();
+  assert.deepEqual(
+    aggregateAdminProofBatchPlans.map((batchPlan) => ({
+      label: batchPlan.label,
+      specIds: batchPlan.specs.map((spec) => spec.id),
+    })),
+    [
+      {
+        label: "Aggregate pre-release admin proof batch",
+        specIds: [
+          "core-loop",
+          "hardening",
+          "identity",
+          "hosted-identity-evidence",
+          "backup",
+          "ops",
+          "seed",
+        ],
+      },
+      {
+        label: "Aggregate release and hosted admin proof batch",
+        specIds: [
+          "release",
+          "release-runbook",
+          "race-coverage",
+          "hosted-target-preflight",
+          "hosted-evidence-lane",
+          "hosted-concurrent-race-matrix",
+          "hosted-ops-signals",
+          "real-hosted-observability-handoff",
+          "spine-manifest",
+        ],
+      },
+    ],
+  );
+  for (const batchPlan of aggregateAdminProofBatchPlans) {
+    assertAdminAuditBatchPlan({
+      plan: batchPlan,
+      label: batchPlan.label,
+      caseSmokeNames: batchPlan.specs.map(
+        (spec) => spec.caseFactory().smokeName,
+      ),
+    });
+  }
   assert.equal(
     devTestGameAdminSpinePlan[12].env,
     adminSpinePreGraphReadinessEvidenceEnv,
@@ -653,6 +722,21 @@ test("dev test-game spine orchestrators expose stable proof order and env maps",
     live: devTestGameLiveSpinePlan,
   });
 });
+
+function assertAdminAuditBatchPlan({ plan, label, caseSmokeNames }) {
+  assert.equal(plan.label, label);
+  assert.equal(typeof plan.reason, "string");
+  assert.notEqual(plan.reason.trim(), "");
+  const resolved = resolveAdminAuditProofBatchPlan(plan);
+  assert.deepEqual(
+    resolved.cases.map((proofCase) => proofCase.smokeName),
+    caseSmokeNames,
+  );
+  assert.deepEqual(
+    new Set(Object.keys(resolved.envOverrides)).size,
+    Object.keys(resolved.envOverrides).length,
+  );
+}
 
 function assertReleaseReadinessStepMetadata(plansByName) {
   for (const [name, plan] of Object.entries(plansByName)) {
