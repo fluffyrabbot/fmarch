@@ -325,6 +325,50 @@ import {
 } from "./dev_test_game_release_runbook.mjs";
 import { devTestGameAdminSpineProofPlan } from "./dev_test_game_admin_spine_proof.mjs";
 
+const recoveryMilestoneCoverageCases = Object.freeze([
+  Object.freeze({
+    checkId: "local-stale-conflict-message-milestone",
+    generatedFromKey: "staleConflictMessageMilestone",
+    coverageKey: "staleConflictMessageCoverage",
+    label: "Stale-client conflict messages",
+    proofBoundary:
+      "Local seeded-game proof that stale replacement, player action, dead-actor action, host deadline, and cohost deadline paths show explicit conflict messages and current-control recovery hints.",
+    hasSurfaceCoverage: true,
+  }),
+  Object.freeze({
+    checkId: "local-host-stale-control-milestone",
+    generatedFromKey: "hostStaleControlMilestone",
+    coverageKey: "hostStaleControlCoverage",
+    label: "Host stale-control recovery",
+    proofBoundary:
+      "Local seeded-game proof that stale host publish, lifecycle, modkill, prompt, complete, resolve, advance, and deadline controls reject drift and recover through current host role surfaces.",
+  }),
+  Object.freeze({
+    checkId: "local-private-channel-recovery-milestone",
+    generatedFromKey: "privateChannelRecoveryMilestone",
+    coverageKey: "coreLoopPrivateChannelRecoveryCoverage",
+    label: "Private-channel recovery",
+    proofBoundary:
+      "Local seeded-game proof that stale replacement private-channel authority, private receipts, stale private posts after phase resolution, private-channel invalid action recovery, reconnect recovery, and completed-game private-channel reloads preserve current player scope and recovery hints.",
+  }),
+  Object.freeze({
+    checkId: "local-replacement-action-recovery-milestone",
+    generatedFromKey: "replacementActionRecoveryMilestone",
+    coverageKey: "replacementActionRecoveryCoverage",
+    label: "Replacement action recovery",
+    proofBoundary:
+      "Local seeded-game proof that incoming replacement factional_kill actions resolve, reconnect to locked post-resolution state, and stale replacement action controls reject after phase resolution without leaking target receipts.",
+  }),
+  Object.freeze({
+    checkId: "local-replacement-handoff-recovery-milestone",
+    generatedFromKey: "replacementHandoffRecoveryMilestone",
+    coverageKey: "replacementHandoffRecoveryCoverage",
+    label: "Replacement handoff recovery",
+    proofBoundary:
+      "Local seeded-game proof that host-issued replacement role URLs, pending and invalid replacement states, replacement session recovery, stale and duplicate replacement commands, stale outgoing authority, private-channel authority, reconnect recovery, and incoming player control all preserve current slot ownership.",
+  }),
+]);
+
 test("dev test-game args expose reset reuse naming and verification controls", () => {
   assert.deepEqual(
     parseArgs([
@@ -9722,63 +9766,10 @@ test("session card and markdown include role credential URLs and tokens", async 
     hardeningReadiness.generatedFrom.hardeningAdminProof,
     "target/dev-test-game/hardening-admin-proof.json",
   );
-  assert.deepEqual(
-    hardeningReadiness.localDevelopmentSpine.checks.find(
-      (item) => item.id === "local-private-channel-recovery-milestone",
-    ),
-    {
-      id: "local-private-channel-recovery-milestone",
-      label: "Private-channel recovery",
-      status: "passed",
-      evidence: "target/dev-test-game/proof-run.json",
-      proofBoundary:
-        "Local seeded-game proof that stale replacement private-channel authority, private receipts, stale private posts after phase resolution, private-channel invalid action recovery, reconnect recovery, and completed-game private-channel reloads preserve current player scope and recovery hints.",
-      laneIds: [...coreLoopPrivateChannelRecoveryLaneIds],
-      requiredLaneCount: coreLoopPrivateChannelRecoveryLaneIds.length,
-      coveredLaneCount: coreLoopPrivateChannelRecoveryLaneIds.length,
-      familyCount: coreLoopPrivateChannelRecoveryCoverageFamilies().length,
-      expectedLaneCount: coreLoopPrivateChannelRecoveryLaneIds.length,
-      expectedFamilyCount: coreLoopPrivateChannelRecoveryCoverageFamilies().length,
-    },
-  );
-  assert.deepEqual(
-    hardeningReadiness.localDevelopmentSpine.checks.find(
-      (item) => item.id === "local-replacement-action-recovery-milestone",
-    ),
-    {
-      id: "local-replacement-action-recovery-milestone",
-      label: "Replacement action recovery",
-      status: "passed",
-      evidence: "target/dev-test-game/proof-run.json",
-      proofBoundary:
-        "Local seeded-game proof that incoming replacement factional_kill actions resolve, reconnect to locked post-resolution state, and stale replacement action controls reject after phase resolution without leaking target receipts.",
-      laneIds: [...replacementActionLaneIds],
-      requiredLaneCount: replacementActionLaneIds.length,
-      coveredLaneCount: replacementActionLaneIds.length,
-      familyCount: replacementActionRecoveryCoverageFamilies().length,
-      expectedLaneCount: replacementActionLaneIds.length,
-      expectedFamilyCount: replacementActionRecoveryCoverageFamilies().length,
-    },
-  );
-  assert.deepEqual(
-    hardeningReadiness.localDevelopmentSpine.checks.find(
-      (item) => item.id === "local-replacement-handoff-recovery-milestone",
-    ),
-    {
-      id: "local-replacement-handoff-recovery-milestone",
-      label: "Replacement handoff recovery",
-      status: "passed",
-      evidence: "target/dev-test-game/proof-run.json",
-      proofBoundary:
-        "Local seeded-game proof that host-issued replacement role URLs, pending and invalid replacement states, replacement session recovery, stale and duplicate replacement commands, stale outgoing authority, private-channel authority, reconnect recovery, and incoming player control all preserve current slot ownership.",
-      laneIds: [...replacementHandoffRecoveryLaneIds],
-      requiredLaneCount: replacementHandoffRecoveryLaneIds.length,
-      coveredLaneCount: replacementHandoffRecoveryLaneIds.length,
-      familyCount: replacementHandoffRecoveryCoverageFamilies().length,
-      expectedLaneCount: replacementHandoffRecoveryLaneIds.length,
-      expectedFamilyCount: replacementHandoffRecoveryCoverageFamilies().length,
-    },
-  );
+  assertReadinessRecoveryMilestonesMirrorProofCoverage({
+    readiness: hardeningReadiness,
+    proofRun,
+  });
   const raceCoverageReadiness = buildDevTestGameReleaseReadiness(proofRun, {
     generatedAt: "2026-06-26T00:00:00.000Z",
     raceCoveragePath: "target/dev-test-game/race-coverage.json",
@@ -11460,6 +11451,100 @@ function seedProofLaneCoverageFixture({ unclassifiedLaneIds = [] } = {}) {
       count: unclassifiedLaneIds.length,
       laneIds: unclassifiedLaneIds,
     },
+  };
+}
+
+function assertReadinessRecoveryMilestonesMirrorProofCoverage({
+  readiness,
+  proofRun,
+}) {
+  for (const scenario of recoveryMilestoneCoverageCases) {
+    const coverage = proofRun[scenario.coverageKey];
+    assert(
+      coverage !== undefined,
+      `proof-run fixture missing coverage summary: ${scenario.coverageKey}`,
+    );
+    const check = readiness.localDevelopmentSpine.checks.find(
+      (item) => item.id === scenario.checkId,
+    );
+    assert(
+      check !== undefined,
+      `readiness checklist missing local milestone: ${scenario.checkId}`,
+    );
+    const generatedSnapshot = readiness.generatedFrom[scenario.generatedFromKey];
+    assert(
+      generatedSnapshot !== undefined,
+      `readiness generatedFrom missing milestone: ${scenario.generatedFromKey}`,
+    );
+
+    assert.deepEqual(
+      visibleRecoveryMilestoneCoverage(check),
+      {
+        id: scenario.checkId,
+        label: scenario.label,
+        status: coverage.status,
+        evidence: "target/dev-test-game/proof-run.json",
+        proofBoundary: scenario.proofBoundary,
+        laneIds: [...coverage.sourceLaneIds],
+        requiredLaneCount: coverage.laneCount,
+        coveredLaneCount: coverage.passedLaneCount,
+        familyCount: coverage.familyCount,
+        expectedLaneCount: coverage.expectedLaneCount,
+        expectedFamilyCount: coverage.expectedFamilyCount,
+        ...(scenario.hasSurfaceCoverage === true
+          ? { surfaceCoverage: generatedSnapshot.surfaceCoverage }
+          : {}),
+      },
+      `${scenario.checkId} should mirror proof-run ${scenario.coverageKey}`,
+    );
+    assert.deepEqual(
+      generatedRecoveryMilestoneCoverage(generatedSnapshot),
+      {
+        status: coverage.status,
+        laneIds: [...coverage.sourceLaneIds],
+        requiredLaneCount: coverage.laneCount,
+        coveredLaneCount: coverage.passedLaneCount,
+        gapCount: coverage.laneCount - coverage.passedLaneCount,
+        familyCount: coverage.familyCount,
+        expectedLaneCount: coverage.expectedLaneCount,
+        expectedFamilyCount: coverage.expectedFamilyCount,
+        families: coverage.families,
+      },
+      `${scenario.generatedFromKey} should mirror proof-run ${scenario.coverageKey}`,
+    );
+  }
+}
+
+function visibleRecoveryMilestoneCoverage(check) {
+  return {
+    id: check.id,
+    label: check.label,
+    status: check.status,
+    evidence: check.evidence,
+    proofBoundary: check.proofBoundary,
+    laneIds: check.laneIds,
+    requiredLaneCount: check.requiredLaneCount,
+    coveredLaneCount: check.coveredLaneCount,
+    familyCount: check.familyCount,
+    expectedLaneCount: check.expectedLaneCount,
+    expectedFamilyCount: check.expectedFamilyCount,
+    ...(check.surfaceCoverage === undefined
+      ? {}
+      : { surfaceCoverage: check.surfaceCoverage }),
+  };
+}
+
+function generatedRecoveryMilestoneCoverage(milestone) {
+  return {
+    status: milestone.status,
+    laneIds: milestone.laneIds,
+    requiredLaneCount: milestone.requiredLaneCount,
+    coveredLaneCount: milestone.coveredLaneCount,
+    gapCount: milestone.gapCount,
+    familyCount: milestone.familyCount,
+    expectedLaneCount: milestone.expectedLaneCount,
+    expectedFamilyCount: milestone.expectedFamilyCount,
+    families: milestone.families,
   };
 }
 
