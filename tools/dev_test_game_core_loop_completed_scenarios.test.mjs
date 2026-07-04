@@ -107,7 +107,7 @@ import {
   staleCompletedGamePlayerCommandHardeningLaneCaseDefinitions as extractedStaleCompletedGamePlayerCommandHardeningLaneCaseDefinitions,
   staleCompletedGamePlayerCommandCaseDefinitions as extractedStaleCompletedGamePlayerCommandCaseDefinitions,
   staleCompletedGamePlayerCommandCases as extractedStaleCompletedGamePlayerCommandCases,
-} from "./dev_test_game_core_loop_completed_game_shared_scenario_assertions.mjs";
+} from "./dev_test_game_core_loop_completed_terminal_scenario_assertions.mjs";
 
 test("completed-game scenario module exposes shared frozen definitions", () => {
   assert.equal(
@@ -421,19 +421,29 @@ test("completed-game production harness callers share extracted recovery cases",
       "tools/dev_test_game_core_loop_admin_proof.mjs",
       [
         "assertCompletedGameProofReadinessSurfaceProof",
+      ],
+      "./dev_test_game_core_loop_completed_game_proof_readiness_contract.mjs",
+    ],
+    [
+      "tools/dev_test_game_core_loop_admin_proof.mjs",
+      [
         "completedGameProofReadinessProofScenarioCases",
         "completedGameProofReadinessScenarioFamilies",
         "completedGameProofReadinessTransition",
       ],
-      "./dev_test_game_core_loop_completed_game_proof_readiness_contract.mjs",
+      "./dev_test_game_core_loop_completed_terminal_scenario_assertions.mjs",
     ],
     [
       "tools/dev_test_game_release_readiness.mjs",
       [
         "assertCompletedGameProofReadinessSurfaceProof",
-        "completedGameProofReadinessScenarioFamilies",
       ],
       "./dev_test_game_core_loop_completed_game_proof_readiness_contract.mjs",
+    ],
+    [
+      "tools/dev_test_game_release_readiness.mjs",
+      ["completedGameProofReadinessScenarioFamilies"],
+      "./dev_test_game_core_loop_completed_terminal_scenario_assertions.mjs",
     ],
     [
       "tools/dev_test_game_release_readiness.mjs",
@@ -613,18 +623,26 @@ test("completed-game production harness callers share extracted recovery cases",
     "completedGameProofReadinessScenarioFamilies",
     "completedGameProofReadinessProofScenarioCases",
     "completedGameProofReadinessTransition",
-    "assertCompletedGameProofReadinessSurfaceProof",
   ]) {
     assert(
       importsFromModule({
         source: proofReadinessContractSource,
         importedName,
         moduleSpecifier:
-          "./dev_test_game_core_loop_completed_game_shared_scenario_assertions.mjs",
+          "./dev_test_game_core_loop_completed_terminal_scenario_assertions.mjs",
       }),
-      `proof/readiness contract should import ${importedName} from the canonical completed-game shared scenario/assertion module`,
+      `proof/readiness contract should import ${importedName} from the canonical completed terminal scenario/assertion module`,
     );
   }
+  assert(
+    importsFromModule({
+      source: proofReadinessContractSource,
+      importedName: "assertCompletedGameProofReadinessSurfaceProof",
+      moduleSpecifier:
+        "./dev_test_game_core_loop_completed_game_shared_scenario_assertions.mjs",
+    }),
+    "proof/readiness contract should keep the surface assertion on the proof/readiness facade",
+  );
   for (const importedName of [
     "completedGameEndgameProofScenarioCases",
     "completedGameEndgameScenarioCaseFamilies",
@@ -646,9 +664,9 @@ test("completed-game production harness callers share extracted recovery cases",
       source: proofReadinessContractSource,
       importedName: "completedGameStaleRecoverySpineLaneCase",
       moduleSpecifier:
-        "./dev_test_game_core_loop_completed_game_shared_scenario_assertions.mjs",
+        "./dev_test_game_core_loop_completed_terminal_scenario_assertions.mjs",
     }),
-    "proof/readiness contract should keep stale recovery spine lane compatibility on the shared scenario/assertion module",
+    "proof/readiness contract should source stale recovery spine lane from the terminal scenario/assertion module",
   );
   for (const importedName of [
     "completedHostStaleCommandCases",
@@ -676,7 +694,7 @@ test("completed-game production harness callers share extracted recovery cases",
         moduleSpecifier:
           "./dev_test_game_core_loop_completed_game_shared_recovery_scenarios.mjs",
       }),
-      `proof/readiness contract should not bypass the scenario/assertion facade for ${importedName}`,
+      `proof/readiness contract should not bypass the terminal scenario/assertion module for ${importedName}`,
     );
     assert(
       !importsFromModule({
@@ -685,7 +703,7 @@ test("completed-game production harness callers share extracted recovery cases",
         moduleSpecifier:
           "./dev_test_game_core_loop_completed_game_shared_case_definitions.mjs",
       }),
-      `proof/readiness contract should not bypass the scenario/assertion facade for ${importedName}`,
+      `proof/readiness contract should not bypass the terminal scenario/assertion module for ${importedName}`,
     );
   }
   for (const localScenarioLiteral of [
@@ -772,9 +790,9 @@ test("completed-game production harness callers share extracted recovery cases",
   );
   assert(
     recoveryDefinitionSource.includes(
-      "./dev_test_game_core_loop_completed_game_shared_recovery_scenarios.mjs",
+      "./dev_test_game_core_loop_completed_terminal_scenario_assertions.mjs",
     ),
-    "broader completed recovery definitions should re-export the shared completed-game scenario/assertion module",
+    "broader completed recovery definitions should re-export the terminal completed-game scenario/assertion module",
   );
   const recoveryScenarioCaseSource = await readFile(
     "tools/dev_test_game_core_loop_completed_recovery_scenario_cases.mjs",
@@ -782,9 +800,9 @@ test("completed-game production harness callers share extracted recovery cases",
   );
   assert(
     recoveryScenarioCaseSource.includes(
-      "./dev_test_game_core_loop_completed_game_shared_recovery_scenarios.mjs",
+      "./dev_test_game_core_loop_completed_terminal_scenario_assertions.mjs",
     ),
-    "broader completed recovery scenario cases should re-export the shared completed-game scenario/assertion module",
+    "broader completed recovery scenario cases should re-export the terminal completed-game scenario/assertion module",
   );
   assert(
     !recoveryScenarioCaseSource.includes(

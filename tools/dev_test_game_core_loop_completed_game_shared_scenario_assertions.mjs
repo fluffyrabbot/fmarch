@@ -1,16 +1,4 @@
-import {
-  assertCompletedGameEndgameSurfaceProof,
-  completedGameEndgameProofScenarioCases,
-  completedGameEndgameScenarioCaseFamilyDefinitions,
-  completedGameEndgameScenarioCaseFamilyEntries,
-  completedGameEndgameScenarioCaseFamilyIds,
-  completedGameEndgameScenarioCaseFamilies,
-  completedGameEndgameTransition,
-  completedGameEndgameTransitionTokens,
-} from "./dev_test_game_core_loop_completed_game_shared_recovery_scenarios.mjs";
-
 export {
-  assertCompletedGameEndgameSurfaceProof,
   assertCompletedGameEndgameTransition,
   assertCompletedPlayerReloadCases,
   completedDeadPlayerStaleVoteAssertionCase,
@@ -25,6 +13,13 @@ export {
   completedGameEndgameStaleRejectAssertionCases,
   completedGameEndgameTransition,
   completedGameEndgameTransitionTokens,
+  completedGameProofReadinessCaseGroupDefinitions,
+  completedGameProofReadinessCaseGroupIds,
+  completedGameProofReadinessCaseGroups,
+  completedGameProofReadinessProofScenarioCases,
+  completedGameProofReadinessScenarioFamilies,
+  completedGameProofReadinessScenarioFamily,
+  completedGameProofReadinessTransition,
   completedGameStaleRecoverySpineLaneCase,
   completedHostStaleCommandAssertionCases,
   completedHostStaleCommandHardeningLaneCaseDefinitions,
@@ -45,67 +40,18 @@ export {
   staleCompletedGamePlayerCommandCaseDefinitions,
   staleCompletedGamePlayerCommandCases,
   staleCompletedGamePlayerCommandProofArgs,
-} from "./dev_test_game_core_loop_completed_game_shared_recovery_scenarios.mjs";
+} from "./dev_test_game_core_loop_completed_terminal_scenario_assertions.mjs";
 
-export const completedGameProofReadinessCaseGroupDefinitions =
-  completedGameEndgameScenarioCaseFamilyDefinitions;
+export {
+  assertCompletedGameEndgameSurfaceProof,
+} from "./dev_test_game_core_loop_completed_recovery_scenario_assertions.mjs";
 
-export const completedGameProofReadinessCaseGroupIds =
-  completedGameEndgameScenarioCaseFamilyIds;
-
-export function completedGameProofReadinessScenarioFamilies() {
-  return completedGameEndgameScenarioCaseFamilies();
-}
-
-export function completedGameProofReadinessCaseGroups({
-  scenarioFamilies = completedGameProofReadinessScenarioFamilies(),
-} = {}) {
-  return Object.freeze(
-    Object.fromEntries(
-      completedGameEndgameScenarioCaseFamilyEntries({ scenarioFamilies }),
-    ),
-  );
-}
-
-export function completedGameProofReadinessProofScenarioCases({
-  scenarioFamilies = completedGameProofReadinessScenarioFamilies(),
-  ...proofArgs
-}) {
-  return completedGameEndgameProofScenarioCases({
-    ...proofArgs,
-    scenarioFamilies,
-  });
-}
-
-export function completedGameProofReadinessTransition({
-  scenarioFamilies = completedGameProofReadinessScenarioFamilies(),
-} = {}) {
-  return completedGameEndgameTransition({ scenarioFamilies });
-}
-
-export function completedGameProofReadinessScenarioFamily({
-  scenarioFamilies = completedGameProofReadinessScenarioFamilies(),
-} = {}) {
-  return {
-    id: "core-loop-completed-endgame-progression",
-    transitionTokens: completedGameEndgameTransitionTokens({
-      scenarioFamilies,
-    }),
-    staleRejects: {
-      completedHostStaleCommands: [
-        ...scenarioFamilies.completedHostStaleCommandCases,
-      ],
-      completedDeadPlayerStaleVote:
-        scenarioFamilies.completedDeadPlayerStaleVoteCase,
-      staleCompletedGamePlayerCommands: [
-        ...scenarioFamilies.staleCompletedGamePlayerCommandCases,
-      ],
-    },
-    reloads: {
-      completedPlayers: [...scenarioFamilies.completedPlayerReloadCases],
-    },
-  };
-}
+import {
+  assertCompletedGameEndgameSurfaceProof,
+} from "./dev_test_game_core_loop_completed_recovery_scenario_assertions.mjs";
+import {
+  completedGameProofReadinessScenarioFamilies,
+} from "./dev_test_game_core_loop_completed_terminal_scenario_assertions.mjs";
 
 export function assertCompletedGameProofReadinessSurfaceProof({
   scenarioFamilies = completedGameProofReadinessScenarioFamilies(),

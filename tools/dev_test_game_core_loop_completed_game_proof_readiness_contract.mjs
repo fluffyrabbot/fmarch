@@ -6,13 +6,16 @@ import {
 } from "./dev_test_game_core_loop_completed_game_cases.mjs";
 import {
   completedGameStaleRecoverySpineLaneCase,
-} from "./dev_test_game_core_loop_completed_game_shared_scenario_assertions.mjs";
+} from "./dev_test_game_core_loop_completed_terminal_scenario_assertions.mjs";
 import {
   completedGameProofReadinessScenarioFamily as completedGameProofReadinessCaseScenarioFamily,
-} from "./dev_test_game_core_loop_completed_game_shared_scenario_assertions.mjs";
+} from "./dev_test_game_core_loop_completed_terminal_scenario_assertions.mjs";
 
 export {
   assertCompletedGameProofReadinessSurfaceProof,
+} from "./dev_test_game_core_loop_completed_game_shared_scenario_assertions.mjs";
+
+export {
   completedGameProofReadinessCaseGroupDefinitions,
   completedGameProofReadinessCaseGroupIds,
   completedGameProofReadinessCaseGroups,
@@ -28,7 +31,7 @@ export {
   completedPlayerReloadCases,
   staleCompletedGamePlayerCommandCaseDefinitions,
   staleCompletedGamePlayerCommandCases,
-} from "./dev_test_game_core_loop_completed_game_shared_scenario_assertions.mjs";
+} from "./dev_test_game_core_loop_completed_terminal_scenario_assertions.mjs";
 
 export {
   completedGameHardeningLaneCases,
