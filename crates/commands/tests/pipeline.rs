@@ -14,7 +14,8 @@ use commands::{
     audit_engine_snapshot_identity_boundary, audit_resolution_envelopes, handle,
     inspect_resolution_traces, load_engine_phase_input, load_engine_snapshot, Ack, Command,
     HostPromptDecision, Reject, ResolutionEnvelopeAuditEnvelope, ResolutionEnvelopeAuditStatus,
-    VoteTarget, LARGE_ACTION_GRAPH_PERFORMANCE_THRESHOLD_MS,
+    ThreadPostMedia, ThreadPostMediaVariant, VoteTarget,
+    LARGE_ACTION_GRAPH_PERFORMANCE_THRESHOLD_MS,
 };
 use eventstore::{ActorId, EventInput};
 use projections::{
@@ -23,7 +24,7 @@ use projections::{
     player_info_results, player_notifications, player_notifications_for_slot, rebuild,
     sheriff_badges, slot_effects, slot_state, visit_history, votecount,
 };
-use sqlx::PgPool;
+use sqlx::{PgPool, Row};
 use std::collections::{BTreeMap, BTreeSet};
 use std::ffi::OsString;
 use std::fs;
@@ -139,6 +140,32 @@ async fn add_vanilla_slot(pool: &PgPool, game: Uuid, host: &str, slot: &str) {
     )
     .await
     .expect("assign vanilla role");
+}
+
+fn thread_media(
+    id: &str,
+    kind: &str,
+    alt: &str,
+    variants: &[(&str, &str, Option<i64>, Option<i64>)],
+) -> ThreadPostMedia {
+    ThreadPostMedia {
+        id: id.into(),
+        kind: kind.into(),
+        alt: alt.into(),
+        variants: variants
+            .iter()
+            .map(|(name, url, width, height)| {
+                (
+                    (*name).to_string(),
+                    ThreadPostMediaVariant {
+                        url: (*url).to_string(),
+                        width: *width,
+                        height: *height,
+                    },
+                )
+            })
+            .collect::<BTreeMap<_, _>>(),
+    }
 }
 
 /// Count of current ballots targeting `target` in `phase`.
@@ -2855,6 +2882,250 @@ async fn replacement_preserves_slot_history_and_transfers_authority(pool: PgPool
         !a_caps.grants(&caps::Capability::SlotOccupant(slot.to_string())),
         "(d) outgoing user A lost SlotOccupant(S)"
     );
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
+async fn submit_post_uses_stream_logical_time_and_preserves_empty_text_media_pagination(
+    pool: PgPool,
+) {
+    let game = setup_game(&pool, "host_h", "slot_1", "user_a").await;
+    let first_media = vec![
+        thread_media(
+            "canvas-sketch",
+            "image",
+            "tablet canvas drawing",
+            &[
+                (
+                    "tablet",
+                    "/media/live-stack/thread/canvas-sketch/tablet.png",
+                    Some(1024),
+                    Some(768),
+                ),
+                (
+                    "thumb",
+                    "/media/live-stack/thread/canvas-sketch/thumb.png",
+                    Some(320),
+                    Some(240),
+                ),
+            ],
+        ),
+        thread_media(
+            "embedded-clip",
+            "video",
+            "short embedded clip",
+            &[(
+                "poster",
+                "/media/live-stack/thread/embedded-clip/poster.png",
+                Some(640),
+                Some(360),
+            )],
+        ),
+    ];
+
+    let first_ack = handle(
+        &pool,
+        &user("user_a"),
+        Command::SubmitPost {
+            game,
+            channel_id: "main".into(),
+            actor_slot: "slot_1".into(),
+            body: "".into(),
+            media: first_media.clone(),
+        },
+    )
+    .await
+    .expect("first post");
+    let second_ack = handle(
+        &pool,
+        &user("user_a"),
+        Command::SubmitPost {
+            game,
+            channel_id: "main".into(),
+            actor_slot: "slot_1".into(),
+            body: "second post".into(),
+            media: Vec::new(),
+        },
+    )
+    .await
+    .expect("second post");
+    assert_eq!(first_ack.stream_seqs.len(), 1);
+    assert_eq!(second_ack.stream_seqs.len(), 1);
+
+    let event_rows = sqlx::query(
+        "SELECT stream_seq, occurred_at, payload FROM events \
+         WHERE stream_id = $1 AND kind = 'PostSubmitted' ORDER BY stream_seq",
+    )
+    .bind(game)
+    .fetch_all(&pool)
+    .await
+    .unwrap();
+    assert_eq!(event_rows.len(), 2);
+    let first_stream_seq: i64 = event_rows[0].get("stream_seq");
+    let first_occurred_at: i64 = event_rows[0].get("occurred_at");
+    let first_payload: serde_json::Value = event_rows[0].get("payload");
+    let second_stream_seq: i64 = event_rows[1].get("stream_seq");
+    let second_occurred_at: i64 = event_rows[1].get("occurred_at");
+    assert_eq!(
+        first_occurred_at, first_stream_seq,
+        "PostSubmitted occurred_at should be the deterministic stream logical time"
+    );
+    assert_eq!(
+        second_occurred_at, second_stream_seq,
+        "subsequent posts should carry their own stream logical time"
+    );
+    assert!(
+        first_occurred_at < second_occurred_at,
+        "post logical time should increase with game-local append order"
+    );
+    assert_eq!(first_payload["body"], "");
+    assert_eq!(first_payload["media"].as_array().unwrap().len(), 2);
+    assert_eq!(first_payload["media"][0]["id"], "canvas-sketch");
+    assert_eq!(first_payload["media"][0]["kind"], "image");
+    assert_eq!(first_payload["media"][1]["id"], "embedded-clip");
+    assert_eq!(first_payload["media"][1]["kind"], "video");
+
+    let latest = projections::thread_view(&pool, game, None, 1)
+        .await
+        .expect("latest thread page");
+    assert_eq!(latest.posts.len(), 1);
+    assert_eq!(latest.posts[0].body, "second post");
+    let older = projections::thread_view(&pool, game, latest.next_before_seq, 1)
+        .await
+        .expect("older thread page");
+    assert_eq!(older.posts.len(), 1);
+    assert_eq!(older.posts[0].body, "");
+    assert_eq!(older.posts[0].stream_seq, first_stream_seq);
+    assert_eq!(older.posts[0].occurred_at, first_occurred_at);
+    assert_eq!(older.posts[0].media[0]["id"], "canvas-sketch");
+    assert_eq!(older.posts[0].media[0]["variants"]["tablet"]["width"], 1024);
+    assert_eq!(older.posts[0].media[1]["kind"], "video");
+}
+
+#[sqlx::test(migrations = "../projections/migrations")]
+async fn private_submit_post_encrypts_body_but_preserves_logical_time_and_media(pool: PgPool) {
+    let host = "host_h";
+    let game = Uuid::new_v4();
+    let h = user(host);
+    handle(
+        &pool,
+        &h,
+        Command::CreateGame {
+            game,
+            pack: "mafiascum".into(),
+        },
+    )
+    .await
+    .unwrap();
+    for (slot, occupant, role) in [
+        ("slot_1", "encryptor_user", "encryptor"),
+        ("slot_2", "goon_user", "mafia_goon"),
+        ("slot_3", "traitor_user", "traitor"),
+    ] {
+        handle(
+            &pool,
+            &h,
+            Command::AddSlot {
+                game,
+                slot: slot.into(),
+            },
+        )
+        .await
+        .unwrap();
+        handle(
+            &pool,
+            &h,
+            Command::AssignSlot {
+                game,
+                slot: slot.into(),
+                user: occupant.into(),
+            },
+        )
+        .await
+        .unwrap();
+        handle(
+            &pool,
+            &h,
+            Command::AssignRole {
+                game,
+                slot: slot.into(),
+                role_key: role.into(),
+            },
+        )
+        .await
+        .unwrap();
+    }
+    handle(
+        &pool,
+        &h,
+        Command::StartGame {
+            game,
+            phase: "D01".into(),
+        },
+    )
+    .await
+    .expect("start declares encryptor private channel");
+
+    let media = vec![thread_media(
+        "private-canvas",
+        "image",
+        "private tablet canvas drawing",
+        &[(
+            "tablet",
+            "/media/live-stack/thread/private-canvas/tablet.png",
+            Some(1024),
+            Some(768),
+        )],
+    )];
+    let ack = handle(
+        &pool,
+        &user("encryptor_user"),
+        Command::SubmitPost {
+            game,
+            channel_id: "private:mafia_day_chat".into(),
+            actor_slot: "slot_1".into(),
+            body: "private media body".into(),
+            media,
+        },
+    )
+    .await
+    .expect("private post");
+    assert_eq!(ack.stream_seqs.len(), 1);
+
+    let raw = sqlx::query(
+        "SELECT stream_seq, occurred_at, payload FROM events \
+         WHERE stream_id = $1 AND kind = 'PostSubmitted' ORDER BY stream_seq DESC LIMIT 1",
+    )
+    .bind(game)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    let stream_seq: i64 = raw.get("stream_seq");
+    let occurred_at: i64 = raw.get("occurred_at");
+    let payload: serde_json::Value = raw.get("payload");
+    assert_eq!(occurred_at, stream_seq);
+    assert_eq!(payload["channel_id"], "private:mafia_day_chat");
+    assert!(
+        payload.get("body").is_none(),
+        "private PostSubmitted body must not be stored in plaintext"
+    );
+    assert!(payload["body_private"]["ciphertext"].is_string());
+    assert_eq!(payload["media"][0]["id"], "private-canvas");
+
+    let thread =
+        projections::thread_view_for_channel(&pool, game, "private:mafia_day_chat", None, 10)
+            .await
+            .expect("private thread projection");
+    assert_eq!(thread.posts.len(), 1);
+    assert_eq!(thread.posts[0].body, "private media body");
+    assert_eq!(thread.posts[0].occurred_at, occurred_at);
+    assert_eq!(thread.posts[0].media[0]["id"], "private-canvas");
+
+    rebuild(&pool, game).await.expect("projection rebuild");
+    let rebuilt =
+        projections::thread_view_for_channel(&pool, game, "private:mafia_day_chat", None, 10)
+            .await
+            .expect("rebuilt private thread projection");
+    assert_eq!(rebuilt.posts, thread.posts);
 }
 
 #[sqlx::test(migrations = "../projections/migrations")]

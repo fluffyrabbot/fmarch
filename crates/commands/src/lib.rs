@@ -1672,6 +1672,10 @@ async fn submit_post_locked(
     // slot, not the user). `slot_or_user` carries the slot id so authorship
     // survives a replacement. Phase id is recorded for partitioning.
     let phase = current_phase(pool, game).await?.unwrap_or_default();
+    let stream = eventstore::load_stream(pool, game)
+        .await
+        .map_err(|e| Reject::Internal(e.to_string()))?;
+    let occurred_at = next_stream_logical_time(&stream);
     let mut payload = serde_json::json!({
         "channel_id": channel_id,
         "slot_or_user": { "slot": actor_slot.clone() },
@@ -1686,7 +1690,7 @@ async fn submit_post_locked(
         1,
         payload,
         ActorId::Slot(actor_slot.clone()),
-        0,
+        occurred_at,
     );
     persist(pool, game, &[ev], receipt).await
 }
@@ -4140,6 +4144,10 @@ fn current_phase_deadline(stream: &[eventstore::StoredEvent], phase_id: &str) ->
         .filter(|ev| ev.payload["phase_id"].as_str() == Some(phase_id))
         .filter_map(|ev| ev.payload["at"].as_i64())
         .last()
+}
+
+fn next_stream_logical_time(stream: &[eventstore::StoredEvent]) -> i64 {
+    stream.last().map(|ev| ev.stream_seq + 1).unwrap_or(1)
 }
 
 fn current_submissions(
