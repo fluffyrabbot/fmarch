@@ -29,6 +29,10 @@ import {
 import {
   localAdminAuditIds,
 } from "./dev_test_game_admin_audit_surface_ids.mjs";
+import {
+  assertRecoveryReceiptGraphSummary,
+  recoveryReceiptGraphDescriptors,
+} from "./dev_test_game_recovery_receipt_graph_surfaces.mjs";
 
 const nextActionPath = path.resolve(
   repoRoot,
@@ -160,14 +164,7 @@ export function nextActionAdminProofCase() {
         proofGraph: source.proofGraph,
       }),
       terminalBatchGraph: source.nextAction.generatedFrom?.terminalBatchGraph ?? null,
-      privateChannelRecoveryGraph:
-        source.nextAction.generatedFrom?.privateChannelRecoveryGraph ?? null,
-      replacementActionRecoveryGraph:
-        source.nextAction.generatedFrom?.replacementActionRecoveryGraph ?? null,
-      replacementHandoffRecoveryGraph:
-        source.nextAction.generatedFrom?.replacementHandoffRecoveryGraph ?? null,
-      replacementPrivateRecoveryGraph:
-        source.nextAction.generatedFrom?.replacementPrivateRecoveryGraph ?? null,
+      ...recoveryReceiptGraphGeneratedFrom(source.nextAction),
       relatedHandoffs: relatedHandoffsForNextAction({
         nextAction: source.nextAction,
         proofGraph: source.proofGraph,
@@ -505,70 +502,7 @@ export function assertNextActionAdminProof(evidence) {
       "next-action admin proof is missing host stale-control trace evidence",
     );
   }
-  const privateChannelRecoveryGraph =
-    evidence.generatedFrom?.privateChannelRecoveryGraph;
-  if (
-    privateChannelRecoveryGraph !== null &&
-    privateChannelRecoveryGraph !== undefined &&
-    (privateChannelRecoveryGraph.nodeId !==
-      "private-channel-recovery-receipt" ||
-      privateChannelRecoveryGraph.status !== "passed" ||
-      privateChannelRecoveryGraph.laneCount !== 4 ||
-      !Array.isArray(privateChannelRecoveryGraph.laneIds) ||
-      privateChannelRecoveryGraph.laneIds.length !== 4)
-  ) {
-    throw new Error(
-      "next-action admin proof private-channel recovery graph summary drifted",
-    );
-  }
-  const replacementPrivateRecoveryGraph =
-    evidence.generatedFrom?.replacementPrivateRecoveryGraph;
-  if (
-    replacementPrivateRecoveryGraph !== null &&
-    replacementPrivateRecoveryGraph !== undefined &&
-    (replacementPrivateRecoveryGraph.nodeId !==
-      "replacement-private-recovery-receipt" ||
-      replacementPrivateRecoveryGraph.status !== "passed" ||
-      replacementPrivateRecoveryGraph.laneCount !== 6 ||
-      !Array.isArray(replacementPrivateRecoveryGraph.laneIds) ||
-      replacementPrivateRecoveryGraph.laneIds.length !== 6)
-  ) {
-    throw new Error(
-      "next-action admin proof replacement private recovery graph summary drifted",
-    );
-  }
-  const replacementActionRecoveryGraph =
-    evidence.generatedFrom?.replacementActionRecoveryGraph;
-  if (
-    replacementActionRecoveryGraph !== null &&
-    replacementActionRecoveryGraph !== undefined &&
-    (replacementActionRecoveryGraph.nodeId !==
-      "replacement-action-recovery-receipt" ||
-      replacementActionRecoveryGraph.status !== "passed" ||
-      replacementActionRecoveryGraph.laneCount !== 3 ||
-      !Array.isArray(replacementActionRecoveryGraph.laneIds) ||
-      replacementActionRecoveryGraph.laneIds.length !== 3)
-  ) {
-    throw new Error(
-      "next-action admin proof replacement action recovery graph summary drifted",
-    );
-  }
-  const replacementHandoffRecoveryGraph =
-    evidence.generatedFrom?.replacementHandoffRecoveryGraph;
-  if (
-    replacementHandoffRecoveryGraph !== null &&
-    replacementHandoffRecoveryGraph !== undefined &&
-    (replacementHandoffRecoveryGraph.nodeId !==
-      "replacement-handoff-recovery-receipt" ||
-      replacementHandoffRecoveryGraph.status !== "passed" ||
-      replacementHandoffRecoveryGraph.laneCount !== 17 ||
-      !Array.isArray(replacementHandoffRecoveryGraph.laneIds) ||
-      replacementHandoffRecoveryGraph.laneIds.length !== 17)
-  ) {
-    throw new Error(
-      "next-action admin proof replacement handoff recovery graph summary drifted",
-    );
-  }
+  assertNextActionAdminRecoveryReceiptGraphs(evidence.generatedFrom);
   for (const checkId of requiredChecksForEvidence(evidence)) {
     if (!evidence.adminRoleSurface?.visibleChecks?.includes(checkId)) {
       throw new Error(`next-action admin proof missing visible check: ${checkId}`);
@@ -773,6 +707,34 @@ export function assertNextActionAdminProof(evidence) {
   return evidence;
 }
 
+function recoveryReceiptGraphGeneratedFrom(nextAction) {
+  return Object.fromEntries(
+    recoveryReceiptGraphDescriptors.map((descriptor) => [
+      descriptor.nextActionGeneratedFromKey,
+      nextAction.generatedFrom?.[descriptor.nextActionGeneratedFromKey] ?? null,
+    ]),
+  );
+}
+
+function assertNextActionAdminRecoveryReceiptGraphs(generatedFrom) {
+  for (const descriptor of recoveryReceiptGraphDescriptors) {
+    assertRecoveryReceiptGraphSummary(
+      generatedFrom?.[descriptor.nextActionGeneratedFromKey],
+      descriptor,
+      { label: "next-action admin proof" },
+    );
+  }
+}
+
+function recoveryReceiptGraphCheckIdsForEvidence(evidence) {
+  return recoveryReceiptGraphDescriptors.flatMap((descriptor) =>
+    evidence.generatedFrom?.[descriptor.nextActionGeneratedFromKey] === null ||
+    evidence.generatedFrom?.[descriptor.nextActionGeneratedFromKey] === undefined
+      ? []
+      : [descriptor.checkId],
+  );
+}
+
 function requiredChecksForNextAction(nextAction) {
   const checks = ["next-command", nextAction.nextAction.reason, "selection-trace"];
   if (nextAction.nextAction.artifact?.id !== undefined) {
@@ -815,17 +777,13 @@ function requiredChecksForNextAction(nextAction) {
   if (nextAction.generatedFrom?.terminalBatchGraph !== undefined) {
     checks.push("terminal-proof-batch-graph");
   }
-  if (nextAction.generatedFrom?.privateChannelRecoveryGraph !== undefined) {
-    checks.push("private-channel-recovery-graph");
-  }
-  if (nextAction.generatedFrom?.replacementActionRecoveryGraph !== undefined) {
-    checks.push("replacement-action-recovery-graph");
-  }
-  if (nextAction.generatedFrom?.replacementHandoffRecoveryGraph !== undefined) {
-    checks.push("replacement-handoff-recovery-graph");
-  }
-  if (nextAction.generatedFrom?.replacementPrivateRecoveryGraph !== undefined) {
-    checks.push("replacement-private-recovery-graph");
+  for (const descriptor of recoveryReceiptGraphDescriptors) {
+    if (
+      nextAction.generatedFrom?.[descriptor.nextActionGeneratedFromKey] !==
+      undefined
+    ) {
+      checks.push(descriptor.checkId);
+    }
   }
   if (nextAction.seedProofLaneCoverageTrace?.status !== "unavailable") {
     checks.push("seed-proof-lane-coverage-trace");
@@ -1115,22 +1073,7 @@ function requiredChecksForEvidence(evidence) {
     evidence.generatedFrom?.terminalBatchGraph === undefined
       ? []
       : ["terminal-proof-batch-graph"]),
-    ...(evidence.generatedFrom?.privateChannelRecoveryGraph === null ||
-    evidence.generatedFrom?.privateChannelRecoveryGraph === undefined
-      ? []
-      : ["private-channel-recovery-graph"]),
-    ...(evidence.generatedFrom?.replacementActionRecoveryGraph === null ||
-    evidence.generatedFrom?.replacementActionRecoveryGraph === undefined
-      ? []
-      : ["replacement-action-recovery-graph"]),
-    ...(evidence.generatedFrom?.replacementHandoffRecoveryGraph === null ||
-    evidence.generatedFrom?.replacementHandoffRecoveryGraph === undefined
-      ? []
-      : ["replacement-handoff-recovery-graph"]),
-    ...(evidence.generatedFrom?.replacementPrivateRecoveryGraph === null ||
-    evidence.generatedFrom?.replacementPrivateRecoveryGraph === undefined
-      ? []
-      : ["replacement-private-recovery-graph"]),
+    ...recoveryReceiptGraphCheckIdsForEvidence(evidence),
     ...(evidence.generatedFrom?.seedProofLaneCoverageTrace?.status !==
       "unavailable"
       ? [

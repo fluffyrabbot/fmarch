@@ -1869,19 +1869,19 @@ export function normalizeLocalNextActionAudit(nextAction, { game, proofGraph = n
     nextAction.generatedFrom?.terminalBatchGraph,
   );
   const privateChannelRecoveryGraph =
-    normalizeNextActionPrivateChannelRecoveryGraph(
+    normalizeNextActionRecoveryReceiptGraph(
       nextAction.generatedFrom?.privateChannelRecoveryGraph,
     );
   const replacementActionRecoveryGraph =
-    normalizeNextActionReplacementActionRecoveryGraph(
+    normalizeNextActionRecoveryReceiptGraph(
       nextAction.generatedFrom?.replacementActionRecoveryGraph,
     );
   const replacementHandoffRecoveryGraph =
-    normalizeNextActionReplacementHandoffRecoveryGraph(
+    normalizeNextActionRecoveryReceiptGraph(
       nextAction.generatedFrom?.replacementHandoffRecoveryGraph,
     );
   const replacementPrivateRecoveryGraph =
-    normalizeNextActionReplacementPrivateRecoveryGraph(
+    normalizeNextActionRecoveryReceiptGraph(
       nextAction.generatedFrom?.replacementPrivateRecoveryGraph,
     );
   const stability =
@@ -2411,10 +2411,10 @@ function normalizeNextActionTerminalBatchGraph(terminalBatchGraph) {
   });
 }
 
-function normalizeNextActionPrivateChannelRecoveryGraph(privateChannelRecoveryGraph) {
+function normalizeNextActionRecoveryReceiptGraph(recoveryReceiptGraph) {
   if (
-    privateChannelRecoveryGraph === null ||
-    typeof privateChannelRecoveryGraph !== "object"
+    recoveryReceiptGraph === null ||
+    typeof recoveryReceiptGraph !== "object"
   ) {
     return Object.freeze({
       nodeId: "",
@@ -2429,147 +2429,21 @@ function normalizeNextActionPrivateChannelRecoveryGraph(privateChannelRecoveryGr
     });
   }
   return Object.freeze({
-    nodeId: String(privateChannelRecoveryGraph.nodeId ?? ""),
-    status: String(privateChannelRecoveryGraph.status ?? ""),
-    proofTarget: String(privateChannelRecoveryGraph.proofTarget ?? ""),
-    roleUrl: String(privateChannelRecoveryGraph.roleUrl ?? ""),
-    familyId: String(privateChannelRecoveryGraph.familyId ?? ""),
-    laneCount: Number(privateChannelRecoveryGraph.laneCount ?? 0),
+    nodeId: String(recoveryReceiptGraph.nodeId ?? ""),
+    status: String(recoveryReceiptGraph.status ?? ""),
+    proofTarget: String(recoveryReceiptGraph.proofTarget ?? ""),
+    roleUrl: String(recoveryReceiptGraph.roleUrl ?? ""),
+    familyId: String(recoveryReceiptGraph.familyId ?? ""),
+    laneCount: Number(recoveryReceiptGraph.laneCount ?? 0),
     laneIds: Object.freeze(
-      Array.isArray(privateChannelRecoveryGraph.laneIds)
-        ? privateChannelRecoveryGraph.laneIds.map((laneId) => String(laneId))
+      Array.isArray(recoveryReceiptGraph.laneIds)
+        ? recoveryReceiptGraph.laneIds.map((laneId) => String(laneId))
         : [],
     ),
-    edgeCount: Number(privateChannelRecoveryGraph.edgeCount ?? 0),
+    edgeCount: Number(recoveryReceiptGraph.edgeCount ?? 0),
     edgeTargets: Object.freeze(
-      Array.isArray(privateChannelRecoveryGraph.edgeTargets)
-        ? privateChannelRecoveryGraph.edgeTargets.map((target) => String(target))
-        : [],
-    ),
-  });
-}
-
-function normalizeNextActionReplacementPrivateRecoveryGraph(
-  replacementPrivateRecoveryGraph,
-) {
-  if (
-    replacementPrivateRecoveryGraph === null ||
-    typeof replacementPrivateRecoveryGraph !== "object"
-  ) {
-    return Object.freeze({
-      nodeId: "",
-      status: "",
-      proofTarget: "",
-      roleUrl: "",
-      familyId: "",
-      laneCount: 0,
-      laneIds: Object.freeze([]),
-      edgeCount: 0,
-      edgeTargets: Object.freeze([]),
-    });
-  }
-  return Object.freeze({
-    nodeId: String(replacementPrivateRecoveryGraph.nodeId ?? ""),
-    status: String(replacementPrivateRecoveryGraph.status ?? ""),
-    proofTarget: String(replacementPrivateRecoveryGraph.proofTarget ?? ""),
-    roleUrl: String(replacementPrivateRecoveryGraph.roleUrl ?? ""),
-    familyId: String(replacementPrivateRecoveryGraph.familyId ?? ""),
-    laneCount: Number(replacementPrivateRecoveryGraph.laneCount ?? 0),
-    laneIds: Object.freeze(
-      Array.isArray(replacementPrivateRecoveryGraph.laneIds)
-        ? replacementPrivateRecoveryGraph.laneIds.map((laneId) => String(laneId))
-        : [],
-    ),
-    edgeCount: Number(replacementPrivateRecoveryGraph.edgeCount ?? 0),
-    edgeTargets: Object.freeze(
-      Array.isArray(replacementPrivateRecoveryGraph.edgeTargets)
-        ? replacementPrivateRecoveryGraph.edgeTargets.map((target) =>
-            String(target),
-          )
-        : [],
-    ),
-  });
-}
-
-function normalizeNextActionReplacementHandoffRecoveryGraph(
-  replacementHandoffRecoveryGraph,
-) {
-  if (
-    replacementHandoffRecoveryGraph === null ||
-    typeof replacementHandoffRecoveryGraph !== "object"
-  ) {
-    return Object.freeze({
-      nodeId: "",
-      status: "",
-      proofTarget: "",
-      roleUrl: "",
-      familyId: "",
-      laneCount: 0,
-      laneIds: Object.freeze([]),
-      edgeCount: 0,
-      edgeTargets: Object.freeze([]),
-    });
-  }
-  return Object.freeze({
-    nodeId: String(replacementHandoffRecoveryGraph.nodeId ?? ""),
-    status: String(replacementHandoffRecoveryGraph.status ?? ""),
-    proofTarget: String(replacementHandoffRecoveryGraph.proofTarget ?? ""),
-    roleUrl: String(replacementHandoffRecoveryGraph.roleUrl ?? ""),
-    familyId: String(replacementHandoffRecoveryGraph.familyId ?? ""),
-    laneCount: Number(replacementHandoffRecoveryGraph.laneCount ?? 0),
-    laneIds: Object.freeze(
-      Array.isArray(replacementHandoffRecoveryGraph.laneIds)
-        ? replacementHandoffRecoveryGraph.laneIds.map((laneId) =>
-            String(laneId),
-          )
-        : [],
-    ),
-    edgeCount: Number(replacementHandoffRecoveryGraph.edgeCount ?? 0),
-    edgeTargets: Object.freeze(
-      Array.isArray(replacementHandoffRecoveryGraph.edgeTargets)
-        ? replacementHandoffRecoveryGraph.edgeTargets.map((target) =>
-            String(target),
-          )
-        : [],
-    ),
-  });
-}
-
-function normalizeNextActionReplacementActionRecoveryGraph(
-  replacementActionRecoveryGraph,
-) {
-  if (
-    replacementActionRecoveryGraph === null ||
-    typeof replacementActionRecoveryGraph !== "object"
-  ) {
-    return Object.freeze({
-      nodeId: "",
-      status: "",
-      proofTarget: "",
-      roleUrl: "",
-      familyId: "",
-      laneCount: 0,
-      laneIds: Object.freeze([]),
-      edgeCount: 0,
-      edgeTargets: Object.freeze([]),
-    });
-  }
-  return Object.freeze({
-    nodeId: String(replacementActionRecoveryGraph.nodeId ?? ""),
-    status: String(replacementActionRecoveryGraph.status ?? ""),
-    proofTarget: String(replacementActionRecoveryGraph.proofTarget ?? ""),
-    roleUrl: String(replacementActionRecoveryGraph.roleUrl ?? ""),
-    familyId: String(replacementActionRecoveryGraph.familyId ?? ""),
-    laneCount: Number(replacementActionRecoveryGraph.laneCount ?? 0),
-    laneIds: Object.freeze(
-      Array.isArray(replacementActionRecoveryGraph.laneIds)
-        ? replacementActionRecoveryGraph.laneIds.map((laneId) => String(laneId))
-        : [],
-    ),
-    edgeCount: Number(replacementActionRecoveryGraph.edgeCount ?? 0),
-    edgeTargets: Object.freeze(
-      Array.isArray(replacementActionRecoveryGraph.edgeTargets)
-        ? replacementActionRecoveryGraph.edgeTargets.map((target) =>
+      Array.isArray(recoveryReceiptGraph.edgeTargets)
+        ? recoveryReceiptGraph.edgeTargets.map((target) =>
             String(target),
           )
         : [],

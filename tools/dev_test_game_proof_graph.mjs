@@ -45,21 +45,24 @@ import {
   localAdminAuditRoleUrl,
 } from "./dev_test_game_admin_audit_surface_ids.mjs";
 import {
-  devTestGamePrivateChannelRecoveryReceiptCommand,
   devTestGamePrivateChannelRecoveryReceiptPath,
 } from "./dev_test_game_private_channel_recovery_receipt.mjs";
 import {
-  devTestGameReplacementPrivateRecoveryReceiptCommand,
   devTestGameReplacementPrivateRecoveryReceiptPath,
 } from "./dev_test_game_replacement_private_recovery_receipt.mjs";
 import {
-  devTestGameReplacementActionRecoveryReceiptCommand,
   devTestGameReplacementActionRecoveryReceiptPath,
 } from "./dev_test_game_replacement_action_recovery_receipt.mjs";
 import {
-  devTestGameReplacementHandoffRecoveryReceiptCommand,
   devTestGameReplacementHandoffRecoveryReceiptPath,
 } from "./dev_test_game_replacement_handoff_recovery_receipt.mjs";
+import {
+  assertProofGraphCoversRecoveryReceipt,
+  buildRecoveryReceiptGraphEdges,
+  buildRecoveryReceiptGraphNode,
+  recoveryReceiptGraphDescriptorByReceiptKey,
+  recoveryReceiptGraphDescriptors,
+} from "./dev_test_game_recovery_receipt_graph_surfaces.mjs";
 export {
   devTestGameProofGraphAdminProofCommand,
   devTestGameProofGraphAdminProofPath,
@@ -252,14 +255,15 @@ export function buildDevTestGameProofGraph(
         (node) => node.kind === "production-feature-spine-target",
       ).length,
       terminalBatchCount: adminSpineTerminalBatchEvidence?.batchCount ?? 0,
-      privateChannelRecoveryLaneCount:
-        privateChannelRecoveryReceiptEvidence?.laneCount ?? 0,
-      replacementPrivateRecoveryLaneCount:
-        replacementPrivateRecoveryReceiptEvidence?.laneCount ?? 0,
-      replacementActionRecoveryLaneCount:
-        replacementActionRecoveryReceiptEvidence?.laneCount ?? 0,
-      replacementHandoffRecoveryLaneCount:
-        replacementHandoffRecoveryReceiptEvidence?.laneCount ?? 0,
+      ...recoveryReceiptSummaryLaneCounts({
+        privateChannelRecoveryReceipt: privateChannelRecoveryReceiptEvidence,
+        replacementActionRecoveryReceipt:
+          replacementActionRecoveryReceiptEvidence,
+        replacementHandoffRecoveryReceipt:
+          replacementHandoffRecoveryReceiptEvidence,
+        replacementPrivateRecoveryReceipt:
+          replacementPrivateRecoveryReceiptEvidence,
+      }),
     },
     nodes,
     edges,
@@ -372,192 +376,43 @@ export function assertDevTestGameProofGraph(
 export function assertDevTestGameProofGraphCoversReplacementActionRecoveryReceipt(
   graph,
 ) {
-  const node = (graph?.nodes ?? []).find(
-    (candidate) => candidate.id === "replacement-action-recovery-receipt",
+  return assertProofGraphCoversRecoveryReceipt(
+    graph,
+    recoveryReceiptGraphDescriptorByReceiptKey(
+      "replacementActionRecoveryReceipt",
+    ),
   );
-  if (graph?.generatedFrom?.replacementActionRecoveryReceipt === undefined) {
-    if (
-      node !== undefined ||
-      graph.summary?.replacementActionRecoveryLaneCount !== 0
-    ) {
-      throw new Error("proof graph replacement action receipt summary drifted");
-    }
-    return graph;
-  }
-  if (
-    node?.kind !== "replacement-action-recovery-receipt" ||
-    node.status !== "passed" ||
-    node.artifact !== graph.generatedFrom.replacementActionRecoveryReceipt ||
-    node.roleUrl !== localAdminAuditRoleUrl(localAdminAuditIds.hardening) ||
-    node.proofCommand !== devTestGameReplacementActionRecoveryReceiptCommand ||
-    node.recoveryCommand !==
-      devTestGameReplacementActionRecoveryReceiptCommand ||
-    node.laneCount !== graph.summary.replacementActionRecoveryLaneCount
-  ) {
-    throw new Error("proof graph replacement action receipt node drifted");
-  }
-  for (const [from, to, relationship] of [
-    ["admin-proof:hardening", "replacement-action-recovery-receipt", "proves"],
-    ["replacement-action-recovery-receipt", "proof-graph", "records"],
-    ["replacement-action-recovery-receipt", "next-action", "summarizes-into"],
-  ]) {
-    if (
-      !(graph.edges ?? []).some(
-        (edge) =>
-          edge.from === from &&
-          edge.to === to &&
-          edge.relationship === relationship,
-      )
-    ) {
-      throw new Error(
-        `proof graph replacement action receipt edge missing: ${from}->${to}`,
-      );
-    }
-  }
-  return graph;
 }
 
 export function assertDevTestGameProofGraphCoversReplacementHandoffRecoveryReceipt(
   graph,
 ) {
-  const node = (graph?.nodes ?? []).find(
-    (candidate) => candidate.id === "replacement-handoff-recovery-receipt",
+  return assertProofGraphCoversRecoveryReceipt(
+    graph,
+    recoveryReceiptGraphDescriptorByReceiptKey(
+      "replacementHandoffRecoveryReceipt",
+    ),
   );
-  if (graph?.generatedFrom?.replacementHandoffRecoveryReceipt === undefined) {
-    if (
-      node !== undefined ||
-      graph.summary?.replacementHandoffRecoveryLaneCount !== 0
-    ) {
-      throw new Error("proof graph replacement handoff receipt summary drifted");
-    }
-    return graph;
-  }
-  if (
-    node?.kind !== "replacement-handoff-recovery-receipt" ||
-    node.status !== "passed" ||
-    node.artifact !== graph.generatedFrom.replacementHandoffRecoveryReceipt ||
-    node.roleUrl !== localAdminAuditRoleUrl(localAdminAuditIds.hardening) ||
-    node.proofCommand !== devTestGameReplacementHandoffRecoveryReceiptCommand ||
-    node.recoveryCommand !==
-      devTestGameReplacementHandoffRecoveryReceiptCommand ||
-    node.laneCount !== graph.summary.replacementHandoffRecoveryLaneCount
-  ) {
-    throw new Error("proof graph replacement handoff receipt node drifted");
-  }
-  for (const [from, to, relationship] of [
-    ["admin-proof:hardening", "replacement-handoff-recovery-receipt", "proves"],
-    ["replacement-handoff-recovery-receipt", "proof-graph", "records"],
-    ["replacement-handoff-recovery-receipt", "next-action", "summarizes-into"],
-  ]) {
-    if (
-      !(graph.edges ?? []).some(
-        (edge) =>
-          edge.from === from &&
-          edge.to === to &&
-          edge.relationship === relationship,
-      )
-    ) {
-      throw new Error(
-        `proof graph replacement handoff receipt edge missing: ${from}->${to}`,
-      );
-    }
-  }
-  return graph;
 }
 
 export function assertDevTestGameProofGraphCoversReplacementPrivateRecoveryReceipt(
   graph,
 ) {
-  const node = (graph?.nodes ?? []).find(
-    (candidate) => candidate.id === "replacement-private-recovery-receipt",
+  return assertProofGraphCoversRecoveryReceipt(
+    graph,
+    recoveryReceiptGraphDescriptorByReceiptKey(
+      "replacementPrivateRecoveryReceipt",
+    ),
   );
-  if (graph?.generatedFrom?.replacementPrivateRecoveryReceipt === undefined) {
-    if (
-      node !== undefined ||
-      graph.summary?.replacementPrivateRecoveryLaneCount !== 0
-    ) {
-      throw new Error("proof graph replacement private receipt summary drifted");
-    }
-    return graph;
-  }
-  if (
-    node?.kind !== "replacement-private-recovery-receipt" ||
-    node.status !== "passed" ||
-    node.artifact !== graph.generatedFrom.replacementPrivateRecoveryReceipt ||
-    node.roleUrl !== localAdminAuditRoleUrl(localAdminAuditIds.hardening) ||
-    node.proofCommand !== devTestGameReplacementPrivateRecoveryReceiptCommand ||
-    node.recoveryCommand !==
-      devTestGameReplacementPrivateRecoveryReceiptCommand ||
-    node.laneCount !== graph.summary.replacementPrivateRecoveryLaneCount
-  ) {
-    throw new Error("proof graph replacement private receipt node drifted");
-  }
-  for (const [from, to, relationship] of [
-    ["admin-proof:hardening", "replacement-private-recovery-receipt", "proves"],
-    ["replacement-private-recovery-receipt", "proof-graph", "records"],
-    ["replacement-private-recovery-receipt", "next-action", "summarizes-into"],
-  ]) {
-    if (
-      !(graph.edges ?? []).some(
-        (edge) =>
-          edge.from === from &&
-          edge.to === to &&
-          edge.relationship === relationship,
-      )
-    ) {
-      throw new Error(
-        `proof graph replacement private receipt edge missing: ${from}->${to}`,
-      );
-    }
-  }
-  return graph;
 }
 
 export function assertDevTestGameProofGraphCoversPrivateChannelRecoveryReceipt(
   graph,
 ) {
-  const node = (graph?.nodes ?? []).find(
-    (candidate) => candidate.id === "private-channel-recovery-receipt",
+  return assertProofGraphCoversRecoveryReceipt(
+    graph,
+    recoveryReceiptGraphDescriptorByReceiptKey("privateChannelRecoveryReceipt"),
   );
-  if (graph?.generatedFrom?.privateChannelRecoveryReceipt === undefined) {
-    if (
-      node !== undefined ||
-      graph.summary?.privateChannelRecoveryLaneCount !== 0
-    ) {
-      throw new Error("proof graph private-channel receipt summary drifted");
-    }
-    return graph;
-  }
-  if (
-    node?.kind !== "private-channel-recovery-receipt" ||
-    node.status !== "passed" ||
-    node.artifact !== graph.generatedFrom.privateChannelRecoveryReceipt ||
-    node.roleUrl !== localAdminAuditRoleUrl(localAdminAuditIds.coreLoop) ||
-    node.proofCommand !== devTestGamePrivateChannelRecoveryReceiptCommand ||
-    node.recoveryCommand !== devTestGamePrivateChannelRecoveryReceiptCommand ||
-    node.laneCount !== graph.summary.privateChannelRecoveryLaneCount
-  ) {
-    throw new Error("proof graph private-channel receipt node drifted");
-  }
-  for (const [from, to, relationship] of [
-    ["admin-proof:core-loop", "private-channel-recovery-receipt", "proves"],
-    ["private-channel-recovery-receipt", "proof-graph", "records"],
-    ["private-channel-recovery-receipt", "next-action", "summarizes-into"],
-  ]) {
-    if (
-      !(graph.edges ?? []).some(
-        (edge) =>
-          edge.from === from &&
-          edge.to === to &&
-          edge.relationship === relationship,
-      )
-    ) {
-      throw new Error(
-        `proof graph private-channel receipt edge missing: ${from}->${to}`,
-      );
-    }
-  }
-  return graph;
 }
 
 export function assertDevTestGameProofGraphCoversTerminalBatches(graph) {
@@ -900,81 +755,16 @@ function buildProofGraphNodes({
             ],
           },
         ];
-  const privateChannelRecoveryReceiptNode =
-    privateChannelRecoveryReceipt === null
-      ? []
-      : [
-          {
-            id: "private-channel-recovery-receipt",
-            label: "Private-channel recovery receipt",
-            kind: "private-channel-recovery-receipt",
-            status: privateChannelRecoveryReceipt.status,
-            artifact: privateChannelRecoveryReceiptSource,
-            roleUrl: privateChannelRecoveryReceipt.roleUrl,
-            proofCommand: devTestGamePrivateChannelRecoveryReceiptCommand,
-            recoveryCommand: devTestGamePrivateChannelRecoveryReceiptCommand,
-            familyId: privateChannelRecoveryReceipt.familyId,
-            laneCount: privateChannelRecoveryReceipt.laneCount,
-            laneIds: privateChannelRecoveryReceipt.laneIds,
-          },
-        ];
-  const replacementPrivateRecoveryReceiptNode =
-    replacementPrivateRecoveryReceipt === null
-      ? []
-      : [
-          {
-            id: "replacement-private-recovery-receipt",
-            label: "Replacement private-channel recovery receipt",
-            kind: "replacement-private-recovery-receipt",
-            status: replacementPrivateRecoveryReceipt.status,
-            artifact: replacementPrivateRecoveryReceiptSource,
-            roleUrl: replacementPrivateRecoveryReceipt.roleUrl,
-            proofCommand: devTestGameReplacementPrivateRecoveryReceiptCommand,
-            recoveryCommand:
-              devTestGameReplacementPrivateRecoveryReceiptCommand,
-            familyId: replacementPrivateRecoveryReceipt.familyId,
-            laneCount: replacementPrivateRecoveryReceipt.laneCount,
-            laneIds: replacementPrivateRecoveryReceipt.laneIds,
-          },
-        ];
-  const replacementActionRecoveryReceiptNode =
-    replacementActionRecoveryReceipt === null
-      ? []
-      : [
-          {
-            id: "replacement-action-recovery-receipt",
-            label: "Replacement action recovery receipt",
-            kind: "replacement-action-recovery-receipt",
-            status: replacementActionRecoveryReceipt.status,
-            artifact: replacementActionRecoveryReceiptSource,
-            roleUrl: replacementActionRecoveryReceipt.roleUrl,
-            proofCommand: devTestGameReplacementActionRecoveryReceiptCommand,
-            recoveryCommand:
-              devTestGameReplacementActionRecoveryReceiptCommand,
-            familyId: replacementActionRecoveryReceipt.familyId,
-            laneCount: replacementActionRecoveryReceipt.laneCount,
-            laneIds: replacementActionRecoveryReceipt.laneIds,
-          },
-        ];
-  const replacementHandoffRecoveryReceiptNode =
-    replacementHandoffRecoveryReceipt === null
-      ? []
-      : [
-          {
-            id: "replacement-handoff-recovery-receipt",
-            label: "Replacement handoff recovery receipt",
-            kind: "replacement-handoff-recovery-receipt",
-            status: replacementHandoffRecoveryReceipt.status,
-            artifact: replacementHandoffRecoveryReceiptSource,
-            roleUrl: replacementHandoffRecoveryReceipt.roleUrl,
-            proofCommand: devTestGameReplacementHandoffRecoveryReceiptCommand,
-            recoveryCommand:
-              devTestGameReplacementHandoffRecoveryReceiptCommand,
-            familyId: replacementHandoffRecoveryReceipt.familyId,
-            laneCount: replacementHandoffRecoveryReceipt.laneCount,
-            laneIds: replacementHandoffRecoveryReceipt.laneIds,
-          },
-        ];
+  const recoveryReceiptNodes = buildRecoveryReceiptGraphNodes({
+    privateChannelRecoveryReceipt,
+    privateChannelRecoveryReceiptSource,
+    replacementActionRecoveryReceipt,
+    replacementActionRecoveryReceiptSource,
+    replacementHandoffRecoveryReceipt,
+    replacementHandoffRecoveryReceiptSource,
+    replacementPrivateRecoveryReceipt,
+    replacementPrivateRecoveryReceiptSource,
+  });
   return [
     {
       id: "admin-spine",
@@ -1027,10 +817,7 @@ function buildProofGraphNodes({
       recoveryCommand: manifest.commands?.proofFreshness?.script,
     },
     ...terminalBatchNode,
-    ...privateChannelRecoveryReceiptNode,
-    ...replacementActionRecoveryReceiptNode,
-    ...replacementHandoffRecoveryReceiptNode,
-    ...replacementPrivateRecoveryReceiptNode,
+    ...recoveryReceiptNodes,
     ...adminProofNodes,
     ...productionFeatureTargetNodes,
   ].map((node) =>
@@ -1057,16 +844,12 @@ function buildProofGraphEdges({
     ["spine-manifest", "next-action", "records"],
     ["proof-freshness", "next-action", "recovers-through"],
     ...terminalBatchEdges(adminSpineTerminalBatches),
-    ...privateChannelRecoveryReceiptEdges(privateChannelRecoveryReceipt),
-    ...replacementActionRecoveryReceiptEdges(
+    ...buildRecoveryReceiptGraphEdgeRows({
+      privateChannelRecoveryReceipt,
       replacementActionRecoveryReceipt,
-    ),
-    ...replacementHandoffRecoveryReceiptEdges(
       replacementHandoffRecoveryReceipt,
-    ),
-    ...replacementPrivateRecoveryReceiptEdges(
       replacementPrivateRecoveryReceipt,
-    ),
+    }),
     ...nextActionRecoveryEdges(nextAction),
     ...nodes
       .filter((node) => node.kind === "admin-proof-surface")
@@ -1093,123 +876,37 @@ function buildProofGraphEdges({
           ([, value]) => value !== undefined && value !== "",
         ),
       ),
-    );
+  );
 }
 
-function replacementHandoffRecoveryReceiptEdges(replacementHandoffRecoveryReceipt) {
-  if (replacementHandoffRecoveryReceipt === null) {
-    return [];
-  }
-  return [
-    [
-      "admin-proof:hardening",
-      "replacement-handoff-recovery-receipt",
-      "proves",
-      {
-        roleUrl: replacementHandoffRecoveryReceipt.roleUrl,
-        proofTarget: replacementHandoffRecoveryReceipt.path,
-      },
-    ],
-    [
-      "replacement-handoff-recovery-receipt",
-      "proof-graph",
-      "records",
-      { proofTarget: replacementHandoffRecoveryReceipt.path },
-    ],
-    [
-      "replacement-handoff-recovery-receipt",
-      "next-action",
-      "summarizes-into",
-      { proofTarget: replacementHandoffRecoveryReceipt.path },
-    ],
-  ];
+function buildRecoveryReceiptGraphNodes(inputs) {
+  return recoveryReceiptGraphDescriptors
+    .map((descriptor) =>
+      buildRecoveryReceiptGraphNode({
+        descriptor,
+        receipt: inputs[descriptor.receiptKey] ?? null,
+        source: inputs[descriptor.sourceKey],
+      }),
+    )
+    .filter((node) => node !== null);
 }
 
-function replacementActionRecoveryReceiptEdges(replacementActionRecoveryReceipt) {
-  if (replacementActionRecoveryReceipt === null) {
-    return [];
-  }
-  return [
-    [
-      "admin-proof:hardening",
-      "replacement-action-recovery-receipt",
-      "proves",
-      {
-        roleUrl: replacementActionRecoveryReceipt.roleUrl,
-        proofTarget: replacementActionRecoveryReceipt.path,
-      },
-    ],
-    [
-      "replacement-action-recovery-receipt",
-      "proof-graph",
-      "records",
-      { proofTarget: replacementActionRecoveryReceipt.path },
-    ],
-    [
-      "replacement-action-recovery-receipt",
-      "next-action",
-      "summarizes-into",
-      { proofTarget: replacementActionRecoveryReceipt.path },
-    ],
-  ];
+function buildRecoveryReceiptGraphEdgeRows(inputs) {
+  return recoveryReceiptGraphDescriptors.flatMap((descriptor) =>
+    buildRecoveryReceiptGraphEdges({
+      descriptor,
+      receipt: inputs[descriptor.receiptKey] ?? null,
+    }),
+  );
 }
 
-function replacementPrivateRecoveryReceiptEdges(replacementPrivateRecoveryReceipt) {
-  if (replacementPrivateRecoveryReceipt === null) {
-    return [];
-  }
-  return [
-    [
-      "admin-proof:hardening",
-      "replacement-private-recovery-receipt",
-      "proves",
-      {
-        roleUrl: replacementPrivateRecoveryReceipt.roleUrl,
-        proofTarget: replacementPrivateRecoveryReceipt.path,
-      },
-    ],
-    [
-      "replacement-private-recovery-receipt",
-      "proof-graph",
-      "records",
-      { proofTarget: replacementPrivateRecoveryReceipt.path },
-    ],
-    [
-      "replacement-private-recovery-receipt",
-      "next-action",
-      "summarizes-into",
-      { proofTarget: replacementPrivateRecoveryReceipt.path },
-    ],
-  ];
-}
-
-function privateChannelRecoveryReceiptEdges(privateChannelRecoveryReceipt) {
-  if (privateChannelRecoveryReceipt === null) {
-    return [];
-  }
-  return [
-    [
-      "admin-proof:core-loop",
-      "private-channel-recovery-receipt",
-      "proves",
-      {
-        roleUrl: privateChannelRecoveryReceipt.roleUrl,
-        proofTarget: privateChannelRecoveryReceipt.path,
-      },
-    ],
-    [
-      "private-channel-recovery-receipt",
-      "proof-graph",
-      "records",
-      { proofTarget: privateChannelRecoveryReceipt.path },
-    ],
-    [
-      "private-channel-recovery-receipt",
-      "next-action",
-      "summarizes-into",
-      { proofTarget: privateChannelRecoveryReceipt.path },
-    ],
-  ];
+function recoveryReceiptSummaryLaneCounts(inputs) {
+  return Object.fromEntries(
+    recoveryReceiptGraphDescriptors.map((descriptor) => [
+      descriptor.summaryLaneCountKey,
+      inputs[descriptor.receiptKey]?.laneCount ?? 0,
+    ]),
+  );
 }
 
 function terminalBatchEdges(adminSpineTerminalBatches) {
