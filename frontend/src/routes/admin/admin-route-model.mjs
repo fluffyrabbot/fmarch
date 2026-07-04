@@ -21,6 +21,9 @@ import {
   playerRecoveryAuditLaneIds,
 } from "../../../../tools/dev_test_game_player_recovery_scenarios.mjs";
 import {
+  completedGameHardeningLaneCases,
+} from "../../../../tools/dev_test_game_core_loop_completed_scenarios.mjs";
+import {
   coreLoopCompletedGameCoverageCheckId,
   coreLoopAuditLaneIds,
 } from "../../../../tools/dev_test_game_core_loop_scenarios.mjs";
@@ -61,6 +64,15 @@ export const ADMIN_ROUTE_CONTRACT = Object.freeze({
 });
 
 export const LOCAL_PLAYER_RECOVERY_AUDIT_LANE_IDS = playerRecoveryAuditLaneIds;
+
+const COMPLETED_GAME_HARDENING_LANE_CASES = Object.freeze(
+  completedGameHardeningLaneCases(),
+);
+const COMPLETED_GAME_HARDENING_FAMILY_IDS = Object.freeze([
+  ...new Set(
+    COMPLETED_GAME_HARDENING_LANE_CASES.map((scenario) => scenario.family),
+  ),
+]);
 
 export async function buildAdminRouteData({
   principalUserId,
@@ -3944,7 +3956,19 @@ export function normalizeLocalCoreLoopAudit(proofRun, { game }) {
 
 function completedGameHardeningCoverageStatus(proofRun) {
   const coverage = proofRun?.completedGameHardeningCoverage;
-  return `${String(coverage?.status ?? "unknown")}: ${Number(coverage?.passedLaneCount ?? 0)}/${Number(coverage?.laneCount ?? 0)} completed-game lanes across ${Number(coverage?.familyCount ?? 0)} families`;
+  const status = String(coverage?.status ?? "unknown");
+  const passedLaneCount = Number(coverage?.passedLaneCount ?? 0);
+  const laneCount = Number(coverage?.laneCount ?? 0);
+  const familyCount = Number(coverage?.familyCount ?? 0);
+  const expectedLaneCount = COMPLETED_GAME_HARDENING_LANE_CASES.length;
+  const expectedFamilyCount = COMPLETED_GAME_HARDENING_FAMILY_IDS.length;
+  if (
+    laneCount !== expectedLaneCount ||
+    familyCount !== expectedFamilyCount
+  ) {
+    return `drift: ${status} artifact reports ${passedLaneCount}/${laneCount} completed-game lanes across ${familyCount} families; expected ${expectedLaneCount} lanes across ${expectedFamilyCount} shared families`;
+  }
+  return `${status}: ${passedLaneCount}/${laneCount} completed-game lanes across ${familyCount} families`;
 }
 
 function normalizeCoreLoopSpineCycles(proofRun) {

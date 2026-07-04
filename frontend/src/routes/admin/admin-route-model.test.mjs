@@ -17,6 +17,7 @@ import {
   hardeningAuditLaneIds,
 } from "../../../../tools/dev_test_game_hardening_scenarios.mjs";
 import {
+  coreLoopCompletedGameCoverageCheckId,
   coreLoopAdminCheckIds,
   coreLoopAuditLaneIds,
 } from "../../../../tools/dev_test_game_core_loop_scenarios.mjs";
@@ -2337,6 +2338,12 @@ test("admin route data exposes local core loop proof as a native audit row", asy
     coreLoop.checks.map((check) => check.id),
     coreLoopAdminCheckIds,
   );
+  assert.equal(
+    coreLoop.checks.find(
+      (check) => check.id === coreLoopCompletedGameCoverageCheckId,
+    )?.status,
+    `passed: ${completedGameHardeningLaneCount()}/${completedGameHardeningLaneCount()} completed-game lanes across ${completedGameHardeningFamilyCount()} families`,
+  );
   assert.deepEqual(coreLoop.artifactSummary, {
     game: "game-a",
     roleCount: 6,
@@ -2347,6 +2354,32 @@ test("admin route data exposes local core loop proof as a native audit row", asy
     releaseReady: false,
     productionReady: false,
   });
+});
+
+test("admin core loop completed-game coverage flags stale shared-case totals", async () => {
+  const proofRun = proofRunFixture();
+  const staleLaneCount = completedGameHardeningLaneCount() - 1;
+  const staleFamilyCount = completedGameHardeningFamilyCount() - 1;
+  proofRun.completedGameHardeningCoverage = {
+    ...proofRun.completedGameHardeningCoverage,
+    laneCount: staleLaneCount,
+    passedLaneCount: staleLaneCount,
+    familyCount: staleFamilyCount,
+  };
+
+  const data = await buildAdminRouteData({
+    principalUserId: "admin_a",
+    capabilities: [{ kind: "GlobalAdmin" }],
+    proofRun,
+  });
+
+  const coreLoop = data.audit.find((item) => item.id === localAdminAuditIds.coreLoop);
+  assert.equal(
+    coreLoop.checks.find(
+      (check) => check.id === coreLoopCompletedGameCoverageCheckId,
+    )?.status,
+    `drift: passed artifact reports ${staleLaneCount}/${staleLaneCount} completed-game lanes across ${staleFamilyCount} families; expected ${completedGameHardeningLaneCount()} lanes across ${completedGameHardeningFamilyCount()} shared families`,
+  );
 });
 
 test("admin local core loop detail data carries lane rows", async () => {
@@ -4077,6 +4110,16 @@ function completedGameHardeningCoverageFixture() {
     })),
     families,
   };
+}
+
+function completedGameHardeningLaneCount() {
+  return completedGameHardeningLaneCases().length;
+}
+
+function completedGameHardeningFamilyCount() {
+  return new Set(
+    completedGameHardeningLaneCases().map((scenario) => scenario.family),
+  ).size;
 }
 
 function hostStaleControlCoverageFixture() {
