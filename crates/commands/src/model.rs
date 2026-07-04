@@ -24,6 +24,12 @@ pub enum HostPromptDecision {
         #[serde(default)]
         metadata: serde_json::Value,
     },
+    /// Choose one of several pack-declared prompt resolution policies.
+    SelectPolicy {
+        policy: String,
+        #[serde(default)]
+        metadata: serde_json::Value,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

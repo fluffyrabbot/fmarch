@@ -6193,7 +6193,7 @@ fn day_vote_prompt_policies_require_v21_statuses_prompt_fields_and_unique_ids() 
 }
 
 #[test]
-fn host_prompt_resolution_effects_require_v22_fields_decisions_and_unique_prompt_pairs() {
+fn host_prompt_resolution_effects_require_v22_fields_decisions_and_unique_implicit_prompts() {
     let mut value = valid_pack_value();
     value["ir_version"] = json!(21);
     value["host_prompt_resolution_effects"] = json!([
@@ -6217,6 +6217,20 @@ fn host_prompt_resolution_effects_require_v22_fields_decisions_and_unique_prompt
             "prompt_reason": "no_majority",
             "decision": "Acknowledge",
             "effect": "AdvanceRevote"
+        },
+        {
+            "id": "dup_ack",
+            "prompt_kind": "revote",
+            "prompt_reason": "no_majority",
+            "decision": "Acknowledge",
+            "effect": "AcknowledgeOnly"
+        },
+        {
+            "id": "select_skip",
+            "prompt_kind": "revote",
+            "prompt_reason": "no_majority",
+            "decision": "SelectPolicy",
+            "effect": "SkipNextDay"
         }
     ]);
 
@@ -6252,7 +6266,16 @@ fn host_prompt_resolution_effects_require_v22_fields_decisions_and_unique_prompt
         "SelectSlot decisions are only valid for PkKill",
     );
     assert_issue(&err, "host_prompt_resolution_effects.id", "duplicate");
-    assert_issue(&err, "host_prompt_resolution_effects.prompt", "duplicate");
+    assert_issue(
+        &err,
+        "host_prompt_resolution_effects[4].decision",
+        "SelectPolicy decisions are only valid",
+    );
+    assert_issue(
+        &err,
+        "host_prompt_resolution_effects.implicit_prompt_decision",
+        "duplicate",
+    );
 
     value["ir_version"] = json!(22);
     value["host_prompt_resolution_effects"] = json!([
@@ -6262,6 +6285,20 @@ fn host_prompt_resolution_effects_require_v22_fields_decisions_and_unique_prompt
             "prompt_reason": "no_majority",
             "decision": "Acknowledge",
             "effect": "AdvanceRevote"
+        },
+        {
+            "id": "no_majority_continue_revote",
+            "prompt_kind": "revote",
+            "prompt_reason": "no_majority",
+            "decision": "SelectPolicy",
+            "effect": "AdvanceRevote"
+        },
+        {
+            "id": "no_majority_no_lynch",
+            "prompt_kind": "revote",
+            "prompt_reason": "no_majority",
+            "decision": "SelectPolicy",
+            "effect": "AdvanceNight"
         }
     ]);
     validate_pack(&pack_from_value(value)).unwrap();

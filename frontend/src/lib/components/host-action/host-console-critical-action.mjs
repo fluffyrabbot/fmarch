@@ -76,31 +76,75 @@ export function buildHostConsoleCriticalActions(
     }),
     ...hostPrompts
       .filter((prompt) => prompt.status === "pending")
-      .map((prompt) =>
-        freezeHostAction({
-          id: `resolve_host_prompt-${stableActionId(prompt.id)}`,
-          label: "Resolve prompt",
-          objectLabel: prompt.label,
-          outcomeLabel: "acknowledge prompt and apply pack policy",
-          confirmationText:
-            `Resolve ${prompt.label}: acknowledge prompt and apply pack policy for ${prompt.label}.`,
-          irreversible: true,
-          payload: {
-            kind: "resolve_host_prompt",
-            gameId,
-            promptId: prompt.id,
-            decision:
-              prompt.decisionKind === "select_slot"
-                ? { kind: "select_slot", slot: prompt.subjectSlot }
-                : { kind: "acknowledge" },
-          },
-        }),
-      ),
+      .flatMap((prompt) => buildHostPromptActions(gameId, prompt)),
   ];
   return Object.freeze(
     actions.filter((action) =>
       hostActionAllowedForCapability(action, capabilityKind),
     ),
+  );
+}
+
+function buildHostPromptActions(gameId, prompt) {
+  if (isNoMajorityRevotePrompt(prompt)) {
+    return noMajorityRevotePolicyActions.map((policy) =>
+      freezeHostAction({
+        id: `resolve_host_prompt-${stableActionId(prompt.id)}-${stableActionId(policy.id)}`,
+        label: policy.label,
+        objectLabel: prompt.label,
+        outcomeLabel: policy.outcomeLabel,
+        confirmationText:
+          `${policy.label} for ${prompt.label}: ${policy.outcomeLabel} for ${prompt.label}.`,
+        irreversible: true,
+        payload: {
+          kind: "resolve_host_prompt",
+          gameId,
+          promptId: prompt.id,
+          decision: { kind: "select_policy", policy: policy.id },
+        },
+      }),
+    );
+  }
+  return [
+    freezeHostAction({
+      id: `resolve_host_prompt-${stableActionId(prompt.id)}`,
+      label: "Resolve prompt",
+      objectLabel: prompt.label,
+      outcomeLabel: "acknowledge prompt and apply pack policy",
+      confirmationText:
+        `Resolve ${prompt.label}: acknowledge prompt and apply pack policy for ${prompt.label}.`,
+      irreversible: true,
+      payload: {
+        kind: "resolve_host_prompt",
+        gameId,
+        promptId: prompt.id,
+        decision:
+          prompt.decisionKind === "select_slot"
+            ? { kind: "select_slot", slot: prompt.subjectSlot }
+            : { kind: "acknowledge" },
+      },
+    }),
+  ];
+}
+
+const noMajorityRevotePolicyActions = Object.freeze([
+  Object.freeze({
+    id: "no_majority_continue_revote",
+    label: "Continue revote",
+    outcomeLabel: "open another revote window",
+  }),
+  Object.freeze({
+    id: "no_majority_no_lynch",
+    label: "End no-lynch",
+    outcomeLabel: "advance to night without a lynch",
+  }),
+]);
+
+function isNoMajorityRevotePrompt(prompt) {
+  return (
+    prompt?.label === "revote" &&
+    prompt?.value === "no_majority" &&
+    prompt?.metadata?.policy === "no_majority_revote"
   );
 }
 

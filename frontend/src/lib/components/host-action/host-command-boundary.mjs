@@ -399,7 +399,14 @@ function mapHostPromptDecision(decision) {
       }),
     });
   }
-  throw new TypeError("payload.decision must be acknowledge or select_slot");
+  if (decision?.kind === "select_policy") {
+    return Object.freeze({
+      SelectPolicy: Object.freeze({
+        policy: requiredString(decision.policy, "payload.decision.policy"),
+      }),
+    });
+  }
+  throw new TypeError("payload.decision must be acknowledge, select_slot, or select_policy");
 }
 
 function secondsSinceEpoch(isoString) {

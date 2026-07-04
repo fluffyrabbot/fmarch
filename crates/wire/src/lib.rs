@@ -149,6 +149,7 @@ impl From<VoteTarget> for commands::VoteTarget {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 pub enum HostPromptDecision {
     SelectSlot { slot: String },
+    SelectPolicy { policy: String },
     Acknowledge,
 }
 
@@ -157,6 +158,12 @@ impl From<HostPromptDecision> for commands::HostPromptDecision {
         match decision {
             HostPromptDecision::SelectSlot { slot } => {
                 commands::HostPromptDecision::SelectSlot { slot }
+            }
+            HostPromptDecision::SelectPolicy { policy } => {
+                commands::HostPromptDecision::SelectPolicy {
+                    policy,
+                    metadata: serde_json::json!({}),
+                }
             }
             HostPromptDecision::Acknowledge => commands::HostPromptDecision::Acknowledge {
                 metadata: serde_json::json!({}),

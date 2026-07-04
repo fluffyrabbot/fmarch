@@ -3212,20 +3212,84 @@ fn host_prompt_effect(
     decision: &HostPromptDecision,
     stream: &[eventstore::StoredEvent],
 ) -> Result<HostPromptEffect, Reject> {
-    let policy = policies
+    let prompt_policies: Vec<&HostPromptResolutionEffectPolicy> = policies
         .iter()
-        .find(|policy| policy.prompt_kind == prompt.kind && policy.prompt_reason == prompt.reason)
-        .ok_or_else(|| {
-            Reject::Internal(format!(
-                "pack has no host prompt resolution effect for {}:{}",
-                prompt.kind, prompt.reason
-            ))
-        })?;
+        .filter(|policy| policy.prompt_kind == prompt.kind && policy.prompt_reason == prompt.reason)
+        .collect();
+    if prompt_policies.is_empty() {
+        return Err(Reject::Internal(format!(
+            "pack has no host prompt resolution effect for {}:{}",
+            prompt.kind, prompt.reason
+        )));
+    }
+    let decision_kind = host_prompt_decision_kind(decision);
+    let selected_policy = host_prompt_selected_policy(decision);
+    let policy = prompt_policies
+        .into_iter()
+        .find(|policy| {
+            policy.decision == decision_kind
+                && selected_policy
+                    .map(|selected| policy.id == selected)
+                    .unwrap_or(true)
+        })
+        .ok_or(Reject::InvalidPromptDecision)?;
     match (policy.decision, policy.effect) {
+        (HostPromptDecisionKind::SelectPolicy, HostPromptResolutionEffect::AdvanceRevote)
+        | (HostPromptDecisionKind::Acknowledge, HostPromptResolutionEffect::AdvanceRevote) => {
+            if !matches!(
+                decision,
+                HostPromptDecision::Acknowledge { .. } | HostPromptDecision::SelectPolicy { .. }
+            ) {
+                return Err(Reject::InvalidPromptDecision);
+            }
+            let phase_id = next_revote_phase_id(stream, &prompt.phase_id);
+            validate_phase_id_for_policy(phase_policy, &phase_id)?;
+            Ok(HostPromptEffect::AdvancePhase {
+                phase_id,
+                reason: "revote",
+                skipped_phase_id: None,
+            })
+        }
+        (HostPromptDecisionKind::SelectPolicy, HostPromptResolutionEffect::AdvanceNight) => {
+            if !matches!(decision, HostPromptDecision::SelectPolicy { .. }) {
+                return Err(Reject::InvalidPromptDecision);
+            }
+            let phase_id = no_majority_advance_night_target(&prompt.phase_id)?;
+            validate_phase_id_for_policy(phase_policy, &phase_id)?;
+            Ok(HostPromptEffect::AdvancePhase {
+                phase_id,
+                reason: "no_majority_no_lynch",
+                skipped_phase_id: None,
+            })
+        }
+        (HostPromptDecisionKind::SelectPolicy, HostPromptResolutionEffect::AcknowledgeOnly)
+        | (HostPromptDecisionKind::Acknowledge, HostPromptResolutionEffect::AcknowledgeOnly) => {
+            if !matches!(
+                decision,
+                HostPromptDecision::Acknowledge { .. } | HostPromptDecision::SelectPolicy { .. }
+            ) {
+                return Err(Reject::InvalidPromptDecision);
+            }
+            Ok(HostPromptEffect::AcknowledgeOnly)
+        }
+        (HostPromptDecisionKind::Acknowledge, HostPromptResolutionEffect::SkipNextDay) => {
+            if !matches!(decision, HostPromptDecision::Acknowledge { .. }) {
+                return Err(Reject::InvalidPromptDecision);
+            }
+            let (skipped_phase_id, phase_id) = skip_next_day_target(&prompt.phase_id)?;
+            validate_phase_id_for_policy(phase_policy, &skipped_phase_id)?;
+            validate_phase_id_for_policy(phase_policy, &phase_id)?;
+            Ok(HostPromptEffect::AdvancePhase {
+                phase_id,
+                reason: "skip_next_day",
+                skipped_phase_id: Some(skipped_phase_id),
+            })
+        }
         (HostPromptDecisionKind::SelectSlot, HostPromptResolutionEffect::PkKill) => {
             let selected = match decision {
                 HostPromptDecision::SelectSlot { slot } => slot.clone(),
-                HostPromptDecision::Acknowledge { .. } => {
+                HostPromptDecision::Acknowledge { .. }
+                | HostPromptDecision::SelectPolicy { .. } => {
                     return Err(Reject::InvalidPromptDecision);
                 }
             };
@@ -3248,41 +3312,25 @@ fn host_prompt_effect(
                 contenders,
             })
         }
-        (HostPromptDecisionKind::Acknowledge, HostPromptResolutionEffect::AdvanceRevote) => {
-            if !matches!(decision, HostPromptDecision::Acknowledge { .. }) {
-                return Err(Reject::InvalidPromptDecision);
-            }
-            let phase_id = next_revote_phase_id(stream, &prompt.phase_id);
-            validate_phase_id_for_policy(phase_policy, &phase_id)?;
-            Ok(HostPromptEffect::AdvancePhase {
-                phase_id,
-                reason: "revote",
-                skipped_phase_id: None,
-            })
-        }
-        (HostPromptDecisionKind::Acknowledge, HostPromptResolutionEffect::SkipNextDay) => {
-            if !matches!(decision, HostPromptDecision::Acknowledge { .. }) {
-                return Err(Reject::InvalidPromptDecision);
-            }
-            let (skipped_phase_id, phase_id) = skip_next_day_target(&prompt.phase_id)?;
-            validate_phase_id_for_policy(phase_policy, &skipped_phase_id)?;
-            validate_phase_id_for_policy(phase_policy, &phase_id)?;
-            Ok(HostPromptEffect::AdvancePhase {
-                phase_id,
-                reason: "skip_next_day",
-                skipped_phase_id: Some(skipped_phase_id),
-            })
-        }
-        (HostPromptDecisionKind::Acknowledge, HostPromptResolutionEffect::AcknowledgeOnly) => {
-            if !matches!(decision, HostPromptDecision::Acknowledge { .. }) {
-                return Err(Reject::InvalidPromptDecision);
-            }
-            Ok(HostPromptEffect::AcknowledgeOnly)
-        }
         _ => Err(Reject::Internal(format!(
             "invalid host prompt resolution effect policy `{}`",
             policy.id
         ))),
+    }
+}
+
+fn host_prompt_decision_kind(decision: &HostPromptDecision) -> HostPromptDecisionKind {
+    match decision {
+        HostPromptDecision::SelectSlot { .. } => HostPromptDecisionKind::SelectSlot,
+        HostPromptDecision::SelectPolicy { .. } => HostPromptDecisionKind::SelectPolicy,
+        HostPromptDecision::Acknowledge { .. } => HostPromptDecisionKind::Acknowledge,
+    }
+}
+
+fn host_prompt_selected_policy(decision: &HostPromptDecision) -> Option<&str> {
+    match decision {
+        HostPromptDecision::SelectPolicy { policy, .. } => Some(policy.as_str()),
+        _ => None,
     }
 }
 
@@ -3332,6 +3380,12 @@ fn revote_base_phase_id(source_phase_id: &str) -> &str {
         }
     }
     source_phase_id
+}
+
+fn no_majority_advance_night_target(source_phase_id: &str) -> Result<String, Reject> {
+    let base_phase_id = revote_base_phase_id(source_phase_id);
+    let number = phase_number(base_phase_id)?;
+    Ok(format!("N{:02}", number))
 }
 
 fn skip_next_day_target(source_phase_id: &str) -> Result<(String, String), Reject> {
@@ -5493,6 +5547,86 @@ mod tests {
                 reason: "revote",
                 skipped_phase_id: None,
             }
+        );
+    }
+
+    #[test]
+    fn host_prompt_effect_select_policy_can_continue_or_end_no_majority_revote() {
+        let prompt = prompt(
+            "revote",
+            "D03R2",
+            serde_json::json!({ "policy": "no_majority_revote" }),
+        );
+        let stream = vec![phase_event("D03R1"), phase_event("D03R2")];
+        let effects = vec![
+            HostPromptResolutionEffectPolicy {
+                id: "no_majority_continue_revote".to_string(),
+                prompt_kind: "revote".to_string(),
+                prompt_reason: "test".to_string(),
+                decision: HostPromptDecisionKind::SelectPolicy,
+                effect: HostPromptResolutionEffect::AdvanceRevote,
+            },
+            HostPromptResolutionEffectPolicy {
+                id: "no_majority_no_lynch".to_string(),
+                prompt_kind: "revote".to_string(),
+                prompt_reason: "test".to_string(),
+                decision: HostPromptDecisionKind::SelectPolicy,
+                effect: HostPromptResolutionEffect::AdvanceNight,
+            },
+        ];
+        let phase_policy = phase_policy(vec![
+            domain::pack::PhaseKind::Day,
+            domain::pack::PhaseKind::Night,
+        ]);
+
+        assert_eq!(
+            host_prompt_effect(
+                &effects,
+                &phase_policy,
+                &prompt,
+                &HostPromptDecision::SelectPolicy {
+                    policy: "no_majority_continue_revote".to_string(),
+                    metadata: serde_json::json!({})
+                },
+                &stream
+            )
+            .unwrap(),
+            HostPromptEffect::AdvancePhase {
+                phase_id: "D03R3".to_string(),
+                reason: "revote",
+                skipped_phase_id: None,
+            }
+        );
+        assert_eq!(
+            host_prompt_effect(
+                &effects,
+                &phase_policy,
+                &prompt,
+                &HostPromptDecision::SelectPolicy {
+                    policy: "no_majority_no_lynch".to_string(),
+                    metadata: serde_json::json!({})
+                },
+                &stream
+            )
+            .unwrap(),
+            HostPromptEffect::AdvancePhase {
+                phase_id: "N03".to_string(),
+                reason: "no_majority_no_lynch",
+                skipped_phase_id: None,
+            }
+        );
+        assert_eq!(
+            host_prompt_effect(
+                &effects,
+                &phase_policy,
+                &prompt,
+                &HostPromptDecision::SelectPolicy {
+                    policy: "unknown".to_string(),
+                    metadata: serde_json::json!({})
+                },
+                &stream
+            ),
+            Err(Reject::InvalidPromptDecision)
         );
     }
 

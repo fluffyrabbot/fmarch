@@ -128,6 +128,19 @@ const RESOLVE_PROMPT_SELECT_SLOT_EVENT = Object.freeze({
   }),
 });
 
+const RESOLVE_PROMPT_SELECT_POLICY_EVENT = Object.freeze({
+  actionId: "resolve_host_prompt-D03R2-revote-NoMajority-no_majority_no_lynch",
+  payload: Object.freeze({
+    kind: "resolve_host_prompt",
+    gameId: "00000000-0000-0000-0000-000000000001",
+    promptId: "D03R2:revote:NoMajority",
+    decision: Object.freeze({
+      kind: "select_policy",
+      policy: "no_majority_no_lynch",
+    }),
+  }),
+});
+
 test("host actions map to generated wire command variants", () => {
   assert.deepEqual(mapHostActionToWireCommand(EXTEND_EVENT), {
     ExtendDeadline: {
@@ -208,6 +221,13 @@ test("host actions map to generated wire command variants", () => {
       game: "00000000-0000-0000-0000-000000000001",
       prompt_id: "D01:tie:slot_2",
       decision: { SelectSlot: { slot: "slot_2" } },
+    },
+  });
+  assert.deepEqual(mapHostActionToWireCommand(RESOLVE_PROMPT_SELECT_POLICY_EVENT), {
+    ResolveHostPrompt: {
+      game: "00000000-0000-0000-0000-000000000001",
+      prompt_id: "D03R2:revote:NoMajority",
+      decision: { SelectPolicy: { policy: "no_majority_no_lynch" } },
     },
   });
 });

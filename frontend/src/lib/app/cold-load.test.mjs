@@ -631,6 +631,7 @@ test("host cold-load maps durable prompt rows and votecount for moderator contro
           status: "pending",
           phase_id: "D01",
           subject_slot: "slot_1",
+          metadata: { policy: "beloved_princess_skip_next_day" },
         },
       ]);
     },
@@ -650,6 +651,7 @@ test("host cold-load maps durable prompt rows and votecount for moderator contro
       phaseId: "D01",
       subjectSlot: "slot_1",
       decisionKind: "acknowledge",
+      metadata: { policy: "beloved_princess_skip_next_day" },
     },
   ]);
   assert.deepEqual(data.votecount, [

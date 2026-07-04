@@ -184,6 +184,7 @@ test("core loop spine status formats compact live spine evidence", () => {
               {
                 id: "d03-revote-prompt-resolved",
                 phase: "D03R1",
+                decisionPolicy: "no_majority_continue_revote",
               },
               {
                 id: "d03r1-revote-ballot-submitted",
@@ -196,6 +197,7 @@ test("core loop spine status formats compact live spine evidence", () => {
               {
                 id: "d03r2-revote-prompt-resolved",
                 phase: "D03R2",
+                decisionPolicy: "no_majority_continue_revote",
               },
               {
                 id: "d03r2-revote-ballot-submitted",
@@ -204,17 +206,19 @@ test("core loop spine status formats compact live spine evidence", () => {
               {
                 id: "d03r2-revote-resolved-no-majority",
                 resolveState: "ack",
+                decisionPolicy: "no_majority_no_lynch",
+                nextPhase: "N03",
               },
             ],
           },
         ],
       },
     }),
-    "passed: D01 -> N01 -> D02, vote ack, N02 action ack, next D03, terminal advance InvalidTarget, reload D03, revote D03R1, revote vote ack, revote resolve ack, second revote D03R2, second vote ack, second resolve ack",
+    "passed: D01 -> N01 -> D02, vote ack, N02 action ack, next D03, terminal advance InvalidTarget, reload D03, revote D03R1 via no_majority_continue_revote, revote vote ack, revote resolve ack, second revote D03R2 via no_majority_continue_revote, second vote ack, second resolve ack, policy no_majority_no_lynch -> N03",
   );
   assert.equal(
     coreLoopSpineStatus({}),
-    "unknown: unknown -> unknown -> unknown, vote unknown, unknown action unknown, next unknown, terminal advance unknown, reload unknown, revote unknown, revote vote unknown, revote resolve unknown, second revote unknown, second vote unknown, second resolve unknown",
+    "unknown: unknown -> unknown -> unknown, vote unknown, unknown action unknown, next unknown, terminal advance unknown, reload unknown, revote unknown via unknown, revote vote unknown, revote resolve unknown, second revote unknown via unknown, second vote unknown, second resolve unknown, policy unknown -> unknown",
   );
 });
 

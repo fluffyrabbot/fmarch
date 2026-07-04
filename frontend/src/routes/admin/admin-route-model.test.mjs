@@ -2452,7 +2452,7 @@ test("admin local core loop detail data carries lane rows", async () => {
     [
       [
         "core-loop-spine",
-        "passed: D01 -> N01 -> D02, vote ack, N02 action ack, next D03, terminal advance InvalidTarget, reload D03, revote D03R1, revote vote ack, revote resolve ack, second revote D03R2, second vote ack, second resolve ack",
+        "passed: D01 -> N01 -> D02, vote ack, N02 action ack, next D03, terminal advance InvalidTarget, reload D03, revote D03R1 via no_majority_continue_revote, revote vote ack, revote resolve ack, second revote D03R2 via no_majority_continue_revote, second vote ack, second resolve ack, policy no_majority_no_lynch -> N03",
       ],
       ["core-loop", "passed: PhaseLocked vote receipt, unchanged unknown, lock ack/unlock ack"],
       ["action-loop", "passed: role URL false, night unknown, receipt unknown, D02 unknown, next unknown"],
@@ -2498,8 +2498,8 @@ test("admin local core loop detail data carries lane rows", async () => {
     [
       [
         "core-loop-spine",
-        "passed: D01 -> N01 -> D02, vote ack, N02 action ack, next D03, terminal advance InvalidTarget, reload D03, revote D03R1, revote vote ack, revote resolve ack, second revote D03R2, second vote ack, second resolve ack",
-        "passed: D01 -> N01 -> D02, vote ack, N02 action ack, next D03, terminal advance InvalidTarget, reload D03, revote D03R1, revote vote ack, revote resolve ack, second revote D03R2, second vote ack, second resolve ack",
+        "passed: D01 -> N01 -> D02, vote ack, N02 action ack, next D03, terminal advance InvalidTarget, reload D03, revote D03R1 via no_majority_continue_revote, revote vote ack, revote resolve ack, second revote D03R2 via no_majority_continue_revote, second vote ack, second resolve ack, policy no_majority_no_lynch -> N03",
+        "passed: D01 -> N01 -> D02, vote ack, N02 action ack, next D03, terminal advance InvalidTarget, reload D03, revote D03R1 via no_majority_continue_revote, revote vote ack, revote resolve ack, second revote D03R2 via no_majority_continue_revote, second vote ack, second resolve ack, policy no_majority_no_lynch -> N03",
       ],
       [
         "core-loop",
@@ -3851,7 +3851,9 @@ function proofRunFixture() {
             {
               id: "d03-revote-prompt-resolved",
               promptId: "D03:revote:NoMajority",
-              promptActionId: "resolve_host_prompt-D03-revote-NoMajority",
+              promptActionId:
+                "resolve_host_prompt-D03-revote-NoMajority-no_majority_continue_revote",
+              decisionPolicy: "no_majority_continue_revote",
               promptStatusBefore: "pending",
               resolveState: "ack",
               streamSeqCount: 2,
@@ -3886,7 +3888,8 @@ function proofRunFixture() {
               winnerSlot: null,
               projectedCount: 1,
               promptId: "D03R1:revote:NoMajority",
-              promptActionId: "resolve_host_prompt-D03R1-revote-NoMajority",
+              promptActionId:
+                "resolve_host_prompt-D03R1-revote-NoMajority-no_majority_continue_revote",
               promptStatusAfter: "pending",
               originalPromptStatus: "resolved",
               promptActionVisible: true,
@@ -3897,7 +3900,9 @@ function proofRunFixture() {
               locked: false,
               resolveState: "ack",
               promptId: "D03R1:revote:NoMajority",
-              promptActionId: "resolve_host_prompt-D03R1-revote-NoMajority",
+              promptActionId:
+                "resolve_host_prompt-D03R1-revote-NoMajority-no_majority_continue_revote",
+              decisionPolicy: "no_majority_continue_revote",
               promptStatusBefore: "pending",
               promptStatusAfter: "resolved",
               originalPromptStatus: "resolved",
@@ -3931,10 +3936,19 @@ function proofRunFixture() {
               winnerSlot: null,
               projectedCount: 1,
               promptId: "D03R2:revote:NoMajority",
-              promptActionId: "resolve_host_prompt-D03R2-revote-NoMajority",
+              promptActionId:
+                "resolve_host_prompt-D03R2-revote-NoMajority-no_majority_no_lynch",
               promptStatusAfter: "pending",
               originalPromptStatus: "resolved",
               promptActionVisible: true,
+              policyResolveState: "ack",
+              policyStreamSeqCount: 2,
+              decisionPolicy: "no_majority_no_lynch",
+              promptStatusAfterPolicy: "resolved",
+              nextPhase: "N03",
+              nextLocked: false,
+              actionNightActionControls: 1,
+              normalNightActionControls: 0,
             },
           ],
         },

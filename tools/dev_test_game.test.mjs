@@ -3219,7 +3219,10 @@ test("session card and markdown include role credential URLs and tokens", async 
               status: "pending",
             },
           ],
-          promptActions: ["resolve_host_prompt-D03-revote-NoMajority"],
+          promptActions: [
+            "resolve_host_prompt-D03-revote-NoMajority-no_majority_continue_revote",
+            "resolve_host_prompt-D03-revote-NoMajority-no_majority_no_lynch",
+          ],
           slots: [{ slot_id: "slot_4", alive: true, status: "alive" }],
         },
         d03RevotePrompt: {
@@ -3228,7 +3231,8 @@ test("session card and markdown include role credential URLs and tokens", async 
           value: "no_majority",
           status: "pending",
         },
-        d03RevotePromptActionId: "resolve_host_prompt-D03-revote-NoMajority",
+        d03RevotePromptActionId:
+          "resolve_host_prompt-D03-revote-NoMajority-no_majority_continue_revote",
         d03TerminalDayVoteOutcome: {
           phaseId: "D03",
           status: "NoMajority",
@@ -3281,7 +3285,10 @@ test("session card and markdown include role credential URLs and tokens", async 
               status: "pending",
             },
           ],
-          promptActions: ["resolve_host_prompt-D03-revote-NoMajority"],
+          promptActions: [
+            "resolve_host_prompt-D03-revote-NoMajority-no_majority_continue_revote",
+            "resolve_host_prompt-D03-revote-NoMajority-no_majority_no_lynch",
+          ],
           dayVoteOutcomes: [
             {
               phaseId: "D03",
@@ -3303,6 +3310,11 @@ test("session card and markdown include role credential URLs and tokens", async 
                   command: {
                     ResolveHostPrompt: {
                       prompt_id: "D03:revote:NoMajority",
+                      decision: {
+                        SelectPolicy: {
+                          policy: "no_majority_continue_revote",
+                        },
+                      },
                     },
                   },
                 },
@@ -3401,7 +3413,10 @@ test("session card and markdown include role credential URLs and tokens", async 
               status: "pending",
             },
           ],
-          promptActions: ["resolve_host_prompt-D03R1-revote-NoMajority"],
+          promptActions: [
+            "resolve_host_prompt-D03R1-revote-NoMajority-no_majority_continue_revote",
+            "resolve_host_prompt-D03R1-revote-NoMajority-no_majority_no_lynch",
+          ],
           dayVoteOutcomes: [
             {
               phaseId: "D03R1",
@@ -3425,7 +3440,8 @@ test("session card and markdown include role credential URLs and tokens", async 
           value: "no_majority",
           status: "pending",
         },
-        d03R1RevotePromptActionId: "resolve_host_prompt-D03R1-revote-NoMajority",
+        d03R1RevotePromptActionId:
+          "resolve_host_prompt-D03R1-revote-NoMajority-no_majority_continue_revote",
         apiPromptsAfterResolveD03R1: [
           { id: "D03:revote:NoMajority", status: "resolved" },
           { id: "D03R1:revote:NoMajority", status: "pending" },
@@ -3440,6 +3456,11 @@ test("session card and markdown include role credential URLs and tokens", async 
                   command: {
                     ResolveHostPrompt: {
                       prompt_id: "D03R1:revote:NoMajority",
+                      decision: {
+                        SelectPolicy: {
+                          policy: "no_majority_continue_revote",
+                        },
+                      },
                     },
                   },
                 },
@@ -3563,7 +3584,10 @@ test("session card and markdown include role credential URLs and tokens", async 
               status: "pending",
             },
           ],
-          promptActions: ["resolve_host_prompt-D03R2-revote-NoMajority"],
+          promptActions: [
+            "resolve_host_prompt-D03R2-revote-NoMajority-no_majority_continue_revote",
+            "resolve_host_prompt-D03R2-revote-NoMajority-no_majority_no_lynch",
+          ],
           dayVoteOutcomes: [
             {
               phaseId: "D03R2",
@@ -3587,11 +3611,76 @@ test("session card and markdown include role credential URLs and tokens", async 
           value: "no_majority",
           status: "pending",
         },
-        d03R2RevotePromptActionId: "resolve_host_prompt-D03R2-revote-NoMajority",
+        d03R2RevotePromptActionId:
+          "resolve_host_prompt-D03R2-revote-NoMajority-no_majority_no_lynch",
         apiPromptsAfterResolveD03R2: [
           { id: "D03:revote:NoMajority", status: "resolved" },
           { id: "D03R1:revote:NoMajority", status: "resolved" },
           { id: "D03R2:revote:NoMajority", status: "pending" },
+        ],
+        d03R2NoLynchPolicyResolution: {
+          commandStatus: {
+            state: "ack",
+            streamSeqs: [64, 65],
+            requestEnvelope: {
+              body: {
+                body: {
+                  command: {
+                    ResolveHostPrompt: {
+                      prompt_id: "D03R2:revote:NoMajority",
+                      decision: {
+                        SelectPolicy: {
+                          policy: "no_majority_no_lynch",
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+        hostAfterD03R2NoLynchPolicy: {
+          phase: { id: "N03", locked: false },
+          phaseActions: ["resolve_phase", "lock_thread"],
+          hostPrompts: [
+            {
+              id: "D03:revote:NoMajority",
+              label: "revote",
+              value: "no_majority",
+              status: "resolved",
+            },
+            {
+              id: "D03R1:revote:NoMajority",
+              label: "revote",
+              value: "no_majority",
+              status: "resolved",
+            },
+            {
+              id: "D03R2:revote:NoMajority",
+              label: "revote",
+              value: "no_majority",
+              status: "resolved",
+            },
+          ],
+          promptActions: [],
+        },
+        actionAfterD03R2NoLynchPolicy: {
+          commandState: {
+            phase: { phaseId: "N03", locked: false },
+          },
+          buttons: [{ action: "submit_action:factional_kill", disabled: false }],
+        },
+        normalAfterD03R2NoLynchPolicy: {
+          commandState: {
+            phase: { phaseId: "N03", locked: false },
+          },
+          buttons: [],
+        },
+        apiPromptsAfterD03R2NoLynchPolicy: [
+          { id: "D03:revote:NoMajority", status: "resolved" },
+          { id: "D03R1:revote:NoMajority", status: "resolved" },
+          { id: "D03R2:revote:NoMajority", status: "resolved" },
         ],
       },
       staleActionConflict: {
@@ -11210,7 +11299,7 @@ function coreLoopAdminProofFixture() {
       proofRun: "target/dev-test-game/proof-run.json",
       game: "00000000-0000-0000-0000-000000000001",
       coreLoopSpineStatus:
-        "passed: D01 -> N01 -> D02, vote ack, N02 action ack, next D03, terminal advance InvalidTarget, reload D03, revote D03R1, revote vote ack, revote resolve ack, second revote D03R2, second vote ack, second resolve ack",
+        "passed: D01 -> N01 -> D02, vote ack, N02 action ack, next D03, terminal advance InvalidTarget, reload D03, revote D03R1 via no_majority_continue_revote, revote vote ack, revote resolve ack, second revote D03R2 via no_majority_continue_revote, second vote ack, second resolve ack, policy no_majority_no_lynch -> N03",
       completedGameHardeningCoverageStatus: "passed: 10/10 lanes across 4 families",
       hostControlFamily: coreLoopHostControlScenarioFamily(),
       playerActionRecoveryFamily:
@@ -11321,7 +11410,7 @@ function coreLoopAdminProofFixture() {
       visibleChecks: [...coreLoopAdminCheckIds],
       visibleCheckStatuses: {
         "core-loop-spine":
-          "passed: D01 -> N01 -> D02, vote ack, N02 action ack, next D03, terminal advance InvalidTarget, reload D03, revote D03R1, revote vote ack, revote resolve ack, second revote D03R2, second vote ack, second resolve ack",
+          "passed: D01 -> N01 -> D02, vote ack, N02 action ack, next D03, terminal advance InvalidTarget, reload D03, revote D03R1 via no_majority_continue_revote, revote vote ack, revote resolve ack, second revote D03R2 via no_majority_continue_revote, second vote ack, second resolve ack, policy no_majority_no_lynch -> N03",
         "completed-game-hardening-coverage":
           "passed: 10/10 lanes across 4 families",
       },

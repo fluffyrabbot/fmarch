@@ -334,7 +334,7 @@ fn pack_deserializes() {
     assert!(pack.roles.contains_key("serial_killer"));
     assert!(pack.roles.contains_key("flipless_townie"));
     assert!(pack.roles.contains_key("alignment_only_townie"));
-    assert_eq!(pack.host_prompt_resolution_effects.len(), 2);
+    assert_eq!(pack.host_prompt_resolution_effects.len(), 4);
     assert!(pack
         .host_prompt_resolution_effects
         .iter()
@@ -351,6 +351,18 @@ fn pack_deserializes() {
         .host_prompt_resolution_effects
         .iter()
         .any(|policy| policy.id == "no_majority_revote"
+            && policy.prompt_kind == "revote"
+            && policy.prompt_reason == "no_majority"));
+    assert!(pack
+        .host_prompt_resolution_effects
+        .iter()
+        .any(|policy| policy.id == "no_majority_continue_revote"
+            && policy.prompt_kind == "revote"
+            && policy.prompt_reason == "no_majority"));
+    assert!(pack
+        .host_prompt_resolution_effects
+        .iter()
+        .any(|policy| policy.id == "no_majority_no_lynch"
             && policy.prompt_kind == "revote"
             && policy.prompt_reason == "no_majority"));
     assert!(pack.roles.contains_key("hider"));

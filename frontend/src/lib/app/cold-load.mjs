@@ -226,6 +226,7 @@ export function normalizeHostPrompts(rows, fallback) {
         phaseId: String(row.phase_id ?? row.phaseId ?? ""),
         subjectSlot: row.subject_slot ?? row.subjectSlot ?? null,
         decisionKind: decisionKindForPrompt(row),
+        metadata: row.metadata ?? {},
       }),
     ),
   );

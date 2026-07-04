@@ -86,6 +86,20 @@
       "prompt_reason": "no_majority",
       "decision": "Acknowledge",
       "effect": "AdvanceRevote"
+    },
+    {
+      "id": "no_majority_continue_revote",
+      "prompt_kind": "revote",
+      "prompt_reason": "no_majority",
+      "decision": "SelectPolicy",
+      "effect": "AdvanceRevote"
+    },
+    {
+      "id": "no_majority_no_lynch",
+      "prompt_kind": "revote",
+      "prompt_reason": "no_majority",
+      "decision": "SelectPolicy",
+      "effect": "AdvanceNight"
     }
   ],
   "phases": {

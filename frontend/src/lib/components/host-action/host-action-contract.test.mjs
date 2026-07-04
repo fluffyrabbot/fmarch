@@ -563,6 +563,42 @@ test("host console prompt rows become confirmable typed host actions", () => {
   assert.match(promptAction.confirmationText, /acknowledge prompt/);
 });
 
+test("host console no-majority revote prompt exposes explicit policy choices", () => {
+  const actions = buildHostConsoleCriticalActions("game-a", {
+    hostPrompts: [
+      {
+        id: "D03R2:revote:NoMajority",
+        label: "revote",
+        value: "no_majority",
+        status: "pending",
+        phaseId: "D03R2",
+        decisionKind: "acknowledge",
+        metadata: { policy: "no_majority_revote", status: "NoMajority" },
+      },
+    ],
+  });
+
+  const promptActions = actions.filter((action) =>
+    action.id.startsWith("resolve_host_prompt-D03R2-revote-NoMajority"),
+  );
+
+  assert.deepEqual(
+    promptActions.map((action) => [action.label, action.payload.decision]),
+    [
+      [
+        "Continue revote",
+        { kind: "select_policy", policy: "no_majority_continue_revote" },
+      ],
+      [
+        "End no-lynch",
+        { kind: "select_policy", policy: "no_majority_no_lynch" },
+      ],
+    ],
+  );
+  assert.match(promptActions[0].confirmationText, /open another revote window/);
+  assert.match(promptActions[1].confirmationText, /advance to night without a lynch/);
+});
+
 function escapeRegExp(value) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }

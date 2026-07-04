@@ -592,11 +592,11 @@ async fn fold_event(
             sqlx::query(
                 "UPDATE phase_state SET deadline = $2 WHERE game_id = $1 AND phase_id = $3",
             )
-                .bind(game_id)
-                .bind(at)
-                .bind(phase_id)
-                .execute(&mut **tx)
-                .await?;
+            .bind(game_id)
+            .bind(at)
+            .bind(phase_id)
+            .execute(&mut **tx)
+            .await?;
         }
         "ThreadLocked" => set_locked(tx, game_id, true).await?,
         "ThreadUnlocked" => set_locked(tx, game_id, false).await?,
@@ -2668,13 +2668,11 @@ async fn clear_ballots_for_dead_slot(
     game_id: Uuid,
     slot_id: &str,
 ) -> Result<(), ProjectionError> {
-    sqlx::query(
-        "DELETE FROM vote_ballot WHERE game_id = $1 AND (actor_slot = $2 OR target = $2)",
-    )
-    .bind(game_id)
-    .bind(slot_id)
-    .execute(&mut **tx)
-    .await?;
+    sqlx::query("DELETE FROM vote_ballot WHERE game_id = $1 AND (actor_slot = $2 OR target = $2)")
+        .bind(game_id)
+        .bind(slot_id)
+        .execute(&mut **tx)
+        .await?;
     Ok(())
 }
 
@@ -3251,7 +3249,7 @@ fn phase_advanced_payload(
     require_nonempty_optional(kind, "source_phase_id", payload.source_phase_id.as_deref())?;
     let reason = require_nonempty_optional(kind, "reason", payload.reason.as_deref())?;
     match reason {
-        "revote" => {
+        "revote" | "no_majority_no_lynch" => {
             require_nonempty_optional(
                 kind,
                 "source_prompt_id",
@@ -3260,7 +3258,7 @@ fn phase_advanced_payload(
             if payload.skipped_phase_id.is_some() {
                 return payload_error(
                     kind,
-                    "revote phase control must not declare skipped_phase_id",
+                    "prompt phase control must not declare skipped_phase_id",
                 );
             }
         }
@@ -3307,7 +3305,7 @@ fn phase_advanced_payload(
         _ => {
             return payload_error(
                 kind,
-                "phase-control reason must be `revote`, `skip_next_day`, `resolved_phase`, or `deadline_elapsed`",
+                "phase-control reason must be `revote`, `no_majority_no_lynch`, `skip_next_day`, `resolved_phase`, or `deadline_elapsed`",
             );
         }
     }

@@ -6698,6 +6698,10 @@ function buildCoreLoopSpineSummary({ session, verification }) {
             ? d02VoteNight.d03RevotePromptResolution.commandStatus.streamSeqs
                 .length
             : null,
+          decisionPolicy:
+            d02VoteNight.d03RevotePromptResolution?.commandStatus?.requestEnvelope
+              ?.body?.body?.command?.ResolveHostPrompt?.decision?.SelectPolicy
+              ?.policy ?? null,
           promptStatusAfter:
             d02VoteNight.hostAfterD03RevotePrompt?.hostPrompts?.find(
               (prompt) => prompt.id === d02VoteNight.d03RevotePrompt?.id,
@@ -6790,6 +6794,10 @@ function buildCoreLoopSpineSummary({ session, verification }) {
             ? d02VoteNight.d03R1RevotePromptResolution.commandStatus.streamSeqs
                 .length
             : null,
+          decisionPolicy:
+            d02VoteNight.d03R1RevotePromptResolution?.commandStatus
+              ?.requestEnvelope?.body?.body?.command?.ResolveHostPrompt?.decision
+              ?.SelectPolicy?.policy ?? null,
           promptStatusAfter:
             d02VoteNight.hostAfterD03R1RevotePrompt?.hostPrompts?.find(
               (prompt) => prompt.id === d02VoteNight.d03R1RevotePrompt?.id,
@@ -6872,6 +6880,35 @@ function buildCoreLoopSpineSummary({ session, verification }) {
             d02VoteNight.hostAfterResolveD03R2?.promptActions?.includes(
               d02VoteNight.d03R2RevotePromptActionId,
             ) ?? null,
+          policyResolveState:
+            d02VoteNight.d03R2NoLynchPolicyResolution?.commandStatus?.state ??
+            null,
+          policyStreamSeqCount: Array.isArray(
+            d02VoteNight.d03R2NoLynchPolicyResolution?.commandStatus?.streamSeqs,
+          )
+            ? d02VoteNight.d03R2NoLynchPolicyResolution.commandStatus.streamSeqs
+                .length
+            : null,
+          decisionPolicy:
+            d02VoteNight.d03R2NoLynchPolicyResolution?.commandStatus
+              ?.requestEnvelope?.body?.body?.command?.ResolveHostPrompt?.decision
+              ?.SelectPolicy?.policy ?? null,
+          promptStatusAfterPolicy:
+            d02VoteNight.hostAfterD03R2NoLynchPolicy?.hostPrompts?.find(
+              (prompt) => prompt.id === d02VoteNight.d03R2RevotePrompt?.id,
+            )?.status ?? null,
+          nextPhase:
+            d02VoteNight.hostAfterD03R2NoLynchPolicy?.phase?.id ?? null,
+          nextLocked:
+            d02VoteNight.hostAfterD03R2NoLynchPolicy?.phase?.locked ?? null,
+          actionNightActionControls: countButtonsWithPrefix(
+            d02VoteNight.actionAfterD03R2NoLynchPolicy?.buttons,
+            "submit_action",
+          ),
+          normalNightActionControls: countButtonsWithPrefix(
+            d02VoteNight.normalAfterD03R2NoLynchPolicy?.buttons,
+            "submit_action",
+          ),
         },
       ],
     },
@@ -6995,10 +7032,12 @@ function buildCoreLoopSpineSummary({ session, verification }) {
     cycles[2]?.checkpoints?.[5]?.unlockControlVisible === true &&
     cycles[2]?.checkpoints?.[6]?.promptId === "D03:revote:NoMajority" &&
     cycles[2]?.checkpoints?.[6]?.promptActionId ===
-      "resolve_host_prompt-D03-revote-NoMajority" &&
+      "resolve_host_prompt-D03-revote-NoMajority-no_majority_continue_revote" &&
     cycles[2]?.checkpoints?.[6]?.promptStatusBefore === "pending" &&
     cycles[2]?.checkpoints?.[6]?.resolveState === "ack" &&
     cycles[2]?.checkpoints?.[6]?.streamSeqCount === 2 &&
+    cycles[2]?.checkpoints?.[6]?.decisionPolicy ===
+      "no_majority_continue_revote" &&
     cycles[2]?.checkpoints?.[6]?.promptStatusAfter === "resolved" &&
     cycles[2]?.checkpoints?.[6]?.phase === "D03R1" &&
     cycles[2]?.checkpoints?.[6]?.locked === false &&
@@ -7025,17 +7064,19 @@ function buildCoreLoopSpineSummary({ session, verification }) {
     cycles[2]?.checkpoints?.[8]?.projectedCount === 1 &&
     cycles[2]?.checkpoints?.[8]?.promptId === "D03R1:revote:NoMajority" &&
     cycles[2]?.checkpoints?.[8]?.promptActionId ===
-      "resolve_host_prompt-D03R1-revote-NoMajority" &&
+      "resolve_host_prompt-D03R1-revote-NoMajority-no_majority_continue_revote" &&
     cycles[2]?.checkpoints?.[8]?.promptStatusAfter === "pending" &&
     cycles[2]?.checkpoints?.[8]?.originalPromptStatus === "resolved" &&
     cycles[2]?.checkpoints?.[8]?.promptActionVisible === true &&
     cycles[2]?.checkpoints?.[9]?.id === "d03r2-revote-prompt-resolved" &&
     cycles[2]?.checkpoints?.[9]?.promptId === "D03R1:revote:NoMajority" &&
     cycles[2]?.checkpoints?.[9]?.promptActionId ===
-      "resolve_host_prompt-D03R1-revote-NoMajority" &&
+      "resolve_host_prompt-D03R1-revote-NoMajority-no_majority_continue_revote" &&
     cycles[2]?.checkpoints?.[9]?.promptStatusBefore === "pending" &&
     cycles[2]?.checkpoints?.[9]?.resolveState === "ack" &&
     cycles[2]?.checkpoints?.[9]?.streamSeqCount === 2 &&
+    cycles[2]?.checkpoints?.[9]?.decisionPolicy ===
+      "no_majority_continue_revote" &&
     cycles[2]?.checkpoints?.[9]?.promptStatusAfter === "resolved" &&
     cycles[2]?.checkpoints?.[9]?.originalPromptStatus === "resolved" &&
     cycles[2]?.checkpoints?.[9]?.phase === "D03R2" &&
@@ -7067,10 +7108,18 @@ function buildCoreLoopSpineSummary({ session, verification }) {
     cycles[2]?.checkpoints?.[11]?.projectedCount === 1 &&
     cycles[2]?.checkpoints?.[11]?.promptId === "D03R2:revote:NoMajority" &&
     cycles[2]?.checkpoints?.[11]?.promptActionId ===
-      "resolve_host_prompt-D03R2-revote-NoMajority" &&
+      "resolve_host_prompt-D03R2-revote-NoMajority-no_majority_no_lynch" &&
     cycles[2]?.checkpoints?.[11]?.promptStatusAfter === "pending" &&
     cycles[2]?.checkpoints?.[11]?.originalPromptStatus === "resolved" &&
     cycles[2]?.checkpoints?.[11]?.promptActionVisible === true &&
+    cycles[2]?.checkpoints?.[11]?.policyResolveState === "ack" &&
+    cycles[2]?.checkpoints?.[11]?.policyStreamSeqCount === 2 &&
+    cycles[2]?.checkpoints?.[11]?.decisionPolicy === "no_majority_no_lynch" &&
+    cycles[2]?.checkpoints?.[11]?.promptStatusAfterPolicy === "resolved" &&
+    cycles[2]?.checkpoints?.[11]?.nextPhase === "N03" &&
+    cycles[2]?.checkpoints?.[11]?.nextLocked === false &&
+    cycles[2]?.checkpoints?.[11]?.actionNightActionControls > 0 &&
+    cycles[2]?.checkpoints?.[11]?.normalNightActionControls === 0 &&
     recoveryHooks.staleLockedVoteReject === "PhaseLocked" &&
     recoveryHooks.invalidActionReject === "InvalidTarget" &&
     recoveryHooks.normalPlayerDirectActionReject === "InvalidTarget" &&
@@ -7079,7 +7128,7 @@ function buildCoreLoopSpineSummary({ session, verification }) {
   return {
     status: passed ? "passed" : "failed",
     proof:
-      "Compact derived spine map for the seeded role URL core loop: D01 resolve to N01 action, N01 resolution to D02 day controls, D02 vote resolution, N02 action return, N02 action submission/resolution, D03 day controls, D03 NoMajority AdvancePhase InvalidTarget recovery, host role URL reload back to locked D03 NoMajority truth, host revote prompt resolution into open D03R1 controls, a D03R1 no-lynch revote ballot keyed separately from the stale D03 tally, host resolution of D03R1 back to locked NoMajority with a fresh pending revote prompt, second revote prompt resolution into open D03R2 controls, and D03R2 no-lynch vote submission/resolution with prior revote tallies kept separate.",
+      "Compact derived spine map for the seeded role URL core loop: D01 resolve to N01 action, N01 resolution to D02 day controls, D02 vote resolution, N02 action return, N02 action submission/resolution, D03 day controls, D03 NoMajority AdvancePhase InvalidTarget recovery, host role URL reload back to locked D03 NoMajority truth, host continue-revote policy resolution into open D03R1 controls, a D03R1 no-lynch revote ballot keyed separately from the stale D03 tally, host resolution of D03R1 back to locked NoMajority with a fresh pending revote prompt, second continue-revote policy resolution into open D03R2 controls, D03R2 no-lynch vote submission/resolution with prior revote tallies kept separate, and explicit host no-lynch policy resolution into open N03 controls.",
     sourceLaneIds: [...coreLoopPhaseProgressionSpineSourceLaneIds],
     cycles,
     recoveryHooks,

@@ -1064,6 +1064,7 @@ pub struct HostPromptResolutionEffectPolicy {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum HostPromptDecisionKind {
     SelectSlot,
+    SelectPolicy,
     Acknowledge,
 }
 
@@ -1071,6 +1072,7 @@ pub enum HostPromptDecisionKind {
 pub enum HostPromptResolutionEffect {
     PkKill,
     AdvanceRevote,
+    AdvanceNight,
     SkipNextDay,
     AcknowledgeOnly,
 }
@@ -8107,7 +8109,7 @@ fn validate_host_prompt_resolution_effects(
     }
 
     let mut ids = Vec::new();
-    let mut pairs = Vec::new();
+    let mut implicit_selectors = Vec::new();
     for (idx, policy) in policies.iter().enumerate() {
         let item_path = format!("{path}[{idx}]");
         ids.push(policy.id.clone());
@@ -8132,9 +8134,17 @@ fn validate_host_prompt_resolution_effects(
                 "host prompt resolution effect prompt_reason must not be empty",
             );
         }
-        pairs.push(format!("{}:{}", policy.prompt_kind, policy.prompt_reason));
+        if policy.decision != HostPromptDecisionKind::SelectPolicy {
+            implicit_selectors.push(format!(
+                "{}:{}:{:?}",
+                policy.prompt_kind, policy.prompt_reason, policy.decision
+            ));
+        }
         match (policy.decision, policy.effect) {
             (HostPromptDecisionKind::SelectSlot, HostPromptResolutionEffect::PkKill)
+            | (HostPromptDecisionKind::SelectPolicy, HostPromptResolutionEffect::AdvanceRevote)
+            | (HostPromptDecisionKind::SelectPolicy, HostPromptResolutionEffect::AdvanceNight)
+            | (HostPromptDecisionKind::SelectPolicy, HostPromptResolutionEffect::AcknowledgeOnly)
             | (HostPromptDecisionKind::Acknowledge, HostPromptResolutionEffect::AdvanceRevote)
             | (HostPromptDecisionKind::Acknowledge, HostPromptResolutionEffect::SkipNextDay)
             | (HostPromptDecisionKind::Acknowledge, HostPromptResolutionEffect::AcknowledgeOnly) => {
@@ -8144,15 +8154,36 @@ fn validate_host_prompt_resolution_effects(
                 format!("{item_path}.decision"),
                 "SelectSlot decisions are only valid for PkKill prompt effects",
             ),
-            (HostPromptDecisionKind::Acknowledge, HostPromptResolutionEffect::PkKill) => issue(
-                issues,
-                format!("{item_path}.decision"),
-                "PkKill prompt effects require SelectSlot decisions",
-            ),
+            (HostPromptDecisionKind::SelectPolicy, HostPromptResolutionEffect::PkKill)
+            | (HostPromptDecisionKind::SelectPolicy, HostPromptResolutionEffect::SkipNextDay) => {
+                issue(
+                    issues,
+                    format!("{item_path}.decision"),
+                    "SelectPolicy decisions are only valid for AdvanceRevote, AdvanceNight, or AcknowledgeOnly prompt effects",
+                );
+            }
+            (HostPromptDecisionKind::Acknowledge, HostPromptResolutionEffect::PkKill) => {
+                issue(
+                    issues,
+                    format!("{item_path}.decision"),
+                    "PkKill prompt effects require SelectSlot decisions",
+                );
+            }
+            (HostPromptDecisionKind::Acknowledge, HostPromptResolutionEffect::AdvanceNight) => {
+                issue(
+                    issues,
+                    format!("{item_path}.decision"),
+                    "AdvanceNight prompt effects require SelectPolicy decisions",
+                );
+            }
         }
     }
     validate_unique_strings(issues, format!("{path}.id"), &ids);
-    validate_unique_strings(issues, format!("{path}.prompt"), &pairs);
+    validate_unique_strings(
+        issues,
+        format!("{path}.implicit_prompt_decision"),
+        &implicit_selectors,
+    );
 
     for (kind, reason, producer_path) in prompt_pairs {
         if !policies

@@ -3,7 +3,7 @@
 
 export type VoteTarget = { "Slot": string } | "NoLynch";
 
-export type HostPromptDecision = { "SelectSlot": { slot: string, } } | "Acknowledge";
+export type HostPromptDecision = { "SelectSlot": { slot: string, } } | { "SelectPolicy": { policy: string, } } | "Acknowledge";
 
 export type SlotLifecycle = "alive" | "dead" | "modkilled";
 
