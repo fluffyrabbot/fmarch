@@ -984,7 +984,7 @@ test("completed-game test fixtures live outside the assertion facade", async () 
     "utf8",
   );
   for (const importedName of [
-    "completedGameProofReadinessCaseGroups",
+    "completedGameEndgameScenarioCaseFamilyEntries",
     "completedGameProofReadinessScenarioFamilies",
     "completedGameProofReadinessTransition",
   ]) {
@@ -998,6 +998,15 @@ test("completed-game test fixtures live outside the assertion facade", async () 
       `completed-game fixtures should import ${importedName} from the proof/readiness contract`,
     );
   }
+  assert(
+    !importsFromModule({
+      source: fixtureModuleSource,
+      importedName: "completedGameProofReadinessCaseGroups",
+      moduleSpecifier:
+        "./dev_test_game_core_loop_completed_game_proof_readiness_contract.mjs",
+    }),
+    "completed-game fixtures should derive cases from shared family entries, not readiness case groups",
+  );
   assert(
     !fixtureModuleSource.includes(
       "./dev_test_game_core_loop_completed_game_shared_scenarios.mjs",
@@ -1247,7 +1256,29 @@ test("completed-game scenario module builds reusable proof fixtures", () => {
     visitedRolePath: "/g/game-a",
     game,
   });
+  const proofFieldsByFamily = Object.fromEntries(
+    completedGameEndgameScenarioCaseFamilyEntries().map(([id, cases]) => [
+      id,
+      cases.map((scenario) => scenario.proofField),
+    ]),
+  );
 
+  assert.deepEqual(
+    Object.keys(hostStaleProofs),
+    proofFieldsByFamily.completedHostStaleCommandCases,
+  );
+  assert.deepEqual(
+    Object.keys(playerSnapshots),
+    proofFieldsByFamily.completedPlayerReloadCases,
+  );
+  assert.deepEqual(
+    Object.keys(playerReloadProofs),
+    proofFieldsByFamily.completedPlayerReloadCases,
+  );
+  assert.deepEqual(
+    Object.keys(stalePlayerProofs),
+    proofFieldsByFamily.staleCompletedGamePlayerCommandCases,
+  );
   assert.equal(
     hostStaleProofs.completedHostStaleResolveRecoveryProof.commandKind,
     "ResolvePhase",

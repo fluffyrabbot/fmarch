@@ -1,5 +1,5 @@
 import {
-  completedGameProofReadinessCaseGroups,
+  completedGameEndgameScenarioCaseFamilyEntries,
   completedGameProofReadinessScenarioFamilies,
   completedGameProofReadinessTransition,
 } from "./dev_test_game_core_loop_completed_game_proof_readiness_contract.mjs";
@@ -904,11 +904,11 @@ export function staleCompletedPlayerCommandProofFixtures({
 }
 
 function completedHostStaleCommandFixtureCases() {
-  return completedGameProofReadinessCaseGroups().completedHostStaleCommandCases;
+  return completedGameFixtureCaseGroups().completedHostStaleCommandCases;
 }
 
 function completedPlayerReloadFixtureCases() {
-  return completedGameProofReadinessCaseGroups().completedPlayerReloadCases;
+  return completedGameFixtureCaseGroups().completedPlayerReloadCases;
 }
 
 function completedDeadPlayerStaleVoteFixtureCase() {
@@ -917,8 +917,17 @@ function completedDeadPlayerStaleVoteFixtureCase() {
 }
 
 function staleCompletedGamePlayerCommandFixtureCases() {
-  return completedGameProofReadinessCaseGroups()
-    .staleCompletedGamePlayerCommandCases;
+  return completedGameFixtureCaseGroups().staleCompletedGamePlayerCommandCases;
+}
+
+function completedGameFixtureCaseGroups({
+  scenarioFamilies = completedGameProofReadinessScenarioFamilies(),
+} = {}) {
+  return Object.freeze(
+    Object.fromEntries(
+      completedGameEndgameScenarioCaseFamilyEntries({ scenarioFamilies }),
+    ),
+  );
 }
 
 export function staleCompletedPlayerCommandFixture({ game, scenario }) {
