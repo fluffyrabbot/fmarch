@@ -3157,7 +3157,7 @@ test("admin route data exposes local release readiness as a native audit row", a
 
   const readiness = data.audit.find((item) => item.id === localAdminAuditIds.releaseReadiness);
   assert.equal(readiness.label, "Local release readiness");
-  assert.equal(readiness.status, "8 local checks passed, 2 release items unproven");
+  assert.equal(readiness.status, "11 local checks passed, 2 release items unproven");
   assert.equal(readiness.authority, "GlobalAdmin or GlobalMod");
   assert.equal(
     readiness.inspectHref,
@@ -3171,6 +3171,9 @@ test("admin route data exposes local release readiness as a native audit row", a
       "local-hardening-proof",
       "local-stale-conflict-message-milestone",
       "local-host-stale-control-milestone",
+      "local-private-channel-recovery-milestone",
+      "local-replacement-action-recovery-milestone",
+      "local-replacement-handoff-recovery-milestone",
       "local-proof-graph-admin-role-handoffs",
       "local-proof-freshness-admin-surface",
       "local-next-action-admin-surface",
@@ -3209,7 +3212,7 @@ test("admin route data exposes local release readiness as a native audit row", a
   );
   assert.deepEqual(readiness.artifactSummary, {
     game: "game-a",
-    localCheckCount: 8,
+    localCheckCount: 11,
     localPrerequisiteCount: 3,
     unprovenCount: 2,
     releaseReady: false,
@@ -3228,7 +3231,42 @@ test("admin local release readiness detail data carries checks and unproven rows
   assert.equal(data.status, "available");
   assert.equal(data.surfaceHeader.title, "Local release readiness");
   assert.equal(data.audit.id, localAdminAuditIds.releaseReadiness);
-  assert.equal(data.audit.checks.length, 8);
+  assert.equal(data.audit.checks.length, 11);
+  assert.deepEqual(
+    data.audit.checks
+      .filter((check) =>
+        [
+          "local-stale-conflict-message-milestone",
+          "local-host-stale-control-milestone",
+          "local-private-channel-recovery-milestone",
+          "local-replacement-action-recovery-milestone",
+          "local-replacement-handoff-recovery-milestone",
+        ].includes(check.id),
+      )
+      .map((check) => [check.id, check.status]),
+    [
+      [
+        "local-stale-conflict-message-milestone",
+        "passed: 5/5 lanes across 3/3 shared families",
+      ],
+      [
+        "local-host-stale-control-milestone",
+        "passed: 20/20 lanes across 5/5 shared families",
+      ],
+      [
+        "local-private-channel-recovery-milestone",
+        "passed: 6/6 lanes across 3/3 shared families",
+      ],
+      [
+        "local-replacement-action-recovery-milestone",
+        "passed: 3/3 lanes across 3/3 shared families",
+      ],
+      [
+        "local-replacement-handoff-recovery-milestone",
+        "passed: 17/17 lanes across 5/5 shared families",
+      ],
+    ],
+  );
   assert.deepEqual(
     data.audit.localPrerequisites.map((item) => [item.id, item.proofTarget]),
     [
@@ -3253,6 +3291,29 @@ test("admin local release readiness detail data carries checks and unproven rows
       "hosted-deployment",
       "human-release-runbook",
     ]).map((item) => [item.id, item.status]),
+  );
+});
+
+test("admin local release readiness flags replacement coverage drift", async () => {
+  const checklist = releaseReadinessChecklistFixture();
+  const replacementHandoff = checklist.localDevelopmentSpine.checks.find(
+    (check) => check.id === "local-replacement-handoff-recovery-milestone",
+  );
+  replacementHandoff.expectedLaneCount =
+    replacementHandoff.expectedLaneCount + 1;
+
+  const data = await buildAdminAuditDetailData({
+    audit: localAdminAuditIds.releaseReadiness,
+    principalUserId: "admin_a",
+    capabilities: [{ kind: "GlobalAdmin" }],
+    releaseReadinessChecklist: checklist,
+  });
+
+  assert.equal(
+    data.audit.checks.find(
+      (check) => check.id === "local-replacement-handoff-recovery-milestone",
+    ).status,
+    "drift: passed: 17/17 lanes across 5/5 shared families; expected 18 shared lanes",
   );
 });
 
@@ -6161,6 +6222,11 @@ function releaseReadinessChecklistFixture() {
       game: "game-a",
       staleConflictMessageMilestone: staleConflictMessageMilestoneFixture(),
       hostStaleControlMilestone: hostStaleControlMilestoneFixture(),
+      privateChannelRecoveryMilestone: privateChannelRecoveryMilestoneFixture(),
+      replacementActionRecoveryMilestone:
+        replacementActionRecoveryMilestoneFixture(),
+      replacementHandoffRecoveryMilestone:
+        replacementHandoffRecoveryMilestoneFixture(),
     },
     localDevelopmentSpine: {
       status: "passed",
@@ -6192,6 +6258,8 @@ function releaseReadinessChecklistFixture() {
           requiredLaneCount: staleConflictMessageLaneIds.length,
           coveredLaneCount: staleConflictMessageLaneIds.length,
           familyCount: staleConflictMessageCoverageFamilies().length,
+          expectedLaneCount: staleConflictMessageLaneIds.length,
+          expectedFamilyCount: staleConflictMessageCoverageFamilies().length,
           surfaceCoverage: staleConflictMessageSurfaceCoverageFixture(),
         },
         {
@@ -6203,6 +6271,45 @@ function releaseReadinessChecklistFixture() {
           requiredLaneCount: hostStaleControlLaneIds.length,
           coveredLaneCount: hostStaleControlLaneIds.length,
           familyCount: hostStaleControlCoverageFamilies().length,
+          expectedLaneCount: hostStaleControlLaneIds.length,
+          expectedFamilyCount: hostStaleControlCoverageFamilies().length,
+        },
+        {
+          id: "local-private-channel-recovery-milestone",
+          label: "Private-channel recovery",
+          status: "passed",
+          evidence: "target/dev-test-game/proof-run.json",
+          laneIds: privateChannelRecoveryMilestoneFixture().laneIds,
+          requiredLaneCount: replacementPrivateChannelRecoveryLaneIds.length,
+          coveredLaneCount: replacementPrivateChannelRecoveryLaneIds.length,
+          familyCount: replacementPrivateChannelRecoveryCoverageFamilies().length,
+          expectedLaneCount: replacementPrivateChannelRecoveryLaneIds.length,
+          expectedFamilyCount:
+            replacementPrivateChannelRecoveryCoverageFamilies().length,
+        },
+        {
+          id: "local-replacement-action-recovery-milestone",
+          label: "Replacement action recovery",
+          status: "passed",
+          evidence: "target/dev-test-game/proof-run.json",
+          laneIds: replacementActionRecoveryMilestoneFixture().laneIds,
+          requiredLaneCount: replacementActionLaneIds.length,
+          coveredLaneCount: replacementActionLaneIds.length,
+          familyCount: replacementActionRecoveryCoverageFamilies().length,
+          expectedLaneCount: replacementActionLaneIds.length,
+          expectedFamilyCount: replacementActionRecoveryCoverageFamilies().length,
+        },
+        {
+          id: "local-replacement-handoff-recovery-milestone",
+          label: "Replacement handoff recovery",
+          status: "passed",
+          evidence: "target/dev-test-game/proof-run.json",
+          laneIds: replacementHandoffRecoveryMilestoneFixture().laneIds,
+          requiredLaneCount: replacementHandoffRecoveryLaneIds.length,
+          coveredLaneCount: replacementHandoffRecoveryLaneIds.length,
+          familyCount: replacementHandoffRecoveryCoverageFamilies().length,
+          expectedLaneCount: replacementHandoffRecoveryLaneIds.length,
+          expectedFamilyCount: replacementHandoffRecoveryCoverageFamilies().length,
         },
         localDependencyReadinessCheckFixture(
           localProofGraphAdminRoleHandoffsCheckId,
@@ -6246,6 +6353,8 @@ function staleConflictMessageMilestoneFixture() {
     coveredLaneCount: staleConflictMessageLaneIds.length,
     gapCount: 0,
     familyCount: staleConflictMessageCoverageFamilies().length,
+    expectedLaneCount: staleConflictMessageLaneIds.length,
+    expectedFamilyCount: staleConflictMessageCoverageFamilies().length,
     families: staleConflictMessageCoverageFamilies().map((family) => ({
       ...family,
       status: "passed",
@@ -6264,7 +6373,63 @@ function hostStaleControlMilestoneFixture() {
     coveredLaneCount: hostStaleControlLaneIds.length,
     gapCount: 0,
     familyCount: hostStaleControlCoverageFamilies().length,
+    expectedLaneCount: hostStaleControlLaneIds.length,
+    expectedFamilyCount: hostStaleControlCoverageFamilies().length,
     families: hostStaleControlCoverageFamilies().map((family) => ({
+      ...family,
+      status: "passed",
+      passedLaneIds: [...family.laneIds],
+    })),
+  };
+}
+
+function privateChannelRecoveryMilestoneFixture() {
+  return {
+    status: "passed",
+    laneIds: [...replacementPrivateChannelRecoveryLaneIds],
+    requiredLaneCount: replacementPrivateChannelRecoveryLaneIds.length,
+    coveredLaneCount: replacementPrivateChannelRecoveryLaneIds.length,
+    gapCount: 0,
+    familyCount: replacementPrivateChannelRecoveryCoverageFamilies().length,
+    expectedLaneCount: replacementPrivateChannelRecoveryLaneIds.length,
+    expectedFamilyCount: replacementPrivateChannelRecoveryCoverageFamilies().length,
+    families: replacementPrivateChannelRecoveryCoverageFamilies().map((family) => ({
+      ...family,
+      status: "passed",
+      passedLaneIds: [...family.laneIds],
+    })),
+  };
+}
+
+function replacementActionRecoveryMilestoneFixture() {
+  return {
+    status: "passed",
+    laneIds: [...replacementActionLaneIds],
+    requiredLaneCount: replacementActionLaneIds.length,
+    coveredLaneCount: replacementActionLaneIds.length,
+    gapCount: 0,
+    familyCount: replacementActionRecoveryCoverageFamilies().length,
+    expectedLaneCount: replacementActionLaneIds.length,
+    expectedFamilyCount: replacementActionRecoveryCoverageFamilies().length,
+    families: replacementActionRecoveryCoverageFamilies().map((family) => ({
+      ...family,
+      status: "passed",
+      passedLaneIds: [...family.laneIds],
+    })),
+  };
+}
+
+function replacementHandoffRecoveryMilestoneFixture() {
+  return {
+    status: "passed",
+    laneIds: [...replacementHandoffRecoveryLaneIds],
+    requiredLaneCount: replacementHandoffRecoveryLaneIds.length,
+    coveredLaneCount: replacementHandoffRecoveryLaneIds.length,
+    gapCount: 0,
+    familyCount: replacementHandoffRecoveryCoverageFamilies().length,
+    expectedLaneCount: replacementHandoffRecoveryLaneIds.length,
+    expectedFamilyCount: replacementHandoffRecoveryCoverageFamilies().length,
+    families: replacementHandoffRecoveryCoverageFamilies().map((family) => ({
       ...family,
       status: "passed",
       passedLaneIds: [...family.laneIds],

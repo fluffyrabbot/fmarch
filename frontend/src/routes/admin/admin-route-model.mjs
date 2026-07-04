@@ -3751,8 +3751,18 @@ export function normalizeLocalReleaseReadinessAudit(
       checks.map((check) =>
         Object.freeze({
           id: String(check.id),
-          status: String(check.status),
+          status: localReleaseReadinessCheckStatus(check),
           dependencyGated: check.dependencyGated === true,
+          laneIds: Object.freeze(
+            Array.isArray(check.laneIds)
+              ? check.laneIds.map((laneId) => String(laneId))
+              : [],
+          ),
+          requiredLaneCount: Number(check.requiredLaneCount ?? 0),
+          coveredLaneCount: Number(check.coveredLaneCount ?? 0),
+          familyCount: Number(check.familyCount ?? 0),
+          expectedLaneCount: Number(check.expectedLaneCount ?? 0),
+          expectedFamilyCount: Number(check.expectedFamilyCount ?? 0),
         }),
       ),
     ),
@@ -3789,6 +3799,35 @@ export function normalizeLocalReleaseReadinessAudit(
       productionReady: releaseReadinessChecklist.productionReady === true,
     }),
   });
+}
+
+function localReleaseReadinessCheckStatus(check) {
+  const status = String(check?.status ?? "unknown");
+  const laneIds = Array.isArray(check?.laneIds) ? check.laneIds : [];
+  const coveredLaneCount = Number(check?.coveredLaneCount ?? 0);
+  const requiredLaneCount = Number(check?.requiredLaneCount ?? laneIds.length);
+  const familyCount = Number(check?.familyCount ?? 0);
+  const expectedLaneCount = Number(check?.expectedLaneCount);
+  const expectedFamilyCount = Number(check?.expectedFamilyCount);
+  const hasCoverageCounts =
+    laneIds.length > 0 &&
+    Number.isFinite(coveredLaneCount) &&
+    Number.isFinite(requiredLaneCount) &&
+    Number.isFinite(familyCount) &&
+    Number.isFinite(expectedLaneCount) &&
+    Number.isFinite(expectedFamilyCount);
+  if (!hasCoverageCounts) {
+    return status;
+  }
+  const summary = `${status}: ${coveredLaneCount}/${requiredLaneCount} lanes across ${familyCount}/${expectedFamilyCount} shared families`;
+  if (
+    requiredLaneCount !== expectedLaneCount ||
+    laneIds.length !== expectedLaneCount ||
+    familyCount !== expectedFamilyCount
+  ) {
+    return `drift: ${summary}; expected ${expectedLaneCount} shared lanes`;
+  }
+  return summary;
 }
 
 export function appendLocalReleaseRunbookAudit(audit, releaseRunbook, { game }) {
