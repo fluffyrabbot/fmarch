@@ -83,6 +83,33 @@ test("dev test game browser proof consumes extracted core-loop scenario assertio
   }
 });
 
+test("dev test game shares stale host prompt recovery choreography", async () => {
+  const source = await readFile("tools/dev_test_game.mjs", "utf8");
+
+  assert(
+    source.includes("async function prepareStaleHostPromptRecovery({"),
+    "dev_test_game.mjs should own one stale host-prompt recovery choreography helper",
+  );
+  assert(
+    source.includes("const staleD03R2PolicyRecovery = await prepareStaleHostPromptRecovery({"),
+    "D03R2 stale policy proof should prepare stale prompt recovery through the shared helper",
+  );
+  assert(
+    source.includes("stalePromptRecovery = await prepareStaleHostPromptRecovery({"),
+    "standalone stale host-prompt proof should prepare stale prompt recovery through the shared helper",
+  );
+  assert.equal(
+    occurrenceCount(source, "await freezeStaleHostPromptPage({"),
+    1,
+    "stale host-prompt pages should be frozen only inside the shared helper",
+  );
+  assert.equal(
+    occurrenceCount(source, "=>\n        submitStaleHostPromptRecovery({"),
+    1,
+    "stale host-prompt recovery submission should be wired only inside the shared helper",
+  );
+});
+
 function importsFromModule({ source, importedName, moduleSpecifier }) {
   const importPattern = new RegExp(
     `import\\s*\\{([^}]*)\\}\\s*from\\s*"${escapeRegExp(moduleSpecifier)}";`,
@@ -96,6 +123,10 @@ function importsFromModule({ source, importedName, moduleSpecifier }) {
         new RegExp(`\\b${escapeRegExp(importedName)}\\b`).test(entry),
       ),
   );
+}
+
+function occurrenceCount(source, needle) {
+  return source.split(needle).length - 1;
 }
 
 function escapeRegExp(value) {

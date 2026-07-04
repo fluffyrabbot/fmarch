@@ -4122,20 +4122,15 @@ async function verifySeededD02VoteNightTransition({
             d03R2RevotePrompt.id,
             "no_majority_continue_revote",
           );
-    const staleD03R2PolicyPage =
-      d03R2StaleContinuePolicyActionId === null
-        ? null
-        : await hostEntry.context.newPage();
+    const staleD03R2PolicyRecovery = await prepareStaleHostPromptRecovery({
+      context: hostEntry.context,
+      frontendBaseUrl,
+      promptGame: transitionGame,
+      actionId: d03R2StaleContinuePolicyActionId,
+      promptId: d03R2RevotePrompt?.id,
+    });
     const d03R2StaleContinuePolicySetup =
-      staleD03R2PolicyPage === null
-        ? null
-        : await freezeStaleHostPromptPage({
-            stalePromptPage: staleD03R2PolicyPage,
-            frontendBaseUrl,
-            promptGame: transitionGame,
-            actionId: d03R2StaleContinuePolicyActionId,
-            promptId: d03R2RevotePrompt.id,
-          });
+      staleD03R2PolicyRecovery.setup;
     const apiPromptsAfterResolveD03R2 = await fetchJson(
       `${apiBaseUrl}/games/${transitionGame}/host-prompts?principal_user_id=host_h`,
     );
@@ -4195,23 +4190,15 @@ async function verifySeededD02VoteNightTransition({
       `${apiBaseUrl}/games/${transitionGame}/host-prompts?principal_user_id=host_h`,
     );
     const d03R2StaleContinuePolicyRecovery =
-      staleD03R2PolicyPage === null
-        ? null
-        : await submitStaleHostPromptRecovery({
-            stalePromptPage: staleD03R2PolicyPage,
-            setup: d03R2StaleContinuePolicySetup,
-            liveResolve: d03R2NoLynchPolicyResolution,
-            apiBaseUrl,
-            frontendBaseUrl,
-            promptGame: transitionGame,
-            actionId: d03R2StaleContinuePolicyActionId,
-            promptId: d03R2RevotePrompt.id,
-            expectedReloadPhase: {
-              id: "N03",
-              locked: false,
-              requiredPhaseActions: ["resolve_phase"],
-            },
-          });
+      await staleD03R2PolicyRecovery.submit({
+        liveResolve: d03R2NoLynchPolicyResolution,
+        apiBaseUrl,
+        expectedReloadPhase: {
+          id: "N03",
+          locked: false,
+          requiredPhaseActions: ["resolve_phase"],
+        },
+      });
 
     assertRevoteProgressionBrowserProof({
       proof: {
@@ -7678,11 +7665,11 @@ async function verifyStaleHostPromptRecovery({
   const actionId = "resolve_host_prompt-D01-skip_next_day-slot_1";
   const seed = await seedHostPromptRecoveryGame({ promptGame, promptId });
   const context = hostPage.context();
-  const stalePromptPage = await context.newPage();
   const livePromptPage = await context.newPage();
+  let stalePromptRecovery;
   try {
-    const setup = await freezeStaleHostPromptPage({
-      stalePromptPage,
+    stalePromptRecovery = await prepareStaleHostPromptRecovery({
+      context,
       frontendBaseUrl,
       promptGame,
       actionId,
@@ -7702,15 +7689,9 @@ async function verifyStaleHostPromptRecovery({
         ),
       promptId,
     );
-    const staleRecovery = await submitStaleHostPromptRecovery({
-      stalePromptPage,
-      setup,
+    const staleRecovery = await stalePromptRecovery.submit({
       liveResolve,
       apiBaseUrl,
-      frontendBaseUrl,
-      promptGame,
-      actionId,
-      promptId,
     });
     return {
       status: "passed",
@@ -7724,7 +7705,7 @@ async function verifyStaleHostPromptRecovery({
         "A disposable local host-prompt game created a Beloved Princess skip-next-day prompt, froze one host role URL with the pending Resolve prompt control, resolved it from a live host role URL, then clicked the stale prompt control and recovered through PromptAlreadyResolved without ACK stream seqs while refreshing hostPrompts to the resolved state, then reloaded the host role URL to prove resolved prompt truth with the stale Resolve action hidden.",
     };
   } finally {
-    await stalePromptPage.close().catch(() => {});
+    await stalePromptRecovery?.close();
     await livePromptPage.close().catch(() => {});
   }
 }
@@ -7790,6 +7771,60 @@ async function seedHostPromptRecoveryGame({ promptGame, promptId }) {
     promptId,
     commands: commands.length,
   };
+}
+
+async function prepareStaleHostPromptRecovery({
+  context,
+  frontendBaseUrl,
+  promptGame,
+  actionId,
+  promptId,
+}) {
+  if (
+    actionId === null ||
+    actionId === undefined ||
+    promptId === null ||
+    promptId === undefined
+  ) {
+    return {
+      stalePromptPage: null,
+      setup: null,
+      submit: async () => null,
+      close: async () => {},
+    };
+  }
+  const stalePromptPage = await context.newPage();
+  try {
+    const setup = await freezeStaleHostPromptPage({
+      stalePromptPage,
+      frontendBaseUrl,
+      promptGame,
+      actionId,
+      promptId,
+    });
+    return {
+      stalePromptPage,
+      setup,
+      submit: async ({ liveResolve, apiBaseUrl, expectedReloadPhase } = {}) =>
+        submitStaleHostPromptRecovery({
+          stalePromptPage,
+          setup,
+          liveResolve,
+          apiBaseUrl,
+          frontendBaseUrl,
+          promptGame,
+          actionId,
+          promptId,
+          expectedReloadPhase,
+        }),
+      close: async () => {
+        await stalePromptPage.close().catch(() => {});
+      },
+    };
+  } catch (error) {
+    await stalePromptPage.close().catch(() => {});
+    throw error;
+  }
 }
 
 async function freezeStaleHostPromptPage({
