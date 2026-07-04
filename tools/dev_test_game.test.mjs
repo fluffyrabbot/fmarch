@@ -148,7 +148,6 @@ import {
 } from "./dev_test_game_hardening_scenarios.mjs";
 import {
   replacementPrivateChannelRecoveryLaneIds,
-  replacementPrivateChannelRecoveryCoverageFamilies,
   replacementPrivatePostRaceLaneIds,
   replacementPrivatePostRecoveryLaneIds,
   replacementStalePrivatePostAfterCompleteScenario,
@@ -16493,9 +16492,7 @@ function recoveryReceiptFixtureOptions() {
 }
 
 function recoveryReceiptFixture(descriptor) {
-  const metadata = recoveryReceiptFixtureMetadata(descriptor);
-  const [adminProofSourceKey, adminProofSourcePath] =
-    recoveryReceiptAdminProofSourceEntry(descriptor);
+  const fixture = descriptor.receiptFixture;
   return {
     version: 1,
     proof: `dev-test-game-${descriptor.kind}`,
@@ -16503,11 +16500,11 @@ function recoveryReceiptFixture(descriptor) {
     releaseReady: false,
     productionReady: false,
     generatedAt: "2026-06-26T00:00:00.000Z",
-    scope: metadata.scope,
-    proofBoundary: `${descriptor.readinessLabel}.`,
+    scope: fixture.scope,
+    proofBoundary: fixture.proofBoundary,
     generatedFrom: {
       proofRun: "target/dev-test-game/proof-run.json",
-      [adminProofSourceKey]: adminProofSourcePath,
+      [fixture.adminProofSourceKey]: fixture.adminProofSourcePath,
       game: "00000000-0000-0000-0000-000000000001",
       family: {
         id: descriptor.familyId,
@@ -16519,9 +16516,9 @@ function recoveryReceiptFixture(descriptor) {
       status: "passed",
       laneCount: descriptor.laneIds.length,
       passedLaneCount: descriptor.laneIds.length,
-      familyCount: metadata.familyCount,
+      familyCount: fixture.familyCount,
       expectedLaneCount: descriptor.laneIds.length,
-      expectedFamilyCount: metadata.familyCount,
+      expectedFamilyCount: fixture.familyCount,
     },
     laneIds: [...descriptor.laneIds],
     lanes: descriptor.laneIds.map((laneId) => ({
@@ -16529,59 +16526,9 @@ function recoveryReceiptFixture(descriptor) {
       label: laneId,
       status: "passed",
       compactStatus: `passed:${laneId}`,
-      evidence: metadata.evidence,
+      evidence: fixture.evidence,
     })),
   };
-}
-
-function recoveryReceiptFixtureMetadata(descriptor) {
-  if (descriptor.receiptKey === "privateChannelRecoveryReceipt") {
-    return {
-      scope: "local-dev-test-game-private-channel-recovery",
-      familyCount: coreLoopPrivateChannelRecoveryCoverageFamilies().length,
-      evidence: { channel: "private:mafia_day_chat" },
-    };
-  }
-  if (descriptor.receiptKey === "replacementActionRecoveryReceipt") {
-    return {
-      scope: "local-dev-test-game-replacement-action-recovery",
-      familyCount: replacementActionRecoveryCoverageFamilies().length,
-      evidence: { targetSlot: "slot-2" },
-    };
-  }
-  if (descriptor.receiptKey === "replacementHandoffRecoveryReceipt") {
-    return {
-      scope: "local-dev-test-game-replacement-handoff-recovery",
-      familyCount: replacementHandoffRecoveryCoverageFamilies().length,
-      evidence: { slot: "slot-2" },
-    };
-  }
-  if (descriptor.receiptKey === "replacementPrivateRecoveryReceipt") {
-    return {
-      scope: "local-dev-test-game-replacement-private-recovery",
-      familyCount: replacementPrivateChannelRecoveryCoverageFamilies().length,
-      evidence: { channel: "private:mafia_day_chat" },
-    };
-  }
-  throw new Error(`unknown recovery receipt fixture: ${descriptor.receiptKey}`);
-}
-
-function recoveryReceiptAdminProofSourceEntry(descriptor) {
-  if (descriptor.provingNodeId === "admin-proof:core-loop") {
-    return [
-      "coreLoopAdminProof",
-      "target/dev-test-game/core-loop-admin-proof.json",
-    ];
-  }
-  if (descriptor.provingNodeId === "admin-proof:hardening") {
-    return [
-      "hardeningAdminProof",
-      "target/dev-test-game/hardening-admin-proof.json",
-    ];
-  }
-  throw new Error(
-    `unknown recovery receipt proving node: ${descriptor.provingNodeId}`,
-  );
 }
 
 function adminSpineProofFixture() {

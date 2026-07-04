@@ -1,13 +1,17 @@
 import {
+  coreLoopPrivateChannelRecoveryCoverageFamilies,
   coreLoopPrivateChannelRecoveryLaneIds,
 } from "./dev_test_game_core_loop_private_channel_recovery_scenarios.mjs";
 import {
+  replacementActionRecoveryCoverageFamilies,
   replacementActionLaneIds,
 } from "./dev_test_game_replacement_action_scenario_cases.mjs";
 import {
+  replacementHandoffRecoveryCoverageFamilies,
   replacementHandoffRecoveryLaneIds,
 } from "./dev_test_game_replacement_handoff_scenario_cases.mjs";
 import {
+  replacementPrivateChannelRecoveryCoverageFamilies,
   replacementPrivateChannelRecoveryLaneIds,
 } from "./dev_test_game_replacement_private_scenarios.mjs";
 import {
@@ -71,6 +75,14 @@ export const recoveryReceiptGraphDescriptors = Object.freeze([
     ]),
     familyId: "core-loop-private-channel-recovery",
     laneIds: coreLoopPrivateChannelRecoveryLaneIds,
+    receiptFixture: {
+      scope: "local-dev-test-game-private-channel-recovery",
+      proofBoundary: "Local private-channel recovery receipt.",
+      familyCount: coreLoopPrivateChannelRecoveryCoverageFamilies().length,
+      evidence: { channel: "private:mafia_day_chat" },
+      adminProofSourceKey: "coreLoopAdminProof",
+      adminProofSourcePath: "target/dev-test-game/core-loop-admin-proof.json",
+    },
     buildReceipt: buildDevTestGamePrivateChannelRecoveryReceipt,
     assertReceipt: assertDevTestGamePrivateChannelRecoveryReceipt,
   }),
@@ -96,6 +108,14 @@ export const recoveryReceiptGraphDescriptors = Object.freeze([
     manifestDependsOn: replacementRecoveryReceiptManifestDependencies(),
     familyId: "replacement-action-recovery",
     laneIds: replacementActionLaneIds,
+    receiptFixture: {
+      scope: "local-dev-test-game-replacement-action-recovery",
+      proofBoundary: "Local replacement action recovery receipt.",
+      familyCount: replacementActionRecoveryCoverageFamilies().length,
+      evidence: { targetSlot: "slot-2" },
+      adminProofSourceKey: "hardeningAdminProof",
+      adminProofSourcePath: "target/dev-test-game/hardening-admin-proof.json",
+    },
     buildReceipt: buildDevTestGameReplacementActionRecoveryReceipt,
     assertReceipt: assertDevTestGameReplacementActionRecoveryReceipt,
   }),
@@ -121,6 +141,14 @@ export const recoveryReceiptGraphDescriptors = Object.freeze([
     manifestDependsOn: replacementRecoveryReceiptManifestDependencies(),
     familyId: "replacement-handoff-recovery",
     laneIds: replacementHandoffRecoveryLaneIds,
+    receiptFixture: {
+      scope: "local-dev-test-game-replacement-handoff-recovery",
+      proofBoundary: "Local replacement handoff recovery receipt.",
+      familyCount: replacementHandoffRecoveryCoverageFamilies().length,
+      evidence: { slot: "slot-2" },
+      adminProofSourceKey: "hardeningAdminProof",
+      adminProofSourcePath: "target/dev-test-game/hardening-admin-proof.json",
+    },
     buildReceipt: buildDevTestGameReplacementHandoffRecoveryReceipt,
     assertReceipt: assertDevTestGameReplacementHandoffRecoveryReceipt,
   }),
@@ -146,6 +174,14 @@ export const recoveryReceiptGraphDescriptors = Object.freeze([
     manifestDependsOn: replacementRecoveryReceiptManifestDependencies(),
     familyId: "replacement-private-channel-recovery",
     laneIds: replacementPrivateChannelRecoveryLaneIds,
+    receiptFixture: {
+      scope: "local-dev-test-game-replacement-private-recovery",
+      proofBoundary: "Local replacement private-channel recovery receipt.",
+      familyCount: replacementPrivateChannelRecoveryCoverageFamilies().length,
+      evidence: { channel: "private:mafia_day_chat" },
+      adminProofSourceKey: "hardeningAdminProof",
+      adminProofSourcePath: "target/dev-test-game/hardening-admin-proof.json",
+    },
     buildReceipt: buildDevTestGameReplacementPrivateRecoveryReceipt,
     assertReceipt: assertDevTestGameReplacementPrivateRecoveryReceipt,
   }),
@@ -418,6 +454,10 @@ function recoveryReceiptGraphDescriptor(descriptor) {
     ...descriptor,
     laneIds: Object.freeze([...descriptor.laneIds]),
     manifestDependsOn: Object.freeze([...descriptor.manifestDependsOn]),
+    receiptFixture: Object.freeze({
+      ...descriptor.receiptFixture,
+      evidence: Object.freeze({ ...descriptor.receiptFixture.evidence }),
+    }),
   });
 }
 
