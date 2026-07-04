@@ -23,6 +23,9 @@ import {
   dayVoteNoLynchLaneId,
   revoteProgressionFeatureSpineRows,
 } from "./dev_test_game_core_loop_revote_progression_scenarios.mjs";
+import {
+  terminalRecoveryFeatureSpineRows,
+} from "./dev_test_game_core_loop_terminal_recovery_scenarios.mjs";
 
 export const nightThreeActionResolutionLaneId =
   "night-three-action-resolution";
@@ -115,24 +118,7 @@ const coreLoopFeatureSpineLaneRows = Object.freeze([
     checkpointId: `${nightTwoDayThree}-n02-resolved-target-killed`,
     adminCheckId: "core-loop",
   }),
-  Object.freeze({
-    targetKey: "dayThreeTerminalBoundary",
-    featureSlotId: "day-three-terminal-boundary",
-    cycleId: nightTwoDayThree,
-    role: "host",
-    checkpointId: `${nightTwoDayThree}-d03-terminal-advance-reject`,
-    recoveryHookId: "d03TerminalAdvanceReject",
-    adminCheckId: "core-loop",
-  }),
-  Object.freeze({
-    targetKey: "dayThreeTerminalRecovery",
-    featureSlotId: "day-three-terminal-recovery",
-    cycleId: nightTwoDayThree,
-    role: "host",
-    checkpointId: `${nightTwoDayThree}-d03-terminal-reload-recovery`,
-    recoveryHookId: "d03TerminalAdvanceReject",
-    adminCheckId: "core-loop",
-  }),
+  ...terminalRecoveryFeatureSpineRows({ cycleId: nightTwoDayThree }),
   ...revoteProgressionFeatureSpineRows({ cycleId: nightTwoDayThree }),
   Object.freeze({
     targetKey: "invalidActionRecovery",
