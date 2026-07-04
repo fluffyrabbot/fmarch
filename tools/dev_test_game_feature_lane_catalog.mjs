@@ -21,6 +21,7 @@ import {
 
 export const nightThreeActionResolutionLaneId =
   "night-three-action-resolution";
+export const dayVoteNoLynchLaneId = "day-vote-no-lynch";
 
 export const coreLoopFeatureSpineSourceCheckId = "local-core-loop-proof";
 export const devTestGameCoreLoopAdminProofCommand =
@@ -64,6 +65,16 @@ const coreLoopFeatureSpineLaneRows = Object.freeze([
     seedMembership: "demoOnly",
     seedOrder: 10,
     seedRoleOverride: "actionPlayer",
+  }),
+  Object.freeze({
+    targetKey: "dayVoteNoLynch",
+    featureSlotId: dayVoteNoLynchLaneId,
+    cycleId: nightTwoDayThree,
+    role: "actionPlayer",
+    checkpointId: `${nightTwoDayThree}-d03r1-revote-ballot-submitted`,
+    adminCheckId: "core-loop",
+    seedMembership: "demoOnly",
+    seedOrder: 20,
   }),
   Object.freeze({
     targetKey: "postDayThreeTransition",
@@ -242,11 +253,6 @@ const coreLoopSeedOnlyLaneRows = Object.freeze([
     seedMembership: "required",
     seedOrder: 10,
   }),
-  Object.freeze({
-    featureSlotId: "day-vote-no-lynch",
-    seedMembership: "demoOnly",
-    seedOrder: 20,
-  }),
 ]);
 
 export const coreLoopFeatureLaneCatalog = Object.freeze([
@@ -327,7 +333,7 @@ export const coreLoopFeatureSeedAliasOnlyProofLaneIds = Object.freeze(
 
 export const coreLoopFeaturePhaseProgressionLaneIds = Object.freeze([
   ...coreLoopVoteResolutionLaneIds,
-  "day-vote-no-lynch",
+  dayVoteNoLynchLaneId,
   playerActionLoopLaneId,
 ]);
 

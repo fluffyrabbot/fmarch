@@ -77,6 +77,7 @@ test("production feature spine resolver builds and validates source collections"
   assert.deepEqual(collection.slotIds, [
     "host-phase-control",
     "day-vote-resolution",
+    "day-vote-no-lynch",
     "post-day-three-transition",
     "night-action-loop",
     "player-action-submission",
@@ -112,6 +113,18 @@ test("production feature spine resolver builds and validates source collections"
       roleUrlId: "d02-n02-actionPlayer",
       checkpointId: "d02-n02-d02-deciding-vote-submitted",
       adminCheckId: "day-vote-resolution",
+    },
+  );
+  assert.deepEqual(
+    {
+      roleUrlId: collection.bySlotId["day-vote-no-lynch"].roleUrlId,
+      checkpointId: collection.bySlotId["day-vote-no-lynch"].checkpointId,
+      adminCheckId: collection.bySlotId["day-vote-no-lynch"].adminCheckId,
+    },
+    {
+      roleUrlId: "n02-d03-actionPlayer",
+      checkpointId: "n02-d03-d03r1-revote-ballot-submitted",
+      adminCheckId: "core-loop",
     },
   );
   assert.deepEqual(

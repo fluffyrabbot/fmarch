@@ -2326,9 +2326,9 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
     graph,
     releaseReadiness,
   );
-  assert.equal(graph.summary.nodeCount, 45);
-  assert.equal(graph.summary.roleUrlCount, 45);
-  assert.equal(graph.summary.productionFeatureTargetCount, 25);
+  assert.equal(graph.summary.nodeCount, 46);
+  assert.equal(graph.summary.roleUrlCount, 46);
+  assert.equal(graph.summary.productionFeatureTargetCount, 26);
   assert.deepEqual(
     graph.nodes
       .filter((node) => node.kind === "admin-proof-surface")
