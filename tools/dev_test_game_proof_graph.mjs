@@ -4,6 +4,7 @@ import { pathToFileURL } from "node:url";
 import {
   assertDevTestGameReleaseReadiness,
   validateDevTestGameAdminSpineProof,
+  validateDevTestGameAdminSpineTerminalBatches,
 } from "./dev_test_game_release_readiness.mjs";
 import {
   assertDevTestGameNextAction,
@@ -51,13 +52,22 @@ import { repoRoot } from "./dev_test_game_spine_runner.mjs";
 export const DEV_TEST_GAME_PROOF_GRAPH_VERSION = 1;
 
 const proofGraphJsonPath = path.join(repoRoot, devTestGameProofGraphPath);
+const defaultAdminSpineTerminalBatchProofPath =
+  "target/dev-test-game/admin-spine-terminal-batches.json";
 
 export function buildDevTestGameProofGraph(
-  { spineManifest, adminSpineProof, nextAction = null, releaseReadiness },
+  {
+    spineManifest,
+    adminSpineProof,
+    adminSpineTerminalBatches = null,
+    nextAction = null,
+    releaseReadiness,
+  },
   {
     generatedAt = new Date().toISOString(),
     spineManifestSource = "target/dev-test-game/spine-manifest.json",
     adminSpineProofSource = "target/dev-test-game/admin-spine-proof.json",
+    adminSpineTerminalBatchesSource = defaultAdminSpineTerminalBatchProofPath,
     nextActionSource = devTestGameNextActionPath,
     releaseReadinessSource = devTestGameReleaseReadinessPath,
   } = {},
@@ -68,16 +78,28 @@ export function buildDevTestGameProofGraph(
   });
   const nextActionEvidence =
     nextAction === null ? null : assertDevTestGameNextAction(nextAction);
+  const adminSpineTerminalBatchEvidence =
+    adminSpineTerminalBatches === null
+      ? null
+      : validateDevTestGameAdminSpineTerminalBatches(adminSpineTerminalBatches, {
+          path: adminSpineTerminalBatchesSource,
+        });
   const releaseReadinessChecklist =
     assertDevTestGameReleaseReadiness(releaseReadiness);
   const adminSpine = adminSpineProof;
   const nodes = buildProofGraphNodes({
     manifest,
     adminSpine,
+    adminSpineTerminalBatches: adminSpineTerminalBatchEvidence,
+    adminSpineTerminalBatchesSource,
     releaseReadiness: releaseReadinessChecklist,
     releaseReadinessSource,
   });
-  const edges = buildProofGraphEdges({ nodes, nextAction: nextActionEvidence });
+  const edges = buildProofGraphEdges({
+    nodes,
+    nextAction: nextActionEvidence,
+    adminSpineTerminalBatches: adminSpineTerminalBatchEvidence,
+  });
   const evidence = {
     version: DEV_TEST_GAME_PROOF_GRAPH_VERSION,
     proof: "dev-test-game-proof-graph",
@@ -91,6 +113,9 @@ export function buildDevTestGameProofGraph(
     generatedFrom: {
       spineManifest: spineManifestSource,
       adminSpineProof: adminSpineProofSource,
+      ...(adminSpineTerminalBatchEvidence === null
+        ? {}
+        : { adminSpineTerminalBatches: adminSpineTerminalBatchesSource }),
       ...(nextActionEvidence === null ? {} : { nextAction: nextActionSource }),
       releaseReadiness: releaseReadinessSource,
       manifestGeneratedAt: manifest.generatedAt,
@@ -108,6 +133,7 @@ export function buildDevTestGameProofGraph(
       productionFeatureTargetCount: nodes.filter(
         (node) => node.kind === "production-feature-spine-target",
       ).length,
+      terminalBatchCount: adminSpineTerminalBatchEvidence?.batchCount ?? 0,
     },
     nodes,
     edges,
@@ -202,6 +228,7 @@ export function assertDevTestGameProofGraph(
   if (adminSpineProof !== undefined) {
     assertDevTestGameProofGraphCoversAdminSpine(evidence, adminSpineProof);
   }
+  assertDevTestGameProofGraphCoversTerminalBatches(evidence);
   if (releaseReadiness !== undefined) {
     assertDevTestGameProofGraphCoversProductionFeatureTargets(
       evidence,
@@ -210,6 +237,44 @@ export function assertDevTestGameProofGraph(
   }
   assertProductionFacingSurfaceGraphCoverage({ proofGraph: evidence });
   return evidence;
+}
+
+export function assertDevTestGameProofGraphCoversTerminalBatches(graph) {
+  const terminalNode = (graph?.nodes ?? []).find(
+    (node) => node.id === "admin-spine-terminal-batches",
+  );
+  if (graph?.generatedFrom?.adminSpineTerminalBatches === undefined) {
+    if (terminalNode !== undefined || graph.summary?.terminalBatchCount !== 0) {
+      throw new Error("proof graph terminal batch summary drifted");
+    }
+    return graph;
+  }
+  if (
+    terminalNode?.kind !== "terminal-proof-batch-receipt" ||
+    terminalNode.status !== "passed" ||
+    terminalNode.artifact !== graph.generatedFrom.adminSpineTerminalBatches ||
+    terminalNode.roleUrl !== localAdminAuditRoleUrl(localAdminAuditIds.adminSpine) ||
+    terminalNode.batchCount !== graph.summary?.terminalBatchCount ||
+    !Array.isArray(terminalNode.proofIds) ||
+    !terminalNode.proofIds.includes("proof-graph") ||
+    !terminalNode.proofIds.includes("proof-freshness") ||
+    !terminalNode.proofIds.includes("next-action")
+  ) {
+    throw new Error("proof graph terminal batch node drifted");
+  }
+  for (const target of ["proof-graph", "proof-freshness", "next-action"]) {
+    if (
+      !(graph.edges ?? []).some(
+        (edge) =>
+          edge.from === "admin-spine-terminal-batches" &&
+          edge.to === target &&
+          edge.relationship === "terminal-browser-proof",
+      )
+    ) {
+      throw new Error(`proof graph terminal batch edge missing: ${target}`);
+    }
+  }
+  return graph;
 }
 
 export function assertDevTestGameProofGraphCoversAdminSpine(graph, adminSpineProof) {
@@ -337,6 +402,9 @@ export async function writeDevTestGameProofGraph({
     "target/dev-test-game/spine-manifest.json",
   adminSpineProofPath = process.env.FMARCH_DEV_TEST_GAME_ADMIN_SPINE_PROOF ??
     "target/dev-test-game/admin-spine-proof.json",
+  adminSpineTerminalBatchesPath =
+    process.env.FMARCH_DEV_TEST_GAME_ADMIN_SPINE_TERMINAL_BATCHES ??
+    defaultAdminSpineTerminalBatchProofPath,
   nextActionPath = process.env.FMARCH_DEV_TEST_GAME_NEXT_ACTION ??
     devTestGameNextActionPath,
   releaseReadinessPath = process.env.FMARCH_DEV_TEST_GAME_RELEASE_READINESS ??
@@ -344,20 +412,37 @@ export async function writeDevTestGameProofGraph({
 } = {}) {
   const absoluteSpineManifestPath = path.resolve(repoRoot, spineManifestPath);
   const absoluteAdminSpineProofPath = path.resolve(repoRoot, adminSpineProofPath);
+  const absoluteAdminSpineTerminalBatchesPath = path.resolve(
+    repoRoot,
+    adminSpineTerminalBatchesPath,
+  );
   const absoluteNextActionPath = path.resolve(repoRoot, nextActionPath);
   const absoluteReleaseReadinessPath = path.resolve(repoRoot, releaseReadinessPath);
   const spineManifest = JSON.parse(await readFile(absoluteSpineManifestPath, "utf8"));
   const adminSpineProof = JSON.parse(await readFile(absoluteAdminSpineProofPath, "utf8"));
+  const adminSpineTerminalBatches = await readOptionalJson(
+    absoluteAdminSpineTerminalBatchesPath,
+  );
   const nextAction = JSON.parse(await readFile(absoluteNextActionPath, "utf8"));
   const releaseReadiness = JSON.parse(
     await readFile(absoluteReleaseReadinessPath, "utf8"),
   );
   const evidence = buildDevTestGameProofGraph(
-    { spineManifest, adminSpineProof, nextAction, releaseReadiness },
+    {
+      spineManifest,
+      adminSpineProof,
+      adminSpineTerminalBatches,
+      nextAction,
+      releaseReadiness,
+    },
     {
       generatedAt,
       spineManifestSource: path.relative(repoRoot, absoluteSpineManifestPath),
       adminSpineProofSource: path.relative(repoRoot, absoluteAdminSpineProofPath),
+      adminSpineTerminalBatchesSource: path.relative(
+        repoRoot,
+        absoluteAdminSpineTerminalBatchesPath,
+      ),
       nextActionSource: path.relative(repoRoot, absoluteNextActionPath),
       releaseReadinessSource: path.relative(repoRoot, absoluteReleaseReadinessPath),
     },
@@ -370,6 +455,8 @@ export async function writeDevTestGameProofGraph({
 function buildProofGraphNodes({
   manifest,
   adminSpine,
+  adminSpineTerminalBatches,
+  adminSpineTerminalBatchesSource,
   releaseReadiness,
   releaseReadinessSource,
 }) {
@@ -394,6 +481,36 @@ function buildProofGraphNodes({
     releaseReadiness,
     releaseReadinessSource,
   });
+  const terminalBatchNode =
+    adminSpineTerminalBatches === null
+      ? []
+      : [
+          {
+            id: "admin-spine-terminal-batches",
+            label: "Admin spine terminal proof batches",
+            kind: "terminal-proof-batch-receipt",
+            status: adminSpineTerminalBatches.status,
+            artifact: adminSpineTerminalBatchesSource,
+            roleUrl: localAdminAuditRoleUrl(localAdminAuditIds.adminSpine),
+            proofCommand: manifest.commands?.adminSpine?.script,
+            recoveryCommand: adminSpine.recovery?.nextCommand,
+            batchCount: adminSpineTerminalBatches.batchCount,
+            proofIds: [
+              ...new Set(
+                adminSpineTerminalBatches.batches.flatMap(
+                  (batch) => batch.proofIds,
+                ),
+              ),
+            ],
+            artifactPaths: [
+              ...new Set(
+                adminSpineTerminalBatches.batches.flatMap(
+                  (batch) => batch.artifactPaths,
+                ),
+              ),
+            ],
+          },
+        ];
   return [
     {
       id: "admin-spine",
@@ -416,6 +533,16 @@ function buildProofGraphNodes({
       recoveryCommand: recoveryCommands.get("spine-manifest"),
     },
     {
+      id: "proof-graph",
+      label: "Local proof graph",
+      kind: "proof-graph",
+      status: "passed",
+      artifact: manifest.commands?.proofGraph?.proofArtifact,
+      roleUrl: localAdminAuditRoleUrl(localAdminAuditIds.proofGraph),
+      proofCommand: manifest.commands?.proofGraph?.script,
+      recoveryCommand: manifest.commands?.proofGraph?.script,
+    },
+    {
       id: "proof-freshness",
       label: "Local proof freshness",
       kind: "freshness-dashboard",
@@ -435,6 +562,7 @@ function buildProofGraphNodes({
       proofCommand: manifest.commands?.nextAction?.script,
       recoveryCommand: manifest.commands?.proofFreshness?.script,
     },
+    ...terminalBatchNode,
     ...adminProofNodes,
     ...productionFeatureTargetNodes,
   ].map((node) =>
@@ -444,13 +572,19 @@ function buildProofGraphNodes({
   );
 }
 
-function buildProofGraphEdges({ nodes, nextAction = null }) {
+function buildProofGraphEdges({
+  nodes,
+  nextAction = null,
+  adminSpineTerminalBatches = null,
+}) {
   const nodeIds = new Set(nodes.map((node) => node.id));
   const edges = [
     ["admin-spine", "spine-manifest", "aggregates"],
+    ["spine-manifest", "proof-graph", "records"],
     ["spine-manifest", "proof-freshness", "records"],
     ["spine-manifest", "next-action", "records"],
     ["proof-freshness", "next-action", "recovers-through"],
+    ...terminalBatchEdges(adminSpineTerminalBatches),
     ...nextActionRecoveryEdges(nextAction),
     ...nodes
       .filter((node) => node.kind === "admin-proof-surface")
@@ -478,6 +612,33 @@ function buildProofGraphEdges({ nodes, nextAction = null }) {
         ),
       ),
     );
+}
+
+function terminalBatchEdges(adminSpineTerminalBatches) {
+  if (adminSpineTerminalBatches === null) {
+    return [];
+  }
+  return ["proof-graph", "proof-freshness", "next-action"].map((target) => [
+    "admin-spine-terminal-batches",
+    target,
+    "terminal-browser-proof",
+    {
+      batchLabels: adminSpineTerminalBatches.batches
+        .filter((batch) => batch.proofIds.includes(target))
+        .map((batch) => batch.label),
+    },
+  ]);
+}
+
+async function readOptionalJson(filePath) {
+  try {
+    return JSON.parse(await readFile(filePath, "utf8"));
+  } catch (error) {
+    if (error?.code === "ENOENT") {
+      return null;
+    }
+    throw error;
+  }
 }
 
 function buildProductionFeatureTargetNodes({

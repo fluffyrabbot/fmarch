@@ -1348,8 +1348,10 @@ test("admin route data exposes local proof graph as a native audit row", async (
     [
       ["admin-spine", localAdminAuditRoleUrl(localAdminAuditIds.adminSpine, { game: "midsummer" })],
       ["spine-manifest", localAdminAuditRoleUrl(localAdminAuditIds.spineManifest, { game: "midsummer" })],
+      ["proof-graph", localAdminAuditRoleUrl(localAdminAuditIds.proofGraph, { game: "midsummer" })],
       ["proof-freshness", localAdminAuditRoleUrl(localAdminAuditIds.proofFreshness, { game: "midsummer" })],
       ["next-action", localAdminAuditRoleUrl(localAdminAuditIds.nextAction, { game: "midsummer" })],
+      ["admin-spine-terminal-batches", localAdminAuditRoleUrl(localAdminAuditIds.adminSpine, { game: "midsummer" })],
       [
         "production-feature:player-action-submission",
         localAdminAuditRoleUrl(localAdminAuditIds.coreLoop, { game: "midsummer" }),
@@ -1404,8 +1406,10 @@ test("admin local proof graph detail data carries graph node rows", async () => 
     [
       ["admin-spine", localAdminAuditRoleUrl(localAdminAuditIds.adminSpine, { game: "midsummer" })],
       ["spine-manifest", localAdminAuditRoleUrl(localAdminAuditIds.spineManifest, { game: "midsummer" })],
+      ["proof-graph", localAdminAuditRoleUrl(localAdminAuditIds.proofGraph, { game: "midsummer" })],
       ["proof-freshness", localAdminAuditRoleUrl(localAdminAuditIds.proofFreshness, { game: "midsummer" })],
       ["next-action", localAdminAuditRoleUrl(localAdminAuditIds.nextAction, { game: "midsummer" })],
+      ["admin-spine-terminal-batches", localAdminAuditRoleUrl(localAdminAuditIds.adminSpine, { game: "midsummer" })],
       [
         "production-feature:player-action-submission",
         localAdminAuditRoleUrl(localAdminAuditIds.coreLoop, { game: "midsummer" }),
@@ -1831,7 +1835,9 @@ test("admin route data exposes local next action as a native audit row", async (
   const data = await buildAdminRouteData({
     principalUserId: "admin_a",
     capabilities: [{ kind: "GlobalAdmin" }],
-    nextAction: nextActionFixture(),
+    nextAction: nextActionFixture({
+      terminalBatchGraph: terminalBatchGraphFixture(),
+    }),
     proofGraph: proofGraphFixture(),
   });
 
@@ -1880,6 +1886,7 @@ test("admin route data exposes local next action as a native audit row", async (
         "selected-production-feature-graph-edge",
         "admin-proof:core-loop->production-feature:player-action-submission",
       ],
+      ["terminal-proof-batch-graph", "passed:3 edges"],
       ["selection-trace", "0 candidates"],
       ["release-readiness-selection-trace", "1 buildable candidates"],
       ["release-readiness-hosted-concurrent-race-matrix", "selected:unproven"],
@@ -1975,6 +1982,15 @@ test("admin route data exposes local next action as a native audit row", async (
       localAdminAuditRoleUrl(localAdminAuditIds.hostedConcurrentRaceMatrix),
     selectedProofGraphNodeAuditId: localAdminAuditIds.hostedConcurrentRaceMatrix,
     selectedProofGraphNodeHref: localAdminAuditRoleUrl(localAdminAuditIds.proofGraph, { game: "midsummer" }),
+    terminalProofBatchGraph: {
+      nodeId: "admin-spine-terminal-batches",
+      status: "passed",
+      proofTarget: "target/dev-test-game/admin-spine-terminal-batches.json",
+      roleUrl: localAdminAuditRoleUrl(localAdminAuditIds.adminSpine),
+      batchCount: 2,
+      edgeCount: 3,
+      edgeTargets: ["proof-graph", "proof-freshness", "next-action"],
+    },
     stabilitySource: "",
     stabilityBuildSlice: "",
     stabilityProofTarget: "",
@@ -5197,6 +5213,7 @@ function nextActionFixture({
   raceCoveragePromotedMilestones = raceCoveragePromotedMilestonesFixture(),
   staleConflictMessageTrace = staleConflictMessageTraceFixture(),
   hostStaleControlTrace = hostStaleControlTraceFixture(),
+  terminalBatchGraph,
 } = {}) {
   return {
     version: 1,
@@ -5262,6 +5279,7 @@ function nextActionFixture({
         forceFallbackCount: Number(stability?.forceFallbackCount ?? 0),
         failureCount: Number(stability?.failureCount ?? 0),
       },
+      ...(terminalBatchGraph === undefined ? {} : { terminalBatchGraph }),
       seedProofLaneCoverageStatus: seedProofLaneCoverageTrace.status,
       seedProofLaneCoverageUnclassifiedCount:
         seedProofLaneCoverageTrace.unclassifiedLaneCount,
@@ -5337,6 +5355,14 @@ function proofGraphFixture() {
       recoveryCommand: "npm run test:dev-test-game-spine-manifest-admin-proof",
     }),
     proofGraphNode({
+      id: "proof-graph",
+      label: "Local proof graph",
+      status: "passed",
+      artifact: "target/dev-test-game/proof-graph.json",
+      roleUrl: localAdminAuditRoleUrl(localAdminAuditIds.proofGraph),
+      recoveryCommand: "test:dev-test-game-proof-graph",
+    }),
+    proofGraphNode({
       id: "proof-freshness",
       label: "Local proof freshness",
       status: "passed",
@@ -5353,6 +5379,21 @@ function proofGraphFixture() {
       recoveryCommand: "test:dev-test-game-next-action",
     }),
     {
+      id: "admin-spine-terminal-batches",
+      label: "Admin spine terminal proof batches",
+      kind: "terminal-proof-batch-receipt",
+      status: "passed",
+      artifact: "target/dev-test-game/admin-spine-terminal-batches.json",
+      roleUrl: localAdminAuditRoleUrl(localAdminAuditIds.adminSpine),
+      batchCount: 2,
+      proofIds: ["proof-graph", "proof-freshness", "next-action"],
+      artifactPaths: [
+        "target/dev-test-game/proof-graph-admin-proof.json",
+        "target/dev-test-game/proof-freshness-admin-proof.json",
+        "target/dev-test-game/next-action-admin-proof.json",
+      ],
+    },
+    {
       id: "production-feature:player-action-submission",
       label: "Production feature: player-action-submission",
       kind: "production-feature-spine-target",
@@ -5366,9 +5407,25 @@ function proofGraphFixture() {
   ];
   const edges = [
     { from: "admin-spine", to: "spine-manifest", relationship: "aggregates" },
+    { from: "spine-manifest", to: "proof-graph", relationship: "records" },
     { from: "spine-manifest", to: "proof-freshness", relationship: "records" },
     { from: "spine-manifest", to: "next-action", relationship: "records" },
     { from: "proof-freshness", to: "next-action", relationship: "recovers-through" },
+    {
+      from: "admin-spine-terminal-batches",
+      to: "proof-graph",
+      relationship: "terminal-browser-proof",
+    },
+    {
+      from: "admin-spine-terminal-batches",
+      to: "proof-freshness",
+      relationship: "terminal-browser-proof",
+    },
+    {
+      from: "admin-spine-terminal-batches",
+      to: "next-action",
+      relationship: "terminal-browser-proof",
+    },
     {
       from: "next-action",
       to: "admin-proof:seed",
@@ -5404,15 +5461,31 @@ function proofGraphFixture() {
     generatedFrom: {
       spineManifest: "target/dev-test-game/spine-manifest.json",
       adminSpineProof: "target/dev-test-game/admin-spine-proof.json",
+      adminSpineTerminalBatches:
+        "target/dev-test-game/admin-spine-terminal-batches.json",
     },
     summary: {
       nodeCount: nodes.length,
       edgeCount: edges.length,
       roleUrlCount: nodes.filter((node) => node.roleUrl).length,
       recoveryTargetCount: nodes.filter((node) => node.recoveryCommand).length,
+      terminalBatchCount: 2,
     },
     nodes,
     edges,
+  };
+}
+
+function terminalBatchGraphFixture() {
+  return {
+    nodeId: "admin-spine-terminal-batches",
+    status: "passed",
+    proofTarget: "target/dev-test-game/admin-spine-terminal-batches.json",
+    roleUrl: localAdminAuditRoleUrl(localAdminAuditIds.adminSpine),
+    batchCount: 2,
+    proofIds: ["proof-graph", "proof-freshness", "next-action"],
+    edgeCount: 3,
+    edgeTargets: ["proof-graph", "proof-freshness", "next-action"],
   };
 }
 

@@ -205,11 +205,17 @@ export const devTestGameAdminSpinePlan = [
     script: "terminal-refresh-admin-proof-batch",
     label: "Terminal refresh admin proof batch",
   },
+  { kind: "node", script: "tools/dev_test_game_proof_graph.mjs" },
+  { kind: "node", script: "tools/dev_test_game_proof_graph_admin_proof.mjs" },
+  { kind: "node", script: "tools/dev_test_game_next_action.mjs" },
+  { kind: "node", script: "tools/dev_test_game_next_action_admin_proof.mjs" },
   { kind: "node", script: "tools/dev_test_game_admin_spine_admin_proof.mjs" },
   releaseReadinessStep({
-    reason: "terminal-next-action-and-freshness-refresh",
+    reason: "terminal-batch-proof-graph-and-next-action-refresh",
     changedInputs: [
       "target/dev-test-game/next-action.json",
+      devTestGameProofGraphPath,
+      devTestGameProofGraphAdminProofPath,
       proofFreshnessAdminProofPath,
       nextActionAdminProofPath,
       adminSpineTerminalBatchProofPath,

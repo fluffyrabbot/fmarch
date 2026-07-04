@@ -1865,6 +1865,9 @@ export function normalizeLocalNextActionAudit(nextAction, { game, proofGraph = n
     normalizeNextActionSeedProofLaneCoverageTrace(
       nextAction.seedProofLaneCoverageTrace,
     );
+  const terminalBatchGraph = normalizeNextActionTerminalBatchGraph(
+    nextAction.generatedFrom?.terminalBatchGraph,
+  );
   const stability =
     action.stability !== null && typeof action.stability === "object"
       ? action.stability
@@ -1956,6 +1959,14 @@ export function normalizeLocalNextActionAudit(nextAction, { game, proofGraph = n
           Object.freeze({
             id: "selected-production-feature-graph-edge",
             status: `${selectedProductionFeatureGraph.edgeFrom}->${selectedProductionFeatureGraph.edgeTo}`,
+          }),
+        ]),
+    ...(terminalBatchGraph.nodeId === ""
+      ? []
+      : [
+          Object.freeze({
+            id: "terminal-proof-batch-graph",
+            status: `${terminalBatchGraph.status}:${terminalBatchGraph.edgeCount} edges`,
           }),
         ]),
     ...(stability === null
@@ -2290,6 +2301,9 @@ export function normalizeLocalNextActionAudit(nextAction, { game, proofGraph = n
         selectedProofGraphNode === null
           ? ""
           : adminAuditInspectHref({ game, audit: localAdminAuditIds.proofGraph }),
+      ...(terminalBatchGraph.nodeId === ""
+        ? {}
+        : { terminalProofBatchGraph: terminalBatchGraph }),
       stabilitySource: String(stability?.source ?? ""),
       stabilityBuildSlice: String(stability?.buildSlice ?? ""),
       stabilityProofTarget: String(stability?.proofTarget ?? ""),
@@ -2307,6 +2321,33 @@ export function normalizeLocalNextActionAudit(nextAction, { game, proofGraph = n
       releaseReady: nextAction.releaseReady === true,
       productionReady: nextAction.productionReady === true,
     }),
+  });
+}
+
+function normalizeNextActionTerminalBatchGraph(terminalBatchGraph) {
+  if (terminalBatchGraph === null || typeof terminalBatchGraph !== "object") {
+    return Object.freeze({
+      nodeId: "",
+      status: "",
+      proofTarget: "",
+      roleUrl: "",
+      batchCount: 0,
+      edgeCount: 0,
+      edgeTargets: Object.freeze([]),
+    });
+  }
+  return Object.freeze({
+    nodeId: String(terminalBatchGraph.nodeId ?? ""),
+    status: String(terminalBatchGraph.status ?? ""),
+    proofTarget: String(terminalBatchGraph.proofTarget ?? ""),
+    roleUrl: String(terminalBatchGraph.roleUrl ?? ""),
+    batchCount: Number(terminalBatchGraph.batchCount ?? 0),
+    edgeCount: Number(terminalBatchGraph.edgeCount ?? 0),
+    edgeTargets: Object.freeze(
+      Array.isArray(terminalBatchGraph.edgeTargets)
+        ? terminalBatchGraph.edgeTargets.map((target) => String(target))
+        : [],
+    ),
   });
 }
 

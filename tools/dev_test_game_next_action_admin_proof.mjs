@@ -159,6 +159,7 @@ export function nextActionAdminProofCase() {
         nextAction: source.nextAction,
         proofGraph: source.proofGraph,
       }),
+      terminalBatchGraph: source.nextAction.generatedFrom?.terminalBatchGraph ?? null,
       relatedHandoffs: relatedHandoffsForNextAction({
         nextAction: source.nextAction,
         proofGraph: source.proofGraph,
@@ -739,6 +740,9 @@ function requiredChecksForNextAction(nextAction) {
   if (nextAction.nextAction.seedProofLaneCoverage?.source !== undefined) {
     checks.push("seed-proof-lane-coverage");
   }
+  if (nextAction.generatedFrom?.terminalBatchGraph !== undefined) {
+    checks.push("terminal-proof-batch-graph");
+  }
   if (nextAction.seedProofLaneCoverageTrace?.status !== "unavailable") {
     checks.push("seed-proof-lane-coverage-trace");
     for (const laneId of nextAction.seedProofLaneCoverageTrace.unclassifiedLaneIds) {
@@ -1023,6 +1027,10 @@ function requiredChecksForEvidence(evidence) {
     ...(typeof evidence.generatedFrom?.seedProofLaneCoverageSource === "string"
       ? ["seed-proof-lane-coverage"]
       : []),
+    ...(evidence.generatedFrom?.terminalBatchGraph === null ||
+    evidence.generatedFrom?.terminalBatchGraph === undefined
+      ? []
+      : ["terminal-proof-batch-graph"]),
     ...(evidence.generatedFrom?.seedProofLaneCoverageTrace?.status !==
       "unavailable"
       ? [

@@ -627,6 +627,10 @@ test("dev test-game spine orchestrators expose stable proof order and env maps",
       devTestGameReleaseReadinessScript,
       "tools/dev_test_game_next_action.mjs",
       "terminal-refresh-admin-proof-batch",
+      "tools/dev_test_game_proof_graph.mjs",
+      "tools/dev_test_game_proof_graph_admin_proof.mjs",
+      "tools/dev_test_game_next_action.mjs",
+      "tools/dev_test_game_next_action_admin_proof.mjs",
       "tools/dev_test_game_admin_spine_admin_proof.mjs",
       devTestGameReleaseReadinessScript,
     ],
@@ -2943,6 +2947,7 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
     {
       spineManifest,
       adminSpineProof,
+      adminSpineTerminalBatches: adminSpineTerminalBatchesFixture(),
       releaseReadiness,
     },
     {
@@ -2956,9 +2961,14 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
     graph,
     releaseReadiness,
   );
-  assert.equal(graph.summary.nodeCount, 50);
-  assert.equal(graph.summary.roleUrlCount, 50);
+  assert.equal(graph.summary.nodeCount, 52);
+  assert.equal(graph.summary.roleUrlCount, 52);
   assert.equal(graph.summary.productionFeatureTargetCount, 30);
+  assert.equal(graph.summary.terminalBatchCount, 2);
+  assert.equal(
+    graph.generatedFrom.adminSpineTerminalBatches,
+    "target/dev-test-game/admin-spine-terminal-batches.json",
+  );
   assert.deepEqual(
     graph.nodes
       .filter((node) => node.kind === "admin-proof-surface")
@@ -2973,9 +2983,14 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
   assert.deepEqual(
     graph.nodes
       .filter((node) =>
-        ["admin-spine", "spine-manifest", "proof-freshness", "next-action"].includes(
-          node.id,
-        ),
+        [
+          "admin-spine",
+          "spine-manifest",
+          "proof-graph",
+          "proof-freshness",
+          "next-action",
+          "admin-spine-terminal-batches",
+        ].includes(node.id),
       )
       .map((node) => [
         node.id,
@@ -3000,6 +3015,13 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
         "npm run test:dev-test-game-spine-manifest-admin-proof",
       ],
       [
+        "proof-graph",
+        "proof-graph",
+        "target/dev-test-game/proof-graph.json",
+        "/admin/audit/local-proof-graph?game=<seeded-game>",
+        "test:dev-test-game-proof-graph",
+      ],
+      [
         "proof-freshness",
         "freshness-dashboard",
         "target/dev-test-game/proof-freshness-admin-proof.json",
@@ -3012,6 +3034,13 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
         "target/dev-test-game/next-action.json",
         "/admin/audit/local-next-action?game=<seeded-game>",
         "test:dev-test-game-proof-freshness-admin-proof",
+      ],
+      [
+        "admin-spine-terminal-batches",
+        "terminal-proof-batch-receipt",
+        "target/dev-test-game/admin-spine-terminal-batches.json",
+        "/admin/audit/local-admin-spine?game=<seeded-game>",
+        "npm run test:dev-test-game-admin-spine",
       ],
     ],
   );
@@ -3076,6 +3105,16 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
         edge.to === "next-action" &&
         edge.relationship === "recovers-through",
     ),
+  );
+  assert.deepEqual(
+    graph.edges
+      .filter((edge) => edge.from === "admin-spine-terminal-batches")
+      .map((edge) => [edge.to, edge.relationship]),
+    [
+      ["proof-graph", "terminal-browser-proof"],
+      ["proof-freshness", "terminal-browser-proof"],
+      ["next-action", "terminal-browser-proof"],
+    ],
   );
   assert(
     expectedProductionFeatureRows.every(([, slotId, sourceCheckId]) =>

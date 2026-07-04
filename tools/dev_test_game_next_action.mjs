@@ -112,6 +112,7 @@ export function buildDevTestGameNextAction(
       ? null
       : assertDevTestGameHostedTargetPreflight(hostedTargetPreflight);
   const graph = proofGraph === null ? null : assertProofGraphForNextAction(proofGraph);
+  const terminalBatchGraph = terminalBatchGraphFromProofGraph(graph);
   const sourceTargetsByCheckId =
     productionFeatureSourceTargetsByCheckIdFromReadiness(readiness, {
       defaultBrowserProofCommand: devTestGameLiveProofCommand,
@@ -385,6 +386,9 @@ export function buildDevTestGameNextAction(
         : {
             proofGraph: proofGraphSource,
             proofGraphGeneratedAt: graph.generatedAt,
+            ...(terminalBatchGraph === null
+              ? {}
+              : { terminalBatchGraph }),
           }),
     },
     nextAction,
@@ -566,6 +570,7 @@ export function assertDevTestGameNextAction(evidence) {
   assertRaceCoveragePromotedMilestones(evidence.raceCoveragePromotedMilestones);
   assertStaleConflictMessageTrace(evidence.staleConflictMessageTrace);
   assertHostStaleControlTrace(evidence.hostStaleControlTrace);
+  assertTerminalBatchGraph(evidence.generatedFrom?.terminalBatchGraph);
   return evidence;
 }
 
@@ -767,6 +772,57 @@ function assertProofGraphForNextAction(proofGraph) {
     throw new Error("next-action proof graph input is malformed");
   }
   return proofGraph;
+}
+
+function terminalBatchGraphFromProofGraph(proofGraph) {
+  if (proofGraph === null) {
+    return null;
+  }
+  const node = proofGraph.nodes.find(
+    (candidate) => candidate?.id === "admin-spine-terminal-batches",
+  );
+  if (node === undefined) {
+    return null;
+  }
+  const edges = proofGraph.edges.filter(
+    (candidate) =>
+      candidate?.from === "admin-spine-terminal-batches" &&
+      candidate?.relationship === "terminal-browser-proof",
+  );
+  return {
+    nodeId: node.id,
+    status: String(node.status ?? "unknown"),
+    proofTarget: String(node.artifact ?? ""),
+    roleUrl: String(node.roleUrl ?? ""),
+    batchCount: Number(node.batchCount ?? 0),
+    proofIds: Array.isArray(node.proofIds)
+      ? node.proofIds.map((proofId) => String(proofId))
+      : [],
+    edgeCount: edges.length,
+    edgeTargets: edges.map((edge) => String(edge.to ?? "")),
+  };
+}
+
+function assertTerminalBatchGraph(terminalBatchGraph) {
+  if (terminalBatchGraph === undefined) {
+    return;
+  }
+  if (
+    terminalBatchGraph === null ||
+    terminalBatchGraph.nodeId !== "admin-spine-terminal-batches" ||
+    terminalBatchGraph.status !== "passed" ||
+    terminalBatchGraph.proofTarget !==
+      "target/dev-test-game/admin-spine-terminal-batches.json" ||
+    terminalBatchGraph.roleUrl !==
+      "/admin/audit/local-admin-spine?game=<seeded-game>" ||
+    !Number.isInteger(terminalBatchGraph.batchCount) ||
+    terminalBatchGraph.batchCount < 1 ||
+    terminalBatchGraph.edgeCount !== 3 ||
+    JSON.stringify(terminalBatchGraph.edgeTargets) !==
+      JSON.stringify(["proof-graph", "proof-freshness", "next-action"])
+  ) {
+    throw new Error("next-action terminal batch graph summary drifted");
+  }
 }
 
 function selectedProductionFeatureGraphForTarget({ proofGraph, spineTarget }) {
