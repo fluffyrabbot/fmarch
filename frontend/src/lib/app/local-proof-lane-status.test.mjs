@@ -384,7 +384,7 @@ test("core loop spine status formats compact live spine evidence", () => {
   );
   assert.equal(
     coreLoopSpineStatus({}),
-    "unknown: unknown -> unknown -> unknown, vote unknown, unknown action unknown, next unknown, terminal advance unknown, reload unknown, revote unknown via unknown, revote vote unknown, revote resolve unknown, second revote unknown via unknown, second vote unknown, second resolve unknown, policy unknown -> unknown, unknown action unknown, next unknown",
+    "unknown: unknown -> unknown -> unknown, vote unknown, unknown action unknown, next unknown, terminal advance unknown, reload unknown, revote unknown via unknown, revote vote unknown, revote resolve unknown, second revote unknown via unknown, second vote unknown, second resolve unknown, policy unknown -> unknown",
   );
 });
 

@@ -103,7 +103,10 @@ export function coreLoopSpineStatus(proofRun) {
   const firstDay = checkpointById(firstCycle, "d02-day-controls-return");
   const secondVote = checkpointById(secondCycle, "d02-deciding-vote-submitted");
   const secondNight = checkpointById(secondCycle, "n02-action-open");
-  return `${status}: ${String(firstStart?.phase ?? "unknown")} -> ${String(firstNight?.phase ?? "unknown")} -> ${String(firstDay?.phase ?? "unknown")}, vote ${String(secondVote?.voteState ?? "unknown")}, ${nightTwoProgressionCompactStatus(thirdCycle, { actionPhase: secondNight?.phase })}, ${terminalRecoveryCompactStatus(fourthCycle)}, ${revoteProgressionCompactStatus(fourthCycle)}, ${nightThreeProgressionCompactStatus(fifthCycle)}`;
+  const baseStatus = `${status}: ${String(firstStart?.phase ?? "unknown")} -> ${String(firstNight?.phase ?? "unknown")} -> ${String(firstDay?.phase ?? "unknown")}, vote ${String(secondVote?.voteState ?? "unknown")}, ${nightTwoProgressionCompactStatus(thirdCycle, { actionPhase: secondNight?.phase })}, ${terminalRecoveryCompactStatus(fourthCycle)}, ${revoteProgressionCompactStatus(fourthCycle)}`;
+  return fifthCycle === undefined
+    ? baseStatus
+    : `${baseStatus}, ${nightThreeProgressionCompactStatus(fifthCycle)}`;
 }
 
 export function hardeningHighlightedLaneEvidence(proofRun) {

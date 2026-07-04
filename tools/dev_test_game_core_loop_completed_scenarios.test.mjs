@@ -598,6 +598,20 @@ test("completed-game production harness callers share extracted recovery cases",
       `proof/readiness contract should not bypass the scenario/assertion facade for ${importedName}`,
     );
   }
+  for (const localScenarioLiteral of [
+    "completedHostStaleResolveRecoveryProof",
+    "completed-host-stale-resolve",
+    "host:stale_resolve_phase:reject:GameAlreadyCompleted",
+    "completedPlayerReloadProof",
+    "actionPlayer:reload:complete",
+    "staleCompletedVoteRecoveryProof",
+    "stale:D05:submit_vote:reject:GameAlreadyCompleted",
+  ]) {
+    assert(
+      !proofReadinessContractSource.includes(localScenarioLiteral),
+      `proof/readiness contract should not define local completed-game scenario literal ${localScenarioLiteral}`,
+    );
+  }
 
   for (const retiredPath of [
     "tools/dev_test_game_core_loop_completed_game_proof_readiness_case_definitions.mjs",
