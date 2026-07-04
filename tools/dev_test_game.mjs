@@ -53,6 +53,7 @@ const artifactDir = path.join(repoRoot, "target", "dev-test-game");
 const sessionJsonPath = path.join(artifactDir, "session.json");
 const sessionMdPath = path.join(artifactDir, "session.md");
 const proofRunJsonPath = path.join(artifactDir, "proof-run.json");
+const hostSetupProofJsonPath = path.join(artifactDir, "host-setup-proof.json");
 const namedGamesPath = path.join(artifactDir, "named-games.json");
 export const defaultDatabaseUrl = "postgres://fmarch:fmarch@localhost:5544/fmarch";
 export const defaultGameName = "local";
@@ -94,6 +95,9 @@ export async function main(rawArgs = process.argv.slice(2), env = process.env) {
   if (args.help) {
     printHelp();
     return;
+  }
+  if (args.verify && args.verifyHostSetupOnly) {
+    throw new Error("--verify and --verify-host-setup-only are mutually exclusive");
   }
 
   databaseUrl = args.databaseUrl ?? env.DATABASE_URL ?? defaultDatabaseUrl;
@@ -144,15 +148,32 @@ export async function main(rawArgs = process.argv.slice(2), env = process.env) {
   await writeNamedGame(gameName, card);
   printSessionCard(card);
 
-  if (args.verify) {
-    const verification = await verifySessionCard(card);
+  if (args.verify || args.verifyHostSetupOnly) {
+    const verification = args.verifyHostSetupOnly
+      ? await verifyHostSetupOnly(card)
+      : await verifySessionCard(card);
     card.verification = verification;
-    const proofRun = buildDevTestGameProofRun(card);
-    assertDevTestGameProofRun(proofRun);
     await writeFile(sessionJsonPath, `${JSON.stringify(card, null, 2)}\n`);
     await writeFile(sessionMdPath, markdownSessionCard(card));
-    await writeFile(proofRunJsonPath, `${JSON.stringify(proofRun, null, 2)}\n`);
-    console.log(`\nverified browser entry: ${verification.roles.join(", ")}`);
+    if (args.verifyHostSetupOnly) {
+      const proof = {
+        proof: "dev-test-game-host-setup-proof",
+        status: "passed",
+        game: card.game,
+        generatedAt: new Date().toISOString(),
+        proofBoundary:
+          "Local dev-test-game host setup role URL browser proof over the seeded setup route plus a disposable setup game. Proves setup route rendering, policy round-trip, stale duplicate AddSlot rejection, setup refresh after reject, roster assignment, role assignment, and readiness recovery; it does not prove the full core loop, multiplayer hardening, hosted deployment, beta readiness, or production readiness.",
+        hostSetup: verification.hostSetup,
+        mediaResponseGuard: verification.mediaResponseGuard,
+      };
+      await writeFile(hostSetupProofJsonPath, `${JSON.stringify(proof, null, 2)}\n`);
+      console.log(`\nverified host setup browser proof: ${path.relative(repoRoot, hostSetupProofJsonPath)}`);
+    } else {
+      const proofRun = buildDevTestGameProofRun(card);
+      assertDevTestGameProofRun(proofRun);
+      await writeFile(proofRunJsonPath, `${JSON.stringify(proofRun, null, 2)}\n`);
+      console.log(`\nverified browser entry: ${verification.roles.join(", ")}`);
+    }
   }
 
   if (args.noKeepalive) {
@@ -1195,6 +1216,49 @@ async function verifySessionCard(card) {
     multiplayerHardening,
     replacementConsole,
   };
+}
+
+async function verifyHostSetupOnly(card) {
+  resetProofStabilityAudit();
+  const { chromium } = await import("playwright");
+  const browser = await chromium.launch();
+  const mediaResponseGuard = createUnexpectedMediaResponseGuard({
+    label: "dev-test-game-host-setup-browser-proof",
+  });
+  mediaResponseGuard.attachBrowser(browser);
+  let entry;
+  try {
+    entry = await openVerifiedRoleEntry({
+      browser,
+      session: card.sessions.hostSetup,
+      game: card.game,
+      apiBaseUrl: card.apiBaseUrl,
+      frontendBaseUrl: card.frontendBaseUrl,
+    });
+    const hostSetup = await verifySeededHostSetupRoute({
+      browser,
+      setupPage: entry.page,
+      game: card.game,
+      apiBaseUrl: card.apiBaseUrl,
+      frontendBaseUrl: card.frontendBaseUrl,
+    });
+    mediaResponseGuard.assertNoUnexpectedMedia404({
+      phase: "dev-test-game-host-setup-browser-proof",
+    });
+    return {
+      status: "passed",
+      roles: ["hostSetup"],
+      sessions: {
+        hostSetup: entry.verification,
+      },
+      proofStability: buildProofStabilityAudit(),
+      mediaResponseGuard: mediaResponseGuard.summary(),
+      hostSetup,
+    };
+  } finally {
+    await entry?.context.close().catch(() => {});
+    await browser.close();
+  }
 }
 
 async function verifySeededHostSetupRoute({
@@ -23982,6 +24046,9 @@ export function parseArgs(values) {
       case "--verify":
         parsed.verify = true;
         break;
+      case "--verify-host-setup-only":
+        parsed.verifyHostSetupOnly = true;
+        break;
       case "--no-keepalive":
         parsed.noKeepalive = true;
         break;
@@ -24051,6 +24118,7 @@ Options:
   --reuse                  Reuse the named or explicit game without reseeding
   --token-prefix TEXT      Prefix for generated opaque login tokens
   --verify                 Verify host and player browser entry before returning
+  --verify-host-setup-only Verify only the host setup role URL browser proof
   --no-keepalive           Stop started servers after seeding and writing artifacts
   --help                   Show this help
 `);

@@ -329,7 +329,7 @@ test("dev test-game args expose reset reuse naming and verification controls", (
       "900000",
       "--frontend-port",
       "4102",
-      "--verify",
+      "--verify-host-setup-only",
       "--no-keepalive",
     ]),
     {
@@ -338,7 +338,7 @@ test("dev test-game args expose reset reuse naming and verification controls", (
       apiPort: 4101,
       apiStartupTimeoutMs: 900000,
       frontendPort: 4102,
-      verify: true,
+      verifyHostSetupOnly: true,
       noKeepalive: true,
     },
   );
