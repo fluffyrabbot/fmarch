@@ -1275,10 +1275,12 @@ async function verifySeededHostSetupRoute({ setupPage, game, frontendBaseUrl }) 
     );
   }
 
+  const policyCommand = await verifyHostSetupPolicyCommandRoundTrip(setupPage);
+
   return {
     status: "passed",
     proof:
-      "Host setup role URL opens roster, role, policy, invite, and start recovery surface.",
+      "Host setup role URL opens roster, role, policy, invite, and start recovery surface, then round-trips the post-policy command and restores the seeded policy.",
     roleUrl,
     capabilityLabel,
     readinessSummary,
@@ -1288,10 +1290,126 @@ async function verifySeededHostSetupRoute({ setupPage, game, frontendBaseUrl }) 
     slotIds,
     roleKeys,
     mainPolicyText,
+    policyCommand,
     readyCheckIds: checks
       .filter((check) => check.state === "ready")
       .map((check) => check.id),
   };
+}
+
+async function verifyHostSetupPolicyCommandRoundTrip(setupPage) {
+  await setupPage.getByRole("button", { name: "Enable media-only" }).click();
+  const enabled = await waitForHostSetupPolicyCommand({
+    setupPage,
+    allowMediaOnly: true,
+    expectedPolicyText: "Media-only posts are enabled.",
+  });
+  await setupPage.getByRole("button", { name: "Disable media-only" }).click();
+  const restored = await waitForHostSetupPolicyCommand({
+    setupPage,
+    allowMediaOnly: false,
+    expectedPolicyText: "Media-only posts are disabled.",
+  });
+  return {
+    status: "passed",
+    actionId: "set-post-policy",
+    commandKind: "SetPostPolicy",
+    channelId: "main",
+    allowMediaOnlySequence: [true, false],
+    finalPolicyText: restored.policyText,
+    enabled,
+    restored,
+  };
+}
+
+async function waitForHostSetupPolicyCommand({
+  setupPage,
+  allowMediaOnly,
+  expectedPolicyText,
+}) {
+  try {
+    await setupPage.waitForFunction(
+      ({ allowMediaOnly: expected }) =>
+        window.__fmarchHostSetupCommandOutcome?.state === "ack" &&
+        window.__fmarchHostSetupCommandOutcome?.requestEnvelope?.body?.body
+          ?.command?.SetPostPolicy?.allow_media_only === expected &&
+        window.__fmarchHostSetupReadiness?.mainPolicy?.allowMediaOnly === expected,
+      { allowMediaOnly },
+      { timeout: 15000 },
+    );
+  } catch (error) {
+    throw new Error(
+      `host setup policy command wait timed out: ${JSON.stringify({
+        allowMediaOnly,
+        expectedPolicyText,
+        snapshot: await hostSetupPolicyCommandSnapshot(setupPage),
+        error: error instanceof Error ? error.message : String(error),
+      })}`,
+    );
+  }
+  await setupPage
+    .getByTestId("host-setup-main-policy")
+    .waitFor({ state: "visible", timeout: 15000 });
+  const [policyText, statusState, statusText, outcome, readiness] =
+    await Promise.all([
+      setupPage.getByTestId("host-setup-main-policy").innerText(),
+      setupPage.getByTestId("host-setup-policy-status").getAttribute("data-state"),
+      setupPage.getByTestId("host-setup-policy-status").innerText(),
+      setupPage.evaluate(() => window.__fmarchHostSetupCommandOutcome ?? null),
+      setupPage.evaluate(() => window.__fmarchHostSetupReadiness ?? null),
+    ]);
+  if (
+    policyText !== expectedPolicyText ||
+    statusState !== "ack" ||
+    outcome?.requestEnvelope?.body?.body?.principal_user_id !== "host_h" ||
+    outcome?.requestEnvelope?.body?.body?.command?.SetPostPolicy?.channel_id !==
+      "main" ||
+    outcome?.requestEnvelope?.body?.body?.command?.SetPostPolicy
+      ?.allow_media_only !== allowMediaOnly ||
+    readiness?.mainPolicy?.allowMediaOnly !== allowMediaOnly
+  ) {
+    throw new Error(
+      `host setup policy command drifted: ${JSON.stringify({
+        allowMediaOnly,
+        expectedPolicyText,
+        policyText,
+        statusState,
+        statusText,
+        outcome,
+        readiness,
+      })}`,
+    );
+  }
+  return {
+    status: statusState,
+    policyText,
+    statusText,
+    streamSeqs: outcome.streamSeqs,
+    requestEnvelope: outcome.requestEnvelope,
+    serverEnvelope: outcome.serverEnvelope,
+    refreshedAllowMediaOnly: readiness.mainPolicy.allowMediaOnly,
+  };
+}
+
+async function hostSetupPolicyCommandSnapshot(setupPage) {
+  return await setupPage.evaluate(() => ({
+    policyText:
+      document.querySelector('[data-testid="host-setup-main-policy"]')?.textContent ??
+      null,
+    statusState:
+      document
+        .querySelector('[data-testid="host-setup-policy-status"]')
+        ?.getAttribute("data-state") ?? null,
+    statusText:
+      document.querySelector('[data-testid="host-setup-policy-status"]')?.textContent ??
+      null,
+    buttonText: Array.from(document.querySelectorAll("button"))
+      .map((button) => button.textContent?.trim())
+      .filter(Boolean),
+    outcome: window.__fmarchHostSetupCommandOutcome ?? null,
+    commandStatuses: window.__fmarchHostSetupCommandStatuses ?? null,
+    readiness: window.__fmarchHostSetupReadiness ?? null,
+  }));
 }
 
 async function openVerifiedRoleEntry({

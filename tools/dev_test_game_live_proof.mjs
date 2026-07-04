@@ -461,6 +461,40 @@ assert.equal(
   session.verification.hostSetup.mainPolicyText,
   "Media-only posts are disabled.",
 );
+assert.equal(session.verification.hostSetup.policyCommand.status, "passed");
+assert.equal(
+  session.verification.hostSetup.policyCommand.commandKind,
+  "SetPostPolicy",
+);
+assert.equal(session.verification.hostSetup.policyCommand.channelId, "main");
+assert.deepEqual(
+  session.verification.hostSetup.policyCommand.allowMediaOnlySequence,
+  [true, false],
+);
+assert.equal(
+  session.verification.hostSetup.policyCommand.finalPolicyText,
+  "Media-only posts are disabled.",
+);
+assert.equal(session.verification.hostSetup.policyCommand.enabled.status, "ack");
+assert.equal(
+  session.verification.hostSetup.policyCommand.enabled.requestEnvelope.body.body
+    .command.SetPostPolicy.allow_media_only,
+  true,
+);
+assert.equal(
+  session.verification.hostSetup.policyCommand.enabled.refreshedAllowMediaOnly,
+  true,
+);
+assert.equal(session.verification.hostSetup.policyCommand.restored.status, "ack");
+assert.equal(
+  session.verification.hostSetup.policyCommand.restored.requestEnvelope.body.body
+    .command.SetPostPolicy.allow_media_only,
+  false,
+);
+assert.equal(
+  session.verification.hostSetup.policyCommand.restored.refreshedAllowMediaOnly,
+  false,
+);
 assert.equal(session.verification.hostSetup.readyCheckIds.length, 7);
 assert.equal(session.verification.hostSetup.slotIds.includes("slot-7"), true);
 assert.equal(session.verification.hostSetup.slotIds.includes("slot_4"), true);

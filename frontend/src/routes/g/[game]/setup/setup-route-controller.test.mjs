@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
   buildSetupCommandDispatchBridgePlan,
+  refreshSetupState,
   sendHostSetupCommand,
   setupConfirmStatus,
   setupCommandConfigForAction,
@@ -108,6 +109,51 @@ test("setup command sender dispatches Rust wire command envelopes", async () => 
   });
 });
 
+test("setup state refresh bypasses cached browser state after command ack", async () => {
+  let captured = null;
+  const refreshed = await refreshSetupState({
+    data: {
+      ...data,
+      setupStateEndpoint:
+        `/games/${data.game.id}/setup-state?principal_user_id=host_h`,
+    },
+    fetchImpl: async (url, init) => {
+      captured = { url, init };
+      return jsonResponse({
+        game: data.game.id,
+        created: true,
+        pack: {
+          key: "mafiascum",
+          name: "Mafiascum",
+          valid: true,
+          role_keys: ["vanilla_townie"],
+          start_phase_options: ["D01"],
+        },
+        phase: null,
+        slots: [
+          {
+            slot_id: "slot_1",
+            occupant_user_id: "player_mira",
+            alive: true,
+            status: "alive",
+            status_tags: [],
+            role_key: "vanilla_townie",
+          },
+        ],
+        post_policies: [{ channel_id: "main", allow_media_only: true }],
+      });
+    },
+  });
+
+  assert.equal(
+    captured.url,
+    `/games/${data.game.id}/setup-state?principal_user_id=host_h`,
+  );
+  assert.equal(captured.init.cache, "no-store");
+  assert.deepEqual(captured.init.headers, { accept: "application/json" });
+  assert.equal(refreshed.readiness.mainPolicy.allowMediaOnly, true);
+});
+
 test("setup dispatch bridge plan records StartGame and setup refresh", () => {
   const plan = buildSetupCommandDispatchBridgePlan({
     actionId: "start-game",
@@ -129,6 +175,16 @@ function formData(values) {
   return {
     get(field) {
       return values[field] ?? null;
+    },
+  };
+}
+
+function jsonResponse(body, { status = 200 } = {}) {
+  return {
+    ok: status >= 200 && status < 300,
+    status,
+    async json() {
+      return body;
     },
   };
 }

@@ -2801,7 +2801,7 @@ test("session card and markdown include role credential URLs and tokens", async 
     hostSetup: {
       status: "passed",
       proof:
-        "Host setup role URL opens roster, role, policy, invite, and start recovery surface.",
+        "Host setup role URL opens roster, role, policy, invite, and start recovery surface, then round-trips the post-policy command and restores the seeded policy.",
       roleUrl: `http://127.0.0.1:4102/g/${game}/setup`,
       capabilityLabel: `HostOf(${game})`,
       readinessSummary: "Started at D01",
@@ -2811,6 +2811,54 @@ test("session card and markdown include role credential URLs and tokens", async 
       slotIds: ["slot-7", "slot_4"],
       roleKeys: ["mafia_goon", "vanilla_townie"],
       mainPolicyText: "Media-only posts are disabled.",
+      policyCommand: {
+        status: "passed",
+        actionId: "set-post-policy",
+        commandKind: "SetPostPolicy",
+        channelId: "main",
+        allowMediaOnlySequence: [true, false],
+        finalPolicyText: "Media-only posts are disabled.",
+        enabled: {
+          status: "ack",
+          policyText: "Media-only posts are enabled.",
+          refreshedAllowMediaOnly: true,
+          streamSeqs: [23],
+          requestEnvelope: {
+            body: {
+              body: {
+                principal_user_id: "host_h",
+                command: {
+                  SetPostPolicy: {
+                    game,
+                    channel_id: "main",
+                    allow_media_only: true,
+                  },
+                },
+              },
+            },
+          },
+        },
+        restored: {
+          status: "ack",
+          policyText: "Media-only posts are disabled.",
+          refreshedAllowMediaOnly: false,
+          streamSeqs: [24],
+          requestEnvelope: {
+            body: {
+              body: {
+                principal_user_id: "host_h",
+                command: {
+                  SetPostPolicy: {
+                    game,
+                    channel_id: "main",
+                    allow_media_only: false,
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
       readyCheckIds: [
         "game-created",
         "pack-valid",

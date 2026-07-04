@@ -170,6 +170,7 @@ export function buildSetupCommandDispatchBridgePlan({
 
 export async function refreshSetupState({ data, fetchImpl }) {
   const response = await fetchImpl(data.setupStateEndpoint, {
+    cache: "no-store",
     headers: { accept: "application/json" },
   });
   if (!response.ok) {

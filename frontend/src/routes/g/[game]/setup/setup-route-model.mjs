@@ -19,11 +19,20 @@ export async function buildHostSetupRouteData({
   const gameId = normalizeId(game, "game");
   const principal = normalizeId(principalUserId, "principalUserId");
   const access = resolveHostConsoleAccess({ game: gameId, capabilities });
+  const serverSetupStateEndpoint = hostSetupStateUrl({
+    apiBaseUrl,
+    game: gameId,
+    principalUserId: principal,
+  });
+  const browserSetupStateEndpoint = hostSetupStateUrl({
+    game: gameId,
+    principalUserId: principal,
+  });
   const setupState = normalizeHostSetupState(
     await fetchJson({
       fetchImpl,
       fallback: hostSetupFixtureState({ game: gameId }),
-      url: hostSetupStateUrl({ apiBaseUrl, game: gameId, principalUserId: principal }),
+      url: serverSetupStateEndpoint,
     }),
     { game: gameId },
   );
@@ -53,11 +62,7 @@ export async function buildHostSetupRouteData({
       principalUserId: principal,
     }),
     commandEndpoint: "/commands",
-    setupStateEndpoint: hostSetupStateUrl({
-      apiBaseUrl,
-      game: gameId,
-      principalUserId: principal,
-    }),
+    setupStateEndpoint: browserSetupStateEndpoint,
     setupState,
     readiness,
     start: Object.freeze({

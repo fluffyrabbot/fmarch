@@ -135,6 +135,41 @@ test("host setup state URL is principal scoped", () => {
   );
 });
 
+test("host setup route data exposes same-origin browser refresh URL", async () => {
+  const fetched = [];
+  const data = await buildHostSetupRouteData({
+    game,
+    principalUserId: "host_h",
+    capabilities: [{ kind: "HostOf", game }],
+    apiBaseUrl: "http://127.0.0.1:8787",
+    fetchImpl: async (url) => {
+      fetched.push(url);
+      return jsonResponse({
+        game,
+        created: true,
+        pack: {
+          key: "mafiascum",
+          name: "Mafiascum",
+          valid: true,
+          role_keys: ["vanilla_townie"],
+          start_phase_options: ["D01"],
+        },
+        phase: null,
+        slots: [],
+        post_policies: [{ channel_id: "main", allow_media_only: false }],
+      });
+    },
+  });
+
+  assert.deepEqual(fetched, [
+    `http://127.0.0.1:8787/games/${game}/setup-state?principal_user_id=host_h`,
+  ]);
+  assert.equal(
+    data.setupStateEndpoint,
+    `/games/${game}/setup-state?principal_user_id=host_h`,
+  );
+});
+
 function jsonResponse(body) {
   return {
     ok: true,

@@ -237,6 +237,7 @@ export function buildDevTestGameProofRun(session, options = {}) {
       slotIds: verification.hostSetup?.slotIds ?? null,
       roleKeys: verification.hostSetup?.roleKeys ?? null,
       mainPolicyText: verification.hostSetup?.mainPolicyText ?? null,
+      policyCommand: verification.hostSetup?.policyCommand ?? null,
       passed:
         verification.hostSetup?.status === "passed" &&
         verification.hostSetup?.roleUrl?.includes(`/g/${session?.game ?? ""}/setup`) ===
@@ -253,6 +254,25 @@ export function buildDevTestGameProofRun(session, options = {}) {
         verification.hostSetup?.slotIds?.includes("slot_4") === true &&
         verification.hostSetup?.roleKeys?.includes("mafia_goon") === true &&
         verification.hostSetup?.roleKeys?.includes("vanilla_townie") === true &&
+        verification.hostSetup?.policyCommand?.status === "passed" &&
+        verification.hostSetup?.policyCommand?.commandKind === "SetPostPolicy" &&
+        verification.hostSetup?.policyCommand?.channelId === "main" &&
+        sameArray(
+          verification.hostSetup?.policyCommand?.allowMediaOnlySequence,
+          [true, false],
+        ) &&
+        verification.hostSetup?.policyCommand?.finalPolicyText ===
+          "Media-only posts are disabled." &&
+        verification.hostSetup?.policyCommand?.enabled?.status === "ack" &&
+        verification.hostSetup?.policyCommand?.enabled?.requestEnvelope?.body?.body
+          ?.command?.SetPostPolicy?.allow_media_only === true &&
+        verification.hostSetup?.policyCommand?.enabled?.refreshedAllowMediaOnly ===
+          true &&
+        verification.hostSetup?.policyCommand?.restored?.status === "ack" &&
+        verification.hostSetup?.policyCommand?.restored?.requestEnvelope?.body?.body
+          ?.command?.SetPostPolicy?.allow_media_only === false &&
+        verification.hostSetup?.policyCommand?.restored?.refreshedAllowMediaOnly ===
+          false &&
         verification.hostSetup?.readyCheckIds?.length === 7,
     }),
     lane("cohost-console", "Cohost role URL opens delegated host console controls", {
