@@ -195,18 +195,21 @@ const localReadinessMilestoneDefinitions = Object.freeze([
   Object.freeze({
     groupId: "host-concurrent-race-reload",
     checkId: "local-host-concurrent-race-reload-milestone",
+    generatedFromKey: "hostConcurrentRaceReloadMilestone",
     proofBoundary:
       "Local race-coverage proof that host resolve, advance, deadline, lifecycle, mixed advance, votecount publication, and complete-game races all have reload recovery coverage.",
   }),
   Object.freeze({
     groupId: "player-concurrent-action-reload",
     checkId: "local-player-concurrent-action-reload-milestone",
+    generatedFromKey: "playerConcurrentActionReloadMilestone",
     proofBoundary:
       "Local race-coverage proof that player vote changes, night actions, player-vs-host phase races, and completed-game reload recovery all have reload coverage.",
   }),
   Object.freeze({
     groupId: "cohost-deadline-race-reload",
     checkId: "local-cohost-deadline-race-reload-milestone",
+    generatedFromKey: "cohostDeadlineRaceReloadMilestone",
     proofBoundary:
       "Local race-coverage proof that the cohost deadline extension versus host resolve race has reload recovery coverage.",
   }),
@@ -218,6 +221,7 @@ export const raceCoverageLocalReadinessMilestoneDefinitions = Object.freeze(
     return Object.freeze({
       id: definition.checkId,
       groupId: group.id,
+      generatedFromKey: definition.generatedFromKey,
       label: `${group.label} coverage`,
       proofBoundary: definition.proofBoundary,
       cellIds: group.cellIds,

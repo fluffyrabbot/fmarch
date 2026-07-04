@@ -13,11 +13,7 @@ import {
 import { assertDevTestGameProofRun } from "./dev_test_game_proof_contract.mjs";
 import {
   assertDevTestGameRaceCoverage,
-  cohostDeadlineRaceCoveragePromotedReloadGroup,
-  completedHostRaceCoveragePromotedReloadGroup,
-  completedPlayerRaceCoveragePromotedReloadGroup,
   raceCoverageLocalReadinessMilestoneCases,
-  replacementRaceCoveragePromotedReloadGroup,
   raceCoveragePromotedReloadGroups,
 } from "./dev_test_game_race_coverage.mjs";
 import {
@@ -501,34 +497,16 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
         artifact: options.raceCoverageArtifact,
       })
     : undefined;
-  const replacementRaceReloadMilestone = options.raceCoverage
-    ? buildReplacementRaceReloadMilestone(options.raceCoverage, {
+  const raceCoverageReloadMilestonesByGroupId = options.raceCoverage
+    ? buildRaceCoverageReloadMilestones(options.raceCoverage, {
         sourcePath: options.raceCoveragePath ?? "target/dev-test-game/race-coverage.json",
       })
-    : undefined;
-  const hostConcurrentRaceReloadMilestone = options.raceCoverage
-    ? buildHostConcurrentRaceReloadMilestone(options.raceCoverage, {
-        sourcePath: options.raceCoveragePath ?? "target/dev-test-game/race-coverage.json",
-      })
-    : undefined;
-  const playerConcurrentActionReloadMilestone = options.raceCoverage
-    ? buildPlayerConcurrentActionReloadMilestone(options.raceCoverage, {
-        sourcePath: options.raceCoveragePath ?? "target/dev-test-game/race-coverage.json",
-      })
-    : undefined;
-  const cohostDeadlineRaceReloadMilestone = options.raceCoverage
-    ? buildCohostDeadlineRaceReloadMilestone(options.raceCoverage, {
-        sourcePath: options.raceCoveragePath ?? "target/dev-test-game/race-coverage.json",
-      })
-    : undefined;
+    : new Map();
   const raceCoveragePromotedMilestones =
     raceCoverageEvidence === undefined
       ? undefined
       : buildRaceCoveragePromotedMilestones(raceCoverageEvidence, {
-          replacementRaceReloadMilestone,
-          hostConcurrentRaceReloadMilestone,
-          playerConcurrentActionReloadMilestone,
-          cohostDeadlineRaceReloadMilestone,
+          milestonesByGroupId: raceCoverageReloadMilestonesByGroupId,
         });
   const hostedConcurrentRaceMatrixEvidence = options.hostedConcurrentRaceMatrix
     ? validateDevTestGameHostedConcurrentRaceMatrix(
@@ -789,11 +767,6 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
     });
   }
   if (raceCoverageEvidence !== undefined) {
-    const raceCoverageMilestoneByGroupId = new Map([
-      ["host-concurrent-race-reload", hostConcurrentRaceReloadMilestone],
-      ["player-concurrent-action-reload", playerConcurrentActionReloadMilestone],
-      ["cohost-deadline-race-reload", cohostDeadlineRaceReloadMilestone],
-    ]);
     localChecks.push({
       id: "local-race-coverage-inventory",
       label: "Local race coverage inventory",
@@ -807,7 +780,9 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
         : { adminRoleSurface: raceCoverageAdminProofEvidence }),
     });
     for (const milestoneCase of raceCoverageLocalReadinessMilestoneCases()) {
-      const milestone = raceCoverageMilestoneByGroupId.get(milestoneCase.groupId);
+      const milestone = raceCoverageReloadMilestonesByGroupId.get(
+        milestoneCase.groupId,
+      );
       if (milestone === undefined) {
         throw new Error(
           `missing local race readiness milestone for ${milestoneCase.groupId}`,
@@ -1076,29 +1051,9 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
                   hostedConcurrentRaceMatrix:
                     hostedConcurrentRaceMatrixEvidence.path,
                 }),
-            hostConcurrentRaceReloadMilestone: {
-              status: hostConcurrentRaceReloadMilestone.status,
-              cellIds: [...hostConcurrentRaceReloadMilestone.cellIds],
-              requiredCellCount: hostConcurrentRaceReloadMilestone.requiredCellCount,
-              coveredCellCount: hostConcurrentRaceReloadMilestone.coveredCellCount,
-              gapCount: hostConcurrentRaceReloadMilestone.gapCount,
-            },
-            playerConcurrentActionReloadMilestone: {
-              status: playerConcurrentActionReloadMilestone.status,
-              cellIds: [...playerConcurrentActionReloadMilestone.cellIds],
-              requiredCellCount:
-                playerConcurrentActionReloadMilestone.requiredCellCount,
-              coveredCellCount:
-                playerConcurrentActionReloadMilestone.coveredCellCount,
-              gapCount: playerConcurrentActionReloadMilestone.gapCount,
-            },
-            cohostDeadlineRaceReloadMilestone: {
-              status: cohostDeadlineRaceReloadMilestone.status,
-              cellIds: [...cohostDeadlineRaceReloadMilestone.cellIds],
-              requiredCellCount: cohostDeadlineRaceReloadMilestone.requiredCellCount,
-              coveredCellCount: cohostDeadlineRaceReloadMilestone.coveredCellCount,
-              gapCount: cohostDeadlineRaceReloadMilestone.gapCount,
-            },
+            ...raceCoverageLocalReadinessMilestoneSnapshots({
+              milestonesByGroupId: raceCoverageReloadMilestonesByGroupId,
+            }),
             raceCoveragePromotedMilestones,
           }),
       ...(proofGraphAdminProofEvidence === undefined
@@ -1152,45 +1107,9 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
               ...(hardeningAdminProofEvidence === undefined
                 ? {}
                 : { hardening: { adminRoleSurface: hardeningAdminProofEvidence } }),
-              ...(hostConcurrentRaceReloadMilestone === undefined
-                ? {}
-                : {
-                    hostConcurrentRaceReloadMilestone: {
-                      status: hostConcurrentRaceReloadMilestone.status,
-                      cellIds: [...hostConcurrentRaceReloadMilestone.cellIds],
-                      requiredCellCount:
-                        hostConcurrentRaceReloadMilestone.requiredCellCount,
-                      coveredCellCount:
-                        hostConcurrentRaceReloadMilestone.coveredCellCount,
-                      gapCount: hostConcurrentRaceReloadMilestone.gapCount,
-                    },
-                  }),
-              ...(playerConcurrentActionReloadMilestone === undefined
-                ? {}
-                : {
-                    playerConcurrentActionReloadMilestone: {
-                      status: playerConcurrentActionReloadMilestone.status,
-                      cellIds: [...playerConcurrentActionReloadMilestone.cellIds],
-                      requiredCellCount:
-                        playerConcurrentActionReloadMilestone.requiredCellCount,
-                      coveredCellCount:
-                        playerConcurrentActionReloadMilestone.coveredCellCount,
-                      gapCount: playerConcurrentActionReloadMilestone.gapCount,
-                    },
-                  }),
-              ...(cohostDeadlineRaceReloadMilestone === undefined
-                ? {}
-                : {
-                    cohostDeadlineRaceReloadMilestone: {
-                      status: cohostDeadlineRaceReloadMilestone.status,
-                      cellIds: [...cohostDeadlineRaceReloadMilestone.cellIds],
-                      requiredCellCount:
-                        cohostDeadlineRaceReloadMilestone.requiredCellCount,
-                      coveredCellCount:
-                        cohostDeadlineRaceReloadMilestone.coveredCellCount,
-                      gapCount: cohostDeadlineRaceReloadMilestone.gapCount,
-                    },
-                  }),
+              ...raceCoverageLocalReadinessMilestoneSnapshots({
+                milestonesByGroupId: raceCoverageReloadMilestonesByGroupId,
+              }),
               ...(raceCoveragePromotedMilestones === undefined
                 ? {}
                 : { raceCoveragePromotedMilestones }),
@@ -1767,46 +1686,52 @@ function buildReplacementHandoffRecoveryMilestone(proof, { sourcePath }) {
   return coverageMilestoneSummary(coverage);
 }
 
-function buildReplacementRaceReloadMilestone(raceCoverage, { sourcePath }) {
+function buildRaceCoverageReloadMilestones(raceCoverage, { sourcePath }) {
   assertDevTestGameRaceCoverage(raceCoverage);
-  const cells = new Map(raceCoverage.cells.map((cell) => [cell.id, cell]));
-  const cellIds = [...replacementRaceReloadCellIds];
-  const coveredCellCount = cellIds.filter((cellId) => {
-    const cell = cells.get(cellId);
-    return (
-      cell?.status === "passed" &&
-      typeof cell.reloadLaneId === "string" &&
-      cell.reloadStatus === "passed"
-    );
-  }).length;
-  const gapCount = cellIds.length - coveredCellCount;
-  if (gapCount !== 0) {
-    throw new Error(
-      `replacement race-reload milestone missing covered cells from ${sourcePath}: ${cellIds
-        .filter((cellId) => {
-          const cell = cells.get(cellId);
-          return (
-            cell?.status !== "passed" ||
-            typeof cell.reloadLaneId !== "string" ||
-            cell.reloadStatus !== "passed"
-          );
-        })
-        .join(", ")}`,
-    );
+  return new Map(
+    raceCoveragePromotedReloadGroups.map((group) => [
+      group.id,
+      buildRaceCoverageReloadMilestone(raceCoverage, { group, sourcePath }),
+    ]),
+  );
+}
+
+function raceCoverageLocalReadinessMilestoneSnapshots({
+  milestoneCases = raceCoverageLocalReadinessMilestoneCases(),
+  milestonesByGroupId,
+}) {
+  if (milestonesByGroupId.size === 0) {
+    return {};
   }
+  return Object.fromEntries(
+    milestoneCases.map((milestoneCase) => {
+      const milestone = milestonesByGroupId.get(milestoneCase.groupId);
+      if (milestone === undefined) {
+        throw new Error(
+          `missing generatedFrom race milestone for ${milestoneCase.groupId}`,
+        );
+      }
+      return [
+        milestoneCase.generatedFromKey,
+        raceCoverageReloadMilestoneSnapshot(milestone),
+      ];
+    }),
+  );
+}
+
+function raceCoverageReloadMilestoneSnapshot(milestone) {
   return {
-    status: "passed",
-    cellIds,
-    requiredCellCount: cellIds.length,
-    coveredCellCount,
-    gapCount,
+    status: milestone.status,
+    cellIds: [...milestone.cellIds],
+    requiredCellCount: milestone.requiredCellCount,
+    coveredCellCount: milestone.coveredCellCount,
+    gapCount: milestone.gapCount,
   };
 }
 
-function buildHostConcurrentRaceReloadMilestone(raceCoverage, { sourcePath }) {
-  assertDevTestGameRaceCoverage(raceCoverage);
+function buildRaceCoverageReloadMilestone(raceCoverage, { group, sourcePath }) {
   const cells = new Map(raceCoverage.cells.map((cell) => [cell.id, cell]));
-  const cellIds = [...hostConcurrentRaceReloadCellIds];
+  const cellIds = [...group.cellIds];
   const coveredCellCount = cellIds.filter((cellId) => {
     const cell = cells.get(cellId);
     return (
@@ -1818,79 +1743,7 @@ function buildHostConcurrentRaceReloadMilestone(raceCoverage, { sourcePath }) {
   const gapCount = cellIds.length - coveredCellCount;
   if (gapCount !== 0) {
     throw new Error(
-      `host concurrent race-reload milestone missing covered cells from ${sourcePath}: ${cellIds
-        .filter((cellId) => {
-          const cell = cells.get(cellId);
-          return (
-            cell?.status !== "passed" ||
-            typeof cell.reloadLaneId !== "string" ||
-            cell.reloadStatus !== "passed"
-          );
-        })
-        .join(", ")}`,
-    );
-  }
-  return {
-    status: "passed",
-    cellIds,
-    requiredCellCount: cellIds.length,
-    coveredCellCount,
-    gapCount,
-  };
-}
-
-function buildPlayerConcurrentActionReloadMilestone(raceCoverage, { sourcePath }) {
-  assertDevTestGameRaceCoverage(raceCoverage);
-  const cells = new Map(raceCoverage.cells.map((cell) => [cell.id, cell]));
-  const cellIds = [...playerConcurrentActionReloadCellIds];
-  const coveredCellCount = cellIds.filter((cellId) => {
-    const cell = cells.get(cellId);
-    return (
-      cell?.status === "passed" &&
-      typeof cell.reloadLaneId === "string" &&
-      cell.reloadStatus === "passed"
-    );
-  }).length;
-  const gapCount = cellIds.length - coveredCellCount;
-  if (gapCount !== 0) {
-    throw new Error(
-      `player concurrent action reload milestone missing covered cells from ${sourcePath}: ${cellIds
-        .filter((cellId) => {
-          const cell = cells.get(cellId);
-          return (
-            cell?.status !== "passed" ||
-            typeof cell.reloadLaneId !== "string" ||
-            cell.reloadStatus !== "passed"
-          );
-        })
-        .join(", ")}`,
-    );
-  }
-  return {
-    status: "passed",
-    cellIds,
-    requiredCellCount: cellIds.length,
-    coveredCellCount,
-    gapCount,
-  };
-}
-
-function buildCohostDeadlineRaceReloadMilestone(raceCoverage, { sourcePath }) {
-  assertDevTestGameRaceCoverage(raceCoverage);
-  const cells = new Map(raceCoverage.cells.map((cell) => [cell.id, cell]));
-  const cellIds = [...cohostDeadlineRaceReloadCellIds];
-  const coveredCellCount = cellIds.filter((cellId) => {
-    const cell = cells.get(cellId);
-    return (
-      cell?.status === "passed" &&
-      typeof cell.reloadLaneId === "string" &&
-      cell.reloadStatus === "passed"
-    );
-  }).length;
-  const gapCount = cellIds.length - coveredCellCount;
-  if (gapCount !== 0) {
-    throw new Error(
-      `cohost deadline race reload milestone missing covered cells from ${sourcePath}: ${cellIds
+      `${group.id} milestone missing covered cells from ${sourcePath}: ${cellIds
         .filter((cellId) => {
           const cell = cells.get(cellId);
           return (
@@ -1913,23 +1766,12 @@ function buildCohostDeadlineRaceReloadMilestone(raceCoverage, { sourcePath }) {
 
 function buildRaceCoveragePromotedMilestones(
   raceCoverageEvidence,
-  {
-    replacementRaceReloadMilestone,
-    hostConcurrentRaceReloadMilestone,
-    playerConcurrentActionReloadMilestone,
-    cohostDeadlineRaceReloadMilestone,
-  },
+  { milestonesByGroupId },
 ) {
-  const milestoneByGroupId = new Map([
-    ["replacement-race-reload", replacementRaceReloadMilestone],
-    ["host-concurrent-race-reload", hostConcurrentRaceReloadMilestone],
-    ["player-concurrent-action-reload", playerConcurrentActionReloadMilestone],
-    ["cohost-deadline-race-reload", cohostDeadlineRaceReloadMilestone],
-  ]);
   const groups = raceCoveragePromotedReloadGroups.map((group) =>
     buildRaceCoveragePromotedMilestoneGroup(
       group,
-      milestoneByGroupId.get(group.id),
+      milestonesByGroupId.get(group.id),
     ),
   );
   const requiredCellCount = groups.reduce(
@@ -1970,22 +1812,6 @@ function buildRaceCoveragePromotedMilestoneGroup(group, milestone) {
     gapCount: milestone.gapCount,
   };
 }
-
-const replacementRaceReloadCellIds = Object.freeze([
-  ...replacementRaceCoveragePromotedReloadGroup().cellIds,
-]);
-
-const hostConcurrentRaceReloadCellIds = Object.freeze([
-  ...completedHostRaceCoveragePromotedReloadGroup().cellIds,
-]);
-
-const playerConcurrentActionReloadCellIds = Object.freeze([
-  ...completedPlayerRaceCoveragePromotedReloadGroup().cellIds,
-]);
-
-const cohostDeadlineRaceReloadCellIds = Object.freeze([
-  ...cohostDeadlineRaceCoveragePromotedReloadGroup().cellIds,
-]);
 
 export function validateDevTestGameBackupRestoreProof(proof, options = {}) {
   const requiredChecks = [

@@ -248,12 +248,10 @@ import {
 import {
   assertDevTestGameRaceCoverage,
   buildDevTestGameRaceCoverage,
-  cohostDeadlineRaceCoveragePromotedReloadGroup,
-  completedHostRaceCoveragePromotedReloadGroup,
-  completedPlayerRaceCoveragePromotedReloadGroup,
   devTestGameRaceCoverageCommand,
   devTestGameRaceCoveragePath,
-  replacementRaceCoveragePromotedReloadGroup,
+  raceCoverageLocalReadinessMilestoneCases,
+  raceCoveragePromotedReloadGroup,
   raceCoveragePromotedReloadGroups,
 } from "./dev_test_game_race_coverage.mjs";
 import {
@@ -9757,57 +9755,30 @@ test("session card and markdown include role credential URLs and tokens", async 
     raceCoverageReadiness.generatedFrom.raceCoverageAdminProof,
     "target/dev-test-game/race-coverage-admin-proof.json",
   );
-  assert.deepEqual(
-    raceCoverageReadiness.generatedFrom.hostConcurrentRaceReloadMilestone,
-    {
-      status: "passed",
-      cellIds: hostConcurrentRaceReloadCellIdsFixture(),
-      requiredCellCount: 7,
-      coveredCellCount: 7,
-      gapCount: 0,
-    },
-  );
-  assert.deepEqual(
-    raceCoverageReadiness.generatedFrom.playerConcurrentActionReloadMilestone,
-    {
-      status: "passed",
-      cellIds: playerConcurrentActionReloadCellIdsFixture(),
-      requiredCellCount: 5,
-      coveredCellCount: 5,
-      gapCount: 0,
-    },
-  );
-  assert.deepEqual(
-    raceCoverageReadiness.generatedFrom.cohostDeadlineRaceReloadMilestone,
-    {
-      status: "passed",
-      cellIds: cohostDeadlineRaceReloadCellIdsFixture(),
-      requiredCellCount: 1,
-      coveredCellCount: 1,
-      gapCount: 0,
-    },
-  );
+  for (const milestoneCase of raceCoverageLocalReadinessMilestoneCases()) {
+    assert.deepEqual(
+      raceCoverageReadiness.generatedFrom[milestoneCase.generatedFromKey],
+      raceReloadMilestoneFixture(milestoneCase.groupId),
+    );
+    assert.deepEqual(
+      raceCoverageReadiness.localDevelopmentSpine.checks.find(
+        (item) => item.id === milestoneCase.id,
+      ),
+      {
+        id: milestoneCase.id,
+        label: milestoneCase.label,
+        status: "passed",
+        evidence: "target/dev-test-game/race-coverage.json",
+        proofBoundary: milestoneCase.proofBoundary,
+        cellIds: [...milestoneCase.cellIds],
+        requiredCellCount: milestoneCase.cellIds.length,
+        coveredCellCount: milestoneCase.cellIds.length,
+      },
+    );
+  }
   assert.deepEqual(
     raceCoverageReadiness.generatedFrom.raceCoveragePromotedMilestones,
     raceCoveragePromotedMilestonesFixture({ groupStatus: "passed" }),
-  );
-  assert.equal(
-    raceCoverageReadiness.localDevelopmentSpine.checks.find(
-      (item) => item.id === "local-host-concurrent-race-reload-milestone",
-    ).coveredCellCount,
-    7,
-  );
-  assert.equal(
-    raceCoverageReadiness.localDevelopmentSpine.checks.find(
-      (item) => item.id === "local-player-concurrent-action-reload-milestone",
-    ).coveredCellCount,
-    5,
-  );
-  assert.equal(
-    raceCoverageReadiness.localDevelopmentSpine.checks.find(
-      (item) => item.id === "local-cohost-deadline-race-reload-milestone",
-    ).coveredCellCount,
-    1,
   );
   assert.equal(
     raceCoverageReadiness.localDevelopmentSpine.checks.find(
@@ -11686,15 +11657,11 @@ function devTestGameRaceCoverageFixture() {
 }
 
 function hostConcurrentRaceReloadCellIdsFixture() {
-  return [
-    ...completedHostRaceCoveragePromotedReloadGroup().cellIds,
-  ];
+  return raceReloadGroupCellIdsFixture("host-concurrent-race-reload");
 }
 
 function replacementRaceReloadCellIdsFixture() {
-  return [
-    ...replacementRaceCoveragePromotedReloadGroup().cellIds,
-  ];
+  return raceReloadGroupCellIdsFixture("replacement-race-reload");
 }
 
 function hostConcurrentRaceReloadCellsFixture() {
@@ -11746,9 +11713,7 @@ function hostConcurrentRaceReloadCellsFixture() {
 }
 
 function playerConcurrentActionReloadCellIdsFixture() {
-  return [
-    ...completedPlayerRaceCoveragePromotedReloadGroup().cellIds,
-  ];
+  return raceReloadGroupCellIdsFixture("player-concurrent-action-reload");
 }
 
 function playerConcurrentActionReloadCellsFixture() {
@@ -11786,9 +11751,22 @@ function playerConcurrentActionReloadCellsFixture() {
 }
 
 function cohostDeadlineRaceReloadCellIdsFixture() {
-  return [
-    ...cohostDeadlineRaceCoveragePromotedReloadGroup().cellIds,
-  ];
+  return raceReloadGroupCellIdsFixture("cohost-deadline-race-reload");
+}
+
+function raceReloadGroupCellIdsFixture(groupId) {
+  return [...raceCoveragePromotedReloadGroup(groupId).cellIds];
+}
+
+function raceReloadMilestoneFixture(groupId) {
+  const cellIds = raceReloadGroupCellIdsFixture(groupId);
+  return {
+    status: "passed",
+    cellIds,
+    requiredCellCount: cellIds.length,
+    coveredCellCount: cellIds.length,
+    gapCount: 0,
+  };
 }
 
 function cohostDeadlineRaceReloadCellsFixture() {

@@ -353,22 +353,19 @@ test("race coverage promoted reload groups fail closed for unknown ids", () => {
   );
 });
 
-test("release readiness consumes named race promoted group helpers", async () => {
+test("release readiness consumes shared race promoted group contracts", async () => {
   const source = await readFile(
     "tools/dev_test_game_release_readiness.mjs",
     "utf8",
   );
-  for (const helperName of [
-    "replacementRaceCoveragePromotedReloadGroup",
-    "completedHostRaceCoveragePromotedReloadGroup",
-    "completedPlayerRaceCoveragePromotedReloadGroup",
-    "cohostDeadlineRaceCoveragePromotedReloadGroup",
-  ]) {
-    assert(
-      source.includes(helperName),
-      `release readiness should consume ${helperName}`,
-    );
-  }
+  assert(
+    source.includes("raceCoveragePromotedReloadGroups"),
+    "release readiness should consume the promoted race group catalog",
+  );
+  assert(
+    source.includes("raceCoverageLocalReadinessMilestoneCases"),
+    "release readiness should consume local readiness milestone cases",
+  );
   for (const groupId of [
     "replacement-race-reload",
     "host-concurrent-race-reload",
@@ -380,25 +377,38 @@ test("release readiness consumes named race promoted group helpers", async () =>
       `release readiness should not duplicate promoted group id ${groupId}`,
     );
   }
-});
-
-test("core proof fixture consumes named race promoted group helpers", async () => {
-  const source = await readFile("tools/dev_test_game.test.mjs", "utf8");
-  assert(
-    source.includes("replacementRaceCoveragePromotedReloadGroup"),
-    "core proof fixture should consume replacement promoted group helper",
-  );
-  assert(
-    source.includes("cohostDeadlineRaceCoveragePromotedReloadGroup"),
-    "core proof fixture should consume cohost deadline promoted group helper",
-  );
-  for (const groupId of [
-    "replacement-race-reload",
-    "cohost-deadline-race-reload",
+  for (const helperName of [
+    "replacementRaceCoveragePromotedReloadGroup",
+    "completedHostRaceCoveragePromotedReloadGroup",
+    "completedPlayerRaceCoveragePromotedReloadGroup",
+    "cohostDeadlineRaceCoveragePromotedReloadGroup",
   ]) {
     assert(
-      !source.includes(`raceCoveragePromotedReloadGroup("${groupId}")`),
-      `core proof fixture should not duplicate promoted group id ${groupId}`,
+      !source.includes(helperName),
+      `release readiness should not depend on named promoted group helper ${helperName}`,
+    );
+  }
+});
+
+test("core proof fixture consumes generic race promoted group accessor", async () => {
+  const source = await readFile("tools/dev_test_game.test.mjs", "utf8");
+  assert(
+    source.includes("raceCoveragePromotedReloadGroup"),
+    "core proof fixture should consume the generic promoted group accessor",
+  );
+  assert(
+    source.includes("raceCoverageLocalReadinessMilestoneCases"),
+    "core proof fixture should consume local readiness milestone cases",
+  );
+  for (const helperName of [
+    "replacementRaceCoveragePromotedReloadGroup",
+    "completedHostRaceCoveragePromotedReloadGroup",
+    "completedPlayerRaceCoveragePromotedReloadGroup",
+    "cohostDeadlineRaceCoveragePromotedReloadGroup",
+  ]) {
+    assert(
+      !source.includes(helperName),
+      `core proof fixture should not depend on named promoted group helper ${helperName}`,
     );
   }
 });
@@ -409,6 +419,7 @@ test("race coverage exposes local readiness milestones from promoted groups", ()
     raceCoverageLocalReadinessMilestoneCases().map((milestone) => ({
       id: milestone.id,
       groupId: milestone.groupId,
+      generatedFromKey: milestone.generatedFromKey,
       label: milestone.label,
       proofBoundary: milestone.proofBoundary,
       cellIds: milestone.cellIds,
@@ -417,6 +428,7 @@ test("race coverage exposes local readiness milestones from promoted groups", ()
       {
         id: "local-host-concurrent-race-reload-milestone",
         groupId: "host-concurrent-race-reload",
+        generatedFromKey: "hostConcurrentRaceReloadMilestone",
         label: "Host concurrent race reload coverage",
         proofBoundary:
           "Local race-coverage proof that host resolve, advance, deadline, lifecycle, mixed advance, votecount publication, and complete-game races all have reload recovery coverage.",
@@ -433,6 +445,7 @@ test("race coverage exposes local readiness milestones from promoted groups", ()
       {
         id: "local-player-concurrent-action-reload-milestone",
         groupId: "player-concurrent-action-reload",
+        generatedFromKey: "playerConcurrentActionReloadMilestone",
         label: "Player concurrent action reload coverage",
         proofBoundary:
           "Local race-coverage proof that player vote changes, night actions, player-vs-host phase races, and completed-game reload recovery all have reload coverage.",
@@ -447,6 +460,7 @@ test("race coverage exposes local readiness milestones from promoted groups", ()
       {
         id: "local-cohost-deadline-race-reload-milestone",
         groupId: "cohost-deadline-race-reload",
+        generatedFromKey: "cohostDeadlineRaceReloadMilestone",
         label: "Cohost deadline race reload coverage",
         proofBoundary:
           "Local race-coverage proof that the cohost deadline extension versus host resolve race has reload recovery coverage.",
