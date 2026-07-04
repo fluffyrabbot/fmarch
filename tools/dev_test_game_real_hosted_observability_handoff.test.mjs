@@ -10,6 +10,7 @@ import {
   realHostedObservabilityEvidenceEnv,
   realHostedObservabilityHandoffCheckIds,
   realHostedObservabilityHandoffInputIds,
+  realHostedObservabilityHandoffInputSectionDefinitions,
 } from "./dev_test_game_real_hosted_observability_handoff_cases.mjs";
 
 test("real hosted observability handoff records blocked receipt from local baseline only", async () => {
@@ -40,6 +41,26 @@ test("real hosted observability handoff records blocked receipt from local basel
   assert.deepEqual(
     handoff.hostedHandoffChecklist.inputIds,
     realHostedObservabilityHandoffInputIds,
+  );
+  assert.deepEqual(
+    handoff.hostedHandoffChecklist.inputSections.map((section) => [
+      section.id,
+      section.status,
+      section.requiredInputIds,
+      section.providedInputIds,
+      section.missingInputs,
+    ]),
+    realHostedObservabilityHandoffInputSectionDefinitions.map((section) => [
+      section.id,
+      "missing",
+      [...section.requiredInputIds],
+      section.id === "baseline-boundary"
+        ? [realHostedObservabilityBaselineEnv]
+        : [],
+      section.requiredInputIds.filter(
+        (inputId) => inputId !== realHostedObservabilityBaselineEnv,
+      ),
+    ]),
   );
   assert(
     handoff.hostedHandoffChecklist.blockedReceipt.localVsHostedBoundary.includes(
@@ -85,6 +106,18 @@ test("real hosted observability handoff can pass with externally hosted evidence
   assertDevTestGameRealHostedObservabilityHandoff(handoff);
   assert.equal(handoff.status, "passed");
   assert.deepEqual(handoff.hostedHandoffChecklist.blockedCheckIds, []);
+  assert.deepEqual(
+    handoff.hostedHandoffChecklist.inputSections.map((section) => [
+      section.id,
+      section.status,
+      section.missingInputs,
+    ]),
+    realHostedObservabilityHandoffInputSectionDefinitions.map((section) => [
+      section.id,
+      "provided",
+      [],
+    ]),
+  );
   assert.equal(handoff.hostedHandoffChecklist.blockedReceipt, undefined);
 });
 

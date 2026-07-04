@@ -30,6 +30,29 @@ const requiredRelatedLinks = [
   "local-next-action",
 ];
 
+function handoffInputSections(source) {
+  return source.hostedHandoffChecklist?.inputSections ?? [];
+}
+
+function handoffSectionInputEntries(source) {
+  return handoffInputSections(source).flatMap((section) => {
+    const provided = new Set(section.providedInputIds ?? []);
+    return (section.requiredInputIds ?? []).map((inputId) => ({
+      rowId: `${section.id}-${inputId}`,
+      status: provided.has(inputId) ? "provided" : "missing",
+    }));
+  });
+}
+
+function handoffSectionInputStatuses(source) {
+  return Object.fromEntries(
+    handoffSectionInputEntries(source).map((input) => [
+      input.rowId,
+      input.status,
+    ]),
+  );
+}
+
 await runAdminAuditProof({
   smokeName: "dev-test-game-real-hosted-observability-handoff-admin-proof",
   stage: "real-hosted-observability-handoff-admin-proof-listen",
@@ -62,6 +85,18 @@ await runAdminAuditProof({
         source.hostedHandoffChecklist.blockedCheckIds,
       requiredHostedHandoffGroups:
         source.hostedHandoffChecklist.requirementGroups.map((group) => group.id),
+      requiredHostedHandoffInputSections:
+        handoffInputSections(source).map((section) => section.id),
+      requiredHostedHandoffInputSectionStatuses: Object.fromEntries(
+        handoffInputSections(source).map((section) => [
+          section.id,
+          section.status,
+        ]),
+      ),
+      requiredHostedHandoffSectionInputs:
+        handoffSectionInputEntries(source).map((input) => input.rowId),
+      requiredHostedHandoffSectionInputStatuses:
+        handoffSectionInputStatuses(source),
       requiredHostedHandoffBlockedReceipt:
         source.hostedHandoffChecklist.blockedReceipt,
       requiredRelatedLinks,
@@ -90,6 +125,17 @@ await runAdminAuditProof({
         source.hostedHandoffChecklist.blockedCheckIds,
       hostedHandoffGroupIds:
         source.hostedHandoffChecklist.requirementGroups.map((group) => group.id),
+      hostedHandoffInputSectionIds:
+        handoffInputSections(source).map((section) => section.id),
+      hostedHandoffInputSectionStatuses: Object.fromEntries(
+        handoffInputSections(source).map((section) => [
+          section.id,
+          section.status,
+        ]),
+      ),
+      hostedHandoffSectionInputIds:
+        handoffSectionInputEntries(source).map((input) => input.rowId),
+      hostedHandoffSectionInputStatuses: handoffSectionInputStatuses(source),
       relatedAuditIds: requiredRelatedLinks,
     },
     adminRoleSurface,
@@ -156,6 +202,56 @@ export function assertRealHostedObservabilityHandoffAdminProof(evidence) {
     ) {
       throw new Error(
         `real hosted observability handoff admin proof missing handoff group: ${groupId}`,
+      );
+    }
+  }
+  for (const sectionId of evidence.generatedFrom?.hostedHandoffInputSectionIds ??
+    []) {
+    if (
+      !evidence.adminRoleSurface?.visibleHostedHandoffInputSections?.includes(
+        sectionId,
+      )
+    ) {
+      throw new Error(
+        `real hosted observability handoff admin proof missing input section: ${sectionId}`,
+      );
+    }
+  }
+  for (const [sectionId, expectedStatus] of Object.entries(
+    evidence.generatedFrom?.hostedHandoffInputSectionStatuses ?? {},
+  )) {
+    const visibleText =
+      evidence.adminRoleSurface?.visibleHostedHandoffInputSectionStatuses?.[
+        sectionId
+      ] ?? "";
+    if (!visibleText.includes(expectedStatus)) {
+      throw new Error(
+        `real hosted observability handoff admin proof missing input section status: ${sectionId}`,
+      );
+    }
+  }
+  for (const inputId of evidence.generatedFrom?.hostedHandoffSectionInputIds ??
+    []) {
+    if (
+      !evidence.adminRoleSurface?.visibleHostedHandoffSectionInputs?.includes(
+        inputId,
+      )
+    ) {
+      throw new Error(
+        `real hosted observability handoff admin proof missing section input: ${inputId}`,
+      );
+    }
+  }
+  for (const [inputId, expectedStatus] of Object.entries(
+    evidence.generatedFrom?.hostedHandoffSectionInputStatuses ?? {},
+  )) {
+    const visibleText =
+      evidence.adminRoleSurface?.visibleHostedHandoffSectionInputStatuses?.[
+        inputId
+      ] ?? "";
+    if (!visibleText.includes(expectedStatus)) {
+      throw new Error(
+        `real hosted observability handoff admin proof missing section input status: ${inputId}`,
       );
     }
   }

@@ -121,6 +121,10 @@ export async function proveAdminAuditDetail({
   requiredHostedHandoffBlockedCheckStatuses = {},
   requiredHostedHandoffGroups = [],
   requiredHostedHandoffGroupStatuses = {},
+  requiredHostedHandoffInputSections = [],
+  requiredHostedHandoffInputSectionStatuses = {},
+  requiredHostedHandoffSectionInputs = [],
+  requiredHostedHandoffSectionInputStatuses = {},
   requiredHostedIdentityPacketSections = [],
   requiredHostedIdentityPacketSectionStatuses = {},
   requiredHostedIdentityPacketInputs = [],
@@ -297,6 +301,28 @@ export async function proveAdminAuditDetail({
       page,
       prefix: "admin-audit-hosted-handoff-group",
       ids: Object.keys(requiredHostedHandoffGroupStatuses),
+    });
+    const visibleHostedHandoffInputSections = await waitForRows({
+      page,
+      prefix: "admin-audit-hosted-handoff-input-section",
+      ids: requiredHostedHandoffInputSections,
+      expectedStatuses: requiredHostedHandoffInputSectionStatuses,
+    });
+    const visibleHostedHandoffInputSectionStatuses = await readRowStatuses({
+      page,
+      prefix: "admin-audit-hosted-handoff-input-section",
+      ids: Object.keys(requiredHostedHandoffInputSectionStatuses),
+    });
+    const visibleHostedHandoffSectionInputs = await waitForRows({
+      page,
+      prefix: "admin-audit-hosted-handoff-section-input",
+      ids: requiredHostedHandoffSectionInputs,
+      expectedStatuses: requiredHostedHandoffSectionInputStatuses,
+    });
+    const visibleHostedHandoffSectionInputStatuses = await readRowStatuses({
+      page,
+      prefix: "admin-audit-hosted-handoff-section-input",
+      ids: Object.keys(requiredHostedHandoffSectionInputStatuses),
     });
     const visibleHostedIdentityPacketSections = await waitForRows({
       page,
@@ -610,6 +636,24 @@ export async function proveAdminAuditDetail({
       ...(Object.keys(visibleHostedHandoffGroupStatuses).length === 0
         ? {}
         : { visibleHostedHandoffGroupStatuses }),
+      ...(visibleHostedHandoffInputSections.length === 0
+        ? {}
+        : { visibleHostedHandoffInputSections }),
+      ...(Object.keys(visibleHostedHandoffInputSectionStatuses).length === 0
+        ? {}
+        : {
+            visibleHostedHandoffInputSectionStatuses:
+              visibleHostedHandoffInputSectionStatuses,
+          }),
+      ...(visibleHostedHandoffSectionInputs.length === 0
+        ? {}
+        : { visibleHostedHandoffSectionInputs }),
+      ...(Object.keys(visibleHostedHandoffSectionInputStatuses).length === 0
+        ? {}
+        : {
+            visibleHostedHandoffSectionInputStatuses:
+              visibleHostedHandoffSectionInputStatuses,
+          }),
       ...(visibleHostedIdentityPacketSections.length === 0
         ? {}
         : { visibleHostedIdentityPacketSections }),

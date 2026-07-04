@@ -1299,6 +1299,7 @@ function normalizeRealHostedObservabilityHandoffChecklist({
       ),
     ),
     groups: normalizeHostedHandoffGroups(checklist?.requirementGroups),
+    inputSections: normalizeHostedHandoffInputSections(checklist?.inputSections),
     blockedReceipt: normalizeHostedHandoffBlockedReceipt(checklist?.blockedReceipt),
   });
 }
@@ -2341,6 +2342,7 @@ function normalizeNextActionHostedHandoffChecklist({
     ),
     blockedReceipt: normalizeHostedHandoffBlockedReceipt(checklist.blockedReceipt),
     groups: normalizeHostedHandoffGroups(checklist.requirementGroups),
+    inputSections: normalizeHostedHandoffInputSections(checklist.inputSections),
   });
 }
 
@@ -2563,6 +2565,35 @@ function normalizeHostedHandoffGroups(groups) {
             ? group.blockedCheckIds
             : []
           ).map((id) => String(id)),
+        ),
+      }),
+    ),
+  );
+}
+
+function normalizeHostedHandoffInputSections(sections) {
+  return Object.freeze(
+    (Array.isArray(sections) ? sections : []).map((section) =>
+      Object.freeze({
+        id: String(section.id ?? ""),
+        label: String(section.label ?? section.id ?? ""),
+        status: String(section.status ?? "unknown"),
+        requiredInputIds: Object.freeze(
+          (Array.isArray(section.requiredInputIds)
+            ? section.requiredInputIds
+            : []
+          ).map((id) => String(id)),
+        ),
+        providedInputIds: Object.freeze(
+          (Array.isArray(section.providedInputIds)
+            ? section.providedInputIds
+            : []
+          ).map((id) => String(id)),
+        ),
+        missingInputs: Object.freeze(
+          (Array.isArray(section.missingInputs) ? section.missingInputs : []).map(
+            (id) => String(id),
+          ),
         ),
       }),
     ),

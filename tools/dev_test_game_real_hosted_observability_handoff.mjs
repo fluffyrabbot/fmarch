@@ -14,6 +14,8 @@ export {
   realHostedObservabilityEvidenceEnv,
   realHostedObservabilityHandoffCheckIds,
   realHostedObservabilityHandoffInputIds,
+  realHostedObservabilityHandoffInputSectionDefinitions,
+  realHostedObservabilityHandoffInputSections,
   realHostedObservabilityRequirementGroupDefinitions,
   realHostedObservabilityRequirementGroups,
   requiredRealHostedObservabilityEvidenceForCheck,
@@ -26,6 +28,8 @@ import {
   realHostedObservabilityEvidenceEnv,
   realHostedObservabilityHandoffCheckIds,
   realHostedObservabilityHandoffInputIds,
+  realHostedObservabilityHandoffInputSectionDefinitions,
+  realHostedObservabilityHandoffInputSections,
   realHostedObservabilityRequirementGroupDefinitions,
   realHostedObservabilityRequirementGroups,
   realHostedObservabilityHandoffCase,
@@ -146,6 +150,7 @@ export async function buildDevTestGameRealHostedObservabilityHandoff({
     : "blocked";
   const blockedChecks = checks.filter((check) => check.status === "blocked");
   const requirementGroups = realHostedObservabilityRequirementGroups(checks);
+  const inputSections = realHostedObservabilityHandoffInputSections({ checks });
   const handoff = {
     version: DEV_TEST_GAME_REAL_HOSTED_OBSERVABILITY_HANDOFF_VERSION,
     proof: "dev-test-game-real-hosted-observability-handoff",
@@ -178,6 +183,7 @@ export async function buildDevTestGameRealHostedObservabilityHandoff({
       preflightStatus: status,
       blockedChecks,
       requirementGroups,
+      inputSections,
       blockedReceipt:
         status === "passed"
           ? null
@@ -233,6 +239,7 @@ export function assertDevTestGameRealHostedObservabilityHandoff(handoff) {
     throw new Error("real hosted observability handoff checklist drifted");
   }
   assertRealHostedObservabilityRequirementGroups(handoff);
+  assertRealHostedObservabilityInputSections(handoff);
   return handoff;
 }
 
@@ -253,6 +260,29 @@ function assertRealHostedObservabilityRequirementGroups(handoff) {
     ) {
       throw new Error(
         `real hosted observability requirement group drifted: ${definition.id}`,
+      );
+    }
+  }
+}
+
+function assertRealHostedObservabilityInputSections(handoff) {
+  const sections = handoff.hostedHandoffChecklist?.inputSections;
+  if (!Array.isArray(sections)) {
+    throw new Error("real hosted observability handoff missing input sections");
+  }
+  const sectionsById = new Map(sections.map((section) => [section.id, section]));
+  for (const definition of realHostedObservabilityHandoffInputSectionDefinitions) {
+    const section = sectionsById.get(definition.id);
+    if (
+      section === undefined ||
+      section.label !== definition.label ||
+      !["provided", "missing"].includes(section.status) ||
+      !sameStringArray(section.requiredInputIds, definition.requiredInputIds) ||
+      !Array.isArray(section.providedInputIds) ||
+      !Array.isArray(section.missingInputs)
+    ) {
+      throw new Error(
+        `real hosted observability input section drifted: ${definition.id}`,
       );
     }
   }

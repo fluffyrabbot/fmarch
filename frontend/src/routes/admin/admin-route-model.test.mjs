@@ -67,6 +67,9 @@ import {
 } from "../../../../tools/dev_test_game_hosted_ops_signal_cases.mjs";
 import {
   realHostedObservabilityHandoffCase,
+  realHostedObservabilityBaselineEnv,
+  realHostedObservabilityHandoffInputSectionDefinitions,
+  realHostedObservabilityHandoffInputSections,
 } from "../../../../tools/dev_test_game_real_hosted_observability_handoff_cases.mjs";
 import {
   hostedIdentityEvidenceBlockedChecks,
@@ -2873,6 +2876,24 @@ test("admin real hosted observability handoff detail data carries blocked eviden
     realHostedObservabilityHandoffCase().requirementGroups.map((group) => group.id),
   );
   assert.deepEqual(
+    data.audit.hostedHandoffChecklist.inputSections.map((section) => [
+      section.id,
+      section.status,
+      section.requiredInputIds,
+      section.providedInputIds,
+      section.missingInputs,
+    ]),
+    realHostedObservabilityHandoffInputSectionDefinitions.map((section) => [
+      section.id,
+      "missing",
+      [...section.requiredInputIds],
+      section.id === "baseline-boundary" ? [realHostedObservabilityBaselineEnv] : [],
+      section.requiredInputIds.filter(
+        (inputId) => inputId !== realHostedObservabilityBaselineEnv,
+      ),
+    ]),
+  );
+  assert.deepEqual(
     data.audit.relatedLinks.map((link) => link.id),
     [localAdminAuditIds.hostedOpsSignals, localAdminAuditIds.nextAction],
   );
@@ -4337,7 +4358,16 @@ function localHostedOpsSignalsFixture() {
 }
 
 function localRealHostedObservabilityHandoffFixture() {
-  const checklist = realHostedObservabilityHandoffCase();
+  const defaultChecklist = realHostedObservabilityHandoffCase();
+  const baselineCheck = {
+    id: "local-hosted-ops-signals-baseline-carried",
+    status: "passed",
+  };
+  const checklist = realHostedObservabilityHandoffCase({
+    inputSections: realHostedObservabilityHandoffInputSections({
+      checks: [baselineCheck, ...defaultChecklist.blockedChecks],
+    }),
+  });
   return {
     version: 1,
     proof: "dev-test-game-real-hosted-observability-handoff",

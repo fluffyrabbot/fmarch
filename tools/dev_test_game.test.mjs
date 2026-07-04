@@ -101,6 +101,7 @@ import {
   realHostedObservabilityHandoffCase,
   realHostedObservabilityHandoffCheckIds,
   realHostedObservabilityHandoffInputIds,
+  realHostedObservabilityHandoffInputSections,
 } from "./dev_test_game_real_hosted_observability_handoff_cases.mjs";
 import {
   releaseAdminProofFallbackUnprovenIds,
@@ -14422,7 +14423,19 @@ function hostedOpsSignalsAdminProofFixture() {
 }
 
 function realHostedObservabilityHandoffAdminProofFixture() {
-  const handoff = realHostedObservabilityHandoffCase();
+  const defaultHandoff = realHostedObservabilityHandoffCase();
+  const handoff = realHostedObservabilityHandoffCase({
+    inputSections: realHostedObservabilityHandoffInputSections({
+      checks: [
+        {
+          id: "local-hosted-ops-signals-baseline-carried",
+          status: "passed",
+        },
+        ...defaultHandoff.blockedChecks,
+      ],
+    }),
+  });
+  const sectionInputRows = realHostedObservabilitySectionInputRowsFixture(handoff);
   return {
     version: 1,
     proof: "dev-test-game-real-hosted-observability-handoff-admin-proof",
@@ -14439,6 +14452,16 @@ function realHostedObservabilityHandoffAdminProofFixture() {
       hostedHandoffInputIds: [...realHostedObservabilityHandoffInputIds],
       hostedHandoffBlockedCheckIds: [...handoff.blockedCheckIds],
       hostedHandoffGroupIds: handoff.requirementGroups.map((group) => group.id),
+      hostedHandoffInputSectionIds: handoff.inputSections.map(
+        (section) => section.id,
+      ),
+      hostedHandoffInputSectionStatuses: Object.fromEntries(
+        handoff.inputSections.map((section) => [section.id, section.status]),
+      ),
+      hostedHandoffSectionInputIds: sectionInputRows.map((row) => row.id),
+      hostedHandoffSectionInputStatuses: Object.fromEntries(
+        sectionInputRows.map((row) => [row.id, row.status]),
+      ),
       relatedAuditIds: ["local-hosted-ops-signals", "local-next-action"],
     },
     adminRoleSurface: {
@@ -14456,12 +14479,34 @@ function realHostedObservabilityHandoffAdminProofFixture() {
       visibleHostedHandoffGroups: handoff.requirementGroups.map(
         (group) => group.id,
       ),
+      visibleHostedHandoffInputSections: handoff.inputSections.map(
+        (section) => section.id,
+      ),
+      visibleHostedHandoffInputSectionStatuses: Object.fromEntries(
+        handoff.inputSections.map((section) => [
+          section.id,
+          `${section.label} ${section.status}`,
+        ]),
+      ),
+      visibleHostedHandoffSectionInputs: sectionInputRows.map((row) => row.id),
+      visibleHostedHandoffSectionInputStatuses: Object.fromEntries(
+        sectionInputRows.map((row) => [row.id, `${row.id} ${row.status}`]),
+      ),
       visibleRelatedLinks: ["local-hosted-ops-signals", "local-next-action"],
       rawInviteTokensVisible: false,
       releaseReady: false,
       productionReady: false,
     },
   };
+}
+
+function realHostedObservabilitySectionInputRowsFixture(handoff) {
+  return handoff.inputSections.flatMap((section) =>
+    section.requiredInputIds.map((inputId) => ({
+      id: `${section.id}-${inputId}`,
+      status: section.providedInputIds.includes(inputId) ? "provided" : "missing",
+    })),
+  );
 }
 
 function seedAdminProofFixture() {

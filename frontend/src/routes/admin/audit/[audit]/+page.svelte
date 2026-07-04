@@ -482,6 +482,29 @@
               <span>{input.required ? "required" : "optional"}</span>
             </li>
           {/each}
+          {#each data.audit.hostedHandoffChecklist.inputSections ?? [] as section}
+            <li
+              class="admin-audit-detail__entry admin-audit-detail__entry--stack"
+              data-testid={`admin-audit-hosted-handoff-input-section-${section.id}`}
+            >
+              <strong>{section.label}</strong>
+              <span>{section.status}</span>
+              <span>{section.missingInputs.join(", ")}</span>
+              {#if section.requiredInputIds?.length > 0}
+                <ol class="admin-audit-detail__nested-list">
+                  {#each section.requiredInputIds as inputId}
+                    <li
+                      class="admin-audit-detail__entry"
+                      data-testid={`admin-audit-hosted-handoff-section-input-${section.id}-${inputId}`}
+                    >
+                      <strong>{inputId}</strong>
+                      <span>{section.providedInputIds?.includes(inputId) ? "provided" : "missing"}</span>
+                    </li>
+                  {/each}
+                </ol>
+              {/if}
+            </li>
+          {/each}
           {#if data.audit.hostedHandoffChecklist.blockedReceipt}
             <li
               class="admin-audit-detail__entry admin-audit-detail__entry--stack"

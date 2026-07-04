@@ -14,6 +14,62 @@ export const realHostedObservabilityHandoffInputIds = Object.freeze([
   realHostedObservabilityBaselineEnv,
 ]);
 
+export const realHostedObservabilityHandoffInputSectionDefinitions = Object.freeze([
+  Object.freeze({
+    id: "evidence-intake",
+    label: "Evidence intake",
+    requiredInputIds: Object.freeze([
+      realHostedObservabilityEvidenceEnv,
+      "readableEvidenceJson",
+    ]),
+  }),
+  Object.freeze({
+    id: "externally-reachable-telemetry",
+    label: "Externally reachable telemetry",
+    requiredInputIds: Object.freeze([
+      "externallyReachableLogs",
+      "externallyReachableMetrics",
+      "externallyReachableTraces",
+    ]),
+  }),
+  Object.freeze({
+    id: "paging-slo",
+    label: "Paging and SLO",
+    requiredInputIds: Object.freeze(["pagingSloEvidence"]),
+  }),
+  Object.freeze({
+    id: "incident-response",
+    label: "Incident response",
+    requiredInputIds: Object.freeze(["incidentResponseEvidence"]),
+  }),
+  Object.freeze({
+    id: "baseline-boundary",
+    label: "Baseline boundary",
+    requiredInputIds: Object.freeze([
+      realHostedObservabilityBaselineEnv,
+      "localHostedLikeSignalsOnlyBaseline",
+      "releaseReadyFalse",
+      "productionReadyFalse",
+    ]),
+  }),
+]);
+
+export const realHostedObservabilityHandoffInputCheckIds = Object.freeze({
+  [realHostedObservabilityEvidenceEnv]:
+    "real-hosted-observability-evidence-path-configured",
+  readableEvidenceJson: "real-hosted-observability-evidence-readable",
+  externallyReachableLogs: "externally-reachable-logs-evidence",
+  externallyReachableMetrics: "externally-reachable-metrics-evidence",
+  externallyReachableTraces: "externally-reachable-traces-evidence",
+  pagingSloEvidence: "paging-slo-evidence",
+  incidentResponseEvidence: "incident-response-evidence",
+  [realHostedObservabilityBaselineEnv]:
+    "local-hosted-ops-signals-baseline-carried",
+  localHostedLikeSignalsOnlyBaseline: "local-hosted-like-baseline-only",
+  releaseReadyFalse: "release-claim-boundary-carried",
+  productionReadyFalse: "release-claim-boundary-carried",
+});
+
 export const realHostedObservabilityHandoffCheckIds = Object.freeze([
   "local-hosted-ops-signals-baseline-carried",
   "real-hosted-observability-evidence-path-configured",
@@ -133,6 +189,9 @@ export function realHostedObservabilityHandoffCase({
   preflightStatus = status,
   blockedChecks = realHostedObservabilityBlockedCheckRows(),
   requirementGroups = realHostedObservabilityRequirementGroups(blockedChecks),
+  inputSections = realHostedObservabilityHandoffInputSections({
+    checks: blockedChecks,
+  }),
   blockedReceipt = realHostedObservabilityBlockedReceipt({
     missingRequiredInputs: blockedChecks.map((check) => check.id),
   }),
@@ -150,8 +209,32 @@ export function realHostedObservabilityHandoffCase({
       requiredEvidence: String(check.requiredEvidence ?? ""),
     })),
     requirementGroups,
+    inputSections,
     ...(blockedReceipt === null ? {} : { blockedReceipt }),
   };
+}
+
+export function realHostedObservabilityHandoffInputSections({ checks = [] } = {}) {
+  const checksById = new Map((checks ?? []).map((check) => [check.id, check]));
+  return realHostedObservabilityHandoffInputSectionDefinitions.map((section) => {
+    const requiredInputIds = [...section.requiredInputIds];
+    const providedInputIds = requiredInputIds.filter(
+      (inputId) =>
+        checksById.get(realHostedObservabilityHandoffInputCheckIds[inputId])
+          ?.status === "passed",
+    );
+    const missingInputs = requiredInputIds.filter(
+      (inputId) => !providedInputIds.includes(inputId),
+    );
+    return {
+      id: section.id,
+      label: section.label,
+      status: missingInputs.length === 0 ? "provided" : "missing",
+      requiredInputIds,
+      providedInputIds,
+      missingInputs,
+    };
+  });
 }
 
 export function realHostedObservabilityRequirementGroups(checks) {
