@@ -4,6 +4,17 @@ import {
   completedGameSeedRequiredScenarioIds,
 } from "../../../../tools/dev_test_game_core_loop_completed_scenarios.mjs";
 import {
+  cohostStaleDeadlineControlLaneId,
+  coreLoopHostStaleCommandHighlightedLaneIds,
+  hardeningHostStaleCommandHighlightedLaneIds,
+  hostStaleAdvanceControlLaneId,
+  hostStaleAdvanceReloadLaneId,
+  hostStaleControlStatusExpectationForLane,
+  hostStaleDeadlineControlLaneId,
+  hostStaleResolveControlLaneId,
+  hostStaleResolveReloadLaneId,
+} from "../../../../tools/dev_test_game_host_stale_control_scenarios.mjs";
+import {
   cohostStaleDeadlineReconnectLaneId,
   hostStaleAdvanceReconnectLaneId,
   hostStaleDeadlineReconnectLaneId,
@@ -43,6 +54,28 @@ function hostStaleReconnectEvidence(laneId) {
   };
 }
 
+function hostStaleControlEvidence(laneId) {
+  const expectation = hostStaleControlStatusExpectationForLane(laneId);
+  return {
+    roleUrl: "http://127.0.0.1:5173/g/game-id/host",
+    ...(Object.hasOwn(expectation, "rejectError")
+      ? { rejectError: expectation.rejectError }
+      : {}),
+    ...(Object.hasOwn(expectation, "rejectReceipt")
+      ? { rejectReceipt: expectation.rejectReceipt }
+      : {}),
+    ...(Object.hasOwn(expectation, "locked")
+      ? { locked: expectation.locked }
+      : {}),
+    ...(Object.hasOwn(expectation, "apiDeadline")
+      ? { apiDeadline: expectation.apiDeadline }
+      : {}),
+    ...(Object.hasOwn(expectation, "phaseActions")
+      ? { phaseActions: [...expectation.phaseActions] }
+      : {}),
+  };
+}
+
 test("core loop highlighted completed-game lanes come from shared scenarios", () => {
   assert.deepEqual(
     CORE_LOOP_COMPLETED_GAME_HIGHLIGHTED_LANE_IDS,
@@ -55,6 +88,21 @@ test("hardening highlighted reconnect lanes come from shared stale-client scenar
     assert(
       HARDENING_HIGHLIGHTED_LANE_IDS.includes(laneId),
       `missing highlighted reconnect lane ${laneId}`,
+    );
+  }
+});
+
+test("highlighted host stale-command lanes come from shared scenarios", () => {
+  for (const laneId of coreLoopHostStaleCommandHighlightedLaneIds) {
+    assert(
+      CORE_LOOP_HIGHLIGHTED_LANE_IDS.includes(laneId),
+      `missing core-loop host stale lane ${laneId}`,
+    );
+  }
+  for (const laneId of hardeningHostStaleCommandHighlightedLaneIds) {
+    assert(
+      HARDENING_HIGHLIGHTED_LANE_IDS.includes(laneId),
+      `missing hardening host stale lane ${laneId}`,
     );
   }
 });
@@ -86,25 +134,17 @@ test("core loop lane status formats seeded recovery evidence", () => {
   );
   assert.equal(
     coreLoopLaneStatus({
-      id: "stale-host-advance",
+      id: hostStaleAdvanceControlLaneId,
       status: "passed",
-      evidence: {
-        rejectError: "InvalidTarget",
-        roleUrl: "http://127.0.0.1:5173/g/game-id/host",
-        locked: false,
-      },
+      evidence: hostStaleControlEvidence(hostStaleAdvanceControlLaneId),
     }),
     "passed: Reject InvalidTarget, role URL true, locked false",
   );
   assert.equal(
     coreLoopLaneStatus({
-      id: "stale-host-resolve",
+      id: hostStaleResolveControlLaneId,
       status: "passed",
-      evidence: {
-        rejectError: "PhaseLocked",
-        roleUrl: "http://127.0.0.1:5173/g/game-id/host",
-        locked: true,
-      },
+      evidence: hostStaleControlEvidence(hostStaleResolveControlLaneId),
     }),
     "passed: Reject PhaseLocked, role URL true, locked true",
   );
@@ -146,25 +186,17 @@ test("core loop lane status formats seeded recovery evidence", () => {
   );
   assert.equal(
     coreLoopLaneStatus({
-      id: "stale-host-resolve-reload",
+      id: hostStaleResolveReloadLaneId,
       status: "passed",
-      evidence: {
-        rejectReceipt:
-          "Reject PhaseLocked: phase locked; stale phase state, refresh and use current controls",
-        locked: true,
-      },
+      evidence: hostStaleControlEvidence(hostStaleResolveReloadLaneId),
     }),
     "passed: Reject PhaseLocked: phase locked; stale phase state, refresh and use current controls, locked true",
   );
   assert.equal(
     coreLoopLaneStatus({
-      id: "stale-host-advance-reload",
+      id: hostStaleAdvanceReloadLaneId,
       status: "passed",
-      evidence: {
-        rejectReceipt:
-          "Reject InvalidTarget: invalid target; stale phase state, refresh and use current controls",
-        locked: false,
-      },
+      evidence: hostStaleControlEvidence(hostStaleAdvanceReloadLaneId),
     }),
     "passed: Reject InvalidTarget: invalid target; stale phase state, refresh and use current controls, locked false",
   );
@@ -341,13 +373,9 @@ test("hardening lane status formats stale and concurrent conflict evidence", () 
   );
   assert.equal(
     hardeningLaneStatus({
-      id: "stale-host-resolve",
+      id: hostStaleResolveControlLaneId,
       status: "passed",
-      evidence: {
-        rejectError: "PhaseLocked",
-        roleUrl: "http://127.0.0.1:5173/g/game-id/host",
-        locked: true,
-      },
+      evidence: hostStaleControlEvidence(hostStaleResolveControlLaneId),
     }),
     "passed: Reject PhaseLocked, role URL true, locked true",
   );
@@ -369,13 +397,9 @@ test("hardening lane status formats stale and concurrent conflict evidence", () 
   );
   assert.equal(
     hardeningLaneStatus({
-      id: "stale-host-advance",
+      id: hostStaleAdvanceControlLaneId,
       status: "passed",
-      evidence: {
-        rejectError: "InvalidTarget",
-        roleUrl: "http://127.0.0.1:5173/g/game-id/host",
-        locked: false,
-      },
+      evidence: hostStaleControlEvidence(hostStaleAdvanceControlLaneId),
     }),
     "passed: Reject InvalidTarget, role URL true, locked false",
   );
@@ -389,13 +413,9 @@ test("hardening lane status formats stale and concurrent conflict evidence", () 
   );
   assert.equal(
     hardeningLaneStatus({
-      id: "stale-host-deadline",
+      id: hostStaleDeadlineControlLaneId,
       status: "passed",
-      evidence: {
-        rejectError: "PhaseLocked",
-        roleUrl: "http://127.0.0.1:5173/g/game-id/host",
-        apiDeadline: null,
-      },
+      evidence: hostStaleControlEvidence(hostStaleDeadlineControlLaneId),
     }),
     "passed: Reject PhaseLocked, role URL true, deadline null",
   );
@@ -409,13 +429,9 @@ test("hardening lane status formats stale and concurrent conflict evidence", () 
   );
   assert.equal(
     hardeningLaneStatus({
-      id: "stale-cohost-deadline",
+      id: cohostStaleDeadlineControlLaneId,
       status: "passed",
-      evidence: {
-        rejectError: "PhaseLocked",
-        roleUrl: "http://127.0.0.1:5173/g/game-id/host",
-        phaseActions: [],
-      },
+      evidence: hostStaleControlEvidence(cohostStaleDeadlineControlLaneId),
     }),
     "passed: Reject PhaseLocked, role URL true, phase controls 0",
   );
@@ -536,13 +552,9 @@ test("highlighted lane evidence maps keep browser proof assertions aligned", () 
         evidence: hostStaleReconnectEvidence(hostStaleResolveReconnectLaneId),
       },
       {
-        id: "stale-host-advance",
+        id: hostStaleAdvanceControlLaneId,
         status: "passed",
-        evidence: {
-          rejectError: "InvalidTarget",
-          roleUrl: "http://127.0.0.1:5173/g/game-id/host",
-          locked: false,
-        },
+        evidence: hostStaleControlEvidence(hostStaleAdvanceControlLaneId),
       },
       {
         id: hostStaleAdvanceReconnectLaneId,
@@ -550,13 +562,9 @@ test("highlighted lane evidence maps keep browser proof assertions aligned", () 
         evidence: hostStaleReconnectEvidence(hostStaleAdvanceReconnectLaneId),
       },
       {
-        id: "stale-host-deadline",
+        id: hostStaleDeadlineControlLaneId,
         status: "passed",
-        evidence: {
-          rejectError: "PhaseLocked",
-          roleUrl: "http://127.0.0.1:5173/g/game-id/host",
-          apiDeadline: null,
-        },
+        evidence: hostStaleControlEvidence(hostStaleDeadlineControlLaneId),
       },
       {
         id: hostStaleDeadlineReconnectLaneId,
@@ -564,13 +572,9 @@ test("highlighted lane evidence maps keep browser proof assertions aligned", () 
         evidence: hostStaleReconnectEvidence(hostStaleDeadlineReconnectLaneId),
       },
       {
-        id: "stale-cohost-deadline",
+        id: cohostStaleDeadlineControlLaneId,
         status: "passed",
-        evidence: {
-          rejectError: "PhaseLocked",
-          roleUrl: "http://127.0.0.1:5173/g/game-id/host",
-          phaseActions: [],
-        },
+        evidence: hostStaleControlEvidence(cohostStaleDeadlineControlLaneId),
       },
       {
         id: cohostStaleDeadlineReconnectLaneId,
@@ -578,31 +582,19 @@ test("highlighted lane evidence maps keep browser proof assertions aligned", () 
         evidence: hostStaleReconnectEvidence(cohostStaleDeadlineReconnectLaneId),
       },
       {
-        id: "stale-host-resolve",
+        id: hostStaleResolveControlLaneId,
         status: "passed",
-        evidence: {
-          rejectError: "PhaseLocked",
-          roleUrl: "http://127.0.0.1:5173/g/game-id/host",
-          locked: true,
-        },
+        evidence: hostStaleControlEvidence(hostStaleResolveControlLaneId),
       },
       {
-        id: "stale-host-resolve-reload",
+        id: hostStaleResolveReloadLaneId,
         status: "passed",
-        evidence: {
-          rejectReceipt:
-            "Reject PhaseLocked: phase locked; stale phase state, refresh and use current controls",
-          locked: true,
-        },
+        evidence: hostStaleControlEvidence(hostStaleResolveReloadLaneId),
       },
       {
-        id: "stale-host-advance-reload",
+        id: hostStaleAdvanceReloadLaneId,
         status: "passed",
-        evidence: {
-          rejectReceipt:
-            "Reject InvalidTarget: invalid target; stale phase state, refresh and use current controls",
-          locked: false,
-        },
+        evidence: hostStaleControlEvidence(hostStaleAdvanceReloadLaneId),
       },
     ],
   };
@@ -652,19 +644,19 @@ test("highlighted lane evidence maps keep browser proof assertions aligned", () 
     "passed: completed true, vote false, posts 0",
   );
   assert.equal(
-    coreLoopHighlightedLaneEvidence(proofRun)["stale-host-resolve"],
+    coreLoopHighlightedLaneEvidence(proofRun)[hostStaleResolveControlLaneId],
     "passed: Reject PhaseLocked, role URL true, locked true",
   );
   assert.equal(
-    coreLoopHighlightedLaneEvidence(proofRun)["stale-host-resolve-reload"],
+    coreLoopHighlightedLaneEvidence(proofRun)[hostStaleResolveReloadLaneId],
     "passed: Reject PhaseLocked: phase locked; stale phase state, refresh and use current controls, locked true",
   );
   assert.equal(
-    coreLoopHighlightedLaneEvidence(proofRun)["stale-host-advance"],
+    coreLoopHighlightedLaneEvidence(proofRun)[hostStaleAdvanceControlLaneId],
     "passed: Reject InvalidTarget, role URL true, locked false",
   );
   assert.equal(
-    coreLoopHighlightedLaneEvidence(proofRun)["stale-host-advance-reload"],
+    coreLoopHighlightedLaneEvidence(proofRun)[hostStaleAdvanceReloadLaneId],
     "passed: Reject InvalidTarget: invalid target; stale phase state, refresh and use current controls, locked false",
   );
   assert.equal(
@@ -692,7 +684,7 @@ test("highlighted lane evidence maps keep browser proof assertions aligned", () 
     "passed: reconnecting -> recovered, locked true",
   );
   assert.equal(
-    hardeningHighlightedLaneEvidence(proofRun)["stale-host-advance"],
+    hardeningHighlightedLaneEvidence(proofRun)[hostStaleAdvanceControlLaneId],
     "passed: Reject InvalidTarget, role URL true, locked false",
   );
   assert.equal(
@@ -700,7 +692,7 @@ test("highlighted lane evidence maps keep browser proof assertions aligned", () 
     "passed: reconnecting -> recovered, locked false",
   );
   assert.equal(
-    hardeningHighlightedLaneEvidence(proofRun)["stale-host-deadline"],
+    hardeningHighlightedLaneEvidence(proofRun)[hostStaleDeadlineControlLaneId],
     "passed: Reject PhaseLocked, role URL true, deadline null",
   );
   assert.equal(
@@ -708,7 +700,7 @@ test("highlighted lane evidence maps keep browser proof assertions aligned", () 
     "passed: reconnecting -> recovered, deadline null",
   );
   assert.equal(
-    hardeningHighlightedLaneEvidence(proofRun)["stale-cohost-deadline"],
+    hardeningHighlightedLaneEvidence(proofRun)[cohostStaleDeadlineControlLaneId],
     "passed: Reject PhaseLocked, role URL true, phase controls 0",
   );
   assert.equal(

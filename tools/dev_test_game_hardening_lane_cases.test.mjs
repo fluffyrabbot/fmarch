@@ -5,8 +5,12 @@ import {
   assertHostStaleControlCoverageSummary,
   buildHostStaleControlCoverageSummary,
   cohostDeadlineRecoveryLaneIds,
+  cohostStaleDeadlineControlLaneId,
+  cohostStaleDeadlineReloadLaneId,
   cohostDeadlineStaleControlCases,
   cohostDeadlineStaleControlCaseDefinitions,
+  coreLoopHostStaleCommandHighlightedLaneIds,
+  hardeningHostStaleCommandHighlightedLaneIds,
   hostCohostRaceRecoveryLaneIds,
   hostGenericStaleControlLaneIds,
   cohostDeadlineActionSet,
@@ -33,6 +37,9 @@ import {
   hostStaleAdvanceControlCase,
   hostStaleAdvanceControlLaneId,
   hostStaleAdvanceReloadLaneId,
+  hostStaleControlStatusExpectations,
+  hostStaleDeadlineControlLaneId,
+  hostStaleDeadlineReloadLaneId,
   hostStaleResolveControlCase,
   hostStaleResolveControlLaneId,
   hostStaleResolveReloadLaneId,
@@ -573,6 +580,111 @@ test("hardening lane cases share host phase stale-control scenarios", () => {
   assert.equal(hostStaleAdvanceControlCase().rejectError, "InvalidTarget");
   assert.equal(hostStaleAdvanceControlLaneId, "stale-host-advance");
   assert.equal(hostStaleAdvanceReloadLaneId, "stale-host-advance-reload");
+});
+
+test("hardening lane cases share host stale-control status expectations", () => {
+  assert.deepEqual(
+    hostStaleControlStatusExpectations().map((expectation) => ({
+      laneId: expectation.laneId,
+      role: expectation.role,
+      rejectError: expectation.rejectError,
+      rejectReceipt: expectation.rejectReceipt,
+      locked: expectation.locked,
+      apiDeadline: expectation.apiDeadline,
+      phaseActions: expectation.phaseActions,
+    })),
+    [
+      {
+        laneId: hostStaleResolveControlLaneId,
+        role: "host",
+        rejectError: "PhaseLocked",
+        rejectReceipt: undefined,
+        locked: true,
+        apiDeadline: undefined,
+        phaseActions: undefined,
+      },
+      {
+        laneId: hostStaleResolveReloadLaneId,
+        role: "host",
+        rejectError: undefined,
+        rejectReceipt:
+          "Reject PhaseLocked: phase locked; stale phase state, refresh and use current controls",
+        locked: true,
+        apiDeadline: undefined,
+        phaseActions: undefined,
+      },
+      {
+        laneId: hostStaleAdvanceControlLaneId,
+        role: "host",
+        rejectError: "InvalidTarget",
+        rejectReceipt: undefined,
+        locked: false,
+        apiDeadline: undefined,
+        phaseActions: undefined,
+      },
+      {
+        laneId: hostStaleAdvanceReloadLaneId,
+        role: "host",
+        rejectError: undefined,
+        rejectReceipt:
+          "Reject InvalidTarget: invalid target; stale phase state, refresh and use current controls",
+        locked: false,
+        apiDeadline: undefined,
+        phaseActions: undefined,
+      },
+      {
+        laneId: hostStaleDeadlineControlLaneId,
+        role: "host",
+        rejectError: "PhaseLocked",
+        rejectReceipt: undefined,
+        locked: false,
+        apiDeadline: null,
+        phaseActions: undefined,
+      },
+      {
+        laneId: hostStaleDeadlineReloadLaneId,
+        role: "host",
+        rejectError: undefined,
+        rejectReceipt:
+          "Reject PhaseLocked: phase locked; stale phase state, refresh and use current controls",
+        locked: false,
+        apiDeadline: null,
+        phaseActions: undefined,
+      },
+      {
+        laneId: cohostStaleDeadlineControlLaneId,
+        role: "cohost",
+        rejectError: "PhaseLocked",
+        rejectReceipt: undefined,
+        locked: undefined,
+        apiDeadline: null,
+        phaseActions: [],
+      },
+      {
+        laneId: cohostStaleDeadlineReloadLaneId,
+        role: "cohost",
+        rejectError: undefined,
+        rejectReceipt:
+          "Reject PhaseLocked: phase locked; stale phase state, refresh and use current controls",
+        locked: false,
+        apiDeadline: null,
+        phaseActions: [],
+      },
+    ],
+  );
+  assert.deepEqual(coreLoopHostStaleCommandHighlightedLaneIds, [
+    hostStaleResolveControlLaneId,
+    hostStaleResolveReloadLaneId,
+    hostStaleAdvanceControlLaneId,
+    hostStaleAdvanceReloadLaneId,
+  ]);
+  assert.deepEqual(hardeningHostStaleCommandHighlightedLaneIds, [
+    hostStaleResolveControlLaneId,
+    hostStaleResolveReloadLaneId,
+    hostStaleAdvanceControlLaneId,
+    hostStaleDeadlineControlLaneId,
+    cohostStaleDeadlineControlLaneId,
+  ]);
 });
 
 function hardeningLaneImportBlocks(source) {

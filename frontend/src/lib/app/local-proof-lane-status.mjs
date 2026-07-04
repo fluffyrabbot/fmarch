@@ -2,6 +2,16 @@ import {
   completedGameSeedRequiredScenarioIds,
 } from "../../../../tools/dev_test_game_core_loop_completed_scenarios.mjs";
 import {
+  cohostStaleDeadlineControlLaneId,
+  coreLoopHostStaleCommandHighlightedLaneIds,
+  hardeningHostStaleCommandHighlightedLaneIds,
+  hostStaleAdvanceControlLaneId,
+  hostStaleAdvanceReloadLaneId,
+  hostStaleDeadlineControlLaneId,
+  hostStaleResolveControlLaneId,
+  hostStaleResolveReloadLaneId,
+} from "../../../../tools/dev_test_game_host_stale_control_scenarios.mjs";
+import {
   playerActionBoundaryLaneId,
   playerActionLoopLaneId,
   playerInvalidActionRecoveryLaneId,
@@ -30,17 +40,10 @@ export const CORE_LOOP_COMPLETED_GAME_HIGHLIGHTED_LANE_IDS = Object.freeze([
   ...completedGameSeedRequiredScenarioIds(),
 ]);
 
-const CORE_LOOP_HOST_STALE_COMMAND_HIGHLIGHTED_LANE_IDS = Object.freeze([
-  "stale-host-resolve",
-  "stale-host-resolve-reload",
-  "stale-host-advance",
-  "stale-host-advance-reload",
-]);
-
 export const CORE_LOOP_HIGHLIGHTED_LANE_IDS = Object.freeze([
   ...CORE_LOOP_FOUNDATION_HIGHLIGHTED_LANE_IDS,
   ...CORE_LOOP_COMPLETED_GAME_HIGHLIGHTED_LANE_IDS,
-  ...CORE_LOOP_HOST_STALE_COMMAND_HIGHLIGHTED_LANE_IDS,
+  ...coreLoopHostStaleCommandHighlightedLaneIds,
 ]);
 
 export const HARDENING_HIGHLIGHTED_LANE_IDS = Object.freeze([
@@ -54,11 +57,7 @@ export const HARDENING_HIGHLIGHTED_LANE_IDS = Object.freeze([
   "stale-host-control",
   "concurrent-host-resolve-race",
   "concurrent-host-resolve-race-reload",
-  "stale-host-resolve",
-  "stale-host-resolve-reload",
-  "stale-host-advance",
-  "stale-host-deadline",
-  "stale-cohost-deadline",
+  ...hardeningHostStaleCommandHighlightedLaneIds,
 ]);
 
 export function coreLoopHighlightedLaneEvidence(proofRun) {
@@ -148,13 +147,13 @@ export function coreLoopLaneStatus(lane) {
       return `${status}: completed ${String(evidence.gameCompleted ?? "unknown")}, posts ${String(evidence.reloadPostCount ?? "unknown")}`;
     case "stale-player-complete-reload":
       return `${status}: completed ${String(evidence.gameCompleted ?? "unknown")}, vote ${String(evidence.currentVote ?? "unknown")}, posts ${String(evidence.threadPostCount ?? "unknown")}`;
-    case "stale-host-resolve":
+    case hostStaleResolveControlLaneId:
       return `${status}: Reject ${String(evidence.rejectError ?? "unknown")}, role URL ${typeof evidence.roleUrl === "string"}, locked ${String(evidence.locked ?? "unknown")}`;
-    case "stale-host-resolve-reload":
+    case hostStaleResolveReloadLaneId:
       return `${status}: ${String(evidence.rejectReceipt ?? "unknown")}, locked ${String(evidence.locked ?? "unknown")}`;
-    case "stale-host-advance":
+    case hostStaleAdvanceControlLaneId:
       return `${status}: Reject ${String(evidence.rejectError ?? "unknown")}, role URL ${typeof evidence.roleUrl === "string"}, locked ${String(evidence.locked ?? "unknown")}`;
-    case "stale-host-advance-reload":
+    case hostStaleAdvanceReloadLaneId:
       return `${status}: ${String(evidence.rejectReceipt ?? "unknown")}, locked ${String(evidence.locked ?? "unknown")}`;
     default:
       return status;
@@ -191,21 +190,21 @@ export function hardeningLaneStatus(lane) {
       return `${status}: ${String(evidence.ackState ?? "unknown")} resolve, reject ${String(evidence.rejectError ?? "unknown")}`;
     case "concurrent-host-resolve-race-reload":
       return `${status}: locked ${String(evidence.apiLocked ?? "unknown")}, routes ${String(evidence.liveRouteStatus ?? "unknown")}/${String(evidence.concurrentRouteStatus ?? "unknown")}`;
-    case "stale-host-resolve":
+    case hostStaleResolveControlLaneId:
       return `${status}: Reject ${String(evidence.rejectError ?? "unknown")}, role URL ${typeof evidence.roleUrl === "string"}, locked ${String(evidence.locked ?? "unknown")}`;
-    case "stale-host-resolve-reload":
+    case hostStaleResolveReloadLaneId:
       return `${status}: ${String(evidence.rejectReceipt ?? "unknown")}`;
     case hostStaleResolveReconnectLaneId:
       return `${status}: ${String(evidence.reconnectingState ?? "unknown")} -> ${String(evidence.recoveryState ?? "unknown")}, locked ${String(evidence.recoveredLocked ?? "unknown")}`;
-    case "stale-host-advance":
+    case hostStaleAdvanceControlLaneId:
       return `${status}: Reject ${String(evidence.rejectError ?? "unknown")}, role URL ${typeof evidence.roleUrl === "string"}, locked ${String(evidence.locked ?? "unknown")}`;
     case hostStaleAdvanceReconnectLaneId:
       return `${status}: ${String(evidence.reconnectingState ?? "unknown")} -> ${String(evidence.recoveryState ?? "unknown")}, locked ${String(evidence.recoveredLocked ?? "unknown")}`;
-    case "stale-host-deadline":
+    case hostStaleDeadlineControlLaneId:
       return `${status}: Reject ${String(evidence.rejectError ?? "unknown")}, role URL ${typeof evidence.roleUrl === "string"}, deadline ${evidence.apiDeadline === undefined ? "unknown" : String(evidence.apiDeadline)}`;
     case hostStaleDeadlineReconnectLaneId:
       return `${status}: ${String(evidence.reconnectingState ?? "unknown")} -> ${String(evidence.recoveryState ?? "unknown")}, deadline ${evidence.apiDeadline === undefined ? "unknown" : String(evidence.apiDeadline)}`;
-    case "stale-cohost-deadline":
+    case cohostStaleDeadlineControlLaneId:
       return `${status}: Reject ${String(evidence.rejectError ?? "unknown")}, role URL ${typeof evidence.roleUrl === "string"}, phase controls ${Array.isArray(evidence.phaseActions) ? evidence.phaseActions.length : "unknown"}`;
     case cohostStaleDeadlineReconnectLaneId:
       return `${status}: ${String(evidence.reconnectingState ?? "unknown")} -> ${String(evidence.recoveryState ?? "unknown")}, deadline ${evidence.apiDeadline === undefined ? "unknown" : String(evidence.apiDeadline)}, phase controls ${Array.isArray(evidence.phaseActions) ? evidence.phaseActions.length : "unknown"}`;

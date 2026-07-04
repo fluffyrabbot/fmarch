@@ -54,6 +54,14 @@ const cloneScenarioCase = (scenario) => ({
   expectedCurrentActions: cloneHostActionSet(scenario.expectedCurrentActions),
 });
 
+const cloneStatusExpectation = (expectation) => {
+  const cloned = { ...expectation };
+  if (Object.hasOwn(expectation, "phaseActions")) {
+    cloned.phaseActions = [...expectation.phaseActions];
+  }
+  return cloned;
+};
+
 const cloneRaceCoverageCell = (cell) => ({
   ...cell,
   roleSurfaces: [...cell.roleSurfaces],
@@ -199,6 +207,12 @@ export const hostStaleAdvanceControlLaneId =
 
 export const hostStaleAdvanceReloadLaneId =
   hostStaleAdvanceControlCase().reloadLaneId;
+
+export const hostStaleDeadlineControlLaneId =
+  hostPhaseStaleControlCase("deadline").baseLaneId;
+
+export const hostStaleDeadlineReloadLaneId =
+  hostPhaseStaleControlCase("deadline").reloadLaneId;
 
 export const hostPhaseStaleControlLaneIds = Object.freeze(
   hostPhaseStaleControlCaseDefinitions.flatMap((scenario) => [
@@ -414,6 +428,16 @@ export function cohostDeadlineStaleControlCases() {
   return cohostDeadlineStaleControlCaseDefinitions.map(cloneScenarioCase);
 }
 
+export function cohostDeadlineStaleControlCase() {
+  return cloneScenarioCase(cohostDeadlineStaleControlCaseDefinitions[0]);
+}
+
+export const cohostStaleDeadlineControlLaneId =
+  cohostDeadlineStaleControlCase().baseLaneId;
+
+export const cohostStaleDeadlineReloadLaneId =
+  cohostDeadlineStaleControlCase().reloadLaneId;
+
 export const cohostDeadlineRecoveryLaneIds = Object.freeze([
   ...cohostDeadlineStaleControlCaseDefinitions.flatMap((scenario) => [
     scenario.reloadLaneId,
@@ -437,6 +461,99 @@ export const hostCohostRaceRecoveryLaneIds = Object.freeze([
   "concurrent-host-deadline-advance-race-reload",
   "concurrent-host-mixed-advance-race",
   "concurrent-host-mixed-advance-race-reload",
+]);
+
+function rejectReceiptText(rejectError) {
+  const reason =
+    rejectError === "InvalidTarget" ? "invalid target" : "phase locked";
+  return `Reject ${rejectError}: ${reason}; stale phase state, refresh and use current controls`;
+}
+
+function hostPhaseBaseStatusExpectation(scenario) {
+  return Object.freeze({
+    laneId: scenario.baseLaneId,
+    role: "host",
+    rejectError: scenario.rejectError,
+    locked: scenario.expectedCurrentPhase.locked,
+    ...(Object.hasOwn(scenario.expectedCurrentPhase, "deadline")
+      ? { apiDeadline: scenario.expectedCurrentPhase.deadline }
+      : {}),
+  });
+}
+
+function hostPhaseReloadStatusExpectation(scenario) {
+  return Object.freeze({
+    laneId: scenario.reloadLaneId,
+    role: "host",
+    rejectReceipt: rejectReceiptText(scenario.rejectError),
+    locked: scenario.expectedCurrentPhase.locked,
+    ...(Object.hasOwn(scenario.expectedCurrentPhase, "deadline")
+      ? { apiDeadline: scenario.expectedCurrentPhase.deadline }
+      : {}),
+  });
+}
+
+function cohostDeadlineBaseStatusExpectation(scenario) {
+  return Object.freeze({
+    laneId: scenario.baseLaneId,
+    role: "cohost",
+    rejectError: scenario.rejectError,
+    apiDeadline: scenario.expectedCurrentPhase.deadline,
+    phaseActions: Object.freeze([]),
+  });
+}
+
+function cohostDeadlineReloadStatusExpectation(scenario) {
+  return Object.freeze({
+    laneId: scenario.reloadLaneId,
+    role: "cohost",
+    rejectReceipt: rejectReceiptText(scenario.rejectError),
+    locked: scenario.expectedCurrentPhase.locked,
+    apiDeadline: scenario.expectedCurrentPhase.deadline,
+    phaseActions: Object.freeze([]),
+  });
+}
+
+export const hostStaleControlStatusExpectationDefinitions = Object.freeze([
+  ...hostPhaseStaleControlCaseDefinitions.flatMap((scenario) => [
+    hostPhaseBaseStatusExpectation(scenario),
+    hostPhaseReloadStatusExpectation(scenario),
+  ]),
+  ...cohostDeadlineStaleControlCaseDefinitions.flatMap((scenario) => [
+    cohostDeadlineBaseStatusExpectation(scenario),
+    cohostDeadlineReloadStatusExpectation(scenario),
+  ]),
+]);
+
+export function hostStaleControlStatusExpectations() {
+  return hostStaleControlStatusExpectationDefinitions.map(
+    cloneStatusExpectation,
+  );
+}
+
+export function hostStaleControlStatusExpectationForLane(laneId) {
+  const expectation = hostStaleControlStatusExpectationDefinitions.find(
+    (candidate) => candidate.laneId === laneId,
+  );
+  if (expectation === undefined) {
+    throw new Error(`unknown host stale-control status lane: ${laneId}`);
+  }
+  return cloneStatusExpectation(expectation);
+}
+
+export const coreLoopHostStaleCommandHighlightedLaneIds = Object.freeze([
+  hostStaleResolveControlLaneId,
+  hostStaleResolveReloadLaneId,
+  hostStaleAdvanceControlLaneId,
+  hostStaleAdvanceReloadLaneId,
+]);
+
+export const hardeningHostStaleCommandHighlightedLaneIds = Object.freeze([
+  hostStaleResolveControlLaneId,
+  hostStaleResolveReloadLaneId,
+  hostStaleAdvanceControlLaneId,
+  hostStaleDeadlineControlLaneId,
+  cohostStaleDeadlineControlLaneId,
 ]);
 
 export { hostedMatrixReconnectLaneIds };
