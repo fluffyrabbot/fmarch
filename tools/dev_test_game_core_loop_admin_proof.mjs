@@ -168,7 +168,19 @@ const requiredSpineRows = (proofRun) => {
 
 function completedGameHardeningCoverageStatus(proofRun) {
   const coverage = proofRun?.completedGameHardeningCoverage;
-  return `${String(coverage?.status ?? "unknown")}: ${Number(coverage?.passedLaneCount ?? 0)}/${Number(coverage?.laneCount ?? 0)} completed-game lanes across ${Number(coverage?.familyCount ?? 0)} families`;
+  const status = String(coverage?.status ?? "unknown");
+  const passedLaneCount = Number(coverage?.passedLaneCount ?? 0);
+  const laneCount = Number(coverage?.laneCount ?? 0);
+  const familyCount = Number(coverage?.familyCount ?? 0);
+  const expectedLaneCount = Number(coverage?.expectedLaneCount);
+  const expectedFamilyCount = Number(coverage?.expectedFamilyCount);
+  if (
+    laneCount !== expectedLaneCount ||
+    familyCount !== expectedFamilyCount
+  ) {
+    return `drift: ${status} artifact reports ${passedLaneCount}/${laneCount} completed-game lanes across ${familyCount} families; expected ${expectedLaneCount} lanes across ${expectedFamilyCount} shared families`;
+  }
+  return `${status}: ${passedLaneCount}/${laneCount} completed-game lanes across ${familyCount} families`;
 }
 
 await runAdminAuditProof({

@@ -4101,6 +4101,8 @@ function completedGameHardeningCoverageFixture() {
     laneCount: cases.length,
     passedLaneCount: cases.length,
     familyCount: families.length,
+    expectedLaneCount: cases.length,
+    expectedFamilyCount: families.length,
     sourceLaneIds: cases.map((scenario) => scenario.id),
     laneStatuses: cases.map((scenario) => ({
       id: scenario.id,

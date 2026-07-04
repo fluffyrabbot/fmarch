@@ -3960,13 +3960,17 @@ function completedGameHardeningCoverageStatus(proofRun) {
   const passedLaneCount = Number(coverage?.passedLaneCount ?? 0);
   const laneCount = Number(coverage?.laneCount ?? 0);
   const familyCount = Number(coverage?.familyCount ?? 0);
-  const expectedLaneCount = COMPLETED_GAME_HARDENING_LANE_CASES.length;
-  const expectedFamilyCount = COMPLETED_GAME_HARDENING_FAMILY_IDS.length;
+  const artifactExpectedLaneCount = Number(coverage?.expectedLaneCount);
+  const artifactExpectedFamilyCount = Number(coverage?.expectedFamilyCount);
+  const sharedExpectedLaneCount = COMPLETED_GAME_HARDENING_LANE_CASES.length;
+  const sharedExpectedFamilyCount = COMPLETED_GAME_HARDENING_FAMILY_IDS.length;
   if (
-    laneCount !== expectedLaneCount ||
-    familyCount !== expectedFamilyCount
+    laneCount !== artifactExpectedLaneCount ||
+    familyCount !== artifactExpectedFamilyCount ||
+    artifactExpectedLaneCount !== sharedExpectedLaneCount ||
+    artifactExpectedFamilyCount !== sharedExpectedFamilyCount
   ) {
-    return `drift: ${status} artifact reports ${passedLaneCount}/${laneCount} completed-game lanes across ${familyCount} families; expected ${expectedLaneCount} lanes across ${expectedFamilyCount} shared families`;
+    return `drift: ${status} artifact reports ${passedLaneCount}/${laneCount} completed-game lanes across ${familyCount} families; expected ${sharedExpectedLaneCount} lanes across ${sharedExpectedFamilyCount} shared families`;
   }
   return `${status}: ${passedLaneCount}/${laneCount} completed-game lanes across ${familyCount} families`;
 }

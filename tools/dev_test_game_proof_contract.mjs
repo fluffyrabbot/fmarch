@@ -6370,11 +6370,15 @@ function buildCompletedGameHardeningCoverage(lanes) {
   const passedLaneCount = laneStatuses.filter(
     (laneStatus) => laneStatus.status === "passed",
   ).length;
+  const expectedLaneCount = cases.length;
+  const expectedFamilyCount = familyIds.length;
   return {
-    status: passedLaneCount === cases.length ? "passed" : "failed",
+    status: passedLaneCount === expectedLaneCount ? "passed" : "failed",
     laneCount: cases.length,
     passedLaneCount,
     familyCount: families.length,
+    expectedLaneCount,
+    expectedFamilyCount,
     sourceLaneIds: cases.map((scenario) => scenario.id),
     laneStatuses,
     families,
@@ -6385,11 +6389,16 @@ function assertCompletedGameHardeningCoverageSummary({ summary, lanes }) {
   const laneById = new Map((lanes ?? []).map((laneItem) => [laneItem.id, laneItem]));
   const cases = completedGameHardeningLaneCases();
   const expectedLaneIds = cases.map((scenario) => scenario.id);
+  const expectedFamilyCount = new Set(
+    cases.map((scenario) => scenario.family),
+  ).size;
   if (
     summary?.status !== "passed" ||
     summary.laneCount !== expectedLaneIds.length ||
     summary.passedLaneCount !== expectedLaneIds.length ||
-    summary.familyCount !== new Set(cases.map((scenario) => scenario.family)).size ||
+    summary.familyCount !== expectedFamilyCount ||
+    summary.expectedLaneCount !== expectedLaneIds.length ||
+    summary.expectedFamilyCount !== expectedFamilyCount ||
     !sameArray(summary.sourceLaneIds, expectedLaneIds)
   ) {
     throw new Error("completed-game hardening coverage summary drifted");

@@ -943,6 +943,11 @@ test("completed-game proof contract uses shared hardening lane metadata", async 
     "proof contract should validate completed-game coverage summary",
   );
   assert(
+    source.includes("expectedLaneCount") &&
+      source.includes("expectedFamilyCount"),
+    "proof contract should emit explicit shared-case expected coverage totals",
+  );
+  assert(
     !source.includes("completedGameHardeningLaneIds().map"),
     "proof contract should leave completed-game lane ordering to the progression facade",
   );
