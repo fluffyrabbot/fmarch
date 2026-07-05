@@ -172,6 +172,15 @@ The local release-readiness checklist generator is:
 npm run test:dev-test-game-readiness
 ```
 
+The default next-action handoff stays in the local capability-model sequence.
+After the local core, hardening, ops, seed/demo, and identity-adapter rows are
+all passed and the operator is ready to inspect the hosted identity blocker
+directly, use the explicit hosted-identity sequence selector:
+
+```sh
+npm run test:dev-test-game-next-action:hosted-identity
+```
+
 The local release-readiness admin browser proof is:
 
 ```sh
@@ -640,6 +649,12 @@ host-issued game-scoped player invite that persists its local game scope and
 is issued from the seeded host role URL before redeeming back to the existing
 player role surface, plus a seeded admin overview-to-local-identity-adapter-detail
 browser proof without raw credential echoes.
+After the local capability rows are passed,
+`npm run test:dev-test-game-next-action:hosted-identity` refreshes
+`target/dev-test-game/next-action.json` with
+`FMARCH_DEV_TEST_GAME_SEQUENCE_STAGE=hosted-identity`, selecting the hosted
+identity evidence lane while preserving the same blocked hosted-readiness
+claims.
 After `npm run test:dev-test-game-admin-spine`, the checklist consumes
 `target/dev-test-game/admin-spine-proof.json` and records the ordered local
 admin browser proof set as a single development-spine evidence signal while
