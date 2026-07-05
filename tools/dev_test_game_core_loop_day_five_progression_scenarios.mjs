@@ -11,6 +11,35 @@ export const coreLoopDayFiveProgressionLaneIds = Object.freeze([
   "action-loop",
 ]);
 
+const coreLoopDayFiveProgressionScenarioCaseDefinitions = Object.freeze([
+  Object.freeze({
+    key: "dayFiveNoLynchResolution",
+    group: "surfaces",
+    laneIds: Object.freeze([...coreLoopDayFiveProgressionLaneIds]),
+    buildScenario: dayFiveNoLynchResolutionSurfaceCase,
+  }),
+  Object.freeze({
+    key: "staleDayFiveVote",
+    group: "staleRejects",
+    laneIds: Object.freeze(["action-loop"]),
+    buildScenario: () =>
+      dayFiveNoLynchResolutionSurfaceCase().staleDayFiveVoteCase,
+  }),
+]);
+
+const cloneDayFiveProgressionScenarioCase = (scenarioCase) => ({
+  key: scenarioCase.key,
+  group: scenarioCase.group,
+  laneIds: [...scenarioCase.laneIds],
+  scenario: scenarioCase.buildScenario(),
+});
+
+export function coreLoopDayFiveProgressionScenarioCases() {
+  return coreLoopDayFiveProgressionScenarioCaseDefinitions.map(
+    cloneDayFiveProgressionScenarioCase,
+  );
+}
+
 const dayFiveNoLynchResolutionSurfaceCaseDefinition = Object.freeze({
   transitionFragments: Object.freeze([
     "player:D05:no_lynch:ack:918",
@@ -130,16 +159,20 @@ export function dayFiveNoLynchResolutionSurfaceCase() {
 }
 
 export function coreLoopDayFiveProgressionScenarioFamily() {
+  const scenarioCases = coreLoopDayFiveProgressionScenarioCases();
   return {
     id: coreLoopDayFiveProgressionFamilyId,
     laneIds: [...coreLoopDayFiveProgressionLaneIds],
-    surfaces: {
-      dayFiveNoLynchResolution: dayFiveNoLynchResolutionSurfaceCase(),
-    },
-    staleRejects: {
-      staleDayFiveVote:
-        dayFiveNoLynchResolutionSurfaceCase().staleDayFiveVoteCase,
-    },
+    surfaces: Object.fromEntries(
+      scenarioCases
+        .filter((scenarioCase) => scenarioCase.group === "surfaces")
+        .map((scenarioCase) => [scenarioCase.key, scenarioCase.scenario]),
+    ),
+    staleRejects: Object.fromEntries(
+      scenarioCases
+        .filter((scenarioCase) => scenarioCase.group === "staleRejects")
+        .map((scenarioCase) => [scenarioCase.key, scenarioCase.scenario]),
+    ),
   };
 }
 

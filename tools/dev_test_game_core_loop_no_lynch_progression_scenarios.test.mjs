@@ -4,6 +4,7 @@ import {
   assertDayFourNoLynchVoteProofCase,
   coreLoopNoLynchProgressionFamilyId,
   coreLoopNoLynchProgressionLaneIds,
+  coreLoopNoLynchProgressionScenarioCases,
   coreLoopNoLynchProgressionScenarioFamily,
   dayFourNoLynchResolutionSurfaceCase,
   dayFourNoLynchVoteProofCase,
@@ -21,6 +22,36 @@ test("no-lynch progression family shares Day 4 and Day 5 no-lynch cases", () => 
     "day-vote-no-lynch",
     "action-loop",
   ]);
+  const scenarioCases = coreLoopNoLynchProgressionScenarioCases();
+  assert.deepEqual(
+    scenarioCases.map((scenarioCase) => ({
+      key: scenarioCase.key,
+      group: scenarioCase.group,
+      laneIds: scenarioCase.laneIds,
+      scenario: scenarioCase.scenario,
+    })),
+    [
+      {
+        key: "dayFourNoLynchResolution",
+        group: "surfaces",
+        laneIds: coreLoopNoLynchProgressionLaneIds,
+        scenario: dayFourNoLynchResolutionSurfaceCase(),
+      },
+      {
+        key: "dayFiveNoLynchResolution",
+        group: "surfaces",
+        laneIds: coreLoopNoLynchProgressionLaneIds,
+        scenario: dayFiveNoLynchResolutionSurfaceCase(),
+      },
+      {
+        key: "staleDayFiveVote",
+        group: "staleRejects",
+        laneIds: ["action-loop"],
+        scenario:
+          dayFiveNoLynchResolutionSurfaceCase().staleDayFiveVoteCase,
+      },
+    ],
+  );
 
   const dayFour = dayFourNoLynchResolutionSurfaceCase();
   assert.deepEqual(dayFour.transitionFragments, [
@@ -35,6 +66,14 @@ test("no-lynch progression family shares Day 4 and Day 5 no-lynch cases", () => 
   const family = coreLoopNoLynchProgressionScenarioFamily();
   assert.equal(family.id, coreLoopNoLynchProgressionFamilyId);
   assert.deepEqual(family.laneIds, coreLoopNoLynchProgressionLaneIds);
+  assert.deepEqual(family.surfaces, {
+    dayFourNoLynchResolution: dayFourNoLynchResolutionSurfaceCase(),
+    dayFiveNoLynchResolution: dayFiveNoLynchResolutionSurfaceCase(),
+  });
+  assert.deepEqual(family.staleRejects, {
+    staleDayFiveVote:
+      dayFiveNoLynchResolutionSurfaceCase().staleDayFiveVoteCase,
+  });
   assert.deepEqual(
     family.surfaces.dayFourNoLynchResolution.voteCase,
     dayFourNoLynchVoteProofCase(),
@@ -50,6 +89,12 @@ test("no-lynch progression family shares Day 4 and Day 5 no-lynch cases", () => 
   assert.notEqual(
     dayFourNoLynchResolutionSurfaceCase().voteCase.expectedRefreshKeys,
     dayFourNoLynchResolutionSurfaceCase().voteCase.expectedRefreshKeys,
+  );
+  assert.notEqual(
+    coreLoopNoLynchProgressionScenarioCases()[0].scenario.voteCase
+      .expectedRefreshKeys,
+    coreLoopNoLynchProgressionScenarioCases()[0].scenario.voteCase
+      .expectedRefreshKeys,
   );
 });
 

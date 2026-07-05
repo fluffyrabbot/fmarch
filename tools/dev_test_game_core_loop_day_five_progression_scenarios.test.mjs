@@ -4,6 +4,7 @@ import {
   assertDayFiveNoLynchResolutionSurfaceProof,
   coreLoopDayFiveProgressionFamilyId,
   coreLoopDayFiveProgressionLaneIds,
+  coreLoopDayFiveProgressionScenarioCases,
   coreLoopDayFiveProgressionScenarioFamily,
   dayFiveNoLynchResolutionSurfaceCase,
 } from "./dev_test_game_core_loop_day_five_progression_scenarios.mjs";
@@ -20,6 +21,30 @@ test("Day 5 progression family shares no-lynch resolution and stale vote cases",
     "day-vote-no-lynch",
     "action-loop",
   ]);
+  const scenarioCases = coreLoopDayFiveProgressionScenarioCases();
+  assert.deepEqual(
+    scenarioCases.map((scenarioCase) => ({
+      key: scenarioCase.key,
+      group: scenarioCase.group,
+      laneIds: scenarioCase.laneIds,
+      scenario: scenarioCase.scenario,
+    })),
+    [
+      {
+        key: "dayFiveNoLynchResolution",
+        group: "surfaces",
+        laneIds: coreLoopDayFiveProgressionLaneIds,
+        scenario: dayFiveNoLynchResolutionSurfaceCase(),
+      },
+      {
+        key: "staleDayFiveVote",
+        group: "staleRejects",
+        laneIds: ["action-loop"],
+        scenario:
+          dayFiveNoLynchResolutionSurfaceCase().staleDayFiveVoteCase,
+      },
+    ],
+  );
 
   const surfaceCase = dayFiveNoLynchResolutionSurfaceCase();
   assert.deepEqual(surfaceCase.transitionFragments, [
@@ -38,6 +63,13 @@ test("Day 5 progression family shares no-lynch resolution and stale vote cases",
   const family = coreLoopDayFiveProgressionScenarioFamily();
   assert.equal(family.id, coreLoopDayFiveProgressionFamilyId);
   assert.deepEqual(family.laneIds, coreLoopDayFiveProgressionLaneIds);
+  assert.deepEqual(family.surfaces, {
+    dayFiveNoLynchResolution: dayFiveNoLynchResolutionSurfaceCase(),
+  });
+  assert.deepEqual(family.staleRejects, {
+    staleDayFiveVote:
+      dayFiveNoLynchResolutionSurfaceCase().staleDayFiveVoteCase,
+  });
   assert.equal(
     family.surfaces.dayFiveNoLynchResolution.voteCase.expectedBoundaryText,
     "Day 5 no-lynch vote ACK",
@@ -49,6 +81,10 @@ test("Day 5 progression family shares no-lynch resolution and stale vote cases",
   assert.notEqual(
     dayFiveNoLynchResolutionSurfaceCase().transitionFragments,
     dayFiveNoLynchResolutionSurfaceCase().transitionFragments,
+  );
+  assert.notEqual(
+    coreLoopDayFiveProgressionScenarioCases()[0].scenario.transitionFragments,
+    coreLoopDayFiveProgressionScenarioCases()[0].scenario.transitionFragments,
   );
 });
 

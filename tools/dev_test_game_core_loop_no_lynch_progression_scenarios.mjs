@@ -19,6 +19,41 @@ export const coreLoopNoLynchProgressionLaneIds = Object.freeze([
   "action-loop",
 ]);
 
+const coreLoopNoLynchProgressionScenarioCaseDefinitions = Object.freeze([
+  Object.freeze({
+    key: "dayFourNoLynchResolution",
+    group: "surfaces",
+    laneIds: Object.freeze(["day-vote-no-lynch", "action-loop"]),
+    buildScenario: dayFourNoLynchResolutionSurfaceCase,
+  }),
+  Object.freeze({
+    key: "dayFiveNoLynchResolution",
+    group: "surfaces",
+    laneIds: Object.freeze(["day-vote-no-lynch", "action-loop"]),
+    buildScenario: dayFiveNoLynchResolutionSurfaceCase,
+  }),
+  Object.freeze({
+    key: "staleDayFiveVote",
+    group: "staleRejects",
+    laneIds: Object.freeze(["action-loop"]),
+    buildScenario: () =>
+      dayFiveNoLynchResolutionSurfaceCase().staleDayFiveVoteCase,
+  }),
+]);
+
+const cloneNoLynchProgressionScenarioCase = (scenarioCase) => ({
+  key: scenarioCase.key,
+  group: scenarioCase.group,
+  laneIds: [...scenarioCase.laneIds],
+  scenario: scenarioCase.buildScenario(),
+});
+
+export function coreLoopNoLynchProgressionScenarioCases() {
+  return coreLoopNoLynchProgressionScenarioCaseDefinitions.map(
+    cloneNoLynchProgressionScenarioCase,
+  );
+}
+
 const dayFourNoLynchVoteProofCaseDefinition = Object.freeze({
   surfaceTestId: "player-surface",
   clickedAction: "submit_vote:no_lynch",
@@ -59,17 +94,20 @@ export function dayFourNoLynchResolutionSurfaceCase() {
 }
 
 export function coreLoopNoLynchProgressionScenarioFamily() {
-  const dayFiveSurface = dayFiveNoLynchResolutionSurfaceCase();
+  const scenarioCases = coreLoopNoLynchProgressionScenarioCases();
   return {
     id: coreLoopNoLynchProgressionFamilyId,
     laneIds: [...coreLoopNoLynchProgressionLaneIds],
-    surfaces: {
-      dayFourNoLynchResolution: dayFourNoLynchResolutionSurfaceCase(),
-      dayFiveNoLynchResolution: dayFiveSurface,
-    },
-    staleRejects: {
-      staleDayFiveVote: dayFiveSurface.staleDayFiveVoteCase,
-    },
+    surfaces: Object.fromEntries(
+      scenarioCases
+        .filter((scenarioCase) => scenarioCase.group === "surfaces")
+        .map((scenarioCase) => [scenarioCase.key, scenarioCase.scenario]),
+    ),
+    staleRejects: Object.fromEntries(
+      scenarioCases
+        .filter((scenarioCase) => scenarioCase.group === "staleRejects")
+        .map((scenarioCase) => [scenarioCase.key, scenarioCase.scenario]),
+    ),
   };
 }
 
