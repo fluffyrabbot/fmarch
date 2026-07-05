@@ -6,6 +6,10 @@ export const identityFeatureSpineSource = Object.freeze({
   sourceCheckId: identityFeatureSpineSourceCheckId,
   graphSourceNodeId: "admin-proof:identity",
   readinessSourceKind: "identity-adapter",
+  coverageDecision: Object.freeze({
+    kind: "seeded-admin-proof",
+    proofCommand: devTestGameIdentityAdminProofCommand,
+  }),
   detailRoleUrlIncludes: "/admin/audit/local-identity-adapter",
   roleUrlIncludes: "/admin/audit/local-identity-adapter",
   rerunCommand: devTestGameIdentityAdminProofCommand,

@@ -21,7 +21,10 @@ import {
   productionFeatureSpineSourceCheckRules,
 } from "./dev_test_game_production_feature_source_rules.mjs";
 import {
+  assertProductionFeatureSourceCoverageDecisions,
+  productionFeatureCoverageDecisionKind,
   productionFeatureReadinessSourceKind,
+  productionFeatureSourceCoverageDecision,
   productionFeatureRoleSurfaceSources,
   productionFeatureRoleSurfaceSourceCheckIds,
   productionFeatureSourceRegistry,
@@ -95,42 +98,61 @@ test("production feature source rules cover every feature spine source", () => {
     productionFeatureSourceRegistry.map((source) => [
       source.sourceCheckId,
       source.readinessSourceKind,
+      source.coverageDecision.kind,
+      source.coverageDecision.proofCommand,
     ]),
     [
       [
         coreLoopFeatureSpineSourceCheckId,
         productionFeatureReadinessSourceKind.spineTargets,
+        productionFeatureCoverageDecisionKind.seededRoleUrlProof,
+        devTestGameCoreLoopAdminProofCommand,
       ],
       [
         hostSetupFeatureSpineSourceCheckId,
         productionFeatureReadinessSourceKind.spineTargets,
+        productionFeatureCoverageDecisionKind.seededRoleUrlProof,
+        devTestGameHostSetupProofCommand,
       ],
       [
         cohostFeatureSpineSourceCheckId,
         productionFeatureReadinessSourceKind.spineTargets,
+        productionFeatureCoverageDecisionKind.seededRoleUrlProof,
+        devTestGameCohostConsoleProofCommand,
       ],
       [
         replacementFeatureSpineSourceCheckId,
         productionFeatureReadinessSourceKind.spineTargets,
+        productionFeatureCoverageDecisionKind.seededRoleUrlProof,
+        devTestGameReplacementPlayerProofCommand,
       ],
       [
         replacementActionFeatureSpineSourceCheckId,
         productionFeatureReadinessSourceKind.spineTargets,
+        productionFeatureCoverageDecisionKind.seededRoleUrlProof,
+        devTestGameReplacementActionProofCommand,
       ],
       [
         replacementPrivateFeatureSpineSourceCheckId,
         productionFeatureReadinessSourceKind.spineTargets,
+        productionFeatureCoverageDecisionKind.seededRoleUrlProof,
+        devTestGameReplacementPrivateProofCommand,
       ],
       [
         hardeningFeatureSpineSourceCheckId,
         productionFeatureReadinessSourceKind.spineTargets,
+        productionFeatureCoverageDecisionKind.seededRoleUrlProof,
+        devTestGameHardeningAdminProofCommand,
       ],
       [
         identityFeatureSpineSourceCheckId,
         productionFeatureReadinessSourceKind.identityAdapter,
+        productionFeatureCoverageDecisionKind.seededAdminProof,
+        devTestGameIdentityAdminProofCommand,
       ],
     ],
   );
+  assert.doesNotThrow(() => assertProductionFeatureSourceCoverageDecisions());
   assert.ok(
     devTestGameProductionFeatureBrowserProofCommand.includes(
       "test:dev-test-game-core-live",
@@ -159,6 +181,48 @@ test("production feature source rules cover every feature spine source", () => {
       "role-surface:replacement-action",
       "role-surface:replacement-private-channel",
     ],
+  );
+});
+
+test("production feature source coverage decisions fail closed", () => {
+  assert.equal(
+    productionFeatureSourceCoverageDecision({
+      sourceCheckId: "future-feature",
+      rerunCommand: "npm run future-proof",
+    }),
+    null,
+  );
+  assert.throws(
+    () =>
+      assertProductionFeatureSourceCoverageDecisions([
+        {
+          sourceCheckId: "future-feature",
+          rerunCommand: "npm run future-proof",
+        },
+      ]),
+    /production feature source missing coverage decision: future-feature/,
+  );
+  assert.equal(
+    productionFeatureSourceCoverageDecision({
+      sourceCheckId: "future-deferred-feature",
+      coverageDecision: {
+        kind: productionFeatureCoverageDecisionKind.deferred,
+        reason: "awaiting real accounts",
+        nextDecisionTrigger: "identity session model lands",
+      },
+    })?.kind,
+    productionFeatureCoverageDecisionKind.deferred,
+  );
+  assert.equal(
+    productionFeatureSourceCoverageDecision({
+      sourceCheckId: "future-blocked-feature",
+      coverageDecision: {
+        kind: productionFeatureCoverageDecisionKind.blockedLocalPrerequisite,
+        prerequisiteCheckId: "local-proof-freshness",
+        recoveryCommand: "npm run test:dev-test-game-proof-freshness-admin-proof",
+      },
+    })?.kind,
+    productionFeatureCoverageDecisionKind.blockedLocalPrerequisite,
   );
 });
 

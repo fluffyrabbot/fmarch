@@ -46,6 +46,10 @@ export const coreLoopFeatureSpineSource = Object.freeze({
   sourceCheckId: coreLoopFeatureSpineSourceCheckId,
   graphSourceNodeId: "admin-proof:core-loop",
   readinessSourceKind: "spine-targets",
+  coverageDecision: Object.freeze({
+    kind: "seeded-role-url-proof",
+    proofCommand: devTestGameCoreLoopAdminProofCommand,
+  }),
   detailRoleUrlIncludes: "/admin/audit/local-core-loop",
   roleUrlIncludes: "/g/",
   rerunCommand: devTestGameCoreLoopAdminProofCommand,

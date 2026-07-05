@@ -11,6 +11,10 @@ export const replacementPrivateFeatureSpineSource = Object.freeze({
   sourceCheckId: replacementPrivateFeatureSpineSourceCheckId,
   graphSourceNodeId: "role-surface:replacement-private-channel",
   readinessSourceKind: "spine-targets",
+  coverageDecision: Object.freeze({
+    kind: "seeded-role-url-proof",
+    proofCommand: devTestGameReplacementPrivateProofCommand,
+  }),
   detailRoleUrlIncludes:
     "/g/<replacement-private-game>/c/private%3Amafia_day_chat",
   roleUrlIncludes: "/g/<replacement-private-game>/c/private%3Amafia_day_chat",

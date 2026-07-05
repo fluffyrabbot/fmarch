@@ -8,6 +8,10 @@ export const hardeningFeatureSpineSource = Object.freeze({
   sourceCheckId: hardeningFeatureSpineSourceCheckId,
   graphSourceNodeId: "admin-proof:hardening",
   readinessSourceKind: "spine-targets",
+  coverageDecision: Object.freeze({
+    kind: "seeded-role-url-proof",
+    proofCommand: devTestGameHardeningAdminProofCommand,
+  }),
   detailRoleUrlIncludes: "/admin/audit/local-hardening",
   roleUrlIncludes: "/g/",
   rerunCommand: devTestGameHardeningAdminProofCommand,

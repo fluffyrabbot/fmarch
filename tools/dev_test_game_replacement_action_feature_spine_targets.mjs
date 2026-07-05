@@ -9,6 +9,10 @@ export const replacementActionFeatureSpineSource = Object.freeze({
   sourceCheckId: replacementActionFeatureSpineSourceCheckId,
   graphSourceNodeId: "role-surface:replacement-action",
   readinessSourceKind: "spine-targets",
+  coverageDecision: Object.freeze({
+    kind: "seeded-role-url-proof",
+    proofCommand: devTestGameReplacementActionProofCommand,
+  }),
   detailRoleUrlIncludes: "/g/<replacement-action-game>",
   roleUrlIncludes: "/g/<replacement-action-game>",
   rerunCommand: devTestGameReplacementActionProofCommand,

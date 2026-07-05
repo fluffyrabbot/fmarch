@@ -8,6 +8,10 @@ export const cohostFeatureSpineSource = Object.freeze({
   sourceCheckId: cohostFeatureSpineSourceCheckId,
   graphSourceNodeId: "role-surface:cohost-console",
   readinessSourceKind: "spine-targets",
+  coverageDecision: Object.freeze({
+    kind: "seeded-role-url-proof",
+    proofCommand: devTestGameCohostConsoleProofCommand,
+  }),
   detailRoleUrlIncludes: "/g/<seeded-game>/host",
   roleUrlIncludes: "/g/<seeded-game>/host",
   rerunCommand: devTestGameCohostConsoleProofCommand,

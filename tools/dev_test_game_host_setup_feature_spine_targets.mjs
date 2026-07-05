@@ -7,6 +7,10 @@ export const hostSetupFeatureSpineSource = Object.freeze({
   sourceCheckId: hostSetupFeatureSpineSourceCheckId,
   graphSourceNodeId: "role-surface:host-setup",
   readinessSourceKind: "spine-targets",
+  coverageDecision: Object.freeze({
+    kind: "seeded-role-url-proof",
+    proofCommand: devTestGameHostSetupProofCommand,
+  }),
   detailRoleUrlIncludes: "/g/<seeded-game>/setup",
   roleUrlIncludes: "/g/<seeded-game>/setup",
   rerunCommand: devTestGameHostSetupProofCommand,

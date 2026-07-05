@@ -36,6 +36,13 @@ export const productionFeatureReadinessSourceKind = Object.freeze({
   identityAdapter: "identity-adapter",
 });
 
+export const productionFeatureCoverageDecisionKind = Object.freeze({
+  seededRoleUrlProof: "seeded-role-url-proof",
+  seededAdminProof: "seeded-admin-proof",
+  deferred: "deferred",
+  blockedLocalPrerequisite: "blocked-local-prerequisite",
+});
+
 export const devTestGameProductionFeatureBrowserProofCommand =
   "DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch npm run test:dev-test-game-core-live";
 export {
@@ -90,3 +97,65 @@ export function productionFeatureSourceForCheckId(sourceCheckId) {
   }
   return source;
 }
+
+export function productionFeatureSourceCoverageDecision(source) {
+  const decision = source?.coverageDecision;
+  if (decision === null || typeof decision !== "object") {
+    return null;
+  }
+  const kind = decision.kind;
+  if (
+    kind === productionFeatureCoverageDecisionKind.seededRoleUrlProof ||
+    kind === productionFeatureCoverageDecisionKind.seededAdminProof
+  ) {
+    return typeof decision.proofCommand === "string" &&
+      decision.proofCommand.trim() !== "" &&
+      decision.proofCommand === source.rerunCommand
+      ? decision
+      : null;
+  }
+  if (kind === productionFeatureCoverageDecisionKind.deferred) {
+    return typeof decision.reason === "string" &&
+      decision.reason.trim() !== "" &&
+      typeof decision.nextDecisionTrigger === "string" &&
+      decision.nextDecisionTrigger.trim() !== ""
+      ? decision
+      : null;
+  }
+  if (kind === productionFeatureCoverageDecisionKind.blockedLocalPrerequisite) {
+    return typeof decision.prerequisiteCheckId === "string" &&
+      decision.prerequisiteCheckId.trim() !== "" &&
+      typeof decision.recoveryCommand === "string" &&
+      decision.recoveryCommand.trim() !== ""
+      ? decision
+      : null;
+  }
+  return null;
+}
+
+export function assertProductionFeatureSourceCoverageDecisions(
+  sources = productionFeatureSourceRegistry,
+) {
+  const missing = [];
+  for (const source of sources) {
+    const decision = productionFeatureSourceCoverageDecision(source);
+    if (decision === null) {
+      missing.push(source?.sourceCheckId ?? "<unknown>");
+      continue;
+    }
+    if (
+      decision.kind === productionFeatureCoverageDecisionKind.seededRoleUrlProof &&
+      (typeof source.roleUrlIncludes !== "string" ||
+        source.roleUrlIncludes.trim() === "")
+    ) {
+      missing.push(source.sourceCheckId);
+    }
+  }
+  if (missing.length > 0) {
+    throw new Error(
+      `production feature source missing coverage decision: ${missing.join(", ")}`,
+    );
+  }
+}
+
+assertProductionFeatureSourceCoverageDecisions();
