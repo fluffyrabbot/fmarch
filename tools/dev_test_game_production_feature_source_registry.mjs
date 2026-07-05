@@ -18,6 +18,10 @@ import {
   cohostFeatureSpineSource,
   devTestGameCohostConsoleProofCommand,
 } from "./dev_test_game_cohost_feature_spine_targets.mjs";
+import {
+  devTestGameReplacementPlayerProofCommand,
+  replacementFeatureSpineSource,
+} from "./dev_test_game_replacement_feature_spine_targets.mjs";
 
 export const productionFeatureReadinessSourceKind = Object.freeze({
   spineTargets: "spine-targets",
@@ -32,12 +36,14 @@ export {
   devTestGameHardeningAdminProofCommand,
   devTestGameHostSetupProofCommand,
   devTestGameIdentityAdminProofCommand,
+  devTestGameReplacementPlayerProofCommand,
 };
 
 export const productionFeatureSourceRegistry = Object.freeze([
   coreLoopFeatureSpineSource,
   hostSetupFeatureSpineSource,
   cohostFeatureSpineSource,
+  replacementFeatureSpineSource,
   hardeningFeatureSpineSource,
   identityFeatureSpineSource,
 ]);

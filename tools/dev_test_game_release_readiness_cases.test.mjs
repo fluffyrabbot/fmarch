@@ -56,6 +56,10 @@ import {
   identityFeatureSpineTargetRows,
 } from "./dev_test_game_identity_feature_spine_targets.mjs";
 import {
+  replacementFeatureSpineSourceCheckId,
+  replacementFeatureSpineTargetRows,
+} from "./dev_test_game_replacement_feature_spine_targets.mjs";
+import {
   hardeningFeatureSpineCycleIds,
   hardeningFeatureSpineSourceCheckId,
 } from "./dev_test_game_hardening_feature_spine_targets.mjs";
@@ -456,6 +460,17 @@ test("identity production feature target derives proof row ids from shared sourc
   const target = releaseReadinessProductionFeatureSpineTargets.identityAdapter;
   assert.equal(target.featureSlotId, source.featureSlotId);
   assert.equal(target.sourceCheckId, identityFeatureSpineSourceCheckId);
+  assert.equal(target.cycleId, source.cycleId);
+  assert.equal(target.roleUrlId, source.roleUrlId);
+  assert.equal(target.checkpointId, source.checkpointId);
+  assert.equal(target.adminCheckId, source.adminCheckId);
+});
+
+test("replacement production feature target derives proof row ids from shared source rows", () => {
+  const source = replacementFeatureSpineTargetRows.replacementPlayer;
+  const target = releaseReadinessProductionFeatureSpineTargets.replacementPlayer;
+  assert.equal(target.featureSlotId, source.featureSlotId);
+  assert.equal(target.sourceCheckId, replacementFeatureSpineSourceCheckId);
   assert.equal(target.cycleId, source.cycleId);
   assert.equal(target.roleUrlId, source.roleUrlId);
   assert.equal(target.checkpointId, source.checkpointId);

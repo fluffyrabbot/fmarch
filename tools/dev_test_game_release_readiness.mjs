@@ -107,6 +107,7 @@ import {
   devTestGameHardeningAdminProofCommand,
   devTestGameHostSetupProofCommand,
   devTestGameProductionFeatureBrowserProofCommand,
+  devTestGameReplacementPlayerProofCommand,
   productionFeatureSpineSourceCheckRules,
 } from "./dev_test_game_production_feature_source_rules.mjs";
 import {
@@ -122,6 +123,10 @@ import {
   cohostFeatureSpineCycleId,
   cohostFeatureSpineSourceCheckId,
 } from "./dev_test_game_cohost_feature_spine_targets.mjs";
+import {
+  replacementFeatureSpineCycleId,
+  replacementFeatureSpineSourceCheckId,
+} from "./dev_test_game_replacement_feature_spine_targets.mjs";
 import {
   hostSetupFeatureSpineCycleId,
   hostSetupFeatureSpineSourceCheckId,
@@ -414,6 +419,12 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
   const cohostConsoleProofEvidence = validateCohostConsoleLaneProof(proof, {
     path: sourcePath,
   });
+  const replacementPlayerProofEvidence = validateReplacementPlayerLaneProof(
+    proof,
+    {
+      path: sourcePath,
+    },
+  );
   const backupRestoreEvidence = options.backupRestoreProof
     ? validateDevTestGameBackupRestoreProof(options.backupRestoreProof, {
         proofPath:
@@ -714,6 +725,27 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
         cohostConsoleProofEvidence.phaseAfterRejectLocked,
       recoveryCommand: devTestGameCohostConsoleProofCommand,
       spineTargets: buildCohostReadinessSpineTargets(cohostConsoleProofEvidence),
+    },
+    {
+      id: replacementFeatureSpineSourceCheckId,
+      label: "Replacement player role URL proof",
+      status: "passed",
+      evidence: replacementPlayerProofEvidence.path,
+      roleUrl: replacementPlayerProofEvidence.roleUrl,
+      proofBoundary:
+        "Seeded dev-test-game replacement player role URL proof from proof-run. Proves host-issued replacement URL, fresh replacement session recovery, incoming player slot authority, stale outgoing player rejection, and private-channel authority transfer; does not prove hosted identity, invite delivery, multi-node races, release readiness, or production readiness.",
+      principalUserId: replacementPlayerProofEvidence.principalUserId,
+      commandStateSlot: replacementPlayerProofEvidence.commandStateSlot,
+      capabilityKinds: replacementPlayerProofEvidence.capabilityKinds,
+      hostIssuedInvite: replacementPlayerProofEvidence.hostIssuedInvite,
+      sessionRefresh: replacementPlayerProofEvidence.sessionRefresh,
+      incomingPlayer: replacementPlayerProofEvidence.incomingPlayer,
+      staleOutgoing: replacementPlayerProofEvidence.staleOutgoing,
+      privateAuthority: replacementPlayerProofEvidence.privateAuthority,
+      recoveryCommand: devTestGameReplacementPlayerProofCommand,
+      spineTargets: buildReplacementReadinessSpineTargets(
+        replacementPlayerProofEvidence,
+      ),
     },
     {
       id: coreLoopFeatureSpineSourceCheckId,
@@ -2445,6 +2477,111 @@ function validateCohostConsoleLaneProof(proof, options = {}) {
   };
 }
 
+function validateReplacementPlayerLaneProof(proof, options = {}) {
+  const laneById = new Map((proof?.lanes ?? []).map((lane) => [lane.id, lane]));
+  const game = proof?.session?.game;
+  const frontendBaseUrl = String(proof?.session?.frontendBaseUrl ?? "").replace(
+    /\/$/,
+    "",
+  );
+  const hostIssuedInvite = laneById.get("replacement-host-issued-invite");
+  const sessionRefresh = laneById.get("replacement-session-refresh-recovery");
+  const incomingPlayer = laneById.get("replacement-incoming-player");
+  const staleOutgoing = laneById.get("replacement-stale-player");
+  const privateAuthority = laneById.get("replacement-stale-private-channel");
+  const privateReceipts = laneById.get("replacement-stale-private-receipts");
+  if (
+    typeof game !== "string" ||
+    game.trim() === "" ||
+    frontendBaseUrl === "" ||
+    hostIssuedInvite?.status !== "passed" ||
+    hostIssuedInvite.evidence?.principalUserId !== "player-rowan" ||
+    hostIssuedInvite.evidence?.issuedBy !== "host_h" ||
+    hostIssuedInvite.evidence?.issuedByCapability !== "HostOf" ||
+    hostIssuedInvite.evidence?.returnTo !== `/g/${game}` ||
+    hostIssuedInvite.evidence?.tokenPresent !== true ||
+    sessionRefresh?.status !== "passed" ||
+    sessionRefresh.evidence?.credentialKind !== "session" ||
+    sessionRefresh.evidence?.principalUserId !== "player-rowan" ||
+    sessionRefresh.evidence?.usedInviteToken !== false ||
+    sessionRefresh.evidence?.landedOnDirectUrl !== true ||
+    !sessionRefresh.evidence?.capabilityKinds?.includes("SlotOccupant") ||
+    !sessionRefresh.evidence?.capabilityKinds?.includes("ChannelMember") ||
+    sessionRefresh.evidence?.commandStateSlot !== "slot-7" ||
+    incomingPlayer?.status !== "passed" ||
+    incomingPlayer.evidence?.principalUserId !== "player-rowan" ||
+    !incomingPlayer.evidence?.capabilityKinds?.includes("SlotOccupant") ||
+    !incomingPlayer.evidence?.capabilityKinds?.includes("ChannelMember") ||
+    incomingPlayer.evidence?.commandStateSlot !== "slot-7" ||
+    incomingPlayer.evidence?.postState !== "ack" ||
+    incomingPlayer.evidence?.voteState !== "Ack" ||
+    incomingPlayer.evidence?.stableHistoryVisible !== true ||
+    incomingPlayer.evidence?.targetKillVisible !== false ||
+    incomingPlayer.evidence?.actionResultVisible !== false ||
+    staleOutgoing?.status !== "passed" ||
+    staleOutgoing.evidence?.rejectError !== "NotYourSlot" ||
+    staleOutgoing.evidence?.recoveredActorStatus !== "replaced" ||
+    staleOutgoing.evidence?.buttonsDisabled !== true ||
+    privateAuthority?.status !== "passed" ||
+    privateAuthority.evidence?.channel !== "private:mafia_day_chat" ||
+    privateAuthority.evidence?.staleRejectError !== "NotYourSlot" ||
+    privateAuthority.evidence?.staleRouteStatus !== 403 ||
+    privateAuthority.evidence?.rowanPostState !== "ack" ||
+    privateReceipts?.status !== "passed" ||
+    privateReceipts.evidence?.staleNotificationsStatus !== 403 ||
+    privateReceipts.evidence?.rowanNotificationsStatus !== 200
+  ) {
+    throw new Error(
+      "dev-test-game proof run missing replacement player role proof",
+    );
+  }
+  return {
+    status: "passed",
+    path: options.path ?? "target/dev-test-game/proof-run.json",
+    roleUrl: `${frontendBaseUrl}/g/<seeded-game>`,
+    principalUserId: "player-rowan",
+    commandStateSlot: "slot-7",
+    capabilityKinds: [...incomingPlayer.evidence.capabilityKinds],
+    hostIssuedInvite: {
+      principalUserId: hostIssuedInvite.evidence.principalUserId,
+      issuedBy: hostIssuedInvite.evidence.issuedBy,
+      issuedByCapability: hostIssuedInvite.evidence.issuedByCapability,
+      returnTo: hostIssuedInvite.evidence.returnTo.replace(
+        game,
+        "<seeded-game>",
+      ),
+      tokenPresent: hostIssuedInvite.evidence.tokenPresent,
+    },
+    sessionRefresh: {
+      credentialKind: sessionRefresh.evidence.credentialKind,
+      usedInviteToken: sessionRefresh.evidence.usedInviteToken,
+      landedOnDirectUrl: sessionRefresh.evidence.landedOnDirectUrl,
+      commandStateSlot: sessionRefresh.evidence.commandStateSlot,
+    },
+    incomingPlayer: {
+      postState: incomingPlayer.evidence.postState,
+      voteState: incomingPlayer.evidence.voteState,
+      stableHistoryVisible: incomingPlayer.evidence.stableHistoryVisible,
+      targetKillVisible: incomingPlayer.evidence.targetKillVisible,
+      actionResultVisible: incomingPlayer.evidence.actionResultVisible,
+    },
+    staleOutgoing: {
+      rejectError: staleOutgoing.evidence.rejectError,
+      recoveredActorStatus: staleOutgoing.evidence.recoveredActorStatus,
+      buttonsDisabled: staleOutgoing.evidence.buttonsDisabled,
+    },
+    privateAuthority: {
+      channel: privateAuthority.evidence.channel,
+      staleRejectError: privateAuthority.evidence.staleRejectError,
+      staleRouteStatus: privateAuthority.evidence.staleRouteStatus,
+      rowanPostState: privateAuthority.evidence.rowanPostState,
+      staleNotificationsStatus:
+        privateReceipts.evidence.staleNotificationsStatus,
+      rowanNotificationsStatus: privateReceipts.evidence.rowanNotificationsStatus,
+    },
+  };
+}
+
 function assertCoreLoopHostLifecycleCheckpoint(hostRoleSurface) {
   const scenarioFamily = coreLoopHostControlScenarioFamily();
   assertHostLifecycleControlRoleSurfaceCase({
@@ -3129,6 +3266,55 @@ function buildCohostReadinessSpineTargets(cohostConsoleProofEvidence) {
         detailRoleUrl: cohostConsoleProofEvidence.roleUrl,
         browserProofCommand: devTestGameSeededBrowserProofCommand,
         rerunCommand: devTestGameCohostConsoleProofCommand,
+        cycleIds,
+        roleUrlIds,
+        checkpointIds,
+        visibleAdminCheckIds,
+        recoveryHookIds: [],
+        roleUrlHrefs,
+      },
+      defaultRerunCommandBySourceCheckId:
+        defaultProductionFeatureSpineRerunCommands,
+    }),
+  };
+}
+
+function buildReplacementReadinessSpineTargets(replacementPlayerProofEvidence) {
+  const cycleIds = [replacementFeatureSpineCycleId];
+  const roleUrlIds = ["replacement-player"];
+  const checkpointIds = ["incoming-player-slot-authority"];
+  const visibleAdminCheckIds = [
+    "replacement-host-issued-invite",
+    "replacement-session-refresh-recovery",
+    "replacement-incoming-player",
+    "replacement-stale-player",
+    "replacement-stale-private-channel",
+    "replacement-stale-private-receipts",
+  ];
+  const roleUrlHrefs = {
+    "replacement-player": replacementPlayerProofEvidence.roleUrl,
+  };
+  return {
+    status: "passed",
+    detailRoleUrl: replacementPlayerProofEvidence.roleUrl,
+    defaultCycleId: replacementFeatureSpineCycleId,
+    defaultRoleUrlId: "replacement-player",
+    defaultRoleUrl: replacementPlayerProofEvidence.roleUrl,
+    defaultCheckpointId: "incoming-player-slot-authority",
+    browserProofCommand: devTestGameSeededBrowserProofCommand,
+    cycleIds,
+    roleUrlIds,
+    checkpointIds,
+    visibleAdminCheckIds,
+    recoveryHookIds: [],
+    roleUrlHrefs,
+    productionFeatureTargets: buildProductionFeatureSpineTargetCollection({
+      declarations: releaseReadinessProductionFeatureSpineTargets,
+      sourceTarget: {
+        sourceCheckId: replacementFeatureSpineSourceCheckId,
+        detailRoleUrl: replacementPlayerProofEvidence.roleUrl,
+        browserProofCommand: devTestGameSeededBrowserProofCommand,
+        rerunCommand: devTestGameReplacementPlayerProofCommand,
         cycleIds,
         roleUrlIds,
         checkpointIds,
@@ -4660,6 +4846,7 @@ export function validateDevTestGameProofGraphAdminProof(proof, options = {}) {
   }
   validateProofGraphAdminHostSetupFeatureTarget(proof);
   validateProofGraphAdminCohostFeatureTarget(proof);
+  validateProofGraphAdminReplacementFeatureTarget(proof);
   const destinationAuditIds = [
     ...new Set(handoffs.map((handoff) => String(handoff.auditId))),
   ];
@@ -4705,6 +4892,20 @@ function validateProofGraphAdminCohostFeatureTarget(proof) {
     expectedAdminCheckId: "cohost-console",
     expectedRecoveryCommand: devTestGameCohostConsoleProofCommand,
     label: "cohost console",
+  });
+}
+
+function validateProofGraphAdminReplacementFeatureTarget(proof) {
+  validateProofGraphAdminFeatureTarget(proof, {
+    target: proof.generatedFrom?.replacementFeatureTarget,
+    expectedRoleSurfaceNodeId: "role-surface:replacement-player",
+    expectedFeatureSlotId: "replacement-player-role-surface",
+    expectedSourceCheckId: replacementFeatureSpineSourceCheckId,
+    expectedRoleUrlIncludes: "/g/<seeded-game>",
+    expectedCheckpointId: "incoming-player-slot-authority",
+    expectedAdminCheckId: "replacement-incoming-player",
+    expectedRecoveryCommand: devTestGameReplacementPlayerProofCommand,
+    label: "replacement player",
   });
 }
 
@@ -5957,7 +6158,7 @@ export function assertDevTestGameReleaseReadiness(checklist) {
     throw new Error("dev-test-game hardening readiness check is missing spine targets");
   }
   const hostSetupCheck = checklist.localDevelopmentSpine?.checks?.find(
-    (check) => check.id === "local-host-setup-proof",
+    (check) => check.id === hostSetupFeatureSpineSourceCheckId,
   );
   if (
     hostSetupCheck !== undefined &&
@@ -5989,6 +6190,34 @@ export function assertDevTestGameReleaseReadiness(checklist) {
     !validCohostSpineTargets(cohostCheck.spineTargets)
   ) {
     throw new Error("dev-test-game cohost console readiness check is malformed");
+  }
+  const replacementCheck = checklist.localDevelopmentSpine?.checks?.find(
+    (check) => check.id === replacementFeatureSpineSourceCheckId,
+  );
+  if (
+    replacementCheck === undefined ||
+    !replacementCheck.roleUrl?.includes("/g/<seeded-game>") ||
+    replacementCheck.principalUserId !== "player-rowan" ||
+    replacementCheck.commandStateSlot !== "slot-7" ||
+    !replacementCheck.capabilityKinds?.includes("SlotOccupant") ||
+    !replacementCheck.capabilityKinds?.includes("ChannelMember") ||
+    replacementCheck.hostIssuedInvite?.issuedBy !== "host_h" ||
+    replacementCheck.hostIssuedInvite?.issuedByCapability !== "HostOf" ||
+    replacementCheck.hostIssuedInvite?.tokenPresent !== true ||
+    replacementCheck.sessionRefresh?.credentialKind !== "session" ||
+    replacementCheck.sessionRefresh?.usedInviteToken !== false ||
+    replacementCheck.incomingPlayer?.postState !== "ack" ||
+    replacementCheck.incomingPlayer?.voteState !== "Ack" ||
+    replacementCheck.staleOutgoing?.rejectError !== "NotYourSlot" ||
+    replacementCheck.staleOutgoing?.recoveredActorStatus !== "replaced" ||
+    replacementCheck.privateAuthority?.staleRejectError !== "NotYourSlot" ||
+    replacementCheck.privateAuthority?.staleRouteStatus !== 403 ||
+    replacementCheck.recoveryCommand !== devTestGameReplacementPlayerProofCommand ||
+    !validReplacementSpineTargets(replacementCheck.spineTargets)
+  ) {
+    throw new Error(
+      "dev-test-game replacement player readiness check is malformed",
+    );
   }
   assertRecoveryMilestoneReadinessChecksMirrorGeneratedFrom(checklist);
   if (checklist.releaseReadiness?.status !== "not_ready") {
@@ -6384,6 +6613,49 @@ function validCohostProductionFeatureTargets(productionFeatureTargets) {
       .filter(
         (declaration) =>
           declaration.sourceCheckId === cohostFeatureSpineSourceCheckId,
+      ),
+    sourceCheckRules: productionFeatureSpineSourceCheckRules,
+  });
+}
+
+function validReplacementSpineTargets(spineTargets) {
+  return (
+    spineTargets !== null &&
+    typeof spineTargets === "object" &&
+    spineTargets.status === "passed" &&
+    spineTargets.detailRoleUrl?.includes("/g/<seeded-game>") &&
+    spineTargets.defaultCycleId === replacementFeatureSpineCycleId &&
+    spineTargets.defaultRoleUrlId === "replacement-player" &&
+    spineTargets.defaultRoleUrl?.includes("/g/<seeded-game>") &&
+    spineTargets.defaultCheckpointId === "incoming-player-slot-authority" &&
+    typeof spineTargets.browserProofCommand === "string" &&
+    spineTargets.browserProofCommand.includes("test:dev-test-game-core-live") &&
+    Array.isArray(spineTargets.cycleIds) &&
+    spineTargets.cycleIds.includes(replacementFeatureSpineCycleId) &&
+    Array.isArray(spineTargets.roleUrlIds) &&
+    spineTargets.roleUrlIds.includes("replacement-player") &&
+    spineTargets.roleUrlHrefs?.["replacement-player"]?.includes(
+      "/g/<seeded-game>",
+    ) &&
+    Array.isArray(spineTargets.checkpointIds) &&
+    spineTargets.checkpointIds.includes("incoming-player-slot-authority") &&
+    Array.isArray(spineTargets.recoveryHookIds) &&
+    spineTargets.recoveryHookIds.length === 0 &&
+    Array.isArray(spineTargets.visibleAdminCheckIds) &&
+    spineTargets.visibleAdminCheckIds.includes("replacement-incoming-player") &&
+    spineTargets.visibleAdminCheckIds.includes("replacement-stale-player") &&
+    validReplacementProductionFeatureTargets(
+      spineTargets.productionFeatureTargets,
+    )
+  );
+}
+
+function validReplacementProductionFeatureTargets(productionFeatureTargets) {
+  return validProductionFeatureSpineTargetCollection(productionFeatureTargets, {
+    declarations: Object.values(releaseReadinessProductionFeatureSpineTargets)
+      .filter(
+        (declaration) =>
+          declaration.sourceCheckId === replacementFeatureSpineSourceCheckId,
       ),
     sourceCheckRules: productionFeatureSpineSourceCheckRules,
   });

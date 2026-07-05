@@ -10,9 +10,12 @@ import {
 import {
   defaultProductionFeatureSpineRerunCommands,
   devTestGameCoreLoopAdminProofCommand,
+  devTestGameCohostConsoleProofCommand,
   devTestGameHardeningAdminProofCommand,
+  devTestGameHostSetupProofCommand,
   devTestGameIdentityAdminProofCommand,
   devTestGameProductionFeatureBrowserProofCommand,
+  devTestGameReplacementPlayerProofCommand,
   productionFeatureSpineSourceCheckRules,
 } from "./dev_test_game_production_feature_source_rules.mjs";
 import {
@@ -31,6 +34,18 @@ import {
   identityFeatureSpineSource,
   identityFeatureSpineSourceCheckId,
 } from "./dev_test_game_identity_feature_spine_targets.mjs";
+import {
+  cohostFeatureSpineSource,
+  cohostFeatureSpineSourceCheckId,
+} from "./dev_test_game_cohost_feature_spine_targets.mjs";
+import {
+  hostSetupFeatureSpineSource,
+  hostSetupFeatureSpineSourceCheckId,
+} from "./dev_test_game_host_setup_feature_spine_targets.mjs";
+import {
+  replacementFeatureSpineSource,
+  replacementFeatureSpineSourceCheckId,
+} from "./dev_test_game_replacement_feature_spine_targets.mjs";
 
 test("production feature source rules cover every feature spine source", () => {
   assert.deepEqual(
@@ -43,11 +58,18 @@ test("production feature source rules cover every feature spine source", () => {
   );
   assert.deepEqual(defaultProductionFeatureSpineRerunCommands, {
     [coreLoopFeatureSpineSourceCheckId]: devTestGameCoreLoopAdminProofCommand,
+    [hostSetupFeatureSpineSourceCheckId]: devTestGameHostSetupProofCommand,
+    [cohostFeatureSpineSourceCheckId]: devTestGameCohostConsoleProofCommand,
+    [replacementFeatureSpineSourceCheckId]:
+      devTestGameReplacementPlayerProofCommand,
     [hardeningFeatureSpineSourceCheckId]: devTestGameHardeningAdminProofCommand,
     [identityFeatureSpineSourceCheckId]: devTestGameIdentityAdminProofCommand,
   });
   assert.deepEqual(productionFeatureSourceRegistry, [
     coreLoopFeatureSpineSource,
+    hostSetupFeatureSpineSource,
+    cohostFeatureSpineSource,
+    replacementFeatureSpineSource,
     hardeningFeatureSpineSource,
     identityFeatureSpineSource,
   ]);
@@ -59,6 +81,18 @@ test("production feature source rules cover every feature spine source", () => {
     [
       [
         coreLoopFeatureSpineSourceCheckId,
+        productionFeatureReadinessSourceKind.spineTargets,
+      ],
+      [
+        hostSetupFeatureSpineSourceCheckId,
+        productionFeatureReadinessSourceKind.spineTargets,
+      ],
+      [
+        cohostFeatureSpineSourceCheckId,
+        productionFeatureReadinessSourceKind.spineTargets,
+      ],
+      [
+        replacementFeatureSpineSourceCheckId,
         productionFeatureReadinessSourceKind.spineTargets,
       ],
       [
@@ -81,6 +115,9 @@ test("production feature source rules cover every feature spine source", () => {
 test("production feature builders use source modules instead of raw source ids", async () => {
   const sourceIdLiterals = [
     coreLoopFeatureSpineSourceCheckId,
+    hostSetupFeatureSpineSourceCheckId,
+    cohostFeatureSpineSourceCheckId,
+    replacementFeatureSpineSourceCheckId,
     hardeningFeatureSpineSourceCheckId,
     identityFeatureSpineSourceCheckId,
   ];

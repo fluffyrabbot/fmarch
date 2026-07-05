@@ -41,6 +41,9 @@ import {
   cohostFeatureSpineTargetRows,
 } from "./dev_test_game_cohost_feature_spine_targets.mjs";
 import {
+  replacementFeatureSpineTargetRows,
+} from "./dev_test_game_replacement_feature_spine_targets.mjs";
+import {
   hardeningFeatureSpineCycleIds,
   hardeningFeatureSpineSourceCheckId,
 } from "./dev_test_game_hardening_feature_spine_targets.mjs";
@@ -107,6 +110,9 @@ export const releaseReadinessProductionFeatureSpineTargets = Object.freeze({
   }),
   cohostConsole: featureSpineCheckpointTarget({
     ...cohostFeatureSpineTargetRows.cohostConsole,
+  }),
+  replacementPlayer: featureSpineCheckpointTarget({
+    ...replacementFeatureSpineTargetRows.replacementPlayer,
   }),
   ...coreLoopProductionFeatureSpineTargets,
   completedGameStaleRecovery: featureSpineCheckpointTarget({

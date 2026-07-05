@@ -310,6 +310,11 @@ import {
   devTestGameCohostConsoleProofCommand,
 } from "./dev_test_game_cohost_feature_spine_targets.mjs";
 import {
+  devTestGameReplacementPlayerProofCommand,
+  replacementFeatureSpineCycleId,
+  replacementFeatureSpineTargetRows,
+} from "./dev_test_game_replacement_feature_spine_targets.mjs";
+import {
   assertDevTestGameHostedMatrixExternalEvidence,
   buildDevTestGameHostedMatrixExternalEvidence,
   devTestGameHostedMatrixExternalEvidenceCommand,
@@ -3262,10 +3267,10 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
     graph,
     releaseReadiness,
   );
-  assert.equal(graph.summary.nodeCount, 62);
-  assert.equal(graph.summary.roleUrlCount, 62);
-  assert.equal(graph.summary.roleSurfaceProofCount, 2);
-  assert.equal(graph.summary.productionFeatureTargetCount, 34);
+  assert.equal(graph.summary.nodeCount, 64);
+  assert.equal(graph.summary.roleUrlCount, 64);
+  assert.equal(graph.summary.roleSurfaceProofCount, 3);
+  assert.equal(graph.summary.productionFeatureTargetCount, 35);
   assert.equal(graph.summary.terminalBatchCount, 2);
   for (const descriptor of recoveryReceiptGraphDescriptors) {
     assert.equal(
@@ -3391,6 +3396,13 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
         "http://127.0.0.1:5173/g/<seeded-game>/host",
         "npm run test:dev-test-game-core-live",
       ],
+      [
+        "role-surface:replacement-player",
+        "local-replacement-player-proof",
+        "target/dev-test-game/proof-run.json",
+        "http://127.0.0.1:5173/g/<seeded-game>",
+        "npm run test:dev-test-game-core-live",
+      ],
     ],
   );
   assert(
@@ -3420,11 +3432,16 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
     releaseReadiness.localDevelopmentSpine.checks.find(
       (check) => check.id === "local-cohost-console-proof",
     ).spineTargets.productionFeatureTargets;
+  const replacementProductionFeatureTargets =
+    releaseReadiness.localDevelopmentSpine.checks.find(
+      (check) => check.id === "local-replacement-player-proof",
+    ).spineTargets.productionFeatureTargets;
   const expectedProductionFeatureRows = [
     ...[
       coreLoopProductionFeatureTargets,
       hostSetupProductionFeatureTargets,
       cohostProductionFeatureTargets,
+      replacementProductionFeatureTargets,
       hardeningProductionFeatureTargets,
     ]
       .flatMap((productionFeatureTargets) =>
@@ -10863,6 +10880,65 @@ test("session card and markdown include role credential URLs and tokens", async 
       cohostSpineTargetsFixture({ roleUrl: cohostCheck.roleUrl }),
     ],
   );
+  const replacementCheck = hostSetupReadiness.localDevelopmentSpine.checks.find(
+    (item) => item.id === "local-replacement-player-proof",
+  );
+  assert.deepEqual(
+    [
+      replacementCheck.roleUrl,
+      replacementCheck.principalUserId,
+      replacementCheck.commandStateSlot,
+      replacementCheck.capabilityKinds,
+      replacementCheck.hostIssuedInvite,
+      replacementCheck.sessionRefresh,
+      replacementCheck.incomingPlayer,
+      replacementCheck.staleOutgoing,
+      replacementCheck.privateAuthority,
+      replacementCheck.recoveryCommand,
+      replacementCheck.spineTargets,
+    ],
+    [
+      "http://127.0.0.1:4102/g/<seeded-game>",
+      "player-rowan",
+      "slot-7",
+      ["SlotOccupant", "ChannelMember"],
+      {
+        principalUserId: "player-rowan",
+        issuedBy: "host_h",
+        issuedByCapability: "HostOf",
+        returnTo: "/g/<seeded-game>",
+        tokenPresent: true,
+      },
+      {
+        credentialKind: "session",
+        usedInviteToken: false,
+        landedOnDirectUrl: true,
+        commandStateSlot: "slot-7",
+      },
+      {
+        postState: "ack",
+        voteState: "Ack",
+        stableHistoryVisible: true,
+        targetKillVisible: false,
+        actionResultVisible: false,
+      },
+      {
+        rejectError: "NotYourSlot",
+        recoveredActorStatus: "replaced",
+        buttonsDisabled: true,
+      },
+      {
+        channel: "private:mafia_day_chat",
+        staleRejectError: "NotYourSlot",
+        staleRouteStatus: 403,
+        rowanPostState: "ack",
+        staleNotificationsStatus: 403,
+        rowanNotificationsStatus: 200,
+      },
+      "npm run test:dev-test-game-core-live",
+      replacementSpineTargetsFixture({ roleUrl: replacementCheck.roleUrl }),
+    ],
+  );
   assert(hostSetupReadiness.releaseReadiness.reason.includes("local host setup proof"));
   const raceCoverageReadiness = buildDevTestGameReleaseReadiness(proofRun, {
     generatedAt: "2026-06-26T00:00:00.000Z",
@@ -12372,6 +12448,53 @@ function devTestGameReleaseReadinessChecklistFixture({
           phaseAfterRejectLocked: false,
           recoveryCommand: "npm run test:dev-test-game-core-live",
           spineTargets: cohostSpineTargetsFixture(),
+        },
+        {
+          id: "local-replacement-player-proof",
+          label: "Replacement player role URL proof",
+          status: "passed",
+          evidence: "target/dev-test-game/proof-run.json",
+          roleUrl: "http://127.0.0.1:5173/g/<seeded-game>",
+          proofBoundary:
+            "Seeded dev-test-game replacement player role URL proof from proof-run. Proves host-issued replacement URL, fresh replacement session recovery, incoming player slot authority, stale outgoing player rejection, and private-channel authority transfer; does not prove hosted identity, invite delivery, multi-node races, release readiness, or production readiness.",
+          principalUserId: "player-rowan",
+          commandStateSlot: "slot-7",
+          capabilityKinds: ["SlotOccupant", "ChannelMember"],
+          hostIssuedInvite: {
+            principalUserId: "player-rowan",
+            issuedBy: "host_h",
+            issuedByCapability: "HostOf",
+            returnTo: "/g/<seeded-game>",
+            tokenPresent: true,
+          },
+          sessionRefresh: {
+            credentialKind: "session",
+            usedInviteToken: false,
+            landedOnDirectUrl: true,
+            commandStateSlot: "slot-7",
+          },
+          incomingPlayer: {
+            postState: "ack",
+            voteState: "Ack",
+            stableHistoryVisible: true,
+            targetKillVisible: false,
+            actionResultVisible: false,
+          },
+          staleOutgoing: {
+            rejectError: "NotYourSlot",
+            recoveredActorStatus: "replaced",
+            buttonsDisabled: true,
+          },
+          privateAuthority: {
+            channel: "private:mafia_day_chat",
+            staleRejectError: "NotYourSlot",
+            staleRouteStatus: 403,
+            rowanPostState: "ack",
+            staleNotificationsStatus: 403,
+            rowanNotificationsStatus: 200,
+          },
+          recoveryCommand: "npm run test:dev-test-game-core-live",
+          spineTargets: replacementSpineTargetsFixture(),
         },
         {
           id: "local-core-loop-proof",
@@ -15600,6 +15723,54 @@ function cohostProductionFeatureTargetsFixture(roleUrlHrefs) {
   };
 }
 
+function replacementSpineTargetsFixture({
+  roleUrl = "http://127.0.0.1:5173/g/<seeded-game>",
+} = {}) {
+  const roleUrlHrefs = {
+    "replacement-player": roleUrl,
+  };
+  return {
+    status: "passed",
+    detailRoleUrl: roleUrlHrefs["replacement-player"],
+    defaultCycleId: replacementFeatureSpineCycleId,
+    defaultRoleUrlId: "replacement-player",
+    defaultRoleUrl: roleUrlHrefs["replacement-player"],
+    defaultCheckpointId: "incoming-player-slot-authority",
+    browserProofCommand: devTestGameLiveProofCommand,
+    cycleIds: [replacementFeatureSpineCycleId],
+    roleUrlIds: ["replacement-player"],
+    checkpointIds: ["incoming-player-slot-authority"],
+    recoveryHookIds: [],
+    visibleAdminCheckIds: [
+      "replacement-host-issued-invite",
+      "replacement-session-refresh-recovery",
+      "replacement-incoming-player",
+      "replacement-stale-player",
+      "replacement-stale-private-channel",
+      "replacement-stale-private-receipts",
+    ],
+    roleUrlHrefs,
+    productionFeatureTargets:
+      replacementProductionFeatureTargetsFixture(roleUrlHrefs),
+  };
+}
+
+function replacementProductionFeatureTargetsFixture(roleUrlHrefs) {
+  const slotIds = Object.values(replacementFeatureSpineTargetRows).map(
+    (row) => row.featureSlotId,
+  );
+  return {
+    status: "passed",
+    slotIds,
+    bySlotId: Object.fromEntries(
+      slotIds.map((slotId) => [
+        slotId,
+        featureSpineCaseFixture(slotId, { roleUrlHrefs }).spineTarget,
+      ]),
+    ),
+  };
+}
+
 function hardeningSpineTargetsFixture({
   roleUrlHrefs = hardeningRoleUrlHrefsFixture(),
 } = {}) {
@@ -15776,6 +15947,20 @@ function featureSpineCaseFixture(
         roleUrlHrefs ?? cohostSpineTargetsFixture().roleUrlHrefs,
       browserProofCommand: devTestGameLiveProofCommand,
       rerunCommand: devTestGameCohostConsoleProofCommand,
+      includeTargetRerunCommand: true,
+    });
+  }
+  if (slotId === "replacement-player-role-surface") {
+    const replacementRoleUrl =
+      roleUrlHrefs?.["replacement-player"] ??
+      replacementSpineTargetsFixture().roleUrlHrefs["replacement-player"];
+    return featureSpineFixture({
+      slotId,
+      detailRoleUrl: replacementRoleUrl,
+      roleUrlsById:
+        roleUrlHrefs ?? replacementSpineTargetsFixture().roleUrlHrefs,
+      browserProofCommand: devTestGameLiveProofCommand,
+      rerunCommand: devTestGameReplacementPlayerProofCommand,
       includeTargetRerunCommand: true,
     });
   }
@@ -16318,6 +16503,7 @@ function proofGraphAdminProofFixture() {
   );
   const hostSetupGraphTarget = proofGraphHostSetupFeatureTargetFixture();
   const cohostGraphTarget = proofGraphCohostFeatureTargetFixture();
+  const replacementGraphTarget = proofGraphReplacementFeatureTargetFixture();
   const evidenceObjectRowIds = [
     ...expectedNormalizedEvidenceObjectRowIds({
       parentId: "private-channel-recovery-receipt",
@@ -16349,14 +16535,21 @@ function proofGraphAdminProofFixture() {
         hostSetupGraphTarget.productionFeatureNodeId,
         cohostGraphTarget.roleSurfaceNodeId,
         cohostGraphTarget.productionFeatureNodeId,
+        replacementGraphTarget.roleSurfaceNodeId,
+        replacementGraphTarget.productionFeatureNodeId,
       ],
       evidenceObjectRowIds,
-      edgeRowIds: [hostSetupGraphTarget.edgeRowId, cohostGraphTarget.edgeRowId],
-      edgeCount: handoffs.length + 2,
+      edgeRowIds: [
+        hostSetupGraphTarget.edgeRowId,
+        cohostGraphTarget.edgeRowId,
+        replacementGraphTarget.edgeRowId,
+      ],
+      edgeCount: handoffs.length + 3,
       adminProofSurfaceIds,
       adminProofRoleHandoffs: handoffs,
       hostSetupFeatureTarget: hostSetupGraphTarget,
       cohostFeatureTarget: cohostGraphTarget,
+      replacementFeatureTarget: replacementGraphTarget,
     },
     adminRoleSurface: {
       status: "passed",
@@ -16373,6 +16566,9 @@ function proofGraphAdminProofFixture() {
         cohostGraphTarget.roleSurfaceNodeId,
         cohostGraphTarget.productionFeatureNodeId,
         cohostGraphTarget.edgeRowId,
+        replacementGraphTarget.roleSurfaceNodeId,
+        replacementGraphTarget.productionFeatureNodeId,
+        replacementGraphTarget.edgeRowId,
         ...evidenceObjectRowIds,
       ],
       visibleRelatedLinks: [
@@ -16381,6 +16577,8 @@ function proofGraphAdminProofFixture() {
         hostSetupGraphTarget.productionFeatureNodeId,
         cohostGraphTarget.roleSurfaceNodeId,
         cohostGraphTarget.productionFeatureNodeId,
+        replacementGraphTarget.roleSurfaceNodeId,
+        replacementGraphTarget.productionFeatureNodeId,
       ],
       visibleRelatedDestinations: handoffs.map((handoff) => ({
         linkId: handoff.linkId,
@@ -16432,6 +16630,24 @@ function proofGraphCohostFeatureTargetFixture() {
     adminCheckId: "cohost-console",
     browserProofCommand: devTestGameLiveProofCommand,
     recoveryCommand: devTestGameCohostConsoleProofCommand,
+  };
+}
+
+function proofGraphReplacementFeatureTargetFixture() {
+  return {
+    roleSurfaceNodeId: "role-surface:replacement-player",
+    productionFeatureNodeId:
+      "production-feature:replacement-player-role-surface",
+    edgeRowId:
+      "edge:role-surface:replacement-player:proves-production-feature:production-feature:replacement-player-role-surface",
+    sourceCheckId: "local-replacement-player-proof",
+    featureSlotId: "replacement-player-role-surface",
+    roleUrl: "http://127.0.0.1:5173/g/<seeded-game>",
+    targetRoleUrl: "http://127.0.0.1:5173/g/<seeded-game>",
+    checkpointId: "incoming-player-slot-authority",
+    adminCheckId: "replacement-incoming-player",
+    browserProofCommand: devTestGameLiveProofCommand,
+    recoveryCommand: devTestGameReplacementPlayerProofCommand,
   };
 }
 

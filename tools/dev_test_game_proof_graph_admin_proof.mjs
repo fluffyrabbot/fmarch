@@ -31,6 +31,11 @@ import {
   devTestGameCohostConsoleProofCommand,
 } from "./dev_test_game_cohost_feature_spine_targets.mjs";
 import {
+  devTestGameReplacementPlayerProofCommand,
+  replacementFeatureSpineSourceCheckId,
+  replacementFeatureSpineTargetRows,
+} from "./dev_test_game_replacement_feature_spine_targets.mjs";
+import {
   devTestGameHostSetupProofCommand,
   hostSetupFeatureSpineSourceCheckId,
   hostSetupFeatureSpineTargetRows,
@@ -164,6 +169,9 @@ export function proofGraphAdminProofCase() {
           source.proofGraph,
         ),
         cohostFeatureTarget: proofGraphCohostFeatureTarget(source.proofGraph),
+        replacementFeatureTarget: proofGraphReplacementFeatureTarget(
+          source.proofGraph,
+        ),
       },
       adminRoleSurface,
     }),
@@ -229,6 +237,7 @@ export function assertProofGraphAdminProof(evidence) {
   });
   assertProofGraphAdminProofCoversHostSetupFeatureTarget(evidence);
   assertProofGraphAdminProofCoversCohostFeatureTarget(evidence);
+  assertProofGraphAdminProofCoversReplacementFeatureTarget(evidence);
   return evidence;
 }
 
@@ -259,6 +268,21 @@ function assertProofGraphAdminProofCoversCohostFeatureTarget(evidence) {
     expectedAdminCheckId: "cohost-console",
     expectedRecoveryCommand: devTestGameCohostConsoleProofCommand,
     label: "cohost console",
+  });
+}
+
+function assertProofGraphAdminProofCoversReplacementFeatureTarget(evidence) {
+  assertProofGraphAdminProofCoversFeatureTarget(evidence, {
+    target: evidence.generatedFrom?.replacementFeatureTarget,
+    expectedRoleSurfaceNodeId: "role-surface:replacement-player",
+    expectedFeatureSlotId:
+      replacementFeatureSpineTargetRows.replacementPlayer.featureSlotId,
+    expectedSourceCheckId: replacementFeatureSpineSourceCheckId,
+    expectedRoleUrlIncludes: "/g/<seeded-game>",
+    expectedCheckpointId: "incoming-player-slot-authority",
+    expectedAdminCheckId: "replacement-incoming-player",
+    expectedRecoveryCommand: devTestGameReplacementPlayerProofCommand,
+    label: "replacement player",
   });
 }
 
@@ -350,6 +374,15 @@ function proofGraphCohostFeatureTarget(proofGraph) {
     expectedFeatureSlotId:
       cohostFeatureSpineTargetRows.cohostConsole.featureSlotId,
     label: "cohost console",
+  });
+}
+
+function proofGraphReplacementFeatureTarget(proofGraph) {
+  return proofGraphFeatureTarget(proofGraph, {
+    roleSurfaceNodeId: "role-surface:replacement-player",
+    expectedFeatureSlotId:
+      replacementFeatureSpineTargetRows.replacementPlayer.featureSlotId,
+    label: "replacement player",
   });
 }
 
