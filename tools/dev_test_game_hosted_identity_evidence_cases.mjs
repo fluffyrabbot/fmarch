@@ -32,6 +32,10 @@ export const hostedIdentityEvidenceOperatorAbuseRateLimitPartialFixturePath =
   "tools/fixtures/dev_test_game_hosted_identity_evidence.operator-abuse-rate-limit-partial.json";
 export const hostedIdentityEvidenceOperatorAbuseRateLimitRecoveredFixturePath =
   "tools/fixtures/dev_test_game_hosted_identity_evidence.operator-abuse-rate-limit-recovered.json";
+export const hostedIdentityEvidenceOperatorSessionSecretPartialFixturePath =
+  "tools/fixtures/dev_test_game_hosted_identity_evidence.operator-session-secret-partial.json";
+export const hostedIdentityEvidenceOperatorSessionSecretRecoveredFixturePath =
+  "tools/fixtures/dev_test_game_hosted_identity_evidence.operator-session-secret-recovered.json";
 export const hostedIdentityEvidenceOperatorInvitePartialFixturePath =
   "tools/fixtures/dev_test_game_hosted_identity_evidence.operator-invite-partial.json";
 export const hostedIdentityEvidenceOperatorInviteRecoveredFixturePath =
@@ -47,6 +51,8 @@ export const hostedIdentityEvidenceFixturePaths = Object.freeze([
   hostedIdentityEvidenceOperatorAccountRecoveryRecoveredFixturePath,
   hostedIdentityEvidenceOperatorAbuseRateLimitPartialFixturePath,
   hostedIdentityEvidenceOperatorAbuseRateLimitRecoveredFixturePath,
+  hostedIdentityEvidenceOperatorSessionSecretPartialFixturePath,
+  hostedIdentityEvidenceOperatorSessionSecretRecoveredFixturePath,
   hostedIdentityEvidenceOperatorInvitePartialFixturePath,
   hostedIdentityEvidenceOperatorInviteRecoveredFixturePath,
   hostedIdentityEvidenceOperatorRecoveredFixturePath,
@@ -356,6 +362,34 @@ export const hostedIdentityEvidenceFamilyProgressionCases = Object.freeze([
     ]),
     recoveredRedactedEvidenceRefIds: Object.freeze([
       "abuse-rate-limit-redacted-policy",
+    ]),
+  }),
+  Object.freeze({
+    id: "session-secret-policy",
+    field: "sessionSecretPolicy",
+    checkId: "session-secret-policy-evidence",
+    missingInputId: "redacted-session-secret-packet",
+    missingFixturePath:
+      hostedIdentityEvidenceOperatorSessionSecretPartialFixturePath,
+    recoveredFixturePath:
+      hostedIdentityEvidenceOperatorSessionSecretRecoveredFixturePath,
+    adminProofFixturePath:
+      hostedIdentityEvidenceOperatorSessionSecretRecoveredFixturePath,
+    adminProofMode: "provided-family-still-blocked",
+    expectedMissingInputs: Object.freeze([
+      "status-provided",
+      "storage",
+      "rotation",
+      "deploymentSecretSource",
+      "redactedEvidenceRefs",
+    ]),
+    recoveredProvidedInputIds: Object.freeze([
+      "storage",
+      "rotation",
+      "deploymentSecretSource",
+    ]),
+    recoveredRedactedEvidenceRefIds: Object.freeze([
+      "session-secret-redacted-policy",
     ]),
   }),
 ]);
@@ -673,6 +707,18 @@ export const hostedIdentityEvidenceFixturePlans = deepFreeze([
     path: hostedIdentityEvidenceOperatorAbuseRateLimitRecoveredFixturePath,
     status: "partial",
     providedFields: ["abuseAndRateLimitPolicy"],
+  },
+  {
+    path: hostedIdentityEvidenceOperatorSessionSecretPartialFixturePath,
+    status: "partial",
+    providedFields: hostedIdentityEvidencePacketSectionDefinitions
+      .map((section) => section.field)
+      .filter((field) => field !== "sessionSecretPolicy"),
+  },
+  {
+    path: hostedIdentityEvidenceOperatorSessionSecretRecoveredFixturePath,
+    status: "partial",
+    providedFields: ["sessionSecretPolicy"],
   },
   {
     path: hostedIdentityEvidenceOperatorInvitePartialFixturePath,

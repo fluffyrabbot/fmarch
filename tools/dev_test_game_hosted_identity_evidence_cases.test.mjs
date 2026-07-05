@@ -20,6 +20,8 @@ import {
   hostedIdentityExpectedRoleSurfaceContract,
   hostedIdentityEvidenceOperatorAbuseRateLimitPartialFixturePath,
   hostedIdentityEvidenceOperatorAbuseRateLimitRecoveredFixturePath,
+  hostedIdentityEvidenceOperatorSessionSecretPartialFixturePath,
+  hostedIdentityEvidenceOperatorSessionSecretRecoveredFixturePath,
   hostedIdentityEvidenceOperatorAccountLifecyclePartialFixturePath,
   hostedIdentityEvidenceOperatorAccountLifecycleRecoveredFixturePath,
   hostedIdentityEvidenceOperatorAccountRecoveryRecoveredFixturePath,
@@ -225,6 +227,13 @@ test("hosted identity evidence cases share handoff inputs and blocked groups", (
         adminProofPath:
           "target/dev-test-game/hosted-identity-evidence-abuse-and-rate-limit-admin-proof.json",
       },
+      {
+        id: "session-secret-policy",
+        evidencePath:
+          "target/dev-test-game/hosted-identity-evidence-session-secret-policy.json",
+        adminProofPath:
+          "target/dev-test-game/hosted-identity-evidence-session-secret-policy-admin-proof.json",
+      },
     ],
   );
   assert.deepEqual(
@@ -298,6 +307,8 @@ test("hosted identity evidence cases share handoff inputs and blocked groups", (
       hostedIdentityEvidenceOperatorAccountRecoveryRecoveredFixturePath,
       hostedIdentityEvidenceOperatorAbuseRateLimitPartialFixturePath,
       hostedIdentityEvidenceOperatorAbuseRateLimitRecoveredFixturePath,
+      hostedIdentityEvidenceOperatorSessionSecretPartialFixturePath,
+      hostedIdentityEvidenceOperatorSessionSecretRecoveredFixturePath,
       hostedIdentityEvidenceOperatorInvitePartialFixturePath,
       hostedIdentityEvidenceOperatorInviteRecoveredFixturePath,
       hostedIdentityEvidenceOperatorRecoveredFixturePath,
@@ -376,6 +387,22 @@ test("hosted identity evidence cases share handoff inputs and blocked groups", (
         ["abuseAndRateLimitPolicy"],
       ],
       [
+        hostedIdentityEvidenceOperatorSessionSecretPartialFixturePath,
+        "partial",
+        [
+          "accountLifecycle",
+          "inviteDelivery",
+          "accountRecovery",
+          "abuseAndRateLimitPolicy",
+          "hostedAuditRetentionExport",
+        ],
+      ],
+      [
+        hostedIdentityEvidenceOperatorSessionSecretRecoveredFixturePath,
+        "partial",
+        ["sessionSecretPolicy"],
+      ],
+      [
         hostedIdentityEvidenceOperatorInvitePartialFixturePath,
         "partial",
         [
@@ -446,6 +473,14 @@ test("hosted identity evidence cases share handoff inputs and blocked groups", (
         "redacted-abuse-rate-limit-packet",
         hostedIdentityEvidenceOperatorAbuseRateLimitPartialFixturePath,
         hostedIdentityEvidenceOperatorAbuseRateLimitRecoveredFixturePath,
+      ],
+      [
+        "session-secret-policy",
+        "sessionSecretPolicy",
+        "session-secret-policy-evidence",
+        "redacted-session-secret-packet",
+        hostedIdentityEvidenceOperatorSessionSecretPartialFixturePath,
+        hostedIdentityEvidenceOperatorSessionSecretRecoveredFixturePath,
       ],
     ],
   );

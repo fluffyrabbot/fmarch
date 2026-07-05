@@ -31,6 +31,8 @@ export {
   hostedIdentityEvidenceOperatorAccountRecoveryRecoveredFixturePath,
   hostedIdentityEvidenceOperatorAbuseRateLimitPartialFixturePath,
   hostedIdentityEvidenceOperatorAbuseRateLimitRecoveredFixturePath,
+  hostedIdentityEvidenceOperatorSessionSecretPartialFixturePath,
+  hostedIdentityEvidenceOperatorSessionSecretRecoveredFixturePath,
   hostedIdentityEvidenceOperatorInvitePartialFixturePath,
   hostedIdentityEvidenceOperatorInviteRecoveredFixturePath,
   hostedIdentityEvidenceOperatorProofDrilldowns,
