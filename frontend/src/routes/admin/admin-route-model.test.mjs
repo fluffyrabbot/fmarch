@@ -134,8 +134,8 @@ import {
 } from "../../../../tools/dev_test_game_local_readiness_dependencies.mjs";
 import {
   adminProofDestinationProofGraphNodes,
-  adminProofDestinationRequirementLinkRows,
   adminProofDestinationRequirementRoleRows,
+  devTestGameProofGraphBaseEdges,
   devTestGameProofGraphFirstClassNodes,
 } from "../../../../tools/dev_test_game_proof_graph_handoff_cases.mjs";
 import {
@@ -5814,40 +5814,7 @@ function proofGraphFixture() {
     ...adminProofDestinationProofGraphNodes(),
   ];
   const edges = [
-    { from: "admin-spine", to: "spine-manifest", relationship: "aggregates" },
-    { from: "spine-manifest", to: "proof-graph", relationship: "records" },
-    { from: "spine-manifest", to: "proof-freshness", relationship: "records" },
-    { from: "spine-manifest", to: "next-action", relationship: "records" },
-    { from: "proof-freshness", to: "next-action", relationship: "recovers-through" },
-    {
-      from: "admin-spine-terminal-batches",
-      to: "proof-graph",
-      relationship: "terminal-browser-proof",
-    },
-    {
-      from: "admin-spine-terminal-batches",
-      to: "proof-freshness",
-      relationship: "terminal-browser-proof",
-    },
-    {
-      from: "admin-spine-terminal-batches",
-      to: "next-action",
-      relationship: "terminal-browser-proof",
-    },
-    {
-      from: "next-action",
-      to: "admin-proof:seed",
-      relationship: "recovery-target",
-      reason: "seed-proof-lane-coverage-drift",
-      command: "npm run test:dev-test-game-seed-fixture",
-      roleUrl: localAdminAuditRoleUrl(localAdminAuditIds.seedFixtures),
-      proofTarget: "target/dev-test-game/seed-fixture-summary.json",
-    },
-    ...adminProofDestinationRequirementLinkRows.map(([linkId]) => ({
-      from: "admin-spine",
-      to: linkId,
-      relationship: "aggregates",
-    })),
+    ...devTestGameProofGraphBaseEdges(),
     {
       from: "admin-proof:core-loop",
       to: "production-feature:player-action-submission",

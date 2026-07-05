@@ -11,11 +11,17 @@ import {
   adminProofDestinationRecoveryCommand,
   adminProofDestinationRoleUrl,
   adminProofDestinationRequirements,
+  devTestGameProofGraphBaseEdges,
   devTestGameProofGraphFirstClassNodes,
+  seedFixtureRecoveryCommand,
+  seedProofLaneCoverageRecoveryReason,
   spineManifestAdminProofCommand,
   terminalAdminProofBatchArtifactPaths,
   terminalAdminProofBatchIds,
 } from "./dev_test_game_proof_graph_handoff_cases.mjs";
+import {
+  devTestGameSeedFixturePath,
+} from "./dev_test_game_adjacent_artifact_paths.mjs";
 import {
   hostedIdentityEvidenceHandoffCase,
 } from "./dev_test_game_hosted_identity_evidence_cases.mjs";
@@ -206,6 +212,42 @@ test("proof graph first-class fixture nodes share artifact and command contracts
         terminalAdminProofBatchIds,
         terminalAdminProofBatchArtifactPaths,
       ],
+    ],
+  );
+});
+
+test("proof graph base edges share fixed topology and seed recovery metadata", () => {
+  assert.deepEqual(
+    devTestGameProofGraphBaseEdges({ game: "midsummer" }),
+    [
+      { from: "admin-spine", to: "spine-manifest", relationship: "aggregates" },
+      { from: "spine-manifest", to: "proof-graph", relationship: "records" },
+      { from: "spine-manifest", to: "proof-freshness", relationship: "records" },
+      { from: "spine-manifest", to: "next-action", relationship: "records" },
+      {
+        from: "proof-freshness",
+        to: "next-action",
+        relationship: "recovers-through",
+      },
+      ...terminalAdminProofBatchIds.map((proofId) => ({
+        from: "admin-spine-terminal-batches",
+        to: proofId,
+        relationship: "terminal-browser-proof",
+      })),
+      {
+        from: "next-action",
+        to: "admin-proof:seed",
+        relationship: "recovery-target",
+        reason: seedProofLaneCoverageRecoveryReason,
+        command: seedFixtureRecoveryCommand,
+        roleUrl: "/admin/audit/local-seed-fixtures?game=midsummer",
+        proofTarget: devTestGameSeedFixturePath,
+      },
+      ...adminProofDestinationRequirementLinkRows.map(([linkId]) => ({
+        from: "admin-spine",
+        to: linkId,
+        relationship: "aggregates",
+      })),
     ],
   );
 });

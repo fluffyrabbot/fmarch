@@ -24,6 +24,9 @@ import {
   seedScenarioCoverageGroups,
 } from "./dev_test_game_seed_scenario_cases.mjs";
 import {
+  devTestGameSeedFixturePath,
+} from "./dev_test_game_adjacent_artifact_paths.mjs";
+import {
   localAdminAuditHandoffCheckIds,
   localAdminAuditIds,
   localAdminAuditRoleUrl,
@@ -55,6 +58,10 @@ import {
 export const adminSpineProofCommand = "npm run test:dev-test-game-admin-spine";
 export const spineManifestAdminProofCommand =
   "npm run test:dev-test-game-spine-manifest-admin-proof";
+export const seedFixtureRecoveryCommand =
+  "npm run test:dev-test-game-seed-fixture";
+export const seedProofLaneCoverageRecoveryReason =
+  "seed-proof-lane-coverage-drift";
 export const terminalAdminProofBatchIds = Object.freeze([
   "proof-graph",
   "proof-freshness",
@@ -325,6 +332,61 @@ export function devTestGameProofGraphFirstClassNodes({
   ]);
 }
 
+export function devTestGameProofGraphBaseEdges({
+  game = "<seeded-game>",
+} = {}) {
+  return Object.freeze([
+    proofGraphEdge({
+      from: "admin-spine",
+      to: "spine-manifest",
+      relationship: "aggregates",
+    }),
+    proofGraphEdge({
+      from: "spine-manifest",
+      to: "proof-graph",
+      relationship: "records",
+    }),
+    proofGraphEdge({
+      from: "spine-manifest",
+      to: "proof-freshness",
+      relationship: "records",
+    }),
+    proofGraphEdge({
+      from: "spine-manifest",
+      to: "next-action",
+      relationship: "records",
+    }),
+    proofGraphEdge({
+      from: "proof-freshness",
+      to: "next-action",
+      relationship: "recovers-through",
+    }),
+    ...terminalAdminProofBatchIds.map((proofId) =>
+      proofGraphEdge({
+        from: "admin-spine-terminal-batches",
+        to: proofId,
+        relationship: "terminal-browser-proof",
+      }),
+    ),
+    proofGraphEdge({
+      from: "next-action",
+      to: "admin-proof:seed",
+      relationship: "recovery-target",
+      reason: seedProofLaneCoverageRecoveryReason,
+      command: seedFixtureRecoveryCommand,
+      roleUrl: localAdminAuditRoleUrl(localAdminAuditIds.seedFixtures, { game }),
+      proofTarget: devTestGameSeedFixturePath,
+    }),
+    ...adminProofDestinationRequirementLinkRows.map(([linkId]) =>
+      proofGraphEdge({
+        from: "admin-spine",
+        to: linkId,
+        relationship: "aggregates",
+      }),
+    ),
+  ]);
+}
+
 export function adminProofDestinationProofGraphNodes({
   game = "<seeded-game>",
   status = "passed",
@@ -441,4 +503,8 @@ function proofGraphSurfaceNode({
     roleUrl,
     recoveryCommand,
   });
+}
+
+function proofGraphEdge(edge) {
+  return Object.freeze(edge);
 }
