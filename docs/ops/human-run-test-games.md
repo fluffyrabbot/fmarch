@@ -213,6 +213,23 @@ opt-in `npm run test:dev-test-game-next-action:hosted-identity` promotion row
 beside it, so the current local-sequence blocker and the hosted-identity
 predicate are visible without weakening the hosted evidence boundary.
 
+The hosted deployment evidence lane accepts a raw hosted matrix packet through
+`FMARCH_HOSTED_MATRIX_RAW_EVIDENCE_PATH`. To inspect the required packet shape,
+compare the fixture-only handoff with the capture-metadata example:
+
+```sh
+FMARCH_HOSTED_MATRIX_FRONTEND_URL=https://fmarch-demo.example.test FMARCH_HOSTED_MATRIX_API_URL=https://api.fmarch-demo.example.test FMARCH_HOSTED_MATRIX_RAW_EVIDENCE_PATH=tools/fixtures/dev_test_game_hosted_matrix_raw_evidence.operator-fixture.json npm run test:dev-test-game-real-hosted-matrix-raw-capture
+FMARCH_HOSTED_MATRIX_FRONTEND_URL=https://fmarch-demo.example.test FMARCH_HOSTED_MATRIX_API_URL=https://api.fmarch-demo.example.test FMARCH_HOSTED_MATRIX_RAW_EVIDENCE_PATH=tools/fixtures/dev_test_game_hosted_matrix_raw_evidence.real-capture-example.json npm run test:dev-test-game-real-hosted-matrix-raw-capture
+```
+
+The real-capture intake requires the raw hosted matrix evidence contract plus
+`capture.externallyCaptured=true`, `capture.capturedAt`,
+`capture.captureSource`, redaction booleans for raw role credentials, invite
+tokens, and session cookies, and `capture.retention.policy`. A passed intake can
+advance hosted target preflight to external hosted-matrix normalization, but it
+still keeps `releaseReady` and `productionReady` false until the broader hosted
+deployment, operations, rollback, and release-readiness evidence exists.
+
 The hosted identity evidence lane accepts a redacted operator packet through
 `FMARCH_HOSTED_IDENTITY_EVIDENCE_PATH`. To inspect the packet shape and admin
 handoff without making a hosted-readiness claim, exercise the placeholder

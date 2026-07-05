@@ -497,6 +497,7 @@ import {
   devTestGameHostedMatrixRawEvidenceFixtureProofCommand,
   devTestGameHostedMatrixRawEvidenceFixtureProofPath,
   devTestGameHostedMatrixRawEvidenceOperatorFixturePath,
+  devTestGameHostedMatrixRawEvidenceRealCaptureExamplePath,
 } from "./dev_test_game_hosted_matrix_raw_evidence_fixture_proof.mjs";
 import {
   assertDevTestGameRealHostedMatrixRawCapture,
@@ -508,6 +509,7 @@ import {
 } from "./dev_test_game_real_hosted_matrix_raw_capture.mjs";
 import {
   assertDevTestGameHostedTargetPreflight,
+  buildDevTestGameHostedTargetPreflight,
   devTestGameHostedTargetPreflightCommand,
   devTestGameHostedTargetPreflightAdminProofPath,
   devTestGameHostedTargetPreflightPath,
@@ -4976,32 +4978,25 @@ test("real hosted matrix raw capture intake rejects fixtures and requires captur
     "capture-redaction-retention-metadata",
   ]);
 
-  const rawCapture = {
-    ...rawNoCapture,
-    capture: {
-      externallyCaptured: true,
-      capturedAt: "2026-06-26T00:00:00.000Z",
-      captureSource: "operator-hosted-browser",
-      redaction: {
-        rawRoleCredentialsRedacted: true,
-        inviteTokensRedacted: true,
-        sessionCookiesRedacted: true,
-      },
-      retention: {
-        policy: "raw credentials discarded; redacted packet retained for proof",
-      },
-    },
-  };
-  const rawCapturePath =
-    "target/dev-test-game/test-real-hosted-matrix-raw-capture.json";
-  await writeFile(rawCapturePath, `${JSON.stringify(rawCapture, null, 2)}\n`);
+  const rawCapture = JSON.parse(
+    await readFile(
+      devTestGameHostedMatrixRawEvidenceRealCaptureExamplePath,
+      "utf8",
+    ),
+  );
+  assertDevTestGameHostedMatrixRawEvidence(rawCapture, {
+    frontendBaseUrl: rawCapture.frontendBaseUrl,
+    apiBaseUrl: rawCapture.apiBaseUrl,
+    groupId: rawCapture.groupId,
+  });
   const passed = await buildDevTestGameRealHostedMatrixRawCapture({
     generatedAt: "2026-06-26T00:00:00.000Z",
     env: {
       FMARCH_HOSTED_MATRIX_FRONTEND_URL: rawCapture.frontendBaseUrl,
       FMARCH_HOSTED_MATRIX_API_URL: rawCapture.apiBaseUrl,
       FMARCH_HOSTED_MATRIX_GROUP_ID: rawCapture.groupId,
-      FMARCH_HOSTED_MATRIX_RAW_EVIDENCE_PATH: rawCapturePath,
+      FMARCH_HOSTED_MATRIX_RAW_EVIDENCE_PATH:
+        devTestGameHostedMatrixRawEvidenceRealCaptureExamplePath,
     },
   });
   assertDevTestGameRealHostedMatrixRawCapture(passed);
@@ -5013,6 +5008,25 @@ test("real hosted matrix raw capture intake rejects fixtures and requires captur
   );
   assert.equal(passed.target.rawEvidenceFixture, false);
   assert.equal(passed.target.rawEvidenceSyntheticExternalTarget, false);
+
+  const preflight = await buildDevTestGameHostedTargetPreflight({
+    generatedAt: "2026-06-26T00:00:00.000Z",
+    env: {
+      FMARCH_HOSTED_MATRIX_FRONTEND_URL: rawCapture.frontendBaseUrl,
+      FMARCH_HOSTED_MATRIX_API_URL: rawCapture.apiBaseUrl,
+      FMARCH_HOSTED_MATRIX_GROUP_ID: rawCapture.groupId,
+      FMARCH_HOSTED_MATRIX_RAW_EVIDENCE_PATH:
+        devTestGameHostedMatrixRawEvidenceRealCaptureExamplePath,
+    },
+  });
+  assertDevTestGameHostedTargetPreflight(preflight);
+  assert.equal(preflight.status, "passed");
+  assert.equal(preflight.releaseReady, false);
+  assert.equal(preflight.productionReady, false);
+  assert.equal(preflight.target.rawCaptureStatus, "passed");
+  assert.deepEqual(preflight.target.rawCaptureBlockedCheckIds, []);
+  assert.equal(preflight.blockedReceipt, undefined);
+  assert.equal(preflight.nextProofTarget, devTestGameHostedMatrixExternalEvidencePath);
 });
 
 test("dev test-game next-action blocks readiness work on saved harness stability drift", () => {

@@ -11,6 +11,8 @@ import { repoRoot } from "./dev_test_game_spine_runner.mjs";
 
 export const devTestGameHostedMatrixRawEvidenceOperatorFixturePath =
   "tools/fixtures/dev_test_game_hosted_matrix_raw_evidence.operator-fixture.json";
+export const devTestGameHostedMatrixRawEvidenceRealCaptureExamplePath =
+  "tools/fixtures/dev_test_game_hosted_matrix_raw_evidence.real-capture-example.json";
 export const devTestGameHostedMatrixRawEvidenceFixtureProofPath =
   "target/dev-test-game/hosted-matrix-raw-evidence-fixture-proof.json";
 export const devTestGameHostedMatrixRawEvidenceFixtureProofCommand =

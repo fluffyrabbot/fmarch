@@ -1,0 +1,69 @@
+{
+  "version": 1,
+  "proof": "fmarch-hosted-concurrent-race-matrix-raw",
+  "status": "passed",
+  "generatedAt": "2026-06-26T00:00:00.000Z",
+  "frontendBaseUrl": "https://fmarch-demo.example.test",
+  "apiBaseUrl": "https://api.fmarch-demo.example.test",
+  "groupId": "replacement-race-reload",
+  "commandRaceCount": 3,
+  "reloadRecoveryCount": 3,
+  "reconnectRecovery": true,
+  "staleConflictMessages": true,
+  "rawRoleCredentialsRedacted": true,
+  "generatedFrom": {
+    "source": "external-operator-capture"
+  },
+  "capture": {
+    "externallyCaptured": true,
+    "capturedAt": "2026-06-26T00:00:00.000Z",
+    "captureSource": "operator-hosted-browser",
+    "redaction": {
+      "rawRoleCredentialsRedacted": true,
+      "inviteTokensRedacted": true,
+      "sessionCookiesRedacted": true
+    },
+    "retention": {
+      "policy": "raw credentials discarded; redacted packet retained for proof"
+    }
+  },
+  "observations": [
+    {
+      "id": "replacement-private-post-real-capture-observation",
+      "status": "passed",
+      "cellId": "replacement-private-post",
+      "raceLaneId": "concurrent-replacement-private-post-race",
+      "reloadLaneId": "concurrent-replacement-private-post-race-reload",
+      "roleSurfaces": [
+        "player",
+        "replacementPlayer",
+        "host"
+      ]
+    },
+    {
+      "id": "replacement-vote-real-capture-observation",
+      "status": "passed",
+      "cellId": "replacement-vote",
+      "raceLaneId": "concurrent-replacement-vote-race",
+      "reloadLaneId": "concurrent-replacement-vote-race-reload",
+      "roleSurfaces": [
+        "player",
+        "replacementPlayer",
+        "host"
+      ]
+    },
+    {
+      "id": "replacement-action-real-capture-observation",
+      "status": "passed",
+      "cellId": "replacement-action",
+      "raceLaneId": "concurrent-replacement-action-race",
+      "reloadLaneId": "concurrent-replacement-action-race-reload",
+      "roleSurfaces": [
+        "player",
+        "replacementPlayer",
+        "host"
+      ]
+    }
+  ],
+  "proofBoundary": "Redacted example for a raw hosted-matrix packet captured from an externally reachable hosted target. It documents the capture/redaction/retention fields required by the intake proof; it is a checked fixture and not a claim that the current deployment has been captured."
+}
