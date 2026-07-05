@@ -19984,6 +19984,12 @@ function proofGraphAdminProofFixture() {
       ],
       visibleProductionFeatureDestinationSummaries:
         productionFeatureDestinationSummary.rows.map((row) => row.id),
+      visibleProductionFeatureDestinationSummaryStatuses: Object.fromEntries(
+        productionFeatureDestinationSummary.rows.map((row) => [
+          row.id,
+          [row.label, row.status].join("\n"),
+        ]),
+      ),
       visibleDiagnosticProofSummaries: diagnosticProofRows.map((row) => row.id),
       visibleDiagnosticProofSummaryStatuses: Object.fromEntries(
         diagnosticProofRows.map((row) => [

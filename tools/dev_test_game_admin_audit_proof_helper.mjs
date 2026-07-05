@@ -464,6 +464,12 @@ export async function proveAdminAuditDetail({
       prefix: "admin-audit-production-feature-destination-summary",
       ids: requiredProductionFeatureDestinationSummaries,
     });
+    const visibleProductionFeatureDestinationSummaryStatuses =
+      await readRowStatuses({
+        page,
+        prefix: "admin-audit-production-feature-destination-summary",
+        ids: visibleProductionFeatureDestinationSummaries,
+      });
     const visibleDiagnosticProofSummaries = await waitForRows({
       page,
       prefix: "admin-audit-diagnostic-proof-summary",
@@ -1111,6 +1117,13 @@ export async function proveAdminAuditDetail({
         : {
             visibleProductionFeatureDestinationSummaries:
               visibleProductionFeatureDestinationSummaries,
+          }),
+      ...(Object.keys(visibleProductionFeatureDestinationSummaryStatuses)
+        .length === 0
+        ? {}
+        : {
+            visibleProductionFeatureDestinationSummaryStatuses:
+              visibleProductionFeatureDestinationSummaryStatuses,
           }),
       ...(visibleDiagnosticProofSummaries.length === 0
         ? {}

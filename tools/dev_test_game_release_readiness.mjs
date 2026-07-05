@@ -5965,7 +5965,23 @@ function validateProofGraphAdminProductionFeatureDestinationSummary(proof) {
         `proof graph admin proof did not inspect production feature destination summary row: ${row.id}`,
       );
     }
+    const visibleStatus =
+      proof.adminRoleSurface?.visibleProductionFeatureDestinationSummaryStatuses?.[
+        row.id
+      ] ?? "";
+    if (!visibleProductionFeatureDestinationSummaryText(row, visibleStatus)) {
+      throw new Error(
+        `proof graph admin proof production feature destination summary text drifted: ${row.id}`,
+      );
+    }
   }
+}
+
+function visibleProductionFeatureDestinationSummaryText(row, visibleStatus) {
+  return [row.label, ...String(row.status ?? "").split("\n")]
+    .map((token) => String(token ?? "").trim())
+    .filter((token) => token !== "")
+    .every((token) => String(visibleStatus ?? "").includes(token));
 }
 
 function validHostSetupProductionFeatureDestination(destination) {
