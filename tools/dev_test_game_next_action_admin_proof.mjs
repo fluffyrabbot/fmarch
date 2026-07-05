@@ -244,6 +244,8 @@ export function nextActionAdminProofCase({
         null,
       unprovenHostedHandoffChecklist:
         source.nextAction.nextAction.unproven?.hostedHandoffChecklist ?? null,
+      unprovenHostedIdentityFamilyBatch:
+        source.nextAction.nextAction.unproven?.hostedIdentityFamilyBatch ?? null,
       unprovenHostedIdentityProgressionSummary:
         source.nextAction.nextAction.unproven?.hostedHandoffChecklist
           ?.progressionSummary ?? null,
@@ -686,6 +688,22 @@ export function assertNextActionAdminProof(evidence) {
       throw new Error(`next-action admin proof missing visible check: ${checkId}`);
     }
   }
+  const hostedIdentityFamilyBatch =
+    evidence.generatedFrom?.unprovenHostedIdentityFamilyBatch;
+  if (hostedIdentityFamilyBatch !== null && hostedIdentityFamilyBatch !== undefined) {
+    const visibleText =
+      evidence.adminRoleSurface?.visibleCheckStatuses?.[
+        hostedIdentityFamilyBatch.id
+      ] ?? "";
+    const expectedText = hostedIdentityFamilyBatchStatusText(
+      hostedIdentityFamilyBatch,
+    );
+    if (!String(visibleText).includes(expectedText)) {
+      throw new Error(
+        "next-action admin proof missing hosted identity family batch predicate row",
+      );
+    }
+  }
   const relatedLinkId = evidence.generatedFrom?.unprovenProofGraphNodeId;
   if (
     typeof relatedLinkId === "string" &&
@@ -1008,6 +1026,9 @@ function requiredChecksForNextAction(nextAction) {
       "selected-proof-graph-node",
       "selected-proof-graph-destination",
     );
+    if (nextAction.nextAction.unproven.hostedIdentityFamilyBatch !== undefined) {
+      checks.push(nextAction.nextAction.unproven.hostedIdentityFamilyBatch.id);
+    }
     if (selectedHostedIdentityOperatorCandidate(nextAction) !== null) {
       checks.push(
         "selected-next-command",
@@ -1361,10 +1382,19 @@ function requiredCheckStatusesForNextAction(nextAction, proofGraph) {
   });
   const selectedOperatorCandidate =
     selectedHostedIdentityOperatorCandidate(nextAction);
+  const hostedIdentityFamilyBatch =
+    nextAction.nextAction.unproven?.hostedIdentityFamilyBatch;
   return {
     ...(selectedNodeStatus === ""
       ? {}
       : { "selected-proof-graph-node": selectedNodeStatus }),
+    ...(hostedIdentityFamilyBatch === undefined
+      ? {}
+      : {
+          [hostedIdentityFamilyBatch.id]: hostedIdentityFamilyBatchStatusText(
+            hostedIdentityFamilyBatch,
+          ),
+        }),
     ...(selectedOperatorCandidate === null
       ? {}
       : {
@@ -1373,6 +1403,18 @@ function requiredCheckStatusesForNextAction(nextAction, proofGraph) {
           "selected-proof-boundary": selectedOperatorCandidate.proofBoundary,
         }),
   };
+}
+
+function hostedIdentityFamilyBatchStatusText(batch) {
+  return [
+    batch.status,
+    batch.command,
+    batch.firstPendingProgressionId,
+    ...(batch.proofTargets ?? []),
+    batch.proofBoundary,
+  ]
+    .filter((part) => String(part ?? "") !== "")
+    .join(" ");
 }
 
 function selectedReleaseReadinessCandidateForNextAction(nextAction) {
@@ -1500,6 +1542,12 @@ function requiredChecksForEvidence(evidence) {
           evidence.generatedFrom.unprovenId,
           "selected-proof-graph-node",
           "selected-proof-graph-destination",
+          ...(evidence.generatedFrom?.unprovenHostedIdentityFamilyBatch ===
+            null ||
+          evidence.generatedFrom?.unprovenHostedIdentityFamilyBatch ===
+            undefined
+            ? []
+            : [evidence.generatedFrom.unprovenHostedIdentityFamilyBatch.id]),
           ...(evidence.generatedFrom?.unprovenSpineTarget === null ||
           evidence.generatedFrom?.unprovenSpineTarget === undefined
             ? []

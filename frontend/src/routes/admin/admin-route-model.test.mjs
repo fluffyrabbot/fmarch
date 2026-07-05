@@ -238,6 +238,22 @@ const HOSTED_IDENTITY_OPERATOR_PROOF_TARGET =
   "target/dev-test-game/hosted-identity-evidence-operator-admin-proof.json";
 const HOSTED_IDENTITY_OPERATOR_PROOF_BOUNDARY =
   "Opt-in local operator predicate proof. The command proves that a non-fixture hosted identity packet path can clear the hosted-production-identity readiness item over the existing role-surface adapter; it does not prove live hosted account/session/invite traffic, release readiness, or production readiness.";
+const HOSTED_IDENTITY_FAMILY_BATCH = Object.freeze({
+  id: "hosted-identity-family-proof-batch",
+  status: "current",
+  command: "npm run test:dev-test-game-hosted-identity-progression-admin-proof:batch",
+  firstPendingProgressionId: null,
+  proofTargets: Object.freeze([
+    "target/dev-test-game/hosted-identity-evidence-hosted-account-lifecycle-admin-proof.json",
+    "target/dev-test-game/hosted-identity-evidence-invite-delivery-admin-proof.json",
+    "target/dev-test-game/hosted-identity-evidence-account-recovery-admin-proof.json",
+    "target/dev-test-game/hosted-identity-evidence-abuse-and-rate-limit-admin-proof.json",
+    "target/dev-test-game/hosted-identity-evidence-session-secret-policy-admin-proof.json",
+    "target/dev-test-game/hosted-identity-evidence-hosted-audit-retention-export-admin-proof.json",
+  ]),
+  proofBoundary:
+    "Hosted identity family proof batch predicate. Required means one or more family admin proofs are missing or stale; current means all family admin proofs are valid and the aggregate hosted identity operator spine may run. It does not prove live hosted identity traffic, release readiness, or production readiness.",
+});
 const HOSTED_EVIDENCE_LANE_DEMO_PROOF_TARGET =
   "target/dev-test-game/hosted-evidence-lane-demo-proof.json";
 
@@ -2865,6 +2881,7 @@ test("admin local next action detail data carries hosted identity progression la
     spineDrilldown: featureSpineDrilldownFixture(),
     spineTarget: featureSpineTargetFixture(),
     hostedHandoffChecklist: hostedIdentityEvidenceHandoffCase(),
+    hostedIdentityFamilyBatch: HOSTED_IDENTITY_FAMILY_BATCH,
   };
   const data = await buildAdminAuditDetailData({
     audit: localAdminAuditIds.nextAction,
@@ -2944,6 +2961,7 @@ test("admin local next action detail data carries hosted identity operator recom
     spineDrilldown: featureSpineDrilldownFixture(),
     spineTarget: featureSpineTargetFixture(),
     hostedHandoffChecklist: hostedIdentityEvidenceHandoffCase(),
+    hostedIdentityFamilyBatch: HOSTED_IDENTITY_FAMILY_BATCH,
   };
   const data = await buildAdminAuditDetailData({
     audit: localAdminAuditIds.nextAction,
@@ -2968,16 +2986,30 @@ test("admin local next action detail data carries hosted identity operator recom
           "selected-next-command",
           "selected-proof-target",
           "selected-proof-boundary",
+          "hosted-identity-family-proof-batch",
           "hosted-production-identity",
         ].includes(check.id),
       )
       .map((check) => [check.id, check.status]),
     [
       ["hosted-production-identity", "unproven"],
+      [
+        "hosted-identity-family-proof-batch",
+        [
+          HOSTED_IDENTITY_FAMILY_BATCH.status,
+          HOSTED_IDENTITY_FAMILY_BATCH.command,
+          ...HOSTED_IDENTITY_FAMILY_BATCH.proofTargets,
+          HOSTED_IDENTITY_FAMILY_BATCH.proofBoundary,
+        ].join("\n"),
+      ],
       ["selected-next-command", HOSTED_IDENTITY_OPERATOR_COMMAND],
       ["selected-proof-target", HOSTED_IDENTITY_OPERATOR_PROOF_TARGET],
       ["selected-proof-boundary", HOSTED_IDENTITY_OPERATOR_PROOF_BOUNDARY],
     ],
+  );
+  assert.deepEqual(
+    data.audit.hostedIdentityFamilyBatch,
+    HOSTED_IDENTITY_FAMILY_BATCH,
   );
   assert.equal(
     data.audit.artifactSummary.command,

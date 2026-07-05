@@ -2265,6 +2265,10 @@ export function normalizeLocalNextActionAudit(nextAction, { game, proofGraph = n
     unproven,
     realHostedEvidenceInputs,
   });
+  const hostedIdentityFamilyBatch =
+    normalizeNextActionHostedIdentityFamilyBatch(
+      unproven?.hostedIdentityFamilyBatch,
+    );
   const localCheckRoleUrl =
     typeof localCheck?.roleUrl === "string" && localCheck.roleUrl.trim() !== ""
       ? localCheck.roleUrl
@@ -2421,6 +2425,22 @@ export function normalizeLocalNextActionAudit(nextAction, { game, proofGraph = n
         ]),
     ...(selectedReleaseReadinessCandidate?.id === "hosted-production-identity"
       ? [
+          ...(hostedIdentityFamilyBatch === null
+            ? []
+            : [
+                Object.freeze({
+                  id: hostedIdentityFamilyBatch.id,
+                  status: [
+                    hostedIdentityFamilyBatch.status,
+                    hostedIdentityFamilyBatch.command,
+                    hostedIdentityFamilyBatch.firstPendingProgressionId,
+                    ...hostedIdentityFamilyBatch.proofTargets,
+                    hostedIdentityFamilyBatch.proofBoundary,
+                  ]
+                    .filter((part) => String(part ?? "") !== "")
+                    .join("\n"),
+                }),
+              ]),
           Object.freeze({
             id: "selected-next-command",
             status: command,
@@ -2621,6 +2641,9 @@ export function normalizeLocalNextActionAudit(nextAction, { game, proofGraph = n
     }),
     realHostedEvidenceInputs,
     ...(hostedHandoffChecklist === null ? {} : { hostedHandoffChecklist }),
+    ...(hostedIdentityFamilyBatch === null
+      ? {}
+      : { hostedIdentityFamilyBatch }),
     localPrerequisites:
       artifact === null || artifactRoleUrl === ""
         ? Object.freeze([])
@@ -2895,6 +2918,27 @@ export function normalizeLocalNextActionAudit(nextAction, { game, proofGraph = n
       releaseReady: nextAction.releaseReady === true,
       productionReady: nextAction.productionReady === true,
     }),
+  });
+}
+
+function normalizeNextActionHostedIdentityFamilyBatch(batch) {
+  if (batch === null || typeof batch !== "object") {
+    return null;
+  }
+  return Object.freeze({
+    id: String(batch.id ?? ""),
+    status: String(batch.status ?? "unknown"),
+    command: String(batch.command ?? ""),
+    firstPendingProgressionId:
+      batch.firstPendingProgressionId === null
+        ? null
+        : String(batch.firstPendingProgressionId ?? ""),
+    proofTargets: Object.freeze(
+      (Array.isArray(batch.proofTargets) ? batch.proofTargets : []).map(
+        (target) => String(target ?? ""),
+      ),
+    ),
+    proofBoundary: String(batch.proofBoundary ?? ""),
   });
 }
 

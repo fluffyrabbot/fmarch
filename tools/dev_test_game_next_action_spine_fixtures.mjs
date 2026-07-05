@@ -174,6 +174,7 @@ export function hostedProductionIdentityUnprovenFixture({
   buildSlice,
   hostedHandoffChecklist,
   hostedIdentityProgression,
+  hostedIdentityFamilyBatch,
 } = {}) {
   return releaseReadinessUnprovenFixture({
     id: "hosted-production-identity",
@@ -189,6 +190,7 @@ export function hostedProductionIdentityUnprovenFixture({
     includeTargetRerunCommand,
     hostedHandoffChecklist,
     hostedIdentityProgression,
+    hostedIdentityFamilyBatch,
   });
 }
 
@@ -237,6 +239,9 @@ export function releaseReadinessTraceCandidateFixture({
     ...(unproven.hostedIdentityProgression === undefined
       ? {}
       : { hostedIdentityProgression: unproven.hostedIdentityProgression }),
+    ...(unproven.hostedIdentityFamilyBatch === undefined
+      ? {}
+      : { hostedIdentityFamilyBatch: unproven.hostedIdentityFamilyBatch }),
   };
 }
 
@@ -255,6 +260,7 @@ export function releaseReadinessUnprovenFixture({
   includeTargetRerunCommand = false,
   hostedHandoffChecklist,
   hostedIdentityProgression,
+  hostedIdentityFamilyBatch,
   hostedTargetPreflight,
   realHostedEvidenceInputs,
 } = {}) {
@@ -315,6 +321,9 @@ export function releaseReadinessUnprovenFixture({
     ...(hostedIdentityProgression === undefined
       ? {}
       : { hostedIdentityProgression }),
+    ...(hostedIdentityFamilyBatch === undefined
+      ? {}
+      : { hostedIdentityFamilyBatch }),
   };
 }
 

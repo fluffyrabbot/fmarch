@@ -441,6 +441,12 @@ export function buildDevTestGameNextAction(
                     hostedIdentityProgression:
                       selectedUnproven.hostedIdentityProgression,
                   }),
+              ...(selectedUnproven.hostedIdentityFamilyBatch === undefined
+                ? {}
+                : {
+                    hostedIdentityFamilyBatch:
+                      selectedUnproven.hostedIdentityFamilyBatch,
+                  }),
             },
           }
         : {
@@ -725,6 +731,16 @@ export function assertDevTestGameNextAction(evidence) {
     ) {
       throw new Error(
         "next-action release-readiness recovery has a malformed hosted identity progression",
+      );
+    }
+    if (
+      evidence.nextAction.unproven?.hostedIdentityFamilyBatch !== undefined &&
+      !validHostedIdentityFamilyBatchPredicate(
+        evidence.nextAction.unproven.hostedIdentityFamilyBatch,
+      )
+    ) {
+      throw new Error(
+        "next-action release-readiness recovery has a malformed hosted identity family batch predicate",
       );
     }
   }
@@ -1042,6 +1058,7 @@ function rankedBuildableReleaseReadinessItems(
         realHostedEvidenceInputs: selectedBuildable.realHostedEvidenceInputs,
         hostedHandoffChecklist: selectedBuildable.hostedHandoffChecklist,
         hostedIdentityProgression: selectedBuildable.hostedIdentityProgression,
+        hostedIdentityFamilyBatch: selectedBuildable.hostedIdentityFamilyBatch,
         actionStatus: releaseReadinessActionStatus(selectedBuildable),
       };
     })
@@ -1073,6 +1090,10 @@ function hostedIdentityOperatorBuildableForManifest(
     buildSlice:
       "Run the opt-in hosted identity operator spine after the hosted identity family admin proofs are current; it attaches the target-local redacted operator packet to the admin proof and refreshes readiness through the operator predicate without claiming live hosted traffic, release readiness, or production readiness.",
     proofTarget: devTestGameHostedIdentityOperatorAdminProofPath,
+    hostedIdentityFamilyBatch: hostedIdentityFamilyBatchPredicate({
+      status: "current",
+      progressions: hostedIdentityEvidenceFamilyProgressionCases,
+    }),
     proofBoundary:
       "Opt-in local operator predicate proof. The command proves that a non-fixture hosted identity packet path can clear the hosted-production-identity readiness item over the existing role-surface adapter; it does not prove live hosted account/session/invite traffic, release readiness, or production readiness.",
   };
@@ -1126,6 +1147,35 @@ function hostedIdentityProgressionBuildableForChecklist({
     roleUrl: progression.roleUrl,
     proofBoundary: progression.proofBoundary,
     hostedIdentityProgression: selectedProgression,
+    hostedIdentityFamilyBatch: hostedIdentityFamilyBatchPredicate({
+      status: "required",
+      firstPendingProgression: progression,
+      progressions: hostedHandoffChecklist.progressionSummary.progressions,
+    }),
+  };
+}
+
+function hostedIdentityFamilyBatchPredicate({
+  status,
+  firstPendingProgression = null,
+  progressions = hostedIdentityEvidenceFamilyProgressionCases,
+}) {
+  const normalizedProgressions = Array.isArray(progressions) ? progressions : [];
+  return {
+    id: "hosted-identity-family-proof-batch",
+    status,
+    command: `npm run ${devTestGameHostedIdentityProgressionAdminProofBatchCommand}`,
+    firstPendingProgressionId:
+      firstPendingProgression === null
+        ? null
+        : String(firstPendingProgression.id ?? ""),
+    proofTargets: normalizedProgressions.map((progression) =>
+      typeof progression.adminProofTarget === "string"
+        ? progression.adminProofTarget
+        : hostedIdentityEvidenceProgressionAdminProofPath(progression.id),
+    ),
+    proofBoundary:
+      "Hosted identity family proof batch predicate. Required means one or more family admin proofs are missing or stale; current means all family admin proofs are valid and the aggregate hosted identity operator spine may run. It does not prove live hosted identity traffic, release readiness, or production readiness.",
   };
 }
 
@@ -1787,6 +1837,27 @@ function validHostedIdentityProgressionSelection(progression, checklist) {
     progression.firstMissingCheckId === expected.firstMissingCheckId &&
     progression.proofBoundary === expected.proofBoundary &&
     ["missing", "stale"].includes(progression.artifactStatus)
+  );
+}
+
+function validHostedIdentityFamilyBatchPredicate(batch) {
+  return (
+    batch !== null &&
+    typeof batch === "object" &&
+    batch.id === "hosted-identity-family-proof-batch" &&
+    ["required", "current"].includes(batch.status) &&
+    batch.command ===
+      `npm run ${devTestGameHostedIdentityProgressionAdminProofBatchCommand}` &&
+    (batch.firstPendingProgressionId === null ||
+      typeof batch.firstPendingProgressionId === "string") &&
+    Array.isArray(batch.proofTargets) &&
+    batch.proofTargets.length ===
+      hostedIdentityEvidenceFamilyProgressionCases.length &&
+    batch.proofTargets.every(
+      (target) => typeof target === "string" && target.trim() !== "",
+    ) &&
+    typeof batch.proofBoundary === "string" &&
+    batch.proofBoundary.includes("does not prove live hosted identity traffic")
   );
 }
 

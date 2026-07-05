@@ -3017,6 +3017,20 @@ test("dev test-game next-action derives one local recovery command from the mani
     proofBoundary: firstHostedIdentityProgression.proofBoundary,
     artifactStatus: "missing",
   };
+  const hostedIdentityFamilyBatchProofTargets =
+    hostedIdentityHandoffChecklist.progressionSummary.progressions.map(
+      (progression) => progression.adminProofTarget,
+    );
+  const requiredHostedIdentityFamilyBatch = {
+    id: "hosted-identity-family-proof-batch",
+    status: "required",
+    command:
+      hostedIdentityHandoffChecklist.progressionSummary.batchProofCommand,
+    firstPendingProgressionId: firstHostedIdentityProgression.id,
+    proofTargets: hostedIdentityFamilyBatchProofTargets,
+    proofBoundary:
+      "Hosted identity family proof batch predicate. Required means one or more family admin proofs are missing or stale; current means all family admin proofs are valid and the aggregate hosted identity operator spine may run. It does not prove live hosted identity traffic, release readiness, or production readiness.",
+  };
   const hostedProductionIdentityOperatorUnproven =
     hostedProductionIdentityUnprovenFixture({
       proofTarget: firstHostedIdentityProgression.adminProofTarget,
@@ -3029,6 +3043,7 @@ test("dev test-game next-action derives one local recovery command from the mani
         "Run the hosted identity evidence-family admin proof batch; hosted-account-lifecycle is the first missing or stale family proof, and the batch refreshes all family proof artifacts before the aggregate hosted identity operator spine can run.",
       hostedHandoffChecklist: hostedIdentityHandoffChecklist,
       hostedIdentityProgression: selectedHostedIdentityProgression,
+      hostedIdentityFamilyBatch: requiredHostedIdentityFamilyBatch,
     });
   assert.deepEqual(freshAction.nextAction, {
     command: devTestGameLiveProofCommand,
@@ -3263,6 +3278,13 @@ test("dev test-game next-action derives one local recovery command from the mani
       artifactStatus: "missing",
     },
   );
+  assert.deepEqual(
+    hostedIdentitySecondStageAction.nextAction.unproven.hostedIdentityFamilyBatch,
+    {
+      ...requiredHostedIdentityFamilyBatch,
+      firstPendingProgressionId: secondHostedIdentityProgression.id,
+    },
+  );
   const allProgressionProofs = Object.fromEntries(
     hostedIdentityHandoffChecklist.progressionSummary.progressions.flatMap(
       (progression) => {
@@ -3303,6 +3325,14 @@ test("dev test-game next-action derives one local recovery command from the mani
   assert.equal(
     hostedIdentityOperatorStageAction.nextAction.unproven.hostedIdentityProgression,
     undefined,
+  );
+  assert.deepEqual(
+    hostedIdentityOperatorStageAction.nextAction.unproven.hostedIdentityFamilyBatch,
+    {
+      ...requiredHostedIdentityFamilyBatch,
+      status: "current",
+      firstPendingProgressionId: null,
+    },
   );
   assert.deepEqual(
     hostedIdentityStageAction.nextAction.unproven.hostedHandoffChecklist
