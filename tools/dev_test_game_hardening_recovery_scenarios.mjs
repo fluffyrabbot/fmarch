@@ -15,6 +15,7 @@ export {
   assertStaleConflictMessageSurfaceCoverage,
   buildStaleConflictMessageCoverageSummary,
   hardeningStaleConflictHighlightedLaneIds,
+  privateChannelStaleActionConflictMessageLaneId,
   replacementStaleConflictMessageLaneId,
   replacementStaleConflictMessageSpineLaneCase,
   staleActionConflictMessageLaneId,

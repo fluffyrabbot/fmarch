@@ -61,6 +61,7 @@ import {
   hostedMatrixReconnectLaneIds,
   hostedMatrixRecoveryLaneIds,
   playerLiveReconnectLaneId,
+  privateChannelStaleActionConflictMessageLaneId,
   privateChannelStaleActionReconnectExpectation,
   privateChannelStaleActionReconnectLaneId,
   replacementStaleConflictMessageLaneId,
@@ -116,6 +117,7 @@ test("hardening lane cases share stale conflict-message IDs", () => {
   assert.deepEqual(staleConflictMessageLaneIds, [
     "replacement-stale-conflict-message",
     "stale-action-conflict-message",
+    "private-channel-stale-action-conflict-message",
     "stale-dead-action-conflict",
     "stale-host-deadline",
     "stale-cohost-deadline",
@@ -160,6 +162,24 @@ test("hardening lane cases share stale conflict-message IDs", () => {
       expectedReceiptFragment: "stale action state",
       proofBoundary:
         "Seeded player role URL proof that a stale factional_kill action rejects with an explicit PhaseLocked conflict message and refreshes into current action controls.",
+    },
+    {
+      id: "private-channel-stale-action-conflict-message-surface",
+      checkId:
+        "stale-conflict-message-surface-private-channel-stale-action-conflict-message",
+      laneId: "private-channel-stale-action-conflict-message",
+      label: "Private channel stale action conflict message surface",
+      role: "player",
+      expectedRejectError: "PhaseLocked",
+      expectedTemplateId: "factional_kill",
+      expectedStalePhase: "N01",
+      expectedRefreshedPhase: "D02",
+      expectedReceiptFragment: "stale action state",
+      expectedChannelId: "private:mafia_day_chat",
+      expectedRoleUrlFragment: "/c/private%3Amafia_day_chat",
+      expectedPrivateThreadPagerVisible: true,
+      proofBoundary:
+        "Seeded private-channel player role URL proof that a stale factional_kill action rejects with an explicit PhaseLocked conflict message, preserves private channel scope, and refreshes into current action controls.",
     },
     {
       id: "stale-dead-action-conflict-surface",
@@ -217,6 +237,7 @@ test("hardening lane cases share stale conflict-message IDs", () => {
   assert.deepEqual(staleConflictMessageSurfaceCheckIds(), [
     "stale-conflict-message-surface-replacement-stale-conflict-message",
     "stale-conflict-message-surface-stale-action-conflict-message",
+    "stale-conflict-message-surface-private-channel-stale-action-conflict-message",
     "stale-conflict-message-surface-stale-dead-action-conflict",
     "stale-conflict-message-surface-stale-host-deadline",
     "stale-conflict-message-surface-stale-cohost-deadline",
@@ -239,7 +260,11 @@ test("hardening lane cases summarize stale conflict-message coverage", () => {
       },
       {
         id: "player-action-conflict-messages",
-        laneIds: ["stale-action-conflict-message", "stale-dead-action-conflict"],
+        laneIds: [
+          "stale-action-conflict-message",
+          "private-channel-stale-action-conflict-message",
+          "stale-dead-action-conflict",
+        ],
       },
       {
         id: "host-deadline-conflict-messages",
@@ -304,6 +329,19 @@ test("hardening lane cases share stale conflict-message status expectations", ()
         currentOccupant: undefined,
       },
       {
+        laneId: privateChannelStaleActionConflictMessageLaneId,
+        role: "player",
+        rejectError: "PhaseLocked",
+        receiptStatusText:
+          "Reject PhaseLocked: phase locked; stale action state, refresh and use current action controls",
+        receiptFragment: undefined,
+        rejectMessageFragment: undefined,
+        actorStatusAfterReject: undefined,
+        actionVisibleAfterRefresh: undefined,
+        refreshedPhase: "D02",
+        currentOccupant: undefined,
+      },
+      {
         laneId: staleDeadActionConflictLaneId,
         role: "player",
         rejectError: "SlotNotAlive",
@@ -346,6 +384,7 @@ test("hardening lane cases share stale conflict-message status expectations", ()
     staleDeadActionConflictLaneId,
     staleActionConflictLaneId,
     staleActionConflictMessageLaneId,
+    privateChannelStaleActionConflictMessageLaneId,
   ]);
 });
 

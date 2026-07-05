@@ -123,6 +123,7 @@ import {
   hostStaleControlLaneIds,
 } from "./dev_test_game_host_stale_control_scenarios.mjs";
 import {
+  privateChannelStaleActionConflictMessageLaneId,
   staleConflictMessageCoverageFamilies,
   staleConflictMessageSurfaceCases,
   staleConflictMessageLaneIds,
@@ -11273,6 +11274,7 @@ test("session card and markdown include role credential URLs and tokens", async 
       "stale-action-conflict",
       "stale-action-conflict-message",
       "stale-action-reconnect-recovery",
+      privateChannelStaleActionConflictMessageLaneId,
       "private-channel-stale-action-reconnect-recovery",
       "stale-host-control",
       "concurrent-host-resolve-race",
@@ -12258,7 +12260,7 @@ test("session card and markdown include role credential URLs and tokens", async 
   assert.equal(opsArtifacts.productionReady, false);
   assert.equal(opsArtifacts.run.game, game);
   assert.equal(opsArtifacts.run.seedCommandCount, 1);
-  assert.equal(opsArtifacts.proofRun.laneCount, 121);
+  assert.equal(opsArtifacts.proofRun.laneCount, proofRun.lanes.length);
   assert.equal(opsArtifacts.proofStability.hostConfirmClicks.total, 4);
   assert.equal(
     opsArtifacts.checks.some(

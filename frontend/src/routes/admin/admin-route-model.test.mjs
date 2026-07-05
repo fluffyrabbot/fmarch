@@ -3827,7 +3827,7 @@ test("admin local release readiness detail data carries checks and unproven rows
     [
       [
         "local-stale-conflict-message-milestone",
-        "passed: 5/5 lanes across 3/3 shared families",
+        `passed: ${staleConflictMessageLaneIds.length}/${staleConflictMessageLaneIds.length} lanes across 3/3 shared families`,
       ],
       [
         "local-host-stale-control-milestone",

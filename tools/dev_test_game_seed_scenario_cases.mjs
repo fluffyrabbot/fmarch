@@ -27,6 +27,9 @@ import {
   coreLoopFeatureSeedProofLaneAliasEntries,
   coreLoopFeatureSeedRoleOverrideEntries,
 } from "./dev_test_game_feature_lane_catalog.mjs";
+import {
+  privateChannelStaleActionConflictMessageLaneId,
+} from "./dev_test_game_stale_conflict_scenarios.mjs";
 
 export const seedRequiredScenarioIds = Object.freeze([
   "host-phase-controls",
@@ -83,6 +86,7 @@ export const seedRequiredScenarioIds = Object.freeze([
   "replacement-stale-private-receipts",
   "replacement-incoming-player",
   "stale-action-conflict-message",
+  privateChannelStaleActionConflictMessageLaneId,
   "stale-action-reconnect-recovery",
   "private-channel-stale-action-reconnect-recovery",
   "stale-dead-action-conflict",
@@ -175,6 +179,7 @@ const seedScenarioRoleOverrides = new Map([
   ["replacement-stale-private-channel", "player"],
   ["replacement-stale-private-receipts", "player"],
   ["private-channel-invalid-action-recovery", "actionPlayer"],
+  [privateChannelStaleActionConflictMessageLaneId, "actionPlayer"],
   ["private-channel-stale-action-reconnect-recovery", "actionPlayer"],
   ["stale-dead-action-conflict", "actionPlayer"],
 ]);

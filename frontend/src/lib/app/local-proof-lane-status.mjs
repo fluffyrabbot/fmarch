@@ -18,6 +18,7 @@ import {
 } from "../../../../tools/dev_test_game_host_stale_recovery_scenarios.mjs";
 import {
   hardeningRecoveryHighlightedLaneIds,
+  privateChannelStaleActionConflictMessageLaneId,
   staleActionConflictMessageLaneId,
   staleDeadActionConflictLaneId,
   privateChannelStaleActionReconnectLaneId,
@@ -202,6 +203,8 @@ export function hardeningLaneStatus(lane) {
       return `${status}: Reject ${String(evidence.rejectError ?? "unknown")}, role URL ${typeof evidence.roleUrl === "string"}, refreshed ${String(evidence.refreshedPhase ?? "unknown")}`;
     case staleActionConflictMessageLaneId:
       return `${status}: role URL ${typeof evidence.roleUrl === "string"}, ${String(evidence.receiptStatusText ?? evidence.rejectMessage ?? "unknown")}`;
+    case privateChannelStaleActionConflictMessageLaneId:
+      return `${status}: role URL ${typeof evidence.roleUrl === "string"}, channel ${String(evidence.channelAfterReject ?? evidence.channel ?? "unknown")}, ${String(evidence.receiptStatusText ?? evidence.rejectMessage ?? "unknown")}`;
     case stalePlayerActionReconnectLaneId:
       return `${status}: role URL ${typeof evidence.roleUrl === "string"}, ${String(evidence.reconnectingState ?? "unknown")} -> ${String(evidence.recoveryState ?? "unknown")}, phase ${String(evidence.recoveredPhase ?? "unknown")}`;
     case privateChannelStaleActionReconnectLaneId:

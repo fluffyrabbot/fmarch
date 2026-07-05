@@ -1886,6 +1886,8 @@ function buildStaleConflictMessageSurfaces(lanes, { sourcePath }) {
       lane?.status !== "passed" ||
       typeof evidence.roleUrl !== "string" ||
       !evidence.roleUrl.includes("/g/") ||
+      (scenario.expectedRoleUrlFragment !== undefined &&
+        !evidence.roleUrl.includes(scenario.expectedRoleUrlFragment)) ||
       evidence.rejectError !== scenario.expectedRejectError ||
       (scenario.expectedTemplateId !== undefined &&
         evidence.templateId !== scenario.expectedTemplateId) ||
@@ -1937,7 +1939,14 @@ function buildStaleConflictMessageSurfaces(lanes, { sourcePath }) {
       (scenario.expectedPhaseActions !== undefined &&
         !sameStringArray(evidence.phaseActions, scenario.expectedPhaseActions)) ||
       (scenario.expectedCurrentActions !== undefined &&
-        !sameStringArray(evidence.currentActions, scenario.expectedCurrentActions))
+        !sameStringArray(evidence.currentActions, scenario.expectedCurrentActions)) ||
+      (scenario.expectedChannelId !== undefined &&
+        evidence.channel !== scenario.expectedChannelId) ||
+      (scenario.expectedChannelId !== undefined &&
+        evidence.channelAfterReject !== scenario.expectedChannelId) ||
+      (scenario.expectedPrivateThreadPagerVisible !== undefined &&
+        evidence.privateThreadPagerVisible !==
+          scenario.expectedPrivateThreadPagerVisible)
     ) {
       throw new Error(
         `stale conflict-message surface missing proof from ${sourcePath}: ${scenario.id}`,
@@ -1952,6 +1961,9 @@ function buildStaleConflictMessageSurfaces(lanes, { sourcePath }) {
       role: scenario.role,
       roleUrl: evidence.roleUrl,
       visitedRolePath: evidence.visitedRolePath,
+      channel: evidence.channel,
+      channelAfterReject: evidence.channelAfterReject,
+      privateThreadPagerVisible: evidence.privateThreadPagerVisible,
       rejectError: evidence.rejectError,
       rejectMessage: evidence.rejectMessage,
       templateId: evidence.templateId,

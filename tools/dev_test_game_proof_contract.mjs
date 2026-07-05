@@ -73,6 +73,7 @@ import {
 import {
   assertStaleConflictMessageCoverageSummary,
   buildStaleConflictMessageCoverageSummary,
+  privateChannelStaleActionConflictMessageLaneId,
   staleConflictMessageLaneIds,
 } from "./dev_test_game_hardening_recovery_scenarios.mjs";
 import {
@@ -5681,6 +5682,85 @@ export function buildDevTestGameProofRun(session, options = {}) {
           (button) =>
             button.action === staleActionReconnectExpectation.commandAction,
         ) !== true,
+      },
+    ),
+    lane(
+      privateChannelStaleActionConflictMessageLaneId,
+      "Private channel stale action conflict message preserves scope",
+      {
+        roleUrl:
+          hardening.privateChannelStaleActionReconnectRecovery?.sourceRoleUrl ??
+          null,
+        visitedRolePath:
+          hardening.privateChannelStaleActionReconnectRecovery?.visitedRolePath ??
+          null,
+        channel:
+          hardening.privateChannelStaleActionReconnectRecovery?.channel ?? null,
+        rejectError:
+          hardening.privateChannelStaleActionReconnectRecovery?.reject?.error ??
+          null,
+        rejectMessage:
+          hardening.privateChannelStaleActionReconnectRecovery?.reject?.message ??
+          null,
+        templateId:
+          hardening.privateChannelStaleActionReconnectRecovery?.actionConfig
+            ?.templateId ?? null,
+        stalePhase:
+          hardening.privateChannelStaleActionReconnectRecovery?.staleN01Phase
+            ?.phaseId ?? null,
+        receiptStatusText:
+          hardening.privateChannelStaleActionReconnectRecovery
+            ?.receiptStatusText ?? null,
+        refreshedPhase:
+          hardening.privateChannelStaleActionReconnectRecovery
+            ?.commandStateAfterReject?.phase?.phaseId ?? null,
+        channelAfterReject:
+          hardening.privateChannelStaleActionReconnectRecovery
+            ?.channelContextAfterReject?.channelId ?? null,
+        privateThreadPagerVisible:
+          hardening.privateChannelStaleActionReconnectRecovery
+            ?.privateThreadPagerVisibleAfterReject ?? null,
+        passed:
+          hardening.privateChannelStaleActionReconnectRecovery?.status ===
+            "passed" &&
+          typeof hardening.privateChannelStaleActionReconnectRecovery
+            ?.sourceRoleUrl === "string" &&
+          hardening.privateChannelStaleActionReconnectRecovery.sourceRoleUrl
+            .includes(privateStaleActionReconnectExpectation.roleUrlFragment) &&
+          typeof hardening.privateChannelStaleActionReconnectRecovery
+            ?.visitedRolePath === "string" &&
+          hardening.privateChannelStaleActionReconnectRecovery.visitedRolePath
+            .includes(privateStaleActionReconnectExpectation.roleUrlFragment) &&
+          staleActionRejectRecoveryMatches(
+            hardening.privateChannelStaleActionReconnectRecovery,
+            {
+              error: privateStaleActionReconnectExpectation.rejectError,
+              actorSlot: privateStaleActionReconnectExpectation.actorSlot,
+              templateId: privateStaleActionReconnectExpectation.templateId,
+              commandAction: privateStaleActionReconnectExpectation.commandAction,
+              messageFragments:
+                privateStaleActionReconnectExpectation.messageFragments,
+              receiptStatusFragments:
+                privateStaleActionReconnectExpectation.messageFragments,
+              dispatchRefreshKeys:
+                privateStaleActionReconnectExpectation.dispatchRefreshKeys,
+              receiptRefreshKeys:
+                privateStaleActionReconnectExpectation.receiptRefreshKeys,
+              stalePhaseId: privateStaleActionReconnectExpectation.stalePhaseId,
+              browserCommandState:
+                privateStaleActionReconnectExpectation.browserCommandState,
+              apiCommandState:
+                privateStaleActionReconnectExpectation.apiCommandState,
+            },
+          ) &&
+          hardening.privateChannelStaleActionReconnectRecovery
+            ?.channelContextBeforeClose?.channelId ===
+            privateStaleActionReconnectExpectation.channelId &&
+          hardening.privateChannelStaleActionReconnectRecovery
+            ?.channelContextAfterReject?.channelId ===
+            privateStaleActionReconnectExpectation.channelId &&
+          hardening.privateChannelStaleActionReconnectRecovery
+            ?.privateThreadPagerVisibleAfterReject === true,
       },
     ),
     lane(

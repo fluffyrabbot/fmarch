@@ -88,9 +88,15 @@ test("hosted concurrent matrix cases share progress and handoff IDs", () => {
     /reload recovery coverage/,
   );
   assert.deepEqual(hostedMatrixReconnectLaneIds, staleClientReconnectLaneIds());
-  assert.equal(hostedMatrixStaleConflictLaneIds.length, 6);
+  assert.equal(
+    hostedMatrixStaleConflictLaneIds.length,
+    staleConflictMessageSurfaceCases().length + 1,
+  );
   assert.deepEqual(
-    hostedMatrixStaleConflictMilestoneCases().slice(0, 5),
+    hostedMatrixStaleConflictMilestoneCases().slice(
+      0,
+      staleConflictMessageSurfaceCases().length,
+    ),
     staleConflictMessageSurfaceCases().map((scenario) => ({
       id: `hosted-${scenario.laneId}`,
       label: `Hosted ${scenario.label}`,

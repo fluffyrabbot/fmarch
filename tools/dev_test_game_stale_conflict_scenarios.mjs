@@ -10,6 +10,9 @@ import {
   staleActionConflictLaneId,
   staleSameActionRecoveryLaneId,
 } from "./dev_test_game_player_recovery_scenarios.mjs";
+import {
+  privateChannelStaleActionReconnectExpectation,
+} from "./dev_test_game_stale_client_reconnect_scenarios.mjs";
 
 const cloneScenarioCase = (scenario) => ({ ...scenario });
 const cloneStatusExpectation = (expectation) => ({ ...expectation });
@@ -18,6 +21,8 @@ export const replacementStaleConflictMessageLaneId =
   "replacement-stale-conflict-message";
 export const staleActionConflictMessageLaneId =
   "stale-action-conflict-message";
+export const privateChannelStaleActionConflictMessageLaneId =
+  "private-channel-stale-action-conflict-message";
 export const staleDeadActionConflictLaneId = "stale-dead-action-conflict";
 export const staleHostDeadlineConflictLaneId = "stale-host-deadline";
 export const staleCohostDeadlineConflictLaneId = "stale-cohost-deadline";
@@ -25,6 +30,7 @@ export const staleCohostDeadlineConflictLaneId = "stale-cohost-deadline";
 export const staleConflictMessageLaneIds = Object.freeze([
   replacementStaleConflictMessageLaneId,
   staleActionConflictMessageLaneId,
+  privateChannelStaleActionConflictMessageLaneId,
   staleDeadActionConflictLaneId,
   staleHostDeadlineConflictLaneId,
   staleCohostDeadlineConflictLaneId,
@@ -41,6 +47,7 @@ export const staleConflictMessageCoverageFamilyDefinitions = Object.freeze([
     label: "Player action stale conflict messages",
     laneIds: Object.freeze([
       staleActionConflictMessageLaneId,
+      privateChannelStaleActionConflictMessageLaneId,
       staleDeadActionConflictLaneId,
     ]),
   }),
@@ -113,6 +120,25 @@ export const staleConflictMessageSurfaceCaseDefinitions = Object.freeze([
     expectedReceiptFragment: "stale action state",
     proofBoundary:
       "Seeded player role URL proof that a stale factional_kill action rejects with an explicit PhaseLocked conflict message and refreshes into current action controls.",
+  }),
+  Object.freeze({
+    id: "private-channel-stale-action-conflict-message-surface",
+    checkId:
+      "stale-conflict-message-surface-private-channel-stale-action-conflict-message",
+    laneId: privateChannelStaleActionConflictMessageLaneId,
+    label: "Private channel stale action conflict message surface",
+    role: "player",
+    expectedRejectError: "PhaseLocked",
+    expectedTemplateId: "factional_kill",
+    expectedStalePhase: "N01",
+    expectedRefreshedPhase: "D02",
+    expectedReceiptFragment: "stale action state",
+    expectedChannelId: privateChannelStaleActionReconnectExpectation().channelId,
+    expectedRoleUrlFragment:
+      privateChannelStaleActionReconnectExpectation().roleUrlFragment,
+    expectedPrivateThreadPagerVisible: true,
+    proofBoundary:
+      "Seeded private-channel player role URL proof that a stale factional_kill action rejects with an explicit PhaseLocked conflict message, preserves private channel scope, and refreshes into current action controls.",
   }),
   Object.freeze({
     id: "stale-dead-action-conflict-surface",
@@ -198,7 +224,10 @@ function actionConflictReceiptText({ rejectError, receiptFragment }) {
 }
 
 function conflictStatusExpectation(scenario) {
-  if (scenario.laneId === staleActionConflictMessageLaneId) {
+  if (
+    scenario.laneId === staleActionConflictMessageLaneId ||
+    scenario.laneId === privateChannelStaleActionConflictMessageLaneId
+  ) {
     return Object.freeze({
       laneId: scenario.laneId,
       role: scenario.role,
@@ -262,6 +291,7 @@ export const hardeningStaleConflictHighlightedLaneIds = Object.freeze([
   staleDeadActionConflictLaneId,
   staleActionConflictLaneId,
   staleActionConflictMessageLaneId,
+  privateChannelStaleActionConflictMessageLaneId,
 ]);
 
 export function assertStaleConflictMessageSurfaceCoverage() {
