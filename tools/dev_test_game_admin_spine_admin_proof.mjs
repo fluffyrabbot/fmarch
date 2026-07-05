@@ -50,6 +50,7 @@ const requiredChecks = [
   "backup",
   "ops",
   "seed",
+  "host-setup",
   "release",
   "release-runbook",
   "race-coverage",

@@ -386,6 +386,10 @@ const defaultHardeningAdminProofPath = path.join(
   "hardening-admin-proof.json",
 );
 const defaultHostSetupProofPath = path.join(artifactDir, "host-setup-proof.json");
+const defaultHostSetupAdminProofPath = path.join(
+  repoRoot,
+  devTestGameHostSetupAdminProofPath,
+);
 const defaultBackupRestoreProofPath = path.join(
   repoRoot,
   "target",
@@ -553,6 +557,14 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
           options.hostSetupProofPath ??
           "target/dev-test-game/host-setup-proof.json",
         artifact: options.hostSetupProofArtifact,
+      })
+    : undefined;
+  const hostSetupAdminProofEvidence = options.hostSetupAdminProof
+    ? validateDevTestGameHostSetupAdminProof(options.hostSetupAdminProof, {
+        path:
+          options.hostSetupAdminProofPath ??
+          devTestGameHostSetupAdminProofPath,
+        artifact: options.hostSetupAdminProofArtifact,
       })
     : undefined;
   const cohostConsoleProofEvidence = validateCohostConsoleLaneProof(proof, {
@@ -875,13 +887,18 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
     ...(hostSetupProofEvidence === undefined
       ? []
       : [
-          buildProofRunRoleSurfaceReadinessCheck({
-            roleSurfaceCase: roleSurfaceSpineCases.hostSetup,
-            proofEvidence: hostSetupProofEvidence,
-            spineTargets: buildHostSetupReadinessSpineTargets(
-              hostSetupProofEvidence,
-            ),
-          }),
+          {
+            ...buildProofRunRoleSurfaceReadinessCheck({
+              roleSurfaceCase: roleSurfaceSpineCases.hostSetup,
+              proofEvidence: hostSetupProofEvidence,
+              spineTargets: buildHostSetupReadinessSpineTargets(
+                hostSetupProofEvidence,
+              ),
+            }),
+            ...(hostSetupAdminProofEvidence === undefined
+              ? {}
+              : { adminRoleSurface: hostSetupAdminProofEvidence }),
+          },
         ]),
     buildProofRunRoleSurfaceReadinessCheck({
       roleSurfaceCase: roleSurfaceSpineCases.cohost,
@@ -1358,7 +1375,12 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
       game: proof.session.game,
       ...(hostSetupProofEvidence === undefined
         ? {}
-        : { hostSetupProof: hostSetupProofEvidence.path }),
+        : {
+            hostSetupProof: hostSetupProofEvidence.path,
+            ...(hostSetupAdminProofEvidence === undefined
+              ? {}
+              : { hostSetupAdminProof: hostSetupAdminProofEvidence.path }),
+          }),
       ...(coreLoopAdminProofEvidence === undefined
         ? {}
         : { coreLoopAdminProof: coreLoopAdminProofEvidence.path }),
@@ -1505,6 +1527,7 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
       ...((backupRestoreEvidence === undefined &&
         opsArtifactsEvidence === undefined &&
         hostSetupProofEvidence === undefined &&
+        hostSetupAdminProofEvidence === undefined &&
         seedFixtureEvidence === undefined &&
         identityAdapterEvidence === undefined &&
         spineManifestEvidence === undefined &&
@@ -1544,7 +1567,20 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
               }),
               ...(hostSetupProofEvidence === undefined
                 ? {}
-                : { hostSetupProof: hostSetupProofEvidence }),
+                : {
+                    hostSetupProof: {
+                      ...hostSetupProofEvidence,
+                      ...(hostSetupAdminProofEvidence === undefined
+                        ? {}
+                        : { adminRoleSurface: hostSetupAdminProofEvidence }),
+                    },
+                  }),
+              ...(
+                hostSetupProofEvidence !== undefined ||
+                hostSetupAdminProofEvidence === undefined
+                ? {}
+                : { hostSetupAdminProof: hostSetupAdminProofEvidence }
+              ),
               ...(backupRestoreEvidence === undefined
                 ? {}
                 : {
@@ -7707,6 +7743,17 @@ const optionalReadinessArtifactRegistry = Object.freeze([
     validator: validateDevTestGameHostSetupProof,
   }),
   optionalReadinessArtifact({
+    id: "hostSetupAdminProof",
+    envVar: "FMARCH_DEV_TEST_GAME_HOST_SETUP_ADMIN_PROOF",
+    defaultPath: defaultHostSetupAdminProofPath,
+    outputKeys: {
+      data: "hostSetupAdminProof",
+      path: "hostSetupAdminProofPath",
+      freshnessMetadata: "hostSetupAdminProofArtifact",
+    },
+    validator: validateDevTestGameHostSetupAdminProof,
+  }),
+  optionalReadinessArtifact({
     id: "backupAdminProof",
     envVar: "FMARCH_DEV_TEST_GAME_BACKUP_ADMIN_PROOF",
     defaultPath: defaultBackupAdminProofPath,
@@ -7991,6 +8038,7 @@ const optionalReadinessArtifactLoadPlan = Object.freeze([
   "coreLoopAdminProof",
   "hardeningAdminProof",
   "hostSetupProof",
+  "hostSetupAdminProof",
   readOptionalBackupRestoreArtifacts,
   "backupAdminProof",
   "opsArtifacts",

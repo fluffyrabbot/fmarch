@@ -49,6 +49,7 @@ import {
   devTestGameBackupAdminProofPath,
   devTestGameCoreLoopAdminProofPath,
   devTestGameHardeningAdminProofPath,
+  devTestGameHostSetupAdminProofPath,
   devTestGameIdentityAdminProofPath,
   devTestGameOpsAdminProofPath,
   devTestGameSeedAdminProofPath,
@@ -121,6 +122,8 @@ export const adminSpineReadinessEvidenceEnv = {
   FMARCH_DEV_TEST_GAME_SEED_FIXTURE_SUMMARY:
     devTestGameSeedFixturePath,
   FMARCH_DEV_TEST_GAME_SEED_ADMIN_PROOF: devTestGameSeedAdminProofPath,
+  FMARCH_DEV_TEST_GAME_HOST_SETUP_ADMIN_PROOF:
+    devTestGameHostSetupAdminProofPath,
   FMARCH_DEV_TEST_GAME_RELEASE_RUNBOOK:
     devTestGameReleaseRunbookPath,
   FMARCH_DEV_TEST_GAME_RELEASE_RUNBOOK_ADMIN_PROOF:

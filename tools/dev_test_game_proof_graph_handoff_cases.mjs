@@ -180,6 +180,14 @@ export const adminProofDestinationRequirementCases = Object.freeze([
     requiredScenarioIds: Object.freeze([...seedScenarioCoverageGroups.allDemo]),
   }),
   Object.freeze({
+    linkId: "admin-proof:host-setup",
+    auditId: localAdminAuditIds.hostSetupProof,
+    requiredCheckIds: Object.freeze([
+      "local-host-setup-proof",
+      "ready-check:start-phase",
+    ]),
+  }),
+  Object.freeze({
     linkId: "admin-proof:release",
     auditId: localAdminAuditIds.releaseReadiness,
     requiredCheckIds: Object.freeze([

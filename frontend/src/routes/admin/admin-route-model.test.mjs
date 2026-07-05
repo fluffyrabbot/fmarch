@@ -197,6 +197,7 @@ import {
   devTestGameBackupAdminProofPath,
   devTestGameCoreLoopAdminProofPath,
   devTestGameHardeningAdminProofPath,
+  devTestGameHostSetupAdminProofPath,
   devTestGameIdentityAdminProofPath,
   devTestGameOpsAdminProofPath,
   devTestGameSeedAdminProofPath,
@@ -1473,7 +1474,7 @@ test("admin route data exposes local admin spine proof as a native audit row", a
 
   const adminSpine = data.audit.find((item) => item.id === localAdminAuditIds.adminSpine);
   assert.equal(adminSpine.label, "Local admin spine");
-  assert.equal(adminSpine.status, "10 admin proof surfaces passed");
+  assert.equal(adminSpine.status, "11 admin proof surfaces passed");
   assert.equal(adminSpine.authority, "GlobalAdmin or GlobalMod");
   assert.equal(adminSpine.inspectHref, localAdminAuditRoleUrl(localAdminAuditIds.adminSpine, { game: "midsummer" }));
   assert.deepEqual(
@@ -1485,6 +1486,7 @@ test("admin route data exposes local admin spine proof as a native audit row", a
       "backup",
       "ops",
       "seed",
+      "host-setup",
       "release",
       "race-coverage",
       "hosted-concurrent-race-matrix",
@@ -1504,10 +1506,10 @@ test("admin route data exposes local admin spine proof as a native audit row", a
   ]);
   assert.deepEqual(adminSpine.artifactSummary, {
     game: "game-a",
-    proofCount: 10,
+    proofCount: 11,
     batchCount: 5,
     recoveryStatus: "passed",
-    refreshedCount: 10,
+    refreshedCount: 11,
     nextCommand: "npm run test:dev-test-game-admin-spine",
     spineManifestInspectHref: localAdminAuditRoleUrl(localAdminAuditIds.spineManifest, { game: "midsummer" }),
     releaseReady: false,
@@ -1527,7 +1529,7 @@ test("admin local admin spine detail data carries aggregate proof rows", async (
   assert.equal(data.status, "available");
   assert.equal(data.surfaceHeader.title, "Local admin spine");
   assert.equal(data.audit.id, localAdminAuditIds.adminSpine);
-  assert.equal(data.audit.checks.length, 12);
+  assert.equal(data.audit.checks.length, 13);
   assert.equal(data.audit.batches.length, 5);
   assert.deepEqual(
     data.audit.batches.map((batch) => [
@@ -1541,7 +1543,7 @@ test("admin local admin spine detail data carries aggregate proof rows", async (
       [
         "aggregate-pre-release-admin-proof-batch",
         "passed",
-        6,
+        7,
         true,
         true,
       ],
@@ -1584,6 +1586,7 @@ test("admin local admin spine detail data carries aggregate proof rows", async (
       ["backup", "passed"],
       ["ops", "passed"],
       ["seed", "passed"],
+      ["host-setup", "passed"],
       ["release", "passed"],
       ["race-coverage", "passed"],
       ["hosted-concurrent-race-matrix", "passed"],
@@ -7686,6 +7689,7 @@ function adminSpineProofFixture() {
       adminSpineProofRow("backup"),
       adminSpineProofRow("ops"),
       adminSpineProofRow("seed"),
+      adminSpineProofRow("host-setup"),
       adminSpineProofRow("release"),
       adminSpineProofRow("race-coverage"),
       adminSpineProofRow("hosted-concurrent-race-matrix"),
@@ -7696,7 +7700,7 @@ function adminSpineProofFixture() {
         label: "Aggregate pre-release admin proof batch",
         reason: "pre-readiness local proof inputs",
         status: "passed",
-        caseCount: 6,
+        caseCount: 7,
         caseSmokeNames: [
           "dev-test-game-core-loop-admin-proof",
           "dev-test-game-hardening-admin-proof",
@@ -7704,8 +7708,17 @@ function adminSpineProofFixture() {
           "dev-test-game-backup-admin-proof",
           "dev-test-game-ops-admin-proof",
           "dev-test-game-seed-admin-proof",
+          "dev-test-game-host-setup-admin-proof",
         ],
-        proofIds: ["core-loop", "hardening", "identity", "backup", "ops", "seed"],
+        proofIds: [
+          "core-loop",
+          "hardening",
+          "identity",
+          "backup",
+          "ops",
+          "seed",
+          "host-setup",
+        ],
         artifactPaths: [
           devTestGameCoreLoopAdminProofPath,
           devTestGameHardeningAdminProofPath,
@@ -7713,6 +7726,7 @@ function adminSpineProofFixture() {
           devTestGameBackupAdminProofPath,
           devTestGameOpsAdminProofPath,
           devTestGameSeedAdminProofPath,
+          devTestGameHostSetupAdminProofPath,
         ],
         elapsedMs: 1200,
         sharedFrontendSession: true,
@@ -7752,8 +7766,8 @@ function adminSpineProofFixture() {
     ],
     recovery: {
       status: "passed",
-      surfaceCount: 10,
-      refreshedCount: 10,
+      surfaceCount: 11,
+      refreshedCount: 11,
       nextCommand: "npm run test:dev-test-game-admin-spine",
       proofBoundary: "Local aggregate recovery commands only.",
       surfaces: [
@@ -7763,6 +7777,7 @@ function adminSpineProofFixture() {
         adminSpineRecoveryRow("backup"),
         adminSpineRecoveryRow("ops"),
         adminSpineRecoveryRow("seed"),
+        adminSpineRecoveryRow("host-setup"),
         adminSpineRecoveryRow("release"),
         adminSpineRecoveryRow("race-coverage"),
         adminSpineRecoveryRow("hosted-concurrent-race-matrix"),

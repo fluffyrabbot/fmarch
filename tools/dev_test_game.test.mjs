@@ -966,6 +966,8 @@ test("dev test-game spine orchestrators expose stable proof order and env maps",
     FMARCH_DEV_TEST_GAME_SEED_FIXTURE_SUMMARY:
       "target/dev-test-game/seed-fixture-summary.json",
     FMARCH_DEV_TEST_GAME_SEED_ADMIN_PROOF: devTestGameSeedAdminProofPath,
+    FMARCH_DEV_TEST_GAME_HOST_SETUP_ADMIN_PROOF:
+      devTestGameHostSetupAdminProofPath,
     FMARCH_DEV_TEST_GAME_RELEASE_RUNBOOK:
       "target/dev-test-game/release-runbook.json",
     FMARCH_DEV_TEST_GAME_RELEASE_RUNBOOK_ADMIN_PROOF:
@@ -12739,6 +12741,8 @@ test("session card and markdown include role credential URLs and tokens", async 
     generatedAt: "2026-06-26T00:00:00.000Z",
     hostSetupProofPath: "target/dev-test-game/host-setup-proof.json",
     hostSetupProof: hostSetupProofFixture(),
+    hostSetupAdminProofPath: devTestGameHostSetupAdminProofPath,
+    hostSetupAdminProof: hostSetupAdminProofFixture(),
   });
   assertDevTestGameReleaseReadiness(hostSetupReadiness);
   const hostSetupCheck = hostSetupReadiness.localDevelopmentSpine.checks.find(
@@ -12747,7 +12751,11 @@ test("session card and markdown include role credential URLs and tokens", async 
   assert.deepEqual(
     [
       hostSetupReadiness.generatedFrom.hostSetupProof,
+      hostSetupReadiness.generatedFrom.hostSetupAdminProof,
       hostSetupReadiness.localDevelopmentSpine.evidence.hostSetupProof.roleUrl,
+      hostSetupReadiness.localDevelopmentSpine.evidence.hostSetupProof
+        .adminRoleSurface.detailRoleUrl,
+      hostSetupCheck.adminRoleSurface.detailRoleUrl,
       hostSetupCheck.roleUrl,
       hostSetupCheck.recoveryCommand,
       hostSetupCheck.readyCheckIds.includes("start-phase"),
@@ -12759,7 +12767,10 @@ test("session card and markdown include role credential URLs and tokens", async 
     ],
     [
       "target/dev-test-game/host-setup-proof.json",
+      devTestGameHostSetupAdminProofPath,
       "http://127.0.0.1:5173/g/<seeded-game>/setup",
+      "/admin/audit/local-host-setup-proof?game=<seeded-game>",
+      "/admin/audit/local-host-setup-proof?game=<seeded-game>",
       "http://127.0.0.1:5173/g/<seeded-game>/setup",
       "npm run dev:test-game -- --verify-host-setup-only",
       true,
