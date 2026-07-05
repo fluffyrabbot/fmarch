@@ -72,10 +72,13 @@ import {
 import {
   adminSpineProofPath,
   adminSpineTerminalBatchProofPath,
+  devTestGameProofGraphPath,
   devTestGameProofGraphAdminProofPath,
   devTestGameProofRunPath,
   hostedIdentityNextActionAdminProofPath,
+  hostedIdentityNextActionPath,
   nextActionAdminProofPath,
+  nextActionPath,
   proofFreshnessAdminProofPath,
   spineManifestPath,
 } from "./dev_test_game_spine_artifact_paths.mjs";
@@ -6481,6 +6484,17 @@ export function validateDevTestGameAdminSpineTerminalBatches(
       ],
     },
   ];
+  const requiredGeneratedFrom = {
+    adminSpineProof: adminSpineProofPath,
+    proofGraph: devTestGameProofGraphPath,
+    nextAction: nextActionPath,
+    hostedIdentityNextAction: hostedIdentityNextActionPath,
+    proofFreshnessAdminProof: proofFreshnessAdminProofPath,
+    nextActionAdminProof: nextActionAdminProofPath,
+    hostedIdentityNextActionAdminProof:
+      hostedIdentityNextActionAdminProofPath,
+    batchCount: requiredBatches.length,
+  };
   if (proof?.version !== 1) {
     throw new Error(
       `admin spine terminal batch proof version drifted: ${proof?.version}`,
@@ -6502,8 +6516,43 @@ export function validateDevTestGameAdminSpineTerminalBatches(
       "admin spine terminal batch proof must not claim production or release readiness",
     );
   }
+  if (
+    proof.generatedFrom?.nextAction ===
+      proof.generatedFrom?.hostedIdentityNextAction ||
+    proof.generatedFrom?.nextActionAdminProof ===
+      proof.generatedFrom?.hostedIdentityNextActionAdminProof
+  ) {
+    throw new Error(
+      "admin spine terminal batch proof must keep canonical and hosted identity artifacts separate",
+    );
+  }
+  if (
+    Object.entries(requiredGeneratedFrom).some(
+      ([key, value]) => proof.generatedFrom?.[key] !== value,
+    )
+  ) {
+    throw new Error("admin spine terminal batch proof generatedFrom drifted");
+  }
   if (!Array.isArray(proof.batches) || proof.batches.length !== requiredBatches.length) {
     throw new Error("admin spine terminal batch proof count drifted");
+  }
+  const hostedIdentityBatch = proof.batches[1];
+  const refreshBatch = proof.batches[2];
+  if (
+    !hostedIdentityBatch?.artifactPaths?.includes(
+      hostedIdentityNextActionAdminProofPath,
+    )
+  ) {
+    throw new Error(
+      "admin spine terminal batch proof missing hosted identity next-action artifact",
+    );
+  }
+  if (
+    refreshBatch?.artifactPaths?.includes(hostedIdentityNextActionAdminProofPath)
+  ) {
+    throw new Error(
+      "admin spine terminal batch proof leaked hosted identity artifact into refresh batch",
+    );
   }
   for (const [index, expected] of requiredBatches.entries()) {
     const batch = proof.batches[index];

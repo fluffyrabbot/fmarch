@@ -280,6 +280,7 @@ import {
 import {
   assertDevTestGameSpineManifest,
   buildDevTestGameSpineManifest,
+  hostedIdentityNextActionAdminProofPath,
   hostedIdentityNextActionPath,
   nextActionAdminProofCommand,
   nextActionAdminProofPath,
@@ -3979,8 +3980,9 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
       ],
     ],
   );
+  const terminalBatchFixture = adminSpineTerminalBatchesFixture();
   const terminalBatches = validateDevTestGameAdminSpineTerminalBatches(
-    adminSpineTerminalBatchesFixture(),
+    terminalBatchFixture,
   );
   assert.deepEqual(
     terminalBatches.batches.map((batch) => [
@@ -4013,6 +4015,25 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
         true,
       ],
     ],
+  );
+  assert.throws(
+    () =>
+      validateDevTestGameAdminSpineTerminalBatches({
+        ...terminalBatchFixture,
+        generatedFrom: {
+          ...terminalBatchFixture.generatedFrom,
+          hostedIdentityNextAction: terminalBatchFixture.generatedFrom.nextAction,
+        },
+      }),
+    /must keep canonical and hosted identity artifacts separate/,
+  );
+  const refreshArtifactLeak = structuredClone(terminalBatchFixture);
+  refreshArtifactLeak.batches[2].artifactPaths.push(
+    hostedIdentityNextActionAdminProofPath,
+  );
+  assert.throws(
+    () => validateDevTestGameAdminSpineTerminalBatches(refreshArtifactLeak),
+    /leaked hosted identity artifact into refresh batch/,
   );
   const releaseReadiness = devTestGameReleaseReadinessChecklistFixture({
     includeHostSetupProofCheck: true,
