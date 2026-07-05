@@ -104,13 +104,23 @@ assert.deepEqual(
 );
 assert.deepEqual(
   proofRun.coreLoopSpine.cycles.map((cycle) => cycle.id),
-  ["d01-n01-d02", "d02-n02", "n02-d03", "d03-n03", "n03-d04"],
+  [
+    "d01-n01-d02",
+    "d02-n02",
+    "n02-d03",
+    "d03-n03",
+    "n03-d04",
+    "d04-n04-d05",
+    "d05-n05",
+  ],
 );
 const proofRunSpineFirstCycle = proofRun.coreLoopSpine.cycles[0];
 const proofRunSpineSecondCycle = proofRun.coreLoopSpine.cycles[1];
 const proofRunSpineThirdCycle = proofRun.coreLoopSpine.cycles[2];
 const proofRunSpineFourthCycle = proofRun.coreLoopSpine.cycles[3];
 const proofRunSpineFifthCycle = proofRun.coreLoopSpine.cycles[4];
+const proofRunSpineSixthCycle = proofRun.coreLoopSpine.cycles[5];
+const proofRunSpineSeventhCycle = proofRun.coreLoopSpine.cycles[6];
 assert.equal(proofRunSpineFirstCycle.game, session.game);
 assert.match(proofRunSpineFirstCycle.roleUrls.host, new RegExp(`/g/${session.game}/host`));
 assert.equal(proofRunSpineFirstCycle.checkpoints[0].id, "d01-resolved-locked");
@@ -409,6 +419,95 @@ assert.equal(proofRunSpineFifthCycle.checkpoints[3].actionSubmitControls, 0);
 assert.equal(proofRunSpineFifthCycle.checkpoints[3].actionVoteControls > 0, true);
 assert.equal(proofRunSpineFifthCycle.checkpoints[3].targetAlive, false);
 assert.equal(proofRunSpineFifthCycle.checkpoints[3].targetVoteControls, 0);
+assert.equal(proofRunSpineSixthCycle.id, "d04-n04-d05");
+assert.equal(proofRunSpineSixthCycle.game, proofRunSpineThirdCycle.game);
+assert.equal(
+  proofRunSpineSixthCycle.roleUrls.host,
+  proofRunSpineThirdCycle.roleUrls.host,
+);
+assert.equal(
+  proofRunSpineSixthCycle.roleUrls.actionPlayer,
+  proofRunSpineThirdCycle.roleUrls.actionPlayer,
+);
+assert.equal(
+  proofRunSpineSixthCycle.roleUrls.deadPlayer,
+  proofRunSpineThirdCycle.roleUrls.normalPlayer,
+);
+assert.equal(
+  proofRunSpineSixthCycle.checkpoints[0].id,
+  "d04-no-lynch-vote-submitted",
+);
+assert.equal(proofRunSpineSixthCycle.checkpoints[0].phase, "D04");
+assert.equal(proofRunSpineSixthCycle.checkpoints[0].voteState, "ack");
+assert.equal(proofRunSpineSixthCycle.checkpoints[0].actorSlot, "slot_4");
+assert.equal(proofRunSpineSixthCycle.checkpoints[0].voteTarget, "NoLynch");
+assert.equal(proofRunSpineSixthCycle.checkpoints[0].currentVoteKind, "no_lynch");
+assert.equal(proofRunSpineSixthCycle.checkpoints[0].apiPhase, "D04");
+assert.equal(proofRunSpineSixthCycle.checkpoints[0].apiTarget, "no_lynch");
+assert.equal(proofRunSpineSixthCycle.checkpoints[0].apiCount, 1);
+assert.equal(proofRunSpineSixthCycle.checkpoints[1].id, "d04-resolved-no-lynch");
+assert.equal(proofRunSpineSixthCycle.checkpoints[1].phase, "D04");
+assert.equal(proofRunSpineSixthCycle.checkpoints[1].locked, true);
+assert.equal(proofRunSpineSixthCycle.checkpoints[1].resolveState, "ack");
+assert.equal(proofRunSpineSixthCycle.checkpoints[1].outcomeStatus, "NoLynch");
+assert.equal(proofRunSpineSixthCycle.checkpoints[1].winnerSlot, null);
+assert.equal(proofRunSpineSixthCycle.checkpoints[1].projectedCount, 1);
+assert.equal(proofRunSpineSixthCycle.checkpoints[2].id, "n04-no-action-open");
+assert.equal(proofRunSpineSixthCycle.checkpoints[2].advanceState, "ack");
+assert.equal(proofRunSpineSixthCycle.checkpoints[2].phase, "N04");
+assert.equal(proofRunSpineSixthCycle.checkpoints[2].actionTemplate, null);
+assert.equal(proofRunSpineSixthCycle.checkpoints[2].actionCount, 0);
+assert.equal(proofRunSpineSixthCycle.checkpoints[2].actionSubmitControls, 0);
+assert.equal(proofRunSpineSixthCycle.checkpoints[2].deadPlayerActionControls, 0);
+assert.equal(proofRunSpineSixthCycle.checkpoints[3].id, "n04-resolved-no-action");
+assert.equal(proofRunSpineSixthCycle.checkpoints[3].resolveState, "ack");
+assert.equal(proofRunSpineSixthCycle.checkpoints[3].phase, "N04");
+assert.equal(proofRunSpineSixthCycle.checkpoints[3].locked, true);
+assert.equal(proofRunSpineSixthCycle.checkpoints[3].actionCount, 0);
+assert.equal(proofRunSpineSixthCycle.checkpoints[3].actionSubmitControls, 0);
+assert.equal(proofRunSpineSixthCycle.checkpoints[4].id, "d05-day-controls-return");
+assert.equal(proofRunSpineSixthCycle.checkpoints[4].advanceState, "ack");
+assert.equal(proofRunSpineSixthCycle.checkpoints[4].phase, "D05");
+assert.equal(proofRunSpineSixthCycle.checkpoints[4].locked, false);
+assert.equal(proofRunSpineSixthCycle.checkpoints[4].actionSubmitControls, 0);
+assert.equal(proofRunSpineSixthCycle.checkpoints[4].actionVoteControls > 0, true);
+assert.equal(proofRunSpineSixthCycle.checkpoints[4].deadPlayerVoteControls, 0);
+assert.equal(proofRunSpineSeventhCycle.id, "d05-n05");
+assert.equal(proofRunSpineSeventhCycle.game, proofRunSpineThirdCycle.game);
+assert.equal(
+  proofRunSpineSeventhCycle.roleUrls.host,
+  proofRunSpineThirdCycle.roleUrls.host,
+);
+assert.equal(
+  proofRunSpineSeventhCycle.roleUrls.actionPlayer,
+  proofRunSpineThirdCycle.roleUrls.actionPlayer,
+);
+assert.equal(
+  proofRunSpineSeventhCycle.checkpoints[0].id,
+  "d05-no-lynch-vote-submitted",
+);
+assert.equal(proofRunSpineSeventhCycle.checkpoints[0].phase, "D05");
+assert.equal(proofRunSpineSeventhCycle.checkpoints[0].voteState, "ack");
+assert.equal(proofRunSpineSeventhCycle.checkpoints[0].actorSlot, "slot_4");
+assert.equal(proofRunSpineSeventhCycle.checkpoints[0].voteTarget, "NoLynch");
+assert.equal(proofRunSpineSeventhCycle.checkpoints[0].currentVoteKind, "no_lynch");
+assert.equal(proofRunSpineSeventhCycle.checkpoints[0].apiPhase, "D05");
+assert.equal(proofRunSpineSeventhCycle.checkpoints[0].apiTarget, "no_lynch");
+assert.equal(proofRunSpineSeventhCycle.checkpoints[0].apiCount, 1);
+assert.equal(proofRunSpineSeventhCycle.checkpoints[1].id, "d05-resolved-no-lynch");
+assert.equal(proofRunSpineSeventhCycle.checkpoints[1].phase, "D05");
+assert.equal(proofRunSpineSeventhCycle.checkpoints[1].locked, true);
+assert.equal(proofRunSpineSeventhCycle.checkpoints[1].resolveState, "ack");
+assert.equal(proofRunSpineSeventhCycle.checkpoints[1].outcomeStatus, "NoLynch");
+assert.equal(proofRunSpineSeventhCycle.checkpoints[1].winnerSlot, null);
+assert.equal(proofRunSpineSeventhCycle.checkpoints[1].projectedCount, 1);
+assert.equal(proofRunSpineSeventhCycle.checkpoints[2].id, "n05-night-controls-return");
+assert.equal(proofRunSpineSeventhCycle.checkpoints[2].advanceState, "ack");
+assert.equal(proofRunSpineSeventhCycle.checkpoints[2].phase, "N05");
+assert.equal(proofRunSpineSeventhCycle.checkpoints[2].locked, false);
+assert.equal(proofRunSpineSeventhCycle.checkpoints[2].actionSubmitControls, 0);
+assert.equal(proofRunSpineSeventhCycle.checkpoints[2].actionVoteControls, 0);
+assert.equal(proofRunSpineSeventhCycle.checkpoints[2].actionCount, 0);
 assert.equal(proofRun.coreLoopSpine.recoveryHooks.staleLockedVoteReject, "PhaseLocked");
 assert.equal(proofRun.coreLoopSpine.recoveryHooks.invalidActionReject, "InvalidTarget");
 assert.equal(

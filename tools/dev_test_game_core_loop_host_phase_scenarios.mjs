@@ -965,32 +965,30 @@ export function assertHostLifecycleRaceSurfaceCase({
   const reloadLane = hostLifecycleRaceSurface?.hostLifecycleRaceReload;
   const race = raceLane?.evidence;
   const reload = reloadLane?.evidence;
+  const expectedOutcome = hostLifecycleRaceExpectedOutcome({ race, scenario });
   if (
     hostLifecycleRaceSurface?.status !== "passed" ||
     hostLifecycleRaceSurface.proofCheckId !== scenario.proofCheckId ||
     hostLifecycleRaceSurface.reloadProofCheckId !== scenario.reloadProofCheckId ||
     raceLane?.id !== scenario.proofCheckId ||
     raceLane?.status !== "passed" ||
-    race?.ackRaceRole !== scenario.ackRaceRole ||
-    race?.rejectRaceRole !== scenario.rejectRaceRole ||
-    race?.ackActionId !== scenario.ackActionId ||
-    race?.rejectActionId !== scenario.rejectActionId ||
+    expectedOutcome === null ||
     typeof race?.game !== "string" ||
     race.game.length === 0 ||
-    race?.winningStatus !== scenario.winningStatus ||
+    race?.winningStatus !== expectedOutcome.winningStatus ||
     race?.rejectError !== scenario.rejectError ||
-    race?.apiStatus !== scenario.apiStatus ||
+    race?.apiStatus !== expectedOutcome.apiStatus ||
     reloadLane?.id !== scenario.reloadProofCheckId ||
     reloadLane?.status !== "passed" ||
     reload?.game !== race.game ||
-    reload?.winningStatus !== scenario.winningStatus ||
+    reload?.winningStatus !== expectedOutcome.winningStatus ||
     reload?.deadRouteStatus !== scenario.deadRouteStatus ||
     reload?.modkillRouteStatus !== scenario.modkillRouteStatus ||
     reload?.playerRouteStatus !== scenario.playerRouteStatus ||
-    reload?.deadLifecycleLabel !== scenario.deadLifecycleLabel ||
-    reload?.modkillLifecycleLabel !== scenario.modkillLifecycleLabel ||
-    reload?.playerStatus !== scenario.playerStatus ||
-    reload?.apiStatus !== scenario.apiStatus
+    reload?.deadLifecycleLabel !== expectedOutcome.lifecycleLabel ||
+    reload?.modkillLifecycleLabel !== expectedOutcome.lifecycleLabel ||
+    reload?.playerStatus !== expectedOutcome.apiStatus ||
+    reload?.apiStatus !== expectedOutcome.apiStatus
   ) {
     throwHostPhaseScenarioAssertionError({
       message: "core-loop admin proof missing host lifecycle race surface",
@@ -998,6 +996,38 @@ export function assertHostLifecycleRaceSurfaceCase({
       includeEvidenceInError,
     });
   }
+}
+
+function hostLifecycleRaceExpectedOutcome({ race, scenario }) {
+  const outcomes = [
+    {
+      ackRaceRole: scenario.ackRaceRole,
+      rejectRaceRole: scenario.rejectRaceRole,
+      ackActionId: scenario.ackActionId,
+      rejectActionId: scenario.rejectActionId,
+      winningStatus: scenario.winningStatus,
+      apiStatus: scenario.apiStatus,
+      lifecycleLabel: scenario.deadLifecycleLabel,
+    },
+    {
+      ackRaceRole: scenario.rejectRaceRole,
+      rejectRaceRole: scenario.ackRaceRole,
+      ackActionId: scenario.rejectActionId,
+      rejectActionId: scenario.ackActionId,
+      winningStatus: "modkilled",
+      apiStatus: "modkilled",
+      lifecycleLabel: "Modkilled",
+    },
+  ];
+  return (
+    outcomes.find(
+      (outcome) =>
+        race?.ackRaceRole === outcome.ackRaceRole &&
+        race?.rejectRaceRole === outcome.rejectRaceRole &&
+        race?.ackActionId === outcome.ackActionId &&
+        race?.rejectActionId === outcome.rejectActionId,
+    ) ?? null
+  );
 }
 
 export function assertHostPublishRaceSurfaceCase({
@@ -1009,6 +1039,7 @@ export function assertHostPublishRaceSurfaceCase({
   const reloadLane = hostPublishRaceSurface?.hostPublishRaceReload;
   const race = raceLane?.evidence;
   const reload = reloadLane?.evidence;
+  const expectedRace = symmetricHostRaceRoleOutcome({ race, scenario });
   if (
     hostPublishRaceSurface?.status !== "passed" ||
     hostPublishRaceSurface.proofCheckId !== scenario.proofCheckId ||
@@ -1019,8 +1050,7 @@ export function assertHostPublishRaceSurfaceCase({
     race.game.length === 0 ||
     race?.targetSlot !== scenario.targetSlot ||
     race?.targetCount !== scenario.targetCount ||
-    race?.ackRaceRole !== scenario.ackRaceRole ||
-    race?.rejectRaceRole !== scenario.rejectRaceRole ||
+    expectedRace === null ||
     race?.ackState !== scenario.ackState ||
     race?.rejectError !== scenario.rejectError ||
     race?.apiOfficialPostCount !== scenario.apiOfficialPostCount ||
@@ -1039,6 +1069,26 @@ export function assertHostPublishRaceSurfaceCase({
       includeEvidenceInError,
     });
   }
+}
+
+function symmetricHostRaceRoleOutcome({ race, scenario }) {
+  const outcomes = [
+    {
+      ackRaceRole: scenario.ackRaceRole,
+      rejectRaceRole: scenario.rejectRaceRole,
+    },
+    {
+      ackRaceRole: scenario.rejectRaceRole,
+      rejectRaceRole: scenario.ackRaceRole,
+    },
+  ];
+  return (
+    outcomes.find(
+      (outcome) =>
+        race?.ackRaceRole === outcome.ackRaceRole &&
+        race?.rejectRaceRole === outcome.rejectRaceRole,
+    ) ?? null
+  );
 }
 
 export function assertHostResolveRaceSurfaceCase({
@@ -1187,6 +1237,7 @@ export function assertHostMixedAdvanceRaceSurfaceCase({
   const reloadLane = hostMixedAdvanceRaceSurface?.hostMixedAdvanceRaceReload;
   const race = raceLane?.evidence;
   const reload = reloadLane?.evidence;
+  const expectedRace = symmetricHostRaceExpectedOutcome({ race, scenario });
   if (
     hostMixedAdvanceRaceSurface?.status !== "passed" ||
     hostMixedAdvanceRaceSurface.proofCheckId !== scenario.proofCheckId ||
@@ -1194,10 +1245,7 @@ export function assertHostMixedAdvanceRaceSurfaceCase({
       scenario.reloadProofCheckId ||
     raceLane?.id !== scenario.proofCheckId ||
     raceLane?.status !== "passed" ||
-    race?.ackRaceRole !== scenario.ackRaceRole ||
-    race?.rejectRaceRole !== scenario.rejectRaceRole ||
-    race?.ackActionId !== scenario.ackActionId ||
-    race?.rejectActionId !== scenario.rejectActionId ||
+    expectedRace === null ||
     typeof race?.game !== "string" ||
     race.game.length === 0 ||
     race?.ackState !== scenario.ackState ||
@@ -1223,6 +1271,32 @@ export function assertHostMixedAdvanceRaceSurfaceCase({
       includeEvidenceInError,
     });
   }
+}
+
+function symmetricHostRaceExpectedOutcome({ race, scenario }) {
+  const outcomes = [
+    {
+      ackRaceRole: scenario.ackRaceRole,
+      rejectRaceRole: scenario.rejectRaceRole,
+      ackActionId: scenario.ackActionId,
+      rejectActionId: scenario.rejectActionId,
+    },
+    {
+      ackRaceRole: scenario.rejectRaceRole,
+      rejectRaceRole: scenario.ackRaceRole,
+      ackActionId: scenario.rejectActionId,
+      rejectActionId: scenario.ackActionId,
+    },
+  ];
+  return (
+    outcomes.find(
+      (outcome) =>
+        race?.ackRaceRole === outcome.ackRaceRole &&
+        race?.rejectRaceRole === outcome.rejectRaceRole &&
+        race?.ackActionId === outcome.ackActionId &&
+        race?.rejectActionId === outcome.rejectActionId,
+    ) ?? null
+  );
 }
 
 function hostControlRaceSurfaceAssertionFor(raceCase) {

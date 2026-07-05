@@ -4933,6 +4933,303 @@ async function verifySeededD02VoteNightTransition({
       includeEvidenceInError: true,
     });
 
+    const d04NoLynchTarget = revoteNoLynchTargetFromCommandState({
+      commandState: d04ActionSurface.commandState,
+    });
+    const d04NoLynchButton = d04ActionSurface.buttons.find(
+      (button) =>
+        button.action === revoteProgressionVoteActionId &&
+        button.disabled === false,
+    );
+    if (d04NoLynchTarget?.kind !== "no_lynch" || d04NoLynchButton === undefined) {
+      throw new Error(
+        `D04 no-lynch setup drifted: ${JSON.stringify({
+          d04ActionSurface,
+          d04NoLynchTarget,
+          d04NoLynchButton,
+        })}`,
+      );
+    }
+    const d04NoLynchVoteSubmission = await submitPlayerCommandAndWait({
+      page: actionEntry.page,
+      actionId: revoteProgressionVoteActionId,
+      waitFor: () =>
+        window.__fmarchPlayerCommandStatus?.state === "ack" &&
+        window.__fmarchPlayerCommandStatus?.requestEnvelope?.body?.body
+          ?.principal_user_id === "player-goon-a" &&
+        window.__fmarchPlayerCommandStatus?.requestEnvelope?.body?.body?.command
+          ?.SubmitVote?.actor_slot === "slot_4" &&
+        window.__fmarchPlayerCommandStatus?.requestEnvelope?.body?.body?.command
+          ?.SubmitVote?.target === "NoLynch" &&
+        window.__fmarchPlayerProjection?.commandState?.phase?.phaseId === "D04" &&
+        window.__fmarchPlayerProjection?.commandState?.currentVote?.kind ===
+          "no_lynch",
+    });
+    await waitForPlayerVotecount(actionEntry.page, {
+      target: "no_lynch",
+      count: 1,
+    });
+    const d04ActionAfterNoLynchVote = await playerProjectionSnapshot(
+      actionEntry.page,
+      { roleUrl: true, currentVote: true, votecount: true, buttons: true },
+    );
+    const d04NoLynchApiVotecountAfterVote = normalizedVotecountRows(
+      await fetchJson(`${apiBaseUrl}/games/${transitionGame}/votecount`),
+    );
+    const d04NoLynchApiRow = d04NoLynchApiVotecountAfterVote.find(
+      (row) => row.phaseId === "D04" && row.target === "no_lynch",
+    );
+    const hostBeforeResolveD04 = await hostProjectionSnapshot(hostEntry.page, {
+      votecount: true,
+    });
+    const resolveD04 = await confirmHostPhaseAction(hostEntry.page, "resolve_phase", {
+      phaseId: "D04",
+      locked: true,
+    });
+    await hostEntry.page.waitForFunction(
+      () =>
+        window.__fmarchHostDayVoteOutcomesProjection?.some(
+          (row) =>
+            row.phaseId === "D04" &&
+            row.status === "NoLynch" &&
+            row.winnerSlot === null,
+        ),
+      null,
+      { timeout: 15000 },
+    );
+    const hostAfterResolveD04 = await hostProjectionSnapshot(hostEntry.page, {
+      dayVoteOutcomes: true,
+      votecount: true,
+      outcomePanel: true,
+    });
+    const d04DayVoteOutcomes = normalizeDayVoteOutcomeRows(
+      await fetchJson(`${apiBaseUrl}/games/${transitionGame}/day-vote-outcomes`),
+    );
+    const d04DayVoteOutcome = d04DayVoteOutcomes.find(
+      (row) => row.phaseId === "D04",
+    );
+    const advanceN04 = await confirmHostPhaseAction(hostEntry.page, "advance_phase", {
+      phaseId: "N04",
+      locked: false,
+    });
+    await Promise.all([
+      gotoPlayerBoard(actionEntry.page, transitionGame),
+      gotoPlayerBoard(playerEntry.page, transitionGame),
+    ]);
+    await Promise.all([
+      actionEntry.page.waitForFunction(
+        () =>
+          window.__fmarchPlayerProjection?.commandState?.phase?.phaseId === "N04" &&
+          window.__fmarchPlayerProjection?.commandState?.phase?.locked === false,
+      ),
+      playerEntry.page.waitForFunction(
+        () =>
+          window.__fmarchPlayerProjection?.commandState?.phase?.phaseId === "N04" &&
+          window.__fmarchPlayerProjection?.commandState?.phase?.locked === false,
+      ),
+    ]);
+    const n04HostSurface = await hostProjectionSnapshot(hostEntry.page, {
+      phaseActions: true,
+      dayVoteOutcomes: true,
+    });
+    const n04ActionSurface = await playerProjectionSnapshot(actionEntry.page, {
+      roleUrl: true,
+      buttons: true,
+    });
+    const n04DeadPlayerSurface = await playerProjectionSnapshot(playerEntry.page, {
+      roleUrl: true,
+      buttons: true,
+      notifications: true,
+    });
+    const n04NoActionState = {
+      actionCount: n04ActionSurface.commandState?.actions?.length ?? null,
+      actionSubmitControls: n04ActionSurface.buttons.filter((button) =>
+        String(button.action ?? "").startsWith("submit_action"),
+      ).length,
+      statusBoundary: n04ActionSurface.commandState?.boundary ?? null,
+    };
+    if (
+      n04NoActionState.actionCount !== 0 ||
+      n04NoActionState.actionSubmitControls !== 0
+    ) {
+      throw new Error(
+        `N04 no-action setup drifted: ${JSON.stringify(n04ActionSurface)}`,
+      );
+    }
+    const hostBeforeResolveN04 = await hostProjectionSnapshot(hostEntry.page);
+    const resolveN04 = await confirmHostPhaseAction(hostEntry.page, "resolve_phase", {
+      phaseId: "N04",
+      locked: true,
+    });
+    const hostAfterResolveN04 = await hostProjectionSnapshot(hostEntry.page, {
+      slots: true,
+    });
+    const advanceD05 = await confirmHostPhaseAction(hostEntry.page, "advance_phase", {
+      phaseId: "D05",
+      locked: false,
+    });
+    await Promise.all([
+      gotoPlayerBoard(actionEntry.page, transitionGame),
+      gotoPlayerBoard(playerEntry.page, transitionGame),
+    ]);
+    await Promise.all([
+      actionEntry.page.waitForFunction(
+        () =>
+          window.__fmarchPlayerProjection?.commandState?.phase?.phaseId === "D05" &&
+          window.__fmarchPlayerProjection?.commandState?.phase?.locked === false,
+      ),
+      playerEntry.page.waitForFunction(
+        () =>
+          window.__fmarchPlayerProjection?.commandState?.phase?.phaseId === "D05" &&
+          window.__fmarchPlayerProjection?.commandState?.phase?.locked === false,
+      ),
+    ]);
+    const d05HostSurface = await hostProjectionSnapshot(hostEntry.page, {
+      roleUrl: true,
+      slots: true,
+      dayVoteOutcomes: true,
+    });
+    const d05ActionSurface = await playerProjectionSnapshot(actionEntry.page, {
+      roleUrl: true,
+      buttons: true,
+    });
+    const d05DeadPlayerSurface = await playerProjectionSnapshot(playerEntry.page, {
+      roleUrl: true,
+      buttons: true,
+      notifications: true,
+    });
+    const d05NoLynchTarget = revoteNoLynchTargetFromCommandState({
+      commandState: d05ActionSurface.commandState,
+    });
+    const d05NoLynchButton = d05ActionSurface.buttons.find(
+      (button) =>
+        button.action === revoteProgressionVoteActionId &&
+        button.disabled === false,
+    );
+    if (d05NoLynchTarget?.kind !== "no_lynch" || d05NoLynchButton === undefined) {
+      throw new Error(
+        `D05 no-lynch setup drifted: ${JSON.stringify({
+          d05ActionSurface,
+          d05NoLynchTarget,
+          d05NoLynchButton,
+        })}`,
+      );
+    }
+    const d05NoLynchVoteSubmission = await submitPlayerCommandAndWait({
+      page: actionEntry.page,
+      actionId: revoteProgressionVoteActionId,
+      waitFor: () =>
+        window.__fmarchPlayerCommandStatus?.state === "ack" &&
+        window.__fmarchPlayerCommandStatus?.requestEnvelope?.body?.body
+          ?.principal_user_id === "player-goon-a" &&
+        window.__fmarchPlayerCommandStatus?.requestEnvelope?.body?.body?.command
+          ?.SubmitVote?.actor_slot === "slot_4" &&
+        window.__fmarchPlayerCommandStatus?.requestEnvelope?.body?.body?.command
+          ?.SubmitVote?.target === "NoLynch" &&
+        window.__fmarchPlayerProjection?.commandState?.phase?.phaseId === "D05" &&
+        window.__fmarchPlayerProjection?.commandState?.currentVote?.kind ===
+          "no_lynch",
+    });
+    await waitForPlayerVotecount(actionEntry.page, {
+      target: "no_lynch",
+      count: 1,
+    });
+    const d05ActionAfterNoLynchVote = await playerProjectionSnapshot(
+      actionEntry.page,
+      { roleUrl: true, currentVote: true, votecount: true, buttons: true },
+    );
+    const d05NoLynchApiVotecountAfterVote = normalizedVotecountRows(
+      await fetchJson(`${apiBaseUrl}/games/${transitionGame}/votecount`),
+    );
+    const d05NoLynchApiRow = d05NoLynchApiVotecountAfterVote.find(
+      (row) => row.phaseId === "D05" && row.target === "no_lynch",
+    );
+    const hostBeforeResolveD05 = await hostProjectionSnapshot(hostEntry.page, {
+      votecount: true,
+    });
+    const resolveD05 = await confirmHostPhaseAction(hostEntry.page, "resolve_phase", {
+      phaseId: "D05",
+      locked: true,
+    });
+    await hostEntry.page.waitForFunction(
+      () =>
+        window.__fmarchHostDayVoteOutcomesProjection?.some(
+          (row) =>
+            row.phaseId === "D05" &&
+            row.status === "NoLynch" &&
+            row.winnerSlot === null,
+        ),
+      null,
+      { timeout: 15000 },
+    );
+    const hostAfterResolveD05 = await hostProjectionSnapshot(hostEntry.page, {
+      dayVoteOutcomes: true,
+      votecount: true,
+      outcomePanel: true,
+    });
+    const d05DayVoteOutcomes = normalizeDayVoteOutcomeRows(
+      await fetchJson(`${apiBaseUrl}/games/${transitionGame}/day-vote-outcomes`),
+    );
+    const d05DayVoteOutcome = d05DayVoteOutcomes.find(
+      (row) => row.phaseId === "D05",
+    );
+    const advanceN05 = await confirmHostPhaseAction(hostEntry.page, "advance_phase", {
+      phaseId: "N05",
+      locked: false,
+    });
+    await gotoPlayerBoard(actionEntry.page, transitionGame);
+    await actionEntry.page.waitForFunction(
+      () =>
+        window.__fmarchPlayerProjection?.commandState?.phase?.phaseId === "N05" &&
+        window.__fmarchPlayerProjection?.commandState?.phase?.locked === false,
+    );
+    const n05ActionSurface = await playerProjectionSnapshot(actionEntry.page, {
+      roleUrl: true,
+      buttons: true,
+    });
+
+    if (
+      d04NoLynchVoteSubmission?.state !== "ack" ||
+      d04NoLynchApiRow?.count !== 1 ||
+      resolveD04?.commandStatus?.state !== "ack" ||
+      d04DayVoteOutcome?.status !== "NoLynch" ||
+      advanceN04?.commandStatus?.state !== "ack" ||
+      n04ActionSurface.commandState?.phase?.phaseId !== "N04" ||
+      n04NoActionState.actionCount !== 0 ||
+      n04NoActionState.actionSubmitControls !== 0 ||
+      resolveN04?.commandStatus?.state !== "ack" ||
+      advanceD05?.commandStatus?.state !== "ack" ||
+      d05ActionSurface.commandState?.phase?.phaseId !== "D05" ||
+      d05NoLynchVoteSubmission?.state !== "ack" ||
+      d05NoLynchApiRow?.count !== 1 ||
+      resolveD05?.commandStatus?.state !== "ack" ||
+      d05DayVoteOutcome?.status !== "NoLynch" ||
+      advanceN05?.commandStatus?.state !== "ack" ||
+      n05ActionSurface.commandState?.phase?.phaseId !== "N05" ||
+      n05ActionSurface.commandState?.actions?.length !== 0
+    ) {
+      throw new Error(
+        `late core-loop progression drifted: ${JSON.stringify({
+          d04NoLynchVoteSubmission,
+          d04NoLynchApiRow,
+          resolveD04,
+          d04DayVoteOutcome,
+          advanceN04,
+          n04ActionSurface,
+          n04NoActionState,
+          resolveN04,
+          advanceD05,
+          d05ActionSurface,
+          d05NoLynchVoteSubmission,
+          d05NoLynchApiRow,
+          resolveD05,
+          d05DayVoteOutcome,
+          advanceN05,
+          n05ActionSurface,
+        })}`,
+      );
+    }
+
     return {
       status: "passed",
       game: transitionGame,
@@ -5049,8 +5346,44 @@ async function verifySeededD02VoteNightTransition({
       d04HostSurface,
       d04ActionSurface,
       d04TargetSurface,
+      d04NoLynchTarget,
+      d04NoLynchButton,
+      d04NoLynchVoteSubmission,
+      d04ActionAfterNoLynchVote,
+      d04NoLynchApiVotecountAfterVote,
+      d04NoLynchApiRow,
+      hostBeforeResolveD04,
+      resolveD04,
+      hostAfterResolveD04,
+      d04DayVoteOutcomes,
+      d04DayVoteOutcome,
+      advanceN04,
+      n04HostSurface,
+      n04ActionSurface,
+      n04NoActionState,
+      n04DeadPlayerSurface,
+      hostBeforeResolveN04,
+      resolveN04,
+      hostAfterResolveN04,
+      advanceD05,
+      d05HostSurface,
+      d05ActionSurface,
+      d05DeadPlayerSurface,
+      d05NoLynchTarget,
+      d05NoLynchButton,
+      d05NoLynchVoteSubmission,
+      d05ActionAfterNoLynchVote,
+      d05NoLynchApiVotecountAfterVote,
+      d05NoLynchApiRow,
+      hostBeforeResolveD05,
+      resolveD05,
+      hostAfterResolveD05,
+      d05DayVoteOutcomes,
+      d05DayVoteOutcome,
+      advanceN05,
+      n05ActionSurface,
       proof:
-        "A disposable seeded local game reached open D02 through real phase commands, the Slot 4 mafia-goon role URL submitted the deciding day vote, the host role URL resolved D02 into a day-vote kill with the target-only receipt, advanced to open N02 where the living mafia-goon role URL regained factional_kill while the normal player role URL did not, then the mafia-goon role URL submitted the N02 factional_kill, the host role URL resolved it, and the same role URLs advanced to open D03 day controls before Slot 7 submitted a D03 vote for Slot 4, host resolution recorded NoMajority and issued the D03 revote host prompt, host AdvancePhase rejected InvalidTarget instead of inventing a Night 3, the host role URL reloaded to the same locked D03 NoMajority recovery truth, resolving the revote prompt with the explicit continue-revote policy advanced the same host and player role URLs into open D03R1 controls, the action-player role URL submitted a no-lynch revote ballot whose API tally was keyed to D03R1 while the old D03 slot tally stayed separate, the host role URL resolved D03R1 back to locked NoMajority with a fresh pending D03R1 revote prompt, resolving that prompt with the explicit continue-revote policy advanced the same host and player role URLs into open D03R2 controls, then the action-player role URL submitted and the host role URL resolved a D03R2 no-lynch ballot with D03, D03R1, and D03R2 tallies kept separate before the host chose the explicit no-lynch policy and advanced the same host/player role URLs into open N03, while a frozen stale continue-revote host policy button rejected PromptAlreadyResolved and reloaded to open N03 controls; the same live role URLs then submitted and resolved the real N03 factional_kill, killed the projected target, and advanced to open D04 day controls.",
+        "A disposable seeded local game reached open D02 through real phase commands, the Slot 4 mafia-goon role URL submitted the deciding day vote, the host role URL resolved D02 into a day-vote kill with the target-only receipt, advanced to open N02 where the living mafia-goon role URL regained factional_kill while the normal player role URL did not, then the mafia-goon role URL submitted the N02 factional_kill, the host role URL resolved it, and the same role URLs advanced to open D03 day controls before Slot 7 submitted a D03 vote for Slot 4, host resolution recorded NoMajority and issued the D03 revote host prompt, host AdvancePhase rejected InvalidTarget instead of inventing a Night 3, the host role URL reloaded to the same locked D03 NoMajority recovery truth, resolving the revote prompt with the explicit continue-revote policy advanced the same host and player role URLs into open D03R1 controls, the action-player role URL submitted a no-lynch revote ballot whose API tally was keyed to D03R1 while the old D03 slot tally stayed separate, the host role URL resolved D03R1 back to locked NoMajority with a fresh pending D03R1 revote prompt, resolving that prompt with the explicit continue-revote policy advanced the same host and player role URLs into open D03R2 controls, then the action-player role URL submitted and the host role URL resolved a D03R2 no-lynch ballot with D03, D03R1, and D03R2 tallies kept separate before the host chose the explicit no-lynch policy and advanced the same host/player role URLs into open N03, while a frozen stale continue-revote host policy button rejected PromptAlreadyResolved and reloaded to open N03 controls; the same live role URLs then submitted and resolved the real N03 factional_kill, killed the projected target, and advanced to open D04 day controls. The D04 action-player role URL then submitted no-lynch, the host role URL resolved and advanced into open N04 with no legal action available, host resolution advanced the same game into open D05 controls, and the D05 action-player no-lynch plus host resolution advanced into open N05 with no legal action remaining.",
     };
   } finally {
     await hostEntry.context.close().catch(() => {});

@@ -109,15 +109,27 @@ export function coreLoopSpineStatus(proofRun) {
   const fourthCycle =
     spine?.cycles?.find((cycle) => cycle.id === "d03-n03") ?? thirdCycle;
   const fifthCycle = spine?.cycles?.find((cycle) => cycle.id === "n03-d04");
+  const sixthCycle = spine?.cycles?.find((cycle) => cycle.id === "d04-n04-d05");
+  const seventhCycle = spine?.cycles?.find((cycle) => cycle.id === "d05-n05");
   const firstStart = checkpointById(firstCycle, "d01-resolved-locked");
   const firstNight = checkpointById(firstCycle, "n01-action-open");
   const firstDay = checkpointById(firstCycle, "d02-day-controls-return");
   const secondVote = checkpointById(secondCycle, "d02-deciding-vote-submitted");
   const secondNight = checkpointById(secondCycle, "n02-action-open");
   const baseStatus = `${status}: ${String(firstStart?.phase ?? "unknown")} -> ${String(firstNight?.phase ?? "unknown")} -> ${String(firstDay?.phase ?? "unknown")}, vote ${String(secondVote?.voteState ?? "unknown")}, ${nightTwoProgressionCompactStatus(thirdCycle, { actionPhase: secondNight?.phase })}, ${terminalRecoveryCompactStatus(fourthCycle)}, ${revoteProgressionCompactStatus(fourthCycle)}`;
-  return fifthCycle === undefined
-    ? baseStatus
-    : `${baseStatus}, ${nightThreeProgressionCompactStatus(fifthCycle)}`;
+  if (fifthCycle === undefined) {
+    return baseStatus;
+  }
+  const nightThreeStatus = `${baseStatus}, ${nightThreeProgressionCompactStatus(fifthCycle)}`;
+  if (sixthCycle === undefined || seventhCycle === undefined) {
+    return nightThreeStatus;
+  }
+  const d04Vote = checkpointById(sixthCycle, "d04-no-lynch-vote-submitted");
+  const n04NoAction = checkpointById(sixthCycle, "n04-no-action-open");
+  const d05Return = checkpointById(sixthCycle, "d05-day-controls-return");
+  const d05Vote = checkpointById(seventhCycle, "d05-no-lynch-vote-submitted");
+  const n05Return = checkpointById(seventhCycle, "n05-night-controls-return");
+  return `${nightThreeStatus}, D04 ${String(d04Vote?.voteState ?? "unknown")} -> N04 actions ${String(n04NoAction?.actionCount ?? "unknown")} -> ${String(d05Return?.phase ?? "unknown")}, D05 ${String(d05Vote?.voteState ?? "unknown")} -> ${String(n05Return?.phase ?? "unknown")}`;
 }
 
 export function hardeningHighlightedLaneEvidence(proofRun) {

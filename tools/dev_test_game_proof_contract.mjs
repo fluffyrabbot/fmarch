@@ -7595,6 +7595,162 @@ function buildCoreLoopSpineSummary({ session, verification }) {
       },
     ],
   });
+  cycles.push({
+    id: "d04-n04-d05",
+    game: d02VoteNight.game ?? null,
+    roleUrls: {
+      host: d02VoteNight.hostRoleUrl ?? null,
+      actionPlayer: d02VoteNight.actionRoleUrl ?? null,
+      deadPlayer: d02VoteNight.playerRoleUrl ?? null,
+    },
+    checkpoints: [
+      {
+        id: "d04-no-lynch-vote-submitted",
+        phase:
+          d02VoteNight.d04ActionAfterNoLynchVote?.commandState?.phase
+            ?.phaseId ?? null,
+        locked:
+          d02VoteNight.d04ActionAfterNoLynchVote?.commandState?.phase
+            ?.locked ?? null,
+        voteState: d02VoteNight.d04NoLynchVoteSubmission?.state ?? null,
+        actorSlot:
+          d02VoteNight.d04NoLynchVoteSubmission?.requestEnvelope?.body?.body
+            ?.command?.SubmitVote?.actor_slot ?? null,
+        voteTarget:
+          d02VoteNight.d04NoLynchVoteSubmission?.requestEnvelope?.body?.body
+            ?.command?.SubmitVote?.target ?? null,
+        currentVoteKind:
+          d02VoteNight.d04ActionAfterNoLynchVote?.commandState?.currentVote
+            ?.kind ?? null,
+        projectedCount:
+          d02VoteNight.d04ActionAfterNoLynchVote?.votecount?.find(
+            (row) => row.target === "no_lynch",
+          )?.count ?? null,
+        apiPhase: d02VoteNight.d04NoLynchApiRow?.phaseId ?? null,
+        apiTarget: d02VoteNight.d04NoLynchApiRow?.target ?? null,
+        apiCount: d02VoteNight.d04NoLynchApiRow?.count ?? null,
+      },
+      {
+        id: "d04-resolved-no-lynch",
+        phase: d02VoteNight.hostAfterResolveD04?.phase?.id ?? null,
+        locked: d02VoteNight.hostAfterResolveD04?.phase?.locked ?? null,
+        resolveState: d02VoteNight.resolveD04?.commandStatus?.state ?? null,
+        outcomeStatus: d02VoteNight.d04DayVoteOutcome?.status ?? null,
+        winnerSlot: d02VoteNight.d04DayVoteOutcome?.winnerSlot ?? null,
+        projectedCount:
+          d02VoteNight.d04DayVoteOutcome?.tallies?.no_lynch ?? null,
+      },
+      {
+        id: "n04-no-action-open",
+        advanceState: d02VoteNight.advanceN04?.commandStatus?.state ?? null,
+        phase: d02VoteNight.n04ActionSurface?.commandState?.phase?.phaseId ?? null,
+        locked:
+          d02VoteNight.n04ActionSurface?.commandState?.phase?.locked ?? null,
+        actionTemplate:
+          firstActionTemplate(d02VoteNight.n04ActionSurface?.commandState?.actions),
+        actionCount:
+          d02VoteNight.n04ActionSurface?.commandState?.actions?.length ?? null,
+        actionSubmitControls: countButtonsWithPrefix(
+          d02VoteNight.n04ActionSurface?.buttons,
+          "submit_action",
+        ),
+        deadPlayerActionControls: countButtonsWithPrefix(
+          d02VoteNight.n04DeadPlayerSurface?.buttons,
+          "submit_action",
+        ),
+      },
+      {
+        id: "n04-resolved-no-action",
+        resolveState: d02VoteNight.resolveN04?.commandStatus?.state ?? null,
+        phase: d02VoteNight.hostAfterResolveN04?.phase?.id ?? null,
+        locked: d02VoteNight.hostAfterResolveN04?.phase?.locked ?? null,
+        actionCount: d02VoteNight.n04NoActionState?.actionCount ?? null,
+        actionSubmitControls:
+          d02VoteNight.n04NoActionState?.actionSubmitControls ?? null,
+      },
+      {
+        id: "d05-day-controls-return",
+        advanceState: d02VoteNight.advanceD05?.commandStatus?.state ?? null,
+        phase: d02VoteNight.d05ActionSurface?.commandState?.phase?.phaseId ?? null,
+        locked:
+          d02VoteNight.d05ActionSurface?.commandState?.phase?.locked ?? null,
+        actionSubmitControls: countButtonsWithPrefix(
+          d02VoteNight.d05ActionSurface?.buttons,
+          "submit_action",
+        ),
+        actionVoteControls: countButtonsWithPrefix(
+          d02VoteNight.d05ActionSurface?.buttons,
+          "submit_vote",
+        ),
+        deadPlayerVoteControls: countButtonsWithPrefix(
+          d02VoteNight.d05DeadPlayerSurface?.buttons,
+          "submit_vote",
+        ),
+      },
+    ],
+  });
+  cycles.push({
+    id: "d05-n05",
+    game: d02VoteNight.game ?? null,
+    roleUrls: {
+      host: d02VoteNight.hostRoleUrl ?? null,
+      actionPlayer: d02VoteNight.actionRoleUrl ?? null,
+    },
+    checkpoints: [
+      {
+        id: "d05-no-lynch-vote-submitted",
+        phase:
+          d02VoteNight.d05ActionAfterNoLynchVote?.commandState?.phase
+            ?.phaseId ?? null,
+        locked:
+          d02VoteNight.d05ActionAfterNoLynchVote?.commandState?.phase
+            ?.locked ?? null,
+        voteState: d02VoteNight.d05NoLynchVoteSubmission?.state ?? null,
+        actorSlot:
+          d02VoteNight.d05NoLynchVoteSubmission?.requestEnvelope?.body?.body
+            ?.command?.SubmitVote?.actor_slot ?? null,
+        voteTarget:
+          d02VoteNight.d05NoLynchVoteSubmission?.requestEnvelope?.body?.body
+            ?.command?.SubmitVote?.target ?? null,
+        currentVoteKind:
+          d02VoteNight.d05ActionAfterNoLynchVote?.commandState?.currentVote
+            ?.kind ?? null,
+        projectedCount:
+          d02VoteNight.d05ActionAfterNoLynchVote?.votecount?.find(
+            (row) => row.target === "no_lynch",
+          )?.count ?? null,
+        apiPhase: d02VoteNight.d05NoLynchApiRow?.phaseId ?? null,
+        apiTarget: d02VoteNight.d05NoLynchApiRow?.target ?? null,
+        apiCount: d02VoteNight.d05NoLynchApiRow?.count ?? null,
+      },
+      {
+        id: "d05-resolved-no-lynch",
+        phase: d02VoteNight.hostAfterResolveD05?.phase?.id ?? null,
+        locked: d02VoteNight.hostAfterResolveD05?.phase?.locked ?? null,
+        resolveState: d02VoteNight.resolveD05?.commandStatus?.state ?? null,
+        outcomeStatus: d02VoteNight.d05DayVoteOutcome?.status ?? null,
+        winnerSlot: d02VoteNight.d05DayVoteOutcome?.winnerSlot ?? null,
+        projectedCount:
+          d02VoteNight.d05DayVoteOutcome?.tallies?.no_lynch ?? null,
+      },
+      {
+        id: "n05-night-controls-return",
+        advanceState: d02VoteNight.advanceN05?.commandStatus?.state ?? null,
+        phase: d02VoteNight.n05ActionSurface?.commandState?.phase?.phaseId ?? null,
+        locked:
+          d02VoteNight.n05ActionSurface?.commandState?.phase?.locked ?? null,
+        actionSubmitControls: countButtonsWithPrefix(
+          d02VoteNight.n05ActionSurface?.buttons,
+          "submit_action",
+        ),
+        actionVoteControls: countButtonsWithPrefix(
+          d02VoteNight.n05ActionSurface?.buttons,
+          "submit_vote",
+        ),
+        actionCount: d02VoteNight.n05ActionSurface?.commandState?.actions?.length ?? null,
+      },
+    ],
+  });
   const recoveryHooks = {
     staleLockedVoteReject: verification.coreLoop?.rejectedVote?.error ?? null,
     invalidActionReject: actionLoop.invalidAction?.error ?? null,
@@ -7873,6 +8029,77 @@ function buildCoreLoopSpineSummary({ session, verification }) {
     cycles[4]?.checkpoints?.[3]?.actionVoteControls > 0 &&
     cycles[4]?.checkpoints?.[3]?.targetAlive === false &&
     cycles[4]?.checkpoints?.[3]?.targetVoteControls === 0 &&
+    cycles[5]?.id === "d04-n04-d05" &&
+    cycles[5]?.game === cycles[2]?.game &&
+    cycles[5]?.roleUrls?.host === cycles[2]?.roleUrls?.host &&
+    cycles[5]?.roleUrls?.actionPlayer === cycles[2]?.roleUrls?.actionPlayer &&
+    cycles[5]?.roleUrls?.deadPlayer === cycles[2]?.roleUrls?.normalPlayer &&
+    cycles[5]?.checkpoints?.[0]?.id === "d04-no-lynch-vote-submitted" &&
+    cycles[5]?.checkpoints?.[0]?.phase === "D04" &&
+    cycles[5]?.checkpoints?.[0]?.locked === false &&
+    cycles[5]?.checkpoints?.[0]?.voteState === "ack" &&
+    cycles[5]?.checkpoints?.[0]?.actorSlot === "slot_4" &&
+    cycles[5]?.checkpoints?.[0]?.voteTarget === "NoLynch" &&
+    cycles[5]?.checkpoints?.[0]?.currentVoteKind === "no_lynch" &&
+    cycles[5]?.checkpoints?.[0]?.apiPhase === "D04" &&
+    cycles[5]?.checkpoints?.[0]?.apiTarget === "no_lynch" &&
+    cycles[5]?.checkpoints?.[0]?.apiCount === 1 &&
+    cycles[5]?.checkpoints?.[1]?.id === "d04-resolved-no-lynch" &&
+    cycles[5]?.checkpoints?.[1]?.phase === "D04" &&
+    cycles[5]?.checkpoints?.[1]?.locked === true &&
+    cycles[5]?.checkpoints?.[1]?.resolveState === "ack" &&
+    cycles[5]?.checkpoints?.[1]?.outcomeStatus === "NoLynch" &&
+    cycles[5]?.checkpoints?.[1]?.winnerSlot === null &&
+    cycles[5]?.checkpoints?.[1]?.projectedCount === 1 &&
+    cycles[5]?.checkpoints?.[2]?.id === "n04-no-action-open" &&
+    cycles[5]?.checkpoints?.[2]?.advanceState === "ack" &&
+    cycles[5]?.checkpoints?.[2]?.phase === "N04" &&
+    cycles[5]?.checkpoints?.[2]?.locked === false &&
+    cycles[5]?.checkpoints?.[2]?.actionTemplate === null &&
+    cycles[5]?.checkpoints?.[2]?.actionCount === 0 &&
+    cycles[5]?.checkpoints?.[2]?.actionSubmitControls === 0 &&
+    cycles[5]?.checkpoints?.[2]?.deadPlayerActionControls === 0 &&
+    cycles[5]?.checkpoints?.[3]?.id === "n04-resolved-no-action" &&
+    cycles[5]?.checkpoints?.[3]?.resolveState === "ack" &&
+    cycles[5]?.checkpoints?.[3]?.phase === "N04" &&
+    cycles[5]?.checkpoints?.[3]?.locked === true &&
+    cycles[5]?.checkpoints?.[3]?.actionCount === 0 &&
+    cycles[5]?.checkpoints?.[3]?.actionSubmitControls === 0 &&
+    cycles[5]?.checkpoints?.[4]?.id === "d05-day-controls-return" &&
+    cycles[5]?.checkpoints?.[4]?.advanceState === "ack" &&
+    cycles[5]?.checkpoints?.[4]?.phase === "D05" &&
+    cycles[5]?.checkpoints?.[4]?.locked === false &&
+    cycles[5]?.checkpoints?.[4]?.actionSubmitControls === 0 &&
+    cycles[5]?.checkpoints?.[4]?.actionVoteControls > 0 &&
+    cycles[5]?.checkpoints?.[4]?.deadPlayerVoteControls === 0 &&
+    cycles[6]?.id === "d05-n05" &&
+    cycles[6]?.game === cycles[2]?.game &&
+    cycles[6]?.roleUrls?.host === cycles[2]?.roleUrls?.host &&
+    cycles[6]?.roleUrls?.actionPlayer === cycles[2]?.roleUrls?.actionPlayer &&
+    cycles[6]?.checkpoints?.[0]?.id === "d05-no-lynch-vote-submitted" &&
+    cycles[6]?.checkpoints?.[0]?.phase === "D05" &&
+    cycles[6]?.checkpoints?.[0]?.locked === false &&
+    cycles[6]?.checkpoints?.[0]?.voteState === "ack" &&
+    cycles[6]?.checkpoints?.[0]?.actorSlot === "slot_4" &&
+    cycles[6]?.checkpoints?.[0]?.voteTarget === "NoLynch" &&
+    cycles[6]?.checkpoints?.[0]?.currentVoteKind === "no_lynch" &&
+    cycles[6]?.checkpoints?.[0]?.apiPhase === "D05" &&
+    cycles[6]?.checkpoints?.[0]?.apiTarget === "no_lynch" &&
+    cycles[6]?.checkpoints?.[0]?.apiCount === 1 &&
+    cycles[6]?.checkpoints?.[1]?.id === "d05-resolved-no-lynch" &&
+    cycles[6]?.checkpoints?.[1]?.phase === "D05" &&
+    cycles[6]?.checkpoints?.[1]?.locked === true &&
+    cycles[6]?.checkpoints?.[1]?.resolveState === "ack" &&
+    cycles[6]?.checkpoints?.[1]?.outcomeStatus === "NoLynch" &&
+    cycles[6]?.checkpoints?.[1]?.winnerSlot === null &&
+    cycles[6]?.checkpoints?.[1]?.projectedCount === 1 &&
+    cycles[6]?.checkpoints?.[2]?.id === "n05-night-controls-return" &&
+    cycles[6]?.checkpoints?.[2]?.advanceState === "ack" &&
+    cycles[6]?.checkpoints?.[2]?.phase === "N05" &&
+    cycles[6]?.checkpoints?.[2]?.locked === false &&
+    cycles[6]?.checkpoints?.[2]?.actionSubmitControls === 0 &&
+    cycles[6]?.checkpoints?.[2]?.actionVoteControls === 0 &&
+    cycles[6]?.checkpoints?.[2]?.actionCount === 0 &&
     recoveryHooks.staleLockedVoteReject === "PhaseLocked" &&
     recoveryHooks.invalidActionReject === "InvalidTarget" &&
     recoveryHooks.normalPlayerDirectActionReject === "InvalidTarget" &&
@@ -7883,7 +8110,7 @@ function buildCoreLoopSpineSummary({ session, verification }) {
   return {
     status: passed ? "passed" : "failed",
     proof:
-      "Compact derived spine map for the seeded role URL core loop: D01 resolve to N01 action, N01 resolution to D02 day controls, D02 vote resolution, N02 action return, N02 action submission/resolution, D03 day controls, D03 NoMajority AdvancePhase InvalidTarget recovery, host role URL reload back to locked D03 NoMajority truth, host continue-revote policy resolution into open D03R1 controls, a D03R1 no-lynch revote ballot keyed separately from the stale D03 tally, host resolution of D03R1 back to locked NoMajority with a fresh pending revote prompt, second continue-revote policy resolution into open D03R2 controls, D03R2 no-lynch vote submission/resolution with prior revote tallies kept separate, explicit host no-lynch policy resolution into open N03 controls, stale continue-revote policy recovery back to open N03, and real N03 action submission/resolution into open D04 day controls.",
+      "Compact derived spine map for the seeded role URL core loop: D01 resolve to N01 action, N01 resolution to D02 day controls, D02 vote resolution, N02 action return, N02 action submission/resolution, D03 day controls, D03 NoMajority AdvancePhase InvalidTarget recovery, host role URL reload back to locked D03 NoMajority truth, host continue-revote policy resolution into open D03R1 controls, a D03R1 no-lynch revote ballot keyed separately from the stale D03 tally, host resolution of D03R1 back to locked NoMajority with a fresh pending revote prompt, second continue-revote policy resolution into open D03R2 controls, D03R2 no-lynch vote submission/resolution with prior revote tallies kept separate, explicit host no-lynch policy resolution into open N03 controls, stale continue-revote policy recovery back to open N03, real N03 action submission/resolution into open D04 day controls, D04 no-lynch resolution into open N04 with no legal action, N04 host resolution into open D05 controls, and D05 no-lynch resolution into open N05 with no legal action remaining.",
     sourceLaneIds: [...coreLoopPhaseProgressionSpineSourceLaneIds],
     cycles,
     recoveryHooks,
@@ -7903,8 +8130,8 @@ function assertCoreLoopSpineSummary(summary) {
   ) {
     throw new Error("core loop spine summary must cite the action-loop source lane");
   }
-  if (!Array.isArray(summary.cycles) || summary.cycles.length !== 5) {
-    throw new Error("core loop spine summary must expose exactly five cycles");
+  if (!Array.isArray(summary.cycles) || summary.cycles.length !== 7) {
+    throw new Error("core loop spine summary must expose exactly seven cycles");
   }
   for (const cycle of summary.cycles) {
     if (
@@ -7919,7 +8146,11 @@ function assertCoreLoopSpineSummary(summary) {
         ? cycle.checkpoints.length !== 13
         : cycle.id === "d03-n03"
           ? cycle.checkpoints.length !== 9
-          : cycle.checkpoints.length !== 4)
+          : cycle.id === "d04-n04-d05"
+            ? cycle.checkpoints.length !== 5
+            : cycle.id === "d05-n05"
+              ? cycle.checkpoints.length !== 3
+              : cycle.checkpoints.length !== 4)
     ) {
       throw new Error(`core loop spine cycle malformed: ${JSON.stringify(cycle)}`);
     }

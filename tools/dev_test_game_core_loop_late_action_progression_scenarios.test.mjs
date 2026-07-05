@@ -133,30 +133,30 @@ test("late action progression family shares Night 4 action and recovery cases", 
   );
 });
 
-test("late action progression surfaces derive feature-spine rows from D04 entrypoint", () => {
+test("late action progression surfaces derive feature-spine rows from N04/D05 checkpoints", () => {
   assert.deepEqual(lateActionProgressionFeatureSpineRows(), [
     {
-      targetKey: "nightFourActionSubmission",
-      featureSlotId: "night-four-action-submission",
-      cycleId: "n03-d04",
+      targetKey: "nightFourNoActionSurface",
+      featureSlotId: "night-four-no-action-surface",
+      cycleId: "d04-n04-d05",
       role: "actionPlayer",
-      checkpointId: "n03-d04-d04-day-controls-return",
+      checkpointId: "d04-n04-d05-n04-no-action-open",
       adminCheckId: "core-loop",
     },
     {
-      targetKey: "nightFourResolutionReceipt",
-      featureSlotId: "night-four-resolution-receipt",
-      cycleId: "n03-d04",
+      targetKey: "nightFourNoActionResolution",
+      featureSlotId: "night-four-no-action-resolution",
+      cycleId: "d04-n04-d05",
       role: "host",
-      checkpointId: "n03-d04-d04-day-controls-return",
+      checkpointId: "d04-n04-d05-n04-resolved-no-action",
       adminCheckId: "core-loop",
     },
     {
       targetKey: "postNightFourTransition",
       featureSlotId: "post-night-four-transition",
-      cycleId: "n03-d04",
-      role: "host",
-      checkpointId: "n03-d04-d04-day-controls-return",
+      cycleId: "d04-n04-d05",
+      role: "actionPlayer",
+      checkpointId: "d04-n04-d05-d05-day-controls-return",
       adminCheckId: "core-loop",
     },
   ]);

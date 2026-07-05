@@ -6,9 +6,7 @@ import {
 export const coreLoopDayFiveProgressionFamilyId =
   "core-loop-day-five-progression";
 export const coreLoopDayFiveProgressionAdminCheckId = "core-loop";
-export const coreLoopDayFiveProgressionCycleId = "n03-d04";
-export const coreLoopDayFiveProgressionEntryCheckpointId =
-  "d04-day-controls-return";
+export const coreLoopDayFiveProgressionCycleId = "d05-n05";
 
 export const coreLoopDayFiveProgressionLaneIds = Object.freeze([
   "day-vote-no-lynch",
@@ -20,6 +18,7 @@ const dayFiveProgressionFeatureRowDefinitions = Object.freeze([
     targetKey: "dayFiveNoLynchResolution",
     featureSlotId: "day-five-no-lynch-resolution",
     role: "actionPlayer",
+    checkpointId: "n05-night-controls-return",
   }),
 ]);
 
@@ -492,7 +491,7 @@ function featureRowFromCase(scenario, { cycleId }) {
     featureSlotId: scenario.featureSlotId,
     cycleId,
     role: scenario.role,
-    checkpointId: `${cycleId}-${coreLoopDayFiveProgressionEntryCheckpointId}`,
+    checkpointId: `${cycleId}-${scenario.checkpointId}`,
     adminCheckId: coreLoopDayFiveProgressionAdminCheckId,
   });
 }

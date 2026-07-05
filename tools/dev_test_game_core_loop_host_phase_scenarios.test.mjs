@@ -1151,6 +1151,37 @@ test("host lifecycle race assertion covers convergence and reload lanes", () => 
       scenario: hostLifecycleRaceScenario(),
     }),
   );
+  assert.doesNotThrow(() =>
+    assertHostLifecycleRaceSurfaceCase({
+      hostLifecycleRaceSurface: {
+        ...hostLifecycleRaceSurface,
+        hostLifecycleRace: {
+          ...hostLifecycleRaceSurface.hostLifecycleRace,
+          evidence: {
+            ...hostLifecycleRaceSurface.hostLifecycleRace.evidence,
+            ackRaceRole: "modkill",
+            rejectRaceRole: "dead",
+            ackActionId: "modkill_slot",
+            rejectActionId: "mark_dead",
+            winningStatus: "modkilled",
+            apiStatus: "modkilled",
+          },
+        },
+        hostLifecycleRaceReload: {
+          ...hostLifecycleRaceSurface.hostLifecycleRaceReload,
+          evidence: {
+            ...hostLifecycleRaceSurface.hostLifecycleRaceReload.evidence,
+            winningStatus: "modkilled",
+            deadLifecycleLabel: "Modkilled",
+            modkillLifecycleLabel: "Modkilled",
+            playerStatus: "modkilled",
+            apiStatus: "modkilled",
+          },
+        },
+      },
+      scenario: hostLifecycleRaceScenario(),
+    }),
+  );
   assert.throws(
     () =>
       assertHostLifecycleRaceSurfaceCase({
@@ -1207,6 +1238,22 @@ test("host publish race assertion covers official-count convergence and reload l
   assert.doesNotThrow(() =>
     assertHostPublishRaceSurfaceCase({
       hostPublishRaceSurface,
+      scenario: hostPublishRaceScenario(),
+    }),
+  );
+  assert.doesNotThrow(() =>
+    assertHostPublishRaceSurfaceCase({
+      hostPublishRaceSurface: {
+        ...hostPublishRaceSurface,
+        hostPublishRace: {
+          ...hostPublishRaceSurface.hostPublishRace,
+          evidence: {
+            ...hostPublishRaceSurface.hostPublishRace.evidence,
+            ackRaceRole: "first",
+            rejectRaceRole: "second",
+          },
+        },
+      },
       scenario: hostPublishRaceScenario(),
     }),
   );
@@ -1442,6 +1489,24 @@ test("host mixed advance race assertion covers mixed advance convergence and rel
   assert.doesNotThrow(() =>
     assertHostMixedAdvanceRaceSurfaceCase({
       hostMixedAdvanceRaceSurface,
+      scenario: hostMixedAdvanceRaceScenario(),
+    }),
+  );
+  assert.doesNotThrow(() =>
+    assertHostMixedAdvanceRaceSurfaceCase({
+      hostMixedAdvanceRaceSurface: {
+        ...hostMixedAdvanceRaceSurface,
+        hostMixedAdvanceRace: {
+          ...hostMixedAdvanceRaceSurface.hostMixedAdvanceRace,
+          evidence: {
+            ...hostMixedAdvanceRaceSurface.hostMixedAdvanceRace.evidence,
+            ackRaceRole: "normal",
+            rejectRaceRole: "deadline",
+            ackActionId: "advance_phase",
+            rejectActionId: "advance_phase_by_deadline",
+          },
+        },
+      },
       scenario: hostMixedAdvanceRaceScenario(),
     }),
   );

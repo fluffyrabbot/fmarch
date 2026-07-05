@@ -19,25 +19,26 @@ import {
 export const coreLoopLateActionProgressionFamilyId =
   "core-loop-late-action-progression";
 export const coreLoopLateActionProgressionAdminCheckId = "core-loop";
-export const coreLoopLateActionProgressionCycleId = "n03-d04";
-export const coreLoopLateActionProgressionEntryCheckpointId =
-  "d04-day-controls-return";
+export const coreLoopLateActionProgressionCycleId = "d04-n04-d05";
 
 const lateActionProgressionFeatureRowDefinitions = Object.freeze([
   Object.freeze({
-    targetKey: "nightFourActionSubmission",
-    featureSlotId: "night-four-action-submission",
+    targetKey: "nightFourNoActionSurface",
+    featureSlotId: "night-four-no-action-surface",
     role: "actionPlayer",
+    checkpointId: "n04-no-action-open",
   }),
   Object.freeze({
-    targetKey: "nightFourResolutionReceipt",
-    featureSlotId: "night-four-resolution-receipt",
+    targetKey: "nightFourNoActionResolution",
+    featureSlotId: "night-four-no-action-resolution",
     role: "host",
+    checkpointId: "n04-resolved-no-action",
   }),
   Object.freeze({
     targetKey: "postNightFourTransition",
     featureSlotId: "post-night-four-transition",
-    role: "host",
+    role: "actionPlayer",
+    checkpointId: "d05-day-controls-return",
   }),
 ]);
 
@@ -335,7 +336,7 @@ function featureRowFromCase(scenario, { cycleId }) {
     featureSlotId: scenario.featureSlotId,
     cycleId,
     role: scenario.role,
-    checkpointId: `${cycleId}-${coreLoopLateActionProgressionEntryCheckpointId}`,
+    checkpointId: `${cycleId}-${scenario.checkpointId}`,
     adminCheckId: coreLoopLateActionProgressionAdminCheckId,
   });
 }

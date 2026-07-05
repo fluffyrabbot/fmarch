@@ -5805,6 +5805,127 @@ test("session card and markdown include role credential URLs and tokens", async 
           },
           buttons: [],
         },
+        d04NoLynchVoteSubmission: {
+          state: "ack",
+          requestEnvelope: {
+            body: {
+              body: {
+                command: {
+                  SubmitVote: {
+                    actor_slot: "slot_4",
+                    target: "NoLynch",
+                  },
+                },
+              },
+            },
+          },
+        },
+        d04ActionAfterNoLynchVote: {
+          commandState: {
+            phase: { phaseId: "D04", locked: false },
+            currentVote: { kind: "no_lynch" },
+          },
+          votecount: [{ target: "no_lynch", count: 1 }],
+        },
+        d04NoLynchApiRow: {
+          phaseId: "D04",
+          target: "no_lynch",
+          count: 1,
+        },
+        hostAfterResolveD04: {
+          phase: { id: "D04", locked: true },
+        },
+        resolveD04: {
+          commandStatus: { state: "ack" },
+        },
+        d04DayVoteOutcome: {
+          status: "NoLynch",
+          winnerSlot: null,
+          tallies: { no_lynch: 1 },
+        },
+        advanceN04: {
+          commandStatus: { state: "ack" },
+        },
+        n04ActionSurface: {
+          commandState: {
+            phase: { phaseId: "N04", locked: false },
+            actions: [],
+          },
+          buttons: [],
+        },
+        n04NoActionState: {
+          actionCount: 0,
+          actionSubmitControls: 0,
+        },
+        n04DeadPlayerSurface: {
+          buttons: [],
+        },
+        resolveN04: {
+          commandStatus: { state: "ack" },
+        },
+        hostAfterResolveN04: {
+          phase: { id: "N04", locked: true },
+        },
+        advanceD05: {
+          commandStatus: { state: "ack" },
+        },
+        d05ActionSurface: {
+          commandState: {
+            phase: { phaseId: "D05", locked: false },
+          },
+          buttons: [{ action: "submit_vote:no_lynch", disabled: false }],
+        },
+        d05DeadPlayerSurface: {
+          buttons: [],
+        },
+        d05NoLynchVoteSubmission: {
+          state: "ack",
+          requestEnvelope: {
+            body: {
+              body: {
+                command: {
+                  SubmitVote: {
+                    actor_slot: "slot_4",
+                    target: "NoLynch",
+                  },
+                },
+              },
+            },
+          },
+        },
+        d05ActionAfterNoLynchVote: {
+          commandState: {
+            phase: { phaseId: "D05", locked: false },
+            currentVote: { kind: "no_lynch" },
+          },
+          votecount: [{ target: "no_lynch", count: 1 }],
+        },
+        d05NoLynchApiRow: {
+          phaseId: "D05",
+          target: "no_lynch",
+          count: 1,
+        },
+        hostAfterResolveD05: {
+          phase: { id: "D05", locked: true },
+        },
+        resolveD05: {
+          commandStatus: { state: "ack" },
+        },
+        d05DayVoteOutcome: {
+          status: "NoLynch",
+          winnerSlot: null,
+          tallies: { no_lynch: 1 },
+        },
+        advanceN05: {
+          commandStatus: { state: "ack" },
+        },
+        n05ActionSurface: {
+          commandState: {
+            phase: { phaseId: "N05", locked: false },
+            actions: [],
+          },
+          buttons: [],
+        },
       },
       staleActionConflict: {
         reject: { error: "PhaseLocked" },
@@ -14506,7 +14627,15 @@ function coreLoopAdminProofFixture() {
       completedGameHardeningCoverageStatus,
       ...coreLoopGeneratedFromScenarioFamilies(),
       coreLoopSpineRows: {
-        cycles: ["d01-n01-d02", "d02-n02", "n02-d03", "d03-n03", "n03-d04"],
+        cycles: [
+          "d01-n01-d02",
+          "d02-n02",
+          "n02-d03",
+          "d03-n03",
+          "n03-d04",
+          "d04-n04-d05",
+          "d05-n05",
+        ],
         roleUrls: [
           "d01-n01-d02-host",
           "d01-n01-d02-actionPlayer",
@@ -14526,6 +14655,11 @@ function coreLoopAdminProofFixture() {
           "n03-d04-host",
           "n03-d04-actionPlayer",
           "n03-d04-target",
+          "d04-n04-d05-host",
+          "d04-n04-d05-actionPlayer",
+          "d04-n04-d05-deadPlayer",
+          "d05-n05-host",
+          "d05-n05-actionPlayer",
         ],
         roleUrlHrefs: {
           "d01-n01-d02-host":
@@ -14564,6 +14698,16 @@ function coreLoopAdminProofFixture() {
             "http://127.0.0.1:5173/g/00000000-0000-0000-0000-000000000002",
           "n03-d04-target":
             "http://127.0.0.1:5173/g/00000000-0000-0000-0000-000000000002",
+          "d04-n04-d05-host":
+            "http://127.0.0.1:5173/g/00000000-0000-0000-0000-000000000002/host",
+          "d04-n04-d05-actionPlayer":
+            "http://127.0.0.1:5173/g/00000000-0000-0000-0000-000000000002",
+          "d04-n04-d05-deadPlayer":
+            "http://127.0.0.1:5173/g/00000000-0000-0000-0000-000000000002",
+          "d05-n05-host":
+            "http://127.0.0.1:5173/g/00000000-0000-0000-0000-000000000002/host",
+          "d05-n05-actionPlayer":
+            "http://127.0.0.1:5173/g/00000000-0000-0000-0000-000000000002",
         },
         checkpoints: [
           "d01-n01-d02-d01-resolved-locked",
@@ -14600,6 +14744,14 @@ function coreLoopAdminProofFixture() {
           "n03-d04-n03-action-submitted",
           "n03-d04-n03-resolved-target-killed",
           "n03-d04-d04-day-controls-return",
+          "d04-n04-d05-d04-no-lynch-vote-submitted",
+          "d04-n04-d05-d04-resolved-no-lynch",
+          "d04-n04-d05-n04-no-action-open",
+          "d04-n04-d05-n04-resolved-no-action",
+          "d04-n04-d05-d05-day-controls-return",
+          "d05-n05-d05-no-lynch-vote-submitted",
+          "d05-n05-d05-resolved-no-lynch",
+          "d05-n05-n05-night-controls-return",
         ],
         recoveryHooks: [
           "staleLockedVoteReject",
@@ -14625,7 +14777,15 @@ function coreLoopAdminProofFixture() {
           "passed: D01 -> N01 -> D02, vote ack, N02 action ack, next D03, terminal advance InvalidTarget, reload D03, revote D03R1 via no_majority_continue_revote, revote vote ack, revote resolve ack, second revote D03R2 via no_majority_continue_revote, second vote ack, second resolve ack, policy no_majority_no_lynch -> N03, N03 action ack, next D04",
         "completed-game-hardening-coverage": completedGameHardeningCoverageStatus,
       },
-      visibleSpineCycles: ["d01-n01-d02", "d02-n02", "n02-d03", "d03-n03", "n03-d04"],
+      visibleSpineCycles: [
+        "d01-n01-d02",
+        "d02-n02",
+        "n02-d03",
+        "d03-n03",
+        "n03-d04",
+        "d04-n04-d05",
+        "d05-n05",
+      ],
       visibleSpineRoleUrls: [
         "d01-n01-d02-host",
         "d01-n01-d02-actionPlayer",
@@ -14645,6 +14805,11 @@ function coreLoopAdminProofFixture() {
         "n03-d04-host",
         "n03-d04-actionPlayer",
         "n03-d04-target",
+        "d04-n04-d05-host",
+        "d04-n04-d05-actionPlayer",
+        "d04-n04-d05-deadPlayer",
+        "d05-n05-host",
+        "d05-n05-actionPlayer",
       ],
       visibleSpineCheckpoints: [
         "d01-n01-d02-d01-resolved-locked",
@@ -14681,6 +14846,14 @@ function coreLoopAdminProofFixture() {
         "n03-d04-n03-action-submitted",
         "n03-d04-n03-resolved-target-killed",
         "n03-d04-d04-day-controls-return",
+        "d04-n04-d05-d04-no-lynch-vote-submitted",
+        "d04-n04-d05-d04-resolved-no-lynch",
+        "d04-n04-d05-n04-no-action-open",
+        "d04-n04-d05-n04-resolved-no-action",
+        "d04-n04-d05-d05-day-controls-return",
+        "d05-n05-d05-no-lynch-vote-submitted",
+        "d05-n05-d05-resolved-no-lynch",
+        "d05-n05-n05-night-controls-return",
       ],
       visibleSpineRecoveryHooks: [
         "staleLockedVoteReject",
@@ -16724,6 +16897,16 @@ function coreLoopSpineTargetsFixture() {
       "http://127.0.0.1:5173/g/00000000-0000-0000-0000-000000000002",
     "n03-d04-target":
       "http://127.0.0.1:5173/g/00000000-0000-0000-0000-000000000002",
+    "d04-n04-d05-host":
+      "http://127.0.0.1:5173/g/00000000-0000-0000-0000-000000000002/host",
+    "d04-n04-d05-actionPlayer":
+      "http://127.0.0.1:5173/g/00000000-0000-0000-0000-000000000002",
+    "d04-n04-d05-deadPlayer":
+      "http://127.0.0.1:5173/g/00000000-0000-0000-0000-000000000002",
+    "d05-n05-host":
+      "http://127.0.0.1:5173/g/00000000-0000-0000-0000-000000000002/host",
+    "d05-n05-actionPlayer":
+      "http://127.0.0.1:5173/g/00000000-0000-0000-0000-000000000002",
   };
   return {
     status: "passed",
@@ -16734,7 +16917,15 @@ function coreLoopSpineTargetsFixture() {
       "http://127.0.0.1:5173/g/00000000-0000-0000-0000-000000000002",
     defaultCheckpointId: "d02-n02-n02-action-open",
     browserProofCommand: devTestGameLiveProofCommand,
-    cycleIds: ["d01-n01-d02", "d02-n02", "n02-d03", "d03-n03", "n03-d04"],
+    cycleIds: [
+      "d01-n01-d02",
+      "d02-n02",
+      "n02-d03",
+      "d03-n03",
+      "n03-d04",
+      "d04-n04-d05",
+      "d05-n05",
+    ],
     roleUrlIds: [
       "d01-n01-d02-host",
       "d01-n01-d02-actionPlayer",
@@ -16754,6 +16945,11 @@ function coreLoopSpineTargetsFixture() {
       "n03-d04-host",
       "n03-d04-actionPlayer",
       "n03-d04-target",
+      "d04-n04-d05-host",
+      "d04-n04-d05-actionPlayer",
+      "d04-n04-d05-deadPlayer",
+      "d05-n05-host",
+      "d05-n05-actionPlayer",
     ],
     checkpointIds: [
       "d01-n01-d02-d01-resolved-locked",
@@ -16790,6 +16986,14 @@ function coreLoopSpineTargetsFixture() {
       "n03-d04-n03-action-submitted",
       "n03-d04-n03-resolved-target-killed",
       "n03-d04-d04-day-controls-return",
+      "d04-n04-d05-d04-no-lynch-vote-submitted",
+      "d04-n04-d05-d04-resolved-no-lynch",
+      "d04-n04-d05-n04-no-action-open",
+      "d04-n04-d05-n04-resolved-no-action",
+      "d04-n04-d05-d05-day-controls-return",
+      "d05-n05-d05-no-lynch-vote-submitted",
+      "d05-n05-d05-resolved-no-lynch",
+      "d05-n05-n05-night-controls-return",
     ],
     recoveryHookIds: [
       "staleLockedVoteReject",

@@ -67,6 +67,8 @@ export const coreLoopFeatureSpineCycleIds = Object.freeze({
   nightTwoDayThree: "n02-d03",
   dayThreeNightThree: "d03-n03",
   nightThreeDayFour: "n03-d04",
+  dayFourNightFourDayFive: "d04-n04-d05",
+  dayFiveNightFive: "d05-n05",
 });
 
 const dayTwoNightTwo = coreLoopFeatureSpineCycleIds.dayTwoNightTwo;
@@ -93,8 +95,8 @@ const coreLoopFeatureSpineLaneRows = Object.freeze([
   ...terminalRecoveryFeatureSpineRows({ cycleId: dayThreeNightThree }),
   ...revoteProgressionFeatureSpineRows({ cycleId: dayThreeNightThree }),
   ...nightThreeProgressionFeatureSpineRows({ cycleId: nightThreeDayFour }),
-  ...lateActionProgressionFeatureSpineRows({ cycleId: nightThreeDayFour }),
-  ...dayFiveProgressionFeatureSpineRows({ cycleId: nightThreeDayFour }),
+  ...lateActionProgressionFeatureSpineRows(),
+  ...dayFiveProgressionFeatureSpineRows(),
   Object.freeze(
     invalidActionRecoveryFeatureSpineRow({ cycleId: dayTwoNightTwo }),
   ),
