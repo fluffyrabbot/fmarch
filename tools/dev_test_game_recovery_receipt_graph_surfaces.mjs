@@ -19,6 +19,10 @@ import {
   localAdminAuditRoleUrl,
 } from "./dev_test_game_admin_audit_surface_ids.mjs";
 import {
+  privateChannelNormalizedEvidenceObjects,
+  sameNormalizedEvidenceObjects,
+} from "./dev_test_game_normalized_evidence_objects.mjs";
+import {
   assertDevTestGamePrivateChannelRecoveryReceipt,
   buildDevTestGamePrivateChannelRecoveryReceipt,
   devTestGamePrivateChannelRecoveryReceiptCommand,
@@ -76,6 +80,7 @@ export const recoveryReceiptGraphDescriptors = Object.freeze([
     ]),
     familyId: "core-loop-private-channel-recovery",
     laneIds: coreLoopPrivateChannelRecoveryLaneIds,
+    normalizedEvidenceObjects: privateChannelNormalizedEvidenceObjects,
     receiptFixture: {
       scope: "local-dev-test-game-private-channel-recovery",
       proofBoundary: "Local private-channel recovery receipt.",
@@ -240,6 +245,9 @@ export function buildRecoveryReceiptGraphNode({
     familyId: receipt.familyId,
     laneCount: receipt.laneCount,
     laneIds: receipt.laneIds,
+    ...(receipt.normalizedEvidenceObjects === undefined
+      ? {}
+      : { normalizedEvidenceObjects: receipt.normalizedEvidenceObjects }),
   };
 }
 
@@ -258,6 +266,9 @@ export function validateRecoveryReceiptArtifact(
     laneCount: receipt.summary.laneCount,
     passedLaneCount: receipt.summary.passedLaneCount,
     laneIds: [...receipt.laneIds],
+    ...(receipt.normalizedEvidenceObjects === undefined
+      ? {}
+      : { normalizedEvidenceObjects: receipt.normalizedEvidenceObjects }),
     ...(options.artifact === undefined ? {} : { artifact: options.artifact }),
   };
 }
@@ -275,6 +286,9 @@ export function recoveryReceiptReadinessCheck(receiptEvidence, descriptor) {
     roleUrl: receiptEvidence.roleUrl,
     laneCount: receiptEvidence.laneCount,
     laneIds: receiptEvidence.laneIds,
+    ...(receiptEvidence.normalizedEvidenceObjects === undefined
+      ? {}
+      : { normalizedEvidenceObjects: receiptEvidence.normalizedEvidenceObjects }),
   };
 }
 
@@ -383,6 +397,9 @@ export function recoveryReceiptGraphSummaryFromProofGraph(proofGraph, descriptor
     laneIds: Array.isArray(node.laneIds)
       ? node.laneIds.map((laneId) => String(laneId))
       : [],
+    ...(node.normalizedEvidenceObjects === undefined
+      ? {}
+      : { normalizedEvidenceObjects: node.normalizedEvidenceObjects }),
     edgeCount: edges.length,
     edgeTargets: edges.map((edge) =>
       String(edge.from === node.id ? edge.to : edge.from),
@@ -440,6 +457,19 @@ export function assertProofGraphCoversRecoveryReceipt(graph, descriptor) {
   ) {
     throw new Error(`proof graph ${descriptor.nodeId} node drifted`);
   }
+  if (
+    descriptor.normalizedEvidenceObjects.length > 0 &&
+    !sameNormalizedEvidenceObjects(
+      node.normalizedEvidenceObjects,
+      descriptor.normalizedEvidenceObjects.map((object) => ({
+        ...object,
+        status: "passed",
+        evidencePath: `lanes.${object.laneId}.evidence.${object.name}`,
+      })),
+    )
+  ) {
+    throw new Error(`proof graph ${descriptor.nodeId} evidence objects drifted`);
+  }
   for (const [from, to, relationship] of [
     [descriptor.provingNodeId, descriptor.nodeId, "proves"],
     [descriptor.nodeId, "proof-graph", "records"],
@@ -464,6 +494,11 @@ function recoveryReceiptGraphDescriptor(descriptor) {
     ...descriptor,
     laneIds: Object.freeze([...descriptor.laneIds]),
     manifestDependsOn: Object.freeze([...descriptor.manifestDependsOn]),
+    normalizedEvidenceObjects: Object.freeze(
+      (descriptor.normalizedEvidenceObjects ?? []).map((object) =>
+        Object.freeze({ ...object }),
+      ),
+    ),
     receiptFixture: Object.freeze({
       ...descriptor.receiptFixture,
       evidence: Object.freeze({ ...descriptor.receiptFixture.evidence }),

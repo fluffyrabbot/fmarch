@@ -208,11 +208,9 @@ import {
 } from "./dev_test_game_core_loop_completed_endgame_progression_scenarios.mjs";
 import {
   assertCoreLoopPrivateChannelRecoveryCoverageSummary,
-  coreLoopPrivateChannelCompletedPostLaneId,
   coreLoopPrivateChannelRecoveryFamilyId,
   coreLoopPrivateChannelRecoveryLaneIds,
   coreLoopPrivateChannelRecoveryScenarioFamily,
-  coreLoopPrivateChannelStalePostLaneId,
 } from "./dev_test_game_core_loop_private_channel_recovery_scenarios.mjs";
 import {
   recoveryReceiptEvidenceByKeyFromOptions,
@@ -221,17 +219,11 @@ import {
   recoveryReceiptReleaseReadinessDescriptors,
   validateRecoveryReceiptArtifact,
 } from "./dev_test_game_recovery_receipt_catalog.mjs";
+import {
+  normalizedEvidenceObjectsFromProof,
+  privateChannelNormalizedEvidenceObjects,
+} from "./dev_test_game_normalized_evidence_objects.mjs";
 export const DEV_TEST_GAME_RELEASE_READINESS_VERSION = 1;
-const privateChannelNormalizedProofObjects = Object.freeze([
-  Object.freeze({
-    name: "submitPostAckProof",
-    laneId: coreLoopPrivateChannelStalePostLaneId,
-  }),
-  Object.freeze({
-    name: "completedPostRejectProof",
-    laneId: coreLoopPrivateChannelCompletedPostLaneId,
-  }),
-]);
 const devTestGameSeededBrowserProofCommand =
   devTestGameProductionFeatureBrowserProofCommand;
 const artifactCoverageMilestoneIds = Object.freeze([
@@ -1761,24 +1753,11 @@ function buildPrivateChannelRecoveryMilestone(proof, { sourcePath }) {
   return {
     ...coverageMilestoneSummary(coverage),
     normalizedEvidenceObjects:
-      privateChannelNormalizedEvidenceObjectsFromProof(proof),
+      normalizedEvidenceObjectsFromProof({
+        proof,
+        objects: privateChannelNormalizedEvidenceObjects,
+      }),
   };
-}
-
-function privateChannelNormalizedEvidenceObjectsFromProof(proof) {
-  const laneById = new Map((proof.lanes ?? []).map((lane) => [lane.id, lane]));
-  return privateChannelNormalizedProofObjects.map(({ name, laneId }) => {
-    const lane = laneById.get(laneId);
-    return {
-      name,
-      laneId,
-      status:
-        lane?.evidence?.normalizedProofStatus ??
-        lane?.evidence?.[name]?.status ??
-        "missing",
-      evidencePath: `lanes.${laneId}.evidence.${name}`,
-    };
-  });
 }
 
 function buildReplacementActionRecoveryMilestone(proof, { sourcePath }) {

@@ -17090,6 +17090,17 @@ function recoveryReceiptFixture(descriptor) {
       expectedFamilyCount: fixture.familyCount,
     },
     laneIds: [...descriptor.laneIds],
+    ...(descriptor.normalizedEvidenceObjects.length === 0
+      ? {}
+      : {
+          normalizedEvidenceObjects: descriptor.normalizedEvidenceObjects.map(
+            (object) => ({
+              ...object,
+              status: "passed",
+              evidencePath: `lanes.${object.laneId}.evidence.${object.name}`,
+            }),
+          ),
+        }),
     lanes: descriptor.laneIds.map((laneId) => ({
       id: laneId,
       label: laneId,
