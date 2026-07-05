@@ -120,6 +120,7 @@ export function proofGraphAdminProofCase() {
         game: source.proofRun.session.game,
         auditId: localAdminAuditIds.proofGraph,
         requiredChecks: proofGraphVisibleCheckIds(source.proofGraph),
+        requiredCheckStatuses: proofGraphVisibleCheckStatuses(source.proofGraph),
         requiredRelatedLinks: source.proofGraph.nodes
           .filter(
             (node) =>
@@ -148,6 +149,11 @@ export function proofGraphAdminProofCase() {
         game: source.proofRun.session.game,
         nodeIds: source.proofGraph.nodes.map((node) => node.id),
         evidenceObjectRowIds: proofGraphEvidenceObjectRowIds(source.proofGraph),
+        receiptArtifactRowIds: proofGraphReceiptArtifactRowIds(
+          source.proofGraph,
+        ),
+        hostedIdentityTerminalReceiptArtifact:
+          hostedIdentityTerminalReceiptArtifact(source.proofGraph),
         edgeRowIds: source.proofGraph.edges.map((edge) =>
           proofGraphEdgeCheckId(edge),
         ),
@@ -203,6 +209,13 @@ export function assertProofGraphAdminProof(evidence) {
     proofName: "proof graph admin proof",
     rowName: "evidence object",
   });
+  assertVisibleAdminRoleSurfaceRows({
+    adminRoleSurface: evidence.adminRoleSurface,
+    rowIds: evidence.generatedFrom?.receiptArtifactRowIds,
+    proofName: "proof graph admin proof",
+    rowName: "receipt artifact",
+  });
+  assertHostedIdentityTerminalReceiptArtifact(evidence);
   const nodeIds = new Set(evidence.generatedFrom?.nodeIds ?? []);
   for (const surfaceId of evidence.generatedFrom?.adminProofSurfaceIds ?? []) {
     if (!nodeIds.has(`admin-proof:${surfaceId}`)) {
@@ -293,8 +306,18 @@ function proofGraphVisibleCheckIds(proofGraph) {
         : [`coverage-decision:${node.id}`],
     ),
     ...proofGraphEvidenceObjectRowIds(proofGraph),
+    ...proofGraphReceiptArtifactRowIds(proofGraph),
     ...proofGraph.edges.map((edge) => proofGraphEdgeCheckId(edge)),
   ];
+}
+
+function proofGraphVisibleCheckStatuses(proofGraph) {
+  const hostedIdentityReceipt = hostedIdentityTerminalReceiptArtifact(proofGraph);
+  return hostedIdentityReceipt === null
+    ? {}
+    : {
+        [hostedIdentityReceipt.rowId]: hostedIdentityReceipt.status,
+      };
 }
 
 function proofGraphEvidenceObjectRowIds(proofGraph) {
@@ -304,6 +327,92 @@ function proofGraphEvidenceObjectRowIds(proofGraph) {
       objects: node.normalizedEvidenceObjects,
     }),
   );
+}
+
+function proofGraphReceiptArtifactRowIds(proofGraph) {
+  return proofGraph.nodes.flatMap((node) =>
+    normalizedReceiptArtifactRows({
+      parentId: node.id,
+      artifacts: node.receiptArtifacts,
+    }).map((artifact) => artifact.rowId),
+  );
+}
+
+function hostedIdentityTerminalReceiptArtifact(proofGraph) {
+  return (
+    normalizedReceiptArtifactRows({
+      parentId: "admin-spine-terminal-batches",
+      artifacts: proofGraph.nodes.find(
+        (node) => node.id === "admin-spine-terminal-batches",
+      )?.receiptArtifacts,
+    }).find(
+      (artifact) =>
+        artifact.proofId === "hosted-identity-next-action" &&
+        artifact.artifactPath ===
+          "target/dev-test-game/hosted-identity-next-action-admin-proof.json" &&
+        artifact.batchLabel ===
+          "Terminal hosted identity next-action admin proof batch",
+    ) ?? null
+  );
+}
+
+function normalizedReceiptArtifactRows({ parentId, artifacts }) {
+  return (Array.isArray(artifacts) ? artifacts : [])
+    .map((artifact, index) => ({
+      proofId: String(artifact?.proofId ?? ""),
+      artifactPath: String(artifact?.artifactPath ?? ""),
+      batchLabel: String(artifact?.batchLabel ?? ""),
+      fallbackSuffix: String(index),
+    }))
+    .filter(
+      (artifact) => artifact.proofId !== "" && artifact.artifactPath !== "",
+    )
+    .map((artifact) => ({
+      ...artifact,
+      rowId: proofGraphReceiptArtifactRowId({ parentId, artifact }),
+      status: `${artifact.proofId}:${artifact.batchLabel}:${artifact.artifactPath}`,
+    }));
+}
+
+function proofGraphReceiptArtifactRowId({ parentId, artifact }) {
+  const batchSuffix = slugIdPart(artifact.batchLabel);
+  return `receipt-artifact:${parentId}:${artifact.proofId}:${
+    batchSuffix === "" ? artifact.fallbackSuffix : batchSuffix
+  }`;
+}
+
+function slugIdPart(value) {
+  return String(value ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/gu, "-")
+    .replace(/^-+|-+$/gu, "");
+}
+
+function assertHostedIdentityTerminalReceiptArtifact(evidence) {
+  const artifact = evidence.generatedFrom?.hostedIdentityTerminalReceiptArtifact;
+  if (
+    artifact?.rowId !==
+      "receipt-artifact:admin-spine-terminal-batches:hosted-identity-next-action:terminal-hosted-identity-next-action-admin-proof-batch" ||
+    artifact.proofId !== "hosted-identity-next-action" ||
+    artifact.artifactPath !==
+      "target/dev-test-game/hosted-identity-next-action-admin-proof.json" ||
+    artifact.batchLabel !==
+      "Terminal hosted identity next-action admin proof batch" ||
+    artifact.status !==
+      "hosted-identity-next-action:Terminal hosted identity next-action admin proof batch:target/dev-test-game/hosted-identity-next-action-admin-proof.json"
+  ) {
+    throw new Error(
+      "proof graph admin proof missing hosted identity terminal receipt metadata",
+    );
+  }
+  const visibleStatus =
+    evidence.adminRoleSurface?.visibleCheckStatuses?.[artifact.rowId];
+  if (typeof visibleStatus !== "string" || !visibleStatus.includes(artifact.status)) {
+    throw new Error(
+      "proof graph admin proof did not inspect hosted identity terminal receipt row",
+    );
+  }
 }
 
 function proofGraphAdminFeatureTargetEntries(proofGraph) {

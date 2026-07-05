@@ -1634,6 +1634,15 @@ test("admin local proof graph detail data carries graph node rows", async () => 
     data.audit.checks.map((check) => [check.id, check.status]),
     expectedProofGraphCheckRows(proofGraph),
   );
+  const hostedIdentityReceiptRow = data.audit.checks.find(
+    (check) =>
+      check.id ===
+      "receipt-artifact:admin-spine-terminal-batches:hosted-identity-next-action:terminal-hosted-identity-next-action-admin-proof-batch",
+  );
+  assert.equal(
+    hostedIdentityReceiptRow?.status,
+    "hosted-identity-next-action:Terminal hosted identity next-action admin proof batch:target/dev-test-game/hosted-identity-next-action-admin-proof.json",
+  );
   assert.deepEqual(
     data.audit.relatedLinks.map((link) => [link.id, link.href]),
     expectedProofGraphRelatedLinkRows(proofGraph, { game: "midsummer" }),

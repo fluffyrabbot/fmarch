@@ -5424,6 +5424,7 @@ export function validateDevTestGameProofGraphAdminProof(proof, options = {}) {
       throw new Error(`proof graph admin proof missing visible edge: ${edgeRowId}`);
     }
   }
+  validateProofGraphAdminTerminalReceiptArtifact(proof);
   for (const featureTargetCase of proofGraphAdminFeatureTargetCases) {
     validateProofGraphAdminFeatureTarget(proof, featureTargetCase);
   }
@@ -5444,6 +5445,44 @@ export function validateDevTestGameProofGraphAdminProof(proof, options = {}) {
     destinationAuditIds,
     ...(options.artifact === undefined ? {} : { artifact: options.artifact }),
   };
+}
+
+function validateProofGraphAdminTerminalReceiptArtifact(proof) {
+  const artifact = proof.generatedFrom?.hostedIdentityTerminalReceiptArtifact;
+  const expectedRowId =
+    "receipt-artifact:admin-spine-terminal-batches:hosted-identity-next-action:terminal-hosted-identity-next-action-admin-proof-batch";
+  const expectedStatus =
+    "hosted-identity-next-action:Terminal hosted identity next-action admin proof batch:target/dev-test-game/hosted-identity-next-action-admin-proof.json";
+  if (
+    artifact?.rowId !== expectedRowId ||
+    artifact.proofId !== "hosted-identity-next-action" ||
+    artifact.artifactPath !==
+      "target/dev-test-game/hosted-identity-next-action-admin-proof.json" ||
+    artifact.batchLabel !==
+      "Terminal hosted identity next-action admin proof batch" ||
+    artifact.status !== expectedStatus
+  ) {
+    throw new Error(
+      "proof graph admin proof missing hosted identity terminal receipt metadata",
+    );
+  }
+  if (!proof.generatedFrom?.receiptArtifactRowIds?.includes(expectedRowId)) {
+    throw new Error(
+      "proof graph admin proof missing hosted identity terminal receipt row id",
+    );
+  }
+  if (!proof.adminRoleSurface?.visibleChecks?.includes(expectedRowId)) {
+    throw new Error(
+      "proof graph admin proof missing hosted identity terminal receipt row",
+    );
+  }
+  const visibleStatus =
+    proof.adminRoleSurface?.visibleCheckStatuses?.[expectedRowId];
+  if (typeof visibleStatus !== "string" || !visibleStatus.includes(expectedStatus)) {
+    throw new Error(
+      "proof graph admin proof did not inspect hosted identity terminal receipt row",
+    );
+  }
 }
 
 function validateProofGraphAdminFeatureTarget(proof, featureTargetCase) {

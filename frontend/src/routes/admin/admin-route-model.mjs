@@ -1967,6 +1967,10 @@ export function normalizeLocalProofGraphNodeCheckRows(node) {
       parentId,
       objects: node?.normalizedEvidenceObjects,
     }),
+    ...proofGraphReceiptArtifactCheckRows({
+      parentId,
+      artifacts: node?.receiptArtifacts,
+    }),
   ]);
 }
 
@@ -2049,6 +2053,43 @@ function normalizedEvidenceObjectCheckRows({ parentId, objects }) {
       evidencePath: object.evidencePath,
     }),
   );
+}
+
+function proofGraphReceiptArtifactCheckRows({ parentId, artifacts }) {
+  return (Array.isArray(artifacts) ? artifacts : [])
+    .map((artifact, index) => ({
+      proofId: String(artifact?.proofId ?? ""),
+      artifactPath: String(artifact?.artifactPath ?? ""),
+      batchLabel: String(artifact?.batchLabel ?? ""),
+      fallbackSuffix: String(index),
+    }))
+    .filter(
+      (artifact) => artifact.proofId !== "" && artifact.artifactPath !== "",
+    )
+    .map((artifact) =>
+      Object.freeze({
+        id: proofGraphReceiptArtifactCheckId({ parentId, artifact }),
+        status: `${artifact.proofId}:${artifact.batchLabel}:${artifact.artifactPath}`,
+        proofId: artifact.proofId,
+        artifactPath: artifact.artifactPath,
+        batchLabel: artifact.batchLabel,
+      }),
+    );
+}
+
+function proofGraphReceiptArtifactCheckId({ parentId, artifact }) {
+  const batchSuffix = slugIdPart(artifact.batchLabel);
+  return `receipt-artifact:${parentId}:${artifact.proofId}:${
+    batchSuffix === "" ? artifact.fallbackSuffix : batchSuffix
+  }`;
+}
+
+function slugIdPart(value) {
+  return String(value ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/gu, "-")
+    .replace(/^-+|-+$/gu, "");
 }
 
 function coverageDecisionCheckRows({

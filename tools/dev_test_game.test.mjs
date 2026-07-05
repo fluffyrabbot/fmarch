@@ -4585,6 +4585,18 @@ test("admin proof fixtures prove normalized evidence object rows", () => {
     proofName: "proof graph admin proof fixture",
     rowName: "evidence object",
   });
+  assertVisibleAdminRoleSurfaceRows({
+    adminRoleSurface: proofGraphProof.adminRoleSurface,
+    rowIds: proofGraphProof.generatedFrom.receiptArtifactRowIds,
+    proofName: "proof graph admin proof fixture",
+    rowName: "receipt artifact",
+  });
+  assert.equal(
+    proofGraphProof.adminRoleSurface.visibleCheckStatuses[
+      "receipt-artifact:admin-spine-terminal-batches:hosted-identity-next-action:terminal-hosted-identity-next-action-admin-proof-batch"
+    ],
+    "receipt-artifact:admin-spine-terminal-batches:hosted-identity-next-action:terminal-hosted-identity-next-action-admin-proof-batch\nhosted-identity-next-action:Terminal hosted identity next-action admin proof batch:target/dev-test-game/hosted-identity-next-action-admin-proof.json",
+  );
 });
 
 test("admin role surface helpers assert visible rows and status text", () => {
@@ -18483,6 +18495,19 @@ function proofGraphAdminProofFixture() {
       objects: replacementPrivatePostNormalizedEvidenceObjects,
     }),
   ];
+  const hostedIdentityTerminalReceiptArtifact = {
+    proofId: "hosted-identity-next-action",
+    artifactPath:
+      "target/dev-test-game/hosted-identity-next-action-admin-proof.json",
+    batchLabel: "Terminal hosted identity next-action admin proof batch",
+    rowId:
+      "receipt-artifact:admin-spine-terminal-batches:hosted-identity-next-action:terminal-hosted-identity-next-action-admin-proof-batch",
+    status:
+      "hosted-identity-next-action:Terminal hosted identity next-action admin proof batch:target/dev-test-game/hosted-identity-next-action-admin-proof.json",
+  };
+  const receiptArtifactRowIds = [
+    hostedIdentityTerminalReceiptArtifact.rowId,
+  ];
   return {
     version: 1,
     proof: "dev-test-game-proof-graph-admin-proof",
@@ -18512,6 +18537,8 @@ function proofGraphAdminProofFixture() {
         replacementPrivateGraphTarget.productionFeatureNodeId,
       ],
       evidenceObjectRowIds,
+      receiptArtifactRowIds,
+      hostedIdentityTerminalReceiptArtifact,
       edgeRowIds: [
         hostSetupGraphTarget.edgeRowId,
         cohostGraphTarget.edgeRowId,
@@ -18558,7 +18585,12 @@ function proofGraphAdminProofFixture() {
         replacementPrivateGraphTarget.edgeRowId,
         `coverage-decision:${replacementPrivateGraphTarget.productionFeatureNodeId}`,
         ...evidenceObjectRowIds,
+        ...receiptArtifactRowIds,
       ],
+      visibleCheckStatuses: {
+        [hostedIdentityTerminalReceiptArtifact.rowId]:
+          `${hostedIdentityTerminalReceiptArtifact.rowId}\n${hostedIdentityTerminalReceiptArtifact.status}`,
+      },
       visibleRelatedLinks: [
         ...handoffs.map((handoff) => handoff.linkId),
         hostSetupGraphTarget.roleSurfaceNodeId,
