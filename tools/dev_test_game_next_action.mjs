@@ -1161,8 +1161,11 @@ function validHostedIdentityProgressionProofArtifact(
     artifact.status === "passed" &&
     artifact.releaseReady === false &&
     artifact.productionReady === false &&
-    artifact.generatedFrom?.hostedIdentityEvidence === progression.evidencePath &&
-    artifact.generatedFrom?.proofArtifact === progression.adminProofTarget &&
+    artifact.generatedFrom?.progressionId === progression.id &&
+    artifact.generatedFrom?.progressionCheckId === progression.checkId &&
+    artifact.generatedFrom?.progressionEvidencePath === progression.evidencePath &&
+    artifact.generatedFrom?.progressionAdminProofPath ===
+      progression.adminProofTarget &&
     artifact.adminRoleSurface?.clickedThroughFromOverview === true &&
     artifact.adminRoleSurface?.rawInviteTokensVisible === false
   );

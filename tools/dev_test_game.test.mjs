@@ -19374,6 +19374,10 @@ function hostedIdentityProgressionAdminProofArtifactFixture(progression) {
     generatedFrom: {
       hostedIdentityEvidence: progression.evidencePath,
       proofArtifact: progression.adminProofTarget,
+      progressionId: progression.id,
+      progressionCheckId: progression.checkId,
+      progressionEvidencePath: progression.evidencePath,
+      progressionAdminProofPath: progression.adminProofTarget,
     },
     adminRoleSurface: {
       clickedThroughFromOverview: true,

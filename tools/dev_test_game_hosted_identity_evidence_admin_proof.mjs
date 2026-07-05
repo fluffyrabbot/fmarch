@@ -204,6 +204,7 @@ export function hostedIdentityEvidenceAdminProofCase({
   proofPath = evidencePath,
   smokeName = "dev-test-game-hosted-identity-evidence-admin-proof",
   stage = "hosted-identity-evidence-admin-proof-listen",
+  progressionMetadata = null,
 } = {}) {
   const sourceRelativePath = path.relative(repoRoot, sourcePath);
   const proofRelativePath = path.relative(repoRoot, proofPath);
@@ -368,6 +369,16 @@ export function hostedIdentityEvidenceAdminProofCase({
         hostedIdentityEvidence: sourceRelativePath,
         proofRun: proofRunRelativePath,
         proofArtifact: proofRelativePath,
+        ...(progressionMetadata === null
+          ? {}
+          : {
+              progressionId: progressionMetadata.progressionId,
+              progressionCheckId: progressionMetadata.progressionCheckId,
+              progressionEvidencePath:
+                progressionMetadata.progressionEvidencePath,
+              progressionAdminProofPath:
+                progressionMetadata.progressionAdminProofPath,
+            }),
         game: source.proofRun.session.game,
         status: source.hostedIdentityEvidence.status,
         rawEvidencePath: source.hostedIdentityEvidence.target.rawEvidencePath,
@@ -572,6 +583,15 @@ export async function writeHostedIdentityProgressionAdminProof({
         `dev-test-game-hosted-identity-${progression.id}-admin-proof`,
       stage:
         stage ?? `hosted-identity-${progression.id}-admin-proof-listen`,
+      progressionMetadata: {
+        progressionId: progression.id,
+        progressionCheckId: progression.checkId,
+        progressionEvidencePath: path.relative(repoRoot, progressionEvidencePath),
+        progressionAdminProofPath: path.relative(
+          repoRoot,
+          progressionAdminProofPath,
+        ),
+      },
     }),
   );
 }
@@ -607,6 +627,20 @@ export function assertHostedIdentityEvidenceAdminProof(evidence) {
     throw new Error(
       "hosted identity evidence admin proof did not prove admin overview click-through",
     );
+  }
+  if (evidence.generatedFrom?.progressionId !== undefined) {
+    const progression = hostedIdentityEvidenceProgressionCase(
+      evidence.generatedFrom.progressionId,
+    );
+    if (
+      evidence.generatedFrom.progressionCheckId !== progression.checkId ||
+      evidence.generatedFrom.progressionEvidencePath !==
+        hostedIdentityEvidenceProgressionPath(progression.id) ||
+      evidence.generatedFrom.progressionAdminProofPath !==
+        hostedIdentityEvidenceProgressionAdminProofPath(progression.id)
+    ) {
+      throw new Error("hosted identity progression admin proof metadata drifted");
+    }
   }
   assertVisibleAdminRoleSurfaceRows({
     adminRoleSurface: evidence.adminRoleSurface,
