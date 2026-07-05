@@ -4872,6 +4872,14 @@ function localHostedIdentityEvidenceFixture() {
 function localHostedIdentityRedactedIntakePacketFixture() {
   return {
     kind: "redacted-hosted-identity-intake",
+    status: "missing",
+    sectionCount: 6,
+    providedSectionCount: 0,
+    missingSectionCount: 6,
+    requiredInputCount: 16,
+    providedInputCount: 0,
+    missingInputCount: 16,
+    redactedEvidenceRefCount: 0,
     rawInviteTokensIncluded: false,
     rawSessionSecretsIncluded: false,
     rawPasswordHashesIncluded: false,

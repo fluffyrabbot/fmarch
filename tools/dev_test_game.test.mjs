@@ -1000,6 +1000,30 @@ test("hosted identity evidence lane records blocked and passed handoffs", async 
     ],
   );
   assert.deepEqual(
+    {
+      status: blocked.target.redactedIntakePacket.status,
+      sectionCount: blocked.target.redactedIntakePacket.sectionCount,
+      providedSectionCount:
+        blocked.target.redactedIntakePacket.providedSectionCount,
+      missingSectionCount: blocked.target.redactedIntakePacket.missingSectionCount,
+      requiredInputCount: blocked.target.redactedIntakePacket.requiredInputCount,
+      providedInputCount: blocked.target.redactedIntakePacket.providedInputCount,
+      missingInputCount: blocked.target.redactedIntakePacket.missingInputCount,
+      redactedEvidenceRefCount:
+        blocked.target.redactedIntakePacket.redactedEvidenceRefCount,
+    },
+    {
+      status: "missing",
+      sectionCount: 6,
+      providedSectionCount: 0,
+      missingSectionCount: 6,
+      requiredInputCount: 16,
+      providedInputCount: 0,
+      missingInputCount: 16,
+      redactedEvidenceRefCount: 0,
+    },
+  );
+  assert.deepEqual(
     blocked.target.redactedIntakePacket.sections.map((section) => [
       section.id,
       section.status,
@@ -1141,6 +1165,29 @@ test("hosted identity evidence lane records blocked and passed handoffs", async 
   );
   assert.equal(passed.hostedHandoffChecklist.status, "passed");
   assert.deepEqual(passed.hostedHandoffChecklist.blockedCheckIds, []);
+  assert.deepEqual(
+    {
+      status: passed.target.redactedIntakePacket.status,
+      sectionCount: passed.target.redactedIntakePacket.sectionCount,
+      providedSectionCount: passed.target.redactedIntakePacket.providedSectionCount,
+      missingSectionCount: passed.target.redactedIntakePacket.missingSectionCount,
+      requiredInputCount: passed.target.redactedIntakePacket.requiredInputCount,
+      providedInputCount: passed.target.redactedIntakePacket.providedInputCount,
+      missingInputCount: passed.target.redactedIntakePacket.missingInputCount,
+      redactedEvidenceRefCount:
+        passed.target.redactedIntakePacket.redactedEvidenceRefCount,
+    },
+    {
+      status: "provided",
+      sectionCount: 6,
+      providedSectionCount: 6,
+      missingSectionCount: 0,
+      requiredInputCount: 16,
+      providedInputCount: 16,
+      missingInputCount: 0,
+      redactedEvidenceRefCount: 6,
+    },
+  );
   assert.deepEqual(
     passed.target.redactedIntakePacket.sections.map((section) => [
       section.id,

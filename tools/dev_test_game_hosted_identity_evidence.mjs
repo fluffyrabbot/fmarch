@@ -303,6 +303,16 @@ function assertHostedIdentityRedactedIntakePacketSummary(evidence) {
   }
   if (
     summary.kind !== "redacted-hosted-identity-intake" ||
+    !["provided", "missing"].includes(summary.status) ||
+    summary.sectionCount !== hostedIdentityEvidencePacketSectionDefinitions.length ||
+    summary.providedSectionCount + summary.missingSectionCount !==
+      summary.sectionCount ||
+    !Number.isInteger(summary.requiredInputCount) ||
+    !Number.isInteger(summary.providedInputCount) ||
+    !Number.isInteger(summary.missingInputCount) ||
+    summary.providedInputCount + summary.missingInputCount !==
+      summary.requiredInputCount ||
+    !Number.isInteger(summary.redactedEvidenceRefCount) ||
     summary.rawInviteTokensIncluded !== false ||
     summary.rawSessionSecretsIncluded !== false ||
     summary.rawPasswordHashesIncluded !== false ||
@@ -333,6 +343,36 @@ function assertHostedIdentityRedactedIntakePacketSummary(evidence) {
         `hosted identity redacted intake summary missing section: ${definition.field}`,
       );
     }
+  }
+  const sections = [...sectionsById.values()];
+  const requiredInputCount = sections.reduce(
+    (total, section) => total + section.requiredInputIds.length,
+    0,
+  );
+  const providedInputCount = sections.reduce(
+    (total, section) => total + section.providedInputIds.length,
+    0,
+  );
+  const redactedEvidenceRefCount = sections.reduce(
+    (total, section) => total + section.redactedEvidenceRefCount,
+    0,
+  );
+  if (
+    summary.requiredInputCount !== requiredInputCount ||
+    summary.providedInputCount !== providedInputCount ||
+    summary.missingInputCount !== requiredInputCount - providedInputCount ||
+    summary.redactedEvidenceRefCount !== redactedEvidenceRefCount ||
+    summary.providedSectionCount !==
+      sections.filter((section) => section.status === "provided").length ||
+    summary.missingSectionCount !==
+      sections.filter((section) => section.status !== "provided").length ||
+    summary.status !==
+      (sections.every((section) => section.status === "provided") &&
+      providedInputCount === requiredInputCount
+        ? "provided"
+        : "missing")
+  ) {
+    throw new Error("hosted identity redacted intake summary counts drifted");
   }
 }
 
@@ -730,9 +770,80 @@ function summarizeHostedIdentityRedactedIntakePacket(source) {
     source !== null && typeof source === "object" && !Array.isArray(source)
       ? source
       : null;
+  const sections = hostedIdentityEvidencePacketSectionDefinitions.map((definition) => {
+    const section = packetSource?.hostedIdentity?.[definition.field];
+    const inputs =
+      section !== null && typeof section === "object" && !Array.isArray(section)
+        ? section.inputs
+        : null;
+    return {
+      id: definition.field,
+      checkId: definition.checkId,
+      label: definition.label,
+      status:
+        section !== null &&
+        typeof section === "object" &&
+        ["provided", "missing"].includes(section.status)
+          ? section.status
+          : "missing",
+      requiredInputIds: [...definition.requiredInputIds],
+      providedInputIds: (definition.requiredInputIds ?? []).filter((inputId) =>
+        hasProvidedInput(inputs?.[inputId]),
+      ),
+      redactedEvidenceRefCount: Array.isArray(section?.redactedEvidenceRefs)
+        ? section.redactedEvidenceRefs.length
+        : 0,
+      redactedEvidenceRefs: Object.freeze(
+        (Array.isArray(section?.redactedEvidenceRefs)
+          ? section.redactedEvidenceRefs
+          : []
+        ).map((ref) => ({
+          id: String(ref?.id ?? ""),
+          kind: String(ref?.kind ?? ""),
+          evidenceFamily: String(ref?.evidenceFamily ?? ""),
+          capturedAt: String(ref?.capturedAt ?? ""),
+          retentionWindow: String(ref?.retentionWindow ?? ""),
+          locator: String(ref?.locator ?? ""),
+          exportLocator: String(ref?.exportLocator ?? ""),
+          redacted: ref?.redacted === true,
+        })),
+      ),
+      missingInputs: hostedIdentityPacketSectionMissingInputs({
+        field: definition.field,
+        section,
+      }),
+    };
+  });
+  const requiredInputCount = sections.reduce(
+    (total, section) => total + section.requiredInputIds.length,
+    0,
+  );
+  const providedInputCount = sections.reduce(
+    (total, section) => total + section.providedInputIds.length,
+    0,
+  );
   return {
     kind: String(
       packetSource?.redaction?.packetKind ?? "redacted-hosted-identity-intake",
+    ),
+    status:
+      sections.every((section) => section.status === "provided") &&
+      providedInputCount === requiredInputCount
+        ? "provided"
+        : "missing",
+    sectionCount: sections.length,
+    providedSectionCount: sections.filter(
+      (section) => section.status === "provided",
+    ).length,
+    missingSectionCount: sections.filter(
+      (section) => section.status !== "provided",
+    ).length,
+    requiredInputCount,
+    providedInputCount,
+    missingInputCount: requiredInputCount - providedInputCount,
+    redactedEvidenceRefCount: sections.reduce(
+      (total, section) => total + section.redactedEvidenceRefCount,
+      0,
     ),
     rawInviteTokensIncluded:
       packetSource?.redaction?.rawInviteTokensIncluded === true,
@@ -744,49 +855,6 @@ function summarizeHostedIdentityRedactedIntakePacket(source) {
       packetSource?.redaction?.rawPersonalContactIncluded === true,
     roleSurfaceArchitectureChanged:
       packetSource?.hostedIdentity?.roleSurfaceArchitectureChanged === true,
-    sections: hostedIdentityEvidencePacketSectionDefinitions.map((definition) => {
-      const section = packetSource?.hostedIdentity?.[definition.field];
-      const inputs =
-        section !== null && typeof section === "object" && !Array.isArray(section)
-          ? section.inputs
-          : null;
-      return {
-        id: definition.field,
-        checkId: definition.checkId,
-        label: definition.label,
-        status:
-          section !== null &&
-          typeof section === "object" &&
-          ["provided", "missing"].includes(section.status)
-            ? section.status
-            : "missing",
-        requiredInputIds: [...definition.requiredInputIds],
-        providedInputIds: (definition.requiredInputIds ?? []).filter((inputId) =>
-          hasProvidedInput(inputs?.[inputId]),
-        ),
-        redactedEvidenceRefCount: Array.isArray(section?.redactedEvidenceRefs)
-          ? section.redactedEvidenceRefs.length
-          : 0,
-        redactedEvidenceRefs: Object.freeze(
-          (Array.isArray(section?.redactedEvidenceRefs)
-            ? section.redactedEvidenceRefs
-            : []
-          ).map((ref) => ({
-            id: String(ref?.id ?? ""),
-            kind: String(ref?.kind ?? ""),
-            evidenceFamily: String(ref?.evidenceFamily ?? ""),
-            capturedAt: String(ref?.capturedAt ?? ""),
-            retentionWindow: String(ref?.retentionWindow ?? ""),
-            locator: String(ref?.locator ?? ""),
-            exportLocator: String(ref?.exportLocator ?? ""),
-            redacted: ref?.redacted === true,
-          })),
-        ),
-        missingInputs: hostedIdentityPacketSectionMissingInputs({
-          field: definition.field,
-          section,
-        }),
-      };
-    }),
+    sections,
   };
 }

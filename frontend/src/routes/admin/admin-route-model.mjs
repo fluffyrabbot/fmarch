@@ -2765,6 +2765,28 @@ function normalizeHostedIdentityRedactedIntakePacket(packet) {
   }
   return Object.freeze({
     kind: String(packet.kind ?? ""),
+    status: String(packet.status ?? "unknown"),
+    sectionCount: Number.isInteger(packet.sectionCount)
+      ? packet.sectionCount
+      : 0,
+    providedSectionCount: Number.isInteger(packet.providedSectionCount)
+      ? packet.providedSectionCount
+      : 0,
+    missingSectionCount: Number.isInteger(packet.missingSectionCount)
+      ? packet.missingSectionCount
+      : 0,
+    requiredInputCount: Number.isInteger(packet.requiredInputCount)
+      ? packet.requiredInputCount
+      : 0,
+    providedInputCount: Number.isInteger(packet.providedInputCount)
+      ? packet.providedInputCount
+      : 0,
+    missingInputCount: Number.isInteger(packet.missingInputCount)
+      ? packet.missingInputCount
+      : 0,
+    redactedEvidenceRefCount: Number.isInteger(packet.redactedEvidenceRefCount)
+      ? packet.redactedEvidenceRefCount
+      : 0,
     rawInviteTokensIncluded: packet.rawInviteTokensIncluded === true,
     rawSessionSecretsIncluded: packet.rawSessionSecretsIncluded === true,
     rawPasswordHashesIncluded: packet.rawPasswordHashesIncluded === true,
