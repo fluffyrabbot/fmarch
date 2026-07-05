@@ -486,8 +486,10 @@
               <strong>{progression.field}</strong>
               <span>{progression.checkId}</span>
               <span>{progression.missingInputId}</span>
+              <span>{progression.adminProofMode}</span>
               <span>{progression.missingFixturePath}</span>
               <span>{progression.recoveredFixturePath}</span>
+              <span>{progression.adminProofFixturePath}</span>
               <span>{progression.proofCommand}</span>
               <span>{progression.evidencePath}</span>
               <span>{progression.adminProofTarget}</span>
@@ -710,6 +712,8 @@
                 data-testid={`admin-audit-hosted-identity-progression-${progression.id}`}
               >
                 <strong>{progression.id}</strong>
+                <span>{progression.adminProofMode}</span>
+                <span>{progression.adminProofFixturePath}</span>
                 <span>{progression.proofCommand}</span>
                 <span>{progression.evidencePath}</span>
                 <span>{progression.adminProofTarget}</span>

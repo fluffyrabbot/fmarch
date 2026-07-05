@@ -226,6 +226,7 @@ import {
   hostedIdentityEvidenceInputIds,
   hostedIdentityEvidenceInputSectionStatuses,
   hostedIdentityEvidenceOperatorInvitePartialFixturePath,
+  hostedIdentityEvidenceOperatorInviteRecoveredFixturePath,
   hostedIdentityEvidenceOperatorProofDrilldowns,
   hostedIdentityEvidenceOperatorPartialFixturePath,
   hostedIdentityEvidenceOperatorRecoveredFixturePath,
@@ -1330,6 +1331,9 @@ test("hosted identity evidence lane records blocked and passed handoffs", async 
     hostedIdentityEvidenceOperatorInvitePartialFixturePath,
   ));
   assert(hostedIdentityEvidenceFixturePaths.includes(
+    hostedIdentityEvidenceOperatorInviteRecoveredFixturePath,
+  ));
+  assert(hostedIdentityEvidenceFixturePaths.includes(
     hostedIdentityEvidenceOperatorRecoveredFixturePath,
   ));
   for (const fixturePath of hostedIdentityEvidenceFixturePaths) {
@@ -1403,10 +1407,30 @@ test("hosted identity evidence lane records blocked and passed handoffs", async 
         .map((section) => [section.id, section.missingInputs]),
       [[progression.field, [...progression.expectedMissingInputs]]],
     );
-    assert.equal(operatorRecovered.status, "passed");
+    assert.equal(
+      operatorRecovered.status,
+      progression.id === "invite-delivery" ? "blocked" : "passed",
+    );
     assert.equal(operatorRecovered.target.rawEvidenceStatus, "passed");
-    assert.deepEqual(operatorRecovered.hostedHandoffChecklist.blockedCheckIds, []);
-    assert.equal(operatorRecovered.hostedHandoffChecklist.blockedReceipt, undefined);
+    if (progression.id === "invite-delivery") {
+      assert.deepEqual(operatorRecovered.hostedHandoffChecklist.blockedCheckIds, [
+        "hosted-account-lifecycle-evidence",
+        "account-recovery-evidence",
+        "abuse-and-rate-limit-evidence",
+        "session-secret-policy-evidence",
+        "hosted-audit-retention-export-evidence",
+      ]);
+      assert.notEqual(
+        operatorRecovered.hostedHandoffChecklist.blockedReceipt,
+        undefined,
+      );
+    } else {
+      assert.deepEqual(operatorRecovered.hostedHandoffChecklist.blockedCheckIds, []);
+      assert.equal(
+        operatorRecovered.hostedHandoffChecklist.blockedReceipt,
+        undefined,
+      );
+    }
     assert.deepEqual(
       operatorRecovered.target.redactedIntakePacket.sections
         .filter((section) => section.id === progression.field)
@@ -1435,7 +1459,16 @@ test("hosted identity evidence lane records blocked and passed handoffs", async 
             )?.status,
         )
         .map((check) => check.id),
-      [progression.checkId],
+      progression.id === "invite-delivery"
+        ? [
+            "hosted-account-lifecycle-evidence",
+            progression.checkId,
+            "account-recovery-evidence",
+            "abuse-and-rate-limit-evidence",
+            "session-secret-policy-evidence",
+            "hosted-audit-retention-export-evidence",
+          ]
+        : [progression.checkId],
     );
   }
 
@@ -1459,6 +1492,8 @@ test("hosted identity evidence lane records blocked and passed handoffs", async 
       id: progression.id,
       missingFixturePath: progression.missingFixturePath,
       recoveredFixturePath: progression.recoveredFixturePath,
+      adminProofMode: progression.adminProofMode,
+      adminProofFixturePath: progression.adminProofFixturePath,
       proofCommand: progression.proofCommand,
       evidencePath: progression.evidencePath,
       adminProofTarget: progression.adminProofTarget,
@@ -1470,6 +1505,8 @@ test("hosted identity evidence lane records blocked and passed handoffs", async 
       id: progression.id,
       missingFixturePath: progression.missingFixturePath,
       recoveredFixturePath: progression.recoveredFixturePath,
+      adminProofMode: progression.adminProofMode,
+      adminProofFixturePath: progression.adminProofFixturePath,
       proofCommand: `FMARCH_HOSTED_IDENTITY_PROGRESSION_ID=${progression.id} npm run ${devTestGameHostedIdentityProgressionAdminProofCommand}`,
       evidencePath: hostedIdentityEvidenceProgressionPath(progression.id),
       adminProofTarget: hostedIdentityEvidenceProgressionAdminProofPath(

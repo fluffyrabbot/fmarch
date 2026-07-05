@@ -24,6 +24,8 @@ export const hostedIdentityEvidenceOperatorPartialFixturePath =
   "tools/fixtures/dev_test_game_hosted_identity_evidence.operator-partial.json";
 export const hostedIdentityEvidenceOperatorInvitePartialFixturePath =
   "tools/fixtures/dev_test_game_hosted_identity_evidence.operator-invite-partial.json";
+export const hostedIdentityEvidenceOperatorInviteRecoveredFixturePath =
+  "tools/fixtures/dev_test_game_hosted_identity_evidence.operator-invite-recovered.json";
 export const hostedIdentityEvidenceOperatorRecoveredFixturePath =
   "tools/fixtures/dev_test_game_hosted_identity_evidence.operator-recovered.json";
 export const hostedIdentityEvidenceFixturePaths = Object.freeze([
@@ -31,6 +33,7 @@ export const hostedIdentityEvidenceFixturePaths = Object.freeze([
   hostedIdentityEvidenceRedactedPassFixturePath,
   hostedIdentityEvidenceOperatorPartialFixturePath,
   hostedIdentityEvidenceOperatorInvitePartialFixturePath,
+  hostedIdentityEvidenceOperatorInviteRecoveredFixturePath,
   hostedIdentityEvidenceOperatorRecoveredFixturePath,
 ]);
 export const devTestGameHostedIdentityPartialEvidencePath =
@@ -242,7 +245,9 @@ export const hostedIdentityEvidenceFamilyProgressionCases = Object.freeze([
     checkId: "invite-delivery-evidence",
     missingInputId: "redacted-invite-delivery-packet",
     missingFixturePath: hostedIdentityEvidenceOperatorInvitePartialFixturePath,
-    recoveredFixturePath: hostedIdentityEvidenceOperatorRecoveredFixturePath,
+    recoveredFixturePath: hostedIdentityEvidenceOperatorInviteRecoveredFixturePath,
+    adminProofFixturePath: hostedIdentityEvidenceOperatorInviteRecoveredFixturePath,
+    adminProofMode: "provided-family-still-blocked",
     expectedMissingInputs: Object.freeze([
       "status-provided",
       "deliveryChannels",
@@ -264,6 +269,8 @@ export const hostedIdentityEvidenceFamilyProgressionCases = Object.freeze([
     missingInputId: "redacted-account-recovery-packet",
     missingFixturePath: hostedIdentityEvidenceOperatorPartialFixturePath,
     recoveredFixturePath: hostedIdentityEvidenceOperatorRecoveredFixturePath,
+    adminProofFixturePath: hostedIdentityEvidenceOperatorPartialFixturePath,
+    adminProofMode: "missing-family",
     expectedMissingInputs: Object.freeze([
       "status-provided",
       "recoveryMethods",
@@ -287,6 +294,8 @@ export function hostedIdentityEvidenceProgressionHandoffSummary() {
         id: progression.id,
         checkId: progression.checkId,
         missingInputId: progression.missingInputId,
+        adminProofMode: progression.adminProofMode,
+        adminProofFixturePath: progression.adminProofFixturePath,
         proofCommand: `FMARCH_HOSTED_IDENTITY_PROGRESSION_ID=${progression.id} npm run ${devTestGameHostedIdentityProgressionAdminProofCommand}`,
         evidencePath: hostedIdentityEvidenceProgressionPath(progression.id),
         adminProofTarget: hostedIdentityEvidenceProgressionAdminProofPath(
@@ -296,7 +305,9 @@ export function hostedIdentityEvidenceProgressionHandoffSummary() {
         firstMissingInputId: progression.missingInputId,
         firstMissingCheckId: progression.checkId,
         proofBoundary:
-          "Fixture-backed local admin browser proof target for one hosted identity evidence-family progression row. It proves the admin handoff can surface the named missing artifact; it does not prove hosted identity traffic, release readiness, or production readiness.",
+          progression.adminProofMode === "provided-family-still-blocked"
+            ? "Fixture-backed local admin browser proof target for one hosted identity evidence-family progression row. It proves the admin handoff can surface the named provided redacted packet while the overall hosted identity evidence stays blocked; it does not prove hosted identity traffic, release readiness, or production readiness."
+            : "Fixture-backed local admin browser proof target for one hosted identity evidence-family progression row. It proves the admin handoff can surface the named missing artifact; it does not prove hosted identity traffic, release readiness, or production readiness.",
       }),
   );
   return Object.freeze({

@@ -1835,6 +1835,10 @@ function validHostedIdentityProgressionSummary(summary) {
         progression.adminProofTarget === summary.progressionProofTargets[index] &&
         typeof progression.proofCommand === "string" &&
         progression.proofCommand.includes("npm run test:") &&
+        typeof progression.adminProofMode === "string" &&
+        progression.adminProofMode !== "" &&
+        typeof progression.adminProofFixturePath === "string" &&
+        progression.adminProofFixturePath !== "" &&
         typeof progression.evidencePath === "string" &&
         progression.evidencePath.trim() !== "" &&
         typeof progression.roleUrl === "string" &&

@@ -94,8 +94,10 @@ function hostedIdentityEvidenceProgressionSummaryRow(progression) {
     field: progression.field,
     checkId: progression.checkId,
     missingInputId: progression.missingInputId,
+    adminProofMode: progression.adminProofMode,
     missingFixturePath: progression.missingFixturePath,
     recoveredFixturePath: progression.recoveredFixturePath,
+    adminProofFixturePath: progression.adminProofFixturePath,
     proofCommand: `FMARCH_HOSTED_IDENTITY_PROGRESSION_ID=${progression.id} npm run ${devTestGameHostedIdentityProgressionAdminProofCommand}`,
     evidencePath: hostedIdentityEvidenceProgressionPath(progression.id),
     adminProofTarget: hostedIdentityEvidenceProgressionAdminProofPath(
@@ -110,6 +112,8 @@ function hostedIdentityEvidenceProgressionSummaryRow(progression) {
       ...progression.recoveredRedactedEvidenceRefIds,
     ],
     proofBoundary:
-      "Fixture-backed local admin browser proof target for one hosted identity evidence-family progression row. It proves the admin handoff can surface the named missing artifact; it does not prove hosted identity traffic, release readiness, or production readiness.",
+      progression.adminProofMode === "provided-family-still-blocked"
+        ? "Fixture-backed local admin browser proof target for one hosted identity evidence-family progression row. It proves the admin handoff can surface the named provided redacted packet while the overall hosted identity evidence stays blocked; it does not prove hosted identity traffic, release readiness, or production readiness."
+        : "Fixture-backed local admin browser proof target for one hosted identity evidence-family progression row. It proves the admin handoff can surface the named missing artifact; it does not prove hosted identity traffic, release readiness, or production readiness.",
   };
 }

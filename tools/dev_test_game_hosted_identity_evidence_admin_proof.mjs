@@ -487,7 +487,8 @@ export async function writeHostedIdentityProgressionAdminProof({
   const progressionAdminProofPath = path.resolve(repoRoot, proofPath);
   const progressionEvidence = await buildDevTestGameHostedIdentityEvidence({
     env: {
-      FMARCH_HOSTED_IDENTITY_EVIDENCE_PATH: progression.missingFixturePath,
+      FMARCH_HOSTED_IDENTITY_EVIDENCE_PATH:
+        progression.adminProofFixturePath ?? progression.missingFixturePath,
     },
   });
   await writeEvidenceArtifact(progressionEvidencePath, progressionEvidence);

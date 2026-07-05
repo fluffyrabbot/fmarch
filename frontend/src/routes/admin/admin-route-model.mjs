@@ -854,9 +854,13 @@ function normalizeHostedIdentityProgressionSummary(summary) {
           field: String(progression?.field ?? ""),
           checkId: String(progression?.checkId ?? ""),
           missingInputId: String(progression?.missingInputId ?? ""),
+          adminProofMode: String(progression?.adminProofMode ?? ""),
           missingFixturePath: String(progression?.missingFixturePath ?? ""),
           recoveredFixturePath: String(
             progression?.recoveredFixturePath ?? "",
+          ),
+          adminProofFixturePath: String(
+            progression?.adminProofFixturePath ?? "",
           ),
           proofCommand: String(progression?.proofCommand ?? ""),
           evidencePath: String(progression?.evidencePath ?? ""),
@@ -3174,6 +3178,10 @@ function normalizeHostedHandoffProgressionSummary(summary) {
           id: String(progression?.id ?? ""),
           checkId: String(progression?.checkId ?? ""),
           missingInputId: String(progression?.missingInputId ?? ""),
+          adminProofMode: String(progression?.adminProofMode ?? ""),
+          adminProofFixturePath: String(
+            progression?.adminProofFixturePath ?? "",
+          ),
           proofCommand: String(progression?.proofCommand ?? ""),
           evidencePath: String(progression?.evidencePath ?? ""),
           adminProofTarget: String(progression?.adminProofTarget ?? ""),

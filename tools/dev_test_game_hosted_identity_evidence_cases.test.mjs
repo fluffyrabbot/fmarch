@@ -16,6 +16,7 @@ import {
   hostedIdentityEvidenceInputSectionStatuses,
   hostedIdentityExpectedRoleSurfaceContract,
   hostedIdentityEvidenceOperatorInvitePartialFixturePath,
+  hostedIdentityEvidenceOperatorInviteRecoveredFixturePath,
   hostedIdentityEvidenceOperatorPartialFixturePath,
   hostedIdentityEvidenceOperatorRecoveredFixturePath,
   hostedIdentityEvidencePlaceholderFixturePath,
@@ -271,6 +272,7 @@ test("hosted identity evidence cases share handoff inputs and blocked groups", (
       hostedIdentityEvidenceRedactedPassFixturePath,
       hostedIdentityEvidenceOperatorPartialFixturePath,
       hostedIdentityEvidenceOperatorInvitePartialFixturePath,
+      hostedIdentityEvidenceOperatorInviteRecoveredFixturePath,
       hostedIdentityEvidenceOperatorRecoveredFixturePath,
     ],
   );
@@ -290,7 +292,7 @@ test("hosted identity evidence cases share handoff inputs and blocked groups", (
         "invite-delivery-evidence",
         "redacted-invite-delivery-packet",
         hostedIdentityEvidenceOperatorInvitePartialFixturePath,
-        hostedIdentityEvidenceOperatorRecoveredFixturePath,
+        hostedIdentityEvidenceOperatorInviteRecoveredFixturePath,
       ],
       [
         "account-recovery",
