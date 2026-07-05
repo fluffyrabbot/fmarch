@@ -101,6 +101,8 @@ import {
   hostedOpsTelemetryBoundaryCheckId,
 } from "./dev_test_game_hosted_ops_signal_cases.mjs";
 import {
+  devTestGameHostedIdentityCompleteAdminProofCommand,
+  devTestGameHostedIdentityCompleteAdminProofPath,
   devTestGameHostedIdentityEvidenceCommand,
   devTestGameHostedIdentityEvidencePath,
   devTestGameHostedIdentityProgressionSummaryPath,
@@ -115,6 +117,7 @@ import {
 } from "./dev_test_game_real_hosted_observability_handoff_cases.mjs";
 import {
   buildReleaseReadinessUnprovenItems,
+  hostedIdentityEvidenceSatisfiesCompleteLocalPacket,
   hostedIdentityEvidenceSatisfiesProductionIdentity,
   hostedIdentityEvidencePathKind,
   releaseAdminProofFallbackUnprovenIds,
@@ -386,6 +389,10 @@ const defaultHostedIdentityEvidenceAdminProofPath = path.join(
   repoRoot,
   hostedIdentityEvidenceAdminProofArtifact.path,
 );
+const defaultHostedIdentityCompleteAdminProofPath = path.join(
+  repoRoot,
+  devTestGameHostedIdentityCompleteAdminProofPath,
+);
 const defaultHostedIdentityProgressionSummaryPath = path.join(
   repoRoot,
   devTestGameHostedIdentityProgressionSummaryPath,
@@ -629,6 +636,18 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
               options.hostedIdentityEvidenceAdminProofPath ??
               hostedIdentityEvidenceAdminProofArtifact.path,
             artifact: options.hostedIdentityEvidenceAdminProofArtifact,
+          },
+        )
+      : undefined;
+  const hostedIdentityCompleteAdminProofEvidence =
+    options.hostedIdentityCompleteAdminProof
+      ? validateDevTestGameHostedIdentityEvidenceAdminProof(
+          options.hostedIdentityCompleteAdminProof,
+          {
+            path:
+              options.hostedIdentityCompleteAdminProofPath ??
+              devTestGameHostedIdentityCompleteAdminProofPath,
+            artifact: options.hostedIdentityCompleteAdminProofArtifact,
           },
         )
       : undefined;
@@ -1015,6 +1034,33 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
       adminRoleSurface: hostedIdentityEvidenceAdminProofEvidence,
     });
   }
+  if (hostedIdentityCompleteAdminProofEvidence !== undefined) {
+    localChecks.push({
+      id: "local-hosted-identity-complete-redacted-packet",
+      label: "Local hosted identity complete redacted packet",
+      status: hostedIdentityEvidenceSatisfiesCompleteLocalPacket(
+        hostedIdentityCompleteAdminProofEvidence,
+      )
+        ? "passed"
+        : "blocked",
+      evidence: hostedIdentityCompleteAdminProofEvidence.path,
+      proofBoundary: hostedIdentityCompleteAdminProofEvidence.proofBoundary,
+      command: `npm run ${devTestGameHostedIdentityCompleteAdminProofCommand}`,
+      roleUrl: localAdminAuditRoleUrl(localAdminAuditIds.hostedIdentityEvidence),
+      evidenceStatus: hostedIdentityCompleteAdminProofEvidence.evidenceStatus,
+      rawEvidenceStatus: hostedIdentityCompleteAdminProofEvidence.rawEvidenceStatus,
+      rawEvidencePath: hostedIdentityCompleteAdminProofEvidence.rawEvidencePath,
+      rawEvidencePathKind:
+        hostedIdentityCompleteAdminProofEvidence.rawEvidencePathKind,
+      fixtureEvidence: hostedIdentityCompleteAdminProofEvidence.fixtureEvidence,
+      hostedIdentityPacketSummaryStatuses:
+        hostedIdentityCompleteAdminProofEvidence
+          .hostedIdentityPacketSummaryStatuses,
+      releaseReady: false,
+      productionReady: false,
+      adminRoleSurface: hostedIdentityCompleteAdminProofEvidence,
+    });
+  }
   if (spineManifestEvidence !== undefined) {
     localChecks.push({
       id: localAdminAuditIds.spineManifest,
@@ -1246,6 +1292,7 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
     seedFixtureEvidence,
     identityAdapterEvidence,
     hostedIdentityEvidenceAdminProofEvidence,
+    hostedIdentityCompleteAdminProofEvidence,
     spineManifestEvidence,
     raceCoverageEvidence,
     hostedConcurrentRaceMatrixEvidence,
@@ -1328,6 +1375,12 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
         : {
             hostedIdentityProgressionSummary:
               hostedIdentityProgressionSummaryEvidence.path,
+          }),
+      ...(hostedIdentityCompleteAdminProofEvidence === undefined
+        ? {}
+        : {
+            hostedIdentityCompleteAdminProof:
+              hostedIdentityCompleteAdminProofEvidence.path,
           }),
       ...(spineManifestEvidence === undefined
         ? {}
@@ -1419,6 +1472,7 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
         hostedEvidenceLaneAdminProofEvidence === undefined &&
         hostedEvidenceLaneDemoProofEvidence === undefined &&
         hostedIdentityProgressionSummaryEvidence === undefined &&
+        hostedIdentityCompleteAdminProofEvidence === undefined &&
         realHostedObservabilityHandoffAdminProofEvidence === undefined &&
         nextActionAdminProofEvidence === undefined)
         ? {}
@@ -1503,6 +1557,12 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
                 : {
                     hostedIdentityProgressionSummary:
                       hostedIdentityProgressionSummaryEvidence,
+                  }),
+              ...(hostedIdentityCompleteAdminProofEvidence === undefined
+                ? {}
+                : {
+                    hostedIdentityCompleteAdminProof:
+                      hostedIdentityCompleteAdminProofEvidence,
                   }),
               ...(spineManifestEvidence === undefined
                 ? {}
@@ -1611,6 +1671,7 @@ function releaseReadinessReason({
   seedFixtureEvidence,
   identityAdapterEvidence,
   hostedIdentityEvidenceAdminProofEvidence,
+  hostedIdentityCompleteAdminProofEvidence,
   spineManifestEvidence,
   raceCoverageEvidence,
   hostedConcurrentRaceMatrixEvidence,
@@ -1633,6 +1694,11 @@ function releaseReadinessReason({
       hostedIdentityEvidenceAdminProofEvidence,
     )
       ? ["hosted identity evidence"]
+      : []),
+    ...(hostedIdentityEvidenceSatisfiesCompleteLocalPacket(
+      hostedIdentityCompleteAdminProofEvidence,
+    )
+      ? ["local complete hosted identity redacted packet"]
       : []),
     ...(spineManifestEvidence === undefined ? [] : ["local spine manifest"]),
     ...(raceCoverageEvidence === undefined ? [] : ["local race coverage inventory"]),
@@ -4419,13 +4485,13 @@ export function validateDevTestGameHostedIdentityEvidenceAdminProof(
     hostedHandoffSummary: hostedHandoffSummary.generated,
     visibleHostedHandoffBlockedReceipt: hostedHandoffBlockedReceipt.visible,
     hostedHandoffBlockedReceipt: hostedHandoffBlockedReceipt.generated,
-    handoffReceiptStatus: hostedHandoffBlockedReceipt.generated.status,
+    handoffReceiptStatus: hostedHandoffBlockedReceipt.generated?.status,
     handoffReceiptMissingInputCount:
-      hostedHandoffBlockedReceipt.generated.missingRequiredInputs.length,
+      hostedHandoffBlockedReceipt.generated?.missingRequiredInputs.length ?? 0,
     handoffReceiptNextProofTarget:
-      hostedHandoffBlockedReceipt.generated.nextProofTarget,
+      hostedHandoffBlockedReceipt.generated?.nextProofTarget,
     handoffReceiptMissingRequiredInputs:
-      hostedHandoffBlockedReceipt.generated.missingRequiredInputs,
+      hostedHandoffBlockedReceipt.generated?.missingRequiredInputs ?? [],
     evidenceStatus: String(proof.generatedFrom?.status ?? "unknown"),
     rawEvidencePath: String(proof.generatedFrom?.rawEvidencePath ?? ""),
     rawEvidencePathKind: hostedIdentityEvidencePathKind(
@@ -4437,6 +4503,10 @@ export function validateDevTestGameHostedIdentityEvidenceAdminProof(
     rawEvidenceStatus: String(
       proof.generatedFrom?.rawEvidenceStatus ?? "unknown",
     ),
+    hostedIdentityPacketSummaryStatuses:
+      proof.generatedFrom?.hostedIdentityPacketSummaryStatuses ?? {},
+    releaseReady: proof.releaseReady,
+    productionReady: proof.productionReady,
     ...(options.artifact === undefined ? {} : { artifact: options.artifact }),
   };
 }
@@ -4495,35 +4565,58 @@ function validateHostedIdentityHandoffSummary(proof) {
       "hosted identity evidence admin proof did not render handoff summary",
     );
   }
-  const expected = {
-    status: "blocked",
-    preflightStatus: "blocked",
+  const fixedExpected = {
     command: `npm run ${devTestGameHostedIdentityEvidenceCommand}`,
     proofTarget: devTestGameHostedIdentityEvidencePath,
   };
-  for (const [key, value] of Object.entries(expected)) {
+  for (const [key, value] of Object.entries(fixedExpected)) {
     if (String(generated[key] ?? "") !== value || String(visible[key] ?? "") !== value) {
       throw new Error(
         `hosted identity evidence admin proof handoff summary drifted: ${key}`,
       );
     }
   }
+  const status = String(generated.status ?? "");
+  if (
+    !["blocked", "passed"].includes(status) ||
+    String(generated.preflightStatus ?? "") !== status ||
+    String(visible.status ?? "") !== status ||
+    String(visible.preflightStatus ?? "") !== status
+  ) {
+    throw new Error(
+      "hosted identity evidence admin proof handoff summary status drifted",
+    );
+  }
   return {
-    generated: Object.freeze({ ...expected }),
-    visible: Object.freeze({ ...expected }),
+    generated: Object.freeze({
+      status,
+      preflightStatus: status,
+      ...fixedExpected,
+    }),
+    visible: Object.freeze({
+      status,
+      preflightStatus: status,
+      ...fixedExpected,
+    }),
   };
 }
 
 function validateHostedIdentityHandoffBlockedReceipt(proof) {
   const generated = proof.generatedFrom?.hostedHandoffBlockedReceipt;
   const visible = proof.adminRoleSurface?.visibleHostedHandoffBlockedReceipt;
-  if (generated === undefined || generated === null) {
+  if (generated === undefined || generated === null || visible === undefined || visible === null) {
+    if (
+      (generated === undefined || generated === null) &&
+      (visible === undefined || visible === null) &&
+      proof.generatedFrom?.hostedHandoffSummary?.status === "passed" &&
+      proof.adminRoleSurface?.visibleHostedHandoffSummary?.status === "passed"
+    ) {
+      return {
+        generated: undefined,
+        visible: undefined,
+      };
+    }
     throw new Error("hosted identity evidence admin proof missing blocked receipt");
-  }
-  if (visible === undefined || visible === null) {
-    throw new Error(
-      "hosted identity evidence admin proof did not render blocked receipt",
-    );
   }
   const requiredInputs = Array.isArray(generated.requiredInputs)
     ? generated.requiredInputs
@@ -6819,6 +6912,27 @@ export function assertDevTestGameReleaseReadiness(checklist) {
       "dev-test-game hosted identity progression summary check is malformed",
     );
   }
+  const hostedIdentityCompleteCheck =
+    checklist.localDevelopmentSpine?.checks?.find(
+      (check) =>
+        check.id === "local-hosted-identity-complete-redacted-packet",
+    );
+  if (
+    hostedIdentityCompleteCheck !== undefined &&
+    (hostedIdentityCompleteCheck.releaseReady !== false ||
+      hostedIdentityCompleteCheck.productionReady !== false ||
+      hostedIdentityCompleteCheck.evidenceStatus !== "passed" ||
+      hostedIdentityCompleteCheck.rawEvidenceStatus !== "passed" ||
+      hostedIdentityCompleteCheck.rawEvidencePathKind !== "fixture" ||
+      hostedIdentityCompleteCheck.hostedIdentityPacketSummaryStatuses?.status !==
+        "provided\n6/6 sections provided\n0 sections missing" ||
+      hostedIdentityCompleteCheck.hostedIdentityPacketSummaryStatuses?.inputs !==
+        "16/16 inputs provided\n0 inputs missing")
+  ) {
+    throw new Error(
+      "dev-test-game hosted identity complete packet check is malformed",
+    );
+  }
   const hasHostedMatrixCheck = checklist.localDevelopmentSpine?.checks?.some(
     (check) => check.id === "local-hosted-concurrent-race-matrix" && check.status === "passed",
   );
@@ -7279,6 +7393,16 @@ const optionalReadinessArtifactRegistry = Object.freeze([
     outputKeys: hostedIdentityEvidenceAdminProofArtifact.outputKeys,
   }),
   optionalReadinessArtifact({
+    id: "hostedIdentityCompleteAdminProof",
+    envVar: "FMARCH_DEV_TEST_GAME_HOSTED_IDENTITY_COMPLETE_ADMIN_PROOF",
+    defaultPath: defaultHostedIdentityCompleteAdminProofPath,
+    outputKeys: {
+      data: "hostedIdentityCompleteAdminProof",
+      path: "hostedIdentityCompleteAdminProofPath",
+      freshnessMetadata: "hostedIdentityCompleteAdminProofArtifact",
+    },
+  }),
+  optionalReadinessArtifact({
     id: "hostedIdentityProgressionSummary",
     envVar: "FMARCH_DEV_TEST_GAME_HOSTED_IDENTITY_PROGRESSION_SUMMARY",
     defaultPath: defaultHostedIdentityProgressionSummaryPath,
@@ -7514,6 +7638,7 @@ const optionalReadinessArtifactLoadPlan = Object.freeze([
   "identityAdapterProof",
   "identityAdminProof",
   "hostedIdentityEvidenceAdminProof",
+  "hostedIdentityCompleteAdminProof",
   "hostedIdentityProgressionSummary",
   "opsAdminProof",
   "hostedOpsSignals",

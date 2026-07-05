@@ -12862,6 +12862,9 @@ test("session card and markdown include role credential URLs and tokens", async 
     hostedIdentityEvidenceAdminProofPath:
       "target/dev-test-game/hosted-identity-evidence-admin-proof.json",
     hostedIdentityEvidenceAdminProof: hostedIdentityEvidenceAdminProofFixture(),
+    hostedIdentityCompleteAdminProofPath:
+      devTestGameHostedIdentityCompleteAdminProofPath,
+    hostedIdentityCompleteAdminProof: hostedIdentityCompleteAdminProofFixture(),
     hostedIdentityProgressionSummaryPath:
       devTestGameHostedIdentityProgressionSummaryPath,
     hostedIdentityProgressionSummary:
@@ -12945,10 +12948,32 @@ test("session card and markdown include role credential URLs and tokens", async 
       hostedIdentityEvidenceProgressionAdminProofPath(progression.id),
     ]),
   );
-  assert(
+  const hostedIdentityCompleteCheck =
+    identityReadiness.localDevelopmentSpine.checks.find(
+      (item) => item.id === "local-hosted-identity-complete-redacted-packet",
+    );
+  assert.equal(hostedIdentityCompleteCheck.status, "passed");
+  assert.equal(
+    hostedIdentityCompleteCheck.evidence,
+    devTestGameHostedIdentityCompleteAdminProofPath,
+  );
+  assert.equal(hostedIdentityCompleteCheck.rawEvidencePathKind, "fixture");
+  assert.equal(
+    hostedIdentityCompleteCheck.rawEvidencePath,
+    hostedIdentityEvidenceRedactedPassFixturePath,
+  );
+  assert.equal(hostedIdentityCompleteCheck.releaseReady, false);
+  assert.equal(hostedIdentityCompleteCheck.productionReady, false);
+  assert.deepEqual(hostedIdentityCompleteCheck.hostedIdentityPacketSummaryStatuses, {
+    status: "provided\n6/6 sections provided\n0 sections missing",
+    inputs: "16/16 inputs provided\n0 inputs missing",
+    "redacted-refs": "6 redacted refs",
+  });
+  assert.equal(
     identityReadiness.releaseReadiness.unproven.some(
       (item) => item.id === "hosted-production-identity" && item.status === "unproven",
     ),
+    true,
   );
   const backupRestoreReadiness = buildDevTestGameReleaseReadiness(proofRun, {
     generatedAt: "2026-06-26T00:00:00.000Z",
@@ -19364,6 +19389,125 @@ function hostedIdentityEvidenceAdminProofFixture() {
       productionReady: false,
     },
   };
+}
+
+function hostedIdentityCompleteAdminProofFixture() {
+  const proof = JSON.parse(JSON.stringify(hostedIdentityEvidenceAdminProofFixture()));
+  const packetSummaryRows = [
+    {
+      id: "status",
+      status: "provided\n6/6 sections provided\n0 sections missing",
+    },
+    {
+      id: "inputs",
+      status: "16/16 inputs provided\n0 inputs missing",
+    },
+    {
+      id: "redacted-refs",
+      status: "6 redacted refs",
+    },
+  ];
+  const packetInputRows = hostedIdentityEvidencePacketSectionDefinitions.flatMap(
+    (section) =>
+      section.requiredInputIds.map((inputId) => ({
+        id: `${section.field}-${inputId}`,
+        status: "provided",
+      })),
+  );
+  proof.proofBoundary =
+    "Local admin hosted identity complete redacted packet proof only.";
+  proof.generatedFrom.hostedIdentityEvidence =
+    "target/dev-test-game/hosted-identity-evidence-complete.json";
+  proof.generatedFrom.status = "passed";
+  proof.generatedFrom.rawEvidenceStatus = "passed";
+  proof.generatedFrom.rawEvidencePath =
+    hostedIdentityEvidenceRedactedPassFixturePath;
+  proof.generatedFrom.checkStatuses = Object.fromEntries(
+    hostedIdentityEvidenceBlockedChecks.map((check) => [check.id, "passed"]),
+  );
+  proof.generatedFrom.blockedCheckIds = [];
+  proof.generatedFrom.hostedHandoffInputValues = {
+    FMARCH_HOSTED_IDENTITY_EVIDENCE_PATH:
+      hostedIdentityEvidenceRedactedPassFixturePath,
+  };
+  proof.generatedFrom.hostedHandoffBlockedCheckIds = [];
+  proof.generatedFrom.hostedHandoffGroupStatuses = Object.fromEntries(
+    hostedIdentityEvidenceHandoffCase().requirementGroups.map((group) => [
+      group.id,
+      "passed",
+    ]),
+  );
+  proof.generatedFrom.hostedHandoffInputSectionStatuses = {
+    "proof-command": "provided",
+    "evidence-file": "provided",
+    "role-surface-contracts": "provided",
+    "identity-operations": "provided",
+  };
+  proof.generatedFrom.hostedHandoffSectionInputStatuses = Object.fromEntries(
+    hostedIdentityEvidenceSectionInputRows(
+      hostedIdentityEvidenceHandoffCase().inputSections,
+    ).map((row) => [row.id, "provided"]),
+  );
+  proof.generatedFrom.hostedHandoffSummary = {
+    ...proof.generatedFrom.hostedHandoffSummary,
+    status: "passed",
+    preflightStatus: "passed",
+  };
+  delete proof.generatedFrom.hostedHandoffBlockedReceipt;
+  proof.generatedFrom.handoffPath.downstreamStatus = "passed";
+  proof.generatedFrom.hostedIdentityPacketSummaryStatuses = Object.fromEntries(
+    packetSummaryRows.map((row) => [row.id, row.status]),
+  );
+  proof.generatedFrom.hostedIdentityPacketInputStatuses = Object.fromEntries(
+    packetInputRows.map((row) => [row.id, row.status]),
+  );
+  proof.generatedFrom.hostedIdentityRoleSurfaceContractDiffStatus = "passed";
+  proof.generatedFrom.hostedIdentityRoleSurfaceContractMismatchIds = [];
+  proof.adminRoleSurface.visibleChecks = hostedIdentityEvidenceBlockedChecks.map(
+    (check) => check.id,
+  );
+  proof.adminRoleSurface.visibleUnproven = [];
+  proof.adminRoleSurface.visibleHostedHandoffInputValues = {
+    FMARCH_HOSTED_IDENTITY_EVIDENCE_PATH:
+      `FMARCH_HOSTED_IDENTITY_EVIDENCE_PATH ${hostedIdentityEvidenceRedactedPassFixturePath} required`,
+  };
+  proof.adminRoleSurface.visibleHostedHandoffBlockedChecks = [];
+  proof.adminRoleSurface.visibleHostedHandoffGroupStatuses = Object.fromEntries(
+    hostedIdentityEvidenceHandoffCase().requirementGroups.map((group) => [
+      group.id,
+      `${group.label} passed`,
+    ]),
+  );
+  proof.adminRoleSurface.visibleHostedHandoffInputSectionStatuses = {
+    "proof-command": "Proof command provided",
+    "evidence-file": "Evidence file provided",
+    "role-surface-contracts": "Role-surface contracts provided",
+    "identity-operations": "Identity operations provided",
+  };
+  proof.adminRoleSurface.visibleHostedHandoffSectionInputStatuses =
+    Object.fromEntries(
+      hostedIdentityEvidenceSectionInputRows(
+        hostedIdentityEvidenceHandoffCase().inputSections,
+      ).map((row) => [row.id, `${row.id} provided`]),
+    );
+  proof.adminRoleSurface.visibleHostedHandoffSummary = {
+    ...proof.adminRoleSurface.visibleHostedHandoffSummary,
+    status: "passed",
+    preflightStatus: "passed",
+  };
+  delete proof.adminRoleSurface.visibleHostedHandoffBlockedReceipt;
+  proof.adminRoleSurface.visibleHandoffPath.downstreamStatus = "passed";
+  proof.adminRoleSurface.visibleHostedIdentityPacketSummaryStatuses =
+    Object.fromEntries(packetSummaryRows.map((row) => [row.id, row.status]));
+  proof.adminRoleSurface.visibleHostedIdentityPacketInputStatuses =
+    Object.fromEntries(
+      packetInputRows.map((row) => [row.id, `${row.id} provided`]),
+    );
+  proof.adminRoleSurface.visibleHostedIdentityRoleSurfaceContractDiff = {
+    status: "passed",
+  };
+  proof.adminRoleSurface.visibleHostedIdentityRoleSurfaceContractMismatches = [];
+  return proof;
 }
 
 function hostedIdentityPacketInputRowsFixture() {

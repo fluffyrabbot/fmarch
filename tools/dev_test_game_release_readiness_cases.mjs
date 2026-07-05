@@ -17,10 +17,12 @@ import {
   devTestGameHostedEvidenceLaneDemoProofPath,
 } from "./dev_test_game_hosted_evidence_lane_demo_proof.mjs";
 import {
+  devTestGameHostedIdentityCompleteAdminProofPath,
   devTestGameHostedIdentityEvidenceCommand,
   devTestGameHostedIdentityEvidencePath,
   hostedIdentityEvidenceFixturePaths,
   hostedIdentityEvidenceHandoffCase,
+  hostedIdentityEvidenceRedactedPassFixturePath,
 } from "./dev_test_game_hosted_identity_evidence_cases.mjs";
 import {
   devTestGameRealHostedObservabilityHandoffCommand,
@@ -343,6 +345,23 @@ export function hostedIdentityEvidenceSatisfiesProductionIdentity(evidence) {
     evidence.fixtureEvidence !== true &&
     hostedIdentityEvidencePathKind(evidence.rawEvidencePath) ===
       "operator-provided"
+  );
+}
+
+export function hostedIdentityEvidenceSatisfiesCompleteLocalPacket(evidence) {
+  return (
+    evidence?.status === "passed" &&
+    evidence.evidenceStatus === "passed" &&
+    evidence.rawEvidenceStatus === "passed" &&
+    evidence.path === devTestGameHostedIdentityCompleteAdminProofPath &&
+    evidence.rawEvidencePath === hostedIdentityEvidenceRedactedPassFixturePath &&
+    evidence.fixtureEvidence === true &&
+    evidence.hostedIdentityPacketSummaryStatuses?.status ===
+      "provided\n6/6 sections provided\n0 sections missing" &&
+    evidence.hostedIdentityPacketSummaryStatuses?.inputs ===
+      "16/16 inputs provided\n0 inputs missing" &&
+    evidence.releaseReady === false &&
+    evidence.productionReady === false
   );
 }
 
