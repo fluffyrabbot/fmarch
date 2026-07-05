@@ -2227,6 +2227,29 @@ test("dev test-game spine manifest records command order and evidence wiring", (
     manifest.commands.live.localScript,
     "test:dev-test-game-live:local",
   );
+  assert.deepEqual(
+    manifest.checks.find(
+      (check) => check.id === "local-live-wrapper-scripts-recorded",
+    ),
+    {
+      id: "local-live-wrapper-scripts-recorded",
+      status: "passed",
+      evidence: [
+        {
+          command: "coreLive",
+          script: "test:dev-test-game-core-live",
+          localScript: "test:dev-test-game-core-live:local",
+        },
+        {
+          command: "live",
+          script: "test:dev-test-game-live",
+          localScript: "test:dev-test-game-live:local",
+        },
+      ],
+      proofBoundary:
+        "DB-backed live spine commands keep an underlying already-started database script and a human one-command local wrapper script.",
+    },
+  );
   assert.deepEqual(manifest.commands.live.plan, devTestGameLiveSpinePlan);
   assert.deepEqual(
     manifest.commands.backupRestore.plan,
@@ -15222,6 +15245,25 @@ test("session card and markdown include role credential URLs and tokens", async 
     ).adminRoleSurface.detailRoleUrl,
     "/admin/audit/local-spine-manifest?game=<seeded-game>",
   );
+  assert.deepEqual(
+    manifestReadiness.localDevelopmentSpine.checks.find(
+      (item) => item.id === "local-spine-manifest",
+    ).localLiveWrapperScripts,
+    [
+      {
+        id: "coreLive",
+        script: "test:dev-test-game-core-live",
+        localScript: "test:dev-test-game-core-live:local",
+        recoveryCommand: "npm run test:dev-test-game-core-live:local",
+      },
+      {
+        id: "live",
+        script: "test:dev-test-game-live",
+        localScript: "test:dev-test-game-live:local",
+        recoveryCommand: "npm run test:dev-test-game-live:local",
+      },
+    ],
+  );
 });
 
 function artifactSummary(path) {
@@ -21759,6 +21801,10 @@ function spineManifestFixture() {
       { id: "core-live-order-recorded", status: "passed" },
       { id: "live-spine-order-recorded", status: "passed" },
       { id: "sub-spine-orders-recorded", status: "passed" },
+      {
+        id: "local-live-wrapper-scripts-recorded",
+        status: "passed",
+      },
       { id: "evidence-env-wiring-recorded", status: "passed" },
       { id: "freshness-proof-recorded", status: "passed" },
       { id: "artifact-refresh-status-recorded", status: "passed" },
@@ -21797,6 +21843,7 @@ function spineManifestAdminProofFixture() {
         "core-live-order-recorded",
         "live-spine-order-recorded",
         "sub-spine-orders-recorded",
+        "local-live-wrapper-scripts-recorded",
         "evidence-env-wiring-recorded",
         "freshness-proof-recorded",
         "artifact-refresh-status-recorded",

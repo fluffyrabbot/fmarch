@@ -37,6 +37,7 @@ const requiredChecks = [
   "core-live-order-recorded",
   "live-spine-order-recorded",
   "sub-spine-orders-recorded",
+  "local-live-wrapper-scripts-recorded",
   "evidence-env-wiring-recorded",
   "freshness-proof-recorded",
   "artifact-refresh-status-recorded",

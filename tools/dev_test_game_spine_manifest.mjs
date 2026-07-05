@@ -524,6 +524,24 @@ export function buildDevTestGameSpineManifest({
         ],
       },
       {
+        id: "local-live-wrapper-scripts-recorded",
+        status: "passed",
+        evidence: [
+          {
+            command: "coreLive",
+            script: "test:dev-test-game-core-live",
+            localScript: "test:dev-test-game-core-live:local",
+          },
+          {
+            command: "live",
+            script: "test:dev-test-game-live",
+            localScript: "test:dev-test-game-live:local",
+          },
+        ],
+        proofBoundary:
+          "DB-backed live spine commands keep an underlying already-started database script and a human one-command local wrapper script.",
+      },
+      {
         id: "ops-spine-order-recorded",
         status: "passed",
         evidence: devTestGameOpsSpinePlan.map((step) => step.script),
@@ -663,22 +681,18 @@ export function assertDevTestGameSpineManifest(manifest) {
     throw new Error("spine manifest must not claim production or release readiness");
   }
   assertArtifactFreshnessReport(manifest.artifactFreshness);
-  if (
-    manifest.commands?.coreLive?.localScript !==
-    "test:dev-test-game-core-live:local"
-  ) {
-    throw new Error(
-      `spine manifest core live local script drifted: ${manifest.commands?.coreLive?.localScript}`,
-    );
-  }
-  if (
-    manifest.commands?.live?.localScript !==
-    "test:dev-test-game-live:local"
-  ) {
-    throw new Error(
-      `spine manifest live local script drifted: ${manifest.commands?.live?.localScript}`,
-    );
-  }
+  assertLocalLiveWrapperScript({
+    manifest,
+    commandId: "coreLive",
+    script: "test:dev-test-game-core-live",
+    localScript: "test:dev-test-game-core-live:local",
+  });
+  assertLocalLiveWrapperScript({
+    manifest,
+    commandId: "live",
+    script: "test:dev-test-game-live",
+    localScript: "test:dev-test-game-live:local",
+  });
   const coreLivePlan = manifest.commands?.coreLive?.plan ?? [];
   assertPlanScripts(coreLivePlan, [
     "dev:test-game:prebuild",
@@ -1067,6 +1081,7 @@ export function assertDevTestGameSpineManifest(manifest) {
     "core-live-order-recorded",
     "live-spine-order-recorded",
     "sub-spine-orders-recorded",
+    "local-live-wrapper-scripts-recorded",
     "ops-spine-order-recorded",
     "seed-fixture-spine-order-recorded",
     "evidence-env-wiring-recorded",
@@ -1447,6 +1462,23 @@ function assertArtifactFreshnessReport(report) {
   }
 }
 
+function assertLocalLiveWrapperScript({ manifest, commandId, script, localScript }) {
+  const command = manifest.commands?.[commandId];
+  if (command?.script !== script) {
+    throw new Error(
+      `spine manifest ${commandId} script drifted: ${command?.script}`,
+    );
+  }
+  if (command.localScript !== localScript) {
+    throw new Error(
+      `spine manifest ${commandId} local script drifted: ${command.localScript}`,
+    );
+  }
+  if (command.localScript === command.script) {
+    throw new Error(`spine manifest ${commandId} local script must wrap script`);
+  }
+}
+
 function firstNextCommand(artifacts) {
   return artifacts.find((artifact) => artifact.nextCommand)?.nextCommand;
 }
@@ -1529,11 +1561,13 @@ function markdownSpineManifest(manifest) {
     "",
     "## Commands",
     "",
-    "| Command | Steps |",
-    "| --- | ---: |",
+    "| Command | Script | Local Script | Steps |",
+    "| --- | --- | --- | ---: |",
   ];
   for (const [id, command] of Object.entries(manifest.commands)) {
-    lines.push(`| ${id} | ${command.plan?.length ?? 1} |`);
+    lines.push(
+      `| ${id} | ${command.script ?? ""} | ${command.localScript ?? ""} | ${command.plan?.length ?? 1} |`,
+    );
   }
   lines.push("", "## Core Live Spine", "", "| Step | Kind | Script |", "| ---: | --- | --- |");
   manifest.commands.coreLive.plan.forEach((step, index) => {

@@ -1164,6 +1164,7 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
       proofBoundary: spineManifestEvidence.proofBoundary,
       commandCount: spineManifestEvidence.commandCount,
       artifactCount: spineManifestEvidence.artifactCount,
+      localLiveWrapperScripts: spineManifestEvidence.localLiveWrapperScripts,
       ...(spineManifestAdminProofEvidence === undefined
         ? {}
         : { adminRoleSurface: spineManifestAdminProofEvidence }),
@@ -6706,6 +6707,7 @@ export function validateDevTestGameSpineManifest(manifest, options = {}) {
     "core-live-order-recorded",
     "live-spine-order-recorded",
     "sub-spine-orders-recorded",
+    "local-live-wrapper-scripts-recorded",
     "evidence-env-wiring-recorded",
     "release-boundary-carried",
   ];
@@ -6739,17 +6741,65 @@ export function validateDevTestGameSpineManifest(manifest, options = {}) {
   if (!Array.isArray(manifest.artifacts) || manifest.artifacts.length === 0) {
     throw new Error("spine manifest missing artifact list");
   }
+  const localLiveWrapperScripts = validateLocalLiveWrapperScripts(manifest);
   return {
     status: "passed",
     path: options.path ?? spineManifestPath,
     checkCount: requiredChecks.length,
     commandCount,
     artifactCount: manifest.artifacts.length,
+    localLiveWrapperScripts,
     proofBoundary: manifest.proofBoundary,
     scope: manifest.scope,
     productionReady: manifest.productionReady,
     releaseReady: manifest.releaseReady,
     ...(options.artifact === undefined ? {} : { artifact: options.artifact }),
+  };
+}
+
+function validateLocalLiveWrapperScripts(manifest) {
+  return [
+    validateLocalLiveWrapperScript({
+      manifest,
+      commandId: "coreLive",
+      script: "test:dev-test-game-core-live",
+      localScript: "test:dev-test-game-core-live:local",
+      recoveryCommand: "npm run test:dev-test-game-core-live:local",
+    }),
+    validateLocalLiveWrapperScript({
+      manifest,
+      commandId: "live",
+      script: "test:dev-test-game-live",
+      localScript: "test:dev-test-game-live:local",
+      recoveryCommand: "npm run test:dev-test-game-live:local",
+    }),
+  ];
+}
+
+function validateLocalLiveWrapperScript({
+  manifest,
+  commandId,
+  script,
+  localScript,
+  recoveryCommand,
+}) {
+  const command = manifest.commands?.[commandId];
+  if (command?.script !== script) {
+    throw new Error(`spine manifest ${commandId} script drifted: ${command?.script}`);
+  }
+  if (command.localScript !== localScript) {
+    throw new Error(
+      `spine manifest ${commandId} local script drifted: ${command.localScript}`,
+    );
+  }
+  if (command.localScript === command.script) {
+    throw new Error(`spine manifest ${commandId} local script must wrap script`);
+  }
+  return {
+    id: commandId,
+    script: command.script,
+    localScript: command.localScript,
+    recoveryCommand,
   };
 }
 
