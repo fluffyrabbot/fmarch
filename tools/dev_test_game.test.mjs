@@ -109,6 +109,7 @@ import {
   devTestGameBackupAdminProofPath,
   devTestGameCoreLoopAdminProofPath,
   devTestGameHardeningAdminProofPath,
+  devTestGameHostSetupAdminProofPath,
   devTestGameIdentityAdminProofPath,
   devTestGameOpsAdminProofPath,
   devTestGameSeedAdminProofPath,
@@ -4210,7 +4211,7 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
     [
       [
         "Aggregate pre-release admin proof batch",
-        7,
+        8,
         true,
         true,
       ],
@@ -4340,8 +4341,8 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
     releaseReadiness,
   );
   const coreLoopFamilyRows = coreLoopScenarioFamilyRows();
-  assert.equal(graph.summary.nodeCount, 73 + coreLoopFamilyRows.length);
-  assert.equal(graph.summary.roleUrlCount, 73 + coreLoopFamilyRows.length);
+  assert.equal(graph.summary.nodeCount, 74 + coreLoopFamilyRows.length);
+  assert.equal(graph.summary.roleUrlCount, 74 + coreLoopFamilyRows.length);
   assert.equal(graph.summary.roleSurfaceProofCount, 5);
   assert.equal(graph.summary.productionFeatureTargetCount, 41);
   assert.deepEqual(
@@ -14132,7 +14133,7 @@ test("session card and markdown include role credential URLs and tokens", async 
   );
   assert.equal(
     adminSpineReadiness.localDevelopmentSpine.evidence.adminProofSpine.proofCount,
-    16,
+    17,
   );
   assert.equal(
     adminSpineReadiness.localDevelopmentSpine.evidence.adminProofSpine.recovery.nextCommand,
@@ -14151,6 +14152,7 @@ test("session card and markdown include role credential URLs and tokens", async 
     "backup",
     "ops",
     "seed",
+    "host-setup",
     "release",
     "release-runbook",
     "race-coverage",
@@ -19147,6 +19149,46 @@ function seedAdminProofFixture() {
   };
 }
 
+function hostSetupAdminProofFixture() {
+  const setupCommandEvidenceIds = [
+    "addSlot",
+    "assignSlot",
+    "assignRole",
+    "setPostPolicy",
+    "startGame",
+  ];
+  return {
+    version: 1,
+    proof: "dev-test-game-host-setup-admin-proof",
+    status: "passed",
+    releaseReady: false,
+    productionReady: false,
+    scope: "local-dev-test-game-host-setup-admin-surface",
+    proofBoundary: "Local admin host setup proof only.",
+    generatedFrom: {
+      releaseReadinessChecklist:
+        "target/dev-test-game/release-readiness-checklist.json",
+      hostSetupProof: "target/dev-test-game/host-setup-proof.json",
+      game: "00000000-0000-0000-0000-000000000001",
+      checkIds: ["local-host-setup-proof", "ready-check:start-phase"],
+      setupCommandEvidenceIds,
+    },
+    adminRoleSurface: {
+      status: "passed",
+      overviewRoleUrl: "/admin?game=<seeded-game>",
+      detailRoleUrl: "/admin/audit/local-host-setup-proof?game=<seeded-game>",
+      linkTestId: "admin-audit-link-local-host-setup-proof",
+      surfaceTestId: "admin-audit-detail-surface",
+      clickedThroughFromOverview: true,
+      visibleChecks: ["local-host-setup-proof", "ready-check:start-phase"],
+      visibleSetupCommandEvidence: setupCommandEvidenceIds,
+      rawInviteTokensVisible: false,
+      releaseReady: false,
+      productionReady: false,
+    },
+  };
+}
+
 function backupAdminProofFixture() {
   return {
     version: 1,
@@ -21146,6 +21188,7 @@ function adminSpineAdminProofFixture() {
         "backup",
         "ops",
         "seed",
+        "host-setup",
         "release",
         "release-runbook",
         "race-coverage",
@@ -21176,6 +21219,7 @@ function adminSpineAdminProofFixture() {
         "backup",
         "ops",
         "seed",
+        "host-setup",
         "release",
         "release-runbook",
         "race-coverage",
@@ -21337,6 +21381,7 @@ function adminSpineProofFixture() {
     ["backup", backupAdminProofFixture()],
     ["ops", opsAdminProofFixture()],
     ["seed", seedAdminProofFixture()],
+    ["host-setup", hostSetupAdminProofFixture()],
     ["release", releaseAdminProofFixture()],
     ["release-runbook", releaseRunbookAdminProofFixture()],
     ["race-coverage", raceCoverageAdminProofFixture()],
@@ -21448,6 +21493,9 @@ function adminSpineProofBatchFixture({
 }
 
 function proofPathFor(id) {
+  if (id === "host-setup") {
+    return devTestGameHostSetupAdminProofPath;
+  }
   return `target/dev-test-game/${id === "core-loop" ? "core-loop" : id}-admin-proof.json`;
 }
 

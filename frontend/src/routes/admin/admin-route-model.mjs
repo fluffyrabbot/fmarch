@@ -289,22 +289,26 @@ export async function buildAdminRouteData({
                               appendLocalIdentityAdapterAudit(
                                 appendLocalBackupRestoreAudit(
                                   appendLocalReleaseRunbookAudit(
-                                    appendLocalReleaseReadinessAudit(
-                                      appendLocalSeedFixtureAudit(
-                                        appendLocalOpsArtifactsAudit(
-                                          appendLocalPlayerRecoveryAudit(
-                                            appendLocalHardeningAudit(
-                                              appendLocalCoreLoopAudit(coldData.audit, proofRun, { game }),
+                                    appendLocalHostSetupProofAudit(
+                                      appendLocalReleaseReadinessAudit(
+                                        appendLocalSeedFixtureAudit(
+                                          appendLocalOpsArtifactsAudit(
+                                            appendLocalPlayerRecoveryAudit(
+                                              appendLocalHardeningAudit(
+                                                appendLocalCoreLoopAudit(coldData.audit, proofRun, { game }),
+                                                proofRun,
+                                                { game },
+                                              ),
                                               proofRun,
                                               { game },
                                             ),
-                                            proofRun,
+                                            opsArtifacts,
                                             { game },
                                           ),
-                                          opsArtifacts,
+                                          seedFixtureSummary,
                                           { game },
                                         ),
-                                        seedFixtureSummary,
+                                        releaseReadinessChecklist,
                                         { game },
                                       ),
                                       releaseReadinessChecklist,
@@ -4665,6 +4669,20 @@ export function appendLocalReleaseReadinessAudit(
   return Object.freeze([...audit.filter((item) => item.id !== row.id), row]);
 }
 
+export function appendLocalHostSetupProofAudit(
+  audit,
+  releaseReadinessChecklist,
+  { game },
+) {
+  const row = normalizeLocalHostSetupProofAudit(releaseReadinessChecklist, {
+    game,
+  });
+  if (row === null) {
+    return audit;
+  }
+  return Object.freeze([...audit.filter((item) => item.id !== row.id), row]);
+}
+
 export function normalizeLocalReleaseReadinessAudit(
   releaseReadinessChecklist,
   { game },
@@ -4772,6 +4790,115 @@ export function normalizeLocalReleaseReadinessAudit(
       unprovenCount: unproven.length,
       releaseReady: releaseReadinessChecklist.releaseReady === true,
       productionReady: releaseReadinessChecklist.productionReady === true,
+    }),
+  });
+}
+
+export function normalizeLocalHostSetupProofAudit(
+  releaseReadinessChecklist,
+  { game },
+) {
+  if (
+    normalizeLocalReleaseReadinessAudit(releaseReadinessChecklist, { game }) ===
+    null
+  ) {
+    return null;
+  }
+  const checks = Array.isArray(releaseReadinessChecklist.localDevelopmentSpine?.checks)
+    ? releaseReadinessChecklist.localDevelopmentSpine.checks
+    : [];
+  const hostSetupCheck = checks.find(
+    (check) => check?.id === localAdminAuditIds.hostSetupProof,
+  );
+  const hostSetupProofEvidence =
+    releaseReadinessChecklist.localDevelopmentSpine?.evidence?.hostSetupProof;
+  const setupCommandEvidence = normalizeSetupCommandEvidenceRows(
+    hostSetupProofEvidence?.setupCommandEvidence,
+  );
+  if (
+    hostSetupProofEvidence === null ||
+    typeof hostSetupProofEvidence !== "object" ||
+    setupCommandEvidence.length === 0
+  ) {
+    return null;
+  }
+  const readyCheckIds = Object.freeze(
+    (Array.isArray(hostSetupProofEvidence.readyCheckIds)
+      ? hostSetupProofEvidence.readyCheckIds
+      : Array.isArray(hostSetupCheck?.readyCheckIds)
+        ? hostSetupCheck.readyCheckIds
+        : []
+    ).map((readyCheckId) => String(readyCheckId)),
+  );
+  const hostSetupProofPath = String(
+    releaseReadinessChecklist.generatedFrom?.hostSetupProof ??
+      hostSetupProofEvidence.path ??
+      hostSetupCheck?.evidence ??
+      "target/dev-test-game/host-setup-proof.json",
+  );
+  return Object.freeze({
+    id: localAdminAuditIds.hostSetupProof,
+    label: "Local host setup proof",
+    status: `${setupCommandEvidence.length} setup commands proven, ${readyCheckIds.length} ready checks covered`,
+    authority: "GlobalAdmin or GlobalMod",
+    boundary: "Local host setup role proof",
+    boundaryDetail:
+      hostSetupProofEvidence.proofBoundary ??
+      hostSetupCheck?.proofBoundary ??
+      "Local host setup role URL, setup command, and recovery proof without hosted or release claims.",
+    href: hostSetupProofPath,
+    inspectHref: adminAuditInspectHref({
+      game,
+      audit: localAdminAuditIds.hostSetupProof,
+    }),
+    checks: Object.freeze([
+      Object.freeze({
+        id: localAdminAuditIds.hostSetupProof,
+        status: localReleaseReadinessCheckStatus(hostSetupCheck),
+        dependencyGated: hostSetupCheck?.dependencyGated === true,
+        laneIds: Object.freeze(
+          Array.isArray(hostSetupCheck?.laneIds)
+            ? hostSetupCheck.laneIds.map((laneId) => String(laneId))
+            : [],
+        ),
+        requiredLaneCount: Number(hostSetupCheck?.requiredLaneCount ?? 0),
+        coveredLaneCount: Number(hostSetupCheck?.coveredLaneCount ?? 0),
+        familyCount: Number(hostSetupCheck?.familyCount ?? 0),
+        expectedLaneCount: Number(hostSetupCheck?.expectedLaneCount ?? 0),
+        expectedFamilyCount: Number(hostSetupCheck?.expectedFamilyCount ?? 0),
+      }),
+      ...readyCheckIds.map((readyCheckId) =>
+        Object.freeze({
+          id: `ready-check:${readyCheckId}`,
+          status: "covered by host setup proof",
+          dependencyGated: false,
+          laneIds: Object.freeze([]),
+          requiredLaneCount: 0,
+          coveredLaneCount: 0,
+          familyCount: 0,
+          expectedLaneCount: 0,
+          expectedFamilyCount: 0,
+        }),
+      ),
+    ]),
+    setupCommandEvidence,
+    artifactSummary: Object.freeze({
+      game: String(
+        hostSetupProofEvidence.game ??
+          releaseReadinessChecklist.generatedFrom?.game ??
+          "",
+      ),
+      hostSetupProof: hostSetupProofPath,
+      roleUrl: String(hostSetupProofEvidence.roleUrl ?? hostSetupCheck?.roleUrl ?? ""),
+      capabilityLabel: String(hostSetupProofEvidence.capabilityLabel ?? ""),
+      readyCheckCount: readyCheckIds.length,
+      setupCommandEvidenceCount: setupCommandEvidence.length,
+      policyCommandStatus: String(hostSetupProofEvidence.policyCommandStatus ?? ""),
+      setupMutationStatus: String(
+        hostSetupProofEvidence.setupMutationStatus ?? "",
+      ),
+      releaseReady: hostSetupProofEvidence.releaseReady === true,
+      productionReady: hostSetupProofEvidence.productionReady === true,
     }),
   });
 }

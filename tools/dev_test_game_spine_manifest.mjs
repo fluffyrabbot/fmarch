@@ -723,6 +723,7 @@ export function assertDevTestGameSpineManifest(manifest) {
     "tools/dev_test_game_backup_admin_proof.mjs",
     "tools/dev_test_game_ops_admin_proof.mjs",
     "tools/dev_test_game_seed_admin_proof.mjs",
+    "tools/dev_test_game_host_setup_admin_proof.mjs",
     "tools/dev_test_game_release_admin_proof.mjs",
     "tools/dev_test_game_release_runbook_admin_proof.mjs",
     "tools/dev_test_game_race_coverage_admin_proof.mjs",

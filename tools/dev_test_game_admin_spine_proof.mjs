@@ -7,6 +7,7 @@ import {
   validateDevTestGameBackupAdminProof,
   validateDevTestGameCoreLoopAdminProof,
   validateDevTestGameHardeningAdminProof,
+  validateDevTestGameHostSetupAdminProof,
   validateDevTestGameHostedConcurrentRaceMatrixAdminProof,
   validateDevTestGameHostedEvidenceLaneAdminProof,
   validateDevTestGameHostedIdentityEvidenceAdminProof,
@@ -52,6 +53,9 @@ import {
   seedAdminProofCase,
 } from "./dev_test_game_seed_admin_proof.mjs";
 import {
+  hostSetupAdminProofCase,
+} from "./dev_test_game_host_setup_admin_proof.mjs";
+import {
   releaseAdminProofCase,
 } from "./dev_test_game_release_admin_proof.mjs";
 import {
@@ -71,6 +75,7 @@ import {
   devTestGameBackupAdminProofPath,
   devTestGameCoreLoopAdminProofPath,
   devTestGameHardeningAdminProofPath,
+  devTestGameHostSetupAdminProofPath,
   devTestGameIdentityAdminProofPath,
   devTestGameOpsAdminProofPath,
   devTestGameSeedAdminProofPath,
@@ -181,6 +186,15 @@ export const devTestGameAdminSpineProofPlan = [
     path: devTestGameSeedAdminProofPath,
     validate: validateDevTestGameSeedAdminProof,
     caseFactory: seedAdminProofCase,
+  },
+  {
+    id: "host-setup",
+    label: "Host setup admin role surface",
+    script: "tools/dev_test_game_host_setup_admin_proof.mjs",
+    rerunCommand: "npm run test:dev-test-game-host-setup-admin-proof",
+    path: devTestGameHostSetupAdminProofPath,
+    validate: validateDevTestGameHostSetupAdminProof,
+    caseFactory: hostSetupAdminProofCase,
   },
   {
     id: "release",

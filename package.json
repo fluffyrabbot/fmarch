@@ -23,6 +23,7 @@
     "test:dev-test-game-ops": "node tools/dev_test_game_ops_spine.mjs",
     "test:dev-test-game-seed-admin-proof": "node tools/dev_test_game_seed_admin_proof.mjs",
     "test:dev-test-game-seed-fixture": "node tools/dev_test_game_seed_fixture_spine.mjs",
+    "test:dev-test-game-host-setup-admin-proof": "node tools/dev_test_game_host_setup_admin_proof.mjs",
     "test:dev-test-game-release-admin-proof": "node tools/dev_test_game_release_admin_proof.mjs",
     "test:dev-test-game-release-runbook": "node tools/dev_test_game_release_runbook.mjs",
     "test:dev-test-game-release-runbook-admin-proof": "node tools/dev_test_game_release_runbook_admin_proof.mjs",

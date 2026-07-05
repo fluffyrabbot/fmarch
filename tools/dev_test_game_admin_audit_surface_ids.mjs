@@ -7,6 +7,7 @@ export const localAdminAuditIds = Object.freeze({
   backupRestore: "local-backup-restore",
   opsArtifacts: "local-ops-artifacts",
   seedFixtures: "local-seed-fixtures",
+  hostSetupProof: "local-host-setup-proof",
   releaseReadiness: "local-release-readiness",
   releaseRunbook: "local-release-runbook",
   raceCoverage: "local-race-coverage",

@@ -4105,7 +4105,7 @@ test("admin route data exposes local release readiness as a native audit row", a
 
   const readiness = data.audit.find((item) => item.id === localAdminAuditIds.releaseReadiness);
   assert.equal(readiness.label, "Local release readiness");
-  assert.equal(readiness.status, "12 local checks passed, 2 release items unproven");
+  assert.equal(readiness.status, "13 local checks passed, 2 release items unproven");
   assert.equal(readiness.authority, "GlobalAdmin or GlobalMod");
   assert.equal(
     readiness.inspectHref,
@@ -4117,6 +4117,7 @@ test("admin route data exposes local release readiness as a native audit row", a
       "local-role-url-browser-proof",
       "local-core-loop-proof",
       "local-hardening-proof",
+      "local-host-setup-proof",
       "local-stale-conflict-message-milestone",
       "local-host-stale-control-milestone",
       "local-private-channel-recovery-milestone",
@@ -4169,7 +4170,7 @@ test("admin route data exposes local release readiness as a native audit row", a
   );
   assert.deepEqual(readiness.artifactSummary, {
     game: "game-a",
-    localCheckCount: 12,
+    localCheckCount: 13,
     coverageCheckCount: 6,
     coverageDriftCount: 0,
     coverageStatus: "coherent",
@@ -4191,7 +4192,7 @@ test("admin local release readiness detail data carries checks and unproven rows
   assert.equal(data.status, "available");
   assert.equal(data.surfaceHeader.title, "Local release readiness");
   assert.equal(data.audit.id, localAdminAuditIds.releaseReadiness);
-  assert.equal(data.audit.checks.length, 18);
+  assert.equal(data.audit.checks.length, 19);
   assert.deepEqual(
     data.audit.checks
       .filter((check) =>
@@ -4286,6 +4287,82 @@ test("admin local release readiness detail data carries checks and unproven rows
       "hosted-deployment",
       "human-release-runbook",
     ]).map((item) => [item.id, item.status]),
+  );
+});
+
+test("admin route data exposes local host setup proof as a native audit row", async () => {
+  const data = await buildAdminRouteData({
+    principalUserId: "admin_a",
+    capabilities: [{ kind: "GlobalAdmin" }],
+    releaseReadinessChecklist: releaseReadinessChecklistFixture(),
+  });
+
+  const hostSetup = data.audit.find(
+    (item) => item.id === localAdminAuditIds.hostSetupProof,
+  );
+  assert.equal(hostSetup.label, "Local host setup proof");
+  assert.equal(hostSetup.status, "5 setup commands proven, 1 ready checks covered");
+  assert.equal(hostSetup.authority, "GlobalAdmin or GlobalMod");
+  assert.equal(hostSetup.href, "target/dev-test-game/host-setup-proof.json");
+  assert.equal(
+    hostSetup.inspectHref,
+    localAdminAuditRoleUrl(localAdminAuditIds.hostSetupProof, {
+      game: "midsummer",
+    }),
+  );
+  assert.deepEqual(
+    hostSetup.checks.map((check) => [check.id, check.status]),
+    [
+      ["local-host-setup-proof", "passed"],
+      ["ready-check:start-phase", "covered by host setup proof"],
+    ],
+  );
+  assert.deepEqual(hostSetup.artifactSummary, {
+    game: "game-a",
+    hostSetupProof: "target/dev-test-game/host-setup-proof.json",
+    roleUrl: "http://127.0.0.1:5173/g/<seeded-game>/setup",
+    capabilityLabel: "HostOf(<seeded-game>)",
+    readyCheckCount: 1,
+    setupCommandEvidenceCount: 5,
+    policyCommandStatus: "passed",
+    setupMutationStatus: "passed",
+    releaseReady: false,
+    productionReady: false,
+  });
+});
+
+test("admin local host setup proof detail data carries setup command evidence rows", async () => {
+  const data = await buildAdminAuditDetailData({
+    audit: localAdminAuditIds.hostSetupProof,
+    principalUserId: "admin_a",
+    capabilities: [{ kind: "GlobalAdmin" }],
+    releaseReadinessChecklist: releaseReadinessChecklistFixture(),
+  });
+
+  assert.equal(data.status, "available");
+  assert.equal(data.surfaceHeader.title, "Local host setup proof");
+  assert.equal(data.audit.id, localAdminAuditIds.hostSetupProof);
+  assert.deepEqual(
+    data.audit.checks.map((check) => [check.id, check.status]),
+    [
+      ["local-host-setup-proof", "passed"],
+      ["ready-check:start-phase", "covered by host setup proof"],
+    ],
+  );
+  assert.deepEqual(
+    data.audit.setupCommandEvidence.map((item) => [
+      item.id,
+      item.status,
+      item.commandKind,
+      item.readinessSummary,
+    ]),
+    [
+      ["addSlot", "ack", "AddSlot", "Setup still needs attention"],
+      ["assignSlot", "ack", "AssignSlot", "Setup still needs attention"],
+      ["assignRole", "ack", "AssignRole", "Ready to start"],
+      ["setPostPolicy", "ack", "SetPostPolicy", "Ready to start"],
+      ["startGame", "ack", "StartGame", "Started at D01"],
+    ],
   );
 });
 
@@ -7842,6 +7919,15 @@ function releaseReadinessChecklistFixture() {
       status: "passed",
       evidence: {
         hostSetupProof: {
+          path: "target/dev-test-game/host-setup-proof.json",
+          game: "game-a",
+          roleUrl: "http://127.0.0.1:5173/g/<seeded-game>/setup",
+          capabilityLabel: "HostOf(<seeded-game>)",
+          readyCheckIds: ["start-phase"],
+          policyCommandStatus: "passed",
+          setupMutationStatus: "passed",
+          proofBoundary:
+            "Local dev-test-game host setup role URL browser proof over the seeded setup route.",
           setupCommandEvidence: setupCommandEvidenceFixture(),
         },
       },
@@ -7863,6 +7949,17 @@ function releaseReadinessChecklistFixture() {
           label: "Idempotency and stale-client handling",
           status: "passed",
           evidence: "target/dev-test-game/proof-run.json",
+        },
+        {
+          id: "local-host-setup-proof",
+          label: "Host setup role URL, policy, roster, and recovery proof",
+          status: "passed",
+          evidence: "target/dev-test-game/host-setup-proof.json",
+          roleUrl: "http://127.0.0.1:5173/g/<seeded-game>/setup",
+          recoveryCommand: "npm run dev:test-game -- --verify-host-setup-only",
+          readyCheckIds: ["start-phase"],
+          proofBoundary:
+            "Local dev-test-game host setup role URL browser proof over the seeded setup route.",
         },
         {
           id: "local-stale-conflict-message-milestone",

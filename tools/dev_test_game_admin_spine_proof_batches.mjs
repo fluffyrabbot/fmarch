@@ -20,6 +20,7 @@ import {
   devTestGameBackupAdminProofPath,
   devTestGameCoreLoopAdminProofPath,
   devTestGameHardeningAdminProofPath,
+  devTestGameHostSetupAdminProofPath,
   devTestGameIdentityAdminProofPath,
   devTestGameOpsAdminProofPath,
   devTestGameSeedAdminProofPath,
@@ -47,7 +48,7 @@ export const aggregateReleaseHostedAdminProofBatchLabel =
   "Aggregate release and hosted admin proof batch";
 
 export const aggregatePreReleaseAdminProofBatchReason =
-  "core, hardening, identity, backup, ops, and seed admin surfaces share the pre-readiness local proof inputs";
+  "core, hardening, identity, backup, ops, seed, and host setup admin surfaces share the pre-readiness local proof inputs";
 export const aggregateReleaseHostedAdminProofBatchReason =
   "release, hosted, race coverage, and manifest admin surfaces share the post-readiness rollup inputs";
 
@@ -59,6 +60,7 @@ export const adminSpineProofArtifactPathById = Object.freeze({
   backup: devTestGameBackupAdminProofPath,
   ops: devTestGameOpsAdminProofPath,
   seed: devTestGameSeedAdminProofPath,
+  "host-setup": devTestGameHostSetupAdminProofPath,
   release: devTestGameReleaseAdminProofPath,
   "release-runbook": devTestGameReleaseRunbookAdminProofPath,
   "race-coverage": devTestGameRaceCoverageAdminProofPath,
@@ -86,6 +88,7 @@ export const adminSpineProofBatchRegistry = defineAdminProofBatchRegistry(
         "backup",
         "ops",
         "seed",
+        "host-setup",
       ],
     },
     {

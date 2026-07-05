@@ -141,6 +141,7 @@ import {
   devTestGameBackupAdminProofPath,
   devTestGameCoreLoopAdminProofPath,
   devTestGameHardeningAdminProofPath,
+  devTestGameHostSetupAdminProofPath,
   devTestGameIdentityAdminProofPath,
   devTestGameOpsAdminProofPath,
   devTestGameSeedAdminProofPath,
@@ -4893,6 +4894,61 @@ export function validateDevTestGameSeedAdminProof(proof, options = {}) {
   };
 }
 
+export function validateDevTestGameHostSetupAdminProof(proof, options = {}) {
+  const requiredChecks = ["local-host-setup-proof"];
+  const requiredSetupCommandEvidence = setupCommandEvidenceKeys;
+  if (proof?.version !== 1) {
+    throw new Error(`host setup admin proof version drifted: ${proof?.version}`);
+  }
+  if (proof.proof !== "dev-test-game-host-setup-admin-proof") {
+    throw new Error(`unexpected host setup admin proof id: ${proof.proof}`);
+  }
+  if (proof.status !== "passed") {
+    throw new Error(`host setup admin proof status is ${proof.status}`);
+  }
+  if (proof.scope !== "local-dev-test-game-host-setup-admin-surface") {
+    throw new Error(`host setup admin proof scope drifted: ${proof.scope}`);
+  }
+  if (proof.productionReady !== false || proof.releaseReady !== false) {
+    throw new Error(
+      "host setup admin proof must not claim production or release readiness",
+    );
+  }
+  if (
+    proof.adminRoleSurface?.clickedThroughFromOverview !== true ||
+    proof.adminRoleSurface?.rawInviteTokensVisible !== false
+  ) {
+    throw new Error(
+      "host setup admin proof did not prove admin overview click-through",
+    );
+  }
+  for (const checkId of proof.generatedFrom?.checkIds ?? requiredChecks) {
+    if (!proof.adminRoleSurface?.visibleChecks?.includes(checkId)) {
+      throw new Error(`host setup admin proof missing visible check: ${checkId}`);
+    }
+  }
+  for (const commandId of
+    proof.generatedFrom?.setupCommandEvidenceIds ??
+    requiredSetupCommandEvidence) {
+    if (!proof.adminRoleSurface?.visibleSetupCommandEvidence?.includes(commandId)) {
+      throw new Error(
+        `host setup admin proof missing setup command evidence: ${commandId}`,
+      );
+    }
+  }
+  return {
+    status: "passed",
+    path: options.path ?? devTestGameHostSetupAdminProofPath,
+    proofBoundary: proof.proofBoundary,
+    overviewRoleUrl: proof.adminRoleSurface.overviewRoleUrl,
+    detailRoleUrl: proof.adminRoleSurface.detailRoleUrl,
+    visibleChecks: proof.adminRoleSurface.visibleChecks,
+    visibleSetupCommandEvidence:
+      proof.adminRoleSurface.visibleSetupCommandEvidence,
+    ...(options.artifact === undefined ? {} : { artifact: options.artifact }),
+  };
+}
+
 export function validateDevTestGameIdentityAdapterProof(proof, options = {}) {
   const requiredRoles = new Map([
     ["admin", "GlobalAdmin"],
@@ -6883,6 +6939,7 @@ export function validateDevTestGameAdminSpineAdminProof(proof, options = {}) {
     "backup",
     "ops",
     "seed",
+    "host-setup",
     "release",
     "release-runbook",
     "race-coverage",
