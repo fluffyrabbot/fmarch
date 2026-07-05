@@ -26,6 +26,11 @@ import {
   localAdminAuditIds,
 } from "./dev_test_game_admin_audit_surface_ids.mjs";
 import {
+  cohostFeatureSpineSourceCheckId,
+  cohostFeatureSpineTargetRows,
+  devTestGameCohostConsoleProofCommand,
+} from "./dev_test_game_cohost_feature_spine_targets.mjs";
+import {
   devTestGameHostSetupProofCommand,
   hostSetupFeatureSpineSourceCheckId,
   hostSetupFeatureSpineTargetRows,
@@ -158,6 +163,7 @@ export function proofGraphAdminProofCase() {
         hostSetupFeatureTarget: proofGraphHostSetupFeatureTarget(
           source.proofGraph,
         ),
+        cohostFeatureTarget: proofGraphCohostFeatureTarget(source.proofGraph),
       },
       adminRoleSurface,
     }),
@@ -222,27 +228,68 @@ export function assertProofGraphAdminProof(evidence) {
     proofName: "proof graph admin proof",
   });
   assertProofGraphAdminProofCoversHostSetupFeatureTarget(evidence);
+  assertProofGraphAdminProofCoversCohostFeatureTarget(evidence);
   return evidence;
 }
 
 function assertProofGraphAdminProofCoversHostSetupFeatureTarget(evidence) {
-  const target = evidence.generatedFrom?.hostSetupFeatureTarget;
-  const expectedFeatureSlotId =
-    hostSetupFeatureSpineTargetRows.hostSetupRoute.featureSlotId;
+  assertProofGraphAdminProofCoversFeatureTarget(evidence, {
+    target: evidence.generatedFrom?.hostSetupFeatureTarget,
+    expectedRoleSurfaceNodeId: "role-surface:host-setup",
+    expectedFeatureSlotId:
+      hostSetupFeatureSpineTargetRows.hostSetupRoute.featureSlotId,
+    expectedSourceCheckId: hostSetupFeatureSpineSourceCheckId,
+    expectedRoleUrlIncludes: "/g/<seeded-game>/setup",
+    expectedCheckpointId: "start-phase",
+    expectedAdminCheckId: "start-phase",
+    expectedRecoveryCommand: devTestGameHostSetupProofCommand,
+    label: "host setup",
+  });
+}
+
+function assertProofGraphAdminProofCoversCohostFeatureTarget(evidence) {
+  assertProofGraphAdminProofCoversFeatureTarget(evidence, {
+    target: evidence.generatedFrom?.cohostFeatureTarget,
+    expectedRoleSurfaceNodeId: "role-surface:cohost-console",
+    expectedFeatureSlotId:
+      cohostFeatureSpineTargetRows.cohostConsole.featureSlotId,
+    expectedSourceCheckId: cohostFeatureSpineSourceCheckId,
+    expectedRoleUrlIncludes: "/g/<seeded-game>/host",
+    expectedCheckpointId: "extend-deadline-ack",
+    expectedAdminCheckId: "cohost-console",
+    expectedRecoveryCommand: devTestGameCohostConsoleProofCommand,
+    label: "cohost console",
+  });
+}
+
+function assertProofGraphAdminProofCoversFeatureTarget(
+  evidence,
+  {
+    target,
+    expectedRoleSurfaceNodeId,
+    expectedFeatureSlotId,
+    expectedSourceCheckId,
+    expectedRoleUrlIncludes,
+    expectedCheckpointId,
+    expectedAdminCheckId,
+    expectedRecoveryCommand,
+    label,
+  },
+) {
   if (
-    target?.roleSurfaceNodeId !== "role-surface:host-setup" ||
+    target?.roleSurfaceNodeId !== expectedRoleSurfaceNodeId ||
     target.productionFeatureNodeId !==
       `production-feature:${expectedFeatureSlotId}` ||
-    target.sourceCheckId !== hostSetupFeatureSpineSourceCheckId ||
+    target.sourceCheckId !== expectedSourceCheckId ||
     target.featureSlotId !== expectedFeatureSlotId ||
-    !target.roleUrl?.includes("/g/<seeded-game>/setup") ||
+    !target.roleUrl?.includes(expectedRoleUrlIncludes) ||
     target.targetRoleUrl !== target.roleUrl ||
-    target.checkpointId !== "start-phase" ||
-    target.adminCheckId !== "start-phase" ||
+    target.checkpointId !== expectedCheckpointId ||
+    target.adminCheckId !== expectedAdminCheckId ||
     !target.browserProofCommand?.includes("test:dev-test-game-core-live") ||
-    target.recoveryCommand !== devTestGameHostSetupProofCommand
+    target.recoveryCommand !== expectedRecoveryCommand
   ) {
-    throw new Error("proof graph admin proof missing host setup feature target");
+    throw new Error(`proof graph admin proof missing ${label} feature target`);
   }
   for (const rowId of [
     target.roleSurfaceNodeId,
@@ -250,7 +297,7 @@ function assertProofGraphAdminProofCoversHostSetupFeatureTarget(evidence) {
     target.edgeRowId,
   ]) {
     if (!evidence.adminRoleSurface?.visibleChecks?.includes(rowId)) {
-      throw new Error(`proof graph admin proof missing host setup row: ${rowId}`);
+      throw new Error(`proof graph admin proof missing ${label} row: ${rowId}`);
     }
   }
   for (const linkId of [
@@ -259,7 +306,7 @@ function assertProofGraphAdminProofCoversHostSetupFeatureTarget(evidence) {
   ]) {
     if (!evidence.adminRoleSurface?.visibleRelatedLinks?.includes(linkId)) {
       throw new Error(
-        `proof graph admin proof missing host setup related link: ${linkId}`,
+        `proof graph admin proof missing ${label} related link: ${linkId}`,
       );
     }
   }
@@ -289,17 +336,36 @@ function proofGraphEvidenceObjectRowIds(proofGraph) {
 }
 
 function proofGraphHostSetupFeatureTarget(proofGraph) {
-  const expectedFeatureSlotId =
-    hostSetupFeatureSpineTargetRows.hostSetupRoute.featureSlotId;
+  return proofGraphFeatureTarget(proofGraph, {
+    roleSurfaceNodeId: "role-surface:host-setup",
+    expectedFeatureSlotId:
+      hostSetupFeatureSpineTargetRows.hostSetupRoute.featureSlotId,
+    label: "host setup",
+  });
+}
+
+function proofGraphCohostFeatureTarget(proofGraph) {
+  return proofGraphFeatureTarget(proofGraph, {
+    roleSurfaceNodeId: "role-surface:cohost-console",
+    expectedFeatureSlotId:
+      cohostFeatureSpineTargetRows.cohostConsole.featureSlotId,
+    label: "cohost console",
+  });
+}
+
+function proofGraphFeatureTarget(
+  proofGraph,
+  { roleSurfaceNodeId, expectedFeatureSlotId, label },
+) {
   const roleSurfaceNode = proofGraph.nodes.find(
-    (node) => node.id === "role-surface:host-setup",
+    (node) => node.id === roleSurfaceNodeId,
   );
   const productionFeatureNode = proofGraph.nodes.find(
     (node) => node.id === `production-feature:${expectedFeatureSlotId}`,
   );
   const edge = proofGraph.edges.find(
     (candidate) =>
-      candidate.from === "role-surface:host-setup" &&
+      candidate.from === roleSurfaceNodeId &&
       candidate.to === `production-feature:${expectedFeatureSlotId}` &&
       candidate.relationship === "proves-production-feature",
   );
@@ -308,7 +374,7 @@ function proofGraphHostSetupFeatureTarget(proofGraph) {
     productionFeatureNode === undefined ||
     edge === undefined
   ) {
-    throw new Error("proof graph missing host setup feature target");
+    throw new Error(`proof graph missing ${label} feature target`);
   }
   return {
     roleSurfaceNodeId: roleSurfaceNode.id,

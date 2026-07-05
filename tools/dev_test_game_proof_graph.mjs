@@ -40,6 +40,9 @@ import {
   hostSetupFeatureSpineSourceCheckId,
 } from "./dev_test_game_host_setup_feature_spine_targets.mjs";
 import {
+  cohostFeatureSpineSourceCheckId,
+} from "./dev_test_game_cohost_feature_spine_targets.mjs";
+import {
   localAdminAuditIds,
   localAdminAuditRoleUrl,
 } from "./dev_test_game_admin_audit_surface_ids.mjs";
@@ -1035,13 +1038,18 @@ function buildRoleSurfaceProofNodes({ releaseReadiness }) {
 
 function roleSurfaceProofChecksForGraph(releaseReadiness) {
   return (releaseReadiness.localDevelopmentSpine?.checks ?? []).filter(
-    (check) => check.id === "local-host-setup-proof",
+    (check) =>
+      check.id === "local-host-setup-proof" ||
+      check.id === cohostFeatureSpineSourceCheckId,
   );
 }
 
 function roleSurfaceProofGraphNodeId(check) {
   if (check.id === "local-host-setup-proof") {
     return "role-surface:host-setup";
+  }
+  if (check.id === cohostFeatureSpineSourceCheckId) {
+    return "role-surface:cohost-console";
   }
   throw new Error(`unknown proof graph role-surface check: ${check.id}`);
 }
@@ -1074,15 +1082,20 @@ function productionFeatureTargetsForGraph(releaseReadiness) {
   const hostSetupTargets = hostSetupProductionFeatureTargetCollection(
     releaseReadiness,
   );
+  const cohostTargets = cohostProductionFeatureTargetCollection(
+    releaseReadiness,
+  );
   const hardeningTargets = hardeningProductionFeatureTargetCollection(
     releaseReadiness,
   );
   const targetsBySlotId = new Map(
-    [coreLoopTargets, hostSetupTargets, hardeningTargets].flatMap((targets) =>
-      targets.slotIds.map((slotId) => [
-        slotId,
-        targets.bySlotId[slotId],
-      ]),
+    [
+      coreLoopTargets,
+      hostSetupTargets,
+      cohostTargets,
+      hardeningTargets,
+    ].flatMap((targets) =>
+      targets.slotIds.map((slotId) => [slotId, targets.bySlotId[slotId]]),
     ),
   );
   for (const item of productionFacingSurfaceChecklistItems()) {
@@ -1144,6 +1157,22 @@ function hostSetupProductionFeatureTargetCollection(releaseReadiness) {
     typeof targets.bySlotId !== "object"
   ) {
     return { status: "passed", slotIds: [], bySlotId: {} };
+  }
+  return targets;
+}
+
+function cohostProductionFeatureTargetCollection(releaseReadiness) {
+  const cohostCheck = releaseReadiness.localDevelopmentSpine?.checks?.find(
+    (check) => check.id === cohostFeatureSpineSourceCheckId,
+  );
+  const targets = cohostCheck?.spineTargets?.productionFeatureTargets;
+  if (
+    targets?.status !== "passed" ||
+    !Array.isArray(targets.slotIds) ||
+    targets.bySlotId === null ||
+    typeof targets.bySlotId !== "object"
+  ) {
+    throw new Error("proof graph missing cohost production feature targets");
   }
   return targets;
 }

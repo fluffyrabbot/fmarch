@@ -305,6 +305,11 @@ import {
   hostSetupFeatureSpineTargetRows,
 } from "./dev_test_game_host_setup_feature_spine_targets.mjs";
 import {
+  cohostFeatureSpineCycleId,
+  cohostFeatureSpineTargetRows,
+  devTestGameCohostConsoleProofCommand,
+} from "./dev_test_game_cohost_feature_spine_targets.mjs";
+import {
   assertDevTestGameHostedMatrixExternalEvidence,
   buildDevTestGameHostedMatrixExternalEvidence,
   devTestGameHostedMatrixExternalEvidenceCommand,
@@ -3257,10 +3262,10 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
     graph,
     releaseReadiness,
   );
-  assert.equal(graph.summary.nodeCount, 60);
-  assert.equal(graph.summary.roleUrlCount, 60);
-  assert.equal(graph.summary.roleSurfaceProofCount, 1);
-  assert.equal(graph.summary.productionFeatureTargetCount, 33);
+  assert.equal(graph.summary.nodeCount, 62);
+  assert.equal(graph.summary.roleUrlCount, 62);
+  assert.equal(graph.summary.roleSurfaceProofCount, 2);
+  assert.equal(graph.summary.productionFeatureTargetCount, 34);
   assert.equal(graph.summary.terminalBatchCount, 2);
   for (const descriptor of recoveryReceiptGraphDescriptors) {
     assert.equal(
@@ -3379,6 +3384,13 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
         "http://127.0.0.1:5173/g/<seeded-game>/setup",
         "npm run dev:test-game -- --verify-host-setup-only",
       ],
+      [
+        "role-surface:cohost-console",
+        "local-cohost-console-proof",
+        "target/dev-test-game/proof-run.json",
+        "http://127.0.0.1:5173/g/<seeded-game>/host",
+        "npm run test:dev-test-game-core-live",
+      ],
     ],
   );
   assert(
@@ -3404,10 +3416,15 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
     releaseReadiness.localDevelopmentSpine.checks.find(
       (check) => check.id === "local-host-setup-proof",
     ).spineTargets.productionFeatureTargets;
+  const cohostProductionFeatureTargets =
+    releaseReadiness.localDevelopmentSpine.checks.find(
+      (check) => check.id === "local-cohost-console-proof",
+    ).spineTargets.productionFeatureTargets;
   const expectedProductionFeatureRows = [
     ...[
       coreLoopProductionFeatureTargets,
       hostSetupProductionFeatureTargets,
+      cohostProductionFeatureTargets,
       hardeningProductionFeatureTargets,
     ]
       .flatMap((productionFeatureTargets) =>
@@ -10821,6 +10838,31 @@ test("session card and markdown include role credential URLs and tokens", async 
       hostSetupSpineTargetsFixture(),
     ],
   );
+  const cohostCheck = hostSetupReadiness.localDevelopmentSpine.checks.find(
+    (item) => item.id === "local-cohost-console-proof",
+  );
+  assert.deepEqual(
+    [
+      cohostCheck.roleUrl,
+      cohostCheck.capabilityLabel,
+      cohostCheck.extendDeadlineState,
+      cohostCheck.hostOnlyRejectError,
+      cohostCheck.phaseAfterRejectId,
+      cohostCheck.phaseAfterRejectLocked,
+      cohostCheck.recoveryCommand,
+      cohostCheck.spineTargets,
+    ],
+    [
+      cohostCheck.roleUrl,
+      "CohostOf(<seeded-game>)",
+      "ack",
+      "NotHost",
+      "D01",
+      false,
+      "npm run test:dev-test-game-core-live",
+      cohostSpineTargetsFixture({ roleUrl: cohostCheck.roleUrl }),
+    ],
+  );
   assert(hostSetupReadiness.releaseReadiness.reason.includes("local host setup proof"));
   const raceCoverageReadiness = buildDevTestGameReleaseReadiness(proofRun, {
     generatedAt: "2026-06-26T00:00:00.000Z",
@@ -12313,6 +12355,24 @@ function devTestGameReleaseReadinessChecklistFixture({
               },
             ]
           : []),
+        {
+          id: "local-cohost-console-proof",
+          label: "Cohost role URL delegated host-console proof",
+          status: "passed",
+          evidence: "target/dev-test-game/proof-run.json",
+          roleUrl: "http://127.0.0.1:5173/g/<seeded-game>/host",
+          proofBoundary:
+            "Seeded dev-test-game cohost role URL proof from proof-run. Proves delegated deadline control and NotHost rejection for host-only resolve; does not prove hosted identity, multi-node races, release readiness, or production readiness.",
+          capabilityLabel: "CohostOf(<seeded-game>)",
+          extendDeadlineState: "ack",
+          extendDeadlinePrincipal: "cohost_c",
+          hostOnlyRejectError: "NotHost",
+          hostOnlyRejectPrincipal: "cohost_c",
+          phaseAfterRejectId: "D01",
+          phaseAfterRejectLocked: false,
+          recoveryCommand: "npm run test:dev-test-game-core-live",
+          spineTargets: cohostSpineTargetsFixture(),
+        },
         {
           id: "local-core-loop-proof",
           label:
@@ -15499,6 +15559,47 @@ function hostSetupProductionFeatureTargetsFixture(roleUrlHrefs) {
   };
 }
 
+function cohostSpineTargetsFixture({
+  roleUrl = "http://127.0.0.1:5173/g/<seeded-game>/host",
+} = {}) {
+  const roleUrlHrefs = {
+    "cohost-console": roleUrl,
+  };
+  return {
+    status: "passed",
+    detailRoleUrl: roleUrlHrefs["cohost-console"],
+    defaultCycleId: cohostFeatureSpineCycleId,
+    defaultRoleUrlId: "cohost-console",
+    defaultRoleUrl: roleUrlHrefs["cohost-console"],
+    defaultCheckpointId: "extend-deadline-ack",
+    browserProofCommand: devTestGameLiveProofCommand,
+    cycleIds: [cohostFeatureSpineCycleId],
+    roleUrlIds: ["cohost-console"],
+    checkpointIds: ["extend-deadline-ack"],
+    recoveryHookIds: [],
+    visibleAdminCheckIds: ["cohost-console"],
+    roleUrlHrefs,
+    productionFeatureTargets:
+      cohostProductionFeatureTargetsFixture(roleUrlHrefs),
+  };
+}
+
+function cohostProductionFeatureTargetsFixture(roleUrlHrefs) {
+  const slotIds = Object.values(cohostFeatureSpineTargetRows).map(
+    (row) => row.featureSlotId,
+  );
+  return {
+    status: "passed",
+    slotIds,
+    bySlotId: Object.fromEntries(
+      slotIds.map((slotId) => [
+        slotId,
+        featureSpineCaseFixture(slotId, { roleUrlHrefs }).spineTarget,
+      ]),
+    ),
+  };
+}
+
 function hardeningSpineTargetsFixture({
   roleUrlHrefs = hardeningRoleUrlHrefsFixture(),
 } = {}) {
@@ -15661,6 +15762,20 @@ function featureSpineCaseFixture(
         roleUrlHrefs ?? hostSetupSpineTargetsFixture().roleUrlHrefs,
       browserProofCommand: devTestGameLiveProofCommand,
       rerunCommand: devTestGameHostSetupProofCommand,
+      includeTargetRerunCommand: true,
+    });
+  }
+  if (slotId === "cohost-console") {
+    const cohostRoleUrl =
+      roleUrlHrefs?.["cohost-console"] ??
+      cohostSpineTargetsFixture().roleUrlHrefs["cohost-console"];
+    return featureSpineFixture({
+      slotId,
+      detailRoleUrl: cohostRoleUrl,
+      roleUrlsById:
+        roleUrlHrefs ?? cohostSpineTargetsFixture().roleUrlHrefs,
+      browserProofCommand: devTestGameLiveProofCommand,
+      rerunCommand: devTestGameCohostConsoleProofCommand,
       includeTargetRerunCommand: true,
     });
   }
@@ -16202,6 +16317,7 @@ function proofGraphAdminProofFixture() {
     handoff.linkId.replace("admin-proof:", ""),
   );
   const hostSetupGraphTarget = proofGraphHostSetupFeatureTargetFixture();
+  const cohostGraphTarget = proofGraphCohostFeatureTargetFixture();
   const evidenceObjectRowIds = [
     ...expectedNormalizedEvidenceObjectRowIds({
       parentId: "private-channel-recovery-receipt",
@@ -16231,13 +16347,16 @@ function proofGraphAdminProofFixture() {
         ...handoffs.map((handoff) => handoff.linkId),
         hostSetupGraphTarget.roleSurfaceNodeId,
         hostSetupGraphTarget.productionFeatureNodeId,
+        cohostGraphTarget.roleSurfaceNodeId,
+        cohostGraphTarget.productionFeatureNodeId,
       ],
       evidenceObjectRowIds,
-      edgeRowIds: [hostSetupGraphTarget.edgeRowId],
-      edgeCount: handoffs.length + 1,
+      edgeRowIds: [hostSetupGraphTarget.edgeRowId, cohostGraphTarget.edgeRowId],
+      edgeCount: handoffs.length + 2,
       adminProofSurfaceIds,
       adminProofRoleHandoffs: handoffs,
       hostSetupFeatureTarget: hostSetupGraphTarget,
+      cohostFeatureTarget: cohostGraphTarget,
     },
     adminRoleSurface: {
       status: "passed",
@@ -16251,12 +16370,17 @@ function proofGraphAdminProofFixture() {
         hostSetupGraphTarget.roleSurfaceNodeId,
         hostSetupGraphTarget.productionFeatureNodeId,
         hostSetupGraphTarget.edgeRowId,
+        cohostGraphTarget.roleSurfaceNodeId,
+        cohostGraphTarget.productionFeatureNodeId,
+        cohostGraphTarget.edgeRowId,
         ...evidenceObjectRowIds,
       ],
       visibleRelatedLinks: [
         ...handoffs.map((handoff) => handoff.linkId),
         hostSetupGraphTarget.roleSurfaceNodeId,
         hostSetupGraphTarget.productionFeatureNodeId,
+        cohostGraphTarget.roleSurfaceNodeId,
+        cohostGraphTarget.productionFeatureNodeId,
       ],
       visibleRelatedDestinations: handoffs.map((handoff) => ({
         linkId: handoff.linkId,
@@ -16291,6 +16415,23 @@ function proofGraphHostSetupFeatureTargetFixture() {
     adminCheckId: "start-phase",
     browserProofCommand: devTestGameLiveProofCommand,
     recoveryCommand: devTestGameHostSetupProofCommand,
+  };
+}
+
+function proofGraphCohostFeatureTargetFixture() {
+  return {
+    roleSurfaceNodeId: "role-surface:cohost-console",
+    productionFeatureNodeId: "production-feature:cohost-console",
+    edgeRowId:
+      "edge:role-surface:cohost-console:proves-production-feature:production-feature:cohost-console",
+    sourceCheckId: "local-cohost-console-proof",
+    featureSlotId: "cohost-console",
+    roleUrl: "http://127.0.0.1:5173/g/<seeded-game>/host",
+    targetRoleUrl: "http://127.0.0.1:5173/g/<seeded-game>/host",
+    checkpointId: "extend-deadline-ack",
+    adminCheckId: "cohost-console",
+    browserProofCommand: devTestGameLiveProofCommand,
+    recoveryCommand: devTestGameCohostConsoleProofCommand,
   };
 }
 

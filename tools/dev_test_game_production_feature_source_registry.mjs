@@ -14,6 +14,10 @@ import {
   devTestGameHostSetupProofCommand,
   hostSetupFeatureSpineSource,
 } from "./dev_test_game_host_setup_feature_spine_targets.mjs";
+import {
+  cohostFeatureSpineSource,
+  devTestGameCohostConsoleProofCommand,
+} from "./dev_test_game_cohost_feature_spine_targets.mjs";
 
 export const productionFeatureReadinessSourceKind = Object.freeze({
   spineTargets: "spine-targets",
@@ -24,6 +28,7 @@ export const devTestGameProductionFeatureBrowserProofCommand =
   "DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch npm run test:dev-test-game-core-live";
 export {
   devTestGameCoreLoopAdminProofCommand,
+  devTestGameCohostConsoleProofCommand,
   devTestGameHardeningAdminProofCommand,
   devTestGameHostSetupProofCommand,
   devTestGameIdentityAdminProofCommand,
@@ -32,6 +37,7 @@ export {
 export const productionFeatureSourceRegistry = Object.freeze([
   coreLoopFeatureSpineSource,
   hostSetupFeatureSpineSource,
+  cohostFeatureSpineSource,
   hardeningFeatureSpineSource,
   identityFeatureSpineSource,
 ]);

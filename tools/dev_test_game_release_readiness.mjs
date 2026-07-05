@@ -102,6 +102,7 @@ import {
 } from "./dev_test_game_production_feature_spine_resolver.mjs";
 import {
   defaultProductionFeatureSpineRerunCommands,
+  devTestGameCohostConsoleProofCommand,
   devTestGameCoreLoopAdminProofCommand,
   devTestGameHardeningAdminProofCommand,
   devTestGameHostSetupProofCommand,
@@ -117,6 +118,10 @@ import {
 import {
   identityFeatureSpineSourceCheckId,
 } from "./dev_test_game_identity_feature_spine_targets.mjs";
+import {
+  cohostFeatureSpineCycleId,
+  cohostFeatureSpineSourceCheckId,
+} from "./dev_test_game_cohost_feature_spine_targets.mjs";
 import {
   hostSetupFeatureSpineCycleId,
   hostSetupFeatureSpineSourceCheckId,
@@ -406,6 +411,9 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
         artifact: options.hostSetupProofArtifact,
       })
     : undefined;
+  const cohostConsoleProofEvidence = validateCohostConsoleLaneProof(proof, {
+    path: sourcePath,
+  });
   const backupRestoreEvidence = options.backupRestoreProof
     ? validateDevTestGameBackupRestoreProof(options.backupRestoreProof, {
         proofPath:
@@ -686,6 +694,27 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
             ),
           },
         ]),
+    {
+      id: cohostFeatureSpineSourceCheckId,
+      label: "Cohost role URL delegated host-console proof",
+      status: "passed",
+      evidence: cohostConsoleProofEvidence.path,
+      roleUrl: cohostConsoleProofEvidence.roleUrl,
+      proofBoundary:
+        "Seeded dev-test-game cohost role URL proof from proof-run. Proves delegated deadline control and NotHost rejection for host-only resolve; does not prove hosted identity, multi-node races, release readiness, or production readiness.",
+      capabilityLabel: cohostConsoleProofEvidence.capabilityLabel,
+      extendDeadlineState: cohostConsoleProofEvidence.extendDeadlineState,
+      extendDeadlinePrincipal:
+        cohostConsoleProofEvidence.extendDeadlinePrincipal,
+      hostOnlyRejectError: cohostConsoleProofEvidence.hostOnlyRejectError,
+      hostOnlyRejectPrincipal:
+        cohostConsoleProofEvidence.hostOnlyRejectPrincipal,
+      phaseAfterRejectId: cohostConsoleProofEvidence.phaseAfterRejectId,
+      phaseAfterRejectLocked:
+        cohostConsoleProofEvidence.phaseAfterRejectLocked,
+      recoveryCommand: devTestGameCohostConsoleProofCommand,
+      spineTargets: buildCohostReadinessSpineTargets(cohostConsoleProofEvidence),
+    },
     {
       id: coreLoopFeatureSpineSourceCheckId,
       label: "Host controls, replacement, player actions, private channels, and day/night loop",
@@ -2377,6 +2406,45 @@ export function validateDevTestGameHostSetupProof(proof, options = {}) {
   };
 }
 
+function validateCohostConsoleLaneProof(proof, options = {}) {
+  const lane = proof?.lanes?.find((item) => item.id === "cohost-console");
+  const game = proof?.session?.game;
+  const frontendBaseUrl = String(proof?.session?.frontendBaseUrl ?? "").replace(
+    /\/$/,
+    "",
+  );
+  const evidence = lane?.evidence ?? {};
+  if (
+    lane?.status !== "passed" ||
+    typeof game !== "string" ||
+    game.trim() === "" ||
+    frontendBaseUrl === "" ||
+    evidence.capabilityLabel !== `CohostOf(${game})` ||
+    evidence.extendDeadlineState !== "ack" ||
+    evidence.extendDeadlinePrincipal !== "cohost_c" ||
+    evidence.hostOnlyControlsVisible !== false ||
+    evidence.hostOnlyRejectError !== "NotHost" ||
+    evidence.hostOnlyRejectPrincipal !== "cohost_c" ||
+    evidence.phaseAfterReject?.id !== "D01" ||
+    evidence.phaseAfterReject?.locked !== false
+  ) {
+    throw new Error("dev-test-game proof run missing cohost console lane proof");
+  }
+  return {
+    status: lane.status,
+    path: options.path ?? "target/dev-test-game/proof-run.json",
+    game,
+    roleUrl: `${frontendBaseUrl}/g/<seeded-game>/host`,
+    capabilityLabel: evidence.capabilityLabel.replace(game, "<seeded-game>"),
+    extendDeadlineState: evidence.extendDeadlineState,
+    extendDeadlinePrincipal: evidence.extendDeadlinePrincipal,
+    hostOnlyRejectError: evidence.hostOnlyRejectError,
+    hostOnlyRejectPrincipal: evidence.hostOnlyRejectPrincipal,
+    phaseAfterRejectId: evidence.phaseAfterReject.id,
+    phaseAfterRejectLocked: evidence.phaseAfterReject.locked,
+  };
+}
+
 function assertCoreLoopHostLifecycleCheckpoint(hostRoleSurface) {
   const scenarioFamily = coreLoopHostControlScenarioFamily();
   assertHostLifecycleControlRoleSurfaceCase({
@@ -3023,6 +3091,48 @@ function buildHostSetupReadinessSpineTargets(hostSetupProofEvidence) {
         roleUrlIds,
         checkpointIds,
         visibleAdminCheckIds: [...hostSetupProofEvidence.readyCheckIds],
+        recoveryHookIds: [],
+        roleUrlHrefs,
+      },
+      defaultRerunCommandBySourceCheckId:
+        defaultProductionFeatureSpineRerunCommands,
+    }),
+  };
+}
+
+function buildCohostReadinessSpineTargets(cohostConsoleProofEvidence) {
+  const cycleIds = [cohostFeatureSpineCycleId];
+  const roleUrlIds = ["cohost-console"];
+  const checkpointIds = ["extend-deadline-ack"];
+  const visibleAdminCheckIds = ["cohost-console"];
+  const roleUrlHrefs = {
+    "cohost-console": cohostConsoleProofEvidence.roleUrl,
+  };
+  return {
+    status: "passed",
+    detailRoleUrl: cohostConsoleProofEvidence.roleUrl,
+    defaultCycleId: cohostFeatureSpineCycleId,
+    defaultRoleUrlId: "cohost-console",
+    defaultRoleUrl: cohostConsoleProofEvidence.roleUrl,
+    defaultCheckpointId: "extend-deadline-ack",
+    browserProofCommand: devTestGameSeededBrowserProofCommand,
+    cycleIds,
+    roleUrlIds,
+    checkpointIds,
+    visibleAdminCheckIds,
+    recoveryHookIds: [],
+    roleUrlHrefs,
+    productionFeatureTargets: buildProductionFeatureSpineTargetCollection({
+      declarations: releaseReadinessProductionFeatureSpineTargets,
+      sourceTarget: {
+        sourceCheckId: cohostFeatureSpineSourceCheckId,
+        detailRoleUrl: cohostConsoleProofEvidence.roleUrl,
+        browserProofCommand: devTestGameSeededBrowserProofCommand,
+        rerunCommand: devTestGameCohostConsoleProofCommand,
+        cycleIds,
+        roleUrlIds,
+        checkpointIds,
+        visibleAdminCheckIds,
         recoveryHookIds: [],
         roleUrlHrefs,
       },
@@ -4549,6 +4659,7 @@ export function validateDevTestGameProofGraphAdminProof(proof, options = {}) {
     }
   }
   validateProofGraphAdminHostSetupFeatureTarget(proof);
+  validateProofGraphAdminCohostFeatureTarget(proof);
   const destinationAuditIds = [
     ...new Set(handoffs.map((handoff) => String(handoff.auditId))),
   ];
@@ -4569,23 +4680,62 @@ export function validateDevTestGameProofGraphAdminProof(proof, options = {}) {
 }
 
 function validateProofGraphAdminHostSetupFeatureTarget(proof) {
-  const target = proof.generatedFrom?.hostSetupFeatureTarget;
-  const expectedFeatureSlotId =
-    hostSetupFeatureSpineTargetRows.hostSetupRoute.featureSlotId;
+  validateProofGraphAdminFeatureTarget(proof, {
+    target: proof.generatedFrom?.hostSetupFeatureTarget,
+    expectedRoleSurfaceNodeId: "role-surface:host-setup",
+    expectedFeatureSlotId:
+      hostSetupFeatureSpineTargetRows.hostSetupRoute.featureSlotId,
+    expectedSourceCheckId: hostSetupFeatureSpineSourceCheckId,
+    expectedRoleUrlIncludes: "/g/<seeded-game>/setup",
+    expectedCheckpointId: "start-phase",
+    expectedAdminCheckId: "start-phase",
+    expectedRecoveryCommand: devTestGameHostSetupProofCommand,
+    label: "host setup",
+  });
+}
+
+function validateProofGraphAdminCohostFeatureTarget(proof) {
+  validateProofGraphAdminFeatureTarget(proof, {
+    target: proof.generatedFrom?.cohostFeatureTarget,
+    expectedRoleSurfaceNodeId: "role-surface:cohost-console",
+    expectedFeatureSlotId: "cohost-console",
+    expectedSourceCheckId: cohostFeatureSpineSourceCheckId,
+    expectedRoleUrlIncludes: "/g/<seeded-game>/host",
+    expectedCheckpointId: "extend-deadline-ack",
+    expectedAdminCheckId: "cohost-console",
+    expectedRecoveryCommand: devTestGameCohostConsoleProofCommand,
+    label: "cohost console",
+  });
+}
+
+function validateProofGraphAdminFeatureTarget(
+  proof,
+  {
+    target,
+    expectedRoleSurfaceNodeId,
+    expectedFeatureSlotId,
+    expectedSourceCheckId,
+    expectedRoleUrlIncludes,
+    expectedCheckpointId,
+    expectedAdminCheckId,
+    expectedRecoveryCommand,
+    label,
+  },
+) {
   if (
-    target?.roleSurfaceNodeId !== "role-surface:host-setup" ||
+    target?.roleSurfaceNodeId !== expectedRoleSurfaceNodeId ||
     target.productionFeatureNodeId !==
       `production-feature:${expectedFeatureSlotId}` ||
-    target.sourceCheckId !== hostSetupFeatureSpineSourceCheckId ||
+    target.sourceCheckId !== expectedSourceCheckId ||
     target.featureSlotId !== expectedFeatureSlotId ||
-    !target.roleUrl?.includes("/g/<seeded-game>/setup") ||
+    !target.roleUrl?.includes(expectedRoleUrlIncludes) ||
     target.targetRoleUrl !== target.roleUrl ||
-    target.checkpointId !== "start-phase" ||
-    target.adminCheckId !== "start-phase" ||
+    target.checkpointId !== expectedCheckpointId ||
+    target.adminCheckId !== expectedAdminCheckId ||
     !target.browserProofCommand?.includes("test:dev-test-game-core-live") ||
-    target.recoveryCommand !== devTestGameHostSetupProofCommand
+    target.recoveryCommand !== expectedRecoveryCommand
   ) {
-    throw new Error("proof graph admin proof missing host setup feature target");
+    throw new Error(`proof graph admin proof missing ${label} feature target`);
   }
   for (const rowId of [
     target.roleSurfaceNodeId,
@@ -4593,7 +4743,7 @@ function validateProofGraphAdminHostSetupFeatureTarget(proof) {
     target.edgeRowId,
   ]) {
     if (!proof.adminRoleSurface?.visibleChecks?.includes(rowId)) {
-      throw new Error(`proof graph admin proof missing host setup row: ${rowId}`);
+      throw new Error(`proof graph admin proof missing ${label} row: ${rowId}`);
     }
   }
   for (const linkId of [
@@ -4602,7 +4752,7 @@ function validateProofGraphAdminHostSetupFeatureTarget(proof) {
   ]) {
     if (!proof.adminRoleSurface?.visibleRelatedLinks?.includes(linkId)) {
       throw new Error(
-        `proof graph admin proof missing host setup related link: ${linkId}`,
+        `proof graph admin proof missing ${label} related link: ${linkId}`,
       );
     }
   }
@@ -5822,6 +5972,24 @@ export function assertDevTestGameReleaseReadiness(checklist) {
   ) {
     throw new Error("dev-test-game host setup readiness check is malformed");
   }
+  const cohostCheck = checklist.localDevelopmentSpine?.checks?.find(
+    (check) => check.id === cohostFeatureSpineSourceCheckId,
+  );
+  if (
+    cohostCheck === undefined ||
+    !cohostCheck.roleUrl?.includes("/g/<seeded-game>/host") ||
+    cohostCheck.capabilityLabel !== "CohostOf(<seeded-game>)" ||
+    cohostCheck.extendDeadlineState !== "ack" ||
+    cohostCheck.extendDeadlinePrincipal !== "cohost_c" ||
+    cohostCheck.hostOnlyRejectError !== "NotHost" ||
+    cohostCheck.hostOnlyRejectPrincipal !== "cohost_c" ||
+    cohostCheck.phaseAfterRejectId !== "D01" ||
+    cohostCheck.phaseAfterRejectLocked !== false ||
+    cohostCheck.recoveryCommand !== devTestGameCohostConsoleProofCommand ||
+    !validCohostSpineTargets(cohostCheck.spineTargets)
+  ) {
+    throw new Error("dev-test-game cohost console readiness check is malformed");
+  }
   assertRecoveryMilestoneReadinessChecksMirrorGeneratedFrom(checklist);
   if (checklist.releaseReadiness?.status !== "not_ready") {
     throw new Error("dev-test-game release readiness must remain not_ready");
@@ -6181,6 +6349,46 @@ function validHostSetupProductionFeatureTargets(productionFeatureTargets) {
   });
 }
 
+function validCohostSpineTargets(spineTargets) {
+  return (
+    spineTargets !== null &&
+    typeof spineTargets === "object" &&
+    spineTargets.status === "passed" &&
+    spineTargets.detailRoleUrl?.includes("/g/<seeded-game>/host") &&
+    spineTargets.defaultCycleId === cohostFeatureSpineCycleId &&
+    spineTargets.defaultRoleUrlId === "cohost-console" &&
+    spineTargets.defaultRoleUrl?.includes("/g/<seeded-game>/host") &&
+    spineTargets.defaultCheckpointId === "extend-deadline-ack" &&
+    typeof spineTargets.browserProofCommand === "string" &&
+    spineTargets.browserProofCommand.includes("test:dev-test-game-core-live") &&
+    Array.isArray(spineTargets.cycleIds) &&
+    spineTargets.cycleIds.includes(cohostFeatureSpineCycleId) &&
+    Array.isArray(spineTargets.roleUrlIds) &&
+    spineTargets.roleUrlIds.includes("cohost-console") &&
+    spineTargets.roleUrlHrefs?.["cohost-console"]?.includes(
+      "/g/<seeded-game>/host",
+    ) &&
+    Array.isArray(spineTargets.checkpointIds) &&
+    spineTargets.checkpointIds.includes("extend-deadline-ack") &&
+    Array.isArray(spineTargets.recoveryHookIds) &&
+    spineTargets.recoveryHookIds.length === 0 &&
+    Array.isArray(spineTargets.visibleAdminCheckIds) &&
+    spineTargets.visibleAdminCheckIds.includes("cohost-console") &&
+    validCohostProductionFeatureTargets(spineTargets.productionFeatureTargets)
+  );
+}
+
+function validCohostProductionFeatureTargets(productionFeatureTargets) {
+  return validProductionFeatureSpineTargetCollection(productionFeatureTargets, {
+    declarations: Object.values(releaseReadinessProductionFeatureSpineTargets)
+      .filter(
+        (declaration) =>
+          declaration.sourceCheckId === cohostFeatureSpineSourceCheckId,
+      ),
+    sourceCheckRules: productionFeatureSpineSourceCheckRules,
+  });
+}
+
 function markdownChecklist(checklist) {
   const lines = [
     "# fmarch Dev Test Game Release Readiness",
@@ -6469,11 +6677,13 @@ const optionalReadinessArtifactRegistry = Object.freeze([
     id: "proofGraphAdminProof",
     envVar: "FMARCH_DEV_TEST_GAME_PROOF_GRAPH_ADMIN_PROOF",
     defaultPath: defaultProofGraphAdminProofPath,
+    ignoreInvalidDefault: true,
     outputKeys: {
       data: "proofGraphAdminProof",
       path: "proofGraphAdminProofPath",
       freshnessMetadata: "proofGraphAdminProofArtifact",
     },
+    validator: validateDevTestGameProofGraphAdminProof,
   }),
   optionalReadinessArtifact({
     id: "proofFreshnessAdminProof",

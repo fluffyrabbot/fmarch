@@ -38,6 +38,9 @@ import {
   hostSetupFeatureSpineTargetRows,
 } from "./dev_test_game_host_setup_feature_spine_targets.mjs";
 import {
+  cohostFeatureSpineTargetRows,
+} from "./dev_test_game_cohost_feature_spine_targets.mjs";
+import {
   hardeningFeatureSpineCycleIds,
   hardeningFeatureSpineSourceCheckId,
 } from "./dev_test_game_hardening_feature_spine_targets.mjs";
@@ -101,6 +104,9 @@ export const releaseReadinessProductionFeatureSpineTargets = Object.freeze({
   }),
   hostSetupRoute: featureSpineCheckpointTarget({
     ...hostSetupFeatureSpineTargetRows.hostSetupRoute,
+  }),
+  cohostConsole: featureSpineCheckpointTarget({
+    ...cohostFeatureSpineTargetRows.cohostConsole,
   }),
   ...coreLoopProductionFeatureSpineTargets,
   completedGameStaleRecovery: featureSpineCheckpointTarget({
