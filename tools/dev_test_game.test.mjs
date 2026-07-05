@@ -213,9 +213,7 @@ import {
   buildDevTestGameHostedIdentityEvidence,
   devTestGameHostedIdentityEvidenceCommand,
   devTestGameHostedIdentityEvidencePath,
-  devTestGameHostedIdentityPartialAdminProofCommand,
-  devTestGameHostedIdentityPartialAdminProofPath,
-  devTestGameHostedIdentityPartialEvidencePath,
+  devTestGameHostedIdentityProgressionAdminProofCommand,
   hostedIdentityEvidenceBlockedChecks,
   hostedIdentityEvidenceFamilyProgressionCases,
   hostedIdentityEvidenceFixturePaths,
@@ -1036,9 +1034,12 @@ test("hosted identity evidence lane records blocked and passed handoffs", async 
   assert.deepEqual(blocked.hostedHandoffChecklist.operatorProofDrilldowns[0], {
     id: "partial-operator-account-recovery-admin-proof",
     label: "Partial operator account recovery admin proof",
-    command: `npm run ${devTestGameHostedIdentityPartialAdminProofCommand}`,
-    sourcePath: devTestGameHostedIdentityPartialEvidencePath,
-    proofTarget: devTestGameHostedIdentityPartialAdminProofPath,
+    command: `FMARCH_HOSTED_IDENTITY_PROGRESSION_ID=account-recovery npm run ${devTestGameHostedIdentityProgressionAdminProofCommand}`,
+    progressionId: "account-recovery",
+    sourcePath:
+      "target/dev-test-game/hosted-identity-evidence-account-recovery.json",
+    proofTarget:
+      "target/dev-test-game/hosted-identity-evidence-account-recovery-admin-proof.json",
     roleUrl: "/admin/audit/local-hosted-identity-evidence?game=<seeded-game>",
     firstMissingInputId: "redacted-account-recovery-packet",
     firstMissingCheckId: "account-recovery-evidence",
@@ -18461,7 +18462,7 @@ function hostedIdentityEvidenceAdminProofFixture() {
       visibleHostedHandoffOperatorProofStatuses: Object.fromEntries(
         handoff.operatorProofDrilldowns.map((drilldown) => [
           drilldown.id,
-          `${drilldown.label} ${drilldown.command} ${drilldown.sourcePath} ${drilldown.proofTarget} ${drilldown.roleUrl} ${drilldown.firstMissingInputId} ${drilldown.firstMissingCheckId} ${drilldown.proofBoundary}`,
+          `${drilldown.label} ${drilldown.command} ${drilldown.progressionId} ${drilldown.sourcePath} ${drilldown.proofTarget} ${drilldown.roleUrl} ${drilldown.firstMissingInputId} ${drilldown.firstMissingCheckId} ${drilldown.proofBoundary}`,
         ]),
       ),
       visibleHostedHandoffSummary: {

@@ -656,6 +656,7 @@
             >
               <strong>{drilldown.label}</strong>
               <span>{drilldown.command}</span>
+              <span>{drilldown.progressionId}</span>
               <span>{drilldown.sourcePath}</span>
               <span>{drilldown.proofTarget}</span>
               <span>{drilldown.roleUrl}</span>

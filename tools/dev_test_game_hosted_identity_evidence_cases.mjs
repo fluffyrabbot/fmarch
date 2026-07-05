@@ -210,9 +210,11 @@ export const hostedIdentityEvidenceOperatorProofDrilldowns = Object.freeze([
   Object.freeze({
     id: "partial-operator-account-recovery-admin-proof",
     label: "Partial operator account recovery admin proof",
-    command: `npm run ${devTestGameHostedIdentityPartialAdminProofCommand}`,
-    sourcePath: devTestGameHostedIdentityPartialEvidencePath,
-    proofTarget: devTestGameHostedIdentityPartialAdminProofPath,
+    command: `FMARCH_HOSTED_IDENTITY_PROGRESSION_ID=account-recovery npm run ${devTestGameHostedIdentityProgressionAdminProofCommand}`,
+    progressionId: "account-recovery",
+    sourcePath: "target/dev-test-game/hosted-identity-evidence-account-recovery.json",
+    proofTarget:
+      "target/dev-test-game/hosted-identity-evidence-account-recovery-admin-proof.json",
     roleUrl: hostedIdentityEvidenceRoleSurfaceDrilldown.handoffRoleUrl,
     firstMissingInputId: "redacted-account-recovery-packet",
     firstMissingCheckId: "account-recovery-evidence",

@@ -2874,6 +2874,7 @@ function normalizeHostedHandoffOperatorProofDrilldowns(drilldowns) {
         id: String(drilldown?.id ?? ""),
         label: String(drilldown?.label ?? ""),
         command: String(drilldown?.command ?? ""),
+        progressionId: String(drilldown?.progressionId ?? ""),
         sourcePath: String(drilldown?.sourcePath ?? ""),
         proofTarget: String(drilldown?.proofTarget ?? ""),
         roleUrl: String(drilldown?.roleUrl ?? ""),

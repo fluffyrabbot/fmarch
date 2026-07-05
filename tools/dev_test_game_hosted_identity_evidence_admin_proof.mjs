@@ -168,6 +168,10 @@ function hostedIdentityHandoffPath(hostedIdentityEvidence) {
   });
 }
 
+function hostedIdentityOperatorProofStatus(drilldown) {
+  return String(drilldown.progressionId ?? "");
+}
+
 export function hostedIdentityEvidenceAdminProofCase({
   sourcePath = hostedIdentityEvidencePath,
   proofPath = evidencePath,
@@ -244,7 +248,7 @@ export function hostedIdentityEvidenceAdminProofCase({
         requiredHostedHandoffOperatorProofStatuses: Object.fromEntries(
           hostedHandoffOperatorProofDrilldowns.map((drilldown) => [
             drilldown.id,
-            drilldown.command,
+            hostedIdentityOperatorProofStatus(drilldown),
           ]),
         ),
         requiredHostedHandoffSummary: hostedIdentityHandoffSummary(
@@ -369,7 +373,10 @@ export function hostedIdentityEvidenceAdminProofCase({
           ),
         hostedHandoffOperatorProofStatuses: Object.fromEntries(
           source.hostedIdentityEvidence.hostedHandoffChecklist.operatorProofDrilldowns.map(
-            (drilldown) => [drilldown.id, drilldown.command],
+            (drilldown) => [
+              drilldown.id,
+              hostedIdentityOperatorProofStatus(drilldown),
+            ],
           ),
         ),
         hostedHandoffSummary: hostedIdentityHandoffSummary(
