@@ -1924,17 +1924,7 @@ export function normalizeLocalProofGraphAudit(proofGraph, { game }) {
     href: devTestGameProofGraphPath,
     inspectHref: adminAuditInspectHref({ game, audit: localAdminAuditIds.proofGraph }),
     checks: normalizeLocalProofGraphCheckRows(proofGraph),
-    relatedLinks: Object.freeze(
-      roleNodes.map((node) =>
-        Object.freeze({
-          id: String(node.id),
-          label: String(node.label ?? node.id),
-          href: seededRoleUrlToAdminHref(node.roleUrl, { game }),
-          status: String(node.status ?? "recorded"),
-          command: String(node.recoveryCommand ?? node.proofCommand ?? ""),
-        }),
-      ),
-    ),
+    relatedLinks: normalizeLocalProofGraphRelatedLinks(proofGraph, { game, nodes }),
     artifactSummary: normalizeLocalProofGraphArtifactSummary(proofGraph, {
       nodes,
       edges,
@@ -1977,6 +1967,31 @@ export function normalizeLocalProofGraphEdgeCheckRows(edge) {
       status: String(edge?.relationship ?? "recorded"),
     }),
   ]);
+}
+
+export function normalizeLocalProofGraphRelatedLinks(
+  proofGraph,
+  { game, nodes } = {},
+) {
+  const graphNodes = Array.isArray(nodes)
+    ? nodes
+    : Array.isArray(proofGraph?.nodes)
+      ? proofGraph.nodes
+      : [];
+  const roleNodes = graphNodes.filter(
+    (node) => typeof node?.roleUrl === "string" && node.roleUrl.trim() !== "",
+  );
+  return Object.freeze(
+    roleNodes.map((node) =>
+      Object.freeze({
+        id: String(node.id),
+        label: String(node.label ?? node.id),
+        href: seededRoleUrlToAdminHref(node.roleUrl, { game }),
+        status: String(node.status ?? "recorded"),
+        command: String(node.recoveryCommand ?? node.proofCommand ?? ""),
+      }),
+    ),
+  );
 }
 
 export function normalizeLocalProofGraphArtifactSummary(

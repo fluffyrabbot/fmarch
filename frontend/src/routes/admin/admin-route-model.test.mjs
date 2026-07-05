@@ -17,6 +17,7 @@ import {
   normalizeLocalNextActionSelectedSpineCheckRows,
   normalizeLocalProofGraphArtifactSummary,
   normalizeLocalProofGraphCheckRows,
+  normalizeLocalProofGraphRelatedLinks,
   summarizeRecoveryGate,
 } from "./admin-route-model.mjs";
 import {
@@ -1546,29 +1547,7 @@ test("admin route data exposes local proof graph as a native audit row", async (
   );
   assert.deepEqual(
     graph.relatedLinks.map((link) => [link.id, link.href]),
-    [
-      ["admin-spine", localAdminAuditRoleUrl(localAdminAuditIds.adminSpine, { game: "midsummer" })],
-      ["spine-manifest", localAdminAuditRoleUrl(localAdminAuditIds.spineManifest, { game: "midsummer" })],
-      ["proof-graph", localAdminAuditRoleUrl(localAdminAuditIds.proofGraph, { game: "midsummer" })],
-      ["proof-freshness", localAdminAuditRoleUrl(localAdminAuditIds.proofFreshness, { game: "midsummer" })],
-      ["next-action", localAdminAuditRoleUrl(localAdminAuditIds.nextAction, { game: "midsummer" })],
-      ["admin-spine-terminal-batches", localAdminAuditRoleUrl(localAdminAuditIds.adminSpine, { game: "midsummer" })],
-      [
-        "production-feature:player-action-submission",
-        localAdminAuditRoleUrl(localAdminAuditIds.coreLoop, { game: "midsummer" }),
-      ],
-      [
-        "private-channel-recovery-receipt",
-        localAdminAuditRoleUrl(localAdminAuditIds.coreLoop, { game: "midsummer" }),
-      ],
-      [
-        "replacement-private-recovery-receipt",
-        localAdminAuditRoleUrl(localAdminAuditIds.hardening, { game: "midsummer" }),
-      ],
-      ...adminProofDestinationRequirementRoleRows({ game: "midsummer" }).map(
-        ({ linkId, roleUrl }) => [linkId, roleUrl],
-      ),
-    ],
+    expectedProofGraphRelatedLinkRows(proofGraph, { game: "midsummer" }),
   );
   assert.deepEqual(
     graph.relatedLinks
@@ -1602,29 +1581,7 @@ test("admin local proof graph detail data carries graph node rows", async () => 
   );
   assert.deepEqual(
     data.audit.relatedLinks.map((link) => [link.id, link.href]),
-    [
-      ["admin-spine", localAdminAuditRoleUrl(localAdminAuditIds.adminSpine, { game: "midsummer" })],
-      ["spine-manifest", localAdminAuditRoleUrl(localAdminAuditIds.spineManifest, { game: "midsummer" })],
-      ["proof-graph", localAdminAuditRoleUrl(localAdminAuditIds.proofGraph, { game: "midsummer" })],
-      ["proof-freshness", localAdminAuditRoleUrl(localAdminAuditIds.proofFreshness, { game: "midsummer" })],
-      ["next-action", localAdminAuditRoleUrl(localAdminAuditIds.nextAction, { game: "midsummer" })],
-      ["admin-spine-terminal-batches", localAdminAuditRoleUrl(localAdminAuditIds.adminSpine, { game: "midsummer" })],
-      [
-        "production-feature:player-action-submission",
-        localAdminAuditRoleUrl(localAdminAuditIds.coreLoop, { game: "midsummer" }),
-      ],
-      [
-        "private-channel-recovery-receipt",
-        localAdminAuditRoleUrl(localAdminAuditIds.coreLoop, { game: "midsummer" }),
-      ],
-      [
-        "replacement-private-recovery-receipt",
-        localAdminAuditRoleUrl(localAdminAuditIds.hardening, { game: "midsummer" }),
-      ],
-      ...adminProofDestinationRequirementRoleRows({ game: "midsummer" }).map(
-        ({ linkId, roleUrl }) => [linkId, roleUrl],
-      ),
-    ],
+    expectedProofGraphRelatedLinkRows(proofGraph, { game: "midsummer" }),
   );
 });
 
@@ -6135,6 +6092,13 @@ function expectedProofGraphCheckRows(proofGraph) {
   return normalizeLocalProofGraphCheckRows(proofGraph).map((check) => [
     check.id,
     check.status,
+  ]);
+}
+
+function expectedProofGraphRelatedLinkRows(proofGraph, { game } = {}) {
+  return normalizeLocalProofGraphRelatedLinks(proofGraph, { game }).map((link) => [
+    link.id,
+    link.href,
   ]);
 }
 
