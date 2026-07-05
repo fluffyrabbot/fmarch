@@ -65,6 +65,15 @@ import {
   preReadinessTraceKeys,
 } from "./dev_test_game_pre_readiness_trace_registry.mjs";
 import {
+  assertPriorityTraceVisibleChecks,
+  assertReleaseReadinessTrace,
+  assertSelectionTrace,
+  releaseReadinessTraceCheckIds,
+  releaseReadinessTraceStrategy,
+  selectionTraceCheckIds,
+  selectionTraceStrategy,
+} from "./dev_test_game_next_action_priority_traces.mjs";
+import {
   proofGraphDestinationSummaryDriftNextActionAdminProofPath,
   proofGraphDestinationSummaryDriftNextActionPath,
 } from "./dev_test_game_next_action_admin_proof_paths.mjs";
@@ -234,7 +243,7 @@ export function nextActionAdminProofCase({
       }),
       stabilityStatus: source.nextAction.stabilityTrace.status,
       selectionTrace: {
-        strategy: source.nextAction.selectionTrace.strategy,
+        strategy: selectionTraceStrategy,
         candidateCount: source.nextAction.selectionTrace.candidateCount,
         selectedArtifactId: source.nextAction.selectionTrace.selectedArtifactId,
         candidateIds: source.nextAction.selectionTrace.candidates.map(
@@ -242,7 +251,7 @@ export function nextActionAdminProofCase({
         ),
       },
       releaseReadinessTrace: {
-        strategy: source.nextAction.releaseReadinessTrace.strategy,
+        strategy: releaseReadinessTraceStrategy,
         candidateCount: source.nextAction.releaseReadinessTrace.candidateCount,
         selectedUnprovenId:
           source.nextAction.releaseReadinessTrace.selectedUnprovenId,
@@ -477,7 +486,7 @@ export function proofGraphDestinationSummaryDriftNextActionFixture(nextAction) {
       proofGraphDestinationSummary,
     },
     selectionTrace: {
-      strategy: "development-spine-priority",
+      strategy: selectionTraceStrategy,
       candidateCount: 0,
       selectedArtifactId: null,
       candidates: [],
@@ -526,21 +535,24 @@ export function assertNextActionAdminProof(evidence) {
   ) {
     throw new Error("next-action admin proof did not prove admin overview click-through");
   }
-  if (
-    evidence.generatedFrom?.selectionTrace?.strategy !== "development-spine-priority" ||
-    !Number.isInteger(evidence.generatedFrom.selectionTrace.candidateCount) ||
-    !Array.isArray(evidence.generatedFrom.selectionTrace.candidateIds)
-  ) {
-    throw new Error("next-action admin proof is missing selection trace evidence");
-  }
-  if (
-    evidence.generatedFrom?.releaseReadinessTrace?.strategy !==
-      "local-dev-release-readiness-priority" ||
-    !Number.isInteger(evidence.generatedFrom.releaseReadinessTrace.candidateCount) ||
-    !Array.isArray(evidence.generatedFrom.releaseReadinessTrace.candidateIds)
-  ) {
-    throw new Error("next-action admin proof is missing release-readiness trace evidence");
-  }
+  assertSelectionTrace(evidence.generatedFrom?.selectionTrace, {
+    label: "next-action admin proof selection trace",
+  });
+  assertReleaseReadinessTrace(evidence.generatedFrom?.releaseReadinessTrace, {
+    label: "next-action admin proof release-readiness trace",
+  });
+  assertPriorityTraceVisibleChecks(
+    "selection",
+    evidence.generatedFrom?.selectionTrace,
+    evidence.adminRoleSurface?.visibleChecks,
+    { label: "next-action admin proof selection trace" },
+  );
+  assertPriorityTraceVisibleChecks(
+    "releaseReadiness",
+    evidence.generatedFrom?.releaseReadinessTrace,
+    evidence.adminRoleSurface?.visibleChecks,
+    { label: "next-action admin proof release-readiness trace" },
+  );
   const selectedCandidate =
     evidence.generatedFrom.releaseReadinessTrace.selectedCandidate;
   if (
@@ -1047,7 +1059,7 @@ function recoveryReceiptGraphCheckIdsForEvidence(evidence) {
 }
 
 function requiredChecksForNextAction(nextAction) {
-  const checks = ["next-command", nextAction.nextAction.reason, "selection-trace"];
+  const checks = ["next-command", nextAction.nextAction.reason];
   if (nextAction.nextAction.artifact?.id !== undefined) {
     checks.push(nextAction.nextAction.artifact.id);
   }
@@ -1059,7 +1071,6 @@ function requiredChecksForNextAction(nextAction) {
       nextAction.nextAction.unproven.id,
       "selected-proof-graph-node",
       "selected-proof-graph-destination",
-      "release-readiness-selection-trace",
     );
     if (selectedHostedIdentityOperatorCandidate(nextAction) !== null) {
       checks.push(
@@ -1125,6 +1136,9 @@ function requiredChecksForNextAction(nextAction) {
     }
   }
   checks.push(
+    ...selectionTraceCheckIds(nextAction.selectionTrace),
+  );
+  checks.push(
     ...preReadinessTraceCheckIds(
       preReadinessTraceKeys.seedProofLaneCoverage,
       nextAction.seedProofLaneCoverageTrace,
@@ -1141,12 +1155,7 @@ function requiredChecksForNextAction(nextAction) {
       nextAction.proofGraphDiagnosticSummaryTrace,
     ),
   );
-  for (const candidate of nextAction.selectionTrace.candidates) {
-    checks.push(`selection-trace-${candidate.id}`);
-  }
-  for (const candidate of nextAction.releaseReadinessTrace.candidates) {
-    checks.push(`release-readiness-${candidate.id}`);
-  }
+  checks.push(...releaseReadinessTraceCheckIds(nextAction.releaseReadinessTrace));
   checks.push(
     ...preReadinessTraceCheckIds(
       preReadinessTraceKeys.localReadinessDependency,
@@ -1490,7 +1499,6 @@ function requiredChecksForEvidence(evidence) {
   return [
     "next-command",
     evidence.generatedFrom?.reason ?? "unknown",
-    "selection-trace",
     ...(typeof evidence.generatedFrom?.artifactId === "string"
       ? [evidence.generatedFrom.artifactId]
       : []),
@@ -1502,7 +1510,6 @@ function requiredChecksForEvidence(evidence) {
           evidence.generatedFrom.unprovenId,
           "selected-proof-graph-node",
           "selected-proof-graph-destination",
-          "release-readiness-selection-trace",
           ...(evidence.generatedFrom?.unprovenSpineTarget === null ||
           evidence.generatedFrom?.unprovenSpineTarget === undefined
             ? []
@@ -1557,14 +1564,10 @@ function requiredChecksForEvidence(evidence) {
     ...proofGraphDiagnosticSummaryCheckIds(
       evidence.generatedFrom?.proofGraphDiagnosticSummaryTrace,
     ),
-    ...(Array.isArray(evidence.generatedFrom?.selectionTrace?.candidateIds)
-      ? evidence.generatedFrom.selectionTrace.candidateIds.map((id) => `selection-trace-${id}`)
-      : []),
-    ...(Array.isArray(evidence.generatedFrom?.releaseReadinessTrace?.candidateIds)
-      ? evidence.generatedFrom.releaseReadinessTrace.candidateIds.map(
-          (id) => `release-readiness-${id}`,
-        )
-      : []),
+    ...selectionTraceCheckIds(evidence.generatedFrom?.selectionTrace),
+    ...releaseReadinessTraceCheckIds(
+      evidence.generatedFrom?.releaseReadinessTrace,
+    ),
     ...preReadinessTraceCheckIds(
       preReadinessTraceKeys.localReadinessDependency,
       evidence.generatedFrom?.localReadinessDependencyTrace,

@@ -495,6 +495,12 @@ import {
   preReadinessTraceRegistryEntries,
 } from "./dev_test_game_pre_readiness_trace_registry.mjs";
 import {
+  releaseReadinessTraceCheckId,
+  releaseReadinessTraceStrategy,
+  selectionTraceCheckId,
+  selectionTraceStrategy,
+} from "./dev_test_game_next_action_priority_traces.mjs";
+import {
   buildProofGraphDiagnosticProofSummary,
   buildProofGraphDiagnosticSummaryTrace,
   proofGraphDiagnosticSummaryCheckIds,
@@ -2476,6 +2482,22 @@ test("pre-readiness trace registry names shared trace contracts", () => {
         "function",
         "function",
         "function",
+      ],
+    ],
+  );
+});
+
+test("next-action priority traces name shared visible check contracts", () => {
+  assert.deepEqual(
+    [
+      [selectionTraceStrategy, selectionTraceCheckId],
+      [releaseReadinessTraceStrategy, releaseReadinessTraceCheckId],
+    ],
+    [
+      ["development-spine-priority", "selection-trace"],
+      [
+        "local-dev-release-readiness-priority",
+        "release-readiness-selection-trace",
       ],
     ],
   );

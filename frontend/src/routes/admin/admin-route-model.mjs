@@ -67,6 +67,12 @@ import {
   normalizeProofGraphDiagnosticSummaryTrace,
 } from "../../../../tools/dev_test_game_proof_graph_diagnostic_summary.mjs";
 import {
+  normalizeSelectionTrace,
+  releaseReadinessTraceCheckRows,
+  releaseReadinessTraceStrategy,
+  selectionTraceCheckRows,
+} from "../../../../tools/dev_test_game_next_action_priority_traces.mjs";
+import {
   devTestGameIdentityAdapterContractDiff,
   devTestGameIdentityAdapterProofVersion,
 } from "../../../../tools/dev_test_game_identity_adapter_contract.mjs";
@@ -2458,34 +2464,8 @@ export function normalizeLocalNextActionAudit(nextAction, { game, proofGraph = n
             }),
           ),
         ]),
-    Object.freeze({
-      id: "selection-trace",
-      status: `${selectionTrace.candidateCount} candidates`,
-    }),
-    ...selectionTrace.candidates.map((candidate) =>
-      Object.freeze({
-        id: `selection-trace-${candidate.id}`,
-        status: candidate.selected
-          ? `selected:${candidate.status}`
-          : `rank-${candidate.rank}:${candidate.status}`,
-      }),
-    ),
-    ...(releaseReadinessTrace.candidateCount === 0
-      ? []
-      : [
-          Object.freeze({
-            id: "release-readiness-selection-trace",
-            status: `${releaseReadinessTrace.candidateCount} buildable candidates`,
-          }),
-          ...releaseReadinessTrace.candidates.map((candidate) =>
-            Object.freeze({
-              id: `release-readiness-${candidate.id}`,
-              status: candidate.selected
-                ? `selected:${candidate.status}`
-                : `rank-${candidate.rank}:${candidate.status}`,
-            }),
-          ),
-        ]),
+    ...selectionTraceCheckRows(selectionTrace),
+    ...releaseReadinessTraceCheckRows(releaseReadinessTrace),
     ...normalizeLocalNextActionSeedProofLaneCoverageTraceCheckRows({
       seedProofLaneCoverageTrace,
     }),
@@ -3802,42 +3782,12 @@ function seededRoleUrlToAdminHref(roleUrl, { game }) {
 }
 
 function normalizeNextActionSelectionTrace(selectionTrace) {
-  if (
-    selectionTrace === null ||
-    typeof selectionTrace !== "object" ||
-    selectionTrace.strategy !== "development-spine-priority" ||
-    !Array.isArray(selectionTrace.candidates)
-  ) {
-    return Object.freeze({
-      strategy: "unknown",
-      candidateCount: 0,
-      selectedArtifactId: null,
-      candidates: Object.freeze([]),
-    });
-  }
-  const candidates = selectionTrace.candidates
-    .filter((candidate) => candidate !== null && typeof candidate === "object")
-    .map((candidate) =>
-      Object.freeze({
-        rank: Number(candidate.rank ?? 0),
-        id: String(candidate.id ?? "unknown"),
-        label: String(candidate.label ?? ""),
-        path: String(candidate.path ?? ""),
-        status: String(candidate.status ?? "unknown"),
-        priority: Number(candidate.priority ?? 0),
-        selected: candidate.selected === true,
-        refreshCommand: String(candidate.refreshCommand ?? ""),
-        refreshSource: String(candidate.refreshSource ?? "unknown"),
-      }),
-    );
+  const normalized = normalizeSelectionTrace(selectionTrace);
   return Object.freeze({
-    strategy: selectionTrace.strategy,
-    candidateCount: Number(selectionTrace.candidateCount ?? candidates.length),
-    selectedArtifactId:
-      typeof selectionTrace.selectedArtifactId === "string"
-        ? selectionTrace.selectedArtifactId
-        : null,
-    candidates: Object.freeze(candidates),
+    strategy: normalized.strategy,
+    candidateCount: normalized.candidateCount,
+    selectedArtifactId: normalized.selectedArtifactId,
+    candidates: normalized.candidates,
   });
 }
 
@@ -3845,7 +3795,7 @@ function normalizeNextActionReleaseReadinessTrace(releaseReadinessTrace) {
   if (
     releaseReadinessTrace === null ||
     typeof releaseReadinessTrace !== "object" ||
-    releaseReadinessTrace.strategy !== "local-dev-release-readiness-priority" ||
+    releaseReadinessTrace.strategy !== releaseReadinessTraceStrategy ||
     !Array.isArray(releaseReadinessTrace.candidates)
   ) {
     return Object.freeze({

@@ -220,6 +220,11 @@ import {
   preReadinessTraceKeys,
 } from "./dev_test_game_pre_readiness_trace_registry.mjs";
 import {
+  assertPriorityTraceVisibleChecks,
+  assertReleaseReadinessTrace,
+  assertSelectionTrace,
+} from "./dev_test_game_next_action_priority_traces.mjs";
+import {
   adminProofBatchIdFromLabel,
 } from "./dev_test_game_admin_proof_batch_registry.mjs";
 import {
@@ -5892,11 +5897,21 @@ export function validateDevTestGameNextActionAdminProof(proof, options = {}) {
   ) {
     throw new Error("next-action admin proof did not prove admin overview click-through");
   }
-  const requiredChecks = [
-    "next-command",
-    proof.generatedFrom?.reason,
-    "selection-trace",
-  ].filter((checkId) => typeof checkId === "string");
+  assertSelectionTrace(proof.generatedFrom?.selectionTrace, {
+    label: "next-action admin proof selection trace",
+  });
+  assertPriorityTraceVisibleChecks(
+    "selection",
+    proof.generatedFrom?.selectionTrace,
+    proof.adminRoleSurface?.visibleChecks,
+    {
+      includeCandidateChecks: false,
+      label: "next-action admin proof selection trace",
+    },
+  );
+  const requiredChecks = ["next-command", proof.generatedFrom?.reason].filter(
+    (checkId) => typeof checkId === "string",
+  );
   for (const checkId of requiredChecks) {
     if (!proof.adminRoleSurface?.visibleChecks?.includes(checkId)) {
       throw new Error(`next-action admin proof missing visible check: ${checkId}`);
@@ -6013,14 +6028,19 @@ export function validateDevTestGameNextActionAdminProof(proof, options = {}) {
     proof.adminRoleSurface?.visibleChecks,
     { label: "next-action admin proof local readiness dependency trace" },
   );
-  const releaseTrace = proof.generatedFrom?.releaseReadinessTrace;
-  if (
-    releaseTrace?.strategy !== "local-dev-release-readiness-priority" ||
-    !Number.isInteger(releaseTrace.candidateCount) ||
-    !Array.isArray(releaseTrace.candidateIds)
-  ) {
-    throw new Error("next-action admin proof is missing release readiness trace");
-  }
+  const releaseTrace = assertReleaseReadinessTrace(
+    proof.generatedFrom?.releaseReadinessTrace,
+    { label: "next-action admin proof release-readiness trace" },
+  );
+  assertPriorityTraceVisibleChecks(
+    "releaseReadiness",
+    proof.generatedFrom?.releaseReadinessTrace,
+    proof.adminRoleSurface?.visibleChecks,
+    {
+      includeCandidateChecks: false,
+      label: "next-action admin proof release-readiness trace",
+    },
+  );
   const seedProofLaneCoverageTrace =
     assertPreReadinessTraceVisibleChecks(
       preReadinessTraceKeys.seedProofLaneCoverage,

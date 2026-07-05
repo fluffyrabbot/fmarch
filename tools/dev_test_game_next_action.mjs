@@ -100,6 +100,12 @@ import {
   preReadinessTraceKeys,
 } from "./dev_test_game_pre_readiness_trace_registry.mjs";
 import {
+  assertReleaseReadinessTrace,
+  assertSelectionTrace,
+  buildReleaseReadinessTrace,
+  buildSelectionTrace,
+} from "./dev_test_game_next_action_priority_traces.mjs";
+import {
   assertRecoveryReceiptGraphSummary,
   recoveryReceiptGraphDescriptors,
   recoveryReceiptGraphSummaryFromProofGraph,
@@ -720,7 +726,9 @@ export function assertDevTestGameNextAction(evidence) {
       );
     }
   }
-  assertSelectionTrace(evidence.selectionTrace, evidence.nextAction);
+  assertSelectionTrace(evidence.selectionTrace, {
+    nextAction: evidence.nextAction,
+  });
   assertPreReadinessTrace(
     preReadinessTraceKeys.proofStability,
     evidence.stabilityTrace,
@@ -758,7 +766,9 @@ export function assertDevTestGameNextAction(evidence) {
       nextActionCommand: evidence.nextAction.command,
     },
   );
-  assertReleaseReadinessTrace(evidence.releaseReadinessTrace, evidence.nextAction);
+  assertReleaseReadinessTrace(evidence.releaseReadinessTrace, {
+    nextAction: evidence.nextAction,
+  });
   assertReplacementRaceReloadTrace(evidence.replacementRaceReloadTrace);
   assertHostConcurrentRaceReloadTrace(evidence.hostConcurrentRaceReloadTrace);
   assertPlayerConcurrentActionReloadTrace(evidence.playerConcurrentActionReloadTrace);
@@ -862,30 +872,6 @@ function rankedArtifactsNeedingRefresh(manifest) {
         artifactAgeSeconds(right.artifact) - artifactAgeSeconds(left.artifact) ||
         left.index - right.index,
     );
-}
-
-function buildSelectionTrace(candidates) {
-  const selectedArtifactId = candidates[0]?.artifact.id ?? null;
-  return {
-    strategy: "development-spine-priority",
-    candidateCount: candidates.length,
-    selectedArtifactId,
-    candidates: candidates.map(({ artifact, priority }, index) => ({
-      rank: index + 1,
-      id: artifact.id,
-      label: artifact.label,
-      path: artifact.path,
-      status: artifact.status,
-      priority,
-      selected: artifact.id === selectedArtifactId,
-      refreshCommand: artifact.nextCommand ?? artifact.refreshCommand,
-      refreshSource: artifact.refreshSource,
-      ...(artifact.ageSeconds === undefined ? {} : { ageSeconds: artifact.ageSeconds }),
-      ...(artifact.maxAgeSeconds === undefined
-        ? {}
-        : { maxAgeSeconds: artifact.maxAgeSeconds }),
-    })),
-  };
 }
 
 function rankedBuildableReleaseReadinessItems(
@@ -1180,51 +1166,6 @@ function validSelectedProductionFeatureGraph(graphSelection, spineTarget) {
     JSON.stringify(graphSelection.coverageDecision ?? null) ===
       JSON.stringify(spineTarget.coverageDecision ?? null)
   );
-}
-
-function buildReleaseReadinessTrace(candidates) {
-  const selectedUnprovenId = candidates[0]?.item.id ?? null;
-  return {
-    strategy: "local-dev-release-readiness-priority",
-    candidateCount: candidates.length,
-    selectedUnprovenId,
-    candidates: candidates.map((candidate, index) => ({
-      rank: index + 1,
-      id: candidate.item.id,
-      status: candidate.item.status,
-      priority: candidate.priority,
-      selected: candidate.item.id === selectedUnprovenId,
-      command: candidate.command,
-      buildSlice: candidate.buildSlice,
-      proofTarget: candidate.proofTarget,
-      roleUrl: candidate.roleUrl,
-      proofGraphNodeId: candidate.proofGraphNodeId,
-      proofBoundary: candidate.proofBoundary,
-      actionStatus: candidate.actionStatus,
-      requiredEvidence: candidate.item.requiredEvidence,
-      productionFeatureSpineTarget: candidate.productionFeatureSpineTarget,
-      spineDrilldown: candidate.spineDrilldown,
-      ...(candidate.spineTarget == null ? {} : { spineTarget: candidate.spineTarget }),
-      ...(candidate.selectedProductionFeatureGraph == null
-        ? {}
-        : {
-            selectedProductionFeatureGraph:
-              candidate.selectedProductionFeatureGraph,
-          }),
-      ...(candidate.hostedEvidenceMode === undefined
-        ? {}
-        : { hostedEvidenceMode: candidate.hostedEvidenceMode }),
-      ...(candidate.realHostedEvidenceStatus === undefined
-        ? {}
-        : { realHostedEvidenceStatus: candidate.realHostedEvidenceStatus }),
-      ...(candidate.realHostedEvidenceInputs === undefined
-        ? {}
-        : { realHostedEvidenceInputs: candidate.realHostedEvidenceInputs }),
-      ...(candidate.hostedHandoffChecklist === undefined
-        ? {}
-        : { hostedHandoffChecklist: candidate.hostedHandoffChecklist }),
-    })),
-  };
 }
 
 function buildReplacementRaceReloadTrace(
@@ -1541,99 +1482,6 @@ function buildHostStaleControlTrace(readiness) {
     gapCount,
     laneIds,
   };
-}
-
-function assertSelectionTrace(selectionTrace, nextAction) {
-  if (
-    selectionTrace?.strategy !== "development-spine-priority" ||
-    !Number.isInteger(selectionTrace.candidateCount) ||
-    !Array.isArray(selectionTrace.candidates)
-  ) {
-    throw new Error("next-action selection trace is missing or malformed");
-  }
-  if (selectionTrace.candidateCount !== selectionTrace.candidates.length) {
-    throw new Error("next-action selection trace candidate count drifted");
-  }
-  if (selectionTrace.candidateCount === 0) {
-    if (
-      selectionTrace.selectedArtifactId !== null ||
-      nextAction.reason === "artifact-not-fresh"
-    ) {
-      throw new Error("next-action fresh trace has a selected artifact");
-    }
-    return;
-  }
-  const [selected, ...rest] = selectionTrace.candidates;
-  if (
-    nextAction.reason !== "artifact-not-fresh" ||
-    selected.selected !== true ||
-    selected.id !== selectionTrace.selectedArtifactId ||
-    nextAction.artifact?.id !== selected.id
-  ) {
-    throw new Error("next-action selection trace does not match selected artifact");
-  }
-  for (const candidate of rest) {
-    if (candidate.selected === true) {
-      throw new Error(`next-action selection trace has duplicate selection: ${candidate.id}`);
-    }
-  }
-}
-
-function assertReleaseReadinessTrace(releaseReadinessTrace, nextAction) {
-  if (
-    releaseReadinessTrace?.strategy !== "local-dev-release-readiness-priority" ||
-    !Number.isInteger(releaseReadinessTrace.candidateCount) ||
-    !Array.isArray(releaseReadinessTrace.candidates)
-  ) {
-    throw new Error("next-action release-readiness trace is missing or malformed");
-  }
-  if (releaseReadinessTrace.candidateCount !== releaseReadinessTrace.candidates.length) {
-    throw new Error("next-action release-readiness trace candidate count drifted");
-  }
-  if (releaseReadinessTrace.candidateCount === 0) {
-    if (
-      releaseReadinessTrace.selectedUnprovenId !== null ||
-      nextAction.reason === "release-readiness-unproven"
-    ) {
-      throw new Error("next-action release-readiness trace has no selected item");
-    }
-    return;
-  }
-  const [selected, ...rest] = releaseReadinessTrace.candidates;
-  if (
-    selected.selected !== true ||
-    selected.id !== releaseReadinessTrace.selectedUnprovenId
-  ) {
-    throw new Error("next-action release-readiness trace does not match selection");
-  }
-  if (nextAction.reason === "release-readiness-unproven") {
-    if (
-      nextAction.unproven?.id !== selected.id ||
-      nextAction.command !== selected.command ||
-      nextAction.unproven?.roleUrl !== selected.roleUrl ||
-      nextAction.unproven?.proofGraphNodeId !== selected.proofGraphNodeId ||
-      nextAction.status !== selected.actionStatus ||
-      JSON.stringify(nextAction.unproven?.productionFeatureSpineTarget ?? null) !==
-        JSON.stringify(selected.productionFeatureSpineTarget ?? null) ||
-      JSON.stringify(nextAction.unproven?.spineDrilldown ?? null) !==
-        JSON.stringify(selected.spineDrilldown ?? null) ||
-      JSON.stringify(nextAction.unproven?.spineTarget ?? null) !==
-        JSON.stringify(selected.spineTarget ?? null) ||
-      JSON.stringify(nextAction.unproven?.selectedProductionFeatureGraph ?? null) !==
-        JSON.stringify(selected.selectedProductionFeatureGraph ?? null) ||
-      JSON.stringify(nextAction.unproven?.hostedHandoffChecklist ?? null) !==
-        JSON.stringify(selected.hostedHandoffChecklist ?? null)
-    ) {
-      throw new Error("next-action release-readiness selection does not match action");
-    }
-  }
-  for (const candidate of rest) {
-    if (candidate.selected === true) {
-      throw new Error(
-        `next-action release-readiness trace has duplicate selection: ${candidate.id}`,
-      );
-    }
-  }
 }
 
 function releaseReadinessActionStatus(buildable) {
