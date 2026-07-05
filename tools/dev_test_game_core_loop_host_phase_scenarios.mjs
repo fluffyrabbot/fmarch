@@ -9,20 +9,17 @@ const cloneHostModkillScenario = (scenario) => ({
 const cloneHostLifecycleRaceScenario = (scenario) => ({
   ...scenario,
 });
-const cloneHostPublishRaceScenario = (scenario) => ({
+const cloneHostRaceScenario = (scenario) => ({
   ...scenario,
+  ...(Array.isArray(scenario.allowedPageRoles)
+    ? { allowedPageRoles: [...scenario.allowedPageRoles] }
+    : {}),
 });
-const cloneHostResolveRaceScenario = (scenario) => ({
-  ...scenario,
-});
-const cloneHostAdvanceRaceScenario = (scenario) => ({
-  ...scenario,
-});
-const cloneHostDeadlineAdvanceRaceScenario = (scenario) => ({
-  ...scenario,
-});
-const cloneHostMixedAdvanceRaceScenario = (scenario) => ({
-  ...scenario,
+const cloneHostRaceSurfaceCase = (raceCase) => ({
+  ...raceCase,
+  metadata: { ...raceCase.metadata },
+  laneMap: { ...raceCase.laneMap },
+  scenario: cloneHostRaceScenario(raceCase.scenario),
 });
 const clonePhaseStateCase = (phaseStateCase) => ({ ...phaseStateCase });
 const cloneTransitionProofCase = (transitionCase) => ({
@@ -575,7 +572,7 @@ const hostPublishRaceScenarioDefinition = Object.freeze({
 });
 
 export function hostPublishRaceScenario() {
-  return cloneHostPublishRaceScenario(hostPublishRaceScenarioDefinition);
+  return cloneHostRaceScenario(hostPublishRaceScenarioDefinition);
 }
 
 const hostResolveRaceScenarioDefinition = Object.freeze({
@@ -595,7 +592,7 @@ const hostResolveRaceScenarioDefinition = Object.freeze({
 });
 
 export function hostResolveRaceScenario() {
-  return cloneHostResolveRaceScenario(hostResolveRaceScenarioDefinition);
+  return cloneHostRaceScenario(hostResolveRaceScenarioDefinition);
 }
 
 const hostAdvanceRaceScenarioDefinition = Object.freeze({
@@ -614,7 +611,7 @@ const hostAdvanceRaceScenarioDefinition = Object.freeze({
 });
 
 export function hostAdvanceRaceScenario() {
-  return cloneHostAdvanceRaceScenario(hostAdvanceRaceScenarioDefinition);
+  return cloneHostRaceScenario(hostAdvanceRaceScenarioDefinition);
 }
 
 const hostDeadlineAdvanceRaceScenarioDefinition = Object.freeze({
@@ -634,9 +631,7 @@ const hostDeadlineAdvanceRaceScenarioDefinition = Object.freeze({
 });
 
 export function hostDeadlineAdvanceRaceScenario() {
-  return cloneHostDeadlineAdvanceRaceScenario(
-    hostDeadlineAdvanceRaceScenarioDefinition,
-  );
+  return cloneHostRaceScenario(hostDeadlineAdvanceRaceScenarioDefinition);
 }
 
 const hostMixedAdvanceRaceScenarioDefinition = Object.freeze({
@@ -659,9 +654,107 @@ const hostMixedAdvanceRaceScenarioDefinition = Object.freeze({
 });
 
 export function hostMixedAdvanceRaceScenario() {
-  return cloneHostMixedAdvanceRaceScenario(
-    hostMixedAdvanceRaceScenarioDefinition,
-  );
+  return cloneHostRaceScenario(hostMixedAdvanceRaceScenarioDefinition);
+}
+
+const hostControlRaceScenarioCaseDefinitions = Object.freeze([
+  Object.freeze({
+    surfaceKey: "hostLifecycleRace",
+    surfaceField: "hostLifecycleRaceSurface",
+    assertionArgument: "hostLifecycleRaceSurface",
+    metadata: Object.freeze({
+      proofCheckId: hostLifecycleRaceScenarioDefinition.proofCheckId,
+      reloadProofCheckId: hostLifecycleRaceScenarioDefinition.reloadProofCheckId,
+    }),
+    laneMap: Object.freeze({
+      hostLifecycleRace: hostLifecycleRaceScenarioDefinition.proofCheckId,
+      hostLifecycleRaceReload:
+        hostLifecycleRaceScenarioDefinition.reloadProofCheckId,
+    }),
+    scenario: hostLifecycleRaceScenarioDefinition,
+  }),
+  Object.freeze({
+    surfaceKey: "hostPublishRace",
+    surfaceField: "hostPublishRaceSurface",
+    assertionArgument: "hostPublishRaceSurface",
+    metadata: Object.freeze({
+      proofCheckId: hostPublishRaceScenarioDefinition.proofCheckId,
+      reloadProofCheckId: hostPublishRaceScenarioDefinition.reloadProofCheckId,
+    }),
+    laneMap: Object.freeze({
+      hostPublishRace: hostPublishRaceScenarioDefinition.proofCheckId,
+      hostPublishRaceReload:
+        hostPublishRaceScenarioDefinition.reloadProofCheckId,
+    }),
+    scenario: hostPublishRaceScenarioDefinition,
+  }),
+  Object.freeze({
+    surfaceKey: "hostResolveRace",
+    surfaceField: "hostResolveRaceSurface",
+    assertionArgument: "hostResolveRaceSurface",
+    metadata: Object.freeze({
+      proofCheckId: hostResolveRaceScenarioDefinition.proofCheckId,
+      reloadProofCheckId: hostResolveRaceScenarioDefinition.reloadProofCheckId,
+    }),
+    laneMap: Object.freeze({
+      hostResolveRace: hostResolveRaceScenarioDefinition.proofCheckId,
+      hostResolveRaceReload:
+        hostResolveRaceScenarioDefinition.reloadProofCheckId,
+    }),
+    scenario: hostResolveRaceScenarioDefinition,
+  }),
+  Object.freeze({
+    surfaceKey: "hostAdvanceRace",
+    surfaceField: "hostAdvanceRaceSurface",
+    assertionArgument: "hostAdvanceRaceSurface",
+    metadata: Object.freeze({
+      proofCheckId: hostAdvanceRaceScenarioDefinition.proofCheckId,
+      reloadProofCheckId: hostAdvanceRaceScenarioDefinition.reloadProofCheckId,
+    }),
+    laneMap: Object.freeze({
+      hostAdvanceRace: hostAdvanceRaceScenarioDefinition.proofCheckId,
+      hostAdvanceRaceReload:
+        hostAdvanceRaceScenarioDefinition.reloadProofCheckId,
+    }),
+    scenario: hostAdvanceRaceScenarioDefinition,
+  }),
+  Object.freeze({
+    surfaceKey: "hostDeadlineAdvanceRace",
+    surfaceField: "hostDeadlineAdvanceRaceSurface",
+    assertionArgument: "hostDeadlineAdvanceRaceSurface",
+    metadata: Object.freeze({
+      proofCheckId: hostDeadlineAdvanceRaceScenarioDefinition.proofCheckId,
+      reloadProofCheckId:
+        hostDeadlineAdvanceRaceScenarioDefinition.reloadProofCheckId,
+    }),
+    laneMap: Object.freeze({
+      hostDeadlineAdvanceRace:
+        hostDeadlineAdvanceRaceScenarioDefinition.proofCheckId,
+      hostDeadlineAdvanceRaceReload:
+        hostDeadlineAdvanceRaceScenarioDefinition.reloadProofCheckId,
+    }),
+    scenario: hostDeadlineAdvanceRaceScenarioDefinition,
+  }),
+  Object.freeze({
+    surfaceKey: "hostMixedAdvanceRace",
+    surfaceField: "hostMixedAdvanceRaceSurface",
+    assertionArgument: "hostMixedAdvanceRaceSurface",
+    metadata: Object.freeze({
+      proofCheckId: hostMixedAdvanceRaceScenarioDefinition.proofCheckId,
+      reloadProofCheckId:
+        hostMixedAdvanceRaceScenarioDefinition.reloadProofCheckId,
+    }),
+    laneMap: Object.freeze({
+      hostMixedAdvanceRace: hostMixedAdvanceRaceScenarioDefinition.proofCheckId,
+      hostMixedAdvanceRaceReload:
+        hostMixedAdvanceRaceScenarioDefinition.reloadProofCheckId,
+    }),
+    scenario: hostMixedAdvanceRaceScenarioDefinition,
+  }),
+]);
+
+export function hostControlRaceScenarioCases() {
+  return hostControlRaceScenarioCaseDefinitions.map(cloneHostRaceSurfaceCase);
 }
 
 export function assertHostLifecycleControlRoleSurfaceCase({
@@ -1130,6 +1223,30 @@ export function assertHostMixedAdvanceRaceSurfaceCase({
       includeEvidenceInError,
     });
   }
+}
+
+function hostControlRaceSurfaceAssertionFor(raceCase) {
+  return {
+    hostLifecycleRaceSurface: assertHostLifecycleRaceSurfaceCase,
+    hostPublishRaceSurface: assertHostPublishRaceSurfaceCase,
+    hostResolveRaceSurface: assertHostResolveRaceSurfaceCase,
+    hostAdvanceRaceSurface: assertHostAdvanceRaceSurfaceCase,
+    hostDeadlineAdvanceRaceSurface: assertHostDeadlineAdvanceRaceSurfaceCase,
+    hostMixedAdvanceRaceSurface: assertHostMixedAdvanceRaceSurfaceCase,
+  }[raceCase.surfaceField];
+}
+
+export function assertHostControlRaceSurfaceCase({
+  raceCase,
+  surface,
+  includeEvidenceInError = false,
+}) {
+  const assertSurface = hostControlRaceSurfaceAssertionFor(raceCase);
+  assertSurface({
+    [raceCase.assertionArgument]: surface,
+    scenario: raceCase.scenario,
+    includeEvidenceInError,
+  });
 }
 
 export function assertHostPhaseTransitionActionProofCase({

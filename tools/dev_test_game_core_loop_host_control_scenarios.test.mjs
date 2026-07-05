@@ -4,33 +4,30 @@ import {
   coreLoopHostControlFamilyId,
   coreLoopHostControlLaneIds,
   coreLoopHostControlScenarioFamily,
-  hostAdvanceRaceScenario,
-  hostDeadlineAdvanceRaceScenario,
-  hostLifecycleRaceScenario,
+  hostControlRaceScenarioCases,
   hostLifecycleControlScenario,
-  hostMixedAdvanceRaceScenario,
   hostModkillControlScenario,
-  hostPublishRaceScenario,
-  hostResolveRaceScenario,
 } from "./dev_test_game_core_loop_host_control_scenarios.mjs";
 
 test("host-control family shares lifecycle role surface and proof-run lane ids", () => {
+  const raceCases = hostControlRaceScenarioCases();
+  const raceLaneIds = raceCases.flatMap((raceCase) => [
+    raceCase.metadata.proofCheckId,
+    raceCase.metadata.reloadProofCheckId,
+  ]);
+  const raceSurfaces = Object.fromEntries(
+    raceCases.map((raceCase) => [raceCase.surfaceKey, raceCase.scenario]),
+  );
+  const raceProofRunLanes = Object.assign(
+    {},
+    ...raceCases.map((raceCase) => raceCase.laneMap),
+  );
+
   assert.equal(coreLoopHostControlFamilyId, "core-loop-host-control");
   assert.deepEqual(coreLoopHostControlLaneIds, [
     "host-lifecycle-control",
     "host-modkill-control",
-    "concurrent-host-lifecycle-race",
-    "concurrent-host-lifecycle-race-reload",
-    "concurrent-host-publish-race",
-    "concurrent-host-publish-race-reload",
-    "concurrent-host-resolve-race",
-    "concurrent-host-resolve-race-reload",
-    "concurrent-host-advance-race",
-    "concurrent-host-advance-race-reload",
-    "concurrent-host-deadline-advance-race",
-    "concurrent-host-deadline-advance-race-reload",
-    "concurrent-host-mixed-advance-race",
-    "concurrent-host-mixed-advance-race-reload",
+    ...raceLaneIds,
   ]);
 
   const family = coreLoopHostControlScenarioFamily();
@@ -44,45 +41,14 @@ test("host-control family shares lifecycle role surface and proof-run lane ids",
     family.surfaces.hostModkillControl,
     hostModkillControlScenario(),
   );
-  assert.deepEqual(
-    family.surfaces.hostLifecycleRace,
-    hostLifecycleRaceScenario(),
-  );
-  assert.deepEqual(
-    family.surfaces.hostPublishRace,
-    hostPublishRaceScenario(),
-  );
-  assert.deepEqual(
-    family.surfaces.hostResolveRace,
-    hostResolveRaceScenario(),
-  );
-  assert.deepEqual(
-    family.surfaces.hostAdvanceRace,
-    hostAdvanceRaceScenario(),
-  );
-  assert.deepEqual(
-    family.surfaces.hostDeadlineAdvanceRace,
-    hostDeadlineAdvanceRaceScenario(),
-  );
-  assert.deepEqual(
-    family.surfaces.hostMixedAdvanceRace,
-    hostMixedAdvanceRaceScenario(),
-  );
+  assert.deepEqual(family.surfaces, {
+    hostLifecycleControl: hostLifecycleControlScenario(),
+    hostModkillControl: hostModkillControlScenario(),
+    ...raceSurfaces,
+  });
   assert.deepEqual(family.proofRunLanes, {
     hostLifecycleControl: "host-lifecycle-control",
     hostModkillControl: "host-modkill-control",
-    hostLifecycleRace: "concurrent-host-lifecycle-race",
-    hostLifecycleRaceReload: "concurrent-host-lifecycle-race-reload",
-    hostPublishRace: "concurrent-host-publish-race",
-    hostPublishRaceReload: "concurrent-host-publish-race-reload",
-    hostResolveRace: "concurrent-host-resolve-race",
-    hostResolveRaceReload: "concurrent-host-resolve-race-reload",
-    hostAdvanceRace: "concurrent-host-advance-race",
-    hostAdvanceRaceReload: "concurrent-host-advance-race-reload",
-    hostDeadlineAdvanceRace: "concurrent-host-deadline-advance-race",
-    hostDeadlineAdvanceRaceReload:
-      "concurrent-host-deadline-advance-race-reload",
-    hostMixedAdvanceRace: "concurrent-host-mixed-advance-race",
-    hostMixedAdvanceRaceReload: "concurrent-host-mixed-advance-race-reload",
+    ...raceProofRunLanes,
   });
 });

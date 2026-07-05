@@ -26,16 +26,11 @@ import {
 } from "./dev_test_game_core_loop_player_action_recovery_scenarios.mjs";
 import {
   assertEmptyNightThreeHostTransitionProofCase,
-  assertHostAdvanceRaceSurfaceCase,
-  assertHostDeadlineAdvanceRaceSurfaceCase,
-  assertHostLifecycleRaceSurfaceCase,
+  assertHostControlRaceSurfaceCase,
   assertHostLifecycleControlRoleSurfaceCase,
-  assertHostMixedAdvanceRaceSurfaceCase,
   assertHostModkillControlSurfaceCase,
   assertHostNightActionTransitionSurfaceCase,
   assertHostPhaseTransitionActionProofCase,
-  assertHostPublishRaceSurfaceCase,
-  assertHostResolveRaceSurfaceCase,
   assertHostStaleAdvanceAfterTransitionProofCase,
   hostAdvancePhaseTransitionCase,
   hostCompleteGameCommandFacts,
@@ -107,6 +102,7 @@ import {
 } from "./dev_test_game_core_loop_day_five_progression_scenarios.mjs";
 import {
   coreLoopHostControlFamilyId,
+  hostControlRaceScenarioCases,
   coreLoopHostControlScenarioFamily,
 } from "./dev_test_game_core_loop_host_control_scenarios.mjs";
 import {
@@ -211,83 +207,16 @@ function hostModkillControlSurfaceFromProofRun(proofRun) {
   });
 }
 
-function hostLifecycleRaceSurfaceFromProofRun(proofRun) {
-  return proofRunLaneSurface(proofRun, {
-    metadata: {
-      proofCheckId: "concurrent-host-lifecycle-race",
-      reloadProofCheckId: "concurrent-host-lifecycle-race-reload",
-    },
-    laneMap: {
-      hostLifecycleRace: "concurrent-host-lifecycle-race",
-      hostLifecycleRaceReload: "concurrent-host-lifecycle-race-reload",
-    },
-  });
-}
-
-function hostPublishRaceSurfaceFromProofRun(proofRun) {
-  return proofRunLaneSurface(proofRun, {
-    metadata: {
-      proofCheckId: "concurrent-host-publish-race",
-      reloadProofCheckId: "concurrent-host-publish-race-reload",
-    },
-    laneMap: {
-      hostPublishRace: "concurrent-host-publish-race",
-      hostPublishRaceReload: "concurrent-host-publish-race-reload",
-    },
-  });
-}
-
-function hostResolveRaceSurfaceFromProofRun(proofRun) {
-  return proofRunLaneSurface(proofRun, {
-    metadata: {
-      proofCheckId: "concurrent-host-resolve-race",
-      reloadProofCheckId: "concurrent-host-resolve-race-reload",
-    },
-    laneMap: {
-      hostResolveRace: "concurrent-host-resolve-race",
-      hostResolveRaceReload: "concurrent-host-resolve-race-reload",
-    },
-  });
-}
-
-function hostAdvanceRaceSurfaceFromProofRun(proofRun) {
-  return proofRunLaneSurface(proofRun, {
-    metadata: {
-      proofCheckId: "concurrent-host-advance-race",
-      reloadProofCheckId: "concurrent-host-advance-race-reload",
-    },
-    laneMap: {
-      hostAdvanceRace: "concurrent-host-advance-race",
-      hostAdvanceRaceReload: "concurrent-host-advance-race-reload",
-    },
-  });
-}
-
-function hostDeadlineAdvanceRaceSurfaceFromProofRun(proofRun) {
-  return proofRunLaneSurface(proofRun, {
-    metadata: {
-      proofCheckId: "concurrent-host-deadline-advance-race",
-      reloadProofCheckId: "concurrent-host-deadline-advance-race-reload",
-    },
-    laneMap: {
-      hostDeadlineAdvanceRace: "concurrent-host-deadline-advance-race",
-      hostDeadlineAdvanceRaceReload:
-        "concurrent-host-deadline-advance-race-reload",
-    },
-  });
-}
-
-function hostMixedAdvanceRaceSurfaceFromProofRun(proofRun) {
-  return proofRunLaneSurface(proofRun, {
-    metadata: {
-      proofCheckId: "concurrent-host-mixed-advance-race",
-      reloadProofCheckId: "concurrent-host-mixed-advance-race-reload",
-    },
-    laneMap: {
-      hostMixedAdvanceRace: "concurrent-host-mixed-advance-race",
-      hostMixedAdvanceRaceReload: "concurrent-host-mixed-advance-race-reload",
-    },
-  });
+function hostRaceSurfacesFromProofRun(proofRun) {
+  return Object.fromEntries(
+    hostControlRaceScenarioCases().map((raceCase) => [
+      raceCase.surfaceField,
+      proofRunLaneSurface(proofRun, {
+        metadata: raceCase.metadata,
+        laneMap: raceCase.laneMap,
+      }),
+    ]),
+  );
 }
 
 function proofRunLaneSurface(proofRun, { metadata, laneMap }) {
@@ -523,25 +452,12 @@ export function coreLoopAdminProofCase() {
       });
       const hostModkillControlSurface =
         hostModkillControlSurfaceFromProofRun(proofRun);
-      const hostLifecycleRaceSurface =
-        hostLifecycleRaceSurfaceFromProofRun(proofRun);
-      const hostPublishRaceSurface = hostPublishRaceSurfaceFromProofRun(proofRun);
-      const hostResolveRaceSurface = hostResolveRaceSurfaceFromProofRun(proofRun);
-      const hostAdvanceRaceSurface = hostAdvanceRaceSurfaceFromProofRun(proofRun);
-      const hostDeadlineAdvanceRaceSurface =
-        hostDeadlineAdvanceRaceSurfaceFromProofRun(proofRun);
-      const hostMixedAdvanceRaceSurface =
-        hostMixedAdvanceRaceSurfaceFromProofRun(proofRun);
+      const hostRaceSurfaces = hostRaceSurfacesFromProofRun(proofRun);
       return {
         adminRoleSurface,
         hostRoleSurface,
         hostModkillControlSurface,
-        hostLifecycleRaceSurface,
-        hostPublishRaceSurface,
-        hostResolveRaceSurface,
-        hostAdvanceRaceSurface,
-        hostDeadlineAdvanceRaceSurface,
-        hostMixedAdvanceRaceSurface,
+        ...hostRaceSurfaces,
         playerRoleSurface,
         targetResolutionReceiptSurface,
         normalResolutionPrivacySurface,
@@ -608,13 +524,12 @@ export function coreLoopAdminProofCase() {
       adminRoleSurface: surfaces.adminRoleSurface,
       hostRoleSurface: surfaces.hostRoleSurface,
       hostModkillControlSurface: surfaces.hostModkillControlSurface,
-      hostLifecycleRaceSurface: surfaces.hostLifecycleRaceSurface,
-      hostPublishRaceSurface: surfaces.hostPublishRaceSurface,
-      hostResolveRaceSurface: surfaces.hostResolveRaceSurface,
-      hostAdvanceRaceSurface: surfaces.hostAdvanceRaceSurface,
-      hostDeadlineAdvanceRaceSurface:
-        surfaces.hostDeadlineAdvanceRaceSurface,
-      hostMixedAdvanceRaceSurface: surfaces.hostMixedAdvanceRaceSurface,
+      ...Object.fromEntries(
+        hostControlRaceScenarioCases().map((raceCase) => [
+          raceCase.surfaceField,
+          surfaces[raceCase.surfaceField],
+        ]),
+      ),
       playerRoleSurface: surfaces.playerRoleSurface,
       targetResolutionReceiptSurface: surfaces.targetResolutionReceiptSurface,
       normalResolutionPrivacySurface: surfaces.normalResolutionPrivacySurface,
@@ -10086,14 +10001,7 @@ export function assertCoreLoopAdminProof(evidence) {
   assertCoreLoopHostModkillControlSurface({
     hostModkillControlSurface: evidence.hostModkillControlSurface,
   });
-  assertCoreLoopHostLifecycleRaceSurface(evidence.hostLifecycleRaceSurface);
-  assertCoreLoopHostPublishRaceSurface(evidence.hostPublishRaceSurface);
-  assertCoreLoopHostResolveRaceSurface(evidence.hostResolveRaceSurface);
-  assertCoreLoopHostAdvanceRaceSurface(evidence.hostAdvanceRaceSurface);
-  assertCoreLoopHostDeadlineAdvanceRaceSurface(
-    evidence.hostDeadlineAdvanceRaceSurface,
-  );
-  assertCoreLoopHostMixedAdvanceRaceSurface(evidence.hostMixedAdvanceRaceSurface);
+  assertCoreLoopHostRaceSurfaces(evidence);
   assertPlayerActionSubmissionCheckpoint(evidence.playerRoleSurface);
   assertTargetResolutionReceiptSurface(evidence.targetResolutionReceiptSurface);
   assertNormalResolutionPrivacySurface(evidence.normalResolutionPrivacySurface);
@@ -10153,60 +10061,14 @@ function assertCoreLoopHostModkillControlSurface({ hostModkillControlSurface }) 
   });
 }
 
-function assertCoreLoopHostLifecycleRaceSurface(hostLifecycleRaceSurface) {
-  const scenarioFamily = coreLoopHostControlScenarioFamily();
-  assertHostLifecycleRaceSurfaceCase({
-    hostLifecycleRaceSurface,
-    scenario: scenarioFamily.surfaces.hostLifecycleRace,
-    includeEvidenceInError: true,
-  });
-}
-
-function assertCoreLoopHostPublishRaceSurface(hostPublishRaceSurface) {
-  const scenarioFamily = coreLoopHostControlScenarioFamily();
-  assertHostPublishRaceSurfaceCase({
-    hostPublishRaceSurface,
-    scenario: scenarioFamily.surfaces.hostPublishRace,
-    includeEvidenceInError: true,
-  });
-}
-
-function assertCoreLoopHostResolveRaceSurface(hostResolveRaceSurface) {
-  const scenarioFamily = coreLoopHostControlScenarioFamily();
-  assertHostResolveRaceSurfaceCase({
-    hostResolveRaceSurface,
-    scenario: scenarioFamily.surfaces.hostResolveRace,
-    includeEvidenceInError: true,
-  });
-}
-
-function assertCoreLoopHostAdvanceRaceSurface(hostAdvanceRaceSurface) {
-  const scenarioFamily = coreLoopHostControlScenarioFamily();
-  assertHostAdvanceRaceSurfaceCase({
-    hostAdvanceRaceSurface,
-    scenario: scenarioFamily.surfaces.hostAdvanceRace,
-    includeEvidenceInError: true,
-  });
-}
-
-function assertCoreLoopHostDeadlineAdvanceRaceSurface(
-  hostDeadlineAdvanceRaceSurface,
-) {
-  const scenarioFamily = coreLoopHostControlScenarioFamily();
-  assertHostDeadlineAdvanceRaceSurfaceCase({
-    hostDeadlineAdvanceRaceSurface,
-    scenario: scenarioFamily.surfaces.hostDeadlineAdvanceRace,
-    includeEvidenceInError: true,
-  });
-}
-
-function assertCoreLoopHostMixedAdvanceRaceSurface(hostMixedAdvanceRaceSurface) {
-  const scenarioFamily = coreLoopHostControlScenarioFamily();
-  assertHostMixedAdvanceRaceSurfaceCase({
-    hostMixedAdvanceRaceSurface,
-    scenario: scenarioFamily.surfaces.hostMixedAdvanceRace,
-    includeEvidenceInError: true,
-  });
+function assertCoreLoopHostRaceSurfaces(evidence) {
+  for (const raceCase of hostControlRaceScenarioCases()) {
+    assertHostControlRaceSurfaceCase({
+      raceCase,
+      surface: evidence[raceCase.surfaceField],
+      includeEvidenceInError: true,
+    });
+  }
 }
 
 function assertPlayerActionSubmissionCheckpoint(playerRoleSurface) {

@@ -226,16 +226,11 @@ import {
 } from "./dev_test_game_core_loop_player_action_recovery_scenarios.mjs";
 import {
   assertEmptyNightThreeHostTransitionProofCase,
-  assertHostAdvanceRaceSurfaceCase,
-  assertHostDeadlineAdvanceRaceSurfaceCase,
-  assertHostLifecycleRaceSurfaceCase,
+  assertHostControlRaceSurfaceCase,
   assertHostLifecycleControlRoleSurfaceCase,
-  assertHostMixedAdvanceRaceSurfaceCase,
   assertHostModkillControlSurfaceCase,
   assertHostNightActionTransitionSurfaceCase,
   assertHostPhaseTransitionActionProofCase,
-  assertHostPublishRaceSurfaceCase,
-  assertHostResolveRaceSurfaceCase,
   assertHostStaleAdvanceAfterTransitionProofCase,
   hostDeadlineAffordanceForPhaseState,
 } from "./dev_test_game_core_loop_host_phase_scenarios.mjs";
@@ -294,6 +289,7 @@ import {
 } from "./dev_test_game_core_loop_day_five_progression_scenarios.mjs";
 import {
   coreLoopHostControlFamilyId,
+  hostControlRaceScenarioCases,
   coreLoopHostControlScenarioFamily,
 } from "./dev_test_game_core_loop_host_control_scenarios.mjs";
 import {
@@ -2452,14 +2448,7 @@ export function validateDevTestGameCoreLoopAdminProof(proof, options = {}) {
   assertCoreLoopHostModkillControlSurface({
     hostModkillControlSurface: proof.hostModkillControlSurface,
   });
-  assertCoreLoopHostLifecycleRaceSurface(proof.hostLifecycleRaceSurface);
-  assertCoreLoopHostPublishRaceSurface(proof.hostPublishRaceSurface);
-  assertCoreLoopHostResolveRaceSurface(proof.hostResolveRaceSurface);
-  assertCoreLoopHostAdvanceRaceSurface(proof.hostAdvanceRaceSurface);
-  assertCoreLoopHostDeadlineAdvanceRaceSurface(
-    proof.hostDeadlineAdvanceRaceSurface,
-  );
-  assertCoreLoopHostMixedAdvanceRaceSurface(proof.hostMixedAdvanceRaceSurface);
+  assertCoreLoopHostRaceSurfaces(proof);
   assertCoreLoopPlayerActionCheckpoint(proof.playerRoleSurface);
   assertCoreLoopTargetResolutionReceiptSurface(proof.targetResolutionReceiptSurface);
   assertCoreLoopNormalResolutionPrivacySurface(proof.normalResolutionPrivacySurface);
@@ -2988,54 +2977,13 @@ function assertCoreLoopHostModkillControlSurface({ hostModkillControlSurface }) 
   });
 }
 
-function assertCoreLoopHostLifecycleRaceSurface(hostLifecycleRaceSurface) {
-  const scenarioFamily = coreLoopHostControlScenarioFamily();
-  assertHostLifecycleRaceSurfaceCase({
-    hostLifecycleRaceSurface,
-    scenario: scenarioFamily.surfaces.hostLifecycleRace,
-  });
-}
-
-function assertCoreLoopHostPublishRaceSurface(hostPublishRaceSurface) {
-  const scenarioFamily = coreLoopHostControlScenarioFamily();
-  assertHostPublishRaceSurfaceCase({
-    hostPublishRaceSurface,
-    scenario: scenarioFamily.surfaces.hostPublishRace,
-  });
-}
-
-function assertCoreLoopHostResolveRaceSurface(hostResolveRaceSurface) {
-  const scenarioFamily = coreLoopHostControlScenarioFamily();
-  assertHostResolveRaceSurfaceCase({
-    hostResolveRaceSurface,
-    scenario: scenarioFamily.surfaces.hostResolveRace,
-  });
-}
-
-function assertCoreLoopHostAdvanceRaceSurface(hostAdvanceRaceSurface) {
-  const scenarioFamily = coreLoopHostControlScenarioFamily();
-  assertHostAdvanceRaceSurfaceCase({
-    hostAdvanceRaceSurface,
-    scenario: scenarioFamily.surfaces.hostAdvanceRace,
-  });
-}
-
-function assertCoreLoopHostDeadlineAdvanceRaceSurface(
-  hostDeadlineAdvanceRaceSurface,
-) {
-  const scenarioFamily = coreLoopHostControlScenarioFamily();
-  assertHostDeadlineAdvanceRaceSurfaceCase({
-    hostDeadlineAdvanceRaceSurface,
-    scenario: scenarioFamily.surfaces.hostDeadlineAdvanceRace,
-  });
-}
-
-function assertCoreLoopHostMixedAdvanceRaceSurface(hostMixedAdvanceRaceSurface) {
-  const scenarioFamily = coreLoopHostControlScenarioFamily();
-  assertHostMixedAdvanceRaceSurfaceCase({
-    hostMixedAdvanceRaceSurface,
-    scenario: scenarioFamily.surfaces.hostMixedAdvanceRace,
-  });
+function assertCoreLoopHostRaceSurfaces(proof) {
+  for (const raceCase of hostControlRaceScenarioCases()) {
+    assertHostControlRaceSurfaceCase({
+      raceCase,
+      surface: proof[raceCase.surfaceField],
+    });
+  }
 }
 
 function assertCoreLoopPlayerActionCheckpoint(playerRoleSurface) {

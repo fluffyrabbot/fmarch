@@ -4,6 +4,7 @@ import {
   assertDayFourNoLynchHostTransitionProofCase,
   assertEmptyNightThreeHostTransitionProofCase,
   assertHostAdvanceRaceSurfaceCase,
+  assertHostControlRaceSurfaceCase,
   assertHostDeadlineAdvanceRaceSurfaceCase,
   assertHostLifecycleRaceSurfaceCase,
   assertHostNightActionTransitionSurfaceCase,
@@ -21,6 +22,7 @@ import {
   hostAdvancePhaseCommandFacts,
   hostAdvancePhaseTransitionCase,
   hostCompleteGameCommandFacts,
+  hostControlRaceScenarioCases,
   hostDeadlineAdvanceRaceScenario,
   hostDeadlineAffordanceForPhaseState,
   hostExtendDeadlineCommandFacts,
@@ -210,6 +212,113 @@ test("host phase scenario module exposes shared lifecycle control case", () => {
   assert.notEqual(
     hostLifecycleControlScenario().visibleRows,
     hostLifecycleControlScenario().visibleRows,
+  );
+});
+
+test("host phase scenario module exposes shared host-control race cases", () => {
+  const raceCases = hostControlRaceScenarioCases();
+  assert.deepEqual(
+    raceCases.map((raceCase) => ({
+      surfaceKey: raceCase.surfaceKey,
+      surfaceField: raceCase.surfaceField,
+      assertionArgument: raceCase.assertionArgument,
+      metadata: raceCase.metadata,
+      laneMap: raceCase.laneMap,
+      scenario: raceCase.scenario,
+    })),
+    [
+      {
+        surfaceKey: "hostLifecycleRace",
+        surfaceField: "hostLifecycleRaceSurface",
+        assertionArgument: "hostLifecycleRaceSurface",
+        metadata: {
+          proofCheckId: "concurrent-host-lifecycle-race",
+          reloadProofCheckId: "concurrent-host-lifecycle-race-reload",
+        },
+        laneMap: {
+          hostLifecycleRace: "concurrent-host-lifecycle-race",
+          hostLifecycleRaceReload: "concurrent-host-lifecycle-race-reload",
+        },
+        scenario: hostLifecycleRaceScenario(),
+      },
+      {
+        surfaceKey: "hostPublishRace",
+        surfaceField: "hostPublishRaceSurface",
+        assertionArgument: "hostPublishRaceSurface",
+        metadata: {
+          proofCheckId: "concurrent-host-publish-race",
+          reloadProofCheckId: "concurrent-host-publish-race-reload",
+        },
+        laneMap: {
+          hostPublishRace: "concurrent-host-publish-race",
+          hostPublishRaceReload: "concurrent-host-publish-race-reload",
+        },
+        scenario: hostPublishRaceScenario(),
+      },
+      {
+        surfaceKey: "hostResolveRace",
+        surfaceField: "hostResolveRaceSurface",
+        assertionArgument: "hostResolveRaceSurface",
+        metadata: {
+          proofCheckId: "concurrent-host-resolve-race",
+          reloadProofCheckId: "concurrent-host-resolve-race-reload",
+        },
+        laneMap: {
+          hostResolveRace: "concurrent-host-resolve-race",
+          hostResolveRaceReload: "concurrent-host-resolve-race-reload",
+        },
+        scenario: hostResolveRaceScenario(),
+      },
+      {
+        surfaceKey: "hostAdvanceRace",
+        surfaceField: "hostAdvanceRaceSurface",
+        assertionArgument: "hostAdvanceRaceSurface",
+        metadata: {
+          proofCheckId: "concurrent-host-advance-race",
+          reloadProofCheckId: "concurrent-host-advance-race-reload",
+        },
+        laneMap: {
+          hostAdvanceRace: "concurrent-host-advance-race",
+          hostAdvanceRaceReload: "concurrent-host-advance-race-reload",
+        },
+        scenario: hostAdvanceRaceScenario(),
+      },
+      {
+        surfaceKey: "hostDeadlineAdvanceRace",
+        surfaceField: "hostDeadlineAdvanceRaceSurface",
+        assertionArgument: "hostDeadlineAdvanceRaceSurface",
+        metadata: {
+          proofCheckId: "concurrent-host-deadline-advance-race",
+          reloadProofCheckId:
+            "concurrent-host-deadline-advance-race-reload",
+        },
+        laneMap: {
+          hostDeadlineAdvanceRace: "concurrent-host-deadline-advance-race",
+          hostDeadlineAdvanceRaceReload:
+            "concurrent-host-deadline-advance-race-reload",
+        },
+        scenario: hostDeadlineAdvanceRaceScenario(),
+      },
+      {
+        surfaceKey: "hostMixedAdvanceRace",
+        surfaceField: "hostMixedAdvanceRaceSurface",
+        assertionArgument: "hostMixedAdvanceRaceSurface",
+        metadata: {
+          proofCheckId: "concurrent-host-mixed-advance-race",
+          reloadProofCheckId: "concurrent-host-mixed-advance-race-reload",
+        },
+        laneMap: {
+          hostMixedAdvanceRace: "concurrent-host-mixed-advance-race",
+          hostMixedAdvanceRaceReload:
+            "concurrent-host-mixed-advance-race-reload",
+        },
+        scenario: hostMixedAdvanceRaceScenario(),
+      },
+    ],
+  );
+  assert.notEqual(
+    hostControlRaceScenarioCases()[2].scenario.allowedPageRoles,
+    hostControlRaceScenarioCases()[2].scenario.allowedPageRoles,
   );
 });
 
@@ -1334,6 +1443,14 @@ test("host mixed advance race assertion covers mixed advance convergence and rel
     assertHostMixedAdvanceRaceSurfaceCase({
       hostMixedAdvanceRaceSurface,
       scenario: hostMixedAdvanceRaceScenario(),
+    }),
+  );
+  assert.doesNotThrow(() =>
+    assertHostControlRaceSurfaceCase({
+      raceCase: hostControlRaceScenarioCases().find(
+        (raceCase) => raceCase.surfaceKey === "hostMixedAdvanceRace",
+      ),
+      surface: hostMixedAdvanceRaceSurface,
     }),
   );
   assert.throws(
