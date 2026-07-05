@@ -13,6 +13,17 @@ export const terminalHostedIdentityNextActionAdminProofBatchLabel =
   "Terminal hosted identity next-action admin proof batch";
 export const terminalRefreshAdminProofBatchLabel =
   "Terminal refresh admin proof batch";
+export const terminalAdminProofBatchScript = "terminal-admin-proof-batch";
+export const terminalHostedIdentityNextActionAdminProofBatchScript =
+  "terminal-hosted-identity-next-action-admin-proof-batch";
+export const terminalRefreshAdminProofBatchScript =
+  "terminal-refresh-admin-proof-batch";
+export const terminalAdminProofBatchReason =
+  "terminal graph, freshness, and next-action admin surfaces share the generated proof graph inputs";
+export const terminalHostedIdentityNextActionAdminProofBatchReason =
+  "hosted identity next-action input proves the promoted operator-aware admin rows before the default next-action receipt is restored";
+export const terminalRefreshAdminProofBatchReason =
+  "freshness and next-action admin surfaces share the refreshed next-action input";
 
 export const hostedIdentityTerminalReceiptArtifactCase =
   terminalReceiptArtifactCase({
@@ -63,15 +74,29 @@ export const terminalProofGraphReceiptRegistry = Object.freeze([
 
 export const terminalProofGraphReceiptBatchRegistry = Object.freeze(
   [
-    terminalAdminProofBatchLabel,
-    terminalHostedIdentityNextActionAdminProofBatchLabel,
-    terminalRefreshAdminProofBatchLabel,
-  ].map((label) => {
+    {
+      label: terminalAdminProofBatchLabel,
+      script: terminalAdminProofBatchScript,
+      reason: terminalAdminProofBatchReason,
+    },
+    {
+      label: terminalHostedIdentityNextActionAdminProofBatchLabel,
+      script: terminalHostedIdentityNextActionAdminProofBatchScript,
+      reason: terminalHostedIdentityNextActionAdminProofBatchReason,
+    },
+    {
+      label: terminalRefreshAdminProofBatchLabel,
+      script: terminalRefreshAdminProofBatchScript,
+      reason: terminalRefreshAdminProofBatchReason,
+    },
+  ].map((batch) => {
     const receipts = terminalProofGraphReceiptRegistry.filter(
-      (entry) => entry.batchLabel === label,
+      (entry) => entry.batchLabel === batch.label,
     );
     return Object.freeze({
-      label,
+      label: batch.label,
+      script: batch.script,
+      reason: batch.reason,
       proofIds: Object.freeze(receipts.map((entry) => entry.proofId)),
       artifactPaths: Object.freeze(
         receipts.map((entry) => entry.artifactPath),

@@ -88,9 +88,10 @@ import {
   nextActionAdminProofCase,
 } from "./dev_test_game_next_action_admin_proof.mjs";
 import {
-  terminalAdminProofBatchLabel,
-  terminalHostedIdentityNextActionAdminProofBatchLabel,
-  terminalRefreshAdminProofBatchLabel,
+  terminalAdminProofBatchScript,
+  terminalHostedIdentityNextActionAdminProofBatchScript,
+  terminalProofGraphReceiptBatchRegistry,
+  terminalRefreshAdminProofBatchScript,
 } from "./dev_test_game_proof_graph_receipt_artifact_rows.mjs";
 import { releaseReadinessStep } from "./dev_test_game_spine_readiness_steps.mjs";
 import { runSpinePlan } from "./dev_test_game_spine_runner.mjs";
@@ -187,36 +188,29 @@ export const adminSpineHostedOpsInputReadinessEnv = {
 
 const devTestGameHostedIdentitySequenceStage = "hosted-identity";
 
-export const terminalAdminProofBatchPlan = {
-  label: terminalAdminProofBatchLabel,
-  reason: "terminal graph, freshness, and next-action admin surfaces share the generated proof graph inputs",
-  cases: [
-    proofGraphAdminProofCase,
-    proofFreshnessAdminProofCase,
-    nextActionAdminProofCase,
-  ],
-};
+const terminalAdminProofCaseFactories = Object.freeze({
+  "proof-graph": proofGraphAdminProofCase,
+  "proof-freshness": proofFreshnessAdminProofCase,
+  "next-action": nextActionAdminProofCase,
+  "hosted-identity-next-action": () =>
+    nextActionAdminProofCase({
+      nextActionSourcePath: hostedIdentityNextActionPath,
+      evidenceSourcePath: hostedIdentityNextActionAdminProofPath,
+      smokeName: "dev-test-game-hosted-identity-next-action-admin-proof",
+      stage: "hosted-identity-next-action-admin-proof-listen",
+    }),
+});
 
-export const terminalRefreshAdminProofBatchPlan = {
-  label: terminalRefreshAdminProofBatchLabel,
-  reason: "freshness and next-action admin surfaces share the refreshed next-action input",
-  cases: [proofFreshnessAdminProofCase, nextActionAdminProofCase],
-};
+export const terminalAdminProofBatchPlan =
+  terminalAdminProofBatchPlanForScript(terminalAdminProofBatchScript);
 
-export const terminalHostedIdentityNextActionAdminProofBatchPlan = {
-  label: terminalHostedIdentityNextActionAdminProofBatchLabel,
-  reason:
-    "hosted identity next-action input proves the promoted operator-aware admin rows before the default next-action receipt is restored",
-  cases: [
-    () =>
-      nextActionAdminProofCase({
-        nextActionSourcePath: hostedIdentityNextActionPath,
-        evidenceSourcePath: hostedIdentityNextActionAdminProofPath,
-        smokeName: "dev-test-game-hosted-identity-next-action-admin-proof",
-        stage: "hosted-identity-next-action-admin-proof-listen",
-      }),
-  ],
-};
+export const terminalRefreshAdminProofBatchPlan =
+  terminalAdminProofBatchPlanForScript(terminalRefreshAdminProofBatchScript);
+
+export const terminalHostedIdentityNextActionAdminProofBatchPlan =
+  terminalAdminProofBatchPlanForScript(
+    terminalHostedIdentityNextActionAdminProofBatchScript,
+  );
 
 export const devTestGameAdminSpinePlan = [
   { kind: "node", script: "tools/dev_test_game_race_coverage.mjs" },
@@ -278,8 +272,8 @@ export const devTestGameAdminSpinePlan = [
   { kind: "node", script: "tools/dev_test_game_proof_graph.mjs" },
   {
     kind: "custom",
-    script: "terminal-admin-proof-batch",
-    label: terminalAdminProofBatchLabel,
+    script: terminalAdminProofBatchPlan.script,
+    label: terminalAdminProofBatchPlan.label,
   },
   releaseReadinessStep({
     reason: "terminal-graph-and-local-dependency-surfaces",
@@ -303,14 +297,14 @@ export const devTestGameAdminSpinePlan = [
   },
   {
     kind: "custom",
-    script: "terminal-hosted-identity-next-action-admin-proof-batch",
-    label: terminalHostedIdentityNextActionAdminProofBatchLabel,
+    script: terminalHostedIdentityNextActionAdminProofBatchPlan.script,
+    label: terminalHostedIdentityNextActionAdminProofBatchPlan.label,
   },
   { kind: "node", script: "tools/dev_test_game_next_action.mjs" },
   {
     kind: "custom",
-    script: "terminal-refresh-admin-proof-batch",
-    label: terminalRefreshAdminProofBatchLabel,
+    script: terminalRefreshAdminProofBatchPlan.script,
+    label: terminalRefreshAdminProofBatchPlan.label,
   },
   { kind: "node", script: "tools/dev_test_game_proof_graph.mjs" },
   { kind: "node", script: "tools/dev_test_game_proof_graph_admin_proof.mjs" },
@@ -332,6 +326,31 @@ export const devTestGameAdminSpinePlan = [
   }),
 ];
 
+function terminalAdminProofBatchPlanForScript(script) {
+  const batch = terminalProofGraphReceiptBatchRegistry.find(
+    (candidate) => candidate.script === script,
+  );
+  if (batch === undefined) {
+    throw new Error(`unknown terminal admin proof batch script: ${script}`);
+  }
+  return Object.freeze({
+    label: batch.label,
+    script: batch.script,
+    reason: batch.reason,
+    cases: Object.freeze(
+      batch.proofIds.map((proofId) => {
+        const factory = terminalAdminProofCaseFactories[proofId];
+        if (factory === undefined) {
+          throw new Error(
+            `terminal admin proof batch ${batch.label} has unknown proof id: ${proofId}`,
+          );
+        }
+        return factory;
+      }),
+    ),
+  });
+}
+
 export async function runDevTestGameAdminSpine() {
   const terminalBatchEvidence = [];
   await clearAdminSpineTerminalBatchProof();
@@ -341,19 +360,19 @@ export async function runDevTestGameAdminSpine() {
         const evidence = await runAdminSpineProof();
         console.log(`wrote ${adminSpineProofPath} (${evidence.status})`);
       },
-      "terminal-admin-proof-batch": async () => {
+      [terminalAdminProofBatchPlan.script]: async () => {
         terminalBatchEvidence.push(
           await runAdminAuditProofBatchPlan(terminalAdminProofBatchPlan),
         );
       },
-      "terminal-hosted-identity-next-action-admin-proof-batch": async () => {
+      [terminalHostedIdentityNextActionAdminProofBatchPlan.script]: async () => {
         terminalBatchEvidence.push(
           await runAdminAuditProofBatchPlan(
             terminalHostedIdentityNextActionAdminProofBatchPlan,
           ),
         );
       },
-      "terminal-refresh-admin-proof-batch": async () => {
+      [terminalRefreshAdminProofBatchPlan.script]: async () => {
         terminalBatchEvidence.push(
           await runAdminAuditProofBatchPlan(terminalRefreshAdminProofBatchPlan),
         );

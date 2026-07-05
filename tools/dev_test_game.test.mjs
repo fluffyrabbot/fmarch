@@ -1150,7 +1150,7 @@ test("dev test-game spine orchestrators expose stable proof order and env maps",
   });
   assertAdminAuditBatchPlan({
     plan: terminalAdminProofBatchPlan,
-    label: "Terminal admin proof batch",
+    batch: terminalProofGraphReceiptBatchRegistry[0],
     caseSmokeNames: [
       "dev-test-game-proof-graph-admin-proof",
       "dev-test-game-proof-freshness-admin-proof",
@@ -1159,14 +1159,14 @@ test("dev test-game spine orchestrators expose stable proof order and env maps",
   });
   assertAdminAuditBatchPlan({
     plan: terminalHostedIdentityNextActionAdminProofBatchPlan,
-    label: "Terminal hosted identity next-action admin proof batch",
+    batch: terminalProofGraphReceiptBatchRegistry[1],
     caseSmokeNames: [
       "dev-test-game-hosted-identity-next-action-admin-proof",
     ],
   });
   assertAdminAuditBatchPlan({
     plan: terminalRefreshAdminProofBatchPlan,
-    label: "Terminal refresh admin proof batch",
+    batch: terminalProofGraphReceiptBatchRegistry[2],
     caseSmokeNames: [
       "dev-test-game-proof-freshness-admin-proof",
       "dev-test-game-next-action-admin-proof",
@@ -1244,10 +1244,18 @@ test("dev test-game spine orchestrators expose stable proof order and env maps",
   });
 });
 
-function assertAdminAuditBatchPlan({ plan, label, caseSmokeNames }) {
-  assert.equal(plan.label, label);
-  assert.equal(typeof plan.reason, "string");
-  assert.notEqual(plan.reason.trim(), "");
+function assertAdminAuditBatchPlan({ plan, batch, caseSmokeNames }) {
+  if (batch === undefined) {
+    assert.equal(typeof plan.label, "string");
+    assert.notEqual(plan.label.trim(), "");
+    assert.equal(typeof plan.reason, "string");
+    assert.notEqual(plan.reason.trim(), "");
+  } else {
+    assert.equal(plan.label, batch.label);
+    assert.equal(plan.script, batch.script);
+    assert.equal(plan.reason, batch.reason);
+    assert.equal(plan.cases.length, batch.proofIds.length);
+  }
   const resolved = resolveAdminAuditProofBatchPlan(plan);
   assert.deepEqual(
     resolved.cases.map((proofCase) => proofCase.smokeName),
@@ -4593,12 +4601,16 @@ test("proof graph receipt artifact rows share one browser row id contract", () =
   assert.deepEqual(
     terminalProofGraphReceiptBatchRegistry.map((batch) => [
       batch.label,
+      batch.script,
+      batch.reason,
       batch.proofIds,
       batch.artifactPaths,
     ]),
     [
       [
         "Terminal admin proof batch",
+        "terminal-admin-proof-batch",
+        "terminal graph, freshness, and next-action admin surfaces share the generated proof graph inputs",
         ["proof-graph", "proof-freshness", "next-action"],
         [
           "target/dev-test-game/proof-graph-admin-proof.json",
@@ -4608,11 +4620,15 @@ test("proof graph receipt artifact rows share one browser row id contract", () =
       ],
       [
         hostedIdentityTerminalReceiptArtifactCase.batchLabel,
+        "terminal-hosted-identity-next-action-admin-proof-batch",
+        "hosted identity next-action input proves the promoted operator-aware admin rows before the default next-action receipt is restored",
         [hostedIdentityTerminalReceiptArtifactCase.proofId],
         [hostedIdentityTerminalReceiptArtifactCase.artifactPath],
       ],
       [
         "Terminal refresh admin proof batch",
+        "terminal-refresh-admin-proof-batch",
+        "freshness and next-action admin surfaces share the refreshed next-action input",
         ["proof-freshness", "next-action"],
         [
           "target/dev-test-game/proof-freshness-admin-proof.json",
