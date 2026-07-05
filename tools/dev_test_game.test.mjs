@@ -576,6 +576,10 @@ test("dev test-game spine orchestrators expose stable proof order and env maps",
     packageJson.scripts["test:dev-test-game-live"],
     "node tools/dev_test_game_live_spine.mjs",
   );
+  assert.match(
+    packageJson.scripts["test:dev-test-game-seed-fixture"],
+    /FMARCH_DEV_TEST_GAME_SEED_FIXTURE_SUMMARY=target\/dev-test-game\/seed-fixture-summary\.json FMARCH_DEV_TEST_GAME_SEED_ADMIN_PROOF=target\/dev-test-game\/seed-admin-proof\.json npm run test:dev-test-game-readiness && FMARCH_DEV_TEST_GAME_SEED_FIXTURE_SUMMARY=target\/dev-test-game\/seed-fixture-summary\.json FMARCH_DEV_TEST_GAME_SEED_ADMIN_PROOF=target\/dev-test-game\/seed-admin-proof\.json npm run test:dev-test-game-next-action/,
+  );
   for (const descriptor of recoveryReceiptGraphDescriptors) {
     assert.equal(
       packageJson.scripts[descriptor.proofCommand],

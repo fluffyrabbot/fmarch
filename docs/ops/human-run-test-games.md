@@ -628,7 +628,8 @@ artifact bundle with its seeded admin overview-to-detail browser proof. After
 the checklist consumes `target/dev-test-game/seed-fixture-summary.json` plus
 `target/dev-test-game/seed-admin-proof.json` and promotes only the local
 seed/demo fixture inventory with its seeded admin overview-to-detail browser
-proof. After
+proof, then refreshes `target/dev-test-game/next-action.json` with the same seed
+evidence so the handoff advances past the recovered local dependency. After
 `npm run test:dev-test-game-identity`, the checklist consumes
 `target/auth-invite-role-proof/invite-role-proof.json` plus
 `target/dev-test-game/identity-admin-proof.json`, and promotes only the local
