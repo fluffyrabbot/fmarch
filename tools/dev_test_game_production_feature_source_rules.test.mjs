@@ -22,10 +22,12 @@ import {
 } from "./dev_test_game_production_feature_source_rules.mjs";
 import {
   assertProductionFeatureSourceCoverageDecisions,
+  assertProductionFeatureSourceSpineChecklist,
   productionFeatureCoverageDecisionKind,
   productionFeatureReadinessSourceKind,
   productionFeatureSourceCoverageDecision,
   productionFeatureSourceCoverageDecisionSummary,
+  productionFeatureSourceSpineChecklist,
   productionFeatureRoleSurfaceSources,
   productionFeatureRoleSurfaceSourceCheckIds,
   productionFeatureSourceRegistry,
@@ -154,6 +156,73 @@ test("production feature source rules cover every feature spine source", () => {
     ],
   );
   assert.doesNotThrow(() => assertProductionFeatureSourceCoverageDecisions());
+  assert.doesNotThrow(() => assertProductionFeatureSourceSpineChecklist());
+  assert.deepEqual(
+    productionFeatureSourceRegistry.map((source) =>
+      productionFeatureSourceSpineChecklist(source),
+    ),
+    [
+      [
+        coreLoopFeatureSpineSourceCheckId,
+        productionFeatureReadinessSourceKind.spineTargets,
+        "admin-proof:core-loop",
+        devTestGameCoreLoopAdminProofCommand,
+      ],
+      [
+        hostSetupFeatureSpineSourceCheckId,
+        productionFeatureReadinessSourceKind.spineTargets,
+        "role-surface:host-setup",
+        devTestGameHostSetupProofCommand,
+      ],
+      [
+        cohostFeatureSpineSourceCheckId,
+        productionFeatureReadinessSourceKind.spineTargets,
+        "role-surface:cohost-console",
+        devTestGameCohostConsoleProofCommand,
+      ],
+      [
+        replacementFeatureSpineSourceCheckId,
+        productionFeatureReadinessSourceKind.spineTargets,
+        "role-surface:replacement-player",
+        devTestGameReplacementPlayerProofCommand,
+      ],
+      [
+        replacementActionFeatureSpineSourceCheckId,
+        productionFeatureReadinessSourceKind.spineTargets,
+        "role-surface:replacement-action",
+        devTestGameReplacementActionProofCommand,
+      ],
+      [
+        replacementPrivateFeatureSpineSourceCheckId,
+        productionFeatureReadinessSourceKind.spineTargets,
+        "role-surface:replacement-private-channel",
+        devTestGameReplacementPrivateProofCommand,
+      ],
+      [
+        hardeningFeatureSpineSourceCheckId,
+        productionFeatureReadinessSourceKind.spineTargets,
+        "admin-proof:hardening",
+        devTestGameHardeningAdminProofCommand,
+      ],
+      [
+        identityFeatureSpineSourceCheckId,
+        productionFeatureReadinessSourceKind.identityAdapter,
+        "admin-proof:identity",
+        devTestGameIdentityAdminProofCommand,
+      ],
+    ].map(([sourceCheckId, readinessDrilldown, proofGraphVisibility, command]) => ({
+      sourceCheckId,
+      coverageDecision:
+        sourceCheckId === identityFeatureSpineSourceCheckId
+          ? "declared:seeded-admin-proof"
+          : "declared:seeded-role-url-proof",
+      roleUrlTarget: "declared",
+      browserProofCommand: devTestGameProductionFeatureBrowserProofCommand,
+      proofGraphVisibility,
+      readinessDrilldown,
+      nextActionDrilldown: "coverage-decision-summary",
+    })),
+  );
   assert.ok(
     devTestGameProductionFeatureBrowserProofCommand.includes(
       "test:dev-test-game-core-live",
@@ -238,6 +307,40 @@ test("production feature source coverage decisions fail closed", () => {
       kind: productionFeatureCoverageDecisionKind.seededRoleUrlProof,
       proofCommand: "npm run future-proof",
     },
+  );
+});
+
+test("production feature source spine checklist fails closed", () => {
+  const futureSource = {
+    sourceCheckId: "future-feature",
+    readinessSourceKind: productionFeatureReadinessSourceKind.spineTargets,
+    rerunCommand: "npm run future-proof",
+    coverageDecision: {
+      kind: productionFeatureCoverageDecisionKind.seededRoleUrlProof,
+      proofCommand: "npm run future-proof",
+    },
+  };
+
+  assert.deepEqual(
+    productionFeatureSourceSpineChecklist(futureSource, {
+      browserProofCommand: "",
+    }),
+    {
+      sourceCheckId: "future-feature",
+      coverageDecision: "declared:seeded-role-url-proof",
+      roleUrlTarget: "missing",
+      browserProofCommand: "",
+      proofGraphVisibility: "",
+      readinessDrilldown: productionFeatureReadinessSourceKind.spineTargets,
+      nextActionDrilldown: "coverage-decision-summary",
+    },
+  );
+  assert.throws(
+    () =>
+      assertProductionFeatureSourceSpineChecklist([futureSource], {
+        browserProofCommand: "",
+      }),
+    /production feature source spine checklist missing: future-feature\.roleUrlTarget, future-feature\.browserProofCommand, future-feature\.proofGraphVisibility/,
   );
 });
 

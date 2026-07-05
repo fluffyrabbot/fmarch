@@ -203,4 +203,78 @@ export function assertProductionFeatureSourceCoverageDecisions(
   }
 }
 
+export function productionFeatureSourceSpineChecklist(
+  source,
+  {
+    browserProofCommand = devTestGameProductionFeatureBrowserProofCommand,
+  } = {},
+) {
+  const decision = productionFeatureSourceCoverageDecision(source);
+  return Object.freeze({
+    sourceCheckId: String(source?.sourceCheckId ?? ""),
+    coverageDecision:
+      decision === null
+        ? "missing"
+        : `declared:${String(decision.kind ?? "unknown")}`,
+    roleUrlTarget:
+      typeof source?.roleUrlIncludes === "string" &&
+      source.roleUrlIncludes.trim() !== "" &&
+      typeof source?.detailRoleUrlIncludes === "string" &&
+      source.detailRoleUrlIncludes.trim() !== ""
+        ? "declared"
+        : "missing",
+    browserProofCommand:
+      typeof browserProofCommand === "string" &&
+      browserProofCommand.includes("test:dev-test-game-core-live")
+        ? browserProofCommand
+        : "",
+    proofGraphVisibility:
+      typeof source?.graphSourceNodeId === "string" &&
+      source.graphSourceNodeId.trim() !== ""
+        ? source.graphSourceNodeId
+        : "",
+    readinessDrilldown:
+      Object.values(productionFeatureReadinessSourceKind).includes(
+        source?.readinessSourceKind,
+      )
+        ? source.readinessSourceKind
+        : "",
+    nextActionDrilldown:
+      decision !== null &&
+      typeof source?.rerunCommand === "string" &&
+      source.rerunCommand.trim() !== "" &&
+      productionFeatureSourceCoverageDecisionSummary(source) !== null
+        ? "coverage-decision-summary"
+        : "",
+  });
+}
+
+export function assertProductionFeatureSourceSpineChecklist(
+  sources = productionFeatureSourceRegistry,
+  options = {},
+) {
+  const missing = [];
+  for (const source of sources) {
+    const checklist = productionFeatureSourceSpineChecklist(source, options);
+    for (const [key, value] of Object.entries(checklist)) {
+      if (key === "sourceCheckId") {
+        continue;
+      }
+      if (
+        typeof value !== "string" ||
+        value.trim() === "" ||
+        value === "missing"
+      ) {
+        missing.push(`${checklist.sourceCheckId || "<unknown>"}.${key}`);
+      }
+    }
+  }
+  if (missing.length > 0) {
+    throw new Error(
+      `production feature source spine checklist missing: ${missing.join(", ")}`,
+    );
+  }
+}
+
 assertProductionFeatureSourceCoverageDecisions();
+assertProductionFeatureSourceSpineChecklist();
