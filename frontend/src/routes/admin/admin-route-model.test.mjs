@@ -48,12 +48,18 @@ import {
   playerInvalidActionRecoveryMessage,
 } from "../../../../tools/dev_test_game_core_loop_action_scenarios.mjs";
 import {
+  coreLoopPrivateChannelRecoveryCoverageFamilies,
+  coreLoopPrivateChannelRecoveryLaneIds,
   coreLoopPrivateChannelCompletedPostLaneId,
   coreLoopPrivateChannelInvalidActionLaneId,
   coreLoopPrivateChannelStalePostLaneId,
   privateChannelInvalidActionRecoveryScenario,
   staleCompletedPrivatePostScenario,
 } from "../../../../tools/dev_test_game_core_loop_private_channel_recovery_scenarios.mjs";
+import {
+  privateChannelNormalizedEvidenceObjects,
+  replacementPrivatePostNormalizedEvidenceObjects,
+} from "../../../../tools/dev_test_game_normalized_evidence_objects.mjs";
 import {
   seedAggregateOnlyProofLaneIds,
   seedAliasOnlyProofLaneIds,
@@ -1335,13 +1341,7 @@ test("admin route data exposes local proof graph as a native audit row", async (
   assert.equal(graph.inspectHref, localAdminAuditRoleUrl(localAdminAuditIds.proofGraph, { game: "midsummer" }));
   assert.deepEqual(
     graph.checks.map((check) => [check.id, check.status]),
-    [
-      ...proofGraph.nodes.map((node) => [node.id, node.status]),
-      ...proofGraph.edges.map((edge) => [
-        `edge:${edge.from}:${edge.relationship}:${edge.to}`,
-        edge.relationship,
-      ]),
-    ],
+    expectedProofGraphCheckRows(proofGraph),
   );
   assert.deepEqual(
     graph.relatedLinks.map((link) => [link.id, link.href]),
@@ -1355,6 +1355,14 @@ test("admin route data exposes local proof graph as a native audit row", async (
       [
         "production-feature:player-action-submission",
         localAdminAuditRoleUrl(localAdminAuditIds.coreLoop, { game: "midsummer" }),
+      ],
+      [
+        "private-channel-recovery-receipt",
+        localAdminAuditRoleUrl(localAdminAuditIds.coreLoop, { game: "midsummer" }),
+      ],
+      [
+        "replacement-private-recovery-receipt",
+        localAdminAuditRoleUrl(localAdminAuditIds.hardening, { game: "midsummer" }),
       ],
       ...adminProofDestinationRequirementRoleRows({ game: "midsummer" }).map(
         ({ linkId, roleUrl }) => [linkId, roleUrl],
@@ -1393,13 +1401,7 @@ test("admin local proof graph detail data carries graph node rows", async () => 
   assert.equal(data.audit.id, localAdminAuditIds.proofGraph);
   assert.deepEqual(
     data.audit.checks.map((check) => [check.id, check.status]),
-    [
-      ...proofGraph.nodes.map((node) => [node.id, node.status]),
-      ...proofGraph.edges.map((edge) => [
-        `edge:${edge.from}:${edge.relationship}:${edge.to}`,
-        edge.relationship,
-      ]),
-    ],
+    expectedProofGraphCheckRows(proofGraph),
   );
   assert.deepEqual(
     data.audit.relatedLinks.map((link) => [link.id, link.href]),
@@ -1413,6 +1415,14 @@ test("admin local proof graph detail data carries graph node rows", async () => 
       [
         "production-feature:player-action-submission",
         localAdminAuditRoleUrl(localAdminAuditIds.coreLoop, { game: "midsummer" }),
+      ],
+      [
+        "private-channel-recovery-receipt",
+        localAdminAuditRoleUrl(localAdminAuditIds.coreLoop, { game: "midsummer" }),
+      ],
+      [
+        "replacement-private-recovery-receipt",
+        localAdminAuditRoleUrl(localAdminAuditIds.hardening, { game: "midsummer" }),
       ],
       ...adminProofDestinationRequirementRoleRows({ game: "midsummer" }).map(
         ({ linkId, roleUrl }) => [linkId, roleUrl],
@@ -3457,7 +3467,7 @@ test("admin route data exposes local release readiness as a native audit row", a
 
   const readiness = data.audit.find((item) => item.id === localAdminAuditIds.releaseReadiness);
   assert.equal(readiness.label, "Local release readiness");
-  assert.equal(readiness.status, "11 local checks passed, 2 release items unproven");
+  assert.equal(readiness.status, "12 local checks passed, 2 release items unproven");
   assert.equal(readiness.authority, "GlobalAdmin or GlobalMod");
   assert.equal(
     readiness.inspectHref,
@@ -3472,6 +3482,15 @@ test("admin route data exposes local release readiness as a native audit row", a
       "local-stale-conflict-message-milestone",
       "local-host-stale-control-milestone",
       "local-private-channel-recovery-milestone",
+      ...expectedNormalizedEvidenceObjectCheckRows({
+        parentId: "local-private-channel-recovery-milestone",
+        objects: privateChannelNormalizedEvidenceObjects,
+      }).map(([id]) => id),
+      "local-replacement-private-recovery-milestone",
+      ...expectedNormalizedEvidenceObjectCheckRows({
+        parentId: "local-replacement-private-recovery-milestone",
+        objects: replacementPrivatePostNormalizedEvidenceObjects,
+      }).map(([id]) => id),
       "local-replacement-action-recovery-milestone",
       "local-replacement-handoff-recovery-milestone",
       "local-proof-graph-admin-role-handoffs",
@@ -3512,8 +3531,8 @@ test("admin route data exposes local release readiness as a native audit row", a
   );
   assert.deepEqual(readiness.artifactSummary, {
     game: "game-a",
-    localCheckCount: 11,
-    coverageCheckCount: 5,
+    localCheckCount: 12,
+    coverageCheckCount: 6,
     coverageDriftCount: 0,
     coverageStatus: "coherent",
     localPrerequisiteCount: 3,
@@ -3534,7 +3553,7 @@ test("admin local release readiness detail data carries checks and unproven rows
   assert.equal(data.status, "available");
   assert.equal(data.surfaceHeader.title, "Local release readiness");
   assert.equal(data.audit.id, localAdminAuditIds.releaseReadiness);
-  assert.equal(data.audit.checks.length, 11);
+  assert.equal(data.audit.checks.length, 18);
   assert.deepEqual(
     data.audit.checks
       .filter((check) =>
@@ -3542,6 +3561,7 @@ test("admin local release readiness detail data carries checks and unproven rows
           "local-stale-conflict-message-milestone",
           "local-host-stale-control-milestone",
           "local-private-channel-recovery-milestone",
+          "local-replacement-private-recovery-milestone",
           "local-replacement-action-recovery-milestone",
           "local-replacement-handoff-recovery-milestone",
         ].includes(check.id),
@@ -3558,6 +3578,10 @@ test("admin local release readiness detail data carries checks and unproven rows
       ],
       [
         "local-private-channel-recovery-milestone",
+        "passed: 4/4 lanes across 4/4 shared families",
+      ],
+      [
+        "local-replacement-private-recovery-milestone",
         "passed: 6/6 lanes across 3/3 shared families",
       ],
       [
@@ -3568,6 +3592,21 @@ test("admin local release readiness detail data carries checks and unproven rows
         "local-replacement-handoff-recovery-milestone",
         "passed: 17/17 lanes across 5/5 shared families",
       ],
+    ],
+  );
+  assert.deepEqual(
+    data.audit.checks
+      .filter((check) => check.id.startsWith("evidence-object:"))
+      .map((check) => [check.id, check.status]),
+    [
+      ...expectedNormalizedEvidenceObjectCheckRows({
+        parentId: "local-private-channel-recovery-milestone",
+        objects: privateChannelNormalizedEvidenceObjects,
+      }),
+      ...expectedNormalizedEvidenceObjectCheckRows({
+        parentId: "local-replacement-private-recovery-milestone",
+        objects: replacementPrivatePostNormalizedEvidenceObjects,
+      }),
     ],
   );
   assert.deepEqual(
@@ -3620,7 +3659,7 @@ test("admin local release readiness flags replacement coverage drift", async () 
   );
   assert.equal(
     data.audit.status,
-    "coverage drift detected in 1/5 groups, 2 release items unproven",
+    "coverage drift detected in 1/6 groups, 2 release items unproven",
   );
   assert.deepEqual(
     {
@@ -3629,7 +3668,7 @@ test("admin local release readiness flags replacement coverage drift", async () 
       coverageStatus: data.audit.artifactSummary.coverageStatus,
     },
     {
-      coverageCheckCount: 5,
+      coverageCheckCount: 6,
       coverageDriftCount: 1,
       coverageStatus: "drift",
     },
@@ -5624,6 +5663,19 @@ function proofGraphFixture() {
       targetRoleUrl: ACTIONABLE_SPINE_ROLE_URL,
       browserProofCommand: LIVE_BROWSER_PROOF_COMMAND,
     },
+    recoveryReceiptProofGraphNode({
+      graph: privateChannelRecoveryGraphFixture(),
+      label: "Private-channel recovery receipt",
+      kind: "private-channel-recovery-receipt",
+      recoveryCommand: "test:dev-test-game-private-channel-recovery-receipt",
+    }),
+    recoveryReceiptProofGraphNode({
+      graph: replacementPrivateRecoveryGraphFixture(),
+      label: "Replacement private-channel recovery receipt",
+      kind: "replacement-private-recovery-receipt",
+      recoveryCommand:
+        "test:dev-test-game-replacement-private-recovery-receipt",
+    }),
     ...adminProofGraphNodesFixture(),
   ];
   const edges = [
@@ -5669,6 +5721,14 @@ function proofGraphFixture() {
       targetRoleUrl: ACTIONABLE_SPINE_ROLE_URL,
       command: LIVE_BROWSER_PROOF_COMMAND,
     },
+    ...recoveryReceiptProofGraphEdges({
+      graph: privateChannelRecoveryGraphFixture(),
+      provingNodeId: "admin-proof:core-loop",
+    }),
+    ...recoveryReceiptProofGraphEdges({
+      graph: replacementPrivateRecoveryGraphFixture(),
+      provingNodeId: "admin-proof:hardening",
+    }),
   ];
   return {
     version: 1,
@@ -5695,6 +5755,43 @@ function proofGraphFixture() {
     nodes,
     edges,
   };
+}
+
+function recoveryReceiptProofGraphNode({ graph, label, kind, recoveryCommand }) {
+  return {
+    id: graph.nodeId,
+    label,
+    kind,
+    status: graph.status,
+    artifact: graph.proofTarget,
+    roleUrl: graph.roleUrl,
+    proofCommand: recoveryCommand,
+    recoveryCommand,
+    familyId: graph.familyId,
+    laneCount: graph.laneCount,
+    laneIds: graph.laneIds,
+    normalizedEvidenceObjects: graph.normalizedEvidenceObjects,
+  };
+}
+
+function recoveryReceiptProofGraphEdges({ graph, provingNodeId }) {
+  return [
+    {
+      from: provingNodeId,
+      to: graph.nodeId,
+      relationship: "proves",
+    },
+    {
+      from: graph.nodeId,
+      to: "proof-graph",
+      relationship: "records",
+    },
+    {
+      from: graph.nodeId,
+      to: "next-action",
+      relationship: "summarizes-into",
+    },
+  ];
 }
 
 function terminalBatchGraphFixture() {
@@ -5724,6 +5821,9 @@ function privateChannelRecoveryGraphFixture() {
       "private-channel-completed-game-recovery",
       "private-channel-invalid-action-recovery",
     ],
+    normalizedEvidenceObjects: expectedPassedNormalizedEvidenceObjects(
+      privateChannelNormalizedEvidenceObjects,
+    ),
     edgeCount: 3,
     edgeTargets: ["admin-proof:core-loop", "proof-graph", "next-action"],
   };
@@ -5778,9 +5878,43 @@ function replacementPrivateRecoveryGraphFixture() {
       "replacement-stale-private-post-after-complete",
       "replacement-stale-private-post-after-complete-reload",
     ],
+    normalizedEvidenceObjects: expectedPassedNormalizedEvidenceObjects(
+      replacementPrivatePostNormalizedEvidenceObjects,
+    ),
     edgeCount: 3,
     edgeTargets: ["admin-proof:hardening", "proof-graph", "next-action"],
   };
+}
+
+function expectedPassedNormalizedEvidenceObjects(objects) {
+  return objects.map((object) => ({
+    ...object,
+    status: "passed",
+    evidencePath: `lanes.${object.laneId}.evidence.${object.name}`,
+  }));
+}
+
+function expectedNormalizedEvidenceObjectCheckRows({ parentId, objects }) {
+  return expectedPassedNormalizedEvidenceObjects(objects).map((object) => [
+    `evidence-object:${parentId}:${object.name}`,
+    `${object.status}:${object.laneId}:${object.evidencePath}`,
+  ]);
+}
+
+function expectedProofGraphCheckRows(proofGraph) {
+  return [
+    ...proofGraph.nodes.flatMap((node) => [
+      [node.id, node.status],
+      ...expectedNormalizedEvidenceObjectCheckRows({
+        parentId: node.id,
+        objects: node.normalizedEvidenceObjects ?? [],
+      }),
+    ]),
+    ...proofGraph.edges.map((edge) => [
+      `edge:${edge.from}:${edge.relationship}:${edge.to}`,
+      edge.relationship,
+    ]),
+  ];
 }
 
 function adminProofGraphNodesFixture() {
@@ -6937,6 +7071,8 @@ function releaseReadinessChecklistFixture() {
       staleConflictMessageMilestone: staleConflictMessageMilestoneFixture(),
       hostStaleControlMilestone: hostStaleControlMilestoneFixture(),
       privateChannelRecoveryMilestone: privateChannelRecoveryMilestoneFixture(),
+      replacementPrivateRecoveryMilestone:
+        replacementPrivateRecoveryMilestoneFixture(),
       replacementActionRecoveryMilestone:
         replacementActionRecoveryMilestoneFixture(),
       replacementHandoffRecoveryMilestone:
@@ -6994,12 +7130,31 @@ function releaseReadinessChecklistFixture() {
           status: "passed",
           evidence: "target/dev-test-game/proof-run.json",
           laneIds: privateChannelRecoveryMilestoneFixture().laneIds,
+          requiredLaneCount: coreLoopPrivateChannelRecoveryLaneIds.length,
+          coveredLaneCount: coreLoopPrivateChannelRecoveryLaneIds.length,
+          familyCount: coreLoopPrivateChannelRecoveryCoverageFamilies().length,
+          expectedLaneCount: coreLoopPrivateChannelRecoveryLaneIds.length,
+          expectedFamilyCount:
+            coreLoopPrivateChannelRecoveryCoverageFamilies().length,
+          normalizedEvidenceObjects: expectedPassedNormalizedEvidenceObjects(
+            privateChannelNormalizedEvidenceObjects,
+          ),
+        },
+        {
+          id: "local-replacement-private-recovery-milestone",
+          label: "Replacement private-channel recovery",
+          status: "passed",
+          evidence: "target/dev-test-game/proof-run.json",
+          laneIds: replacementPrivateRecoveryMilestoneFixture().laneIds,
           requiredLaneCount: replacementPrivateChannelRecoveryLaneIds.length,
           coveredLaneCount: replacementPrivateChannelRecoveryLaneIds.length,
           familyCount: replacementPrivateChannelRecoveryCoverageFamilies().length,
           expectedLaneCount: replacementPrivateChannelRecoveryLaneIds.length,
           expectedFamilyCount:
             replacementPrivateChannelRecoveryCoverageFamilies().length,
+          normalizedEvidenceObjects: expectedPassedNormalizedEvidenceObjects(
+            replacementPrivatePostNormalizedEvidenceObjects,
+          ),
         },
         {
           id: "local-replacement-action-recovery-milestone",
@@ -7100,6 +7255,27 @@ function hostStaleControlMilestoneFixture() {
 function privateChannelRecoveryMilestoneFixture() {
   return {
     status: "passed",
+    laneIds: [...coreLoopPrivateChannelRecoveryLaneIds],
+    requiredLaneCount: coreLoopPrivateChannelRecoveryLaneIds.length,
+    coveredLaneCount: coreLoopPrivateChannelRecoveryLaneIds.length,
+    gapCount: 0,
+    familyCount: coreLoopPrivateChannelRecoveryCoverageFamilies().length,
+    expectedLaneCount: coreLoopPrivateChannelRecoveryLaneIds.length,
+    expectedFamilyCount: coreLoopPrivateChannelRecoveryCoverageFamilies().length,
+    families: coreLoopPrivateChannelRecoveryCoverageFamilies().map((family) => ({
+      ...family,
+      status: "passed",
+      passedLaneIds: [...family.laneIds],
+    })),
+    normalizedEvidenceObjects: expectedPassedNormalizedEvidenceObjects(
+      privateChannelNormalizedEvidenceObjects,
+    ),
+  };
+}
+
+function replacementPrivateRecoveryMilestoneFixture() {
+  return {
+    status: "passed",
     laneIds: [...replacementPrivateChannelRecoveryLaneIds],
     requiredLaneCount: replacementPrivateChannelRecoveryLaneIds.length,
     coveredLaneCount: replacementPrivateChannelRecoveryLaneIds.length,
@@ -7112,6 +7288,9 @@ function privateChannelRecoveryMilestoneFixture() {
       status: "passed",
       passedLaneIds: [...family.laneIds],
     })),
+    normalizedEvidenceObjects: expectedPassedNormalizedEvidenceObjects(
+      replacementPrivatePostNormalizedEvidenceObjects,
+    ),
   };
 }
 

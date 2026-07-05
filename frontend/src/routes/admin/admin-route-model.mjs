@@ -1710,10 +1710,16 @@ export function normalizeLocalProofGraphAudit(proofGraph, { game }) {
     inspectHref: adminAuditInspectHref({ game, audit: localAdminAuditIds.proofGraph }),
     checks: Object.freeze(
       [
-        ...nodes.map((node) => ({
-          id: String(node.id),
-          status: String(node.status ?? "recorded"),
-        })),
+        ...nodes.flatMap((node) => [
+          {
+            id: String(node.id),
+            status: String(node.status ?? "recorded"),
+          },
+          ...normalizedEvidenceObjectCheckRows({
+            parentId: String(node.id),
+            objects: node.normalizedEvidenceObjects,
+          }),
+        ]),
         ...edges.map((edge) => ({
           id: proofGraphEdgeCheckId(edge),
           status: String(edge.relationship ?? "recorded"),
@@ -1746,6 +1752,33 @@ function proofGraphEdgeCheckId(edge) {
   return `edge:${String(edge?.from ?? "")}:${String(
     edge?.relationship ?? "related",
   )}:${String(edge?.to ?? "")}`;
+}
+
+function normalizedEvidenceObjectCheckRows({ parentId, objects }) {
+  return normalizeNormalizedEvidenceObjects(objects).map((object) =>
+    Object.freeze({
+      id: `evidence-object:${parentId}:${object.name}`,
+      status: `${object.status}:${object.laneId}:${object.evidencePath}`,
+      name: object.name,
+      laneId: object.laneId,
+      evidencePath: object.evidencePath,
+    }),
+  );
+}
+
+function normalizeNormalizedEvidenceObjects(objects) {
+  return Object.freeze(
+    (Array.isArray(objects) ? objects : [])
+      .map((object) =>
+        Object.freeze({
+          name: String(object?.name ?? ""),
+          laneId: String(object?.laneId ?? ""),
+          status: String(object?.status ?? "unknown"),
+          evidencePath: String(object?.evidencePath ?? ""),
+        }),
+      )
+      .filter((object) => object.name !== ""),
+  );
 }
 
 export function normalizeLocalNextActionAudit(nextAction, { game, proofGraph = null }) {
@@ -2562,6 +2595,9 @@ function normalizeNextActionRecoveryReceiptGraph(recoveryReceiptGraph) {
       edgeTargets: Object.freeze([]),
     });
   }
+  const normalizedEvidenceObjects = normalizeNormalizedEvidenceObjects(
+    recoveryReceiptGraph.normalizedEvidenceObjects,
+  );
   return Object.freeze({
     nodeId: String(recoveryReceiptGraph.nodeId ?? ""),
     status: String(recoveryReceiptGraph.status ?? ""),
@@ -2582,6 +2618,9 @@ function normalizeNextActionRecoveryReceiptGraph(recoveryReceiptGraph) {
           )
         : [],
     ),
+    ...(normalizedEvidenceObjects.length === 0
+      ? {}
+      : { normalizedEvidenceObjects }),
   });
 }
 
@@ -4163,7 +4202,7 @@ export function normalizeLocalReleaseReadinessAudit(
       audit: localAdminAuditIds.releaseReadiness,
     }),
     checks: Object.freeze(
-      checks.map((check) =>
+      checks.flatMap((check) => [
         Object.freeze({
           id: String(check.id),
           status: localReleaseReadinessCheckStatus(check),
@@ -4179,7 +4218,11 @@ export function normalizeLocalReleaseReadinessAudit(
           expectedLaneCount: Number(check.expectedLaneCount ?? 0),
           expectedFamilyCount: Number(check.expectedFamilyCount ?? 0),
         }),
-      ),
+        ...normalizedEvidenceObjectCheckRows({
+          parentId: String(check.id),
+          objects: check.normalizedEvidenceObjects,
+        }),
+      ]),
     ),
     localPrerequisites: Object.freeze(
       localPrerequisites.map((check) =>
