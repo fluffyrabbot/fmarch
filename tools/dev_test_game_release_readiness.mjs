@@ -106,6 +106,7 @@ import {
 } from "./dev_test_game_real_hosted_observability_handoff_cases.mjs";
 import {
   buildReleaseReadinessUnprovenItems,
+  devTestGameReleaseRunbookAdminProofPath,
   hostedIdentityEvidenceSatisfiesProductionIdentity,
   hostedIdentityEvidencePathKind,
   releaseAdminProofFallbackUnprovenIds,
@@ -402,8 +403,8 @@ const defaultNextActionAdminProofPath = path.join(
 );
 const defaultReleaseRunbookPath = path.join(artifactDir, "release-runbook.json");
 const defaultReleaseRunbookAdminProofPath = path.join(
-  artifactDir,
-  "release-runbook-admin-proof.json",
+  repoRoot,
+  devTestGameReleaseRunbookAdminProofPath,
 );
 const jsonPath = path.join(repoRoot, devTestGameReleaseReadinessPath);
 const markdownPath = path.join(repoRoot, devTestGameReleaseReadinessMarkdownPath);
@@ -764,7 +765,7 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
     ? validateDevTestGameReleaseRunbookAdminProof(options.releaseRunbookAdminProof, {
         path:
           options.releaseRunbookAdminProofPath ??
-          "target/dev-test-game/release-runbook-admin-proof.json",
+          devTestGameReleaseRunbookAdminProofPath,
         artifact: options.releaseRunbookAdminProofArtifact,
       })
     : undefined;
@@ -5966,7 +5967,7 @@ export function validateDevTestGameReleaseRunbookAdminProof(proof, options = {})
   }
   return {
     status: "passed",
-    path: options.path ?? "target/dev-test-game/release-runbook-admin-proof.json",
+    path: options.path ?? devTestGameReleaseRunbookAdminProofPath,
     proofBoundary: proof.proofBoundary,
     overviewRoleUrl: proof.adminRoleSurface.overviewRoleUrl,
     detailRoleUrl: proof.adminRoleSurface.detailRoleUrl,
@@ -6327,7 +6328,7 @@ function adminSpineProofArtifactPath(id) {
     ops: "target/dev-test-game/ops-admin-proof.json",
     seed: "target/dev-test-game/seed-admin-proof.json",
     release: "target/dev-test-game/release-admin-proof.json",
-    "release-runbook": "target/dev-test-game/release-runbook-admin-proof.json",
+    "release-runbook": devTestGameReleaseRunbookAdminProofPath,
     "race-coverage": "target/dev-test-game/race-coverage-admin-proof.json",
     "hosted-target-preflight": devTestGameHostedTargetPreflightAdminProofPath,
     "hosted-evidence-lane": devTestGameHostedEvidenceLaneAdminProofPath,

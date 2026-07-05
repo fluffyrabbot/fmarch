@@ -31,6 +31,9 @@ import {
   devTestGameRealHostedObservabilityHandoffPath,
 } from "./dev_test_game_real_hosted_observability_handoff_cases.mjs";
 import {
+  devTestGameReleaseRunbookAdminProofPath,
+} from "./dev_test_game_release_readiness_cases.mjs";
+import {
   nextActionAdminProofPath,
   proofFreshnessAdminProofPath,
 } from "./dev_test_game_next_action_paths.mjs";
@@ -81,7 +84,7 @@ export const adminSpineReadinessEvidenceEnv = {
   FMARCH_DEV_TEST_GAME_RELEASE_RUNBOOK:
     "target/dev-test-game/release-runbook.json",
   FMARCH_DEV_TEST_GAME_RELEASE_RUNBOOK_ADMIN_PROOF:
-    "target/dev-test-game/release-runbook-admin-proof.json",
+    devTestGameReleaseRunbookAdminProofPath,
   FMARCH_DEV_TEST_GAME_IDENTITY_ADAPTER_PROOF:
     "target/auth-invite-role-proof/invite-role-proof.json",
   FMARCH_DEV_TEST_GAME_IDENTITY_ADMIN_PROOF:

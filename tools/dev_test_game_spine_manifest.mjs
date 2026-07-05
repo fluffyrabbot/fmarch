@@ -72,6 +72,7 @@ import {
 } from "./dev_test_game_hosted_target_preflight_cases.mjs";
 import {
   devTestGameReleaseRunbookCommand,
+  devTestGameReleaseRunbookAdminProofPath,
   devTestGameReleaseRunbookPath,
 } from "./dev_test_game_release_runbook.mjs";
 import {
@@ -909,7 +910,7 @@ export function assertDevTestGameSpineManifest(manifest) {
     "target/dev-test-game/hardening-admin-proof.json",
     "target/dev-test-game/identity-admin-proof.json",
     "target/dev-test-game/release-admin-proof.json",
-    "target/dev-test-game/release-runbook-admin-proof.json",
+    devTestGameReleaseRunbookAdminProofPath,
     devTestGameHostedTargetPreflightAdminProofPath,
     devTestGameHostedOpsSignalsAdminProofPath,
     "target/dev-test-game/spine-manifest-admin-proof.json",

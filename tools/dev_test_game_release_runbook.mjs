@@ -6,6 +6,7 @@ import {
 } from "./dev_test_game_release_readiness.mjs";
 import {
   devTestGameReleaseRunbookCommand,
+  devTestGameReleaseRunbookAdminProofPath,
   devTestGameReleaseRunbookPath,
 } from "./dev_test_game_release_readiness_cases.mjs";
 import {
@@ -21,6 +22,7 @@ import { repoRoot } from "./dev_test_game_spine_runner.mjs";
 export const DEV_TEST_GAME_RELEASE_RUNBOOK_VERSION = 1;
 export {
   devTestGameReleaseRunbookCommand,
+  devTestGameReleaseRunbookAdminProofPath,
   devTestGameReleaseRunbookPath,
 } from "./dev_test_game_release_readiness_cases.mjs";
 const devTestGameReleaseReadinessPath =

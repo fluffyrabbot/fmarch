@@ -409,6 +409,7 @@ import {
 } from "./dev_test_game_hosted_target_preflight.mjs";
 import {
   devTestGameReleaseRunbookCommand,
+  devTestGameReleaseRunbookAdminProofPath,
   devTestGameReleaseRunbookPath,
 } from "./dev_test_game_release_runbook.mjs";
 import {
@@ -747,7 +748,7 @@ test("dev test-game spine orchestrators expose stable proof order and env maps",
     FMARCH_DEV_TEST_GAME_RELEASE_RUNBOOK:
       "target/dev-test-game/release-runbook.json",
     FMARCH_DEV_TEST_GAME_RELEASE_RUNBOOK_ADMIN_PROOF:
-      "target/dev-test-game/release-runbook-admin-proof.json",
+      devTestGameReleaseRunbookAdminProofPath,
     FMARCH_DEV_TEST_GAME_IDENTITY_ADAPTER_PROOF:
       "target/auth-invite-role-proof/invite-role-proof.json",
     FMARCH_DEV_TEST_GAME_IDENTITY_ADMIN_PROOF:

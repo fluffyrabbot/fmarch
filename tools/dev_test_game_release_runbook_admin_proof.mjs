@@ -3,8 +3,11 @@ import { pathToFileURL } from "node:url";
 import { assertDevTestGameProofRun } from "./dev_test_game_proof_contract.mjs";
 import { assertDevTestGameReleaseRunbook } from "./dev_test_game_release_runbook.mjs";
 import {
+  devTestGameReleaseRunbookAdminProofPath,
+  devTestGameReleaseRunbookPath,
+} from "./dev_test_game_release_readiness_cases.mjs";
+import {
   assertVisibleAdminRoleSurfaceRows,
-  artifactDir,
   proveAdminAuditDetail,
   readJson,
   repoRoot,
@@ -14,7 +17,7 @@ import {
 const releaseRunbookPath = path.resolve(
   repoRoot,
   process.env.FMARCH_DEV_TEST_GAME_RELEASE_RUNBOOK ??
-    "target/dev-test-game/release-runbook.json",
+    devTestGameReleaseRunbookPath,
 );
 const proofRunPath = path.resolve(
   repoRoot,
@@ -22,7 +25,7 @@ const proofRunPath = path.resolve(
 );
 const releaseRunbookRelativePath = path.relative(repoRoot, releaseRunbookPath);
 const proofRunRelativePath = path.relative(repoRoot, proofRunPath);
-const evidencePath = path.join(artifactDir, "release-runbook-admin-proof.json");
+const evidencePath = path.join(repoRoot, devTestGameReleaseRunbookAdminProofPath);
 
 const requiredChecks = [
   "remaining-readiness-gaps-mapped",

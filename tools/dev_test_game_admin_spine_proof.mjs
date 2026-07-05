@@ -52,6 +52,9 @@ import {
   releaseRunbookAdminProofCase,
 } from "./dev_test_game_release_runbook_admin_proof.mjs";
 import {
+  devTestGameReleaseRunbookAdminProofPath,
+} from "./dev_test_game_release_readiness_cases.mjs";
+import {
   raceCoverageAdminProofCase,
 } from "./dev_test_game_race_coverage_admin_proof.mjs";
 import {
@@ -165,7 +168,7 @@ export const devTestGameAdminSpineProofPlan = [
     label: "Release runbook admin role surface",
     script: "tools/dev_test_game_release_runbook_admin_proof.mjs",
     rerunCommand: "npm run test:dev-test-game-release-runbook-admin-proof",
-    path: "target/dev-test-game/release-runbook-admin-proof.json",
+    path: devTestGameReleaseRunbookAdminProofPath,
     validate: validateDevTestGameReleaseRunbookAdminProof,
     caseFactory: releaseRunbookAdminProofCase,
   },
