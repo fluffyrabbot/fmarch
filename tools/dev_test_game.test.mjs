@@ -2948,6 +2948,7 @@ test("dev test-game next-action derives one local recovery command from the mani
     firstMissingInputId: firstHostedIdentityProgression.firstMissingInputId,
     firstMissingCheckId: firstHostedIdentityProgression.firstMissingCheckId,
     proofBoundary: firstHostedIdentityProgression.proofBoundary,
+    artifactStatus: "missing",
   };
   const hostedProductionIdentityOperatorUnproven =
     hostedProductionIdentityUnprovenFixture({
@@ -3147,6 +3148,53 @@ test("dev test-game next-action derives one local recovery command from the mani
     hostedIdentityStageAction.releaseReadinessTrace.candidates[0]
       .hostedIdentityProgression,
     selectedHostedIdentityProgression,
+  );
+  const secondHostedIdentityProgression =
+    hostedIdentityHandoffChecklist.progressionSummary.progressions[1];
+  const firstProgressionProof = hostedIdentityProgressionAdminProofArtifactFixture(
+    firstHostedIdentityProgression,
+  );
+  const hostedIdentitySecondStageAction = buildDevTestGameNextAction(freshManifest, {
+    generatedAt: "2026-06-26T00:00:01.000Z",
+    sequenceStage: devTestGameHostedIdentitySequenceStage,
+    opsArtifacts: devTestGameOpsArtifactsFixture(),
+    raceCoverage: devTestGameRaceCoverageFixture(),
+    hostedIdentityProgressionProofs: {
+      [firstHostedIdentityProgression.id]: firstProgressionProof,
+      [firstHostedIdentityProgression.adminProofTarget]: firstProgressionProof,
+    },
+    releaseReadinessChecklist: devTestGameReleaseReadinessChecklistFixture({
+      includeOpsArtifactBundleCheck: true,
+      unproven: [
+        {
+          id: "hosted-production-identity",
+          status: "unproven",
+          requiredEvidence: "Hosted account lifecycle",
+        },
+      ],
+    }),
+  });
+  assertDevTestGameNextAction(hostedIdentitySecondStageAction);
+  assert.equal(
+    hostedIdentitySecondStageAction.nextAction.command,
+    secondHostedIdentityProgression.proofCommand,
+  );
+  assert.deepEqual(
+    hostedIdentitySecondStageAction.nextAction.unproven.hostedIdentityProgression,
+    {
+      id: secondHostedIdentityProgression.id,
+      checkId: secondHostedIdentityProgression.checkId,
+      missingInputId: secondHostedIdentityProgression.missingInputId,
+      adminProofMode: secondHostedIdentityProgression.adminProofMode,
+      proofCommand: secondHostedIdentityProgression.proofCommand,
+      evidencePath: secondHostedIdentityProgression.evidencePath,
+      adminProofTarget: secondHostedIdentityProgression.adminProofTarget,
+      roleUrl: secondHostedIdentityProgression.roleUrl,
+      firstMissingInputId: secondHostedIdentityProgression.firstMissingInputId,
+      firstMissingCheckId: secondHostedIdentityProgression.firstMissingCheckId,
+      proofBoundary: secondHostedIdentityProgression.proofBoundary,
+      artifactStatus: "missing",
+    },
   );
   assert.deepEqual(
     hostedIdentityStageAction.nextAction.unproven.hostedHandoffChecklist
@@ -19313,6 +19361,25 @@ function featureSpineCaseFixture(
 
 function hostedIdentityHandoffChecklistFixture() {
   return hostedIdentityEvidenceHandoffCase();
+}
+
+function hostedIdentityProgressionAdminProofArtifactFixture(progression) {
+  return {
+    version: 1,
+    proof: "dev-test-game-hosted-identity-evidence-admin-proof",
+    status: "passed",
+    releaseReady: false,
+    productionReady: false,
+    scope: "local-dev-test-game-hosted-identity-evidence-admin-surface",
+    generatedFrom: {
+      hostedIdentityEvidence: progression.evidencePath,
+      proofArtifact: progression.adminProofTarget,
+    },
+    adminRoleSurface: {
+      clickedThroughFromOverview: true,
+      rawInviteTokensVisible: false,
+    },
+  };
 }
 
 function hardeningAdminProofFixture() {

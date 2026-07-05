@@ -119,6 +119,11 @@ import {
   hostedAdminHandoffProofArtifactCases,
 } from "./dev_test_game_hosted_handoff_proof_cases.mjs";
 import {
+  devTestGameHostedIdentityOperatorAdminProofPath,
+  hostedIdentityEvidenceFamilyProgressionCases,
+  hostedIdentityEvidenceProgressionAdminProofPath,
+} from "./dev_test_game_hosted_identity_evidence_cases.mjs";
+import {
   devTestGameAdminSpineAdminProofPath,
   devTestGameBackupAdminProofPath,
   devTestGameCoreLoopAdminProofPath,
@@ -188,6 +193,7 @@ export function buildDevTestGameNextAction(
     hostedTargetPreflightSource = devTestGameHostedTargetPreflightPath,
     proofGraph = null,
     proofGraphSource = devTestGameProofGraphPath,
+    hostedIdentityProgressionProofs = {},
   } = {},
 ) {
   const manifest = assertDevTestGameSpineManifest(spineManifest);
@@ -240,6 +246,7 @@ export function buildDevTestGameNextAction(
     proofGraph: graph,
     hostedIdentityOperatorBuildable:
       hostedIdentityOperatorBuildableForManifest(manifest, { sequenceStage }),
+    hostedIdentityProgressionProofs,
   });
   const releaseReadinessTrace = buildReleaseReadinessTrace(releaseReadinessCandidates);
   const localReadinessDependencyCandidates =
@@ -882,6 +889,8 @@ export async function writeDevTestGameNextAction({
     process.env.FMARCH_DEV_TEST_GAME_PROOF_GRAPH ?? devTestGameProofGraphPath,
   );
   const proofGraph = await readOptionalJson(absoluteProofGraphPath);
+  const hostedIdentityProgressionProofs =
+    await readHostedIdentityProgressionProofs();
   const spineManifestSource = path.relative(repoRoot, absoluteManifestPath);
   const releaseReadinessChecklistSource = path.relative(
     repoRoot,
@@ -908,6 +917,7 @@ export async function writeDevTestGameNextAction({
     hostedTargetPreflightSource,
     proofGraph,
     proofGraphSource,
+    hostedIdentityProgressionProofs,
   });
   await mkdir(path.dirname(nextActionJsonPath), { recursive: true });
   await writeFile(nextActionJsonPath, `${JSON.stringify(evidence, null, 2)}\n`);
@@ -967,6 +977,7 @@ function rankedBuildableReleaseReadinessItems(
     sourceTargetsByCheckId = {},
     proofGraph = null,
     hostedIdentityOperatorBuildable = null,
+    hostedIdentityProgressionProofs = {},
   } = {},
 ) {
   if (readiness === null) {
@@ -984,6 +995,7 @@ function rankedBuildableReleaseReadinessItems(
         hostedIdentityOperatorBuildable !== null
           ? hostedIdentityProgressionBuildableForChecklist({
               hostedHandoffChecklist: buildable.hostedHandoffChecklist,
+              hostedIdentityProgressionProofs,
             })
           : null;
       const selectedBuildable =
@@ -1056,6 +1068,10 @@ function hostedIdentityOperatorBuildableForManifest(
     return null;
   }
   return {
+    command: devTestGameHostedIdentityOperatorSpineCommand,
+    buildSlice:
+      "Run the opt-in hosted identity operator spine after the hosted identity family admin proofs are current; it attaches the target-local redacted operator packet to the admin proof and refreshes readiness through the operator predicate without claiming live hosted traffic, release readiness, or production readiness.",
+    proofTarget: devTestGameHostedIdentityOperatorAdminProofPath,
     proofBoundary:
       "Opt-in local operator predicate proof. The command proves that a non-fixture hosted identity packet path can clear the hosted-production-identity readiness item over the existing role-surface adapter; it does not prove live hosted account/session/invite traffic, release readiness, or production readiness.",
   };
@@ -1063,9 +1079,12 @@ function hostedIdentityOperatorBuildableForManifest(
 
 function hostedIdentityProgressionBuildableForChecklist({
   hostedHandoffChecklist,
+  hostedIdentityProgressionProofs = {},
 }) {
-  const progression =
-    hostedHandoffChecklist?.progressionSummary?.progressions?.[0];
+  const progression = firstUnprovenHostedIdentityProgression({
+    hostedHandoffChecklist,
+    hostedIdentityProgressionProofs,
+  });
   if (!validHostedIdentityProgressionSummaryRow(progression)) {
     return null;
   }
@@ -1081,6 +1100,10 @@ function hostedIdentityProgressionBuildableForChecklist({
     firstMissingInputId: progression.firstMissingInputId,
     firstMissingCheckId: progression.firstMissingCheckId,
     proofBoundary: progression.proofBoundary,
+    artifactStatus: hostedIdentityProgressionArtifactStatus(
+      progression,
+      hostedIdentityProgressionProofs,
+    ),
   };
   return {
     command: progression.proofCommand,
@@ -1096,6 +1119,74 @@ function hostedIdentityProgressionBuildableForChecklist({
   };
 }
 
+function firstUnprovenHostedIdentityProgression({
+  hostedHandoffChecklist,
+  hostedIdentityProgressionProofs = {},
+}) {
+  const progressions =
+    hostedHandoffChecklist?.progressionSummary?.progressions ?? [];
+  return progressions.find(
+    (progression) =>
+      validHostedIdentityProgressionSummaryRow(progression) &&
+      !validHostedIdentityProgressionProofArtifact(
+        progression,
+        hostedIdentityProgressionProofs,
+      ),
+  );
+}
+
+function hostedIdentityProgressionProofArtifactFor(
+  progression,
+  hostedIdentityProgressionProofs = {},
+) {
+  return (
+    hostedIdentityProgressionProofs[progression.id] ??
+    hostedIdentityProgressionProofs[progression.adminProofTarget] ??
+    null
+  );
+}
+
+function validHostedIdentityProgressionProofArtifact(
+  progression,
+  hostedIdentityProgressionProofs = {},
+) {
+  const artifact = hostedIdentityProgressionProofArtifactFor(
+    progression,
+    hostedIdentityProgressionProofs,
+  );
+  return (
+    artifact !== null &&
+    typeof artifact === "object" &&
+    artifact.proof === "dev-test-game-hosted-identity-evidence-admin-proof" &&
+    artifact.status === "passed" &&
+    artifact.releaseReady === false &&
+    artifact.productionReady === false &&
+    artifact.generatedFrom?.hostedIdentityEvidence === progression.evidencePath &&
+    artifact.generatedFrom?.proofArtifact === progression.adminProofTarget &&
+    artifact.adminRoleSurface?.clickedThroughFromOverview === true &&
+    artifact.adminRoleSurface?.rawInviteTokensVisible === false
+  );
+}
+
+function hostedIdentityProgressionArtifactStatus(
+  progression,
+  hostedIdentityProgressionProofs = {},
+) {
+  const artifact = hostedIdentityProgressionProofArtifactFor(
+    progression,
+    hostedIdentityProgressionProofs,
+  );
+  if (artifact === null) {
+    return "missing";
+  }
+  return validHostedIdentityProgressionProofArtifact(
+    progression,
+    hostedIdentityProgressionProofs,
+  )
+    ? "passed"
+    : "stale";
+}
+
 function releaseReadinessActionRank(status) {
   return status === "ready" ? 0 : 1;
 }
@@ -1109,6 +1200,24 @@ async function readOptionalJson(filePath) {
     }
     throw error;
   }
+}
+
+async function readHostedIdentityProgressionProofs() {
+  const entries = await Promise.all(
+    hostedIdentityEvidenceFamilyProgressionCases.map(async (progression) => {
+      const proofPath = hostedIdentityEvidenceProgressionAdminProofPath(
+        progression.id,
+      );
+      const proof = await readOptionalJson(path.resolve(repoRoot, proofPath));
+      return proof === null
+        ? []
+        : [
+            [progression.id, proof],
+            [proofPath, proof],
+          ];
+    }),
+  );
+  return Object.fromEntries(entries.flat());
 }
 
 function assertProofGraphForNextAction(proofGraph) {
@@ -1660,7 +1769,8 @@ function validHostedIdentityProgressionSelection(progression, checklist) {
     progression.roleUrl === expected.roleUrl &&
     progression.firstMissingInputId === expected.firstMissingInputId &&
     progression.firstMissingCheckId === expected.firstMissingCheckId &&
-    progression.proofBoundary === expected.proofBoundary
+    progression.proofBoundary === expected.proofBoundary &&
+    ["missing", "stale"].includes(progression.artifactStatus)
   );
 }
 
