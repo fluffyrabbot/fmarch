@@ -133,6 +133,7 @@ import {
   localReadinessDependencyCheckFor,
 } from "../../../../tools/dev_test_game_local_readiness_dependencies.mjs";
 import {
+  adminProofDestinationProofGraphNodes,
   adminProofDestinationRequirementLinkRows,
   adminProofDestinationRequirementRoleRows,
 } from "../../../../tools/dev_test_game_proof_graph_handoff_cases.mjs";
@@ -5863,7 +5864,7 @@ function proofGraphFixture() {
       recoveryCommand:
         "test:dev-test-game-replacement-private-recovery-receipt",
     }),
-    ...adminProofGraphNodesFixture(),
+    ...adminProofDestinationProofGraphNodes(),
   ];
   const edges = [
     { from: "admin-spine", to: "spine-manifest", relationship: "aggregates" },
@@ -6100,30 +6101,6 @@ function expectedProofGraphRelatedLinkRows(proofGraph, { game } = {}) {
     link.id,
     link.href,
   ]);
-}
-
-function adminProofGraphNodesFixture() {
-  return adminProofDestinationRequirementRoleRows().map(
-    ({ linkId, auditId, roleUrl }) =>
-      proofGraphNode({
-        id: linkId,
-        label: `${auditId} admin proof`,
-        status: "passed",
-        artifact: adminProofArtifactPath(linkId),
-        roleUrl,
-        recoveryCommand: adminProofRecoveryCommand(linkId),
-      }),
-  );
-}
-
-function adminProofArtifactPath(linkId) {
-  const proofId = linkId.replace("admin-proof:", "");
-  return `target/dev-test-game/${proofId}-admin-proof.json`;
-}
-
-function adminProofRecoveryCommand(linkId) {
-  const proofId = linkId.replace("admin-proof:", "");
-  return `npm run test:dev-test-game-${proofId}-admin-proof`;
 }
 
 function raceCoverageFixture() {

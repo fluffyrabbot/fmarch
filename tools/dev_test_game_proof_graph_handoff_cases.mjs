@@ -232,6 +232,34 @@ export function adminProofDestinationRequirementRoleRows({
   );
 }
 
+export function adminProofDestinationProofGraphNodes({
+  game = "<seeded-game>",
+  status = "passed",
+} = {}) {
+  return adminProofDestinationRequirementRoleRows({ game }).map(
+    ({ linkId, auditId, roleUrl }) =>
+      Object.freeze({
+        id: linkId,
+        label: `${auditId} admin proof`,
+        kind: "proof-surface",
+        status,
+        artifact: adminProofDestinationArtifactPath(linkId),
+        roleUrl,
+        recoveryCommand: adminProofDestinationRecoveryCommand(linkId),
+      }),
+  );
+}
+
+export function adminProofDestinationArtifactPath(linkId) {
+  const proofId = adminProofDestinationProofId(linkId);
+  return `target/dev-test-game/${proofId}-admin-proof.json`;
+}
+
+export function adminProofDestinationRecoveryCommand(linkId) {
+  const proofId = adminProofDestinationProofId(linkId);
+  return `npm run test:dev-test-game-${proofId}-admin-proof`;
+}
+
 export function adminProofDestinationRoleUrl({ auditId, game = "<seeded-game>" }) {
   return localAdminAuditRoleUrl(auditId, { game });
 }
@@ -297,4 +325,8 @@ function cloneRequirement(requirement) {
       ? {}
       : { fromHostedMatrix: requirement.fromHostedMatrix }),
   };
+}
+
+function adminProofDestinationProofId(linkId) {
+  return String(linkId).replace("admin-proof:", "");
 }

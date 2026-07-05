@@ -1,10 +1,13 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
+  adminProofDestinationArtifactPath,
+  adminProofDestinationProofGraphNodes,
   adminProofDestinationRequirementCases,
   adminProofDestinationRequirementForLink,
   adminProofDestinationRequirementLinkRows,
   adminProofDestinationRequirementRoleRows,
+  adminProofDestinationRecoveryCommand,
   adminProofDestinationRoleUrl,
   adminProofDestinationRequirements,
 } from "./dev_test_game_proof_graph_handoff_cases.mjs";
@@ -92,6 +95,29 @@ test("admin proof destination handoff cases share link and audit rows", () => {
       game: "midsummer",
     }),
     "/admin/audit/local-core-loop?game=midsummer",
+  );
+});
+
+test("admin proof destination handoff cases derive proof graph nodes", () => {
+  assert.deepEqual(
+    adminProofDestinationProofGraphNodes({ game: "midsummer" }).map((node) => [
+      node.id,
+      node.label,
+      node.kind,
+      node.status,
+      node.artifact,
+      node.roleUrl,
+      node.recoveryCommand,
+    ]),
+    adminProofDestinationRequirementLinkRows.map(([linkId, auditId]) => [
+      linkId,
+      `${auditId} admin proof`,
+      "proof-surface",
+      "passed",
+      adminProofDestinationArtifactPath(linkId),
+      `/admin/audit/${auditId}?game=midsummer`,
+      adminProofDestinationRecoveryCommand(linkId),
+    ]),
   );
 });
 
