@@ -459,6 +459,11 @@ import {
 import {
   assertProofGraphAdminProof,
 } from "./dev_test_game_proof_graph_admin_proof.mjs";
+import {
+  normalizeProofGraphReceiptArtifactRows,
+  proofGraphReceiptArtifactRowId,
+  proofGraphReceiptArtifactRowStatus,
+} from "./dev_test_game_proof_graph_receipt_artifact_rows.mjs";
 
 test("dev test-game args expose reset reuse naming and verification controls", () => {
   assert.deepEqual(
@@ -4558,6 +4563,82 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
         adminSpineProof,
       ),
     /proof graph admin surface count drifted/,
+  );
+});
+
+test("proof graph receipt artifact rows share one browser row id contract", () => {
+  const rows = normalizeProofGraphReceiptArtifactRows({
+    parentId: "admin-spine-terminal-batches",
+    artifacts: [
+      {
+        proofId: "proof-freshness",
+        artifactPath: "target/dev-test-game/proof-freshness-admin-proof.json",
+        batchLabel: "Terminal admin proof batch",
+      },
+      {
+        proofId: "proof-freshness",
+        artifactPath: "target/dev-test-game/proof-freshness-admin-proof.json",
+        batchLabel: "Terminal refresh admin proof batch",
+      },
+      {
+        proofId: "next-action",
+        artifactPath: "target/dev-test-game/next-action-admin-proof.json",
+        batchLabel: "",
+      },
+      {
+        proofId: "",
+        artifactPath: "target/dev-test-game/ignored.json",
+        batchLabel: "ignored",
+      },
+      {
+        proofId: "ignored",
+        artifactPath: "",
+        batchLabel: "ignored",
+      },
+    ],
+  });
+
+  assert.deepEqual(
+    rows.map((row) => [row.id, row.rowId, row.status]),
+    [
+      [
+        "receipt-artifact:admin-spine-terminal-batches:proof-freshness:terminal-admin-proof-batch",
+        "receipt-artifact:admin-spine-terminal-batches:proof-freshness:terminal-admin-proof-batch",
+        "proof-freshness:Terminal admin proof batch:target/dev-test-game/proof-freshness-admin-proof.json",
+      ],
+      [
+        "receipt-artifact:admin-spine-terminal-batches:proof-freshness:terminal-refresh-admin-proof-batch",
+        "receipt-artifact:admin-spine-terminal-batches:proof-freshness:terminal-refresh-admin-proof-batch",
+        "proof-freshness:Terminal refresh admin proof batch:target/dev-test-game/proof-freshness-admin-proof.json",
+      ],
+      [
+        "receipt-artifact:admin-spine-terminal-batches:next-action:2",
+        "receipt-artifact:admin-spine-terminal-batches:next-action:2",
+        "next-action::target/dev-test-game/next-action-admin-proof.json",
+      ],
+    ],
+  );
+  assert.equal(
+    new Set(rows.map((row) => row.id)).size,
+    rows.length,
+  );
+  assert.equal(
+    proofGraphReceiptArtifactRowId({
+      parentId: "admin-spine-terminal-batches",
+      artifact: {
+        proofId: "proof-freshness",
+        batchLabel: "Terminal admin proof batch",
+      },
+    }),
+    rows[0].id,
+  );
+  assert.equal(
+    proofGraphReceiptArtifactRowStatus({
+      proofId: "proof-freshness",
+      artifactPath: "target/dev-test-game/proof-freshness-admin-proof.json",
+      batchLabel: "Terminal admin proof batch",
+    }),
+    rows[0].status,
   );
 });
 

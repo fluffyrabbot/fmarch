@@ -50,6 +50,9 @@ import {
   buildAdminAuditHandoffPath,
 } from "../../../../tools/dev_test_game_admin_audit_handoff_path.mjs";
 import {
+  normalizeProofGraphReceiptArtifactRows,
+} from "../../../../tools/dev_test_game_proof_graph_receipt_artifact_rows.mjs";
+import {
   devTestGameIdentityAdapterContractDiff,
   devTestGameIdentityAdapterProofVersion,
 } from "../../../../tools/dev_test_game_identity_adapter_contract.mjs";
@@ -2056,40 +2059,7 @@ function normalizedEvidenceObjectCheckRows({ parentId, objects }) {
 }
 
 function proofGraphReceiptArtifactCheckRows({ parentId, artifacts }) {
-  return (Array.isArray(artifacts) ? artifacts : [])
-    .map((artifact, index) => ({
-      proofId: String(artifact?.proofId ?? ""),
-      artifactPath: String(artifact?.artifactPath ?? ""),
-      batchLabel: String(artifact?.batchLabel ?? ""),
-      fallbackSuffix: String(index),
-    }))
-    .filter(
-      (artifact) => artifact.proofId !== "" && artifact.artifactPath !== "",
-    )
-    .map((artifact) =>
-      Object.freeze({
-        id: proofGraphReceiptArtifactCheckId({ parentId, artifact }),
-        status: `${artifact.proofId}:${artifact.batchLabel}:${artifact.artifactPath}`,
-        proofId: artifact.proofId,
-        artifactPath: artifact.artifactPath,
-        batchLabel: artifact.batchLabel,
-      }),
-    );
-}
-
-function proofGraphReceiptArtifactCheckId({ parentId, artifact }) {
-  const batchSuffix = slugIdPart(artifact.batchLabel);
-  return `receipt-artifact:${parentId}:${artifact.proofId}:${
-    batchSuffix === "" ? artifact.fallbackSuffix : batchSuffix
-  }`;
-}
-
-function slugIdPart(value) {
-  return String(value ?? "")
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/gu, "-")
-    .replace(/^-+|-+$/gu, "");
+  return normalizeProofGraphReceiptArtifactRows({ parentId, artifacts });
 }
 
 function coverageDecisionCheckRows({

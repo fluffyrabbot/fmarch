@@ -43,6 +43,9 @@ import {
   devTestGameProofGraphPath,
   devTestGameProofRunPath,
 } from "./dev_test_game_spine_artifact_paths.mjs";
+import {
+  normalizeProofGraphReceiptArtifactRows,
+} from "./dev_test_game_proof_graph_receipt_artifact_rows.mjs";
 
 const proofGraphPath = path.resolve(
   repoRoot,
@@ -331,7 +334,7 @@ function proofGraphEvidenceObjectRowIds(proofGraph) {
 
 function proofGraphReceiptArtifactRowIds(proofGraph) {
   return proofGraph.nodes.flatMap((node) =>
-    normalizedReceiptArtifactRows({
+    normalizeProofGraphReceiptArtifactRows({
       parentId: node.id,
       artifacts: node.receiptArtifacts,
     }).map((artifact) => artifact.rowId),
@@ -340,7 +343,7 @@ function proofGraphReceiptArtifactRowIds(proofGraph) {
 
 function hostedIdentityTerminalReceiptArtifact(proofGraph) {
   return (
-    normalizedReceiptArtifactRows({
+    normalizeProofGraphReceiptArtifactRows({
       parentId: "admin-spine-terminal-batches",
       artifacts: proofGraph.nodes.find(
         (node) => node.id === "admin-spine-terminal-batches",
@@ -354,39 +357,6 @@ function hostedIdentityTerminalReceiptArtifact(proofGraph) {
           "Terminal hosted identity next-action admin proof batch",
     ) ?? null
   );
-}
-
-function normalizedReceiptArtifactRows({ parentId, artifacts }) {
-  return (Array.isArray(artifacts) ? artifacts : [])
-    .map((artifact, index) => ({
-      proofId: String(artifact?.proofId ?? ""),
-      artifactPath: String(artifact?.artifactPath ?? ""),
-      batchLabel: String(artifact?.batchLabel ?? ""),
-      fallbackSuffix: String(index),
-    }))
-    .filter(
-      (artifact) => artifact.proofId !== "" && artifact.artifactPath !== "",
-    )
-    .map((artifact) => ({
-      ...artifact,
-      rowId: proofGraphReceiptArtifactRowId({ parentId, artifact }),
-      status: `${artifact.proofId}:${artifact.batchLabel}:${artifact.artifactPath}`,
-    }));
-}
-
-function proofGraphReceiptArtifactRowId({ parentId, artifact }) {
-  const batchSuffix = slugIdPart(artifact.batchLabel);
-  return `receipt-artifact:${parentId}:${artifact.proofId}:${
-    batchSuffix === "" ? artifact.fallbackSuffix : batchSuffix
-  }`;
-}
-
-function slugIdPart(value) {
-  return String(value ?? "")
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/gu, "-")
-    .replace(/^-+|-+$/gu, "");
 }
 
 function assertHostedIdentityTerminalReceiptArtifact(evidence) {
