@@ -363,6 +363,27 @@
       >
         <h2>Hosted identity packet</h2>
         <ol class="admin-audit-detail__entries">
+          <li
+            class="admin-audit-detail__entry admin-audit-detail__entry--stack"
+            data-testid="admin-audit-hosted-identity-packet-summary-status"
+          >
+            <strong>{data.audit.artifactSummary.redactedIntakePacket.status}</strong>
+            <span>{data.audit.artifactSummary.redactedIntakePacket.providedSectionCount}/{data.audit.artifactSummary.redactedIntakePacket.sectionCount} sections provided</span>
+            <span>{data.audit.artifactSummary.redactedIntakePacket.missingSectionCount} sections missing</span>
+          </li>
+          <li
+            class="admin-audit-detail__entry admin-audit-detail__entry--stack"
+            data-testid="admin-audit-hosted-identity-packet-summary-inputs"
+          >
+            <strong>{data.audit.artifactSummary.redactedIntakePacket.providedInputCount}/{data.audit.artifactSummary.redactedIntakePacket.requiredInputCount} inputs provided</strong>
+            <span>{data.audit.artifactSummary.redactedIntakePacket.missingInputCount} inputs missing</span>
+          </li>
+          <li
+            class="admin-audit-detail__entry admin-audit-detail__entry--stack"
+            data-testid="admin-audit-hosted-identity-packet-summary-redacted-refs"
+          >
+            <strong>{data.audit.artifactSummary.redactedIntakePacket.redactedEvidenceRefCount} redacted refs</strong>
+          </li>
           {#each data.audit.artifactSummary.redactedIntakePacket.sections as section}
             <li
               class="admin-audit-detail__entry admin-audit-detail__entry--stack"

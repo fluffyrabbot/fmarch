@@ -77,6 +77,39 @@ function hostedIdentityPacketInputStatuses(hostedIdentityEvidence) {
   );
 }
 
+function hostedIdentityPacketSummaryRows(hostedIdentityEvidence) {
+  const packet = hostedIdentityEvidence.target?.redactedIntakePacket ?? {};
+  return [
+    {
+      id: "status",
+      status: `${String(packet.status ?? "unknown")}\n${Number(
+        packet.providedSectionCount ?? 0,
+      )}/${Number(packet.sectionCount ?? 0)} sections provided\n${Number(
+        packet.missingSectionCount ?? 0,
+      )} sections missing`,
+    },
+    {
+      id: "inputs",
+      status: `${Number(packet.providedInputCount ?? 0)}/${Number(
+        packet.requiredInputCount ?? 0,
+      )} inputs provided\n${Number(packet.missingInputCount ?? 0)} inputs missing`,
+    },
+    {
+      id: "redacted-refs",
+      status: `${Number(packet.redactedEvidenceRefCount ?? 0)} redacted refs`,
+    },
+  ];
+}
+
+function hostedIdentityPacketSummaryStatuses(hostedIdentityEvidence) {
+  return Object.fromEntries(
+    hostedIdentityPacketSummaryRows(hostedIdentityEvidence).map((summary) => [
+      summary.id,
+      summary.status,
+    ]),
+  );
+}
+
 export function hostedIdentityEvidenceAdminProofCase() {
   return {
     smokeName: "dev-test-game-hosted-identity-evidence-admin-proof",
@@ -138,6 +171,11 @@ export function hostedIdentityEvidenceAdminProofCase() {
         ),
         requiredHostedHandoffSectionInputStatuses:
           hostedIdentityEvidenceSectionInputStatuses(hostedHandoffInputSections),
+        requiredHostedIdentityPacketSummaries: hostedIdentityPacketSummaryRows(
+          source.hostedIdentityEvidence,
+        ).map((summary) => summary.id),
+        requiredHostedIdentityPacketSummaryStatuses:
+          hostedIdentityPacketSummaryStatuses(source.hostedIdentityEvidence),
         requiredHostedIdentityPacketSections:
           hostedIdentityPacketSectionRows(source.hostedIdentityEvidence).map(
             (section) => section.id,
@@ -232,6 +270,11 @@ export function hostedIdentityEvidenceAdminProofCase() {
           hostedIdentityEvidenceSectionInputStatuses(
             source.hostedIdentityEvidence.hostedHandoffChecklist.inputSections,
           ),
+        hostedIdentityPacketSummaryIds: hostedIdentityPacketSummaryRows(
+          source.hostedIdentityEvidence,
+        ).map((summary) => summary.id),
+        hostedIdentityPacketSummaryStatuses:
+          hostedIdentityPacketSummaryStatuses(source.hostedIdentityEvidence),
         hostedIdentityPacketSectionIds:
           hostedIdentityPacketSectionRows(source.hostedIdentityEvidence).map(
             (section) => section.id,
@@ -365,6 +408,20 @@ export function assertHostedIdentityEvidenceAdminProof(evidence) {
     proofName: "hosted identity evidence admin proof",
     rowName: "handoff section input status",
     surfaceKey: "visibleHostedHandoffSectionInputStatuses",
+  });
+  assertVisibleAdminRoleSurfaceRows({
+    adminRoleSurface: evidence.adminRoleSurface,
+    rowIds: evidence.generatedFrom?.hostedIdentityPacketSummaryIds,
+    proofName: "hosted identity evidence admin proof",
+    rowName: "packet summary",
+    surfaceKey: "visibleHostedIdentityPacketSummaries",
+  });
+  assertAdminRoleSurfaceStatusText({
+    adminRoleSurface: evidence.adminRoleSurface,
+    expectedStatuses: evidence.generatedFrom?.hostedIdentityPacketSummaryStatuses,
+    proofName: "hosted identity evidence admin proof",
+    rowName: "packet summary status",
+    surfaceKey: "visibleHostedIdentityPacketSummaryStatuses",
   });
   assertVisibleAdminRoleSurfaceRows({
     adminRoleSurface: evidence.adminRoleSurface,

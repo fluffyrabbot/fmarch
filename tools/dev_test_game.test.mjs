@@ -17789,6 +17789,20 @@ function hostedIdentityEvidenceAdminProofFixture() {
     handoff.inputSections,
   );
   const packetInputRows = hostedIdentityPacketInputRowsFixture();
+  const packetSummaryRows = [
+    {
+      id: "status",
+      status: "missing\n0/6 sections provided\n6 sections missing",
+    },
+    {
+      id: "inputs",
+      status: "0/16 inputs provided\n16 inputs missing",
+    },
+    {
+      id: "redacted-refs",
+      status: "0 redacted refs",
+    },
+  ];
   return {
     version: 1,
     proof: "dev-test-game-hosted-identity-evidence-admin-proof",
@@ -17826,6 +17840,10 @@ function hostedIdentityEvidenceAdminProofFixture() {
       hostedHandoffSectionInputIds: handoffSectionInputRows.map((row) => row.id),
       hostedHandoffSectionInputStatuses:
         hostedIdentityEvidenceSectionInputStatuses(handoff.inputSections),
+      hostedIdentityPacketSummaryIds: packetSummaryRows.map((row) => row.id),
+      hostedIdentityPacketSummaryStatuses: Object.fromEntries(
+        packetSummaryRows.map((row) => [row.id, row.status]),
+      ),
       hostedIdentityPacketSectionIds: hostedIdentityEvidencePacketSectionDefinitions.map(
         (section) => section.field,
       ),
@@ -17877,6 +17895,10 @@ function hostedIdentityEvidenceAdminProofFixture() {
       ),
       visibleHostedHandoffSectionInputStatuses: Object.fromEntries(
         handoffSectionInputRows.map((row) => [row.id, `${row.id} ${row.status}`]),
+      ),
+      visibleHostedIdentityPacketSummaries: packetSummaryRows.map((row) => row.id),
+      visibleHostedIdentityPacketSummaryStatuses: Object.fromEntries(
+        packetSummaryRows.map((row) => [row.id, row.status]),
       ),
       visibleHostedIdentityPacketSections:
         hostedIdentityEvidencePacketSectionDefinitions.map((section) => section.field),
