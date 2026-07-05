@@ -18,6 +18,28 @@ import {
 
 export const coreLoopLateActionProgressionFamilyId =
   "core-loop-late-action-progression";
+export const coreLoopLateActionProgressionAdminCheckId = "core-loop";
+export const coreLoopLateActionProgressionCycleId = "n03-d04";
+export const coreLoopLateActionProgressionEntryCheckpointId =
+  "d04-day-controls-return";
+
+const lateActionProgressionFeatureRowDefinitions = Object.freeze([
+  Object.freeze({
+    targetKey: "nightFourActionSubmission",
+    featureSlotId: "night-four-action-submission",
+    role: "actionPlayer",
+  }),
+  Object.freeze({
+    targetKey: "nightFourResolutionReceipt",
+    featureSlotId: "night-four-resolution-receipt",
+    role: "host",
+  }),
+  Object.freeze({
+    targetKey: "postNightFourTransition",
+    featureSlotId: "post-night-four-transition",
+    role: "host",
+  }),
+]);
 
 const coreLoopLateActionProgressionScenarioCaseDefinitions = Object.freeze([
   Object.freeze({
@@ -73,6 +95,7 @@ const cloneTransitionCase = (transitionCase) => ({
 });
 
 const clonePrivateReceiptScenario = (scenario) => ({ ...scenario });
+const cloneFeatureRow = (row) => ({ ...row });
 
 const nightFourActionSubmissionSurfaceCaseDefinition = Object.freeze({
   transitionFragments: Object.freeze([
@@ -161,6 +184,14 @@ export function nightFourResolutionReceiptSurfaceCase() {
       privateReceiptScenario(surfaceCase.actionPlayerPrivacyScenarioId),
     ),
   };
+}
+
+export function lateActionProgressionFeatureSpineRows({
+  cycleId = coreLoopLateActionProgressionCycleId,
+} = {}) {
+  return lateActionProgressionFeatureRowDefinitions.map((scenario) =>
+    cloneFeatureRow(featureRowFromCase(scenario, { cycleId })),
+  );
 }
 
 export function coreLoopLateActionProgressionScenarioFamily() {
@@ -296,6 +327,17 @@ export function assertNightFourPlayerActionSubmissionProofCase({
       includeEvidenceInError,
     });
   }
+}
+
+function featureRowFromCase(scenario, { cycleId }) {
+  return Object.freeze({
+    targetKey: scenario.targetKey,
+    featureSlotId: scenario.featureSlotId,
+    cycleId,
+    role: scenario.role,
+    checkpointId: `${cycleId}-${coreLoopLateActionProgressionEntryCheckpointId}`,
+    adminCheckId: coreLoopLateActionProgressionAdminCheckId,
+  });
 }
 
 export function assertNightFourResolutionReceiptSurfaceCase({

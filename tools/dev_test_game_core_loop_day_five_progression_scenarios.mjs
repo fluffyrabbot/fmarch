@@ -5,10 +5,22 @@ import {
 
 export const coreLoopDayFiveProgressionFamilyId =
   "core-loop-day-five-progression";
+export const coreLoopDayFiveProgressionAdminCheckId = "core-loop";
+export const coreLoopDayFiveProgressionCycleId = "n03-d04";
+export const coreLoopDayFiveProgressionEntryCheckpointId =
+  "d04-day-controls-return";
 
 export const coreLoopDayFiveProgressionLaneIds = Object.freeze([
   "day-vote-no-lynch",
   "action-loop",
+]);
+
+const dayFiveProgressionFeatureRowDefinitions = Object.freeze([
+  Object.freeze({
+    targetKey: "dayFiveNoLynchResolution",
+    featureSlotId: "day-five-no-lynch-resolution",
+    role: "actionPlayer",
+  }),
 ]);
 
 const coreLoopDayFiveProgressionScenarioCaseDefinitions = Object.freeze([
@@ -34,9 +46,19 @@ const cloneDayFiveProgressionScenarioCase = (scenarioCase) => ({
   scenario: scenarioCase.buildScenario(),
 });
 
+const cloneFeatureRow = (row) => ({ ...row });
+
 export function coreLoopDayFiveProgressionScenarioCases() {
   return coreLoopDayFiveProgressionScenarioCaseDefinitions.map(
     cloneDayFiveProgressionScenarioCase,
+  );
+}
+
+export function dayFiveProgressionFeatureSpineRows({
+  cycleId = coreLoopDayFiveProgressionCycleId,
+} = {}) {
+  return dayFiveProgressionFeatureRowDefinitions.map((scenario) =>
+    cloneFeatureRow(featureRowFromCase(scenario, { cycleId })),
   );
 }
 
@@ -462,6 +484,17 @@ function throwDayFiveProgressionAssertionError({
 function gameFromRoleUrl(roleUrl) {
   const match = String(roleUrl ?? "").match(/\/g\/([^/?#]+)/);
   return match?.[1] ?? "";
+}
+
+function featureRowFromCase(scenario, { cycleId }) {
+  return Object.freeze({
+    targetKey: scenario.targetKey,
+    featureSlotId: scenario.featureSlotId,
+    cycleId,
+    role: scenario.role,
+    checkpointId: `${cycleId}-${coreLoopDayFiveProgressionEntryCheckpointId}`,
+    adminCheckId: coreLoopDayFiveProgressionAdminCheckId,
+  });
 }
 
 function sameStringArray(actual, expected) {

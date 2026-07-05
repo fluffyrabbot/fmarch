@@ -31,6 +31,12 @@ import {
   nightThreeProgressionFeatureSpineRows,
 } from "./dev_test_game_core_loop_night_three_progression_scenarios.mjs";
 import {
+  lateActionProgressionFeatureSpineRows,
+} from "./dev_test_game_core_loop_late_action_progression_scenarios.mjs";
+import {
+  dayFiveProgressionFeatureSpineRows,
+} from "./dev_test_game_core_loop_day_five_progression_scenarios.mjs";
+import {
   dayTwoNightTwoFeatureSpineRows,
 } from "./dev_test_game_core_loop_day_two_night_two_scenarios.mjs";
 import {
@@ -87,6 +93,8 @@ const coreLoopFeatureSpineLaneRows = Object.freeze([
   ...terminalRecoveryFeatureSpineRows({ cycleId: dayThreeNightThree }),
   ...revoteProgressionFeatureSpineRows({ cycleId: dayThreeNightThree }),
   ...nightThreeProgressionFeatureSpineRows({ cycleId: nightThreeDayFour }),
+  ...lateActionProgressionFeatureSpineRows({ cycleId: nightThreeDayFour }),
+  ...dayFiveProgressionFeatureSpineRows({ cycleId: nightThreeDayFour }),
   Object.freeze(
     invalidActionRecoveryFeatureSpineRow({ cycleId: dayTwoNightTwo }),
   ),

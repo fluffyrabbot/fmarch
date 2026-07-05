@@ -7,6 +7,7 @@ import {
   coreLoopDayFiveProgressionScenarioCases,
   coreLoopDayFiveProgressionScenarioFamily,
   dayFiveNoLynchResolutionSurfaceCase,
+  dayFiveProgressionFeatureSpineRows,
 } from "./dev_test_game_core_loop_day_five_progression_scenarios.mjs";
 import {
   dayFiveNoLynchResolutionSurfaceFixture,
@@ -86,6 +87,19 @@ test("Day 5 progression family shares no-lynch resolution and stale vote cases",
     coreLoopDayFiveProgressionScenarioCases()[0].scenario.transitionFragments,
     coreLoopDayFiveProgressionScenarioCases()[0].scenario.transitionFragments,
   );
+});
+
+test("Day 5 no-lynch surface derives feature-spine row from D04 entrypoint", () => {
+  assert.deepEqual(dayFiveProgressionFeatureSpineRows(), [
+    {
+      targetKey: "dayFiveNoLynchResolution",
+      featureSlotId: "day-five-no-lynch-resolution",
+      cycleId: "n03-d04",
+      role: "actionPlayer",
+      checkpointId: "n03-d04-d04-day-controls-return",
+      adminCheckId: "core-loop",
+    },
+  ]);
 });
 
 test("Day 5 progression assertion delegates host and player observations", () => {

@@ -5,6 +5,9 @@ import {
   releaseReadinessProductionFeatureSpineTargets,
 } from "./dev_test_game_release_readiness_cases.mjs";
 import {
+  coreLoopFeatureSpineTargetRows,
+} from "./dev_test_game_core_loop_feature_spine_targets.mjs";
+import {
   buildProductionFeatureSpineDrilldown,
   buildProductionFeatureSpineTargetCollection,
   resolveProductionFeatureSpineTarget,
@@ -244,37 +247,12 @@ test("production feature spine resolver builds and validates source collections"
   });
 
   assert.equal(collection.status, "passed");
-  assert.deepEqual(collection.slotIds, [
-    "host-phase-control",
-    "day-vote-resolution",
-    "day-vote-no-lynch",
-    "post-day-three-transition",
-    "night-action-loop",
-    "player-action-submission",
-    "host-night-action-transition",
-    "night-two-action-resolution",
-    "day-three-controls-return",
-    "day-three-terminal-boundary",
-    "day-three-terminal-recovery",
-    "day-three-stale-continue-policy-recovery",
-    "day-three-no-majority-revote",
-    "day-three-revote-ballot",
-    "day-three-revote-resolution",
-    "day-three-second-revote",
-    "day-three-second-revote-ballot",
-    "day-three-second-revote-resolution",
-    "night-three-action-resolution",
-    "day-four-controls-return",
-    "invalid-action-recovery",
-    "stale-vote-transition-recovery",
-    "stale-action-transition-recovery",
-    "player-action-boundary",
-    "private-channel",
-    "resolution-receipts",
-    "stale-recovery",
-    "stale-action-conflict-message",
-    "completed-game-recovery",
-  ]);
+  assert.deepEqual(
+    collection.slotIds,
+    Object.values(coreLoopFeatureSpineTargetRows).map(
+      (row) => row.featureSlotId,
+    ),
+  );
   assert.equal(
     collection.bySlotId["invalid-action-recovery"].recoveryHookId,
     "invalidActionReject",

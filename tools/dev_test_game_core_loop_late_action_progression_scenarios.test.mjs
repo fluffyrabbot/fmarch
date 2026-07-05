@@ -7,6 +7,7 @@ import {
   coreLoopLateActionProgressionLaneIds,
   coreLoopLateActionProgressionScenarioCases,
   coreLoopLateActionProgressionScenarioFamily,
+  lateActionProgressionFeatureSpineRows,
   nightFourActionSubmissionSurfaceCase,
   nightFourResolutionReceiptSurfaceCase,
 } from "./dev_test_game_core_loop_late_action_progression_scenarios.mjs";
@@ -130,6 +131,35 @@ test("late action progression family shares Night 4 action and recovery cases", 
     coreLoopLateActionProgressionScenarioCases()[0].scenario
       .transitionFragments,
   );
+});
+
+test("late action progression surfaces derive feature-spine rows from D04 entrypoint", () => {
+  assert.deepEqual(lateActionProgressionFeatureSpineRows(), [
+    {
+      targetKey: "nightFourActionSubmission",
+      featureSlotId: "night-four-action-submission",
+      cycleId: "n03-d04",
+      role: "actionPlayer",
+      checkpointId: "n03-d04-d04-day-controls-return",
+      adminCheckId: "core-loop",
+    },
+    {
+      targetKey: "nightFourResolutionReceipt",
+      featureSlotId: "night-four-resolution-receipt",
+      cycleId: "n03-d04",
+      role: "host",
+      checkpointId: "n03-d04-d04-day-controls-return",
+      adminCheckId: "core-loop",
+    },
+    {
+      targetKey: "postNightFourTransition",
+      featureSlotId: "post-night-four-transition",
+      cycleId: "n03-d04",
+      role: "host",
+      checkpointId: "n03-d04-d04-day-controls-return",
+      adminCheckId: "core-loop",
+    },
+  ]);
 });
 
 test("late action progression assertion delegates Day 4 and checks Night 4 action ACK", () => {
