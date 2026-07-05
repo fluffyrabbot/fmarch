@@ -280,6 +280,41 @@ export const hostedIdentityEvidenceFamilyProgressionCases = Object.freeze([
   }),
 ]);
 
+export function hostedIdentityEvidenceProgressionHandoffSummary() {
+  const progressions = hostedIdentityEvidenceFamilyProgressionCases.map(
+    (progression) =>
+      Object.freeze({
+        id: progression.id,
+        checkId: progression.checkId,
+        missingInputId: progression.missingInputId,
+        proofCommand: `FMARCH_HOSTED_IDENTITY_PROGRESSION_ID=${progression.id} npm run ${devTestGameHostedIdentityProgressionAdminProofCommand}`,
+        evidencePath: hostedIdentityEvidenceProgressionPath(progression.id),
+        adminProofTarget: hostedIdentityEvidenceProgressionAdminProofPath(
+          progression.id,
+        ),
+        roleUrl: hostedIdentityEvidenceRoleSurfaceDrilldown.handoffRoleUrl,
+        firstMissingInputId: progression.missingInputId,
+        firstMissingCheckId: progression.checkId,
+        proofBoundary:
+          "Fixture-backed local admin browser proof target for one hosted identity evidence-family progression row. It proves the admin handoff can surface the named missing artifact; it does not prove hosted identity traffic, release readiness, or production readiness.",
+      }),
+  );
+  return Object.freeze({
+    status: "passed",
+    command: `npm run ${devTestGameHostedIdentityProgressionSummaryCommand}`,
+    proofTarget: devTestGameHostedIdentityProgressionSummaryPath,
+    roleUrl: hostedIdentityEvidenceRoleSurfaceDrilldown.handoffRoleUrl,
+    progressionCount: progressions.length,
+    progressionIds: progressions.map((progression) => progression.id),
+    progressionProofTargets: progressions.map(
+      (progression) => progression.adminProofTarget,
+    ),
+    progressions,
+    proofBoundary:
+      "Fixture-backed local summary of hosted identity evidence-family progression rows. Passing means every shared progression case names its missing fixture, recovered fixture, proof command, role URL, and admin proof target; it does not prove hosted identity traffic, release readiness, or production readiness.",
+  });
+}
+
 export function hostedIdentityEvidenceProgressionCase(progressionId) {
   const id = String(progressionId ?? "").trim();
   const progression = hostedIdentityEvidenceFamilyProgressionCases.find(
@@ -538,6 +573,7 @@ export function hostedIdentityEvidenceHandoffCase({
     operatorProofDrilldowns: hostedIdentityEvidenceOperatorProofDrilldowns.map(
       (drilldown) => ({ ...drilldown }),
     ),
+    progressionSummary: hostedIdentityEvidenceProgressionHandoffSummary(),
     inputIds: [...hostedIdentityEvidenceInputIds],
     blockedCheckIds: blockedChecks.map((check) => check.id),
     blockedChecks: blockedChecks.map((check) => ({

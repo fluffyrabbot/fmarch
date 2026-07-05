@@ -795,6 +795,21 @@ export async function proveAdminAuditDetail({
           page,
           expected: destination.requiredHostedHandoffBlockedReceipt,
         });
+      const destinationVisibleHostedIdentityProgressions = await waitForRows({
+        page,
+        prefix: "admin-audit-hosted-identity-progression",
+        ids: destination.requiredHostedIdentityProgressions ?? [],
+        expectedStatuses:
+          destination.requiredHostedIdentityProgressionStatuses ?? {},
+      });
+      const destinationVisibleHostedIdentityProgressionStatuses =
+        await readRowStatuses({
+          page,
+          prefix: "admin-audit-hosted-identity-progression",
+          ids: Object.keys(
+            destination.requiredHostedIdentityProgressionStatuses ?? {},
+          ),
+        });
       await assertAdminAuditBodyText({
         page,
         auditId: destinationAuditId,
@@ -863,6 +878,19 @@ export async function proveAdminAuditDetail({
           : {
               visibleHostedHandoffBlockedReceipt:
                 destinationVisibleHostedHandoffBlockedReceipt,
+            }),
+        ...(destinationVisibleHostedIdentityProgressions.length === 0
+          ? {}
+          : {
+              visibleHostedIdentityProgressions:
+                destinationVisibleHostedIdentityProgressions,
+            }),
+        ...(Object.keys(destinationVisibleHostedIdentityProgressionStatuses)
+          .length === 0
+          ? {}
+          : {
+              visibleHostedIdentityProgressionStatuses:
+                destinationVisibleHostedIdentityProgressionStatuses,
             }),
       });
     }

@@ -703,6 +703,23 @@
               <span>{drilldown.proofBoundary}</span>
             </li>
           {/each}
+          {#if !data.audit.artifactSummary?.progressionSummary?.progressions?.length}
+            {#each data.audit.hostedHandoffChecklist.progressionSummary?.progressions ?? [] as progression}
+              <li
+                class="admin-audit-detail__entry admin-audit-detail__entry--stack"
+                data-testid={`admin-audit-hosted-identity-progression-${progression.id}`}
+              >
+                <strong>{progression.id}</strong>
+                <span>{progression.proofCommand}</span>
+                <span>{progression.evidencePath}</span>
+                <span>{progression.adminProofTarget}</span>
+                <span>{progression.roleUrl}</span>
+                <span>{progression.firstMissingInputId}</span>
+                <span>{progression.firstMissingCheckId}</span>
+                <span>{progression.proofBoundary}</span>
+              </li>
+            {/each}
+          {/if}
           {#if data.audit.hostedHandoffChecklist.blockedReceipt}
             <li
               class="admin-audit-detail__entry admin-audit-detail__entry--stack"

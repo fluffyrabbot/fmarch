@@ -930,6 +930,9 @@ function normalizeHostedIdentityEvidenceHandoffChecklist({
     operatorProofDrilldowns: normalizeHostedHandoffOperatorProofDrilldowns(
       hostedIdentityEvidence.hostedHandoffChecklist?.operatorProofDrilldowns,
     ),
+    progressionSummary: normalizeHostedHandoffProgressionSummary(
+      hostedIdentityEvidence.hostedHandoffChecklist?.progressionSummary,
+    ),
     blockedReceipt: normalizeHostedHandoffBlockedReceipt(
       hostedIdentityEvidence.hostedHandoffChecklist?.blockedReceipt,
     ),
@@ -3134,6 +3137,54 @@ function normalizeNextActionHostedHandoffChecklist({
     operatorProofDrilldowns: normalizeHostedHandoffOperatorProofDrilldowns(
       checklist.operatorProofDrilldowns,
     ),
+    progressionSummary: normalizeHostedHandoffProgressionSummary(
+      checklist.progressionSummary,
+    ),
+  });
+}
+
+function normalizeHostedHandoffProgressionSummary(summary) {
+  if (summary === null || typeof summary !== "object") {
+    return null;
+  }
+  const progressions = Array.isArray(summary.progressions)
+    ? summary.progressions
+    : [];
+  return Object.freeze({
+    status: String(summary.status ?? "unknown"),
+    command: String(summary.command ?? ""),
+    proofTarget: String(summary.proofTarget ?? ""),
+    roleUrl: String(summary.roleUrl ?? ""),
+    progressionCount: Number(summary.progressionCount ?? progressions.length),
+    progressionIds: Object.freeze(
+      (Array.isArray(summary.progressionIds)
+        ? summary.progressionIds
+        : progressions.map((progression) => progression.id)
+      ).map((id) => String(id ?? "")),
+    ),
+    progressionProofTargets: Object.freeze(
+      (Array.isArray(summary.progressionProofTargets)
+        ? summary.progressionProofTargets
+        : progressions.map((progression) => progression.adminProofTarget)
+      ).map((target) => String(target ?? "")),
+    ),
+    progressions: Object.freeze(
+      progressions.map((progression) =>
+        Object.freeze({
+          id: String(progression?.id ?? ""),
+          checkId: String(progression?.checkId ?? ""),
+          missingInputId: String(progression?.missingInputId ?? ""),
+          proofCommand: String(progression?.proofCommand ?? ""),
+          evidencePath: String(progression?.evidencePath ?? ""),
+          adminProofTarget: String(progression?.adminProofTarget ?? ""),
+          roleUrl: String(progression?.roleUrl ?? ""),
+          firstMissingInputId: String(progression?.firstMissingInputId ?? ""),
+          firstMissingCheckId: String(progression?.firstMissingCheckId ?? ""),
+          proofBoundary: String(progression?.proofBoundary ?? ""),
+        }),
+      ),
+    ),
+    proofBoundary: String(summary.proofBoundary ?? ""),
   });
 }
 

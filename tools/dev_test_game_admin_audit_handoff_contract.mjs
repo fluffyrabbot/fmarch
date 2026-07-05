@@ -30,6 +30,20 @@ export function requiredRelatedDestinationsForHandoff(handoff) {
             handoff.requiredHostedHandoffSummary ?? null,
           requiredHostedHandoffBlockedReceipt:
             handoff.requiredHostedHandoffBlockedReceipt ?? null,
+          ...(Array.isArray(handoff.requiredHostedIdentityProgressionIds) &&
+          handoff.requiredHostedIdentityProgressionIds.length > 0
+            ? {
+                requiredHostedIdentityProgressions:
+                  handoff.requiredHostedIdentityProgressionIds,
+              }
+            : {}),
+          ...(handoff.requiredHostedIdentityProgressionStatuses !== undefined &&
+          Object.keys(handoff.requiredHostedIdentityProgressionStatuses).length > 0
+            ? {
+                requiredHostedIdentityProgressionStatuses:
+                  handoff.requiredHostedIdentityProgressionStatuses,
+              }
+            : {}),
           requiredRelatedLinks: handoff.requiredRelatedLinkIds ?? [],
         },
       ];
@@ -173,6 +187,25 @@ export function assertAdminAuditRelatedHandoff({
     expected: handoff.requiredHostedHandoffBlockedReceipt,
     message: `${name} handoff destination missing hosted handoff blocked receipt`,
   });
+  for (const progressionId of handoff.requiredHostedIdentityProgressionIds ?? []) {
+    if (!destination.visibleHostedIdentityProgressions?.includes(progressionId)) {
+      throw new Error(
+        `${name} handoff destination missing hosted identity progression: ${progressionId}`,
+      );
+    }
+  }
+  for (const [progressionId, expected] of Object.entries(
+    handoff.requiredHostedIdentityProgressionStatuses ?? {},
+  )) {
+    const visibleText =
+      destination.visibleHostedIdentityProgressionStatuses?.[progressionId] ??
+      "";
+    if (!visibleText.includes(expected)) {
+      throw new Error(
+        `${name} handoff destination missing hosted identity progression status: ${progressionId}`,
+      );
+    }
+  }
 }
 
 function assertOptionalObjectEqual({ actual, expected, message }) {

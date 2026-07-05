@@ -1112,6 +1112,28 @@ test("admin route data exposes hosted identity evidence as a native audit row", 
     identity.hostedHandoffChecklist.operatorProofDrilldowns,
     hostedIdentityEvidenceOperatorProofDrilldowns,
   );
+  assert.deepEqual(
+    identity.hostedHandoffChecklist.progressionSummary.progressions.map(
+      (progression) => [
+        progression.id,
+        progression.proofCommand,
+        progression.evidencePath,
+        progression.adminProofTarget,
+        progression.roleUrl,
+        progression.firstMissingInputId,
+        progression.firstMissingCheckId,
+      ],
+    ),
+    hostedIdentityEvidenceFamilyProgressionCases.map((progression) => [
+      progression.id,
+      `FMARCH_HOSTED_IDENTITY_PROGRESSION_ID=${progression.id} npm run test:dev-test-game-hosted-identity-progression-admin-proof`,
+      `target/dev-test-game/hosted-identity-evidence-${progression.id}.json`,
+      hostedIdentityEvidenceProgressionAdminProofPath(progression.id),
+      "/admin/audit/local-hosted-identity-evidence?game=<seeded-game>",
+      progression.missingInputId,
+      progression.checkId,
+    ]),
+  );
   assert.equal(
     identity.artifactSummary.progressionSummary.progressionCount,
     hostedIdentityEvidenceFamilyProgressionCases.length,
@@ -2455,6 +2477,53 @@ test("admin local next action detail data carries hosted evidence handoff checkl
   assert.equal(
     data.audit.artifactSummary.selectedRoleHref,
     localAdminAuditRoleUrl(localAdminAuditIds.hostedEvidenceLane, { game: "midsummer" }),
+  );
+});
+
+test("admin local next action detail data carries hosted identity progression ladder", async () => {
+  const unproven = {
+    id: "hosted-production-identity",
+    status: "unproven",
+    requiredEvidence: "Hosted account lifecycle",
+    buildSlice: "Run the hosted identity evidence intake.",
+    proofTarget: HOSTED_IDENTITY_EVIDENCE_PROOF_TARGET,
+    roleUrl: localAdminAuditRoleUrl(localAdminAuditIds.hostedIdentityEvidence),
+    proofGraphNodeId: "admin-proof:hosted-identity-evidence",
+    actionStatus: "ready",
+    productionFeatureSpineTarget: productionFeatureSpineTargetFixture(),
+    spineDrilldown: featureSpineDrilldownFixture(),
+    spineTarget: featureSpineTargetFixture(),
+    hostedHandoffChecklist: hostedIdentityEvidenceHandoffCase(),
+  };
+  const data = await buildAdminAuditDetailData({
+    audit: localAdminAuditIds.nextAction,
+    principalUserId: "admin_a",
+    capabilities: [{ kind: "GlobalAdmin" }],
+    nextAction: nextActionFixture({
+      command: "npm run test:dev-test-game-hosted-identity-evidence",
+      unproven,
+    }),
+  });
+
+  assert.equal(data.status, "available");
+  assert.equal(data.audit.id, localAdminAuditIds.nextAction);
+  assert.deepEqual(
+    data.audit.hostedHandoffChecklist.progressionSummary.progressions.map(
+      (progression) => [
+        progression.id,
+        progression.proofCommand,
+        progression.adminProofTarget,
+        progression.roleUrl,
+        progression.firstMissingInputId,
+      ],
+    ),
+    hostedIdentityEvidenceFamilyProgressionCases.map((progression) => [
+      progression.id,
+      `FMARCH_HOSTED_IDENTITY_PROGRESSION_ID=${progression.id} npm run test:dev-test-game-hosted-identity-progression-admin-proof`,
+      hostedIdentityEvidenceProgressionAdminProofPath(progression.id),
+      localAdminAuditRoleUrl(localAdminAuditIds.hostedIdentityEvidence),
+      progression.missingInputId,
+    ]),
   );
 });
 

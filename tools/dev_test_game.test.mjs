@@ -2549,6 +2549,20 @@ test("dev test-game next-action derives one local recovery command from the mani
       .operatorProofDrilldowns,
     hostedIdentityEvidenceOperatorProofDrilldowns,
   );
+  assert.deepEqual(
+    hostedIdentityStageAction.nextAction.unproven.hostedHandoffChecklist
+      .progressionSummary.progressionIds,
+    hostedIdentityEvidenceFamilyProgressionCases.map(
+      (progression) => progression.id,
+    ),
+  );
+  assert.deepEqual(
+    hostedIdentityStageAction.nextAction.unproven.hostedHandoffChecklist
+      .progressionSummary.progressionProofTargets,
+    hostedIdentityEvidenceFamilyProgressionCases.map((progression) =>
+      hostedIdentityEvidenceProgressionAdminProofPath(progression.id),
+    ),
+  );
   assert.equal(
     freshAction.generatedFrom.sequenceStage,
     devTestGameDefaultSequenceStage,

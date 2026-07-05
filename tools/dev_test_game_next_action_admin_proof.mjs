@@ -114,6 +114,12 @@ export function nextActionAdminProofCase() {
           requiredHostedHandoffSectionInputIdsForNextAction(source.nextAction),
         requiredHostedHandoffSectionInputStatuses:
           requiredHostedHandoffSectionInputStatusesForNextAction(source.nextAction),
+        requiredHostedIdentityProgressions:
+          requiredHostedIdentityProgressionIdsForNextAction(source.nextAction),
+        requiredHostedIdentityProgressionStatuses:
+          requiredHostedIdentityProgressionStatusesForNextAction(
+            source.nextAction,
+          ),
         requiredRelatedDestinations: requiredRelatedDestinationsForHandoffs(
           relatedHandoffsForNextAction({
             nextAction: source.nextAction,
@@ -167,6 +173,9 @@ export function nextActionAdminProofCase() {
         null,
       unprovenHostedHandoffChecklist:
         source.nextAction.nextAction.unproven?.hostedHandoffChecklist ?? null,
+      unprovenHostedIdentityProgressionSummary:
+        source.nextAction.nextAction.unproven?.hostedHandoffChecklist
+          ?.progressionSummary ?? null,
       selectedProofGraphNode: selectedNextActionProofGraphNodeSummary({
         nextAction: source.nextAction,
         proofGraph: source.proofGraph,
@@ -733,6 +742,28 @@ export function assertNextActionAdminProof(evidence) {
         );
       }
     }
+    const progressionSummary = checklist.progressionSummary;
+    if (progressionSummary !== undefined) {
+      for (const progression of progressionSummary.progressions ?? []) {
+        if (
+          !evidence.adminRoleSurface?.visibleHostedIdentityProgressions?.includes(
+            progression.id,
+          )
+        ) {
+          throw new Error(
+            `next-action admin proof missing hosted identity progression: ${progression.id}`,
+          );
+        }
+        const visibleText =
+          evidence.adminRoleSurface
+            ?.visibleHostedIdentityProgressionStatuses?.[progression.id] ?? "";
+        if (!visibleText.includes(progression.adminProofTarget)) {
+          throw new Error(
+            `next-action admin proof missing hosted identity progression target: ${progression.id}`,
+          );
+        }
+      }
+    }
   }
   return evidence;
 }
@@ -972,6 +1003,27 @@ function requiredHostedHandoffSectionInputStatusesForNextAction(nextAction) {
   );
 }
 
+function requiredHostedIdentityProgressionIdsForNextAction(nextAction) {
+  const progressions =
+    nextAction.nextAction.unproven?.hostedHandoffChecklist?.progressionSummary
+      ?.progressions;
+  return Array.isArray(progressions)
+    ? progressions.map((progression) => String(progression.id ?? ""))
+    : [];
+}
+
+function requiredHostedIdentityProgressionStatusesForNextAction(nextAction) {
+  const progressions =
+    nextAction.nextAction.unproven?.hostedHandoffChecklist?.progressionSummary
+      ?.progressions;
+  return Object.fromEntries(
+    (Array.isArray(progressions) ? progressions : []).map((progression) => [
+      String(progression.id ?? ""),
+      String(progression.adminProofTarget ?? ""),
+    ]),
+  );
+}
+
 function hostedHandoffInputSections(checklist) {
   return Array.isArray(checklist?.inputSections)
     ? checklist.inputSections.map((section) => ({
@@ -1084,15 +1136,12 @@ function hostedIdentityEvidenceHandoffSummary({ nextAction }) {
     requiredHostedHandoffInputIds: Array.isArray(checklist?.inputIds)
       ? checklist.inputIds
       : [],
-    requiredHostedHandoffBlockedCheckIds: Array.isArray(
-      checklist?.blockedCheckIds,
-    )
-      ? checklist.blockedCheckIds
-      : [],
     requiredHostedHandoffSummary:
       requiredHostedHandoffSummaryForNextAction(nextAction),
-    requiredHostedHandoffBlockedReceipt:
-      requiredHostedHandoffBlockedReceiptForNextAction(nextAction),
+    requiredHostedIdentityProgressionIds:
+      requiredHostedIdentityProgressionIdsForNextAction(nextAction),
+    requiredHostedIdentityProgressionStatuses:
+      requiredHostedIdentityProgressionStatusesForNextAction(nextAction),
     requiredRelatedLinkIds: [
       localAdminAuditIds.identityAdapter,
       localAdminAuditIds.nextAction,

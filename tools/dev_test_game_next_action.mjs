@@ -1806,6 +1806,45 @@ function validHostedHandoffChecklist(checklist) {
         checklist.blockedCheckIds.includes(check.id) &&
         check.status === "blocked" &&
         typeof check.requiredEvidence === "string",
+    ) &&
+    (checklist.progressionSummary === undefined ||
+      validHostedIdentityProgressionSummary(checklist.progressionSummary))
+  );
+}
+
+function validHostedIdentityProgressionSummary(summary) {
+  return (
+    summary !== null &&
+    typeof summary === "object" &&
+    summary.status === "passed" &&
+    typeof summary.command === "string" &&
+    summary.command.startsWith("npm run test:") &&
+    typeof summary.proofTarget === "string" &&
+    summary.proofTarget.trim() !== "" &&
+    Number.isInteger(summary.progressionCount) &&
+    summary.progressionCount > 0 &&
+    Array.isArray(summary.progressionIds) &&
+    summary.progressionIds.length === summary.progressionCount &&
+    Array.isArray(summary.progressionProofTargets) &&
+    summary.progressionProofTargets.length === summary.progressionCount &&
+    Array.isArray(summary.progressions) &&
+    summary.progressions.length === summary.progressionCount &&
+    summary.progressions.every(
+      (progression, index) =>
+        progression.id === summary.progressionIds[index] &&
+        progression.adminProofTarget === summary.progressionProofTargets[index] &&
+        typeof progression.proofCommand === "string" &&
+        progression.proofCommand.includes("npm run test:") &&
+        typeof progression.evidencePath === "string" &&
+        progression.evidencePath.trim() !== "" &&
+        typeof progression.roleUrl === "string" &&
+        progression.roleUrl.includes("?game=<seeded-game>") &&
+        typeof progression.firstMissingInputId === "string" &&
+        progression.firstMissingInputId !== "" &&
+        typeof progression.firstMissingCheckId === "string" &&
+        progression.firstMissingCheckId !== "" &&
+        typeof progression.proofBoundary === "string" &&
+        progression.proofBoundary !== "",
     )
   );
 }
