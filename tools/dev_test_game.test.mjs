@@ -59,8 +59,8 @@ import {
   seededCoreLoopPlayerSurfaceFixture,
 } from "./dev_test_game_core_loop_proof_fixtures.mjs";
 import {
-  nightFourActionSubmissionSurfaceFixture,
-  nightFourResolutionReceiptSurfaceFixture,
+  nightFourNoActionSurfaceFixture,
+  nightFourNoActionResolutionSurfaceFixture,
   postNightFourTransitionSurfaceFixture,
 } from "./dev_test_game_core_loop_late_action_fixtures.mjs";
 import {
@@ -14893,8 +14893,8 @@ function coreLoopAdminProofFixture() {
     postDayThreeResolutionSurface: postDayThreeResolutionSurfaceFixture(),
     nightThreeEmptyResolutionSurface: nightThreeEmptyResolutionSurfaceFixture(),
     dayFourSurvivorRoleSurface: dayFourSurvivorRoleSurfaceFixture(),
-    nightFourActionSubmissionSurface: nightFourActionSubmissionSurfaceFixture(),
-    nightFourResolutionReceiptSurface: nightFourResolutionReceiptSurfaceFixture(),
+    nightFourNoActionSurface: nightFourNoActionSurfaceFixture(),
+    nightFourNoActionResolutionSurface: nightFourNoActionResolutionSurfaceFixture(),
     postNightFourTransitionSurface: postNightFourTransitionSurfaceFixture(),
     dayFiveNoLynchResolutionSurface: dayFiveNoLynchResolutionSurfaceFixture(),
     completedGameEndgameSurface: completedGameEndgameSurfaceFixture(),

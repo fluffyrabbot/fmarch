@@ -3,8 +3,8 @@ import {
   postDayThreeResolutionSurfaceCase,
 } from "./dev_test_game_core_loop_post_day_three_scenarios.mjs";
 import {
-  assertNightFourResolutionReceiptSurfaceCase,
-  nightFourResolutionReceiptSurfaceCase,
+  assertNightFourNoActionResolutionSurfaceCase,
+  nightFourNoActionResolutionSurfaceCase,
 } from "./dev_test_game_core_loop_late_action_progression_scenarios.mjs";
 import {
   privateReceiptScenario,
@@ -13,8 +13,8 @@ import {
 export {
   assertPostDayThreeResolutionSurfaceCase,
   postDayThreeResolutionSurfaceCase,
-  assertNightFourResolutionReceiptSurfaceCase,
-  nightFourResolutionReceiptSurfaceCase,
+  assertNightFourNoActionResolutionSurfaceCase,
+  nightFourNoActionResolutionSurfaceCase,
 };
 
 export const coreLoopResolutionReceiptPrivacyFamilyId =
@@ -31,7 +31,7 @@ export function coreLoopResolutionReceiptPrivacyScenarioFamily() {
     laneIds: [...coreLoopResolutionReceiptPrivacyLaneIds],
     surfaces: {
       postDayThreeResolution: postDayThreeResolutionSurfaceCase(),
-      nightFourResolutionReceipt: nightFourResolutionReceiptSurfaceCase(),
+      nightFourNoActionResolution: nightFourNoActionResolutionSurfaceCase(),
     },
     privateReceiptScenarios: {
       dayThreeTargetReceipt: clonePrivateReceiptScenario(
@@ -40,10 +40,7 @@ export function coreLoopResolutionReceiptPrivacyScenarioFamily() {
       dayThreeActionPlayerPrivacy: clonePrivateReceiptScenario(
         privateReceiptScenario("d03-action-player-privacy"),
       ),
-      nightFourSurvivorReceipt: clonePrivateReceiptScenario(
-        privateReceiptScenario("n04-survivor-receipt"),
-      ),
-      nightFourActionPlayerPrivacy: clonePrivateReceiptScenario(
+      nightFourNoActionPrivacy: clonePrivateReceiptScenario(
         privateReceiptScenario("n04-action-player-privacy"),
       ),
     },

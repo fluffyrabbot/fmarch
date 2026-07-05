@@ -269,11 +269,11 @@ import {
   coreLoopPhaseProgressionFamilyId,
 } from "./dev_test_game_core_loop_phase_progression_scenarios.mjs";
 import {
-  assertNightFourActionSubmissionSurfaceCase,
+  assertNightFourNoActionSurfaceCase,
   coreLoopLateActionProgressionFamilyId,
 } from "./dev_test_game_core_loop_late_action_progression_scenarios.mjs";
 import {
-  assertNightFourResolutionReceiptSurfaceCase,
+  assertNightFourNoActionResolutionSurfaceCase,
   assertPostDayThreeResolutionSurfaceCase,
   coreLoopResolutionReceiptPrivacyFamilyId,
 } from "./dev_test_game_core_loop_resolution_receipt_privacy_scenarios.mjs";
@@ -2493,11 +2493,11 @@ export function validateDevTestGameCoreLoopAdminProof(proof, options = {}) {
   assertCoreLoopDayFourSurvivorRoleSurface(
     proof.dayFourSurvivorRoleSurface,
   );
-  assertCoreLoopNightFourActionSubmissionSurface(
-    proof.nightFourActionSubmissionSurface,
+  assertCoreLoopNightFourNoActionSurface(
+    proof.nightFourNoActionSurface,
   );
-  assertCoreLoopNightFourResolutionReceiptSurface(
-    proof.nightFourResolutionReceiptSurface,
+  assertCoreLoopNightFourNoActionResolutionSurface(
+    proof.nightFourNoActionResolutionSurface,
   );
   assertCoreLoopPostNightFourTransitionSurface(
     proof.postNightFourTransitionSurface,
@@ -2550,8 +2550,8 @@ export function validateDevTestGameCoreLoopAdminProof(proof, options = {}) {
     postDayThreeResolutionSurface: proof.postDayThreeResolutionSurface,
     nightThreeEmptyResolutionSurface: proof.nightThreeEmptyResolutionSurface,
     dayFourSurvivorRoleSurface: proof.dayFourSurvivorRoleSurface,
-    nightFourActionSubmissionSurface: proof.nightFourActionSubmissionSurface,
-    nightFourResolutionReceiptSurface: proof.nightFourResolutionReceiptSurface,
+    nightFourNoActionSurface: proof.nightFourNoActionSurface,
+    nightFourNoActionResolutionSurface: proof.nightFourNoActionResolutionSurface,
     postNightFourTransitionSurface: proof.postNightFourTransitionSurface,
     dayFiveNoLynchResolutionSurface: proof.dayFiveNoLynchResolutionSurface,
     completedGameEndgameSurface: proof.completedGameEndgameSurface,
@@ -3184,14 +3184,14 @@ function assertCoreLoopDayFourSurvivorRoleSurface(dayFourSurvivorRoleSurface) {
   });
 }
 
-function assertCoreLoopNightFourActionSubmissionSurface(
-  nightFourActionSubmissionSurface,
+function assertCoreLoopNightFourNoActionSurface(
+  nightFourNoActionSurface,
 ) {
   const expectedGame = gameFromRoleUrl(
-    nightFourActionSubmissionSurface?.sourceHostRoleUrl,
+    nightFourNoActionSurface?.sourceHostRoleUrl,
   );
-  assertNightFourActionSubmissionSurfaceCase({
-    nightFourActionSubmissionSurface,
+  assertNightFourNoActionSurfaceCase({
+    nightFourNoActionSurface,
     expectedGame,
     assertDayFourNoLynchVoteProof: assertCoreLoopDayFourNoLynchVoteProof,
     assertDayFourNoLynchHostTransitionProof:
@@ -3199,14 +3199,14 @@ function assertCoreLoopNightFourActionSubmissionSurface(
   });
 }
 
-function assertCoreLoopNightFourResolutionReceiptSurface(
-  nightFourResolutionReceiptSurface,
+function assertCoreLoopNightFourNoActionResolutionSurface(
+  nightFourNoActionResolutionSurface,
 ) {
   const expectedGame = gameFromRoleUrl(
-    nightFourResolutionReceiptSurface?.sourceHostRoleUrl,
+    nightFourNoActionResolutionSurface?.sourceHostRoleUrl,
   );
-  assertNightFourResolutionReceiptSurfaceCase({
-    nightFourResolutionReceiptSurface,
+  assertNightFourNoActionResolutionSurfaceCase({
+    nightFourNoActionResolutionSurface,
     expectedGame,
     assertHostPhaseTransitionActionProof:
       assertCoreLoopHostPhaseTransitionActionProof,

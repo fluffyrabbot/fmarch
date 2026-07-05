@@ -12,7 +12,7 @@ export function lateLoopDayVoteOutcomesFixture() {
   ];
 }
 
-export function nightFourActionSubmissionSurfaceFixture({
+export function nightFourNoActionSurfaceFixture({
   game = "00000000-0000-0000-0000-000000000002",
 } = {}) {
   const baseRoleUrl = `http://127.0.0.1:5173/g/${game}`;
@@ -22,7 +22,7 @@ export function nightFourActionSubmissionSurfaceFixture({
     sourceActionPlayerRoleUrl: baseRoleUrl,
     clickedThroughFromRoleUrl: true,
     transition:
-      "player:D04:no_lynch:ack:912 -> host:D04:resolve_phase:ack:913 -> host:advance_phase:ack:914 -> player:N04:submit_action:slot-5:ack:915",
+      "player:D04:no_lynch:ack:912 -> host:D04:resolve_phase:ack:913 -> host:advance_phase:ack:914 -> actionPlayer:N04:no_action",
     dayFourVoteProof: {
       status: "passed",
       sourceRoleUrl: baseRoleUrl,
@@ -127,7 +127,7 @@ export function nightFourActionSubmissionSurfaceFixture({
         },
       }),
     }),
-    nightFourActionProof: {
+    nightFourNoActionProof: {
       status: "passed",
       sourceRoleUrl: baseRoleUrl,
       visitedRolePath: `/g/${game}`,
@@ -138,48 +138,29 @@ export function nightFourActionSubmissionSurfaceFixture({
         phase: {
           phaseId: "N04",
         },
-        actions: [{ targets: ["slot-5"] }],
+        actions: [],
       },
-      clickProof: {
-        status: "passed",
-        clickedAction: "submit_action:factional_kill",
-        commandKind: "SubmitAction",
-        command: {
-          game,
-          action_id: "factional_kill",
-          actor_slot: "slot-7",
-          template_id: "factional_kill",
-          targets: ["slot-5"],
-          grant_id: "grant-factional-kill-n04",
+      checkpoint: {
+        phaseId: "N04",
+        phaseState: "open",
+        actorSlot: "slot-7",
+        actionCount: 0,
+        submitActionControls: 0,
+        voteTargetCount: 0,
+        privateCount: 0,
+      },
+      projectionCommandState: {
+        actorSlot: "slot-7",
+        actorAlive: true,
+        actorStatus: "alive",
+        phase: {
+          phaseId: "N04",
+          locked: false,
         },
-        commandStatus: {
-          state: "ack",
-          message: "Ack: stream seqs 915",
-        },
-        bridgePlan: {
-          role: "player",
-          commandKind: "SubmitAction",
-          commandEndpoint: "/commands",
-          finalState: "ack",
-          projectionRefreshKeys: [
-            "notifications",
-            "investigationResults",
-            "commandState",
-          ],
-        },
-        receipts: [{ state: "ack" }],
-        projectionCommandState: {
-          phase: {
-            phaseId: "N04",
-          },
-          actions: [],
-          boundary:
-            "Seeded browser Night 4 action ACK refreshed action state after targeting slot-5.",
-        },
-        checkpointReceiptState: "ack:Ack: stream seqs 915",
-        checkpointActionStateAfterAck: "disabled:no legal action available",
-        receiptCount: 1,
-        receiptStatusText: "Ack: stream seqs 915",
+        actions: [],
+        voteTargets: [],
+        boundary:
+          "Seeded browser opened Night 4 with no legal action available.",
       },
       releaseReady: false,
       productionReady: false,
@@ -189,7 +170,7 @@ export function nightFourActionSubmissionSurfaceFixture({
   };
 }
 
-export function nightFourResolutionReceiptSurfaceFixture({
+export function nightFourNoActionResolutionSurfaceFixture({
   game = "00000000-0000-0000-0000-000000000002",
 } = {}) {
   const baseRoleUrl = `http://127.0.0.1:5173/g/${game}`;
@@ -197,13 +178,12 @@ export function nightFourResolutionReceiptSurfaceFixture({
     status: "passed",
     sourceHostRoleUrl: `${baseRoleUrl}/host`,
     sourceActionPlayerRoleUrl: baseRoleUrl,
-    sourceSurvivorRoleUrl: `${baseRoleUrl}?private=notification-1`,
     clickedThroughFromRoleUrl: true,
     transition:
-      "host:N04:resolve_phase:ack:916 -> survivor:N04:factional_kill_receipt -> actionPlayer:N04:privacy",
+      "host:N04:resolve_phase:ack:916 -> actionPlayer:N04:no_action_privacy",
     hostResolutionProof: seededCoreLoopHostSurfaceFixture({
       game,
-      setupResyncFromSeq: 915,
+      setupResyncFromSeq: 914,
       setupPhaseId: "N04",
       setupPhaseState: "open",
       resolveProof: hostPhaseTransitionActionFixture({
@@ -225,25 +205,6 @@ export function nightFourResolutionReceiptSurfaceFixture({
         },
       }),
     }),
-    survivorReceiptProof: nightFourResolutionPlayerSurfaceFixture({
-      sourceRoleUrl: `${baseRoleUrl}?private=notification-1`,
-      visitedRolePath: `/g/${game}?private=notification-1`,
-      slotField: "survivorSlot",
-      slot: "slot-5",
-      principalUserId: "player_sage",
-      actorAlive: false,
-      actorStatus: "dead",
-      actionState: "disabled:actor is not alive",
-      statusText: "Player action unavailable: actor is not alive",
-      privateCount: 1,
-      privateReceipt: true,
-      boundary:
-        "Seeded browser survivor target received factional_kill private receipt after N04 resolution.",
-      commandStateEndpoint:
-        `/games/${game}/player-command-state?principal_user_id=player_sage&slot_id=slot-5`,
-      notificationsEndpoint:
-        `/games/${game}/notifications?principal_user_id=player_sage`,
-    }),
     actionPlayerPrivacyProof: nightFourResolutionPlayerSurfaceFixture({
       sourceRoleUrl: baseRoleUrl,
       visitedRolePath: `/g/${game}`,
@@ -257,7 +218,7 @@ export function nightFourResolutionReceiptSurfaceFixture({
       privateCount: 0,
       privateReceipt: false,
       boundary:
-        "Seeded browser action player stayed alive with no target-only N04 receipt after host resolved Night 4.",
+        "Seeded browser action player observed locked Night 4 after no-action host resolution with no private receipt.",
       commandStateEndpoint:
         `/games/${game}/player-command-state?principal_user_id=player_mira&slot_id=slot-7`,
       notificationsEndpoint:

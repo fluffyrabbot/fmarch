@@ -1,15 +1,15 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
-  assertNightFourActionSubmissionSurfaceCase,
-  assertNightFourResolutionReceiptSurfaceCase,
+  assertNightFourNoActionSurfaceCase,
+  assertNightFourNoActionResolutionSurfaceCase,
   coreLoopLateActionProgressionFamilyId,
   coreLoopLateActionProgressionLaneIds,
   coreLoopLateActionProgressionScenarioCases,
   coreLoopLateActionProgressionScenarioFamily,
   lateActionProgressionFeatureSpineRows,
-  nightFourActionSubmissionSurfaceCase,
-  nightFourResolutionReceiptSurfaceCase,
+  nightFourNoActionSurfaceCase,
+  nightFourNoActionResolutionSurfaceCase,
 } from "./dev_test_game_core_loop_late_action_progression_scenarios.mjs";
 import {
   assertDayFourNoLynchVoteProofCase,
@@ -19,8 +19,8 @@ import {
   assertHostPhaseTransitionActionProofCase,
 } from "./dev_test_game_core_loop_host_phase_scenarios.mjs";
 import {
-  nightFourActionSubmissionSurfaceFixture,
-  nightFourResolutionReceiptSurfaceFixture,
+  nightFourNoActionSurfaceFixture,
+  nightFourNoActionResolutionSurfaceFixture,
 } from "./dev_test_game_core_loop_late_action_fixtures.mjs";
 import {
   postNightFourTransitionSurfaceCase,
@@ -29,7 +29,7 @@ import {
   staleNightFourActionRecoveryScenario,
 } from "./dev_test_game_core_loop_action_scenario_cases.mjs";
 
-test("late action progression family shares Night 4 action and recovery cases", () => {
+test("late action progression family shares Night 4 no-action and recovery cases", () => {
   assert.equal(
     coreLoopLateActionProgressionFamilyId,
     "core-loop-late-action-progression",
@@ -45,16 +45,16 @@ test("late action progression family shares Night 4 action and recovery cases", 
     })),
     [
       {
-        key: "nightFourActionSubmission",
+        key: "nightFourNoAction",
         group: "surfaces",
         laneId: "action-loop",
-        scenario: nightFourActionSubmissionSurfaceCase(),
+        scenario: nightFourNoActionSurfaceCase(),
       },
       {
-        key: "nightFourResolutionReceipt",
+        key: "nightFourNoActionResolution",
         group: "surfaces",
         laneId: "action-loop",
-        scenario: nightFourResolutionReceiptSurfaceCase(),
+        scenario: nightFourNoActionResolutionSurfaceCase(),
       },
       {
         key: "postNightFourTransition",
@@ -72,38 +72,46 @@ test("late action progression family shares Night 4 action and recovery cases", 
   );
 
   assert.deepEqual(
-    nightFourActionSubmissionSurfaceCase().transitionFragments,
+    nightFourNoActionSurfaceCase().transitionFragments,
     [
       "player:D04:no_lynch:ack:912",
       "host:D04:resolve_phase:ack:913",
       "host:advance_phase:ack:914",
-      "player:N04:submit_action:slot-5:ack:915",
+      "actionPlayer:N04:no_action",
     ],
   );
   assert.equal(
-    nightFourActionSubmissionSurfaceCase().actionSubmissionCase.targetSlot,
-    "slot-5",
+    nightFourNoActionSurfaceCase().noActionCase.expectedActionCount,
+    0,
   );
   assert.equal(
-    nightFourActionSubmissionSurfaceCase().actionSubmissionCase.streamSeq,
-    915,
+    nightFourNoActionSurfaceCase().noActionCase.expectedSubmitActionControls,
+    0,
   );
   assert.equal(
-    nightFourResolutionReceiptSurfaceCase().hostResolutionCase.resolveCase
+    nightFourNoActionResolutionSurfaceCase().hostResolutionCase.resolveCase
       .streamSeq,
     916,
   );
   assert.equal(
-    nightFourResolutionReceiptSurfaceCase().survivorReceiptScenario.phaseId,
-    "N04",
+    nightFourNoActionResolutionSurfaceCase().actionPlayerPrivacyScenario
+      .privateReceipt,
+    false,
+  );
+  assert.deepEqual(
+    nightFourNoActionResolutionSurfaceCase().transitionFragments,
+    [
+      "host:N04:resolve_phase:ack:916",
+      "actionPlayer:N04:no_action_privacy",
+    ],
   );
 
   const family = coreLoopLateActionProgressionScenarioFamily();
   assert.equal(family.id, coreLoopLateActionProgressionFamilyId);
   assert.deepEqual(family.laneIds, coreLoopLateActionProgressionLaneIds);
   assert.deepEqual(family.surfaces, {
-    nightFourActionSubmission: nightFourActionSubmissionSurfaceCase(),
-    nightFourResolutionReceipt: nightFourResolutionReceiptSurfaceCase(),
+    nightFourNoAction: nightFourNoActionSurfaceCase(),
+    nightFourNoActionResolution: nightFourNoActionResolutionSurfaceCase(),
     postNightFourTransition: scenarioCases.find(
       (scenarioCase) => scenarioCase.key === "postNightFourTransition",
     ).scenario,
@@ -122,8 +130,8 @@ test("late action progression family shares Night 4 action and recovery cases", 
     "D05",
   );
   assert.notEqual(
-    nightFourActionSubmissionSurfaceCase().transitionFragments,
-    nightFourActionSubmissionSurfaceCase().transitionFragments,
+    nightFourNoActionSurfaceCase().transitionFragments,
+    nightFourNoActionSurfaceCase().transitionFragments,
   );
   assert.notEqual(
     coreLoopLateActionProgressionScenarioCases()[0].scenario
@@ -162,15 +170,15 @@ test("late action progression surfaces derive feature-spine rows from N04/D05 ch
   ]);
 });
 
-test("late action progression assertion delegates Day 4 and checks Night 4 action ACK", () => {
+test("late action progression assertion delegates Day 4 and checks Night 4 no-action surface", () => {
   const observedVotes = [];
   const observedHostTransitions = [];
   const game = "game-a";
   const baseRoleUrl = `http://127.0.0.1:5173/g/${game}`;
 
   assert.doesNotThrow(() =>
-    assertNightFourActionSubmissionSurfaceCase({
-      nightFourActionSubmissionSurface: {
+    assertNightFourNoActionSurfaceCase({
+      nightFourNoActionSurface: {
         status: "passed",
         clickedThroughFromRoleUrl: true,
         releaseReady: false,
@@ -178,10 +186,10 @@ test("late action progression assertion delegates Day 4 and checks Night 4 actio
         sourceHostRoleUrl: `${baseRoleUrl}/host`,
         sourceActionPlayerRoleUrl: baseRoleUrl,
         transition:
-          "player:D04:no_lynch:ack:912 -> host:D04:resolve_phase:ack:913 -> host:advance_phase:ack:914 -> player:N04:submit_action:slot-5:ack:915",
+          "player:D04:no_lynch:ack:912 -> host:D04:resolve_phase:ack:913 -> host:advance_phase:ack:914 -> actionPlayer:N04:no_action",
         dayFourVoteProof: { id: "day-four-vote" },
         hostTransitionProof: { id: "day-four-host" },
-        nightFourActionProof: nightFourActionProof({ game, baseRoleUrl }),
+        nightFourNoActionProof: nightFourNoActionProof({ game, baseRoleUrl }),
       },
       expectedGame: game,
       assertDayFourNoLynchVoteProof: (args) => observedVotes.push(args),
@@ -204,17 +212,16 @@ test("late action progression assertion checks host resolution and receipt priva
   const baseRoleUrl = `http://127.0.0.1:5173/g/${game}`;
 
   assert.doesNotThrow(() =>
-    assertNightFourResolutionReceiptSurfaceCase({
-      nightFourResolutionReceiptSurface: {
+    assertNightFourNoActionResolutionSurfaceCase({
+      nightFourNoActionResolutionSurface: {
         status: "passed",
         clickedThroughFromRoleUrl: true,
         releaseReady: false,
         productionReady: false,
         sourceHostRoleUrl: `${baseRoleUrl}/host`,
         sourceActionPlayerRoleUrl: baseRoleUrl,
-        sourceSurvivorRoleUrl: `${baseRoleUrl}?private=notification-1`,
         transition:
-          "host:N04:resolve_phase:ack:916 -> survivor:N04:factional_kill_receipt -> actionPlayer:N04:privacy",
+          "host:N04:resolve_phase:ack:916 -> actionPlayer:N04:no_action_privacy",
         hostResolutionProof: {
           status: "passed",
           clickedThroughFromRoleUrl: true,
@@ -224,26 +231,10 @@ test("late action progression assertion checks host resolution and receipt priva
           sourceRoleUrl: `${baseRoleUrl}/host`,
           visitedRolePath: `/g/${game}/host`,
           surfaceTestId: "host-console-surface",
-          setupResyncFromSeq: 915,
+          setupResyncFromSeq: 914,
           setupSnapshotHost: { phase: { id: "N04", state: "open" } },
           resolveProof: { id: "host-resolve" },
         },
-        survivorReceiptProof: nightFourPlayerSurfaceProof({
-          game,
-          sourceRoleUrl: `${baseRoleUrl}?private=notification-1`,
-          visitedRolePath: `/g/${game}?private=notification-1`,
-          slotField: "survivorSlot",
-          slot: "slot-5",
-          principalUserId: "player_sage",
-          actorAlive: false,
-          actorStatus: "dead",
-          actionState: "disabled:actor is not alive",
-          statusText: "actor is not alive",
-          privateCount: 1,
-          privateReceipt: true,
-          boundary:
-            "Seeded browser survivor target received factional_kill private receipt after N04 resolution.",
-        }),
         actionPlayerPrivacyProof: nightFourPlayerSurfaceProof({
           game,
           sourceRoleUrl: baseRoleUrl,
@@ -258,7 +249,7 @@ test("late action progression assertion checks host resolution and receipt priva
           privateCount: 0,
           privateReceipt: false,
           boundary:
-            "Seeded browser action player stayed alive with no target-only N04 receipt after host resolved Night 4.",
+            "Seeded browser action player observed locked Night 4 after no-action host resolution with no private receipt.",
         }),
       },
       expectedGame: game,
@@ -277,11 +268,11 @@ test("late action progression assertion checks host resolution and receipt priva
   );
 });
 
-test("Night 4 action fixture satisfies the shared submission assertion", () => {
+test("Night 4 no-action fixture satisfies the shared surface assertion", () => {
   assert.doesNotThrow(() =>
-    assertNightFourActionSubmissionSurfaceCase({
-      nightFourActionSubmissionSurface:
-        nightFourActionSubmissionSurfaceFixture(),
+    assertNightFourNoActionSurfaceCase({
+      nightFourNoActionSurface:
+        nightFourNoActionSurfaceFixture(),
       expectedGame: "00000000-0000-0000-0000-000000000002",
       assertDayFourNoLynchVoteProof: assertDayFourNoLynchVoteProofCase,
       assertDayFourNoLynchHostTransitionProof:
@@ -290,11 +281,11 @@ test("Night 4 action fixture satisfies the shared submission assertion", () => {
   );
 });
 
-test("Night 4 receipt fixture satisfies the shared privacy assertion", () => {
+test("Night 4 no-action resolution fixture satisfies the shared privacy assertion", () => {
   assert.doesNotThrow(() =>
-    assertNightFourResolutionReceiptSurfaceCase({
-      nightFourResolutionReceiptSurface:
-        nightFourResolutionReceiptSurfaceFixture(),
+    assertNightFourNoActionResolutionSurfaceCase({
+      nightFourNoActionResolutionSurface:
+        nightFourNoActionResolutionSurfaceFixture(),
       expectedGame: "00000000-0000-0000-0000-000000000002",
       assertHostPhaseTransitionActionProof:
         assertHostPhaseTransitionActionProofCase,
@@ -302,7 +293,7 @@ test("Night 4 receipt fixture satisfies the shared privacy assertion", () => {
   );
 });
 
-function nightFourActionProof({ game, baseRoleUrl }) {
+function nightFourNoActionProof({ game, baseRoleUrl }) {
   return {
     status: "passed",
     clickedThroughFromRoleUrl: true,
@@ -314,42 +305,25 @@ function nightFourActionProof({ game, baseRoleUrl }) {
     setupResyncFromSeq: 914,
     setupSnapshotCommandState: {
       phase: { phaseId: "N04" },
-      actions: [{ targets: ["slot-5"] }],
+      actions: [],
     },
-    clickProof: {
-      status: "passed",
-      clickedAction: "submit_action:factional_kill",
-      commandKind: "SubmitAction",
-      command: {
-        game,
-        actor_slot: "slot-7",
-        action_id: "factional_kill",
-        template_id: "factional_kill",
-        targets: ["slot-5"],
-        grant_id: "grant-factional-kill-n04",
-      },
-      commandStatus: { state: "ack", message: "Ack: stream seqs 915" },
-      bridgePlan: {
-        role: "player",
-        commandKind: "SubmitAction",
-        commandEndpoint: "/commands",
-        finalState: "ack",
-        projectionRefreshKeys: [
-          "notifications",
-          "investigationResults",
-          "commandState",
-        ],
-      },
-      receipts: [{ state: "ack" }],
-      projectionCommandState: {
-        phase: { phaseId: "N04" },
-        actions: [],
-        boundary: "Seeded browser Night 4 action ACK refreshed action state.",
-      },
-      checkpointReceiptState: "ack:Ack: stream seqs 915",
-      checkpointActionStateAfterAck: "disabled:no legal action available",
-      receiptCount: 1,
-      receiptStatusText: "Ack: stream seqs 915",
+    checkpoint: {
+      phaseId: "N04",
+      phaseState: "open",
+      actorSlot: "slot-7",
+      actionCount: 0,
+      submitActionControls: 0,
+      voteTargetCount: 0,
+      privateCount: 0,
+    },
+    projectionCommandState: {
+      actorSlot: "slot-7",
+      actorAlive: true,
+      actorStatus: "alive",
+      phase: { phaseId: "N04", locked: false },
+      actions: [],
+      voteTargets: [],
+      boundary: "Seeded browser opened Night 4 with no legal action available.",
     },
   };
 }

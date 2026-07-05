@@ -234,7 +234,8 @@ export function privateReceiptScenarios() {
       privateReceipt: false,
       privateReceiptStatus: "factional_kill",
       privateReceiptPhaseId: "N04",
-      boundaryText: "action player stayed alive",
+      boundaryText:
+        "action player observed locked Night 4 after no-action host resolution with no private receipt",
       resyncFromSeq: 916,
     },
   ];

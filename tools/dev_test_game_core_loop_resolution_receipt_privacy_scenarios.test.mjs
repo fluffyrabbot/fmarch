@@ -4,11 +4,11 @@ import {
   coreLoopResolutionReceiptPrivacyFamilyId,
   coreLoopResolutionReceiptPrivacyLaneIds,
   coreLoopResolutionReceiptPrivacyScenarioFamily,
-  nightFourResolutionReceiptSurfaceCase,
+  nightFourNoActionResolutionSurfaceCase,
   postDayThreeResolutionSurfaceCase,
 } from "./dev_test_game_core_loop_resolution_receipt_privacy_scenarios.mjs";
 
-test("receipt/privacy family shares post-Day 3 and Night 4 receipt cases", () => {
+test("receipt/privacy family shares post-Day 3 and Night 4 no-action resolution cases", () => {
   assert.equal(
     coreLoopResolutionReceiptPrivacyFamilyId,
     "core-loop-resolution-receipt-privacy",
@@ -26,8 +26,8 @@ test("receipt/privacy family shares post-Day 3 and Night 4 receipt cases", () =>
     postDayThreeResolutionSurfaceCase(),
   );
   assert.deepEqual(
-    family.surfaces.nightFourResolutionReceipt,
-    nightFourResolutionReceiptSurfaceCase(),
+    family.surfaces.nightFourNoActionResolution,
+    nightFourNoActionResolutionSurfaceCase(),
   );
   assert.equal(
     family.privateReceiptScenarios.dayThreeTargetReceipt.id,
@@ -38,12 +38,12 @@ test("receipt/privacy family shares post-Day 3 and Night 4 receipt cases", () =>
     false,
   );
   assert.equal(
-    family.privateReceiptScenarios.nightFourSurvivorReceipt.phaseId,
-    "N04",
-  );
-  assert.equal(
-    family.privateReceiptScenarios.nightFourActionPlayerPrivacy.privateReceipt,
+    family.privateReceiptScenarios.nightFourNoActionPrivacy.privateReceipt,
     false,
+  );
+  assert.match(
+    family.privateReceiptScenarios.nightFourNoActionPrivacy.boundaryText,
+    /no-action host resolution/,
   );
   assert.notEqual(
     coreLoopResolutionReceiptPrivacyScenarioFamily().surfaces

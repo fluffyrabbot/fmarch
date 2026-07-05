@@ -44,16 +44,16 @@ const lateActionProgressionFeatureRowDefinitions = Object.freeze([
 
 const coreLoopLateActionProgressionScenarioCaseDefinitions = Object.freeze([
   Object.freeze({
-    key: "nightFourActionSubmission",
+    key: "nightFourNoAction",
     group: "surfaces",
     laneId: playerActionLoopLaneId,
-    buildScenario: nightFourActionSubmissionSurfaceCase,
+    buildScenario: nightFourNoActionSurfaceCase,
   }),
   Object.freeze({
-    key: "nightFourResolutionReceipt",
+    key: "nightFourNoActionResolution",
     group: "surfaces",
     laneId: playerActionLoopLaneId,
-    buildScenario: nightFourResolutionReceiptSurfaceCase,
+    buildScenario: nightFourNoActionResolutionSurfaceCase,
   }),
   Object.freeze({
     key: "postNightFourTransition",
@@ -98,47 +98,41 @@ const cloneTransitionCase = (transitionCase) => ({
 const clonePrivateReceiptScenario = (scenario) => ({ ...scenario });
 const cloneFeatureRow = (row) => ({ ...row });
 
-const nightFourActionSubmissionSurfaceCaseDefinition = Object.freeze({
+const nightFourNoActionSurfaceCaseDefinition = Object.freeze({
   transitionFragments: Object.freeze([
     "player:D04:no_lynch:ack:912",
     "host:D04:resolve_phase:ack:913",
     "host:advance_phase:ack:914",
-    "player:N04:submit_action:slot-5:ack:915",
+    "actionPlayer:N04:no_action",
   ]),
   dayFourHostTransitionCase: Object.freeze(
     dayFourNoLynchHostTransitionProofCase(),
   ),
-  actionSubmissionCase: Object.freeze({
+  noActionCase: Object.freeze({
     surfaceTestId: "player-surface",
-    clickedAction: "submit_action:factional_kill",
-    commandKind: "SubmitAction",
-    actorSlot: "slot-7",
-    actionId: "factional_kill",
-    templateId: "factional_kill",
-    targetSlot: "slot-5",
-    grantId: "grant-factional-kill-n04",
     setupResyncFromSeq: 914,
     setupPhaseId: "N04",
-    streamSeq: 915,
-    expectedRefreshKeys: Object.freeze([
-      "notifications",
-      "investigationResults",
-      "commandState",
-    ]),
-    expectedBoundaryText: "Night 4 action ACK",
-    checkpointActionStateAfterAck: "disabled:no legal action available",
+    expectedSlot: "slot-7",
+    expectedPrincipalUserId: "player_mira",
+    expectedPhaseState: "open",
+    expectedActorAlive: true,
+    expectedActorStatus: "alive",
+    expectedActionCount: 0,
+    expectedSubmitActionControls: 0,
+    expectedVoteTargetCount: 0,
+    expectedPrivateCount: 0,
+    expectedBoundaryText: "Night 4 with no legal action",
   }),
 });
 
-const nightFourResolutionReceiptSurfaceCaseDefinition = Object.freeze({
+const nightFourNoActionResolutionSurfaceCaseDefinition = Object.freeze({
   transitionFragments: Object.freeze([
     "host:N04:resolve_phase:ack:916",
-    "survivor:N04:factional_kill_receipt",
-    "actionPlayer:N04:privacy",
+    "actionPlayer:N04:no_action_privacy",
   ]),
   hostResolutionCase: Object.freeze({
     surfaceTestId: "host-console-surface",
-    setupResyncFromSeq: 915,
+    setupResyncFromSeq: 914,
     setupPhaseId: "N04",
     setupPhaseState: "open",
     resolveCase: Object.freeze(
@@ -148,39 +142,31 @@ const nightFourResolutionReceiptSurfaceCaseDefinition = Object.freeze({
       }),
     ),
   }),
-  survivorReceiptScenarioId: "n04-survivor-receipt",
   actionPlayerPrivacyScenarioId: "n04-action-player-privacy",
 });
 
-export function nightFourActionSubmissionSurfaceCase() {
+export function nightFourNoActionSurfaceCase() {
   return {
     transitionFragments: [
-      ...nightFourActionSubmissionSurfaceCaseDefinition.transitionFragments,
+      ...nightFourNoActionSurfaceCaseDefinition.transitionFragments,
     ],
     dayFourHostTransitionCase: {
-      ...nightFourActionSubmissionSurfaceCaseDefinition.dayFourHostTransitionCase,
+      ...nightFourNoActionSurfaceCaseDefinition.dayFourHostTransitionCase,
     },
-    actionSubmissionCase: {
-      ...nightFourActionSubmissionSurfaceCaseDefinition.actionSubmissionCase,
-      expectedRefreshKeys: [
-        ...nightFourActionSubmissionSurfaceCaseDefinition.actionSubmissionCase
-          .expectedRefreshKeys,
-      ],
+    noActionCase: {
+      ...nightFourNoActionSurfaceCaseDefinition.noActionCase,
     },
   };
 }
 
-export function nightFourResolutionReceiptSurfaceCase() {
-  const surfaceCase = nightFourResolutionReceiptSurfaceCaseDefinition;
+export function nightFourNoActionResolutionSurfaceCase() {
+  const surfaceCase = nightFourNoActionResolutionSurfaceCaseDefinition;
   return {
     transitionFragments: [...surfaceCase.transitionFragments],
     hostResolutionCase: {
       ...surfaceCase.hostResolutionCase,
       resolveCase: cloneTransitionCase(surfaceCase.hostResolutionCase.resolveCase),
     },
-    survivorReceiptScenario: clonePrivateReceiptScenario(
-      privateReceiptScenario(surfaceCase.survivorReceiptScenarioId),
-    ),
     actionPlayerPrivacyScenario: clonePrivateReceiptScenario(
       privateReceiptScenario(surfaceCase.actionPlayerPrivacyScenarioId),
     ),
@@ -213,65 +199,62 @@ export function coreLoopLateActionProgressionScenarioFamily() {
   };
 }
 
-export function assertNightFourActionSubmissionSurfaceCase({
-  nightFourActionSubmissionSurface,
+export function assertNightFourNoActionSurfaceCase({
+  nightFourNoActionSurface,
   expectedGame,
   assertDayFourNoLynchVoteProof,
   assertDayFourNoLynchHostTransitionProof,
   includeEvidenceInError = false,
 }) {
-  const surfaceCase = nightFourActionSubmissionSurfaceCaseDefinition;
+  const surfaceCase = nightFourNoActionSurfaceCaseDefinition;
   if (
-    nightFourActionSubmissionSurface?.status !== "passed" ||
-    nightFourActionSubmissionSurface.clickedThroughFromRoleUrl !== true ||
-    nightFourActionSubmissionSurface.releaseReady !== false ||
-    nightFourActionSubmissionSurface.productionReady !== false ||
-    typeof nightFourActionSubmissionSurface.sourceHostRoleUrl !== "string" ||
-    !nightFourActionSubmissionSurface.sourceHostRoleUrl.endsWith("/host") ||
-    typeof nightFourActionSubmissionSurface.sourceActionPlayerRoleUrl !==
+    nightFourNoActionSurface?.status !== "passed" ||
+    nightFourNoActionSurface.clickedThroughFromRoleUrl !== true ||
+    nightFourNoActionSurface.releaseReady !== false ||
+    nightFourNoActionSurface.productionReady !== false ||
+    typeof nightFourNoActionSurface.sourceHostRoleUrl !== "string" ||
+    !nightFourNoActionSurface.sourceHostRoleUrl.endsWith("/host") ||
+    typeof nightFourNoActionSurface.sourceActionPlayerRoleUrl !==
       "string" ||
-    !nightFourActionSubmissionSurface.sourceActionPlayerRoleUrl.includes("/g/") ||
+    !nightFourNoActionSurface.sourceActionPlayerRoleUrl.includes("/g/") ||
     !surfaceCase.transitionFragments.every((fragment) =>
-      String(nightFourActionSubmissionSurface.transition ?? "").includes(
+      String(nightFourNoActionSurface.transition ?? "").includes(
         fragment,
       ),
     )
   ) {
     throwLateActionProgressionAssertionError({
-      message: "core-loop admin proof missing Night 4 action submission",
-      evidence: nightFourActionSubmissionSurface,
+      message: "core-loop admin proof missing Night 4 no-action surface",
+      evidence: nightFourNoActionSurface,
       includeEvidenceInError,
     });
   }
   assertDayFourNoLynchVoteProof({
-    proof: nightFourActionSubmissionSurface.dayFourVoteProof,
+    proof: nightFourNoActionSurface.dayFourVoteProof,
     expectedGame,
-    sourceRoleUrl: nightFourActionSubmissionSurface.sourceActionPlayerRoleUrl,
+    sourceRoleUrl: nightFourNoActionSurface.sourceActionPlayerRoleUrl,
     includeEvidenceInError,
   });
   assertDayFourNoLynchHostTransitionProof({
-    proof: nightFourActionSubmissionSurface.hostTransitionProof,
+    proof: nightFourNoActionSurface.hostTransitionProof,
     expectedGame,
-    sourceRoleUrl: nightFourActionSubmissionSurface.sourceHostRoleUrl,
+    sourceRoleUrl: nightFourNoActionSurface.sourceHostRoleUrl,
     includeEvidenceInError,
   });
-  assertNightFourPlayerActionSubmissionProofCase({
-    proof: nightFourActionSubmissionSurface.nightFourActionProof,
+  assertNightFourPlayerNoActionProofCase({
+    proof: nightFourNoActionSurface.nightFourNoActionProof,
     expectedGame,
-    sourceRoleUrl: nightFourActionSubmissionSurface.sourceActionPlayerRoleUrl,
+    sourceRoleUrl: nightFourNoActionSurface.sourceActionPlayerRoleUrl,
     includeEvidenceInError,
   });
 }
 
-export function assertNightFourPlayerActionSubmissionProofCase({
+export function assertNightFourPlayerNoActionProofCase({
   proof,
-  expectedGame,
   sourceRoleUrl,
   includeEvidenceInError = false,
 }) {
-  const actionCase =
-    nightFourActionSubmissionSurfaceCaseDefinition.actionSubmissionCase;
-  const clickProof = proof?.clickProof;
+  const noActionCase = nightFourNoActionSurfaceCaseDefinition.noActionCase;
   if (
     proof?.status !== "passed" ||
     proof.clickedThroughFromRoleUrl !== true ||
@@ -280,50 +263,35 @@ export function assertNightFourPlayerActionSubmissionProofCase({
     proof.sourceRoleUrl !== sourceRoleUrl ||
     typeof proof.visitedRolePath !== "string" ||
     !proof.visitedRolePath.includes("/g/") ||
-    proof.surfaceTestId !== actionCase.surfaceTestId ||
-    proof.setupResyncFromSeq !== actionCase.setupResyncFromSeq ||
-    proof.setupSnapshotCommandState?.phase?.phaseId !== actionCase.setupPhaseId ||
-    proof.setupSnapshotCommandState?.actions?.[0]?.targets?.[0] !==
-      actionCase.targetSlot ||
-    clickProof?.status !== "passed" ||
-    clickProof.clickedAction !== actionCase.clickedAction ||
-    clickProof.commandKind !== actionCase.commandKind ||
-    clickProof.command?.game !== expectedGame ||
-    clickProof.command.actor_slot !== actionCase.actorSlot ||
-    clickProof.command.action_id !== actionCase.actionId ||
-    clickProof.command.template_id !== actionCase.templateId ||
-    clickProof.command.targets?.[0] !== actionCase.targetSlot ||
-    clickProof.command.grant_id !== actionCase.grantId ||
-    clickProof.commandStatus?.state !== "ack" ||
-    !String(clickProof.commandStatus?.message ?? "").includes(
-      `Ack: stream seqs ${actionCase.streamSeq}`,
-    ) ||
-    clickProof.bridgePlan?.role !== "player" ||
-    clickProof.bridgePlan.commandKind !== actionCase.commandKind ||
-    clickProof.bridgePlan.commandEndpoint !== "/commands" ||
-    clickProof.bridgePlan.finalState !== "ack" ||
-    !sameStringArray(
-      clickProof.bridgePlan.projectionRefreshKeys,
-      actionCase.expectedRefreshKeys,
-    ) ||
-    clickProof.receipts?.at?.(-1)?.state !== "ack" ||
-    clickProof.projectionCommandState?.phase?.phaseId !== actionCase.setupPhaseId ||
-    clickProof.projectionCommandState?.actions?.length !== 0 ||
-    !String(clickProof.projectionCommandState?.boundary ?? "").includes(
-      actionCase.expectedBoundaryText,
-    ) ||
-    !String(clickProof.checkpointReceiptState ?? "").includes(
-      `Ack: stream seqs ${actionCase.streamSeq}`,
-    ) ||
-    clickProof.checkpointActionStateAfterAck !==
-      actionCase.checkpointActionStateAfterAck ||
-    clickProof.receiptCount !== 1 ||
-    !String(clickProof.receiptStatusText ?? "")
-      .toLowerCase()
-      .includes(`ack: stream seqs ${actionCase.streamSeq}`)
+    proof.surfaceTestId !== noActionCase.surfaceTestId ||
+    proof.setupResyncFromSeq !== noActionCase.setupResyncFromSeq ||
+    proof.setupSnapshotCommandState?.phase?.phaseId !== noActionCase.setupPhaseId ||
+    proof.setupSnapshotCommandState?.actions?.length !==
+      noActionCase.expectedActionCount ||
+    proof.checkpoint?.phaseId !== noActionCase.setupPhaseId ||
+    proof.checkpoint?.phaseState !== noActionCase.expectedPhaseState ||
+    proof.checkpoint?.actorSlot !== noActionCase.expectedSlot ||
+    proof.checkpoint?.actionCount !== noActionCase.expectedActionCount ||
+    proof.checkpoint?.submitActionControls !==
+      noActionCase.expectedSubmitActionControls ||
+    proof.checkpoint?.voteTargetCount !== noActionCase.expectedVoteTargetCount ||
+    proof.checkpoint?.privateCount !== noActionCase.expectedPrivateCount ||
+    proof.projectionCommandState?.actorSlot !== noActionCase.expectedSlot ||
+    proof.projectionCommandState?.actorAlive !== noActionCase.expectedActorAlive ||
+    proof.projectionCommandState?.actorStatus !==
+      noActionCase.expectedActorStatus ||
+    proof.projectionCommandState?.phase?.phaseId !== noActionCase.setupPhaseId ||
+    proof.projectionCommandState?.phase?.locked !== false ||
+    proof.projectionCommandState?.actions?.length !==
+      noActionCase.expectedActionCount ||
+    proof.projectionCommandState?.voteTargets?.length !==
+      noActionCase.expectedVoteTargetCount ||
+    !String(proof.projectionCommandState?.boundary ?? "").includes(
+      noActionCase.expectedBoundaryText,
+    )
   ) {
     throwLateActionProgressionAssertionError({
-      message: "core-loop admin proof missing Night 4 player action ACK",
+      message: "core-loop admin proof missing Night 4 no-action player surface",
       evidence: proof,
       includeEvidenceInError,
     });
@@ -341,60 +309,48 @@ function featureRowFromCase(scenario, { cycleId }) {
   });
 }
 
-export function assertNightFourResolutionReceiptSurfaceCase({
-  nightFourResolutionReceiptSurface,
+export function assertNightFourNoActionResolutionSurfaceCase({
+  nightFourNoActionResolutionSurface,
   expectedGame,
   assertHostPhaseTransitionActionProof,
   includeEvidenceInError = false,
 }) {
-  const surfaceCase = nightFourResolutionReceiptSurfaceCaseDefinition;
+  const surfaceCase = nightFourNoActionResolutionSurfaceCaseDefinition;
   if (
-    nightFourResolutionReceiptSurface?.status !== "passed" ||
-    nightFourResolutionReceiptSurface.clickedThroughFromRoleUrl !== true ||
-    nightFourResolutionReceiptSurface.releaseReady !== false ||
-    nightFourResolutionReceiptSurface.productionReady !== false ||
-    typeof nightFourResolutionReceiptSurface.sourceHostRoleUrl !== "string" ||
-    !nightFourResolutionReceiptSurface.sourceHostRoleUrl.endsWith("/host") ||
-    typeof nightFourResolutionReceiptSurface.sourceActionPlayerRoleUrl !==
+    nightFourNoActionResolutionSurface?.status !== "passed" ||
+    nightFourNoActionResolutionSurface.clickedThroughFromRoleUrl !== true ||
+    nightFourNoActionResolutionSurface.releaseReady !== false ||
+    nightFourNoActionResolutionSurface.productionReady !== false ||
+    typeof nightFourNoActionResolutionSurface.sourceHostRoleUrl !== "string" ||
+    !nightFourNoActionResolutionSurface.sourceHostRoleUrl.endsWith("/host") ||
+    typeof nightFourNoActionResolutionSurface.sourceActionPlayerRoleUrl !==
       "string" ||
-    !nightFourResolutionReceiptSurface.sourceActionPlayerRoleUrl.includes("/g/") ||
-    typeof nightFourResolutionReceiptSurface.sourceSurvivorRoleUrl !==
-      "string" ||
-    !nightFourResolutionReceiptSurface.sourceSurvivorRoleUrl.includes("/g/") ||
+    !nightFourNoActionResolutionSurface.sourceActionPlayerRoleUrl.includes("/g/") ||
     !surfaceCase.transitionFragments.every((fragment) =>
-      String(nightFourResolutionReceiptSurface.transition ?? "").includes(
+      String(nightFourNoActionResolutionSurface.transition ?? "").includes(
         fragment,
       ),
     )
   ) {
     throwLateActionProgressionAssertionError({
       message: "core-loop admin proof missing Night 4 resolution receipt",
-      evidence: nightFourResolutionReceiptSurface,
+      evidence: nightFourNoActionResolutionSurface,
       includeEvidenceInError,
     });
   }
   assertNightFourHostResolutionProofCase({
-    proof: nightFourResolutionReceiptSurface.hostResolutionProof,
+    proof: nightFourNoActionResolutionSurface.hostResolutionProof,
     expectedGame,
-    sourceRoleUrl: nightFourResolutionReceiptSurface.sourceHostRoleUrl,
+    sourceRoleUrl: nightFourNoActionResolutionSurface.sourceHostRoleUrl,
     assertHostPhaseTransitionActionProof,
     includeEvidenceInError,
   });
   assertNightFourResolutionPlayerSurfaceProofCase({
-    proof: nightFourResolutionReceiptSurface.survivorReceiptProof,
-    ...privateReceiptAssertionArgs({
-      scenario: privateReceiptScenario(surfaceCase.survivorReceiptScenarioId),
-      expectedGame,
-      sourceRoleUrl: nightFourResolutionReceiptSurface.sourceSurvivorRoleUrl,
-    }),
-    includeEvidenceInError,
-  });
-  assertNightFourResolutionPlayerSurfaceProofCase({
-    proof: nightFourResolutionReceiptSurface.actionPlayerPrivacyProof,
+    proof: nightFourNoActionResolutionSurface.actionPlayerPrivacyProof,
     ...privateReceiptAssertionArgs({
       scenario: privateReceiptScenario(surfaceCase.actionPlayerPrivacyScenarioId),
       expectedGame,
-      sourceRoleUrl: nightFourResolutionReceiptSurface.sourceActionPlayerRoleUrl,
+      sourceRoleUrl: nightFourNoActionResolutionSurface.sourceActionPlayerRoleUrl,
     }),
     includeEvidenceInError,
   });
@@ -408,7 +364,7 @@ export function assertNightFourHostResolutionProofCase({
   includeEvidenceInError = false,
 }) {
   const hostCase =
-    nightFourResolutionReceiptSurfaceCaseDefinition.hostResolutionCase;
+    nightFourNoActionResolutionSurfaceCaseDefinition.hostResolutionCase;
   if (
     proof?.status !== "passed" ||
     proof.clickedThroughFromRoleUrl !== true ||
@@ -541,7 +497,7 @@ export function assertNightFourResolutionPlayerSurfaceProofCase({
       proof.privateNotice !== undefined)
   ) {
     throwLateActionProgressionAssertionError({
-      message: "core-loop admin proof leaked Night 4 target receipt",
+      message: "core-loop admin proof leaked Night 4 no-action resolution",
       evidence: proof,
       includeEvidenceInError,
     });
