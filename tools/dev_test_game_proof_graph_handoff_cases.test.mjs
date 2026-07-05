@@ -52,6 +52,8 @@ import {
   hostedTargetPreflightCheckIds,
 } from "./dev_test_game_hosted_target_preflight_cases.mjs";
 import {
+  devTestGameHostedEvidenceLaneRealCaptureAdminProofCommand,
+  devTestGameHostedEvidenceLaneRealCaptureAdminProofPath,
   hostedEvidenceHandoffCase,
 } from "./dev_test_game_hosted_handoff_cases.mjs";
 import {
@@ -104,6 +106,10 @@ test("admin proof destination handoff cases share link and audit rows", () => {
       localAdminAuditIds.hostedTargetPreflight,
     ],
     ["admin-proof:hosted-evidence-lane", localAdminAuditIds.hostedEvidenceLane],
+    [
+      "admin-proof:hosted-evidence-lane-operator-fixture",
+      localAdminAuditIds.hostedEvidenceLane,
+    ],
     [
       "admin-proof:hosted-concurrent-race-matrix",
       localAdminAuditIds.hostedConcurrentRaceMatrix,
@@ -240,6 +246,17 @@ test("proof graph first-class fixture nodes share artifact and command contracts
         terminalAdminProofBatchReceiptArtifacts,
       ],
       [
+        "hosted-evidence-lane-real-capture-admin-proof",
+        "optional-browser-proof",
+        "passed",
+        devTestGameHostedEvidenceLaneRealCaptureAdminProofPath,
+        "/admin/audit/local-hosted-evidence-lane?game=midsummer",
+        devTestGameHostedEvidenceLaneRealCaptureAdminProofCommand,
+        [],
+        [],
+        [],
+      ],
+      [
         "diagnostic:proof-graph-destination-summary-drift",
         "diagnostic-browser-proof",
         "passed",
@@ -296,6 +313,24 @@ test("proof graph base edges share fixed topology and seed recovery metadata", (
         command: seedFixtureRecoveryCommand,
         roleUrl: "/admin/audit/local-seed-fixtures?game=midsummer",
         proofTarget: devTestGameSeedFixturePath,
+      },
+      {
+        from: "admin-proof:hosted-evidence-lane",
+        to: "hosted-evidence-lane-real-capture-admin-proof",
+        relationship: "proves-positive-real-capture-path",
+        command: devTestGameHostedEvidenceLaneRealCaptureAdminProofCommand,
+      },
+      {
+        from: "hosted-evidence-lane-real-capture-admin-proof",
+        to: "proof-graph",
+        relationship: "records",
+        command: devTestGameHostedEvidenceLaneRealCaptureAdminProofCommand,
+      },
+      {
+        from: "hosted-evidence-lane-real-capture-admin-proof",
+        to: "next-action",
+        relationship: "summarizes-into",
+        command: devTestGameHostedEvidenceLaneRealCaptureAdminProofCommand,
       },
       ...proofGraphDiagnosticProofEdges,
       ...adminProofDestinationRequirementLinkRows.map(([linkId]) => ({
@@ -444,6 +479,24 @@ test("admin proof destination handoff cases carry shared row requirements", () =
     hostedEvidenceHandoffCase().blockedCheckIds,
   );
   assert.deepEqual(
+    adminProofDestinationRequirementForLink(
+      "admin-proof:hosted-evidence-lane-operator-fixture",
+    ).requiredCheckIds,
+    ["hosted-target-preflight", "raw-evidence-real-hosted-target"],
+  );
+  assert.deepEqual(
+    adminProofDestinationRequirementForLink(
+      "admin-proof:hosted-evidence-lane-operator-fixture",
+    ).requiredHostedHandoffInputs,
+    hostedEvidenceHandoffCase().inputIds,
+  );
+  assert.deepEqual(
+    adminProofDestinationRequirementForLink(
+      "admin-proof:hosted-evidence-lane-operator-fixture",
+    ).requiredHostedHandoffBlockedChecks,
+    ["raw-evidence-real-hosted-target"],
+  );
+  assert.deepEqual(
     adminProofDestinationRequirementForLink("admin-proof:hosted-ops-signals")
       .requiredCheckIds,
     hostedOpsSignalCheckIds,
@@ -526,6 +579,12 @@ test("admin proof destination handoff cases return cloned mutable rows", () => {
     .find((item) => item.linkId === "admin-proof:hosted-evidence-lane")
     .requiredHostedHandoffBlockedChecks.push("mutated");
   requirements
+    .find(
+      (item) =>
+        item.linkId === "admin-proof:hosted-evidence-lane-operator-fixture",
+    )
+    .requiredHostedHandoffBlockedChecks.push("mutated");
+  requirements
     .find((item) => item.linkId === "admin-proof:hosted-identity-evidence")
     .requiredHostedHandoffInputs.push("mutated");
   requirements
@@ -556,6 +615,12 @@ test("admin proof destination handoff cases return cloned mutable rows", () => {
   assert.equal(
     adminProofDestinationRequirementForLink("admin-proof:hosted-evidence-lane")
       .requiredHostedHandoffBlockedChecks.includes("mutated"),
+    false,
+  );
+  assert.equal(
+    adminProofDestinationRequirementForLink(
+      "admin-proof:hosted-evidence-lane-operator-fixture",
+    ).requiredHostedHandoffBlockedChecks.includes("mutated"),
     false,
   );
   assert.equal(

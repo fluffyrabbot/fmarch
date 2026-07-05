@@ -24,6 +24,7 @@ import {
 } from "../../../../tools/dev_test_game_hosted_concurrent_race_matrix_cases.mjs";
 import {
   devTestGameHostedEvidenceLaneAdminProofPath,
+  devTestGameHostedEvidenceLaneRealCaptureAdminProofPath,
 } from "../../../../tools/dev_test_game_hosted_handoff_cases.mjs";
 import {
   devTestGameHostedIdentityEvidenceAdminProofPath,
@@ -105,6 +106,8 @@ const DEFAULT_HOSTED_EVIDENCE_LANE =
   devTestGameHostedEvidenceLanePath;
 const DEFAULT_HOSTED_EVIDENCE_LANE_ADMIN_PROOF =
   devTestGameHostedEvidenceLaneAdminProofPath;
+const DEFAULT_HOSTED_EVIDENCE_LANE_REAL_CAPTURE_ADMIN_PROOF =
+  devTestGameHostedEvidenceLaneRealCaptureAdminProofPath;
 const DEFAULT_HOSTED_EVIDENCE_LANE_DEMO_PROOF =
   devTestGameHostedEvidenceLaneDemoProofPath;
 const DEFAULT_RELEASE_RUNBOOK = devTestGameReleaseRunbookPath;
@@ -328,6 +331,12 @@ const LOCAL_PROOF_FRESHNESS_ARTIFACTS = Object.freeze([
     label: "Hosted evidence lane admin proof",
     env: "FMARCH_DEV_TEST_GAME_HOSTED_EVIDENCE_LANE_ADMIN_PROOF",
     fallback: DEFAULT_HOSTED_EVIDENCE_LANE_ADMIN_PROOF,
+  }),
+  Object.freeze({
+    id: "hosted-evidence-lane-real-capture-admin",
+    label: "Hosted evidence lane real-capture admin proof",
+    env: "FMARCH_DEV_TEST_GAME_HOSTED_EVIDENCE_LANE_REAL_CAPTURE_ADMIN_PROOF",
+    fallback: DEFAULT_HOSTED_EVIDENCE_LANE_REAL_CAPTURE_ADMIN_PROOF,
   }),
   Object.freeze({
     id: "hosted-evidence-lane-demo",

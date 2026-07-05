@@ -78,6 +78,7 @@ import {
 } from "./dev_test_game_hosted_target_preflight_cases.mjs";
 import {
   devTestGameHostedEvidenceLaneAdminProofPath,
+  devTestGameHostedEvidenceLaneRealCaptureAdminProofPath,
 } from "./dev_test_game_hosted_handoff_cases.mjs";
 import {
   devTestGameReleaseReadinessMarkdownPath,
@@ -524,6 +525,10 @@ const defaultHostedEvidenceLaneAdminProofPath = path.join(
   repoRoot,
   devTestGameHostedEvidenceLaneAdminProofPath,
 );
+const defaultHostedEvidenceLaneRealCaptureAdminProofPath = path.join(
+  repoRoot,
+  devTestGameHostedEvidenceLaneRealCaptureAdminProofPath,
+);
 const defaultHostedEvidenceLaneOperatorFixtureAdminProofPath = path.join(
   repoRoot,
   devTestGameHostedEvidenceLaneOperatorFixtureAdminProofPath,
@@ -881,6 +886,18 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
               options.hostedEvidenceLaneAdminProofPath ??
               devTestGameHostedEvidenceLaneAdminProofPath,
             artifact: options.hostedEvidenceLaneAdminProofArtifact,
+          },
+        )
+      : undefined;
+  const hostedEvidenceLaneRealCaptureAdminProofEvidence =
+    options.hostedEvidenceLaneRealCaptureAdminProof
+      ? validateDevTestGameHostedEvidenceLaneAdminProof(
+          options.hostedEvidenceLaneRealCaptureAdminProof,
+          {
+            path:
+              options.hostedEvidenceLaneRealCaptureAdminProofPath ??
+              devTestGameHostedEvidenceLaneRealCaptureAdminProofPath,
+            artifact: options.hostedEvidenceLaneRealCaptureAdminProofArtifact,
           },
         )
       : undefined;
@@ -1357,6 +1374,25 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
       adminRoleSurface: hostedEvidenceLaneAdminProofEvidence,
     });
   }
+  if (hostedEvidenceLaneRealCaptureAdminProofEvidence !== undefined) {
+    localChecks.push({
+      id: "local-hosted-evidence-lane-real-capture-admin-surface",
+      label: "Local hosted evidence lane real-capture admin surface",
+      status: "passed",
+      evidence: hostedEvidenceLaneRealCaptureAdminProofEvidence.path,
+      proofBoundary:
+        hostedEvidenceLaneRealCaptureAdminProofEvidence.proofBoundary,
+      laneStatus: hostedEvidenceLaneRealCaptureAdminProofEvidence.laneStatus,
+      preflightStatus:
+        hostedEvidenceLaneRealCaptureAdminProofEvidence.preflightStatus,
+      blockedCheckCount:
+        hostedEvidenceLaneRealCaptureAdminProofEvidence.visibleUnproven
+          ?.length ?? 0,
+      releaseReady: false,
+      productionReady: false,
+      adminRoleSurface: hostedEvidenceLaneRealCaptureAdminProofEvidence,
+    });
+  }
   if (hostedEvidenceLaneOperatorFixtureAdminProofEvidence !== undefined) {
     localChecks.push({
       id: "local-hosted-evidence-lane-operator-fixture-admin-surface",
@@ -1633,6 +1669,12 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
         : {
             realHostedMatrixRawCapture: realHostedMatrixRawCaptureEvidence.path,
           }),
+      ...(hostedEvidenceLaneRealCaptureAdminProofEvidence === undefined
+        ? {}
+        : {
+            hostedEvidenceLaneRealCaptureAdminProof:
+              hostedEvidenceLaneRealCaptureAdminProofEvidence.path,
+          }),
       ...(proofGraphAdminProofEvidence === undefined
         ? {}
         : {
@@ -1675,6 +1717,7 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
         proofGraphAdminProofEvidence === undefined &&
         proofFreshnessAdminProofEvidence === undefined &&
         hostedEvidenceLaneAdminProofEvidence === undefined &&
+        hostedEvidenceLaneRealCaptureAdminProofEvidence === undefined &&
         hostedEvidenceLaneDemoProofEvidence === undefined &&
         hostedIdentityProgressionSummaryEvidence === undefined &&
         hostedIdentityCompleteAdminProofEvidence === undefined &&
@@ -1829,6 +1872,12 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
                 : {
                     hostedEvidenceLaneAdminProof:
                       hostedEvidenceLaneAdminProofEvidence,
+                  }),
+              ...(hostedEvidenceLaneRealCaptureAdminProofEvidence === undefined
+                ? {}
+                : {
+                    hostedEvidenceLaneRealCaptureAdminProof:
+                      hostedEvidenceLaneRealCaptureAdminProofEvidence,
                   }),
               ...(hostedEvidenceLaneDemoProofEvidence === undefined
                 ? {}
@@ -8464,6 +8513,16 @@ const optionalReadinessArtifactRegistry = Object.freeze([
     },
   }),
   optionalReadinessArtifact({
+    id: "hostedEvidenceLaneRealCaptureAdminProof",
+    envVar: "FMARCH_DEV_TEST_GAME_HOSTED_EVIDENCE_LANE_REAL_CAPTURE_ADMIN_PROOF",
+    defaultPath: defaultHostedEvidenceLaneRealCaptureAdminProofPath,
+    outputKeys: {
+      data: "hostedEvidenceLaneRealCaptureAdminProof",
+      path: "hostedEvidenceLaneRealCaptureAdminProofPath",
+      freshnessMetadata: "hostedEvidenceLaneRealCaptureAdminProofArtifact",
+    },
+  }),
+  optionalReadinessArtifact({
     id: "hostedEvidenceLaneOperatorFixtureAdminProof",
     envVar:
       "FMARCH_DEV_TEST_GAME_HOSTED_EVIDENCE_LANE_OPERATOR_FIXTURE_ADMIN_PROOF",
@@ -8585,6 +8644,7 @@ const optionalReadinessArtifactLoadPlan = Object.freeze([
   "raceCoverageAdminProof",
   "hostedConcurrentRaceMatrixAdminProof",
   "hostedEvidenceLaneAdminProof",
+  "hostedEvidenceLaneRealCaptureAdminProof",
   "hostedEvidenceLaneOperatorFixtureAdminProof",
   "realHostedMatrixRawCapture",
   "hostedEvidenceLaneDemoProof",

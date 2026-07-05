@@ -42,6 +42,9 @@ import {
   devTestGameHostedEvidenceLaneOperatorFixtureAdminProofPath,
 } from "./dev_test_game_hosted_evidence_lane_operator_fixture_cases.mjs";
 import {
+  devTestGameHostedEvidenceLaneRealCaptureAdminProofPath,
+} from "./dev_test_game_hosted_handoff_cases.mjs";
+import {
   devTestGameRealHostedMatrixRawCapturePath,
 } from "./dev_test_game_real_hosted_matrix_raw_capture_contract.mjs";
 import {
@@ -2137,6 +2140,10 @@ const devSpineArtifactPriorities = new Map(
     [
       "real-hosted-matrix-raw-capture",
       devTestGameRealHostedMatrixRawCapturePath,
+    ],
+    [
+      "hosted-evidence-lane-real-capture-admin",
+      devTestGameHostedEvidenceLaneRealCaptureAdminProofPath,
     ],
     ["admin-spine", adminSpineProofPath],
     ["admin-spine-admin", devTestGameAdminSpineAdminProofPath],

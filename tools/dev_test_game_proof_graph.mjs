@@ -65,6 +65,10 @@ import {
   localAdminAuditRoleUrl,
 } from "./dev_test_game_admin_audit_surface_ids.mjs";
 import {
+  devTestGameHostedEvidenceLaneRealCaptureAdminProofCommand,
+  devTestGameHostedEvidenceLaneRealCaptureAdminProofPath,
+} from "./dev_test_game_hosted_handoff_cases.mjs";
+import {
   proofGraphDiagnosticProofEdges,
   proofGraphDiagnosticProofNodes,
 } from "./dev_test_game_proof_graph_handoff_cases.mjs";
@@ -358,6 +362,7 @@ export function assertDevTestGameProofGraph(
   }
   assertDevTestGameProofGraphCoversTerminalBatches(evidence);
   assertDevTestGameProofGraphCoversDiagnosticProofs(evidence);
+  assertDevTestGameProofGraphCoversHostedEvidenceRealCaptureProof(evidence);
   assertDevTestGameProofGraphCoversHostedIdentityOperatorPrerequisites(evidence);
   assertDevTestGameProofGraphCoversPrivateChannelRecoveryReceipt(evidence);
   assertDevTestGameProofGraphCoversCoreLoopScenarioFamilies(evidence);
@@ -414,6 +419,64 @@ export function assertDevTestGameProofGraphCoversDiagnosticProofs(graph) {
     ) {
       throw new Error(
         `proof graph diagnostic edge missing: ${diagnosticEdge.from}->${diagnosticEdge.to}`,
+      );
+    }
+  }
+  return graph;
+}
+
+export function assertDevTestGameProofGraphCoversHostedEvidenceRealCaptureProof(
+  graph,
+) {
+  const node = (graph.nodes ?? []).find(
+    (candidate) =>
+      candidate.id === "hosted-evidence-lane-real-capture-admin-proof",
+  );
+  if (
+    node?.kind !== "optional-browser-proof" ||
+    node.status !== "passed" ||
+    node.artifact !== devTestGameHostedEvidenceLaneRealCaptureAdminProofPath ||
+    node.roleUrl !== localAdminAuditRoleUrl(localAdminAuditIds.hostedEvidenceLane) ||
+    node.proofCommand !==
+      devTestGameHostedEvidenceLaneRealCaptureAdminProofCommand ||
+    node.recoveryCommand !==
+      devTestGameHostedEvidenceLaneRealCaptureAdminProofCommand ||
+    node.releaseReady !== false ||
+    node.productionReady !== false
+  ) {
+    throw new Error(
+      "proof graph hosted evidence lane real-capture proof node drifted",
+    );
+  }
+  for (const edge of [
+    {
+      from: "admin-proof:hosted-evidence-lane",
+      to: "hosted-evidence-lane-real-capture-admin-proof",
+      relationship: "proves-positive-real-capture-path",
+    },
+    {
+      from: "hosted-evidence-lane-real-capture-admin-proof",
+      to: "proof-graph",
+      relationship: "records",
+    },
+    {
+      from: "hosted-evidence-lane-real-capture-admin-proof",
+      to: "next-action",
+      relationship: "summarizes-into",
+    },
+  ]) {
+    if (
+      !(graph.edges ?? []).some(
+        (candidate) =>
+          candidate.from === edge.from &&
+          candidate.to === edge.to &&
+          candidate.relationship === edge.relationship &&
+          candidate.command ===
+            devTestGameHostedEvidenceLaneRealCaptureAdminProofCommand,
+      )
+    ) {
+      throw new Error(
+        `proof graph hosted evidence lane real-capture edge missing: ${edge.from}->${edge.to}`,
       );
     }
   }
@@ -914,6 +977,24 @@ function buildProofGraphNodes({
   });
   const hostedIdentityOperatorPrerequisiteNodes =
     hostedIdentityOperatorDependencyProofGraphNodes();
+  const hostedEvidenceRealCaptureProofNode = {
+    id: "hosted-evidence-lane-real-capture-admin-proof",
+    label: "Hosted evidence lane real-capture admin proof",
+    kind: "optional-browser-proof",
+    status: "passed",
+    artifact:
+      manifest.commands?.hostedEvidenceLaneRealCaptureAdminProof
+        ?.proofArtifact ?? devTestGameHostedEvidenceLaneRealCaptureAdminProofPath,
+    roleUrl: localAdminAuditRoleUrl(localAdminAuditIds.hostedEvidenceLane),
+    proofCommand:
+      manifest.commands?.hostedEvidenceLaneRealCaptureAdminProof?.script ??
+      devTestGameHostedEvidenceLaneRealCaptureAdminProofCommand,
+    recoveryCommand:
+      manifest.commands?.hostedEvidenceLaneRealCaptureAdminProof?.script ??
+      devTestGameHostedEvidenceLaneRealCaptureAdminProofCommand,
+    releaseReady: false,
+    productionReady: false,
+  };
   const terminalBatchNode =
     adminSpineTerminalBatches === null
       ? []
@@ -1013,6 +1094,7 @@ function buildProofGraphNodes({
     ...recoveryReceiptNodes,
     ...roleSurfaceProofNodes,
     ...adminProofNodes,
+    hostedEvidenceRealCaptureProofNode,
     ...hostedIdentityOperatorPrerequisiteNodes,
     ...coreLoopScenarioFamilyNodes,
     ...productionFeatureTargetNodes,
@@ -1062,6 +1144,7 @@ function buildProofGraphEdges({
     ...nodes
       .filter((node) => node.kind === "admin-proof-surface")
       .map((node) => ["admin-spine", node.id, "aggregates"]),
+    ...hostedEvidenceRealCaptureProofEdges(nodes),
     ...nodes
       .filter((node) => node.kind === "core-loop-scenario-family")
       .map((node) => [
@@ -1099,6 +1182,39 @@ function buildProofGraphEdges({
         ),
       ),
   );
+}
+
+function hostedEvidenceRealCaptureProofEdges(nodes) {
+  return nodes.some(
+    (node) => node.id === "hosted-evidence-lane-real-capture-admin-proof",
+  )
+    ? [
+        [
+          "admin-proof:hosted-evidence-lane",
+          "hosted-evidence-lane-real-capture-admin-proof",
+          "proves-positive-real-capture-path",
+          {
+            command: devTestGameHostedEvidenceLaneRealCaptureAdminProofCommand,
+          },
+        ],
+        [
+          "hosted-evidence-lane-real-capture-admin-proof",
+          "proof-graph",
+          "records",
+          {
+            command: devTestGameHostedEvidenceLaneRealCaptureAdminProofCommand,
+          },
+        ],
+        [
+          "hosted-evidence-lane-real-capture-admin-proof",
+          "next-action",
+          "summarizes-into",
+          {
+            command: devTestGameHostedEvidenceLaneRealCaptureAdminProofCommand,
+          },
+        ],
+      ]
+    : [];
 }
 
 function buildCoreLoopScenarioFamilyNodes({ recoveryCommand }) {

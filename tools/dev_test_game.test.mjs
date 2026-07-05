@@ -459,6 +459,9 @@ import {
 } from "./dev_test_game_hosted_evidence_lane.mjs";
 import {
   devTestGameHostedEvidenceLaneAdminProofPath,
+  devTestGameHostedEvidenceLaneRealCaptureAdminProofCommand,
+  devTestGameHostedEvidenceLaneRealCaptureAdminProofPath,
+  devTestGameHostedEvidenceLaneRealCaptureSourcePath,
   hostedEvidenceBlockedHandoffChecklistFixture,
   hostedEvidenceHandoffChecklistFromPreflight,
   hostedEvidenceHandoffBlockedCheckIds,
@@ -2500,6 +2503,19 @@ test("dev test-game spine manifest records command order and evidence wiring", (
     releaseReady: false,
     productionReady: false,
   });
+  assert.deepEqual(manifest.commands.hostedEvidenceLaneRealCaptureAdminProof, {
+    script: devTestGameHostedEvidenceLaneRealCaptureAdminProofCommand,
+    proofArtifact: devTestGameHostedEvidenceLaneRealCaptureAdminProofPath,
+    sourceArtifact: devTestGameHostedEvidenceLaneRealCaptureSourcePath,
+    dependsOn: [
+      devTestGameRealHostedMatrixRawCapturePath,
+      devTestGameHostedEvidenceLaneDemoProofPath,
+    ],
+    fixtureEvidence: false,
+    releaseReady: false,
+    productionReady: false,
+    roleUrl: "/admin/audit/local-hosted-evidence-lane?game=<seeded-game>",
+  });
   for (const descriptor of recoveryReceiptGraphDescriptors) {
     assert.deepEqual(manifest.commands[descriptor.receiptKey], {
       script: descriptor.proofCommand,
@@ -2527,6 +2543,7 @@ test("dev test-game spine manifest records command order and evidence wiring", (
       devTestGameHostedEvidenceLanePath,
       devTestGameHostedEvidenceLaneDemoProofPath,
       devTestGameHostedEvidenceLaneOperatorFixtureAdminProofPath,
+      devTestGameHostedEvidenceLaneRealCaptureAdminProofPath,
     ],
   });
   assert.deepEqual(manifest.commands.nextActionAdminProof, {
@@ -5396,10 +5413,28 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
     releaseReadiness,
   );
   const coreLoopFamilyRows = coreLoopScenarioFamilyRows();
-  assert.equal(graph.summary.nodeCount, 77 + coreLoopFamilyRows.length);
-  assert.equal(graph.summary.roleUrlCount, 77 + coreLoopFamilyRows.length);
+  assert.equal(graph.summary.nodeCount, 78 + coreLoopFamilyRows.length);
+  assert.equal(graph.summary.roleUrlCount, 78 + coreLoopFamilyRows.length);
   assert.equal(graph.summary.roleSurfaceProofCount, 5);
   assert.equal(graph.summary.productionFeatureTargetCount, 41);
+  assert.deepEqual(
+    graph.nodes.find(
+      (node) =>
+        node.id === "hosted-evidence-lane-real-capture-admin-proof",
+    ),
+    {
+      id: "hosted-evidence-lane-real-capture-admin-proof",
+      label: "Hosted evidence lane real-capture admin proof",
+      kind: "optional-browser-proof",
+      status: "passed",
+      artifact: devTestGameHostedEvidenceLaneRealCaptureAdminProofPath,
+      roleUrl: "/admin/audit/local-hosted-evidence-lane?game=<seeded-game>",
+      proofCommand: devTestGameHostedEvidenceLaneRealCaptureAdminProofCommand,
+      recoveryCommand: devTestGameHostedEvidenceLaneRealCaptureAdminProofCommand,
+      releaseReady: false,
+      productionReady: false,
+    },
+  );
   assert.deepEqual(
     graph.summary.productionFeatureDestinationSummary,
     proofGraphProductionFeatureDestinationSummary({
@@ -15179,6 +15214,34 @@ test("session card and markdown include role credential URLs and tokens", async 
     hostedEvidenceLaneCheck.adminRoleSurface.preflightStatus,
     "blocked",
   );
+  const hostedEvidenceRealCaptureReadiness = buildDevTestGameReleaseReadiness(
+    proofRun,
+    {
+      generatedAt: "2026-06-26T00:00:00.000Z",
+      hostedEvidenceLaneRealCaptureAdminProofPath:
+        devTestGameHostedEvidenceLaneRealCaptureAdminProofPath,
+      hostedEvidenceLaneRealCaptureAdminProof:
+        hostedEvidenceLaneRealCaptureAdminProofFixture(),
+    },
+  );
+  assertDevTestGameReleaseReadiness(hostedEvidenceRealCaptureReadiness);
+  const hostedEvidenceRealCaptureCheck =
+    hostedEvidenceRealCaptureReadiness.localDevelopmentSpine.checks.find(
+      (item) =>
+        item.id ===
+        "local-hosted-evidence-lane-real-capture-admin-surface",
+    );
+  assert.equal(hostedEvidenceRealCaptureCheck.status, "passed");
+  assert.equal(hostedEvidenceRealCaptureCheck.laneStatus, "passed");
+  assert.equal(hostedEvidenceRealCaptureCheck.preflightStatus, "passed");
+  assert.equal(hostedEvidenceRealCaptureCheck.blockedCheckCount, 0);
+  assert.equal(hostedEvidenceRealCaptureCheck.releaseReady, false);
+  assert.equal(hostedEvidenceRealCaptureCheck.productionReady, false);
+  assert.equal(
+    hostedEvidenceRealCaptureReadiness.generatedFrom
+      .hostedEvidenceLaneRealCaptureAdminProof,
+    devTestGameHostedEvidenceLaneRealCaptureAdminProofPath,
+  );
   const hostedEvidenceOperatorFixtureReadiness =
     buildDevTestGameReleaseReadiness(proofRun, {
       generatedAt: "2026-06-26T00:00:00.000Z",
@@ -23048,6 +23111,51 @@ function hostedEvidenceLaneOperatorFixtureAdminProofFixture() {
   proof.adminRoleSurface.visibleHostedHandoffBlockedChecks = [
     "raw-evidence-real-hosted-target",
   ];
+  return proof;
+}
+
+function hostedEvidenceLaneRealCaptureAdminProofFixture() {
+  const proof = hostedEvidenceLaneAdminProofFixture();
+  proof.proofBoundary =
+    "Local hosted evidence lane real-capture admin proof only.";
+  proof.generatedFrom.hostedEvidenceLane =
+    devTestGameHostedEvidenceLaneRealCaptureSourcePath;
+  proof.generatedFrom.realCaptureExample = true;
+  proof.generatedFrom.rawEvidencePath =
+    devTestGameHostedMatrixRawEvidenceRealCaptureExamplePath;
+  proof.generatedFrom.externalEvidencePath =
+    devTestGameHostedMatrixExternalEvidencePath;
+  proof.generatedFrom.status = "passed";
+  proof.generatedFrom.preflightStatus = "passed";
+  proof.generatedFrom.blockedCheckIds = [];
+  proof.generatedFrom.hostedHandoffBlockedCheckIds = [];
+  proof.generatedFrom.requiredText = [
+    "passed",
+    "real-hosted",
+    devTestGameHostedMatrixExternalEvidencePath,
+    devTestGameHostedMatrixRawEvidenceRealCaptureExamplePath,
+    `npm run ${devTestGameHostedMatrixExternalEvidenceCommand}`,
+    "release not ready",
+    "production not ready",
+  ];
+  proof.adminRoleSurface.visibleChecks = [
+    "hosted-target-preflight",
+    ...hostedTargetPreflightBlockingCheckIds,
+    "external-hosted-evidence-written",
+    "real-hosted-evidence-required",
+    "release-claim-boundary-carried",
+  ];
+  proof.adminRoleSurface.visibleUnproven = [];
+  proof.adminRoleSurface.visibleHostedHandoffBlockedChecks = [];
+  proof.adminRoleSurface.visibleRequiredText = [
+    ...proof.generatedFrom.requiredText,
+  ];
+  proof.adminRoleSurface.visibleHostedHandoffSummary = {
+    status: "passed",
+    preflightStatus: "passed",
+    command: "npm run test:dev-test-game-hosted-evidence-lane",
+    proofTarget: devTestGameHostedMatrixExternalEvidencePath,
+  };
   return proof;
 }
 

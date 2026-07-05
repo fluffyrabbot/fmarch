@@ -85,6 +85,11 @@ import {
   hostedAdminHandoffProofArtifactCases,
 } from "./dev_test_game_hosted_handoff_proof_cases.mjs";
 import {
+  devTestGameHostedEvidenceLaneRealCaptureAdminProofCommand,
+  devTestGameHostedEvidenceLaneRealCaptureAdminProofPath,
+  devTestGameHostedEvidenceLaneRealCaptureSourcePath,
+} from "./dev_test_game_hosted_handoff_cases.mjs";
+import {
   devTestGameHostedTargetPreflightCommand,
   devTestGameHostedTargetPreflightPath,
 } from "./dev_test_game_hosted_target_preflight.mjs";
@@ -391,6 +396,19 @@ export function buildDevTestGameSpineManifest({
         releaseReady: false,
         productionReady: false,
       },
+      hostedEvidenceLaneRealCaptureAdminProof: {
+        script: devTestGameHostedEvidenceLaneRealCaptureAdminProofCommand,
+        proofArtifact: devTestGameHostedEvidenceLaneRealCaptureAdminProofPath,
+        sourceArtifact: devTestGameHostedEvidenceLaneRealCaptureSourcePath,
+        dependsOn: [
+          devTestGameRealHostedMatrixRawCapturePath,
+          devTestGameHostedEvidenceLaneDemoProofPath,
+        ],
+        fixtureEvidence: false,
+        releaseReady: false,
+        productionReady: false,
+        roleUrl: "/admin/audit/local-hosted-evidence-lane?game=<seeded-game>",
+      },
       ...recoveryReceiptManifestCommands(),
       releaseRunbook: {
         script: devTestGameReleaseRunbookCommand,
@@ -411,6 +429,7 @@ export function buildDevTestGameSpineManifest({
           devTestGameHostedEvidenceLanePath,
           devTestGameHostedEvidenceLaneDemoProofPath,
           devTestGameHostedEvidenceLaneOperatorFixtureAdminProofPath,
+          devTestGameHostedEvidenceLaneRealCaptureAdminProofPath,
         ],
       },
       nextActionAdminProof: {
@@ -460,6 +479,7 @@ export function buildDevTestGameSpineManifest({
           devTestGameHostedEvidenceLanePath,
           devTestGameHostedEvidenceLaneDemoProofPath,
           devTestGameHostedEvidenceLaneOperatorFixtureAdminProofPath,
+          devTestGameHostedEvidenceLaneRealCaptureAdminProofPath,
         ],
         boundary:
           "Terminal local receipt that chooses one upstream freshness, harness-stability, or recovery command from the manifest, ops artifacts, release-readiness checklist, and race coverage milestone.",
@@ -527,6 +547,8 @@ export function buildDevTestGameSpineManifest({
       devTestGameHostedEvidenceLaneOperatorFixturePath,
       devTestGameHostedEvidenceLaneOperatorFixtureAdminProofPath,
       devTestGameRealHostedMatrixRawCapturePath,
+      devTestGameHostedEvidenceLaneRealCaptureAdminProofPath,
+      devTestGameHostedEvidenceLaneRealCaptureSourcePath,
       ...recoveryReceiptGraphDescriptors.map(
         (descriptor) => descriptor.proofTarget,
       ),
@@ -699,6 +721,17 @@ export function buildDevTestGameSpineManifest({
         evidence: [
           devTestGameRealHostedMatrixRawCaptureCommand,
           devTestGameRealHostedMatrixRawCapturePath,
+        ],
+        releaseReady: false,
+        productionReady: false,
+      },
+      {
+        id: "hosted-evidence-lane-real-capture-admin-proof-recorded",
+        status: "passed",
+        evidence: [
+          devTestGameHostedEvidenceLaneRealCaptureAdminProofCommand,
+          devTestGameHostedEvidenceLaneRealCaptureAdminProofPath,
+          devTestGameHostedEvidenceLaneRealCaptureSourcePath,
         ],
         releaseReady: false,
         productionReady: false,
@@ -1115,6 +1148,40 @@ export function assertDevTestGameSpineManifest(manifest) {
       "spine manifest real hosted matrix raw capture must not claim readiness",
     );
   }
+  if (
+    manifest.commands?.hostedEvidenceLaneRealCaptureAdminProof?.script !==
+    devTestGameHostedEvidenceLaneRealCaptureAdminProofCommand
+  ) {
+    throw new Error(
+      `spine manifest hosted evidence lane real-capture admin proof command drifted: ${manifest.commands?.hostedEvidenceLaneRealCaptureAdminProof?.script}`,
+    );
+  }
+  if (
+    manifest.commands.hostedEvidenceLaneRealCaptureAdminProof.proofArtifact !==
+    devTestGameHostedEvidenceLaneRealCaptureAdminProofPath
+  ) {
+    throw new Error(
+      `spine manifest hosted evidence lane real-capture admin proof artifact drifted: ${manifest.commands.hostedEvidenceLaneRealCaptureAdminProof.proofArtifact}`,
+    );
+  }
+  if (
+    manifest.commands.hostedEvidenceLaneRealCaptureAdminProof.sourceArtifact !==
+    devTestGameHostedEvidenceLaneRealCaptureSourcePath
+  ) {
+    throw new Error(
+      `spine manifest hosted evidence lane real-capture source artifact drifted: ${manifest.commands.hostedEvidenceLaneRealCaptureAdminProof.sourceArtifact}`,
+    );
+  }
+  if (
+    manifest.commands.hostedEvidenceLaneRealCaptureAdminProof.releaseReady !==
+      false ||
+    manifest.commands.hostedEvidenceLaneRealCaptureAdminProof.productionReady !==
+      false
+  ) {
+    throw new Error(
+      "spine manifest hosted evidence lane real-capture admin proof must not claim readiness",
+    );
+  }
   assertRecoveryReceiptManifestCommands(manifest.commands ?? {});
   if (manifest.commands?.releaseRunbook?.script !== devTestGameReleaseRunbookCommand) {
     throw new Error(
@@ -1241,6 +1308,7 @@ export function assertDevTestGameSpineManifest(manifest) {
     "hosted-evidence-lane-demo-proof-recorded",
     "hosted-evidence-lane-operator-fixture-recorded",
     "real-hosted-matrix-raw-capture-recorded",
+    "hosted-evidence-lane-real-capture-admin-proof-recorded",
     "hosted-ops-signals-recorded",
     "release-runbook-recorded",
     "terminal-artifacts-recorded",
@@ -1683,6 +1751,12 @@ const artifactRefreshCommands = Object.freeze({
     "npm run test:dev-test-game-real-hosted-matrix-raw-capture",
   [devTestGameRealHostedMatrixRawCapturePath]:
     "npm run test:dev-test-game-real-hosted-matrix-raw-capture",
+  "hosted-evidence-lane-real-capture-admin-proof":
+    devTestGameHostedEvidenceLaneRealCaptureAdminProofCommand,
+  [devTestGameHostedEvidenceLaneRealCaptureAdminProofPath]:
+    devTestGameHostedEvidenceLaneRealCaptureAdminProofCommand,
+  [devTestGameHostedEvidenceLaneRealCaptureSourcePath]:
+    devTestGameHostedEvidenceLaneRealCaptureAdminProofCommand,
   "hosted-ops-signals": "npm run test:dev-test-game-hosted-ops-signals",
   "hosted-ops-signals-admin":
     "npm run test:dev-test-game-hosted-ops-signals-admin-proof",

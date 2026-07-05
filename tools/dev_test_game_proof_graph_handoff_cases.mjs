@@ -7,6 +7,8 @@ import {
 } from "./dev_test_game_hosted_target_preflight_cases.mjs";
 import {
   hostedEvidenceHandoffCase,
+  devTestGameHostedEvidenceLaneRealCaptureAdminProofCommand,
+  devTestGameHostedEvidenceLaneRealCaptureAdminProofPath,
 } from "./dev_test_game_hosted_handoff_cases.mjs";
 import {
   hostedOpsSignalCheckIds,
@@ -266,6 +268,25 @@ export const adminProofDestinationRequirementCases = Object.freeze([
     ]),
   }),
   Object.freeze({
+    linkId: "admin-proof:hosted-evidence-lane-operator-fixture",
+    auditId: localAdminAuditIds.hostedEvidenceLane,
+    requiredCheckIds: Object.freeze([
+      "hosted-target-preflight",
+      "raw-evidence-real-hosted-target",
+    ]),
+    requiredHostedHandoffInputs: Object.freeze([
+      ...hostedEvidenceHandoffCase().inputIds,
+    ]),
+    requiredHostedHandoffBlockedChecks: Object.freeze([
+      "raw-evidence-real-hosted-target",
+    ]),
+    requiredRelatedLinkIds: Object.freeze([
+      localAdminAuditIds.hostedTargetPreflight,
+      localAdminAuditIds.hostedConcurrentRaceMatrix,
+      localAdminAuditIds.nextAction,
+    ]),
+  }),
+  Object.freeze({
     linkId: "admin-proof:hosted-concurrent-race-matrix",
     auditId: localAdminAuditIds.hostedConcurrentRaceMatrix,
     fromHostedMatrix: true,
@@ -388,6 +409,20 @@ export function devTestGameProofGraphFirstClassNodes({
       artifactPaths: terminalAdminProofBatchArtifactPaths,
       receiptArtifacts: terminalAdminProofBatchReceiptArtifacts,
     }),
+    Object.freeze({
+      id: "hosted-evidence-lane-real-capture-admin-proof",
+      label: "Hosted evidence lane real-capture admin proof",
+      kind: "optional-browser-proof",
+      status: "passed",
+      artifact: devTestGameHostedEvidenceLaneRealCaptureAdminProofPath,
+      roleUrl: localAdminAuditRoleUrl(localAdminAuditIds.hostedEvidenceLane, {
+        game,
+      }),
+      proofCommand: devTestGameHostedEvidenceLaneRealCaptureAdminProofCommand,
+      recoveryCommand: devTestGameHostedEvidenceLaneRealCaptureAdminProofCommand,
+      releaseReady: false,
+      productionReady: false,
+    }),
     ...proofGraphDiagnosticProofNodes.map((node) =>
       Object.freeze({
         ...node,
@@ -441,6 +476,24 @@ export function devTestGameProofGraphBaseEdges({
       command: seedFixtureRecoveryCommand,
       roleUrl: localAdminAuditRoleUrl(localAdminAuditIds.seedFixtures, { game }),
       proofTarget: devTestGameSeedFixturePath,
+    }),
+    proofGraphEdge({
+      from: "admin-proof:hosted-evidence-lane",
+      to: "hosted-evidence-lane-real-capture-admin-proof",
+      relationship: "proves-positive-real-capture-path",
+      command: devTestGameHostedEvidenceLaneRealCaptureAdminProofCommand,
+    }),
+    proofGraphEdge({
+      from: "hosted-evidence-lane-real-capture-admin-proof",
+      to: "proof-graph",
+      relationship: "records",
+      command: devTestGameHostedEvidenceLaneRealCaptureAdminProofCommand,
+    }),
+    proofGraphEdge({
+      from: "hosted-evidence-lane-real-capture-admin-proof",
+      to: "next-action",
+      relationship: "summarizes-into",
+      command: devTestGameHostedEvidenceLaneRealCaptureAdminProofCommand,
     }),
     ...proofGraphDiagnosticProofEdges,
     ...adminProofDestinationRequirementLinkRows.map(([linkId]) =>
