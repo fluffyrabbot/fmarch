@@ -7,6 +7,17 @@ export const selectedNextActionGraphDestinationCases = Object.freeze([
   Object.freeze({
     id: "selected-proof-graph-node",
     label: "selected proof graph node",
+    fixtureSubject: () => ({
+      id: "admin-proof:hosted-concurrent-race-matrix",
+      status: "ready",
+      auditId: "local-hosted-concurrent-race-matrix",
+      roleUrl:
+        "/admin/audit/local-hosted-concurrent-race-matrix?game=<seeded-game>",
+      proofCommand:
+        "npm run test:dev-test-game-hosted-concurrent-race-matrix-admin-proof",
+      graphProofCommand:
+        "npm run test:dev-test-game-hosted-concurrent-race-matrix-admin-proof",
+    }),
     subjectFromGeneratedFrom: (generatedFrom) =>
       selectedProofGraphNodeFromGeneratedFrom(generatedFrom),
     destinationLinkId: () => "selected-proof-graph-node",
@@ -37,6 +48,24 @@ export const selectedNextActionGraphDestinationCases = Object.freeze([
   Object.freeze({
     id: "selected-production-feature-graph",
     label: "selected production feature graph",
+    fixtureSubject: ({ browserProofCommand } = {}) => ({
+      nodeId: "production-feature:player-action-submission",
+      status: "passed",
+      sourceNodeId: "admin-proof:core-loop",
+      edge: {
+        from: "admin-proof:core-loop",
+        to: "production-feature:player-action-submission",
+        relationship: "proves-production-feature",
+      },
+      roleUrl: "/admin/audit/local-core-loop?game=<seeded-game>",
+      targetRoleUrl: "http://127.0.0.1:5173/g/<seeded-game>/c/thread:day-two",
+      browserProofCommand: String(browserProofCommand ?? ""),
+      proofTarget: "target/dev-test-game/release-readiness-checklist.json",
+      coverageDecision: {
+        kind: "seeded-role-url-proof",
+        proofCommand: "npm run test:dev-test-game-core-loop-admin-proof",
+      },
+    }),
     subjectFromGeneratedFrom: (generatedFrom) =>
       selectedProductionFeatureGraphFromGeneratedFrom(generatedFrom),
     destinationLinkId: (subject) => String(subject?.nodeId ?? ""),
@@ -93,6 +122,17 @@ export function selectedGraphDestinationSubject({
   generatedFrom,
 }) {
   return destinationCase?.subjectFromGeneratedFrom(generatedFrom) ?? null;
+}
+
+export function selectedGraphDestinationFixtureSubject({
+  destinationCase,
+  browserProofCommand,
+} = {}) {
+  return (
+    destinationCase?.fixtureSubject({
+      browserProofCommand,
+    }) ?? null
+  );
 }
 
 export function selectedGraphDestinationLinkId({ destinationCase, subject }) {

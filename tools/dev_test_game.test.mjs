@@ -313,6 +313,7 @@ import {
 } from "./dev_test_game_next_action_admin_proof.mjs";
 import {
   selectedGraphDestinationLinkId,
+  selectedGraphDestinationFixtureSubject,
   selectedGraphDestinationLocalCheckIds,
   selectedGraphDestinationLocalRelatedLinkIds,
   selectedGraphDestinationRequiredCheckIds,
@@ -5615,7 +5616,10 @@ test("next-action admin proof fixture proves proof graph next-action handoff dep
 
 for (const destinationCase of selectedNextActionGraphDestinationCases) {
   test(`next-action admin proof fixture proves ${destinationCase.label} destination text`, () => {
-    const { subject } = selectedGraphDestinationFixtureForCase(destinationCase);
+    const subject = selectedGraphDestinationFixtureSubject({
+      destinationCase,
+      browserProofCommand: devTestGameLiveProofCommand,
+    });
     const selectedDestination = selectedGraphDestinationFixture({
       destinationCase,
       subject,
@@ -5668,48 +5672,6 @@ for (const destinationCase of selectedNextActionGraphDestinationCases) {
       new RegExp(escapeRegExp(destinationCase.readinessTextMessage)),
     );
   });
-}
-
-function selectedGraphDestinationFixtureForCase(destinationCase) {
-  if (destinationCase.id === "selected-proof-graph-node") {
-    return {
-      subject: {
-        id: "admin-proof:hosted-concurrent-race-matrix",
-        status: "ready",
-        auditId: "local-hosted-concurrent-race-matrix",
-        roleUrl:
-          "/admin/audit/local-hosted-concurrent-race-matrix?game=<seeded-game>",
-        proofCommand:
-          "npm run test:dev-test-game-hosted-concurrent-race-matrix-admin-proof",
-        graphProofCommand:
-          "npm run test:dev-test-game-hosted-concurrent-race-matrix-admin-proof",
-      },
-    };
-  }
-  if (destinationCase.id === "selected-production-feature-graph") {
-    return {
-      subject: {
-        nodeId: "production-feature:player-action-submission",
-        status: "passed",
-        sourceNodeId: "admin-proof:core-loop",
-        edge: {
-          from: "admin-proof:core-loop",
-          to: "production-feature:player-action-submission",
-          relationship: "proves-production-feature",
-        },
-        roleUrl: "/admin/audit/local-core-loop?game=<seeded-game>",
-        targetRoleUrl:
-          "http://127.0.0.1:5173/g/<seeded-game>/c/thread:day-two",
-        browserProofCommand: devTestGameLiveProofCommand,
-        proofTarget: "target/dev-test-game/release-readiness-checklist.json",
-        coverageDecision: {
-          kind: "seeded-role-url-proof",
-          proofCommand: "npm run test:dev-test-game-core-loop-admin-proof",
-        },
-      },
-    };
-  }
-  throw new Error(`unknown selected graph destination case: ${destinationCase.id}`);
 }
 
 function selectedGraphDestinationFixture({ destinationCase, subject }) {
