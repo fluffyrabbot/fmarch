@@ -5,8 +5,7 @@ import { seedCommandPlanForGame } from "./dev_test_game.mjs";
 import { assertDevTestGameProofRun } from "./dev_test_game_proof_contract.mjs";
 import { assertDevTestGameReleaseReadiness } from "./dev_test_game_release_readiness.mjs";
 import {
-  seedAggregateOnlyProofLaneIds,
-  seedAliasOnlyProofLaneIds,
+  assertSeedProofLaneCoverage,
   seedDemoScenarioCatalog,
   seedDemoScenarioProofLaneCandidates,
   seedProofLaneCoverageForPassedLanes,
@@ -185,7 +184,9 @@ export function assertDevTestGameSeedFixtureSummary(summary) {
       throw new Error(`seed fixture summary missing local scenario: ${id}`);
     }
   }
-  assertSeedFixtureProofLaneCoverage(summary.proofLaneCoverage);
+  assertSeedProofLaneCoverage(summary.proofLaneCoverage, {
+    label: "seed fixture proof lane coverage",
+  });
   if ((summary.fixture?.slots ?? []).length < 5) {
     throw new Error("seed fixture summary must enumerate seeded slots");
   }
@@ -214,40 +215,6 @@ export function assertDevTestGameSeedFixtureSummary(summary) {
     }
   }
   return summary;
-}
-
-function assertSeedFixtureProofLaneCoverage(coverage) {
-  if (coverage?.status !== "passed") {
-    throw new Error(`seed fixture proof lane coverage is ${coverage?.status}`);
-  }
-  if (!Number.isInteger(coverage.passedLaneCount) || coverage.passedLaneCount <= 0) {
-    throw new Error("seed fixture proof lane coverage must count passed lanes");
-  }
-  for (const [id, expectedLaneIds] of [
-    ["aliasOnly", seedAliasOnlyProofLaneIds],
-    ["aggregateOnly", seedAggregateOnlyProofLaneIds],
-  ]) {
-    const laneIds = coverage[id]?.laneIds ?? [];
-    for (const laneId of expectedLaneIds) {
-      if (!laneIds.includes(laneId)) {
-        throw new Error(`seed fixture proof lane coverage missing ${id} lane: ${laneId}`);
-      }
-    }
-    if (coverage[id]?.count !== laneIds.length) {
-      throw new Error(`seed fixture proof lane coverage count drifted for ${id}`);
-    }
-  }
-  if ((coverage.directSeeded?.laneIds ?? []).length !== coverage.directSeeded?.count) {
-    throw new Error("seed fixture direct seeded proof lane count drifted");
-  }
-  if ((coverage.unclassified?.laneIds ?? []).length !== 0) {
-    throw new Error(
-      `seed fixture proof lane coverage has unclassified lanes: ${coverage.unclassified.laneIds.join(", ")}`,
-    );
-  }
-  if (coverage.unclassified?.count !== 0) {
-    throw new Error("seed fixture proof lane coverage must have zero unclassified lanes");
-  }
 }
 
 function demoScenarios({ roles, laneIds }) {

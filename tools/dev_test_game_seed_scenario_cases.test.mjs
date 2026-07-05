@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import {
+  assertSeedProofLaneCoverage,
   seedAggregateOnlyProofLaneIds,
   seedAliasOnlyProofLaneIds,
   directSeedProofLaneIds,
@@ -381,4 +382,30 @@ test("seed scenario cases classify every passed proof lane", () => {
   assert.deepEqual(coverage.aliasOnly.laneIds, seedAliasOnlyProofLaneIds);
   assert.deepEqual(coverage.aggregateOnly.laneIds, seedAggregateOnlyProofLaneIds);
   assert.deepEqual(coverage.unclassified.laneIds, []);
+  assert.deepEqual(assertSeedProofLaneCoverage(coverage), coverage);
+  assert.throws(
+    () =>
+      assertSeedProofLaneCoverage({
+        ...coverage,
+        passedLaneCount: coverage.passedLaneCount - 1,
+        aliasOnly: {
+          count: coverage.aliasOnly.count - 1,
+          laneIds: coverage.aliasOnly.laneIds.slice(1),
+        },
+      }),
+    /missing aliasOnly lane: browser-entry/,
+  );
+  assert.throws(
+    () =>
+      assertSeedProofLaneCoverage({
+        ...coverage,
+        status: "failed",
+        passedLaneCount: coverage.passedLaneCount + 1,
+        unclassified: {
+          count: 1,
+          laneIds: ["new-production-proof-lane"],
+        },
+      }, { requirePassed: false }),
+    /has unclassified lanes: new-production-proof-lane/,
+  );
 });

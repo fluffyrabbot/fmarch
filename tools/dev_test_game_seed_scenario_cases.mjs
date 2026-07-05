@@ -315,6 +315,72 @@ export function seedProofLaneCoverageForPassedLanes(
   };
 }
 
+export function assertSeedProofLaneCoverage(
+  coverage,
+  {
+    ids = seedDemoScenarioIds,
+    label = "seed proof lane coverage",
+    requirePassed = true,
+    requireBaselineLanes = true,
+    allowUnclassified = false,
+  } = {},
+) {
+  if (requirePassed && coverage?.status !== "passed") {
+    throw new Error(`${label} is ${coverage?.status}`);
+  }
+  if (!Number.isInteger(coverage?.passedLaneCount) || coverage.passedLaneCount <= 0) {
+    throw new Error(`${label} must count passed lanes`);
+  }
+  const directSeededLaneIds = seedProofLaneCoverageBucket(coverage, "directSeeded", {
+    label,
+  });
+  const aliasOnlyLaneIds = seedProofLaneCoverageBucket(coverage, "aliasOnly", {
+    label,
+  });
+  const aggregateOnlyLaneIds = seedProofLaneCoverageBucket(coverage, "aggregateOnly", {
+    label,
+  });
+  const unclassifiedLaneIds = seedProofLaneCoverageBucket(coverage, "unclassified", {
+    label,
+  });
+  if (requireBaselineLanes) {
+    for (const [bucket, expectedLaneIds, actualLaneIds] of [
+      ["aliasOnly", seedAliasOnlyProofLaneIds, aliasOnlyLaneIds],
+      ["aggregateOnly", seedAggregateOnlyProofLaneIds, aggregateOnlyLaneIds],
+    ]) {
+      for (const laneId of expectedLaneIds) {
+        if (!actualLaneIds.includes(laneId)) {
+          throw new Error(`${label} missing ${bucket} lane: ${laneId}`);
+        }
+      }
+    }
+  }
+  const passedLaneIds = [
+    ...directSeededLaneIds,
+    ...aliasOnlyLaneIds,
+    ...aggregateOnlyLaneIds,
+    ...unclassifiedLaneIds,
+  ];
+  if (coverage.passedLaneCount !== passedLaneIds.length) {
+    throw new Error(`${label} passed lane count drifted`);
+  }
+  const expected = seedProofLaneCoverageForPassedLanes(passedLaneIds, { ids });
+  for (const bucket of ["directSeeded", "aliasOnly", "aggregateOnly", "unclassified"]) {
+    if (!sameStringArray(coverage[bucket].laneIds, expected[bucket].laneIds)) {
+      throw new Error(`${label} bucket drifted for ${bucket}`);
+    }
+  }
+  if (coverage.status !== expected.status) {
+    throw new Error(`${label} status drifted from classified lanes`);
+  }
+  if (!allowUnclassified && expected.unclassified.count !== 0) {
+    throw new Error(
+      `${label} has unclassified lanes: ${expected.unclassified.laneIds.join(", ")}`,
+    );
+  }
+  return expected;
+}
+
 export function seedProofLaneCoverageFixture({
   passedLaneIds = seedProofLaneCoverageBaselineLaneIds,
   unclassifiedLaneIds = [],
@@ -323,6 +389,26 @@ export function seedProofLaneCoverageFixture({
     ...passedLaneIds,
     ...unclassifiedLaneIds,
   ]);
+}
+
+function seedProofLaneCoverageBucket(coverage, bucket, { label }) {
+  const laneIds = coverage?.[bucket]?.laneIds;
+  if (!Array.isArray(laneIds)) {
+    throw new Error(`${label} missing ${bucket} lanes`);
+  }
+  if (coverage[bucket]?.count !== laneIds.length) {
+    throw new Error(`${label} count drifted for ${bucket}`);
+  }
+  return laneIds;
+}
+
+function sameStringArray(left, right) {
+  return (
+    Array.isArray(left) &&
+    Array.isArray(right) &&
+    left.length === right.length &&
+    left.every((item, index) => item === right[index])
+  );
 }
 
 function seedScenarioNote(id, role) {

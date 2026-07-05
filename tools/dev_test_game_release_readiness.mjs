@@ -52,8 +52,7 @@ import {
   staleConflictMessageLaneIds,
 } from "./dev_test_game_hardening_recovery_scenarios.mjs";
 import {
-  seedAggregateOnlyProofLaneIds,
-  seedAliasOnlyProofLaneIds,
+  assertSeedProofLaneCoverage,
   seedDemoScenarioIds,
   seedScenarioCoverageGroups,
 } from "./dev_test_game_seed_scenario_cases.mjs";
@@ -4659,9 +4658,9 @@ export function validateDevTestGameSeedFixtureSummary(summary, options = {}) {
   if ((summary.fixture?.slots ?? []).length < 5) {
     throw new Error("seed fixture summary must enumerate seeded slots");
   }
-  const proofLaneCoverage = validateSeedFixtureProofLaneCoverage(
-    summary.proofLaneCoverage,
-  );
+  const proofLaneCoverage = assertSeedProofLaneCoverage(summary.proofLaneCoverage, {
+    label: "seed fixture proof lane coverage",
+  });
   const serialized = JSON.stringify(summary);
   if (/invite=(?!REDACTED)/.test(serialized)) {
     throw new Error("seed fixture summary leaked an invite URL token");
@@ -4678,65 +4677,6 @@ export function validateDevTestGameSeedFixtureSummary(summary, options = {}) {
     scope: summary.scope,
     productionReady: summary.productionReady,
     ...(options.artifact === undefined ? {} : { artifact: options.artifact }),
-  };
-}
-
-function validateSeedFixtureProofLaneCoverage(coverage) {
-  if (coverage?.status !== "passed") {
-    throw new Error(`seed fixture proof lane coverage is ${coverage?.status}`);
-  }
-  if (!Number.isInteger(coverage.passedLaneCount) || coverage.passedLaneCount <= 0) {
-    throw new Error("seed fixture proof lane coverage must count passed lanes");
-  }
-  const aliasOnlyLaneIds = coverage.aliasOnly?.laneIds ?? [];
-  const aggregateOnlyLaneIds = coverage.aggregateOnly?.laneIds ?? [];
-  const directSeededLaneIds = coverage.directSeeded?.laneIds ?? [];
-  const unclassifiedLaneIds = coverage.unclassified?.laneIds ?? [];
-  for (const laneId of seedAliasOnlyProofLaneIds) {
-    if (!aliasOnlyLaneIds.includes(laneId)) {
-      throw new Error(`seed fixture proof lane coverage missing alias lane: ${laneId}`);
-    }
-  }
-  for (const laneId of seedAggregateOnlyProofLaneIds) {
-    if (!aggregateOnlyLaneIds.includes(laneId)) {
-      throw new Error(
-        `seed fixture proof lane coverage missing aggregate lane: ${laneId}`,
-      );
-    }
-  }
-  if (coverage.directSeeded?.count !== directSeededLaneIds.length) {
-    throw new Error("seed fixture direct proof lane count drifted");
-  }
-  if (coverage.aliasOnly?.count !== aliasOnlyLaneIds.length) {
-    throw new Error("seed fixture alias proof lane count drifted");
-  }
-  if (coverage.aggregateOnly?.count !== aggregateOnlyLaneIds.length) {
-    throw new Error("seed fixture aggregate proof lane count drifted");
-  }
-  if (coverage.unclassified?.count !== 0 || unclassifiedLaneIds.length !== 0) {
-    throw new Error(
-      `seed fixture proof lane coverage has unclassified lanes: ${unclassifiedLaneIds.join(", ")}`,
-    );
-  }
-  return {
-    status: "passed",
-    passedLaneCount: coverage.passedLaneCount,
-    directSeeded: {
-      count: directSeededLaneIds.length,
-      laneIds: directSeededLaneIds,
-    },
-    aliasOnly: {
-      count: aliasOnlyLaneIds.length,
-      laneIds: aliasOnlyLaneIds,
-    },
-    aggregateOnly: {
-      count: aggregateOnlyLaneIds.length,
-      laneIds: aggregateOnlyLaneIds,
-    },
-    unclassified: {
-      count: 0,
-      laneIds: [],
-    },
   };
 }
 
