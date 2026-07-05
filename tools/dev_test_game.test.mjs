@@ -2390,7 +2390,7 @@ test("spine manifest gives host setup freshness artifacts focused recovery comma
       },
       artifacts: [
         {
-          id: "host-setup",
+          id: "host-setup-role",
           label: "Host setup role proof",
           path: "target/dev-test-game/host-setup-proof.json",
           status: "stale",
@@ -2426,7 +2426,7 @@ test("spine manifest gives host setup freshness artifacts focused recovery comma
     ]),
     [
       [
-        "host-setup",
+        "host-setup-role",
         devTestGameHostSetupProofCommand,
         devTestGameHostSetupProofCommand,
         "manifest-default",

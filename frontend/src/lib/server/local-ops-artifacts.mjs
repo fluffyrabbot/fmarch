@@ -198,7 +198,7 @@ const LOCAL_PROOF_FRESHNESS_ARTIFACTS = Object.freeze([
     fallback: devTestGameSeedAdminProofPath,
   }),
   Object.freeze({
-    id: "host-setup",
+    id: "host-setup-role",
     label: "Host setup role proof",
     env: "FMARCH_DEV_TEST_GAME_HOST_SETUP_PROOF",
     fallback: DEFAULT_HOST_SETUP_PROOF,

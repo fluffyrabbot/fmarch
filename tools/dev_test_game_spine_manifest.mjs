@@ -1449,7 +1449,7 @@ const artifactRefreshCommands = Object.freeze({
   backup: "npm run test:dev-test-game-backup-admin-proof",
   ops: "npm run test:dev-test-game-ops-admin-proof",
   seed: "npm run test:dev-test-game-seed-admin-proof",
-  "host-setup": devTestGameHostSetupProofCommand,
+  "host-setup-role": devTestGameHostSetupProofCommand,
   [devTestGameHostSetupProofPath]: devTestGameHostSetupProofCommand,
   "host-setup-admin": "npm run test:dev-test-game-host-setup-admin-proof",
   [devTestGameHostSetupAdminProofPath]:
