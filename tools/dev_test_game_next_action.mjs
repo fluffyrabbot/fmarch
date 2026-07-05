@@ -177,8 +177,10 @@ export const devTestGameHostedIdentitySequencePromotionCommand =
   "npm run test:dev-test-game-next-action:hosted-identity";
 export const devTestGameHostedIdentityOperatorSpineScript =
   "test:dev-test-game-identity:operator";
+export const devTestGameHostedIdentityOperatorLocalSpineScript =
+  "test:dev-test-game-identity:operator:local";
 export const devTestGameHostedIdentityOperatorSpineCommand =
-  `DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch npm run ${devTestGameHostedIdentityOperatorSpineScript}`;
+  `npm run ${devTestGameHostedIdentityOperatorLocalSpineScript}`;
 const devTestGameHostSetupRoleUrl =
   "http://127.0.0.1:5173/g/<seeded-game>/setup";
 

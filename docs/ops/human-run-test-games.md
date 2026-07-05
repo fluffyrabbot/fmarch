@@ -192,7 +192,7 @@ After that batch is current, the selector advances to the opt-in operator
 identity spine:
 
 ```sh
-DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch npm run test:dev-test-game-identity:operator
+npm run test:dev-test-game-identity:operator:local
 ```
 
 The generated next-action proof target is
@@ -262,6 +262,14 @@ pair, while still keeping their source artifacts separate:
 blocker and `target/dev-test-game/hosted-identity-next-action-admin-proof.json`
 for the hosted-identity predicate.
 To run that predicate as an explicit opt-in identity spine phase, use:
+
+```sh
+npm run test:dev-test-game-identity:operator:local
+```
+
+That local command starts repo-local Postgres, runs
+`test:dev-test-game-identity:operator` with `DATABASE_URL`, and stops Postgres
+when the spine exits. If Postgres is already running, the underlying command is:
 
 ```sh
 DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch npm run test:dev-test-game-identity:operator
@@ -760,9 +768,11 @@ first; once those family artifacts are current, the selector advances to the
 opt-in hosted identity operator spine command and operator admin proof target
 while preserving the same local-predicate boundary and non-claims about live
 hosted identity traffic.
-`npm run test:dev-test-game-identity:operator` is the opt-in variant that appends
-the target-local operator predicate proof and a separate readiness pass; the
-default identity spine remains fixture-safe.
+`npm run test:dev-test-game-identity:operator:local` is the opt-in local variant
+that starts repo-local Postgres, runs the inner
+`test:dev-test-game-identity:operator` phase, appends the target-local operator
+predicate proof and a separate readiness pass, then stops Postgres; the default
+identity spine remains fixture-safe.
 After `npm run test:dev-test-game-admin-spine`, the checklist consumes
 `target/dev-test-game/admin-spine-proof.json` and records the ordered local
 admin browser proof set as a single development-spine evidence signal while

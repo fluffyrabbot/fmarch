@@ -221,6 +221,10 @@ import {
   runSpinePlan,
 } from "./dev_test_game_spine_runner.mjs";
 import {
+  localSpineDatabaseUrl,
+  parseArgs as parseLocalSpineArgs,
+} from "./dev_test_game_local_spine.mjs";
+import {
   devTestGameHostedIdentityProgressionAdminProofBatchScript,
   hostedIdentityProgressionAdminProofBatchArtifactPaths,
   hostedIdentityProgressionAdminProofBatchPlan,
@@ -759,9 +763,41 @@ test("dev test-game spine orchestrators expose stable proof order and env maps",
     "FMARCH_DEV_TEST_GAME_SEQUENCE_STAGE=hosted-identity npm run test:dev-test-game-next-action",
   );
   assert.equal(
+    packageJson.scripts["test:dev-test-game-spine:local"],
+    "node tools/dev_test_game_local_spine.mjs",
+  );
+  assert.equal(
     packageJson.scripts["test:dev-test-game-identity:operator"],
     "node tools/dev_test_game_identity_spine.mjs --operator",
   );
+  assert.equal(
+    packageJson.scripts["test:dev-test-game-identity:operator:local"],
+    "node tools/dev_test_game_local_spine.mjs --script test:dev-test-game-identity:operator",
+  );
+  assert.deepEqual(parseLocalSpineArgs([]), {
+    script: "test:dev-test-game-identity:operator",
+    prebuild: false,
+    passThrough: [],
+  });
+  assert.deepEqual(
+    parseLocalSpineArgs([
+      "--script",
+      "test:dev-test-game-core-live",
+      "--prebuild",
+      "--",
+      "--reset",
+    ]),
+    {
+      script: "test:dev-test-game-core-live",
+      prebuild: true,
+      passThrough: ["--reset"],
+    },
+  );
+  assert.equal(
+    localSpineDatabaseUrl,
+    "postgres://fmarch:fmarch@127.0.0.1:5544/fmarch",
+  );
+  assert.throws(() => parseLocalSpineArgs(["--script"]), /requires/);
   assert.equal(
     packageJson.scripts[
       "test:dev-test-game-hosted-identity-partial-admin-proof"
