@@ -1207,6 +1207,13 @@ async function waitForHostedHandoffBlockedReceipt({ page, expected }) {
     missingRequiredInputs: Array.isArray(expected.missingRequiredInputs)
       ? expected.missingRequiredInputs.map((input) => String(input))
       : [],
+    firstMissingOperatorArtifact:
+      expected.firstMissingOperatorArtifact === null ||
+      expected.firstMissingOperatorArtifact === undefined
+        ? null
+        : normalizeExpectedFirstMissingOperatorArtifact(
+            expected.firstMissingOperatorArtifact,
+          ),
   };
   for (const value of [
     receipt.status,
@@ -1214,6 +1221,7 @@ async function waitForHostedHandoffBlockedReceipt({ page, expected }) {
     receipt.localVsHostedBoundary,
     receipt.nextProofTarget,
     ...receipt.missingRequiredInputs,
+    ...firstMissingOperatorArtifactText(receipt.firstMissingOperatorArtifact),
   ]) {
     if (value === "" || !text.includes(value)) {
       throw new Error(
@@ -1222,6 +1230,48 @@ async function waitForHostedHandoffBlockedReceipt({ page, expected }) {
     }
   }
   return receipt;
+}
+
+function normalizeExpectedFirstMissingOperatorArtifact(artifact) {
+  const drilldown = artifact.roleSurfaceDrilldown ?? {};
+  return {
+    inputId: String(artifact.inputId ?? ""),
+    checkId: String(artifact.checkId ?? ""),
+    sectionId: String(artifact.sectionId ?? ""),
+    sectionLabel: String(artifact.sectionLabel ?? ""),
+    requiredEvidence: String(artifact.requiredEvidence ?? ""),
+    purpose: String(artifact.purpose ?? ""),
+    proofTarget: String(artifact.proofTarget ?? ""),
+    roleSurfaceDrilldown: {
+      localCapabilityRoleUrl: String(drilldown.localCapabilityRoleUrl ?? ""),
+      handoffRoleUrl: String(drilldown.handoffRoleUrl ?? ""),
+      proofGraphNodeId: String(drilldown.proofGraphNodeId ?? ""),
+      productionFeatureGraphNodeId: String(
+        drilldown.productionFeatureGraphNodeId ?? "",
+      ),
+      proofGraphEvidencePath: String(drilldown.proofGraphEvidencePath ?? ""),
+    },
+  };
+}
+
+function firstMissingOperatorArtifactText(artifact) {
+  if (artifact === null) {
+    return [];
+  }
+  return [
+    artifact.inputId,
+    artifact.checkId,
+    artifact.sectionId,
+    artifact.sectionLabel,
+    artifact.requiredEvidence,
+    artifact.purpose,
+    artifact.proofTarget,
+    artifact.roleSurfaceDrilldown.localCapabilityRoleUrl,
+    artifact.roleSurfaceDrilldown.handoffRoleUrl,
+    artifact.roleSurfaceDrilldown.proofGraphNodeId,
+    artifact.roleSurfaceDrilldown.productionFeatureGraphNodeId,
+    artifact.roleSurfaceDrilldown.proofGraphEvidencePath,
+  ];
 }
 
 async function waitForLocalPrerequisiteRoleUrls({ page, ids }) {

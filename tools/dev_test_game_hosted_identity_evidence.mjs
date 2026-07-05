@@ -243,7 +243,10 @@ export function assertDevTestGameHostedIdentityEvidence(evidence) {
       !Array.isArray(receipt.missingRequiredInputs) ||
       receipt.missingRequiredInputs.length === 0 ||
       !Array.isArray(receipt.requiredInputs) ||
-      receipt.requiredInputs.length !== hostedIdentityEvidenceInputIds.length
+      receipt.requiredInputs.length !== hostedIdentityEvidenceInputIds.length ||
+      !validHostedIdentityFirstMissingOperatorArtifact(
+        receipt.firstMissingOperatorArtifact,
+      )
     ) {
       throw new Error("hosted identity evidence missing blocked receipt");
     }
@@ -275,6 +278,44 @@ export function assertDevTestGameHostedIdentityEvidence(evidence) {
   assertHostedIdentityAdapterContractComparison(evidence);
   assertHostedIdentityEvidenceRequirementGroups(evidence);
   return evidence;
+}
+
+function validHostedIdentityFirstMissingOperatorArtifact(artifact) {
+  return (
+    artifact !== null &&
+    typeof artifact === "object" &&
+    typeof artifact.inputId === "string" &&
+    artifact.inputId.length > 0 &&
+    typeof artifact.checkId === "string" &&
+    artifact.checkId.length > 0 &&
+    typeof artifact.sectionId === "string" &&
+    artifact.sectionId.length > 0 &&
+    typeof artifact.sectionLabel === "string" &&
+    artifact.sectionLabel.length > 0 &&
+    typeof artifact.requiredEvidence === "string" &&
+    artifact.requiredEvidence.length > 0 &&
+    typeof artifact.purpose === "string" &&
+    artifact.purpose.length > 0 &&
+    artifact.proofTarget === devTestGameHostedIdentityEvidencePath &&
+    validHostedIdentityRoleSurfaceDrilldown(artifact.roleSurfaceDrilldown)
+  );
+}
+
+function validHostedIdentityRoleSurfaceDrilldown(drilldown) {
+  return (
+    drilldown !== null &&
+    typeof drilldown === "object" &&
+    drilldown.localCapabilityAuditId === "local-identity-adapter" &&
+    typeof drilldown.localCapabilityRoleUrl === "string" &&
+    drilldown.localCapabilityRoleUrl.includes("?game=<seeded-game>") &&
+    drilldown.handoffAuditId === "local-hosted-identity-evidence" &&
+    typeof drilldown.handoffRoleUrl === "string" &&
+    drilldown.handoffRoleUrl.includes("?game=<seeded-game>") &&
+    drilldown.proofGraphNodeId === "admin-proof:hosted-identity-evidence" &&
+    drilldown.productionFeatureGraphNodeId ===
+      "production-feature:identity-adapter" &&
+    drilldown.proofGraphEvidencePath === "target/dev-test-game/proof-graph.json"
+  );
 }
 
 function assertHostedIdentityRoleSurfaceContractDiff(evidence) {

@@ -1074,6 +1074,8 @@ test("admin route data exposes hosted identity evidence as a native audit row", 
     operatorAction: hostedIdentityBlockedReceipt.operatorAction,
     localVsHostedBoundary: hostedIdentityBlockedReceipt.localVsHostedBoundary,
     missingRequiredInputs: hostedIdentityBlockedReceipt.missingRequiredInputs,
+    firstMissingOperatorArtifact:
+      hostedIdentityBlockedReceipt.firstMissingOperatorArtifact,
     requiredInputs: hostedIdentityBlockedReceipt.requiredInputs.map((input) => ({
       name: input.name,
       value: input.value === null ? "" : String(input.value ?? ""),

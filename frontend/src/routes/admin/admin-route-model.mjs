@@ -2881,6 +2881,15 @@ function normalizeHostedHandoffBlockedReceipt(receipt) {
         : []
       ).map((input) => String(input)),
     ),
+    ...(receipt.firstMissingOperatorArtifact === null ||
+    typeof receipt.firstMissingOperatorArtifact !== "object"
+      ? {}
+      : {
+          firstMissingOperatorArtifact:
+            normalizeHostedHandoffFirstMissingOperatorArtifact(
+              receipt.firstMissingOperatorArtifact,
+            ),
+        }),
     requiredInputs: Object.freeze(
       requiredInputs.map((input) =>
         Object.freeze({
@@ -2891,6 +2900,34 @@ function normalizeHostedHandoffBlockedReceipt(receipt) {
         }),
       ),
     ),
+  });
+}
+
+function normalizeHostedHandoffFirstMissingOperatorArtifact(artifact) {
+  const drilldown =
+    artifact.roleSurfaceDrilldown !== null &&
+    typeof artifact.roleSurfaceDrilldown === "object"
+      ? artifact.roleSurfaceDrilldown
+      : {};
+  return Object.freeze({
+    inputId: String(artifact.inputId ?? ""),
+    checkId: String(artifact.checkId ?? ""),
+    sectionId: String(artifact.sectionId ?? ""),
+    sectionLabel: String(artifact.sectionLabel ?? ""),
+    requiredEvidence: String(artifact.requiredEvidence ?? ""),
+    purpose: String(artifact.purpose ?? ""),
+    proofTarget: String(artifact.proofTarget ?? ""),
+    roleSurfaceDrilldown: Object.freeze({
+      localCapabilityAuditId: String(drilldown.localCapabilityAuditId ?? ""),
+      localCapabilityRoleUrl: String(drilldown.localCapabilityRoleUrl ?? ""),
+      handoffAuditId: String(drilldown.handoffAuditId ?? ""),
+      handoffRoleUrl: String(drilldown.handoffRoleUrl ?? ""),
+      proofGraphNodeId: String(drilldown.proofGraphNodeId ?? ""),
+      productionFeatureGraphNodeId: String(
+        drilldown.productionFeatureGraphNodeId ?? "",
+      ),
+      proofGraphEvidencePath: String(drilldown.proofGraphEvidencePath ?? ""),
+    }),
   });
 }
 

@@ -6,6 +6,24 @@ export const hostedIdentityEvidencePlaceholderFixturePath =
   "tools/fixtures/dev_test_game_hosted_identity_evidence.placeholder.json";
 export const hostedIdentityEvidenceRedactedPassFixturePath =
   "tools/fixtures/dev_test_game_hosted_identity_evidence.redacted-pass.json";
+export const hostedIdentityEvidenceProofGraphNodeId =
+  "admin-proof:hosted-identity-evidence";
+export const hostedIdentityEvidenceProductionFeatureGraphNodeId =
+  "production-feature:identity-adapter";
+export const hostedIdentityEvidenceProofGraphPath =
+  "target/dev-test-game/proof-graph.json";
+export const hostedIdentityEvidenceRoleSurfaceDrilldown = Object.freeze({
+  localCapabilityAuditId: "local-identity-adapter",
+  localCapabilityRoleUrl:
+    "/admin/audit/local-identity-adapter?game=<seeded-game>",
+  handoffAuditId: "local-hosted-identity-evidence",
+  handoffRoleUrl:
+    "/admin/audit/local-hosted-identity-evidence?game=<seeded-game>",
+  proofGraphNodeId: hostedIdentityEvidenceProofGraphNodeId,
+  productionFeatureGraphNodeId:
+    hostedIdentityEvidenceProductionFeatureGraphNodeId,
+  proofGraphEvidencePath: hostedIdentityEvidenceProofGraphPath,
+});
 
 export const hostedIdentityEvidencePlaceholderSchema = Object.freeze({
   type: "object",
@@ -388,6 +406,8 @@ export function hostedIdentityEvidenceHandoffCase({
       ? hostedIdentityEvidenceBlockedReceipt({
           missingRequiredInputs:
             hostedIdentityEvidenceMissingRequiredInputs(inputSections),
+          inputSections,
+          blockedChecks,
         })
       : undefined,
 } = {}) {
@@ -414,7 +434,16 @@ export function hostedIdentityEvidenceBlockedReceipt({
   missingRequiredInputs = hostedIdentityEvidenceInputIds.filter(
     (id) => id !== "command" && id !== "proof-target",
   ),
+  inputSections = hostedIdentityEvidenceInputSections({
+    checks: hostedIdentityEvidenceBlockedCheckRows(),
+  }),
+  blockedChecks = hostedIdentityEvidenceBlockedCheckRows(),
 } = {}) {
+  const firstMissingOperatorArtifact = hostedIdentityFirstMissingOperatorArtifact({
+    missingRequiredInputs,
+    inputSections,
+    blockedChecks,
+  });
   return {
     status: "blocked",
     command: `npm run ${devTestGameHostedIdentityEvidenceCommand}`,
@@ -436,7 +465,46 @@ export function hostedIdentityEvidenceBlockedReceipt({
     localVsHostedBoundary:
       "The local identity adapter proves the role-surface capability model only; it cannot satisfy hosted account, session, invite, recovery, abuse, secret, or audit-retention evidence.",
     missingRequiredInputs: [...missingRequiredInputs],
+    ...(firstMissingOperatorArtifact === null
+      ? {}
+      : { firstMissingOperatorArtifact }),
   };
+}
+
+export function hostedIdentityFirstMissingOperatorArtifact({
+  missingRequiredInputs = [],
+  inputSections = [],
+  blockedChecks = [],
+} = {}) {
+  const firstMissingInputId = (Array.isArray(missingRequiredInputs)
+    ? missingRequiredInputs
+    : []
+  ).find((inputId) => inputId !== "command" && inputId !== "proof-target");
+  if (firstMissingInputId === undefined) {
+    return null;
+  }
+  const section = (Array.isArray(inputSections) ? inputSections : []).find(
+    (candidate) =>
+      Array.isArray(candidate.missingInputs) &&
+      candidate.missingInputs.includes(firstMissingInputId),
+  );
+  const checkId = hostedIdentityInputCheckIds[firstMissingInputId] ?? "";
+  const check = (Array.isArray(blockedChecks) ? blockedChecks : []).find(
+    (candidate) => candidate.id === checkId,
+  );
+  return Object.freeze({
+    inputId: String(firstMissingInputId),
+    checkId,
+    sectionId: String(section?.id ?? ""),
+    sectionLabel: String(section?.label ?? ""),
+    requiredEvidence: String(
+      check?.requiredEvidence ??
+        requiredHostedIdentityEvidenceForCheck(checkId),
+    ),
+    purpose: hostedIdentityEvidenceInputPurpose(firstMissingInputId),
+    proofTarget: devTestGameHostedIdentityEvidencePath,
+    roleSurfaceDrilldown: hostedIdentityEvidenceRoleSurfaceDrilldown,
+  });
 }
 
 function hostedIdentityEvidenceMissingRequiredInputs(inputSections) {

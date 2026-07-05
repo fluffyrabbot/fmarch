@@ -659,6 +659,20 @@
               <span>{data.audit.hostedHandoffChecklist.blockedReceipt.localVsHostedBoundary}</span>
               <span>{data.audit.hostedHandoffChecklist.blockedReceipt.missingRequiredInputs.join(", ")}</span>
               <span>{data.audit.hostedHandoffChecklist.blockedReceipt.nextProofTarget}</span>
+              {#if data.audit.hostedHandoffChecklist.blockedReceipt.firstMissingOperatorArtifact}
+                <span>{data.audit.hostedHandoffChecklist.blockedReceipt.firstMissingOperatorArtifact.inputId}</span>
+                <span>{data.audit.hostedHandoffChecklist.blockedReceipt.firstMissingOperatorArtifact.checkId}</span>
+                <span>{data.audit.hostedHandoffChecklist.blockedReceipt.firstMissingOperatorArtifact.sectionId}</span>
+                <span>{data.audit.hostedHandoffChecklist.blockedReceipt.firstMissingOperatorArtifact.sectionLabel}</span>
+                <span>{data.audit.hostedHandoffChecklist.blockedReceipt.firstMissingOperatorArtifact.requiredEvidence}</span>
+                <span>{data.audit.hostedHandoffChecklist.blockedReceipt.firstMissingOperatorArtifact.purpose}</span>
+                <span>{data.audit.hostedHandoffChecklist.blockedReceipt.firstMissingOperatorArtifact.proofTarget}</span>
+                <span>{data.audit.hostedHandoffChecklist.blockedReceipt.firstMissingOperatorArtifact.roleSurfaceDrilldown.localCapabilityRoleUrl}</span>
+                <span>{data.audit.hostedHandoffChecklist.blockedReceipt.firstMissingOperatorArtifact.roleSurfaceDrilldown.handoffRoleUrl}</span>
+                <span>{data.audit.hostedHandoffChecklist.blockedReceipt.firstMissingOperatorArtifact.roleSurfaceDrilldown.proofGraphNodeId}</span>
+                <span>{data.audit.hostedHandoffChecklist.blockedReceipt.firstMissingOperatorArtifact.roleSurfaceDrilldown.productionFeatureGraphNodeId}</span>
+                <span>{data.audit.hostedHandoffChecklist.blockedReceipt.firstMissingOperatorArtifact.roleSurfaceDrilldown.proofGraphEvidencePath}</span>
+              {/if}
             </li>
           {/if}
           {#each data.audit.hostedHandoffChecklist.groups ?? [] as group}

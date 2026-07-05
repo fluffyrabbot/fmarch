@@ -1007,6 +1007,16 @@ test("hosted identity evidence lane records blocked and passed handoffs", async 
     blocked.hostedHandoffChecklist.inputIds,
     hostedIdentityEvidenceInputIds,
   );
+  assert.equal(
+    blocked.hostedHandoffChecklist.blockedReceipt.firstMissingOperatorArtifact
+      .inputId,
+    "FMARCH_HOSTED_IDENTITY_EVIDENCE_PATH",
+  );
+  assert.equal(
+    blocked.hostedHandoffChecklist.blockedReceipt.firstMissingOperatorArtifact
+      .roleSurfaceDrilldown.proofGraphEvidencePath,
+    "target/dev-test-game/proof-graph.json",
+  );
   assert(
     blocked.hostedHandoffChecklist.blockedCheckIds.includes(
       "hosted-identity-evidence-path-configured",
@@ -18289,6 +18299,8 @@ function hostedIdentityEvidenceAdminProofFixture() {
         localVsHostedBoundary: handoff.blockedReceipt.localVsHostedBoundary,
         nextProofTarget: handoff.blockedReceipt.nextProofTarget,
         missingRequiredInputs: handoff.blockedReceipt.missingRequiredInputs,
+        firstMissingOperatorArtifact:
+          handoff.blockedReceipt.firstMissingOperatorArtifact,
       },
       visibleHandoffPath: {
         upstreamAuditId: "local-next-action",
