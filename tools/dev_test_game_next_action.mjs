@@ -925,11 +925,11 @@ function artifactRecoveryMetadata(artifact) {
     return {
       roleUrl: devTestGameHostSetupRoleUrl,
       requiredEvidence:
-        "Fresh host setup seeded role proof artifact with setup route command recovery.",
+        "Fresh host setup seeded role proof artifact with setup workbench browser proof for /g/<seeded-game>/setup, roster/role/policy/start recovery, and command recovery.",
       buildSlice:
-        "Refresh only the host setup role URL proof before trusting host setup freshness.",
+        "Refresh only the host setup workbench role URL proof before trusting /g/<seeded-game>/setup freshness.",
       proofBoundary:
-        "Local host setup role proof freshness recovery only; does not prove the admin audit surface or release readiness.",
+        "Local host setup workbench role proof freshness recovery only; does not prove the admin audit surface, hosted setup behavior, release readiness, or production readiness.",
     };
   }
   if (artifact.id === "host-setup-admin") {

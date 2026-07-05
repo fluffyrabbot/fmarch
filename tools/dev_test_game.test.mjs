@@ -2470,11 +2470,11 @@ test("spine manifest gives host setup freshness artifacts focused recovery comma
       proofTarget: "target/dev-test-game/host-setup-proof.json",
       roleUrl: "http://127.0.0.1:5173/g/<seeded-game>/setup",
       requiredEvidence:
-        "Fresh host setup seeded role proof artifact with setup route command recovery.",
+        "Fresh host setup seeded role proof artifact with setup workbench browser proof for /g/<seeded-game>/setup, roster/role/policy/start recovery, and command recovery.",
       buildSlice:
-        "Refresh only the host setup role URL proof before trusting host setup freshness.",
+        "Refresh only the host setup workbench role URL proof before trusting /g/<seeded-game>/setup freshness.",
       proofBoundary:
-        "Local host setup role proof freshness recovery only; does not prove the admin audit surface or release readiness.",
+        "Local host setup workbench role proof freshness recovery only; does not prove the admin audit surface, hosted setup behavior, release readiness, or production readiness.",
     },
   });
   const adminOnlyManifest = buildDevTestGameSpineManifest({
@@ -13072,6 +13072,7 @@ test("session card and markdown include role credential URLs and tokens", async 
         .setupCommandEvidence.startGame.commandKind,
       hostSetupReadiness.localDevelopmentSpine.evidence.hostSetupProof
         .setupCommandEvidence.setPostPolicy.readinessSummary,
+      hostSetupCheck.browserWorkbench,
       hostSetupCheck.spineTargets,
     ],
     [
@@ -13085,6 +13086,14 @@ test("session card and markdown include role credential URLs and tokens", async 
       true,
       "StartGame",
       "Ready to start",
+      {
+        status: "passed",
+        route: "/g/<seeded-game>/setup",
+        roleUrl: "http://127.0.0.1:5173/g/<seeded-game>/setup",
+        roleSurface: "host-setup",
+        requiredEvidence:
+          "Seeded host setup role URL opens the setup workbench browser surface for /g/<seeded-game>/setup before start-phase recovery is trusted.",
+      },
       hostSetupSpineTargetsFixture(),
     ],
   );
@@ -14988,6 +14997,14 @@ function devTestGameReleaseReadinessChecklistFixture({
                   "policy-acknowledged",
                   "start-phase",
                 ],
+                browserWorkbench: {
+                  status: "passed",
+                  route: "/g/<seeded-game>/setup",
+                  roleUrl: "http://127.0.0.1:5173/g/<seeded-game>/setup",
+                  roleSurface: "host-setup",
+                  requiredEvidence:
+                    "Seeded host setup role URL opens the setup workbench browser surface for /g/<seeded-game>/setup before start-phase recovery is trusted.",
+                },
                 setupMutationStatus: "passed",
                 policyCommandStatus: "passed",
                 recoveryCommand:

@@ -2777,6 +2777,7 @@ export function validateDevTestGameHostSetupProof(proof, options = {}) {
     ),
     proofBoundary: proof.proofBoundary,
     readyCheckIds: [...proof.hostSetup.readyCheckIds],
+    browserWorkbench: hostSetupBrowserWorkbenchEvidence(proof),
     setupCommandEvidence: setupCommandEvidenceSummary(
       proof.hostSetup.setupCommandEvidence,
     ),
@@ -2785,6 +2786,17 @@ export function validateDevTestGameHostSetupProof(proof, options = {}) {
     releaseReady: false,
     productionReady: false,
     ...(options.artifact === undefined ? {} : { artifact: options.artifact }),
+  };
+}
+
+function hostSetupBrowserWorkbenchEvidence(proof) {
+  return {
+    status: "passed",
+    route: "/g/<seeded-game>/setup",
+    roleUrl: proof.hostSetup.roleUrl.replace(proof.game, "<seeded-game>"),
+    roleSurface: "host-setup",
+    requiredEvidence:
+      "Seeded host setup role URL opens the setup workbench browser surface for /g/<seeded-game>/setup before start-phase recovery is trusted.",
   };
 }
 
@@ -4946,7 +4958,7 @@ export function validateDevTestGameSeedAdminProof(proof, options = {}) {
 }
 
 export function validateDevTestGameHostSetupAdminProof(proof, options = {}) {
-  const requiredChecks = ["local-host-setup-proof"];
+  const requiredChecks = [hostSetupFeatureSpineSourceCheckId];
   const requiredSetupCommandEvidence = setupCommandEvidenceKeys;
   if (proof?.version !== 1) {
     throw new Error(`host setup admin proof version drifted: ${proof?.version}`);
@@ -7227,6 +7239,7 @@ export function assertDevTestGameReleaseReadiness(checklist) {
     (!hostSetupCheck.roleUrl?.includes("/g/<seeded-game>/setup") ||
       hostSetupCheck.setupMutationStatus !== "passed" ||
       hostSetupCheck.policyCommandStatus !== "passed" ||
+      !validHostSetupBrowserWorkbench(hostSetupCheck.browserWorkbench) ||
       !Array.isArray(hostSetupCheck.readyCheckIds) ||
       !hostSetupCheck.readyCheckIds.includes("start-phase") ||
       hostSetupCheck.recoveryCommand !==
@@ -7738,6 +7751,20 @@ function validHostSetupSpineTargets(spineTargets) {
   return validRoleSurfaceSpineTargets(
     spineTargets,
     roleSurfaceSpineCases.hostSetup,
+  );
+}
+
+function validHostSetupBrowserWorkbench(workbench) {
+  return (
+    workbench !== null &&
+    typeof workbench === "object" &&
+    workbench.status === "passed" &&
+    workbench.route === "/g/<seeded-game>/setup" &&
+    typeof workbench.roleUrl === "string" &&
+    workbench.roleUrl.includes("/g/<seeded-game>/setup") &&
+    workbench.roleSurface === "host-setup" &&
+    typeof workbench.requiredEvidence === "string" &&
+    workbench.requiredEvidence.includes("setup workbench browser surface")
   );
 }
 

@@ -30,6 +30,7 @@ export const roleSurfaceSpineCases = Object.freeze({
     readinessDetails: (evidence) => ({
       capabilityLabel: evidence.capabilityLabel,
       readyCheckIds: evidence.readyCheckIds,
+      browserWorkbench: evidence.browserWorkbench,
       setupMutationStatus: evidence.setupMutationStatus,
       policyCommandStatus: evidence.policyCommandStatus,
     }),

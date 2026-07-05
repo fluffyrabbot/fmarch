@@ -575,6 +575,7 @@ test("proof graph admin feature targets derive from shared source rows", () => {
       readinessDetailKeys: [
         "capabilityLabel",
         "readyCheckIds",
+        "browserWorkbench",
         "setupMutationStatus",
         "policyCommandStatus",
       ],
