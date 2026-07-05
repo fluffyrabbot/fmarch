@@ -356,6 +356,7 @@ import {
   assertDevTestGameProofGraph,
   assertDevTestGameProofGraphCoversDiagnosticProofs,
   assertDevTestGameProofGraphCoversAdminSpine,
+  assertDevTestGameProofGraphCoversHostedIdentityOperatorPrerequisites,
   assertDevTestGameProofGraphCoversProductionFeatureTargets,
   buildDevTestGameProofGraph,
   devTestGameProofGraphAdminProofCommand,
@@ -4823,13 +4824,14 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
   assertDevTestGameProofGraph(graph, { releaseReadiness });
   assertDevTestGameProofGraphCoversAdminSpine(graph, adminSpineProof);
   assertDevTestGameProofGraphCoversDiagnosticProofs(graph);
+  assertDevTestGameProofGraphCoversHostedIdentityOperatorPrerequisites(graph);
   assertDevTestGameProofGraphCoversProductionFeatureTargets(
     graph,
     releaseReadiness,
   );
   const coreLoopFamilyRows = coreLoopScenarioFamilyRows();
-  assert.equal(graph.summary.nodeCount, 74 + coreLoopFamilyRows.length);
-  assert.equal(graph.summary.roleUrlCount, 74 + coreLoopFamilyRows.length);
+  assert.equal(graph.summary.nodeCount, 76 + coreLoopFamilyRows.length);
+  assert.equal(graph.summary.roleUrlCount, 76 + coreLoopFamilyRows.length);
   assert.equal(graph.summary.roleSurfaceProofCount, 5);
   assert.equal(graph.summary.productionFeatureTargetCount, 41);
   assert.deepEqual(
@@ -4933,6 +4935,8 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
           "next-action",
           "diagnostic:proof-graph-destination-summary-drift",
           "admin-spine-terminal-batches",
+          "hosted-identity-family-proof-batch",
+          "hosted-identity-operator-predicate-proof",
           ...proofGraphReceiptNodeIds,
         ].includes(node.id),
       )
@@ -5000,6 +5004,20 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
         descriptor.roleUrl,
         descriptor.proofCommand,
       ]),
+      [
+        "hosted-identity-family-proof-batch",
+        "hosted-identity-family-proof-batch",
+        devTestGameHostedIdentityProgressionSummaryPath,
+        "/admin/audit/local-hosted-identity-evidence?game=<seeded-game>",
+        `npm run ${devTestGameHostedIdentityProgressionAdminProofBatchCommand}`,
+      ],
+      [
+        "hosted-identity-operator-predicate-proof",
+        "hosted-identity-operator-predicate-proof",
+        devTestGameHostedIdentityOperatorAdminProofPath,
+        "/admin/audit/local-hosted-identity-evidence?game=<seeded-game>",
+        `npm run ${devTestGameHostedIdentityOperatorAdminProofCommand}`,
+      ],
     ],
   );
   const terminalBatchNode = graph.nodes.find(
@@ -5086,6 +5104,84 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
       artifactPath: hostedIdentityTerminalReceiptArtifactCase.artifactPath,
       batchLabel: hostedIdentityTerminalReceiptArtifactCase.batchLabel,
     },
+  );
+  assert.deepEqual(
+    graph.nodes
+      .filter((node) =>
+        [
+          "hosted-identity-family-proof-batch",
+          "hosted-identity-operator-predicate-proof",
+        ].includes(node.id),
+      )
+      .map((node) => ({
+        id: node.id,
+        artifact: node.artifact,
+        roleUrl: node.roleUrl,
+        proofCommand: node.proofCommand,
+        progressionIds: node.progressionIds,
+        proofTargets: node.proofTargets,
+        prerequisiteNodeId: node.prerequisiteNodeId,
+        auditSurfaceNodeId: node.auditSurfaceNodeId,
+      })),
+    [
+      {
+        id: "hosted-identity-family-proof-batch",
+        artifact: devTestGameHostedIdentityProgressionSummaryPath,
+        roleUrl: "/admin/audit/local-hosted-identity-evidence?game=<seeded-game>",
+        proofCommand: `npm run ${devTestGameHostedIdentityProgressionAdminProofBatchCommand}`,
+        progressionIds: hostedIdentityEvidenceFamilyProgressionCases.map(
+          (progression) => progression.id,
+        ),
+        proofTargets: hostedIdentityEvidenceFamilyProgressionCases.map(
+          (progression) =>
+            hostedIdentityEvidenceProgressionAdminProofPath(progression.id),
+        ),
+        prerequisiteNodeId: undefined,
+        auditSurfaceNodeId: undefined,
+      },
+      {
+        id: "hosted-identity-operator-predicate-proof",
+        artifact: devTestGameHostedIdentityOperatorAdminProofPath,
+        roleUrl: "/admin/audit/local-hosted-identity-evidence?game=<seeded-game>",
+        proofCommand: `npm run ${devTestGameHostedIdentityOperatorAdminProofCommand}`,
+        progressionIds: undefined,
+        proofTargets: undefined,
+        prerequisiteNodeId: "hosted-identity-family-proof-batch",
+        auditSurfaceNodeId: "admin-proof:hosted-identity-evidence",
+      },
+    ],
+  );
+  assert.deepEqual(
+    graph.edges
+      .filter((edge) =>
+        [
+          "hosted-identity-family-proof-batch",
+          "hosted-identity-operator-predicate-proof",
+        ].includes(edge.from),
+      )
+      .map((edge) => [
+        edge.from,
+        edge.to,
+        edge.relationship,
+        edge.command,
+        edge.proofTarget,
+      ]),
+    [
+      [
+        "hosted-identity-family-proof-batch",
+        "hosted-identity-operator-predicate-proof",
+        "prerequisite-for-hosted-identity-operator",
+        `npm run ${devTestGameHostedIdentityProgressionAdminProofBatchCommand}`,
+        devTestGameHostedIdentityOperatorAdminProofPath,
+      ],
+      [
+        "hosted-identity-operator-predicate-proof",
+        "admin-proof:hosted-identity-evidence",
+        "operator-predicate-for-admin-surface",
+        `npm run ${devTestGameHostedIdentityOperatorAdminProofCommand}`,
+        devTestGameHostedIdentityOperatorAdminProofPath,
+      ],
+    ],
   );
   assert.deepEqual(
     graph.edges

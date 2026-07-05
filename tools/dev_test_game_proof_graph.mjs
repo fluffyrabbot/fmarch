@@ -28,6 +28,15 @@ import {
   hostedIdentityTerminalReceiptArtifactCase,
 } from "./dev_test_game_proof_graph_receipt_artifact_rows.mjs";
 import {
+  devTestGameHostedIdentityOperatorAdminProofCommand,
+  devTestGameHostedIdentityOperatorAdminProofPath,
+  devTestGameHostedIdentityProgressionAdminProofBatchCommand,
+  devTestGameHostedIdentityProgressionSummaryPath,
+  hostedIdentityEvidenceFamilyProgressionCases,
+  hostedIdentityEvidenceProgressionAdminProofPath,
+  hostedIdentityEvidenceProofGraphNodeId,
+} from "./dev_test_game_hosted_identity_evidence_cases.mjs";
+import {
   proofGraphProductionFeatureDestinationSummary,
 } from "./dev_test_game_proof_graph_production_feature_destinations.mjs";
 import {
@@ -198,7 +207,7 @@ export function buildDevTestGameProofGraph(
     generatedAt,
     scope: "local-dev-test-game-proof-graph",
     proofBoundary:
-      "Generated local proof graph for the dev-test-game development spine. It records local audit role URLs, production feature spine target role URLs, artifact paths, proof commands, dependencies, and recovery edges for seeded admin proof surfaces; it does not validate artifact contents, hosted identity, hosted operations, beta readiness, release readiness, or production readiness.",
+      "Generated local proof graph for the dev-test-game development spine. It records local audit role URLs, production feature spine target role URLs, artifact paths, proof commands, dependencies, and recovery edges for seeded admin proof surfaces; it does not validate artifact contents, live hosted identity, hosted operations, beta readiness, release readiness, or production readiness.",
     generatedFrom: {
       spineManifest: spineManifestSource,
       adminSpineProof: adminSpineProofSource,
@@ -352,6 +361,7 @@ export function assertDevTestGameProofGraph(
   }
   assertDevTestGameProofGraphCoversTerminalBatches(evidence);
   assertDevTestGameProofGraphCoversDiagnosticProofs(evidence);
+  assertDevTestGameProofGraphCoversHostedIdentityOperatorPrerequisites(evidence);
   assertDevTestGameProofGraphCoversPrivateChannelRecoveryReceipt(evidence);
   assertDevTestGameProofGraphCoversCoreLoopScenarioFamilies(evidence);
   assertDevTestGameProofGraphCoversReplacementPrivateRecoveryReceipt(evidence);
@@ -409,6 +419,107 @@ export function assertDevTestGameProofGraphCoversDiagnosticProofs(graph) {
         `proof graph diagnostic edge missing: ${diagnosticEdge.from}->${diagnosticEdge.to}`,
       );
     }
+  }
+  return graph;
+}
+
+export function assertDevTestGameProofGraphCoversHostedIdentityOperatorPrerequisites(
+  graph,
+) {
+  const batchNode = (graph.nodes ?? []).find(
+    (node) => node.id === hostedIdentityFamilyBatchGraphNodeId,
+  );
+  if (batchNode?.kind !== "hosted-identity-family-proof-batch") {
+    throw new Error("proof graph hosted identity family batch node drifted");
+  }
+  const familyBatchCommand =
+    `npm run ${devTestGameHostedIdentityProgressionAdminProofBatchCommand}`;
+  const familyProgressionIds = hostedIdentityEvidenceFamilyProgressionCases.map(
+    (progression) => progression.id,
+  );
+  const familyProofTargets = hostedIdentityEvidenceFamilyProgressionCases.map(
+    (progression) =>
+      hostedIdentityEvidenceProgressionAdminProofPath(progression.id),
+  );
+  const batchNodeExpectations = {
+    status: "recorded",
+    artifact: devTestGameHostedIdentityProgressionSummaryPath,
+    roleUrl: localAdminAuditRoleUrl(localAdminAuditIds.hostedIdentityEvidence),
+    proofCommand: familyBatchCommand,
+    recoveryCommand: familyBatchCommand,
+    progressionCount: hostedIdentityEvidenceFamilyProgressionCases.length,
+  };
+  for (const [field, expected] of Object.entries(batchNodeExpectations)) {
+    if (batchNode[field] !== expected) {
+      throw new Error(
+        `proof graph hosted identity family batch ${field} drifted`,
+      );
+    }
+  }
+  if (!sameStringArray(batchNode.progressionIds, familyProgressionIds)) {
+    throw new Error(
+      "proof graph hosted identity family batch progression ids drifted",
+    );
+  }
+  if (!sameStringArray(batchNode.proofTargets, familyProofTargets)) {
+    throw new Error(
+      "proof graph hosted identity family batch proof targets drifted",
+    );
+  }
+  if (
+    !String(batchNode.proofBoundary ?? "").includes(
+      "does not validate those artifacts or prove live hosted identity traffic",
+    )
+  ) {
+    throw new Error(
+      "proof graph hosted identity family batch boundary drifted",
+    );
+  }
+  const operatorNode = (graph.nodes ?? []).find(
+    (node) => node.id === hostedIdentityOperatorPredicateGraphNodeId,
+  );
+  if (
+    operatorNode?.kind !== "hosted-identity-operator-predicate-proof" ||
+    operatorNode.status !== "recorded" ||
+    operatorNode.artifact !== devTestGameHostedIdentityOperatorAdminProofPath ||
+    operatorNode.roleUrl !==
+      localAdminAuditRoleUrl(localAdminAuditIds.hostedIdentityEvidence) ||
+    operatorNode.proofCommand !==
+      `npm run ${devTestGameHostedIdentityOperatorAdminProofCommand}` ||
+    operatorNode.recoveryCommand !== operatorNode.proofCommand ||
+    operatorNode.prerequisiteNodeId !== hostedIdentityFamilyBatchGraphNodeId ||
+    operatorNode.auditSurfaceNodeId !== hostedIdentityEvidenceProofGraphNodeId ||
+    !String(operatorNode.proofBoundary ?? "").includes(
+      "does not validate the artifact or prove live hosted identity traffic",
+    )
+  ) {
+    throw new Error("proof graph hosted identity operator predicate node drifted");
+  }
+  if (
+    !(graph.edges ?? []).some(
+      (edge) =>
+        edge.from === hostedIdentityFamilyBatchGraphNodeId &&
+        edge.to === hostedIdentityOperatorPredicateGraphNodeId &&
+        edge.relationship === "prerequisite-for-hosted-identity-operator" &&
+        edge.command ===
+          `npm run ${devTestGameHostedIdentityProgressionAdminProofBatchCommand}` &&
+        edge.proofTarget === devTestGameHostedIdentityOperatorAdminProofPath,
+    )
+  ) {
+    throw new Error("proof graph hosted identity family batch edge missing");
+  }
+  if (
+    !(graph.edges ?? []).some(
+      (edge) =>
+        edge.from === hostedIdentityOperatorPredicateGraphNodeId &&
+        edge.to === hostedIdentityEvidenceProofGraphNodeId &&
+        edge.relationship === "operator-predicate-for-admin-surface" &&
+        edge.command ===
+          `npm run ${devTestGameHostedIdentityOperatorAdminProofCommand}` &&
+        edge.proofTarget === devTestGameHostedIdentityOperatorAdminProofPath,
+    )
+  ) {
+    throw new Error("proof graph hosted identity operator surface edge missing");
   }
   return graph;
 }
@@ -895,6 +1006,8 @@ function buildProofGraphNodes({
   const coreLoopScenarioFamilyNodes = buildCoreLoopScenarioFamilyNodes({
     recoveryCommand: recoveryCommands.get("core-loop"),
   });
+  const hostedIdentityOperatorPrerequisiteNodes =
+    buildHostedIdentityOperatorPrerequisiteNodes();
   const terminalBatchNode =
     adminSpineTerminalBatches === null
       ? []
@@ -994,6 +1107,7 @@ function buildProofGraphNodes({
     ...recoveryReceiptNodes,
     ...roleSurfaceProofNodes,
     ...adminProofNodes,
+    ...hostedIdentityOperatorPrerequisiteNodes,
     ...coreLoopScenarioFamilyNodes,
     ...productionFeatureTargetNodes,
   ].map((node) =>
@@ -1054,6 +1168,7 @@ function buildProofGraphEdges({
           command: node.recoveryCommand,
         },
       ]),
+    ...hostedIdentityOperatorPrerequisiteEdges(nodes),
     ...nodes
       .filter((node) => node.kind === "production-feature-spine-target")
       .map((node) => [
@@ -1077,6 +1192,86 @@ function buildProofGraphEdges({
         ),
       ),
   );
+}
+
+const hostedIdentityFamilyBatchGraphNodeId =
+  "hosted-identity-family-proof-batch";
+const hostedIdentityOperatorPredicateGraphNodeId =
+  "hosted-identity-operator-predicate-proof";
+
+function buildHostedIdentityOperatorPrerequisiteNodes() {
+  const roleUrl = localAdminAuditRoleUrl(localAdminAuditIds.hostedIdentityEvidence);
+  const familyBatchCommand = `npm run ${devTestGameHostedIdentityProgressionAdminProofBatchCommand}`;
+  const operatorCommand = `npm run ${devTestGameHostedIdentityOperatorAdminProofCommand}`;
+  const progressionIds = hostedIdentityEvidenceFamilyProgressionCases.map(
+    (progression) => progression.id,
+  );
+  const proofTargets = hostedIdentityEvidenceFamilyProgressionCases.map(
+    (progression) =>
+      hostedIdentityEvidenceProgressionAdminProofPath(progression.id),
+  );
+  return [
+    {
+      id: hostedIdentityFamilyBatchGraphNodeId,
+      label: "Hosted identity family proof batch",
+      kind: "hosted-identity-family-proof-batch",
+      status: "recorded",
+      artifact: devTestGameHostedIdentityProgressionSummaryPath,
+      roleUrl,
+      proofCommand: familyBatchCommand,
+      recoveryCommand: familyBatchCommand,
+      progressionCount: hostedIdentityEvidenceFamilyProgressionCases.length,
+      progressionIds,
+      proofTargets,
+      proofBoundary:
+        "Hosted identity family proof batch prerequisite. This graph node records that every hosted identity evidence-family admin proof target is a prerequisite before the operator predicate proof may run; it does not validate those artifacts or prove live hosted identity traffic, release readiness, or production readiness.",
+    },
+    {
+      id: hostedIdentityOperatorPredicateGraphNodeId,
+      label: "Hosted identity operator predicate proof",
+      kind: "hosted-identity-operator-predicate-proof",
+      status: "recorded",
+      artifact: devTestGameHostedIdentityOperatorAdminProofPath,
+      roleUrl,
+      proofCommand: operatorCommand,
+      recoveryCommand: operatorCommand,
+      prerequisiteNodeId: hostedIdentityFamilyBatchGraphNodeId,
+      auditSurfaceNodeId: hostedIdentityEvidenceProofGraphNodeId,
+      proofBoundary:
+        "Hosted identity operator predicate proof. This graph node records the target-local redacted operator packet predicate that can clear the hosted-production-identity readiness item over the existing role-surface adapter; it does not validate the artifact or prove live hosted identity traffic, release readiness, or production readiness.",
+    },
+  ];
+}
+
+function hostedIdentityOperatorPrerequisiteEdges(nodes) {
+  const nodeIds = new Set(nodes.map((node) => node.id));
+  if (
+    !nodeIds.has(hostedIdentityFamilyBatchGraphNodeId) ||
+    !nodeIds.has(hostedIdentityOperatorPredicateGraphNodeId) ||
+    !nodeIds.has(hostedIdentityEvidenceProofGraphNodeId)
+  ) {
+    return [];
+  }
+  return [
+    [
+      hostedIdentityFamilyBatchGraphNodeId,
+      hostedIdentityOperatorPredicateGraphNodeId,
+      "prerequisite-for-hosted-identity-operator",
+      {
+        command: `npm run ${devTestGameHostedIdentityProgressionAdminProofBatchCommand}`,
+        proofTarget: devTestGameHostedIdentityOperatorAdminProofPath,
+      },
+    ],
+    [
+      hostedIdentityOperatorPredicateGraphNodeId,
+      hostedIdentityEvidenceProofGraphNodeId,
+      "operator-predicate-for-admin-surface",
+      {
+        command: `npm run ${devTestGameHostedIdentityOperatorAdminProofCommand}`,
+        proofTarget: devTestGameHostedIdentityOperatorAdminProofPath,
+      },
+    ],
+  ];
 }
 
 function buildCoreLoopScenarioFamilyNodes({ recoveryCommand }) {
