@@ -19,6 +19,9 @@ import {
   buildLiveStackProofSummary,
   markdownLiveStackProofSummary,
 } from "./live_stack_proof_summary.mjs";
+import {
+  waitForHostSetupCommand,
+} from "./dev_test_game_setup_bootstrap_scenario.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const frontendRoot = path.join(repoRoot, "frontend");
@@ -1280,9 +1283,11 @@ async function driveHostSetupBrowser(page, frontendBaseUrl) {
   assertHitTarget(addSlotBox, "host setup add slot");
   await addSlotButton.click();
   const addSlot = await waitForHostSetupCommand({
-    page,
+    setupPage: page,
     statusTestId: "host-setup-add-slot-status",
     commandKind: "AddSlot",
+    commandPredicate: (command) =>
+      command?.game === adminCreatedGame && command?.slot === slotId,
     statePredicate: (state) =>
       (state?.slots ?? []).some((slot) => slot.slotId === slotId),
   });
@@ -1295,9 +1300,13 @@ async function driveHostSetupBrowser(page, frontendBaseUrl) {
   assertHitTarget(assignSlotBox, "host setup assign slot");
   await assignSlotButton.click();
   const assignSlot = await waitForHostSetupCommand({
-    page,
+    setupPage: page,
     statusTestId: "host-setup-assign-slot-status",
     commandKind: "AssignSlot",
+    commandPredicate: (command) =>
+      command?.game === adminCreatedGame &&
+      command?.slot === slotId &&
+      command?.user === occupantUserId,
     statePredicate: (state) =>
       (state?.slots ?? []).some(
         (slot) => slot.slotId === slotId && slot.occupantUserId === occupantUserId,
@@ -1312,9 +1321,13 @@ async function driveHostSetupBrowser(page, frontendBaseUrl) {
   assertHitTarget(assignRoleBox, "host setup assign role");
   await assignRoleButton.click();
   const assignRole = await waitForHostSetupCommand({
-    page,
+    setupPage: page,
     statusTestId: "host-setup-assign-role-status",
     commandKind: "AssignRole",
+    commandPredicate: (command) =>
+      command?.game === adminCreatedGame &&
+      command?.slot === slotId &&
+      command?.role_key === roleKey,
     statePredicate: (state) =>
       (state?.slots ?? []).some(
         (slot) => slot.slotId === slotId && slot.roleKey === roleKey,
@@ -1330,9 +1343,13 @@ async function driveHostSetupBrowser(page, frontendBaseUrl) {
   assertHitTarget(policyButtonBox, "host setup media-only policy");
   await policyButton.click();
   const setPostPolicy = await waitForHostSetupCommand({
-    page,
+    setupPage: page,
     statusTestId: "host-setup-policy-status",
     commandKind: "SetPostPolicy",
+    commandPredicate: (command) =>
+      command?.game === adminCreatedGame &&
+      command?.channel_id === "main" &&
+      command?.allow_media_only === true,
     statePredicate: (state) =>
       (state?.postPolicies ?? []).some(
         (policy) => policy.channelId === "main" && policy.allowMediaOnly === true,
@@ -1362,9 +1379,11 @@ async function driveHostSetupBrowser(page, frontendBaseUrl) {
   assertHitTarget(startConfirmBox, "host setup start confirm");
   await startConfirm.click();
   const startGame = await waitForHostSetupCommand({
-    page,
+    setupPage: page,
     statusTestId: "host-setup-start-status",
     commandKind: "StartGame",
+    commandPredicate: (command) =>
+      command?.game === adminCreatedGame && command?.phase === "D01",
     statePredicate: (state) => state?.phase?.phaseId === "D01",
   });
 
@@ -1427,72 +1446,6 @@ async function driveHostSetupBrowser(page, frontendBaseUrl) {
       phase: hostConsoleState.phase,
       slot: hostConsoleState.slots?.find((slot) => slot.slot_id === slotId),
     },
-  };
-}
-
-async function waitForHostSetupCommand({
-  page,
-  statusTestId,
-  commandKind,
-  statePredicate,
-}) {
-  await page.waitForFunction(
-    ({ expectedKind }) => {
-      const outcome = window.__fmarchHostSetupCommandOutcome;
-      const command = outcome?.requestEnvelope?.body?.body?.command?.[expectedKind];
-      return (
-        outcome?.state === "ack" &&
-        command !== undefined &&
-        window.__fmarchHostSetupState !== undefined &&
-        window.__fmarchHostSetupReadiness !== undefined
-      );
-    },
-    { expectedKind: commandKind },
-    { timeout: 15000 },
-  );
-  const status = page.getByTestId(statusTestId);
-  await status.waitFor({ state: "visible" });
-  await page.waitForFunction(
-    ({ testId }) =>
-      document.querySelector(`[data-testid="${testId}"]`)?.getAttribute("data-state") ===
-      "ack",
-    { testId: statusTestId },
-    { timeout: 15000 },
-  );
-
-  const statusState = await status.getAttribute("data-state");
-  const statusText = await status.innerText();
-  const outcome = await page.evaluate(() => window.__fmarchHostSetupCommandOutcome);
-  const setupState = await page.evaluate(() => window.__fmarchHostSetupState ?? null);
-  const readiness = await setupReadiness(page);
-  const command =
-    outcome?.requestEnvelope?.body?.body?.command?.[commandKind] ?? null;
-  if (
-    statusState !== "ack" ||
-    command === null ||
-    statePredicate(setupState) !== true
-  ) {
-    throw new Error(
-      `host setup ${commandKind} browser command drifted: ${JSON.stringify({
-        statusState,
-        statusText,
-        command,
-        setupState,
-        readiness,
-      })}`,
-    );
-  }
-  if (command.game !== adminCreatedGame) {
-    throw new Error(`host setup ${commandKind} used wrong game: ${JSON.stringify(command)}`);
-  }
-  return {
-    status: statusState,
-    statusText,
-    commandKind,
-    command,
-    streamSeqs: outcome.streamSeqs,
-    requestEnvelope: outcome.requestEnvelope,
-    readinessSummary: readiness.summary,
   };
 }
 

@@ -5460,6 +5460,29 @@ test("setup bootstrap scenario owns the seeded setup command grammar", () => {
   assert(plan.some(([, command]) => command.StartGame?.phase === "D01"));
 });
 
+test("setup browser proof lanes share setup command assertion helpers", async () => {
+  const [devTestGameSource, liveStackSource] = await Promise.all([
+    readFile(new URL("./dev_test_game.mjs", import.meta.url), "utf8"),
+    readFile(new URL("./host_console_live_stack_smoke.mjs", import.meta.url), "utf8"),
+  ]);
+  assert.match(
+    devTestGameSource,
+    /from "\.\/dev_test_game_setup_bootstrap_scenario\.mjs"/,
+  );
+  assert.match(
+    liveStackSource,
+    /from "\.\/dev_test_game_setup_bootstrap_scenario\.mjs"/,
+  );
+  assert.doesNotMatch(
+    liveStackSource,
+    /async function waitForHostSetupCommand/,
+  );
+  assert.match(
+    liveStackSource,
+    /commandPredicate: \(command\) =>\s+command\?\.game === adminCreatedGame/s,
+  );
+});
+
 test("session card and markdown include role credential URLs and tokens", async () => {
   const game = "44444444-4444-4444-8444-444444444444";
   const tokens = createTokenSet("dev-test-card");
