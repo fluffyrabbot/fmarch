@@ -469,6 +469,8 @@ export function assertDevTestGameProofGraphCoversProductionFeatureTargets(
 ) {
   const readiness = assertDevTestGameReleaseReadiness(releaseReadiness);
   const targets = productionFeatureTargetsForGraph(readiness);
+  const evidenceObjectNamesByFeatureSlotId =
+    productionFeatureEvidenceObjectNamesBySlotId(readiness);
   const nodes = (graph.nodes ?? []).filter(
     (node) => node.kind === "production-feature-spine-target",
   );
@@ -503,6 +505,16 @@ export function assertDevTestGameProofGraphCoversProductionFeatureTargets(
     if ((node.recoveryHookId ?? undefined) !== (target.recoveryHookId ?? undefined)) {
       throw new Error(`proof graph production feature recovery hook drifted: ${slotId}`);
     }
+    const expectedEvidenceObjectNames =
+      evidenceObjectNamesByFeatureSlotId[slotId] ?? [];
+    if (
+      expectedEvidenceObjectNames.length > 0 &&
+      !sameStringArray(node.evidenceObjectNames, expectedEvidenceObjectNames)
+    ) {
+      throw new Error(
+        `proof graph production feature evidence objects drifted: ${slotId}`,
+      );
+    }
     const sourceNodeId = productionFeatureSourceGraphNodeId(target.sourceCheckId);
     if (
       !(graph.edges ?? []).some(
@@ -519,6 +531,15 @@ export function assertDevTestGameProofGraphCoversProductionFeatureTargets(
     }
   }
   return graph;
+}
+
+function sameStringArray(actual, expected) {
+  return (
+    Array.isArray(actual) &&
+    Array.isArray(expected) &&
+    actual.length === expected.length &&
+    actual.every((value, index) => value === expected[index])
+  );
 }
 
 export async function writeDevTestGameProofGraph({
@@ -908,6 +929,8 @@ function buildProductionFeatureTargetNodes({
   releaseReadinessSource,
 }) {
   const targets = productionFeatureTargetsForGraph(releaseReadiness);
+  const evidenceObjectNamesByFeatureSlotId =
+    productionFeatureEvidenceObjectNamesBySlotId(releaseReadiness);
   return targets.map((target) => {
     return {
       id: `production-feature:${target.featureSlotId}`,
@@ -927,8 +950,31 @@ function buildProductionFeatureTargetNodes({
       adminCheckId: target.adminCheckId,
       browserProofCommand: target.browserProofCommand,
       recoveryCommand: target.rerunCommand,
+      ...((evidenceObjectNamesByFeatureSlotId[target.featureSlotId] ?? [])
+        .length === 0
+        ? {}
+        : {
+            evidenceObjectNames:
+              evidenceObjectNamesByFeatureSlotId[target.featureSlotId],
+          }),
     };
   });
+}
+
+function productionFeatureEvidenceObjectNamesBySlotId(releaseReadiness) {
+  const privateChannelMilestone =
+    releaseReadiness.localDevelopmentSpine?.checks?.find(
+      (check) => check.id === "local-private-channel-recovery-milestone",
+    );
+  const privateChannelEvidenceObjectNames =
+    privateChannelMilestone?.normalizedEvidenceObjects
+      ?.filter((object) => object.status === "passed")
+      .map((object) => object.name) ?? [];
+  return {
+    ...(privateChannelEvidenceObjectNames.length === 0
+      ? {}
+      : { "private-channel": privateChannelEvidenceObjectNames }),
+  };
 }
 
 function productionFeatureTargetsForGraph(releaseReadiness) {

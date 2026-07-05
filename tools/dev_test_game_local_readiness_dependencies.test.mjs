@@ -12,6 +12,7 @@ import {
   localHostedEvidenceLaneDemoProofCheckId,
   localProofFreshnessAdminSurfaceCheckId,
   localProofGraphAdminRoleHandoffsCheckId,
+  localSeedDemoFixtureCheckId,
   rankedMissingLocalReadinessDependencies,
 } from "./dev_test_game_local_readiness_dependencies.mjs";
 import {
@@ -24,6 +25,7 @@ const proofFreshnessRoleUrl = localAdminAuditRoleUrl(
   localAdminAuditIds.proofFreshness,
 );
 const nextActionRoleUrl = localAdminAuditRoleUrl(localAdminAuditIds.nextAction);
+const seedFixturesRoleUrl = localAdminAuditRoleUrl(localAdminAuditIds.seedFixtures);
 const hostedEvidenceLaneRoleUrl = localAdminAuditRoleUrl(
   localAdminAuditIds.hostedEvidenceLane,
 );
@@ -298,10 +300,25 @@ test("missing local readiness dependencies rank before hosted readiness work", (
         "Passed next-action admin surface check in the generated release-readiness checklist",
     },
     {
-      id: "local-hosted-evidence-lane-demo-proof",
+      id: "local-seed-demo-fixture",
       status: "missing",
       index: 3,
       priority: 3,
+      command: "npm run test:dev-test-game-seed-fixture",
+      buildSlice:
+        "Generate the local seed/demo fixture inventory and admin proof before choosing hosted readiness work.",
+      proofTarget: "target/dev-test-game/seed-fixture-summary.json",
+      roleUrl: seedFixturesRoleUrl,
+      proofBoundary:
+        "Local seed/demo fixture inventory and admin browser proof for one dev-test-game run. This recovers the local fixture dependency only; it does not prove hosted demo data, invite delivery, release readiness, or production readiness.",
+      requiredEvidence:
+        "Passed local seed/demo fixture inventory and admin role-surface proof in the generated release-readiness checklist",
+    },
+    {
+      id: "local-hosted-evidence-lane-demo-proof",
+      status: "missing",
+      index: 4,
+      priority: 4,
       command: "npm run test:dev-test-game-hosted-evidence-lane-demo-proof",
       buildSlice:
         "Refresh the local hosted evidence lane demo proof before choosing hosted deployment work.",
@@ -328,6 +345,10 @@ test("missing local readiness dependencies rank before hosted readiness work", (
           },
           {
             id: localNextActionAdminSurfaceCheckId,
+            status: "passed",
+          },
+          {
+            id: localSeedDemoFixtureCheckId,
             status: "passed",
           },
           {

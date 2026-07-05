@@ -3364,6 +3364,7 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
             target.roleUrl,
             target.browserProofCommand,
             target.rerunCommand,
+            expectedPrivateChannelFeatureEvidenceObjectNames(slotId),
           ];
         }),
       ),
@@ -3376,6 +3377,7 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
       identityAdapterCheck.adminRoleSurface.detailRoleUrl,
       devTestGameLiveProofCommand,
       devTestGameIdentityAdminProofCommand,
+      [],
     ],
   ];
   assert.deepEqual(
@@ -3390,6 +3392,7 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
         node.targetRoleUrl,
         node.browserProofCommand,
         node.recoveryCommand,
+        node.evidenceObjectNames ?? [],
       ]),
     expectedProductionFeatureRows,
   );
@@ -12375,6 +12378,9 @@ function recoveryMilestoneFixtureChecks() {
         ? { surfaceCoverage: milestone.surfaceCoverage }
         : {}),
       ...(scenario.hasSurfaceChecks === true ? { surfaces: milestone.surfaces } : {}),
+      ...(milestone.normalizedEvidenceObjects === undefined
+        ? {}
+        : { normalizedEvidenceObjects: milestone.normalizedEvidenceObjects }),
     };
   });
 }
@@ -12419,6 +12425,7 @@ function assertReadinessRecoveryMilestonesMirrorProofCoverage({
         ...(scenario.hasSurfaceCoverage === true
           ? { surfaceCoverage: generatedSnapshot.surfaceCoverage }
           : {}),
+        ...expectedPrivateChannelEvidenceObjectsForScenario(scenario),
       },
       `${scenario.checkId} should mirror proof-run ${scenario.coverageKey}`,
     );
@@ -12434,6 +12441,7 @@ function assertReadinessRecoveryMilestonesMirrorProofCoverage({
         expectedLaneCount: coverage.expectedLaneCount,
         expectedFamilyCount: coverage.expectedFamilyCount,
         families: coverage.families,
+        ...expectedPrivateChannelEvidenceObjectsForScenario(scenario),
       },
       `${scenario.generatedFromKey} should mirror proof-run ${scenario.coverageKey}`,
     );
@@ -12456,6 +12464,9 @@ function visibleRecoveryMilestoneCoverage(check) {
     ...(check.surfaceCoverage === undefined
       ? {}
       : { surfaceCoverage: check.surfaceCoverage }),
+    ...(check.normalizedEvidenceObjects === undefined
+      ? {}
+      : { normalizedEvidenceObjects: check.normalizedEvidenceObjects }),
   };
 }
 
@@ -12470,7 +12481,39 @@ function generatedRecoveryMilestoneCoverage(milestone) {
     expectedLaneCount: milestone.expectedLaneCount,
     expectedFamilyCount: milestone.expectedFamilyCount,
     families: milestone.families,
+    ...(milestone.normalizedEvidenceObjects === undefined
+      ? {}
+      : { normalizedEvidenceObjects: milestone.normalizedEvidenceObjects }),
   };
+}
+
+function expectedPrivateChannelEvidenceObjectsForScenario(scenario) {
+  return scenario.generatedFromKey === "privateChannelRecoveryMilestone"
+    ? {
+        normalizedEvidenceObjects: [
+          {
+            name: "submitPostAckProof",
+            laneId: coreLoopPrivateChannelStalePostLaneId,
+            status: "passed",
+            evidencePath:
+              `lanes.${coreLoopPrivateChannelStalePostLaneId}.evidence.submitPostAckProof`,
+          },
+          {
+            name: "completedPostRejectProof",
+            laneId: coreLoopPrivateChannelCompletedPostLaneId,
+            status: "passed",
+            evidencePath:
+              `lanes.${coreLoopPrivateChannelCompletedPostLaneId}.evidence.completedPostRejectProof`,
+          },
+        ],
+      }
+    : {};
+}
+
+function expectedPrivateChannelFeatureEvidenceObjectNames(slotId) {
+  return slotId === "private-channel"
+    ? ["submitPostAckProof", "completedPostRejectProof"]
+    : [];
 }
 
 function staleConflictMessageMilestoneFixture() {
@@ -12556,6 +12599,9 @@ function privateChannelRecoveryMilestoneFixture() {
       status: "passed",
       passedLaneIds: [...family.laneIds],
     })),
+    ...expectedPrivateChannelEvidenceObjectsForScenario({
+      generatedFromKey: "privateChannelRecoveryMilestone",
+    }),
   };
 }
 

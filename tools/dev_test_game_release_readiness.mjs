@@ -208,9 +208,11 @@ import {
 } from "./dev_test_game_core_loop_completed_endgame_progression_scenarios.mjs";
 import {
   assertCoreLoopPrivateChannelRecoveryCoverageSummary,
+  coreLoopPrivateChannelCompletedPostLaneId,
   coreLoopPrivateChannelRecoveryFamilyId,
   coreLoopPrivateChannelRecoveryLaneIds,
   coreLoopPrivateChannelRecoveryScenarioFamily,
+  coreLoopPrivateChannelStalePostLaneId,
 } from "./dev_test_game_core_loop_private_channel_recovery_scenarios.mjs";
 import {
   recoveryReceiptEvidenceByKeyFromOptions,
@@ -220,6 +222,16 @@ import {
   validateRecoveryReceiptArtifact,
 } from "./dev_test_game_recovery_receipt_catalog.mjs";
 export const DEV_TEST_GAME_RELEASE_READINESS_VERSION = 1;
+const privateChannelNormalizedProofObjects = Object.freeze([
+  Object.freeze({
+    name: "submitPostAckProof",
+    laneId: coreLoopPrivateChannelStalePostLaneId,
+  }),
+  Object.freeze({
+    name: "completedPostRejectProof",
+    laneId: coreLoopPrivateChannelCompletedPostLaneId,
+  }),
+]);
 const devTestGameSeededBrowserProofCommand =
   devTestGameProductionFeatureBrowserProofCommand;
 const artifactCoverageMilestoneIds = Object.freeze([
@@ -1467,6 +1479,9 @@ function coverageMilestoneSnapshot(milestone) {
       ? {}
       : { surfaceCoverage: milestone.surfaceCoverage }),
     ...(milestone.surfaces === undefined ? {} : { surfaces: milestone.surfaces }),
+    ...(milestone.normalizedEvidenceObjects === undefined
+      ? {}
+      : { normalizedEvidenceObjects: milestone.normalizedEvidenceObjects }),
   };
 }
 
@@ -1537,6 +1552,9 @@ function recoveryMilestoneReadinessCheck({ scenario, milestone, sourcePath }) {
       ? { surfaceCoverage: milestone.surfaceCoverage }
       : {}),
     ...(scenario.hasSurfaceChecks === true ? { surfaces: milestone.surfaces } : {}),
+    ...(milestone.normalizedEvidenceObjects === undefined
+      ? {}
+      : { normalizedEvidenceObjects: milestone.normalizedEvidenceObjects }),
   };
 }
 
@@ -1740,7 +1758,27 @@ function buildPrivateChannelRecoveryMilestone(proof, { sourcePath }) {
       `private-channel recovery milestone missing passed lanes from ${sourcePath}: ${error.message}`,
     );
   }
-  return coverageMilestoneSummary(coverage);
+  return {
+    ...coverageMilestoneSummary(coverage),
+    normalizedEvidenceObjects:
+      privateChannelNormalizedEvidenceObjectsFromProof(proof),
+  };
+}
+
+function privateChannelNormalizedEvidenceObjectsFromProof(proof) {
+  const laneById = new Map((proof.lanes ?? []).map((lane) => [lane.id, lane]));
+  return privateChannelNormalizedProofObjects.map(({ name, laneId }) => {
+    const lane = laneById.get(laneId);
+    return {
+      name,
+      laneId,
+      status:
+        lane?.evidence?.normalizedProofStatus ??
+        lane?.evidence?.[name]?.status ??
+        "missing",
+      evidencePath: `lanes.${laneId}.evidence.${name}`,
+    };
+  });
 }
 
 function buildReplacementActionRecoveryMilestone(proof, { sourcePath }) {
@@ -5763,6 +5801,15 @@ function assertRecoveryMilestoneReadinessChecksMirrorGeneratedFrom(checklist) {
       );
     }
     if (
+      snapshot.normalizedEvidenceObjects !== undefined &&
+      JSON.stringify(check.normalizedEvidenceObjects) !==
+        JSON.stringify(snapshot.normalizedEvidenceObjects)
+    ) {
+      throw new Error(
+        `dev-test-game recovery milestone evidence objects drifted: ${scenario.checkId}`,
+      );
+    }
+    if (
       scenario.hasSurfaceCoverage === true &&
       JSON.stringify(check.surfaceCoverage) !==
         JSON.stringify(snapshot.surfaceCoverage)
@@ -5903,11 +5950,13 @@ function markdownChecklist(checklist) {
     "",
     `Status: ${checklist.localDevelopmentSpine.status}`,
     "",
-    "| Check | Status | Evidence |",
-    "| --- | --- | --- |",
+    "| Check | Status | Evidence | Evidence Objects |",
+    "| --- | --- | --- | --- |",
   ];
   for (const check of checklist.localDevelopmentSpine.checks) {
-    lines.push(`| ${check.label} | ${check.status} | \`${check.evidence}\` |`);
+    lines.push(
+      `| ${check.label} | ${check.status} | \`${check.evidence}\` | ${evidenceObjectNamesText(check)} |`,
+    );
   }
   lines.push(
     "",
@@ -5924,6 +5973,13 @@ function markdownChecklist(checklist) {
     lines.push(`| ${item.id} | ${item.status} | ${item.requiredEvidence} |`);
   }
   return `${lines.join("\n")}\n`;
+}
+
+function evidenceObjectNamesText(check) {
+  const names = (check.normalizedEvidenceObjects ?? [])
+    .map((object) => object.name)
+    .filter((name) => typeof name === "string" && name.length > 0);
+  return names.length === 0 ? "" : names.map((name) => `\`${name}\``).join(", ");
 }
 
 const optionalReadinessArtifactRegistry = Object.freeze([
