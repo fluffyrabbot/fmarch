@@ -18400,7 +18400,7 @@ function hostedConcurrentRaceMatrixAdminProofFixture() {
     {
       id: "coverage",
       status:
-        "passed\n3/3 cells passed\n3/3 reloads covered\n10 reconnect lanes\n4 stale conflict lanes",
+        `passed\n3/3 cells passed\n3/3 reloads covered\n${hostedMatrixReconnectLaneIds.length} reconnect lanes\n${hostedMatrixStaleConflictLaneIds.length} stale conflict lanes`,
     },
     {
       id: "hosted-evidence",

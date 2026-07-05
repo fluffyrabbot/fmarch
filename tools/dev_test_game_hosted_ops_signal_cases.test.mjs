@@ -9,6 +9,10 @@ import {
   hostedOpsTelemetryBoundaryCheckId,
   hostedOpsTelemetryBoundaryStatus,
 } from "./dev_test_game_hosted_ops_signal_cases.mjs";
+import {
+  hostedMatrixReconnectLaneIds,
+  hostedMatrixStaleConflictLaneIds,
+} from "./dev_test_game_hosted_concurrent_race_matrix_cases.mjs";
 
 test("hosted ops signal cases share checks, related links, and telemetry status", () => {
   assert.deepEqual(hostedOpsSignalCheckIds, [
@@ -31,8 +35,8 @@ test("hosted ops signal cases share checks, related links, and telemetry status"
     frontendBaseUrl: "http://127.0.0.1:5173",
     apiBaseUrl: "http://127.0.0.1:55987",
     cellCount: 16,
-    reconnectLaneCount: 10,
-    staleConflictLaneCount: 4,
+    reconnectLaneCount: hostedMatrixReconnectLaneIds.length,
+    staleConflictLaneCount: hostedMatrixStaleConflictLaneIds.length,
     realHostedDeploymentStatus: "unproven",
   });
   assert.deepEqual(
