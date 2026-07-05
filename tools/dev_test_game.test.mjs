@@ -649,6 +649,25 @@ test("dev test-game spine orchestrators expose stable proof order and env maps",
     devTestGameHostedIdentityProgressionSummaryPath,
     "target/dev-test-game/hosted-identity-progression-summary.json",
   );
+  const operatorDocs = await readFile(
+    "docs/ops/human-run-test-games.md",
+    "utf8",
+  );
+  assert(
+    operatorDocs.includes(
+      `FMARCH_HOSTED_IDENTITY_EVIDENCE_PATH=${hostedIdentityEvidencePlaceholderFixturePath} npm run ${devTestGameHostedIdentityEvidenceCommand}`,
+    ),
+  );
+  assert(
+    operatorDocs.includes(
+      `FMARCH_HOSTED_IDENTITY_EVIDENCE_PATH=${hostedIdentityEvidencePlaceholderFixturePath} npm run test:dev-test-game-hosted-identity-evidence-admin-proof`,
+    ),
+  );
+  assert(
+    operatorDocs.includes(
+      "That placeholder keeps `releaseReady` and `productionReady` false.",
+    ),
+  );
   for (const descriptor of recoveryReceiptGraphDescriptors) {
     assert.equal(
       packageJson.scripts[descriptor.proofCommand],

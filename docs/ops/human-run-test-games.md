@@ -181,6 +181,21 @@ directly, use the explicit hosted-identity sequence selector:
 npm run test:dev-test-game-next-action:hosted-identity
 ```
 
+The hosted identity evidence lane accepts a redacted operator packet through
+`FMARCH_HOSTED_IDENTITY_EVIDENCE_PATH`. To inspect the packet shape and admin
+handoff without making a hosted-readiness claim, exercise the placeholder
+template:
+
+```sh
+FMARCH_HOSTED_IDENTITY_EVIDENCE_PATH=tools/fixtures/dev_test_game_hosted_identity_evidence.placeholder.json npm run test:dev-test-game-hosted-identity-evidence
+FMARCH_HOSTED_IDENTITY_EVIDENCE_PATH=tools/fixtures/dev_test_game_hosted_identity_evidence.placeholder.json npm run test:dev-test-game-hosted-identity-evidence-admin-proof
+```
+
+That placeholder keeps `releaseReady` and `productionReady` false. It proves
+only the redacted packet schema, role-surface adapter comparison, and seeded
+admin detail visibility; hosted accounts, sessions, invite delivery, recovery,
+abuse controls, session-secret policy, and audit retention remain unproven.
+
 The local release-readiness admin browser proof is:
 
 ```sh
