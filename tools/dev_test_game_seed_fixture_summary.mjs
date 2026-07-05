@@ -9,8 +9,8 @@ import {
   seedAliasOnlyProofLaneIds,
   seedDemoScenarioCatalog,
   seedDemoScenarioProofLaneCandidates,
+  seedProofLaneCoverageForPassedLanes,
   seedScenarioCoverageGroups,
-  unclassifiedSeedProofLaneIds,
 } from "./dev_test_game_seed_scenario_cases.mjs";
 import {
   devTestGameProofRunPath,
@@ -53,7 +53,7 @@ export function buildDevTestGameSeedFixtureSummary({
     .filter((lane) => lane.status === "passed")
     .map((lane) => lane.id);
   const demoScenarioRows = demoScenarios({ roles, laneIds: passedLaneIds });
-  const proofLaneCoverage = proofLaneCoverageForPassedLanes(passedLaneIds);
+  const proofLaneCoverage = seedProofLaneCoverageForPassedLanes(passedLaneIds);
   const summary = {
     version: DEV_TEST_GAME_SEED_FIXTURE_SUMMARY_VERSION,
     proof: "dev-test-game-seed-fixture-summary",
@@ -259,37 +259,6 @@ function demoScenarios({ roles, laneIds }) {
       ),
     roleUrlForRole: (role) => roles[role]?.loginUrlRedacted ?? null,
   });
-}
-
-function proofLaneCoverageForPassedLanes(passedLaneIds) {
-  const passedLaneSet = new Set(passedLaneIds);
-  const directScenarioSet = new Set(seedScenarioCoverageGroups.allDemo);
-  const directSeeded = passedLaneIds.filter((id) => directScenarioSet.has(id));
-  const aliasOnly = seedAliasOnlyProofLaneIds.filter((id) => passedLaneSet.has(id));
-  const aggregateOnly = seedAggregateOnlyProofLaneIds.filter((id) =>
-    passedLaneSet.has(id),
-  );
-  const unclassified = unclassifiedSeedProofLaneIds({ proofLaneIds: passedLaneIds });
-  return {
-    status: unclassified.length === 0 ? "passed" : "failed",
-    passedLaneCount: passedLaneIds.length,
-    directSeeded: {
-      count: directSeeded.length,
-      laneIds: directSeeded,
-    },
-    aliasOnly: {
-      count: aliasOnly.length,
-      laneIds: aliasOnly,
-    },
-    aggregateOnly: {
-      count: aggregateOnly.length,
-      laneIds: aggregateOnly,
-    },
-    unclassified: {
-      count: unclassified.length,
-      laneIds: unclassified,
-    },
-  };
 }
 
 function summarizeSeedSlots(plan) {

@@ -115,6 +115,8 @@ import {
 import {
   seedAggregateOnlyProofLaneIds,
   seedAliasOnlyProofLaneIds,
+  seedProofLaneCoverageFixture,
+  seedProofLaneCoverageForPassedLanes,
   seedRequiredScenarioIds,
   seedScenarioCoverageGroups,
 } from "./dev_test_game_seed_scenario_cases.mjs";
@@ -12515,6 +12517,14 @@ test("session card and markdown include role credential URLs and tokens", async 
   assert.equal(seedFixture.proofLaneCoverage.status, "passed");
   assert.equal(seedFixture.proofLaneCoverage.unclassified.count, 0);
   assert.deepEqual(
+    seedFixture.proofLaneCoverage,
+    seedProofLaneCoverageForPassedLanes(
+      proofRun.lanes
+        .filter((lane) => lane.status === "passed")
+        .map((lane) => lane.id),
+    ),
+  );
+  assert.deepEqual(
     seedFixture.proofLaneCoverage.aliasOnly.laneIds,
     seedAliasOnlyProofLaneIds,
   );
@@ -13666,34 +13676,6 @@ function devTestGameReleaseReadinessChecklistFixture({
     },
     proofBoundary:
       "Derived from the local dev-test-game proof-run artifact without release claims.",
-  };
-}
-
-function seedProofLaneCoverageFixture({ unclassifiedLaneIds = [] } = {}) {
-  const directSeededLaneIds = seedScenarioCoverageGroups.allDemo.slice(0, 108);
-  return {
-    status: unclassifiedLaneIds.length === 0 ? "passed" : "failed",
-    passedLaneCount:
-      directSeededLaneIds.length +
-      seedAliasOnlyProofLaneIds.length +
-      seedAggregateOnlyProofLaneIds.length +
-      unclassifiedLaneIds.length,
-    directSeeded: {
-      count: directSeededLaneIds.length,
-      laneIds: directSeededLaneIds,
-    },
-    aliasOnly: {
-      count: seedAliasOnlyProofLaneIds.length,
-      laneIds: seedAliasOnlyProofLaneIds,
-    },
-    aggregateOnly: {
-      count: seedAggregateOnlyProofLaneIds.length,
-      laneIds: seedAggregateOnlyProofLaneIds,
-    },
-    unclassified: {
-      count: unclassifiedLaneIds.length,
-      laneIds: unclassifiedLaneIds,
-    },
   };
 }
 

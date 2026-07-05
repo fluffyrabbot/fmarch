@@ -64,6 +64,7 @@ import {
   seedAggregateOnlyProofLaneIds,
   seedAliasOnlyProofLaneIds,
   seedDemoScenarioFixtureRows,
+  seedProofLaneCoverageFixture,
   seedScenarioCoverageGroups,
 } from "../../../../tools/dev_test_game_seed_scenario_cases.mjs";
 import {
@@ -3619,6 +3620,7 @@ test("admin hosted evidence lane detail data carries blocked setup rows", async 
 });
 
 test("admin route data exposes local seed fixture summary as a native audit row", async () => {
+  const seedCoverage = seedProofLaneCoverageFixture();
   const data = await buildAdminRouteData({
     principalUserId: "admin_a",
     capabilities: [{ kind: "GlobalAdmin" }],
@@ -3642,8 +3644,8 @@ test("admin route data exposes local seed fixture summary as a native audit row"
     scenarioCount: seedScenarioCoverageGroups.allDemo.length,
     roleCount: 7,
     slotCount: 5,
-    proofLaneCount: 116,
-    directSeededProofLaneCount: 108,
+    proofLaneCount: seedCoverage.passedLaneCount,
+    directSeededProofLaneCount: seedCoverage.directSeeded.count,
     aliasOnlyProofLaneCount: seedAliasOnlyProofLaneIds.length,
     aggregateOnlyProofLaneCount: seedAggregateOnlyProofLaneIds.length,
     unclassifiedProofLaneCount: 0,
@@ -3653,6 +3655,7 @@ test("admin route data exposes local seed fixture summary as a native audit row"
 });
 
 test("admin local seed fixture detail data carries scenario rows", async () => {
+  const seedCoverage = seedProofLaneCoverageFixture();
   const data = await buildAdminAuditDetailData({
     audit: localAdminAuditIds.seedFixtures,
     principalUserId: "admin_a",
@@ -3677,7 +3680,7 @@ test("admin local seed fixture detail data carries scenario rows", async () => {
       coverage.count,
     ]),
     [
-      ["direct-seeded", 108],
+      ["direct-seeded", seedCoverage.directSeeded.count],
       ["alias-only", seedAliasOnlyProofLaneIds.length],
       ["aggregate-only", seedAggregateOnlyProofLaneIds.length],
       ["unclassified", 0],
@@ -5294,34 +5297,6 @@ function localHostedEvidenceLaneDemoProofFixture() {
       status: "passed",
       preflightStatus: "passed",
       blockedCheckIds: [],
-    },
-  };
-}
-
-function seedProofLaneCoverageFixture({ unclassifiedLaneIds = [] } = {}) {
-  const directSeededLaneIds = seedScenarioCoverageGroups.allDemo.slice(0, 108);
-  return {
-    status: unclassifiedLaneIds.length === 0 ? "passed" : "failed",
-    passedLaneCount:
-      directSeededLaneIds.length +
-      seedAliasOnlyProofLaneIds.length +
-      seedAggregateOnlyProofLaneIds.length +
-      unclassifiedLaneIds.length,
-    directSeeded: {
-      count: directSeededLaneIds.length,
-      laneIds: directSeededLaneIds,
-    },
-    aliasOnly: {
-      count: seedAliasOnlyProofLaneIds.length,
-      laneIds: seedAliasOnlyProofLaneIds,
-    },
-    aggregateOnly: {
-      count: seedAggregateOnlyProofLaneIds.length,
-      laneIds: seedAggregateOnlyProofLaneIds,
-    },
-    unclassified: {
-      count: unclassifiedLaneIds.length,
-      laneIds: unclassifiedLaneIds,
     },
   };
 }

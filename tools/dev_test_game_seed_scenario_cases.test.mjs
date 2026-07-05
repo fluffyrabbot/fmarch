@@ -4,6 +4,7 @@ import { test } from "node:test";
 import {
   seedAggregateOnlyProofLaneIds,
   seedAliasOnlyProofLaneIds,
+  directSeedProofLaneIds,
   seedDemoScenarioClassifiedProofLaneIds,
   seedDemoScenarioCatalog,
   seedDemoScenarioFixtureRows,
@@ -11,13 +12,14 @@ import {
   seedDemoOnlyScenarioIds,
   seedDemoScenarioProofLaneCandidates,
   seedNonDirectProofLaneIds,
+  seedProofLaneCoverageForPassedLanes,
   seedRequiredScenarioIds,
   seedScenarioCoverageGroups,
   unclassifiedSeedProofLaneIds,
 } from "./dev_test_game_seed_scenario_cases.mjs";
 
 test("seed scenario cases expose one full shared required inventory", () => {
-  assert.equal(seedRequiredScenarioIds.length, 85);
+  assert.equal(seedRequiredScenarioIds.length, 86);
   assert.equal(new Set(seedRequiredScenarioIds).size, seedRequiredScenarioIds.length);
   assert.deepEqual(seedRequiredScenarioIds.slice(0, 8), [
     "host-phase-controls",
@@ -55,7 +57,7 @@ test("seed scenario cases include reload and stale-reject proof rows", () => {
 });
 
 test("seed scenario cases expose generated demo scenario fixture rows", () => {
-  assert.equal(seedDemoScenarioIds.length, 124);
+  assert.equal(seedDemoScenarioIds.length, 125);
   assert.deepEqual(seedDemoOnlyScenarioIds, [
     "day-vote-resolution",
     "day-vote-no-lynch",
@@ -369,4 +371,14 @@ test("seed scenario cases classify every passed proof lane", () => {
     [...seedAggregateOnlyProofLaneIds].sort(),
   );
   assert.deepEqual(unclassifiedSeedProofLaneIds({ proofLaneIds: passedLaneIds }), []);
+  const coverage = seedProofLaneCoverageForPassedLanes(passedLaneIds);
+  assert.equal(coverage.status, "passed");
+  assert.equal(coverage.passedLaneCount, passedLaneIds.length);
+  assert.deepEqual(
+    coverage.directSeeded.laneIds,
+    passedLaneIds.filter((id) => directSeedProofLaneIds().includes(id)),
+  );
+  assert.deepEqual(coverage.aliasOnly.laneIds, seedAliasOnlyProofLaneIds);
+  assert.deepEqual(coverage.aggregateOnly.laneIds, seedAggregateOnlyProofLaneIds);
+  assert.deepEqual(coverage.unclassified.laneIds, []);
 });

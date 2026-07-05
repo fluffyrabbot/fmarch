@@ -266,6 +266,65 @@ export function unclassifiedSeedProofLaneIds({
   return proofLaneIds.filter((id) => !classifiedLaneIds.has(id));
 }
 
+export function directSeedProofLaneIds({ ids = seedDemoScenarioIds } = {}) {
+  return ids.filter((id) => seedDemoScenarioProofLaneCandidates(id).includes(id));
+}
+
+export const seedProofLaneCoverageBaselineLaneIds = Object.freeze([
+  ...directSeedProofLaneIds(),
+  ...seedAliasOnlyProofLaneIds,
+  ...seedAggregateOnlyProofLaneIds,
+]);
+
+export function seedProofLaneCoverageForPassedLanes(
+  passedLaneIds,
+  { ids = seedDemoScenarioIds } = {},
+) {
+  const passedLaneSet = new Set(passedLaneIds);
+  const directLaneSet = new Set(directSeedProofLaneIds({ ids }));
+  const directSeeded = passedLaneIds.filter((id) => directLaneSet.has(id));
+  const aliasOnly = seedAliasOnlyProofLaneIds.filter((id) =>
+    passedLaneSet.has(id),
+  );
+  const aggregateOnly = seedAggregateOnlyProofLaneIds.filter((id) =>
+    passedLaneSet.has(id),
+  );
+  const unclassified = unclassifiedSeedProofLaneIds({
+    proofLaneIds: passedLaneIds,
+    ids,
+  });
+  return {
+    status: unclassified.length === 0 ? "passed" : "failed",
+    passedLaneCount: passedLaneIds.length,
+    directSeeded: {
+      count: directSeeded.length,
+      laneIds: directSeeded,
+    },
+    aliasOnly: {
+      count: aliasOnly.length,
+      laneIds: aliasOnly,
+    },
+    aggregateOnly: {
+      count: aggregateOnly.length,
+      laneIds: aggregateOnly,
+    },
+    unclassified: {
+      count: unclassified.length,
+      laneIds: unclassified,
+    },
+  };
+}
+
+export function seedProofLaneCoverageFixture({
+  passedLaneIds = seedProofLaneCoverageBaselineLaneIds,
+  unclassifiedLaneIds = [],
+} = {}) {
+  return seedProofLaneCoverageForPassedLanes([
+    ...passedLaneIds,
+    ...unclassifiedLaneIds,
+  ]);
+}
+
 function seedScenarioNote(id, role) {
   return [
     "Local seeded scenario",
