@@ -7,10 +7,17 @@ import test from "node:test";
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
 const artifactPathPattern =
-  /target\/(?:dev-test-game\/(?:ops-artifacts|seed-fixture-summary|race-coverage|hosted-concurrent-race-matrix|hosted-target-preflight|hosted-evidence-lane|hosted-evidence-lane-demo-proof|hosted-ops-signals|hosted-identity-evidence|hosted-identity-progression-summary|real-hosted-observability-handoff)\.json|auth-invite-role-proof\/invite-role-proof\.json|live-stack-backup-restore-drill\/(?:local-backup-restore-proof\.json|local-live-stack\.dump))/g;
+  /target\/(?:dev-test-game\/(?:ops-artifacts|seed-fixture-summary|race-coverage|race-coverage-admin-proof|hosted-concurrent-race-matrix|hosted-concurrent-race-matrix-admin-proof|hosted-target-preflight|hosted-target-preflight-admin-proof|hosted-evidence-lane|hosted-evidence-lane-admin-proof|hosted-evidence-lane-demo-proof|hosted-ops-signals|hosted-identity-evidence|hosted-identity-evidence-admin-proof|hosted-identity-progression-summary|real-hosted-observability-handoff|real-hosted-observability-handoff-admin-proof|release-runbook|release-runbook-admin-proof|release-admin-proof)\.json|auth-invite-role-proof\/invite-role-proof\.json|live-stack-backup-restore-drill\/(?:local-backup-restore-proof\.json|local-live-stack\.dump))/g;
 
 const approvedSourceFiles = new Set([
   "tools/dev_test_game_adjacent_artifact_paths.mjs",
+  "tools/dev_test_game_hosted_concurrent_race_matrix_cases.mjs",
+  "tools/dev_test_game_hosted_handoff_cases.mjs",
+  "tools/dev_test_game_hosted_identity_evidence_cases.mjs",
+  "tools/dev_test_game_hosted_target_preflight_cases.mjs",
+  "tools/dev_test_game_race_coverage.mjs",
+  "tools/dev_test_game_real_hosted_observability_handoff_cases.mjs",
+  "tools/dev_test_game_release_artifact_paths.mjs",
 ]);
 
 const scanRoots = [
@@ -19,24 +26,30 @@ const scanRoots = [
   "frontend/src/routes/admin",
 ];
 
-test("spine-adjacent artifact paths are owned by the shared path module", async () => {
+test("dev-test-game artifact paths are owned by approved path modules", async () => {
   const findings = [];
-  for (const root of scanRoots) {
-    for (const file of await runtimeSourceFiles(path.join(repoRoot, root))) {
-      const relativePath = path.relative(repoRoot, file);
-      if (approvedSourceFiles.has(relativePath)) {
-        continue;
-      }
-      const source = await readFile(file, "utf8");
-      const matches = source.match(artifactPathPattern) ?? [];
-      for (const match of matches) {
-        findings.push(`${relativePath}: ${match}`);
-      }
+  for (const file of await scannedFiles()) {
+    const relativePath = path.relative(repoRoot, file);
+    if (approvedSourceFiles.has(relativePath)) {
+      continue;
+    }
+    const source = await readFile(file, "utf8");
+    const matches = source.match(artifactPathPattern) ?? [];
+    for (const match of matches) {
+      findings.push(`${relativePath}: ${match}`);
     }
   }
 
   assert.deepEqual(findings, []);
 });
+
+async function scannedFiles() {
+  const files = [path.join(repoRoot, "package.json")];
+  for (const root of scanRoots) {
+    files.push(...(await runtimeSourceFiles(path.join(repoRoot, root))));
+  }
+  return files;
+}
 
 async function runtimeSourceFiles(dir) {
   const entries = await readdir(dir, { withFileTypes: true });

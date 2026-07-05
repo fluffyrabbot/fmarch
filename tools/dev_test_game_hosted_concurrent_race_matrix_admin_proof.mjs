@@ -6,6 +6,7 @@ import {
   devTestGameHostedConcurrentRaceMatrixPath,
 } from "./dev_test_game_hosted_concurrent_race_matrix.mjs";
 import {
+  devTestGameHostedConcurrentRaceMatrixAdminProofPath,
   hostedMatrixProgressCheckIds,
   hostedMatrixRealHostedEvidenceInputIds,
   hostedMatrixRelatedAuditIds,
@@ -19,7 +20,6 @@ import {
 import {
   assertAdminRoleSurfaceStatusText,
   assertVisibleAdminRoleSurfaceRows,
-  artifactDir,
   proveAdminAuditDetail,
   readJson,
   repoRoot,
@@ -48,8 +48,8 @@ const proofRunPath = path.resolve(
 const hostedMatrixRelativePath = path.relative(repoRoot, hostedMatrixPath);
 const proofRunRelativePath = path.relative(repoRoot, proofRunPath);
 const evidencePath = path.join(
-  artifactDir,
-  "hosted-concurrent-race-matrix-admin-proof.json",
+  repoRoot,
+  devTestGameHostedConcurrentRaceMatrixAdminProofPath,
 );
 const requiredProgressChecks = hostedMatrixProgressCheckIds;
 const requiredRelatedLinks = hostedMatrixRelatedAuditIds;

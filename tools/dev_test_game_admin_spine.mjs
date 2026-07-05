@@ -25,15 +25,23 @@ import {
 import {
   devTestGameHostedOpsSignalsAdminProofPath,
 } from "./dev_test_game_hosted_ops_signal_cases.mjs";
+import {
+  devTestGameHostedConcurrentRaceMatrixAdminProofPath,
+} from "./dev_test_game_hosted_concurrent_race_matrix_cases.mjs";
+import {
+  devTestGameHostedIdentityEvidenceAdminProofPath,
+} from "./dev_test_game_hosted_identity_evidence_cases.mjs";
 import { runAdminSpineProof } from "./dev_test_game_admin_spine_proof.mjs";
 import {
   devTestGameProofGraphAdminProofPath,
   devTestGameProofGraphPath,
 } from "./dev_test_game_proof_graph_paths.mjs";
 import {
+  devTestGameRealHostedObservabilityHandoffAdminProofPath,
   devTestGameRealHostedObservabilityHandoffPath,
 } from "./dev_test_game_real_hosted_observability_handoff_cases.mjs";
 import {
+  devTestGameReleaseRunbookPath,
   devTestGameReleaseRunbookAdminProofPath,
 } from "./dev_test_game_release_artifact_paths.mjs";
 import {
@@ -101,12 +109,12 @@ export const adminSpineReadinessEvidenceEnv = {
   FMARCH_DEV_TEST_GAME_REAL_HOSTED_OBSERVABILITY_HANDOFF:
     devTestGameRealHostedObservabilityHandoffPath,
   FMARCH_DEV_TEST_GAME_REAL_HOSTED_OBSERVABILITY_HANDOFF_ADMIN_PROOF:
-    "target/dev-test-game/real-hosted-observability-handoff-admin-proof.json",
+    devTestGameRealHostedObservabilityHandoffAdminProofPath,
   FMARCH_DEV_TEST_GAME_SEED_FIXTURE_SUMMARY:
     devTestGameSeedFixturePath,
   FMARCH_DEV_TEST_GAME_SEED_ADMIN_PROOF: devTestGameSeedAdminProofPath,
   FMARCH_DEV_TEST_GAME_RELEASE_RUNBOOK:
-    "target/dev-test-game/release-runbook.json",
+    devTestGameReleaseRunbookPath,
   FMARCH_DEV_TEST_GAME_RELEASE_RUNBOOK_ADMIN_PROOF:
     devTestGameReleaseRunbookAdminProofPath,
   FMARCH_DEV_TEST_GAME_IDENTITY_ADAPTER_PROOF:
@@ -118,7 +126,7 @@ export const adminSpineReadinessEvidenceEnv = {
   FMARCH_DEV_TEST_GAME_HOSTED_IDENTITY_PROGRESSION_SUMMARY:
     devTestGameHostedIdentityProgressionSummaryPath,
   FMARCH_DEV_TEST_GAME_HOSTED_IDENTITY_EVIDENCE_ADMIN_PROOF:
-    "target/dev-test-game/hosted-identity-evidence-admin-proof.json",
+    devTestGameHostedIdentityEvidenceAdminProofPath,
   FMARCH_DEV_TEST_GAME_SPINE_MANIFEST: spineManifestPath,
   FMARCH_DEV_TEST_GAME_SPINE_MANIFEST_ADMIN_PROOF:
     devTestGameSpineManifestAdminProofPath,
@@ -131,7 +139,7 @@ export const adminSpineReadinessEvidenceEnv = {
   FMARCH_DEV_TEST_GAME_HOSTED_CONCURRENT_RACE_MATRIX:
     devTestGameHostedConcurrentRaceMatrixPath,
   FMARCH_DEV_TEST_GAME_HOSTED_CONCURRENT_RACE_MATRIX_ADMIN_PROOF:
-    "target/dev-test-game/hosted-concurrent-race-matrix-admin-proof.json",
+    devTestGameHostedConcurrentRaceMatrixAdminProofPath,
   FMARCH_DEV_TEST_GAME_HOSTED_TARGET_PREFLIGHT:
     devTestGameHostedTargetPreflightPath,
   FMARCH_DEV_TEST_GAME_HOSTED_TARGET_PREFLIGHT_ADMIN_PROOF:
@@ -235,7 +243,7 @@ export const devTestGameAdminSpinePlan = [
       devTestGameHostedEvidenceLaneDemoProofPath,
       devTestGameHostedOpsSignalsPath,
       devTestGameRealHostedObservabilityHandoffPath,
-      "target/dev-test-game/release-runbook.json",
+      devTestGameReleaseRunbookPath,
       adminSpineProofPath,
       devTestGameAdminSpineAdminProofPath,
     ],

@@ -76,6 +76,9 @@ import {
   devTestGameSeedFixturePath,
 } from "../../../../tools/dev_test_game_adjacent_artifact_paths.mjs";
 import {
+  devTestGameReleaseRunbookPath,
+} from "../../../../tools/dev_test_game_release_artifact_paths.mjs";
+import {
   normalizeSpineRowKind,
   selectedSpineDeclarationStatus,
   selectedSpineDrilldownStatus,
@@ -4707,7 +4710,7 @@ export function normalizeLocalReleaseRunbookAudit(releaseRunbook, { game }) {
     boundaryDetail:
       releaseRunbook.proofBoundary ??
       "Local release-runbook rehearsal without human approval or release claims.",
-    href: "target/dev-test-game/release-runbook.json",
+    href: devTestGameReleaseRunbookPath,
     inspectHref: adminAuditInspectHref({ game, audit: localAdminAuditIds.releaseRunbook }),
     checks: Object.freeze(
       checks.map((check) =>

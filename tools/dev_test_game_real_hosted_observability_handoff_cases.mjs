@@ -3,6 +3,8 @@ import {
 } from "./dev_test_game_adjacent_artifact_paths.mjs";
 
 export { devTestGameRealHostedObservabilityHandoffPath };
+export const devTestGameRealHostedObservabilityHandoffAdminProofPath =
+  "target/dev-test-game/real-hosted-observability-handoff-admin-proof.json";
 export const devTestGameRealHostedObservabilityHandoffCommand =
   "test:dev-test-game-real-hosted-observability-handoff";
 export const realHostedObservabilityEvidenceEnv =

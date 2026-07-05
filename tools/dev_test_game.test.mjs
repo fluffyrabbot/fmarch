@@ -220,6 +220,14 @@ import {
   identityReadinessEnv,
 } from "./dev_test_game_identity_spine.mjs";
 import {
+  devTestGameOpsSpinePlan,
+  opsSpineReadinessEnv,
+} from "./dev_test_game_ops_spine.mjs";
+import {
+  devTestGameSeedFixtureSpinePlan,
+  seedFixtureSpineEnv,
+} from "./dev_test_game_seed_fixture_spine.mjs";
+import {
   buildDevTestGameIdentityAdapterContractPacket,
   devTestGameIdentityAdapterContractDiff,
   devTestGameIdentityAdapterProofVersion,
@@ -626,9 +634,13 @@ test("dev test-game spine orchestrators expose stable proof order and env maps",
     packageJson.scripts["test:dev-test-game-live"],
     "node tools/dev_test_game_live_spine.mjs",
   );
-  assert.match(
+  assert.equal(
+    packageJson.scripts["test:dev-test-game-ops"],
+    "node tools/dev_test_game_ops_spine.mjs",
+  );
+  assert.equal(
     packageJson.scripts["test:dev-test-game-seed-fixture"],
-    /FMARCH_DEV_TEST_GAME_SEED_FIXTURE_SUMMARY=target\/dev-test-game\/seed-fixture-summary\.json FMARCH_DEV_TEST_GAME_SEED_ADMIN_PROOF=target\/dev-test-game\/seed-admin-proof\.json npm run test:dev-test-game-readiness && FMARCH_DEV_TEST_GAME_SEED_FIXTURE_SUMMARY=target\/dev-test-game\/seed-fixture-summary\.json FMARCH_DEV_TEST_GAME_SEED_ADMIN_PROOF=target\/dev-test-game\/seed-admin-proof\.json npm run test:dev-test-game-next-action/,
+    "node tools/dev_test_game_seed_fixture_spine.mjs",
   );
   assert.equal(
     packageJson.scripts["test:dev-test-game-next-action:hosted-identity"],
@@ -664,6 +676,32 @@ test("dev test-game spine orchestrators expose stable proof order and env maps",
       `node ${descriptor.proofScript}`,
     );
   }
+  assert.deepEqual(
+    devTestGameOpsSpinePlan.map((step) => step.script),
+    [
+      "tools/dev_test_game_ops_artifacts.mjs",
+      "tools/dev_test_game_ops_admin_proof.mjs",
+      devTestGameReleaseReadinessScript,
+    ],
+  );
+  assert.deepEqual(opsSpineReadinessEnv, {
+    FMARCH_DEV_TEST_GAME_OPS_ARTIFACTS: devTestGameOpsArtifactsPath,
+    FMARCH_DEV_TEST_GAME_OPS_ADMIN_PROOF: devTestGameOpsAdminProofPath,
+  });
+  assert.deepEqual(
+    devTestGameSeedFixtureSpinePlan.map((step) => step.script),
+    [
+      "tools/dev_test_game_seed_fixture_summary.mjs",
+      "tools/dev_test_game_seed_admin_proof.mjs",
+      devTestGameReleaseReadinessScript,
+      "tools/dev_test_game_next_action.mjs",
+    ],
+  );
+  assert.deepEqual(seedFixtureSpineEnv, {
+    FMARCH_DEV_TEST_GAME_SEED_FIXTURE_SUMMARY:
+      "target/dev-test-game/seed-fixture-summary.json",
+    FMARCH_DEV_TEST_GAME_SEED_ADMIN_PROOF: devTestGameSeedAdminProofPath,
+  });
   assert.deepEqual(
     devTestGameBackupRestoreSpinePlan.map((step) => step.script),
     [

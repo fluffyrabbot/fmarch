@@ -124,6 +124,7 @@ import {
 import {
   devTestGameReleaseAdminProofPath,
   devTestGameReleaseRunbookAdminProofPath,
+  devTestGameReleaseRunbookPath,
 } from "./dev_test_game_release_artifact_paths.mjs";
 import {
   devTestGameAdminSpineAdminProofPath,
@@ -434,7 +435,7 @@ const defaultNextActionAdminProofPath = path.join(
   repoRoot,
   nextActionAdminProofPath,
 );
-const defaultReleaseRunbookPath = path.join(artifactDir, "release-runbook.json");
+const defaultReleaseRunbookPath = path.join(repoRoot, devTestGameReleaseRunbookPath);
 const defaultReleaseRunbookAdminProofPath = path.join(
   repoRoot,
   devTestGameReleaseRunbookAdminProofPath,
@@ -790,7 +791,7 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
     : undefined;
   const releaseRunbookEvidence = options.releaseRunbook
     ? validateDevTestGameReleaseRunbook(options.releaseRunbook, {
-        path: options.releaseRunbookPath ?? "target/dev-test-game/release-runbook.json",
+        path: options.releaseRunbookPath ?? devTestGameReleaseRunbookPath,
         artifact: options.releaseRunbookArtifact,
       })
     : undefined;
@@ -5951,7 +5952,7 @@ export function validateDevTestGameReleaseRunbook(runbook, options = {}) {
   }
   return {
     status: "passed",
-    path: options.path ?? "target/dev-test-game/release-runbook.json",
+    path: options.path ?? devTestGameReleaseRunbookPath,
     proofBoundary: runbook.proofBoundary,
     runbookItemCount: runbook.runbookItems.length,
     runbookItemIds: runbook.runbookItems.map((item) => item.id),

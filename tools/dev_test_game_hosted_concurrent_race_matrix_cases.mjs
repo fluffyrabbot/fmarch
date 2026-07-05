@@ -17,6 +17,9 @@ export {
   hostedMatrixStaleConflictLaneIds,
 };
 
+export const devTestGameHostedConcurrentRaceMatrixAdminProofPath =
+  "target/dev-test-game/hosted-concurrent-race-matrix-admin-proof.json";
+
 export const hostedMatrixProgressCheckIds = Object.freeze([
   "hosted-like-api-frontend-target",
   "multi-session-concurrent-command-matrix",

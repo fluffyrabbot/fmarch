@@ -6,12 +6,12 @@ import {
 import {
   realHostedObservabilityBaselineEnv,
   realHostedObservabilityEvidenceEnv,
+  devTestGameRealHostedObservabilityHandoffAdminProofPath,
   realHostedObservabilityHandoffInputIds,
 } from "./dev_test_game_real_hosted_observability_handoff_cases.mjs";
 import {
   assertAdminRoleSurfaceStatusText,
   assertVisibleAdminRoleSurfaceRows,
-  artifactDir,
   proveAdminAuditDetail,
   readJson,
   repoRoot,
@@ -34,8 +34,8 @@ const handoffPath = path.resolve(
 );
 const handoffRelativePath = path.relative(repoRoot, handoffPath);
 const evidencePath = path.join(
-  artifactDir,
-  "real-hosted-observability-handoff-admin-proof.json",
+  repoRoot,
+  devTestGameRealHostedObservabilityHandoffAdminProofPath,
 );
 const requiredRelatedLinks = [
   "local-hosted-ops-signals",

@@ -37,6 +37,9 @@ import {
   hostedIdentityEvidenceAdminProofCase,
 } from "./dev_test_game_hosted_identity_evidence_admin_proof.mjs";
 import {
+  devTestGameHostedIdentityEvidenceAdminProofPath,
+} from "./dev_test_game_hosted_identity_evidence_cases.mjs";
+import {
   backupAdminProofCase,
 } from "./dev_test_game_backup_admin_proof.mjs";
 import {
@@ -89,6 +92,9 @@ import {
   hostedConcurrentRaceMatrixAdminProofCase,
 } from "./dev_test_game_hosted_concurrent_race_matrix_admin_proof.mjs";
 import {
+  devTestGameHostedConcurrentRaceMatrixAdminProofPath,
+} from "./dev_test_game_hosted_concurrent_race_matrix_cases.mjs";
+import {
   hostedOpsSignalsAdminProofCase,
 } from "./dev_test_game_hosted_ops_signals_admin_proof.mjs";
 import {
@@ -97,6 +103,9 @@ import {
 import {
   realHostedObservabilityHandoffAdminProofCase,
 } from "./dev_test_game_real_hosted_observability_handoff_admin_proof.mjs";
+import {
+  devTestGameRealHostedObservabilityHandoffAdminProofPath,
+} from "./dev_test_game_real_hosted_observability_handoff_cases.mjs";
 import {
   spineManifestAdminProofCase,
 } from "./dev_test_game_spine_manifest_admin_proof.mjs";
@@ -139,7 +148,7 @@ export const devTestGameAdminSpineProofPlan = [
     script: "tools/dev_test_game_hosted_identity_evidence_admin_proof.mjs",
     rerunCommand:
       "npm run test:dev-test-game-hosted-identity-evidence-admin-proof",
-    path: "target/dev-test-game/hosted-identity-evidence-admin-proof.json",
+    path: devTestGameHostedIdentityEvidenceAdminProofPath,
     validate: validateDevTestGameHostedIdentityEvidenceAdminProof,
     caseFactory: hostedIdentityEvidenceAdminProofCase,
   },
@@ -221,7 +230,7 @@ export const devTestGameAdminSpineProofPlan = [
     script: "tools/dev_test_game_hosted_concurrent_race_matrix_admin_proof.mjs",
     rerunCommand:
       "npm run test:dev-test-game-hosted-concurrent-race-matrix-admin-proof",
-    path: "target/dev-test-game/hosted-concurrent-race-matrix-admin-proof.json",
+    path: devTestGameHostedConcurrentRaceMatrixAdminProofPath,
     validate: validateDevTestGameHostedConcurrentRaceMatrixAdminProof,
     caseFactory: hostedConcurrentRaceMatrixAdminProofCase,
   },
@@ -240,7 +249,7 @@ export const devTestGameAdminSpineProofPlan = [
     script: "tools/dev_test_game_real_hosted_observability_handoff_admin_proof.mjs",
     rerunCommand:
       "npm run test:dev-test-game-real-hosted-observability-handoff-admin-proof",
-    path: "target/dev-test-game/real-hosted-observability-handoff-admin-proof.json",
+    path: devTestGameRealHostedObservabilityHandoffAdminProofPath,
     validate: validateDevTestGameRealHostedObservabilityHandoffAdminProof,
     caseFactory: realHostedObservabilityHandoffAdminProofCase,
   },

@@ -17,10 +17,16 @@ import {
 } from "./dev_test_game_spine_readiness_steps.mjs";
 import {
   assertDevTestGameRaceCoverage,
+  devTestGameRaceCoverageAdminProofPath,
   devTestGameRaceCoveragePath,
   raceCoveragePromotedReloadGroup,
   raceCoveragePromotedReloadGroups,
 } from "./dev_test_game_race_coverage.mjs";
+import {
+  devTestGameReleaseAdminProofPath,
+  devTestGameReleaseRunbookAdminProofPath,
+  devTestGameReleaseRunbookPath,
+} from "./dev_test_game_release_artifact_paths.mjs";
 import {
   devTestGameHostedConcurrentRaceMatrixPath,
 } from "./dev_test_game_hosted_concurrent_race_matrix.mjs";
@@ -2242,15 +2248,15 @@ const devSpineArtifactPriorities = new Map(
     ["seed-fixture", devTestGameSeedFixturePath],
     ["seed", devTestGameSeedAdminProofPath],
     ["release-readiness", devTestGameReleaseReadinessPath],
-    ["release-runbook", "target/dev-test-game/release-runbook.json"],
-    ["release-runbook-admin", "target/dev-test-game/release-runbook-admin-proof.json"],
+    ["release-runbook", devTestGameReleaseRunbookPath],
+    ["release-runbook-admin", devTestGameReleaseRunbookAdminProofPath],
     ["race-coverage", devTestGameRaceCoveragePath],
-    ["race-coverage-admin", "target/dev-test-game/race-coverage-admin-proof.json"],
+    ["race-coverage-admin", devTestGameRaceCoverageAdminProofPath],
     ["hosted-concurrent-race-matrix", devTestGameHostedConcurrentRaceMatrixPath],
     ["hosted-target-preflight", devTestGameHostedTargetPreflightPath],
     ["hosted-evidence-lane-demo", devTestGameHostedEvidenceLaneDemoProofPath],
     ["hosted-evidence-lane", devTestGameHostedEvidenceLanePath],
-    ["release", "target/dev-test-game/release-admin-proof.json"],
+    ["release", devTestGameReleaseAdminProofPath],
     ["admin-spine", adminSpineProofPath],
     ["admin-spine-admin", devTestGameAdminSpineAdminProofPath],
     ["proof-graph", devTestGameProofGraphPath],

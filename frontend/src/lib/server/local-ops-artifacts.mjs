@@ -11,6 +11,32 @@ import {
   devTestGameSpineManifestAdminProofPath,
 } from "../../../../tools/dev_test_game_local_admin_proof_paths.mjs";
 import {
+  devTestGameReleaseAdminProofPath,
+  devTestGameReleaseRunbookAdminProofPath,
+  devTestGameReleaseRunbookPath,
+} from "../../../../tools/dev_test_game_release_artifact_paths.mjs";
+import {
+  devTestGameRaceCoverageAdminProofPath,
+} from "../../../../tools/dev_test_game_race_coverage.mjs";
+import {
+  devTestGameHostedConcurrentRaceMatrixAdminProofPath,
+} from "../../../../tools/dev_test_game_hosted_concurrent_race_matrix_cases.mjs";
+import {
+  devTestGameHostedEvidenceLaneAdminProofPath,
+} from "../../../../tools/dev_test_game_hosted_handoff_cases.mjs";
+import {
+  devTestGameHostedIdentityEvidenceAdminProofPath,
+} from "../../../../tools/dev_test_game_hosted_identity_evidence_cases.mjs";
+import {
+  devTestGameHostedOpsSignalsAdminProofPath,
+} from "../../../../tools/dev_test_game_hosted_ops_signal_cases.mjs";
+import {
+  devTestGameHostedTargetPreflightAdminProofPath,
+} from "../../../../tools/dev_test_game_hosted_target_preflight_cases.mjs";
+import {
+  devTestGameRealHostedObservabilityHandoffAdminProofPath,
+} from "../../../../tools/dev_test_game_real_hosted_observability_handoff_cases.mjs";
+import {
   adminSpineProofPath,
   adminSpineTerminalBatchProofPath,
   devTestGameProofGraphAdminProofPath,
@@ -53,35 +79,35 @@ const DEFAULT_PROOF_GRAPH = devTestGameProofGraphPath;
 const DEFAULT_PROOF_GRAPH_ADMIN_PROOF = devTestGameProofGraphAdminProofPath;
 const DEFAULT_RACE_COVERAGE = devTestGameRaceCoveragePath;
 const DEFAULT_RACE_COVERAGE_ADMIN_PROOF =
-  "target/dev-test-game/race-coverage-admin-proof.json";
+  devTestGameRaceCoverageAdminProofPath;
 const DEFAULT_HOSTED_CONCURRENT_RACE_MATRIX =
   devTestGameHostedConcurrentRaceMatrixPath;
 const DEFAULT_HOSTED_CONCURRENT_RACE_MATRIX_ADMIN_PROOF =
-  "target/dev-test-game/hosted-concurrent-race-matrix-admin-proof.json";
+  devTestGameHostedConcurrentRaceMatrixAdminProofPath;
 const DEFAULT_HOSTED_IDENTITY_EVIDENCE =
   devTestGameHostedIdentityEvidencePath;
 const DEFAULT_HOSTED_IDENTITY_EVIDENCE_ADMIN_PROOF =
-  "target/dev-test-game/hosted-identity-evidence-admin-proof.json";
+  devTestGameHostedIdentityEvidenceAdminProofPath;
 const DEFAULT_HOSTED_IDENTITY_PROGRESSION_SUMMARY =
   devTestGameHostedIdentityProgressionSummaryPath;
 const DEFAULT_HOSTED_OPS_SIGNALS = devTestGameHostedOpsSignalsPath;
 const DEFAULT_REAL_HOSTED_OBSERVABILITY_HANDOFF =
   devTestGameRealHostedObservabilityHandoffPath;
 const DEFAULT_REAL_HOSTED_OBSERVABILITY_HANDOFF_ADMIN_PROOF =
-  "target/dev-test-game/real-hosted-observability-handoff-admin-proof.json";
+  devTestGameRealHostedObservabilityHandoffAdminProofPath;
 const DEFAULT_HOSTED_TARGET_PREFLIGHT =
   devTestGameHostedTargetPreflightPath;
 const DEFAULT_HOSTED_TARGET_PREFLIGHT_ADMIN_PROOF =
-  "target/dev-test-game/hosted-target-preflight-admin-proof.json";
+  devTestGameHostedTargetPreflightAdminProofPath;
 const DEFAULT_HOSTED_EVIDENCE_LANE =
   devTestGameHostedEvidenceLanePath;
 const DEFAULT_HOSTED_EVIDENCE_LANE_ADMIN_PROOF =
-  "target/dev-test-game/hosted-evidence-lane-admin-proof.json";
+  devTestGameHostedEvidenceLaneAdminProofPath;
 const DEFAULT_HOSTED_EVIDENCE_LANE_DEMO_PROOF =
   devTestGameHostedEvidenceLaneDemoProofPath;
-const DEFAULT_RELEASE_RUNBOOK = "target/dev-test-game/release-runbook.json";
+const DEFAULT_RELEASE_RUNBOOK = devTestGameReleaseRunbookPath;
 const DEFAULT_RELEASE_RUNBOOK_ADMIN_PROOF =
-  "target/dev-test-game/release-runbook-admin-proof.json";
+  devTestGameReleaseRunbookAdminProofPath;
 const DEFAULT_MAX_ARTIFACT_AGE_HOURS = 24;
 
 const LOCAL_PROOF_FRESHNESS_ARTIFACTS = Object.freeze([
@@ -173,7 +199,7 @@ const LOCAL_PROOF_FRESHNESS_ARTIFACTS = Object.freeze([
     id: "release",
     label: "Release admin proof",
     env: "FMARCH_DEV_TEST_GAME_RELEASE_ADMIN_PROOF",
-    fallback: "target/dev-test-game/release-admin-proof.json",
+    fallback: devTestGameReleaseAdminProofPath,
   }),
   Object.freeze({
     id: "spine-manifest-admin",

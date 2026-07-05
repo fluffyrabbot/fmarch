@@ -1,3 +1,13 @@
+import {
+  devTestGameHostedConcurrentRaceMatrixAdminProofPath,
+} from "./dev_test_game_hosted_concurrent_race_matrix_cases.mjs";
+import {
+  devTestGameHostedIdentityEvidenceAdminProofPath,
+} from "./dev_test_game_hosted_identity_evidence_cases.mjs";
+import {
+  devTestGameRealHostedObservabilityHandoffAdminProofPath,
+} from "./dev_test_game_real_hosted_observability_handoff_cases.mjs";
+
 export const hostedAdminHandoffProofArtifactCases = Object.freeze([
   createHostedAdminHandoffProofArtifactCase({
     id: "hosted-identity-evidence-admin-proof",
@@ -6,7 +16,7 @@ export const hostedAdminHandoffProofArtifactCases = Object.freeze([
     refreshId: "hosted-identity-evidence-admin",
     label: "hosted identity evidence admin proof",
     script: "test:dev-test-game-hosted-identity-evidence-admin-proof",
-    path: "target/dev-test-game/hosted-identity-evidence-admin-proof.json",
+    path: devTestGameHostedIdentityEvidenceAdminProofPath,
     envVar: "FMARCH_DEV_TEST_GAME_HOSTED_IDENTITY_EVIDENCE_ADMIN_PROOF",
     outputKeys: {
       data: "hostedIdentityEvidenceAdminProof",
@@ -23,8 +33,7 @@ export const hostedAdminHandoffProofArtifactCases = Object.freeze([
     refreshId: "hosted-concurrent-race-matrix-admin",
     label: "hosted concurrent race matrix admin proof",
     script: "test:dev-test-game-hosted-concurrent-race-matrix-admin-proof",
-    path:
-      "target/dev-test-game/hosted-concurrent-race-matrix-admin-proof.json",
+    path: devTestGameHostedConcurrentRaceMatrixAdminProofPath,
     envVar:
       "FMARCH_DEV_TEST_GAME_HOSTED_CONCURRENT_RACE_MATRIX_ADMIN_PROOF",
     outputKeys: {
@@ -42,8 +51,7 @@ export const hostedAdminHandoffProofArtifactCases = Object.freeze([
     refreshId: "real-hosted-observability-handoff-admin",
     label: "real hosted observability handoff admin proof",
     script: "test:dev-test-game-real-hosted-observability-handoff-admin-proof",
-    path:
-      "target/dev-test-game/real-hosted-observability-handoff-admin-proof.json",
+    path: devTestGameRealHostedObservabilityHandoffAdminProofPath,
     envVar:
       "FMARCH_DEV_TEST_GAME_REAL_HOSTED_OBSERVABILITY_HANDOFF_ADMIN_PROOF",
     outputKeys: {

@@ -13,6 +13,7 @@ import {
 import {
   devTestGameHostedIdentityPartialAdminProofPath,
   devTestGameHostedIdentityPartialEvidencePath,
+  devTestGameHostedIdentityEvidenceAdminProofPath,
   devTestGameHostedIdentityProgressionSummaryPath,
   hostedIdentityEvidencePlaceholderFixturePath,
   hostedIdentityEvidenceInputIds,
@@ -30,7 +31,6 @@ export {
 import {
   assertAdminRoleSurfaceStatusText,
   assertVisibleAdminRoleSurfaceRows,
-  artifactDir,
   proveAdminAuditDetail,
   readJson,
   repoRoot,
@@ -70,8 +70,8 @@ const hostedIdentityProgressionSummaryRelativePath = path.relative(
   hostedIdentityProgressionSummaryPath,
 );
 const evidencePath = path.join(
-  artifactDir,
-  "hosted-identity-evidence-admin-proof.json",
+  repoRoot,
+  devTestGameHostedIdentityEvidenceAdminProofPath,
 );
 export const hostedIdentityEvidencePartialPath =
   devTestGameHostedIdentityPartialEvidencePath;

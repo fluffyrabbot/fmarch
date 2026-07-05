@@ -43,6 +43,8 @@ export const hostedIdentityEvidenceProductionFeatureGraphNodeId =
   "production-feature:identity-adapter";
 export const hostedIdentityEvidenceProofGraphPath =
   devTestGameProofGraphPath;
+export const devTestGameHostedIdentityEvidenceAdminProofPath =
+  "target/dev-test-game/hosted-identity-evidence-admin-proof.json";
 export const hostedIdentityEvidenceRoleSurfaceDrilldown = Object.freeze({
   localCapabilityAuditId: "local-identity-adapter",
   localCapabilityRoleUrl:
