@@ -79,8 +79,12 @@ import {
 import {
   devTestGameHostedIdentityEvidenceCommand,
   devTestGameHostedIdentityEvidencePath,
+  devTestGameHostedIdentityProgressionSummaryPath,
   hostedIdentityEvidenceInputIds,
 } from "./dev_test_game_hosted_identity_evidence_cases.mjs";
+import {
+  assertDevTestGameHostedIdentityProgressionSummary,
+} from "./dev_test_game_hosted_identity_progression_summary.mjs";
 import {
   realHostedObservabilityHandoffCheckIds,
   realHostedObservabilityHandoffInputIds,
@@ -330,6 +334,10 @@ const defaultHostedIdentityEvidenceAdminProofPath = path.join(
   repoRoot,
   hostedIdentityEvidenceAdminProofArtifact.path,
 );
+const defaultHostedIdentityProgressionSummaryPath = path.join(
+  repoRoot,
+  devTestGameHostedIdentityProgressionSummaryPath,
+);
 const defaultSpineManifestPath = path.join(artifactDir, "spine-manifest.json");
 const defaultSpineManifestAdminProofPath = path.join(
   artifactDir,
@@ -569,6 +577,18 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
               options.hostedIdentityEvidenceAdminProofPath ??
               hostedIdentityEvidenceAdminProofArtifact.path,
             artifact: options.hostedIdentityEvidenceAdminProofArtifact,
+          },
+        )
+      : undefined;
+  const hostedIdentityProgressionSummaryEvidence =
+    options.hostedIdentityProgressionSummary
+      ? validateDevTestGameHostedIdentityProgressionSummary(
+          options.hostedIdentityProgressionSummary,
+          {
+            path:
+              options.hostedIdentityProgressionSummaryPath ??
+              devTestGameHostedIdentityProgressionSummaryPath,
+            artifact: options.hostedIdentityProgressionSummaryArtifact,
           },
         )
       : undefined;
@@ -921,6 +941,17 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
         hostedIdentityEvidenceAdminProofEvidence.handoffReceiptMissingRequiredInputs,
       blockedCheckCount:
         hostedIdentityEvidenceAdminProofEvidence.visibleUnproven?.length ?? 0,
+      ...(hostedIdentityProgressionSummaryEvidence === undefined
+        ? {}
+        : {
+            progressionSummary: hostedIdentityProgressionSummaryEvidence,
+            progressionCount:
+              hostedIdentityProgressionSummaryEvidence.progressionCount,
+            progressionIds:
+              hostedIdentityProgressionSummaryEvidence.progressionIds,
+            progressionProofTargets:
+              hostedIdentityProgressionSummaryEvidence.progressionProofTargets,
+          }),
       adminRoleSurface: hostedIdentityEvidenceAdminProofEvidence,
     });
   }
@@ -1232,6 +1263,12 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
               ? {}
               : { identityAdminProof: identityAdminProofEvidence.path }),
           }),
+      ...(hostedIdentityProgressionSummaryEvidence === undefined
+        ? {}
+        : {
+            hostedIdentityProgressionSummary:
+              hostedIdentityProgressionSummaryEvidence.path,
+          }),
       ...(spineManifestEvidence === undefined
         ? {}
         : {
@@ -1321,6 +1358,7 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
         proofFreshnessAdminProofEvidence === undefined &&
         hostedEvidenceLaneAdminProofEvidence === undefined &&
         hostedEvidenceLaneDemoProofEvidence === undefined &&
+        hostedIdentityProgressionSummaryEvidence === undefined &&
         realHostedObservabilityHandoffAdminProofEvidence === undefined &&
         nextActionAdminProofEvidence === undefined)
         ? {}
@@ -1399,6 +1437,12 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
                         ? {}
                         : { adminRoleSurface: identityAdminProofEvidence }),
                     },
+                  }),
+              ...(hostedIdentityProgressionSummaryEvidence === undefined
+                ? {}
+                : {
+                    hostedIdentityProgressionSummary:
+                      hostedIdentityProgressionSummaryEvidence,
                   }),
               ...(spineManifestEvidence === undefined
                 ? {}
@@ -4304,6 +4348,49 @@ export function validateDevTestGameHostedIdentityEvidenceAdminProof(
   };
 }
 
+export function validateDevTestGameHostedIdentityProgressionSummary(
+  summary,
+  options = {},
+) {
+  assertDevTestGameHostedIdentityProgressionSummary(summary);
+  const progressions = summary.progressions ?? [];
+  if (summary.productionReady !== false || summary.releaseReady !== false) {
+    throw new Error(
+      "hosted identity progression summary must not claim readiness",
+    );
+  }
+  return {
+    status: "passed",
+    path: options.path ?? devTestGameHostedIdentityProgressionSummaryPath,
+    proofBoundary: summary.proofBoundary,
+    releaseReady: false,
+    productionReady: false,
+    progressionCount: summary.progressionCount,
+    progressionIds: progressions.map((progression) => progression.id),
+    progressionProofCommands: progressions.map(
+      (progression) => progression.proofCommand,
+    ),
+    progressionProofTargets: progressions.map(
+      (progression) => progression.adminProofTarget,
+    ),
+    progressions: progressions.map((progression) => ({
+      id: progression.id,
+      field: progression.field,
+      checkId: progression.checkId,
+      missingInputId: progression.missingInputId,
+      missingFixturePath: progression.missingFixturePath,
+      recoveredFixturePath: progression.recoveredFixturePath,
+      proofCommand: progression.proofCommand,
+      evidencePath: progression.evidencePath,
+      adminProofTarget: progression.adminProofTarget,
+      roleUrl: progression.roleUrl,
+      firstMissingInputId: progression.firstMissingInputId,
+      firstMissingCheckId: progression.firstMissingCheckId,
+    })),
+    ...(options.artifact === undefined ? {} : { artifact: options.artifact }),
+  };
+}
+
 function validateHostedIdentityHandoffSummary(proof) {
   const generated = proof.generatedFrom?.hostedHandoffSummary;
   const visible = proof.adminRoleSurface?.visibleHostedHandoffSummary;
@@ -6673,6 +6760,34 @@ export function assertDevTestGameReleaseReadiness(checklist) {
   if (hasIdentityAdapterCheck && hasIdentityUnproven) {
     throw new Error("dev-test-game identity adapter cannot be both passed and unproven");
   }
+  const hostedIdentityCheck = checklist.localDevelopmentSpine?.checks?.find(
+    (check) => check.id === "local-hosted-identity-evidence-admin-surface",
+  );
+  if (
+    hostedIdentityCheck?.progressionSummary !== undefined &&
+    (hostedIdentityCheck.progressionSummary.releaseReady !== false ||
+      hostedIdentityCheck.progressionSummary.productionReady !== false ||
+      hostedIdentityCheck.progressionSummary.progressionCount < 1 ||
+      !sameStringArray(
+        hostedIdentityCheck.progressionIds,
+        hostedIdentityCheck.progressionSummary.progressionIds,
+      ) ||
+      !sameStringArray(
+        hostedIdentityCheck.progressionProofTargets,
+        hostedIdentityCheck.progressionSummary.progressionProofTargets,
+      ) ||
+      hostedIdentityCheck.progressionSummary.progressions.some(
+        (progression) =>
+          typeof progression.proofCommand !== "string" ||
+          progression.proofCommand.length === 0 ||
+          typeof progression.adminProofTarget !== "string" ||
+          progression.adminProofTarget.length === 0,
+      ))
+  ) {
+    throw new Error(
+      "dev-test-game hosted identity progression summary check is malformed",
+    );
+  }
   const hasHostedMatrixCheck = checklist.localDevelopmentSpine?.checks?.some(
     (check) => check.id === "local-hosted-concurrent-race-matrix" && check.status === "passed",
   );
@@ -7133,6 +7248,17 @@ const optionalReadinessArtifactRegistry = Object.freeze([
     outputKeys: hostedIdentityEvidenceAdminProofArtifact.outputKeys,
   }),
   optionalReadinessArtifact({
+    id: "hostedIdentityProgressionSummary",
+    envVar: "FMARCH_DEV_TEST_GAME_HOSTED_IDENTITY_PROGRESSION_SUMMARY",
+    defaultPath: defaultHostedIdentityProgressionSummaryPath,
+    outputKeys: {
+      data: "hostedIdentityProgressionSummary",
+      path: "hostedIdentityProgressionSummaryPath",
+      freshnessMetadata: "hostedIdentityProgressionSummaryArtifact",
+    },
+    validator: validateDevTestGameHostedIdentityProgressionSummary,
+  }),
+  optionalReadinessArtifact({
     id: "opsAdminProof",
     envVar: "FMARCH_DEV_TEST_GAME_OPS_ADMIN_PROOF",
     defaultPath: defaultOpsAdminProofPath,
@@ -7357,6 +7483,7 @@ const optionalReadinessArtifactLoadPlan = Object.freeze([
   "identityAdapterProof",
   "identityAdminProof",
   "hostedIdentityEvidenceAdminProof",
+  "hostedIdentityProgressionSummary",
   "opsAdminProof",
   "hostedOpsSignals",
   "hostedOpsSignalsAdminProof",

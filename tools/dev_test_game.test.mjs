@@ -12448,6 +12448,12 @@ test("session card and markdown include role credential URLs and tokens", async 
     hostedIdentityEvidenceAdminProofPath:
       "target/dev-test-game/hosted-identity-evidence-admin-proof.json",
     hostedIdentityEvidenceAdminProof: hostedIdentityEvidenceAdminProofFixture(),
+    hostedIdentityProgressionSummaryPath:
+      devTestGameHostedIdentityProgressionSummaryPath,
+    hostedIdentityProgressionSummary:
+      buildDevTestGameHostedIdentityProgressionSummary({
+        generatedAt: "2026-06-26T00:00:00.000Z",
+      }),
   });
   assertDevTestGameReleaseReadiness(identityReadiness);
   assert(
@@ -12485,6 +12491,45 @@ test("session card and markdown include role credential URLs and tokens", async 
   assert.equal(
     hostedIdentityEvidenceCheck.handoffReceiptMissingInputCount,
     hostedIdentityEvidenceHandoffCase().blockedReceipt.missingRequiredInputs.length,
+  );
+  assert.equal(
+    identityReadiness.generatedFrom.hostedIdentityProgressionSummary,
+    devTestGameHostedIdentityProgressionSummaryPath,
+  );
+  assert.equal(
+    identityReadiness.localDevelopmentSpine.evidence
+      .hostedIdentityProgressionSummary.progressionCount,
+    hostedIdentityEvidenceFamilyProgressionCases.length,
+  );
+  assert.deepEqual(
+    hostedIdentityEvidenceCheck.progressionIds,
+    hostedIdentityEvidenceFamilyProgressionCases.map(
+      (progression) => progression.id,
+    ),
+  );
+  assert.deepEqual(
+    hostedIdentityEvidenceCheck.progressionProofTargets,
+    hostedIdentityEvidenceFamilyProgressionCases.map((progression) =>
+      hostedIdentityEvidenceProgressionAdminProofPath(progression.id),
+    ),
+  );
+  assert.deepEqual(
+    hostedIdentityEvidenceCheck.progressionSummary.progressions.map(
+      (progression) => [
+        progression.id,
+        progression.missingFixturePath,
+        progression.recoveredFixturePath,
+        progression.proofCommand,
+        progression.adminProofTarget,
+      ],
+    ),
+    hostedIdentityEvidenceFamilyProgressionCases.map((progression) => [
+      progression.id,
+      progression.missingFixturePath,
+      progression.recoveredFixturePath,
+      `FMARCH_HOSTED_IDENTITY_PROGRESSION_ID=${progression.id} npm run ${devTestGameHostedIdentityProgressionAdminProofCommand}`,
+      hostedIdentityEvidenceProgressionAdminProofPath(progression.id),
+    ]),
   );
   assert(
     identityReadiness.releaseReadiness.unproven.some(
