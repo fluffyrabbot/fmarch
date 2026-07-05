@@ -593,6 +593,327 @@ export const hostedIdentityEvidenceRequirementGroupDefinitions = Object.freeze([
   }),
 ]);
 
+export const hostedIdentityEvidenceFixturePlans = deepFreeze([
+  {
+    path: hostedIdentityEvidencePlaceholderFixturePath,
+    status: "placeholder",
+    providedFields: [],
+  },
+  {
+    path: hostedIdentityEvidenceRedactedPassFixturePath,
+    status: "passed",
+    providedFields: hostedIdentityEvidencePacketSectionDefinitions.map(
+      (section) => section.field,
+    ),
+  },
+  {
+    path: hostedIdentityEvidenceOperatorPartialFixturePath,
+    status: "partial",
+    providedFields: hostedIdentityEvidencePacketSectionDefinitions
+      .map((section) => section.field)
+      .filter((field) => field !== "accountRecovery"),
+  },
+  {
+    path: hostedIdentityEvidenceOperatorAccountLifecyclePartialFixturePath,
+    status: "partial",
+    providedFields: hostedIdentityEvidencePacketSectionDefinitions
+      .map((section) => section.field)
+      .filter((field) => field !== "accountLifecycle"),
+  },
+  {
+    path: hostedIdentityEvidenceOperatorAccountLifecycleRecoveredFixturePath,
+    status: "partial",
+    providedFields: ["accountLifecycle"],
+  },
+  {
+    path: hostedIdentityEvidenceOperatorAccountRecoveryRecoveredFixturePath,
+    status: "partial",
+    providedFields: ["accountRecovery"],
+  },
+  {
+    path: hostedIdentityEvidenceOperatorInvitePartialFixturePath,
+    status: "partial",
+    providedFields: hostedIdentityEvidencePacketSectionDefinitions
+      .map((section) => section.field)
+      .filter((field) => field !== "inviteDelivery"),
+  },
+  {
+    path: hostedIdentityEvidenceOperatorInviteRecoveredFixturePath,
+    status: "partial",
+    providedFields: ["inviteDelivery"],
+  },
+  {
+    path: hostedIdentityEvidenceOperatorRecoveredFixturePath,
+    status: "passed",
+    providedFields: hostedIdentityEvidencePacketSectionDefinitions.map(
+      (section) => section.field,
+    ),
+  },
+]);
+
+const hostedIdentityEvidenceProvidedSections = deepFreeze({
+  accountLifecycle: {
+    status: "provided",
+    inputs: {
+      createAccount: "redacted-account-create-event",
+      login: "redacted-login-event",
+      disableAccount: "redacted-disable-event",
+      enableAccount: "redacted-enable-event",
+    },
+    redactedEvidenceRefs: [
+      {
+        id: "account-lifecycle-redacted-log",
+        kind: "audit-log",
+        evidenceFamily: "account-lifecycle",
+        capturedAt: "2026-07-01T00:00:00.000Z",
+        locator: "s3://redacted/fmarch/identity/account-lifecycle.json",
+        retentionWindow: "90d",
+        exportLocator: "s3://redacted/fmarch/identity/account-lifecycle.json",
+        redacted: true,
+      },
+    ],
+  },
+  inviteDelivery: {
+    status: "provided",
+    inputs: {
+      deliveryChannels: ["email"],
+      revocationCovered: true,
+    },
+    rawInviteTokensIncluded: false,
+    redactedEvidenceRefs: [
+      {
+        id: "invite-delivery-redacted-log",
+        kind: "mail-provider-event-export",
+        evidenceFamily: "invite-delivery",
+        capturedAt: "2026-07-01T00:00:00.000Z",
+        locator: "s3://redacted/fmarch/identity/invites.json",
+        retentionWindow: "90d",
+        exportLocator: "s3://redacted/fmarch/identity/invites.json",
+        redacted: true,
+      },
+    ],
+  },
+  accountRecovery: {
+    status: "provided",
+    inputs: {
+      recoveryMethods: ["operator-assisted-reset"],
+      recoveredSessionsPreserveRoleSurfaceAdapter: true,
+    },
+    redactedEvidenceRefs: [
+      {
+        id: "account-recovery-redacted-log",
+        kind: "audit-log",
+        evidenceFamily: "account-recovery",
+        capturedAt: "2026-07-01T00:00:00.000Z",
+        locator: "s3://redacted/fmarch/identity/recovery.json",
+        retentionWindow: "90d",
+        exportLocator: "s3://redacted/fmarch/identity/recovery.json",
+        redacted: true,
+      },
+    ],
+  },
+  abuseAndRateLimitPolicy: {
+    status: "provided",
+    inputs: {
+      protectedOperations: ["login", "invite", "session-lifecycle"],
+      rateLimitPolicyRef: "ops/runbooks/identity-rate-limit.redacted.md",
+    },
+    redactedEvidenceRefs: [
+      {
+        id: "abuse-rate-limit-redacted-policy",
+        kind: "policy-export",
+        evidenceFamily: "abuse-rate-limit",
+        capturedAt: "2026-07-01T00:00:00.000Z",
+        locator: "s3://redacted/fmarch/identity/abuse-rate-limit.json",
+        retentionWindow: "90d",
+        exportLocator: "s3://redacted/fmarch/identity/abuse-rate-limit.json",
+        redacted: true,
+      },
+    ],
+  },
+  sessionSecretPolicy: {
+    status: "provided",
+    inputs: {
+      storage: "managed-secret-store",
+      rotation: "operator-triggered-rotation",
+      deploymentSecretSource: "hosted-platform-secret-binding",
+    },
+    rawSessionSecretsIncluded: false,
+    redactedEvidenceRefs: [
+      {
+        id: "session-secret-redacted-policy",
+        kind: "secret-policy-export",
+        evidenceFamily: "session-secret-policy",
+        capturedAt: "2026-07-01T00:00:00.000Z",
+        locator: "s3://redacted/fmarch/identity/session-secret.json",
+        retentionWindow: "90d",
+        exportLocator: "s3://redacted/fmarch/identity/session-secret.json",
+        redacted: true,
+      },
+    ],
+  },
+  hostedAuditRetentionExport: {
+    status: "provided",
+    inputs: {
+      eventFamilies: ["account", "invite", "session"],
+      retentionWindow: "90d",
+      exportRef: "s3://redacted/fmarch/identity/audit-retention.json",
+    },
+    redactedEvidenceRefs: [
+      {
+        id: "audit-retention-redacted-export",
+        kind: "audit-retention-export",
+        evidenceFamily: "audit-retention-export",
+        capturedAt: "2026-07-01T00:00:00.000Z",
+        locator: "s3://redacted/fmarch/identity/audit-retention.json",
+        retentionWindow: "90d",
+        exportLocator: "s3://redacted/fmarch/identity/audit-retention.json",
+        redacted: true,
+      },
+    ],
+  },
+});
+
+const hostedIdentityEvidenceMissingSections = deepFreeze({
+  accountLifecycle: {
+    status: "missing",
+    inputs: {
+      createAccount: "",
+      login: "",
+      disableAccount: "",
+      enableAccount: "",
+    },
+    redactedEvidenceRefs: [],
+  },
+  inviteDelivery: {
+    status: "missing",
+    inputs: {
+      deliveryChannels: [],
+      revocationCovered: false,
+    },
+    rawInviteTokensIncluded: false,
+    redactedEvidenceRefs: [],
+  },
+  accountRecovery: {
+    status: "missing",
+    inputs: {
+      recoveryMethods: [],
+      recoveredSessionsPreserveRoleSurfaceAdapter: false,
+    },
+    redactedEvidenceRefs: [],
+  },
+  abuseAndRateLimitPolicy: {
+    status: "missing",
+    inputs: {
+      protectedOperations: [],
+      rateLimitPolicyRef: "",
+    },
+    redactedEvidenceRefs: [],
+  },
+  sessionSecretPolicy: {
+    status: "missing",
+    inputs: {
+      storage: "",
+      rotation: "",
+      deploymentSecretSource: "",
+    },
+    rawSessionSecretsIncluded: false,
+    redactedEvidenceRefs: [],
+  },
+  hostedAuditRetentionExport: {
+    status: "missing",
+    inputs: {
+      eventFamilies: [],
+      retentionWindow: "",
+      exportRef: "",
+    },
+    redactedEvidenceRefs: [],
+  },
+});
+
+export function buildHostedIdentityEvidenceFixtureSnapshot(pathOrPlan) {
+  const plan =
+    typeof pathOrPlan === "string"
+      ? hostedIdentityEvidenceFixturePlan(pathOrPlan)
+      : pathOrPlan;
+  const providedFields = new Set(plan.providedFields ?? []);
+  return {
+    version: 1,
+    proof: "hosted-production-identity-evidence",
+    status: plan.status,
+    releaseReady: false,
+    productionReady: false,
+    redaction: {
+      packetKind: "redacted-hosted-identity-intake",
+      rawInviteTokensIncluded: false,
+      rawSessionSecretsIncluded: false,
+      rawPasswordHashesIncluded: false,
+      rawPersonalContactIncluded: false,
+    },
+    hostedIdentity: {
+      ...Object.fromEntries(
+        hostedIdentityEvidencePacketSectionDefinitions.map((section) => [
+          section.field,
+          fixtureClone(
+            providedFields.has(section.field)
+              ? hostedIdentityEvidenceProvidedSections[section.field]
+              : hostedIdentityEvidenceMissingSections[section.field],
+          ),
+        ]),
+      ),
+      roleSurfaceArchitectureChanged: false,
+      roleSurfaceContract: fixtureClone(hostedIdentityExpectedRoleSurfaceContract),
+      identityAdapterContract: hostedIdentityEvidenceFixtureAdapterContract(),
+    },
+  };
+}
+
+export function hostedIdentityEvidenceFixturePlan(path) {
+  const plan = hostedIdentityEvidenceFixturePlans.find(
+    (candidate) => candidate.path === path,
+  );
+  if (plan === undefined) {
+    throw new Error(`unknown hosted identity evidence fixture path: ${path}`);
+  }
+  return plan;
+}
+
+function hostedIdentityEvidenceFixtureAdapterContract() {
+  return {
+    version: 1,
+    adapterId: "local-production-identity-adapter-v1",
+    roleSurfaceArchitectureChanged: false,
+    roleSurfaceContract: fixtureClone(hostedIdentityExpectedRoleSurfaceContract),
+    credentialKinds: {
+      invite: "single-use-invite",
+      account: "local-password-account",
+      session: "opaque-session",
+    },
+    browserCookieName: "fmarch_session",
+    lifecycleControls: [
+      "account-disable",
+      "account-enable",
+      "session-rotation",
+      "session-revocation",
+      "invite-revocation",
+    ],
+    delegatedIssuanceControls: ["host-scoped-invite-issuance"],
+    redactionPolicy: {
+      rawInviteTokensStored: false,
+      rawSessionSecretsStored: false,
+      rawPasswordStored: false,
+      rawInviteTokensVisible: false,
+    },
+    status: "passed",
+    lifecycleStatus: "passed",
+    roleSurfaceEvidenceStatus: "passed",
+  };
+}
+
+function fixtureClone(value) {
+  return JSON.parse(JSON.stringify(value));
+}
+
 export function hostedIdentityEvidenceBlockedCheckRows() {
   return hostedIdentityEvidenceBlockedChecks.map((check) => ({
     ...check,

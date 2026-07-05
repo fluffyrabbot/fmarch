@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import { test } from "node:test";
 import {
+  buildHostedIdentityEvidenceFixtureSnapshot,
   devTestGameHostedIdentityEvidenceCommand,
   devTestGameHostedIdentityEvidencePath,
   devTestGameHostedIdentityProgressionAdminProofCommand,
@@ -9,6 +11,7 @@ import {
   hostedIdentityEvidenceBlockedCheckRows,
   hostedIdentityEvidenceBlockedChecks,
   hostedIdentityEvidenceFamilyProgressionCases,
+  hostedIdentityEvidenceFixturePlans,
   hostedIdentityEvidenceFixturePaths,
   hostedIdentityEvidenceHandoffCase,
   hostedIdentityEvidenceInputIds,
@@ -290,6 +293,92 @@ test("hosted identity evidence cases share handoff inputs and blocked groups", (
     ],
   );
   assert.deepEqual(
+    hostedIdentityEvidenceFixturePlans.map((plan) => plan.path),
+    hostedIdentityEvidenceFixturePaths,
+  );
+  assert.deepEqual(
+    hostedIdentityEvidenceFixturePlans.map((plan) => [
+      plan.path,
+      plan.status,
+      plan.providedFields,
+    ]),
+    [
+      [hostedIdentityEvidencePlaceholderFixturePath, "placeholder", []],
+      [
+        hostedIdentityEvidenceRedactedPassFixturePath,
+        "passed",
+        [
+          "accountLifecycle",
+          "inviteDelivery",
+          "accountRecovery",
+          "abuseAndRateLimitPolicy",
+          "sessionSecretPolicy",
+          "hostedAuditRetentionExport",
+        ],
+      ],
+      [
+        hostedIdentityEvidenceOperatorPartialFixturePath,
+        "partial",
+        [
+          "accountLifecycle",
+          "inviteDelivery",
+          "abuseAndRateLimitPolicy",
+          "sessionSecretPolicy",
+          "hostedAuditRetentionExport",
+        ],
+      ],
+      [
+        hostedIdentityEvidenceOperatorAccountLifecyclePartialFixturePath,
+        "partial",
+        [
+          "inviteDelivery",
+          "accountRecovery",
+          "abuseAndRateLimitPolicy",
+          "sessionSecretPolicy",
+          "hostedAuditRetentionExport",
+        ],
+      ],
+      [
+        hostedIdentityEvidenceOperatorAccountLifecycleRecoveredFixturePath,
+        "partial",
+        ["accountLifecycle"],
+      ],
+      [
+        hostedIdentityEvidenceOperatorAccountRecoveryRecoveredFixturePath,
+        "partial",
+        ["accountRecovery"],
+      ],
+      [
+        hostedIdentityEvidenceOperatorInvitePartialFixturePath,
+        "partial",
+        [
+          "accountLifecycle",
+          "accountRecovery",
+          "abuseAndRateLimitPolicy",
+          "sessionSecretPolicy",
+          "hostedAuditRetentionExport",
+        ],
+      ],
+      [
+        hostedIdentityEvidenceOperatorInviteRecoveredFixturePath,
+        "partial",
+        ["inviteDelivery"],
+      ],
+      [
+        hostedIdentityEvidenceOperatorRecoveredFixturePath,
+        "passed",
+        [
+          "accountLifecycle",
+          "inviteDelivery",
+          "accountRecovery",
+          "abuseAndRateLimitPolicy",
+          "sessionSecretPolicy",
+          "hostedAuditRetentionExport",
+        ],
+      ],
+    ],
+  );
+  assert.deepEqual(
     hostedIdentityEvidenceFamilyProgressionCases.map((progression) => [
       progression.id,
       progression.field,
@@ -325,4 +414,15 @@ test("hosted identity evidence cases share handoff inputs and blocked groups", (
       ],
     ],
   );
+});
+
+test("hosted identity fixture snapshots match the shared packet registry", async () => {
+  for (const plan of hostedIdentityEvidenceFixturePlans) {
+    const fixture = JSON.parse(await readFile(plan.path, "utf8"));
+    assert.deepEqual(
+      fixture,
+      buildHostedIdentityEvidenceFixtureSnapshot(plan),
+      `${plan.path} should match the shared hosted identity fixture registry`,
+    );
+  }
 });
