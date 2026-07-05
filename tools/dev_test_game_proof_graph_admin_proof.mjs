@@ -54,6 +54,9 @@ import {
   normalizeProofGraphReceiptArtifactRows,
   proofGraphTerminalReceiptParentId,
 } from "./dev_test_game_proof_graph_receipt_artifact_rows.mjs";
+import {
+  normalizeProofGraphDiagnosticProofSummary,
+} from "./dev_test_game_proof_graph_diagnostic_summary.mjs";
 
 const proofGraphPath = path.resolve(
   repoRoot,
@@ -131,8 +134,9 @@ export function proofGraphAdminProofCase() {
         proofGraphProductionFeatureTargetDestinations(source.proofGraph);
       const productionFeatureDestinationSummary =
         source.proofGraph.summary.productionFeatureDestinationSummary;
-      const diagnosticProofSummary = proofGraphDiagnosticProofSummary(
-        source.proofGraph,
+      const diagnosticProofSummary = normalizeProofGraphDiagnosticProofSummary(
+        source.proofGraph.summary?.diagnosticProofSummary,
+        { nodes: source.proofGraph.nodes },
       );
       return await proveAdminAuditDetail({
         browser,
@@ -206,8 +210,9 @@ export function proofGraphAdminProofCase() {
           proofGraphProductionFeatureTargetDestinations(source.proofGraph),
         productionFeatureDestinationSummary:
           source.proofGraph.summary.productionFeatureDestinationSummary,
-        diagnosticProofSummary: proofGraphDiagnosticProofSummary(
-          source.proofGraph,
+        diagnosticProofSummary: normalizeProofGraphDiagnosticProofSummary(
+          source.proofGraph.summary?.diagnosticProofSummary,
+          { nodes: source.proofGraph.nodes },
         ),
         ...proofGraphAdminFeatureTargetEntries(source.proofGraph),
       },
@@ -551,36 +556,6 @@ function proofGraphVisibleCheckStatuses(proofGraph) {
     : {
         [hostedIdentityReceipt.rowId]: hostedIdentityReceipt.status,
       };
-}
-
-function proofGraphDiagnosticProofSummary(proofGraph) {
-  const rows = proofGraph.nodes
-    .filter((node) => node?.diagnostic === true)
-    .map((node) => ({
-      id: String(node.id ?? ""),
-      label: String(node.label ?? node.id ?? ""),
-      status: String(node.status ?? "recorded"),
-      artifact: String(node.artifact ?? ""),
-      roleUrl: String(node.roleUrl ?? ""),
-      proofCommand: String(node.proofCommand ?? ""),
-      recoveryCommand: String(node.recoveryCommand ?? ""),
-      diagnosticReason: String(node.diagnosticReason ?? ""),
-      promotesFreshness: node.promotesFreshness === true,
-      terminalArtifact: node.terminalArtifact === true,
-    }));
-  return {
-    id: "diagnostic-non-terminal",
-    label: "Diagnostic non-terminal proofs",
-    status: diagnosticProofCountLabel(rows.length),
-    diagnosticCount: rows.length,
-    promotesFreshnessCount: rows.filter((row) => row.promotesFreshness).length,
-    terminalArtifactCount: rows.filter((row) => row.terminalArtifact).length,
-    rows,
-  };
-}
-
-function diagnosticProofCountLabel(count) {
-  return `${count} diagnostic non-terminal ${count === 1 ? "proof" : "proofs"}`;
 }
 
 function proofGraphEvidenceObjectRowIds(proofGraph) {

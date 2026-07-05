@@ -212,6 +212,9 @@ import {
   proofGraphProductionFeatureDestinationSummary,
 } from "./dev_test_game_proof_graph_production_feature_destinations.mjs";
 import {
+  normalizeProofGraphDiagnosticProofSummary,
+} from "./dev_test_game_proof_graph_diagnostic_summary.mjs";
+import {
   adminProofBatchIdFromLabel,
 } from "./dev_test_game_admin_proof_batch_registry.mjs";
 import {
@@ -5448,6 +5451,7 @@ export function validateDevTestGameProofGraphAdminProof(proof, options = {}) {
   validateProofGraphAdminCoreLoopScenarioFamilyDestinations(proof);
   validateProofGraphAdminProductionFeatureTargetDestinations(proof);
   validateProofGraphAdminProductionFeatureDestinationSummary(proof);
+  validateProofGraphAdminDiagnosticProofSummary(proof);
   for (const featureTargetCase of proofGraphAdminFeatureTargetCases) {
     validateProofGraphAdminFeatureTarget(proof, featureTargetCase);
   }
@@ -5687,6 +5691,55 @@ function validateProofGraphAdminProductionFeatureDestinationSummary(proof) {
     ) {
       throw new Error(
         `proof graph admin proof did not inspect production feature destination summary row: ${row.id}`,
+      );
+    }
+  }
+}
+
+function validateProofGraphAdminDiagnosticProofSummary(proof) {
+  if (
+    proof.generatedFrom?.diagnosticProofSummary === null ||
+    typeof proof.generatedFrom?.diagnosticProofSummary !== "object"
+  ) {
+    throw new Error("proof graph admin proof missing diagnostic summary");
+  }
+  const summary = normalizeProofGraphDiagnosticProofSummary(
+    proof.generatedFrom?.diagnosticProofSummary,
+  );
+  if (
+    summary.id !== "diagnostic-non-terminal" ||
+    summary.diagnosticCount !== summary.rows.length ||
+    summary.diagnosticCount === 0 ||
+    summary.promotesFreshnessCount !== 0 ||
+    summary.terminalArtifactCount !== 0
+  ) {
+    throw new Error("proof graph admin proof diagnostic summary drifted");
+  }
+  for (const row of summary.rows) {
+    if (
+      row.promotesFreshness !== false ||
+      row.terminalArtifact !== false ||
+      row.diagnosticReason === "" ||
+      row.artifact === "" ||
+      row.proofCommand === "" ||
+      row.recoveryCommand === ""
+    ) {
+      throw new Error(
+        `proof graph admin proof diagnostic row malformed: ${row.id}`,
+      );
+    }
+    const visibleStatus =
+      proof.adminRoleSurface?.visibleDiagnosticProofSummaryStatuses?.[row.id] ??
+      "";
+    if (
+      !proof.adminRoleSurface?.visibleDiagnosticProofSummaries?.includes(
+        row.id,
+      ) ||
+      !visibleStatus.includes(row.diagnosticReason) ||
+      !visibleStatus.includes("non-terminal artifact")
+    ) {
+      throw new Error(
+        `proof graph admin proof did not inspect diagnostic summary row: ${row.id}`,
       );
     }
   }

@@ -486,6 +486,9 @@ import {
   proofGraphProductionFeatureDestinationSummary,
 } from "./dev_test_game_proof_graph_production_feature_destinations.mjs";
 import {
+  buildProofGraphDiagnosticProofSummary,
+} from "./dev_test_game_proof_graph_diagnostic_summary.mjs";
+import {
   hostedIdentityTerminalReceiptArtifactCase,
   normalizeProofGraphReceiptArtifactRows,
   proofGraphReceiptArtifactRowId,
@@ -4235,6 +4238,10 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
       },
     }),
   );
+  assert.deepEqual(
+    graph.summary.diagnosticProofSummary,
+    buildProofGraphDiagnosticProofSummary({ nodes: graph.nodes }),
+  );
   assert.equal(
     graph.summary.coreLoopScenarioFamilyCount,
     coreLoopFamilyRows.length,
@@ -5113,24 +5120,9 @@ test("admin proof fixtures prove normalized evidence object rows", () => {
     hostedIdentityTerminalReceiptArtifactCase.visibleStatusText,
   );
   assert.deepEqual(proofGraphProof.generatedFrom.diagnosticProofSummary, {
-    id: "diagnostic-non-terminal",
-    label: "Diagnostic non-terminal proofs",
-    status: "1 diagnostic non-terminal proof",
-    diagnosticCount: 1,
-    promotesFreshnessCount: 0,
-    terminalArtifactCount: 0,
-    rows: proofGraphDiagnosticProofNodes.map((node) => ({
-      id: node.id,
-      label: node.label,
-      status: node.status,
-      artifact: node.artifact,
-      roleUrl: node.roleUrl,
-      proofCommand: node.proofCommand,
-      recoveryCommand: node.recoveryCommand,
-      diagnosticReason: node.diagnosticReason,
-      promotesFreshness: node.promotesFreshness,
-      terminalArtifact: node.terminalArtifact,
-    })),
+    ...buildProofGraphDiagnosticProofSummary({
+      nodes: proofGraphDiagnosticProofNodes,
+    }),
   });
   const preTerminalProofGraphProof = proofGraphAdminProofFixture();
   preTerminalProofGraphProof.generatedFrom.receiptArtifactRowIds = [];
@@ -19077,29 +19069,10 @@ function proofGraphAdminProofFixture() {
   const diagnosticEdgeRowIds = proofGraphDiagnosticProofEdges.map(
     (edge) => `edge:${edge.from}:${edge.relationship}:${edge.to}`,
   );
-  const diagnosticProofRows = proofGraphDiagnosticProofNodes.map((node) => ({
-    id: node.id,
-    label: node.label,
-    status: node.status,
-    artifact: node.artifact,
-    roleUrl: node.roleUrl,
-    proofCommand: node.proofCommand,
-    recoveryCommand: node.recoveryCommand,
-    diagnosticReason: node.diagnosticReason,
-    promotesFreshness: node.promotesFreshness,
-    terminalArtifact: node.terminalArtifact,
-  }));
-  const diagnosticProofSummary = {
-    id: "diagnostic-non-terminal",
-    label: "Diagnostic non-terminal proofs",
-    status: `${diagnosticProofRows.length} diagnostic non-terminal ${
-      diagnosticProofRows.length === 1 ? "proof" : "proofs"
-    }`,
-    diagnosticCount: diagnosticProofRows.length,
-    promotesFreshnessCount: 0,
-    terminalArtifactCount: 0,
-    rows: diagnosticProofRows,
-  };
+  const diagnosticProofSummary = buildProofGraphDiagnosticProofSummary({
+    nodes: proofGraphDiagnosticProofNodes,
+  });
+  const diagnosticProofRows = diagnosticProofSummary.rows;
   return {
     version: 1,
     proof: "dev-test-game-proof-graph-admin-proof",

@@ -62,6 +62,10 @@ import {
   proofGraphDiagnosticProofNodes,
 } from "./dev_test_game_proof_graph_handoff_cases.mjs";
 import {
+  assertProofGraphDiagnosticProofSummary,
+  buildProofGraphDiagnosticProofSummary,
+} from "./dev_test_game_proof_graph_diagnostic_summary.mjs";
+import {
   devTestGameCoreLoopAdminProofPath,
 } from "./dev_test_game_local_admin_proof_paths.mjs";
 import {
@@ -237,6 +241,7 @@ export function buildDevTestGameProofGraph(
         proofGraphProductionFeatureDestinationSummary({
           nodes,
         }),
+      diagnosticProofSummary: buildProofGraphDiagnosticProofSummary({ nodes }),
       coreLoopScenarioFamilyCount: nodes.filter(
         (node) => node.kind === "core-loop-scenario-family",
       ).length,
@@ -366,6 +371,9 @@ export function assertDevTestGameProofGraph(
 }
 
 export function assertDevTestGameProofGraphCoversDiagnosticProofs(graph) {
+  assertProofGraphDiagnosticProofSummary(graph.summary?.diagnosticProofSummary, {
+    nodes: graph.nodes,
+  });
   for (const diagnosticNode of proofGraphDiagnosticProofNodes) {
     const node = (graph.nodes ?? []).find(
       (candidate) => candidate.id === diagnosticNode.id,

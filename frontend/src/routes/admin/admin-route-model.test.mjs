@@ -151,6 +151,9 @@ import {
   proofGraphRecoveryReceiptNodes,
 } from "../../../../tools/dev_test_game_proof_graph_handoff_cases.mjs";
 import {
+  buildProofGraphDiagnosticProofSummary,
+} from "../../../../tools/dev_test_game_proof_graph_diagnostic_summary.mjs";
+import {
   recoveryReceiptGraphDescriptorByReceiptKey,
 } from "../../../../tools/dev_test_game_recovery_receipt_graph_surfaces.mjs";
 import {
@@ -1627,27 +1630,7 @@ test("admin route data exposes local proof graph as a native audit row", async (
     normalizeLocalProofGraphArtifactSummary(proofGraph),
   );
   assert.deepEqual(graph.artifactSummary.diagnosticProofSummary, {
-    id: "diagnostic-non-terminal",
-    label: "Diagnostic non-terminal proofs",
-    status: "1 diagnostic non-terminal proof",
-    diagnosticCount: 1,
-    promotesFreshnessCount: 0,
-    terminalArtifactCount: 0,
-    rows: [
-      {
-        id: "diagnostic:proof-graph-destination-summary-drift",
-        label: "Proof graph destination-summary drift branch",
-        status: "passed",
-        artifact:
-          "target/dev-test-game/next-action-proof-graph-destination-summary-drift-admin-proof.json",
-        roleUrl: "/admin/audit/local-next-action?game=<seeded-game>",
-        proofCommand: "npm run test:dev-test-game-next-action-admin-proof",
-        recoveryCommand: "test:dev-test-game-proof-graph",
-        diagnosticReason: "proof-graph-destination-summary-drift",
-        promotesFreshness: false,
-        terminalArtifact: false,
-      },
-    ],
+    ...proofGraph.summary.diagnosticProofSummary,
   });
   assert.deepEqual(graph.artifactSummary.productionFeatureDestinationSummary, {
     status: "passed",
@@ -6313,6 +6296,7 @@ function proofGraphFixture() {
       edgeCount: edges.length,
       roleUrlCount: nodes.filter((node) => node.roleUrl).length,
       recoveryTargetCount: nodes.filter((node) => node.recoveryCommand).length,
+      diagnosticProofSummary: buildProofGraphDiagnosticProofSummary({ nodes }),
       productionFeatureTargetCount: 1,
       productionFeatureDestinationSummary: {
         status: "passed",

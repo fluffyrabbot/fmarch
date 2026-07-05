@@ -56,6 +56,9 @@ import {
   normalizeProofGraphReceiptArtifactRows,
 } from "../../../../tools/dev_test_game_proof_graph_receipt_artifact_rows.mjs";
 import {
+  normalizeProofGraphDiagnosticProofSummary,
+} from "../../../../tools/dev_test_game_proof_graph_diagnostic_summary.mjs";
+import {
   devTestGameIdentityAdapterContractDiff,
   devTestGameIdentityAdapterProofVersion,
 } from "../../../../tools/dev_test_game_identity_adapter_contract.mjs";
@@ -2042,6 +2045,7 @@ export function normalizeLocalProofGraphArtifactSummary(
     ),
     recoveryTargetCount: Number(proofGraph?.summary?.recoveryTargetCount ?? 0),
     diagnosticProofSummary: normalizeLocalProofGraphDiagnosticProofSummary({
+      proofGraph,
       nodes: graphNodes,
     }),
     productionFeatureDestinationSummary:
@@ -2051,42 +2055,14 @@ export function normalizeLocalProofGraphArtifactSummary(
   });
 }
 
-export function normalizeLocalProofGraphDiagnosticProofSummary({ nodes } = {}) {
-  const diagnosticNodes = (Array.isArray(nodes) ? nodes : []).filter(
-    (node) => node?.diagnostic === true,
+export function normalizeLocalProofGraphDiagnosticProofSummary({
+  proofGraph,
+  nodes,
+} = {}) {
+  return normalizeProofGraphDiagnosticProofSummary(
+    proofGraph?.summary?.diagnosticProofSummary,
+    { nodes },
   );
-  return Object.freeze({
-    id: "diagnostic-non-terminal",
-    label: "Diagnostic non-terminal proofs",
-    status: diagnosticProofCountLabel(diagnosticNodes.length),
-    diagnosticCount: diagnosticNodes.length,
-    promotesFreshnessCount: diagnosticNodes.filter(
-      (node) => node?.promotesFreshness === true,
-    ).length,
-    terminalArtifactCount: diagnosticNodes.filter(
-      (node) => node?.terminalArtifact === true,
-    ).length,
-    rows: Object.freeze(
-      diagnosticNodes.map((node) =>
-        Object.freeze({
-          id: String(node.id ?? ""),
-          label: String(node.label ?? node.id ?? ""),
-          status: String(node.status ?? "recorded"),
-          artifact: String(node.artifact ?? ""),
-          roleUrl: String(node.roleUrl ?? ""),
-          proofCommand: String(node.proofCommand ?? ""),
-          recoveryCommand: String(node.recoveryCommand ?? ""),
-          diagnosticReason: String(node.diagnosticReason ?? ""),
-          promotesFreshness: node.promotesFreshness === true,
-          terminalArtifact: node.terminalArtifact === true,
-        }),
-      ),
-    ),
-  });
-}
-
-function diagnosticProofCountLabel(count) {
-  return `${count} diagnostic non-terminal ${count === 1 ? "proof" : "proofs"}`;
 }
 
 function proofGraphEdgeCheckId(edge) {
