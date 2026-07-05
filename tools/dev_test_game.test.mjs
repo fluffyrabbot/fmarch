@@ -1087,11 +1087,47 @@ test("dev test-game spine orchestrators expose stable proof order and env maps",
     script: "terminal-hosted-identity-next-action-admin-proof-batch",
     label: "Terminal hosted identity next-action admin proof batch",
   });
+  assert.deepEqual(devTestGameAdminSpinePlan[23], {
+    kind: "node",
+    script: "tools/dev_test_game_next_action.mjs",
+  });
   assert.deepEqual(devTestGameAdminSpinePlan[24], {
     kind: "custom",
     script: "terminal-refresh-admin-proof-batch",
     label: "Terminal refresh admin proof batch",
   });
+  assert.deepEqual(
+    devTestGameAdminSpinePlan
+      .map((step, index) => ({ index, step }))
+      .filter(({ step }) => step.script === "tools/dev_test_game_next_action.mjs")
+      .map(({ index, step }) => ({
+        index,
+        sequenceStage: step.env?.FMARCH_DEV_TEST_GAME_SEQUENCE_STAGE ?? null,
+        outputPath: step.env?.FMARCH_DEV_TEST_GAME_NEXT_ACTION ?? nextActionPath,
+      })),
+    [
+      {
+        index: 17,
+        sequenceStage: null,
+        outputPath: nextActionPath,
+      },
+      {
+        index: 21,
+        sequenceStage: devTestGameHostedIdentitySequenceStage,
+        outputPath: hostedIdentityNextActionPath,
+      },
+      {
+        index: 23,
+        sequenceStage: null,
+        outputPath: nextActionPath,
+      },
+      {
+        index: 27,
+        sequenceStage: null,
+        outputPath: nextActionPath,
+      },
+    ],
+  );
   assert.deepEqual(devTestGameAdminSpinePlan[4], {
     kind: "node",
     script: devTestGameReleaseReadinessScript,
@@ -2758,6 +2794,48 @@ test("dev test-game next-action derives one local recovery command from the mani
     hostedIdentityEvidenceFamilyProgressionCases.map((progression) =>
       hostedIdentityEvidenceProgressionAdminProofPath(progression.id),
     ),
+  );
+  assert.deepEqual(
+    devTestGameAdminSpinePlan.slice(21, 25).map((step) => ({
+      script: step.script,
+      sequenceStage:
+        step.env?.FMARCH_DEV_TEST_GAME_SEQUENCE_STAGE ??
+        devTestGameDefaultSequenceStage,
+      outputPath: step.env?.FMARCH_DEV_TEST_GAME_NEXT_ACTION ?? nextActionPath,
+      selectedCommand:
+        step.env?.FMARCH_DEV_TEST_GAME_SEQUENCE_STAGE ===
+        devTestGameHostedIdentitySequenceStage
+          ? hostedIdentityStageAction.nextAction.command
+          : step.script === "tools/dev_test_game_next_action.mjs"
+            ? localCapabilityPassedAction.nextAction.command
+            : null,
+    })),
+    [
+      {
+        script: "tools/dev_test_game_next_action.mjs",
+        sequenceStage: devTestGameHostedIdentitySequenceStage,
+        outputPath: hostedIdentityNextActionPath,
+        selectedCommand: devTestGameHostedIdentityOperatorSpineCommand,
+      },
+      {
+        script: "terminal-hosted-identity-next-action-admin-proof-batch",
+        sequenceStage: devTestGameDefaultSequenceStage,
+        outputPath: nextActionPath,
+        selectedCommand: null,
+      },
+      {
+        script: "tools/dev_test_game_next_action.mjs",
+        sequenceStage: devTestGameDefaultSequenceStage,
+        outputPath: nextActionPath,
+        selectedCommand: devTestGameHostedIdentitySequencePromotionCommand,
+      },
+      {
+        script: "terminal-refresh-admin-proof-batch",
+        sequenceStage: devTestGameDefaultSequenceStage,
+        outputPath: nextActionPath,
+        selectedCommand: null,
+      },
+    ],
   );
   assert.equal(
     freshAction.generatedFrom.sequenceStage,
