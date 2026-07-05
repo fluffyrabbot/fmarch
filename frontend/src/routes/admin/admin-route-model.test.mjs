@@ -128,6 +128,9 @@ import {
   localAdminAuditRoleUrl,
 } from "../../../../tools/dev_test_game_admin_audit_surface_ids.mjs";
 import {
+  buildAdminAuditHandoffPath,
+} from "../../../../tools/dev_test_game_admin_audit_handoff_path.mjs";
+import {
   hostedTargetPreflightExternalTargetsRequiredEvidence,
   hostedTargetPreflightMissingApiUrlRequiredEvidence,
   hostedTargetPreflightMissingFrontendUrlRequiredEvidence,
@@ -1123,6 +1126,93 @@ test("admin route data exposes hosted identity evidence as a native audit row", 
       ["status-provided", ...section.requiredInputIds, "redactedEvidenceRefs"],
     ]),
   );
+});
+
+test("admin hosted-facing audit inventory carries shared handoff paths where required", async () => {
+  const data = await buildAdminRouteData({
+    principalUserId: "admin_a",
+    capabilities: [{ kind: "GlobalAdmin" }],
+    hostedConcurrentRaceMatrix: hostedConcurrentRaceMatrixFixture(),
+    hostedOpsSignals: localHostedOpsSignalsFixture(),
+    realHostedObservabilityHandoff:
+      localRealHostedObservabilityHandoffFixture(),
+    hostedTargetPreflight: localHostedTargetPreflightFixture(),
+    hostedEvidenceLane: localHostedEvidenceLaneFixture(),
+    hostedEvidenceLaneDemoProof: localHostedEvidenceLaneDemoProofFixture(),
+    hostedIdentityEvidence: localHostedIdentityEvidenceFixture(),
+  });
+  const hostedFacingAuditIds = Object.values(localAdminAuditIds)
+    .filter((id) => id.includes("hosted"))
+    .sort();
+  assert.deepEqual(hostedFacingAuditIds, [
+    localAdminAuditIds.hostedConcurrentRaceMatrix,
+    localAdminAuditIds.hostedEvidenceLane,
+    localAdminAuditIds.hostedIdentityEvidence,
+    localAdminAuditIds.hostedOpsSignals,
+    localAdminAuditIds.hostedTargetPreflight,
+    localAdminAuditIds.realHostedObservabilityHandoff,
+  ].sort());
+
+  const auditsById = new Map(data.audit.map((item) => [item.id, item]));
+  assert.deepEqual(
+    hostedFacingAuditIds.filter((id) => auditsById.has(id)).sort(),
+    hostedFacingAuditIds,
+  );
+
+  const requiredHandoffPaths = new Map([
+    [
+      localAdminAuditIds.hostedConcurrentRaceMatrix,
+      buildAdminAuditHandoffPath({
+        upstreamAuditId: localAdminAuditIds.nextAction,
+        localCapabilityAuditId: localAdminAuditIds.raceCoverage,
+        downstreamStatus: "unproven",
+        downstreamCommand: hostedMatrixRealHostedEvidenceCommand,
+        downstreamProofTarget: hostedMatrixExternalEvidenceProofTarget,
+      }),
+    ],
+    [
+      localAdminAuditIds.hostedIdentityEvidence,
+      buildAdminAuditHandoffPath({
+        upstreamAuditId: localAdminAuditIds.nextAction,
+        localCapabilityAuditId: localAdminAuditIds.identityAdapter,
+        downstreamStatus: "blocked",
+        downstreamCommand: "npm run test:dev-test-game-hosted-identity-evidence",
+        downstreamProofTarget: HOSTED_IDENTITY_EVIDENCE_PROOF_TARGET,
+      }),
+    ],
+    [
+      localAdminAuditIds.realHostedObservabilityHandoff,
+      buildAdminAuditHandoffPath({
+        upstreamAuditId: localAdminAuditIds.nextAction,
+        localCapabilityAuditId: localAdminAuditIds.hostedOpsSignals,
+        downstreamStatus: "blocked",
+        downstreamCommand:
+          "npm run test:dev-test-game-real-hosted-observability-handoff",
+        downstreamProofTarget:
+          "target/dev-test-game/real-hosted-observability-handoff.json",
+      }),
+    ],
+  ]);
+  const hostedAuditsWithHandoffPath = hostedFacingAuditIds
+    .filter((id) => auditsById.get(id)?.handoffPath !== undefined)
+    .sort();
+  assert.deepEqual(
+    hostedAuditsWithHandoffPath,
+    [...requiredHandoffPaths.keys()].sort(),
+  );
+  for (const [auditId, expectedHandoffPath] of requiredHandoffPaths) {
+    const handoffPath = auditsById.get(auditId)?.handoffPath;
+    assert(Object.isFrozen(handoffPath));
+    assert.deepEqual(Object.keys(handoffPath), [
+      "upstreamAuditId",
+      "upstreamLabel",
+      "localCapabilityAuditId",
+      "downstreamStatus",
+      "downstreamCommand",
+      "downstreamProofTarget",
+    ]);
+    assert.deepEqual(handoffPath, expectedHandoffPath);
+  }
 });
 
 test("admin route data exposes local spine manifest as a native audit row", async () => {
