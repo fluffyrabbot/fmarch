@@ -126,7 +126,7 @@ const boundary = {
   boundary:
     "Generated browser acceptance boundary over the current frontend proof artifacts. It distinguishes proven browser evidence from blocked or prepared-only lanes, and does not promote model/SSR/DOM evidence to hydrated browser acceptance.",
   promotionRule:
-    "Full app browser acceptance is proven by the localhost dev-server role smoke, either run locally or imported through the role-smoke import contract, when it passes with board, admin, player, moderator, forbidden-route, and route-state screenshots, screenshot pixel evidence, overlap-checked target evidence, tablet thumb-zone geometry evidence, admin session-grant/recovery-gate form evidence, player main-thread SubmitPost ACK refresh evidence, player role-pm SubmitPost ACK evidence, player tablet-media browser request evidence, and moderator SetSlotStatus projection evidence. Passed file-backed or localhost-served fixture browser-runs promote their fixture lanes only; prepared fixtures, bind blocks, and Chromium launch blocks do not promote full app acceptance.",
+    "Full app browser acceptance is proven by the localhost dev-server role smoke, either run locally or imported through the role-smoke import contract, when it passes with board, setup, admin, player, moderator, forbidden-route, and route-state screenshots, screenshot pixel evidence, setup workbench geometry for /g/midsummer/setup, overlap-checked target evidence, tablet thumb-zone geometry evidence, admin session-grant/recovery-gate form evidence, player main-thread SubmitPost ACK refresh evidence, player role-pm SubmitPost ACK evidence, player tablet-media browser request evidence, and moderator SetSlotStatus projection evidence. Passed file-backed or localhost-served fixture browser-runs promote their fixture lanes only; prepared fixtures, bind blocks, and Chromium launch blocks do not promote full app acceptance.",
   lanes,
   overall: {
     state: fullAppBrowserProven ? "browser_proven" : "not_complete",
@@ -153,6 +153,7 @@ function localhostLane(roleSmoke) {
       ? [
           "roleSmoke.status == passed",
           "roleSmoke.roles includes admin/player/moderator screenshot pixel evidence",
+          "roleSmoke.setup includes /g/midsummer/setup workbench geometry evidence",
           "roleSmoke admin/player/moderator entries include tablet thumb-zone geometry evidence",
           "roleSmoke admin entries include session-grant/recovery-gate form evidence",
           "roleSmoke player entries include SubmitPost ACK and refreshed thread evidence",
@@ -167,6 +168,7 @@ function localhostLane(roleSmoke) {
       : [
           "localhost bind is denied before dev-server browser proof can run",
           "admin/player/moderator browser screenshots are absent",
+          "setup workbench browser geometry evidence is absent",
           "board and route-state browser screenshots are absent",
           "admin/player/moderator tablet thumb-zone geometry evidence is absent",
           "admin session-grant/recovery-gate browser form evidence is absent",
@@ -449,6 +451,7 @@ function browserRoleSmokeEvidenceComplete(roleSmoke) {
   return (
     Array.isArray(roleSmoke.board) &&
     roleSmoke.board.length > 0 &&
+    roleSmokeSetupWorkbenchEvidenceComplete(roleSmoke) &&
     Array.isArray(roleSmoke.routeStates) &&
     roleSmoke.routeStates.length > 0 &&
     (roleSmoke.roles ?? []).every((entry) => entry.screenshotPixels !== undefined) &&
@@ -469,6 +472,7 @@ function importedRoleSmokeEvidenceComplete(importedRoleSmoke) {
   return (
     validated.viewportCount > 0 &&
     validated.boardCount >= validated.viewportCount &&
+    validated.setupCount >= 3 &&
     validated.roleCount >= validated.viewportCount * 3 &&
     validated.playerPrivateChannelCount >= validated.viewportCount &&
     validated.routeStateCount > 0 &&
@@ -620,6 +624,30 @@ function roleSmokeThumbZoneEvidenceComplete(roleSmoke) {
       entries.every((entry) => thumbZonesComplete(entry.thumbZones, zones))
     );
   });
+}
+
+function roleSmokeSetupWorkbenchEvidenceComplete(roleSmoke) {
+  const setupEntries = roleSmoke.setup ?? [];
+  const viewportNames = new Set(setupEntries.map((entry) => entry.viewport?.name));
+  return (
+    setupEntries.length >= 3 &&
+    ["mobile", "tablet", "desktop"].every((name) => viewportNames.has(name)) &&
+    setupEntries.every((entry) =>
+      entry.role === "host-setup" &&
+      entry.path === "/g/midsummer/setup" &&
+      entry.surfaceTestId === "host-setup-surface" &&
+      entry.capabilityTestId === "host-setup-capability" &&
+      entry.noHorizontalOverflow === true &&
+      entry.screenshotPixels !== undefined &&
+      Array.isArray(entry.slotCards) &&
+      entry.slotCards.length >= 2 &&
+      entry.slotCards.every(
+        (slot) =>
+          slot.roleCellContainedInCard === true &&
+          slot.assignmentContainedInCard === true,
+      )
+    )
+  );
 }
 
 function renderSmokeThumbZoneEvidenceComplete(renderSmoke) {

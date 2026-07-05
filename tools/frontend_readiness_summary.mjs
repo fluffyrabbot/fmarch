@@ -222,6 +222,7 @@ const summary = {
       "roleSmoke.status == passed",
       "roleSmoke.roles includes admin, player, and moderator",
       "roleSmoke.board is nonempty",
+      "roleSmoke.setup includes /g/midsummer/setup workbench geometry for mobile, tablet, and desktop",
       "roleSmoke.routeStates is nonempty",
       "all roleSmoke role entries include screenshotPixels",
       "roleSmoke admin/player/moderator entries include tablet thumb-zone geometry for setup/recovery, player vote/post, and moderator critical actions",
@@ -265,6 +266,7 @@ const summary = {
     importedRoleSmokeRequires: [
       "importedRoleSmoke.status == imported-passed",
       "importedRoleSmoke.validated.boardCount covers every proof viewport",
+      "importedRoleSmoke.validated.setupCount covers setup workbench geometry",
       "importedRoleSmoke.validated.roleCount covers admin, player, and moderator for every proof viewport",
       "importedRoleSmoke.validated.playerPrivateChannelCount covers every proof viewport",
       "importedRoleSmoke.validated.routeStateCount and forbiddenRouteCount are nonempty",
@@ -994,6 +996,7 @@ function importedRoleSmokeEvidenceComplete(importedRoleSmoke) {
   return (
     validated.viewportCount > 0 &&
     validated.boardCount >= validated.viewportCount &&
+    validated.setupCount >= 3 &&
     validated.roleCount >= validated.viewportCount * 3 &&
     validated.playerPrivateChannelCount >= validated.viewportCount &&
     validated.routeStateCount > 0 &&
@@ -1141,6 +1144,7 @@ function browserRoleSmokeEvidenceComplete(roleSmoke) {
   return (
     Array.isArray(roleSmoke.board) &&
     roleSmoke.board.length > 0 &&
+    roleSmokeSetupWorkbenchEvidenceComplete(roleSmoke) &&
     Array.isArray(roleSmoke.routeStates) &&
     roleSmoke.routeStates.length > 0 &&
     (roleSmoke.roles ?? []).every((entry) => entry.screenshotPixels !== undefined) &&
@@ -1292,6 +1296,30 @@ function roleSmokeThumbZoneEvidenceComplete(roleSmoke) {
   });
 }
 
+function roleSmokeSetupWorkbenchEvidenceComplete(roleSmoke) {
+  const setupEntries = roleSmoke.setup ?? [];
+  const viewportNames = new Set(setupEntries.map((entry) => entry.viewport?.name));
+  return (
+    setupEntries.length >= 3 &&
+    ["mobile", "tablet", "desktop"].every((name) => viewportNames.has(name)) &&
+    setupEntries.every((entry) =>
+      entry.role === "host-setup" &&
+      entry.path === "/g/midsummer/setup" &&
+      entry.surfaceTestId === "host-setup-surface" &&
+      entry.capabilityTestId === "host-setup-capability" &&
+      entry.noHorizontalOverflow === true &&
+      entry.screenshotPixels !== undefined &&
+      Array.isArray(entry.slotCards) &&
+      entry.slotCards.length >= 2 &&
+      entry.slotCards.every(
+        (slot) =>
+          slot.roleCellContainedInCard === true &&
+          slot.assignmentContainedInCard === true,
+      )
+    )
+  );
+}
+
 function renderSmokeThumbZoneEvidenceComplete(renderSmoke) {
   const viewportCount = renderSmoke.viewports?.length ?? 0;
   if (viewportCount === 0) {
@@ -1426,6 +1454,11 @@ function localhostFailureReasons(roleSmoke) {
   }
   if (!Array.isArray(roleSmoke.board) || roleSmoke.board.length === 0) {
     failures.push("roleSmoke.board is empty or absent");
+  }
+  if (!roleSmokeSetupWorkbenchEvidenceComplete(roleSmoke)) {
+    failures.push(
+      "roleSmoke.setup missing /g/midsummer/setup workbench geometry evidence",
+    );
   }
   if (!Array.isArray(roleSmoke.routeStates) || roleSmoke.routeStates.length === 0) {
     failures.push("roleSmoke.routeStates is empty or absent");

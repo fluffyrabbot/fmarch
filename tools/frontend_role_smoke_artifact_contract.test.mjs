@@ -4169,7 +4169,7 @@ test("browser acceptance boundary records blocked and prepared browser lanes", a
   );
   assert.equal(
     boundary.promotionRule,
-    "Full app browser acceptance is proven by the localhost dev-server role smoke, either run locally or imported through the role-smoke import contract, when it passes with board, admin, player, moderator, forbidden-route, and route-state screenshots, screenshot pixel evidence, overlap-checked target evidence, tablet thumb-zone geometry evidence, admin session-grant/recovery-gate form evidence, player main-thread SubmitPost ACK refresh evidence, player role-pm SubmitPost ACK evidence, player tablet-media browser request evidence, and moderator SetSlotStatus projection evidence. Passed file-backed or localhost-served fixture browser-runs promote their fixture lanes only; prepared fixtures, bind blocks, and Chromium launch blocks do not promote full app acceptance.",
+    "Full app browser acceptance is proven by the localhost dev-server role smoke, either run locally or imported through the role-smoke import contract, when it passes with board, setup, admin, player, moderator, forbidden-route, and route-state screenshots, screenshot pixel evidence, setup workbench geometry for /g/midsummer/setup, overlap-checked target evidence, tablet thumb-zone geometry evidence, admin session-grant/recovery-gate form evidence, player main-thread SubmitPost ACK refresh evidence, player role-pm SubmitPost ACK evidence, player tablet-media browser request evidence, and moderator SetSlotStatus projection evidence. Passed file-backed or localhost-served fixture browser-runs promote their fixture lanes only; prepared fixtures, bind blocks, and Chromium launch blocks do not promote full app acceptance.",
   );
   const laneById = new Map(boundary.lanes.map((lane) => [lane.id, lane]));
   assert.deepEqual([...laneById.keys()], [
@@ -4636,6 +4636,7 @@ test("frontend readiness summary reports role proof layers without promoting bro
       "roleSmoke.status == passed",
       "roleSmoke.roles includes admin, player, and moderator",
       "roleSmoke.board is nonempty",
+      "roleSmoke.setup includes /g/midsummer/setup workbench geometry for mobile, tablet, and desktop",
       "roleSmoke.routeStates is nonempty",
       "all roleSmoke role entries include screenshotPixels",
       "roleSmoke admin/player/moderator entries include tablet thumb-zone geometry for setup/recovery, player vote/post, and moderator critical actions",
@@ -4679,6 +4680,7 @@ test("frontend readiness summary reports role proof layers without promoting bro
     importedRoleSmokeRequires: [
       "importedRoleSmoke.status == imported-passed",
       "importedRoleSmoke.validated.boardCount covers every proof viewport",
+      "importedRoleSmoke.validated.setupCount covers setup workbench geometry",
       "importedRoleSmoke.validated.roleCount covers admin, player, and moderator for every proof viewport",
       "importedRoleSmoke.validated.playerPrivateChannelCount covers every proof viewport",
       "importedRoleSmoke.validated.routeStateCount and forbiddenRouteCount are nonempty",
@@ -4867,6 +4869,7 @@ test("frontend readiness summary reports role proof layers without promoting bro
           "localhostBrowser: roleSmoke.roles missing player",
           "localhostBrowser: roleSmoke.roles missing moderator",
           "localhostBrowser: roleSmoke.board is empty or absent",
+          "localhostBrowser: roleSmoke.setup missing /g/midsummer/setup workbench geometry evidence",
           "localhostBrowser: roleSmoke.routeStates is empty or absent",
           "localhostBrowser: roleSmoke.roles[admin] missing session-grant form or recovery-gate ACK evidence",
           "localhostBrowser: roleSmoke.roles missing tablet thumb-zone geometry evidence",
@@ -4920,6 +4923,7 @@ test("frontend readiness summary reports role proof layers without promoting bro
           "localhostBrowser: roleSmoke.roles missing player",
           "localhostBrowser: roleSmoke.roles missing moderator",
           "localhostBrowser: roleSmoke.board is empty or absent",
+          "localhostBrowser: roleSmoke.setup missing /g/midsummer/setup workbench geometry evidence",
           "localhostBrowser: roleSmoke.routeStates is empty or absent",
           "localhostBrowser: roleSmoke.roles[admin] missing session-grant form or recovery-gate ACK evidence",
           "localhostBrowser: roleSmoke.roles missing tablet thumb-zone geometry evidence",
@@ -4973,6 +4977,7 @@ test("frontend readiness summary reports role proof layers without promoting bro
           "localhostBrowser: roleSmoke.roles missing player",
           "localhostBrowser: roleSmoke.roles missing moderator",
           "localhostBrowser: roleSmoke.board is empty or absent",
+          "localhostBrowser: roleSmoke.setup missing /g/midsummer/setup workbench geometry evidence",
           "localhostBrowser: roleSmoke.routeStates is empty or absent",
           "localhostBrowser: roleSmoke.roles[admin] missing session-grant form or recovery-gate ACK evidence",
           "localhostBrowser: roleSmoke.roles missing tablet thumb-zone geometry evidence",
@@ -5168,6 +5173,7 @@ test("frontend readiness summary reports role proof layers without promoting bro
         "roleSmoke.roles missing player",
         "roleSmoke.roles missing moderator",
         "roleSmoke.board is empty or absent",
+        "roleSmoke.setup missing /g/midsummer/setup workbench geometry evidence",
         "roleSmoke.routeStates is empty or absent",
         "roleSmoke.roles[admin] missing session-grant form or recovery-gate ACK evidence",
         "roleSmoke.roles missing tablet thumb-zone geometry evidence",

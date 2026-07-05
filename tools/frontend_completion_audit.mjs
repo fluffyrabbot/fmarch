@@ -367,7 +367,7 @@ const audit = {
         "Host touch-control CSS proves the 44px target variable, 8px minimum gaps, touch-action: manipulation, visible focus outline, and wrapping confirmation actions used by moderator/admin-style destructive confirmations.",
         "Build-mode SSR proves admin setup/recovery, player vote/post, and all 9 moderator critical host actions are descendants of explicit thumb-zone containers.",
         ...fullBrowserProofLines(
-          "Dev-server role smoke proves touch target geometry, thumb-zone target counts, overlap-checked visible targets, nonblank screenshots, and focus traversal across 1024, 1180, 1280, and desktop viewports.",
+          "Dev-server role smoke proves touch target geometry, thumb-zone target counts, setup workbench geometry for /g/midsummer/setup, overlap-checked visible targets, nonblank screenshots, and focus traversal across mobile, tablet, 1024, 1180, 1280, and desktop viewports.",
         ),
       ],
       evidence: [
@@ -625,7 +625,7 @@ const audit = {
       proven:
         browserRoleSmokeEvidenceComplete()
           ? [
-              "Dev-server Chromium role smoke passed, generated screenshots, recorded tablet thumb-zone geometry, and recorded admin session-grant/recovery-gate form evidence, player main-thread SubmitPost ACK, player role-pm SubmitPost ACK, player tablet-media browser request evidence, and moderator SetSlotStatus ACK evidence with refreshed projections.",
+              "Dev-server Chromium role smoke passed, generated screenshots, recorded setup workbench geometry for /g/midsummer/setup, recorded tablet thumb-zone geometry, and recorded admin session-grant/recovery-gate form evidence, player main-thread SubmitPost ACK, player role-pm SubmitPost ACK, player tablet-media browser request evidence, and moderator SetSlotStatus ACK evidence with refreshed projections.",
             ]
           : inAppBrowserImportedRunEvidenceComplete()
             ? [
@@ -750,6 +750,7 @@ function importedRoleSmokeEvidenceComplete() {
   return (
     validated.viewportCount > 0 &&
     validated.boardCount >= validated.viewportCount &&
+    validated.setupCount >= 3 &&
     validated.roleCount >= validated.viewportCount * 3 &&
     validated.playerPrivateChannelCount >= validated.viewportCount &&
     validated.routeStateCount > 0 &&
@@ -787,6 +788,7 @@ function browserRoleSmokeEvidenceComplete() {
   return (
     Array.isArray(artifacts.roleSmoke.board) &&
     artifacts.roleSmoke.board.length > 0 &&
+    roleSmokeSetupWorkbenchEvidenceComplete() &&
     Array.isArray(artifacts.roleSmoke.routeStates) &&
     artifacts.roleSmoke.routeStates.length > 0 &&
     (artifacts.roleSmoke.roles ?? []).every(
@@ -815,6 +817,30 @@ function roleSmokeThumbZoneEvidenceComplete() {
       entries.every((entry) => thumbZonesComplete(entry.thumbZones, zones))
     );
   });
+}
+
+function roleSmokeSetupWorkbenchEvidenceComplete() {
+  const setupEntries = artifacts.roleSmoke.setup ?? [];
+  const viewportNames = new Set(setupEntries.map((entry) => entry.viewport?.name));
+  return (
+    setupEntries.length >= 3 &&
+    ["mobile", "tablet", "desktop"].every((name) => viewportNames.has(name)) &&
+    setupEntries.every((entry) =>
+      entry.role === "host-setup" &&
+      entry.path === "/g/midsummer/setup" &&
+      entry.surfaceTestId === "host-setup-surface" &&
+      entry.capabilityTestId === "host-setup-capability" &&
+      entry.noHorizontalOverflow === true &&
+      entry.screenshotPixels !== undefined &&
+      Array.isArray(entry.slotCards) &&
+      entry.slotCards.length >= 2 &&
+      entry.slotCards.every(
+        (slot) =>
+          slot.roleCellContainedInCard === true &&
+          slot.assignmentContainedInCard === true,
+      )
+    )
+  );
 }
 
 function expectedThumbZoneCounts() {
