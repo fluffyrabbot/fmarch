@@ -341,6 +341,8 @@ export async function proveAdminAuditDetail({
   requiredHostedIdentityPacketRefStatuses = {},
   requiredHostedIdentityProgressions = [],
   requiredHostedIdentityProgressionStatuses = {},
+  requiredNextActionHandoffPairRows = [],
+  requiredNextActionHandoffPairRowStatuses = {},
   requiredHostedIdentityOperatorGate = null,
   requiredHostedIdentityProviderBoundary = null,
   requiredHostedIdentityRoleSurfaceContractDiffStatus = null,
@@ -656,6 +658,17 @@ export async function proveAdminAuditDetail({
       page,
       prefix: "admin-audit-hosted-identity-progression",
       ids: Object.keys(requiredHostedIdentityProgressionStatuses),
+    });
+    const visibleNextActionHandoffPairRows = await waitForRows({
+      page,
+      prefix: "admin-audit-next-action-handoff-pair",
+      ids: requiredNextActionHandoffPairRows,
+      expectedStatuses: requiredNextActionHandoffPairRowStatuses,
+    });
+    const visibleNextActionHandoffPairRowStatuses = await readRowStatuses({
+      page,
+      prefix: "admin-audit-next-action-handoff-pair",
+      ids: Object.keys(requiredNextActionHandoffPairRowStatuses),
     });
     const requiredHostedIdentityOperatorGateIds =
       requiredHostedIdentityOperatorGate === null
@@ -1196,6 +1209,15 @@ export async function proveAdminAuditDetail({
         : {
             visibleHostedIdentityProgressionStatuses:
               visibleHostedIdentityProgressionStatuses,
+          }),
+      ...(visibleNextActionHandoffPairRows.length === 0
+        ? {}
+        : { visibleNextActionHandoffPairRows }),
+      ...(Object.keys(visibleNextActionHandoffPairRowStatuses).length === 0
+        ? {}
+        : {
+            visibleNextActionHandoffPairRowStatuses:
+              visibleNextActionHandoffPairRowStatuses,
           }),
       ...(visibleHostedIdentityOperatorGate.length === 0
         ? {}

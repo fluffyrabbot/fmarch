@@ -175,6 +175,12 @@ export function nextActionAdminProofCase({
           requiredHostedIdentityProgressionStatusesForNextAction(
             source.nextAction,
           ),
+        requiredNextActionHandoffPairRows:
+          requiredNextActionHandoffPairRowsForNextAction(source.nextAction),
+        requiredNextActionHandoffPairRowStatuses:
+          requiredNextActionHandoffPairRowStatusesForNextAction(
+            source.nextAction,
+          ),
         requiredHostedIdentityOperatorGate:
           requiredHostedIdentityOperatorGateForNextAction(source.nextAction),
         requiredRelatedDestinations: requiredRelatedDestinationsForHandoffs(
@@ -1276,6 +1282,34 @@ function requiredHostedIdentityProgressionStatusesForNextAction(nextAction) {
       String(progression.adminProofTarget ?? ""),
     ]),
   );
+}
+
+function requiredNextActionHandoffPairRowsForNextAction(nextAction) {
+  const pair = nextAction.generatedFrom?.nextActionHandoffPair;
+  if (pair === undefined) {
+    return [];
+  }
+  return [
+    "summary",
+    String(pair.defaultSequenceBlocker.id ?? ""),
+    String(pair.hostedIdentityPredicate.id ?? ""),
+  ];
+}
+
+function requiredNextActionHandoffPairRowStatusesForNextAction(nextAction) {
+  const pair = nextAction.generatedFrom?.nextActionHandoffPair;
+  if (pair === undefined) {
+    return {};
+  }
+  return {
+    summary: String(pair.proofBoundary ?? ""),
+    [String(pair.defaultSequenceBlocker.id ?? "")]: `${String(
+      pair.defaultSequenceBlocker.expectedReason ?? "",
+    )}\n${String(pair.defaultSequenceBlocker.expectedActionStatus ?? "")}`,
+    [String(pair.hostedIdentityPredicate.id ?? "")]: `${String(
+      pair.hostedIdentityPredicate.expectedReason ?? "",
+    )}\n${String(pair.hostedIdentityPredicate.expectedActionStatus ?? "")}`,
+  };
 }
 
 function requiredHostedIdentityOperatorGateForNextAction(nextAction) {
