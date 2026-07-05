@@ -121,6 +121,9 @@ import {
   devTestGameSpineManifestAdminProofPath,
 } from "./dev_test_game_local_admin_proof_paths.mjs";
 import {
+  devTestGameProofRunPath,
+} from "./dev_test_game_spine_artifact_paths.mjs";
+import {
   assertDevTestGameSeedFixtureSummary,
   buildDevTestGameSeedFixtureSummary,
 } from "./dev_test_game_seed_fixture_summary.mjs";
@@ -414,6 +417,9 @@ import {
 import {
   coreLoopFeatureSpineTargetRows,
 } from "./dev_test_game_core_loop_feature_spine_targets.mjs";
+import {
+  identityFeatureSpineTargetRows,
+} from "./dev_test_game_identity_feature_spine_targets.mjs";
 import {
   devTestGameHostSetupProofCommand,
   hostSetupFeatureSpineCycleId,
@@ -4314,6 +4320,7 @@ test("dev test-game next-action advances hosted deployment after target prefligh
       targetRoleUrlMatchesSelectedSpineTarget: true,
       browserProofCommand: devTestGameLiveProofCommand,
       proofTarget: devTestGameReleaseReadinessPath,
+      sourceProofArtifact: devTestGameCoreLoopAdminProofPath,
       coverageDecision:
         resolvedFeatureSpineTargetFixture("host-phase-control")
           .coverageDecision,
@@ -4958,6 +4965,7 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
     [
       "http://127.0.0.1:5173/g/<seeded-game>/setup",
       "/admin/audit/local-host-setup-proof?game=<seeded-game>",
+      "target/dev-test-game/host-setup-proof.json",
       devTestGameHostSetupProofCommand,
       "setup workbench browser surface",
     ].every((token) => hostSetupDestinationSummaryRow.status.includes(token)),
@@ -5407,6 +5415,7 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
             target.detailRoleUrl,
             target.roleUrl,
             target.browserProofCommand,
+            target.sourceProofArtifact,
             target.rerunCommand,
             expectedPrivateChannelFeatureEvidenceObjectNames(slotId),
           ];
@@ -5420,6 +5429,7 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
       identityAdapterCheck.adminRoleSurface.detailRoleUrl,
       identityAdapterCheck.adminRoleSurface.detailRoleUrl,
       devTestGameLiveProofCommand,
+      devTestGameIdentityAdminProofPath,
       devTestGameIdentityAdminProofCommand,
       [],
     ],
@@ -5435,6 +5445,7 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
         node.roleUrl,
         node.targetRoleUrl,
         node.browserProofCommand,
+        node.sourceProofArtifact,
         node.recoveryCommand,
         node.evidenceObjectNames ?? [],
       ]),
@@ -15913,6 +15924,7 @@ function devTestGameReleaseReadinessChecklistFixture({
             ],
             visibleSessions: ["admin", "host", "player"],
           },
+          spineTargets: identitySpineTargetsFixture(),
         },
         ...(includeProofGraphHandoffCheck
           ? [
@@ -19304,6 +19316,58 @@ function coreLoopProductionFeatureTargetsFixture(roleUrlHrefs) {
   };
 }
 
+function identitySpineTargetsFixture() {
+  const targetRow = identityFeatureSpineTargetRows.identityAdapter;
+  const detailRoleUrl = localAdminAuditRoleUrl(
+    localAdminAuditIds.identityAdapter,
+  );
+  const roleUrlHrefs = {
+    [targetRow.roleUrlId]: detailRoleUrl,
+  };
+  return {
+    status: "passed",
+    detailRoleUrl,
+    defaultCycleId: targetRow.cycleId,
+    defaultRoleUrlId: targetRow.roleUrlId,
+    defaultRoleUrl: detailRoleUrl,
+    defaultCheckpointId: targetRow.checkpointId,
+    browserProofCommand: devTestGameLiveProofCommand,
+    cycleIds: [targetRow.cycleId],
+    roleUrlIds: [targetRow.roleUrlId],
+    checkpointIds: [targetRow.checkpointId],
+    recoveryHookIds: [],
+    visibleAdminCheckIds: [
+      "account-login",
+      "account-lifecycle",
+      "session-rotation",
+      "session-revocation",
+      "invite-revocation",
+      "host-scoped-invite-issuance",
+      "audit-trail",
+      "admin-audit-surface",
+    ],
+    roleUrlHrefs,
+    productionFeatureTargets:
+      identityProductionFeatureTargetsFixture(roleUrlHrefs),
+  };
+}
+
+function identityProductionFeatureTargetsFixture(roleUrlHrefs) {
+  const slotIds = Object.values(identityFeatureSpineTargetRows).map(
+    (row) => row.featureSlotId,
+  );
+  return {
+    status: "passed",
+    slotIds,
+    bySlotId: Object.fromEntries(
+      slotIds.map((slotId) => [
+        slotId,
+        featureSpineCaseFixture(slotId, { roleUrlHrefs }).spineTarget,
+      ]),
+    ),
+  };
+}
+
 function hostSetupSpineTargetsFixture() {
   const roleUrlHrefs = {
     "host-setup": "http://127.0.0.1:5173/g/<seeded-game>/setup",
@@ -19657,6 +19721,7 @@ function nextActionProofGraphFixture(slotId = "player-action-submission") {
         roleUrl: target.detailRoleUrl,
         targetRoleUrl: target.roleUrl,
         browserProofCommand: target.browserProofCommand,
+        sourceProofArtifact: target.sourceProofArtifact,
         artifact: devTestGameReleaseReadinessPath,
       },
       ...proofGraphDiagnosticProofNodes,
@@ -19668,6 +19733,7 @@ function nextActionProofGraphFixture(slotId = "player-action-submission") {
         relationship: "proves-production-feature",
         featureSlotId: slotId,
         targetRoleUrl: target.roleUrl,
+        sourceProofArtifact: target.sourceProofArtifact,
         command: target.browserProofCommand,
       },
     ],
@@ -19718,6 +19784,7 @@ function hostedIdentityProofGraphFixture() {
         roleUrl: identityTarget.detailRoleUrl,
         targetRoleUrl: identityTarget.roleUrl,
         browserProofCommand: identityTarget.browserProofCommand,
+        sourceProofArtifact: identityTarget.sourceProofArtifact,
         recoveryCommand: identityTarget.rerunCommand,
         coverageDecision: identityTarget.coverageDecision,
       },
@@ -19770,6 +19837,7 @@ function hostedIdentityProofGraphFixture() {
         relationship: "proves-production-feature",
         featureSlotId: "identity-adapter",
         targetRoleUrl: identityTarget.roleUrl,
+        sourceProofArtifact: identityTarget.sourceProofArtifact,
         command: identityTarget.browserProofCommand,
       },
       ...hostedIdentityProofGraphEdgesFixture().edges.map((edge) => ({
@@ -20816,6 +20884,7 @@ function proofGraphHostSetupFeatureTargetFixture() {
     adminCheckId: "start-phase",
     browserProofCommand: devTestGameLiveProofCommand,
     recoveryCommand: devTestGameHostSetupProofCommand,
+    sourceProofArtifact: "target/dev-test-game/host-setup-proof.json",
     adminDetailRoleUrl: "/admin/audit/local-host-setup-proof?game=<seeded-game>",
     readinessEvidence: "target/dev-test-game/host-setup-proof.json",
     browserWorkbench: {
@@ -20842,6 +20911,7 @@ function proofGraphCoreLoopProductionFeatureTargetFixture() {
     adminCheckId: "host-lifecycle-control",
     browserProofCommand: devTestGameLiveProofCommand,
     recoveryCommand: "npm run test:dev-test-game-core-loop-admin-proof",
+    sourceProofArtifact: devTestGameCoreLoopAdminProofPath,
     coverageDecision: {
       kind: "seeded-role-url-proof",
       proofCommand: "npm run test:dev-test-game-core-loop-admin-proof",
@@ -20863,6 +20933,7 @@ function proofGraphCohostFeatureTargetFixture() {
     adminCheckId: "cohost-console",
     browserProofCommand: devTestGameLiveProofCommand,
     recoveryCommand: devTestGameCohostConsoleProofCommand,
+    sourceProofArtifact: devTestGameProofRunPath,
     coverageDecision:
       featureSpineCaseFixture("cohost-console").spineTarget.coverageDecision,
   };
@@ -20883,6 +20954,7 @@ function proofGraphReplacementFeatureTargetFixture() {
     adminCheckId: "replacement-incoming-player",
     browserProofCommand: devTestGameLiveProofCommand,
     recoveryCommand: devTestGameReplacementPlayerProofCommand,
+    sourceProofArtifact: devTestGameProofRunPath,
     coverageDecision:
       featureSpineCaseFixture("replacement-player-role-surface").spineTarget
         .coverageDecision,
@@ -20903,6 +20975,7 @@ function proofGraphReplacementActionFeatureTargetFixture() {
     adminCheckId: "replacement-incoming-action",
     browserProofCommand: devTestGameLiveProofCommand,
     recoveryCommand: devTestGameReplacementActionProofCommand,
+    sourceProofArtifact: devTestGameProofRunPath,
     coverageDecision:
       featureSpineCaseFixture("replacement-action-recovery").spineTarget
         .coverageDecision,
@@ -20926,6 +20999,7 @@ function proofGraphReplacementPrivateFeatureTargetFixture() {
     adminCheckId: "replacement-stale-private-channel",
     browserProofCommand: devTestGameLiveProofCommand,
     recoveryCommand: devTestGameReplacementPrivateProofCommand,
+    sourceProofArtifact: devTestGameProofRunPath,
     coverageDecision:
       featureSpineCaseFixture("replacement-private-channel-recovery").spineTarget
         .coverageDecision,
@@ -20981,6 +21055,7 @@ function proofGraphProductionFeatureTargetDestinationsFixture(targets) {
       roleUrl: target.roleUrl,
       targetRoleUrl: target.targetRoleUrl,
       adminCheckId: target.adminCheckId,
+      sourceProofArtifact: target.sourceProofArtifact,
       ...(target.adminDetailRoleUrl === undefined
         ? {}
         : { adminDetailRoleUrl: target.adminDetailRoleUrl }),
@@ -21010,6 +21085,7 @@ function proofGraphProductionFeatureDestinationSummaryFixture(destinations) {
       sourceCheckId: destination.sourceCheckId,
       adminCheckId: destination.adminCheckId,
       targetRoleUrl: destination.targetRoleUrl,
+      sourceProofArtifact: destination.sourceProofArtifact,
       adminDetailRoleUrl: destination.adminDetailRoleUrl,
       recoveryCommand: destination.recoveryCommand,
       browserWorkbench: destination.browserWorkbench,
@@ -21197,6 +21273,7 @@ function nextActionAdminProofFixture() {
         "selected-spine-admin-check",
         "selected-spine-rerun-command",
         "selected-spine-browser-proof",
+        "selected-spine-source-artifact",
         "selected-spine-coverage-decision",
         "seed-proof-lane-coverage-trace",
         ...proofGraphDiagnosticSummaryCheckIds(proofGraphDiagnosticSummaryTrace),
@@ -21435,6 +21512,7 @@ function nextActionAdminProofLocalReadinessDependencyFixture({
     "selected-spine-admin-check",
     "selected-spine-rerun-command",
     "selected-spine-browser-proof",
+    "selected-spine-source-artifact",
     "selected-spine-coverage-decision",
   ]);
 

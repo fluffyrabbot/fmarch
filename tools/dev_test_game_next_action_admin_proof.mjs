@@ -754,6 +754,8 @@ export function assertNextActionAdminProof(evidence) {
       typeof target.checkpointId !== "string" ||
       typeof target.adminCheckId !== "string" ||
       typeof target.browserProofCommand !== "string" ||
+      typeof target.sourceProofArtifact !== "string" ||
+      target.sourceProofArtifact.length === 0 ||
       target.coverageDecision === null ||
       typeof target.coverageDecision !== "object" ||
       target.featureSlotId !== declaration.featureSlotId ||
@@ -764,6 +766,7 @@ export function assertNextActionAdminProof(evidence) {
       typeof drilldown?.checkpointRowId !== "string" ||
       typeof drilldown?.adminCheckId !== "string" ||
       typeof drilldown?.rerunCommand !== "string" ||
+      drilldown.sourceProofArtifact !== target.sourceProofArtifact ||
       drilldown.featureSlotId !== declaration.featureSlotId ||
       drilldown.adminCheckId !== declaration.adminCheckId ||
       !evidence.adminRoleSurface?.visibleChecks?.includes(
@@ -783,6 +786,9 @@ export function assertNextActionAdminProof(evidence) {
       ) ||
       !evidence.adminRoleSurface?.visibleChecks?.includes(
         "selected-spine-browser-proof",
+      ) ||
+      !evidence.adminRoleSurface?.visibleChecks?.includes(
+        "selected-spine-source-artifact",
       ) ||
       !evidence.adminRoleSurface?.visibleChecks?.includes(
         "selected-spine-coverage-decision",
@@ -1074,6 +1080,7 @@ function requiredChecksForNextAction(nextAction) {
       checks.push("selected-spine-admin-check");
       checks.push("selected-spine-rerun-command");
       checks.push("selected-spine-browser-proof");
+      checks.push("selected-spine-source-artifact");
       checks.push("selected-spine-coverage-decision");
     }
     if (
@@ -1642,6 +1649,7 @@ function requiredChecksForEvidence(evidence) {
                 "selected-spine-admin-check",
                 "selected-spine-rerun-command",
                 "selected-spine-browser-proof",
+                "selected-spine-source-artifact",
                 "selected-spine-coverage-decision",
               ]),
           ...(evidence.generatedFrom?.unprovenSelectedProductionFeatureGraph ===

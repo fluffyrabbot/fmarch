@@ -21,6 +21,7 @@ export const productionFeatureSpineSourceCheckRules = Object.freeze(
       Object.freeze({
         detailRoleUrlIncludes: source.detailRoleUrlIncludes,
         roleUrlIncludes: source.roleUrlIncludes,
+        proofArtifact: source.proofArtifact,
         rerunCommand: source.rerunCommand,
       }),
     ]),

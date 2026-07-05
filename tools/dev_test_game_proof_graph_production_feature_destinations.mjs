@@ -8,9 +8,10 @@ export function proofGraphProductionFeatureTargetDestinations(proofGraph) {
         auditId,
         detailRoleUrl: `/admin/audit/${auditId}?game=<seeded-game>`,
         featureSlotId: String(node.featureSlotId ?? ""),
-        sourceCheckId: String(node.sourceCheckId ?? ""),
-        adminCheckId: String(node.adminCheckId ?? ""),
-        requiredChecks: Object.freeze([String(node.adminCheckId ?? "")]),
+      sourceCheckId: String(node.sourceCheckId ?? ""),
+      adminCheckId: String(node.adminCheckId ?? ""),
+      sourceProofArtifact: String(node.sourceProofArtifact ?? ""),
+      requiredChecks: Object.freeze([String(node.adminCheckId ?? "")]),
       });
     }
     return Object.freeze({
@@ -21,6 +22,7 @@ export function proofGraphProductionFeatureTargetDestinations(proofGraph) {
       roleUrl: String(node.roleUrl ?? ""),
       targetRoleUrl: String(node.targetRoleUrl ?? ""),
       adminCheckId: String(node.adminCheckId ?? ""),
+      sourceProofArtifact: String(node.sourceProofArtifact ?? ""),
       ...(typeof node.adminDetailRoleUrl === "string" &&
       node.adminDetailRoleUrl.trim() !== ""
         ? { adminDetailRoleUrl: String(node.adminDetailRoleUrl) }
@@ -71,6 +73,7 @@ export function proofGraphProductionFeatureDestinationSummary(
         status: roleUrlDestinationStatus(destination),
         roleUrl: destination.roleUrl,
         targetRoleUrl: destination.targetRoleUrl,
+        sourceProofArtifact: destination.sourceProofArtifact,
         adminDetailRoleUrl: destination.adminDetailRoleUrl ?? "",
         recoveryCommand: destination.recoveryCommand ?? "",
         readinessEvidence: destination.readinessEvidence ?? "",
@@ -113,6 +116,7 @@ function roleUrlDestinationStatus(destination) {
   return [
     `roleUrl ${destination.roleUrl}`,
     `targetRoleUrl ${destination.targetRoleUrl}`,
+    `sourceProofArtifact ${destination.sourceProofArtifact}`,
     ...(destination.adminDetailRoleUrl === undefined
       ? []
       : [`adminDetailRoleUrl ${destination.adminDetailRoleUrl}`]),

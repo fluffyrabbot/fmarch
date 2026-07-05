@@ -178,6 +178,7 @@ import {
   devTestGameCoreLoopAdminProofCommand,
   devTestGameHardeningAdminProofCommand,
   devTestGameHostSetupProofCommand,
+  devTestGameIdentityAdminProofCommand,
   devTestGameProductionFeatureBrowserProofCommand,
   devTestGameReplacementActionProofCommand,
   devTestGameReplacementPlayerProofCommand,
@@ -192,6 +193,7 @@ import {
 } from "./dev_test_game_hardening_feature_spine_targets.mjs";
 import {
   identityFeatureSpineSourceCheckId,
+  identityFeatureSpineTargetRows,
 } from "./dev_test_game_identity_feature_spine_targets.mjs";
 import {
   cohostFeatureSpineSourceCheckId,
@@ -1086,7 +1088,12 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
       roles: identityAdapterEvidence.roles,
       ...(identityAdminProofEvidence === undefined
         ? {}
-        : { adminRoleSurface: identityAdminProofEvidence }),
+        : {
+            adminRoleSurface: identityAdminProofEvidence,
+            spineTargets: buildIdentityReadinessSpineTargets(
+              identityAdminProofEvidence,
+            ),
+          }),
     });
   }
   if (hostedIdentityEvidenceAdminProofEvidence !== undefined) {
@@ -3694,6 +3701,9 @@ function buildCoreLoopReadinessSpineTargets(coreLoopAdminProofEvidence) {
         sourceCheckId: coreLoopFeatureSpineSourceCheckId,
         detailRoleUrl: coreLoopAdminProofEvidence.detailRoleUrl,
         browserProofCommand: devTestGameSeededBrowserProofCommand,
+        sourceProofArtifact:
+          productionFeatureSpineSourceCheckRules[coreLoopFeatureSpineSourceCheckId]
+            .proofArtifact,
         rerunCommand: devTestGameCoreLoopAdminProofCommand,
         cycleIds,
         roleUrlIds,
@@ -3771,6 +3781,9 @@ function buildHardeningReadinessSpineTargets({
         sourceCheckId: hardeningFeatureSpineSourceCheckId,
         detailRoleUrl: hardeningAdminProofEvidence.detailRoleUrl,
         browserProofCommand: devTestGameSeededBrowserProofCommand,
+        sourceProofArtifact:
+          productionFeatureSpineSourceCheckRules[hardeningFeatureSpineSourceCheckId]
+            .proofArtifact,
         rerunCommand: devTestGameHardeningAdminProofCommand,
         cycleIds,
         roleUrlIds,
@@ -3822,6 +3835,52 @@ function buildCompletedGameHardeningSpineRows(proof) {
       .map((scenario) => scenario.id)
       .filter((laneId) => roleUrlHrefs[laneId] !== undefined),
     roleUrlHrefs,
+  };
+}
+
+function buildIdentityReadinessSpineTargets(identityAdminProofEvidence) {
+  const targetRow = identityFeatureSpineTargetRows.identityAdapter;
+  const detailRoleUrl = identityAdminProofEvidence.detailRoleUrl;
+  const roleUrlHrefs = {
+    [targetRow.roleUrlId]: detailRoleUrl,
+  };
+  const visibleAdminCheckIds = [
+    ...(identityAdminProofEvidence.visibleChecks ?? []),
+  ].map((id) => String(id));
+  return {
+    status: "passed",
+    detailRoleUrl,
+    defaultCycleId: targetRow.cycleId,
+    defaultRoleUrlId: targetRow.roleUrlId,
+    defaultRoleUrl: detailRoleUrl,
+    defaultCheckpointId: targetRow.checkpointId,
+    browserProofCommand: devTestGameSeededBrowserProofCommand,
+    cycleIds: [targetRow.cycleId],
+    roleUrlIds: [targetRow.roleUrlId],
+    checkpointIds: [targetRow.checkpointId],
+    visibleAdminCheckIds,
+    recoveryHookIds: [],
+    roleUrlHrefs,
+    productionFeatureTargets: buildProductionFeatureSpineTargetCollection({
+      declarations: releaseReadinessProductionFeatureSpineTargets,
+      sourceTarget: {
+        sourceCheckId: identityFeatureSpineSourceCheckId,
+        detailRoleUrl,
+        browserProofCommand: devTestGameSeededBrowserProofCommand,
+        sourceProofArtifact:
+          productionFeatureSpineSourceCheckRules[identityFeatureSpineSourceCheckId]
+            .proofArtifact,
+        rerunCommand: devTestGameIdentityAdminProofCommand,
+        cycleIds: [targetRow.cycleId],
+        roleUrlIds: [targetRow.roleUrlId],
+        checkpointIds: [targetRow.checkpointId],
+        visibleAdminCheckIds,
+        recoveryHookIds: [],
+        roleUrlHrefs,
+      },
+      defaultRerunCommandBySourceCheckId:
+        defaultProductionFeatureSpineRerunCommands,
+    }),
   };
 }
 
@@ -3887,6 +3946,7 @@ function buildRoleSurfaceReadinessSpineTargets({
         sourceCheckId: source.sourceCheckId,
         detailRoleUrl: proofEvidence.roleUrl,
         browserProofCommand: devTestGameSeededBrowserProofCommand,
+        sourceProofArtifact: source.proofArtifact,
         rerunCommand: source.rerunCommand,
         cycleIds: resolvedCycleIds,
         roleUrlIds: resolvedRoleUrlIds,
@@ -5965,6 +6025,7 @@ function validateProofGraphAdminProductionFeatureDestinationSummary(proof) {
       sourceCheckId: destination.sourceCheckId,
       adminCheckId: destination.adminCheckId,
       targetRoleUrl: destination.targetRoleUrl,
+      sourceProofArtifact: destination.sourceProofArtifact,
       adminDetailRoleUrl: destination.adminDetailRoleUrl,
       recoveryCommand: destination.recoveryCommand,
       browserWorkbench: destination.browserWorkbench,
@@ -6265,6 +6326,8 @@ export function validateDevTestGameNextActionAdminProof(proof, options = {}) {
         target.recoveryHookId !== declaration.recoveryHookId) ||
       typeof target.adminCheckId !== "string" ||
       typeof target.browserProofCommand !== "string" ||
+      typeof target.sourceProofArtifact !== "string" ||
+      target.sourceProofArtifact.length === 0 ||
       target.coverageDecision === null ||
       typeof target.coverageDecision !== "object" ||
       target.featureSlotId !== declaration.featureSlotId ||
@@ -6278,6 +6341,7 @@ export function validateDevTestGameNextActionAdminProof(proof, options = {}) {
         drilldown.recoveryHookRowId !== declaration.recoveryHookId) ||
       typeof drilldown?.adminCheckId !== "string" ||
       typeof drilldown?.rerunCommand !== "string" ||
+      drilldown.sourceProofArtifact !== target.sourceProofArtifact ||
       drilldown.featureSlotId !== declaration.featureSlotId ||
       drilldown.adminCheckId !== declaration.adminCheckId ||
       !proof.adminRoleSurface?.visibleChecks?.includes(
@@ -6293,6 +6357,9 @@ export function validateDevTestGameNextActionAdminProof(proof, options = {}) {
       ) ||
       !proof.adminRoleSurface?.visibleChecks?.includes(
         "selected-spine-browser-proof",
+      ) ||
+      !proof.adminRoleSurface?.visibleChecks?.includes(
+        "selected-spine-source-artifact",
       ) ||
       !proof.adminRoleSurface?.visibleChecks?.includes(
         "selected-spine-coverage-decision",

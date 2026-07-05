@@ -57,6 +57,7 @@ export function productionFeatureSourceTargetFromReadiness(
 }
 
 function spineTargetsSourceTargetFromReadiness(readiness, sourceCheckId) {
+  const source = productionFeatureSourceForCheckId(sourceCheckId);
   const sourceCheck = readiness?.localDevelopmentSpine?.checks?.find?.(
     (check) => check?.id === sourceCheckId,
   );
@@ -72,6 +73,7 @@ function spineTargetsSourceTargetFromReadiness(readiness, sourceCheckId) {
     roleUrl: String(targets.defaultRoleUrl ?? ""),
     checkpointId: String(targets.defaultCheckpointId ?? ""),
     browserProofCommand: String(targets.browserProofCommand ?? ""),
+    sourceProofArtifact: String(source.proofArtifact ?? ""),
     cycleIds: [...(targets.cycleIds ?? [])].map((id) => String(id)),
     roleUrlIds: [...(targets.roleUrlIds ?? [])].map((id) => String(id)),
     checkpointIds: [...(targets.checkpointIds ?? [])].map((id) => String(id)),
@@ -116,6 +118,10 @@ function identityAdapterSourceTargetFromReadiness(
     roleUrl: detailRoleUrl,
     checkpointId: identityTarget.checkpointId,
     browserProofCommand: defaultBrowserProofCommand,
+    sourceProofArtifact: String(
+      productionFeatureSourceForCheckId(identityFeatureSpineSourceCheckId)
+        .proofArtifact ?? "",
+    ),
     rerunCommand: defaultRerunCommand,
     cycleIds: [identityTarget.cycleId],
     roleUrlIds: [identityTarget.roleUrlId],
@@ -141,5 +147,6 @@ function validSourceTarget(sourceTarget) {
     sourceTarget.checkpointId,
     sourceTarget.visibleAdminCheckIds.length > 0 ? "visible-admin-checks" : "",
     sourceTarget.browserProofCommand,
+    sourceTarget.sourceProofArtifact,
   ].every((value) => value !== "");
 }

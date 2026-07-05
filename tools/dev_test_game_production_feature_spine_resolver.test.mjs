@@ -81,6 +81,7 @@ test("production feature spine resolver resolves seeded role targets", () => {
     checkpointId: "d01-n01-d02-n01-resolved-target-killed",
     adminCheckId: "resolution-receipts",
     browserProofCommand,
+    sourceProofArtifact: "target/dev-test-game/core-loop-admin-proof.json",
     rerunCommand: coreLoopAdminProofCommand,
   });
   assert.equal(
@@ -101,6 +102,7 @@ test("production feature spine resolver resolves seeded role targets", () => {
     roleUrl: "http://127.0.0.1:5173/g/game-a",
     rerunCommand: coreLoopAdminProofCommand,
     browserProofCommand,
+    sourceProofArtifact: "target/dev-test-game/core-loop-admin-proof.json",
     coverageDecision: {
       kind: "seeded-role-url-proof",
       proofCommand: coreLoopAdminProofCommand,
@@ -127,6 +129,7 @@ test("future feature source template flows through checklist, resolver, graph, a
     [source.sourceCheckId]: {
       detailRoleUrlIncludes: source.detailRoleUrlIncludes,
       roleUrlIncludes: source.roleUrlIncludes,
+      proofArtifact: source.proofArtifact,
       rerunCommand: source.rerunCommand,
     },
   };
@@ -195,6 +198,7 @@ test("future feature source template flows through checklist, resolver, graph, a
     recoveryHookId: undefined,
     adminCheckId: declaration.adminCheckId,
     browserProofCommand,
+    sourceProofArtifact: source.proofArtifact,
     recoveryCommand: source.rerunCommand,
     coverageDecision: productionFeatureSourceCoverageDecisionSummary(source),
   });
@@ -215,6 +219,7 @@ test("future feature source template flows through checklist, resolver, graph, a
           relationship: "proves-production-feature",
           featureSlotId: target.featureSlotId,
           targetRoleUrl: target.roleUrl,
+          sourceProofArtifact: target.sourceProofArtifact,
           command: target.browserProofCommand,
         },
       ],
@@ -238,6 +243,7 @@ test("future feature source template flows through checklist, resolver, graph, a
     targetRoleUrlMatchesSelectedSpineTarget: true,
     browserProofCommand,
     proofTarget: "target/dev-test-game/release-readiness-checklist.json",
+    sourceProofArtifact: source.proofArtifact,
     coverageDecision: productionFeatureSourceCoverageDecisionSummary(source),
   });
 });
@@ -572,6 +578,7 @@ function coreLoopSourceTargetFixture() {
     sourceCheckId: "local-core-loop-proof",
     detailRoleUrl: "/admin/audit/local-core-loop?game=<seeded-game>",
     browserProofCommand,
+    sourceProofArtifact: "target/dev-test-game/core-loop-admin-proof.json",
     rerunCommand: coreLoopAdminProofCommand,
     cycleIds: [
       "d01-n01-d02",
@@ -706,6 +713,7 @@ function coreLoopSourceCheckRules() {
     "local-core-loop-proof": {
       detailRoleUrlIncludes: "/admin/audit/local-core-loop",
       roleUrlIncludes: "/g/",
+      proofArtifact: "target/dev-test-game/core-loop-admin-proof.json",
       rerunCommand: coreLoopAdminProofCommand,
     },
   };
@@ -743,6 +751,7 @@ function futureFeatureSourceTargetFixture() {
     sourceCheckId: "local-future-feature-proof",
     detailRoleUrl: "/admin/audit/local-future-feature?game=<seeded-game>",
     browserProofCommand,
+    sourceProofArtifact: "target/dev-test-game/future-feature-admin-proof.json",
     rerunCommand: "npm run test:dev-test-game-future-feature-admin-proof",
     cycleIds: ["future-cycle"],
     roleUrlIds: ["future-player"],

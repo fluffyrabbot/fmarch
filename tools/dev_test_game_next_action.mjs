@@ -1482,6 +1482,12 @@ export function selectedProductionFeatureGraphForTarget({
       node.browserProofCommand ?? edge.command ?? spineTarget.browserProofCommand,
     ),
     proofTarget: String(node.artifact ?? ""),
+    sourceProofArtifact: String(
+      node.sourceProofArtifact ??
+        edge.sourceProofArtifact ??
+        spineTarget.sourceProofArtifact ??
+        "",
+    ),
     coverageDecision: node.coverageDecision ?? spineTarget.coverageDecision,
   };
 }
@@ -1510,6 +1516,7 @@ function validSelectedProductionFeatureGraph(graphSelection, spineTarget) {
     graphSelection.browserProofCommand === spineTarget.browserProofCommand &&
     typeof graphSelection.proofTarget === "string" &&
     graphSelection.proofTarget.length > 0 &&
+    graphSelection.sourceProofArtifact === spineTarget.sourceProofArtifact &&
     JSON.stringify(graphSelection.coverageDecision ?? null) ===
       JSON.stringify(spineTarget.coverageDecision ?? null)
   );

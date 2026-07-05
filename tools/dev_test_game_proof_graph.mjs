@@ -682,6 +682,7 @@ export function assertDevTestGameProofGraphCoversProductionFeatureTargets(
       node.checkpointId !== target.checkpointId ||
       node.adminCheckId !== target.adminCheckId ||
       node.browserProofCommand !== target.browserProofCommand ||
+      node.sourceProofArtifact !== target.sourceProofArtifact ||
       node.recoveryCommand !== target.rerunCommand ||
       JSON.stringify(node.coverageDecision ?? null) !==
         JSON.stringify(target.coverageDecision ?? null)
@@ -716,6 +717,7 @@ export function assertDevTestGameProofGraphCoversProductionFeatureTargets(
           edge.relationship === "proves-production-feature" &&
           edge.roleUrl === target.detailRoleUrl &&
           edge.targetRoleUrl === target.roleUrl &&
+          edge.sourceProofArtifact === target.sourceProofArtifact &&
           edge.command === target.browserProofCommand,
       )
     ) {
@@ -1083,6 +1085,7 @@ function buildProofGraphEdges({
           featureSlotId: node.featureSlotId,
           roleUrl: node.roleUrl,
           targetRoleUrl: node.targetRoleUrl,
+          sourceProofArtifact: node.sourceProofArtifact,
           command: node.browserProofCommand,
         },
       ]),
@@ -1295,6 +1298,7 @@ export function buildProductionFeatureTargetGraphNode({
     recoveryHookId: target.recoveryHookId,
     adminCheckId: target.adminCheckId,
     browserProofCommand: target.browserProofCommand,
+    sourceProofArtifact: target.sourceProofArtifact,
     recoveryCommand: target.rerunCommand,
     coverageDecision: target.coverageDecision,
     ...(evidenceObjectNames.length === 0 ? {} : { evidenceObjectNames }),
@@ -1497,6 +1501,9 @@ function resolveBuildableProductionFeatureTarget({ declaration, releaseReadiness
       checkpointId: declaration.checkpointId,
       adminCheckId: declaration.adminCheckId,
       browserProofCommand: devTestGameLiveProofCommand,
+      sourceProofArtifact: productionFeatureSourceForCheckId(
+        declaration.sourceCheckId,
+      ).proofArtifact,
       rerunCommand: devTestGameIdentityAdminProofCommand,
       coverageDecision: productionFeatureSourceCoverageDecisionSummaryForCheckId(
         declaration.sourceCheckId,

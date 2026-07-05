@@ -60,6 +60,7 @@ export function resolveProductionFeatureSpineTarget({
       : {}),
     adminCheckId: declaration.adminCheckId,
     browserProofCommand: sourceTarget.browserProofCommand,
+    sourceProofArtifact: sourceTarget.sourceProofArtifact,
     rerunCommand:
       sourceTarget.rerunCommand ??
       defaultRerunCommandBySourceCheckId[sourceTarget.sourceCheckId],
@@ -83,6 +84,7 @@ export function buildProductionFeatureSpineDrilldown(spineTarget) {
     roleUrl: spineTarget.roleUrl,
     rerunCommand: spineTarget.rerunCommand,
     browserProofCommand: spineTarget.browserProofCommand,
+    sourceProofArtifact: spineTarget.sourceProofArtifact,
     coverageDecision: spineTarget.coverageDecision,
   };
 }
@@ -136,6 +138,8 @@ export function validProductionFeatureSpineTarget(
     typeof target.roleUrl !== "string" ||
     typeof target.browserProofCommand !== "string" ||
     !target.browserProofCommand.includes("test:dev-test-game-core-live") ||
+    typeof target.sourceProofArtifact !== "string" ||
+    target.sourceProofArtifact.length === 0 ||
     !validCoverageDecision(target.coverageDecision, target.sourceCheckId, {
       coverageDecisionSummaryForCheckId,
     })
@@ -187,6 +191,8 @@ export function validProductionFeatureSpineDrilldown(
     typeof drilldown.roleUrl !== "string" ||
     typeof drilldown.browserProofCommand !== "string" ||
     !drilldown.browserProofCommand.includes("test:dev-test-game-core-live") ||
+    typeof drilldown.sourceProofArtifact !== "string" ||
+    drilldown.sourceProofArtifact.length === 0 ||
     !validCoverageDecision(drilldown.coverageDecision, drilldown.sourceCheckId, {
       coverageDecisionSummaryForCheckId,
     })
@@ -250,6 +256,7 @@ function validProductionFeatureSourceRule(item, sourceCheckRules) {
   return (
     item.detailRoleUrl.includes(rule.detailRoleUrlIncludes) &&
     item.roleUrl.includes(rule.roleUrlIncludes) &&
+    item.sourceProofArtifact === rule.proofArtifact &&
     (rule.rerunCommand === undefined || item.rerunCommand === rule.rerunCommand)
   );
 }

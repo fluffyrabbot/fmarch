@@ -11,6 +11,7 @@ import {
 } from "./dev_test_game_admin_audit_surface_ids.mjs";
 import {
   productionFeatureSourceCoverageDecisionSummaryForCheckId,
+  productionFeatureSourceForCheckId,
 } from "./dev_test_game_production_feature_source_registry.mjs";
 
 export const invalidActionRecoveryHostedConcurrentRaceMatrixUnprovenText =
@@ -57,6 +58,8 @@ export function featureSpineFixture({
   const coverageDecision = productionFeatureSourceCoverageDecisionSummaryForCheckId(
     declaration.sourceCheckId,
   );
+  const sourceProofArtifact =
+    productionFeatureSourceForCheckId(declaration.sourceCheckId).proofArtifact;
   const spineTarget = {
     sourceCheckId: declaration.sourceCheckId,
     featureSlotId: declaration.featureSlotId,
@@ -70,6 +73,7 @@ export function featureSpineFixture({
     ...(recoveryHookId === undefined ? {} : { recoveryHookId }),
     adminCheckId: declaration.adminCheckId,
     browserProofCommand,
+    sourceProofArtifact,
     ...(includeTargetRerunCommand ? { rerunCommand } : {}),
   };
   return {
@@ -90,6 +94,7 @@ export function featureSpineFixture({
       roleUrl: resolvedRoleUrl,
       rerunCommand,
       browserProofCommand,
+      sourceProofArtifact,
       coverageDecision,
     },
   };

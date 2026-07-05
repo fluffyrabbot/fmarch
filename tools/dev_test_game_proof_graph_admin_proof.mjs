@@ -564,6 +564,7 @@ function assertProofGraphAdminProofCoversFeatureTarget(
     target.checkpointId !== featureTargetCase.targetRow.checkpointId ||
     target.adminCheckId !== featureTargetCase.targetRow.adminCheckId ||
     !target.browserProofCommand?.includes("test:dev-test-game-core-live") ||
+    target.sourceProofArtifact !== featureTargetCase.source.proofArtifact ||
     target.recoveryCommand !== featureTargetCase.source.rerunCommand ||
     JSON.stringify(target.coverageDecision ?? null) !==
       JSON.stringify(featureTargetCase.source.coverageDecision ?? null)
@@ -820,6 +821,7 @@ function proofGraphFeatureTarget(proofGraph, featureTargetCase) {
     checkpointId: productionFeatureNode.checkpointId,
     adminCheckId: productionFeatureNode.adminCheckId,
     browserProofCommand: productionFeatureNode.browserProofCommand,
+    sourceProofArtifact: productionFeatureNode.sourceProofArtifact,
     recoveryCommand: productionFeatureNode.recoveryCommand,
     coverageDecision: productionFeatureNode.coverageDecision,
   };
