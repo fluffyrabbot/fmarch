@@ -6,8 +6,10 @@ import { analyzePngScreenshot } from "./frontend_screenshot_pixels.mjs";
 import {
   boardScenario,
   forbiddenRoutes,
+  hostSetupScenario,
   routeStateScenarios,
   roles,
+  setupViewports,
   viewports,
 } from "./frontend_role_smoke_scenarios.mjs";
 
@@ -41,8 +43,10 @@ console.log(`wrote ${path.relative(repoRoot, evidencePath)}`);
 async function importedPassedEvidence() {
   assert.deepEqual(roleSmoke.viewports, viewports);
   assert.equal((roleSmoke.board ?? []).length, viewports.length);
+  assert.equal((roleSmoke.setup ?? []).length, setupViewports.length);
   assert.equal((roleSmoke.routeStates ?? []).length, viewports.length * routeStateScenarios.length);
   assert.equal((roleSmoke.playerPrivateChannel ?? []).length, viewports.length);
+  assertSetupEntries();
   assertRoleEntries();
   assertForbiddenRoutes();
   assertRoleSmokeEvidenceComplete();
@@ -50,6 +54,7 @@ async function importedPassedEvidence() {
   const screenshotChecks = [];
   for (const entry of [
     ...(roleSmoke.board ?? []),
+    ...(roleSmoke.setup ?? []),
     ...(roleSmoke.roles ?? []),
     ...(roleSmoke.playerPrivateChannel ?? []),
     ...(roleSmoke.routeStates ?? []),
@@ -62,7 +67,7 @@ async function importedPassedEvidence() {
     status: "imported-passed",
     proof: "frontend-role-smoke-imported-contract",
     boundary:
-      "Validates a passed localhost dev-server role-smoke artifact without binding localhost or launching Chromium locally. It rechecks board/admin/player/moderator, forbidden-route, and route-state screenshots; screenshot PNG pixels; focus traversal evidence; overlap-checked targets; tablet thumb-zone geometry; admin session-grant/recovery-gate form evidence; player main-thread and role-PM SubmitPost ACK evidence; player tablet-media request evidence; and moderator SetSlotStatus lifecycle evidence. It does not prove that the imported artifact was produced by this exact checkout unless the operator imports evidence from a matching commit.",
+      "Validates a passed localhost dev-server role-smoke artifact without binding localhost or launching Chromium locally. It rechecks board/admin/player/moderator/setup, forbidden-route, and route-state screenshots; screenshot PNG pixels; focus traversal evidence; overlap-checked targets; setup workbench geometry; tablet thumb-zone geometry; admin session-grant/recovery-gate form evidence; player main-thread and role-PM SubmitPost ACK evidence; player tablet-media request evidence; and moderator SetSlotStatus lifecycle evidence. It does not prove that the imported artifact was produced by this exact checkout unless the operator imports evidence from a matching commit.",
     generatedFrom: {
       sourceRoleSmoke: relativeOrAbsolute(sourceRoleSmoke),
     },
@@ -71,6 +76,7 @@ async function importedPassedEvidence() {
     validated: {
       viewportCount: roleSmoke.viewports.length,
       boardCount: roleSmoke.board.length,
+      setupCount: roleSmoke.setup.length,
       roleCount: roleSmoke.roles.length,
       playerPrivateChannelCount: roleSmoke.playerPrivateChannel.length,
       routeStateCount: roleSmoke.routeStates.length,
@@ -108,6 +114,41 @@ function sourceBlockedEvidence() {
       "Run npm run test:frontend-role-smoke in a Chromium-capable environment, then import target/frontend-role-smoke/role-smoke.json plus its referenced screenshots.",
     ],
   };
+}
+
+function assertSetupEntries() {
+  const entries = roleSmoke.setup ?? [];
+  assert.equal(entries.length, setupViewports.length);
+  assert.deepEqual(
+    entries.map((entry) => [entry.viewport.name, entry.role, entry.path]),
+    setupViewports.map((viewport) => [
+      viewport.name,
+      hostSetupScenario.role,
+      hostSetupScenario.path,
+    ]),
+  );
+  for (const entry of entries) {
+    const expectedLayout =
+      entry.viewport.width <= 820 ? "stacked" : "co-located-columns";
+    assert.equal(entry.layout, expectedLayout);
+    assert.equal(entry.noHorizontalOverflow, true);
+    assert.equal(entry.overlapCheckedTargets > 0, true);
+    assert.equal(entry.slotCards.length, hostSetupScenario.slotIds.length);
+    assert.deepEqual(
+      entry.slotCards.map((slot) => [
+        slot.slotId,
+        slot.layout,
+        slot.roleCellContainedInCard,
+        slot.assignmentContainedInCard,
+      ]),
+      hostSetupScenario.slotIds.map((slotId) => [
+        slotId,
+        expectedLayout,
+        true,
+        true,
+      ]),
+    );
+  }
 }
 
 function assertRoleEntries() {
@@ -356,6 +397,7 @@ function sourceSummary() {
     boundary: roleSmoke.boundary ?? null,
     viewportCount: roleSmoke.viewports?.length ?? 0,
     boardCount: roleSmoke.board?.length ?? 0,
+    setupCount: roleSmoke.setup?.length ?? 0,
     roleCount: roleSmoke.roles?.length ?? 0,
     routeStateCount: roleSmoke.routeStates?.length ?? 0,
   };

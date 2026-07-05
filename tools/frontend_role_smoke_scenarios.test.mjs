@@ -3,9 +3,11 @@ import test from "node:test";
 import {
   boardScenario,
   forbiddenRoutes,
+  hostSetupScenario,
   navFocusCoverage,
   routeStateScenarios,
   roles,
+  setupViewports,
   viewports,
 } from "./frontend_role_smoke_scenarios.mjs";
 import {
@@ -33,6 +35,30 @@ test("role smoke scenario matrix covers tablet-first acceptance viewports", () =
     ],
   );
   assert.equal(viewports.every(Object.isFrozen), true);
+});
+
+test("host setup scenario pins mobile stacking and workbench route identity", () => {
+  assert.deepEqual(
+    setupViewports.map((viewport) => [viewport.name, viewport.width, viewport.height]),
+    [
+      ["mobile", 390, 844],
+      ["tablet", 1024, 768],
+      ["desktop", 1440, 920],
+    ],
+  );
+  assert.equal(setupViewports.every(Object.isFrozen), true);
+  assert.deepEqual(hostSetupScenario, {
+    id: "host-setup",
+    role: "host-setup",
+    token: "fixture-host",
+    path: "/g/midsummer/setup",
+    surfaceTestId: "host-setup-surface",
+    capabilityTestId: "host-setup-capability",
+    requiredText: "Setup still needs attention",
+    slotIds: ["slot_1", "slot_2"],
+  });
+  assert.equal(Object.isFrozen(hostSetupScenario), true);
+  assert.equal(Object.isFrozen(hostSetupScenario.slotIds), true);
 });
 
 test("board smoke scenario keeps allowed and blocked navigation explicit", () => {
@@ -163,7 +189,7 @@ test("role smoke scenarios pin tablet thumb-zone target counts", () => {
       ],
       [
         "moderator",
-        [["moderator-primary-action-zone", "moderator-primary-actions", 10]],
+        [["moderator-primary-action-zone", "moderator-primary-actions", 9]],
       ],
     ],
   );

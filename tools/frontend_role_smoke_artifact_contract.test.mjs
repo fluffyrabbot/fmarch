@@ -7,9 +7,11 @@ import { fileURLToPath } from "node:url";
 import {
   boardScenario,
   forbiddenRoutes,
+  hostSetupScenario,
   navFocusCoverage,
   routeStateScenarios,
   roles,
+  setupViewports,
   viewports,
 } from "./frontend_role_smoke_scenarios.mjs";
 import {
@@ -4207,6 +4209,7 @@ test("role smoke artifact carries the same static matrices as its proof source",
     assert.equal(roleSmoke.board.length, viewports.length);
     assertPixelEvidence(roleSmoke.board, "board screenshots");
     assertPixelEvidence(roleSmoke.roles, "role screenshots");
+    assertBrowserSetupWorkbenchEvidence(roleSmoke.setup);
     assertBrowserConfirmationFocusEvidence(roleSmoke.roles);
     assertBrowserPlayerPrivateDisclosureEvidence(roleSmoke.roles);
     assertBrowserPlayerPrivateChannelEvidence(roleSmoke.playerPrivateChannel);
@@ -4312,6 +4315,7 @@ test("imported role smoke artifact validates or preserves full-app browser evide
     assert.equal(imported.validated.viewportCount, viewports.length);
     assert.equal(imported.validated.boardCount, viewports.length);
     assert.equal(imported.validated.roleCount, viewports.length * roles.length);
+    assert.equal(imported.validated.setupCount, setupViewports.length);
     assert.equal(imported.validated.playerPrivateChannelCount, viewports.length);
     assert.equal(imported.validated.routeStateCount, viewports.length * routeStateScenarios.length);
     assert.equal(imported.validated.forbiddenRouteCount, viewports.length * forbiddenRoutes.length);
@@ -5657,6 +5661,49 @@ function assertPixelEvidence(entries, label) {
       true,
       `${label} changed pixel ratio proves nonblank pixels`,
     );
+  }
+}
+
+function assertBrowserSetupWorkbenchEvidence(setupEntries) {
+  assert.equal(
+    Array.isArray(setupEntries),
+    true,
+    "host setup browser geometry evidence missing",
+  );
+  assert.equal(setupEntries.length, setupViewports.length);
+  assert.deepEqual(
+    setupEntries.map((entry) => [entry.viewport.name, entry.role, entry.path]),
+    setupViewports.map((viewport) => [
+      viewport.name,
+      hostSetupScenario.role,
+      hostSetupScenario.path,
+    ]),
+  );
+
+  for (const entry of setupEntries) {
+    const expectedLayout =
+      entry.viewport.width <= 820 ? "stacked" : "co-located-columns";
+    assert.equal(entry.surfaceTestId, hostSetupScenario.surfaceTestId);
+    assert.equal(entry.capabilityTestId, hostSetupScenario.capabilityTestId);
+    assert.equal(entry.layout, expectedLayout);
+    assert.equal(entry.noHorizontalOverflow, true);
+    assert.equal(entry.overflow.scrollWidth <= entry.overflow.clientWidth + 1, true);
+    assert.equal(entry.overlapCheckedTargets >= 11, true);
+    assert.deepEqual(
+      entry.slotCards.map((slot) => [
+        slot.slotId,
+        slot.layout,
+        slot.roleCellContainedInCard,
+        slot.assignmentContainedInCard,
+      ]),
+      hostSetupScenario.slotIds.map((slotId) => [
+        slotId,
+        expectedLayout,
+        true,
+        true,
+      ]),
+    );
+    assertPixelEvidence([entry], "host setup workbench screenshots");
   }
 }
 

@@ -12,9 +12,11 @@ import {
 import {
   boardScenario,
   forbiddenRoutes,
+  hostSetupScenario,
   navFocusCoverage,
   routeStateScenarios,
   roles,
+  setupViewports,
   viewports,
 } from "./frontend_role_smoke_scenarios.mjs";
 
@@ -80,6 +82,7 @@ try {
     },
     board: [],
     roles: [],
+    setup: [],
     forbidden: [],
     playerPrivateChannel: [],
     routeStates: [],
@@ -753,6 +756,38 @@ try {
     }
   }
 
+  for (const viewport of setupViewports) {
+    const context = await newContextForViewport(viewport, hostSetupScenario.token);
+    const page = await context.newPage();
+    const response = await page.goto(`${baseUrl}${hostSetupScenario.path}`, {
+      waitUntil: "networkidle",
+    });
+    if (!response?.ok()) {
+      throw new Error(
+        `${hostSetupScenario.id} ${viewport.name} returned ${response?.status()} for ${hostSetupScenario.path}`,
+      );
+    }
+    const setupGeometry = await assertHostSetupWorkbenchGeometry(page, {
+      scenario: hostSetupScenario,
+      viewport,
+    });
+    const screenshot = path.join(
+      artifactDir,
+      `${viewport.name}-${hostSetupScenario.id}.png`,
+    );
+    const screenshotPixels = await captureScreenshotEvidence(page, {
+      path: screenshot,
+      label: `${hostSetupScenario.id} ${viewport.name}`,
+      viewport,
+    });
+    evidence.setup.push({
+      ...setupGeometry,
+      screenshot: path.relative(repoRoot, screenshot),
+      screenshotPixels,
+    });
+    await context.close();
+  }
+
   await writeFile(evidencePath, `${JSON.stringify(evidence, null, 2)}\n`);
   console.log(`wrote ${path.relative(repoRoot, evidencePath)}`);
 } catch (error) {
@@ -798,6 +833,157 @@ async function newContextForViewport(viewport, token) {
     ]);
   }
   return context;
+}
+
+async function assertHostSetupWorkbenchGeometry(page, { scenario, viewport }) {
+  const surface = page.getByTestId(scenario.surfaceTestId);
+  await surface.waitFor({ state: "visible" });
+  const bodyText = await page.textContent("body");
+  if (!bodyText?.includes(scenario.requiredText)) {
+    throw new Error(
+      `${scenario.id} ${viewport.name} did not render ${scenario.requiredText}`,
+    );
+  }
+
+  const surfaceBox = await assertVisibleBox(
+    surface,
+    `${scenario.id} surface`,
+  );
+  const capabilityBox = await assertVisibleBox(
+    page.getByTestId(scenario.capabilityTestId),
+    `${scenario.id} capability`,
+  );
+  const rosterBox = await assertVisibleBox(
+    page.getByTestId("host-setup-roster"),
+    `${scenario.id} roster`,
+  );
+  const workbenchBox = await assertVisibleBox(
+    page.getByTestId("host-setup-roles"),
+    `${scenario.id} slot workbench`,
+  );
+  const addSlotBox = await assertHitTarget(
+    page.locator(".host-setup__inline-form button").first(),
+    `${scenario.id} add slot`,
+  );
+  const startReviewBox = await assertHitTarget(
+    page.getByTestId("host-setup-start-review"),
+    `${scenario.id} start review`,
+  );
+  const overflow = await page.evaluate(() => {
+    const root = document.documentElement;
+    const body = document.body;
+    return {
+      clientWidth: root.clientWidth,
+      scrollWidth: Math.max(root.scrollWidth, body?.scrollWidth ?? 0),
+    };
+  });
+  if (overflow.scrollWidth > overflow.clientWidth + 1) {
+    throw new Error(
+      `${scenario.id} ${viewport.name} horizontal overflow: ${overflow.scrollWidth}px over ${overflow.clientWidth}px`,
+    );
+  }
+
+  const expectedLayout = viewport.width <= 820 ? "stacked" : "co-located-columns";
+  const slotCards = [];
+  const overlapTargets = [
+    { label: `${scenario.id} surface`, box: surfaceBox },
+    { label: `${scenario.id} roster`, box: rosterBox },
+    { label: `${scenario.id} workbench`, box: workbenchBox },
+    { label: `${scenario.id} add slot`, box: addSlotBox },
+    { label: `${scenario.id} start review`, box: startReviewBox },
+  ];
+  for (const slotId of scenario.slotIds) {
+    const card = page.getByTestId(`host-setup-slot-${slotId}`);
+    const roleCell = page.getByTestId(`host-setup-role-${slotId}`);
+    const summary = card.locator(".host-setup__slot-summary");
+    const assignmentForm = card.locator(".host-setup__slot-form").first();
+    const roleForm = card.locator(".host-setup__role-cell .host-setup__slot-form");
+    const cardBox = await assertVisibleBox(card, `${scenario.id} ${slotId} card`);
+    const summaryBox = await assertVisibleBox(
+      summary,
+      `${scenario.id} ${slotId} summary`,
+    );
+    const assignmentBox = await assertVisibleBox(
+      assignmentForm,
+      `${scenario.id} ${slotId} assignment`,
+    );
+    const roleCellBox = await assertVisibleBox(
+      roleCell,
+      `${scenario.id} ${slotId} role cell`,
+    );
+    const roleFormBox = await assertVisibleBox(
+      roleForm,
+      `${scenario.id} ${slotId} role form`,
+    );
+    await assertHitTarget(
+      assignmentForm.locator("button").first(),
+      `${scenario.id} ${slotId} assign occupant`,
+    );
+    await assertHitTarget(
+      roleForm.locator("button").first(),
+      `${scenario.id} ${slotId} assign role`,
+    );
+    if (!containsBox(cardBox, roleCellBox)) {
+      throw new Error(`${scenario.id} ${viewport.name} ${slotId} role cell escaped slot card`);
+    }
+    if (!containsBox(cardBox, assignmentBox)) {
+      throw new Error(`${scenario.id} ${viewport.name} ${slotId} assignment escaped slot card`);
+    }
+
+    const actualLayout =
+      roleCellBox.y > summaryBox.y + summaryBox.height - 1
+        ? "stacked"
+        : "co-located-columns";
+    if (actualLayout !== expectedLayout) {
+      throw new Error(
+        `${scenario.id} ${viewport.name} ${slotId} layout ${actualLayout}, expected ${expectedLayout}`,
+      );
+    }
+    if (expectedLayout === "co-located-columns" && roleCellBox.x <= summaryBox.x) {
+      throw new Error(
+        `${scenario.id} ${viewport.name} ${slotId} role cell is not to the right of the slot summary`,
+      );
+    }
+
+    overlapTargets.push(
+      { label: `${scenario.id} ${slotId} summary`, box: summaryBox },
+      { label: `${scenario.id} ${slotId} assignment`, box: assignmentBox },
+      { label: `${scenario.id} ${slotId} role`, box: roleCellBox },
+    );
+    slotCards.push({
+      slotId,
+      state: await card.getAttribute("data-state"),
+      layout: actualLayout,
+      roleCellContainedInCard: true,
+      assignmentContainedInCard: true,
+      cardBox,
+      summaryBox,
+      assignmentBox,
+      roleCellBox,
+      roleFormBox,
+    });
+  }
+  await assertNoObviousOverlap(overlapTargets, {
+    role: scenario.id,
+    viewport: viewport.name,
+  });
+
+  return {
+    role: scenario.role,
+    viewport,
+    path: scenario.path,
+    surfaceTestId: scenario.surfaceTestId,
+    capabilityTestId: scenario.capabilityTestId,
+    layout: expectedLayout,
+    noHorizontalOverflow: true,
+    overflow,
+    surfaceBox,
+    capabilityBox,
+    rosterBox,
+    workbenchBox,
+    slotCards,
+    overlapCheckedTargets: overlapTargets.length,
+  };
 }
 
 async function driveAdminReject(page) {
@@ -1515,6 +1701,33 @@ async function installPrivateChannelBrowserRoutes(page, { commandRequests }) {
           needed: 5,
         },
       ]),
+    });
+  });
+  await page.route(/\/games\/[^/]+\/day-vote-outcomes(?:\?.*)?$/, async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify([]),
+    });
+  });
+  await page.route(/\/games\/[^/]+\/player-command-state(?:\?.*)?$/, async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        game: "midsummer",
+        actor_slot: "slot-7",
+        actor_alive: true,
+        actor_status: "alive",
+        phase: {
+          phase_id: "D01",
+          phase_kind: "Day",
+          phase_number: 1,
+          locked: false,
+        },
+        actions: [],
+        vote_targets: [],
+      }),
     });
   });
 }

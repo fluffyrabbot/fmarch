@@ -29,6 +29,9 @@ import {
   hostConsoleForbiddenMessage,
 } from "../frontend/src/routes/g/[game]/host/host-route-model.mjs";
 import {
+  HOST_SETUP_ROUTE_CONTRACT,
+} from "../frontend/src/routes/g/[game]/setup/setup-route-model.mjs";
+import {
   ADMIN_READINESS_STRIP_CONTRACT,
   adminReadinessStatusTestId,
   adminReadinessTestId,
@@ -48,6 +51,12 @@ export const viewports = Object.freeze([
   Object.freeze({ name: "tablet", width: 1024, height: 768 }),
   Object.freeze({ name: "tablet-wide", width: 1180, height: 820 }),
   Object.freeze({ name: "tablet-landscape", width: 1280, height: 900 }),
+  Object.freeze({ name: "desktop", width: 1440, height: 920 }),
+]);
+
+export const setupViewports = Object.freeze([
+  Object.freeze({ name: "mobile", width: 390, height: 844 }),
+  Object.freeze({ name: "tablet", width: 1024, height: 768 }),
   Object.freeze({ name: "desktop", width: 1440, height: 920 }),
 ]);
 
@@ -127,6 +136,17 @@ const playerPrivateChannelRoute = Object.freeze({
       "player-thread-load-older",
     ],
   }),
+});
+
+export const hostSetupScenario = Object.freeze({
+  id: "host-setup",
+  role: "host-setup",
+  token: "fixture-host",
+  path: "/g/midsummer/setup",
+  surfaceTestId: HOST_SETUP_ROUTE_CONTRACT.surfaceTestId,
+  capabilityTestId: HOST_SETUP_ROUTE_CONTRACT.capabilityTestId,
+  requiredText: "Setup still needs attention",
+  slotIds: Object.freeze(["slot_1", "slot_2"]),
 });
 
 export const roles = Object.freeze([
