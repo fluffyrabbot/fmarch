@@ -513,7 +513,9 @@ export function assertDevTestGameProofGraphCoversProductionFeatureTargets(
       node.checkpointId !== target.checkpointId ||
       node.adminCheckId !== target.adminCheckId ||
       node.browserProofCommand !== target.browserProofCommand ||
-      node.recoveryCommand !== target.rerunCommand
+      node.recoveryCommand !== target.rerunCommand ||
+      JSON.stringify(node.coverageDecision ?? null) !==
+        JSON.stringify(target.coverageDecision ?? null)
     ) {
       throw new Error(`proof graph production feature target drifted: ${slotId}`);
     }
@@ -1013,6 +1015,7 @@ function buildProductionFeatureTargetNodes({
       adminCheckId: target.adminCheckId,
       browserProofCommand: target.browserProofCommand,
       recoveryCommand: target.rerunCommand,
+      coverageDecision: target.coverageDecision,
       ...((evidenceObjectNamesByFeatureSlotId[target.featureSlotId] ?? [])
         .length === 0
         ? {}

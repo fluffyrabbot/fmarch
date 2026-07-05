@@ -25,6 +25,7 @@ import {
   productionFeatureCoverageDecisionKind,
   productionFeatureReadinessSourceKind,
   productionFeatureSourceCoverageDecision,
+  productionFeatureSourceCoverageDecisionSummary,
   productionFeatureRoleSurfaceSources,
   productionFeatureRoleSurfaceSourceCheckIds,
   productionFeatureSourceRegistry,
@@ -223,6 +224,20 @@ test("production feature source coverage decisions fail closed", () => {
       },
     })?.kind,
     productionFeatureCoverageDecisionKind.blockedLocalPrerequisite,
+  );
+  assert.deepEqual(
+    productionFeatureSourceCoverageDecisionSummary({
+      sourceCheckId: "future-seeded-feature",
+      rerunCommand: "npm run future-proof",
+      coverageDecision: {
+        kind: productionFeatureCoverageDecisionKind.seededRoleUrlProof,
+        proofCommand: "npm run future-proof",
+      },
+    }),
+    {
+      kind: productionFeatureCoverageDecisionKind.seededRoleUrlProof,
+      proofCommand: "npm run future-proof",
+    },
   );
 });
 

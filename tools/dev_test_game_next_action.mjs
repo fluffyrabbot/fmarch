@@ -941,6 +941,7 @@ function selectedProductionFeatureGraphForTarget({ proofGraph, spineTarget }) {
       node.browserProofCommand ?? edge.command ?? spineTarget.browserProofCommand,
     ),
     proofTarget: String(node.artifact ?? ""),
+    coverageDecision: node.coverageDecision ?? spineTarget.coverageDecision,
   };
 }
 
@@ -967,7 +968,9 @@ function validSelectedProductionFeatureGraph(graphSelection, spineTarget) {
     graphSelection.selectedSpineTargetRoleUrl === spineTarget.roleUrl &&
     graphSelection.browserProofCommand === spineTarget.browserProofCommand &&
     typeof graphSelection.proofTarget === "string" &&
-    graphSelection.proofTarget.length > 0
+    graphSelection.proofTarget.length > 0 &&
+    JSON.stringify(graphSelection.coverageDecision ?? null) ===
+      JSON.stringify(spineTarget.coverageDecision ?? null)
   );
 }
 

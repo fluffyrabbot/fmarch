@@ -133,6 +133,51 @@ export function productionFeatureSourceCoverageDecision(source) {
   return null;
 }
 
+export function productionFeatureSourceCoverageDecisionForCheckId(sourceCheckId) {
+  return productionFeatureSourceCoverageDecision(
+    productionFeatureSourceForCheckId(sourceCheckId),
+  );
+}
+
+export function productionFeatureSourceCoverageDecisionSummary(source) {
+  const decision = productionFeatureSourceCoverageDecision(source);
+  if (decision === null) {
+    return null;
+  }
+  if (
+    decision.kind === productionFeatureCoverageDecisionKind.seededRoleUrlProof ||
+    decision.kind === productionFeatureCoverageDecisionKind.seededAdminProof
+  ) {
+    return {
+      kind: decision.kind,
+      proofCommand: decision.proofCommand,
+    };
+  }
+  if (decision.kind === productionFeatureCoverageDecisionKind.deferred) {
+    return {
+      kind: decision.kind,
+      reason: decision.reason,
+      nextDecisionTrigger: decision.nextDecisionTrigger,
+    };
+  }
+  if (decision.kind === productionFeatureCoverageDecisionKind.blockedLocalPrerequisite) {
+    return {
+      kind: decision.kind,
+      prerequisiteCheckId: decision.prerequisiteCheckId,
+      recoveryCommand: decision.recoveryCommand,
+    };
+  }
+  return null;
+}
+
+export function productionFeatureSourceCoverageDecisionSummaryForCheckId(
+  sourceCheckId,
+) {
+  return productionFeatureSourceCoverageDecisionSummary(
+    productionFeatureSourceForCheckId(sourceCheckId),
+  );
+}
+
 export function assertProductionFeatureSourceCoverageDecisions(
   sources = productionFeatureSourceRegistry,
 ) {

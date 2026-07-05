@@ -9,6 +9,9 @@ import {
   localAdminAuditIds,
   localAdminAuditRoleUrl,
 } from "./dev_test_game_admin_audit_surface_ids.mjs";
+import {
+  productionFeatureSourceCoverageDecisionSummaryForCheckId,
+} from "./dev_test_game_production_feature_source_registry.mjs";
 
 export const invalidActionRecoveryHostedConcurrentRaceMatrixUnprovenText =
   "Hosted or hosted-like concurrent command race matrix beyond the promoted local replacement, host, player, cohost deadline, lifecycle, and complete-game reload milestones, including multi-session reload/reconnect recovery and stale-client conflict evidence";
@@ -51,9 +54,13 @@ export function featureSpineFixture({
     ...declaration,
     ...(recoveryHookId === undefined ? {} : { recoveryHookId }),
   };
+  const coverageDecision = productionFeatureSourceCoverageDecisionSummaryForCheckId(
+    declaration.sourceCheckId,
+  );
   const spineTarget = {
     sourceCheckId: declaration.sourceCheckId,
     featureSlotId: declaration.featureSlotId,
+    coverageDecision,
     detailRoleUrl,
     cycleId: declaration.cycleId,
     roleUrlId: declaration.roleUrlId,
@@ -83,6 +90,7 @@ export function featureSpineFixture({
       roleUrl: resolvedRoleUrl,
       rerunCommand,
       browserProofCommand,
+      coverageDecision,
     },
   };
 }

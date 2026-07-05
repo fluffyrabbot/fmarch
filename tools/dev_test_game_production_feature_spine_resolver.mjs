@@ -4,6 +4,9 @@ import {
   featureSpineRowKind,
   validFeatureSpineDeclaration,
 } from "./dev_test_game_feature_spine_targets.mjs";
+import {
+  productionFeatureSourceCoverageDecisionSummaryForCheckId,
+} from "./dev_test_game_production_feature_source_registry.mjs";
 
 export function resolveProductionFeatureSpineTarget({
   itemId,
@@ -42,6 +45,9 @@ export function resolveProductionFeatureSpineTarget({
   return {
     featureSlotId: declaration.featureSlotId,
     sourceCheckId: sourceTarget.sourceCheckId,
+    coverageDecision: productionFeatureSourceCoverageDecisionSummaryForCheckId(
+      sourceTarget.sourceCheckId,
+    ),
     detailRoleUrl: sourceTarget.detailRoleUrl,
     cycleId: declaration.cycleId,
     roleUrlId: declaration.roleUrlId,
@@ -76,6 +82,7 @@ export function buildProductionFeatureSpineDrilldown(spineTarget) {
     roleUrl: spineTarget.roleUrl,
     rerunCommand: spineTarget.rerunCommand,
     browserProofCommand: spineTarget.browserProofCommand,
+    coverageDecision: spineTarget.coverageDecision,
   };
 }
 
@@ -117,7 +124,8 @@ export function validProductionFeatureSpineTarget(
     typeof target.detailRoleUrl !== "string" ||
     typeof target.roleUrl !== "string" ||
     typeof target.browserProofCommand !== "string" ||
-    !target.browserProofCommand.includes("test:dev-test-game-core-live")
+    !target.browserProofCommand.includes("test:dev-test-game-core-live") ||
+    !validCoverageDecision(target.coverageDecision, target.sourceCheckId)
   ) {
     return false;
   }
@@ -160,7 +168,8 @@ export function validProductionFeatureSpineDrilldown(
     drilldown.adminCheckId.length === 0 ||
     typeof drilldown.roleUrl !== "string" ||
     typeof drilldown.browserProofCommand !== "string" ||
-    !drilldown.browserProofCommand.includes("test:dev-test-game-core-live")
+    !drilldown.browserProofCommand.includes("test:dev-test-game-core-live") ||
+    !validCoverageDecision(drilldown.coverageDecision, drilldown.sourceCheckId)
   ) {
     return false;
   }
@@ -212,5 +221,16 @@ function validProductionFeatureSourceRule(item, sourceCheckRules) {
     item.detailRoleUrl.includes(rule.detailRoleUrlIncludes) &&
     item.roleUrl.includes(rule.roleUrlIncludes) &&
     (rule.rerunCommand === undefined || item.rerunCommand === rule.rerunCommand)
+  );
+}
+
+function validCoverageDecision(decision, sourceCheckId) {
+  return (
+    decision !== null &&
+    typeof decision === "object" &&
+    JSON.stringify(decision) ===
+      JSON.stringify(
+        productionFeatureSourceCoverageDecisionSummaryForCheckId(sourceCheckId),
+      )
   );
 }

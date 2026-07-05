@@ -53,6 +53,10 @@ test("production feature spine resolver resolves seeded role targets", () => {
   assert.deepEqual(target, {
     featureSlotId: "resolution-receipts",
     sourceCheckId: "local-core-loop-proof",
+    coverageDecision: {
+      kind: "seeded-role-url-proof",
+      proofCommand: coreLoopAdminProofCommand,
+    },
     detailRoleUrl: "/admin/audit/local-core-loop?game=<seeded-game>",
     cycleId: "d01-n01-d02",
     roleUrlId: "d01-n01-d02-target",
@@ -81,6 +85,10 @@ test("production feature spine resolver resolves seeded role targets", () => {
     roleUrl: "http://127.0.0.1:5173/g/game-a",
     rerunCommand: coreLoopAdminProofCommand,
     browserProofCommand,
+    coverageDecision: {
+      kind: "seeded-role-url-proof",
+      proofCommand: coreLoopAdminProofCommand,
+    },
   });
   assert.equal(
     validProductionFeatureSpineDrilldown(buildProductionFeatureSpineDrilldown(target), {

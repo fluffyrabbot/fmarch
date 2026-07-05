@@ -2782,6 +2782,9 @@ test("dev test-game next-action advances hosted deployment after target prefligh
       targetRoleUrlMatchesSelectedSpineTarget: true,
       browserProofCommand: devTestGameLiveProofCommand,
       proofTarget: devTestGameReleaseReadinessPath,
+      coverageDecision:
+        resolvedFeatureSpineTargetFixture("host-phase-control")
+          .coverageDecision,
     },
   );
   assert.deepEqual(
