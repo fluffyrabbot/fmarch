@@ -22,6 +22,10 @@ export const hostedIdentityEvidenceRedactedPassFixturePath =
   "tools/fixtures/dev_test_game_hosted_identity_evidence.redacted-pass.json";
 export const hostedIdentityEvidenceOperatorPartialFixturePath =
   "tools/fixtures/dev_test_game_hosted_identity_evidence.operator-partial.json";
+export const hostedIdentityEvidenceOperatorAccountLifecyclePartialFixturePath =
+  "tools/fixtures/dev_test_game_hosted_identity_evidence.operator-account-lifecycle-partial.json";
+export const hostedIdentityEvidenceOperatorAccountLifecycleRecoveredFixturePath =
+  "tools/fixtures/dev_test_game_hosted_identity_evidence.operator-account-lifecycle-recovered.json";
 export const hostedIdentityEvidenceOperatorAccountRecoveryRecoveredFixturePath =
   "tools/fixtures/dev_test_game_hosted_identity_evidence.operator-account-recovery-recovered.json";
 export const hostedIdentityEvidenceOperatorInvitePartialFixturePath =
@@ -34,6 +38,8 @@ export const hostedIdentityEvidenceFixturePaths = Object.freeze([
   hostedIdentityEvidencePlaceholderFixturePath,
   hostedIdentityEvidenceRedactedPassFixturePath,
   hostedIdentityEvidenceOperatorPartialFixturePath,
+  hostedIdentityEvidenceOperatorAccountLifecyclePartialFixturePath,
+  hostedIdentityEvidenceOperatorAccountLifecycleRecoveredFixturePath,
   hostedIdentityEvidenceOperatorAccountRecoveryRecoveredFixturePath,
   hostedIdentityEvidenceOperatorInvitePartialFixturePath,
   hostedIdentityEvidenceOperatorInviteRecoveredFixturePath,
@@ -242,6 +248,36 @@ export const hostedIdentityEvidenceOperatorProofDrilldowns = Object.freeze([
 ]);
 
 export const hostedIdentityEvidenceFamilyProgressionCases = Object.freeze([
+  Object.freeze({
+    id: "hosted-account-lifecycle",
+    field: "accountLifecycle",
+    checkId: "hosted-account-lifecycle-evidence",
+    missingInputId: "redacted-account-lifecycle-packet",
+    missingFixturePath:
+      hostedIdentityEvidenceOperatorAccountLifecyclePartialFixturePath,
+    recoveredFixturePath:
+      hostedIdentityEvidenceOperatorAccountLifecycleRecoveredFixturePath,
+    adminProofFixturePath:
+      hostedIdentityEvidenceOperatorAccountLifecycleRecoveredFixturePath,
+    adminProofMode: "provided-family-still-blocked",
+    expectedMissingInputs: Object.freeze([
+      "status-provided",
+      "createAccount",
+      "login",
+      "disableAccount",
+      "enableAccount",
+      "redactedEvidenceRefs",
+    ]),
+    recoveredProvidedInputIds: Object.freeze([
+      "createAccount",
+      "login",
+      "disableAccount",
+      "enableAccount",
+    ]),
+    recoveredRedactedEvidenceRefIds: Object.freeze([
+      "account-lifecycle-redacted-log",
+    ]),
+  }),
   Object.freeze({
     id: "invite-delivery",
     field: "inviteDelivery",

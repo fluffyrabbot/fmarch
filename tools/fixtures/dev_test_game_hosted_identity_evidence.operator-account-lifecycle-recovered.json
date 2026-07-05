@@ -1,0 +1,202 @@
+{
+  "version": 1,
+  "proof": "hosted-production-identity-evidence",
+  "status": "partial",
+  "releaseReady": false,
+  "productionReady": false,
+  "redaction": {
+    "packetKind": "redacted-hosted-identity-intake",
+    "rawInviteTokensIncluded": false,
+    "rawSessionSecretsIncluded": false,
+    "rawPasswordHashesIncluded": false,
+    "rawPersonalContactIncluded": false
+  },
+  "hostedIdentity": {
+    "accountLifecycle": {
+      "status": "provided",
+      "inputs": {
+        "createAccount": "redacted-account-create-event",
+        "login": "redacted-login-event",
+        "disableAccount": "redacted-disable-event",
+        "enableAccount": "redacted-enable-event"
+      },
+      "redactedEvidenceRefs": [
+        {
+          "id": "account-lifecycle-redacted-log",
+          "kind": "audit-log",
+          "evidenceFamily": "account-lifecycle",
+          "capturedAt": "2026-07-01T00:00:00.000Z",
+          "locator": "s3://redacted/fmarch/identity/account-lifecycle.json",
+          "retentionWindow": "90d",
+          "exportLocator": "s3://redacted/fmarch/identity/account-lifecycle.json",
+          "redacted": true
+        }
+      ]
+    },
+    "inviteDelivery": {
+      "status": "missing",
+      "inputs": {
+        "deliveryChannels": [],
+        "revocationCovered": false
+      },
+      "rawInviteTokensIncluded": false,
+      "redactedEvidenceRefs": []
+    },
+    "accountRecovery": {
+      "status": "missing",
+      "inputs": {
+        "recoveryMethods": [],
+        "recoveredSessionsPreserveRoleSurfaceAdapter": false
+      },
+      "redactedEvidenceRefs": []
+    },
+    "abuseAndRateLimitPolicy": {
+      "status": "missing",
+      "inputs": {
+        "protectedOperations": [],
+        "rateLimitPolicyRef": ""
+      },
+      "redactedEvidenceRefs": []
+    },
+    "sessionSecretPolicy": {
+      "status": "missing",
+      "inputs": {
+        "storage": "",
+        "rotation": "",
+        "deploymentSecretSource": ""
+      },
+      "rawSessionSecretsIncluded": false,
+      "redactedEvidenceRefs": []
+    },
+    "hostedAuditRetentionExport": {
+      "status": "missing",
+      "inputs": {
+        "eventFamilies": [],
+        "retentionWindow": "",
+        "exportRef": ""
+      },
+      "redactedEvidenceRefs": []
+    },
+    "roleSurfaceArchitectureChanged": false,
+    "roleSurfaceContract": {
+      "version": 1,
+      "architectureId": "seeded-role-url-plus-session-adapter-v1",
+      "seededGamePlaceholder": "<seeded-game>",
+      "roleUrlPatterns": [
+        {
+          "id": "admin-audit",
+          "href": "/admin/audit/:audit?game=<seeded-game>"
+        },
+        {
+          "id": "admin-overview",
+          "href": "/admin?game=<seeded-game>"
+        },
+        {
+          "id": "host",
+          "href": "/g/<seeded-game>/host"
+        },
+        {
+          "id": "player",
+          "href": "/g/<seeded-game>"
+        },
+        {
+          "id": "channel",
+          "href": "/g/<seeded-game>/c/:channel"
+        }
+      ],
+      "authBoundaries": [
+        {
+          "id": "login",
+          "path": "/auth/login"
+        },
+        {
+          "id": "session",
+          "path": "/auth/session"
+        },
+        {
+          "id": "session-grants",
+          "path": "/auth/session-grants"
+        }
+      ],
+      "credentialPolicy": {
+        "rawInviteTokensInRoleUrls": false,
+        "rawSessionSecretsInRoleUrls": false,
+        "accountIdentifiersChangeRoleUrls": false
+      }
+    },
+    "identityAdapterContract": {
+      "version": 1,
+      "adapterId": "local-production-identity-adapter-v1",
+      "roleSurfaceArchitectureChanged": false,
+      "roleSurfaceContract": {
+        "version": 1,
+        "architectureId": "seeded-role-url-plus-session-adapter-v1",
+        "seededGamePlaceholder": "<seeded-game>",
+        "roleUrlPatterns": [
+          {
+            "id": "admin-audit",
+            "href": "/admin/audit/:audit?game=<seeded-game>"
+          },
+          {
+            "id": "admin-overview",
+            "href": "/admin?game=<seeded-game>"
+          },
+          {
+            "id": "host",
+            "href": "/g/<seeded-game>/host"
+          },
+          {
+            "id": "player",
+            "href": "/g/<seeded-game>"
+          },
+          {
+            "id": "channel",
+            "href": "/g/<seeded-game>/c/:channel"
+          }
+        ],
+        "authBoundaries": [
+          {
+            "id": "login",
+            "path": "/auth/login"
+          },
+          {
+            "id": "session",
+            "path": "/auth/session"
+          },
+          {
+            "id": "session-grants",
+            "path": "/auth/session-grants"
+          }
+        ],
+        "credentialPolicy": {
+          "rawInviteTokensInRoleUrls": false,
+          "rawSessionSecretsInRoleUrls": false,
+          "accountIdentifiersChangeRoleUrls": false
+        }
+      },
+      "credentialKinds": {
+        "invite": "single-use-invite",
+        "account": "local-password-account",
+        "session": "opaque-session"
+      },
+      "browserCookieName": "fmarch_session",
+      "lifecycleControls": [
+        "account-disable",
+        "account-enable",
+        "session-rotation",
+        "session-revocation",
+        "invite-revocation"
+      ],
+      "delegatedIssuanceControls": ["host-scoped-invite-issuance"],
+      "redactionPolicy": {
+        "rawInviteTokensStored": false,
+        "rawSessionSecretsStored": false,
+        "rawPasswordStored": false,
+        "rawInviteTokensVisible": false
+      },
+      "status": "passed",
+      "lifecycleStatus": "passed",
+      "roleSurfaceEvidenceStatus": "passed"
+    }
+  }
+}

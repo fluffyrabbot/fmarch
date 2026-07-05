@@ -15,6 +15,8 @@ import {
   hostedIdentityEvidenceInputSectionIds,
   hostedIdentityEvidenceInputSectionStatuses,
   hostedIdentityExpectedRoleSurfaceContract,
+  hostedIdentityEvidenceOperatorAccountLifecyclePartialFixturePath,
+  hostedIdentityEvidenceOperatorAccountLifecycleRecoveredFixturePath,
   hostedIdentityEvidenceOperatorAccountRecoveryRecoveredFixturePath,
   hostedIdentityEvidenceOperatorInvitePartialFixturePath,
   hostedIdentityEvidenceOperatorInviteRecoveredFixturePath,
@@ -191,6 +193,13 @@ test("hosted identity evidence cases share handoff inputs and blocked groups", (
     })),
     [
       {
+        id: "hosted-account-lifecycle",
+        evidencePath:
+          "target/dev-test-game/hosted-identity-evidence-hosted-account-lifecycle.json",
+        adminProofPath:
+          "target/dev-test-game/hosted-identity-evidence-hosted-account-lifecycle-admin-proof.json",
+      },
+      {
         id: "invite-delivery",
         evidencePath:
           "target/dev-test-game/hosted-identity-evidence-invite-delivery.json",
@@ -272,6 +281,8 @@ test("hosted identity evidence cases share handoff inputs and blocked groups", (
       hostedIdentityEvidencePlaceholderFixturePath,
       hostedIdentityEvidenceRedactedPassFixturePath,
       hostedIdentityEvidenceOperatorPartialFixturePath,
+      hostedIdentityEvidenceOperatorAccountLifecyclePartialFixturePath,
+      hostedIdentityEvidenceOperatorAccountLifecycleRecoveredFixturePath,
       hostedIdentityEvidenceOperatorAccountRecoveryRecoveredFixturePath,
       hostedIdentityEvidenceOperatorInvitePartialFixturePath,
       hostedIdentityEvidenceOperatorInviteRecoveredFixturePath,
@@ -288,6 +299,14 @@ test("hosted identity evidence cases share handoff inputs and blocked groups", (
       progression.recoveredFixturePath,
     ]),
     [
+      [
+        "hosted-account-lifecycle",
+        "accountLifecycle",
+        "hosted-account-lifecycle-evidence",
+        "redacted-account-lifecycle-packet",
+        hostedIdentityEvidenceOperatorAccountLifecyclePartialFixturePath,
+        hostedIdentityEvidenceOperatorAccountLifecycleRecoveredFixturePath,
+      ],
       [
         "invite-delivery",
         "inviteDelivery",
