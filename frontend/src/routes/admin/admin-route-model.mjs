@@ -1544,6 +1544,20 @@ export function normalizeLocalHostedConcurrentRaceMatrixAudit(
         command: String(hostedConcurrentRaceMatrix.nextBuildSlice?.command ?? ""),
       }),
     ]),
+    handoffPath: Object.freeze({
+      upstreamAuditId: localAdminAuditIds.nextAction,
+      upstreamLabel: "Ranked next action",
+      localCapabilityAuditId: localAdminAuditIds.raceCoverage,
+      downstreamStatus: String(
+        hostedConcurrentRaceMatrix.summary?.realHostedEvidenceStatus ?? "unknown",
+      ),
+      downstreamCommand: String(
+        hostedConcurrentRaceMatrix.realHostedEvidenceInputs?.command ?? "",
+      ),
+      downstreamProofTarget: String(
+        hostedConcurrentRaceMatrix.realHostedEvidenceInputs?.proofTarget ?? "",
+      ),
+    }),
     reconnectLanes: Object.freeze(
       reconnectLanes.map((lane) =>
         Object.freeze({

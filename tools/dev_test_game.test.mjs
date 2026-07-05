@@ -17553,6 +17553,14 @@ function hostedConcurrentRaceMatrixAdminProofFixture() {
         proofTarget: hostedHandoffChecklist.proofTarget,
       },
       hostedHandoffBlockedReceipt: hostedHandoffChecklist.blockedReceipt,
+      handoffPath: {
+        upstreamAuditId: "local-next-action",
+        upstreamLabel: "Ranked next action",
+        localCapabilityAuditId: "local-race-coverage",
+        downstreamStatus: "unproven",
+        downstreamCommand: hostedMatrixRealHostedEvidenceCommand,
+        downstreamProofTarget: hostedMatrixExternalEvidenceProofTarget,
+      },
       realHostedDeploymentStatus: "unproven",
     },
     adminRoleSurface: {
@@ -17600,6 +17608,22 @@ function hostedConcurrentRaceMatrixAdminProofFixture() {
         missingRequiredInputs:
           hostedHandoffChecklist.blockedReceipt.missingRequiredInputs,
       },
+      visibleHandoffPath: {
+        upstreamAuditId: "local-next-action",
+        upstreamLabel: "Ranked next action",
+        localCapabilityAuditId: "local-race-coverage",
+        downstreamStatus: "unproven",
+        downstreamCommand: hostedMatrixRealHostedEvidenceCommand,
+        downstreamProofTarget: hostedMatrixExternalEvidenceProofTarget,
+      },
+      visibleRelatedDestinations: [
+        {
+          linkId: "local-next-action",
+          auditId: "local-next-action",
+          detailRoleUrl: "/admin/audit/local-next-action?game=<seeded-game>",
+          visibleChecks: ["next-command"],
+        },
+      ],
       rawInviteTokensVisible: false,
       releaseReady: false,
       productionReady: false,

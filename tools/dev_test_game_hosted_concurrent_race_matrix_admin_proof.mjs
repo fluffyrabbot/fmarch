@@ -91,6 +91,21 @@ function hostedMatrixSummaryStatuses(hostedMatrix) {
   );
 }
 
+function hostedMatrixHandoffPath(hostedMatrix) {
+  return {
+    upstreamAuditId: "local-next-action",
+    upstreamLabel: "Ranked next action",
+    localCapabilityAuditId: "local-race-coverage",
+    downstreamStatus: String(
+      hostedMatrix.summary?.realHostedEvidenceStatus ?? "unknown",
+    ),
+    downstreamCommand: String(hostedMatrix.realHostedEvidenceInputs?.command ?? ""),
+    downstreamProofTarget: String(
+      hostedMatrix.realHostedEvidenceInputs?.proofTarget ?? "",
+    ),
+  };
+}
+
 export function hostedConcurrentRaceMatrixAdminProofCase() {
   return {
     smokeName: "dev-test-game-hosted-concurrent-race-matrix-admin-proof",
@@ -171,7 +186,15 @@ export function hostedConcurrentRaceMatrixAdminProofCase() {
         requiredHostedHandoffSummary: hostedHandoffSummary,
         requiredHostedHandoffBlockedReceipt:
           source.hostedMatrix.hostedHandoffChecklist?.blockedReceipt ?? null,
+        requiredHandoffPath: hostedMatrixHandoffPath(source.hostedMatrix),
         requiredRelatedLinks,
+        requiredRelatedDestinations: [
+          {
+            linkId: "local-next-action",
+            auditId: "local-next-action",
+            requiredChecks: ["next-command"],
+          },
+        ],
       });
     },
     buildEvidence: ({ source, adminRoleSurface }) => ({
@@ -242,6 +265,7 @@ export function hostedConcurrentRaceMatrixAdminProofCase() {
               hostedHandoffBlockedReceipt:
                 source.hostedMatrix.hostedHandoffChecklist.blockedReceipt,
             }),
+        handoffPath: hostedMatrixHandoffPath(source.hostedMatrix),
         realHostedDeploymentStatus:
           source.hostedMatrix.summary.realHostedDeploymentStatus,
       },
@@ -429,6 +453,31 @@ export function assertHostedConcurrentRaceMatrixAdminProof(evidence) {
         );
       }
     }
+  }
+  const expectedHandoffPath = evidence.generatedFrom?.handoffPath;
+  if (expectedHandoffPath !== undefined) {
+    const visibleHandoffPath = evidence.adminRoleSurface?.visibleHandoffPath;
+    for (const [key, expectedValue] of Object.entries(expectedHandoffPath)) {
+      if (visibleHandoffPath?.[key] !== String(expectedValue)) {
+        throw new Error(
+          `hosted concurrent race matrix admin proof missing handoff path: ${key}`,
+        );
+      }
+    }
+  }
+  const nextActionDestination =
+    evidence.adminRoleSurface?.visibleRelatedDestinations?.find(
+      (destination) =>
+        destination.linkId === "local-next-action" &&
+        destination.auditId === "local-next-action",
+    ) ?? null;
+  if (
+    nextActionDestination === null ||
+    !nextActionDestination.visibleChecks?.includes("next-command")
+  ) {
+    throw new Error(
+      "hosted concurrent race matrix admin proof did not prove next-action round trip",
+    );
   }
   return evidence;
 }

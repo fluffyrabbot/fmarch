@@ -1567,6 +1567,14 @@ test("admin route data exposes local hosted matrix as a native audit row", async
       [localAdminAuditIds.nextAction, localAdminAuditRoleUrl(localAdminAuditIds.nextAction, { game: "midsummer" })],
     ],
   );
+  assert.deepEqual(matrix.handoffPath, {
+    upstreamAuditId: localAdminAuditIds.nextAction,
+    upstreamLabel: "Ranked next action",
+    localCapabilityAuditId: localAdminAuditIds.raceCoverage,
+    downstreamStatus: "unproven",
+    downstreamCommand: hostedMatrixRealHostedEvidenceCommand,
+    downstreamProofTarget: hostedMatrixExternalEvidenceProofTarget,
+  });
   assert.deepEqual(
     matrix.reconnectLanes.map((lane) => [lane.id, lane.status]),
     [
