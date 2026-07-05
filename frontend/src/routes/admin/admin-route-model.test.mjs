@@ -155,6 +155,7 @@ import {
 import {
   buildProofGraphDiagnosticProofSummary,
   buildProofGraphDiagnosticSummaryTrace,
+  proofGraphDiagnosticSummaryCheckIds,
 } from "../../../../tools/dev_test_game_proof_graph_diagnostic_summary.mjs";
 import {
   recoveryReceiptGraphDescriptorByReceiptKey,
@@ -2596,9 +2597,8 @@ test("admin route data exposes proof graph destination-summary drift next action
           "proof-graph-destination-summary-drift-count",
           "proof-graph-destination-summary-trace",
           "proof-graph-destination-summary-trace-drift-count",
-          "proof-graph-diagnostic-summary",
-          ...proofGraphDiagnosticProofNodes.map(
-            (node) => `proof-graph-diagnostic-${node.id}`,
+          ...proofGraphDiagnosticSummaryCheckIds(
+            proofGraphDiagnosticSummaryTraceFixture(),
           ),
         ].includes(check.id),
       )

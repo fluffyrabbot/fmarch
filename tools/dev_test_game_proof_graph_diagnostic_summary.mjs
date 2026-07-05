@@ -186,6 +186,25 @@ export function proofGraphDiagnosticSummaryCheckIds(trace) {
       ]);
 }
 
+export function proofGraphDiagnosticSummaryCheckRows(trace) {
+  const normalized = normalizeProofGraphDiagnosticSummaryTrace(trace);
+  const checkIds = proofGraphDiagnosticSummaryCheckIds(normalized);
+  return normalized.status === "unavailable"
+    ? Object.freeze([])
+    : Object.freeze([
+        Object.freeze({
+          id: checkIds[0],
+          status: `${normalized.diagnosticCount} diagnostics:${normalized.status}`,
+        }),
+        ...normalized.rows.map((row, index) =>
+          Object.freeze({
+            id: checkIds[index + 1],
+            status: `${row.status}:${row.diagnosticReason}:non-terminal`,
+          }),
+        ),
+      ]);
+}
+
 export function assertProofGraphDiagnosticSummaryVisibleChecks(
   trace,
   visibleChecks,

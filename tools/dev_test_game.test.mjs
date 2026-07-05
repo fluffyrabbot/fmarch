@@ -488,6 +488,7 @@ import {
 import {
   buildProofGraphDiagnosticProofSummary,
   buildProofGraphDiagnosticSummaryTrace,
+  proofGraphDiagnosticSummaryCheckIds,
 } from "./dev_test_game_proof_graph_diagnostic_summary.mjs";
 import {
   hostedIdentityTerminalReceiptArtifactCase,
@@ -19640,10 +19641,7 @@ function nextActionAdminProofFixture() {
         "selected-spine-browser-proof",
         "selected-spine-coverage-decision",
         "seed-proof-lane-coverage-trace",
-        "proof-graph-diagnostic-summary",
-        ...proofGraphDiagnosticSummaryTrace.rows.map(
-          (row) => `proof-graph-diagnostic-${row.id}`,
-        ),
+        ...proofGraphDiagnosticSummaryCheckIds(proofGraphDiagnosticSummaryTrace),
         "release-readiness-selection-trace",
       ],
       visibleRelatedLinks: [

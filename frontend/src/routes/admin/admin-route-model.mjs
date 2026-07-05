@@ -56,6 +56,7 @@ import {
   normalizeProofGraphReceiptArtifactRows,
 } from "../../../../tools/dev_test_game_proof_graph_receipt_artifact_rows.mjs";
 import {
+  proofGraphDiagnosticSummaryCheckRows,
   normalizeProofGraphDiagnosticProofSummary,
   normalizeProofGraphDiagnosticSummaryTrace,
 } from "../../../../tools/dev_test_game_proof_graph_diagnostic_summary.mjs";
@@ -3151,30 +3152,7 @@ export function normalizeLocalNextActionProofGraphDestinationSummaryTraceCheckRo
 export function normalizeLocalNextActionProofGraphDiagnosticSummaryCheckRows({
   proofGraphDiagnosticSummaryTrace = null,
 } = {}) {
-  return proofGraphDiagnosticSummaryTrace?.status === "unavailable" ||
-    proofGraphDiagnosticSummaryTrace === null
-    ? Object.freeze([])
-    : Object.freeze([
-        Object.freeze({
-          id: "proof-graph-diagnostic-summary",
-          status: `${Number(
-            proofGraphDiagnosticSummaryTrace.diagnosticCount ?? 0,
-          )} diagnostics:${String(
-            proofGraphDiagnosticSummaryTrace.status ?? "unknown",
-          )}`,
-        }),
-        ...(Array.isArray(proofGraphDiagnosticSummaryTrace.rows)
-          ? proofGraphDiagnosticSummaryTrace.rows
-          : []
-        ).map((row) =>
-          Object.freeze({
-            id: `proof-graph-diagnostic-${String(row.id ?? "")}`,
-            status: `${String(row.status ?? "unknown")}:${String(
-              row.diagnosticReason ?? "",
-            )}:non-terminal`,
-          }),
-        ),
-      ]);
+  return proofGraphDiagnosticSummaryCheckRows(proofGraphDiagnosticSummaryTrace);
 }
 
 export function normalizeLocalNextActionLocalReadinessDependencyCheckRows({
