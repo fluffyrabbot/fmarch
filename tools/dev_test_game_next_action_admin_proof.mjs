@@ -38,11 +38,6 @@ import {
   nextActionPath as defaultNextActionPath,
 } from "./dev_test_game_spine_artifact_paths.mjs";
 
-const nextActionPath = path.resolve(
-  repoRoot,
-  process.env.FMARCH_DEV_TEST_GAME_NEXT_ACTION ??
-    defaultNextActionPath,
-);
 const proofRunPath = path.resolve(
   repoRoot,
   process.env.FMARCH_DEV_TEST_GAME_PROOF_RUN ?? devTestGameProofRunPath,
@@ -56,19 +51,30 @@ const hostedMatrixPath = path.resolve(
   process.env.FMARCH_DEV_TEST_GAME_HOSTED_CONCURRENT_RACE_MATRIX ??
     devTestGameHostedConcurrentRaceMatrixPath,
 );
-const nextActionRelativePath = path.relative(repoRoot, nextActionPath);
 const proofRunRelativePath = path.relative(repoRoot, proofRunPath);
 const proofGraphRelativePath = path.relative(repoRoot, proofGraphPath);
 const hostedMatrixRelativePath = path.relative(repoRoot, hostedMatrixPath);
-const evidencePath = path.join(repoRoot, nextActionAdminProofPath);
 
-export function nextActionAdminProofCase() {
+export function nextActionAdminProofCase({
+  nextActionSourcePath =
+    process.env.FMARCH_DEV_TEST_GAME_NEXT_ACTION ?? defaultNextActionPath,
+  evidenceSourcePath =
+    process.env.FMARCH_DEV_TEST_GAME_NEXT_ACTION_ADMIN_PROOF ??
+    nextActionAdminProofPath,
+  smokeName = "dev-test-game-next-action-admin-proof",
+  stage = "next-action-admin-proof-listen",
+} = {}) {
+  const nextActionPath = path.resolve(repoRoot, nextActionSourcePath);
+  const nextActionRelativePath = path.relative(repoRoot, nextActionPath);
+  const evidencePath = path.resolve(repoRoot, evidenceSourcePath);
+  const evidenceRelativePath = path.relative(repoRoot, evidencePath);
   return {
-    smokeName: "dev-test-game-next-action-admin-proof",
-    stage: "next-action-admin-proof-listen",
+    smokeName,
+    stage,
     evidencePath,
     envOverrides: {
       FMARCH_DEV_TEST_GAME_NEXT_ACTION: nextActionRelativePath,
+      FMARCH_DEV_TEST_GAME_NEXT_ACTION_ADMIN_PROOF: evidenceRelativePath,
       FMARCH_DEV_TEST_GAME_PROOF_GRAPH: proofGraphRelativePath,
       FMARCH_DEV_TEST_GAME_HOSTED_CONCURRENT_RACE_MATRIX:
         hostedMatrixRelativePath,

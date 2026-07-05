@@ -184,6 +184,7 @@ import {
   adminSpineTerminalBatchReadinessEvidenceEnv,
   devTestGameAdminSpinePlan,
   terminalAdminProofBatchPlan,
+  terminalHostedIdentityNextActionAdminProofBatchPlan,
   terminalRefreshAdminProofBatchPlan,
 } from "./dev_test_game_admin_spine.mjs";
 import {
@@ -279,6 +280,7 @@ import {
 import {
   assertDevTestGameSpineManifest,
   buildDevTestGameSpineManifest,
+  hostedIdentityNextActionPath,
   nextActionAdminProofCommand,
   nextActionAdminProofPath,
   nextActionCommand,
@@ -1051,6 +1053,8 @@ test("dev test-game spine orchestrators expose stable proof order and env maps",
       "terminal-admin-proof-batch",
       devTestGameReleaseReadinessScript,
       "tools/dev_test_game_next_action.mjs",
+      "terminal-hosted-identity-next-action-admin-proof-batch",
+      "tools/dev_test_game_next_action.mjs",
       "terminal-refresh-admin-proof-batch",
       "tools/dev_test_game_proof_graph.mjs",
       "tools/dev_test_game_proof_graph_admin_proof.mjs",
@@ -1070,7 +1074,20 @@ test("dev test-game spine orchestrators expose stable proof order and env maps",
     script: "terminal-admin-proof-batch",
     label: "Terminal admin proof batch",
   });
+  assert.deepEqual(devTestGameAdminSpinePlan[21], {
+    kind: "node",
+    script: "tools/dev_test_game_next_action.mjs",
+    env: {
+      FMARCH_DEV_TEST_GAME_SEQUENCE_STAGE: "hosted-identity",
+      FMARCH_DEV_TEST_GAME_NEXT_ACTION: hostedIdentityNextActionPath,
+    },
+  });
   assert.deepEqual(devTestGameAdminSpinePlan[22], {
+    kind: "custom",
+    script: "terminal-hosted-identity-next-action-admin-proof-batch",
+    label: "Terminal hosted identity next-action admin proof batch",
+  });
+  assert.deepEqual(devTestGameAdminSpinePlan[24], {
     kind: "custom",
     script: "terminal-refresh-admin-proof-batch",
     label: "Terminal refresh admin proof batch",
@@ -1092,6 +1109,13 @@ test("dev test-game spine orchestrators expose stable proof order and env maps",
       "dev-test-game-proof-graph-admin-proof",
       "dev-test-game-proof-freshness-admin-proof",
       "dev-test-game-next-action-admin-proof",
+    ],
+  });
+  assertAdminAuditBatchPlan({
+    plan: terminalHostedIdentityNextActionAdminProofBatchPlan,
+    label: "Terminal hosted identity next-action admin proof batch",
+    caseSmokeNames: [
+      "dev-test-game-hosted-identity-next-action-admin-proof",
     ],
   });
   assertAdminAuditBatchPlan({
@@ -3897,6 +3921,13 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
         true,
       ],
       [
+        "Terminal hosted identity next-action admin proof batch",
+        1,
+        ["hosted-identity-next-action"],
+        true,
+        true,
+      ],
+      [
         "Terminal refresh admin proof batch",
         2,
         ["proof-freshness", "next-action"],
@@ -3970,7 +4001,7 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
   assert.equal(graph.summary.roleUrlCount, 72);
   assert.equal(graph.summary.roleSurfaceProofCount, 5);
   assert.equal(graph.summary.productionFeatureTargetCount, 41);
-  assert.equal(graph.summary.terminalBatchCount, 2);
+  assert.equal(graph.summary.terminalBatchCount, 3);
   for (const descriptor of recoveryReceiptGraphDescriptors) {
     assert.equal(
       graph.summary[descriptor.summaryLaneCountKey],
@@ -13177,7 +13208,7 @@ test("session card and markdown include role credential URLs and tokens", async 
   assert.equal(
     adminSpineReadiness.localDevelopmentSpine.evidence.adminProofSpine
       .terminalBatches.batchCount,
-    2,
+    3,
   );
   assert.deepEqual(adminSpineReadiness.localDevelopmentSpine.evidence.adminProofSpine.proofIds, [
     "core-loop",
@@ -20003,10 +20034,14 @@ function adminSpineTerminalBatchesFixture() {
       adminSpineProof: "target/dev-test-game/admin-spine-proof.json",
       proofGraph: "target/dev-test-game/proof-graph.json",
       nextAction: "target/dev-test-game/next-action.json",
+      hostedIdentityNextAction:
+        "target/dev-test-game/next-action-hosted-identity.json",
       proofFreshnessAdminProof:
         "target/dev-test-game/proof-freshness-admin-proof.json",
       nextActionAdminProof: "target/dev-test-game/next-action-admin-proof.json",
-      batchCount: 2,
+      hostedIdentityNextActionAdminProof:
+        "target/dev-test-game/hosted-identity-next-action-admin-proof.json",
+      batchCount: 3,
     },
     batches: [
       {
@@ -20027,6 +20062,25 @@ function adminSpineTerminalBatchesFixture() {
           "target/dev-test-game/next-action-admin-proof.json",
         ],
         elapsedMs: 2400,
+        sharedFrontendSession: true,
+        sharedChromiumSession: true,
+        releaseReady: false,
+        productionReady: false,
+      },
+      {
+        label: "Terminal hosted identity next-action admin proof batch",
+        reason:
+          "hosted identity next-action input proves the promoted operator-aware admin rows before the default next-action receipt is restored",
+        status: "passed",
+        caseCount: 1,
+        caseSmokeNames: [
+          "dev-test-game-hosted-identity-next-action-admin-proof",
+        ],
+        proofIds: ["hosted-identity-next-action"],
+        artifactPaths: [
+          "target/dev-test-game/hosted-identity-next-action-admin-proof.json",
+        ],
+        elapsedMs: 1200,
         sharedFrontendSession: true,
         sharedChromiumSession: true,
         releaseReady: false,

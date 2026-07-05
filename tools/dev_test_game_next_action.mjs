@@ -102,6 +102,7 @@ import {
   devTestGameProofGraphAdminProofPath,
   devTestGameProofRunPath,
   devTestGameSessionPath,
+  hostedIdentityNextActionPath,
   nextActionAdminProofPath,
   nextActionPath,
 } from "./dev_test_game_spine_artifact_paths.mjs";
@@ -114,6 +115,8 @@ export {
 
 export const DEV_TEST_GAME_NEXT_ACTION_VERSION = 1;
 export const devTestGameNextActionPath = nextActionPath;
+export const devTestGameHostedIdentityNextActionPath =
+  hostedIdentityNextActionPath;
 export { devTestGameOpsArtifactsPath, devTestGameReleaseReadinessPath };
 export const devTestGameLiveProofCommand =
   devTestGameProductionFeatureBrowserProofCommand;
@@ -130,8 +133,6 @@ export const devTestGameHostedIdentityOperatorSpineScript =
   "test:dev-test-game-identity:operator";
 export const devTestGameHostedIdentityOperatorSpineCommand =
   `DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch npm run ${devTestGameHostedIdentityOperatorSpineScript}`;
-
-const nextActionJsonPath = path.join(repoRoot, devTestGameNextActionPath);
 
 export function buildDevTestGameNextAction(
   spineManifest,
@@ -665,7 +666,10 @@ export async function writeDevTestGameNextAction({
     process.env.FMARCH_DEV_TEST_GAME_SEQUENCE_STAGE ??
     devTestGameDefaultSequenceStage,
   manifestPath = process.env.FMARCH_DEV_TEST_GAME_SPINE_MANIFEST ?? spineManifestPath,
+  nextActionOutputPath =
+    process.env.FMARCH_DEV_TEST_GAME_NEXT_ACTION ?? devTestGameNextActionPath,
 } = {}) {
+  const nextActionJsonPath = path.resolve(repoRoot, nextActionOutputPath);
   const absoluteManifestPath = path.resolve(repoRoot, manifestPath);
   const absoluteReleaseReadinessPath = path.resolve(
     repoRoot,
@@ -2395,5 +2399,7 @@ const raceCoveragePromotedMilestoneGroupIds = Object.freeze([
 
 if (pathToFileURL(process.argv[1] ?? "").href === import.meta.url) {
   const evidence = await writeDevTestGameNextAction();
-  console.log(`wrote ${devTestGameNextActionPath} (${evidence.nextAction.status})`);
+  console.log(
+    `wrote ${process.env.FMARCH_DEV_TEST_GAME_NEXT_ACTION ?? devTestGameNextActionPath} (${evidence.nextAction.status})`,
+  );
 }

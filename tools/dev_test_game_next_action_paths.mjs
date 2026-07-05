@@ -1,4 +1,6 @@
 export {
+  hostedIdentityNextActionAdminProofPath,
+  hostedIdentityNextActionPath,
   nextActionAdminProofPath,
   nextActionPath,
   proofFreshnessAdminProofPath,

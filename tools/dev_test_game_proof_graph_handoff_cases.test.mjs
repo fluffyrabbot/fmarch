@@ -23,6 +23,7 @@ import {
   seedProofLaneCoverageRecoveryReason,
   spineManifestAdminProofCommand,
   terminalAdminProofBatchArtifactPaths,
+  terminalAdminProofBatchEdgeIds,
   terminalAdminProofBatchIds,
 } from "./dev_test_game_proof_graph_handoff_cases.mjs";
 import {
@@ -241,7 +242,7 @@ test("proof graph base edges share fixed topology and seed recovery metadata", (
         to: "next-action",
         relationship: "recovers-through",
       },
-      ...terminalAdminProofBatchIds.map((proofId) => ({
+      ...terminalAdminProofBatchEdgeIds.map((proofId) => ({
         from: "admin-spine-terminal-batches",
         to: proofId,
         relationship: "terminal-browser-proof",

@@ -74,6 +74,7 @@ import {
   adminSpineTerminalBatchProofPath,
   devTestGameProofGraphAdminProofPath,
   devTestGameProofRunPath,
+  hostedIdentityNextActionAdminProofPath,
   nextActionAdminProofPath,
   proofFreshnessAdminProofPath,
   spineManifestPath,
@@ -6465,6 +6466,11 @@ export function validateDevTestGameAdminSpineTerminalBatches(
         proofFreshnessAdminProofPath,
         nextActionAdminProofPath,
       ],
+    },
+    {
+      label: "Terminal hosted identity next-action admin proof batch",
+      proofIds: ["hosted-identity-next-action"],
+      artifactPaths: [hostedIdentityNextActionAdminProofPath],
     },
     {
       label: "Terminal refresh admin proof batch",

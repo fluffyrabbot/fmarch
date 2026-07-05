@@ -37,6 +37,7 @@ import {
   devTestGameReleaseReadinessPath,
   devTestGameProofGraphAdminProofPath,
   devTestGameProofGraphPath,
+  hostedIdentityNextActionAdminProofPath,
   nextActionAdminProofPath,
   nextActionPath,
   proofFreshnessAdminProofPath,
@@ -70,11 +71,18 @@ export const terminalAdminProofBatchIds = Object.freeze([
   "proof-graph",
   "proof-freshness",
   "next-action",
+  "hosted-identity-next-action",
+]);
+export const terminalAdminProofBatchEdgeIds = Object.freeze([
+  "proof-graph",
+  "proof-freshness",
+  "next-action",
 ]);
 export const terminalAdminProofBatchArtifactPaths = Object.freeze([
   devTestGameProofGraphAdminProofPath,
   proofFreshnessAdminProofPath,
   nextActionAdminProofPath,
+  hostedIdentityNextActionAdminProofPath,
 ]);
 
 export const adminProofDestinationRequirementCases = Object.freeze([
@@ -329,7 +337,7 @@ export function devTestGameProofGraphFirstClassNodes({
       status: "passed",
       artifact: adminSpineTerminalBatchProofPath,
       roleUrl: localAdminAuditRoleUrl(localAdminAuditIds.adminSpine, { game }),
-      batchCount: 2,
+      batchCount: 3,
       proofIds: terminalAdminProofBatchIds,
       artifactPaths: terminalAdminProofBatchArtifactPaths,
     }),
@@ -365,7 +373,7 @@ export function devTestGameProofGraphBaseEdges({
       to: "next-action",
       relationship: "recovers-through",
     }),
-    ...terminalAdminProofBatchIds.map((proofId) =>
+    ...terminalAdminProofBatchEdgeIds.map((proofId) =>
       proofGraphEdge({
         from: "admin-spine-terminal-batches",
         to: proofId,

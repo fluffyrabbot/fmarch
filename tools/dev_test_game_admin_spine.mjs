@@ -55,6 +55,8 @@ import {
   devTestGameSpineManifestAdminProofPath,
 } from "./dev_test_game_local_admin_proof_paths.mjs";
 import {
+  hostedIdentityNextActionAdminProofPath,
+  hostedIdentityNextActionPath,
   nextActionAdminProofPath,
   proofFreshnessAdminProofPath,
 } from "./dev_test_game_next_action_paths.mjs";
@@ -178,6 +180,8 @@ export const adminSpineHostedOpsInputReadinessEnv = {
     devTestGameHostedConcurrentRaceMatrixPath,
 };
 
+const devTestGameHostedIdentitySequenceStage = "hosted-identity";
+
 export const terminalAdminProofBatchPlan = {
   label: "Terminal admin proof batch",
   reason: "terminal graph, freshness, and next-action admin surfaces share the generated proof graph inputs",
@@ -192,6 +196,21 @@ export const terminalRefreshAdminProofBatchPlan = {
   label: "Terminal refresh admin proof batch",
   reason: "freshness and next-action admin surfaces share the refreshed next-action input",
   cases: [proofFreshnessAdminProofCase, nextActionAdminProofCase],
+};
+
+export const terminalHostedIdentityNextActionAdminProofBatchPlan = {
+  label: "Terminal hosted identity next-action admin proof batch",
+  reason:
+    "hosted identity next-action input proves the promoted operator-aware admin rows before the default next-action receipt is restored",
+  cases: [
+    () =>
+      nextActionAdminProofCase({
+        nextActionSourcePath: hostedIdentityNextActionPath,
+        evidenceSourcePath: hostedIdentityNextActionAdminProofPath,
+        smokeName: "dev-test-game-hosted-identity-next-action-admin-proof",
+        stage: "hosted-identity-next-action-admin-proof-listen",
+      }),
+  ],
 };
 
 export const devTestGameAdminSpinePlan = [
@@ -269,6 +288,19 @@ export const devTestGameAdminSpinePlan = [
     ],
     env: adminSpineReadinessEvidenceEnv,
   }),
+  {
+    kind: "node",
+    script: "tools/dev_test_game_next_action.mjs",
+    env: {
+      FMARCH_DEV_TEST_GAME_SEQUENCE_STAGE: devTestGameHostedIdentitySequenceStage,
+      FMARCH_DEV_TEST_GAME_NEXT_ACTION: hostedIdentityNextActionPath,
+    },
+  },
+  {
+    kind: "custom",
+    script: "terminal-hosted-identity-next-action-admin-proof-batch",
+    label: "Terminal hosted identity next-action admin proof batch",
+  },
   { kind: "node", script: "tools/dev_test_game_next_action.mjs" },
   {
     kind: "custom",
@@ -309,6 +341,13 @@ export async function runDevTestGameAdminSpine() {
           await runAdminAuditProofBatchPlan(terminalAdminProofBatchPlan),
         );
       },
+      "terminal-hosted-identity-next-action-admin-proof-batch": async () => {
+        terminalBatchEvidence.push(
+          await runAdminAuditProofBatchPlan(
+            terminalHostedIdentityNextActionAdminProofBatchPlan,
+          ),
+        );
+      },
       "terminal-refresh-admin-proof-batch": async () => {
         terminalBatchEvidence.push(
           await runAdminAuditProofBatchPlan(terminalRefreshAdminProofBatchPlan),
@@ -345,8 +384,11 @@ async function writeAdminSpineTerminalBatchProof(batches) {
       adminSpineProof: adminSpineProofPath,
       proofGraph: devTestGameProofGraphPath,
       nextAction: nextActionPath,
+      hostedIdentityNextAction: hostedIdentityNextActionPath,
       proofFreshnessAdminProof: proofFreshnessAdminProofPath,
       nextActionAdminProof: nextActionAdminProofPath,
+      hostedIdentityNextActionAdminProof:
+        hostedIdentityNextActionAdminProofPath,
       batchCount: batches.length,
     },
     batches,

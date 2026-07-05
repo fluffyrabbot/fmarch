@@ -1474,7 +1474,7 @@ test("admin route data exposes local admin spine proof as a native audit row", a
   assert.deepEqual(adminSpine.artifactSummary, {
     game: "game-a",
     proofCount: 10,
-    batchCount: 4,
+    batchCount: 5,
     recoveryStatus: "passed",
     refreshedCount: 10,
     nextCommand: "npm run test:dev-test-game-admin-spine",
@@ -1497,7 +1497,7 @@ test("admin local admin spine detail data carries aggregate proof rows", async (
   assert.equal(data.surfaceHeader.title, "Local admin spine");
   assert.equal(data.audit.id, localAdminAuditIds.adminSpine);
   assert.equal(data.audit.checks.length, 12);
-  assert.equal(data.audit.batches.length, 4);
+  assert.equal(data.audit.batches.length, 5);
   assert.deepEqual(
     data.audit.batches.map((batch) => [
       batch.id,
@@ -1525,6 +1525,13 @@ test("admin local admin spine detail data carries aggregate proof rows", async (
         "terminal-admin-proof-batch",
         "passed",
         3,
+        true,
+        true,
+      ],
+      [
+        "terminal-hosted-identity-next-action-admin-proof-batch",
+        "passed",
+        1,
         true,
         true,
       ],
@@ -2205,7 +2212,7 @@ test("admin route data exposes local next action as a native audit row", async (
       status: "passed",
       proofTarget: "target/dev-test-game/admin-spine-terminal-batches.json",
       roleUrl: localAdminAuditRoleUrl(localAdminAuditIds.adminSpine),
-      batchCount: 2,
+      batchCount: 3,
       edgeCount: 3,
       edgeTargets: ["proof-graph", "proof-freshness", "next-action"],
     },
@@ -5992,7 +5999,7 @@ function proofGraphFixture() {
       edgeCount: edges.length,
       roleUrlCount: nodes.filter((node) => node.roleUrl).length,
       recoveryTargetCount: nodes.filter((node) => node.recoveryCommand).length,
-      terminalBatchCount: 2,
+      terminalBatchCount: 3,
     },
     nodes,
     edges,
@@ -6022,8 +6029,13 @@ function terminalBatchGraphFixture() {
     status: "passed",
     proofTarget: "target/dev-test-game/admin-spine-terminal-batches.json",
     roleUrl: localAdminAuditRoleUrl(localAdminAuditIds.adminSpine),
-    batchCount: 2,
-    proofIds: ["proof-graph", "proof-freshness", "next-action"],
+    batchCount: 3,
+    proofIds: [
+      "proof-graph",
+      "proof-freshness",
+      "next-action",
+      "hosted-identity-next-action",
+    ],
     edgeCount: 3,
     edgeTargets: ["proof-graph", "proof-freshness", "next-action"],
   };
@@ -7132,10 +7144,14 @@ function adminSpineTerminalBatchesFixture() {
       adminSpineProof: "target/dev-test-game/admin-spine-proof.json",
       proofGraph: "target/dev-test-game/proof-graph.json",
       nextAction: "target/dev-test-game/next-action.json",
+      hostedIdentityNextAction:
+        "target/dev-test-game/next-action-hosted-identity.json",
       proofFreshnessAdminProof:
         "target/dev-test-game/proof-freshness-admin-proof.json",
       nextActionAdminProof: "target/dev-test-game/next-action-admin-proof.json",
-      batchCount: 2,
+      hostedIdentityNextActionAdminProof:
+        "target/dev-test-game/hosted-identity-next-action-admin-proof.json",
+      batchCount: 3,
     },
     batches: [
       {
@@ -7156,6 +7172,25 @@ function adminSpineTerminalBatchesFixture() {
           "target/dev-test-game/next-action-admin-proof.json",
         ],
         elapsedMs: 2400,
+        sharedFrontendSession: true,
+        sharedChromiumSession: true,
+        releaseReady: false,
+        productionReady: false,
+      },
+      {
+        label: "Terminal hosted identity next-action admin proof batch",
+        reason:
+          "hosted identity next-action input proves the promoted operator-aware admin rows before the default next-action receipt is restored",
+        status: "passed",
+        caseCount: 1,
+        caseSmokeNames: [
+          "dev-test-game-hosted-identity-next-action-admin-proof",
+        ],
+        proofIds: ["hosted-identity-next-action"],
+        artifactPaths: [
+          "target/dev-test-game/hosted-identity-next-action-admin-proof.json",
+        ],
+        elapsedMs: 1200,
         sharedFrontendSession: true,
         sharedChromiumSession: true,
         releaseReady: false,
