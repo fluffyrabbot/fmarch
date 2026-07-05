@@ -335,6 +335,7 @@ export async function proveAdminAuditDetail({
   requiredHostedIdentityPacketRefStatuses = {},
   requiredHostedIdentityProgressions = [],
   requiredHostedIdentityProgressionStatuses = {},
+  requiredHostedIdentityOperatorGate = null,
   requiredHostedIdentityRoleSurfaceContractDiffStatus = null,
   requiredHostedIdentityRoleSurfaceContractMismatches = [],
   requiredHostedIdentityAdapterContractComparisonStatus = null,
@@ -618,6 +619,53 @@ export async function proveAdminAuditDetail({
       prefix: "admin-audit-hosted-identity-progression",
       ids: Object.keys(requiredHostedIdentityProgressionStatuses),
     });
+    const requiredHostedIdentityOperatorGateIds =
+      requiredHostedIdentityOperatorGate === null
+        ? []
+        : [String(requiredHostedIdentityOperatorGate.id ?? "")];
+    const visibleHostedIdentityOperatorGate = await waitForRows({
+      page,
+      prefix: "admin-audit-hosted-identity-operator-gate",
+      ids: requiredHostedIdentityOperatorGateIds,
+      expectedStatuses:
+        requiredHostedIdentityOperatorGate === null
+          ? {}
+          : {
+              [String(requiredHostedIdentityOperatorGate.id ?? "")]: String(
+                requiredHostedIdentityOperatorGate.requiredRawEvidencePathKind ??
+                  "",
+              ),
+            },
+    });
+    const visibleHostedIdentityOperatorGateStatuses = await readRowStatuses({
+      page,
+      prefix: "admin-audit-hosted-identity-operator-gate",
+      ids: requiredHostedIdentityOperatorGateIds,
+    });
+    const requiredHostedIdentityOperatorGateFamilies =
+      requiredHostedIdentityOperatorGate === null
+        ? []
+        : (requiredHostedIdentityOperatorGate.requiredEvidenceFamilies ?? []).map(
+            (family) => String(family?.id ?? ""),
+          );
+    const visibleHostedIdentityOperatorGateFamilies = await waitForRows({
+      page,
+      prefix: "admin-audit-hosted-identity-operator-gate-family",
+      ids: requiredHostedIdentityOperatorGateFamilies,
+    });
+    const requiredHostedIdentityOperatorGateRejectedPathKinds =
+      requiredHostedIdentityOperatorGate === null
+        ? []
+        : (
+            requiredHostedIdentityOperatorGate.rejectedRawEvidencePathKinds ?? []
+          ).map((kind) => String(kind));
+    const visibleHostedIdentityOperatorGateRejectedPathKinds =
+      await waitForRows({
+        page,
+        prefix:
+          "admin-audit-hosted-identity-operator-gate-rejected-path-kind",
+        ids: requiredHostedIdentityOperatorGateRejectedPathKinds,
+      });
     const visibleHostedIdentityRoleSurfaceContractDiff =
       await waitForHostedIdentityRoleSurfaceContractDiff({
         page,
@@ -1041,6 +1089,27 @@ export async function proveAdminAuditDetail({
         : {
             visibleHostedIdentityProgressionStatuses:
               visibleHostedIdentityProgressionStatuses,
+          }),
+      ...(visibleHostedIdentityOperatorGate.length === 0
+        ? {}
+        : { visibleHostedIdentityOperatorGate }),
+      ...(Object.keys(visibleHostedIdentityOperatorGateStatuses).length === 0
+        ? {}
+        : {
+            visibleHostedIdentityOperatorGateStatuses:
+              visibleHostedIdentityOperatorGateStatuses,
+          }),
+      ...(visibleHostedIdentityOperatorGateFamilies.length === 0
+        ? {}
+        : {
+            visibleHostedIdentityOperatorGateFamilies:
+              visibleHostedIdentityOperatorGateFamilies,
+          }),
+      ...(visibleHostedIdentityOperatorGateRejectedPathKinds.length === 0
+        ? {}
+        : {
+            visibleHostedIdentityOperatorGateRejectedPathKinds:
+              visibleHostedIdentityOperatorGateRejectedPathKinds,
           }),
       ...(visibleHostedIdentityRoleSurfaceContractDiff === null
         ? {}

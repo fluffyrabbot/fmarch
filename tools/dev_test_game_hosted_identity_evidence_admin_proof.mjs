@@ -285,6 +285,9 @@ export function hostedIdentityEvidenceAdminProofCase({
         requiredHostedHandoffBlockedReceipt:
           source.hostedIdentityEvidence.hostedHandoffChecklist.blockedReceipt ??
           null,
+        requiredHostedIdentityOperatorGate:
+          source.hostedIdentityEvidence.hostedHandoffChecklist
+            .operatorEvidenceGate,
         requiredHostedIdentityPacketSummaries: hostedIdentityPacketSummaryRows(
           source.hostedIdentityEvidence,
         ).map((summary) => summary.id),
@@ -416,6 +419,9 @@ export function hostedIdentityEvidenceAdminProofCase({
             ],
           ),
         ),
+        hostedIdentityOperatorGate:
+          source.hostedIdentityEvidence.hostedHandoffChecklist
+            .operatorEvidenceGate,
         hostedHandoffSummary: hostedIdentityHandoffSummary(
           source.hostedIdentityEvidence,
         ),
@@ -793,6 +799,38 @@ export function assertHostedIdentityEvidenceAdminProof(evidence) {
     rowName: "progression status",
     surfaceKey: "visibleHostedIdentityProgressionStatuses",
   });
+  const operatorGate = evidence.generatedFrom?.hostedIdentityOperatorGate;
+  if (operatorGate !== undefined) {
+    if (
+      !evidence.adminRoleSurface?.visibleHostedIdentityOperatorGate?.includes(
+        operatorGate.id,
+      ) ||
+      !(
+        evidence.adminRoleSurface
+          ?.visibleHostedIdentityOperatorGateStatuses?.[operatorGate.id] ?? ""
+      ).includes(operatorGate.requiredRawEvidencePathKind)
+    ) {
+      throw new Error(
+        "hosted identity evidence admin proof missing operator evidence gate",
+      );
+    }
+    assertVisibleAdminRoleSurfaceRows({
+      adminRoleSurface: evidence.adminRoleSurface,
+      rowIds: (operatorGate.requiredEvidenceFamilies ?? []).map(
+        (family) => family.id,
+      ),
+      proofName: "hosted identity evidence admin proof",
+      rowName: "operator evidence family",
+      surfaceKey: "visibleHostedIdentityOperatorGateFamilies",
+    });
+    assertVisibleAdminRoleSurfaceRows({
+      adminRoleSurface: evidence.adminRoleSurface,
+      rowIds: operatorGate.rejectedRawEvidencePathKinds ?? [],
+      proofName: "hosted identity evidence admin proof",
+      rowName: "rejected operator evidence path kind",
+      surfaceKey: "visibleHostedIdentityOperatorGateRejectedPathKinds",
+    });
+  }
   if (
     evidence.generatedFrom?.hostedIdentityRoleSurfaceContractDiffStatus !==
     evidence.adminRoleSurface?.visibleHostedIdentityRoleSurfaceContractDiff?.status

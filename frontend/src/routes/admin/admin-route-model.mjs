@@ -931,6 +931,9 @@ function normalizeHostedIdentityEvidenceHandoffChecklist({
     inputSections: normalizeHostedHandoffInputSections(
       hostedIdentityEvidence.hostedHandoffChecklist?.inputSections,
     ),
+    operatorEvidenceGate: normalizeHostedIdentityOperatorEvidenceGate(
+      hostedIdentityEvidence.hostedHandoffChecklist?.operatorEvidenceGate,
+    ),
     operatorProofDrilldowns: normalizeHostedHandoffOperatorProofDrilldowns(
       hostedIdentityEvidence.hostedHandoffChecklist?.operatorProofDrilldowns,
     ),
@@ -3138,12 +3141,57 @@ function normalizeNextActionHostedHandoffChecklist({
     blockedReceipt: normalizeHostedHandoffBlockedReceipt(checklist.blockedReceipt),
     groups: normalizeHostedHandoffGroups(checklist.requirementGroups),
     inputSections: normalizeHostedHandoffInputSections(checklist.inputSections),
+    operatorEvidenceGate: normalizeHostedIdentityOperatorEvidenceGate(
+      checklist.operatorEvidenceGate,
+    ),
     operatorProofDrilldowns: normalizeHostedHandoffOperatorProofDrilldowns(
       checklist.operatorProofDrilldowns,
     ),
     progressionSummary: normalizeHostedHandoffProgressionSummary(
       checklist.progressionSummary,
     ),
+  });
+}
+
+function normalizeHostedIdentityOperatorEvidenceGate(gate) {
+  if (gate === null || typeof gate !== "object") {
+    return null;
+  }
+  const families = Array.isArray(gate.requiredEvidenceFamilies)
+    ? gate.requiredEvidenceFamilies
+    : [];
+  return Object.freeze({
+    id: String(gate.id ?? ""),
+    status: String(gate.status ?? "unknown"),
+    evidencePathEnv: String(gate.evidencePathEnv ?? ""),
+    requiredRawEvidencePathKind: String(gate.requiredRawEvidencePathKind ?? ""),
+    rejectedRawEvidencePathKinds: Object.freeze(
+      (Array.isArray(gate.rejectedRawEvidencePathKinds)
+        ? gate.rejectedRawEvidencePathKinds
+        : []
+      ).map((kind) => String(kind)),
+    ),
+    command: String(gate.command ?? ""),
+    proofTarget: String(gate.proofTarget ?? ""),
+    roleUrl: String(gate.roleUrl ?? ""),
+    localCapabilityAuditId: String(gate.localCapabilityAuditId ?? ""),
+    localCapabilityRoleUrl: String(gate.localCapabilityRoleUrl ?? ""),
+    requiredEvidenceFamilies: Object.freeze(
+      families.map((family) =>
+        Object.freeze({
+          id: String(family?.id ?? ""),
+          field: String(family?.field ?? ""),
+          checkId: String(family?.checkId ?? ""),
+          requiredInputIds: Object.freeze(
+            (Array.isArray(family?.requiredInputIds)
+              ? family.requiredInputIds
+              : []
+            ).map((inputId) => String(inputId)),
+          ),
+        }),
+      ),
+    ),
+    proofBoundary: String(gate.proofBoundary ?? ""),
   });
 }
 

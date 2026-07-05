@@ -32,6 +32,7 @@ import {
   hostedIdentityEvidenceOperatorAccountRecoveryRecoveredFixturePath,
   hostedIdentityEvidenceOperatorInvitePartialFixturePath,
   hostedIdentityEvidenceOperatorInviteRecoveredFixturePath,
+  hostedIdentityEvidenceOperatorGate,
   hostedIdentityEvidenceOperatorPartialFixturePath,
   hostedIdentityEvidenceOperatorRecoveredFixturePath,
   hostedIdentityEvidencePlaceholderFixturePath,
@@ -163,6 +164,50 @@ test("hosted identity evidence cases share handoff inputs and blocked groups", (
     handoff.requirementGroups,
     hostedIdentityEvidenceRequirementGroups(blockedChecks),
   );
+  assert.deepEqual(handoff.operatorEvidenceGate, hostedIdentityEvidenceOperatorGate);
+  assert.deepEqual(
+    handoff.operatorEvidenceGate.requiredEvidenceFamilies.map((family) => [
+      family.id,
+      family.checkId,
+      family.requiredInputIds,
+    ]),
+    [
+      [
+        "account-lifecycle",
+        "hosted-account-lifecycle-evidence",
+        ["createAccount", "login", "disableAccount", "enableAccount"],
+      ],
+      [
+        "invite-delivery",
+        "invite-delivery-evidence",
+        ["deliveryChannels", "revocationCovered"],
+      ],
+      [
+        "account-recovery",
+        "account-recovery-evidence",
+        ["recoveryMethods", "recoveredSessionsPreserveRoleSurfaceAdapter"],
+      ],
+      [
+        "abuse-rate-limit",
+        "abuse-and-rate-limit-evidence",
+        ["protectedOperations", "rateLimitPolicyRef"],
+      ],
+      [
+        "session-secret-policy",
+        "session-secret-policy-evidence",
+        ["storage", "rotation", "deploymentSecretSource"],
+      ],
+      [
+        "audit-retention-export",
+        "hosted-audit-retention-export-evidence",
+        ["eventFamilies", "retentionWindow", "exportRef"],
+      ],
+    ],
+  );
+  assert.deepEqual(handoff.operatorEvidenceGate.rejectedRawEvidencePathKinds, [
+    "missing",
+    "fixture",
+  ]);
   assert.equal(handoff.blockedReceipt.status, "blocked");
   assert.equal(
     handoff.blockedReceipt.command,

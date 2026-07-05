@@ -689,6 +689,42 @@
               {/if}
             </li>
           {/each}
+          {#if data.audit.hostedHandoffChecklist.operatorEvidenceGate}
+            <li
+              class="admin-audit-detail__entry admin-audit-detail__entry--stack"
+              data-testid={`admin-audit-hosted-identity-operator-gate-${data.audit.hostedHandoffChecklist.operatorEvidenceGate.id}`}
+            >
+              <strong>{data.audit.hostedHandoffChecklist.operatorEvidenceGate.status}</strong>
+              <span>{data.audit.hostedHandoffChecklist.operatorEvidenceGate.evidencePathEnv}</span>
+              <span>{data.audit.hostedHandoffChecklist.operatorEvidenceGate.requiredRawEvidencePathKind}</span>
+              <span>{data.audit.hostedHandoffChecklist.operatorEvidenceGate.rejectedRawEvidencePathKinds.join(", ")}</span>
+              <span>{data.audit.hostedHandoffChecklist.operatorEvidenceGate.command}</span>
+              <span>{data.audit.hostedHandoffChecklist.operatorEvidenceGate.proofTarget}</span>
+              <span>{data.audit.hostedHandoffChecklist.operatorEvidenceGate.roleUrl}</span>
+              <span>{data.audit.hostedHandoffChecklist.operatorEvidenceGate.localCapabilityRoleUrl}</span>
+              <span>{data.audit.hostedHandoffChecklist.operatorEvidenceGate.proofBoundary}</span>
+            </li>
+            {#each data.audit.hostedHandoffChecklist.operatorEvidenceGate.requiredEvidenceFamilies as family}
+              <li
+                class="admin-audit-detail__entry admin-audit-detail__entry--stack"
+                data-testid={`admin-audit-hosted-identity-operator-gate-family-${family.id}`}
+              >
+                <strong>{family.id}</strong>
+                <span>{family.field}</span>
+                <span>{family.checkId}</span>
+                <span>{family.requiredInputIds.join(", ")}</span>
+              </li>
+            {/each}
+            {#each data.audit.hostedHandoffChecklist.operatorEvidenceGate.rejectedRawEvidencePathKinds as kind}
+              <li
+                class="admin-audit-detail__entry"
+                data-testid={`admin-audit-hosted-identity-operator-gate-rejected-path-kind-${kind}`}
+              >
+                <strong>{kind}</strong>
+                <span>rejected</span>
+              </li>
+            {/each}
+          {/if}
           {#each data.audit.hostedHandoffChecklist.operatorProofDrilldowns ?? [] as drilldown}
             <li
               class="admin-audit-detail__entry admin-audit-detail__entry--stack"

@@ -109,6 +109,7 @@ import {
   hostedIdentityExpectedRoleSurfaceContract,
   hostedIdentityEvidencePacketSectionDefinitions,
   hostedIdentityEvidenceOperatorProofDrilldowns,
+  hostedIdentityEvidenceOperatorGate,
   hostedIdentityEvidencePlaceholderFixturePath,
   hostedIdentityEvidenceProgressionAdminProofPath,
   hostedIdentityEvidenceRequirementGroups,
@@ -1107,6 +1108,10 @@ test("admin route data exposes hosted identity evidence as a native audit row", 
   assert.deepEqual(
     identity.hostedHandoffChecklist.inputSections.map((section) => section.id),
     hostedIdentityEvidenceInputSectionIds,
+  );
+  assert.deepEqual(
+    identity.hostedHandoffChecklist.operatorEvidenceGate,
+    hostedIdentityEvidenceOperatorGate,
   );
   assert.deepEqual(
     identity.hostedHandoffChecklist.operatorProofDrilldowns,
@@ -2532,6 +2537,10 @@ test("admin local next action detail data carries hosted identity progression la
       localAdminAuditRoleUrl(localAdminAuditIds.hostedIdentityEvidence),
       progression.missingInputId,
     ]),
+  );
+  assert.deepEqual(
+    data.audit.hostedHandoffChecklist.operatorEvidenceGate,
+    hostedIdentityEvidenceOperatorGate,
   );
 });
 

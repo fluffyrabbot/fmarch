@@ -120,6 +120,8 @@ export function nextActionAdminProofCase() {
           requiredHostedIdentityProgressionStatusesForNextAction(
             source.nextAction,
           ),
+        requiredHostedIdentityOperatorGate:
+          requiredHostedIdentityOperatorGateForNextAction(source.nextAction),
         requiredRelatedDestinations: requiredRelatedDestinationsForHandoffs(
           relatedHandoffsForNextAction({
             nextAction: source.nextAction,
@@ -742,6 +744,42 @@ export function assertNextActionAdminProof(evidence) {
         );
       }
     }
+    const operatorGate = checklist.operatorEvidenceGate;
+    if (operatorGate !== undefined) {
+      if (
+        !evidence.adminRoleSurface?.visibleHostedIdentityOperatorGate?.includes(
+          operatorGate.id,
+        ) ||
+        !(
+          evidence.adminRoleSurface
+            ?.visibleHostedIdentityOperatorGateStatuses?.[operatorGate.id] ?? ""
+        ).includes(operatorGate.requiredRawEvidencePathKind)
+      ) {
+        throw new Error(
+          "next-action admin proof missing hosted identity operator evidence gate",
+        );
+      }
+      for (const family of operatorGate.requiredEvidenceFamilies ?? []) {
+        if (
+          !evidence.adminRoleSurface
+            ?.visibleHostedIdentityOperatorGateFamilies?.includes(family.id)
+        ) {
+          throw new Error(
+            `next-action admin proof missing hosted identity operator evidence family: ${family.id}`,
+          );
+        }
+      }
+      for (const kind of operatorGate.rejectedRawEvidencePathKinds ?? []) {
+        if (
+          !evidence.adminRoleSurface
+            ?.visibleHostedIdentityOperatorGateRejectedPathKinds?.includes(kind)
+        ) {
+          throw new Error(
+            `next-action admin proof missing hosted identity rejected evidence path kind: ${kind}`,
+          );
+        }
+      }
+    }
     const progressionSummary = checklist.progressionSummary;
     if (progressionSummary !== undefined) {
       for (const progression of progressionSummary.progressions ?? []) {
@@ -1022,6 +1060,12 @@ function requiredHostedIdentityProgressionStatusesForNextAction(nextAction) {
       String(progression.adminProofTarget ?? ""),
     ]),
   );
+}
+
+function requiredHostedIdentityOperatorGateForNextAction(nextAction) {
+  const gate =
+    nextAction.nextAction.unproven?.hostedHandoffChecklist?.operatorEvidenceGate;
+  return gate === null || gate === undefined ? null : gate;
 }
 
 function hostedHandoffInputSections(checklist) {

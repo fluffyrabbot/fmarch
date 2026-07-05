@@ -572,6 +572,31 @@ export const hostedIdentityEvidencePacketSectionDefinitions = Object.freeze([
   }),
 ]);
 
+export const hostedIdentityEvidenceOperatorGate = deepFreeze({
+  id: "operator-hosted-identity-evidence",
+  status: "blocked",
+  evidencePathEnv: "FMARCH_HOSTED_IDENTITY_EVIDENCE_PATH",
+  requiredRawEvidencePathKind: "operator-provided",
+  rejectedRawEvidencePathKinds: ["missing", "fixture"],
+  command: `npm run ${devTestGameHostedIdentityEvidenceCommand}`,
+  proofTarget: devTestGameHostedIdentityEvidencePath,
+  roleUrl: hostedIdentityEvidenceRoleSurfaceDrilldown.handoffRoleUrl,
+  localCapabilityAuditId:
+    hostedIdentityEvidenceRoleSurfaceDrilldown.localCapabilityAuditId,
+  localCapabilityRoleUrl:
+    hostedIdentityEvidenceRoleSurfaceDrilldown.localCapabilityRoleUrl,
+  requiredEvidenceFamilies: hostedIdentityEvidencePacketSectionDefinitions.map(
+    (section) => ({
+      id: section.evidenceFamily,
+      field: section.field,
+      checkId: section.checkId,
+      requiredInputIds: [...section.requiredInputIds],
+    }),
+  ),
+  proofBoundary:
+    "Production identity requires an operator-provided hosted identity evidence packet. Fixture-backed redacted packets can prove the local handoff shape, but cannot satisfy hosted-production-identity readiness.",
+});
+
 export const hostedIdentityEvidenceCheckIds = Object.freeze([
   "hosted-identity-evidence-path-configured",
   "hosted-identity-evidence-readable",
@@ -1089,6 +1114,7 @@ export function hostedIdentityEvidenceHandoffCase({
       (drilldown) => ({ ...drilldown }),
     ),
     progressionSummary: hostedIdentityEvidenceProgressionHandoffSummary(),
+    operatorEvidenceGate: hostedIdentityEvidenceOperatorGate,
     inputIds: [...hostedIdentityEvidenceInputIds],
     blockedCheckIds: blockedChecks.map((check) => check.id),
     blockedChecks: blockedChecks.map((check) => ({
