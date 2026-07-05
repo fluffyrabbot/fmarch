@@ -817,6 +817,12 @@ test("dev test-game spine orchestrators expose stable proof order and env maps",
   );
   assert.equal(
     packageJson.scripts[
+      "test:dev-test-game-hosted-evidence-lane-real-capture-admin-proof"
+    ],
+    "node tools/dev_test_game_hosted_evidence_lane_real_capture_admin_proof.mjs",
+  );
+  assert.equal(
+    packageJson.scripts[
       "test:dev-test-game-hosted-target-preflight-real-capture-admin-proof"
     ],
     "node tools/dev_test_game_hosted_target_preflight_real_capture_admin_proof.mjs",

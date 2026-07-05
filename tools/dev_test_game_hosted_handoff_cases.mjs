@@ -22,6 +22,10 @@ export const hostedEvidenceLaneCommand =
 export const hostedEvidenceLanePath = devTestGameHostedEvidenceLanePath;
 export const devTestGameHostedEvidenceLaneAdminProofPath =
   "target/dev-test-game/hosted-evidence-lane-admin-proof.json";
+export const devTestGameHostedEvidenceLaneRealCaptureAdminProofPath =
+  "target/dev-test-game/hosted-evidence-lane-real-capture-admin-proof.json";
+export const devTestGameHostedEvidenceLaneRealCaptureSourcePath =
+  "target/dev-test-game/hosted-evidence-lane-real-capture-source.json";
 export const hostedMatrixExternalEvidencePath =
   "target/dev-test-game/hosted-matrix-external.json";
 

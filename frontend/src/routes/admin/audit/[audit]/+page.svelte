@@ -807,6 +807,30 @@
         </ol>
       </section>
     {/if}
+    {#if data.audit.id === "local-hosted-evidence-lane" && data.audit.artifactSummary}
+      <section
+        class="admin-audit-detail__group"
+        data-testid="admin-audit-detail-hosted-evidence-lane-summary"
+      >
+        <h2>Hosted evidence lane</h2>
+        <ol class="admin-audit-detail__entries">
+          <li
+            class="admin-audit-detail__entry admin-audit-detail__entry--stack"
+            data-testid="admin-audit-hosted-evidence-lane-summary"
+          >
+            <strong>{data.audit.artifactSummary.realHostedEvidenceStatus}</strong>
+            <span>{data.audit.artifactSummary.hostedEvidenceMode}</span>
+            <span>{data.audit.artifactSummary.externalEvidencePath}</span>
+            <span>{data.audit.artifactSummary.rawEvidencePath}</span>
+            <span>{data.audit.artifactSummary.rawEvidenceStatus}</span>
+            <span>{data.audit.artifactSummary.nextCommand}</span>
+            <span>{data.audit.artifactSummary.nextProofTarget}</span>
+            <span>{data.audit.artifactSummary.releaseReady ? "release ready" : "release not ready"}</span>
+            <span>{data.audit.artifactSummary.productionReady ? "production ready" : "production not ready"}</span>
+          </li>
+        </ol>
+      </section>
+    {/if}
     {#if data.audit.hostedHandoffChecklist?.inputs?.length > 0 || data.audit.hostedHandoffChecklist?.blockedChecks?.length > 0}
       <section
         class="admin-audit-detail__group"

@@ -86,6 +86,7 @@ import {
 } from "../../../../tools/dev_test_game_seed_scenario_cases.mjs";
 import {
   hostedEvidenceBlockedHandoffChecklistFixture,
+  hostedEvidenceHandoffChecklistFromPreflight,
   hostedEvidenceRealHostedInputsFixture,
 } from "../../../../tools/dev_test_game_hosted_handoff_cases.mjs";
 import {
@@ -1133,6 +1134,114 @@ test("admin route data exposes hosted evidence lane as a native audit row", asyn
   assert.equal(lane.artifactSummary.syntheticExternalTarget, true);
   assert.equal(lane.artifactSummary.demoBlockedLaneStatus, "blocked");
   assert.equal(lane.artifactSummary.demoSyntheticRejectedLaneStatus, "blocked");
+});
+
+test("admin hosted evidence lane detail data carries real-capture pass summary", async () => {
+  const lane = localHostedEvidenceLaneFixture();
+  const passedLane = {
+    ...lane,
+    status: "passed",
+    preflightStatus: "passed",
+    blockedCheckIds: [],
+    target: {
+      ...lane.target,
+      frontendBaseUrl: "https://fmarch-demo.example.test",
+      apiBaseUrl: "https://api.fmarch-demo.example.test",
+      rawEvidencePath:
+        "tools/fixtures/dev_test_game_hosted_matrix_raw_evidence.real-capture-example.json",
+      rawEvidenceStatus: "passed",
+      rawEvidenceSyntheticExternalTarget: false,
+      rawEvidenceFixture: false,
+    },
+    hostedEvidence: {
+      status: "passed",
+      mode: "real-hosted",
+      syntheticExternalTarget: false,
+      externalEvidencePath: "target/dev-test-game/hosted-matrix-external.json",
+      externalEvidenceSourceMode: "raw-hosted-target",
+      realHostedEvidenceStatus: "passed",
+      realHostedEvidenceInputs: realHostedEvidenceInputsFixture({
+        status: "passed",
+        mode: "real-hosted",
+        command: "npm run test:dev-test-game-hosted-evidence-lane",
+        proofTarget: "target/dev-test-game/hosted-matrix-external.json",
+      }),
+      evidence: "target/dev-test-game/hosted-matrix-external.json",
+    },
+    checks: [
+      { id: "hosted-target-preflight", status: "passed" },
+      {
+        id: "external-hosted-evidence-written",
+        status: "passed",
+        evidence: "target/dev-test-game/hosted-matrix-external.json",
+      },
+      { id: "local-demo-pass-path", status: "not_applicable" },
+      {
+        id: "real-hosted-evidence-required",
+        status: "passed",
+        evidence: "target/dev-test-game/hosted-matrix-external.json",
+      },
+      {
+        id: "release-claim-boundary-carried",
+        status: "passed",
+        releaseReady: false,
+        productionReady: false,
+      },
+    ],
+    hostedHandoffChecklist: hostedEvidenceHandoffChecklistFromPreflight({
+      preflight: {
+        status: "passed",
+        checks: [
+          { id: "hosted-target-preflight", status: "passed" },
+          { id: "external-hosted-evidence-written", status: "passed" },
+        ],
+        target: {
+          frontendBaseUrl: "https://fmarch-demo.example.test",
+          apiBaseUrl: "https://api.fmarch-demo.example.test",
+          groupId: "replacement-race-reload",
+          rawEvidencePath:
+            "tools/fixtures/dev_test_game_hosted_matrix_raw_evidence.real-capture-example.json",
+          rawEvidenceStatus: "passed",
+        },
+      },
+      command: "npm run test:dev-test-game-hosted-evidence-lane",
+      proofTarget: "target/dev-test-game/hosted-matrix-external.json",
+    }),
+    blockedReceipt: undefined,
+    nextCommand: "npm run test:dev-test-game-hosted-matrix-external-evidence",
+    nextProofTarget: "target/dev-test-game/hosted-matrix-external.json",
+  };
+  const data = await buildAdminAuditDetailData({
+    audit: localAdminAuditIds.hostedEvidenceLane,
+    principalUserId: "admin_a",
+    capabilities: [{ kind: "GlobalAdmin" }],
+    hostedEvidenceLane: passedLane,
+    hostedEvidenceLaneDemoProof: localHostedEvidenceLaneDemoProofFixture(),
+  });
+
+  assert.equal(data.status, "available");
+  assert.equal(data.audit.status, "passed: 4 passed, 0 blocked");
+  assert.deepEqual(data.audit.unproven, []);
+  assert.equal(data.audit.artifactSummary.realHostedEvidenceStatus, "passed");
+  assert.equal(data.audit.artifactSummary.hostedEvidenceMode, "real-hosted");
+  assert.equal(
+    data.audit.artifactSummary.externalEvidencePath,
+    "target/dev-test-game/hosted-matrix-external.json",
+  );
+  assert.equal(
+    data.audit.artifactSummary.rawEvidencePath,
+    "tools/fixtures/dev_test_game_hosted_matrix_raw_evidence.real-capture-example.json",
+  );
+  assert.equal(
+    data.audit.artifactSummary.nextCommand,
+    "npm run test:dev-test-game-hosted-matrix-external-evidence",
+  );
+  assert.equal(
+    data.audit.artifactSummary.nextProofTarget,
+    "target/dev-test-game/hosted-matrix-external.json",
+  );
+  assert.equal(data.audit.artifactSummary.releaseReady, false);
+  assert.equal(data.audit.artifactSummary.productionReady, false);
 });
 
 test("admin route data exposes hosted identity evidence as a native audit row", async () => {

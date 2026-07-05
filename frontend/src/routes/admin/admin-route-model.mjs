@@ -1121,6 +1121,12 @@ export function normalizeLocalHostedEvidenceLaneAudit(
       realHostedEvidenceStatus: String(
         hostedEvidenceLane.hostedEvidence?.realHostedEvidenceStatus ?? "unknown",
       ),
+      hostedEvidenceMode: String(
+        hostedEvidenceLane.hostedEvidence?.mode ?? "unknown",
+      ),
+      externalEvidencePath: String(
+        hostedEvidenceLane.hostedEvidence?.externalEvidencePath ?? "",
+      ),
       realHostedEvidenceCommand: String(
         hostedEvidenceLane.hostedEvidence?.realHostedEvidenceInputs?.command ??
           "",

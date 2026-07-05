@@ -68,6 +68,7 @@ export function hostedEvidenceLaneAdminProofCase({
   proofBoundary =
     "Local SvelteKit admin role URL with fixture admin authority over the hosted evidence lane. Proves the lane is discoverable from the seeded admin overview and inspectable in a native admin audit detail route with blocked preflight rows and local demo proof synthetic-rejection rows visible; it does not prove hosted deployment, hosted telemetry, beta readiness, release readiness, or production readiness.",
   generatedFromExtra = {},
+  requiredText = [],
   assertEvidence = assertHostedEvidenceLaneAdminProof,
 } = {}) {
   const laneRelativePath = path.relative(repoRoot, lanePath);
@@ -133,6 +134,7 @@ export function hostedEvidenceLaneAdminProofCase({
         requiredHostedHandoffSummary: hostedHandoffSummary,
         requiredHostedHandoffBlockedReceipt:
           source.lane.hostedHandoffChecklist?.blockedReceipt ?? null,
+        requiredText,
         requiredHostedHandoffInputSections: hostedHandoffInputSections.map(
           (section) => section.id,
         ),
@@ -215,6 +217,9 @@ export function hostedEvidenceLaneAdminProofCase({
               hostedHandoffBlockedReceipt:
                 source.lane.hostedHandoffChecklist.blockedReceipt,
             }),
+        ...(requiredText.length === 0
+          ? {}
+          : { requiredText: [...requiredText] }),
         relatedAuditIds: requiredRelatedLinks,
         ...generatedFromExtra,
       },
@@ -375,6 +380,13 @@ export function assertHostedEvidenceLaneAdminProof(evidence) {
           `hosted evidence lane admin proof missing blocked receipt input: ${input}`,
         );
       }
+    }
+  }
+  for (const token of evidence.generatedFrom?.requiredText ?? []) {
+    if (!evidence.adminRoleSurface?.visibleRequiredText?.includes(token)) {
+      throw new Error(
+        `hosted evidence lane admin proof missing required text token: ${token}`,
+      );
     }
   }
   assertVisibleAdminRoleSurfaceRows({
