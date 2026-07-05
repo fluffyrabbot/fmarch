@@ -55,6 +55,9 @@ import {
   proofGraphTerminalReceiptParentId,
 } from "./dev_test_game_proof_graph_receipt_artifact_rows.mjs";
 import {
+  devTestGameNextActionSequenceHandoffPair,
+} from "./dev_test_game_next_action_sequence_handoff_pair.mjs";
+import {
   normalizeProofGraphDiagnosticProofSummary,
 } from "./dev_test_game_proof_graph_diagnostic_summary.mjs";
 
@@ -161,13 +164,19 @@ export function proofGraphAdminProofCase() {
             (node) =>
               typeof node.roleUrl === "string" && node.roleUrl.trim() !== "",
           )
-          .map((node) => node.id),
+          .map((node) => node.id)
+          .concat(
+            proofGraphIncludesTerminalBatchNode(source.proofGraph)
+              ? ["next-action-sequence-handoff"]
+              : [],
+          ),
         requiredRelatedDestinations: [
           ...requiredRelatedDestinationsForHandoffs(roleHandoffs),
           ...coreLoopFamilyDestinations,
           ...productionFeatureTargetDestinations.filter(
             (destination) => destination.kind === "admin-audit",
           ),
+          ...proofGraphNextActionHandoffDestinations(source.proofGraph),
         ],
       });
     },
@@ -281,6 +290,14 @@ export function assertProofGraphAdminProof(evidence) {
     if (!evidence.adminRoleSurface.visibleRelatedLinks.includes(handoff.linkId)) {
       throw new Error(`proof graph admin proof missing related link: ${handoff.linkId}`);
     }
+  }
+  if (
+    proofGraphIncludesTerminalBatchReceipts(evidence) &&
+    !evidence.adminRoleSurface.visibleRelatedLinks.includes(
+      "next-action-sequence-handoff",
+    )
+  ) {
+    throw new Error("proof graph admin proof missing next-action handoff link");
   }
   assertAdminAuditRelatedHandoffs({
     adminRoleSurface: evidence.adminRoleSurface,
@@ -624,6 +641,50 @@ function proofGraphIncludesTerminalBatchReceipts(evidence) {
   return (evidence.generatedFrom?.nodeIds ?? []).includes(
     proofGraphTerminalReceiptParentId,
   );
+}
+
+function proofGraphIncludesTerminalBatchNode(proofGraph) {
+  return proofGraph.nodes.some(
+    (node) => node.id === proofGraphTerminalReceiptParentId,
+  );
+}
+
+function proofGraphNextActionHandoffDestinations(proofGraph) {
+  if (!proofGraphIncludesTerminalBatchNode(proofGraph)) {
+    return [];
+  }
+  const pair = devTestGameNextActionSequenceHandoffPair();
+  return [
+    {
+      linkId: "next-action-sequence-handoff",
+      auditId: localAdminAuditIds.nextAction,
+      detailRoleUrl:
+        `/admin/audit/${localAdminAuditIds.nextAction}?game=<seeded-game>`,
+      requiredChecks: [pair.id],
+      requiredCheckStatuses: {
+        [pair.id]: [
+          pair.defaultSequenceBlocker.status,
+          pair.hostedIdentityPredicate.status,
+        ].join(":"),
+      },
+      requiredNextActionHandoffPairRows: [
+        "summary",
+        pair.defaultSequenceBlocker.id,
+        pair.hostedIdentityPredicate.id,
+      ],
+      requiredNextActionHandoffPairRowStatuses: {
+        summary: pair.proofBoundary,
+        [pair.defaultSequenceBlocker.id]: [
+          pair.defaultSequenceBlocker.expectedReason,
+          pair.defaultSequenceBlocker.expectedActionStatus,
+        ].join("\n"),
+        [pair.hostedIdentityPredicate.id]: [
+          pair.hostedIdentityPredicate.expectedReason,
+          pair.hostedIdentityPredicate.expectedActionStatus,
+        ].join("\n"),
+      },
+    },
+  ];
 }
 
 function proofGraphAdminFeatureTargetEntries(proofGraph) {

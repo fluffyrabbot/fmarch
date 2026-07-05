@@ -1647,6 +1647,18 @@ test("admin route data exposes local proof graph as a native audit row", async (
     expectedProofGraphRelatedLinkRows(proofGraph, { game: "midsummer" }),
   );
   assert.deepEqual(
+    graph.relatedLinks.find((link) => link.id === "next-action-sequence-handoff"),
+    {
+      id: "next-action-sequence-handoff",
+      label: "Next action handoff",
+      href: localAdminAuditRoleUrl(localAdminAuditIds.nextAction, {
+        game: "midsummer",
+      }),
+      status: "passed",
+      command: "npm run test:dev-test-game-next-action-admin-proof",
+    },
+  );
+  assert.deepEqual(
     graph.relatedLinks
       .filter((link) => link.id.startsWith("admin-proof:"))
       .map((link) => [link.id, link.href]),
@@ -1721,6 +1733,14 @@ test("admin local proof graph detail data carries graph node rows", async () => 
   assert.deepEqual(
     data.audit.relatedLinks.map((link) => [link.id, link.href]),
     expectedProofGraphRelatedLinkRows(proofGraph, { game: "midsummer" }),
+  );
+  assert.equal(
+    data.audit.relatedLinks.find(
+      (link) => link.id === "next-action-sequence-handoff",
+    )?.href,
+    localAdminAuditRoleUrl(localAdminAuditIds.nextAction, {
+      game: "midsummer",
+    }),
   );
 });
 

@@ -2038,16 +2038,35 @@ export function normalizeLocalProofGraphRelatedLinks(
   const roleNodes = graphNodes.filter(
     (node) => typeof node?.roleUrl === "string" && node.roleUrl.trim() !== "",
   );
+  const terminalBatchNode = graphNodes.find(
+    (node) => node?.id === "admin-spine-terminal-batches",
+  );
   return Object.freeze(
-    roleNodes.map((node) =>
-      Object.freeze({
-        id: String(node.id),
-        label: String(node.label ?? node.id),
-        href: seededRoleUrlToAdminHref(node.roleUrl, { game }),
-        status: String(node.status ?? "recorded"),
-        command: String(node.recoveryCommand ?? node.proofCommand ?? ""),
-      }),
-    ),
+    [
+      ...roleNodes.map((node) =>
+        Object.freeze({
+          id: String(node.id),
+          label: String(node.label ?? node.id),
+          href: seededRoleUrlToAdminHref(node.roleUrl, { game }),
+          status: String(node.status ?? "recorded"),
+          command: String(node.recoveryCommand ?? node.proofCommand ?? ""),
+        }),
+      ),
+      ...(terminalBatchNode === undefined
+        ? []
+        : [
+            Object.freeze({
+              id: "next-action-sequence-handoff",
+              label: "Next action handoff",
+              href: adminAuditInspectHref({
+                game,
+                audit: localAdminAuditIds.nextAction,
+              }),
+              status: String(terminalBatchNode.status ?? "recorded"),
+              command: "npm run test:dev-test-game-next-action-admin-proof",
+            }),
+          ]),
+    ],
   );
 }
 
