@@ -3042,10 +3042,35 @@ test("dev test-game next-action derives one local recovery command from the mani
   });
   assertDevTestGameNextAction(localCapabilityPassedAction);
   assert.deepEqual(localCapabilityPassedAction.nextAction, {
-    command: `npm run ${devTestGameHostedIdentityEvidenceCommand}`,
-    reason: "release-readiness-unproven",
-    status: "ready",
-    unproven: hostedProductionIdentityUnproven,
+    command: devTestGameHostedIdentitySequencePromotionCommand,
+    reason: "sequence-deferred-hosted-identity",
+    status: "blocked",
+    sequenceDeferral: {
+      status: "blocked",
+      currentSequenceStage: "local-capability-model",
+      requiredSequenceStage: "hosted-identity",
+      deferredUnprovenId: "hosted-production-identity",
+      deferredCommand: `npm run ${devTestGameHostedIdentityEvidenceCommand}`,
+      deferredProofTarget: devTestGameHostedIdentityEvidencePath,
+      deferredRoleUrl:
+        "/admin/audit/local-hosted-identity-evidence?game=<seeded-game>",
+      nextLocalCommand: devTestGameHostedIdentitySequencePromotionCommand,
+      nextLocalProofTarget: nextActionPath,
+      roleUrl: "/admin/audit/local-identity-adapter?game=<seeded-game>",
+      sequenceTransition: {
+        status: "ready",
+        promotionCommand: devTestGameHostedIdentitySequencePromotionCommand,
+        promotedSequenceStage: "hosted-identity",
+      },
+      buildSlice:
+        "Local seeded capability confidence is passed; promote the next-action generator to the hosted-identity sequence stage before replacing dev tokens with hosted accounts, sessions, and invites.",
+      requiredBeforeHostedIdentity:
+        "The local core gameplay, hardening, and local ops proof spine should remain the trusted development surface before production identity replaces dev tokens.",
+      localCapabilityConfidence:
+        hostedIdentityPassedLocalCapabilityConfidenceFixture(),
+      proofBoundary:
+        "Sequencing hold only. This records that hosted production identity is a real release-readiness blocker, but not the next local-development command; it does not prove hosted account lifecycle, invite delivery, release readiness, or production readiness.",
+    },
   });
   const hostedIdentityStageAction = buildDevTestGameNextAction(freshManifest, {
     generatedAt: "2026-06-26T00:00:01.000Z",
@@ -3129,7 +3154,7 @@ test("dev test-game next-action derives one local recovery command from the mani
         script: "tools/dev_test_game_next_action.mjs",
         sequenceStage: devTestGameDefaultSequenceStage,
         outputPath: nextActionPath,
-        selectedCommand: `npm run ${devTestGameHostedIdentityEvidenceCommand}`,
+        selectedCommand: devTestGameHostedIdentitySequencePromotionCommand,
       },
       {
         script: "terminal-refresh-admin-proof-batch",
