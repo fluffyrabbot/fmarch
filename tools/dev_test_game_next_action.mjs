@@ -19,7 +19,6 @@ import {
   assertDevTestGameRaceCoverage,
   devTestGameRaceCoverageAdminProofPath,
   devTestGameRaceCoveragePath,
-  raceCoveragePromotedReloadGroup,
   raceCoveragePromotedReloadGroups,
 } from "./dev_test_game_race_coverage.mjs";
 import {
@@ -41,13 +40,6 @@ import {
   devTestGameIdentityAdapterProofPath,
   devTestGameSeedFixturePath,
 } from "./dev_test_game_adjacent_artifact_paths.mjs";
-import {
-  hostStaleControlLaneIds,
-} from "./dev_test_game_host_stale_recovery_scenarios.mjs";
-import {
-  staleConflictMessageSurfaceCases,
-  staleConflictMessageLaneIds,
-} from "./dev_test_game_hardening_recovery_scenarios.mjs";
 import {
   assertDevTestGameHostedTargetPreflight,
   devTestGameHostedTargetPreflightPath,
@@ -110,6 +102,16 @@ import {
   recoveryReceiptGraphDescriptors,
   recoveryReceiptGraphSummaryFromProofGraph,
 } from "./dev_test_game_recovery_receipt_catalog.mjs";
+import {
+  assertRecoveryTrace,
+  buildCohostDeadlineRaceReloadTrace,
+  buildHostConcurrentRaceReloadTrace,
+  buildHostStaleControlTrace,
+  buildPlayerConcurrentActionReloadTrace,
+  buildReplacementRaceReloadTrace,
+  buildStaleConflictMessageTrace,
+  recoveryTraceKeys,
+} from "./dev_test_game_next_action_recovery_traces.mjs";
 import {
   hostedAdminHandoffProofArtifactCases,
 } from "./dev_test_game_hosted_handoff_proof_cases.mjs";
@@ -769,13 +771,37 @@ export function assertDevTestGameNextAction(evidence) {
   assertReleaseReadinessTrace(evidence.releaseReadinessTrace, {
     nextAction: evidence.nextAction,
   });
-  assertReplacementRaceReloadTrace(evidence.replacementRaceReloadTrace);
-  assertHostConcurrentRaceReloadTrace(evidence.hostConcurrentRaceReloadTrace);
-  assertPlayerConcurrentActionReloadTrace(evidence.playerConcurrentActionReloadTrace);
-  assertCohostDeadlineRaceReloadTrace(evidence.cohostDeadlineRaceReloadTrace);
+  assertRecoveryTrace(
+    recoveryTraceKeys.replacementRaceReload,
+    evidence.replacementRaceReloadTrace,
+    { label: "next-action replacement-race reload trace" },
+  );
+  assertRecoveryTrace(
+    recoveryTraceKeys.hostConcurrentRaceReload,
+    evidence.hostConcurrentRaceReloadTrace,
+    { label: "next-action host concurrent race-reload trace" },
+  );
+  assertRecoveryTrace(
+    recoveryTraceKeys.playerConcurrentActionReload,
+    evidence.playerConcurrentActionReloadTrace,
+    { label: "next-action player concurrent action reload trace" },
+  );
+  assertRecoveryTrace(
+    recoveryTraceKeys.cohostDeadlineRaceReload,
+    evidence.cohostDeadlineRaceReloadTrace,
+    { label: "next-action cohost deadline race reload trace" },
+  );
   assertRaceCoveragePromotedMilestones(evidence.raceCoveragePromotedMilestones);
-  assertStaleConflictMessageTrace(evidence.staleConflictMessageTrace);
-  assertHostStaleControlTrace(evidence.hostStaleControlTrace);
+  assertRecoveryTrace(
+    recoveryTraceKeys.staleConflictMessage,
+    evidence.staleConflictMessageTrace,
+    { label: "next-action stale conflict-message trace" },
+  );
+  assertRecoveryTrace(
+    recoveryTraceKeys.hostStaleControl,
+    evidence.hostStaleControlTrace,
+    { label: "next-action host stale-control trace" },
+  );
   assertTerminalBatchGraph(evidence.generatedFrom?.terminalBatchGraph);
   assertRecoveryReceiptGraphsForNextAction(evidence.generatedFrom);
   return evidence;
@@ -1168,134 +1194,6 @@ function validSelectedProductionFeatureGraph(graphSelection, spineTarget) {
   );
 }
 
-function buildReplacementRaceReloadTrace(
-  raceCoverage,
-  { source = devTestGameRaceCoveragePath } = {},
-) {
-  const cells = replacementRaceReloadCellIds.map((id) => {
-    const cell = raceCoverage?.cells?.find?.((candidate) => candidate.id === id);
-    const reloadLaneId =
-      typeof cell?.reloadLaneId === "string" ? cell.reloadLaneId : null;
-    const reloadStatus = String(cell?.reloadStatus ?? "missing");
-    const covered =
-      cell?.status === "passed" && reloadLaneId !== null && reloadStatus === "passed";
-    return {
-      id,
-      raceLaneId: String(cell?.raceLaneId ?? ""),
-      reloadLaneId,
-      reloadStatus,
-      covered,
-    };
-  });
-  const coveredCellCount = cells.filter((cell) => cell.covered).length;
-  const gapCount = cells.length - coveredCellCount;
-  return {
-    strategy: "replacement-race-reload-before-readiness",
-    status: raceCoverage === null ? "unavailable" : gapCount === 0 ? "covered" : "gapped",
-    source: raceCoverage === null ? "" : source,
-    requiredCellCount: cells.length,
-    coveredCellCount,
-    gapCount,
-    cells,
-  };
-}
-
-function buildHostConcurrentRaceReloadTrace(
-  raceCoverage,
-  { source = devTestGameRaceCoveragePath } = {},
-) {
-  const cells = hostConcurrentRaceReloadCellIds.map((id) => {
-    const cell = raceCoverage?.cells?.find?.((candidate) => candidate.id === id);
-    const reloadLaneId =
-      typeof cell?.reloadLaneId === "string" ? cell.reloadLaneId : null;
-    const reloadStatus = String(cell?.reloadStatus ?? "missing");
-    const covered =
-      cell?.status === "passed" && reloadLaneId !== null && reloadStatus === "passed";
-    return {
-      id,
-      raceLaneId: String(cell?.raceLaneId ?? ""),
-      reloadLaneId,
-      reloadStatus,
-      covered,
-    };
-  });
-  const coveredCellCount = cells.filter((cell) => cell.covered).length;
-  const gapCount = cells.length - coveredCellCount;
-  return {
-    strategy: "host-concurrent-race-reload-before-readiness",
-    status: raceCoverage === null ? "unavailable" : gapCount === 0 ? "covered" : "gapped",
-    source: raceCoverage === null ? "" : source,
-    requiredCellCount: cells.length,
-    coveredCellCount,
-    gapCount,
-    cells,
-  };
-}
-
-function buildPlayerConcurrentActionReloadTrace(
-  raceCoverage,
-  { source = devTestGameRaceCoveragePath } = {},
-) {
-  const cells = playerConcurrentActionReloadCellIds.map((id) => {
-    const cell = raceCoverage?.cells?.find?.((candidate) => candidate.id === id);
-    const reloadLaneId =
-      typeof cell?.reloadLaneId === "string" ? cell.reloadLaneId : null;
-    const reloadStatus = String(cell?.reloadStatus ?? "missing");
-    const covered =
-      cell?.status === "passed" && reloadLaneId !== null && reloadStatus === "passed";
-    return {
-      id,
-      raceLaneId: String(cell?.raceLaneId ?? ""),
-      reloadLaneId,
-      reloadStatus,
-      covered,
-    };
-  });
-  const coveredCellCount = cells.filter((cell) => cell.covered).length;
-  const gapCount = cells.length - coveredCellCount;
-  return {
-    strategy: "player-concurrent-action-reload-before-readiness",
-    status: raceCoverage === null ? "unavailable" : gapCount === 0 ? "covered" : "gapped",
-    source: raceCoverage === null ? "" : source,
-    requiredCellCount: cells.length,
-    coveredCellCount,
-    gapCount,
-    cells,
-  };
-}
-
-function buildCohostDeadlineRaceReloadTrace(
-  raceCoverage,
-  { source = devTestGameRaceCoveragePath } = {},
-) {
-  const cells = cohostDeadlineRaceReloadCellIds.map((id) => {
-    const cell = raceCoverage?.cells?.find?.((candidate) => candidate.id === id);
-    const reloadLaneId =
-      typeof cell?.reloadLaneId === "string" ? cell.reloadLaneId : null;
-    const reloadStatus = String(cell?.reloadStatus ?? "missing");
-    const covered =
-      cell?.status === "passed" && reloadLaneId !== null && reloadStatus === "passed";
-    return {
-      id,
-      raceLaneId: String(cell?.raceLaneId ?? ""),
-      reloadLaneId,
-      reloadStatus,
-      covered,
-    };
-  });
-  const coveredCellCount = cells.filter((cell) => cell.covered).length;
-  const gapCount = cells.length - coveredCellCount;
-  return {
-    strategy: "cohost-deadline-race-reload-before-readiness",
-    status: raceCoverage === null ? "unavailable" : gapCount === 0 ? "covered" : "gapped",
-    source: raceCoverage === null ? "" : source,
-    requiredCellCount: cells.length,
-    coveredCellCount,
-    gapCount,
-    cells,
-  };
-}
-
 function buildRaceCoveragePromotedMilestones(
   raceCoverage,
   {
@@ -1350,137 +1248,6 @@ function buildRaceCoveragePromotedMilestoneGroup(group, trace) {
     requiredCellCount: trace.requiredCellCount,
     coveredCellCount: trace.coveredCellCount,
     gapCount: trace.gapCount,
-  };
-}
-
-function buildStaleConflictMessageTrace(readiness) {
-  const milestone =
-    readiness?.generatedFrom?.staleConflictMessageMilestone ??
-    readiness?.localDevelopmentSpine?.evidence?.staleConflictMessageMilestone ??
-    null;
-  const check = readiness?.localDevelopmentSpine?.checks?.find?.(
-    (candidate) => candidate.id === "local-stale-conflict-message-milestone",
-  );
-  const laneIds = Array.isArray(milestone?.laneIds)
-    ? milestone.laneIds.map((laneId) => String(laneId))
-    : staleConflictMessageLaneIds.map((laneId) => String(laneId));
-  const surfaces = Array.isArray(milestone?.surfaces)
-    ? milestone.surfaces.map((surface) => ({
-        id: String(surface.id ?? ""),
-        checkId: String(surface.checkId ?? ""),
-        label: String(surface.label ?? surface.id ?? ""),
-        status: String(surface.status ?? "unknown"),
-        laneId: String(surface.laneId ?? ""),
-        roleUrl: String(surface.roleUrl ?? ""),
-        rejectError: String(surface.rejectError ?? ""),
-        rejectMessage: String(surface.rejectMessage ?? ""),
-        receiptStatusText: String(surface.receiptStatusText ?? ""),
-        proofBoundary: String(surface.proofBoundary ?? ""),
-      }))
-    : [];
-  const surfaceCoverage = normalizeStaleConflictMessageSurfaceCoverage({
-    coverage: milestone?.surfaceCoverage,
-    readiness,
-    laneIds,
-    surfaces,
-  });
-  const requiredLaneCount = Number(
-    milestone?.requiredLaneCount ?? check?.requiredLaneCount ?? laneIds.length,
-  );
-  const coveredLaneCount = Number(
-    milestone?.coveredLaneCount ?? check?.coveredLaneCount ?? 0,
-  );
-  const gapCount = Number(
-    milestone?.gapCount ?? Math.max(requiredLaneCount - coveredLaneCount, 0),
-  );
-  return {
-    strategy: "stale-conflict-message-before-readiness",
-    status:
-      readiness === null
-        ? "unavailable"
-        : check?.status === "passed" && gapCount === 0
-          ? "covered"
-          : "gapped",
-    source: readiness === null ? "" : devTestGameReleaseReadinessPath,
-    requiredLaneCount,
-    coveredLaneCount,
-    gapCount,
-    laneIds,
-    surfaceCoverage,
-    surfaces,
-  };
-}
-
-function normalizeStaleConflictMessageSurfaceCoverage({
-  coverage,
-  readiness,
-  laneIds,
-  surfaces,
-}) {
-  if (readiness === null) {
-    return {
-      status: "unavailable",
-      requiredSurfaceCount: laneIds.length,
-      coveredSurfaceCount: 0,
-      gapCount: laneIds.length,
-    };
-  }
-  const requiredSurfaceCount = Number(
-    coverage?.requiredSurfaceCount ?? laneIds.length,
-  );
-  const coveredSurfaceCount = Number(
-    coverage?.coveredSurfaceCount ??
-      surfaces.filter((surface) => surface.status === "passed").length,
-  );
-  const gapCount = Number(
-    coverage?.gapCount ?? Math.max(requiredSurfaceCount - coveredSurfaceCount, 0),
-  );
-  return {
-    status:
-      coverage?.status === "complete" && gapCount === 0
-        ? "complete"
-        : gapCount === 0
-          ? "complete"
-          : "gapped",
-    requiredSurfaceCount,
-    coveredSurfaceCount,
-    gapCount,
-  };
-}
-
-function buildHostStaleControlTrace(readiness) {
-  const milestone =
-    readiness?.generatedFrom?.hostStaleControlMilestone ??
-    readiness?.localDevelopmentSpine?.evidence?.hostStaleControlMilestone ??
-    null;
-  const check = readiness?.localDevelopmentSpine?.checks?.find?.(
-    (candidate) => candidate.id === "local-host-stale-control-milestone",
-  );
-  const laneIds = Array.isArray(milestone?.laneIds)
-    ? milestone.laneIds.map((laneId) => String(laneId))
-    : hostStaleControlLaneIds.map((laneId) => String(laneId));
-  const requiredLaneCount = Number(
-    milestone?.requiredLaneCount ?? check?.requiredLaneCount ?? laneIds.length,
-  );
-  const coveredLaneCount = Number(
-    milestone?.coveredLaneCount ?? check?.coveredLaneCount ?? 0,
-  );
-  const gapCount = Number(
-    milestone?.gapCount ?? Math.max(requiredLaneCount - coveredLaneCount, 0),
-  );
-  return {
-    strategy: "host-stale-control-before-readiness",
-    status:
-      readiness === null
-        ? "unavailable"
-        : check?.status === "passed" && gapCount === 0
-          ? "covered"
-          : "gapped",
-    source: readiness === null ? "" : devTestGameReleaseReadinessPath,
-    requiredLaneCount,
-    coveredLaneCount,
-    gapCount,
-    laneIds,
   };
 }
 
@@ -1759,156 +1526,6 @@ function validHostedIdentityProgressionSummary(summary) {
   );
 }
 
-function assertReplacementRaceReloadTrace(trace) {
-  if (
-    trace?.strategy !== "replacement-race-reload-before-readiness" ||
-    !["covered", "gapped", "unavailable"].includes(trace.status) ||
-    !Number.isInteger(trace.requiredCellCount) ||
-    !Number.isInteger(trace.coveredCellCount) ||
-    !Number.isInteger(trace.gapCount) ||
-    !Array.isArray(trace.cells)
-  ) {
-    throw new Error("next-action replacement-race reload trace is missing or malformed");
-  }
-  if (
-    trace.requiredCellCount !== replacementRaceReloadCellIds.length ||
-    trace.cells.length !== replacementRaceReloadCellIds.length ||
-    trace.coveredCellCount + trace.gapCount !== trace.requiredCellCount
-  ) {
-    throw new Error("next-action replacement-race reload trace count drifted");
-  }
-  for (const id of replacementRaceReloadCellIds) {
-    const cell = trace.cells.find((candidate) => candidate.id === id);
-    if (cell === undefined) {
-      throw new Error(`next-action replacement-race reload trace missing cell: ${id}`);
-    }
-    if (typeof cell.covered !== "boolean") {
-      throw new Error(`next-action replacement-race reload trace malformed cell: ${id}`);
-    }
-  }
-  if (trace.status === "covered" && trace.gapCount !== 0) {
-    throw new Error("next-action replacement-race reload trace covered with gaps");
-  }
-  if (trace.status === "gapped" && trace.gapCount === 0) {
-    throw new Error("next-action replacement-race reload trace gapped without gaps");
-  }
-}
-
-function assertHostConcurrentRaceReloadTrace(trace) {
-  if (
-    trace?.strategy !== "host-concurrent-race-reload-before-readiness" ||
-    !["covered", "gapped", "unavailable"].includes(trace.status) ||
-    !Number.isInteger(trace.requiredCellCount) ||
-    !Number.isInteger(trace.coveredCellCount) ||
-    !Number.isInteger(trace.gapCount) ||
-    !Array.isArray(trace.cells)
-  ) {
-    throw new Error("next-action host concurrent race-reload trace is missing or malformed");
-  }
-  if (
-    trace.requiredCellCount !== hostConcurrentRaceReloadCellIds.length ||
-    trace.cells.length !== hostConcurrentRaceReloadCellIds.length ||
-    trace.coveredCellCount + trace.gapCount !== trace.requiredCellCount
-  ) {
-    throw new Error("next-action host concurrent race-reload trace count drifted");
-  }
-  for (const id of hostConcurrentRaceReloadCellIds) {
-    const cell = trace.cells.find((candidate) => candidate.id === id);
-    if (cell === undefined) {
-      throw new Error(`next-action host concurrent race-reload trace missing cell: ${id}`);
-    }
-    if (cell.covered === true && cell.reloadStatus !== "passed") {
-      throw new Error(
-        `next-action host concurrent race-reload trace covered without reload: ${id}`,
-      );
-    }
-  }
-  if (trace.status === "covered" && trace.gapCount !== 0) {
-    throw new Error("next-action host concurrent race-reload trace covered with gaps");
-  }
-  if (trace.status === "gapped" && trace.gapCount === 0) {
-    throw new Error("next-action host concurrent race-reload trace gapped without gaps");
-  }
-}
-
-function assertPlayerConcurrentActionReloadTrace(trace) {
-  if (
-    trace?.strategy !== "player-concurrent-action-reload-before-readiness" ||
-    !["covered", "gapped", "unavailable"].includes(trace.status) ||
-    !Number.isInteger(trace.requiredCellCount) ||
-    !Number.isInteger(trace.coveredCellCount) ||
-    !Number.isInteger(trace.gapCount) ||
-    !Array.isArray(trace.cells)
-  ) {
-    throw new Error(
-      "next-action player concurrent action reload trace is missing or malformed",
-    );
-  }
-  if (
-    trace.requiredCellCount !== playerConcurrentActionReloadCellIds.length ||
-    trace.cells.length !== playerConcurrentActionReloadCellIds.length ||
-    trace.coveredCellCount + trace.gapCount !== trace.requiredCellCount
-  ) {
-    throw new Error("next-action player concurrent action reload trace count drifted");
-  }
-  for (const id of playerConcurrentActionReloadCellIds) {
-    const cell = trace.cells.find((candidate) => candidate.id === id);
-    if (cell === undefined) {
-      throw new Error(
-        `next-action player concurrent action reload trace missing cell: ${id}`,
-      );
-    }
-    if (cell.covered === true && cell.reloadStatus !== "passed") {
-      throw new Error(
-        `next-action player concurrent action reload trace covered without reload: ${id}`,
-      );
-    }
-  }
-  if (trace.status === "covered" && trace.gapCount !== 0) {
-    throw new Error("next-action player concurrent action reload trace covered with gaps");
-  }
-  if (trace.status === "gapped" && trace.gapCount === 0) {
-    throw new Error("next-action player concurrent action reload trace gapped without gaps");
-  }
-}
-
-function assertCohostDeadlineRaceReloadTrace(trace) {
-  if (
-    trace?.strategy !== "cohost-deadline-race-reload-before-readiness" ||
-    !["covered", "gapped", "unavailable"].includes(trace.status) ||
-    !Number.isInteger(trace.requiredCellCount) ||
-    !Number.isInteger(trace.coveredCellCount) ||
-    !Number.isInteger(trace.gapCount) ||
-    !Array.isArray(trace.cells)
-  ) {
-    throw new Error("next-action cohost deadline race reload trace is missing or malformed");
-  }
-  if (
-    trace.requiredCellCount !== cohostDeadlineRaceReloadCellIds.length ||
-    trace.cells.length !== cohostDeadlineRaceReloadCellIds.length ||
-    trace.coveredCellCount + trace.gapCount !== trace.requiredCellCount
-  ) {
-    throw new Error("next-action cohost deadline race reload trace count drifted");
-  }
-  for (const id of cohostDeadlineRaceReloadCellIds) {
-    const cell = trace.cells.find((candidate) => candidate.id === id);
-    if (cell === undefined) {
-      throw new Error(`next-action cohost deadline race reload trace missing cell: ${id}`);
-    }
-    if (cell.covered === true && cell.reloadStatus !== "passed") {
-      throw new Error(
-        `next-action cohost deadline race reload trace covered without reload: ${id}`,
-      );
-    }
-  }
-  if (trace.status === "covered" && trace.gapCount !== 0) {
-    throw new Error("next-action cohost deadline race reload trace covered with gaps");
-  }
-  if (trace.status === "gapped" && trace.gapCount === 0) {
-    throw new Error("next-action cohost deadline race reload trace gapped without gaps");
-  }
-}
-
 function assertRaceCoveragePromotedMilestones(summary) {
   if (
     !["passed", "gapped", "unavailable"].includes(summary?.status) ||
@@ -1951,108 +1568,6 @@ function assertRaceCoveragePromotedMilestones(summary) {
   }
   if (summary.status === "gapped" && summary.gapCount === 0) {
     throw new Error("next-action race coverage promoted milestone gapped without gaps");
-  }
-}
-
-function assertStaleConflictMessageTrace(trace) {
-  if (
-    trace?.strategy !== "stale-conflict-message-before-readiness" ||
-    !["covered", "gapped", "unavailable"].includes(trace.status) ||
-    !Number.isInteger(trace.requiredLaneCount) ||
-    !Number.isInteger(trace.coveredLaneCount) ||
-    !Number.isInteger(trace.gapCount) ||
-    !Array.isArray(trace.laneIds) ||
-    trace.surfaceCoverage === null ||
-    typeof trace.surfaceCoverage !== "object" ||
-    !["complete", "gapped", "unavailable"].includes(trace.surfaceCoverage.status) ||
-    !Number.isInteger(trace.surfaceCoverage.requiredSurfaceCount) ||
-    !Number.isInteger(trace.surfaceCoverage.coveredSurfaceCount) ||
-    !Number.isInteger(trace.surfaceCoverage.gapCount) ||
-    !Array.isArray(trace.surfaces)
-  ) {
-    throw new Error("next-action stale conflict-message trace is missing or malformed");
-  }
-  if (
-    trace.requiredLaneCount !== staleConflictMessageLaneIds.length ||
-    trace.laneIds.length !== staleConflictMessageLaneIds.length ||
-    trace.coveredLaneCount + trace.gapCount !== trace.requiredLaneCount
-  ) {
-    throw new Error("next-action stale conflict-message trace count drifted");
-  }
-  for (const laneId of staleConflictMessageLaneIds) {
-    if (!trace.laneIds.includes(laneId)) {
-      throw new Error(`next-action stale conflict-message trace missing lane: ${laneId}`);
-    }
-  }
-  for (const scenario of staleConflictMessageSurfaceCases()) {
-    const surface = trace.surfaces.find(
-      (candidate) => candidate.id === scenario.id,
-    );
-    if (
-      trace.status === "covered" &&
-      (surface?.checkId !== scenario.checkId ||
-        surface.laneId !== scenario.laneId ||
-        surface.status !== "passed" ||
-        !String(surface.roleUrl ?? "").includes("/g/") ||
-        (scenario.expectedReceiptFragment !== undefined &&
-          !String(surface.receiptStatusText ?? "").includes(
-            scenario.expectedReceiptFragment,
-          )) ||
-        (scenario.expectedRejectMessageFragment !== undefined &&
-          !String(surface.rejectMessage ?? "").includes(
-            scenario.expectedRejectMessageFragment,
-          )))
-    ) {
-      throw new Error(
-        `next-action stale conflict-message trace missing surface: ${scenario.id}`,
-      );
-    }
-  }
-  if (trace.status === "covered" && trace.gapCount !== 0) {
-    throw new Error("next-action stale conflict-message trace covered with gaps");
-  }
-  if (
-    trace.status === "covered" &&
-    (trace.surfaceCoverage.status !== "complete" ||
-      trace.surfaceCoverage.requiredSurfaceCount !== staleConflictMessageLaneIds.length ||
-      trace.surfaceCoverage.coveredSurfaceCount !== staleConflictMessageSurfaceCases().length ||
-      trace.surfaceCoverage.gapCount !== 0)
-  ) {
-    throw new Error("next-action stale conflict-message trace covered without complete surfaces");
-  }
-  if (trace.status === "gapped" && trace.gapCount === 0) {
-    throw new Error("next-action stale conflict-message trace gapped without gaps");
-  }
-}
-
-function assertHostStaleControlTrace(trace) {
-  if (
-    trace?.strategy !== "host-stale-control-before-readiness" ||
-    !["covered", "gapped", "unavailable"].includes(trace.status) ||
-    !Number.isInteger(trace.requiredLaneCount) ||
-    !Number.isInteger(trace.coveredLaneCount) ||
-    !Number.isInteger(trace.gapCount) ||
-    !Array.isArray(trace.laneIds)
-  ) {
-    throw new Error("next-action host stale-control trace is missing or malformed");
-  }
-  if (
-    trace.requiredLaneCount !== hostStaleControlLaneIds.length ||
-    trace.laneIds.length !== hostStaleControlLaneIds.length ||
-    trace.coveredLaneCount + trace.gapCount !== trace.requiredLaneCount
-  ) {
-    throw new Error("next-action host stale-control trace count drifted");
-  }
-  for (const laneId of hostStaleControlLaneIds) {
-    if (!trace.laneIds.includes(laneId)) {
-      throw new Error(`next-action host stale-control trace missing lane: ${laneId}`);
-    }
-  }
-  if (trace.status === "covered" && trace.gapCount !== 0) {
-    throw new Error("next-action host stale-control trace covered with gaps");
-  }
-  if (trace.status === "gapped" && trace.gapCount === 0) {
-    throw new Error("next-action host stale-control trace gapped without gaps");
   }
 }
 
@@ -2129,28 +1644,9 @@ const terminalArtifactPaths = new Set([
   devTestGameProofGraphAdminProofPath,
 ]);
 
-const replacementRaceReloadCellIds = Object.freeze([
-  ...raceCoveragePromotedReloadGroup("replacement-race-reload").cellIds,
-]);
-
-const hostConcurrentRaceReloadCellIds = Object.freeze([
-  ...raceCoveragePromotedReloadGroup("host-concurrent-race-reload").cellIds,
-]);
-
-const playerConcurrentActionReloadCellIds = Object.freeze([
-  ...raceCoveragePromotedReloadGroup("player-concurrent-action-reload").cellIds,
-]);
-
-const cohostDeadlineRaceReloadCellIds = Object.freeze([
-  ...raceCoveragePromotedReloadGroup("cohost-deadline-race-reload").cellIds,
-]);
-
-const raceCoveragePromotedMilestoneGroupIds = Object.freeze([
-  "replacement-race-reload",
-  "host-concurrent-race-reload",
-  "player-concurrent-action-reload",
-  "cohost-deadline-race-reload",
-]);
+const raceCoveragePromotedMilestoneGroupIds = Object.freeze(
+  raceCoveragePromotedReloadGroups.map((group) => group.id),
+);
 
 if (pathToFileURL(process.argv[1] ?? "").href === import.meta.url) {
   const evidence = await writeDevTestGameNextAction();

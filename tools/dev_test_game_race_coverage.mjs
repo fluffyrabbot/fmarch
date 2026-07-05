@@ -3,19 +3,14 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 import {
   completedGameRaceCoverageCellCases,
-  completedGameRaceCoverageCellIdsForPromotedGroup,
 } from "./dev_test_game_core_loop_completed_scenarios.mjs";
 import {
   cohostHostRaceCoverageCellCases,
-  cohostHostRaceCoverageCellIds,
   playerHostRaceCoverageCellCases,
-  playerHostRaceCoverageCellIds,
 } from "./dev_test_game_cross_role_race_scenarios.mjs";
 import {
   hostPhaseRaceCoverageCellCases,
-  hostPhaseRaceCoverageCellIds,
   hostStandaloneRaceCoverageCellCases,
-  hostStandaloneRaceCoverageCellIds,
 } from "./dev_test_game_host_stale_recovery_scenarios.mjs";
 import { assertDevTestGameProofRun } from "./dev_test_game_proof_contract.mjs";
 import { repoRoot } from "./dev_test_game_spine_runner.mjs";
@@ -24,10 +19,18 @@ import {
 } from "./dev_test_game_spine_artifact_paths.mjs";
 import {
   devTestGameRaceCoveragePath,
-} from "./dev_test_game_adjacent_artifact_paths.mjs";
+  hostLifecycleRaceCoverageCellId,
+  hostVotecountPublicationRaceCoverageCellId,
+  raceCoveragePromotedReloadGroup,
+  raceCoveragePromotedReloadGroups,
+} from "./dev_test_game_race_coverage_contracts.mjs";
 
 export const DEV_TEST_GAME_RACE_COVERAGE_VERSION = 1;
-export { devTestGameRaceCoveragePath };
+export {
+  devTestGameRaceCoveragePath,
+  raceCoveragePromotedReloadGroup,
+  raceCoveragePromotedReloadGroups,
+};
 export const devTestGameRaceCoverageAdminProofPath =
   "target/dev-test-game/race-coverage-admin-proof.json";
 export const devTestGameRaceCoverageCommand = "test:dev-test-game-race-coverage";
@@ -41,9 +44,6 @@ const playerHostRaceCoverageCells =
 const cohostHostRaceCoverageCells =
   cohostHostRaceCoverageCellCases().map(raceCell);
 const hostMixedAdvanceRaceCoverageCellId = "host-mixed-advance";
-const hostLifecycleRaceCoverageCellId = "host-lifecycle";
-const hostVotecountPublicationRaceCoverageCellId =
-  "host-votecount-publication";
 
 const raceCells = Object.freeze([
   raceCell({
@@ -102,69 +102,6 @@ const raceCells = Object.freeze([
   ),
   ...completedGameRaceCoverageCellCases().map(raceCell),
 ]);
-
-export const raceCoveragePromotedReloadGroups = Object.freeze(
-  [
-    {
-      id: "replacement-race-reload",
-      label: "Replacement race reload",
-      cellIds: [
-        "replacement-private-post",
-        "replacement-vote",
-        "replacement-action",
-      ],
-    },
-    {
-      id: "host-concurrent-race-reload",
-      label: "Host concurrent race reload",
-      cellIds: [
-        ...hostPhaseRaceCoverageCellIds().filter(
-          (id) => id !== "host-mixed-advance",
-        ),
-        hostLifecycleRaceCoverageCellId,
-        "host-mixed-advance",
-        ...hostStandaloneRaceCoverageCellIds().filter(
-          (id) => id === hostVotecountPublicationRaceCoverageCellId,
-        ),
-        ...completedGameRaceCoverageCellIdsForPromotedGroup(
-          "host-concurrent-race-reload",
-        ),
-      ],
-    },
-    {
-      id: "player-concurrent-action-reload",
-      label: "Player concurrent action reload",
-      cellIds: [
-        "player-vote-change",
-        "player-night-action",
-        ...playerHostRaceCoverageCellIds(),
-        ...completedGameRaceCoverageCellIdsForPromotedGroup(
-          "player-concurrent-action-reload",
-        ),
-      ],
-    },
-    {
-      id: "cohost-deadline-race-reload",
-      label: "Cohost deadline race reload",
-      cellIds: cohostHostRaceCoverageCellIds(),
-    },
-  ].map((group) =>
-    Object.freeze({
-      ...group,
-      cellIds: Object.freeze(group.cellIds),
-    }),
-  ),
-);
-
-export function raceCoveragePromotedReloadGroup(groupId) {
-  const group = raceCoveragePromotedReloadGroups.find(
-    (candidate) => candidate.id === groupId,
-  );
-  if (group === undefined) {
-    throw new Error(`unknown race coverage promoted reload group: ${groupId}`);
-  }
-  return group;
-}
 
 export function replacementRaceCoveragePromotedReloadGroup() {
   return raceCoveragePromotedReloadGroup("replacement-race-reload");

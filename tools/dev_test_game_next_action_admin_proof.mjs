@@ -74,6 +74,11 @@ import {
   selectionTraceStrategy,
 } from "./dev_test_game_next_action_priority_traces.mjs";
 import {
+  assertRecoveryTrace,
+  recoveryTraceCheckIds,
+  recoveryTraceKeys,
+} from "./dev_test_game_next_action_recovery_traces.mjs";
+import {
   proofGraphDestinationSummaryDriftNextActionAdminProofPath,
   proofGraphDestinationSummaryDriftNextActionPath,
 } from "./dev_test_game_next_action_admin_proof_paths.mjs";
@@ -603,66 +608,38 @@ export function assertNextActionAdminProof(evidence) {
     { label: "next-action admin proof local readiness dependency trace" },
   );
   assertNextActionAdminProofGraphDiagnosticSummaryTrace(evidence);
-  if (
-    evidence.generatedFrom?.replacementRaceReloadTrace?.strategy !==
-      "replacement-race-reload-before-readiness" ||
-    !["covered", "gapped", "unavailable"].includes(
-      evidence.generatedFrom.replacementRaceReloadTrace.status,
-    ) ||
-    !Number.isInteger(
-      evidence.generatedFrom.replacementRaceReloadTrace.requiredCellCount,
-    ) ||
-    !Array.isArray(evidence.generatedFrom.replacementRaceReloadTrace.cellIds)
-  ) {
-    throw new Error(
-      "next-action admin proof is missing replacement-race reload trace evidence",
-    );
-  }
-  if (
-    evidence.generatedFrom?.hostConcurrentRaceReloadTrace?.strategy !==
-      "host-concurrent-race-reload-before-readiness" ||
-    !["covered", "gapped", "unavailable"].includes(
-      evidence.generatedFrom.hostConcurrentRaceReloadTrace.status,
-    ) ||
-    !Number.isInteger(
-      evidence.generatedFrom.hostConcurrentRaceReloadTrace.requiredCellCount,
-    ) ||
-    !Array.isArray(evidence.generatedFrom.hostConcurrentRaceReloadTrace.cellIds)
-  ) {
-    throw new Error(
-      "next-action admin proof is missing host concurrent race-reload trace evidence",
-    );
-  }
-  if (
-    evidence.generatedFrom?.playerConcurrentActionReloadTrace?.strategy !==
-      "player-concurrent-action-reload-before-readiness" ||
-    !["covered", "gapped", "unavailable"].includes(
-      evidence.generatedFrom.playerConcurrentActionReloadTrace.status,
-    ) ||
-    !Number.isInteger(
-      evidence.generatedFrom.playerConcurrentActionReloadTrace.requiredCellCount,
-    ) ||
-    !Array.isArray(evidence.generatedFrom.playerConcurrentActionReloadTrace.cellIds)
-  ) {
-    throw new Error(
-      "next-action admin proof is missing player concurrent action reload trace evidence",
-    );
-  }
-  if (
-    evidence.generatedFrom?.cohostDeadlineRaceReloadTrace?.strategy !==
-      "cohost-deadline-race-reload-before-readiness" ||
-    !["covered", "gapped", "unavailable"].includes(
-      evidence.generatedFrom.cohostDeadlineRaceReloadTrace.status,
-    ) ||
-    !Number.isInteger(
-      evidence.generatedFrom.cohostDeadlineRaceReloadTrace.requiredCellCount,
-    ) ||
-    !Array.isArray(evidence.generatedFrom.cohostDeadlineRaceReloadTrace.cellIds)
-  ) {
-    throw new Error(
-      "next-action admin proof is missing cohost deadline race reload trace evidence",
-    );
-  }
+  assertRecoveryTrace(
+    recoveryTraceKeys.replacementRaceReload,
+    evidence.generatedFrom?.replacementRaceReloadTrace,
+    {
+      label: "next-action admin proof replacement-race reload trace",
+      requireFullTrace: false,
+    },
+  );
+  assertRecoveryTrace(
+    recoveryTraceKeys.hostConcurrentRaceReload,
+    evidence.generatedFrom?.hostConcurrentRaceReloadTrace,
+    {
+      label: "next-action admin proof host concurrent race-reload trace",
+      requireFullTrace: false,
+    },
+  );
+  assertRecoveryTrace(
+    recoveryTraceKeys.playerConcurrentActionReload,
+    evidence.generatedFrom?.playerConcurrentActionReloadTrace,
+    {
+      label: "next-action admin proof player concurrent action reload trace",
+      requireFullTrace: false,
+    },
+  );
+  assertRecoveryTrace(
+    recoveryTraceKeys.cohostDeadlineRaceReload,
+    evidence.generatedFrom?.cohostDeadlineRaceReloadTrace,
+    {
+      label: "next-action admin proof cohost deadline race reload trace",
+      requireFullTrace: false,
+    },
+  );
   if (
     !["passed", "gapped", "unavailable"].includes(
       evidence.generatedFrom?.raceCoveragePromotedMilestones?.status,
@@ -679,47 +656,16 @@ export function assertNextActionAdminProof(evidence) {
       "next-action admin proof is missing race coverage promoted milestone evidence",
     );
   }
-  if (
-    evidence.generatedFrom?.staleConflictMessageTrace?.strategy !==
-      "stale-conflict-message-before-readiness" ||
-    !["covered", "gapped", "unavailable"].includes(
-      evidence.generatedFrom.staleConflictMessageTrace.status,
-    ) ||
-    !Number.isInteger(
-      evidence.generatedFrom.staleConflictMessageTrace.requiredLaneCount,
-    ) ||
-    !Array.isArray(evidence.generatedFrom.staleConflictMessageTrace.laneIds) ||
-    evidence.generatedFrom.staleConflictMessageTrace.surfaceCoverage?.status !==
-      "complete" ||
-    !Number.isInteger(
-      evidence.generatedFrom.staleConflictMessageTrace.surfaceCoverage
-        ?.requiredSurfaceCount,
-    ) ||
-    !Number.isInteger(
-      evidence.generatedFrom.staleConflictMessageTrace.surfaceCoverage
-        ?.coveredSurfaceCount,
-    ) ||
-    !Array.isArray(evidence.generatedFrom.staleConflictMessageTrace.surfaces)
-  ) {
-    throw new Error(
-      "next-action admin proof is missing stale conflict-message trace evidence",
-    );
-  }
-  if (
-    evidence.generatedFrom?.hostStaleControlTrace?.strategy !==
-      "host-stale-control-before-readiness" ||
-    !["covered", "gapped", "unavailable"].includes(
-      evidence.generatedFrom.hostStaleControlTrace.status,
-    ) ||
-    !Number.isInteger(
-      evidence.generatedFrom.hostStaleControlTrace.requiredLaneCount,
-    ) ||
-    !Array.isArray(evidence.generatedFrom.hostStaleControlTrace.laneIds)
-  ) {
-    throw new Error(
-      "next-action admin proof is missing host stale-control trace evidence",
-    );
-  }
+  assertRecoveryTrace(
+    recoveryTraceKeys.staleConflictMessage,
+    evidence.generatedFrom?.staleConflictMessageTrace,
+    { label: "next-action admin proof stale conflict-message trace" },
+  );
+  assertRecoveryTrace(
+    recoveryTraceKeys.hostStaleControl,
+    evidence.generatedFrom?.hostStaleControlTrace,
+    { label: "next-action admin proof host stale-control trace" },
+  );
   assertNextActionAdminRecoveryReceiptGraphs(evidence.generatedFrom);
   for (const checkId of requiredChecksForEvidence(evidence)) {
     if (!evidence.adminRoleSurface?.visibleChecks?.includes(checkId)) {
@@ -1162,35 +1108,43 @@ function requiredChecksForNextAction(nextAction) {
       nextAction.localReadinessDependencyTrace,
     ),
   );
-  checks.push("replacement-race-reload-milestone");
-  for (const cell of nextAction.replacementRaceReloadTrace.cells) {
-    checks.push(`replacement-race-reload-${cell.id}`);
-  }
-  checks.push("host-concurrent-race-reload-milestone");
-  for (const cell of nextAction.hostConcurrentRaceReloadTrace.cells) {
-    checks.push(`host-concurrent-race-reload-${cell.id}`);
-  }
-  checks.push("player-concurrent-action-reload-milestone");
-  for (const cell of nextAction.playerConcurrentActionReloadTrace.cells) {
-    checks.push(`player-concurrent-action-reload-${cell.id}`);
-  }
-  checks.push("cohost-deadline-race-reload-milestone");
-  for (const cell of nextAction.cohostDeadlineRaceReloadTrace.cells) {
-    checks.push(`cohost-deadline-race-reload-${cell.id}`);
-  }
+  checks.push(
+    ...recoveryTraceCheckIds(
+      recoveryTraceKeys.replacementRaceReload,
+      nextAction.replacementRaceReloadTrace,
+    ),
+  );
+  checks.push(
+    ...recoveryTraceCheckIds(
+      recoveryTraceKeys.hostConcurrentRaceReload,
+      nextAction.hostConcurrentRaceReloadTrace,
+    ),
+  );
+  checks.push(
+    ...recoveryTraceCheckIds(
+      recoveryTraceKeys.playerConcurrentActionReload,
+      nextAction.playerConcurrentActionReloadTrace,
+    ),
+  );
+  checks.push(
+    ...recoveryTraceCheckIds(
+      recoveryTraceKeys.cohostDeadlineRaceReload,
+      nextAction.cohostDeadlineRaceReloadTrace,
+    ),
+  );
   checks.push("race-coverage-promoted-milestones");
-  checks.push("stale-conflict-message-milestone");
-  checks.push("stale-conflict-message-surface-coverage");
-  for (const laneId of nextAction.staleConflictMessageTrace.laneIds) {
-    checks.push(`stale-conflict-message-${laneId}`);
-  }
-  for (const surface of nextAction.staleConflictMessageTrace.surfaces) {
-    checks.push(surface.checkId);
-  }
-  checks.push("host-stale-control-milestone");
-  for (const laneId of nextAction.hostStaleControlTrace.laneIds) {
-    checks.push(`host-stale-control-${laneId}`);
-  }
+  checks.push(
+    ...recoveryTraceCheckIds(
+      recoveryTraceKeys.staleConflictMessage,
+      nextAction.staleConflictMessageTrace,
+    ),
+  );
+  checks.push(
+    ...recoveryTraceCheckIds(
+      recoveryTraceKeys.hostStaleControl,
+      nextAction.hostStaleControlTrace,
+    ),
+  );
   return checks;
 }
 
@@ -1572,48 +1526,30 @@ function requiredChecksForEvidence(evidence) {
       preReadinessTraceKeys.localReadinessDependency,
       evidence.generatedFrom?.localReadinessDependencyTrace,
     ),
-    "replacement-race-reload-milestone",
-    ...(Array.isArray(evidence.generatedFrom?.replacementRaceReloadTrace?.cellIds)
-      ? evidence.generatedFrom.replacementRaceReloadTrace.cellIds.map(
-          (id) => `replacement-race-reload-${id}`,
-        )
-      : []),
-    "host-concurrent-race-reload-milestone",
-    ...(Array.isArray(evidence.generatedFrom?.hostConcurrentRaceReloadTrace?.cellIds)
-      ? evidence.generatedFrom.hostConcurrentRaceReloadTrace.cellIds.map(
-          (id) => `host-concurrent-race-reload-${id}`,
-        )
-      : []),
-    "player-concurrent-action-reload-milestone",
-    ...(Array.isArray(evidence.generatedFrom?.playerConcurrentActionReloadTrace?.cellIds)
-      ? evidence.generatedFrom.playerConcurrentActionReloadTrace.cellIds.map(
-          (id) => `player-concurrent-action-reload-${id}`,
-        )
-      : []),
-    "cohost-deadline-race-reload-milestone",
-    ...(Array.isArray(evidence.generatedFrom?.cohostDeadlineRaceReloadTrace?.cellIds)
-      ? evidence.generatedFrom.cohostDeadlineRaceReloadTrace.cellIds.map(
-          (id) => `cohost-deadline-race-reload-${id}`,
-        )
-      : []),
+    ...recoveryTraceCheckIds(
+      recoveryTraceKeys.replacementRaceReload,
+      evidence.generatedFrom?.replacementRaceReloadTrace,
+    ),
+    ...recoveryTraceCheckIds(
+      recoveryTraceKeys.hostConcurrentRaceReload,
+      evidence.generatedFrom?.hostConcurrentRaceReloadTrace,
+    ),
+    ...recoveryTraceCheckIds(
+      recoveryTraceKeys.playerConcurrentActionReload,
+      evidence.generatedFrom?.playerConcurrentActionReloadTrace,
+    ),
+    ...recoveryTraceCheckIds(
+      recoveryTraceKeys.cohostDeadlineRaceReload,
+      evidence.generatedFrom?.cohostDeadlineRaceReloadTrace,
+    ),
     "race-coverage-promoted-milestones",
-    "stale-conflict-message-milestone",
-    "stale-conflict-message-surface-coverage",
-    ...(Array.isArray(evidence.generatedFrom?.staleConflictMessageTrace?.laneIds)
-      ? evidence.generatedFrom.staleConflictMessageTrace.laneIds.map(
-          (id) => `stale-conflict-message-${id}`,
-        )
-      : []),
-    ...(Array.isArray(evidence.generatedFrom?.staleConflictMessageTrace?.surfaces)
-      ? evidence.generatedFrom.staleConflictMessageTrace.surfaces.map(
-          (surface) => surface.checkId,
-        )
-      : []),
-    "host-stale-control-milestone",
-    ...(Array.isArray(evidence.generatedFrom?.hostStaleControlTrace?.laneIds)
-      ? evidence.generatedFrom.hostStaleControlTrace.laneIds.map(
-          (id) => `host-stale-control-${id}`,
-        )
-      : []),
+    ...recoveryTraceCheckIds(
+      recoveryTraceKeys.staleConflictMessage,
+      evidence.generatedFrom?.staleConflictMessageTrace,
+    ),
+    ...recoveryTraceCheckIds(
+      recoveryTraceKeys.hostStaleControl,
+      evidence.generatedFrom?.hostStaleControlTrace,
+    ),
   ];
 }

@@ -501,6 +501,9 @@ import {
   selectionTraceStrategy,
 } from "./dev_test_game_next_action_priority_traces.mjs";
 import {
+  recoveryTraceRegistryEntries,
+} from "./dev_test_game_next_action_recovery_traces.mjs";
+import {
   buildProofGraphDiagnosticProofSummary,
   buildProofGraphDiagnosticSummaryTrace,
   proofGraphDiagnosticSummaryCheckIds,
@@ -2498,6 +2501,48 @@ test("next-action priority traces name shared visible check contracts", () => {
       [
         "local-dev-release-readiness-priority",
         "release-readiness-selection-trace",
+      ],
+    ],
+  );
+});
+
+test("next-action recovery trace registry names shared trace contracts", () => {
+  assert.deepEqual(
+    recoveryTraceRegistryEntries.map((entry) => [
+      entry.key,
+      entry.traceKey,
+      entry.strategy,
+    ]),
+    [
+      [
+        "replacementRaceReload",
+        "replacementRaceReloadTrace",
+        "replacement-race-reload-before-readiness",
+      ],
+      [
+        "hostConcurrentRaceReload",
+        "hostConcurrentRaceReloadTrace",
+        "host-concurrent-race-reload-before-readiness",
+      ],
+      [
+        "playerConcurrentActionReload",
+        "playerConcurrentActionReloadTrace",
+        "player-concurrent-action-reload-before-readiness",
+      ],
+      [
+        "cohostDeadlineRaceReload",
+        "cohostDeadlineRaceReloadTrace",
+        "cohost-deadline-race-reload-before-readiness",
+      ],
+      [
+        "staleConflictMessage",
+        "staleConflictMessageTrace",
+        "stale-conflict-message-before-readiness",
+      ],
+      [
+        "hostStaleControl",
+        "hostStaleControlTrace",
+        "host-stale-control-before-readiness",
       ],
     ],
   );

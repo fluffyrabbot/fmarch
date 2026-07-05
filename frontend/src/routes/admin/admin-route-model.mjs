@@ -73,6 +73,11 @@ import {
   selectionTraceCheckRows,
 } from "../../../../tools/dev_test_game_next_action_priority_traces.mjs";
 import {
+  normalizeRecoveryTrace,
+  recoveryTraceCheckRows,
+  recoveryTraceKeys,
+} from "../../../../tools/dev_test_game_next_action_recovery_traces.mjs";
+import {
   devTestGameIdentityAdapterContractDiff,
   devTestGameIdentityAdapterProofVersion,
 } from "../../../../tools/dev_test_game_identity_adapter_contract.mjs";
@@ -2482,75 +2487,29 @@ export function normalizeLocalNextActionAudit(nextAction, { game, proofGraph = n
       id: "race-coverage-promoted-milestones",
       status: `${raceCoveragePromotedMilestones.passedGroupCount}/${raceCoveragePromotedMilestones.groupCount} groups, ${raceCoveragePromotedMilestones.coveredCellCount}/${raceCoveragePromotedMilestones.requiredCellCount} cells, ${raceCoveragePromotedMilestones.reloadCoveredCellCount}/${raceCoveragePromotedMilestones.cellCount} reloads`,
     }),
-    Object.freeze({
-      id: "replacement-race-reload-milestone",
-      status: `${replacementRaceReloadTrace.coveredCellCount}/${replacementRaceReloadTrace.requiredCellCount} ${replacementRaceReloadTrace.status}`,
-    }),
-    ...replacementRaceReloadTrace.cells.map((cell) =>
-      Object.freeze({
-        id: `replacement-race-reload-${cell.id}`,
-        status: cell.covered ? `covered:${cell.reloadStatus}` : `gap:${cell.reloadStatus}`,
-      }),
+    ...recoveryTraceCheckRows(
+      recoveryTraceKeys.replacementRaceReload,
+      replacementRaceReloadTrace,
     ),
-    Object.freeze({
-      id: "host-concurrent-race-reload-milestone",
-      status: `${hostConcurrentRaceReloadTrace.coveredCellCount}/${hostConcurrentRaceReloadTrace.requiredCellCount} ${hostConcurrentRaceReloadTrace.status}`,
-    }),
-    ...hostConcurrentRaceReloadTrace.cells.map((cell) =>
-      Object.freeze({
-        id: `host-concurrent-race-reload-${cell.id}`,
-        status: cell.covered ? `covered:${cell.reloadStatus}` : `gap:${cell.reloadStatus}`,
-      }),
+    ...recoveryTraceCheckRows(
+      recoveryTraceKeys.hostConcurrentRaceReload,
+      hostConcurrentRaceReloadTrace,
     ),
-    Object.freeze({
-      id: "player-concurrent-action-reload-milestone",
-      status: `${playerConcurrentActionReloadTrace.coveredCellCount}/${playerConcurrentActionReloadTrace.requiredCellCount} ${playerConcurrentActionReloadTrace.status}`,
-    }),
-    ...playerConcurrentActionReloadTrace.cells.map((cell) =>
-      Object.freeze({
-        id: `player-concurrent-action-reload-${cell.id}`,
-        status: cell.covered ? `covered:${cell.reloadStatus}` : `gap:${cell.reloadStatus}`,
-      }),
+    ...recoveryTraceCheckRows(
+      recoveryTraceKeys.playerConcurrentActionReload,
+      playerConcurrentActionReloadTrace,
     ),
-    Object.freeze({
-      id: "cohost-deadline-race-reload-milestone",
-      status: `${cohostDeadlineRaceReloadTrace.coveredCellCount}/${cohostDeadlineRaceReloadTrace.requiredCellCount} ${cohostDeadlineRaceReloadTrace.status}`,
-    }),
-    ...cohostDeadlineRaceReloadTrace.cells.map((cell) =>
-      Object.freeze({
-        id: `cohost-deadline-race-reload-${cell.id}`,
-        status: cell.covered ? `covered:${cell.reloadStatus}` : `gap:${cell.reloadStatus}`,
-      }),
+    ...recoveryTraceCheckRows(
+      recoveryTraceKeys.cohostDeadlineRaceReload,
+      cohostDeadlineRaceReloadTrace,
     ),
-    Object.freeze({
-      id: "stale-conflict-message-milestone",
-      status: `${staleConflictMessageTrace.coveredLaneCount}/${staleConflictMessageTrace.requiredLaneCount} ${staleConflictMessageTrace.status}`,
-    }),
-    Object.freeze({
-      id: "stale-conflict-message-surface-coverage",
-      status: `${staleConflictMessageTrace.surfaceCoverage.coveredSurfaceCount}/${staleConflictMessageTrace.surfaceCoverage.requiredSurfaceCount} ${staleConflictMessageTrace.surfaceCoverage.status}`,
-    }),
-    ...staleConflictMessageTrace.laneIds.map((laneId) =>
-      Object.freeze({
-        id: `stale-conflict-message-${laneId}`,
-        status: staleConflictMessageTrace.status,
-      }),
+    ...recoveryTraceCheckRows(
+      recoveryTraceKeys.staleConflictMessage,
+      staleConflictMessageTrace,
     ),
-    ...staleConflictMessageTrace.surfaces.map((surface) =>
-      Object.freeze({
-        id: surface.checkId,
-        status: `${surface.status}:${surface.rejectError}`,
-      }),
-    ),
-    Object.freeze({
-      id: "host-stale-control-milestone",
-      status: `${hostStaleControlTrace.coveredLaneCount}/${hostStaleControlTrace.requiredLaneCount} ${hostStaleControlTrace.status}`,
-    }),
-    ...hostStaleControlTrace.laneIds.map((laneId) =>
-      Object.freeze({
-        id: `host-stale-control-${laneId}`,
-        status: hostStaleControlTrace.status,
-      }),
+    ...recoveryTraceCheckRows(
+      recoveryTraceKeys.hostStaleControl,
+      hostStaleControlTrace,
     ),
   ];
   const generatedSummary = normalizeLocalNextActionGeneratedSummary(nextAction);
@@ -4027,179 +3986,47 @@ function normalizeRealHostedEvidenceInputs(inputs) {
 }
 
 function normalizeNextActionReplacementRaceReloadTrace(replacementRaceReloadTrace) {
-  if (
-    replacementRaceReloadTrace === null ||
-    typeof replacementRaceReloadTrace !== "object" ||
-    replacementRaceReloadTrace.strategy !== "replacement-race-reload-before-readiness" ||
-    !Array.isArray(replacementRaceReloadTrace.cells)
-  ) {
-    return Object.freeze({
-      strategy: "unknown",
-      status: "unknown",
-      source: "",
-      requiredCellCount: 0,
-      coveredCellCount: 0,
-      gapCount: 0,
-      cells: Object.freeze([]),
-    });
-  }
-  const cells = replacementRaceReloadTrace.cells
-    .filter((cell) => cell !== null && typeof cell === "object")
-    .map((cell) =>
-      Object.freeze({
-        id: String(cell.id ?? "unknown"),
-        raceLaneId: String(cell.raceLaneId ?? ""),
-        reloadLaneId:
-          typeof cell.reloadLaneId === "string" ? cell.reloadLaneId : null,
-        reloadStatus: String(cell.reloadStatus ?? "unknown"),
-        covered: cell.covered === true,
-      }),
-    );
-  return Object.freeze({
-    strategy: replacementRaceReloadTrace.strategy,
-    status: String(replacementRaceReloadTrace.status ?? "unknown"),
-    source: String(replacementRaceReloadTrace.source ?? ""),
-    requiredCellCount: Number(
-      replacementRaceReloadTrace.requiredCellCount ?? cells.length,
-    ),
-    coveredCellCount: Number(replacementRaceReloadTrace.coveredCellCount ?? 0),
-    gapCount: Number(replacementRaceReloadTrace.gapCount ?? 0),
-    cells: Object.freeze(cells),
-  });
+  return normalizeNextActionRaceReloadTrace(
+    recoveryTraceKeys.replacementRaceReload,
+    replacementRaceReloadTrace,
+  );
 }
 
 function normalizeNextActionHostConcurrentRaceReloadTrace(hostConcurrentRaceReloadTrace) {
-  if (
-    hostConcurrentRaceReloadTrace === null ||
-    typeof hostConcurrentRaceReloadTrace !== "object" ||
-    hostConcurrentRaceReloadTrace.strategy !==
-      "host-concurrent-race-reload-before-readiness" ||
-    !Array.isArray(hostConcurrentRaceReloadTrace.cells)
-  ) {
-    return Object.freeze({
-      strategy: "unknown",
-      status: "unknown",
-      source: "",
-      requiredCellCount: 0,
-      coveredCellCount: 0,
-      gapCount: 0,
-      cells: Object.freeze([]),
-    });
-  }
-  const cells = hostConcurrentRaceReloadTrace.cells
-    .filter((cell) => cell !== null && typeof cell === "object")
-    .map((cell) =>
-      Object.freeze({
-        id: String(cell.id ?? "unknown"),
-        raceLaneId: String(cell.raceLaneId ?? ""),
-        reloadLaneId:
-          typeof cell.reloadLaneId === "string" ? cell.reloadLaneId : null,
-        reloadStatus: String(cell.reloadStatus ?? "unknown"),
-        covered: cell.covered === true,
-      }),
-    );
-  return Object.freeze({
-    strategy: hostConcurrentRaceReloadTrace.strategy,
-    status: String(hostConcurrentRaceReloadTrace.status ?? "unknown"),
-    source: String(hostConcurrentRaceReloadTrace.source ?? ""),
-    requiredCellCount: Number(
-      hostConcurrentRaceReloadTrace.requiredCellCount ?? cells.length,
-    ),
-    coveredCellCount: Number(hostConcurrentRaceReloadTrace.coveredCellCount ?? 0),
-    gapCount: Number(hostConcurrentRaceReloadTrace.gapCount ?? 0),
-    cells: Object.freeze(cells),
-  });
+  return normalizeNextActionRaceReloadTrace(
+    recoveryTraceKeys.hostConcurrentRaceReload,
+    hostConcurrentRaceReloadTrace,
+  );
 }
 
 function normalizeNextActionPlayerConcurrentActionReloadTrace(
   playerConcurrentActionReloadTrace,
 ) {
-  if (
-    playerConcurrentActionReloadTrace === null ||
-    typeof playerConcurrentActionReloadTrace !== "object" ||
-    playerConcurrentActionReloadTrace.strategy !==
-      "player-concurrent-action-reload-before-readiness" ||
-    !Array.isArray(playerConcurrentActionReloadTrace.cells)
-  ) {
-    return Object.freeze({
-      strategy: "unknown",
-      status: "unknown",
-      source: "",
-      requiredCellCount: 0,
-      coveredCellCount: 0,
-      gapCount: 0,
-      cells: Object.freeze([]),
-    });
-  }
-  const cells = playerConcurrentActionReloadTrace.cells
-    .filter((cell) => cell !== null && typeof cell === "object")
-    .map((cell) =>
-      Object.freeze({
-        id: String(cell.id ?? "unknown"),
-        raceLaneId: String(cell.raceLaneId ?? ""),
-        reloadLaneId:
-          typeof cell.reloadLaneId === "string" ? cell.reloadLaneId : null,
-        reloadStatus: String(cell.reloadStatus ?? "unknown"),
-        covered: cell.covered === true,
-      }),
-    );
-  return Object.freeze({
-    strategy: playerConcurrentActionReloadTrace.strategy,
-    status: String(playerConcurrentActionReloadTrace.status ?? "unknown"),
-    source: String(playerConcurrentActionReloadTrace.source ?? ""),
-    requiredCellCount: Number(
-      playerConcurrentActionReloadTrace.requiredCellCount ?? cells.length,
-    ),
-    coveredCellCount: Number(
-      playerConcurrentActionReloadTrace.coveredCellCount ?? 0,
-    ),
-    gapCount: Number(playerConcurrentActionReloadTrace.gapCount ?? 0),
-    cells: Object.freeze(cells),
-  });
+  return normalizeNextActionRaceReloadTrace(
+    recoveryTraceKeys.playerConcurrentActionReload,
+    playerConcurrentActionReloadTrace,
+  );
 }
 
 function normalizeNextActionCohostDeadlineRaceReloadTrace(
   cohostDeadlineRaceReloadTrace,
 ) {
-  if (
-    cohostDeadlineRaceReloadTrace === null ||
-    typeof cohostDeadlineRaceReloadTrace !== "object" ||
-    cohostDeadlineRaceReloadTrace.strategy !==
-      "cohost-deadline-race-reload-before-readiness" ||
-    !Array.isArray(cohostDeadlineRaceReloadTrace.cells)
-  ) {
-    return Object.freeze({
-      strategy: "unknown",
-      status: "unknown",
-      source: "",
-      requiredCellCount: 0,
-      coveredCellCount: 0,
-      gapCount: 0,
-      cells: Object.freeze([]),
-    });
-  }
-  const cells = cohostDeadlineRaceReloadTrace.cells
-    .filter((cell) => cell !== null && typeof cell === "object")
-    .map((cell) =>
-      Object.freeze({
-        id: String(cell.id ?? "unknown"),
-        raceLaneId: String(cell.raceLaneId ?? ""),
-        reloadLaneId:
-          typeof cell.reloadLaneId === "string" ? cell.reloadLaneId : null,
-        reloadStatus: String(cell.reloadStatus ?? "unknown"),
-        covered: cell.covered === true,
-      }),
-    );
+  return normalizeNextActionRaceReloadTrace(
+    recoveryTraceKeys.cohostDeadlineRaceReload,
+    cohostDeadlineRaceReloadTrace,
+  );
+}
+
+function normalizeNextActionRaceReloadTrace(key, trace) {
+  const normalized = normalizeRecoveryTrace(key, trace);
   return Object.freeze({
-    strategy: cohostDeadlineRaceReloadTrace.strategy,
-    status: String(cohostDeadlineRaceReloadTrace.status ?? "unknown"),
-    source: String(cohostDeadlineRaceReloadTrace.source ?? ""),
-    requiredCellCount: Number(
-      cohostDeadlineRaceReloadTrace.requiredCellCount ?? cells.length,
-    ),
-    coveredCellCount: Number(cohostDeadlineRaceReloadTrace.coveredCellCount ?? 0),
-    gapCount: Number(cohostDeadlineRaceReloadTrace.gapCount ?? 0),
-    cells: Object.freeze(cells),
+    strategy: normalized.strategy,
+    status: normalized.status,
+    source: normalized.source,
+    requiredCellCount: normalized.requiredCellCount,
+    coveredCellCount: normalized.coveredCellCount,
+    gapCount: normalized.gapCount,
+    cells: normalized.cells,
   });
 }
 
@@ -4254,100 +4081,25 @@ function normalizeNextActionRaceCoveragePromotedMilestones(promotedMilestones) {
 }
 
 function normalizeNextActionStaleConflictMessageTrace(staleConflictMessageTrace) {
-  if (
-    staleConflictMessageTrace === null ||
-    typeof staleConflictMessageTrace !== "object" ||
-    staleConflictMessageTrace.strategy !== "stale-conflict-message-before-readiness" ||
-    !Array.isArray(staleConflictMessageTrace.laneIds)
-  ) {
-    return Object.freeze({
-      strategy: "unknown",
-      status: "unknown",
-      source: "",
-      requiredLaneCount: 0,
-      coveredLaneCount: 0,
-      gapCount: 0,
-      laneIds: Object.freeze([]),
-      surfaceCoverage: Object.freeze({
-        status: "unknown",
-        requiredSurfaceCount: 0,
-        coveredSurfaceCount: 0,
-        gapCount: 0,
-      }),
-      surfaces: Object.freeze([]),
-    });
-  }
-  return Object.freeze({
-    strategy: staleConflictMessageTrace.strategy,
-    status: String(staleConflictMessageTrace.status ?? "unknown"),
-    source: String(staleConflictMessageTrace.source ?? ""),
-    requiredLaneCount: Number(staleConflictMessageTrace.requiredLaneCount ?? 0),
-    coveredLaneCount: Number(staleConflictMessageTrace.coveredLaneCount ?? 0),
-    gapCount: Number(staleConflictMessageTrace.gapCount ?? 0),
-    laneIds: Object.freeze(
-      staleConflictMessageTrace.laneIds.map((laneId) => String(laneId)),
-    ),
-    surfaceCoverage: Object.freeze({
-      status: String(
-        staleConflictMessageTrace.surfaceCoverage?.status ?? "unknown",
-      ),
-      requiredSurfaceCount: Number(
-        staleConflictMessageTrace.surfaceCoverage?.requiredSurfaceCount ?? 0,
-      ),
-      coveredSurfaceCount: Number(
-        staleConflictMessageTrace.surfaceCoverage?.coveredSurfaceCount ?? 0,
-      ),
-      gapCount: Number(staleConflictMessageTrace.surfaceCoverage?.gapCount ?? 0),
-    }),
-    surfaces: Object.freeze(
-      (Array.isArray(staleConflictMessageTrace.surfaces)
-        ? staleConflictMessageTrace.surfaces
-        : []
-      ).map((surface) =>
-        Object.freeze({
-          id: String(surface.id ?? ""),
-          checkId: String(surface.checkId ?? ""),
-          label: String(surface.label ?? surface.id ?? ""),
-          status: String(surface.status ?? "unknown"),
-          laneId: String(surface.laneId ?? ""),
-          roleUrl: String(surface.roleUrl ?? ""),
-          rejectError: String(surface.rejectError ?? ""),
-          rejectMessage: String(surface.rejectMessage ?? ""),
-          receiptStatusText: String(surface.receiptStatusText ?? ""),
-          proofBoundary: String(surface.proofBoundary ?? ""),
-        }),
-      ),
-    ),
-  });
+  return normalizeRecoveryTrace(
+    recoveryTraceKeys.staleConflictMessage,
+    staleConflictMessageTrace,
+  );
 }
 
 function normalizeNextActionHostStaleControlTrace(hostStaleControlTrace) {
-  if (
-    hostStaleControlTrace === null ||
-    typeof hostStaleControlTrace !== "object" ||
-    hostStaleControlTrace.strategy !== "host-stale-control-before-readiness" ||
-    !Array.isArray(hostStaleControlTrace.laneIds)
-  ) {
-    return Object.freeze({
-      strategy: "unknown",
-      status: "unknown",
-      source: "",
-      requiredLaneCount: 0,
-      coveredLaneCount: 0,
-      gapCount: 0,
-      laneIds: Object.freeze([]),
-    });
-  }
+  const normalized = normalizeRecoveryTrace(
+    recoveryTraceKeys.hostStaleControl,
+    hostStaleControlTrace,
+  );
   return Object.freeze({
-    strategy: hostStaleControlTrace.strategy,
-    status: String(hostStaleControlTrace.status ?? "unknown"),
-    source: String(hostStaleControlTrace.source ?? ""),
-    requiredLaneCount: Number(hostStaleControlTrace.requiredLaneCount ?? 0),
-    coveredLaneCount: Number(hostStaleControlTrace.coveredLaneCount ?? 0),
-    gapCount: Number(hostStaleControlTrace.gapCount ?? 0),
-    laneIds: Object.freeze(
-      hostStaleControlTrace.laneIds.map((laneId) => String(laneId)),
-    ),
+    strategy: normalized.strategy,
+    status: normalized.status,
+    source: normalized.source,
+    requiredLaneCount: normalized.requiredLaneCount,
+    coveredLaneCount: normalized.coveredLaneCount,
+    gapCount: normalized.gapCount,
+    laneIds: normalized.laneIds,
   });
 }
 
