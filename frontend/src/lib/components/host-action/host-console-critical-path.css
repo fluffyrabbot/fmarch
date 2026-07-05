@@ -188,17 +188,8 @@ body {
   display: grid;
   gap: 16px;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  max-block-size: calc(
-    100svh - var(--fm-app-topbar-block-size) - var(--fm-app-sticky-rail-gap) -
-      env(safe-area-inset-top) - env(safe-area-inset-bottom)
-  );
-  overflow: auto;
-  overscroll-behavior: contain;
-  position: sticky;
-  top: calc(
-    var(--fm-app-topbar-block-size) + var(--fm-app-sticky-rail-gap) +
-      env(safe-area-inset-top)
-  );
+  overflow: visible;
+  position: static;
 }
 
 .host-console-critical-path__command-context {
@@ -534,9 +525,7 @@ body {
 
 @media (max-width: 1359px) {
   .host-console-critical-path__moderator-controls {
-    max-block-size: none;
-    overflow: visible;
-    position: static;
+    grid-template-columns: 1fr;
   }
 }
 

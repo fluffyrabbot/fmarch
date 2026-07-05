@@ -255,9 +255,9 @@ test("admin setup grid view model binds command status and confirmation metadata
 
   assert.equal(view.root.ariaLabel, "Game setup");
   assert.equal(ADMIN_SURFACE_CONTRACT.operatorRailClassName, "admin-surface__operator-actions");
-  assert.equal(ADMIN_SURFACE_CONTRACT.operatorRailMode, "sticky-tablet-admin-operator-rail");
-  assert.equal(ADMIN_SURFACE_CONTRACT.operatorRailStickyTopPx, 22);
-  assert.equal(ADMIN_SURFACE_CONTRACT.operatorRailUnstickBelowPx, 760);
+  assert.equal(ADMIN_SURFACE_CONTRACT.operatorRailMode, "flow-admin-operator-actions");
+  assert.equal(ADMIN_SURFACE_CONTRACT.operatorRailStickyTopPx, 0);
+  assert.equal(ADMIN_SURFACE_CONTRACT.operatorRailUnstickBelowPx, 0);
   assert.equal(view.root.data.thumbZone, "admin-setup-actions");
   assert.equal(view.root.data.actionTileStabilityMode, "reserved-status-floor");
   assert.equal(view.root.testId, "admin-setup-action-zone");

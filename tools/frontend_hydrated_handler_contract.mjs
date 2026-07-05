@@ -248,7 +248,7 @@ async function provePlayerHandlers() {
   assert.equal(postAck.visible.state, "ack");
   assert.deepEqual(voteAck.refreshed, [["votecount"]]);
   assert.deepEqual(voteReject.refreshed, []);
-  assert.deepEqual(postAck.refreshed, [["thread", "votecount"]]);
+  assert.deepEqual(postAck.refreshed, [["thread", "votecount", "dayVoteOutcomes"]]);
 
   return {
     component: "player-command-receipt",
@@ -381,7 +381,9 @@ async function proveModeratorHandlers() {
   assert.equal(reject.visible.state, "reject");
   assert.equal(slotLifecycle.visible.state, "ack");
   assert.deepEqual(ack.refreshed, [["hostPrompts"]]);
-  assert.deepEqual(reject.refreshed, []);
+  assert.deepEqual(reject.refreshed, [
+    ["host", "votecount", "dayVoteOutcomes", "hostPrompts"],
+  ]);
   assert.deepEqual(slotLifecycle.refreshed, []);
   assert.deepEqual(slotLifecycle.requestCommand.SetSlotStatus, {
     game: "midsummer",

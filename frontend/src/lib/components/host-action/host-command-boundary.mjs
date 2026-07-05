@@ -261,7 +261,10 @@ function rejectMessage(reject, retryable, { requestEnvelope } = {}) {
   ) {
     return `${base}; host prompt selection is stale, refresh the host console and use current prompt controls`;
   }
-  return retryable ? `${base}; reload and retry` : base;
+  if (!retryable || /\breload and retry\b/i.test(base)) {
+    return base;
+  }
+  return `${base}; reload and retry`;
 }
 
 export function buildHostConsoleStateEndpoint({

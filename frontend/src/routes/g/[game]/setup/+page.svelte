@@ -156,7 +156,23 @@
       );
     }
   }
-</script>
+
+  function slotSetupStatus(slot) {
+    const hasOccupant =
+      typeof slot.occupantUserId === "string" && slot.occupantUserId.trim() !== "";
+    const hasRole = typeof slot.roleKey === "string" && slot.roleKey.trim() !== "";
+    if (hasOccupant && hasRole) {
+      return { state: "ready", label: "ready" };
+    }
+    if (!hasOccupant && !hasRole) {
+      return { state: "blocked", label: "needs occupant + role" };
+    }
+    if (!hasOccupant) {
+      return { state: "blocked", label: "needs occupant" };
+    }
+    return { state: "blocked", label: "needs role" };
+  }
+  </script>
 
 <svelte:head>
   <title>{data.game.label} setup</title>
@@ -187,11 +203,12 @@
       </a>
     </section>
 
-    <section class="host-setup__band" aria-label="Roster">
+    <section class="host-setup__band" aria-label="Slot setup">
       <header class="host-setup__section-header">
         <div>
           <p class="fm-eyebrow">Roster</p>
-          <h2>Slots and occupants</h2>
+          <h2>Slots and roles</h2>
+          <p>{roleKeys.length} known role keys</p>
         </div>
         <form
           class="host-setup__inline-form"
@@ -206,14 +223,28 @@
       </header>
 
       <div class="host-setup__table" data-testid="host-setup-roster">
+        <div class="host-setup__slot-workbench" data-testid="host-setup-roles">
         {#each setupState.slots as slot}
-          <article class="host-setup__row" data-testid={`host-setup-slot-${slot.slotId}`}>
-            <div>
-              <strong>{slot.slotId}</strong>
-              <span>{slot.occupantUserId ?? "Unoccupied"}</span>
+          <article
+            class="host-setup__slot-card"
+            data-state={slotSetupStatus(slot).state}
+            data-testid={`host-setup-slot-${slot.slotId}`}
+          >
+            <div class="host-setup__slot-summary">
+              <div>
+                <p class="fm-eyebrow">Slot</p>
+                <h3>{slot.slotId}</h3>
+              </div>
+              <span
+                class="host-setup__slot-state"
+                data-state={slotSetupStatus(slot).state}
+              >
+                {slotSetupStatus(slot).label}
+              </span>
             </div>
+
             <form
-              class="host-setup__inline-form"
+              class="host-setup__slot-form"
               on:submit={(event) => handleSetupSubmit(event, "assign-slot")}
             >
               <input type="hidden" name="slotId" value={slot.slotId} />
@@ -229,8 +260,38 @@
                 Assign
               </button>
             </form>
+
+            <div
+              class="host-setup__role-cell"
+              data-testid={`host-setup-role-${slot.slotId}`}
+            >
+              <div>
+                <p class="fm-eyebrow">Current role</p>
+                <strong>{slot.roleKey ?? "No role assigned"}</strong>
+              </div>
+              <form
+                class="host-setup__slot-form"
+                on:submit={(event) => handleSetupSubmit(event, "assign-role")}
+              >
+                <input type="hidden" name="slotId" value={slot.slotId} />
+                <label>
+                  <span>Role</span>
+                  <select name="roleKey">
+                    {#each roleKeys as roleKey}
+                      <option value={roleKey} selected={slot.roleKey === roleKey}>
+                        {roleKey}
+                      </option>
+                    {/each}
+                  </select>
+                </label>
+                <button class="fm-touch-button fm-touch-button--secondary" type="submit">
+                  Assign role
+                </button>
+              </form>
+            </div>
           </article>
         {/each}
+        </div>
       </div>
       {#if commandStatuses["add-slot"]}
         <AppStatus status={commandStatuses["add-slot"]} testId="host-setup-add-slot-status" />
@@ -238,45 +299,6 @@
       {#if commandStatuses["assign-slot"]}
         <AppStatus status={commandStatuses["assign-slot"]} testId="host-setup-assign-slot-status" />
       {/if}
-    </section>
-
-    <section class="host-setup__band" aria-label="Roles">
-      <header class="host-setup__section-header">
-        <div>
-          <p class="fm-eyebrow">Roles</p>
-          <h2>Pack role assignment</h2>
-        </div>
-        <p>{roleKeys.length} known role keys</p>
-      </header>
-      <div class="host-setup__table" data-testid="host-setup-roles">
-        {#each setupState.slots as slot}
-          <article class="host-setup__row" data-testid={`host-setup-role-${slot.slotId}`}>
-            <div>
-              <strong>{slot.slotId}</strong>
-              <span>{slot.roleKey ?? "No role assigned"}</span>
-            </div>
-            <form
-              class="host-setup__inline-form"
-              on:submit={(event) => handleSetupSubmit(event, "assign-role")}
-            >
-              <input type="hidden" name="slotId" value={slot.slotId} />
-              <label>
-                <span>Role</span>
-                <select name="roleKey">
-                  {#each roleKeys as roleKey}
-                    <option value={roleKey} selected={slot.roleKey === roleKey}>
-                      {roleKey}
-                    </option>
-                  {/each}
-                </select>
-              </label>
-              <button class="fm-touch-button fm-touch-button--secondary" type="submit">
-                Assign role
-              </button>
-            </form>
-          </article>
-        {/each}
-      </div>
       {#if commandStatuses["assign-role"]}
         <AppStatus status={commandStatuses["assign-role"]} testId="host-setup-assign-role-status" />
       {/if}
@@ -449,8 +471,8 @@
   }
 
   .host-setup__section-header,
-  .host-setup__row,
   .host-setup__inline-form,
+  .host-setup__slot-form,
   .host-setup__invite,
   .host-setup__confirm {
     align-items: end;
@@ -459,18 +481,18 @@
     gap: 12px;
   }
 
-  .host-setup__section-header,
-  .host-setup__row {
+  .host-setup__section-header {
     justify-content: space-between;
   }
 
   .host-setup__table,
-  .host-setup__invite-list {
+  .host-setup__invite-list,
+  .host-setup__slot-workbench {
     display: grid;
     gap: 10px;
   }
 
-  .host-setup__row,
+  .host-setup__slot-card,
   .host-setup__invite {
     background: #ffffff;
     border: 1px solid #d6ddd1;
@@ -479,13 +501,64 @@
     padding: 12px;
   }
 
-  .host-setup__row > div,
+  .host-setup__slot-card {
+    align-items: stretch;
+    display: grid;
+    gap: 12px;
+    grid-template-columns: minmax(160px, 0.55fr) minmax(260px, 0.8fr) minmax(320px, 1fr);
+  }
+
+  .host-setup__slot-card[data-state="blocked"] {
+    border-color: #d7b9a3;
+  }
+
+  .host-setup__slot-summary,
+  .host-setup__role-cell {
+    align-items: center;
+    display: grid;
+    gap: 10px;
+    grid-template-columns: minmax(0, 1fr) auto;
+    min-inline-size: 0;
+  }
+
+  .host-setup__slot-summary h3,
+  .host-setup__role-cell strong {
+    margin: 0;
+    overflow-wrap: anywhere;
+  }
+
+  .host-setup__slot-state {
+    align-items: center;
+    border: 1px solid #b9c5bf;
+    border-radius: 8px;
+    display: inline-flex;
+    font-size: 13px;
+    font-weight: 800;
+    min-block-size: 36px;
+    padding-inline: 10px;
+    text-align: center;
+  }
+
+  .host-setup__slot-state[data-state="ready"] {
+    background: #e7f3ec;
+    border-color: #648875;
+    color: #183b2a;
+  }
+
+  .host-setup__slot-state[data-state="blocked"] {
+    background: #fff4ed;
+    border-color: #c68664;
+    color: #7a2f1f;
+  }
+
+  .host-setup__slot-form {
+    min-inline-size: 0;
+  }
+
   .host-setup__invite-list {
     min-inline-size: min(100%, 260px);
   }
 
-  .host-setup__row strong,
-  .host-setup__row span,
   .host-setup__invite span,
   .host-setup__invite-status,
   .host-setup__confirm span {
@@ -495,6 +568,7 @@
   .host-setup label {
     display: grid;
     gap: 4px;
+    min-inline-size: 0;
   }
 
   .host-setup input,
@@ -540,7 +614,13 @@
 
   @media (max-width: 820px) {
     .host-setup__identity,
-    .host-setup__two-column {
+    .host-setup__two-column,
+    .host-setup__slot-card {
+      grid-template-columns: 1fr;
+    }
+
+    .host-setup__slot-summary,
+    .host-setup__role-cell {
       grid-template-columns: 1fr;
     }
   }

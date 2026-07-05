@@ -99,13 +99,13 @@ assert.equal(artifacts.tabletInteraction.thumbZones.admin.zones.length, 2);
 assert.equal(artifacts.tabletInteraction.thumbZones.player.zones.length, 1);
 assert.equal(
   artifacts.tabletInteraction.thumbZones.moderator.zones[0].descendantCount,
-  10,
+  9,
 );
 assert.equal(artifacts.routeLive.status, "passed");
 assert.equal(artifacts.routeLive.proof, "frontend-route-live-contract");
 assert.equal(artifacts.hostConfirmations.status, "passed");
 assert.equal(artifacts.hostConfirmations.proof, "host-confirmation-static-dom-contract");
-assert.equal(artifacts.hostConfirmations.actionCount, 10);
+assert.equal(artifacts.hostConfirmations.actionCount, 9);
 assert.equal(artifacts.routeLive.sources.player.onMountConnects, true);
 assert.equal(artifacts.routeLive.sources.moderator.onMountConnects, true);
 assert.equal(artifacts.routeLive.runtime.player.finalStatus.state, "recovered");
@@ -193,7 +193,7 @@ const summary = {
     noBindInteractionRequires: [
       "noBindInteractions.status == passed",
       "noBindInteractions.viewports is nonempty",
-      "noBindInteractions.interactions includes admin cohost, admin session-grant, admin recovery-gate, player vote, player post, player private-channel post, and all 10 moderator critical host confirmations",
+      "noBindInteractions.interactions includes admin cohost, admin session-grant, admin recovery-gate, player vote, player post, player private-channel post, and all 9 moderator critical host confirmations",
       "all noBindInteractions entries include clicked target, activeElement, and targetBox",
     ],
     staticFocusabilityRequires: [
@@ -234,7 +234,7 @@ const summary = {
     inAppBrowserFixtureRequires: [
       "inAppBrowserPage.status == page-generated",
       "inAppBrowserPage.surfaces includes board-player, admin, player, and moderator",
-      "inAppBrowserPage.scenarios includes admin cohost, admin session-grant, admin recovery-gate, player vote, player post, player private-channel post, and all 10 moderator critical host confirmations",
+      "inAppBrowserPage.scenarios includes admin cohost, admin session-grant, admin recovery-gate, player vote, player post, player private-channel post, and all 9 moderator critical host confirmations",
       "inAppBrowserPage.hydratedSurfaceScenarios includes shared shell, admin audit, admin operational forms, player private disclosure/vote/post, moderator host-prompt, and moderator slot-lifecycle controls",
       "inAppBrowserStaticDom.status == passed",
       "inAppBrowserStaticDom.scenarios includes every fixture command target with role-pm route evidence",
@@ -244,7 +244,7 @@ const summary = {
       "inAppBrowserRun.status == passed",
       "inAppBrowserRun.runs includes every proof viewport",
       "all inAppBrowserRun entries include clicked target, activeElement, targetBox, and screenshotPixels",
-      "all 10 moderator critical host confirmation run entries include alertdialog focus metadata and object/outcome text",
+      "all 9 moderator critical host confirmation run entries include alertdialog focus metadata and object/outcome text",
       "player private-channel run entries include active role-pm route evidence",
       "player private disclosure toggles from aria-expanded=false to aria-expanded=true",
     ],
@@ -253,13 +253,13 @@ const summary = {
       "inAppBrowserLocalhostRun.pageUrl is a localhost URL",
       "inAppBrowserLocalhostRun.runs includes every proof viewport",
       "all inAppBrowserLocalhostRun entries include clicked target, activeElement, targetBox, and screenshotPixels",
-      "all 10 moderator critical host confirmation run entries include alertdialog focus metadata and object/outcome text",
+      "all 9 moderator critical host confirmation run entries include alertdialog focus metadata and object/outcome text",
     ],
     inAppBrowserImportedRunRequires: [
       "inAppBrowserImportedRun.status == imported-passed",
       "inAppBrowserImportedRun.validated.runCount covers every proof viewport",
-      "inAppBrowserImportedRun.validated.plannedInteractionCount covers all 22 fixture interactions",
-      "inAppBrowserImportedRun.validated.moderatorCriticalConfirmationCount is 10",
+      "inAppBrowserImportedRun.validated.plannedInteractionCount covers all 21 fixture interactions",
+      "inAppBrowserImportedRun.validated.moderatorCriticalConfirmationCount is 9",
       "inAppBrowserImportedRun.validated.screenshotChecks re-read nonblank PNG evidence",
     ],
     importedRoleSmokeRequires: [
@@ -855,7 +855,7 @@ function inAppBrowserStaticDomEvidenceComplete(inAppBrowserStaticDom) {
   if (
     inAppBrowserStaticDom.status !== "passed" ||
     inAppBrowserStaticDom.proof !== "in-app-browser-static-dom-contract" ||
-    inAppBrowserStaticDom.scenarioCount < 17 ||
+    inAppBrowserStaticDom.scenarioCount < 16 ||
     inAppBrowserStaticDom.hydratedScenarioCount < 6
   ) {
     return false;
@@ -1036,9 +1036,8 @@ function moderatorCriticalConfirmationScenarioIds() {
   return [
     "moderator-extend_deadline-confirm-click",
     "moderator-process_replacement-confirm-click",
+    "moderator-resolve_phase-confirm-click",
     "moderator-lock_thread-confirm-click",
-    "moderator-unlock_thread-confirm-click",
-    "moderator-advance_phase-confirm-click",
     "moderator-publish_votecount-confirm-click",
     "moderator-mark_dead-confirm-click",
     "moderator-modkill_slot-confirm-click",
@@ -1318,8 +1317,8 @@ function expectedThumbZoneCounts() {
         ["admin-recovery-action-zone", 1],
       ],
     },
-    { role: "player", zones: [["player-primary-action-zone", 3]] },
-    { role: "moderator", zones: [["moderator-primary-action-zone", 10]] },
+    { role: "player", zones: [["player-primary-action-zone", 4]] },
+    { role: "moderator", zones: [["moderator-primary-action-zone", 9]] },
   ];
 }
 
@@ -1378,9 +1377,8 @@ function noBindInteractionScenarioIds() {
     moderator: [
       "moderator-extend_deadline-confirm-click",
       "moderator-process_replacement-confirm-click",
+      "moderator-resolve_phase-confirm-click",
       "moderator-lock_thread-confirm-click",
-      "moderator-unlock_thread-confirm-click",
-      "moderator-advance_phase-confirm-click",
       "moderator-publish_votecount-confirm-click",
       "moderator-mark_dead-confirm-click",
       "moderator-modkill_slot-confirm-click",

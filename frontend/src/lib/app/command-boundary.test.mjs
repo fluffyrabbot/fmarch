@@ -641,6 +641,35 @@ test("generic command sender normalizes ack and reject outcomes", async () => {
     retryableReject.message,
     "Reject StreamConflict: stream conflict (retryable); reload and retry",
   );
+
+  const retryableRejectWithGuidance = await sendCommand({
+    principalUserId: "player_mira",
+    command: buildPlayerCommand({
+      action: "withdraw_vote",
+      game: "00000000-0000-0000-0000-000000000001",
+      actorSlot: "slot-7",
+    }),
+    commandIdFactory: () => "44444444-4444-4444-8444-444444444445",
+    envelopeIdFactory: () => 14,
+    fetchImpl: async () =>
+      jsonResponse({
+        v: 1,
+        id: 14,
+        body: {
+          kind: "Reject",
+          body: {
+            error: "StreamConflict",
+            retryable: true,
+            message: "reload and retry",
+          },
+        },
+      }),
+  });
+  assert.equal(retryableRejectWithGuidance.retryable, true);
+  assert.equal(
+    retryableRejectWithGuidance.message,
+    "Reject StreamConflict: reload and retry",
+  );
 });
 
 function jsonResponse(body) {

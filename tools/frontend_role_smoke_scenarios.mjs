@@ -64,7 +64,7 @@ const adminReadinessTargets = scanStripTargets({
   states: {
     authority: "ack",
     setup: "pending",
-    audit: "ack",
+    audit: "pending",
     recovery: "pending",
   },
 });
@@ -256,8 +256,8 @@ export const roles = Object.freeze([
     statusRegions: hostOperationTargets.statusRegions,
     touchSelectors: [
       '[data-testid="critical-host-action-extend_deadline"] [data-testid="critical-host-action-trigger"]',
+      '[data-testid="critical-host-action-resolve_phase"] [data-testid="critical-host-action-trigger"]',
       '[data-testid="critical-host-action-lock_thread"] [data-testid="critical-host-action-trigger"]',
-      '[data-testid="critical-host-action-advance_phase"] [data-testid="critical-host-action-trigger"]',
       '[data-testid="critical-host-action-publish_votecount"] [data-testid="critical-host-action-trigger"]',
       '[data-testid="critical-host-action-modkill_slot"] [data-testid="critical-host-action-trigger"]',
       '[data-testid="critical-host-action-complete_game"] [data-testid="critical-host-action-trigger"]',
@@ -273,9 +273,8 @@ export const roles = Object.freeze([
         targetSelectors: Object.freeze([
           '[data-testid="critical-host-action-extend_deadline"] [data-testid="critical-host-action-trigger"]',
           '[data-testid="critical-host-action-process_replacement"] [data-testid="critical-host-action-trigger"]',
+          '[data-testid="critical-host-action-resolve_phase"] [data-testid="critical-host-action-trigger"]',
           '[data-testid="critical-host-action-lock_thread"] [data-testid="critical-host-action-trigger"]',
-          '[data-testid="critical-host-action-unlock_thread"] [data-testid="critical-host-action-trigger"]',
-          '[data-testid="critical-host-action-advance_phase"] [data-testid="critical-host-action-trigger"]',
           '[data-testid="critical-host-action-publish_votecount"] [data-testid="critical-host-action-trigger"]',
           '[data-testid="critical-host-action-mark_dead"] [data-testid="critical-host-action-trigger"]',
           '[data-testid="critical-host-action-modkill_slot"] [data-testid="critical-host-action-trigger"]',

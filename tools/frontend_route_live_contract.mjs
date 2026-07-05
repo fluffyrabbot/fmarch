@@ -138,7 +138,8 @@ function assertSourceOwnsLiveConnection(
   assert.match(source, new RegExp(`${eventRecorder}\\(`));
   assert.match(source, new RegExp(`${resyncTrigger}\\(`));
   assert.match(source, new RegExp(`window\\.${escapeRegExp(windowTrigger)}`));
-  assert.match(source, /return \(\) => connection\?\.close\(\)/);
+  assert.match(source, /return \(\) => \{/);
+  assert.match(source, /connection\?\.close\(\)/);
 }
 
 async function provePlayerLiveRuntime() {
@@ -184,10 +185,25 @@ async function provePlayerLiveRuntime() {
           },
         },
       ],
+      [data.coldLoad.dayVoteOutcomesEndpoint]: [],
       [data.coldLoad.notificationsEndpoint]: [
         { effect: "Commuted", phase_id: "N02", status: "Delivered" },
       ],
       [data.coldLoad.investigationResultsEndpoint]: [],
+      [data.coldLoad.commandStateEndpoint]: {
+        game: "midsummer",
+        actor_slot: "slot-7",
+        actor_alive: true,
+        actor_status: "alive",
+        phase: {
+          phase_id: "D02",
+          phase_kind: "Day",
+          phase_number: 2,
+          locked: false,
+        },
+        actions: [],
+        vote_targets: [],
+      },
     }),
     resyncKeys: playerResyncKeys(data),
     onEvent(message, snapshot) {
@@ -239,8 +255,10 @@ async function provePlayerLiveRuntime() {
   assert.deepEqual(playerResyncKeys(data), [
     "thread",
     "votecount",
+    "dayVoteOutcomes",
     "notifications",
     "investigationResults",
+    "commandState",
   ]);
 
   return {
@@ -295,6 +313,7 @@ async function proveModeratorLiveRuntime() {
           },
         },
       ],
+      [data.dayVoteOutcomesEndpoint]: [],
       [data.hostPromptEndpoint]: [],
     }),
     resyncKeys: hostProjectionResyncKeys(),
@@ -333,7 +352,12 @@ async function proveModeratorLiveRuntime() {
     ["open", "hello", "delta", "resync-required"],
   );
   assert.equal(windowRef.__fmarchHostLiveProjectionStatus.state, "recovered");
-  assert.deepEqual(hostProjectionResyncKeys(), ["host", "votecount", "hostPrompts"]);
+  assert.deepEqual(hostProjectionResyncKeys(), [
+    "host",
+    "votecount",
+    "dayVoteOutcomes",
+    "hostPrompts",
+  ]);
   assert.deepEqual(windowRef.__fmarchHostPromptsProjection, []);
 
   return {
@@ -354,7 +378,7 @@ async function readRouteSource(relativePath) {
 
 function responseMap(bodiesByUrl) {
   return async (url) => {
-    const body = bodiesByUrl[String(url)];
+    const body = bodiesByUrl[stripProjectionRefreshParam(url)];
     assert.notEqual(body, undefined, `unexpected refresh URL ${url}`);
     return {
       ok: true,
@@ -363,6 +387,12 @@ function responseMap(bodiesByUrl) {
       },
     };
   };
+}
+
+function stripProjectionRefreshParam(url) {
+  const parsed = new URL(String(url), "http://fmarch.local");
+  parsed.searchParams.delete("_fmarch_projection_refresh");
+  return `${parsed.pathname}${parsed.search}`;
 }
 
 function liveEnvelope(kind, body) {

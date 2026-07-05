@@ -6,9 +6,9 @@ import {
 export const ADMIN_SURFACE_CONTRACT = Object.freeze({
   minTouchTargetPx: 44,
   operatorRailClassName: "admin-surface__operator-actions",
-  operatorRailMode: "sticky-tablet-admin-operator-rail",
-  operatorRailStickyTopPx: 22,
-  operatorRailUnstickBelowPx: 760,
+  operatorRailMode: "flow-admin-operator-actions",
+  operatorRailStickyTopPx: 0,
+  operatorRailUnstickBelowPx: 0,
   setupThumbZone: "admin-setup-actions",
   setupThumbZoneTestId: "admin-setup-action-zone",
   recoveryThumbZone: "admin-recovery-actions",

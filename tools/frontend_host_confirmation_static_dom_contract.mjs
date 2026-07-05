@@ -44,9 +44,8 @@ assert.deepEqual(
   [
     "extend_deadline",
     "process_replacement",
+    "resolve_phase",
     "lock_thread",
-    "unlock_thread",
-    "advance_phase",
     "publish_votecount",
     "mark_dead",
     "modkill_slot",

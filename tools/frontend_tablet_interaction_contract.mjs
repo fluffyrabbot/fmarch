@@ -335,55 +335,26 @@ function assertPlayerCommandPanelBeforeReceipts(source) {
 
 function proveAdminOperatorSurfaceCss({ route, setupComponent, recoveryComponent }) {
   assert.match(route, /data-control-rail-mode=\{ADMIN_SURFACE_CONTRACT\.operatorRailMode\}/s);
-  assert.match(
-    route,
-    /data-sticky-top-px=\{ADMIN_SURFACE_CONTRACT\.operatorRailStickyTopPx\}/s,
-  );
-  assert.match(
-    route,
-    /data-unstick-below-px=\{ADMIN_SURFACE_CONTRACT\.operatorRailUnstickBelowPx\}/s,
-  );
   assertAdminActionTilesReserveStatusFloor(setupComponent, "admin setup");
   assertAdminActionTilesReserveStatusFloor(recoveryComponent, "admin recovery");
   assertAdminOperatorRailBeforeStatusReadouts(route);
   assert.match(
     route,
-    /\.admin-surface__operator-actions\s*\{[^}]*position:\s*sticky;/s,
+    /\.admin-surface__operator-actions\s*\{[^}]*position:\s*static;/s,
   );
   assert.match(
     route,
-    /\.admin-surface__operator-actions\s*\{[^}]*top:\s*calc\(\s*var\(--fm-app-topbar-block-size\) \+ var\(--fm-app-sticky-rail-gap\) \+\s*env\(safe-area-inset-top\)\s*\);/s,
-  );
-  assert.match(
-    route,
-    /\.admin-surface__operator-actions\s*\{[^}]*max-block-size:\s*calc\(\s*100svh - var\(--fm-app-topbar-block-size\) - var\(--fm-app-sticky-rail-gap\) -\s*env\(safe-area-inset-top\) - env\(safe-area-inset-bottom\)\s*\);/s,
-  );
-  assert.match(
-    route,
-    /\.admin-surface__operator-actions\s*\{[^}]*overflow:\s*auto;/s,
-  );
-  assert.match(
-    route,
-    /\.admin-surface__operator-actions\s*\{[^}]*overscroll-behavior:\s*contain;/s,
-  );
-  assert.match(route, /@media \(max-width:\s*760px\)/);
-  assert.match(
-    route,
-    /@media \(max-width:\s*760px\)\s*\{[\s\S]*?\.admin-surface__operator-actions\s*\{[^}]*position:\s*static;/s,
-  );
-  assert.match(
-    route,
-    /@media \(max-width:\s*760px\)\s*\{[\s\S]*?\.admin-surface__operator-actions\s*\{[^}]*overflow:\s*visible;/s,
+    /\.admin-surface__operator-actions\s*\{[^}]*overflow:\s*visible;/s,
   );
 
   return {
-    controlRailMode: "sticky-tablet-admin-operator-rail",
-    stickyTopPx: 22,
+    controlRailMode: "flow-admin-operator-actions",
+    stickyTopPx: 0,
     topbarOffsetPx: APP_SHELL_CONTRACT.topbarBlockSizePx,
-    safeAreaAware: true,
-    internalScroll: true,
-    overscroll: "contain",
-    unstickBelowPx: 760,
+    safeAreaAware: false,
+    internalScroll: false,
+    overscroll: "visible",
+    unstickBelowPx: 0,
     setupAndRecoveryBeforeStatusReadouts: true,
     actionTileStabilityMode: "reserved-status-floor",
     actionTileStatusFloorMinBlockSizePx: 44,
@@ -454,23 +425,11 @@ function proveModeratorControlSurfaceCss({ css, component, route }) {
   assertHostControlBeforeStatusReadouts(route);
   assert.match(
     css,
-    /\.host-console-critical-path__moderator-controls\s*\{[^}]*position:\s*sticky;/s,
+    /\.host-console-critical-path__moderator-controls\s*\{[^}]*position:\s*static;/s,
   );
   assert.match(
     css,
-    /\.host-console-critical-path__moderator-controls\s*\{[^}]*top:\s*calc\(\s*var\(--fm-app-topbar-block-size\) \+ var\(--fm-app-sticky-rail-gap\) \+\s*env\(safe-area-inset-top\)\s*\);/s,
-  );
-  assert.match(
-    css,
-    /\.host-console-critical-path__moderator-controls\s*\{[^}]*max-block-size:\s*calc\(\s*100svh - var\(--fm-app-topbar-block-size\) - var\(--fm-app-sticky-rail-gap\) -\s*env\(safe-area-inset-top\) - env\(safe-area-inset-bottom\)\s*\);/s,
-  );
-  assert.match(
-    css,
-    /\.host-console-critical-path__moderator-controls\s*\{[^}]*overflow:\s*auto;/s,
-  );
-  assert.match(
-    css,
-    /\.host-console-critical-path__moderator-controls\s*\{[^}]*overscroll-behavior:\s*contain;/s,
+    /\.host-console-critical-path__moderator-controls\s*\{[^}]*overflow:\s*visible;/s,
   );
   assert.match(
     css,
@@ -484,24 +443,14 @@ function proveModeratorControlSurfaceCss({ css, component, route }) {
     component,
     /data-status-floor-min-px=\{action\.statusFloorMinBlockSizePx\}/s,
   );
-  assert.match(css, /@media \(max-width:\s*760px\)/);
-  assert.match(
-    css,
-    /@media \(max-width:\s*760px\)\s*\{[\s\S]*?\.host-console-critical-path__moderator-controls\s*\{[^}]*position:\s*static;/s,
-  );
-  assert.match(
-    css,
-    /@media \(max-width:\s*760px\)\s*\{[\s\S]*?\.host-console-critical-path__moderator-controls\s*\{[^}]*overflow:\s*visible;/s,
-  );
-
   return {
-    controlRailMode: "sticky-tablet-host-control-rail",
-    stickyTopPx: 22,
+    controlRailMode: "flow-host-control-actions",
+    stickyTopPx: 0,
     topbarOffsetPx: APP_SHELL_CONTRACT.topbarBlockSizePx,
-    safeAreaAware: true,
-    internalScroll: true,
-    overscroll: "contain",
-    unstickBelowPx: 760,
+    safeAreaAware: false,
+    internalScroll: false,
+    overscroll: "visible",
+    unstickBelowPx: 0,
     primaryControlsBeforeStatusReadouts: true,
     actionTileStabilityMode: "reserved-status-floor",
     actionTileStatusFloorMinBlockSizePx: 44,
@@ -636,9 +585,8 @@ async function proveThumbZonePlacement(bundle) {
           requiredDescendants: [
             "critical-host-action-extend_deadline",
             "critical-host-action-process_replacement",
+            "critical-host-action-resolve_phase",
             "critical-host-action-lock_thread",
-            "critical-host-action-unlock_thread",
-            "critical-host-action-advance_phase",
             "critical-host-action-publish_votecount",
             "critical-host-action-mark_dead",
             "critical-host-action-modkill_slot",

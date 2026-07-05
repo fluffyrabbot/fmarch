@@ -15,9 +15,8 @@ const sources = {
 const moderatorCriticalConfirmationScenarioIds = Object.freeze([
   "moderator-extend_deadline-confirm-click",
   "moderator-process_replacement-confirm-click",
+  "moderator-resolve_phase-confirm-click",
   "moderator-lock_thread-confirm-click",
-  "moderator-unlock_thread-confirm-click",
-  "moderator-advance_phase-confirm-click",
   "moderator-publish_votecount-confirm-click",
   "moderator-mark_dead-confirm-click",
   "moderator-modkill_slot-confirm-click",
@@ -87,7 +86,7 @@ async function importedPassedEvidence() {
   const screenshotChecks = [];
   for (const run of browserRun.runs) {
     assert.equal(run.pageReady.status, "ready");
-    assert.equal(run.pageReady.scenarioCount >= 17, true);
+    assert.equal(run.pageReady.scenarioCount >= 16, true);
     assert.equal(run.pageReady.hydratedScenarioCount >= 6, true);
     assertImportedInteractions(run);
     assertImportedStabilityChecks(run);
@@ -98,7 +97,7 @@ async function importedPassedEvidence() {
     status: "imported-passed",
     proof: "in-app-browser-imported-run-contract",
     boundary:
-      "Validates a passed file-backed in-app browser browser-run artifact without launching Chromium. It rechecks the current fixture manifest, static DOM contract, planned interaction matrix, per-viewport click/focus/touch evidence, all 10 moderator critical host confirmation metadata records, player private-channel route/disclosure evidence, and referenced screenshot PNG pixels. It does not prove fixture freshness after the imported run, Svelte client hydration, command side effects, TCP transport, WebSocket delivery, dev-server routing, or localhost-backed app acceptance.",
+      "Validates a passed file-backed in-app browser browser-run artifact without launching Chromium. It rechecks the current fixture manifest, static DOM contract, planned interaction matrix, per-viewport click/focus/touch evidence, all 9 moderator critical host confirmation metadata records, player private-channel route/disclosure evidence, and referenced screenshot PNG pixels. It does not prove fixture freshness after the imported run, Svelte client hydration, command side effects, TCP transport, WebSocket delivery, dev-server routing, or localhost-backed app acceptance.",
     generatedFrom: {
       ...sources,
       sourceBrowserRun: relativeOrAbsolute(sourceBrowserRun),
@@ -283,7 +282,7 @@ function assertInAppBrowserPlannedStabilityChecks(plannedStabilityChecks) {
     plannedStabilityChecks.map((entry) => [entry.id, entry.mode, entry.tiles.length]),
     [
       ["admin-operator-action-status-floors", "reserved-status-floor", 4],
-      ["moderator-primary-action-status-floors", "reserved-status-floor", 10],
+      ["moderator-primary-action-status-floors", "reserved-status-floor", 9],
     ],
   );
 }

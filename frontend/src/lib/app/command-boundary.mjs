@@ -267,7 +267,10 @@ function rejectMessage(reject, retryable, { requestEnvelope } = {}) {
   if (reject.error === "NotYourSlot") {
     return `${base}; slot ownership changed, refresh and use current role surface`;
   }
-  return retryable ? `${base}; reload and retry` : base;
+  if (!retryable || /\breload and retry\b/i.test(base)) {
+    return base;
+  }
+  return `${base}; reload and retry`;
 }
 
 function requiredString(value, field) {

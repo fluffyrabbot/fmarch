@@ -43,6 +43,14 @@ import {
 import {
   exposePlayerCommandDispatchBridgePlan,
 } from "../frontend/src/routes/g/[game]/player-route-browser-bridge.mjs";
+import {
+  buildSetupCommandDispatchBridgePlan,
+  exposeSetupRouteWindowState,
+  recordSetupCommandStatus,
+  sendHostSetupCommand,
+  setupConfirmStatus,
+  setupPendingStatus,
+} from "../frontend/src/routes/g/[game]/setup/setup-route-controller.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const artifactDir = path.join(repoRoot, "target", "frontend-dispatch-bridge");
@@ -56,6 +64,7 @@ const evidence = {
     admin: await proveAdminDispatchBridge(),
     player: await provePlayerDispatchBridge(),
     moderator: await proveModeratorDispatchBridge(),
+    "host-setup": await proveHostSetupDispatchBridge(),
   },
   routeHandlerOwnership: await proveRouteHandlerOwnership(),
 };
@@ -176,12 +185,86 @@ async function proveRouteHandlerOwnership() {
       ],
       exposureKey: "__fmarchHostCommandDispatchBridgePlan",
     }),
+    await proveRouteSource({
+      role: "host-setup",
+      path: "frontend/src/routes/g/[game]/setup/+page.svelte",
+      requiredSnippets: [
+        "buildSetupCommandDispatchBridgePlan",
+        "exposeSetupRouteWindowState",
+        "confirmationStatus",
+        "optimisticStatus",
+      ],
+      exposureKey: "__fmarchHostSetupCommandDispatchBridgePlan",
+    }),
   ];
 
   return {
     boundary:
       "Static source ownership proof that each Svelte route handler calls its role-owned dispatch bridge helper and exposes the resulting plan for smoke evidence. This does not prove browser event delivery.",
     routes,
+  };
+}
+
+async function proveHostSetupDispatchBridge() {
+  const actionId = "start-game";
+  const data = hostSetupData();
+  const formData = setupFormData({ phase: "D01" });
+  const confirmationStatus = setupConfirmStatus(actionId, "Start midsummer at D01");
+  const optimisticStatus = setupPendingStatus();
+  let commandStatuses = recordSetupCommandStatus({}, actionId, optimisticStatus);
+  const sent = [];
+  const finalStatus = await sendHostSetupCommand({
+    actionId,
+    data,
+    formData,
+    fetchImpl: async () => {
+      throw new Error("host setup bridge proof should stay inside sendCommandImpl");
+    },
+    sendCommandImpl: async (request) => {
+      sent.push(request);
+      return {
+        state: "ack",
+        message: "Ack: stream seqs 82",
+      };
+    },
+  });
+  commandStatuses = recordSetupCommandStatus(commandStatuses, actionId, finalStatus);
+  const plan = buildSetupCommandDispatchBridgePlan({
+    actionId,
+    data,
+    formData,
+    confirmationStatus,
+    optimisticStatus,
+    finalStatus,
+  });
+  const windowRef = {};
+  assert.equal(
+    exposeSetupRouteWindowState({
+      windowRef,
+      commandStatuses,
+      setupState: data.setupState,
+      readiness: data.readiness,
+      outcome: finalStatus,
+      plan,
+    }),
+    true,
+  );
+
+  assert.equal(plan.role, "host-setup");
+  assert.equal(plan.commandKind, "StartGame");
+  assert.deepEqual(plan.projectionRefreshKeys, ["setupState"]);
+  assert.deepEqual(only(sent).command.StartGame, {
+    game: "midsummer",
+    phase: "D01",
+  });
+  assert.equal(commandStatuses[actionId].state, "ack");
+  assert.equal(windowRef.__fmarchHostSetupCommandDispatchBridgePlan, plan);
+
+  return {
+    ...plan,
+    exposureKey: "__fmarchHostSetupCommandDispatchBridgePlan",
+    statusKey: actionId,
+    ackStatus: commandStatuses[actionId],
   };
 }
 
@@ -235,7 +318,7 @@ async function provePlayerDispatchBridge() {
   assert.deepEqual(rejectPath.refreshed, []);
   assert.equal(rejectPath.finalReceipt.state, "reject");
   assert.equal(commandKind(postPath.request.command), "SubmitPost");
-  assert.deepEqual(postPath.refreshed, [["thread", "votecount"]]);
+  assert.deepEqual(postPath.refreshed, [["thread", "votecount", "dayVoteOutcomes"]]);
   assert.deepEqual(postPath.request.command.SubmitPost, {
     game: "midsummer",
     channel_id: "role-pm",
@@ -527,6 +610,47 @@ function moderatorData() {
     hostConsoleStateEndpoint: "/games/midsummer/host-console-state",
     hostVotecountEndpoint: "/games/midsummer/votecount",
     hostPromptEndpoint: "/games/midsummer/host-prompts",
+  };
+}
+
+function hostSetupData() {
+  return {
+    game: { id: "midsummer" },
+    session: { principalUserId: "host_h" },
+    commandEndpoint: "/commands",
+    setupStateEndpoint: "/games/midsummer/setup-state?principal_user_id=host_h",
+    start: { defaultPhase: "D01" },
+    setupState: {
+      game: "midsummer",
+      phase: null,
+      pack: {
+        key: "mafiascum",
+        name: "Mafiascum",
+        valid: true,
+        roleKeys: ["vanilla_townie", "mafia_goon"],
+        startPhaseOptions: ["D01"],
+      },
+      slots: [
+        {
+          slotId: "slot_1",
+          occupantUserId: "player_mira",
+          roleKey: "vanilla_townie",
+        },
+      ],
+      postPolicies: [{ channelId: "main", allowMediaOnly: true }],
+    },
+    readiness: {
+      summary: "Ready to start",
+      startAvailable: true,
+    },
+  };
+}
+
+function setupFormData(values) {
+  return {
+    get(field) {
+      return values[field] ?? null;
+    },
   };
 }
 

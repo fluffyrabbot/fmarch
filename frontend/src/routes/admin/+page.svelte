@@ -184,8 +184,6 @@
       class={ADMIN_SURFACE_CONTRACT.operatorRailClassName}
       aria-label="Admin operator actions"
       data-control-rail-mode={ADMIN_SURFACE_CONTRACT.operatorRailMode}
-      data-sticky-top-px={ADMIN_SURFACE_CONTRACT.operatorRailStickyTopPx}
-      data-unstick-below-px={ADMIN_SURFACE_CONTRACT.operatorRailUnstickBelowPx}
       data-testid="admin-operator-action-rail"
     >
       <AdminSetupGrid
@@ -231,17 +229,8 @@
     display: grid;
     gap: 18px;
     grid-template-columns: minmax(0, 1.45fr) minmax(260px, 0.55fr);
-    max-block-size: calc(
-      100svh - var(--fm-app-topbar-block-size) - var(--fm-app-sticky-rail-gap) -
-        env(safe-area-inset-top) - env(safe-area-inset-bottom)
-    );
-    overflow: auto;
-    overscroll-behavior: contain;
-    position: sticky;
-    top: calc(
-      var(--fm-app-topbar-block-size) + var(--fm-app-sticky-rail-gap) +
-        env(safe-area-inset-top)
-    );
+    overflow: visible;
+    position: static;
   }
 
   .admin-surface__audit-stack {
@@ -259,11 +248,4 @@
     }
   }
 
-  @media (max-width: 760px) {
-    .admin-surface__operator-actions {
-      max-block-size: none;
-      overflow: visible;
-      position: static;
-    }
-  }
 </style>

@@ -37,9 +37,9 @@ test("host control surface model binds moderator control bays to action status",
   assert.equal(view.root.ariaLabel, "Moderator controls");
   assert.equal(view.root.data.component, "host-control-surface");
   assert.equal(view.root.data.thumbZone, "moderator-primary-actions");
-  assert.equal(view.root.data.controlRailMode, "sticky-tablet-host-control-rail");
-  assert.equal(view.root.data.stickyTopPx, 22);
-  assert.equal(view.root.data.unstickBelowPx, 760);
+  assert.equal(view.root.data.controlRailMode, "flow-host-control-actions");
+  assert.equal(view.root.data.stickyTopPx, 0);
+  assert.equal(view.root.data.unstickBelowPx, 0);
   assert.equal(view.root.data.actionTileStabilityMode, "reserved-status-floor");
   assert.equal(view.root.data.gameId, "midsummer");
   assert.equal(view.root.data.principalUserId, "host_h");

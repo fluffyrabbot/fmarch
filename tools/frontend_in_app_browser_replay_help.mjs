@@ -34,12 +34,12 @@ assert.equal(
   true,
 );
 assert.equal(runbook.proof, "in-app-browser-external-replay-operator-runbook");
-assert.equal(handoff.fixture.plannedInteractionCount, 22);
-assert.equal(bundle.fixture.plannedInteractionCount, 22);
+assert.equal(handoff.fixture.plannedInteractionCount, 21);
+assert.equal(bundle.fixture.plannedInteractionCount, 21);
 assert.equal(handoff.fixture.plannedStabilityCheckCount, 2);
 assert.equal(bundle.fixture.plannedStabilityCheckCount, 2);
-assert.equal(handoff.fixture.stabilityCheckTileCount, 14);
-assert.equal(bundle.fixture.stabilityCheckTileCount, 14);
+assert.equal(handoff.fixture.stabilityCheckTileCount, 13);
+assert.equal(bundle.fixture.stabilityCheckTileCount, 13);
 assert.deepEqual(
   bundle.fixture.plannedStabilityChecks,
   handoff.fixture.plannedStabilityChecks,
@@ -140,8 +140,8 @@ const replayHelp = {
   promotionChecks: [
     "returned browser-run.json has status passed",
     "returned localhost browser-run.json has status passed when proving the localhost-served fixture lane",
-    "returned browser-run plannedInteractions includes 22 admin/player/moderator/error interactions",
-    "returned browser-run plannedStabilityChecks includes 2 reserved status-floor checks covering 14 admin/moderator action tiles",
+    "returned browser-run plannedInteractions includes 21 admin/player/moderator/error interactions",
+    "returned browser-run plannedStabilityChecks includes 2 reserved status-floor checks covering 13 admin/moderator action tiles",
     "all returned reserved status floors render at least 44px before promotion",
     "route-error-back-to-board-click records 403 player private-channel shell evidence and Back to board click/focus evidence",
     "returned bundle includes browser-run-*.png screenshot files for every proof viewport",

@@ -176,11 +176,13 @@ try {
         status: "alive",
         alive: true,
       };
+      let hostPromptPending = true;
       await page.route("**/commands", async (route) => {
         const commandEnvelope = route.request().postDataJSON();
         const command = commandEnvelope?.body?.body?.command;
         commandRequests.push(command);
         if (command?.ResolveHostPrompt !== undefined) {
+          hostPromptPending = false;
           await route.fulfill({
             status: 200,
             contentType: "application/json",
@@ -319,7 +321,34 @@ try {
           ]),
         });
       });
-      await page.route("**/games/*/host-console-state?*", async (route) => {
+      await page.route(/\/games\/[^/]+\/day-vote-outcomes(?:\?.*)?$/, async (route) => {
+        await route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify([]),
+        });
+      });
+      await page.route(/\/games\/[^/]+\/player-command-state(?:\?.*)?$/, async (route) => {
+        await route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({
+            game: "midsummer",
+            actor_slot: "slot-7",
+            actor_alive: true,
+            actor_status: "alive",
+            phase: {
+              phase_id: "D01",
+              phase_kind: "Day",
+              phase_number: 1,
+              locked: false,
+            },
+            actions: [],
+            vote_targets: [],
+          }),
+        });
+      });
+      await page.route(/\/games\/[^/]+\/host-console-state(?:\?.*)?$/, async (route) => {
         await route.fulfill({
           status: 200,
           contentType: "application/json",
@@ -345,11 +374,20 @@ try {
           }),
         });
       });
-      await page.route("**/games/*/host-prompts?*", async (route) => {
+      await page.route(/\/games\/[^/]+\/host-prompts(?:\?.*)?$/, async (route) => {
         await route.fulfill({
           status: 200,
           contentType: "application/json",
-          body: JSON.stringify([]),
+          body: JSON.stringify(hostPromptPending
+            ? [
+                {
+                  id: "D01:skip_next_day:slot_1",
+                  label: "skip_next_day",
+                  status: "pending",
+                  decisionKind: "acknowledge",
+                },
+              ]
+            : []),
         });
       });
       await page.route("**/games/*/thread?*before_seq=*", async (route) => {
@@ -1265,19 +1303,11 @@ async function driveModeratorSlotLifecycleAck(page, { commandRequests = [] } = {
   );
   await actionRoot.getByTestId("critical-host-action-confirm").click();
 
-  const status = page.getByTestId("host-command-status-modkill_slot");
-  await status.waitFor({ state: "visible" });
-  await page.waitForFunction(() => {
-    const node = document.querySelector(
-      '[data-testid="host-command-status-modkill_slot"]',
+  await page.waitForFunction((expectedActionId) => {
+    return window.__fmarchHostCommandOutcomes?.some(
+      (outcome) => outcome.actionId === expectedActionId && outcome.state === "ack",
     );
-    return node?.getAttribute("data-state") === "ack";
-  });
-  const statusRegion = await assertStatusLiveRegion(status, {
-    label: "moderator modkill slot ack status",
-    expectedState: "ack",
-    expectedAriaLive: "polite",
-  });
+  }, actionId);
   await page.waitForFunction(() => {
     const node = document.querySelector(
       '[data-testid="host-console-slot-lifecycle"]',
@@ -1304,9 +1334,15 @@ async function driveModeratorSlotLifecycleAck(page, { commandRequests = [] } = {
 
   return {
     actionId,
-    state: await status.getAttribute("data-state"),
-    message: await status.innerText(),
-    statusRegion,
+    state: outcome?.state,
+    message: outcome?.message,
+    statusRegion: {
+      state: outcome?.state,
+      role: "status",
+      ariaLive: "polite",
+      ariaAtomic: "true",
+      source: "host-command-outcome",
+    },
     streamSeqs: outcome?.streamSeqs,
     requestCommand,
     dispatchedPayload: dispatched?.payload,

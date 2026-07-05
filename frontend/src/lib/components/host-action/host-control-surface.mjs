@@ -4,9 +4,9 @@ export const HOST_CONTROL_SURFACE_CONTRACT = Object.freeze({
   thumbZoneTestId: "moderator-primary-action-zone",
   commandContextTestId: "moderator-command-context",
   controlRail: Object.freeze({
-    mode: "sticky-tablet-host-control-rail",
-    stickyTopPx: 22,
-    unstickBelowPx: 760,
+    mode: "flow-host-control-actions",
+    stickyTopPx: 0,
+    unstickBelowPx: 0,
   }),
   controlBayClassName: "host-console-critical-path__control-bay",
   actionBayClassName: "host-console-critical-path__action-bay",

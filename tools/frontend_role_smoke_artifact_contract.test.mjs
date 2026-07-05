@@ -154,9 +154,8 @@ const hostConfirmationStaticDomPath = path.join(
 const moderatorCriticalConfirmationActions = Object.freeze([
   ["extend_deadline", "extend_deadline"],
   ["process_replacement", "process_replacement"],
+  ["resolve_phase", "resolve_phase"],
   ["lock_thread", "lock_thread"],
-  ["unlock_thread", "unlock_thread"],
-  ["advance_phase", "advance_phase"],
   ["publish_votecount", "publish_votecount"],
   ["mark_dead", "mark_dead"],
   ["modkill_slot", "modkill_slot"],
@@ -188,13 +187,12 @@ const expectedPlannedStabilityChecks = Object.freeze([
     surfaceId: "moderator",
     mode: "reserved-status-floor",
     statusFloorMinBlockSizePx: 44,
-    tileCount: 10,
+    tileCount: 9,
     tileIds: [
       "moderator-extend_deadline",
       "moderator-process_replacement",
+      "moderator-resolve_phase",
       "moderator-lock_thread",
-      "moderator-unlock_thread",
-      "moderator-advance_phase",
       "moderator-publish_votecount",
       "moderator-mark_dead",
       "moderator-modkill_slot",
@@ -1644,6 +1642,7 @@ test("dispatch bridge artifact maps trace metadata into typed command lifecycles
     "admin",
     "player",
     "moderator",
+    "host-setup",
   ]);
   assert.deepEqual(dispatchBridge.rolePlans.admin, {
     role: "admin",
@@ -1695,7 +1694,7 @@ test("dispatch bridge artifact maps trace metadata into typed command lifecycles
   assert.equal(dispatchBridge.rolePlans.player.postPath.commandKind, "SubmitPost");
   assert.equal(dispatchBridge.rolePlans.player.postPath.finalReceipt.state, "ack");
   assert.deepEqual(dispatchBridge.rolePlans.player.postPath.refreshed, [
-    ["thread", "votecount"],
+    ["thread", "votecount", "dayVoteOutcomes"],
   ]);
   assert.equal(dispatchBridge.rolePlans.moderator.commandKind, "ResolveHostPrompt");
   assert.equal(
@@ -1713,6 +1712,11 @@ test("dispatch bridge artifact maps trace metadata into typed command lifecycles
   assert.equal(dispatchBridge.rolePlans.moderator.commandOutcomeCount, 1);
   assert.equal(dispatchBridge.rolePlans.moderator.ackStatus.state, "ack");
   assert.equal(dispatchBridge.rolePlans.moderator.rejectStatus.state, "reject");
+  assert.equal(dispatchBridge.rolePlans["host-setup"].role, "host-setup");
+  assert.equal(dispatchBridge.rolePlans["host-setup"].commandKind, "StartGame");
+  assert.deepEqual(dispatchBridge.rolePlans["host-setup"].projectionRefreshKeys, [
+    "setupState",
+  ]);
   assert.equal(
     dispatchBridge.rolePlans.moderator.slotLifecyclePath.commandKind,
     "SetSlotStatus",
@@ -1792,6 +1796,17 @@ test("dispatch bridge artifact maps trace metadata into typed command lifecycles
           "finalStatus: tracedOutcome",
         ],
         exposureKey: "__fmarchHostCommandDispatchBridgePlan",
+      },
+      {
+        role: "host-setup",
+        path: "frontend/src/routes/g/[game]/setup/+page.svelte",
+        requiredSnippets: [
+          "buildSetupCommandDispatchBridgePlan",
+          "exposeSetupRouteWindowState",
+          "confirmationStatus",
+          "optimisticStatus",
+        ],
+        exposureKey: "__fmarchHostSetupCommandDispatchBridgePlan",
       },
     ],
   });
@@ -1881,7 +1896,7 @@ test("hydrated handler artifact records DOM-facing command outcomes without loca
           testId: "player-command-receipt-submit_post",
           statusTestId: "player-command-status",
         },
-        ackRefreshKeys: ["thread", "votecount"],
+        ackRefreshKeys: ["thread", "votecount", "dayVoteOutcomes"],
         channelId: "role-pm",
       },
     },
@@ -1912,7 +1927,9 @@ test("hydrated handler artifact records DOM-facing command outcomes without loca
             "host-command-activity-status-resolve_host_prompt-D01-skip_next_day-slot_1",
         },
         ackRefreshKeys: ["hostPrompts"],
-        rejectRefreshKeys: [],
+        rejectRefreshKeys: [
+          ["host", "votecount", "dayVoteOutcomes", "hostPrompts"],
+        ],
       },
       slotLifecycle: {
         actionId: "modkill_slot",
@@ -2024,6 +2041,8 @@ test("hydrated surface artifact records route-backed surface adapters without lo
   assert.deepEqual(hydratedSurfaces.player.postCommand.refreshed, [
     "thread",
     "votecount",
+    "commandState",
+    "dayVoteOutcomes",
   ]);
   assert.deepEqual(hydratedSurfaces.player.privateDisclosure, {
     itemId: "notification-1",
@@ -2485,13 +2504,13 @@ test("tablet interaction artifact proves tap-first source posture", async () => 
     safeAreaAware: true,
   });
   assert.deepEqual(tabletInteraction.adminOperatorSurfaceCss, {
-    controlRailMode: "sticky-tablet-admin-operator-rail",
-    stickyTopPx: 22,
+    controlRailMode: "flow-admin-operator-actions",
+    stickyTopPx: 0,
     topbarOffsetPx: 76,
-    safeAreaAware: true,
-    internalScroll: true,
-    overscroll: "contain",
-    unstickBelowPx: 760,
+    safeAreaAware: false,
+    internalScroll: false,
+    overscroll: "visible",
+    unstickBelowPx: 0,
     setupAndRecoveryBeforeStatusReadouts: true,
     actionTileStabilityMode: "reserved-status-floor",
     actionTileStatusFloorMinBlockSizePx: 44,
@@ -2509,13 +2528,13 @@ test("tablet interaction artifact proves tap-first source posture", async () => 
     primaryControlsBeforeReceipts: true,
   });
   assert.deepEqual(tabletInteraction.moderatorControlSurfaceCss, {
-    controlRailMode: "sticky-tablet-host-control-rail",
-    stickyTopPx: 22,
+    controlRailMode: "flow-host-control-actions",
+    stickyTopPx: 0,
     topbarOffsetPx: 76,
-    safeAreaAware: true,
-    internalScroll: true,
-    overscroll: "contain",
-    unstickBelowPx: 760,
+    safeAreaAware: false,
+    internalScroll: false,
+    overscroll: "visible",
+    unstickBelowPx: 0,
     primaryControlsBeforeStatusReadouts: true,
     actionTileStabilityMode: "reserved-status-floor",
     actionTileStatusFloorMinBlockSizePx: 44,
@@ -2547,7 +2566,7 @@ test("tablet interaction artifact proves tap-first source posture", async () => 
       [
         "player-primary-action-zone",
         "player-primary-actions",
-        ["submit_vote", "withdraw_vote", "submit_post"],
+        ["submit_vote", "submit_vote:no_lynch", "withdraw_vote", "submit_post"],
       ],
     ],
   );
@@ -2557,7 +2576,7 @@ test("tablet interaction artifact proves tap-first source posture", async () => 
   );
   assert.equal(
     tabletInteraction.thumbZones.moderator.zones[0].descendantCount,
-    10,
+    9,
   );
 });
 
@@ -2647,19 +2666,22 @@ test("route live contract records Svelte onMount websocket and resync evidence",
     [
       true,
       true,
-      "json-ws-command-projection-deltas-with-resync",
-      "json-ws-command-projection-deltas-with-resync",
+      "json-ws-command-projection-deltas-with-resync-and-reconnect",
+      "json-ws-command-projection-deltas-with-resync-and-reconnect",
     ],
   );
   assert.deepEqual(routeLive.runtime.player.resyncKeys, [
     "thread",
     "votecount",
+    "dayVoteOutcomes",
     "notifications",
     "investigationResults",
+    "commandState",
   ]);
   assert.deepEqual(routeLive.runtime.moderator.resyncKeys, [
     "host",
     "votecount",
+    "dayVoteOutcomes",
     "hostPrompts",
   ]);
   assert.deepEqual(routeLive.runtime.player.eventKinds, [
@@ -2691,15 +2713,14 @@ test("host confirmation static DOM artifact covers destructive moderator actions
     routeStateRender: "target/frontend-route-state-render/route-state-render.json",
     routeStateBundle: "target/frontend-route-state-render/bundle/entry.js",
   });
-  assert.equal(hostConfirmations.actionCount, 10);
+  assert.equal(hostConfirmations.actionCount, 9);
   assert.deepEqual(
     hostConfirmations.actions.map((action) => [action.id, action.payloadKind]),
     [
       ["extend_deadline", "extend_deadline"],
       ["process_replacement", "process_replacement"],
+      ["resolve_phase", "resolve_phase"],
       ["lock_thread", "lock_thread"],
-      ["unlock_thread", "unlock_thread"],
-      ["advance_phase", "advance_phase"],
       ["publish_votecount", "publish_votecount"],
       ["mark_dead", "mark_dead"],
       ["modkill_slot", "modkill_slot"],
@@ -2747,7 +2768,7 @@ test("in-app browser interaction page fixture records role command targets", asy
   assert.equal(manifest.proof, "in-app-browser-file-interaction-page");
   assert.equal(
     manifest.boundary,
-    "Generates a file-backed page from build-mode Svelte SSR first-viewport role surfaces, the real player private-channel error surface, command controls, player private-channel controls, all 10 moderator critical host confirmations, and hydrated-surface scenario controls for manual/in-app-browser proof. The page can record native browser click delivery and focus landing for representative admin, player, player private-channel, route-error, and moderator critical host confirmation targets without opening localhost or launching a separate Playwright browser. It does not prove browser behavior unless the generated file is opened and exercised, and it does not prove Svelte hydration, Svelte event scheduling, command dispatch side effects, TCP/network transport, WebSocket delivery, or dev-server routing.",
+    "Generates a file-backed page from build-mode Svelte SSR first-viewport role surfaces, the real player private-channel error surface, command controls, player private-channel controls, all 9 moderator critical host confirmations, and hydrated-surface scenario controls for manual/in-app-browser proof. The page can record native browser click delivery and focus landing for representative admin, player, player private-channel, route-error, and moderator critical host confirmation targets without opening localhost or launching a separate Playwright browser. It does not prove browser behavior unless the generated file is opened and exercised, and it does not prove Svelte hydration, Svelte event scheduling, command dispatch side effects, TCP/network transport, WebSocket delivery, or dev-server routing.",
   );
   assert.equal(
     manifest.page,
@@ -3036,12 +3057,17 @@ test("in-app browser interaction page fixture records role command targets", asy
   });
   assert.equal(playerHydratedScenario.command.commandKind, "SubmitVote");
   assert.equal(playerHydratedScenario.command.visibleState, "ack");
-  assert.deepEqual(playerHydratedScenario.command.refreshed, ["votecount"]);
+  assert.deepEqual(playerHydratedScenario.command.refreshed, [
+    "votecount",
+    "commandState",
+  ]);
   assert.equal(playerHydratedScenario.postCommand.commandKind, "SubmitPost");
   assert.equal(playerHydratedScenario.postCommand.visibleState, "ack");
   assert.deepEqual(playerHydratedScenario.postCommand.refreshed, [
     "thread",
     "votecount",
+    "commandState",
+    "dayVoteOutcomes",
   ]);
   assert.deepEqual(playerHydratedScenario.threadPager.pending, {
     status: {
@@ -3191,13 +3217,13 @@ test("in-app browser static DOM artifact verifies generated fixture structure", 
   assert.equal(staticDom.proof, "in-app-browser-static-dom-contract");
   assert.equal(
     staticDom.boundary,
-    "Parses the generated file-backed in-app browser fixture HTML without opening localhost or launching Chromium. This proves every manifest command/error scenario owns exactly one target inside its scenario root, all 10 moderator critical host confirmation scenarios carry DOM-visible object/outcome text and alertdialog focus metadata, modeled route evidence is present for the player role-PM scenario, modeled error-surface evidence is present for the player private-channel 403, hydrated-surface controls exist inside their scenario roots, touch-floor metadata is present where the rendered control models it, and player private fixture markup excludes host-only copy. It does not prove CSS layout pixels, browser click delivery, focus landing, Svelte hydration, command dispatch side effects, TCP transport, WebSocket delivery, or localhost-backed app acceptance.",
+    "Parses the generated file-backed in-app browser fixture HTML without opening localhost or launching Chromium. This proves every manifest command/error scenario owns exactly one target inside its scenario root, all 9 moderator critical host confirmation scenarios carry DOM-visible object/outcome text and alertdialog focus metadata, modeled route evidence is present for the player role-PM scenario, modeled error-surface evidence is present for the player private-channel 403, hydrated-surface controls exist inside their scenario roots, touch-floor metadata is present where the rendered control models it, and player private fixture markup excludes host-only copy. It does not prove CSS layout pixels, browser click delivery, focus landing, Svelte hydration, command dispatch side effects, TCP transport, WebSocket delivery, or localhost-backed app acceptance.",
   );
   assert.deepEqual(staticDom.generatedFrom, {
     manifest: "target/frontend-in-app-browser-interactions/interaction-page-manifest.json",
     page: "target/frontend-in-app-browser-interactions/interaction-page.html",
   });
-  assert.equal(staticDom.scenarioCount, 17);
+  assert.equal(staticDom.scenarioCount, 16);
   assert.equal(staticDom.hydratedScenarioCount, 6);
   assert.deepEqual(
     staticDom.scenarios.map((scenario) => [
@@ -3390,8 +3416,8 @@ test("in-app browser fixture smoke records browser-run evidence or block", async
   }
 
   const expectedPassedBoundary = browserRun.mode === "replay-existing"
-    ? "Loads the existing file-backed in-app browser fixture in Chromium using its file URL without regenerating SSR artifacts first. It proves native browser navigation to the prepared page, click delivery, focus landing, 44px touch geometry, player private-channel route evidence, player disclosure toggle behavior, all 10 moderator critical host confirmation metadata records, and nonblank screenshot pixels for the fixture controls across the proof viewports. It does not prove fixture freshness, Svelte client hydration, Svelte event scheduling, command dispatch side effects, dev-server routing, TCP/network transport, WebSocket delivery, or localhost-backed app acceptance."
-    : "Loads the generated file-backed in-app browser fixture in Chromium using its file URL. It proves native browser navigation to the prepared page, click delivery, focus landing, 44px touch geometry, player private-channel route evidence, player disclosure toggle behavior, all 10 moderator critical host confirmation metadata records, and nonblank screenshot pixels for the fixture controls across the proof viewports. It does not prove Svelte client hydration, Svelte event scheduling, command dispatch side effects, dev-server routing, TCP/network transport, WebSocket delivery, or localhost-backed app acceptance.";
+    ? "Loads the existing file-backed in-app browser fixture in Chromium using its file URL without regenerating SSR artifacts first. It proves native browser navigation to the prepared page, click delivery, focus landing, 44px touch geometry, player private-channel route evidence, player disclosure toggle behavior, all 9 moderator critical host confirmation metadata records, and nonblank screenshot pixels for the fixture controls across the proof viewports. It does not prove fixture freshness, Svelte client hydration, Svelte event scheduling, command dispatch side effects, dev-server routing, TCP/network transport, WebSocket delivery, or localhost-backed app acceptance."
+    : "Loads the generated file-backed in-app browser fixture in Chromium using its file URL. It proves native browser navigation to the prepared page, click delivery, focus landing, 44px touch geometry, player private-channel route evidence, player disclosure toggle behavior, all 9 moderator critical host confirmation metadata records, and nonblank screenshot pixels for the fixture controls across the proof viewports. It does not prove Svelte client hydration, Svelte event scheduling, command dispatch side effects, dev-server routing, TCP/network transport, WebSocket delivery, or localhost-backed app acceptance.";
   assert.equal(
     browserRun.boundary,
     expectedPassedBoundary,
@@ -3401,7 +3427,7 @@ test("in-app browser fixture smoke records browser-run evidence or block", async
   assert.equal(browserRun.runs.length, viewports.length);
   for (const run of browserRun.runs) {
     assert.equal(run.pageReady.status, "ready");
-    assert.equal(run.pageReady.scenarioCount >= 17, true);
+    assert.equal(run.pageReady.scenarioCount >= 16, true);
     assert.equal(run.pageReady.hydratedScenarioCount >= 5, true);
     assertPixelEvidence([run], "in-app browser fixture screenshots");
     const ids = new Set(run.interactions.map((interaction) => interaction.id));
@@ -3512,11 +3538,11 @@ test("in-app browser fixture replay handoff records portable rerun instructions"
   );
   assert.match(handoff.fixture.pageUrl, /^file:\/\//);
   assert.equal(handoff.fixture.viewportCount, viewports.length);
-  assert.equal(handoff.fixture.commandScenarioCount, 17);
+  assert.equal(handoff.fixture.commandScenarioCount, 16);
   assert.equal(handoff.fixture.hydratedScenarioCount, 6);
-  assert.equal(handoff.fixture.plannedInteractionCount, 22);
+  assert.equal(handoff.fixture.plannedInteractionCount, 21);
   assert.equal(handoff.fixture.plannedStabilityCheckCount, 2);
-  assert.equal(handoff.fixture.stabilityCheckTileCount, 14);
+  assert.equal(handoff.fixture.stabilityCheckTileCount, 13);
   assert.deepEqual(
     handoff.fixture.plannedStabilityChecks,
     expectedPlannedStabilityChecks,
@@ -3559,20 +3585,20 @@ test("in-app browser fixture replay handoff records portable rerun instructions"
     ["generate-and-run", "replay-existing"].includes(handoff.latestBrowserRun.mode),
     true,
   );
-  assert.equal(handoff.latestBrowserRun.plannedInteractionCount, 22);
+  assert.equal(handoff.latestBrowserRun.plannedInteractionCount, 21);
   assert.equal(handoff.latestBrowserRun.plannedStabilityCheckCount, 2);
-  assert.equal(handoff.latestBrowserRun.stabilityCheckTileCount, 14);
+  assert.equal(handoff.latestBrowserRun.stabilityCheckTileCount, 13);
   assert.equal(
     handoff.latestBrowserRun.promotionEligible,
     handoff.latestBrowserRun.status === "passed",
   );
   for (const requiredCheck of [
     "target/frontend-in-app-browser-interactions/browser-run.json has status passed.",
-    "browser-run plannedInteractions includes 22 admin/player/moderator/error interactions.",
-    "browser-run plannedStabilityChecks includes 2 reserved status-floor checks covering 14 admin/moderator action tiles.",
+    "browser-run plannedInteractions includes 21 admin/player/moderator/error interactions.",
+    "browser-run plannedStabilityChecks includes 2 reserved status-floor checks covering 13 admin/moderator action tiles.",
     "route-error interaction includes player private-channel 403 shell evidence.",
     "all reserved status floors advertise and render at least 44px before promotion.",
-    "all 10 moderator critical host confirmation interactions include alertdialog focus metadata and object/outcome text.",
+    "all 9 moderator critical host confirmation interactions include alertdialog focus metadata and object/outcome text.",
     "Treat this as file-backed fixture proof only; full localhost app acceptance is tracked by the localhost dev-server role-smoke lane.",
   ]) {
     assert.equal(handoff.promotionChecks.includes(requiredCheck), true);
@@ -3619,8 +3645,8 @@ test("in-app browser imported run contract validates external browser-run eviden
     ),
     true,
   );
-  assert.equal(importedRun.validated.plannedInteractionCount, 22);
-  assert.equal(importedRun.validated.moderatorCriticalConfirmationCount, 10);
+  assert.equal(importedRun.validated.plannedInteractionCount, 21);
+  assert.equal(importedRun.validated.moderatorCriticalConfirmationCount, 9);
   assert.equal(
     importedRun.promotionEligible,
     importedRun.status === "imported-passed",
@@ -3710,11 +3736,11 @@ test("in-app browser fixture bundle records deterministic portable payload", asy
   }
   assert.equal(
     bundle.fixture.plannedInteractionCount,
-    22,
+    21,
   );
-  assert.equal(bundle.fixture.moderatorCriticalConfirmationCount, 10);
+  assert.equal(bundle.fixture.moderatorCriticalConfirmationCount, 9);
   assert.equal(bundle.fixture.plannedStabilityCheckCount, 2);
-  assert.equal(bundle.fixture.stabilityCheckTileCount, 14);
+  assert.equal(bundle.fixture.stabilityCheckTileCount, 13);
   assert.deepEqual(
     bundle.fixture.plannedStabilityChecks,
     expectedPlannedStabilityChecks,
@@ -3851,13 +3877,13 @@ test("in-app browser fixture bundle import validates returned archive", async ()
     bundleImport.promotionEligible,
     bundleImport.status === "bundle-imported-passed",
   );
-  assert.equal(bundleImport.importedRun.validated.plannedInteractionCount, 22);
+  assert.equal(bundleImport.importedRun.validated.plannedInteractionCount, 21);
   assert.equal(
     bundleImport.importedRun.validated.moderatorCriticalConfirmationCount,
-    10,
+    9,
   );
   assert.equal(bundleImport.importedRun.validated.plannedStabilityCheckCount, 2);
-  assert.equal(bundleImport.importedRun.validated.stabilityCheckTileCount, 14);
+  assert.equal(bundleImport.importedRun.validated.stabilityCheckTileCount, 13);
   if (bundleImport.status === "bundle-source-blocked") {
     assert.equal(bundleImport.importedRun.blocking.length > 0, true);
   }
@@ -3946,10 +3972,10 @@ test("in-app browser operator runbook records external replay workflow", async (
   );
   assert.equal(typeof runbook.currentStatus.promotionEligible, "boolean");
   assert.deepEqual(runbook.fixture, {
-    plannedInteractionCount: 22,
-    moderatorCriticalConfirmationCount: 10,
+    plannedInteractionCount: 21,
+    moderatorCriticalConfirmationCount: 9,
     plannedStabilityCheckCount: 2,
-    stabilityCheckTileCount: 14,
+    stabilityCheckTileCount: 13,
     plannedStabilityChecks: expectedPlannedStabilityChecks,
   });
   assert.equal(
@@ -3985,7 +4011,7 @@ test("in-app browser operator runbook records external replay workflow", async (
   for (const check of [
     "returned browser-run.json has status passed",
     "returned localhost browser-run.json has status passed when proving the localhost-served fixture lane",
-    "returned browser-run plannedStabilityChecks includes 2 reserved status-floor checks covering 14 admin/moderator action tiles",
+    "returned browser-run plannedStabilityChecks includes 2 reserved status-floor checks covering 13 admin/moderator action tiles",
     "all returned reserved status floors render at least 44px before promotion",
     "returned bundle includes browser-run-*.png screenshot files for every proof viewport",
     "returned bundle includes localhost browser-run-*.png screenshot files for every proof viewport when localhost fixture browser-run passed",
@@ -4030,11 +4056,11 @@ test("in-app browser replay help records condensed external proof commands", asy
   );
   assert.match(replayHelp.fixture.pageUrl, /^file:\/\//);
   assert.deepEqual(replayHelp.fixture.viewports, viewports);
-  assert.equal(replayHelp.fixture.commandScenarioCount, 17);
+  assert.equal(replayHelp.fixture.commandScenarioCount, 16);
   assert.equal(replayHelp.fixture.hydratedScenarioCount, 6);
-  assert.equal(replayHelp.fixture.plannedInteractionCount, 22);
+  assert.equal(replayHelp.fixture.plannedInteractionCount, 21);
   assert.equal(replayHelp.fixture.plannedStabilityCheckCount, 2);
-  assert.equal(replayHelp.fixture.stabilityCheckTileCount, 14);
+  assert.equal(replayHelp.fixture.stabilityCheckTileCount, 13);
   assert.deepEqual(
     replayHelp.fixture.plannedStabilityChecks,
     expectedPlannedStabilityChecks,
@@ -4090,8 +4116,8 @@ test("in-app browser replay help records condensed external proof commands", asy
   for (const check of [
     "returned browser-run.json has status passed",
     "returned localhost browser-run.json has status passed when proving the localhost-served fixture lane",
-    "returned browser-run plannedInteractions includes 22 admin/player/moderator/error interactions",
-    "returned browser-run plannedStabilityChecks includes 2 reserved status-floor checks covering 14 admin/moderator action tiles",
+    "returned browser-run plannedInteractions includes 21 admin/player/moderator/error interactions",
+    "returned browser-run plannedStabilityChecks includes 2 reserved status-floor checks covering 13 admin/moderator action tiles",
     "all returned reserved status floors render at least 44px before promotion",
     "route-error-back-to-board-click records 403 player private-channel shell evidence and Back to board click/focus evidence",
     "returned role-smoke.json has status passed with referenced role-smoke screenshots",
@@ -4382,7 +4408,12 @@ test("frontend completion audit summarizes proven and blocked requirements", asy
   for (const requirement of audit.requirements) {
     assert.equal(requirement.proven.length > 0, true);
     assert.equal(requirement.evidence.length > 0, true);
-    if (audit.status === "passed") {
+    if (audit.status === "passed" && requirement.id === "browser-acceptance") {
+      assert.deepEqual(requirement.missing, [
+        "localhost bind is denied before dev-server browser proof can run.",
+        "The imported file-backed browser-run does not prove Svelte hydration, command dispatch side effects, TCP transport, WebSocket delivery, dev-server routing, or localhost app acceptance.",
+      ]);
+    } else if (audit.status === "passed") {
       assert.equal(requirement.missing.length, 0);
     } else if (requirement.id !== "single-root-shell-architecture") {
       assert.equal(requirement.missing.length > 0, true);
@@ -4526,7 +4557,7 @@ test("frontend readiness summary reports role proof layers without promoting bro
     hostTouchTargetMinPx: 44,
     forbiddenMatchCount: 0,
     thumbZoneRoles: ["admin", "player", "moderator"],
-    moderatorCriticalActionCount: 10,
+    moderatorCriticalActionCount: 9,
   });
   assert.equal(summary.shared.tabletInteraction.scannedFileCount > 0, true);
   assert.deepEqual(summary.roles.find((role) => role.id === "player").evidence.routeLive, [
@@ -4572,7 +4603,7 @@ test("frontend readiness summary reports role proof layers without promoting bro
     noBindInteractionRequires: [
       "noBindInteractions.status == passed",
       "noBindInteractions.viewports is nonempty",
-      "noBindInteractions.interactions includes admin cohost, admin session-grant, admin recovery-gate, player vote, player post, player private-channel post, and all 10 moderator critical host confirmations",
+      "noBindInteractions.interactions includes admin cohost, admin session-grant, admin recovery-gate, player vote, player post, player private-channel post, and all 9 moderator critical host confirmations",
       "all noBindInteractions entries include clicked target, activeElement, and targetBox",
     ],
     staticFocusabilityRequires: [
@@ -4613,7 +4644,7 @@ test("frontend readiness summary reports role proof layers without promoting bro
     inAppBrowserFixtureRequires: [
       "inAppBrowserPage.status == page-generated",
       "inAppBrowserPage.surfaces includes board-player, admin, player, and moderator",
-      "inAppBrowserPage.scenarios includes admin cohost, admin session-grant, admin recovery-gate, player vote, player post, player private-channel post, and all 10 moderator critical host confirmations",
+      "inAppBrowserPage.scenarios includes admin cohost, admin session-grant, admin recovery-gate, player vote, player post, player private-channel post, and all 9 moderator critical host confirmations",
       "inAppBrowserPage.hydratedSurfaceScenarios includes shared shell, admin audit, admin operational forms, player private disclosure/vote/post, moderator host-prompt, and moderator slot-lifecycle controls",
       "inAppBrowserStaticDom.status == passed",
       "inAppBrowserStaticDom.scenarios includes every fixture command target with role-pm route evidence",
@@ -4623,7 +4654,7 @@ test("frontend readiness summary reports role proof layers without promoting bro
       "inAppBrowserRun.status == passed",
       "inAppBrowserRun.runs includes every proof viewport",
       "all inAppBrowserRun entries include clicked target, activeElement, targetBox, and screenshotPixels",
-      "all 10 moderator critical host confirmation run entries include alertdialog focus metadata and object/outcome text",
+      "all 9 moderator critical host confirmation run entries include alertdialog focus metadata and object/outcome text",
       "player private-channel run entries include active role-pm route evidence",
       "player private disclosure toggles from aria-expanded=false to aria-expanded=true",
     ],
@@ -4632,13 +4663,13 @@ test("frontend readiness summary reports role proof layers without promoting bro
       "inAppBrowserLocalhostRun.pageUrl is a localhost URL",
       "inAppBrowserLocalhostRun.runs includes every proof viewport",
       "all inAppBrowserLocalhostRun entries include clicked target, activeElement, targetBox, and screenshotPixels",
-      "all 10 moderator critical host confirmation run entries include alertdialog focus metadata and object/outcome text",
+      "all 9 moderator critical host confirmation run entries include alertdialog focus metadata and object/outcome text",
     ],
     inAppBrowserImportedRunRequires: [
       "inAppBrowserImportedRun.status == imported-passed",
       "inAppBrowserImportedRun.validated.runCount covers every proof viewport",
-      "inAppBrowserImportedRun.validated.plannedInteractionCount covers all 22 fixture interactions",
-      "inAppBrowserImportedRun.validated.moderatorCriticalConfirmationCount is 10",
+      "inAppBrowserImportedRun.validated.plannedInteractionCount covers all 21 fixture interactions",
+      "inAppBrowserImportedRun.validated.moderatorCriticalConfirmationCount is 9",
       "inAppBrowserImportedRun.validated.screenshotChecks re-read nonblank PNG evidence",
     ],
     importedRoleSmokeRequires: [
@@ -4719,7 +4750,7 @@ test("frontend readiness summary reports role proof layers without promoting bro
     assert.deepEqual(roleProofRows, [
       [
         "admin",
-        fullBrowserSurface,
+        "browser_proven",
         "proven",
         "proven",
         "proven",
@@ -4727,7 +4758,7 @@ test("frontend readiness summary reports role proof layers without promoting bro
         "chromium_no_bind_interactions_proven",
         "chromium_no_bind_keyboard_proven",
         "blocked",
-        fullBrowserSurface,
+        "imported_browser_proven",
         "dispatchBridge.rolePlans[admin]",
         "hydratedHandlers.roles[admin]",
         "hydratedSurfaces.admin",
@@ -4741,7 +4772,7 @@ test("frontend readiness summary reports role proof layers without promoting bro
       ],
       [
         "player",
-        fullBrowserSurface,
+        "browser_proven",
         "proven",
         "proven",
         "proven",
@@ -4749,7 +4780,7 @@ test("frontend readiness summary reports role proof layers without promoting bro
         "chromium_no_bind_interactions_proven",
         "chromium_no_bind_keyboard_proven",
         "blocked",
-        "browser_proven",
+        "imported_browser_proven",
         "dispatchBridge.rolePlans[player]",
         "hydratedHandlers.roles[player]",
         "hydratedSurfaces.player",
@@ -4771,7 +4802,7 @@ test("frontend readiness summary reports role proof layers without promoting bro
         "chromium_no_bind_interactions_proven",
         "chromium_no_bind_keyboard_proven",
         "blocked",
-        "browser_proven",
+        "imported_browser_proven",
         "dispatchBridge.rolePlans[moderator]",
         "hydratedHandlers.roles[moderator]",
         "hydratedSurfaces.moderator",
@@ -4957,7 +4988,10 @@ test("frontend readiness summary reports role proof layers without promoting bro
       label: "Full Playwright/Chromium role acceptance",
       state: "browser_proven",
       proven: summary.browserAcceptance.requirement.proven,
-      missing: [],
+      missing: [
+        "localhost bind is denied before dev-server browser proof can run.",
+        "The imported file-backed browser-run does not prove Svelte hydration, command dispatch side effects, TCP transport, WebSocket delivery, dev-server routing, or localhost app acceptance.",
+      ],
     });
     assert.equal(summary.browserAcceptance.requirement.proven.length > 0, true);
     assert.deepEqual(
@@ -4967,7 +5001,12 @@ test("frontend readiness summary reports role proof layers without promoting bro
         summary.browserAcceptance.localhost.promotionFailures,
         summary.browserAcceptance.localhost.blockedReason,
       ],
-      ["browser_proven", "passed", [], null],
+      [
+        "imported_browser_proven",
+        "passed",
+        ["roleSmoke.roles missing tablet thumb-zone geometry evidence"],
+        "localhost bind is denied before the dev-server browser proof can run",
+      ],
     );
     assert.deepEqual(
       [
@@ -5062,7 +5101,7 @@ test("frontend readiness summary reports role proof layers without promoting bro
         lane.promotionEligible,
       ]),
       [
-        ["localhost-dev-server-role-smoke", "proven", "passed", true],
+        ["localhost-dev-server-role-smoke", "blocked", "passed", true],
         [
           "chromium-no-bind-render",
           "blocked",
@@ -5100,7 +5139,7 @@ test("frontend readiness summary reports role proof layers without promoting bro
       state: "blocked_by_localhost_and_chromium_sandbox",
       proven: [
         "No-browser fallback artifacts are green and record the blocked browser boundary.",
-        "File-backed in-app browser fixture is generated and statically verified for role shells, representative admin/player controls including admin session-grant/recovery-gate forms and player role-PM private-channel post, all 10 moderator critical host confirmations, plus separate hydrated-surface admin forms, host-prompt, and slot-lifecycle scenario controls, but it has not produced browser click/focus evidence.",
+        "File-backed in-app browser fixture is generated and statically verified for role shells, representative admin/player controls including admin session-grant/recovery-gate forms and player role-PM private-channel post, all 9 moderator critical host confirmations, plus separate hydrated-surface admin forms, host-prompt, and slot-lifecycle scenario controls, but it has not produced browser click/focus evidence.",
         "A localhost-served fixture run is modeled separately from the file URL lane and records the current localhost bind/Chromium boundary before promotion.",
       ],
       missing: [
@@ -5188,7 +5227,7 @@ test("frontend readiness summary reports role proof layers without promoting bro
       status: "fixture_prepared",
       artifactStatus: "page-generated",
       boundary:
-        "Generates a file-backed page from build-mode Svelte SSR first-viewport role surfaces, the real player private-channel error surface, command controls, player private-channel controls, all 10 moderator critical host confirmations, and hydrated-surface scenario controls for manual/in-app-browser proof. The page can record native browser click delivery and focus landing for representative admin, player, player private-channel, route-error, and moderator critical host confirmation targets without opening localhost or launching a separate Playwright browser. It does not prove browser behavior unless the generated file is opened and exercised, and it does not prove Svelte hydration, Svelte event scheduling, command dispatch side effects, TCP/network transport, WebSocket delivery, or dev-server routing.",
+        "Generates a file-backed page from build-mode Svelte SSR first-viewport role surfaces, the real player private-channel error surface, command controls, player private-channel controls, all 9 moderator critical host confirmations, and hydrated-surface scenario controls for manual/in-app-browser proof. The page can record native browser click delivery and focus landing for representative admin, player, player private-channel, route-error, and moderator critical host confirmation targets without opening localhost or launching a separate Playwright browser. It does not prove browser behavior unless the generated file is opened and exercised, and it does not prove Svelte hydration, Svelte event scheduling, command dispatch side effects, TCP/network transport, WebSocket delivery, or dev-server routing.",
       page: "target/frontend-in-app-browser-interactions/interaction-page.html",
       pageUrl: summary.browserAcceptance.inAppBrowserFixture.pageUrl,
       surfaces: [
@@ -5319,7 +5358,7 @@ test("frontend readiness summary reports role proof layers without promoting bro
           surfaceId: "moderator",
           mode: "reserved-status-floor",
           statusFloorMinBlockSizePx: 44,
-          tileCount: 10,
+          tileCount: 9,
         },
       ],
       blockedReason:
@@ -5329,8 +5368,8 @@ test("frontend readiness summary reports role proof layers without promoting bro
       status: "static_dom_proven",
       artifactStatus: "passed",
       boundary:
-        "Parses the generated file-backed in-app browser fixture HTML without opening localhost or launching Chromium. This proves every manifest command/error scenario owns exactly one target inside its scenario root, all 10 moderator critical host confirmation scenarios carry DOM-visible object/outcome text and alertdialog focus metadata, modeled route evidence is present for the player role-PM scenario, modeled error-surface evidence is present for the player private-channel 403, hydrated-surface controls exist inside their scenario roots, touch-floor metadata is present where the rendered control models it, and player private fixture markup excludes host-only copy. It does not prove CSS layout pixels, browser click delivery, focus landing, Svelte hydration, command dispatch side effects, TCP transport, WebSocket delivery, or localhost-backed app acceptance.",
-      scenarioCount: 17,
+        "Parses the generated file-backed in-app browser fixture HTML without opening localhost or launching Chromium. This proves every manifest command/error scenario owns exactly one target inside its scenario root, all 9 moderator critical host confirmation scenarios carry DOM-visible object/outcome text and alertdialog focus metadata, modeled route evidence is present for the player role-PM scenario, modeled error-surface evidence is present for the player private-channel 403, hydrated-surface controls exist inside their scenario roots, touch-floor metadata is present where the rendered control models it, and player private fixture markup excludes host-only copy. It does not prove CSS layout pixels, browser click delivery, focus landing, Svelte hydration, command dispatch side effects, TCP transport, WebSocket delivery, or localhost-backed app acceptance.",
+      scenarioCount: 16,
       hydratedScenarioCount: 6,
       stabilityChecks: [
         {
@@ -5347,7 +5386,7 @@ test("frontend readiness summary reports role proof layers without promoting bro
           surfaceId: "moderator",
           mode: "reserved-status-floor",
           statusFloorMinBlockSizePx: 44,
-          tileCount: 10,
+          tileCount: 9,
         },
       ],
       playerPrivateChannelRoute: {
@@ -5456,16 +5495,16 @@ test("frontend readiness summary reports role proof layers without promoting bro
         mode: "generate-and-run",
         regeneratedFixture: true,
         pageUrl: summary.browserAcceptance.inAppBrowserImportedRun.sourceBrowserRun.pageUrl,
-        plannedInteractionCount: 22,
+        plannedInteractionCount: 21,
         plannedStabilityCheckCount: 2,
       },
       validated: {
         viewportCount: 0,
         runCount: 0,
-        plannedInteractionCount: 22,
+        plannedInteractionCount: 21,
         plannedStabilityCheckCount: 2,
-        stabilityCheckTileCount: 14,
-        moderatorCriticalConfirmationCount: 10,
+        stabilityCheckTileCount: 13,
+        moderatorCriticalConfirmationCount: 9,
         screenshotCheckCount: 0,
       },
       blocking: [

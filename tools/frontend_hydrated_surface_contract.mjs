@@ -349,14 +349,16 @@ async function provePlayerSurfaceAdapter() {
   });
 
   assert.equal(voteCommand.request.command.SubmitVote.target.Slot, "slot-2");
-  assert.deepEqual(voteCommand.refreshed, [["votecount"]]);
+  assert.deepEqual(voteCommand.refreshed, [["votecount", "commandState"]]);
   assert.deepEqual(postCommand.request.command.SubmitPost, {
     game: "midsummer",
     channel_id: "role-pm",
     actor_slot: "slot-7",
     body: "private role note",
   });
-  assert.deepEqual(postCommand.refreshed, [["thread", "votecount"]]);
+  assert.deepEqual(postCommand.refreshed, [
+    ["thread", "votecount", "commandState", "dayVoteOutcomes"],
+  ]);
   const threadPager = await provePlayerThreadPagerLifecycle();
 
   return {
