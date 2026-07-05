@@ -40,19 +40,8 @@ import {
   hostSetupFeatureSpineSourceCheckId,
 } from "./dev_test_game_host_setup_feature_spine_targets.mjs";
 import {
-  cohostFeatureSpineSourceCheckId,
-} from "./dev_test_game_cohost_feature_spine_targets.mjs";
-import {
-  replacementFeatureSpineSourceCheckId,
-} from "./dev_test_game_replacement_feature_spine_targets.mjs";
-import {
-  replacementActionFeatureSpineSourceCheckId,
-} from "./dev_test_game_replacement_action_feature_spine_targets.mjs";
-import {
-  replacementPrivateFeatureSpineSourceCheckId,
-} from "./dev_test_game_replacement_private_feature_spine_targets.mjs";
-import {
   productionFeatureRoleSurfaceSourceCheckIds,
+  productionFeatureRoleSurfaceSources,
   productionFeatureSourceForCheckId,
 } from "./dev_test_game_production_feature_source_registry.mjs";
 import {
@@ -1094,30 +1083,15 @@ function seededGraphRoleUrl(roleUrl) {
 
 function productionFeatureTargetsForGraph(releaseReadiness) {
   const coreLoopTargets = coreLoopProductionFeatureTargetCollection(releaseReadiness);
-  const hostSetupTargets = hostSetupProductionFeatureTargetCollection(
-    releaseReadiness,
-  );
-  const cohostTargets = cohostProductionFeatureTargetCollection(
-    releaseReadiness,
-  );
-  const replacementTargets = replacementProductionFeatureTargetCollection(
-    releaseReadiness,
-  );
-  const replacementActionTargets =
-    replacementActionProductionFeatureTargetCollection(releaseReadiness);
-  const replacementPrivateTargets =
-    replacementPrivateProductionFeatureTargetCollection(releaseReadiness);
+  const roleSurfaceTargets =
+    roleSurfaceProductionFeatureTargetCollections(releaseReadiness);
   const hardeningTargets = hardeningProductionFeatureTargetCollection(
     releaseReadiness,
   );
   const targetsBySlotId = new Map(
     [
       coreLoopTargets,
-      hostSetupTargets,
-      cohostTargets,
-      replacementTargets,
-      replacementActionTargets,
-      replacementPrivateTargets,
+      ...roleSurfaceTargets,
       hardeningTargets,
     ].flatMap((targets) =>
       targets.slotIds.map((slotId) => [slotId, targets.bySlotId[slotId]]),
@@ -1170,88 +1144,31 @@ function hardeningProductionFeatureTargetCollection(releaseReadiness) {
   return targets;
 }
 
-function hostSetupProductionFeatureTargetCollection(releaseReadiness) {
-  const hostSetupCheck = releaseReadiness.localDevelopmentSpine?.checks?.find(
-    (check) => check.id === hostSetupFeatureSpineSourceCheckId,
+function roleSurfaceProductionFeatureTargetCollections(releaseReadiness) {
+  return productionFeatureRoleSurfaceSources.map((source) =>
+    roleSurfaceProductionFeatureTargetCollection(releaseReadiness, source),
   );
-  const targets = hostSetupCheck?.spineTargets?.productionFeatureTargets;
-  if (
-    targets?.status !== "passed" ||
-    !Array.isArray(targets.slotIds) ||
-    targets.bySlotId === null ||
-    typeof targets.bySlotId !== "object"
-  ) {
-    return { status: "passed", slotIds: [], bySlotId: {} };
-  }
-  return targets;
 }
 
-function cohostProductionFeatureTargetCollection(releaseReadiness) {
-  const cohostCheck = releaseReadiness.localDevelopmentSpine?.checks?.find(
-    (check) => check.id === cohostFeatureSpineSourceCheckId,
+function roleSurfaceProductionFeatureTargetCollection(
+  releaseReadiness,
+  source,
+) {
+  const check = releaseReadiness.localDevelopmentSpine?.checks?.find(
+    (item) => item.id === source.sourceCheckId,
   );
-  const targets = cohostCheck?.spineTargets?.productionFeatureTargets;
+  const targets = check?.spineTargets?.productionFeatureTargets;
   if (
     targets?.status !== "passed" ||
     !Array.isArray(targets.slotIds) ||
     targets.bySlotId === null ||
     typeof targets.bySlotId !== "object"
   ) {
-    throw new Error("proof graph missing cohost production feature targets");
-  }
-  return targets;
-}
-
-function replacementProductionFeatureTargetCollection(releaseReadiness) {
-  const replacementCheck = releaseReadiness.localDevelopmentSpine?.checks?.find(
-    (check) => check.id === replacementFeatureSpineSourceCheckId,
-  );
-  const targets = replacementCheck?.spineTargets?.productionFeatureTargets;
-  if (
-    targets?.status !== "passed" ||
-    !Array.isArray(targets.slotIds) ||
-    targets.bySlotId === null ||
-    typeof targets.bySlotId !== "object"
-  ) {
-    throw new Error("proof graph missing replacement production feature targets");
-  }
-  return targets;
-}
-
-function replacementActionProductionFeatureTargetCollection(releaseReadiness) {
-  const replacementActionCheck =
-    releaseReadiness.localDevelopmentSpine?.checks?.find(
-      (check) => check.id === replacementActionFeatureSpineSourceCheckId,
-    );
-  const targets = replacementActionCheck?.spineTargets?.productionFeatureTargets;
-  if (
-    targets?.status !== "passed" ||
-    !Array.isArray(targets.slotIds) ||
-    targets.bySlotId === null ||
-    typeof targets.bySlotId !== "object"
-  ) {
+    if (source.sourceCheckId === hostSetupFeatureSpineSourceCheckId) {
+      return { status: "passed", slotIds: [], bySlotId: {} };
+    }
     throw new Error(
-      "proof graph missing replacement action production feature targets",
-    );
-  }
-  return targets;
-}
-
-function replacementPrivateProductionFeatureTargetCollection(releaseReadiness) {
-  const replacementPrivateCheck =
-    releaseReadiness.localDevelopmentSpine?.checks?.find(
-      (check) => check.id === replacementPrivateFeatureSpineSourceCheckId,
-    );
-  const targets =
-    replacementPrivateCheck?.spineTargets?.productionFeatureTargets;
-  if (
-    targets?.status !== "passed" ||
-    !Array.isArray(targets.slotIds) ||
-    targets.bySlotId === null ||
-    typeof targets.bySlotId !== "object"
-  ) {
-    throw new Error(
-      "proof graph missing replacement private production feature targets",
+      `proof graph missing ${source.sourceCheckId} production feature targets`,
     );
   }
   return targets;

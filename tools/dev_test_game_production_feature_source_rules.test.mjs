@@ -186,4 +186,24 @@ test("production feature builders use source modules instead of raw source ids",
       );
     }
   }
+  const proofGraphSource = await readFile(
+    new URL("dev_test_game_proof_graph.mjs", import.meta.url),
+    "utf8",
+  );
+  assert.match(
+    proofGraphSource,
+    /productionFeatureRoleSurfaceSources\.map/,
+  );
+  for (const staleFunctionName of [
+    "cohostProductionFeatureTargetCollection",
+    "replacementProductionFeatureTargetCollection",
+    "replacementActionProductionFeatureTargetCollection",
+    "replacementPrivateProductionFeatureTargetCollection",
+  ]) {
+    assert.equal(
+      proofGraphSource.includes(staleFunctionName),
+      false,
+      `proof graph should collect role-surface targets through the registry: ${staleFunctionName}`,
+    );
+  }
 });
