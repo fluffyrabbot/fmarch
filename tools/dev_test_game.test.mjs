@@ -499,6 +499,12 @@ import {
   devTestGameHostedMatrixRawEvidenceOperatorFixturePath,
 } from "./dev_test_game_hosted_matrix_raw_evidence_fixture_proof.mjs";
 import {
+  assertDevTestGameRealHostedMatrixRawCapture,
+  buildDevTestGameRealHostedMatrixRawCapture,
+  devTestGameRealHostedMatrixRawCaptureCommand,
+  devTestGameRealHostedMatrixRawCapturePath,
+} from "./dev_test_game_real_hosted_matrix_raw_capture.mjs";
+import {
   assertDevTestGameHostedTargetPreflight,
   devTestGameHostedTargetPreflightCommand,
   devTestGameHostedTargetPreflightAdminProofPath,
@@ -793,6 +799,10 @@ test("dev test-game spine orchestrators expose stable proof order and env maps",
       "test:dev-test-game-hosted-matrix-raw-evidence-fixture-proof"
     ],
     "node tools/dev_test_game_hosted_matrix_raw_evidence_fixture_proof.mjs",
+  );
+  assert.equal(
+    packageJson.scripts["test:dev-test-game-real-hosted-matrix-raw-capture"],
+    "node tools/dev_test_game_real_hosted_matrix_raw_capture.mjs",
   );
   assert.equal(
     packageJson.scripts[
@@ -2465,6 +2475,14 @@ test("dev test-game spine manifest records command order and evidence wiring", (
       roleUrl: "/admin/audit/local-hosted-evidence-lane?game=<seeded-game>",
     },
   );
+  assert.deepEqual(manifest.commands.realHostedMatrixRawCapture, {
+    script: devTestGameRealHostedMatrixRawCaptureCommand,
+    proofArtifact: devTestGameRealHostedMatrixRawCapturePath,
+    dependsOn: [devTestGameHostedMatrixRawEvidenceOperatorFixturePath],
+    fixtureEvidence: false,
+    releaseReady: false,
+    productionReady: false,
+  });
   for (const descriptor of recoveryReceiptGraphDescriptors) {
     assert.deepEqual(manifest.commands[descriptor.receiptKey], {
       script: descriptor.proofCommand,
@@ -2624,6 +2642,7 @@ test("dev test-game spine manifest records command order and evidence wiring", (
       devTestGameHostedEvidenceLaneOperatorFixtureAdminProofPath,
     ),
   );
+  assert(manifest.artifacts.includes(devTestGameRealHostedMatrixRawCapturePath));
   assert(manifest.artifacts.includes(devTestGameReleaseRunbookPath));
   assert(manifest.artifacts.includes(nextActionPath));
   assert(manifest.artifacts.includes(nextActionAdminProofPath));
@@ -4886,6 +4905,111 @@ test("dev test-game hosted evidence lane validates operator fixture without prom
       visibleUnproven: ["raw-evidence-real-hosted-target"],
     },
   });
+});
+
+test("real hosted matrix raw capture intake rejects fixtures and requires capture metadata", async () => {
+  assert.equal(
+    devTestGameRealHostedMatrixRawCaptureCommand,
+    "test:dev-test-game-real-hosted-matrix-raw-capture",
+  );
+  assert.equal(
+    devTestGameRealHostedMatrixRawCapturePath,
+    "target/dev-test-game/real-hosted-matrix-raw-capture.json",
+  );
+  const missing = await buildDevTestGameRealHostedMatrixRawCapture({
+    generatedAt: "2026-06-26T00:00:00.000Z",
+    env: {},
+  });
+  assertDevTestGameRealHostedMatrixRawCapture(missing);
+  assert.equal(missing.status, "blocked");
+  assert(missing.blockedCheckIds.includes("raw-evidence-path-configured"));
+
+  const fixture = await buildDevTestGameRealHostedMatrixRawCapture({
+    generatedAt: "2026-06-26T00:00:00.000Z",
+    env: {
+      FMARCH_HOSTED_MATRIX_FRONTEND_URL: "https://fmarch-demo.example.test",
+      FMARCH_HOSTED_MATRIX_API_URL: "https://api.fmarch-demo.example.test",
+      FMARCH_HOSTED_MATRIX_GROUP_ID: "replacement-race-reload",
+      FMARCH_HOSTED_MATRIX_RAW_EVIDENCE_PATH:
+        devTestGameHostedMatrixRawEvidenceOperatorFixturePath,
+    },
+  });
+  assertDevTestGameRealHostedMatrixRawCapture(fixture);
+  assert.equal(fixture.status, "blocked");
+  assert.equal(fixture.target.rawEvidenceFixture, true);
+  assert(fixture.blockedCheckIds.includes("fixture-and-demo-markers-absent"));
+  assert(
+    fixture.blockedCheckIds.includes("capture-redaction-retention-metadata"),
+  );
+
+  const source = JSON.parse(
+    await readFile(devTestGameHostedMatrixRawEvidenceOperatorFixturePath, "utf8"),
+  );
+  const rawNoCapture = {
+    ...source,
+    frontendBaseUrl: "https://fmarch.example.test",
+    apiBaseUrl: "https://api.fmarch.example.test",
+    generatedFrom: {
+      source: "external-operator-capture",
+    },
+  };
+  const rawNoCapturePath =
+    "target/dev-test-game/test-real-hosted-matrix-raw-no-capture.json";
+  await mkdir("target/dev-test-game", { recursive: true });
+  await writeFile(rawNoCapturePath, `${JSON.stringify(rawNoCapture, null, 2)}\n`);
+  const noCapture = await buildDevTestGameRealHostedMatrixRawCapture({
+    generatedAt: "2026-06-26T00:00:00.000Z",
+    env: {
+      FMARCH_HOSTED_MATRIX_FRONTEND_URL: rawNoCapture.frontendBaseUrl,
+      FMARCH_HOSTED_MATRIX_API_URL: rawNoCapture.apiBaseUrl,
+      FMARCH_HOSTED_MATRIX_GROUP_ID: rawNoCapture.groupId,
+      FMARCH_HOSTED_MATRIX_RAW_EVIDENCE_PATH: rawNoCapturePath,
+    },
+  });
+  assertDevTestGameRealHostedMatrixRawCapture(noCapture);
+  assert.equal(noCapture.status, "blocked");
+  assert.equal(noCapture.target.rawEvidenceFixture, false);
+  assert.deepEqual(noCapture.blockedCheckIds, [
+    "capture-redaction-retention-metadata",
+  ]);
+
+  const rawCapture = {
+    ...rawNoCapture,
+    capture: {
+      externallyCaptured: true,
+      capturedAt: "2026-06-26T00:00:00.000Z",
+      captureSource: "operator-hosted-browser",
+      redaction: {
+        rawRoleCredentialsRedacted: true,
+        inviteTokensRedacted: true,
+        sessionCookiesRedacted: true,
+      },
+      retention: {
+        policy: "raw credentials discarded; redacted packet retained for proof",
+      },
+    },
+  };
+  const rawCapturePath =
+    "target/dev-test-game/test-real-hosted-matrix-raw-capture.json";
+  await writeFile(rawCapturePath, `${JSON.stringify(rawCapture, null, 2)}\n`);
+  const passed = await buildDevTestGameRealHostedMatrixRawCapture({
+    generatedAt: "2026-06-26T00:00:00.000Z",
+    env: {
+      FMARCH_HOSTED_MATRIX_FRONTEND_URL: rawCapture.frontendBaseUrl,
+      FMARCH_HOSTED_MATRIX_API_URL: rawCapture.apiBaseUrl,
+      FMARCH_HOSTED_MATRIX_GROUP_ID: rawCapture.groupId,
+      FMARCH_HOSTED_MATRIX_RAW_EVIDENCE_PATH: rawCapturePath,
+    },
+  });
+  assertDevTestGameRealHostedMatrixRawCapture(passed);
+  assert.equal(passed.status, "passed");
+  assert.deepEqual(passed.blockedCheckIds, []);
+  assert.equal(
+    passed.nextCommand,
+    "npm run test:dev-test-game-hosted-evidence-lane",
+  );
+  assert.equal(passed.target.rawEvidenceFixture, false);
+  assert.equal(passed.target.rawEvidenceSyntheticExternalTarget, false);
 });
 
 test("dev test-game next-action blocks readiness work on saved harness stability drift", () => {
@@ -15037,6 +15161,35 @@ test("session card and markdown include role credential URLs and tokens", async 
     ),
     true,
   );
+  const realHostedRawCaptureReadiness = buildDevTestGameReleaseReadiness(
+    proofRun,
+    {
+      generatedAt: "2026-06-26T00:00:00.000Z",
+      realHostedMatrixRawCapturePath:
+        devTestGameRealHostedMatrixRawCapturePath,
+      realHostedMatrixRawCapture:
+        realHostedMatrixRawCaptureBlockedFixture(),
+    },
+  );
+  assertDevTestGameReleaseReadiness(realHostedRawCaptureReadiness);
+  assert.equal(
+    realHostedRawCaptureReadiness.generatedFrom.realHostedMatrixRawCapture,
+    devTestGameRealHostedMatrixRawCapturePath,
+  );
+  const realHostedRawCaptureCheck =
+    realHostedRawCaptureReadiness.localDevelopmentSpine.checks.find(
+      (item) => item.id === "local-real-hosted-matrix-raw-capture-intake",
+    );
+  assert.equal(realHostedRawCaptureCheck.status, "passed");
+  assert.equal(realHostedRawCaptureCheck.intakeStatus, "blocked");
+  assert.equal(realHostedRawCaptureCheck.blockedCheckCount, 2);
+  assert.equal(realHostedRawCaptureCheck.rawEvidenceFixture, true);
+  assert.equal(
+    realHostedRawCaptureReadiness.releaseReadiness.unproven.some(
+      (item) => item.id === "hosted-deployment",
+    ),
+    true,
+  );
   const hostedEvidenceLaneDemoReadiness = buildDevTestGameReleaseReadiness(
     proofRun,
     {
@@ -22851,6 +23004,65 @@ function hostedEvidenceLaneOperatorFixtureAdminProofFixture() {
     "raw-evidence-real-hosted-target",
   ];
   return proof;
+}
+
+function realHostedMatrixRawCaptureBlockedFixture() {
+  return {
+    version: 1,
+    proof: "dev-test-game-real-hosted-matrix-raw-capture",
+    status: "blocked",
+    releaseReady: false,
+    productionReady: false,
+    generatedAt: "2026-06-26T00:00:00.000Z",
+    scope: "real-hosted-matrix-raw-capture",
+    proofBoundary: "Local real hosted matrix raw capture intake fixture.",
+    target: {
+      frontendBaseUrl: "https://fmarch-demo.example.test",
+      apiBaseUrl: "https://api.fmarch-demo.example.test",
+      groupId: "replacement-race-reload",
+      rawEvidencePath:
+        devTestGameHostedMatrixRawEvidenceOperatorFixturePath,
+      rawEvidenceStatus: "passed",
+      rawEvidenceSyntheticExternalTarget: false,
+      rawEvidenceFixture: true,
+    },
+    checks: [
+      {
+        id: "raw-evidence-path-configured",
+        status: "passed",
+        evidence: devTestGameHostedMatrixRawEvidenceOperatorFixturePath,
+      },
+      {
+        id: "raw-evidence-contract-valid",
+        status: "passed",
+        evidence: {
+          path: devTestGameHostedMatrixRawEvidenceOperatorFixturePath,
+        },
+      },
+      {
+        id: "fixture-and-demo-markers-absent",
+        status: "blocked",
+        requiredEvidence: "Real hosted raw evidence without fixture markers.",
+      },
+      {
+        id: "capture-redaction-retention-metadata",
+        status: "blocked",
+        requiredEvidence: "Capture metadata is required.",
+      },
+      {
+        id: "release-claim-boundary-carried",
+        status: "passed",
+        releaseReady: false,
+        productionReady: false,
+      },
+    ],
+    blockedCheckIds: [
+      "fixture-and-demo-markers-absent",
+      "capture-redaction-retention-metadata",
+    ],
+    nextCommand: "npm run test:dev-test-game-real-hosted-matrix-raw-capture",
+    nextProofTarget: devTestGameRealHostedMatrixRawCapturePath,
+  };
 }
 
 function hostedEvidenceLaneDemoProofFixture() {

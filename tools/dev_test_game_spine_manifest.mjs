@@ -57,6 +57,10 @@ import {
   devTestGameHostedMatrixRawEvidenceOperatorFixturePath,
 } from "./dev_test_game_hosted_matrix_raw_evidence_fixture_proof.mjs";
 import {
+  devTestGameRealHostedMatrixRawCaptureCommand,
+  devTestGameRealHostedMatrixRawCapturePath,
+} from "./dev_test_game_real_hosted_matrix_raw_capture.mjs";
+import {
   devTestGameHostedOpsSignalsCommand,
   devTestGameHostedOpsSignalsPath,
 } from "./dev_test_game_hosted_ops_signals.mjs";
@@ -379,6 +383,14 @@ export function buildDevTestGameSpineManifest({
         fixtureEvidence: true,
         roleUrl: "/admin/audit/local-hosted-evidence-lane?game=<seeded-game>",
       },
+      realHostedMatrixRawCapture: {
+        script: devTestGameRealHostedMatrixRawCaptureCommand,
+        proofArtifact: devTestGameRealHostedMatrixRawCapturePath,
+        dependsOn: [devTestGameHostedMatrixRawEvidenceOperatorFixturePath],
+        fixtureEvidence: false,
+        releaseReady: false,
+        productionReady: false,
+      },
       ...recoveryReceiptManifestCommands(),
       releaseRunbook: {
         script: devTestGameReleaseRunbookCommand,
@@ -514,6 +526,7 @@ export function buildDevTestGameSpineManifest({
       devTestGameHostedMatrixRawEvidenceFixtureProofPath,
       devTestGameHostedEvidenceLaneOperatorFixturePath,
       devTestGameHostedEvidenceLaneOperatorFixtureAdminProofPath,
+      devTestGameRealHostedMatrixRawCapturePath,
       ...recoveryReceiptGraphDescriptors.map(
         (descriptor) => descriptor.proofTarget,
       ),
@@ -679,6 +692,16 @@ export function buildDevTestGameSpineManifest({
           devTestGameHostedEvidenceLaneOperatorFixtureAdminProofPath,
         ],
         fixtureEvidence: true,
+      },
+      {
+        id: "real-hosted-matrix-raw-capture-recorded",
+        status: "passed",
+        evidence: [
+          devTestGameRealHostedMatrixRawCaptureCommand,
+          devTestGameRealHostedMatrixRawCapturePath,
+        ],
+        releaseReady: false,
+        productionReady: false,
       },
       {
         id: "release-runbook-recorded",
@@ -1068,6 +1091,30 @@ export function assertDevTestGameSpineManifest(manifest) {
       "spine manifest hosted evidence lane operator fixture proof must stay fixture-only",
     );
   }
+  if (
+    manifest.commands?.realHostedMatrixRawCapture?.script !==
+    devTestGameRealHostedMatrixRawCaptureCommand
+  ) {
+    throw new Error(
+      `spine manifest real hosted matrix raw capture command drifted: ${manifest.commands?.realHostedMatrixRawCapture?.script}`,
+    );
+  }
+  if (
+    manifest.commands.realHostedMatrixRawCapture.proofArtifact !==
+    devTestGameRealHostedMatrixRawCapturePath
+  ) {
+    throw new Error(
+      `spine manifest real hosted matrix raw capture artifact drifted: ${manifest.commands.realHostedMatrixRawCapture.proofArtifact}`,
+    );
+  }
+  if (
+    manifest.commands.realHostedMatrixRawCapture.releaseReady !== false ||
+    manifest.commands.realHostedMatrixRawCapture.productionReady !== false
+  ) {
+    throw new Error(
+      "spine manifest real hosted matrix raw capture must not claim readiness",
+    );
+  }
   assertRecoveryReceiptManifestCommands(manifest.commands ?? {});
   if (manifest.commands?.releaseRunbook?.script !== devTestGameReleaseRunbookCommand) {
     throw new Error(
@@ -1150,6 +1197,7 @@ export function assertDevTestGameSpineManifest(manifest) {
     devTestGameHostedMatrixRawEvidenceFixtureProofPath,
     devTestGameHostedEvidenceLaneOperatorFixturePath,
     devTestGameHostedEvidenceLaneOperatorFixtureAdminProofPath,
+    devTestGameRealHostedMatrixRawCapturePath,
     devTestGameHostedOpsSignalsPath,
     devTestGameRealHostedObservabilityHandoffPath,
     devTestGameReleaseRunbookPath,
@@ -1192,6 +1240,7 @@ export function assertDevTestGameSpineManifest(manifest) {
     "hosted-evidence-lane-recorded",
     "hosted-evidence-lane-demo-proof-recorded",
     "hosted-evidence-lane-operator-fixture-recorded",
+    "real-hosted-matrix-raw-capture-recorded",
     "hosted-ops-signals-recorded",
     "release-runbook-recorded",
     "terminal-artifacts-recorded",
@@ -1630,6 +1679,10 @@ const artifactRefreshCommands = Object.freeze({
     "npm run test:dev-test-game-hosted-evidence-lane-operator-fixture-admin-proof",
   [devTestGameHostedEvidenceLaneOperatorFixtureAdminProofPath]:
     "npm run test:dev-test-game-hosted-evidence-lane-operator-fixture-admin-proof",
+  "real-hosted-matrix-raw-capture":
+    "npm run test:dev-test-game-real-hosted-matrix-raw-capture",
+  [devTestGameRealHostedMatrixRawCapturePath]:
+    "npm run test:dev-test-game-real-hosted-matrix-raw-capture",
   "hosted-ops-signals": "npm run test:dev-test-game-hosted-ops-signals",
   "hosted-ops-signals-admin":
     "npm run test:dev-test-game-hosted-ops-signals-admin-proof",

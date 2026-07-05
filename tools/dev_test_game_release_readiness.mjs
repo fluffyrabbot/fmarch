@@ -34,6 +34,10 @@ import {
   devTestGameHostedEvidenceLaneOperatorFixtureAdminProofPath,
 } from "./dev_test_game_hosted_evidence_lane_operator_fixture_cases.mjs";
 import {
+  assertDevTestGameRealHostedMatrixRawCapture,
+  devTestGameRealHostedMatrixRawCapturePath,
+} from "./dev_test_game_real_hosted_matrix_raw_capture.mjs";
+import {
   assertDevTestGameIdentityAdapterContractPacket,
   devTestGameIdentityAdapterContractDiff,
   devTestGameIdentityAdapterProofVersion,
@@ -524,6 +528,10 @@ const defaultHostedEvidenceLaneOperatorFixtureAdminProofPath = path.join(
   repoRoot,
   devTestGameHostedEvidenceLaneOperatorFixtureAdminProofPath,
 );
+const defaultRealHostedMatrixRawCapturePath = path.join(
+  repoRoot,
+  devTestGameRealHostedMatrixRawCapturePath,
+);
 const defaultHostedEvidenceLaneDemoProofPath = path.join(
   artifactDir,
   "hosted-evidence-lane-demo-proof.json",
@@ -889,6 +897,17 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
           },
         )
       : undefined;
+  const realHostedMatrixRawCaptureEvidence = options.realHostedMatrixRawCapture
+    ? validateDevTestGameRealHostedMatrixRawCapture(
+        options.realHostedMatrixRawCapture,
+        {
+          path:
+            options.realHostedMatrixRawCapturePath ??
+            devTestGameRealHostedMatrixRawCapturePath,
+          artifact: options.realHostedMatrixRawCaptureArtifact,
+        },
+      )
+    : undefined;
   const hostedEvidenceLaneDemoProofEvidence = options.hostedEvidenceLaneDemoProof
     ? validateDevTestGameHostedEvidenceLaneDemoProof(
         options.hostedEvidenceLaneDemoProof,
@@ -1359,6 +1378,21 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
       adminRoleSurface: hostedEvidenceLaneOperatorFixtureAdminProofEvidence,
     });
   }
+  if (realHostedMatrixRawCaptureEvidence !== undefined) {
+    localChecks.push({
+      id: "local-real-hosted-matrix-raw-capture-intake",
+      label: "Local real hosted matrix raw capture intake",
+      status: "passed",
+      evidence: realHostedMatrixRawCaptureEvidence.path,
+      proofBoundary: realHostedMatrixRawCaptureEvidence.proofBoundary,
+      intakeStatus: realHostedMatrixRawCaptureEvidence.status,
+      blockedCheckCount: realHostedMatrixRawCaptureEvidence.blockedCheckCount,
+      rawEvidenceFixture: realHostedMatrixRawCaptureEvidence.rawEvidenceFixture,
+      rawEvidenceSyntheticExternalTarget:
+        realHostedMatrixRawCaptureEvidence.rawEvidenceSyntheticExternalTarget,
+      realHostedMatrixRawCapture: realHostedMatrixRawCaptureEvidence,
+    });
+  }
   if (hostedEvidenceLaneDemoProofEvidence !== undefined) {
     const dependency = getLocalReadinessDependency(
       localHostedEvidenceLaneDemoProofCheckId,
@@ -1593,6 +1627,11 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
               milestonesByGroupId: raceCoverageReloadMilestonesByGroupId,
             }),
             raceCoveragePromotedMilestones,
+          }),
+      ...(realHostedMatrixRawCaptureEvidence === undefined
+        ? {}
+        : {
+            realHostedMatrixRawCapture: realHostedMatrixRawCaptureEvidence.path,
           }),
       ...(proofGraphAdminProofEvidence === undefined
         ? {}
@@ -4706,6 +4745,27 @@ export function validateDevTestGameHostedEvidenceLaneOperatorFixtureAdminProof(
     targetMatchedFixture: true,
     laneStatus: String(proof.generatedFrom?.status ?? "unknown"),
     preflightStatus: String(proof.generatedFrom?.preflightStatus ?? "unknown"),
+    ...(options.artifact === undefined ? {} : { artifact: options.artifact }),
+  };
+}
+
+export function validateDevTestGameRealHostedMatrixRawCapture(
+  proof,
+  options = {},
+) {
+  assertDevTestGameRealHostedMatrixRawCapture(proof);
+  return {
+    status: proof.status,
+    path: options.path ?? devTestGameRealHostedMatrixRawCapturePath,
+    proofBoundary: proof.proofBoundary,
+    blockedCheckCount: proof.blockedCheckIds.length,
+    blockedCheckIds: proof.blockedCheckIds,
+    rawEvidenceFixture: proof.target.rawEvidenceFixture,
+    rawEvidenceSyntheticExternalTarget:
+      proof.target.rawEvidenceSyntheticExternalTarget,
+    nextCommand: proof.nextCommand,
+    nextProofTarget: proof.nextProofTarget,
+    checks: proof.checks,
     ...(options.artifact === undefined ? {} : { artifact: options.artifact }),
   };
 }
@@ -8416,6 +8476,16 @@ const optionalReadinessArtifactRegistry = Object.freeze([
     },
   }),
   optionalReadinessArtifact({
+    id: "realHostedMatrixRawCapture",
+    envVar: "FMARCH_DEV_TEST_GAME_REAL_HOSTED_MATRIX_RAW_CAPTURE",
+    defaultPath: defaultRealHostedMatrixRawCapturePath,
+    outputKeys: {
+      data: "realHostedMatrixRawCapture",
+      path: "realHostedMatrixRawCapturePath",
+      freshnessMetadata: "realHostedMatrixRawCaptureArtifact",
+    },
+  }),
+  optionalReadinessArtifact({
     id: "hostedEvidenceLaneDemoProof",
     envVar: "FMARCH_DEV_TEST_GAME_HOSTED_EVIDENCE_LANE_DEMO_PROOF",
     defaultPath: defaultHostedEvidenceLaneDemoProofPath,
@@ -8516,6 +8586,7 @@ const optionalReadinessArtifactLoadPlan = Object.freeze([
   "hostedConcurrentRaceMatrixAdminProof",
   "hostedEvidenceLaneAdminProof",
   "hostedEvidenceLaneOperatorFixtureAdminProof",
+  "realHostedMatrixRawCapture",
   "hostedEvidenceLaneDemoProof",
   "proofGraphAdminProof",
   "proofFreshnessAdminProof",
