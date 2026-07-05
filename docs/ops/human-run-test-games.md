@@ -196,6 +196,20 @@ only the redacted packet schema, role-surface adapter comparison, and seeded
 admin detail visibility; hosted accounts, sessions, invite delivery, recovery,
 abuse controls, session-secret policy, and audit retention remain unproven.
 
+The fixture-backed progression summary lists the first operator packet families
+that can move from missing to provided while keeping hosted readiness blocked:
+
+```sh
+npm run test:dev-test-game-hosted-identity-progression-summary
+FMARCH_HOSTED_IDENTITY_PROGRESSION_ID=invite-delivery npm run test:dev-test-game-hosted-identity-progression-admin-proof
+FMARCH_HOSTED_IDENTITY_PROGRESSION_ID=account-recovery npm run test:dev-test-game-hosted-identity-progression-admin-proof
+```
+
+Those progression admin proofs are local role-surface checks. They prove the
+seeded admin detail can show the specific missing redacted packet and the
+fixture-backed recovered packet for that evidence family; they do not prove real
+hosted identity traffic, release readiness, or production readiness.
+
 The local release-readiness admin browser proof is:
 
 ```sh

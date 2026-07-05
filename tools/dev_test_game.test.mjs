@@ -668,6 +668,19 @@ test("dev test-game spine orchestrators expose stable proof order and env maps",
       "That placeholder keeps `releaseReady` and `productionReady` false.",
     ),
   );
+  assert(
+    operatorDocs.includes(
+      `npm run ${devTestGameHostedIdentityProgressionSummaryCommand}`,
+    ),
+  );
+  for (const progression of hostedIdentityEvidenceFamilyProgressionCases) {
+    assert(
+      operatorDocs.includes(
+        `FMARCH_HOSTED_IDENTITY_PROGRESSION_ID=${progression.id} npm run ${devTestGameHostedIdentityProgressionAdminProofCommand}`,
+      ),
+      `operator docs should expose ${progression.id} hosted identity progression proof command`,
+    );
+  }
   for (const descriptor of recoveryReceiptGraphDescriptors) {
     assert.equal(
       packageJson.scripts[descriptor.proofCommand],
