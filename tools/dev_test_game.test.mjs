@@ -355,6 +355,8 @@ import {
   devTestGameAdminSpineProofPlan,
 } from "./dev_test_game_admin_spine_proof.mjs";
 import {
+  assertVisibleAdminRoleSurfaceRows,
+  normalizedEvidenceObjectRowIds,
   resolveAdminAuditProofBatchPlan,
 } from "./dev_test_game_admin_audit_proof_helper.mjs";
 import {
@@ -3565,11 +3567,12 @@ test("admin proof fixtures prove normalized evidence object rows", () => {
       }),
     ],
   );
-  assert(
-    releaseProof.generatedFrom.evidenceObjectRowIds.every((rowId) =>
-      releaseProof.adminRoleSurface.visibleChecks.includes(rowId),
-    ),
-  );
+  assertVisibleAdminRoleSurfaceRows({
+    adminRoleSurface: releaseProof.adminRoleSurface,
+    rowIds: releaseProof.generatedFrom.evidenceObjectRowIds,
+    proofName: "release admin proof fixture",
+    rowName: "evidence object",
+  });
 
   const proofGraphProof = assertProofGraphAdminProof(
     proofGraphAdminProofFixture(),
@@ -3587,11 +3590,12 @@ test("admin proof fixtures prove normalized evidence object rows", () => {
       }),
     ],
   );
-  assert(
-    proofGraphProof.generatedFrom.evidenceObjectRowIds.every((rowId) =>
-      proofGraphProof.adminRoleSurface.visibleChecks.includes(rowId),
-    ),
-  );
+  assertVisibleAdminRoleSurfaceRows({
+    adminRoleSurface: proofGraphProof.adminRoleSurface,
+    rowIds: proofGraphProof.generatedFrom.evidenceObjectRowIds,
+    proofName: "proof graph admin proof fixture",
+    rowName: "evidence object",
+  });
 });
 
 test("named game selection is idempotent by default with explicit reset and reuse", () => {
@@ -12583,7 +12587,7 @@ function expectedPassedNormalizedEvidenceObjects(objects) {
 }
 
 function expectedNormalizedEvidenceObjectRowIds({ parentId, objects }) {
-  return objects.map((object) => `evidence-object:${parentId}:${object.name}`);
+  return normalizedEvidenceObjectRowIds({ parentId, objects });
 }
 
 function staleConflictMessageMilestoneFixture() {

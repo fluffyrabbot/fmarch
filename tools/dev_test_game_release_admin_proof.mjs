@@ -5,7 +5,9 @@ import {
   releaseAdminProofFallbackUnprovenIds,
 } from "./dev_test_game_release_readiness_cases.mjs";
 import {
+  assertVisibleAdminRoleSurfaceRows,
   artifactDir,
+  normalizedEvidenceObjectRowIds,
   proveAdminAuditDetail,
   readJson,
   repoRoot,
@@ -106,14 +108,12 @@ export function assertReleaseAdminProof(evidence) {
       throw new Error(`release admin proof missing visible check: ${checkId}`);
     }
   }
-  for (const evidenceObjectRowId of
-    evidence.generatedFrom?.evidenceObjectRowIds ?? []) {
-    if (!evidence.adminRoleSurface?.visibleChecks?.includes(evidenceObjectRowId)) {
-      throw new Error(
-        `release admin proof missing evidence object: ${evidenceObjectRowId}`,
-      );
-    }
-  }
+  assertVisibleAdminRoleSurfaceRows({
+    adminRoleSurface: evidence.adminRoleSurface,
+    rowIds: evidence.generatedFrom?.evidenceObjectRowIds,
+    proofName: "release admin proof",
+    rowName: "evidence object",
+  });
   for (const prerequisiteId of
     evidence.generatedFrom?.localPrerequisiteIds ?? requiredLocalPrerequisites) {
     if (!evidence.adminRoleSurface?.visibleLocalPrerequisites?.includes(prerequisiteId)) {
@@ -166,11 +166,4 @@ function releaseReadinessEvidenceObjectRowIds(readiness) {
       objects: check.normalizedEvidenceObjects,
     }),
   );
-}
-
-function normalizedEvidenceObjectRowIds({ parentId, objects }) {
-  return (Array.isArray(objects) ? objects : [])
-    .map((object) => String(object?.name ?? ""))
-    .filter((name) => name !== "")
-    .map((name) => `evidence-object:${parentId}:${name}`);
 }

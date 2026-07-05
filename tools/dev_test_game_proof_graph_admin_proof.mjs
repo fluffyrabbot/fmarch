@@ -14,7 +14,9 @@ import {
   assertDevTestGameHostedEvidenceLane,
 } from "./dev_test_game_hosted_evidence_lane.mjs";
 import {
+  assertVisibleAdminRoleSurfaceRows,
   artifactDir,
+  normalizedEvidenceObjectRowIds,
   proveAdminAuditDetail,
   readJson,
   repoRoot,
@@ -186,14 +188,12 @@ export function assertProofGraphAdminProof(evidence) {
       throw new Error(`proof graph admin proof missing visible edge: ${edgeRowId}`);
     }
   }
-  for (const evidenceObjectRowId of
-    evidence.generatedFrom?.evidenceObjectRowIds ?? []) {
-    if (!evidence.adminRoleSurface?.visibleChecks?.includes(evidenceObjectRowId)) {
-      throw new Error(
-        `proof graph admin proof missing evidence object: ${evidenceObjectRowId}`,
-      );
-    }
-  }
+  assertVisibleAdminRoleSurfaceRows({
+    adminRoleSurface: evidence.adminRoleSurface,
+    rowIds: evidence.generatedFrom?.evidenceObjectRowIds,
+    proofName: "proof graph admin proof",
+    rowName: "evidence object",
+  });
   const nodeIds = new Set(evidence.generatedFrom?.nodeIds ?? []);
   for (const surfaceId of evidence.generatedFrom?.adminProofSurfaceIds ?? []) {
     if (!nodeIds.has(`admin-proof:${surfaceId}`)) {
@@ -237,13 +237,6 @@ function proofGraphEvidenceObjectRowIds(proofGraph) {
       objects: node.normalizedEvidenceObjects,
     }),
   );
-}
-
-function normalizedEvidenceObjectRowIds({ parentId, objects }) {
-  return (Array.isArray(objects) ? objects : [])
-    .map((object) => String(object?.name ?? ""))
-    .filter((name) => name !== "")
-    .map((name) => `evidence-object:${parentId}:${name}`);
 }
 
 function bootstrapProofGraphAdminRoleHandoffs({

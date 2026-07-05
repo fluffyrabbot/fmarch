@@ -22,6 +22,28 @@ export async function readJson(filePath) {
   return JSON.parse(await readFile(filePath, "utf8"));
 }
 
+export function normalizedEvidenceObjectRowIds({ parentId, objects }) {
+  return (Array.isArray(objects) ? objects : [])
+    .map((object) => String(object?.name ?? ""))
+    .filter((name) => name !== "")
+    .map((name) => `evidence-object:${parentId}:${name}`);
+}
+
+export function assertVisibleAdminRoleSurfaceRows({
+  adminRoleSurface,
+  rowIds,
+  proofName,
+  rowName = "row",
+  surfaceKey = "visibleChecks",
+}) {
+  const visibleRows = adminRoleSurface?.[surfaceKey];
+  for (const rowId of rowIds ?? []) {
+    if (!visibleRows?.includes(rowId)) {
+      throw new Error(`${proofName} missing ${rowName}: ${rowId}`);
+    }
+  }
+}
+
 export async function runAdminAuditProof({
   smokeName,
   stage,
