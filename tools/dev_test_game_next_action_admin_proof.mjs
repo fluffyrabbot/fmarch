@@ -1,3 +1,4 @@
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { assertDevTestGameNextAction } from "./dev_test_game_next_action.mjs";
@@ -8,7 +9,6 @@ import {
 } from "./dev_test_game_hosted_concurrent_race_matrix.mjs";
 import {
   assertDevTestGameProofGraph,
-  devTestGameProofGraphPath,
 } from "./dev_test_game_proof_graph.mjs";
 import {
   proveAdminAuditDetail,
@@ -37,6 +37,15 @@ import {
   nextActionAdminProofPath,
   nextActionPath as defaultNextActionPath,
 } from "./dev_test_game_spine_artifact_paths.mjs";
+import {
+  devTestGameProofGraphCommand,
+  devTestGameProofGraphPath,
+} from "./dev_test_game_proof_graph_paths.mjs";
+
+export const proofGraphDestinationSummaryDriftNextActionPath =
+  "target/dev-test-game/next-action-proof-graph-destination-summary-drift.json";
+export const proofGraphDestinationSummaryDriftNextActionAdminProofPath =
+  "target/dev-test-game/next-action-proof-graph-destination-summary-drift-admin-proof.json";
 
 const proofRunPath = path.resolve(
   repoRoot,
@@ -360,6 +369,147 @@ export function nextActionAdminProofCase({
 
 if (pathToFileURL(process.argv[1] ?? "").href === import.meta.url) {
   await runAdminAuditProof(nextActionAdminProofCase());
+  const driftNextActionPath =
+    await writeProofGraphDestinationSummaryDriftNextActionFixture();
+  await runAdminAuditProof(
+    nextActionAdminProofCase({
+      nextActionSourcePath: driftNextActionPath,
+      evidenceSourcePath:
+        proofGraphDestinationSummaryDriftNextActionAdminProofPath,
+      smokeName:
+        "dev-test-game-next-action-admin-proof:proof-graph-destination-summary-drift",
+      stage: "next-action-admin-proof-destination-summary-drift-listen",
+    }),
+  );
+}
+
+export async function writeProofGraphDestinationSummaryDriftNextActionFixture({
+  sourcePath = process.env.FMARCH_DEV_TEST_GAME_NEXT_ACTION ??
+    defaultNextActionPath,
+  outputPath = proofGraphDestinationSummaryDriftNextActionPath,
+} = {}) {
+  const absoluteSourcePath = path.resolve(repoRoot, sourcePath);
+  const absoluteOutputPath = path.resolve(repoRoot, outputPath);
+  const source = JSON.parse(await readFile(absoluteSourcePath, "utf8"));
+  const fixture = proofGraphDestinationSummaryDriftNextActionFixture(source);
+  await mkdir(path.dirname(absoluteOutputPath), { recursive: true });
+  await writeFile(absoluteOutputPath, `${JSON.stringify(fixture, null, 2)}\n`);
+  return path.relative(repoRoot, absoluteOutputPath);
+}
+
+export function proofGraphDestinationSummaryDriftNextActionFixture(nextAction) {
+  const source = assertDevTestGameNextAction(nextAction);
+  const sourceTrace = source.proofGraphDestinationSummaryTrace ?? {};
+  const productionFeatureTargetCount = Math.max(
+    1,
+    Number(sourceTrace.productionFeatureTargetCount ?? 0),
+  );
+  const roleUrlDestinationCount = Number(
+    sourceTrace.roleUrlDestinationCount ?? 0,
+  );
+  const totalDestinationCount = productionFeatureTargetCount + 1;
+  const adminAuditDestinationCount = Math.max(
+    0,
+    totalDestinationCount - roleUrlDestinationCount,
+  );
+  const driftCount = 1;
+  const proofGraphDestinationSummary = {
+    source: sourceTrace.source || devTestGameProofGraphPath,
+    summaryStatus: "drift",
+    totalDestinationCount,
+    productionFeatureTargetCount,
+    adminAuditDestinationCount,
+    roleUrlDestinationCount,
+    driftCount,
+    buildSlice:
+      "Refresh the proof graph so its production-feature destination summary matches the production-feature target inventory before next-action or readiness guidance is trusted.",
+    proofTarget: devTestGameProofGraphPath,
+  };
+  return assertDevTestGameNextAction({
+    ...source,
+    generatedFrom: {
+      ...source.generatedFrom,
+      proofGraph: source.generatedFrom?.proofGraph ?? devTestGameProofGraphPath,
+      proofGraphDestinationSummaryStatus: "drifted",
+      proofGraphDestinationSummaryDriftCount: driftCount,
+      syntheticNextActionFixture:
+        "proof-graph-destination-summary-drift-admin-proof",
+    },
+    nextAction: {
+      command: `npm run ${devTestGameProofGraphCommand}`,
+      reason: "proof-graph-destination-summary-drift",
+      status: "blocked",
+      proofGraphDestinationSummary,
+    },
+    selectionTrace: {
+      strategy: "development-spine-priority",
+      candidateCount: 0,
+      selectedArtifactId: null,
+      candidates: [],
+    },
+    stabilityTrace: cleanProofStabilityTrace(source.stabilityTrace),
+    proofGraphDestinationSummaryTrace: {
+      strategy: "proof-graph-destination-summary-before-readiness",
+      status: "drifted",
+      source: proofGraphDestinationSummary.source,
+      summaryStatus: proofGraphDestinationSummary.summaryStatus,
+      totalDestinationCount,
+      productionFeatureTargetCount,
+      adminAuditDestinationCount,
+      roleUrlDestinationCount,
+      driftCount,
+      selected: true,
+    },
+    seedProofLaneCoverageTrace: cleanSeedProofLaneCoverageTrace(
+      source.seedProofLaneCoverageTrace,
+    ),
+    localReadinessDependencyTrace: {
+      strategy: "local-readiness-dependency-before-hosted-work",
+      candidateCount: 0,
+      selectedCheckId: null,
+      candidates: [],
+    },
+  });
+}
+
+function cleanProofStabilityTrace(stabilityTrace = {}) {
+  return {
+    strategy: "proof-stability-before-readiness",
+    status: "clean",
+    hostConfirmClicks: Number(stabilityTrace.hostConfirmClicks ?? 0),
+    retryClickCount: 0,
+    domFallbackCount: 0,
+    forceFallbackCount: 0,
+    failureCount: 0,
+    maxAttempts: Number(stabilityTrace.maxAttempts ?? 0),
+    eventCount: 0,
+    selected: false,
+  };
+}
+
+function cleanSeedProofLaneCoverageTrace(seedProofLaneCoverageTrace = {}) {
+  return {
+    strategy: "seed-proof-lane-coverage-before-readiness",
+    status: "clean",
+    source: String(seedProofLaneCoverageTrace.source ?? ""),
+    checkId:
+      typeof seedProofLaneCoverageTrace.checkId === "string"
+        ? seedProofLaneCoverageTrace.checkId
+        : null,
+    passedLaneCount: Number(seedProofLaneCoverageTrace.passedLaneCount ?? 0),
+    directSeededLaneCount: Number(
+      seedProofLaneCoverageTrace.directSeededLaneCount ?? 0,
+    ),
+    aliasOnlyLaneCount: Number(
+      seedProofLaneCoverageTrace.aliasOnlyLaneCount ?? 0,
+    ),
+    aggregateOnlyLaneCount: Number(
+      seedProofLaneCoverageTrace.aggregateOnlyLaneCount ?? 0,
+    ),
+    unclassifiedLaneCount: 0,
+    unclassifiedLaneIds: [],
+    selected: false,
+  };
 }
 
 export function assertNextActionAdminProof(evidence) {

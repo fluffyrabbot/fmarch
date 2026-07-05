@@ -301,6 +301,11 @@ import {
   assertGeneratedAdminProofHandoffPath,
 } from "./dev_test_game_admin_audit_handoff_contract.mjs";
 import {
+  proofGraphDestinationSummaryDriftNextActionAdminProofPath,
+  proofGraphDestinationSummaryDriftNextActionFixture,
+  proofGraphDestinationSummaryDriftNextActionPath,
+} from "./dev_test_game_next_action_admin_proof.mjs";
+import {
   hostedAdminHandoffProofArtifactCase,
   hostedAdminHandoffProofArtifactCases,
 } from "./dev_test_game_hosted_handoff_proof_cases.mjs";
@@ -3039,6 +3044,41 @@ test("dev test-game next-action derives one local recovery command from the mani
       driftCount: 1,
       selected: true,
     },
+  );
+  const syntheticDriftAction =
+    proofGraphDestinationSummaryDriftNextActionFixture(freshAction);
+  assertDevTestGameNextAction(syntheticDriftAction);
+  assert.equal(
+    proofGraphDestinationSummaryDriftNextActionPath,
+    "target/dev-test-game/next-action-proof-graph-destination-summary-drift.json",
+  );
+  assert.equal(
+    proofGraphDestinationSummaryDriftNextActionAdminProofPath,
+    "target/dev-test-game/next-action-proof-graph-destination-summary-drift-admin-proof.json",
+  );
+  assert.equal(
+    syntheticDriftAction.nextAction.reason,
+    "proof-graph-destination-summary-drift",
+  );
+  assert.equal(
+    syntheticDriftAction.nextAction.command,
+    `npm run ${devTestGameProofGraphCommand}`,
+  );
+  assert.equal(
+    syntheticDriftAction.proofGraphDestinationSummaryTrace.status,
+    "drifted",
+  );
+  assert.equal(
+    syntheticDriftAction.proofGraphDestinationSummaryTrace.selected,
+    true,
+  );
+  assert.equal(
+    syntheticDriftAction.nextAction.proofGraphDestinationSummary.driftCount,
+    syntheticDriftAction.proofGraphDestinationSummaryTrace.driftCount,
+  );
+  assert.equal(
+    syntheticDriftAction.generatedFrom.syntheticNextActionFixture,
+    "proof-graph-destination-summary-drift-admin-proof",
   );
   const driftedSeedProofLaneCoverage = seedProofLaneCoverageFixture({
     unclassifiedLaneIds: ["new-production-proof-lane"],
