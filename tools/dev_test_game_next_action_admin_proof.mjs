@@ -100,6 +100,8 @@ export function nextActionAdminProofCase() {
           requiredHostedHandoffGroupIdsForNextAction(source.nextAction),
         requiredHostedHandoffSummary:
           requiredHostedHandoffSummaryForNextAction(source.nextAction),
+        requiredHostedHandoffBlockedReceipt:
+          requiredHostedHandoffBlockedReceiptForNextAction(source.nextAction),
         requiredHostedHandoffInputSections:
           requiredHostedHandoffInputSectionIdsForNextAction(source.nextAction),
         requiredHostedHandoffInputSectionStatuses:
@@ -705,6 +707,23 @@ export function assertNextActionAdminProof(evidence) {
         "next-action admin proof missing hosted handoff blocked summary",
       );
     }
+    if (checklist.blockedReceipt !== undefined) {
+      const receipt =
+        evidence.adminRoleSurface?.visibleHostedHandoffBlockedReceipt;
+      if (
+        receipt?.status !== checklist.blockedReceipt.status ||
+        receipt?.operatorAction !== checklist.blockedReceipt.operatorAction ||
+        receipt?.localVsHostedBoundary !==
+          checklist.blockedReceipt.localVsHostedBoundary ||
+        receipt?.nextProofTarget !== checklist.blockedReceipt.nextProofTarget ||
+        JSON.stringify(receipt?.missingRequiredInputs ?? []) !==
+          JSON.stringify(checklist.blockedReceipt.missingRequiredInputs ?? [])
+      ) {
+        throw new Error(
+          "next-action admin proof missing hosted handoff blocked receipt",
+        );
+      }
+    }
   }
   return evidence;
 }
@@ -977,6 +996,22 @@ function requiredHostedHandoffSummaryForNextAction(nextAction) {
         preflightStatus: checklist.preflightStatus,
         command: checklist.command,
         proofTarget: checklist.proofTarget,
+      };
+}
+
+function requiredHostedHandoffBlockedReceiptForNextAction(nextAction) {
+  const receipt =
+    nextAction.nextAction.unproven?.hostedHandoffChecklist?.blockedReceipt;
+  return receipt === null || receipt === undefined
+    ? null
+    : {
+        status: receipt.status,
+        operatorAction: receipt.operatorAction,
+        localVsHostedBoundary: receipt.localVsHostedBoundary,
+        nextProofTarget: receipt.nextProofTarget,
+        missingRequiredInputs: Array.isArray(receipt.missingRequiredInputs)
+          ? receipt.missingRequiredInputs
+          : [],
       };
 }
 

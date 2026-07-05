@@ -17386,6 +17386,20 @@ function nextActionAdminProofFixture() {
         command: hostedHandoffChecklist.command,
         proofTarget: hostedHandoffChecklist.proofTarget,
       },
+      ...(hostedHandoffChecklist.blockedReceipt === undefined
+        ? {}
+        : {
+            visibleHostedHandoffBlockedReceipt: {
+              status: hostedHandoffChecklist.blockedReceipt.status,
+              operatorAction: hostedHandoffChecklist.blockedReceipt.operatorAction,
+              localVsHostedBoundary:
+                hostedHandoffChecklist.blockedReceipt.localVsHostedBoundary,
+              nextProofTarget:
+                hostedHandoffChecklist.blockedReceipt.nextProofTarget,
+              missingRequiredInputs:
+                hostedHandoffChecklist.blockedReceipt.missingRequiredInputs,
+            },
+          }),
       visibleRelatedDestinations: [
         {
           linkId: "selected-proof-graph-node",
