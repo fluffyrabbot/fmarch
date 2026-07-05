@@ -42,6 +42,12 @@ import {
   devTestGameProofGraphPath,
 } from "./dev_test_game_proof_graph_paths.mjs";
 import {
+  assertProofGraphDestinationSummaryTraceVisibleChecks,
+  buildProofGraphDestinationSummaryTrace,
+  normalizeProofGraphDestinationSummaryTrace,
+  proofGraphDestinationSummaryTraceCheckIds,
+} from "./dev_test_game_proof_graph_destination_summary_trace.mjs";
+import {
   assertProofGraphDiagnosticSummaryVisibleChecks,
   normalizeProofGraphDiagnosticSummaryTrace,
   proofGraphDiagnosticSummaryCheckIds,
@@ -267,27 +273,10 @@ export function nextActionAdminProofCase({
         unclassifiedLaneIds:
           source.nextAction.seedProofLaneCoverageTrace.unclassifiedLaneIds,
       },
-      proofGraphDestinationSummaryTrace: {
-        strategy: source.nextAction.proofGraphDestinationSummaryTrace.strategy,
-        status: source.nextAction.proofGraphDestinationSummaryTrace.status,
-        selected: source.nextAction.proofGraphDestinationSummaryTrace.selected,
-        summaryStatus:
-          source.nextAction.proofGraphDestinationSummaryTrace.summaryStatus,
-        totalDestinationCount:
-          source.nextAction.proofGraphDestinationSummaryTrace
-            .totalDestinationCount,
-        productionFeatureTargetCount:
-          source.nextAction.proofGraphDestinationSummaryTrace
-            .productionFeatureTargetCount,
-        adminAuditDestinationCount:
-          source.nextAction.proofGraphDestinationSummaryTrace
-            .adminAuditDestinationCount,
-        roleUrlDestinationCount:
-          source.nextAction.proofGraphDestinationSummaryTrace
-            .roleUrlDestinationCount,
-        driftCount:
-          source.nextAction.proofGraphDestinationSummaryTrace.driftCount,
-      },
+      proofGraphDestinationSummaryTrace:
+        normalizeProofGraphDestinationSummaryTrace(
+          source.nextAction.proofGraphDestinationSummaryTrace,
+        ),
       proofGraphDiagnosticSummaryTrace: {
         strategy: source.nextAction.proofGraphDiagnosticSummaryTrace.strategy,
         status: source.nextAction.proofGraphDiagnosticSummaryTrace.status,
@@ -487,7 +476,7 @@ export function proofGraphDestinationSummaryDriftNextActionFixture(nextAction) {
       candidates: [],
     },
     stabilityTrace: cleanProofStabilityTrace(source.stabilityTrace),
-    proofGraphDestinationSummaryTrace: {
+    proofGraphDestinationSummaryTrace: buildProofGraphDestinationSummaryTrace({
       strategy: "proof-graph-destination-summary-before-readiness",
       status: "drifted",
       source: proofGraphDestinationSummary.source,
@@ -497,8 +486,7 @@ export function proofGraphDestinationSummaryDriftNextActionFixture(nextAction) {
       adminAuditDestinationCount,
       roleUrlDestinationCount,
       driftCount,
-      selected: true,
-    },
+    }),
     proofGraphDiagnosticSummaryTrace: normalizeProofGraphDiagnosticSummaryTrace(
       source.proofGraphDiagnosticSummaryTrace,
     ),
@@ -614,24 +602,11 @@ export function assertNextActionAdminProof(evidence) {
     evidence.adminRoleSurface?.visibleChecks,
     { label: "next-action admin proof seed proof-lane coverage trace" },
   );
-  if (
-    evidence.generatedFrom?.proofGraphDestinationSummaryTrace?.strategy !==
-      "proof-graph-destination-summary-before-readiness" ||
-    !["clean", "drifted", "unavailable"].includes(
-      evidence.generatedFrom.proofGraphDestinationSummaryTrace.status,
-    ) ||
-    typeof evidence.generatedFrom.proofGraphDestinationSummaryTrace.selected !==
-      "boolean" ||
-    typeof evidence.generatedFrom.proofGraphDestinationSummaryTrace
-      .summaryStatus !== "string" ||
-    !Number.isInteger(
-      evidence.generatedFrom.proofGraphDestinationSummaryTrace.driftCount,
-    )
-  ) {
-    throw new Error(
-      "next-action admin proof is missing proof graph destination-summary trace evidence",
-    );
-  }
+  assertProofGraphDestinationSummaryTraceVisibleChecks(
+    evidence.generatedFrom?.proofGraphDestinationSummaryTrace,
+    evidence.adminRoleSurface?.visibleChecks,
+    { label: "next-action admin proof destination-summary trace" },
+  );
   assertNextActionAdminProofGraphDiagnosticSummaryTrace(evidence);
   if (
     evidence.generatedFrom?.replacementRaceReloadTrace?.strategy !==
@@ -1171,12 +1146,11 @@ function requiredChecksForNextAction(nextAction) {
       nextAction.seedProofLaneCoverageTrace,
     ),
   );
-  if (nextAction.proofGraphDestinationSummaryTrace?.status === "drifted") {
-    checks.push(
-      "proof-graph-destination-summary-trace",
-      "proof-graph-destination-summary-trace-drift-count",
-    );
-  }
+  checks.push(
+    ...proofGraphDestinationSummaryTraceCheckIds(
+      nextAction.proofGraphDestinationSummaryTrace,
+    ),
+  );
   checks.push(
     ...proofGraphDiagnosticSummaryCheckIds(
       nextAction.proofGraphDiagnosticSummaryTrace,
@@ -1589,13 +1563,9 @@ function requiredChecksForEvidence(evidence) {
     ...seedProofLaneCoverageTraceCheckIds(
       evidence.generatedFrom?.seedProofLaneCoverageTrace,
     ),
-    ...(evidence.generatedFrom?.proofGraphDestinationSummaryTrace?.status ===
-      "drifted"
-      ? [
-          "proof-graph-destination-summary-trace",
-          "proof-graph-destination-summary-trace-drift-count",
-        ]
-      : []),
+    ...proofGraphDestinationSummaryTraceCheckIds(
+      evidence.generatedFrom?.proofGraphDestinationSummaryTrace,
+    ),
     ...proofGraphDiagnosticSummaryCheckIds(
       evidence.generatedFrom?.proofGraphDiagnosticSummaryTrace,
     ),

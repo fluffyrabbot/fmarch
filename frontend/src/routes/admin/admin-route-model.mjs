@@ -56,6 +56,10 @@ import {
   normalizeProofGraphReceiptArtifactRows,
 } from "../../../../tools/dev_test_game_proof_graph_receipt_artifact_rows.mjs";
 import {
+  normalizeProofGraphDestinationSummaryTrace,
+  proofGraphDestinationSummaryTraceCheckRows,
+} from "../../../../tools/dev_test_game_proof_graph_destination_summary_trace.mjs";
+import {
   proofGraphDiagnosticSummaryCheckRows,
   normalizeProofGraphDiagnosticProofSummary,
   normalizeProofGraphDiagnosticSummaryTrace,
@@ -2282,7 +2286,7 @@ export function normalizeLocalNextActionAudit(nextAction, { game, proofGraph = n
       nextAction.seedProofLaneCoverageTrace,
     );
   const proofGraphDestinationSummaryTrace =
-    normalizeNextActionProofGraphDestinationSummaryTrace(
+    normalizeProofGraphDestinationSummaryTrace(
       nextAction.proofGraphDestinationSummaryTrace,
     );
   const proofGraphDiagnosticSummaryTrace =
@@ -3112,26 +3116,9 @@ export function normalizeLocalNextActionSeedProofLaneCoverageTraceCheckRows({
 export function normalizeLocalNextActionProofGraphDestinationSummaryTraceCheckRows({
   proofGraphDestinationSummaryTrace = null,
 } = {}) {
-  return proofGraphDestinationSummaryTrace?.status === "unavailable" ||
-    proofGraphDestinationSummaryTrace?.status === "clean" ||
-    proofGraphDestinationSummaryTrace === null
-    ? Object.freeze([])
-    : Object.freeze([
-        Object.freeze({
-          id: "proof-graph-destination-summary-trace",
-          status: `${Number(
-            proofGraphDestinationSummaryTrace.totalDestinationCount ?? 0,
-          )}/${Number(
-            proofGraphDestinationSummaryTrace.productionFeatureTargetCount ?? 0,
-          )} ${String(proofGraphDestinationSummaryTrace.status ?? "unknown")}`,
-        }),
-        Object.freeze({
-          id: "proof-graph-destination-summary-trace-drift-count",
-          status: `${Number(
-            proofGraphDestinationSummaryTrace.driftCount ?? 0,
-          )} drift`,
-        }),
-      ]);
+  return proofGraphDestinationSummaryTraceCheckRows(
+    proofGraphDestinationSummaryTrace,
+  );
 }
 
 export function normalizeLocalNextActionProofGraphDiagnosticSummaryCheckRows({
@@ -3846,52 +3833,6 @@ function normalizeNextActionStabilityTrace(stabilityTrace) {
     failureCount: Number(stabilityTrace.failureCount ?? 0),
     maxAttempts: Number(stabilityTrace.maxAttempts ?? 0),
     eventCount: Number(stabilityTrace.eventCount ?? 0),
-  });
-}
-
-function normalizeNextActionProofGraphDestinationSummaryTrace(
-  proofGraphDestinationSummaryTrace,
-) {
-  if (
-    proofGraphDestinationSummaryTrace === null ||
-    typeof proofGraphDestinationSummaryTrace !== "object" ||
-    proofGraphDestinationSummaryTrace.strategy !==
-      "proof-graph-destination-summary-before-readiness"
-  ) {
-    return Object.freeze({
-      strategy: "unknown",
-      status: "unavailable",
-      source: "",
-      summaryStatus: "",
-      selected: false,
-      totalDestinationCount: 0,
-      productionFeatureTargetCount: 0,
-      adminAuditDestinationCount: 0,
-      roleUrlDestinationCount: 0,
-      driftCount: 0,
-    });
-  }
-  return Object.freeze({
-    strategy: proofGraphDestinationSummaryTrace.strategy,
-    status: String(proofGraphDestinationSummaryTrace.status ?? "unknown"),
-    source: String(proofGraphDestinationSummaryTrace.source ?? ""),
-    summaryStatus: String(
-      proofGraphDestinationSummaryTrace.summaryStatus ?? "",
-    ),
-    selected: proofGraphDestinationSummaryTrace.selected === true,
-    totalDestinationCount: Number(
-      proofGraphDestinationSummaryTrace.totalDestinationCount ?? 0,
-    ),
-    productionFeatureTargetCount: Number(
-      proofGraphDestinationSummaryTrace.productionFeatureTargetCount ?? 0,
-    ),
-    adminAuditDestinationCount: Number(
-      proofGraphDestinationSummaryTrace.adminAuditDestinationCount ?? 0,
-    ),
-    roleUrlDestinationCount: Number(
-      proofGraphDestinationSummaryTrace.roleUrlDestinationCount ?? 0,
-    ),
-    driftCount: Number(proofGraphDestinationSummaryTrace.driftCount ?? 0),
   });
 }
 

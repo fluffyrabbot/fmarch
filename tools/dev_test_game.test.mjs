@@ -486,6 +486,9 @@ import {
   proofGraphProductionFeatureDestinationSummary,
 } from "./dev_test_game_proof_graph_production_feature_destinations.mjs";
 import {
+  buildProofGraphDestinationSummaryTrace,
+} from "./dev_test_game_proof_graph_destination_summary_trace.mjs";
+import {
   buildProofGraphDiagnosticProofSummary,
   buildProofGraphDiagnosticSummaryTrace,
   proofGraphDiagnosticSummaryCheckIds,
@@ -3046,7 +3049,7 @@ test("dev test-game next-action derives one local recovery command from the mani
   });
   assert.deepEqual(
     destinationSummaryDriftAction.proofGraphDestinationSummaryTrace,
-    {
+    buildProofGraphDestinationSummaryTrace({
       strategy: "proof-graph-destination-summary-before-readiness",
       status: "drifted",
       source: "target/dev-test-game/proof-graph.json",
@@ -3056,8 +3059,7 @@ test("dev test-game next-action derives one local recovery command from the mani
       adminAuditDestinationCount: 1,
       roleUrlDestinationCount: 0,
       driftCount: 1,
-      selected: true,
-    },
+    }),
   );
   assert.deepEqual(
     destinationSummaryDriftAction.proofGraphDiagnosticSummaryTrace,

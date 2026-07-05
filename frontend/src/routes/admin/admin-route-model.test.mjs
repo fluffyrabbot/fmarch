@@ -153,6 +153,10 @@ import {
   proofGraphRecoveryReceiptNodes,
 } from "../../../../tools/dev_test_game_proof_graph_handoff_cases.mjs";
 import {
+  buildProofGraphDestinationSummaryTrace,
+  proofGraphDestinationSummaryTraceCheckIds,
+} from "../../../../tools/dev_test_game_proof_graph_destination_summary_trace.mjs";
+import {
   buildProofGraphDiagnosticProofSummary,
   buildProofGraphDiagnosticSummaryTrace,
   proofGraphDiagnosticSummaryCheckIds,
@@ -2595,8 +2599,11 @@ test("admin route data exposes proof graph destination-summary drift next action
           "proof-graph-destination-summary-drift",
           "proof-graph-destination-summary",
           "proof-graph-destination-summary-drift-count",
-          "proof-graph-destination-summary-trace",
-          "proof-graph-destination-summary-trace-drift-count",
+          ...proofGraphDestinationSummaryTraceCheckIds(
+            proofGraphDestinationSummaryTraceFixture({
+              proofGraphDestinationSummary,
+            }),
+          ),
           ...proofGraphDiagnosticSummaryCheckIds(
             proofGraphDiagnosticSummaryTraceFixture(),
           ),
@@ -6194,7 +6201,7 @@ function proofGraphDestinationSummaryActionFixture({
 function proofGraphDestinationSummaryTraceFixture({
   proofGraphDestinationSummary,
 } = {}) {
-  return {
+  return buildProofGraphDestinationSummaryTrace({
     strategy: "proof-graph-destination-summary-before-readiness",
     status:
       proofGraphDestinationSummary === undefined ? "clean" : "drifted",
@@ -6211,8 +6218,7 @@ function proofGraphDestinationSummaryTraceFixture({
     roleUrlDestinationCount:
       proofGraphDestinationSummary?.roleUrlDestinationCount ?? 4,
     driftCount: proofGraphDestinationSummary?.driftCount ?? 0,
-    selected: proofGraphDestinationSummary !== undefined,
-  };
+  });
 }
 
 function proofGraphDiagnosticSummaryTraceFixture({

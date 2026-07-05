@@ -79,6 +79,11 @@ import {
   devTestGameProofGraphPath,
 } from "./dev_test_game_proof_graph_paths.mjs";
 import {
+  assertProofGraphDestinationSummaryTrace,
+  buildProofGraphDestinationSummaryTrace,
+  proofGraphDestinationSummaryDriftFromProofGraph,
+} from "./dev_test_game_proof_graph_destination_summary_trace.mjs";
+import {
   assertProofGraphDiagnosticSummaryTrace,
   buildProofGraphDiagnosticSummaryTrace,
 } from "./dev_test_game_proof_graph_diagnostic_summary.mjs";
@@ -712,7 +717,12 @@ export function assertDevTestGameNextAction(evidence) {
   assertProofStabilityTrace(evidence.stabilityTrace, evidence.nextAction);
   assertProofGraphDestinationSummaryTrace(
     evidence.proofGraphDestinationSummaryTrace,
-    evidence.nextAction,
+    {
+      label: "next-action proof graph destination-summary trace",
+      nextActionReason: evidence.nextAction.reason,
+      nextActionProofGraphDestinationSummary:
+        evidence.nextAction.proofGraphDestinationSummary,
+    },
   );
   assertProofGraphDiagnosticSummaryTrace(evidence.proofGraphDiagnosticSummaryTrace);
   assertSeedProofLaneCoverageTrace(evidence.seedProofLaneCoverageTrace, {
@@ -1211,65 +1221,6 @@ function buildReleaseReadinessTrace(candidates) {
         ? {}
         : { hostedHandoffChecklist: candidate.hostedHandoffChecklist }),
     })),
-  };
-}
-
-function proofGraphDestinationSummaryDriftFromProofGraph(
-  proofGraph,
-  { source = devTestGameProofGraphPath } = {},
-) {
-  const summary = proofGraph?.summary?.productionFeatureDestinationSummary;
-  const productionFeatureTargetCount = numberOrZero(
-    proofGraph?.summary?.productionFeatureTargetCount,
-  );
-  const totalDestinationCount = numberOrZero(summary?.totalDestinationCount);
-  const adminAuditDestinationCount = numberOrZero(
-    summary?.adminAuditDestinationCount,
-  );
-  const roleUrlDestinationCount = numberOrZero(summary?.roleUrlDestinationCount);
-  const driftCount = numberOrZero(
-    summary?.driftCount ?? totalDestinationCount - productionFeatureTargetCount,
-  );
-  const summaryStatus = String(summary?.status ?? "missing");
-  const status =
-    proofGraph === null
-      ? "unavailable"
-      : summaryStatus === "passed" &&
-          driftCount === 0 &&
-          totalDestinationCount === productionFeatureTargetCount
-        ? "clean"
-        : "drifted";
-  return {
-    strategy: "proof-graph-destination-summary-before-readiness",
-    status,
-    source: proofGraph === null ? "" : source,
-    summaryStatus,
-    totalDestinationCount,
-    productionFeatureTargetCount,
-    adminAuditDestinationCount,
-    roleUrlDestinationCount,
-    driftCount,
-  };
-}
-
-function buildProofGraphDestinationSummaryTrace(
-  proofGraphDestinationSummaryDrift,
-) {
-  return {
-    strategy: proofGraphDestinationSummaryDrift.strategy,
-    status: proofGraphDestinationSummaryDrift.status,
-    source: proofGraphDestinationSummaryDrift.source,
-    summaryStatus: proofGraphDestinationSummaryDrift.summaryStatus,
-    totalDestinationCount:
-      proofGraphDestinationSummaryDrift.totalDestinationCount,
-    productionFeatureTargetCount:
-      proofGraphDestinationSummaryDrift.productionFeatureTargetCount,
-    adminAuditDestinationCount:
-      proofGraphDestinationSummaryDrift.adminAuditDestinationCount,
-    roleUrlDestinationCount:
-      proofGraphDestinationSummaryDrift.roleUrlDestinationCount,
-    driftCount: proofGraphDestinationSummaryDrift.driftCount,
-    selected: proofGraphDestinationSummaryDrift.status === "drifted",
   };
 }
 
@@ -2067,55 +2018,6 @@ function assertProofStabilityTrace(stabilityTrace, nextAction) {
     stabilityTrace.selected === true
   ) {
     throw new Error("next-action stability trace selected without drift action");
-  }
-}
-
-function assertProofGraphDestinationSummaryTrace(
-  proofGraphDestinationSummaryTrace,
-  nextAction,
-) {
-  if (
-    proofGraphDestinationSummaryTrace?.strategy !==
-      "proof-graph-destination-summary-before-readiness" ||
-    !["clean", "drifted", "unavailable"].includes(
-      proofGraphDestinationSummaryTrace.status,
-    ) ||
-    typeof proofGraphDestinationSummaryTrace.selected !== "boolean" ||
-    typeof proofGraphDestinationSummaryTrace.summaryStatus !== "string" ||
-    !Number.isInteger(proofGraphDestinationSummaryTrace.totalDestinationCount) ||
-    !Number.isInteger(
-      proofGraphDestinationSummaryTrace.productionFeatureTargetCount,
-    ) ||
-    !Number.isInteger(
-      proofGraphDestinationSummaryTrace.adminAuditDestinationCount,
-    ) ||
-    !Number.isInteger(proofGraphDestinationSummaryTrace.roleUrlDestinationCount) ||
-    !Number.isInteger(proofGraphDestinationSummaryTrace.driftCount)
-  ) {
-    throw new Error(
-      "next-action proof graph destination-summary trace is missing or malformed",
-    );
-  }
-  if (
-    nextAction.reason === "proof-graph-destination-summary-drift" &&
-    (proofGraphDestinationSummaryTrace.status !== "drifted" ||
-      proofGraphDestinationSummaryTrace.selected !== true ||
-      nextAction.proofGraphDestinationSummary?.driftCount !==
-        proofGraphDestinationSummaryTrace.driftCount ||
-      nextAction.proofGraphDestinationSummary?.summaryStatus !==
-        proofGraphDestinationSummaryTrace.summaryStatus)
-  ) {
-    throw new Error(
-      "next-action proof graph destination-summary trace does not match selected drift",
-    );
-  }
-  if (
-    nextAction.reason !== "proof-graph-destination-summary-drift" &&
-    proofGraphDestinationSummaryTrace.selected === true
-  ) {
-    throw new Error(
-      "next-action proof graph destination-summary trace selected without drift action",
-    );
   }
 }
 
