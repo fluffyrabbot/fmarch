@@ -56,21 +56,35 @@ import {
   identityFeatureSpineTargetRows,
 } from "./dev_test_game_identity_feature_spine_targets.mjs";
 import {
+  replacementFeatureSpineSource,
   replacementFeatureSpineSourceCheckId,
   replacementFeatureSpineTargetRows,
 } from "./dev_test_game_replacement_feature_spine_targets.mjs";
 import {
+  replacementActionFeatureSpineSource,
   replacementActionFeatureSpineSourceCheckId,
   replacementActionFeatureSpineTargetRows,
 } from "./dev_test_game_replacement_action_feature_spine_targets.mjs";
 import {
+  replacementPrivateFeatureSpineSource,
   replacementPrivateFeatureSpineSourceCheckId,
   replacementPrivateFeatureSpineTargetRows,
 } from "./dev_test_game_replacement_private_feature_spine_targets.mjs";
 import {
+  cohostFeatureSpineSource,
+  cohostFeatureSpineTargetRows,
+} from "./dev_test_game_cohost_feature_spine_targets.mjs";
+import {
   hardeningFeatureSpineCycleIds,
   hardeningFeatureSpineSourceCheckId,
 } from "./dev_test_game_hardening_feature_spine_targets.mjs";
+import {
+  hostSetupFeatureSpineSource,
+  hostSetupFeatureSpineTargetRows,
+} from "./dev_test_game_host_setup_feature_spine_targets.mjs";
+import {
+  proofGraphAdminFeatureTargetCases,
+} from "./dev_test_game_proof_graph_feature_target_cases.mjs";
 import {
   replacementStaleConflictMessageSpineLaneCase,
 } from "./dev_test_game_stale_conflict_scenarios.mjs";
@@ -509,6 +523,75 @@ test("replacement private production feature target derives proof row ids from s
   assert.equal(target.roleUrlId, source.roleUrlId);
   assert.equal(target.checkpointId, source.checkpointId);
   assert.equal(target.adminCheckId, source.adminCheckId);
+});
+
+test("proof graph admin feature targets derive from shared source rows", () => {
+  const expectedCases = [
+    {
+      generatedFromKey: "hostSetupFeatureTarget",
+      label: "host setup",
+      source: hostSetupFeatureSpineSource,
+      targetRow: hostSetupFeatureSpineTargetRows.hostSetupRoute,
+    },
+    {
+      generatedFromKey: "cohostFeatureTarget",
+      label: "cohost console",
+      source: cohostFeatureSpineSource,
+      targetRow: cohostFeatureSpineTargetRows.cohostConsole,
+    },
+    {
+      generatedFromKey: "replacementFeatureTarget",
+      label: "replacement player",
+      source: replacementFeatureSpineSource,
+      targetRow: replacementFeatureSpineTargetRows.replacementPlayer,
+    },
+    {
+      generatedFromKey: "replacementActionFeatureTarget",
+      label: "replacement action",
+      source: replacementActionFeatureSpineSource,
+      targetRow:
+        replacementActionFeatureSpineTargetRows.replacementActionRecovery,
+    },
+    {
+      generatedFromKey: "replacementPrivateFeatureTarget",
+      label: "replacement private",
+      source: replacementPrivateFeatureSpineSource,
+      targetRow:
+        replacementPrivateFeatureSpineTargetRows.replacementPrivateChannel,
+    },
+  ];
+  assert.deepEqual(
+    proofGraphAdminFeatureTargetCases.map((featureTargetCase) => [
+      featureTargetCase.generatedFromKey,
+      featureTargetCase.label,
+      featureTargetCase.source.sourceCheckId,
+      featureTargetCase.source.graphSourceNodeId,
+      featureTargetCase.source.roleUrlIncludes,
+      featureTargetCase.source.rerunCommand,
+      featureTargetCase.targetRow.featureSlotId,
+      featureTargetCase.targetRow.sourceCheckId,
+      featureTargetCase.targetRow.checkpointId,
+      featureTargetCase.targetRow.adminCheckId,
+    ]),
+    expectedCases.map((featureTargetCase) => [
+      featureTargetCase.generatedFromKey,
+      featureTargetCase.label,
+      featureTargetCase.source.sourceCheckId,
+      featureTargetCase.source.graphSourceNodeId,
+      featureTargetCase.source.roleUrlIncludes,
+      featureTargetCase.source.rerunCommand,
+      featureTargetCase.targetRow.featureSlotId,
+      featureTargetCase.targetRow.sourceCheckId,
+      featureTargetCase.targetRow.checkpointId,
+      featureTargetCase.targetRow.adminCheckId,
+    ]),
+  );
+  for (const featureTargetCase of proofGraphAdminFeatureTargetCases) {
+    assert.equal(
+      featureTargetCase.targetRow.sourceCheckId,
+      featureTargetCase.source.sourceCheckId,
+    );
+  }
 });
 
 test("scenario-owned production feature targets avoid hand-maintained row literals", async () => {

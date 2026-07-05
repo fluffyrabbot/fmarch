@@ -26,30 +26,8 @@ import {
   localAdminAuditIds,
 } from "./dev_test_game_admin_audit_surface_ids.mjs";
 import {
-  cohostFeatureSpineSourceCheckId,
-  cohostFeatureSpineTargetRows,
-  devTestGameCohostConsoleProofCommand,
-} from "./dev_test_game_cohost_feature_spine_targets.mjs";
-import {
-  devTestGameReplacementPlayerProofCommand,
-  replacementFeatureSpineSourceCheckId,
-  replacementFeatureSpineTargetRows,
-} from "./dev_test_game_replacement_feature_spine_targets.mjs";
-import {
-  devTestGameReplacementActionProofCommand,
-  replacementActionFeatureSpineSourceCheckId,
-  replacementActionFeatureSpineTargetRows,
-} from "./dev_test_game_replacement_action_feature_spine_targets.mjs";
-import {
-  devTestGameReplacementPrivateProofCommand,
-  replacementPrivateFeatureSpineSourceCheckId,
-  replacementPrivateFeatureSpineTargetRows,
-} from "./dev_test_game_replacement_private_feature_spine_targets.mjs";
-import {
-  devTestGameHostSetupProofCommand,
-  hostSetupFeatureSpineSourceCheckId,
-  hostSetupFeatureSpineTargetRows,
-} from "./dev_test_game_host_setup_feature_spine_targets.mjs";
+  proofGraphAdminFeatureTargetCases,
+} from "./dev_test_game_proof_graph_feature_target_cases.mjs";
 import {
   localNextActionAdminSurfaceCheckId,
   localProofFreshnessAdminSurfaceCheckId,
@@ -175,17 +153,7 @@ export function proofGraphAdminProofCase() {
           hostedMatrix: source.hostedMatrix,
           hostedEvidenceLane: source.hostedEvidenceLane,
         }),
-        hostSetupFeatureTarget: proofGraphHostSetupFeatureTarget(
-          source.proofGraph,
-        ),
-        cohostFeatureTarget: proofGraphCohostFeatureTarget(source.proofGraph),
-        replacementFeatureTarget: proofGraphReplacementFeatureTarget(
-          source.proofGraph,
-        ),
-        replacementActionFeatureTarget:
-          proofGraphReplacementActionFeatureTarget(source.proofGraph),
-        replacementPrivateFeatureTarget:
-          proofGraphReplacementPrivateFeatureTarget(source.proofGraph),
+        ...proofGraphAdminFeatureTargetEntries(source.proofGraph),
       },
       adminRoleSurface,
     }),
@@ -249,124 +217,35 @@ export function assertProofGraphAdminProof(evidence) {
     handoffs: evidence.generatedFrom?.adminProofRoleHandoffs,
     proofName: "proof graph admin proof",
   });
-  assertProofGraphAdminProofCoversHostSetupFeatureTarget(evidence);
-  assertProofGraphAdminProofCoversCohostFeatureTarget(evidence);
-  assertProofGraphAdminProofCoversReplacementFeatureTarget(evidence);
-  assertProofGraphAdminProofCoversReplacementActionFeatureTarget(evidence);
-  assertProofGraphAdminProofCoversReplacementPrivateFeatureTarget(evidence);
+  for (const featureTargetCase of proofGraphAdminFeatureTargetCases) {
+    assertProofGraphAdminProofCoversFeatureTarget(evidence, featureTargetCase);
+  }
   return evidence;
-}
-
-function assertProofGraphAdminProofCoversHostSetupFeatureTarget(evidence) {
-  assertProofGraphAdminProofCoversFeatureTarget(evidence, {
-    target: evidence.generatedFrom?.hostSetupFeatureTarget,
-    expectedRoleSurfaceNodeId: "role-surface:host-setup",
-    expectedFeatureSlotId:
-      hostSetupFeatureSpineTargetRows.hostSetupRoute.featureSlotId,
-    expectedSourceCheckId: hostSetupFeatureSpineSourceCheckId,
-    expectedRoleUrlIncludes: "/g/<seeded-game>/setup",
-    expectedCheckpointId: "start-phase",
-    expectedAdminCheckId: "start-phase",
-    expectedRecoveryCommand: devTestGameHostSetupProofCommand,
-    label: "host setup",
-  });
-}
-
-function assertProofGraphAdminProofCoversCohostFeatureTarget(evidence) {
-  assertProofGraphAdminProofCoversFeatureTarget(evidence, {
-    target: evidence.generatedFrom?.cohostFeatureTarget,
-    expectedRoleSurfaceNodeId: "role-surface:cohost-console",
-    expectedFeatureSlotId:
-      cohostFeatureSpineTargetRows.cohostConsole.featureSlotId,
-    expectedSourceCheckId: cohostFeatureSpineSourceCheckId,
-    expectedRoleUrlIncludes: "/g/<seeded-game>/host",
-    expectedCheckpointId: "extend-deadline-ack",
-    expectedAdminCheckId: "cohost-console",
-    expectedRecoveryCommand: devTestGameCohostConsoleProofCommand,
-    label: "cohost console",
-  });
-}
-
-function assertProofGraphAdminProofCoversReplacementFeatureTarget(evidence) {
-  assertProofGraphAdminProofCoversFeatureTarget(evidence, {
-    target: evidence.generatedFrom?.replacementFeatureTarget,
-    expectedRoleSurfaceNodeId: "role-surface:replacement-player",
-    expectedFeatureSlotId:
-      replacementFeatureSpineTargetRows.replacementPlayer.featureSlotId,
-    expectedSourceCheckId: replacementFeatureSpineSourceCheckId,
-    expectedRoleUrlIncludes: "/g/<seeded-game>",
-    expectedCheckpointId: "incoming-player-slot-authority",
-    expectedAdminCheckId: "replacement-incoming-player",
-    expectedRecoveryCommand: devTestGameReplacementPlayerProofCommand,
-    label: "replacement player",
-  });
-}
-
-function assertProofGraphAdminProofCoversReplacementActionFeatureTarget(
-  evidence,
-) {
-  assertProofGraphAdminProofCoversFeatureTarget(evidence, {
-    target: evidence.generatedFrom?.replacementActionFeatureTarget,
-    expectedRoleSurfaceNodeId: "role-surface:replacement-action",
-    expectedFeatureSlotId:
-      replacementActionFeatureSpineTargetRows.replacementActionRecovery
-        .featureSlotId,
-    expectedSourceCheckId: replacementActionFeatureSpineSourceCheckId,
-    expectedRoleUrlIncludes: "/g/<replacement-action-game>",
-    expectedCheckpointId: "replacement-incoming-action",
-    expectedAdminCheckId: "replacement-incoming-action",
-    expectedRecoveryCommand: devTestGameReplacementActionProofCommand,
-    label: "replacement action",
-  });
-}
-
-function assertProofGraphAdminProofCoversReplacementPrivateFeatureTarget(
-  evidence,
-) {
-  assertProofGraphAdminProofCoversFeatureTarget(evidence, {
-    target: evidence.generatedFrom?.replacementPrivateFeatureTarget,
-    expectedRoleSurfaceNodeId: "role-surface:replacement-private-channel",
-    expectedFeatureSlotId:
-      replacementPrivateFeatureSpineTargetRows.replacementPrivateChannel
-        .featureSlotId,
-    expectedSourceCheckId: replacementPrivateFeatureSpineSourceCheckId,
-    expectedRoleUrlIncludes:
-      "/g/<replacement-private-game>/c/private%3Amafia_day_chat",
-    expectedCheckpointId: "replacement-stale-private-channel",
-    expectedAdminCheckId: "replacement-stale-private-channel",
-    expectedRecoveryCommand: devTestGameReplacementPrivateProofCommand,
-    label: "replacement private",
-  });
 }
 
 function assertProofGraphAdminProofCoversFeatureTarget(
   evidence,
-  {
-    target,
-    expectedRoleSurfaceNodeId,
-    expectedFeatureSlotId,
-    expectedSourceCheckId,
-    expectedRoleUrlIncludes,
-    expectedCheckpointId,
-    expectedAdminCheckId,
-    expectedRecoveryCommand,
-    label,
-  },
+  featureTargetCase,
 ) {
+  const target =
+    evidence.generatedFrom?.[featureTargetCase.generatedFromKey];
+  const expectedFeatureSlotId = featureTargetCase.targetRow.featureSlotId;
   if (
-    target?.roleSurfaceNodeId !== expectedRoleSurfaceNodeId ||
+    target?.roleSurfaceNodeId !== featureTargetCase.source.graphSourceNodeId ||
     target.productionFeatureNodeId !==
       `production-feature:${expectedFeatureSlotId}` ||
-    target.sourceCheckId !== expectedSourceCheckId ||
+    target.sourceCheckId !== featureTargetCase.source.sourceCheckId ||
     target.featureSlotId !== expectedFeatureSlotId ||
-    !target.roleUrl?.includes(expectedRoleUrlIncludes) ||
+    !target.roleUrl?.includes(featureTargetCase.source.roleUrlIncludes) ||
     target.targetRoleUrl !== target.roleUrl ||
-    target.checkpointId !== expectedCheckpointId ||
-    target.adminCheckId !== expectedAdminCheckId ||
+    target.checkpointId !== featureTargetCase.targetRow.checkpointId ||
+    target.adminCheckId !== featureTargetCase.targetRow.adminCheckId ||
     !target.browserProofCommand?.includes("test:dev-test-game-core-live") ||
-    target.recoveryCommand !== expectedRecoveryCommand
+    target.recoveryCommand !== featureTargetCase.source.rerunCommand
   ) {
-    throw new Error(`proof graph admin proof missing ${label} feature target`);
+    throw new Error(
+      `proof graph admin proof missing ${featureTargetCase.label} feature target`,
+    );
   }
   for (const rowId of [
     target.roleSurfaceNodeId,
@@ -374,7 +253,9 @@ function assertProofGraphAdminProofCoversFeatureTarget(
     target.edgeRowId,
   ]) {
     if (!evidence.adminRoleSurface?.visibleChecks?.includes(rowId)) {
-      throw new Error(`proof graph admin proof missing ${label} row: ${rowId}`);
+      throw new Error(
+        `proof graph admin proof missing ${featureTargetCase.label} row: ${rowId}`,
+      );
     }
   }
   for (const linkId of [
@@ -383,7 +264,7 @@ function assertProofGraphAdminProofCoversFeatureTarget(
   ]) {
     if (!evidence.adminRoleSurface?.visibleRelatedLinks?.includes(linkId)) {
       throw new Error(
-        `proof graph admin proof missing ${label} related link: ${linkId}`,
+        `proof graph admin proof missing ${featureTargetCase.label} related link: ${linkId}`,
       );
     }
   }
@@ -412,57 +293,18 @@ function proofGraphEvidenceObjectRowIds(proofGraph) {
   );
 }
 
-function proofGraphHostSetupFeatureTarget(proofGraph) {
-  return proofGraphFeatureTarget(proofGraph, {
-    roleSurfaceNodeId: "role-surface:host-setup",
-    expectedFeatureSlotId:
-      hostSetupFeatureSpineTargetRows.hostSetupRoute.featureSlotId,
-    label: "host setup",
-  });
+function proofGraphAdminFeatureTargetEntries(proofGraph) {
+  return Object.fromEntries(
+    proofGraphAdminFeatureTargetCases.map((featureTargetCase) => [
+      featureTargetCase.generatedFromKey,
+      proofGraphFeatureTarget(proofGraph, featureTargetCase),
+    ]),
+  );
 }
 
-function proofGraphCohostFeatureTarget(proofGraph) {
-  return proofGraphFeatureTarget(proofGraph, {
-    roleSurfaceNodeId: "role-surface:cohost-console",
-    expectedFeatureSlotId:
-      cohostFeatureSpineTargetRows.cohostConsole.featureSlotId,
-    label: "cohost console",
-  });
-}
-
-function proofGraphReplacementFeatureTarget(proofGraph) {
-  return proofGraphFeatureTarget(proofGraph, {
-    roleSurfaceNodeId: "role-surface:replacement-player",
-    expectedFeatureSlotId:
-      replacementFeatureSpineTargetRows.replacementPlayer.featureSlotId,
-    label: "replacement player",
-  });
-}
-
-function proofGraphReplacementActionFeatureTarget(proofGraph) {
-  return proofGraphFeatureTarget(proofGraph, {
-    roleSurfaceNodeId: "role-surface:replacement-action",
-    expectedFeatureSlotId:
-      replacementActionFeatureSpineTargetRows.replacementActionRecovery
-        .featureSlotId,
-    label: "replacement action",
-  });
-}
-
-function proofGraphReplacementPrivateFeatureTarget(proofGraph) {
-  return proofGraphFeatureTarget(proofGraph, {
-    roleSurfaceNodeId: "role-surface:replacement-private-channel",
-    expectedFeatureSlotId:
-      replacementPrivateFeatureSpineTargetRows.replacementPrivateChannel
-        .featureSlotId,
-    label: "replacement private",
-  });
-}
-
-function proofGraphFeatureTarget(
-  proofGraph,
-  { roleSurfaceNodeId, expectedFeatureSlotId, label },
-) {
+function proofGraphFeatureTarget(proofGraph, featureTargetCase) {
+  const roleSurfaceNodeId = featureTargetCase.source.graphSourceNodeId;
+  const expectedFeatureSlotId = featureTargetCase.targetRow.featureSlotId;
   const roleSurfaceNode = proofGraph.nodes.find(
     (node) => node.id === roleSurfaceNodeId,
   );
@@ -480,7 +322,9 @@ function proofGraphFeatureTarget(
     productionFeatureNode === undefined ||
     edge === undefined
   ) {
-    throw new Error(`proof graph missing ${label} feature target`);
+    throw new Error(
+      `proof graph missing ${featureTargetCase.label} feature target`,
+    );
   }
   return {
     roleSurfaceNodeId: roleSurfaceNode.id,
