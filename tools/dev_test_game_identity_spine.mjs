@@ -1,6 +1,7 @@
 import { pathToFileURL } from "node:url";
 import {
   devTestGameHostedIdentityEvidencePath,
+  devTestGameHostedIdentityProgressionSummaryPath,
 } from "./dev_test_game_hosted_identity_evidence.mjs";
 import { releaseReadinessStep } from "./dev_test_game_spine_readiness_steps.mjs";
 import { runSpinePlan } from "./dev_test_game_spine_runner.mjs";
@@ -15,18 +16,25 @@ export const identityReadinessEnv = {
     "target/dev-test-game/identity-admin-proof.json",
   FMARCH_DEV_TEST_GAME_HOSTED_IDENTITY_EVIDENCE:
     devTestGameHostedIdentityEvidencePath,
+  FMARCH_DEV_TEST_GAME_HOSTED_IDENTITY_PROGRESSION_SUMMARY:
+    devTestGameHostedIdentityProgressionSummaryPath,
 };
 
 export const devTestGameIdentitySpinePlan = [
   { kind: "node", script: "tools/auth_invite_role_proof.mjs" },
   { kind: "node", script: "tools/dev_test_game_identity_admin_proof.mjs" },
   { kind: "node", script: "tools/dev_test_game_hosted_identity_evidence.mjs" },
+  {
+    kind: "node",
+    script: "tools/dev_test_game_hosted_identity_progression_summary.mjs",
+  },
   releaseReadinessStep({
     reason: "identity-adapter-and-hosted-evidence",
     changedInputs: [
       "target/auth-invite-role-proof/invite-role-proof.json",
       "target/dev-test-game/identity-admin-proof.json",
       devTestGameHostedIdentityEvidencePath,
+      devTestGameHostedIdentityProgressionSummaryPath,
     ],
     env: identityReadinessEnv,
   }),

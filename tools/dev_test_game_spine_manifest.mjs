@@ -614,6 +614,7 @@ export function assertDevTestGameSpineManifest(manifest) {
     "tools/auth_invite_role_proof.mjs",
     "tools/dev_test_game_identity_admin_proof.mjs",
     "tools/dev_test_game_hosted_identity_evidence.mjs",
+    "tools/dev_test_game_hosted_identity_progression_summary.mjs",
     "tools/dev_test_game_release_readiness.mjs",
   ]);
   assertPlanScripts(manifest.commands?.adminSpine?.plan ?? [], [

@@ -6,6 +6,7 @@ import { devTestGameHostedConcurrentRaceMatrixPath } from "./dev_test_game_hoste
 import { devTestGameHostedEvidenceLanePath } from "./dev_test_game_hosted_evidence_lane.mjs";
 import {
   devTestGameHostedIdentityEvidencePath,
+  devTestGameHostedIdentityProgressionSummaryPath,
 } from "./dev_test_game_hosted_identity_evidence.mjs";
 import { devTestGameHostedTargetPreflightPath } from "./dev_test_game_hosted_target_preflight.mjs";
 import { runAdminSpineProof } from "./dev_test_game_admin_spine_proof.mjs";
@@ -75,6 +76,8 @@ export const adminSpineReadinessEvidenceEnv = {
     "target/dev-test-game/identity-admin-proof.json",
   FMARCH_DEV_TEST_GAME_HOSTED_IDENTITY_EVIDENCE:
     devTestGameHostedIdentityEvidencePath,
+  FMARCH_DEV_TEST_GAME_HOSTED_IDENTITY_PROGRESSION_SUMMARY:
+    devTestGameHostedIdentityProgressionSummaryPath,
   FMARCH_DEV_TEST_GAME_HOSTED_IDENTITY_EVIDENCE_ADMIN_PROOF:
     "target/dev-test-game/hosted-identity-evidence-admin-proof.json",
   FMARCH_DEV_TEST_GAME_SPINE_MANIFEST: "target/dev-test-game/spine-manifest.json",
@@ -149,6 +152,10 @@ export const devTestGameAdminSpinePlan = [
     script: "tools/dev_test_game_hosted_concurrent_race_matrix.mjs",
   },
   { kind: "node", script: "tools/dev_test_game_hosted_identity_evidence.mjs" },
+  {
+    kind: "node",
+    script: "tools/dev_test_game_hosted_identity_progression_summary.mjs",
+  },
   { kind: "node", script: "tools/dev_test_game_hosted_target_preflight.mjs" },
   { kind: "node", script: "tools/dev_test_game_hosted_evidence_lane.mjs" },
   {
@@ -168,6 +175,7 @@ export const devTestGameAdminSpinePlan = [
     changedInputs: [
       devTestGameHostedConcurrentRaceMatrixPath,
       devTestGameHostedIdentityEvidencePath,
+      devTestGameHostedIdentityProgressionSummaryPath,
       devTestGameHostedTargetPreflightPath,
       devTestGameHostedEvidenceLanePath,
       "target/dev-test-game/hosted-evidence-lane-demo-proof.json",
