@@ -229,6 +229,8 @@ import {
   hostedIdentityEvidenceOperatorAbuseRateLimitRecoveredFixturePath,
   hostedIdentityEvidenceOperatorSessionSecretPartialFixturePath,
   hostedIdentityEvidenceOperatorSessionSecretRecoveredFixturePath,
+  hostedIdentityEvidenceOperatorAuditRetentionPartialFixturePath,
+  hostedIdentityEvidenceOperatorAuditRetentionRecoveredFixturePath,
   hostedIdentityEvidenceOperatorAccountLifecyclePartialFixturePath,
   hostedIdentityEvidenceOperatorAccountLifecycleRecoveredFixturePath,
   hostedIdentityEvidenceOperatorAccountRecoveryRecoveredFixturePath,
@@ -1363,6 +1365,12 @@ test("hosted identity evidence lane records blocked and passed handoffs", async 
   ));
   assert(hostedIdentityEvidenceFixturePaths.includes(
     hostedIdentityEvidenceOperatorSessionSecretRecoveredFixturePath,
+  ));
+  assert(hostedIdentityEvidenceFixturePaths.includes(
+    hostedIdentityEvidenceOperatorAuditRetentionPartialFixturePath,
+  ));
+  assert(hostedIdentityEvidenceFixturePaths.includes(
+    hostedIdentityEvidenceOperatorAuditRetentionRecoveredFixturePath,
   ));
   assert(hostedIdentityEvidenceFixturePaths.includes(
     hostedIdentityEvidenceOperatorInvitePartialFixturePath,

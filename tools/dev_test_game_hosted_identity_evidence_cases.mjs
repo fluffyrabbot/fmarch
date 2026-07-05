@@ -36,6 +36,10 @@ export const hostedIdentityEvidenceOperatorSessionSecretPartialFixturePath =
   "tools/fixtures/dev_test_game_hosted_identity_evidence.operator-session-secret-partial.json";
 export const hostedIdentityEvidenceOperatorSessionSecretRecoveredFixturePath =
   "tools/fixtures/dev_test_game_hosted_identity_evidence.operator-session-secret-recovered.json";
+export const hostedIdentityEvidenceOperatorAuditRetentionPartialFixturePath =
+  "tools/fixtures/dev_test_game_hosted_identity_evidence.operator-audit-retention-partial.json";
+export const hostedIdentityEvidenceOperatorAuditRetentionRecoveredFixturePath =
+  "tools/fixtures/dev_test_game_hosted_identity_evidence.operator-audit-retention-recovered.json";
 export const hostedIdentityEvidenceOperatorInvitePartialFixturePath =
   "tools/fixtures/dev_test_game_hosted_identity_evidence.operator-invite-partial.json";
 export const hostedIdentityEvidenceOperatorInviteRecoveredFixturePath =
@@ -53,6 +57,8 @@ export const hostedIdentityEvidenceFixturePaths = Object.freeze([
   hostedIdentityEvidenceOperatorAbuseRateLimitRecoveredFixturePath,
   hostedIdentityEvidenceOperatorSessionSecretPartialFixturePath,
   hostedIdentityEvidenceOperatorSessionSecretRecoveredFixturePath,
+  hostedIdentityEvidenceOperatorAuditRetentionPartialFixturePath,
+  hostedIdentityEvidenceOperatorAuditRetentionRecoveredFixturePath,
   hostedIdentityEvidenceOperatorInvitePartialFixturePath,
   hostedIdentityEvidenceOperatorInviteRecoveredFixturePath,
   hostedIdentityEvidenceOperatorRecoveredFixturePath,
@@ -392,6 +398,34 @@ export const hostedIdentityEvidenceFamilyProgressionCases = Object.freeze([
       "session-secret-redacted-policy",
     ]),
   }),
+  Object.freeze({
+    id: "hosted-audit-retention-export",
+    field: "hostedAuditRetentionExport",
+    checkId: "hosted-audit-retention-export-evidence",
+    missingInputId: "redacted-audit-retention-packet",
+    missingFixturePath:
+      hostedIdentityEvidenceOperatorAuditRetentionPartialFixturePath,
+    recoveredFixturePath:
+      hostedIdentityEvidenceOperatorAuditRetentionRecoveredFixturePath,
+    adminProofFixturePath:
+      hostedIdentityEvidenceOperatorAuditRetentionRecoveredFixturePath,
+    adminProofMode: "provided-family-still-blocked",
+    expectedMissingInputs: Object.freeze([
+      "status-provided",
+      "eventFamilies",
+      "retentionWindow",
+      "exportRef",
+      "redactedEvidenceRefs",
+    ]),
+    recoveredProvidedInputIds: Object.freeze([
+      "eventFamilies",
+      "retentionWindow",
+      "exportRef",
+    ]),
+    recoveredRedactedEvidenceRefIds: Object.freeze([
+      "audit-retention-redacted-export",
+    ]),
+  }),
 ]);
 
 export function hostedIdentityEvidenceProgressionHandoffSummary() {
@@ -719,6 +753,18 @@ export const hostedIdentityEvidenceFixturePlans = deepFreeze([
     path: hostedIdentityEvidenceOperatorSessionSecretRecoveredFixturePath,
     status: "partial",
     providedFields: ["sessionSecretPolicy"],
+  },
+  {
+    path: hostedIdentityEvidenceOperatorAuditRetentionPartialFixturePath,
+    status: "partial",
+    providedFields: hostedIdentityEvidencePacketSectionDefinitions
+      .map((section) => section.field)
+      .filter((field) => field !== "hostedAuditRetentionExport"),
+  },
+  {
+    path: hostedIdentityEvidenceOperatorAuditRetentionRecoveredFixturePath,
+    status: "partial",
+    providedFields: ["hostedAuditRetentionExport"],
   },
   {
     path: hostedIdentityEvidenceOperatorInvitePartialFixturePath,

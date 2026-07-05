@@ -33,6 +33,8 @@ export {
   hostedIdentityEvidenceOperatorAbuseRateLimitRecoveredFixturePath,
   hostedIdentityEvidenceOperatorSessionSecretPartialFixturePath,
   hostedIdentityEvidenceOperatorSessionSecretRecoveredFixturePath,
+  hostedIdentityEvidenceOperatorAuditRetentionPartialFixturePath,
+  hostedIdentityEvidenceOperatorAuditRetentionRecoveredFixturePath,
   hostedIdentityEvidenceOperatorInvitePartialFixturePath,
   hostedIdentityEvidenceOperatorInviteRecoveredFixturePath,
   hostedIdentityEvidenceOperatorProofDrilldowns,

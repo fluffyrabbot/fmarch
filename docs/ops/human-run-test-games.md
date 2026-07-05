@@ -206,6 +206,7 @@ FMARCH_HOSTED_IDENTITY_PROGRESSION_ID=invite-delivery npm run test:dev-test-game
 FMARCH_HOSTED_IDENTITY_PROGRESSION_ID=account-recovery npm run test:dev-test-game-hosted-identity-progression-admin-proof
 FMARCH_HOSTED_IDENTITY_PROGRESSION_ID=abuse-and-rate-limit npm run test:dev-test-game-hosted-identity-progression-admin-proof
 FMARCH_HOSTED_IDENTITY_PROGRESSION_ID=session-secret-policy npm run test:dev-test-game-hosted-identity-progression-admin-proof
+FMARCH_HOSTED_IDENTITY_PROGRESSION_ID=hosted-audit-retention-export npm run test:dev-test-game-hosted-identity-progression-admin-proof
 ```
 
 Those progression admin proofs are local role-surface checks. They prove the
@@ -213,11 +214,11 @@ seeded admin detail can show the specific missing redacted packet and the
 fixture-backed recovered packet for that evidence family; they do not prove real
 hosted identity traffic, release readiness, or production readiness.
 The `hosted-account-lifecycle`, `invite-delivery`, `account-recovery`,
-`abuse-and-rate-limit`, and `session-secret-policy` progressions are the first
-operator-packet flows: each admin proof reads a redacted packet with only that
-evidence family provided, so the admin handoff shows one family as provided
-while hosted identity readiness remains blocked on the remaining hosted identity
-packets.
+`abuse-and-rate-limit`, `session-secret-policy`, and
+`hosted-audit-retention-export` progressions are the first operator-packet
+flows: each admin proof reads a redacted packet with only that evidence family
+provided, so the admin handoff shows one family as provided while hosted
+identity readiness remains blocked on the remaining hosted identity packets.
 
 The local release-readiness admin browser proof is:
 
