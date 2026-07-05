@@ -12026,6 +12026,9 @@ test("session card and markdown include role credential URLs and tokens", async 
     identityAdapterProof: identityAdapterProofFixture(game),
     identityAdminProofPath: "target/dev-test-game/identity-admin-proof.json",
     identityAdminProof: identityAdminProofFixture(),
+    hostedIdentityEvidenceAdminProofPath:
+      "target/dev-test-game/hosted-identity-evidence-admin-proof.json",
+    hostedIdentityEvidenceAdminProof: hostedIdentityEvidenceAdminProofFixture(),
   });
   assertDevTestGameReleaseReadiness(identityReadiness);
   assert(
@@ -12044,6 +12047,25 @@ test("session card and markdown include role credential URLs and tokens", async 
       (item) => item.id === "production-identity",
     ),
     false,
+  );
+  const hostedIdentityEvidenceCheck =
+    identityReadiness.localDevelopmentSpine.checks.find(
+      (item) => item.id === "local-hosted-identity-evidence-admin-surface",
+    );
+  assert.equal(hostedIdentityEvidenceCheck.status, "passed");
+  assert.equal(hostedIdentityEvidenceCheck.evidenceStatus, "blocked");
+  assert.equal(hostedIdentityEvidenceCheck.handoffReceiptStatus, "blocked");
+  assert.equal(
+    hostedIdentityEvidenceCheck.handoffReceiptNextProofTarget,
+    "target/dev-test-game/hosted-identity-evidence.json",
+  );
+  assert.deepEqual(
+    hostedIdentityEvidenceCheck.handoffReceiptMissingRequiredInputs,
+    hostedIdentityEvidenceHandoffCase().blockedReceipt.missingRequiredInputs,
+  );
+  assert.equal(
+    hostedIdentityEvidenceCheck.handoffReceiptMissingInputCount,
+    hostedIdentityEvidenceHandoffCase().blockedReceipt.missingRequiredInputs.length,
   );
   assert(
     identityReadiness.releaseReadiness.unproven.some(

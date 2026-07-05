@@ -77,6 +77,11 @@ import {
   hostedOpsTelemetryBoundaryCheckId,
 } from "./dev_test_game_hosted_ops_signal_cases.mjs";
 import {
+  devTestGameHostedIdentityEvidenceCommand,
+  devTestGameHostedIdentityEvidencePath,
+  hostedIdentityEvidenceInputIds,
+} from "./dev_test_game_hosted_identity_evidence_cases.mjs";
+import {
   realHostedObservabilityHandoffCheckIds,
   realHostedObservabilityHandoffInputIds,
 } from "./dev_test_game_real_hosted_observability_handoff_cases.mjs";
@@ -872,6 +877,14 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
         hostedIdentityEvidenceAdminProofEvidence.rawEvidencePathKind,
       fixtureEvidence:
         hostedIdentityEvidenceAdminProofEvidence.fixtureEvidence,
+      handoffReceiptStatus:
+        hostedIdentityEvidenceAdminProofEvidence.handoffReceiptStatus,
+      handoffReceiptMissingInputCount:
+        hostedIdentityEvidenceAdminProofEvidence.handoffReceiptMissingInputCount,
+      handoffReceiptNextProofTarget:
+        hostedIdentityEvidenceAdminProofEvidence.handoffReceiptNextProofTarget,
+      handoffReceiptMissingRequiredInputs:
+        hostedIdentityEvidenceAdminProofEvidence.handoffReceiptMissingRequiredInputs,
       blockedCheckCount:
         hostedIdentityEvidenceAdminProofEvidence.visibleUnproven?.length ?? 0,
       adminRoleSurface: hostedIdentityEvidenceAdminProofEvidence,
@@ -4194,6 +4207,9 @@ export function validateDevTestGameHostedIdentityEvidenceAdminProof(
       );
     }
   }
+  const hostedHandoffSummary = validateHostedIdentityHandoffSummary(proof);
+  const hostedHandoffBlockedReceipt =
+    validateHostedIdentityHandoffBlockedReceipt(proof);
   return {
     status: "passed",
     path:
@@ -4215,6 +4231,17 @@ export function validateDevTestGameHostedIdentityEvidenceAdminProof(
       proof.adminRoleSurface.visibleHostedHandoffInputSections ?? [],
     visibleHostedHandoffSectionInputs:
       proof.adminRoleSurface.visibleHostedHandoffSectionInputs ?? [],
+    visibleHostedHandoffSummary: hostedHandoffSummary.visible,
+    hostedHandoffSummary: hostedHandoffSummary.generated,
+    visibleHostedHandoffBlockedReceipt: hostedHandoffBlockedReceipt.visible,
+    hostedHandoffBlockedReceipt: hostedHandoffBlockedReceipt.generated,
+    handoffReceiptStatus: hostedHandoffBlockedReceipt.generated.status,
+    handoffReceiptMissingInputCount:
+      hostedHandoffBlockedReceipt.generated.missingRequiredInputs.length,
+    handoffReceiptNextProofTarget:
+      hostedHandoffBlockedReceipt.generated.nextProofTarget,
+    handoffReceiptMissingRequiredInputs:
+      hostedHandoffBlockedReceipt.generated.missingRequiredInputs,
     evidenceStatus: String(proof.generatedFrom?.status ?? "unknown"),
     rawEvidencePath: String(proof.generatedFrom?.rawEvidencePath ?? ""),
     rawEvidencePathKind: hostedIdentityEvidencePathKind(
@@ -4227,6 +4254,105 @@ export function validateDevTestGameHostedIdentityEvidenceAdminProof(
       proof.generatedFrom?.rawEvidenceStatus ?? "unknown",
     ),
     ...(options.artifact === undefined ? {} : { artifact: options.artifact }),
+  };
+}
+
+function validateHostedIdentityHandoffSummary(proof) {
+  const generated = proof.generatedFrom?.hostedHandoffSummary;
+  const visible = proof.adminRoleSurface?.visibleHostedHandoffSummary;
+  if (generated === undefined || generated === null) {
+    throw new Error("hosted identity evidence admin proof missing handoff summary");
+  }
+  if (visible === undefined || visible === null) {
+    throw new Error(
+      "hosted identity evidence admin proof did not render handoff summary",
+    );
+  }
+  const expected = {
+    status: "blocked",
+    preflightStatus: "blocked",
+    command: `npm run ${devTestGameHostedIdentityEvidenceCommand}`,
+    proofTarget: devTestGameHostedIdentityEvidencePath,
+  };
+  for (const [key, value] of Object.entries(expected)) {
+    if (String(generated[key] ?? "") !== value || String(visible[key] ?? "") !== value) {
+      throw new Error(
+        `hosted identity evidence admin proof handoff summary drifted: ${key}`,
+      );
+    }
+  }
+  return {
+    generated: Object.freeze({ ...expected }),
+    visible: Object.freeze({ ...expected }),
+  };
+}
+
+function validateHostedIdentityHandoffBlockedReceipt(proof) {
+  const generated = proof.generatedFrom?.hostedHandoffBlockedReceipt;
+  const visible = proof.adminRoleSurface?.visibleHostedHandoffBlockedReceipt;
+  if (generated === undefined || generated === null) {
+    throw new Error("hosted identity evidence admin proof missing blocked receipt");
+  }
+  if (visible === undefined || visible === null) {
+    throw new Error(
+      "hosted identity evidence admin proof did not render blocked receipt",
+    );
+  }
+  const requiredInputs = Array.isArray(generated.requiredInputs)
+    ? generated.requiredInputs
+    : [];
+  const requiredInputNames = requiredInputs.map((input) =>
+    String(input?.name ?? ""),
+  );
+  if (
+    generated.status !== "blocked" ||
+    generated.command !== `npm run ${devTestGameHostedIdentityEvidenceCommand}` ||
+    generated.proofTarget !== devTestGameHostedIdentityEvidencePath ||
+    generated.nextProofTarget !== devTestGameHostedIdentityEvidencePath ||
+    !sameStringArray(requiredInputNames, hostedIdentityEvidenceInputIds) ||
+    requiredInputs.some((input) => input?.required !== true) ||
+    !Array.isArray(generated.missingRequiredInputs) ||
+    generated.missingRequiredInputs.length === 0
+  ) {
+    throw new Error("hosted identity evidence admin proof blocked receipt drifted");
+  }
+  for (const field of [
+    "status",
+    "operatorAction",
+    "localVsHostedBoundary",
+    "nextProofTarget",
+  ]) {
+    if (String(visible[field] ?? "") !== String(generated[field] ?? "")) {
+      throw new Error(
+        `hosted identity evidence admin proof visible blocked receipt drifted: ${field}`,
+      );
+    }
+  }
+  const visibleMissingInputs = Array.isArray(visible.missingRequiredInputs)
+    ? visible.missingRequiredInputs.map((input) => String(input))
+    : [];
+  if (!sameStringArray(visibleMissingInputs, generated.missingRequiredInputs)) {
+    throw new Error(
+      "hosted identity evidence admin proof visible blocked receipt missing inputs drifted",
+    );
+  }
+  return {
+    generated: Object.freeze({
+      status: generated.status,
+      command: generated.command,
+      proofTarget: generated.proofTarget,
+      nextProofTarget: generated.nextProofTarget,
+      missingRequiredInputs: Object.freeze([
+        ...generated.missingRequiredInputs,
+      ]),
+    }),
+    visible: Object.freeze({
+      status: visible.status,
+      operatorAction: visible.operatorAction,
+      localVsHostedBoundary: visible.localVsHostedBoundary,
+      nextProofTarget: visible.nextProofTarget,
+      missingRequiredInputs: Object.freeze([...visibleMissingInputs]),
+    }),
   };
 }
 
