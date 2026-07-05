@@ -26,6 +26,7 @@ import {
   recoveryReceiptReleaseReadinessValidators,
   validateDevTestGameAdminSpineProof,
   validateDevTestGameAdminSpineTerminalBatches,
+  validateDevTestGameNextActionAdminProof,
   validateDevTestGameProofGraphAdminProof,
   validateDevTestGameHostSetupProof,
 } from "./dev_test_game_release_readiness.mjs";
@@ -5681,6 +5682,95 @@ test("next-action admin proof fixture proves selected proof graph destination te
   assert.throws(
     () => assertNextActionAdminProof(proofMissingDestinationText),
     /next-action admin proof did not prove selected proof graph destination text/,
+  );
+});
+
+test("next-action admin proof fixture proves selected production feature graph destination text", () => {
+  const selectedProductionFeatureGraph = {
+    nodeId: "production-feature:player-action-submission",
+    status: "passed",
+    sourceNodeId: "admin-proof:core-loop",
+    edge: {
+      from: "admin-proof:core-loop",
+      to: "production-feature:player-action-submission",
+      relationship: "proves-production-feature",
+    },
+    roleUrl: "/admin/audit/local-core-loop?game=<seeded-game>",
+    targetRoleUrl:
+      "http://127.0.0.1:5173/g/<seeded-game>/c/thread:day-two",
+    browserProofCommand: devTestGameLiveProofCommand,
+    proofTarget: "target/dev-test-game/release-readiness-checklist.json",
+    coverageDecision: {
+      kind: "seeded-role-url-proof",
+      proofCommand: "npm run test:dev-test-game-core-loop-admin-proof",
+    },
+  };
+  const selectedDestination = {
+    linkId: selectedProductionFeatureGraph.nodeId,
+    auditId: "local-proof-graph",
+    detailRoleUrl: "/admin/audit/local-proof-graph?game=<seeded-game>",
+    visibleChecks: [
+      selectedProductionFeatureGraph.nodeId,
+      `coverage-decision:${selectedProductionFeatureGraph.nodeId}`,
+    ],
+    visibleCheckStatuses: {
+      [selectedProductionFeatureGraph.nodeId]: [
+        selectedProductionFeatureGraph.nodeId,
+        `roleUrl ${selectedProductionFeatureGraph.roleUrl}`,
+        `targetRoleUrl ${selectedProductionFeatureGraph.targetRoleUrl}`,
+        `browserProofCommand ${selectedProductionFeatureGraph.browserProofCommand}`,
+      ].join("\n"),
+      [`coverage-decision:${selectedProductionFeatureGraph.nodeId}`]: [
+        "seeded-role-url-proof",
+        "npm run test:dev-test-game-core-loop-admin-proof",
+      ].join("\n"),
+    },
+    visibleRelatedLinks: [selectedProductionFeatureGraph.nodeId],
+  };
+  const proof = nextActionAdminProofLocalReadinessDependencyFixture();
+  proof.generatedFrom.unprovenSelectedProductionFeatureGraph =
+    selectedProductionFeatureGraph;
+  proof.adminRoleSurface.visibleChecks.push(
+    "selected-production-feature-graph-node",
+    "selected-production-feature-graph-edge",
+    "selected-production-feature-graph-coverage-decision",
+  );
+  proof.adminRoleSurface.visibleRelatedLinks.push(
+    selectedProductionFeatureGraph.nodeId,
+  );
+  proof.adminRoleSurface.visibleRelatedDestinations = [selectedDestination];
+  assertNextActionAdminProof(proof);
+  assert.equal(validateDevTestGameNextActionAdminProof(proof).status, "passed");
+
+  const proofMissingDestinationText =
+    nextActionAdminProofLocalReadinessDependencyFixture();
+  proofMissingDestinationText.generatedFrom.unprovenSelectedProductionFeatureGraph =
+    selectedProductionFeatureGraph;
+  proofMissingDestinationText.adminRoleSurface.visibleChecks.push(
+    "selected-production-feature-graph-node",
+    "selected-production-feature-graph-edge",
+    "selected-production-feature-graph-coverage-decision",
+  );
+  proofMissingDestinationText.adminRoleSurface.visibleRelatedLinks.push(
+    selectedProductionFeatureGraph.nodeId,
+  );
+  proofMissingDestinationText.adminRoleSurface.visibleRelatedDestinations = [
+    {
+      ...selectedDestination,
+      visibleCheckStatuses: {
+        ...selectedDestination.visibleCheckStatuses,
+        [selectedProductionFeatureGraph.nodeId]: "passed",
+      },
+    },
+  ];
+  assert.throws(
+    () => assertNextActionAdminProof(proofMissingDestinationText),
+    /next-action admin proof did not prove selected production feature graph destination text/,
+  );
+  assert.throws(
+    () =>
+      validateDevTestGameNextActionAdminProof(proofMissingDestinationText),
+    /next-action admin proof did not prove selected production feature graph destination/,
   );
 });
 

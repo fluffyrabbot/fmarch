@@ -2023,10 +2023,16 @@ function localProofGraphNodeCheckStatus(node) {
   const recoveryCommand = String(
     node?.recoveryCommand ?? node?.proofCommand ?? "",
   ).trim();
+  const targetRoleUrl = String(node?.targetRoleUrl ?? "").trim();
+  const browserProofCommand = String(node?.browserProofCommand ?? "").trim();
   return [
     status,
     ...(roleUrl === "" ? [] : [`roleUrl ${roleUrl}`]),
+    ...(targetRoleUrl === "" ? [] : [`targetRoleUrl ${targetRoleUrl}`]),
     ...(recoveryCommand === "" ? [] : [`recoveryCommand ${recoveryCommand}`]),
+    ...(browserProofCommand === ""
+      ? []
+      : [`browserProofCommand ${browserProofCommand}`]),
   ].join("\n");
 }
 

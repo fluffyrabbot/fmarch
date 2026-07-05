@@ -256,6 +256,10 @@ import {
   localAdminAuditRoleUrl,
 } from "./dev_test_game_admin_audit_surface_ids.mjs";
 import {
+  assertSelectedProductionFeatureGraphDestinationText,
+  assertSelectedProofGraphDestinationText,
+} from "./dev_test_game_next_action_graph_destination_assertions.mjs";
+import {
   assertCompletedGameProofReadinessSurfaceProof,
   completedGameProofReadinessScenarioFamilies,
   completedGameHardeningSpineCycleId,
@@ -6294,27 +6298,55 @@ export function validateDevTestGameNextActionAdminProof(proof, options = {}) {
       graphDestination === null ||
       graphDestination.detailRoleUrl !==
         localAdminAuditRoleUrl(localAdminAuditIds.proofGraph) ||
-      !graphDestination.visibleChecks?.includes(String(selectedProofGraphNode.id)) ||
-      !selectedProofGraphDestinationTextMatches({
-        graphDestination,
-        selectedProofGraphNode,
-      })
+      !graphDestination.visibleChecks?.includes(String(selectedProofGraphNode.id))
     ) {
       throw new Error(
         "next-action admin proof did not prove selected proof graph destination",
       );
     }
+    assertSelectedProofGraphDestinationText({
+      graphDestination,
+      selectedProofGraphNode,
+      errorMessage:
+        "next-action admin proof did not prove selected proof graph destination",
+    });
   }
+  const selectedProductionFeatureGraph =
+    proof.generatedFrom?.unprovenSelectedProductionFeatureGraph;
   if (
-    proof.generatedFrom?.unprovenSelectedProductionFeatureGraph !== null &&
-    proof.generatedFrom?.unprovenSelectedProductionFeatureGraph !== undefined &&
-    !proof.adminRoleSurface?.visibleChecks?.includes(
-      "selected-production-feature-graph-coverage-decision",
-    )
+    selectedProductionFeatureGraph !== null &&
+    selectedProductionFeatureGraph !== undefined
   ) {
-    throw new Error(
-      "next-action admin proof missing selected production feature graph coverage decision",
-    );
+    if (
+      !proof.adminRoleSurface?.visibleChecks?.includes(
+        "selected-production-feature-graph-node",
+      ) ||
+      !proof.adminRoleSurface?.visibleChecks?.includes(
+        "selected-production-feature-graph-edge",
+      ) ||
+      !proof.adminRoleSurface?.visibleChecks?.includes(
+        "selected-production-feature-graph-coverage-decision",
+      ) ||
+      !proof.adminRoleSurface?.visibleRelatedLinks?.includes(
+        selectedProductionFeatureGraph.nodeId,
+      )
+    ) {
+      throw new Error(
+        "next-action admin proof missing selected production feature graph destination",
+      );
+    }
+    const graphDestination =
+      proof.adminRoleSurface?.visibleRelatedDestinations?.find(
+        (item) =>
+          item?.linkId === selectedProductionFeatureGraph.nodeId &&
+          item.auditId === localAdminAuditIds.proofGraph,
+      ) ?? null;
+    assertSelectedProductionFeatureGraphDestinationText({
+      graphDestination,
+      selectedProductionFeatureGraph,
+      errorMessage:
+        "next-action admin proof did not prove selected production feature graph destination",
+    });
   }
   const localTrace = assertPreReadinessTraceVisibleChecks(
     preReadinessTraceKeys.localReadinessDependency,
@@ -6469,28 +6501,6 @@ export function validateDevTestGameNextActionAdminProof(proof, options = {}) {
     localReadinessDependencyCandidateCount: localTrace.candidateCount,
     ...(options.artifact === undefined ? {} : { artifact: options.artifact }),
   };
-}
-
-function selectedProofGraphDestinationTextMatches({
-  graphDestination,
-  selectedProofGraphNode,
-}) {
-  const selectedNodeId = String(selectedProofGraphNode?.id ?? "");
-  const visibleText =
-    graphDestination?.visibleCheckStatuses?.[selectedNodeId] ?? "";
-  const roleUrl = String(selectedProofGraphNode?.roleUrl ?? "").trim();
-  const recoveryCommand = String(
-    selectedProofGraphNode?.graphProofCommand ??
-      selectedProofGraphNode?.proofCommand ??
-      "",
-  ).trim();
-  const requiredTokens = [roleUrl, recoveryCommand].filter(
-    (token) => token !== "",
-  );
-  return (
-    typeof visibleText === "string" &&
-    requiredTokens.every((token) => visibleText.includes(token))
-  );
 }
 
 function validateNextActionAdminProofGraphDiagnosticSummaryTrace(proof) {

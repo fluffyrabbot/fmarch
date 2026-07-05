@@ -27,8 +27,12 @@ import {
 } from "../frontend/src/lib/app/local-proof-handoff-status.mjs";
 import {
   localAdminAuditIds,
-  localAdminAuditRoleUrl,
 } from "./dev_test_game_admin_audit_surface_ids.mjs";
+import {
+  assertSelectedProductionFeatureGraphDestinationText,
+  assertSelectedProofGraphDestinationText,
+  productionFeatureGraphCoverageDecisionCheckId,
+} from "./dev_test_game_next_action_graph_destination_assertions.mjs";
 import {
   assertRecoveryReceiptGraphSummary,
   recoveryReceiptGraphDescriptors,
@@ -726,6 +730,23 @@ export function assertNextActionAdminProof(evidence) {
     assertSelectedProofGraphDestinationText({
       graphDestination,
       selectedProofGraphNode: evidence.generatedFrom.selectedProofGraphNode,
+    });
+  }
+  const selectedProductionFeatureGraph =
+    evidence.generatedFrom?.unprovenSelectedProductionFeatureGraph;
+  if (
+    selectedProductionFeatureGraph !== null &&
+    selectedProductionFeatureGraph !== undefined
+  ) {
+    const graphDestination =
+      evidence.adminRoleSurface?.visibleRelatedDestinations?.find(
+        (item) =>
+          item?.linkId === selectedProductionFeatureGraph.nodeId &&
+          item.auditId === localAdminAuditIds.proofGraph,
+      ) ?? null;
+    assertSelectedProductionFeatureGraphDestinationText({
+      graphDestination,
+      selectedProductionFeatureGraph,
     });
   }
   if (
@@ -1502,38 +1523,15 @@ function selectedProductionFeatureGraphHandoffSummary({ nextAction }) {
   return {
     linkId: selectedGraph.nodeId,
     auditId: localAdminAuditIds.proofGraph,
-    requiredCheckIds: [selectedGraph.nodeId],
+    requiredCheckIds: [
+      selectedGraph.nodeId,
+      ...(selectedGraph.coverageDecision === null ||
+      typeof selectedGraph.coverageDecision !== "object"
+        ? []
+        : [productionFeatureGraphCoverageDecisionCheckId(selectedGraph)]),
+    ],
     requiredRelatedLinkIds: [selectedGraph.nodeId],
   };
-}
-
-function assertSelectedProofGraphDestinationText({
-  graphDestination,
-  selectedProofGraphNode,
-}) {
-  const selectedNodeId = String(selectedProofGraphNode?.id ?? "");
-  const visibleText =
-    graphDestination?.visibleCheckStatuses?.[selectedNodeId] ?? "";
-  const roleUrl = String(selectedProofGraphNode?.roleUrl ?? "").trim();
-  const recoveryCommand = String(
-    selectedProofGraphNode?.graphProofCommand ??
-      selectedProofGraphNode?.proofCommand ??
-      "",
-  ).trim();
-  const requiredTokens = [roleUrl, recoveryCommand].filter(
-    (token) => token !== "",
-  );
-  if (
-    graphDestination === null ||
-    graphDestination.detailRoleUrl !==
-      localAdminAuditRoleUrl(localAdminAuditIds.proofGraph) ||
-    !graphDestination.visibleChecks?.includes(selectedNodeId) ||
-    requiredTokens.some((token) => !visibleText.includes(token))
-  ) {
-    throw new Error(
-      "next-action admin proof did not prove selected proof graph destination text",
-    );
-  }
 }
 
 function requiredChecksForEvidence(evidence) {
