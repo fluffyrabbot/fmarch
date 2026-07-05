@@ -8,12 +8,24 @@ import {
   coreLoopPhaseProgressionFamilyId,
   coreLoopPhaseProgressionLaneIds,
   coreLoopPhaseProgressionRequiredSeedScenarioIds,
+  coreLoopPhaseProgressionScenarioCases,
   coreLoopPhaseProgressionScenarioFamily,
   coreLoopPhaseProgressionSeedAliasEntries,
   coreLoopPhaseProgressionSpineSourceLaneIds,
   dayFourSurvivorRoleSurfaceCase,
+  nightThreeActionResolutionLaneId,
   nightThreeEmptyResolutionSurfaceCase,
 } from "./dev_test_game_core_loop_phase_progression_scenarios.mjs";
+import {
+  staleDayTwoVoteAfterTransitionRecoveryScenario,
+  staleNightOneActionAfterTransitionRecoveryScenario,
+} from "./dev_test_game_core_loop_action_scenario_cases.mjs";
+import {
+  coreLoopVoteResolutionScenarioFamily,
+} from "./dev_test_game_core_loop_vote_resolution_scenarios.mjs";
+import {
+  postDayThreeResolutionSurfaceCase,
+} from "./dev_test_game_core_loop_post_day_three_scenarios.mjs";
 
 test("core loop phase progression family names proof, seed, and stale reject cases", () => {
   assert.equal(
@@ -23,6 +35,7 @@ test("core loop phase progression family names proof, seed, and stale reject cas
   assert.deepEqual(coreLoopPhaseProgressionLaneIds, [
     "day-vote-resolution",
     "day-vote-no-lynch",
+    nightThreeActionResolutionLaneId,
     "action-loop",
   ]);
   assert.deepEqual(coreLoopPhaseProgressionSpineSourceLaneIds, [
@@ -33,6 +46,7 @@ test("core loop phase progression family names proof, seed, and stale reject cas
   ]);
   assert.deepEqual(coreLoopPhaseProgressionRequiredSeedScenarioIds, [
     "night-action-loop",
+    nightThreeActionResolutionLaneId,
   ]);
   assert.deepEqual(coreLoopPhaseProgressionDemoOnlySeedScenarioIds, [
     "day-vote-resolution",
@@ -45,9 +59,70 @@ test("core loop phase progression family names proof, seed, and stale reject cas
   assert.deepEqual(coreLoopPhaseProgressionSeedAliasEntries, [
     ["night-action-loop", ["action-loop", "stale-action-conflict"]],
   ]);
+  const scenarioCases = coreLoopPhaseProgressionScenarioCases();
+  assert.deepEqual(
+    scenarioCases.map((scenarioCase) => ({
+      key: scenarioCase.key,
+      group: scenarioCase.group,
+      scenario: scenarioCase.scenario,
+    })),
+    [
+      {
+        key: "dayThreeVoteResolution",
+        group: "surfaces",
+        scenario:
+          coreLoopVoteResolutionScenarioFamily().surfaces.dayThreeVoteResolution,
+      },
+      {
+        key: "postDayThreeResolution",
+        group: "surfaces",
+        scenario: postDayThreeResolutionSurfaceCase(),
+      },
+      {
+        key: "nightThreeEmptyResolution",
+        group: "surfaces",
+        scenario: nightThreeEmptyResolutionSurfaceCase(),
+      },
+      {
+        key: "dayFourSurvivorRole",
+        group: "surfaces",
+        scenario: dayFourSurvivorRoleSurfaceCase(),
+      },
+      {
+        key: "staleDayTwoVote",
+        group: "staleRejects",
+        scenario: staleDayTwoVoteAfterTransitionRecoveryScenario(),
+      },
+      {
+        key: "staleNightOneAction",
+        group: "staleRejects",
+        scenario: staleNightOneActionAfterTransitionRecoveryScenario(),
+      },
+    ],
+  );
 
   const family = coreLoopPhaseProgressionScenarioFamily();
   assert.equal(family.id, coreLoopPhaseProgressionFamilyId);
+  assert.deepEqual(family.laneIds, coreLoopPhaseProgressionLaneIds);
+  assert.deepEqual(
+    family.spineSourceLaneIds,
+    coreLoopPhaseProgressionSpineSourceLaneIds,
+  );
+  assert.deepEqual(family.seedScenarioIds, [
+    ...coreLoopPhaseProgressionRequiredSeedScenarioIds,
+    ...coreLoopPhaseProgressionDemoOnlySeedScenarioIds,
+  ]);
+  assert.deepEqual(family.surfaces, {
+    dayThreeVoteResolution:
+      coreLoopVoteResolutionScenarioFamily().surfaces.dayThreeVoteResolution,
+    postDayThreeResolution: postDayThreeResolutionSurfaceCase(),
+    nightThreeEmptyResolution: nightThreeEmptyResolutionSurfaceCase(),
+    dayFourSurvivorRole: dayFourSurvivorRoleSurfaceCase(),
+  });
+  assert.deepEqual(family.staleRejects, {
+    staleDayTwoVote: staleDayTwoVoteAfterTransitionRecoveryScenario(),
+    staleNightOneAction: staleNightOneActionAfterTransitionRecoveryScenario(),
+  });
   assert.equal(
     family.surfaces.dayThreeVoteResolution.playerVoteCase.clickedAction,
     "submit_vote",
@@ -73,6 +148,10 @@ test("core loop phase progression family names proof, seed, and stale reject cas
   assert.equal(
     family.staleRejects.staleNightOneAction.messageIncludes,
     "stale action state, refresh and use current action controls",
+  );
+  assert.notEqual(
+    coreLoopPhaseProgressionScenarioCases()[2].scenario.transitionFragments,
+    coreLoopPhaseProgressionScenarioCases()[2].scenario.transitionFragments,
   );
 });
 

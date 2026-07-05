@@ -46,6 +46,12 @@ import {
   coreLoopVoteResolutionScenarioFamily,
 } from "./dev_test_game_core_loop_vote_resolution_scenarios.mjs";
 import {
+  coreLoopPhaseProgressionScenarioFamily,
+} from "./dev_test_game_core_loop_phase_progression_scenarios.mjs";
+import {
+  coreLoopLateActionProgressionScenarioFamily,
+} from "./dev_test_game_core_loop_late_action_progression_scenarios.mjs";
+import {
   coreLoopNoLynchProgressionScenarioFamily,
 } from "./dev_test_game_core_loop_no_lynch_progression_scenarios.mjs";
 import {
@@ -14499,14 +14505,8 @@ function coreLoopAdminProofFixture() {
       postDayVoteAdvanceFamily:
         coreLoopPostDayVoteAdvanceScenarioFamily(),
       voteResolutionFamily: coreLoopVoteResolutionScenarioFamily(),
-      phaseProgressionFamily: {
-        id: "core-loop-phase-progression",
-        laneIds: ["day-vote-resolution", "day-vote-no-lynch", "action-loop"],
-      },
-      lateActionProgressionFamily: {
-        id: "core-loop-late-action-progression",
-        laneIds: ["action-loop"],
-      },
+      phaseProgressionFamily: coreLoopPhaseProgressionScenarioFamily(),
+      lateActionProgressionFamily: coreLoopLateActionProgressionScenarioFamily(),
       resolutionReceiptPrivacyFamily:
         coreLoopResolutionReceiptPrivacyScenarioFamily(),
       noLynchProgressionFamily:

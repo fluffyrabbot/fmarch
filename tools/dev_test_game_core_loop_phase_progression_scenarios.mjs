@@ -44,6 +44,52 @@ export const coreLoopPhaseProgressionAliasOnlyProofLaneIds =
 export const coreLoopPhaseProgressionSeedAliasEntries =
   coreLoopFeatureSeedProofLaneAliasEntries;
 
+const coreLoopPhaseProgressionScenarioCaseDefinitions = Object.freeze([
+  Object.freeze({
+    key: "dayThreeVoteResolution",
+    group: "surfaces",
+    buildScenario: () =>
+      coreLoopVoteResolutionScenarioFamily().surfaces.dayThreeVoteResolution,
+  }),
+  Object.freeze({
+    key: "postDayThreeResolution",
+    group: "surfaces",
+    buildScenario: postDayThreeResolutionSurfaceCase,
+  }),
+  Object.freeze({
+    key: "nightThreeEmptyResolution",
+    group: "surfaces",
+    buildScenario: nightThreeEmptyResolutionSurfaceCase,
+  }),
+  Object.freeze({
+    key: "dayFourSurvivorRole",
+    group: "surfaces",
+    buildScenario: dayFourSurvivorRoleSurfaceCase,
+  }),
+  Object.freeze({
+    key: "staleDayTwoVote",
+    group: "staleRejects",
+    buildScenario: staleDayTwoVoteAfterTransitionRecoveryScenario,
+  }),
+  Object.freeze({
+    key: "staleNightOneAction",
+    group: "staleRejects",
+    buildScenario: staleNightOneActionAfterTransitionRecoveryScenario,
+  }),
+]);
+
+const clonePhaseProgressionScenarioCase = (scenarioCase) => ({
+  key: scenarioCase.key,
+  group: scenarioCase.group,
+  scenario: scenarioCase.buildScenario(),
+});
+
+export function coreLoopPhaseProgressionScenarioCases() {
+  return coreLoopPhaseProgressionScenarioCaseDefinitions.map(
+    clonePhaseProgressionScenarioCase,
+  );
+}
+
 const clonePlayerObservationCase = (scenario) => ({ ...scenario });
 
 const nightThreeEmptyResolutionSurfaceCaseDefinition = Object.freeze({
@@ -137,7 +183,7 @@ export function dayFourSurvivorRoleSurfaceCase() {
 }
 
 export function coreLoopPhaseProgressionScenarioFamily() {
-  const voteResolutionFamily = coreLoopVoteResolutionScenarioFamily();
+  const scenarioCases = coreLoopPhaseProgressionScenarioCases();
   return {
     id: coreLoopPhaseProgressionFamilyId,
     laneIds: [...coreLoopPhaseProgressionLaneIds],
@@ -146,17 +192,16 @@ export function coreLoopPhaseProgressionScenarioFamily() {
       ...coreLoopPhaseProgressionRequiredSeedScenarioIds,
       ...coreLoopPhaseProgressionDemoOnlySeedScenarioIds,
     ],
-    surfaces: {
-      dayThreeVoteResolution:
-        voteResolutionFamily.surfaces.dayThreeVoteResolution,
-      postDayThreeResolution: postDayThreeResolutionSurfaceCase(),
-      nightThreeEmptyResolution: nightThreeEmptyResolutionSurfaceCase(),
-      dayFourSurvivorRole: dayFourSurvivorRoleSurfaceCase(),
-    },
-    staleRejects: {
-      staleDayTwoVote: staleDayTwoVoteAfterTransitionRecoveryScenario(),
-      staleNightOneAction: staleNightOneActionAfterTransitionRecoveryScenario(),
-    },
+    surfaces: Object.fromEntries(
+      scenarioCases
+        .filter((scenarioCase) => scenarioCase.group === "surfaces")
+        .map((scenarioCase) => [scenarioCase.key, scenarioCase.scenario]),
+    ),
+    staleRejects: Object.fromEntries(
+      scenarioCases
+        .filter((scenarioCase) => scenarioCase.group === "staleRejects")
+        .map((scenarioCase) => [scenarioCase.key, scenarioCase.scenario]),
+    ),
   };
 }
 
