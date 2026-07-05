@@ -225,6 +225,7 @@ import {
   hostedIdentityEvidenceHandoffCase,
   hostedIdentityEvidenceInputIds,
   hostedIdentityEvidenceInputSectionStatuses,
+  hostedIdentityEvidenceOperatorAccountRecoveryRecoveredFixturePath,
   hostedIdentityEvidenceOperatorInvitePartialFixturePath,
   hostedIdentityEvidenceOperatorInviteRecoveredFixturePath,
   hostedIdentityEvidenceOperatorProofDrilldowns,
@@ -1138,6 +1139,15 @@ function assertReleaseReadinessStepMetadata(plansByName) {
   }
 }
 
+const hostedIdentityEvidenceFamilyCheckIds = Object.freeze([
+  "hosted-account-lifecycle-evidence",
+  "invite-delivery-evidence",
+  "account-recovery-evidence",
+  "abuse-and-rate-limit-evidence",
+  "session-secret-policy-evidence",
+  "hosted-audit-retention-export-evidence",
+]);
+
 test("hosted identity evidence lane records blocked and passed handoffs", async () => {
   const blocked = await buildDevTestGameHostedIdentityEvidence({
     env: {},
@@ -1155,7 +1165,7 @@ test("hosted identity evidence lane records blocked and passed handoffs", async 
   );
   assert.deepEqual(blocked.hostedHandoffChecklist.operatorProofDrilldowns[0], {
     id: "partial-operator-account-recovery-admin-proof",
-    label: "Partial operator account recovery admin proof",
+    label: "Account recovery operator packet admin proof",
     command: `FMARCH_HOSTED_IDENTITY_PROGRESSION_ID=account-recovery npm run ${devTestGameHostedIdentityProgressionAdminProofCommand}`,
     progressionId: "account-recovery",
     sourcePath:
@@ -1166,7 +1176,7 @@ test("hosted identity evidence lane records blocked and passed handoffs", async 
     firstMissingInputId: "redacted-account-recovery-packet",
     firstMissingCheckId: "account-recovery-evidence",
     proofBoundary:
-      "Fixture-backed local admin browser proof for the partial operator hosted identity packet. It proves the admin handoff can surface redacted-account-recovery-packet as the first actionable missing artifact; it does not prove hosted account recovery, release readiness, or production readiness.",
+      "Fixture-backed local admin browser proof for the account recovery operator hosted identity packet. It proves the admin handoff can surface redacted-account-recovery-packet as provided while the overall hosted identity evidence stays blocked; it does not prove hosted account recovery traffic, release readiness, or production readiness.",
   });
   assert.equal(
     blocked.hostedHandoffChecklist.blockedReceipt.firstMissingOperatorArtifact
@@ -1328,6 +1338,9 @@ test("hosted identity evidence lane records blocked and passed handoffs", async 
     hostedIdentityEvidenceOperatorPartialFixturePath,
   ));
   assert(hostedIdentityEvidenceFixturePaths.includes(
+    hostedIdentityEvidenceOperatorAccountRecoveryRecoveredFixturePath,
+  ));
+  assert(hostedIdentityEvidenceFixturePaths.includes(
     hostedIdentityEvidenceOperatorInvitePartialFixturePath,
   ));
   assert(hostedIdentityEvidenceFixturePaths.includes(
@@ -1409,17 +1422,18 @@ test("hosted identity evidence lane records blocked and passed handoffs", async 
     );
     assert.equal(
       operatorRecovered.status,
-      progression.id === "invite-delivery" ? "blocked" : "passed",
+      progression.adminProofMode === "provided-family-still-blocked"
+        ? "blocked"
+        : "passed",
     );
     assert.equal(operatorRecovered.target.rawEvidenceStatus, "passed");
-    if (progression.id === "invite-delivery") {
-      assert.deepEqual(operatorRecovered.hostedHandoffChecklist.blockedCheckIds, [
-        "hosted-account-lifecycle-evidence",
-        "account-recovery-evidence",
-        "abuse-and-rate-limit-evidence",
-        "session-secret-policy-evidence",
-        "hosted-audit-retention-export-evidence",
-      ]);
+    if (progression.adminProofMode === "provided-family-still-blocked") {
+      assert.deepEqual(
+        operatorRecovered.hostedHandoffChecklist.blockedCheckIds,
+        hostedIdentityEvidenceFamilyCheckIds.filter(
+          (checkId) => checkId !== progression.checkId,
+        ),
+      );
       assert.notEqual(
         operatorRecovered.hostedHandoffChecklist.blockedReceipt,
         undefined,
@@ -1459,15 +1473,8 @@ test("hosted identity evidence lane records blocked and passed handoffs", async 
             )?.status,
         )
         .map((check) => check.id),
-      progression.id === "invite-delivery"
-        ? [
-            "hosted-account-lifecycle-evidence",
-            progression.checkId,
-            "account-recovery-evidence",
-            "abuse-and-rate-limit-evidence",
-            "session-secret-policy-evidence",
-            "hosted-audit-retention-export-evidence",
-          ]
+      progression.adminProofMode === "provided-family-still-blocked"
+        ? hostedIdentityEvidenceFamilyCheckIds
         : [progression.checkId],
     );
   }

@@ -22,6 +22,8 @@ export const hostedIdentityEvidenceRedactedPassFixturePath =
   "tools/fixtures/dev_test_game_hosted_identity_evidence.redacted-pass.json";
 export const hostedIdentityEvidenceOperatorPartialFixturePath =
   "tools/fixtures/dev_test_game_hosted_identity_evidence.operator-partial.json";
+export const hostedIdentityEvidenceOperatorAccountRecoveryRecoveredFixturePath =
+  "tools/fixtures/dev_test_game_hosted_identity_evidence.operator-account-recovery-recovered.json";
 export const hostedIdentityEvidenceOperatorInvitePartialFixturePath =
   "tools/fixtures/dev_test_game_hosted_identity_evidence.operator-invite-partial.json";
 export const hostedIdentityEvidenceOperatorInviteRecoveredFixturePath =
@@ -32,6 +34,7 @@ export const hostedIdentityEvidenceFixturePaths = Object.freeze([
   hostedIdentityEvidencePlaceholderFixturePath,
   hostedIdentityEvidenceRedactedPassFixturePath,
   hostedIdentityEvidenceOperatorPartialFixturePath,
+  hostedIdentityEvidenceOperatorAccountRecoveryRecoveredFixturePath,
   hostedIdentityEvidenceOperatorInvitePartialFixturePath,
   hostedIdentityEvidenceOperatorInviteRecoveredFixturePath,
   hostedIdentityEvidenceOperatorRecoveredFixturePath,
@@ -224,7 +227,7 @@ export const hostedIdentityEvidenceInputSectionIds = Object.freeze(
 export const hostedIdentityEvidenceOperatorProofDrilldowns = Object.freeze([
   Object.freeze({
     id: "partial-operator-account-recovery-admin-proof",
-    label: "Partial operator account recovery admin proof",
+    label: "Account recovery operator packet admin proof",
     command: `FMARCH_HOSTED_IDENTITY_PROGRESSION_ID=account-recovery npm run ${devTestGameHostedIdentityProgressionAdminProofCommand}`,
     progressionId: "account-recovery",
     sourcePath: "target/dev-test-game/hosted-identity-evidence-account-recovery.json",
@@ -234,7 +237,7 @@ export const hostedIdentityEvidenceOperatorProofDrilldowns = Object.freeze([
     firstMissingInputId: "redacted-account-recovery-packet",
     firstMissingCheckId: "account-recovery-evidence",
     proofBoundary:
-      "Fixture-backed local admin browser proof for the partial operator hosted identity packet. It proves the admin handoff can surface redacted-account-recovery-packet as the first actionable missing artifact; it does not prove hosted account recovery, release readiness, or production readiness.",
+      "Fixture-backed local admin browser proof for the account recovery operator hosted identity packet. It proves the admin handoff can surface redacted-account-recovery-packet as provided while the overall hosted identity evidence stays blocked; it does not prove hosted account recovery traffic, release readiness, or production readiness.",
   }),
 ]);
 
@@ -268,9 +271,11 @@ export const hostedIdentityEvidenceFamilyProgressionCases = Object.freeze([
     checkId: "account-recovery-evidence",
     missingInputId: "redacted-account-recovery-packet",
     missingFixturePath: hostedIdentityEvidenceOperatorPartialFixturePath,
-    recoveredFixturePath: hostedIdentityEvidenceOperatorRecoveredFixturePath,
-    adminProofFixturePath: hostedIdentityEvidenceOperatorPartialFixturePath,
-    adminProofMode: "missing-family",
+    recoveredFixturePath:
+      hostedIdentityEvidenceOperatorAccountRecoveryRecoveredFixturePath,
+    adminProofFixturePath:
+      hostedIdentityEvidenceOperatorAccountRecoveryRecoveredFixturePath,
+    adminProofMode: "provided-family-still-blocked",
     expectedMissingInputs: Object.freeze([
       "status-provided",
       "recoveryMethods",

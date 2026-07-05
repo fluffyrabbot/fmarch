@@ -26,6 +26,7 @@ export {
   hostedIdentityEvidenceInputSectionDefinitions,
   hostedIdentityEvidenceInputSectionIds,
   hostedIdentityEvidenceInputSectionStatuses,
+  hostedIdentityEvidenceOperatorAccountRecoveryRecoveredFixturePath,
   hostedIdentityEvidenceOperatorInvitePartialFixturePath,
   hostedIdentityEvidenceOperatorInviteRecoveredFixturePath,
   hostedIdentityEvidenceOperatorProofDrilldowns,

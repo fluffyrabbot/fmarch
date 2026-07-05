@@ -209,11 +209,11 @@ Those progression admin proofs are local role-surface checks. They prove the
 seeded admin detail can show the specific missing redacted packet and the
 fixture-backed recovered packet for that evidence family; they do not prove real
 hosted identity traffic, release readiness, or production readiness.
-The `invite-delivery` progression is the first operator-packet flow: its admin
-proof reads a redacted invite-delivery packet with only that evidence family
-provided, so the admin handoff shows invite delivery as provided while hosted
-identity readiness remains blocked on the remaining hosted account, recovery,
-abuse, session-secret, and audit-retention packets.
+The `invite-delivery` and `account-recovery` progressions are the first
+operator-packet flows: each admin proof reads a redacted packet with only that
+evidence family provided, so the admin handoff shows one family as provided
+while hosted identity readiness remains blocked on the remaining hosted
+identity packets.
 
 The local release-readiness admin browser proof is:
 
