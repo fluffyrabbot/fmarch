@@ -41,6 +41,11 @@ import {
   replacementActionFeatureSpineTargetRows,
 } from "./dev_test_game_replacement_action_feature_spine_targets.mjs";
 import {
+  devTestGameReplacementPrivateProofCommand,
+  replacementPrivateFeatureSpineSourceCheckId,
+  replacementPrivateFeatureSpineTargetRows,
+} from "./dev_test_game_replacement_private_feature_spine_targets.mjs";
+import {
   devTestGameHostSetupProofCommand,
   hostSetupFeatureSpineSourceCheckId,
   hostSetupFeatureSpineTargetRows,
@@ -179,6 +184,8 @@ export function proofGraphAdminProofCase() {
         ),
         replacementActionFeatureTarget:
           proofGraphReplacementActionFeatureTarget(source.proofGraph),
+        replacementPrivateFeatureTarget:
+          proofGraphReplacementPrivateFeatureTarget(source.proofGraph),
       },
       adminRoleSurface,
     }),
@@ -246,6 +253,7 @@ export function assertProofGraphAdminProof(evidence) {
   assertProofGraphAdminProofCoversCohostFeatureTarget(evidence);
   assertProofGraphAdminProofCoversReplacementFeatureTarget(evidence);
   assertProofGraphAdminProofCoversReplacementActionFeatureTarget(evidence);
+  assertProofGraphAdminProofCoversReplacementPrivateFeatureTarget(evidence);
   return evidence;
 }
 
@@ -309,6 +317,25 @@ function assertProofGraphAdminProofCoversReplacementActionFeatureTarget(
     expectedAdminCheckId: "replacement-incoming-action",
     expectedRecoveryCommand: devTestGameReplacementActionProofCommand,
     label: "replacement action",
+  });
+}
+
+function assertProofGraphAdminProofCoversReplacementPrivateFeatureTarget(
+  evidence,
+) {
+  assertProofGraphAdminProofCoversFeatureTarget(evidence, {
+    target: evidence.generatedFrom?.replacementPrivateFeatureTarget,
+    expectedRoleSurfaceNodeId: "role-surface:replacement-private-channel",
+    expectedFeatureSlotId:
+      replacementPrivateFeatureSpineTargetRows.replacementPrivateChannel
+        .featureSlotId,
+    expectedSourceCheckId: replacementPrivateFeatureSpineSourceCheckId,
+    expectedRoleUrlIncludes:
+      "/g/<replacement-private-game>/c/private%3Amafia_day_chat",
+    expectedCheckpointId: "replacement-stale-private-channel",
+    expectedAdminCheckId: "replacement-stale-private-channel",
+    expectedRecoveryCommand: devTestGameReplacementPrivateProofCommand,
+    label: "replacement private",
   });
 }
 
@@ -419,6 +446,16 @@ function proofGraphReplacementActionFeatureTarget(proofGraph) {
       replacementActionFeatureSpineTargetRows.replacementActionRecovery
         .featureSlotId,
     label: "replacement action",
+  });
+}
+
+function proofGraphReplacementPrivateFeatureTarget(proofGraph) {
+  return proofGraphFeatureTarget(proofGraph, {
+    roleSurfaceNodeId: "role-surface:replacement-private-channel",
+    expectedFeatureSlotId:
+      replacementPrivateFeatureSpineTargetRows.replacementPrivateChannel
+        .featureSlotId,
+    label: "replacement private",
   });
 }
 

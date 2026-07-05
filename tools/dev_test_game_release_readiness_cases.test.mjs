@@ -64,6 +64,10 @@ import {
   replacementActionFeatureSpineTargetRows,
 } from "./dev_test_game_replacement_action_feature_spine_targets.mjs";
 import {
+  replacementPrivateFeatureSpineSourceCheckId,
+  replacementPrivateFeatureSpineTargetRows,
+} from "./dev_test_game_replacement_private_feature_spine_targets.mjs";
+import {
   hardeningFeatureSpineCycleIds,
   hardeningFeatureSpineSourceCheckId,
 } from "./dev_test_game_hardening_feature_spine_targets.mjs";
@@ -488,6 +492,19 @@ test("replacement action production feature target derives proof row ids from sh
     releaseReadinessProductionFeatureSpineTargets.replacementActionRecovery;
   assert.equal(target.featureSlotId, source.featureSlotId);
   assert.equal(target.sourceCheckId, replacementActionFeatureSpineSourceCheckId);
+  assert.equal(target.cycleId, source.cycleId);
+  assert.equal(target.roleUrlId, source.roleUrlId);
+  assert.equal(target.checkpointId, source.checkpointId);
+  assert.equal(target.adminCheckId, source.adminCheckId);
+});
+
+test("replacement private production feature target derives proof row ids from shared source rows", () => {
+  const source =
+    replacementPrivateFeatureSpineTargetRows.replacementPrivateChannel;
+  const target =
+    releaseReadinessProductionFeatureSpineTargets.replacementPrivateChannel;
+  assert.equal(target.featureSlotId, source.featureSlotId);
+  assert.equal(target.sourceCheckId, replacementPrivateFeatureSpineSourceCheckId);
   assert.equal(target.cycleId, source.cycleId);
   assert.equal(target.roleUrlId, source.roleUrlId);
   assert.equal(target.checkpointId, source.checkpointId);

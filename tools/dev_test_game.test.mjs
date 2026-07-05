@@ -320,6 +320,11 @@ import {
   replacementActionFeatureSpineTargetRows,
 } from "./dev_test_game_replacement_action_feature_spine_targets.mjs";
 import {
+  devTestGameReplacementPrivateProofCommand,
+  replacementPrivateFeatureSpineCycleId,
+  replacementPrivateFeatureSpineTargetRows,
+} from "./dev_test_game_replacement_private_feature_spine_targets.mjs";
+import {
   assertDevTestGameHostedMatrixExternalEvidence,
   buildDevTestGameHostedMatrixExternalEvidence,
   devTestGameHostedMatrixExternalEvidenceCommand,
@@ -3272,10 +3277,10 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
     graph,
     releaseReadiness,
   );
-  assert.equal(graph.summary.nodeCount, 66);
-  assert.equal(graph.summary.roleUrlCount, 66);
-  assert.equal(graph.summary.roleSurfaceProofCount, 4);
-  assert.equal(graph.summary.productionFeatureTargetCount, 36);
+  assert.equal(graph.summary.nodeCount, 68);
+  assert.equal(graph.summary.roleUrlCount, 68);
+  assert.equal(graph.summary.roleSurfaceProofCount, 5);
+  assert.equal(graph.summary.productionFeatureTargetCount, 37);
   assert.equal(graph.summary.terminalBatchCount, 2);
   for (const descriptor of recoveryReceiptGraphDescriptors) {
     assert.equal(
@@ -3415,6 +3420,13 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
         "http://127.0.0.1:5173/g/<replacement-action-game>",
         "npm run test:dev-test-game-core-live",
       ],
+      [
+        "role-surface:replacement-private-channel",
+        "local-replacement-private-proof",
+        "target/dev-test-game/proof-run.json",
+        "http://127.0.0.1:5173/g/<replacement-private-game>/c/private%3Amafia_day_chat",
+        "npm run test:dev-test-game-core-live",
+      ],
     ],
   );
   assert(
@@ -3452,6 +3464,10 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
     releaseReadiness.localDevelopmentSpine.checks.find(
       (check) => check.id === "local-replacement-action-proof",
     ).spineTargets.productionFeatureTargets;
+  const replacementPrivateProductionFeatureTargets =
+    releaseReadiness.localDevelopmentSpine.checks.find(
+      (check) => check.id === "local-replacement-private-proof",
+    ).spineTargets.productionFeatureTargets;
   const expectedProductionFeatureRows = [
     ...[
       coreLoopProductionFeatureTargets,
@@ -3459,6 +3475,7 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
       cohostProductionFeatureTargets,
       replacementProductionFeatureTargets,
       replacementActionProductionFeatureTargets,
+      replacementPrivateProductionFeatureTargets,
       hardeningProductionFeatureTargets,
     ]
       .flatMap((productionFeatureTargets) =>
@@ -11006,6 +11023,75 @@ test("session card and markdown include role credential URLs and tokens", async 
       }),
     ],
   );
+  const replacementPrivateCheck =
+    hostSetupReadiness.localDevelopmentSpine.checks.find(
+      (item) => item.id === "local-replacement-private-proof",
+    );
+  assert.deepEqual(
+    [
+      replacementPrivateCheck.roleUrl,
+      replacementPrivateCheck.authority,
+      replacementPrivateCheck.receipts,
+      replacementPrivateCheck.resolvedPost,
+      replacementPrivateCheck.reconnect,
+      replacementPrivateCheck.completedPost,
+      replacementPrivateCheck.completedReload,
+      replacementPrivateCheck.recoveryCommand,
+      replacementPrivateCheck.spineTargets,
+    ],
+    [
+      "http://127.0.0.1:4102/g/<replacement-private-game>/c/private%3Amafia_day_chat",
+      {
+        channel: "private:mafia_day_chat",
+        staleRejectError: "NotYourSlot",
+        staleRouteStatus: 403,
+        rowanCapabilityLabel: "ChannelMember(private:mafia_day_chat)",
+        rowanPostState: "ack",
+      },
+      {
+        staleNotificationsStatus: 403,
+        staleInvestigationResultsStatus: 403,
+        rowanNotificationsStatus: 200,
+        rowanInvestigationResultsStatus: 200,
+        rowanPrivateQueueCount: 0,
+      },
+      {
+        game: "<replacement-private-game>",
+        channel: "private:mafia_day_chat",
+        postState: "ack",
+        refreshedPhase: "D01",
+        refreshedLocked: true,
+        staleRouteStatus: 403,
+        normalizedProofStatus: "passed",
+      },
+      {
+        game: "<replacement-private-game>",
+        reconnectState: "recovered",
+        recoveredPhase: "D01",
+        recoveredLocked: true,
+        staleThreadStatus: 403,
+        normalizedProofStatus: "passed",
+      },
+      {
+        game: "<replacement-private-completed-game>",
+        rejectError: "GameAlreadyCompleted",
+        gameCompleted: true,
+        staleThreadStatus: 403,
+        normalizedProofStatus: "passed",
+      },
+      {
+        game: "<replacement-private-completed-game>",
+        routeStatus: 200,
+        gameCompleted: true,
+        staleRouteStatus: 403,
+        normalizedProofStatus: "passed",
+      },
+      "npm run test:dev-test-game-core-live",
+      replacementPrivateSpineTargetsFixture({
+        roleUrl: replacementPrivateCheck.roleUrl,
+      }),
+    ],
+  );
   assert(hostSetupReadiness.releaseReadiness.reason.includes("local host setup proof"));
   const raceCoverageReadiness = buildDevTestGameReleaseReadiness(proofRun, {
     generatedAt: "2026-06-26T00:00:00.000Z",
@@ -12602,6 +12688,63 @@ function devTestGameReleaseReadinessChecklistFixture({
           },
           recoveryCommand: "npm run test:dev-test-game-core-live",
           spineTargets: replacementActionSpineTargetsFixture(),
+        },
+        {
+          id: "local-replacement-private-proof",
+          label: "Replacement private-channel recovery role URL proof",
+          status: "passed",
+          evidence: "target/dev-test-game/proof-run.json",
+          roleUrl:
+            "http://127.0.0.1:5173/g/<replacement-private-game>/c/private%3Amafia_day_chat",
+          proofBoundary:
+            "Seeded dev-test-game replacement private-channel role URL proof from proof-run. Proves current replacement private-channel authority, stale outgoing private-channel and receipt denial, stale private-post ACK and reconnect recovery after resolution, completed-game private-post rejection, and completed private-channel reload; does not prove hosted identity, hosted transport, release readiness, or production readiness.",
+          authority: {
+            channel: "private:mafia_day_chat",
+            staleRejectError: "NotYourSlot",
+            staleRouteStatus: 403,
+            rowanCapabilityLabel: "ChannelMember(private:mafia_day_chat)",
+            rowanPostState: "ack",
+          },
+          receipts: {
+            staleNotificationsStatus: 403,
+            staleInvestigationResultsStatus: 403,
+            rowanNotificationsStatus: 200,
+            rowanInvestigationResultsStatus: 200,
+            rowanPrivateQueueCount: 0,
+          },
+          resolvedPost: {
+            game: "<replacement-private-game>",
+            channel: "private:mafia_day_chat",
+            postState: "ack",
+            refreshedPhase: "D01",
+            refreshedLocked: true,
+            staleRouteStatus: 403,
+            normalizedProofStatus: "passed",
+          },
+          reconnect: {
+            game: "<replacement-private-game>",
+            reconnectState: "recovered",
+            recoveredPhase: "D01",
+            recoveredLocked: true,
+            staleThreadStatus: 403,
+            normalizedProofStatus: "passed",
+          },
+          completedPost: {
+            game: "<replacement-private-completed-game>",
+            rejectError: "GameAlreadyCompleted",
+            gameCompleted: true,
+            staleThreadStatus: 403,
+            normalizedProofStatus: "passed",
+          },
+          completedReload: {
+            game: "<replacement-private-completed-game>",
+            routeStatus: 200,
+            gameCompleted: true,
+            staleRouteStatus: 403,
+            normalizedProofStatus: "passed",
+          },
+          recoveryCommand: "npm run test:dev-test-game-core-live",
+          spineTargets: replacementPrivateSpineTargetsFixture(),
         },
         {
           id: "local-core-loop-proof",
@@ -15923,6 +16066,55 @@ function replacementActionProductionFeatureTargetsFixture(roleUrlHrefs) {
   };
 }
 
+function replacementPrivateSpineTargetsFixture({
+  roleUrl =
+    "http://127.0.0.1:5173/g/<replacement-private-game>/c/private%3Amafia_day_chat",
+} = {}) {
+  const roleUrlHrefs = {
+    "replacement-private-channel": roleUrl,
+  };
+  return {
+    status: "passed",
+    detailRoleUrl: roleUrlHrefs["replacement-private-channel"],
+    defaultCycleId: replacementPrivateFeatureSpineCycleId,
+    defaultRoleUrlId: "replacement-private-channel",
+    defaultRoleUrl: roleUrlHrefs["replacement-private-channel"],
+    defaultCheckpointId: "replacement-stale-private-channel",
+    browserProofCommand: devTestGameLiveProofCommand,
+    cycleIds: [replacementPrivateFeatureSpineCycleId],
+    roleUrlIds: ["replacement-private-channel"],
+    checkpointIds: ["replacement-stale-private-channel"],
+    recoveryHookIds: [],
+    visibleAdminCheckIds: [
+      "replacement-stale-private-channel",
+      "replacement-stale-private-receipts",
+      "replacement-stale-private-post-after-resolve",
+      "replacement-stale-private-post-reconnect",
+      "replacement-stale-private-post-after-complete",
+      "replacement-stale-private-post-after-complete-reload",
+    ],
+    roleUrlHrefs,
+    productionFeatureTargets:
+      replacementPrivateProductionFeatureTargetsFixture(roleUrlHrefs),
+  };
+}
+
+function replacementPrivateProductionFeatureTargetsFixture(roleUrlHrefs) {
+  const slotIds = Object.values(replacementPrivateFeatureSpineTargetRows).map(
+    (row) => row.featureSlotId,
+  );
+  return {
+    status: "passed",
+    slotIds,
+    bySlotId: Object.fromEntries(
+      slotIds.map((slotId) => [
+        slotId,
+        featureSpineCaseFixture(slotId, { roleUrlHrefs }).spineTarget,
+      ]),
+    ),
+  };
+}
+
 function hardeningSpineTargetsFixture({
   roleUrlHrefs = hardeningRoleUrlHrefsFixture(),
 } = {}) {
@@ -16129,6 +16321,22 @@ function featureSpineCaseFixture(
         roleUrlHrefs ?? replacementActionSpineTargetsFixture().roleUrlHrefs,
       browserProofCommand: devTestGameLiveProofCommand,
       rerunCommand: devTestGameReplacementActionProofCommand,
+      includeTargetRerunCommand: true,
+    });
+  }
+  if (slotId === "replacement-private-channel-recovery") {
+    const replacementPrivateRoleUrl =
+      roleUrlHrefs?.["replacement-private-channel"] ??
+      replacementPrivateSpineTargetsFixture().roleUrlHrefs[
+        "replacement-private-channel"
+      ];
+    return featureSpineFixture({
+      slotId,
+      detailRoleUrl: replacementPrivateRoleUrl,
+      roleUrlsById:
+        roleUrlHrefs ?? replacementPrivateSpineTargetsFixture().roleUrlHrefs,
+      browserProofCommand: devTestGameLiveProofCommand,
+      rerunCommand: devTestGameReplacementPrivateProofCommand,
       includeTargetRerunCommand: true,
     });
   }
@@ -16674,6 +16882,8 @@ function proofGraphAdminProofFixture() {
   const replacementGraphTarget = proofGraphReplacementFeatureTargetFixture();
   const replacementActionGraphTarget =
     proofGraphReplacementActionFeatureTargetFixture();
+  const replacementPrivateGraphTarget =
+    proofGraphReplacementPrivateFeatureTargetFixture();
   const evidenceObjectRowIds = [
     ...expectedNormalizedEvidenceObjectRowIds({
       parentId: "private-channel-recovery-receipt",
@@ -16709,6 +16919,8 @@ function proofGraphAdminProofFixture() {
         replacementGraphTarget.productionFeatureNodeId,
         replacementActionGraphTarget.roleSurfaceNodeId,
         replacementActionGraphTarget.productionFeatureNodeId,
+        replacementPrivateGraphTarget.roleSurfaceNodeId,
+        replacementPrivateGraphTarget.productionFeatureNodeId,
       ],
       evidenceObjectRowIds,
       edgeRowIds: [
@@ -16716,14 +16928,16 @@ function proofGraphAdminProofFixture() {
         cohostGraphTarget.edgeRowId,
         replacementGraphTarget.edgeRowId,
         replacementActionGraphTarget.edgeRowId,
+        replacementPrivateGraphTarget.edgeRowId,
       ],
-      edgeCount: handoffs.length + 4,
+      edgeCount: handoffs.length + 5,
       adminProofSurfaceIds,
       adminProofRoleHandoffs: handoffs,
       hostSetupFeatureTarget: hostSetupGraphTarget,
       cohostFeatureTarget: cohostGraphTarget,
       replacementFeatureTarget: replacementGraphTarget,
       replacementActionFeatureTarget: replacementActionGraphTarget,
+      replacementPrivateFeatureTarget: replacementPrivateGraphTarget,
     },
     adminRoleSurface: {
       status: "passed",
@@ -16746,6 +16960,9 @@ function proofGraphAdminProofFixture() {
         replacementActionGraphTarget.roleSurfaceNodeId,
         replacementActionGraphTarget.productionFeatureNodeId,
         replacementActionGraphTarget.edgeRowId,
+        replacementPrivateGraphTarget.roleSurfaceNodeId,
+        replacementPrivateGraphTarget.productionFeatureNodeId,
+        replacementPrivateGraphTarget.edgeRowId,
         ...evidenceObjectRowIds,
       ],
       visibleRelatedLinks: [
@@ -16758,6 +16975,8 @@ function proofGraphAdminProofFixture() {
         replacementGraphTarget.productionFeatureNodeId,
         replacementActionGraphTarget.roleSurfaceNodeId,
         replacementActionGraphTarget.productionFeatureNodeId,
+        replacementPrivateGraphTarget.roleSurfaceNodeId,
+        replacementPrivateGraphTarget.productionFeatureNodeId,
       ],
       visibleRelatedDestinations: handoffs.map((handoff) => ({
         linkId: handoff.linkId,
@@ -16844,6 +17063,26 @@ function proofGraphReplacementActionFeatureTargetFixture() {
     adminCheckId: "replacement-incoming-action",
     browserProofCommand: devTestGameLiveProofCommand,
     recoveryCommand: devTestGameReplacementActionProofCommand,
+  };
+}
+
+function proofGraphReplacementPrivateFeatureTargetFixture() {
+  return {
+    roleSurfaceNodeId: "role-surface:replacement-private-channel",
+    productionFeatureNodeId:
+      "production-feature:replacement-private-channel-recovery",
+    edgeRowId:
+      "edge:role-surface:replacement-private-channel:proves-production-feature:production-feature:replacement-private-channel-recovery",
+    sourceCheckId: "local-replacement-private-proof",
+    featureSlotId: "replacement-private-channel-recovery",
+    roleUrl:
+      "http://127.0.0.1:5173/g/<replacement-private-game>/c/private%3Amafia_day_chat",
+    targetRoleUrl:
+      "http://127.0.0.1:5173/g/<replacement-private-game>/c/private%3Amafia_day_chat",
+    checkpointId: "replacement-stale-private-channel",
+    adminCheckId: "replacement-stale-private-channel",
+    browserProofCommand: devTestGameLiveProofCommand,
+    recoveryCommand: devTestGameReplacementPrivateProofCommand,
   };
 }
 

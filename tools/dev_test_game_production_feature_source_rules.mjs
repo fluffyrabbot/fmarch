@@ -11,6 +11,7 @@ export {
   devTestGameProductionFeatureBrowserProofCommand,
   devTestGameReplacementActionProofCommand,
   devTestGameReplacementPlayerProofCommand,
+  devTestGameReplacementPrivateProofCommand,
 } from "./dev_test_game_production_feature_source_registry.mjs";
 
 export const productionFeatureSpineSourceCheckRules = Object.freeze(

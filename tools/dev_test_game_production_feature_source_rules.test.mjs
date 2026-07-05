@@ -17,6 +17,7 @@ import {
   devTestGameProductionFeatureBrowserProofCommand,
   devTestGameReplacementActionProofCommand,
   devTestGameReplacementPlayerProofCommand,
+  devTestGameReplacementPrivateProofCommand,
   productionFeatureSpineSourceCheckRules,
 } from "./dev_test_game_production_feature_source_rules.mjs";
 import {
@@ -51,6 +52,10 @@ import {
   replacementActionFeatureSpineSource,
   replacementActionFeatureSpineSourceCheckId,
 } from "./dev_test_game_replacement_action_feature_spine_targets.mjs";
+import {
+  replacementPrivateFeatureSpineSource,
+  replacementPrivateFeatureSpineSourceCheckId,
+} from "./dev_test_game_replacement_private_feature_spine_targets.mjs";
 
 test("production feature source rules cover every feature spine source", () => {
   assert.deepEqual(
@@ -69,6 +74,8 @@ test("production feature source rules cover every feature spine source", () => {
       devTestGameReplacementPlayerProofCommand,
     [replacementActionFeatureSpineSourceCheckId]:
       devTestGameReplacementActionProofCommand,
+    [replacementPrivateFeatureSpineSourceCheckId]:
+      devTestGameReplacementPrivateProofCommand,
     [hardeningFeatureSpineSourceCheckId]: devTestGameHardeningAdminProofCommand,
     [identityFeatureSpineSourceCheckId]: devTestGameIdentityAdminProofCommand,
   });
@@ -78,6 +85,7 @@ test("production feature source rules cover every feature spine source", () => {
     cohostFeatureSpineSource,
     replacementFeatureSpineSource,
     replacementActionFeatureSpineSource,
+    replacementPrivateFeatureSpineSource,
     hardeningFeatureSpineSource,
     identityFeatureSpineSource,
   ]);
@@ -108,6 +116,10 @@ test("production feature source rules cover every feature spine source", () => {
         productionFeatureReadinessSourceKind.spineTargets,
       ],
       [
+        replacementPrivateFeatureSpineSourceCheckId,
+        productionFeatureReadinessSourceKind.spineTargets,
+      ],
+      [
         hardeningFeatureSpineSourceCheckId,
         productionFeatureReadinessSourceKind.spineTargets,
       ],
@@ -131,6 +143,7 @@ test("production feature builders use source modules instead of raw source ids",
     cohostFeatureSpineSourceCheckId,
     replacementFeatureSpineSourceCheckId,
     replacementActionFeatureSpineSourceCheckId,
+    replacementPrivateFeatureSpineSourceCheckId,
     hardeningFeatureSpineSourceCheckId,
     identityFeatureSpineSourceCheckId,
   ];
