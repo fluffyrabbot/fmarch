@@ -264,8 +264,10 @@ import {
   devTestGameDefaultSequenceStage,
   devTestGameHardeningAdminProofCommand,
   devTestGameHostedIdentitySequenceStage,
+  devTestGameHostedIdentitySequencePromotionCommand,
   devTestGameIdentityAdminProofCommand,
   devTestGameLiveProofCommand,
+  devTestGameNextActionPath,
   devTestGameReleaseReadinessPath,
   devTestGameSeedFixtureCommand,
   devTestGameSeedFixturePath,
@@ -2042,6 +2044,11 @@ test("dev test-game next-action derives one local recovery command from the mani
       nextLocalCommand: devTestGameLiveProofCommand,
       nextLocalProofTarget: "target/dev-test-game/proof-run.json",
       roleUrl: "/admin/audit/local-identity-adapter?game=<seeded-game>",
+      sequenceTransition: {
+        status: "blocked",
+        promotionCommand: devTestGameHostedIdentitySequencePromotionCommand,
+        promotedSequenceStage: "hosted-identity",
+      },
       buildSlice:
         "Keep hosted production identity deferred while the local seeded capability model remains the active architecture sequence; refresh the core-live role proof before replacing dev tokens with hosted accounts, sessions, and invites.",
       requiredBeforeHostedIdentity:
@@ -2115,6 +2122,53 @@ test("dev test-game next-action derives one local recovery command from the mani
         includeTargetRerunCommand: true,
       }),
     ],
+  });
+  const localCapabilityPassedAction = buildDevTestGameNextAction(freshManifest, {
+    generatedAt: "2026-06-26T00:00:01.000Z",
+    opsArtifacts: devTestGameOpsArtifactsFixture(),
+    raceCoverage: devTestGameRaceCoverageFixture(),
+    releaseReadinessChecklist: devTestGameReleaseReadinessChecklistFixture({
+      includeOpsArtifactBundleCheck: true,
+      unproven: [
+        {
+          id: "hosted-production-identity",
+          status: "unproven",
+          requiredEvidence: "Hosted account lifecycle",
+        },
+      ],
+    }),
+  });
+  assertDevTestGameNextAction(localCapabilityPassedAction);
+  assert.deepEqual(localCapabilityPassedAction.nextAction, {
+    command: devTestGameHostedIdentitySequencePromotionCommand,
+    reason: "sequence-deferred-hosted-identity",
+    status: "blocked",
+    sequenceDeferral: {
+      status: "blocked",
+      currentSequenceStage: "local-capability-model",
+      requiredSequenceStage: "hosted-identity",
+      deferredUnprovenId: "hosted-production-identity",
+      deferredCommand: `npm run ${devTestGameHostedIdentityEvidenceCommand}`,
+      deferredProofTarget: devTestGameHostedIdentityEvidencePath,
+      deferredRoleUrl:
+        "/admin/audit/local-hosted-identity-evidence?game=<seeded-game>",
+      nextLocalCommand: devTestGameHostedIdentitySequencePromotionCommand,
+      nextLocalProofTarget: devTestGameNextActionPath,
+      roleUrl: "/admin/audit/local-identity-adapter?game=<seeded-game>",
+      sequenceTransition: {
+        status: "ready",
+        promotionCommand: devTestGameHostedIdentitySequencePromotionCommand,
+        promotedSequenceStage: "hosted-identity",
+      },
+      buildSlice:
+        "Local seeded capability confidence is passed; promote the next-action generator to the hosted-identity sequence stage before replacing dev tokens with hosted accounts, sessions, and invites.",
+      requiredBeforeHostedIdentity:
+        "The local core gameplay, hardening, and local ops proof spine should remain the trusted development surface before production identity replaces dev tokens.",
+      localCapabilityConfidence:
+        hostedIdentityPassedLocalCapabilityConfidenceFixture(),
+      proofBoundary:
+        "Sequencing hold only. This records that hosted production identity is a real release-readiness blocker, but not the next local-development command; it does not prove hosted account lifecycle, invite delivery, release readiness, or production readiness.",
+    },
   });
   const hostedIdentityStageAction = buildDevTestGameNextAction(freshManifest, {
     generatedAt: "2026-06-26T00:00:01.000Z",
@@ -13291,6 +13345,27 @@ function hostedIdentityLocalCapabilityConfidenceFixture() {
     ],
     proofBoundary:
       "Local capability-model confidence is derived from the current release-readiness checklist. It requires passed core-loop, hardening, local ops, seed/demo fixture, and local identity-adapter rows before hosted identity can move out of sequencing deferral; it does not prove hosted accounts, sessions, invites, release readiness, or production readiness.",
+  };
+}
+
+function hostedIdentityPassedLocalCapabilityConfidenceFixture() {
+  const confidence = hostedIdentityLocalCapabilityConfidenceFixture();
+  return {
+    ...confidence,
+    status: "passed",
+    passedCheckCount: 5,
+    checks: confidence.checks.map((check) =>
+      check.id === "local-ops-artifact-bundle"
+        ? {
+            id: "local-ops-artifact-bundle",
+            label: "Local ops artifact bundle",
+            status: "passed",
+            evidence: "target/dev-test-game/ops-artifacts.json",
+            roleUrl: "/admin/audit/local-ops-artifacts?game=<seeded-game>",
+            proofBoundary: "Local ops artifact bundle.",
+          }
+        : check,
+    ),
   };
 }
 

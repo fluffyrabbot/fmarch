@@ -88,6 +88,8 @@ export const devTestGameSeedFixtureRoleUrl =
   "/admin/audit/local-seed-fixtures?game=<seeded-game>";
 export const devTestGameDefaultSequenceStage = "local-capability-model";
 export const devTestGameHostedIdentitySequenceStage = "hosted-identity";
+export const devTestGameHostedIdentitySequencePromotionCommand =
+  "npm run test:dev-test-game-next-action:hosted-identity";
 
 const nextActionJsonPath = path.join(repoRoot, devTestGameNextActionPath);
 
@@ -1618,6 +1620,8 @@ function hostedIdentitySequenceDeferralFor(
   ) {
     return null;
   }
+  const readyForHostedIdentity =
+    localCapabilityConfidence?.status === "passed";
   return {
     status: "blocked",
     currentSequenceStage: sequenceStage,
@@ -1626,11 +1630,21 @@ function hostedIdentitySequenceDeferralFor(
     deferredCommand: selectedUnproven.command,
     deferredProofTarget: selectedUnproven.proofTarget,
     deferredRoleUrl: selectedUnproven.roleUrl,
-    nextLocalCommand: devTestGameLiveProofCommand,
-    nextLocalProofTarget: "target/dev-test-game/proof-run.json",
+    nextLocalCommand: readyForHostedIdentity
+      ? devTestGameHostedIdentitySequencePromotionCommand
+      : devTestGameLiveProofCommand,
+    nextLocalProofTarget: readyForHostedIdentity
+      ? devTestGameNextActionPath
+      : "target/dev-test-game/proof-run.json",
     roleUrl: selectedUnproven.spineTarget?.roleUrl ?? "",
-    buildSlice:
-      "Keep hosted production identity deferred while the local seeded capability model remains the active architecture sequence; refresh the core-live role proof before replacing dev tokens with hosted accounts, sessions, and invites.",
+    sequenceTransition: {
+      status: readyForHostedIdentity ? "ready" : "blocked",
+      promotionCommand: devTestGameHostedIdentitySequencePromotionCommand,
+      promotedSequenceStage: devTestGameHostedIdentitySequenceStage,
+    },
+    buildSlice: readyForHostedIdentity
+      ? "Local seeded capability confidence is passed; promote the next-action generator to the hosted-identity sequence stage before replacing dev tokens with hosted accounts, sessions, and invites."
+      : "Keep hosted production identity deferred while the local seeded capability model remains the active architecture sequence; refresh the core-live role proof before replacing dev tokens with hosted accounts, sessions, and invites.",
     requiredBeforeHostedIdentity:
       "The local core gameplay, hardening, and local ops proof spine should remain the trusted development surface before production identity replaces dev tokens.",
     localCapabilityConfidence,
@@ -1654,10 +1668,14 @@ function assertHostedIdentitySequenceDeferral(deferral) {
     deferral.deferredProofTarget.length === 0 ||
     typeof deferral.deferredRoleUrl !== "string" ||
     !deferral.deferredRoleUrl.includes("?game=<seeded-game>") ||
-    deferral.nextLocalCommand !== devTestGameLiveProofCommand ||
-    deferral.nextLocalProofTarget !== "target/dev-test-game/proof-run.json" ||
+    ![devTestGameLiveProofCommand, devTestGameHostedIdentitySequencePromotionCommand]
+      .includes(deferral.nextLocalCommand) ||
+    ![devTestGameNextActionPath, "target/dev-test-game/proof-run.json"].includes(
+      deferral.nextLocalProofTarget,
+    ) ||
     typeof deferral.roleUrl !== "string" ||
     deferral.roleUrl.length === 0 ||
+    !validHostedIdentitySequenceTransition(deferral.sequenceTransition) ||
     typeof deferral.buildSlice !== "string" ||
     deferral.buildSlice.length === 0 ||
     typeof deferral.requiredBeforeHostedIdentity !== "string" ||
@@ -1670,6 +1688,38 @@ function assertHostedIdentitySequenceDeferral(deferral) {
   ) {
     throw new Error("next-action hosted identity sequence deferral is malformed");
   }
+  if (
+    deferral.localCapabilityConfidence.status === "passed" &&
+    (deferral.nextLocalCommand !==
+      devTestGameHostedIdentitySequencePromotionCommand ||
+      deferral.nextLocalProofTarget !== devTestGameNextActionPath ||
+      deferral.sequenceTransition.status !== "ready")
+  ) {
+    throw new Error(
+      "next-action hosted identity deferral must expose the stage promotion command",
+    );
+  }
+  if (
+    deferral.localCapabilityConfidence.status !== "passed" &&
+    (deferral.nextLocalCommand !== devTestGameLiveProofCommand ||
+      deferral.nextLocalProofTarget !== "target/dev-test-game/proof-run.json" ||
+      deferral.sequenceTransition.status !== "blocked")
+  ) {
+    throw new Error(
+      "next-action hosted identity deferral must refresh local proof while confidence is blocked",
+    );
+  }
+}
+
+function validHostedIdentitySequenceTransition(transition) {
+  return (
+    transition !== null &&
+    typeof transition === "object" &&
+    ["ready", "blocked"].includes(transition.status) &&
+    transition.promotionCommand ===
+      devTestGameHostedIdentitySequencePromotionCommand &&
+    transition.promotedSequenceStage === devTestGameHostedIdentitySequenceStage
+  );
 }
 
 function validHostedIdentityLocalCapabilityConfidence(confidence) {
