@@ -17891,6 +17891,13 @@ function hostedIdentityEvidenceAdminProofFixture() {
       hostedHandoffSectionInputIds: handoffSectionInputRows.map((row) => row.id),
       hostedHandoffSectionInputStatuses:
         hostedIdentityEvidenceSectionInputStatuses(handoff.inputSections),
+      hostedHandoffSummary: {
+        status: handoff.status,
+        preflightStatus: handoff.preflightStatus,
+        command: handoff.command,
+        proofTarget: handoff.proofTarget,
+      },
+      hostedHandoffBlockedReceipt: handoff.blockedReceipt,
       hostedIdentityPacketSummaryIds: packetSummaryRows.map((row) => row.id),
       hostedIdentityPacketSummaryStatuses: Object.fromEntries(
         packetSummaryRows.map((row) => [row.id, row.status]),
@@ -17947,6 +17954,19 @@ function hostedIdentityEvidenceAdminProofFixture() {
       visibleHostedHandoffSectionInputStatuses: Object.fromEntries(
         handoffSectionInputRows.map((row) => [row.id, `${row.id} ${row.status}`]),
       ),
+      visibleHostedHandoffSummary: {
+        status: handoff.status,
+        preflightStatus: handoff.preflightStatus,
+        command: handoff.command,
+        proofTarget: handoff.proofTarget,
+      },
+      visibleHostedHandoffBlockedReceipt: {
+        status: handoff.blockedReceipt.status,
+        operatorAction: handoff.blockedReceipt.operatorAction,
+        localVsHostedBoundary: handoff.blockedReceipt.localVsHostedBoundary,
+        nextProofTarget: handoff.blockedReceipt.nextProofTarget,
+        missingRequiredInputs: handoff.blockedReceipt.missingRequiredInputs,
+      },
       visibleHostedIdentityPacketSummaries: packetSummaryRows.map((row) => row.id),
       visibleHostedIdentityPacketSummaryStatuses: Object.fromEntries(
         packetSummaryRows.map((row) => [row.id, row.status]),

@@ -836,6 +836,9 @@ function normalizeHostedIdentityEvidenceHandoffChecklist({
     inputSections: normalizeHostedHandoffInputSections(
       hostedIdentityEvidence.hostedHandoffChecklist?.inputSections,
     ),
+    blockedReceipt: normalizeHostedHandoffBlockedReceipt(
+      hostedIdentityEvidence.hostedHandoffChecklist?.blockedReceipt,
+    ),
   });
 }
 

@@ -1044,6 +1044,23 @@ test("admin route data exposes hosted identity evidence as a native audit row", 
     identity.hostedHandoffChecklist.inputSections.map((section) => section.id),
     hostedIdentityEvidenceInputSectionIds,
   );
+  const hostedIdentityBlockedReceipt =
+    hostedIdentityEvidenceHandoffCase().blockedReceipt;
+  assert.deepEqual(identity.hostedHandoffChecklist.blockedReceipt, {
+    status: hostedIdentityBlockedReceipt.status,
+    command: hostedIdentityBlockedReceipt.command,
+    proofTarget: hostedIdentityBlockedReceipt.proofTarget,
+    nextProofTarget: hostedIdentityBlockedReceipt.nextProofTarget,
+    operatorAction: hostedIdentityBlockedReceipt.operatorAction,
+    localVsHostedBoundary: hostedIdentityBlockedReceipt.localVsHostedBoundary,
+    missingRequiredInputs: hostedIdentityBlockedReceipt.missingRequiredInputs,
+    requiredInputs: hostedIdentityBlockedReceipt.requiredInputs.map((input) => ({
+      name: input.name,
+      value: input.value === null ? "" : String(input.value ?? ""),
+      required: input.required === true,
+      purpose: input.purpose,
+    })),
+  });
   assert.equal(
     identity.artifactSummary.nextProofTarget,
     HOSTED_IDENTITY_EVIDENCE_PROOF_TARGET,

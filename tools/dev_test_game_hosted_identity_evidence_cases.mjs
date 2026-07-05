@@ -383,6 +383,13 @@ export function hostedIdentityEvidenceHandoffCase({
   blockedChecks = hostedIdentityEvidenceBlockedCheckRows(),
   requirementGroups = hostedIdentityEvidenceRequirementGroups(blockedChecks),
   inputSections = hostedIdentityEvidenceInputSections({ checks: blockedChecks }),
+  blockedReceipt =
+    status === "blocked"
+      ? hostedIdentityEvidenceBlockedReceipt({
+          missingRequiredInputs:
+            hostedIdentityEvidenceMissingRequiredInputs(inputSections),
+        })
+      : undefined,
 } = {}) {
   return {
     status,
@@ -399,7 +406,74 @@ export function hostedIdentityEvidenceHandoffCase({
     })),
     requirementGroups,
     inputSections,
+    ...(blockedReceipt === undefined ? {} : { blockedReceipt }),
   };
+}
+
+export function hostedIdentityEvidenceBlockedReceipt({
+  missingRequiredInputs = hostedIdentityEvidenceInputIds.filter(
+    (id) => id !== "command" && id !== "proof-target",
+  ),
+} = {}) {
+  return {
+    status: "blocked",
+    command: `npm run ${devTestGameHostedIdentityEvidenceCommand}`,
+    proofTarget: devTestGameHostedIdentityEvidencePath,
+    nextProofTarget: devTestGameHostedIdentityEvidencePath,
+    requiredInputs: hostedIdentityEvidenceInputIds.map((id) => ({
+      name: id,
+      value:
+        id === "command"
+          ? `npm run ${devTestGameHostedIdentityEvidenceCommand}`
+          : id === "proof-target"
+            ? devTestGameHostedIdentityEvidencePath
+            : null,
+      required: true,
+      purpose: hostedIdentityEvidenceInputPurpose(id),
+    })),
+    operatorAction:
+      "Attach a redacted hosted identity evidence JSON packet for account lifecycle, invite delivery, recovery, abuse/rate-limit, session-secret, audit retention/export, and role-surface adapter compatibility, then rerun npm run test:dev-test-game-hosted-identity-evidence.",
+    localVsHostedBoundary:
+      "The local identity adapter proves the role-surface capability model only; it cannot satisfy hosted account, session, invite, recovery, abuse, secret, or audit-retention evidence.",
+    missingRequiredInputs: [...missingRequiredInputs],
+  };
+}
+
+function hostedIdentityEvidenceMissingRequiredInputs(inputSections) {
+  return [
+    ...new Set(
+      (Array.isArray(inputSections) ? inputSections : []).flatMap((section) =>
+        Array.isArray(section.missingInputs) ? section.missingInputs : [],
+      ),
+    ),
+  ];
+}
+
+function hostedIdentityEvidenceInputPurpose(id) {
+  return (
+    {
+      command: "Command that regenerates the hosted identity evidence handoff.",
+      "proof-target": "Machine-readable hosted identity evidence handoff path.",
+      FMARCH_HOSTED_IDENTITY_EVIDENCE_PATH:
+        "Readable redacted hosted identity evidence JSON path.",
+      "redacted-role-surface-contract-packet":
+        "Redacted hosted role-surface contract packet.",
+      "redacted-identity-adapter-contract-packet":
+        "Redacted hosted identity adapter contract packet.",
+      "redacted-account-lifecycle-packet":
+        "Redacted hosted account create/login/disable/enable packet.",
+      "redacted-invite-delivery-packet":
+        "Redacted hosted invite delivery and revocation packet.",
+      "redacted-account-recovery-packet":
+        "Redacted hosted account recovery packet.",
+      "redacted-abuse-rate-limit-packet":
+        "Redacted hosted abuse and rate-limit policy packet.",
+      "redacted-session-secret-packet":
+        "Redacted hosted session-secret storage and rotation packet.",
+      "redacted-audit-retention-packet":
+        "Redacted hosted audit retention and export packet.",
+    }[id] ?? "Hosted identity evidence input."
+  );
 }
 
 export function hostedIdentityEvidenceInputSections({ checks = [] } = {}) {

@@ -113,6 +113,54 @@ test("hosted identity evidence cases share handoff inputs and blocked groups", (
     handoff.requirementGroups,
     hostedIdentityEvidenceRequirementGroups(blockedChecks),
   );
+  assert.equal(handoff.blockedReceipt.status, "blocked");
+  assert.equal(
+    handoff.blockedReceipt.command,
+    `npm run ${devTestGameHostedIdentityEvidenceCommand}`,
+  );
+  assert.equal(handoff.blockedReceipt.proofTarget, devTestGameHostedIdentityEvidencePath);
+  assert.equal(
+    handoff.blockedReceipt.nextProofTarget,
+    devTestGameHostedIdentityEvidencePath,
+  );
+  assert.deepEqual(
+    handoff.blockedReceipt.missingRequiredInputs,
+    [
+      "FMARCH_HOSTED_IDENTITY_EVIDENCE_PATH",
+      "redacted-role-surface-contract-packet",
+      "redacted-identity-adapter-contract-packet",
+      "redacted-account-lifecycle-packet",
+      "redacted-invite-delivery-packet",
+      "redacted-account-recovery-packet",
+      "redacted-abuse-rate-limit-packet",
+      "redacted-session-secret-packet",
+      "redacted-audit-retention-packet",
+    ],
+  );
+  assert.deepEqual(
+    handoff.blockedReceipt.requiredInputs.map((input) => [
+      input.name,
+      input.value,
+      input.required,
+    ]),
+    hostedIdentityEvidenceInputIds.map((id) => [
+      id,
+      id === "command"
+        ? `npm run ${devTestGameHostedIdentityEvidenceCommand}`
+        : id === "proof-target"
+          ? devTestGameHostedIdentityEvidencePath
+          : null,
+      true,
+    ]),
+  );
+  assert.match(
+    handoff.blockedReceipt.operatorAction,
+    /redacted hosted identity evidence JSON packet/,
+  );
+  assert.match(
+    handoff.blockedReceipt.localVsHostedBoundary,
+    /local identity adapter proves the role-surface capability model only/,
+  );
   assert.equal(hostedIdentityEvidencePlaceholderSchema.properties.version.const, 1);
   assert.equal(
     hostedIdentityEvidencePlaceholderSchema.properties.releaseReady.const,

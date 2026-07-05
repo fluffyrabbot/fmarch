@@ -110,6 +110,20 @@ function hostedIdentityPacketSummaryStatuses(hostedIdentityEvidence) {
   );
 }
 
+function hostedIdentityHandoffSummary(hostedIdentityEvidence) {
+  const checklist = hostedIdentityEvidence.hostedHandoffChecklist ?? {};
+  return {
+    status: String(checklist.status ?? hostedIdentityEvidence.status ?? "unknown"),
+    preflightStatus: String(
+      checklist.preflightStatus ?? hostedIdentityEvidence.status ?? "unknown",
+    ),
+    command: String(checklist.command ?? hostedIdentityEvidence.nextCommand ?? ""),
+    proofTarget: String(
+      checklist.proofTarget ?? hostedIdentityEvidence.nextProofTarget ?? "",
+    ),
+  };
+}
+
 export function hostedIdentityEvidenceAdminProofCase() {
   return {
     smokeName: "dev-test-game-hosted-identity-evidence-admin-proof",
@@ -171,6 +185,12 @@ export function hostedIdentityEvidenceAdminProofCase() {
         ),
         requiredHostedHandoffSectionInputStatuses:
           hostedIdentityEvidenceSectionInputStatuses(hostedHandoffInputSections),
+        requiredHostedHandoffSummary: hostedIdentityHandoffSummary(
+          source.hostedIdentityEvidence,
+        ),
+        requiredHostedHandoffBlockedReceipt:
+          source.hostedIdentityEvidence.hostedHandoffChecklist.blockedReceipt ??
+          null,
         requiredHostedIdentityPacketSummaries: hostedIdentityPacketSummaryRows(
           source.hostedIdentityEvidence,
         ).map((summary) => summary.id),
@@ -270,6 +290,17 @@ export function hostedIdentityEvidenceAdminProofCase() {
           hostedIdentityEvidenceSectionInputStatuses(
             source.hostedIdentityEvidence.hostedHandoffChecklist.inputSections,
           ),
+        hostedHandoffSummary: hostedIdentityHandoffSummary(
+          source.hostedIdentityEvidence,
+        ),
+        ...(source.hostedIdentityEvidence.hostedHandoffChecklist
+          .blockedReceipt === undefined
+          ? {}
+          : {
+              hostedHandoffBlockedReceipt:
+                source.hostedIdentityEvidence.hostedHandoffChecklist
+                  .blockedReceipt,
+            }),
         hostedIdentityPacketSummaryIds: hostedIdentityPacketSummaryRows(
           source.hostedIdentityEvidence,
         ).map((summary) => summary.id),
@@ -409,6 +440,47 @@ export function assertHostedIdentityEvidenceAdminProof(evidence) {
     rowName: "handoff section input status",
     surfaceKey: "visibleHostedHandoffSectionInputStatuses",
   });
+  const expectedSummary = evidence.generatedFrom?.hostedHandoffSummary;
+  if (expectedSummary !== undefined) {
+    for (const [key, expectedValue] of Object.entries(expectedSummary)) {
+      if (
+        evidence.adminRoleSurface?.visibleHostedHandoffSummary?.[key] !==
+        String(expectedValue)
+      ) {
+        throw new Error(
+          `hosted identity evidence admin proof missing handoff summary: ${key}`,
+        );
+      }
+    }
+  }
+  const expectedBlockedReceipt =
+    evidence.generatedFrom?.hostedHandoffBlockedReceipt;
+  if (expectedBlockedReceipt !== undefined) {
+    const visibleReceipt =
+      evidence.adminRoleSurface?.visibleHostedHandoffBlockedReceipt;
+    if (visibleReceipt === undefined) {
+      throw new Error("hosted identity evidence admin proof missing blocked receipt");
+    }
+    for (const field of [
+      "status",
+      "operatorAction",
+      "localVsHostedBoundary",
+      "nextProofTarget",
+    ]) {
+      if (visibleReceipt[field] !== expectedBlockedReceipt[field]) {
+        throw new Error(
+          `hosted identity evidence admin proof blocked receipt mismatch: ${field}`,
+        );
+      }
+    }
+    for (const input of expectedBlockedReceipt.missingRequiredInputs ?? []) {
+      if (!visibleReceipt.missingRequiredInputs?.includes(String(input))) {
+        throw new Error(
+          `hosted identity evidence admin proof blocked receipt missing input: ${input}`,
+        );
+      }
+    }
+  }
   assertVisibleAdminRoleSurfaceRows({
     adminRoleSurface: evidence.adminRoleSurface,
     rowIds: evidence.generatedFrom?.hostedIdentityPacketSummaryIds,

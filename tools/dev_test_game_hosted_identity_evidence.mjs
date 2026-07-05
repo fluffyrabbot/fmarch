@@ -35,6 +35,7 @@ import {
   devTestGameHostedIdentityEvidencePath,
   hostedIdentityEvidenceCheckIds,
   hostedIdentityEvidenceHandoffCase,
+  hostedIdentityEvidenceInputIds,
   hostedIdentityEvidenceInputSectionDefinitions,
   hostedIdentityEvidencePacketSectionDefinitions,
   hostedIdentityEvidencePlaceholderFixturePath,
@@ -227,6 +228,25 @@ export function assertDevTestGameHostedIdentityEvidence(evidence) {
       devTestGameHostedIdentityEvidencePath
   ) {
     throw new Error("hosted identity evidence handoff checklist drifted");
+  }
+  if (evidence.status === "blocked") {
+    const receipt = evidence.hostedHandoffChecklist?.blockedReceipt;
+    if (
+      receipt?.status !== "blocked" ||
+      receipt.command !== `npm run ${devTestGameHostedIdentityEvidenceCommand}` ||
+      receipt.proofTarget !== devTestGameHostedIdentityEvidencePath ||
+      receipt.nextProofTarget !== devTestGameHostedIdentityEvidencePath ||
+      typeof receipt.operatorAction !== "string" ||
+      receipt.operatorAction.length === 0 ||
+      typeof receipt.localVsHostedBoundary !== "string" ||
+      receipt.localVsHostedBoundary.length === 0 ||
+      !Array.isArray(receipt.missingRequiredInputs) ||
+      receipt.missingRequiredInputs.length === 0 ||
+      !Array.isArray(receipt.requiredInputs) ||
+      receipt.requiredInputs.length !== hostedIdentityEvidenceInputIds.length
+    ) {
+      throw new Error("hosted identity evidence missing blocked receipt");
+    }
   }
   const inputSections = evidence.hostedHandoffChecklist?.inputSections;
   if (!Array.isArray(inputSections)) {
