@@ -9,6 +9,7 @@ import {
   assertHostModkillControlSurfaceCase,
   assertHostPhaseTransitionActionProofCase,
   assertHostPublishRaceSurfaceCase,
+  assertHostResolveRaceSurfaceCase,
   assertHostStaleAdvanceAfterTransitionProofCase,
   dayFourNoLynchHostTransitionProofCase,
   emptyNightThreeHostTransitionProofCase,
@@ -22,6 +23,7 @@ import {
   hostLifecycleControlScenario,
   hostModkillControlScenario,
   hostPublishRaceScenario,
+  hostResolveRaceScenario,
   hostLockedPhaseTransitionCase,
   hostLockThreadCommandFacts,
   hostNightActionTransitionSurfaceCase,
@@ -1108,6 +1110,64 @@ test("host publish race assertion covers official-count convergence and reload l
         },
       }),
     /host publish race surface/,
+  );
+});
+
+test("host resolve race assertion covers phase-lock convergence and reload lanes", () => {
+  const hostResolveRaceSurface = {
+    status: "passed",
+    proofCheckId: "concurrent-host-resolve-race",
+    reloadProofCheckId: "concurrent-host-resolve-race-reload",
+    hostResolveRace: {
+      id: "concurrent-host-resolve-race",
+      label: "Concurrent host resolves converge",
+      status: "passed",
+      evidence: {
+        ackPageRole: "concurrent",
+        rejectPageRole: "live",
+        game: "resolve-race-game-a",
+        ackState: "ack",
+        rejectError: "PhaseLocked",
+        lockedAfterRace: true,
+        lockedAfterRestore: false,
+      },
+    },
+    hostResolveRaceReload: {
+      id: "concurrent-host-resolve-race-reload",
+      label: "Concurrent host resolve race reloads locked host projections",
+      status: "passed",
+      evidence: {
+        game: "resolve-race-game-a",
+        liveRouteStatus: 200,
+        concurrentRouteStatus: 200,
+        livePhase: { id: "D02", state: "locked", locked: true },
+        concurrentPhase: { id: "D02", state: "locked", locked: true },
+        apiLocked: true,
+      },
+    },
+  };
+
+  assert.doesNotThrow(() =>
+    assertHostResolveRaceSurfaceCase({
+      hostResolveRaceSurface,
+      scenario: hostResolveRaceScenario(),
+    }),
+  );
+  assert.throws(
+    () =>
+      assertHostResolveRaceSurfaceCase({
+        hostResolveRaceSurface: {
+          ...hostResolveRaceSurface,
+          hostResolveRaceReload: {
+            ...hostResolveRaceSurface.hostResolveRaceReload,
+            evidence: {
+              ...hostResolveRaceSurface.hostResolveRaceReload.evidence,
+              apiLocked: false,
+            },
+          },
+        },
+      }),
+    /host resolve race surface/,
   );
 });
 

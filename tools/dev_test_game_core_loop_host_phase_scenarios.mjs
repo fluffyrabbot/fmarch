@@ -12,6 +12,9 @@ const cloneHostLifecycleRaceScenario = (scenario) => ({
 const cloneHostPublishRaceScenario = (scenario) => ({
   ...scenario,
 });
+const cloneHostResolveRaceScenario = (scenario) => ({
+  ...scenario,
+});
 const clonePhaseStateCase = (phaseStateCase) => ({ ...phaseStateCase });
 const cloneTransitionProofCase = (transitionCase) => ({
   ...transitionCase,
@@ -566,6 +569,26 @@ export function hostPublishRaceScenario() {
   return cloneHostPublishRaceScenario(hostPublishRaceScenarioDefinition);
 }
 
+const hostResolveRaceScenarioDefinition = Object.freeze({
+  proofCheckId: "concurrent-host-resolve-race",
+  reloadProofCheckId: "concurrent-host-resolve-race-reload",
+  allowedPageRoles: Object.freeze(["live", "concurrent"]),
+  ackState: "ack",
+  rejectError: "PhaseLocked",
+  lockedAfterRace: true,
+  lockedAfterRestore: false,
+  liveRouteStatus: 200,
+  concurrentRouteStatus: 200,
+  phaseId: "D02",
+  phaseState: "locked",
+  phaseLocked: true,
+  apiLocked: true,
+});
+
+export function hostResolveRaceScenario() {
+  return cloneHostResolveRaceScenario(hostResolveRaceScenarioDefinition);
+}
+
 export function assertHostLifecycleControlRoleSurfaceCase({
   hostRoleSurface,
   expectedGame,
@@ -845,6 +868,51 @@ export function assertHostPublishRaceSurfaceCase({
     throwHostPhaseScenarioAssertionError({
       message: "core-loop admin proof missing host publish race surface",
       evidence: hostPublishRaceSurface,
+      includeEvidenceInError,
+    });
+  }
+}
+
+export function assertHostResolveRaceSurfaceCase({
+  hostResolveRaceSurface,
+  scenario = hostResolveRaceScenarioDefinition,
+  includeEvidenceInError = false,
+}) {
+  const raceLane = hostResolveRaceSurface?.hostResolveRace;
+  const reloadLane = hostResolveRaceSurface?.hostResolveRaceReload;
+  const race = raceLane?.evidence;
+  const reload = reloadLane?.evidence;
+  if (
+    hostResolveRaceSurface?.status !== "passed" ||
+    hostResolveRaceSurface.proofCheckId !== scenario.proofCheckId ||
+    hostResolveRaceSurface.reloadProofCheckId !== scenario.reloadProofCheckId ||
+    raceLane?.id !== scenario.proofCheckId ||
+    raceLane?.status !== "passed" ||
+    !scenario.allowedPageRoles.includes(race?.ackPageRole) ||
+    !scenario.allowedPageRoles.includes(race?.rejectPageRole) ||
+    race?.ackPageRole === race?.rejectPageRole ||
+    typeof race?.game !== "string" ||
+    race.game.length === 0 ||
+    race?.ackState !== scenario.ackState ||
+    race?.rejectError !== scenario.rejectError ||
+    race?.lockedAfterRace !== scenario.lockedAfterRace ||
+    race?.lockedAfterRestore !== scenario.lockedAfterRestore ||
+    reloadLane?.id !== scenario.reloadProofCheckId ||
+    reloadLane?.status !== "passed" ||
+    reload?.game !== race.game ||
+    reload?.liveRouteStatus !== scenario.liveRouteStatus ||
+    reload?.concurrentRouteStatus !== scenario.concurrentRouteStatus ||
+    reload?.livePhase?.id !== scenario.phaseId ||
+    reload?.livePhase?.state !== scenario.phaseState ||
+    reload?.livePhase?.locked !== scenario.phaseLocked ||
+    reload?.concurrentPhase?.id !== scenario.phaseId ||
+    reload?.concurrentPhase?.state !== scenario.phaseState ||
+    reload?.concurrentPhase?.locked !== scenario.phaseLocked ||
+    reload?.apiLocked !== scenario.apiLocked
+  ) {
+    throwHostPhaseScenarioAssertionError({
+      message: "core-loop admin proof missing host resolve race surface",
+      evidence: hostResolveRaceSurface,
       includeEvidenceInError,
     });
   }

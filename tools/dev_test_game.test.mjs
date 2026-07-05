@@ -14712,6 +14712,7 @@ function coreLoopAdminProofFixture() {
     hostModkillControlSurface: hostModkillControlSurfaceFixture(),
     hostLifecycleRaceSurface: hostLifecycleRaceSurfaceFixture(),
     hostPublishRaceSurface: hostPublishRaceSurfaceFixture(),
+    hostResolveRaceSurface: hostResolveRaceSurfaceFixture(),
     playerRoleSurface: playerActionRoleSurfaceFixture(),
     targetResolutionReceiptSurface: targetResolutionReceiptSurfaceFixture(),
     normalResolutionPrivacySurface: normalResolutionPrivacySurfaceFixture(),
@@ -14958,6 +14959,41 @@ function hostPublishRaceSurfaceFixture() {
         playerRouteStatus: 200,
         apiOfficialPostCount: 1,
         playerOfficialPostCount: 1,
+      },
+    },
+  };
+}
+
+function hostResolveRaceSurfaceFixture() {
+  return {
+    status: "passed",
+    proofCheckId: "concurrent-host-resolve-race",
+    reloadProofCheckId: "concurrent-host-resolve-race-reload",
+    hostResolveRace: {
+      id: "concurrent-host-resolve-race",
+      label: "Concurrent host resolves converge",
+      status: "passed",
+      evidence: {
+        ackPageRole: "concurrent",
+        rejectPageRole: "live",
+        game: "resolve-race-game-a",
+        ackState: "ack",
+        rejectError: "PhaseLocked",
+        lockedAfterRace: true,
+        lockedAfterRestore: false,
+      },
+    },
+    hostResolveRaceReload: {
+      id: "concurrent-host-resolve-race-reload",
+      label: "Concurrent host resolve race reloads locked host projections",
+      status: "passed",
+      evidence: {
+        game: "resolve-race-game-a",
+        liveRouteStatus: 200,
+        concurrentRouteStatus: 200,
+        livePhase: { id: "D02", state: "locked", locked: true },
+        concurrentPhase: { id: "D02", state: "locked", locked: true },
+        apiLocked: true,
       },
     },
   };

@@ -3,6 +3,7 @@ import {
   hostLifecycleControlScenario,
   hostModkillControlScenario,
   hostPublishRaceScenario,
+  hostResolveRaceScenario,
 } from "./dev_test_game_core_loop_host_phase_scenarios.mjs";
 
 export {
@@ -10,6 +11,7 @@ export {
   hostLifecycleControlScenario,
   hostModkillControlScenario,
   hostPublishRaceScenario,
+  hostResolveRaceScenario,
 } from "./dev_test_game_core_loop_host_phase_scenarios.mjs";
 
 export const coreLoopHostControlFamilyId = "core-loop-host-control";
@@ -21,6 +23,8 @@ export const coreLoopHostControlLaneIds = Object.freeze([
   "concurrent-host-lifecycle-race-reload",
   "concurrent-host-publish-race",
   "concurrent-host-publish-race-reload",
+  "concurrent-host-resolve-race",
+  "concurrent-host-resolve-race-reload",
 ]);
 
 export function hostPhaseControlFeatureSpineRow({ cycleId }) {
@@ -43,6 +47,7 @@ export function coreLoopHostControlScenarioFamily() {
       hostModkillControl: hostModkillControlScenario(),
       hostLifecycleRace: hostLifecycleRaceScenario(),
       hostPublishRace: hostPublishRaceScenario(),
+      hostResolveRace: hostResolveRaceScenario(),
     },
     proofRunLanes: {
       hostLifecycleControl: "host-lifecycle-control",
@@ -51,6 +56,8 @@ export function coreLoopHostControlScenarioFamily() {
       hostLifecycleRaceReload: "concurrent-host-lifecycle-race-reload",
       hostPublishRace: "concurrent-host-publish-race",
       hostPublishRaceReload: "concurrent-host-publish-race-reload",
+      hostResolveRace: "concurrent-host-resolve-race",
+      hostResolveRaceReload: "concurrent-host-resolve-race-reload",
     },
   };
 }
