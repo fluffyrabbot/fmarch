@@ -16,6 +16,7 @@ import {
   normalizeLocalNextActionSelectedProofGraphCheckRows,
   normalizeLocalNextActionSelectedSpineCheckRows,
   normalizeLocalProofGraphArtifactSummary,
+  normalizeLocalProofGraphCheckRows,
   summarizeRecoveryGate,
 } from "./admin-route-model.mjs";
 import {
@@ -6131,35 +6132,10 @@ function expectedNormalizedEvidenceObjectCheckRows({ parentId, objects }) {
 }
 
 function expectedProofGraphCheckRows(proofGraph) {
-  return [
-    ...proofGraph.nodes.flatMap((node) => [
-      [node.id, node.status],
-      ...expectedCoverageDecisionCheckRows({
-        parentId: node.id,
-        coverageDecision: node.coverageDecision,
-      }),
-      ...expectedNormalizedEvidenceObjectCheckRows({
-        parentId: node.id,
-        objects: node.normalizedEvidenceObjects ?? [],
-      }),
-    ]),
-    ...proofGraph.edges.map((edge) => [
-      `edge:${edge.from}:${edge.relationship}:${edge.to}`,
-      edge.relationship,
-    ]),
-  ];
-}
-
-function expectedCoverageDecisionCheckRows({ parentId, coverageDecision }) {
-  if (coverageDecision === null || typeof coverageDecision !== "object") {
-    return [];
-  }
-  return [
-    [
-      `coverage-decision:${parentId}`,
-      `${coverageDecision.kind}:${coverageDecision.proofCommand}`,
-    ],
-  ];
+  return normalizeLocalProofGraphCheckRows(proofGraph).map((check) => [
+    check.id,
+    check.status,
+  ]);
 }
 
 function adminProofGraphNodesFixture() {

@@ -1923,28 +1923,7 @@ export function normalizeLocalProofGraphAudit(proofGraph, { game }) {
       "Generated local proof graph without hosted or release-readiness claims.",
     href: devTestGameProofGraphPath,
     inspectHref: adminAuditInspectHref({ game, audit: localAdminAuditIds.proofGraph }),
-    checks: Object.freeze(
-      [
-        ...nodes.flatMap((node) => [
-          {
-            id: String(node.id),
-            status: String(node.status ?? "recorded"),
-          },
-          ...coverageDecisionCheckRows({
-            parentId: String(node.id),
-            coverageDecision: node.coverageDecision,
-          }),
-          ...normalizedEvidenceObjectCheckRows({
-            parentId: String(node.id),
-            objects: node.normalizedEvidenceObjects,
-          }),
-        ]),
-        ...edges.map((edge) => ({
-          id: proofGraphEdgeCheckId(edge),
-          status: String(edge.relationship ?? "recorded"),
-        })),
-      ].map((check) => Object.freeze(check)),
-    ),
+    checks: normalizeLocalProofGraphCheckRows(proofGraph),
     relatedLinks: Object.freeze(
       roleNodes.map((node) =>
         Object.freeze({
@@ -1962,6 +1941,42 @@ export function normalizeLocalProofGraphAudit(proofGraph, { game }) {
       roleNodes,
     }),
   });
+}
+
+export function normalizeLocalProofGraphCheckRows(proofGraph) {
+  const nodes = Array.isArray(proofGraph?.nodes) ? proofGraph.nodes : [];
+  const edges = Array.isArray(proofGraph?.edges) ? proofGraph.edges : [];
+  return Object.freeze([
+    ...nodes.flatMap((node) => normalizeLocalProofGraphNodeCheckRows(node)),
+    ...edges.flatMap((edge) => normalizeLocalProofGraphEdgeCheckRows(edge)),
+  ]);
+}
+
+export function normalizeLocalProofGraphNodeCheckRows(node) {
+  const parentId = String(node?.id ?? "");
+  return Object.freeze([
+    Object.freeze({
+      id: parentId,
+      status: String(node?.status ?? "recorded"),
+    }),
+    ...coverageDecisionCheckRows({
+      parentId,
+      coverageDecision: node?.coverageDecision,
+    }),
+    ...normalizedEvidenceObjectCheckRows({
+      parentId,
+      objects: node?.normalizedEvidenceObjects,
+    }),
+  ]);
+}
+
+export function normalizeLocalProofGraphEdgeCheckRows(edge) {
+  return Object.freeze([
+    Object.freeze({
+      id: proofGraphEdgeCheckId(edge),
+      status: String(edge?.relationship ?? "recorded"),
+    }),
+  ]);
 }
 
 export function normalizeLocalProofGraphArtifactSummary(
