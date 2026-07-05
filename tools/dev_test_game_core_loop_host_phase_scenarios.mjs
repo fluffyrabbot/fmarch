@@ -15,6 +15,9 @@ const cloneHostPublishRaceScenario = (scenario) => ({
 const cloneHostResolveRaceScenario = (scenario) => ({
   ...scenario,
 });
+const cloneHostAdvanceRaceScenario = (scenario) => ({
+  ...scenario,
+});
 const clonePhaseStateCase = (phaseStateCase) => ({ ...phaseStateCase });
 const cloneTransitionProofCase = (transitionCase) => ({
   ...transitionCase,
@@ -589,6 +592,25 @@ export function hostResolveRaceScenario() {
   return cloneHostResolveRaceScenario(hostResolveRaceScenarioDefinition);
 }
 
+const hostAdvanceRaceScenarioDefinition = Object.freeze({
+  proofCheckId: "concurrent-host-advance-race",
+  reloadProofCheckId: "concurrent-host-advance-race-reload",
+  allowedPageRoles: Object.freeze(["live", "concurrent"]),
+  ackState: "ack",
+  rejectError: "InvalidTarget",
+  phaseAfterRace: "N02",
+  liveRouteStatus: 200,
+  concurrentRouteStatus: 200,
+  phaseId: "N02",
+  phaseState: "open",
+  phaseLocked: false,
+  apiPhase: "N02",
+});
+
+export function hostAdvanceRaceScenario() {
+  return cloneHostAdvanceRaceScenario(hostAdvanceRaceScenarioDefinition);
+}
+
 export function assertHostLifecycleControlRoleSurfaceCase({
   hostRoleSurface,
   expectedGame,
@@ -913,6 +935,50 @@ export function assertHostResolveRaceSurfaceCase({
     throwHostPhaseScenarioAssertionError({
       message: "core-loop admin proof missing host resolve race surface",
       evidence: hostResolveRaceSurface,
+      includeEvidenceInError,
+    });
+  }
+}
+
+export function assertHostAdvanceRaceSurfaceCase({
+  hostAdvanceRaceSurface,
+  scenario = hostAdvanceRaceScenarioDefinition,
+  includeEvidenceInError = false,
+}) {
+  const raceLane = hostAdvanceRaceSurface?.hostAdvanceRace;
+  const reloadLane = hostAdvanceRaceSurface?.hostAdvanceRaceReload;
+  const race = raceLane?.evidence;
+  const reload = reloadLane?.evidence;
+  if (
+    hostAdvanceRaceSurface?.status !== "passed" ||
+    hostAdvanceRaceSurface.proofCheckId !== scenario.proofCheckId ||
+    hostAdvanceRaceSurface.reloadProofCheckId !== scenario.reloadProofCheckId ||
+    raceLane?.id !== scenario.proofCheckId ||
+    raceLane?.status !== "passed" ||
+    !scenario.allowedPageRoles.includes(race?.ackPageRole) ||
+    !scenario.allowedPageRoles.includes(race?.rejectPageRole) ||
+    race?.ackPageRole === race?.rejectPageRole ||
+    typeof race?.game !== "string" ||
+    race.game.length === 0 ||
+    race?.ackState !== scenario.ackState ||
+    race?.rejectError !== scenario.rejectError ||
+    race?.phaseAfterRace !== scenario.phaseAfterRace ||
+    reloadLane?.id !== scenario.reloadProofCheckId ||
+    reloadLane?.status !== "passed" ||
+    reload?.game !== race.game ||
+    reload?.liveRouteStatus !== scenario.liveRouteStatus ||
+    reload?.concurrentRouteStatus !== scenario.concurrentRouteStatus ||
+    reload?.livePhase?.id !== scenario.phaseId ||
+    reload?.livePhase?.state !== scenario.phaseState ||
+    reload?.livePhase?.locked !== scenario.phaseLocked ||
+    reload?.concurrentPhase?.id !== scenario.phaseId ||
+    reload?.concurrentPhase?.state !== scenario.phaseState ||
+    reload?.concurrentPhase?.locked !== scenario.phaseLocked ||
+    reload?.apiPhase !== scenario.apiPhase
+  ) {
+    throwHostPhaseScenarioAssertionError({
+      message: "core-loop admin proof missing host advance race surface",
+      evidence: hostAdvanceRaceSurface,
       includeEvidenceInError,
     });
   }

@@ -226,6 +226,7 @@ import {
 } from "./dev_test_game_core_loop_player_action_recovery_scenarios.mjs";
 import {
   assertEmptyNightThreeHostTransitionProofCase,
+  assertHostAdvanceRaceSurfaceCase,
   assertHostLifecycleRaceSurfaceCase,
   assertHostLifecycleControlRoleSurfaceCase,
   assertHostModkillControlSurfaceCase,
@@ -2452,6 +2453,7 @@ export function validateDevTestGameCoreLoopAdminProof(proof, options = {}) {
   assertCoreLoopHostLifecycleRaceSurface(proof.hostLifecycleRaceSurface);
   assertCoreLoopHostPublishRaceSurface(proof.hostPublishRaceSurface);
   assertCoreLoopHostResolveRaceSurface(proof.hostResolveRaceSurface);
+  assertCoreLoopHostAdvanceRaceSurface(proof.hostAdvanceRaceSurface);
   assertCoreLoopPlayerActionCheckpoint(proof.playerRoleSurface);
   assertCoreLoopTargetResolutionReceiptSurface(proof.targetResolutionReceiptSurface);
   assertCoreLoopNormalResolutionPrivacySurface(proof.normalResolutionPrivacySurface);
@@ -3001,6 +3003,14 @@ function assertCoreLoopHostResolveRaceSurface(hostResolveRaceSurface) {
   assertHostResolveRaceSurfaceCase({
     hostResolveRaceSurface,
     scenario: scenarioFamily.surfaces.hostResolveRace,
+  });
+}
+
+function assertCoreLoopHostAdvanceRaceSurface(hostAdvanceRaceSurface) {
+  const scenarioFamily = coreLoopHostControlScenarioFamily();
+  assertHostAdvanceRaceSurfaceCase({
+    hostAdvanceRaceSurface,
+    scenario: scenarioFamily.surfaces.hostAdvanceRace,
   });
 }
 

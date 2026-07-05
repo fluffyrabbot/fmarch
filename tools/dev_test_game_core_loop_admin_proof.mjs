@@ -26,6 +26,7 @@ import {
 } from "./dev_test_game_core_loop_player_action_recovery_scenarios.mjs";
 import {
   assertEmptyNightThreeHostTransitionProofCase,
+  assertHostAdvanceRaceSurfaceCase,
   assertHostLifecycleRaceSurfaceCase,
   assertHostLifecycleControlRoleSurfaceCase,
   assertHostModkillControlSurfaceCase,
@@ -243,6 +244,19 @@ function hostResolveRaceSurfaceFromProofRun(proofRun) {
     laneMap: {
       hostResolveRace: "concurrent-host-resolve-race",
       hostResolveRaceReload: "concurrent-host-resolve-race-reload",
+    },
+  });
+}
+
+function hostAdvanceRaceSurfaceFromProofRun(proofRun) {
+  return proofRunLaneSurface(proofRun, {
+    metadata: {
+      proofCheckId: "concurrent-host-advance-race",
+      reloadProofCheckId: "concurrent-host-advance-race-reload",
+    },
+    laneMap: {
+      hostAdvanceRace: "concurrent-host-advance-race",
+      hostAdvanceRaceReload: "concurrent-host-advance-race-reload",
     },
   });
 }
@@ -484,6 +498,7 @@ export function coreLoopAdminProofCase() {
         hostLifecycleRaceSurfaceFromProofRun(proofRun);
       const hostPublishRaceSurface = hostPublishRaceSurfaceFromProofRun(proofRun);
       const hostResolveRaceSurface = hostResolveRaceSurfaceFromProofRun(proofRun);
+      const hostAdvanceRaceSurface = hostAdvanceRaceSurfaceFromProofRun(proofRun);
       return {
         adminRoleSurface,
         hostRoleSurface,
@@ -491,6 +506,7 @@ export function coreLoopAdminProofCase() {
         hostLifecycleRaceSurface,
         hostPublishRaceSurface,
         hostResolveRaceSurface,
+        hostAdvanceRaceSurface,
         playerRoleSurface,
         targetResolutionReceiptSurface,
         normalResolutionPrivacySurface,
@@ -560,6 +576,7 @@ export function coreLoopAdminProofCase() {
       hostLifecycleRaceSurface: surfaces.hostLifecycleRaceSurface,
       hostPublishRaceSurface: surfaces.hostPublishRaceSurface,
       hostResolveRaceSurface: surfaces.hostResolveRaceSurface,
+      hostAdvanceRaceSurface: surfaces.hostAdvanceRaceSurface,
       playerRoleSurface: surfaces.playerRoleSurface,
       targetResolutionReceiptSurface: surfaces.targetResolutionReceiptSurface,
       normalResolutionPrivacySurface: surfaces.normalResolutionPrivacySurface,
@@ -10034,6 +10051,7 @@ export function assertCoreLoopAdminProof(evidence) {
   assertCoreLoopHostLifecycleRaceSurface(evidence.hostLifecycleRaceSurface);
   assertCoreLoopHostPublishRaceSurface(evidence.hostPublishRaceSurface);
   assertCoreLoopHostResolveRaceSurface(evidence.hostResolveRaceSurface);
+  assertCoreLoopHostAdvanceRaceSurface(evidence.hostAdvanceRaceSurface);
   assertPlayerActionSubmissionCheckpoint(evidence.playerRoleSurface);
   assertTargetResolutionReceiptSurface(evidence.targetResolutionReceiptSurface);
   assertNormalResolutionPrivacySurface(evidence.normalResolutionPrivacySurface);
@@ -10116,6 +10134,15 @@ function assertCoreLoopHostResolveRaceSurface(hostResolveRaceSurface) {
   assertHostResolveRaceSurfaceCase({
     hostResolveRaceSurface,
     scenario: scenarioFamily.surfaces.hostResolveRace,
+    includeEvidenceInError: true,
+  });
+}
+
+function assertCoreLoopHostAdvanceRaceSurface(hostAdvanceRaceSurface) {
+  const scenarioFamily = coreLoopHostControlScenarioFamily();
+  assertHostAdvanceRaceSurfaceCase({
+    hostAdvanceRaceSurface,
+    scenario: scenarioFamily.surfaces.hostAdvanceRace,
     includeEvidenceInError: true,
   });
 }

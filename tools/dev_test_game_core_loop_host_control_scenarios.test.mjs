@@ -4,6 +4,7 @@ import {
   coreLoopHostControlFamilyId,
   coreLoopHostControlLaneIds,
   coreLoopHostControlScenarioFamily,
+  hostAdvanceRaceScenario,
   hostLifecycleRaceScenario,
   hostLifecycleControlScenario,
   hostModkillControlScenario,
@@ -22,6 +23,8 @@ test("host-control family shares lifecycle role surface and proof-run lane ids",
     "concurrent-host-publish-race-reload",
     "concurrent-host-resolve-race",
     "concurrent-host-resolve-race-reload",
+    "concurrent-host-advance-race",
+    "concurrent-host-advance-race-reload",
   ]);
 
   const family = coreLoopHostControlScenarioFamily();
@@ -47,6 +50,10 @@ test("host-control family shares lifecycle role surface and proof-run lane ids",
     family.surfaces.hostResolveRace,
     hostResolveRaceScenario(),
   );
+  assert.deepEqual(
+    family.surfaces.hostAdvanceRace,
+    hostAdvanceRaceScenario(),
+  );
   assert.deepEqual(family.proofRunLanes, {
     hostLifecycleControl: "host-lifecycle-control",
     hostModkillControl: "host-modkill-control",
@@ -56,5 +63,7 @@ test("host-control family shares lifecycle role surface and proof-run lane ids",
     hostPublishRaceReload: "concurrent-host-publish-race-reload",
     hostResolveRace: "concurrent-host-resolve-race",
     hostResolveRaceReload: "concurrent-host-resolve-race-reload",
+    hostAdvanceRace: "concurrent-host-advance-race",
+    hostAdvanceRaceReload: "concurrent-host-advance-race-reload",
   });
 });

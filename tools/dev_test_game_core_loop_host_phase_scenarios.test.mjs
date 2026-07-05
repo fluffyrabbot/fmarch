@@ -3,6 +3,7 @@ import { test } from "node:test";
 import {
   assertDayFourNoLynchHostTransitionProofCase,
   assertEmptyNightThreeHostTransitionProofCase,
+  assertHostAdvanceRaceSurfaceCase,
   assertHostLifecycleRaceSurfaceCase,
   assertHostNightActionTransitionSurfaceCase,
   assertHostLifecycleControlRoleSurfaceCase,
@@ -13,6 +14,7 @@ import {
   assertHostStaleAdvanceAfterTransitionProofCase,
   dayFourNoLynchHostTransitionProofCase,
   emptyNightThreeHostTransitionProofCase,
+  hostAdvanceRaceScenario,
   hostAdvanceByDeadlineCommandFacts,
   hostAdvancePhaseCommandFacts,
   hostAdvancePhaseTransitionCase,
@@ -1168,6 +1170,63 @@ test("host resolve race assertion covers phase-lock convergence and reload lanes
         },
       }),
     /host resolve race surface/,
+  );
+});
+
+test("host advance race assertion covers phase advance convergence and reload lanes", () => {
+  const hostAdvanceRaceSurface = {
+    status: "passed",
+    proofCheckId: "concurrent-host-advance-race",
+    reloadProofCheckId: "concurrent-host-advance-race-reload",
+    hostAdvanceRace: {
+      id: "concurrent-host-advance-race",
+      label: "Concurrent host advances converge",
+      status: "passed",
+      evidence: {
+        ackPageRole: "concurrent",
+        rejectPageRole: "live",
+        game: "advance-race-game-a",
+        ackState: "ack",
+        rejectError: "InvalidTarget",
+        phaseAfterRace: "N02",
+      },
+    },
+    hostAdvanceRaceReload: {
+      id: "concurrent-host-advance-race-reload",
+      label: "Concurrent host advance race reloads open host projections",
+      status: "passed",
+      evidence: {
+        game: "advance-race-game-a",
+        liveRouteStatus: 200,
+        concurrentRouteStatus: 200,
+        livePhase: { id: "N02", state: "open", locked: false },
+        concurrentPhase: { id: "N02", state: "open", locked: false },
+        apiPhase: "N02",
+      },
+    },
+  };
+
+  assert.doesNotThrow(() =>
+    assertHostAdvanceRaceSurfaceCase({
+      hostAdvanceRaceSurface,
+      scenario: hostAdvanceRaceScenario(),
+    }),
+  );
+  assert.throws(
+    () =>
+      assertHostAdvanceRaceSurfaceCase({
+        hostAdvanceRaceSurface: {
+          ...hostAdvanceRaceSurface,
+          hostAdvanceRaceReload: {
+            ...hostAdvanceRaceSurface.hostAdvanceRaceReload,
+            evidence: {
+              ...hostAdvanceRaceSurface.hostAdvanceRaceReload.evidence,
+              apiPhase: "D02",
+            },
+          },
+        },
+      }),
+    /host advance race surface/,
   );
 });
 
