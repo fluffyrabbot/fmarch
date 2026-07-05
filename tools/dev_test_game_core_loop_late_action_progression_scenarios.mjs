@@ -19,8 +19,52 @@ import {
 export const coreLoopLateActionProgressionFamilyId =
   "core-loop-late-action-progression";
 
+const coreLoopLateActionProgressionScenarioCaseDefinitions = Object.freeze([
+  Object.freeze({
+    key: "nightFourActionSubmission",
+    group: "surfaces",
+    laneId: playerActionLoopLaneId,
+    buildScenario: nightFourActionSubmissionSurfaceCase,
+  }),
+  Object.freeze({
+    key: "nightFourResolutionReceipt",
+    group: "surfaces",
+    laneId: playerActionLoopLaneId,
+    buildScenario: nightFourResolutionReceiptSurfaceCase,
+  }),
+  Object.freeze({
+    key: "postNightFourTransition",
+    group: "surfaces",
+    laneId: playerActionLoopLaneId,
+    buildScenario: postNightFourTransitionSurfaceCase,
+  }),
+  Object.freeze({
+    key: "staleNightFourAction",
+    group: "staleRejects",
+    laneId: playerActionLoopLaneId,
+    buildScenario: staleNightFourActionRecoveryScenario,
+  }),
+]);
+
+const uniqueLaneIds = (scenarioCases) => [
+  ...new Set(scenarioCases.map((scenarioCase) => scenarioCase.laneId)),
+];
+
+const cloneLateActionProgressionScenarioCase = (scenarioCase) => ({
+  key: scenarioCase.key,
+  group: scenarioCase.group,
+  laneId: scenarioCase.laneId,
+  scenario: scenarioCase.buildScenario(),
+});
+
+export function coreLoopLateActionProgressionScenarioCases() {
+  return coreLoopLateActionProgressionScenarioCaseDefinitions.map(
+    cloneLateActionProgressionScenarioCase,
+  );
+}
+
 export const coreLoopLateActionProgressionLaneIds = Object.freeze([
-  playerActionLoopLaneId,
+  ...uniqueLaneIds(coreLoopLateActionProgressionScenarioCaseDefinitions),
 ]);
 
 const cloneTransitionCase = (transitionCase) => ({
@@ -120,17 +164,20 @@ export function nightFourResolutionReceiptSurfaceCase() {
 }
 
 export function coreLoopLateActionProgressionScenarioFamily() {
+  const scenarioCases = coreLoopLateActionProgressionScenarioCases();
   return {
     id: coreLoopLateActionProgressionFamilyId,
     laneIds: [...coreLoopLateActionProgressionLaneIds],
-    surfaces: {
-      nightFourActionSubmission: nightFourActionSubmissionSurfaceCase(),
-      nightFourResolutionReceipt: nightFourResolutionReceiptSurfaceCase(),
-      postNightFourTransition: postNightFourTransitionSurfaceCase(),
-    },
-    staleRejects: {
-      staleNightFourAction: staleNightFourActionRecoveryScenario(),
-    },
+    surfaces: Object.fromEntries(
+      scenarioCases
+        .filter((scenarioCase) => scenarioCase.group === "surfaces")
+        .map((scenarioCase) => [scenarioCase.key, scenarioCase.scenario]),
+    ),
+    staleRejects: Object.fromEntries(
+      scenarioCases
+        .filter((scenarioCase) => scenarioCase.group === "staleRejects")
+        .map((scenarioCase) => [scenarioCase.key, scenarioCase.scenario]),
+    ),
   };
 }
 

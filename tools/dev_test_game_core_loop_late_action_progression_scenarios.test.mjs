@@ -5,6 +5,7 @@ import {
   assertNightFourResolutionReceiptSurfaceCase,
   coreLoopLateActionProgressionFamilyId,
   coreLoopLateActionProgressionLaneIds,
+  coreLoopLateActionProgressionScenarioCases,
   coreLoopLateActionProgressionScenarioFamily,
   nightFourActionSubmissionSurfaceCase,
   nightFourResolutionReceiptSurfaceCase,
@@ -20,6 +21,12 @@ import {
   nightFourActionSubmissionSurfaceFixture,
   nightFourResolutionReceiptSurfaceFixture,
 } from "./dev_test_game_core_loop_late_action_fixtures.mjs";
+import {
+  postNightFourTransitionSurfaceCase,
+} from "./dev_test_game_core_loop_post_night_four_transition_scenarios.mjs";
+import {
+  staleNightFourActionRecoveryScenario,
+} from "./dev_test_game_core_loop_action_scenario_cases.mjs";
 
 test("late action progression family shares Night 4 action and recovery cases", () => {
   assert.equal(
@@ -27,6 +34,41 @@ test("late action progression family shares Night 4 action and recovery cases", 
     "core-loop-late-action-progression",
   );
   assert.deepEqual(coreLoopLateActionProgressionLaneIds, ["action-loop"]);
+  const scenarioCases = coreLoopLateActionProgressionScenarioCases();
+  assert.deepEqual(
+    scenarioCases.map((scenarioCase) => ({
+      key: scenarioCase.key,
+      group: scenarioCase.group,
+      laneId: scenarioCase.laneId,
+      scenario: scenarioCase.scenario,
+    })),
+    [
+      {
+        key: "nightFourActionSubmission",
+        group: "surfaces",
+        laneId: "action-loop",
+        scenario: nightFourActionSubmissionSurfaceCase(),
+      },
+      {
+        key: "nightFourResolutionReceipt",
+        group: "surfaces",
+        laneId: "action-loop",
+        scenario: nightFourResolutionReceiptSurfaceCase(),
+      },
+      {
+        key: "postNightFourTransition",
+        group: "surfaces",
+        laneId: "action-loop",
+        scenario: postNightFourTransitionSurfaceCase(),
+      },
+      {
+        key: "staleNightFourAction",
+        group: "staleRejects",
+        laneId: "action-loop",
+        scenario: staleNightFourActionRecoveryScenario(),
+      },
+    ],
+  );
 
   assert.deepEqual(
     nightFourActionSubmissionSurfaceCase().transitionFragments,
@@ -57,6 +99,19 @@ test("late action progression family shares Night 4 action and recovery cases", 
 
   const family = coreLoopLateActionProgressionScenarioFamily();
   assert.equal(family.id, coreLoopLateActionProgressionFamilyId);
+  assert.deepEqual(family.laneIds, coreLoopLateActionProgressionLaneIds);
+  assert.deepEqual(family.surfaces, {
+    nightFourActionSubmission: nightFourActionSubmissionSurfaceCase(),
+    nightFourResolutionReceipt: nightFourResolutionReceiptSurfaceCase(),
+    postNightFourTransition: scenarioCases.find(
+      (scenarioCase) => scenarioCase.key === "postNightFourTransition",
+    ).scenario,
+  });
+  assert.deepEqual(family.staleRejects, {
+    staleNightFourAction: scenarioCases.find(
+      (scenarioCase) => scenarioCase.key === "staleNightFourAction",
+    ).scenario,
+  });
   assert.equal(
     family.surfaces.postNightFourTransition.hostAdvanceCase.expectedPhaseId,
     "D05",
@@ -68,6 +123,12 @@ test("late action progression family shares Night 4 action and recovery cases", 
   assert.notEqual(
     nightFourActionSubmissionSurfaceCase().transitionFragments,
     nightFourActionSubmissionSurfaceCase().transitionFragments,
+  );
+  assert.notEqual(
+    coreLoopLateActionProgressionScenarioCases()[0].scenario
+      .transitionFragments,
+    coreLoopLateActionProgressionScenarioCases()[0].scenario
+      .transitionFragments,
   );
 });
 
