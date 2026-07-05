@@ -8,6 +8,7 @@ import {
   buildAdminAuditDetailData,
   buildAdminRouteData,
   normalizeLocalNextActionGeneratedSummary,
+  normalizeLocalNextActionRelatedLinks,
   normalizeLocalProofGraphArtifactSummary,
   summarizeRecoveryGate,
 } from "./admin-route-model.mjs";
@@ -2139,29 +2140,28 @@ test("admin route data exposes local next action as a native audit row", async (
       ...hostStaleControlCheckRows(),
     ],
   );
-  assert.deepEqual(nextAction.relatedLinks, [
-    {
-      id: "selected-proof-graph-node",
-      label: "admin-proof:hosted-concurrent-race-matrix",
-      href: localAdminAuditRoleUrl(localAdminAuditIds.proofGraph, { game: "midsummer" }),
-      status: "passed",
+  assert.deepEqual(
+    nextAction.relatedLinks,
+    normalizeLocalNextActionRelatedLinks({
+      game: "midsummer",
       command: LOCAL_RACE_COMMAND,
-    },
-    {
-      id: "production-feature:player-action-submission",
-      label: "production-feature:player-action-submission",
-      href: localAdminAuditRoleUrl(localAdminAuditIds.proofGraph, { game: "midsummer" }),
-      status: "passed",
-      command: LIVE_BROWSER_PROOF_COMMAND,
-    },
-    {
-      id: "admin-proof:hosted-concurrent-race-matrix",
-      label: "hosted-concurrent-race-matrix",
-      href: localAdminAuditRoleUrl(localAdminAuditIds.hostedConcurrentRaceMatrix, { game: "midsummer" }),
-      status: "unproven",
-      command: LOCAL_RACE_COMMAND,
-    },
-  ]);
+      actionStatus: "ready",
+      selectedProofGraphNode: {
+        id: "admin-proof:hosted-concurrent-race-matrix",
+        status: "passed",
+        proofCommand: LOCAL_RACE_COMMAND,
+      },
+      selectedProductionFeatureGraph:
+        selectedProductionFeatureGraphFixture(),
+      unproven: {
+        id: "hosted-concurrent-race-matrix",
+        status: "unproven",
+      },
+      unprovenRoleUrl:
+        localAdminAuditRoleUrl(localAdminAuditIds.hostedConcurrentRaceMatrix),
+      unprovenProofGraphNodeId: "admin-proof:hosted-concurrent-race-matrix",
+    }),
+  );
   assert.deepEqual(nextAction.artifactSummary, {
     command: LOCAL_RACE_COMMAND,
     reason: "release-readiness-unproven",
@@ -2374,15 +2374,16 @@ test("admin route data exposes local readiness dependency next action", async ()
       ],
     ],
   );
-  assert.deepEqual(nextAction.relatedLinks, [
-    {
-      id: "local-proof-graph-admin-role-handoffs",
-      label: "local-proof-graph-admin-role-handoffs",
-      href: localAdminAuditRoleUrl(localAdminAuditIds.proofGraph, { game: "midsummer" }),
-      status: "missing",
+  assert.deepEqual(
+    nextAction.relatedLinks,
+    normalizeLocalNextActionRelatedLinks({
+      game: "midsummer",
       command: LOCAL_PROOF_GRAPH_COMMAND,
-    },
-  ]);
+      actionStatus: "blocked",
+      localCheck,
+      localCheckRoleUrl: localAdminAuditRoleUrl(localAdminAuditIds.proofGraph),
+    }),
+  );
   assert.equal(
     nextAction.artifactSummary.selectedLocalCheckRoleHref,
     localAdminAuditRoleUrl(localAdminAuditIds.proofGraph, { game: "midsummer" }),
@@ -2425,15 +2426,17 @@ test("admin route data exposes seed proof-lane coverage drift next action", asyn
       ["seed-proof-lane-coverage-new-production-proof-lane", "unclassified"],
     ],
   );
-  assert.deepEqual(nextAction.relatedLinks, [
-    {
-      id: "seed-proof-lane-coverage",
-      label: "Seed proof-lane coverage",
-      href: localAdminAuditRoleUrl(localAdminAuditIds.seedFixtures, { game: "midsummer" }),
-      status: "drifted",
+  assert.deepEqual(
+    nextAction.relatedLinks,
+    normalizeLocalNextActionRelatedLinks({
+      game: "midsummer",
       command: SEED_FIXTURE_COMMAND,
-    },
-  ]);
+      actionStatus: "blocked",
+      seedProofLaneCoverage,
+      seedProofLaneCoverageRoleUrl:
+        localAdminAuditRoleUrl(localAdminAuditIds.seedFixtures),
+    }),
+  );
   assert.equal(
     nextAction.artifactSummary.selectedSeedProofLaneCoverageRoleHref,
     localAdminAuditRoleUrl(localAdminAuditIds.seedFixtures, { game: "midsummer" }),

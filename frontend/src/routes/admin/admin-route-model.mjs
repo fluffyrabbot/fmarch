@@ -2554,89 +2554,22 @@ export function normalizeLocalNextActionAudit(nextAction, { game, proofGraph = n
     href: nextActionPath,
     inspectHref: adminAuditInspectHref({ game, audit: localAdminAuditIds.nextAction }),
     checks: Object.freeze(checks),
-    relatedLinks:
-      unprovenRoleUrl === "" &&
-      localCheckRoleUrl === "" &&
-      seedProofLaneCoverageRoleUrl === "" &&
-      sequenceDeferralRoleUrl === "" &&
-      selectedProofGraphNode === null &&
-      selectedProductionFeatureGraph.nodeId === ""
-        ? Object.freeze([])
-        : Object.freeze([
-            ...(selectedProofGraphNode === null
-              ? []
-              : [
-                  Object.freeze({
-                    id: "selected-proof-graph-node",
-                    label: selectedProofGraphNode.id,
-                    href: adminAuditInspectHref({ game, audit: localAdminAuditIds.proofGraph }),
-                    status: selectedProofGraphNode.status,
-                    command: selectedProofGraphNode.proofCommand,
-                  }),
-                ]),
-            ...(selectedProductionFeatureGraph.nodeId === ""
-              ? []
-              : [
-                  Object.freeze({
-                    id: selectedProductionFeatureGraph.nodeId,
-                    label: selectedProductionFeatureGraph.nodeId,
-                    href: adminAuditInspectHref({ game, audit: localAdminAuditIds.proofGraph }),
-                    status: selectedProductionFeatureGraph.status,
-                    command: selectedProductionFeatureGraph.browserProofCommand,
-                  }),
-                ]),
-            ...(unprovenRoleUrl === ""
-              ? []
-              : [
-                  Object.freeze({
-                    id: unprovenProofGraphNodeId || String(unproven.id),
-                    label: String(unproven.id ?? "Selected role surface"),
-                    href: seededRoleUrlToAdminHref(unprovenRoleUrl, { game }),
-                    status: String(unproven.status ?? actionStatus),
-                    command,
-                  }),
-                ]),
-            ...(localCheckRoleUrl === ""
-              ? []
-              : [
-                  Object.freeze({
-                    id: String(localCheck.id ?? "local-readiness-dependency"),
-                    label: String(localCheck.id ?? "Local readiness dependency"),
-                    href: seededRoleUrlToAdminHref(localCheckRoleUrl, { game }),
-                    status: String(localCheck.status ?? actionStatus),
-                    command,
-                  }),
-                ]),
-            ...(seedProofLaneCoverageRoleUrl === ""
-              ? []
-              : [
-                  Object.freeze({
-                    id: "seed-proof-lane-coverage",
-                    label: "Seed proof-lane coverage",
-                    href: seededRoleUrlToAdminHref(seedProofLaneCoverageRoleUrl, {
-                      game,
-                    }),
-                    status: String(seedProofLaneCoverage.status ?? actionStatus),
-                    command,
-                  }),
-                ]),
-            ...(sequenceDeferralRoleUrl === ""
-              ? []
-              : [
-                  Object.freeze({
-                    id: String(
-                      sequenceDeferral.deferredUnprovenId ??
-                        "hosted-identity-sequence-deferral",
-                    ),
-                    label: "Deferred hosted identity",
-                    href: seededRoleUrlToAdminHref(sequenceDeferralRoleUrl, {
-                      game,
-                    }),
-                    status: String(sequenceDeferral.status ?? actionStatus),
-                    command: String(sequenceDeferral.deferredCommand ?? command),
-                  }),
-                ]),
-          ]),
+    relatedLinks: normalizeLocalNextActionRelatedLinks({
+      game,
+      command,
+      actionStatus,
+      selectedProofGraphNode,
+      selectedProductionFeatureGraph,
+      unproven,
+      unprovenRoleUrl,
+      unprovenProofGraphNodeId,
+      localCheck,
+      localCheckRoleUrl,
+      seedProofLaneCoverage,
+      seedProofLaneCoverageRoleUrl,
+      sequenceDeferral,
+      sequenceDeferralRoleUrl,
+    }),
     realHostedEvidenceInputs,
     ...(hostedHandoffChecklist === null ? {} : { hostedHandoffChecklist }),
     artifactSummary: Object.freeze({
@@ -2828,6 +2761,111 @@ export function normalizeLocalNextActionAudit(nextAction, { game, proofGraph = n
       productionReady: nextAction.productionReady === true,
     }),
   });
+}
+
+export function normalizeLocalNextActionRelatedLinks({
+  game,
+  command = "",
+  actionStatus = "unknown",
+  selectedProofGraphNode = null,
+  selectedProductionFeatureGraph = null,
+  unproven = null,
+  unprovenRoleUrl = "",
+  unprovenProofGraphNodeId = "",
+  localCheck = null,
+  localCheckRoleUrl = "",
+  seedProofLaneCoverage = null,
+  seedProofLaneCoverageRoleUrl = "",
+  sequenceDeferral = null,
+  sequenceDeferralRoleUrl = "",
+} = {}) {
+  if (
+    unprovenRoleUrl === "" &&
+    localCheckRoleUrl === "" &&
+    seedProofLaneCoverageRoleUrl === "" &&
+    sequenceDeferralRoleUrl === "" &&
+    selectedProofGraphNode === null &&
+    String(selectedProductionFeatureGraph?.nodeId ?? "") === ""
+  ) {
+    return Object.freeze([]);
+  }
+  return Object.freeze([
+    ...(selectedProofGraphNode === null
+      ? []
+      : [
+          Object.freeze({
+            id: "selected-proof-graph-node",
+            label: selectedProofGraphNode.id,
+            href: adminAuditInspectHref({
+              game,
+              audit: localAdminAuditIds.proofGraph,
+            }),
+            status: selectedProofGraphNode.status,
+            command: selectedProofGraphNode.proofCommand,
+          }),
+        ]),
+    ...(String(selectedProductionFeatureGraph?.nodeId ?? "") === ""
+      ? []
+      : [
+          Object.freeze({
+            id: selectedProductionFeatureGraph.nodeId,
+            label: selectedProductionFeatureGraph.nodeId,
+            href: adminAuditInspectHref({
+              game,
+              audit: localAdminAuditIds.proofGraph,
+            }),
+            status: selectedProductionFeatureGraph.status,
+            command: selectedProductionFeatureGraph.browserProofCommand,
+          }),
+        ]),
+    ...(unprovenRoleUrl === ""
+      ? []
+      : [
+          Object.freeze({
+            id: unprovenProofGraphNodeId || String(unproven?.id),
+            label: String(unproven?.id ?? "Selected role surface"),
+            href: seededRoleUrlToAdminHref(unprovenRoleUrl, { game }),
+            status: String(unproven?.status ?? actionStatus),
+            command,
+          }),
+        ]),
+    ...(localCheckRoleUrl === ""
+      ? []
+      : [
+          Object.freeze({
+            id: String(localCheck?.id ?? "local-readiness-dependency"),
+            label: String(localCheck?.id ?? "Local readiness dependency"),
+            href: seededRoleUrlToAdminHref(localCheckRoleUrl, { game }),
+            status: String(localCheck?.status ?? actionStatus),
+            command,
+          }),
+        ]),
+    ...(seedProofLaneCoverageRoleUrl === ""
+      ? []
+      : [
+          Object.freeze({
+            id: "seed-proof-lane-coverage",
+            label: "Seed proof-lane coverage",
+            href: seededRoleUrlToAdminHref(seedProofLaneCoverageRoleUrl, { game }),
+            status: String(seedProofLaneCoverage?.status ?? actionStatus),
+            command,
+          }),
+        ]),
+    ...(sequenceDeferralRoleUrl === ""
+      ? []
+      : [
+          Object.freeze({
+            id: String(
+              sequenceDeferral?.deferredUnprovenId ??
+                "hosted-identity-sequence-deferral",
+            ),
+            label: "Deferred hosted identity",
+            href: seededRoleUrlToAdminHref(sequenceDeferralRoleUrl, { game }),
+            status: String(sequenceDeferral?.status ?? actionStatus),
+            command: String(sequenceDeferral?.deferredCommand ?? command),
+          }),
+        ]),
+  ]);
 }
 
 export function normalizeLocalNextActionGeneratedSummary(nextAction) {
