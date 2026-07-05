@@ -3,6 +3,7 @@ import { pathToFileURL } from "node:url";
 import { assertDevTestGameProofRun } from "./dev_test_game_proof_contract.mjs";
 import { assertDevTestGameSpineManifest } from "./dev_test_game_spine_manifest.mjs";
 import {
+  assertVisibleAdminRoleSurfaceRows,
   artifactDir,
   proveAdminAuditDetail,
   readJson,
@@ -105,15 +106,18 @@ export function assertSpineManifestAdminProof(evidence) {
   ) {
     throw new Error("spine manifest admin proof did not prove admin overview click-through");
   }
-  for (const checkId of requiredChecks) {
-    if (!evidence.adminRoleSurface?.visibleChecks?.includes(checkId)) {
-      throw new Error(`spine manifest admin proof missing visible check: ${checkId}`);
-    }
-  }
-  for (const linkId of evidence.generatedFrom?.relatedAuditIds ?? []) {
-    if (!evidence.adminRoleSurface?.visibleRelatedLinks?.includes(linkId)) {
-      throw new Error(`spine manifest admin proof missing related link: ${linkId}`);
-    }
-  }
+  assertVisibleAdminRoleSurfaceRows({
+    adminRoleSurface: evidence.adminRoleSurface,
+    rowIds: requiredChecks,
+    proofName: "spine manifest admin proof",
+    rowName: "visible check",
+  });
+  assertVisibleAdminRoleSurfaceRows({
+    adminRoleSurface: evidence.adminRoleSurface,
+    rowIds: evidence.generatedFrom?.relatedAuditIds,
+    proofName: "spine manifest admin proof",
+    rowName: "related link",
+    surfaceKey: "visibleRelatedLinks",
+  });
   return evidence;
 }

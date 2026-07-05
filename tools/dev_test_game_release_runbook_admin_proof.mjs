@@ -3,6 +3,7 @@ import { pathToFileURL } from "node:url";
 import { assertDevTestGameProofRun } from "./dev_test_game_proof_contract.mjs";
 import { assertDevTestGameReleaseRunbook } from "./dev_test_game_release_runbook.mjs";
 import {
+  assertVisibleAdminRoleSurfaceRows,
   artifactDir,
   proveAdminAuditDetail,
   readJson,
@@ -98,20 +99,25 @@ export function assertReleaseRunbookAdminProof(evidence) {
   ) {
     throw new Error("release runbook admin proof did not prove overview click-through");
   }
-  for (const checkId of evidence.generatedFrom?.checkIds ?? requiredChecks) {
-    if (!evidence.adminRoleSurface?.visibleChecks?.includes(checkId)) {
-      throw new Error(`release runbook admin proof missing visible check: ${checkId}`);
-    }
-  }
-  for (const itemId of evidence.generatedFrom?.runbookItemIds ?? []) {
-    if (!evidence.adminRoleSurface?.visibleUnproven?.includes(itemId)) {
-      throw new Error(`release runbook admin proof missing runbook item: ${itemId}`);
-    }
-  }
-  for (const linkId of evidence.generatedFrom?.relatedAuditIds ?? requiredRelatedLinks) {
-    if (!evidence.adminRoleSurface?.visibleRelatedLinks?.includes(linkId)) {
-      throw new Error(`release runbook admin proof missing related link: ${linkId}`);
-    }
-  }
+  assertVisibleAdminRoleSurfaceRows({
+    adminRoleSurface: evidence.adminRoleSurface,
+    rowIds: evidence.generatedFrom?.checkIds ?? requiredChecks,
+    proofName: "release runbook admin proof",
+    rowName: "visible check",
+  });
+  assertVisibleAdminRoleSurfaceRows({
+    adminRoleSurface: evidence.adminRoleSurface,
+    rowIds: evidence.generatedFrom?.runbookItemIds,
+    proofName: "release runbook admin proof",
+    rowName: "runbook item",
+    surfaceKey: "visibleUnproven",
+  });
+  assertVisibleAdminRoleSurfaceRows({
+    adminRoleSurface: evidence.adminRoleSurface,
+    rowIds: evidence.generatedFrom?.relatedAuditIds ?? requiredRelatedLinks,
+    proofName: "release runbook admin proof",
+    rowName: "related link",
+    surfaceKey: "visibleRelatedLinks",
+  });
   return evidence;
 }

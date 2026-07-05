@@ -8,6 +8,7 @@ import {
   hostedOpsTelemetryBoundaryStatus,
 } from "./dev_test_game_hosted_ops_signal_cases.mjs";
 import {
+  assertVisibleAdminRoleSurfaceRows,
   artifactDir,
   proveAdminAuditDetail,
   readJson,
@@ -92,15 +93,18 @@ export function assertHostedOpsSignalsAdminProof(evidence) {
   ) {
     throw new Error("hosted ops signals admin proof did not prove admin overview click-through");
   }
-  for (const checkId of requiredChecks) {
-    if (!evidence.adminRoleSurface?.visibleChecks?.includes(checkId)) {
-      throw new Error(`hosted ops signals admin proof missing visible check: ${checkId}`);
-    }
-  }
-  for (const linkId of requiredRelatedLinks) {
-    if (!evidence.adminRoleSurface?.visibleRelatedLinks?.includes(linkId)) {
-      throw new Error(`hosted ops signals admin proof missing related link: ${linkId}`);
-    }
-  }
+  assertVisibleAdminRoleSurfaceRows({
+    adminRoleSurface: evidence.adminRoleSurface,
+    rowIds: requiredChecks,
+    proofName: "hosted ops signals admin proof",
+    rowName: "visible check",
+  });
+  assertVisibleAdminRoleSurfaceRows({
+    adminRoleSurface: evidence.adminRoleSurface,
+    rowIds: requiredRelatedLinks,
+    proofName: "hosted ops signals admin proof",
+    rowName: "related link",
+    surfaceKey: "visibleRelatedLinks",
+  });
   return evidence;
 }

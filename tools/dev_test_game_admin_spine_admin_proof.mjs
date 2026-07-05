@@ -5,6 +5,7 @@ import {
   validateDevTestGameAdminSpineTerminalBatches,
 } from "./dev_test_game_release_readiness.mjs";
 import {
+  assertVisibleAdminRoleSurfaceRows,
   artifactDir,
   proveAdminAuditDetail,
   readJson,
@@ -177,20 +178,27 @@ export function assertAdminSpineAdminProof(evidence) {
   ) {
     throw new Error("admin spine admin proof did not prove admin overview click-through");
   }
-  for (const checkId of requiredChecks) {
-    if (!evidence.adminRoleSurface?.visibleChecks?.includes(checkId)) {
-      throw new Error(`admin spine admin proof missing visible check: ${checkId}`);
-    }
-  }
-  for (const linkId of evidence.generatedFrom?.relatedAuditIds ?? []) {
-    if (!evidence.adminRoleSurface?.visibleRelatedLinks?.includes(linkId)) {
-      throw new Error(`admin spine admin proof missing related link: ${linkId}`);
-    }
-  }
+  assertVisibleAdminRoleSurfaceRows({
+    adminRoleSurface: evidence.adminRoleSurface,
+    rowIds: requiredChecks,
+    proofName: "admin spine admin proof",
+    rowName: "visible check",
+  });
+  assertVisibleAdminRoleSurfaceRows({
+    adminRoleSurface: evidence.adminRoleSurface,
+    rowIds: evidence.generatedFrom?.relatedAuditIds,
+    proofName: "admin spine admin proof",
+    rowName: "related link",
+    surfaceKey: "visibleRelatedLinks",
+  });
   for (const batchId of evidence.generatedFrom?.batchIds ?? []) {
-    if (!evidence.adminRoleSurface?.visibleAdminSpineBatches?.includes(batchId)) {
-      throw new Error(`admin spine admin proof missing batch row: ${batchId}`);
-    }
+    assertVisibleAdminRoleSurfaceRows({
+      adminRoleSurface: evidence.adminRoleSurface,
+      rowIds: [batchId],
+      proofName: "admin spine admin proof",
+      rowName: "batch row",
+      surfaceKey: "visibleAdminSpineBatches",
+    });
     const visibleText =
       evidence.adminRoleSurface?.visibleAdminSpineBatchStatuses?.[batchId] ?? "";
     if (!visibleText.includes("passed") || !visibleText.includes("shared frontend")) {
