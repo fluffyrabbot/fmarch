@@ -63,13 +63,16 @@ export {
   devTestGameProofGraphPath,
 } from "./dev_test_game_proof_graph_paths.mjs";
 import { devTestGameProofGraphPath } from "./dev_test_game_proof_graph_paths.mjs";
+import {
+  adminSpineProofPath as defaultAdminSpineProofPath,
+  adminSpineTerminalBatchProofPath as defaultAdminSpineTerminalBatchProofPath,
+  spineManifestPath as defaultSpineManifestPath,
+} from "./dev_test_game_spine_artifact_paths.mjs";
 import { repoRoot } from "./dev_test_game_spine_runner.mjs";
 
 export const DEV_TEST_GAME_PROOF_GRAPH_VERSION = 1;
 
 const proofGraphJsonPath = path.join(repoRoot, devTestGameProofGraphPath);
-const defaultAdminSpineTerminalBatchProofPath =
-  "target/dev-test-game/admin-spine-terminal-batches.json";
 
 export function buildDevTestGameProofGraph(
   {
@@ -85,8 +88,8 @@ export function buildDevTestGameProofGraph(
   },
   {
     generatedAt = new Date().toISOString(),
-    spineManifestSource = "target/dev-test-game/spine-manifest.json",
-    adminSpineProofSource = "target/dev-test-game/admin-spine-proof.json",
+    spineManifestSource = defaultSpineManifestPath,
+    adminSpineProofSource = defaultAdminSpineProofPath,
     adminSpineTerminalBatchesSource = defaultAdminSpineTerminalBatchProofPath,
     privateChannelRecoveryReceiptSource =
       defaultRecoveryReceiptPath("privateChannelRecoveryReceipt"),
@@ -603,9 +606,9 @@ function sameStringArray(actual, expected) {
 export async function writeDevTestGameProofGraph({
   generatedAt = new Date().toISOString(),
   spineManifestPath = process.env.FMARCH_DEV_TEST_GAME_SPINE_MANIFEST ??
-    "target/dev-test-game/spine-manifest.json",
+    defaultSpineManifestPath,
   adminSpineProofPath = process.env.FMARCH_DEV_TEST_GAME_ADMIN_SPINE_PROOF ??
-    "target/dev-test-game/admin-spine-proof.json",
+    defaultAdminSpineProofPath,
   adminSpineTerminalBatchesPath =
     process.env.FMARCH_DEV_TEST_GAME_ADMIN_SPINE_TERMINAL_BATCHES ??
     defaultAdminSpineTerminalBatchProofPath,
@@ -761,7 +764,7 @@ function buildProofGraphNodes({
       label: "Local admin spine",
       kind: "aggregate-proof",
       status: adminSpine.status,
-      artifact: "target/dev-test-game/admin-spine-proof.json",
+      artifact: defaultAdminSpineProofPath,
       roleUrl: localAdminAuditRoleUrl(localAdminAuditIds.adminSpine),
       proofCommand: manifest.commands?.adminSpine?.script,
       recoveryCommand: adminSpine.recovery?.nextCommand,
@@ -771,7 +774,7 @@ function buildProofGraphNodes({
       label: "Local spine manifest",
       kind: "manifest",
       status: manifest.status,
-      artifact: "target/dev-test-game/spine-manifest.json",
+      artifact: defaultSpineManifestPath,
       roleUrl: localAdminAuditRoleUrl(localAdminAuditIds.spineManifest),
       proofCommand: "test:dev-test-game-spine-manifest",
       recoveryCommand: recoveryCommands.get("spine-manifest"),

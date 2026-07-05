@@ -1,3 +1,7 @@
+import {
+  devTestGameProofGraphPath,
+} from "./dev_test_game_spine_artifact_paths.mjs";
+
 export const devTestGameHostedIdentityEvidencePath =
   "target/dev-test-game/hosted-identity-evidence.json";
 export const devTestGameHostedIdentityEvidenceCommand =
@@ -36,7 +40,7 @@ export const hostedIdentityEvidenceProofGraphNodeId =
 export const hostedIdentityEvidenceProductionFeatureGraphNodeId =
   "production-feature:identity-adapter";
 export const hostedIdentityEvidenceProofGraphPath =
-  "target/dev-test-game/proof-graph.json";
+  devTestGameProofGraphPath;
 export const hostedIdentityEvidenceRoleSurfaceDrilldown = Object.freeze({
   localCapabilityAuditId: "local-identity-adapter",
   localCapabilityRoleUrl:

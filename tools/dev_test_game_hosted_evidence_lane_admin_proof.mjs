@@ -27,6 +27,9 @@ import {
   repoRoot,
   runAdminAuditProof,
 } from "./dev_test_game_admin_audit_proof_helper.mjs";
+import {
+  devTestGameProofRunPath,
+} from "./dev_test_game_spine_artifact_paths.mjs";
 
 const lanePath = path.resolve(
   repoRoot,
@@ -36,7 +39,7 @@ const lanePath = path.resolve(
 const proofRunPath = path.resolve(
   repoRoot,
   process.env.FMARCH_DEV_TEST_GAME_PROOF_RUN ??
-    "target/dev-test-game/proof-run.json",
+    devTestGameProofRunPath,
 );
 const demoProofPath = path.resolve(
   repoRoot,

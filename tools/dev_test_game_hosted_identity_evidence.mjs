@@ -56,6 +56,7 @@ import {
   hostedIdentityEvidencePacketSectionDefinitions,
   hostedIdentityEvidencePlaceholderFixturePath,
   hostedIdentityEvidencePlaceholderSchema,
+  hostedIdentityEvidenceProofGraphPath,
   hostedIdentityEvidenceRedactedPassFixturePath,
   hostedIdentityEvidenceRequirementGroupDefinitions,
   hostedIdentityEvidenceRequirementGroups,
@@ -331,7 +332,7 @@ function validHostedIdentityRoleSurfaceDrilldown(drilldown) {
     drilldown.proofGraphNodeId === "admin-proof:hosted-identity-evidence" &&
     drilldown.productionFeatureGraphNodeId ===
       "production-feature:identity-adapter" &&
-    drilldown.proofGraphEvidencePath === "target/dev-test-game/proof-graph.json"
+    drilldown.proofGraphEvidencePath === hostedIdentityEvidenceProofGraphPath
   );
 }
 

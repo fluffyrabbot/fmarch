@@ -6,6 +6,10 @@ import {
   completedGameHardeningLaneIds,
 } from "./dev_test_game_core_loop_completed_game_proof_readiness_contract.mjs";
 import {
+  devTestGameProofRunPath,
+  devTestGameSessionPath,
+} from "./dev_test_game_spine_artifact_paths.mjs";
+import {
   crossRoleRaceLaneIds,
 } from "./dev_test_game_cross_role_race_scenarios.mjs";
 import {
@@ -6573,9 +6577,9 @@ export function buildDevTestGameProofRun(session, options = {}) {
     releaseReady: false,
     scope: "local-dev-test-game-harness",
     artifacts: {
-      sessionJson: "target/dev-test-game/session.json",
+      sessionJson: devTestGameSessionPath,
       sessionMarkdown: "target/dev-test-game/session.md",
-      proofRun: "target/dev-test-game/proof-run.json",
+      proofRun: devTestGameProofRunPath,
     },
     session: {
       name: session?.name ?? null,

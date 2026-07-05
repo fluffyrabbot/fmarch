@@ -51,6 +51,9 @@ import {
   devTestGameCoreLoopAdminProofPath,
   devTestGameHardeningAdminProofPath,
 } from "./dev_test_game_local_admin_proof_paths.mjs";
+import {
+  devTestGameProofRunPath,
+} from "./dev_test_game_spine_artifact_paths.mjs";
 
 const recoveryReceiptRelationships = Object.freeze([
   "proves",
@@ -80,7 +83,7 @@ export const recoveryReceiptGraphDescriptors = Object.freeze([
     proofScript: "tools/dev_test_game_private_channel_recovery_receipt.mjs",
     proofTarget: devTestGamePrivateChannelRecoveryReceiptPath,
     manifestDependsOn: Object.freeze([
-      "target/dev-test-game/proof-run.json",
+      devTestGameProofRunPath,
       devTestGameCoreLoopAdminProofPath,
     ]),
     familyId: "core-loop-private-channel-recovery",
@@ -514,7 +517,7 @@ function recoveryReceiptGraphDescriptor(descriptor) {
 
 function replacementRecoveryReceiptManifestDependencies() {
   return Object.freeze([
-    "target/dev-test-game/proof-run.json",
+    devTestGameProofRunPath,
     devTestGameHardeningAdminProofPath,
   ]);
 }

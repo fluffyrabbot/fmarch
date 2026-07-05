@@ -8,6 +8,9 @@ import {
   releaseAdminProofFallbackUnprovenIds,
 } from "./dev_test_game_release_readiness_cases.mjs";
 import {
+  devTestGameReleaseReadinessPath,
+} from "./dev_test_game_spine_artifact_paths.mjs";
+import {
   assertVisibleAdminRoleSurfaceRows,
   normalizedEvidenceObjectRowIds,
   proveAdminAuditDetail,
@@ -19,7 +22,7 @@ import {
 const readinessPath = path.resolve(
   repoRoot,
   process.env.FMARCH_DEV_TEST_GAME_RELEASE_READINESS ??
-    "target/dev-test-game/release-readiness-checklist.json",
+    devTestGameReleaseReadinessPath,
 );
 const readinessRelativePath = path.relative(repoRoot, readinessPath);
 const evidencePath = path.join(repoRoot, devTestGameReleaseAdminProofPath);

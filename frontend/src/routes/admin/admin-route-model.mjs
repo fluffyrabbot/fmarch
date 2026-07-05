@@ -54,6 +54,14 @@ import {
   devTestGameIdentityAdapterProofVersion,
 } from "../../../../tools/dev_test_game_identity_adapter_contract.mjs";
 import {
+  adminSpineProofPath,
+  devTestGameProofGraphPath,
+  devTestGameProofRunPath,
+  devTestGameReleaseReadinessPath,
+  nextActionPath,
+  spineManifestPath,
+} from "../../../../tools/dev_test_game_spine_artifact_paths.mjs";
+import {
   normalizeSpineRowKind,
   selectedSpineDeclarationStatus,
   selectedSpineDrilldownStatus,
@@ -1896,7 +1904,7 @@ export function normalizeLocalProofGraphAudit(proofGraph, { game }) {
     boundaryDetail:
       proofGraph.proofBoundary ??
       "Generated local proof graph without hosted or release-readiness claims.",
-    href: "target/dev-test-game/proof-graph.json",
+    href: devTestGameProofGraphPath,
     inspectHref: adminAuditInspectHref({ game, audit: localAdminAuditIds.proofGraph }),
     checks: Object.freeze(
       [
@@ -2502,7 +2510,7 @@ export function normalizeLocalNextActionAudit(nextAction, { game, proofGraph = n
     boundaryDetail:
       nextAction.proofBoundary ??
       "Local dev-test-game next-action receipt without hosted, release, or production claims.",
-    href: "target/dev-test-game/next-action.json",
+    href: nextActionPath,
     inspectHref: adminAuditInspectHref({ game, audit: localAdminAuditIds.nextAction }),
     checks: Object.freeze(checks),
     relatedLinks:
@@ -4031,7 +4039,7 @@ export function normalizeLocalProofFreshnessAudit(
     boundaryDetail:
       proofFreshness.proofBoundary ??
       "Local dev-test-game artifact age dashboard without content validation or release claims.",
-    href: "target/dev-test-game/release-readiness-checklist.json",
+    href: devTestGameReleaseReadinessPath,
     inspectHref: adminAuditInspectHref({ game, audit: localAdminAuditIds.proofFreshness }),
     checks: Object.freeze(
       [
@@ -4174,7 +4182,7 @@ export function normalizeLocalSpineManifestAudit(spineManifest, { game }) {
     boundaryDetail:
       spineManifest.proofBoundary ??
       "Generated local dev-test-game proof order and evidence wiring without release claims.",
-    href: "target/dev-test-game/spine-manifest.json",
+    href: spineManifestPath,
     inspectHref: adminAuditInspectHref({ game, audit: localAdminAuditIds.spineManifest }),
     checks: Object.freeze(
       [
@@ -4289,7 +4297,7 @@ export function normalizeLocalAdminSpineAudit(
     boundaryDetail:
       adminSpineProof.proofBoundary ??
       "Local aggregate admin proof without hosted or release-readiness claims.",
-    href: "target/dev-test-game/admin-spine-proof.json",
+    href: adminSpineProofPath,
     inspectHref: adminAuditInspectHref({ game, audit: localAdminAuditIds.adminSpine }),
     checks: Object.freeze(
       [
@@ -4540,7 +4548,7 @@ export function normalizeLocalReleaseReadinessAudit(
     boundaryDetail:
       releaseReadinessChecklist.proofBoundary ??
       "Local dev-test-game release-readiness checklist without beta or production claims.",
-    href: "target/dev-test-game/release-readiness-checklist.json",
+    href: devTestGameReleaseReadinessPath,
     inspectHref: adminAuditInspectHref({
       game,
       audit: localAdminAuditIds.releaseReadiness,
@@ -4766,7 +4774,7 @@ export function normalizeLocalCoreLoopAudit(proofRun, { game }) {
     boundaryDetail:
       proofRun.proofBoundary ??
       "Local dev-test-game proof-run core loop lanes without hosted release claims.",
-    href: proofRun.artifacts?.proofRun ?? "target/dev-test-game/proof-run.json",
+    href: proofRun.artifacts?.proofRun ?? devTestGameProofRunPath,
     inspectHref: adminAuditInspectHref({
       game,
       audit: localAdminAuditIds.coreLoop,
@@ -5047,7 +5055,7 @@ export function normalizeLocalPlayerRecoveryAudit(proofRun, { game }) {
     boundary: "Local player-action recovery proof",
     boundaryDetail:
       "Focused local dev-test-game player action recovery, stale command, reload, and conflict lanes without hosted multiplayer claims.",
-    href: proofRun.artifacts?.proofRun ?? "target/dev-test-game/proof-run.json",
+    href: proofRun.artifacts?.proofRun ?? devTestGameProofRunPath,
     inspectHref: adminAuditInspectHref({
       game,
       audit: localAdminAuditIds.playerRecovery,
@@ -5135,7 +5143,7 @@ export function normalizeLocalHardeningAudit(proofRun, { game }) {
     boundaryDetail:
       proofRun.proofBoundary ??
       "Local dev-test-game proof-run hardening lanes without exhaustive race claims.",
-    href: proofRun.artifacts?.proofRun ?? "target/dev-test-game/proof-run.json",
+    href: proofRun.artifacts?.proofRun ?? devTestGameProofRunPath,
     inspectHref: adminAuditInspectHref({
       game,
       audit: localAdminAuditIds.hardening,

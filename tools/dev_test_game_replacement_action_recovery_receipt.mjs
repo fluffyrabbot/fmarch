@@ -15,6 +15,9 @@ import {
 import {
   devTestGameHardeningAdminProofPath,
 } from "./dev_test_game_local_admin_proof_paths.mjs";
+import {
+  devTestGameProofRunPath,
+} from "./dev_test_game_spine_artifact_paths.mjs";
 import { repoRoot } from "./dev_test_game_spine_runner.mjs";
 
 export const DEV_TEST_GAME_REPLACEMENT_ACTION_RECOVERY_RECEIPT_VERSION = 1;
@@ -29,7 +32,7 @@ const receiptJsonPath = path.join(
   repoRoot,
   devTestGameReplacementActionRecoveryReceiptPath,
 );
-const defaultProofRunPath = "target/dev-test-game/proof-run.json";
+const defaultProofRunPath = devTestGameProofRunPath;
 
 export function buildDevTestGameReplacementActionRecoveryReceipt(
   proofRun,

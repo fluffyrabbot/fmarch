@@ -7,6 +7,9 @@ import {
   devTestGameReleaseRunbookPath,
 } from "./dev_test_game_release_artifact_paths.mjs";
 import {
+  devTestGameProofRunPath,
+} from "./dev_test_game_spine_artifact_paths.mjs";
+import {
   assertVisibleAdminRoleSurfaceRows,
   proveAdminAuditDetail,
   readJson,
@@ -21,7 +24,7 @@ const releaseRunbookPath = path.resolve(
 );
 const proofRunPath = path.resolve(
   repoRoot,
-  process.env.FMARCH_DEV_TEST_GAME_PROOF_RUN ?? "target/dev-test-game/proof-run.json",
+  process.env.FMARCH_DEV_TEST_GAME_PROOF_RUN ?? devTestGameProofRunPath,
 );
 const releaseRunbookRelativePath = path.relative(repoRoot, releaseRunbookPath);
 const proofRunRelativePath = path.relative(repoRoot, proofRunPath);

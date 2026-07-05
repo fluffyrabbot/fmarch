@@ -19,6 +19,9 @@ import {
 } from "./dev_test_game_host_stale_recovery_scenarios.mjs";
 import { assertDevTestGameProofRun } from "./dev_test_game_proof_contract.mjs";
 import { repoRoot } from "./dev_test_game_spine_runner.mjs";
+import {
+  devTestGameProofRunPath,
+} from "./dev_test_game_spine_artifact_paths.mjs";
 
 export const DEV_TEST_GAME_RACE_COVERAGE_VERSION = 1;
 export const devTestGameRaceCoveragePath =
@@ -242,7 +245,7 @@ export function buildDevTestGameRaceCoverage(
   proofRun,
   {
     generatedAt = new Date().toISOString(),
-    sourcePath = "target/dev-test-game/proof-run.json",
+    sourcePath = devTestGameProofRunPath,
   } = {},
 ) {
   const proof = assertDevTestGameProofRun(proofRun);
@@ -351,7 +354,7 @@ export function assertDevTestGameRaceCoverage(evidence) {
 export async function writeDevTestGameRaceCoverage({
   generatedAt = new Date().toISOString(),
   proofRunPath = process.env.FMARCH_DEV_TEST_GAME_PROOF_RUN ??
-    "target/dev-test-game/proof-run.json",
+    devTestGameProofRunPath,
 } = {}) {
   const absoluteProofRunPath = path.resolve(repoRoot, proofRunPath);
   const proofRun = JSON.parse(await readFile(absoluteProofRunPath, "utf8"));

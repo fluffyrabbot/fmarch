@@ -10,25 +10,33 @@ import {
   devTestGameSeedAdminProofPath,
   devTestGameSpineManifestAdminProofPath,
 } from "../../../../tools/dev_test_game_local_admin_proof_paths.mjs";
+import {
+  adminSpineProofPath,
+  adminSpineTerminalBatchProofPath,
+  devTestGameProofGraphAdminProofPath,
+  devTestGameProofGraphPath,
+  devTestGameProofRunPath,
+  devTestGameReleaseReadinessPath,
+  devTestGameSessionPath,
+  nextActionPath,
+  spineManifestPath,
+} from "../../../../tools/dev_test_game_spine_artifact_paths.mjs";
 
 const DEFAULT_OPS_ARTIFACTS = "target/dev-test-game/ops-artifacts.json";
-const DEFAULT_DEV_TEST_GAME_PROOF_RUN = "target/dev-test-game/proof-run.json";
+const DEFAULT_DEV_TEST_GAME_PROOF_RUN = devTestGameProofRunPath;
 const DEFAULT_SEED_FIXTURE_SUMMARY = "target/dev-test-game/seed-fixture-summary.json";
-const DEFAULT_RELEASE_READINESS_CHECKLIST =
-  "target/dev-test-game/release-readiness-checklist.json";
+const DEFAULT_RELEASE_READINESS_CHECKLIST = devTestGameReleaseReadinessPath;
 const DEFAULT_BACKUP_RESTORE_PROOF =
   "target/live-stack-backup-restore-drill/local-backup-restore-proof.json";
 const DEFAULT_IDENTITY_ADAPTER_PROOF =
   "target/auth-invite-role-proof/invite-role-proof.json";
-const DEFAULT_SPINE_MANIFEST = "target/dev-test-game/spine-manifest.json";
-const DEFAULT_ADMIN_SPINE_PROOF = "target/dev-test-game/admin-spine-proof.json";
+const DEFAULT_SPINE_MANIFEST = spineManifestPath;
+const DEFAULT_ADMIN_SPINE_PROOF = adminSpineProofPath;
 const DEFAULT_ADMIN_SPINE_ADMIN_PROOF = devTestGameAdminSpineAdminProofPath;
-const DEFAULT_ADMIN_SPINE_TERMINAL_BATCHES =
-  "target/dev-test-game/admin-spine-terminal-batches.json";
-const DEFAULT_NEXT_ACTION = "target/dev-test-game/next-action.json";
-const DEFAULT_PROOF_GRAPH = "target/dev-test-game/proof-graph.json";
-const DEFAULT_PROOF_GRAPH_ADMIN_PROOF =
-  "target/dev-test-game/proof-graph-admin-proof.json";
+const DEFAULT_ADMIN_SPINE_TERMINAL_BATCHES = adminSpineTerminalBatchProofPath;
+const DEFAULT_NEXT_ACTION = nextActionPath;
+const DEFAULT_PROOF_GRAPH = devTestGameProofGraphPath;
+const DEFAULT_PROOF_GRAPH_ADMIN_PROOF = devTestGameProofGraphAdminProofPath;
 const DEFAULT_RACE_COVERAGE = "target/dev-test-game/race-coverage.json";
 const DEFAULT_RACE_COVERAGE_ADMIN_PROOF =
   "target/dev-test-game/race-coverage-admin-proof.json";
@@ -68,7 +76,7 @@ const LOCAL_PROOF_FRESHNESS_ARTIFACTS = Object.freeze([
     id: "session",
     label: "Dev test-game session",
     env: "FMARCH_DEV_TEST_GAME_SESSION",
-    fallback: "target/dev-test-game/session.json",
+    fallback: devTestGameSessionPath,
   }),
   Object.freeze({
     id: "proof-run",

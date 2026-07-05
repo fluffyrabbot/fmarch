@@ -70,6 +70,15 @@ import {
   devTestGameReleaseReadinessMarkdownPath,
   devTestGameReleaseReadinessPath,
 } from "./dev_test_game_spine_readiness_steps.mjs";
+import {
+  adminSpineProofPath,
+  adminSpineTerminalBatchProofPath,
+  devTestGameProofGraphAdminProofPath,
+  devTestGameProofRunPath,
+  nextActionAdminProofPath,
+  proofFreshnessAdminProofPath,
+  spineManifestPath,
+} from "./dev_test_game_spine_artifact_paths.mjs";
 export {
   devTestGameReleaseReadinessMarkdownPath,
   devTestGameReleaseReadinessPath,
@@ -368,19 +377,19 @@ const defaultHostedIdentityProgressionSummaryPath = path.join(
   repoRoot,
   devTestGameHostedIdentityProgressionSummaryPath,
 );
-const defaultSpineManifestPath = path.join(artifactDir, "spine-manifest.json");
+const defaultSpineManifestPath = path.join(repoRoot, spineManifestPath);
 const defaultSpineManifestAdminProofPath = path.join(
   artifactDir,
   "spine-manifest-admin-proof.json",
 );
-const defaultAdminSpineProofPath = path.join(artifactDir, "admin-spine-proof.json");
+const defaultAdminSpineProofPath = path.join(repoRoot, adminSpineProofPath);
 const defaultAdminSpineAdminProofPath = path.join(
   artifactDir,
   "admin-spine-admin-proof.json",
 );
 const defaultAdminSpineTerminalBatchProofPath = path.join(
-  artifactDir,
-  "admin-spine-terminal-batches.json",
+  repoRoot,
+  adminSpineTerminalBatchProofPath,
 );
 const defaultRaceCoveragePath = path.join(artifactDir, "race-coverage.json");
 const defaultRaceCoverageAdminProofPath = path.join(
@@ -404,16 +413,16 @@ const defaultHostedEvidenceLaneDemoProofPath = path.join(
   "hosted-evidence-lane-demo-proof.json",
 );
 const defaultProofGraphAdminProofPath = path.join(
-  artifactDir,
-  "proof-graph-admin-proof.json",
+  repoRoot,
+  devTestGameProofGraphAdminProofPath,
 );
 const defaultProofFreshnessAdminProofPath = path.join(
-  artifactDir,
-  "proof-freshness-admin-proof.json",
+  repoRoot,
+  proofFreshnessAdminProofPath,
 );
 const defaultNextActionAdminProofPath = path.join(
-  artifactDir,
-  "next-action-admin-proof.json",
+  repoRoot,
+  nextActionAdminProofPath,
 );
 const defaultReleaseRunbookPath = path.join(artifactDir, "release-runbook.json");
 const defaultReleaseRunbookAdminProofPath = path.join(
@@ -435,7 +444,7 @@ if (!Number.isFinite(maxBackupArtifactAgeHours) || maxBackupArtifactAgeHours <= 
 export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
   const proof = assertDevTestGameProofRun(proofRun);
   const generatedAt = options.generatedAt ?? new Date().toISOString();
-  const sourcePath = options.sourcePath ?? "target/dev-test-game/proof-run.json";
+  const sourcePath = options.sourcePath ?? devTestGameProofRunPath;
   const recoveryMilestonesByGeneratedFromKey = {
     staleConflictMessageMilestone: buildStaleConflictMessageMilestone(proof, {
       sourcePath,
@@ -624,7 +633,7 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
       : undefined;
   const spineManifestEvidence = options.spineManifest
     ? validateDevTestGameSpineManifest(options.spineManifest, {
-        path: options.spineManifestPath ?? "target/dev-test-game/spine-manifest.json",
+        path: options.spineManifestPath ?? spineManifestPath,
         artifact: options.spineManifestArtifact,
       })
     : undefined;
@@ -638,7 +647,7 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
     : undefined;
   const adminSpineProofEvidence = options.adminSpineProof
     ? validateDevTestGameAdminSpineProof(options.adminSpineProof, {
-        path: options.adminSpineProofPath ?? "target/dev-test-game/admin-spine-proof.json",
+        path: options.adminSpineProofPath ?? adminSpineProofPath,
         artifact: options.adminSpineProofArtifact,
       })
     : undefined;
@@ -656,7 +665,7 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
         {
           path:
             options.adminSpineTerminalBatchesPath ??
-            "target/dev-test-game/admin-spine-terminal-batches.json",
+            adminSpineTerminalBatchProofPath,
           artifact: options.adminSpineTerminalBatchesArtifact,
         },
       )
@@ -756,7 +765,7 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
         {
           path:
             options.proofFreshnessAdminProofPath ??
-            "target/dev-test-game/proof-freshness-admin-proof.json",
+            proofFreshnessAdminProofPath,
           artifact: options.proofFreshnessAdminProofArtifact,
         },
       )
@@ -765,7 +774,7 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
     ? validateOptionalNextActionAdminProof(options.nextActionAdminProof, {
         path:
           options.nextActionAdminProofPath ??
-          "target/dev-test-game/next-action-admin-proof.json",
+          nextActionAdminProofPath,
         artifact: options.nextActionAdminProofArtifact,
       })
     : undefined;
@@ -2598,7 +2607,7 @@ function validateCohostConsoleLaneProof(proof, options = {}) {
   }
   return {
     status: lane.status,
-    path: options.path ?? "target/dev-test-game/proof-run.json",
+    path: options.path ?? devTestGameProofRunPath,
     game,
     roleUrl: `${frontendBaseUrl}/g/<seeded-game>/host`,
     capabilityLabel: evidence.capabilityLabel.replace(game, "<seeded-game>"),
@@ -2671,7 +2680,7 @@ function validateReplacementPlayerLaneProof(proof, options = {}) {
   }
   return {
     status: "passed",
-    path: options.path ?? "target/dev-test-game/proof-run.json",
+    path: options.path ?? devTestGameProofRunPath,
     roleUrl: `${frontendBaseUrl}/g/<seeded-game>`,
     principalUserId: "player-rowan",
     commandStateSlot: "slot-7",
@@ -2760,7 +2769,7 @@ function validateReplacementActionLaneProof(proof, options = {}) {
   }
   return {
     status: "passed",
-    path: options.path ?? "target/dev-test-game/proof-run.json",
+    path: options.path ?? devTestGameProofRunPath,
     roleUrl: `${frontendBaseUrl}/g/<replacement-action-game>`,
     incomingAction: {
       game: "<replacement-action-game>",
@@ -2871,7 +2880,7 @@ function validateReplacementPrivateLaneProof(proof, options = {}) {
   }
   return {
     status: "passed",
-    path: options.path ?? "target/dev-test-game/proof-run.json",
+    path: options.path ?? devTestGameProofRunPath,
     roleUrl:
       `${frontendBaseUrl}/g/<replacement-private-game>` +
       "/c/private%3Amafia_day_chat",
@@ -5448,7 +5457,7 @@ export function validateDevTestGameProofFreshnessAdminProof(proof, options = {})
   }
   return {
     status: "passed",
-    path: options.path ?? "target/dev-test-game/proof-freshness-admin-proof.json",
+    path: options.path ?? proofFreshnessAdminProofPath,
     proofBoundary: proof.proofBoundary,
     overviewRoleUrl: proof.adminRoleSurface.overviewRoleUrl,
     detailRoleUrl: proof.adminRoleSurface.detailRoleUrl,
@@ -5739,7 +5748,7 @@ export function validateDevTestGameNextActionAdminProof(proof, options = {}) {
   }
   return {
     status: "passed",
-    path: options.path ?? "target/dev-test-game/next-action-admin-proof.json",
+    path: options.path ?? nextActionAdminProofPath,
     proofBoundary: proof.proofBoundary,
     overviewRoleUrl: proof.adminRoleSurface.overviewRoleUrl,
     detailRoleUrl: proof.adminRoleSurface.detailRoleUrl,
@@ -6032,7 +6041,7 @@ export function validateDevTestGameSpineManifest(manifest, options = {}) {
   }
   return {
     status: "passed",
-    path: options.path ?? "target/dev-test-game/spine-manifest.json",
+    path: options.path ?? spineManifestPath,
     checkCount: requiredChecks.length,
     commandCount,
     artifactCount: manifest.artifacts.length,
@@ -6219,7 +6228,7 @@ export function validateDevTestGameAdminSpineProof(proof, options = {}) {
   });
   return {
     status: "passed",
-    path: options.path ?? "target/dev-test-game/admin-spine-proof.json",
+    path: options.path ?? adminSpineProofPath,
     proofCount: requiredProofs.length,
     proofIds: requiredProofs,
     proofBoundary: proof.proofBoundary,
@@ -6365,16 +6374,16 @@ export function validateDevTestGameAdminSpineTerminalBatches(
       proofIds: ["proof-graph", "proof-freshness", "next-action"],
       artifactPaths: [
         "target/dev-test-game/proof-graph-admin-proof.json",
-        "target/dev-test-game/proof-freshness-admin-proof.json",
-        "target/dev-test-game/next-action-admin-proof.json",
+        proofFreshnessAdminProofPath,
+        nextActionAdminProofPath,
       ],
     },
     {
       label: "Terminal refresh admin proof batch",
       proofIds: ["proof-freshness", "next-action"],
       artifactPaths: [
-        "target/dev-test-game/proof-freshness-admin-proof.json",
-        "target/dev-test-game/next-action-admin-proof.json",
+        proofFreshnessAdminProofPath,
+        nextActionAdminProofPath,
       ],
     },
   ];
@@ -6439,7 +6448,7 @@ export function validateDevTestGameAdminSpineTerminalBatches(
   return {
     status: "passed",
     path:
-      options.path ?? "target/dev-test-game/admin-spine-terminal-batches.json",
+      options.path ?? adminSpineTerminalBatchProofPath,
     proofBoundary: proof.proofBoundary,
     batchCount: requiredBatches.length,
     batchIds: requiredBatches.map((batch) =>

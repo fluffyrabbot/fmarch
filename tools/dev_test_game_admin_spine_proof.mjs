@@ -71,6 +71,9 @@ import {
   devTestGameSpineManifestAdminProofPath,
 } from "./dev_test_game_local_admin_proof_paths.mjs";
 import {
+  adminSpineProofPath,
+} from "./dev_test_game_spine_artifact_paths.mjs";
+import {
   hostedTargetPreflightAdminProofCase,
 } from "./dev_test_game_hosted_target_preflight_admin_proof.mjs";
 import {
@@ -321,7 +324,7 @@ export async function runAdminSpineProof() {
     recovery: buildAdminSpineRecovery({ entries, batches }),
   };
   validateDevTestGameAdminSpineProof(evidence, {
-    path: "target/dev-test-game/admin-spine-proof.json",
+    path: adminSpineProofPath,
   });
   await writeFile(evidencePath, `${JSON.stringify(evidence, null, 2)}\n`);
   return evidence;

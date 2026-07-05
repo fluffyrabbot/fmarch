@@ -12,15 +12,20 @@ import {
   seedScenarioCoverageGroups,
   unclassifiedSeedProofLaneIds,
 } from "./dev_test_game_seed_scenario_cases.mjs";
+import {
+  devTestGameProofRunPath,
+  devTestGameReleaseReadinessPath,
+  devTestGameSessionPath,
+} from "./dev_test_game_spine_artifact_paths.mjs";
 
 export const DEV_TEST_GAME_SEED_FIXTURE_SUMMARY_VERSION = 1;
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const artifactDir = path.join(repoRoot, "target", "dev-test-game");
 const defaultPaths = Object.freeze({
-  session: path.join(artifactDir, "session.json"),
-  proofRun: path.join(artifactDir, "proof-run.json"),
-  readiness: path.join(artifactDir, "release-readiness-checklist.json"),
+  session: path.join(repoRoot, devTestGameSessionPath),
+  proofRun: path.join(repoRoot, devTestGameProofRunPath),
+  readiness: path.join(repoRoot, devTestGameReleaseReadinessPath),
 });
 const jsonPath = path.join(artifactDir, "seed-fixture-summary.json");
 const markdownPath = path.join(artifactDir, "seed-fixture-summary.md");
@@ -60,10 +65,10 @@ export function buildDevTestGameSeedFixtureSummary({
     proofBoundary:
       "Local seed/demo fixture inventory for one dev-test-game run. It maps seeded slots, redacted role URLs, and browser-proof lanes into reusable local scenarios; it does not prove hosted demo data, production identity, invite delivery, beta readiness, or release readiness.",
     generatedFrom: {
-      sessionJson: paths.session ?? "target/dev-test-game/session.json",
-      proofRun: paths.proofRun ?? "target/dev-test-game/proof-run.json",
+      sessionJson: paths.session ?? devTestGameSessionPath,
+      proofRun: paths.proofRun ?? devTestGameProofRunPath,
       readinessChecklist:
-        paths.readiness ?? "target/dev-test-game/release-readiness-checklist.json",
+        paths.readiness ?? devTestGameReleaseReadinessPath,
       game: proof.session.game,
     },
     fixture: {

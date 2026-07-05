@@ -11,7 +11,6 @@ import {
   devTestGameProofGraphPath,
 } from "./dev_test_game_proof_graph.mjs";
 import {
-  artifactDir,
   proveAdminAuditDetail,
   readJson,
   repoRoot,
@@ -33,15 +32,20 @@ import {
   assertRecoveryReceiptGraphSummary,
   recoveryReceiptGraphDescriptors,
 } from "./dev_test_game_recovery_receipt_catalog.mjs";
+import {
+  devTestGameProofRunPath,
+  nextActionAdminProofPath,
+  nextActionPath as defaultNextActionPath,
+} from "./dev_test_game_spine_artifact_paths.mjs";
 
 const nextActionPath = path.resolve(
   repoRoot,
   process.env.FMARCH_DEV_TEST_GAME_NEXT_ACTION ??
-    "target/dev-test-game/next-action.json",
+    defaultNextActionPath,
 );
 const proofRunPath = path.resolve(
   repoRoot,
-  process.env.FMARCH_DEV_TEST_GAME_PROOF_RUN ?? "target/dev-test-game/proof-run.json",
+  process.env.FMARCH_DEV_TEST_GAME_PROOF_RUN ?? devTestGameProofRunPath,
 );
 const proofGraphPath = path.resolve(
   repoRoot,
@@ -56,7 +60,7 @@ const nextActionRelativePath = path.relative(repoRoot, nextActionPath);
 const proofRunRelativePath = path.relative(repoRoot, proofRunPath);
 const proofGraphRelativePath = path.relative(repoRoot, proofGraphPath);
 const hostedMatrixRelativePath = path.relative(repoRoot, hostedMatrixPath);
-const evidencePath = path.join(artifactDir, "next-action-admin-proof.json");
+const evidencePath = path.join(repoRoot, nextActionAdminProofPath);
 
 export function nextActionAdminProofCase() {
   return {

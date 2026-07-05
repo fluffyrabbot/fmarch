@@ -11,6 +11,10 @@ import {
   devTestGameReleaseReadinessPath,
 } from "./dev_test_game_spine_readiness_steps.mjs";
 import {
+  devTestGameProofRunPath,
+  devTestGameSessionPath,
+} from "./dev_test_game_spine_artifact_paths.mjs";
+import {
   assertRealHostedEvidenceInputs,
   buildRealHostedEvidenceInputs,
 } from "./dev_test_game_real_hosted_evidence_inputs.mjs";
@@ -29,9 +33,11 @@ import {
 } from "./dev_test_game_hosted_concurrent_race_matrix_cases.mjs";
 
 export const DEV_TEST_GAME_HOSTED_CONCURRENT_RACE_MATRIX_VERSION = 1;
-export { devTestGameReleaseReadinessPath };
-export const devTestGameSessionPath = "target/dev-test-game/session.json";
-export const devTestGameProofRunPath = "target/dev-test-game/proof-run.json";
+export {
+  devTestGameProofRunPath,
+  devTestGameReleaseReadinessPath,
+  devTestGameSessionPath,
+};
 export const devTestGameRaceCoveragePath =
   "target/dev-test-game/race-coverage.json";
 export const devTestGameHostedConcurrentRaceMatrixPath =
@@ -192,7 +198,7 @@ export function buildDevTestGameHostedConcurrentRaceMatrixEvidence(
         evidence: [
           proof.session.frontendBaseUrl,
           proof.session.apiBaseUrl,
-          "target/dev-test-game/session.json",
+          devTestGameSessionPath,
         ],
       },
       {

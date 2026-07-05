@@ -7,6 +7,9 @@ import {
   devTestGameHardeningAdminProofPath,
 } from "./dev_test_game_local_admin_proof_paths.mjs";
 import { releaseReadinessStep } from "./dev_test_game_spine_readiness_steps.mjs";
+import {
+  devTestGameProofRunPath,
+} from "./dev_test_game_spine_artifact_paths.mjs";
 import { runSpinePlan } from "./dev_test_game_spine_runner.mjs";
 import {
   recoveryReceiptProofPlanSteps,
@@ -31,7 +34,7 @@ export const devTestGameCoreLiveSpinePlan = [
   releaseReadinessStep({
     reason: "core-live-gameplay-admin-surfaces",
     changedInputs: [
-      "target/dev-test-game/proof-run.json",
+      devTestGameProofRunPath,
       devTestGameCoreLoopAdminProofPath,
       ...recoveryReceiptProofTargets(coreLoopRecoveryReceiptSelector),
       devTestGameHardeningAdminProofPath,

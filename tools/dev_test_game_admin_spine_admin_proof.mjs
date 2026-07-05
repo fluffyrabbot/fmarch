@@ -16,20 +16,25 @@ import {
   localAdminAuditHandoffCheckIds,
   localAdminAuditIds,
 } from "./dev_test_game_admin_audit_surface_ids.mjs";
+import {
+  adminSpineProofPath as defaultAdminSpineProofPath,
+  adminSpineTerminalBatchProofPath,
+  devTestGameProofRunPath,
+} from "./dev_test_game_spine_artifact_paths.mjs";
 
 const adminSpineProofPath = path.resolve(
   repoRoot,
   process.env.FMARCH_DEV_TEST_GAME_ADMIN_SPINE_PROOF ??
-    "target/dev-test-game/admin-spine-proof.json",
+    defaultAdminSpineProofPath,
 );
 const proofRunPath = path.resolve(
   repoRoot,
-  process.env.FMARCH_DEV_TEST_GAME_PROOF_RUN ?? "target/dev-test-game/proof-run.json",
+  process.env.FMARCH_DEV_TEST_GAME_PROOF_RUN ?? devTestGameProofRunPath,
 );
 const adminSpineTerminalBatchesPath = path.resolve(
   repoRoot,
   process.env.FMARCH_DEV_TEST_GAME_ADMIN_SPINE_TERMINAL_BATCHES ??
-    "target/dev-test-game/admin-spine-terminal-batches.json",
+    adminSpineTerminalBatchProofPath,
 );
 const adminSpineProofRelativePath = path.relative(repoRoot, adminSpineProofPath);
 const proofRunRelativePath = path.relative(repoRoot, proofRunPath);

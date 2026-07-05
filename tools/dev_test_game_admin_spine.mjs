@@ -51,6 +51,12 @@ import {
   proofFreshnessAdminProofPath,
 } from "./dev_test_game_next_action_paths.mjs";
 import {
+  adminSpineProofPath,
+  adminSpineTerminalBatchProofPath,
+  nextActionPath,
+  spineManifestPath,
+} from "./dev_test_game_spine_artifact_paths.mjs";
+import {
   artifactDir,
   repoRoot,
   runAdminAuditProofBatchPlan,
@@ -67,9 +73,7 @@ import {
 import { releaseReadinessStep } from "./dev_test_game_spine_readiness_steps.mjs";
 import { runSpinePlan } from "./dev_test_game_spine_runner.mjs";
 
-export const adminSpineProofPath = "target/dev-test-game/admin-spine-proof.json";
-export const adminSpineTerminalBatchProofPath =
-  "target/dev-test-game/admin-spine-terminal-batches.json";
+export { adminSpineProofPath, adminSpineTerminalBatchProofPath };
 
 export const adminSpineReadinessEvidenceEnv = {
   FMARCH_DEV_TEST_GAME_CORE_LOOP_ADMIN_PROOF:
@@ -108,10 +112,10 @@ export const adminSpineReadinessEvidenceEnv = {
     devTestGameHostedIdentityProgressionSummaryPath,
   FMARCH_DEV_TEST_GAME_HOSTED_IDENTITY_EVIDENCE_ADMIN_PROOF:
     "target/dev-test-game/hosted-identity-evidence-admin-proof.json",
-  FMARCH_DEV_TEST_GAME_SPINE_MANIFEST: "target/dev-test-game/spine-manifest.json",
+  FMARCH_DEV_TEST_GAME_SPINE_MANIFEST: spineManifestPath,
   FMARCH_DEV_TEST_GAME_SPINE_MANIFEST_ADMIN_PROOF:
     devTestGameSpineManifestAdminProofPath,
-  FMARCH_DEV_TEST_GAME_ADMIN_SPINE_PROOF: "target/dev-test-game/admin-spine-proof.json",
+  FMARCH_DEV_TEST_GAME_ADMIN_SPINE_PROOF: adminSpineProofPath,
   FMARCH_DEV_TEST_GAME_ADMIN_SPINE_ADMIN_PROOF:
     devTestGameAdminSpineAdminProofPath,
   FMARCH_DEV_TEST_GAME_RACE_COVERAGE: devTestGameRaceCoveragePath,
@@ -241,8 +245,8 @@ export const devTestGameAdminSpinePlan = [
   releaseReadinessStep({
     reason: "terminal-graph-and-local-dependency-surfaces",
     changedInputs: [
-      "target/dev-test-game/spine-manifest.json",
-      "target/dev-test-game/next-action.json",
+      spineManifestPath,
+      nextActionPath,
       devTestGameProofGraphPath,
       devTestGameProofGraphAdminProofPath,
       proofFreshnessAdminProofPath,
@@ -264,7 +268,7 @@ export const devTestGameAdminSpinePlan = [
   releaseReadinessStep({
     reason: "terminal-batch-proof-graph-and-next-action-refresh",
     changedInputs: [
-      "target/dev-test-game/next-action.json",
+      nextActionPath,
       devTestGameProofGraphPath,
       devTestGameProofGraphAdminProofPath,
       proofFreshnessAdminProofPath,
@@ -325,7 +329,7 @@ async function writeAdminSpineTerminalBatchProof(batches) {
     generatedFrom: {
       adminSpineProof: adminSpineProofPath,
       proofGraph: devTestGameProofGraphPath,
-      nextAction: "target/dev-test-game/next-action.json",
+      nextAction: nextActionPath,
       proofFreshnessAdminProof: proofFreshnessAdminProofPath,
       nextActionAdminProof: nextActionAdminProofPath,
       batchCount: batches.length,

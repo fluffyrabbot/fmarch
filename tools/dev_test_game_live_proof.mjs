@@ -24,6 +24,9 @@ import {
   privateChannelStaleActionReconnectExpectation,
 } from "./dev_test_game_stale_client_reconnect_scenarios.mjs";
 import {
+  devTestGameProofRunPath,
+} from "./dev_test_game_spine_artifact_paths.mjs";
+import {
   coreLoopPrivateChannelCompletedPostLaneId,
   coreLoopPrivateChannelInvalidActionLaneId,
   privateChannelInvalidActionRecoveryScenario,
@@ -84,7 +87,7 @@ assert.equal(session.name, "live-proof");
 assert.equal(session.seedMode, "seeded");
 assert.equal(session.seedCommandCount, 22);
 assert.equal(session.verification?.status, "passed");
-assert.equal(session.artifacts.proofRun, "target/dev-test-game/proof-run.json");
+assert.equal(session.artifacts.proofRun, devTestGameProofRunPath);
 assert.equal(proofRun.proof, "dev-test-game-proof-run");
 assert.equal(proofRun.status, "passed");
 assert.equal(proofRun.session.game, session.game);

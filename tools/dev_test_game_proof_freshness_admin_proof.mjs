@@ -4,7 +4,6 @@ import { readLocalProofFreshness } from "../frontend/src/lib/server/local-ops-ar
 import { assertDevTestGameNextAction } from "./dev_test_game_next_action.mjs";
 import { assertDevTestGameProofRun } from "./dev_test_game_proof_contract.mjs";
 import {
-  artifactDir,
   proveAdminAuditDetail,
   readJson,
   repoRoot,
@@ -14,19 +13,24 @@ import {
   localAdminAuditHandoffCheckIds,
   localAdminAuditIds,
 } from "./dev_test_game_admin_audit_surface_ids.mjs";
+import {
+  devTestGameProofRunPath,
+  nextActionPath as defaultNextActionPath,
+  proofFreshnessAdminProofPath,
+} from "./dev_test_game_spine_artifact_paths.mjs";
 
 const proofRunPath = path.resolve(
   repoRoot,
-  process.env.FMARCH_DEV_TEST_GAME_PROOF_RUN ?? "target/dev-test-game/proof-run.json",
+  process.env.FMARCH_DEV_TEST_GAME_PROOF_RUN ?? devTestGameProofRunPath,
 );
 const proofRunRelativePath = path.relative(repoRoot, proofRunPath);
 const nextActionPath = path.resolve(
   repoRoot,
   process.env.FMARCH_DEV_TEST_GAME_NEXT_ACTION ??
-    "target/dev-test-game/next-action.json",
+    defaultNextActionPath,
 );
 const nextActionRelativePath = path.relative(repoRoot, nextActionPath);
-const evidencePath = path.join(artifactDir, "proof-freshness-admin-proof.json");
+const evidencePath = path.join(repoRoot, proofFreshnessAdminProofPath);
 
 export function proofFreshnessAdminProofCase() {
   return {

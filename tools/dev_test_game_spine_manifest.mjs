@@ -121,12 +121,16 @@ import {
   localAdminAuditIds,
   localAdminAuditRoleUrl,
 } from "./dev_test_game_admin_audit_surface_ids.mjs";
+import {
+  devTestGameProofRunPath,
+  devTestGameSessionPath,
+  spineManifestMarkdownPath,
+  spineManifestPath,
+} from "./dev_test_game_spine_artifact_paths.mjs";
 import { repoRoot } from "./dev_test_game_spine_runner.mjs";
 
 export const DEV_TEST_GAME_SPINE_MANIFEST_VERSION = 1;
 
-export const spineManifestPath = "target/dev-test-game/spine-manifest.json";
-export const spineManifestMarkdownPath = "target/dev-test-game/spine-manifest.md";
 export {
   nextActionAdminProofCommand,
   nextActionAdminProofPath,
@@ -134,6 +138,8 @@ export {
   nextActionPath,
   proofFreshnessAdminProofCommand,
   proofFreshnessAdminProofPath,
+  spineManifestMarkdownPath,
+  spineManifestPath,
 };
 
 const manifestJsonPath = path.join(repoRoot, spineManifestPath);
@@ -215,7 +221,7 @@ export function buildDevTestGameSpineManifest({
       raceCoverage: {
         script: devTestGameRaceCoverageCommand,
         proofArtifact: devTestGameRaceCoveragePath,
-        dependsOn: ["target/dev-test-game/proof-run.json"],
+        dependsOn: [devTestGameProofRunPath],
       },
       hostedConcurrentRaceMatrix: {
         script: devTestGameHostedConcurrentRaceMatrixCommand,
@@ -245,7 +251,7 @@ export function buildDevTestGameSpineManifest({
         proofArtifact: hostedIdentityEvidenceAdminProofArtifact.path,
         dependsOn: [
           devTestGameHostedIdentityEvidencePath,
-          "target/dev-test-game/proof-run.json",
+          devTestGameProofRunPath,
         ],
         roleUrl: hostedIdentityEvidenceAdminProofArtifact.roleUrl,
       },
@@ -319,7 +325,7 @@ export function buildDevTestGameSpineManifest({
         proofArtifact: nextActionAdminProofPath,
         dependsOn: [
           nextActionPath,
-          "target/dev-test-game/proof-run.json",
+          devTestGameProofRunPath,
           devTestGameProofGraphPath,
         ],
         roleUrl: localAdminAuditRoleUrl(localAdminAuditIds.nextAction),
@@ -335,7 +341,7 @@ export function buildDevTestGameSpineManifest({
         dependsOn: [
           devTestGameProofGraphPath,
           adminSpineProofPath,
-          "target/dev-test-game/proof-run.json",
+          devTestGameProofRunPath,
         ],
         roleUrl: localAdminAuditRoleUrl(localAdminAuditIds.proofGraph),
       },
@@ -371,7 +377,7 @@ export function buildDevTestGameSpineManifest({
         path: nextActionAdminProofPath,
         dependsOn: [
           nextActionPath,
-          "target/dev-test-game/proof-run.json",
+          devTestGameProofRunPath,
           devTestGameProofGraphPath,
         ],
         roleUrl: localAdminAuditRoleUrl(localAdminAuditIds.nextAction),
@@ -395,7 +401,7 @@ export function buildDevTestGameSpineManifest({
         dependsOn: [
           devTestGameProofGraphPath,
           adminSpineProofPath,
-          "target/dev-test-game/proof-run.json",
+          devTestGameProofRunPath,
         ],
         roleUrl: localAdminAuditRoleUrl(localAdminAuditIds.proofGraph),
         boundary:
@@ -895,7 +901,7 @@ export function assertDevTestGameSpineManifest(manifest) {
   for (const path of [
     spineManifestPath,
     spineManifestMarkdownPath,
-    "target/dev-test-game/admin-spine-proof.json",
+    adminSpineProofPath,
     devTestGameRaceCoveragePath,
     proofFreshnessAdminProofPath,
     nextActionPath,
@@ -1035,8 +1041,8 @@ export async function writeDevTestGameSpineManifest({
 }
 
 async function readProofRunContractStatus({
-  proofPath = "target/dev-test-game/proof-run.json",
-  sessionPath = "target/dev-test-game/session.json",
+  proofPath = devTestGameProofRunPath,
+  sessionPath = devTestGameSessionPath,
 } = {}) {
   try {
     const [proof, session] = await Promise.all([
@@ -1250,7 +1256,7 @@ function proofRunContractArtifact(proofRunContract) {
   return {
     id: "proof-run",
     label: "Proof run and session contract",
-    path: proofRunContract.proofPath ?? "target/dev-test-game/proof-run.json",
+    path: proofRunContract.proofPath ?? devTestGameProofRunPath,
     status: "stale",
     refreshCommand: artifactRefreshCommands["proof-run"],
     refreshSource: "manifest-default",

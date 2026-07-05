@@ -17,6 +17,9 @@ import {
   localAdminAuditIds,
   localAdminAuditRoleUrl,
 } from "./dev_test_game_admin_audit_surface_ids.mjs";
+import {
+  devTestGameReleaseReadinessPath,
+} from "./dev_test_game_spine_artifact_paths.mjs";
 import { repoRoot } from "./dev_test_game_spine_runner.mjs";
 
 export const DEV_TEST_GAME_RELEASE_RUNBOOK_VERSION = 1;
@@ -25,8 +28,6 @@ export {
   devTestGameReleaseRunbookAdminProofPath,
   devTestGameReleaseRunbookPath,
 } from "./dev_test_game_release_artifact_paths.mjs";
-const devTestGameReleaseReadinessPath =
-  "target/dev-test-game/release-readiness-checklist.json";
 
 const outputPath = path.join(repoRoot, devTestGameReleaseRunbookPath);
 const defaultReadinessPath = path.join(repoRoot, devTestGameReleaseReadinessPath);
@@ -184,7 +185,7 @@ function releaseRunbookItem(item, { rank, game }) {
   const config = releaseRunbookItemConfig.get(item.id) ?? {
     owner: "release-owner",
     command: "npm run test:dev-test-game-admin-spine",
-    proofTarget: "target/dev-test-game/release-readiness-checklist.json",
+    proofTarget: devTestGameReleaseReadinessPath,
     roleUrl: localAdminAuditRoleUrl(localAdminAuditIds.releaseReadiness),
     evidenceBoundary:
       "Collect external evidence for this readiness gap, then regenerate the local release-readiness checklist.",

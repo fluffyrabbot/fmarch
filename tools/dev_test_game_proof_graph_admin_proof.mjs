@@ -38,20 +38,25 @@ import {
   requiredRelatedDestinationsForHandoffs,
 } from "./dev_test_game_admin_audit_handoff_contract.mjs";
 import { adminProofGraphRoleHandoffs } from "./dev_test_game_proof_graph_handoffs.mjs";
+import {
+  adminSpineProofPath as defaultAdminSpineProofPath,
+  devTestGameProofGraphPath,
+  devTestGameProofRunPath,
+} from "./dev_test_game_spine_artifact_paths.mjs";
 
 const proofGraphPath = path.resolve(
   repoRoot,
   process.env.FMARCH_DEV_TEST_GAME_PROOF_GRAPH ??
-    "target/dev-test-game/proof-graph.json",
+    devTestGameProofGraphPath,
 );
 const proofRunPath = path.resolve(
   repoRoot,
-  process.env.FMARCH_DEV_TEST_GAME_PROOF_RUN ?? "target/dev-test-game/proof-run.json",
+  process.env.FMARCH_DEV_TEST_GAME_PROOF_RUN ?? devTestGameProofRunPath,
 );
 const adminSpineProofPath = path.resolve(
   repoRoot,
   process.env.FMARCH_DEV_TEST_GAME_ADMIN_SPINE_PROOF ??
-    "target/dev-test-game/admin-spine-proof.json",
+    defaultAdminSpineProofPath,
 );
 const hostedMatrixPath = path.resolve(
   repoRoot,

@@ -82,6 +82,15 @@ import {
   devTestGameSeedAdminProofPath,
   devTestGameSpineManifestAdminProofPath,
 } from "./dev_test_game_local_admin_proof_paths.mjs";
+import {
+  adminSpineProofPath,
+  adminSpineTerminalBatchProofPath,
+  devTestGameProofGraphAdminProofPath,
+  devTestGameProofRunPath,
+  devTestGameSessionPath,
+  nextActionAdminProofPath,
+  nextActionPath,
+} from "./dev_test_game_spine_artifact_paths.mjs";
 
 export {
   devTestGameCoreLoopAdminProofCommand,
@@ -90,7 +99,7 @@ export {
 } from "./dev_test_game_production_feature_source_rules.mjs";
 
 export const DEV_TEST_GAME_NEXT_ACTION_VERSION = 1;
-export const devTestGameNextActionPath = "target/dev-test-game/next-action.json";
+export const devTestGameNextActionPath = nextActionPath;
 export { devTestGameOpsArtifactsPath, devTestGameReleaseReadinessPath };
 export const devTestGameLiveProofCommand =
   devTestGameProductionFeatureBrowserProofCommand;
@@ -234,7 +243,7 @@ export function buildDevTestGameNextAction(
               eventCount: stabilityDrift.events.length,
               buildSlice:
                 "Stabilize the critical host-confirm browser interaction before expanding the production-facing seeded proof spine.",
-              proofTarget: "target/dev-test-game/session.json",
+              proofTarget: devTestGameSessionPath,
             },
           }
       : seedProofLaneCoverageDrift.status === "drifted"
@@ -884,7 +893,7 @@ function assertTerminalBatchGraph(terminalBatchGraph) {
     terminalBatchGraph.nodeId !== "admin-spine-terminal-batches" ||
     terminalBatchGraph.status !== "passed" ||
     terminalBatchGraph.proofTarget !==
-      "target/dev-test-game/admin-spine-terminal-batches.json" ||
+      adminSpineTerminalBatchProofPath ||
     terminalBatchGraph.roleUrl !==
       "/admin/audit/local-admin-spine?game=<seeded-game>" ||
     !Number.isInteger(terminalBatchGraph.batchCount) ||
@@ -1649,7 +1658,7 @@ function hostedIdentitySequenceDeferralFor(
       : devTestGameLiveProofCommand,
     nextLocalProofTarget: readyForHostedIdentity
       ? devTestGameNextActionPath
-      : "target/dev-test-game/proof-run.json",
+      : devTestGameProofRunPath,
     roleUrl: selectedUnproven.spineTarget?.roleUrl ?? "",
     sequenceTransition: {
       status: readyForHostedIdentity ? "ready" : "blocked",
@@ -1684,7 +1693,7 @@ function assertHostedIdentitySequenceDeferral(deferral) {
     !deferral.deferredRoleUrl.includes("?game=<seeded-game>") ||
     ![devTestGameLiveProofCommand, devTestGameHostedIdentitySequencePromotionCommand]
       .includes(deferral.nextLocalCommand) ||
-    ![devTestGameNextActionPath, "target/dev-test-game/proof-run.json"].includes(
+    ![devTestGameNextActionPath, devTestGameProofRunPath].includes(
       deferral.nextLocalProofTarget,
     ) ||
     typeof deferral.roleUrl !== "string" ||
@@ -1716,7 +1725,7 @@ function assertHostedIdentitySequenceDeferral(deferral) {
   if (
     deferral.localCapabilityConfidence.status !== "passed" &&
     (deferral.nextLocalCommand !== devTestGameLiveProofCommand ||
-      deferral.nextLocalProofTarget !== "target/dev-test-game/proof-run.json" ||
+      deferral.nextLocalProofTarget !== devTestGameProofRunPath ||
       deferral.sequenceTransition.status !== "blocked")
   ) {
     throw new Error(
@@ -2216,8 +2225,8 @@ function developmentSpineArtifactPriority(artifact) {
 
 const devSpineArtifactPriorities = new Map(
   [
-    ["proof-run", "target/dev-test-game/proof-run.json"],
-    ["session", "target/dev-test-game/session.json"],
+    ["proof-run", devTestGameProofRunPath],
+    ["session", devTestGameSessionPath],
     ["core-loop", devTestGameCoreLoopAdminProofPath],
     ["hardening", devTestGameHardeningAdminProofPath],
     ["identity-adapter", "target/auth-invite-role-proof/invite-role-proof.json"],
@@ -2238,11 +2247,11 @@ const devSpineArtifactPriorities = new Map(
     ["hosted-evidence-lane-demo", devTestGameHostedEvidenceLaneDemoProofPath],
     ["hosted-evidence-lane", devTestGameHostedEvidenceLanePath],
     ["release", "target/dev-test-game/release-admin-proof.json"],
-    ["admin-spine", "target/dev-test-game/admin-spine-proof.json"],
+    ["admin-spine", adminSpineProofPath],
     ["admin-spine-admin", devTestGameAdminSpineAdminProofPath],
-    ["proof-graph", "target/dev-test-game/proof-graph.json"],
-    ["proof-graph-admin", "target/dev-test-game/proof-graph-admin-proof.json"],
-    ["spine-manifest", "target/dev-test-game/spine-manifest.json"],
+    ["proof-graph", devTestGameProofGraphPath],
+    ["proof-graph-admin", devTestGameProofGraphAdminProofPath],
+    ["spine-manifest", spineManifestPath],
     ["spine-manifest-admin", devTestGameSpineManifestAdminProofPath],
     ...hostedAdminHandoffProofArtifactCases.map((artifactCase) => [
       artifactCase.refreshId,
@@ -2264,9 +2273,9 @@ const terminalArtifactIds = new Set([
 ]);
 const terminalArtifactPaths = new Set([
   devTestGameNextActionPath,
-  "target/dev-test-game/next-action-admin-proof.json",
-  "target/dev-test-game/proof-graph.json",
-  "target/dev-test-game/proof-graph-admin-proof.json",
+  nextActionAdminProofPath,
+  devTestGameProofGraphPath,
+  devTestGameProofGraphAdminProofPath,
 ]);
 
 const replacementRaceReloadCellIds = Object.freeze([
