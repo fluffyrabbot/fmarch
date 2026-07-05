@@ -26,9 +26,11 @@ import {
   runAdminAuditProof,
 } from "./dev_test_game_admin_audit_proof_helper.mjs";
 import {
-  assertAdminRoleSurfaceHandoffPath,
   buildAdminAuditHandoffPath,
 } from "./dev_test_game_admin_audit_handoff_path.mjs";
+import {
+  assertGeneratedAdminProofHandoffPath,
+} from "./dev_test_game_admin_audit_handoff_contract.mjs";
 
 const hostedMatrixPath = path.resolve(
   repoRoot,
@@ -457,25 +459,9 @@ export function assertHostedConcurrentRaceMatrixAdminProof(evidence) {
       }
     }
   }
-  const expectedHandoffPath = evidence.generatedFrom?.handoffPath;
-  assertAdminRoleSurfaceHandoffPath({
-    adminRoleSurface: evidence.adminRoleSurface,
-    expected: expectedHandoffPath,
+  assertGeneratedAdminProofHandoffPath({
+    proof: evidence,
     proofName: "hosted concurrent race matrix admin proof",
   });
-  const nextActionDestination =
-    evidence.adminRoleSurface?.visibleRelatedDestinations?.find(
-      (destination) =>
-        destination.linkId === "local-next-action" &&
-        destination.auditId === "local-next-action",
-    ) ?? null;
-  if (
-    nextActionDestination === null ||
-    !nextActionDestination.visibleChecks?.includes("next-command")
-  ) {
-    throw new Error(
-      "hosted concurrent race matrix admin proof did not prove next-action round trip",
-    );
-  }
   return evidence;
 }

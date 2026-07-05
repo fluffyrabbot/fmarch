@@ -18,9 +18,11 @@ import {
   runAdminAuditProof,
 } from "./dev_test_game_admin_audit_proof_helper.mjs";
 import {
-  assertAdminRoleSurfaceHandoffPath,
   buildAdminAuditHandoffPath,
 } from "./dev_test_game_admin_audit_handoff_path.mjs";
+import {
+  assertGeneratedAdminProofHandoffPath,
+} from "./dev_test_game_admin_audit_handoff_contract.mjs";
 
 const handoffPath = path.resolve(
   repoRoot,
@@ -330,24 +332,9 @@ export function assertRealHostedObservabilityHandoffAdminProof(evidence) {
     rowName: "related link",
     surfaceKey: "visibleRelatedLinks",
   });
-  assertAdminRoleSurfaceHandoffPath({
-    adminRoleSurface: evidence.adminRoleSurface,
-    expected: evidence.generatedFrom?.handoffPath,
+  assertGeneratedAdminProofHandoffPath({
+    proof: evidence,
     proofName: "real hosted observability handoff admin proof",
   });
-  const nextActionDestination =
-    evidence.adminRoleSurface?.visibleRelatedDestinations?.find(
-      (destination) =>
-        destination.linkId === "local-next-action" &&
-        destination.auditId === "local-next-action",
-    ) ?? null;
-  if (
-    nextActionDestination === null ||
-    !nextActionDestination.visibleChecks?.includes("next-command")
-  ) {
-    throw new Error(
-      "real hosted observability handoff admin proof did not prove next-action round trip",
-    );
-  }
   return evidence;
 }

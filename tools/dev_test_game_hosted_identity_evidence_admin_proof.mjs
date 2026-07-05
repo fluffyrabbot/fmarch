@@ -21,9 +21,11 @@ import {
   runAdminAuditProof,
 } from "./dev_test_game_admin_audit_proof_helper.mjs";
 import {
-  assertAdminRoleSurfaceHandoffPath,
   buildAdminAuditHandoffPath,
 } from "./dev_test_game_admin_audit_handoff_path.mjs";
+import {
+  assertGeneratedAdminProofHandoffPath,
+} from "./dev_test_game_admin_audit_handoff_contract.mjs";
 
 const hostedIdentityEvidencePath = path.resolve(
   repoRoot,
@@ -506,10 +508,8 @@ export function assertHostedIdentityEvidenceAdminProof(evidence) {
       }
     }
   }
-  const expectedHandoffPath = evidence.generatedFrom?.handoffPath;
-  assertAdminRoleSurfaceHandoffPath({
-    adminRoleSurface: evidence.adminRoleSurface,
-    expected: expectedHandoffPath,
+  assertGeneratedAdminProofHandoffPath({
+    proof: evidence,
     proofName: "hosted identity evidence admin proof",
   });
   assertVisibleAdminRoleSurfaceRows({
@@ -594,19 +594,5 @@ export function assertHostedIdentityEvidenceAdminProof(evidence) {
     rowName: "related link",
     surfaceKey: "visibleRelatedLinks",
   });
-  const nextActionDestination =
-    evidence.adminRoleSurface?.visibleRelatedDestinations?.find(
-      (destination) =>
-        destination.linkId === "local-next-action" &&
-        destination.auditId === "local-next-action",
-    ) ?? null;
-  if (
-    nextActionDestination === null ||
-    !nextActionDestination.visibleChecks?.includes("next-command")
-  ) {
-    throw new Error(
-      "hosted identity evidence admin proof did not prove next-action round trip",
-    );
-  }
   return evidence;
 }
