@@ -5,11 +5,16 @@ import {
   devTestGameHostedIdentityEvidencePath,
   hostedIdentityEvidenceBlockedCheckRows,
   hostedIdentityEvidenceBlockedChecks,
+  hostedIdentityEvidenceFamilyProgressionCases,
+  hostedIdentityEvidenceFixturePaths,
   hostedIdentityEvidenceHandoffCase,
   hostedIdentityEvidenceInputIds,
   hostedIdentityEvidenceInputSectionIds,
   hostedIdentityEvidenceInputSectionStatuses,
   hostedIdentityExpectedRoleSurfaceContract,
+  hostedIdentityEvidenceOperatorInvitePartialFixturePath,
+  hostedIdentityEvidenceOperatorPartialFixturePath,
+  hostedIdentityEvidenceOperatorRecoveredFixturePath,
   hostedIdentityEvidencePlaceholderFixturePath,
   hostedIdentityEvidencePlaceholderSchema,
   hostedIdentityEvidenceRedactedPassFixturePath,
@@ -216,5 +221,43 @@ test("hosted identity evidence cases share handoff inputs and blocked groups", (
   assert.equal(
     hostedIdentityEvidenceRedactedPassFixturePath,
     "tools/fixtures/dev_test_game_hosted_identity_evidence.redacted-pass.json",
+  );
+  assert.deepEqual(
+    hostedIdentityEvidenceFixturePaths,
+    [
+      hostedIdentityEvidencePlaceholderFixturePath,
+      hostedIdentityEvidenceRedactedPassFixturePath,
+      hostedIdentityEvidenceOperatorPartialFixturePath,
+      hostedIdentityEvidenceOperatorInvitePartialFixturePath,
+      hostedIdentityEvidenceOperatorRecoveredFixturePath,
+    ],
+  );
+  assert.deepEqual(
+    hostedIdentityEvidenceFamilyProgressionCases.map((progression) => [
+      progression.id,
+      progression.field,
+      progression.checkId,
+      progression.missingInputId,
+      progression.missingFixturePath,
+      progression.recoveredFixturePath,
+    ]),
+    [
+      [
+        "invite-delivery",
+        "inviteDelivery",
+        "invite-delivery-evidence",
+        "redacted-invite-delivery-packet",
+        hostedIdentityEvidenceOperatorInvitePartialFixturePath,
+        hostedIdentityEvidenceOperatorRecoveredFixturePath,
+      ],
+      [
+        "account-recovery",
+        "accountRecovery",
+        "account-recovery-evidence",
+        "redacted-account-recovery-packet",
+        hostedIdentityEvidenceOperatorPartialFixturePath,
+        hostedIdentityEvidenceOperatorRecoveredFixturePath,
+      ],
+    ],
   );
 });

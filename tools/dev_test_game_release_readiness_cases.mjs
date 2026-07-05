@@ -19,11 +19,8 @@ import {
 import {
   devTestGameHostedIdentityEvidenceCommand,
   devTestGameHostedIdentityEvidencePath,
+  hostedIdentityEvidenceFixturePaths,
   hostedIdentityEvidenceHandoffCase,
-  hostedIdentityEvidenceOperatorPartialFixturePath,
-  hostedIdentityEvidenceOperatorRecoveredFixturePath,
-  hostedIdentityEvidencePlaceholderFixturePath,
-  hostedIdentityEvidenceRedactedPassFixturePath,
 } from "./dev_test_game_hosted_identity_evidence_cases.mjs";
 import {
   devTestGameRealHostedObservabilityHandoffCommand,
@@ -344,12 +341,7 @@ export function hostedIdentityEvidencePathKind(rawEvidencePath) {
   if (normalized === "") {
     return "missing";
   }
-  if (
-    normalized === hostedIdentityEvidencePlaceholderFixturePath ||
-    normalized === hostedIdentityEvidenceRedactedPassFixturePath ||
-    normalized === hostedIdentityEvidenceOperatorPartialFixturePath ||
-    normalized === hostedIdentityEvidenceOperatorRecoveredFixturePath
-  ) {
+  if (hostedIdentityEvidenceFixturePaths.includes(normalized)) {
     return "fixture";
   }
   return "operator-provided";

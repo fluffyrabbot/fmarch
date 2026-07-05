@@ -10,8 +10,17 @@ export const hostedIdentityEvidenceRedactedPassFixturePath =
   "tools/fixtures/dev_test_game_hosted_identity_evidence.redacted-pass.json";
 export const hostedIdentityEvidenceOperatorPartialFixturePath =
   "tools/fixtures/dev_test_game_hosted_identity_evidence.operator-partial.json";
+export const hostedIdentityEvidenceOperatorInvitePartialFixturePath =
+  "tools/fixtures/dev_test_game_hosted_identity_evidence.operator-invite-partial.json";
 export const hostedIdentityEvidenceOperatorRecoveredFixturePath =
   "tools/fixtures/dev_test_game_hosted_identity_evidence.operator-recovered.json";
+export const hostedIdentityEvidenceFixturePaths = Object.freeze([
+  hostedIdentityEvidencePlaceholderFixturePath,
+  hostedIdentityEvidenceRedactedPassFixturePath,
+  hostedIdentityEvidenceOperatorPartialFixturePath,
+  hostedIdentityEvidenceOperatorInvitePartialFixturePath,
+  hostedIdentityEvidenceOperatorRecoveredFixturePath,
+]);
 export const devTestGameHostedIdentityPartialEvidencePath =
   "target/dev-test-game/hosted-identity-evidence-partial.json";
 export const devTestGameHostedIdentityPartialAdminProofPath =
@@ -207,6 +216,51 @@ export const hostedIdentityEvidenceOperatorProofDrilldowns = Object.freeze([
     firstMissingCheckId: "account-recovery-evidence",
     proofBoundary:
       "Fixture-backed local admin browser proof for the partial operator hosted identity packet. It proves the admin handoff can surface redacted-account-recovery-packet as the first actionable missing artifact; it does not prove hosted account recovery, release readiness, or production readiness.",
+  }),
+]);
+
+export const hostedIdentityEvidenceFamilyProgressionCases = Object.freeze([
+  Object.freeze({
+    id: "invite-delivery",
+    field: "inviteDelivery",
+    checkId: "invite-delivery-evidence",
+    missingInputId: "redacted-invite-delivery-packet",
+    missingFixturePath: hostedIdentityEvidenceOperatorInvitePartialFixturePath,
+    recoveredFixturePath: hostedIdentityEvidenceOperatorRecoveredFixturePath,
+    expectedMissingInputs: Object.freeze([
+      "status-provided",
+      "deliveryChannels",
+      "revocationCovered",
+      "redactedEvidenceRefs",
+    ]),
+    recoveredProvidedInputIds: Object.freeze([
+      "deliveryChannels",
+      "revocationCovered",
+    ]),
+    recoveredRedactedEvidenceRefIds: Object.freeze([
+      "invite-delivery-redacted-log",
+    ]),
+  }),
+  Object.freeze({
+    id: "account-recovery",
+    field: "accountRecovery",
+    checkId: "account-recovery-evidence",
+    missingInputId: "redacted-account-recovery-packet",
+    missingFixturePath: hostedIdentityEvidenceOperatorPartialFixturePath,
+    recoveredFixturePath: hostedIdentityEvidenceOperatorRecoveredFixturePath,
+    expectedMissingInputs: Object.freeze([
+      "status-provided",
+      "recoveryMethods",
+      "recoveredSessionsPreserveRoleSurfaceAdapter",
+      "redactedEvidenceRefs",
+    ]),
+    recoveredProvidedInputIds: Object.freeze([
+      "recoveryMethods",
+      "recoveredSessionsPreserveRoleSurfaceAdapter",
+    ]),
+    recoveredRedactedEvidenceRefIds: Object.freeze([
+      "account-recovery-redacted-log",
+    ]),
   }),
 ]);
 

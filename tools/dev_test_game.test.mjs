@@ -217,9 +217,12 @@ import {
   devTestGameHostedIdentityPartialAdminProofPath,
   devTestGameHostedIdentityPartialEvidencePath,
   hostedIdentityEvidenceBlockedChecks,
+  hostedIdentityEvidenceFamilyProgressionCases,
+  hostedIdentityEvidenceFixturePaths,
   hostedIdentityEvidenceHandoffCase,
   hostedIdentityEvidenceInputIds,
   hostedIdentityEvidenceInputSectionStatuses,
+  hostedIdentityEvidenceOperatorInvitePartialFixturePath,
   hostedIdentityEvidenceOperatorProofDrilldowns,
   hostedIdentityEvidenceOperatorPartialFixturePath,
   hostedIdentityEvidenceOperatorRecoveredFixturePath,
@@ -1192,139 +1195,121 @@ test("hosted identity evidence lane records blocked and passed handoffs", async 
     [],
   );
 
-  const operatorPartialSource = JSON.parse(
-    await readFile(hostedIdentityEvidenceOperatorPartialFixturePath, "utf8"),
-  );
-  assert.deepEqual(
-    validateHostedIdentityEvidencePlaceholder(operatorPartialSource),
-    [],
-  );
-  const operatorRecoveredSource = JSON.parse(
-    await readFile(hostedIdentityEvidenceOperatorRecoveredFixturePath, "utf8"),
-  );
-  assert.deepEqual(
-    validateHostedIdentityEvidencePlaceholder(operatorRecoveredSource),
-    [],
-  );
-  const operatorCases = [];
-  for (const [fixturePath, generatedAt] of [
-    [hostedIdentityEvidenceOperatorPartialFixturePath, "2026-07-01T00:00:00.875Z"],
-    [
-      hostedIdentityEvidenceOperatorRecoveredFixturePath,
-      "2026-07-01T00:00:00.900Z",
-    ],
+  assert(hostedIdentityEvidenceFixturePaths.includes(
+    hostedIdentityEvidenceOperatorPartialFixturePath,
+  ));
+  assert(hostedIdentityEvidenceFixturePaths.includes(
+    hostedIdentityEvidenceOperatorInvitePartialFixturePath,
+  ));
+  assert(hostedIdentityEvidenceFixturePaths.includes(
+    hostedIdentityEvidenceOperatorRecoveredFixturePath,
+  ));
+  for (const fixturePath of hostedIdentityEvidenceFixturePaths) {
+    assert.equal(hostedIdentityEvidencePathKind(fixturePath), "fixture");
+  }
+  for (const fixturePath of [
+    ...new Set(
+      hostedIdentityEvidenceFamilyProgressionCases.flatMap((progression) => [
+        progression.missingFixturePath,
+        progression.recoveredFixturePath,
+      ]),
+    ),
   ]) {
+    const source = JSON.parse(await readFile(fixturePath, "utf8"));
+    assert.deepEqual(validateHostedIdentityEvidencePlaceholder(source), []);
+  }
+  const operatorEvidenceByFixturePath = new Map();
+  for (const [index, fixturePath] of [
+    ...new Set(
+      hostedIdentityEvidenceFamilyProgressionCases.flatMap((progression) => [
+        progression.missingFixturePath,
+        progression.recoveredFixturePath,
+      ]),
+    ),
+  ].entries()) {
     const evidence = await buildDevTestGameHostedIdentityEvidence({
       env: {
         FMARCH_HOSTED_IDENTITY_EVIDENCE_PATH: fixturePath,
       },
-      generatedAt,
+      generatedAt: `2026-07-01T00:00:00.${875 + index}Z`,
     });
     assertDevTestGameHostedIdentityEvidence(evidence);
-    operatorCases.push({ fixturePath, evidence });
+    operatorEvidenceByFixturePath.set(fixturePath, evidence);
   }
-  const operatorPartial = operatorCases.find(
-    (item) => item.fixturePath === hostedIdentityEvidenceOperatorPartialFixturePath,
-  ).evidence;
-  const operatorRecovered = operatorCases.find(
-    (item) =>
-      item.fixturePath === hostedIdentityEvidenceOperatorRecoveredFixturePath,
-  ).evidence;
-  assertDevTestGameHostedIdentityEvidence(operatorPartial);
-  assert.equal(operatorPartial.status, "blocked");
-  assert.equal(operatorPartial.target.rawEvidenceStatus, "passed");
-  assert.equal(
-    hostedIdentityEvidencePathKind(hostedIdentityEvidenceOperatorPartialFixturePath),
-    "fixture",
-  );
-  assert.equal(operatorPartial.target.roleSurfaceContractDiff.status, "passed");
-  assert.equal(
-    operatorPartial.target.identityAdapterContractComparison.status,
-    "passed",
-  );
-  assert.deepEqual(
-    operatorPartial.hostedHandoffChecklist.blockedCheckIds,
-    ["account-recovery-evidence"],
-  );
-  assert.deepEqual(
-    operatorPartial.hostedHandoffChecklist.blockedReceipt
-      .firstMissingOperatorArtifact,
-    {
-      inputId: "redacted-account-recovery-packet",
-      checkId: "account-recovery-evidence",
-      sectionId: "identity-operations",
-      sectionLabel: "Identity operations",
-      requiredEvidence:
-        "Redacted hosted account recovery intake packet where recovered sessions keep the same role-surface architecture.",
-      purpose: "Redacted hosted account recovery packet.",
-      proofTarget: "target/dev-test-game/hosted-identity-evidence.json",
-      roleSurfaceDrilldown: {
-        localCapabilityAuditId: "local-identity-adapter",
-        localCapabilityRoleUrl:
-          "/admin/audit/local-identity-adapter?game=<seeded-game>",
-        handoffAuditId: "local-hosted-identity-evidence",
-        handoffRoleUrl:
-          "/admin/audit/local-hosted-identity-evidence?game=<seeded-game>",
-        proofGraphNodeId: "admin-proof:hosted-identity-evidence",
-        productionFeatureGraphNodeId: "production-feature:identity-adapter",
-        proofGraphEvidencePath: "target/dev-test-game/proof-graph.json",
-      },
-    },
-  );
-  assert.deepEqual(
-    operatorPartial.target.redactedIntakePacket.sections
-      .filter((section) => section.status !== "provided")
-      .map((section) => [section.id, section.missingInputs]),
-    [
+  for (const progression of hostedIdentityEvidenceFamilyProgressionCases) {
+    const operatorMissing = operatorEvidenceByFixturePath.get(
+      progression.missingFixturePath,
+    );
+    const operatorRecovered = operatorEvidenceByFixturePath.get(
+      progression.recoveredFixturePath,
+    );
+    assert.equal(operatorMissing.status, "blocked");
+    assert.equal(operatorMissing.target.rawEvidenceStatus, "passed");
+    assert.equal(operatorMissing.target.roleSurfaceContractDiff.status, "passed");
+    assert.equal(
+      operatorMissing.target.identityAdapterContractComparison.status,
+      "passed",
+    );
+    assert.deepEqual(operatorMissing.hostedHandoffChecklist.blockedCheckIds, [
+      progression.checkId,
+    ]);
+    assert.equal(
+      operatorMissing.hostedHandoffChecklist.blockedReceipt
+        .firstMissingOperatorArtifact.inputId,
+      progression.missingInputId,
+    );
+    assert.equal(
+      operatorMissing.hostedHandoffChecklist.blockedReceipt
+        .firstMissingOperatorArtifact.checkId,
+      progression.checkId,
+    );
+    assert.equal(
+      operatorMissing.hostedHandoffChecklist.blockedReceipt
+        .firstMissingOperatorArtifact.roleSurfaceDrilldown
+        .proofGraphEvidencePath,
+      "target/dev-test-game/proof-graph.json",
+    );
+    assert.deepEqual(
+      operatorMissing.target.redactedIntakePacket.sections
+        .filter((section) => section.status !== "provided")
+        .map((section) => [section.id, section.missingInputs]),
+      [[progression.field, [...progression.expectedMissingInputs]]],
+    );
+    assert.equal(operatorRecovered.status, "passed");
+    assert.equal(operatorRecovered.target.rawEvidenceStatus, "passed");
+    assert.deepEqual(operatorRecovered.hostedHandoffChecklist.blockedCheckIds, []);
+    assert.equal(operatorRecovered.hostedHandoffChecklist.blockedReceipt, undefined);
+    assert.deepEqual(
+      operatorRecovered.target.redactedIntakePacket.sections
+        .filter((section) => section.id === progression.field)
+        .map((section) => [
+          section.status,
+          section.providedInputIds,
+          section.missingInputs,
+          section.redactedEvidenceRefs.map((ref) => ref.id),
+        ]),
       [
-        "accountRecovery",
         [
-          "status-provided",
-          "recoveryMethods",
-          "recoveredSessionsPreserveRoleSurfaceAdapter",
-          "redactedEvidenceRefs",
+          "provided",
+          [...progression.recoveredProvidedInputIds],
+          [],
+          [...progression.recoveredRedactedEvidenceRefIds],
         ],
       ],
-    ],
-  );
-  assert.equal(operatorRecovered.status, "passed");
-  assert.equal(operatorRecovered.target.rawEvidenceStatus, "passed");
-  assert.equal(
-    hostedIdentityEvidencePathKind(hostedIdentityEvidenceOperatorRecoveredFixturePath),
-    "fixture",
-  );
-  assert.deepEqual(operatorRecovered.hostedHandoffChecklist.blockedCheckIds, []);
-  assert.equal(operatorRecovered.hostedHandoffChecklist.blockedReceipt, undefined);
-  assert.deepEqual(
-    operatorRecovered.target.redactedIntakePacket.sections
-      .filter((section) => section.id === "accountRecovery")
-      .map((section) => [
-        section.status,
-        section.providedInputIds,
-        section.missingInputs,
-        section.redactedEvidenceRefs.map((ref) => ref.id),
-      ]),
-    [
-      [
-        "provided",
-        ["recoveryMethods", "recoveredSessionsPreserveRoleSurfaceAdapter"],
-        [],
-        ["account-recovery-redacted-log"],
-      ],
-    ],
-  );
-  assert.deepEqual(
-    operatorPartial.checks
-      .filter(
-        (partialCheck) =>
-          partialCheck.status !==
-          operatorRecovered.checks.find(
-            (recoveredCheck) => recoveredCheck.id === partialCheck.id,
-          )?.status,
-      )
-      .map((check) => check.id),
-    ["account-recovery-evidence"],
-  );
+    );
+    assert.deepEqual(
+      operatorMissing.checks
+        .filter(
+          (partialCheck) =>
+            partialCheck.status !==
+            operatorRecovered.checks.find(
+              (recoveredCheck) => recoveredCheck.id === partialCheck.id,
+            )?.status,
+        )
+        .map((check) => check.id),
+      [progression.checkId],
+    );
+  }
 
   const rawPath = "target/dev-test-game/hosted-identity-evidence-raw.test.json";
   await writeFile(
