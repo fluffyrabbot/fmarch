@@ -2197,6 +2197,9 @@ export function normalizeLocalNextActionAudit(nextAction, { game, proofGraph = n
   const releaseReadinessTrace = normalizeNextActionReleaseReadinessTrace(
     nextAction.releaseReadinessTrace,
   );
+  const selectedReleaseReadinessCandidate =
+    releaseReadinessTrace.candidates.find((candidate) => candidate.selected) ??
+    null;
   const localReadinessDependencyTrace =
     normalizeNextActionLocalReadinessDependencyTrace(
       nextAction.localReadinessDependencyTrace,
@@ -2287,6 +2290,22 @@ export function normalizeLocalNextActionAudit(nextAction, { game, proofGraph = n
             status: String(unproven.status ?? "unknown"),
           }),
         ]),
+    ...(selectedReleaseReadinessCandidate?.id === "hosted-production-identity"
+      ? [
+          Object.freeze({
+            id: "selected-next-command",
+            status: command,
+          }),
+          Object.freeze({
+            id: "selected-proof-target",
+            status: selectedReleaseReadinessCandidate.proofTarget,
+          }),
+          Object.freeze({
+            id: "selected-proof-boundary",
+            status: selectedReleaseReadinessCandidate.proofBoundary,
+          }),
+        ]
+      : []),
     ...normalizeLocalNextActionSelectedProofGraphCheckRows({
       selectedProofGraphNode,
       selectedProofGraphNodeStatus,
@@ -2652,6 +2671,9 @@ export function normalizeLocalNextActionAudit(nextAction, { game, proofGraph = n
       selectedUnprovenId: String(unproven?.id ?? ""),
       selectedBuildSlice: String(unproven?.buildSlice ?? ""),
       selectedProofTarget: String(unproven?.proofTarget ?? ""),
+      selectedProofBoundary: String(
+        selectedReleaseReadinessCandidate?.proofBoundary ?? "",
+      ),
       selectedHostedEvidenceMode: String(unproven?.hostedEvidenceMode ?? ""),
       selectedRealHostedEvidenceStatus: String(
         unproven?.realHostedEvidenceStatus ?? "",
@@ -3732,6 +3754,7 @@ function normalizeNextActionReleaseReadinessTrace(releaseReadinessTrace) {
         command: String(candidate.command ?? ""),
         buildSlice: String(candidate.buildSlice ?? ""),
         proofTarget: String(candidate.proofTarget ?? ""),
+        proofBoundary: String(candidate.proofBoundary ?? ""),
         roleUrl: String(candidate.roleUrl ?? ""),
         proofGraphNodeId: String(candidate.proofGraphNodeId ?? ""),
         productionFeatureSpineTarget: normalizeNextActionFeatureSpineDeclaration(

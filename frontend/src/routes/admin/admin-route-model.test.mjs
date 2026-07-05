@@ -197,6 +197,12 @@ const HOSTED_EVIDENCE_LANE_PROOF_TARGET =
   "target/dev-test-game/hosted-evidence-lane.json";
 const HOSTED_IDENTITY_EVIDENCE_PROOF_TARGET =
   "target/dev-test-game/hosted-identity-evidence.json";
+const HOSTED_IDENTITY_OPERATOR_COMMAND =
+  "DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch npm run test:dev-test-game-identity:operator";
+const HOSTED_IDENTITY_OPERATOR_PROOF_TARGET =
+  "target/dev-test-game/hosted-identity-evidence-operator-admin-proof.json";
+const HOSTED_IDENTITY_OPERATOR_PROOF_BOUNDARY =
+  "Opt-in local operator predicate proof. The command proves that a non-fixture hosted identity packet path can clear the hosted-production-identity readiness item over the existing role-surface adapter; it does not prove live hosted account/session/invite traffic, release readiness, or production readiness.";
 const HOSTED_EVIDENCE_LANE_DEMO_PROOF_TARGET =
   "target/dev-test-game/hosted-evidence-lane-demo-proof.json";
 
@@ -2175,6 +2181,7 @@ test("admin route data exposes local next action as a native audit row", async (
     selectedBuildSlice:
       "Create the first hosted-like concurrent race matrix proof request from the promoted local race baseline.",
     selectedProofTarget: HOSTED_MATRIX_PROOF_TARGET,
+    selectedProofBoundary: "",
     selectedHostedEvidenceMode: "",
     selectedRealHostedEvidenceStatus: "",
     selectedRealHostedEvidenceCommand: "",
@@ -2243,6 +2250,7 @@ test("admin route data exposes local next action as a native audit row", async (
           buildSlice:
             "Create the first hosted-like concurrent race matrix proof request from the promoted local race baseline.",
           proofTarget: HOSTED_MATRIX_PROOF_TARGET,
+          proofBoundary: "",
           roleUrl:
             localAdminAuditRoleUrl(localAdminAuditIds.hostedConcurrentRaceMatrix),
           proofGraphNodeId: "admin-proof:hosted-concurrent-race-matrix",
@@ -2541,6 +2549,75 @@ test("admin local next action detail data carries hosted identity progression la
   assert.deepEqual(
     data.audit.hostedHandoffChecklist.operatorEvidenceGate,
     hostedIdentityEvidenceOperatorGate,
+  );
+});
+
+test("admin local next action detail data carries hosted identity operator recommendation", async () => {
+  const unproven = {
+    id: "hosted-production-identity",
+    status: "unproven",
+    requiredEvidence: "Hosted account lifecycle",
+    buildSlice:
+      "Run the opt-in hosted identity operator spine; it attaches the target-local redacted operator packet to the admin proof and refreshes readiness through the operator predicate without claiming live hosted traffic, release readiness, or production readiness.",
+    proofTarget: HOSTED_IDENTITY_OPERATOR_PROOF_TARGET,
+    proofBoundary: HOSTED_IDENTITY_OPERATOR_PROOF_BOUNDARY,
+    roleUrl: localAdminAuditRoleUrl(localAdminAuditIds.hostedIdentityEvidence),
+    proofGraphNodeId: "admin-proof:hosted-identity-evidence",
+    actionStatus: "ready",
+    productionFeatureSpineTarget: productionFeatureSpineTargetFixture(),
+    spineDrilldown: featureSpineDrilldownFixture(),
+    spineTarget: featureSpineTargetFixture(),
+    hostedHandoffChecklist: hostedIdentityEvidenceHandoffCase(),
+  };
+  const data = await buildAdminAuditDetailData({
+    audit: localAdminAuditIds.nextAction,
+    principalUserId: "admin_a",
+    capabilities: [{ kind: "GlobalAdmin" }],
+    nextAction: nextActionFixture({
+      command: HOSTED_IDENTITY_OPERATOR_COMMAND,
+      unproven,
+    }),
+  });
+
+  assert.equal(data.status, "available");
+  assert.equal(data.audit.id, localAdminAuditIds.nextAction);
+  assert.equal(
+    data.audit.status,
+    `ready: ${HOSTED_IDENTITY_OPERATOR_COMMAND}`,
+  );
+  assert.deepEqual(
+    data.audit.checks
+      .filter((check) =>
+        [
+          "selected-next-command",
+          "selected-proof-target",
+          "selected-proof-boundary",
+          "hosted-production-identity",
+        ].includes(check.id),
+      )
+      .map((check) => [check.id, check.status]),
+    [
+      ["hosted-production-identity", "unproven"],
+      ["selected-next-command", HOSTED_IDENTITY_OPERATOR_COMMAND],
+      ["selected-proof-target", HOSTED_IDENTITY_OPERATOR_PROOF_TARGET],
+      ["selected-proof-boundary", HOSTED_IDENTITY_OPERATOR_PROOF_BOUNDARY],
+    ],
+  );
+  assert.equal(
+    data.audit.artifactSummary.command,
+    HOSTED_IDENTITY_OPERATOR_COMMAND,
+  );
+  assert.equal(
+    data.audit.artifactSummary.selectedProofTarget,
+    HOSTED_IDENTITY_OPERATOR_PROOF_TARGET,
+  );
+  assert.equal(
+    data.audit.artifactSummary.selectedProofBoundary,
+    HOSTED_IDENTITY_OPERATOR_PROOF_BOUNDARY,
+  );
+  assert.equal(
+    data.audit.artifactSummary.selectedUnprovenId,
+    "hosted-production-identity",
   );
 });
 
@@ -6365,6 +6442,7 @@ function releaseReadinessTraceFixture({ unproven, command }) {
         command,
         buildSlice: unproven.buildSlice,
         proofTarget: unproven.proofTarget,
+        proofBoundary: unproven.proofBoundary ?? "",
         roleUrl: unproven.roleUrl,
         proofGraphNodeId: unproven.proofGraphNodeId,
         actionStatus: unproven.actionStatus ?? "ready",

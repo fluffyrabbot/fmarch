@@ -206,6 +206,8 @@ export function nextActionAdminProofCase() {
         candidateIds: source.nextAction.releaseReadinessTrace.candidates.map(
           (candidate) => candidate.id,
         ),
+        selectedCandidate:
+          selectedReleaseReadinessCandidateForNextAction(source.nextAction),
       },
       localReadinessDependencyTrace: {
         strategy: source.nextAction.localReadinessDependencyTrace.strategy,
@@ -362,6 +364,32 @@ export function assertNextActionAdminProof(evidence) {
     !Array.isArray(evidence.generatedFrom.releaseReadinessTrace.candidateIds)
   ) {
     throw new Error("next-action admin proof is missing release-readiness trace evidence");
+  }
+  const selectedCandidate =
+    evidence.generatedFrom.releaseReadinessTrace.selectedCandidate;
+  if (
+    selectedCandidate?.id === "hosted-production-identity" &&
+    evidence.generatedFrom?.command?.includes(
+      "test:dev-test-game-identity:operator",
+    )
+  ) {
+    const statuses = evidence.adminRoleSurface?.visibleCheckStatuses ?? {};
+    if (
+      !String(statuses["selected-next-command"] ?? "").includes(
+        evidence.generatedFrom.command,
+      ) ||
+      !String(statuses["selected-proof-target"] ?? "").includes(
+        selectedCandidate.proofTarget,
+      ) ||
+      !String(statuses["selected-proof-boundary"] ?? "").includes(
+        selectedCandidate.proofBoundary,
+      ) ||
+      evidence.generatedFrom.unprovenId !== "hosted-production-identity"
+    ) {
+      throw new Error(
+        "next-action admin proof missing operator-aware hosted identity recommendation rows",
+      );
+    }
   }
   if (
     evidence.generatedFrom?.localReadinessDependencyTrace?.strategy !==
@@ -852,6 +880,13 @@ function requiredChecksForNextAction(nextAction) {
       "selected-proof-graph-destination",
       "release-readiness-selection-trace",
     );
+    if (selectedHostedIdentityOperatorCandidate(nextAction) !== null) {
+      checks.push(
+        "selected-next-command",
+        "selected-proof-target",
+        "selected-proof-boundary",
+      );
+    }
     if (nextAction.nextAction.unproven.spineTarget !== undefined) {
       checks.push("selected-feature-spine-declaration");
       checks.push("selected-spine-target");
@@ -1127,11 +1162,40 @@ function requiredCheckStatusesForNextAction(nextAction, proofGraph) {
     nextAction,
     proofGraph,
   });
-  return selectedNodeStatus === ""
-    ? {}
-    : {
-        "selected-proof-graph-node": selectedNodeStatus,
-      };
+  const selectedOperatorCandidate =
+    selectedHostedIdentityOperatorCandidate(nextAction);
+  return {
+    ...(selectedNodeStatus === ""
+      ? {}
+      : { "selected-proof-graph-node": selectedNodeStatus }),
+    ...(selectedOperatorCandidate === null
+      ? {}
+      : {
+          "selected-next-command": nextAction.nextAction.command,
+          "selected-proof-target": selectedOperatorCandidate.proofTarget,
+          "selected-proof-boundary": selectedOperatorCandidate.proofBoundary,
+        }),
+  };
+}
+
+function selectedReleaseReadinessCandidateForNextAction(nextAction) {
+  const candidates = nextAction.releaseReadinessTrace?.candidates;
+  return (Array.isArray(candidates) ? candidates : []).find(
+    (candidate) => candidate?.selected === true,
+  ) ?? null;
+}
+
+function selectedHostedIdentityOperatorCandidate(nextAction) {
+  const candidate = selectedReleaseReadinessCandidateForNextAction(nextAction);
+  if (
+    nextAction.nextAction?.unproven?.id !== "hosted-production-identity" ||
+    candidate?.id !== "hosted-production-identity" ||
+    typeof nextAction.nextAction?.command !== "string" ||
+    !nextAction.nextAction.command.includes("test:dev-test-game-identity:operator")
+  ) {
+    return null;
+  }
+  return candidate;
 }
 
 function relatedHandoffsForNextAction({ nextAction, proofGraph, hostedMatrix }) {
