@@ -65,6 +65,7 @@ import {
   assertLivePrivateChannelSubmitPostAckOutcome,
 } from "./dev_test_game_core_loop_private_receipt_scenarios.mjs";
 import {
+  buildSetupCommandEvidence,
   runSeededSetupBootstrapScenario,
   seedPreSetupCommandPlanForGame,
   seedSetupCommandPlanForGame,
@@ -1147,6 +1148,7 @@ async function verifySessionCard(card) {
     hostSetup = {
       ...hostSetup,
       setupBootstrap: card.setupBootstrap ?? null,
+      setupCommandEvidence: card.setupBootstrap?.setupCommandEvidence ?? null,
     };
     concurrentActionPage = await roleEntries.actionPlayer.context.newPage();
     privateChannelActionPage = await roleEntries.actionPlayer.context.newPage();
@@ -1335,6 +1337,7 @@ async function verifyHostSetupOnly(card) {
     const hostSetupWithBootstrap = {
       ...hostSetup,
       setupBootstrap: card.setupBootstrap ?? null,
+      setupCommandEvidence: card.setupBootstrap?.setupCommandEvidence ?? null,
     };
     mediaResponseGuard.assertNoUnexpectedMedia404({
       phase: "dev-test-game-host-setup-browser-proof",
@@ -1703,6 +1706,13 @@ async function verifyDisposableHostSetupRosterRoleCommand({
         assignSlot,
         assignRole,
       },
+      setupCommandEvidence: buildSetupCommandEvidence({
+        addSlot,
+        assignSlot,
+        assignRole,
+        setPostPolicy: null,
+        startGame: null,
+      }),
     };
   } finally {
     await entry.context.close().catch(() => {});

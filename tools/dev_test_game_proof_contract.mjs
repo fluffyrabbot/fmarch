@@ -10,6 +10,9 @@ import {
   devTestGameSessionPath,
 } from "./dev_test_game_spine_artifact_paths.mjs";
 import {
+  hasCompleteSetupCommandEvidence,
+} from "./dev_test_game_setup_bootstrap_scenario.mjs";
+import {
   crossRoleRaceLaneIds,
 } from "./dev_test_game_cross_role_race_scenarios.mjs";
 import {
@@ -298,6 +301,7 @@ export function buildDevTestGameProofRun(session, options = {}) {
       roleKeys: verification.hostSetup?.roleKeys ?? null,
       mainPolicyText: verification.hostSetup?.mainPolicyText ?? null,
       setupBootstrap: verification.hostSetup?.setupBootstrap ?? null,
+      setupCommandEvidence: verification.hostSetup?.setupCommandEvidence ?? null,
       policyCommand: verification.hostSetup?.policyCommand ?? null,
       setupMutationCommand: verification.hostSetup?.setupMutationCommand ?? null,
       passed:
@@ -332,6 +336,13 @@ export function buildDevTestGameProofRun(session, options = {}) {
         ) === true &&
         verification.hostSetup?.setupBootstrap?.policyCommand?.status ===
           "passed" &&
+        hasCompleteSetupCommandEvidence(
+          verification.hostSetup?.setupCommandEvidence,
+        ) &&
+        verification.hostSetup?.setupCommandEvidence?.startGame?.command?.phase ===
+          "D01" &&
+        verification.hostSetup?.setupCommandEvidence?.setPostPolicy?.command
+          ?.allow_media_only === false &&
         verification.hostSetup?.setupBootstrap?.roleAssignments?.["slot_4"] ===
           "mafia_goon" &&
         verification.hostSetup?.setupBootstrap?.roleAssignments?.["slot-7"] ===

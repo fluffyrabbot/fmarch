@@ -5,6 +5,9 @@ import {
   assertLiveStackReadiness,
   buildLiveStackReadiness,
 } from "./live_stack_readiness_contract.mjs";
+import {
+  setupCommandEvidenceKeys,
+} from "./dev_test_game_setup_bootstrap_scenario.mjs";
 
 export const LIVE_STACK_PROOF_SUMMARY_VERSION = 1;
 
@@ -27,6 +30,7 @@ export function buildLiveStackProofSummary(
   const readiness = evidence.readiness ?? buildLiveStackReadiness(evidence);
   assertLiveStackReadiness(readiness);
   const hostSetup = evidence.browser?.admin?.hostSetup;
+  const setupCommandEvidence = hostSetup?.setupCommandEvidence ?? {};
   const convergence = evidence.browser?.hostVotecountConvergence;
   const reconnect = evidence.browser?.player?.reconnect;
   const moderator = evidence.browser?.moderator;
@@ -54,7 +58,9 @@ export function buildLiveStackProofSummary(
     },
     hostSetupWorkflow: {
       status: hostSetup?.status ?? "missing",
-      game: commandGame(hostSetup?.commands?.startGame),
+      game: commandGame(
+        setupCommandEvidence.startGame ?? hostSetup?.commands?.startGame,
+      ),
       setupUrl: hostSetup?.setupUrl ?? null,
       hostConsoleUrl: hostSetup?.hostConsoleUrl ?? null,
       slotId: hostSetup?.slotId ?? null,
@@ -66,6 +72,7 @@ export function buildLiveStackProofSummary(
       startedReadinessSummary: hostSetup?.startedReadiness?.summary ?? null,
       hostConsolePhase: hostSetup?.hostConsoleState?.phase?.phase_id ?? null,
       hostConsoleSlot: hostSetup?.hostConsoleState?.slot?.slot_id ?? null,
+      setupCommandEvidence: setupCommandEvidenceSummary(setupCommandEvidence),
       commands: Object.fromEntries(
         Object.entries(hostSetup?.commands ?? {}).map(([id, command]) => [
           id,
@@ -183,7 +190,10 @@ export function assertLiveStackProofSummary(summary) {
       throw new Error(`live-stack summary missing passed check: ${id}`);
     }
   }
-  if (summary.hostSetupWorkflow?.commands?.startGame?.commandKind !== "StartGame") {
+  if (
+    summary.hostSetupWorkflow?.setupCommandEvidence?.startGame?.commandKind !==
+    "StartGame"
+  ) {
     throw new Error("live-stack summary missing host setup StartGame command");
   }
   if (summary.hostSetupWorkflow?.readyReadinessSummary !== "Ready to start") {
@@ -242,7 +252,13 @@ export function markdownLiveStackProofSummary(summary) {
     "| Command | Status | Kind | Stream Seqs | Readiness |",
     "| --- | --- | --- | --- | --- |",
   );
-  for (const [id, command] of Object.entries(summary.hostSetupWorkflow.commands)) {
+  for (const [id, command] of Object.entries(
+    summary.hostSetupWorkflow.setupCommandEvidence,
+  )) {
+    if (command === null) {
+      lines.push(`| ${id} | missing |  |  |  |`);
+      continue;
+    }
     lines.push(
       `| ${id} | ${command.status} | ${command.commandKind} | ${command.streamSeqs.join(", ")} | ${command.readinessSummary ?? ""} |`,
     );
@@ -284,6 +300,22 @@ function hostOpsStatus(moderator) {
 
 function commandGame(command) {
   return command?.command?.game ?? null;
+}
+
+function setupCommandEvidenceSummary(evidence) {
+  return Object.fromEntries(
+    setupCommandEvidenceKeys.map((key) => [
+      key,
+      evidence[key] === undefined || evidence[key] === null
+        ? null
+        : {
+            status: evidence[key].status,
+            commandKind: evidence[key].commandKind,
+            streamSeqs: evidence[key].streamSeqs ?? [],
+            readinessSummary: evidence[key].readinessSummary ?? null,
+          },
+    ]),
+  );
 }
 
 function voteCountForSlot(votecount, slotId) {

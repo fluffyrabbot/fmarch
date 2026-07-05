@@ -10,6 +10,7 @@ import {
   selectGame,
 } from "./dev_test_game.mjs";
 import {
+  buildSetupBootstrapCommandEvidence,
   seedSetupCommandPlanForGame as setupBootstrapCommandPlanForGame,
   seededSetupRoster as setupBootstrapRoster,
 } from "./dev_test_game_setup_bootstrap_scenario.mjs";
@@ -5508,8 +5509,31 @@ test("session card and markdown include role credential URLs and tokens", async 
     commands: [
       {
         status: "ack",
+        commandKind: "AddSlot",
+        command: { game, slot: "slot-7" },
+        streamSeqs: [20],
+        readinessSummary: "Setup still needs attention",
+      },
+      {
+        status: "ack",
+        commandKind: "AssignSlot",
+        command: { game, slot: "slot-7", user: "player-mira" },
+        streamSeqs: [21],
+        readinessSummary: "Setup still needs attention",
+      },
+      {
+        status: "ack",
+        commandKind: "AssignRole",
+        command: { game, slot: "slot-7", role_key: "encryptor" },
+        streamSeqs: [22],
+        readinessSummary: "Ready to start",
+      },
+      {
+        status: "ack",
         commandKind: "StartGame",
         command: { game, phase: "D01" },
+        streamSeqs: [24],
+        readinessSummary: "Started at D01",
       },
     ],
     slotIds: ["slot-2", "slot-3", "slot-7", "slot_4", "slot_5"],
@@ -5527,8 +5551,20 @@ test("session card and markdown include role credential URLs and tokens", async 
       channelId: "main",
       allowMediaOnlySequence: [true, false],
       finalPolicyText: "Media-only posts are disabled.",
+      restored: {
+        status: "ack",
+        commandKind: "SetPostPolicy",
+        command: { game, channel_id: "main", allow_media_only: false },
+        streamSeqs: [23],
+        readinessSummary: "Ready to start",
+      },
     },
   };
+  setupBootstrapFixture.setupCommandEvidence =
+    buildSetupBootstrapCommandEvidence({
+      commands: setupBootstrapFixture.commands,
+      policyCommand: setupBootstrapFixture.policyCommand,
+    });
   const card = buildSessionCard({
     gameName: "card",
     game,
@@ -5646,6 +5682,7 @@ test("session card and markdown include role credential URLs and tokens", async 
       roleKeys: ["mafia_goon", "vanilla_townie"],
       mainPolicyText: "Media-only posts are disabled.",
       setupBootstrap: setupBootstrapFixture,
+      setupCommandEvidence: setupBootstrapFixture.setupCommandEvidence,
       policyCommand: {
         status: "passed",
         actionId: "set-post-policy",
@@ -12713,6 +12750,10 @@ test("session card and markdown include role credential URLs and tokens", async 
       hostSetupCheck.roleUrl,
       hostSetupCheck.recoveryCommand,
       hostSetupCheck.readyCheckIds.includes("start-phase"),
+      hostSetupReadiness.localDevelopmentSpine.evidence.hostSetupProof
+        .setupCommandEvidence.startGame.commandKind,
+      hostSetupReadiness.localDevelopmentSpine.evidence.hostSetupProof
+        .setupCommandEvidence.setPostPolicy.readinessSummary,
       hostSetupCheck.spineTargets,
     ],
     [
@@ -12721,6 +12762,8 @@ test("session card and markdown include role credential URLs and tokens", async 
       "http://127.0.0.1:5173/g/<seeded-game>/setup",
       "npm run dev:test-game -- --verify-host-setup-only",
       true,
+      "StartGame",
+      "Ready to start",
       hostSetupSpineTargetsFixture(),
     ],
   );
@@ -14235,6 +14278,43 @@ function artifactSummary(path) {
 }
 
 function hostSetupProofFixture(game = "game-a") {
+  const setupCommandEvidence = {
+    addSlot: {
+      status: "ack",
+      commandKind: "AddSlot",
+      command: { game, slot: "slot-7" },
+      streamSeqs: [20],
+      readinessSummary: "Setup still needs attention",
+    },
+    assignSlot: {
+      status: "ack",
+      commandKind: "AssignSlot",
+      command: { game, slot: "slot-7", user: "player-mira" },
+      streamSeqs: [21],
+      readinessSummary: "Setup still needs attention",
+    },
+    assignRole: {
+      status: "ack",
+      commandKind: "AssignRole",
+      command: { game, slot: "slot-7", role_key: "encryptor" },
+      streamSeqs: [22],
+      readinessSummary: "Ready to start",
+    },
+    setPostPolicy: {
+      status: "ack",
+      commandKind: "SetPostPolicy",
+      command: { game, channel_id: "main", allow_media_only: false },
+      streamSeqs: [23],
+      readinessSummary: "Ready to start",
+    },
+    startGame: {
+      status: "ack",
+      commandKind: "StartGame",
+      command: { game, phase: "D01" },
+      streamSeqs: [24],
+      readinessSummary: "Started at D01",
+    },
+  };
   return {
     proof: "dev-test-game-host-setup-proof",
     status: "passed",
@@ -14254,6 +14334,7 @@ function hostSetupProofFixture(game = "game-a") {
       slotIds: ["slot-2", "slot-3", "slot-7", "slot_4", "slot_5"],
       roleKeys: ["mafia_goon", "vanilla_townie"],
       mainPolicyText: "Media-only posts are disabled.",
+      setupCommandEvidence,
       policyCommand: {
         status: "passed",
         commandKind: "SetPostPolicy",

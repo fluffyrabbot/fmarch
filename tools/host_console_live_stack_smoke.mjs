@@ -20,6 +20,7 @@ import {
   markdownLiveStackProofSummary,
 } from "./live_stack_proof_summary.mjs";
 import {
+  buildSetupCommandEvidence,
   waitForHostSetupCommand,
 } from "./dev_test_game_setup_bootstrap_scenario.mjs";
 
@@ -1442,6 +1443,13 @@ async function driveHostSetupBrowser(page, frontendBaseUrl) {
       setPostPolicy,
       startGame,
     },
+    setupCommandEvidence: buildSetupCommandEvidence({
+      addSlot,
+      assignSlot,
+      assignRole,
+      setPostPolicy,
+      startGame,
+    }),
     hostConsoleState: {
       phase: hostConsoleState.phase,
       slot: hostConsoleState.slots?.find((slot) => slot.slot_id === slotId),

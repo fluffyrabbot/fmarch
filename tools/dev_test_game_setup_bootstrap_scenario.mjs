@@ -28,6 +28,22 @@ export const seededSetupRoster = Object.freeze([
   }),
 ]);
 
+export const setupCommandEvidenceKeys = Object.freeze([
+  "addSlot",
+  "assignSlot",
+  "assignRole",
+  "setPostPolicy",
+  "startGame",
+]);
+
+export const setupCommandEvidenceKindByKey = Object.freeze({
+  addSlot: "AddSlot",
+  assignSlot: "AssignSlot",
+  assignRole: "AssignRole",
+  setPostPolicy: "SetPostPolicy",
+  startGame: "StartGame",
+});
+
 export function seedPreSetupCommandPlanForGame(game) {
   return [["host_h", { CreateGame: { game, pack: "mafiascum" } }]];
 }
@@ -142,8 +158,77 @@ export async function runSeededSetupBootstrapScenario({
     slotIds,
     roleAssignments,
     policyCommand,
+    setupCommandEvidence: buildSetupBootstrapCommandEvidence({
+      commands,
+      policyCommand,
+    }),
     startDispatchPlan: dispatchPlan,
   };
+}
+
+export function buildSetupCommandEvidence({
+  addSlot,
+  assignSlot,
+  assignRole,
+  setPostPolicy,
+  startGame,
+}) {
+  return {
+    addSlot: compactSetupCommandEvidence(addSlot),
+    assignSlot: compactSetupCommandEvidence(assignSlot),
+    assignRole: compactSetupCommandEvidence(assignRole),
+    setPostPolicy: compactSetupCommandEvidence(setPostPolicy),
+    startGame: compactSetupCommandEvidence(startGame),
+  };
+}
+
+export function buildSetupBootstrapCommandEvidence({ commands, policyCommand }) {
+  const commandList = Array.isArray(commands) ? commands : [];
+  return buildSetupCommandEvidence({
+    addSlot: commandList.find((command) => command?.commandKind === "AddSlot"),
+    assignSlot: commandList.find(
+      (command) => command?.commandKind === "AssignSlot",
+    ),
+    assignRole: commandList.find(
+      (command) => command?.commandKind === "AssignRole",
+    ),
+    setPostPolicy:
+      policyCommand?.restored ??
+      commandList.find((command) => command?.commandKind === "SetPostPolicy"),
+    startGame: commandList.find(
+      (command) => command?.commandKind === "StartGame",
+    ),
+  });
+}
+
+export function compactSetupCommandEvidence(commandEvidence) {
+  if (commandEvidence === null || commandEvidence === undefined) {
+    return null;
+  }
+  return {
+    status: commandEvidence.status ?? null,
+    commandKind: commandEvidence.commandKind ?? null,
+    command: commandEvidence.command ?? null,
+    streamSeqs: Array.isArray(commandEvidence.streamSeqs)
+      ? [...commandEvidence.streamSeqs]
+      : [],
+    readinessSummary: commandEvidence.readinessSummary ?? null,
+  };
+}
+
+export function hasCompleteSetupCommandEvidence(evidence) {
+  if (evidence === null || typeof evidence !== "object") {
+    return false;
+  }
+  return setupCommandEvidenceKeys.every((key) => {
+    const row = evidence[key];
+    return (
+      row?.status === "ack" &&
+      row?.commandKind === setupCommandEvidenceKindByKey[key] &&
+      row?.command !== null &&
+      Array.isArray(row?.streamSeqs)
+    );
+  });
 }
 
 export async function addSetupSlot({ setupPage, slotId }) {
@@ -421,12 +506,16 @@ async function waitForHostSetupPolicyCommand({
   }
   return {
     status: statusState,
+    commandKind: "SetPostPolicy",
+    command:
+      outcome.requestEnvelope.body.body.command.SetPostPolicy ?? null,
     policyText,
     statusText,
     streamSeqs: outcome.streamSeqs,
     requestEnvelope: outcome.requestEnvelope,
     serverEnvelope: outcome.serverEnvelope,
     refreshedAllowMediaOnly: readiness.mainPolicy.allowMediaOnly,
+    readinessSummary: readiness.summary ?? null,
   };
 }
 

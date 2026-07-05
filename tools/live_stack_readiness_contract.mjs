@@ -1,3 +1,7 @@
+import {
+  hasCompleteSetupCommandEvidence,
+} from "./dev_test_game_setup_bootstrap_scenario.mjs";
+
 export const LIVE_STACK_READINESS_VERSION = 1;
 
 const CHECKS = Object.freeze([
@@ -34,14 +38,16 @@ const CHECKS = Object.freeze([
     label: "Admin-created game setup proves roster, role, policy, StartGame, and host handoff",
     predicate: (evidence) =>
       evidence?.browser?.admin?.hostSetup?.status === "passed" &&
-      evidence.browser.admin.hostSetup?.commands?.addSlot?.commandKind === "AddSlot" &&
-      evidence.browser.admin.hostSetup?.commands?.assignSlot?.commandKind ===
-        "AssignSlot" &&
-      evidence.browser.admin.hostSetup?.commands?.assignRole?.command?.role_key ===
+      hasCompleteSetupCommandEvidence(
+        evidence.browser.admin.hostSetup?.setupCommandEvidence,
+      ) &&
+      evidence.browser.admin.hostSetup?.setupCommandEvidence?.assignRole?.command
+        ?.role_key ===
         "vanilla_townie" &&
-      evidence.browser.admin.hostSetup?.commands?.setPostPolicy?.command
+      evidence.browser.admin.hostSetup?.setupCommandEvidence?.setPostPolicy?.command
         ?.allow_media_only === true &&
-      evidence.browser.admin.hostSetup?.commands?.startGame?.command?.phase === "D01" &&
+      evidence.browser.admin.hostSetup?.setupCommandEvidence?.startGame?.command
+        ?.phase === "D01" &&
       evidence.browser.admin.hostSetup?.readyReadiness?.summary === "Ready to start" &&
       evidence.browser.admin.hostSetup?.startedReadiness?.summary === "Started at D01" &&
       evidence.browser.admin.hostSetup?.hostConsoleState?.phase?.phase_id === "D01" &&

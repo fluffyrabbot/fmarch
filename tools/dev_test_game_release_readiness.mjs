@@ -14,6 +14,10 @@ import {
 } from "./dev_test_game_local_readiness_dependencies.mjs";
 import { assertDevTestGameProofRun } from "./dev_test_game_proof_contract.mjs";
 import {
+  hasCompleteSetupCommandEvidence,
+  setupCommandEvidenceKeys,
+} from "./dev_test_game_setup_bootstrap_scenario.mjs";
+import {
   assertDevTestGameRaceCoverage,
   devTestGameRaceCoverageAdminProofPath,
   raceCoverageLocalReadinessMilestoneCases,
@@ -2689,6 +2693,14 @@ export function validateDevTestGameHostSetupProof(proof, options = {}) {
     throw new Error("host setup proof missing policy command coverage");
   }
   if (
+    !hasCompleteSetupCommandEvidence(proof.hostSetup.setupCommandEvidence) ||
+    proof.hostSetup.setupCommandEvidence.startGame.command?.phase !== "D01" ||
+    proof.hostSetup.setupCommandEvidence.setPostPolicy.command?.allow_media_only !==
+      false
+  ) {
+    throw new Error("host setup proof missing shared setup command evidence");
+  }
+  if (
     proof.hostSetup.setupMutationCommand?.status !== "passed" ||
     proof.hostSetup.setupMutationCommand?.duplicateAddSlotRecovery?.status !==
       "reject" ||
@@ -2713,12 +2725,28 @@ export function validateDevTestGameHostSetupProof(proof, options = {}) {
     ),
     proofBoundary: proof.proofBoundary,
     readyCheckIds: [...proof.hostSetup.readyCheckIds],
+    setupCommandEvidence: setupCommandEvidenceSummary(
+      proof.hostSetup.setupCommandEvidence,
+    ),
     setupMutationStatus: proof.hostSetup.setupMutationCommand.status,
     policyCommandStatus: proof.hostSetup.policyCommand.status,
     releaseReady: false,
     productionReady: false,
     ...(options.artifact === undefined ? {} : { artifact: options.artifact }),
   };
+}
+
+function setupCommandEvidenceSummary(evidence) {
+  return Object.fromEntries(
+    setupCommandEvidenceKeys.map((key) => [
+      key,
+      {
+        status: evidence[key].status,
+        commandKind: evidence[key].commandKind,
+        readinessSummary: evidence[key].readinessSummary ?? null,
+      },
+    ]),
+  );
 }
 
 function validateCohostConsoleLaneProof(proof, options = {}) {

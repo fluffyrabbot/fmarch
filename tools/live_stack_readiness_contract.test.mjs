@@ -15,6 +15,25 @@ test("player-vote-loop requires host votecount convergence evidence", () => {
   );
 });
 
+test("host setup workflow requires shared setup command evidence", () => {
+  const evidence = liveStackReadinessFixture();
+  assert.equal(
+    checkStatus(buildLiveStackReadiness(evidence), "host-setup-workflow"),
+    "passed",
+  );
+
+  const withoutSharedEvidence = structuredClone(evidence);
+  delete withoutSharedEvidence.browser.admin.hostSetup.setupCommandEvidence;
+
+  assert.equal(
+    checkStatus(
+      buildLiveStackReadiness(withoutSharedEvidence),
+      "host-setup-workflow",
+    ),
+    "failed",
+  );
+});
+
 function checkStatus(readiness, id) {
   return readiness.checks.find((check) => check.id === id)?.status;
 }
@@ -44,6 +63,42 @@ function liveStackReadinessFixture() {
         },
         hostSetup: {
           status: "passed",
+          setupCommandEvidence: {
+            addSlot: {
+              status: "ack",
+              commandKind: "AddSlot",
+              command: { game: "game-a", slot: "slot_1" },
+              streamSeqs: [1],
+            },
+            assignSlot: {
+              status: "ack",
+              commandKind: "AssignSlot",
+              command: { game: "game-a", slot: "slot_1", user: "player_mira" },
+              streamSeqs: [2],
+            },
+            assignRole: {
+              status: "ack",
+              commandKind: "AssignRole",
+              command: { game: "game-a", slot: "slot_1", role_key: "vanilla_townie" },
+              streamSeqs: [3],
+            },
+            setPostPolicy: {
+              status: "ack",
+              commandKind: "SetPostPolicy",
+              command: {
+                game: "game-a",
+                channel_id: "main",
+                allow_media_only: true,
+              },
+              streamSeqs: [4],
+            },
+            startGame: {
+              status: "ack",
+              commandKind: "StartGame",
+              command: { game: "game-a", phase: "D01" },
+              streamSeqs: [5],
+            },
+          },
           commands: {
             addSlot: { commandKind: "AddSlot" },
             assignSlot: { commandKind: "AssignSlot" },
