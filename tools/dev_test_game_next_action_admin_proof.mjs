@@ -29,9 +29,11 @@ import {
   localAdminAuditIds,
 } from "./dev_test_game_admin_audit_surface_ids.mjs";
 import {
-  assertSelectedProductionFeatureGraphDestinationText,
-  assertSelectedProofGraphDestinationText,
-  productionFeatureGraphCoverageDecisionCheckId,
+  assertSelectedGraphDestinationCaseSurface,
+  selectedGraphDestinationRequiredCheckIds,
+  selectedGraphDestinationSubject,
+  selectedNextActionGraphDestinationCaseForId,
+  selectedNextActionGraphDestinationCases,
 } from "./dev_test_game_next_action_graph_destination_assertions.mjs";
 import {
   assertRecoveryReceiptGraphSummary,
@@ -692,63 +694,7 @@ export function assertNextActionAdminProof(evidence) {
   ) {
     throw new Error("next-action admin proof missing selected role URL handoff");
   }
-  if (
-    evidence.generatedFrom?.selectedProofGraphNode !== null &&
-    evidence.generatedFrom?.selectedProofGraphNode?.id !== undefined &&
-    !evidence.adminRoleSurface?.visibleChecks?.includes("selected-proof-graph-node")
-  ) {
-    throw new Error("next-action admin proof missing selected graph node row");
-  }
-  if (
-    evidence.generatedFrom?.selectedProofGraphNode !== null &&
-    evidence.generatedFrom?.selectedProofGraphNode?.id !== undefined &&
-    !evidence.adminRoleSurface?.visibleChecks?.includes(
-      "selected-proof-graph-destination",
-    )
-  ) {
-    throw new Error("next-action admin proof missing selected graph destination row");
-  }
-  if (
-    evidence.generatedFrom?.selectedProofGraphNode !== null &&
-    evidence.generatedFrom?.selectedProofGraphNode?.id !== undefined &&
-    !evidence.adminRoleSurface?.visibleRelatedLinks?.includes(
-      "selected-proof-graph-node",
-    )
-  ) {
-    throw new Error("next-action admin proof missing selected graph destination link");
-  }
-  if (
-    evidence.generatedFrom?.selectedProofGraphNode !== null &&
-    evidence.generatedFrom?.selectedProofGraphNode?.id !== undefined
-  ) {
-    const graphDestination =
-      evidence.adminRoleSurface?.visibleRelatedDestinations?.find(
-        (item) =>
-          item?.linkId === "selected-proof-graph-node" &&
-          item.auditId === localAdminAuditIds.proofGraph,
-      ) ?? null;
-    assertSelectedProofGraphDestinationText({
-      graphDestination,
-      selectedProofGraphNode: evidence.generatedFrom.selectedProofGraphNode,
-    });
-  }
-  const selectedProductionFeatureGraph =
-    evidence.generatedFrom?.unprovenSelectedProductionFeatureGraph;
-  if (
-    selectedProductionFeatureGraph !== null &&
-    selectedProductionFeatureGraph !== undefined
-  ) {
-    const graphDestination =
-      evidence.adminRoleSurface?.visibleRelatedDestinations?.find(
-        (item) =>
-          item?.linkId === selectedProductionFeatureGraph.nodeId &&
-          item.auditId === localAdminAuditIds.proofGraph,
-      ) ?? null;
-    assertSelectedProductionFeatureGraphDestinationText({
-      graphDestination,
-      selectedProductionFeatureGraph,
-    });
-  }
+  assertSelectedGraphDestinationCases(evidence);
   if (
     evidence.generatedFrom?.unprovenSpineTarget !== null &&
     evidence.generatedFrom?.unprovenSpineTarget !== undefined
@@ -1520,18 +1466,37 @@ function selectedProductionFeatureGraphHandoffSummary({ nextAction }) {
   ) {
     return null;
   }
+  const destinationCase = selectedNextActionGraphDestinationCaseForId(
+    "selected-production-feature-graph",
+  );
   return {
     linkId: selectedGraph.nodeId,
     auditId: localAdminAuditIds.proofGraph,
-    requiredCheckIds: [
-      selectedGraph.nodeId,
-      ...(selectedGraph.coverageDecision === null ||
-      typeof selectedGraph.coverageDecision !== "object"
-        ? []
-        : [productionFeatureGraphCoverageDecisionCheckId(selectedGraph)]),
-    ],
+    requiredCheckIds: selectedGraphDestinationRequiredCheckIds({
+      destinationCase,
+      subject: selectedGraph,
+    }),
     requiredRelatedLinkIds: [selectedGraph.nodeId],
   };
+}
+
+function assertSelectedGraphDestinationCases(evidence) {
+  for (const destinationCase of selectedNextActionGraphDestinationCases) {
+    const subject = selectedGraphDestinationSubject({
+      destinationCase,
+      generatedFrom: evidence.generatedFrom,
+    });
+    if (subject === null) {
+      continue;
+    }
+    assertSelectedGraphDestinationCaseSurface({
+      destinationCase,
+      subject,
+      adminRoleSurface: evidence.adminRoleSurface,
+      missingErrorMessage: destinationCase.proofMissingMessage,
+      textErrorMessage: destinationCase.proofTextMessage,
+    });
+  }
 }
 
 function requiredChecksForEvidence(evidence) {

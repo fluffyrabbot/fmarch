@@ -312,6 +312,14 @@ import {
   proofGraphDestinationSummaryDriftNextActionFixture,
 } from "./dev_test_game_next_action_admin_proof.mjs";
 import {
+  selectedGraphDestinationLinkId,
+  selectedGraphDestinationLocalCheckIds,
+  selectedGraphDestinationLocalRelatedLinkIds,
+  selectedGraphDestinationRequiredCheckIds,
+  selectedGraphDestinationRequiredCheckText,
+  selectedNextActionGraphDestinationCases,
+} from "./dev_test_game_next_action_graph_destination_assertions.mjs";
+import {
   proofGraphDestinationSummaryDriftNextActionAdminProofPath,
   proofGraphDestinationSummaryDriftNextActionPath,
 } from "./dev_test_game_next_action_admin_proof_paths.mjs";
@@ -5605,174 +5613,157 @@ test("next-action admin proof fixture proves proof graph next-action handoff dep
   );
 });
 
-test("next-action admin proof fixture proves selected proof graph destination text", () => {
-  const selectedProofGraphNode = {
-    id: "admin-proof:hosted-concurrent-race-matrix",
-    status: "ready",
-    auditId: "local-hosted-concurrent-race-matrix",
-    roleUrl:
-      "/admin/audit/local-hosted-concurrent-race-matrix?game=<seeded-game>",
-    proofCommand:
-      "npm run test:dev-test-game-hosted-concurrent-race-matrix-admin-proof",
-    graphProofCommand:
-      "npm run test:dev-test-game-hosted-concurrent-race-matrix-admin-proof",
-  };
-  const selectedDestination = {
-    linkId: "selected-proof-graph-node",
+for (const destinationCase of selectedNextActionGraphDestinationCases) {
+  test(`next-action admin proof fixture proves ${destinationCase.label} destination text`, () => {
+    const { subject } = selectedGraphDestinationFixtureForCase(destinationCase);
+    const selectedDestination = selectedGraphDestinationFixture({
+      destinationCase,
+      subject,
+    });
+    const proof = nextActionAdminProofLocalReadinessDependencyFixture();
+    applySelectedGraphDestinationFixture({
+      proof,
+      destinationCase,
+      subject,
+      selectedDestination,
+    });
+    assertNextActionAdminProof(proof);
+    assert.equal(validateDevTestGameNextActionAdminProof(proof).status, "passed");
+
+    for (const [checkId, tokens] of Object.entries(
+      selectedGraphDestinationRequiredCheckText({
+        destinationCase,
+        subject,
+      }),
+    )) {
+      for (const token of tokens) {
+        assert.equal(
+          selectedDestination.visibleCheckStatuses[checkId].includes(token),
+          true,
+        );
+      }
+    }
+
+    const proofMissingDestinationText =
+      nextActionAdminProofLocalReadinessDependencyFixture();
+    applySelectedGraphDestinationFixture({
+      proof: proofMissingDestinationText,
+      destinationCase,
+      subject,
+      selectedDestination: {
+        ...selectedDestination,
+        visibleCheckStatuses: {
+          ...selectedDestination.visibleCheckStatuses,
+          [selectedDestination.visibleChecks[0]]: "passed",
+        },
+      },
+    });
+    assert.throws(
+      () => assertNextActionAdminProof(proofMissingDestinationText),
+      new RegExp(escapeRegExp(destinationCase.proofTextMessage)),
+    );
+    assert.throws(
+      () =>
+        validateDevTestGameNextActionAdminProof(proofMissingDestinationText),
+      new RegExp(escapeRegExp(destinationCase.readinessTextMessage)),
+    );
+  });
+}
+
+function selectedGraphDestinationFixtureForCase(destinationCase) {
+  if (destinationCase.id === "selected-proof-graph-node") {
+    return {
+      subject: {
+        id: "admin-proof:hosted-concurrent-race-matrix",
+        status: "ready",
+        auditId: "local-hosted-concurrent-race-matrix",
+        roleUrl:
+          "/admin/audit/local-hosted-concurrent-race-matrix?game=<seeded-game>",
+        proofCommand:
+          "npm run test:dev-test-game-hosted-concurrent-race-matrix-admin-proof",
+        graphProofCommand:
+          "npm run test:dev-test-game-hosted-concurrent-race-matrix-admin-proof",
+      },
+    };
+  }
+  if (destinationCase.id === "selected-production-feature-graph") {
+    return {
+      subject: {
+        nodeId: "production-feature:player-action-submission",
+        status: "passed",
+        sourceNodeId: "admin-proof:core-loop",
+        edge: {
+          from: "admin-proof:core-loop",
+          to: "production-feature:player-action-submission",
+          relationship: "proves-production-feature",
+        },
+        roleUrl: "/admin/audit/local-core-loop?game=<seeded-game>",
+        targetRoleUrl:
+          "http://127.0.0.1:5173/g/<seeded-game>/c/thread:day-two",
+        browserProofCommand: devTestGameLiveProofCommand,
+        proofTarget: "target/dev-test-game/release-readiness-checklist.json",
+        coverageDecision: {
+          kind: "seeded-role-url-proof",
+          proofCommand: "npm run test:dev-test-game-core-loop-admin-proof",
+        },
+      },
+    };
+  }
+  throw new Error(`unknown selected graph destination case: ${destinationCase.id}`);
+}
+
+function selectedGraphDestinationFixture({ destinationCase, subject }) {
+  return {
+    linkId: selectedGraphDestinationLinkId({ destinationCase, subject }),
     auditId: "local-proof-graph",
     detailRoleUrl: "/admin/audit/local-proof-graph?game=<seeded-game>",
-    visibleChecks: ["admin-proof:hosted-concurrent-race-matrix"],
-    visibleCheckStatuses: {
-      "admin-proof:hosted-concurrent-race-matrix": [
-        "passed",
-        "roleUrl /admin/audit/local-hosted-concurrent-race-matrix?game=<seeded-game>",
-        "recoveryCommand npm run test:dev-test-game-hosted-concurrent-race-matrix-admin-proof",
-      ].join("\n"),
-    },
-    visibleRelatedLinks: ["admin-proof:hosted-concurrent-race-matrix"],
-  };
-  const proof = nextActionAdminProofLocalReadinessDependencyFixture();
-  proof.generatedFrom.selectedProofGraphNode = selectedProofGraphNode;
-  proof.adminRoleSurface.visibleChecks.push(
-    "selected-proof-graph-node",
-    "selected-proof-graph-destination",
-  );
-  proof.adminRoleSurface.visibleRelatedLinks.push("selected-proof-graph-node");
-  proof.adminRoleSurface.visibleRelatedDestinations = [selectedDestination];
-  assertNextActionAdminProof(proof);
-  const destination = proof.adminRoleSurface.visibleRelatedDestinations.find(
-    (item) => item.linkId === "selected-proof-graph-node",
-  );
-  assert.equal(
-    destination.visibleCheckStatuses[
-      "admin-proof:hosted-concurrent-race-matrix"
-    ].includes(
-      "roleUrl /admin/audit/local-hosted-concurrent-race-matrix?game=<seeded-game>",
+    visibleChecks: selectedGraphDestinationRequiredCheckIds({
+      destinationCase,
+      subject,
+    }),
+    visibleCheckStatuses: Object.fromEntries(
+      Object.entries(
+        selectedGraphDestinationRequiredCheckText({
+          destinationCase,
+          subject,
+        }),
+      ).map(([checkId, tokens]) => [checkId, tokens.join("\n")]),
     ),
-    true,
-  );
-  assert.equal(
-    destination.visibleCheckStatuses[
-      "admin-proof:hosted-concurrent-race-matrix"
-    ].includes(
-      "recoveryCommand npm run test:dev-test-game-hosted-concurrent-race-matrix-admin-proof",
-    ),
-    true,
-  );
-
-  const proofMissingDestinationText =
-    nextActionAdminProofLocalReadinessDependencyFixture();
-  proofMissingDestinationText.generatedFrom.selectedProofGraphNode =
-    selectedProofGraphNode;
-  proofMissingDestinationText.adminRoleSurface.visibleChecks.push(
-    "selected-proof-graph-node",
-    "selected-proof-graph-destination",
-  );
-  proofMissingDestinationText.adminRoleSurface.visibleRelatedLinks.push(
-    "selected-proof-graph-node",
-  );
-  proofMissingDestinationText.adminRoleSurface.visibleRelatedDestinations = [
-    {
-      ...selectedDestination,
-      visibleCheckStatuses: undefined,
-    },
-  ];
-  delete proofMissingDestinationText.adminRoleSurface.visibleRelatedDestinations[0]
-    .visibleCheckStatuses;
-  assert.throws(
-    () => assertNextActionAdminProof(proofMissingDestinationText),
-    /next-action admin proof did not prove selected proof graph destination text/,
-  );
-});
-
-test("next-action admin proof fixture proves selected production feature graph destination text", () => {
-  const selectedProductionFeatureGraph = {
-    nodeId: "production-feature:player-action-submission",
-    status: "passed",
-    sourceNodeId: "admin-proof:core-loop",
-    edge: {
-      from: "admin-proof:core-loop",
-      to: "production-feature:player-action-submission",
-      relationship: "proves-production-feature",
-    },
-    roleUrl: "/admin/audit/local-core-loop?game=<seeded-game>",
-    targetRoleUrl:
-      "http://127.0.0.1:5173/g/<seeded-game>/c/thread:day-two",
-    browserProofCommand: devTestGameLiveProofCommand,
-    proofTarget: "target/dev-test-game/release-readiness-checklist.json",
-    coverageDecision: {
-      kind: "seeded-role-url-proof",
-      proofCommand: "npm run test:dev-test-game-core-loop-admin-proof",
-    },
+    visibleRelatedLinks: selectedGraphDestinationLocalRelatedLinkIds({
+      destinationCase,
+      subject,
+    }),
   };
-  const selectedDestination = {
-    linkId: selectedProductionFeatureGraph.nodeId,
-    auditId: "local-proof-graph",
-    detailRoleUrl: "/admin/audit/local-proof-graph?game=<seeded-game>",
-    visibleChecks: [
-      selectedProductionFeatureGraph.nodeId,
-      `coverage-decision:${selectedProductionFeatureGraph.nodeId}`,
-    ],
-    visibleCheckStatuses: {
-      [selectedProductionFeatureGraph.nodeId]: [
-        selectedProductionFeatureGraph.nodeId,
-        `roleUrl ${selectedProductionFeatureGraph.roleUrl}`,
-        `targetRoleUrl ${selectedProductionFeatureGraph.targetRoleUrl}`,
-        `browserProofCommand ${selectedProductionFeatureGraph.browserProofCommand}`,
-      ].join("\n"),
-      [`coverage-decision:${selectedProductionFeatureGraph.nodeId}`]: [
-        "seeded-role-url-proof",
-        "npm run test:dev-test-game-core-loop-admin-proof",
-      ].join("\n"),
-    },
-    visibleRelatedLinks: [selectedProductionFeatureGraph.nodeId],
-  };
-  const proof = nextActionAdminProofLocalReadinessDependencyFixture();
-  proof.generatedFrom.unprovenSelectedProductionFeatureGraph =
-    selectedProductionFeatureGraph;
+}
+
+function applySelectedGraphDestinationFixture({
+  proof,
+  destinationCase,
+  subject,
+  selectedDestination,
+}) {
+  if (destinationCase.id === "selected-proof-graph-node") {
+    proof.generatedFrom.selectedProofGraphNode = subject;
+  } else if (destinationCase.id === "selected-production-feature-graph") {
+    proof.generatedFrom.unprovenSelectedProductionFeatureGraph = subject;
+  } else {
+    throw new Error(`unknown selected graph destination case: ${destinationCase.id}`);
+  }
   proof.adminRoleSurface.visibleChecks.push(
-    "selected-production-feature-graph-node",
-    "selected-production-feature-graph-edge",
-    "selected-production-feature-graph-coverage-decision",
+    ...selectedGraphDestinationLocalCheckIds({ destinationCase, subject }),
   );
   proof.adminRoleSurface.visibleRelatedLinks.push(
-    selectedProductionFeatureGraph.nodeId,
+    ...selectedGraphDestinationLocalRelatedLinkIds({
+      destinationCase,
+      subject,
+    }),
   );
   proof.adminRoleSurface.visibleRelatedDestinations = [selectedDestination];
-  assertNextActionAdminProof(proof);
-  assert.equal(validateDevTestGameNextActionAdminProof(proof).status, "passed");
+}
 
-  const proofMissingDestinationText =
-    nextActionAdminProofLocalReadinessDependencyFixture();
-  proofMissingDestinationText.generatedFrom.unprovenSelectedProductionFeatureGraph =
-    selectedProductionFeatureGraph;
-  proofMissingDestinationText.adminRoleSurface.visibleChecks.push(
-    "selected-production-feature-graph-node",
-    "selected-production-feature-graph-edge",
-    "selected-production-feature-graph-coverage-decision",
-  );
-  proofMissingDestinationText.adminRoleSurface.visibleRelatedLinks.push(
-    selectedProductionFeatureGraph.nodeId,
-  );
-  proofMissingDestinationText.adminRoleSurface.visibleRelatedDestinations = [
-    {
-      ...selectedDestination,
-      visibleCheckStatuses: {
-        ...selectedDestination.visibleCheckStatuses,
-        [selectedProductionFeatureGraph.nodeId]: "passed",
-      },
-    },
-  ];
-  assert.throws(
-    () => assertNextActionAdminProof(proofMissingDestinationText),
-    /next-action admin proof did not prove selected production feature graph destination text/,
-  );
-  assert.throws(
-    () =>
-      validateDevTestGameNextActionAdminProof(proofMissingDestinationText),
-    /next-action admin proof did not prove selected production feature graph destination/,
-  );
-});
+function escapeRegExp(value) {
+  return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
 
 test("admin role surface helpers assert visible rows and status text", () => {
   const adminRoleSurface = {

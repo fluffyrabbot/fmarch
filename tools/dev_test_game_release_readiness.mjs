@@ -256,8 +256,9 @@ import {
   localAdminAuditRoleUrl,
 } from "./dev_test_game_admin_audit_surface_ids.mjs";
 import {
-  assertSelectedProductionFeatureGraphDestinationText,
-  assertSelectedProofGraphDestinationText,
+  assertSelectedGraphDestinationCaseSurface,
+  selectedGraphDestinationSubject,
+  selectedNextActionGraphDestinationCases,
 } from "./dev_test_game_next_action_graph_destination_assertions.mjs";
 import {
   assertCompletedGameProofReadinessSurfaceProof,
@@ -6267,87 +6268,7 @@ export function validateDevTestGameNextActionAdminProof(proof, options = {}) {
       throw new Error("next-action admin proof missing selected spine target");
     }
   }
-  const selectedProofGraphNode = proof.generatedFrom?.selectedProofGraphNode;
-  if (
-    selectedProofGraphNode !== null &&
-    selectedProofGraphNode !== undefined &&
-    selectedProofGraphNode.id !== undefined
-  ) {
-    if (
-      !proof.adminRoleSurface?.visibleChecks?.includes(
-        "selected-proof-graph-node",
-      ) ||
-      !proof.adminRoleSurface?.visibleChecks?.includes(
-        "selected-proof-graph-destination",
-      ) ||
-      !proof.adminRoleSurface?.visibleRelatedLinks?.includes(
-        "selected-proof-graph-node",
-      )
-    ) {
-      throw new Error(
-        "next-action admin proof missing selected proof graph destination",
-      );
-    }
-    const graphDestination =
-      proof.adminRoleSurface?.visibleRelatedDestinations?.find(
-        (item) =>
-          item?.linkId === "selected-proof-graph-node" &&
-          item.auditId === localAdminAuditIds.proofGraph,
-      ) ?? null;
-    if (
-      graphDestination === null ||
-      graphDestination.detailRoleUrl !==
-        localAdminAuditRoleUrl(localAdminAuditIds.proofGraph) ||
-      !graphDestination.visibleChecks?.includes(String(selectedProofGraphNode.id))
-    ) {
-      throw new Error(
-        "next-action admin proof did not prove selected proof graph destination",
-      );
-    }
-    assertSelectedProofGraphDestinationText({
-      graphDestination,
-      selectedProofGraphNode,
-      errorMessage:
-        "next-action admin proof did not prove selected proof graph destination",
-    });
-  }
-  const selectedProductionFeatureGraph =
-    proof.generatedFrom?.unprovenSelectedProductionFeatureGraph;
-  if (
-    selectedProductionFeatureGraph !== null &&
-    selectedProductionFeatureGraph !== undefined
-  ) {
-    if (
-      !proof.adminRoleSurface?.visibleChecks?.includes(
-        "selected-production-feature-graph-node",
-      ) ||
-      !proof.adminRoleSurface?.visibleChecks?.includes(
-        "selected-production-feature-graph-edge",
-      ) ||
-      !proof.adminRoleSurface?.visibleChecks?.includes(
-        "selected-production-feature-graph-coverage-decision",
-      ) ||
-      !proof.adminRoleSurface?.visibleRelatedLinks?.includes(
-        selectedProductionFeatureGraph.nodeId,
-      )
-    ) {
-      throw new Error(
-        "next-action admin proof missing selected production feature graph destination",
-      );
-    }
-    const graphDestination =
-      proof.adminRoleSurface?.visibleRelatedDestinations?.find(
-        (item) =>
-          item?.linkId === selectedProductionFeatureGraph.nodeId &&
-          item.auditId === localAdminAuditIds.proofGraph,
-      ) ?? null;
-    assertSelectedProductionFeatureGraphDestinationText({
-      graphDestination,
-      selectedProductionFeatureGraph,
-      errorMessage:
-        "next-action admin proof did not prove selected production feature graph destination",
-    });
-  }
+  assertSelectedGraphDestinationReadinessCases(proof);
   const localTrace = assertPreReadinessTraceVisibleChecks(
     preReadinessTraceKeys.localReadinessDependency,
     proof.generatedFrom?.localReadinessDependencyTrace,
@@ -6501,6 +6422,25 @@ export function validateDevTestGameNextActionAdminProof(proof, options = {}) {
     localReadinessDependencyCandidateCount: localTrace.candidateCount,
     ...(options.artifact === undefined ? {} : { artifact: options.artifact }),
   };
+}
+
+function assertSelectedGraphDestinationReadinessCases(proof) {
+  for (const destinationCase of selectedNextActionGraphDestinationCases) {
+    const subject = selectedGraphDestinationSubject({
+      destinationCase,
+      generatedFrom: proof.generatedFrom,
+    });
+    if (subject === null) {
+      continue;
+    }
+    assertSelectedGraphDestinationCaseSurface({
+      destinationCase,
+      subject,
+      adminRoleSurface: proof.adminRoleSurface,
+      missingErrorMessage: destinationCase.readinessMissingMessage,
+      textErrorMessage: destinationCase.readinessTextMessage,
+    });
+  }
 }
 
 function validateNextActionAdminProofGraphDiagnosticSummaryTrace(proof) {
