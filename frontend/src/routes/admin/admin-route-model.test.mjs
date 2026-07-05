@@ -2079,12 +2079,20 @@ test("admin route data exposes local next action as a native audit row", async (
       ],
       ["selected-spine-browser-proof", LIVE_BROWSER_PROOF_COMMAND],
       [
+        "selected-spine-coverage-decision",
+        "seeded-role-url-proof:npm run test:dev-test-game-core-loop-admin-proof",
+      ],
+      [
         "selected-production-feature-graph-node",
         "production-feature:player-action-submission:passed",
       ],
       [
         "selected-production-feature-graph-edge",
         "admin-proof:core-loop->production-feature:player-action-submission",
+      ],
+      [
+        "selected-production-feature-graph-coverage-decision",
+        "seeded-role-url-proof:npm run test:dev-test-game-core-loop-admin-proof",
       ],
       ["terminal-proof-batch-graph", "passed:3 edges"],
       ["private-channel-recovery-graph", "passed:4 lanes"],
@@ -2259,6 +2267,7 @@ test("admin route data exposes local next action as a native audit row", async (
             targetRoleUrlMatchesSelectedSpineTarget: true,
             browserProofCommand: LIVE_BROWSER_PROOF_COMMAND,
             proofTarget: "target/dev-test-game/release-readiness-checklist.json",
+            coverageDecision: featureSpineTargetFixture().coverageDecision,
           },
         },
       ],
@@ -5866,6 +5875,7 @@ function proofGraphFixture() {
       roleUrl: localAdminAuditRoleUrl(localAdminAuditIds.coreLoop),
       targetRoleUrl: ACTIONABLE_SPINE_ROLE_URL,
       browserProofCommand: LIVE_BROWSER_PROOF_COMMAND,
+      coverageDecision: featureSpineTargetFixture().coverageDecision,
     },
     recoveryReceiptProofGraphNode({
       graph: privateChannelRecoveryGraphFixture(),
@@ -6109,6 +6119,10 @@ function expectedProofGraphCheckRows(proofGraph) {
   return [
     ...proofGraph.nodes.flatMap((node) => [
       [node.id, node.status],
+      ...expectedCoverageDecisionCheckRows({
+        parentId: node.id,
+        coverageDecision: node.coverageDecision,
+      }),
       ...expectedNormalizedEvidenceObjectCheckRows({
         parentId: node.id,
         objects: node.normalizedEvidenceObjects ?? [],
@@ -6118,6 +6132,18 @@ function expectedProofGraphCheckRows(proofGraph) {
       `edge:${edge.from}:${edge.relationship}:${edge.to}`,
       edge.relationship,
     ]),
+  ];
+}
+
+function expectedCoverageDecisionCheckRows({ parentId, coverageDecision }) {
+  if (coverageDecision === null || typeof coverageDecision !== "object") {
+    return [];
+  }
+  return [
+    [
+      `coverage-decision:${parentId}`,
+      `${coverageDecision.kind}:${coverageDecision.proofCommand}`,
+    ],
   ];
 }
 
@@ -6624,6 +6650,7 @@ function selectedProductionFeatureGraphFixture() {
     targetRoleUrlMatchesSelectedSpineTarget: true,
     browserProofCommand: LIVE_BROWSER_PROOF_COMMAND,
     proofTarget: "target/dev-test-game/release-readiness-checklist.json",
+    coverageDecision: featureSpineTargetFixture().coverageDecision,
   };
 }
 

@@ -5242,7 +5242,9 @@ function validateProofGraphAdminFeatureTarget(proof, featureTargetCase) {
     target.checkpointId !== featureTargetCase.targetRow.checkpointId ||
     target.adminCheckId !== featureTargetCase.targetRow.adminCheckId ||
     !target.browserProofCommand?.includes("test:dev-test-game-core-live") ||
-    target.recoveryCommand !== featureTargetCase.source.rerunCommand
+    target.recoveryCommand !== featureTargetCase.source.rerunCommand ||
+    JSON.stringify(target.coverageDecision ?? null) !==
+      JSON.stringify(featureTargetCase.source.coverageDecision ?? null)
   ) {
     throw new Error(
       `proof graph admin proof missing ${featureTargetCase.label} feature target`,
@@ -5252,6 +5254,7 @@ function validateProofGraphAdminFeatureTarget(proof, featureTargetCase) {
     target.roleSurfaceNodeId,
     target.productionFeatureNodeId,
     target.edgeRowId,
+    `coverage-decision:${target.productionFeatureNodeId}`,
   ]) {
     if (!proof.adminRoleSurface?.visibleChecks?.includes(rowId)) {
       throw new Error(
@@ -5397,6 +5400,8 @@ export function validateDevTestGameNextActionAdminProof(proof, options = {}) {
         target.recoveryHookId !== declaration.recoveryHookId) ||
       typeof target.adminCheckId !== "string" ||
       typeof target.browserProofCommand !== "string" ||
+      target.coverageDecision === null ||
+      typeof target.coverageDecision !== "object" ||
       target.featureSlotId !== declaration.featureSlotId ||
       target.adminCheckId !== declaration.adminCheckId ||
       typeof drilldown?.featureSlotId !== "string" ||
@@ -5423,6 +5428,9 @@ export function validateDevTestGameNextActionAdminProof(proof, options = {}) {
       ) ||
       !proof.adminRoleSurface?.visibleChecks?.includes(
         "selected-spine-browser-proof",
+      ) ||
+      !proof.adminRoleSurface?.visibleChecks?.includes(
+        "selected-spine-coverage-decision",
       )
     ) {
       throw new Error("next-action admin proof missing selected spine target");
@@ -5465,6 +5473,17 @@ export function validateDevTestGameNextActionAdminProof(proof, options = {}) {
         "next-action admin proof did not prove selected proof graph destination",
       );
     }
+  }
+  if (
+    proof.generatedFrom?.unprovenSelectedProductionFeatureGraph !== null &&
+    proof.generatedFrom?.unprovenSelectedProductionFeatureGraph !== undefined &&
+    !proof.adminRoleSurface?.visibleChecks?.includes(
+      "selected-production-feature-graph-coverage-decision",
+    )
+  ) {
+    throw new Error(
+      "next-action admin proof missing selected production feature graph coverage decision",
+    );
   }
   const localTrace = proof.generatedFrom?.localReadinessDependencyTrace;
   if (

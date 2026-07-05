@@ -241,7 +241,9 @@ function assertProofGraphAdminProofCoversFeatureTarget(
     target.checkpointId !== featureTargetCase.targetRow.checkpointId ||
     target.adminCheckId !== featureTargetCase.targetRow.adminCheckId ||
     !target.browserProofCommand?.includes("test:dev-test-game-core-live") ||
-    target.recoveryCommand !== featureTargetCase.source.rerunCommand
+    target.recoveryCommand !== featureTargetCase.source.rerunCommand ||
+    JSON.stringify(target.coverageDecision ?? null) !==
+      JSON.stringify(featureTargetCase.source.coverageDecision ?? null)
   ) {
     throw new Error(
       `proof graph admin proof missing ${featureTargetCase.label} feature target`,
@@ -251,6 +253,7 @@ function assertProofGraphAdminProofCoversFeatureTarget(
     target.roleSurfaceNodeId,
     target.productionFeatureNodeId,
     target.edgeRowId,
+    `coverage-decision:${target.productionFeatureNodeId}`,
   ]) {
     if (!evidence.adminRoleSurface?.visibleChecks?.includes(rowId)) {
       throw new Error(
@@ -279,6 +282,11 @@ function proofGraphEdgeCheckId(edge) {
 function proofGraphVisibleCheckIds(proofGraph) {
   return [
     ...proofGraph.nodes.map((node) => node.id),
+    ...proofGraph.nodes.flatMap((node) =>
+      node.coverageDecision === undefined
+        ? []
+        : [`coverage-decision:${node.id}`],
+    ),
     ...proofGraphEvidenceObjectRowIds(proofGraph),
     ...proofGraph.edges.map((edge) => proofGraphEdgeCheckId(edge)),
   ];
@@ -338,6 +346,7 @@ function proofGraphFeatureTarget(proofGraph, featureTargetCase) {
     adminCheckId: productionFeatureNode.adminCheckId,
     browserProofCommand: productionFeatureNode.browserProofCommand,
     recoveryCommand: productionFeatureNode.recoveryCommand,
+    coverageDecision: productionFeatureNode.coverageDecision,
   };
 }
 

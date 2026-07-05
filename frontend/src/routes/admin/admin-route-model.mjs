@@ -1846,6 +1846,10 @@ export function normalizeLocalProofGraphAudit(proofGraph, { game }) {
             id: String(node.id),
             status: String(node.status ?? "recorded"),
           },
+          ...coverageDecisionCheckRows({
+            parentId: String(node.id),
+            coverageDecision: node.coverageDecision,
+          }),
           ...normalizedEvidenceObjectCheckRows({
             parentId: String(node.id),
             objects: node.normalizedEvidenceObjects,
@@ -1895,6 +1899,39 @@ function normalizedEvidenceObjectCheckRows({ parentId, objects }) {
       evidencePath: object.evidencePath,
     }),
   );
+}
+
+function coverageDecisionCheckRows({
+  parentId,
+  coverageDecision,
+  rowId = `coverage-decision:${parentId}`,
+}) {
+  const status = coverageDecisionStatus(coverageDecision);
+  return status === ""
+    ? []
+    : [
+        Object.freeze({
+          id: rowId,
+          status,
+        }),
+      ];
+}
+
+function coverageDecisionStatus(coverageDecision) {
+  if (coverageDecision === null || typeof coverageDecision !== "object") {
+    return "";
+  }
+  const kind = String(coverageDecision.kind ?? "");
+  if (kind === "") {
+    return "";
+  }
+  const detail =
+    String(coverageDecision.proofCommand ?? "").trim() ||
+    String(coverageDecision.recoveryCommand ?? "").trim() ||
+    String(coverageDecision.reason ?? "").trim() ||
+    String(coverageDecision.prerequisiteCheckId ?? "").trim() ||
+    String(coverageDecision.nextDecisionTrigger ?? "").trim();
+  return detail === "" ? kind : `${kind}:${detail}`;
 }
 
 function normalizeNormalizedEvidenceObjects(objects) {
@@ -2143,6 +2180,11 @@ export function normalizeLocalNextActionAudit(nextAction, { game, proofGraph = n
             id: "selected-spine-browser-proof",
             status: selectedSpineTarget.browserProofCommand,
           }),
+          ...coverageDecisionCheckRows({
+            parentId: "selected-spine",
+            rowId: "selected-spine-coverage-decision",
+            coverageDecision: selectedSpineTarget.coverageDecision,
+          }),
         ]),
     ...(selectedProductionFeatureGraph.nodeId === ""
       ? []
@@ -2154,6 +2196,11 @@ export function normalizeLocalNextActionAudit(nextAction, { game, proofGraph = n
           Object.freeze({
             id: "selected-production-feature-graph-edge",
             status: `${selectedProductionFeatureGraph.edgeFrom}->${selectedProductionFeatureGraph.edgeTo}`,
+          }),
+          ...coverageDecisionCheckRows({
+            parentId: "selected-production-feature-graph",
+            rowId: "selected-production-feature-graph-coverage-decision",
+            coverageDecision: selectedProductionFeatureGraph.coverageDecision,
           }),
         ]),
     ...(terminalBatchGraph.nodeId === ""
@@ -3302,6 +3349,7 @@ function normalizeNextActionSpineTarget(spineTarget) {
       recoveryHookId: "",
       adminCheckId: "",
       browserProofCommand: "",
+      coverageDecision: null,
     });
   }
   return Object.freeze({
@@ -3316,6 +3364,7 @@ function normalizeNextActionSpineTarget(spineTarget) {
     recoveryHookId: String(spineTarget.recoveryHookId ?? ""),
     adminCheckId: String(spineTarget.adminCheckId ?? ""),
     browserProofCommand: String(spineTarget.browserProofCommand ?? ""),
+    coverageDecision: normalizeCoverageDecision(spineTarget.coverageDecision),
   });
 }
 
@@ -3360,6 +3409,7 @@ function normalizeNextActionProductionFeatureGraph(graphSelection) {
       targetRoleUrlMatchesSelectedSpineTarget: false,
       browserProofCommand: "",
       proofTarget: "",
+      coverageDecision: null,
     });
   }
   const edge =
@@ -3383,6 +3433,7 @@ function normalizeNextActionProductionFeatureGraph(graphSelection) {
       graphSelection.targetRoleUrlMatchesSelectedSpineTarget === true,
     browserProofCommand: String(graphSelection.browserProofCommand ?? ""),
     proofTarget: String(graphSelection.proofTarget ?? ""),
+    coverageDecision: normalizeCoverageDecision(graphSelection.coverageDecision),
   });
 }
 
@@ -3401,6 +3452,7 @@ function normalizeNextActionSpineDrilldown(drilldown) {
       roleUrl: "",
       rerunCommand: "",
       browserProofCommand: "",
+      coverageDecision: null,
     });
   }
   return Object.freeze({
@@ -3416,7 +3468,28 @@ function normalizeNextActionSpineDrilldown(drilldown) {
     roleUrl: String(drilldown.roleUrl ?? ""),
     rerunCommand: String(drilldown.rerunCommand ?? ""),
     browserProofCommand: String(drilldown.browserProofCommand ?? ""),
+    coverageDecision: normalizeCoverageDecision(drilldown.coverageDecision),
   });
+}
+
+function normalizeCoverageDecision(coverageDecision) {
+  if (coverageDecision === null || typeof coverageDecision !== "object") {
+    return null;
+  }
+  return Object.freeze(
+    Object.fromEntries(
+      [
+        "kind",
+        "proofCommand",
+        "reason",
+        "nextDecisionTrigger",
+        "prerequisiteCheckId",
+        "recoveryCommand",
+      ]
+        .map((key) => [key, String(coverageDecision[key] ?? "")])
+        .filter(([, value]) => value !== ""),
+    ),
+  );
 }
 
 function normalizeRealHostedEvidenceInputs(inputs) {

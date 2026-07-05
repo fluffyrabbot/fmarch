@@ -17212,18 +17212,23 @@ function proofGraphAdminProofFixture() {
         hostSetupGraphTarget.roleSurfaceNodeId,
         hostSetupGraphTarget.productionFeatureNodeId,
         hostSetupGraphTarget.edgeRowId,
+        `coverage-decision:${hostSetupGraphTarget.productionFeatureNodeId}`,
         cohostGraphTarget.roleSurfaceNodeId,
         cohostGraphTarget.productionFeatureNodeId,
         cohostGraphTarget.edgeRowId,
+        `coverage-decision:${cohostGraphTarget.productionFeatureNodeId}`,
         replacementGraphTarget.roleSurfaceNodeId,
         replacementGraphTarget.productionFeatureNodeId,
         replacementGraphTarget.edgeRowId,
+        `coverage-decision:${replacementGraphTarget.productionFeatureNodeId}`,
         replacementActionGraphTarget.roleSurfaceNodeId,
         replacementActionGraphTarget.productionFeatureNodeId,
         replacementActionGraphTarget.edgeRowId,
+        `coverage-decision:${replacementActionGraphTarget.productionFeatureNodeId}`,
         replacementPrivateGraphTarget.roleSurfaceNodeId,
         replacementPrivateGraphTarget.productionFeatureNodeId,
         replacementPrivateGraphTarget.edgeRowId,
+        `coverage-decision:${replacementPrivateGraphTarget.productionFeatureNodeId}`,
         ...evidenceObjectRowIds,
       ],
       visibleRelatedLinks: [
@@ -17272,6 +17277,8 @@ function proofGraphHostSetupFeatureTargetFixture() {
     adminCheckId: "start-phase",
     browserProofCommand: devTestGameLiveProofCommand,
     recoveryCommand: devTestGameHostSetupProofCommand,
+    coverageDecision:
+      featureSpineCaseFixture("host-setup-route").spineTarget.coverageDecision,
   };
 }
 
@@ -17289,6 +17296,8 @@ function proofGraphCohostFeatureTargetFixture() {
     adminCheckId: "cohost-console",
     browserProofCommand: devTestGameLiveProofCommand,
     recoveryCommand: devTestGameCohostConsoleProofCommand,
+    coverageDecision:
+      featureSpineCaseFixture("cohost-console").spineTarget.coverageDecision,
   };
 }
 
@@ -17307,6 +17316,9 @@ function proofGraphReplacementFeatureTargetFixture() {
     adminCheckId: "replacement-incoming-player",
     browserProofCommand: devTestGameLiveProofCommand,
     recoveryCommand: devTestGameReplacementPlayerProofCommand,
+    coverageDecision:
+      featureSpineCaseFixture("replacement-player-role-surface").spineTarget
+        .coverageDecision,
   };
 }
 
@@ -17324,6 +17336,9 @@ function proofGraphReplacementActionFeatureTargetFixture() {
     adminCheckId: "replacement-incoming-action",
     browserProofCommand: devTestGameLiveProofCommand,
     recoveryCommand: devTestGameReplacementActionProofCommand,
+    coverageDecision:
+      featureSpineCaseFixture("replacement-action-recovery").spineTarget
+        .coverageDecision,
   };
 }
 
@@ -17344,6 +17359,9 @@ function proofGraphReplacementPrivateFeatureTargetFixture() {
     adminCheckId: "replacement-stale-private-channel",
     browserProofCommand: devTestGameLiveProofCommand,
     recoveryCommand: devTestGameReplacementPrivateProofCommand,
+    coverageDecision:
+      featureSpineCaseFixture("replacement-private-channel-recovery").spineTarget
+        .coverageDecision,
   };
 }
 
@@ -17518,6 +17536,7 @@ function nextActionAdminProofFixture() {
         "selected-spine-admin-check",
         "selected-spine-rerun-command",
         "selected-spine-browser-proof",
+        "selected-spine-coverage-decision",
         "seed-proof-lane-coverage-trace",
         "release-readiness-selection-trace",
       ],

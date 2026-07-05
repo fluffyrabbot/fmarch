@@ -564,6 +564,8 @@ export function assertNextActionAdminProof(evidence) {
       typeof target.checkpointId !== "string" ||
       typeof target.adminCheckId !== "string" ||
       typeof target.browserProofCommand !== "string" ||
+      target.coverageDecision === null ||
+      typeof target.coverageDecision !== "object" ||
       target.featureSlotId !== declaration.featureSlotId ||
       target.adminCheckId !== declaration.adminCheckId ||
       typeof drilldown?.featureSlotId !== "string" ||
@@ -591,6 +593,9 @@ export function assertNextActionAdminProof(evidence) {
       ) ||
       !evidence.adminRoleSurface?.visibleChecks?.includes(
         "selected-spine-browser-proof",
+      ) ||
+      !evidence.adminRoleSurface?.visibleChecks?.includes(
+        "selected-spine-coverage-decision",
       )
     ) {
       throw new Error("next-action admin proof missing selected spine target row");
@@ -781,12 +786,14 @@ function requiredChecksForNextAction(nextAction) {
       checks.push("selected-spine-admin-check");
       checks.push("selected-spine-rerun-command");
       checks.push("selected-spine-browser-proof");
+      checks.push("selected-spine-coverage-decision");
     }
     if (
       nextAction.nextAction.unproven.selectedProductionFeatureGraph !== undefined
     ) {
       checks.push("selected-production-feature-graph-node");
       checks.push("selected-production-feature-graph-edge");
+      checks.push("selected-production-feature-graph-coverage-decision");
     }
   }
   if (nextAction.nextAction.stability?.source !== undefined) {
@@ -1138,6 +1145,7 @@ function requiredChecksForEvidence(evidence) {
                 "selected-spine-admin-check",
                 "selected-spine-rerun-command",
                 "selected-spine-browser-proof",
+                "selected-spine-coverage-decision",
               ]),
           ...(evidence.generatedFrom?.unprovenSelectedProductionFeatureGraph ===
             null ||
@@ -1147,6 +1155,7 @@ function requiredChecksForEvidence(evidence) {
             : [
                 "selected-production-feature-graph-node",
                 "selected-production-feature-graph-edge",
+                "selected-production-feature-graph-coverage-decision",
               ]),
         ]
       : []),
