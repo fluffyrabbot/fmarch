@@ -74,7 +74,10 @@ import {
   devTestGameProductionFeatureBrowserProofCommand,
   productionFeatureSpineSourceCheckRules,
 } from "./dev_test_game_production_feature_source_rules.mjs";
-import { devTestGameProofGraphPath } from "./dev_test_game_proof_graph_paths.mjs";
+import {
+  devTestGameProofGraphCommand,
+  devTestGameProofGraphPath,
+} from "./dev_test_game_proof_graph_paths.mjs";
 import {
   assertRecoveryReceiptGraphSummary,
   recoveryReceiptGraphDescriptors,
@@ -185,6 +188,12 @@ export function buildDevTestGameNextAction(
   const seedProofLaneCoverageTrace = buildSeedProofLaneCoverageTrace(
     seedProofLaneCoverageDrift,
   );
+  const proofGraphDestinationSummaryDrift =
+    proofGraphDestinationSummaryDriftFromProofGraph(graph, {
+      source: proofGraphSource,
+    });
+  const proofGraphDestinationSummaryTrace =
+    buildProofGraphDestinationSummaryTrace(proofGraphDestinationSummaryDrift);
   const releaseReadinessCandidates = rankedBuildableReleaseReadinessItems(readiness, {
     hostedTargetPreflight: hostedPreflight,
     sourceTargetsByCheckId,
@@ -264,6 +273,28 @@ export function buildDevTestGameNextAction(
               buildSlice:
                 "Stabilize the critical host-confirm browser interaction before expanding the production-facing seeded proof spine.",
               proofTarget: devTestGameSessionPath,
+            },
+          }
+      : proofGraphDestinationSummaryDrift.status === "drifted"
+        ? {
+            command: `npm run ${devTestGameProofGraphCommand}`,
+            reason: "proof-graph-destination-summary-drift",
+            status: "blocked",
+            proofGraphDestinationSummary: {
+              source: proofGraphDestinationSummaryDrift.source,
+              summaryStatus: proofGraphDestinationSummaryDrift.summaryStatus,
+              totalDestinationCount:
+                proofGraphDestinationSummaryDrift.totalDestinationCount,
+              productionFeatureTargetCount:
+                proofGraphDestinationSummaryDrift.productionFeatureTargetCount,
+              adminAuditDestinationCount:
+                proofGraphDestinationSummaryDrift.adminAuditDestinationCount,
+              roleUrlDestinationCount:
+                proofGraphDestinationSummaryDrift.roleUrlDestinationCount,
+              driftCount: proofGraphDestinationSummaryDrift.driftCount,
+              buildSlice:
+                "Refresh the proof graph so its production-feature destination summary matches the production-feature target inventory before next-action or readiness guidance is trusted.",
+              proofTarget: devTestGameProofGraphPath,
             },
           }
       : seedProofLaneCoverageDrift.status === "drifted"
@@ -459,6 +490,10 @@ export function buildDevTestGameNextAction(
         : {
             proofGraph: proofGraphSource,
             proofGraphGeneratedAt: graph.generatedAt,
+            proofGraphDestinationSummaryStatus:
+              proofGraphDestinationSummaryDrift.status,
+            proofGraphDestinationSummaryDriftCount:
+              proofGraphDestinationSummaryDrift.driftCount,
             ...(terminalBatchGraph === null
               ? {}
               : { terminalBatchGraph }),
@@ -468,6 +503,7 @@ export function buildDevTestGameNextAction(
     nextAction,
     selectionTrace,
     stabilityTrace,
+    proofGraphDestinationSummaryTrace,
     seedProofLaneCoverageTrace,
     localReadinessDependencyTrace,
     releaseReadinessTrace,
@@ -510,6 +546,7 @@ export function assertDevTestGameNextAction(evidence) {
       "all-artifacts-fresh",
       "artifact-not-fresh",
       "harness-stability-drift",
+      "proof-graph-destination-summary-drift",
       "seed-proof-lane-coverage-drift",
       "release-readiness-local-check-missing",
       "release-readiness-unproven",
@@ -620,6 +657,22 @@ export function assertDevTestGameNextAction(evidence) {
   ) {
     throw new Error("next-action harness-stability recovery is missing stability evidence");
   }
+  if (evidence.nextAction.reason === "proof-graph-destination-summary-drift") {
+    if (
+      evidence.nextAction.command !== `npm run ${devTestGameProofGraphCommand}` ||
+      evidence.nextAction.status !== "blocked" ||
+      typeof evidence.nextAction.proofGraphDestinationSummary?.source !== "string" ||
+      evidence.nextAction.proofGraphDestinationSummary.proofTarget !==
+        devTestGameProofGraphPath ||
+      !Number.isInteger(
+        evidence.nextAction.proofGraphDestinationSummary.driftCount,
+      )
+    ) {
+      throw new Error(
+        "next-action proof graph destination-summary recovery is missing drift evidence",
+      );
+    }
+  }
   if (evidence.nextAction.reason === "seed-proof-lane-coverage-drift") {
     if (
       typeof evidence.nextAction.seedProofLaneCoverage?.source !== "string" ||
@@ -639,6 +692,10 @@ export function assertDevTestGameNextAction(evidence) {
   }
   assertSelectionTrace(evidence.selectionTrace, evidence.nextAction);
   assertProofStabilityTrace(evidence.stabilityTrace, evidence.nextAction);
+  assertProofGraphDestinationSummaryTrace(
+    evidence.proofGraphDestinationSummaryTrace,
+    evidence.nextAction,
+  );
   assertSeedProofLaneCoverageTrace(
     evidence.seedProofLaneCoverageTrace,
     evidence.nextAction,
@@ -1182,6 +1239,65 @@ function buildSeedProofLaneCoverageTrace(seedProofLaneCoverageDrift) {
       seedProofLaneCoverageDrift.unclassifiedLaneCount,
     unclassifiedLaneIds: seedProofLaneCoverageDrift.unclassifiedLaneIds,
     selected: seedProofLaneCoverageDrift.status === "drifted",
+  };
+}
+
+function proofGraphDestinationSummaryDriftFromProofGraph(
+  proofGraph,
+  { source = devTestGameProofGraphPath } = {},
+) {
+  const summary = proofGraph?.summary?.productionFeatureDestinationSummary;
+  const productionFeatureTargetCount = numberOrZero(
+    proofGraph?.summary?.productionFeatureTargetCount,
+  );
+  const totalDestinationCount = numberOrZero(summary?.totalDestinationCount);
+  const adminAuditDestinationCount = numberOrZero(
+    summary?.adminAuditDestinationCount,
+  );
+  const roleUrlDestinationCount = numberOrZero(summary?.roleUrlDestinationCount);
+  const driftCount = numberOrZero(
+    summary?.driftCount ?? totalDestinationCount - productionFeatureTargetCount,
+  );
+  const summaryStatus = String(summary?.status ?? "missing");
+  const status =
+    proofGraph === null
+      ? "unavailable"
+      : summaryStatus === "passed" &&
+          driftCount === 0 &&
+          totalDestinationCount === productionFeatureTargetCount
+        ? "clean"
+        : "drifted";
+  return {
+    strategy: "proof-graph-destination-summary-before-readiness",
+    status,
+    source: proofGraph === null ? "" : source,
+    summaryStatus,
+    totalDestinationCount,
+    productionFeatureTargetCount,
+    adminAuditDestinationCount,
+    roleUrlDestinationCount,
+    driftCount,
+  };
+}
+
+function buildProofGraphDestinationSummaryTrace(
+  proofGraphDestinationSummaryDrift,
+) {
+  return {
+    strategy: proofGraphDestinationSummaryDrift.strategy,
+    status: proofGraphDestinationSummaryDrift.status,
+    source: proofGraphDestinationSummaryDrift.source,
+    summaryStatus: proofGraphDestinationSummaryDrift.summaryStatus,
+    totalDestinationCount:
+      proofGraphDestinationSummaryDrift.totalDestinationCount,
+    productionFeatureTargetCount:
+      proofGraphDestinationSummaryDrift.productionFeatureTargetCount,
+    adminAuditDestinationCount:
+      proofGraphDestinationSummaryDrift.adminAuditDestinationCount,
+    roleUrlDestinationCount:
+      proofGraphDestinationSummaryDrift.roleUrlDestinationCount,
+    driftCount: proofGraphDestinationSummaryDrift.driftCount,
+    selected: proofGraphDestinationSummaryDrift.status === "drifted",
   };
 }
 
@@ -1979,6 +2095,55 @@ function assertProofStabilityTrace(stabilityTrace, nextAction) {
     stabilityTrace.selected === true
   ) {
     throw new Error("next-action stability trace selected without drift action");
+  }
+}
+
+function assertProofGraphDestinationSummaryTrace(
+  proofGraphDestinationSummaryTrace,
+  nextAction,
+) {
+  if (
+    proofGraphDestinationSummaryTrace?.strategy !==
+      "proof-graph-destination-summary-before-readiness" ||
+    !["clean", "drifted", "unavailable"].includes(
+      proofGraphDestinationSummaryTrace.status,
+    ) ||
+    typeof proofGraphDestinationSummaryTrace.selected !== "boolean" ||
+    typeof proofGraphDestinationSummaryTrace.summaryStatus !== "string" ||
+    !Number.isInteger(proofGraphDestinationSummaryTrace.totalDestinationCount) ||
+    !Number.isInteger(
+      proofGraphDestinationSummaryTrace.productionFeatureTargetCount,
+    ) ||
+    !Number.isInteger(
+      proofGraphDestinationSummaryTrace.adminAuditDestinationCount,
+    ) ||
+    !Number.isInteger(proofGraphDestinationSummaryTrace.roleUrlDestinationCount) ||
+    !Number.isInteger(proofGraphDestinationSummaryTrace.driftCount)
+  ) {
+    throw new Error(
+      "next-action proof graph destination-summary trace is missing or malformed",
+    );
+  }
+  if (
+    nextAction.reason === "proof-graph-destination-summary-drift" &&
+    (proofGraphDestinationSummaryTrace.status !== "drifted" ||
+      proofGraphDestinationSummaryTrace.selected !== true ||
+      nextAction.proofGraphDestinationSummary?.driftCount !==
+        proofGraphDestinationSummaryTrace.driftCount ||
+      nextAction.proofGraphDestinationSummary?.summaryStatus !==
+        proofGraphDestinationSummaryTrace.summaryStatus)
+  ) {
+    throw new Error(
+      "next-action proof graph destination-summary trace does not match selected drift",
+    );
+  }
+  if (
+    nextAction.reason !== "proof-graph-destination-summary-drift" &&
+    proofGraphDestinationSummaryTrace.selected === true
+  ) {
+    throw new Error(
+      "next-action proof graph destination-summary trace selected without drift action",
+    );
   }
 }
 

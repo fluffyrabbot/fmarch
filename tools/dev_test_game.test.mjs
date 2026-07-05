@@ -2989,6 +2989,57 @@ test("dev test-game next-action derives one local recovery command from the mani
       ],
     },
   );
+  const driftedDestinationSummaryProofGraph = JSON.parse(
+    JSON.stringify(nextActionProofGraphFixture()),
+  );
+  driftedDestinationSummaryProofGraph.summary.productionFeatureDestinationSummary = {
+    ...driftedDestinationSummaryProofGraph.summary
+      .productionFeatureDestinationSummary,
+    status: "drift",
+    driftCount: 1,
+  };
+  const destinationSummaryDriftAction = buildDevTestGameNextAction(freshManifest, {
+    generatedAt: "2026-06-26T00:00:01.000Z",
+    opsArtifacts: devTestGameOpsArtifactsFixture(),
+    raceCoverage: devTestGameRaceCoverageFixture(),
+    proofGraph: driftedDestinationSummaryProofGraph,
+    releaseReadinessChecklist: devTestGameReleaseReadinessChecklistFixture({
+      unproven: [],
+    }),
+  });
+  assertDevTestGameNextAction(destinationSummaryDriftAction);
+  assert.deepEqual(destinationSummaryDriftAction.nextAction, {
+    command: `npm run ${devTestGameProofGraphCommand}`,
+    reason: "proof-graph-destination-summary-drift",
+    status: "blocked",
+    proofGraphDestinationSummary: {
+      source: "target/dev-test-game/proof-graph.json",
+      summaryStatus: "drift",
+      totalDestinationCount: 1,
+      productionFeatureTargetCount: 1,
+      adminAuditDestinationCount: 1,
+      roleUrlDestinationCount: 0,
+      driftCount: 1,
+      buildSlice:
+        "Refresh the proof graph so its production-feature destination summary matches the production-feature target inventory before next-action or readiness guidance is trusted.",
+      proofTarget: "target/dev-test-game/proof-graph.json",
+    },
+  });
+  assert.deepEqual(
+    destinationSummaryDriftAction.proofGraphDestinationSummaryTrace,
+    {
+      strategy: "proof-graph-destination-summary-before-readiness",
+      status: "drifted",
+      source: "target/dev-test-game/proof-graph.json",
+      summaryStatus: "drift",
+      totalDestinationCount: 1,
+      productionFeatureTargetCount: 1,
+      adminAuditDestinationCount: 1,
+      roleUrlDestinationCount: 0,
+      driftCount: 1,
+      selected: true,
+    },
+  );
   const driftedSeedProofLaneCoverage = seedProofLaneCoverageFixture({
     unclassifiedLaneIds: ["new-production-proof-lane"],
   });
@@ -18131,12 +18182,15 @@ function nextActionProofGraphFixture(slotId = "player-action-submission") {
   const target = resolvedFeatureSpineTargetFixture(slotId);
   const sourceNodeId = productionFeatureGraphSourceNodeId(target.sourceCheckId);
   const nodeId = `production-feature:${slotId}`;
-  return {
+  const graph = {
     version: 1,
     proof: "dev-test-game-proof-graph",
     status: "passed",
     generatedAt: "2026-06-26T00:00:00.000Z",
     scope: "local-dev-test-game-proof-graph",
+    summary: {
+      productionFeatureTargetCount: 1,
+    },
     nodes: [
       {
         id: nodeId,
@@ -18160,6 +18214,14 @@ function nextActionProofGraphFixture(slotId = "player-action-submission") {
         command: target.browserProofCommand,
       },
     ],
+  };
+  return {
+    ...graph,
+    summary: {
+      ...graph.summary,
+      productionFeatureDestinationSummary:
+        proofGraphProductionFeatureDestinationSummary(graph),
+    },
   };
 }
 
