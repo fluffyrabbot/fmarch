@@ -6,10 +6,12 @@ import {
   buildNextActionAdminSurfaceReadinessCheck,
   buildProofFreshnessAdminSurfaceReadinessCheck,
   buildProofGraphAdminRoleHandoffsReadinessCheck,
+  buildProofGraphNextActionHandoffReadinessCheck,
   getLocalReadinessDependency,
   localReadinessDependencyRecoveryFor,
   localHostedEvidenceLaneDemoProofCheckId,
   localProofGraphAdminRoleHandoffsCheckId,
+  localProofGraphNextActionHandoffCheckId,
   localSeedDemoFixtureCheckId,
 } from "./dev_test_game_local_readiness_dependencies.mjs";
 import { assertDevTestGameProofRun } from "./dev_test_game_proof_contract.mjs";
@@ -1309,6 +1311,13 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
     localChecks.push(
       buildProofGraphAdminRoleHandoffsReadinessCheck(proofGraphAdminProofEvidence),
     );
+    if (proofGraphAdminProofEvidence.nextActionHandoffDestination !== null) {
+      localChecks.push(
+        buildProofGraphNextActionHandoffReadinessCheck(
+          proofGraphAdminProofEvidence,
+        ),
+      );
+    }
   }
   if (proofFreshnessAdminProofEvidence !== undefined) {
     localChecks.push(
@@ -5585,6 +5594,13 @@ export function validateDevTestGameProofGraphAdminProof(proof, options = {}) {
       throw new Error(`proof graph admin proof missing visible edge: ${edgeRowId}`);
     }
   }
+  const nextActionHandoffDestination = proofGraphAdminProofIncludesTerminalReceipts(
+    proof,
+  )
+    ? validateProofGraphNextActionHandoffDestination(proof, {
+        visibleDestinations,
+      })
+    : null;
   if (proofGraphAdminProofIncludesTerminalReceipts(proof)) {
     validateProofGraphAdminTerminalReceiptArtifact(proof);
   }
@@ -5610,7 +5626,99 @@ export function validateDevTestGameProofGraphAdminProof(proof, options = {}) {
     roleHandoffCount: handoffs.length,
     roleHandoffIds: handoffs.map((handoff) => String(handoff.linkId)),
     destinationAuditIds,
+    nextActionHandoffDestination,
     ...(options.artifact === undefined ? {} : { artifact: options.artifact }),
+  };
+}
+
+function validateProofGraphNextActionHandoffDestination(
+  proof,
+  { visibleDestinations },
+) {
+  const pair = devTestGameNextActionSequenceHandoffPair();
+  const destination = visibleDestinations.find(
+    (item) =>
+      item?.linkId === pair.id &&
+      item.auditId === localAdminAuditIds.nextAction,
+  );
+  if (destination === undefined) {
+    throw new Error(
+      "proof graph admin proof missing next-action handoff destination",
+    );
+  }
+  if (!proof.adminRoleSurface?.visibleRelatedLinks?.includes(pair.id)) {
+    throw new Error(
+      "proof graph admin proof missing next-action handoff related link",
+    );
+  }
+  if (
+    destination.detailRoleUrl !==
+    localAdminAuditRoleUrl(localAdminAuditIds.nextAction)
+  ) {
+    throw new Error(
+      "proof graph admin proof next-action handoff destination URL drifted",
+    );
+  }
+  const visibleChecks = Array.isArray(destination.visibleChecks)
+    ? destination.visibleChecks
+    : [];
+  if (!visibleChecks.includes(pair.id)) {
+    throw new Error(
+      "proof graph admin proof next-action destination missing handoff check",
+    );
+  }
+  const expectedRows = [
+    "summary",
+    pair.defaultSequenceBlocker.id,
+    pair.hostedIdentityPredicate.id,
+  ];
+  for (const rowId of expectedRows) {
+    const visibleRows = Array.isArray(
+      destination.visibleNextActionHandoffPairRows,
+    )
+      ? destination.visibleNextActionHandoffPairRows
+      : [];
+    if (!visibleRows.includes(rowId)) {
+      throw new Error(
+        `proof graph admin proof next-action destination missing handoff row: ${rowId}`,
+      );
+    }
+  }
+  const expectedStatuses = {
+    summary: pair.proofBoundary,
+    [pair.defaultSequenceBlocker.id]: [
+      pair.defaultSequenceBlocker.expectedReason,
+      pair.defaultSequenceBlocker.expectedActionStatus,
+    ].join("\n"),
+    [pair.hostedIdentityPredicate.id]: [
+      pair.hostedIdentityPredicate.expectedReason,
+      pair.hostedIdentityPredicate.expectedActionStatus,
+    ].join("\n"),
+  };
+  for (const [rowId, expectedStatus] of Object.entries(expectedStatuses)) {
+    const visibleStatus =
+      destination.visibleNextActionHandoffPairRowStatuses?.[rowId];
+    if (
+      typeof visibleStatus !== "string" ||
+      !visibleStatus.includes(expectedStatus)
+    ) {
+      throw new Error(
+        `proof graph admin proof next-action destination row drifted: ${rowId}`,
+      );
+    }
+  }
+  return {
+    linkId: pair.id,
+    auditId: localAdminAuditIds.nextAction,
+    detailRoleUrl: destination.detailRoleUrl,
+    visibleChecks: [...visibleChecks],
+    visibleNextActionHandoffPairRows: [...expectedRows],
+    visibleNextActionHandoffPairRowStatuses: Object.fromEntries(
+      Object.keys(expectedStatuses).map((rowId) => [
+        rowId,
+        destination.visibleNextActionHandoffPairRowStatuses[rowId],
+      ]),
+    ),
   };
 }
 
@@ -7392,6 +7500,32 @@ export function assertDevTestGameReleaseReadiness(checklist) {
       ))
   ) {
     throw new Error("dev-test-game proof graph admin handoff check is malformed");
+  }
+  const proofGraphNextActionHandoffCheck =
+    checklist.localDevelopmentSpine?.checks?.find(
+      (check) => check.id === localProofGraphNextActionHandoffCheckId,
+    );
+  if (
+    proofGraphNextActionHandoffCheck !== undefined &&
+    (proofGraphNextActionHandoffCheck.linkId !==
+      "next-action-sequence-handoff" ||
+      proofGraphNextActionHandoffCheck.auditId !==
+        localAdminAuditIds.nextAction ||
+      proofGraphNextActionHandoffCheck.detailRoleUrl !==
+        localAdminAuditRoleUrl(localAdminAuditIds.nextAction) ||
+      !proofGraphNextActionHandoffCheck.visibleChecks?.includes(
+        "next-action-sequence-handoff",
+      ) ||
+      !proofGraphNextActionHandoffCheck.visibleNextActionHandoffPairRows?.includes(
+        "default-sequence-blocker",
+      ) ||
+      !proofGraphNextActionHandoffCheck.visibleNextActionHandoffPairRows?.includes(
+        "opt-in-hosted-identity-predicate",
+      ))
+  ) {
+    throw new Error(
+      "dev-test-game proof graph next-action handoff check is malformed",
+    );
   }
   for (const item of checklist.releaseReadiness?.unproven ?? []) {
     if (item.status !== "unproven") {

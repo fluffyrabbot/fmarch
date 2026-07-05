@@ -19,6 +19,8 @@ import {
 
 export const localProofGraphAdminRoleHandoffsCheckId =
   "local-proof-graph-admin-role-handoffs";
+export const localProofGraphNextActionHandoffCheckId =
+  "local-proof-graph-next-action-handoff";
 export const localProofFreshnessAdminSurfaceCheckId =
   "local-proof-freshness-admin-surface";
 export const localNextActionAdminSurfaceCheckId =
@@ -47,9 +49,23 @@ export const localReadinessDependencies = Object.freeze([
       "Passed proof graph admin role-handoff check in the generated release-readiness checklist",
   }),
   Object.freeze({
+    id: localProofGraphNextActionHandoffCheckId,
+    label: "Proof graph next-action handoff",
+    priority: 1,
+    command: `npm run ${devTestGameProofGraphAdminProofCommand}`,
+    buildSlice:
+      "Refresh the proof graph admin browser proof so the terminal batch links to the next-action handoff detail before hosted readiness work can be selected.",
+    proofTarget: devTestGameProofGraphAdminProofPath,
+    roleUrl: localAdminAuditRoleUrl(localAdminAuditIds.proofGraph),
+    proofBoundary:
+      "Local browser proof that the proof graph terminal batch links to the next-action handoff detail and verifies the default blocker plus opt-in hosted identity predicate rows. This recovers a local readiness dependency only; it does not prove hosted deployment, release readiness, or production readiness.",
+    requiredEvidence:
+      "Passed proof graph next-action handoff check in the generated release-readiness checklist",
+  }),
+  Object.freeze({
     id: localProofFreshnessAdminSurfaceCheckId,
     label: "Proof freshness admin surface",
-    priority: 1,
+    priority: 2,
     command: `npm run ${proofFreshnessAdminProofCommand}`,
     buildSlice:
       "Refresh the proof-freshness admin browser proof before hosted readiness work can be selected.",
@@ -63,7 +79,7 @@ export const localReadinessDependencies = Object.freeze([
   Object.freeze({
     id: localNextActionAdminSurfaceCheckId,
     label: "Next-action admin surface",
-    priority: 2,
+    priority: 3,
     command: `npm run ${nextActionAdminProofCommand}`,
     buildSlice:
       "Refresh the next-action admin browser proof before hosted readiness work can be selected.",
@@ -77,7 +93,7 @@ export const localReadinessDependencies = Object.freeze([
   Object.freeze({
     id: localSeedDemoFixtureCheckId,
     label: "Local seed/demo fixture summary",
-    priority: 3,
+    priority: 4,
     command: `npm run ${devTestGameSeedFixtureCommand}`,
     buildSlice:
       "Generate the local seed/demo fixture inventory and admin proof before choosing hosted readiness work.",
@@ -92,7 +108,7 @@ export const localReadinessDependencies = Object.freeze([
   Object.freeze({
     id: localHostedEvidenceLaneDemoProofCheckId,
     label: "Local hosted evidence lane demo proof",
-    priority: 4,
+    priority: 5,
     command: `npm run ${devTestGameHostedEvidenceLaneDemoProofCommand}`,
     buildSlice:
       "Refresh the local hosted evidence lane demo proof before choosing hosted deployment work.",
@@ -231,6 +247,38 @@ export function buildProofGraphAdminRoleHandoffsReadinessCheck(
     roleHandoffCount: proofGraphAdminProofEvidence.roleHandoffCount,
     roleHandoffIds: proofGraphAdminProofEvidence.roleHandoffIds,
     destinationAuditIds: proofGraphAdminProofEvidence.destinationAuditIds,
+    adminRoleSurface: proofGraphAdminProofEvidence,
+  };
+}
+
+export function buildProofGraphNextActionHandoffReadinessCheck(
+  proofGraphAdminProofEvidence,
+) {
+  const dependency = getLocalReadinessDependency(
+    localProofGraphNextActionHandoffCheckId,
+  );
+  if (dependency === undefined) {
+    throw new Error(
+      "proof graph next-action handoff readiness dependency is missing a recovery contract",
+    );
+  }
+  const handoff = proofGraphAdminProofEvidence.nextActionHandoffDestination;
+  return {
+    id: dependency.id,
+    label: dependency.label,
+    status: "passed",
+    dependencyGated: true,
+    evidence: proofGraphAdminProofEvidence.path,
+    proofBoundary: proofGraphAdminProofEvidence.proofBoundary,
+    recovery: buildLocalReadinessDependencyRecovery(dependency),
+    linkId: handoff.linkId,
+    auditId: handoff.auditId,
+    detailRoleUrl: handoff.detailRoleUrl,
+    visibleChecks: handoff.visibleChecks,
+    visibleNextActionHandoffPairRows:
+      handoff.visibleNextActionHandoffPairRows,
+    visibleNextActionHandoffPairRowStatuses:
+      handoff.visibleNextActionHandoffPairRowStatuses,
     adminRoleSurface: proofGraphAdminProofEvidence,
   };
 }

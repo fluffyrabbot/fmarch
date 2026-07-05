@@ -3204,7 +3204,7 @@ test("dev test-game next-action derives one local recovery command from the mani
   });
   assert.deepEqual(missingLocalDependencyAction.localReadinessDependencyTrace, {
     strategy: "local-readiness-dependency-before-hosted-work",
-    candidateCount: 1,
+    candidateCount: 2,
     selectedCheckId: "local-proof-graph-admin-role-handoffs",
     candidates: [
       {
@@ -3222,6 +3222,22 @@ test("dev test-game next-action derives one local recovery command from the mani
           "Local browser proof that the proof graph admin surface follows every mapped admin-proof role URL. This recovers a local readiness dependency only; it does not prove hosted deployment, release readiness, or production readiness.",
         requiredEvidence:
           "Passed proof graph admin role-handoff check in the generated release-readiness checklist",
+      },
+      {
+        rank: 2,
+        id: "local-proof-graph-next-action-handoff",
+        status: "missing",
+        priority: 1,
+        selected: false,
+        command: "npm run test:dev-test-game-proof-graph-admin-proof",
+        buildSlice:
+          "Refresh the proof graph admin browser proof so the terminal batch links to the next-action handoff detail before hosted readiness work can be selected.",
+        proofTarget: "target/dev-test-game/proof-graph-admin-proof.json",
+        roleUrl: "/admin/audit/local-proof-graph?game=<seeded-game>",
+        proofBoundary:
+          "Local browser proof that the proof graph terminal batch links to the next-action handoff detail and verifies the default blocker plus opt-in hosted identity predicate rows. This recovers a local readiness dependency only; it does not prove hosted deployment, release readiness, or production readiness.",
+        requiredEvidence:
+          "Passed proof graph next-action handoff check in the generated release-readiness checklist",
       },
     ],
   });
@@ -3276,7 +3292,7 @@ test("dev test-game next-action derives one local recovery command from the mani
           rank: 1,
           id: "local-seed-demo-fixture",
           status: "missing",
-          priority: 3,
+          priority: 4,
           selected: true,
           command: devTestGameSeedFixtureCommand,
           buildSlice:
@@ -3480,7 +3496,7 @@ test("dev test-game next-action derives one local recovery command from the mani
           rank: 1,
           id: "local-proof-freshness-admin-surface",
           status: "missing",
-          priority: 1,
+          priority: 2,
           selected: true,
           command: "npm run test:dev-test-game-proof-freshness-admin-proof",
           buildSlice:
@@ -3496,7 +3512,7 @@ test("dev test-game next-action derives one local recovery command from the mani
           rank: 2,
           id: "local-next-action-admin-surface",
           status: "missing",
-          priority: 2,
+          priority: 3,
           selected: false,
           command: "npm run test:dev-test-game-next-action-admin-proof",
           buildSlice:
@@ -3556,7 +3572,7 @@ test("dev test-game next-action derives one local recovery command from the mani
           rank: 1,
           id: "local-next-action-admin-surface",
           status: "missing",
-          priority: 2,
+          priority: 3,
           selected: true,
           command: "npm run test:dev-test-game-next-action-admin-proof",
           buildSlice:
@@ -3617,7 +3633,7 @@ test("dev test-game next-action derives one local recovery command from the mani
           rank: 1,
           id: "local-hosted-evidence-lane-demo-proof",
           status: "missing",
-          priority: 4,
+          priority: 5,
           selected: true,
           command: `npm run ${devTestGameHostedEvidenceLaneDemoProofCommand}`,
           buildSlice:
@@ -14395,6 +14411,26 @@ test("session card and markdown include role credential URLs and tokens", async 
       .roleHandoffCount,
     adminProofDestinationRequirementLinkRows.length,
   );
+  const nextActionHandoffCheck =
+    proofGraphHandoffReadiness.localDevelopmentSpine.checks.find(
+      (item) => item.id === "local-proof-graph-next-action-handoff",
+    );
+  assert.equal(nextActionHandoffCheck.status, "passed");
+  assert.equal(nextActionHandoffCheck.linkId, "next-action-sequence-handoff");
+  assert.equal(nextActionHandoffCheck.auditId, localAdminAuditIds.nextAction);
+  assert.deepEqual(
+    nextActionHandoffCheck.visibleNextActionHandoffPairRows,
+    [
+      "summary",
+      "default-sequence-blocker",
+      "opt-in-hosted-identity-predicate",
+    ],
+  );
+  assert.deepEqual(
+    proofGraphHandoffReadiness.localDevelopmentSpine.evidence.proofGraphAdminProof
+      .nextActionHandoffDestination,
+    nextActionHandoffDestinationFixture(),
+  );
   const proofFreshnessAdminReadiness = buildDevTestGameReleaseReadiness(proofRun, {
     generatedAt: "2026-06-26T00:00:00.000Z",
     proofFreshnessAdminProofPath:
@@ -15134,6 +15170,27 @@ function devTestGameReleaseReadinessChecklistFixture({
                 roleHandoffCount: 10,
                 roleHandoffIds: ["admin-proof:release"],
                 destinationAuditIds: ["local-release-readiness"],
+              },
+              {
+                id: "local-proof-graph-next-action-handoff",
+                label: "Proof graph next-action handoff",
+                status: "passed",
+                dependencyGated: true,
+                evidence: "target/dev-test-game/proof-graph-admin-proof.json",
+                proofBoundary:
+                  "Local browser proof that the proof graph admin surface follows every mapped admin-proof role URL.",
+                recovery: {
+                  command: "npm run test:dev-test-game-proof-graph-admin-proof",
+                  buildSlice:
+                    "Refresh the proof graph admin browser proof so the terminal batch links to the next-action handoff detail before hosted readiness work can be selected.",
+                  proofTarget: "target/dev-test-game/proof-graph-admin-proof.json",
+                  roleUrl: "/admin/audit/local-proof-graph?game=<seeded-game>",
+                  proofBoundary:
+                    "Local browser proof that the proof graph terminal batch links to the next-action handoff detail and verifies the default blocker plus opt-in hosted identity predicate rows. This recovers a local readiness dependency only; it does not prove hosted deployment, release readiness, or production readiness.",
+                  requiredEvidence:
+                    "Passed proof graph next-action handoff check in the generated release-readiness checklist",
+                },
+                ...nextActionHandoffDestinationFixture(),
               },
             ]
           : []),
@@ -19739,6 +19796,7 @@ function proofGraphAdminProofFixture() {
       visibleRelatedLinks: [
         ...proofGraphDiagnosticProofNodes.map((node) => node.id),
         ...handoffs.map((handoff) => handoff.linkId),
+        "next-action-sequence-handoff",
         hostSetupGraphTarget.roleSurfaceNodeId,
         hostSetupGraphTarget.productionFeatureNodeId,
         coreLoopProductionFeatureTarget.productionFeatureNodeId,
@@ -19780,6 +19838,7 @@ function proofGraphAdminProofFixture() {
               }
             : {}),
         })),
+        nextActionHandoffDestinationFixture(),
         ...productionFeatureTargetDestinations
           .filter((destination) => destination.kind === "admin-audit")
           .map((destination) => ({
@@ -21492,6 +21551,48 @@ function adminSpineTerminalBatchesFixture() {
 
 function nextActionHandoffPairFixture() {
   return devTestGameNextActionSequenceHandoffPair();
+}
+
+function nextActionHandoffDestinationFixture() {
+  const pair = nextActionHandoffPairFixture();
+  return {
+    linkId: pair.id,
+    auditId: localAdminAuditIds.nextAction,
+    detailRoleUrl: localAdminAuditRoleUrl(localAdminAuditIds.nextAction),
+    visibleChecks: [pair.id],
+    visibleNextActionHandoffPairRows: [
+      "summary",
+      pair.defaultSequenceBlocker.id,
+      pair.hostedIdentityPredicate.id,
+    ],
+    visibleNextActionHandoffPairRowStatuses: {
+      summary: [
+        pair.status,
+        pair.id,
+        pair.proofBoundary,
+      ].join("\n"),
+      [pair.defaultSequenceBlocker.id]: [
+        pair.defaultSequenceBlocker.label,
+        pair.defaultSequenceBlocker.status,
+        pair.defaultSequenceBlocker.proofId,
+        pair.defaultSequenceBlocker.expectedReason,
+        pair.defaultSequenceBlocker.expectedActionStatus,
+        pair.defaultSequenceBlocker.batchLabel,
+        pair.defaultSequenceBlocker.nextActionPath,
+        pair.defaultSequenceBlocker.adminProofPath,
+      ].join("\n"),
+      [pair.hostedIdentityPredicate.id]: [
+        pair.hostedIdentityPredicate.label,
+        pair.hostedIdentityPredicate.status,
+        pair.hostedIdentityPredicate.proofId,
+        pair.hostedIdentityPredicate.expectedReason,
+        pair.hostedIdentityPredicate.expectedActionStatus,
+        pair.hostedIdentityPredicate.batchLabel,
+        pair.hostedIdentityPredicate.nextActionPath,
+        pair.hostedIdentityPredicate.adminProofPath,
+      ].join("\n"),
+    },
+  };
 }
 
 function terminalAdminProofSmokeNameForId(proofId) {
