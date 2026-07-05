@@ -60,6 +60,7 @@ export {
   hostedIdentityEvidenceSectionInputRows,
   hostedIdentityEvidenceSectionInputStatuses,
   hostedIdentityExpectedRoleSurfaceContract,
+  hostedIdentityProviderBoundary,
   hostedIdentityRoleSurfaceContractDiff,
   requiredHostedIdentityEvidenceForCheck,
 } from "./dev_test_game_hosted_identity_evidence_cases.mjs";
@@ -79,6 +80,7 @@ import {
   hostedIdentityEvidenceRequirementGroupDefinitions,
   hostedIdentityEvidenceRequirementGroups,
   hostedIdentityExpectedRoleSurfaceContract,
+  hostedIdentityProviderBoundary,
   hostedIdentityRoleSurfaceContractDiff,
   requiredHostedIdentityEvidenceForCheck,
 } from "./dev_test_game_hosted_identity_evidence_cases.mjs";
@@ -211,6 +213,7 @@ export async function buildDevTestGameHostedIdentityEvidence({
       expectedRoleSurfaceContract: hostedIdentityExpectedRoleSurfaceContract,
       roleSurfaceContractDiff,
       identityAdapterContractComparison,
+      identityProviderBoundary: hostedIdentityProviderBoundary,
       redactedIntakePacket: summarizeHostedIdentityRedactedIntakePacket(source),
     },
     checks,

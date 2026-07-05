@@ -715,6 +715,40 @@
                 <span>{family.requiredInputIds.join(", ")}</span>
               </li>
             {/each}
+            {#if data.audit.hostedHandoffChecklist.operatorEvidenceGate.providerBoundary}
+              <li
+                class="admin-audit-detail__entry admin-audit-detail__entry--stack"
+                data-testid={`admin-audit-hosted-identity-provider-boundary-${data.audit.hostedHandoffChecklist.operatorEvidenceGate.providerBoundary.id}`}
+              >
+                <strong>{data.audit.hostedHandoffChecklist.operatorEvidenceGate.providerBoundary.status}</strong>
+                <span>{data.audit.hostedHandoffChecklist.operatorEvidenceGate.providerBoundary.architectureId}</span>
+                <span>{data.audit.hostedHandoffChecklist.operatorEvidenceGate.providerBoundary.providerCount} providers</span>
+                <span>{data.audit.hostedHandoffChecklist.operatorEvidenceGate.providerBoundary.roleSurfaceArchitectureChanged ? "role surface changed" : "role surface preserved"}</span>
+                <span>{data.audit.hostedHandoffChecklist.operatorEvidenceGate.providerBoundary.proofBoundary}</span>
+              </li>
+              {#each data.audit.hostedHandoffChecklist.operatorEvidenceGate.providerBoundary.providers as provider}
+                <li
+                  class="admin-audit-detail__entry admin-audit-detail__entry--stack"
+                  data-testid={`admin-audit-hosted-identity-provider-boundary-provider-${provider.id}`}
+                >
+                  <strong>{provider.status}</strong>
+                  <span>{provider.label}</span>
+                  <span>{provider.mode}</span>
+                  <span>{provider.accountCredential}</span>
+                  <span>{provider.inviteCredential}</span>
+                  <span>{provider.sessionCredential}</span>
+                  <span>{provider.loginBoundary}</span>
+                  <span>{provider.sessionBoundary}</span>
+                  <span>{provider.sessionGrantBoundary}</span>
+                  <span>{provider.browserCookieName}</span>
+                  <span>{provider.rawCredentialPolicy}</span>
+                  <span>{provider.roleSurfaceArchitectureChanged ? "role surface changed" : "role surface preserved"}</span>
+                  {#if provider.requiredEvidence}
+                    <span>{provider.requiredEvidence}</span>
+                  {/if}
+                </li>
+              {/each}
+            {/if}
             {#each data.audit.hostedHandoffChecklist.operatorEvidenceGate.rejectedRawEvidencePathKinds as kind}
               <li
                 class="admin-audit-detail__entry"

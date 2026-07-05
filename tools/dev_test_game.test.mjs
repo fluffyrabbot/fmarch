@@ -254,6 +254,7 @@ import {
   hostedIdentityEvidenceProgressionAdminProofPath,
   hostedIdentityEvidenceProgressionPath,
   hostedIdentityExpectedRoleSurfaceContract,
+  hostedIdentityProviderBoundary,
   hostedIdentityEvidencePlaceholderFixturePath,
   hostedIdentityEvidencePlaceholderSchema,
   hostedIdentityEvidenceRedactedPassFixturePath,
@@ -1472,6 +1473,14 @@ test("hosted identity evidence lane records blocked and passed handoffs", async 
     "passed",
   );
   assert.deepEqual(
+    placeholder.target.identityProviderBoundary,
+    hostedIdentityProviderBoundary,
+  );
+  assert.equal(
+    placeholder.hostedHandoffChecklist.operatorEvidenceGate.providerBoundary.id,
+    hostedIdentityProviderBoundary.id,
+  );
+  assert.deepEqual(
     placeholder.hostedHandoffChecklist.requirementGroups.find(
       (group) => group.id === "hosted-identity-evidence-intake",
     )?.blockedCheckIds,
@@ -1716,6 +1725,10 @@ test("hosted identity evidence lane records blocked and passed handoffs", async 
   );
   assert.equal(passed.target.roleSurfaceContractDiff.status, "passed");
   assert.deepEqual(passed.target.roleSurfaceContractDiff.mismatches, []);
+  assert.deepEqual(
+    passed.target.identityProviderBoundary,
+    hostedIdentityProviderBoundary,
+  );
   assert.deepEqual(
     {
       status: passed.target.identityAdapterContractComparison.status,

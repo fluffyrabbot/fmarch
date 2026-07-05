@@ -211,6 +211,50 @@ export const hostedIdentityExpectedRoleSurfaceContract = deepFreeze({
   },
 });
 
+export const hostedIdentityProviderBoundary = deepFreeze({
+  version: 1,
+  id: "identity-provider-role-surface-boundary-v1",
+  status: "blocked",
+  architectureId: hostedIdentityExpectedRoleSurfaceContract.architectureId,
+  roleSurfaceArchitectureChanged: false,
+  proofBoundary:
+    "Production identity swaps provider credentials behind the same seeded role URL and session adapter surface. The hosted provider remains blocked until operator evidence proves real account, invite, session, recovery, abuse/rate-limit, secret, and audit-retention behavior.",
+  providers: [
+    {
+      id: "local-dev-token-provider",
+      label: "Local dev-token provider",
+      mode: "local-capability-model",
+      status: "passed",
+      accountCredential: "local-password-account",
+      inviteCredential: "single-use-invite",
+      sessionCredential: "opaque-session",
+      loginBoundary: "/auth/login",
+      sessionBoundary: "/auth/session",
+      sessionGrantBoundary: "/auth/session-grants",
+      browserCookieName: "fmarch_session",
+      roleSurfaceArchitectureChanged: false,
+      rawCredentialPolicy: "redacted",
+    },
+    {
+      id: "hosted-production-provider",
+      label: "Hosted production provider",
+      mode: "hosted-operator-evidence",
+      status: "blocked",
+      accountCredential: "hosted-account",
+      inviteCredential: "hosted-invite",
+      sessionCredential: "hosted-session",
+      loginBoundary: "/auth/login",
+      sessionBoundary: "/auth/session",
+      sessionGrantBoundary: "/auth/session-grants",
+      browserCookieName: "fmarch_session",
+      roleSurfaceArchitectureChanged: false,
+      rawCredentialPolicy: "operator-redacted",
+      requiredEvidence:
+        "operator-provided hosted identity evidence packet",
+    },
+  ],
+});
+
 export const hostedIdentityEvidenceInputIds = Object.freeze([
   "command",
   "proof-target",
@@ -593,6 +637,7 @@ export const hostedIdentityEvidenceOperatorGate = deepFreeze({
     hostedIdentityEvidenceRoleSurfaceDrilldown.localCapabilityAuditId,
   localCapabilityRoleUrl:
     hostedIdentityEvidenceRoleSurfaceDrilldown.localCapabilityRoleUrl,
+  providerBoundary: hostedIdentityProviderBoundary,
   requiredEvidenceFamilies: hostedIdentityEvidencePacketSectionDefinitions.map(
     (section) => ({
       id: section.evidenceFamily,
@@ -1039,6 +1084,7 @@ export function buildHostedIdentityEvidenceFixtureSnapshot(pathOrPlan) {
       roleSurfaceArchitectureChanged: false,
       roleSurfaceContract: fixtureClone(hostedIdentityExpectedRoleSurfaceContract),
       identityAdapterContract: hostedIdentityEvidenceFixtureAdapterContract(),
+      providerBoundary: fixtureClone(hostedIdentityProviderBoundary),
     },
   };
 }

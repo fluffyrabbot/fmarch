@@ -47,6 +47,7 @@ import {
   hostedIdentityEvidenceRequirementGroups,
   hostedIdentityEvidenceSectionInputRows,
   hostedIdentityEvidenceSectionInputStatuses,
+  hostedIdentityProviderBoundary,
   hostedIdentityRoleSurfaceContractDiff,
   requiredHostedIdentityEvidenceForCheck,
 } from "./dev_test_game_hosted_identity_evidence_cases.mjs";
@@ -185,6 +186,21 @@ test("hosted identity evidence cases share handoff inputs and blocked groups", (
     hostedIdentityEvidenceRequirementGroups(blockedChecks),
   );
   assert.deepEqual(handoff.operatorEvidenceGate, hostedIdentityEvidenceOperatorGate);
+  assert.equal(
+    handoff.operatorEvidenceGate.providerBoundary.id,
+    hostedIdentityProviderBoundary.id,
+  );
+  assert.deepEqual(
+    handoff.operatorEvidenceGate.providerBoundary.providers.map((provider) => [
+      provider.id,
+      provider.status,
+      provider.roleSurfaceArchitectureChanged,
+    ]),
+    [
+      ["local-dev-token-provider", "passed", false],
+      ["hosted-production-provider", "blocked", false],
+    ],
+  );
   assert.deepEqual(
     handoff.operatorEvidenceGate.requiredEvidenceFamilies.map((family) => [
       family.id,

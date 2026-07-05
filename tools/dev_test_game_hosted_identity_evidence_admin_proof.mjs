@@ -288,6 +288,10 @@ export function hostedIdentityEvidenceAdminProofCase({
         requiredHostedIdentityOperatorGate:
           source.hostedIdentityEvidence.hostedHandoffChecklist
             .operatorEvidenceGate,
+        requiredHostedIdentityProviderBoundary:
+          source.hostedIdentityEvidence.hostedHandoffChecklist
+            .operatorEvidenceGate?.providerBoundary ??
+          source.hostedIdentityEvidence.target.identityProviderBoundary,
         requiredHostedIdentityPacketSummaries: hostedIdentityPacketSummaryRows(
           source.hostedIdentityEvidence,
         ).map((summary) => summary.id),
@@ -422,6 +426,17 @@ export function hostedIdentityEvidenceAdminProofCase({
         hostedIdentityOperatorGate:
           source.hostedIdentityEvidence.hostedHandoffChecklist
             .operatorEvidenceGate,
+        hostedIdentityProviderBoundary:
+          source.hostedIdentityEvidence.hostedHandoffChecklist
+            .operatorEvidenceGate?.providerBoundary ??
+          source.hostedIdentityEvidence.target.identityProviderBoundary,
+        hostedIdentityProviderIds: (
+          source.hostedIdentityEvidence.hostedHandoffChecklist
+            .operatorEvidenceGate?.providerBoundary?.providers ??
+          source.hostedIdentityEvidence.target.identityProviderBoundary
+            ?.providers ??
+          []
+        ).map((provider) => provider.id),
         hostedHandoffSummary: hostedIdentityHandoffSummary(
           source.hostedIdentityEvidence,
         ),
@@ -830,6 +845,24 @@ export function assertHostedIdentityEvidenceAdminProof(evidence) {
       rowName: "rejected operator evidence path kind",
       surfaceKey: "visibleHostedIdentityOperatorGateRejectedPathKinds",
     });
+    if (operatorGate.providerBoundary !== undefined) {
+      assertVisibleAdminRoleSurfaceRows({
+        adminRoleSurface: evidence.adminRoleSurface,
+        rowIds: [operatorGate.providerBoundary.id],
+        proofName: "hosted identity evidence admin proof",
+        rowName: "identity provider boundary",
+        surfaceKey: "visibleHostedIdentityProviderBoundary",
+      });
+      assertVisibleAdminRoleSurfaceRows({
+        adminRoleSurface: evidence.adminRoleSurface,
+        rowIds: (operatorGate.providerBoundary.providers ?? []).map(
+          (provider) => provider.id,
+        ),
+        proofName: "hosted identity evidence admin proof",
+        rowName: "identity provider",
+        surfaceKey: "visibleHostedIdentityProviderBoundaryProviders",
+      });
+    }
   }
   if (
     evidence.generatedFrom?.hostedIdentityRoleSurfaceContractDiffStatus !==

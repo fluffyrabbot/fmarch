@@ -819,6 +819,9 @@ export function normalizeLocalHostedIdentityEvidenceAudit(
         normalizeHostedIdentityAdapterContractComparison(
           hostedIdentityEvidence.target?.identityAdapterContractComparison,
         ),
+      identityProviderBoundary: normalizeHostedIdentityProviderBoundary(
+        hostedIdentityEvidence.target?.identityProviderBoundary,
+      ),
       redactedIntakePacket: normalizeHostedIdentityRedactedIntakePacket(
         hostedIdentityEvidence.target?.redactedIntakePacket,
       ),
@@ -3236,7 +3239,51 @@ function normalizeHostedIdentityOperatorEvidenceGate(gate) {
         }),
       ),
     ),
+    providerBoundary: normalizeHostedIdentityProviderBoundary(
+      gate.providerBoundary,
+    ),
     proofBoundary: String(gate.proofBoundary ?? ""),
+  });
+}
+
+function normalizeHostedIdentityProviderBoundary(boundary) {
+  if (
+    boundary === null ||
+    typeof boundary !== "object" ||
+    boundary.version !== 1 ||
+    !Array.isArray(boundary.providers)
+  ) {
+    return null;
+  }
+  return Object.freeze({
+    id: String(boundary.id ?? ""),
+    status: String(boundary.status ?? "unknown"),
+    architectureId: String(boundary.architectureId ?? ""),
+    roleSurfaceArchitectureChanged:
+      boundary.roleSurfaceArchitectureChanged === true,
+    providerCount: boundary.providers.length,
+    proofBoundary: String(boundary.proofBoundary ?? ""),
+    providers: Object.freeze(
+      boundary.providers.map((provider) =>
+        Object.freeze({
+          id: String(provider?.id ?? ""),
+          label: String(provider?.label ?? ""),
+          mode: String(provider?.mode ?? ""),
+          status: String(provider?.status ?? "unknown"),
+          accountCredential: String(provider?.accountCredential ?? ""),
+          inviteCredential: String(provider?.inviteCredential ?? ""),
+          sessionCredential: String(provider?.sessionCredential ?? ""),
+          loginBoundary: String(provider?.loginBoundary ?? ""),
+          sessionBoundary: String(provider?.sessionBoundary ?? ""),
+          sessionGrantBoundary: String(provider?.sessionGrantBoundary ?? ""),
+          browserCookieName: String(provider?.browserCookieName ?? ""),
+          rawCredentialPolicy: String(provider?.rawCredentialPolicy ?? ""),
+          roleSurfaceArchitectureChanged:
+            provider?.roleSurfaceArchitectureChanged === true,
+          requiredEvidence: String(provider?.requiredEvidence ?? ""),
+        }),
+      ),
+    ),
   });
 }
 

@@ -336,6 +336,7 @@ export async function proveAdminAuditDetail({
   requiredHostedIdentityProgressions = [],
   requiredHostedIdentityProgressionStatuses = {},
   requiredHostedIdentityOperatorGate = null,
+  requiredHostedIdentityProviderBoundary = null,
   requiredHostedIdentityRoleSurfaceContractDiffStatus = null,
   requiredHostedIdentityRoleSurfaceContractMismatches = [],
   requiredHostedIdentityAdapterContractComparisonStatus = null,
@@ -666,6 +667,38 @@ export async function proveAdminAuditDetail({
           "admin-audit-hosted-identity-operator-gate-rejected-path-kind",
         ids: requiredHostedIdentityOperatorGateRejectedPathKinds,
       });
+    const requiredHostedIdentityProviderBoundaryIds =
+      requiredHostedIdentityProviderBoundary === null
+        ? []
+        : [String(requiredHostedIdentityProviderBoundary.id ?? "")];
+    const visibleHostedIdentityProviderBoundary = await waitForRows({
+      page,
+      prefix: "admin-audit-hosted-identity-provider-boundary",
+      ids: requiredHostedIdentityProviderBoundaryIds,
+      expectedStatuses:
+        requiredHostedIdentityProviderBoundary === null
+          ? {}
+          : {
+              [String(requiredHostedIdentityProviderBoundary.id ?? "")]: String(
+                requiredHostedIdentityProviderBoundary.status ?? "",
+              ),
+            },
+    });
+    const providerRows =
+      requiredHostedIdentityProviderBoundary === null
+        ? []
+        : requiredHostedIdentityProviderBoundary.providers ?? [];
+    const visibleHostedIdentityProviderBoundaryProviders = await waitForRows({
+      page,
+      prefix: "admin-audit-hosted-identity-provider-boundary-provider",
+      ids: providerRows.map((provider) => String(provider?.id ?? "")),
+      expectedStatuses: Object.fromEntries(
+        providerRows.map((provider) => [
+          String(provider?.id ?? ""),
+          String(provider?.status ?? ""),
+        ]),
+      ),
+    });
     const visibleHostedIdentityRoleSurfaceContractDiff =
       await waitForHostedIdentityRoleSurfaceContractDiff({
         page,
@@ -1110,6 +1143,15 @@ export async function proveAdminAuditDetail({
         : {
             visibleHostedIdentityOperatorGateRejectedPathKinds:
               visibleHostedIdentityOperatorGateRejectedPathKinds,
+          }),
+      ...(visibleHostedIdentityProviderBoundary.length === 0
+        ? {}
+        : { visibleHostedIdentityProviderBoundary }),
+      ...(visibleHostedIdentityProviderBoundaryProviders.length === 0
+        ? {}
+        : {
+            visibleHostedIdentityProviderBoundaryProviders:
+              visibleHostedIdentityProviderBoundaryProviders,
           }),
       ...(visibleHostedIdentityRoleSurfaceContractDiff === null
         ? {}

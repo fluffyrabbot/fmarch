@@ -1121,7 +1121,7 @@ test("admin route data exposes hosted identity evidence as a native audit row", 
   );
   assert.deepEqual(
     identity.hostedHandoffChecklist.operatorEvidenceGate,
-    hostedIdentityEvidenceOperatorGate,
+    normalizedHostedIdentityOperatorGateFixture(),
   );
   assert.deepEqual(
     identity.hostedHandoffChecklist.operatorProofDrilldowns,
@@ -2616,7 +2616,7 @@ test("admin local next action detail data carries hosted identity progression la
   );
   assert.deepEqual(
     data.audit.hostedHandoffChecklist.operatorEvidenceGate,
-    hostedIdentityEvidenceOperatorGate,
+    normalizedHostedIdentityOperatorGateFixture(),
   );
 });
 
@@ -5294,6 +5294,7 @@ function localHostedIdentityEvidenceFixture() {
           identityAdapterContract,
         ).mismatches,
       },
+      identityProviderBoundary: hostedIdentityEvidenceOperatorGate.providerBoundary,
       redactedIntakePacket: localHostedIdentityRedactedIntakePacketFixture(),
     },
     checks: hostedIdentityEvidenceBlockedChecks.map((check) => ({
@@ -5304,6 +5305,44 @@ function localHostedIdentityEvidenceFixture() {
     hostedHandoffChecklist,
     nextCommand: "npm run test:dev-test-game-hosted-identity-evidence",
     nextProofTarget: HOSTED_IDENTITY_EVIDENCE_PROOF_TARGET,
+  };
+}
+
+function normalizedHostedIdentityOperatorGateFixture() {
+  return {
+    ...hostedIdentityEvidenceOperatorGate,
+    providerBoundary: normalizeHostedIdentityProviderBoundaryFixture(
+      hostedIdentityEvidenceOperatorGate.providerBoundary,
+    ),
+  };
+}
+
+function normalizeHostedIdentityProviderBoundaryFixture(boundary) {
+  return {
+    id: boundary.id,
+    status: boundary.status,
+    architectureId: boundary.architectureId,
+    roleSurfaceArchitectureChanged:
+      boundary.roleSurfaceArchitectureChanged === true,
+    providerCount: boundary.providers.length,
+    proofBoundary: boundary.proofBoundary,
+    providers: boundary.providers.map((provider) => ({
+      id: provider.id,
+      label: provider.label,
+      mode: provider.mode,
+      status: provider.status,
+      accountCredential: provider.accountCredential,
+      inviteCredential: provider.inviteCredential,
+      sessionCredential: provider.sessionCredential,
+      loginBoundary: provider.loginBoundary,
+      sessionBoundary: provider.sessionBoundary,
+      sessionGrantBoundary: provider.sessionGrantBoundary,
+      browserCookieName: provider.browserCookieName,
+      rawCredentialPolicy: provider.rawCredentialPolicy,
+      roleSurfaceArchitectureChanged:
+        provider.roleSurfaceArchitectureChanged === true,
+      requiredEvidence: String(provider.requiredEvidence ?? ""),
+    })),
   };
 }
 
