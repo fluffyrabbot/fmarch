@@ -15,6 +15,7 @@ import {
   devTestGameProofGraphFirstClassNodes,
   proofGraphProductionFeatureEdge,
   proofGraphProductionFeatureNode,
+  proofGraphRecoveryReceiptCase,
   proofGraphRecoveryReceiptEdges,
   proofGraphRecoveryReceiptNodes,
   seedFixtureRecoveryCommand,
@@ -26,6 +27,9 @@ import {
 import {
   devTestGameSeedFixturePath,
 } from "./dev_test_game_adjacent_artifact_paths.mjs";
+import {
+  recoveryReceiptGraphDescriptorByReceiptKey,
+} from "./dev_test_game_recovery_receipt_graph_surfaces.mjs";
 import {
   hostedIdentityEvidenceHandoffCase,
 } from "./dev_test_game_hosted_identity_evidence_cases.mjs";
@@ -290,34 +294,33 @@ test("proof graph feature and recovery receipt helpers preserve fixture graph sh
   });
 
   const receiptCases = [
-    {
+    proofGraphRecoveryReceiptCase({
+      descriptor: recoveryReceiptGraphDescriptorByReceiptKey(
+        "privateChannelRecoveryReceipt",
+      ),
       graph: {
-        nodeId: "future-recovery-receipt",
+        nodeId: "private-channel-recovery-receipt",
         status: "passed",
-        proofTarget: "target/dev-test-game/future-recovery-receipt.json",
+        proofTarget: "target/dev-test-game/private-channel-recovery-receipt.json",
         roleUrl: "/admin/audit/local-core-loop?game=<seeded-game>",
-        familyId: "future-recovery",
+        familyId: "core-loop-private-channel-recovery",
         laneCount: 2,
         laneIds: ["future-a", "future-b"],
         normalizedEvidenceObjects: [{ name: "evidence-a" }],
       },
-      label: "Future recovery receipt",
-      kind: "future-recovery-receipt",
-      recoveryCommand: "npm run test:future-recovery",
-      provingNodeId: "admin-proof:core-loop",
-    },
+    }),
   ];
   assert.deepEqual(proofGraphRecoveryReceiptNodes(receiptCases), [
     {
-      id: "future-recovery-receipt",
-      label: "Future recovery receipt",
-      kind: "future-recovery-receipt",
+      id: "private-channel-recovery-receipt",
+      label: "Private-channel recovery receipt",
+      kind: "private-channel-recovery-receipt",
       status: "passed",
-      artifact: "target/dev-test-game/future-recovery-receipt.json",
+      artifact: "target/dev-test-game/private-channel-recovery-receipt.json",
       roleUrl: "/admin/audit/local-core-loop?game=<seeded-game>",
-      proofCommand: "npm run test:future-recovery",
-      recoveryCommand: "npm run test:future-recovery",
-      familyId: "future-recovery",
+      proofCommand: "test:dev-test-game-private-channel-recovery-receipt",
+      recoveryCommand: "test:dev-test-game-private-channel-recovery-receipt",
+      familyId: "core-loop-private-channel-recovery",
       laneCount: 2,
       laneIds: ["future-a", "future-b"],
       normalizedEvidenceObjects: [{ name: "evidence-a" }],
@@ -326,16 +329,16 @@ test("proof graph feature and recovery receipt helpers preserve fixture graph sh
   assert.deepEqual(proofGraphRecoveryReceiptEdges(receiptCases), [
     {
       from: "admin-proof:core-loop",
-      to: "future-recovery-receipt",
+      to: "private-channel-recovery-receipt",
       relationship: "proves",
     },
     {
-      from: "future-recovery-receipt",
+      from: "private-channel-recovery-receipt",
       to: "proof-graph",
       relationship: "records",
     },
     {
-      from: "future-recovery-receipt",
+      from: "private-channel-recovery-receipt",
       to: "next-action",
       relationship: "summarizes-into",
     },

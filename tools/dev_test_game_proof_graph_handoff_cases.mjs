@@ -436,6 +436,16 @@ export function proofGraphRecoveryReceiptNodes(recoveryReceiptCases) {
   );
 }
 
+export function proofGraphRecoveryReceiptCase({ descriptor, graph }) {
+  return Object.freeze({
+    graph,
+    label: descriptor.label,
+    kind: descriptor.kind,
+    recoveryCommand: descriptor.proofCommand,
+    provingNodeId: descriptor.provingNodeId,
+  });
+}
+
 export function proofGraphRecoveryReceiptEdges(recoveryReceiptCases) {
   return recoveryReceiptCases.flatMap(({ graph, provingNodeId }) =>
     proofGraphRecoveryReceiptEdgeRows({ graph, provingNodeId }),

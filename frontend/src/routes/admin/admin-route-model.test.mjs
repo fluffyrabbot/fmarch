@@ -139,9 +139,13 @@ import {
   devTestGameProofGraphFirstClassNodes,
   proofGraphProductionFeatureEdge,
   proofGraphProductionFeatureNode,
+  proofGraphRecoveryReceiptCase,
   proofGraphRecoveryReceiptEdges,
   proofGraphRecoveryReceiptNodes,
 } from "../../../../tools/dev_test_game_proof_graph_handoff_cases.mjs";
+import {
+  recoveryReceiptGraphDescriptorByReceiptKey,
+} from "../../../../tools/dev_test_game_recovery_receipt_graph_surfaces.mjs";
 import {
   featureSpineFixture,
   hostedEvidenceLaneUnprovenFixture as sharedHostedEvidenceLaneUnprovenFixture,
@@ -5846,21 +5850,18 @@ function proofGraphProductionFeatureCase() {
 
 function proofGraphRecoveryReceiptCases() {
   return [
-    {
+    proofGraphRecoveryReceiptCase({
+      descriptor: recoveryReceiptGraphDescriptorByReceiptKey(
+        "privateChannelRecoveryReceipt",
+      ),
       graph: privateChannelRecoveryGraphFixture(),
-      label: "Private-channel recovery receipt",
-      kind: "private-channel-recovery-receipt",
-      recoveryCommand: "test:dev-test-game-private-channel-recovery-receipt",
-      provingNodeId: "admin-proof:core-loop",
-    },
-    {
+    }),
+    proofGraphRecoveryReceiptCase({
+      descriptor: recoveryReceiptGraphDescriptorByReceiptKey(
+        "replacementPrivateRecoveryReceipt",
+      ),
       graph: replacementPrivateRecoveryGraphFixture(),
-      label: "Replacement private-channel recovery receipt",
-      kind: "replacement-private-recovery-receipt",
-      recoveryCommand:
-        "test:dev-test-game-replacement-private-recovery-receipt",
-      provingNodeId: "admin-proof:hardening",
-    },
+    }),
   ];
 }
 
