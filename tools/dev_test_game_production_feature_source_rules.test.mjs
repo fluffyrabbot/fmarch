@@ -22,6 +22,8 @@ import {
 } from "./dev_test_game_production_feature_source_rules.mjs";
 import {
   productionFeatureReadinessSourceKind,
+  productionFeatureRoleSurfaceSources,
+  productionFeatureRoleSurfaceSourceCheckIds,
   productionFeatureSourceRegistry,
 } from "./dev_test_game_production_feature_source_registry.mjs";
 import {
@@ -133,6 +135,30 @@ test("production feature source rules cover every feature spine source", () => {
     devTestGameProductionFeatureBrowserProofCommand.includes(
       "test:dev-test-game-core-live",
     ),
+  );
+  assert.deepEqual(productionFeatureRoleSurfaceSources, [
+    hostSetupFeatureSpineSource,
+    cohostFeatureSpineSource,
+    replacementFeatureSpineSource,
+    replacementActionFeatureSpineSource,
+    replacementPrivateFeatureSpineSource,
+  ]);
+  assert.deepEqual(productionFeatureRoleSurfaceSourceCheckIds, [
+    hostSetupFeatureSpineSourceCheckId,
+    cohostFeatureSpineSourceCheckId,
+    replacementFeatureSpineSourceCheckId,
+    replacementActionFeatureSpineSourceCheckId,
+    replacementPrivateFeatureSpineSourceCheckId,
+  ]);
+  assert.deepEqual(
+    productionFeatureRoleSurfaceSources.map((source) => source.graphSourceNodeId),
+    [
+      "role-surface:host-setup",
+      "role-surface:cohost-console",
+      "role-surface:replacement-player",
+      "role-surface:replacement-action",
+      "role-surface:replacement-private-channel",
+    ],
   );
 });
 

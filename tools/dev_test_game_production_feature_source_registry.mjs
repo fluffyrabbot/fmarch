@@ -64,6 +64,16 @@ export const productionFeatureSourceCheckIds = Object.freeze(
   productionFeatureSourceRegistry.map((source) => source.sourceCheckId),
 );
 
+export const productionFeatureRoleSurfaceSources = Object.freeze(
+  productionFeatureSourceRegistry.filter((source) =>
+    source.graphSourceNodeId.startsWith("role-surface:"),
+  ),
+);
+
+export const productionFeatureRoleSurfaceSourceCheckIds = Object.freeze(
+  productionFeatureRoleSurfaceSources.map((source) => source.sourceCheckId),
+);
+
 export const productionFeatureSourceByCheckId = Object.freeze(
   Object.fromEntries(
     productionFeatureSourceRegistry.map((source) => [

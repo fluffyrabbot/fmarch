@@ -52,6 +52,10 @@ import {
   replacementPrivateFeatureSpineSourceCheckId,
 } from "./dev_test_game_replacement_private_feature_spine_targets.mjs";
 import {
+  productionFeatureRoleSurfaceSourceCheckIds,
+  productionFeatureSourceForCheckId,
+} from "./dev_test_game_production_feature_source_registry.mjs";
+import {
   localAdminAuditIds,
   localAdminAuditRoleUrl,
 } from "./dev_test_game_admin_audit_surface_ids.mjs";
@@ -1046,33 +1050,20 @@ function buildRoleSurfaceProofNodes({ releaseReadiness }) {
 }
 
 function roleSurfaceProofChecksForGraph(releaseReadiness) {
+  const roleSurfaceSourceCheckIds = new Set(
+    productionFeatureRoleSurfaceSourceCheckIds,
+  );
   return (releaseReadiness.localDevelopmentSpine?.checks ?? []).filter(
-    (check) =>
-      check.id === hostSetupFeatureSpineSourceCheckId ||
-      check.id === cohostFeatureSpineSourceCheckId ||
-      check.id === replacementFeatureSpineSourceCheckId ||
-      check.id === replacementActionFeatureSpineSourceCheckId ||
-      check.id === replacementPrivateFeatureSpineSourceCheckId,
+    (check) => roleSurfaceSourceCheckIds.has(check.id),
   );
 }
 
 function roleSurfaceProofGraphNodeId(check) {
-  if (check.id === hostSetupFeatureSpineSourceCheckId) {
-    return "role-surface:host-setup";
+  const source = productionFeatureSourceForCheckId(check.id);
+  if (!source.graphSourceNodeId.startsWith("role-surface:")) {
+    throw new Error(`proof graph source is not a role surface: ${check.id}`);
   }
-  if (check.id === cohostFeatureSpineSourceCheckId) {
-    return "role-surface:cohost-console";
-  }
-  if (check.id === replacementFeatureSpineSourceCheckId) {
-    return "role-surface:replacement-player";
-  }
-  if (check.id === replacementActionFeatureSpineSourceCheckId) {
-    return "role-surface:replacement-action";
-  }
-  if (check.id === replacementPrivateFeatureSpineSourceCheckId) {
-    return "role-surface:replacement-private-channel";
-  }
-  throw new Error(`unknown proof graph role-surface check: ${check.id}`);
+  return source.graphSourceNodeId;
 }
 
 function productionFeatureEvidenceObjectNamesBySlotId(releaseReadiness) {
