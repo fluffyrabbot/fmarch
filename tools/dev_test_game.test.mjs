@@ -113,8 +113,7 @@ import {
   buildDevTestGameSeedFixtureSummary,
 } from "./dev_test_game_seed_fixture_summary.mjs";
 import {
-  seedAggregateOnlyProofLaneIds,
-  seedAliasOnlyProofLaneIds,
+  seedProofLaneCoverageCountSummary,
   seedProofLaneCoverageFixture,
   seedProofLaneCoverageForPassedLanes,
   seedRequiredScenarioIds,
@@ -2387,15 +2386,20 @@ test("dev test-game next-action derives one local recovery command from the mani
     selected: false,
   });
   const cleanSeedProofLaneCoverage = seedProofLaneCoverageFixture();
+  const cleanSeedProofLaneCoverageCounts = seedProofLaneCoverageCountSummary(
+    cleanSeedProofLaneCoverage,
+  );
   assert.deepEqual(freshAction.seedProofLaneCoverageTrace, {
     strategy: "seed-proof-lane-coverage-before-readiness",
     status: "clean",
     source: "target/dev-test-game/release-readiness-checklist.json",
     checkId: "local-seed-demo-fixture",
-    passedLaneCount: cleanSeedProofLaneCoverage.passedLaneCount,
-    directSeededLaneCount: cleanSeedProofLaneCoverage.directSeeded.count,
-    aliasOnlyLaneCount: seedAliasOnlyProofLaneIds.length,
-    aggregateOnlyLaneCount: seedAggregateOnlyProofLaneIds.length,
+    passedLaneCount: cleanSeedProofLaneCoverageCounts.passedLaneCount,
+    directSeededLaneCount:
+      cleanSeedProofLaneCoverageCounts.directSeededLaneCount,
+    aliasOnlyLaneCount: cleanSeedProofLaneCoverageCounts.aliasOnlyLaneCount,
+    aggregateOnlyLaneCount:
+      cleanSeedProofLaneCoverageCounts.aggregateOnlyLaneCount,
     unclassifiedLaneCount: 0,
     unclassifiedLaneIds: [],
     selected: false,
@@ -2640,6 +2644,9 @@ test("dev test-game next-action derives one local recovery command from the mani
   const driftedSeedProofLaneCoverage = seedProofLaneCoverageFixture({
     unclassifiedLaneIds: ["new-production-proof-lane"],
   });
+  const driftedSeedProofLaneCoverageCounts = seedProofLaneCoverageCountSummary(
+    driftedSeedProofLaneCoverage,
+  );
   const unclassifiedSeedCoverageAction = buildDevTestGameNextAction(freshManifest, {
     generatedAt: "2026-06-26T00:00:01.000Z",
     opsArtifacts: devTestGameOpsArtifactsFixture(),
@@ -2663,7 +2670,7 @@ test("dev test-game next-action derives one local recovery command from the mani
     seedProofLaneCoverage: {
       source: "target/dev-test-game/release-readiness-checklist.json",
       status: "drifted",
-      passedLaneCount: driftedSeedProofLaneCoverage.passedLaneCount,
+      passedLaneCount: driftedSeedProofLaneCoverageCounts.passedLaneCount,
       unclassifiedLaneCount: 1,
       unclassifiedLaneIds: ["new-production-proof-lane"],
       buildSlice:
@@ -2677,11 +2684,14 @@ test("dev test-game next-action derives one local recovery command from the mani
     status: "drifted",
     source: "target/dev-test-game/release-readiness-checklist.json",
     checkId: "local-seed-demo-fixture",
-    passedLaneCount: driftedSeedProofLaneCoverage.passedLaneCount,
-    directSeededLaneCount: driftedSeedProofLaneCoverage.directSeeded.count,
-    aliasOnlyLaneCount: seedAliasOnlyProofLaneIds.length,
-    aggregateOnlyLaneCount: seedAggregateOnlyProofLaneIds.length,
-    unclassifiedLaneCount: 1,
+    passedLaneCount: driftedSeedProofLaneCoverageCounts.passedLaneCount,
+    directSeededLaneCount:
+      driftedSeedProofLaneCoverageCounts.directSeededLaneCount,
+    aliasOnlyLaneCount: driftedSeedProofLaneCoverageCounts.aliasOnlyLaneCount,
+    aggregateOnlyLaneCount:
+      driftedSeedProofLaneCoverageCounts.aggregateOnlyLaneCount,
+    unclassifiedLaneCount:
+      driftedSeedProofLaneCoverageCounts.unclassifiedLaneCount,
     unclassifiedLaneIds: ["new-production-proof-lane"],
     selected: true,
   });
@@ -12526,11 +12536,11 @@ test("session card and markdown include role credential URLs and tokens", async 
   );
   assert.deepEqual(
     seedFixture.proofLaneCoverage.aliasOnly.laneIds,
-    seedAliasOnlyProofLaneIds,
+    seedProofLaneCoverageFixture().aliasOnly.laneIds,
   );
   assert.deepEqual(
     seedFixture.proofLaneCoverage.aggregateOnly.laneIds,
-    seedAggregateOnlyProofLaneIds,
+    seedProofLaneCoverageFixture().aggregateOnly.laneIds,
   );
   const seedFixtureReadiness = buildDevTestGameReleaseReadiness(proofRun, {
     generatedAt: "2026-06-26T00:00:00.000Z",

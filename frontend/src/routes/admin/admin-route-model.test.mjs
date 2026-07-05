@@ -61,9 +61,8 @@ import {
   replacementPrivatePostNormalizedEvidenceObjects,
 } from "../../../../tools/dev_test_game_normalized_evidence_objects.mjs";
 import {
-  seedAggregateOnlyProofLaneIds,
-  seedAliasOnlyProofLaneIds,
   seedDemoScenarioFixtureRows,
+  seedProofLaneCoverageCountSummary,
   seedProofLaneCoverageFixture,
   seedScenarioCoverageGroups,
 } from "../../../../tools/dev_test_game_seed_scenario_cases.mjs";
@@ -3621,6 +3620,7 @@ test("admin hosted evidence lane detail data carries blocked setup rows", async 
 
 test("admin route data exposes local seed fixture summary as a native audit row", async () => {
   const seedCoverage = seedProofLaneCoverageFixture();
+  const seedCoverageCounts = seedProofLaneCoverageCountSummary(seedCoverage);
   const data = await buildAdminRouteData({
     principalUserId: "admin_a",
     capabilities: [{ kind: "GlobalAdmin" }],
@@ -3644,11 +3644,11 @@ test("admin route data exposes local seed fixture summary as a native audit row"
     scenarioCount: seedScenarioCoverageGroups.allDemo.length,
     roleCount: 7,
     slotCount: 5,
-    proofLaneCount: seedCoverage.passedLaneCount,
-    directSeededProofLaneCount: seedCoverage.directSeeded.count,
-    aliasOnlyProofLaneCount: seedAliasOnlyProofLaneIds.length,
-    aggregateOnlyProofLaneCount: seedAggregateOnlyProofLaneIds.length,
-    unclassifiedProofLaneCount: 0,
+    proofLaneCount: seedCoverageCounts.passedLaneCount,
+    directSeededProofLaneCount: seedCoverageCounts.directSeededLaneCount,
+    aliasOnlyProofLaneCount: seedCoverageCounts.aliasOnlyLaneCount,
+    aggregateOnlyProofLaneCount: seedCoverageCounts.aggregateOnlyLaneCount,
+    unclassifiedProofLaneCount: seedCoverageCounts.unclassifiedLaneCount,
     releaseReady: false,
     productionReady: false,
   });
@@ -3656,6 +3656,7 @@ test("admin route data exposes local seed fixture summary as a native audit row"
 
 test("admin local seed fixture detail data carries scenario rows", async () => {
   const seedCoverage = seedProofLaneCoverageFixture();
+  const seedCoverageCounts = seedProofLaneCoverageCountSummary(seedCoverage);
   const data = await buildAdminAuditDetailData({
     audit: localAdminAuditIds.seedFixtures,
     principalUserId: "admin_a",
@@ -3680,10 +3681,10 @@ test("admin local seed fixture detail data carries scenario rows", async () => {
       coverage.count,
     ]),
     [
-      ["direct-seeded", seedCoverage.directSeeded.count],
-      ["alias-only", seedAliasOnlyProofLaneIds.length],
-      ["aggregate-only", seedAggregateOnlyProofLaneIds.length],
-      ["unclassified", 0],
+      ["direct-seeded", seedCoverageCounts.directSeededLaneCount],
+      ["alias-only", seedCoverageCounts.aliasOnlyLaneCount],
+      ["aggregate-only", seedCoverageCounts.aggregateOnlyLaneCount],
+      ["unclassified", seedCoverageCounts.unclassifiedLaneCount],
     ],
   );
 });
@@ -6705,6 +6706,7 @@ function stabilityTraceFixture({ stability }) {
 
 function seedProofLaneCoverageTraceFixture({ seedProofLaneCoverage } = {}) {
   const cleanCoverage = seedProofLaneCoverageFixture();
+  const cleanCoverageCounts = seedProofLaneCoverageCountSummary(cleanCoverage);
   const unclassifiedLaneIds =
     seedProofLaneCoverage?.unclassifiedLaneIds?.map((laneId) => String(laneId)) ??
     [];
@@ -6717,9 +6719,9 @@ function seedProofLaneCoverageTraceFixture({ seedProofLaneCoverage } = {}) {
     passedLaneCount: Number(
       seedProofLaneCoverage?.passedLaneCount ?? cleanCoverage.passedLaneCount,
     ),
-    directSeededLaneCount: cleanCoverage.directSeeded.count,
-    aliasOnlyLaneCount: seedAliasOnlyProofLaneIds.length,
-    aggregateOnlyLaneCount: seedAggregateOnlyProofLaneIds.length,
+    directSeededLaneCount: cleanCoverageCounts.directSeededLaneCount,
+    aliasOnlyLaneCount: cleanCoverageCounts.aliasOnlyLaneCount,
+    aggregateOnlyLaneCount: cleanCoverageCounts.aggregateOnlyLaneCount,
     unclassifiedLaneCount: unclassifiedLaneIds.length,
     unclassifiedLaneIds,
   };

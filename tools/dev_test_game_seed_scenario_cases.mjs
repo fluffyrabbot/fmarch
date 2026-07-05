@@ -391,6 +391,16 @@ export function seedProofLaneCoverageFixture({
   ]);
 }
 
+export function seedProofLaneCoverageCountSummary(coverage) {
+  return {
+    passedLaneCount: Number(coverage?.passedLaneCount ?? 0),
+    directSeededLaneCount: Number(coverage?.directSeeded?.count ?? 0),
+    aliasOnlyLaneCount: Number(coverage?.aliasOnly?.count ?? 0),
+    aggregateOnlyLaneCount: Number(coverage?.aggregateOnly?.count ?? 0),
+    unclassifiedLaneCount: Number(coverage?.unclassified?.count ?? 0),
+  };
+}
+
 function seedProofLaneCoverageBucket(coverage, bucket, { label }) {
   const laneIds = coverage?.[bucket]?.laneIds;
   if (!Array.isArray(laneIds)) {

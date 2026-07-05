@@ -13,6 +13,7 @@ import {
   seedDemoOnlyScenarioIds,
   seedDemoScenarioProofLaneCandidates,
   seedNonDirectProofLaneIds,
+  seedProofLaneCoverageCountSummary,
   seedProofLaneCoverageForPassedLanes,
   seedRequiredScenarioIds,
   seedScenarioCoverageGroups,
@@ -382,6 +383,13 @@ test("seed scenario cases classify every passed proof lane", () => {
   assert.deepEqual(coverage.aliasOnly.laneIds, seedAliasOnlyProofLaneIds);
   assert.deepEqual(coverage.aggregateOnly.laneIds, seedAggregateOnlyProofLaneIds);
   assert.deepEqual(coverage.unclassified.laneIds, []);
+  assert.deepEqual(seedProofLaneCoverageCountSummary(coverage), {
+    passedLaneCount: passedLaneIds.length,
+    directSeededLaneCount: coverage.directSeeded.count,
+    aliasOnlyLaneCount: coverage.aliasOnly.count,
+    aggregateOnlyLaneCount: coverage.aggregateOnly.count,
+    unclassifiedLaneCount: 0,
+  });
   assert.deepEqual(assertSeedProofLaneCoverage(coverage), coverage);
   assert.throws(
     () =>
