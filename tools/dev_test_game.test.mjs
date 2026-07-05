@@ -16201,6 +16201,7 @@ function proofGraphAdminProofFixture() {
   const adminProofSurfaceIds = handoffs.map((handoff) =>
     handoff.linkId.replace("admin-proof:", ""),
   );
+  const hostSetupGraphTarget = proofGraphHostSetupFeatureTargetFixture();
   const evidenceObjectRowIds = [
     ...expectedNormalizedEvidenceObjectRowIds({
       parentId: "private-channel-recovery-receipt",
@@ -16226,11 +16227,17 @@ function proofGraphAdminProofFixture() {
       hostedConcurrentRaceMatrix:
         "target/dev-test-game/hosted-concurrent-race-matrix.json",
       game: "00000000-0000-0000-0000-000000000001",
-      nodeIds: handoffs.map((handoff) => handoff.linkId),
+      nodeIds: [
+        ...handoffs.map((handoff) => handoff.linkId),
+        hostSetupGraphTarget.roleSurfaceNodeId,
+        hostSetupGraphTarget.productionFeatureNodeId,
+      ],
       evidenceObjectRowIds,
-      edgeCount: handoffs.length,
+      edgeRowIds: [hostSetupGraphTarget.edgeRowId],
+      edgeCount: handoffs.length + 1,
       adminProofSurfaceIds,
       adminProofRoleHandoffs: handoffs,
+      hostSetupFeatureTarget: hostSetupGraphTarget,
     },
     adminRoleSurface: {
       status: "passed",
@@ -16241,9 +16248,16 @@ function proofGraphAdminProofFixture() {
       clickedThroughFromOverview: true,
       visibleChecks: [
         ...handoffs.map((handoff) => handoff.linkId),
+        hostSetupGraphTarget.roleSurfaceNodeId,
+        hostSetupGraphTarget.productionFeatureNodeId,
+        hostSetupGraphTarget.edgeRowId,
         ...evidenceObjectRowIds,
       ],
-      visibleRelatedLinks: handoffs.map((handoff) => handoff.linkId),
+      visibleRelatedLinks: [
+        ...handoffs.map((handoff) => handoff.linkId),
+        hostSetupGraphTarget.roleSurfaceNodeId,
+        hostSetupGraphTarget.productionFeatureNodeId,
+      ],
       visibleRelatedDestinations: handoffs.map((handoff) => ({
         linkId: handoff.linkId,
         auditId: handoff.auditId,
@@ -16260,6 +16274,23 @@ function proofGraphAdminProofFixture() {
       releaseReady: false,
       productionReady: false,
     },
+  };
+}
+
+function proofGraphHostSetupFeatureTargetFixture() {
+  return {
+    roleSurfaceNodeId: "role-surface:host-setup",
+    productionFeatureNodeId: "production-feature:host-setup-route",
+    edgeRowId:
+      "edge:role-surface:host-setup:proves-production-feature:production-feature:host-setup-route",
+    sourceCheckId: "local-host-setup-proof",
+    featureSlotId: "host-setup-route",
+    roleUrl: "http://127.0.0.1:5173/g/<seeded-game>/setup",
+    targetRoleUrl: "http://127.0.0.1:5173/g/<seeded-game>/setup",
+    checkpointId: "start-phase",
+    adminCheckId: "start-phase",
+    browserProofCommand: devTestGameLiveProofCommand,
+    recoveryCommand: devTestGameHostSetupProofCommand,
   };
 }
 

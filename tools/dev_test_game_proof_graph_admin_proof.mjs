@@ -26,6 +26,11 @@ import {
   localAdminAuditIds,
 } from "./dev_test_game_admin_audit_surface_ids.mjs";
 import {
+  devTestGameHostSetupProofCommand,
+  hostSetupFeatureSpineSourceCheckId,
+  hostSetupFeatureSpineTargetRows,
+} from "./dev_test_game_host_setup_feature_spine_targets.mjs";
+import {
   localNextActionAdminSurfaceCheckId,
   localProofFreshnessAdminSurfaceCheckId,
   localProofGraphAdminRoleHandoffsCheckId,
@@ -150,6 +155,9 @@ export function proofGraphAdminProofCase() {
           hostedMatrix: source.hostedMatrix,
           hostedEvidenceLane: source.hostedEvidenceLane,
         }),
+        hostSetupFeatureTarget: proofGraphHostSetupFeatureTarget(
+          source.proofGraph,
+        ),
       },
       adminRoleSurface,
     }),
@@ -213,7 +221,48 @@ export function assertProofGraphAdminProof(evidence) {
     handoffs: evidence.generatedFrom?.adminProofRoleHandoffs,
     proofName: "proof graph admin proof",
   });
+  assertProofGraphAdminProofCoversHostSetupFeatureTarget(evidence);
   return evidence;
+}
+
+function assertProofGraphAdminProofCoversHostSetupFeatureTarget(evidence) {
+  const target = evidence.generatedFrom?.hostSetupFeatureTarget;
+  const expectedFeatureSlotId =
+    hostSetupFeatureSpineTargetRows.hostSetupRoute.featureSlotId;
+  if (
+    target?.roleSurfaceNodeId !== "role-surface:host-setup" ||
+    target.productionFeatureNodeId !==
+      `production-feature:${expectedFeatureSlotId}` ||
+    target.sourceCheckId !== hostSetupFeatureSpineSourceCheckId ||
+    target.featureSlotId !== expectedFeatureSlotId ||
+    !target.roleUrl?.includes("/g/<seeded-game>/setup") ||
+    target.targetRoleUrl !== target.roleUrl ||
+    target.checkpointId !== "start-phase" ||
+    target.adminCheckId !== "start-phase" ||
+    !target.browserProofCommand?.includes("test:dev-test-game-core-live") ||
+    target.recoveryCommand !== devTestGameHostSetupProofCommand
+  ) {
+    throw new Error("proof graph admin proof missing host setup feature target");
+  }
+  for (const rowId of [
+    target.roleSurfaceNodeId,
+    target.productionFeatureNodeId,
+    target.edgeRowId,
+  ]) {
+    if (!evidence.adminRoleSurface?.visibleChecks?.includes(rowId)) {
+      throw new Error(`proof graph admin proof missing host setup row: ${rowId}`);
+    }
+  }
+  for (const linkId of [
+    target.roleSurfaceNodeId,
+    target.productionFeatureNodeId,
+  ]) {
+    if (!evidence.adminRoleSurface?.visibleRelatedLinks?.includes(linkId)) {
+      throw new Error(
+        `proof graph admin proof missing host setup related link: ${linkId}`,
+      );
+    }
+  }
 }
 
 function proofGraphEdgeCheckId(edge) {
@@ -237,6 +286,43 @@ function proofGraphEvidenceObjectRowIds(proofGraph) {
       objects: node.normalizedEvidenceObjects,
     }),
   );
+}
+
+function proofGraphHostSetupFeatureTarget(proofGraph) {
+  const expectedFeatureSlotId =
+    hostSetupFeatureSpineTargetRows.hostSetupRoute.featureSlotId;
+  const roleSurfaceNode = proofGraph.nodes.find(
+    (node) => node.id === "role-surface:host-setup",
+  );
+  const productionFeatureNode = proofGraph.nodes.find(
+    (node) => node.id === `production-feature:${expectedFeatureSlotId}`,
+  );
+  const edge = proofGraph.edges.find(
+    (candidate) =>
+      candidate.from === "role-surface:host-setup" &&
+      candidate.to === `production-feature:${expectedFeatureSlotId}` &&
+      candidate.relationship === "proves-production-feature",
+  );
+  if (
+    roleSurfaceNode === undefined ||
+    productionFeatureNode === undefined ||
+    edge === undefined
+  ) {
+    throw new Error("proof graph missing host setup feature target");
+  }
+  return {
+    roleSurfaceNodeId: roleSurfaceNode.id,
+    productionFeatureNodeId: productionFeatureNode.id,
+    edgeRowId: proofGraphEdgeCheckId(edge),
+    sourceCheckId: productionFeatureNode.sourceCheckId,
+    featureSlotId: productionFeatureNode.featureSlotId,
+    roleUrl: productionFeatureNode.roleUrl,
+    targetRoleUrl: productionFeatureNode.targetRoleUrl,
+    checkpointId: productionFeatureNode.checkpointId,
+    adminCheckId: productionFeatureNode.adminCheckId,
+    browserProofCommand: productionFeatureNode.browserProofCommand,
+    recoveryCommand: productionFeatureNode.recoveryCommand,
+  };
 }
 
 function bootstrapProofGraphAdminRoleHandoffs({

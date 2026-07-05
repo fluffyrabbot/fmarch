@@ -120,6 +120,7 @@ import {
 import {
   hostSetupFeatureSpineCycleId,
   hostSetupFeatureSpineSourceCheckId,
+  hostSetupFeatureSpineTargetRows,
 } from "./dev_test_game_host_setup_feature_spine_targets.mjs";
 import {
   localAdminAuditHandoffCheckIds,
@@ -4547,6 +4548,7 @@ export function validateDevTestGameProofGraphAdminProof(proof, options = {}) {
       throw new Error(`proof graph admin proof missing visible edge: ${edgeRowId}`);
     }
   }
+  validateProofGraphAdminHostSetupFeatureTarget(proof);
   const destinationAuditIds = [
     ...new Set(handoffs.map((handoff) => String(handoff.auditId))),
   ];
@@ -4564,6 +4566,46 @@ export function validateDevTestGameProofGraphAdminProof(proof, options = {}) {
     destinationAuditIds,
     ...(options.artifact === undefined ? {} : { artifact: options.artifact }),
   };
+}
+
+function validateProofGraphAdminHostSetupFeatureTarget(proof) {
+  const target = proof.generatedFrom?.hostSetupFeatureTarget;
+  const expectedFeatureSlotId =
+    hostSetupFeatureSpineTargetRows.hostSetupRoute.featureSlotId;
+  if (
+    target?.roleSurfaceNodeId !== "role-surface:host-setup" ||
+    target.productionFeatureNodeId !==
+      `production-feature:${expectedFeatureSlotId}` ||
+    target.sourceCheckId !== hostSetupFeatureSpineSourceCheckId ||
+    target.featureSlotId !== expectedFeatureSlotId ||
+    !target.roleUrl?.includes("/g/<seeded-game>/setup") ||
+    target.targetRoleUrl !== target.roleUrl ||
+    target.checkpointId !== "start-phase" ||
+    target.adminCheckId !== "start-phase" ||
+    !target.browserProofCommand?.includes("test:dev-test-game-core-live") ||
+    target.recoveryCommand !== devTestGameHostSetupProofCommand
+  ) {
+    throw new Error("proof graph admin proof missing host setup feature target");
+  }
+  for (const rowId of [
+    target.roleSurfaceNodeId,
+    target.productionFeatureNodeId,
+    target.edgeRowId,
+  ]) {
+    if (!proof.adminRoleSurface?.visibleChecks?.includes(rowId)) {
+      throw new Error(`proof graph admin proof missing host setup row: ${rowId}`);
+    }
+  }
+  for (const linkId of [
+    target.roleSurfaceNodeId,
+    target.productionFeatureNodeId,
+  ]) {
+    if (!proof.adminRoleSurface?.visibleRelatedLinks?.includes(linkId)) {
+      throw new Error(
+        `proof graph admin proof missing host setup related link: ${linkId}`,
+      );
+    }
+  }
 }
 
 export function validateDevTestGameProofFreshnessAdminProof(proof, options = {}) {
