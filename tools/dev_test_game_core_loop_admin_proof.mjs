@@ -26,6 +26,7 @@ import {
 } from "./dev_test_game_core_loop_player_action_recovery_scenarios.mjs";
 import {
   assertEmptyNightThreeHostTransitionProofCase,
+  assertHostLifecycleRaceSurfaceCase,
   assertHostLifecycleControlRoleSurfaceCase,
   assertHostModkillControlSurfaceCase,
   assertHostNightActionTransitionSurfaceCase,
@@ -210,6 +211,28 @@ function hostModkillControlSurfaceFromProofRun(proofRun) {
     hostModkillControl: hostModkillControl ?? null,
     staleHostModkill: staleHostModkill ?? null,
     staleHostModkillReload: staleHostModkillReload ?? null,
+  };
+}
+
+function hostLifecycleRaceSurfaceFromProofRun(proofRun) {
+  const hostLifecycleRace = proofRunLane(
+    proofRun,
+    "concurrent-host-lifecycle-race",
+  );
+  const hostLifecycleRaceReload = proofRunLane(
+    proofRun,
+    "concurrent-host-lifecycle-race-reload",
+  );
+  return {
+    status:
+      hostLifecycleRace?.status === "passed" &&
+      hostLifecycleRaceReload?.status === "passed"
+        ? "passed"
+        : "failed",
+    proofCheckId: "concurrent-host-lifecycle-race",
+    reloadProofCheckId: "concurrent-host-lifecycle-race-reload",
+    hostLifecycleRace: hostLifecycleRace ?? null,
+    hostLifecycleRaceReload: hostLifecycleRaceReload ?? null,
   };
 }
 
@@ -430,10 +453,13 @@ export function coreLoopAdminProofCase() {
       });
       const hostModkillControlSurface =
         hostModkillControlSurfaceFromProofRun(proofRun);
+      const hostLifecycleRaceSurface =
+        hostLifecycleRaceSurfaceFromProofRun(proofRun);
       return {
         adminRoleSurface,
         hostRoleSurface,
         hostModkillControlSurface,
+        hostLifecycleRaceSurface,
         playerRoleSurface,
         targetResolutionReceiptSurface,
         normalResolutionPrivacySurface,
@@ -500,6 +526,7 @@ export function coreLoopAdminProofCase() {
       adminRoleSurface: surfaces.adminRoleSurface,
       hostRoleSurface: surfaces.hostRoleSurface,
       hostModkillControlSurface: surfaces.hostModkillControlSurface,
+      hostLifecycleRaceSurface: surfaces.hostLifecycleRaceSurface,
       playerRoleSurface: surfaces.playerRoleSurface,
       targetResolutionReceiptSurface: surfaces.targetResolutionReceiptSurface,
       normalResolutionPrivacySurface: surfaces.normalResolutionPrivacySurface,
@@ -9970,8 +9997,8 @@ export function assertCoreLoopAdminProof(evidence) {
   assertHostLifecycleControlCheckpoint(evidence.hostRoleSurface);
   assertCoreLoopHostModkillControlSurface({
     hostModkillControlSurface: evidence.hostModkillControlSurface,
-    expectedGame: evidence.generatedFrom?.game,
   });
+  assertCoreLoopHostLifecycleRaceSurface(evidence.hostLifecycleRaceSurface);
   assertPlayerActionSubmissionCheckpoint(evidence.playerRoleSurface);
   assertTargetResolutionReceiptSurface(evidence.targetResolutionReceiptSurface);
   assertNormalResolutionPrivacySurface(evidence.normalResolutionPrivacySurface);
@@ -10022,15 +10049,20 @@ function assertHostLifecycleControlCheckpoint(hostRoleSurface) {
   });
 }
 
-function assertCoreLoopHostModkillControlSurface({
-  hostModkillControlSurface,
-  expectedGame,
-}) {
+function assertCoreLoopHostModkillControlSurface({ hostModkillControlSurface }) {
   const scenarioFamily = coreLoopHostControlScenarioFamily();
   assertHostModkillControlSurfaceCase({
     hostModkillControlSurface,
-    expectedGame,
     scenario: scenarioFamily.surfaces.hostModkillControl,
+    includeEvidenceInError: true,
+  });
+}
+
+function assertCoreLoopHostLifecycleRaceSurface(hostLifecycleRaceSurface) {
+  const scenarioFamily = coreLoopHostControlScenarioFamily();
+  assertHostLifecycleRaceSurfaceCase({
+    hostLifecycleRaceSurface,
+    scenario: scenarioFamily.surfaces.hostLifecycleRace,
     includeEvidenceInError: true,
   });
 }

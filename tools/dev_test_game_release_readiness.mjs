@@ -226,6 +226,7 @@ import {
 } from "./dev_test_game_core_loop_player_action_recovery_scenarios.mjs";
 import {
   assertEmptyNightThreeHostTransitionProofCase,
+  assertHostLifecycleRaceSurfaceCase,
   assertHostLifecycleControlRoleSurfaceCase,
   assertHostModkillControlSurfaceCase,
   assertHostNightActionTransitionSurfaceCase,
@@ -2445,8 +2446,8 @@ export function validateDevTestGameCoreLoopAdminProof(proof, options = {}) {
   assertCoreLoopHostLifecycleCheckpoint(proof.hostRoleSurface);
   assertCoreLoopHostModkillControlSurface({
     hostModkillControlSurface: proof.hostModkillControlSurface,
-    expectedGame: proof.generatedFrom?.game,
   });
+  assertCoreLoopHostLifecycleRaceSurface(proof.hostLifecycleRaceSurface);
   assertCoreLoopPlayerActionCheckpoint(proof.playerRoleSurface);
   assertCoreLoopTargetResolutionReceiptSurface(proof.targetResolutionReceiptSurface);
   assertCoreLoopNormalResolutionPrivacySurface(proof.normalResolutionPrivacySurface);
@@ -2967,15 +2968,19 @@ function assertCoreLoopHostLifecycleCheckpoint(hostRoleSurface) {
   });
 }
 
-function assertCoreLoopHostModkillControlSurface({
-  hostModkillControlSurface,
-  expectedGame,
-}) {
+function assertCoreLoopHostModkillControlSurface({ hostModkillControlSurface }) {
   const scenarioFamily = coreLoopHostControlScenarioFamily();
   assertHostModkillControlSurfaceCase({
     hostModkillControlSurface,
-    expectedGame,
     scenario: scenarioFamily.surfaces.hostModkillControl,
+  });
+}
+
+function assertCoreLoopHostLifecycleRaceSurface(hostLifecycleRaceSurface) {
+  const scenarioFamily = coreLoopHostControlScenarioFamily();
+  assertHostLifecycleRaceSurfaceCase({
+    hostLifecycleRaceSurface,
+    scenario: scenarioFamily.surfaces.hostLifecycleRace,
   });
 }
 

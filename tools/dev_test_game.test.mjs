@@ -14710,6 +14710,7 @@ function coreLoopAdminProofFixture() {
     },
     hostRoleSurface: hostLifecycleRoleSurfaceFixture(),
     hostModkillControlSurface: hostModkillControlSurfaceFixture(),
+    hostLifecycleRaceSurface: hostLifecycleRaceSurfaceFixture(),
     playerRoleSurface: playerActionRoleSurfaceFixture(),
     targetResolutionReceiptSurface: targetResolutionReceiptSurfaceFixture(),
     normalResolutionPrivacySurface: normalResolutionPrivacySurfaceFixture(),
@@ -14881,6 +14882,45 @@ function hostModkillControlSurfaceFixture() {
         routeStatus: 200,
         lifecycle: "Modkilled",
         apiStatus: "modkilled",
+      },
+    },
+  };
+}
+
+function hostLifecycleRaceSurfaceFixture() {
+  return {
+    status: "passed",
+    proofCheckId: "concurrent-host-lifecycle-race",
+    reloadProofCheckId: "concurrent-host-lifecycle-race-reload",
+    hostLifecycleRace: {
+      id: "concurrent-host-lifecycle-race",
+      label: "Concurrent host lifecycle commands converge",
+      status: "passed",
+      evidence: {
+        ackRaceRole: "dead",
+        rejectRaceRole: "modkill",
+        ackActionId: "mark_dead",
+        rejectActionId: "modkill_slot",
+        game: "lifecycle-race-game-a",
+        winningStatus: "dead",
+        rejectError: "InvalidTarget",
+        apiStatus: "dead",
+      },
+    },
+    hostLifecycleRaceReload: {
+      id: "concurrent-host-lifecycle-race-reload",
+      label: "Concurrent host lifecycle race reloads terminal slot projections",
+      status: "passed",
+      evidence: {
+        game: "lifecycle-race-game-a",
+        winningStatus: "dead",
+        deadRouteStatus: 200,
+        modkillRouteStatus: 200,
+        playerRouteStatus: 200,
+        deadLifecycleLabel: "Dead",
+        modkillLifecycleLabel: "Dead",
+        playerStatus: "dead",
+        apiStatus: "dead",
       },
     },
   };

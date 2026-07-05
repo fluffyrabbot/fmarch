@@ -3,6 +3,7 @@ import { test } from "node:test";
 import {
   assertDayFourNoLynchHostTransitionProofCase,
   assertEmptyNightThreeHostTransitionProofCase,
+  assertHostLifecycleRaceSurfaceCase,
   assertHostNightActionTransitionSurfaceCase,
   assertHostLifecycleControlRoleSurfaceCase,
   assertHostModkillControlSurfaceCase,
@@ -16,6 +17,7 @@ import {
   hostCompleteGameCommandFacts,
   hostDeadlineAffordanceForPhaseState,
   hostExtendDeadlineCommandFacts,
+  hostLifecycleRaceScenario,
   hostLifecycleControlScenario,
   hostModkillControlScenario,
   hostLockedPhaseTransitionCase,
@@ -983,6 +985,68 @@ test("host modkill control assertion covers ack, stale reject, and reload recove
         expectedGame: "game-a",
       }),
     /host modkill control surface/,
+  );
+});
+
+test("host lifecycle race assertion covers convergence and reload lanes", () => {
+  const hostLifecycleRaceSurface = {
+    status: "passed",
+    proofCheckId: "concurrent-host-lifecycle-race",
+    reloadProofCheckId: "concurrent-host-lifecycle-race-reload",
+    hostLifecycleRace: {
+      id: "concurrent-host-lifecycle-race",
+      label: "Concurrent host lifecycle commands converge",
+      status: "passed",
+      evidence: {
+        ackRaceRole: "dead",
+        rejectRaceRole: "modkill",
+        ackActionId: "mark_dead",
+        rejectActionId: "modkill_slot",
+        game: "race-game-a",
+        winningStatus: "dead",
+        rejectError: "InvalidTarget",
+        apiStatus: "dead",
+      },
+    },
+    hostLifecycleRaceReload: {
+      id: "concurrent-host-lifecycle-race-reload",
+      label: "Concurrent host lifecycle race reloads terminal slot projections",
+      status: "passed",
+      evidence: {
+        game: "race-game-a",
+        winningStatus: "dead",
+        deadRouteStatus: 200,
+        modkillRouteStatus: 200,
+        playerRouteStatus: 200,
+        deadLifecycleLabel: "Dead",
+        modkillLifecycleLabel: "Dead",
+        playerStatus: "dead",
+        apiStatus: "dead",
+      },
+    },
+  };
+
+  assert.doesNotThrow(() =>
+    assertHostLifecycleRaceSurfaceCase({
+      hostLifecycleRaceSurface,
+      scenario: hostLifecycleRaceScenario(),
+    }),
+  );
+  assert.throws(
+    () =>
+      assertHostLifecycleRaceSurfaceCase({
+        hostLifecycleRaceSurface: {
+          ...hostLifecycleRaceSurface,
+          hostLifecycleRaceReload: {
+            ...hostLifecycleRaceSurface.hostLifecycleRaceReload,
+            evidence: {
+              ...hostLifecycleRaceSurface.hostLifecycleRaceReload.evidence,
+              modkillRouteStatus: 409,
+            },
+          },
+        },
+      }),
+    /host lifecycle race surface/,
   );
 });
 

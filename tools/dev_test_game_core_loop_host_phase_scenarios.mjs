@@ -6,6 +6,9 @@ const cloneLifecycleScenario = (scenario) => ({
 const cloneHostModkillScenario = (scenario) => ({
   ...scenario,
 });
+const cloneHostLifecycleRaceScenario = (scenario) => ({
+  ...scenario,
+});
 const clonePhaseStateCase = (phaseStateCase) => ({ ...phaseStateCase });
 const cloneTransitionProofCase = (transitionCase) => ({
   ...transitionCase,
@@ -518,6 +521,28 @@ export function hostModkillControlScenario() {
   return cloneHostModkillScenario(hostModkillControlScenarioDefinition);
 }
 
+const hostLifecycleRaceScenarioDefinition = Object.freeze({
+  proofCheckId: "concurrent-host-lifecycle-race",
+  reloadProofCheckId: "concurrent-host-lifecycle-race-reload",
+  ackRaceRole: "dead",
+  rejectRaceRole: "modkill",
+  ackActionId: "mark_dead",
+  rejectActionId: "modkill_slot",
+  winningStatus: "dead",
+  rejectError: "InvalidTarget",
+  apiStatus: "dead",
+  deadRouteStatus: 200,
+  modkillRouteStatus: 200,
+  playerRouteStatus: 200,
+  deadLifecycleLabel: "Dead",
+  modkillLifecycleLabel: "Dead",
+  playerStatus: "dead",
+});
+
+export function hostLifecycleRaceScenario() {
+  return cloneHostLifecycleRaceScenario(hostLifecycleRaceScenarioDefinition);
+}
+
 export function assertHostLifecycleControlRoleSurfaceCase({
   hostRoleSurface,
   expectedGame,
@@ -712,6 +737,50 @@ export function assertHostModkillControlSurfaceCase({
     throwHostPhaseScenarioAssertionError({
       message: "core-loop admin proof missing host modkill control surface",
       evidence: hostModkillControlSurface,
+      includeEvidenceInError,
+    });
+  }
+}
+
+export function assertHostLifecycleRaceSurfaceCase({
+  hostLifecycleRaceSurface,
+  scenario = hostLifecycleRaceScenarioDefinition,
+  includeEvidenceInError = false,
+}) {
+  const raceLane = hostLifecycleRaceSurface?.hostLifecycleRace;
+  const reloadLane = hostLifecycleRaceSurface?.hostLifecycleRaceReload;
+  const race = raceLane?.evidence;
+  const reload = reloadLane?.evidence;
+  if (
+    hostLifecycleRaceSurface?.status !== "passed" ||
+    hostLifecycleRaceSurface.proofCheckId !== scenario.proofCheckId ||
+    hostLifecycleRaceSurface.reloadProofCheckId !== scenario.reloadProofCheckId ||
+    raceLane?.id !== scenario.proofCheckId ||
+    raceLane?.status !== "passed" ||
+    race?.ackRaceRole !== scenario.ackRaceRole ||
+    race?.rejectRaceRole !== scenario.rejectRaceRole ||
+    race?.ackActionId !== scenario.ackActionId ||
+    race?.rejectActionId !== scenario.rejectActionId ||
+    typeof race?.game !== "string" ||
+    race.game.length === 0 ||
+    race?.winningStatus !== scenario.winningStatus ||
+    race?.rejectError !== scenario.rejectError ||
+    race?.apiStatus !== scenario.apiStatus ||
+    reloadLane?.id !== scenario.reloadProofCheckId ||
+    reloadLane?.status !== "passed" ||
+    reload?.game !== race.game ||
+    reload?.winningStatus !== scenario.winningStatus ||
+    reload?.deadRouteStatus !== scenario.deadRouteStatus ||
+    reload?.modkillRouteStatus !== scenario.modkillRouteStatus ||
+    reload?.playerRouteStatus !== scenario.playerRouteStatus ||
+    reload?.deadLifecycleLabel !== scenario.deadLifecycleLabel ||
+    reload?.modkillLifecycleLabel !== scenario.modkillLifecycleLabel ||
+    reload?.playerStatus !== scenario.playerStatus ||
+    reload?.apiStatus !== scenario.apiStatus
+  ) {
+    throwHostPhaseScenarioAssertionError({
+      message: "core-loop admin proof missing host lifecycle race surface",
+      evidence: hostLifecycleRaceSurface,
       includeEvidenceInError,
     });
   }
