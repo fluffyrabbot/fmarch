@@ -30,7 +30,14 @@ import {
 } from "./dev_test_game_admin_audit_proof_helper.mjs";
 import {
   localAdminAuditIds,
+  localAdminAuditRoleUrl,
 } from "./dev_test_game_admin_audit_surface_ids.mjs";
+import {
+  hostSetupFeatureSpineSourceCheckId,
+} from "./dev_test_game_host_setup_feature_spine_targets.mjs";
+import {
+  devTestGameHostSetupProofCommand,
+} from "./dev_test_game_production_feature_source_registry.mjs";
 import {
   proofGraphAdminFeatureTargetCases,
 } from "./dev_test_game_proof_graph_feature_target_cases.mjs";
@@ -401,6 +408,14 @@ function assertProofGraphAdminProofCoversProductionFeatureDestinations(evidence)
           `proof graph admin proof has malformed production feature role destination: ${destination.linkId}`,
         );
       }
+      if (
+        destination.sourceCheckId === hostSetupFeatureSpineSourceCheckId &&
+        !validHostSetupProductionFeatureDestination(destination)
+      ) {
+        throw new Error(
+          `proof graph admin proof has malformed host setup production feature destination: ${destination.linkId}`,
+        );
+      }
       continue;
     }
     const visibleDestination =
@@ -418,6 +433,25 @@ function assertProofGraphAdminProofCoversProductionFeatureDestinations(evidence)
       );
     }
   }
+}
+
+function validHostSetupProductionFeatureDestination(destination) {
+  return (
+    destination.featureSlotId === "host-setup-route" &&
+    destination.adminCheckId === "start-phase" &&
+    destination.adminDetailRoleUrl ===
+      localAdminAuditRoleUrl(localAdminAuditIds.hostSetupProof) &&
+    destination.recoveryCommand === devTestGameHostSetupProofCommand &&
+    destination.readinessEvidence === "target/dev-test-game/host-setup-proof.json" &&
+    destination.browserWorkbench?.status === "passed" &&
+    destination.browserWorkbench.route === "/g/<seeded-game>/setup" &&
+    destination.browserWorkbench.roleUrl === destination.targetRoleUrl &&
+    destination.browserWorkbench.roleSurface === "host-setup" &&
+    typeof destination.browserWorkbench.requiredEvidence === "string" &&
+    destination.browserWorkbench.requiredEvidence.includes(
+      "setup workbench browser surface",
+    )
+  );
 }
 
 function assertProofGraphAdminProofCoversProductionFeatureDestinationSummary(

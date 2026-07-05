@@ -672,6 +672,12 @@ export function assertDevTestGameProofGraphCoversProductionFeatureTargets(
     ) {
       throw new Error(`proof graph production feature target drifted: ${slotId}`);
     }
+    if (
+      target.sourceCheckId === hostSetupFeatureSpineSourceCheckId &&
+      !validHostSetupProductionFeatureDestinationMetadata(node)
+    ) {
+      throw new Error("proof graph host setup production feature destination metadata drifted");
+    }
     if ((node.recoveryHookId ?? undefined) !== (target.recoveryHookId ?? undefined)) {
       throw new Error(`proof graph production feature recovery hook drifted: ${slotId}`);
     }
@@ -701,6 +707,23 @@ export function assertDevTestGameProofGraphCoversProductionFeatureTargets(
     }
   }
   return graph;
+}
+
+function validHostSetupProductionFeatureDestinationMetadata(node) {
+  return (
+    node.adminDetailRoleUrl ===
+      localAdminAuditRoleUrl(localAdminAuditIds.hostSetupProof) &&
+    node.recoveryCommand === node.coverageDecision?.proofCommand &&
+    node.readinessEvidence === "target/dev-test-game/host-setup-proof.json" &&
+    node.browserWorkbench?.status === "passed" &&
+    node.browserWorkbench.route === "/g/<seeded-game>/setup" &&
+    node.browserWorkbench.roleUrl === node.targetRoleUrl &&
+    node.browserWorkbench.roleSurface === "host-setup" &&
+    typeof node.browserWorkbench.requiredEvidence === "string" &&
+    node.browserWorkbench.requiredEvidence.includes(
+      "setup workbench browser surface",
+    )
+  );
 }
 
 export function assertDevTestGameProofGraphCoversRoleSurfaceProofs(
@@ -1215,12 +1238,16 @@ function buildProductionFeatureTargetNodes({
   const targets = productionFeatureTargetsForGraph(releaseReadiness);
   const evidenceObjectNamesByFeatureSlotId =
     productionFeatureEvidenceObjectNamesBySlotId(releaseReadiness);
+  const destinationMetadataByFeatureSlotId =
+    productionFeatureDestinationMetadataBySlotId(releaseReadiness);
   return targets.map((target) =>
     buildProductionFeatureTargetGraphNode({
       target,
       releaseReadinessSource,
       evidenceObjectNames:
         evidenceObjectNamesByFeatureSlotId[target.featureSlotId] ?? [],
+      destinationMetadata:
+        destinationMetadataByFeatureSlotId[target.featureSlotId] ?? {},
     }),
   );
 }
@@ -1229,6 +1256,7 @@ export function buildProductionFeatureTargetGraphNode({
   target,
   releaseReadinessSource,
   evidenceObjectNames = [],
+  destinationMetadata = {},
 }) {
   return {
     id: `production-feature:${target.featureSlotId}`,
@@ -1250,7 +1278,33 @@ export function buildProductionFeatureTargetGraphNode({
     recoveryCommand: target.rerunCommand,
     coverageDecision: target.coverageDecision,
     ...(evidenceObjectNames.length === 0 ? {} : { evidenceObjectNames }),
+    ...destinationMetadata,
   };
+}
+
+function productionFeatureDestinationMetadataBySlotId(releaseReadiness) {
+  const hostSetupCheck = releaseReadiness.localDevelopmentSpine?.checks?.find(
+    (check) => check.id === hostSetupFeatureSpineSourceCheckId,
+  );
+  if (hostSetupCheck === undefined) {
+    return {};
+  }
+  const hostSetupTargets = hostSetupCheck.spineTargets?.productionFeatureTargets;
+  if (!Array.isArray(hostSetupTargets?.slotIds)) {
+    return {};
+  }
+  return Object.fromEntries(
+    hostSetupTargets.slotIds.map((slotId) => [
+      slotId,
+      {
+        adminDetailRoleUrl:
+          hostSetupCheck.adminRoleSurface?.detailRoleUrl ??
+          localAdminAuditRoleUrl(localAdminAuditIds.hostSetupProof),
+        browserWorkbench: hostSetupCheck.browserWorkbench,
+        readinessEvidence: hostSetupCheck.evidence,
+      },
+    ]),
+  );
 }
 
 function buildRoleSurfaceProofNodes({ releaseReadiness }) {

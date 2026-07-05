@@ -21,6 +21,22 @@ export function proofGraphProductionFeatureTargetDestinations(proofGraph) {
       roleUrl: String(node.roleUrl ?? ""),
       targetRoleUrl: String(node.targetRoleUrl ?? ""),
       adminCheckId: String(node.adminCheckId ?? ""),
+      ...(typeof node.adminDetailRoleUrl === "string" &&
+      node.adminDetailRoleUrl.trim() !== ""
+        ? { adminDetailRoleUrl: String(node.adminDetailRoleUrl) }
+        : {}),
+      ...(typeof node.recoveryCommand === "string" &&
+      node.recoveryCommand.trim() !== ""
+        ? { recoveryCommand: String(node.recoveryCommand) }
+        : {}),
+      ...(node.browserWorkbench === null ||
+      typeof node.browserWorkbench !== "object"
+        ? {}
+        : { browserWorkbench: Object.freeze({ ...node.browserWorkbench }) }),
+      ...(typeof node.readinessEvidence === "string" &&
+      node.readinessEvidence.trim() !== ""
+        ? { readinessEvidence: String(node.readinessEvidence) }
+        : {}),
     });
   });
 }
@@ -46,6 +62,20 @@ export function proofGraphProductionFeatureDestinationSummary(
   ).length;
   const totalDestinationCount = destinations.length;
   const driftCount = totalDestinationCount - productionFeatureTargetCount;
+  const roleUrlRows = destinations
+    .filter((destination) => destination.kind === "role-url")
+    .map((destination) =>
+      Object.freeze({
+        id: destination.linkId,
+        label: `Role URL destination: ${destination.featureSlotId}`,
+        status: roleUrlDestinationStatus(destination),
+        roleUrl: destination.roleUrl,
+        targetRoleUrl: destination.targetRoleUrl,
+        adminDetailRoleUrl: destination.adminDetailRoleUrl ?? "",
+        recoveryCommand: destination.recoveryCommand ?? "",
+        readinessEvidence: destination.readinessEvidence ?? "",
+      }),
+    );
   return Object.freeze({
     status: driftCount === 0 ? "passed" : "drift",
     totalDestinationCount,
@@ -74,8 +104,25 @@ export function proofGraphProductionFeatureDestinationSummary(
         expectedCount: productionFeatureTargetCount,
         driftCount,
       }),
+      ...roleUrlRows,
     ]),
   });
+}
+
+function roleUrlDestinationStatus(destination) {
+  return [
+    `roleUrl ${destination.roleUrl}`,
+    `targetRoleUrl ${destination.targetRoleUrl}`,
+    ...(destination.adminDetailRoleUrl === undefined
+      ? []
+      : [`adminDetailRoleUrl ${destination.adminDetailRoleUrl}`]),
+    ...(destination.recoveryCommand === undefined
+      ? []
+      : [`recoveryCommand ${destination.recoveryCommand}`]),
+    ...(destination.browserWorkbench?.requiredEvidence === undefined
+      ? []
+      : [`browserWorkbench ${destination.browserWorkbench.requiredEvidence}`]),
+  ].join("\n");
 }
 
 function productionFeatureTargetNodes(proofGraph) {

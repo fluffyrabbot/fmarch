@@ -95,6 +95,7 @@ test("admin proof destination handoff cases share link and audit rows", () => {
     ["admin-proof:backup", localAdminAuditIds.backupRestore],
     ["admin-proof:ops", localAdminAuditIds.opsArtifacts],
     ["admin-proof:seed", localAdminAuditIds.seedFixtures],
+    ["admin-proof:host-setup", localAdminAuditIds.hostSetupProof],
     ["admin-proof:release", localAdminAuditIds.releaseReadiness],
     ["admin-proof:release-runbook", localAdminAuditIds.releaseRunbook],
     ["admin-proof:race-coverage", localAdminAuditIds.raceCoverage],

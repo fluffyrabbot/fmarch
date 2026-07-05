@@ -4624,6 +4624,19 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
       },
     }),
   );
+  const hostSetupDestinationSummaryRow =
+    graph.summary.productionFeatureDestinationSummary.rows.find(
+      (row) => row.id === "production-feature:host-setup-route",
+    );
+  assert.equal(
+    [
+      "http://127.0.0.1:5173/g/<seeded-game>/setup",
+      "/admin/audit/local-host-setup-proof?game=<seeded-game>",
+      devTestGameHostSetupProofCommand,
+      "setup workbench browser surface",
+    ].every((token) => hostSetupDestinationSummaryRow.status.includes(token)),
+    true,
+  );
   assert.deepEqual(
     graph.summary.diagnosticProofSummary,
     buildProofGraphDiagnosticProofSummary({ nodes: graph.nodes }),
@@ -5006,6 +5019,30 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
         node.evidenceObjectNames ?? [],
       ]),
     expectedProductionFeatureRows,
+  );
+  const hostSetupFeatureNode = graph.nodes.find(
+    (node) => node.id === "production-feature:host-setup-route",
+  );
+  assert.deepEqual(
+    {
+      adminDetailRoleUrl: hostSetupFeatureNode.adminDetailRoleUrl,
+      recoveryCommand: hostSetupFeatureNode.recoveryCommand,
+      readinessEvidence: hostSetupFeatureNode.readinessEvidence,
+      browserWorkbench: hostSetupFeatureNode.browserWorkbench,
+    },
+    {
+      adminDetailRoleUrl: "/admin/audit/local-host-setup-proof?game=<seeded-game>",
+      recoveryCommand: devTestGameHostSetupProofCommand,
+      readinessEvidence: "target/dev-test-game/host-setup-proof.json",
+      browserWorkbench: {
+        status: "passed",
+        route: "/g/<seeded-game>/setup",
+        roleUrl: "http://127.0.0.1:5173/g/<seeded-game>/setup",
+        roleSurface: "host-setup",
+        requiredEvidence:
+          "Seeded host setup role URL opens the setup workbench browser surface for /g/<seeded-game>/setup before start-phase recovery is trusted.",
+      },
+    },
   );
   assert(
     graph.edges.some(
@@ -20016,6 +20053,16 @@ function proofGraphHostSetupFeatureTargetFixture() {
     adminCheckId: "start-phase",
     browserProofCommand: devTestGameLiveProofCommand,
     recoveryCommand: devTestGameHostSetupProofCommand,
+    adminDetailRoleUrl: "/admin/audit/local-host-setup-proof?game=<seeded-game>",
+    readinessEvidence: "target/dev-test-game/host-setup-proof.json",
+    browserWorkbench: {
+      status: "passed",
+      route: "/g/<seeded-game>/setup",
+      roleUrl: "http://127.0.0.1:5173/g/<seeded-game>/setup",
+      roleSurface: "host-setup",
+      requiredEvidence:
+        "Seeded host setup role URL opens the setup workbench browser surface for /g/<seeded-game>/setup before start-phase recovery is trusted.",
+    },
     coverageDecision:
       featureSpineCaseFixture("host-setup-route").spineTarget.coverageDecision,
   };
@@ -20171,6 +20218,18 @@ function proofGraphProductionFeatureTargetDestinationsFixture(targets) {
       roleUrl: target.roleUrl,
       targetRoleUrl: target.targetRoleUrl,
       adminCheckId: target.adminCheckId,
+      ...(target.adminDetailRoleUrl === undefined
+        ? {}
+        : { adminDetailRoleUrl: target.adminDetailRoleUrl }),
+      ...(target.recoveryCommand === undefined
+        ? {}
+        : { recoveryCommand: target.recoveryCommand }),
+      ...(target.browserWorkbench === undefined
+        ? {}
+        : { browserWorkbench: target.browserWorkbench }),
+      ...(target.readinessEvidence === undefined
+        ? {}
+        : { readinessEvidence: target.readinessEvidence }),
     };
   });
 }
@@ -20188,6 +20247,10 @@ function proofGraphProductionFeatureDestinationSummaryFixture(destinations) {
       sourceCheckId: destination.sourceCheckId,
       adminCheckId: destination.adminCheckId,
       targetRoleUrl: destination.targetRoleUrl,
+      adminDetailRoleUrl: destination.adminDetailRoleUrl,
+      recoveryCommand: destination.recoveryCommand,
+      browserWorkbench: destination.browserWorkbench,
+      readinessEvidence: destination.readinessEvidence,
     })),
     summary: {
       productionFeatureTargetCount: destinations.length,

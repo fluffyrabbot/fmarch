@@ -5885,6 +5885,14 @@ function validateProofGraphAdminProductionFeatureTargetDestinations(proof) {
           `proof graph admin proof malformed production feature role destination: ${destination.linkId}`,
         );
       }
+      if (
+        destination.sourceCheckId === hostSetupFeatureSpineSourceCheckId &&
+        !validHostSetupProductionFeatureDestination(destination)
+      ) {
+        throw new Error(
+          `proof graph admin proof malformed host setup destination: ${destination.linkId}`,
+        );
+      }
       continue;
     }
     const visibleDestination = visibleDestinations.find(
@@ -5919,6 +5927,10 @@ function validateProofGraphAdminProductionFeatureDestinationSummary(proof) {
       sourceCheckId: destination.sourceCheckId,
       adminCheckId: destination.adminCheckId,
       targetRoleUrl: destination.targetRoleUrl,
+      adminDetailRoleUrl: destination.adminDetailRoleUrl,
+      recoveryCommand: destination.recoveryCommand,
+      browserWorkbench: destination.browserWorkbench,
+      readinessEvidence: destination.readinessEvidence,
     })),
     summary: {
       productionFeatureTargetCount: destinations.length,
@@ -5954,6 +5966,18 @@ function validateProofGraphAdminProductionFeatureDestinationSummary(proof) {
       );
     }
   }
+}
+
+function validHostSetupProductionFeatureDestination(destination) {
+  return (
+    destination.featureSlotId === "host-setup-route" &&
+    destination.adminCheckId === "start-phase" &&
+    destination.adminDetailRoleUrl ===
+      localAdminAuditRoleUrl(localAdminAuditIds.hostSetupProof) &&
+    destination.recoveryCommand === devTestGameHostSetupProofCommand &&
+    destination.readinessEvidence === "target/dev-test-game/host-setup-proof.json" &&
+    validHostSetupBrowserWorkbench(destination.browserWorkbench)
+  );
 }
 
 function validateProofGraphAdminDiagnosticProofSummary(proof) {
