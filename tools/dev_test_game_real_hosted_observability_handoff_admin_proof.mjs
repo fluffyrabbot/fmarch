@@ -9,6 +9,8 @@ import {
   realHostedObservabilityHandoffInputIds,
 } from "./dev_test_game_real_hosted_observability_handoff_cases.mjs";
 import {
+  assertAdminRoleSurfaceStatusText,
+  assertVisibleAdminRoleSurfaceRows,
   artifactDir,
   proveAdminAuditDetail,
   readJson,
@@ -171,103 +173,74 @@ export function assertRealHostedObservabilityHandoffAdminProof(evidence) {
       "real hosted observability handoff admin proof did not prove admin overview click-through",
     );
   }
-  for (const checkId of evidence.generatedFrom?.checkIds ?? []) {
-    if (!evidence.adminRoleSurface?.visibleChecks?.includes(checkId)) {
-      throw new Error(
-        `real hosted observability handoff admin proof missing visible check: ${checkId}`,
-      );
-    }
-  }
-  for (const checkId of evidence.generatedFrom?.blockedCheckIds ?? []) {
-    if (!evidence.adminRoleSurface?.visibleUnproven?.includes(checkId)) {
-      throw new Error(
-        `real hosted observability handoff admin proof missing blocked row: ${checkId}`,
-      );
-    }
-  }
-  for (const inputId of evidence.generatedFrom?.hostedHandoffInputIds ?? []) {
-    if (!evidence.adminRoleSurface?.visibleHostedHandoffInputs?.includes(inputId)) {
-      throw new Error(
-        `real hosted observability handoff admin proof missing handoff input: ${inputId}`,
-      );
-    }
-  }
-  for (const checkId of evidence.generatedFrom?.hostedHandoffBlockedCheckIds ?? []) {
-    if (
-      !evidence.adminRoleSurface?.visibleHostedHandoffBlockedChecks?.includes(
-        checkId,
-      )
-    ) {
-      throw new Error(
-        `real hosted observability handoff admin proof missing handoff blocked check: ${checkId}`,
-      );
-    }
-  }
-  for (const groupId of evidence.generatedFrom?.hostedHandoffGroupIds ?? []) {
-    if (
-      !evidence.adminRoleSurface?.visibleHostedHandoffGroups?.includes(groupId)
-    ) {
-      throw new Error(
-        `real hosted observability handoff admin proof missing handoff group: ${groupId}`,
-      );
-    }
-  }
-  for (const sectionId of evidence.generatedFrom?.hostedHandoffInputSectionIds ??
-    []) {
-    if (
-      !evidence.adminRoleSurface?.visibleHostedHandoffInputSections?.includes(
-        sectionId,
-      )
-    ) {
-      throw new Error(
-        `real hosted observability handoff admin proof missing input section: ${sectionId}`,
-      );
-    }
-  }
-  for (const [sectionId, expectedStatus] of Object.entries(
-    evidence.generatedFrom?.hostedHandoffInputSectionStatuses ?? {},
-  )) {
-    const visibleText =
-      evidence.adminRoleSurface?.visibleHostedHandoffInputSectionStatuses?.[
-        sectionId
-      ] ?? "";
-    if (!visibleText.includes(expectedStatus)) {
-      throw new Error(
-        `real hosted observability handoff admin proof missing input section status: ${sectionId}`,
-      );
-    }
-  }
-  for (const inputId of evidence.generatedFrom?.hostedHandoffSectionInputIds ??
-    []) {
-    if (
-      !evidence.adminRoleSurface?.visibleHostedHandoffSectionInputs?.includes(
-        inputId,
-      )
-    ) {
-      throw new Error(
-        `real hosted observability handoff admin proof missing section input: ${inputId}`,
-      );
-    }
-  }
-  for (const [inputId, expectedStatus] of Object.entries(
-    evidence.generatedFrom?.hostedHandoffSectionInputStatuses ?? {},
-  )) {
-    const visibleText =
-      evidence.adminRoleSurface?.visibleHostedHandoffSectionInputStatuses?.[
-        inputId
-      ] ?? "";
-    if (!visibleText.includes(expectedStatus)) {
-      throw new Error(
-        `real hosted observability handoff admin proof missing section input status: ${inputId}`,
-      );
-    }
-  }
-  for (const linkId of evidence.generatedFrom?.relatedAuditIds ?? []) {
-    if (!evidence.adminRoleSurface?.visibleRelatedLinks?.includes(linkId)) {
-      throw new Error(
-        `real hosted observability handoff admin proof missing related link: ${linkId}`,
-      );
-    }
-  }
+  assertVisibleAdminRoleSurfaceRows({
+    adminRoleSurface: evidence.adminRoleSurface,
+    rowIds: evidence.generatedFrom?.checkIds,
+    proofName: "real hosted observability handoff admin proof",
+    rowName: "visible check",
+  });
+  assertVisibleAdminRoleSurfaceRows({
+    adminRoleSurface: evidence.adminRoleSurface,
+    rowIds: evidence.generatedFrom?.blockedCheckIds,
+    proofName: "real hosted observability handoff admin proof",
+    rowName: "blocked row",
+    surfaceKey: "visibleUnproven",
+  });
+  assertVisibleAdminRoleSurfaceRows({
+    adminRoleSurface: evidence.adminRoleSurface,
+    rowIds: evidence.generatedFrom?.hostedHandoffInputIds,
+    proofName: "real hosted observability handoff admin proof",
+    rowName: "handoff input",
+    surfaceKey: "visibleHostedHandoffInputs",
+  });
+  assertVisibleAdminRoleSurfaceRows({
+    adminRoleSurface: evidence.adminRoleSurface,
+    rowIds: evidence.generatedFrom?.hostedHandoffBlockedCheckIds,
+    proofName: "real hosted observability handoff admin proof",
+    rowName: "handoff blocked check",
+    surfaceKey: "visibleHostedHandoffBlockedChecks",
+  });
+  assertVisibleAdminRoleSurfaceRows({
+    adminRoleSurface: evidence.adminRoleSurface,
+    rowIds: evidence.generatedFrom?.hostedHandoffGroupIds,
+    proofName: "real hosted observability handoff admin proof",
+    rowName: "handoff group",
+    surfaceKey: "visibleHostedHandoffGroups",
+  });
+  assertVisibleAdminRoleSurfaceRows({
+    adminRoleSurface: evidence.adminRoleSurface,
+    rowIds: evidence.generatedFrom?.hostedHandoffInputSectionIds,
+    proofName: "real hosted observability handoff admin proof",
+    rowName: "input section",
+    surfaceKey: "visibleHostedHandoffInputSections",
+  });
+  assertAdminRoleSurfaceStatusText({
+    adminRoleSurface: evidence.adminRoleSurface,
+    expectedStatuses: evidence.generatedFrom?.hostedHandoffInputSectionStatuses,
+    proofName: "real hosted observability handoff admin proof",
+    rowName: "input section status",
+    surfaceKey: "visibleHostedHandoffInputSectionStatuses",
+  });
+  assertVisibleAdminRoleSurfaceRows({
+    adminRoleSurface: evidence.adminRoleSurface,
+    rowIds: evidence.generatedFrom?.hostedHandoffSectionInputIds,
+    proofName: "real hosted observability handoff admin proof",
+    rowName: "section input",
+    surfaceKey: "visibleHostedHandoffSectionInputs",
+  });
+  assertAdminRoleSurfaceStatusText({
+    adminRoleSurface: evidence.adminRoleSurface,
+    expectedStatuses: evidence.generatedFrom?.hostedHandoffSectionInputStatuses,
+    proofName: "real hosted observability handoff admin proof",
+    rowName: "section input status",
+    surfaceKey: "visibleHostedHandoffSectionInputStatuses",
+  });
+  assertVisibleAdminRoleSurfaceRows({
+    adminRoleSurface: evidence.adminRoleSurface,
+    rowIds: evidence.generatedFrom?.relatedAuditIds,
+    proofName: "real hosted observability handoff admin proof",
+    rowName: "related link",
+    surfaceKey: "visibleRelatedLinks",
+  });
   return evidence;
 }
