@@ -15,6 +15,9 @@ import {
 import { releaseReadinessStep } from "./dev_test_game_spine_readiness_steps.mjs";
 import { runSpinePlan } from "./dev_test_game_spine_runner.mjs";
 import {
+  devTestGameProofGraphPath,
+} from "./dev_test_game_proof_graph_paths.mjs";
+import {
   devTestGameHostedIdentityProgressionAdminProofBatchScript,
   hostedIdentityProgressionAdminProofBatchArtifactPaths,
 } from "./dev_test_game_hosted_identity_progression_admin_proof_batch.mjs";
@@ -37,6 +40,14 @@ export const identityOperatorReadinessEnv = {
   FMARCH_DEV_TEST_GAME_HOSTED_IDENTITY_EVIDENCE_ADMIN_PROOF:
     devTestGameHostedIdentityOperatorAdminProofPath,
 };
+
+export const hostedIdentityOperatorProofGraphDependencyPrecondition =
+  Object.freeze({
+    kind: "hosted-identity-proof-graph-dependency",
+    path: devTestGameProofGraphPath,
+    id: "hosted-identity-proof-graph-dependency",
+    label: "Hosted identity proof graph dependency",
+  });
 
 const devTestGameIdentityBaseSpineSteps = [
   { kind: "node", script: "tools/auth_invite_role_proof.mjs" },
@@ -83,6 +94,7 @@ export const devTestGameIdentityOperatorSpinePlan = [
   {
     kind: "node",
     script: "tools/dev_test_game_hosted_identity_operator_admin_proof.mjs",
+    preconditions: [hostedIdentityOperatorProofGraphDependencyPrecondition],
   },
   releaseReadinessStep({
     reason: "identity-operator-hosted-evidence-predicate",

@@ -1,6 +1,10 @@
 import { spawn } from "node:child_process";
+import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import {
+  assertHostedIdentityProofGraphDependency,
+} from "./dev_test_game_hosted_identity_proof_graph_dependency.mjs";
 
 export const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -19,6 +23,7 @@ export async function runSpinePlan(plan, { custom = {} } = {}) {
 }
 
 async function runSpinePlanStep(step, { custom }) {
+  await runSpinePlanStepPreconditions(step.preconditions);
   const kind = step.kind ?? "node";
   if (kind === "node") {
     await runNodeScript(step.script, { env: step.env });
@@ -37,6 +42,33 @@ async function runSpinePlanStep(step, { custom }) {
     return;
   }
   throw new Error(`unknown spine plan step kind: ${kind}`);
+}
+
+async function runSpinePlanStepPreconditions(preconditions = []) {
+  if (!Array.isArray(preconditions)) {
+    throw new Error("spine plan step preconditions must be an array");
+  }
+  for (const precondition of preconditions) {
+    await runSpinePlanStepPrecondition(precondition);
+  }
+}
+
+async function runSpinePlanStepPrecondition(precondition) {
+  const kind = precondition?.kind;
+  if (kind === "hosted-identity-proof-graph-dependency") {
+    if (
+      typeof precondition.path !== "string" ||
+      precondition.path.trim() === ""
+    ) {
+      throw new Error("hosted identity proof graph precondition is missing a path");
+    }
+    const proofGraphPath = path.resolve(repoRoot, precondition.path);
+    assertHostedIdentityProofGraphDependency(
+      JSON.parse(await readFile(proofGraphPath, "utf8")),
+    );
+    return;
+  }
+  throw new Error(`unknown spine plan precondition kind: ${kind}`);
 }
 
 export function runCommand(command, args, { env = {} } = {}) {

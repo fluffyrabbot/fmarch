@@ -213,9 +213,13 @@ import {
 import {
   devTestGameIdentityOperatorSpinePlan,
   devTestGameIdentitySpinePlan,
+  hostedIdentityOperatorProofGraphDependencyPrecondition,
   identityOperatorReadinessEnv,
   identityReadinessEnv,
 } from "./dev_test_game_identity_spine.mjs";
+import {
+  runSpinePlan,
+} from "./dev_test_game_spine_runner.mjs";
 import {
   devTestGameHostedIdentityProgressionAdminProofBatchScript,
   hostedIdentityProgressionAdminProofBatchArtifactPaths,
@@ -991,6 +995,11 @@ test("dev test-game spine orchestrators expose stable proof order and env maps",
   assert(identityOperatorBatchIndex > -1);
   assert(identityOperatorProofIndex > identityOperatorBatchIndex);
   assert.deepEqual(
+    devTestGameIdentityOperatorSpinePlan[identityOperatorProofIndex]
+      .preconditions,
+    [hostedIdentityOperatorProofGraphDependencyPrecondition],
+  );
+  assert.deepEqual(
     devTestGameIdentityOperatorSpinePlan[identityOperatorBatchIndex + 1]
       .changedInputs,
     [
@@ -1022,6 +1031,12 @@ test("dev test-game spine orchestrators expose stable proof order and env maps",
     devTestGameIdentityOperatorSpinePlan.at(-1).readinessReason,
     "identity-operator-hosted-evidence-predicate",
   );
+  assert.deepEqual(hostedIdentityOperatorProofGraphDependencyPrecondition, {
+    kind: "hosted-identity-proof-graph-dependency",
+    path: devTestGameProofGraphPath,
+    id: "hosted-identity-proof-graph-dependency",
+    label: "Hosted identity proof graph dependency",
+  });
   assert.deepEqual(identityReadinessEnv, {
     FMARCH_DEV_TEST_GAME_OPS_ARTIFACTS: devTestGameOpsArtifactsPath,
     FMARCH_DEV_TEST_GAME_SEED_FIXTURE_SUMMARY:
@@ -5558,6 +5573,76 @@ test("hosted identity proof graph dependency is shared by graph and next-action"
       }),
     /proof graph hosted identity operator dependency missing/,
   );
+});
+
+test("spine runner enforces hosted identity graph preconditions before a step", async () => {
+  await mkdir("target/dev-test-game", { recursive: true });
+  const proofGraphPath =
+    "target/dev-test-game/runner-hosted-identity-proof-graph.json";
+  const staleProofGraphPath =
+    "target/dev-test-game/runner-hosted-identity-proof-graph-stale.json";
+  const graph = hostedIdentityProofGraphFixture();
+  await writeFile(proofGraphPath, `${JSON.stringify(graph, null, 2)}\n`);
+  await writeFile(
+    staleProofGraphPath,
+    `${JSON.stringify(
+      {
+        ...graph,
+        edges: graph.edges.filter(
+          (edge) =>
+            edge.relationship !==
+            hostedIdentityOperatorAdminSurfaceProofGraphRelationship,
+        ),
+      },
+      null,
+      2,
+    )}\n`,
+  );
+  const calls = [];
+  await runSpinePlan(
+    [
+      {
+        kind: "custom",
+        script: "record",
+        preconditions: [
+          {
+            ...hostedIdentityOperatorProofGraphDependencyPrecondition,
+            path: proofGraphPath,
+          },
+        ],
+      },
+    ],
+    {
+      custom: {
+        record: async (step) => calls.push(step.script),
+      },
+    },
+  );
+  assert.deepEqual(calls, ["record"]);
+  await assert.rejects(
+    () =>
+      runSpinePlan(
+        [
+          {
+            kind: "custom",
+            script: "blocked",
+            preconditions: [
+              {
+                ...hostedIdentityOperatorProofGraphDependencyPrecondition,
+                path: staleProofGraphPath,
+              },
+            ],
+          },
+        ],
+        {
+          custom: {
+            blocked: async (step) => calls.push(step.script),
+          },
+        },
+      ),
+    /proof graph hosted identity operator dependency missing/,
+  );
+  assert.deepEqual(calls, ["record"]);
 });
 
 test("proof graph receipt artifact rows share one browser row id contract", () => {

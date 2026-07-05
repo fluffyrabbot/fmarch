@@ -1240,6 +1240,13 @@ function clonePlan(plan) {
   return plan.map((step) => ({
     ...step,
     ...(step.env === undefined ? {} : { env: { ...step.env } }),
+    ...(step.preconditions === undefined
+      ? {}
+      : {
+          preconditions: step.preconditions.map((precondition) => ({
+            ...precondition,
+          })),
+        }),
   }));
 }
 
