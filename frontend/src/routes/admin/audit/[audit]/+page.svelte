@@ -1035,6 +1035,7 @@
               class="admin-audit-detail__entry admin-audit-detail__entry--stack"
               data-testid="admin-audit-hosted-handoff-blocked-receipt"
             >
+              <h3>Hosted identity blocked receipt</h3>
               <strong>{data.audit.hostedHandoffChecklist.blockedReceipt.status}</strong>
               <span>{data.audit.hostedHandoffChecklist.blockedReceipt.operatorAction}</span>
               <span>{data.audit.hostedHandoffChecklist.blockedReceipt.localVsHostedBoundary}</span>

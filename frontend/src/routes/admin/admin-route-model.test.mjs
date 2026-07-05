@@ -1534,6 +1534,16 @@ test("admin audit detail page renders hosted identity operator drilldowns as a n
   );
 });
 
+test("admin audit detail page renders hosted identity blocked receipt as a named group", async () => {
+  const source = await readFile(
+    "frontend/src/routes/admin/audit/[audit]/+page.svelte",
+    "utf8",
+  );
+  assert.match(source, /admin-audit-hosted-handoff-blocked-receipt/);
+  assert.match(source, /Hosted identity blocked receipt/);
+  assert.match(source, /firstMissingOperatorArtifact\.roleSurfaceDrilldown/);
+});
+
 test("admin hosted-facing audit inventory carries shared handoff paths where required", async () => {
   const data = await buildAdminRouteData({
     principalUserId: "admin_a",

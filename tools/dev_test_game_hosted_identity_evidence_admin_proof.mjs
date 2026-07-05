@@ -332,6 +332,7 @@ export function hostedIdentityEvidenceAdminProofCase({
         requiredText: [
           "Hosted identity recovery ladder",
           "Hosted identity operator drilldowns",
+          "Hosted identity blocked receipt",
         ],
         requiredHostedIdentityRoleSurfaceContractDiffStatus:
           source.hostedIdentityEvidence.target.roleSurfaceContractDiff.status,
