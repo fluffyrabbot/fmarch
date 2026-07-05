@@ -1320,10 +1320,7 @@ function hostedIdentitySequenceDeferralFor(
   if (selectedUnproven?.item?.id !== "hosted-production-identity") {
     return null;
   }
-  if (
-    sequenceStage === devTestGameHostedIdentitySequenceStage &&
-    localCapabilityConfidence?.status === "passed"
-  ) {
+  if (localCapabilityConfidence?.status === "passed") {
     return null;
   }
   const readyForHostedIdentity =

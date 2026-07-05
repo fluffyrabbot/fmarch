@@ -27,7 +27,7 @@
     sendAdminSetupCommand,
   } from "./admin-route-controller.mjs";
   import { ADMIN_SURFACE_CONTRACT } from "$lib/components/admin/admin-surface-model.mjs";
-  import { ADMIN_ROUTE_CONTRACT } from "./admin-route-model.mjs";
+  import { ADMIN_ROUTE_CONTRACT } from "./admin-route-contract.mjs";
 
   export let data;
   export let form;

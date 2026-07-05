@@ -929,6 +929,15 @@
             <strong>{item.id}</strong>
             <span>{item.status}</span>
             <span>{item.requiredEvidence}</span>
+            {#if item.command}
+              <span>{item.command}</span>
+            {/if}
+            {#if item.proofTarget}
+              <span>{item.proofTarget}</span>
+            {/if}
+            {#if item.roleUrl}
+              <span>{item.roleUrl}</span>
+            {/if}
           </li>
         {/each}
       </ol>

@@ -112,12 +112,11 @@ import {
   selectedSpineDrilldownStatus,
   selectedSpineTargetStatus,
 } from "./selected-spine-status.mjs";
+import {
+  ADMIN_ROUTE_CONTRACT,
+} from "./admin-route-contract.mjs";
 
-export const ADMIN_ROUTE_CONTRACT = Object.freeze({
-  surfaceTestId: "admin-surface",
-  capabilityTestId: "admin-capability",
-  requiredText: "Operations",
-});
+export { ADMIN_ROUTE_CONTRACT };
 
 export const LOCAL_PLAYER_RECOVERY_AUDIT_LANE_IDS = playerRecoveryAuditLaneIds;
 
@@ -4879,6 +4878,15 @@ export function normalizeLocalReleaseRunbookAudit(releaseRunbook, { game }) {
       runbookItemCount: runbookItems.length,
       rollbackStatus: String(releaseRunbook.rollbackPath?.status ?? "unknown"),
       supportStatus: String(releaseRunbook.supportPath?.status ?? "unknown"),
+      nextBuildCommand: String(releaseRunbook.nextBuildSlice?.command ?? ""),
+      nextBuildProofTarget: String(
+        releaseRunbook.nextBuildSlice?.proofTarget ?? "",
+      ),
+      nextBuildRoleUrl: String(releaseRunbook.nextBuildSlice?.roleUrl ?? ""),
+      nextBuildOwner: String(releaseRunbook.nextBuildSlice?.owner ?? ""),
+      nextBuildUnprovenId: String(
+        releaseRunbook.nextBuildSlice?.unprovenId ?? "",
+      ),
       releaseReady: releaseRunbook.releaseReady === true,
       productionReady: releaseRunbook.productionReady === true,
     }),

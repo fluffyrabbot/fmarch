@@ -23,9 +23,12 @@ import {
 import {
   devTestGameBackupRestoreProofPath,
   devTestGameHostedConcurrentRaceMatrixPath,
-  devTestGameIdentityAdapterProofPath,
   devTestGameSeedFixturePath,
 } from "./dev_test_game_adjacent_artifact_paths.mjs";
+import {
+  devTestGameHostedIdentityEvidenceCommand,
+  devTestGameHostedIdentityEvidencePath,
+} from "./dev_test_game_hosted_identity_evidence_cases.mjs";
 import { repoRoot } from "./dev_test_game_spine_runner.mjs";
 
 export const DEV_TEST_GAME_RELEASE_RUNBOOK_VERSION = 1;
@@ -52,6 +55,7 @@ export function buildDevTestGameReleaseRunbook({
       game: readiness.generatedFrom.game,
     }),
   );
+  const nextRunbookItem = nextReleaseRunbookItem(runbookItems);
   const runbook = {
     version: DEV_TEST_GAME_RELEASE_RUNBOOK_VERSION,
     proof: "dev-test-game-release-runbook",
@@ -120,11 +124,14 @@ export function buildDevTestGameReleaseRunbook({
         "Named support owner, escalation window, incident channel, and rollback decision authority remain human approval tasks.",
     },
     nextBuildSlice: {
-      command: `npm run ${devTestGameReleaseRunbookCommand}`,
+      command: nextRunbookItem.command,
       buildSlice:
-        "Refresh the local release-runbook rehearsal after readiness evidence changes, then collect real human approval outside the local proof spine.",
-      proofTarget: devTestGameReleaseRunbookPath,
-      roleUrl: localAdminAuditRoleUrl(localAdminAuditIds.releaseRunbook),
+        nextRunbookItem.nextBuildSlice ??
+        "Execute the first rehearsed release-readiness handoff, then regenerate the local release-readiness checklist and runbook.",
+      proofTarget: nextRunbookItem.proofTarget,
+      roleUrl: nextRunbookItem.roleUrl,
+      owner: nextRunbookItem.owner,
+      unprovenId: nextRunbookItem.id,
     },
   };
   assertDevTestGameReleaseRunbook(runbook);
@@ -180,7 +187,12 @@ export function assertDevTestGameReleaseRunbook(runbook) {
   if (
     runbook.rollbackPath?.status !== "rehearsed_locally" ||
     runbook.supportPath?.status !== "local_admin_surface_available" ||
-    runbook.nextBuildSlice?.proofTarget !== devTestGameReleaseRunbookPath
+    typeof runbook.nextBuildSlice?.command !== "string" ||
+    runbook.nextBuildSlice.command === "" ||
+    typeof runbook.nextBuildSlice?.proofTarget !== "string" ||
+    runbook.nextBuildSlice.proofTarget === "" ||
+    typeof runbook.nextBuildSlice?.roleUrl !== "string" ||
+    !runbook.nextBuildSlice.roleUrl.includes("?game=<seeded-game>")
   ) {
     throw new Error("release runbook recovery paths drifted");
   }
@@ -207,6 +219,9 @@ function releaseRunbookItem(item, { rank, game }) {
     game,
     requiredEvidence: item.requiredEvidence,
     evidenceBoundary: config.evidenceBoundary,
+    ...(config.nextBuildSlice === undefined
+      ? {}
+      : { nextBuildSlice: config.nextBuildSlice }),
   };
 }
 
@@ -215,11 +230,13 @@ const releaseRunbookItemConfig = new Map([
     "hosted-production-identity",
     {
       owner: "identity-owner",
-      command: "npm run test:dev-test-game-identity",
-      proofTarget: devTestGameIdentityAdapterProofPath,
-      roleUrl: localAdminAuditRoleUrl(localAdminAuditIds.identityAdapter),
+      command: `npm run ${devTestGameHostedIdentityEvidenceCommand}`,
+      proofTarget: devTestGameHostedIdentityEvidencePath,
+      roleUrl: localAdminAuditRoleUrl(localAdminAuditIds.hostedIdentityEvidence),
       evidenceBoundary:
-        "Local adapter proof is present; hosted account lifecycle, invite delivery, recovery, abuse controls, and audit export still require external evidence.",
+        "Local adapter proof remains the prerequisite role-surface boundary; the owner-facing release step is hosted identity evidence intake for account lifecycle, invite delivery, recovery, abuse controls, session-secret policy, and hosted audit export.",
+      nextBuildSlice:
+        "Run the hosted identity evidence intake while carrying the local identity adapter proof as prerequisite evidence; this records the blocked hosted handoff until operator packets are attached.",
     },
   ],
   [
@@ -307,6 +324,21 @@ const releaseRunbookItemConfig = new Map([
     },
   ],
 ]);
+
+function nextReleaseRunbookItem(runbookItems) {
+  return (
+    runbookItems.find((item) => item.id === "hosted-production-identity") ??
+    runbookItems[0] ?? {
+      id: "release-runbook",
+      owner: "release-owner",
+      command: `npm run ${devTestGameReleaseRunbookCommand}`,
+      proofTarget: devTestGameReleaseRunbookPath,
+      roleUrl: localAdminAuditRoleUrl(localAdminAuditIds.releaseRunbook),
+      nextBuildSlice:
+        "Refresh the local release-runbook rehearsal after readiness evidence changes, then collect real human approval outside the local proof spine.",
+    }
+  );
+}
 
 async function readArtifactSummary(absolutePath) {
   const metadata = await stat(absolutePath).catch(() => null);

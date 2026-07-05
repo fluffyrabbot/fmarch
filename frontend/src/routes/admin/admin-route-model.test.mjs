@@ -190,6 +190,7 @@ import {
   hostedTargetPreflightMissingApiUrlRequiredEvidence,
   hostedTargetPreflightMissingFrontendUrlRequiredEvidence,
   hostedTargetPreflightMissingRawEvidencePathRequiredEvidence,
+  hostedTargetPreflightSyntheticRawEvidenceRequiredEvidence,
 } from "../../../../tools/dev_test_game_hosted_target_preflight.mjs";
 import {
   devTestGameAdminSpineAdminProofPath,
@@ -222,6 +223,8 @@ const HOSTED_EVIDENCE_LANE_PROOF_TARGET =
   "target/dev-test-game/hosted-evidence-lane.json";
 const HOSTED_IDENTITY_EVIDENCE_PROOF_TARGET =
   "target/dev-test-game/hosted-identity-evidence.json";
+const HOSTED_IDENTITY_EVIDENCE_COMMAND =
+  "npm run test:dev-test-game-hosted-identity-evidence";
 const HOSTED_IDENTITY_OPERATOR_COMMAND =
   "DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch npm run test:dev-test-game-identity:operator";
 const HOSTED_IDENTITY_OPERATOR_PROOF_TARGET =
@@ -2754,13 +2757,30 @@ test("admin local next action detail data carries hosted identity progression la
     principalUserId: "admin_a",
     capabilities: [{ kind: "GlobalAdmin" }],
     nextAction: nextActionFixture({
-      command: "npm run test:dev-test-game-hosted-identity-evidence",
+      command: HOSTED_IDENTITY_EVIDENCE_COMMAND,
       unproven,
     }),
   });
 
   assert.equal(data.status, "available");
   assert.equal(data.audit.id, localAdminAuditIds.nextAction);
+  assert.equal(data.audit.status, `ready: ${HOSTED_IDENTITY_EVIDENCE_COMMAND}`);
+  assert.deepEqual(
+    data.audit.checks
+      .filter((check) =>
+        [
+          "hosted-production-identity",
+          "selected-next-command",
+          "selected-proof-target",
+        ].includes(check.id),
+      )
+      .map((check) => [check.id, check.status]),
+    [
+      ["hosted-production-identity", "unproven"],
+      ["selected-next-command", HOSTED_IDENTITY_EVIDENCE_COMMAND],
+      ["selected-proof-target", HOSTED_IDENTITY_EVIDENCE_PROOF_TARGET],
+    ],
+  );
   assert.deepEqual(
     data.audit.hostedHandoffChecklist.progressionSummary.progressions.map(
       (progression) => [
@@ -2786,6 +2806,11 @@ test("admin local next action detail data carries hosted identity progression la
   assert.deepEqual(
     data.audit.hostedHandoffChecklist.operatorEvidenceGate,
     normalizedHostedIdentityOperatorGateFixture(),
+  );
+  assert.equal(data.audit.artifactSummary.command, HOSTED_IDENTITY_EVIDENCE_COMMAND);
+  assert.equal(
+    data.audit.artifactSummary.selectedProofTarget,
+    HOSTED_IDENTITY_EVIDENCE_PROOF_TARGET,
   );
 });
 
@@ -4246,6 +4271,97 @@ test("admin local release readiness detail data carries checks and unproven rows
       "hosted-deployment",
       "human-release-runbook",
     ]).map((item) => [item.id, item.status]),
+  );
+});
+
+test("admin local release runbook detail data routes hosted identity handoff to evidence intake", async () => {
+  const data = await buildAdminAuditDetailData({
+    audit: localAdminAuditIds.releaseRunbook,
+    principalUserId: "admin_a",
+    capabilities: [{ kind: "GlobalAdmin" }],
+    releaseRunbook: {
+      version: 1,
+      proof: "dev-test-game-release-runbook",
+      status: "passed",
+      releaseReady: false,
+      productionReady: false,
+      generatedAt: "2026-07-05T00:00:00.000Z",
+      scope: "local-dev-test-game-release-runbook-rehearsal",
+      proofBoundary: "Local release runbook handoff.",
+      generatedFrom: {
+        releaseReadinessChecklist:
+          "target/dev-test-game/release-readiness-checklist.json",
+        releaseReadinessGeneratedAt: "2026-07-05T00:00:00.000Z",
+        game: "midsummer",
+        unprovenIds: ["hosted-production-identity"],
+      },
+      checks: [
+        { id: "remaining-readiness-gaps-mapped", status: "passed" },
+        { id: "rollback-path-carried", status: "passed" },
+        { id: "support-path-carried", status: "passed" },
+        {
+          id: "release-claim-boundary-carried",
+          status: "passed",
+          releaseReady: false,
+          productionReady: false,
+        },
+        { id: "human-approval-boundary-carried", status: "unproven" },
+      ],
+      runbookItems: [
+        {
+          id: "hosted-production-identity",
+          rank: 1,
+          status: "rehearsal_ready",
+          owner: "identity-owner",
+          command: HOSTED_IDENTITY_EVIDENCE_COMMAND,
+          proofTarget: HOSTED_IDENTITY_EVIDENCE_PROOF_TARGET,
+          roleUrl: localAdminAuditRoleUrl(localAdminAuditIds.hostedIdentityEvidence),
+          game: "midsummer",
+          requiredEvidence: "Hosted account lifecycle",
+          evidenceBoundary:
+            "Local adapter proof remains the prerequisite role-surface boundary.",
+        },
+      ],
+      rollbackPath: { status: "rehearsed_locally" },
+      supportPath: { status: "local_admin_surface_available" },
+      nextBuildSlice: {
+        command: HOSTED_IDENTITY_EVIDENCE_COMMAND,
+        proofTarget: HOSTED_IDENTITY_EVIDENCE_PROOF_TARGET,
+        roleUrl: localAdminAuditRoleUrl(localAdminAuditIds.hostedIdentityEvidence),
+        owner: "identity-owner",
+        unprovenId: "hosted-production-identity",
+      },
+    },
+  });
+
+  assert.equal(data.status, "available");
+  assert.deepEqual(
+    data.audit.unproven.map((item) => [
+      item.id,
+      item.command,
+      item.proofTarget,
+      item.roleUrl,
+    ]),
+    [
+      [
+        "hosted-production-identity",
+        HOSTED_IDENTITY_EVIDENCE_COMMAND,
+        HOSTED_IDENTITY_EVIDENCE_PROOF_TARGET,
+        localAdminAuditRoleUrl(localAdminAuditIds.hostedIdentityEvidence),
+      ],
+    ],
+  );
+  assert.equal(
+    data.audit.artifactSummary.nextBuildCommand,
+    HOSTED_IDENTITY_EVIDENCE_COMMAND,
+  );
+  assert.equal(
+    data.audit.artifactSummary.nextBuildProofTarget,
+    HOSTED_IDENTITY_EVIDENCE_PROOF_TARGET,
+  );
+  assert.equal(
+    data.audit.artifactSummary.nextBuildUnprovenId,
+    "hosted-production-identity",
   );
 });
 

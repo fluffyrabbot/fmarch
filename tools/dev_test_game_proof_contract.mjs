@@ -297,6 +297,7 @@ export function buildDevTestGameProofRun(session, options = {}) {
       slotIds: verification.hostSetup?.slotIds ?? null,
       roleKeys: verification.hostSetup?.roleKeys ?? null,
       mainPolicyText: verification.hostSetup?.mainPolicyText ?? null,
+      setupBootstrap: verification.hostSetup?.setupBootstrap ?? null,
       policyCommand: verification.hostSetup?.policyCommand ?? null,
       setupMutationCommand: verification.hostSetup?.setupMutationCommand ?? null,
       passed:
@@ -315,6 +316,26 @@ export function buildDevTestGameProofRun(session, options = {}) {
         verification.hostSetup?.slotIds?.includes("slot_4") === true &&
         verification.hostSetup?.roleKeys?.includes("mafia_goon") === true &&
         verification.hostSetup?.roleKeys?.includes("vanilla_townie") === true &&
+        verification.hostSetup?.setupBootstrap?.status === "passed" &&
+        verification.hostSetup?.setupBootstrap?.roleUrl?.includes(
+          `/g/${session?.game ?? ""}/setup`,
+        ) === true &&
+        verification.hostSetup?.setupBootstrap?.phaseId === "D01" &&
+        verification.hostSetup?.setupBootstrap?.readinessSummary ===
+          "Started at D01" &&
+        verification.hostSetup?.setupBootstrap?.commandCount === 18 &&
+        verification.hostSetup?.setupBootstrap?.commands?.some(
+          (command) =>
+            command.commandKind === "StartGame" &&
+            command.command?.phase === "D01" &&
+            command.status === "ack",
+        ) === true &&
+        verification.hostSetup?.setupBootstrap?.policyCommand?.status ===
+          "passed" &&
+        verification.hostSetup?.setupBootstrap?.roleAssignments?.["slot_4"] ===
+          "mafia_goon" &&
+        verification.hostSetup?.setupBootstrap?.roleAssignments?.["slot-7"] ===
+          "encryptor" &&
         verification.hostSetup?.policyCommand?.status === "passed" &&
         verification.hostSetup?.policyCommand?.commandKind === "SetPostPolicy" &&
         verification.hostSetup?.policyCommand?.channelId === "main" &&
@@ -6669,6 +6690,16 @@ export function buildDevTestGameProofRun(session, options = {}) {
       apiBaseUrl: session?.apiBaseUrl ?? null,
       verificationStatus: verification.status ?? null,
       roles: verification.roles ?? [],
+      setupBootstrap:
+        session?.setupBootstrap === null || session?.setupBootstrap === undefined
+          ? null
+          : {
+              status: session.setupBootstrap.status,
+              roleUrl: redactSeededGameUrl(session.setupBootstrap.roleUrl, session?.game),
+              commandCount: session.setupBootstrap.commandCount,
+              phaseId: session.setupBootstrap.phaseId,
+              readinessSummary: session.setupBootstrap.readinessSummary,
+            },
     },
     identityBootstrap: session?.identityBootstrap ?? null,
     coreLoopSpine,
@@ -6688,7 +6719,7 @@ export function buildDevTestGameProofRun(session, options = {}) {
       "beta or release readiness",
     ],
     proofBoundary:
-      "Local Rust API plus SvelteKit browser proof over one seeded mafiascum game. Passing means the local development-spine role URLs exercised the recorded lanes; it does not prove production identity, hosted deployment, exhaustive races, backup/restore, or release readiness.",
+      "Local Rust API plus SvelteKit browser proof over one setup-bootstrapped mafiascum game. Passing means /g/<game>/setup drove roster, role, policy, and StartGame bootstrap before the local development-spine role URLs exercised the recorded gameplay lanes; it does not prove production identity, hosted deployment, exhaustive races, backup/restore, or release readiness.",
   };
 }
 
@@ -6720,6 +6751,16 @@ export function assertDevTestGameProofRun(proof) {
     throw new Error(
       "dev-test-game proof must bootstrap identity through auth_session with /auth/dev-session disabled",
     );
+  }
+  if (
+    proof.session?.setupBootstrap?.status !== "passed" ||
+    proof.session?.setupBootstrap?.roleUrl?.includes("/g/<seeded-game>/setup") !==
+      true ||
+    proof.session?.setupBootstrap?.commandCount !== 18 ||
+    proof.session?.setupBootstrap?.phaseId !== "D01" ||
+    proof.session?.setupBootstrap?.readinessSummary !== "Started at D01"
+  ) {
+    throw new Error("dev-test-game proof must carry setup-route bootstrap evidence");
   }
   assertCoreLoopSpineSummary(proof.coreLoopSpine);
   assertCompletedGameHardeningCoverageSummary({
@@ -6756,6 +6797,13 @@ export function assertDevTestGameProofRun(proof) {
     }
   }
   return proof;
+}
+
+function redactSeededGameUrl(value, game) {
+  if (typeof value !== "string" || typeof game !== "string" || game === "") {
+    return value ?? null;
+  }
+  return value.replaceAll(game, "<seeded-game>");
 }
 
 function normalizedPrivateChannelSubmitPostAckProofPassed(proof) {

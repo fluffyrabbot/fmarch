@@ -173,6 +173,7 @@ export function buildDevTestGameHostedConcurrentRaceMatrixEvidence(
       frontendBaseUrl: proof.session.frontendBaseUrl,
       apiBaseUrl: proof.session.apiBaseUrl,
       roleSurfaces,
+      setupBootstrap: proof.session.setupBootstrap,
       proofBoundary: proof.proofBoundary,
     },
     summary: {

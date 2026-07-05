@@ -2887,35 +2887,10 @@ test("dev test-game next-action derives one local recovery command from the mani
   });
   assertDevTestGameNextAction(localCapabilityPassedAction);
   assert.deepEqual(localCapabilityPassedAction.nextAction, {
-    command: devTestGameHostedIdentitySequencePromotionCommand,
-    reason: "sequence-deferred-hosted-identity",
-    status: "blocked",
-    sequenceDeferral: {
-      status: "blocked",
-      currentSequenceStage: "local-capability-model",
-      requiredSequenceStage: "hosted-identity",
-      deferredUnprovenId: "hosted-production-identity",
-      deferredCommand: `npm run ${devTestGameHostedIdentityEvidenceCommand}`,
-      deferredProofTarget: devTestGameHostedIdentityEvidencePath,
-      deferredRoleUrl:
-        "/admin/audit/local-hosted-identity-evidence?game=<seeded-game>",
-      nextLocalCommand: devTestGameHostedIdentitySequencePromotionCommand,
-      nextLocalProofTarget: devTestGameNextActionPath,
-      roleUrl: "/admin/audit/local-identity-adapter?game=<seeded-game>",
-      sequenceTransition: {
-        status: "ready",
-        promotionCommand: devTestGameHostedIdentitySequencePromotionCommand,
-        promotedSequenceStage: "hosted-identity",
-      },
-      buildSlice:
-        "Local seeded capability confidence is passed; promote the next-action generator to the hosted-identity sequence stage before replacing dev tokens with hosted accounts, sessions, and invites.",
-      requiredBeforeHostedIdentity:
-        "The local core gameplay, hardening, and local ops proof spine should remain the trusted development surface before production identity replaces dev tokens.",
-      localCapabilityConfidence:
-        hostedIdentityPassedLocalCapabilityConfidenceFixture(),
-      proofBoundary:
-        "Sequencing hold only. This records that hosted production identity is a real release-readiness blocker, but not the next local-development command; it does not prove hosted account lifecycle, invite delivery, release readiness, or production readiness.",
-    },
+    command: `npm run ${devTestGameHostedIdentityEvidenceCommand}`,
+    reason: "release-readiness-unproven",
+    status: "ready",
+    unproven: hostedProductionIdentityUnproven,
   });
   const hostedIdentityStageAction = buildDevTestGameNextAction(freshManifest, {
     generatedAt: "2026-06-26T00:00:01.000Z",
@@ -2999,7 +2974,7 @@ test("dev test-game next-action derives one local recovery command from the mani
         script: "tools/dev_test_game_next_action.mjs",
         sequenceStage: devTestGameDefaultSequenceStage,
         outputPath: nextActionPath,
-        selectedCommand: devTestGameHostedIdentitySequencePromotionCommand,
+        selectedCommand: `npm run ${devTestGameHostedIdentityEvidenceCommand}`,
       },
       {
         script: "terminal-refresh-admin-proof-batch",
@@ -5438,9 +5413,11 @@ test("named game selection is idempotent by default with explicit reset and reus
 test("seed plan creates a playable mafiascum D01 game shape", () => {
   const game = "33333333-3333-4333-8333-333333333333";
   const plan = seedCommandPlanForGame(game);
-  assert.equal(plan.length, 22);
+  assert.equal(plan.length, 24);
   assert.deepEqual(plan[0], ["host_h", { CreateGame: { game, pack: "mafiascum" } }]);
   assert(plan.some(([, command]) => command.AddCohost?.user === "cohost_c"));
+  assert(plan.some(([, command]) => command.SetPostPolicy?.allow_media_only === true));
+  assert(plan.some(([, command]) => command.SetPostPolicy?.allow_media_only === false));
   assert(plan.some(([, command]) => command.StartGame?.phase === "D01"));
   assert(plan.some(([, command]) => command.SubmitVote?.target?.Slot === "slot_5"));
   assert(plan.some(([, command]) => command.SubmitPost?.channel_id === "main"));
@@ -5457,6 +5434,41 @@ test("session card and markdown include role credential URLs and tokens", async 
   const replacementActionReconnectCase = replacementActionReconnectScenario();
   const replacementStaleActionAfterResolveCase =
     replacementStaleActionAfterResolveScenario();
+  const setupBootstrapFixture = {
+    status: "passed",
+    proof:
+      "Seeded local game bootstrap used the /setup route to add slots, assign occupants, assign roles, round-trip main post policy, and start D01 before gameplay priming.",
+    roleUrl: `http://127.0.0.1:4102/g/${game}/setup`,
+    sessionPrincipalUserId: "host_h",
+    credentialKind: "session",
+    capabilityLabel: `HostOf(${game})`,
+    readinessSummary: "Started at D01",
+    phaseId: "D01",
+    commandCount: 18,
+    commands: [
+      {
+        status: "ack",
+        commandKind: "StartGame",
+        command: { game, phase: "D01" },
+      },
+    ],
+    slotIds: ["slot-2", "slot-3", "slot-7", "slot_4", "slot_5"],
+    roleAssignments: {
+      "slot-2": "vanilla_townie",
+      "slot-3": "vanilla_townie",
+      "slot-7": "encryptor",
+      slot_4: "mafia_goon",
+      slot_5: "vanilla_townie",
+    },
+    policyCommand: {
+      status: "passed",
+      actionId: "set-post-policy",
+      commandKind: "SetPostPolicy",
+      channelId: "main",
+      allowMediaOnlySequence: [true, false],
+      finalPolicyText: "Media-only posts are disabled.",
+    },
+  };
   const card = buildSessionCard({
     gameName: "card",
     game,
@@ -5465,6 +5477,7 @@ test("session card and markdown include role credential URLs and tokens", async 
     apiBaseUrl: "http://127.0.0.1:4101",
     frontendBaseUrl: "http://127.0.0.1:4102",
     seedCommands: [{ command: { CreateGame: { game, pack: "mafiascum" } } }],
+    setupBootstrap: setupBootstrapFixture,
     identityBootstrap: {
       status: "passed",
       devSessionEndpointEnabled: false,
@@ -5521,7 +5534,8 @@ test("session card and markdown include role credential URLs and tokens", async 
   });
 
   assert.equal(card.name, "card");
-  assert.equal(card.seedCommandCount, 1);
+  assert.equal(card.seedCommandCount, 19);
+  assert.equal(card.directSeedCommandCount, 1);
   assert.equal(card.identityBootstrap.devSessionEndpointEnabled, false);
   assert.equal(card.identityBootstrap.rootSessionSource, "auth_session");
   assert.equal(card.identityBootstrap.browserCredentialIssuer, "/auth/session-grants");
@@ -5571,6 +5585,7 @@ test("session card and markdown include role credential URLs and tokens", async 
       slotIds: ["slot-7", "slot_4"],
       roleKeys: ["mafia_goon", "vanilla_townie"],
       mainPolicyText: "Media-only posts are disabled.",
+      setupBootstrap: setupBootstrapFixture,
       policyCommand: {
         status: "passed",
         actionId: "set-post-policy",
@@ -13455,7 +13470,7 @@ test("session card and markdown include role credential URLs and tokens", async 
   assert.equal(opsArtifacts.releaseReady, false);
   assert.equal(opsArtifacts.productionReady, false);
   assert.equal(opsArtifacts.run.game, game);
-  assert.equal(opsArtifacts.run.seedCommandCount, 1);
+  assert.equal(opsArtifacts.run.seedCommandCount, 19);
   assert.equal(opsArtifacts.proofRun.laneCount, proofRun.lanes.length);
   assert.equal(opsArtifacts.proofStability.hostConfirmClicks.total, 4);
   assert.equal(

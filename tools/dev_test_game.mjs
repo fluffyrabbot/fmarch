@@ -163,7 +163,7 @@ export async function main(rawArgs = process.argv.slice(2), env = process.env) {
     frontendBaseUrl = await startFrontend(apiBaseUrl);
   }
 
-  const card = buildSessionCard({
+  let card = buildSessionCard({
     game,
     gameName,
     seedMode: seedResult.mode,
@@ -175,6 +175,23 @@ export async function main(rawArgs = process.argv.slice(2), env = process.env) {
     sessions,
     artifacts: sessionArtifacts,
   });
+  if (seedResult.shouldRunSetupBootstrap) {
+    const setupBootstrap = await bootstrapSeededGameThroughSetup(card);
+    const postSetup = await seedPostSetupGameplayCommands();
+    card = buildSessionCard({
+      game,
+      gameName,
+      seedMode: seedResult.mode,
+      databaseUrl,
+      apiBaseUrl,
+      frontendBaseUrl,
+      seedCommands: [...seedResult.commands, ...postSetup.commands],
+      setupBootstrap,
+      identityBootstrap,
+      sessions,
+      artifacts: sessionArtifacts,
+    });
+  }
   await writeSessionArtifacts(card, sessionArtifacts);
   await writeNamedGame(gameName, card);
   printSessionCard(card);
@@ -288,6 +305,7 @@ async function startFrontend(currentApiBaseUrl) {
       frontendRequire.resolve("vite")
     );
     vite = await createViteServer({
+      root: frontendRoot,
       server: {
         host,
         port: args.frontendPort ?? 0,
@@ -316,17 +334,17 @@ async function startFrontend(currentApiBaseUrl) {
 
 async function seedGame() {
   if (seedMode === "reuse") {
-    return { mode: "reused", commands: [] };
+    return { mode: "reused", commands: [], shouldRunSetupBootstrap: false };
   }
   const commands = [];
-  const plan = seedCommandPlanForGame(game);
+  const plan = seedPreSetupCommandPlanForGame(game);
   for (let index = 0; index < plan.length; index += 1) {
     const [principalUserId, command] = plan[index];
     const result = await sendCommandResult(principalUserId, command);
     if (result.body?.kind === "Reject") {
       if (index === 0 && result.body.body?.error === "UnknownGame") {
         if (seedMode === "reuse-if-present") {
-          return { mode: "reused", commands: [] };
+          return { mode: "reused", commands: [], shouldRunSetupBootstrap: false };
         }
         throw new Error(
           `game ${game} already exists; rerun with --reuse to use it or --reset to create a fresh named game`,
@@ -336,29 +354,66 @@ async function seedGame() {
     }
     commands.push(commandSummary(principalUserId, command, result));
   }
-  return { mode: "seeded", commands };
+  return { mode: "seeded", commands, shouldRunSetupBootstrap: true };
 }
 
-export function seedCommandPlanForGame(game) {
+export const seededSetupRoster = Object.freeze([
+  Object.freeze({
+    slot: "slot-7",
+    user: "player-mira",
+    roleKey: "encryptor",
+  }),
+  Object.freeze({
+    slot: "slot-2",
+    user: "player-target",
+    roleKey: "vanilla_townie",
+  }),
+  Object.freeze({
+    slot: "slot-3",
+    user: "player-seed",
+    roleKey: "vanilla_townie",
+  }),
+  Object.freeze({
+    slot: "slot_4",
+    user: "player-goon-a",
+    roleKey: "mafia_goon",
+  }),
+  Object.freeze({
+    slot: "slot_5",
+    user: "player-goon-b",
+    roleKey: "vanilla_townie",
+  }),
+]);
+
+export function seedPreSetupCommandPlanForGame(game) {
   return [
     ["host_h", { CreateGame: { game, pack: "mafiascum" } }],
-    ["host_h", { AddSlot: { game, slot: "slot-7" } }],
-    ["host_h", { AddSlot: { game, slot: "slot-2" } }],
-    ["host_h", { AddSlot: { game, slot: "slot-3" } }],
-    ["host_h", { AddSlot: { game, slot: "slot_4" } }],
-    ["host_h", { AddSlot: { game, slot: "slot_5" } }],
-    ["host_h", { AssignSlot: { game, slot: "slot-7", user: "player-mira" } }],
-    ["host_h", { AssignRole: { game, slot: "slot-7", role_key: "encryptor" } }],
-    ["host_h", { AssignSlot: { game, slot: "slot-2", user: "player-target" } }],
-    ["host_h", { AssignRole: { game, slot: "slot-2", role_key: "vanilla_townie" } }],
-    ["host_h", { AssignSlot: { game, slot: "slot-3", user: "player-seed" } }],
-    ["host_h", { AssignRole: { game, slot: "slot-3", role_key: "vanilla_townie" } }],
-    ["host_h", { AssignSlot: { game, slot: "slot_4", user: "player-goon-a" } }],
-    ["host_h", { AssignRole: { game, slot: "slot_4", role_key: "mafia_goon" } }],
-    ["host_h", { AssignSlot: { game, slot: "slot_5", user: "player-goon-b" } }],
-    ["host_h", { AssignRole: { game, slot: "slot_5", role_key: "vanilla_townie" } }],
-    ["host_h", { AddCohost: { game, user: "cohost_c" } }],
+  ];
+}
+
+export function seedSetupCommandPlanForGame(game) {
+  return [
+    ...seedPreSetupCommandPlanForGame(game),
+    ...seededSetupRoster.map((row) => [
+      "host_h",
+      { AddSlot: { game, slot: row.slot } },
+    ]),
+    ...seededSetupRoster.flatMap((row) => [
+      ["host_h", { AssignSlot: { game, slot: row.slot, user: row.user } }],
+      [
+        "host_h",
+        { AssignRole: { game, slot: row.slot, role_key: row.roleKey } },
+      ],
+    ]),
+    ["host_h", { SetPostPolicy: { game, channel_id: "main", allow_media_only: true } }],
+    ["host_h", { SetPostPolicy: { game, channel_id: "main", allow_media_only: false } }],
     ["host_h", { StartGame: { game, phase: "D01" } }],
+  ];
+}
+
+export function seedPostSetupCommandPlanForGame(game) {
+  return [
+    ["host_h", { AddCohost: { game, user: "cohost_c" } }],
     [
       "player-seed",
       { SubmitVote: { game, actor_slot: "slot-3", target: { Slot: "slot_5" } } },
@@ -383,6 +438,21 @@ export function seedCommandPlanForGame(game) {
       },
     ],
   ];
+}
+
+export function seedCommandPlanForGame(game) {
+  return [
+    ...seedSetupCommandPlanForGame(game),
+    ...seedPostSetupCommandPlanForGame(game),
+  ];
+}
+
+async function seedPostSetupGameplayCommands() {
+  const commands = [];
+  for (const [principalUserId, command] of seedPostSetupCommandPlanForGame(game)) {
+    commands.push(await sendCommand(principalUserId, command));
+  }
+  return { commands };
 }
 
 async function createSessions() {
@@ -630,6 +700,7 @@ export function buildSessionCard({
   apiBaseUrl,
   frontendBaseUrl,
   seedCommands,
+  setupBootstrap = null,
   identityBootstrap = null,
   sessions,
   artifacts = sessionArtifactsForPaths({
@@ -658,7 +729,10 @@ export function buildSessionCard({
     databaseUrl,
     apiBaseUrl,
     frontendBaseUrl,
-    seedCommandCount: seedCommands.length,
+    seedCommandCount:
+      seedCommands.length + (setupBootstrap?.commandCount ?? 0),
+    directSeedCommandCount: seedCommands.length,
+    setupBootstrap,
     identityBootstrap,
     sessions: withFrontendUrls,
     artifacts,
@@ -708,6 +782,12 @@ export function markdownSessionCard(card) {
     `- seed: ${card.seedMode}`,
     `- frontend: ${card.frontendBaseUrl}`,
     `- api: ${card.apiBaseUrl}`,
+    ...(card.setupBootstrap === null
+      ? []
+      : [
+          `- setup bootstrap: ${card.setupBootstrap.status} via ${card.setupBootstrap.roleUrl}`,
+          `- setup bootstrap commands: ${card.setupBootstrap.commandCount}`,
+        ]),
     ...(card.identityBootstrap === null
       ? []
       : [
@@ -1105,6 +1185,10 @@ async function verifySessionCard(card) {
       apiBaseUrl: card.apiBaseUrl,
       frontendBaseUrl: card.frontendBaseUrl,
     });
+    hostSetup = {
+      ...hostSetup,
+      setupBootstrap: card.setupBootstrap ?? null,
+    };
     concurrentActionPage = await roleEntries.actionPlayer.context.newPage();
     privateChannelActionPage = await roleEntries.actionPlayer.context.newPage();
     privateChannelStaleActionPage =
@@ -1289,6 +1373,10 @@ async function verifyHostSetupOnly(card) {
       apiBaseUrl: card.apiBaseUrl,
       frontendBaseUrl: card.frontendBaseUrl,
     });
+    const hostSetupWithBootstrap = {
+      ...hostSetup,
+      setupBootstrap: card.setupBootstrap ?? null,
+    };
     mediaResponseGuard.assertNoUnexpectedMedia404({
       phase: "dev-test-game-host-setup-browser-proof",
     });
@@ -1300,12 +1388,188 @@ async function verifyHostSetupOnly(card) {
       },
       proofStability: buildProofStabilityAudit(),
       mediaResponseGuard: mediaResponseGuard.summary(),
-      hostSetup,
+      hostSetup: hostSetupWithBootstrap,
     };
   } finally {
     await entry?.context.close().catch(() => {});
     await browser.close();
   }
+}
+
+async function bootstrapSeededGameThroughSetup(card) {
+  const { chromium } = await import("playwright");
+  const browser = await chromium.launch();
+  let entry;
+  try {
+    const bootstrapSession = await createSessionGrantCredential({
+      token: `${tokenPrefix}-setup-bootstrap-${card.game}`,
+      principalUserId: "host_h",
+      returnTo: `/g/${card.game}/setup`,
+      expectedCapabilityKind: "HostOf",
+      issuedBy: {
+        principalUserId: "root_admin",
+        capabilityKind: "GlobalAdmin",
+        surface: "/auth/session-grants",
+      },
+    });
+    entry = await openVerifiedRoleEntry({
+      browser,
+      session: bootstrapSession,
+      game: card.game,
+      apiBaseUrl: card.apiBaseUrl,
+      frontendBaseUrl: card.frontendBaseUrl,
+    });
+    const setupPage = entry.page;
+    const roleUrl = `${card.frontendBaseUrl}/g/${card.game}/setup`;
+    await setupPage.getByTestId("host-setup-surface").waitFor({
+      state: "visible",
+      timeout: 15000,
+    });
+    const commands = [];
+    for (const row of seededSetupRoster) {
+      commands.push(await addSetupSlot({ setupPage, slotId: row.slot }));
+    }
+    for (const row of seededSetupRoster) {
+      commands.push(
+        await assignSetupSlot({
+          setupPage,
+          slotId: row.slot,
+          principalUserId: row.user,
+        }),
+      );
+      commands.push(
+        await assignSetupRole({
+          setupPage,
+          slotId: row.slot,
+          roleKey: row.roleKey,
+        }),
+      );
+    }
+    const policyCommand = await verifyHostSetupPolicyCommandRoundTrip(setupPage);
+    commands.push(policyCommand.enabled, policyCommand.restored);
+    commands.push(await startSetupGame(setupPage));
+    const [readinessSummary, setupState, dispatchPlan, capabilityLabel] = await Promise.all([
+      setupPage.getByTestId("host-setup-readiness-summary").innerText(),
+      setupPage.evaluate(() => window.__fmarchHostSetupState ?? null),
+      setupPage.evaluate(
+        () => window.__fmarchHostSetupCommandDispatchBridgePlan ?? null,
+      ),
+      setupPage.getByTestId("host-setup-capability").innerText(),
+    ]);
+    const slotIds = (setupState?.slots ?? []).map((slot) => slot.slotId);
+    const roleAssignments = Object.fromEntries(
+      (setupState?.slots ?? []).map((slot) => [slot.slotId, slot.roleKey]),
+    );
+    if (
+      setupPage.url() !== roleUrl ||
+      readinessSummary !== "Started at D01" ||
+      setupState?.phase?.phaseId !== "D01" ||
+      seededSetupRoster.some(
+        (row) =>
+          !slotIds.includes(row.slot) ||
+          roleAssignments[row.slot] !== row.roleKey,
+      )
+    ) {
+      throw new Error(
+        `seeded setup bootstrap drifted: ${JSON.stringify({
+          url: setupPage.url(),
+          expectedUrl: roleUrl,
+          readinessSummary,
+          phase: setupState?.phase ?? null,
+          slotIds,
+          roleAssignments,
+        })}`,
+      );
+    }
+    return {
+      status: "passed",
+      proof:
+        "Seeded local game bootstrap used the /setup route to add slots, assign occupants, assign roles, round-trip main post policy, and start D01 before gameplay priming.",
+      roleUrl,
+      sessionPrincipalUserId: bootstrapSession.principalUserId,
+      credentialKind: bootstrapSession.credentialKind,
+      capabilityLabel,
+      readinessSummary,
+      phaseId: setupState.phase.phaseId,
+      commandCount: commands.length,
+      commands,
+      slotIds,
+      roleAssignments,
+      policyCommand,
+      startDispatchPlan: dispatchPlan,
+    };
+  } finally {
+    await entry?.context.close().catch(() => {});
+    await browser.close();
+  }
+}
+
+async function addSetupSlot({ setupPage, slotId }) {
+  const form = setupPage.locator('section[aria-label="Roster"] form').first();
+  await form.locator('input[name="slotId"]').fill(slotId);
+  await form.getByRole("button", { name: "Add slot" }).click();
+  return await waitForHostSetupCommand({
+    setupPage,
+    statusTestId: "host-setup-add-slot-status",
+    commandKind: "AddSlot",
+    commandPredicate: (command) => command?.slot === slotId,
+    statePredicate: (setupState) =>
+      setupState?.slots?.some((slot) => slot.slotId === slotId),
+  });
+}
+
+async function assignSetupSlot({ setupPage, slotId, principalUserId }) {
+  const row = setupPage.getByTestId(`host-setup-slot-${slotId}`);
+  await row.locator('input[name="principalUserId"]').fill(principalUserId);
+  await row.getByRole("button", { name: "Assign" }).click();
+  return await waitForHostSetupCommand({
+    setupPage,
+    statusTestId: "host-setup-assign-slot-status",
+    commandKind: "AssignSlot",
+    commandPredicate: (command) =>
+      command?.slot === slotId && command?.user === principalUserId,
+    statePredicate: (setupState) =>
+      setupState?.slots?.some(
+        (slot) =>
+          slot.slotId === slotId && slot.occupantUserId === principalUserId,
+      ),
+  });
+}
+
+async function assignSetupRole({ setupPage, slotId, roleKey }) {
+  const row = setupPage.getByTestId(`host-setup-role-${slotId}`);
+  await row.locator('select[name="roleKey"]').selectOption(roleKey);
+  await row.getByRole("button", { name: "Assign role" }).click();
+  return await waitForHostSetupCommand({
+    setupPage,
+    statusTestId: "host-setup-assign-role-status",
+    commandKind: "AssignRole",
+    commandPredicate: (command) =>
+      command?.slot === slotId && command?.role_key === roleKey,
+    statePredicate: (setupState) =>
+      setupState?.slots?.some(
+        (slot) => slot.slotId === slotId && slot.roleKey === roleKey,
+      ),
+  });
+}
+
+async function startSetupGame(setupPage) {
+  await setupPage.getByTestId("host-setup-start-review").click();
+  await setupPage.getByTestId("host-setup-start-confirmation").waitFor({
+    state: "visible",
+    timeout: 15000,
+  });
+  await setupPage
+    .getByTestId("host-setup-start-confirmation")
+    .getByRole("button", { name: "Start game" })
+    .click();
+  return await waitForHostSetupCommand({
+    setupPage,
+    statusTestId: "host-setup-start-status",
+    commandKind: "StartGame",
+    commandPredicate: (command) => command?.phase === "D01",
+    statePredicate: (setupState) => setupState?.phase?.phaseId === "D01",
+  });
 }
 
 async function verifySeededHostSetupRoute({
@@ -1693,6 +1957,18 @@ async function waitForHostSetupCommand({
       { commandKind, expectedState },
       { timeout: 15000 },
     );
+    await setupPage.getByTestId(statusTestId).waitFor({
+      state: "visible",
+      timeout: 15000,
+    });
+    await setupPage.waitForFunction(
+      ({ statusTestId, expectedState }) =>
+        document
+          .querySelector(`[data-testid="${statusTestId}"]`)
+          ?.getAttribute("data-state") === expectedState,
+      { statusTestId, expectedState },
+      { timeout: 15000 },
+    );
   } catch (error) {
     throw new Error(
       `host setup ${commandKind} command wait timed out: ${JSON.stringify({
@@ -1702,47 +1978,90 @@ async function waitForHostSetupCommand({
       })}`,
     );
   }
-  const [statusState, statusText, outcome, setupState, readiness] =
-    await Promise.all([
-      setupPage.getByTestId(statusTestId).getAttribute("data-state"),
-      setupPage.getByTestId(statusTestId).innerText(),
-      setupPage.evaluate(() => window.__fmarchHostSetupCommandOutcome ?? null),
-      setupPage.evaluate(() => window.__fmarchHostSetupState ?? null),
-      setupPage.evaluate(() => window.__fmarchHostSetupReadiness ?? null),
-    ]);
-  const command =
-    outcome?.requestEnvelope?.body?.body?.command?.[commandKind] ?? null;
+  let snapshot = null;
+  const deadline = Date.now() + 15000;
+  while (Date.now() < deadline) {
+    const [statusState, statusText, outcome, setupState, readiness] =
+      await Promise.all([
+        setupPage.getByTestId(statusTestId).getAttribute("data-state"),
+        setupPage.getByTestId(statusTestId).innerText(),
+        setupPage.evaluate(() => window.__fmarchHostSetupCommandOutcome ?? null),
+        setupPage.evaluate(() => window.__fmarchHostSetupState ?? null),
+        setupPage.evaluate(() => window.__fmarchHostSetupReadiness ?? null),
+      ]);
+    const command =
+      outcome?.requestEnvelope?.body?.body?.command?.[commandKind] ?? null;
+    const settledState = outcome?.state ?? statusState;
+    snapshot = {
+      statusState,
+      settledState,
+      statusText,
+      expectedState,
+      expectedError,
+      commandMatches: commandPredicate(command) === true,
+      stateMatches: statePredicate(setupState) === true,
+      command,
+      setupState,
+      readiness,
+      outcome,
+    };
+    if (
+      snapshot.settledState === expectedState &&
+      (expectedError === null || outcome?.error === expectedError) &&
+      snapshot.commandMatches === true &&
+      snapshot.stateMatches === true
+    ) {
+      break;
+    }
+    await delay(50);
+  }
   if (
-    statusState !== expectedState ||
-    (expectedError !== null && outcome?.error !== expectedError) ||
-    commandPredicate(command) !== true ||
-    statePredicate(setupState) !== true
+    snapshot?.settledState !== expectedState ||
+    (expectedError !== null && snapshot?.outcome?.error !== expectedError) ||
+    snapshot?.commandMatches !== true ||
+    snapshot?.stateMatches !== true
   ) {
     throw new Error(
-      `host setup ${commandKind} command drifted: ${JSON.stringify({
-        statusState,
-        statusText,
-        expectedState,
-        expectedError,
-        command,
-        setupState,
-        readiness,
-        outcome,
-      })}`,
+      `host setup ${commandKind} command drifted: ${JSON.stringify(snapshot)}`,
     );
   }
   return {
-    status: statusState,
-    statusText,
+    status: snapshot.settledState,
+    statusText: snapshot.statusText,
     commandKind,
-    error: outcome.error ?? null,
-    retryable: outcome.retryable ?? false,
-    command,
-    streamSeqs: outcome.streamSeqs,
-    requestEnvelope: outcome.requestEnvelope,
-    serverEnvelope: outcome.serverEnvelope,
-    readinessSummary: readiness?.summary ?? null,
+    error: snapshot.outcome.error ?? null,
+    retryable: snapshot.outcome.retryable ?? false,
+    command: snapshot.command,
+    streamSeqs: snapshot.outcome.streamSeqs,
+    requestEnvelope: snapshot.outcome.requestEnvelope,
+    serverEnvelope: snapshot.outcome.serverEnvelope,
+    readinessSummary: snapshot.readiness?.summary ?? null,
   };
+}
+
+function hostSetupCommandStateMatches({ commandKind, command, setupState }) {
+  const slots = Array.isArray(setupState?.slots) ? setupState.slots : [];
+  if (commandKind === "AddSlot") {
+    return slots.some((slot) => slot.slotId === command?.slot);
+  }
+  if (commandKind === "AssignSlot") {
+    return slots.some(
+      (slot) =>
+        slot.slotId === command?.slot &&
+        slot.occupantUserId === command?.user,
+    );
+  }
+  if (commandKind === "AssignRole") {
+    return slots.some(
+      (slot) =>
+        slot.slotId === command?.slot &&
+        slot.roleKey === command?.role_key,
+    );
+  }
+  if (commandKind === "StartGame") {
+    return setupState?.phase?.phaseId === command?.phase;
+  }
+  return false;
 }
 
 async function verifyHostSetupPolicyCommandRoundTrip(setupPage) {
@@ -8230,6 +8549,13 @@ async function verifySeededMultiplayerHardening({
   const { normalizeServerCommandEnvelope } = await importFrontendModule(
     "src/lib/components/host-action/host-command-boundary.mjs",
   );
+  await waitForHostProjectionPhase(hostPage, { phaseId: "D02", locked: false });
+  const staleHostControl = await submitStaleHostControlRecovery({
+    staleHostPage,
+    staleHostControlSetup,
+    apiBaseUrl,
+    game,
+  });
 
   const retryCommandId = crypto.randomUUID();
   const retryPostBody = `Idempotent retry post from dev:test-game ${retryCommandId}.`;
@@ -8501,13 +8827,6 @@ async function verifySeededMultiplayerHardening({
     normalizeCommandResponse,
   });
 
-  await waitForHostProjectionPhase(hostPage, { phaseId: "D02", locked: false });
-  const staleHostControl = await submitStaleHostControlRecovery({
-    staleHostPage,
-    staleHostControlSetup,
-    apiBaseUrl,
-    game,
-  });
   const staleHostDeadline = await submitStaleHostDeadlineRecovery({
     staleHostDeadlinePage,
     staleHostDeadlineSetup,
