@@ -25,6 +25,10 @@ import {
   repoRoot,
   runAdminAuditProof,
 } from "./dev_test_game_admin_audit_proof_helper.mjs";
+import {
+  assertAdminRoleSurfaceHandoffPath,
+  buildAdminAuditHandoffPath,
+} from "./dev_test_game_admin_audit_handoff_path.mjs";
 
 const hostedMatrixPath = path.resolve(
   repoRoot,
@@ -92,9 +96,8 @@ function hostedMatrixSummaryStatuses(hostedMatrix) {
 }
 
 function hostedMatrixHandoffPath(hostedMatrix) {
-  return {
+  return buildAdminAuditHandoffPath({
     upstreamAuditId: "local-next-action",
-    upstreamLabel: "Ranked next action",
     localCapabilityAuditId: "local-race-coverage",
     downstreamStatus: String(
       hostedMatrix.summary?.realHostedEvidenceStatus ?? "unknown",
@@ -103,7 +106,7 @@ function hostedMatrixHandoffPath(hostedMatrix) {
     downstreamProofTarget: String(
       hostedMatrix.realHostedEvidenceInputs?.proofTarget ?? "",
     ),
-  };
+  });
 }
 
 export function hostedConcurrentRaceMatrixAdminProofCase() {
@@ -455,16 +458,11 @@ export function assertHostedConcurrentRaceMatrixAdminProof(evidence) {
     }
   }
   const expectedHandoffPath = evidence.generatedFrom?.handoffPath;
-  if (expectedHandoffPath !== undefined) {
-    const visibleHandoffPath = evidence.adminRoleSurface?.visibleHandoffPath;
-    for (const [key, expectedValue] of Object.entries(expectedHandoffPath)) {
-      if (visibleHandoffPath?.[key] !== String(expectedValue)) {
-        throw new Error(
-          `hosted concurrent race matrix admin proof missing handoff path: ${key}`,
-        );
-      }
-    }
-  }
+  assertAdminRoleSurfaceHandoffPath({
+    adminRoleSurface: evidence.adminRoleSurface,
+    expected: expectedHandoffPath,
+    proofName: "hosted concurrent race matrix admin proof",
+  });
   const nextActionDestination =
     evidence.adminRoleSurface?.visibleRelatedDestinations?.find(
       (destination) =>

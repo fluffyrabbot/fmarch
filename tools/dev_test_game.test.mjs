@@ -247,6 +247,9 @@ import {
   proofFreshnessAdminProofPath,
 } from "./dev_test_game_spine_manifest.mjs";
 import {
+  buildAdminAuditHandoffPath,
+} from "./dev_test_game_admin_audit_handoff_path.mjs";
+import {
   assertDevTestGameNextAction,
   buildDevTestGameNextAction,
   devTestGameDefaultSequenceStage,
@@ -3813,6 +3816,27 @@ test("admin role surface helpers assert visible rows and status text", () => {
         surfaceKey: "visibleUnprovenStatuses",
       }),
     /helper proof missing blocked evidence: hosted-deployment/,
+  );
+});
+
+test("admin audit handoff paths normalize the shared hosted handoff shape", () => {
+  assert.deepEqual(
+    buildAdminAuditHandoffPath({
+      upstreamAuditId: "local-next-action",
+      localCapabilityAuditId: "local-race-coverage",
+      downstreamStatus: "unproven",
+      downstreamCommand: "npm run test:dev-test-game-hosted-matrix-external-evidence",
+      downstreamProofTarget: "target/dev-test-game/hosted-matrix-external.json",
+    }),
+    {
+      upstreamAuditId: "local-next-action",
+      upstreamLabel: "Ranked next action",
+      localCapabilityAuditId: "local-race-coverage",
+      downstreamStatus: "unproven",
+      downstreamCommand:
+        "npm run test:dev-test-game-hosted-matrix-external-evidence",
+      downstreamProofTarget: "target/dev-test-game/hosted-matrix-external.json",
+    },
   );
 });
 

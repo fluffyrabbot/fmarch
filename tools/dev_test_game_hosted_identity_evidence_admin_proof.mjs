@@ -20,6 +20,10 @@ import {
   repoRoot,
   runAdminAuditProof,
 } from "./dev_test_game_admin_audit_proof_helper.mjs";
+import {
+  assertAdminRoleSurfaceHandoffPath,
+  buildAdminAuditHandoffPath,
+} from "./dev_test_game_admin_audit_handoff_path.mjs";
 
 const hostedIdentityEvidencePath = path.resolve(
   repoRoot,
@@ -125,14 +129,13 @@ function hostedIdentityHandoffSummary(hostedIdentityEvidence) {
 }
 
 function hostedIdentityHandoffPath(hostedIdentityEvidence) {
-  return {
+  return buildAdminAuditHandoffPath({
     upstreamAuditId: "local-next-action",
-    upstreamLabel: "Ranked next action",
     localCapabilityAuditId: "local-identity-adapter",
     downstreamStatus: String(hostedIdentityEvidence.status ?? "unknown"),
     downstreamCommand: String(hostedIdentityEvidence.nextCommand ?? ""),
     downstreamProofTarget: String(hostedIdentityEvidence.nextProofTarget ?? ""),
-  };
+  });
 }
 
 export function hostedIdentityEvidenceAdminProofCase() {
@@ -504,16 +507,11 @@ export function assertHostedIdentityEvidenceAdminProof(evidence) {
     }
   }
   const expectedHandoffPath = evidence.generatedFrom?.handoffPath;
-  if (expectedHandoffPath !== undefined) {
-    const visibleHandoffPath = evidence.adminRoleSurface?.visibleHandoffPath;
-    for (const [key, expectedValue] of Object.entries(expectedHandoffPath)) {
-      if (visibleHandoffPath?.[key] !== String(expectedValue)) {
-        throw new Error(
-          `hosted identity evidence admin proof missing handoff path: ${key}`,
-        );
-      }
-    }
-  }
+  assertAdminRoleSurfaceHandoffPath({
+    adminRoleSurface: evidence.adminRoleSurface,
+    expected: expectedHandoffPath,
+    proofName: "hosted identity evidence admin proof",
+  });
   assertVisibleAdminRoleSurfaceRows({
     adminRoleSurface: evidence.adminRoleSurface,
     rowIds: evidence.generatedFrom?.hostedIdentityPacketSummaryIds,

@@ -47,6 +47,9 @@ import {
   localAdminAuditIds,
 } from "../../../../tools/dev_test_game_admin_audit_surface_ids.mjs";
 import {
+  buildAdminAuditHandoffPath,
+} from "../../../../tools/dev_test_game_admin_audit_handoff_path.mjs";
+import {
   devTestGameIdentityAdapterContractDiff,
   devTestGameIdentityAdapterProofVersion,
 } from "../../../../tools/dev_test_game_identity_adapter_contract.mjs";
@@ -748,9 +751,8 @@ export function normalizeLocalHostedIdentityEvidenceAudit(
         command: "test:dev-test-game-next-action",
       }),
     ]),
-    handoffPath: Object.freeze({
+    handoffPath: buildAdminAuditHandoffPath({
       upstreamAuditId: localAdminAuditIds.nextAction,
-      upstreamLabel: "Ranked next action",
       localCapabilityAuditId: localAdminAuditIds.identityAdapter,
       downstreamStatus: String(hostedIdentityEvidence.status ?? "unknown"),
       downstreamCommand: String(hostedIdentityEvidence.nextCommand ?? ""),
@@ -1544,9 +1546,8 @@ export function normalizeLocalHostedConcurrentRaceMatrixAudit(
         command: String(hostedConcurrentRaceMatrix.nextBuildSlice?.command ?? ""),
       }),
     ]),
-    handoffPath: Object.freeze({
+    handoffPath: buildAdminAuditHandoffPath({
       upstreamAuditId: localAdminAuditIds.nextAction,
-      upstreamLabel: "Ranked next action",
       localCapabilityAuditId: localAdminAuditIds.raceCoverage,
       downstreamStatus: String(
         hostedConcurrentRaceMatrix.summary?.realHostedEvidenceStatus ?? "unknown",
