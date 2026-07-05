@@ -192,6 +192,11 @@ The generated next-action proof target is
 `target/dev-test-game/hosted-identity-evidence-operator-admin-proof.json`. It
 remains a local operator-predicate proof and does not prove live hosted account,
 session, or invite traffic.
+The default local next-action admin detail keeps
+`hosted-production-identity` as a sequence-deferred blocker and shows the
+opt-in `npm run test:dev-test-game-next-action:hosted-identity` promotion row
+beside it, so the current local-sequence blocker and the hosted-identity
+predicate are visible without weakening the hosted evidence boundary.
 
 The hosted identity evidence lane accepts a redacted operator packet through
 `FMARCH_HOSTED_IDENTITY_EVIDENCE_PATH`. To inspect the packet shape and admin

@@ -1058,7 +1058,10 @@ function requiredChecksForNextAction(nextAction) {
     );
   }
   if (nextAction.nextAction.sequenceDeferral !== undefined) {
-    checks.push("hosted-identity-sequence-deferral");
+    checks.push(
+      "hosted-identity-sequence-deferral",
+      "hosted-identity-sequence-promotion",
+    );
     if (
       nextAction.nextAction.sequenceDeferral.localCapabilityConfidence !==
       undefined

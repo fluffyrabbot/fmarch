@@ -2465,6 +2465,14 @@ export function normalizeLocalNextActionAudit(nextAction, { game, proofGraph = n
               String(sequenceDeferral.deferredUnprovenId ?? "unknown")
             }`,
           }),
+          Object.freeze({
+            id: "hosted-identity-sequence-promotion",
+            status: `${String(
+              sequenceDeferral.sequenceTransition?.status ??
+                sequenceDeferral.status ??
+                "unknown",
+            )}:${String(sequenceDeferral.nextLocalCommand ?? "")}`,
+          }),
         ]),
     ...(localCapabilityConfidence === null
       ? []
@@ -2716,6 +2724,15 @@ export function normalizeLocalNextActionAudit(nextAction, { game, proofGraph = n
               sequenceDeferral.requiredBeforeHostedIdentity ?? "",
             ),
             sequenceProofBoundary: String(sequenceDeferral.proofBoundary ?? ""),
+            sequenceTransitionStatus: String(
+              sequenceDeferral.sequenceTransition?.status ?? "",
+            ),
+            sequenceTransitionPromotionCommand: String(
+              sequenceDeferral.sequenceTransition?.promotionCommand ?? "",
+            ),
+            sequenceTransitionPromotedStage: String(
+              sequenceDeferral.sequenceTransition?.promotedSequenceStage ?? "",
+            ),
             sequenceLocalCapabilityConfidenceStatus: String(
               localCapabilityConfidence?.status ?? "",
             ),

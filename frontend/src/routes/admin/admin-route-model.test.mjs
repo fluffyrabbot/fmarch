@@ -3079,6 +3079,7 @@ test("admin local next action detail data exposes hosted identity sequence defer
         [
           "sequence-deferred-hosted-identity",
           "hosted-identity-sequence-deferral",
+          "hosted-identity-sequence-promotion",
           "hosted-identity-local-capability-confidence",
           "hosted-identity-local-capability-local-core-loop-proof",
           "release-readiness-hosted-production-identity",
@@ -3090,6 +3091,10 @@ test("admin local next action detail data exposes hosted identity sequence defer
       [
         "hosted-identity-sequence-deferral",
         "local-capability-model:hosted-production-identity",
+      ],
+      [
+        "hosted-identity-sequence-promotion",
+        "ready:npm run test:dev-test-game-next-action:hosted-identity",
       ],
       ["hosted-identity-local-capability-confidence", "passed:5/5"],
       ["hosted-identity-local-capability-local-core-loop-proof", "passed"],
@@ -3110,8 +3115,9 @@ test("admin local next action detail data exposes hosted identity sequence defer
   );
   assert.equal(
     data.audit.artifactSummary.sequenceNextLocalCommand,
-    LIVE_BROWSER_PROOF_COMMAND,
+    "npm run test:dev-test-game-next-action:hosted-identity",
   );
+  assert.equal(data.audit.artifactSummary.sequenceTransitionStatus, "ready");
   assert.equal(
     data.audit.artifactSummary.sequenceDeferredCommand,
     "npm run test:dev-test-game-hosted-identity-evidence",
@@ -6588,8 +6594,13 @@ function hostedIdentitySequenceDeferralFixture() {
     deferredRoleUrl: localAdminAuditRoleUrl(
       localAdminAuditIds.hostedIdentityEvidence,
     ),
-    nextLocalCommand: LIVE_BROWSER_PROOF_COMMAND,
-    nextLocalProofTarget: "target/dev-test-game/proof-run.json",
+    nextLocalCommand: "npm run test:dev-test-game-next-action:hosted-identity",
+    nextLocalProofTarget: "target/dev-test-game/next-action.json",
+    sequenceTransition: {
+      status: "ready",
+      promotionCommand: "npm run test:dev-test-game-next-action:hosted-identity",
+      promotedSequenceStage: "hosted-identity",
+    },
     roleUrl: localAdminAuditRoleUrl(localAdminAuditIds.identityAdapter),
     buildSlice:
       "Keep hosted production identity deferred while the local seeded capability model remains the active architecture sequence; refresh the core-live role proof before replacing dev tokens with hosted accounts, sessions, and invites.",
