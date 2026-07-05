@@ -137,6 +137,7 @@ import {
   adminProofDestinationRequirementRoleRows,
   devTestGameProofGraphBaseEdges,
   devTestGameProofGraphFirstClassNodes,
+  proofGraphProductionFeatureCase,
   proofGraphProductionFeatureEdge,
   proofGraphProductionFeatureNode,
   proofGraphRecoveryReceiptCase,
@@ -5793,7 +5794,9 @@ function hostedIdentityLocalCapabilityConfidenceFixture() {
 }
 
 function proofGraphFixture() {
-  const productionFeatureCase = proofGraphProductionFeatureCase();
+  const productionFeatureCase = proofGraphProductionFeatureCase({
+    spineTarget: featureSpineTargetFixture(),
+  });
   const recoveryReceiptCases = proofGraphRecoveryReceiptCases();
   const nodes = [
     ...devTestGameProofGraphFirstClassNodes(),
@@ -5830,21 +5833,6 @@ function proofGraphFixture() {
     },
     nodes,
     edges,
-  };
-}
-
-function proofGraphProductionFeatureCase() {
-  return {
-    id: "production-feature:player-action-submission",
-    label: "Production feature: player-action-submission",
-    featureSlotId: "player-action-submission",
-    status: "passed",
-    artifact: "target/dev-test-game/release-readiness-checklist.json",
-    roleUrl: localAdminAuditRoleUrl(localAdminAuditIds.coreLoop),
-    provingNodeId: "admin-proof:core-loop",
-    targetRoleUrl: ACTIONABLE_SPINE_ROLE_URL,
-    browserProofCommand: LIVE_BROWSER_PROOF_COMMAND,
-    coverageDecision: featureSpineTargetFixture().coverageDecision,
   };
 }
 

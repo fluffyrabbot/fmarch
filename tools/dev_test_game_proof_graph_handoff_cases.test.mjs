@@ -13,6 +13,7 @@ import {
   adminProofDestinationRequirements,
   devTestGameProofGraphBaseEdges,
   devTestGameProofGraphFirstClassNodes,
+  proofGraphProductionFeatureCase,
   proofGraphProductionFeatureEdge,
   proofGraphProductionFeatureNode,
   proofGraphRecoveryReceiptCase,
@@ -27,6 +28,9 @@ import {
 import {
   devTestGameSeedFixturePath,
 } from "./dev_test_game_adjacent_artifact_paths.mjs";
+import {
+  devTestGameProductionFeatureBrowserProofCommand,
+} from "./dev_test_game_production_feature_source_registry.mjs";
 import {
   recoveryReceiptGraphDescriptorByReceiptKey,
 } from "./dev_test_game_recovery_receipt_graph_surfaces.mjs";
@@ -261,18 +265,19 @@ test("proof graph base edges share fixed topology and seed recovery metadata", (
 });
 
 test("proof graph feature and recovery receipt helpers preserve fixture graph shape", () => {
-  const featureCase = {
-    id: "production-feature:future-feature",
-    label: "Production feature: future-feature",
-    featureSlotId: "future-feature",
-    status: "passed",
-    artifact: "target/dev-test-game/release-readiness-checklist.json",
-    roleUrl: "/admin/audit/local-core-loop?game=<seeded-game>",
-    provingNodeId: "admin-proof:core-loop",
-    targetRoleUrl: "/g/<seeded-game>/player-a",
-    browserProofCommand: "npm run test:dev-test-game-live",
-    coverageDecision: { kind: "covered", proofCommand: "npm run proof" },
-  };
+  const featureCase = proofGraphProductionFeatureCase({
+    spineTarget: {
+      sourceCheckId: "local-core-loop-proof",
+      featureSlotId: "future-feature",
+      detailRoleUrl: "/admin/audit/local-core-loop?game=<seeded-game>",
+      roleUrl: "/g/<seeded-game>/player-a",
+      browserProofCommand: devTestGameProductionFeatureBrowserProofCommand,
+      coverageDecision: {
+        kind: "seeded-role-url-proof",
+        proofCommand: "npm run proof",
+      },
+    },
+  });
   assert.deepEqual(proofGraphProductionFeatureNode(featureCase), {
     id: "production-feature:future-feature",
     label: "Production feature: future-feature",
@@ -281,8 +286,11 @@ test("proof graph feature and recovery receipt helpers preserve fixture graph sh
     artifact: "target/dev-test-game/release-readiness-checklist.json",
     roleUrl: "/admin/audit/local-core-loop?game=<seeded-game>",
     targetRoleUrl: "/g/<seeded-game>/player-a",
-    browserProofCommand: "npm run test:dev-test-game-live",
-    coverageDecision: { kind: "covered", proofCommand: "npm run proof" },
+    browserProofCommand: devTestGameProductionFeatureBrowserProofCommand,
+    coverageDecision: {
+      kind: "seeded-role-url-proof",
+      proofCommand: "npm run proof",
+    },
   });
   assert.deepEqual(proofGraphProductionFeatureEdge(featureCase), {
     from: "admin-proof:core-loop",
@@ -290,7 +298,7 @@ test("proof graph feature and recovery receipt helpers preserve fixture graph sh
     relationship: "proves-production-feature",
     featureSlotId: "future-feature",
     targetRoleUrl: "/g/<seeded-game>/player-a",
-    command: "npm run test:dev-test-game-live",
+    command: devTestGameProductionFeatureBrowserProofCommand,
   });
 
   const receiptCases = [

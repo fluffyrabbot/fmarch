@@ -34,6 +34,7 @@ import {
 import {
   adminSpineProofPath,
   adminSpineTerminalBatchProofPath,
+  devTestGameReleaseReadinessPath,
   devTestGameProofGraphAdminProofPath,
   devTestGameProofGraphPath,
   nextActionAdminProofPath,
@@ -44,6 +45,9 @@ import {
 import {
   devTestGameProofGraphCommand,
 } from "./dev_test_game_proof_graph_paths.mjs";
+import {
+  productionFeatureGraphSourceNodeId,
+} from "./dev_test_game_production_feature_graph_sources.mjs";
 import {
   nextActionCommand,
   proofFreshnessAdminProofCommand,
@@ -403,6 +407,25 @@ export function adminProofDestinationProofGraphNodes({
         recoveryCommand: adminProofDestinationRecoveryCommand(linkId),
       }),
   );
+}
+
+export function proofGraphProductionFeatureCase({
+  spineTarget,
+  artifact = devTestGameReleaseReadinessPath,
+  status = "passed",
+}) {
+  return Object.freeze({
+    id: `production-feature:${spineTarget.featureSlotId}`,
+    label: `Production feature: ${spineTarget.featureSlotId}`,
+    featureSlotId: spineTarget.featureSlotId,
+    status,
+    artifact,
+    roleUrl: spineTarget.detailRoleUrl,
+    provingNodeId: productionFeatureGraphSourceNodeId(spineTarget.sourceCheckId),
+    targetRoleUrl: spineTarget.roleUrl,
+    browserProofCommand: spineTarget.browserProofCommand,
+    coverageDecision: spineTarget.coverageDecision,
+  });
 }
 
 export function proofGraphProductionFeatureNode(featureCase) {
