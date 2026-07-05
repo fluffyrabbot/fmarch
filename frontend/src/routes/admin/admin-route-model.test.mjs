@@ -2551,6 +2551,10 @@ test("admin route data exposes recovery-hook spine drilldowns", async () => {
     checks.get("selected-spine-admin-check"),
     "invalid-action-recovery",
   );
+  assert.equal(
+    checks.get("selected-spine-source-artifact"),
+    featureSpineTargetFixture().sourceProofArtifact,
+  );
 });
 
 test("admin route data exposes local readiness dependency next action", async () => {

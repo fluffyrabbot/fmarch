@@ -846,6 +846,27 @@ test("dev test-game spine orchestrators expose stable proof order and env maps",
     hostedIdentityOperatorEvidencePacketPath,
     "target/operator-evidence/hosted-identity-redacted.example.json",
   );
+  const releaseReadinessSource = await readFile(
+    "tools/dev_test_game_release_readiness.mjs",
+    "utf8",
+  );
+  const hostedIdentityDefaultPathsStart = releaseReadinessSource.indexOf(
+    "const defaultHostedIdentityEvidenceAdminProofPaths = Object.freeze([",
+  );
+  assert(hostedIdentityDefaultPathsStart >= 0);
+  const hostedIdentityDefaultPaths = releaseReadinessSource.slice(
+    hostedIdentityDefaultPathsStart,
+    releaseReadinessSource.indexOf("]);", hostedIdentityDefaultPathsStart),
+  );
+  assert(
+    hostedIdentityDefaultPaths.indexOf(
+      "devTestGameHostedIdentityOperatorAdminProofPath",
+    ) <
+      hostedIdentityDefaultPaths.indexOf(
+        "defaultHostedIdentityEvidenceAdminProofPath,",
+      ),
+    "plain readiness regeneration should prefer the operator identity admin proof once it exists",
+  );
   assert.equal(
     packageJson.scripts[
       "test:dev-test-game-hosted-identity-progression-admin-proof"

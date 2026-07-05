@@ -115,6 +115,7 @@ import {
   devTestGameHostedIdentityCompleteAdminProofPath,
   devTestGameHostedIdentityEvidenceCommand,
   devTestGameHostedIdentityEvidencePath,
+  devTestGameHostedIdentityOperatorAdminProofPath,
   devTestGameHostedIdentityProgressionSummaryPath,
   hostedIdentityEvidenceInputIds,
 } from "./dev_test_game_hosted_identity_evidence_cases.mjs";
@@ -472,6 +473,10 @@ const defaultHostedIdentityEvidenceAdminProofPath = path.join(
   repoRoot,
   hostedIdentityEvidenceAdminProofArtifact.path,
 );
+const defaultHostedIdentityEvidenceAdminProofPaths = Object.freeze([
+  path.join(repoRoot, devTestGameHostedIdentityOperatorAdminProofPath),
+  defaultHostedIdentityEvidenceAdminProofPath,
+]);
 const defaultHostedIdentityCompleteAdminProofPath = path.join(
   repoRoot,
   devTestGameHostedIdentityCompleteAdminProofPath,
@@ -8138,7 +8143,7 @@ const optionalReadinessArtifactRegistry = Object.freeze([
   optionalReadinessArtifact({
     id: hostedIdentityEvidenceAdminProofArtifact.readinessId,
     envVar: hostedIdentityEvidenceAdminProofArtifact.envVar,
-    defaultPath: defaultHostedIdentityEvidenceAdminProofPath,
+    defaultPath: defaultHostedIdentityEvidenceAdminProofPaths,
     outputKeys: hostedIdentityEvidenceAdminProofArtifact.outputKeys,
   }),
   optionalReadinessArtifact({
@@ -8647,6 +8652,15 @@ async function readOptionalBackupRestoreArtifacts() {
 async function resolveOptionalDefaultArtifactPath(value, fallback) {
   if (value !== undefined && value.trim() !== "") {
     return resolveArtifactPath(value, fallback);
+  }
+  if (Array.isArray(fallback)) {
+    for (const candidate of fallback) {
+      const resolved = await resolveOptionalDefaultArtifactPath(undefined, candidate);
+      if (resolved !== undefined) {
+        return resolved;
+      }
+    }
+    return undefined;
   }
   try {
     await stat(fallback);

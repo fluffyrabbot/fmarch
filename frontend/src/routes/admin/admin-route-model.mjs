@@ -3192,6 +3192,14 @@ export function normalizeLocalNextActionSelectedSpineCheckRows({
           id: "selected-spine-browser-proof",
           status: String(selectedSpineTarget?.browserProofCommand ?? ""),
         }),
+        Object.freeze({
+          id: "selected-spine-source-artifact",
+          status: String(
+            selectedSpineTarget?.sourceProofArtifact ??
+              selectedSpineDrilldown?.sourceProofArtifact ??
+              "",
+          ),
+        }),
         ...coverageDecisionCheckRows({
           parentId: "selected-spine",
           rowId: "selected-spine-coverage-decision",
@@ -4063,6 +4071,7 @@ function normalizeNextActionSpineTarget(spineTarget) {
       recoveryHookId: "",
       adminCheckId: "",
       browserProofCommand: "",
+      sourceProofArtifact: "",
       coverageDecision: null,
     });
   }
@@ -4078,6 +4087,7 @@ function normalizeNextActionSpineTarget(spineTarget) {
     recoveryHookId: String(spineTarget.recoveryHookId ?? ""),
     adminCheckId: String(spineTarget.adminCheckId ?? ""),
     browserProofCommand: String(spineTarget.browserProofCommand ?? ""),
+    sourceProofArtifact: String(spineTarget.sourceProofArtifact ?? ""),
     coverageDecision: normalizeCoverageDecision(spineTarget.coverageDecision),
   });
 }
@@ -4166,6 +4176,7 @@ function normalizeNextActionSpineDrilldown(drilldown) {
       roleUrl: "",
       rerunCommand: "",
       browserProofCommand: "",
+      sourceProofArtifact: "",
       coverageDecision: null,
     });
   }
@@ -4182,6 +4193,7 @@ function normalizeNextActionSpineDrilldown(drilldown) {
     roleUrl: String(drilldown.roleUrl ?? ""),
     rerunCommand: String(drilldown.rerunCommand ?? ""),
     browserProofCommand: String(drilldown.browserProofCommand ?? ""),
+    sourceProofArtifact: String(drilldown.sourceProofArtifact ?? ""),
     coverageDecision: normalizeCoverageDecision(drilldown.coverageDecision),
   });
 }
