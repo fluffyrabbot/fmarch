@@ -2200,6 +2200,7 @@ test("admin local proof freshness detail data carries stale and missing rows", a
 test("admin route data exposes local next action as a native audit row", async () => {
   const nextActionInput = nextActionFixture({
     terminalBatchGraph: terminalBatchGraphFixture(),
+    nextActionHandoffPair: nextActionHandoffPairFixture(),
     privateChannelRecoveryGraph: privateChannelRecoveryGraphFixture(),
     replacementActionRecoveryGraph:
       replacementActionRecoveryGraphFixture(),
@@ -2247,6 +2248,7 @@ test("admin route data exposes local next action as a native audit row", async (
           selectedProductionFeatureGraphFixture(),
       }).map((check) => [check.id, check.status]),
       ["terminal-proof-batch-graph", "passed:3 edges"],
+      ["next-action-sequence-handoff", "passed:passed"],
       ["private-channel-recovery-graph", "passed:4 lanes"],
       ["replacement-action-recovery-graph", "passed:3 lanes"],
       [
@@ -2360,6 +2362,7 @@ test("admin route data exposes local next action as a native audit row", async (
       edgeTargets: ["proof-graph", "proof-freshness", "next-action"],
       receiptArtifacts: terminalBatchReceiptArtifactsFixture(),
     },
+    nextActionHandoffPair: nextActionHandoffPairFixture(),
     privateChannelRecoveryGraph: privateChannelRecoveryGraphFixture(),
     replacementActionRecoveryGraph: replacementActionRecoveryGraphFixture(),
     replacementHandoffRecoveryGraph: replacementHandoffRecoveryGraphFixture(),
@@ -3069,6 +3072,7 @@ test("admin local next action detail data exposes hosted identity sequence defer
       reason: "sequence-deferred-hosted-identity",
       command: LIVE_BROWSER_PROOF_COMMAND,
       sequenceDeferral: hostedIdentitySequenceDeferralFixture(),
+      nextActionHandoffPair: nextActionHandoffPairFixture(),
       unproven: undefined,
       releaseReadinessTrace: releaseReadinessTraceFixture({
         unproven: hostedIdentityCandidate,
@@ -3088,12 +3092,14 @@ test("admin local next action detail data exposes hosted identity sequence defer
           "hosted-identity-sequence-promotion",
           "hosted-identity-local-capability-confidence",
           "hosted-identity-local-capability-local-core-loop-proof",
+          "next-action-sequence-handoff",
           "release-readiness-hosted-production-identity",
         ].includes(check.id),
       )
       .map((check) => [check.id, check.status]),
     [
       ["sequence-deferred-hosted-identity", "blocked"],
+      ["next-action-sequence-handoff", "passed:passed"],
       [
         "hosted-identity-sequence-deferral",
         "local-capability-model:hosted-production-identity",
@@ -3145,6 +3151,10 @@ test("admin local next action detail data exposes hosted identity sequence defer
       "local-seed-demo-fixture",
       "local-identity-adapter-proof",
     ],
+  );
+  assert.deepEqual(
+    data.audit.artifactSummary.nextActionHandoffPair,
+    nextActionHandoffPairFixture(),
   );
 });
 
@@ -6381,6 +6391,7 @@ function nextActionFixture({
   staleConflictMessageTrace = staleConflictMessageTraceFixture(),
   hostStaleControlTrace = hostStaleControlTraceFixture(),
   terminalBatchGraph,
+  nextActionHandoffPair,
   privateChannelRecoveryGraph,
   replacementActionRecoveryGraph,
   replacementHandoffRecoveryGraph,
@@ -6461,6 +6472,9 @@ function nextActionFixture({
       proofGraphDiagnosticCount:
         proofGraphDiagnosticSummaryTrace.diagnosticCount,
       ...(terminalBatchGraph === undefined ? {} : { terminalBatchGraph }),
+      ...(nextActionHandoffPair === undefined
+        ? {}
+        : { nextActionHandoffPair }),
       ...(privateChannelRecoveryGraph === undefined
         ? {}
         : { privateChannelRecoveryGraph }),

@@ -9,6 +9,9 @@ import {
 import { repoRoot } from "./dev_test_game_spine_runner.mjs";
 import { assertDevTestGameReleaseReadiness } from "./dev_test_game_release_readiness.mjs";
 import {
+  assertDevTestGameNextActionSequenceHandoffPair,
+} from "./dev_test_game_next_action_sequence_handoff_pair.mjs";
+import {
   assertDevTestGameOpsArtifacts,
   devTestGameOpsArtifactsPath,
 } from "./dev_test_game_ops_artifacts.mjs";
@@ -205,6 +208,7 @@ export function buildDevTestGameNextAction(
       : assertDevTestGameHostedTargetPreflight(hostedTargetPreflight);
   const graph = proofGraph === null ? null : assertProofGraphForNextAction(proofGraph);
   const terminalBatchGraph = terminalBatchGraphFromProofGraph(graph);
+  const nextActionHandoffPair = nextActionHandoffPairFromReadiness(readiness);
   const recoveryReceiptGraphs =
     recoveryReceiptGraphSummariesFromProofGraph(graph);
   const sourceTargetsByCheckId =
@@ -542,6 +546,9 @@ export function buildDevTestGameNextAction(
             ...(terminalBatchGraph === null
               ? {}
               : { terminalBatchGraph }),
+            ...(nextActionHandoffPair === null
+              ? {}
+              : { nextActionHandoffPair }),
             ...recoveryReceiptGraphs,
           }),
     },
@@ -813,6 +820,9 @@ export function assertDevTestGameNextAction(evidence) {
     { label: "next-action host stale-control trace" },
   );
   assertTerminalBatchGraph(evidence.generatedFrom?.terminalBatchGraph);
+  assertNextActionHandoffPairForNextAction(
+    evidence.generatedFrom?.nextActionHandoffPair,
+  );
   assertRecoveryReceiptGraphsForNextAction(evidence.generatedFrom);
   return evidence;
 }
@@ -1090,6 +1100,23 @@ function terminalBatchGraphFromProofGraph(proofGraph) {
     edgeCount: edges.length,
     edgeTargets: edges.map((edge) => String(edge.to ?? "")),
   };
+}
+
+function nextActionHandoffPairFromReadiness(readiness) {
+  const pair = readiness?.localDevelopmentSpine?.checks?.find(
+    (check) => check?.id === "local-admin-spine-terminal-batches",
+  )?.nextActionHandoffPair;
+  if (pair === undefined) {
+    return null;
+  }
+  return assertDevTestGameNextActionSequenceHandoffPair(pair);
+}
+
+function assertNextActionHandoffPairForNextAction(pair) {
+  if (pair === undefined) {
+    return;
+  }
+  assertDevTestGameNextActionSequenceHandoffPair(pair);
 }
 
 function recoveryReceiptGraphSummariesFromProofGraph(proofGraph) {

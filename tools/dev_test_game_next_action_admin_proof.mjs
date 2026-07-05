@@ -240,6 +240,8 @@ export function nextActionAdminProofCase({
         proofGraph: source.proofGraph,
       }),
       terminalBatchGraph: source.nextAction.generatedFrom?.terminalBatchGraph ?? null,
+      nextActionHandoffPair:
+        source.nextAction.generatedFrom?.nextActionHandoffPair ?? null,
       ...recoveryReceiptGraphGeneratedFrom(source.nextAction),
       relatedHandoffs: relatedHandoffsForNextAction({
         nextAction: source.nextAction,
@@ -1076,6 +1078,9 @@ function requiredChecksForNextAction(nextAction) {
   if (nextAction.generatedFrom?.terminalBatchGraph !== undefined) {
     checks.push("terminal-proof-batch-graph");
   }
+  if (nextAction.generatedFrom?.nextActionHandoffPair !== undefined) {
+    checks.push(nextAction.generatedFrom.nextActionHandoffPair.id);
+  }
   for (const descriptor of recoveryReceiptGraphDescriptors) {
     if (
       nextAction.generatedFrom?.[descriptor.nextActionGeneratedFromKey] !==
@@ -1509,6 +1514,10 @@ function requiredChecksForEvidence(evidence) {
     evidence.generatedFrom?.terminalBatchGraph === undefined
       ? []
       : ["terminal-proof-batch-graph"]),
+    ...(evidence.generatedFrom?.nextActionHandoffPair === null ||
+    evidence.generatedFrom?.nextActionHandoffPair === undefined
+      ? []
+      : [evidence.generatedFrom.nextActionHandoffPair.id]),
     ...recoveryReceiptGraphCheckIdsForEvidence(evidence),
     ...preReadinessTraceCheckIds(
       preReadinessTraceKeys.seedProofLaneCoverage,

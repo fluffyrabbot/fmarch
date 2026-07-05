@@ -2325,6 +2325,9 @@ export function normalizeLocalNextActionAudit(nextAction, { game, proofGraph = n
   const terminalBatchGraph = normalizeNextActionTerminalBatchGraph(
     nextAction.generatedFrom?.terminalBatchGraph,
   );
+  const nextActionHandoffPair = normalizeAdminSpineNextActionHandoffPair(
+    nextAction.generatedFrom?.nextActionHandoffPair,
+  );
   const privateChannelRecoveryGraph =
     normalizeNextActionRecoveryReceiptGraph(
       nextAction.generatedFrom?.privateChannelRecoveryGraph,
@@ -2412,6 +2415,14 @@ export function normalizeLocalNextActionAudit(nextAction, { game, proofGraph = n
           Object.freeze({
             id: "terminal-proof-batch-graph",
             status: `${terminalBatchGraph.status}:${terminalBatchGraph.edgeCount} edges`,
+          }),
+        ]),
+    ...(nextActionHandoffPair === null
+      ? []
+      : [
+          Object.freeze({
+            id: nextActionHandoffPair.id,
+            status: `${nextActionHandoffPair.defaultSequenceBlocker.status}:${nextActionHandoffPair.hostedIdentityPredicate.status}`,
           }),
         ]),
     ...(privateChannelRecoveryGraph.nodeId === ""
@@ -2810,6 +2821,9 @@ export function normalizeLocalNextActionAudit(nextAction, { game, proofGraph = n
       ...(terminalBatchGraph.nodeId === ""
         ? {}
         : { terminalProofBatchGraph: terminalBatchGraph }),
+      ...(nextActionHandoffPair === null
+        ? {}
+        : { nextActionHandoffPair }),
       ...(privateChannelRecoveryGraph.nodeId === ""
         ? {}
         : { privateChannelRecoveryGraph }),
