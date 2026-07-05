@@ -9,6 +9,7 @@ import {
   devTestGameHostedIdentityEvidenceCommand,
   devTestGameHostedIdentityEvidencePath,
   hostedIdentityEvidenceHandoffCase,
+  hostedIdentityEvidenceOperatorPartialFixturePath,
   hostedIdentityEvidencePlaceholderFixturePath,
   hostedIdentityEvidenceRedactedPassFixturePath,
 } from "./dev_test_game_hosted_identity_evidence_cases.mjs";
@@ -191,6 +192,12 @@ test("release readiness keeps hosted identity fixture evidence out of release tr
   assert.equal(
     hostedIdentityEvidencePathKind(
       "target/operator-evidence/hosted-identity-redacted.json",
+    ),
+    "operator-provided",
+  );
+  assert.equal(
+    hostedIdentityEvidencePathKind(
+      hostedIdentityEvidenceOperatorPartialFixturePath,
     ),
     "operator-provided",
   );

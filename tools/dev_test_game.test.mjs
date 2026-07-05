@@ -216,6 +216,7 @@ import {
   hostedIdentityEvidenceHandoffCase,
   hostedIdentityEvidenceInputIds,
   hostedIdentityEvidenceInputSectionStatuses,
+  hostedIdentityEvidenceOperatorPartialFixturePath,
   hostedIdentityEvidencePacketSectionDefinitions,
   hostedIdentityExpectedRoleSurfaceContract,
   hostedIdentityEvidencePlaceholderFixturePath,
@@ -1161,6 +1162,74 @@ test("hosted identity evidence lane records blocked and passed handoffs", async 
       id.includes("identity-evidence"),
     ),
     [],
+  );
+
+  const operatorPartialSource = JSON.parse(
+    await readFile(hostedIdentityEvidenceOperatorPartialFixturePath, "utf8"),
+  );
+  assert.deepEqual(
+    validateHostedIdentityEvidencePlaceholder(operatorPartialSource),
+    [],
+  );
+  const operatorPartial = await buildDevTestGameHostedIdentityEvidence({
+    env: {
+      FMARCH_HOSTED_IDENTITY_EVIDENCE_PATH:
+        hostedIdentityEvidenceOperatorPartialFixturePath,
+    },
+    generatedAt: "2026-07-01T00:00:00.875Z",
+  });
+  assertDevTestGameHostedIdentityEvidence(operatorPartial);
+  assert.equal(operatorPartial.status, "blocked");
+  assert.equal(operatorPartial.target.rawEvidenceStatus, "passed");
+  assert.equal(operatorPartial.target.roleSurfaceContractDiff.status, "passed");
+  assert.equal(
+    operatorPartial.target.identityAdapterContractComparison.status,
+    "passed",
+  );
+  assert.deepEqual(
+    operatorPartial.hostedHandoffChecklist.blockedCheckIds,
+    ["account-recovery-evidence"],
+  );
+  assert.deepEqual(
+    operatorPartial.hostedHandoffChecklist.blockedReceipt
+      .firstMissingOperatorArtifact,
+    {
+      inputId: "redacted-account-recovery-packet",
+      checkId: "account-recovery-evidence",
+      sectionId: "identity-operations",
+      sectionLabel: "Identity operations",
+      requiredEvidence:
+        "Redacted hosted account recovery intake packet where recovered sessions keep the same role-surface architecture.",
+      purpose: "Redacted hosted account recovery packet.",
+      proofTarget: "target/dev-test-game/hosted-identity-evidence.json",
+      roleSurfaceDrilldown: {
+        localCapabilityAuditId: "local-identity-adapter",
+        localCapabilityRoleUrl:
+          "/admin/audit/local-identity-adapter?game=<seeded-game>",
+        handoffAuditId: "local-hosted-identity-evidence",
+        handoffRoleUrl:
+          "/admin/audit/local-hosted-identity-evidence?game=<seeded-game>",
+        proofGraphNodeId: "admin-proof:hosted-identity-evidence",
+        productionFeatureGraphNodeId: "production-feature:identity-adapter",
+        proofGraphEvidencePath: "target/dev-test-game/proof-graph.json",
+      },
+    },
+  );
+  assert.deepEqual(
+    operatorPartial.target.redactedIntakePacket.sections
+      .filter((section) => section.status !== "provided")
+      .map((section) => [section.id, section.missingInputs]),
+    [
+      [
+        "accountRecovery",
+        [
+          "status-provided",
+          "recoveryMethods",
+          "recoveredSessionsPreserveRoleSurfaceAdapter",
+          "redactedEvidenceRefs",
+        ],
+      ],
+    ],
   );
 
   const rawPath = "target/dev-test-game/hosted-identity-evidence-raw.test.json";

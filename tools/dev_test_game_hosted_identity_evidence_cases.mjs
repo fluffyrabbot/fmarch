@@ -6,6 +6,8 @@ export const hostedIdentityEvidencePlaceholderFixturePath =
   "tools/fixtures/dev_test_game_hosted_identity_evidence.placeholder.json";
 export const hostedIdentityEvidenceRedactedPassFixturePath =
   "tools/fixtures/dev_test_game_hosted_identity_evidence.redacted-pass.json";
+export const hostedIdentityEvidenceOperatorPartialFixturePath =
+  "tools/fixtures/dev_test_game_hosted_identity_evidence.operator-partial.json";
 export const hostedIdentityEvidenceProofGraphNodeId =
   "admin-proof:hosted-identity-evidence";
 export const hostedIdentityEvidenceProductionFeatureGraphNodeId =
