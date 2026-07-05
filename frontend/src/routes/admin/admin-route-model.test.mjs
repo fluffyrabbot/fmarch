@@ -1544,6 +1544,17 @@ test("admin audit detail page renders hosted identity blocked receipt as a named
   assert.match(source, /firstMissingOperatorArtifact\.roleSurfaceDrilldown/);
 });
 
+test("admin audit detail page renders hosted evidence raw-capture intake as a named blocked-receipt group", async () => {
+  const source = await readFile(
+    "frontend/src/routes/admin/audit/[audit]/+page.svelte",
+    "utf8",
+  );
+  assert.match(source, /hostedHandoffBlockedReceiptHeading/);
+  assert.match(source, /Hosted evidence blocked receipt/);
+  assert.match(source, /Real hosted raw-capture intake/);
+  assert.match(source, /realHostedMatrixRawCaptureIntake\.proofTarget/);
+});
+
 test("admin hosted-facing audit inventory carries shared handoff paths where required", async () => {
   const data = await buildAdminRouteData({
     principalUserId: "admin_a",

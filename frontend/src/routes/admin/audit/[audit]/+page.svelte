@@ -23,6 +23,7 @@
     productionFeatureDestinationRows.filter((row) =>
       isHostedEvidenceProgressionDestination(row),
     );
+  $: blockedReceiptHeading = hostedHandoffBlockedReceiptHeading(data.audit?.id);
 
   function prerequisiteRoleHref(prerequisite) {
     const roleUrl = String(prerequisite?.roleUrl ?? "");
@@ -32,6 +33,16 @@
 
   function isHostedEvidenceProgressionDestination(row) {
     return String(row?.id ?? "").startsWith("hosted-evidence-progression:");
+  }
+
+  function hostedHandoffBlockedReceiptHeading(auditId) {
+    if (auditId === "local-hosted-identity-evidence") {
+      return "Hosted identity blocked receipt";
+    }
+    if (auditId === "local-hosted-evidence-lane") {
+      return "Hosted evidence blocked receipt";
+    }
+    return "Hosted handoff blocked receipt";
   }
 </script>
 
@@ -1035,7 +1046,7 @@
               class="admin-audit-detail__entry admin-audit-detail__entry--stack"
               data-testid="admin-audit-hosted-handoff-blocked-receipt"
             >
-              <h3>Hosted identity blocked receipt</h3>
+              <h3>{blockedReceiptHeading}</h3>
               <strong>{data.audit.hostedHandoffChecklist.blockedReceipt.status}</strong>
               <span>{data.audit.hostedHandoffChecklist.blockedReceipt.operatorAction}</span>
               <span>{data.audit.hostedHandoffChecklist.blockedReceipt.localVsHostedBoundary}</span>
@@ -1043,6 +1054,7 @@
                 <span>{data.audit.hostedHandoffChecklist.blockedReceipt.rawEvidenceContractSummary}</span>
               {/if}
               {#if data.audit.hostedHandoffChecklist.blockedReceipt.realHostedMatrixRawCaptureIntake}
+                <h4>Real hosted raw-capture intake</h4>
                 <span>{data.audit.hostedHandoffChecklist.blockedReceipt.realHostedMatrixRawCaptureIntake.command}</span>
                 <span>{data.audit.hostedHandoffChecklist.blockedReceipt.realHostedMatrixRawCaptureIntake.proofTarget}</span>
                 <span>{data.audit.hostedHandoffChecklist.blockedReceipt.realHostedMatrixRawCaptureIntake.status}</span>
@@ -1258,6 +1270,12 @@
   .admin-audit-detail__entry h3 {
     color: #334155;
     font-size: 0.88rem;
+    margin: 0;
+  }
+
+  .admin-audit-detail__entry h4 {
+    color: #455466;
+    font-size: 0.82rem;
     margin: 0;
   }
 

@@ -68,7 +68,10 @@ export function hostedEvidenceLaneAdminProofCase({
   proofBoundary =
     "Local SvelteKit admin role URL with fixture admin authority over the hosted evidence lane. Proves the lane is discoverable from the seeded admin overview and inspectable in a native admin audit detail route with blocked preflight rows and local demo proof synthetic-rejection rows visible; it does not prove hosted deployment, hosted telemetry, beta readiness, release readiness, or production readiness.",
   generatedFromExtra = {},
-  requiredText = [],
+  requiredText = [
+    "Hosted evidence blocked receipt",
+    "Real hosted raw-capture intake",
+  ],
   assertEvidence = assertHostedEvidenceLaneAdminProof,
 } = {}) {
   const laneRelativePath = path.relative(repoRoot, lanePath);
