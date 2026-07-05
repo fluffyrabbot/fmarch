@@ -12,6 +12,8 @@ import {
   hostedIdentityEvidenceSectionInputStatuses,
 } from "./dev_test_game_hosted_identity_evidence_cases.mjs";
 import {
+  assertAdminRoleSurfaceStatusText,
+  assertVisibleAdminRoleSurfaceRows,
   artifactDir,
   proveAdminAuditDetail,
   readJson,
@@ -288,163 +290,110 @@ export function assertHostedIdentityEvidenceAdminProof(evidence) {
       "hosted identity evidence admin proof did not prove admin overview click-through",
     );
   }
-  for (const checkId of evidence.generatedFrom?.checkIds ?? []) {
-    if (!evidence.adminRoleSurface?.visibleChecks?.includes(checkId)) {
-      throw new Error(
-        `hosted identity evidence admin proof missing visible check: ${checkId}`,
-      );
-    }
-  }
-  for (const checkId of evidence.generatedFrom?.blockedCheckIds ?? []) {
-    if (!evidence.adminRoleSurface?.visibleUnproven?.includes(checkId)) {
-      throw new Error(
-        `hosted identity evidence admin proof missing blocked row: ${checkId}`,
-      );
-    }
-  }
-  for (const inputId of evidence.generatedFrom?.hostedHandoffInputIds ?? []) {
-    if (!evidence.adminRoleSurface?.visibleHostedHandoffInputs?.includes(inputId)) {
-      throw new Error(
-        `hosted identity evidence admin proof missing handoff input: ${inputId}`,
-      );
-    }
-  }
-  for (const [inputId, expected] of Object.entries(
-    evidence.generatedFrom?.hostedHandoffInputValues ?? {},
-  )) {
-    const visibleText =
-      evidence.adminRoleSurface?.visibleHostedHandoffInputValues?.[inputId] ?? "";
-    if (!visibleText.includes(expected)) {
-      throw new Error(
-        `hosted identity evidence admin proof missing handoff input value: ${inputId}`,
-      );
-    }
-  }
-  for (const checkId of evidence.generatedFrom?.hostedHandoffBlockedCheckIds ?? []) {
-    if (
-      !evidence.adminRoleSurface?.visibleHostedHandoffBlockedChecks?.includes(
-        checkId,
-      )
-    ) {
-      throw new Error(
-        `hosted identity evidence admin proof missing handoff blocked check: ${checkId}`,
-      );
-    }
-  }
-  for (const groupId of evidence.generatedFrom?.hostedHandoffGroupIds ?? []) {
-    if (
-      !evidence.adminRoleSurface?.visibleHostedHandoffGroups?.includes(groupId)
-    ) {
-      throw new Error(
-        `hosted identity evidence admin proof missing handoff group: ${groupId}`,
-      );
-    }
-  }
-  for (const [groupId, status] of Object.entries(
-    evidence.generatedFrom?.hostedHandoffGroupStatuses ?? {},
-  )) {
-    if (
-      !evidence.adminRoleSurface?.visibleHostedHandoffGroupStatuses?.[
-        groupId
-      ]?.includes(status)
-    ) {
-      throw new Error(
-        `hosted identity evidence admin proof missing handoff group status: ${groupId}`,
-      );
-    }
-  }
-  for (const sectionId of evidence.generatedFrom?.hostedHandoffInputSectionIds ??
-    []) {
-    if (
-      !evidence.adminRoleSurface?.visibleHostedHandoffInputSections?.includes(
-        sectionId,
-      )
-    ) {
-      throw new Error(
-        `hosted identity evidence admin proof missing handoff input section: ${sectionId}`,
-      );
-    }
-  }
-  for (const [sectionId, expectedStatus] of Object.entries(
-    evidence.generatedFrom?.hostedHandoffInputSectionStatuses ?? {},
-  )) {
-    const visibleText =
-      evidence.adminRoleSurface?.visibleHostedHandoffInputSectionStatuses?.[
-        sectionId
-      ] ?? "";
-    if (!visibleText.includes(expectedStatus)) {
-      throw new Error(
-        `hosted identity evidence admin proof missing handoff input section status: ${sectionId}`,
-      );
-    }
-  }
-  for (const rowId of evidence.generatedFrom?.hostedHandoffSectionInputIds ?? []) {
-    if (
-      !evidence.adminRoleSurface?.visibleHostedHandoffSectionInputs?.includes(
-        rowId,
-      )
-    ) {
-      throw new Error(
-        `hosted identity evidence admin proof missing handoff section input: ${rowId}`,
-      );
-    }
-  }
-  for (const [rowId, expectedStatus] of Object.entries(
-    evidence.generatedFrom?.hostedHandoffSectionInputStatuses ?? {},
-  )) {
-    const visibleText =
-      evidence.adminRoleSurface?.visibleHostedHandoffSectionInputStatuses?.[
-        rowId
-      ] ?? "";
-    if (!visibleText.includes(expectedStatus)) {
-      throw new Error(
-        `hosted identity evidence admin proof missing handoff section input status: ${rowId}`,
-      );
-    }
-  }
-  for (const sectionId of evidence.generatedFrom?.hostedIdentityPacketSectionIds ??
-    []) {
-    if (
-      !evidence.adminRoleSurface?.visibleHostedIdentityPacketSections?.includes(
-        sectionId,
-      )
-    ) {
-      throw new Error(
-        `hosted identity evidence admin proof missing packet section: ${sectionId}`,
-      );
-    }
-  }
-  for (const inputId of evidence.generatedFrom?.hostedIdentityPacketInputIds ?? []) {
-    if (
-      !evidence.adminRoleSurface?.visibleHostedIdentityPacketInputs?.includes(inputId)
-    ) {
-      throw new Error(
-        `hosted identity evidence admin proof missing packet input: ${inputId}`,
-      );
-    }
-  }
-  for (const [inputId, expectedStatus] of Object.entries(
-    evidence.generatedFrom?.hostedIdentityPacketInputStatuses ?? {},
-  )) {
-    const visibleText =
-      evidence.adminRoleSurface?.visibleHostedIdentityPacketInputStatuses?.[
-        inputId
-      ] ?? "";
-    if (!visibleText.includes(expectedStatus)) {
-      throw new Error(
-        `hosted identity evidence admin proof missing packet input status: ${inputId}`,
-      );
-    }
-  }
-  for (const refId of evidence.generatedFrom?.hostedIdentityPacketRefIds ?? []) {
-    if (
-      !evidence.adminRoleSurface?.visibleHostedIdentityPacketRefs?.includes(refId)
-    ) {
-      throw new Error(
-        `hosted identity evidence admin proof missing packet ref: ${refId}`,
-      );
-    }
-  }
+  assertVisibleAdminRoleSurfaceRows({
+    adminRoleSurface: evidence.adminRoleSurface,
+    rowIds: evidence.generatedFrom?.checkIds,
+    proofName: "hosted identity evidence admin proof",
+    rowName: "visible check",
+  });
+  assertVisibleAdminRoleSurfaceRows({
+    adminRoleSurface: evidence.adminRoleSurface,
+    rowIds: evidence.generatedFrom?.blockedCheckIds,
+    proofName: "hosted identity evidence admin proof",
+    rowName: "blocked row",
+    surfaceKey: "visibleUnproven",
+  });
+  assertVisibleAdminRoleSurfaceRows({
+    adminRoleSurface: evidence.adminRoleSurface,
+    rowIds: evidence.generatedFrom?.hostedHandoffInputIds,
+    proofName: "hosted identity evidence admin proof",
+    rowName: "handoff input",
+    surfaceKey: "visibleHostedHandoffInputs",
+  });
+  assertAdminRoleSurfaceStatusText({
+    adminRoleSurface: evidence.adminRoleSurface,
+    expectedStatuses: evidence.generatedFrom?.hostedHandoffInputValues,
+    proofName: "hosted identity evidence admin proof",
+    rowName: "handoff input value",
+    surfaceKey: "visibleHostedHandoffInputValues",
+  });
+  assertVisibleAdminRoleSurfaceRows({
+    adminRoleSurface: evidence.adminRoleSurface,
+    rowIds: evidence.generatedFrom?.hostedHandoffBlockedCheckIds,
+    proofName: "hosted identity evidence admin proof",
+    rowName: "handoff blocked check",
+    surfaceKey: "visibleHostedHandoffBlockedChecks",
+  });
+  assertVisibleAdminRoleSurfaceRows({
+    adminRoleSurface: evidence.adminRoleSurface,
+    rowIds: evidence.generatedFrom?.hostedHandoffGroupIds,
+    proofName: "hosted identity evidence admin proof",
+    rowName: "handoff group",
+    surfaceKey: "visibleHostedHandoffGroups",
+  });
+  assertAdminRoleSurfaceStatusText({
+    adminRoleSurface: evidence.adminRoleSurface,
+    expectedStatuses: evidence.generatedFrom?.hostedHandoffGroupStatuses,
+    proofName: "hosted identity evidence admin proof",
+    rowName: "handoff group status",
+    surfaceKey: "visibleHostedHandoffGroupStatuses",
+  });
+  assertVisibleAdminRoleSurfaceRows({
+    adminRoleSurface: evidence.adminRoleSurface,
+    rowIds: evidence.generatedFrom?.hostedHandoffInputSectionIds,
+    proofName: "hosted identity evidence admin proof",
+    rowName: "handoff input section",
+    surfaceKey: "visibleHostedHandoffInputSections",
+  });
+  assertAdminRoleSurfaceStatusText({
+    adminRoleSurface: evidence.adminRoleSurface,
+    expectedStatuses: evidence.generatedFrom?.hostedHandoffInputSectionStatuses,
+    proofName: "hosted identity evidence admin proof",
+    rowName: "handoff input section status",
+    surfaceKey: "visibleHostedHandoffInputSectionStatuses",
+  });
+  assertVisibleAdminRoleSurfaceRows({
+    adminRoleSurface: evidence.adminRoleSurface,
+    rowIds: evidence.generatedFrom?.hostedHandoffSectionInputIds,
+    proofName: "hosted identity evidence admin proof",
+    rowName: "handoff section input",
+    surfaceKey: "visibleHostedHandoffSectionInputs",
+  });
+  assertAdminRoleSurfaceStatusText({
+    adminRoleSurface: evidence.adminRoleSurface,
+    expectedStatuses: evidence.generatedFrom?.hostedHandoffSectionInputStatuses,
+    proofName: "hosted identity evidence admin proof",
+    rowName: "handoff section input status",
+    surfaceKey: "visibleHostedHandoffSectionInputStatuses",
+  });
+  assertVisibleAdminRoleSurfaceRows({
+    adminRoleSurface: evidence.adminRoleSurface,
+    rowIds: evidence.generatedFrom?.hostedIdentityPacketSectionIds,
+    proofName: "hosted identity evidence admin proof",
+    rowName: "packet section",
+    surfaceKey: "visibleHostedIdentityPacketSections",
+  });
+  assertVisibleAdminRoleSurfaceRows({
+    adminRoleSurface: evidence.adminRoleSurface,
+    rowIds: evidence.generatedFrom?.hostedIdentityPacketInputIds,
+    proofName: "hosted identity evidence admin proof",
+    rowName: "packet input",
+    surfaceKey: "visibleHostedIdentityPacketInputs",
+  });
+  assertAdminRoleSurfaceStatusText({
+    adminRoleSurface: evidence.adminRoleSurface,
+    expectedStatuses: evidence.generatedFrom?.hostedIdentityPacketInputStatuses,
+    proofName: "hosted identity evidence admin proof",
+    rowName: "packet input status",
+    surfaceKey: "visibleHostedIdentityPacketInputStatuses",
+  });
+  assertVisibleAdminRoleSurfaceRows({
+    adminRoleSurface: evidence.adminRoleSurface,
+    rowIds: evidence.generatedFrom?.hostedIdentityPacketRefIds,
+    proofName: "hosted identity evidence admin proof",
+    rowName: "packet ref",
+    surfaceKey: "visibleHostedIdentityPacketRefs",
+  });
   if (
     evidence.generatedFrom?.hostedIdentityRoleSurfaceContractDiffStatus !==
     evidence.adminRoleSurface?.visibleHostedIdentityRoleSurfaceContractDiff?.status
@@ -453,19 +402,14 @@ export function assertHostedIdentityEvidenceAdminProof(evidence) {
       "hosted identity evidence admin proof missing role-surface contract diff",
     );
   }
-  for (const mismatchId of evidence.generatedFrom
-    ?.hostedIdentityRoleSurfaceContractMismatchIds ?? []) {
-    if (
-      !evidence.adminRoleSurface
-        ?.visibleHostedIdentityRoleSurfaceContractMismatches?.includes(
-          mismatchId,
-        )
-    ) {
-      throw new Error(
-        `hosted identity evidence admin proof missing role-surface mismatch: ${mismatchId}`,
-      );
-    }
-  }
+  assertVisibleAdminRoleSurfaceRows({
+    adminRoleSurface: evidence.adminRoleSurface,
+    rowIds:
+      evidence.generatedFrom?.hostedIdentityRoleSurfaceContractMismatchIds,
+    proofName: "hosted identity evidence admin proof",
+    rowName: "role-surface mismatch",
+    surfaceKey: "visibleHostedIdentityRoleSurfaceContractMismatches",
+  });
   if (
     evidence.generatedFrom?.hostedIdentityAdapterContractComparisonStatus !==
     evidence.adminRoleSurface
@@ -475,25 +419,20 @@ export function assertHostedIdentityEvidenceAdminProof(evidence) {
       "hosted identity evidence admin proof missing adapter contract comparison",
     );
   }
-  for (const mismatchId of evidence.generatedFrom
-    ?.hostedIdentityAdapterContractComparisonMismatchIds ?? []) {
-    if (
-      !evidence.adminRoleSurface
-        ?.visibleHostedIdentityAdapterContractComparisonMismatches?.includes(
-          mismatchId,
-        )
-    ) {
-      throw new Error(
-        `hosted identity evidence admin proof missing adapter contract mismatch: ${mismatchId}`,
-      );
-    }
-  }
-  for (const linkId of evidence.generatedFrom?.relatedAuditIds ?? []) {
-    if (!evidence.adminRoleSurface?.visibleRelatedLinks?.includes(linkId)) {
-      throw new Error(
-        `hosted identity evidence admin proof missing related link: ${linkId}`,
-      );
-    }
-  }
+  assertVisibleAdminRoleSurfaceRows({
+    adminRoleSurface: evidence.adminRoleSurface,
+    rowIds:
+      evidence.generatedFrom?.hostedIdentityAdapterContractComparisonMismatchIds,
+    proofName: "hosted identity evidence admin proof",
+    rowName: "adapter contract mismatch",
+    surfaceKey: "visibleHostedIdentityAdapterContractComparisonMismatches",
+  });
+  assertVisibleAdminRoleSurfaceRows({
+    adminRoleSurface: evidence.adminRoleSurface,
+    rowIds: evidence.generatedFrom?.relatedAuditIds,
+    proofName: "hosted identity evidence admin proof",
+    rowName: "related link",
+    surfaceKey: "visibleRelatedLinks",
+  });
   return evidence;
 }
