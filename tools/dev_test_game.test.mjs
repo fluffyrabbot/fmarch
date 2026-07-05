@@ -422,10 +422,10 @@ import {
   assertDevTestGameHostedEvidenceLaneDemoProof,
   devTestGameHostedEvidenceLaneDemoBlockedPath,
   devTestGameHostedEvidenceLaneDemoExternalEvidencePath,
-  devTestGameHostedEvidenceLaneDemoPassedPath,
   devTestGameHostedEvidenceLaneDemoProofCommand,
   devTestGameHostedEvidenceLaneDemoProofPath,
   devTestGameHostedEvidenceLaneDemoRawEvidencePath,
+  devTestGameHostedEvidenceLaneDemoSyntheticRejectedPath,
   runDevTestGameHostedEvidenceLaneDemoProof,
 } from "./dev_test_game_hosted_evidence_lane_demo_proof.mjs";
 import {
@@ -2335,7 +2335,11 @@ test("dev test-game spine manifest records command order and evidence wiring", (
     manifest.artifacts.includes(devTestGameHostedEvidenceLaneDemoExternalEvidencePath),
   );
   assert(manifest.artifacts.includes(devTestGameHostedEvidenceLaneDemoBlockedPath));
-  assert(manifest.artifacts.includes(devTestGameHostedEvidenceLaneDemoPassedPath));
+  assert(
+    manifest.artifacts.includes(
+      devTestGameHostedEvidenceLaneDemoSyntheticRejectedPath,
+    ),
+  );
   assert(manifest.artifacts.includes(devTestGameReleaseRunbookPath));
   assert(manifest.artifacts.includes(nextActionPath));
   assert(manifest.artifacts.includes(nextActionAdminProofPath));
@@ -3914,38 +3918,38 @@ test("dev test-game next-action advances hosted deployment after target prefligh
     }),
   });
   assertDevTestGameNextAction(syntheticPreflightAction);
-  assert.equal(syntheticPreflightAction.nextAction.status, "blocked");
+  assert.equal(syntheticPreflightAction.nextAction.status, "ready");
   assert.equal(
     syntheticPreflightAction.nextAction.command,
-    `npm run ${devTestGameHostedEvidenceLaneDemoProofCommand}`,
+    `npm run ${devTestGameHostedEvidenceLaneCommand}`,
   );
   assert.equal(
     syntheticPreflightAction.nextAction.unproven.proofTarget,
-    devTestGameHostedEvidenceLaneDemoProofPath,
+    devTestGameHostedMatrixExternalEvidencePath,
   );
   assert.equal(
     syntheticPreflightAction.nextAction.unproven.roleUrl,
-    "/admin/audit/local-hosted-evidence-lane?game=<seeded-game>",
+    "/admin/audit/local-hosted-concurrent-race-matrix?game=<seeded-game>",
   );
   assert.equal(
     syntheticPreflightAction.nextAction.unproven.proofGraphNodeId,
-    "admin-proof:hosted-evidence-lane",
+    "admin-proof:hosted-concurrent-race-matrix",
   );
   assert.equal(
     syntheticPreflightAction.nextAction.unproven.hostedEvidenceMode,
-    "synthetic-demo",
+    "real-hosted",
   );
   assert.equal(
     syntheticPreflightAction.nextAction.unproven.realHostedEvidenceStatus,
-    "unproven",
+    "passed",
   );
   assert.equal(
     syntheticPreflightAction.releaseReadinessTrace.candidates[0].actionStatus,
-    "blocked",
+    "ready",
   );
   assert.equal(
     syntheticPreflightAction.releaseReadinessTrace.candidates[0].command,
-    `npm run ${devTestGameHostedEvidenceLaneDemoProofCommand}`,
+    `npm run ${devTestGameHostedEvidenceLaneCommand}`,
   );
   assert.equal(
     syntheticPreflightAction.generatedFrom.hostedTargetPreflightNextProofTarget,
@@ -3988,6 +3992,10 @@ test("dev test-game hosted evidence lane records blocked preflight state", async
       ],
       [
         "raw-evidence-readable",
+        hostedTargetPreflightMissingRawEvidencePathRequiredEvidence,
+      ],
+      [
+        "raw-evidence-real-hosted-target",
         hostedTargetPreflightMissingRawEvidencePathRequiredEvidence,
       ],
     ],
@@ -13316,16 +13324,17 @@ test("session card and markdown include role credential URLs and tokens", async 
   );
   assert.equal(demoProof.target.syntheticExternalTarget, true);
   assert.equal(demoProof.blockedLane.status, "blocked");
-  assert.equal(demoProof.passedLane.status, "passed");
-  assert.equal(demoProof.passedLane.hostedEvidenceMode, "synthetic-demo");
-  assert.equal(demoProof.passedLane.realHostedEvidenceStatus, "unproven");
+  assert.equal(demoProof.syntheticRejectedLane.status, "blocked");
+  assert.deepEqual(demoProof.syntheticRejectedLane.blockedCheckIds, [
+    "raw-evidence-real-hosted-target",
+  ]);
   assert.equal(
     demoProof.handoff.blockedRoleUrl,
     "/admin/audit/local-hosted-evidence-lane?game=<seeded-game>",
   );
   assert.equal(
-    demoProof.handoff.passedRoleUrl,
-    "/admin/audit/local-hosted-concurrent-race-matrix?game=<seeded-game>",
+    demoProof.handoff.syntheticRejectedRoleUrl,
+    "/admin/audit/local-hosted-evidence-lane?game=<seeded-game>",
   );
   assert.equal(
     demoProof.externalEvidence.rawRoleCredentialsRedacted,
@@ -13614,7 +13623,7 @@ test("session card and markdown include role credential URLs and tokens", async 
   assert.equal(hostedEvidenceLaneCheck.status, "passed");
   assert.equal(hostedEvidenceLaneCheck.laneStatus, "blocked");
   assert.equal(hostedEvidenceLaneCheck.preflightStatus, "blocked");
-  assert.equal(hostedEvidenceLaneCheck.blockedCheckCount, 5);
+  assert.equal(hostedEvidenceLaneCheck.blockedCheckCount, 6);
   assert.equal(
     hostedEvidenceLaneCheck.adminRoleSurface.detailRoleUrl,
     "/admin/audit/local-hosted-evidence-lane?game=<seeded-game>",
@@ -13642,10 +13651,13 @@ test("session card and markdown include role credential URLs and tokens", async 
   assert.equal(hostedEvidenceLaneDemoCheck.demoOnly, true);
   assert.equal(hostedEvidenceLaneDemoCheck.syntheticExternalTarget, true);
   assert.equal(hostedEvidenceLaneDemoCheck.blockedLaneStatus, "blocked");
-  assert.equal(hostedEvidenceLaneDemoCheck.passedLaneStatus, "passed");
   assert.equal(
-    hostedEvidenceLaneDemoCheck.passedRoleUrl,
-    "/admin/audit/local-hosted-concurrent-race-matrix?game=<seeded-game>",
+    hostedEvidenceLaneDemoCheck.syntheticRejectedLaneStatus,
+    "blocked",
+  );
+  assert.equal(
+    hostedEvidenceLaneDemoCheck.syntheticRejectedRoleUrl,
+    "/admin/audit/local-hosted-evidence-lane?game=<seeded-game>",
   );
   assert.equal(
     hostedEvidenceLaneDemoCheck.recovery.roleUrl,
@@ -14836,13 +14848,13 @@ function devTestGameReleaseReadinessChecklistFixture({
                 evidence:
                   "target/dev-test-game/hosted-evidence-lane-demo-proof.json",
                 proofBoundary:
-                  "Local demo proof for the hosted evidence lane pass path.",
+                  "Local demo proof for the hosted evidence lane synthetic rejection path.",
                 demoOnly: true,
                 syntheticExternalTarget: true,
                 blockedLaneStatus: "blocked",
-                passedLaneStatus: "passed",
-                passedRoleUrl:
-                  "/admin/audit/local-hosted-concurrent-race-matrix?game=<seeded-game>",
+                syntheticRejectedLaneStatus: "blocked",
+                syntheticRejectedRoleUrl:
+                  "/admin/audit/local-hosted-evidence-lane?game=<seeded-game>",
                 externalEvidencePath:
                   "target/dev-test-game/hosted-matrix-demo-external.json",
                 recovery: {
@@ -20744,7 +20756,8 @@ function hostedEvidenceLaneDemoProofFixture() {
       hostedConcurrentRaceMatrixGeneratedAt: "2026-06-26T00:00:00.000Z",
       hostedEvidenceLane: "target/dev-test-game/hosted-evidence-lane.json",
       blockedLane: "target/dev-test-game/hosted-evidence-lane-demo-blocked.json",
-      passedLane: "target/dev-test-game/hosted-evidence-lane-demo-passed.json",
+      syntheticRejectedLane:
+        "target/dev-test-game/hosted-evidence-lane-demo-synthetic-rejected.json",
       rawEvidence: "target/dev-test-game/hosted-matrix-demo-raw.json",
       externalEvidence: "target/dev-test-game/hosted-matrix-demo-external.json",
     },
@@ -20760,12 +20773,13 @@ function hostedEvidenceLaneDemoProofFixture() {
         evidence: "target/dev-test-game/hosted-matrix-demo-raw.json",
       },
       {
-        id: "passed-lane-recorded",
-        status: "passed",
-        evidence: "target/dev-test-game/hosted-evidence-lane-demo-passed.json",
+        id: "synthetic-lane-rejected",
+        status: "blocked",
+        evidence:
+          "target/dev-test-game/hosted-evidence-lane-demo-synthetic-rejected.json",
       },
       {
-        id: "external-evidence-written",
+        id: "demo-external-evidence-written",
         status: "passed",
         evidence: "target/dev-test-game/hosted-matrix-demo-external.json",
       },
@@ -20784,12 +20798,14 @@ function hostedEvidenceLaneDemoProofFixture() {
     ],
     handoff: {
       blockedRoleUrl: "/admin/audit/local-hosted-evidence-lane?game=<seeded-game>",
-      passedRoleUrl:
-        "/admin/audit/local-hosted-concurrent-race-matrix?game=<seeded-game>",
+      syntheticRejectedRoleUrl:
+        "/admin/audit/local-hosted-evidence-lane?game=<seeded-game>",
       blockedNextCommand: "npm run test:dev-test-game-hosted-evidence-lane",
-      passedNextCommand:
-        "npm run test:dev-test-game-hosted-matrix-external-evidence",
-      passedNextProofTarget: "target/dev-test-game/hosted-matrix-demo-external.json",
+      syntheticRejectedNextCommand:
+        "npm run test:dev-test-game-hosted-evidence-lane",
+      syntheticRejectedNextProofTarget:
+        "target/dev-test-game/hosted-evidence-lane.json",
+      demoExternalEvidencePath: "target/dev-test-game/hosted-matrix-demo-external.json",
     },
     blockedLane: {
       status: "blocked",
@@ -20797,13 +20813,13 @@ function hostedEvidenceLaneDemoProofFixture() {
       blockedCheckIds: [hostedTargetPreflightBlockingCheckIds[0]],
       nextProofTarget: "target/dev-test-game/hosted-evidence-lane.json",
     },
-    passedLane: {
-      status: "passed",
-      preflightStatus: "passed",
-      blockedCheckIds: [],
-      hostedEvidenceMode: "synthetic-demo",
+    syntheticRejectedLane: {
+      status: "blocked",
+      preflightStatus: "blocked",
+      blockedCheckIds: ["raw-evidence-real-hosted-target"],
+      hostedEvidenceMode: "blocked",
       realHostedEvidenceStatus: "unproven",
-      nextProofTarget: "target/dev-test-game/hosted-matrix-demo-external.json",
+      nextProofTarget: "target/dev-test-game/hosted-evidence-lane.json",
     },
     externalEvidence: {
       proof: "fmarch-hosted-concurrent-race-matrix-evidence",

@@ -138,7 +138,7 @@ export function hostedEvidenceLaneAdminProofCase() {
       productionReady: false,
       scope: "local-dev-test-game-hosted-evidence-lane-admin-surface",
       proofBoundary:
-        "Local SvelteKit admin role URL with fixture admin authority over the hosted evidence lane. Proves the lane is discoverable from the seeded admin overview and inspectable in a native admin audit detail route with blocked preflight rows and local demo proof blocked-to-passed rows visible; it does not prove hosted deployment, hosted telemetry, beta readiness, release readiness, or production readiness.",
+        "Local SvelteKit admin role URL with fixture admin authority over the hosted evidence lane. Proves the lane is discoverable from the seeded admin overview and inspectable in a native admin audit detail route with blocked preflight rows and local demo proof synthetic-rejection rows visible; it does not prove hosted deployment, hosted telemetry, beta readiness, release readiness, or production readiness.",
       generatedFrom: {
         hostedEvidenceLane: laneRelativePath,
         hostedEvidenceLaneDemoProof: demoProofRelativePath,
@@ -157,7 +157,8 @@ export function hostedEvidenceLaneAdminProofCase() {
         demoProofStatus: source.demoProof.status,
         demoProofTarget: devTestGameHostedEvidenceLaneDemoProofPath,
         demoProofBlockedLaneStatus: source.demoProof.blockedLane.status,
-        demoProofPassedLaneStatus: source.demoProof.passedLane.status,
+        demoProofSyntheticRejectedLaneStatus:
+          source.demoProof.syntheticRejectedLane.status,
         demoProofSyntheticExternalTarget:
           source.demoProof.target.syntheticExternalTarget,
         blockedCheckIds: source.lane.blockedCheckIds,
@@ -243,7 +244,7 @@ export function assertHostedEvidenceLaneAdminProof(evidence) {
   if (
     evidence.generatedFrom?.demoProofStatus !== "passed" ||
     evidence.generatedFrom?.demoProofBlockedLaneStatus !== "blocked" ||
-    evidence.generatedFrom?.demoProofPassedLaneStatus !== "passed" ||
+    evidence.generatedFrom?.demoProofSyntheticRejectedLaneStatus !== "blocked" ||
     evidence.generatedFrom?.demoProofSyntheticExternalTarget !== true
   ) {
     throw new Error("hosted evidence lane admin proof demo boundary drifted");

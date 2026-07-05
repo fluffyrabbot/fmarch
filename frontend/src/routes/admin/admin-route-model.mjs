@@ -1191,9 +1191,11 @@ function normalizeLocalHostedEvidenceLaneDemoProofSummary(proof) {
     demoOnly: true,
     syntheticExternalTarget: true,
     demoBlockedLaneStatus: String(proof.blockedLane.status),
-    demoPassedLaneStatus: String(proof.passedLane.status),
+    demoSyntheticRejectedLaneStatus: String(proof.syntheticRejectedLane.status),
     demoExternalEvidencePath: String(proof.generatedFrom?.externalEvidence ?? ""),
-    demoPassedRoleUrl: String(proof.handoff?.passedRoleUrl ?? ""),
+    demoSyntheticRejectedRoleUrl: String(
+      proof.handoff?.syntheticRejectedRoleUrl ?? "",
+    ),
   });
 }
 
@@ -1221,7 +1223,7 @@ function isLocalHostedEvidenceLaneDemoProof(proof) {
     proof.productionReady === false &&
     proof.target?.syntheticExternalTarget === true &&
     proof.blockedLane?.status === "blocked" &&
-    proof.passedLane?.status === "passed"
+    proof.syntheticRejectedLane?.status === "blocked"
   );
 }
 

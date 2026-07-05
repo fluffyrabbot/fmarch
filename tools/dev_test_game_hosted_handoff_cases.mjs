@@ -4,6 +4,7 @@ import {
   hostedTargetPreflightMissingApiUrlRequiredEvidence,
   hostedTargetPreflightMissingFrontendUrlRequiredEvidence,
   hostedTargetPreflightMissingRawEvidencePathRequiredEvidence,
+  hostedTargetPreflightSyntheticRawEvidenceRequiredEvidence,
 } from "./dev_test_game_hosted_target_preflight_cases.mjs";
 import {
   buildRealHostedEvidenceInputs,
@@ -77,6 +78,11 @@ const hostedEvidenceHandoffBlockedChecks = Object.freeze([
     id: "raw-evidence-readable",
     status: "blocked",
     requiredEvidence: hostedTargetPreflightMissingRawEvidencePathRequiredEvidence,
+  },
+  {
+    id: "raw-evidence-real-hosted-target",
+    status: "blocked",
+    requiredEvidence: hostedTargetPreflightSyntheticRawEvidenceRequiredEvidence,
   },
 ]);
 

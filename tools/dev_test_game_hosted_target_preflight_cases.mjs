@@ -7,6 +7,7 @@ export const hostedTargetPreflightBlockingCheckIds = Object.freeze([
   "hosted-targets-external",
   "raw-evidence-path-configured",
   "raw-evidence-readable",
+  "raw-evidence-real-hosted-target",
 ]);
 
 export const hostedTargetPreflightCheckIds = Object.freeze([
@@ -22,6 +23,9 @@ export const hostedTargetPreflightMissingApiUrlRequiredEvidence =
 
 export const hostedTargetPreflightMissingRawEvidencePathRequiredEvidence =
   "Set FMARCH_HOSTED_MATRIX_RAW_EVIDENCE_PATH to a readable raw hosted matrix evidence JSON captured from the same frontend/API/group, then rerun npm run test:dev-test-game-hosted-evidence-lane.";
+
+export const hostedTargetPreflightSyntheticRawEvidenceRequiredEvidence =
+  "Replace synthetic demo raw evidence with raw hosted matrix evidence captured from a real externally reachable hosted target; synthetic demo evidence can only prove the local handoff shape.";
 
 export function hostedTargetPreflightExternalTargetsRequiredEvidence({
   frontendBaseUrl = null,

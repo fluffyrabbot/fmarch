@@ -1261,8 +1261,10 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
       syntheticExternalTarget:
         hostedEvidenceLaneDemoProofEvidence.syntheticExternalTarget,
       blockedLaneStatus: hostedEvidenceLaneDemoProofEvidence.blockedLaneStatus,
-      passedLaneStatus: hostedEvidenceLaneDemoProofEvidence.passedLaneStatus,
-      passedRoleUrl: hostedEvidenceLaneDemoProofEvidence.passedRoleUrl,
+      syntheticRejectedLaneStatus:
+        hostedEvidenceLaneDemoProofEvidence.syntheticRejectedLaneStatus,
+      syntheticRejectedRoleUrl:
+        hostedEvidenceLaneDemoProofEvidence.syntheticRejectedRoleUrl,
       externalEvidencePath:
         hostedEvidenceLaneDemoProofEvidence.externalEvidencePath,
       recovery: {
@@ -4721,9 +4723,11 @@ export function validateDevTestGameHostedEvidenceLaneDemoProof(proof, options = 
   }
   if (
     validated.blockedLane?.status !== "blocked" ||
-    validated.passedLane?.status !== "passed"
+    validated.syntheticRejectedLane?.status !== "blocked"
   ) {
-    throw new Error("hosted evidence lane demo proof must carry blocked and passed lanes");
+    throw new Error(
+      "hosted evidence lane demo proof must carry blocked and synthetic-rejected lanes",
+    );
   }
   return {
     status: "passed",
@@ -4735,10 +4739,10 @@ export function validateDevTestGameHostedEvidenceLaneDemoProof(proof, options = 
     apiBaseUrl: String(validated.target.apiBaseUrl ?? ""),
     groupId: String(validated.target.groupId ?? ""),
     blockedLaneStatus: validated.blockedLane.status,
-    passedLaneStatus: validated.passedLane.status,
+    syntheticRejectedLaneStatus: validated.syntheticRejectedLane.status,
     blockedRoleUrl: validated.handoff.blockedRoleUrl,
-    passedRoleUrl: validated.handoff.passedRoleUrl,
-    passedNextCommand: validated.handoff.passedNextCommand,
+    syntheticRejectedRoleUrl: validated.handoff.syntheticRejectedRoleUrl,
+    syntheticRejectedNextCommand: validated.handoff.syntheticRejectedNextCommand,
     externalEvidencePath: validated.generatedFrom.externalEvidence,
     externalCellIds: [...validated.externalEvidence.cellIds],
     ...(options.artifact === undefined ? {} : { artifact: options.artifact }),
@@ -7221,7 +7225,7 @@ export function assertDevTestGameReleaseReadiness(checklist) {
     (hostedDemoCheck.demoOnly !== true ||
       hostedDemoCheck.syntheticExternalTarget !== true ||
       hostedDemoCheck.blockedLaneStatus !== "blocked" ||
-      hostedDemoCheck.passedLaneStatus !== "passed")
+      hostedDemoCheck.syntheticRejectedLaneStatus !== "blocked")
   ) {
     throw new Error("dev-test-game hosted evidence lane demo check is malformed");
   }

@@ -124,10 +124,8 @@ export function assertDevTestGameHostedEvidenceLane(evidence) {
     if (
       evidence.preflightStatus !== "passed" ||
       checks.get("external-hosted-evidence-written")?.status !== "passed" ||
-      !["synthetic-demo", "real-hosted"].includes(evidence.hostedEvidence?.mode) ||
-      !["passed", "unproven"].includes(
-        evidence.hostedEvidence?.realHostedEvidenceStatus,
-      ) ||
+      evidence.hostedEvidence?.mode !== "real-hosted" ||
+      evidence.hostedEvidence?.realHostedEvidenceStatus !== "passed" ||
       evidence.hostedEvidence?.realHostedEvidenceInputs === undefined ||
       evidence.hostedHandoffChecklist === undefined ||
       evidence.nextCommand !==

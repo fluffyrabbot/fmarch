@@ -40,10 +40,10 @@ import {
 import {
   devTestGameHostedEvidenceLaneDemoBlockedPath,
   devTestGameHostedEvidenceLaneDemoExternalEvidencePath,
-  devTestGameHostedEvidenceLaneDemoPassedPath,
   devTestGameHostedEvidenceLaneDemoProofCommand,
   devTestGameHostedEvidenceLaneDemoProofPath,
   devTestGameHostedEvidenceLaneDemoRawEvidencePath,
+  devTestGameHostedEvidenceLaneDemoSyntheticRejectedPath,
 } from "./dev_test_game_hosted_evidence_lane_demo_proof.mjs";
 import {
   devTestGameHostedOpsSignalsCommand,
@@ -463,7 +463,7 @@ export function buildDevTestGameSpineManifest({
       devTestGameHostedEvidenceLaneDemoRawEvidencePath,
       devTestGameHostedEvidenceLaneDemoExternalEvidencePath,
       devTestGameHostedEvidenceLaneDemoBlockedPath,
-      devTestGameHostedEvidenceLaneDemoPassedPath,
+      devTestGameHostedEvidenceLaneDemoSyntheticRejectedPath,
       ...recoveryReceiptGraphDescriptors.map(
         (descriptor) => descriptor.proofTarget,
       ),
@@ -987,7 +987,7 @@ export function assertDevTestGameSpineManifest(manifest) {
     devTestGameHostedEvidenceLaneDemoRawEvidencePath,
     devTestGameHostedEvidenceLaneDemoExternalEvidencePath,
     devTestGameHostedEvidenceLaneDemoBlockedPath,
-    devTestGameHostedEvidenceLaneDemoPassedPath,
+    devTestGameHostedEvidenceLaneDemoSyntheticRejectedPath,
     devTestGameHostedOpsSignalsPath,
     devTestGameRealHostedObservabilityHandoffPath,
     devTestGameReleaseRunbookPath,

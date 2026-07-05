@@ -13,10 +13,6 @@ import {
   hostedMatrixExternalEvidencePath,
 } from "./dev_test_game_hosted_handoff_cases.mjs";
 import {
-  devTestGameHostedEvidenceLaneDemoProofCommand,
-  devTestGameHostedEvidenceLaneDemoProofPath,
-} from "./dev_test_game_hosted_evidence_lane_demo_proof.mjs";
-import {
   devTestGameHostedIdentityCompleteAdminProofPath,
   devTestGameHostedIdentityEvidenceCommand,
   devTestGameHostedIdentityEvidencePath,
@@ -428,41 +424,24 @@ function humanReleaseUnprovenItems({ releaseRunbookEvidence }) {
 
 function hostedDeploymentBuildable({ hostedTargetPreflight }) {
   if (hostedTargetPreflight?.status === "passed") {
-    const syntheticExternalTarget =
-      hostedTargetPreflight.target?.rawEvidenceSyntheticExternalTarget === true;
-    const command = syntheticExternalTarget
-      ? `npm run ${devTestGameHostedEvidenceLaneDemoProofCommand}`
-      : hostedEvidenceLaneCommand;
-    const proofTarget = syntheticExternalTarget
-      ? devTestGameHostedEvidenceLaneDemoProofPath
-      : releaseReadinessRealHostedConcurrentRaceMatrixProofTarget;
-    const roleUrl = syntheticExternalTarget
-      ? releaseReadinessHostedEvidenceLaneRoleUrl
-      : releaseReadinessHostedConcurrentRaceMatrixRoleUrl;
-    const proofGraphNodeId = syntheticExternalTarget
-      ? releaseReadinessHostedEvidenceLaneProofGraphNodeId
-      : releaseReadinessHostedConcurrentRaceMatrixProofGraphNodeId;
     return {
       priority: 0,
-      command,
+      command: hostedEvidenceLaneCommand,
       buildSlice:
-        syntheticExternalTarget
-          ? "Run the local hosted evidence lane demo proof; it refreshes blocked and synthetic passed lane artifacts, while real externally hosted evidence remains required."
-          : "Run the one-command hosted evidence lane; the hosted target preflight has passed, so the lane can write external hosted matrix evidence.",
-      proofTarget,
-      roleUrl,
-      proofGraphNodeId,
+        "Run the one-command hosted evidence lane; the hosted target preflight has passed with non-synthetic hosted raw evidence, so the lane can write external hosted matrix evidence.",
+      proofTarget: releaseReadinessRealHostedConcurrentRaceMatrixProofTarget,
+      roleUrl: releaseReadinessHostedConcurrentRaceMatrixRoleUrl,
+      proofGraphNodeId:
+        releaseReadinessHostedConcurrentRaceMatrixProofGraphNodeId,
       productionFeatureSpineTarget:
         releaseReadinessProductionFeatureSpineTargets.hostPhaseControl,
       proofBoundary:
-        syntheticExternalTarget
-          ? "Local demo proof for the hosted evidence lane pass path after passed synthetic target preflight. This command refreshes blocked and synthetic passed local lane artifacts, but does not satisfy real hosted deployment evidence."
-          : "External hosted evidence handoff after passed target preflight. This command requires the same FMARCH_HOSTED_MATRIX_FRONTEND_URL, FMARCH_HOSTED_MATRIX_API_URL, and FMARCH_HOSTED_MATRIX_RAW_EVIDENCE_PATH target inputs; it does not let local hosted-like evidence satisfy hosted deployment.",
-      hostedEvidenceMode: syntheticExternalTarget ? "synthetic-demo" : "real-hosted",
-      realHostedEvidenceStatus: syntheticExternalTarget ? "unproven" : "passed",
+        "External hosted evidence handoff after passed target preflight. This command requires the same FMARCH_HOSTED_MATRIX_FRONTEND_URL, FMARCH_HOSTED_MATRIX_API_URL, and FMARCH_HOSTED_MATRIX_RAW_EVIDENCE_PATH target inputs; it does not let local hosted-like or synthetic demo evidence satisfy hosted deployment.",
+      hostedEvidenceMode: "real-hosted",
+      realHostedEvidenceStatus: "passed",
       realHostedEvidenceInputs: buildRealHostedEvidenceInputs({
-        status: syntheticExternalTarget ? "unproven" : "passed",
-        mode: syntheticExternalTarget ? "synthetic-demo" : "real-hosted",
+        status: "passed",
+        mode: "real-hosted",
       }),
     };
   }

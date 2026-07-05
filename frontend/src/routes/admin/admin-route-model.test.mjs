@@ -914,7 +914,7 @@ test("admin route data exposes hosted target preflight as a native audit row", a
     (item) => item.id === localAdminAuditIds.hostedTargetPreflight,
   );
   assert.equal(preflight.label, "Hosted target preflight");
-  assert.equal(preflight.status, "1 passed, 5 blocked");
+  assert.equal(preflight.status, "1 passed, 6 blocked");
   assert.equal(
     preflight.inspectHref,
     localAdminAuditRoleUrl(localAdminAuditIds.hostedTargetPreflight, { game: "midsummer" }),
@@ -927,6 +927,7 @@ test("admin route data exposes hosted target preflight as a native audit row", a
       ["hosted-targets-external", "blocked"],
       ["raw-evidence-path-configured", "blocked"],
       ["raw-evidence-readable", "blocked"],
+      ["raw-evidence-real-hosted-target", "blocked"],
       ["release-claim-boundary-carried", "passed"],
     ],
   );
@@ -938,6 +939,7 @@ test("admin route data exposes hosted target preflight as a native audit row", a
       "hosted-targets-external",
       "raw-evidence-path-configured",
       "raw-evidence-readable",
+      "raw-evidence-real-hosted-target",
     ],
   );
   assert.equal(preflight.artifactSummary.nextProofTarget, HOSTED_TARGET_PREFLIGHT_PROOF_TARGET);
@@ -953,7 +955,7 @@ test("admin route data exposes hosted evidence lane as a native audit row", asyn
 
   const lane = data.audit.find((item) => item.id === localAdminAuditIds.hostedEvidenceLane);
   assert.equal(lane.label, "Hosted evidence lane");
-  assert.equal(lane.status, "blocked: 1 passed, 5 blocked");
+  assert.equal(lane.status, "blocked: 1 passed, 6 blocked");
   assert.equal(lane.authority, "GlobalAdmin or GlobalMod");
   assert.equal(lane.inspectHref, localAdminAuditRoleUrl(localAdminAuditIds.hostedEvidenceLane, { game: "midsummer" }));
   assert.deepEqual(
@@ -965,11 +967,12 @@ test("admin route data exposes hosted evidence lane as a native audit row", asyn
       "hosted-targets-external",
       "raw-evidence-path-configured",
       "raw-evidence-readable",
+      "raw-evidence-real-hosted-target",
       "release-claim-boundary-carried",
       "demo-proof:blocked-lane-recorded",
       "demo-proof:synthetic-raw-evidence-written",
-      "demo-proof:passed-lane-recorded",
-      "demo-proof:external-evidence-written",
+      "demo-proof:synthetic-lane-rejected",
+      "demo-proof:demo-external-evidence-written",
       "demo-proof:synthetic-demo-boundary-carried",
       "demo-proof:release-claim-boundary-carried",
     ],
@@ -985,7 +988,7 @@ test("admin route data exposes hosted evidence lane as a native audit row", asyn
   assert.equal(lane.artifactSummary.nextCommand, "npm run test:dev-test-game-hosted-evidence-lane");
   assert.equal(lane.artifactSummary.nextProofTarget, HOSTED_EVIDENCE_LANE_PROOF_TARGET);
   assert.equal(lane.artifactSummary.preflightStatus, "blocked");
-  assert.equal(lane.artifactSummary.blockedCheckCount, 5);
+  assert.equal(lane.artifactSummary.blockedCheckCount, 6);
   assert.equal(lane.artifactSummary.realHostedEvidenceStatus, "unproven");
   assert.equal(
     lane.artifactSummary.realHostedEvidenceCommand,
@@ -1003,7 +1006,7 @@ test("admin route data exposes hosted evidence lane as a native audit row", asyn
   assert.equal(lane.artifactSummary.demoOnly, true);
   assert.equal(lane.artifactSummary.syntheticExternalTarget, true);
   assert.equal(lane.artifactSummary.demoBlockedLaneStatus, "blocked");
-  assert.equal(lane.artifactSummary.demoPassedLaneStatus, "passed");
+  assert.equal(lane.artifactSummary.demoSyntheticRejectedLaneStatus, "blocked");
 });
 
 test("admin route data exposes hosted identity evidence as a native audit row", async () => {
@@ -3792,7 +3795,7 @@ test("admin hosted target preflight detail data carries blocked setup rows", asy
   assert.equal(data.status, "available");
   assert.equal(data.surfaceHeader.title, "Hosted target preflight");
   assert.equal(data.audit.id, localAdminAuditIds.hostedTargetPreflight);
-  assert.equal(data.audit.checks.length, 6);
+  assert.equal(data.audit.checks.length, 7);
   assert.deepEqual(
     data.audit.relatedLinks.map((link) => link.id),
     [localAdminAuditIds.hostedConcurrentRaceMatrix, localAdminAuditIds.nextAction],
@@ -3829,6 +3832,11 @@ test("admin hosted target preflight detail data carries blocked setup rows", asy
         "blocked",
         hostedTargetPreflightMissingRawEvidencePathRequiredEvidence,
       ],
+      [
+        "raw-evidence-real-hosted-target",
+        "blocked",
+        hostedTargetPreflightMissingRawEvidencePathRequiredEvidence,
+      ],
     ],
   );
 });
@@ -3845,14 +3853,14 @@ test("admin hosted evidence lane detail data carries blocked setup rows", async 
   assert.equal(data.status, "available");
   assert.equal(data.surfaceHeader.title, "Hosted evidence lane");
   assert.equal(data.audit.id, localAdminAuditIds.hostedEvidenceLane);
-  assert.equal(data.audit.checks.length, 13);
+  assert.equal(data.audit.checks.length, 14);
   assert.deepEqual(
     data.audit.checks.slice(-6).map((check) => [check.id, check.status]),
     [
       ["demo-proof:blocked-lane-recorded", "blocked"],
       ["demo-proof:synthetic-raw-evidence-written", "passed"],
-      ["demo-proof:passed-lane-recorded", "passed"],
-      ["demo-proof:external-evidence-written", "passed"],
+      ["demo-proof:synthetic-lane-rejected", "blocked"],
+      ["demo-proof:demo-external-evidence-written", "passed"],
       ["demo-proof:synthetic-demo-boundary-carried", "passed"],
       ["demo-proof:release-claim-boundary-carried", "passed"],
     ],
@@ -3873,6 +3881,7 @@ test("admin hosted evidence lane detail data carries blocked setup rows", async 
       ["hosted-targets-external", "blocked"],
       ["raw-evidence-path-configured", "blocked"],
       ["raw-evidence-readable", "blocked"],
+      ["raw-evidence-real-hosted-target", "blocked"],
     ],
   );
   assert.deepEqual(
@@ -3964,6 +3973,11 @@ test("admin hosted evidence lane detail data carries blocked setup rows", async 
         "blocked",
         hostedTargetPreflightMissingRawEvidencePathRequiredEvidence,
       ],
+      [
+        "raw-evidence-real-hosted-target",
+        "blocked",
+        hostedTargetPreflightMissingRawEvidencePathRequiredEvidence,
+      ],
     ],
   );
   assert.deepEqual(
@@ -3981,8 +3995,8 @@ test("admin hosted evidence lane detail data carries blocked setup rows", async 
   assert.equal(data.audit.artifactSummary.demoProofStatus, "passed");
   assert.equal(data.audit.artifactSummary.demoOnly, true);
   assert.equal(
-    data.audit.artifactSummary.demoPassedRoleUrl,
-    localAdminAuditRoleUrl(localAdminAuditIds.hostedConcurrentRaceMatrix),
+    data.audit.artifactSummary.demoSyntheticRejectedRoleUrl,
+    localAdminAuditRoleUrl(localAdminAuditIds.hostedEvidenceLane),
   );
 });
 
@@ -5426,6 +5440,12 @@ function localHostedTargetPreflightFixture() {
           hostedTargetPreflightMissingRawEvidencePathRequiredEvidence,
       },
       {
+        id: "raw-evidence-real-hosted-target",
+        status: "blocked",
+        requiredEvidence:
+          hostedTargetPreflightMissingRawEvidencePathRequiredEvidence,
+      },
+      {
         id: "release-claim-boundary-carried",
         status: "passed",
         releaseReady: false,
@@ -5577,6 +5597,7 @@ function localHostedEvidenceLaneFixture() {
       "hosted-targets-external",
       "raw-evidence-path-configured",
       "raw-evidence-readable",
+      "raw-evidence-real-hosted-target",
     ],
     target: {
       frontendBaseUrl: null,
@@ -5630,6 +5651,12 @@ function localHostedEvidenceLaneFixture() {
           hostedTargetPreflightMissingRawEvidencePathRequiredEvidence,
       },
       {
+        id: "raw-evidence-real-hosted-target",
+        status: "blocked",
+        requiredEvidence:
+          hostedTargetPreflightMissingRawEvidencePathRequiredEvidence,
+      },
+      {
         id: "release-claim-boundary-carried",
         status: "passed",
         releaseReady: false,
@@ -5667,8 +5694,8 @@ function localHostedEvidenceLaneDemoProofFixture() {
     },
     handoff: {
       blockedRoleUrl: localAdminAuditRoleUrl(localAdminAuditIds.hostedEvidenceLane),
-      passedRoleUrl:
-        localAdminAuditRoleUrl(localAdminAuditIds.hostedConcurrentRaceMatrix),
+      syntheticRejectedRoleUrl:
+        localAdminAuditRoleUrl(localAdminAuditIds.hostedEvidenceLane),
     },
     checks: [
       {
@@ -5680,11 +5707,11 @@ function localHostedEvidenceLaneDemoProofFixture() {
         status: "passed",
       },
       {
-        id: "passed-lane-recorded",
-        status: "passed",
+        id: "synthetic-lane-rejected",
+        status: "blocked",
       },
       {
-        id: "external-evidence-written",
+        id: "demo-external-evidence-written",
         status: "passed",
       },
       {
@@ -5701,10 +5728,10 @@ function localHostedEvidenceLaneDemoProofFixture() {
       preflightStatus: "blocked",
       blockedCheckIds: ["hosted-frontend-url-configured"],
     },
-    passedLane: {
-      status: "passed",
-      preflightStatus: "passed",
-      blockedCheckIds: [],
+    syntheticRejectedLane: {
+      status: "blocked",
+      preflightStatus: "blocked",
+      blockedCheckIds: ["raw-evidence-real-hosted-target"],
     },
   };
 }
@@ -5876,7 +5903,7 @@ function spineManifestFixture() {
       "target/dev-test-game/hosted-matrix-demo-raw.json",
       "target/dev-test-game/hosted-matrix-demo-external.json",
       "target/dev-test-game/hosted-evidence-lane-demo-blocked.json",
-      "target/dev-test-game/hosted-evidence-lane-demo-passed.json",
+      "target/dev-test-game/hosted-evidence-lane-demo-synthetic-rejected.json",
       "target/dev-test-game/next-action.json",
       "target/dev-test-game/next-action-admin-proof.json",
       "target/dev-test-game/proof-graph.json",
@@ -6913,6 +6940,7 @@ function hostedBlockedReceiptFixture({ proofTarget, nextProofTarget }) {
       "hosted-targets-external",
       "raw-evidence-path-configured",
       "raw-evidence-readable",
+      "raw-evidence-real-hosted-target",
     ],
     command: "npm run test:dev-test-game-hosted-evidence-lane",
     proofTarget,

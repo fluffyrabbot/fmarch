@@ -17,6 +17,7 @@ export {
   hostedTargetPreflightMissingApiUrlRequiredEvidence,
   hostedTargetPreflightMissingFrontendUrlRequiredEvidence,
   hostedTargetPreflightMissingRawEvidencePathRequiredEvidence,
+  hostedTargetPreflightSyntheticRawEvidenceRequiredEvidence,
 } from "./dev_test_game_hosted_target_preflight_cases.mjs";
 import {
   hostedTargetPreflightExternalTargetsRequiredEvidence,
@@ -24,6 +25,7 @@ import {
   hostedTargetPreflightMissingApiUrlRequiredEvidence,
   hostedTargetPreflightMissingFrontendUrlRequiredEvidence,
   hostedTargetPreflightMissingRawEvidencePathRequiredEvidence,
+  hostedTargetPreflightSyntheticRawEvidenceRequiredEvidence,
 } from "./dev_test_game_hosted_target_preflight_cases.mjs";
 import {
   assertHostedEvidenceHandoffChecklist,
@@ -118,6 +120,23 @@ export async function buildDevTestGameHostedTargetPreflight({
       ...(rawEvidence.requiredEvidence === undefined
         ? {}
         : { requiredEvidence: rawEvidence.requiredEvidence }),
+    },
+    {
+      id: "raw-evidence-real-hosted-target",
+      status:
+        rawEvidence.status === "passed" &&
+        rawEvidence.syntheticExternalTarget !== true
+          ? "passed"
+          : "blocked",
+      ...(rawEvidence.status === "passed" &&
+      rawEvidence.syntheticExternalTarget !== true
+        ? { evidence: rawEvidence.evidence }
+        : {
+            requiredEvidence:
+              rawEvidence.syntheticExternalTarget === true
+                ? hostedTargetPreflightSyntheticRawEvidenceRequiredEvidence
+                : hostedTargetPreflightMissingRawEvidencePathRequiredEvidence,
+          }),
     },
     {
       id: "release-claim-boundary-carried",
@@ -336,7 +355,8 @@ function buildBlockedReceipt({
       name: "FMARCH_HOSTED_MATRIX_RAW_EVIDENCE_PATH",
       value: rawEvidencePath,
       required: true,
-      purpose: "Readable raw hosted matrix evidence captured from the real target.",
+      purpose:
+        "Readable raw hosted matrix evidence captured from a real externally reachable target.",
     },
     {
       name: "FMARCH_HOSTED_MATRIX_EVIDENCE_PATH",

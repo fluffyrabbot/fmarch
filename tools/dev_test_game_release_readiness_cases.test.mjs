@@ -2,10 +2,6 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { test } from "node:test";
 import {
-  devTestGameHostedEvidenceLaneDemoProofCommand,
-  devTestGameHostedEvidenceLaneDemoProofPath,
-} from "./dev_test_game_hosted_evidence_lane_demo_proof.mjs";
-import {
   devTestGameHostedIdentityCompleteAdminProofPath,
   devTestGameHostedIdentityEvidenceCommand,
   devTestGameHostedIdentityEvidencePath,
@@ -33,7 +29,6 @@ import {
   hostedIdentityEvidenceSatisfiesProductionIdentity,
   releaseReadinessBuildableItemForId,
   releaseReadinessHostedConcurrentRaceMatrixRoleUrl,
-  releaseReadinessHostedEvidenceLaneRoleUrl,
   releaseAdminProofFallbackUnprovenIds,
   releaseReadinessProductionFeatureSpineTargets,
   releaseReadinessUnprovenCaseIds,
@@ -811,16 +806,22 @@ test("hosted deployment buildable case carries blocked and passed preflight stat
   });
   assert.equal(
     passed.command,
-    `npm run ${devTestGameHostedEvidenceLaneDemoProofCommand}`,
+    "npm run test:dev-test-game-hosted-evidence-lane",
   );
-  assert.equal(passed.proofTarget, devTestGameHostedEvidenceLaneDemoProofPath);
+  assert.equal(
+    passed.proofTarget,
+    "target/dev-test-game/hosted-matrix-external.json",
+  );
   assert.equal(
     passed.roleUrl,
-    releaseReadinessHostedEvidenceLaneRoleUrl,
+    releaseReadinessHostedConcurrentRaceMatrixRoleUrl,
   );
-  assert.equal(passed.proofGraphNodeId, "admin-proof:hosted-evidence-lane");
-  assert.equal(passed.hostedEvidenceMode, "synthetic-demo");
-  assert.equal(passed.realHostedEvidenceStatus, "unproven");
+  assert.equal(
+    passed.proofGraphNodeId,
+    "admin-proof:hosted-concurrent-race-matrix",
+  );
+  assert.equal(passed.hostedEvidenceMode, "real-hosted");
+  assert.equal(passed.realHostedEvidenceStatus, "passed");
 
   const realPassed = releaseReadinessBuildableItemForId("hosted-deployment", {
     hostedTargetPreflight: { status: "passed", target: {} },

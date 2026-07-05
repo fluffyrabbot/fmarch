@@ -30,6 +30,7 @@ export function buildDevTestGameHostedMatrixExternalEvidence({
   rawEvidenceSource = null,
   frontendBaseUrl,
   apiBaseUrl,
+  allowSyntheticDemo = false,
 } = {}) {
   const sourceMatrix = assertDevTestGameHostedConcurrentRaceMatrixEvidence(matrix);
   const source = assertRawHostedMatrixEvidence(rawEvidence, {
@@ -39,6 +40,11 @@ export function buildDevTestGameHostedMatrixExternalEvidence({
   });
   const rawEvidenceSyntheticExternalTarget =
     source.generatedFrom?.syntheticExternalTarget === true;
+  if (rawEvidenceSyntheticExternalTarget && allowSyntheticDemo !== true) {
+    throw new Error(
+      "synthetic hosted matrix evidence cannot satisfy the real hosted matrix external evidence handoff",
+    );
+  }
   const cellIds = promotedGroupCells[groupId];
   if (cellIds === undefined) {
     throw new Error(`unsupported hosted matrix external group: ${groupId}`);

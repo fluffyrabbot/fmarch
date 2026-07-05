@@ -12,6 +12,7 @@ import {
 } from "./dev_test_game_hosted_evidence_lane.mjs";
 import {
   assertDevTestGameHostedMatrixExternalEvidence,
+  buildDevTestGameHostedMatrixExternalEvidence,
 } from "./dev_test_game_hosted_matrix_external_evidence.mjs";
 import {
   assertDevTestGameHostedMatrixRawEvidence,
@@ -36,8 +37,8 @@ export const devTestGameHostedEvidenceLaneDemoExternalEvidencePath =
   "target/dev-test-game/hosted-matrix-demo-external.json";
 export const devTestGameHostedEvidenceLaneDemoBlockedPath =
   "target/dev-test-game/hosted-evidence-lane-demo-blocked.json";
-export const devTestGameHostedEvidenceLaneDemoPassedPath =
-  "target/dev-test-game/hosted-evidence-lane-demo-passed.json";
+export const devTestGameHostedEvidenceLaneDemoSyntheticRejectedPath =
+  "target/dev-test-game/hosted-evidence-lane-demo-synthetic-rejected.json";
 
 const defaultDemoFrontendBaseUrl = "https://fmarch-demo.example.test";
 const defaultDemoApiBaseUrl = "https://api.fmarch-demo.example.test";
@@ -98,7 +99,7 @@ export async function runDevTestGameHostedEvidenceLaneDemoProof({
   });
   await writeJson(rawEvidencePath, rawEvidence);
 
-  const passedLane = assertDevTestGameHostedEvidenceLane(
+  const syntheticRejectedLane = assertDevTestGameHostedEvidenceLane(
     await runDevTestGameHostedEvidenceLane({
       generatedAt,
       env: {
@@ -110,11 +111,24 @@ export async function runDevTestGameHostedEvidenceLaneDemoProof({
       },
     }),
   );
-  await writeJson(devTestGameHostedEvidenceLaneDemoPassedPath, passedLane);
+  await writeJson(
+    devTestGameHostedEvidenceLaneDemoSyntheticRejectedPath,
+    syntheticRejectedLane,
+  );
   const externalEvidence = assertDevTestGameHostedMatrixExternalEvidence(
-    await readJson(externalEvidencePath),
+    buildDevTestGameHostedMatrixExternalEvidence({
+      matrix,
+      rawEvidence,
+      generatedAt,
+      frontendBaseUrl,
+      apiBaseUrl,
+      groupId,
+      rawEvidenceSource: rawEvidencePath,
+      allowSyntheticDemo: true,
+    }),
     { frontendBaseUrl, apiBaseUrl, groupId },
   );
+  await writeJson(externalEvidencePath, externalEvidence);
 
   const proof = assertDevTestGameHostedEvidenceLaneDemoProof({
     version: DEV_TEST_GAME_HOSTED_EVIDENCE_LANE_DEMO_PROOF_VERSION,
@@ -125,7 +139,7 @@ export async function runDevTestGameHostedEvidenceLaneDemoProof({
     generatedAt,
     scope: "local-dev-test-game-hosted-evidence-lane-demo-proof",
     proofBoundary:
-      "Local demo proof for the hosted evidence lane pass path. It writes synthetic external-looking raw evidence from the saved local hosted-like matrix, proves the lane records both blocked and passed states, and keeps hosted deployment, beta readiness, release readiness, and production readiness unproven.",
+      "Local demo proof for the hosted evidence lane synthetic boundary. It writes synthetic external-looking raw evidence from the saved local hosted-like matrix, proves the hosted lane rejects that synthetic input, separately validates the demo normalizer path, and keeps hosted deployment, beta readiness, release readiness, and production readiness unproven.",
     target: {
       frontendBaseUrl,
       apiBaseUrl,
@@ -137,7 +151,8 @@ export async function runDevTestGameHostedEvidenceLaneDemoProof({
       hostedConcurrentRaceMatrixGeneratedAt: matrix.generatedAt,
       hostedEvidenceLane: devTestGameHostedEvidenceLanePath,
       blockedLane: devTestGameHostedEvidenceLaneDemoBlockedPath,
-      passedLane: devTestGameHostedEvidenceLaneDemoPassedPath,
+      syntheticRejectedLane:
+        devTestGameHostedEvidenceLaneDemoSyntheticRejectedPath,
       rawEvidence: rawEvidencePath,
       externalEvidence: externalEvidencePath,
     },
@@ -153,26 +168,28 @@ export async function runDevTestGameHostedEvidenceLaneDemoProof({
         evidence: rawEvidencePath,
       },
       {
-        id: "passed-lane-recorded",
-        status: passedLane.status,
-        evidence: devTestGameHostedEvidenceLaneDemoPassedPath,
+        id: "synthetic-lane-rejected",
+        status: syntheticRejectedLane.status,
+        evidence: devTestGameHostedEvidenceLaneDemoSyntheticRejectedPath,
       },
       {
-        id: "external-evidence-written",
+        id: "demo-external-evidence-written",
         status: externalEvidence.status,
         evidence: externalEvidencePath,
       },
       {
         id: "synthetic-demo-boundary-carried",
         status:
-          passedLane.hostedEvidence?.mode === "synthetic-demo" &&
-          passedLane.hostedEvidence?.realHostedEvidenceStatus === "unproven" &&
+          syntheticRejectedLane.status === "blocked" &&
+          syntheticRejectedLane.blockedCheckIds.includes(
+            "raw-evidence-real-hosted-target",
+          ) &&
           externalEvidence.sourceMode === "synthetic-demo"
             ? "passed"
             : "blocked",
-        hostedEvidenceMode: passedLane.hostedEvidence?.mode,
+        hostedEvidenceMode: syntheticRejectedLane.hostedEvidence?.mode,
         realHostedEvidenceStatus:
-          passedLane.hostedEvidence?.realHostedEvidenceStatus,
+          syntheticRejectedLane.hostedEvidence?.realHostedEvidenceStatus,
       },
       {
         id: "release-claim-boundary-carried",
@@ -184,13 +201,12 @@ export async function runDevTestGameHostedEvidenceLaneDemoProof({
     handoff: {
       blockedRoleUrl:
         localAdminAuditRoleUrl(localAdminAuditIds.hostedEvidenceLane),
-      passedRoleUrl:
-        localAdminAuditRoleUrl(
-          localAdminAuditIds.hostedConcurrentRaceMatrix,
-        ),
+      syntheticRejectedRoleUrl:
+        localAdminAuditRoleUrl(localAdminAuditIds.hostedEvidenceLane),
       blockedNextCommand: blockedLane.nextCommand,
-      passedNextCommand: passedLane.nextCommand,
-      passedNextProofTarget: passedLane.nextProofTarget,
+      syntheticRejectedNextCommand: syntheticRejectedLane.nextCommand,
+      syntheticRejectedNextProofTarget: syntheticRejectedLane.nextProofTarget,
+      demoExternalEvidencePath: externalEvidencePath,
     },
     blockedLane: {
       status: blockedLane.status,
@@ -198,14 +214,14 @@ export async function runDevTestGameHostedEvidenceLaneDemoProof({
       blockedCheckIds: [...blockedLane.blockedCheckIds],
       nextProofTarget: blockedLane.nextProofTarget,
     },
-    passedLane: {
-      status: passedLane.status,
-      preflightStatus: passedLane.preflightStatus,
-      blockedCheckIds: [...passedLane.blockedCheckIds],
-      hostedEvidenceMode: passedLane.hostedEvidence?.mode,
+    syntheticRejectedLane: {
+      status: syntheticRejectedLane.status,
+      preflightStatus: syntheticRejectedLane.preflightStatus,
+      blockedCheckIds: [...syntheticRejectedLane.blockedCheckIds],
+      hostedEvidenceMode: syntheticRejectedLane.hostedEvidence?.mode,
       realHostedEvidenceStatus:
-        passedLane.hostedEvidence?.realHostedEvidenceStatus,
-      nextProofTarget: passedLane.nextProofTarget,
+        syntheticRejectedLane.hostedEvidence?.realHostedEvidenceStatus,
+      nextProofTarget: syntheticRejectedLane.nextProofTarget,
     },
     externalEvidence: {
       proof: externalEvidence.proof,
@@ -242,33 +258,42 @@ export function assertDevTestGameHostedEvidenceLaneDemoProof(proof) {
   for (const id of [
     "blocked-lane-recorded",
     "synthetic-raw-evidence-written",
-    "passed-lane-recorded",
-    "external-evidence-written",
+    "synthetic-lane-rejected",
+    "demo-external-evidence-written",
     "synthetic-demo-boundary-carried",
     "release-claim-boundary-carried",
   ]) {
-    if (checks.get(id)?.status !== "passed" && id !== "blocked-lane-recorded") {
+    if (
+      checks.get(id)?.status !== "passed" &&
+      id !== "blocked-lane-recorded" &&
+      id !== "synthetic-lane-rejected"
+    ) {
       throw new Error(`hosted evidence lane demo proof missing passed check: ${id}`);
     }
   }
   if (checks.get("blocked-lane-recorded")?.status !== "blocked") {
     throw new Error("hosted evidence lane demo proof missed blocked state");
   }
+  if (checks.get("synthetic-lane-rejected")?.status !== "blocked") {
+    throw new Error("hosted evidence lane demo proof missed synthetic rejection");
+  }
   if (
     proof.blockedLane?.status !== "blocked" ||
     proof.blockedLane?.preflightStatus !== "blocked" ||
     !Array.isArray(proof.blockedLane.blockedCheckIds) ||
     proof.blockedLane.blockedCheckIds.length === 0 ||
-    proof.passedLane?.status !== "passed" ||
-    proof.passedLane?.preflightStatus !== "passed" ||
-    proof.passedLane?.hostedEvidenceMode !== "synthetic-demo" ||
-    proof.passedLane?.realHostedEvidenceStatus !== "unproven" ||
-    !Array.isArray(proof.passedLane.blockedCheckIds) ||
-    proof.passedLane.blockedCheckIds.length !== 0 ||
+    proof.syntheticRejectedLane?.status !== "blocked" ||
+    proof.syntheticRejectedLane?.preflightStatus !== "blocked" ||
+    proof.syntheticRejectedLane?.hostedEvidenceMode !== "blocked" ||
+    proof.syntheticRejectedLane?.realHostedEvidenceStatus !== "unproven" ||
+    !Array.isArray(proof.syntheticRejectedLane.blockedCheckIds) ||
+    !proof.syntheticRejectedLane.blockedCheckIds.includes(
+      "raw-evidence-real-hosted-target",
+    ) ||
     proof.handoff?.blockedRoleUrl !==
       localAdminAuditRoleUrl(localAdminAuditIds.hostedEvidenceLane) ||
-    proof.handoff?.passedRoleUrl !==
-      localAdminAuditRoleUrl(localAdminAuditIds.hostedConcurrentRaceMatrix)
+    proof.handoff?.syntheticRejectedRoleUrl !==
+      localAdminAuditRoleUrl(localAdminAuditIds.hostedEvidenceLane)
   ) {
     throw new Error("hosted evidence lane demo handoff drifted");
   }
