@@ -5298,6 +5298,34 @@ function localHostedEvidenceLaneDemoProofFixture() {
   };
 }
 
+function seedProofLaneCoverageFixture({ unclassifiedLaneIds = [] } = {}) {
+  const directSeededLaneIds = seedScenarioCoverageGroups.allDemo.slice(0, 108);
+  return {
+    status: unclassifiedLaneIds.length === 0 ? "passed" : "failed",
+    passedLaneCount:
+      directSeededLaneIds.length +
+      seedAliasOnlyProofLaneIds.length +
+      seedAggregateOnlyProofLaneIds.length +
+      unclassifiedLaneIds.length,
+    directSeeded: {
+      count: directSeededLaneIds.length,
+      laneIds: directSeededLaneIds,
+    },
+    aliasOnly: {
+      count: seedAliasOnlyProofLaneIds.length,
+      laneIds: seedAliasOnlyProofLaneIds,
+    },
+    aggregateOnly: {
+      count: seedAggregateOnlyProofLaneIds.length,
+      laneIds: seedAggregateOnlyProofLaneIds,
+    },
+    unclassified: {
+      count: unclassifiedLaneIds.length,
+      laneIds: unclassifiedLaneIds,
+    },
+  };
+}
+
 function seedFixtureSummaryFixture() {
   return {
     version: 1,
@@ -5319,26 +5347,7 @@ function seedFixtureSummaryFixture() {
       ],
     },
     demoScenarios: seedDemoScenarioFixtureRows(),
-    proofLaneCoverage: {
-      status: "passed",
-      passedLaneCount: 116,
-      directSeeded: {
-        count: 108,
-        laneIds: seedScenarioCoverageGroups.allDemo.slice(0, 108),
-      },
-      aliasOnly: {
-        count: seedAliasOnlyProofLaneIds.length,
-        laneIds: seedAliasOnlyProofLaneIds,
-      },
-      aggregateOnly: {
-        count: seedAggregateOnlyProofLaneIds.length,
-        laneIds: seedAggregateOnlyProofLaneIds,
-      },
-      unclassified: {
-        count: 0,
-        laneIds: [],
-      },
-    },
+    proofLaneCoverage: seedProofLaneCoverageFixture(),
   };
 }
 
@@ -5750,10 +5759,11 @@ function proofGraphHandoffLocalCheckFixture() {
 }
 
 function seedProofLaneCoverageActionFixture({ unclassifiedLaneIds }) {
+  const coverage = seedProofLaneCoverageFixture({ unclassifiedLaneIds });
   return {
     source: "target/dev-test-game/release-readiness-checklist.json",
     status: "drifted",
-    passedLaneCount: 116 + unclassifiedLaneIds.length,
+    passedLaneCount: coverage.passedLaneCount,
     unclassifiedLaneCount: unclassifiedLaneIds.length,
     unclassifiedLaneIds,
     buildSlice:
@@ -6719,6 +6729,7 @@ function stabilityTraceFixture({ stability }) {
 }
 
 function seedProofLaneCoverageTraceFixture({ seedProofLaneCoverage } = {}) {
+  const cleanCoverage = seedProofLaneCoverageFixture();
   const unclassifiedLaneIds =
     seedProofLaneCoverage?.unclassifiedLaneIds?.map((laneId) => String(laneId)) ??
     [];
@@ -6728,8 +6739,10 @@ function seedProofLaneCoverageTraceFixture({ seedProofLaneCoverage } = {}) {
     source: "target/dev-test-game/release-readiness-checklist.json",
     checkId: "local-seed-demo-fixture",
     selected: seedProofLaneCoverage !== undefined,
-    passedLaneCount: Number(seedProofLaneCoverage?.passedLaneCount ?? 116),
-    directSeededLaneCount: 108,
+    passedLaneCount: Number(
+      seedProofLaneCoverage?.passedLaneCount ?? cleanCoverage.passedLaneCount,
+    ),
+    directSeededLaneCount: cleanCoverage.directSeeded.count,
     aliasOnlyLaneCount: seedAliasOnlyProofLaneIds.length,
     aggregateOnlyLaneCount: seedAggregateOnlyProofLaneIds.length,
     unclassifiedLaneCount: unclassifiedLaneIds.length,

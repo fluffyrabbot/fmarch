@@ -2384,13 +2384,14 @@ test("dev test-game next-action derives one local recovery command from the mani
     eventCount: 0,
     selected: false,
   });
+  const cleanSeedProofLaneCoverage = seedProofLaneCoverageFixture();
   assert.deepEqual(freshAction.seedProofLaneCoverageTrace, {
     strategy: "seed-proof-lane-coverage-before-readiness",
     status: "clean",
     source: "target/dev-test-game/release-readiness-checklist.json",
     checkId: "local-seed-demo-fixture",
-    passedLaneCount: 116,
-    directSeededLaneCount: 108,
+    passedLaneCount: cleanSeedProofLaneCoverage.passedLaneCount,
+    directSeededLaneCount: cleanSeedProofLaneCoverage.directSeeded.count,
     aliasOnlyLaneCount: seedAliasOnlyProofLaneIds.length,
     aggregateOnlyLaneCount: seedAggregateOnlyProofLaneIds.length,
     unclassifiedLaneCount: 0,
@@ -2634,14 +2635,15 @@ test("dev test-game next-action derives one local recovery command from the mani
       ],
     },
   );
+  const driftedSeedProofLaneCoverage = seedProofLaneCoverageFixture({
+    unclassifiedLaneIds: ["new-production-proof-lane"],
+  });
   const unclassifiedSeedCoverageAction = buildDevTestGameNextAction(freshManifest, {
     generatedAt: "2026-06-26T00:00:01.000Z",
     opsArtifacts: devTestGameOpsArtifactsFixture(),
     raceCoverage: devTestGameRaceCoverageFixture(),
     releaseReadinessChecklist: devTestGameReleaseReadinessChecklistFixture({
-      seedProofLaneCoverage: seedProofLaneCoverageFixture({
-        unclassifiedLaneIds: ["new-production-proof-lane"],
-      }),
+      seedProofLaneCoverage: driftedSeedProofLaneCoverage,
       unproven: [
         {
           id: "hosted-concurrent-race-matrix",
@@ -2659,7 +2661,7 @@ test("dev test-game next-action derives one local recovery command from the mani
     seedProofLaneCoverage: {
       source: "target/dev-test-game/release-readiness-checklist.json",
       status: "drifted",
-      passedLaneCount: 117,
+      passedLaneCount: driftedSeedProofLaneCoverage.passedLaneCount,
       unclassifiedLaneCount: 1,
       unclassifiedLaneIds: ["new-production-proof-lane"],
       buildSlice:
@@ -2673,8 +2675,8 @@ test("dev test-game next-action derives one local recovery command from the mani
     status: "drifted",
     source: "target/dev-test-game/release-readiness-checklist.json",
     checkId: "local-seed-demo-fixture",
-    passedLaneCount: 117,
-    directSeededLaneCount: 108,
+    passedLaneCount: driftedSeedProofLaneCoverage.passedLaneCount,
+    directSeededLaneCount: driftedSeedProofLaneCoverage.directSeeded.count,
     aliasOnlyLaneCount: seedAliasOnlyProofLaneIds.length,
     aggregateOnlyLaneCount: seedAggregateOnlyProofLaneIds.length,
     unclassifiedLaneCount: 1,
@@ -13668,12 +13670,17 @@ function devTestGameReleaseReadinessChecklistFixture({
 }
 
 function seedProofLaneCoverageFixture({ unclassifiedLaneIds = [] } = {}) {
+  const directSeededLaneIds = seedScenarioCoverageGroups.allDemo.slice(0, 108);
   return {
     status: unclassifiedLaneIds.length === 0 ? "passed" : "failed",
-    passedLaneCount: 116 + unclassifiedLaneIds.length,
+    passedLaneCount:
+      directSeededLaneIds.length +
+      seedAliasOnlyProofLaneIds.length +
+      seedAggregateOnlyProofLaneIds.length +
+      unclassifiedLaneIds.length,
     directSeeded: {
-      count: 108,
-      laneIds: seedScenarioCoverageGroups.allDemo.slice(0, 108),
+      count: directSeededLaneIds.length,
+      laneIds: directSeededLaneIds,
     },
     aliasOnly: {
       count: seedAliasOnlyProofLaneIds.length,
