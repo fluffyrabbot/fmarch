@@ -2748,6 +2748,92 @@ test("spine manifest gives host setup freshness artifacts focused recovery comma
   });
 });
 
+function frontendReadinessSummaryFixture() {
+  return {
+    shared: {
+      hostSetupWorkbench: {
+        requirement: {
+          id: "host-setup-workbench",
+          label: "Host setup workbench geometry",
+          state: "browser_proven",
+        },
+        local: {
+          status: "browser_proven",
+          route: "/g/midsummer/setup",
+          viewportLayouts: [
+            {
+              viewport: "mobile",
+              layout: "stacked",
+              slotCount: 2,
+              noHorizontalOverflow: true,
+              screenshot: "target/frontend-role-smoke/mobile-host-setup.png",
+            },
+            {
+              viewport: "tablet",
+              layout: "co-located-columns",
+              slotCount: 2,
+              noHorizontalOverflow: true,
+              screenshot: "target/frontend-role-smoke/tablet-host-setup.png",
+            },
+            {
+              viewport: "desktop",
+              layout: "co-located-columns",
+              slotCount: 2,
+              noHorizontalOverflow: true,
+              screenshot: "target/frontend-role-smoke/desktop-host-setup.png",
+            },
+          ],
+          screenshotCount: 3,
+        },
+        imported: {
+          status: "imported_browser_proven",
+          setupCount: 3,
+          screenshotCheckCount: 3,
+        },
+      },
+    },
+  };
+}
+
+function frontendSetupWorkbenchReadinessFixture() {
+  return {
+    id: "host-setup-workbench",
+    label: "Host setup workbench geometry",
+    state: "browser_proven",
+    route: "/g/midsummer/setup",
+    localStatus: "browser_proven",
+    importedStatus: "imported_browser_proven",
+    localViewportLayouts: [
+      {
+        viewport: "mobile",
+        layout: "stacked",
+        slotCount: 2,
+        noHorizontalOverflow: true,
+        screenshot: "target/frontend-role-smoke/mobile-host-setup.png",
+      },
+      {
+        viewport: "tablet",
+        layout: "co-located-columns",
+        slotCount: 2,
+        noHorizontalOverflow: true,
+        screenshot: "target/frontend-role-smoke/tablet-host-setup.png",
+      },
+      {
+        viewport: "desktop",
+        layout: "co-located-columns",
+        slotCount: 2,
+        noHorizontalOverflow: true,
+        screenshot: "target/frontend-role-smoke/desktop-host-setup.png",
+      },
+    ],
+    localScreenshotCount: 3,
+    importedSetupCount: 3,
+    importedScreenshotCheckCount: 3,
+    proofBoundary:
+      "Frontend readiness summary host-setup-workbench lane only; separates browser geometry proof from dev-test-game host setup role recovery and does not claim hosted, release, or production readiness.",
+  };
+}
+
 test("dev test-game spine manifest blocks freshness on proof-run session drift", () => {
   const manifest = buildDevTestGameSpineManifest({
     generatedAt: "2026-06-26T00:00:00.000Z",
