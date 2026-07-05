@@ -2,11 +2,11 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 import {
   assertDevTestGameRaceCoverage,
+  devTestGameRaceCoverageAdminProofPath,
   devTestGameRaceCoveragePath,
 } from "./dev_test_game_race_coverage.mjs";
 import { assertDevTestGameProofRun } from "./dev_test_game_proof_contract.mjs";
 import {
-  artifactDir,
   proveAdminAuditDetail,
   readJson,
   repoRoot,
@@ -24,7 +24,7 @@ const proofRunPath = path.resolve(
 );
 const raceCoverageRelativePath = path.relative(repoRoot, raceCoveragePath);
 const proofRunRelativePath = path.relative(repoRoot, proofRunPath);
-const evidencePath = path.join(artifactDir, "race-coverage-admin-proof.json");
+const evidencePath = path.join(repoRoot, devTestGameRaceCoverageAdminProofPath);
 
 export function raceCoverageAdminProofCase() {
   return {

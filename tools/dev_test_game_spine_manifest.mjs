@@ -19,6 +19,7 @@ import {
   devTestGameProofGraphPath,
 } from "./dev_test_game_proof_graph_paths.mjs";
 import {
+  devTestGameRaceCoverageAdminProofPath,
   devTestGameRaceCoverageCommand,
   devTestGameRaceCoveragePath,
 } from "./dev_test_game_race_coverage.mjs";
@@ -75,6 +76,9 @@ import {
   devTestGameReleaseRunbookAdminProofPath,
   devTestGameReleaseRunbookPath,
 } from "./dev_test_game_release_runbook.mjs";
+import {
+  devTestGameReleaseAdminProofPath,
+} from "./dev_test_game_release_readiness_cases.mjs";
 import {
   backupAwareOpsEnv,
   backupRestoreEvidenceEnv,
@@ -909,7 +913,8 @@ export function assertDevTestGameSpineManifest(manifest) {
     "target/dev-test-game/core-loop-admin-proof.json",
     "target/dev-test-game/hardening-admin-proof.json",
     "target/dev-test-game/identity-admin-proof.json",
-    "target/dev-test-game/release-admin-proof.json",
+    devTestGameReleaseAdminProofPath,
+    devTestGameRaceCoverageAdminProofPath,
     devTestGameReleaseRunbookAdminProofPath,
     devTestGameHostedTargetPreflightAdminProofPath,
     devTestGameHostedOpsSignalsAdminProofPath,

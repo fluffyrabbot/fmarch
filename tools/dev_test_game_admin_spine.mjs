@@ -1,7 +1,10 @@
 import { mkdir, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
-import { devTestGameRaceCoveragePath } from "./dev_test_game_race_coverage.mjs";
+import {
+  devTestGameRaceCoverageAdminProofPath,
+  devTestGameRaceCoveragePath,
+} from "./dev_test_game_race_coverage.mjs";
 import { devTestGameHostedConcurrentRaceMatrixPath } from "./dev_test_game_hosted_concurrent_race_matrix.mjs";
 import { devTestGameHostedEvidenceLanePath } from "./dev_test_game_hosted_evidence_lane.mjs";
 import {
@@ -103,7 +106,7 @@ export const adminSpineReadinessEvidenceEnv = {
     "target/dev-test-game/admin-spine-admin-proof.json",
   FMARCH_DEV_TEST_GAME_RACE_COVERAGE: devTestGameRaceCoveragePath,
   FMARCH_DEV_TEST_GAME_RACE_COVERAGE_ADMIN_PROOF:
-    "target/dev-test-game/race-coverage-admin-proof.json",
+    devTestGameRaceCoverageAdminProofPath,
   FMARCH_DEV_TEST_GAME_HOSTED_CONCURRENT_RACE_MATRIX:
     devTestGameHostedConcurrentRaceMatrixPath,
   FMARCH_DEV_TEST_GAME_HOSTED_CONCURRENT_RACE_MATRIX_ADMIN_PROOF:

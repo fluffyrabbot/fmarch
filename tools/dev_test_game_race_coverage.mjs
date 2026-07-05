@@ -23,6 +23,8 @@ import { repoRoot } from "./dev_test_game_spine_runner.mjs";
 export const DEV_TEST_GAME_RACE_COVERAGE_VERSION = 1;
 export const devTestGameRaceCoveragePath =
   "target/dev-test-game/race-coverage.json";
+export const devTestGameRaceCoverageAdminProofPath =
+  "target/dev-test-game/race-coverage-admin-proof.json";
 export const devTestGameRaceCoverageCommand = "test:dev-test-game-race-coverage";
 
 const raceCoverageJsonPath = path.join(repoRoot, devTestGameRaceCoveragePath);

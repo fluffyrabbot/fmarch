@@ -2,11 +2,11 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { assertDevTestGameReleaseReadiness } from "./dev_test_game_release_readiness.mjs";
 import {
+  devTestGameReleaseAdminProofPath,
   releaseAdminProofFallbackUnprovenIds,
 } from "./dev_test_game_release_readiness_cases.mjs";
 import {
   assertVisibleAdminRoleSurfaceRows,
-  artifactDir,
   normalizedEvidenceObjectRowIds,
   proveAdminAuditDetail,
   readJson,
@@ -20,7 +20,7 @@ const readinessPath = path.resolve(
     "target/dev-test-game/release-readiness-checklist.json",
 );
 const readinessRelativePath = path.relative(repoRoot, readinessPath);
-const evidencePath = path.join(artifactDir, "release-admin-proof.json");
+const evidencePath = path.join(repoRoot, devTestGameReleaseAdminProofPath);
 const requiredReleaseChecks = [
   "local-role-url-browser-proof",
   "local-core-loop-proof",

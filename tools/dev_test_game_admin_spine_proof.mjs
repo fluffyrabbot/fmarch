@@ -52,11 +52,15 @@ import {
   releaseRunbookAdminProofCase,
 } from "./dev_test_game_release_runbook_admin_proof.mjs";
 import {
+  devTestGameReleaseAdminProofPath,
   devTestGameReleaseRunbookAdminProofPath,
 } from "./dev_test_game_release_readiness_cases.mjs";
 import {
   raceCoverageAdminProofCase,
 } from "./dev_test_game_race_coverage_admin_proof.mjs";
+import {
+  devTestGameRaceCoverageAdminProofPath,
+} from "./dev_test_game_race_coverage.mjs";
 import {
   hostedTargetPreflightAdminProofCase,
 } from "./dev_test_game_hosted_target_preflight_admin_proof.mjs";
@@ -159,7 +163,7 @@ export const devTestGameAdminSpineProofPlan = [
     label: "Release-readiness admin role surface",
     script: "tools/dev_test_game_release_admin_proof.mjs",
     rerunCommand: "npm run test:dev-test-game-release-admin-proof",
-    path: "target/dev-test-game/release-admin-proof.json",
+    path: devTestGameReleaseAdminProofPath,
     validate: validateDevTestGameReleaseAdminProof,
     caseFactory: releaseAdminProofCase,
   },
@@ -177,7 +181,7 @@ export const devTestGameAdminSpineProofPlan = [
     label: "Race coverage admin role surface",
     script: "tools/dev_test_game_race_coverage_admin_proof.mjs",
     rerunCommand: "npm run test:dev-test-game-race-coverage-admin-proof",
-    path: "target/dev-test-game/race-coverage-admin-proof.json",
+    path: devTestGameRaceCoverageAdminProofPath,
     validate: validateDevTestGameRaceCoverageAdminProof,
     caseFactory: raceCoverageAdminProofCase,
   },

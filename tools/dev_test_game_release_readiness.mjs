@@ -15,6 +15,7 @@ import {
 import { assertDevTestGameProofRun } from "./dev_test_game_proof_contract.mjs";
 import {
   assertDevTestGameRaceCoverage,
+  devTestGameRaceCoverageAdminProofPath,
   raceCoverageLocalReadinessMilestoneCases,
   raceCoveragePromotedReloadGroups,
 } from "./dev_test_game_race_coverage.mjs";
@@ -106,6 +107,7 @@ import {
 } from "./dev_test_game_real_hosted_observability_handoff_cases.mjs";
 import {
   buildReleaseReadinessUnprovenItems,
+  devTestGameReleaseAdminProofPath,
   devTestGameReleaseRunbookAdminProofPath,
   hostedIdentityEvidenceSatisfiesProductionIdentity,
   hostedIdentityEvidencePathKind,
@@ -370,8 +372,8 @@ const defaultAdminSpineTerminalBatchProofPath = path.join(
 );
 const defaultRaceCoveragePath = path.join(artifactDir, "race-coverage.json");
 const defaultRaceCoverageAdminProofPath = path.join(
-  artifactDir,
-  "race-coverage-admin-proof.json",
+  repoRoot,
+  devTestGameRaceCoverageAdminProofPath,
 );
 const defaultHostedConcurrentRaceMatrixAdminProofPath = path.join(
   repoRoot,
@@ -689,7 +691,7 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
     ? validateDevTestGameRaceCoverageAdminProof(options.raceCoverageAdminProof, {
         path:
           options.raceCoverageAdminProofPath ??
-          "target/dev-test-game/race-coverage-admin-proof.json",
+          devTestGameRaceCoverageAdminProofPath,
         artifact: options.raceCoverageAdminProofArtifact,
       })
     : undefined;
@@ -5150,7 +5152,7 @@ export function validateDevTestGameRaceCoverageAdminProof(proof, options = {}) {
   }
   return {
     status: "passed",
-    path: options.path ?? "target/dev-test-game/race-coverage-admin-proof.json",
+    path: options.path ?? devTestGameRaceCoverageAdminProofPath,
     proofBoundary: proof.proofBoundary,
     overviewRoleUrl: proof.adminRoleSurface.overviewRoleUrl,
     detailRoleUrl: proof.adminRoleSurface.detailRoleUrl,
@@ -5855,7 +5857,7 @@ export function validateDevTestGameReleaseAdminProof(proof, options = {}) {
   }
   return {
     status: "passed",
-    path: options.path ?? "target/dev-test-game/release-admin-proof.json",
+    path: options.path ?? devTestGameReleaseAdminProofPath,
     proofBoundary: proof.proofBoundary,
     overviewRoleUrl: proof.adminRoleSurface.overviewRoleUrl,
     detailRoleUrl: proof.adminRoleSurface.detailRoleUrl,
@@ -6327,9 +6329,9 @@ function adminSpineProofArtifactPath(id) {
     backup: "target/dev-test-game/backup-admin-proof.json",
     ops: "target/dev-test-game/ops-admin-proof.json",
     seed: "target/dev-test-game/seed-admin-proof.json",
-    release: "target/dev-test-game/release-admin-proof.json",
+    release: devTestGameReleaseAdminProofPath,
     "release-runbook": devTestGameReleaseRunbookAdminProofPath,
-    "race-coverage": "target/dev-test-game/race-coverage-admin-proof.json",
+    "race-coverage": devTestGameRaceCoverageAdminProofPath,
     "hosted-target-preflight": devTestGameHostedTargetPreflightAdminProofPath,
     "hosted-evidence-lane": devTestGameHostedEvidenceLaneAdminProofPath,
     "hosted-concurrent-race-matrix":

@@ -115,6 +115,7 @@ import {
   realHostedObservabilityHandoffInputSections,
 } from "./dev_test_game_real_hosted_observability_handoff_cases.mjs";
 import {
+  devTestGameReleaseAdminProofPath,
   hostedIdentityEvidencePathKind,
   releaseAdminProofFallbackUnprovenIds,
 } from "./dev_test_game_release_readiness_cases.mjs";
@@ -311,6 +312,7 @@ import {
 import {
   assertDevTestGameRaceCoverage,
   buildDevTestGameRaceCoverage,
+  devTestGameRaceCoverageAdminProofPath,
   devTestGameRaceCoverageCommand,
   devTestGameRaceCoveragePath,
   raceCoverageLocalReadinessMilestoneCases,
@@ -768,7 +770,7 @@ test("dev test-game spine orchestrators expose stable proof order and env maps",
       "target/dev-test-game/admin-spine-admin-proof.json",
     FMARCH_DEV_TEST_GAME_RACE_COVERAGE: "target/dev-test-game/race-coverage.json",
     FMARCH_DEV_TEST_GAME_RACE_COVERAGE_ADMIN_PROOF:
-      "target/dev-test-game/race-coverage-admin-proof.json",
+      devTestGameRaceCoverageAdminProofPath,
     FMARCH_DEV_TEST_GAME_HOSTED_CONCURRENT_RACE_MATRIX:
       "target/dev-test-game/hosted-concurrent-race-matrix.json",
     FMARCH_DEV_TEST_GAME_HOSTED_CONCURRENT_RACE_MATRIX_ADMIN_PROOF:
@@ -1980,7 +1982,7 @@ test("dev test-game spine manifest records command order and evidence wiring", (
   for (const descriptor of recoveryReceiptGraphDescriptors) {
     assert(manifest.artifacts.includes(descriptor.proofTarget));
   }
-  assert(manifest.artifacts.includes("target/dev-test-game/release-admin-proof.json"));
+  assert(manifest.artifacts.includes(devTestGameReleaseAdminProofPath));
   assert(
     manifest.artifacts.includes(
       "target/dev-test-game/spine-manifest-admin-proof.json",
@@ -3502,7 +3504,7 @@ test("dev test-game next-action prioritizes development-spine recovery over mani
         {
           id: "release",
           label: "Release admin proof",
-          path: "target/dev-test-game/release-admin-proof.json",
+          path: devTestGameReleaseAdminProofPath,
           status: "missing",
         },
         {
@@ -11575,7 +11577,7 @@ test("session card and markdown include role credential URLs and tokens", async 
     generatedAt: "2026-06-26T00:00:00.000Z",
     raceCoveragePath: "target/dev-test-game/race-coverage.json",
     raceCoverage,
-    raceCoverageAdminProofPath: "target/dev-test-game/race-coverage-admin-proof.json",
+    raceCoverageAdminProofPath: devTestGameRaceCoverageAdminProofPath,
     raceCoverageAdminProof: raceCoverageAdminProofFixture(),
   });
   assertDevTestGameReleaseReadiness(raceCoverageReadiness);
@@ -11597,7 +11599,7 @@ test("session card and markdown include role credential URLs and tokens", async 
   );
   assert.equal(
     raceCoverageReadiness.generatedFrom.raceCoverageAdminProof,
-    "target/dev-test-game/race-coverage-admin-proof.json",
+    devTestGameRaceCoverageAdminProofPath,
   );
   for (const milestoneCase of raceCoverageLocalReadinessMilestoneCases()) {
     assert.deepEqual(
