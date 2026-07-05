@@ -6863,19 +6863,11 @@ function validHostSetupSpineTargets(spineTargets) {
     spineTargets.recoveryHookIds.length === 0 &&
     Array.isArray(spineTargets.visibleAdminCheckIds) &&
     spineTargets.visibleAdminCheckIds.includes("start-phase") &&
-    validHostSetupProductionFeatureTargets(spineTargets.productionFeatureTargets)
+    validProductionFeatureTargetsForSource(
+      spineTargets.productionFeatureTargets,
+      hostSetupFeatureSpineSourceCheckId,
+    )
   );
-}
-
-function validHostSetupProductionFeatureTargets(productionFeatureTargets) {
-  return validProductionFeatureSpineTargetCollection(productionFeatureTargets, {
-    declarations: Object.values(releaseReadinessProductionFeatureSpineTargets)
-      .filter(
-        (declaration) =>
-          declaration.sourceCheckId === hostSetupFeatureSpineSourceCheckId,
-      ),
-    sourceCheckRules: productionFeatureSpineSourceCheckRules,
-  });
 }
 
 function validCohostSpineTargets(spineTargets) {
@@ -6903,19 +6895,11 @@ function validCohostSpineTargets(spineTargets) {
     spineTargets.recoveryHookIds.length === 0 &&
     Array.isArray(spineTargets.visibleAdminCheckIds) &&
     spineTargets.visibleAdminCheckIds.includes("cohost-console") &&
-    validCohostProductionFeatureTargets(spineTargets.productionFeatureTargets)
+    validProductionFeatureTargetsForSource(
+      spineTargets.productionFeatureTargets,
+      cohostFeatureSpineSourceCheckId,
+    )
   );
-}
-
-function validCohostProductionFeatureTargets(productionFeatureTargets) {
-  return validProductionFeatureSpineTargetCollection(productionFeatureTargets, {
-    declarations: Object.values(releaseReadinessProductionFeatureSpineTargets)
-      .filter(
-        (declaration) =>
-          declaration.sourceCheckId === cohostFeatureSpineSourceCheckId,
-      ),
-    sourceCheckRules: productionFeatureSpineSourceCheckRules,
-  });
 }
 
 function validReplacementSpineTargets(spineTargets) {
@@ -6944,21 +6928,11 @@ function validReplacementSpineTargets(spineTargets) {
     Array.isArray(spineTargets.visibleAdminCheckIds) &&
     spineTargets.visibleAdminCheckIds.includes("replacement-incoming-player") &&
     spineTargets.visibleAdminCheckIds.includes("replacement-stale-player") &&
-    validReplacementProductionFeatureTargets(
+    validProductionFeatureTargetsForSource(
       spineTargets.productionFeatureTargets,
+      replacementFeatureSpineSourceCheckId,
     )
   );
-}
-
-function validReplacementProductionFeatureTargets(productionFeatureTargets) {
-  return validProductionFeatureSpineTargetCollection(productionFeatureTargets, {
-    declarations: Object.values(releaseReadinessProductionFeatureSpineTargets)
-      .filter(
-        (declaration) =>
-          declaration.sourceCheckId === replacementFeatureSpineSourceCheckId,
-      ),
-    sourceCheckRules: productionFeatureSpineSourceCheckRules,
-  });
 }
 
 function validReplacementActionSpineTargets(spineTargets) {
@@ -6990,24 +6964,11 @@ function validReplacementActionSpineTargets(spineTargets) {
     spineTargets.visibleAdminCheckIds.includes(
       "replacement-stale-action-after-resolve",
     ) &&
-    validReplacementActionProductionFeatureTargets(
+    validProductionFeatureTargetsForSource(
       spineTargets.productionFeatureTargets,
+      replacementActionFeatureSpineSourceCheckId,
     )
   );
-}
-
-function validReplacementActionProductionFeatureTargets(
-  productionFeatureTargets,
-) {
-  return validProductionFeatureSpineTargetCollection(productionFeatureTargets, {
-    declarations: Object.values(releaseReadinessProductionFeatureSpineTargets)
-      .filter(
-        (declaration) =>
-          declaration.sourceCheckId ===
-          replacementActionFeatureSpineSourceCheckId,
-      ),
-    sourceCheckRules: productionFeatureSpineSourceCheckRules,
-  });
 }
 
 function validReplacementPrivateSpineTargets(spineTargets) {
@@ -7044,22 +7005,20 @@ function validReplacementPrivateSpineTargets(spineTargets) {
     spineTargets.visibleAdminCheckIds.includes(
       "replacement-stale-private-post-after-complete-reload",
     ) &&
-    validReplacementPrivateProductionFeatureTargets(
+    validProductionFeatureTargetsForSource(
       spineTargets.productionFeatureTargets,
+      replacementPrivateFeatureSpineSourceCheckId,
     )
   );
 }
 
-function validReplacementPrivateProductionFeatureTargets(
+function validProductionFeatureTargetsForSource(
   productionFeatureTargets,
+  sourceCheckId,
 ) {
   return validProductionFeatureSpineTargetCollection(productionFeatureTargets, {
     declarations: Object.values(releaseReadinessProductionFeatureSpineTargets)
-      .filter(
-        (declaration) =>
-          declaration.sourceCheckId ===
-          replacementPrivateFeatureSpineSourceCheckId,
-      ),
+      .filter((declaration) => declaration.sourceCheckId === sourceCheckId),
     sourceCheckRules: productionFeatureSpineSourceCheckRules,
   });
 }

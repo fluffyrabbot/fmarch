@@ -206,4 +206,22 @@ test("production feature builders use source modules instead of raw source ids",
       `proof graph should collect role-surface targets through the registry: ${staleFunctionName}`,
     );
   }
+  const readinessSource = await readFile(
+    new URL("dev_test_game_release_readiness.mjs", import.meta.url),
+    "utf8",
+  );
+  assert.match(readinessSource, /validProductionFeatureTargetsForSource/);
+  for (const staleFunctionName of [
+    "validHostSetupProductionFeatureTargets",
+    "validCohostProductionFeatureTargets",
+    "validReplacementProductionFeatureTargets",
+    "validReplacementActionProductionFeatureTargets",
+    "validReplacementPrivateProductionFeatureTargets",
+  ]) {
+    assert.equal(
+      readinessSource.includes(staleFunctionName),
+      false,
+      `release readiness should validate role-surface production targets through the shared source helper: ${staleFunctionName}`,
+    );
+  }
 });
