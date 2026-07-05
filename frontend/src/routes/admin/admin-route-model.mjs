@@ -104,6 +104,7 @@ export async function buildAdminRouteData({
   hostedEvidenceLane = null,
   hostedEvidenceLaneDemoProof = null,
   hostedIdentityEvidence = null,
+  hostedIdentityProgressionSummary = null,
   nextAction = null,
   proofFreshness = null,
 }) {
@@ -260,7 +261,7 @@ export async function buildAdminRouteData({
                                 { game },
                               ),
                               hostedIdentityEvidence,
-                              { game },
+                              { game, hostedIdentityProgressionSummary },
                             ),
                             spineManifest,
                             { game },
@@ -359,6 +360,7 @@ export async function buildAdminAuditDetailData({
   hostedEvidenceLane = null,
   hostedEvidenceLaneDemoProof = null,
   hostedIdentityEvidence = null,
+  hostedIdentityProgressionSummary = null,
   nextAction = null,
   proofFreshness = null,
 }) {
@@ -389,6 +391,7 @@ export async function buildAdminAuditDetailData({
     hostedEvidenceLane,
     hostedEvidenceLaneDemoProof,
     hostedIdentityEvidence,
+    hostedIdentityProgressionSummary,
     nextAction,
     proofFreshness,
   });
@@ -652,10 +655,11 @@ export function normalizeLocalHostedTargetPreflightAudit(
 export function appendLocalHostedIdentityEvidenceAudit(
   audit,
   hostedIdentityEvidence,
-  { game },
+  { game, hostedIdentityProgressionSummary = null },
 ) {
   const row = normalizeLocalHostedIdentityEvidenceAudit(hostedIdentityEvidence, {
     game,
+    hostedIdentityProgressionSummary,
   });
   if (row === null) {
     return audit;
@@ -665,7 +669,7 @@ export function appendLocalHostedIdentityEvidenceAudit(
 
 export function normalizeLocalHostedIdentityEvidenceAudit(
   hostedIdentityEvidence,
-  { game },
+  { game, hostedIdentityProgressionSummary = null },
 ) {
   if (
     hostedIdentityEvidence === null ||
@@ -699,6 +703,10 @@ export function normalizeLocalHostedIdentityEvidenceAudit(
       blockedCheckIdSet.has(String(check.id)),
     ),
   });
+  const progressionSummary =
+    normalizeHostedIdentityProgressionSummary(
+      hostedIdentityProgressionSummary,
+    );
   return Object.freeze({
     id: localAdminAuditIds.hostedIdentityEvidence,
     label: "Hosted identity evidence",
@@ -786,7 +794,55 @@ export function normalizeLocalHostedIdentityEvidenceAudit(
       redactedIntakePacket: normalizeHostedIdentityRedactedIntakePacket(
         hostedIdentityEvidence.target?.redactedIntakePacket,
       ),
+      ...(progressionSummary === null ? {} : { progressionSummary }),
     }),
+  });
+}
+
+function normalizeHostedIdentityProgressionSummary(summary) {
+  if (
+    summary === null ||
+    typeof summary !== "object" ||
+    summary.version !== 1 ||
+    summary.proof !== "dev-test-game-hosted-identity-progression-summary" ||
+    summary.status !== "passed" ||
+    summary.scope !== "hosted-identity-evidence-family-progression-summary" ||
+    summary.releaseReady !== false ||
+    summary.productionReady !== false ||
+    !Array.isArray(summary.progressions)
+  ) {
+    return null;
+  }
+  return Object.freeze({
+    status: String(summary.status ?? "unknown"),
+    progressionCount: Number(summary.progressionCount ?? summary.progressions.length),
+    sourceCaseCount: Number(summary.sourceCaseCount ?? summary.progressions.length),
+    nextCommand: String(summary.nextCommand ?? ""),
+    nextProofTarget: String(summary.nextProofTarget ?? ""),
+    proofBoundary: String(summary.proofBoundary ?? ""),
+    releaseReady: summary.releaseReady === true,
+    productionReady: summary.productionReady === true,
+    progressions: Object.freeze(
+      summary.progressions.map((progression) =>
+        Object.freeze({
+          id: String(progression?.id ?? ""),
+          field: String(progression?.field ?? ""),
+          checkId: String(progression?.checkId ?? ""),
+          missingInputId: String(progression?.missingInputId ?? ""),
+          missingFixturePath: String(progression?.missingFixturePath ?? ""),
+          recoveredFixturePath: String(
+            progression?.recoveredFixturePath ?? "",
+          ),
+          proofCommand: String(progression?.proofCommand ?? ""),
+          evidencePath: String(progression?.evidencePath ?? ""),
+          adminProofTarget: String(progression?.adminProofTarget ?? ""),
+          roleUrl: String(progression?.roleUrl ?? ""),
+          firstMissingInputId: String(progression?.firstMissingInputId ?? ""),
+          firstMissingCheckId: String(progression?.firstMissingCheckId ?? ""),
+          proofBoundary: String(progression?.proofBoundary ?? ""),
+        }),
+      ),
+    ),
   });
 }
 

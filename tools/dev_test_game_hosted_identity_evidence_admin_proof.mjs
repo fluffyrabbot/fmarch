@@ -7,8 +7,13 @@ import {
   buildDevTestGameHostedIdentityEvidence,
 } from "./dev_test_game_hosted_identity_evidence.mjs";
 import {
+  assertDevTestGameHostedIdentityProgressionSummary,
+  buildDevTestGameHostedIdentityProgressionSummary,
+} from "./dev_test_game_hosted_identity_progression_summary.mjs";
+import {
   devTestGameHostedIdentityPartialAdminProofPath,
   devTestGameHostedIdentityPartialEvidencePath,
+  devTestGameHostedIdentityProgressionSummaryPath,
   hostedIdentityEvidencePlaceholderFixturePath,
   hostedIdentityEvidenceInputIds,
   hostedIdentityEvidenceInputSectionStatuses,
@@ -49,6 +54,15 @@ const proofRunPath = path.resolve(
     "target/dev-test-game/proof-run.json",
 );
 const proofRunRelativePath = path.relative(repoRoot, proofRunPath);
+const hostedIdentityProgressionSummaryPath = path.resolve(
+  repoRoot,
+  process.env.FMARCH_DEV_TEST_GAME_HOSTED_IDENTITY_PROGRESSION_SUMMARY ??
+    devTestGameHostedIdentityProgressionSummaryPath,
+);
+const hostedIdentityProgressionSummaryRelativePath = path.relative(
+  repoRoot,
+  hostedIdentityProgressionSummaryPath,
+);
 const evidencePath = path.join(
   artifactDir,
   "hosted-identity-evidence-admin-proof.json",
@@ -155,6 +169,15 @@ function hostedIdentityOperatorProofStatus(drilldown) {
   return String(drilldown.progressionId ?? "");
 }
 
+function hostedIdentityProgressionRowStatuses(summary) {
+  return Object.fromEntries(
+    (summary.progressions ?? []).map((progression) => [
+      progression.id,
+      progression.adminProofTarget,
+    ]),
+  );
+}
+
 export function hostedIdentityEvidenceAdminProofCase({
   sourcePath = hostedIdentityEvidencePath,
   proofPath = evidencePath,
@@ -175,6 +198,8 @@ export function hostedIdentityEvidenceAdminProofCase({
       hostedIdentityEvidence: assertDevTestGameHostedIdentityEvidence(
         await readJson(sourcePath),
       ),
+      hostedIdentityProgressionSummary:
+        await ensureHostedIdentityProgressionSummary(),
       proofRun: assertDevTestGameProofRun(await readJson(proofRunPath)),
     }),
     prove: async ({ browser, frontendBaseUrl, source }) =>
@@ -268,6 +293,14 @@ export function hostedIdentityEvidenceAdminProofCase({
             (ref) => [ref.rowId, ref.evidenceFamily],
           ),
         ),
+        requiredHostedIdentityProgressions:
+          source.hostedIdentityProgressionSummary.progressions.map(
+            (progression) => progression.id,
+          ),
+        requiredHostedIdentityProgressionStatuses:
+          hostedIdentityProgressionRowStatuses(
+            source.hostedIdentityProgressionSummary,
+          ),
         requiredHostedIdentityRoleSurfaceContractDiffStatus:
           source.hostedIdentityEvidence.target.roleSurfaceContractDiff.status,
         requiredHostedIdentityRoleSurfaceContractMismatches:
@@ -392,6 +425,16 @@ export function hostedIdentityEvidenceAdminProofCase({
         hostedIdentityPacketRefIds: hostedIdentityPacketRefEntries(
           source.hostedIdentityEvidence,
         ).map((ref) => ref.rowId),
+        hostedIdentityProgressionSummary:
+          hostedIdentityProgressionSummaryRelativePath,
+        hostedIdentityProgressionIds:
+          source.hostedIdentityProgressionSummary.progressions.map(
+            (progression) => progression.id,
+          ),
+        hostedIdentityProgressionStatuses:
+          hostedIdentityProgressionRowStatuses(
+            source.hostedIdentityProgressionSummary,
+          ),
         hostedIdentityRoleSurfaceContractDiffStatus:
           source.hostedIdentityEvidence.target.roleSurfaceContractDiff.status,
         hostedIdentityRoleSurfaceContractMismatchIds:
@@ -458,6 +501,12 @@ export async function writeHostedIdentityProgressionAdminProof({
 async function writeEvidenceArtifact(filePath, evidence) {
   await mkdir(path.dirname(filePath), { recursive: true });
   await writeFile(filePath, `${JSON.stringify(evidence, null, 2)}\n`);
+}
+
+async function ensureHostedIdentityProgressionSummary() {
+  const summary = buildDevTestGameHostedIdentityProgressionSummary();
+  await writeEvidenceArtifact(hostedIdentityProgressionSummaryPath, summary);
+  return assertDevTestGameHostedIdentityProgressionSummary(summary);
 }
 
 export function assertHostedIdentityEvidenceAdminProof(evidence) {
@@ -672,6 +721,20 @@ export function assertHostedIdentityEvidenceAdminProof(evidence) {
     proofName: "hosted identity evidence admin proof",
     rowName: "packet ref",
     surfaceKey: "visibleHostedIdentityPacketRefs",
+  });
+  assertVisibleAdminRoleSurfaceRows({
+    adminRoleSurface: evidence.adminRoleSurface,
+    rowIds: evidence.generatedFrom?.hostedIdentityProgressionIds,
+    proofName: "hosted identity evidence admin proof",
+    rowName: "progression",
+    surfaceKey: "visibleHostedIdentityProgressions",
+  });
+  assertAdminRoleSurfaceStatusText({
+    adminRoleSurface: evidence.adminRoleSurface,
+    expectedStatuses: evidence.generatedFrom?.hostedIdentityProgressionStatuses,
+    proofName: "hosted identity evidence admin proof",
+    rowName: "progression status",
+    surfaceKey: "visibleHostedIdentityProgressionStatuses",
   });
   if (
     evidence.generatedFrom?.hostedIdentityRoleSurfaceContractDiffStatus !==

@@ -18427,6 +18427,15 @@ function hostedTargetPreflightAdminProofFixture() {
 
 function hostedIdentityEvidenceAdminProofFixture() {
   const handoff = hostedIdentityEvidenceHandoffCase();
+  const progressionSummary = buildDevTestGameHostedIdentityProgressionSummary({
+    generatedAt: "2026-06-26T00:00:00.000Z",
+  });
+  const progressionStatuses = Object.fromEntries(
+    progressionSummary.progressions.map((progression) => [
+      progression.id,
+      progression.adminProofTarget,
+    ]),
+  );
   const handoffGroupIds = handoff.requirementGroups.map((group) => group.id);
   const handoffSectionInputRows = hostedIdentityEvidenceSectionInputRows(
     handoff.inputSections,
@@ -18518,6 +18527,12 @@ function hostedIdentityEvidenceAdminProofFixture() {
       hostedIdentityPacketInputStatuses: Object.fromEntries(
         packetInputRows.map((row) => [row.id, row.status]),
       ),
+      hostedIdentityProgressionSummary:
+        "target/dev-test-game/hosted-identity-progression-summary.json",
+      hostedIdentityProgressionIds: progressionSummary.progressions.map(
+        (progression) => progression.id,
+      ),
+      hostedIdentityProgressionStatuses: progressionStatuses,
       hostedIdentityRoleSurfaceContractDiffStatus: "blocked",
       hostedIdentityRoleSurfaceContractMismatchIds: [
         "hostedIdentity-roleSurfaceArchitectureChanged",
@@ -18605,6 +18620,10 @@ function hostedIdentityEvidenceAdminProofFixture() {
       visibleHostedIdentityPacketInputStatuses: Object.fromEntries(
         packetInputRows.map((row) => [row.id, `${row.id} ${row.status}`]),
       ),
+      visibleHostedIdentityProgressions: progressionSummary.progressions.map(
+        (progression) => progression.id,
+      ),
+      visibleHostedIdentityProgressionStatuses: progressionStatuses,
       visibleHostedIdentityRoleSurfaceContractDiff: { status: "blocked" },
       visibleHostedIdentityRoleSurfaceContractMismatches: [
         "hostedIdentity-roleSurfaceArchitectureChanged",

@@ -461,6 +461,44 @@
         </ol>
       </section>
     {/if}
+    {#if data.audit.artifactSummary?.progressionSummary?.progressions?.length > 0}
+      <section
+        class="admin-audit-detail__group"
+        data-testid="admin-audit-detail-hosted-identity-progression-summary"
+      >
+        <h2>Evidence family ladder</h2>
+        <ol class="admin-audit-detail__entries">
+          <li
+            class="admin-audit-detail__entry admin-audit-detail__entry--stack"
+            data-testid="admin-audit-hosted-identity-progression-summary"
+          >
+            <strong>{data.audit.artifactSummary.progressionSummary.status}</strong>
+            <span>{data.audit.artifactSummary.progressionSummary.progressionCount} progression rows</span>
+            <span>{data.audit.artifactSummary.progressionSummary.nextCommand}</span>
+            <span>{data.audit.artifactSummary.progressionSummary.nextProofTarget}</span>
+            <span>{data.audit.artifactSummary.progressionSummary.proofBoundary}</span>
+          </li>
+          {#each data.audit.artifactSummary.progressionSummary.progressions as progression}
+            <li
+              class="admin-audit-detail__entry admin-audit-detail__entry--stack"
+              data-testid={`admin-audit-hosted-identity-progression-${progression.id}`}
+            >
+              <strong>{progression.field}</strong>
+              <span>{progression.checkId}</span>
+              <span>{progression.missingInputId}</span>
+              <span>{progression.missingFixturePath}</span>
+              <span>{progression.recoveredFixturePath}</span>
+              <span>{progression.proofCommand}</span>
+              <span>{progression.evidencePath}</span>
+              <span>{progression.adminProofTarget}</span>
+              <span>{progression.roleUrl}</span>
+              <span>{progression.firstMissingInputId}</span>
+              <span>{progression.firstMissingCheckId}</span>
+            </li>
+          {/each}
+        </ol>
+      </section>
+    {/if}
     {#if data.audit.artifactSummary?.roleSurfaceContractDiff}
       <section
         class="admin-audit-detail__group"

@@ -92,13 +92,18 @@ import {
   hostedIdentityEvidenceHandoffCase,
   hostedIdentityEvidenceInputIds,
   hostedIdentityEvidenceInputSectionIds,
+  hostedIdentityEvidenceFamilyProgressionCases,
   hostedIdentityExpectedRoleSurfaceContract,
   hostedIdentityEvidencePacketSectionDefinitions,
   hostedIdentityEvidenceOperatorProofDrilldowns,
   hostedIdentityEvidencePlaceholderFixturePath,
+  hostedIdentityEvidenceProgressionAdminProofPath,
   hostedIdentityEvidenceRequirementGroups,
   hostedIdentityRoleSurfaceContractDiff,
 } from "../../../../tools/dev_test_game_hosted_identity_evidence.mjs";
+import {
+  buildDevTestGameHostedIdentityProgressionSummary,
+} from "../../../../tools/dev_test_game_hosted_identity_progression_summary.mjs";
 import {
   buildDevTestGameIdentityAdapterContractPacket,
   devTestGameIdentityAdapterContractDiff,
@@ -940,6 +945,10 @@ test("admin route data exposes hosted identity evidence as a native audit row", 
     principalUserId: "admin_a",
     capabilities: [{ kind: "GlobalAdmin" }],
     hostedIdentityEvidence: localHostedIdentityEvidenceFixture(),
+    hostedIdentityProgressionSummary:
+      buildDevTestGameHostedIdentityProgressionSummary({
+        generatedAt: "2026-06-26T00:00:00.000Z",
+      }),
   });
 
   const identity = data.audit.find(
@@ -1069,6 +1078,32 @@ test("admin route data exposes hosted identity evidence as a native audit row", 
     identity.hostedHandoffChecklist.operatorProofDrilldowns,
     hostedIdentityEvidenceOperatorProofDrilldowns,
   );
+  assert.equal(
+    identity.artifactSummary.progressionSummary.progressionCount,
+    hostedIdentityEvidenceFamilyProgressionCases.length,
+  );
+  assert.deepEqual(
+    identity.artifactSummary.progressionSummary.progressions.map(
+      (progression) => [
+        progression.id,
+        progression.field,
+        progression.missingInputId,
+        progression.missingFixturePath,
+        progression.recoveredFixturePath,
+        progression.adminProofTarget,
+      ],
+    ),
+    hostedIdentityEvidenceFamilyProgressionCases.map((progression) => [
+      progression.id,
+      progression.field,
+      progression.missingInputId,
+      progression.missingFixturePath,
+      progression.recoveredFixturePath,
+      hostedIdentityEvidenceProgressionAdminProofPath(progression.id),
+    ]),
+  );
+  assert.equal(identity.artifactSummary.progressionSummary.releaseReady, false);
+  assert.equal(identity.artifactSummary.progressionSummary.productionReady, false);
   const hostedIdentityBlockedReceipt =
     hostedIdentityEvidenceHandoffCase().blockedReceipt;
   assert.deepEqual(identity.hostedHandoffChecklist.blockedReceipt, {

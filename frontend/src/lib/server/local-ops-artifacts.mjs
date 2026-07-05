@@ -31,6 +31,8 @@ const DEFAULT_HOSTED_IDENTITY_EVIDENCE =
   "target/dev-test-game/hosted-identity-evidence.json";
 const DEFAULT_HOSTED_IDENTITY_EVIDENCE_ADMIN_PROOF =
   "target/dev-test-game/hosted-identity-evidence-admin-proof.json";
+const DEFAULT_HOSTED_IDENTITY_PROGRESSION_SUMMARY =
+  "target/dev-test-game/hosted-identity-progression-summary.json";
 const DEFAULT_HOSTED_OPS_SIGNALS =
   "target/dev-test-game/hosted-ops-signals.json";
 const DEFAULT_REAL_HOSTED_OBSERVABILITY_HANDOFF =
@@ -210,6 +212,12 @@ const LOCAL_PROOF_FRESHNESS_ARTIFACTS = Object.freeze([
     fallback: DEFAULT_HOSTED_IDENTITY_EVIDENCE_ADMIN_PROOF,
   }),
   Object.freeze({
+    id: "hosted-identity-progression-summary",
+    label: "Hosted identity progression summary",
+    env: "FMARCH_DEV_TEST_GAME_HOSTED_IDENTITY_PROGRESSION_SUMMARY",
+    fallback: DEFAULT_HOSTED_IDENTITY_PROGRESSION_SUMMARY,
+  }),
+  Object.freeze({
     id: "hosted-ops-signals",
     label: "Hosted ops signals",
     env: "FMARCH_DEV_TEST_GAME_HOSTED_OPS_SIGNALS",
@@ -314,6 +322,15 @@ export async function readLocalHostedIdentityEvidence({
   return await readLocalJsonArtifact({
     pathValue: env.FMARCH_DEV_TEST_GAME_HOSTED_IDENTITY_EVIDENCE,
     fallback: DEFAULT_HOSTED_IDENTITY_EVIDENCE,
+  });
+}
+
+export async function readLocalHostedIdentityProgressionSummary({
+  env = process.env,
+} = {}) {
+  return await readLocalJsonArtifact({
+    pathValue: env.FMARCH_DEV_TEST_GAME_HOSTED_IDENTITY_PROGRESSION_SUMMARY,
+    fallback: DEFAULT_HOSTED_IDENTITY_PROGRESSION_SUMMARY,
   });
 }
 

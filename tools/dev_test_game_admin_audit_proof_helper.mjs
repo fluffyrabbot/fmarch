@@ -333,6 +333,8 @@ export async function proveAdminAuditDetail({
   requiredHostedIdentityPacketInputStatuses = {},
   requiredHostedIdentityPacketRefs = [],
   requiredHostedIdentityPacketRefStatuses = {},
+  requiredHostedIdentityProgressions = [],
+  requiredHostedIdentityProgressionStatuses = {},
   requiredHostedIdentityRoleSurfaceContractDiffStatus = null,
   requiredHostedIdentityRoleSurfaceContractMismatches = [],
   requiredHostedIdentityAdapterContractComparisonStatus = null,
@@ -604,6 +606,17 @@ export async function proveAdminAuditDetail({
       prefix: "admin-audit-hosted-identity-packet-ref",
       ids: requiredHostedIdentityPacketRefs,
       expectedStatuses: requiredHostedIdentityPacketRefStatuses,
+    });
+    const visibleHostedIdentityProgressions = await waitForRows({
+      page,
+      prefix: "admin-audit-hosted-identity-progression",
+      ids: requiredHostedIdentityProgressions,
+      expectedStatuses: requiredHostedIdentityProgressionStatuses,
+    });
+    const visibleHostedIdentityProgressionStatuses = await readRowStatuses({
+      page,
+      prefix: "admin-audit-hosted-identity-progression",
+      ids: Object.keys(requiredHostedIdentityProgressionStatuses),
     });
     const visibleHostedIdentityRoleSurfaceContractDiff =
       await waitForHostedIdentityRoleSurfaceContractDiff({
@@ -992,6 +1005,15 @@ export async function proveAdminAuditDetail({
       ...(visibleHostedIdentityPacketRefs.length === 0
         ? {}
         : { visibleHostedIdentityPacketRefs }),
+      ...(visibleHostedIdentityProgressions.length === 0
+        ? {}
+        : { visibleHostedIdentityProgressions }),
+      ...(Object.keys(visibleHostedIdentityProgressionStatuses).length === 0
+        ? {}
+        : {
+            visibleHostedIdentityProgressionStatuses:
+              visibleHostedIdentityProgressionStatuses,
+          }),
       ...(visibleHostedIdentityRoleSurfaceContractDiff === null
         ? {}
         : { visibleHostedIdentityRoleSurfaceContractDiff }),
