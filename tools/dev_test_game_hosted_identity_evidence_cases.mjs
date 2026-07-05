@@ -13,6 +13,8 @@ export const devTestGameHostedIdentityPartialAdminProofCommand =
   "test:dev-test-game-hosted-identity-partial-admin-proof";
 export const devTestGameHostedIdentityCompleteAdminProofCommand =
   "test:dev-test-game-hosted-identity-complete-admin-proof";
+export const devTestGameHostedIdentityOperatorAdminProofCommand =
+  "test:dev-test-game-hosted-identity-operator-admin-proof";
 export const devTestGameHostedIdentityProgressionAdminProofCommand =
   "test:dev-test-game-hosted-identity-progression-admin-proof";
 export const devTestGameHostedIdentityProgressionSummaryCommand =
@@ -73,6 +75,12 @@ export const devTestGameHostedIdentityCompleteEvidencePath =
   "target/dev-test-game/hosted-identity-evidence-complete.json";
 export const devTestGameHostedIdentityCompleteAdminProofPath =
   "target/dev-test-game/hosted-identity-evidence-complete-admin-proof.json";
+export const devTestGameHostedIdentityOperatorEvidencePath =
+  "target/dev-test-game/hosted-identity-evidence-operator.json";
+export const devTestGameHostedIdentityOperatorAdminProofPath =
+  "target/dev-test-game/hosted-identity-evidence-operator-admin-proof.json";
+export const hostedIdentityOperatorEvidencePacketPath =
+  "target/operator-evidence/hosted-identity-redacted.example.json";
 export const hostedIdentityEvidenceProofGraphNodeId =
   "admin-proof:hosted-identity-evidence";
 export const hostedIdentityEvidenceProductionFeatureGraphNodeId =

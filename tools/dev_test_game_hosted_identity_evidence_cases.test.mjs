@@ -8,6 +8,9 @@ import {
   devTestGameHostedIdentityCompleteEvidencePath,
   devTestGameHostedIdentityEvidenceCommand,
   devTestGameHostedIdentityEvidencePath,
+  devTestGameHostedIdentityOperatorAdminProofCommand,
+  devTestGameHostedIdentityOperatorAdminProofPath,
+  devTestGameHostedIdentityOperatorEvidencePath,
   devTestGameHostedIdentityProgressionAdminProofCommand,
   devTestGameHostedIdentityProgressionSummaryCommand,
   devTestGameHostedIdentityProgressionSummaryPath,
@@ -35,6 +38,7 @@ import {
   hostedIdentityEvidenceOperatorGate,
   hostedIdentityEvidenceOperatorPartialFixturePath,
   hostedIdentityEvidenceOperatorRecoveredFixturePath,
+  hostedIdentityOperatorEvidencePacketPath,
   hostedIdentityEvidencePlaceholderFixturePath,
   hostedIdentityEvidencePlaceholderSchema,
   hostedIdentityEvidenceProgressionAdminProofPath,
@@ -64,12 +68,28 @@ test("hosted identity evidence cases share handoff inputs and blocked groups", (
     "test:dev-test-game-hosted-identity-complete-admin-proof",
   );
   assert.equal(
+    devTestGameHostedIdentityOperatorAdminProofCommand,
+    "test:dev-test-game-hosted-identity-operator-admin-proof",
+  );
+  assert.equal(
     devTestGameHostedIdentityCompleteEvidencePath,
     "target/dev-test-game/hosted-identity-evidence-complete.json",
   );
   assert.equal(
     devTestGameHostedIdentityCompleteAdminProofPath,
     "target/dev-test-game/hosted-identity-evidence-complete-admin-proof.json",
+  );
+  assert.equal(
+    devTestGameHostedIdentityOperatorEvidencePath,
+    "target/dev-test-game/hosted-identity-evidence-operator.json",
+  );
+  assert.equal(
+    devTestGameHostedIdentityOperatorAdminProofPath,
+    "target/dev-test-game/hosted-identity-evidence-operator-admin-proof.json",
+  );
+  assert.equal(
+    hostedIdentityOperatorEvidencePacketPath,
+    "target/operator-evidence/hosted-identity-redacted.example.json",
   );
   assert.equal(
     devTestGameHostedIdentityProgressionSummaryCommand,

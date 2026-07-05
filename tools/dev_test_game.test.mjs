@@ -219,6 +219,9 @@ import {
   devTestGameHostedIdentityCompleteEvidencePath,
   devTestGameHostedIdentityEvidenceCommand,
   devTestGameHostedIdentityEvidencePath,
+  devTestGameHostedIdentityOperatorAdminProofCommand,
+  devTestGameHostedIdentityOperatorAdminProofPath,
+  devTestGameHostedIdentityOperatorEvidencePath,
   devTestGameHostedIdentityProgressionAdminProofCommand,
   devTestGameHostedIdentityProgressionSummaryCommand,
   devTestGameHostedIdentityProgressionSummaryPath,
@@ -242,6 +245,7 @@ import {
   hostedIdentityEvidenceOperatorProofDrilldowns,
   hostedIdentityEvidenceOperatorPartialFixturePath,
   hostedIdentityEvidenceOperatorRecoveredFixturePath,
+  hostedIdentityOperatorEvidencePacketPath,
   hostedIdentityEvidencePacketSectionDefinitions,
   hostedIdentityEvidenceProgressionAdminProofPath,
   hostedIdentityEvidenceProgressionPath,
@@ -649,12 +653,28 @@ test("dev test-game spine orchestrators expose stable proof order and env maps",
     "node tools/dev_test_game_hosted_identity_complete_admin_proof.mjs",
   );
   assert.equal(
+    packageJson.scripts[devTestGameHostedIdentityOperatorAdminProofCommand],
+    "node tools/dev_test_game_hosted_identity_operator_admin_proof.mjs",
+  );
+  assert.equal(
     devTestGameHostedIdentityCompleteEvidencePath,
     "target/dev-test-game/hosted-identity-evidence-complete.json",
   );
   assert.equal(
     devTestGameHostedIdentityCompleteAdminProofPath,
     "target/dev-test-game/hosted-identity-evidence-complete-admin-proof.json",
+  );
+  assert.equal(
+    devTestGameHostedIdentityOperatorEvidencePath,
+    "target/dev-test-game/hosted-identity-evidence-operator.json",
+  );
+  assert.equal(
+    devTestGameHostedIdentityOperatorAdminProofPath,
+    "target/dev-test-game/hosted-identity-evidence-operator-admin-proof.json",
+  );
+  assert.equal(
+    hostedIdentityOperatorEvidencePacketPath,
+    "target/operator-evidence/hosted-identity-redacted.example.json",
   );
   assert.equal(
     packageJson.scripts[
@@ -701,6 +721,11 @@ test("dev test-game spine orchestrators expose stable proof order and env maps",
   assert(
     operatorDocs.includes(
       `npm run ${devTestGameHostedIdentityCompleteAdminProofCommand}`,
+    ),
+  );
+  assert(
+    operatorDocs.includes(
+      `npm run ${devTestGameHostedIdentityOperatorAdminProofCommand}`,
     ),
   );
   for (const progression of hostedIdentityEvidenceFamilyProgressionCases) {
