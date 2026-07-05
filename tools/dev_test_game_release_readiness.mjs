@@ -1371,6 +1371,14 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
       preflightStatus: hostedEvidenceLaneAdminProofEvidence.preflightStatus,
       blockedCheckCount:
         hostedEvidenceLaneAdminProofEvidence.visibleUnproven?.length ?? 0,
+      hostedHandoffBlockedReceipt:
+        hostedEvidenceLaneAdminProofEvidence.hostedHandoffBlockedReceipt,
+      firstMissingOperatorArtifact:
+        hostedEvidenceLaneAdminProofEvidence.firstMissingOperatorArtifact,
+      handoffReceiptMissingRequiredInputs:
+        hostedEvidenceLaneAdminProofEvidence.handoffReceiptMissingRequiredInputs,
+      handoffReceiptNextProofTarget:
+        hostedEvidenceLaneAdminProofEvidence.handoffReceiptNextProofTarget,
       adminRoleSurface: hostedEvidenceLaneAdminProofEvidence,
     });
   }
@@ -4719,6 +4727,12 @@ export function validateDevTestGameHostedEvidenceLaneAdminProof(proof, options =
       );
     }
   }
+  const hostedHandoffBlockedReceipt =
+    proof.generatedFrom?.hostedHandoffBlockedReceipt ??
+    proof.adminRoleSurface?.visibleHostedHandoffBlockedReceipt ??
+    null;
+  const firstMissingOperatorArtifact =
+    hostedHandoffBlockedReceipt?.firstMissingOperatorArtifact ?? null;
   return {
     status: "passed",
     path:
@@ -4744,6 +4758,17 @@ export function validateDevTestGameHostedEvidenceLaneAdminProof(proof, options =
       proof.adminRoleSurface.visibleHostedHandoffSectionInputs ?? [],
     visibleHostedHandoffSummary:
       proof.adminRoleSurface.visibleHostedHandoffSummary ?? null,
+    visibleHostedHandoffBlockedReceipt:
+      proof.adminRoleSurface.visibleHostedHandoffBlockedReceipt ?? null,
+    hostedHandoffBlockedReceipt,
+    firstMissingOperatorArtifact,
+    handoffReceiptStatus: hostedHandoffBlockedReceipt?.status,
+    handoffReceiptMissingInputCount:
+      hostedHandoffBlockedReceipt?.missingRequiredInputs?.length ?? 0,
+    handoffReceiptNextProofTarget:
+      hostedHandoffBlockedReceipt?.nextProofTarget,
+    handoffReceiptMissingRequiredInputs:
+      hostedHandoffBlockedReceipt?.missingRequiredInputs ?? [],
     laneStatus: String(proof.generatedFrom?.status ?? "unknown"),
     preflightStatus: String(proof.generatedFrom?.preflightStatus ?? "unknown"),
     ...(options.artifact === undefined ? {} : { artifact: options.artifact }),
@@ -8208,7 +8233,7 @@ function validProductionFeatureTargetsForSource(
   });
 }
 
-function markdownChecklist(checklist) {
+export function markdownChecklist(checklist) {
   const lines = [
     "# fmarch Dev Test Game Release Readiness",
     "",
@@ -8224,12 +8249,12 @@ function markdownChecklist(checklist) {
     "",
     `Status: ${checklist.localDevelopmentSpine.status}`,
     "",
-    "| Check | Status | Evidence | Evidence Objects |",
-    "| --- | --- | --- | --- |",
+    "| Check | Status | Evidence | Evidence Objects | Next Input |",
+    "| --- | --- | --- | --- | --- |",
   ];
   for (const check of checklist.localDevelopmentSpine.checks) {
     lines.push(
-      `| ${check.label} | ${check.status} | \`${check.evidence}\` | ${evidenceObjectNamesText(check)} |`,
+      `| ${check.label} | ${check.status} | \`${check.evidence}\` | ${evidenceObjectNamesText(check)} | ${firstMissingOperatorArtifactText(check)} |`,
     );
   }
   lines.push(
@@ -8254,6 +8279,23 @@ function evidenceObjectNamesText(check) {
     .map((object) => object.name)
     .filter((name) => typeof name === "string" && name.length > 0);
   return names.length === 0 ? "" : names.map((name) => `\`${name}\``).join(", ");
+}
+
+function firstMissingOperatorArtifactText(check) {
+  const artifact = check.firstMissingOperatorArtifact;
+  if (artifact === null || artifact === undefined) {
+    return "";
+  }
+  const inputId = String(artifact.inputId ?? "");
+  const checkId = String(artifact.checkId ?? "");
+  const roleUrl = String(artifact.roleSurfaceDrilldown?.handoffRoleUrl ?? "");
+  return [
+    inputId === "" ? "" : `\`${inputId}\``,
+    checkId === "" ? "" : `check \`${checkId}\``,
+    roleUrl === "" ? "" : `role \`${roleUrl}\``,
+  ]
+    .filter((part) => part.length > 0)
+    .join("; ");
 }
 
 const optionalReadinessArtifactRegistry = Object.freeze([

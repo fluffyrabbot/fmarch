@@ -24,6 +24,7 @@ import {
   buildDevTestGameReleaseReadiness,
   devTestGameIdentityAdapterSeedCommandKinds,
   hostedAdminHandoffProofReadinessDecision,
+  markdownChecklist,
   recoveryReceiptReleaseReadinessValidators,
   validateDevTestGameAdminSpineProof,
   validateDevTestGameAdminSpineTerminalBatches,
@@ -15233,6 +15234,28 @@ test("session card and markdown include role credential URLs and tokens", async 
     hostedEvidenceLaneCheck.adminRoleSurface.preflightStatus,
     "blocked",
   );
+  assert.equal(
+    hostedEvidenceLaneCheck.firstMissingOperatorArtifact.inputId,
+    "FMARCH_HOSTED_MATRIX_FRONTEND_URL",
+  );
+  assert.equal(
+    hostedEvidenceLaneCheck.firstMissingOperatorArtifact.checkId,
+    "hosted-frontend-url-configured",
+  );
+  assert.equal(
+    hostedEvidenceLaneCheck.handoffReceiptNextProofTarget,
+    devTestGameHostedEvidenceLanePath,
+  );
+  assert.deepEqual(hostedEvidenceLaneCheck.handoffReceiptMissingRequiredInputs, [
+    "FMARCH_HOSTED_MATRIX_FRONTEND_URL",
+    "FMARCH_HOSTED_MATRIX_API_URL",
+    "FMARCH_HOSTED_MATRIX_RAW_EVIDENCE_PATH",
+  ]);
+  assert(
+    markdownChecklist(hostedEvidenceLaneReadiness).includes(
+      "| Local hosted evidence lane admin surface | passed | `target/dev-test-game/hosted-evidence-lane-admin-proof.json` |  | `FMARCH_HOSTED_MATRIX_FRONTEND_URL`; check `hosted-frontend-url-configured`; role `/admin/audit/local-hosted-evidence-lane?game=<seeded-game>` |",
+    ),
+  );
   const hostedEvidenceRealCaptureReadiness = buildDevTestGameReleaseReadiness(
     proofRun,
     {
@@ -23004,7 +23027,9 @@ function hostedIdentityPacketInputRowsFixture() {
 }
 
 function hostedEvidenceLaneAdminProofFixture() {
-  const handoff = hostedEvidenceBlockedHandoffChecklistFixture();
+  const handoff = hostedTargetPreflightFixture({
+    status: "blocked",
+  }).hostedHandoffChecklist;
   const sectionInputRows = hostedEvidenceHandoffSectionInputRows(
     handoff.inputSections,
   );
@@ -23039,6 +23064,7 @@ function hostedEvidenceLaneAdminProofFixture() {
       hostedHandoffSectionInputIds: sectionInputRows.map((row) => row.id),
       hostedHandoffSectionInputStatuses:
         hostedEvidenceHandoffSectionInputStatuses(handoff.inputSections),
+      hostedHandoffBlockedReceipt: handoff.blockedReceipt,
       relatedAuditIds: [
         "local-hosted-target-preflight",
         "local-hosted-concurrent-race-matrix",
@@ -23426,6 +23452,26 @@ function hostedTargetPreflightFixture({
           "FMARCH_HOSTED_MATRIX_API_URL",
           "FMARCH_HOSTED_MATRIX_RAW_EVIDENCE_PATH",
         ],
+        firstMissingOperatorArtifact: {
+          inputId: "FMARCH_HOSTED_MATRIX_FRONTEND_URL",
+          checkId: "hosted-frontend-url-configured",
+          sectionId: "hosted-target",
+          sectionLabel: "Hosted target",
+          requiredEvidence: hostedTargetPreflightMissingFrontendUrlRequiredEvidence,
+          purpose: "Externally reachable frontend base URL.",
+          proofTarget: devTestGameHostedTargetPreflightPath,
+          roleSurfaceDrilldown: {
+            localCapabilityAuditId: "local-core-loop",
+            localCapabilityRoleUrl: "/admin/audit/local-core-loop?game=<seeded-game>",
+            handoffAuditId: "local-hosted-evidence-lane",
+            handoffRoleUrl:
+              "/admin/audit/local-hosted-evidence-lane?game=<seeded-game>",
+            proofGraphNodeId: "admin-proof:hosted-evidence-lane",
+            productionFeatureGraphNodeId:
+              "production-feature:host-phase-control",
+            proofGraphEvidencePath: "target/dev-test-game/proof-graph.json",
+          },
+        },
         operatorAction:
           "Configure the hosted frontend/API URLs plus a readable raw hosted matrix evidence packet from that same deployment, then rerun npm run test:dev-test-game-hosted-evidence-lane.",
         rawEvidenceContractSummary: hostedMatrixRawEvidenceContractSummary(),
