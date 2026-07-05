@@ -5785,52 +5785,18 @@ function hostedIdentityLocalCapabilityConfidenceFixture() {
 }
 
 function proofGraphFixture() {
+  const productionFeatureCase = proofGraphProductionFeatureCase();
+  const recoveryReceiptCases = proofGraphRecoveryReceiptCases();
   const nodes = [
     ...devTestGameProofGraphFirstClassNodes(),
-    {
-      id: "production-feature:player-action-submission",
-      label: "Production feature: player-action-submission",
-      kind: "production-feature-spine-target",
-      status: "passed",
-      artifact: "target/dev-test-game/release-readiness-checklist.json",
-      roleUrl: localAdminAuditRoleUrl(localAdminAuditIds.coreLoop),
-      targetRoleUrl: ACTIONABLE_SPINE_ROLE_URL,
-      browserProofCommand: LIVE_BROWSER_PROOF_COMMAND,
-      coverageDecision: featureSpineTargetFixture().coverageDecision,
-    },
-    recoveryReceiptProofGraphNode({
-      graph: privateChannelRecoveryGraphFixture(),
-      label: "Private-channel recovery receipt",
-      kind: "private-channel-recovery-receipt",
-      recoveryCommand: "test:dev-test-game-private-channel-recovery-receipt",
-    }),
-    recoveryReceiptProofGraphNode({
-      graph: replacementPrivateRecoveryGraphFixture(),
-      label: "Replacement private-channel recovery receipt",
-      kind: "replacement-private-recovery-receipt",
-      recoveryCommand:
-        "test:dev-test-game-replacement-private-recovery-receipt",
-    }),
+    proofGraphProductionFeatureNode(productionFeatureCase),
+    ...proofGraphRecoveryReceiptNodes(recoveryReceiptCases),
     ...adminProofDestinationProofGraphNodes(),
   ];
   const edges = [
     ...devTestGameProofGraphBaseEdges(),
-    {
-      from: "admin-proof:core-loop",
-      to: "production-feature:player-action-submission",
-      relationship: "proves-production-feature",
-      featureSlotId: "player-action-submission",
-      targetRoleUrl: ACTIONABLE_SPINE_ROLE_URL,
-      command: LIVE_BROWSER_PROOF_COMMAND,
-    },
-    ...recoveryReceiptProofGraphEdges({
-      graph: privateChannelRecoveryGraphFixture(),
-      provingNodeId: "admin-proof:core-loop",
-    }),
-    ...recoveryReceiptProofGraphEdges({
-      graph: replacementPrivateRecoveryGraphFixture(),
-      provingNodeId: "admin-proof:hardening",
-    }),
+    proofGraphProductionFeatureEdge(productionFeatureCase),
+    ...proofGraphRecoveryReceiptEdges(recoveryReceiptCases),
   ];
   return {
     version: 1,
@@ -5857,6 +5823,78 @@ function proofGraphFixture() {
     nodes,
     edges,
   };
+}
+
+function proofGraphProductionFeatureCase() {
+  return {
+    id: "production-feature:player-action-submission",
+    label: "Production feature: player-action-submission",
+    featureSlotId: "player-action-submission",
+    status: "passed",
+    artifact: "target/dev-test-game/release-readiness-checklist.json",
+    roleUrl: localAdminAuditRoleUrl(localAdminAuditIds.coreLoop),
+    provingNodeId: "admin-proof:core-loop",
+    targetRoleUrl: ACTIONABLE_SPINE_ROLE_URL,
+    browserProofCommand: LIVE_BROWSER_PROOF_COMMAND,
+    coverageDecision: featureSpineTargetFixture().coverageDecision,
+  };
+}
+
+function proofGraphProductionFeatureNode(featureCase) {
+  return {
+    id: featureCase.id,
+    label: featureCase.label,
+    kind: "production-feature-spine-target",
+    status: featureCase.status,
+    artifact: featureCase.artifact,
+    roleUrl: featureCase.roleUrl,
+    targetRoleUrl: featureCase.targetRoleUrl,
+    browserProofCommand: featureCase.browserProofCommand,
+    coverageDecision: featureCase.coverageDecision,
+  };
+}
+
+function proofGraphProductionFeatureEdge(featureCase) {
+  return {
+    from: featureCase.provingNodeId,
+    to: featureCase.id,
+    relationship: "proves-production-feature",
+    featureSlotId: featureCase.featureSlotId,
+    targetRoleUrl: featureCase.targetRoleUrl,
+    command: featureCase.browserProofCommand,
+  };
+}
+
+function proofGraphRecoveryReceiptCases() {
+  return [
+    {
+      graph: privateChannelRecoveryGraphFixture(),
+      label: "Private-channel recovery receipt",
+      kind: "private-channel-recovery-receipt",
+      recoveryCommand: "test:dev-test-game-private-channel-recovery-receipt",
+      provingNodeId: "admin-proof:core-loop",
+    },
+    {
+      graph: replacementPrivateRecoveryGraphFixture(),
+      label: "Replacement private-channel recovery receipt",
+      kind: "replacement-private-recovery-receipt",
+      recoveryCommand:
+        "test:dev-test-game-replacement-private-recovery-receipt",
+      provingNodeId: "admin-proof:hardening",
+    },
+  ];
+}
+
+function proofGraphRecoveryReceiptNodes(recoveryReceiptCases) {
+  return recoveryReceiptCases.map(({ graph, label, kind, recoveryCommand }) =>
+    recoveryReceiptProofGraphNode({ graph, label, kind, recoveryCommand }),
+  );
+}
+
+function proofGraphRecoveryReceiptEdges(recoveryReceiptCases) {
+  return recoveryReceiptCases.flatMap(({ graph, provingNodeId }) =>
+    recoveryReceiptProofGraphEdges({ graph, provingNodeId }),
+  );
 }
 
 function recoveryReceiptProofGraphNode({ graph, label, kind, recoveryCommand }) {
