@@ -10,6 +10,10 @@ import {
   selectGame,
 } from "./dev_test_game.mjs";
 import {
+  seedSetupCommandPlanForGame as setupBootstrapCommandPlanForGame,
+  seededSetupRoster as setupBootstrapRoster,
+} from "./dev_test_game_setup_bootstrap_scenario.mjs";
+import {
   assertDevTestGameProofRun,
   buildDevTestGameProofRun,
 } from "./dev_test_game_proof_contract.mjs";
@@ -5421,6 +5425,39 @@ test("seed plan creates a playable mafiascum D01 game shape", () => {
   assert(plan.some(([, command]) => command.StartGame?.phase === "D01"));
   assert(plan.some(([, command]) => command.SubmitVote?.target?.Slot === "slot_5"));
   assert(plan.some(([, command]) => command.SubmitPost?.channel_id === "main"));
+});
+
+test("setup bootstrap scenario owns the seeded setup command grammar", () => {
+  const game = "33333333-3333-4333-8333-333333333333";
+  const plan = setupBootstrapCommandPlanForGame(game);
+  assert.equal(setupBootstrapRoster.length, 5);
+  assert.equal(plan.length, 19);
+  assert.deepEqual(plan[0], ["host_h", { CreateGame: { game, pack: "mafiascum" } }]);
+  assert.deepEqual(
+    plan.filter(([, command]) => command.AddSlot).map(([, command]) => command.AddSlot.slot),
+    setupBootstrapRoster.map((row) => row.slot),
+  );
+  assert(
+    setupBootstrapRoster.every((row) =>
+      plan.some(
+        ([, command]) =>
+          command.AssignSlot?.slot === row.slot &&
+          command.AssignSlot?.user === row.user,
+      ),
+    ),
+  );
+  assert(
+    setupBootstrapRoster.every((row) =>
+      plan.some(
+        ([, command]) =>
+          command.AssignRole?.slot === row.slot &&
+          command.AssignRole?.role_key === row.roleKey,
+      ),
+    ),
+  );
+  assert(plan.some(([, command]) => command.SetPostPolicy?.allow_media_only === true));
+  assert(plan.some(([, command]) => command.SetPostPolicy?.allow_media_only === false));
+  assert(plan.some(([, command]) => command.StartGame?.phase === "D01"));
 });
 
 test("session card and markdown include role credential URLs and tokens", async () => {
