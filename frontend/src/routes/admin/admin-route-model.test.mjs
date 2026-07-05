@@ -136,6 +136,7 @@ import {
   adminProofDestinationProofGraphNodes,
   adminProofDestinationRequirementLinkRows,
   adminProofDestinationRequirementRoleRows,
+  devTestGameProofGraphFirstClassNodes,
 } from "../../../../tools/dev_test_game_proof_graph_handoff_cases.mjs";
 import {
   featureSpineFixture,
@@ -5785,61 +5786,7 @@ function hostedIdentityLocalCapabilityConfidenceFixture() {
 
 function proofGraphFixture() {
   const nodes = [
-    proofGraphNode({
-      id: "admin-spine",
-      label: "Local admin spine",
-      status: "passed",
-      artifact: "target/dev-test-game/admin-spine-proof.json",
-      roleUrl: localAdminAuditRoleUrl(localAdminAuditIds.adminSpine),
-      recoveryCommand: "npm run test:dev-test-game-admin-spine",
-    }),
-    proofGraphNode({
-      id: "spine-manifest",
-      label: "Local spine manifest",
-      status: "passed",
-      artifact: "target/dev-test-game/spine-manifest.json",
-      roleUrl: localAdminAuditRoleUrl(localAdminAuditIds.spineManifest),
-      recoveryCommand: "npm run test:dev-test-game-spine-manifest-admin-proof",
-    }),
-    proofGraphNode({
-      id: "proof-graph",
-      label: "Local proof graph",
-      status: "passed",
-      artifact: "target/dev-test-game/proof-graph.json",
-      roleUrl: localAdminAuditRoleUrl(localAdminAuditIds.proofGraph),
-      recoveryCommand: "test:dev-test-game-proof-graph",
-    }),
-    proofGraphNode({
-      id: "proof-freshness",
-      label: "Local proof freshness",
-      status: "passed",
-      artifact: "target/dev-test-game/proof-freshness-admin-proof.json",
-      roleUrl: localAdminAuditRoleUrl(localAdminAuditIds.proofFreshness),
-      recoveryCommand: "test:dev-test-game-proof-freshness-admin-proof",
-    }),
-    proofGraphNode({
-      id: "next-action",
-      label: "Local next action",
-      status: "recorded",
-      artifact: "target/dev-test-game/next-action.json",
-      roleUrl: localAdminAuditRoleUrl(localAdminAuditIds.nextAction),
-      recoveryCommand: "test:dev-test-game-next-action",
-    }),
-    {
-      id: "admin-spine-terminal-batches",
-      label: "Admin spine terminal proof batches",
-      kind: "terminal-proof-batch-receipt",
-      status: "passed",
-      artifact: "target/dev-test-game/admin-spine-terminal-batches.json",
-      roleUrl: localAdminAuditRoleUrl(localAdminAuditIds.adminSpine),
-      batchCount: 2,
-      proofIds: ["proof-graph", "proof-freshness", "next-action"],
-      artifactPaths: [
-        "target/dev-test-game/proof-graph-admin-proof.json",
-        "target/dev-test-game/proof-freshness-admin-proof.json",
-        "target/dev-test-game/next-action-admin-proof.json",
-      ],
-    },
+    ...devTestGameProofGraphFirstClassNodes(),
     {
       id: "production-feature:player-action-submission",
       label: "Production feature: player-action-submission",
@@ -6354,25 +6301,6 @@ function realHostedEvidenceInputsFixture(options = {}) {
     });
   }
   return hostedEvidenceRealHostedInputsFixture();
-}
-
-function proofGraphNode({
-  id,
-  label,
-  status,
-  artifact,
-  roleUrl,
-  recoveryCommand,
-}) {
-  return {
-    id,
-    label,
-    kind: "proof-surface",
-    status,
-    artifact,
-    roleUrl,
-    recoveryCommand,
-  };
 }
 
 function selectionTraceFixture({ artifact, command }) {

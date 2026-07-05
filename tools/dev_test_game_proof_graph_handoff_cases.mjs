@@ -29,11 +29,42 @@ import {
   localAdminAuditRoleUrl,
 } from "./dev_test_game_admin_audit_surface_ids.mjs";
 import {
+  adminSpineProofPath,
+  adminSpineTerminalBatchProofPath,
+  devTestGameProofGraphAdminProofPath,
+  devTestGameProofGraphPath,
+  nextActionAdminProofPath,
+  nextActionPath,
+  proofFreshnessAdminProofPath,
+  spineManifestPath,
+} from "./dev_test_game_spine_artifact_paths.mjs";
+import {
+  devTestGameProofGraphCommand,
+} from "./dev_test_game_proof_graph_paths.mjs";
+import {
+  nextActionCommand,
+  proofFreshnessAdminProofCommand,
+} from "./dev_test_game_next_action_paths.mjs";
+import {
   localHostedEvidenceLaneDemoProofCheckId,
   localNextActionAdminSurfaceCheckId,
   localProofFreshnessAdminSurfaceCheckId,
   localProofGraphAdminRoleHandoffsCheckId,
 } from "./dev_test_game_local_readiness_dependencies.mjs";
+
+export const adminSpineProofCommand = "npm run test:dev-test-game-admin-spine";
+export const spineManifestAdminProofCommand =
+  "npm run test:dev-test-game-spine-manifest-admin-proof";
+export const terminalAdminProofBatchIds = Object.freeze([
+  "proof-graph",
+  "proof-freshness",
+  "next-action",
+]);
+export const terminalAdminProofBatchArtifactPaths = Object.freeze([
+  devTestGameProofGraphAdminProofPath,
+  proofFreshnessAdminProofPath,
+  nextActionAdminProofPath,
+]);
 
 export const adminProofDestinationRequirementCases = Object.freeze([
   Object.freeze({
@@ -232,6 +263,68 @@ export function adminProofDestinationRequirementRoleRows({
   );
 }
 
+export function devTestGameProofGraphFirstClassNodes({
+  game = "<seeded-game>",
+} = {}) {
+  return Object.freeze([
+    proofGraphSurfaceNode({
+      id: "admin-spine",
+      label: "Local admin spine",
+      status: "passed",
+      artifact: adminSpineProofPath,
+      roleUrl: localAdminAuditRoleUrl(localAdminAuditIds.adminSpine, { game }),
+      recoveryCommand: adminSpineProofCommand,
+    }),
+    proofGraphSurfaceNode({
+      id: "spine-manifest",
+      label: "Local spine manifest",
+      status: "passed",
+      artifact: spineManifestPath,
+      roleUrl: localAdminAuditRoleUrl(localAdminAuditIds.spineManifest, {
+        game,
+      }),
+      recoveryCommand: spineManifestAdminProofCommand,
+    }),
+    proofGraphSurfaceNode({
+      id: "proof-graph",
+      label: "Local proof graph",
+      status: "passed",
+      artifact: devTestGameProofGraphPath,
+      roleUrl: localAdminAuditRoleUrl(localAdminAuditIds.proofGraph, { game }),
+      recoveryCommand: devTestGameProofGraphCommand,
+    }),
+    proofGraphSurfaceNode({
+      id: "proof-freshness",
+      label: "Local proof freshness",
+      status: "passed",
+      artifact: proofFreshnessAdminProofPath,
+      roleUrl: localAdminAuditRoleUrl(localAdminAuditIds.proofFreshness, {
+        game,
+      }),
+      recoveryCommand: proofFreshnessAdminProofCommand,
+    }),
+    proofGraphSurfaceNode({
+      id: "next-action",
+      label: "Local next action",
+      status: "recorded",
+      artifact: nextActionPath,
+      roleUrl: localAdminAuditRoleUrl(localAdminAuditIds.nextAction, { game }),
+      recoveryCommand: nextActionCommand,
+    }),
+    Object.freeze({
+      id: "admin-spine-terminal-batches",
+      label: "Admin spine terminal proof batches",
+      kind: "terminal-proof-batch-receipt",
+      status: "passed",
+      artifact: adminSpineTerminalBatchProofPath,
+      roleUrl: localAdminAuditRoleUrl(localAdminAuditIds.adminSpine, { game }),
+      batchCount: 2,
+      proofIds: terminalAdminProofBatchIds,
+      artifactPaths: terminalAdminProofBatchArtifactPaths,
+    }),
+  ]);
+}
+
 export function adminProofDestinationProofGraphNodes({
   game = "<seeded-game>",
   status = "passed",
@@ -329,4 +422,23 @@ function cloneRequirement(requirement) {
 
 function adminProofDestinationProofId(linkId) {
   return String(linkId).replace("admin-proof:", "");
+}
+
+function proofGraphSurfaceNode({
+  id,
+  label,
+  status,
+  artifact,
+  roleUrl,
+  recoveryCommand,
+}) {
+  return Object.freeze({
+    id,
+    label,
+    kind: "proof-surface",
+    status,
+    artifact,
+    roleUrl,
+    recoveryCommand,
+  });
 }

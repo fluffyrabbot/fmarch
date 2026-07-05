@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
+  adminSpineProofCommand,
   adminProofDestinationArtifactPath,
   adminProofDestinationProofGraphNodes,
   adminProofDestinationRequirementCases,
@@ -10,6 +11,10 @@ import {
   adminProofDestinationRecoveryCommand,
   adminProofDestinationRoleUrl,
   adminProofDestinationRequirements,
+  devTestGameProofGraphFirstClassNodes,
+  spineManifestAdminProofCommand,
+  terminalAdminProofBatchArtifactPaths,
+  terminalAdminProofBatchIds,
 } from "./dev_test_game_proof_graph_handoff_cases.mjs";
 import {
   hostedIdentityEvidenceHandoffCase,
@@ -39,6 +44,13 @@ import {
   localAdminAuditHandoffCheckIds,
   localAdminAuditIds,
 } from "./dev_test_game_admin_audit_surface_ids.mjs";
+import {
+  devTestGameProofGraphCommand,
+} from "./dev_test_game_proof_graph_paths.mjs";
+import {
+  nextActionCommand,
+  proofFreshnessAdminProofCommand,
+} from "./dev_test_game_next_action_paths.mjs";
 import {
   localHostedEvidenceLaneDemoProofCheckId,
   localNextActionAdminSurfaceCheckId,
@@ -118,6 +130,83 @@ test("admin proof destination handoff cases derive proof graph nodes", () => {
       `/admin/audit/${auditId}?game=midsummer`,
       adminProofDestinationRecoveryCommand(linkId),
     ]),
+  );
+});
+
+test("proof graph first-class fixture nodes share artifact and command contracts", () => {
+  assert.deepEqual(
+    devTestGameProofGraphFirstClassNodes({ game: "midsummer" }).map((node) => [
+      node.id,
+      node.kind,
+      node.status,
+      node.artifact,
+      node.roleUrl,
+      node.recoveryCommand ?? "",
+      node.proofIds ?? [],
+      node.artifactPaths ?? [],
+    ]),
+    [
+      [
+        "admin-spine",
+        "proof-surface",
+        "passed",
+        "target/dev-test-game/admin-spine-proof.json",
+        "/admin/audit/local-admin-spine?game=midsummer",
+        adminSpineProofCommand,
+        [],
+        [],
+      ],
+      [
+        "spine-manifest",
+        "proof-surface",
+        "passed",
+        "target/dev-test-game/spine-manifest.json",
+        "/admin/audit/local-spine-manifest?game=midsummer",
+        spineManifestAdminProofCommand,
+        [],
+        [],
+      ],
+      [
+        "proof-graph",
+        "proof-surface",
+        "passed",
+        "target/dev-test-game/proof-graph.json",
+        "/admin/audit/local-proof-graph?game=midsummer",
+        devTestGameProofGraphCommand,
+        [],
+        [],
+      ],
+      [
+        "proof-freshness",
+        "proof-surface",
+        "passed",
+        "target/dev-test-game/proof-freshness-admin-proof.json",
+        "/admin/audit/local-proof-freshness?game=midsummer",
+        proofFreshnessAdminProofCommand,
+        [],
+        [],
+      ],
+      [
+        "next-action",
+        "proof-surface",
+        "recorded",
+        "target/dev-test-game/next-action.json",
+        "/admin/audit/local-next-action?game=midsummer",
+        nextActionCommand,
+        [],
+        [],
+      ],
+      [
+        "admin-spine-terminal-batches",
+        "terminal-proof-batch-receipt",
+        "passed",
+        "target/dev-test-game/admin-spine-terminal-batches.json",
+        "/admin/audit/local-admin-spine?game=midsummer",
+        "",
+        terminalAdminProofBatchIds,
+        terminalAdminProofBatchArtifactPaths,
+      ],
+    ],
   );
 });
 
