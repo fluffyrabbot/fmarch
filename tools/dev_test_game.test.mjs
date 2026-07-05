@@ -14489,6 +14489,8 @@ function identityAdminProofFixture() {
 }
 
 function coreLoopAdminProofFixture() {
+  const completedGameHardeningCoverageStatus =
+    completedGameHardeningCoverageStatusFixture();
   return {
     version: 1,
     proof: "dev-test-game-core-loop-admin-proof",
@@ -14502,7 +14504,7 @@ function coreLoopAdminProofFixture() {
       game: "00000000-0000-0000-0000-000000000001",
       coreLoopSpineStatus:
         "passed: D01 -> N01 -> D02, vote ack, N02 action ack, next D03, terminal advance InvalidTarget, reload D03, revote D03R1 via no_majority_continue_revote, revote vote ack, revote resolve ack, second revote D03R2 via no_majority_continue_revote, second vote ack, second resolve ack, policy no_majority_no_lynch -> N03",
-      completedGameHardeningCoverageStatus: "passed: 10/10 lanes across 4 families",
+      completedGameHardeningCoverageStatus,
       ...coreLoopGeneratedFromScenarioFamilies(),
       coreLoopSpineRows: {
         cycles: ["d01-n01-d02", "d02-n02", "n02-d03", "d03-n03", "n03-d04"],
@@ -14622,8 +14624,7 @@ function coreLoopAdminProofFixture() {
       visibleCheckStatuses: {
         "core-loop-spine":
           "passed: D01 -> N01 -> D02, vote ack, N02 action ack, next D03, terminal advance InvalidTarget, reload D03, revote D03R1 via no_majority_continue_revote, revote vote ack, revote resolve ack, second revote D03R2 via no_majority_continue_revote, second vote ack, second resolve ack, policy no_majority_no_lynch -> N03, N03 action ack, next D04",
-        "completed-game-hardening-coverage":
-          "passed: 10/10 lanes across 4 families",
+        "completed-game-hardening-coverage": completedGameHardeningCoverageStatus,
       },
       visibleSpineCycles: ["d01-n01-d02", "d02-n02", "n02-d03", "d03-n03", "n03-d04"],
       visibleSpineRoleUrls: [
@@ -19558,6 +19559,12 @@ function recoveryReceiptFixture(descriptor) {
       evidence: fixture.evidence,
     })),
   };
+}
+
+function completedGameHardeningCoverageStatusFixture() {
+  const cases = completedGameHardeningSpineLaneCases();
+  const familyCount = new Set(cases.map((scenario) => scenario.family)).size;
+  return `passed: ${cases.length}/${cases.length} lanes across ${familyCount} families`;
 }
 
 function adminSpineProofFixture() {

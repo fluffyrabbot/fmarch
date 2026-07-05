@@ -3797,27 +3797,27 @@ test("admin local release readiness detail data carries checks and unproven rows
     [
       [
         "local-stale-conflict-message-milestone",
-        `passed: ${staleConflictMessageLaneIds.length}/${staleConflictMessageLaneIds.length} lanes across 3/3 shared families`,
+        releaseReadinessCoverageStatus(staleConflictMessageMilestoneFixture()),
       ],
       [
         "local-host-stale-control-milestone",
-        "passed: 20/20 lanes across 5/5 shared families",
+        releaseReadinessCoverageStatus(hostStaleControlMilestoneFixture()),
       ],
       [
         "local-private-channel-recovery-milestone",
-        "passed: 4/4 lanes across 4/4 shared families",
+        releaseReadinessCoverageStatus(privateChannelRecoveryMilestoneFixture()),
       ],
       [
         "local-replacement-private-recovery-milestone",
-        "passed: 6/6 lanes across 3/3 shared families",
+        releaseReadinessCoverageStatus(replacementPrivateRecoveryMilestoneFixture()),
       ],
       [
         "local-replacement-action-recovery-milestone",
-        "passed: 3/3 lanes across 3/3 shared families",
+        releaseReadinessCoverageStatus(replacementActionRecoveryMilestoneFixture()),
       ],
       [
         "local-replacement-handoff-recovery-milestone",
-        "passed: 17/17 lanes across 5/5 shared families",
+        releaseReadinessCoverageStatus(replacementHandoffRecoveryMilestoneFixture()),
       ],
     ],
   );
@@ -3882,7 +3882,13 @@ test("admin local release readiness flags replacement coverage drift", async () 
     data.audit.checks.find(
       (check) => check.id === "local-replacement-handoff-recovery-milestone",
     ).status,
-    "drift: passed: 17/17 lanes across 5/5 shared families; expected 18 shared lanes",
+    releaseReadinessCoverageStatus(
+      replacementHandoffRecoveryMilestoneFixture(),
+      {
+        status: "drift",
+        expectedLaneCount: replacementHandoffRecoveryLaneIds.length + 1,
+      },
+    ),
   );
   assert.equal(
     data.audit.status,
@@ -4886,6 +4892,20 @@ function passedCoverageFixture({ laneIds, families }) {
     ),
     families: passedFamilies,
   };
+}
+
+function releaseReadinessCoverageStatus(
+  milestone,
+  { status = milestone.status, expectedLaneCount = milestone.expectedLaneCount } = {},
+) {
+  const summary =
+    `passed: ${milestone.coveredLaneCount}/${milestone.requiredLaneCount} ` +
+    `lanes across ${milestone.familyCount}/${milestone.expectedFamilyCount} ` +
+    "shared families";
+  if (status === "drift") {
+    return `drift: ${summary}; expected ${expectedLaneCount} shared lanes`;
+  }
+  return summary;
 }
 
 function localOpsArtifactsFixture() {
