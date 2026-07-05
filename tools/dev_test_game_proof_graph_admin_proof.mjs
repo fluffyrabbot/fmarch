@@ -124,6 +124,8 @@ export function proofGraphAdminProofCase() {
       });
       const coreLoopFamilyDestinations =
         proofGraphCoreLoopScenarioFamilyDestinations(source.proofGraph);
+      const productionFeatureTargetDestinations =
+        proofGraphProductionFeatureTargetDestinations(source.proofGraph);
       return await proveAdminAuditDetail({
         browser,
         frontendBaseUrl,
@@ -140,6 +142,9 @@ export function proofGraphAdminProofCase() {
         requiredRelatedDestinations: [
           ...requiredRelatedDestinationsForHandoffs(roleHandoffs),
           ...coreLoopFamilyDestinations,
+          ...productionFeatureTargetDestinations.filter(
+            (destination) => destination.kind === "admin-audit",
+          ),
         ],
       });
     },
@@ -178,6 +183,8 @@ export function proofGraphAdminProofCase() {
         }),
         coreLoopScenarioFamilyDestinations:
           proofGraphCoreLoopScenarioFamilyDestinations(source.proofGraph),
+        productionFeatureTargetDestinations:
+          proofGraphProductionFeatureTargetDestinations(source.proofGraph),
         ...proofGraphAdminFeatureTargetEntries(source.proofGraph),
       },
       adminRoleSurface,
@@ -252,10 +259,65 @@ export function assertProofGraphAdminProof(evidence) {
     proofName: "proof graph admin proof",
   });
   assertProofGraphAdminProofCoversCoreLoopScenarioFamilies(evidence);
+  assertProofGraphAdminProofCoversProductionFeatureDestinations(evidence);
   for (const featureTargetCase of proofGraphAdminFeatureTargetCases) {
     assertProofGraphAdminProofCoversFeatureTarget(evidence, featureTargetCase);
   }
   return evidence;
+}
+
+function assertProofGraphAdminProofCoversProductionFeatureDestinations(evidence) {
+  const productionNodeIds = new Set(
+    (evidence.generatedFrom?.nodeIds ?? []).filter((id) =>
+      String(id).startsWith("production-feature:"),
+    ),
+  );
+  const destinations =
+    evidence.generatedFrom?.productionFeatureTargetDestinations ?? [];
+  if (destinations.length !== productionNodeIds.size) {
+    throw new Error(
+      "proof graph admin proof production feature destination count drifted",
+    );
+  }
+  for (const destination of destinations) {
+    if (
+      !productionNodeIds.has(destination.linkId) ||
+      !evidence.adminRoleSurface?.visibleRelatedLinks?.includes(
+        destination.linkId,
+      )
+    ) {
+      throw new Error(
+        `proof graph admin proof missing production feature related link: ${destination.linkId}`,
+      );
+    }
+    if (destination.kind !== "admin-audit") {
+      if (
+        destination.kind !== "role-url" ||
+        typeof destination.roleUrl !== "string" ||
+        destination.roleUrl.trim() === "" ||
+        destination.targetRoleUrl !== destination.roleUrl
+      ) {
+        throw new Error(
+          `proof graph admin proof has malformed production feature role destination: ${destination.linkId}`,
+        );
+      }
+      continue;
+    }
+    const visibleDestination =
+      evidence.adminRoleSurface?.visibleRelatedDestinations?.find(
+        (candidate) =>
+          candidate.linkId === destination.linkId &&
+          candidate.auditId === destination.auditId,
+      );
+    if (
+      visibleDestination?.detailRoleUrl !== destination.detailRoleUrl ||
+      !visibleDestination.visibleChecks?.includes(destination.adminCheckId)
+    ) {
+      throw new Error(
+        `proof graph admin proof did not inspect production feature destination: ${destination.linkId}`,
+      );
+    }
+  }
 }
 
 function assertProofGraphAdminProofCoversCoreLoopScenarioFamilies(evidence) {
@@ -494,6 +556,40 @@ function coreLoopScenarioFamilyTextTokens(family) {
     ...family.scenarios,
     ...family.transitionTokens,
   ].filter((token) => String(token ?? "") !== "");
+}
+
+function proofGraphProductionFeatureTargetDestinations(proofGraph) {
+  return proofGraph.nodes
+    .filter((node) => node.kind === "production-feature-spine-target")
+    .map((node) => {
+      const auditId = auditIdFromAdminRoleUrl(node.roleUrl);
+      if (auditId !== null) {
+        return {
+          kind: "admin-audit",
+          linkId: node.id,
+          auditId,
+          detailRoleUrl: `/admin/audit/${auditId}?game=<seeded-game>`,
+          featureSlotId: node.featureSlotId,
+          sourceCheckId: node.sourceCheckId,
+          adminCheckId: node.adminCheckId,
+          requiredChecks: [node.adminCheckId],
+        };
+      }
+      return {
+        kind: "role-url",
+        linkId: node.id,
+        featureSlotId: node.featureSlotId,
+        sourceCheckId: node.sourceCheckId,
+        roleUrl: node.roleUrl,
+        targetRoleUrl: node.targetRoleUrl,
+        adminCheckId: node.adminCheckId,
+      };
+    });
+}
+
+function auditIdFromAdminRoleUrl(roleUrl) {
+  const match = String(roleUrl ?? "").match(/^\/admin\/audit\/([^?]+)/);
+  return match === null ? null : match[1];
 }
 
 function proofGraphFeatureTarget(proofGraph, featureTargetCase) {

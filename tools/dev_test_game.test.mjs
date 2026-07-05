@@ -18834,6 +18834,17 @@ function proofGraphAdminProofFixture() {
     proofGraphReplacementActionFeatureTargetFixture();
   const replacementPrivateGraphTarget =
     proofGraphReplacementPrivateFeatureTargetFixture();
+  const coreLoopProductionFeatureTarget =
+    proofGraphCoreLoopProductionFeatureTargetFixture();
+  const productionFeatureTargetDestinations =
+    proofGraphProductionFeatureTargetDestinationsFixture([
+      coreLoopProductionFeatureTarget,
+      hostSetupGraphTarget,
+      cohostGraphTarget,
+      replacementGraphTarget,
+      replacementActionGraphTarget,
+      replacementPrivateGraphTarget,
+    ]);
   const coreLoopFamilyDestinations =
     proofGraphCoreLoopScenarioFamilyDestinationsFixture();
   const evidenceObjectRowIds = [
@@ -18867,6 +18878,7 @@ function proofGraphAdminProofFixture() {
       nodeIds: [
         ...handoffs.map((handoff) => handoff.linkId),
         hostSetupGraphTarget.roleSurfaceNodeId,
+        coreLoopProductionFeatureTarget.productionFeatureNodeId,
         hostSetupGraphTarget.productionFeatureNodeId,
         cohostGraphTarget.roleSurfaceNodeId,
         cohostGraphTarget.productionFeatureNodeId,
@@ -18898,6 +18910,7 @@ function proofGraphAdminProofFixture() {
       adminProofSurfaceIds,
       adminProofRoleHandoffs: handoffs,
       coreLoopScenarioFamilyDestinations: coreLoopFamilyDestinations,
+      productionFeatureTargetDestinations,
       hostSetupFeatureTarget: hostSetupGraphTarget,
       cohostFeatureTarget: cohostGraphTarget,
       replacementFeatureTarget: replacementGraphTarget,
@@ -18915,6 +18928,7 @@ function proofGraphAdminProofFixture() {
         ...handoffs.map((handoff) => handoff.linkId),
         hostSetupGraphTarget.roleSurfaceNodeId,
         hostSetupGraphTarget.productionFeatureNodeId,
+        coreLoopProductionFeatureTarget.productionFeatureNodeId,
         hostSetupGraphTarget.edgeRowId,
         `coverage-decision:${hostSetupGraphTarget.productionFeatureNodeId}`,
         cohostGraphTarget.roleSurfaceNodeId,
@@ -18945,6 +18959,7 @@ function proofGraphAdminProofFixture() {
         ...handoffs.map((handoff) => handoff.linkId),
         hostSetupGraphTarget.roleSurfaceNodeId,
         hostSetupGraphTarget.productionFeatureNodeId,
+        coreLoopProductionFeatureTarget.productionFeatureNodeId,
         cohostGraphTarget.roleSurfaceNodeId,
         cohostGraphTarget.productionFeatureNodeId,
         replacementGraphTarget.roleSurfaceNodeId,
@@ -18968,6 +18983,14 @@ function proofGraphAdminProofFixture() {
               }
             : {}),
         })),
+        ...productionFeatureTargetDestinations
+          .filter((destination) => destination.kind === "admin-audit")
+          .map((destination) => ({
+            linkId: destination.linkId,
+            auditId: destination.auditId,
+            detailRoleUrl: destination.detailRoleUrl,
+            visibleChecks: [destination.adminCheckId],
+          })),
         ...coreLoopFamilyDestinations.map((destination) => ({
           linkId: destination.linkId,
           auditId: destination.auditId,
@@ -19004,6 +19027,24 @@ function proofGraphHostSetupFeatureTargetFixture() {
     recoveryCommand: devTestGameHostSetupProofCommand,
     coverageDecision:
       featureSpineCaseFixture("host-setup-route").spineTarget.coverageDecision,
+  };
+}
+
+function proofGraphCoreLoopProductionFeatureTargetFixture() {
+  return {
+    productionFeatureNodeId: "production-feature:host-phase-control",
+    sourceCheckId: "local-core-loop-proof",
+    featureSlotId: "host-phase-control",
+    roleUrl: "/admin/audit/local-core-loop?game=<seeded-game>",
+    targetRoleUrl: "http://127.0.0.1:5173/g/<seeded-game>/host",
+    checkpointId: "host-control-start-phase",
+    adminCheckId: "host-lifecycle-control",
+    browserProofCommand: devTestGameLiveProofCommand,
+    recoveryCommand: "npm run test:dev-test-game-core-loop-admin-proof",
+    coverageDecision: {
+      kind: "seeded-role-url-proof",
+      proofCommand: "npm run test:dev-test-game-core-loop-admin-proof",
+    },
   };
 }
 
@@ -19114,6 +19155,33 @@ function proofGraphCoreLoopScenarioFamilyTextTokensFixture(family) {
     ...family.scenarios,
     ...family.transitionTokens,
   ].filter((token) => String(token ?? "") !== "");
+}
+
+function proofGraphProductionFeatureTargetDestinationsFixture(targets) {
+  return targets.map((target) => {
+    const auditId = target.roleUrl.match(/^\/admin\/audit\/([^?]+)/)?.[1];
+    if (auditId !== undefined) {
+      return {
+        kind: "admin-audit",
+        linkId: target.productionFeatureNodeId,
+        auditId,
+        detailRoleUrl: `/admin/audit/${auditId}?game=<seeded-game>`,
+        featureSlotId: target.featureSlotId,
+        sourceCheckId: target.sourceCheckId,
+        adminCheckId: target.adminCheckId,
+        requiredChecks: [target.adminCheckId],
+      };
+    }
+    return {
+      kind: "role-url",
+      linkId: target.productionFeatureNodeId,
+      featureSlotId: target.featureSlotId,
+      sourceCheckId: target.sourceCheckId,
+      roleUrl: target.roleUrl,
+      targetRoleUrl: target.targetRoleUrl,
+      adminCheckId: target.adminCheckId,
+    };
+  });
 }
 
 function hostedHandoffInputIdsFixture() {

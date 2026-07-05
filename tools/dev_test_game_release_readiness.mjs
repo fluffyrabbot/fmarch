@@ -5443,6 +5443,7 @@ export function validateDevTestGameProofGraphAdminProof(proof, options = {}) {
     validateProofGraphAdminTerminalReceiptArtifact(proof);
   }
   validateProofGraphAdminCoreLoopScenarioFamilyDestinations(proof);
+  validateProofGraphAdminProductionFeatureTargetDestinations(proof);
   for (const featureTargetCase of proofGraphAdminFeatureTargetCases) {
     validateProofGraphAdminFeatureTarget(proof, featureTargetCase);
   }
@@ -5562,6 +5563,74 @@ function validateProofGraphAdminCoreLoopScenarioFamilyDestinations(proof) {
           `proof graph admin proof missing core-loop scenario family text: ${family.id} ${token}`,
         );
       }
+    }
+  }
+}
+
+function validateProofGraphAdminProductionFeatureTargetDestinations(proof) {
+  const productionNodeIds = new Set(
+    (proof.generatedFrom?.nodeIds ?? []).filter((id) =>
+      String(id).startsWith("production-feature:"),
+    ),
+  );
+  const destinations =
+    proof.generatedFrom?.productionFeatureTargetDestinations ?? [];
+  if (destinations.length !== productionNodeIds.size) {
+    throw new Error(
+      "proof graph admin proof production feature destination count drifted",
+    );
+  }
+  const visibleDestinations = Array.isArray(
+    proof.adminRoleSurface?.visibleRelatedDestinations,
+  )
+    ? proof.adminRoleSurface.visibleRelatedDestinations
+    : [];
+  for (const destination of destinations) {
+    if (
+      !productionNodeIds.has(destination.linkId) ||
+      !proof.adminRoleSurface?.visibleRelatedLinks?.includes(destination.linkId)
+    ) {
+      throw new Error(
+        `proof graph admin proof missing production feature destination link: ${destination.linkId}`,
+      );
+    }
+    if (
+      typeof destination.featureSlotId !== "string" ||
+      destination.featureSlotId.trim() === "" ||
+      typeof destination.sourceCheckId !== "string" ||
+      destination.sourceCheckId.trim() === "" ||
+      typeof destination.adminCheckId !== "string" ||
+      destination.adminCheckId.trim() === ""
+    ) {
+      throw new Error(
+        `proof graph admin proof malformed production feature destination: ${destination.linkId}`,
+      );
+    }
+    if (destination.kind !== "admin-audit") {
+      if (
+        destination.kind !== "role-url" ||
+        typeof destination.roleUrl !== "string" ||
+        destination.roleUrl.trim() === "" ||
+        destination.targetRoleUrl !== destination.roleUrl
+      ) {
+        throw new Error(
+          `proof graph admin proof malformed production feature role destination: ${destination.linkId}`,
+        );
+      }
+      continue;
+    }
+    const visibleDestination = visibleDestinations.find(
+      (item) =>
+        item.linkId === destination.linkId &&
+        item.auditId === destination.auditId,
+    );
+    if (
+      visibleDestination?.detailRoleUrl !== destination.detailRoleUrl ||
+      !visibleDestination.visibleChecks?.includes(destination.adminCheckId)
+    ) {
+      throw new Error(
+        `proof graph admin proof did not inspect production feature destination: ${destination.linkId}`,
+      );
     }
   }
 }
