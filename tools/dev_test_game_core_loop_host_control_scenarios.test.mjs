@@ -5,6 +5,7 @@ import {
   coreLoopHostControlLaneIds,
   coreLoopHostControlScenarioFamily,
   hostLifecycleControlScenario,
+  hostModkillControlScenario,
 } from "./dev_test_game_core_loop_host_control_scenarios.mjs";
 
 test("host-control family shares lifecycle role surface and proof-run lane ids", () => {
@@ -20,6 +21,10 @@ test("host-control family shares lifecycle role surface and proof-run lane ids",
   assert.deepEqual(
     family.surfaces.hostLifecycleControl,
     hostLifecycleControlScenario(),
+  );
+  assert.deepEqual(
+    family.surfaces.hostModkillControl,
+    hostModkillControlScenario(),
   );
   assert.deepEqual(family.proofRunLanes, {
     hostLifecycleControl: "host-lifecycle-control",

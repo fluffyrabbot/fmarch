@@ -27,6 +27,7 @@ import {
 import {
   assertEmptyNightThreeHostTransitionProofCase,
   assertHostLifecycleControlRoleSurfaceCase,
+  assertHostModkillControlSurfaceCase,
   assertHostNightActionTransitionSurfaceCase,
   assertHostPhaseTransitionActionProofCase,
   assertHostStaleAdvanceAfterTransitionProofCase,
@@ -187,6 +188,42 @@ function completedGameHardeningCoverageStatus(proofRun) {
     return `drift: ${status} artifact reports ${passedLaneCount}/${laneCount} completed-game lanes across ${familyCount} families; expected ${expectedLaneCount} lanes across ${expectedFamilyCount} shared families`;
   }
   return `${status}: ${passedLaneCount}/${laneCount} completed-game lanes across ${familyCount} families`;
+}
+
+function hostModkillControlSurfaceFromProofRun(proofRun) {
+  const hostModkillControl = proofRunLane(proofRun, "host-modkill-control");
+  const staleHostModkill = proofRunLane(proofRun, "stale-host-modkill");
+  const staleHostModkillReload = proofRunLane(
+    proofRun,
+    "stale-host-modkill-reload",
+  );
+  return {
+    status:
+      hostModkillControl?.status === "passed" &&
+      staleHostModkill?.status === "passed" &&
+      staleHostModkillReload?.status === "passed"
+        ? "passed"
+        : "failed",
+    proofCheckId: "host-modkill-control",
+    staleProofCheckId: "stale-host-modkill",
+    staleReloadProofCheckId: "stale-host-modkill-reload",
+    hostModkillControl: hostModkillControl ?? null,
+    staleHostModkill: staleHostModkill ?? null,
+    staleHostModkillReload: staleHostModkillReload ?? null,
+  };
+}
+
+function proofRunLane(proofRun, laneId) {
+  const lane = proofRun?.lanes?.find?.((candidate) => candidate?.id === laneId);
+  if (!lane) {
+    return null;
+  }
+  return {
+    id: lane.id,
+    label: lane.label,
+    status: lane.status,
+    evidence: lane.evidence ?? null,
+  };
 }
 
 export function coreLoopAdminProofCase() {
@@ -391,9 +428,12 @@ export function coreLoopAdminProofCase() {
             spineRows.roleUrlHrefs["d02-n02-actionPlayer"],
           ),
       });
+      const hostModkillControlSurface =
+        hostModkillControlSurfaceFromProofRun(proofRun);
       return {
         adminRoleSurface,
         hostRoleSurface,
+        hostModkillControlSurface,
         playerRoleSurface,
         targetResolutionReceiptSurface,
         normalResolutionPrivacySurface,
@@ -459,6 +499,7 @@ export function coreLoopAdminProofCase() {
       },
       adminRoleSurface: surfaces.adminRoleSurface,
       hostRoleSurface: surfaces.hostRoleSurface,
+      hostModkillControlSurface: surfaces.hostModkillControlSurface,
       playerRoleSurface: surfaces.playerRoleSurface,
       targetResolutionReceiptSurface: surfaces.targetResolutionReceiptSurface,
       normalResolutionPrivacySurface: surfaces.normalResolutionPrivacySurface,
@@ -9927,6 +9968,10 @@ export function assertCoreLoopAdminProof(evidence) {
     }
   }
   assertHostLifecycleControlCheckpoint(evidence.hostRoleSurface);
+  assertCoreLoopHostModkillControlSurface({
+    hostModkillControlSurface: evidence.hostModkillControlSurface,
+    expectedGame: evidence.generatedFrom?.game,
+  });
   assertPlayerActionSubmissionCheckpoint(evidence.playerRoleSurface);
   assertTargetResolutionReceiptSurface(evidence.targetResolutionReceiptSurface);
   assertNormalResolutionPrivacySurface(evidence.normalResolutionPrivacySurface);
@@ -9973,6 +10018,19 @@ function assertHostLifecycleControlCheckpoint(hostRoleSurface) {
     hostRoleSurface,
     expectedGame: gameFromRoleUrl(hostRoleSurface?.sourceRoleUrl),
     scenario: scenarioFamily.surfaces.hostLifecycleControl,
+    includeEvidenceInError: true,
+  });
+}
+
+function assertCoreLoopHostModkillControlSurface({
+  hostModkillControlSurface,
+  expectedGame,
+}) {
+  const scenarioFamily = coreLoopHostControlScenarioFamily();
+  assertHostModkillControlSurfaceCase({
+    hostModkillControlSurface,
+    expectedGame,
+    scenario: scenarioFamily.surfaces.hostModkillControl,
     includeEvidenceInError: true,
   });
 }

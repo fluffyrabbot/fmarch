@@ -14709,6 +14709,7 @@ function coreLoopAdminProofFixture() {
       productionReady: false,
     },
     hostRoleSurface: hostLifecycleRoleSurfaceFixture(),
+    hostModkillControlSurface: hostModkillControlSurfaceFixture(),
     playerRoleSurface: playerActionRoleSurfaceFixture(),
     targetResolutionReceiptSurface: targetResolutionReceiptSurfaceFixture(),
     normalResolutionPrivacySurface: normalResolutionPrivacySurfaceFixture(),
@@ -14835,6 +14836,53 @@ function hostLifecycleRoleSurfaceFixture() {
     },
     releaseReady: false,
     productionReady: false,
+  };
+}
+
+function hostModkillControlSurfaceFixture() {
+  return {
+    status: "passed",
+    proofCheckId: "host-modkill-control",
+    staleProofCheckId: "stale-host-modkill",
+    staleReloadProofCheckId: "stale-host-modkill-reload",
+    hostModkillControl: {
+      id: "host-modkill-control",
+      label: "Host modkill control disables player commands",
+      status: "passed",
+      evidence: {
+        targetSlot: "slot-7",
+        modkillState: "ack",
+        commandStatus: "modkilled",
+        apiModkillStatus: "modkilled",
+        actorStatusAfterModkill: "modkilled",
+        directPostError: "SlotNotAlive",
+        restoreState: "ack",
+        apiRestoredStatus: "alive",
+        actorStatusAfterRestore: "alive",
+      },
+    },
+    staleHostModkill: {
+      id: "stale-host-modkill",
+      label: "Stale host modkill rejects current status",
+      status: "passed",
+      evidence: {
+        rejectError: "InvalidTarget",
+        staleLifecycle: "Alive",
+        apiStatus: "modkilled",
+        actorStatus: "modkilled",
+      },
+    },
+    staleHostModkillReload: {
+      id: "stale-host-modkill-reload",
+      label: "Stale host modkill reloads terminal slot controls",
+      status: "passed",
+      evidence: {
+        routeResponseStatus: 200,
+        routeStatus: 200,
+        lifecycle: "Modkilled",
+        apiStatus: "modkilled",
+      },
+    },
   };
 }
 

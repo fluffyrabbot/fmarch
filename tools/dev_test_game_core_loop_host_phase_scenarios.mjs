@@ -3,6 +3,9 @@ const cloneLifecycleScenario = (scenario) => ({
   ...scenario,
   visibleRows: [...scenario.visibleRows],
 });
+const cloneHostModkillScenario = (scenario) => ({
+  ...scenario,
+});
 const clonePhaseStateCase = (phaseStateCase) => ({ ...phaseStateCase });
 const cloneTransitionProofCase = (transitionCase) => ({
   ...transitionCase,
@@ -492,6 +495,29 @@ export function hostLifecycleControlScenario() {
   return cloneLifecycleScenario(hostLifecycleControlScenarioDefinition);
 }
 
+const hostModkillControlScenarioDefinition = Object.freeze({
+  proofCheckId: "host-modkill-control",
+  staleProofCheckId: "stale-host-modkill",
+  staleReloadProofCheckId: "stale-host-modkill-reload",
+  targetSlot: "slot-7",
+  lifecycleStatus: "modkilled",
+  lifecycleLabel: "Modkilled",
+  staleLifecycleLabel: "Alive",
+  modkillState: "ack",
+  commandStatus: "modkilled",
+  apiModkillStatus: "modkilled",
+  actorStatusAfterModkill: "modkilled",
+  directPostError: "SlotNotAlive",
+  restoreState: "ack",
+  restoreStatus: "alive",
+  staleRejectError: "InvalidTarget",
+  staleReloadRouteStatus: 200,
+});
+
+export function hostModkillControlScenario() {
+  return cloneHostModkillScenario(hostModkillControlScenarioDefinition);
+}
+
 export function assertHostLifecycleControlRoleSurfaceCase({
   hostRoleSurface,
   expectedGame,
@@ -638,6 +664,54 @@ export function assertHostLifecycleStaleRejectProofCase({
     throwHostPhaseScenarioAssertionError({
       message: "core-loop admin proof missing host stale lifecycle recovery",
       evidence: staleRejectProof,
+      includeEvidenceInError,
+    });
+  }
+}
+
+export function assertHostModkillControlSurfaceCase({
+  hostModkillControlSurface,
+  scenario = hostModkillControlScenarioDefinition,
+  includeEvidenceInError = false,
+}) {
+  const proofLane = hostModkillControlSurface?.hostModkillControl;
+  const staleProofLane = hostModkillControlSurface?.staleHostModkill;
+  const staleReloadLane = hostModkillControlSurface?.staleHostModkillReload;
+  const proof = proofLane?.evidence;
+  const staleProof = staleProofLane?.evidence;
+  const staleReloadProof = staleReloadLane?.evidence;
+  if (
+    hostModkillControlSurface?.status !== "passed" ||
+    hostModkillControlSurface.proofCheckId !== scenario.proofCheckId ||
+    hostModkillControlSurface.staleProofCheckId !== scenario.staleProofCheckId ||
+    hostModkillControlSurface.staleReloadProofCheckId !==
+      scenario.staleReloadProofCheckId ||
+    proofLane?.id !== scenario.proofCheckId ||
+    proofLane?.status !== "passed" ||
+    proof?.targetSlot !== scenario.targetSlot ||
+    proof?.modkillState !== scenario.modkillState ||
+    proof?.commandStatus !== scenario.commandStatus ||
+    proof?.apiModkillStatus !== scenario.apiModkillStatus ||
+    proof?.actorStatusAfterModkill !== scenario.actorStatusAfterModkill ||
+    proof?.directPostError !== scenario.directPostError ||
+    proof?.restoreState !== scenario.restoreState ||
+    proof?.apiRestoredStatus !== scenario.restoreStatus ||
+    proof?.actorStatusAfterRestore !== scenario.restoreStatus ||
+    staleProofLane?.id !== scenario.staleProofCheckId ||
+    staleProofLane?.status !== "passed" ||
+    staleProof?.rejectError !== scenario.staleRejectError ||
+    staleProof?.staleLifecycle !== scenario.staleLifecycleLabel ||
+    staleProof?.apiStatus !== scenario.lifecycleStatus ||
+    staleProof?.actorStatus !== scenario.lifecycleStatus ||
+    staleReloadLane?.id !== scenario.staleReloadProofCheckId ||
+    staleReloadLane?.status !== "passed" ||
+    staleReloadProof?.routeStatus !== scenario.staleReloadRouteStatus ||
+    staleReloadProof?.lifecycle !== scenario.lifecycleLabel ||
+    staleReloadProof?.apiStatus !== scenario.lifecycleStatus
+  ) {
+    throwHostPhaseScenarioAssertionError({
+      message: "core-loop admin proof missing host modkill control surface",
+      evidence: hostModkillControlSurface,
       includeEvidenceInError,
     });
   }

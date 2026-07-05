@@ -227,6 +227,7 @@ import {
 import {
   assertEmptyNightThreeHostTransitionProofCase,
   assertHostLifecycleControlRoleSurfaceCase,
+  assertHostModkillControlSurfaceCase,
   assertHostNightActionTransitionSurfaceCase,
   assertHostPhaseTransitionActionProofCase,
   assertHostStaleAdvanceAfterTransitionProofCase,
@@ -2442,6 +2443,10 @@ export function validateDevTestGameCoreLoopAdminProof(proof, options = {}) {
     }
   }
   assertCoreLoopHostLifecycleCheckpoint(proof.hostRoleSurface);
+  assertCoreLoopHostModkillControlSurface({
+    hostModkillControlSurface: proof.hostModkillControlSurface,
+    expectedGame: proof.generatedFrom?.game,
+  });
   assertCoreLoopPlayerActionCheckpoint(proof.playerRoleSurface);
   assertCoreLoopTargetResolutionReceiptSurface(proof.targetResolutionReceiptSurface);
   assertCoreLoopNormalResolutionPrivacySurface(proof.normalResolutionPrivacySurface);
@@ -2959,6 +2964,18 @@ function assertCoreLoopHostLifecycleCheckpoint(hostRoleSurface) {
     hostRoleSurface,
     expectedGame: gameFromRoleUrl(hostRoleSurface?.sourceRoleUrl),
     scenario: scenarioFamily.surfaces.hostLifecycleControl,
+  });
+}
+
+function assertCoreLoopHostModkillControlSurface({
+  hostModkillControlSurface,
+  expectedGame,
+}) {
+  const scenarioFamily = coreLoopHostControlScenarioFamily();
+  assertHostModkillControlSurfaceCase({
+    hostModkillControlSurface,
+    expectedGame,
+    scenario: scenarioFamily.surfaces.hostModkillControl,
   });
 }
 

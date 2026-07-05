@@ -5,6 +5,7 @@ import {
   assertEmptyNightThreeHostTransitionProofCase,
   assertHostNightActionTransitionSurfaceCase,
   assertHostLifecycleControlRoleSurfaceCase,
+  assertHostModkillControlSurfaceCase,
   assertHostPhaseTransitionActionProofCase,
   assertHostStaleAdvanceAfterTransitionProofCase,
   dayFourNoLynchHostTransitionProofCase,
@@ -16,6 +17,7 @@ import {
   hostDeadlineAffordanceForPhaseState,
   hostExtendDeadlineCommandFacts,
   hostLifecycleControlScenario,
+  hostModkillControlScenario,
   hostLockedPhaseTransitionCase,
   hostLockThreadCommandFacts,
   hostNightActionTransitionSurfaceCase,
@@ -909,6 +911,78 @@ test("host lifecycle control assertion covers checkpoint, click, and stale rejec
         expectedGame: "game-a",
       }),
     /host lifecycle role checkpoint/,
+  );
+});
+
+test("host modkill control assertion covers ack, stale reject, and reload recovery", () => {
+  const hostModkillControlSurface = {
+    status: "passed",
+    proofCheckId: "host-modkill-control",
+    staleProofCheckId: "stale-host-modkill",
+    staleReloadProofCheckId: "stale-host-modkill-reload",
+    hostModkillControl: {
+      id: "host-modkill-control",
+      label: "Host modkill control disables player commands",
+      status: "passed",
+      evidence: {
+        targetSlot: "slot-7",
+        modkillState: "ack",
+        commandStatus: "modkilled",
+        apiModkillStatus: "modkilled",
+        actorStatusAfterModkill: "modkilled",
+        directPostError: "SlotNotAlive",
+        restoreState: "ack",
+        apiRestoredStatus: "alive",
+        actorStatusAfterRestore: "alive",
+      },
+    },
+    staleHostModkill: {
+      id: "stale-host-modkill",
+      label: "Stale host modkill rejects current status",
+      status: "passed",
+      evidence: {
+        rejectError: "InvalidTarget",
+        staleLifecycle: "Alive",
+        apiStatus: "modkilled",
+        actorStatus: "modkilled",
+      },
+    },
+    staleHostModkillReload: {
+      id: "stale-host-modkill-reload",
+      label: "Stale host modkill reloads terminal slot controls",
+      status: "passed",
+      evidence: {
+        routeResponseStatus: 200,
+        routeStatus: 200,
+        lifecycle: "Modkilled",
+        apiStatus: "modkilled",
+      },
+    },
+  };
+
+  assert.doesNotThrow(() =>
+    assertHostModkillControlSurfaceCase({
+      hostModkillControlSurface,
+      expectedGame: "game-a",
+      scenario: hostModkillControlScenario(),
+    }),
+  );
+  assert.throws(
+    () =>
+      assertHostModkillControlSurfaceCase({
+        hostModkillControlSurface: {
+          ...hostModkillControlSurface,
+          hostModkillControl: {
+            ...hostModkillControlSurface.hostModkillControl,
+            evidence: {
+              ...hostModkillControlSurface.hostModkillControl.evidence,
+              directPostError: null,
+            },
+          },
+        },
+        expectedGame: "game-a",
+      }),
+    /host modkill control surface/,
   );
 });
 
