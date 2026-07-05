@@ -20,6 +20,7 @@ import {
 } from "./dev_test_game_admin_audit_surface_ids.mjs";
 import {
   privateChannelNormalizedEvidenceObjects,
+  replacementPrivatePostNormalizedEvidenceObjects,
   sameNormalizedEvidenceObjects,
 } from "./dev_test_game_normalized_evidence_objects.mjs";
 import {
@@ -183,6 +184,7 @@ export const recoveryReceiptGraphDescriptors = Object.freeze([
     manifestDependsOn: replacementRecoveryReceiptManifestDependencies(),
     familyId: "replacement-private-channel-recovery",
     laneIds: replacementPrivateChannelRecoveryLaneIds,
+    normalizedEvidenceObjects: replacementPrivatePostNormalizedEvidenceObjects,
     receiptFixture: {
       scope: "local-dev-test-game-replacement-private-recovery",
       proofBoundary: "Local replacement private-channel recovery receipt.",

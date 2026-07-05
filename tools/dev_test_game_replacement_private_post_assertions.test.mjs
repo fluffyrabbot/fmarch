@@ -1,6 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
+  buildReplacementCompletedPrivatePostRejectProof,
+  buildReplacementCompletedPrivatePostReloadProof,
+  buildReplacementResolvedPrivatePostAckProof,
+  buildReplacementResolvedPrivatePostReconnectProof,
   replacementCompletedPrivatePostRejectMatches,
   replacementCompletedPrivatePostReloadMatches,
   replacementResolvedPrivatePostAckMatches,
@@ -321,6 +325,29 @@ test("replacement completed private-post reload assertion covers disabled comple
   );
 });
 
+test("replacement completed private-post proof builders normalize reject and reload evidence", () => {
+  const proof = replacementCompletedPrivatePostProofFixture();
+  const rejectProof = buildReplacementCompletedPrivatePostRejectProof(
+    proof,
+    scenario,
+  );
+  const reloadProof = buildReplacementCompletedPrivatePostReloadProof(
+    proof,
+    proof.privateReloadAfterReject,
+    scenario,
+  );
+
+  assert.equal(rejectProof.status, "passed");
+  assert.equal(rejectProof.command.channel_id, scenario.channelId);
+  assert.equal(rejectProof.commandStatus.error, scenario.commandError);
+  assert.equal(rejectProof.bridgePlan.finalState, "reject");
+  assert.equal(rejectProof.receiptRefreshKeys, "commandState");
+  assert.equal(reloadProof.status, "passed");
+  assert.equal(reloadProof.routeResponseStatus, 200);
+  assert.equal(reloadProof.buttonsDisabled, true);
+  assert.equal(reloadProof.staleOutgoingRouteStatus, 403);
+});
+
 test("replacement resolved private-post ACK assertion covers locked channel recovery", () => {
   assert.equal(
     replacementResolvedPrivatePostAckMatches(
@@ -329,6 +356,31 @@ test("replacement resolved private-post ACK assertion covers locked channel reco
     ),
     true,
   );
+});
+
+test("replacement resolved private-post proof builders normalize ACK and reconnect evidence", () => {
+  const proof = replacementResolvedPrivatePostProofFixture();
+  const ackProof = buildReplacementResolvedPrivatePostAckProof(
+    proof,
+    resolveScenario,
+  );
+  const reconnectProof = buildReplacementResolvedPrivatePostReconnectProof(
+    proof,
+    proof.privateReconnectAfterAck,
+    resolveScenario,
+  );
+
+  assert.equal(ackProof.status, "passed");
+  assert.equal(ackProof.command.channel_id, resolveScenario.channelId);
+  assert.equal(ackProof.bridgePlan.finalState, "ack");
+  assert.equal(ackProof.receiptRefreshKeys, "thread,commandState");
+  assert.equal(reconnectProof.status, "passed");
+  assert.equal(
+    reconnectProof.principalUserId,
+    resolveScenario.replacementPrincipalUserId,
+  );
+  assert.equal(reconnectProof.reconnectRecoveryEvent.state, "recovered");
+  assert.equal(reconnectProof.staleOutgoingThreadStatus, 403);
 });
 
 test("replacement resolved private-post ACK assertion requires thread refresh", () => {

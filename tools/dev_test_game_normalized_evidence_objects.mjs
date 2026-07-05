@@ -2,6 +2,9 @@ import {
   coreLoopPrivateChannelCompletedPostLaneId,
   coreLoopPrivateChannelStalePostLaneId,
 } from "./dev_test_game_core_loop_private_channel_recovery_scenarios.mjs";
+import {
+  replacementPrivatePostRecoveryLaneIds,
+} from "./dev_test_game_replacement_private_scenarios.mjs";
 
 export const privateChannelNormalizedEvidenceObjects = Object.freeze([
   Object.freeze({
@@ -11,6 +14,25 @@ export const privateChannelNormalizedEvidenceObjects = Object.freeze([
   Object.freeze({
     name: "completedPostRejectProof",
     laneId: coreLoopPrivateChannelCompletedPostLaneId,
+  }),
+]);
+
+export const replacementPrivatePostNormalizedEvidenceObjects = Object.freeze([
+  Object.freeze({
+    name: "replacementResolvedPrivatePostAckProof",
+    laneId: replacementPrivatePostRecoveryLaneIds[0],
+  }),
+  Object.freeze({
+    name: "replacementResolvedPrivatePostReconnectProof",
+    laneId: replacementPrivatePostRecoveryLaneIds[1],
+  }),
+  Object.freeze({
+    name: "replacementCompletedPrivatePostRejectProof",
+    laneId: replacementPrivatePostRecoveryLaneIds[2],
+  }),
+  Object.freeze({
+    name: "replacementCompletedPrivatePostReloadProof",
+    laneId: replacementPrivatePostRecoveryLaneIds[3],
   }),
 ]);
 

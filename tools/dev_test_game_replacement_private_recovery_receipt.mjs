@@ -12,6 +12,11 @@ import {
   localAdminAuditIds,
   localAdminAuditRoleUrl,
 } from "./dev_test_game_admin_audit_surface_ids.mjs";
+import {
+  normalizedEvidenceObjectsFromProof,
+  replacementPrivatePostNormalizedEvidenceObjects,
+  sameNormalizedEvidenceObjects,
+} from "./dev_test_game_normalized_evidence_objects.mjs";
 import { repoRoot } from "./dev_test_game_spine_runner.mjs";
 
 export const DEV_TEST_GAME_REPLACEMENT_PRIVATE_RECOVERY_RECEIPT_VERSION = 1;
@@ -91,6 +96,10 @@ export function buildDevTestGameReplacementPrivateRecoveryReceipt(
       expectedFamilyCount: coverage.expectedFamilyCount,
     },
     laneIds: [...replacementPrivateChannelRecoveryLaneIds],
+    normalizedEvidenceObjects: normalizedEvidenceObjectsFromProof({
+      proof,
+      objects: replacementPrivatePostNormalizedEvidenceObjects,
+    }),
     lanes,
   };
   assertDevTestGameReplacementPrivateRecoveryReceipt(receipt);
@@ -147,6 +156,18 @@ export function assertDevTestGameReplacementPrivateRecoveryReceipt(receipt) {
   }
   if (!sameStringArray(receipt.laneIds, replacementPrivateChannelRecoveryLaneIds)) {
     throw new Error("replacement private receipt lane list drifted");
+  }
+  if (
+    !sameNormalizedEvidenceObjects(
+      receipt.normalizedEvidenceObjects,
+      replacementPrivatePostNormalizedEvidenceObjects.map((object) => ({
+        ...object,
+        status: "passed",
+        evidencePath: `lanes.${object.laneId}.evidence.${object.name}`,
+      })),
+    )
+  ) {
+    throw new Error("replacement private receipt evidence objects drifted");
   }
   const lanes = receipt.lanes ?? [];
   if (lanes.length !== replacementPrivateChannelRecoveryLaneIds.length) {

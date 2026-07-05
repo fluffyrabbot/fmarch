@@ -112,6 +112,10 @@ import {
   replacementStalePrivatePostAfterCompleteScenario,
 } from "./dev_test_game_replacement_private_scenario_cases.mjs";
 import {
+  buildReplacementCompletedPrivatePostRejectProof,
+  buildReplacementCompletedPrivatePostReloadProof,
+  buildReplacementResolvedPrivatePostAckProof,
+  buildReplacementResolvedPrivatePostReconnectProof,
   replacementCompletedPrivatePostRejectMatches,
   replacementCompletedPrivatePostReloadMatches,
   replacementResolvedPrivatePostAckMatches,
@@ -246,6 +250,30 @@ export function buildDevTestGameProofRun(session, options = {}) {
   const privateChannelCompletedPostRejectProofPassed =
     normalizedCompletedPrivateChannelPostRejectProofPassed(
       privateChannelCompletedPostRejectProof,
+    );
+  const replacementResolvedPrivatePostAckProof =
+    buildReplacementResolvedPrivatePostAckProof(
+      hardening.replacementStalePrivatePostAfterResolve,
+      replacementResolvedPrivatePostScenario,
+    );
+  const replacementResolvedPrivatePostReconnectProof =
+    buildReplacementResolvedPrivatePostReconnectProof(
+      hardening.replacementStalePrivatePostAfterResolve,
+      hardening.replacementStalePrivatePostAfterResolve
+        ?.privateReconnectAfterAck,
+      replacementResolvedPrivatePostScenario,
+    );
+  const replacementCompletedPrivatePostRejectProof =
+    buildReplacementCompletedPrivatePostRejectProof(
+      hardening.replacementStalePrivatePostAfterComplete,
+      replacementCompletedPrivatePostScenario,
+    );
+  const replacementCompletedPrivatePostReloadProof =
+    buildReplacementCompletedPrivatePostReloadProof(
+      hardening.replacementStalePrivatePostAfterComplete,
+      hardening.replacementStalePrivatePostAfterComplete
+        ?.privateReloadAfterReject,
+      replacementCompletedPrivatePostScenario,
     );
   const lanes = [
     lane("browser-entry", "Role URLs open verified browser sessions", {
@@ -4205,11 +4233,15 @@ export function buildDevTestGameProofRun(session, options = {}) {
         staleRouteStatus:
           hardening.replacementStalePrivatePostAfterResolve
             ?.staleOutgoingRouteAfterAck?.status ?? null,
+        normalizedProofStatus:
+          replacementResolvedPrivatePostAckProof.status,
+        replacementResolvedPrivatePostAckProof,
         passed:
           replacementResolvedPrivatePostAckMatches(
             hardening.replacementStalePrivatePostAfterResolve,
             replacementResolvedPrivatePostScenario,
-          ),
+          ) &&
+          replacementResolvedPrivatePostAckProof.status === "passed",
       },
     ),
     lane(
@@ -4231,13 +4263,17 @@ export function buildDevTestGameProofRun(session, options = {}) {
         staleThreadStatus:
           hardening.replacementStalePrivatePostAfterResolve?.privateReconnectAfterAck
             ?.staleOutgoingThreadAfterReconnect?.status ?? null,
+        normalizedProofStatus:
+          replacementResolvedPrivatePostReconnectProof.status,
+        replacementResolvedPrivatePostReconnectProof,
         passed:
           replacementResolvedPrivatePostReconnectMatches(
             hardening.replacementStalePrivatePostAfterResolve,
             hardening.replacementStalePrivatePostAfterResolve
               ?.privateReconnectAfterAck,
             replacementResolvedPrivatePostScenario,
-          ),
+          ) &&
+          replacementResolvedPrivatePostReconnectProof.status === "passed",
       },
     ),
     lane(
@@ -4257,11 +4293,15 @@ export function buildDevTestGameProofRun(session, options = {}) {
         staleThreadStatus:
           hardening.replacementStalePrivatePostAfterComplete
             ?.staleOutgoingThreadAfterReject?.status ?? null,
+        normalizedProofStatus:
+          replacementCompletedPrivatePostRejectProof.status,
+        replacementCompletedPrivatePostRejectProof,
         passed:
           replacementCompletedPrivatePostRejectMatches(
             hardening.replacementStalePrivatePostAfterComplete,
             replacementCompletedPrivatePostScenario,
-          ),
+          ) &&
+          replacementCompletedPrivatePostRejectProof.status === "passed",
       },
     ),
     lane(
@@ -4283,13 +4323,17 @@ export function buildDevTestGameProofRun(session, options = {}) {
           hardening.replacementStalePrivatePostAfterComplete
             ?.privateReloadAfterReject?.staleOutgoingRouteAfterReload?.status ??
           null,
+        normalizedProofStatus:
+          replacementCompletedPrivatePostReloadProof.status,
+        replacementCompletedPrivatePostReloadProof,
         passed:
           replacementCompletedPrivatePostReloadMatches(
             hardening.replacementStalePrivatePostAfterComplete,
             hardening.replacementStalePrivatePostAfterComplete
               ?.privateReloadAfterReject,
             replacementCompletedPrivatePostScenario,
-          ),
+          ) &&
+          replacementCompletedPrivatePostReloadProof.status === "passed",
       },
     ),
     lane("stale-dead-target-vote", "Stale dead-target vote rejects and refreshes targets", {

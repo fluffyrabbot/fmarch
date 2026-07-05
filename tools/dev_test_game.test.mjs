@@ -148,6 +148,7 @@ import {
   hardeningAuditLaneIds,
 } from "./dev_test_game_hardening_scenarios.mjs";
 import {
+  replacementPrivateChannelRecoveryCoverageFamilies,
   replacementPrivateChannelRecoveryLaneIds,
   replacementPrivatePostRaceLaneIds,
   replacementPrivatePostRecoveryLaneIds,
@@ -359,6 +360,10 @@ import {
 import {
   recoveryMilestoneCoverageCases,
 } from "./dev_test_game_release_readiness_milestone_cases.mjs";
+import {
+  privateChannelNormalizedEvidenceObjects,
+  replacementPrivatePostNormalizedEvidenceObjects,
+} from "./dev_test_game_normalized_evidence_objects.mjs";
 
 test("dev test-game args expose reset reuse naming and verification controls", () => {
   assert.deepEqual(
@@ -10393,6 +10398,12 @@ test("session card and markdown include role credential URLs and tokens", async 
     completedPrivatePostLane.evidence.completedPostRejectProof.receiptRefreshKeys,
     "commandState",
   );
+  for (const object of replacementPrivatePostNormalizedEvidenceObjects) {
+    const lane = proofRun.lanes.find((candidate) => candidate.id === object.laneId);
+    assert.equal(lane.status, "passed");
+    assert.equal(lane.evidence.normalizedProofStatus, "passed");
+    assert.equal(lane.evidence[object.name].status, "passed");
+  }
   for (const descriptor of recoveryReceiptGraphDescriptors) {
     const receipt = descriptor.buildReceipt(proofRun, {
       generatedAt: "2026-06-26T00:00:00.000Z",
@@ -11999,6 +12010,8 @@ function devTestGameReleaseReadinessChecklistFixture({
       staleConflictMessageMilestone: staleConflictMessageMilestoneFixture(),
       hostStaleControlMilestone: hostStaleControlMilestoneFixture(),
       privateChannelRecoveryMilestone: privateChannelRecoveryMilestoneFixture(),
+      replacementPrivateRecoveryMilestone:
+        replacementPrivateRecoveryMilestoneFixture(),
       replacementActionRecoveryMilestone:
         replacementActionRecoveryMilestoneFixture(),
       replacementHandoffRecoveryMilestone:
@@ -12359,6 +12372,8 @@ function recoveryMilestoneFixtureChecks() {
     replacementActionRecoveryMilestone: replacementActionRecoveryMilestoneFixture(),
     replacementHandoffRecoveryMilestone:
       replacementHandoffRecoveryMilestoneFixture(),
+    replacementPrivateRecoveryMilestone:
+      replacementPrivateRecoveryMilestoneFixture(),
   };
   return recoveryMilestoneCoverageCases.map((scenario) => {
     const milestone = milestonesByGeneratedFromKey[scenario.generatedFromKey];
@@ -12488,32 +12503,33 @@ function generatedRecoveryMilestoneCoverage(milestone) {
 }
 
 function expectedPrivateChannelEvidenceObjectsForScenario(scenario) {
-  return scenario.generatedFromKey === "privateChannelRecoveryMilestone"
-    ? {
-        normalizedEvidenceObjects: [
-          {
-            name: "submitPostAckProof",
-            laneId: coreLoopPrivateChannelStalePostLaneId,
-            status: "passed",
-            evidencePath:
-              `lanes.${coreLoopPrivateChannelStalePostLaneId}.evidence.submitPostAckProof`,
-          },
-          {
-            name: "completedPostRejectProof",
-            laneId: coreLoopPrivateChannelCompletedPostLaneId,
-            status: "passed",
-            evidencePath:
-              `lanes.${coreLoopPrivateChannelCompletedPostLaneId}.evidence.completedPostRejectProof`,
-          },
-        ],
-      }
-    : {};
+  const objectsByGeneratedFromKey = {
+    privateChannelRecoveryMilestone: privateChannelNormalizedEvidenceObjects,
+    replacementPrivateRecoveryMilestone:
+      replacementPrivatePostNormalizedEvidenceObjects,
+  };
+  const objects = objectsByGeneratedFromKey[scenario.generatedFromKey];
+  return objects === undefined
+    ? {}
+    : {
+        normalizedEvidenceObjects: expectedPassedNormalizedEvidenceObjects(
+          objects,
+        ),
+      };
 }
 
 function expectedPrivateChannelFeatureEvidenceObjectNames(slotId) {
   return slotId === "private-channel"
     ? ["submitPostAckProof", "completedPostRejectProof"]
     : [];
+}
+
+function expectedPassedNormalizedEvidenceObjects(objects) {
+  return objects.map((object) => ({
+    ...object,
+    status: "passed",
+    evidencePath: `lanes.${object.laneId}.evidence.${object.name}`,
+  }));
 }
 
 function staleConflictMessageMilestoneFixture() {
@@ -12620,6 +12636,30 @@ function replacementActionRecoveryMilestoneFixture() {
       status: "passed",
       passedLaneIds: [...family.laneIds],
     })),
+  };
+}
+
+function replacementPrivateRecoveryMilestoneFixture() {
+  return {
+    status: "passed",
+    laneIds: [...replacementPrivateChannelRecoveryLaneIds],
+    requiredLaneCount: replacementPrivateChannelRecoveryLaneIds.length,
+    coveredLaneCount: replacementPrivateChannelRecoveryLaneIds.length,
+    gapCount: 0,
+    familyCount: replacementPrivateChannelRecoveryCoverageFamilies().length,
+    expectedLaneCount: replacementPrivateChannelRecoveryLaneIds.length,
+    expectedFamilyCount:
+      replacementPrivateChannelRecoveryCoverageFamilies().length,
+    families: replacementPrivateChannelRecoveryCoverageFamilies().map(
+      (family) => ({
+        ...family,
+        status: "passed",
+        passedLaneIds: [...family.laneIds],
+      }),
+    ),
+    ...expectedPrivateChannelEvidenceObjectsForScenario({
+      generatedFromKey: "replacementPrivateRecoveryMilestone",
+    }),
   };
 }
 

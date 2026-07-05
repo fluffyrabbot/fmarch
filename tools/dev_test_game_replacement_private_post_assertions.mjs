@@ -75,6 +75,175 @@ const threadDoesNotIncludePost = (posts, proof) =>
 
 const threadIncludesPost = (posts, postBody) => posts?.includes(postBody) === true;
 
+const submitPostCommandProof = ({ proof, commandStatus, postBody }) => {
+  const command = commandStatus?.requestEnvelope?.body?.body?.command?.SubmitPost ??
+    commandStatus?.command?.SubmitPost ??
+    {};
+  return {
+    game: proof?.game ?? command.game ?? null,
+    channel_id: command.channel_id ?? null,
+    actor_slot: command.actor_slot ?? null,
+    body: command.body ?? postBody ?? null,
+  };
+};
+
+const bridgePlanProof = ({ scenario, finalState, refreshKeys }) => ({
+  role: "player",
+  commandKind: scenario.commandKind,
+  commandEndpoint: "/commands",
+  finalState,
+  projectionRefreshKeys: refreshKeys,
+});
+
+const receiptList = (receipt) => (receipt === undefined ? [] : [receipt]);
+
+const buttonsDisabled = (buttons) =>
+  Array.isArray(buttons) && buttons.some((button) => button.disabled !== true) === false;
+
+export function buildReplacementResolvedPrivatePostAckProof(proof, scenario) {
+  const refreshKeys = proof?.dispatchPlan?.projectionRefreshKeys ?? [];
+  return {
+    status: replacementResolvedPrivatePostAckMatches(proof, scenario)
+      ? "passed"
+      : "failed",
+    clickedAction: scenario.commandAction,
+    commandKind: scenario.commandKind,
+    command: submitPostCommandProof({
+      proof,
+      commandStatus: proof?.stalePost,
+      postBody: proof?.postBody,
+    }),
+    commandStatus: proof?.stalePost ?? null,
+    bridgePlan: bridgePlanProof({
+      scenario,
+      finalState: "ack",
+      refreshKeys,
+    }),
+    receipts: receiptList(proof?.currentReceipt),
+    privatePostBody: proof?.postBody ?? null,
+    projectionCommandState: proof?.commandStateAfterAck ?? null,
+    channelContext: proof?.channelContextAfterAck ?? null,
+    projectionThread: {
+      posts: [proof?.projectedPost].filter(Boolean),
+      postBodies: proof?.apiThreadPostBodies ?? [],
+    },
+    staleOutgoingRouteStatus: proof?.staleOutgoingRouteAfterAck?.status ?? null,
+    staleOutgoingThreadStatus: proof?.staleOutgoingThreadAfterAck?.status ?? null,
+    receiptStatusText: proof?.receiptStatusText ?? null,
+    receiptRefreshKeys: refreshKeys.join(","),
+  };
+}
+
+export function buildReplacementResolvedPrivatePostReconnectProof(
+  proof,
+  reconnectProof,
+  scenario,
+) {
+  const reconnectCommand = reconnectProof?.reconnectCommand?.command?.SubmitPost;
+  return {
+    status: replacementResolvedPrivatePostReconnectMatches(
+      proof,
+      reconnectProof,
+      scenario,
+    )
+      ? "passed"
+      : "failed",
+    clickedAction: scenario.commandAction,
+    commandKind: scenario.commandKind,
+    command: {
+      game: proof?.game ?? reconnectCommand?.game ?? null,
+      channel_id: reconnectCommand?.channel_id ?? null,
+      actor_slot: reconnectCommand?.actor_slot ?? null,
+      body: reconnectCommand?.body ?? reconnectProof?.reconnectPostBody ?? null,
+    },
+    principalUserId: reconnectProof?.reconnectCommand?.principalUserId ?? null,
+    reconnectingStatus: reconnectProof?.reconnectingStatus ?? null,
+    reconnectRecoveryEvent: reconnectProof?.reconnectRecoveryEvent ?? null,
+    recoveredCommandState: reconnectProof?.recoveredCommandState ?? null,
+    channelContext:
+      reconnectProof?.reconnectChannelContextAfterRecovery ?? null,
+    reconnectPostBody: reconnectProof?.reconnectPostBody ?? null,
+    recoveredSnapshotContainsPost:
+      reconnectProof?.recoveredSnapshotContainsPost ?? null,
+    apiThreadPostBodiesAfterReconnect:
+      reconnectProof?.apiThreadPostBodiesAfterReconnect ?? [],
+    staleOutgoingThreadStatus:
+      reconnectProof?.staleOutgoingThreadAfterReconnect?.status ?? null,
+  };
+}
+
+export function buildReplacementCompletedPrivatePostRejectProof(
+  proof,
+  scenario,
+) {
+  const refreshKeys = proof?.dispatchPlan?.projectionRefreshKeys ?? [];
+  return {
+    status: replacementCompletedPrivatePostRejectMatches(proof, scenario)
+      ? "passed"
+      : "failed",
+    clickedAction: scenario.commandAction,
+    commandKind: scenario.commandKind,
+    command: submitPostCommandProof({
+      proof,
+      commandStatus: proof?.reject,
+      postBody: proof?.postBody,
+    }),
+    commandStatus: proof?.reject ?? null,
+    bridgePlan: bridgePlanProof({
+      scenario,
+      finalState: "reject",
+      refreshKeys,
+    }),
+    receipts: receiptList(proof?.currentReceipt),
+    privatePostBody: proof?.postBody ?? null,
+    projectionCommandState: proof?.commandStateAfterReject ?? null,
+    channelContext: proof?.channelContextAfterReject ?? null,
+    buttonsDisabled: buttonsDisabled(proof?.buttonsAfterReject),
+    threadPostPresent:
+      proof?.apiThreadPostBodies?.includes(proof?.postBody) ?? null,
+    staleOutgoingRouteStatus:
+      proof?.staleOutgoingRouteAfterReject?.status ?? null,
+    staleOutgoingThreadStatus:
+      proof?.staleOutgoingThreadAfterReject?.status ?? null,
+    receiptStatusText: proof?.receiptStatusText ?? null,
+    receiptRefreshKeys: refreshKeys.join(","),
+  };
+}
+
+export function buildReplacementCompletedPrivatePostReloadProof(
+  proof,
+  reloadProof,
+  scenario,
+) {
+  return {
+    status: replacementCompletedPrivatePostReloadMatches(
+      proof,
+      reloadProof,
+      scenario,
+    )
+      ? "passed"
+      : "failed",
+    clickedAction: scenario.commandAction,
+    commandKind: scenario.commandKind,
+    routeResponseStatus: reloadProof?.routeResponseStatus ?? null,
+    threadPagerVisible: reloadProof?.threadPagerVisible ?? null,
+    recoveredCommandState: reloadProof?.recoveredCommandState ?? null,
+    channelContext: reloadProof?.reloadChannelContext ?? null,
+    buttonsDisabled: buttonsDisabled(reloadProof?.reloadButtons),
+    reloadRejectedPostVisible: reloadProof?.reloadRejectedPostVisible ?? null,
+    reloadThreadPostBodies: reloadProof?.reloadThreadPostBodies ?? [],
+    apiThreadPostBodiesAfterReload:
+      reloadProof?.apiThreadPostBodiesAfterReload ?? [],
+    staleOutgoingRouteStatus:
+      reloadProof?.staleOutgoingRouteAfterReload?.status ?? null,
+    staleOutgoingRouteResponseStatus:
+      reloadProof?.staleOutgoingRouteAfterReload?.responseStatus ?? null,
+    staleOutgoingThreadStatus:
+      reloadProof?.staleOutgoingThreadAfterReload?.status ?? null,
+    privatePostBody: proof?.postBody ?? null,
+  };
+}
+
 export function replacementResolvedPrivatePostAckMatches(proof, scenario) {
   const replacement = replacementCommand(proof);
   const ackedPost = ackedSubmitPostCommand(proof);

@@ -222,6 +222,7 @@ import {
 import {
   normalizedEvidenceObjectsFromProof,
   privateChannelNormalizedEvidenceObjects,
+  replacementPrivatePostNormalizedEvidenceObjects,
 } from "./dev_test_game_normalized_evidence_objects.mjs";
 export const DEV_TEST_GAME_RELEASE_READINESS_VERSION = 1;
 const devTestGameSeededBrowserProofCommand =
@@ -358,6 +359,10 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
     privateChannelRecoveryMilestone: buildPrivateChannelRecoveryMilestone(proof, {
       sourcePath,
     }),
+    replacementPrivateRecoveryMilestone: buildReplacementPrivateRecoveryMilestone(
+      proof,
+      { sourcePath },
+    ),
     replacementActionRecoveryMilestone: buildReplacementActionRecoveryMilestone(
       proof,
       { sourcePath },
@@ -1756,6 +1761,28 @@ function buildPrivateChannelRecoveryMilestone(proof, { sourcePath }) {
       normalizedEvidenceObjectsFromProof({
         proof,
         objects: privateChannelNormalizedEvidenceObjects,
+      }),
+  };
+}
+
+function buildReplacementPrivateRecoveryMilestone(proof, { sourcePath }) {
+  let coverage;
+  try {
+    coverage = assertReplacementPrivateChannelRecoveryCoverageSummary({
+      summary: proof.replacementPrivateChannelRecoveryCoverage,
+      lanes: proof.lanes,
+    });
+  } catch (error) {
+    throw new Error(
+      `replacement private recovery milestone missing passed lanes from ${sourcePath}: ${error.message}`,
+    );
+  }
+  return {
+    ...coverageMilestoneSummary(coverage),
+    normalizedEvidenceObjects:
+      normalizedEvidenceObjectsFromProof({
+        proof,
+        objects: replacementPrivatePostNormalizedEvidenceObjects,
       }),
   };
 }

@@ -26,6 +26,14 @@ export const recoveryMilestoneCoverageCases = Object.freeze([
       "Local seeded-game proof that stale replacement private-channel authority, private receipts, stale private posts after phase resolution, private-channel invalid action recovery, reconnect recovery, and completed-game private-channel reloads preserve current player scope and recovery hints.",
   }),
   Object.freeze({
+    checkId: "local-replacement-private-recovery-milestone",
+    generatedFromKey: "replacementPrivateRecoveryMilestone",
+    coverageKey: "replacementPrivateChannelRecoveryCoverage",
+    label: "Replacement private-channel recovery",
+    proofBoundary:
+      "Local seeded-game proof that replacement private-channel authority, private receipts, stale replacement private posts after phase resolution, reconnect recovery, and completed-game reloads preserve current replacement player scope and stale outgoing denial.",
+  }),
+  Object.freeze({
     checkId: "local-replacement-action-recovery-milestone",
     generatedFromKey: "replacementActionRecoveryMilestone",
     coverageKey: "replacementActionRecoveryCoverage",
