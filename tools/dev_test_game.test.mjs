@@ -80,6 +80,9 @@ import {
   devTestGameOpsArtifactsPath,
 } from "./dev_test_game_ops_artifacts.mjs";
 import {
+  devTestGameIdentityAdapterProofPath,
+} from "./dev_test_game_adjacent_artifact_paths.mjs";
+import {
   assertDevTestGameHostedOpsSignals,
   buildDevTestGameHostedOpsSignals,
   devTestGameHostedOpsSignalsCommand,
@@ -964,6 +967,28 @@ test("dev test-game spine orchestrators expose stable proof order and env maps",
       devTestGameReleaseReadinessScript,
       "tools/dev_test_game_hosted_identity_operator_admin_proof.mjs",
       devTestGameReleaseReadinessScript,
+    ],
+  );
+  const identityOperatorBatchIndex = devTestGameIdentityOperatorSpinePlan.findIndex(
+    (step) =>
+      step.script === devTestGameHostedIdentityProgressionAdminProofBatchScript,
+  );
+  const identityOperatorProofIndex = devTestGameIdentityOperatorSpinePlan.findIndex(
+    (step) =>
+      step.script ===
+      "tools/dev_test_game_hosted_identity_operator_admin_proof.mjs",
+  );
+  assert(identityOperatorBatchIndex > -1);
+  assert(identityOperatorProofIndex > identityOperatorBatchIndex);
+  assert.deepEqual(
+    devTestGameIdentityOperatorSpinePlan[identityOperatorBatchIndex + 1]
+      .changedInputs,
+    [
+      devTestGameIdentityAdapterProofPath,
+      devTestGameIdentityAdminProofPath,
+      devTestGameHostedIdentityEvidencePath,
+      devTestGameHostedIdentityProgressionSummaryPath,
+      ...hostedIdentityProgressionAdminProofBatchArtifactPaths,
     ],
   );
   assert.deepEqual(
@@ -3001,7 +3026,7 @@ test("dev test-game next-action derives one local recovery command from the mani
       includeTargetRerunCommand: true,
       requiredEvidence: "Hosted account lifecycle",
       buildSlice:
-        "Run the first hosted identity evidence-family admin proof (hosted-account-lifecycle); it proves the admin handoff can surface redacted-account-lifecycle-packet while the aggregate hosted identity evidence remains blocked and non-production.",
+        "Run the hosted identity evidence-family admin proof batch; hosted-account-lifecycle is the first missing or stale family proof, and the batch refreshes all family proof artifacts before the aggregate hosted identity operator spine can run.",
       hostedHandoffChecklist: hostedIdentityHandoffChecklist,
       hostedIdentityProgression: selectedHostedIdentityProgression,
     });
@@ -3177,7 +3202,7 @@ test("dev test-game next-action derives one local recovery command from the mani
     devTestGameHostedIdentitySequenceStage,
   );
   assert.deepEqual(hostedIdentityStageAction.nextAction, {
-    command: firstHostedIdentityProgression.proofCommand,
+    command: hostedIdentityHandoffChecklist.progressionSummary.batchProofCommand,
     reason: "release-readiness-unproven",
     status: "ready",
     unproven: hostedProductionIdentityOperatorUnproven,
@@ -3219,7 +3244,7 @@ test("dev test-game next-action derives one local recovery command from the mani
   assertDevTestGameNextAction(hostedIdentitySecondStageAction);
   assert.equal(
     hostedIdentitySecondStageAction.nextAction.command,
-    secondHostedIdentityProgression.proofCommand,
+    hostedIdentityHandoffChecklist.progressionSummary.batchProofCommand,
   );
   assert.deepEqual(
     hostedIdentitySecondStageAction.nextAction.unproven.hostedIdentityProgression,
@@ -3318,7 +3343,8 @@ test("dev test-game next-action derives one local recovery command from the mani
         script: "tools/dev_test_game_next_action.mjs",
         sequenceStage: devTestGameHostedIdentitySequenceStage,
         outputPath: hostedIdentityNextActionPath,
-        selectedCommand: firstHostedIdentityProgression.proofCommand,
+        selectedCommand:
+          hostedIdentityHandoffChecklist.progressionSummary.batchProofCommand,
       },
       {
         script: "terminal-hosted-identity-next-action-admin-proof-batch",

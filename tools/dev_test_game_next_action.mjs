@@ -120,6 +120,7 @@ import {
 } from "./dev_test_game_hosted_handoff_proof_cases.mjs";
 import {
   devTestGameHostedIdentityOperatorAdminProofPath,
+  devTestGameHostedIdentityProgressionAdminProofBatchCommand,
   hostedIdentityEvidenceFamilyProgressionCases,
   hostedIdentityEvidenceProgressionAdminProofPath,
 } from "./dev_test_game_hosted_identity_evidence_cases.mjs";
@@ -1081,6 +1082,15 @@ function hostedIdentityProgressionBuildableForChecklist({
   hostedHandoffChecklist,
   hostedIdentityProgressionProofs = {},
 }) {
+  const batchProofCommand =
+    hostedHandoffChecklist?.progressionSummary?.batchProofCommand;
+  if (
+    typeof batchProofCommand !== "string" ||
+    batchProofCommand !==
+      `npm run ${devTestGameHostedIdentityProgressionAdminProofBatchCommand}`
+  ) {
+    return null;
+  }
   const progression = firstUnprovenHostedIdentityProgression({
     hostedHandoffChecklist,
     hostedIdentityProgressionProofs,
@@ -1106,11 +1116,11 @@ function hostedIdentityProgressionBuildableForChecklist({
     ),
   };
   return {
-    command: progression.proofCommand,
+    command: batchProofCommand,
     buildSlice: [
-      `Run the first hosted identity evidence-family admin proof (${progression.id});`,
-      `it proves the admin handoff can surface ${progression.firstMissingInputId}`,
-      "while the aggregate hosted identity evidence remains blocked and non-production.",
+      "Run the hosted identity evidence-family admin proof batch;",
+      `${progression.id} is the first missing or stale family proof, and the batch refreshes all family proof artifacts`,
+      "before the aggregate hosted identity operator spine can run.",
     ].join(" "),
     proofTarget: progression.adminProofTarget,
     roleUrl: progression.roleUrl,
@@ -1723,6 +1733,9 @@ function validHostedIdentityProgressionSummary(summary) {
     summary.status === "passed" &&
     typeof summary.command === "string" &&
     summary.command.startsWith("npm run test:") &&
+    typeof summary.batchProofCommand === "string" &&
+    summary.batchProofCommand ===
+      `npm run ${devTestGameHostedIdentityProgressionAdminProofBatchCommand}` &&
     typeof summary.proofTarget === "string" &&
     summary.proofTarget.trim() !== "" &&
     Number.isInteger(summary.progressionCount) &&

@@ -181,8 +181,15 @@ directly, use the explicit hosted-identity sequence selector:
 npm run test:dev-test-game-next-action:hosted-identity
 ```
 
-That selector now points the ranked `hosted-production-identity` action at the
-opt-in operator identity spine:
+That selector points the ranked `hosted-production-identity` action at the
+hosted identity progression batch until the family proof artifacts are current:
+
+```sh
+npm run test:dev-test-game-hosted-identity-progression-admin-proof:batch
+```
+
+After that batch is current, the selector advances to the opt-in operator
+identity spine:
 
 ```sh
 DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch npm run test:dev-test-game-identity:operator
@@ -747,10 +754,12 @@ browser proof without raw credential echoes.
 After the local capability rows are passed,
 `npm run test:dev-test-game-next-action:hosted-identity` refreshes
 `target/dev-test-game/next-action.json` with
-`FMARCH_DEV_TEST_GAME_SEQUENCE_STAGE=hosted-identity`, selecting the opt-in
-hosted identity operator spine command and operator admin proof target while
-preserving the same local-predicate boundary and non-claims about live hosted
-identity traffic.
+`FMARCH_DEV_TEST_GAME_SEQUENCE_STAGE=hosted-identity`. Missing or stale
+hosted-identity family proofs select the shared progression admin-proof batch
+first; once those family artifacts are current, the selector advances to the
+opt-in hosted identity operator spine command and operator admin proof target
+while preserving the same local-predicate boundary and non-claims about live
+hosted identity traffic.
 `npm run test:dev-test-game-identity:operator` is the opt-in variant that appends
 the target-local operator predicate proof and a separate readiness pass; the
 default identity spine remains fixture-safe.
