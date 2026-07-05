@@ -2074,7 +2074,7 @@ test("admin route data exposes local proof freshness as a native audit row", asy
 
   const freshness = data.audit.find((item) => item.id === localAdminAuditIds.proofFreshness);
   assert.equal(freshness.label, "Local proof freshness");
-  assert.equal(freshness.status, "23 fresh, 0 stale, 0 missing");
+  assert.equal(freshness.status, "25 fresh, 0 stale, 0 missing");
   assert.equal(freshness.authority, "GlobalAdmin or GlobalMod");
   assert.equal(
     freshness.inspectHref,
@@ -2097,6 +2097,8 @@ test("admin route data exposes local proof freshness as a native audit row", asy
       "backup",
       "ops",
       "seed",
+      "host-setup",
+      "host-setup-admin",
       "release",
       "spine-manifest-admin",
       "admin-spine",
@@ -2119,8 +2121,8 @@ test("admin route data exposes local proof freshness as a native audit row", asy
     },
   ]);
   assert.deepEqual(freshness.artifactSummary, {
-    artifactCount: 23,
-    freshCount: 23,
+    artifactCount: 25,
+    freshCount: 25,
     staleCount: 0,
     missingCount: 0,
     maxAgeHours: 24,
@@ -6158,6 +6160,8 @@ function proofFreshnessFixture({
     freshnessArtifact("backup", "fresh"),
     freshnessArtifact("ops", "fresh"),
     freshnessArtifact("seed", "fresh"),
+    freshnessArtifact("host-setup", "fresh"),
+    freshnessArtifact("host-setup-admin", "fresh"),
     freshnessArtifact("release", "fresh"),
     freshnessArtifact("spine-manifest-admin", "fresh"),
     freshnessArtifact("admin-spine", "fresh"),
@@ -6279,8 +6283,8 @@ function nextActionFixture({
       manifestGeneratedAt: "2026-06-26T00:00:00.000Z",
       artifactFreshnessStatus: "passed",
       artifactFreshnessSummary: {
-        artifactCount: 23,
-        freshCount: 23,
+        artifactCount: 25,
+        freshCount: 25,
         staleCount: 0,
         missingCount: 0,
       },

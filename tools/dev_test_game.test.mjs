@@ -2372,6 +2372,75 @@ test("dev test-game spine manifest records command order and evidence wiring", (
   );
 });
 
+test("spine manifest gives host setup freshness artifacts focused recovery commands", () => {
+  const manifest = buildDevTestGameSpineManifest({
+    generatedAt: "2026-06-26T00:00:00.000Z",
+    proofFreshness: {
+      version: 1,
+      proof: "dev-test-game-proof-freshness",
+      status: "blocked",
+      generatedAt: "2026-06-26T00:00:00.000Z",
+      maxAgeHours: 24,
+      proofBoundary: "test freshness boundary",
+      summary: {
+        artifactCount: 2,
+        freshCount: 0,
+        staleCount: 2,
+        missingCount: 0,
+      },
+      artifacts: [
+        {
+          id: "host-setup",
+          label: "Host setup role proof",
+          path: "target/dev-test-game/host-setup-proof.json",
+          status: "stale",
+          mtime: "2026-06-25T00:00:00.000Z",
+          ageSeconds: 172800,
+          maxAgeSeconds: 86400,
+        },
+        {
+          id: "host-setup-admin",
+          label: "Host setup admin proof",
+          path: devTestGameHostSetupAdminProofPath,
+          status: "stale",
+          mtime: "2026-06-25T00:00:00.000Z",
+          ageSeconds: 172800,
+          maxAgeSeconds: 86400,
+        },
+      ],
+    },
+  });
+
+  assertDevTestGameSpineManifest(manifest);
+  assert.equal(manifest.artifactFreshness.status, "blocked");
+  assert.equal(
+    manifest.artifactFreshness.nextCommand,
+    devTestGameHostSetupProofCommand,
+  );
+  assert.deepEqual(
+    manifest.artifactFreshness.artifacts.map((artifact) => [
+      artifact.id,
+      artifact.refreshCommand,
+      artifact.nextCommand,
+      artifact.refreshSource,
+    ]),
+    [
+      [
+        "host-setup",
+        devTestGameHostSetupProofCommand,
+        devTestGameHostSetupProofCommand,
+        "manifest-default",
+      ],
+      [
+        "host-setup-admin",
+        "npm run test:dev-test-game-host-setup-admin-proof",
+        "npm run test:dev-test-game-host-setup-admin-proof",
+        "manifest-default",
+      ],
+    ],
+  );
+});
+
 test("dev test-game spine manifest blocks freshness on proof-run session drift", () => {
   const manifest = buildDevTestGameSpineManifest({
     generatedAt: "2026-06-26T00:00:00.000Z",

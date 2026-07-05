@@ -88,9 +88,13 @@ import {
   devTestGameAdminSpineAdminProofPath,
   devTestGameCoreLoopAdminProofPath,
   devTestGameHardeningAdminProofPath,
+  devTestGameHostSetupAdminProofPath,
   devTestGameIdentityAdminProofPath,
   devTestGameSpineManifestAdminProofPath,
 } from "./dev_test_game_local_admin_proof_paths.mjs";
+import {
+  devTestGameHostSetupProofCommand,
+} from "./dev_test_game_host_setup_feature_spine_targets.mjs";
 import {
   backupAwareOpsEnv,
   backupRestoreEvidenceEnv,
@@ -1402,6 +1406,8 @@ function refreshCommandForArtifact(artifact) {
 }
 
 const localDatabasePrefix = "DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch";
+const devTestGameHostSetupProofPath =
+  "target/dev-test-game/host-setup-proof.json";
 
 const artifactRefreshCommands = Object.freeze({
   session: `${localDatabasePrefix} npm run test:dev-test-game-core-live`,
@@ -1443,6 +1449,11 @@ const artifactRefreshCommands = Object.freeze({
   backup: "npm run test:dev-test-game-backup-admin-proof",
   ops: "npm run test:dev-test-game-ops-admin-proof",
   seed: "npm run test:dev-test-game-seed-admin-proof",
+  "host-setup": devTestGameHostSetupProofCommand,
+  [devTestGameHostSetupProofPath]: devTestGameHostSetupProofCommand,
+  "host-setup-admin": "npm run test:dev-test-game-host-setup-admin-proof",
+  [devTestGameHostSetupAdminProofPath]:
+    "npm run test:dev-test-game-host-setup-admin-proof",
   release: "npm run test:dev-test-game-release-admin-proof",
   "spine-manifest-admin": "npm run test:dev-test-game-spine-manifest-admin-proof",
   "admin-spine": "npm run test:dev-test-game-admin-spine",

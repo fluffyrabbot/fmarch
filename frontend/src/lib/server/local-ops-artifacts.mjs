@@ -5,6 +5,7 @@ import {
   devTestGameBackupAdminProofPath,
   devTestGameCoreLoopAdminProofPath,
   devTestGameHardeningAdminProofPath,
+  devTestGameHostSetupAdminProofPath,
   devTestGameIdentityAdminProofPath,
   devTestGameOpsAdminProofPath,
   devTestGameSeedAdminProofPath,
@@ -74,6 +75,7 @@ const DEFAULT_SPINE_MANIFEST = spineManifestPath;
 const DEFAULT_ADMIN_SPINE_PROOF = adminSpineProofPath;
 const DEFAULT_ADMIN_SPINE_ADMIN_PROOF = devTestGameAdminSpineAdminProofPath;
 const DEFAULT_ADMIN_SPINE_TERMINAL_BATCHES = adminSpineTerminalBatchProofPath;
+const DEFAULT_HOST_SETUP_PROOF = "target/dev-test-game/host-setup-proof.json";
 const DEFAULT_NEXT_ACTION = nextActionPath;
 const DEFAULT_PROOF_GRAPH = devTestGameProofGraphPath;
 const DEFAULT_PROOF_GRAPH_ADMIN_PROOF = devTestGameProofGraphAdminProofPath;
@@ -194,6 +196,18 @@ const LOCAL_PROOF_FRESHNESS_ARTIFACTS = Object.freeze([
     label: "Seed admin proof",
     env: "FMARCH_DEV_TEST_GAME_SEED_ADMIN_PROOF",
     fallback: devTestGameSeedAdminProofPath,
+  }),
+  Object.freeze({
+    id: "host-setup",
+    label: "Host setup role proof",
+    env: "FMARCH_DEV_TEST_GAME_HOST_SETUP_PROOF",
+    fallback: DEFAULT_HOST_SETUP_PROOF,
+  }),
+  Object.freeze({
+    id: "host-setup-admin",
+    label: "Host setup admin proof",
+    env: "FMARCH_DEV_TEST_GAME_HOST_SETUP_ADMIN_PROOF",
+    fallback: devTestGameHostSetupAdminProofPath,
   }),
   Object.freeze({
     id: "release",
