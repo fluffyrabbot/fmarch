@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import { test } from "node:test";
 import { actions, load } from "./+page.server.js";
 import {
@@ -3287,6 +3288,17 @@ test("admin local next action detail distinguishes frontend setup workbench read
   );
   assert.equal(data.audit.localPrerequisites[0].id, "host-setup-role");
   assert.equal(data.audit.localPrerequisites[0].status, "stale");
+});
+
+test("admin audit detail page renders frontend setup workbench section", async () => {
+  const source = await readFile(
+    "frontend/src/routes/admin/audit/[audit]/+page.svelte",
+    "utf8",
+  );
+  assert.match(source, /admin-audit-detail-frontend-setup-workbench/);
+  assert.match(source, /admin-audit-frontend-setup-workbench-summary/);
+  assert.match(source, /admin-audit-frontend-setup-workbench-\$\{layout\.viewport\}/);
+  assert.match(source, /frontendSetupWorkbenchReadiness\.proofBoundary/);
 });
 
 test("admin local next action detail data exposes hosted identity sequence deferral", async () => {
