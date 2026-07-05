@@ -464,10 +464,14 @@ import {
   devTestGameHostedEvidenceLaneRealCaptureAdminProofPath,
   devTestGameHostedEvidenceLaneRealCaptureSourcePath,
   hostedEvidenceBlockedHandoffChecklistFixture,
+  hostedEvidenceFirstMissingOperatorArtifact,
+  hostedEvidenceFirstMissingProgressionCaseById,
+  hostedEvidenceFirstMissingProgressionCases,
   hostedEvidenceHandoffChecklistFromPreflight,
   hostedEvidenceHandoffBlockedCheckIds,
   hostedEvidenceHandoffInputIds,
   hostedEvidenceHandoffInputSectionStatuses,
+  hostedEvidenceRequiredInputsFixture,
   hostedEvidenceHandoffSectionInputRows,
   hostedEvidenceHandoffSectionInputStatuses,
 } from "./dev_test_game_hosted_handoff_cases.mjs";
@@ -4817,25 +4821,11 @@ test("dev test-game hosted evidence lane records blocked preflight state", async
     "FMARCH_HOSTED_MATRIX_API_URL",
     "FMARCH_HOSTED_MATRIX_RAW_EVIDENCE_PATH",
   ]);
-  assert.deepEqual(lane.blockedReceipt.firstMissingOperatorArtifact, {
-    inputId: "FMARCH_HOSTED_MATRIX_FRONTEND_URL",
-    checkId: "hosted-frontend-url-configured",
-    sectionId: "hosted-target",
-    sectionLabel: "Hosted target",
-    requiredEvidence: hostedTargetPreflightMissingFrontendUrlRequiredEvidence,
-    purpose: "Externally reachable frontend base URL.",
-    proofTarget: devTestGameHostedTargetPreflightPath,
-    roleSurfaceDrilldown: {
-      localCapabilityAuditId: "local-core-loop",
-      localCapabilityRoleUrl: "/admin/audit/local-core-loop?game=<seeded-game>",
-      handoffAuditId: "local-hosted-evidence-lane",
-      handoffRoleUrl:
-        "/admin/audit/local-hosted-evidence-lane?game=<seeded-game>",
-      proofGraphNodeId: "admin-proof:hosted-evidence-lane",
-      productionFeatureGraphNodeId: "production-feature:host-phase-control",
-      proofGraphEvidencePath: "target/dev-test-game/proof-graph.json",
-    },
-  });
+  assert.deepEqual(
+    lane.blockedReceipt.firstMissingOperatorArtifact,
+    hostedEvidenceFirstMissingProgressionCaseById("missing-hosted-target-inputs")
+      .firstMissingOperatorArtifact,
+  );
   assert.equal(
     lane.blockedReceipt.localVsHostedBoundary,
     "Local hosted-like matrix artifacts and synthetic demo evidence can prove the handoff path, but they cannot satisfy hosted deployment evidence.",
@@ -4845,6 +4835,27 @@ test("dev test-game hosted evidence lane records blocked preflight state", async
   assert.deepEqual(lane.generatedFrom, {
     hostedTargetPreflight: devTestGameHostedTargetPreflightPath,
   });
+});
+
+test("hosted evidence first-missing progression cases drive operator artifacts", () => {
+  for (const progression of hostedEvidenceFirstMissingProgressionCases) {
+    assert.deepEqual(
+      hostedEvidenceFirstMissingOperatorArtifact(progression),
+      progression.firstMissingOperatorArtifact,
+      progression.id,
+    );
+  }
+  assert.equal(
+    hostedEvidenceFirstMissingProgressionCaseById(
+      "demo-raw-evidence-still-blocked",
+    ).firstMissingOperatorArtifact.inputId,
+    "FMARCH_HOSTED_MATRIX_RAW_EVIDENCE_PATH",
+  );
+  assert.equal(
+    hostedEvidenceFirstMissingProgressionCaseById("real-raw-capture-ready")
+      .firstMissingOperatorArtifact,
+    null,
+  );
 });
 
 test("dev test-game hosted evidence lane validates operator fixture without promoting hosted deployment", async () => {
@@ -23420,58 +23431,16 @@ function hostedTargetPreflightFixture({
         command: "npm run test:dev-test-game-hosted-evidence-lane",
         proofTarget: devTestGameHostedTargetPreflightPath,
         nextProofTarget: devTestGameHostedTargetPreflightPath,
-        requiredInputs: [
-          {
-            name: "FMARCH_HOSTED_MATRIX_FRONTEND_URL",
-            value: null,
-            required: true,
-            purpose: "Externally reachable frontend base URL.",
-          },
-          {
-            name: "FMARCH_HOSTED_MATRIX_API_URL",
-            value: null,
-            required: true,
-            purpose:
-              "Externally reachable API base URL for the same hosted deployment.",
-          },
-          {
-            name: "FMARCH_HOSTED_MATRIX_GROUP_ID",
-            value: "replacement-race-reload",
-            required: true,
-            purpose: "Hosted matrix group to prove.",
-          },
-          {
-            name: "FMARCH_HOSTED_MATRIX_RAW_EVIDENCE_PATH",
-            value: null,
-            required: true,
-            purpose: hostedMatrixRawEvidenceContractSummary(),
-          },
-        ],
+        requiredInputs: hostedEvidenceRequiredInputsFixture(),
         missingRequiredInputs: [
           "FMARCH_HOSTED_MATRIX_FRONTEND_URL",
           "FMARCH_HOSTED_MATRIX_API_URL",
           "FMARCH_HOSTED_MATRIX_RAW_EVIDENCE_PATH",
         ],
-        firstMissingOperatorArtifact: {
-          inputId: "FMARCH_HOSTED_MATRIX_FRONTEND_URL",
-          checkId: "hosted-frontend-url-configured",
-          sectionId: "hosted-target",
-          sectionLabel: "Hosted target",
-          requiredEvidence: hostedTargetPreflightMissingFrontendUrlRequiredEvidence,
-          purpose: "Externally reachable frontend base URL.",
-          proofTarget: devTestGameHostedTargetPreflightPath,
-          roleSurfaceDrilldown: {
-            localCapabilityAuditId: "local-core-loop",
-            localCapabilityRoleUrl: "/admin/audit/local-core-loop?game=<seeded-game>",
-            handoffAuditId: "local-hosted-evidence-lane",
-            handoffRoleUrl:
-              "/admin/audit/local-hosted-evidence-lane?game=<seeded-game>",
-            proofGraphNodeId: "admin-proof:hosted-evidence-lane",
-            productionFeatureGraphNodeId:
-              "production-feature:host-phase-control",
-            proofGraphEvidencePath: "target/dev-test-game/proof-graph.json",
-          },
-        },
+        firstMissingOperatorArtifact:
+          hostedEvidenceFirstMissingProgressionCaseById(
+            "missing-hosted-target-inputs",
+          ).firstMissingOperatorArtifact,
         operatorAction:
           "Configure the hosted frontend/API URLs plus a readable raw hosted matrix evidence packet from that same deployment, then rerun npm run test:dev-test-game-hosted-evidence-lane.",
         rawEvidenceContractSummary: hostedMatrixRawEvidenceContractSummary(),

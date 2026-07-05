@@ -4,15 +4,27 @@ import {
   hostedTargetPreflightMissingApiUrlRequiredEvidence,
   hostedTargetPreflightMissingFrontendUrlRequiredEvidence,
   hostedTargetPreflightMissingRawEvidencePathRequiredEvidence,
+  hostedTargetPreflightRawCaptureRequiredEvidence,
   hostedTargetPreflightSyntheticRawEvidenceRequiredEvidence,
 } from "./dev_test_game_hosted_target_preflight_cases.mjs";
+import {
+  hostedMatrixRawEvidenceContractSummary,
+} from "./dev_test_game_hosted_matrix_raw_evidence_contract.mjs";
 import {
   buildRealHostedEvidenceInputs,
   realHostedEvidenceInputIds,
 } from "./dev_test_game_real_hosted_evidence_inputs.mjs";
 import {
+  devTestGameHostedTargetPreflightPath,
   devTestGameHostedEvidenceLanePath,
 } from "./dev_test_game_adjacent_artifact_paths.mjs";
+import {
+  localAdminAuditIds,
+  localAdminAuditRoleUrl,
+} from "./dev_test_game_admin_audit_surface_ids.mjs";
+import {
+  devTestGameProofGraphPath,
+} from "./dev_test_game_proof_graph_paths.mjs";
 
 export const hostedEvidenceHandoffInputIds = realHostedEvidenceInputIds;
 export const hostedEvidenceHandoffBlockedCheckIds =
@@ -91,6 +103,223 @@ const hostedEvidenceHandoffBlockedChecks = Object.freeze([
     requiredEvidence: hostedTargetPreflightSyntheticRawEvidenceRequiredEvidence,
   },
 ]);
+
+export const hostedEvidenceHandoffInputCheckIds = Object.freeze({
+  FMARCH_HOSTED_MATRIX_FRONTEND_URL: "hosted-frontend-url-configured",
+  FMARCH_HOSTED_MATRIX_API_URL: "hosted-api-url-configured",
+  FMARCH_HOSTED_MATRIX_RAW_EVIDENCE_PATH: "raw-evidence-path-configured",
+});
+
+export const hostedEvidenceHandoffInputSectionsByInputId = Object.freeze({
+  FMARCH_HOSTED_MATRIX_FRONTEND_URL: Object.freeze({
+    id: "hosted-target",
+    label: "Hosted target",
+  }),
+  FMARCH_HOSTED_MATRIX_API_URL: Object.freeze({
+    id: "hosted-target",
+    label: "Hosted target",
+  }),
+  FMARCH_HOSTED_MATRIX_RAW_EVIDENCE_PATH: Object.freeze({
+    id: "raw-evidence",
+    label: "Raw evidence",
+  }),
+});
+
+const hostedEvidenceHandoffBlockedEvidenceByCheckId = Object.freeze({
+  "hosted-frontend-url-configured":
+    hostedTargetPreflightMissingFrontendUrlRequiredEvidence,
+  "hosted-api-url-configured":
+    hostedTargetPreflightMissingApiUrlRequiredEvidence,
+  "raw-evidence-path-configured":
+    hostedTargetPreflightMissingRawEvidencePathRequiredEvidence,
+  "raw-evidence-readable":
+    hostedTargetPreflightMissingRawEvidencePathRequiredEvidence,
+  "raw-evidence-real-hosted-target":
+    hostedTargetPreflightRawCaptureRequiredEvidence,
+});
+
+export function hostedEvidenceRequiredInputsFixture({
+  frontendBaseUrl = null,
+  apiBaseUrl = null,
+  groupId = "replacement-race-reload",
+  rawEvidencePath = null,
+} = {}) {
+  return [
+    {
+      name: "FMARCH_HOSTED_MATRIX_FRONTEND_URL",
+      value: frontendBaseUrl,
+      required: true,
+      purpose: "Externally reachable frontend base URL.",
+    },
+    {
+      name: "FMARCH_HOSTED_MATRIX_API_URL",
+      value: apiBaseUrl,
+      required: true,
+      purpose: "Externally reachable API base URL for the same hosted deployment.",
+    },
+    {
+      name: "FMARCH_HOSTED_MATRIX_GROUP_ID",
+      value: groupId,
+      required: true,
+      purpose: "Hosted matrix group to prove.",
+    },
+    {
+      name: "FMARCH_HOSTED_MATRIX_RAW_EVIDENCE_PATH",
+      value: rawEvidencePath,
+      required: true,
+      purpose: hostedMatrixRawEvidenceContractSummary(),
+    },
+    {
+      name: "FMARCH_HOSTED_MATRIX_EVIDENCE_PATH",
+      value: null,
+      required: false,
+      purpose: "Optional normalized hosted matrix evidence output path.",
+    },
+  ];
+}
+
+export function hostedEvidenceFirstMissingOperatorArtifact({
+  blockedCheckIds = [],
+  missingRequiredInputs,
+  requiredInputs = hostedEvidenceRequiredInputsFixture(),
+  rawCapture,
+} = {}) {
+  const resolvedMissingRequiredInputs =
+    missingRequiredInputs ??
+    requiredInputs
+      .filter((input) => input.required === true && input.value === null)
+      .map((input) => input.name);
+  const missingInputId =
+    resolvedMissingRequiredInputs[0] ??
+    (Array.isArray(rawCapture?.blockedCheckIds) &&
+    rawCapture.blockedCheckIds.length > 0
+      ? "FMARCH_HOSTED_MATRIX_RAW_EVIDENCE_PATH"
+      : null);
+  if (missingInputId === null) {
+    return null;
+  }
+  const checkId =
+    hostedEvidenceHandoffInputCheckIds[missingInputId] ??
+    blockedCheckIds.find((id) => String(id).startsWith("raw-evidence-")) ??
+    String(blockedCheckIds[0] ?? "");
+  const section = hostedEvidenceHandoffInputSectionsByInputId[missingInputId] ?? {
+    id: "hosted-target",
+    label: "Hosted target",
+  };
+  const requiredInput = requiredInputs.find(
+    (input) => input.name === missingInputId,
+  );
+  const requiredEvidence =
+    hostedEvidenceHandoffBlockedEvidenceByCheckId[checkId] ??
+    hostedTargetPreflightRawCaptureRequiredEvidence;
+  return {
+    inputId: missingInputId,
+    checkId,
+    sectionId: section.id,
+    sectionLabel: section.label,
+    requiredEvidence,
+    purpose: String(requiredInput?.purpose ?? requiredEvidence),
+    proofTarget: devTestGameHostedTargetPreflightPath,
+    roleSurfaceDrilldown: {
+      localCapabilityAuditId: localAdminAuditIds.coreLoop,
+      localCapabilityRoleUrl: localAdminAuditRoleUrl(localAdminAuditIds.coreLoop),
+      handoffAuditId: localAdminAuditIds.hostedEvidenceLane,
+      handoffRoleUrl: localAdminAuditRoleUrl(localAdminAuditIds.hostedEvidenceLane),
+      proofGraphNodeId: "admin-proof:hosted-evidence-lane",
+      productionFeatureGraphNodeId: "production-feature:host-phase-control",
+      proofGraphEvidencePath: devTestGameProofGraphPath,
+    },
+  };
+}
+
+function hostedEvidenceFirstMissingProgressionCase({
+  id,
+  label,
+  requiredInputValues,
+  blockedCheckIds,
+  rawCaptureBlockedCheckIds,
+}) {
+  const requiredInputs = hostedEvidenceRequiredInputsFixture(requiredInputValues);
+  const missingRequiredInputs = requiredInputs
+    .filter((input) => input.required === true && input.value === null)
+    .map((input) => input.name);
+  const rawCapture = Object.freeze({
+    status: rawCaptureBlockedCheckIds.length === 0 ? "passed" : "blocked",
+    blockedCheckIds: Object.freeze([...rawCaptureBlockedCheckIds]),
+  });
+  const firstMissingOperatorArtifact = hostedEvidenceFirstMissingOperatorArtifact({
+    blockedCheckIds,
+    missingRequiredInputs,
+    requiredInputs,
+    rawCapture,
+  });
+  return Object.freeze({
+    id,
+    label,
+    blockedCheckIds: Object.freeze([...blockedCheckIds]),
+    missingRequiredInputs: Object.freeze([...missingRequiredInputs]),
+    requiredInputs: Object.freeze(requiredInputs.map((input) => Object.freeze(input))),
+    rawCapture,
+    firstMissingOperatorArtifact:
+      firstMissingOperatorArtifact === null
+        ? null
+        : Object.freeze({
+            ...firstMissingOperatorArtifact,
+            roleSurfaceDrilldown: Object.freeze(
+              firstMissingOperatorArtifact.roleSurfaceDrilldown,
+            ),
+          }),
+  });
+}
+
+export const hostedEvidenceFirstMissingProgressionCases = Object.freeze([
+  hostedEvidenceFirstMissingProgressionCase({
+    id: "missing-hosted-target-inputs",
+    label: "Missing hosted target inputs",
+    blockedCheckIds: hostedTargetPreflightBlockingCheckIds,
+    rawCaptureBlockedCheckIds: [
+      "raw-evidence-path-configured",
+      "raw-evidence-contract-valid",
+      "fixture-and-demo-markers-absent",
+      "capture-redaction-retention-metadata",
+    ],
+  }),
+  hostedEvidenceFirstMissingProgressionCase({
+    id: "demo-raw-evidence-still-blocked",
+    label: "Demo raw evidence still blocked",
+    requiredInputValues: {
+      frontendBaseUrl: "https://fmarch-demo.example.test",
+      apiBaseUrl: "https://api.fmarch-demo.example.test",
+      rawEvidencePath: "target/dev-test-game/hosted-matrix-demo-raw.json",
+    },
+    blockedCheckIds: ["raw-evidence-real-hosted-target"],
+    rawCaptureBlockedCheckIds: [
+      "fixture-and-demo-markers-absent",
+      "capture-redaction-retention-metadata",
+    ],
+  }),
+  hostedEvidenceFirstMissingProgressionCase({
+    id: "real-raw-capture-ready",
+    label: "Real raw capture ready",
+    requiredInputValues: {
+      frontendBaseUrl: "https://fmarch.example.test",
+      apiBaseUrl: "https://api.fmarch.example.test",
+      rawEvidencePath: "target/dev-test-game/hosted-matrix-raw-evidence.json",
+    },
+    blockedCheckIds: [],
+    rawCaptureBlockedCheckIds: [],
+  }),
+]);
+
+export function hostedEvidenceFirstMissingProgressionCaseById(id) {
+  const found = hostedEvidenceFirstMissingProgressionCases.find(
+    (item) => item.id === id,
+  );
+  if (found === undefined) {
+    throw new Error(`unknown hosted evidence first-missing progression case: ${id}`);
+  }
+  return found;
+}
 
 export function hostedEvidenceHandoffCase() {
   return {
