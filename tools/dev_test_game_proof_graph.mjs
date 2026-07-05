@@ -200,6 +200,9 @@ export function buildDevTestGameProofGraph(
       edgeCount: edges.length,
       roleUrlCount: nodes.filter((node) => node.roleUrl).length,
       recoveryTargetCount: nodes.filter((node) => node.recoveryCommand).length,
+      roleSurfaceProofCount: nodes.filter(
+        (node) => node.kind === "role-surface-proof",
+      ).length,
       productionFeatureTargetCount: nodes.filter(
         (node) => node.kind === "production-feature-spine-target",
       ).length,
@@ -269,7 +272,7 @@ export function assertDevTestGameProofGraph(
     if (typeof node.artifact !== "string" || node.artifact.trim() === "") {
       throw new Error(`proof graph node ${node.id} is missing an artifact`);
     }
-    if (node.roleUrl !== undefined && !node.roleUrl.includes("?game=<seeded-game>")) {
+    if (node.roleUrl !== undefined && !seededGraphRoleUrl(node.roleUrl)) {
       throw new Error(`proof graph node ${node.id} role URL is not seeded`);
     }
     if (
@@ -283,7 +286,7 @@ export function assertDevTestGameProofGraph(
     if (!nodesById.has(edge.from) || !nodesById.has(edge.to)) {
       throw new Error(`proof graph edge has an unknown endpoint: ${edge.from}->${edge.to}`);
     }
-    if (edge.roleUrl !== undefined && !edge.roleUrl.includes("?game=<seeded-game>")) {
+    if (edge.roleUrl !== undefined && !seededGraphRoleUrl(edge.roleUrl)) {
       throw new Error(`proof graph edge ${edge.from}->${edge.to} role URL is not seeded`);
     }
   }
@@ -314,6 +317,10 @@ export function assertDevTestGameProofGraph(
   assertDevTestGameProofGraphCoversReplacementHandoffRecoveryReceipt(evidence);
   if (releaseReadiness !== undefined) {
     assertDevTestGameProofGraphCoversProductionFeatureTargets(
+      evidence,
+      releaseReadiness,
+    );
+    assertDevTestGameProofGraphCoversRoleSurfaceProofs(
       evidence,
       releaseReadiness,
     );
@@ -533,6 +540,47 @@ export function assertDevTestGameProofGraphCoversProductionFeatureTargets(
   return graph;
 }
 
+export function assertDevTestGameProofGraphCoversRoleSurfaceProofs(
+  graph,
+  releaseReadiness,
+) {
+  const readiness = assertDevTestGameReleaseReadiness(releaseReadiness);
+  const roleSurfaceChecks = roleSurfaceProofChecksForGraph(readiness);
+  const nodes = (graph.nodes ?? []).filter(
+    (node) => node.kind === "role-surface-proof",
+  );
+  if (nodes.length !== roleSurfaceChecks.length) {
+    throw new Error(
+      `proof graph role-surface proof count drifted: expected ${roleSurfaceChecks.length}, got ${nodes.length}`,
+    );
+  }
+  const nodesByCheckId = new Map(nodes.map((node) => [node.sourceCheckId, node]));
+  for (const check of roleSurfaceChecks) {
+    const node = nodesByCheckId.get(check.id);
+    if (
+      node?.id !== roleSurfaceProofGraphNodeId(check) ||
+      node.status !== check.status ||
+      node.artifact !== check.evidence ||
+      node.roleUrl !== check.roleUrl ||
+      node.proofBoundary !== check.proofBoundary ||
+      node.recoveryCommand !== check.recoveryCommand
+    ) {
+      throw new Error(`proof graph role-surface proof drifted: ${check.id}`);
+    }
+    if (
+      !(graph.edges ?? []).some(
+        (edge) =>
+          edge.from === "spine-manifest" &&
+          edge.to === node.id &&
+          edge.relationship === "records",
+      )
+    ) {
+      throw new Error(`proof graph role-surface proof missing edge: ${check.id}`);
+    }
+  }
+  return graph;
+}
+
 function sameStringArray(actual, expected) {
   return (
     Array.isArray(actual) &&
@@ -654,6 +702,9 @@ function buildProofGraphNodes({
     releaseReadiness,
     releaseReadinessSource,
   });
+  const roleSurfaceProofNodes = buildRoleSurfaceProofNodes({
+    releaseReadiness,
+  });
   const terminalBatchNode =
     adminSpineTerminalBatches === null
       ? []
@@ -747,6 +798,7 @@ function buildProofGraphNodes({
     },
     ...terminalBatchNode,
     ...recoveryReceiptNodes,
+    ...roleSurfaceProofNodes,
     ...adminProofNodes,
     ...productionFeatureTargetNodes,
   ].map((node) =>
@@ -780,6 +832,9 @@ function buildProofGraphEdges({
       replacementPrivateRecoveryReceipt,
     }),
     ...nextActionRecoveryEdges(nextAction),
+    ...nodes
+      .filter((node) => node.kind === "role-surface-proof")
+      .map((node) => ["spine-manifest", node.id, "records"]),
     ...nodes
       .filter((node) => node.kind === "admin-proof-surface")
       .map((node) => ["admin-spine", node.id, "aggregates"]),
@@ -961,6 +1016,33 @@ function buildProductionFeatureTargetNodes({
   });
 }
 
+function buildRoleSurfaceProofNodes({ releaseReadiness }) {
+  return roleSurfaceProofChecksForGraph(releaseReadiness).map((check) => ({
+    id: roleSurfaceProofGraphNodeId(check),
+    sourceCheckId: check.id,
+    label: check.label,
+    kind: "role-surface-proof",
+    status: check.status,
+    artifact: check.evidence,
+    roleUrl: check.roleUrl,
+    proofBoundary: check.proofBoundary,
+    recoveryCommand: check.recoveryCommand,
+  }));
+}
+
+function roleSurfaceProofChecksForGraph(releaseReadiness) {
+  return (releaseReadiness.localDevelopmentSpine?.checks ?? []).filter(
+    (check) => check.id === "local-host-setup-proof",
+  );
+}
+
+function roleSurfaceProofGraphNodeId(check) {
+  if (check.id === "local-host-setup-proof") {
+    return "role-surface:host-setup";
+  }
+  throw new Error(`unknown proof graph role-surface check: ${check.id}`);
+}
+
 function productionFeatureEvidenceObjectNamesBySlotId(releaseReadiness) {
   const privateChannelMilestone =
     releaseReadiness.localDevelopmentSpine?.checks?.find(
@@ -975,6 +1057,13 @@ function productionFeatureEvidenceObjectNamesBySlotId(releaseReadiness) {
       ? {}
       : { "private-channel": privateChannelEvidenceObjectNames }),
   };
+}
+
+function seededGraphRoleUrl(roleUrl) {
+  return (
+    roleUrl.includes("?game=<seeded-game>") ||
+    roleUrl.includes("/g/<seeded-game>/")
+  );
 }
 
 function productionFeatureTargetsForGraph(releaseReadiness) {

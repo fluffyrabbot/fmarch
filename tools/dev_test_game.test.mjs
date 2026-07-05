@@ -19,6 +19,7 @@ import {
   recoveryReceiptReleaseReadinessValidators,
   validateDevTestGameAdminSpineProof,
   validateDevTestGameAdminSpineTerminalBatches,
+  validateDevTestGameHostSetupProof,
 } from "./dev_test_game_release_readiness.mjs";
 import {
   completedGameHardeningSpineCycleId,
@@ -3191,6 +3192,7 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
     ],
   );
   const releaseReadiness = devTestGameReleaseReadinessChecklistFixture({
+    includeHostSetupProofCheck: true,
     unproven: [
       {
         id: "hosted-deployment",
@@ -3250,8 +3252,9 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
     graph,
     releaseReadiness,
   );
-  assert.equal(graph.summary.nodeCount, 58);
-  assert.equal(graph.summary.roleUrlCount, 58);
+  assert.equal(graph.summary.nodeCount, 59);
+  assert.equal(graph.summary.roleUrlCount, 59);
+  assert.equal(graph.summary.roleSurfaceProofCount, 1);
   assert.equal(graph.summary.productionFeatureTargetCount, 32);
   assert.equal(graph.summary.terminalBatchCount, 2);
   for (const descriptor of recoveryReceiptGraphDescriptors) {
@@ -3352,6 +3355,34 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
         descriptor.proofCommand,
       ]),
     ],
+  );
+  assert.deepEqual(
+    graph.nodes
+      .filter((node) => node.kind === "role-surface-proof")
+      .map((node) => [
+        node.id,
+        node.sourceCheckId,
+        node.artifact,
+        node.roleUrl,
+        node.recoveryCommand,
+      ]),
+    [
+      [
+        "role-surface:host-setup",
+        "local-host-setup-proof",
+        "target/dev-test-game/host-setup-proof.json",
+        "http://127.0.0.1:5173/g/<seeded-game>/setup",
+        "npm run dev:test-game -- --verify-host-setup-only",
+      ],
+    ],
+  );
+  assert(
+    graph.edges.some(
+      (edge) =>
+        edge.from === "spine-manifest" &&
+        edge.to === "role-surface:host-setup" &&
+        edge.relationship === "records",
+    ),
   );
   const coreLoopProductionFeatureTargets =
     releaseReadiness.localDevelopmentSpine.checks.find(
@@ -10740,6 +10771,42 @@ test("session card and markdown include role credential URLs and tokens", async 
     readiness: hardeningReadiness,
     proofRun,
   });
+  const validatedHostSetupProof = validateDevTestGameHostSetupProof(
+    hostSetupProofFixture(),
+    {
+      path: "target/dev-test-game/host-setup-proof.json",
+    },
+  );
+  assert.equal(
+    validatedHostSetupProof.roleUrl,
+    "http://127.0.0.1:5173/g/<seeded-game>/setup",
+  );
+  const hostSetupReadiness = buildDevTestGameReleaseReadiness(proofRun, {
+    generatedAt: "2026-06-26T00:00:00.000Z",
+    hostSetupProofPath: "target/dev-test-game/host-setup-proof.json",
+    hostSetupProof: hostSetupProofFixture(),
+  });
+  assertDevTestGameReleaseReadiness(hostSetupReadiness);
+  const hostSetupCheck = hostSetupReadiness.localDevelopmentSpine.checks.find(
+    (item) => item.id === "local-host-setup-proof",
+  );
+  assert.deepEqual(
+    [
+      hostSetupReadiness.generatedFrom.hostSetupProof,
+      hostSetupReadiness.localDevelopmentSpine.evidence.hostSetupProof.roleUrl,
+      hostSetupCheck.roleUrl,
+      hostSetupCheck.recoveryCommand,
+      hostSetupCheck.readyCheckIds.includes("start-phase"),
+    ],
+    [
+      "target/dev-test-game/host-setup-proof.json",
+      "http://127.0.0.1:5173/g/<seeded-game>/setup",
+      "http://127.0.0.1:5173/g/<seeded-game>/setup",
+      "npm run dev:test-game -- --verify-host-setup-only",
+      true,
+    ],
+  );
+  assert(hostSetupReadiness.releaseReadiness.reason.includes("local host setup proof"));
   const raceCoverageReadiness = buildDevTestGameReleaseReadiness(proofRun, {
     generatedAt: "2026-06-26T00:00:00.000Z",
     raceCoveragePath: "target/dev-test-game/race-coverage.json",
@@ -11904,6 +11971,77 @@ function artifactSummary(path) {
   };
 }
 
+function hostSetupProofFixture(game = "game-a") {
+  return {
+    proof: "dev-test-game-host-setup-proof",
+    status: "passed",
+    generatedAt: "2026-06-26T00:00:00.000Z",
+    game,
+    proofBoundary:
+      "Local dev-test-game host setup role URL browser proof over the seeded setup route.",
+    hostSetup: {
+      status: "passed",
+      proof: "Host setup role URL opens setup recovery surface.",
+      roleUrl: `http://127.0.0.1:5173/g/${game}/setup`,
+      capabilityLabel: `HostOf(${game})`,
+      readinessSummary: "Started at D01",
+      phaseId: "D01",
+      startDisabled: true,
+      hostHref: `/g/${game}/host`,
+      slotIds: ["slot-2", "slot-3", "slot-7", "slot_4", "slot_5"],
+      roleKeys: ["mafia_goon", "vanilla_townie"],
+      mainPolicyText: "Media-only posts are disabled.",
+      policyCommand: {
+        status: "passed",
+        commandKind: "SetPostPolicy",
+        channelId: "main",
+        allowMediaOnlySequence: [true, false],
+        finalPolicyText: "Media-only posts are disabled.",
+      },
+      setupMutationCommand: {
+        status: "passed",
+        proof: "A disposable pre-start setup role URL refreshed to ready setup state.",
+        game: "setup-game-a",
+        roleUrl: "http://127.0.0.1:5173/g/setup-game-a/setup",
+        sessionPrincipalUserId: "host_h",
+        addedSlotId: "slot_extra",
+        assignedPrincipalUserId: "setup-extra-player",
+        assignedRoleKey: "mafia_goon",
+        initialSummary: "Ready to start",
+        duplicateAddSlotRecovery: {
+          status: "reject",
+          statusText: "Reject InvalidTarget: invalid target",
+          commandKind: "AddSlot",
+          error: "InvalidTarget",
+          retryable: false,
+          refreshedReadinessSummary: "Setup still needs attention",
+        },
+        finalSummary: "Ready to start",
+        finalStartAvailable: true,
+        finalSlot: {
+          slotId: "slot_extra",
+          occupantUserId: "setup-extra-player",
+          roleKey: "mafia_goon",
+        },
+        commands: {
+          addSlot: { status: "ack" },
+          assignSlot: { status: "ack" },
+          assignRole: { status: "ack" },
+        },
+      },
+      readyCheckIds: [
+        "game-created",
+        "pack-valid",
+        "slots-exist",
+        "slots-occupied",
+        "roles-assigned",
+        "policy-acknowledged",
+        "start-phase",
+      ],
+    },
+  };
+}
+
 function identityAdapterProofFixture(game) {
   const identityAdapterContract = buildDevTestGameIdentityAdapterContractPacket();
   return {
@@ -12097,6 +12235,7 @@ function devTestGameReleaseReadinessChecklistFixture({
   includeProofFreshnessAdminCheck = true,
   includeNextActionAdminCheck = true,
   includeHostedEvidenceLaneDemoProofCheck = true,
+  includeHostSetupProofCheck = false,
   includeOpsArtifactBundleCheck = false,
 }) {
   return {
@@ -12131,6 +12270,33 @@ function devTestGameReleaseReadinessChecklistFixture({
           status: "passed",
           evidence: "target/dev-test-game/proof-run.json",
         },
+        ...(includeHostSetupProofCheck
+          ? [
+              {
+                id: "local-host-setup-proof",
+                label: "Host setup role URL, policy, roster, and recovery proof",
+                status: "passed",
+                evidence: "target/dev-test-game/host-setup-proof.json",
+                roleUrl: "http://127.0.0.1:5173/g/<seeded-game>/setup",
+                proofBoundary:
+                  "Local dev-test-game host setup role URL browser proof over the seeded setup route.",
+                capabilityLabel: "HostOf(<seeded-game>)",
+                readyCheckIds: [
+                  "game-created",
+                  "pack-valid",
+                  "slots-exist",
+                  "slots-occupied",
+                  "roles-assigned",
+                  "policy-acknowledged",
+                  "start-phase",
+                ],
+                setupMutationStatus: "passed",
+                policyCommandStatus: "passed",
+                recoveryCommand:
+                  "npm run dev:test-game -- --verify-host-setup-only",
+              },
+            ]
+          : []),
         {
           id: "local-core-loop-proof",
           label:

@@ -242,6 +242,7 @@ const defaultHardeningAdminProofPath = path.join(
   artifactDir,
   "hardening-admin-proof.json",
 );
+const defaultHostSetupProofPath = path.join(artifactDir, "host-setup-proof.json");
 const defaultBackupRestoreProofPath = path.join(
   repoRoot,
   "target",
@@ -389,6 +390,14 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
           options.hardeningAdminProofPath ??
           "target/dev-test-game/hardening-admin-proof.json",
         artifact: options.hardeningAdminProofArtifact,
+      })
+    : undefined;
+  const hostSetupProofEvidence = options.hostSetupProof
+    ? validateDevTestGameHostSetupProof(options.hostSetupProof, {
+        path:
+          options.hostSetupProofPath ??
+          "target/dev-test-game/host-setup-proof.json",
+        artifact: options.hostSetupProofArtifact,
       })
     : undefined;
   const backupRestoreEvidence = options.backupRestoreProof
@@ -651,6 +660,24 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
       evidence: sourcePath,
       laneIds: proof.lanes.map((lane) => lane.id),
     },
+    ...(hostSetupProofEvidence === undefined
+      ? []
+      : [
+          {
+            id: "local-host-setup-proof",
+            label: "Host setup role URL, policy, roster, and recovery proof",
+            status: "passed",
+            evidence: hostSetupProofEvidence.path,
+            roleUrl: hostSetupProofEvidence.roleUrl,
+            proofBoundary: hostSetupProofEvidence.proofBoundary,
+            capabilityLabel: hostSetupProofEvidence.capabilityLabel,
+            readyCheckIds: hostSetupProofEvidence.readyCheckIds,
+            setupMutationStatus: hostSetupProofEvidence.setupMutationStatus,
+            policyCommandStatus: hostSetupProofEvidence.policyCommandStatus,
+            recoveryCommand:
+              "npm run dev:test-game -- --verify-host-setup-only",
+          },
+        ]),
     {
       id: coreLoopFeatureSpineSourceCheckId,
       label: "Host controls, replacement, player actions, private channels, and day/night loop",
@@ -1008,6 +1035,7 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
     backupRestoreEvidence,
     opsArtifactsEvidence,
     hostedOpsSignalsEvidence,
+    hostSetupProofEvidence,
     seedFixtureEvidence,
     identityAdapterEvidence,
     hostedIdentityEvidenceAdminProofEvidence,
@@ -1032,6 +1060,9 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
       proofRun: sourcePath,
       proofGeneratedAt: proof.generatedAt,
       game: proof.session.game,
+      ...(hostSetupProofEvidence === undefined
+        ? {}
+        : { hostSetupProof: hostSetupProofEvidence.path }),
       ...(coreLoopAdminProofEvidence === undefined
         ? {}
         : { coreLoopAdminProof: coreLoopAdminProofEvidence.path }),
@@ -1159,6 +1190,7 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
       checks: localChecks,
       ...((backupRestoreEvidence === undefined &&
         opsArtifactsEvidence === undefined &&
+        hostSetupProofEvidence === undefined &&
         seedFixtureEvidence === undefined &&
         identityAdapterEvidence === undefined &&
         spineManifestEvidence === undefined &&
@@ -1193,6 +1225,9 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
                 cases: recoveryMilestoneCoverageCases,
                 milestonesByGeneratedFromKey: recoveryMilestonesByGeneratedFromKey,
               }),
+              ...(hostSetupProofEvidence === undefined
+                ? {}
+                : { hostSetupProof: hostSetupProofEvidence }),
               ...(backupRestoreEvidence === undefined
                 ? {}
                 : {
@@ -1339,6 +1374,7 @@ function releaseReadinessReason({
   backupRestoreEvidence,
   opsArtifactsEvidence,
   hostedOpsSignalsEvidence,
+  hostSetupProofEvidence,
   seedFixtureEvidence,
   identityAdapterEvidence,
   hostedIdentityEvidenceAdminProofEvidence,
@@ -1352,6 +1388,7 @@ function releaseReadinessReason({
 }) {
   const passed = [
     "the local development-spine proof",
+    ...(hostSetupProofEvidence === undefined ? [] : ["local host setup proof"]),
     ...(backupRestoreEvidence === undefined ? [] : ["local backup/restore drill"]),
     ...(opsArtifactsEvidence === undefined ? [] : ["local ops artifact bundle"]),
     ...(hostedOpsSignalsEvidence === undefined
@@ -2270,6 +2307,64 @@ export function validateDevTestGameCoreLoopAdminProof(proof, options = {}) {
     dayFiveNoLynchResolutionSurface: proof.dayFiveNoLynchResolutionSurface,
     completedGameEndgameSurface: proof.completedGameEndgameSurface,
     privateChannelRoleSurface: proof.privateChannelRoleSurface,
+    ...(options.artifact === undefined ? {} : { artifact: options.artifact }),
+  };
+}
+
+export function validateDevTestGameHostSetupProof(proof, options = {}) {
+  if (proof?.proof !== "dev-test-game-host-setup-proof") {
+    throw new Error(`unexpected host setup proof id: ${proof?.proof}`);
+  }
+  if (proof.status !== "passed" || proof.hostSetup?.status !== "passed") {
+    throw new Error(`host setup proof status is ${proof.status}`);
+  }
+  if (typeof proof.game !== "string" || proof.game.trim() === "") {
+    throw new Error("host setup proof is missing game id");
+  }
+  if (
+    typeof proof.hostSetup.roleUrl !== "string" ||
+    !proof.hostSetup.roleUrl.includes(`/g/${proof.game}/setup`)
+  ) {
+    throw new Error("host setup proof role URL does not target setup route");
+  }
+  if (proof.hostSetup.capabilityLabel !== `HostOf(${proof.game})`) {
+    throw new Error("host setup proof capability label drifted");
+  }
+  if (
+    proof.hostSetup.policyCommand?.status !== "passed" ||
+    proof.hostSetup.policyCommand?.commandKind !== "SetPostPolicy"
+  ) {
+    throw new Error("host setup proof missing policy command coverage");
+  }
+  if (
+    proof.hostSetup.setupMutationCommand?.status !== "passed" ||
+    proof.hostSetup.setupMutationCommand?.duplicateAddSlotRecovery?.status !==
+      "reject" ||
+    proof.hostSetup.setupMutationCommand?.duplicateAddSlotRecovery?.error !==
+      "InvalidTarget" ||
+    proof.hostSetup.setupMutationCommand?.finalStartAvailable !== true
+  ) {
+    throw new Error("host setup proof missing setup mutation recovery coverage");
+  }
+  if (!Array.isArray(proof.hostSetup.readyCheckIds)) {
+    throw new Error("host setup proof missing ready check ids");
+  }
+  return {
+    status: proof.status,
+    proof: proof.proof,
+    path: options.path ?? "target/dev-test-game/host-setup-proof.json",
+    game: proof.game,
+    roleUrl: proof.hostSetup.roleUrl.replace(proof.game, "<seeded-game>"),
+    capabilityLabel: proof.hostSetup.capabilityLabel.replace(
+      proof.game,
+      "<seeded-game>",
+    ),
+    proofBoundary: proof.proofBoundary,
+    readyCheckIds: [...proof.hostSetup.readyCheckIds],
+    setupMutationStatus: proof.hostSetup.setupMutationCommand.status,
+    policyCommandStatus: proof.hostSetup.policyCommand.status,
+    releaseReady: false,
+    productionReady: false,
     ...(options.artifact === undefined ? {} : { artifact: options.artifact }),
   };
 }
@@ -5621,6 +5716,21 @@ export function assertDevTestGameReleaseReadiness(checklist) {
   ) {
     throw new Error("dev-test-game hardening readiness check is missing spine targets");
   }
+  const hostSetupCheck = checklist.localDevelopmentSpine?.checks?.find(
+    (check) => check.id === "local-host-setup-proof",
+  );
+  if (
+    hostSetupCheck !== undefined &&
+    (!hostSetupCheck.roleUrl?.includes("/g/<seeded-game>/setup") ||
+      hostSetupCheck.setupMutationStatus !== "passed" ||
+      hostSetupCheck.policyCommandStatus !== "passed" ||
+      !Array.isArray(hostSetupCheck.readyCheckIds) ||
+      !hostSetupCheck.readyCheckIds.includes("start-phase") ||
+      hostSetupCheck.recoveryCommand !==
+        "npm run dev:test-game -- --verify-host-setup-only")
+  ) {
+    throw new Error("dev-test-game host setup readiness check is malformed");
+  }
   assertRecoveryMilestoneReadinessChecksMirrorGeneratedFrom(checklist);
   if (checklist.releaseReadiness?.status !== "not_ready") {
     throw new Error("dev-test-game release readiness must remain not_ready");
@@ -6010,6 +6120,17 @@ const optionalReadinessArtifactRegistry = Object.freeze([
     },
   }),
   optionalReadinessArtifact({
+    id: "hostSetupProof",
+    envVar: "FMARCH_DEV_TEST_GAME_HOST_SETUP_PROOF",
+    defaultPath: defaultHostSetupProofPath,
+    outputKeys: {
+      data: "hostSetupProof",
+      path: "hostSetupProofPath",
+      freshnessMetadata: "hostSetupProofArtifact",
+    },
+    validator: validateDevTestGameHostSetupProof,
+  }),
+  optionalReadinessArtifact({
     id: "backupAdminProof",
     envVar: "FMARCH_DEV_TEST_GAME_BACKUP_ADMIN_PROOF",
     defaultPath: defaultBackupAdminProofPath,
@@ -6272,6 +6393,7 @@ const optionalReadinessArtifactById = new Map(
 const optionalReadinessArtifactLoadPlan = Object.freeze([
   "coreLoopAdminProof",
   "hardeningAdminProof",
+  "hostSetupProof",
   readOptionalBackupRestoreArtifacts,
   "backupAdminProof",
   "opsArtifacts",
