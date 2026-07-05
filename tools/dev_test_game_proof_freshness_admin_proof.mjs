@@ -54,6 +54,13 @@ export function proofFreshnessAdminProofCase() {
         requiredChecks: [
           ...source.freshness.artifacts.map((artifact) => artifact.id),
           localAdminAuditHandoffCheckIds.nextAction,
+          ...(source.nextAction.nextAction.reason ===
+          "proof-graph-destination-summary-drift"
+            ? [
+                `next-action-${source.nextAction.nextAction.reason}`,
+                "next-action-proof-graph-destination-summary",
+              ]
+            : []),
         ],
         requiredCheckStatuses: Object.fromEntries([
           ...source.freshness.artifacts.map((artifact) => [
@@ -64,6 +71,22 @@ export function proofFreshnessAdminProofCase() {
             localAdminAuditHandoffCheckIds.nextAction,
             source.nextAction.nextAction.status,
           ],
+          ...(source.nextAction.nextAction.reason ===
+          "proof-graph-destination-summary-drift"
+            ? [
+                [
+                  `next-action-${source.nextAction.nextAction.reason}`,
+                  source.nextAction.nextAction.status,
+                ],
+                [
+                  "next-action-proof-graph-destination-summary",
+                  String(
+                    source.nextAction.nextAction.proofGraphDestinationSummary
+                      ?.summaryStatus ?? "",
+                  ),
+                ],
+              ]
+            : []),
         ]),
         requiredRelatedLinks: [localAdminAuditIds.nextAction],
       }),
@@ -85,6 +108,8 @@ export function proofFreshnessAdminProofCase() {
         nextActionCommand: source.nextAction.nextAction.command,
         nextActionStatus: source.nextAction.nextAction.status,
         nextActionReason: source.nextAction.nextAction.reason,
+        nextActionProofGraphDestinationSummary:
+          source.nextAction.nextAction.proofGraphDestinationSummary ?? null,
       },
       adminRoleSurface,
     }),
@@ -147,6 +172,21 @@ export function assertProofFreshnessAdminProof(evidence) {
     )
   ) {
     throw new Error("proof freshness admin proof missing next-action handoff check");
+  }
+  if (
+    evidence.generatedFrom?.nextActionReason ===
+      "proof-graph-destination-summary-drift" &&
+    (!evidence.adminRoleSurface?.visibleChecks?.includes(
+      `next-action-${evidence.generatedFrom.nextActionReason}`,
+    ) ||
+      !evidence.adminRoleSurface?.visibleChecks?.includes(
+        "next-action-proof-graph-destination-summary",
+      ) ||
+      evidence.generatedFrom.nextActionProofGraphDestinationSummary === null)
+  ) {
+    throw new Error(
+      "proof freshness admin proof missing proof graph destination-summary handoff row",
+    );
   }
   for (const id of evidence.generatedFrom?.artifactIds ?? []) {
     if (!evidence.adminRoleSurface?.visibleChecks?.includes(id)) {

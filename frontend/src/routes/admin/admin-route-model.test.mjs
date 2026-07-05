@@ -9,6 +9,8 @@ import {
   buildAdminRouteData,
   normalizeLocalNextActionGeneratedSummary,
   normalizeLocalNextActionLocalReadinessDependencyCheckRows,
+  normalizeLocalNextActionProofGraphDestinationSummaryCheckRows,
+  normalizeLocalNextActionProofGraphDestinationSummaryTraceCheckRows,
   normalizeLocalNextActionRelatedLinks,
   normalizeLocalNextActionSeedProofLaneCoverageCheckRows,
   normalizeLocalNextActionSeedProofLaneCoverageTraceCheckRows,
@@ -190,6 +192,7 @@ const LOCAL_RACE_COMMAND =
 const SEED_FIXTURE_COMMAND = "npm run test:dev-test-game-seed-fixture";
 const LOCAL_PROOF_GRAPH_COMMAND =
   "npm run test:dev-test-game-proof-graph-admin-proof";
+const PROOF_GRAPH_REGEN_COMMAND = "npm run test:dev-test-game-proof-graph";
 const LIVE_BROWSER_PROOF_COMMAND =
   "DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch npm run test:dev-test-game-live";
 const ACTIONABLE_SPINE_ROLE_URL =
@@ -2545,6 +2548,90 @@ test("admin route data exposes seed proof-lane coverage drift next action", asyn
   assert.deepEqual(
     nextAction.artifactSummary.selectedSeedProofLaneCoverageUnclassifiedLaneIds,
     ["new-production-proof-lane"],
+  );
+});
+
+test("admin route data exposes proof graph destination-summary drift next action", async () => {
+  const proofGraphDestinationSummary =
+    proofGraphDestinationSummaryActionFixture();
+  const data = await buildAdminRouteData({
+    principalUserId: "admin_a",
+    capabilities: [{ kind: "GlobalAdmin" }],
+    proofFreshness: proofFreshnessFixture(),
+    nextAction: nextActionFixture({
+      actionStatus: "blocked",
+      reason: "proof-graph-destination-summary-drift",
+      command: PROOF_GRAPH_REGEN_COMMAND,
+      proofGraphDestinationSummary,
+      unproven: undefined,
+      releaseReadinessTrace: releaseReadinessTraceFixture({ unproven: undefined }),
+    }),
+  });
+
+  const nextAction = data.audit.find((item) => item.id === localAdminAuditIds.nextAction);
+  assert.equal(nextAction.status, `blocked: ${PROOF_GRAPH_REGEN_COMMAND}`);
+  assert.deepEqual(
+    nextAction.checks
+      .filter((check) =>
+        [
+          "proof-graph-destination-summary-drift",
+          "proof-graph-destination-summary",
+          "proof-graph-destination-summary-drift-count",
+          "proof-graph-destination-summary-trace",
+          "proof-graph-destination-summary-trace-drift-count",
+        ].includes(check.id),
+      )
+      .map((check) => [check.id, check.status]),
+    [
+      ["proof-graph-destination-summary-drift", "blocked"],
+      ...normalizeLocalNextActionProofGraphDestinationSummaryCheckRows({
+        proofGraphDestinationSummary,
+      }).map((check) => [check.id, check.status]),
+      ...normalizeLocalNextActionProofGraphDestinationSummaryTraceCheckRows({
+        proofGraphDestinationSummaryTrace:
+          proofGraphDestinationSummaryTraceFixture({
+            proofGraphDestinationSummary,
+          }),
+      }).map((check) => [check.id, check.status]),
+    ],
+  );
+  assert.deepEqual(
+    nextAction.relatedLinks,
+    normalizeLocalNextActionRelatedLinks({
+      game: "midsummer",
+      command: PROOF_GRAPH_REGEN_COMMAND,
+      actionStatus: "blocked",
+      proofGraphDestinationSummary,
+    }),
+  );
+  assert.equal(
+    nextAction.artifactSummary.selectedProofGraphDestinationSummaryStatus,
+    "drift",
+  );
+  assert.equal(
+    nextAction.artifactSummary.selectedProofGraphDestinationSummaryDriftCount,
+    1,
+  );
+  const freshness = data.audit.find(
+    (item) => item.id === localAdminAuditIds.proofFreshness,
+  );
+  assert.deepEqual(
+    freshness.checks
+      .filter((check) =>
+        [
+          "next-action-proof-graph-destination-summary-drift",
+          "next-action-proof-graph-destination-summary",
+        ].includes(check.id),
+      )
+      .map((check) => [check.id, check.status]),
+    [
+      ["next-action-proof-graph-destination-summary-drift", "blocked"],
+      ["next-action-proof-graph-destination-summary", "drift:1 drift"],
+    ],
+  );
+  assert.equal(
+    freshness.artifactSummary.nextActionProofGraphDestinationSummaryDriftCount,
+    1,
   );
 });
 
@@ -5874,6 +5961,11 @@ function nextActionFixture({
   seedProofLaneCoverageTrace = seedProofLaneCoverageTraceFixture({
     seedProofLaneCoverage,
   }),
+  proofGraphDestinationSummary,
+  proofGraphDestinationSummaryTrace =
+    proofGraphDestinationSummaryTraceFixture({
+      proofGraphDestinationSummary,
+    }),
   replacementRaceReloadTrace = replacementRaceReloadTraceFixture(),
   hostConcurrentRaceReloadTrace = hostConcurrentRaceReloadTraceFixture(),
   playerConcurrentActionReloadTrace = playerConcurrentActionReloadTraceFixture(),
@@ -5951,6 +6043,12 @@ function nextActionFixture({
         forceFallbackCount: Number(stability?.forceFallbackCount ?? 0),
         failureCount: Number(stability?.failureCount ?? 0),
       },
+      proofGraph: "target/dev-test-game/proof-graph.json",
+      proofGraphGeneratedAt: "2026-06-26T00:00:00.000Z",
+      proofGraphDestinationSummaryStatus:
+        proofGraphDestinationSummaryTrace.status,
+      proofGraphDestinationSummaryDriftCount:
+        proofGraphDestinationSummaryTrace.driftCount,
       ...(terminalBatchGraph === undefined ? {} : { terminalBatchGraph }),
       ...(privateChannelRecoveryGraph === undefined
         ? {}
@@ -5979,10 +6077,14 @@ function nextActionFixture({
       ...(seedProofLaneCoverage === undefined
         ? {}
         : { seedProofLaneCoverage }),
+      ...(proofGraphDestinationSummary === undefined
+        ? {}
+        : { proofGraphDestinationSummary }),
       ...(sequenceDeferral === undefined ? {} : { sequenceDeferral }),
     },
     selectionTrace,
     stabilityTrace,
+    proofGraphDestinationSummaryTrace,
     seedProofLaneCoverageTrace,
     localReadinessDependencyTrace,
     releaseReadinessTrace,
@@ -6019,6 +6121,48 @@ function seedProofLaneCoverageActionFixture({ unclassifiedLaneIds }) {
       "Classify every passed proof lane as direct seeded, alias-covered, or aggregate-only before expanding the production-facing seeded proof spine.",
     proofTarget: "target/dev-test-game/seed-fixture-summary.json",
     roleUrl: localAdminAuditRoleUrl(localAdminAuditIds.seedFixtures),
+  };
+}
+
+function proofGraphDestinationSummaryActionFixture({
+  driftCount = 1,
+  summaryStatus = "drift",
+} = {}) {
+  return {
+    source: "target/dev-test-game/proof-graph.json",
+    summaryStatus,
+    totalDestinationCount: 12,
+    productionFeatureTargetCount: 11,
+    adminAuditDestinationCount: 8,
+    roleUrlDestinationCount: 4,
+    driftCount,
+    buildSlice:
+      "Refresh the proof graph so its production-feature destination summary matches the production-feature target inventory before next-action or readiness guidance is trusted.",
+    proofTarget: "target/dev-test-game/proof-graph.json",
+  };
+}
+
+function proofGraphDestinationSummaryTraceFixture({
+  proofGraphDestinationSummary,
+} = {}) {
+  return {
+    strategy: "proof-graph-destination-summary-before-readiness",
+    status:
+      proofGraphDestinationSummary === undefined ? "clean" : "drifted",
+    source:
+      proofGraphDestinationSummary?.source ??
+      "target/dev-test-game/proof-graph.json",
+    summaryStatus: proofGraphDestinationSummary?.summaryStatus ?? "passed",
+    totalDestinationCount:
+      proofGraphDestinationSummary?.totalDestinationCount ?? 11,
+    productionFeatureTargetCount:
+      proofGraphDestinationSummary?.productionFeatureTargetCount ?? 11,
+    adminAuditDestinationCount:
+      proofGraphDestinationSummary?.adminAuditDestinationCount ?? 7,
+    roleUrlDestinationCount:
+      proofGraphDestinationSummary?.roleUrlDestinationCount ?? 4,
+    driftCount: proofGraphDestinationSummary?.driftCount ?? 0,
+    selected: proofGraphDestinationSummary !== undefined,
   };
 }
 

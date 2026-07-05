@@ -164,6 +164,8 @@ export function nextActionAdminProofCase({
       seedProofLaneCoverageUnclassifiedLaneIds:
         source.nextAction.nextAction.seedProofLaneCoverage
           ?.unclassifiedLaneIds ?? [],
+      proofGraphDestinationSummary:
+        source.nextAction.nextAction.proofGraphDestinationSummary ?? null,
       sequenceDeferral:
         source.nextAction.nextAction.sequenceDeferral ?? null,
       unprovenId: source.nextAction.nextAction.unproven?.id ?? null,
@@ -242,6 +244,27 @@ export function nextActionAdminProofCase({
           source.nextAction.seedProofLaneCoverageTrace.unclassifiedLaneCount,
         unclassifiedLaneIds:
           source.nextAction.seedProofLaneCoverageTrace.unclassifiedLaneIds,
+      },
+      proofGraphDestinationSummaryTrace: {
+        strategy: source.nextAction.proofGraphDestinationSummaryTrace.strategy,
+        status: source.nextAction.proofGraphDestinationSummaryTrace.status,
+        selected: source.nextAction.proofGraphDestinationSummaryTrace.selected,
+        summaryStatus:
+          source.nextAction.proofGraphDestinationSummaryTrace.summaryStatus,
+        totalDestinationCount:
+          source.nextAction.proofGraphDestinationSummaryTrace
+            .totalDestinationCount,
+        productionFeatureTargetCount:
+          source.nextAction.proofGraphDestinationSummaryTrace
+            .productionFeatureTargetCount,
+        adminAuditDestinationCount:
+          source.nextAction.proofGraphDestinationSummaryTrace
+            .adminAuditDestinationCount,
+        roleUrlDestinationCount:
+          source.nextAction.proofGraphDestinationSummaryTrace
+            .roleUrlDestinationCount,
+        driftCount:
+          source.nextAction.proofGraphDestinationSummaryTrace.driftCount,
       },
       replacementRaceReloadTrace: {
         strategy: source.nextAction.replacementRaceReloadTrace.strategy,
@@ -436,6 +459,24 @@ export function assertNextActionAdminProof(evidence) {
   ) {
     throw new Error(
       "next-action admin proof is missing seed proof-lane coverage trace evidence",
+    );
+  }
+  if (
+    evidence.generatedFrom?.proofGraphDestinationSummaryTrace?.strategy !==
+      "proof-graph-destination-summary-before-readiness" ||
+    !["clean", "drifted", "unavailable"].includes(
+      evidence.generatedFrom.proofGraphDestinationSummaryTrace.status,
+    ) ||
+    typeof evidence.generatedFrom.proofGraphDestinationSummaryTrace.selected !==
+      "boolean" ||
+    typeof evidence.generatedFrom.proofGraphDestinationSummaryTrace
+      .summaryStatus !== "string" ||
+    !Number.isInteger(
+      evidence.generatedFrom.proofGraphDestinationSummaryTrace.driftCount,
+    )
+  ) {
+    throw new Error(
+      "next-action admin proof is missing proof graph destination-summary trace evidence",
     );
   }
   if (
@@ -670,6 +711,23 @@ export function assertNextActionAdminProof(evidence) {
     )
   ) {
     throw new Error("next-action admin proof missing seed coverage role URL");
+  }
+  if (evidence.generatedFrom?.proofGraphDestinationSummary !== null) {
+    if (
+      !evidence.adminRoleSurface?.visibleChecks?.includes(
+        "proof-graph-destination-summary",
+      ) ||
+      !evidence.adminRoleSurface?.visibleChecks?.includes(
+        "proof-graph-destination-summary-drift-count",
+      ) ||
+      !evidence.adminRoleSurface?.visibleRelatedLinks?.includes(
+        "proof-graph-destination-summary",
+      )
+    ) {
+      throw new Error(
+        "next-action admin proof missing proof graph destination-summary recovery rows",
+      );
+    }
   }
   for (const relatedHandoff of evidence.generatedFrom?.relatedHandoffs ?? []) {
     assertAdminAuditRelatedHandoff({
@@ -916,6 +974,12 @@ function requiredChecksForNextAction(nextAction) {
   if (nextAction.nextAction.seedProofLaneCoverage?.source !== undefined) {
     checks.push("seed-proof-lane-coverage");
   }
+  if (nextAction.nextAction.proofGraphDestinationSummary?.source !== undefined) {
+    checks.push(
+      "proof-graph-destination-summary",
+      "proof-graph-destination-summary-drift-count",
+    );
+  }
   if (nextAction.nextAction.sequenceDeferral !== undefined) {
     checks.push("hosted-identity-sequence-deferral");
     if (
@@ -945,6 +1009,12 @@ function requiredChecksForNextAction(nextAction) {
     for (const laneId of nextAction.seedProofLaneCoverageTrace.unclassifiedLaneIds) {
       checks.push(`seed-proof-lane-coverage-${laneId}`);
     }
+  }
+  if (nextAction.proofGraphDestinationSummaryTrace?.status === "drifted") {
+    checks.push(
+      "proof-graph-destination-summary-trace",
+      "proof-graph-destination-summary-trace-drift-count",
+    );
   }
   for (const candidate of nextAction.selectionTrace.candidates) {
     checks.push(`selection-trace-${candidate.id}`);
@@ -994,6 +1064,8 @@ function requiredRelatedLinksForNextAction(nextAction) {
   const localCheckId = nextAction.nextAction.localCheck?.id;
   const seedProofLaneCoverageRoleUrl =
     nextAction.nextAction.seedProofLaneCoverage?.roleUrl;
+  const proofGraphDestinationSummary =
+    nextAction.nextAction.proofGraphDestinationSummary;
   return [
     ...(typeof proofGraphNodeId === "string" && proofGraphNodeId.trim() !== ""
       ? ["selected-proof-graph-node"]
@@ -1011,6 +1083,10 @@ function requiredRelatedLinksForNextAction(nextAction) {
     ...(typeof seedProofLaneCoverageRoleUrl === "string" &&
     seedProofLaneCoverageRoleUrl.trim() !== ""
       ? ["seed-proof-lane-coverage"]
+      : []),
+    ...(proofGraphDestinationSummary !== null &&
+    typeof proofGraphDestinationSummary === "object"
+      ? ["proof-graph-destination-summary"]
       : []),
   ];
 }
@@ -1332,6 +1408,13 @@ function requiredChecksForEvidence(evidence) {
     ...(typeof evidence.generatedFrom?.seedProofLaneCoverageSource === "string"
       ? ["seed-proof-lane-coverage"]
       : []),
+    ...(evidence.generatedFrom?.proofGraphDestinationSummary === null ||
+    evidence.generatedFrom?.proofGraphDestinationSummary === undefined
+      ? []
+      : [
+          "proof-graph-destination-summary",
+          "proof-graph-destination-summary-drift-count",
+        ]),
     ...(evidence.generatedFrom?.terminalBatchGraph === null ||
     evidence.generatedFrom?.terminalBatchGraph === undefined
       ? []
@@ -1349,6 +1432,13 @@ function requiredChecksForEvidence(evidence) {
                 (id) => `seed-proof-lane-coverage-${id}`,
               )
             : []),
+        ]
+      : []),
+    ...(evidence.generatedFrom?.proofGraphDestinationSummaryTrace?.status ===
+      "drifted"
+      ? [
+          "proof-graph-destination-summary-trace",
+          "proof-graph-destination-summary-trace-drift-count",
         ]
       : []),
     ...(Array.isArray(evidence.generatedFrom?.selectionTrace?.candidateIds)
