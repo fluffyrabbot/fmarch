@@ -747,8 +747,16 @@ test("dev test-game spine orchestrators expose stable proof order and env maps",
     "node tools/dev_test_game_live_spine.mjs --core",
   );
   assert.equal(
+    packageJson.scripts["test:dev-test-game-core-live:local"],
+    "node tools/dev_test_game_local_spine.mjs --script test:dev-test-game-core-live",
+  );
+  assert.equal(
     packageJson.scripts["test:dev-test-game-live"],
     "node tools/dev_test_game_live_spine.mjs",
+  );
+  assert.equal(
+    packageJson.scripts["test:dev-test-game-live:local"],
+    "node tools/dev_test_game_local_spine.mjs --script test:dev-test-game-live",
   );
   assert.equal(
     packageJson.scripts["test:dev-test-game-ops"],
@@ -2210,7 +2218,15 @@ test("dev test-game spine manifest records command order and evidence wiring", (
   assert.equal(manifest.productionReady, false);
   assert.deepEqual(manifest.commands.coreLive.plan, devTestGameCoreLiveSpinePlan);
   assert.equal(manifest.commands.coreLive.script, "test:dev-test-game-core-live");
+  assert.equal(
+    manifest.commands.coreLive.localScript,
+    "test:dev-test-game-core-live:local",
+  );
   assert.equal(manifest.commands.live.script, "test:dev-test-game-live");
+  assert.equal(
+    manifest.commands.live.localScript,
+    "test:dev-test-game-live:local",
+  );
   assert.deepEqual(manifest.commands.live.plan, devTestGameLiveSpinePlan);
   assert.deepEqual(
     manifest.commands.backupRestore.plan,
@@ -2708,7 +2724,7 @@ test("dev test-game spine manifest blocks freshness on proof-run session drift",
   assert.equal(manifest.artifactFreshness.status, "blocked");
   assert.equal(
     manifest.artifactFreshness.nextCommand,
-    "DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch npm run test:dev-test-game-core-live",
+    "npm run test:dev-test-game-core-live:local",
   );
   assert.deepEqual(manifest.artifactFreshness.proofRunContract, {
     status: "failed",
@@ -2732,9 +2748,9 @@ test("dev test-game spine manifest blocks freshness on proof-run session drift",
         id: "proof-run",
         status: "stale",
         refreshCommand:
-          "DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch npm run test:dev-test-game-core-live",
+          "npm run test:dev-test-game-core-live:local",
         nextCommand:
-          "DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch npm run test:dev-test-game-core-live",
+          "npm run test:dev-test-game-core-live:local",
         contractReason: "proof-run-session-mismatch",
         sessionPath: "target/dev-test-game/session.json",
       },
@@ -4131,7 +4147,7 @@ test("spine manifest blocks freshness when proof-run no longer matches session",
   assert.equal(manifest.artifactFreshness.status, "blocked");
   assert.equal(
     manifest.artifactFreshness.nextCommand,
-    "DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch npm run test:dev-test-game-core-live",
+    "npm run test:dev-test-game-core-live:local",
   );
   assert.deepEqual(manifest.artifactFreshness.proofRunContract, {
     status: "failed",
@@ -4151,10 +4167,10 @@ test("spine manifest blocks freshness when proof-run no longer matches session",
       ageSeconds: 0,
       maxAgeSeconds: 86400,
       refreshCommand:
-        "DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch npm run test:dev-test-game-core-live",
+        "npm run test:dev-test-game-core-live:local",
       refreshSource: "manifest-default",
       nextCommand:
-        "DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch npm run test:dev-test-game-core-live",
+        "npm run test:dev-test-game-core-live:local",
       contractStatus: "failed",
       contractReason: "proof-run-session-mismatch",
       contractMessage:
@@ -5283,28 +5299,28 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
         "local-cohost-console-proof",
         "target/dev-test-game/proof-run.json",
         "http://127.0.0.1:5173/g/<seeded-game>/host",
-        "npm run test:dev-test-game-core-live",
+        "npm run test:dev-test-game-core-live:local",
       ],
       [
         "role-surface:replacement-player",
         "local-replacement-player-proof",
         "target/dev-test-game/proof-run.json",
         "http://127.0.0.1:5173/g/<seeded-game>",
-        "npm run test:dev-test-game-core-live",
+        "npm run test:dev-test-game-core-live:local",
       ],
       [
         "role-surface:replacement-action",
         "local-replacement-action-proof",
         "target/dev-test-game/proof-run.json",
         "http://127.0.0.1:5173/g/<replacement-action-game>",
-        "npm run test:dev-test-game-core-live",
+        "npm run test:dev-test-game-core-live:local",
       ],
       [
         "role-surface:replacement-private-channel",
         "local-replacement-private-proof",
         "target/dev-test-game/proof-run.json",
         "http://127.0.0.1:5173/g/<replacement-private-game>/c/private%3Amafia_day_chat",
-        "npm run test:dev-test-game-core-live",
+        "npm run test:dev-test-game-core-live:local",
       ],
     ],
   );
@@ -13697,7 +13713,7 @@ test("session card and markdown include role credential URLs and tokens", async 
       "NotHost",
       "D01",
       false,
-      "npm run test:dev-test-game-core-live",
+      "npm run test:dev-test-game-core-live:local",
       cohostSpineTargetsFixture({ roleUrl: cohostCheck.roleUrl }),
     ],
   );
@@ -13756,7 +13772,7 @@ test("session card and markdown include role credential URLs and tokens", async 
         staleNotificationsStatus: 403,
         rowanNotificationsStatus: 200,
       },
-      "npm run test:dev-test-game-core-live",
+      "npm run test:dev-test-game-core-live:local",
       replacementSpineTargetsFixture({ roleUrl: replacementCheck.roleUrl }),
     ],
   );
@@ -13804,7 +13820,7 @@ test("session card and markdown include role credential URLs and tokens", async 
         rowanPrivateKillVisible: false,
         targetNoticePresent: false,
       },
-      "npm run test:dev-test-game-core-live",
+      "npm run test:dev-test-game-core-live:local",
       replacementActionSpineTargetsFixture({
         roleUrl: replacementActionCheck.roleUrl,
       }),
@@ -13873,7 +13889,7 @@ test("session card and markdown include role credential URLs and tokens", async 
         staleRouteStatus: 403,
         normalizedProofStatus: "passed",
       },
-      "npm run test:dev-test-game-core-live",
+      "npm run test:dev-test-game-core-live:local",
       replacementPrivateSpineTargetsFixture({
         roleUrl: replacementPrivateCheck.roleUrl,
       }),
@@ -15607,7 +15623,7 @@ function devTestGameReleaseReadinessChecklistFixture({
           hostOnlyRejectPrincipal: "cohost_c",
           phaseAfterRejectId: "D01",
           phaseAfterRejectLocked: false,
-          recoveryCommand: "npm run test:dev-test-game-core-live",
+          recoveryCommand: "npm run test:dev-test-game-core-live:local",
           spineTargets: cohostSpineTargetsFixture(),
         },
         {
@@ -15654,7 +15670,7 @@ function devTestGameReleaseReadinessChecklistFixture({
             staleNotificationsStatus: 403,
             rowanNotificationsStatus: 200,
           },
-          recoveryCommand: "npm run test:dev-test-game-core-live",
+          recoveryCommand: "npm run test:dev-test-game-core-live:local",
           spineTargets: replacementSpineTargetsFixture(),
         },
         {
@@ -15694,7 +15710,7 @@ function devTestGameReleaseReadinessChecklistFixture({
             rowanPrivateKillVisible: false,
             targetNoticePresent: false,
           },
-          recoveryCommand: "npm run test:dev-test-game-core-live",
+          recoveryCommand: "npm run test:dev-test-game-core-live:local",
           spineTargets: replacementActionSpineTargetsFixture(),
         },
         {
@@ -15751,7 +15767,7 @@ function devTestGameReleaseReadinessChecklistFixture({
             staleRouteStatus: 403,
             normalizedProofStatus: "passed",
           },
-          recoveryCommand: "npm run test:dev-test-game-core-live",
+          recoveryCommand: "npm run test:dev-test-game-core-live:local",
           spineTargets: replacementPrivateSpineTargetsFixture(),
         },
         {
@@ -21654,10 +21670,12 @@ function spineManifestFixture() {
     commands: {
       coreLive: {
         script: "test:dev-test-game-core-live",
+        localScript: "test:dev-test-game-core-live:local",
         plan: [{ script: "dev:test-game:prebuild" }],
       },
       live: {
         script: "test:dev-test-game-live",
+        localScript: "test:dev-test-game-live:local",
         plan: [{ script: "dev:test-game:prebuild" }],
       },
       backupRestore: { plan: [{ script: "tools/live_stack_backup_restore_drill.mjs" }] },
@@ -21705,7 +21723,7 @@ function spineManifestFixture() {
         missingCount: 0,
       },
       nextCommand:
-        "DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch npm run test:dev-test-game-core-live",
+        "npm run test:dev-test-game-core-live:local",
       proofBoundary: "Local proof freshness dashboard.",
       artifacts: [
         {
@@ -21714,9 +21732,9 @@ function spineManifestFixture() {
           path: "target/dev-test-game/proof-run.json",
           status: "stale",
           refreshCommand:
-            "DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch npm run test:dev-test-game-core-live",
+            "npm run test:dev-test-game-core-live:local",
           nextCommand:
-            "DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch npm run test:dev-test-game-core-live",
+            "npm run test:dev-test-game-core-live:local",
           refreshSource: "manifest-default",
         },
         {

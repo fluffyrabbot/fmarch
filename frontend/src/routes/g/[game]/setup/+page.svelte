@@ -212,6 +212,7 @@
         </div>
         <form
           class="host-setup__inline-form"
+          data-testid="host-setup-add-slot-form"
           on:submit={(event) => handleSetupSubmit(event, "add-slot")}
         >
           <label>

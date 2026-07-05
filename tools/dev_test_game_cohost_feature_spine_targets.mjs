@@ -2,7 +2,7 @@ export const cohostFeatureSpineSourceCheckId = "local-cohost-console-proof";
 export const cohostFeatureSpineCycleId = "cohost-console";
 export const cohostConsoleFeatureSlotId = "cohost-console";
 export const devTestGameCohostConsoleProofCommand =
-  "npm run test:dev-test-game-core-live";
+  "npm run test:dev-test-game-core-live:local";
 
 export const cohostFeatureSpineSource = Object.freeze({
   sourceCheckId: cohostFeatureSpineSourceCheckId,

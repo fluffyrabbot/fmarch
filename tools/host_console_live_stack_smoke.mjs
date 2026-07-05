@@ -1275,9 +1275,9 @@ async function driveHostSetupBrowser(page, frontendBaseUrl) {
   const slotId = "slot_1";
   const occupantUserId = "player_mira";
   const roleKey = "vanilla_townie";
-  const addSlotInput = page.locator(
-    'section[aria-label="Roster"] input[name="slotId"]:not([type="hidden"])',
-  );
+  const addSlotForm = page.getByTestId("host-setup-add-slot-form");
+  await addSlotForm.waitFor({ state: "visible" });
+  const addSlotInput = addSlotForm.locator('input[name="slotId"]');
   await addSlotInput.fill(slotId);
   const addSlotButton = page.getByRole("button", { name: "Add slot" });
   const addSlotBox = await addSlotButton.boundingBox();
@@ -1296,7 +1296,10 @@ async function driveHostSetupBrowser(page, frontendBaseUrl) {
   const rosterRow = page.getByTestId(`host-setup-slot-${slotId}`);
   await rosterRow.waitFor({ state: "visible" });
   await rosterRow.locator('input[name="principalUserId"]').fill(occupantUserId);
-  const assignSlotButton = rosterRow.getByRole("button", { name: "Assign" });
+  const assignSlotButton = rosterRow.getByRole("button", {
+    name: "Assign",
+    exact: true,
+  });
   const assignSlotBox = await assignSlotButton.boundingBox();
   assertHitTarget(assignSlotBox, "host setup assign slot");
   await assignSlotButton.click();
@@ -1317,7 +1320,10 @@ async function driveHostSetupBrowser(page, frontendBaseUrl) {
   const roleRow = page.getByTestId(`host-setup-role-${slotId}`);
   await roleRow.waitFor({ state: "visible" });
   await roleRow.locator('select[name="roleKey"]').selectOption(roleKey);
-  const assignRoleButton = roleRow.getByRole("button", { name: "Assign role" });
+  const assignRoleButton = roleRow.getByRole("button", {
+    name: "Assign role",
+    exact: true,
+  });
   const assignRoleBox = await assignRoleButton.boundingBox();
   assertHitTarget(assignRoleBox, "host setup assign role");
   await assignRoleButton.click();

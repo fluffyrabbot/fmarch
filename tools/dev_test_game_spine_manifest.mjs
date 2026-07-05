@@ -219,10 +219,12 @@ export function buildDevTestGameSpineManifest({
     commands: {
       coreLive: {
         script: "test:dev-test-game-core-live",
+        localScript: "test:dev-test-game-core-live:local",
         plan: clonePlan(devTestGameCoreLiveSpinePlan),
       },
       live: {
         script: "test:dev-test-game-live",
+        localScript: "test:dev-test-game-live:local",
         plan: clonePlan(devTestGameLiveSpinePlan),
       },
       backupRestore: {
@@ -661,6 +663,22 @@ export function assertDevTestGameSpineManifest(manifest) {
     throw new Error("spine manifest must not claim production or release readiness");
   }
   assertArtifactFreshnessReport(manifest.artifactFreshness);
+  if (
+    manifest.commands?.coreLive?.localScript !==
+    "test:dev-test-game-core-live:local"
+  ) {
+    throw new Error(
+      `spine manifest core live local script drifted: ${manifest.commands?.coreLive?.localScript}`,
+    );
+  }
+  if (
+    manifest.commands?.live?.localScript !==
+    "test:dev-test-game-live:local"
+  ) {
+    throw new Error(
+      `spine manifest live local script drifted: ${manifest.commands?.live?.localScript}`,
+    );
+  }
   const coreLivePlan = manifest.commands?.coreLive?.plan ?? [];
   assertPlanScripts(coreLivePlan, [
     "dev:test-game:prebuild",
@@ -1446,8 +1464,8 @@ const devTestGameHostSetupProofPath =
   "target/dev-test-game/host-setup-proof.json";
 
 const artifactRefreshCommands = Object.freeze({
-  session: `${localDatabasePrefix} npm run test:dev-test-game-core-live`,
-  "proof-run": `${localDatabasePrefix} npm run test:dev-test-game-core-live`,
+  session: "npm run test:dev-test-game-core-live:local",
+  "proof-run": "npm run test:dev-test-game-core-live:local",
   "backup-restore": "npm run test:dev-test-game-backup-restore",
   "ops-artifacts": "npm run test:dev-test-game-ops",
   "seed-fixture": "npm run test:dev-test-game-seed-fixture",

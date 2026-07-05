@@ -5,7 +5,7 @@ export const replacementPrivateFeatureSpineCycleId =
 export const replacementPrivateFeatureSlotId =
   "replacement-private-channel-recovery";
 export const devTestGameReplacementPrivateProofCommand =
-  "npm run test:dev-test-game-core-live";
+  "npm run test:dev-test-game-core-live:local";
 
 export const replacementPrivateFeatureSpineSource = Object.freeze({
   sourceCheckId: replacementPrivateFeatureSpineSourceCheckId,

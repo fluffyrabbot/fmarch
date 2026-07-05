@@ -86,6 +86,10 @@ export async function runSeededSetupBootstrapScenario({
     state: "visible",
     timeout: 15000,
   });
+  await setupPage.getByTestId("host-setup-add-slot-form").waitFor({
+    state: "visible",
+    timeout: 15000,
+  });
   const commands = [];
   for (const row of roster) {
     commands.push(await addSetupSlot({ setupPage, slotId: row.slot }));
@@ -232,7 +236,7 @@ export function hasCompleteSetupCommandEvidence(evidence) {
 }
 
 export async function addSetupSlot({ setupPage, slotId }) {
-  const form = setupPage.locator('section[aria-label="Roster"] form').first();
+  const form = setupPage.getByTestId("host-setup-add-slot-form");
   await form.locator('input[name="slotId"]').fill(slotId);
   await form.getByRole("button", { name: "Add slot" }).click();
   return await waitForHostSetupCommand({
@@ -252,7 +256,7 @@ export async function assignSetupSlot({
 }) {
   const row = setupPage.getByTestId(`host-setup-slot-${slotId}`);
   await row.locator('input[name="principalUserId"]').fill(principalUserId);
-  await row.getByRole("button", { name: "Assign" }).click();
+  await row.getByRole("button", { name: "Assign", exact: true }).click();
   return await waitForHostSetupCommand({
     setupPage,
     statusTestId: "host-setup-assign-slot-status",
@@ -270,7 +274,7 @@ export async function assignSetupSlot({
 export async function assignSetupRole({ setupPage, slotId, roleKey }) {
   const row = setupPage.getByTestId(`host-setup-role-${slotId}`);
   await row.locator('select[name="roleKey"]').selectOption(roleKey);
-  await row.getByRole("button", { name: "Assign role" }).click();
+  await row.getByRole("button", { name: "Assign role", exact: true }).click();
   return await waitForHostSetupCommand({
     setupPage,
     statusTestId: "host-setup-assign-role-status",

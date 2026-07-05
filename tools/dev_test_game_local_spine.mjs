@@ -144,6 +144,8 @@ Options:
   --prebuild      Run dev:test-game:prebuild before the selected package script
 
 Examples:
+  npm run test:dev-test-game-core-live:local
+  npm run test:dev-test-game-live:local
   npm run test:dev-test-game-identity:operator:local
   npm run test:dev-test-game-spine:local -- --script test:dev-test-game-identity:operator
 `);

@@ -30,7 +30,7 @@ import {
 } from "./dev_test_game_production_feature_source_registry.mjs";
 
 const browserProofCommand =
-  "DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch npm run test:dev-test-game-core-live";
+  "npm run test:dev-test-game-core-live:local";
 const coreLoopAdminProofCommand =
   "npm run test:dev-test-game-core-loop-admin-proof";
 

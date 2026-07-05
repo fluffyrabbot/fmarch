@@ -1565,6 +1565,14 @@ async function verifyDisposableHostSetupRosterRoleCommand({
       state: "visible",
       timeout: 15000,
     });
+    await page.getByTestId("host-setup-add-slot-form").waitFor({
+      state: "visible",
+      timeout: 15000,
+    });
+    await stalePage.getByTestId("host-setup-add-slot-form").waitFor({
+      state: "visible",
+      timeout: 15000,
+    });
     const initialSummary = await page
       .getByTestId("host-setup-readiness-summary")
       .innerText();
@@ -1573,7 +1581,8 @@ async function verifyDisposableHostSetupRosterRoleCommand({
     );
 
     await page
-      .locator('section[aria-label="Roster"] input[name="slotId"]:not([type="hidden"])')
+      .getByTestId("host-setup-add-slot-form")
+      .locator('input[name="slotId"]')
       .fill(addedSlotId);
     await page.getByRole("button", { name: "Add slot" }).click();
     const addSlot = await waitForHostSetupCommand({
@@ -1586,7 +1595,8 @@ async function verifyDisposableHostSetupRosterRoleCommand({
     });
 
     await stalePage
-      .locator('section[aria-label="Roster"] input[name="slotId"]:not([type="hidden"])')
+      .getByTestId("host-setup-add-slot-form")
+      .locator('input[name="slotId"]')
       .fill(addedSlotId);
     await stalePage.getByRole("button", { name: "Add slot" }).click();
     const duplicateAddSlotRecovery = await waitForHostSetupCommand({
@@ -1611,7 +1621,9 @@ async function verifyDisposableHostSetupRosterRoleCommand({
     await rosterRow.locator('input[name="principalUserId"]').fill(
       assignedPrincipalUserId,
     );
-    await rosterRow.getByRole("button", { name: "Assign" }).click();
+    await rosterRow
+      .getByRole("button", { name: "Assign", exact: true })
+      .click();
     const assignSlot = await waitForHostSetupCommand({
       setupPage: page,
       statusTestId: "host-setup-assign-slot-status",
@@ -1629,7 +1641,9 @@ async function verifyDisposableHostSetupRosterRoleCommand({
 
     const roleRow = page.getByTestId(`host-setup-role-${addedSlotId}`);
     await roleRow.locator('select[name="roleKey"]').selectOption(assignedRoleKey);
-    await roleRow.getByRole("button", { name: "Assign role" }).click();
+    await roleRow
+      .getByRole("button", { name: "Assign role", exact: true })
+      .click();
     const assignRole = await waitForHostSetupCommand({
       setupPage: page,
       statusTestId: "host-setup-assign-role-status",

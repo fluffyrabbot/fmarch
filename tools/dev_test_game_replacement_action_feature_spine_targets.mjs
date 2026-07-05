@@ -3,7 +3,7 @@ export const replacementActionFeatureSpineSourceCheckId =
 export const replacementActionFeatureSpineCycleId = "replacement-action";
 export const replacementActionFeatureSlotId = "replacement-action-recovery";
 export const devTestGameReplacementActionProofCommand =
-  "npm run test:dev-test-game-core-live";
+  "npm run test:dev-test-game-core-live:local";
 
 export const replacementActionFeatureSpineSource = Object.freeze({
   sourceCheckId: replacementActionFeatureSpineSourceCheckId,

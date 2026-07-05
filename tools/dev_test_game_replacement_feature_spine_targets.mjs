@@ -3,7 +3,7 @@ export const replacementFeatureSpineSourceCheckId =
 export const replacementFeatureSpineCycleId = "replacement-player";
 export const replacementPlayerFeatureSlotId = "replacement-player-role-surface";
 export const devTestGameReplacementPlayerProofCommand =
-  "npm run test:dev-test-game-core-live";
+  "npm run test:dev-test-game-core-live:local";
 
 export const replacementFeatureSpineSource = Object.freeze({
   sourceCheckId: replacementFeatureSpineSourceCheckId,

@@ -144,17 +144,25 @@ npm run test:dev-postgres-contract
 npm run test:dev-test-game-contract
 ```
 
-The core gameplay live gate is the faster role-URL proof lane. It prebuilds the
-Rust API, runs the seeded live browser proof, validates `proof-run.json`, runs
-the core-loop and hardening admin proofs, and regenerates release readiness:
+The core gameplay live gate is the faster role-URL proof lane. The local command
+starts repo-local Postgres, prebuilds the Rust API, runs the seeded live browser
+proof, validates `proof-run.json`, runs the core-loop and hardening admin
+proofs, regenerates release readiness, and stops Postgres when it exits:
 
 ```sh
-DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch npm run test:dev-test-game-core-live
+npm run test:dev-test-game-core-live:local
 ```
 
-The full dev-test-game spine keeps the broader local proof chain intact. It runs
-the core gameplay live gate plus seed fixtures, backup/restore, identity, admin
-spine, proof graph, next-action, and final release-readiness refreshes:
+The full dev-test-game spine keeps the broader local proof chain intact. The
+local command starts repo-local Postgres, runs the core gameplay live gate plus
+seed fixtures, backup/restore, identity, admin spine, proof graph, next-action,
+and final release-readiness refreshes, then stops Postgres:
+
+```sh
+npm run test:dev-test-game-live:local
+```
+
+For an already-started database, use the underlying spine command:
 
 ```sh
 DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch npm run test:dev-test-game-live
@@ -605,7 +613,7 @@ hosted invite delivery or production account lifecycle.
 To replay and inspect only this local evidence surface after a fresh run:
 
 ```sh
-DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch npm run test:dev-test-game-core-live
+npm run test:dev-test-game-core-live:local
 node - <<'NODE'
 const proof = require("./target/dev-test-game/proof-run.json");
 const lane = proof.lanes.find((item) => item.id === "stale-host-invite-recovery");

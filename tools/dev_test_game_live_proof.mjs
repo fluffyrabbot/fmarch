@@ -85,7 +85,7 @@ const proofRun = JSON.parse(await readFile(proofRunPath, "utf8"));
 assert.equal(session.status, "ready");
 assert.equal(session.name, "live-proof");
 assert.equal(session.seedMode, "seeded");
-assert.equal(session.seedCommandCount, 22);
+assert.equal(session.seedCommandCount, 24);
 assert.equal(session.verification?.status, "passed");
 assert.equal(session.artifacts.proofRun, devTestGameProofRunPath);
 assert.equal(proofRun.proof, "dev-test-game-proof-run");

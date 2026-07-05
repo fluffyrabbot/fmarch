@@ -44,7 +44,7 @@ export const productionFeatureCoverageDecisionKind = Object.freeze({
 });
 
 export const devTestGameProductionFeatureBrowserProofCommand =
-  "DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch npm run test:dev-test-game-core-live";
+  "npm run test:dev-test-game-core-live:local";
 export {
   devTestGameCoreLoopAdminProofCommand,
   devTestGameCohostConsoleProofCommand,
