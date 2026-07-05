@@ -2,12 +2,18 @@ export const devTestGameHostedIdentityEvidencePath =
   "target/dev-test-game/hosted-identity-evidence.json";
 export const devTestGameHostedIdentityEvidenceCommand =
   "test:dev-test-game-hosted-identity-evidence";
+export const devTestGameHostedIdentityPartialAdminProofCommand =
+  "test:dev-test-game-hosted-identity-partial-admin-proof";
 export const hostedIdentityEvidencePlaceholderFixturePath =
   "tools/fixtures/dev_test_game_hosted_identity_evidence.placeholder.json";
 export const hostedIdentityEvidenceRedactedPassFixturePath =
   "tools/fixtures/dev_test_game_hosted_identity_evidence.redacted-pass.json";
 export const hostedIdentityEvidenceOperatorPartialFixturePath =
   "tools/fixtures/dev_test_game_hosted_identity_evidence.operator-partial.json";
+export const devTestGameHostedIdentityPartialEvidencePath =
+  "target/dev-test-game/hosted-identity-evidence-partial.json";
+export const devTestGameHostedIdentityPartialAdminProofPath =
+  "target/dev-test-game/hosted-identity-evidence-partial-admin-proof.json";
 export const hostedIdentityEvidenceProofGraphNodeId =
   "admin-proof:hosted-identity-evidence";
 export const hostedIdentityEvidenceProductionFeatureGraphNodeId =
@@ -186,6 +192,21 @@ export const hostedIdentityEvidenceInputSectionDefinitions = Object.freeze([
 export const hostedIdentityEvidenceInputSectionIds = Object.freeze(
   hostedIdentityEvidenceInputSectionDefinitions.map((section) => section.id),
 );
+
+export const hostedIdentityEvidenceOperatorProofDrilldowns = Object.freeze([
+  Object.freeze({
+    id: "partial-operator-account-recovery-admin-proof",
+    label: "Partial operator account recovery admin proof",
+    command: `npm run ${devTestGameHostedIdentityPartialAdminProofCommand}`,
+    sourcePath: devTestGameHostedIdentityPartialEvidencePath,
+    proofTarget: devTestGameHostedIdentityPartialAdminProofPath,
+    roleUrl: hostedIdentityEvidenceRoleSurfaceDrilldown.handoffRoleUrl,
+    firstMissingInputId: "redacted-account-recovery-packet",
+    firstMissingCheckId: "account-recovery-evidence",
+    proofBoundary:
+      "Fixture-backed local admin browser proof for the partial operator hosted identity packet. It proves the admin handoff can surface redacted-account-recovery-packet as the first actionable missing artifact; it does not prove hosted account recovery, release readiness, or production readiness.",
+  }),
+]);
 
 const hostedIdentityInputCheckIds = Object.freeze({
   FMARCH_HOSTED_IDENTITY_EVIDENCE_PATH:
@@ -419,6 +440,9 @@ export function hostedIdentityEvidenceHandoffCase({
     command: `npm run ${devTestGameHostedIdentityEvidenceCommand}`,
     proofTarget: devTestGameHostedIdentityEvidencePath,
     placeholderFixturePath: hostedIdentityEvidencePlaceholderFixturePath,
+    operatorProofDrilldowns: hostedIdentityEvidenceOperatorProofDrilldowns.map(
+      (drilldown) => ({ ...drilldown }),
+    ),
     inputIds: [...hostedIdentityEvidenceInputIds],
     blockedCheckIds: blockedChecks.map((check) => check.id),
     blockedChecks: blockedChecks.map((check) => ({

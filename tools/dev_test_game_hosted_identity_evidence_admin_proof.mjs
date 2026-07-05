@@ -7,6 +7,8 @@ import {
   buildDevTestGameHostedIdentityEvidence,
 } from "./dev_test_game_hosted_identity_evidence.mjs";
 import {
+  devTestGameHostedIdentityPartialAdminProofPath,
+  devTestGameHostedIdentityPartialEvidencePath,
   hostedIdentityEvidencePlaceholderFixturePath,
   hostedIdentityEvidenceOperatorPartialFixturePath,
   hostedIdentityEvidenceInputIds,
@@ -46,9 +48,9 @@ const evidencePath = path.join(
   "hosted-identity-evidence-admin-proof.json",
 );
 export const hostedIdentityEvidencePartialPath =
-  "target/dev-test-game/hosted-identity-evidence-partial.json";
+  devTestGameHostedIdentityPartialEvidencePath;
 export const hostedIdentityEvidencePartialAdminProofPath =
-  "target/dev-test-game/hosted-identity-evidence-partial-admin-proof.json";
+  devTestGameHostedIdentityPartialAdminProofPath;
 const requiredRelatedLinks = ["local-identity-adapter", "local-next-action"];
 
 function hostedIdentityPacketSectionRows(hostedIdentityEvidence) {
@@ -171,6 +173,9 @@ export function hostedIdentityEvidenceAdminProofCase({
           source.hostedIdentityEvidence.hostedHandoffChecklist.inputSections ?? [];
         const hostedHandoffSectionInputRows =
           hostedIdentityEvidenceSectionInputRows(hostedHandoffInputSections);
+        const hostedHandoffOperatorProofDrilldowns =
+          source.hostedIdentityEvidence.hostedHandoffChecklist
+            .operatorProofDrilldowns ?? [];
         return await proveAdminAuditDetail({
         browser,
         frontendBaseUrl,
@@ -211,6 +216,14 @@ export function hostedIdentityEvidenceAdminProofCase({
         ),
         requiredHostedHandoffSectionInputStatuses:
           hostedIdentityEvidenceSectionInputStatuses(hostedHandoffInputSections),
+        requiredHostedHandoffOperatorProofs:
+          hostedHandoffOperatorProofDrilldowns.map((drilldown) => drilldown.id),
+        requiredHostedHandoffOperatorProofStatuses: Object.fromEntries(
+          hostedHandoffOperatorProofDrilldowns.map((drilldown) => [
+            drilldown.id,
+            drilldown.command,
+          ]),
+        ),
         requiredHostedHandoffSummary: hostedIdentityHandoffSummary(
           source.hostedIdentityEvidence,
         ),
@@ -327,6 +340,15 @@ export function hostedIdentityEvidenceAdminProofCase({
           hostedIdentityEvidenceSectionInputStatuses(
             source.hostedIdentityEvidence.hostedHandoffChecklist.inputSections,
           ),
+        hostedHandoffOperatorProofIds:
+          source.hostedIdentityEvidence.hostedHandoffChecklist.operatorProofDrilldowns.map(
+            (drilldown) => drilldown.id,
+          ),
+        hostedHandoffOperatorProofStatuses: Object.fromEntries(
+          source.hostedIdentityEvidence.hostedHandoffChecklist.operatorProofDrilldowns.map(
+            (drilldown) => [drilldown.id, drilldown.command],
+          ),
+        ),
         hostedHandoffSummary: hostedIdentityHandoffSummary(
           source.hostedIdentityEvidence,
         ),
@@ -508,6 +530,20 @@ export function assertHostedIdentityEvidenceAdminProof(evidence) {
     proofName: "hosted identity evidence admin proof",
     rowName: "handoff section input status",
     surfaceKey: "visibleHostedHandoffSectionInputStatuses",
+  });
+  assertVisibleAdminRoleSurfaceRows({
+    adminRoleSurface: evidence.adminRoleSurface,
+    rowIds: evidence.generatedFrom?.hostedHandoffOperatorProofIds,
+    proofName: "hosted identity evidence admin proof",
+    rowName: "handoff operator proof",
+    surfaceKey: "visibleHostedHandoffOperatorProofs",
+  });
+  assertAdminRoleSurfaceStatusText({
+    adminRoleSurface: evidence.adminRoleSurface,
+    expectedStatuses: evidence.generatedFrom?.hostedHandoffOperatorProofStatuses,
+    proofName: "hosted identity evidence admin proof",
+    rowName: "handoff operator proof status",
+    surfaceKey: "visibleHostedHandoffOperatorProofStatuses",
   });
   const expectedSummary = evidence.generatedFrom?.hostedHandoffSummary;
   if (expectedSummary !== undefined) {

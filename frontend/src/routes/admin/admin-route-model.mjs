@@ -846,6 +846,9 @@ function normalizeHostedIdentityEvidenceHandoffChecklist({
     inputSections: normalizeHostedHandoffInputSections(
       hostedIdentityEvidence.hostedHandoffChecklist?.inputSections,
     ),
+    operatorProofDrilldowns: normalizeHostedHandoffOperatorProofDrilldowns(
+      hostedIdentityEvidence.hostedHandoffChecklist?.operatorProofDrilldowns,
+    ),
     blockedReceipt: normalizeHostedHandoffBlockedReceipt(
       hostedIdentityEvidence.hostedHandoffChecklist?.blockedReceipt,
     ),
@@ -2858,7 +2861,28 @@ function normalizeNextActionHostedHandoffChecklist({
     blockedReceipt: normalizeHostedHandoffBlockedReceipt(checklist.blockedReceipt),
     groups: normalizeHostedHandoffGroups(checklist.requirementGroups),
     inputSections: normalizeHostedHandoffInputSections(checklist.inputSections),
+    operatorProofDrilldowns: normalizeHostedHandoffOperatorProofDrilldowns(
+      checklist.operatorProofDrilldowns,
+    ),
   });
+}
+
+function normalizeHostedHandoffOperatorProofDrilldowns(drilldowns) {
+  return Object.freeze(
+    (Array.isArray(drilldowns) ? drilldowns : []).map((drilldown) =>
+      Object.freeze({
+        id: String(drilldown?.id ?? ""),
+        label: String(drilldown?.label ?? ""),
+        command: String(drilldown?.command ?? ""),
+        sourcePath: String(drilldown?.sourcePath ?? ""),
+        proofTarget: String(drilldown?.proofTarget ?? ""),
+        roleUrl: String(drilldown?.roleUrl ?? ""),
+        firstMissingInputId: String(drilldown?.firstMissingInputId ?? ""),
+        firstMissingCheckId: String(drilldown?.firstMissingCheckId ?? ""),
+        proofBoundary: String(drilldown?.proofBoundary ?? ""),
+      }),
+    ),
+  );
 }
 
 function normalizeHostedHandoffBlockedReceipt(receipt) {

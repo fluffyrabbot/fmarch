@@ -10,6 +10,9 @@ import {
 export {
   devTestGameHostedIdentityEvidenceCommand,
   devTestGameHostedIdentityEvidencePath,
+  devTestGameHostedIdentityPartialAdminProofCommand,
+  devTestGameHostedIdentityPartialAdminProofPath,
+  devTestGameHostedIdentityPartialEvidencePath,
   hostedIdentityEvidenceBlockedCheckRows,
   hostedIdentityEvidenceBlockedChecks,
   hostedIdentityEvidenceCheckIds,
@@ -18,6 +21,7 @@ export {
   hostedIdentityEvidenceInputSectionDefinitions,
   hostedIdentityEvidenceInputSectionIds,
   hostedIdentityEvidenceInputSectionStatuses,
+  hostedIdentityEvidenceOperatorProofDrilldowns,
   hostedIdentityEvidenceOperatorPartialFixturePath,
   hostedIdentityEvidencePacketSectionDefinitions,
   hostedIdentityEvidencePlaceholderFixturePath,

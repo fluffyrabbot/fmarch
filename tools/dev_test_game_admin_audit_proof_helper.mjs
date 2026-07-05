@@ -321,6 +321,8 @@ export async function proveAdminAuditDetail({
   requiredHostedHandoffInputSectionStatuses = {},
   requiredHostedHandoffSectionInputs = [],
   requiredHostedHandoffSectionInputStatuses = {},
+  requiredHostedHandoffOperatorProofs = [],
+  requiredHostedHandoffOperatorProofStatuses = {},
   requiredRealHostedObservabilitySummaries = [],
   requiredRealHostedObservabilitySummaryStatuses = {},
   requiredHostedIdentityPacketSummaries = [],
@@ -546,6 +548,17 @@ export async function proveAdminAuditDetail({
       page,
       prefix: "admin-audit-hosted-handoff-section-input",
       ids: Object.keys(requiredHostedHandoffSectionInputStatuses),
+    });
+    const visibleHostedHandoffOperatorProofs = await waitForRows({
+      page,
+      prefix: "admin-audit-hosted-handoff-operator-proof",
+      ids: requiredHostedHandoffOperatorProofs,
+      expectedStatuses: requiredHostedHandoffOperatorProofStatuses,
+    });
+    const visibleHostedHandoffOperatorProofStatuses = await readRowStatuses({
+      page,
+      prefix: "admin-audit-hosted-handoff-operator-proof",
+      ids: Object.keys(requiredHostedHandoffOperatorProofStatuses),
     });
     const visibleRealHostedObservabilitySummaries = await waitForRows({
       page,
@@ -936,6 +949,15 @@ export async function proveAdminAuditDetail({
         : {
             visibleHostedHandoffSectionInputStatuses:
               visibleHostedHandoffSectionInputStatuses,
+          }),
+      ...(visibleHostedHandoffOperatorProofs.length === 0
+        ? {}
+        : { visibleHostedHandoffOperatorProofs }),
+      ...(Object.keys(visibleHostedHandoffOperatorProofStatuses).length === 0
+        ? {}
+        : {
+            visibleHostedHandoffOperatorProofStatuses:
+              visibleHostedHandoffOperatorProofStatuses,
           }),
       ...(visibleRealHostedObservabilitySummaries.length === 0
         ? {}

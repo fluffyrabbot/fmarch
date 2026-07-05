@@ -649,6 +649,21 @@
               {/if}
             </li>
           {/each}
+          {#each data.audit.hostedHandoffChecklist.operatorProofDrilldowns ?? [] as drilldown}
+            <li
+              class="admin-audit-detail__entry admin-audit-detail__entry--stack"
+              data-testid={`admin-audit-hosted-handoff-operator-proof-${drilldown.id}`}
+            >
+              <strong>{drilldown.label}</strong>
+              <span>{drilldown.command}</span>
+              <span>{drilldown.sourcePath}</span>
+              <span>{drilldown.proofTarget}</span>
+              <span>{drilldown.roleUrl}</span>
+              <span>{drilldown.firstMissingInputId}</span>
+              <span>{drilldown.firstMissingCheckId}</span>
+              <span>{drilldown.proofBoundary}</span>
+            </li>
+          {/each}
           {#if data.audit.hostedHandoffChecklist.blockedReceipt}
             <li
               class="admin-audit-detail__entry admin-audit-detail__entry--stack"

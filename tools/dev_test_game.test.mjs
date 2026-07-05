@@ -212,10 +212,14 @@ import {
   buildDevTestGameHostedIdentityEvidence,
   devTestGameHostedIdentityEvidenceCommand,
   devTestGameHostedIdentityEvidencePath,
+  devTestGameHostedIdentityPartialAdminProofCommand,
+  devTestGameHostedIdentityPartialAdminProofPath,
+  devTestGameHostedIdentityPartialEvidencePath,
   hostedIdentityEvidenceBlockedChecks,
   hostedIdentityEvidenceHandoffCase,
   hostedIdentityEvidenceInputIds,
   hostedIdentityEvidenceInputSectionStatuses,
+  hostedIdentityEvidenceOperatorProofDrilldowns,
   hostedIdentityEvidenceOperatorPartialFixturePath,
   hostedIdentityEvidencePacketSectionDefinitions,
   hostedIdentityExpectedRoleSurfaceContract,
@@ -1014,6 +1018,22 @@ test("hosted identity evidence lane records blocked and passed handoffs", async 
     blocked.hostedHandoffChecklist.inputIds,
     hostedIdentityEvidenceInputIds,
   );
+  assert.deepEqual(
+    blocked.hostedHandoffChecklist.operatorProofDrilldowns,
+    hostedIdentityEvidenceOperatorProofDrilldowns,
+  );
+  assert.deepEqual(blocked.hostedHandoffChecklist.operatorProofDrilldowns[0], {
+    id: "partial-operator-account-recovery-admin-proof",
+    label: "Partial operator account recovery admin proof",
+    command: `npm run ${devTestGameHostedIdentityPartialAdminProofCommand}`,
+    sourcePath: devTestGameHostedIdentityPartialEvidencePath,
+    proofTarget: devTestGameHostedIdentityPartialAdminProofPath,
+    roleUrl: "/admin/audit/local-hosted-identity-evidence?game=<seeded-game>",
+    firstMissingInputId: "redacted-account-recovery-packet",
+    firstMissingCheckId: "account-recovery-evidence",
+    proofBoundary:
+      "Fixture-backed local admin browser proof for the partial operator hosted identity packet. It proves the admin handoff can surface redacted-account-recovery-packet as the first actionable missing artifact; it does not prove hosted account recovery, release readiness, or production readiness.",
+  });
   assert.equal(
     blocked.hostedHandoffChecklist.blockedReceipt.firstMissingOperatorArtifact
       .inputId,
@@ -2282,6 +2302,11 @@ test("dev test-game next-action derives one local recovery command from the mani
     status: "ready",
     unproven: hostedProductionIdentityUnproven,
   });
+  assert.deepEqual(
+    hostedIdentityStageAction.nextAction.unproven.hostedHandoffChecklist
+      .operatorProofDrilldowns,
+    hostedIdentityEvidenceOperatorProofDrilldowns,
+  );
   assert.equal(
     freshAction.generatedFrom.sequenceStage,
     devTestGameDefaultSequenceStage,
@@ -18291,6 +18316,15 @@ function hostedIdentityEvidenceAdminProofFixture() {
       hostedHandoffSectionInputIds: handoffSectionInputRows.map((row) => row.id),
       hostedHandoffSectionInputStatuses:
         hostedIdentityEvidenceSectionInputStatuses(handoff.inputSections),
+      hostedHandoffOperatorProofIds: handoff.operatorProofDrilldowns.map(
+        (drilldown) => drilldown.id,
+      ),
+      hostedHandoffOperatorProofStatuses: Object.fromEntries(
+        handoff.operatorProofDrilldowns.map((drilldown) => [
+          drilldown.id,
+          drilldown.command,
+        ]),
+      ),
       hostedHandoffSummary: {
         status: handoff.status,
         preflightStatus: handoff.preflightStatus,
@@ -18361,6 +18395,15 @@ function hostedIdentityEvidenceAdminProofFixture() {
       ),
       visibleHostedHandoffSectionInputStatuses: Object.fromEntries(
         handoffSectionInputRows.map((row) => [row.id, `${row.id} ${row.status}`]),
+      ),
+      visibleHostedHandoffOperatorProofs: handoff.operatorProofDrilldowns.map(
+        (drilldown) => drilldown.id,
+      ),
+      visibleHostedHandoffOperatorProofStatuses: Object.fromEntries(
+        handoff.operatorProofDrilldowns.map((drilldown) => [
+          drilldown.id,
+          `${drilldown.label} ${drilldown.command} ${drilldown.sourcePath} ${drilldown.proofTarget} ${drilldown.roleUrl} ${drilldown.firstMissingInputId} ${drilldown.firstMissingCheckId} ${drilldown.proofBoundary}`,
+        ]),
       ),
       visibleHostedHandoffSummary: {
         status: handoff.status,

@@ -94,6 +94,7 @@ import {
   hostedIdentityEvidenceInputSectionIds,
   hostedIdentityExpectedRoleSurfaceContract,
   hostedIdentityEvidencePacketSectionDefinitions,
+  hostedIdentityEvidenceOperatorProofDrilldowns,
   hostedIdentityEvidencePlaceholderFixturePath,
   hostedIdentityEvidenceRequirementGroups,
   hostedIdentityRoleSurfaceContractDiff,
@@ -1063,6 +1064,10 @@ test("admin route data exposes hosted identity evidence as a native audit row", 
   assert.deepEqual(
     identity.hostedHandoffChecklist.inputSections.map((section) => section.id),
     hostedIdentityEvidenceInputSectionIds,
+  );
+  assert.deepEqual(
+    identity.hostedHandoffChecklist.operatorProofDrilldowns,
+    hostedIdentityEvidenceOperatorProofDrilldowns,
   );
   const hostedIdentityBlockedReceipt =
     hostedIdentityEvidenceHandoffCase().blockedReceipt;
