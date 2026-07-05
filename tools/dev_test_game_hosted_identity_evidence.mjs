@@ -13,6 +13,7 @@ export {
   devTestGameHostedIdentityPartialAdminProofCommand,
   devTestGameHostedIdentityPartialAdminProofPath,
   devTestGameHostedIdentityPartialEvidencePath,
+  devTestGameHostedIdentityProgressionAdminProofCommand,
   hostedIdentityEvidenceBlockedCheckRows,
   hostedIdentityEvidenceBlockedChecks,
   hostedIdentityEvidenceCheckIds,

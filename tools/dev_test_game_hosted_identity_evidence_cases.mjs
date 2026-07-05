@@ -4,6 +4,8 @@ export const devTestGameHostedIdentityEvidenceCommand =
   "test:dev-test-game-hosted-identity-evidence";
 export const devTestGameHostedIdentityPartialAdminProofCommand =
   "test:dev-test-game-hosted-identity-partial-admin-proof";
+export const devTestGameHostedIdentityProgressionAdminProofCommand =
+  "test:dev-test-game-hosted-identity-progression-admin-proof";
 export const hostedIdentityEvidencePlaceholderFixturePath =
   "tools/fixtures/dev_test_game_hosted_identity_evidence.placeholder.json";
 export const hostedIdentityEvidenceRedactedPassFixturePath =

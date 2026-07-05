@@ -3,6 +3,7 @@ import { test } from "node:test";
 import {
   devTestGameHostedIdentityEvidenceCommand,
   devTestGameHostedIdentityEvidencePath,
+  devTestGameHostedIdentityProgressionAdminProofCommand,
   hostedIdentityEvidenceBlockedCheckRows,
   hostedIdentityEvidenceBlockedChecks,
   hostedIdentityEvidenceFamilyProgressionCases,
@@ -32,6 +33,10 @@ test("hosted identity evidence cases share handoff inputs and blocked groups", (
   assert.equal(
     handoff.command,
     `npm run ${devTestGameHostedIdentityEvidenceCommand}`,
+  );
+  assert.equal(
+    devTestGameHostedIdentityProgressionAdminProofCommand,
+    "test:dev-test-game-hosted-identity-progression-admin-proof",
   );
   assert.equal(handoff.proofTarget, devTestGameHostedIdentityEvidencePath);
   assert.equal(

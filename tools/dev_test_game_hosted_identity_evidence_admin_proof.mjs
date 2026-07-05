@@ -9,8 +9,8 @@ import {
 import {
   devTestGameHostedIdentityPartialAdminProofPath,
   devTestGameHostedIdentityPartialEvidencePath,
+  hostedIdentityEvidenceFamilyProgressionCases,
   hostedIdentityEvidencePlaceholderFixturePath,
-  hostedIdentityEvidenceOperatorPartialFixturePath,
   hostedIdentityEvidenceInputIds,
   hostedIdentityEvidenceInputSectionStatuses,
   hostedIdentityEvidenceSectionInputRows,
@@ -52,6 +52,29 @@ export const hostedIdentityEvidencePartialPath =
 export const hostedIdentityEvidencePartialAdminProofPath =
   devTestGameHostedIdentityPartialAdminProofPath;
 const requiredRelatedLinks = ["local-identity-adapter", "local-next-action"];
+
+export function hostedIdentityEvidenceProgressionPath(progressionId) {
+  const progression = hostedIdentityEvidenceProgressionCase(progressionId);
+  return `target/dev-test-game/hosted-identity-evidence-${progression.id}.json`;
+}
+
+export function hostedIdentityEvidenceProgressionAdminProofPath(progressionId) {
+  const progression = hostedIdentityEvidenceProgressionCase(progressionId);
+  return `target/dev-test-game/hosted-identity-evidence-${progression.id}-admin-proof.json`;
+}
+
+function hostedIdentityEvidenceProgressionCase(progressionId) {
+  const id = String(progressionId ?? "").trim();
+  const progression = hostedIdentityEvidenceFamilyProgressionCases.find(
+    (candidate) => candidate.id === id,
+  );
+  if (progression === undefined) {
+    throw new Error(
+      `unknown hosted identity progression id: ${id || "<missing>"}; expected one of ${hostedIdentityEvidenceFamilyProgressionCases.map((candidate) => candidate.id).join(", ")}`,
+    );
+  }
+  return progression;
+}
 
 function hostedIdentityPacketSectionRows(hostedIdentityEvidence) {
   return hostedIdentityEvidence.target?.redactedIntakePacket?.sections ?? [];
@@ -404,32 +427,45 @@ if (pathToFileURL(process.argv[1] ?? "").href === import.meta.url) {
 }
 
 export async function writeHostedIdentityPartialOperatorAdminProof() {
-  const partialEvidencePath = path.resolve(
-    repoRoot,
-    hostedIdentityEvidencePartialPath,
-  );
-  const partialAdminProofPath = path.resolve(
-    repoRoot,
-    hostedIdentityEvidencePartialAdminProofPath,
-  );
-  const partialEvidence = await buildDevTestGameHostedIdentityEvidence({
+  await writeHostedIdentityProgressionAdminProof({
+    progressionId: "account-recovery",
+    evidencePath: hostedIdentityEvidencePartialPath,
+    proofPath: hostedIdentityEvidencePartialAdminProofPath,
+    smokeName: "dev-test-game-hosted-identity-partial-admin-proof",
+    stage: "hosted-identity-partial-admin-proof-listen",
+  });
+}
+
+export async function writeHostedIdentityProgressionAdminProof({
+  progressionId,
+  evidencePath = hostedIdentityEvidenceProgressionPath(progressionId),
+  proofPath = hostedIdentityEvidenceProgressionAdminProofPath(progressionId),
+  smokeName,
+  stage,
+} = {}) {
+  const progression = hostedIdentityEvidenceProgressionCase(progressionId);
+  const progressionEvidencePath = path.resolve(repoRoot, evidencePath);
+  const progressionAdminProofPath = path.resolve(repoRoot, proofPath);
+  const progressionEvidence = await buildDevTestGameHostedIdentityEvidence({
     env: {
-      FMARCH_HOSTED_IDENTITY_EVIDENCE_PATH:
-        hostedIdentityEvidenceOperatorPartialFixturePath,
+      FMARCH_HOSTED_IDENTITY_EVIDENCE_PATH: progression.missingFixturePath,
     },
   });
-  await writePartialEvidence(partialEvidencePath, partialEvidence);
+  await writeEvidenceArtifact(progressionEvidencePath, progressionEvidence);
   await runAdminAuditProof(
     hostedIdentityEvidenceAdminProofCase({
-      sourcePath: partialEvidencePath,
-      proofPath: partialAdminProofPath,
-      smokeName: "dev-test-game-hosted-identity-partial-admin-proof",
-      stage: "hosted-identity-partial-admin-proof-listen",
+      sourcePath: progressionEvidencePath,
+      proofPath: progressionAdminProofPath,
+      smokeName:
+        smokeName ??
+        `dev-test-game-hosted-identity-${progression.id}-admin-proof`,
+      stage:
+        stage ?? `hosted-identity-${progression.id}-admin-proof-listen`,
     }),
   );
 }
 
-async function writePartialEvidence(filePath, evidence) {
+async function writeEvidenceArtifact(filePath, evidence) {
   await mkdir(path.dirname(filePath), { recursive: true });
   await writeFile(filePath, `${JSON.stringify(evidence, null, 2)}\n`);
 }
