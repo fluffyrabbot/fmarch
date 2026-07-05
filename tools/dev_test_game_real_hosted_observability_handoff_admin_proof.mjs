@@ -56,6 +56,48 @@ function handoffSectionInputStatuses(source) {
   );
 }
 
+function realHostedObservabilitySummaryRows(source) {
+  const checks = Array.isArray(source.checks) ? source.checks : [];
+  const passedCheckCount = checks.filter((check) => check.status === "passed").length;
+  const blockedCheckCount = source.hostedHandoffChecklist.blockedCheckIds.length;
+  const inputSections = handoffInputSections(source);
+  const requiredInputCount = inputSections.reduce(
+    (total, section) => total + (section.requiredInputIds ?? []).length,
+    0,
+  );
+  const providedInputCount = inputSections.reduce(
+    (total, section) => total + (section.providedInputIds ?? []).length,
+    0,
+  );
+  return [
+    {
+      id: "status",
+      status: `${source.status}\n${passedCheckCount}/${checks.length} checks passed\n${blockedCheckCount} checks blocked`,
+    },
+    {
+      id: "inputs",
+      status: `${providedInputCount}/${requiredInputCount} inputs provided\n${requiredInputCount - providedInputCount} inputs missing`,
+    },
+    {
+      id: "baseline",
+      status: `${
+        source.target.localHostedLikeSignalsOnlyBaseline === true
+          ? "baseline only"
+          : "baseline missing"
+      }\n${source.target.localHostedOpsSignalsPath}\nLocal hosted-like signals cannot satisfy real hosted observability evidence.`,
+    },
+  ];
+}
+
+function realHostedObservabilitySummaryStatuses(source) {
+  return Object.fromEntries(
+    realHostedObservabilitySummaryRows(source).map((summary) => [
+      summary.id,
+      summary.status,
+    ]),
+  );
+}
+
 export function realHostedObservabilityHandoffAdminProofCase() {
   return {
     smokeName: "dev-test-game-real-hosted-observability-handoff-admin-proof",
@@ -101,6 +143,10 @@ export function realHostedObservabilityHandoffAdminProofCase() {
           handoffSectionInputEntries(source).map((input) => input.rowId),
         requiredHostedHandoffSectionInputStatuses:
           handoffSectionInputStatuses(source),
+        requiredRealHostedObservabilitySummaries:
+          realHostedObservabilitySummaryRows(source).map((summary) => summary.id),
+        requiredRealHostedObservabilitySummaryStatuses:
+          realHostedObservabilitySummaryStatuses(source),
         requiredHostedHandoffBlockedReceipt:
           source.hostedHandoffChecklist.blockedReceipt,
         requiredRelatedLinks,
@@ -140,6 +186,10 @@ export function realHostedObservabilityHandoffAdminProofCase() {
         hostedHandoffSectionInputIds:
           handoffSectionInputEntries(source).map((input) => input.rowId),
         hostedHandoffSectionInputStatuses: handoffSectionInputStatuses(source),
+        realHostedObservabilitySummaryIds:
+          realHostedObservabilitySummaryRows(source).map((summary) => summary.id),
+        realHostedObservabilitySummaryStatuses:
+          realHostedObservabilitySummaryStatuses(source),
         relatedAuditIds: requiredRelatedLinks,
       },
       adminRoleSurface,
@@ -234,6 +284,21 @@ export function assertRealHostedObservabilityHandoffAdminProof(evidence) {
     proofName: "real hosted observability handoff admin proof",
     rowName: "section input status",
     surfaceKey: "visibleHostedHandoffSectionInputStatuses",
+  });
+  assertVisibleAdminRoleSurfaceRows({
+    adminRoleSurface: evidence.adminRoleSurface,
+    rowIds: evidence.generatedFrom?.realHostedObservabilitySummaryIds,
+    proofName: "real hosted observability handoff admin proof",
+    rowName: "observability summary",
+    surfaceKey: "visibleRealHostedObservabilitySummaries",
+  });
+  assertAdminRoleSurfaceStatusText({
+    adminRoleSurface: evidence.adminRoleSurface,
+    expectedStatuses:
+      evidence.generatedFrom?.realHostedObservabilitySummaryStatuses,
+    proofName: "real hosted observability handoff admin proof",
+    rowName: "observability summary status",
+    surfaceKey: "visibleRealHostedObservabilitySummaryStatuses",
   });
   assertVisibleAdminRoleSurfaceRows({
     adminRoleSurface: evidence.adminRoleSurface,

@@ -510,6 +510,39 @@
         </ol>
       </section>
     {/if}
+    {#if data.audit.artifactSummary?.realHostedObservabilitySummary}
+      <section
+        class="admin-audit-detail__group"
+        data-testid="admin-audit-detail-real-hosted-observability-summary"
+      >
+        <h2>Real hosted observability</h2>
+        <ol class="admin-audit-detail__entries">
+          <li
+            class="admin-audit-detail__entry admin-audit-detail__entry--stack"
+            data-testid="admin-audit-real-hosted-observability-summary-status"
+          >
+            <strong>{data.audit.artifactSummary.realHostedObservabilitySummary.status}</strong>
+            <span>{data.audit.artifactSummary.realHostedObservabilitySummary.passedCheckCount}/{data.audit.artifactSummary.realHostedObservabilitySummary.checkCount} checks passed</span>
+            <span>{data.audit.artifactSummary.realHostedObservabilitySummary.blockedCheckCount} checks blocked</span>
+          </li>
+          <li
+            class="admin-audit-detail__entry admin-audit-detail__entry--stack"
+            data-testid="admin-audit-real-hosted-observability-summary-inputs"
+          >
+            <strong>{data.audit.artifactSummary.realHostedObservabilitySummary.providedInputCount}/{data.audit.artifactSummary.realHostedObservabilitySummary.requiredInputCount} inputs provided</strong>
+            <span>{data.audit.artifactSummary.realHostedObservabilitySummary.missingInputCount} inputs missing</span>
+          </li>
+          <li
+            class="admin-audit-detail__entry admin-audit-detail__entry--stack"
+            data-testid="admin-audit-real-hosted-observability-summary-baseline"
+          >
+            <strong>{data.audit.artifactSummary.realHostedObservabilitySummary.baselineStatus}</strong>
+            <span>{data.audit.artifactSummary.realHostedObservabilitySummary.localHostedOpsSignalsPath}</span>
+            <span>{data.audit.artifactSummary.realHostedObservabilitySummary.localVsHostedBoundary}</span>
+          </li>
+        </ol>
+      </section>
+    {/if}
     {#if data.audit.hostedHandoffChecklist?.inputs?.length > 0 || data.audit.hostedHandoffChecklist?.blockedChecks?.length > 0}
       <section
         class="admin-audit-detail__group"

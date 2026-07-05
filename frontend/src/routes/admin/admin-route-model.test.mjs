@@ -792,6 +792,19 @@ test("admin route data exposes real hosted observability handoff as a native aud
     "The local hosted-like ops signal bundle is baseline evidence only; it cannot satisfy real hosted observability.",
   );
   assert.deepEqual(handoff.artifactSummary, {
+    realHostedObservabilitySummary: {
+      status: "blocked",
+      checkCount: 10,
+      passedCheckCount: 1,
+      blockedCheckCount: 9,
+      requiredInputCount: 11,
+      providedInputCount: 1,
+      missingInputCount: 10,
+      baselineStatus: "baseline only",
+      localHostedOpsSignalsPath: "target/dev-test-game/hosted-ops-signals.json",
+      localVsHostedBoundary:
+        "Local hosted-like signals cannot satisfy real hosted observability evidence.",
+    },
     game: "game-a",
     rawEvidencePath: "",
     rawEvidenceStatus: "blocked",
@@ -3162,6 +3175,19 @@ test("admin real hosted observability handoff detail data carries blocked eviden
     data.audit.hostedHandoffChecklist.groups.map((group) => group.id),
     realHostedObservabilityHandoffCase().requirementGroups.map((group) => group.id),
   );
+  assert.deepEqual(data.audit.artifactSummary.realHostedObservabilitySummary, {
+    status: "blocked",
+    checkCount: 10,
+    passedCheckCount: 1,
+    blockedCheckCount: 9,
+    requiredInputCount: 11,
+    providedInputCount: 1,
+    missingInputCount: 10,
+    baselineStatus: "baseline only",
+    localHostedOpsSignalsPath: "target/dev-test-game/hosted-ops-signals.json",
+    localVsHostedBoundary:
+      "Local hosted-like signals cannot satisfy real hosted observability evidence.",
+  });
   assert.deepEqual(
     data.audit.hostedHandoffChecklist.inputSections.map((section) => [
       section.id,

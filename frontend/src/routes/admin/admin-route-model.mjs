@@ -1196,6 +1196,14 @@ export function normalizeLocalRealHostedObservabilityHandoffAudit(
         blockedCheckIdSet.has(String(check.id)),
       ),
     });
+  const realHostedObservabilitySummary =
+    normalizeRealHostedObservabilitySummary({
+      realHostedObservabilityHandoff,
+      checks,
+      passedChecks,
+      blockedCheckIds,
+      hostedHandoffChecklist,
+    });
   return Object.freeze({
     id: localAdminAuditIds.realHostedObservabilityHandoff,
     label: "Real hosted observability handoff",
@@ -1250,6 +1258,7 @@ export function normalizeLocalRealHostedObservabilityHandoffAudit(
     ]),
     hostedHandoffChecklist,
     artifactSummary: Object.freeze({
+      realHostedObservabilitySummary,
       game: String(realHostedObservabilityHandoff.generatedFrom?.game ?? ""),
       rawEvidencePath: String(
         realHostedObservabilityHandoff.target?.rawEvidencePath ?? "",
@@ -1269,6 +1278,45 @@ export function normalizeLocalRealHostedObservabilityHandoffAudit(
       releaseReady: realHostedObservabilityHandoff.releaseReady === true,
       productionReady: realHostedObservabilityHandoff.productionReady === true,
     }),
+  });
+}
+
+function normalizeRealHostedObservabilitySummary({
+  realHostedObservabilityHandoff,
+  checks,
+  passedChecks,
+  blockedCheckIds,
+  hostedHandoffChecklist,
+}) {
+  const inputSections = Array.isArray(hostedHandoffChecklist?.inputSections)
+    ? hostedHandoffChecklist.inputSections
+    : [];
+  const requiredInputCount = inputSections.reduce(
+    (total, section) => total + section.requiredInputIds.length,
+    0,
+  );
+  const providedInputCount = inputSections.reduce(
+    (total, section) => total + section.providedInputIds.length,
+    0,
+  );
+  return Object.freeze({
+    status: String(realHostedObservabilityHandoff.status ?? "unknown"),
+    checkCount: checks.length,
+    passedCheckCount: passedChecks.length,
+    blockedCheckCount: blockedCheckIds.length,
+    requiredInputCount,
+    providedInputCount,
+    missingInputCount: requiredInputCount - providedInputCount,
+    baselineStatus:
+      realHostedObservabilityHandoff.target?.localHostedLikeSignalsOnlyBaseline ===
+      true
+        ? "baseline only"
+        : "baseline missing",
+    localHostedOpsSignalsPath: String(
+      realHostedObservabilityHandoff.target?.localHostedOpsSignalsPath ?? "",
+    ),
+    localVsHostedBoundary:
+      "Local hosted-like signals cannot satisfy real hosted observability evidence.",
   });
 }
 

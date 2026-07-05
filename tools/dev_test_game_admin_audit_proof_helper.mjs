@@ -319,6 +319,8 @@ export async function proveAdminAuditDetail({
   requiredHostedHandoffInputSectionStatuses = {},
   requiredHostedHandoffSectionInputs = [],
   requiredHostedHandoffSectionInputStatuses = {},
+  requiredRealHostedObservabilitySummaries = [],
+  requiredRealHostedObservabilitySummaryStatuses = {},
   requiredHostedIdentityPacketSummaries = [],
   requiredHostedIdentityPacketSummaryStatuses = {},
   requiredHostedIdentityPacketSections = [],
@@ -530,6 +532,17 @@ export async function proveAdminAuditDetail({
       page,
       prefix: "admin-audit-hosted-handoff-section-input",
       ids: Object.keys(requiredHostedHandoffSectionInputStatuses),
+    });
+    const visibleRealHostedObservabilitySummaries = await waitForRows({
+      page,
+      prefix: "admin-audit-real-hosted-observability-summary",
+      ids: requiredRealHostedObservabilitySummaries,
+      expectedStatuses: requiredRealHostedObservabilitySummaryStatuses,
+    });
+    const visibleRealHostedObservabilitySummaryStatuses = await readRowStatuses({
+      page,
+      prefix: "admin-audit-real-hosted-observability-summary",
+      ids: Object.keys(requiredRealHostedObservabilitySummaryStatuses),
     });
     const visibleHostedIdentityPacketSummaries = await waitForRows({
       page,
@@ -877,6 +890,15 @@ export async function proveAdminAuditDetail({
         : {
             visibleHostedHandoffSectionInputStatuses:
               visibleHostedHandoffSectionInputStatuses,
+          }),
+      ...(visibleRealHostedObservabilitySummaries.length === 0
+        ? {}
+        : { visibleRealHostedObservabilitySummaries }),
+      ...(Object.keys(visibleRealHostedObservabilitySummaryStatuses).length === 0
+        ? {}
+        : {
+            visibleRealHostedObservabilitySummaryStatuses:
+              visibleRealHostedObservabilitySummaryStatuses,
           }),
       ...(visibleHostedIdentityPacketSummaries.length === 0
         ? {}

@@ -16627,6 +16627,21 @@ function realHostedObservabilityHandoffAdminProofFixture() {
     }),
   });
   const sectionInputRows = realHostedObservabilitySectionInputRowsFixture(handoff);
+  const summaryRows = [
+    {
+      id: "status",
+      status: "blocked\n1/10 checks passed\n9 checks blocked",
+    },
+    {
+      id: "inputs",
+      status: "1/11 inputs provided\n10 inputs missing",
+    },
+    {
+      id: "baseline",
+      status:
+        "baseline only\ntarget/dev-test-game/hosted-ops-signals.json\nLocal hosted-like signals cannot satisfy real hosted observability evidence.",
+    },
+  ];
   return {
     version: 1,
     proof: "dev-test-game-real-hosted-observability-handoff-admin-proof",
@@ -16652,6 +16667,10 @@ function realHostedObservabilityHandoffAdminProofFixture() {
       hostedHandoffSectionInputIds: sectionInputRows.map((row) => row.id),
       hostedHandoffSectionInputStatuses: Object.fromEntries(
         sectionInputRows.map((row) => [row.id, row.status]),
+      ),
+      realHostedObservabilitySummaryIds: summaryRows.map((row) => row.id),
+      realHostedObservabilitySummaryStatuses: Object.fromEntries(
+        summaryRows.map((row) => [row.id, row.status]),
       ),
       relatedAuditIds: ["local-hosted-ops-signals", "local-next-action"],
     },
@@ -16682,6 +16701,10 @@ function realHostedObservabilityHandoffAdminProofFixture() {
       visibleHostedHandoffSectionInputs: sectionInputRows.map((row) => row.id),
       visibleHostedHandoffSectionInputStatuses: Object.fromEntries(
         sectionInputRows.map((row) => [row.id, `${row.id} ${row.status}`]),
+      ),
+      visibleRealHostedObservabilitySummaries: summaryRows.map((row) => row.id),
+      visibleRealHostedObservabilitySummaryStatuses: Object.fromEntries(
+        summaryRows.map((row) => [row.id, row.status]),
       ),
       visibleRelatedLinks: ["local-hosted-ops-signals", "local-next-action"],
       rawInviteTokensVisible: false,
