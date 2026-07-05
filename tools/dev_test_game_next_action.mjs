@@ -1851,11 +1851,11 @@ function validHostedHandoffChecklist(checklist) {
         typeof check.requiredEvidence === "string",
     ) &&
     (checklist.progressionSummary === undefined ||
-      validHostedIdentityProgressionSummary(checklist.progressionSummary))
+      validHostedHandoffProgressionSummary(checklist.progressionSummary))
   );
 }
 
-function validHostedIdentityProgressionSummary(summary) {
+function validHostedHandoffProgressionSummary(summary) {
   return (
     summary !== null &&
     typeof summary === "object" &&
@@ -1863,8 +1863,7 @@ function validHostedIdentityProgressionSummary(summary) {
     typeof summary.command === "string" &&
     summary.command.startsWith("npm run test:") &&
     typeof summary.batchProofCommand === "string" &&
-    summary.batchProofCommand ===
-      `npm run ${devTestGameHostedIdentityProgressionAdminProofBatchCommand}` &&
+    summary.batchProofCommand.startsWith("npm run test:") &&
     typeof summary.proofTarget === "string" &&
     summary.proofTarget.trim() !== "" &&
     Number.isInteger(summary.progressionCount) &&

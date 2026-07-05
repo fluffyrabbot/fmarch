@@ -19,6 +19,11 @@ import {
   devTestGameHostedEvidenceLanePath,
 } from "./dev_test_game_adjacent_artifact_paths.mjs";
 import {
+  devTestGameHostedEvidenceLaneOperatorFixtureAdminProofCommand,
+  devTestGameHostedEvidenceLaneOperatorFixtureAdminProofPath,
+  devTestGameHostedEvidenceLaneOperatorFixturePath,
+} from "./dev_test_game_hosted_evidence_lane_operator_fixture_cases.mjs";
+import {
   localAdminAuditIds,
   localAdminAuditRoleUrl,
 } from "./dev_test_game_admin_audit_surface_ids.mjs";
@@ -34,6 +39,8 @@ export const hostedEvidenceLaneCommand =
 export const hostedEvidenceLanePath = devTestGameHostedEvidenceLanePath;
 export const devTestGameHostedEvidenceLaneAdminProofPath =
   "target/dev-test-game/hosted-evidence-lane-admin-proof.json";
+export const devTestGameHostedEvidenceLaneAdminProofCommand =
+  "test:dev-test-game-hosted-evidence-lane-admin-proof";
 export const devTestGameHostedEvidenceLaneRealCaptureAdminProofPath =
   "target/dev-test-game/hosted-evidence-lane-real-capture-admin-proof.json";
 export const devTestGameHostedEvidenceLaneRealCaptureSourcePath =
@@ -321,6 +328,80 @@ export function hostedEvidenceFirstMissingProgressionCaseById(id) {
   return found;
 }
 
+export function hostedEvidenceProgressionHandoffSummary() {
+  const progressions = hostedEvidenceFirstMissingProgressionCases.map(
+    (progression) => {
+      const artifact =
+        progression.firstMissingOperatorArtifact ??
+        hostedEvidenceFirstMissingOperatorArtifact({
+          blockedCheckIds: progression.blockedCheckIds,
+          requiredInputs: progression.requiredInputs,
+          rawCapture: progression.rawCapture,
+        });
+      const firstMissingInputId =
+        artifact?.inputId ?? "hosted-evidence-ready";
+      const firstMissingCheckId =
+        artifact?.checkId ?? "external-hosted-evidence-written";
+      const adminProofMode =
+        progression.id === "missing-hosted-target-inputs"
+          ? "missing-hosted-target-inputs"
+          : progression.id === "demo-raw-evidence-still-blocked"
+            ? "operator-demo-raw-evidence-still-blocked"
+            : "real-raw-capture-ready";
+      const proofCommand =
+        progression.id === "demo-raw-evidence-still-blocked"
+          ? `npm run ${devTestGameHostedEvidenceLaneOperatorFixtureAdminProofCommand}`
+          : progression.id === "real-raw-capture-ready"
+            ? devTestGameHostedEvidenceLaneRealCaptureAdminProofCommand
+            : `npm run ${devTestGameHostedEvidenceLaneAdminProofCommand}`;
+      const evidencePath =
+        progression.id === "demo-raw-evidence-still-blocked"
+          ? devTestGameHostedEvidenceLaneOperatorFixturePath
+          : progression.id === "real-raw-capture-ready"
+            ? devTestGameHostedEvidenceLaneRealCaptureSourcePath
+            : hostedEvidenceLanePath;
+      const adminProofTarget =
+        progression.id === "demo-raw-evidence-still-blocked"
+          ? devTestGameHostedEvidenceLaneOperatorFixtureAdminProofPath
+          : progression.id === "real-raw-capture-ready"
+            ? devTestGameHostedEvidenceLaneRealCaptureAdminProofPath
+            : devTestGameHostedEvidenceLaneAdminProofPath;
+      return Object.freeze({
+        id: progression.id,
+        checkId: firstMissingCheckId,
+        missingInputId: firstMissingInputId,
+        adminProofMode,
+        adminProofFixturePath: evidencePath,
+        proofCommand,
+        evidencePath,
+        adminProofTarget,
+        roleUrl: localAdminAuditRoleUrl(localAdminAuditIds.hostedEvidenceLane),
+        firstMissingInputId,
+        firstMissingCheckId,
+        proofBoundary:
+          progression.id === "real-raw-capture-ready"
+            ? "Local admin browser proof target for the hosted evidence real-capture handoff. It proves the role surface can show a real-hosted raw-capture-ready progression; it does not prove live hosted deployment, release readiness, or production readiness."
+            : "Local admin browser proof target for one hosted evidence recovery progression row. It proves the admin handoff can surface the named first missing operator input; it does not prove live hosted deployment, release readiness, or production readiness.",
+      });
+    },
+  );
+  return Object.freeze({
+    status: "passed",
+    command: hostedEvidenceLaneCommand,
+    batchProofCommand: `npm run ${devTestGameHostedEvidenceLaneAdminProofCommand}`,
+    proofTarget: hostedEvidenceLanePath,
+    roleUrl: localAdminAuditRoleUrl(localAdminAuditIds.hostedEvidenceLane),
+    progressionCount: progressions.length,
+    progressionIds: progressions.map((progression) => progression.id),
+    progressionProofTargets: progressions.map(
+      (progression) => progression.adminProofTarget,
+    ),
+    progressions,
+    proofBoundary:
+      "Local hosted evidence recovery progression summary. Passing means every shared hosted evidence progression case names its proof command, admin proof target, role URL, and first operator input; it does not prove live hosted deployment, release readiness, or production readiness.",
+  });
+}
+
 export function hostedEvidenceHandoffCase() {
   return {
     inputIds: [...hostedEvidenceHandoffInputIds],
@@ -541,6 +622,7 @@ export function hostedEvidenceHandoffChecklistFixture({
   blockedChecks = hostedEvidenceHandoffBlockedChecks,
   inputSections = hostedEvidenceHandoffInputSections(),
   blockedReceipt = null,
+  progressionSummary = undefined,
 } = {}) {
   const blockedCheckIdSet = new Set(blockedCheckIds);
   return assertHostedEvidenceHandoffChecklist({
@@ -555,6 +637,7 @@ export function hostedEvidenceHandoffChecklistFixture({
       .map((check) => ({ ...check })),
     inputSections,
     ...(blockedReceipt === null ? {} : { blockedReceipt }),
+    ...(progressionSummary === undefined ? {} : { progressionSummary }),
   });
 }
 
@@ -586,6 +669,7 @@ export function hostedEvidenceHandoffChecklistFromPreflight({
     blockedCheckIds: blockedChecks.map((check) => check.id),
     blockedChecks,
     inputSections,
+    progressionSummary: hostedEvidenceProgressionHandoffSummary(),
     blockedReceipt:
       preflight?.blockedReceipt === undefined
         ? null

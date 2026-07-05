@@ -468,6 +468,7 @@ import {
   hostedEvidenceFirstMissingOperatorArtifact,
   hostedEvidenceFirstMissingProgressionCaseById,
   hostedEvidenceFirstMissingProgressionCases,
+  hostedEvidenceProgressionHandoffSummary,
   hostedEvidenceHandoffChecklistFromPreflight,
   hostedEvidenceHandoffChecklistFixture,
   hostedEvidenceHandoffBlockedCheckIds,
@@ -4588,6 +4589,21 @@ test("dev test-game next-action advances hosted deployment after target prefligh
     blockedPreflightAction.nextAction.unproven.hostedHandoffChecklist
       .blockedCheckIds,
     hostedEvidenceHandoffBlockedCheckIds,
+  );
+  assert.deepEqual(
+    blockedPreflightAction.nextAction.unproven.hostedHandoffChecklist
+      .progressionSummary.progressionIds,
+    hostedEvidenceProgressionHandoffSummary().progressionIds,
+  );
+  assert.deepEqual(
+    blockedPreflightAction.nextAction.unproven.hostedHandoffChecklist
+      .progressionSummary.progressionProofTargets,
+    hostedEvidenceProgressionHandoffSummary().progressionProofTargets,
+  );
+  assert.equal(
+    blockedPreflightAction.nextAction.unproven.hostedHandoffChecklist
+      .progressionSummary.progressions[1].adminProofTarget,
+    devTestGameHostedEvidenceLaneOperatorFixtureAdminProofPath,
   );
   assert.deepEqual(
     blockedPreflightAction.releaseReadinessTrace.candidates[0]
