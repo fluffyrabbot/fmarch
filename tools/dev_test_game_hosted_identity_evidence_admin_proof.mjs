@@ -329,6 +329,7 @@ export function hostedIdentityEvidenceAdminProofCase({
           hostedIdentityProgressionRowStatuses(
             source.hostedIdentityProgressionSummary,
           ),
+        requiredText: ["Hosted identity recovery ladder"],
         requiredHostedIdentityRoleSurfaceContractDiffStatus:
           source.hostedIdentityEvidence.target.roleSurfaceContractDiff.status,
         requiredHostedIdentityRoleSurfaceContractMismatches:

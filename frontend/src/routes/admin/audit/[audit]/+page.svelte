@@ -644,7 +644,7 @@
         class="admin-audit-detail__group"
         data-testid="admin-audit-detail-hosted-identity-progression-summary"
       >
-        <h2>Evidence family ladder</h2>
+        <h2>Hosted identity recovery ladder</h2>
         <ol class="admin-audit-detail__entries">
           <li
             class="admin-audit-detail__entry admin-audit-detail__entry--stack"

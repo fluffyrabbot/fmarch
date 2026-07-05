@@ -1508,6 +1508,19 @@ test("admin route data exposes hosted identity evidence as a native audit row", 
   );
 });
 
+test("admin audit detail page renders hosted identity progressions as a named recovery ladder", async () => {
+  const source = await readFile(
+    "frontend/src/routes/admin/audit/[audit]/+page.svelte",
+    "utf8",
+  );
+  assert.match(source, /admin-audit-detail-hosted-identity-progression-summary/);
+  assert.match(source, /Hosted identity recovery ladder/);
+  assert.match(
+    source,
+    /admin-audit-hosted-identity-progression-\$\{progression\.id\}/,
+  );
+});
+
 test("admin hosted-facing audit inventory carries shared handoff paths where required", async () => {
   const data = await buildAdminRouteData({
     principalUserId: "admin_a",
