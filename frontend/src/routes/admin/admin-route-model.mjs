@@ -128,6 +128,13 @@ const COMPLETED_GAME_HARDENING_FAMILY_IDS = Object.freeze([
     COMPLETED_GAME_HARDENING_LANE_CASES.map((scenario) => scenario.family),
   ),
 ]);
+const SETUP_COMMAND_EVIDENCE_KEYS = Object.freeze([
+  "addSlot",
+  "assignSlot",
+  "assignRole",
+  "setPostPolicy",
+  "startGame",
+]);
 
 export async function buildAdminRouteData({
   principalUserId,
@@ -4684,6 +4691,11 @@ export function normalizeLocalReleaseReadinessAudit(
   const unproven = Array.isArray(releaseReadinessChecklist.releaseReadiness?.unproven)
     ? releaseReadinessChecklist.releaseReadiness.unproven
     : [];
+  const hostSetupProofEvidence =
+    releaseReadinessChecklist.localDevelopmentSpine?.evidence?.hostSetupProof;
+  const setupCommandEvidence = normalizeSetupCommandEvidenceRows(
+    hostSetupProofEvidence?.setupCommandEvidence,
+  );
   const statusPrefix =
     coverageSummary.driftCount === 0
       ? `${checks.length} local checks passed`
@@ -4749,6 +4761,7 @@ export function normalizeLocalReleaseReadinessAudit(
         }),
       ),
     ),
+    setupCommandEvidence,
     artifactSummary: Object.freeze({
       game: String(releaseReadinessChecklist.generatedFrom?.game ?? ""),
       localCheckCount: checks.length,
@@ -4761,6 +4774,26 @@ export function normalizeLocalReleaseReadinessAudit(
       productionReady: releaseReadinessChecklist.productionReady === true,
     }),
   });
+}
+
+function normalizeSetupCommandEvidenceRows(evidence) {
+  if (evidence === null || typeof evidence !== "object") {
+    return Object.freeze([]);
+  }
+  return Object.freeze(
+    SETUP_COMMAND_EVIDENCE_KEYS.map((id) => {
+      const row = evidence[id];
+      if (row === null || typeof row !== "object") {
+        return null;
+      }
+      return Object.freeze({
+        id,
+        status: String(row.status ?? "unknown"),
+        commandKind: String(row.commandKind ?? ""),
+        readinessSummary: String(row.readinessSummary ?? ""),
+      });
+    }).filter((row) => row !== null),
+  );
 }
 
 function localReleaseReadinessCoverageSummary(checks) {

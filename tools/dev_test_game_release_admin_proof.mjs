@@ -38,6 +38,13 @@ const requiredLocalPrerequisites = [
   "local-hosted-evidence-lane-demo-proof",
 ];
 const requiredUnprovenItems = releaseAdminProofFallbackUnprovenIds;
+const requiredSetupCommandEvidence = [
+  "addSlot",
+  "assignSlot",
+  "assignRole",
+  "setPostPolicy",
+  "startGame",
+];
 
 export function releaseAdminProofCase() {
   return {
@@ -59,6 +66,11 @@ export function releaseAdminProofCase() {
         requiredLocalPrerequisites: readiness.localDevelopmentSpine.checks
           .filter((check) => check.dependencyGated === true)
           .map((check) => check.id),
+        requiredSetupCommandEvidence:
+          readiness.localDevelopmentSpine.evidence?.hostSetupProof
+            ?.setupCommandEvidence === undefined
+            ? []
+            : requiredSetupCommandEvidence,
         requiredUnproven: readiness.releaseReadiness.unproven.map((item) => item.id),
       }),
     buildEvidence: ({ source: readiness, adminRoleSurface }) => ({
@@ -79,6 +91,11 @@ export function releaseAdminProofCase() {
         localPrerequisiteIds: readiness.localDevelopmentSpine.checks
           .filter((check) => check.dependencyGated === true)
           .map((check) => check.id),
+        setupCommandEvidenceIds: requiredSetupCommandEvidence.filter(
+          (id) =>
+            readiness.localDevelopmentSpine.evidence?.hostSetupProof
+              ?.setupCommandEvidence?.[id] !== undefined,
+        ),
         unprovenIds: readiness.releaseReadiness.unproven.map((item) => item.id),
       },
       adminRoleSurface,
@@ -146,6 +163,14 @@ export function assertReleaseAdminProof(evidence) {
     if (visitedDestination === undefined) {
       throw new Error(
         `release admin proof did not navigate local prerequisite: ${prerequisiteId}`,
+      );
+    }
+  }
+  for (const commandId of
+    evidence.generatedFrom?.setupCommandEvidenceIds ?? requiredSetupCommandEvidence) {
+    if (!evidence.adminRoleSurface?.visibleSetupCommandEvidence?.includes(commandId)) {
+      throw new Error(
+        `release admin proof missing visible setup command evidence: ${commandId}`,
       );
     }
   }

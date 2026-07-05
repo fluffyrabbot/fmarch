@@ -942,6 +942,27 @@
         {/each}
       </ol>
     {/if}
+    {#if data.audit.setupCommandEvidence?.length > 0}
+      <section
+        class="admin-audit-detail__group"
+        data-testid="admin-audit-detail-setup-command-evidence"
+      >
+        <h2>Setup command evidence</h2>
+        <ol class="admin-audit-detail__entries">
+          {#each data.audit.setupCommandEvidence as command}
+            <li
+              class="admin-audit-detail__entry"
+              data-testid={`admin-audit-setup-command-evidence-${command.id}`}
+            >
+              <strong>{command.id}</strong>
+              <span>{command.status}</span>
+              <span>{command.commandKind}</span>
+              <span>{command.readinessSummary}</span>
+            </li>
+          {/each}
+        </ol>
+      </section>
+    {/if}
     {#if data.audit.realHostedEvidenceInputs?.length > 0}
       <section
         class="admin-audit-detail__group"

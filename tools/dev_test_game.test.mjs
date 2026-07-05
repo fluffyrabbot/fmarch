@@ -19213,6 +19213,7 @@ function releaseAdminProofFixture() {
       ],
       evidenceObjectRowIds,
       localPrerequisiteIds: releaseAdminProofLocalPrerequisiteIds(),
+      setupCommandEvidenceIds: releaseAdminProofSetupCommandEvidenceIds(),
       unprovenIds: [...releaseAdminProofFallbackUnprovenIds],
     },
     adminRoleSurface: {
@@ -19242,12 +19243,17 @@ function releaseAdminProofFixture() {
           detailRoleUrl: releaseAdminProofLocalPrerequisiteRoleUrl(id),
           clickedThrough: true,
         })),
+      visibleSetupCommandEvidence: releaseAdminProofSetupCommandEvidenceIds(),
       visibleUnproven: [...releaseAdminProofFallbackUnprovenIds],
       rawInviteTokensVisible: false,
       releaseReady: false,
       productionReady: false,
     },
   };
+}
+
+function releaseAdminProofSetupCommandEvidenceIds() {
+  return ["addSlot", "assignSlot", "assignRole", "setPostPolicy", "startGame"];
 }
 
 function releaseAdminProofLocalPrerequisiteIds() {

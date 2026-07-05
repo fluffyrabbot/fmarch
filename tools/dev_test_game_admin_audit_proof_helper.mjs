@@ -314,6 +314,7 @@ export async function proveAdminAuditDetail({
   requiredSpineRecoveryHooks = [],
   requiredAdminSpineBatches = [],
   requiredAdminSpineBatchStatuses = {},
+  requiredSetupCommandEvidence = [],
   requiredUnproven = [],
   requiredRealHostedEvidenceInputs = [],
   requiredHostedHandoffInputs = [],
@@ -512,6 +513,11 @@ export async function proveAdminAuditDetail({
       page,
       prefix: "admin-audit-admin-spine-batch",
       ids: Object.keys(requiredAdminSpineBatchStatuses),
+    });
+    const visibleSetupCommandEvidence = await waitForRows({
+      page,
+      prefix: "admin-audit-setup-command-evidence",
+      ids: requiredSetupCommandEvidence,
     });
     const visibleUnproven = await waitForRows({
       page,
@@ -1091,6 +1097,9 @@ export async function proveAdminAuditDetail({
       ...(Object.keys(visibleAdminSpineBatchStatuses).length === 0
         ? {}
         : { visibleAdminSpineBatchStatuses }),
+      ...(visibleSetupCommandEvidence.length === 0
+        ? {}
+        : { visibleSetupCommandEvidence }),
       ...(visibleUnproven.length === 0 ? {} : { visibleUnproven }),
       ...(Object.keys(visibleUnprovenStatuses).length === 0
         ? {}

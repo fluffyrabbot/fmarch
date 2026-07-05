@@ -4266,6 +4266,21 @@ test("admin local release readiness detail data carries checks and unproven rows
   );
   assert.equal(data.audit.unproven.length, 2);
   assert.deepEqual(
+    data.audit.setupCommandEvidence.map((item) => [
+      item.id,
+      item.status,
+      item.commandKind,
+      item.readinessSummary,
+    ]),
+    [
+      ["addSlot", "ack", "AddSlot", "Setup still needs attention"],
+      ["assignSlot", "ack", "AssignSlot", "Setup still needs attention"],
+      ["assignRole", "ack", "AssignRole", "Ready to start"],
+      ["setPostPolicy", "ack", "SetPostPolicy", "Ready to start"],
+      ["startGame", "ack", "StartGame", "Started at D01"],
+    ],
+  );
+  assert.deepEqual(
     data.audit.unproven.map((item) => [item.id, item.status]),
     releaseReadinessUnprovenStatusRows([
       "hosted-deployment",
@@ -7825,6 +7840,11 @@ function releaseReadinessChecklistFixture() {
     },
     localDevelopmentSpine: {
       status: "passed",
+      evidence: {
+        hostSetupProof: {
+          setupCommandEvidence: setupCommandEvidenceFixture(),
+        },
+      },
       checks: [
         {
           id: "local-role-url-browser-proof",
@@ -7957,6 +7977,41 @@ function localDependencyReadinessCheckFixture(id, evidence) {
     status: "passed",
     evidence,
   });
+}
+
+function setupCommandEvidenceFixture(game = "game-a") {
+  return {
+    addSlot: {
+      status: "ack",
+      commandKind: "AddSlot",
+      readinessSummary: "Setup still needs attention",
+      command: { game, slot: "slot-7" },
+    },
+    assignSlot: {
+      status: "ack",
+      commandKind: "AssignSlot",
+      readinessSummary: "Setup still needs attention",
+      command: { game, slot: "slot-7", user: "player-mira" },
+    },
+    assignRole: {
+      status: "ack",
+      commandKind: "AssignRole",
+      readinessSummary: "Ready to start",
+      command: { game, slot: "slot-7", role_key: "encryptor" },
+    },
+    setPostPolicy: {
+      status: "ack",
+      commandKind: "SetPostPolicy",
+      readinessSummary: "Ready to start",
+      command: { game, channel_id: "main", allow_media_only: false },
+    },
+    startGame: {
+      status: "ack",
+      commandKind: "StartGame",
+      readinessSummary: "Started at D01",
+      command: { game, phase: "D01" },
+    },
+  };
 }
 
 function staleConflictMessageMilestoneFixture() {
