@@ -3241,6 +3241,66 @@ test("dev test-game next-action derives one local recovery command from the mani
       },
     ],
   });
+  const missingProofGraphNextActionHandoffAction = buildDevTestGameNextAction(
+    freshManifest,
+    {
+      generatedAt: "2026-06-26T00:00:01.000Z",
+      opsArtifacts: devTestGameOpsArtifactsFixture(),
+      raceCoverage: devTestGameRaceCoverageFixture(),
+      releaseReadinessChecklist: devTestGameReleaseReadinessChecklistFixture({
+        includeProofGraphNextActionHandoffCheck: false,
+        unproven: [
+          {
+            id: "hosted-concurrent-race-matrix",
+            status: "unproven",
+            requiredEvidence: "Hosted concurrent matrix evidence",
+          },
+        ],
+      }),
+    },
+  );
+  assertDevTestGameNextAction(missingProofGraphNextActionHandoffAction);
+  assert.deepEqual(missingProofGraphNextActionHandoffAction.nextAction, {
+    command: "npm run test:dev-test-game-proof-graph-admin-proof",
+    reason: "release-readiness-local-check-missing",
+    status: "blocked",
+    localCheck: {
+      id: "local-proof-graph-next-action-handoff",
+      status: "missing",
+      requiredEvidence:
+        "Passed proof graph next-action handoff check in the generated release-readiness checklist",
+      buildSlice:
+        "Refresh the proof graph admin browser proof so the terminal batch links to the next-action handoff detail before hosted readiness work can be selected.",
+      proofTarget: "target/dev-test-game/proof-graph-admin-proof.json",
+      roleUrl: "/admin/audit/local-proof-graph?game=<seeded-game>",
+    },
+  });
+  assert.deepEqual(
+    missingProofGraphNextActionHandoffAction.localReadinessDependencyTrace,
+    {
+      strategy: "local-readiness-dependency-before-hosted-work",
+      candidateCount: 1,
+      selectedCheckId: "local-proof-graph-next-action-handoff",
+      candidates: [
+        {
+          rank: 1,
+          id: "local-proof-graph-next-action-handoff",
+          status: "missing",
+          priority: 1,
+          selected: true,
+          command: "npm run test:dev-test-game-proof-graph-admin-proof",
+          buildSlice:
+            "Refresh the proof graph admin browser proof so the terminal batch links to the next-action handoff detail before hosted readiness work can be selected.",
+          proofTarget: "target/dev-test-game/proof-graph-admin-proof.json",
+          roleUrl: "/admin/audit/local-proof-graph?game=<seeded-game>",
+          proofBoundary:
+            "Local browser proof that the proof graph terminal batch links to the next-action handoff detail and verifies the default blocker plus opt-in hosted identity predicate rows. This recovers a local readiness dependency only; it does not prove hosted deployment, release readiness, or production readiness.",
+          requiredEvidence:
+            "Passed proof graph next-action handoff check in the generated release-readiness checklist",
+        },
+      ],
+    },
+  );
   const missingSeedFixtureDependencyAction = buildDevTestGameNextAction(
     freshManifest,
     {
@@ -14816,6 +14876,7 @@ function devTestGameReleaseReadinessChecklistFixture({
   unproven,
   seedProofLaneCoverage = seedProofLaneCoverageFixture(),
   includeProofGraphHandoffCheck = true,
+  includeProofGraphNextActionHandoffCheck = true,
   includeProofFreshnessAdminCheck = true,
   includeNextActionAdminCheck = true,
   includeHostedEvidenceLaneDemoProofCheck = true,
@@ -15171,6 +15232,10 @@ function devTestGameReleaseReadinessChecklistFixture({
                 roleHandoffIds: ["admin-proof:release"],
                 destinationAuditIds: ["local-release-readiness"],
               },
+            ]
+          : []),
+        ...(includeProofGraphHandoffCheck && includeProofGraphNextActionHandoffCheck
+          ? [
               {
                 id: "local-proof-graph-next-action-handoff",
                 label: "Proof graph next-action handoff",

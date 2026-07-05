@@ -137,6 +137,7 @@ import {
   localNextActionAdminSurfaceCheckId,
   localProofFreshnessAdminSurfaceCheckId,
   localProofGraphAdminRoleHandoffsCheckId,
+  localProofGraphNextActionHandoffCheckId,
   localReadinessDependencyCheckFor,
 } from "../../../../tools/dev_test_game_local_readiness_dependencies.mjs";
 import {
@@ -2236,7 +2237,9 @@ test("admin route data exposes local next action as a native audit row", async (
     proofGraph: proofGraphFixture(),
   });
 
-  const nextAction = data.audit.find((item) => item.id === localAdminAuditIds.nextAction);
+  const nextAction = data.audit.find(
+    (item) => item.id === localAdminAuditIds.nextAction,
+  );
   assert.equal(nextAction.label, "Local next action");
   assert.equal(nextAction.status, `ready: ${LOCAL_RACE_COMMAND}`);
   assert.equal(nextAction.authority, "GlobalAdmin or GlobalMod");
@@ -2479,7 +2482,9 @@ test("admin route data exposes recovery-hook spine drilldowns", async () => {
     proofGraph: proofGraphFixture(),
   });
 
-  const nextAction = data.audit.find((item) => item.id === localAdminAuditIds.nextAction);
+  const nextAction = data.audit.find(
+    (item) => item.id === localAdminAuditIds.nextAction,
+  );
   const checks = new Map(
     nextAction.checks.map((check) => [check.id, check.status]),
   );
@@ -2522,7 +2527,9 @@ test("admin route data exposes local readiness dependency next action", async ()
     }),
   });
 
-  const nextAction = data.audit.find((item) => item.id === localAdminAuditIds.nextAction);
+  const nextAction = data.audit.find(
+    (item) => item.id === localAdminAuditIds.nextAction,
+  );
   assert.equal(nextAction.status, `blocked: ${LOCAL_PROOF_GRAPH_COMMAND}`);
   assert.deepEqual(
     nextAction.checks
@@ -2559,6 +2566,70 @@ test("admin route data exposes local readiness dependency next action", async ()
   assert.equal(
     nextAction.artifactSummary.selectedLocalCheckRoleHref,
     localAdminAuditRoleUrl(localAdminAuditIds.proofGraph, { game: "midsummer" }),
+  );
+});
+
+test("admin route data exposes proof graph next-action handoff dependency", async () => {
+  const localCheck = proofGraphNextActionHandoffLocalCheckFixture();
+  const data = await buildAdminRouteData({
+    principalUserId: "admin_a",
+    capabilities: [{ kind: "GlobalAdmin" }],
+    nextAction: nextActionFixture({
+      actionStatus: "blocked",
+      reason: "release-readiness-local-check-missing",
+      command: LOCAL_PROOF_GRAPH_COMMAND,
+      localCheck,
+      unproven: undefined,
+      localReadinessDependencyTrace: localReadinessDependencyTraceFixture({
+        localCheck,
+        command: LOCAL_PROOF_GRAPH_COMMAND,
+      }),
+      releaseReadinessTrace: releaseReadinessTraceFixture({
+        unproven: undefined,
+      }),
+    }),
+  });
+
+  const nextAction = data.audit.find(
+    (item) => item.id === localAdminAuditIds.nextAction,
+  );
+  assert.deepEqual(
+    nextAction.checks
+      .filter((check) =>
+        [
+          "release-readiness-local-check-missing",
+          "local-proof-graph-next-action-handoff",
+          "local-readiness-dependency-trace",
+          "local-readiness-dependency-local-proof-graph-next-action-handoff",
+        ].includes(check.id),
+      )
+      .map((check) => [check.id, check.status]),
+    [
+      ["release-readiness-local-check-missing", "blocked"],
+      ["local-proof-graph-next-action-handoff", "missing"],
+      ...normalizeLocalNextActionLocalReadinessDependencyCheckRows({
+        localReadinessDependencyTrace: localReadinessDependencyTraceFixture({
+          localCheck,
+          command: LOCAL_PROOF_GRAPH_COMMAND,
+        }),
+      }).map((check) => [check.id, check.status]),
+    ],
+  );
+  assert.deepEqual(
+    nextAction.relatedLinks.find((link) => link.id === localCheck.id),
+    {
+      id: "local-proof-graph-next-action-handoff",
+      label: "local-proof-graph-next-action-handoff",
+      href: localAdminAuditRoleUrl(localAdminAuditIds.proofGraph, {
+        game: "midsummer",
+      }),
+      status: "missing",
+      command: LOCAL_PROOF_GRAPH_COMMAND,
+    },
+  );
+  assert.equal(
+    nextAction.artifactSummary.selectedLocalCheckId,
+    "local-proof-graph-next-action-handoff",
   );
 });
 
@@ -6547,6 +6618,17 @@ function nextActionFixture({
 function proofGraphHandoffLocalCheckFixture() {
   const check = localReadinessDependencyCheckFor(
     localProofGraphAdminRoleHandoffsCheckId,
+  );
+  return {
+    id: check.id,
+    status: check.status,
+    ...check.recovery,
+  };
+}
+
+function proofGraphNextActionHandoffLocalCheckFixture() {
+  const check = localReadinessDependencyCheckFor(
+    localProofGraphNextActionHandoffCheckId,
   );
   return {
     id: check.id,
