@@ -79,7 +79,6 @@ import {
   devTestGameProofGraphPath,
 } from "./dev_test_game_proof_graph_paths.mjs";
 import {
-  assertProofGraphDestinationSummaryTrace,
   buildProofGraphDestinationSummaryTrace,
   proofGraphDestinationSummaryDriftFromProofGraph,
 } from "./dev_test_game_proof_graph_destination_summary_trace.mjs";
@@ -88,15 +87,18 @@ import {
   buildProofGraphDiagnosticSummaryTrace,
 } from "./dev_test_game_proof_graph_diagnostic_summary.mjs";
 import {
-  assertProofStabilityTrace,
   buildProofStabilityTrace,
   proofStabilityDriftFromOpsArtifacts,
 } from "./dev_test_game_proof_stability_trace.mjs";
 import {
-  assertSeedProofLaneCoverageTrace,
   buildSeedProofLaneCoverageTrace,
   seedProofLaneCoverageDriftFromReadiness,
 } from "./dev_test_game_seed_proof_lane_coverage_trace.mjs";
+import {
+  assertPreReadinessTrace,
+  buildLocalReadinessDependencyTrace,
+  preReadinessTraceKeys,
+} from "./dev_test_game_pre_readiness_trace_registry.mjs";
 import {
   assertRecoveryReceiptGraphSummary,
   recoveryReceiptGraphDescriptors,
@@ -719,11 +721,16 @@ export function assertDevTestGameNextAction(evidence) {
     }
   }
   assertSelectionTrace(evidence.selectionTrace, evidence.nextAction);
-  assertProofStabilityTrace(evidence.stabilityTrace, {
-    label: "next-action stability trace",
-    nextActionReason: evidence.nextAction.reason,
-  });
-  assertProofGraphDestinationSummaryTrace(
+  assertPreReadinessTrace(
+    preReadinessTraceKeys.proofStability,
+    evidence.stabilityTrace,
+    {
+      label: "next-action stability trace",
+      nextActionReason: evidence.nextAction.reason,
+    },
+  );
+  assertPreReadinessTrace(
+    preReadinessTraceKeys.proofGraphDestinationSummary,
     evidence.proofGraphDestinationSummaryTrace,
     {
       label: "next-action proof graph destination-summary trace",
@@ -733,13 +740,23 @@ export function assertDevTestGameNextAction(evidence) {
     },
   );
   assertProofGraphDiagnosticSummaryTrace(evidence.proofGraphDiagnosticSummaryTrace);
-  assertSeedProofLaneCoverageTrace(evidence.seedProofLaneCoverageTrace, {
-    label: "next-action seed proof-lane coverage trace",
-    nextActionReason: evidence.nextAction.reason,
-  });
-  assertLocalReadinessDependencyTrace(
+  assertPreReadinessTrace(
+    preReadinessTraceKeys.seedProofLaneCoverage,
+    evidence.seedProofLaneCoverageTrace,
+    {
+      label: "next-action seed proof-lane coverage trace",
+      nextActionReason: evidence.nextAction.reason,
+    },
+  );
+  assertPreReadinessTrace(
+    preReadinessTraceKeys.localReadinessDependency,
     evidence.localReadinessDependencyTrace,
-    evidence.nextAction,
+    {
+      label: "next-action local readiness dependency trace",
+      nextActionReason: evidence.nextAction.reason,
+      nextActionLocalCheck: evidence.nextAction.localCheck,
+      nextActionCommand: evidence.nextAction.command,
+    },
   );
   assertReleaseReadinessTrace(evidence.releaseReadinessTrace, evidence.nextAction);
   assertReplacementRaceReloadTrace(evidence.replacementRaceReloadTrace);
@@ -1163,28 +1180,6 @@ function validSelectedProductionFeatureGraph(graphSelection, spineTarget) {
     JSON.stringify(graphSelection.coverageDecision ?? null) ===
       JSON.stringify(spineTarget.coverageDecision ?? null)
   );
-}
-
-function buildLocalReadinessDependencyTrace(candidates) {
-  const selectedCheckId = candidates[0]?.id ?? null;
-  return {
-    strategy: "local-readiness-dependency-before-hosted-work",
-    candidateCount: candidates.length,
-    selectedCheckId,
-    candidates: candidates.map((candidate, index) => ({
-      rank: index + 1,
-      id: candidate.id,
-      status: candidate.status,
-      priority: candidate.priority,
-      selected: candidate.id === selectedCheckId,
-      command: candidate.command,
-      buildSlice: candidate.buildSlice,
-      proofTarget: candidate.proofTarget,
-      roleUrl: candidate.roleUrl,
-      proofBoundary: candidate.proofBoundary,
-      requiredEvidence: candidate.requiredEvidence,
-    })),
-  };
 }
 
 function buildReleaseReadinessTrace(candidates) {
@@ -1914,55 +1909,6 @@ function validHostedIdentityProgressionSummary(summary) {
         progression.proofBoundary !== "",
     )
   );
-}
-
-function assertLocalReadinessDependencyTrace(localReadinessDependencyTrace, nextAction) {
-  if (
-    localReadinessDependencyTrace?.strategy !==
-      "local-readiness-dependency-before-hosted-work" ||
-    !Number.isInteger(localReadinessDependencyTrace.candidateCount) ||
-    !Array.isArray(localReadinessDependencyTrace.candidates)
-  ) {
-    throw new Error("next-action local readiness dependency trace is missing or malformed");
-  }
-  if (
-    localReadinessDependencyTrace.candidateCount !==
-    localReadinessDependencyTrace.candidates.length
-  ) {
-    throw new Error("next-action local readiness dependency count drifted");
-  }
-  if (localReadinessDependencyTrace.candidateCount === 0) {
-    if (
-      localReadinessDependencyTrace.selectedCheckId !== null ||
-      nextAction.reason === "release-readiness-local-check-missing"
-    ) {
-      throw new Error("next-action local readiness trace has no selected item");
-    }
-    return;
-  }
-  const [selected, ...rest] = localReadinessDependencyTrace.candidates;
-  if (
-    selected.selected !== true ||
-    selected.id !== localReadinessDependencyTrace.selectedCheckId
-  ) {
-    throw new Error("next-action local readiness trace does not match selection");
-  }
-  if (nextAction.reason === "release-readiness-local-check-missing") {
-    if (
-      nextAction.localCheck?.id !== selected.id ||
-      nextAction.command !== selected.command ||
-      nextAction.localCheck?.roleUrl !== selected.roleUrl
-    ) {
-      throw new Error("next-action local readiness selection does not match action");
-    }
-  }
-  for (const candidate of rest) {
-    if (candidate.selected === true) {
-      throw new Error(
-        `next-action local readiness trace has duplicate selection: ${candidate.id}`,
-      );
-    }
-  }
 }
 
 function assertReplacementRaceReloadTrace(trace) {

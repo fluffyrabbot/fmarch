@@ -216,8 +216,9 @@ import {
   normalizeProofGraphDiagnosticProofSummary,
 } from "./dev_test_game_proof_graph_diagnostic_summary.mjs";
 import {
-  assertSeedProofLaneCoverageTraceVisibleChecks,
-} from "./dev_test_game_seed_proof_lane_coverage_trace.mjs";
+  assertPreReadinessTraceVisibleChecks,
+  preReadinessTraceKeys,
+} from "./dev_test_game_pre_readiness_trace_registry.mjs";
 import {
   adminProofBatchIdFromLabel,
 } from "./dev_test_game_admin_proof_batch_registry.mjs";
@@ -6006,16 +6007,12 @@ export function validateDevTestGameNextActionAdminProof(proof, options = {}) {
       "next-action admin proof missing selected production feature graph coverage decision",
     );
   }
-  const localTrace = proof.generatedFrom?.localReadinessDependencyTrace;
-  if (
-    localTrace?.strategy !== "local-readiness-dependency-before-hosted-work" ||
-    !Number.isInteger(localTrace.candidateCount) ||
-    !Array.isArray(localTrace.candidateIds)
-  ) {
-    throw new Error(
-      "next-action admin proof is missing local readiness dependency trace",
-    );
-  }
+  const localTrace = assertPreReadinessTraceVisibleChecks(
+    preReadinessTraceKeys.localReadinessDependency,
+    proof.generatedFrom?.localReadinessDependencyTrace,
+    proof.adminRoleSurface?.visibleChecks,
+    { label: "next-action admin proof local readiness dependency trace" },
+  );
   const releaseTrace = proof.generatedFrom?.releaseReadinessTrace;
   if (
     releaseTrace?.strategy !== "local-dev-release-readiness-priority" ||
@@ -6025,7 +6022,8 @@ export function validateDevTestGameNextActionAdminProof(proof, options = {}) {
     throw new Error("next-action admin proof is missing release readiness trace");
   }
   const seedProofLaneCoverageTrace =
-    assertSeedProofLaneCoverageTraceVisibleChecks(
+    assertPreReadinessTraceVisibleChecks(
+      preReadinessTraceKeys.seedProofLaneCoverage,
       proof.generatedFrom?.seedProofLaneCoverageTrace,
       proof.adminRoleSurface?.visibleChecks,
       { label: "next-action admin proof seed proof-lane coverage trace" },

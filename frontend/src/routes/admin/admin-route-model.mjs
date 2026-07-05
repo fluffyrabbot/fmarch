@@ -56,22 +56,16 @@ import {
   normalizeProofGraphReceiptArtifactRows,
 } from "../../../../tools/dev_test_game_proof_graph_receipt_artifact_rows.mjs";
 import {
-  normalizeProofStabilityTrace,
-  proofStabilityTraceCheckRows,
-} from "../../../../tools/dev_test_game_proof_stability_trace.mjs";
-import {
-  normalizeProofGraphDestinationSummaryTrace,
-  proofGraphDestinationSummaryTraceCheckRows,
-} from "../../../../tools/dev_test_game_proof_graph_destination_summary_trace.mjs";
+  normalizeLocalReadinessDependencyTrace,
+  normalizePreReadinessTrace,
+  preReadinessTraceCheckRows,
+  preReadinessTraceKeys,
+} from "../../../../tools/dev_test_game_pre_readiness_trace_registry.mjs";
 import {
   proofGraphDiagnosticSummaryCheckRows,
   normalizeProofGraphDiagnosticProofSummary,
   normalizeProofGraphDiagnosticSummaryTrace,
 } from "../../../../tools/dev_test_game_proof_graph_diagnostic_summary.mjs";
-import {
-  normalizeSeedProofLaneCoverageTrace,
-  seedProofLaneCoverageTraceCheckRows,
-} from "../../../../tools/dev_test_game_seed_proof_lane_coverage_trace.mjs";
 import {
   devTestGameIdentityAdapterContractDiff,
   devTestGameIdentityAdapterProofVersion,
@@ -2256,7 +2250,7 @@ export function normalizeLocalNextActionAudit(nextAction, { game, proofGraph = n
     releaseReadinessTrace.candidates.find((candidate) => candidate.selected) ??
     null;
   const localReadinessDependencyTrace =
-    normalizeNextActionLocalReadinessDependencyTrace(
+    normalizeLocalNextActionLocalReadinessDependencyTrace(
       nextAction.localReadinessDependencyTrace,
     );
   const replacementRaceReloadTrace = normalizeNextActionReplacementRaceReloadTrace(
@@ -2284,15 +2278,18 @@ export function normalizeLocalNextActionAudit(nextAction, { game, proofGraph = n
   const hostStaleControlTrace = normalizeNextActionHostStaleControlTrace(
     nextAction.hostStaleControlTrace,
   );
-  const stabilityTrace = normalizeProofStabilityTrace(nextAction.stabilityTrace);
-  const seedProofLaneCoverageTrace =
-    normalizeSeedProofLaneCoverageTrace(
-      nextAction.seedProofLaneCoverageTrace,
-    );
-  const proofGraphDestinationSummaryTrace =
-    normalizeProofGraphDestinationSummaryTrace(
-      nextAction.proofGraphDestinationSummaryTrace,
-    );
+  const stabilityTrace = normalizePreReadinessTrace(
+    preReadinessTraceKeys.proofStability,
+    nextAction.stabilityTrace,
+  );
+  const seedProofLaneCoverageTrace = normalizePreReadinessTrace(
+    preReadinessTraceKeys.seedProofLaneCoverage,
+    nextAction.seedProofLaneCoverageTrace,
+  );
+  const proofGraphDestinationSummaryTrace = normalizePreReadinessTrace(
+    preReadinessTraceKeys.proofGraphDestinationSummary,
+    nextAction.proofGraphDestinationSummaryTrace,
+  );
   const proofGraphDiagnosticSummaryTrace =
     normalizeProofGraphDiagnosticSummaryTrace(
       nextAction.proofGraphDiagnosticSummaryTrace,
@@ -2421,7 +2418,10 @@ export function normalizeLocalNextActionAudit(nextAction, { game, proofGraph = n
             status: `${replacementPrivateRecoveryGraph.status}:${replacementPrivateRecoveryGraph.laneCount} lanes`,
           }),
         ]),
-    ...proofStabilityTraceCheckRows(stabilityTrace),
+    ...preReadinessTraceCheckRows(
+      preReadinessTraceKeys.proofStability,
+      stabilityTrace,
+    ),
     ...normalizeLocalNextActionSeedProofLaneCoverageCheckRows({
       seedProofLaneCoverage,
     }),
@@ -3103,13 +3103,17 @@ export function normalizeLocalNextActionProofGraphDestinationSummaryCheckRows({
 export function normalizeLocalNextActionSeedProofLaneCoverageTraceCheckRows({
   seedProofLaneCoverageTrace = null,
 } = {}) {
-  return seedProofLaneCoverageTraceCheckRows(seedProofLaneCoverageTrace);
+  return preReadinessTraceCheckRows(
+    preReadinessTraceKeys.seedProofLaneCoverage,
+    seedProofLaneCoverageTrace,
+  );
 }
 
 export function normalizeLocalNextActionProofGraphDestinationSummaryTraceCheckRows({
   proofGraphDestinationSummaryTrace = null,
 } = {}) {
-  return proofGraphDestinationSummaryTraceCheckRows(
+  return preReadinessTraceCheckRows(
+    preReadinessTraceKeys.proofGraphDestinationSummary,
     proofGraphDestinationSummaryTrace,
   );
 }
@@ -3123,27 +3127,24 @@ export function normalizeLocalNextActionProofGraphDiagnosticSummaryCheckRows({
 export function normalizeLocalNextActionLocalReadinessDependencyCheckRows({
   localReadinessDependencyTrace = null,
 } = {}) {
-  return Number(localReadinessDependencyTrace?.candidateCount ?? 0) === 0
-    ? Object.freeze([])
-    : Object.freeze([
-        Object.freeze({
-          id: "local-readiness-dependency-trace",
-          status: `${Number(
-            localReadinessDependencyTrace.candidateCount ?? 0,
-          )} missing local dependencies`,
-        }),
-        ...(Array.isArray(localReadinessDependencyTrace.candidates)
-          ? localReadinessDependencyTrace.candidates
-          : []
-        ).map((candidate) =>
-          Object.freeze({
-            id: `local-readiness-dependency-${candidate.id}`,
-            status: candidate.selected
-              ? `selected:${candidate.status}`
-              : `rank-${candidate.rank}:${candidate.status}`,
-          }),
-        ),
-      ]);
+  return preReadinessTraceCheckRows(
+    preReadinessTraceKeys.localReadinessDependency,
+    localReadinessDependencyTrace,
+  );
+}
+
+function normalizeLocalNextActionLocalReadinessDependencyTrace(
+  localReadinessDependencyTrace,
+) {
+  const normalized = normalizeLocalReadinessDependencyTrace(
+    localReadinessDependencyTrace,
+  );
+  return Object.freeze({
+    strategy: normalized.strategy,
+    candidateCount: normalized.candidateCount,
+    selectedCheckId: normalized.selectedCheckId,
+    candidates: normalized.candidates,
+  });
 }
 
 export function normalizeLocalNextActionGeneratedSummary(nextAction) {
@@ -4073,53 +4074,6 @@ function normalizeRealHostedEvidenceInputs(inputs) {
       Object.freeze(input),
     ),
   );
-}
-
-function normalizeNextActionLocalReadinessDependencyTrace(
-  localReadinessDependencyTrace,
-) {
-  if (
-    localReadinessDependencyTrace === null ||
-    typeof localReadinessDependencyTrace !== "object" ||
-    localReadinessDependencyTrace.strategy !==
-      "local-readiness-dependency-before-hosted-work" ||
-    !Array.isArray(localReadinessDependencyTrace.candidates)
-  ) {
-    return Object.freeze({
-      strategy: "unknown",
-      candidateCount: 0,
-      selectedCheckId: null,
-      candidates: Object.freeze([]),
-    });
-  }
-  const candidates = localReadinessDependencyTrace.candidates
-    .filter((candidate) => candidate !== null && typeof candidate === "object")
-    .map((candidate) =>
-      Object.freeze({
-        rank: Number(candidate.rank ?? 0),
-        id: String(candidate.id ?? "unknown"),
-        status: String(candidate.status ?? "unknown"),
-        priority: Number(candidate.priority ?? 0),
-        selected: candidate.selected === true,
-        command: String(candidate.command ?? ""),
-        buildSlice: String(candidate.buildSlice ?? ""),
-        proofTarget: String(candidate.proofTarget ?? ""),
-        roleUrl: String(candidate.roleUrl ?? ""),
-        proofBoundary: String(candidate.proofBoundary ?? ""),
-        requiredEvidence: String(candidate.requiredEvidence ?? ""),
-      }),
-    );
-  return Object.freeze({
-    strategy: localReadinessDependencyTrace.strategy,
-    candidateCount: Number(
-      localReadinessDependencyTrace.candidateCount ?? candidates.length,
-    ),
-    selectedCheckId:
-      typeof localReadinessDependencyTrace.selectedCheckId === "string"
-        ? localReadinessDependencyTrace.selectedCheckId
-        : null,
-    candidates: Object.freeze(candidates),
-  });
 }
 
 function normalizeNextActionReplacementRaceReloadTrace(replacementRaceReloadTrace) {

@@ -492,6 +492,9 @@ import {
   buildProofStabilityTrace,
 } from "./dev_test_game_proof_stability_trace.mjs";
 import {
+  preReadinessTraceRegistryEntries,
+} from "./dev_test_game_pre_readiness_trace_registry.mjs";
+import {
   buildProofGraphDiagnosticProofSummary,
   buildProofGraphDiagnosticSummaryTrace,
   proofGraphDiagnosticSummaryCheckIds,
@@ -2427,6 +2430,53 @@ test("dev test-game spine manifest blocks freshness on proof-run session drift",
         contractReason: undefined,
         sessionPath: undefined,
       },
+    ],
+  );
+});
+
+test("pre-readiness trace registry names shared trace contracts", () => {
+  assert.deepEqual(
+    preReadinessTraceRegistryEntries.map((entry) => [
+      entry.key,
+      entry.traceKey,
+      entry.strategy,
+      typeof entry.assertTrace,
+      typeof entry.checkIds,
+      typeof entry.checkRows,
+    ]),
+    [
+      [
+        "proofStability",
+        "stabilityTrace",
+        "proof-stability-before-readiness",
+        "function",
+        "function",
+        "function",
+      ],
+      [
+        "seedProofLaneCoverage",
+        "seedProofLaneCoverageTrace",
+        "seed-proof-lane-coverage-before-readiness",
+        "function",
+        "function",
+        "function",
+      ],
+      [
+        "proofGraphDestinationSummary",
+        "proofGraphDestinationSummaryTrace",
+        "proof-graph-destination-summary-before-readiness",
+        "function",
+        "function",
+        "function",
+      ],
+      [
+        "localReadinessDependency",
+        "localReadinessDependencyTrace",
+        "local-readiness-dependency-before-hosted-work",
+        "function",
+        "function",
+        "function",
+      ],
     ],
   );
 });

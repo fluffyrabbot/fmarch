@@ -42,15 +42,12 @@ import {
   devTestGameProofGraphPath,
 } from "./dev_test_game_proof_graph_paths.mjs";
 import {
-  assertProofStabilityTrace,
   cleanProofStabilityTrace,
-  proofStabilityTraceCheckIds,
 } from "./dev_test_game_proof_stability_trace.mjs";
 import {
-  assertProofGraphDestinationSummaryTraceVisibleChecks,
   buildProofGraphDestinationSummaryTrace,
   normalizeProofGraphDestinationSummaryTrace,
-  proofGraphDestinationSummaryTraceCheckIds,
+  proofGraphDestinationSummaryTraceStrategy,
 } from "./dev_test_game_proof_graph_destination_summary_trace.mjs";
 import {
   assertProofGraphDiagnosticSummaryVisibleChecks,
@@ -58,10 +55,15 @@ import {
   proofGraphDiagnosticSummaryCheckIds,
 } from "./dev_test_game_proof_graph_diagnostic_summary.mjs";
 import {
-  assertSeedProofLaneCoverageTraceVisibleChecks,
   cleanSeedProofLaneCoverageTrace,
-  seedProofLaneCoverageTraceCheckIds,
 } from "./dev_test_game_seed_proof_lane_coverage_trace.mjs";
+import {
+  assertPreReadinessTrace,
+  assertPreReadinessTraceVisibleChecks,
+  localReadinessDependencyTraceStrategy,
+  preReadinessTraceCheckIds,
+  preReadinessTraceKeys,
+} from "./dev_test_game_pre_readiness_trace_registry.mjs";
 import {
   proofGraphDestinationSummaryDriftNextActionAdminProofPath,
   proofGraphDestinationSummaryDriftNextActionPath,
@@ -482,7 +484,7 @@ export function proofGraphDestinationSummaryDriftNextActionFixture(nextAction) {
     },
     stabilityTrace: cleanProofStabilityTrace(source.stabilityTrace),
     proofGraphDestinationSummaryTrace: buildProofGraphDestinationSummaryTrace({
-      strategy: "proof-graph-destination-summary-before-readiness",
+      strategy: proofGraphDestinationSummaryTraceStrategy,
       status: "drifted",
       source: proofGraphDestinationSummary.source,
       summaryStatus: proofGraphDestinationSummary.summaryStatus,
@@ -499,7 +501,7 @@ export function proofGraphDestinationSummaryDriftNextActionFixture(nextAction) {
       source.seedProofLaneCoverageTrace,
     ),
     localReadinessDependencyTrace: {
-      strategy: "local-readiness-dependency-before-hosted-work",
+      strategy: localReadinessDependencyTraceStrategy,
       candidateCount: 0,
       selectedCheckId: null,
       candidates: [],
@@ -565,32 +567,28 @@ export function assertNextActionAdminProof(evidence) {
       );
     }
   }
-  if (
-    evidence.generatedFrom?.localReadinessDependencyTrace?.strategy !==
-      "local-readiness-dependency-before-hosted-work" ||
-    !Number.isInteger(
-      evidence.generatedFrom.localReadinessDependencyTrace.candidateCount,
-    ) ||
-    !Array.isArray(
-      evidence.generatedFrom.localReadinessDependencyTrace.candidateIds,
-    )
-  ) {
-    throw new Error(
-      "next-action admin proof is missing local readiness dependency trace evidence",
-    );
-  }
-  assertProofStabilityTrace(evidence.generatedFrom?.stabilityTrace, {
-    label: "next-action admin proof stability trace",
-  });
-  assertSeedProofLaneCoverageTraceVisibleChecks(
+  assertPreReadinessTrace(
+    preReadinessTraceKeys.proofStability,
+    evidence.generatedFrom?.stabilityTrace,
+    { label: "next-action admin proof stability trace" },
+  );
+  assertPreReadinessTraceVisibleChecks(
+    preReadinessTraceKeys.seedProofLaneCoverage,
     evidence.generatedFrom?.seedProofLaneCoverageTrace,
     evidence.adminRoleSurface?.visibleChecks,
     { label: "next-action admin proof seed proof-lane coverage trace" },
   );
-  assertProofGraphDestinationSummaryTraceVisibleChecks(
+  assertPreReadinessTraceVisibleChecks(
+    preReadinessTraceKeys.proofGraphDestinationSummary,
     evidence.generatedFrom?.proofGraphDestinationSummaryTrace,
     evidence.adminRoleSurface?.visibleChecks,
     { label: "next-action admin proof destination-summary trace" },
+  );
+  assertPreReadinessTraceVisibleChecks(
+    preReadinessTraceKeys.localReadinessDependency,
+    evidence.generatedFrom?.localReadinessDependencyTrace,
+    evidence.adminRoleSurface?.visibleChecks,
+    { label: "next-action admin proof local readiness dependency trace" },
   );
   assertNextActionAdminProofGraphDiagnosticSummaryTrace(evidence);
   if (
@@ -1054,10 +1052,7 @@ function requiredChecksForNextAction(nextAction) {
     checks.push(nextAction.nextAction.artifact.id);
   }
   if (nextAction.nextAction.localCheck?.id !== undefined) {
-    checks.push(
-      nextAction.nextAction.localCheck.id,
-      "local-readiness-dependency-trace",
-    );
+    checks.push(nextAction.nextAction.localCheck.id);
   }
   if (nextAction.nextAction.unproven?.id !== undefined) {
     checks.push(
@@ -1090,7 +1085,12 @@ function requiredChecksForNextAction(nextAction) {
       checks.push("selected-production-feature-graph-coverage-decision");
     }
   }
-  checks.push(...proofStabilityTraceCheckIds(nextAction.stabilityTrace));
+  checks.push(
+    ...preReadinessTraceCheckIds(
+      preReadinessTraceKeys.proofStability,
+      nextAction.stabilityTrace,
+    ),
+  );
   if (nextAction.nextAction.seedProofLaneCoverage?.source !== undefined) {
     checks.push("seed-proof-lane-coverage");
   }
@@ -1125,12 +1125,14 @@ function requiredChecksForNextAction(nextAction) {
     }
   }
   checks.push(
-    ...seedProofLaneCoverageTraceCheckIds(
+    ...preReadinessTraceCheckIds(
+      preReadinessTraceKeys.seedProofLaneCoverage,
       nextAction.seedProofLaneCoverageTrace,
     ),
   );
   checks.push(
-    ...proofGraphDestinationSummaryTraceCheckIds(
+    ...preReadinessTraceCheckIds(
+      preReadinessTraceKeys.proofGraphDestinationSummary,
       nextAction.proofGraphDestinationSummaryTrace,
     ),
   );
@@ -1145,9 +1147,12 @@ function requiredChecksForNextAction(nextAction) {
   for (const candidate of nextAction.releaseReadinessTrace.candidates) {
     checks.push(`release-readiness-${candidate.id}`);
   }
-  for (const candidate of nextAction.localReadinessDependencyTrace.candidates) {
-    checks.push(`local-readiness-dependency-${candidate.id}`);
-  }
+  checks.push(
+    ...preReadinessTraceCheckIds(
+      preReadinessTraceKeys.localReadinessDependency,
+      nextAction.localReadinessDependencyTrace,
+    ),
+  );
   checks.push("replacement-race-reload-milestone");
   for (const cell of nextAction.replacementRaceReloadTrace.cells) {
     checks.push(`replacement-race-reload-${cell.id}`);
@@ -1490,10 +1495,7 @@ function requiredChecksForEvidence(evidence) {
       ? [evidence.generatedFrom.artifactId]
       : []),
     ...(typeof evidence.generatedFrom?.localCheckId === "string"
-      ? [
-          evidence.generatedFrom.localCheckId,
-          "local-readiness-dependency-trace",
-        ]
+      ? [evidence.generatedFrom.localCheckId]
       : []),
     ...(typeof evidence.generatedFrom?.unprovenId === "string"
       ? [
@@ -1525,7 +1527,10 @@ function requiredChecksForEvidence(evidence) {
               ]),
         ]
       : []),
-    ...proofStabilityTraceCheckIds(evidence.generatedFrom?.stabilityTrace),
+    ...preReadinessTraceCheckIds(
+      preReadinessTraceKeys.proofStability,
+      evidence.generatedFrom?.stabilityTrace,
+    ),
     ...(typeof evidence.generatedFrom?.seedProofLaneCoverageSource === "string"
       ? ["seed-proof-lane-coverage"]
       : []),
@@ -1541,10 +1546,12 @@ function requiredChecksForEvidence(evidence) {
       ? []
       : ["terminal-proof-batch-graph"]),
     ...recoveryReceiptGraphCheckIdsForEvidence(evidence),
-    ...seedProofLaneCoverageTraceCheckIds(
+    ...preReadinessTraceCheckIds(
+      preReadinessTraceKeys.seedProofLaneCoverage,
       evidence.generatedFrom?.seedProofLaneCoverageTrace,
     ),
-    ...proofGraphDestinationSummaryTraceCheckIds(
+    ...preReadinessTraceCheckIds(
+      preReadinessTraceKeys.proofGraphDestinationSummary,
       evidence.generatedFrom?.proofGraphDestinationSummaryTrace,
     ),
     ...proofGraphDiagnosticSummaryCheckIds(
@@ -1558,13 +1565,10 @@ function requiredChecksForEvidence(evidence) {
           (id) => `release-readiness-${id}`,
         )
       : []),
-    ...(Array.isArray(
-      evidence.generatedFrom?.localReadinessDependencyTrace?.candidateIds,
-    )
-      ? evidence.generatedFrom.localReadinessDependencyTrace.candidateIds.map(
-          (id) => `local-readiness-dependency-${id}`,
-        )
-      : []),
+    ...preReadinessTraceCheckIds(
+      preReadinessTraceKeys.localReadinessDependency,
+      evidence.generatedFrom?.localReadinessDependencyTrace,
+    ),
     "replacement-race-reload-milestone",
     ...(Array.isArray(evidence.generatedFrom?.replacementRaceReloadTrace?.cellIds)
       ? evidence.generatedFrom.replacementRaceReloadTrace.cellIds.map(
