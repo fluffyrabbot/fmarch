@@ -370,6 +370,10 @@ import {
   devTestGameProofGraphPath,
 } from "./dev_test_game_proof_graph.mjs";
 import {
+  assertHostedIdentityProofGraphDependency,
+  hostedIdentityProofGraphDependencyFromGraph,
+} from "./dev_test_game_hosted_identity_proof_graph_dependency.mjs";
+import {
   adminProofDestinationRequirementLinkRows,
   proofGraphDiagnosticProofEdges,
   proofGraphDiagnosticProofNodes,
@@ -5533,6 +5537,26 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
         adminSpineProof,
       ),
     /proof graph admin surface count drifted/,
+  );
+});
+
+test("hosted identity proof graph dependency is shared by graph and next-action", () => {
+  const graph = hostedIdentityProofGraphFixture();
+  const dependency = hostedIdentityProofGraphDependencyFromGraph(graph);
+
+  assert.deepEqual(dependency, hostedIdentityProofGraphEdgesFixture());
+  assert.deepEqual(assertHostedIdentityProofGraphDependency(graph), dependency);
+  assert.throws(
+    () =>
+      assertHostedIdentityProofGraphDependency({
+        ...graph,
+        edges: graph.edges.filter(
+          (edge) =>
+            edge.relationship !==
+            hostedIdentityOperatorAdminSurfaceProofGraphRelationship,
+        ),
+      }),
+    /proof graph hosted identity operator dependency missing/,
   );
 });
 
@@ -19534,6 +19558,8 @@ function hostedIdentityProofGraphFixture() {
           (progression) =>
             hostedIdentityEvidenceProgressionAdminProofPath(progression.id),
         ),
+        proofBoundary:
+          "Hosted identity family proof batch prerequisite. This graph node records that every hosted identity evidence-family admin proof target is a prerequisite before the operator predicate proof may run; it does not validate those artifacts or prove live hosted identity traffic, release readiness, or production readiness.",
       },
       {
         id: hostedIdentityOperatorPredicateProofGraphNodeId,
@@ -19545,6 +19571,8 @@ function hostedIdentityProofGraphFixture() {
         recoveryCommand: `npm run ${devTestGameHostedIdentityOperatorAdminProofCommand}`,
         prerequisiteNodeId: hostedIdentityFamilyBatchProofGraphNodeId,
         auditSurfaceNodeId: hostedIdentityEvidenceProofGraphNodeId,
+        proofBoundary:
+          "Hosted identity operator predicate proof. This graph node records the target-local redacted operator packet predicate that can clear the hosted-production-identity readiness item over the existing role-surface adapter; it does not validate the artifact or prove live hosted identity traffic, release readiness, or production readiness.",
       },
       {
         id: hostedIdentityEvidenceProofGraphNodeId,

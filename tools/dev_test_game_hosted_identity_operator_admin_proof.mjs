@@ -11,9 +11,13 @@ import {
   buildHostedIdentityEvidenceFixtureSnapshot,
   devTestGameHostedIdentityOperatorAdminProofPath,
   devTestGameHostedIdentityOperatorEvidencePath,
+  hostedIdentityEvidenceProofGraphPath,
   hostedIdentityEvidenceRedactedPassFixturePath,
   hostedIdentityOperatorEvidencePacketPath,
 } from "./dev_test_game_hosted_identity_evidence_cases.mjs";
+import {
+  assertHostedIdentityProofGraphDependency,
+} from "./dev_test_game_hosted_identity_proof_graph_dependency.mjs";
 import {
   buildReleaseReadinessUnprovenItems,
   hostedIdentityEvidenceSatisfiesProductionIdentity,
@@ -32,6 +36,15 @@ if (pathToFileURL(process.argv[1] ?? "").href === import.meta.url) {
 }
 
 export async function writeHostedIdentityOperatorAdminProof() {
+  const proofGraphPath = path.resolve(
+    repoRoot,
+    process.env.FMARCH_DEV_TEST_GAME_PROOF_GRAPH ??
+      hostedIdentityEvidenceProofGraphPath,
+  );
+  const proofGraphRelativePath = path.relative(repoRoot, proofGraphPath);
+  const proofGraphDependency = assertHostedIdentityProofGraphDependency(
+    await readJson(proofGraphPath),
+  );
   const operatorPacketPath = path.resolve(
     repoRoot,
     hostedIdentityOperatorEvidencePacketPath,
@@ -102,6 +115,17 @@ export async function writeHostedIdentityOperatorAdminProof() {
       acceptedRawEvidencePath: validated.rawEvidencePath,
       rejectedDefaultFixturePath: hostedIdentityEvidenceRedactedPassFixturePath,
       unprovenIdsAfterOperatorProof: unprovenIds,
+      proofGraphDependency: {
+        proofGraph: proofGraphRelativePath,
+        id: proofGraphDependency.id,
+        status: proofGraphDependency.status,
+        familyBatchNodeId: proofGraphDependency.familyBatchNodeId,
+        operatorPredicateNodeId: proofGraphDependency.operatorPredicateNodeId,
+        adminSurfaceNodeId: proofGraphDependency.adminSurfaceNodeId,
+        familyProofTargets: proofGraphDependency.familyProofTargets,
+        operatorProofTarget: proofGraphDependency.operatorProofTarget,
+        edgeIds: proofGraphDependency.edges.map((edge) => edge.id),
+      },
       releaseReady: false,
       productionReady: false,
       proofBoundary:
