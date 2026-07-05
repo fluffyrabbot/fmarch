@@ -4727,6 +4727,7 @@ export function validateDevTestGameHostedEvidenceLaneAdminProof(proof, options =
       );
     }
   }
+  assertHostedEvidenceLaneAdminProofBlockedReceipt(proof);
   const hostedHandoffBlockedReceipt =
     proof.generatedFrom?.hostedHandoffBlockedReceipt ??
     proof.adminRoleSurface?.visibleHostedHandoffBlockedReceipt ??
@@ -4772,6 +4773,77 @@ export function validateDevTestGameHostedEvidenceLaneAdminProof(proof, options =
     laneStatus: String(proof.generatedFrom?.status ?? "unknown"),
     preflightStatus: String(proof.generatedFrom?.preflightStatus ?? "unknown"),
     ...(options.artifact === undefined ? {} : { artifact: options.artifact }),
+  };
+}
+
+function assertHostedEvidenceLaneAdminProofBlockedReceipt(proof) {
+  const generated = proof.generatedFrom?.hostedHandoffBlockedReceipt;
+  if (generated === undefined || generated === null) {
+    return;
+  }
+  const visible = proof.adminRoleSurface?.visibleHostedHandoffBlockedReceipt;
+  if (visible === undefined || visible === null) {
+    throw new Error("hosted evidence lane admin proof missing blocked receipt");
+  }
+  for (const field of [
+    "status",
+    "operatorAction",
+    "localVsHostedBoundary",
+    "nextProofTarget",
+  ]) {
+    if (String(visible[field] ?? "") !== String(generated[field] ?? "")) {
+      throw new Error(
+        `hosted evidence lane admin proof visible blocked receipt drifted: ${field}`,
+      );
+    }
+  }
+  const visibleMissingInputs = Array.isArray(visible.missingRequiredInputs)
+    ? visible.missingRequiredInputs.map((input) => String(input))
+    : [];
+  const generatedMissingInputs = Array.isArray(generated.missingRequiredInputs)
+    ? generated.missingRequiredInputs.map((input) => String(input))
+    : [];
+  if (!sameStringArray(visibleMissingInputs, generatedMissingInputs)) {
+    throw new Error(
+      "hosted evidence lane admin proof visible blocked receipt missing inputs drifted",
+    );
+  }
+  const expectedFirstMissing = visibleHostedEvidenceFirstMissingOperatorArtifact(
+    generated.firstMissingOperatorArtifact,
+  );
+  const visibleFirstMissing = visible.firstMissingOperatorArtifact ?? null;
+  if (
+    JSON.stringify(visibleFirstMissing) !==
+    JSON.stringify(expectedFirstMissing)
+  ) {
+    throw new Error(
+      "hosted evidence lane admin proof visible first missing operator artifact drifted",
+    );
+  }
+}
+
+function visibleHostedEvidenceFirstMissingOperatorArtifact(artifact) {
+  if (artifact === null || artifact === undefined) {
+    return null;
+  }
+  const drilldown = artifact.roleSurfaceDrilldown ?? {};
+  return {
+    inputId: String(artifact.inputId ?? ""),
+    checkId: String(artifact.checkId ?? ""),
+    sectionId: String(artifact.sectionId ?? ""),
+    sectionLabel: String(artifact.sectionLabel ?? ""),
+    requiredEvidence: String(artifact.requiredEvidence ?? ""),
+    purpose: String(artifact.purpose ?? ""),
+    proofTarget: String(artifact.proofTarget ?? ""),
+    roleSurfaceDrilldown: {
+      localCapabilityRoleUrl: String(drilldown.localCapabilityRoleUrl ?? ""),
+      handoffRoleUrl: String(drilldown.handoffRoleUrl ?? ""),
+      proofGraphNodeId: String(drilldown.proofGraphNodeId ?? ""),
+      productionFeatureGraphNodeId: String(
+        drilldown.productionFeatureGraphNodeId ?? "",
+      ),
+      proofGraphEvidencePath: String(drilldown.proofGraphEvidencePath ?? ""),
+    },
   };
 }
 

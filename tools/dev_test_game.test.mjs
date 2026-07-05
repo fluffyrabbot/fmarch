@@ -28,6 +28,7 @@ import {
   recoveryReceiptReleaseReadinessValidators,
   validateDevTestGameAdminSpineProof,
   validateDevTestGameAdminSpineTerminalBatches,
+  validateDevTestGameHostedEvidenceLaneAdminProof,
   validateDevTestGameNextActionAdminProof,
   validateDevTestGameProofGraphAdminProof,
   validateDevTestGameHostSetupProof,
@@ -468,8 +469,10 @@ import {
   hostedEvidenceFirstMissingProgressionCaseById,
   hostedEvidenceFirstMissingProgressionCases,
   hostedEvidenceHandoffChecklistFromPreflight,
+  hostedEvidenceHandoffChecklistFixture,
   hostedEvidenceHandoffBlockedCheckIds,
   hostedEvidenceHandoffInputIds,
+  hostedEvidenceHandoffInputSections,
   hostedEvidenceHandoffInputSectionStatuses,
   hostedEvidenceRequiredInputsFixture,
   hostedEvidenceHandoffSectionInputRows,
@@ -4856,6 +4859,28 @@ test("hosted evidence first-missing progression cases drive operator artifacts",
       .firstMissingOperatorArtifact,
     null,
   );
+});
+
+test("hosted evidence lane admin proof fixtures preserve visible first-missing artifacts", () => {
+  for (const progression of hostedEvidenceFirstMissingProgressionCases) {
+    const proof = hostedEvidenceLaneAdminProofFixture({
+      progressionCaseId: progression.id,
+    });
+    const validated = validateDevTestGameHostedEvidenceLaneAdminProof(proof);
+    assert.deepEqual(
+      validated.firstMissingOperatorArtifact,
+      progression.firstMissingOperatorArtifact,
+      progression.id,
+    );
+    assert.deepEqual(
+      validated.visibleHostedHandoffBlockedReceipt
+        ?.firstMissingOperatorArtifact ?? null,
+      visibleHostedEvidenceFirstMissingOperatorArtifact(
+        progression.firstMissingOperatorArtifact,
+      ),
+      progression.id,
+    );
+  }
 });
 
 test("dev test-game hosted evidence lane validates operator fixture without promoting hosted deployment", async () => {
@@ -23037,13 +23062,20 @@ function hostedIdentityPacketInputRowsFixture() {
   );
 }
 
-function hostedEvidenceLaneAdminProofFixture() {
-  const handoff = hostedTargetPreflightFixture({
-    status: "blocked",
-  }).hostedHandoffChecklist;
+function hostedEvidenceLaneAdminProofFixture({
+  progressionCaseId = "missing-hosted-target-inputs",
+} = {}) {
+  const progression =
+    hostedEvidenceFirstMissingProgressionCaseById(progressionCaseId);
+  const handoff = hostedEvidenceAdminProofHandoffFixture(progression);
   const sectionInputRows = hostedEvidenceHandoffSectionInputRows(
     handoff.inputSections,
   );
+  const blocked = progression.blockedCheckIds.length > 0;
+  const visibleBlockedReceipt =
+    handoff.blockedReceipt === undefined
+      ? undefined
+      : visibleHostedEvidenceBlockedReceipt(handoff.blockedReceipt);
   return {
     version: 1,
     proof: "dev-test-game-hosted-evidence-lane-admin-proof",
@@ -23056,14 +23088,14 @@ function hostedEvidenceLaneAdminProofFixture() {
       hostedEvidenceLane: "target/dev-test-game/hosted-evidence-lane.json",
       proofRun: "target/dev-test-game/proof-run.json",
       game: "00000000-0000-0000-0000-000000000001",
-      status: "blocked",
-      preflightStatus: "blocked",
+      status: blocked ? "blocked" : "passed",
+      preflightStatus: blocked ? "blocked" : "passed",
       checkIds: [
         "hosted-target-preflight",
         ...hostedTargetPreflightBlockingCheckIds,
         "release-claim-boundary-carried",
       ],
-      blockedCheckIds: [...hostedTargetPreflightBlockingCheckIds],
+      blockedCheckIds: [...progression.blockedCheckIds],
       realHostedEvidenceInputIds: [...hostedEvidenceHandoffInputIds],
       hostedHandoffInputIds: handoff.inputIds,
       hostedHandoffBlockedCheckIds: handoff.blockedCheckIds,
@@ -23075,7 +23107,9 @@ function hostedEvidenceLaneAdminProofFixture() {
       hostedHandoffSectionInputIds: sectionInputRows.map((row) => row.id),
       hostedHandoffSectionInputStatuses:
         hostedEvidenceHandoffSectionInputStatuses(handoff.inputSections),
-      hostedHandoffBlockedReceipt: handoff.blockedReceipt,
+      ...(handoff.blockedReceipt === undefined
+        ? {}
+        : { hostedHandoffBlockedReceipt: handoff.blockedReceipt }),
       relatedAuditIds: [
         "local-hosted-target-preflight",
         "local-hosted-concurrent-race-matrix",
@@ -23094,7 +23128,7 @@ function hostedEvidenceLaneAdminProofFixture() {
         ...hostedTargetPreflightBlockingCheckIds,
         "release-claim-boundary-carried",
       ],
-      visibleUnproven: [...hostedTargetPreflightBlockingCheckIds],
+      visibleUnproven: [...progression.blockedCheckIds],
       visibleRealHostedEvidenceInputs: [...hostedEvidenceHandoffInputIds],
       visibleHostedHandoffInputs: handoff.inputIds,
       visibleHostedHandoffBlockedChecks: handoff.blockedCheckIds,
@@ -23106,6 +23140,15 @@ function hostedEvidenceLaneAdminProofFixture() {
       visibleHostedHandoffSectionInputs: sectionInputRows.map((row) => row.id),
       visibleHostedHandoffSectionInputStatuses:
         hostedEvidenceHandoffSectionInputStatuses(handoff.inputSections),
+      visibleHostedHandoffSummary: {
+        status: handoff.status,
+        preflightStatus: handoff.preflightStatus,
+        command: handoff.command,
+        proofTarget: handoff.proofTarget,
+      },
+      ...(visibleBlockedReceipt === undefined
+        ? {}
+        : { visibleHostedHandoffBlockedReceipt: visibleBlockedReceipt }),
       visibleRelatedLinks: [
         "local-hosted-target-preflight",
         "local-hosted-concurrent-race-matrix",
@@ -23118,8 +23161,110 @@ function hostedEvidenceLaneAdminProofFixture() {
   };
 }
 
+function hostedEvidenceAdminProofHandoffFixture(progression) {
+  const providedInputIds = [
+    "command",
+    "proof-target",
+    ...progression.requiredInputs
+      .filter((input) => input.value !== null)
+      .map((input) => input.name),
+  ];
+  const blockedReceipt =
+    progression.blockedCheckIds.length === 0
+      ? null
+      : {
+          status: "blocked",
+          blockedCheckIds: [...progression.blockedCheckIds],
+          command: "npm run test:dev-test-game-hosted-evidence-lane",
+          proofTarget: devTestGameHostedTargetPreflightPath,
+          nextProofTarget: devTestGameHostedEvidenceLanePath,
+          requiredInputs: progression.requiredInputs.map((input) => ({
+            ...input,
+          })),
+          missingRequiredInputs: [...progression.missingRequiredInputs],
+          ...(progression.firstMissingOperatorArtifact === null
+            ? {}
+            : {
+                firstMissingOperatorArtifact:
+                  progression.firstMissingOperatorArtifact,
+              }),
+          rawEvidenceContractSummary: hostedMatrixRawEvidenceContractSummary(),
+          rawEvidenceContract: hostedMatrixRawEvidenceContract,
+          realHostedMatrixRawCaptureIntake: {
+            command: `npm run ${devTestGameRealHostedMatrixRawCaptureCommand}`,
+            proofTarget: devTestGameRealHostedMatrixRawCapturePath,
+            status: progression.rawCapture.status,
+            blockedCheckIds: [...progression.rawCapture.blockedCheckIds],
+          },
+          operatorAction:
+            "Configure the hosted frontend/API URLs plus a readable raw hosted matrix evidence packet from that same deployment, then rerun npm run test:dev-test-game-hosted-evidence-lane.",
+          localVsHostedBoundary:
+            "Local hosted-like matrix artifacts and synthetic demo evidence can prove the handoff path, but they cannot satisfy hosted deployment evidence.",
+        };
+  return hostedEvidenceHandoffChecklistFixture({
+    status: progression.blockedCheckIds.length === 0 ? "passed" : "blocked",
+    preflightStatus:
+      progression.blockedCheckIds.length === 0 ? "passed" : "blocked",
+    proofTarget:
+      progression.blockedCheckIds.length === 0
+        ? devTestGameHostedMatrixExternalEvidencePath
+        : devTestGameHostedEvidenceLanePath,
+    blockedCheckIds: progression.blockedCheckIds,
+    inputSections: hostedEvidenceHandoffInputSections({ providedInputIds }),
+    blockedReceipt,
+  });
+}
+
+function visibleHostedEvidenceBlockedReceipt(receipt) {
+  return {
+    status: receipt.status,
+    operatorAction: receipt.operatorAction,
+    localVsHostedBoundary: receipt.localVsHostedBoundary,
+    rawEvidenceContractSummary: receipt.rawEvidenceContractSummary,
+    nextProofTarget: receipt.nextProofTarget,
+    missingRequiredInputs: [...(receipt.missingRequiredInputs ?? [])],
+    firstMissingOperatorArtifact:
+      visibleHostedEvidenceFirstMissingOperatorArtifact(
+        receipt.firstMissingOperatorArtifact,
+      ),
+    realHostedMatrixRawCaptureIntake: {
+      command: receipt.realHostedMatrixRawCaptureIntake.command,
+      proofTarget: receipt.realHostedMatrixRawCaptureIntake.proofTarget,
+      status: receipt.realHostedMatrixRawCaptureIntake.status,
+      blockedCheckIds: [
+        ...receipt.realHostedMatrixRawCaptureIntake.blockedCheckIds,
+      ],
+    },
+  };
+}
+
+function visibleHostedEvidenceFirstMissingOperatorArtifact(artifact) {
+  if (artifact === null || artifact === undefined) {
+    return null;
+  }
+  const drilldown = artifact.roleSurfaceDrilldown ?? {};
+  return {
+    inputId: artifact.inputId,
+    checkId: artifact.checkId,
+    sectionId: artifact.sectionId,
+    sectionLabel: artifact.sectionLabel,
+    requiredEvidence: artifact.requiredEvidence,
+    purpose: artifact.purpose,
+    proofTarget: artifact.proofTarget,
+    roleSurfaceDrilldown: {
+      localCapabilityRoleUrl: drilldown.localCapabilityRoleUrl,
+      handoffRoleUrl: drilldown.handoffRoleUrl,
+      proofGraphNodeId: drilldown.proofGraphNodeId,
+      productionFeatureGraphNodeId: drilldown.productionFeatureGraphNodeId,
+      proofGraphEvidencePath: drilldown.proofGraphEvidencePath,
+    },
+  };
+}
+
 function hostedEvidenceLaneOperatorFixtureAdminProofFixture() {
-  const proof = hostedEvidenceLaneAdminProofFixture();
+  const proof = hostedEvidenceLaneAdminProofFixture({
+    progressionCaseId: "demo-raw-evidence-still-blocked",
+  });
   proof.proof = "dev-test-game-hosted-evidence-lane-operator-fixture-admin-proof";
   proof.scope =
     "local-dev-test-game-hosted-evidence-lane-operator-fixture-admin-surface";
@@ -23171,7 +23316,9 @@ function hostedEvidenceLaneOperatorFixtureAdminProofFixture() {
 }
 
 function hostedEvidenceLaneRealCaptureAdminProofFixture() {
-  const proof = hostedEvidenceLaneAdminProofFixture();
+  const proof = hostedEvidenceLaneAdminProofFixture({
+    progressionCaseId: "real-raw-capture-ready",
+  });
   proof.proofBoundary =
     "Local hosted evidence lane real-capture admin proof only.";
   proof.generatedFrom.hostedEvidenceLane =

@@ -381,6 +381,18 @@ export function assertHostedEvidenceLaneAdminProof(evidence) {
         );
       }
     }
+    if (
+      JSON.stringify(visibleReceipt.firstMissingOperatorArtifact ?? null) !==
+      JSON.stringify(
+        visibleFirstMissingOperatorArtifact(
+          expectedBlockedReceipt.firstMissingOperatorArtifact,
+        ),
+      )
+    ) {
+      throw new Error(
+        "hosted evidence lane admin proof missing first missing operator artifact",
+      );
+    }
   }
   for (const token of evidence.generatedFrom?.requiredText ?? []) {
     if (!evidence.adminRoleSurface?.visibleRequiredText?.includes(token)) {
@@ -397,6 +409,31 @@ export function assertHostedEvidenceLaneAdminProof(evidence) {
     surfaceKey: "visibleRelatedLinks",
   });
   return evidence;
+}
+
+function visibleFirstMissingOperatorArtifact(artifact) {
+  if (artifact === null || artifact === undefined) {
+    return null;
+  }
+  const drilldown = artifact.roleSurfaceDrilldown ?? {};
+  return {
+    inputId: String(artifact.inputId ?? ""),
+    checkId: String(artifact.checkId ?? ""),
+    sectionId: String(artifact.sectionId ?? ""),
+    sectionLabel: String(artifact.sectionLabel ?? ""),
+    requiredEvidence: String(artifact.requiredEvidence ?? ""),
+    purpose: String(artifact.purpose ?? ""),
+    proofTarget: String(artifact.proofTarget ?? ""),
+    roleSurfaceDrilldown: {
+      localCapabilityRoleUrl: String(drilldown.localCapabilityRoleUrl ?? ""),
+      handoffRoleUrl: String(drilldown.handoffRoleUrl ?? ""),
+      proofGraphNodeId: String(drilldown.proofGraphNodeId ?? ""),
+      productionFeatureGraphNodeId: String(
+        drilldown.productionFeatureGraphNodeId ?? "",
+      ),
+      proofGraphEvidencePath: String(drilldown.proofGraphEvidencePath ?? ""),
+    },
+  };
 }
 
 function hostedEvidenceLaneDemoProofCheckIds(proof) {
