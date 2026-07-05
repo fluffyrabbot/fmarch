@@ -743,7 +743,7 @@ test("post-Night 4 transition surface case shares transition and observation fac
     surfaceTestId: "host-console-surface",
     transitionFragments: [
       "host:N04:advance_phase:ack:917",
-      "survivor:D05:dead_no_controls",
+      "deadPlayer:D05:dead_no_controls",
       "actionPlayer:D05:no_lynch_controls",
       "stale:N04:submit_action:reject:PhaseLocked",
     ],
@@ -761,11 +761,11 @@ test("post-Night 4 transition surface case shares transition and observation fac
     },
     playerObservationCases: [
       {
-        proofField: "survivorDayFiveProof",
-        sourceRoleUrlField: "sourceSurvivorRoleUrl",
-        expectedSlot: "slot-5",
-        slotField: "survivorSlot",
-        expectedPrincipalUserId: "player_sage",
+        proofField: "deadPlayerDayFiveProof",
+        sourceRoleUrlField: "sourceDeadPlayerRoleUrl",
+        expectedSlot: "slot-3",
+        slotField: "deadPlayerSlot",
+        expectedPrincipalUserId: "player-seed",
         expectedPhaseId: "D05",
         expectedPhaseState: "open",
         expectedActorAlive: false,
@@ -774,13 +774,14 @@ test("post-Night 4 transition surface case shares transition and observation fac
         expectedStatusText: "actor is not alive",
         expectedPrivateCount: 1,
         expectedPrivateReceipt: true,
-        expectedBoundaryText: "survivor stayed dead with no controls",
+        expectedBoundaryText:
+          "dead player stayed dead from the N02 factional kill",
         expectedResyncFromSeq: 917,
         expectedVoteButtonCount: 0,
         expectedVoteTargetCount: 0,
         expectedLastVoteOutcomePhaseId: "D04",
         expectedPrivateReceiptStatus: "factional_kill",
-        expectedPrivateReceiptPhaseId: "N04",
+        expectedPrivateReceiptPhaseId: "N02",
       },
       {
         proofField: "actionPlayerDayFiveProof",
@@ -827,9 +828,9 @@ test("post-Night 4 transition assertion delegates host, player, and stale checks
     productionReady: false,
     sourceHostRoleUrl: "http://127.0.0.1:5173/g/game-a/host",
     sourceActionPlayerRoleUrl: "http://127.0.0.1:5173/g/game-a?slot=slot-7",
-    sourceSurvivorRoleUrl: "http://127.0.0.1:5173/g/game-a?slot=slot-5",
+    sourceDeadPlayerRoleUrl: "http://127.0.0.1:5173/g/game-a?slot=slot-3",
     transition:
-      "host:N04:advance_phase:ack:917 -> survivor:D05:dead_no_controls -> actionPlayer:D05:no_lynch_controls -> stale:N04:submit_action:reject:PhaseLocked",
+      "host:N04:advance_phase:ack:917 -> deadPlayer:D05:dead_no_controls -> actionPlayer:D05:no_lynch_controls -> stale:N04:submit_action:reject:PhaseLocked",
     hostAdvanceProof: {
       status: "passed",
       clickedThroughFromRoleUrl: true,
@@ -845,7 +846,7 @@ test("post-Night 4 transition assertion delegates host, player, and stale checks
         dayVoteOutcomesProjection: [{ phaseId: "D04" }],
       },
     },
-    survivorDayFiveProof: { id: "survivor" },
+    deadPlayerDayFiveProof: { id: "deadPlayer" },
     actionPlayerDayFiveProof: { id: "actionPlayer" },
     staleNightFourActionRecoveryProof: { id: "stale" },
   };
@@ -879,10 +880,10 @@ test("post-Night 4 transition assertion delegates host, player, and stale checks
     ]),
     [
       [
-        "survivor",
-        "player_sage",
-        "/games/game-a/player-command-state?principal_user_id=player_sage&slot_id=slot-5",
-        "/games/game-a/notifications?principal_user_id=player_sage",
+        "deadPlayer",
+        "player-seed",
+        "/games/game-a/player-command-state?principal_user_id=player-seed&slot_id=slot-3",
+        "/games/game-a/notifications?principal_user_id=player-seed",
         0,
         "factional_kill",
       ],

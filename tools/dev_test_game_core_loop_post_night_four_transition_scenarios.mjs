@@ -18,7 +18,7 @@ const postNightFourTransitionSurfaceCaseDefinition = Object.freeze({
   surfaceTestId: "host-console-surface",
   transitionFragments: Object.freeze([
     "host:N04:advance_phase:ack:917",
-    "survivor:D05:dead_no_controls",
+    "deadPlayer:D05:dead_no_controls",
     "actionPlayer:D05:no_lynch_controls",
     "stale:N04:submit_action:reject:PhaseLocked",
   ]),
@@ -36,11 +36,11 @@ const postNightFourTransitionSurfaceCaseDefinition = Object.freeze({
   }),
   playerObservationCases: Object.freeze([
     Object.freeze({
-      proofField: "survivorDayFiveProof",
-      sourceRoleUrlField: "sourceSurvivorRoleUrl",
-      expectedSlot: "slot-5",
-      slotField: "survivorSlot",
-      expectedPrincipalUserId: "player_sage",
+      proofField: "deadPlayerDayFiveProof",
+      sourceRoleUrlField: "sourceDeadPlayerRoleUrl",
+      expectedSlot: "slot-3",
+      slotField: "deadPlayerSlot",
+      expectedPrincipalUserId: "player-seed",
       expectedPhaseId: "D05",
       expectedPhaseState: "open",
       expectedActorAlive: false,
@@ -49,13 +49,14 @@ const postNightFourTransitionSurfaceCaseDefinition = Object.freeze({
       expectedStatusText: "actor is not alive",
       expectedPrivateCount: 1,
       expectedPrivateReceipt: true,
-      expectedBoundaryText: "survivor stayed dead with no controls",
+      expectedBoundaryText:
+        "dead player stayed dead from the N02 factional kill",
       expectedResyncFromSeq: 917,
       expectedVoteButtonCount: 0,
       expectedVoteTargetCount: 0,
       expectedLastVoteOutcomePhaseId: "D04",
       expectedPrivateReceiptStatus: "factional_kill",
-      expectedPrivateReceiptPhaseId: "N04",
+      expectedPrivateReceiptPhaseId: "N02",
     }),
     Object.freeze({
       proofField: "actionPlayerDayFiveProof",
@@ -107,8 +108,8 @@ export function assertPostNightFourTransitionSurfaceCase({
     typeof postNightFourTransitionSurface.sourceActionPlayerRoleUrl !==
       "string" ||
     !postNightFourTransitionSurface.sourceActionPlayerRoleUrl.includes("/g/") ||
-    typeof postNightFourTransitionSurface.sourceSurvivorRoleUrl !== "string" ||
-    !postNightFourTransitionSurface.sourceSurvivorRoleUrl.includes("/g/") ||
+    typeof postNightFourTransitionSurface.sourceDeadPlayerRoleUrl !== "string" ||
+    !postNightFourTransitionSurface.sourceDeadPlayerRoleUrl.includes("/g/") ||
     !surfaceCase.transitionFragments.every((fragment) =>
       String(postNightFourTransitionSurface.transition ?? "").includes(fragment),
     )

@@ -238,10 +238,10 @@ export function postNightFourTransitionSurfaceFixture({
     status: "passed",
     sourceHostRoleUrl: `${baseRoleUrl}/host`,
     sourceActionPlayerRoleUrl: baseRoleUrl,
-    sourceSurvivorRoleUrl: `${baseRoleUrl}?private=notification-1`,
+    sourceDeadPlayerRoleUrl: `${baseRoleUrl}?private=notification-1`,
     clickedThroughFromRoleUrl: true,
     transition:
-      "host:N04:advance_phase:ack:917 -> survivor:D05:dead_no_controls -> actionPlayer:D05:no_lynch_controls -> stale:N04:submit_action:reject:PhaseLocked",
+      "host:N04:advance_phase:ack:917 -> deadPlayer:D05:dead_no_controls -> actionPlayer:D05:no_lynch_controls -> stale:N04:submit_action:reject:PhaseLocked",
     hostAdvanceProof: seededCoreLoopHostSurfaceFixture({
       game,
       setupResyncFromSeq: 916,
@@ -261,12 +261,12 @@ export function postNightFourTransitionSurfaceFixture({
         dayVoteOutcomesProjection: dayVoteOutcomes,
       }),
     }),
-    survivorDayFiveProof: seededCoreLoopPlayerSurfaceFixture({
+    deadPlayerDayFiveProof: seededCoreLoopPlayerSurfaceFixture({
       game,
       roleUrlSuffix: "?private=notification-1",
-      slotField: "survivorSlot",
-      slot: "slot-5",
-      principalUserId: "player_sage",
+      slotField: "deadPlayerSlot",
+      slot: "slot-3",
+      principalUserId: "player-seed",
       phaseId: "D05",
       phaseState: "open",
       actorAlive: false,
@@ -276,9 +276,9 @@ export function postNightFourTransitionSurfaceFixture({
       privateCount: 1,
       privateReceipt: true,
       privateReceiptStatus: "factional_kill",
-      privateReceiptPhaseId: "N04",
+      privateReceiptPhaseId: "N02",
       boundary:
-        "Seeded browser survivor stayed dead with no controls after N04 advanced to Day 5.",
+        "Seeded browser dead player stayed dead from the N02 factional kill after N04 advanced to Day 5.",
       resyncFromSeq: 917,
       dayVoteOutcomes,
     }),

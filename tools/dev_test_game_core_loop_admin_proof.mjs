@@ -420,8 +420,8 @@ export function coreLoopAdminProofCase() {
           frontendBaseUrl,
           hostRoleUrl: spineRows.roleUrlHrefs["d02-n02-host"],
           actionPlayerRoleUrl: spineRows.roleUrlHrefs["d02-n02-actionPlayer"],
-          survivorRoleUrl: targetResolutionReceiptRoleUrl(
-            spineRows.roleUrlHrefs["d02-n02-actionPlayer"],
+          deadPlayerRoleUrl: targetResolutionReceiptRoleUrl(
+            spineRows.roleUrlHrefs["d02-n02-target"],
           ),
         });
       const dayFiveNoLynchResolutionSurface =
@@ -1710,29 +1710,29 @@ async function provePostNightFourTransitionSurface({
   frontendBaseUrl,
   hostRoleUrl,
   actionPlayerRoleUrl,
-  survivorRoleUrl,
+  deadPlayerRoleUrl,
 }) {
   const hostAdvanceProof = await provePostNightFourHostAdvance({
     browser,
     frontendBaseUrl,
     roleUrl: hostRoleUrl,
   });
-  const survivorDayFiveProof = await provePostDayThreePlayerSurface({
+  const deadPlayerDayFiveProof = await provePostDayThreePlayerSurface({
     browser,
     frontendBaseUrl,
-    roleUrl: survivorRoleUrl,
-    cookieValue: "fixture-survivor",
-    expectedSlot: "slot-5",
-    principalUserId: "player_sage",
-    slotField: "survivorSlot",
-    commandState: seededDayFiveSurvivorKilledCommandState({
+    roleUrl: deadPlayerRoleUrl,
+    cookieValue: "fixture-night-target",
+    expectedSlot: "slot-3",
+    principalUserId: "player-seed",
+    slotField: "deadPlayerSlot",
+    commandState: seededDayFiveDeadPlayerCommandState({
       boundary:
-        "Seeded browser survivor stayed dead with no controls after N04 advanced to Day 5.",
+        "Seeded browser dead player stayed dead from the N02 factional kill after N04 advanced to Day 5.",
     }),
     notifications: [
       {
         effect: "player_killed",
-        phase_id: "N04",
+        phase_id: "N02",
         status: "factional_kill",
       },
     ],
@@ -1776,12 +1776,12 @@ async function provePostNightFourTransitionSurface({
     status: "passed",
     sourceHostRoleUrl: String(hostRoleUrl),
     sourceActionPlayerRoleUrl: String(actionPlayerRoleUrl),
-    sourceSurvivorRoleUrl: String(survivorRoleUrl),
+    sourceDeadPlayerRoleUrl: String(deadPlayerRoleUrl),
     clickedThroughFromRoleUrl: true,
     transition:
-      "host:N04:advance_phase:ack:917 -> survivor:D05:dead_no_controls -> actionPlayer:D05:no_lynch_controls -> stale:N04:submit_action:reject:PhaseLocked",
+      "host:N04:advance_phase:ack:917 -> deadPlayer:D05:dead_no_controls -> actionPlayer:D05:no_lynch_controls -> stale:N04:submit_action:reject:PhaseLocked",
     hostAdvanceProof,
-    survivorDayFiveProof,
+    deadPlayerDayFiveProof,
     actionPlayerDayFiveProof,
     staleNightFourActionRecoveryProof,
     releaseReady: false,
@@ -9340,10 +9340,10 @@ function seededNightFourActionPlayerResolvedCommandState({ boundary }) {
   };
 }
 
-function seededDayFiveSurvivorKilledCommandState({ boundary }) {
+function seededDayFiveDeadPlayerCommandState({ boundary }) {
   return {
-    game: "seeded-day-five-survivor-killed",
-    actorSlot: "slot-5",
+    game: "seeded-day-five-dead-player",
+    actorSlot: "slot-3",
     actorAlive: false,
     actorStatus: "dead",
     roleKey: null,
