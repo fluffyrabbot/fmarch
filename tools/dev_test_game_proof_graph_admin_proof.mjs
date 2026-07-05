@@ -5,7 +5,6 @@ import {
   coreLoopScenarioFamilyRows,
 } from "./dev_test_game_core_loop_generated_from_families.mjs";
 import {
-  proofGraphProductionFeatureDestinationSummary,
   proofGraphProductionFeatureTargetDestinations,
 } from "./dev_test_game_proof_graph_production_feature_destinations.mjs";
 import { validateDevTestGameAdminSpineProof } from "./dev_test_game_release_readiness.mjs";
@@ -131,7 +130,7 @@ export function proofGraphAdminProofCase() {
       const productionFeatureTargetDestinations =
         proofGraphProductionFeatureTargetDestinations(source.proofGraph);
       const productionFeatureDestinationSummary =
-        proofGraphProductionFeatureDestinationSummary(source.proofGraph);
+        source.proofGraph.summary.productionFeatureDestinationSummary;
       return await proveAdminAuditDetail({
         browser,
         frontendBaseUrl,
@@ -194,7 +193,7 @@ export function proofGraphAdminProofCase() {
         productionFeatureTargetDestinations:
           proofGraphProductionFeatureTargetDestinations(source.proofGraph),
         productionFeatureDestinationSummary:
-          proofGraphProductionFeatureDestinationSummary(source.proofGraph),
+          source.proofGraph.summary.productionFeatureDestinationSummary,
         ...proofGraphAdminFeatureTargetEntries(source.proofGraph),
       },
       adminRoleSurface,

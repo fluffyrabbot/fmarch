@@ -28,6 +28,9 @@ import {
   hostedIdentityTerminalReceiptArtifactCase,
 } from "./dev_test_game_proof_graph_receipt_artifact_rows.mjs";
 import {
+  proofGraphProductionFeatureDestinationSummary,
+} from "./dev_test_game_proof_graph_production_feature_destinations.mjs";
+import {
   productionFeatureGraphSourceNodeId as productionFeatureSourceGraphNodeId,
 } from "./dev_test_game_production_feature_graph_sources.mjs";
 import {
@@ -226,6 +229,10 @@ export function buildDevTestGameProofGraph(
       productionFeatureTargetCount: nodes.filter(
         (node) => node.kind === "production-feature-spine-target",
       ).length,
+      productionFeatureDestinationSummary:
+        proofGraphProductionFeatureDestinationSummary({
+          nodes,
+        }),
       coreLoopScenarioFamilyCount: nodes.filter(
         (node) => node.kind === "core-loop-scenario-family",
       ).length,
@@ -574,6 +581,19 @@ export function assertDevTestGameProofGraphCoversProductionFeatureTargets(
     throw new Error(
       `proof graph production feature target count drifted: expected ${targets.length}, got ${nodes.length}`,
     );
+  }
+  const expectedDestinationSummary =
+    proofGraphProductionFeatureDestinationSummary({
+      nodes,
+      summary: {
+        productionFeatureTargetCount: targets.length,
+      },
+    });
+  if (
+    JSON.stringify(graph.summary?.productionFeatureDestinationSummary ?? null) !==
+    JSON.stringify(expectedDestinationSummary)
+  ) {
+    throw new Error("proof graph production feature destination summary drifted");
   }
   const nodesBySlotId = new Map(nodes.map((node) => [node.featureSlotId, node]));
   for (const target of targets) {

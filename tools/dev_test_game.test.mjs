@@ -4128,6 +4128,16 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
   assert.equal(graph.summary.roleUrlCount, 72 + coreLoopFamilyRows.length);
   assert.equal(graph.summary.roleSurfaceProofCount, 5);
   assert.equal(graph.summary.productionFeatureTargetCount, 41);
+  assert.deepEqual(
+    graph.summary.productionFeatureDestinationSummary,
+    proofGraphProductionFeatureDestinationSummary({
+      nodes: graph.nodes,
+      summary: {
+        productionFeatureTargetCount:
+          graph.summary.productionFeatureTargetCount,
+      },
+    }),
+  );
   assert.equal(
     graph.summary.coreLoopScenarioFamilyCount,
     coreLoopFamilyRows.length,
