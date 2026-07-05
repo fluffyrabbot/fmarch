@@ -22,6 +22,7 @@ import {
   assertHostedAdminHandoffProofReadinessDecisions,
   assertDevTestGameReleaseReadiness,
   buildDevTestGameReleaseReadiness,
+  devTestGameIdentityAdapterSeedCommandKinds,
   hostedAdminHandoffProofReadinessDecision,
   recoveryReceiptReleaseReadinessValidators,
   validateDevTestGameAdminSpineProof,
@@ -15008,9 +15009,9 @@ function identityAdapterProofFixture(game) {
       ],
     },
     game,
-    seedCommands: Array.from({ length: 22 }, (_, index) => ({
+    seedCommands: devTestGameIdentityAdapterSeedCommandKinds.map((kind, index) => ({
       principalUserId: index === 0 ? "host_h" : "player-mira",
-      kind: index === 0 ? "CreateGame" : "SeedCommand",
+      kind,
       streamSeqs: [index + 1],
     })),
     accounts: {

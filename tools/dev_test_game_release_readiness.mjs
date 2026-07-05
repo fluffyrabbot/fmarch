@@ -371,6 +371,32 @@ import {
   hostedAdminHandoffProofArtifactCases,
 } from "./dev_test_game_hosted_handoff_proof_cases.mjs";
 export const DEV_TEST_GAME_RELEASE_READINESS_VERSION = 1;
+export const devTestGameIdentityAdapterSeedCommandKinds = Object.freeze([
+  "CreateGame",
+  "AddSlot",
+  "AddSlot",
+  "AddSlot",
+  "AddSlot",
+  "AddSlot",
+  "AssignSlot",
+  "AssignRole",
+  "AssignSlot",
+  "AssignRole",
+  "AssignSlot",
+  "AssignRole",
+  "AssignSlot",
+  "AssignRole",
+  "AssignSlot",
+  "AssignRole",
+  "SetPostPolicy",
+  "SetPostPolicy",
+  "StartGame",
+  "AddCohost",
+  "SubmitVote",
+  "SubmitVote",
+  "SubmitVote",
+  "SubmitPost",
+]);
 const devTestGameSeededBrowserProofCommand =
   devTestGameProductionFeatureBrowserProofCommand;
 const artifactCoverageMilestoneIds = Object.freeze([
@@ -5196,7 +5222,13 @@ export function validateDevTestGameIdentityAdapterProof(proof, options = {}) {
       throw new Error(`identity adapter proof role ${role} missing role URL params`);
     }
   }
-  if ((proof.seedCommands ?? []).length !== 22) {
+  const seedCommandKinds = (proof.seedCommands ?? []).map((command) => command.kind);
+  if (
+    seedCommandKinds.length !== devTestGameIdentityAdapterSeedCommandKinds.length ||
+    !devTestGameIdentityAdapterSeedCommandKinds.every(
+      (kind, index) => seedCommandKinds[index] === kind,
+    )
+  ) {
     throw new Error("identity adapter proof did not seed the local game shape");
   }
   if (
