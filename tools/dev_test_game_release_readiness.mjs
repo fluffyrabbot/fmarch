@@ -711,98 +711,38 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
     ...(hostSetupProofEvidence === undefined
       ? []
       : [
-          {
-            id: hostSetupFeatureSpineSourceCheckId,
-            label: "Host setup role URL, policy, roster, and recovery proof",
-            status: "passed",
-            evidence: hostSetupProofEvidence.path,
-            roleUrl: hostSetupProofEvidence.roleUrl,
-            proofBoundary: hostSetupProofEvidence.proofBoundary,
-            capabilityLabel: hostSetupProofEvidence.capabilityLabel,
-            readyCheckIds: hostSetupProofEvidence.readyCheckIds,
-            setupMutationStatus: hostSetupProofEvidence.setupMutationStatus,
-            policyCommandStatus: hostSetupProofEvidence.policyCommandStatus,
-            recoveryCommand: devTestGameHostSetupProofCommand,
+          buildProofRunRoleSurfaceReadinessCheck({
+            roleSurfaceCase: roleSurfaceSpineCases.hostSetup,
+            proofEvidence: hostSetupProofEvidence,
             spineTargets: buildHostSetupReadinessSpineTargets(
               hostSetupProofEvidence,
             ),
-          },
+          }),
         ]),
     buildProofRunRoleSurfaceReadinessCheck({
-      sourceCheckId: cohostFeatureSpineSourceCheckId,
-      label: "Cohost role URL delegated host-console proof",
+      roleSurfaceCase: roleSurfaceSpineCases.cohost,
       proofEvidence: cohostConsoleProofEvidence,
-      proofBoundary:
-        "Seeded dev-test-game cohost role URL proof from proof-run. Proves delegated deadline control and NotHost rejection for host-only resolve; does not prove hosted identity, multi-node races, release readiness, or production readiness.",
-      details: {
-        capabilityLabel: cohostConsoleProofEvidence.capabilityLabel,
-        extendDeadlineState: cohostConsoleProofEvidence.extendDeadlineState,
-        extendDeadlinePrincipal:
-          cohostConsoleProofEvidence.extendDeadlinePrincipal,
-        hostOnlyRejectError: cohostConsoleProofEvidence.hostOnlyRejectError,
-        hostOnlyRejectPrincipal:
-          cohostConsoleProofEvidence.hostOnlyRejectPrincipal,
-        phaseAfterRejectId: cohostConsoleProofEvidence.phaseAfterRejectId,
-        phaseAfterRejectLocked:
-          cohostConsoleProofEvidence.phaseAfterRejectLocked,
-      },
-      recoveryCommand: devTestGameCohostConsoleProofCommand,
       spineTargets: buildCohostReadinessSpineTargets(
         cohostConsoleProofEvidence,
       ),
     }),
     buildProofRunRoleSurfaceReadinessCheck({
-      sourceCheckId: replacementFeatureSpineSourceCheckId,
-      label: "Replacement player role URL proof",
+      roleSurfaceCase: roleSurfaceSpineCases.replacement,
       proofEvidence: replacementPlayerProofEvidence,
-      proofBoundary:
-        "Seeded dev-test-game replacement player role URL proof from proof-run. Proves host-issued replacement URL, fresh replacement session recovery, incoming player slot authority, stale outgoing player rejection, and private-channel authority transfer; does not prove hosted identity, invite delivery, multi-node races, release readiness, or production readiness.",
-      details: {
-        principalUserId: replacementPlayerProofEvidence.principalUserId,
-        commandStateSlot: replacementPlayerProofEvidence.commandStateSlot,
-        capabilityKinds: replacementPlayerProofEvidence.capabilityKinds,
-        hostIssuedInvite: replacementPlayerProofEvidence.hostIssuedInvite,
-        sessionRefresh: replacementPlayerProofEvidence.sessionRefresh,
-        incomingPlayer: replacementPlayerProofEvidence.incomingPlayer,
-        staleOutgoing: replacementPlayerProofEvidence.staleOutgoing,
-        privateAuthority: replacementPlayerProofEvidence.privateAuthority,
-      },
-      recoveryCommand: devTestGameReplacementPlayerProofCommand,
       spineTargets: buildReplacementReadinessSpineTargets(
         replacementPlayerProofEvidence,
       ),
     }),
     buildProofRunRoleSurfaceReadinessCheck({
-      sourceCheckId: replacementActionFeatureSpineSourceCheckId,
-      label: "Replacement action recovery role URL proof",
+      roleSurfaceCase: roleSurfaceSpineCases.replacementAction,
       proofEvidence: replacementActionProofEvidence,
-      proofBoundary:
-        "Seeded dev-test-game replacement action role URL proof from proof-run. Proves incoming replacement factional_kill submission, reconnect into locked resolved state, stale replacement action PhaseLocked recovery, and scoped target receipt visibility; does not prove hosted identity, hosted transport, multi-node races, release readiness, or production readiness.",
-      details: {
-        incomingAction: replacementActionProofEvidence.incomingAction,
-        reconnect: replacementActionProofEvidence.reconnect,
-        staleAction: replacementActionProofEvidence.staleAction,
-      },
-      recoveryCommand: devTestGameReplacementActionProofCommand,
       spineTargets: buildReplacementActionReadinessSpineTargets(
         replacementActionProofEvidence,
       ),
     }),
     buildProofRunRoleSurfaceReadinessCheck({
-      sourceCheckId: replacementPrivateFeatureSpineSourceCheckId,
-      label: "Replacement private-channel recovery role URL proof",
+      roleSurfaceCase: roleSurfaceSpineCases.replacementPrivate,
       proofEvidence: replacementPrivateProofEvidence,
-      proofBoundary:
-        "Seeded dev-test-game replacement private-channel role URL proof from proof-run. Proves current replacement private-channel authority, stale outgoing private-channel and receipt denial, stale private-post ACK and reconnect recovery after resolution, completed-game private-post rejection, and completed private-channel reload; does not prove hosted identity, hosted transport, release readiness, or production readiness.",
-      details: {
-        authority: replacementPrivateProofEvidence.authority,
-        receipts: replacementPrivateProofEvidence.receipts,
-        resolvedPost: replacementPrivateProofEvidence.resolvedPost,
-        reconnect: replacementPrivateProofEvidence.reconnect,
-        completedPost: replacementPrivateProofEvidence.completedPost,
-        completedReload: replacementPrivateProofEvidence.completedReload,
-      },
-      recoveryCommand: devTestGameReplacementPrivateProofCommand,
       spineTargets: buildReplacementPrivateReadinessSpineTargets(
         replacementPrivateProofEvidence,
       ),
@@ -3466,23 +3406,19 @@ function completedGameHardeningSpineRoleUrl({ frontendBaseUrl, game, role }) {
 }
 
 function buildProofRunRoleSurfaceReadinessCheck({
-  sourceCheckId,
-  label,
+  roleSurfaceCase,
   proofEvidence,
-  proofBoundary,
-  details,
-  recoveryCommand,
   spineTargets,
 }) {
   return {
-    id: sourceCheckId,
-    label,
+    id: roleSurfaceCase.source.sourceCheckId,
+    label: roleSurfaceCase.readinessLabel,
     status: "passed",
     evidence: proofEvidence.path,
     roleUrl: proofEvidence.roleUrl,
-    proofBoundary,
-    ...details,
-    recoveryCommand,
+    proofBoundary: roleSurfaceCase.proofBoundary ?? proofEvidence.proofBoundary,
+    ...roleSurfaceCase.readinessDetails(proofEvidence),
+    recoveryCommand: roleSurfaceCase.source.rerunCommand,
     spineTargets,
   };
 }

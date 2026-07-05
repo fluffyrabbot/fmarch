@@ -533,20 +533,43 @@ test("proof graph admin feature targets derive from shared source rows", () => {
     {
       generatedFromKey: "hostSetupFeatureTarget",
       label: "host setup",
+      readinessLabel: "Host setup role URL, policy, roster, and recovery proof",
+      proofBoundary: null,
       source: hostSetupFeatureSpineSource,
       targetRow: hostSetupFeatureSpineTargetRows.hostSetupRoute,
       visibleAdminCheckIds: ["start-phase"],
+      readinessDetailKeys: [
+        "capabilityLabel",
+        "readyCheckIds",
+        "setupMutationStatus",
+        "policyCommandStatus",
+      ],
     },
     {
       generatedFromKey: "cohostFeatureTarget",
       label: "cohost console",
+      readinessLabel: "Cohost role URL delegated host-console proof",
+      proofBoundary:
+        "Seeded dev-test-game cohost role URL proof from proof-run. Proves delegated deadline control and NotHost rejection for host-only resolve; does not prove hosted identity, multi-node races, release readiness, or production readiness.",
       source: cohostFeatureSpineSource,
       targetRow: cohostFeatureSpineTargetRows.cohostConsole,
       visibleAdminCheckIds: ["cohost-console"],
+      readinessDetailKeys: [
+        "capabilityLabel",
+        "extendDeadlineState",
+        "extendDeadlinePrincipal",
+        "hostOnlyRejectError",
+        "hostOnlyRejectPrincipal",
+        "phaseAfterRejectId",
+        "phaseAfterRejectLocked",
+      ],
     },
     {
       generatedFromKey: "replacementFeatureTarget",
       label: "replacement player",
+      readinessLabel: "Replacement player role URL proof",
+      proofBoundary:
+        "Seeded dev-test-game replacement player role URL proof from proof-run. Proves host-issued replacement URL, fresh replacement session recovery, incoming player slot authority, stale outgoing player rejection, and private-channel authority transfer; does not prove hosted identity, invite delivery, multi-node races, release readiness, or production readiness.",
       source: replacementFeatureSpineSource,
       targetRow: replacementFeatureSpineTargetRows.replacementPlayer,
       visibleAdminCheckIds: [
@@ -561,10 +584,23 @@ test("proof graph admin feature targets derive from shared source rows", () => {
         "replacement-stale-private-channel",
         "replacement-stale-private-receipts",
       ],
+      readinessDetailKeys: [
+        "principalUserId",
+        "commandStateSlot",
+        "capabilityKinds",
+        "hostIssuedInvite",
+        "sessionRefresh",
+        "incomingPlayer",
+        "staleOutgoing",
+        "privateAuthority",
+      ],
     },
     {
       generatedFromKey: "replacementActionFeatureTarget",
       label: "replacement action",
+      readinessLabel: "Replacement action recovery role URL proof",
+      proofBoundary:
+        "Seeded dev-test-game replacement action role URL proof from proof-run. Proves incoming replacement factional_kill submission, reconnect into locked resolved state, stale replacement action PhaseLocked recovery, and scoped target receipt visibility; does not prove hosted identity, hosted transport, multi-node races, release readiness, or production readiness.",
       source: replacementActionFeatureSpineSource,
       targetRow:
         replacementActionFeatureSpineTargetRows.replacementActionRecovery,
@@ -573,10 +609,14 @@ test("proof graph admin feature targets derive from shared source rows", () => {
         "replacement-action-reconnect",
         "replacement-stale-action-after-resolve",
       ],
+      readinessDetailKeys: ["incomingAction", "reconnect", "staleAction"],
     },
     {
       generatedFromKey: "replacementPrivateFeatureTarget",
       label: "replacement private",
+      readinessLabel: "Replacement private-channel recovery role URL proof",
+      proofBoundary:
+        "Seeded dev-test-game replacement private-channel role URL proof from proof-run. Proves current replacement private-channel authority, stale outgoing private-channel and receipt denial, stale private-post ACK and reconnect recovery after resolution, completed-game private-post rejection, and completed private-channel reload; does not prove hosted identity, hosted transport, release readiness, or production readiness.",
       source: replacementPrivateFeatureSpineSource,
       targetRow:
         replacementPrivateFeatureSpineTargetRows.replacementPrivateChannel,
@@ -592,12 +632,22 @@ test("proof graph admin feature targets derive from shared source rows", () => {
         "replacement-stale-private-post-after-complete",
         "replacement-stale-private-post-after-complete-reload",
       ],
+      readinessDetailKeys: [
+        "authority",
+        "receipts",
+        "resolvedPost",
+        "reconnect",
+        "completedPost",
+        "completedReload",
+      ],
     },
   ];
   assert.deepEqual(
     roleSurfaceSpineCaseList.map((featureTargetCase) => [
       featureTargetCase.generatedFromKey,
       featureTargetCase.label,
+      featureTargetCase.readinessLabel,
+      featureTargetCase.proofBoundary ?? null,
       featureTargetCase.source.sourceCheckId,
       featureTargetCase.source.graphSourceNodeId,
       featureTargetCase.source.roleUrlIncludes,
@@ -610,10 +660,13 @@ test("proof graph admin feature targets derive from shared source rows", () => {
       featureTargetCase.buildVisibleAdminCheckIds === undefined
         ? null
         : [...featureTargetCase.buildVisibleAdminCheckIds],
+      Object.keys(featureTargetCase.readinessDetails({})),
     ]),
     expectedCases.map((featureTargetCase) => [
       featureTargetCase.generatedFromKey,
       featureTargetCase.label,
+      featureTargetCase.readinessLabel,
+      featureTargetCase.proofBoundary,
       featureTargetCase.source.sourceCheckId,
       featureTargetCase.source.graphSourceNodeId,
       featureTargetCase.source.roleUrlIncludes,
@@ -624,6 +677,7 @@ test("proof graph admin feature targets derive from shared source rows", () => {
       featureTargetCase.targetRow.adminCheckId,
       featureTargetCase.visibleAdminCheckIds,
       featureTargetCase.buildVisibleAdminCheckIds ?? null,
+      featureTargetCase.readinessDetailKeys,
     ]),
   );
   assert.equal(proofGraphAdminFeatureTargetCases, roleSurfaceSpineCaseList);
