@@ -11919,15 +11919,39 @@ test("session card and markdown include role credential URLs and tokens", async 
     hostedOpsSignalsAdminProofPath:
       "target/dev-test-game/hosted-ops-signals-admin-proof.json",
     hostedOpsSignalsAdminProof: hostedOpsSignalsAdminProofFixture(),
+    realHostedObservabilityHandoffAdminProofPath:
+      hostedAdminHandoffProofArtifactCase(
+        "realHostedObservabilityHandoffAdminProof",
+      ).path,
+    realHostedObservabilityHandoffAdminProof:
+      realHostedObservabilityHandoffAdminProofFixture(),
   });
   assertDevTestGameReleaseReadiness(hostedOpsReadiness);
-  assert(
-    hostedOpsReadiness.localDevelopmentSpine.checks.some(
-      (item) =>
-        item.id === "local-hosted-ops-signals" &&
-        item.status === "passed" &&
-        item.cellCount === 16,
-    ),
+  const hostedOpsReadinessCheck =
+    hostedOpsReadiness.localDevelopmentSpine.checks.find(
+      (item) => item.id === "local-hosted-ops-signals",
+    );
+  assert.equal(hostedOpsReadinessCheck.status, "passed");
+  assert.equal(hostedOpsReadinessCheck.cellCount, 16);
+  assert.equal(
+    hostedOpsReadinessCheck.realHostedObservabilityHandoffAdminRoleSurface
+      .path,
+    hostedAdminHandoffProofArtifactCase(
+      "realHostedObservabilityHandoffAdminProof",
+    ).path,
+  );
+  assert.equal(
+    hostedOpsReadiness.generatedFrom.realHostedObservabilityHandoffAdminProof,
+    hostedAdminHandoffProofArtifactCase(
+      "realHostedObservabilityHandoffAdminProof",
+    ).path,
+  );
+  assert.equal(
+    hostedOpsReadiness.localDevelopmentSpine.evidence.hostedOpsSignals
+      .realHostedObservabilityHandoffAdminRoleSurface.path,
+    hostedAdminHandoffProofArtifactCase(
+      "realHostedObservabilityHandoffAdminProof",
+    ).path,
   );
   assert.equal(
     hostedOpsReadiness.releaseReadiness.unproven.some(

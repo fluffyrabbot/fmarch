@@ -306,6 +306,10 @@ const defaultHostedOpsSignalsAdminProofPath = path.join(
   artifactDir,
   "hosted-ops-signals-admin-proof.json",
 );
+const defaultRealHostedObservabilityHandoffAdminProofPath = path.join(
+  repoRoot,
+  realHostedObservabilityHandoffAdminProofArtifact.path,
+);
 const defaultSeedFixtureSummaryPath = path.join(
   artifactDir,
   "seed-fixture-summary.json",
@@ -513,6 +517,18 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
         },
       )
     : undefined;
+  const realHostedObservabilityHandoffAdminProofEvidence =
+    options.realHostedObservabilityHandoffAdminProof
+      ? validateDevTestGameRealHostedObservabilityHandoffAdminProof(
+          options.realHostedObservabilityHandoffAdminProof,
+          {
+            path:
+              options.realHostedObservabilityHandoffAdminProofPath ??
+              realHostedObservabilityHandoffAdminProofArtifact.path,
+            artifact: options.realHostedObservabilityHandoffAdminProofArtifact,
+          },
+        )
+      : undefined;
   const seedFixtureEvidence = options.seedFixtureSummary
     ? validateDevTestGameSeedFixtureSummary(options.seedFixtureSummary, {
         path:
@@ -842,6 +858,12 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
       ...(hostedOpsSignalsAdminProofEvidence === undefined
         ? {}
         : { adminRoleSurface: hostedOpsSignalsAdminProofEvidence }),
+      ...(realHostedObservabilityHandoffAdminProofEvidence === undefined
+        ? {}
+        : {
+            realHostedObservabilityHandoffAdminRoleSurface:
+              realHostedObservabilityHandoffAdminProofEvidence,
+          }),
     });
   }
   if (seedFixtureEvidence !== undefined) {
@@ -1185,6 +1207,12 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
                       hostedOpsSignalsAdminProof:
                         hostedOpsSignalsAdminProofEvidence.path,
                     }),
+                ...(realHostedObservabilityHandoffAdminProofEvidence === undefined
+                  ? {}
+                  : {
+                      realHostedObservabilityHandoffAdminProof:
+                        realHostedObservabilityHandoffAdminProofEvidence.path,
+                    }),
               }),
         }),
       ...(seedFixtureEvidence === undefined
@@ -1292,6 +1320,7 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
         proofFreshnessAdminProofEvidence === undefined &&
         hostedEvidenceLaneAdminProofEvidence === undefined &&
         hostedEvidenceLaneDemoProofEvidence === undefined &&
+        realHostedObservabilityHandoffAdminProofEvidence === undefined &&
         nextActionAdminProofEvidence === undefined)
         ? {}
         : {
@@ -1342,6 +1371,12 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
                       ...(hostedOpsSignalsAdminProofEvidence === undefined
                         ? {}
                         : { adminRoleSurface: hostedOpsSignalsAdminProofEvidence }),
+                      ...(realHostedObservabilityHandoffAdminProofEvidence === undefined
+                        ? {}
+                        : {
+                            realHostedObservabilityHandoffAdminRoleSurface:
+                              realHostedObservabilityHandoffAdminProofEvidence,
+                          }),
                     },
                   }),
               ...(seedFixtureEvidence === undefined
@@ -7108,6 +7143,12 @@ const optionalReadinessArtifactRegistry = Object.freeze([
     },
   }),
   optionalReadinessArtifact({
+    id: realHostedObservabilityHandoffAdminProofArtifact.readinessId,
+    envVar: realHostedObservabilityHandoffAdminProofArtifact.envVar,
+    defaultPath: defaultRealHostedObservabilityHandoffAdminProofPath,
+    outputKeys: realHostedObservabilityHandoffAdminProofArtifact.outputKeys,
+  }),
+  optionalReadinessArtifact({
     id: "spineManifest",
     envVar: "FMARCH_DEV_TEST_GAME_SPINE_MANIFEST",
     defaultPath: defaultSpineManifestPath,
@@ -7299,6 +7340,7 @@ const optionalReadinessArtifactLoadPlan = Object.freeze([
   "opsAdminProof",
   "hostedOpsSignals",
   "hostedOpsSignalsAdminProof",
+  "realHostedObservabilityHandoffAdminProof",
   readOptionalSeedAdminProof,
   "spineManifest",
   "spineManifestAdminProof",
