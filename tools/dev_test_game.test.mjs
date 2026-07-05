@@ -214,6 +214,9 @@ import {
 import {
   assertDevTestGameHostedIdentityEvidence,
   buildDevTestGameHostedIdentityEvidence,
+  devTestGameHostedIdentityCompleteAdminProofCommand,
+  devTestGameHostedIdentityCompleteAdminProofPath,
+  devTestGameHostedIdentityCompleteEvidencePath,
   devTestGameHostedIdentityEvidenceCommand,
   devTestGameHostedIdentityEvidencePath,
   devTestGameHostedIdentityProgressionAdminProofCommand,
@@ -642,6 +645,18 @@ test("dev test-game spine orchestrators expose stable proof order and env maps",
     "node tools/dev_test_game_hosted_identity_partial_admin_proof.mjs",
   );
   assert.equal(
+    packageJson.scripts[devTestGameHostedIdentityCompleteAdminProofCommand],
+    "node tools/dev_test_game_hosted_identity_complete_admin_proof.mjs",
+  );
+  assert.equal(
+    devTestGameHostedIdentityCompleteEvidencePath,
+    "target/dev-test-game/hosted-identity-evidence-complete.json",
+  );
+  assert.equal(
+    devTestGameHostedIdentityCompleteAdminProofPath,
+    "target/dev-test-game/hosted-identity-evidence-complete-admin-proof.json",
+  );
+  assert.equal(
     packageJson.scripts[
       "test:dev-test-game-hosted-identity-progression-admin-proof"
     ],
@@ -681,6 +696,11 @@ test("dev test-game spine orchestrators expose stable proof order and env maps",
   assert(
     operatorDocs.includes(
       `npm run ${devTestGameHostedIdentityProgressionSummaryCommand}`,
+    ),
+  );
+  assert(
+    operatorDocs.includes(
+      `npm run ${devTestGameHostedIdentityCompleteAdminProofCommand}`,
     ),
   );
   for (const progression of hostedIdentityEvidenceFamilyProgressionCases) {

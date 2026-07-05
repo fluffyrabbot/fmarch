@@ -3288,7 +3288,8 @@ function normalizeHostedHandoffFirstMissingOperatorArtifact(artifact) {
 function hostedIdentityHandoffInputValue({ id, hostedIdentityEvidence }) {
   return id === "FMARCH_HOSTED_IDENTITY_EVIDENCE_PATH"
     ? String(
-        hostedIdentityEvidence.hostedHandoffChecklist?.placeholderFixturePath ??
+        hostedIdentityEvidence.target?.rawEvidencePath ??
+          hostedIdentityEvidence.hostedHandoffChecklist?.placeholderFixturePath ??
           hostedIdentityEvidence.target?.placeholderFixturePath ??
           "required",
       )

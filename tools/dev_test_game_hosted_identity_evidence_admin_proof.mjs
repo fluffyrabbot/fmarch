@@ -11,11 +11,14 @@ import {
   buildDevTestGameHostedIdentityProgressionSummary,
 } from "./dev_test_game_hosted_identity_progression_summary.mjs";
 import {
+  devTestGameHostedIdentityCompleteAdminProofPath,
+  devTestGameHostedIdentityCompleteEvidencePath,
   devTestGameHostedIdentityPartialAdminProofPath,
   devTestGameHostedIdentityPartialEvidencePath,
   devTestGameHostedIdentityEvidenceAdminProofPath,
   devTestGameHostedIdentityProgressionSummaryPath,
   hostedIdentityEvidencePlaceholderFixturePath,
+  hostedIdentityEvidenceRedactedPassFixturePath,
   hostedIdentityEvidenceInputIds,
   hostedIdentityEvidenceInputSectionStatuses,
   hostedIdentityEvidenceProgressionAdminProofPath,
@@ -77,6 +80,10 @@ export const hostedIdentityEvidencePartialPath =
   devTestGameHostedIdentityPartialEvidencePath;
 export const hostedIdentityEvidencePartialAdminProofPath =
   devTestGameHostedIdentityPartialAdminProofPath;
+export const hostedIdentityEvidenceCompletePath =
+  devTestGameHostedIdentityCompleteEvidencePath;
+export const hostedIdentityEvidenceCompleteAdminProofPath =
+  devTestGameHostedIdentityCompleteAdminProofPath;
 const requiredRelatedLinks = ["local-identity-adapter", "local-next-action"];
 
 function hostedIdentityPacketSectionRows(hostedIdentityEvidence) {
@@ -171,6 +178,14 @@ function hostedIdentityHandoffPath(hostedIdentityEvidence) {
   });
 }
 
+function hostedIdentityHandoffInputValues(hostedIdentityEvidence) {
+  return {
+    FMARCH_HOSTED_IDENTITY_EVIDENCE_PATH:
+      hostedIdentityEvidence.target?.rawEvidencePath ??
+      hostedIdentityEvidencePlaceholderFixturePath,
+  };
+}
+
 function hostedIdentityOperatorProofStatus(drilldown) {
   return String(drilldown.progressionId ?? "");
 }
@@ -232,10 +247,9 @@ export function hostedIdentityEvidenceAdminProofCase({
         requiredUnproven:
           source.hostedIdentityEvidence.hostedHandoffChecklist.blockedCheckIds,
         requiredHostedHandoffInputs: hostedIdentityEvidenceInputIds,
-        requiredHostedHandoffInputValues: {
-          FMARCH_HOSTED_IDENTITY_EVIDENCE_PATH:
-            hostedIdentityEvidencePlaceholderFixturePath,
-        },
+        requiredHostedHandoffInputValues: hostedIdentityHandoffInputValues(
+          source.hostedIdentityEvidence,
+        ),
         requiredHostedHandoffBlockedChecks:
           source.hostedIdentityEvidence.hostedHandoffChecklist.blockedCheckIds,
         requiredHostedHandoffGroups:
@@ -340,7 +354,9 @@ export function hostedIdentityEvidenceAdminProofCase({
       productionReady: false,
       scope: "local-dev-test-game-hosted-identity-evidence-admin-surface",
       proofBoundary:
-        "Local SvelteKit admin role URL with fixture admin authority over the hosted identity evidence handoff. Proves the hosted identity evidence receipt is discoverable from the seeded admin overview and inspectable in a native admin audit detail route with blocked hosted account, invite, recovery, abuse/rate-limit, session-secret, and audit-retention rows visible; it does not prove hosted identity, beta readiness, release readiness, or production readiness.",
+        source.hostedIdentityEvidence.status === "passed"
+          ? "Local SvelteKit admin role URL with fixture admin authority over the complete hosted identity evidence handoff. Proves a redacted hosted identity intake packet with all six evidence-family sections provided is discoverable from the seeded admin overview and inspectable in a native admin audit detail route while releaseReady and productionReady stay false; it does not prove hosted identity live traffic, beta readiness, release readiness, or production readiness."
+          : "Local SvelteKit admin role URL with fixture admin authority over the hosted identity evidence handoff. Proves the hosted identity evidence receipt is discoverable from the seeded admin overview and inspectable in a native admin audit detail route with blocked hosted account, invite, recovery, abuse/rate-limit, session-secret, and audit-retention rows visible; it does not prove hosted identity, beta readiness, release readiness, or production readiness.",
       generatedFrom: {
         hostedIdentityEvidence: sourceRelativePath,
         proofRun: proofRunRelativePath,
@@ -359,10 +375,9 @@ export function hostedIdentityEvidenceAdminProofCase({
         blockedCheckIds:
           source.hostedIdentityEvidence.hostedHandoffChecklist.blockedCheckIds,
         hostedHandoffInputIds: hostedIdentityEvidenceInputIds,
-        hostedHandoffInputValues: {
-          FMARCH_HOSTED_IDENTITY_EVIDENCE_PATH:
-            hostedIdentityEvidencePlaceholderFixturePath,
-        },
+        hostedHandoffInputValues: hostedIdentityHandoffInputValues(
+          source.hostedIdentityEvidence,
+        ),
         hostedHandoffBlockedCheckIds:
           source.hostedIdentityEvidence.hostedHandoffChecklist.blockedCheckIds,
         hostedHandoffGroupIds:
@@ -473,6 +488,41 @@ export async function writeHostedIdentityPartialOperatorAdminProof() {
     smokeName: "dev-test-game-hosted-identity-partial-admin-proof",
     stage: "hosted-identity-partial-admin-proof-listen",
   });
+}
+
+export async function writeHostedIdentityCompleteAdminProof() {
+  const completeEvidencePath = path.resolve(
+    repoRoot,
+    hostedIdentityEvidenceCompletePath,
+  );
+  const completeAdminProofPath = path.resolve(
+    repoRoot,
+    hostedIdentityEvidenceCompleteAdminProofPath,
+  );
+  const completeEvidence = await buildDevTestGameHostedIdentityEvidence({
+    env: {
+      FMARCH_HOSTED_IDENTITY_EVIDENCE_PATH:
+        hostedIdentityEvidenceRedactedPassFixturePath,
+    },
+  });
+  if (
+    completeEvidence.status !== "passed" ||
+    completeEvidence.target?.redactedIntakePacket?.providedSectionCount !== 6 ||
+    completeEvidence.target?.redactedIntakePacket?.sectionCount !== 6 ||
+    completeEvidence.releaseReady !== false ||
+    completeEvidence.productionReady !== false
+  ) {
+    throw new Error("complete hosted identity evidence packet did not pass locally");
+  }
+  await writeEvidenceArtifact(completeEvidencePath, completeEvidence);
+  await runAdminAuditProof(
+    hostedIdentityEvidenceAdminProofCase({
+      sourcePath: completeEvidencePath,
+      proofPath: completeAdminProofPath,
+      smokeName: "dev-test-game-hosted-identity-complete-admin-proof",
+      stage: "hosted-identity-complete-admin-proof-listen",
+    }),
+  );
 }
 
 export async function writeHostedIdentityProgressionAdminProof({

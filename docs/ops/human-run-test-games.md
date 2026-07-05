@@ -207,6 +207,7 @@ FMARCH_HOSTED_IDENTITY_PROGRESSION_ID=account-recovery npm run test:dev-test-gam
 FMARCH_HOSTED_IDENTITY_PROGRESSION_ID=abuse-and-rate-limit npm run test:dev-test-game-hosted-identity-progression-admin-proof
 FMARCH_HOSTED_IDENTITY_PROGRESSION_ID=session-secret-policy npm run test:dev-test-game-hosted-identity-progression-admin-proof
 FMARCH_HOSTED_IDENTITY_PROGRESSION_ID=hosted-audit-retention-export npm run test:dev-test-game-hosted-identity-progression-admin-proof
+npm run test:dev-test-game-hosted-identity-complete-admin-proof
 ```
 
 Those progression admin proofs are local role-surface checks. They prove the
@@ -219,6 +220,9 @@ The `hosted-account-lifecycle`, `invite-delivery`, `account-recovery`,
 flows: each admin proof reads a redacted packet with only that evidence family
 provided, so the admin handoff shows one family as provided while hosted
 identity readiness remains blocked on the remaining hosted identity packets.
+The complete admin proof reads the all-families redacted packet and proves the
+seeded admin detail can show all six evidence-family sections as provided while
+`releaseReady` and `productionReady` remain false.
 
 The local release-readiness admin browser proof is:
 
