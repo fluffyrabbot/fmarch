@@ -1956,14 +1956,40 @@ export function normalizeLocalProofGraphAudit(proofGraph, { game }) {
         }),
       ),
     ),
-    artifactSummary: Object.freeze({
-      nodeCount: Number(proofGraph.summary?.nodeCount ?? nodes.length),
-      edgeCount: Number(proofGraph.summary?.edgeCount ?? edges.length),
-      roleUrlCount: Number(proofGraph.summary?.roleUrlCount ?? roleNodes.length),
-      recoveryTargetCount: Number(proofGraph.summary?.recoveryTargetCount ?? 0),
-      releaseReady: proofGraph.releaseReady === true,
-      productionReady: proofGraph.productionReady === true,
+    artifactSummary: normalizeLocalProofGraphArtifactSummary(proofGraph, {
+      nodes,
+      edges,
+      roleNodes,
     }),
+  });
+}
+
+export function normalizeLocalProofGraphArtifactSummary(
+  proofGraph,
+  { nodes, edges, roleNodes } = {},
+) {
+  const graphNodes = Array.isArray(nodes)
+    ? nodes
+    : Array.isArray(proofGraph?.nodes)
+      ? proofGraph.nodes
+      : [];
+  const graphEdges = Array.isArray(edges)
+    ? edges
+    : Array.isArray(proofGraph?.edges)
+      ? proofGraph.edges
+      : [];
+  const graphRoleNodes = Array.isArray(roleNodes)
+    ? roleNodes
+    : graphNodes.filter((node) => typeof node?.roleUrl === "string");
+  return Object.freeze({
+    nodeCount: Number(proofGraph?.summary?.nodeCount ?? graphNodes.length),
+    edgeCount: Number(proofGraph?.summary?.edgeCount ?? graphEdges.length),
+    roleUrlCount: Number(
+      proofGraph?.summary?.roleUrlCount ?? graphRoleNodes.length,
+    ),
+    recoveryTargetCount: Number(proofGraph?.summary?.recoveryTargetCount ?? 0),
+    releaseReady: proofGraph?.releaseReady === true,
+    productionReady: proofGraph?.productionReady === true,
   });
 }
 
@@ -2512,9 +2538,7 @@ export function normalizeLocalNextActionAudit(nextAction, { game, proofGraph = n
       }),
     ),
   ];
-  const freshnessSummary = nextAction.generatedFrom?.artifactFreshnessSummary ?? {};
-  const releaseReadinessSummary =
-    nextAction.generatedFrom?.releaseReadinessSummary ?? {};
+  const generatedSummary = normalizeLocalNextActionGeneratedSummary(nextAction);
   return Object.freeze({
     id: localAdminAuditIds.nextAction,
     label: "Local next action",
@@ -2619,27 +2643,20 @@ export function normalizeLocalNextActionAudit(nextAction, { game, proofGraph = n
       command,
       reason,
       actionStatus,
-      sourceManifest: String(nextAction.generatedFrom?.spineManifest ?? ""),
-      artifactFreshnessStatus: String(
-        nextAction.generatedFrom?.artifactFreshnessStatus ?? "unknown",
-      ),
-      artifactCount: Number(freshnessSummary.artifactCount ?? 0),
-      freshCount: Number(freshnessSummary.freshCount ?? 0),
-      staleCount: Number(freshnessSummary.staleCount ?? 0),
-      missingCount: Number(freshnessSummary.missingCount ?? 0),
+      sourceManifest: generatedSummary.sourceManifest,
+      artifactFreshnessStatus: generatedSummary.artifactFreshnessStatus,
+      artifactCount: generatedSummary.artifactCount,
+      freshCount: generatedSummary.freshCount,
+      staleCount: generatedSummary.staleCount,
+      missingCount: generatedSummary.missingCount,
       selectionTrace,
-      releaseReadinessChecklist: String(
-        nextAction.generatedFrom?.releaseReadinessChecklist ?? "",
-      ),
-      releaseReadinessStatus: String(releaseReadinessSummary.status ?? "unknown"),
-      unprovenCount: Number(releaseReadinessSummary.unprovenCount ?? 0),
-      buildableUnprovenCount: Number(
-        releaseReadinessSummary.buildableUnprovenCount ?? 0,
-      ),
-      localCheckCount: Number(releaseReadinessSummary.localCheckCount ?? 0),
-      buildableLocalDependencyCount: Number(
-        releaseReadinessSummary.buildableLocalDependencyCount ?? 0,
-      ),
+      releaseReadinessChecklist: generatedSummary.releaseReadinessChecklist,
+      releaseReadinessStatus: generatedSummary.releaseReadinessStatus,
+      unprovenCount: generatedSummary.unprovenCount,
+      buildableUnprovenCount: generatedSummary.buildableUnprovenCount,
+      localCheckCount: generatedSummary.localCheckCount,
+      buildableLocalDependencyCount:
+        generatedSummary.buildableLocalDependencyCount,
       selectedLocalCheckId: String(localCheck?.id ?? ""),
       selectedLocalCheckBuildSlice: String(localCheck?.buildSlice ?? ""),
       selectedLocalCheckProofTarget: String(localCheck?.proofTarget ?? ""),
@@ -2810,6 +2827,35 @@ export function normalizeLocalNextActionAudit(nextAction, { game, proofGraph = n
       releaseReady: nextAction.releaseReady === true,
       productionReady: nextAction.productionReady === true,
     }),
+  });
+}
+
+export function normalizeLocalNextActionGeneratedSummary(nextAction) {
+  const freshnessSummary =
+    nextAction?.generatedFrom?.artifactFreshnessSummary ?? {};
+  const releaseReadinessSummary =
+    nextAction?.generatedFrom?.releaseReadinessSummary ?? {};
+  return Object.freeze({
+    sourceManifest: String(nextAction?.generatedFrom?.spineManifest ?? ""),
+    artifactFreshnessStatus: String(
+      nextAction?.generatedFrom?.artifactFreshnessStatus ?? "unknown",
+    ),
+    artifactCount: Number(freshnessSummary.artifactCount ?? 0),
+    freshCount: Number(freshnessSummary.freshCount ?? 0),
+    staleCount: Number(freshnessSummary.staleCount ?? 0),
+    missingCount: Number(freshnessSummary.missingCount ?? 0),
+    releaseReadinessChecklist: String(
+      nextAction?.generatedFrom?.releaseReadinessChecklist ?? "",
+    ),
+    releaseReadinessStatus: String(releaseReadinessSummary.status ?? "unknown"),
+    unprovenCount: Number(releaseReadinessSummary.unprovenCount ?? 0),
+    buildableUnprovenCount: Number(
+      releaseReadinessSummary.buildableUnprovenCount ?? 0,
+    ),
+    localCheckCount: Number(releaseReadinessSummary.localCheckCount ?? 0),
+    buildableLocalDependencyCount: Number(
+      releaseReadinessSummary.buildableLocalDependencyCount ?? 0,
+    ),
   });
 }
 

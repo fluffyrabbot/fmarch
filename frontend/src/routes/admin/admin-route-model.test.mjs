@@ -7,6 +7,8 @@ import {
   adminForbiddenMessage,
   buildAdminAuditDetailData,
   buildAdminRouteData,
+  normalizeLocalNextActionGeneratedSummary,
+  normalizeLocalProofGraphArtifactSummary,
   summarizeRecoveryGate,
 } from "./admin-route-model.mjs";
 import {
@@ -1568,14 +1570,10 @@ test("admin route data exposes local proof graph as a native audit row", async (
       ({ linkId, roleUrl }) => [linkId, roleUrl],
     ),
   );
-  assert.deepEqual(graph.artifactSummary, {
-    nodeCount: proofGraph.summary.nodeCount,
-    edgeCount: proofGraph.summary.edgeCount,
-    roleUrlCount: proofGraph.summary.roleUrlCount,
-    recoveryTargetCount: proofGraph.summary.recoveryTargetCount,
-    releaseReady: false,
-    productionReady: false,
-  });
+  assert.deepEqual(
+    graph.artifactSummary,
+    normalizeLocalProofGraphArtifactSummary(proofGraph),
+  );
 });
 
 test("admin local proof graph detail data carries graph node rows", async () => {
@@ -2047,19 +2045,20 @@ test("admin local proof freshness detail data carries stale and missing rows", a
 });
 
 test("admin route data exposes local next action as a native audit row", async () => {
+  const nextActionInput = nextActionFixture({
+    terminalBatchGraph: terminalBatchGraphFixture(),
+    privateChannelRecoveryGraph: privateChannelRecoveryGraphFixture(),
+    replacementActionRecoveryGraph:
+      replacementActionRecoveryGraphFixture(),
+    replacementHandoffRecoveryGraph:
+      replacementHandoffRecoveryGraphFixture(),
+    replacementPrivateRecoveryGraph:
+      replacementPrivateRecoveryGraphFixture(),
+  });
   const data = await buildAdminRouteData({
     principalUserId: "admin_a",
     capabilities: [{ kind: "GlobalAdmin" }],
-    nextAction: nextActionFixture({
-      terminalBatchGraph: terminalBatchGraphFixture(),
-      privateChannelRecoveryGraph: privateChannelRecoveryGraphFixture(),
-      replacementActionRecoveryGraph:
-        replacementActionRecoveryGraphFixture(),
-      replacementHandoffRecoveryGraph:
-        replacementHandoffRecoveryGraphFixture(),
-      replacementPrivateRecoveryGraph:
-        replacementPrivateRecoveryGraphFixture(),
-    }),
+    nextAction: nextActionInput,
     proofGraph: proofGraphFixture(),
   });
 
@@ -2167,24 +2166,13 @@ test("admin route data exposes local next action as a native audit row", async (
     command: LOCAL_RACE_COMMAND,
     reason: "release-readiness-unproven",
     actionStatus: "ready",
-    sourceManifest: "target/dev-test-game/spine-manifest.json",
-    artifactFreshnessStatus: "passed",
-    artifactCount: 23,
-    freshCount: 23,
-    staleCount: 0,
-    missingCount: 0,
+    ...normalizeLocalNextActionGeneratedSummary(nextActionInput),
     selectionTrace: {
       strategy: "development-spine-priority",
       candidateCount: 0,
       selectedArtifactId: null,
       candidates: [],
     },
-    releaseReadinessChecklist: "target/dev-test-game/release-readiness-checklist.json",
-    releaseReadinessStatus: "not_ready",
-    unprovenCount: 7,
-    buildableUnprovenCount: 1,
-    localCheckCount: 18,
-    buildableLocalDependencyCount: 0,
     selectedLocalCheckId: "",
     selectedLocalCheckBuildSlice: "",
     selectedLocalCheckProofTarget: "",
