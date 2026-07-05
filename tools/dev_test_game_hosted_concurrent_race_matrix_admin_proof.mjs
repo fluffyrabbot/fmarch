@@ -17,6 +17,8 @@ import {
   hostedEvidenceHandoffSummary,
 } from "./dev_test_game_hosted_handoff_cases.mjs";
 import {
+  assertAdminRoleSurfaceStatusText,
+  assertVisibleAdminRoleSurfaceRows,
   artifactDir,
   proveAdminAuditDetail,
   readJson,
@@ -222,20 +224,18 @@ export function assertHostedConcurrentRaceMatrixAdminProof(evidence) {
       "hosted concurrent race matrix admin proof did not prove admin overview click-through",
     );
   }
-  for (const checkId of evidence.generatedFrom?.progressCheckIds ?? []) {
-    if (!evidence.adminRoleSurface?.visibleChecks?.includes(checkId)) {
-      throw new Error(
-        `hosted concurrent race matrix admin proof missing visible check: ${checkId}`,
-      );
-    }
-  }
-  for (const cellId of evidence.generatedFrom?.cellIds ?? []) {
-    if (!evidence.adminRoleSurface?.visibleChecks?.includes(cellId)) {
-      throw new Error(
-        `hosted concurrent race matrix admin proof missing visible cell: ${cellId}`,
-      );
-    }
-  }
+  assertVisibleAdminRoleSurfaceRows({
+    adminRoleSurface: evidence.adminRoleSurface,
+    rowIds: evidence.generatedFrom?.progressCheckIds,
+    proofName: "hosted concurrent race matrix admin proof",
+    rowName: "visible check",
+  });
+  assertVisibleAdminRoleSurfaceRows({
+    adminRoleSurface: evidence.adminRoleSurface,
+    rowIds: evidence.generatedFrom?.cellIds,
+    proofName: "hosted concurrent race matrix admin proof",
+    rowName: "visible cell",
+  });
   for (const laneId of evidence.generatedFrom?.reconnectLaneIds ?? []) {
     if (!evidence.adminRoleSurface?.visibleReconnectLanes?.includes(laneId)) {
       throw new Error(
@@ -266,77 +266,59 @@ export function assertHostedConcurrentRaceMatrixAdminProof(evidence) {
       );
     }
   }
-  for (const linkId of evidence.generatedFrom?.relatedAuditIds ?? []) {
-    if (!evidence.adminRoleSurface?.visibleRelatedLinks?.includes(linkId)) {
-      throw new Error(
-        `hosted concurrent race matrix admin proof missing related link: ${linkId}`,
-      );
-    }
-  }
-  if (
-    !evidence.adminRoleSurface?.visibleUnproven?.includes(
-      evidence.generatedFrom?.requestedEvidenceId,
-    )
-  ) {
-    throw new Error(
-      "hosted concurrent race matrix admin proof missing requested evidence row",
-    );
-  }
-  for (const inputId of evidence.generatedFrom?.realHostedEvidenceInputIds ?? []) {
-    if (
-      !evidence.adminRoleSurface?.visibleRealHostedEvidenceInputs?.includes(
-        inputId,
-      )
-    ) {
-      throw new Error(
-        `hosted concurrent race matrix admin proof missing real hosted input: ${inputId}`,
-      );
-    }
-  }
-  for (const inputId of evidence.generatedFrom?.hostedHandoffInputIds ?? []) {
-    if (
-      !evidence.adminRoleSurface?.visibleHostedHandoffInputs?.includes(inputId)
-    ) {
-      throw new Error(
-        `hosted concurrent race matrix admin proof missing handoff input: ${inputId}`,
-      );
-    }
-  }
-  for (const checkId of evidence.generatedFrom?.hostedHandoffBlockedCheckIds ?? []) {
-    if (
-      !evidence.adminRoleSurface?.visibleHostedHandoffBlockedChecks?.includes(
-        checkId,
-      )
-    ) {
-      throw new Error(
-        `hosted concurrent race matrix admin proof missing handoff blocked check: ${checkId}`,
-      );
-    }
-  }
-  for (const [inputId, expectedValue] of Object.entries(
-    evidence.generatedFrom?.hostedHandoffInputValues ?? {},
-  )) {
-    const visibleValue =
-      evidence.adminRoleSurface?.visibleHostedHandoffInputValues?.[inputId];
-    if (typeof visibleValue !== "string" || !visibleValue.includes(expectedValue)) {
-      throw new Error(
-        `hosted concurrent race matrix admin proof missing handoff input value: ${inputId}`,
-      );
-    }
-  }
-  for (const [checkId, expectedText] of Object.entries(
-    evidence.generatedFrom?.hostedHandoffBlockedCheckRequiredEvidence ?? {},
-  )) {
-    const visibleText =
-      evidence.adminRoleSurface?.visibleHostedHandoffBlockedCheckStatuses?.[
-        checkId
-      ];
-    if (typeof visibleText !== "string" || !visibleText.includes(expectedText)) {
-      throw new Error(
-        `hosted concurrent race matrix admin proof missing blocked check evidence: ${checkId}`,
-      );
-    }
-  }
+  assertVisibleAdminRoleSurfaceRows({
+    adminRoleSurface: evidence.adminRoleSurface,
+    rowIds: evidence.generatedFrom?.relatedAuditIds,
+    proofName: "hosted concurrent race matrix admin proof",
+    rowName: "related link",
+    surfaceKey: "visibleRelatedLinks",
+  });
+  assertVisibleAdminRoleSurfaceRows({
+    adminRoleSurface: evidence.adminRoleSurface,
+    rowIds:
+      evidence.generatedFrom?.requestedEvidenceId === undefined
+        ? []
+        : [evidence.generatedFrom.requestedEvidenceId],
+    proofName: "hosted concurrent race matrix admin proof",
+    rowName: "requested evidence row",
+    surfaceKey: "visibleUnproven",
+  });
+  assertVisibleAdminRoleSurfaceRows({
+    adminRoleSurface: evidence.adminRoleSurface,
+    rowIds: evidence.generatedFrom?.realHostedEvidenceInputIds,
+    proofName: "hosted concurrent race matrix admin proof",
+    rowName: "real hosted input",
+    surfaceKey: "visibleRealHostedEvidenceInputs",
+  });
+  assertVisibleAdminRoleSurfaceRows({
+    adminRoleSurface: evidence.adminRoleSurface,
+    rowIds: evidence.generatedFrom?.hostedHandoffInputIds,
+    proofName: "hosted concurrent race matrix admin proof",
+    rowName: "handoff input",
+    surfaceKey: "visibleHostedHandoffInputs",
+  });
+  assertVisibleAdminRoleSurfaceRows({
+    adminRoleSurface: evidence.adminRoleSurface,
+    rowIds: evidence.generatedFrom?.hostedHandoffBlockedCheckIds,
+    proofName: "hosted concurrent race matrix admin proof",
+    rowName: "handoff blocked check",
+    surfaceKey: "visibleHostedHandoffBlockedChecks",
+  });
+  assertAdminRoleSurfaceStatusText({
+    adminRoleSurface: evidence.adminRoleSurface,
+    expectedStatuses: evidence.generatedFrom?.hostedHandoffInputValues,
+    proofName: "hosted concurrent race matrix admin proof",
+    rowName: "handoff input value",
+    surfaceKey: "visibleHostedHandoffInputValues",
+  });
+  assertAdminRoleSurfaceStatusText({
+    adminRoleSurface: evidence.adminRoleSurface,
+    expectedStatuses:
+      evidence.generatedFrom?.hostedHandoffBlockedCheckRequiredEvidence,
+    proofName: "hosted concurrent race matrix admin proof",
+    rowName: "blocked check evidence",
+    surfaceKey: "visibleHostedHandoffBlockedCheckStatuses",
+  });
   const expectedSummary = evidence.generatedFrom?.hostedHandoffSummary;
   if (expectedSummary !== undefined) {
     for (const [key, expectedValue] of Object.entries(expectedSummary)) {
