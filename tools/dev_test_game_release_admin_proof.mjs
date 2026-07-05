@@ -48,7 +48,7 @@ export function releaseAdminProofCase() {
         frontendBaseUrl,
         game: readiness.generatedFrom.game,
         auditId: "local-release-readiness",
-        requiredChecks: readiness.localDevelopmentSpine.checks.map((check) => check.id),
+        requiredChecks: releaseReadinessVisibleCheckIds(readiness),
         requiredLocalPrerequisites: readiness.localDevelopmentSpine.checks
           .filter((check) => check.dependencyGated === true)
           .map((check) => check.id),
@@ -62,11 +62,13 @@ export function releaseAdminProofCase() {
       productionReady: false,
       scope: "local-dev-test-game-release-admin-surface",
       proofBoundary:
-        "Local SvelteKit admin role URL with fixture admin authority over the dev-test-game release-readiness checklist. Proves the local checklist is discoverable from the seeded admin overview and inspectable in a native admin audit detail route with local checks and remaining unproven release items visible; it does not prove hosted deployment, hosted identity, hosted operations, production backup/PITR, exhaustive race coverage, human release approval, beta readiness, or production readiness.",
+        "Local SvelteKit admin role URL with fixture admin authority over the dev-test-game release-readiness checklist. Proves the local checklist is discoverable from the seeded admin overview and inspectable in a native admin audit detail route with local checks, normalized evidence-object rows, and remaining unproven release items visible; it does not prove hosted deployment, hosted identity, hosted operations, production backup/PITR, exhaustive race coverage, human release approval, beta readiness, or production readiness.",
       generatedFrom: {
         releaseReadinessChecklist: readinessRelativePath,
         game: readiness.generatedFrom.game,
         localCheckIds: readiness.localDevelopmentSpine.checks.map((check) => check.id),
+        evidenceObjectRowIds:
+          releaseReadinessEvidenceObjectRowIds(readiness),
         localPrerequisiteIds: readiness.localDevelopmentSpine.checks
           .filter((check) => check.dependencyGated === true)
           .map((check) => check.id),
@@ -102,6 +104,14 @@ export function assertReleaseAdminProof(evidence) {
   for (const checkId of evidence.generatedFrom?.localCheckIds ?? requiredReleaseChecks) {
     if (!evidence.adminRoleSurface?.visibleChecks?.includes(checkId)) {
       throw new Error(`release admin proof missing visible check: ${checkId}`);
+    }
+  }
+  for (const evidenceObjectRowId of
+    evidence.generatedFrom?.evidenceObjectRowIds ?? []) {
+    if (!evidence.adminRoleSurface?.visibleChecks?.includes(evidenceObjectRowId)) {
+      throw new Error(
+        `release admin proof missing evidence object: ${evidenceObjectRowId}`,
+      );
     }
   }
   for (const prerequisiteId of
@@ -140,4 +150,27 @@ export function assertReleaseAdminProof(evidence) {
     }
   }
   return evidence;
+}
+
+function releaseReadinessVisibleCheckIds(readiness) {
+  return [
+    ...readiness.localDevelopmentSpine.checks.map((check) => check.id),
+    ...releaseReadinessEvidenceObjectRowIds(readiness),
+  ];
+}
+
+function releaseReadinessEvidenceObjectRowIds(readiness) {
+  return readiness.localDevelopmentSpine.checks.flatMap((check) =>
+    normalizedEvidenceObjectRowIds({
+      parentId: check.id,
+      objects: check.normalizedEvidenceObjects,
+    }),
+  );
+}
+
+function normalizedEvidenceObjectRowIds({ parentId, objects }) {
+  return (Array.isArray(objects) ? objects : [])
+    .map((object) => String(object?.name ?? ""))
+    .filter((name) => name !== "")
+    .map((name) => `evidence-object:${parentId}:${name}`);
 }

@@ -109,10 +109,7 @@ export function proofGraphAdminProofCase() {
         frontendBaseUrl,
         game: source.proofRun.session.game,
         auditId: localAdminAuditIds.proofGraph,
-        requiredChecks: [
-          ...source.proofGraph.nodes.map((node) => node.id),
-          ...source.proofGraph.edges.map((edge) => proofGraphEdgeCheckId(edge)),
-        ],
+        requiredChecks: proofGraphVisibleCheckIds(source.proofGraph),
         requiredRelatedLinks: source.proofGraph.nodes
           .filter(
             (node) =>
@@ -131,7 +128,7 @@ export function proofGraphAdminProofCase() {
       productionReady: false,
       scope: "local-dev-test-game-proof-graph-admin-surface",
       proofBoundary:
-        "Local SvelteKit admin role URL with fixture admin authority over the generated dev-test-game proof graph. Proves the machine-readable proof graph is discoverable from the seeded admin overview and inspectable in a native admin audit detail route; it does not prove hosted operations, beta readiness, release readiness, or production readiness.",
+        "Local SvelteKit admin role URL with fixture admin authority over the generated dev-test-game proof graph. Proves the machine-readable proof graph, recovery receipt evidence-object rows, and role handoffs are discoverable from the seeded admin overview and inspectable in a native admin audit detail route; it does not prove hosted operations, beta readiness, release readiness, or production readiness.",
       generatedFrom: {
         proofGraph: proofGraphRelativePath,
         proofRun: proofRunRelativePath,
@@ -140,6 +137,7 @@ export function proofGraphAdminProofCase() {
         hostedEvidenceLane: hostedEvidenceLaneRelativePath,
         game: source.proofRun.session.game,
         nodeIds: source.proofGraph.nodes.map((node) => node.id),
+        evidenceObjectRowIds: proofGraphEvidenceObjectRowIds(source.proofGraph),
         edgeRowIds: source.proofGraph.edges.map((edge) =>
           proofGraphEdgeCheckId(edge),
         ),
@@ -188,6 +186,14 @@ export function assertProofGraphAdminProof(evidence) {
       throw new Error(`proof graph admin proof missing visible edge: ${edgeRowId}`);
     }
   }
+  for (const evidenceObjectRowId of
+    evidence.generatedFrom?.evidenceObjectRowIds ?? []) {
+    if (!evidence.adminRoleSurface?.visibleChecks?.includes(evidenceObjectRowId)) {
+      throw new Error(
+        `proof graph admin proof missing evidence object: ${evidenceObjectRowId}`,
+      );
+    }
+  }
   const nodeIds = new Set(evidence.generatedFrom?.nodeIds ?? []);
   for (const surfaceId of evidence.generatedFrom?.adminProofSurfaceIds ?? []) {
     if (!nodeIds.has(`admin-proof:${surfaceId}`)) {
@@ -214,6 +220,30 @@ function proofGraphEdgeCheckId(edge) {
   return `edge:${String(edge?.from ?? "")}:${String(
     edge?.relationship ?? "related",
   )}:${String(edge?.to ?? "")}`;
+}
+
+function proofGraphVisibleCheckIds(proofGraph) {
+  return [
+    ...proofGraph.nodes.map((node) => node.id),
+    ...proofGraphEvidenceObjectRowIds(proofGraph),
+    ...proofGraph.edges.map((edge) => proofGraphEdgeCheckId(edge)),
+  ];
+}
+
+function proofGraphEvidenceObjectRowIds(proofGraph) {
+  return proofGraph.nodes.flatMap((node) =>
+    normalizedEvidenceObjectRowIds({
+      parentId: node.id,
+      objects: node.normalizedEvidenceObjects,
+    }),
+  );
+}
+
+function normalizedEvidenceObjectRowIds({ parentId, objects }) {
+  return (Array.isArray(objects) ? objects : [])
+    .map((object) => String(object?.name ?? ""))
+    .filter((name) => name !== "")
+    .map((name) => `evidence-object:${parentId}:${name}`);
 }
 
 function bootstrapProofGraphAdminRoleHandoffs({

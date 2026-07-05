@@ -364,6 +364,12 @@ import {
   privateChannelNormalizedEvidenceObjects,
   replacementPrivatePostNormalizedEvidenceObjects,
 } from "./dev_test_game_normalized_evidence_objects.mjs";
+import {
+  assertReleaseAdminProof,
+} from "./dev_test_game_release_admin_proof.mjs";
+import {
+  assertProofGraphAdminProof,
+} from "./dev_test_game_proof_graph_admin_proof.mjs";
 
 test("dev test-game args expose reset reuse naming and verification controls", () => {
   assert.deepEqual(
@@ -3541,6 +3547,50 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
         adminSpineProof,
       ),
     /proof graph admin surface count drifted/,
+  );
+});
+
+test("admin proof fixtures prove normalized evidence object rows", () => {
+  const releaseProof = assertReleaseAdminProof(releaseAdminProofFixture());
+  assert.deepEqual(
+    releaseProof.generatedFrom.evidenceObjectRowIds,
+    [
+      ...expectedNormalizedEvidenceObjectRowIds({
+        parentId: "local-private-channel-recovery-milestone",
+        objects: privateChannelNormalizedEvidenceObjects,
+      }),
+      ...expectedNormalizedEvidenceObjectRowIds({
+        parentId: "local-replacement-private-recovery-milestone",
+        objects: replacementPrivatePostNormalizedEvidenceObjects,
+      }),
+    ],
+  );
+  assert(
+    releaseProof.generatedFrom.evidenceObjectRowIds.every((rowId) =>
+      releaseProof.adminRoleSurface.visibleChecks.includes(rowId),
+    ),
+  );
+
+  const proofGraphProof = assertProofGraphAdminProof(
+    proofGraphAdminProofFixture(),
+  );
+  assert.deepEqual(
+    proofGraphProof.generatedFrom.evidenceObjectRowIds,
+    [
+      ...expectedNormalizedEvidenceObjectRowIds({
+        parentId: "private-channel-recovery-receipt",
+        objects: privateChannelNormalizedEvidenceObjects,
+      }),
+      ...expectedNormalizedEvidenceObjectRowIds({
+        parentId: "replacement-private-recovery-receipt",
+        objects: replacementPrivatePostNormalizedEvidenceObjects,
+      }),
+    ],
+  );
+  assert(
+    proofGraphProof.generatedFrom.evidenceObjectRowIds.every((rowId) =>
+      proofGraphProof.adminRoleSurface.visibleChecks.includes(rowId),
+    ),
   );
 });
 
@@ -12532,6 +12582,10 @@ function expectedPassedNormalizedEvidenceObjects(objects) {
   }));
 }
 
+function expectedNormalizedEvidenceObjectRowIds({ parentId, objects }) {
+  return objects.map((object) => `evidence-object:${parentId}:${object.name}`);
+}
+
 function staleConflictMessageMilestoneFixture() {
   return {
     status: "passed",
@@ -15696,6 +15750,16 @@ function backupAdminProofFixture() {
 }
 
 function releaseAdminProofFixture() {
+  const evidenceObjectRowIds = [
+    ...expectedNormalizedEvidenceObjectRowIds({
+      parentId: "local-private-channel-recovery-milestone",
+      objects: privateChannelNormalizedEvidenceObjects,
+    }),
+    ...expectedNormalizedEvidenceObjectRowIds({
+      parentId: "local-replacement-private-recovery-milestone",
+      objects: replacementPrivatePostNormalizedEvidenceObjects,
+    }),
+  ];
   return {
     version: 1,
     proof: "dev-test-game-release-admin-proof",
@@ -15712,6 +15776,8 @@ function releaseAdminProofFixture() {
         "local-core-loop-proof",
         "local-hardening-proof",
       ],
+      evidenceObjectRowIds,
+      localPrerequisiteIds: releaseAdminProofLocalPrerequisiteIds(),
       unprovenIds: [...releaseAdminProofFallbackUnprovenIds],
     },
     adminRoleSurface: {
@@ -15725,13 +15791,50 @@ function releaseAdminProofFixture() {
         "local-role-url-browser-proof",
         "local-core-loop-proof",
         "local-hardening-proof",
+        ...evidenceObjectRowIds,
       ],
+      visibleLocalPrerequisites: releaseAdminProofLocalPrerequisiteIds(),
+      visibleLocalPrerequisiteRoleUrls: Object.fromEntries(
+        releaseAdminProofLocalPrerequisiteIds().map((id) => [
+          id,
+          releaseAdminProofLocalPrerequisiteRoleUrl(id),
+        ]),
+      ),
+      visitedLocalPrerequisiteDestinations:
+        releaseAdminProofLocalPrerequisiteIds().map((id) => ({
+          id,
+          auditId: releaseAdminProofLocalPrerequisiteAuditId(id),
+          detailRoleUrl: releaseAdminProofLocalPrerequisiteRoleUrl(id),
+          clickedThrough: true,
+        })),
       visibleUnproven: [...releaseAdminProofFallbackUnprovenIds],
       rawInviteTokensVisible: false,
       releaseReady: false,
       productionReady: false,
     },
   };
+}
+
+function releaseAdminProofLocalPrerequisiteIds() {
+  return [
+    "local-proof-graph-admin-role-handoffs",
+    "local-proof-freshness-admin-surface",
+    "local-next-action-admin-surface",
+    "local-hosted-evidence-lane-demo-proof",
+  ];
+}
+
+function releaseAdminProofLocalPrerequisiteAuditId(id) {
+  return {
+    "local-proof-graph-admin-role-handoffs": "local-proof-graph",
+    "local-proof-freshness-admin-surface": "local-proof-freshness",
+    "local-next-action-admin-surface": "local-next-action",
+    "local-hosted-evidence-lane-demo-proof": "local-hosted-evidence-lane",
+  }[id];
+}
+
+function releaseAdminProofLocalPrerequisiteRoleUrl(id) {
+  return `/admin/audit/${releaseAdminProofLocalPrerequisiteAuditId(id)}?game=<seeded-game>`;
 }
 
 function releaseRunbookAdminProofFixture() {
@@ -15803,6 +15906,16 @@ function proofGraphAdminProofFixture() {
   const adminProofSurfaceIds = handoffs.map((handoff) =>
     handoff.linkId.replace("admin-proof:", ""),
   );
+  const evidenceObjectRowIds = [
+    ...expectedNormalizedEvidenceObjectRowIds({
+      parentId: "private-channel-recovery-receipt",
+      objects: privateChannelNormalizedEvidenceObjects,
+    }),
+    ...expectedNormalizedEvidenceObjectRowIds({
+      parentId: "replacement-private-recovery-receipt",
+      objects: replacementPrivatePostNormalizedEvidenceObjects,
+    }),
+  ];
   return {
     version: 1,
     proof: "dev-test-game-proof-graph-admin-proof",
@@ -15819,6 +15932,7 @@ function proofGraphAdminProofFixture() {
         "target/dev-test-game/hosted-concurrent-race-matrix.json",
       game: "00000000-0000-0000-0000-000000000001",
       nodeIds: handoffs.map((handoff) => handoff.linkId),
+      evidenceObjectRowIds,
       edgeCount: handoffs.length,
       adminProofSurfaceIds,
       adminProofRoleHandoffs: handoffs,
@@ -15830,7 +15944,10 @@ function proofGraphAdminProofFixture() {
       linkTestId: "admin-audit-link-local-proof-graph",
       surfaceTestId: "admin-audit-detail-surface",
       clickedThroughFromOverview: true,
-      visibleChecks: handoffs.map((handoff) => handoff.linkId),
+      visibleChecks: [
+        ...handoffs.map((handoff) => handoff.linkId),
+        ...evidenceObjectRowIds,
+      ],
       visibleRelatedLinks: handoffs.map((handoff) => handoff.linkId),
       visibleRelatedDestinations: handoffs.map((handoff) => ({
         linkId: handoff.linkId,
