@@ -3,6 +3,7 @@ import {
   hostDeadlineAdvanceRaceScenario,
   hostLifecycleRaceScenario,
   hostLifecycleControlScenario,
+  hostMixedAdvanceRaceScenario,
   hostModkillControlScenario,
   hostPublishRaceScenario,
   hostResolveRaceScenario,
@@ -13,6 +14,7 @@ export {
   hostDeadlineAdvanceRaceScenario,
   hostLifecycleRaceScenario,
   hostLifecycleControlScenario,
+  hostMixedAdvanceRaceScenario,
   hostModkillControlScenario,
   hostPublishRaceScenario,
   hostResolveRaceScenario,
@@ -33,6 +35,8 @@ export const coreLoopHostControlLaneIds = Object.freeze([
   "concurrent-host-advance-race-reload",
   "concurrent-host-deadline-advance-race",
   "concurrent-host-deadline-advance-race-reload",
+  "concurrent-host-mixed-advance-race",
+  "concurrent-host-mixed-advance-race-reload",
 ]);
 
 export function hostPhaseControlFeatureSpineRow({ cycleId }) {
@@ -58,6 +62,7 @@ export function coreLoopHostControlScenarioFamily() {
       hostResolveRace: hostResolveRaceScenario(),
       hostAdvanceRace: hostAdvanceRaceScenario(),
       hostDeadlineAdvanceRace: hostDeadlineAdvanceRaceScenario(),
+      hostMixedAdvanceRace: hostMixedAdvanceRaceScenario(),
     },
     proofRunLanes: {
       hostLifecycleControl: "host-lifecycle-control",
@@ -73,6 +78,8 @@ export function coreLoopHostControlScenarioFamily() {
       hostDeadlineAdvanceRace: "concurrent-host-deadline-advance-race",
       hostDeadlineAdvanceRaceReload:
         "concurrent-host-deadline-advance-race-reload",
+      hostMixedAdvanceRace: "concurrent-host-mixed-advance-race",
+      hostMixedAdvanceRaceReload: "concurrent-host-mixed-advance-race-reload",
     },
   };
 }

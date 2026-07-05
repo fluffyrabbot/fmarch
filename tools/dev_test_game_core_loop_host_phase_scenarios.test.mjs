@@ -8,6 +8,7 @@ import {
   assertHostLifecycleRaceSurfaceCase,
   assertHostNightActionTransitionSurfaceCase,
   assertHostLifecycleControlRoleSurfaceCase,
+  assertHostMixedAdvanceRaceSurfaceCase,
   assertHostModkillControlSurfaceCase,
   assertHostPhaseTransitionActionProofCase,
   assertHostPublishRaceSurfaceCase,
@@ -25,6 +26,7 @@ import {
   hostExtendDeadlineCommandFacts,
   hostLifecycleRaceScenario,
   hostLifecycleControlScenario,
+  hostMixedAdvanceRaceScenario,
   hostModkillControlScenario,
   hostPublishRaceScenario,
   hostResolveRaceScenario,
@@ -1289,6 +1291,66 @@ test("host deadline advance race assertion covers deadline convergence and reloa
         },
       }),
     /host deadline advance race surface/,
+  );
+});
+
+test("host mixed advance race assertion covers mixed advance convergence and reload lanes", () => {
+  const hostMixedAdvanceRaceSurface = {
+    status: "passed",
+    proofCheckId: "concurrent-host-mixed-advance-race",
+    reloadProofCheckId: "concurrent-host-mixed-advance-race-reload",
+    hostMixedAdvanceRace: {
+      id: "concurrent-host-mixed-advance-race",
+      label: "Concurrent host mixed advance commands converge",
+      status: "passed",
+      evidence: {
+        ackRaceRole: "deadline",
+        rejectRaceRole: "normal",
+        ackActionId: "advance_phase_by_deadline",
+        rejectActionId: "advance_phase",
+        game: "mixed-advance-race-game-a",
+        ackState: "ack",
+        rejectError: "InvalidTarget",
+        phaseAfterRace: "N01",
+      },
+    },
+    hostMixedAdvanceRaceReload: {
+      id: "concurrent-host-mixed-advance-race-reload",
+      label: "Concurrent host mixed advance race reloads open host projections",
+      status: "passed",
+      evidence: {
+        game: "mixed-advance-race-game-a",
+        normalRouteStatus: 200,
+        deadlineRouteStatus: 200,
+        normalPhase: { id: "N01", state: "open", locked: false },
+        deadlinePhase: { id: "N01", state: "open", locked: false },
+        apiPhase: "N01",
+        apiDeadline: null,
+      },
+    },
+  };
+
+  assert.doesNotThrow(() =>
+    assertHostMixedAdvanceRaceSurfaceCase({
+      hostMixedAdvanceRaceSurface,
+      scenario: hostMixedAdvanceRaceScenario(),
+    }),
+  );
+  assert.throws(
+    () =>
+      assertHostMixedAdvanceRaceSurfaceCase({
+        hostMixedAdvanceRaceSurface: {
+          ...hostMixedAdvanceRaceSurface,
+          hostMixedAdvanceRace: {
+            ...hostMixedAdvanceRaceSurface.hostMixedAdvanceRace,
+            evidence: {
+              ...hostMixedAdvanceRaceSurface.hostMixedAdvanceRace.evidence,
+              rejectActionId: "advance_phase_by_deadline",
+            },
+          },
+        },
+      }),
+    /host mixed advance race surface/,
   );
 });
 

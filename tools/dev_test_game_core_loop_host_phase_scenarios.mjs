@@ -21,6 +21,9 @@ const cloneHostAdvanceRaceScenario = (scenario) => ({
 const cloneHostDeadlineAdvanceRaceScenario = (scenario) => ({
   ...scenario,
 });
+const cloneHostMixedAdvanceRaceScenario = (scenario) => ({
+  ...scenario,
+});
 const clonePhaseStateCase = (phaseStateCase) => ({ ...phaseStateCase });
 const cloneTransitionProofCase = (transitionCase) => ({
   ...transitionCase,
@@ -636,6 +639,31 @@ export function hostDeadlineAdvanceRaceScenario() {
   );
 }
 
+const hostMixedAdvanceRaceScenarioDefinition = Object.freeze({
+  proofCheckId: "concurrent-host-mixed-advance-race",
+  reloadProofCheckId: "concurrent-host-mixed-advance-race-reload",
+  ackRaceRole: "deadline",
+  rejectRaceRole: "normal",
+  ackActionId: "advance_phase_by_deadline",
+  rejectActionId: "advance_phase",
+  ackState: "ack",
+  rejectError: "InvalidTarget",
+  phaseAfterRace: "N01",
+  normalRouteStatus: 200,
+  deadlineRouteStatus: 200,
+  phaseId: "N01",
+  phaseState: "open",
+  phaseLocked: false,
+  apiPhase: "N01",
+  apiDeadline: null,
+});
+
+export function hostMixedAdvanceRaceScenario() {
+  return cloneHostMixedAdvanceRaceScenario(
+    hostMixedAdvanceRaceScenarioDefinition,
+  );
+}
+
 export function assertHostLifecycleControlRoleSurfaceCase({
   hostRoleSurface,
   expectedGame,
@@ -1052,6 +1080,53 @@ export function assertHostDeadlineAdvanceRaceSurfaceCase({
       message:
         "core-loop admin proof missing host deadline advance race surface",
       evidence: hostDeadlineAdvanceRaceSurface,
+      includeEvidenceInError,
+    });
+  }
+}
+
+export function assertHostMixedAdvanceRaceSurfaceCase({
+  hostMixedAdvanceRaceSurface,
+  scenario = hostMixedAdvanceRaceScenarioDefinition,
+  includeEvidenceInError = false,
+}) {
+  const raceLane = hostMixedAdvanceRaceSurface?.hostMixedAdvanceRace;
+  const reloadLane = hostMixedAdvanceRaceSurface?.hostMixedAdvanceRaceReload;
+  const race = raceLane?.evidence;
+  const reload = reloadLane?.evidence;
+  if (
+    hostMixedAdvanceRaceSurface?.status !== "passed" ||
+    hostMixedAdvanceRaceSurface.proofCheckId !== scenario.proofCheckId ||
+    hostMixedAdvanceRaceSurface.reloadProofCheckId !==
+      scenario.reloadProofCheckId ||
+    raceLane?.id !== scenario.proofCheckId ||
+    raceLane?.status !== "passed" ||
+    race?.ackRaceRole !== scenario.ackRaceRole ||
+    race?.rejectRaceRole !== scenario.rejectRaceRole ||
+    race?.ackActionId !== scenario.ackActionId ||
+    race?.rejectActionId !== scenario.rejectActionId ||
+    typeof race?.game !== "string" ||
+    race.game.length === 0 ||
+    race?.ackState !== scenario.ackState ||
+    race?.rejectError !== scenario.rejectError ||
+    race?.phaseAfterRace !== scenario.phaseAfterRace ||
+    reloadLane?.id !== scenario.reloadProofCheckId ||
+    reloadLane?.status !== "passed" ||
+    reload?.game !== race.game ||
+    reload?.normalRouteStatus !== scenario.normalRouteStatus ||
+    reload?.deadlineRouteStatus !== scenario.deadlineRouteStatus ||
+    reload?.normalPhase?.id !== scenario.phaseId ||
+    reload?.normalPhase?.state !== scenario.phaseState ||
+    reload?.normalPhase?.locked !== scenario.phaseLocked ||
+    reload?.deadlinePhase?.id !== scenario.phaseId ||
+    reload?.deadlinePhase?.state !== scenario.phaseState ||
+    reload?.deadlinePhase?.locked !== scenario.phaseLocked ||
+    reload?.apiPhase !== scenario.apiPhase ||
+    reload?.apiDeadline !== scenario.apiDeadline
+  ) {
+    throwHostPhaseScenarioAssertionError({
+      message: "core-loop admin proof missing host mixed advance race surface",
+      evidence: hostMixedAdvanceRaceSurface,
       includeEvidenceInError,
     });
   }
