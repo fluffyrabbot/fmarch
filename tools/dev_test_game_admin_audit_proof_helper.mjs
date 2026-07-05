@@ -357,6 +357,7 @@ export async function proveAdminAuditDetail({
   requiredRelatedLinks = [],
   requiredRelatedDestinations = [],
   requiredUnprovenStatuses = {},
+  requiredText = [],
   forbiddenText = [],
 }) {
   const page = await browser.newPage({ viewport: { width: 1024, height: 768 } });
@@ -804,7 +805,12 @@ export async function proveAdminAuditDetail({
       prefix: "admin-audit-related-link",
       ids: requiredRelatedLinks,
     });
-    await assertAdminAuditBodyText({ page, auditId, forbiddenText });
+    await assertAdminAuditBodyText({
+      page,
+      auditId,
+      requiredText,
+      forbiddenText,
+    });
     const visitedLocalPrerequisiteDestinations =
       await visitLocalPrerequisiteDestinations({
         page,
@@ -980,6 +986,7 @@ export async function proveAdminAuditDetail({
       await assertAdminAuditBodyText({
         page,
         auditId: destinationAuditId,
+        requiredText: destination.requiredText ?? [],
         forbiddenText,
       });
       visibleRelatedDestinations.push({
@@ -1094,6 +1101,7 @@ export async function proveAdminAuditDetail({
       ...(Object.keys(visibleCheckStatuses).length === 0
         ? {}
         : { visibleCheckStatuses }),
+      ...(requiredText.length === 0 ? {} : { visibleRequiredText: requiredText }),
       ...(visibleLocalPrerequisites.length === 0
         ? {}
         : { visibleLocalPrerequisites }),
@@ -1409,10 +1417,22 @@ async function waitForHostedIdentityRoleSurfaceContractDiff({
   return { status: expectedStatus };
 }
 
-async function assertAdminAuditBodyText({ page, auditId, forbiddenText }) {
+async function assertAdminAuditBodyText({
+  page,
+  auditId,
+  requiredText = [],
+  forbiddenText,
+}) {
   const bodyText = await page.locator("body").innerText();
   if (/invite=(?!REDACTED)/.test(bodyText)) {
     throw new Error(`${auditId} admin surface leaked an invite URL token`);
+  }
+  for (const token of requiredText) {
+    if (!bodyText.includes(token)) {
+      throw new Error(
+        `${auditId} admin surface missing required text: ${token}`,
+      );
+    }
   }
   for (const token of forbiddenText) {
     if (bodyText.includes(token)) {

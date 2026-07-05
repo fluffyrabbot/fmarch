@@ -707,6 +707,15 @@ export function normalizeLocalHostedTargetPreflightAudit(
       rawEvidenceStatus: String(
         hostedTargetPreflight.target?.rawEvidenceStatus ?? "unknown",
       ),
+      rawCaptureStatus: String(
+        hostedTargetPreflight.target?.rawCaptureStatus ?? "unknown",
+      ),
+      rawCapturePath: String(hostedTargetPreflight.target?.rawCapturePath ?? ""),
+      rawCaptureBlockedCheckIds: Object.freeze(
+        (hostedTargetPreflight.target?.rawCaptureBlockedCheckIds ?? []).map(
+          (id) => String(id),
+        ),
+      ),
       nextCommand: String(hostedTargetPreflight.nextCommand ?? ""),
       nextProofTarget: String(hostedTargetPreflight.nextProofTarget ?? ""),
       releaseReady: hostedTargetPreflight.releaseReady === true,

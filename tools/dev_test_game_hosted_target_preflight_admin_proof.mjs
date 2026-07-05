@@ -28,29 +28,31 @@ import {
   devTestGameProofRunPath,
 } from "./dev_test_game_spine_artifact_paths.mjs";
 
-const preflightPath = path.resolve(
-  repoRoot,
-  process.env.FMARCH_DEV_TEST_GAME_HOSTED_TARGET_PREFLIGHT ??
-    devTestGameHostedTargetPreflightPath,
-);
 const proofRunPath = path.resolve(
   repoRoot,
   process.env.FMARCH_DEV_TEST_GAME_PROOF_RUN ??
     devTestGameProofRunPath,
 );
-const preflightRelativePath = path.relative(repoRoot, preflightPath);
 const proofRunRelativePath = path.relative(repoRoot, proofRunPath);
-const evidencePath = path.join(
-  repoRoot,
-  devTestGameHostedTargetPreflightAdminProofPath,
-);
 const requiredChecks = hostedTargetPreflightCheckIds;
 const requiredRelatedLinks = [
   "local-hosted-concurrent-race-matrix",
   "local-next-action",
 ];
 
-export function hostedTargetPreflightAdminProofCase() {
+export function hostedTargetPreflightAdminProofCase({
+  preflightPath = path.resolve(
+    repoRoot,
+    process.env.FMARCH_DEV_TEST_GAME_HOSTED_TARGET_PREFLIGHT ??
+      devTestGameHostedTargetPreflightPath,
+  ),
+  evidencePath = path.join(
+    repoRoot,
+    devTestGameHostedTargetPreflightAdminProofPath,
+  ),
+  requiredText = [],
+} = {}) {
+  const preflightRelativePath = path.relative(repoRoot, preflightPath);
   return {
     smokeName: "dev-test-game-hosted-target-preflight-admin-proof",
     stage: "hosted-target-preflight-admin-proof-listen",
@@ -101,6 +103,7 @@ export function hostedTargetPreflightAdminProofCase() {
         }),
         requiredHostedHandoffBlockedReceipt:
           source.preflight.hostedHandoffChecklist?.blockedReceipt ?? null,
+        requiredText,
         requiredHostedHandoffInputSections: hostedHandoffInputSections.map(
           (section) => section.id,
         ),
@@ -122,7 +125,7 @@ export function hostedTargetPreflightAdminProofCase() {
       productionReady: false,
       scope: "local-dev-test-game-hosted-target-preflight-admin-surface",
       proofBoundary:
-        "Local SvelteKit admin role URL with fixture admin authority over the hosted target preflight handoff. Proves configured, blocked, and release-boundary checks are discoverable from the seeded admin overview and inspectable in a native admin audit detail route; it does not prove hosted deployment, hosted telemetry, beta readiness, release readiness, or production readiness.",
+        "Local SvelteKit admin role URL with fixture admin authority over the hosted target preflight handoff. Proves configured, blocked or passed, and release-boundary checks are discoverable from the seeded admin overview and inspectable in a native admin audit detail route; it does not prove hosted deployment, hosted telemetry, beta readiness, release readiness, or production readiness.",
       generatedFrom: {
         hostedTargetPreflight: preflightRelativePath,
         proofRun: proofRunRelativePath,
@@ -173,6 +176,9 @@ export function hostedTargetPreflightAdminProofCase() {
               hostedHandoffBlockedReceipt:
                 source.preflight.hostedHandoffChecklist.blockedReceipt,
             }),
+        ...(requiredText.length === 0
+          ? {}
+          : { requiredText: [...requiredText] }),
         relatedAuditIds: requiredRelatedLinks,
       },
       adminRoleSurface,
@@ -311,6 +317,13 @@ export function assertHostedTargetPreflightAdminProof(evidence) {
           `hosted target preflight admin proof missing blocked receipt input: ${input}`,
         );
       }
+    }
+  }
+  for (const token of evidence.generatedFrom?.requiredText ?? []) {
+    if (!evidence.adminRoleSurface?.visibleRequiredText?.includes(token)) {
+      throw new Error(
+        `hosted target preflight admin proof missing required text token: ${token}`,
+      );
     }
   }
   assertVisibleAdminRoleSurfaceRows({

@@ -21,6 +21,8 @@ export {
   hostedTargetPreflightMissingFrontendUrlRequiredEvidence,
   hostedTargetPreflightMissingRawEvidencePathRequiredEvidence,
   hostedTargetPreflightRawCaptureRequiredEvidence,
+  devTestGameHostedTargetPreflightRealCaptureAdminProofPath,
+  devTestGameHostedTargetPreflightRealCaptureProofSourcePath,
   hostedTargetPreflightSyntheticRawEvidenceRequiredEvidence,
 } from "./dev_test_game_hosted_target_preflight_cases.mjs";
 import {

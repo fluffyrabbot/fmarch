@@ -4,6 +4,10 @@ import {
 
 export const devTestGameHostedTargetPreflightAdminProofPath =
   "target/dev-test-game/hosted-target-preflight-admin-proof.json";
+export const devTestGameHostedTargetPreflightRealCaptureAdminProofPath =
+  "target/dev-test-game/hosted-target-preflight-real-capture-admin-proof.json";
+export const devTestGameHostedTargetPreflightRealCaptureProofSourcePath =
+  "target/dev-test-game/hosted-target-preflight-real-capture-source.json";
 
 export const hostedTargetPreflightBlockingCheckIds = Object.freeze([
   "hosted-frontend-url-configured",

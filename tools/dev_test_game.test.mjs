@@ -816,6 +816,12 @@ test("dev test-game spine orchestrators expose stable proof order and env maps",
     "node tools/dev_test_game_hosted_evidence_lane_operator_fixture_admin_proof.mjs",
   );
   assert.equal(
+    packageJson.scripts[
+      "test:dev-test-game-hosted-target-preflight-real-capture-admin-proof"
+    ],
+    "node tools/dev_test_game_hosted_target_preflight_real_capture_admin_proof.mjs",
+  );
+  assert.equal(
     packageJson.scripts["test:dev-test-game-next-action:hosted-identity"],
     "FMARCH_DEV_TEST_GAME_SEQUENCE_STAGE=hosted-identity npm run test:dev-test-game-next-action",
   );
