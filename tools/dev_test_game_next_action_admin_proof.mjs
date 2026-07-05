@@ -42,6 +42,11 @@ import {
   devTestGameProofGraphPath,
 } from "./dev_test_game_proof_graph_paths.mjs";
 import {
+  assertProofStabilityTrace,
+  cleanProofStabilityTrace,
+  proofStabilityTraceCheckIds,
+} from "./dev_test_game_proof_stability_trace.mjs";
+import {
   assertProofGraphDestinationSummaryTraceVisibleChecks,
   buildProofGraphDestinationSummaryTrace,
   normalizeProofGraphDestinationSummaryTrace,
@@ -502,21 +507,6 @@ export function proofGraphDestinationSummaryDriftNextActionFixture(nextAction) {
   });
 }
 
-function cleanProofStabilityTrace(stabilityTrace = {}) {
-  return {
-    strategy: "proof-stability-before-readiness",
-    status: "clean",
-    hostConfirmClicks: Number(stabilityTrace.hostConfirmClicks ?? 0),
-    retryClickCount: 0,
-    domFallbackCount: 0,
-    forceFallbackCount: 0,
-    failureCount: 0,
-    maxAttempts: Number(stabilityTrace.maxAttempts ?? 0),
-    eventCount: 0,
-    selected: false,
-  };
-}
-
 export function assertNextActionAdminProof(evidence) {
   if (
     evidence?.version !== 1 ||
@@ -589,14 +579,9 @@ export function assertNextActionAdminProof(evidence) {
       "next-action admin proof is missing local readiness dependency trace evidence",
     );
   }
-  if (
-    evidence.generatedFrom?.stabilityTrace?.strategy !==
-      "proof-stability-before-readiness" ||
-    !["clean", "drifted"].includes(evidence.generatedFrom.stabilityTrace.status) ||
-    typeof evidence.generatedFrom.stabilityTrace.selected !== "boolean"
-  ) {
-    throw new Error("next-action admin proof is missing stability trace evidence");
-  }
+  assertProofStabilityTrace(evidence.generatedFrom?.stabilityTrace, {
+    label: "next-action admin proof stability trace",
+  });
   assertSeedProofLaneCoverageTraceVisibleChecks(
     evidence.generatedFrom?.seedProofLaneCoverageTrace,
     evidence.adminRoleSurface?.visibleChecks,
@@ -1105,9 +1090,7 @@ function requiredChecksForNextAction(nextAction) {
       checks.push("selected-production-feature-graph-coverage-decision");
     }
   }
-  if (nextAction.nextAction.stability?.source !== undefined) {
-    checks.push("proof-stability-drift");
-  }
+  checks.push(...proofStabilityTraceCheckIds(nextAction.stabilityTrace));
   if (nextAction.nextAction.seedProofLaneCoverage?.source !== undefined) {
     checks.push("seed-proof-lane-coverage");
   }
@@ -1542,9 +1525,7 @@ function requiredChecksForEvidence(evidence) {
               ]),
         ]
       : []),
-    ...(evidence.generatedFrom?.stabilityStatus === "drifted"
-      ? ["proof-stability-drift"]
-      : []),
+    ...proofStabilityTraceCheckIds(evidence.generatedFrom?.stabilityTrace),
     ...(typeof evidence.generatedFrom?.seedProofLaneCoverageSource === "string"
       ? ["seed-proof-lane-coverage"]
       : []),

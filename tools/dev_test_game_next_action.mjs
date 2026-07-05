@@ -88,6 +88,11 @@ import {
   buildProofGraphDiagnosticSummaryTrace,
 } from "./dev_test_game_proof_graph_diagnostic_summary.mjs";
 import {
+  assertProofStabilityTrace,
+  buildProofStabilityTrace,
+  proofStabilityDriftFromOpsArtifacts,
+} from "./dev_test_game_proof_stability_trace.mjs";
+import {
   assertSeedProofLaneCoverageTrace,
   buildSeedProofLaneCoverageTrace,
   seedProofLaneCoverageDriftFromReadiness,
@@ -714,7 +719,10 @@ export function assertDevTestGameNextAction(evidence) {
     }
   }
   assertSelectionTrace(evidence.selectionTrace, evidence.nextAction);
-  assertProofStabilityTrace(evidence.stabilityTrace, evidence.nextAction);
+  assertProofStabilityTrace(evidence.stabilityTrace, {
+    label: "next-action stability trace",
+    nextActionReason: evidence.nextAction.reason,
+  });
   assertProofGraphDestinationSummaryTrace(
     evidence.proofGraphDestinationSummaryTrace,
     {
@@ -1221,48 +1229,6 @@ function buildReleaseReadinessTrace(candidates) {
         ? {}
         : { hostedHandoffChecklist: candidate.hostedHandoffChecklist }),
     })),
-  };
-}
-
-function proofStabilityDriftFromOpsArtifacts(ops) {
-  const hostConfirmClicks = ops?.proofStability?.hostConfirmClicks ?? {};
-  const retryClickCount = numberOrZero(hostConfirmClicks.retryClickCount);
-  const domFallbackCount = numberOrZero(hostConfirmClicks.domFallbackCount);
-  const forceFallbackCount = numberOrZero(hostConfirmClicks.forceFallbackCount);
-  const failureCount = numberOrZero(hostConfirmClicks.failureCount);
-  const events = Array.isArray(hostConfirmClicks.events) ? hostConfirmClicks.events : [];
-  return {
-    status:
-      retryClickCount + domFallbackCount + forceFallbackCount + failureCount > 0
-        ? "drifted"
-        : "clean",
-    hostConfirmClicks: numberOrZero(hostConfirmClicks.total),
-    retryClickCount,
-    domFallbackCount,
-    forceFallbackCount,
-    failureCount,
-    maxAttempts: numberOrZero(hostConfirmClicks.maxAttempts),
-    events: events.map((event) => ({
-      actionId: String(event.actionId ?? "unknown"),
-      roleLabel: String(event.roleLabel ?? "unknown"),
-      method: String(event.method ?? "unknown"),
-      attempts: numberOrZero(event.attempts),
-    })),
-  };
-}
-
-function buildProofStabilityTrace(stabilityDrift) {
-  return {
-    strategy: "proof-stability-before-readiness",
-    status: stabilityDrift.status,
-    hostConfirmClicks: stabilityDrift.hostConfirmClicks,
-    retryClickCount: stabilityDrift.retryClickCount,
-    domFallbackCount: stabilityDrift.domFallbackCount,
-    forceFallbackCount: stabilityDrift.forceFallbackCount,
-    failureCount: stabilityDrift.failureCount,
-    maxAttempts: stabilityDrift.maxAttempts,
-    eventCount: stabilityDrift.events.length,
-    selected: stabilityDrift.status === "drifted",
   };
 }
 
@@ -1996,28 +1962,6 @@ function assertLocalReadinessDependencyTrace(localReadinessDependencyTrace, next
         `next-action local readiness trace has duplicate selection: ${candidate.id}`,
       );
     }
-  }
-}
-
-function assertProofStabilityTrace(stabilityTrace, nextAction) {
-  if (
-    stabilityTrace?.strategy !== "proof-stability-before-readiness" ||
-    !["clean", "drifted"].includes(stabilityTrace.status) ||
-    typeof stabilityTrace.selected !== "boolean"
-  ) {
-    throw new Error("next-action stability trace is missing or malformed");
-  }
-  if (
-    nextAction.reason === "harness-stability-drift" &&
-    (stabilityTrace.status !== "drifted" || stabilityTrace.selected !== true)
-  ) {
-    throw new Error("next-action stability trace does not match selected drift");
-  }
-  if (
-    nextAction.reason !== "harness-stability-drift" &&
-    stabilityTrace.selected === true
-  ) {
-    throw new Error("next-action stability trace selected without drift action");
   }
 }
 

@@ -56,6 +56,10 @@ import {
   normalizeProofGraphReceiptArtifactRows,
 } from "../../../../tools/dev_test_game_proof_graph_receipt_artifact_rows.mjs";
 import {
+  normalizeProofStabilityTrace,
+  proofStabilityTraceCheckRows,
+} from "../../../../tools/dev_test_game_proof_stability_trace.mjs";
+import {
   normalizeProofGraphDestinationSummaryTrace,
   proofGraphDestinationSummaryTraceCheckRows,
 } from "../../../../tools/dev_test_game_proof_graph_destination_summary_trace.mjs";
@@ -2280,7 +2284,7 @@ export function normalizeLocalNextActionAudit(nextAction, { game, proofGraph = n
   const hostStaleControlTrace = normalizeNextActionHostStaleControlTrace(
     nextAction.hostStaleControlTrace,
   );
-  const stabilityTrace = normalizeNextActionStabilityTrace(nextAction.stabilityTrace);
+  const stabilityTrace = normalizeProofStabilityTrace(nextAction.stabilityTrace);
   const seedProofLaneCoverageTrace =
     normalizeSeedProofLaneCoverageTrace(
       nextAction.seedProofLaneCoverageTrace,
@@ -2417,18 +2421,7 @@ export function normalizeLocalNextActionAudit(nextAction, { game, proofGraph = n
             status: `${replacementPrivateRecoveryGraph.status}:${replacementPrivateRecoveryGraph.laneCount} lanes`,
           }),
         ]),
-    ...(stability === null
-      ? []
-      : [
-          Object.freeze({
-            id: "proof-stability-drift",
-            status: `${Number(stability.retryClickCount ?? 0)} retries, ${Number(
-              stability.domFallbackCount ?? 0,
-            )} DOM fallbacks, ${Number(
-              stability.forceFallbackCount ?? 0,
-            )} force fallbacks`,
-          }),
-        ]),
+    ...proofStabilityTraceCheckRows(stabilityTrace),
     ...normalizeLocalNextActionSeedProofLaneCoverageCheckRows({
       seedProofLaneCoverage,
     }),
@@ -3801,39 +3794,6 @@ function normalizeHostedHandoffInputSections(sections) {
       }),
     ),
   );
-}
-
-function normalizeNextActionStabilityTrace(stabilityTrace) {
-  if (
-    stabilityTrace === null ||
-    typeof stabilityTrace !== "object" ||
-    stabilityTrace.strategy !== "proof-stability-before-readiness"
-  ) {
-    return Object.freeze({
-      strategy: "unknown",
-      status: "unknown",
-      selected: false,
-      hostConfirmClicks: 0,
-      retryClickCount: 0,
-      domFallbackCount: 0,
-      forceFallbackCount: 0,
-      failureCount: 0,
-      maxAttempts: 0,
-      eventCount: 0,
-    });
-  }
-  return Object.freeze({
-    strategy: stabilityTrace.strategy,
-    status: String(stabilityTrace.status ?? "unknown"),
-    selected: stabilityTrace.selected === true,
-    hostConfirmClicks: Number(stabilityTrace.hostConfirmClicks ?? 0),
-    retryClickCount: Number(stabilityTrace.retryClickCount ?? 0),
-    domFallbackCount: Number(stabilityTrace.domFallbackCount ?? 0),
-    forceFallbackCount: Number(stabilityTrace.forceFallbackCount ?? 0),
-    failureCount: Number(stabilityTrace.failureCount ?? 0),
-    maxAttempts: Number(stabilityTrace.maxAttempts ?? 0),
-    eventCount: Number(stabilityTrace.eventCount ?? 0),
-  });
 }
 
 function seededRoleUrlToAdminHref(roleUrl, { game }) {

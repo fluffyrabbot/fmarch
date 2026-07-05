@@ -157,6 +157,10 @@ import {
   proofGraphDestinationSummaryTraceCheckIds,
 } from "../../../../tools/dev_test_game_proof_graph_destination_summary_trace.mjs";
 import {
+  buildProofStabilityTrace,
+  proofStabilityTraceCheckRows,
+} from "../../../../tools/dev_test_game_proof_stability_trace.mjs";
+import {
   buildProofGraphDiagnosticProofSummary,
   buildProofGraphDiagnosticSummaryTrace,
   proofGraphDiagnosticSummaryCheckIds,
@@ -2337,18 +2341,16 @@ test("admin route data exposes local next action as a native audit row", async (
     stabilitySource: "",
     stabilityBuildSlice: "",
     stabilityProofTarget: "",
-    stabilityTrace: {
-      strategy: "proof-stability-before-readiness",
+    stabilityTrace: buildProofStabilityTrace({
       status: "clean",
-      selected: false,
       hostConfirmClicks: 55,
       retryClickCount: 0,
       domFallbackCount: 0,
       forceFallbackCount: 0,
       failureCount: 0,
       maxAttempts: 1,
-      eventCount: 0,
-    },
+      events: [],
+    }),
     seedProofLaneCoverageTrace: seedProofLaneCoverageTraceFixture(),
     proofGraphDiagnosticSummaryStatus: "recorded",
     proofGraphDiagnosticCount: 1,
@@ -2997,6 +2999,20 @@ test("admin local next action detail data exposes hosted identity sequence defer
 });
 
 test("admin local next action detail data carries harness stability drift rows", async () => {
+  const stability = {
+    source: "target/dev-test-game/ops-artifacts.json",
+    hostConfirmClicks: 55,
+    retryClickCount: 1,
+    domFallbackCount: 1,
+    forceFallbackCount: 0,
+    failureCount: 0,
+    maxAttempts: 3,
+    eventCount: 2,
+    buildSlice:
+      "Stabilize the critical host-confirm browser interaction before expanding the production-facing seeded proof spine.",
+    proofTarget: "target/dev-test-game/session.json",
+  };
+  const stabilityTrace = stabilityTraceFixture({ stability });
   const data = await buildAdminAuditDetailData({
     audit: localAdminAuditIds.nextAction,
     principalUserId: "admin_a",
@@ -3007,19 +3023,8 @@ test("admin local next action detail data carries harness stability drift rows",
       command: LOCAL_RACE_COMMAND,
       unproven: undefined,
       releaseReadinessTrace: releaseReadinessTraceFixture({ unproven: undefined }),
-      stability: {
-        source: "target/dev-test-game/ops-artifacts.json",
-        hostConfirmClicks: 55,
-        retryClickCount: 1,
-        domFallbackCount: 1,
-        forceFallbackCount: 0,
-        failureCount: 0,
-        maxAttempts: 3,
-        eventCount: 2,
-        buildSlice:
-          "Stabilize the critical host-confirm browser interaction before expanding the production-facing seeded proof spine.",
-        proofTarget: "target/dev-test-game/session.json",
-      },
+      stability,
+      stabilityTrace,
     }),
   });
 
@@ -3030,7 +3035,10 @@ test("admin local next action detail data carries harness stability drift rows",
     [
       ["next-command", "available"],
       ["harness-stability-drift", "blocked"],
-      ["proof-stability-drift", "1 retries, 1 DOM fallbacks, 0 force fallbacks"],
+      ...proofStabilityTraceCheckRows(stabilityTrace).map((check) => [
+        check.id,
+        check.status,
+      ]),
       ["selection-trace", "0 candidates"],
       ...normalizeLocalNextActionSeedProofLaneCoverageTraceCheckRows({
         seedProofLaneCoverageTrace: seedProofLaneCoverageTraceFixture(),
@@ -3050,18 +3058,7 @@ test("admin local next action detail data carries harness stability drift rows",
       ...hostStaleControlCheckRows(),
     ],
   );
-  assert.deepEqual(data.audit.artifactSummary.stabilityTrace, {
-    strategy: "proof-stability-before-readiness",
-    status: "drifted",
-    selected: true,
-    hostConfirmClicks: 55,
-    retryClickCount: 1,
-    domFallbackCount: 1,
-    forceFallbackCount: 0,
-    failureCount: 0,
-    maxAttempts: 3,
-    eventCount: 2,
-  });
+  assert.deepEqual(data.audit.artifactSummary.stabilityTrace, stabilityTrace);
   assert.equal(
     data.audit.artifactSummary.stabilityBuildSlice,
     "Stabilize the critical host-confirm browser interaction before expanding the production-facing seeded proof spine.",
@@ -7032,8 +7029,7 @@ function localReadinessDependencyTraceFixture({ localCheck, command } = {}) {
 }
 
 function stabilityTraceFixture({ stability }) {
-  return {
-    strategy: "proof-stability-before-readiness",
+  return buildProofStabilityTrace({
     status: stability === undefined ? "clean" : "drifted",
     hostConfirmClicks: Number(stability?.hostConfirmClicks ?? 55),
     retryClickCount: Number(stability?.retryClickCount ?? 0),
@@ -7041,9 +7037,10 @@ function stabilityTraceFixture({ stability }) {
     forceFallbackCount: Number(stability?.forceFallbackCount ?? 0),
     failureCount: Number(stability?.failureCount ?? 0),
     maxAttempts: Number(stability?.maxAttempts ?? 1),
-    eventCount: Number(stability?.eventCount ?? 0),
-    selected: stability !== undefined,
-  };
+    events: Array.from({
+      length: Number(stability?.eventCount ?? 0),
+    }),
+  });
 }
 
 function seedProofLaneCoverageTraceFixture({ seedProofLaneCoverage } = {}) {

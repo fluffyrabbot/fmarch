@@ -489,6 +489,9 @@ import {
   buildProofGraphDestinationSummaryTrace,
 } from "./dev_test_game_proof_graph_destination_summary_trace.mjs";
 import {
+  buildProofStabilityTrace,
+} from "./dev_test_game_proof_stability_trace.mjs";
+import {
   buildProofGraphDiagnosticProofSummary,
   buildProofGraphDiagnosticSummaryTrace,
   proofGraphDiagnosticSummaryCheckIds,
@@ -2679,8 +2682,7 @@ test("dev test-game next-action derives one local recovery command from the mani
     selectedArtifactId: null,
     candidates: [],
   });
-  assert.deepEqual(freshAction.stabilityTrace, {
-    strategy: "proof-stability-before-readiness",
+  assert.deepEqual(freshAction.stabilityTrace, buildProofStabilityTrace({
     status: "clean",
     hostConfirmClicks: 55,
     retryClickCount: 0,
@@ -2688,9 +2690,8 @@ test("dev test-game next-action derives one local recovery command from the mani
     forceFallbackCount: 0,
     failureCount: 0,
     maxAttempts: 1,
-    eventCount: 0,
-    selected: false,
-  });
+    events: [],
+  }));
   assert.deepEqual(
     freshAction.proofGraphDiagnosticSummaryTrace,
     buildProofGraphDiagnosticSummaryTrace(null),
@@ -3985,8 +3986,7 @@ test("dev test-game next-action blocks readiness work on saved harness stability
       proofTarget: "target/dev-test-game/session.json",
     },
   });
-  assert.deepEqual(action.stabilityTrace, {
-    strategy: "proof-stability-before-readiness",
+  assert.deepEqual(action.stabilityTrace, buildProofStabilityTrace({
     status: "drifted",
     hostConfirmClicks: 55,
     retryClickCount: 1,
@@ -3994,9 +3994,8 @@ test("dev test-game next-action blocks readiness work on saved harness stability
     forceFallbackCount: 0,
     failureCount: 0,
     maxAttempts: 3,
-    eventCount: 2,
-    selected: true,
-  });
+    events: [{}, {}],
+  }));
   assert.equal(
     action.releaseReadinessTrace.selectedUnprovenId,
     "hosted-concurrent-race-matrix",
