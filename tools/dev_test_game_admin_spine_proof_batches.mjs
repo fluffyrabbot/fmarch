@@ -1,4 +1,7 @@
 import {
+  defineAdminProofBatchRegistry,
+} from "./dev_test_game_admin_proof_batch_registry.mjs";
+import {
   devTestGameHostedConcurrentRaceMatrixAdminProofPath,
 } from "./dev_test_game_hosted_concurrent_race_matrix_cases.mjs";
 import {
@@ -69,7 +72,7 @@ export const adminSpineProofArtifactPathById = Object.freeze({
   "spine-manifest": devTestGameSpineManifestAdminProofPath,
 });
 
-export const adminSpineProofBatchRegistry = Object.freeze(
+export const adminSpineProofBatchRegistry = defineAdminProofBatchRegistry(
   [
     {
       label: aggregatePreReleaseAdminProofBatchLabel,
@@ -101,15 +104,8 @@ export const adminSpineProofBatchRegistry = Object.freeze(
         "spine-manifest",
       ],
     },
-  ].map((batch) =>
-    Object.freeze({
-      ...batch,
-      proofIds: Object.freeze(batch.proofIds),
-      artifactPaths: Object.freeze(
-        batch.proofIds.map(adminSpineProofArtifactPathForId),
-      ),
-    }),
-  ),
+  ],
+  { artifactPathForProofId: adminSpineProofArtifactPathForId },
 );
 
 export const adminSpineProofIds = Object.freeze(

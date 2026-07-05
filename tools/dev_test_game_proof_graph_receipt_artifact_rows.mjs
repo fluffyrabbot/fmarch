@@ -4,6 +4,9 @@ import {
   nextActionAdminProofPath,
   proofFreshnessAdminProofPath,
 } from "./dev_test_game_spine_artifact_paths.mjs";
+import {
+  defineAdminProofBatchRegistry,
+} from "./dev_test_game_admin_proof_batch_registry.mjs";
 
 export const proofGraphTerminalReceiptParentId =
   "admin-spine-terminal-batches";
@@ -72,7 +75,7 @@ export const terminalProofGraphReceiptRegistry = Object.freeze([
   }),
 ]);
 
-export const terminalProofGraphReceiptBatchRegistry = Object.freeze(
+export const terminalProofGraphReceiptBatchRegistry = defineAdminProofBatchRegistry(
   [
     {
       label: terminalAdminProofBatchLabel,
@@ -93,18 +96,16 @@ export const terminalProofGraphReceiptBatchRegistry = Object.freeze(
     const receipts = terminalProofGraphReceiptRegistry.filter(
       (entry) => entry.batchLabel === batch.label,
     );
-    return Object.freeze({
+    return {
       label: batch.label,
       script: batch.script,
       reason: batch.reason,
-      proofIds: Object.freeze(receipts.map((entry) => entry.proofId)),
-      artifactPaths: Object.freeze(
-        receipts.map((entry) => entry.artifactPath),
-      ),
+      proofIds: receipts.map((entry) => entry.proofId),
+      artifactPaths: receipts.map((entry) => entry.artifactPath),
       receiptArtifacts: Object.freeze(
         receipts.map((entry) => receiptArtifactFromRegistryEntry(entry)),
       ),
-    });
+    };
   }),
 );
 

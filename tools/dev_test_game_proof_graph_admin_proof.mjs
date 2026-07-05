@@ -220,7 +220,9 @@ export function assertProofGraphAdminProof(evidence) {
     proofName: "proof graph admin proof",
     rowName: "receipt artifact",
   });
-  assertHostedIdentityTerminalReceiptArtifact(evidence);
+  if (proofGraphIncludesTerminalBatchReceipts(evidence)) {
+    assertHostedIdentityTerminalReceiptArtifact(evidence);
+  }
   const nodeIds = new Set(evidence.generatedFrom?.nodeIds ?? []);
   for (const surfaceId of evidence.generatedFrom?.adminProofSurfaceIds ?? []) {
     if (!nodeIds.has(`admin-proof:${surfaceId}`)) {
@@ -385,6 +387,12 @@ function assertHostedIdentityTerminalReceiptArtifact(evidence) {
       "proof graph admin proof did not inspect hosted identity terminal receipt row",
     );
   }
+}
+
+function proofGraphIncludesTerminalBatchReceipts(evidence) {
+  return (evidence.generatedFrom?.nodeIds ?? []).includes(
+    proofGraphTerminalReceiptParentId,
+  );
 }
 
 function proofGraphAdminFeatureTargetEntries(proofGraph) {

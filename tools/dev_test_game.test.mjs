@@ -21,6 +21,7 @@ import {
   recoveryReceiptReleaseReadinessValidators,
   validateDevTestGameAdminSpineProof,
   validateDevTestGameAdminSpineTerminalBatches,
+  validateDevTestGameProofGraphAdminProof,
   validateDevTestGameHostSetupProof,
 } from "./dev_test_game_release_readiness.mjs";
 import {
@@ -443,6 +444,11 @@ import {
 import {
   adminSpineProofBatchRegistry,
 } from "./dev_test_game_admin_spine_proof_batches.mjs";
+import {
+  adminProofBatchIdFromLabel,
+  adminProofBatchStatusText,
+  defineAdminProofBatchRegistry,
+} from "./dev_test_game_admin_proof_batch_registry.mjs";
 import {
   assertAdminRoleSurfaceStatusText,
   assertVisibleAdminRoleSurfaceRows,
@@ -4701,6 +4707,91 @@ test("proof graph receipt artifact rows share one browser row id contract", () =
   );
 });
 
+test("admin proof batch registries share validation and status helpers", () => {
+  const registry = defineAdminProofBatchRegistry(
+    [
+      {
+        label: "Example admin proof batch",
+        script: "example-admin-proof-batch",
+        reason: "example admin proofs share fixture inputs",
+        proofIds: ["alpha", "beta"],
+      },
+    ],
+    {
+      artifactPathForProofId: (proofId) =>
+        `target/dev-test-game/${proofId}-admin-proof.json`,
+    },
+  );
+  assert.deepEqual(registry, [
+    {
+      label: "Example admin proof batch",
+      script: "example-admin-proof-batch",
+      reason: "example admin proofs share fixture inputs",
+      proofIds: ["alpha", "beta"],
+      artifactPaths: [
+        "target/dev-test-game/alpha-admin-proof.json",
+        "target/dev-test-game/beta-admin-proof.json",
+      ],
+    },
+  ]);
+  assert.equal(
+    adminProofBatchIdFromLabel("Example admin proof batch"),
+    "example-admin-proof-batch",
+  );
+  assert.equal(
+    adminProofBatchStatusText(registry[0]),
+    "Example admin proof batch passed 2 cases shared frontend shared chromium",
+  );
+  assert.throws(
+    () =>
+      defineAdminProofBatchRegistry([
+        {
+          label: "First",
+          script: "duplicate",
+          reason: "first",
+          proofIds: ["alpha"],
+          artifactPaths: ["target/dev-test-game/alpha.json"],
+        },
+        {
+          label: "Second",
+          script: "duplicate",
+          reason: "second",
+          proofIds: ["beta"],
+          artifactPaths: ["target/dev-test-game/beta.json"],
+        },
+      ]),
+    /script is duplicated/,
+  );
+  assert.throws(
+    () =>
+      defineAdminProofBatchRegistry([
+        {
+          label: "Duplicate proof ids",
+          script: "duplicate-proof-ids",
+          reason: "duplicate proof ids",
+          proofIds: ["alpha", "alpha"],
+          artifactPaths: [
+            "target/dev-test-game/alpha-one.json",
+            "target/dev-test-game/alpha-two.json",
+          ],
+        },
+      ]),
+    /duplicate proof id/,
+  );
+  assert.throws(
+    () =>
+      defineAdminProofBatchRegistry([
+        {
+          label: "Missing artifacts",
+          script: "missing-artifacts",
+          reason: "missing artifacts",
+          proofIds: ["alpha"],
+        },
+      ]),
+    /requires artifact paths or a resolver/,
+  );
+});
+
 test("core-loop generatedFrom families come from one canonical bundle", () => {
   const families = coreLoopGeneratedFromScenarioFamilies();
   assert.deepEqual(Object.keys(families), [
@@ -4789,6 +4880,19 @@ test("admin proof fixtures prove normalized evidence object rows", () => {
       hostedIdentityTerminalReceiptArtifactCase.rowId
     ],
     hostedIdentityTerminalReceiptArtifactCase.visibleStatusText,
+  );
+  const preTerminalProofGraphProof = proofGraphAdminProofFixture();
+  preTerminalProofGraphProof.generatedFrom.receiptArtifactRowIds = [];
+  preTerminalProofGraphProof.generatedFrom.hostedIdentityTerminalReceiptArtifact =
+    null;
+  preTerminalProofGraphProof.adminRoleSurface.visibleChecks =
+    preTerminalProofGraphProof.adminRoleSurface.visibleChecks.filter(
+      (rowId) => rowId !== hostedIdentityTerminalReceiptArtifactCase.rowId,
+    );
+  preTerminalProofGraphProof.adminRoleSurface.visibleCheckStatuses = {};
+  assert.equal(
+    validateDevTestGameProofGraphAdminProof(preTerminalProofGraphProof).status,
+    "passed",
   );
 });
 
@@ -20341,7 +20445,7 @@ function adminSpineAdminProofFixture() {
       visibleAdminSpineBatchStatuses: Object.fromEntries(
         adminSpineProofBatchRegistry.map((batch) => [
           batch.script,
-          `${batch.label} passed ${batch.proofIds.length} cases shared frontend shared chromium`,
+          adminProofBatchStatusText(batch),
         ]),
       ),
       rawInviteTokensVisible: false,
@@ -20352,6 +20456,7 @@ function adminSpineAdminProofFixture() {
 }
 
 function adminSpineTerminalBatchesFixture() {
+  const elapsedMsByIndex = [2400, 1200, 1600];
   return {
     version: 1,
     proof: "dev-test-game-admin-spine-terminal-batches",
@@ -20372,74 +20477,33 @@ function adminSpineTerminalBatchesFixture() {
       nextActionAdminProof: "target/dev-test-game/next-action-admin-proof.json",
       hostedIdentityNextActionAdminProof:
         "target/dev-test-game/hosted-identity-next-action-admin-proof.json",
-      batchCount: 3,
+      batchCount: terminalProofGraphReceiptBatchRegistry.length,
     },
-    batches: [
-      {
-        label: "Terminal admin proof batch",
-        reason:
-          "terminal graph, freshness, and next-action admin surfaces share the generated proof graph inputs",
-        status: "passed",
-        caseCount: 3,
-        caseSmokeNames: [
-          "dev-test-game-proof-graph-admin-proof",
-          "dev-test-game-proof-freshness-admin-proof",
-          "dev-test-game-next-action-admin-proof",
-        ],
-        proofIds: ["proof-graph", "proof-freshness", "next-action"],
-        artifactPaths: [
-          "target/dev-test-game/proof-graph-admin-proof.json",
-          "target/dev-test-game/proof-freshness-admin-proof.json",
-          "target/dev-test-game/next-action-admin-proof.json",
-        ],
-        elapsedMs: 2400,
-        sharedFrontendSession: true,
-        sharedChromiumSession: true,
-        releaseReady: false,
-        productionReady: false,
-      },
-      {
-        label: "Terminal hosted identity next-action admin proof batch",
-        reason:
-          "hosted identity next-action input proves the promoted operator-aware admin rows before the default next-action receipt is restored",
-        status: "passed",
-        caseCount: 1,
-        caseSmokeNames: [
-          "dev-test-game-hosted-identity-next-action-admin-proof",
-        ],
-        proofIds: ["hosted-identity-next-action"],
-        artifactPaths: [
-          "target/dev-test-game/hosted-identity-next-action-admin-proof.json",
-        ],
-        elapsedMs: 1200,
-        sharedFrontendSession: true,
-        sharedChromiumSession: true,
-        releaseReady: false,
-        productionReady: false,
-      },
-      {
-        label: "Terminal refresh admin proof batch",
-        reason:
-          "freshness and next-action admin surfaces share the refreshed next-action input",
-        status: "passed",
-        caseCount: 2,
-        caseSmokeNames: [
-          "dev-test-game-proof-freshness-admin-proof",
-          "dev-test-game-next-action-admin-proof",
-        ],
-        proofIds: ["proof-freshness", "next-action"],
-        artifactPaths: [
-          "target/dev-test-game/proof-freshness-admin-proof.json",
-          "target/dev-test-game/next-action-admin-proof.json",
-        ],
-        elapsedMs: 1600,
-        sharedFrontendSession: true,
-        sharedChromiumSession: true,
-        releaseReady: false,
-        productionReady: false,
-      },
-    ],
+    batches: terminalProofGraphReceiptBatchRegistry.map((batch, index) => ({
+      label: batch.label,
+      reason: batch.reason,
+      status: "passed",
+      caseCount: batch.proofIds.length,
+      caseSmokeNames: batch.proofIds.map(terminalAdminProofSmokeNameForId),
+      proofIds: batch.proofIds,
+      artifactPaths: batch.artifactPaths,
+      elapsedMs: elapsedMsByIndex[index],
+      sharedFrontendSession: true,
+      sharedChromiumSession: true,
+      releaseReady: false,
+      productionReady: false,
+    })),
   };
+}
+
+function terminalAdminProofSmokeNameForId(proofId) {
+  return {
+    "proof-graph": "dev-test-game-proof-graph-admin-proof",
+    "proof-freshness": "dev-test-game-proof-freshness-admin-proof",
+    "next-action": "dev-test-game-next-action-admin-proof",
+    "hosted-identity-next-action":
+      "dev-test-game-hosted-identity-next-action-admin-proof",
+  }[proofId];
 }
 
 function recoveryReceiptFixtures() {

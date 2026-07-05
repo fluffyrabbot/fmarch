@@ -206,6 +206,9 @@ import {
   proofGraphAdminFeatureTargetCases,
 } from "./dev_test_game_proof_graph_feature_target_cases.mjs";
 import {
+  adminProofBatchIdFromLabel,
+} from "./dev_test_game_admin_proof_batch_registry.mjs";
+import {
   hostedIdentityTerminalReceiptArtifactCase,
   terminalProofGraphReceiptBatchRegistry,
   terminalRefreshAdminProofBatchLabel,
@@ -5433,7 +5436,9 @@ export function validateDevTestGameProofGraphAdminProof(proof, options = {}) {
       throw new Error(`proof graph admin proof missing visible edge: ${edgeRowId}`);
     }
   }
-  validateProofGraphAdminTerminalReceiptArtifact(proof);
+  if (proofGraphAdminProofIncludesTerminalReceipts(proof)) {
+    validateProofGraphAdminTerminalReceiptArtifact(proof);
+  }
   for (const featureTargetCase of proofGraphAdminFeatureTargetCases) {
     validateProofGraphAdminFeatureTarget(proof, featureTargetCase);
   }
@@ -5490,6 +5495,12 @@ function validateProofGraphAdminTerminalReceiptArtifact(proof) {
       "proof graph admin proof did not inspect hosted identity terminal receipt row",
     );
   }
+}
+
+function proofGraphAdminProofIncludesTerminalReceipts(proof) {
+  return (proof.generatedFrom?.receiptArtifactRowIds ?? []).includes(
+    hostedIdentityTerminalReceiptArtifactCase.rowId,
+  );
 }
 
 function validateProofGraphAdminFeatureTarget(proof, featureTargetCase) {
@@ -6553,10 +6564,7 @@ export function validateDevTestGameAdminSpineTerminalBatches(
     proofBoundary: proof.proofBoundary,
     batchCount: requiredBatches.length,
     batchIds: requiredBatches.map((batch) =>
-      batch.label
-        .toLowerCase()
-        .replace(/[^a-z0-9]+/g, "-")
-        .replace(/^-+|-+$/g, ""),
+      adminProofBatchIdFromLabel(batch.label),
     ),
     batches: proof.batches.map((batch) => ({
       label: batch.label,
