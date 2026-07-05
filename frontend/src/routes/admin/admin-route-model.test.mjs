@@ -182,6 +182,9 @@ import {
   buildAdminAuditHandoffPath,
 } from "../../../../tools/dev_test_game_admin_audit_handoff_path.mjs";
 import {
+  devTestGameNextActionSequenceHandoffPair,
+} from "../../../../tools/dev_test_game_next_action_sequence_handoff_pair.mjs";
+import {
   hostedIdentityTerminalReceiptArtifactCase,
   terminalProofGraphReceiptArtifacts,
 } from "../../../../tools/dev_test_game_proof_graph_receipt_artifact_rows.mjs";
@@ -1495,6 +1498,7 @@ test("admin route data exposes local admin spine proof as a native audit row", a
       "spine-manifest",
       "recovery",
       localAdminAuditHandoffCheckIds.spineManifest,
+      "next-action-sequence-handoff",
     ],
   );
   assert.deepEqual(adminSpine.relatedLinks, [
@@ -1514,6 +1518,7 @@ test("admin route data exposes local admin spine proof as a native audit row", a
     refreshedCount: 11,
     nextCommand: "npm run test:dev-test-game-admin-spine",
     spineManifestInspectHref: localAdminAuditRoleUrl(localAdminAuditIds.spineManifest, { game: "midsummer" }),
+    nextActionHandoffPair: nextActionHandoffPairFixture(),
     releaseReady: false,
     productionReady: false,
   });
@@ -1531,7 +1536,7 @@ test("admin local admin spine detail data carries aggregate proof rows", async (
   assert.equal(data.status, "available");
   assert.equal(data.surfaceHeader.title, "Local admin spine");
   assert.equal(data.audit.id, localAdminAuditIds.adminSpine);
-  assert.equal(data.audit.checks.length, 13);
+  assert.equal(data.audit.checks.length, 14);
   assert.equal(data.audit.batches.length, 5);
   assert.deepEqual(
     data.audit.batches.map((batch) => [
@@ -1595,6 +1600,7 @@ test("admin local admin spine detail data carries aggregate proof rows", async (
       ["spine-manifest", "passed"],
       ["recovery", "passed"],
       [localAdminAuditHandoffCheckIds.spineManifest, "passed"],
+      ["next-action-sequence-handoff", "passed:passed"],
     ],
   );
   assert.equal(
@@ -7931,6 +7937,7 @@ function adminSpineTerminalBatchesFixture() {
         "target/dev-test-game/hosted-identity-next-action-admin-proof.json",
       batchCount: 3,
     },
+    nextActionHandoffPair: nextActionHandoffPairFixture(),
     batches: [
       {
         label: "Terminal admin proof batch",
@@ -7997,6 +8004,10 @@ function adminSpineTerminalBatchesFixture() {
       },
     ],
   };
+}
+
+function nextActionHandoffPairFixture() {
+  return devTestGameNextActionSequenceHandoffPair();
 }
 
 function adminSpineProofRow(id) {

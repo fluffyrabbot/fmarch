@@ -238,6 +238,10 @@ import {
   terminalRefreshAdminProofBatchLabel,
 } from "./dev_test_game_proof_graph_receipt_artifact_rows.mjs";
 import {
+  assertDevTestGameNextActionSequenceHandoffPair,
+  devTestGameNextActionSequenceHandoffPair,
+} from "./dev_test_game_next_action_sequence_handoff_pair.mjs";
+import {
   adminSpineProofBatchRegistry,
   adminSpineProofIds,
 } from "./dev_test_game_admin_spine_proof_batches.mjs";
@@ -1155,6 +1159,8 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
       batchCount: adminSpineTerminalBatchEvidence.batchCount,
       batchIds: adminSpineTerminalBatchEvidence.batchIds,
       artifactPaths: adminSpineTerminalBatchEvidence.artifactPaths,
+      nextActionHandoffPair:
+        adminSpineTerminalBatchEvidence.nextActionHandoffPair,
     });
   }
   for (const descriptor of recoveryReceiptReleaseReadinessDescriptors) {
@@ -6900,6 +6906,15 @@ export function validateDevTestGameAdminSpineTerminalBatches(
       "admin spine terminal batch proof leaked hosted identity artifact into refresh batch",
     );
   }
+  const expectedNextActionHandoffPair =
+    devTestGameNextActionSequenceHandoffPair();
+  try {
+    assertDevTestGameNextActionSequenceHandoffPair(proof.nextActionHandoffPair);
+  } catch (error) {
+    throw new Error(
+      `admin spine terminal batch proof ${error.message}`,
+    );
+  }
   for (const [index, expected] of requiredBatches.entries()) {
     const batch = proof.batches[index];
     if (batch?.label !== expected.label || batch.status !== "passed") {
@@ -6943,6 +6958,7 @@ export function validateDevTestGameAdminSpineTerminalBatches(
     batchIds: requiredBatches.map((batch) =>
       adminProofBatchIdFromLabel(batch.label),
     ),
+    nextActionHandoffPair: expectedNextActionHandoffPair,
     batches: proof.batches.map((batch) => ({
       label: batch.label,
       status: batch.status,

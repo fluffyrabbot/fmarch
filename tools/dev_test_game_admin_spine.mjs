@@ -94,6 +94,9 @@ import {
   terminalProofGraphReceiptBatchRegistry,
   terminalRefreshAdminProofBatchScript,
 } from "./dev_test_game_proof_graph_receipt_artifact_rows.mjs";
+import {
+  devTestGameNextActionSequenceHandoffPair,
+} from "./dev_test_game_next_action_sequence_handoff_pair.mjs";
 import { releaseReadinessStep } from "./dev_test_game_spine_readiness_steps.mjs";
 import { runSpinePlan } from "./dev_test_game_spine_runner.mjs";
 
@@ -418,6 +421,7 @@ async function writeAdminSpineTerminalBatchProof(batches) {
         hostedIdentityNextActionAdminProofPath,
       batchCount: batches.length,
     },
+    nextActionHandoffPair: devTestGameNextActionSequenceHandoffPair(),
     batches,
   };
   await mkdir(artifactDir, { recursive: true });

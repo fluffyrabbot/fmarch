@@ -247,6 +247,12 @@ seeded admin role URL, and records that the hosted-production-identity
 readiness item clears only for an operator-provided packet path. It is still a
 local predicate proof and does not prove live hosted identity traffic, release
 readiness, or production readiness.
+The admin spine terminal batch receipt records the default next-action blocker
+and the opt-in hosted-identity predicate as one `next-action-sequence-handoff`
+pair, while still keeping their source artifacts separate:
+`target/dev-test-game/next-action-admin-proof.json` for the canonical sequence
+blocker and `target/dev-test-game/hosted-identity-next-action-admin-proof.json`
+for the hosted-identity predicate.
 To run that predicate as an explicit opt-in identity spine phase, use:
 
 ```sh

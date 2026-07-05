@@ -523,6 +523,9 @@ import {
   terminalProofGraphReceiptBatchRegistry,
   terminalProofGraphReceiptRegistry,
 } from "./dev_test_game_proof_graph_receipt_artifact_rows.mjs";
+import {
+  devTestGameNextActionSequenceHandoffPair,
+} from "./dev_test_game_next_action_sequence_handoff_pair.mjs";
 
 test("dev test-game args expose reset reuse naming and verification controls", () => {
   assert.deepEqual(
@@ -4401,6 +4404,10 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
   const terminalBatchFixture = adminSpineTerminalBatchesFixture();
   const terminalBatches = validateDevTestGameAdminSpineTerminalBatches(
     terminalBatchFixture,
+  );
+  assert.deepEqual(
+    terminalBatches.nextActionHandoffPair,
+    nextActionHandoffPairFixture(),
   );
   assert.deepEqual(
     terminalBatches.batches.map((batch) => [
@@ -14328,6 +14335,17 @@ test("session card and markdown include role credential URLs and tokens", async 
       .terminalBatches.batchCount,
     3,
   );
+  assert.deepEqual(
+    adminSpineReadiness.localDevelopmentSpine.evidence.adminProofSpine
+      .terminalBatches.nextActionHandoffPair,
+    nextActionHandoffPairFixture(),
+  );
+  assert.deepEqual(
+    adminSpineReadiness.localDevelopmentSpine.checks.find(
+      (item) => item.id === "local-admin-spine-terminal-batches",
+    ).nextActionHandoffPair,
+    nextActionHandoffPairFixture(),
+  );
   assert.deepEqual(adminSpineReadiness.localDevelopmentSpine.evidence.adminProofSpine.proofIds, [
     "core-loop",
     "hardening",
@@ -21454,6 +21472,7 @@ function adminSpineTerminalBatchesFixture() {
         "target/dev-test-game/hosted-identity-next-action-admin-proof.json",
       batchCount: terminalProofGraphReceiptBatchRegistry.length,
     },
+    nextActionHandoffPair: nextActionHandoffPairFixture(),
     batches: terminalProofGraphReceiptBatchRegistry.map((batch, index) => ({
       label: batch.label,
       reason: batch.reason,
@@ -21469,6 +21488,10 @@ function adminSpineTerminalBatchesFixture() {
       productionReady: false,
     })),
   };
+}
+
+function nextActionHandoffPairFixture() {
+  return devTestGameNextActionSequenceHandoffPair();
 }
 
 function terminalAdminProofSmokeNameForId(proofId) {

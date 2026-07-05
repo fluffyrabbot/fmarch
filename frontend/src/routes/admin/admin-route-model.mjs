@@ -4478,6 +4478,13 @@ export function normalizeLocalAdminSpineAudit(
   const terminalBatches = validAdminSpineTerminalBatchProof(terminalBatchProof)
     ? terminalBatchProof.batches
     : [];
+  const terminalNextActionHandoffPair = validAdminSpineTerminalBatchProof(
+    terminalBatchProof,
+  )
+    ? normalizeAdminSpineNextActionHandoffPair(
+        terminalBatchProof.nextActionHandoffPair,
+      )
+    : null;
   const batches = [...aggregateBatches, ...terminalBatches].map((batch, index) =>
     normalizeAdminSpineBatch(batch, index),
   );
@@ -4532,6 +4539,14 @@ export function normalizeLocalAdminSpineAudit(
             proofs.find((proof) => proof?.id === "spine-manifest")?.status ?? "unknown",
           ),
         }),
+        ...(terminalNextActionHandoffPair === null
+          ? []
+          : [
+              Object.freeze({
+                id: terminalNextActionHandoffPair.id,
+                status: `${terminalNextActionHandoffPair.defaultSequenceBlocker.status}:${terminalNextActionHandoffPair.hostedIdentityPredicate.status}`,
+              }),
+            ]),
       ],
     ),
     batches: Object.freeze(batches),
@@ -4547,6 +4562,9 @@ export function normalizeLocalAdminSpineAudit(
         game,
         audit: localAdminAuditIds.spineManifest,
       }),
+      ...(terminalNextActionHandoffPair === null
+        ? {}
+        : { nextActionHandoffPair: terminalNextActionHandoffPair }),
       releaseReady: adminSpineProof.releaseReady === true,
       productionReady: adminSpineProof.productionReady === true,
     }),
@@ -4591,6 +4609,45 @@ function normalizeAdminSpineBatch(batch, index) {
         ? batch.artifactPaths.map((artifactPath) => String(artifactPath))
         : [],
     ),
+  });
+}
+
+function normalizeAdminSpineNextActionHandoffPair(pair) {
+  if (pair === null || typeof pair !== "object") {
+    return null;
+  }
+  const defaultSequenceBlocker = normalizeAdminSpineNextActionHandoffPairSide(
+    pair.defaultSequenceBlocker,
+  );
+  const hostedIdentityPredicate = normalizeAdminSpineNextActionHandoffPairSide(
+    pair.hostedIdentityPredicate,
+  );
+  if (defaultSequenceBlocker === null || hostedIdentityPredicate === null) {
+    return null;
+  }
+  return Object.freeze({
+    id: String(pair.id ?? ""),
+    status: String(pair.status ?? "unknown"),
+    proofBoundary: String(pair.proofBoundary ?? ""),
+    defaultSequenceBlocker,
+    hostedIdentityPredicate,
+  });
+}
+
+function normalizeAdminSpineNextActionHandoffPairSide(side) {
+  if (side === null || typeof side !== "object") {
+    return null;
+  }
+  return Object.freeze({
+    id: String(side.id ?? ""),
+    label: String(side.label ?? ""),
+    status: String(side.status ?? "unknown"),
+    proofId: String(side.proofId ?? ""),
+    nextActionPath: String(side.nextActionPath ?? ""),
+    adminProofPath: String(side.adminProofPath ?? ""),
+    batchLabel: String(side.batchLabel ?? ""),
+    expectedReason: String(side.expectedReason ?? ""),
+    expectedActionStatus: String(side.expectedActionStatus ?? ""),
   });
 }
 
