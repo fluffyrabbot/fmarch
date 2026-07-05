@@ -216,6 +216,9 @@ import {
   normalizeProofGraphDiagnosticProofSummary,
 } from "./dev_test_game_proof_graph_diagnostic_summary.mjs";
 import {
+  assertSeedProofLaneCoverageTraceVisibleChecks,
+} from "./dev_test_game_seed_proof_lane_coverage_trace.mjs";
+import {
   adminProofBatchIdFromLabel,
 } from "./dev_test_game_admin_proof_batch_registry.mjs";
 import {
@@ -6022,31 +6025,11 @@ export function validateDevTestGameNextActionAdminProof(proof, options = {}) {
     throw new Error("next-action admin proof is missing release readiness trace");
   }
   const seedProofLaneCoverageTrace =
-    proof.generatedFrom?.seedProofLaneCoverageTrace;
-  if (
-    seedProofLaneCoverageTrace?.strategy !==
-      "seed-proof-lane-coverage-before-readiness" ||
-    !["clean", "drifted", "unavailable"].includes(
-      seedProofLaneCoverageTrace.status,
-    ) ||
-    typeof seedProofLaneCoverageTrace.selected !== "boolean" ||
-    !Number.isInteger(seedProofLaneCoverageTrace.unclassifiedLaneCount) ||
-    !Array.isArray(seedProofLaneCoverageTrace.unclassifiedLaneIds)
-  ) {
-    throw new Error(
-      "next-action admin proof is missing seed proof-lane coverage trace",
+    assertSeedProofLaneCoverageTraceVisibleChecks(
+      proof.generatedFrom?.seedProofLaneCoverageTrace,
+      proof.adminRoleSurface?.visibleChecks,
+      { label: "next-action admin proof seed proof-lane coverage trace" },
     );
-  }
-  if (
-    seedProofLaneCoverageTrace.status !== "unavailable" &&
-    !proof.adminRoleSurface?.visibleChecks?.includes(
-      "seed-proof-lane-coverage-trace",
-    )
-  ) {
-    throw new Error(
-      "next-action admin proof missing seed proof-lane coverage trace row",
-    );
-  }
   validateNextActionAdminProofGraphDiagnosticSummaryTrace(proof);
   if (
     typeof proof.generatedFrom?.seedProofLaneCoverageRoleUrl === "string" &&

@@ -61,6 +61,10 @@ import {
   normalizeProofGraphDiagnosticSummaryTrace,
 } from "../../../../tools/dev_test_game_proof_graph_diagnostic_summary.mjs";
 import {
+  normalizeSeedProofLaneCoverageTrace,
+  seedProofLaneCoverageTraceCheckRows,
+} from "../../../../tools/dev_test_game_seed_proof_lane_coverage_trace.mjs";
+import {
   devTestGameIdentityAdapterContractDiff,
   devTestGameIdentityAdapterProofVersion,
 } from "../../../../tools/dev_test_game_identity_adapter_contract.mjs";
@@ -2274,7 +2278,7 @@ export function normalizeLocalNextActionAudit(nextAction, { game, proofGraph = n
   );
   const stabilityTrace = normalizeNextActionStabilityTrace(nextAction.stabilityTrace);
   const seedProofLaneCoverageTrace =
-    normalizeNextActionSeedProofLaneCoverageTrace(
+    normalizeSeedProofLaneCoverageTrace(
       nextAction.seedProofLaneCoverageTrace,
     );
   const proofGraphDestinationSummaryTrace =
@@ -3102,26 +3106,7 @@ export function normalizeLocalNextActionProofGraphDestinationSummaryCheckRows({
 export function normalizeLocalNextActionSeedProofLaneCoverageTraceCheckRows({
   seedProofLaneCoverageTrace = null,
 } = {}) {
-  return seedProofLaneCoverageTrace?.status === "unavailable" ||
-    seedProofLaneCoverageTrace === null
-    ? Object.freeze([])
-    : Object.freeze([
-        Object.freeze({
-          id: "seed-proof-lane-coverage-trace",
-          status: `${Number(
-            seedProofLaneCoverageTrace.unclassifiedLaneCount ?? 0,
-          )} unclassified lanes`,
-        }),
-        ...(Array.isArray(seedProofLaneCoverageTrace.unclassifiedLaneIds)
-          ? seedProofLaneCoverageTrace.unclassifiedLaneIds
-          : []
-        ).map((laneId) =>
-          Object.freeze({
-            id: `seed-proof-lane-coverage-${String(laneId)}`,
-            status: "unclassified",
-          }),
-        ),
-      ]);
+  return seedProofLaneCoverageTraceCheckRows(seedProofLaneCoverageTrace);
 }
 
 export function normalizeLocalNextActionProofGraphDestinationSummaryTraceCheckRows({
@@ -3861,58 +3846,6 @@ function normalizeNextActionStabilityTrace(stabilityTrace) {
     failureCount: Number(stabilityTrace.failureCount ?? 0),
     maxAttempts: Number(stabilityTrace.maxAttempts ?? 0),
     eventCount: Number(stabilityTrace.eventCount ?? 0),
-  });
-}
-
-function normalizeNextActionSeedProofLaneCoverageTrace(seedProofLaneCoverageTrace) {
-  if (
-    seedProofLaneCoverageTrace === null ||
-    typeof seedProofLaneCoverageTrace !== "object" ||
-    seedProofLaneCoverageTrace.strategy !==
-      "seed-proof-lane-coverage-before-readiness" ||
-    !Array.isArray(seedProofLaneCoverageTrace.unclassifiedLaneIds)
-  ) {
-    return Object.freeze({
-      strategy: "unknown",
-      status: "unavailable",
-      source: "",
-      checkId: null,
-      selected: false,
-      passedLaneCount: 0,
-      directSeededLaneCount: 0,
-      aliasOnlyLaneCount: 0,
-      aggregateOnlyLaneCount: 0,
-      unclassifiedLaneCount: 0,
-      unclassifiedLaneIds: Object.freeze([]),
-    });
-  }
-  return Object.freeze({
-    strategy: seedProofLaneCoverageTrace.strategy,
-    status: String(seedProofLaneCoverageTrace.status ?? "unknown"),
-    source: String(seedProofLaneCoverageTrace.source ?? ""),
-    checkId:
-      typeof seedProofLaneCoverageTrace.checkId === "string"
-        ? seedProofLaneCoverageTrace.checkId
-        : null,
-    selected: seedProofLaneCoverageTrace.selected === true,
-    passedLaneCount: Number(seedProofLaneCoverageTrace.passedLaneCount ?? 0),
-    directSeededLaneCount: Number(
-      seedProofLaneCoverageTrace.directSeededLaneCount ?? 0,
-    ),
-    aliasOnlyLaneCount: Number(
-      seedProofLaneCoverageTrace.aliasOnlyLaneCount ?? 0,
-    ),
-    aggregateOnlyLaneCount: Number(
-      seedProofLaneCoverageTrace.aggregateOnlyLaneCount ?? 0,
-    ),
-    unclassifiedLaneCount: Number(
-      seedProofLaneCoverageTrace.unclassifiedLaneCount ?? 0,
-    ),
-    unclassifiedLaneIds: Object.freeze(
-      seedProofLaneCoverageTrace.unclassifiedLaneIds.map((laneId) =>
-        String(laneId),
-      ),
-    ),
   });
 }
 

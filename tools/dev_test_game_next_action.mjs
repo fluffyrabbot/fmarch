@@ -83,6 +83,11 @@ import {
   buildProofGraphDiagnosticSummaryTrace,
 } from "./dev_test_game_proof_graph_diagnostic_summary.mjs";
 import {
+  assertSeedProofLaneCoverageTrace,
+  buildSeedProofLaneCoverageTrace,
+  seedProofLaneCoverageDriftFromReadiness,
+} from "./dev_test_game_seed_proof_lane_coverage_trace.mjs";
+import {
   assertRecoveryReceiptGraphSummary,
   recoveryReceiptGraphDescriptors,
   recoveryReceiptGraphSummaryFromProofGraph,
@@ -188,7 +193,9 @@ export function buildDevTestGameNextAction(
   const stabilityDrift = proofStabilityDriftFromOpsArtifacts(ops);
   const stabilityTrace = buildProofStabilityTrace(stabilityDrift);
   const seedProofLaneCoverageDrift =
-    seedProofLaneCoverageDriftFromReadiness(readiness);
+    seedProofLaneCoverageDriftFromReadiness(readiness, {
+      source: devTestGameReleaseReadinessPath,
+    });
   const seedProofLaneCoverageTrace = buildSeedProofLaneCoverageTrace(
     seedProofLaneCoverageDrift,
   );
@@ -708,10 +715,10 @@ export function assertDevTestGameNextAction(evidence) {
     evidence.nextAction,
   );
   assertProofGraphDiagnosticSummaryTrace(evidence.proofGraphDiagnosticSummaryTrace);
-  assertSeedProofLaneCoverageTrace(
-    evidence.seedProofLaneCoverageTrace,
-    evidence.nextAction,
-  );
+  assertSeedProofLaneCoverageTrace(evidence.seedProofLaneCoverageTrace, {
+    label: "next-action seed proof-lane coverage trace",
+    nextActionReason: evidence.nextAction.reason,
+  });
   assertLocalReadinessDependencyTrace(
     evidence.localReadinessDependencyTrace,
     evidence.nextAction,
@@ -1204,53 +1211,6 @@ function buildReleaseReadinessTrace(candidates) {
         ? {}
         : { hostedHandoffChecklist: candidate.hostedHandoffChecklist }),
     })),
-  };
-}
-
-function seedProofLaneCoverageDriftFromReadiness(readiness) {
-  const seedCheck = readiness?.localDevelopmentSpine?.checks?.find?.(
-    (check) => check?.id === "local-seed-demo-fixture",
-  );
-  const coverage = seedCheck?.proofLaneCoverage;
-  const unclassifiedLaneIds = Array.isArray(coverage?.unclassified?.laneIds)
-    ? coverage.unclassified.laneIds.map((laneId) => String(laneId))
-    : [];
-  const unclassifiedLaneCount = numberOrZero(
-    coverage?.unclassified?.count ?? unclassifiedLaneIds.length,
-  );
-  return {
-    strategy: "seed-proof-lane-coverage-before-readiness",
-    status:
-      readiness === null || coverage === null || typeof coverage !== "object"
-        ? "unavailable"
-        : unclassifiedLaneCount > 0
-          ? "drifted"
-          : "clean",
-    source: readiness === null ? "" : devTestGameReleaseReadinessPath,
-    checkId: seedCheck?.id ?? null,
-    passedLaneCount: numberOrZero(coverage?.passedLaneCount),
-    directSeededLaneCount: numberOrZero(coverage?.directSeeded?.count),
-    aliasOnlyLaneCount: numberOrZero(coverage?.aliasOnly?.count),
-    aggregateOnlyLaneCount: numberOrZero(coverage?.aggregateOnly?.count),
-    unclassifiedLaneCount,
-    unclassifiedLaneIds,
-  };
-}
-
-function buildSeedProofLaneCoverageTrace(seedProofLaneCoverageDrift) {
-  return {
-    strategy: seedProofLaneCoverageDrift.strategy,
-    status: seedProofLaneCoverageDrift.status,
-    source: seedProofLaneCoverageDrift.source,
-    checkId: seedProofLaneCoverageDrift.checkId,
-    passedLaneCount: seedProofLaneCoverageDrift.passedLaneCount,
-    directSeededLaneCount: seedProofLaneCoverageDrift.directSeededLaneCount,
-    aliasOnlyLaneCount: seedProofLaneCoverageDrift.aliasOnlyLaneCount,
-    aggregateOnlyLaneCount: seedProofLaneCoverageDrift.aggregateOnlyLaneCount,
-    unclassifiedLaneCount:
-      seedProofLaneCoverageDrift.unclassifiedLaneCount,
-    unclassifiedLaneIds: seedProofLaneCoverageDrift.unclassifiedLaneIds,
-    selected: seedProofLaneCoverageDrift.status === "drifted",
   };
 }
 
@@ -2156,43 +2116,6 @@ function assertProofGraphDestinationSummaryTrace(
     throw new Error(
       "next-action proof graph destination-summary trace selected without drift action",
     );
-  }
-}
-
-function assertSeedProofLaneCoverageTrace(seedProofLaneCoverageTrace, nextAction) {
-  if (
-    seedProofLaneCoverageTrace?.strategy !==
-      "seed-proof-lane-coverage-before-readiness" ||
-    !["clean", "drifted", "unavailable"].includes(seedProofLaneCoverageTrace.status) ||
-    typeof seedProofLaneCoverageTrace.selected !== "boolean" ||
-    !Number.isInteger(seedProofLaneCoverageTrace.unclassifiedLaneCount) ||
-    !Array.isArray(seedProofLaneCoverageTrace.unclassifiedLaneIds)
-  ) {
-    throw new Error("next-action seed proof-lane coverage trace is missing or malformed");
-  }
-  if (
-    nextAction.reason === "seed-proof-lane-coverage-drift" &&
-    (seedProofLaneCoverageTrace.status !== "drifted" ||
-      seedProofLaneCoverageTrace.selected !== true ||
-      seedProofLaneCoverageTrace.unclassifiedLaneIds.length === 0)
-  ) {
-    throw new Error(
-      "next-action seed proof-lane coverage trace does not match selected drift",
-    );
-  }
-  if (
-    nextAction.reason !== "seed-proof-lane-coverage-drift" &&
-    seedProofLaneCoverageTrace.selected === true
-  ) {
-    throw new Error(
-      "next-action seed proof-lane coverage trace selected without drift action",
-    );
-  }
-  if (
-    seedProofLaneCoverageTrace.unclassifiedLaneCount !==
-    seedProofLaneCoverageTrace.unclassifiedLaneIds.length
-  ) {
-    throw new Error("next-action seed proof-lane coverage trace count drifted");
   }
 }
 

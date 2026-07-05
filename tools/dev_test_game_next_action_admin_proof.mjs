@@ -47,6 +47,11 @@ import {
   proofGraphDiagnosticSummaryCheckIds,
 } from "./dev_test_game_proof_graph_diagnostic_summary.mjs";
 import {
+  assertSeedProofLaneCoverageTraceVisibleChecks,
+  cleanSeedProofLaneCoverageTrace,
+  seedProofLaneCoverageTraceCheckIds,
+} from "./dev_test_game_seed_proof_lane_coverage_trace.mjs";
+import {
   proofGraphDestinationSummaryDriftNextActionAdminProofPath,
   proofGraphDestinationSummaryDriftNextActionPath,
 } from "./dev_test_game_next_action_admin_proof_paths.mjs";
@@ -524,31 +529,6 @@ function cleanProofStabilityTrace(stabilityTrace = {}) {
   };
 }
 
-function cleanSeedProofLaneCoverageTrace(seedProofLaneCoverageTrace = {}) {
-  return {
-    strategy: "seed-proof-lane-coverage-before-readiness",
-    status: "clean",
-    source: String(seedProofLaneCoverageTrace.source ?? ""),
-    checkId:
-      typeof seedProofLaneCoverageTrace.checkId === "string"
-        ? seedProofLaneCoverageTrace.checkId
-        : null,
-    passedLaneCount: Number(seedProofLaneCoverageTrace.passedLaneCount ?? 0),
-    directSeededLaneCount: Number(
-      seedProofLaneCoverageTrace.directSeededLaneCount ?? 0,
-    ),
-    aliasOnlyLaneCount: Number(
-      seedProofLaneCoverageTrace.aliasOnlyLaneCount ?? 0,
-    ),
-    aggregateOnlyLaneCount: Number(
-      seedProofLaneCoverageTrace.aggregateOnlyLaneCount ?? 0,
-    ),
-    unclassifiedLaneCount: 0,
-    unclassifiedLaneIds: [],
-    selected: false,
-  };
-}
-
 export function assertNextActionAdminProof(evidence) {
   if (
     evidence?.version !== 1 ||
@@ -629,25 +609,11 @@ export function assertNextActionAdminProof(evidence) {
   ) {
     throw new Error("next-action admin proof is missing stability trace evidence");
   }
-  if (
-    evidence.generatedFrom?.seedProofLaneCoverageTrace?.strategy !==
-      "seed-proof-lane-coverage-before-readiness" ||
-    !["clean", "drifted", "unavailable"].includes(
-      evidence.generatedFrom.seedProofLaneCoverageTrace.status,
-    ) ||
-    typeof evidence.generatedFrom.seedProofLaneCoverageTrace.selected !==
-      "boolean" ||
-    !Number.isInteger(
-      evidence.generatedFrom.seedProofLaneCoverageTrace.unclassifiedLaneCount,
-    ) ||
-    !Array.isArray(
-      evidence.generatedFrom.seedProofLaneCoverageTrace.unclassifiedLaneIds,
-    )
-  ) {
-    throw new Error(
-      "next-action admin proof is missing seed proof-lane coverage trace evidence",
-    );
-  }
+  assertSeedProofLaneCoverageTraceVisibleChecks(
+    evidence.generatedFrom?.seedProofLaneCoverageTrace,
+    evidence.adminRoleSurface?.visibleChecks,
+    { label: "next-action admin proof seed proof-lane coverage trace" },
+  );
   if (
     evidence.generatedFrom?.proofGraphDestinationSummaryTrace?.strategy !==
       "proof-graph-destination-summary-before-readiness" ||
@@ -1200,12 +1166,11 @@ function requiredChecksForNextAction(nextAction) {
       checks.push(descriptor.checkId);
     }
   }
-  if (nextAction.seedProofLaneCoverageTrace?.status !== "unavailable") {
-    checks.push("seed-proof-lane-coverage-trace");
-    for (const laneId of nextAction.seedProofLaneCoverageTrace.unclassifiedLaneIds) {
-      checks.push(`seed-proof-lane-coverage-${laneId}`);
-    }
-  }
+  checks.push(
+    ...seedProofLaneCoverageTraceCheckIds(
+      nextAction.seedProofLaneCoverageTrace,
+    ),
+  );
   if (nextAction.proofGraphDestinationSummaryTrace?.status === "drifted") {
     checks.push(
       "proof-graph-destination-summary-trace",
@@ -1621,20 +1586,9 @@ function requiredChecksForEvidence(evidence) {
       ? []
       : ["terminal-proof-batch-graph"]),
     ...recoveryReceiptGraphCheckIdsForEvidence(evidence),
-    ...(evidence.generatedFrom?.seedProofLaneCoverageTrace?.status !==
-      "unavailable"
-      ? [
-          "seed-proof-lane-coverage-trace",
-          ...(Array.isArray(
-            evidence.generatedFrom.seedProofLaneCoverageTrace
-              .unclassifiedLaneIds,
-          )
-            ? evidence.generatedFrom.seedProofLaneCoverageTrace.unclassifiedLaneIds.map(
-                (id) => `seed-proof-lane-coverage-${id}`,
-              )
-            : []),
-        ]
-      : []),
+    ...seedProofLaneCoverageTraceCheckIds(
+      evidence.generatedFrom?.seedProofLaneCoverageTrace,
+    ),
     ...(evidence.generatedFrom?.proofGraphDestinationSummaryTrace?.status ===
       "drifted"
       ? [
