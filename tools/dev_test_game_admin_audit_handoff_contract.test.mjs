@@ -1,8 +1,11 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import { test } from "node:test";
 import {
   assertAdminAuditRelatedHandoff,
   assertAdminAuditRelatedHandoffs,
+  assertGeneratedAdminProofHandoffPath,
+  hostedAdminHandoffProofArtifactCases,
   requiredRelatedDestinationsForHandoff,
   requiredRelatedDestinationsForHandoffs,
 } from "./dev_test_game_admin_audit_handoff_contract.mjs";
@@ -44,6 +47,8 @@ test("related handoff requirements map to admin audit destination proof inputs",
       ],
       requiredHostedHandoffInputs: hostedHandoffInputIdsFixture(),
       requiredHostedHandoffBlockedChecks: hostedHandoffBlockedCheckIdsFixture(),
+      requiredHostedHandoffSummary: null,
+      requiredHostedHandoffBlockedReceipt: null,
       requiredRelatedLinks: ["local-next-action"],
     },
   ]);
@@ -69,6 +74,8 @@ test("related handoff requirements map to admin audit destination proof inputs",
       ],
       requiredHostedHandoffInputs: hostedHandoffInputIdsFixture(),
       requiredHostedHandoffBlockedChecks: hostedHandoffBlockedCheckIdsFixture(),
+      requiredHostedHandoffSummary: null,
+      requiredHostedHandoffBlockedReceipt: null,
       requiredRelatedLinks: ["local-next-action"],
     },
   ]);
@@ -186,6 +193,29 @@ test("related handoff assertion fails closed for missing hosted handoff rows", (
       }),
     /proof graph admin proof handoff destination missing hosted handoff blocked check: hosted-frontend-url-configured/,
   );
+});
+
+test("generated hosted admin proof artifacts carry visible shared handoff paths", async (t) => {
+  for (const artifactCase of hostedAdminHandoffProofArtifactCases) {
+    await t.test(artifactCase.label, async (t) => {
+      let proof;
+      try {
+        proof = JSON.parse(await readFile(artifactCase.path, "utf8"));
+      } catch (error) {
+        if (error?.code === "ENOENT") {
+          t.skip(
+            `${artifactCase.path} absent; run ${artifactCase.command} to generate it`,
+          );
+          return;
+        }
+        throw error;
+      }
+      assertGeneratedAdminProofHandoffPath({
+        proof,
+        proofName: artifactCase.label,
+      });
+    });
+  }
 });
 
 function handoffFixture() {

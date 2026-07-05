@@ -247,9 +247,11 @@ import {
   proofFreshnessAdminProofPath,
 } from "./dev_test_game_spine_manifest.mjs";
 import {
-  assertAdminRoleSurfaceHandoffPath,
   buildAdminAuditHandoffPath,
 } from "./dev_test_game_admin_audit_handoff_path.mjs";
+import {
+  assertGeneratedAdminProofHandoffPath,
+} from "./dev_test_game_admin_audit_handoff_contract.mjs";
 import {
   assertDevTestGameNextAction,
   buildDevTestGameNextAction,
@@ -3851,31 +3853,10 @@ test("hosted admin proof fixtures carry visible shared handoff paths", () => {
     ],
   ];
   for (const [label, proof] of proofFixtures) {
-    const expected = proof.generatedFrom.handoffPath;
-    assert.deepEqual(
-      proof.adminRoleSurface.visibleHandoffPath,
-      expected,
-      `${label} visible handoff path drifted from generated path`,
-    );
-    assertAdminRoleSurfaceHandoffPath({
-      adminRoleSurface: proof.adminRoleSurface,
-      expected,
+    assertGeneratedAdminProofHandoffPath({
+      proof,
       proofName: `${label} proof fixture`,
     });
-    assert.deepEqual(
-      proof.adminRoleSurface.visibleRelatedDestinations?.find(
-        (destination) =>
-          destination.linkId === "local-next-action" &&
-          destination.auditId === "local-next-action",
-      ),
-      {
-        linkId: "local-next-action",
-        auditId: "local-next-action",
-        detailRoleUrl: "/admin/audit/local-next-action?game=<seeded-game>",
-        visibleChecks: ["next-command"],
-      },
-      `${label} proof fixture missing next-action round trip`,
-    );
   }
 });
 

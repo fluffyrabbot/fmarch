@@ -1,6 +1,31 @@
 import {
+  localAdminAuditIds,
   localAdminAuditRoleUrl,
 } from "./dev_test_game_admin_audit_surface_ids.mjs";
+import {
+  assertAdminRoleSurfaceHandoffPath,
+} from "./dev_test_game_admin_audit_handoff_path.mjs";
+
+export const hostedAdminHandoffProofArtifactCases = Object.freeze([
+  Object.freeze({
+    label: "hosted identity evidence admin proof",
+    path: "target/dev-test-game/hosted-identity-evidence-admin-proof.json",
+    command: "npm run test:dev-test-game-hosted-identity-evidence-admin-proof",
+  }),
+  Object.freeze({
+    label: "hosted concurrent race matrix admin proof",
+    path: "target/dev-test-game/hosted-concurrent-race-matrix-admin-proof.json",
+    command:
+      "npm run test:dev-test-game-hosted-concurrent-race-matrix-admin-proof",
+  }),
+  Object.freeze({
+    label: "real hosted observability handoff admin proof",
+    path:
+      "target/dev-test-game/real-hosted-observability-handoff-admin-proof.json",
+    command:
+      "npm run test:dev-test-game-real-hosted-observability-handoff-admin-proof",
+  }),
+]);
 
 export function requiredRelatedDestinationsForHandoff(handoff) {
   return handoff === null || handoff === undefined
@@ -191,6 +216,35 @@ export function assertAdminAuditRelatedHandoffs({
       handoff,
       proofName,
     });
+  }
+}
+
+export function assertGeneratedAdminProofHandoffPath({ proof, proofName }) {
+  const name = proofNameForMessage(proofName);
+  const handoffPath = proof?.generatedFrom?.handoffPath;
+  if (handoffPath === null || handoffPath === undefined) {
+    throw new Error(`${name} missing generated handoff path`);
+  }
+  assertAdminRoleSurfaceHandoffPath({
+    adminRoleSurface: proof?.adminRoleSurface,
+    expected: handoffPath,
+    proofName: name,
+  });
+  const upstreamAuditId = String(
+    handoffPath.upstreamAuditId ?? localAdminAuditIds.nextAction,
+  );
+  const destination =
+    proof?.adminRoleSurface?.visibleRelatedDestinations?.find(
+      (item) => item.linkId === upstreamAuditId && item.auditId === upstreamAuditId,
+    ) ?? null;
+  if (destination === null) {
+    throw new Error(`${name} did not follow generated handoff upstream`);
+  }
+  if (destination.detailRoleUrl !== localAdminAuditRoleUrl(upstreamAuditId)) {
+    throw new Error(`${name} generated handoff upstream role URL drifted`);
+  }
+  if (!destination.visibleChecks?.includes("next-command")) {
+    throw new Error(`${name} generated handoff upstream missing next-command`);
   }
 }
 

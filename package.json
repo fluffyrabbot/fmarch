@@ -8,7 +8,7 @@
     "dev:test-game:local": "node tools/dev_test_game_local.mjs",
     "dev:test-game": "node tools/dev_test_game.mjs",
     "test:dev-postgres-contract": "node --test tools/dev_postgres.test.mjs",
-    "test:dev-test-game-contract": "node --test tools/dev_test_game.test.mjs tools/dev_test_game_media_response_guard.test.mjs",
+    "test:dev-test-game-contract": "node --test tools/dev_test_game.test.mjs tools/dev_test_game_media_response_guard.test.mjs tools/dev_test_game_admin_audit_handoff_contract.test.mjs",
     "test:dev-test-game-proof": "node tools/dev_test_game_proof_contract.mjs",
     "test:dev-test-game-readiness": "node tools/dev_test_game_release_readiness.mjs",
     "test:dev-test-game-private-channel-recovery-receipt": "node tools/dev_test_game_private_channel_recovery_receipt.mjs",
