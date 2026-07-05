@@ -107,6 +107,7 @@ import {
   devTestGameHardeningAdminProofCommand,
   devTestGameHostSetupProofCommand,
   devTestGameProductionFeatureBrowserProofCommand,
+  devTestGameReplacementActionProofCommand,
   devTestGameReplacementPlayerProofCommand,
   productionFeatureSpineSourceCheckRules,
 } from "./dev_test_game_production_feature_source_rules.mjs";
@@ -127,6 +128,10 @@ import {
   replacementFeatureSpineCycleId,
   replacementFeatureSpineSourceCheckId,
 } from "./dev_test_game_replacement_feature_spine_targets.mjs";
+import {
+  replacementActionFeatureSpineCycleId,
+  replacementActionFeatureSpineSourceCheckId,
+} from "./dev_test_game_replacement_action_feature_spine_targets.mjs";
 import {
   hostSetupFeatureSpineCycleId,
   hostSetupFeatureSpineSourceCheckId,
@@ -420,6 +425,12 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
     path: sourcePath,
   });
   const replacementPlayerProofEvidence = validateReplacementPlayerLaneProof(
+    proof,
+    {
+      path: sourcePath,
+    },
+  );
+  const replacementActionProofEvidence = validateReplacementActionLaneProof(
     proof,
     {
       path: sourcePath,
@@ -745,6 +756,22 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
       recoveryCommand: devTestGameReplacementPlayerProofCommand,
       spineTargets: buildReplacementReadinessSpineTargets(
         replacementPlayerProofEvidence,
+      ),
+    },
+    {
+      id: replacementActionFeatureSpineSourceCheckId,
+      label: "Replacement action recovery role URL proof",
+      status: "passed",
+      evidence: replacementActionProofEvidence.path,
+      roleUrl: replacementActionProofEvidence.roleUrl,
+      proofBoundary:
+        "Seeded dev-test-game replacement action role URL proof from proof-run. Proves incoming replacement factional_kill submission, reconnect into locked resolved state, stale replacement action PhaseLocked recovery, and scoped target receipt visibility; does not prove hosted identity, hosted transport, multi-node races, release readiness, or production readiness.",
+      incomingAction: replacementActionProofEvidence.incomingAction,
+      reconnect: replacementActionProofEvidence.reconnect,
+      staleAction: replacementActionProofEvidence.staleAction,
+      recoveryCommand: devTestGameReplacementActionProofCommand,
+      spineTargets: buildReplacementActionReadinessSpineTargets(
+        replacementActionProofEvidence,
       ),
     },
     {
@@ -2582,6 +2609,85 @@ function validateReplacementPlayerLaneProof(proof, options = {}) {
   };
 }
 
+function validateReplacementActionLaneProof(proof, options = {}) {
+  const laneById = new Map((proof?.lanes ?? []).map((lane) => [lane.id, lane]));
+  const frontendBaseUrl = String(proof?.session?.frontendBaseUrl ?? "").replace(
+    /\/$/,
+    "",
+  );
+  const incomingAction = laneById.get("replacement-incoming-action");
+  const reconnect = laneById.get("replacement-action-reconnect");
+  const staleAction = laneById.get("replacement-stale-action-after-resolve");
+  if (
+    frontendBaseUrl === "" ||
+    incomingAction?.status !== "passed" ||
+    typeof incomingAction.evidence?.game !== "string" ||
+    incomingAction.evidence?.targetSlot !== "slot-2" ||
+    incomingAction.evidence?.replacementState !== "ack" ||
+    incomingAction.evidence?.actionState !== "ack" ||
+    incomingAction.evidence?.targetAlive !== false ||
+    incomingAction.evidence?.staleOutgoingError !== "NotYourSlot" ||
+    incomingAction.evidence?.rowanPrivateKillVisible !== false ||
+    reconnect?.status !== "passed" ||
+    reconnect.evidence?.targetSlot !== "slot-2" ||
+    reconnect.evidence?.replacementState !== "ack" ||
+    reconnect.evidence?.actionState !== "ack" ||
+    reconnect.evidence?.reconnectState !== "recovered" ||
+    reconnect.evidence?.phaseLocked !== true ||
+    reconnect.evidence?.actionCount !== 0 ||
+    reconnect.evidence?.rowanPrivateKillVisible !== false ||
+    reconnect.evidence?.targetNoticeStatus !== "factional_kill" ||
+    staleAction?.status !== "passed" ||
+    staleAction.evidence?.targetSlot !== "slot-2" ||
+    staleAction.evidence?.rejectError !== "PhaseLocked" ||
+    staleAction.evidence?.refreshedPhase !== "N01" ||
+    staleAction.evidence?.refreshedLocked !== true ||
+    staleAction.evidence?.refreshedActionCount !== 0 ||
+    staleAction.evidence?.targetAlive !== true ||
+    staleAction.evidence?.rowanPrivateKillVisible !== false ||
+    staleAction.evidence?.targetNoticePresent !== false
+  ) {
+    throw new Error(
+      "dev-test-game proof run missing replacement action role proof",
+    );
+  }
+  return {
+    status: "passed",
+    path: options.path ?? "target/dev-test-game/proof-run.json",
+    roleUrl: `${frontendBaseUrl}/g/<replacement-action-game>`,
+    incomingAction: {
+      game: "<replacement-action-game>",
+      targetSlot: incomingAction.evidence.targetSlot,
+      replacementState: incomingAction.evidence.replacementState,
+      actionState: incomingAction.evidence.actionState,
+      targetAlive: incomingAction.evidence.targetAlive,
+      staleOutgoingError: incomingAction.evidence.staleOutgoingError,
+      rowanPrivateKillVisible:
+        incomingAction.evidence.rowanPrivateKillVisible,
+    },
+    reconnect: {
+      game: "<replacement-action-reconnect-game>",
+      replacementState: reconnect.evidence.replacementState,
+      actionState: reconnect.evidence.actionState,
+      reconnectState: reconnect.evidence.reconnectState,
+      phaseLocked: reconnect.evidence.phaseLocked,
+      actionCount: reconnect.evidence.actionCount,
+      targetNoticeStatus: reconnect.evidence.targetNoticeStatus,
+      rowanPrivateKillVisible: reconnect.evidence.rowanPrivateKillVisible,
+    },
+    staleAction: {
+      game: "<replacement-stale-action-game>",
+      rejectError: staleAction.evidence.rejectError,
+      refreshedPhase: staleAction.evidence.refreshedPhase,
+      refreshedLocked: staleAction.evidence.refreshedLocked,
+      refreshedActionCount: staleAction.evidence.refreshedActionCount,
+      targetAlive: staleAction.evidence.targetAlive,
+      rowanPrivateKillVisible: staleAction.evidence.rowanPrivateKillVisible,
+      targetNoticePresent: staleAction.evidence.targetNoticePresent,
+    },
+  };
+}
+
 function assertCoreLoopHostLifecycleCheckpoint(hostRoleSurface) {
   const scenarioFamily = coreLoopHostControlScenarioFamily();
   assertHostLifecycleControlRoleSurfaceCase({
@@ -3315,6 +3421,54 @@ function buildReplacementReadinessSpineTargets(replacementPlayerProofEvidence) {
         detailRoleUrl: replacementPlayerProofEvidence.roleUrl,
         browserProofCommand: devTestGameSeededBrowserProofCommand,
         rerunCommand: devTestGameReplacementPlayerProofCommand,
+        cycleIds,
+        roleUrlIds,
+        checkpointIds,
+        visibleAdminCheckIds,
+        recoveryHookIds: [],
+        roleUrlHrefs,
+      },
+      defaultRerunCommandBySourceCheckId:
+        defaultProductionFeatureSpineRerunCommands,
+    }),
+  };
+}
+
+function buildReplacementActionReadinessSpineTargets(
+  replacementActionProofEvidence,
+) {
+  const cycleIds = [replacementActionFeatureSpineCycleId];
+  const roleUrlIds = ["replacement-action"];
+  const checkpointIds = ["replacement-incoming-action"];
+  const visibleAdminCheckIds = [
+    "replacement-incoming-action",
+    "replacement-action-reconnect",
+    "replacement-stale-action-after-resolve",
+  ];
+  const roleUrlHrefs = {
+    "replacement-action": replacementActionProofEvidence.roleUrl,
+  };
+  return {
+    status: "passed",
+    detailRoleUrl: replacementActionProofEvidence.roleUrl,
+    defaultCycleId: replacementActionFeatureSpineCycleId,
+    defaultRoleUrlId: "replacement-action",
+    defaultRoleUrl: replacementActionProofEvidence.roleUrl,
+    defaultCheckpointId: "replacement-incoming-action",
+    browserProofCommand: devTestGameSeededBrowserProofCommand,
+    cycleIds,
+    roleUrlIds,
+    checkpointIds,
+    visibleAdminCheckIds,
+    recoveryHookIds: [],
+    roleUrlHrefs,
+    productionFeatureTargets: buildProductionFeatureSpineTargetCollection({
+      declarations: releaseReadinessProductionFeatureSpineTargets,
+      sourceTarget: {
+        sourceCheckId: replacementActionFeatureSpineSourceCheckId,
+        detailRoleUrl: replacementActionProofEvidence.roleUrl,
+        browserProofCommand: devTestGameSeededBrowserProofCommand,
+        rerunCommand: devTestGameReplacementActionProofCommand,
         cycleIds,
         roleUrlIds,
         checkpointIds,
@@ -4847,6 +5001,7 @@ export function validateDevTestGameProofGraphAdminProof(proof, options = {}) {
   validateProofGraphAdminHostSetupFeatureTarget(proof);
   validateProofGraphAdminCohostFeatureTarget(proof);
   validateProofGraphAdminReplacementFeatureTarget(proof);
+  validateProofGraphAdminReplacementActionFeatureTarget(proof);
   const destinationAuditIds = [
     ...new Set(handoffs.map((handoff) => String(handoff.auditId))),
   ];
@@ -4906,6 +5061,20 @@ function validateProofGraphAdminReplacementFeatureTarget(proof) {
     expectedAdminCheckId: "replacement-incoming-player",
     expectedRecoveryCommand: devTestGameReplacementPlayerProofCommand,
     label: "replacement player",
+  });
+}
+
+function validateProofGraphAdminReplacementActionFeatureTarget(proof) {
+  validateProofGraphAdminFeatureTarget(proof, {
+    target: proof.generatedFrom?.replacementActionFeatureTarget,
+    expectedRoleSurfaceNodeId: "role-surface:replacement-action",
+    expectedFeatureSlotId: "replacement-action-recovery",
+    expectedSourceCheckId: replacementActionFeatureSpineSourceCheckId,
+    expectedRoleUrlIncludes: "/g/<replacement-action-game>",
+    expectedCheckpointId: "replacement-incoming-action",
+    expectedAdminCheckId: "replacement-incoming-action",
+    expectedRecoveryCommand: devTestGameReplacementActionProofCommand,
+    label: "replacement action",
   });
 }
 
@@ -6219,6 +6388,35 @@ export function assertDevTestGameReleaseReadiness(checklist) {
       "dev-test-game replacement player readiness check is malformed",
     );
   }
+  const replacementActionCheck = checklist.localDevelopmentSpine?.checks?.find(
+    (check) => check.id === replacementActionFeatureSpineSourceCheckId,
+  );
+  if (
+    replacementActionCheck === undefined ||
+    !replacementActionCheck.roleUrl?.includes("/g/<replacement-action-game>") ||
+    replacementActionCheck.incomingAction?.replacementState !== "ack" ||
+    replacementActionCheck.incomingAction?.actionState !== "ack" ||
+    replacementActionCheck.incomingAction?.targetAlive !== false ||
+    replacementActionCheck.incomingAction?.staleOutgoingError !==
+      "NotYourSlot" ||
+    replacementActionCheck.reconnect?.reconnectState !== "recovered" ||
+    replacementActionCheck.reconnect?.phaseLocked !== true ||
+    replacementActionCheck.reconnect?.actionCount !== 0 ||
+    replacementActionCheck.reconnect?.targetNoticeStatus !==
+      "factional_kill" ||
+    replacementActionCheck.staleAction?.rejectError !== "PhaseLocked" ||
+    replacementActionCheck.staleAction?.refreshedPhase !== "N01" ||
+    replacementActionCheck.staleAction?.refreshedLocked !== true ||
+    replacementActionCheck.staleAction?.refreshedActionCount !== 0 ||
+    replacementActionCheck.staleAction?.targetNoticePresent !== false ||
+    replacementActionCheck.recoveryCommand !==
+      devTestGameReplacementActionProofCommand ||
+    !validReplacementActionSpineTargets(replacementActionCheck.spineTargets)
+  ) {
+    throw new Error(
+      "dev-test-game replacement action readiness check is malformed",
+    );
+  }
   assertRecoveryMilestoneReadinessChecksMirrorGeneratedFrom(checklist);
   if (checklist.releaseReadiness?.status !== "not_ready") {
     throw new Error("dev-test-game release readiness must remain not_ready");
@@ -6656,6 +6854,55 @@ function validReplacementProductionFeatureTargets(productionFeatureTargets) {
       .filter(
         (declaration) =>
           declaration.sourceCheckId === replacementFeatureSpineSourceCheckId,
+      ),
+    sourceCheckRules: productionFeatureSpineSourceCheckRules,
+  });
+}
+
+function validReplacementActionSpineTargets(spineTargets) {
+  return (
+    spineTargets !== null &&
+    typeof spineTargets === "object" &&
+    spineTargets.status === "passed" &&
+    spineTargets.detailRoleUrl?.includes("/g/<replacement-action-game>") &&
+    spineTargets.defaultCycleId === replacementActionFeatureSpineCycleId &&
+    spineTargets.defaultRoleUrlId === "replacement-action" &&
+    spineTargets.defaultRoleUrl?.includes("/g/<replacement-action-game>") &&
+    spineTargets.defaultCheckpointId === "replacement-incoming-action" &&
+    typeof spineTargets.browserProofCommand === "string" &&
+    spineTargets.browserProofCommand.includes("test:dev-test-game-core-live") &&
+    Array.isArray(spineTargets.cycleIds) &&
+    spineTargets.cycleIds.includes(replacementActionFeatureSpineCycleId) &&
+    Array.isArray(spineTargets.roleUrlIds) &&
+    spineTargets.roleUrlIds.includes("replacement-action") &&
+    spineTargets.roleUrlHrefs?.["replacement-action"]?.includes(
+      "/g/<replacement-action-game>",
+    ) &&
+    Array.isArray(spineTargets.checkpointIds) &&
+    spineTargets.checkpointIds.includes("replacement-incoming-action") &&
+    Array.isArray(spineTargets.recoveryHookIds) &&
+    spineTargets.recoveryHookIds.length === 0 &&
+    Array.isArray(spineTargets.visibleAdminCheckIds) &&
+    spineTargets.visibleAdminCheckIds.includes("replacement-incoming-action") &&
+    spineTargets.visibleAdminCheckIds.includes("replacement-action-reconnect") &&
+    spineTargets.visibleAdminCheckIds.includes(
+      "replacement-stale-action-after-resolve",
+    ) &&
+    validReplacementActionProductionFeatureTargets(
+      spineTargets.productionFeatureTargets,
+    )
+  );
+}
+
+function validReplacementActionProductionFeatureTargets(
+  productionFeatureTargets,
+) {
+  return validProductionFeatureSpineTargetCollection(productionFeatureTargets, {
+    declarations: Object.values(releaseReadinessProductionFeatureSpineTargets)
+      .filter(
+        (declaration) =>
+          declaration.sourceCheckId ===
+          replacementActionFeatureSpineSourceCheckId,
       ),
     sourceCheckRules: productionFeatureSpineSourceCheckRules,
   });

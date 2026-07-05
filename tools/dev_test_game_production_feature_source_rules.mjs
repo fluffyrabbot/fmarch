@@ -9,6 +9,7 @@ export {
   devTestGameHostSetupProofCommand,
   devTestGameIdentityAdminProofCommand,
   devTestGameProductionFeatureBrowserProofCommand,
+  devTestGameReplacementActionProofCommand,
   devTestGameReplacementPlayerProofCommand,
 } from "./dev_test_game_production_feature_source_registry.mjs";
 

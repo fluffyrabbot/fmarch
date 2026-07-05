@@ -46,6 +46,9 @@ import {
   replacementFeatureSpineSourceCheckId,
 } from "./dev_test_game_replacement_feature_spine_targets.mjs";
 import {
+  replacementActionFeatureSpineSourceCheckId,
+} from "./dev_test_game_replacement_action_feature_spine_targets.mjs";
+import {
   localAdminAuditIds,
   localAdminAuditRoleUrl,
 } from "./dev_test_game_admin_audit_surface_ids.mjs";
@@ -1044,7 +1047,8 @@ function roleSurfaceProofChecksForGraph(releaseReadiness) {
     (check) =>
       check.id === hostSetupFeatureSpineSourceCheckId ||
       check.id === cohostFeatureSpineSourceCheckId ||
-      check.id === replacementFeatureSpineSourceCheckId,
+      check.id === replacementFeatureSpineSourceCheckId ||
+      check.id === replacementActionFeatureSpineSourceCheckId,
   );
 }
 
@@ -1057,6 +1061,9 @@ function roleSurfaceProofGraphNodeId(check) {
   }
   if (check.id === replacementFeatureSpineSourceCheckId) {
     return "role-surface:replacement-player";
+  }
+  if (check.id === replacementActionFeatureSpineSourceCheckId) {
+    return "role-surface:replacement-action";
   }
   throw new Error(`unknown proof graph role-surface check: ${check.id}`);
 }
@@ -1081,6 +1088,7 @@ function seededGraphRoleUrl(roleUrl) {
   return (
     roleUrl.includes("?game=<seeded-game>") ||
     roleUrl.endsWith("/g/<seeded-game>") ||
+    roleUrl.endsWith("/g/<replacement-action-game>") ||
     roleUrl.includes("/g/<seeded-game>/")
   );
 }
@@ -1096,6 +1104,8 @@ function productionFeatureTargetsForGraph(releaseReadiness) {
   const replacementTargets = replacementProductionFeatureTargetCollection(
     releaseReadiness,
   );
+  const replacementActionTargets =
+    replacementActionProductionFeatureTargetCollection(releaseReadiness);
   const hardeningTargets = hardeningProductionFeatureTargetCollection(
     releaseReadiness,
   );
@@ -1105,6 +1115,7 @@ function productionFeatureTargetsForGraph(releaseReadiness) {
       hostSetupTargets,
       cohostTargets,
       replacementTargets,
+      replacementActionTargets,
       hardeningTargets,
     ].flatMap((targets) =>
       targets.slotIds.map((slotId) => [slotId, targets.bySlotId[slotId]]),
@@ -1201,6 +1212,25 @@ function replacementProductionFeatureTargetCollection(releaseReadiness) {
     typeof targets.bySlotId !== "object"
   ) {
     throw new Error("proof graph missing replacement production feature targets");
+  }
+  return targets;
+}
+
+function replacementActionProductionFeatureTargetCollection(releaseReadiness) {
+  const replacementActionCheck =
+    releaseReadiness.localDevelopmentSpine?.checks?.find(
+      (check) => check.id === replacementActionFeatureSpineSourceCheckId,
+    );
+  const targets = replacementActionCheck?.spineTargets?.productionFeatureTargets;
+  if (
+    targets?.status !== "passed" ||
+    !Array.isArray(targets.slotIds) ||
+    targets.bySlotId === null ||
+    typeof targets.bySlotId !== "object"
+  ) {
+    throw new Error(
+      "proof graph missing replacement action production feature targets",
+    );
   }
   return targets;
 }

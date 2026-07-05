@@ -36,6 +36,11 @@ import {
   replacementFeatureSpineTargetRows,
 } from "./dev_test_game_replacement_feature_spine_targets.mjs";
 import {
+  devTestGameReplacementActionProofCommand,
+  replacementActionFeatureSpineSourceCheckId,
+  replacementActionFeatureSpineTargetRows,
+} from "./dev_test_game_replacement_action_feature_spine_targets.mjs";
+import {
   devTestGameHostSetupProofCommand,
   hostSetupFeatureSpineSourceCheckId,
   hostSetupFeatureSpineTargetRows,
@@ -172,6 +177,8 @@ export function proofGraphAdminProofCase() {
         replacementFeatureTarget: proofGraphReplacementFeatureTarget(
           source.proofGraph,
         ),
+        replacementActionFeatureTarget:
+          proofGraphReplacementActionFeatureTarget(source.proofGraph),
       },
       adminRoleSurface,
     }),
@@ -238,6 +245,7 @@ export function assertProofGraphAdminProof(evidence) {
   assertProofGraphAdminProofCoversHostSetupFeatureTarget(evidence);
   assertProofGraphAdminProofCoversCohostFeatureTarget(evidence);
   assertProofGraphAdminProofCoversReplacementFeatureTarget(evidence);
+  assertProofGraphAdminProofCoversReplacementActionFeatureTarget(evidence);
   return evidence;
 }
 
@@ -283,6 +291,24 @@ function assertProofGraphAdminProofCoversReplacementFeatureTarget(evidence) {
     expectedAdminCheckId: "replacement-incoming-player",
     expectedRecoveryCommand: devTestGameReplacementPlayerProofCommand,
     label: "replacement player",
+  });
+}
+
+function assertProofGraphAdminProofCoversReplacementActionFeatureTarget(
+  evidence,
+) {
+  assertProofGraphAdminProofCoversFeatureTarget(evidence, {
+    target: evidence.generatedFrom?.replacementActionFeatureTarget,
+    expectedRoleSurfaceNodeId: "role-surface:replacement-action",
+    expectedFeatureSlotId:
+      replacementActionFeatureSpineTargetRows.replacementActionRecovery
+        .featureSlotId,
+    expectedSourceCheckId: replacementActionFeatureSpineSourceCheckId,
+    expectedRoleUrlIncludes: "/g/<replacement-action-game>",
+    expectedCheckpointId: "replacement-incoming-action",
+    expectedAdminCheckId: "replacement-incoming-action",
+    expectedRecoveryCommand: devTestGameReplacementActionProofCommand,
+    label: "replacement action",
   });
 }
 
@@ -383,6 +409,16 @@ function proofGraphReplacementFeatureTarget(proofGraph) {
     expectedFeatureSlotId:
       replacementFeatureSpineTargetRows.replacementPlayer.featureSlotId,
     label: "replacement player",
+  });
+}
+
+function proofGraphReplacementActionFeatureTarget(proofGraph) {
+  return proofGraphFeatureTarget(proofGraph, {
+    roleSurfaceNodeId: "role-surface:replacement-action",
+    expectedFeatureSlotId:
+      replacementActionFeatureSpineTargetRows.replacementActionRecovery
+        .featureSlotId,
+    label: "replacement action",
   });
 }
 
