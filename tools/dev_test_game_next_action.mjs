@@ -129,6 +129,10 @@ import {
   devTestGameSpineManifestAdminProofPath,
 } from "./dev_test_game_local_admin_proof_paths.mjs";
 import {
+  localAdminAuditIds,
+  localAdminAuditRoleUrl,
+} from "./dev_test_game_admin_audit_surface_ids.mjs";
+import {
   adminSpineProofPath,
   adminSpineTerminalBatchProofPath,
   devTestGameProofGraphAdminProofPath,
@@ -165,6 +169,8 @@ export const devTestGameHostedIdentityOperatorSpineScript =
   "test:dev-test-game-identity:operator";
 export const devTestGameHostedIdentityOperatorSpineCommand =
   `DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch npm run ${devTestGameHostedIdentityOperatorSpineScript}`;
+const devTestGameHostSetupRoleUrl =
+  "http://127.0.0.1:5173/g/<seeded-game>/setup";
 
 export function buildDevTestGameNextAction(
   spineManifest,
@@ -287,6 +293,8 @@ export function buildDevTestGameNextAction(
             path: artifact.path,
             status: artifact.status,
             refreshSource: artifact.refreshSource,
+            proofTarget: artifact.path,
+            ...artifactRecoveryMetadata(artifact),
           },
         }
       : stabilityDrift.status === "drifted"
@@ -595,9 +603,11 @@ export function assertDevTestGameNextAction(evidence) {
   }
   if (
     evidence.nextAction.reason === "artifact-not-fresh" &&
-    typeof evidence.nextAction.artifact?.id !== "string"
+    (typeof evidence.nextAction.artifact?.id !== "string" ||
+      typeof evidence.nextAction.artifact?.proofTarget !== "string" ||
+      evidence.nextAction.artifact.proofTarget.trim() === "")
   ) {
-    throw new Error("next-action artifact recovery is missing an artifact id");
+    throw new Error("next-action artifact recovery is missing artifact proof target");
   }
   if (
     evidence.nextAction.reason === "release-readiness-unproven" &&
@@ -898,6 +908,32 @@ function rankedArtifactsNeedingRefresh(manifest) {
         artifactAgeSeconds(right.artifact) - artifactAgeSeconds(left.artifact) ||
         left.index - right.index,
     );
+}
+
+function artifactRecoveryMetadata(artifact) {
+  if (artifact.id === "host-setup-role") {
+    return {
+      roleUrl: devTestGameHostSetupRoleUrl,
+      requiredEvidence:
+        "Fresh host setup seeded role proof artifact with setup route command recovery.",
+      buildSlice:
+        "Refresh only the host setup role URL proof before trusting host setup freshness.",
+      proofBoundary:
+        "Local host setup role proof freshness recovery only; does not prove the admin audit surface or release readiness.",
+    };
+  }
+  if (artifact.id === "host-setup-admin") {
+    return {
+      roleUrl: localAdminAuditRoleUrl(localAdminAuditIds.hostSetupProof),
+      requiredEvidence:
+        "Fresh host setup admin proof artifact with visible setup checks.",
+      buildSlice:
+        "Refresh only the host setup admin proof before trusting host setup admin freshness.",
+      proofBoundary:
+        "Local host setup admin proof freshness recovery only; does not rerun the role proof or claim release readiness.",
+    };
+  }
+  return {};
 }
 
 function rankedBuildableReleaseReadinessItems(

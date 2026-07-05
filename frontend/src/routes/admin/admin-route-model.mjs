@@ -2187,6 +2187,11 @@ export function normalizeLocalNextActionAudit(nextAction, { game, proofGraph = n
     action.artifact !== null && typeof action.artifact === "object"
       ? action.artifact
       : null;
+  const artifactRoleUrl =
+    typeof artifact?.roleUrl === "string" && artifact.roleUrl.trim() !== ""
+      ? artifact.roleUrl
+      : "";
+  const artifactProofTarget = String(artifact?.proofTarget ?? artifact?.path ?? "");
   const localCheck =
     action.localCheck !== null && typeof action.localCheck === "object"
       ? action.localCheck
@@ -2559,10 +2564,36 @@ export function normalizeLocalNextActionAudit(nextAction, { game, proofGraph = n
     }),
     realHostedEvidenceInputs,
     ...(hostedHandoffChecklist === null ? {} : { hostedHandoffChecklist }),
+    localPrerequisites:
+      artifact === null || artifactRoleUrl === ""
+        ? Object.freeze([])
+        : Object.freeze([
+            Object.freeze({
+              id: String(artifact.id ?? ""),
+              label: String(artifact.label ?? artifact.id ?? ""),
+              status: String(artifact.status ?? "unknown"),
+              evidence: String(artifact.path ?? ""),
+              command,
+              proofTarget: artifactProofTarget,
+              roleUrl: artifactRoleUrl,
+              requiredEvidence: String(artifact.requiredEvidence ?? ""),
+              proofBoundary: String(artifact.proofBoundary ?? ""),
+            }),
+          ]),
     artifactSummary: Object.freeze({
       command,
       reason,
       actionStatus,
+      selectedArtifactId: String(artifact?.id ?? ""),
+      selectedArtifactStatus: String(artifact?.status ?? ""),
+      selectedArtifactProofTarget: artifactProofTarget,
+      selectedArtifactRoleUrl: artifactRoleUrl,
+      selectedArtifactRoleHref:
+        artifactRoleUrl === ""
+          ? ""
+          : seededRoleUrlToAdminHref(artifactRoleUrl, { game }),
+      selectedArtifactBuildSlice: String(artifact?.buildSlice ?? ""),
+      selectedArtifactRequiredEvidence: String(artifact?.requiredEvidence ?? ""),
       sourceManifest: generatedSummary.sourceManifest,
       artifactFreshnessStatus: generatedSummary.artifactFreshnessStatus,
       artifactCount: generatedSummary.artifactCount,

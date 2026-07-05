@@ -207,6 +207,8 @@ import {
 const LOCAL_RACE_COMMAND =
   "npm run test:dev-test-game-hosted-concurrent-race-matrix";
 const SEED_FIXTURE_COMMAND = "npm run test:dev-test-game-seed-fixture";
+const HOST_SETUP_PROOF_COMMAND =
+  "npm run dev:test-game -- --verify-host-setup-only";
 const LOCAL_PROOF_GRAPH_COMMAND =
   "npm run test:dev-test-game-proof-graph-admin-proof";
 const PROOF_GRAPH_REGEN_COMMAND = "npm run test:dev-test-game-proof-graph";
@@ -2293,6 +2295,13 @@ test("admin route data exposes local next action as a native audit row", async (
     command: LOCAL_RACE_COMMAND,
     reason: "release-readiness-unproven",
     actionStatus: "ready",
+    selectedArtifactId: "",
+    selectedArtifactStatus: "",
+    selectedArtifactProofTarget: "",
+    selectedArtifactRoleUrl: "",
+    selectedArtifactRoleHref: "",
+    selectedArtifactBuildSlice: "",
+    selectedArtifactRequiredEvidence: "",
     ...normalizeLocalNextActionGeneratedSummary(nextActionInput),
     selectionTrace: {
       strategy: "development-spine-priority",
@@ -2934,6 +2943,102 @@ test("admin local next action detail data carries recovery check rows", async ()
       ...cohostDeadlineRaceReloadCheckRows(),
       ...staleConflictMessageCheckRows(),
       ...hostStaleControlCheckRows(),
+    ],
+  );
+});
+
+test("admin local next action detail data carries host setup artifact recovery row", async () => {
+  const roleData = await buildAdminAuditDetailData({
+    audit: localAdminAuditIds.nextAction,
+    principalUserId: "admin_a",
+    capabilities: [{ kind: "GlobalAdmin" }],
+    nextAction: nextActionFixture({
+      actionStatus: "blocked",
+      reason: "artifact-not-fresh",
+      command: HOST_SETUP_PROOF_COMMAND,
+      artifact: {
+        id: "host-setup-role",
+        label: "Host setup role proof",
+        path: "target/dev-test-game/host-setup-proof.json",
+        status: "stale",
+        refreshSource: "manifest-default",
+        proofTarget: "target/dev-test-game/host-setup-proof.json",
+        roleUrl: "http://127.0.0.1:5173/g/<seeded-game>/setup",
+        requiredEvidence:
+          "Fresh host setup seeded role proof artifact with setup route command recovery.",
+        buildSlice:
+          "Refresh only the host setup role URL proof before trusting host setup freshness.",
+        proofBoundary:
+          "Local host setup role proof freshness recovery only; does not prove the admin audit surface or release readiness.",
+      },
+    }),
+  });
+
+  assert.deepEqual(
+    roleData.audit.localPrerequisites.map((item) => [
+      item.id,
+      item.command,
+      item.proofTarget,
+      item.roleUrl,
+      item.requiredEvidence,
+    ]),
+    [
+      [
+        "host-setup-role",
+        HOST_SETUP_PROOF_COMMAND,
+        "target/dev-test-game/host-setup-proof.json",
+        "http://127.0.0.1:5173/g/<seeded-game>/setup",
+        "Fresh host setup seeded role proof artifact with setup route command recovery.",
+      ],
+    ],
+  );
+  assert.equal(
+    roleData.audit.artifactSummary.selectedArtifactRoleHref,
+    "http://127.0.0.1:5173/g/midsummer/setup",
+  );
+  assert.equal(
+    roleData.audit.artifactSummary.selectedArtifactBuildSlice,
+    "Refresh only the host setup role URL proof before trusting host setup freshness.",
+  );
+  const adminData = await buildAdminAuditDetailData({
+    audit: localAdminAuditIds.nextAction,
+    principalUserId: "admin_a",
+    capabilities: [{ kind: "GlobalAdmin" }],
+    nextAction: nextActionFixture({
+      actionStatus: "blocked",
+      reason: "artifact-not-fresh",
+      command: "npm run test:dev-test-game-host-setup-admin-proof",
+      artifact: {
+        id: "host-setup-admin",
+        label: "Host setup admin proof",
+        path: devTestGameHostSetupAdminProofPath,
+        status: "stale",
+        refreshSource: "manifest-default",
+        proofTarget: devTestGameHostSetupAdminProofPath,
+        roleUrl: localAdminAuditRoleUrl(localAdminAuditIds.hostSetupProof),
+        requiredEvidence:
+          "Fresh host setup admin proof artifact with visible setup checks.",
+        buildSlice:
+          "Refresh only the host setup admin proof before trusting host setup admin freshness.",
+        proofBoundary:
+          "Local host setup admin proof freshness recovery only; does not rerun the role proof or claim release readiness.",
+      },
+    }),
+  });
+  assert.deepEqual(
+    adminData.audit.localPrerequisites.map((item) => [
+      item.id,
+      item.command,
+      item.proofTarget,
+      item.roleUrl,
+    ]),
+    [
+      [
+        "host-setup-admin",
+        "npm run test:dev-test-game-host-setup-admin-proof",
+        devTestGameHostSetupAdminProofPath,
+        localAdminAuditRoleUrl(localAdminAuditIds.hostSetupProof),
+      ],
     ],
   );
 });

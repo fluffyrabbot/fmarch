@@ -2439,6 +2439,82 @@ test("spine manifest gives host setup freshness artifacts focused recovery comma
       ],
     ],
   );
+  const nextAction = buildDevTestGameNextAction(manifest, {
+    generatedAt: "2026-06-26T00:00:01.000Z",
+  });
+  assertDevTestGameNextAction(nextAction);
+  assert.deepEqual(nextAction.nextAction, {
+    command: devTestGameHostSetupProofCommand,
+    reason: "artifact-not-fresh",
+    status: "blocked",
+    artifact: {
+      id: "host-setup-role",
+      label: "Host setup role proof",
+      path: "target/dev-test-game/host-setup-proof.json",
+      status: "stale",
+      refreshSource: "manifest-default",
+      proofTarget: "target/dev-test-game/host-setup-proof.json",
+      roleUrl: "http://127.0.0.1:5173/g/<seeded-game>/setup",
+      requiredEvidence:
+        "Fresh host setup seeded role proof artifact with setup route command recovery.",
+      buildSlice:
+        "Refresh only the host setup role URL proof before trusting host setup freshness.",
+      proofBoundary:
+        "Local host setup role proof freshness recovery only; does not prove the admin audit surface or release readiness.",
+    },
+  });
+  const adminOnlyManifest = buildDevTestGameSpineManifest({
+    generatedAt: "2026-06-26T00:00:00.000Z",
+    proofFreshness: {
+      version: 1,
+      proof: "dev-test-game-proof-freshness",
+      status: "blocked",
+      generatedAt: "2026-06-26T00:00:00.000Z",
+      maxAgeHours: 24,
+      proofBoundary: "test freshness boundary",
+      summary: {
+        artifactCount: 1,
+        freshCount: 0,
+        staleCount: 1,
+        missingCount: 0,
+      },
+      artifacts: [
+        {
+          id: "host-setup-admin",
+          label: "Host setup admin proof",
+          path: devTestGameHostSetupAdminProofPath,
+          status: "stale",
+          mtime: "2026-06-25T00:00:00.000Z",
+          ageSeconds: 172800,
+          maxAgeSeconds: 86400,
+        },
+      ],
+    },
+  });
+  const adminNextAction = buildDevTestGameNextAction(adminOnlyManifest, {
+    generatedAt: "2026-06-26T00:00:01.000Z",
+  });
+  assertDevTestGameNextAction(adminNextAction);
+  assert.deepEqual(adminNextAction.nextAction, {
+    command: "npm run test:dev-test-game-host-setup-admin-proof",
+    reason: "artifact-not-fresh",
+    status: "blocked",
+    artifact: {
+      id: "host-setup-admin",
+      label: "Host setup admin proof",
+      path: devTestGameHostSetupAdminProofPath,
+      status: "stale",
+      refreshSource: "manifest-default",
+      proofTarget: devTestGameHostSetupAdminProofPath,
+      roleUrl: "/admin/audit/local-host-setup-proof?game=<seeded-game>",
+      requiredEvidence:
+        "Fresh host setup admin proof artifact with visible setup checks.",
+      buildSlice:
+        "Refresh only the host setup admin proof before trusting host setup admin freshness.",
+      proofBoundary:
+        "Local host setup admin proof freshness recovery only; does not rerun the role proof or claim release readiness.",
+    },
+  });
 });
 
 test("dev test-game spine manifest blocks freshness on proof-run session drift", () => {
@@ -2683,6 +2759,7 @@ test("dev test-game next-action derives one local recovery command from the mani
       path: devTestGameCoreLoopAdminProofPath,
       status: "stale",
       refreshSource: "admin-spine-recovery",
+      proofTarget: devTestGameCoreLoopAdminProofPath,
     },
   });
   assert.deepEqual(staleAction.selectionTrace, {
@@ -2745,6 +2822,7 @@ test("dev test-game next-action derives one local recovery command from the mani
       path: devTestGameHostedEvidenceLaneDemoProofPath,
       status: "missing",
       refreshSource: "manifest-default",
+      proofTarget: devTestGameHostedEvidenceLaneDemoProofPath,
     },
   });
   assert.deepEqual(missingDemoProofAction.selectionTrace, {
@@ -4241,6 +4319,7 @@ test("dev test-game next-action prioritizes development-spine recovery over mani
       path: "target/dev-test-game/proof-run.json",
       status: "stale",
       refreshSource: "manifest-default",
+      proofTarget: "target/dev-test-game/proof-run.json",
     },
   });
   assert.deepEqual(
