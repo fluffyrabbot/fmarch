@@ -312,11 +312,9 @@ import {
   proofGraphDestinationSummaryDriftNextActionFixture,
 } from "./dev_test_game_next_action_admin_proof.mjs";
 import {
-  selectedGraphDestinationLinkId,
+  applySelectedGraphDestinationFixture,
+  selectedGraphDestinationFixture,
   selectedGraphDestinationFixtureSubject,
-  selectedGraphDestinationLocalCheckIds,
-  selectedGraphDestinationLocalRelatedLinkIds,
-  selectedGraphDestinationRequiredCheckIds,
   selectedGraphDestinationRequiredCheckText,
   selectedNextActionGraphDestinationCases,
 } from "./dev_test_game_next_action_graph_destination_assertions.mjs";
@@ -5672,55 +5670,6 @@ for (const destinationCase of selectedNextActionGraphDestinationCases) {
       new RegExp(escapeRegExp(destinationCase.readinessTextMessage)),
     );
   });
-}
-
-function selectedGraphDestinationFixture({ destinationCase, subject }) {
-  return {
-    linkId: selectedGraphDestinationLinkId({ destinationCase, subject }),
-    auditId: "local-proof-graph",
-    detailRoleUrl: "/admin/audit/local-proof-graph?game=<seeded-game>",
-    visibleChecks: selectedGraphDestinationRequiredCheckIds({
-      destinationCase,
-      subject,
-    }),
-    visibleCheckStatuses: Object.fromEntries(
-      Object.entries(
-        selectedGraphDestinationRequiredCheckText({
-          destinationCase,
-          subject,
-        }),
-      ).map(([checkId, tokens]) => [checkId, tokens.join("\n")]),
-    ),
-    visibleRelatedLinks: selectedGraphDestinationLocalRelatedLinkIds({
-      destinationCase,
-      subject,
-    }),
-  };
-}
-
-function applySelectedGraphDestinationFixture({
-  proof,
-  destinationCase,
-  subject,
-  selectedDestination,
-}) {
-  if (destinationCase.id === "selected-proof-graph-node") {
-    proof.generatedFrom.selectedProofGraphNode = subject;
-  } else if (destinationCase.id === "selected-production-feature-graph") {
-    proof.generatedFrom.unprovenSelectedProductionFeatureGraph = subject;
-  } else {
-    throw new Error(`unknown selected graph destination case: ${destinationCase.id}`);
-  }
-  proof.adminRoleSurface.visibleChecks.push(
-    ...selectedGraphDestinationLocalCheckIds({ destinationCase, subject }),
-  );
-  proof.adminRoleSurface.visibleRelatedLinks.push(
-    ...selectedGraphDestinationLocalRelatedLinkIds({
-      destinationCase,
-      subject,
-    }),
-  );
-  proof.adminRoleSurface.visibleRelatedDestinations = [selectedDestination];
 }
 
 function escapeRegExp(value) {

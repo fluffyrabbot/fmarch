@@ -7,6 +7,9 @@ export const selectedNextActionGraphDestinationCases = Object.freeze([
   Object.freeze({
     id: "selected-proof-graph-node",
     label: "selected proof graph node",
+    assignFixtureSubject: ({ generatedFrom, subject }) => {
+      generatedFrom.selectedProofGraphNode = subject;
+    },
     fixtureSubject: () => ({
       id: "admin-proof:hosted-concurrent-race-matrix",
       status: "ready",
@@ -48,6 +51,9 @@ export const selectedNextActionGraphDestinationCases = Object.freeze([
   Object.freeze({
     id: "selected-production-feature-graph",
     label: "selected production feature graph",
+    assignFixtureSubject: ({ generatedFrom, subject }) => {
+      generatedFrom.unprovenSelectedProductionFeatureGraph = subject;
+    },
     fixtureSubject: ({ browserProofCommand } = {}) => ({
       nodeId: "production-feature:player-action-submission",
       status: "passed",
@@ -193,6 +199,62 @@ export function selectedGraphDestinationHandoffSummary({
           subject,
         }),
       };
+}
+
+export function selectedGraphDestinationFixture({
+  destinationCase,
+  subject,
+}) {
+  return {
+    linkId: selectedGraphDestinationLinkId({ destinationCase, subject }),
+    auditId: localAdminAuditIds.proofGraph,
+    detailRoleUrl: localAdminAuditRoleUrl(localAdminAuditIds.proofGraph),
+    visibleChecks: selectedGraphDestinationRequiredCheckIds({
+      destinationCase,
+      subject,
+    }),
+    visibleCheckStatuses: Object.fromEntries(
+      Object.entries(
+        selectedGraphDestinationRequiredCheckText({
+          destinationCase,
+          subject,
+        }),
+      ).map(([checkId, tokens]) => [checkId, tokens.join("\n")]),
+    ),
+    visibleRelatedLinks: selectedGraphDestinationLocalRelatedLinkIds({
+      destinationCase,
+      subject,
+    }),
+  };
+}
+
+export function applySelectedGraphDestinationFixture({
+  proof,
+  destinationCase,
+  subject,
+  selectedDestination,
+}) {
+  if (typeof destinationCase?.assignFixtureSubject !== "function") {
+    throw new Error(
+      `selected graph destination fixture missing assignment hook: ${String(
+        destinationCase?.id ?? "",
+      )}`,
+    );
+  }
+  destinationCase.assignFixtureSubject({
+    generatedFrom: proof.generatedFrom,
+    subject,
+  });
+  proof.adminRoleSurface.visibleChecks.push(
+    ...selectedGraphDestinationLocalCheckIds({ destinationCase, subject }),
+  );
+  proof.adminRoleSurface.visibleRelatedLinks.push(
+    ...selectedGraphDestinationLocalRelatedLinkIds({
+      destinationCase,
+      subject,
+    }),
+  );
+  proof.adminRoleSurface.visibleRelatedDestinations = [selectedDestination];
 }
 
 export function assertSelectedGraphDestinationCaseText({
