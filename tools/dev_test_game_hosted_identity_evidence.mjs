@@ -20,6 +20,7 @@ export {
   devTestGameHostedIdentityOperatorAdminProofPath,
   devTestGameHostedIdentityOperatorEvidencePath,
   devTestGameHostedIdentityProgressionAdminProofCommand,
+  devTestGameHostedIdentityProgressionAdminProofBatchCommand,
   devTestGameHostedIdentityProgressionSummaryCommand,
   devTestGameHostedIdentityProgressionSummaryPath,
   hostedIdentityEvidenceBlockedCheckRows,

@@ -99,6 +99,10 @@ import {
 } from "./dev_test_game_next_action_sequence_handoff_pair.mjs";
 import { releaseReadinessStep } from "./dev_test_game_spine_readiness_steps.mjs";
 import { runSpinePlan } from "./dev_test_game_spine_runner.mjs";
+import {
+  devTestGameHostedIdentityProgressionAdminProofBatchScript,
+  hostedIdentityProgressionAdminProofBatchArtifactPaths,
+} from "./dev_test_game_hosted_identity_progression_admin_proof_batch.mjs";
 
 export { adminSpineProofPath, adminSpineTerminalBatchProofPath };
 
@@ -242,6 +246,10 @@ export const devTestGameAdminSpinePlan = [
     kind: "node",
     script: "tools/dev_test_game_hosted_identity_progression_summary.mjs",
   },
+  {
+    kind: "node",
+    script: devTestGameHostedIdentityProgressionAdminProofBatchScript,
+  },
   { kind: "node", script: "tools/dev_test_game_hosted_target_preflight.mjs" },
   { kind: "node", script: "tools/dev_test_game_hosted_evidence_lane.mjs" },
   {
@@ -262,6 +270,7 @@ export const devTestGameAdminSpinePlan = [
       devTestGameHostedConcurrentRaceMatrixPath,
       devTestGameHostedIdentityEvidencePath,
       devTestGameHostedIdentityProgressionSummaryPath,
+      ...hostedIdentityProgressionAdminProofBatchArtifactPaths,
       devTestGameHostedTargetPreflightPath,
       devTestGameHostedEvidenceLanePath,
       devTestGameHostedEvidenceLaneDemoProofPath,

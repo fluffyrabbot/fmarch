@@ -218,6 +218,7 @@ that can move from missing to provided while keeping hosted readiness blocked:
 
 ```sh
 npm run test:dev-test-game-hosted-identity-progression-summary
+npm run test:dev-test-game-hosted-identity-progression-admin-proof:batch
 FMARCH_HOSTED_IDENTITY_PROGRESSION_ID=hosted-account-lifecycle npm run test:dev-test-game-hosted-identity-progression-admin-proof
 FMARCH_HOSTED_IDENTITY_PROGRESSION_ID=invite-delivery npm run test:dev-test-game-hosted-identity-progression-admin-proof
 FMARCH_HOSTED_IDENTITY_PROGRESSION_ID=account-recovery npm run test:dev-test-game-hosted-identity-progression-admin-proof

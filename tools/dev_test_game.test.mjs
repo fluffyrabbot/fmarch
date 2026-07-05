@@ -214,6 +214,11 @@ import {
   identityReadinessEnv,
 } from "./dev_test_game_identity_spine.mjs";
 import {
+  devTestGameHostedIdentityProgressionAdminProofBatchScript,
+  hostedIdentityProgressionAdminProofBatchArtifactPaths,
+  hostedIdentityProgressionAdminProofBatchPlan,
+} from "./dev_test_game_hosted_identity_progression_admin_proof_batch.mjs";
+import {
   devTestGameOpsSpinePlan,
   opsSpineReadinessEnv,
 } from "./dev_test_game_ops_spine.mjs";
@@ -238,6 +243,7 @@ import {
   devTestGameHostedIdentityOperatorAdminProofPath,
   devTestGameHostedIdentityOperatorEvidencePath,
   devTestGameHostedIdentityProgressionAdminProofCommand,
+  devTestGameHostedIdentityProgressionAdminProofBatchCommand,
   devTestGameHostedIdentityProgressionSummaryCommand,
   devTestGameHostedIdentityProgressionSummaryPath,
   hostedIdentityEvidenceBlockedChecks,
@@ -780,6 +786,16 @@ test("dev test-game spine orchestrators expose stable proof order and env maps",
     "node tools/dev_test_game_hosted_identity_progression_admin_proof.mjs",
   );
   assert.equal(
+    devTestGameHostedIdentityProgressionAdminProofBatchCommand,
+    "test:dev-test-game-hosted-identity-progression-admin-proof:batch",
+  );
+  assert.equal(
+    packageJson.scripts[
+      devTestGameHostedIdentityProgressionAdminProofBatchCommand
+    ],
+    `node ${devTestGameHostedIdentityProgressionAdminProofBatchScript}`,
+  );
+  assert.equal(
     devTestGameHostedIdentityProgressionSummaryCommand,
     "test:dev-test-game-hosted-identity-progression-summary",
   );
@@ -813,6 +829,11 @@ test("dev test-game spine orchestrators expose stable proof order and env maps",
   assert(
     operatorDocs.includes(
       `npm run ${devTestGameHostedIdentityProgressionSummaryCommand}`,
+    ),
+  );
+  assert(
+    operatorDocs.includes(
+      `npm run ${devTestGameHostedIdentityProgressionAdminProofBatchCommand}`,
     ),
   );
   assert(
@@ -928,6 +949,7 @@ test("dev test-game spine orchestrators expose stable proof order and env maps",
       "tools/dev_test_game_identity_admin_proof.mjs",
       "tools/dev_test_game_hosted_identity_evidence.mjs",
       "tools/dev_test_game_hosted_identity_progression_summary.mjs",
+      devTestGameHostedIdentityProgressionAdminProofBatchScript,
       devTestGameReleaseReadinessScript,
     ],
   );
@@ -938,10 +960,28 @@ test("dev test-game spine orchestrators expose stable proof order and env maps",
       "tools/dev_test_game_identity_admin_proof.mjs",
       "tools/dev_test_game_hosted_identity_evidence.mjs",
       "tools/dev_test_game_hosted_identity_progression_summary.mjs",
+      devTestGameHostedIdentityProgressionAdminProofBatchScript,
       devTestGameReleaseReadinessScript,
       "tools/dev_test_game_hosted_identity_operator_admin_proof.mjs",
       devTestGameReleaseReadinessScript,
     ],
+  );
+  assert.deepEqual(
+    hostedIdentityProgressionAdminProofBatchPlan,
+    hostedIdentityEvidenceFamilyProgressionCases.map((progression) => ({
+      progressionId: progression.id,
+      evidencePath: hostedIdentityEvidenceProgressionPath(progression.id),
+      adminProofPath: hostedIdentityEvidenceProgressionAdminProofPath(
+        progression.id,
+      ),
+    })),
+  );
+  assert.deepEqual(
+    hostedIdentityProgressionAdminProofBatchArtifactPaths,
+    hostedIdentityEvidenceFamilyProgressionCases.flatMap((progression) => [
+      hostedIdentityEvidenceProgressionPath(progression.id),
+      hostedIdentityEvidenceProgressionAdminProofPath(progression.id),
+    ]),
   );
   assert.equal(
     devTestGameIdentityOperatorSpinePlan.at(-1).readinessReason,
@@ -1128,6 +1168,7 @@ test("dev test-game spine orchestrators expose stable proof order and env maps",
       devTestGameReleaseReadinessScript,
       "tools/dev_test_game_hosted_identity_evidence.mjs",
       "tools/dev_test_game_hosted_identity_progression_summary.mjs",
+      devTestGameHostedIdentityProgressionAdminProofBatchScript,
       "tools/dev_test_game_hosted_target_preflight.mjs",
       "tools/dev_test_game_hosted_evidence_lane.mjs",
       "tools/dev_test_game_hosted_evidence_lane_demo_proof.mjs",
@@ -1154,17 +1195,17 @@ test("dev test-game spine orchestrators expose stable proof order and env maps",
       devTestGameReleaseReadinessScript,
     ],
   );
-  assert.deepEqual(devTestGameAdminSpinePlan[13], {
+  assert.deepEqual(devTestGameAdminSpinePlan[14], {
     kind: "custom",
     script: "admin-spine-proof",
     label: "Admin spine proof",
   });
-  assert.deepEqual(devTestGameAdminSpinePlan[19], {
+  assert.deepEqual(devTestGameAdminSpinePlan[20], {
     kind: "custom",
     script: "terminal-admin-proof-batch",
     label: "Terminal admin proof batch",
   });
-  assert.deepEqual(devTestGameAdminSpinePlan[21], {
+  assert.deepEqual(devTestGameAdminSpinePlan[22], {
     kind: "node",
     script: "tools/dev_test_game_next_action.mjs",
     env: {
@@ -1172,16 +1213,16 @@ test("dev test-game spine orchestrators expose stable proof order and env maps",
       FMARCH_DEV_TEST_GAME_NEXT_ACTION: hostedIdentityNextActionPath,
     },
   });
-  assert.deepEqual(devTestGameAdminSpinePlan[22], {
+  assert.deepEqual(devTestGameAdminSpinePlan[23], {
     kind: "custom",
     script: "terminal-hosted-identity-next-action-admin-proof-batch",
     label: "Terminal hosted identity next-action admin proof batch",
   });
-  assert.deepEqual(devTestGameAdminSpinePlan[23], {
+  assert.deepEqual(devTestGameAdminSpinePlan[24], {
     kind: "node",
     script: "tools/dev_test_game_next_action.mjs",
   });
-  assert.deepEqual(devTestGameAdminSpinePlan[24], {
+  assert.deepEqual(devTestGameAdminSpinePlan[25], {
     kind: "custom",
     script: "terminal-refresh-admin-proof-batch",
     label: "Terminal refresh admin proof batch",
@@ -1197,22 +1238,22 @@ test("dev test-game spine orchestrators expose stable proof order and env maps",
       })),
     [
       {
-        index: 17,
+        index: 18,
         sequenceStage: null,
         outputPath: nextActionPath,
       },
       {
-        index: 21,
+        index: 22,
         sequenceStage: devTestGameHostedIdentitySequenceStage,
         outputPath: hostedIdentityNextActionPath,
       },
       {
-        index: 23,
+        index: 24,
         sequenceStage: null,
         outputPath: nextActionPath,
       },
       {
-        index: 27,
+        index: 28,
         sequenceStage: null,
         outputPath: nextActionPath,
       },
@@ -1279,7 +1320,7 @@ test("dev test-game spine orchestrators expose stable proof order and env maps",
     });
   }
   assert.equal(
-    devTestGameAdminSpinePlan[15].env,
+    devTestGameAdminSpinePlan[16].env,
     adminSpinePreGraphReadinessEvidenceEnv,
   );
   for (const key of [
@@ -1288,8 +1329,8 @@ test("dev test-game spine orchestrators expose stable proof order and env maps",
     "FMARCH_DEV_TEST_GAME_PROOF_FRESHNESS_ADMIN_PROOF",
     "FMARCH_DEV_TEST_GAME_NEXT_ACTION_ADMIN_PROOF",
   ]) {
-    assert.equal(devTestGameAdminSpinePlan[15].env[key], undefined);
-    assert.equal(Object.hasOwn(devTestGameAdminSpinePlan[15].env, key), false);
+    assert.equal(devTestGameAdminSpinePlan[16].env[key], undefined);
+    assert.equal(Object.hasOwn(devTestGameAdminSpinePlan[16].env, key), false);
   }
   assert.equal(
     devTestGameAdminSpinePlan.at(-1).env,
@@ -3258,7 +3299,7 @@ test("dev test-game next-action derives one local recovery command from the mani
     ),
   );
   assert.deepEqual(
-    devTestGameAdminSpinePlan.slice(21, 25).map((step) => ({
+    devTestGameAdminSpinePlan.slice(22, 26).map((step) => ({
       script: step.script,
       sequenceStage:
         step.env?.FMARCH_DEV_TEST_GAME_SEQUENCE_STAGE ??

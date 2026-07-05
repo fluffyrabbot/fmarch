@@ -17,6 +17,8 @@ export const devTestGameHostedIdentityOperatorAdminProofCommand =
   "test:dev-test-game-hosted-identity-operator-admin-proof";
 export const devTestGameHostedIdentityProgressionAdminProofCommand =
   "test:dev-test-game-hosted-identity-progression-admin-proof";
+export const devTestGameHostedIdentityProgressionAdminProofBatchCommand =
+  "test:dev-test-game-hosted-identity-progression-admin-proof:batch";
 export const devTestGameHostedIdentityProgressionSummaryCommand =
   "test:dev-test-game-hosted-identity-progression-summary";
 export { devTestGameHostedIdentityProgressionSummaryPath };
@@ -512,6 +514,7 @@ export function hostedIdentityEvidenceProgressionHandoffSummary() {
   return Object.freeze({
     status: "passed",
     command: `npm run ${devTestGameHostedIdentityProgressionSummaryCommand}`,
+    batchProofCommand: `npm run ${devTestGameHostedIdentityProgressionAdminProofBatchCommand}`,
     proofTarget: devTestGameHostedIdentityProgressionSummaryPath,
     roleUrl: hostedIdentityEvidenceRoleSurfaceDrilldown.handoffRoleUrl,
     progressionCount: progressions.length,

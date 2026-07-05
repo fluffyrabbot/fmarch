@@ -30,6 +30,7 @@ import {
 import {
   devTestGameHostedIdentityEvidenceCommand,
   devTestGameHostedIdentityEvidencePath,
+  devTestGameHostedIdentityProgressionAdminProofBatchCommand,
   devTestGameHostedIdentityProgressionSummaryCommand,
   devTestGameHostedIdentityProgressionSummaryPath,
 } from "./dev_test_game_hosted_identity_evidence.mjs";
@@ -108,6 +109,9 @@ import {
   devTestGameIdentitySpinePlan,
   identityReadinessEnv,
 } from "./dev_test_game_identity_spine.mjs";
+import {
+  hostedIdentityProgressionAdminProofBatchArtifactPaths,
+} from "./dev_test_game_hosted_identity_progression_admin_proof_batch.mjs";
 import {
   devTestGameOpsSpinePlan,
   opsSpineReadinessEnv,
@@ -284,6 +288,12 @@ export function buildDevTestGameSpineManifest({
         script: devTestGameHostedIdentityProgressionSummaryCommand,
         proofArtifact: devTestGameHostedIdentityProgressionSummaryPath,
         dependsOn: [devTestGameHostedIdentityEvidencePath],
+        roleUrl: "/admin/audit/local-hosted-identity-evidence?game=<seeded-game>",
+      },
+      hostedIdentityProgressionAdminProofBatch: {
+        script: devTestGameHostedIdentityProgressionAdminProofBatchCommand,
+        proofArtifacts: [...hostedIdentityProgressionAdminProofBatchArtifactPaths],
+        dependsOn: [devTestGameHostedIdentityProgressionSummaryPath],
         roleUrl: "/admin/audit/local-hosted-identity-evidence?game=<seeded-game>",
       },
       hostedIdentityEvidenceAdminProof: {
@@ -708,6 +718,7 @@ export function assertDevTestGameSpineManifest(manifest) {
     "tools/dev_test_game_identity_admin_proof.mjs",
     "tools/dev_test_game_hosted_identity_evidence.mjs",
     "tools/dev_test_game_hosted_identity_progression_summary.mjs",
+    "tools/dev_test_game_hosted_identity_progression_admin_proof_batch.mjs",
     "tools/dev_test_game_release_readiness.mjs",
   ]);
   assertPlanScripts(manifest.commands?.identityOperator?.plan ?? [], [
@@ -715,6 +726,7 @@ export function assertDevTestGameSpineManifest(manifest) {
     "tools/dev_test_game_identity_admin_proof.mjs",
     "tools/dev_test_game_hosted_identity_evidence.mjs",
     "tools/dev_test_game_hosted_identity_progression_summary.mjs",
+    "tools/dev_test_game_hosted_identity_progression_admin_proof_batch.mjs",
     "tools/dev_test_game_release_readiness.mjs",
     "tools/dev_test_game_hosted_identity_operator_admin_proof.mjs",
     "tools/dev_test_game_release_readiness.mjs",
@@ -804,6 +816,23 @@ export function assertDevTestGameSpineManifest(manifest) {
   ) {
     throw new Error(
       `spine manifest hosted identity progression summary artifact drifted: ${manifest.commands.hostedIdentityProgressionSummary.proofArtifact}`,
+    );
+  }
+  if (
+    manifest.commands?.hostedIdentityProgressionAdminProofBatch?.script !==
+    devTestGameHostedIdentityProgressionAdminProofBatchCommand
+  ) {
+    throw new Error(
+      `spine manifest hosted identity progression admin proof batch command drifted: ${manifest.commands?.hostedIdentityProgressionAdminProofBatch?.script}`,
+    );
+  }
+  if (
+    JSON.stringify(
+      manifest.commands.hostedIdentityProgressionAdminProofBatch.proofArtifacts,
+    ) !== JSON.stringify([...hostedIdentityProgressionAdminProofBatchArtifactPaths])
+  ) {
+    throw new Error(
+      "spine manifest hosted identity progression admin proof batch artifacts drifted",
     );
   }
   if (

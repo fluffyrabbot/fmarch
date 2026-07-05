@@ -14,6 +14,10 @@ import {
 } from "./dev_test_game_adjacent_artifact_paths.mjs";
 import { releaseReadinessStep } from "./dev_test_game_spine_readiness_steps.mjs";
 import { runSpinePlan } from "./dev_test_game_spine_runner.mjs";
+import {
+  devTestGameHostedIdentityProgressionAdminProofBatchScript,
+  hostedIdentityProgressionAdminProofBatchArtifactPaths,
+} from "./dev_test_game_hosted_identity_progression_admin_proof_batch.mjs";
 
 export const identityReadinessEnv = {
   FMARCH_DEV_TEST_GAME_OPS_ARTIFACTS: devTestGameOpsArtifactsPath,
@@ -42,6 +46,10 @@ const devTestGameIdentityBaseSpineSteps = [
     kind: "node",
     script: "tools/dev_test_game_hosted_identity_progression_summary.mjs",
   },
+  {
+    kind: "node",
+    script: devTestGameHostedIdentityProgressionAdminProofBatchScript,
+  },
 ];
 
 export const devTestGameIdentitySpinePlan = [
@@ -53,6 +61,7 @@ export const devTestGameIdentitySpinePlan = [
       devTestGameIdentityAdminProofPath,
       devTestGameHostedIdentityEvidencePath,
       devTestGameHostedIdentityProgressionSummaryPath,
+      ...hostedIdentityProgressionAdminProofBatchArtifactPaths,
     ],
     env: identityReadinessEnv,
   }),
@@ -67,6 +76,7 @@ export const devTestGameIdentityOperatorSpinePlan = [
       devTestGameIdentityAdminProofPath,
       devTestGameHostedIdentityEvidencePath,
       devTestGameHostedIdentityProgressionSummaryPath,
+      ...hostedIdentityProgressionAdminProofBatchArtifactPaths,
     ],
     env: identityReadinessEnv,
   }),
