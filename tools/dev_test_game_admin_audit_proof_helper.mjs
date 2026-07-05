@@ -44,6 +44,25 @@ export function assertVisibleAdminRoleSurfaceRows({
   }
 }
 
+export function assertAdminRoleSurfaceStatusText({
+  adminRoleSurface,
+  expectedStatuses,
+  proofName,
+  rowName = "row status",
+  surfaceKey,
+}) {
+  const visibleStatuses = adminRoleSurface?.[surfaceKey];
+  for (const [rowId, expectedText] of Object.entries(expectedStatuses ?? {})) {
+    const visibleText = visibleStatuses?.[rowId];
+    if (
+      typeof visibleText !== "string" ||
+      !visibleText.includes(String(expectedText))
+    ) {
+      throw new Error(`${proofName} missing ${rowName}: ${rowId}`);
+    }
+  }
+}
+
 export async function runAdminAuditProof({
   smokeName,
   stage,

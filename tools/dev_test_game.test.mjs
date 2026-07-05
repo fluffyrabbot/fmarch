@@ -355,6 +355,7 @@ import {
   devTestGameAdminSpineProofPlan,
 } from "./dev_test_game_admin_spine_proof.mjs";
 import {
+  assertAdminRoleSurfaceStatusText,
   assertVisibleAdminRoleSurfaceRows,
   normalizedEvidenceObjectRowIds,
   resolveAdminAuditProofBatchPlan,
@@ -3596,6 +3597,56 @@ test("admin proof fixtures prove normalized evidence object rows", () => {
     proofName: "proof graph admin proof fixture",
     rowName: "evidence object",
   });
+});
+
+test("admin role surface helpers assert visible rows and status text", () => {
+  const adminRoleSurface = {
+    visibleRelatedLinks: ["local-next-action"],
+    visibleUnprovenStatuses: {
+      "hosted-deployment": "blocked - needs hosted API URL",
+    },
+  };
+
+  assertVisibleAdminRoleSurfaceRows({
+    adminRoleSurface,
+    rowIds: ["local-next-action"],
+    proofName: "helper proof",
+    rowName: "related link",
+    surfaceKey: "visibleRelatedLinks",
+  });
+  assertAdminRoleSurfaceStatusText({
+    adminRoleSurface,
+    expectedStatuses: {
+      "hosted-deployment": "hosted API URL",
+    },
+    proofName: "helper proof",
+    rowName: "blocked evidence",
+    surfaceKey: "visibleUnprovenStatuses",
+  });
+  assert.throws(
+    () =>
+      assertVisibleAdminRoleSurfaceRows({
+        adminRoleSurface,
+        rowIds: ["local-release-readiness"],
+        proofName: "helper proof",
+        rowName: "related link",
+        surfaceKey: "visibleRelatedLinks",
+      }),
+    /helper proof missing related link: local-release-readiness/,
+  );
+  assert.throws(
+    () =>
+      assertAdminRoleSurfaceStatusText({
+        adminRoleSurface,
+        expectedStatuses: {
+          "hosted-deployment": "backup receipt",
+        },
+        proofName: "helper proof",
+        rowName: "blocked evidence",
+        surfaceKey: "visibleUnprovenStatuses",
+      }),
+    /helper proof missing blocked evidence: hosted-deployment/,
+  );
 });
 
 test("named game selection is idempotent by default with explicit reset and reuse", () => {
