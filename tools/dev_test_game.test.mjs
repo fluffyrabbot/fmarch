@@ -4204,6 +4204,59 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
     (node) => node.id === "admin-spine-terminal-batches",
   );
   assert.deepEqual(
+    terminalBatchNode.receiptArtifacts.map((artifact) => [
+      artifact.proofId,
+      artifact.artifactPath,
+      artifact.batchLabel,
+    ]),
+    [
+      [
+        "proof-graph",
+        "target/dev-test-game/proof-graph-admin-proof.json",
+        "Terminal admin proof batch",
+      ],
+      [
+        "proof-freshness",
+        "target/dev-test-game/proof-freshness-admin-proof.json",
+        "Terminal admin proof batch",
+      ],
+      [
+        "next-action",
+        "target/dev-test-game/next-action-admin-proof.json",
+        "Terminal admin proof batch",
+      ],
+      [
+        "hosted-identity-next-action",
+        "target/dev-test-game/hosted-identity-next-action-admin-proof.json",
+        "Terminal hosted identity next-action admin proof batch",
+      ],
+      [
+        "proof-freshness",
+        "target/dev-test-game/proof-freshness-admin-proof.json",
+        "Terminal refresh admin proof batch",
+      ],
+      [
+        "next-action",
+        "target/dev-test-game/next-action-admin-proof.json",
+        "Terminal refresh admin proof batch",
+      ],
+    ],
+  );
+  assert.deepEqual(
+    Object.entries(
+      terminalBatchNode.receiptArtifacts.reduce((counts, artifact) => {
+        counts[artifact.proofId] = (counts[artifact.proofId] ?? 0) + 1;
+        return counts;
+      }, {}),
+    ),
+    [
+      ["proof-graph", 1],
+      ["proof-freshness", 2],
+      ["next-action", 2],
+      ["hosted-identity-next-action", 1],
+    ],
+  );
+  assert.deepEqual(
     terminalBatchNode.receiptArtifacts.find(
       (artifact) => artifact.proofId === "hosted-identity-next-action",
     ),

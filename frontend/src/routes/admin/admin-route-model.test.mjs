@@ -1649,6 +1649,53 @@ test("admin local proof graph detail data carries graph node rows", async () => 
   );
 });
 
+test("admin local proof graph detail keeps duplicate terminal receipt proof ids inspectable", async () => {
+  const proofGraph = proofGraphWithDuplicateTerminalReceiptProofIds();
+  const data = await buildAdminAuditDetailData({
+    audit: localAdminAuditIds.proofGraph,
+    principalUserId: "admin_a",
+    capabilities: [{ kind: "GlobalAdmin" }],
+    proofGraph,
+  });
+
+  const receiptRows = data.audit.checks.filter((check) =>
+    check.id.startsWith("receipt-artifact:admin-spine-terminal-batches:"),
+  );
+  assert.equal(
+    new Set(receiptRows.map((row) => row.id)).size,
+    receiptRows.length,
+  );
+  assert.deepEqual(
+    receiptRows.map((row) => [row.id, row.status]),
+    [
+      [
+        "receipt-artifact:admin-spine-terminal-batches:proof-graph:terminal-admin-proof-batch",
+        "proof-graph:Terminal admin proof batch:target/dev-test-game/proof-graph-admin-proof.json",
+      ],
+      [
+        "receipt-artifact:admin-spine-terminal-batches:proof-freshness:terminal-admin-proof-batch",
+        "proof-freshness:Terminal admin proof batch:target/dev-test-game/proof-freshness-admin-proof.json",
+      ],
+      [
+        "receipt-artifact:admin-spine-terminal-batches:next-action:terminal-admin-proof-batch",
+        "next-action:Terminal admin proof batch:target/dev-test-game/next-action-admin-proof.json",
+      ],
+      [
+        "receipt-artifact:admin-spine-terminal-batches:hosted-identity-next-action:terminal-hosted-identity-next-action-admin-proof-batch",
+        "hosted-identity-next-action:Terminal hosted identity next-action admin proof batch:target/dev-test-game/hosted-identity-next-action-admin-proof.json",
+      ],
+      [
+        "receipt-artifact:admin-spine-terminal-batches:proof-freshness:terminal-refresh-admin-proof-batch",
+        "proof-freshness:Terminal refresh admin proof batch:target/dev-test-game/proof-freshness-admin-proof.json",
+      ],
+      [
+        "receipt-artifact:admin-spine-terminal-batches:next-action:terminal-refresh-admin-proof-batch",
+        "next-action:Terminal refresh admin proof batch:target/dev-test-game/next-action-admin-proof.json",
+      ],
+    ],
+  );
+});
+
 test("admin route data exposes local race coverage as a native audit row", async () => {
   const data = await buildAdminRouteData({
     principalUserId: "admin_a",
@@ -2224,31 +2271,7 @@ test("admin route data exposes local next action as a native audit row", async (
       batchCount: 3,
       edgeCount: 3,
       edgeTargets: ["proof-graph", "proof-freshness", "next-action"],
-      receiptArtifacts: [
-        {
-          proofId: "proof-graph",
-          artifactPath: "target/dev-test-game/proof-graph-admin-proof.json",
-          batchLabel: "Terminal admin proof batch",
-        },
-        {
-          proofId: "proof-freshness",
-          artifactPath:
-            "target/dev-test-game/proof-freshness-admin-proof.json",
-          batchLabel: "Terminal admin proof batch",
-        },
-        {
-          proofId: "next-action",
-          artifactPath: "target/dev-test-game/next-action-admin-proof.json",
-          batchLabel: "Terminal admin proof batch",
-        },
-        {
-          proofId: "hosted-identity-next-action",
-          artifactPath:
-            "target/dev-test-game/hosted-identity-next-action-admin-proof.json",
-          batchLabel:
-            "Terminal hosted identity next-action admin proof batch",
-        },
-      ],
+      receiptArtifacts: terminalBatchReceiptArtifactsFixture(),
     },
     privateChannelRecoveryGraph: privateChannelRecoveryGraphFixture(),
     replacementActionRecoveryGraph: replacementActionRecoveryGraphFixture(),
@@ -6040,6 +6063,21 @@ function proofGraphFixture() {
   };
 }
 
+function proofGraphWithDuplicateTerminalReceiptProofIds() {
+  const proofGraph = proofGraphFixture();
+  return {
+    ...proofGraph,
+    nodes: proofGraph.nodes.map((node) =>
+      node.id === "admin-spine-terminal-batches"
+        ? {
+            ...node,
+            receiptArtifacts: terminalBatchReceiptArtifactsFixture(),
+          }
+        : node,
+    ),
+  };
+}
+
 function proofGraphRecoveryReceiptCases() {
   return [
     proofGraphRecoveryReceiptCase({
@@ -6072,31 +6110,45 @@ function terminalBatchGraphFixture() {
     ],
     edgeCount: 3,
     edgeTargets: ["proof-graph", "proof-freshness", "next-action"],
-    receiptArtifacts: [
-      {
-        proofId: "proof-graph",
-        artifactPath: "target/dev-test-game/proof-graph-admin-proof.json",
-        batchLabel: "Terminal admin proof batch",
-      },
-      {
-        proofId: "proof-freshness",
-        artifactPath: "target/dev-test-game/proof-freshness-admin-proof.json",
-        batchLabel: "Terminal admin proof batch",
-      },
-      {
-        proofId: "next-action",
-        artifactPath: "target/dev-test-game/next-action-admin-proof.json",
-        batchLabel: "Terminal admin proof batch",
-      },
-      {
-        proofId: "hosted-identity-next-action",
-        artifactPath:
-          "target/dev-test-game/hosted-identity-next-action-admin-proof.json",
-        batchLabel:
-          "Terminal hosted identity next-action admin proof batch",
-      },
-    ],
+    receiptArtifacts: terminalBatchReceiptArtifactsFixture(),
   };
+}
+
+function terminalBatchReceiptArtifactsFixture() {
+  return [
+    {
+      proofId: "proof-graph",
+      artifactPath: "target/dev-test-game/proof-graph-admin-proof.json",
+      batchLabel: "Terminal admin proof batch",
+    },
+    {
+      proofId: "proof-freshness",
+      artifactPath: "target/dev-test-game/proof-freshness-admin-proof.json",
+      batchLabel: "Terminal admin proof batch",
+    },
+    {
+      proofId: "next-action",
+      artifactPath: "target/dev-test-game/next-action-admin-proof.json",
+      batchLabel: "Terminal admin proof batch",
+    },
+    {
+      proofId: "hosted-identity-next-action",
+      artifactPath:
+        "target/dev-test-game/hosted-identity-next-action-admin-proof.json",
+      batchLabel:
+        "Terminal hosted identity next-action admin proof batch",
+    },
+    {
+      proofId: "proof-freshness",
+      artifactPath: "target/dev-test-game/proof-freshness-admin-proof.json",
+      batchLabel: "Terminal refresh admin proof batch",
+    },
+    {
+      proofId: "next-action",
+      artifactPath: "target/dev-test-game/next-action-admin-proof.json",
+      batchLabel: "Terminal refresh admin proof batch",
+    },
+  ];
 }
 
 function privateChannelRecoveryGraphFixture() {
