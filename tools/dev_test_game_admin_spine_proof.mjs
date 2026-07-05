@@ -25,6 +25,9 @@ import {
   runAdminAuditProofBatchPlan,
 } from "./dev_test_game_admin_audit_proof_helper.mjs";
 import {
+  adminSpineProofBatchRegistry,
+} from "./dev_test_game_admin_spine_proof_batches.mjs";
+import {
   coreLoopAdminProofCase,
 } from "./dev_test_game_core_loop_admin_proof.mjs";
 import {
@@ -267,28 +270,46 @@ export const devTestGameAdminSpineProofPlan = [
 export function devTestGameAdminSpineProofBatchPlans(
   plan = devTestGameAdminSpineProofPlan,
 ) {
-  const releaseIndex = plan.findIndex((spec) => spec.id === "release");
-  if (releaseIndex < 0) {
-    throw new Error("admin spine proof plan is missing the release proof boundary");
+  const specsById = new Map(plan.map((spec) => [spec.id, spec]));
+  const batchedIds = new Set(
+    adminSpineProofBatchRegistry.flatMap((batch) => batch.proofIds),
+  );
+  const unbatchedSpec = plan.find((spec) => !batchedIds.has(spec.id));
+  if (unbatchedSpec !== undefined) {
+    throw new Error(
+      `admin spine proof spec is missing from batch registry: ${unbatchedSpec.id}`,
+    );
   }
-  const preReleaseSpecs = plan.slice(0, releaseIndex);
-  const releaseAndHostedSpecs = plan.slice(releaseIndex);
-  return [
-    {
-      label: "Aggregate pre-release admin proof batch",
-      reason:
-        "core, hardening, identity, backup, ops, and seed admin surfaces share the pre-readiness local proof inputs",
-      specs: preReleaseSpecs,
-      cases: preReleaseSpecs.map((spec) => spec.caseFactory),
-    },
-    {
-      label: "Aggregate release and hosted admin proof batch",
-      reason:
-        "release, hosted, race coverage, and manifest admin surfaces share the post-readiness rollup inputs",
-      specs: releaseAndHostedSpecs,
-      cases: releaseAndHostedSpecs.map((spec) => spec.caseFactory),
-    },
-  ];
+  return adminSpineProofBatchRegistry.map((batch) =>
+    adminSpineProofBatchPlanForRegistryBatch({ batch, specsById }),
+  );
+}
+
+function adminSpineProofBatchPlanForRegistryBatch({ batch, specsById }) {
+  const specs = batch.proofIds.map((proofId) => {
+    const spec = specsById.get(proofId);
+    if (spec === undefined) {
+      throw new Error(
+        `admin spine proof batch ${batch.label} has unknown proof id: ${proofId}`,
+      );
+    }
+    return spec;
+  });
+  const artifactPaths = specs.map((spec) => spec.path);
+  if (JSON.stringify(artifactPaths) !== JSON.stringify(batch.artifactPaths)) {
+    throw new Error(
+      `admin spine proof batch ${batch.label} artifact paths drifted from registry`,
+    );
+  }
+  return Object.freeze({
+    label: batch.label,
+    script: batch.script,
+    reason: batch.reason,
+    proofIds: batch.proofIds,
+    artifactPaths: batch.artifactPaths,
+    specs: Object.freeze(specs),
+    cases: Object.freeze(specs.map((spec) => spec.caseFactory)),
+  });
 }
 
 if (pathToFileURL(process.argv[1] ?? "").href === import.meta.url) {

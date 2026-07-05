@@ -211,6 +211,10 @@ import {
   terminalRefreshAdminProofBatchLabel,
 } from "./dev_test_game_proof_graph_receipt_artifact_rows.mjs";
 import {
+  adminSpineProofBatchRegistry,
+  adminSpineProofIds,
+} from "./dev_test_game_admin_spine_proof_batches.mjs";
+import {
   roleSurfaceSpineCases,
 } from "./dev_test_game_role_surface_spine_cases.mjs";
 import {
@@ -6235,52 +6239,8 @@ export function validateDevTestGameSpineManifestAdminProof(proof, options = {}) 
 }
 
 export function validateDevTestGameAdminSpineProof(proof, options = {}) {
-  const requiredProofs = [
-    "core-loop",
-    "hardening",
-    "identity",
-    "hosted-identity-evidence",
-    "backup",
-    "ops",
-    "seed",
-    "release",
-    "release-runbook",
-    "race-coverage",
-    "hosted-target-preflight",
-    "hosted-evidence-lane",
-    "hosted-concurrent-race-matrix",
-    "hosted-ops-signals",
-    "real-hosted-observability-handoff",
-    "spine-manifest",
-  ];
-  const requiredBatches = [
-    {
-      label: "Aggregate pre-release admin proof batch",
-      proofIds: [
-        "core-loop",
-        "hardening",
-        "identity",
-        "hosted-identity-evidence",
-        "backup",
-        "ops",
-        "seed",
-      ],
-    },
-    {
-      label: "Aggregate release and hosted admin proof batch",
-      proofIds: [
-        "release",
-        "release-runbook",
-        "race-coverage",
-        "hosted-target-preflight",
-        "hosted-evidence-lane",
-        "hosted-concurrent-race-matrix",
-        "hosted-ops-signals",
-        "real-hosted-observability-handoff",
-        "spine-manifest",
-      ],
-    },
-  ];
+  const requiredProofs = adminSpineProofIds;
+  const requiredBatches = adminSpineProofBatchRegistry;
   if (proof?.version !== 1) {
     throw new Error(`admin spine proof version drifted: ${proof?.version}`);
   }
@@ -6461,9 +6421,7 @@ function validateAdminSpineProofBatches({
     ) {
       throw new Error(`admin spine proof batch ${expected.label} proof order drifted`);
     }
-    const expectedArtifactPaths = expected.proofIds.map((id) =>
-      adminSpineProofArtifactPath(id),
-    );
+    const expectedArtifactPaths = expected.artifactPaths;
     if (
       JSON.stringify(batch.artifactPaths) !== JSON.stringify(expectedArtifactPaths) ||
       JSON.stringify(recoveryBatch.artifactPaths) !==
@@ -6472,30 +6430,6 @@ function validateAdminSpineProofBatches({
       throw new Error(`admin spine proof batch ${expected.label} artifact drifted`);
     }
   }
-}
-
-function adminSpineProofArtifactPath(id) {
-  return {
-    "core-loop": devTestGameCoreLoopAdminProofPath,
-    hardening: devTestGameHardeningAdminProofPath,
-    identity: devTestGameIdentityAdminProofPath,
-    "hosted-identity-evidence":
-      hostedIdentityEvidenceAdminProofArtifact.path,
-    backup: devTestGameBackupAdminProofPath,
-    ops: devTestGameOpsAdminProofPath,
-    seed: devTestGameSeedAdminProofPath,
-    release: devTestGameReleaseAdminProofPath,
-    "release-runbook": devTestGameReleaseRunbookAdminProofPath,
-    "race-coverage": devTestGameRaceCoverageAdminProofPath,
-    "hosted-target-preflight": devTestGameHostedTargetPreflightAdminProofPath,
-    "hosted-evidence-lane": devTestGameHostedEvidenceLaneAdminProofPath,
-    "hosted-concurrent-race-matrix":
-      hostedConcurrentRaceMatrixAdminProofArtifact.path,
-    "hosted-ops-signals": devTestGameHostedOpsSignalsAdminProofPath,
-    "real-hosted-observability-handoff":
-      realHostedObservabilityHandoffAdminProofArtifact.path,
-    "spine-manifest": devTestGameSpineManifestAdminProofPath,
-  }[id];
 }
 
 export function validateDevTestGameAdminSpineTerminalBatches(
@@ -6666,10 +6600,7 @@ export function validateDevTestGameAdminSpineAdminProof(proof, options = {}) {
     "recovery",
     localAdminAuditHandoffCheckIds.spineManifest,
   ];
-  const requiredBatches = [
-    "aggregate-pre-release-admin-proof-batch",
-    "aggregate-release-and-hosted-admin-proof-batch",
-  ];
+  const requiredBatches = adminSpineProofBatchRegistry.map((batch) => batch.script);
   if (proof?.version !== 1) {
     throw new Error(`admin spine admin proof version drifted: ${proof?.version}`);
   }

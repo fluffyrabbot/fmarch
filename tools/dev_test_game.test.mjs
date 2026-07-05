@@ -441,6 +441,9 @@ import {
   devTestGameAdminSpineProofPlan,
 } from "./dev_test_game_admin_spine_proof.mjs";
 import {
+  adminSpineProofBatchRegistry,
+} from "./dev_test_game_admin_spine_proof_batches.mjs";
+import {
   assertAdminRoleSurfaceStatusText,
   assertVisibleAdminRoleSurfaceRows,
   normalizedEvidenceObjectRowIds,
@@ -1176,41 +1179,23 @@ test("dev test-game spine orchestrators expose stable proof order and env maps",
   assert.deepEqual(
     aggregateAdminProofBatchPlans.map((batchPlan) => ({
       label: batchPlan.label,
+      script: batchPlan.script,
+      reason: batchPlan.reason,
       specIds: batchPlan.specs.map((spec) => spec.id),
+      artifactPaths: batchPlan.artifactPaths,
     })),
-    [
-      {
-        label: "Aggregate pre-release admin proof batch",
-        specIds: [
-          "core-loop",
-          "hardening",
-          "identity",
-          "hosted-identity-evidence",
-          "backup",
-          "ops",
-          "seed",
-        ],
-      },
-      {
-        label: "Aggregate release and hosted admin proof batch",
-        specIds: [
-          "release",
-          "release-runbook",
-          "race-coverage",
-          "hosted-target-preflight",
-          "hosted-evidence-lane",
-          "hosted-concurrent-race-matrix",
-          "hosted-ops-signals",
-          "real-hosted-observability-handoff",
-          "spine-manifest",
-        ],
-      },
-    ],
+    adminSpineProofBatchRegistry.map((batch) => ({
+      label: batch.label,
+      script: batch.script,
+      reason: batch.reason,
+      specIds: batch.proofIds,
+      artifactPaths: batch.artifactPaths,
+    })),
   );
-  for (const batchPlan of aggregateAdminProofBatchPlans) {
+  for (const [index, batchPlan] of aggregateAdminProofBatchPlans.entries()) {
     assertAdminAuditBatchPlan({
       plan: batchPlan,
-      label: batchPlan.label,
+      batch: adminSpineProofBatchRegistry[index],
       caseSmokeNames: batchPlan.specs.map(
         (spec) => spec.caseFactory().smokeName,
       ),
@@ -20319,24 +20304,12 @@ function adminSpineAdminProofFixture() {
         "hosted-ops-signals",
         "spine-manifest",
       ],
-      batchIds: [
-        "aggregate-pre-release-admin-proof-batch",
-        "aggregate-release-and-hosted-admin-proof-batch",
-      ],
-      batchLabels: [
-        "Aggregate pre-release admin proof batch",
-        "Aggregate release and hosted admin proof batch",
-      ],
-      batchCaseCounts: [
-        {
-          label: "Aggregate pre-release admin proof batch",
-          caseCount: 7,
-        },
-        {
-          label: "Aggregate release and hosted admin proof batch",
-          caseCount: 9,
-        },
-      ],
+      batchIds: adminSpineProofBatchRegistry.map((batch) => batch.script),
+      batchLabels: adminSpineProofBatchRegistry.map((batch) => batch.label),
+      batchCaseCounts: adminSpineProofBatchRegistry.map((batch) => ({
+        label: batch.label,
+        caseCount: batch.proofIds.length,
+      })),
     },
     adminRoleSurface: {
       status: "passed",
@@ -20362,16 +20335,15 @@ function adminSpineAdminProofFixture() {
         "recovery",
         "spine-manifest-handoff",
       ],
-      visibleAdminSpineBatches: [
-        "aggregate-pre-release-admin-proof-batch",
-        "aggregate-release-and-hosted-admin-proof-batch",
-      ],
-      visibleAdminSpineBatchStatuses: {
-        "aggregate-pre-release-admin-proof-batch":
-          "Aggregate pre-release admin proof batch passed 7 cases shared frontend shared chromium",
-        "aggregate-release-and-hosted-admin-proof-batch":
-          "Aggregate release and hosted admin proof batch passed 9 cases shared frontend shared chromium",
-      },
+      visibleAdminSpineBatches: adminSpineProofBatchRegistry.map(
+        (batch) => batch.script,
+      ),
+      visibleAdminSpineBatchStatuses: Object.fromEntries(
+        adminSpineProofBatchRegistry.map((batch) => [
+          batch.script,
+          `${batch.label} passed ${batch.proofIds.length} cases shared frontend shared chromium`,
+        ]),
+      ),
       rawInviteTokensVisible: false,
       releaseReady: false,
       productionReady: false,
@@ -20630,42 +20602,15 @@ function adminSpineProofFixture() {
 
 function adminSpineProofBatchFixtures(fixtures) {
   const fixtureMap = new Map(fixtures);
-  return [
+  return adminSpineProofBatchRegistry.map((batch, index) =>
     adminSpineProofBatchFixture({
-      label: "Aggregate pre-release admin proof batch",
-      reason:
-        "core, hardening, identity, backup, ops, and seed admin surfaces share the pre-readiness local proof inputs",
-      proofIds: [
-        "core-loop",
-        "hardening",
-        "identity",
-        "hosted-identity-evidence",
-        "backup",
-        "ops",
-        "seed",
-      ],
+      label: batch.label,
+      reason: batch.reason,
+      proofIds: batch.proofIds,
       fixtureMap,
-      elapsedMs: 1200,
+      elapsedMs: index === 0 ? 1200 : 1800,
     }),
-    adminSpineProofBatchFixture({
-      label: "Aggregate release and hosted admin proof batch",
-      reason:
-        "release, hosted, race coverage, and manifest admin surfaces share the post-readiness rollup inputs",
-      proofIds: [
-        "release",
-        "release-runbook",
-        "race-coverage",
-        "hosted-target-preflight",
-        "hosted-evidence-lane",
-        "hosted-concurrent-race-matrix",
-        "hosted-ops-signals",
-        "real-hosted-observability-handoff",
-        "spine-manifest",
-      ],
-      fixtureMap,
-      elapsedMs: 1800,
-    }),
-  ];
+  );
 }
 
 function adminSpineProofBatchFixture({
