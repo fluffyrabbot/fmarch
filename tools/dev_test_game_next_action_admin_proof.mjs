@@ -278,6 +278,32 @@ export function nextActionAdminProofCase({
         driftCount:
           source.nextAction.proofGraphDestinationSummaryTrace.driftCount,
       },
+      proofGraphDiagnosticSummaryTrace: {
+        strategy: source.nextAction.proofGraphDiagnosticSummaryTrace.strategy,
+        status: source.nextAction.proofGraphDiagnosticSummaryTrace.status,
+        source: source.nextAction.proofGraphDiagnosticSummaryTrace.source,
+        selected: source.nextAction.proofGraphDiagnosticSummaryTrace.selected,
+        diagnosticCount:
+          source.nextAction.proofGraphDiagnosticSummaryTrace.diagnosticCount,
+        promotesFreshnessCount:
+          source.nextAction.proofGraphDiagnosticSummaryTrace
+            .promotesFreshnessCount,
+        terminalArtifactCount:
+          source.nextAction.proofGraphDiagnosticSummaryTrace
+            .terminalArtifactCount,
+        rows: source.nextAction.proofGraphDiagnosticSummaryTrace.rows.map(
+          (row) => ({
+            id: row.id,
+            status: row.status,
+            artifact: row.artifact,
+            diagnosticReason: row.diagnosticReason,
+            proofCommand: row.proofCommand,
+            recoveryCommand: row.recoveryCommand,
+            promotesFreshness: row.promotesFreshness,
+            terminalArtifact: row.terminalArtifact,
+          }),
+        ),
+      },
       replacementRaceReloadTrace: {
         strategy: source.nextAction.replacementRaceReloadTrace.strategy,
         status: source.nextAction.replacementRaceReloadTrace.status,
@@ -463,6 +489,9 @@ export function proofGraphDestinationSummaryDriftNextActionFixture(nextAction) {
       driftCount,
       selected: true,
     },
+    proofGraphDiagnosticSummaryTrace: cleanProofGraphDiagnosticSummaryTrace(
+      source.proofGraphDiagnosticSummaryTrace,
+    ),
     seedProofLaneCoverageTrace: cleanSeedProofLaneCoverageTrace(
       source.seedProofLaneCoverageTrace,
     ),
@@ -487,6 +516,38 @@ function cleanProofStabilityTrace(stabilityTrace = {}) {
     maxAttempts: Number(stabilityTrace.maxAttempts ?? 0),
     eventCount: 0,
     selected: false,
+  };
+}
+
+function cleanProofGraphDiagnosticSummaryTrace(
+  proofGraphDiagnosticSummaryTrace = {},
+) {
+  return {
+    strategy: "proof-graph-diagnostics-before-readiness",
+    status: proofGraphDiagnosticSummaryTrace.status ?? "unavailable",
+    source: proofGraphDiagnosticSummaryTrace.source ?? "",
+    diagnosticCount: Number(
+      proofGraphDiagnosticSummaryTrace.diagnosticCount ?? 0,
+    ),
+    promotesFreshnessCount: Number(
+      proofGraphDiagnosticSummaryTrace.promotesFreshnessCount ?? 0,
+    ),
+    terminalArtifactCount: Number(
+      proofGraphDiagnosticSummaryTrace.terminalArtifactCount ?? 0,
+    ),
+    selected: false,
+    rows: Array.isArray(proofGraphDiagnosticSummaryTrace.rows)
+      ? proofGraphDiagnosticSummaryTrace.rows.map((row) => ({
+          id: String(row.id ?? ""),
+          status: String(row.status ?? ""),
+          artifact: String(row.artifact ?? ""),
+          diagnosticReason: String(row.diagnosticReason ?? ""),
+          proofCommand: String(row.proofCommand ?? ""),
+          recoveryCommand: String(row.recoveryCommand ?? ""),
+          promotesFreshness: row.promotesFreshness === true,
+          terminalArtifact: row.terminalArtifact === true,
+        }))
+      : [],
   };
 }
 
@@ -632,6 +693,7 @@ export function assertNextActionAdminProof(evidence) {
       "next-action admin proof is missing proof graph destination-summary trace evidence",
     );
   }
+  assertNextActionAdminProofGraphDiagnosticSummaryTrace(evidence);
   if (
     evidence.generatedFrom?.replacementRaceReloadTrace?.strategy !==
       "replacement-race-reload-before-readiness" ||
@@ -1060,6 +1122,71 @@ function recoveryReceiptGraphGeneratedFrom(nextAction) {
   );
 }
 
+function assertNextActionAdminProofGraphDiagnosticSummaryTrace(evidence) {
+  const trace = evidence.generatedFrom?.proofGraphDiagnosticSummaryTrace;
+  if (
+    trace?.strategy !== "proof-graph-diagnostics-before-readiness" ||
+    !["recorded", "empty", "unavailable"].includes(trace.status) ||
+    trace.selected !== false ||
+    !Number.isInteger(trace.diagnosticCount) ||
+    !Number.isInteger(trace.promotesFreshnessCount) ||
+    !Number.isInteger(trace.terminalArtifactCount) ||
+    !Array.isArray(trace.rows)
+  ) {
+    throw new Error(
+      "next-action admin proof is missing proof graph diagnostic summary trace evidence",
+    );
+  }
+  if (
+    trace.diagnosticCount !== trace.rows.length ||
+    trace.promotesFreshnessCount !== 0 ||
+    trace.terminalArtifactCount !== 0
+  ) {
+    throw new Error(
+      "next-action admin proof promoted a diagnostic proof graph summary row",
+    );
+  }
+  if (
+    trace.status !== "unavailable" &&
+    !evidence.adminRoleSurface?.visibleChecks?.includes(
+      "proof-graph-diagnostic-summary",
+    )
+  ) {
+    throw new Error(
+      "next-action admin proof missing proof graph diagnostic summary row",
+    );
+  }
+  for (const row of trace.rows) {
+    if (
+      typeof row.id !== "string" ||
+      row.id === "" ||
+      typeof row.diagnosticReason !== "string" ||
+      row.diagnosticReason === "" ||
+      typeof row.artifact !== "string" ||
+      row.artifact === "" ||
+      typeof row.proofCommand !== "string" ||
+      row.proofCommand === "" ||
+      typeof row.recoveryCommand !== "string" ||
+      row.recoveryCommand === "" ||
+      row.promotesFreshness !== false ||
+      row.terminalArtifact !== false
+    ) {
+      throw new Error(
+        `next-action admin proof diagnostic summary row malformed: ${row?.id}`,
+      );
+    }
+    if (
+      !evidence.adminRoleSurface?.visibleChecks?.includes(
+        `proof-graph-diagnostic-${row.id}`,
+      )
+    ) {
+      throw new Error(
+        `next-action admin proof missing proof graph diagnostic row: ${row.id}`,
+      );
+    }
+  }
+}
+
 function assertNextActionAdminRecoveryReceiptGraphs(generatedFrom) {
   for (const descriptor of recoveryReceiptGraphDescriptors) {
     assertRecoveryReceiptGraphSummary(
@@ -1168,6 +1295,12 @@ function requiredChecksForNextAction(nextAction) {
       "proof-graph-destination-summary-trace",
       "proof-graph-destination-summary-trace-drift-count",
     );
+  }
+  if (nextAction.proofGraphDiagnosticSummaryTrace?.status !== "unavailable") {
+    checks.push("proof-graph-diagnostic-summary");
+    for (const row of nextAction.proofGraphDiagnosticSummaryTrace.rows ?? []) {
+      checks.push(`proof-graph-diagnostic-${row.id}`);
+    }
   }
   for (const candidate of nextAction.selectionTrace.candidates) {
     checks.push(`selection-trace-${candidate.id}`);
@@ -1592,6 +1725,19 @@ function requiredChecksForEvidence(evidence) {
       ? [
           "proof-graph-destination-summary-trace",
           "proof-graph-destination-summary-trace-drift-count",
+        ]
+      : []),
+    ...(evidence.generatedFrom?.proofGraphDiagnosticSummaryTrace?.status !==
+      "unavailable"
+      ? [
+          "proof-graph-diagnostic-summary",
+          ...(Array.isArray(
+            evidence.generatedFrom.proofGraphDiagnosticSummaryTrace.rows,
+          )
+            ? evidence.generatedFrom.proofGraphDiagnosticSummaryTrace.rows.map(
+                (row) => `proof-graph-diagnostic-${row.id}`,
+              )
+            : []),
         ]
       : []),
     ...(Array.isArray(evidence.generatedFrom?.selectionTrace?.candidateIds)

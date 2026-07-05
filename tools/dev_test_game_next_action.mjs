@@ -79,6 +79,9 @@ import {
   devTestGameProofGraphPath,
 } from "./dev_test_game_proof_graph_paths.mjs";
 import {
+  normalizeProofGraphDiagnosticProofSummary,
+} from "./dev_test_game_proof_graph_diagnostic_summary.mjs";
+import {
   assertRecoveryReceiptGraphSummary,
   recoveryReceiptGraphDescriptors,
   recoveryReceiptGraphSummaryFromProofGraph,
@@ -194,6 +197,8 @@ export function buildDevTestGameNextAction(
     });
   const proofGraphDestinationSummaryTrace =
     buildProofGraphDestinationSummaryTrace(proofGraphDestinationSummaryDrift);
+  const proofGraphDiagnosticSummaryTrace =
+    buildProofGraphDiagnosticSummaryTrace(graph, { source: proofGraphSource });
   const releaseReadinessCandidates = rankedBuildableReleaseReadinessItems(readiness, {
     hostedTargetPreflight: hostedPreflight,
     sourceTargetsByCheckId,
@@ -494,6 +499,10 @@ export function buildDevTestGameNextAction(
               proofGraphDestinationSummaryDrift.status,
             proofGraphDestinationSummaryDriftCount:
               proofGraphDestinationSummaryDrift.driftCount,
+            proofGraphDiagnosticSummaryStatus:
+              proofGraphDiagnosticSummaryTrace.status,
+            proofGraphDiagnosticCount:
+              proofGraphDiagnosticSummaryTrace.diagnosticCount,
             ...(terminalBatchGraph === null
               ? {}
               : { terminalBatchGraph }),
@@ -504,6 +513,7 @@ export function buildDevTestGameNextAction(
     selectionTrace,
     stabilityTrace,
     proofGraphDestinationSummaryTrace,
+    proofGraphDiagnosticSummaryTrace,
     seedProofLaneCoverageTrace,
     localReadinessDependencyTrace,
     releaseReadinessTrace,
@@ -696,6 +706,7 @@ export function assertDevTestGameNextAction(evidence) {
     evidence.proofGraphDestinationSummaryTrace,
     evidence.nextAction,
   );
+  assertProofGraphDiagnosticSummaryTrace(evidence.proofGraphDiagnosticSummaryTrace);
   assertSeedProofLaneCoverageTrace(
     evidence.seedProofLaneCoverageTrace,
     evidence.nextAction,
@@ -1298,6 +1309,47 @@ function buildProofGraphDestinationSummaryTrace(
       proofGraphDestinationSummaryDrift.roleUrlDestinationCount,
     driftCount: proofGraphDestinationSummaryDrift.driftCount,
     selected: proofGraphDestinationSummaryDrift.status === "drifted",
+  };
+}
+
+function buildProofGraphDiagnosticSummaryTrace(
+  proofGraph,
+  { source = devTestGameProofGraphPath } = {},
+) {
+  if (proofGraph === null) {
+    return {
+      strategy: "proof-graph-diagnostics-before-readiness",
+      status: "unavailable",
+      source: "",
+      diagnosticCount: 0,
+      promotesFreshnessCount: 0,
+      terminalArtifactCount: 0,
+      selected: false,
+      rows: [],
+    };
+  }
+  const summary = normalizeProofGraphDiagnosticProofSummary(
+    proofGraph.summary?.diagnosticProofSummary,
+    { nodes: proofGraph.nodes },
+  );
+  return {
+    strategy: "proof-graph-diagnostics-before-readiness",
+    status: summary.diagnosticCount === 0 ? "empty" : "recorded",
+    source,
+    diagnosticCount: summary.diagnosticCount,
+    promotesFreshnessCount: summary.promotesFreshnessCount,
+    terminalArtifactCount: summary.terminalArtifactCount,
+    selected: false,
+    rows: summary.rows.map((row) => ({
+      id: row.id,
+      status: row.status,
+      artifact: row.artifact,
+      diagnosticReason: row.diagnosticReason,
+      proofCommand: row.proofCommand,
+      recoveryCommand: row.recoveryCommand,
+      promotesFreshness: row.promotesFreshness,
+      terminalArtifact: row.terminalArtifact,
+    })),
   };
 }
 
@@ -2144,6 +2196,55 @@ function assertProofGraphDestinationSummaryTrace(
     throw new Error(
       "next-action proof graph destination-summary trace selected without drift action",
     );
+  }
+}
+
+function assertProofGraphDiagnosticSummaryTrace(proofGraphDiagnosticSummaryTrace) {
+  if (
+    proofGraphDiagnosticSummaryTrace?.strategy !==
+      "proof-graph-diagnostics-before-readiness" ||
+    !["recorded", "empty", "unavailable"].includes(
+      proofGraphDiagnosticSummaryTrace.status,
+    ) ||
+    proofGraphDiagnosticSummaryTrace.selected !== false ||
+    !Number.isInteger(proofGraphDiagnosticSummaryTrace.diagnosticCount) ||
+    !Number.isInteger(proofGraphDiagnosticSummaryTrace.promotesFreshnessCount) ||
+    !Number.isInteger(proofGraphDiagnosticSummaryTrace.terminalArtifactCount) ||
+    !Array.isArray(proofGraphDiagnosticSummaryTrace.rows)
+  ) {
+    throw new Error(
+      "next-action proof graph diagnostic summary trace is missing or malformed",
+    );
+  }
+  if (
+    proofGraphDiagnosticSummaryTrace.diagnosticCount !==
+      proofGraphDiagnosticSummaryTrace.rows.length ||
+    proofGraphDiagnosticSummaryTrace.promotesFreshnessCount !== 0 ||
+    proofGraphDiagnosticSummaryTrace.terminalArtifactCount !== 0
+  ) {
+    throw new Error(
+      "next-action proof graph diagnostic summary trace promoted a terminal or freshness artifact",
+    );
+  }
+  for (const row of proofGraphDiagnosticSummaryTrace.rows) {
+    if (
+      typeof row.id !== "string" ||
+      row.id === "" ||
+      typeof row.diagnosticReason !== "string" ||
+      row.diagnosticReason === "" ||
+      typeof row.artifact !== "string" ||
+      row.artifact === "" ||
+      typeof row.proofCommand !== "string" ||
+      row.proofCommand === "" ||
+      typeof row.recoveryCommand !== "string" ||
+      row.recoveryCommand === "" ||
+      row.promotesFreshness !== false ||
+      row.terminalArtifact !== false
+    ) {
+      throw new Error(
+        `next-action proof graph diagnostic summary row is malformed: ${row?.id}`,
+      );
+    }
   }
 }
 

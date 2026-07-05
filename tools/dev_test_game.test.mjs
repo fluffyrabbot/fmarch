@@ -2686,6 +2686,16 @@ test("dev test-game next-action derives one local recovery command from the mani
     eventCount: 0,
     selected: false,
   });
+  assert.deepEqual(freshAction.proofGraphDiagnosticSummaryTrace, {
+    strategy: "proof-graph-diagnostics-before-readiness",
+    status: "unavailable",
+    source: "",
+    diagnosticCount: 0,
+    promotesFreshnessCount: 0,
+    terminalArtifactCount: 0,
+    selected: false,
+    rows: [],
+  });
   const cleanSeedProofLaneCoverage = seedProofLaneCoverageFixture();
   const cleanSeedProofLaneCoverageCounts = seedProofLaneCoverageCountSummary(
     cleanSeedProofLaneCoverage,
@@ -3053,6 +3063,27 @@ test("dev test-game next-action derives one local recovery command from the mani
       selected: true,
     },
   );
+  assert.deepEqual(destinationSummaryDriftAction.proofGraphDiagnosticSummaryTrace, {
+    strategy: "proof-graph-diagnostics-before-readiness",
+    status: "recorded",
+    source: "target/dev-test-game/proof-graph.json",
+    diagnosticCount: 1,
+    promotesFreshnessCount: 0,
+    terminalArtifactCount: 0,
+    selected: false,
+    rows: buildProofGraphDiagnosticProofSummary({
+      nodes: proofGraphDiagnosticProofNodes,
+    }).rows.map((row) => ({
+      id: row.id,
+      status: row.status,
+      artifact: row.artifact,
+      diagnosticReason: row.diagnosticReason,
+      proofCommand: row.proofCommand,
+      recoveryCommand: row.recoveryCommand,
+      promotesFreshness: false,
+      terminalArtifact: false,
+    })),
+  });
   const syntheticDriftAction =
     proofGraphDestinationSummaryDriftNextActionFixture(freshAction);
   assertDevTestGameNextAction(syntheticDriftAction);
@@ -18330,6 +18361,7 @@ function nextActionProofGraphFixture(slotId = "player-action-submission") {
         browserProofCommand: target.browserProofCommand,
         artifact: devTestGameReleaseReadinessPath,
       },
+      ...proofGraphDiagnosticProofNodes,
     ],
     edges: [
       {
@@ -18348,6 +18380,9 @@ function nextActionProofGraphFixture(slotId = "player-action-submission") {
       ...graph.summary,
       productionFeatureDestinationSummary:
         proofGraphProductionFeatureDestinationSummary(graph),
+      diagnosticProofSummary: buildProofGraphDiagnosticProofSummary({
+        nodes: graph.nodes,
+      }),
     },
   };
 }
@@ -19506,6 +19541,28 @@ function nextActionAdminProofFixture() {
       browserProofCommand: devTestGameLiveProofCommand,
       includeTargetRerunCommand: true,
     });
+  const diagnosticProofSummary = buildProofGraphDiagnosticProofSummary({
+    nodes: proofGraphDiagnosticProofNodes,
+  });
+  const proofGraphDiagnosticSummaryTrace = {
+    strategy: "proof-graph-diagnostics-before-readiness",
+    status: "recorded",
+    source: "target/dev-test-game/proof-graph.json",
+    diagnosticCount: diagnosticProofSummary.diagnosticCount,
+    promotesFreshnessCount: diagnosticProofSummary.promotesFreshnessCount,
+    terminalArtifactCount: diagnosticProofSummary.terminalArtifactCount,
+    selected: false,
+    rows: diagnosticProofSummary.rows.map((row) => ({
+      id: row.id,
+      status: row.status,
+      artifact: row.artifact,
+      diagnosticReason: row.diagnosticReason,
+      proofCommand: row.proofCommand,
+      recoveryCommand: row.recoveryCommand,
+      promotesFreshness: row.promotesFreshness,
+      terminalArtifact: row.terminalArtifact,
+    })),
+  };
   return {
     version: 1,
     proof: "dev-test-game-next-action-admin-proof",
@@ -19589,6 +19646,7 @@ function nextActionAdminProofFixture() {
         unclassifiedLaneCount: 0,
         unclassifiedLaneIds: [],
       },
+      proofGraphDiagnosticSummaryTrace,
     },
     adminRoleSurface: {
       status: "passed",
@@ -19612,6 +19670,10 @@ function nextActionAdminProofFixture() {
         "selected-spine-browser-proof",
         "selected-spine-coverage-decision",
         "seed-proof-lane-coverage-trace",
+        "proof-graph-diagnostic-summary",
+        ...proofGraphDiagnosticSummaryTrace.rows.map(
+          (row) => `proof-graph-diagnostic-${row.id}`,
+        ),
         "release-readiness-selection-trace",
       ],
       visibleRelatedLinks: [

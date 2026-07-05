@@ -9,6 +9,7 @@ import {
   buildAdminRouteData,
   normalizeLocalNextActionGeneratedSummary,
   normalizeLocalNextActionLocalReadinessDependencyCheckRows,
+  normalizeLocalNextActionProofGraphDiagnosticSummaryCheckRows,
   normalizeLocalNextActionProofGraphDestinationSummaryCheckRows,
   normalizeLocalNextActionProofGraphDestinationSummaryTraceCheckRows,
   normalizeLocalNextActionRelatedLinks,
@@ -143,6 +144,7 @@ import {
   adminProofDestinationRequirementRoleRows,
   devTestGameProofGraphBaseEdges,
   devTestGameProofGraphFirstClassNodes,
+  proofGraphDiagnosticProofNodes,
   proofGraphProductionFeatureCase,
   proofGraphProductionFeatureEdge,
   proofGraphProductionFeatureNode,
@@ -2229,6 +2231,9 @@ test("admin route data exposes local next action as a native audit row", async (
       ...normalizeLocalNextActionSeedProofLaneCoverageTraceCheckRows({
         seedProofLaneCoverageTrace: seedProofLaneCoverageTraceFixture(),
       }).map((check) => [check.id, check.status]),
+      ...normalizeLocalNextActionProofGraphDiagnosticSummaryCheckRows({
+        proofGraphDiagnosticSummaryTrace: proofGraphDiagnosticSummaryTraceFixture(),
+      }).map((check) => [check.id, check.status]),
       ["race-coverage-promoted-milestones", "4/4 groups, 16/16 cells, 16/16 reloads"],
       ["replacement-race-reload-milestone", "3/3 covered"],
       ["replacement-race-reload-replacement-private-post", "covered:passed"],
@@ -2339,6 +2344,11 @@ test("admin route data exposes local next action as a native audit row", async (
       eventCount: 0,
     },
     seedProofLaneCoverageTrace: seedProofLaneCoverageTraceFixture(),
+    proofGraphDiagnosticSummaryStatus: "recorded",
+    proofGraphDiagnosticCount: 1,
+    proofGraphDiagnosticPromotesFreshnessCount: 0,
+    proofGraphDiagnosticTerminalArtifactCount: 0,
+    proofGraphDiagnosticSummaryTrace: proofGraphDiagnosticSummaryTraceFixture(),
     localReadinessDependencyTrace: {
       strategy: "local-readiness-dependency-before-hosted-work",
       candidateCount: 0,
@@ -2585,6 +2595,10 @@ test("admin route data exposes proof graph destination-summary drift next action
           "proof-graph-destination-summary-drift-count",
           "proof-graph-destination-summary-trace",
           "proof-graph-destination-summary-trace-drift-count",
+          "proof-graph-diagnostic-summary",
+          ...proofGraphDiagnosticProofNodes.map(
+            (node) => `proof-graph-diagnostic-${node.id}`,
+          ),
         ].includes(check.id),
       )
       .map((check) => [check.id, check.status]),
@@ -2598,6 +2612,9 @@ test("admin route data exposes proof graph destination-summary drift next action
           proofGraphDestinationSummaryTraceFixture({
             proofGraphDestinationSummary,
           }),
+      }).map((check) => [check.id, check.status]),
+      ...normalizeLocalNextActionProofGraphDiagnosticSummaryCheckRows({
+        proofGraphDiagnosticSummaryTrace: proofGraphDiagnosticSummaryTraceFixture(),
       }).map((check) => [check.id, check.status]),
     ],
   );
@@ -2617,6 +2634,19 @@ test("admin route data exposes proof graph destination-summary drift next action
   assert.equal(
     nextAction.artifactSummary.selectedProofGraphDestinationSummaryDriftCount,
     1,
+  );
+  assert.equal(
+    nextAction.artifactSummary.proofGraphDiagnosticSummaryStatus,
+    "recorded",
+  );
+  assert.equal(nextAction.artifactSummary.proofGraphDiagnosticCount, 1);
+  assert.equal(
+    nextAction.artifactSummary.proofGraphDiagnosticPromotesFreshnessCount,
+    0,
+  );
+  assert.equal(
+    nextAction.artifactSummary.proofGraphDiagnosticTerminalArtifactCount,
+    0,
   );
   const freshness = data.audit.find(
     (item) => item.id === localAdminAuditIds.proofFreshness,
@@ -2848,6 +2878,9 @@ test("admin local next action detail data carries recovery check rows", async ()
       ...normalizeLocalNextActionSeedProofLaneCoverageTraceCheckRows({
         seedProofLaneCoverageTrace: seedProofLaneCoverageTraceFixture(),
       }).map((check) => [check.id, check.status]),
+      ...normalizeLocalNextActionProofGraphDiagnosticSummaryCheckRows({
+        proofGraphDiagnosticSummaryTrace: proofGraphDiagnosticSummaryTraceFixture(),
+      }).map((check) => [check.id, check.status]),
       ["race-coverage-promoted-milestones", "4/4 groups, 16/16 cells, 16/16 reloads"],
       ["replacement-race-reload-milestone", "3/3 covered"],
       ["replacement-race-reload-replacement-private-post", "covered:passed"],
@@ -2993,6 +3026,9 @@ test("admin local next action detail data carries harness stability drift rows",
       ["selection-trace", "0 candidates"],
       ...normalizeLocalNextActionSeedProofLaneCoverageTraceCheckRows({
         seedProofLaneCoverageTrace: seedProofLaneCoverageTraceFixture(),
+      }).map((check) => [check.id, check.status]),
+      ...normalizeLocalNextActionProofGraphDiagnosticSummaryCheckRows({
+        proofGraphDiagnosticSummaryTrace: proofGraphDiagnosticSummaryTraceFixture(),
       }).map((check) => [check.id, check.status]),
       ["race-coverage-promoted-milestones", "4/4 groups, 16/16 cells, 16/16 reloads"],
       ["replacement-race-reload-milestone", "3/3 covered"],
@@ -5972,6 +6008,7 @@ function nextActionFixture({
     proofGraphDestinationSummaryTraceFixture({
       proofGraphDestinationSummary,
     }),
+  proofGraphDiagnosticSummaryTrace = proofGraphDiagnosticSummaryTraceFixture(),
   replacementRaceReloadTrace = replacementRaceReloadTraceFixture(),
   hostConcurrentRaceReloadTrace = hostConcurrentRaceReloadTraceFixture(),
   playerConcurrentActionReloadTrace = playerConcurrentActionReloadTraceFixture(),
@@ -6055,6 +6092,10 @@ function nextActionFixture({
         proofGraphDestinationSummaryTrace.status,
       proofGraphDestinationSummaryDriftCount:
         proofGraphDestinationSummaryTrace.driftCount,
+      proofGraphDiagnosticSummaryStatus:
+        proofGraphDiagnosticSummaryTrace.status,
+      proofGraphDiagnosticCount:
+        proofGraphDiagnosticSummaryTrace.diagnosticCount,
       ...(terminalBatchGraph === undefined ? {} : { terminalBatchGraph }),
       ...(privateChannelRecoveryGraph === undefined
         ? {}
@@ -6091,6 +6132,7 @@ function nextActionFixture({
     selectionTrace,
     stabilityTrace,
     proofGraphDestinationSummaryTrace,
+    proofGraphDiagnosticSummaryTrace,
     seedProofLaneCoverageTrace,
     localReadinessDependencyTrace,
     releaseReadinessTrace,
@@ -6169,6 +6211,31 @@ function proofGraphDestinationSummaryTraceFixture({
       proofGraphDestinationSummary?.roleUrlDestinationCount ?? 4,
     driftCount: proofGraphDestinationSummary?.driftCount ?? 0,
     selected: proofGraphDestinationSummary !== undefined,
+  };
+}
+
+function proofGraphDiagnosticSummaryTraceFixture({
+  nodes = proofGraphDiagnosticProofNodes,
+} = {}) {
+  const summary = buildProofGraphDiagnosticProofSummary({ nodes });
+  return {
+    strategy: "proof-graph-diagnostics-before-readiness",
+    status: summary.diagnosticCount === 0 ? "empty" : "recorded",
+    source: "target/dev-test-game/proof-graph.json",
+    diagnosticCount: summary.diagnosticCount,
+    promotesFreshnessCount: summary.promotesFreshnessCount,
+    terminalArtifactCount: summary.terminalArtifactCount,
+    selected: false,
+    rows: summary.rows.map((row) => ({
+      id: row.id,
+      status: row.status,
+      artifact: row.artifact,
+      diagnosticReason: row.diagnosticReason,
+      proofCommand: row.proofCommand,
+      recoveryCommand: row.recoveryCommand,
+      promotesFreshness: row.promotesFreshness,
+      terminalArtifact: row.terminalArtifact,
+    })),
   };
 }
 
