@@ -30,39 +30,11 @@ import {
   completedGameHardeningSpineLaneCases,
 } from "./dev_test_game_core_loop_completed_terminal_scenario_assertions.mjs";
 import {
-  coreLoopHostControlScenarioFamily,
-} from "./dev_test_game_core_loop_host_control_scenarios.mjs";
+  coreLoopGeneratedFromScenarioFamilies,
+} from "./dev_test_game_core_loop_generated_from_families.mjs";
 import {
-  coreLoopPlayerActionRecoveryScenarioFamily,
   playerInvalidActionRecoveryMessage,
 } from "./dev_test_game_core_loop_player_action_recovery_scenarios.mjs";
-import {
-  coreLoopPrivateReceiptSurfaceScenarioFamily,
-} from "./dev_test_game_core_loop_private_receipt_surface_scenarios.mjs";
-import {
-  coreLoopPostDayVoteAdvanceScenarioFamily,
-} from "./dev_test_game_core_loop_post_day_vote_advance_scenarios.mjs";
-import {
-  coreLoopVoteResolutionScenarioFamily,
-} from "./dev_test_game_core_loop_vote_resolution_scenarios.mjs";
-import {
-  coreLoopPhaseProgressionScenarioFamily,
-} from "./dev_test_game_core_loop_phase_progression_scenarios.mjs";
-import {
-  coreLoopLateActionProgressionScenarioFamily,
-} from "./dev_test_game_core_loop_late_action_progression_scenarios.mjs";
-import {
-  coreLoopNoLynchProgressionScenarioFamily,
-} from "./dev_test_game_core_loop_no_lynch_progression_scenarios.mjs";
-import {
-  coreLoopDayFiveProgressionScenarioFamily,
-} from "./dev_test_game_core_loop_day_five_progression_scenarios.mjs";
-import {
-  coreLoopResolutionReceiptPrivacyScenarioFamily,
-} from "./dev_test_game_core_loop_resolution_receipt_privacy_scenarios.mjs";
-import {
-  coreLoopCompletedEndgameProgressionScenarioFamily,
-} from "./dev_test_game_core_loop_completed_endgame_progression_scenarios.mjs";
 import {
   completedGameEndgameSurfaceFixture,
   dayFiveNoLynchResolutionSurfaceFixture,
@@ -77,7 +49,6 @@ import {
   coreLoopPrivateChannelCompletedPostLaneId,
   coreLoopPrivateChannelInvalidActionLaneId,
   coreLoopPrivateChannelRecoveryLaneIds,
-  coreLoopPrivateChannelRecoveryScenarioFamily,
   coreLoopPrivateChannelStalePostLaneId,
   privateChannelInvalidActionRecoveryScenario,
   staleCompletedPrivatePostScenario,
@@ -4147,6 +4118,39 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
         adminSpineProof,
       ),
     /proof graph admin surface count drifted/,
+  );
+});
+
+test("core-loop generatedFrom families come from one canonical bundle", () => {
+  const families = coreLoopGeneratedFromScenarioFamilies();
+  assert.deepEqual(Object.keys(families), [
+    "hostControlFamily",
+    "playerActionRecoveryFamily",
+    "privateReceiptSurfaceFamily",
+    "postDayVoteAdvanceFamily",
+    "voteResolutionFamily",
+    "phaseProgressionFamily",
+    "lateActionProgressionFamily",
+    "resolutionReceiptPrivacyFamily",
+    "noLynchProgressionFamily",
+    "dayFiveProgressionFamily",
+    "completedEndgameProgressionFamily",
+    "privateChannelRecoveryFamily",
+  ]);
+  assert.deepEqual(families.phaseProgressionFamily.laneIds, [
+    "day-vote-resolution",
+    "day-vote-no-lynch",
+    "night-three-action-resolution",
+    "action-loop",
+  ]);
+  assert.deepEqual(families.dayFiveProgressionFamily.staleRejects, {
+    staleDayFiveVote:
+      families.dayFiveProgressionFamily.surfaces.dayFiveNoLynchResolution
+        .staleDayFiveVoteCase,
+  });
+  assert.deepEqual(
+    coreLoopAdminProofFixture().generatedFrom.phaseProgressionFamily,
+    families.phaseProgressionFamily,
   );
 });
 
@@ -14497,26 +14501,7 @@ function coreLoopAdminProofFixture() {
       coreLoopSpineStatus:
         "passed: D01 -> N01 -> D02, vote ack, N02 action ack, next D03, terminal advance InvalidTarget, reload D03, revote D03R1 via no_majority_continue_revote, revote vote ack, revote resolve ack, second revote D03R2 via no_majority_continue_revote, second vote ack, second resolve ack, policy no_majority_no_lynch -> N03",
       completedGameHardeningCoverageStatus: "passed: 10/10 lanes across 4 families",
-      hostControlFamily: coreLoopHostControlScenarioFamily(),
-      playerActionRecoveryFamily:
-        coreLoopPlayerActionRecoveryScenarioFamily(),
-      privateReceiptSurfaceFamily:
-        coreLoopPrivateReceiptSurfaceScenarioFamily(),
-      postDayVoteAdvanceFamily:
-        coreLoopPostDayVoteAdvanceScenarioFamily(),
-      voteResolutionFamily: coreLoopVoteResolutionScenarioFamily(),
-      phaseProgressionFamily: coreLoopPhaseProgressionScenarioFamily(),
-      lateActionProgressionFamily: coreLoopLateActionProgressionScenarioFamily(),
-      resolutionReceiptPrivacyFamily:
-        coreLoopResolutionReceiptPrivacyScenarioFamily(),
-      noLynchProgressionFamily:
-        coreLoopNoLynchProgressionScenarioFamily(),
-      dayFiveProgressionFamily:
-        coreLoopDayFiveProgressionScenarioFamily(),
-      completedEndgameProgressionFamily:
-        coreLoopCompletedEndgameProgressionScenarioFamily(),
-      privateChannelRecoveryFamily:
-        coreLoopPrivateChannelRecoveryScenarioFamily(),
+      ...coreLoopGeneratedFromScenarioFamilies(),
       coreLoopSpineRows: {
         cycles: ["d01-n01-d02", "d02-n02", "n02-d03", "d03-n03", "n03-d04"],
         roleUrls: [

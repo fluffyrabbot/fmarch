@@ -5,6 +5,9 @@ import {
   coreLoopSpineStatus,
 } from "../frontend/src/lib/app/local-proof-lane-status.mjs";
 import {
+  coreLoopGeneratedFromScenarioFamilies,
+} from "./dev_test_game_core_loop_generated_from_families.mjs";
+import {
   assertCompletedGameProofReadinessSurfaceProof,
   completedGameProofReadinessProofScenarioCases,
   completedGameProofReadinessScenarioFamilies,
@@ -499,26 +502,7 @@ export function coreLoopAdminProofCase() {
           proofRun.completedGameHardeningCoverage,
         completedGameHardeningCoverageStatus:
           completedGameHardeningCoverageStatus(proofRun),
-        hostControlFamily: coreLoopHostControlScenarioFamily(),
-        playerActionRecoveryFamily:
-          coreLoopPlayerActionRecoveryScenarioFamily(),
-        privateReceiptSurfaceFamily:
-          coreLoopPrivateReceiptSurfaceScenarioFamily(),
-        postDayVoteAdvanceFamily:
-          coreLoopPostDayVoteAdvanceScenarioFamily(),
-        voteResolutionFamily: coreLoopVoteResolutionScenarioFamily(),
-        phaseProgressionFamily: coreLoopPhaseProgressionScenarioFamily(),
-        lateActionProgressionFamily:
-          coreLoopLateActionProgressionScenarioFamily(),
-        resolutionReceiptPrivacyFamily:
-          coreLoopResolutionReceiptPrivacyScenarioFamily(),
-        noLynchProgressionFamily:
-          coreLoopNoLynchProgressionScenarioFamily(),
-        dayFiveProgressionFamily: coreLoopDayFiveProgressionScenarioFamily(),
-        completedEndgameProgressionFamily:
-          coreLoopCompletedEndgameProgressionScenarioFamily(),
-        privateChannelRecoveryFamily:
-          coreLoopPrivateChannelRecoveryScenarioFamily(),
+        ...coreLoopGeneratedFromScenarioFamilies(),
         highlightedLaneEvidence: coreLoopHighlightedLaneEvidence(proofRun),
       },
       adminRoleSurface: surfaces.adminRoleSurface,
