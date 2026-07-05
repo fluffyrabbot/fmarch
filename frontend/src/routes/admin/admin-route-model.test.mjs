@@ -1521,6 +1521,19 @@ test("admin audit detail page renders hosted identity progressions as a named re
   );
 });
 
+test("admin audit detail page renders hosted identity operator drilldowns as a named group", async () => {
+  const source = await readFile(
+    "frontend/src/routes/admin/audit/[audit]/+page.svelte",
+    "utf8",
+  );
+  assert.match(source, /admin-audit-hosted-identity-operator-drilldowns/);
+  assert.match(source, /Hosted identity operator drilldowns/);
+  assert.match(
+    source,
+    /admin-audit-hosted-handoff-operator-proof-\$\{drilldown\.id\}/,
+  );
+});
+
 test("admin hosted-facing audit inventory carries shared handoff paths where required", async () => {
   const data = await buildAdminRouteData({
     principalUserId: "admin_a",

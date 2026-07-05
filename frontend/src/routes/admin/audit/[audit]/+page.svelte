@@ -985,22 +985,32 @@
               </li>
             {/each}
           {/if}
-          {#each data.audit.hostedHandoffChecklist.operatorProofDrilldowns ?? [] as drilldown}
+          {#if data.audit.hostedHandoffChecklist.operatorProofDrilldowns?.length > 0}
             <li
               class="admin-audit-detail__entry admin-audit-detail__entry--stack"
-              data-testid={`admin-audit-hosted-handoff-operator-proof-${drilldown.id}`}
+              data-testid="admin-audit-hosted-identity-operator-drilldowns"
             >
-              <strong>{drilldown.label}</strong>
-              <span>{drilldown.command}</span>
-              <span>{drilldown.progressionId}</span>
-              <span>{drilldown.sourcePath}</span>
-              <span>{drilldown.proofTarget}</span>
-              <span>{drilldown.roleUrl}</span>
-              <span>{drilldown.firstMissingInputId}</span>
-              <span>{drilldown.firstMissingCheckId}</span>
-              <span>{drilldown.proofBoundary}</span>
+              <h3>Hosted identity operator drilldowns</h3>
+              <ol class="admin-audit-detail__subentries">
+                {#each data.audit.hostedHandoffChecklist.operatorProofDrilldowns as drilldown}
+                  <li
+                    class="admin-audit-detail__entry admin-audit-detail__entry--stack"
+                    data-testid={`admin-audit-hosted-handoff-operator-proof-${drilldown.id}`}
+                  >
+                    <strong>{drilldown.label}</strong>
+                    <span>{drilldown.command}</span>
+                    <span>{drilldown.progressionId}</span>
+                    <span>{drilldown.sourcePath}</span>
+                    <span>{drilldown.proofTarget}</span>
+                    <span>{drilldown.roleUrl}</span>
+                    <span>{drilldown.firstMissingInputId}</span>
+                    <span>{drilldown.firstMissingCheckId}</span>
+                    <span>{drilldown.proofBoundary}</span>
+                  </li>
+                {/each}
+              </ol>
             </li>
-          {/each}
+          {/if}
           {#if !data.audit.artifactSummary?.progressionSummary?.progressions?.length}
             {#each data.audit.hostedHandoffChecklist.progressionSummary?.progressions ?? [] as progression}
               <li
@@ -1242,6 +1252,12 @@
 
   .admin-audit-detail__entry strong {
     color: #18212d;
+  }
+
+  .admin-audit-detail__entry h3 {
+    color: #334155;
+    font-size: 0.88rem;
+    margin: 0;
   }
 
   .admin-audit-detail__entry--stack {
