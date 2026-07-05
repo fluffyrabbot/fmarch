@@ -115,10 +115,22 @@ import {
   realHostedObservabilityHandoffInputSections,
 } from "./dev_test_game_real_hosted_observability_handoff_cases.mjs";
 import {
-  devTestGameReleaseAdminProofPath,
   hostedIdentityEvidencePathKind,
   releaseAdminProofFallbackUnprovenIds,
 } from "./dev_test_game_release_readiness_cases.mjs";
+import {
+  devTestGameReleaseAdminProofPath,
+} from "./dev_test_game_release_artifact_paths.mjs";
+import {
+  devTestGameAdminSpineAdminProofPath,
+  devTestGameBackupAdminProofPath,
+  devTestGameCoreLoopAdminProofPath,
+  devTestGameHardeningAdminProofPath,
+  devTestGameIdentityAdminProofPath,
+  devTestGameOpsAdminProofPath,
+  devTestGameSeedAdminProofPath,
+  devTestGameSpineManifestAdminProofPath,
+} from "./dev_test_game_local_admin_proof_paths.mjs";
 import {
   assertDevTestGameSeedFixtureSummary,
   buildDevTestGameSeedFixtureSummary,
@@ -684,18 +696,15 @@ test("dev test-game spine orchestrators expose stable proof order and env maps",
   assert.deepEqual(seedReadinessEnv, {
     FMARCH_DEV_TEST_GAME_SEED_FIXTURE_SUMMARY:
       "target/dev-test-game/seed-fixture-summary.json",
-    FMARCH_DEV_TEST_GAME_SEED_ADMIN_PROOF:
-      "target/dev-test-game/seed-admin-proof.json",
+    FMARCH_DEV_TEST_GAME_SEED_ADMIN_PROOF: devTestGameSeedAdminProofPath,
   });
   assert.deepEqual(backupRestoreFinalReadinessEnv, {
     ...backupRestoreEvidenceEnv,
-    FMARCH_DEV_TEST_GAME_BACKUP_ADMIN_PROOF:
-      "target/dev-test-game/backup-admin-proof.json",
+    FMARCH_DEV_TEST_GAME_BACKUP_ADMIN_PROOF: devTestGameBackupAdminProofPath,
     FMARCH_DEV_TEST_GAME_OPS_ARTIFACTS: devTestGameOpsArtifactsPath,
     FMARCH_DEV_TEST_GAME_SEED_FIXTURE_SUMMARY:
       "target/dev-test-game/seed-fixture-summary.json",
-    FMARCH_DEV_TEST_GAME_SEED_ADMIN_PROOF:
-      "target/dev-test-game/seed-admin-proof.json",
+    FMARCH_DEV_TEST_GAME_SEED_ADMIN_PROOF: devTestGameSeedAdminProofPath,
   });
   assert.deepEqual(
     devTestGameIdentitySpinePlan.map((step) => step.script),
@@ -714,7 +723,7 @@ test("dev test-game spine orchestrators expose stable proof order and env maps",
     FMARCH_DEV_TEST_GAME_IDENTITY_ADAPTER_PROOF:
       "target/auth-invite-role-proof/invite-role-proof.json",
     FMARCH_DEV_TEST_GAME_IDENTITY_ADMIN_PROOF:
-      "target/dev-test-game/identity-admin-proof.json",
+      devTestGameIdentityAdminProofPath,
     FMARCH_DEV_TEST_GAME_HOSTED_IDENTITY_EVIDENCE:
       devTestGameHostedIdentityEvidencePath,
     FMARCH_DEV_TEST_GAME_HOSTED_IDENTITY_PROGRESSION_SUMMARY:
@@ -722,18 +731,16 @@ test("dev test-game spine orchestrators expose stable proof order and env maps",
   });
   assert.deepEqual(adminSpineReadinessEvidenceEnv, {
     FMARCH_DEV_TEST_GAME_CORE_LOOP_ADMIN_PROOF:
-      "target/dev-test-game/core-loop-admin-proof.json",
+      devTestGameCoreLoopAdminProofPath,
     FMARCH_DEV_TEST_GAME_HARDENING_ADMIN_PROOF:
-      "target/dev-test-game/hardening-admin-proof.json",
+      devTestGameHardeningAdminProofPath,
     FMARCH_DEV_TEST_GAME_BACKUP_RESTORE_PROOF:
       "target/live-stack-backup-restore-drill/local-backup-restore-proof.json",
     FMARCH_DEV_TEST_GAME_BACKUP_RESTORE_DUMP:
       "target/live-stack-backup-restore-drill/local-live-stack.dump",
-    FMARCH_DEV_TEST_GAME_BACKUP_ADMIN_PROOF:
-      "target/dev-test-game/backup-admin-proof.json",
+    FMARCH_DEV_TEST_GAME_BACKUP_ADMIN_PROOF: devTestGameBackupAdminProofPath,
     FMARCH_DEV_TEST_GAME_OPS_ARTIFACTS: devTestGameOpsArtifactsPath,
-    FMARCH_DEV_TEST_GAME_OPS_ADMIN_PROOF:
-      "target/dev-test-game/ops-admin-proof.json",
+    FMARCH_DEV_TEST_GAME_OPS_ADMIN_PROOF: devTestGameOpsAdminProofPath,
     FMARCH_DEV_TEST_GAME_HOSTED_OPS_SIGNALS: devTestGameHostedOpsSignalsPath,
     FMARCH_DEV_TEST_GAME_HOSTED_OPS_SIGNALS_ADMIN_PROOF:
       devTestGameHostedOpsSignalsAdminProofPath,
@@ -745,8 +752,7 @@ test("dev test-game spine orchestrators expose stable proof order and env maps",
       ).path,
     FMARCH_DEV_TEST_GAME_SEED_FIXTURE_SUMMARY:
       "target/dev-test-game/seed-fixture-summary.json",
-    FMARCH_DEV_TEST_GAME_SEED_ADMIN_PROOF:
-      "target/dev-test-game/seed-admin-proof.json",
+    FMARCH_DEV_TEST_GAME_SEED_ADMIN_PROOF: devTestGameSeedAdminProofPath,
     FMARCH_DEV_TEST_GAME_RELEASE_RUNBOOK:
       "target/dev-test-game/release-runbook.json",
     FMARCH_DEV_TEST_GAME_RELEASE_RUNBOOK_ADMIN_PROOF:
@@ -754,7 +760,7 @@ test("dev test-game spine orchestrators expose stable proof order and env maps",
     FMARCH_DEV_TEST_GAME_IDENTITY_ADAPTER_PROOF:
       "target/auth-invite-role-proof/invite-role-proof.json",
     FMARCH_DEV_TEST_GAME_IDENTITY_ADMIN_PROOF:
-      "target/dev-test-game/identity-admin-proof.json",
+      devTestGameIdentityAdminProofPath,
     FMARCH_DEV_TEST_GAME_HOSTED_IDENTITY_EVIDENCE:
       "target/dev-test-game/hosted-identity-evidence.json",
     FMARCH_DEV_TEST_GAME_HOSTED_IDENTITY_PROGRESSION_SUMMARY:
@@ -763,11 +769,11 @@ test("dev test-game spine orchestrators expose stable proof order and env maps",
       hostedAdminHandoffProofArtifactCase("hostedIdentityEvidenceAdminProof").path,
     FMARCH_DEV_TEST_GAME_SPINE_MANIFEST: "target/dev-test-game/spine-manifest.json",
     FMARCH_DEV_TEST_GAME_SPINE_MANIFEST_ADMIN_PROOF:
-      "target/dev-test-game/spine-manifest-admin-proof.json",
+      devTestGameSpineManifestAdminProofPath,
     FMARCH_DEV_TEST_GAME_ADMIN_SPINE_PROOF:
       "target/dev-test-game/admin-spine-proof.json",
     FMARCH_DEV_TEST_GAME_ADMIN_SPINE_ADMIN_PROOF:
-      "target/dev-test-game/admin-spine-admin-proof.json",
+      devTestGameAdminSpineAdminProofPath,
     FMARCH_DEV_TEST_GAME_RACE_COVERAGE: "target/dev-test-game/race-coverage.json",
     FMARCH_DEV_TEST_GAME_RACE_COVERAGE_ADMIN_PROOF:
       devTestGameRaceCoverageAdminProofPath,
@@ -859,9 +865,9 @@ test("dev test-game spine orchestrators expose stable proof order and env maps",
       readinessReason: "core-live-gameplay-admin-surfaces",
       changedInputs: [
         "target/dev-test-game/proof-run.json",
-        "target/dev-test-game/core-loop-admin-proof.json",
+        devTestGameCoreLoopAdminProofPath,
         ...recoveryReceiptProofTargets(coreLoopRecoveryReceiptSelector),
-        "target/dev-test-game/hardening-admin-proof.json",
+        devTestGameHardeningAdminProofPath,
         ...recoveryReceiptProofTargets(hardeningRecoveryReceiptSelector),
       ],
     },
@@ -1676,7 +1682,7 @@ test("dev test-game spine manifest records command order and evidence wiring", (
         {
           id: "core-loop",
           label: "Core loop admin proof",
-          path: "target/dev-test-game/core-loop-admin-proof.json",
+          path: devTestGameCoreLoopAdminProofPath,
           status: "stale",
           mtime: "2026-06-25T00:00:00.000Z",
           ageSeconds: 90000,
@@ -1698,7 +1704,7 @@ test("dev test-game spine manifest records command order and evidence wiring", (
         surfaces: [
           {
             id: "core-loop",
-            path: "target/dev-test-game/core-loop-admin-proof.json",
+            path: devTestGameCoreLoopAdminProofPath,
             rerunCommand: "npm run test:dev-test-game-core-loop-admin-proof",
           },
         ],
@@ -1770,7 +1776,7 @@ test("dev test-game spine manifest records command order and evidence wiring", (
     proofArtifact: devTestGameHostedIdentityEvidencePath,
     dependsOn: [
       "target/auth-invite-role-proof/invite-role-proof.json",
-      "target/dev-test-game/identity-admin-proof.json",
+      devTestGameIdentityAdminProofPath,
     ],
     roleUrl: "/admin/audit/local-identity-adapter?game=<seeded-game>",
   });
@@ -1985,11 +1991,11 @@ test("dev test-game spine manifest records command order and evidence wiring", (
   assert(manifest.artifacts.includes(devTestGameReleaseAdminProofPath));
   assert(
     manifest.artifacts.includes(
-      "target/dev-test-game/spine-manifest-admin-proof.json",
+      devTestGameSpineManifestAdminProofPath,
     ),
   );
   assert(
-    manifest.artifacts.includes("target/dev-test-game/admin-spine-admin-proof.json"),
+    manifest.artifacts.includes(devTestGameAdminSpineAdminProofPath),
   );
   assert(
     manifest.artifacts.includes(
@@ -2101,7 +2107,7 @@ test("dev test-game next-action derives one local recovery command from the mani
         {
           id: "core-loop",
           label: "Core loop admin proof",
-          path: "target/dev-test-game/core-loop-admin-proof.json",
+          path: devTestGameCoreLoopAdminProofPath,
           status: "stale",
           mtime: "2026-06-25T00:00:00.000Z",
           ageSeconds: 90000,
@@ -2114,7 +2120,7 @@ test("dev test-game next-action derives one local recovery command from the mani
         surfaces: [
           {
             id: "core-loop",
-            path: "target/dev-test-game/core-loop-admin-proof.json",
+            path: devTestGameCoreLoopAdminProofPath,
             rerunCommand: "npm run test:dev-test-game-core-loop-admin-proof",
           },
         ],
@@ -2132,7 +2138,7 @@ test("dev test-game next-action derives one local recovery command from the mani
     artifact: {
       id: "core-loop",
       label: "Core loop admin proof",
-      path: "target/dev-test-game/core-loop-admin-proof.json",
+      path: devTestGameCoreLoopAdminProofPath,
       status: "stale",
       refreshSource: "admin-spine-recovery",
     },
@@ -2146,7 +2152,7 @@ test("dev test-game next-action derives one local recovery command from the mani
         rank: 1,
         id: "core-loop",
         label: "Core loop admin proof",
-        path: "target/dev-test-game/core-loop-admin-proof.json",
+        path: devTestGameCoreLoopAdminProofPath,
         status: "stale",
         priority: 2,
         selected: true,
@@ -11269,7 +11275,7 @@ test("session card and markdown include role credential URLs and tokens", async 
   );
   const coreLoopReadiness = buildDevTestGameReleaseReadiness(proofRun, {
     generatedAt: "2026-06-26T00:00:00.000Z",
-    coreLoopAdminProofPath: "target/dev-test-game/core-loop-admin-proof.json",
+    coreLoopAdminProofPath: devTestGameCoreLoopAdminProofPath,
     coreLoopAdminProof: coreLoopAdminProofFixture(),
   });
   assertDevTestGameReleaseReadiness(coreLoopReadiness);
@@ -11293,11 +11299,11 @@ test("session card and markdown include role credential URLs and tokens", async 
   );
   assert.equal(
     coreLoopReadiness.generatedFrom.coreLoopAdminProof,
-    "target/dev-test-game/core-loop-admin-proof.json",
+    devTestGameCoreLoopAdminProofPath,
   );
   const hardeningReadiness = buildDevTestGameReleaseReadiness(proofRun, {
     generatedAt: "2026-06-26T00:00:00.000Z",
-    hardeningAdminProofPath: "target/dev-test-game/hardening-admin-proof.json",
+    hardeningAdminProofPath: devTestGameHardeningAdminProofPath,
     hardeningAdminProof: hardeningAdminProofFixture(),
   });
   assertDevTestGameReleaseReadiness(hardeningReadiness);
@@ -11326,7 +11332,7 @@ test("session card and markdown include role credential URLs and tokens", async 
   );
   assert.equal(
     hardeningReadiness.generatedFrom.hardeningAdminProof,
-    "target/dev-test-game/hardening-admin-proof.json",
+    devTestGameHardeningAdminProofPath,
   );
   assertReadinessRecoveryMilestonesMirrorProofCoverage({
     readiness: hardeningReadiness,
@@ -12210,7 +12216,7 @@ test("session card and markdown include role credential URLs and tokens", async 
     generatedAt: "2026-06-26T00:00:00.000Z",
     opsArtifactsPath: devTestGameOpsArtifactsPath,
     opsArtifacts,
-    opsAdminProofPath: "target/dev-test-game/ops-admin-proof.json",
+    opsAdminProofPath: devTestGameOpsAdminProofPath,
     opsAdminProof: opsAdminProofFixture(),
   });
   assertDevTestGameReleaseReadiness(opsReadiness);
@@ -12432,7 +12438,7 @@ test("session card and markdown include role credential URLs and tokens", async 
     opsArtifacts,
     seedFixtureSummaryPath: "target/dev-test-game/seed-fixture-summary.json",
     seedFixtureSummary: seedFixture,
-    seedAdminProofPath: "target/dev-test-game/seed-admin-proof.json",
+    seedAdminProofPath: devTestGameSeedAdminProofPath,
     seedAdminProof: seedAdminProofFixture(),
   });
   assertDevTestGameReleaseReadiness(seedFixtureReadiness);
@@ -12469,7 +12475,7 @@ test("session card and markdown include role credential URLs and tokens", async 
     identityAdapterProofPath:
       "target/auth-invite-role-proof/invite-role-proof.json",
     identityAdapterProof: identityAdapterProofFixture(game),
-    identityAdminProofPath: "target/dev-test-game/identity-admin-proof.json",
+    identityAdminProofPath: devTestGameIdentityAdminProofPath,
     identityAdminProof: identityAdminProofFixture(),
     hostedIdentityEvidenceAdminProofPath:
       "target/dev-test-game/hosted-identity-evidence-admin-proof.json",
@@ -12567,7 +12573,7 @@ test("session card and markdown include role credential URLs and tokens", async 
     backupRestoreProofPath:
       "target/live-stack-backup-restore-drill/local-backup-restore-proof.json",
     backupRestoreDumpPath: "target/live-stack-backup-restore-drill/local-live-stack.dump",
-    backupAdminProofPath: "target/dev-test-game/backup-admin-proof.json",
+    backupAdminProofPath: devTestGameBackupAdminProofPath,
     backupAdminProof: backupAdminProofFixture(),
     backupRestoreProof: {
       version: 1,
@@ -12627,7 +12633,7 @@ test("session card and markdown include role credential URLs and tokens", async 
     generatedAt: "2026-06-26T00:00:00.000Z",
     adminSpineProofPath: "target/dev-test-game/admin-spine-proof.json",
     adminSpineProof: adminSpineProofFixture(),
-    adminSpineAdminProofPath: "target/dev-test-game/admin-spine-admin-proof.json",
+    adminSpineAdminProofPath: devTestGameAdminSpineAdminProofPath,
     adminSpineAdminProof: adminSpineAdminProofFixture(),
     adminSpineTerminalBatchesPath:
       "target/dev-test-game/admin-spine-terminal-batches.json",
@@ -12641,7 +12647,7 @@ test("session card and markdown include role credential URLs and tokens", async 
   );
   assert.equal(
     adminSpineReadiness.generatedFrom.adminSpineAdminProof,
-    "target/dev-test-game/admin-spine-admin-proof.json",
+    devTestGameAdminSpineAdminProofPath,
   );
   assert.equal(
     adminSpineReadiness.generatedFrom.adminSpineTerminalBatches,
@@ -12794,7 +12800,7 @@ test("session card and markdown include role credential URLs and tokens", async 
     generatedAt: "2026-06-26T00:00:00.000Z",
     spineManifestPath: "target/dev-test-game/spine-manifest.json",
     spineManifest: spineManifestFixture(),
-    spineManifestAdminProofPath: "target/dev-test-game/spine-manifest-admin-proof.json",
+    spineManifestAdminProofPath: devTestGameSpineManifestAdminProofPath,
     spineManifestAdminProof: spineManifestAdminProofFixture(),
   });
   assertDevTestGameReleaseReadiness(manifestReadiness);
@@ -12804,7 +12810,7 @@ test("session card and markdown include role credential URLs and tokens", async 
   );
   assert.equal(
     manifestReadiness.generatedFrom.spineManifestAdminProof,
-    "target/dev-test-game/spine-manifest-admin-proof.json",
+    devTestGameSpineManifestAdminProofPath,
   );
   assert.equal(
     manifestReadiness.localDevelopmentSpine.checks.find(
@@ -13321,7 +13327,7 @@ function devTestGameReleaseReadinessChecklistFixture({
           evidence: "target/dev-test-game/proof-run.json",
           laneIds: coreLoopAuditLaneIds,
           adminRoleSurface: {
-            path: "target/dev-test-game/core-loop-admin-proof.json",
+            path: devTestGameCoreLoopAdminProofPath,
             detailRoleUrl: localAdminAuditRoleUrl(localAdminAuditIds.coreLoop),
           },
           spineTargets: coreLoopSpineTargetsFixture(),
@@ -13335,7 +13341,7 @@ function devTestGameReleaseReadinessChecklistFixture({
           laneIds: hardeningAuditLaneIds,
           adminRoleSurface: {
             status: "passed",
-            path: "target/dev-test-game/hardening-admin-proof.json",
+            path: devTestGameHardeningAdminProofPath,
             detailRoleUrl: localAdminAuditRoleUrl(localAdminAuditIds.hardening),
             visibleChecks: [
               ...hardeningAdminProofFixture().adminRoleSurface.visibleChecks,
@@ -13396,7 +13402,7 @@ function devTestGameReleaseReadinessChecklistFixture({
           roles: ["admin", "host", "player"],
           adminRoleSurface: {
             status: "passed",
-            path: "target/dev-test-game/identity-admin-proof.json",
+            path: devTestGameIdentityAdminProofPath,
             proofBoundary:
               "Local identity adapter admin role URL proof.",
             overviewRoleUrl: "/admin?game=<seeded-game>",
@@ -18280,7 +18286,7 @@ function spineManifestFixture() {
     artifacts: [
       "target/dev-test-game/spine-manifest.json",
       "target/dev-test-game/spine-manifest.md",
-      "target/dev-test-game/spine-manifest-admin-proof.json",
+      devTestGameSpineManifestAdminProofPath,
       "target/dev-test-game/proof-freshness-admin-proof.json",
       "target/dev-test-game/next-action.json",
       "target/dev-test-game/next-action-admin-proof.json",

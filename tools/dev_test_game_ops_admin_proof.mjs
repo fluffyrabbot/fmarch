@@ -2,7 +2,9 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { assertDevTestGameOpsArtifacts } from "./dev_test_game_ops_artifacts.mjs";
 import {
-  artifactDir,
+  devTestGameOpsAdminProofPath,
+} from "./dev_test_game_local_admin_proof_paths.mjs";
+import {
   proveAdminAuditDetail,
   readJson,
   repoRoot,
@@ -15,7 +17,7 @@ const opsArtifactsPath = path.resolve(
     "target/dev-test-game/ops-artifacts.json",
 );
 const opsArtifactsRelativePath = path.relative(repoRoot, opsArtifactsPath);
-const evidencePath = path.join(artifactDir, "ops-admin-proof.json");
+const evidencePath = path.join(repoRoot, devTestGameOpsAdminProofPath);
 const requiredChecks = [
   "source-artifacts-checksummed",
   "role-entrypoints-redacted",

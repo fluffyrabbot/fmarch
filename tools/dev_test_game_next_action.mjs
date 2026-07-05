@@ -72,6 +72,16 @@ import {
 import {
   hostedAdminHandoffProofArtifactCases,
 } from "./dev_test_game_hosted_handoff_proof_cases.mjs";
+import {
+  devTestGameAdminSpineAdminProofPath,
+  devTestGameBackupAdminProofPath,
+  devTestGameCoreLoopAdminProofPath,
+  devTestGameHardeningAdminProofPath,
+  devTestGameIdentityAdminProofPath,
+  devTestGameOpsAdminProofPath,
+  devTestGameSeedAdminProofPath,
+  devTestGameSpineManifestAdminProofPath,
+} from "./dev_test_game_local_admin_proof_paths.mjs";
 
 export {
   devTestGameCoreLoopAdminProofCommand,
@@ -2208,16 +2218,16 @@ const devSpineArtifactPriorities = new Map(
   [
     ["proof-run", "target/dev-test-game/proof-run.json"],
     ["session", "target/dev-test-game/session.json"],
-    ["core-loop", "target/dev-test-game/core-loop-admin-proof.json"],
-    ["hardening", "target/dev-test-game/hardening-admin-proof.json"],
+    ["core-loop", devTestGameCoreLoopAdminProofPath],
+    ["hardening", devTestGameHardeningAdminProofPath],
     ["identity-adapter", "target/auth-invite-role-proof/invite-role-proof.json"],
-    ["identity", "target/dev-test-game/identity-admin-proof.json"],
+    ["identity", devTestGameIdentityAdminProofPath],
     ["backup-restore", "target/live-stack-backup-restore-drill/local-backup-restore-proof.json"],
-    ["backup", "target/dev-test-game/backup-admin-proof.json"],
+    ["backup", devTestGameBackupAdminProofPath],
     ["ops-artifacts", devTestGameOpsArtifactsPath],
-    ["ops", "target/dev-test-game/ops-admin-proof.json"],
+    ["ops", devTestGameOpsAdminProofPath],
     ["seed-fixture", "target/dev-test-game/seed-fixture-summary.json"],
-    ["seed", "target/dev-test-game/seed-admin-proof.json"],
+    ["seed", devTestGameSeedAdminProofPath],
     ["release-readiness", devTestGameReleaseReadinessPath],
     ["release-runbook", "target/dev-test-game/release-runbook.json"],
     ["release-runbook-admin", "target/dev-test-game/release-runbook-admin-proof.json"],
@@ -2229,11 +2239,11 @@ const devSpineArtifactPriorities = new Map(
     ["hosted-evidence-lane", devTestGameHostedEvidenceLanePath],
     ["release", "target/dev-test-game/release-admin-proof.json"],
     ["admin-spine", "target/dev-test-game/admin-spine-proof.json"],
-    ["admin-spine-admin", "target/dev-test-game/admin-spine-admin-proof.json"],
+    ["admin-spine-admin", devTestGameAdminSpineAdminProofPath],
     ["proof-graph", "target/dev-test-game/proof-graph.json"],
     ["proof-graph-admin", "target/dev-test-game/proof-graph-admin-proof.json"],
     ["spine-manifest", "target/dev-test-game/spine-manifest.json"],
-    ["spine-manifest-admin", "target/dev-test-game/spine-manifest-admin-proof.json"],
+    ["spine-manifest-admin", devTestGameSpineManifestAdminProofPath],
     ...hostedAdminHandoffProofArtifactCases.map((artifactCase) => [
       artifactCase.refreshId,
       artifactCase.path,

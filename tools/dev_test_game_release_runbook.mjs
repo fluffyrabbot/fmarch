@@ -8,7 +8,7 @@ import {
   devTestGameReleaseRunbookCommand,
   devTestGameReleaseRunbookAdminProofPath,
   devTestGameReleaseRunbookPath,
-} from "./dev_test_game_release_readiness_cases.mjs";
+} from "./dev_test_game_release_artifact_paths.mjs";
 import {
   devTestGameRealHostedObservabilityHandoffCommand,
   devTestGameRealHostedObservabilityHandoffPath,
@@ -24,7 +24,7 @@ export {
   devTestGameReleaseRunbookCommand,
   devTestGameReleaseRunbookAdminProofPath,
   devTestGameReleaseRunbookPath,
-} from "./dev_test_game_release_readiness_cases.mjs";
+} from "./dev_test_game_release_artifact_paths.mjs";
 const devTestGameReleaseReadinessPath =
   "target/dev-test-game/release-readiness-checklist.json";
 

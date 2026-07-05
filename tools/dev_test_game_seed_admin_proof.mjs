@@ -5,7 +5,9 @@ import {
   seedScenarioCoverageGroups,
 } from "./dev_test_game_seed_scenario_cases.mjs";
 import {
-  artifactDir,
+  devTestGameSeedAdminProofPath,
+} from "./dev_test_game_local_admin_proof_paths.mjs";
+import {
   proveAdminAuditDetail,
   readJson,
   repoRoot,
@@ -18,7 +20,7 @@ const seedFixturePath = path.resolve(
     "target/dev-test-game/seed-fixture-summary.json",
 );
 const seedFixtureRelativePath = path.relative(repoRoot, seedFixturePath);
-const evidencePath = path.join(artifactDir, "seed-admin-proof.json");
+const evidencePath = path.join(repoRoot, devTestGameSeedAdminProofPath);
 const requiredScenarios = seedScenarioCoverageGroups.allDemo;
 const requiredProofLaneCoverage = [
   "direct-seeded",

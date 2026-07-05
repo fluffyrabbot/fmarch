@@ -142,6 +142,16 @@ import {
   hostedTargetPreflightMissingFrontendUrlRequiredEvidence,
   hostedTargetPreflightMissingRawEvidencePathRequiredEvidence,
 } from "../../../../tools/dev_test_game_hosted_target_preflight.mjs";
+import {
+  devTestGameAdminSpineAdminProofPath,
+  devTestGameBackupAdminProofPath,
+  devTestGameCoreLoopAdminProofPath,
+  devTestGameHardeningAdminProofPath,
+  devTestGameIdentityAdminProofPath,
+  devTestGameOpsAdminProofPath,
+  devTestGameSeedAdminProofPath,
+  devTestGameSpineManifestAdminProofPath,
+} from "../../../../tools/dev_test_game_local_admin_proof_paths.mjs";
 
 const LOCAL_RACE_COMMAND =
   "npm run test:dev-test-game-hosted-concurrent-race-matrix";
@@ -2538,7 +2548,7 @@ test("admin local next action detail data carries recovery check rows", async ()
       artifact: {
         id: "core-loop",
         label: "Core loop admin proof",
-        path: "target/dev-test-game/core-loop-admin-proof.json",
+        path: devTestGameCoreLoopAdminProofPath,
         status: "stale",
         refreshSource: "admin-spine-recovery",
       },
@@ -5475,7 +5485,7 @@ function spineManifestFixture() {
     artifacts: [
       "target/dev-test-game/spine-manifest.json",
       "target/dev-test-game/spine-manifest.md",
-      "target/dev-test-game/spine-manifest-admin-proof.json",
+      devTestGameSpineManifestAdminProofPath,
       "target/dev-test-game/proof-freshness-admin-proof.json",
       "target/dev-test-game/hosted-concurrent-race-matrix.json",
       HOSTED_TARGET_PREFLIGHT_PROOF_TARGET,
@@ -7125,17 +7135,17 @@ function adminSpineProofFixture() {
     generatedFrom: {
       game: "game-a",
       proofs: {
-        "core-loop": "target/dev-test-game/core-loop-admin-proof.json",
-        hardening: "target/dev-test-game/hardening-admin-proof.json",
-        identity: "target/dev-test-game/identity-admin-proof.json",
-        backup: "target/dev-test-game/backup-admin-proof.json",
-        ops: "target/dev-test-game/ops-admin-proof.json",
-        seed: "target/dev-test-game/seed-admin-proof.json",
+        "core-loop": devTestGameCoreLoopAdminProofPath,
+        hardening: devTestGameHardeningAdminProofPath,
+        identity: devTestGameIdentityAdminProofPath,
+        backup: devTestGameBackupAdminProofPath,
+        ops: devTestGameOpsAdminProofPath,
+        seed: devTestGameSeedAdminProofPath,
         release: "target/dev-test-game/release-admin-proof.json",
         "race-coverage": "target/dev-test-game/race-coverage-admin-proof.json",
         "hosted-concurrent-race-matrix":
           "target/dev-test-game/hosted-concurrent-race-matrix-admin-proof.json",
-        "spine-manifest": "target/dev-test-game/spine-manifest-admin-proof.json",
+        "spine-manifest": devTestGameSpineManifestAdminProofPath,
       },
     },
     adminProofs: [
@@ -7166,12 +7176,12 @@ function adminSpineProofFixture() {
         ],
         proofIds: ["core-loop", "hardening", "identity", "backup", "ops", "seed"],
         artifactPaths: [
-          "target/dev-test-game/core-loop-admin-proof.json",
-          "target/dev-test-game/hardening-admin-proof.json",
-          "target/dev-test-game/identity-admin-proof.json",
-          "target/dev-test-game/backup-admin-proof.json",
-          "target/dev-test-game/ops-admin-proof.json",
-          "target/dev-test-game/seed-admin-proof.json",
+          devTestGameCoreLoopAdminProofPath,
+          devTestGameHardeningAdminProofPath,
+          devTestGameIdentityAdminProofPath,
+          devTestGameBackupAdminProofPath,
+          devTestGameOpsAdminProofPath,
+          devTestGameSeedAdminProofPath,
         ],
         elapsedMs: 1200,
         sharedFrontendSession: true,
@@ -7200,7 +7210,7 @@ function adminSpineProofFixture() {
           "target/dev-test-game/release-admin-proof.json",
           "target/dev-test-game/race-coverage-admin-proof.json",
           "target/dev-test-game/hosted-concurrent-race-matrix-admin-proof.json",
-          "target/dev-test-game/spine-manifest-admin-proof.json",
+          devTestGameSpineManifestAdminProofPath,
         ],
         elapsedMs: 1800,
         sharedFrontendSession: true,

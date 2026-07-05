@@ -2,7 +2,9 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { validateDevTestGameIdentityAdapterProof } from "./dev_test_game_release_readiness.mjs";
 import {
-  artifactDir,
+  devTestGameIdentityAdminProofPath,
+} from "./dev_test_game_local_admin_proof_paths.mjs";
+import {
   proveAdminAuditDetail,
   readJson,
   repoRoot,
@@ -15,7 +17,7 @@ const identityProofPath = path.resolve(
     "target/auth-invite-role-proof/invite-role-proof.json",
 );
 const identityProofRelativePath = path.relative(repoRoot, identityProofPath);
-const evidencePath = path.join(artifactDir, "identity-admin-proof.json");
+const evidencePath = path.join(repoRoot, devTestGameIdentityAdminProofPath);
 const requiredChecks = [
   "account-login",
   "account-lifecycle",

@@ -54,13 +54,22 @@ import {
 import {
   devTestGameReleaseAdminProofPath,
   devTestGameReleaseRunbookAdminProofPath,
-} from "./dev_test_game_release_readiness_cases.mjs";
+} from "./dev_test_game_release_artifact_paths.mjs";
 import {
   raceCoverageAdminProofCase,
 } from "./dev_test_game_race_coverage_admin_proof.mjs";
 import {
   devTestGameRaceCoverageAdminProofPath,
 } from "./dev_test_game_race_coverage.mjs";
+import {
+  devTestGameBackupAdminProofPath,
+  devTestGameCoreLoopAdminProofPath,
+  devTestGameHardeningAdminProofPath,
+  devTestGameIdentityAdminProofPath,
+  devTestGameOpsAdminProofPath,
+  devTestGameSeedAdminProofPath,
+  devTestGameSpineManifestAdminProofPath,
+} from "./dev_test_game_local_admin_proof_paths.mjs";
 import {
   hostedTargetPreflightAdminProofCase,
 } from "./dev_test_game_hosted_target_preflight_admin_proof.mjs";
@@ -99,7 +108,7 @@ export const devTestGameAdminSpineProofPlan = [
     label: "Core loop admin role surface",
     script: "tools/dev_test_game_core_loop_admin_proof.mjs",
     rerunCommand: "npm run test:dev-test-game-core-loop-admin-proof",
-    path: "target/dev-test-game/core-loop-admin-proof.json",
+    path: devTestGameCoreLoopAdminProofPath,
     validate: validateDevTestGameCoreLoopAdminProof,
     caseFactory: coreLoopAdminProofCase,
   },
@@ -108,7 +117,7 @@ export const devTestGameAdminSpineProofPlan = [
     label: "Multiplayer hardening admin role surface",
     script: "tools/dev_test_game_hardening_admin_proof.mjs",
     rerunCommand: "npm run test:dev-test-game-hardening-admin-proof",
-    path: "target/dev-test-game/hardening-admin-proof.json",
+    path: devTestGameHardeningAdminProofPath,
     validate: validateDevTestGameHardeningAdminProof,
     caseFactory: hardeningAdminProofCase,
   },
@@ -117,7 +126,7 @@ export const devTestGameAdminSpineProofPlan = [
     label: "Identity adapter admin role surface",
     script: "tools/dev_test_game_identity_admin_proof.mjs",
     rerunCommand: "npm run test:dev-test-game-identity-admin-proof",
-    path: "target/dev-test-game/identity-admin-proof.json",
+    path: devTestGameIdentityAdminProofPath,
     validate: validateDevTestGameIdentityAdminProof,
     caseFactory: identityAdminProofCase,
   },
@@ -136,7 +145,7 @@ export const devTestGameAdminSpineProofPlan = [
     label: "Backup/restore admin role surface",
     script: "tools/dev_test_game_backup_admin_proof.mjs",
     rerunCommand: "npm run test:dev-test-game-backup-admin-proof",
-    path: "target/dev-test-game/backup-admin-proof.json",
+    path: devTestGameBackupAdminProofPath,
     validate: validateDevTestGameBackupAdminProof,
     caseFactory: backupAdminProofCase,
   },
@@ -145,7 +154,7 @@ export const devTestGameAdminSpineProofPlan = [
     label: "Ops artifact admin role surface",
     script: "tools/dev_test_game_ops_admin_proof.mjs",
     rerunCommand: "npm run test:dev-test-game-ops-admin-proof",
-    path: "target/dev-test-game/ops-admin-proof.json",
+    path: devTestGameOpsAdminProofPath,
     validate: validateDevTestGameOpsAdminProof,
     caseFactory: opsAdminProofCase,
   },
@@ -154,7 +163,7 @@ export const devTestGameAdminSpineProofPlan = [
     label: "Seed/demo fixture admin role surface",
     script: "tools/dev_test_game_seed_admin_proof.mjs",
     rerunCommand: "npm run test:dev-test-game-seed-admin-proof",
-    path: "target/dev-test-game/seed-admin-proof.json",
+    path: devTestGameSeedAdminProofPath,
     validate: validateDevTestGameSeedAdminProof,
     caseFactory: seedAdminProofCase,
   },
@@ -237,7 +246,7 @@ export const devTestGameAdminSpineProofPlan = [
     label: "Spine manifest admin role surface",
     script: "tools/dev_test_game_spine_manifest_admin_proof.mjs",
     rerunCommand: "npm run test:dev-test-game-spine-manifest-admin-proof",
-    path: "target/dev-test-game/spine-manifest-admin-proof.json",
+    path: devTestGameSpineManifestAdminProofPath,
     validate: validateDevTestGameSpineManifestAdminProof,
     caseFactory: spineManifestAdminProofCase,
   },

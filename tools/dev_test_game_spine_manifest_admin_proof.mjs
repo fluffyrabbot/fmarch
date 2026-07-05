@@ -3,8 +3,10 @@ import { pathToFileURL } from "node:url";
 import { assertDevTestGameProofRun } from "./dev_test_game_proof_contract.mjs";
 import { assertDevTestGameSpineManifest } from "./dev_test_game_spine_manifest.mjs";
 import {
+  devTestGameSpineManifestAdminProofPath,
+} from "./dev_test_game_local_admin_proof_paths.mjs";
+import {
   assertVisibleAdminRoleSurfaceRows,
-  artifactDir,
   proveAdminAuditDetail,
   readJson,
   repoRoot,
@@ -26,7 +28,7 @@ const proofRunPath = path.resolve(
 );
 const spineManifestRelativePath = path.relative(repoRoot, spineManifestPath);
 const proofRunRelativePath = path.relative(repoRoot, proofRunPath);
-const evidencePath = path.join(artifactDir, "spine-manifest-admin-proof.json");
+const evidencePath = path.join(repoRoot, devTestGameSpineManifestAdminProofPath);
 const requiredChecks = [
   "core-live-order-recorded",
   "live-spine-order-recorded",

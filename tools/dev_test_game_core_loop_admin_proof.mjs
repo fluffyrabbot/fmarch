@@ -123,7 +123,9 @@ import {
 } from "./dev_test_game_core_loop_scenarios.mjs";
 import { assertDevTestGameProofRun } from "./dev_test_game_proof_contract.mjs";
 import {
-  artifactDir,
+  devTestGameCoreLoopAdminProofPath,
+} from "./dev_test_game_local_admin_proof_paths.mjs";
+import {
   proveAdminAuditDetail,
   readJson,
   repoRoot,
@@ -136,7 +138,7 @@ const proofRunPath = path.resolve(
     "target/dev-test-game/proof-run.json",
 );
 const proofRunRelativePath = path.relative(repoRoot, proofRunPath);
-const evidencePath = path.join(artifactDir, "core-loop-admin-proof.json");
+const evidencePath = path.join(repoRoot, devTestGameCoreLoopAdminProofPath);
 const requiredChecks = coreLoopAdminCheckIds;
 
 const requiredSpineRows = (proofRun) => {

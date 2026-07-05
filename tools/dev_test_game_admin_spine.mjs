@@ -35,7 +35,17 @@ import {
 } from "./dev_test_game_real_hosted_observability_handoff_cases.mjs";
 import {
   devTestGameReleaseRunbookAdminProofPath,
-} from "./dev_test_game_release_readiness_cases.mjs";
+} from "./dev_test_game_release_artifact_paths.mjs";
+import {
+  devTestGameAdminSpineAdminProofPath,
+  devTestGameBackupAdminProofPath,
+  devTestGameCoreLoopAdminProofPath,
+  devTestGameHardeningAdminProofPath,
+  devTestGameIdentityAdminProofPath,
+  devTestGameOpsAdminProofPath,
+  devTestGameSeedAdminProofPath,
+  devTestGameSpineManifestAdminProofPath,
+} from "./dev_test_game_local_admin_proof_paths.mjs";
 import {
   nextActionAdminProofPath,
   proofFreshnessAdminProofPath,
@@ -63,17 +73,17 @@ export const adminSpineTerminalBatchProofPath =
 
 export const adminSpineReadinessEvidenceEnv = {
   FMARCH_DEV_TEST_GAME_CORE_LOOP_ADMIN_PROOF:
-    "target/dev-test-game/core-loop-admin-proof.json",
+    devTestGameCoreLoopAdminProofPath,
   FMARCH_DEV_TEST_GAME_HARDENING_ADMIN_PROOF:
-    "target/dev-test-game/hardening-admin-proof.json",
+    devTestGameHardeningAdminProofPath,
   FMARCH_DEV_TEST_GAME_BACKUP_RESTORE_PROOF:
     "target/live-stack-backup-restore-drill/local-backup-restore-proof.json",
   FMARCH_DEV_TEST_GAME_BACKUP_RESTORE_DUMP:
     "target/live-stack-backup-restore-drill/local-live-stack.dump",
   FMARCH_DEV_TEST_GAME_BACKUP_ADMIN_PROOF:
-    "target/dev-test-game/backup-admin-proof.json",
+    devTestGameBackupAdminProofPath,
   FMARCH_DEV_TEST_GAME_OPS_ARTIFACTS: devTestGameOpsArtifactsPath,
-  FMARCH_DEV_TEST_GAME_OPS_ADMIN_PROOF: "target/dev-test-game/ops-admin-proof.json",
+  FMARCH_DEV_TEST_GAME_OPS_ADMIN_PROOF: devTestGameOpsAdminProofPath,
   FMARCH_DEV_TEST_GAME_HOSTED_OPS_SIGNALS: devTestGameHostedOpsSignalsPath,
   FMARCH_DEV_TEST_GAME_HOSTED_OPS_SIGNALS_ADMIN_PROOF:
     devTestGameHostedOpsSignalsAdminProofPath,
@@ -83,7 +93,7 @@ export const adminSpineReadinessEvidenceEnv = {
     "target/dev-test-game/real-hosted-observability-handoff-admin-proof.json",
   FMARCH_DEV_TEST_GAME_SEED_FIXTURE_SUMMARY:
     "target/dev-test-game/seed-fixture-summary.json",
-  FMARCH_DEV_TEST_GAME_SEED_ADMIN_PROOF: "target/dev-test-game/seed-admin-proof.json",
+  FMARCH_DEV_TEST_GAME_SEED_ADMIN_PROOF: devTestGameSeedAdminProofPath,
   FMARCH_DEV_TEST_GAME_RELEASE_RUNBOOK:
     "target/dev-test-game/release-runbook.json",
   FMARCH_DEV_TEST_GAME_RELEASE_RUNBOOK_ADMIN_PROOF:
@@ -91,7 +101,7 @@ export const adminSpineReadinessEvidenceEnv = {
   FMARCH_DEV_TEST_GAME_IDENTITY_ADAPTER_PROOF:
     "target/auth-invite-role-proof/invite-role-proof.json",
   FMARCH_DEV_TEST_GAME_IDENTITY_ADMIN_PROOF:
-    "target/dev-test-game/identity-admin-proof.json",
+    devTestGameIdentityAdminProofPath,
   FMARCH_DEV_TEST_GAME_HOSTED_IDENTITY_EVIDENCE:
     devTestGameHostedIdentityEvidencePath,
   FMARCH_DEV_TEST_GAME_HOSTED_IDENTITY_PROGRESSION_SUMMARY:
@@ -100,10 +110,10 @@ export const adminSpineReadinessEvidenceEnv = {
     "target/dev-test-game/hosted-identity-evidence-admin-proof.json",
   FMARCH_DEV_TEST_GAME_SPINE_MANIFEST: "target/dev-test-game/spine-manifest.json",
   FMARCH_DEV_TEST_GAME_SPINE_MANIFEST_ADMIN_PROOF:
-    "target/dev-test-game/spine-manifest-admin-proof.json",
+    devTestGameSpineManifestAdminProofPath,
   FMARCH_DEV_TEST_GAME_ADMIN_SPINE_PROOF: "target/dev-test-game/admin-spine-proof.json",
   FMARCH_DEV_TEST_GAME_ADMIN_SPINE_ADMIN_PROOF:
-    "target/dev-test-game/admin-spine-admin-proof.json",
+    devTestGameAdminSpineAdminProofPath,
   FMARCH_DEV_TEST_GAME_RACE_COVERAGE: devTestGameRaceCoveragePath,
   FMARCH_DEV_TEST_GAME_RACE_COVERAGE_ADMIN_PROOF:
     devTestGameRaceCoverageAdminProofPath,
@@ -216,7 +226,7 @@ export const devTestGameAdminSpinePlan = [
       devTestGameRealHostedObservabilityHandoffPath,
       "target/dev-test-game/release-runbook.json",
       adminSpineProofPath,
-      "target/dev-test-game/admin-spine-admin-proof.json",
+      devTestGameAdminSpineAdminProofPath,
     ],
     env: adminSpinePreGraphReadinessEvidenceEnv,
   }),
@@ -260,7 +270,7 @@ export const devTestGameAdminSpinePlan = [
       proofFreshnessAdminProofPath,
       nextActionAdminProofPath,
       adminSpineTerminalBatchProofPath,
-      "target/dev-test-game/admin-spine-admin-proof.json",
+      devTestGameAdminSpineAdminProofPath,
     ],
     env: adminSpineTerminalBatchReadinessEvidenceEnv,
   }),

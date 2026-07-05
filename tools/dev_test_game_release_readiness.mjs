@@ -107,13 +107,25 @@ import {
 } from "./dev_test_game_real_hosted_observability_handoff_cases.mjs";
 import {
   buildReleaseReadinessUnprovenItems,
-  devTestGameReleaseAdminProofPath,
-  devTestGameReleaseRunbookAdminProofPath,
   hostedIdentityEvidenceSatisfiesProductionIdentity,
   hostedIdentityEvidencePathKind,
   releaseAdminProofFallbackUnprovenIds,
   releaseReadinessProductionFeatureSpineTargets,
 } from "./dev_test_game_release_readiness_cases.mjs";
+import {
+  devTestGameReleaseAdminProofPath,
+  devTestGameReleaseRunbookAdminProofPath,
+} from "./dev_test_game_release_artifact_paths.mjs";
+import {
+  devTestGameAdminSpineAdminProofPath,
+  devTestGameBackupAdminProofPath,
+  devTestGameCoreLoopAdminProofPath,
+  devTestGameHardeningAdminProofPath,
+  devTestGameIdentityAdminProofPath,
+  devTestGameOpsAdminProofPath,
+  devTestGameSeedAdminProofPath,
+  devTestGameSpineManifestAdminProofPath,
+} from "./dev_test_game_local_admin_proof_paths.mjs";
 import {
   proofRunLaneCoverageMilestoneIds,
   recoveryMilestoneCoverageCases,
@@ -454,7 +466,7 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
     ? validateDevTestGameCoreLoopAdminProof(options.coreLoopAdminProof, {
         path:
           options.coreLoopAdminProofPath ??
-          "target/dev-test-game/core-loop-admin-proof.json",
+          devTestGameCoreLoopAdminProofPath,
         artifact: options.coreLoopAdminProofArtifact,
       })
     : undefined;
@@ -462,7 +474,7 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
     ? validateDevTestGameHardeningAdminProof(options.hardeningAdminProof, {
         path:
           options.hardeningAdminProofPath ??
-          "target/dev-test-game/hardening-admin-proof.json",
+          devTestGameHardeningAdminProofPath,
         artifact: options.hardeningAdminProofArtifact,
       })
     : undefined;
@@ -509,7 +521,7 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
     : undefined;
   const backupAdminProofEvidence = options.backupAdminProof
     ? validateDevTestGameBackupAdminProof(options.backupAdminProof, {
-        path: options.backupAdminProofPath ?? "target/dev-test-game/backup-admin-proof.json",
+        path: options.backupAdminProofPath ?? devTestGameBackupAdminProofPath,
         artifact: options.backupAdminProofArtifact,
       })
     : undefined;
@@ -521,7 +533,7 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
     : undefined;
   const opsAdminProofEvidence = options.opsAdminProof
     ? validateDevTestGameOpsAdminProof(options.opsAdminProof, {
-        path: options.opsAdminProofPath ?? "target/dev-test-game/ops-admin-proof.json",
+        path: options.opsAdminProofPath ?? devTestGameOpsAdminProofPath,
         artifact: options.opsAdminProofArtifact,
       })
     : undefined;
@@ -566,7 +578,7 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
     : undefined;
   const seedAdminProofEvidence = options.seedAdminProof
     ? validateDevTestGameSeedAdminProof(options.seedAdminProof, {
-        path: options.seedAdminProofPath ?? "target/dev-test-game/seed-admin-proof.json",
+        path: options.seedAdminProofPath ?? devTestGameSeedAdminProofPath,
         artifact: options.seedAdminProofArtifact,
       })
     : undefined;
@@ -582,7 +594,7 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
     ? validateDevTestGameIdentityAdminProof(options.identityAdminProof, {
         path:
           options.identityAdminProofPath ??
-          "target/dev-test-game/identity-admin-proof.json",
+          devTestGameIdentityAdminProofPath,
         artifact: options.identityAdminProofArtifact,
       })
     : undefined;
@@ -620,7 +632,7 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
     ? validateDevTestGameSpineManifestAdminProof(options.spineManifestAdminProof, {
         path:
           options.spineManifestAdminProofPath ??
-          "target/dev-test-game/spine-manifest-admin-proof.json",
+          devTestGameSpineManifestAdminProofPath,
         artifact: options.spineManifestAdminProofArtifact,
       })
     : undefined;
@@ -634,7 +646,7 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
     ? validateDevTestGameAdminSpineAdminProof(options.adminSpineAdminProof, {
         path:
           options.adminSpineAdminProofPath ??
-          "target/dev-test-game/admin-spine-admin-proof.json",
+          devTestGameAdminSpineAdminProofPath,
         artifact: options.adminSpineAdminProofArtifact,
       })
     : undefined;
@@ -2464,7 +2476,7 @@ export function validateDevTestGameCoreLoopAdminProof(proof, options = {}) {
   });
   return {
     status: "passed",
-    path: options.path ?? "target/dev-test-game/core-loop-admin-proof.json",
+    path: options.path ?? devTestGameCoreLoopAdminProofPath,
     proofBoundary: proof.proofBoundary,
     overviewRoleUrl: proof.adminRoleSurface.overviewRoleUrl,
     detailRoleUrl: proof.adminRoleSurface.detailRoleUrl,
@@ -3692,7 +3704,7 @@ export function validateDevTestGameHardeningAdminProof(proof, options = {}) {
   }
   return {
     status: "passed",
-    path: options.path ?? "target/dev-test-game/hardening-admin-proof.json",
+    path: options.path ?? devTestGameHardeningAdminProofPath,
     proofBoundary: proof.proofBoundary,
     overviewRoleUrl: proof.adminRoleSurface.overviewRoleUrl,
     detailRoleUrl: proof.adminRoleSurface.detailRoleUrl,
@@ -3743,7 +3755,7 @@ export function validateDevTestGameBackupAdminProof(proof, options = {}) {
   }
   return {
     status: "passed",
-    path: options.path ?? "target/dev-test-game/backup-admin-proof.json",
+    path: options.path ?? devTestGameBackupAdminProofPath,
     proofBoundary: proof.proofBoundary,
     overviewRoleUrl: proof.adminRoleSurface.overviewRoleUrl,
     detailRoleUrl: proof.adminRoleSurface.detailRoleUrl,
@@ -3834,7 +3846,7 @@ export function validateDevTestGameOpsAdminProof(proof, options = {}) {
   }
   return {
     status: "passed",
-    path: options.path ?? "target/dev-test-game/ops-admin-proof.json",
+    path: options.path ?? devTestGameOpsAdminProofPath,
     proofBoundary: proof.proofBoundary,
     overviewRoleUrl: proof.adminRoleSurface.overviewRoleUrl,
     detailRoleUrl: proof.adminRoleSurface.detailRoleUrl,
@@ -4707,7 +4719,7 @@ export function validateDevTestGameSeedAdminProof(proof, options = {}) {
   }
   return {
     status: "passed",
-    path: options.path ?? "target/dev-test-game/seed-admin-proof.json",
+    path: options.path ?? devTestGameSeedAdminProofPath,
     proofBoundary: proof.proofBoundary,
     overviewRoleUrl: proof.adminRoleSurface.overviewRoleUrl,
     detailRoleUrl: proof.adminRoleSurface.detailRoleUrl,
@@ -4967,7 +4979,7 @@ export function validateDevTestGameIdentityAdminProof(proof, options = {}) {
   }
   return {
     status: "passed",
-    path: options.path ?? "target/dev-test-game/identity-admin-proof.json",
+    path: options.path ?? devTestGameIdentityAdminProofPath,
     proofBoundary: proof.proofBoundary,
     overviewRoleUrl: proof.adminRoleSurface.overviewRoleUrl,
     detailRoleUrl: proof.adminRoleSurface.detailRoleUrl,
@@ -6070,7 +6082,7 @@ export function validateDevTestGameSpineManifestAdminProof(proof, options = {}) 
   }
   return {
     status: "passed",
-    path: options.path ?? "target/dev-test-game/spine-manifest-admin-proof.json",
+    path: options.path ?? devTestGameSpineManifestAdminProofPath,
     proofBoundary: proof.proofBoundary,
     overviewRoleUrl: proof.adminRoleSurface.overviewRoleUrl,
     detailRoleUrl: proof.adminRoleSurface.detailRoleUrl,
@@ -6321,14 +6333,14 @@ function validateAdminSpineProofBatches({
 
 function adminSpineProofArtifactPath(id) {
   return {
-    "core-loop": "target/dev-test-game/core-loop-admin-proof.json",
-    hardening: "target/dev-test-game/hardening-admin-proof.json",
-    identity: "target/dev-test-game/identity-admin-proof.json",
+    "core-loop": devTestGameCoreLoopAdminProofPath,
+    hardening: devTestGameHardeningAdminProofPath,
+    identity: devTestGameIdentityAdminProofPath,
     "hosted-identity-evidence":
       hostedIdentityEvidenceAdminProofArtifact.path,
-    backup: "target/dev-test-game/backup-admin-proof.json",
-    ops: "target/dev-test-game/ops-admin-proof.json",
-    seed: "target/dev-test-game/seed-admin-proof.json",
+    backup: devTestGameBackupAdminProofPath,
+    ops: devTestGameOpsAdminProofPath,
+    seed: devTestGameSeedAdminProofPath,
     release: devTestGameReleaseAdminProofPath,
     "release-runbook": devTestGameReleaseRunbookAdminProofPath,
     "race-coverage": devTestGameRaceCoverageAdminProofPath,
@@ -6339,7 +6351,7 @@ function adminSpineProofArtifactPath(id) {
     "hosted-ops-signals": devTestGameHostedOpsSignalsAdminProofPath,
     "real-hosted-observability-handoff":
       realHostedObservabilityHandoffAdminProofArtifact.path,
-    "spine-manifest": "target/dev-test-game/spine-manifest-admin-proof.json",
+    "spine-manifest": devTestGameSpineManifestAdminProofPath,
   }[id];
 }
 
@@ -6517,7 +6529,7 @@ export function validateDevTestGameAdminSpineAdminProof(proof, options = {}) {
   }
   return {
     status: "passed",
-    path: options.path ?? "target/dev-test-game/admin-spine-admin-proof.json",
+    path: options.path ?? devTestGameAdminSpineAdminProofPath,
     proofBoundary: proof.proofBoundary,
     overviewRoleUrl: proof.adminRoleSurface.overviewRoleUrl,
     detailRoleUrl: proof.adminRoleSurface.detailRoleUrl,

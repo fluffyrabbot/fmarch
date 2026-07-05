@@ -17,6 +17,9 @@ import {
   replacementPrivatePostNormalizedEvidenceObjects,
   sameNormalizedEvidenceObjects,
 } from "./dev_test_game_normalized_evidence_objects.mjs";
+import {
+  devTestGameHardeningAdminProofPath,
+} from "./dev_test_game_local_admin_proof_paths.mjs";
 import { repoRoot } from "./dev_test_game_spine_runner.mjs";
 
 export const DEV_TEST_GAME_REPLACEMENT_PRIVATE_RECOVERY_RECEIPT_VERSION = 1;
@@ -38,7 +41,7 @@ export function buildDevTestGameReplacementPrivateRecoveryReceipt(
   {
     generatedAt = new Date().toISOString(),
     proofRunSource = defaultProofRunPath,
-    hardeningAdminProofSource = "target/dev-test-game/hardening-admin-proof.json",
+    hardeningAdminProofSource = devTestGameHardeningAdminProofPath,
   } = {},
 ) {
   const proof = assertDevTestGameProofRun(proofRun);
@@ -194,7 +197,7 @@ export async function writeDevTestGameReplacementPrivateRecoveryReceipt({
   proofRunPath = process.env.FMARCH_DEV_TEST_GAME_PROOF_RUN ?? defaultProofRunPath,
   hardeningAdminProofPath =
     process.env.FMARCH_DEV_TEST_GAME_HARDENING_ADMIN_PROOF ??
-    "target/dev-test-game/hardening-admin-proof.json",
+    devTestGameHardeningAdminProofPath,
 } = {}) {
   const absoluteProofRunPath = path.resolve(repoRoot, proofRunPath);
   const proofRun = JSON.parse(await readFile(absoluteProofRunPath, "utf8"));

@@ -78,7 +78,14 @@ import {
 } from "./dev_test_game_release_runbook.mjs";
 import {
   devTestGameReleaseAdminProofPath,
-} from "./dev_test_game_release_readiness_cases.mjs";
+} from "./dev_test_game_release_artifact_paths.mjs";
+import {
+  devTestGameAdminSpineAdminProofPath,
+  devTestGameCoreLoopAdminProofPath,
+  devTestGameHardeningAdminProofPath,
+  devTestGameIdentityAdminProofPath,
+  devTestGameSpineManifestAdminProofPath,
+} from "./dev_test_game_local_admin_proof_paths.mjs";
 import {
   backupAwareOpsEnv,
   backupRestoreEvidenceEnv,
@@ -223,7 +230,7 @@ export function buildDevTestGameSpineManifest({
         proofArtifact: devTestGameHostedIdentityEvidencePath,
         dependsOn: [
           "target/auth-invite-role-proof/invite-role-proof.json",
-          "target/dev-test-game/identity-admin-proof.json",
+          devTestGameIdentityAdminProofPath,
         ],
         roleUrl: "/admin/audit/local-identity-adapter?game=<seeded-game>",
       },
@@ -910,16 +917,16 @@ export function assertDevTestGameSpineManifest(manifest) {
     devTestGameReleaseRunbookPath,
     devTestGameProofGraphPath,
     devTestGameProofGraphAdminProofPath,
-    "target/dev-test-game/core-loop-admin-proof.json",
-    "target/dev-test-game/hardening-admin-proof.json",
-    "target/dev-test-game/identity-admin-proof.json",
+    devTestGameCoreLoopAdminProofPath,
+    devTestGameHardeningAdminProofPath,
+    devTestGameIdentityAdminProofPath,
     devTestGameReleaseAdminProofPath,
     devTestGameRaceCoverageAdminProofPath,
     devTestGameReleaseRunbookAdminProofPath,
     devTestGameHostedTargetPreflightAdminProofPath,
     devTestGameHostedOpsSignalsAdminProofPath,
-    "target/dev-test-game/spine-manifest-admin-proof.json",
-    "target/dev-test-game/admin-spine-admin-proof.json",
+    devTestGameSpineManifestAdminProofPath,
+    devTestGameAdminSpineAdminProofPath,
     "target/live-stack-backup-restore-drill/local-backup-restore-proof.json",
     "target/live-stack-backup-restore-drill/local-live-stack.dump",
   ]) {

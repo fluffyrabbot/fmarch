@@ -3,6 +3,8 @@ import { pathToFileURL } from "node:url";
 import { assertDevTestGameReleaseReadiness } from "./dev_test_game_release_readiness.mjs";
 import {
   devTestGameReleaseAdminProofPath,
+} from "./dev_test_game_release_artifact_paths.mjs";
+import {
   releaseAdminProofFallbackUnprovenIds,
 } from "./dev_test_game_release_readiness_cases.mjs";
 import {

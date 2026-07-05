@@ -2,7 +2,9 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { validateDevTestGameBackupRestoreProof } from "./dev_test_game_release_readiness.mjs";
 import {
-  artifactDir,
+  devTestGameBackupAdminProofPath,
+} from "./dev_test_game_local_admin_proof_paths.mjs";
+import {
   proveAdminAuditDetail,
   readJson,
   repoRoot,
@@ -21,7 +23,7 @@ const backupDumpPath = path.resolve(
 );
 const backupProofRelativePath = path.relative(repoRoot, backupProofPath);
 const backupDumpRelativePath = path.relative(repoRoot, backupDumpPath);
-const evidencePath = path.join(artifactDir, "backup-admin-proof.json");
+const evidencePath = path.join(repoRoot, devTestGameBackupAdminProofPath);
 const requiredChecks = [
   "dump-created",
   "event-log-restored",

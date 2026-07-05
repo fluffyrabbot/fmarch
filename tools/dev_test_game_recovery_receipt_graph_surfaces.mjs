@@ -47,6 +47,10 @@ import {
   devTestGameReplacementPrivateRecoveryReceiptCommand,
   devTestGameReplacementPrivateRecoveryReceiptPath,
 } from "./dev_test_game_replacement_private_recovery_receipt.mjs";
+import {
+  devTestGameCoreLoopAdminProofPath,
+  devTestGameHardeningAdminProofPath,
+} from "./dev_test_game_local_admin_proof_paths.mjs";
 
 const recoveryReceiptRelationships = Object.freeze([
   "proves",
@@ -77,7 +81,7 @@ export const recoveryReceiptGraphDescriptors = Object.freeze([
     proofTarget: devTestGamePrivateChannelRecoveryReceiptPath,
     manifestDependsOn: Object.freeze([
       "target/dev-test-game/proof-run.json",
-      "target/dev-test-game/core-loop-admin-proof.json",
+      devTestGameCoreLoopAdminProofPath,
     ]),
     familyId: "core-loop-private-channel-recovery",
     laneIds: coreLoopPrivateChannelRecoveryLaneIds,
@@ -88,7 +92,7 @@ export const recoveryReceiptGraphDescriptors = Object.freeze([
       familyCount: coreLoopPrivateChannelRecoveryCoverageFamilies().length,
       evidence: { channel: "private:mafia_day_chat" },
       adminProofSourceKey: "coreLoopAdminProof",
-      adminProofSourcePath: "target/dev-test-game/core-loop-admin-proof.json",
+      adminProofSourcePath: devTestGameCoreLoopAdminProofPath,
     },
     buildReceipt: buildDevTestGamePrivateChannelRecoveryReceipt,
     assertReceipt: assertDevTestGamePrivateChannelRecoveryReceipt,
@@ -122,7 +126,7 @@ export const recoveryReceiptGraphDescriptors = Object.freeze([
       familyCount: replacementActionRecoveryCoverageFamilies().length,
       evidence: { targetSlot: "slot-2" },
       adminProofSourceKey: "hardeningAdminProof",
-      adminProofSourcePath: "target/dev-test-game/hardening-admin-proof.json",
+      adminProofSourcePath: devTestGameHardeningAdminProofPath,
     },
     buildReceipt: buildDevTestGameReplacementActionRecoveryReceipt,
     assertReceipt: assertDevTestGameReplacementActionRecoveryReceipt,
@@ -156,7 +160,7 @@ export const recoveryReceiptGraphDescriptors = Object.freeze([
       familyCount: replacementHandoffRecoveryCoverageFamilies().length,
       evidence: { slot: "slot-2" },
       adminProofSourceKey: "hardeningAdminProof",
-      adminProofSourcePath: "target/dev-test-game/hardening-admin-proof.json",
+      adminProofSourcePath: devTestGameHardeningAdminProofPath,
     },
     buildReceipt: buildDevTestGameReplacementHandoffRecoveryReceipt,
     assertReceipt: assertDevTestGameReplacementHandoffRecoveryReceipt,
@@ -191,7 +195,7 @@ export const recoveryReceiptGraphDescriptors = Object.freeze([
       familyCount: replacementPrivateChannelRecoveryCoverageFamilies().length,
       evidence: { channel: "private:mafia_day_chat" },
       adminProofSourceKey: "hardeningAdminProof",
-      adminProofSourcePath: "target/dev-test-game/hardening-admin-proof.json",
+      adminProofSourcePath: devTestGameHardeningAdminProofPath,
     },
     buildReceipt: buildDevTestGameReplacementPrivateRecoveryReceipt,
     assertReceipt: assertDevTestGameReplacementPrivateRecoveryReceipt,
@@ -511,7 +515,7 @@ function recoveryReceiptGraphDescriptor(descriptor) {
 function replacementRecoveryReceiptManifestDependencies() {
   return Object.freeze([
     "target/dev-test-game/proof-run.json",
-    "target/dev-test-game/hardening-admin-proof.json",
+    devTestGameHardeningAdminProofPath,
   ]);
 }
 

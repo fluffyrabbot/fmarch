@@ -3,6 +3,9 @@ import {
   devTestGameHostedIdentityEvidencePath,
   devTestGameHostedIdentityProgressionSummaryPath,
 } from "./dev_test_game_hosted_identity_evidence.mjs";
+import {
+  devTestGameIdentityAdminProofPath,
+} from "./dev_test_game_local_admin_proof_paths.mjs";
 import { releaseReadinessStep } from "./dev_test_game_spine_readiness_steps.mjs";
 import { runSpinePlan } from "./dev_test_game_spine_runner.mjs";
 
@@ -13,7 +16,7 @@ export const identityReadinessEnv = {
   FMARCH_DEV_TEST_GAME_IDENTITY_ADAPTER_PROOF:
     "target/auth-invite-role-proof/invite-role-proof.json",
   FMARCH_DEV_TEST_GAME_IDENTITY_ADMIN_PROOF:
-    "target/dev-test-game/identity-admin-proof.json",
+    devTestGameIdentityAdminProofPath,
   FMARCH_DEV_TEST_GAME_HOSTED_IDENTITY_EVIDENCE:
     devTestGameHostedIdentityEvidencePath,
   FMARCH_DEV_TEST_GAME_HOSTED_IDENTITY_PROGRESSION_SUMMARY:
@@ -32,7 +35,7 @@ export const devTestGameIdentitySpinePlan = [
     reason: "identity-adapter-and-hosted-evidence",
     changedInputs: [
       "target/auth-invite-role-proof/invite-role-proof.json",
-      "target/dev-test-game/identity-admin-proof.json",
+      devTestGameIdentityAdminProofPath,
       devTestGameHostedIdentityEvidencePath,
       devTestGameHostedIdentityProgressionSummaryPath,
     ],

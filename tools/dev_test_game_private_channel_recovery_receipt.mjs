@@ -21,6 +21,9 @@ import {
   privateChannelNormalizedEvidenceObjects,
   sameNormalizedEvidenceObjects,
 } from "./dev_test_game_normalized_evidence_objects.mjs";
+import {
+  devTestGameCoreLoopAdminProofPath,
+} from "./dev_test_game_local_admin_proof_paths.mjs";
 import { repoRoot } from "./dev_test_game_spine_runner.mjs";
 
 export const DEV_TEST_GAME_PRIVATE_CHANNEL_RECOVERY_RECEIPT_VERSION = 1;
@@ -42,7 +45,7 @@ export function buildDevTestGamePrivateChannelRecoveryReceipt(
   {
     generatedAt = new Date().toISOString(),
     proofRunSource = defaultProofRunPath,
-    coreLoopAdminProofSource = "target/dev-test-game/core-loop-admin-proof.json",
+    coreLoopAdminProofSource = devTestGameCoreLoopAdminProofPath,
   } = {},
 ) {
   const proof = assertDevTestGameProofRun(proofRun);
@@ -194,7 +197,7 @@ export async function writeDevTestGamePrivateChannelRecoveryReceipt({
   proofRunPath = process.env.FMARCH_DEV_TEST_GAME_PROOF_RUN ?? defaultProofRunPath,
   coreLoopAdminProofPath =
     process.env.FMARCH_DEV_TEST_GAME_CORE_LOOP_ADMIN_PROOF ??
-    "target/dev-test-game/core-loop-admin-proof.json",
+    devTestGameCoreLoopAdminProofPath,
 } = {}) {
   const absoluteProofRunPath = path.resolve(repoRoot, proofRunPath);
   const proofRun = JSON.parse(await readFile(absoluteProofRunPath, "utf8"));

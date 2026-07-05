@@ -1,5 +1,15 @@
 import { readFile, stat } from "node:fs/promises";
 import path from "node:path";
+import {
+  devTestGameAdminSpineAdminProofPath,
+  devTestGameBackupAdminProofPath,
+  devTestGameCoreLoopAdminProofPath,
+  devTestGameHardeningAdminProofPath,
+  devTestGameIdentityAdminProofPath,
+  devTestGameOpsAdminProofPath,
+  devTestGameSeedAdminProofPath,
+  devTestGameSpineManifestAdminProofPath,
+} from "../../../../tools/dev_test_game_local_admin_proof_paths.mjs";
 
 const DEFAULT_OPS_ARTIFACTS = "target/dev-test-game/ops-artifacts.json";
 const DEFAULT_DEV_TEST_GAME_PROOF_RUN = "target/dev-test-game/proof-run.json";
@@ -12,8 +22,7 @@ const DEFAULT_IDENTITY_ADAPTER_PROOF =
   "target/auth-invite-role-proof/invite-role-proof.json";
 const DEFAULT_SPINE_MANIFEST = "target/dev-test-game/spine-manifest.json";
 const DEFAULT_ADMIN_SPINE_PROOF = "target/dev-test-game/admin-spine-proof.json";
-const DEFAULT_ADMIN_SPINE_ADMIN_PROOF =
-  "target/dev-test-game/admin-spine-admin-proof.json";
+const DEFAULT_ADMIN_SPINE_ADMIN_PROOF = devTestGameAdminSpineAdminProofPath;
 const DEFAULT_ADMIN_SPINE_TERMINAL_BATCHES =
   "target/dev-test-game/admin-spine-terminal-batches.json";
 const DEFAULT_NEXT_ACTION = "target/dev-test-game/next-action.json";
@@ -107,37 +116,37 @@ const LOCAL_PROOF_FRESHNESS_ARTIFACTS = Object.freeze([
     id: "core-loop",
     label: "Core loop admin proof",
     env: "FMARCH_DEV_TEST_GAME_CORE_LOOP_ADMIN_PROOF",
-    fallback: "target/dev-test-game/core-loop-admin-proof.json",
+    fallback: devTestGameCoreLoopAdminProofPath,
   }),
   Object.freeze({
     id: "hardening",
     label: "Hardening admin proof",
     env: "FMARCH_DEV_TEST_GAME_HARDENING_ADMIN_PROOF",
-    fallback: "target/dev-test-game/hardening-admin-proof.json",
+    fallback: devTestGameHardeningAdminProofPath,
   }),
   Object.freeze({
     id: "identity",
     label: "Identity admin proof",
     env: "FMARCH_DEV_TEST_GAME_IDENTITY_ADMIN_PROOF",
-    fallback: "target/dev-test-game/identity-admin-proof.json",
+    fallback: devTestGameIdentityAdminProofPath,
   }),
   Object.freeze({
     id: "backup",
     label: "Backup admin proof",
     env: "FMARCH_DEV_TEST_GAME_BACKUP_ADMIN_PROOF",
-    fallback: "target/dev-test-game/backup-admin-proof.json",
+    fallback: devTestGameBackupAdminProofPath,
   }),
   Object.freeze({
     id: "ops",
     label: "Ops admin proof",
     env: "FMARCH_DEV_TEST_GAME_OPS_ADMIN_PROOF",
-    fallback: "target/dev-test-game/ops-admin-proof.json",
+    fallback: devTestGameOpsAdminProofPath,
   }),
   Object.freeze({
     id: "seed",
     label: "Seed admin proof",
     env: "FMARCH_DEV_TEST_GAME_SEED_ADMIN_PROOF",
-    fallback: "target/dev-test-game/seed-admin-proof.json",
+    fallback: devTestGameSeedAdminProofPath,
   }),
   Object.freeze({
     id: "release",
@@ -149,7 +158,7 @@ const LOCAL_PROOF_FRESHNESS_ARTIFACTS = Object.freeze([
     id: "spine-manifest-admin",
     label: "Spine manifest admin proof",
     env: "FMARCH_DEV_TEST_GAME_SPINE_MANIFEST_ADMIN_PROOF",
-    fallback: "target/dev-test-game/spine-manifest-admin-proof.json",
+    fallback: devTestGameSpineManifestAdminProofPath,
   }),
   Object.freeze({
     id: "admin-spine",

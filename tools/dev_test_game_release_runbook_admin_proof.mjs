@@ -5,7 +5,7 @@ import { assertDevTestGameReleaseRunbook } from "./dev_test_game_release_runbook
 import {
   devTestGameReleaseRunbookAdminProofPath,
   devTestGameReleaseRunbookPath,
-} from "./dev_test_game_release_readiness_cases.mjs";
+} from "./dev_test_game_release_artifact_paths.mjs";
 import {
   assertVisibleAdminRoleSurfaceRows,
   proveAdminAuditDetail,

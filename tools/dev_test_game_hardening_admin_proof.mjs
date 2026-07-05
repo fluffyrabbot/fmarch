@@ -19,7 +19,9 @@ import {
   localAdminAuditIds,
 } from "./dev_test_game_admin_audit_surface_ids.mjs";
 import {
-  artifactDir,
+  devTestGameHardeningAdminProofPath,
+} from "./dev_test_game_local_admin_proof_paths.mjs";
+import {
   proveAdminAuditDetail,
   readJson,
   repoRoot,
@@ -32,7 +34,7 @@ const proofRunPath = path.resolve(
     "target/dev-test-game/proof-run.json",
 );
 const proofRunRelativePath = path.relative(repoRoot, proofRunPath);
-const evidencePath = path.join(artifactDir, "hardening-admin-proof.json");
+const evidencePath = path.join(repoRoot, devTestGameHardeningAdminProofPath);
 const requiredChecks = hardeningAuditLaneIds;
 
 export function hardeningAdminProofCase() {

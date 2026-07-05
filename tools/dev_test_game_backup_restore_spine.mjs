@@ -1,4 +1,8 @@
 import { pathToFileURL } from "node:url";
+import {
+  devTestGameBackupAdminProofPath,
+  devTestGameSeedAdminProofPath,
+} from "./dev_test_game_local_admin_proof_paths.mjs";
 import { releaseReadinessStep } from "./dev_test_game_spine_readiness_steps.mjs";
 import { runSpinePlan } from "./dev_test_game_spine_runner.mjs";
 
@@ -24,13 +28,13 @@ export const opsReadinessEnv = {
 export const seedReadinessEnv = {
   FMARCH_DEV_TEST_GAME_SEED_FIXTURE_SUMMARY:
     "target/dev-test-game/seed-fixture-summary.json",
-  FMARCH_DEV_TEST_GAME_SEED_ADMIN_PROOF: "target/dev-test-game/seed-admin-proof.json",
+  FMARCH_DEV_TEST_GAME_SEED_ADMIN_PROOF: devTestGameSeedAdminProofPath,
 };
 
 export const backupRestoreFinalReadinessEnv = {
   ...backupRestoreEvidenceEnv,
   FMARCH_DEV_TEST_GAME_BACKUP_ADMIN_PROOF:
-    "target/dev-test-game/backup-admin-proof.json",
+    devTestGameBackupAdminProofPath,
   FMARCH_DEV_TEST_GAME_OPS_ARTIFACTS: opsReadinessEnv.FMARCH_DEV_TEST_GAME_OPS_ARTIFACTS,
   FMARCH_DEV_TEST_GAME_SEED_FIXTURE_SUMMARY:
     seedReadinessEnv.FMARCH_DEV_TEST_GAME_SEED_FIXTURE_SUMMARY,
@@ -65,8 +69,8 @@ export const devTestGameBackupRestoreSpinePlan = [
     reason: "backup-seed-and-admin-surfaces-final",
     changedInputs: [
       "target/dev-test-game/seed-fixture-summary.json",
-      "target/dev-test-game/seed-admin-proof.json",
-      "target/dev-test-game/backup-admin-proof.json",
+      devTestGameSeedAdminProofPath,
+      devTestGameBackupAdminProofPath,
     ],
     env: backupRestoreFinalReadinessEnv,
   }),

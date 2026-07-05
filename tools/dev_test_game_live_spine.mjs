@@ -2,6 +2,10 @@ import { pathToFileURL } from "node:url";
 import { runDevTestGameAdminSpine } from "./dev_test_game_admin_spine.mjs";
 import { runDevTestGameBackupRestoreSpine } from "./dev_test_game_backup_restore_spine.mjs";
 import { runDevTestGameIdentitySpine } from "./dev_test_game_identity_spine.mjs";
+import {
+  devTestGameCoreLoopAdminProofPath,
+  devTestGameHardeningAdminProofPath,
+} from "./dev_test_game_local_admin_proof_paths.mjs";
 import { releaseReadinessStep } from "./dev_test_game_spine_readiness_steps.mjs";
 import { runSpinePlan } from "./dev_test_game_spine_runner.mjs";
 import {
@@ -28,9 +32,9 @@ export const devTestGameCoreLiveSpinePlan = [
     reason: "core-live-gameplay-admin-surfaces",
     changedInputs: [
       "target/dev-test-game/proof-run.json",
-      "target/dev-test-game/core-loop-admin-proof.json",
+      devTestGameCoreLoopAdminProofPath,
       ...recoveryReceiptProofTargets(coreLoopRecoveryReceiptSelector),
-      "target/dev-test-game/hardening-admin-proof.json",
+      devTestGameHardeningAdminProofPath,
       ...recoveryReceiptProofTargets(hardeningRecoveryReceiptSelector),
     ],
   }),
