@@ -4568,6 +4568,31 @@ test("admin hosted evidence lane detail data carries blocked setup rows", async 
       "FMARCH_HOSTED_MATRIX_RAW_EVIDENCE_PATH",
     ],
   );
+  assert.deepEqual(
+    data.audit.hostedHandoffChecklist.blockedReceipt.firstMissingOperatorArtifact,
+    {
+      inputId: "FMARCH_HOSTED_MATRIX_FRONTEND_URL",
+      checkId: "hosted-frontend-url-configured",
+      sectionId: "hosted-target",
+      sectionLabel: "Hosted target",
+      requiredEvidence: hostedTargetPreflightMissingFrontendUrlRequiredEvidence,
+      purpose: "Externally reachable frontend base URL.",
+      proofTarget: HOSTED_TARGET_PREFLIGHT_PROOF_TARGET,
+      roleSurfaceDrilldown: {
+        localCapabilityAuditId: localAdminAuditIds.coreLoop,
+        localCapabilityRoleUrl: localAdminAuditRoleUrl(
+          localAdminAuditIds.coreLoop,
+        ),
+        handoffAuditId: localAdminAuditIds.hostedEvidenceLane,
+        handoffRoleUrl: localAdminAuditRoleUrl(
+          localAdminAuditIds.hostedEvidenceLane,
+        ),
+        proofGraphNodeId: "admin-proof:hosted-evidence-lane",
+        productionFeatureGraphNodeId: "production-feature:host-phase-control",
+        proofGraphEvidencePath: "target/dev-test-game/proof-graph.json",
+      },
+    },
+  );
   assert.equal(
     data.audit.hostedHandoffChecklist.blockedReceipt.operatorAction,
     "Configure the hosted frontend/API URLs plus a readable raw hosted matrix evidence packet from that same deployment, then rerun npm run test:dev-test-game-hosted-evidence-lane.",
@@ -7812,6 +7837,28 @@ function hostedBlockedReceiptFixture({ proofTarget, nextProofTarget }) {
       "FMARCH_HOSTED_MATRIX_API_URL",
       "FMARCH_HOSTED_MATRIX_RAW_EVIDENCE_PATH",
     ],
+    firstMissingOperatorArtifact: {
+      inputId: "FMARCH_HOSTED_MATRIX_FRONTEND_URL",
+      checkId: "hosted-frontend-url-configured",
+      sectionId: "hosted-target",
+      sectionLabel: "Hosted target",
+      requiredEvidence: hostedTargetPreflightMissingFrontendUrlRequiredEvidence,
+      purpose: "Externally reachable frontend base URL.",
+      proofTarget,
+      roleSurfaceDrilldown: {
+        localCapabilityAuditId: localAdminAuditIds.coreLoop,
+        localCapabilityRoleUrl: localAdminAuditRoleUrl(
+          localAdminAuditIds.coreLoop,
+        ),
+        handoffAuditId: localAdminAuditIds.hostedEvidenceLane,
+        handoffRoleUrl: localAdminAuditRoleUrl(
+          localAdminAuditIds.hostedEvidenceLane,
+        ),
+        proofGraphNodeId: "admin-proof:hosted-evidence-lane",
+        productionFeatureGraphNodeId: "production-feature:host-phase-control",
+        proofGraphEvidencePath: "target/dev-test-game/proof-graph.json",
+      },
+    },
     operatorAction:
       "Configure the hosted frontend/API URLs plus a readable raw hosted matrix evidence packet from that same deployment, then rerun npm run test:dev-test-game-hosted-evidence-lane.",
     rawEvidenceContractSummary: hostedMatrixRawEvidenceContractSummary(),

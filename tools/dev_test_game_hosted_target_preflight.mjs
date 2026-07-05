@@ -53,12 +53,53 @@ import {
 import {
   buildDevTestGameRealHostedMatrixRawCapture,
 } from "./dev_test_game_real_hosted_matrix_raw_capture.mjs";
+import {
+  localAdminAuditIds,
+  localAdminAuditRoleUrl,
+} from "./dev_test_game_admin_audit_surface_ids.mjs";
+import {
+  devTestGameProofGraphPath,
+} from "./dev_test_game_proof_graph_paths.mjs";
 
 export const DEV_TEST_GAME_HOSTED_TARGET_PREFLIGHT_VERSION = 1;
 export { devTestGameHostedTargetPreflightPath };
 export const devTestGameHostedTargetPreflightCommand =
   "test:dev-test-game-hosted-target-preflight";
 const outputPath = path.join(repoRoot, devTestGameHostedTargetPreflightPath);
+
+const hostedTargetInputCheckIds = Object.freeze({
+  FMARCH_HOSTED_MATRIX_FRONTEND_URL: "hosted-frontend-url-configured",
+  FMARCH_HOSTED_MATRIX_API_URL: "hosted-api-url-configured",
+  FMARCH_HOSTED_MATRIX_RAW_EVIDENCE_PATH: "raw-evidence-path-configured",
+});
+
+const hostedTargetInputSections = Object.freeze({
+  FMARCH_HOSTED_MATRIX_FRONTEND_URL: Object.freeze({
+    id: "hosted-target",
+    label: "Hosted target",
+  }),
+  FMARCH_HOSTED_MATRIX_API_URL: Object.freeze({
+    id: "hosted-target",
+    label: "Hosted target",
+  }),
+  FMARCH_HOSTED_MATRIX_RAW_EVIDENCE_PATH: Object.freeze({
+    id: "raw-evidence",
+    label: "Raw evidence",
+  }),
+});
+
+const hostedTargetBlockedEvidenceByCheckId = Object.freeze({
+  "hosted-frontend-url-configured":
+    hostedTargetPreflightMissingFrontendUrlRequiredEvidence,
+  "hosted-api-url-configured":
+    hostedTargetPreflightMissingApiUrlRequiredEvidence,
+  "raw-evidence-path-configured":
+    hostedTargetPreflightMissingRawEvidencePathRequiredEvidence,
+  "raw-evidence-readable":
+    hostedTargetPreflightMissingRawEvidencePathRequiredEvidence,
+  "raw-evidence-real-hosted-target":
+    hostedTargetPreflightRawCaptureRequiredEvidence,
+});
 
 if (pathToFileURL(process.argv[1] ?? "").href === import.meta.url) {
   const preflight = await buildDevTestGameHostedTargetPreflight({
@@ -418,6 +459,15 @@ function buildBlockedReceipt({
       purpose: "Optional normalized hosted matrix evidence output path.",
     },
   ];
+  const missingRequiredInputs = requiredInputs
+    .filter((input) => input.required && input.value === null)
+    .map((input) => input.name);
+  const firstMissingOperatorArtifact = hostedTargetFirstMissingOperatorArtifact({
+    blockedCheckIds,
+    missingRequiredInputs,
+    requiredInputs,
+    rawCapture,
+  });
   return {
     status: "blocked",
     blockedCheckIds,
@@ -425,9 +475,10 @@ function buildBlockedReceipt({
     proofTarget: devTestGameHostedTargetPreflightPath,
     nextProofTarget: devTestGameHostedTargetPreflightPath,
     requiredInputs,
-    missingRequiredInputs: requiredInputs
-      .filter((input) => input.required && input.value === null)
-      .map((input) => input.name),
+    missingRequiredInputs,
+    ...(firstMissingOperatorArtifact === null
+      ? {}
+      : { firstMissingOperatorArtifact }),
     rawEvidenceContractSummary: hostedMatrixRawEvidenceContractSummary(),
     rawEvidenceContract: hostedMatrixRawEvidenceContract,
     realHostedMatrixRawCaptureIntake: {
@@ -440,5 +491,54 @@ function buildBlockedReceipt({
       "Configure the hosted frontend/API URLs plus a readable raw hosted matrix evidence packet from that same deployment, then rerun npm run test:dev-test-game-hosted-evidence-lane.",
     localVsHostedBoundary:
       "Local hosted-like matrix artifacts and synthetic demo evidence can prove the handoff path, but they cannot satisfy hosted deployment evidence.",
+  };
+}
+
+function hostedTargetFirstMissingOperatorArtifact({
+  blockedCheckIds,
+  missingRequiredInputs,
+  requiredInputs,
+  rawCapture,
+}) {
+  const missingInputId =
+    missingRequiredInputs[0] ??
+    (Array.isArray(rawCapture?.blockedCheckIds) &&
+    rawCapture.blockedCheckIds.length > 0
+      ? "FMARCH_HOSTED_MATRIX_RAW_EVIDENCE_PATH"
+      : null);
+  if (missingInputId === null) {
+    return null;
+  }
+  const checkId =
+    hostedTargetInputCheckIds[missingInputId] ??
+    blockedCheckIds.find((id) => String(id).startsWith("raw-evidence-")) ??
+    String(blockedCheckIds[0] ?? "");
+  const section = hostedTargetInputSections[missingInputId] ?? {
+    id: "hosted-target",
+    label: "Hosted target",
+  };
+  const requiredInput = requiredInputs.find(
+    (input) => input.name === missingInputId,
+  );
+  const requiredEvidence =
+    hostedTargetBlockedEvidenceByCheckId[checkId] ??
+    hostedTargetPreflightRawCaptureRequiredEvidence;
+  return {
+    inputId: missingInputId,
+    checkId,
+    sectionId: section.id,
+    sectionLabel: section.label,
+    requiredEvidence,
+    purpose: String(requiredInput?.purpose ?? requiredEvidence),
+    proofTarget: devTestGameHostedTargetPreflightPath,
+    roleSurfaceDrilldown: {
+      localCapabilityAuditId: localAdminAuditIds.coreLoop,
+      localCapabilityRoleUrl: localAdminAuditRoleUrl(localAdminAuditIds.coreLoop),
+      handoffAuditId: localAdminAuditIds.hostedEvidenceLane,
+      handoffRoleUrl: localAdminAuditRoleUrl(localAdminAuditIds.hostedEvidenceLane),
+      proofGraphNodeId: "admin-proof:hosted-evidence-lane",
+      productionFeatureGraphNodeId: "production-feature:host-phase-control",
+      proofGraphEvidencePath: devTestGameProofGraphPath,
+    },
   };
 }

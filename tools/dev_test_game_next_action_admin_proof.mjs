@@ -935,7 +935,13 @@ export function assertNextActionAdminProof(evidence) {
           checklist.blockedReceipt.localVsHostedBoundary ||
         receipt?.nextProofTarget !== checklist.blockedReceipt.nextProofTarget ||
         JSON.stringify(receipt?.missingRequiredInputs ?? []) !==
-          JSON.stringify(checklist.blockedReceipt.missingRequiredInputs ?? [])
+          JSON.stringify(checklist.blockedReceipt.missingRequiredInputs ?? []) ||
+        JSON.stringify(receipt?.firstMissingOperatorArtifact ?? null) !==
+          JSON.stringify(
+            visibleFirstMissingOperatorArtifact(
+              checklist.blockedReceipt.firstMissingOperatorArtifact,
+            ),
+          )
       ) {
         throw new Error(
           "next-action admin proof missing hosted handoff blocked receipt",
@@ -1002,6 +1008,31 @@ export function assertNextActionAdminProof(evidence) {
     }
   }
   return evidence;
+}
+
+function visibleFirstMissingOperatorArtifact(artifact) {
+  if (artifact === null || artifact === undefined) {
+    return null;
+  }
+  const drilldown = artifact.roleSurfaceDrilldown ?? {};
+  return {
+    inputId: String(artifact.inputId ?? ""),
+    checkId: String(artifact.checkId ?? ""),
+    sectionId: String(artifact.sectionId ?? ""),
+    sectionLabel: String(artifact.sectionLabel ?? ""),
+    requiredEvidence: String(artifact.requiredEvidence ?? ""),
+    purpose: String(artifact.purpose ?? ""),
+    proofTarget: String(artifact.proofTarget ?? ""),
+    roleSurfaceDrilldown: {
+      localCapabilityRoleUrl: String(drilldown.localCapabilityRoleUrl ?? ""),
+      handoffRoleUrl: String(drilldown.handoffRoleUrl ?? ""),
+      proofGraphNodeId: String(drilldown.proofGraphNodeId ?? ""),
+      productionFeatureGraphNodeId: String(
+        drilldown.productionFeatureGraphNodeId ?? "",
+      ),
+      proofGraphEvidencePath: String(drilldown.proofGraphEvidencePath ?? ""),
+    },
+  };
 }
 
 function recoveryReceiptGraphGeneratedFrom(nextAction) {
@@ -1410,6 +1441,12 @@ function requiredHostedHandoffBlockedReceiptForNextAction(nextAction) {
         missingRequiredInputs: Array.isArray(receipt.missingRequiredInputs)
           ? receipt.missingRequiredInputs
           : [],
+        ...(receipt.firstMissingOperatorArtifact === undefined
+          ? {}
+          : {
+              firstMissingOperatorArtifact:
+                receipt.firstMissingOperatorArtifact,
+            }),
       };
 }
 

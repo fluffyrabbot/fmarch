@@ -4816,6 +4816,25 @@ test("dev test-game hosted evidence lane records blocked preflight state", async
     "FMARCH_HOSTED_MATRIX_API_URL",
     "FMARCH_HOSTED_MATRIX_RAW_EVIDENCE_PATH",
   ]);
+  assert.deepEqual(lane.blockedReceipt.firstMissingOperatorArtifact, {
+    inputId: "FMARCH_HOSTED_MATRIX_FRONTEND_URL",
+    checkId: "hosted-frontend-url-configured",
+    sectionId: "hosted-target",
+    sectionLabel: "Hosted target",
+    requiredEvidence: hostedTargetPreflightMissingFrontendUrlRequiredEvidence,
+    purpose: "Externally reachable frontend base URL.",
+    proofTarget: devTestGameHostedTargetPreflightPath,
+    roleSurfaceDrilldown: {
+      localCapabilityAuditId: "local-core-loop",
+      localCapabilityRoleUrl: "/admin/audit/local-core-loop?game=<seeded-game>",
+      handoffAuditId: "local-hosted-evidence-lane",
+      handoffRoleUrl:
+        "/admin/audit/local-hosted-evidence-lane?game=<seeded-game>",
+      proofGraphNodeId: "admin-proof:hosted-evidence-lane",
+      productionFeatureGraphNodeId: "production-feature:host-phase-control",
+      proofGraphEvidencePath: "target/dev-test-game/proof-graph.json",
+    },
+  });
   assert.equal(
     lane.blockedReceipt.localVsHostedBoundary,
     "Local hosted-like matrix artifacts and synthetic demo evidence can prove the handoff path, but they cannot satisfy hosted deployment evidence.",
