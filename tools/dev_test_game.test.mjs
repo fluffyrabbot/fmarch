@@ -17449,6 +17449,22 @@ function raceCoverageAdminProofFixture() {
 
 function hostedConcurrentRaceMatrixAdminProofFixture() {
   const hostedHandoffChecklist = hostedMatrixRealHostedHandoffChecklist();
+  const summaryRows = [
+    {
+      id: "coverage",
+      status:
+        "passed\n3/3 cells passed\n3/3 reloads covered\n10 reconnect lanes\n4 stale conflict lanes",
+    },
+    {
+      id: "hosted-evidence",
+      status: "unproven\nunproven\nnot_configured",
+    },
+    {
+      id: "missing-inputs",
+      status:
+        "3 missing hosted inputs\nFMARCH_HOSTED_MATRIX_FRONTEND_URL, FMARCH_HOSTED_MATRIX_API_URL, FMARCH_HOSTED_MATRIX_RAW_EVIDENCE_PATH\nLocal hosted-like matrix evidence cannot satisfy real hosted race evidence.",
+    },
+  ];
   return {
     version: 1,
     proof: "dev-test-game-hosted-concurrent-race-matrix-admin-proof",
@@ -17483,6 +17499,10 @@ function hostedConcurrentRaceMatrixAdminProofFixture() {
       hostedEvidenceMode: "not_configured",
       localDemoHostedEvidenceStatus: "not_applicable",
       realHostedEvidenceStatus: "unproven",
+      hostedMatrixSummaryIds: summaryRows.map((row) => row.id),
+      hostedMatrixSummaryStatuses: Object.fromEntries(
+        summaryRows.map((row) => [row.id, row.status]),
+      ),
       realHostedEvidenceInputIds: hostedHandoffChecklist.inputIds,
       hostedHandoffInputIds: hostedHandoffChecklist.inputIds,
       hostedHandoffBlockedCheckIds: hostedHandoffChecklist.blockedCheckIds,
@@ -17511,6 +17531,10 @@ function hostedConcurrentRaceMatrixAdminProofFixture() {
       ],
       visibleReconnectLanes: hostedMatrixReconnectLaneIds,
       visibleStaleConflictLanes: hostedMatrixStaleConflictLaneIds,
+      visibleHostedMatrixSummaries: summaryRows.map((row) => row.id),
+      visibleHostedMatrixSummaryStatuses: Object.fromEntries(
+        summaryRows.map((row) => [row.id, row.status]),
+      ),
       visibleUnproven: [
         "hosted-concurrent-race-matrix",
         "remaining-gap-1",

@@ -356,6 +356,42 @@
         </ol>
       </section>
     {/if}
+    {#if data.audit.artifactSummary?.hostedMatrixSummary}
+      <section
+        class="admin-audit-detail__group"
+        data-testid="admin-audit-detail-hosted-matrix-summary"
+      >
+        <h2>Hosted race matrix</h2>
+        <ol class="admin-audit-detail__entries">
+          <li
+            class="admin-audit-detail__entry admin-audit-detail__entry--stack"
+            data-testid="admin-audit-hosted-matrix-summary-coverage"
+          >
+            <strong>{data.audit.artifactSummary.hostedMatrixSummary.status}</strong>
+            <span>{data.audit.artifactSummary.hostedMatrixSummary.passedCellCount}/{data.audit.artifactSummary.hostedMatrixSummary.cellCount} cells passed</span>
+            <span>{data.audit.artifactSummary.hostedMatrixSummary.reloadCoveredCellCount}/{data.audit.artifactSummary.hostedMatrixSummary.cellCount} reloads covered</span>
+            <span>{data.audit.artifactSummary.hostedMatrixSummary.reconnectLaneCount} reconnect lanes</span>
+            <span>{data.audit.artifactSummary.hostedMatrixSummary.staleConflictLaneCount} stale conflict lanes</span>
+          </li>
+          <li
+            class="admin-audit-detail__entry admin-audit-detail__entry--stack"
+            data-testid="admin-audit-hosted-matrix-summary-hosted-evidence"
+          >
+            <strong>{data.audit.artifactSummary.hostedMatrixSummary.hostedEvidenceStatus}</strong>
+            <span>{data.audit.artifactSummary.hostedMatrixSummary.hostedDeploymentStatus}</span>
+            <span>{data.audit.artifactSummary.hostedMatrixSummary.hostedEvidenceMode}</span>
+          </li>
+          <li
+            class="admin-audit-detail__entry admin-audit-detail__entry--stack"
+            data-testid="admin-audit-hosted-matrix-summary-missing-inputs"
+          >
+            <strong>{data.audit.artifactSummary.hostedMatrixSummary.missingHostedInputCount} missing hosted inputs</strong>
+            <span>{data.audit.artifactSummary.hostedMatrixSummary.missingHostedInputIds.join(", ")}</span>
+            <span>{data.audit.artifactSummary.hostedMatrixSummary.localVsHostedBoundary}</span>
+          </li>
+        </ol>
+      </section>
+    {/if}
     {#if data.audit.artifactSummary?.redactedIntakePacket?.sections?.length > 0}
       <section
         class="admin-audit-detail__group"

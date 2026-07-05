@@ -1575,6 +1575,25 @@ test("admin route data exposes local hosted matrix as a native audit row", async
     ],
   );
   assert.deepEqual(matrix.artifactSummary, {
+    hostedMatrixSummary: {
+      status: "passed",
+      cellCount: 3,
+      passedCellCount: 3,
+      reloadCoveredCellCount: 3,
+      reconnectLaneCount: 10,
+      staleConflictLaneCount: 4,
+      hostedEvidenceStatus: "unproven",
+      hostedDeploymentStatus: "unproven",
+      hostedEvidenceMode: "not_configured",
+      missingHostedInputCount: 3,
+      missingHostedInputIds: [
+        "FMARCH_HOSTED_MATRIX_FRONTEND_URL",
+        "FMARCH_HOSTED_MATRIX_API_URL",
+        "FMARCH_HOSTED_MATRIX_RAW_EVIDENCE_PATH",
+      ],
+      localVsHostedBoundary:
+        "Local hosted-like matrix evidence cannot satisfy real hosted race evidence.",
+    },
     game: "00000000-0000-0000-0000-000000000001",
     cellCount: 3,
     passedCellCount: 3,
@@ -1705,6 +1724,25 @@ test("admin local hosted matrix detail data carries progress and gap rows", asyn
     data.audit.hostedHandoffChecklist.blockedReceipt.localVsHostedBoundary,
     /cannot satisfy real hosted race evidence/,
   );
+  assert.deepEqual(data.audit.artifactSummary.hostedMatrixSummary, {
+    status: "passed",
+    cellCount: 3,
+    passedCellCount: 3,
+    reloadCoveredCellCount: 3,
+    reconnectLaneCount: 10,
+    staleConflictLaneCount: 4,
+    hostedEvidenceStatus: "unproven",
+    hostedDeploymentStatus: "unproven",
+    hostedEvidenceMode: "not_configured",
+    missingHostedInputCount: 3,
+    missingHostedInputIds: [
+      "FMARCH_HOSTED_MATRIX_FRONTEND_URL",
+      "FMARCH_HOSTED_MATRIX_API_URL",
+      "FMARCH_HOSTED_MATRIX_RAW_EVIDENCE_PATH",
+    ],
+    localVsHostedBoundary:
+      "Local hosted-like matrix evidence cannot satisfy real hosted race evidence.",
+  });
   assert.deepEqual(
     data.audit.reconnectLanes.map((lane) => [lane.id, lane.status]),
     [

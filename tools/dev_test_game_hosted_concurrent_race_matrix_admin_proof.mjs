@@ -49,6 +49,48 @@ const requiredRealHostedEvidenceInputs =
 const requiredStaleConflictMilestones =
   hostedMatrixStaleConflictMilestoneCases();
 
+function hostedMatrixSummaryRows(hostedMatrix) {
+  const missingInputs =
+    hostedMatrix.hostedHandoffChecklist?.blockedReceipt?.missingRequiredInputs ?? [];
+  return [
+    {
+      id: "coverage",
+      status: `${hostedMatrix.status}\n${Number(
+        hostedMatrix.summary?.passedCellCount ?? 0,
+      )}/${Number(hostedMatrix.summary?.cellCount ?? 0)} cells passed\n${Number(
+        hostedMatrix.summary?.reloadCoveredCellCount ?? 0,
+      )}/${Number(hostedMatrix.summary?.cellCount ?? 0)} reloads covered\n${Number(
+        hostedMatrix.summary?.reconnectLaneCount ?? 0,
+      )} reconnect lanes\n${Number(
+        hostedMatrix.summary?.staleConflictLaneCount ?? 0,
+      )} stale conflict lanes`,
+    },
+    {
+      id: "hosted-evidence",
+      status: `${String(
+        hostedMatrix.summary?.realHostedEvidenceStatus ?? "unknown",
+      )}\n${String(
+        hostedMatrix.summary?.realHostedDeploymentStatus ?? "unknown",
+      )}\n${String(hostedMatrix.summary?.hostedEvidenceMode ?? "unknown")}`,
+    },
+    {
+      id: "missing-inputs",
+      status: `${missingInputs.length} missing hosted inputs\n${missingInputs.join(
+        ", ",
+      )}\nLocal hosted-like matrix evidence cannot satisfy real hosted race evidence.`,
+    },
+  ];
+}
+
+function hostedMatrixSummaryStatuses(hostedMatrix) {
+  return Object.fromEntries(
+    hostedMatrixSummaryRows(hostedMatrix).map((summary) => [
+      summary.id,
+      summary.status,
+    ]),
+  );
+}
+
 export function hostedConcurrentRaceMatrixAdminProofCase() {
   return {
     smokeName: "dev-test-game-hosted-concurrent-race-matrix-admin-proof",
@@ -97,6 +139,12 @@ export function hostedConcurrentRaceMatrixAdminProofCase() {
         ),
         requiredStaleConflictLanes: source.hostedMatrix.staleConflictLanes.map(
           (lane) => lane.id,
+        ),
+        requiredHostedMatrixSummaries: hostedMatrixSummaryRows(
+          source.hostedMatrix,
+        ).map((summary) => summary.id),
+        requiredHostedMatrixSummaryStatuses: hostedMatrixSummaryStatuses(
+          source.hostedMatrix,
         ),
         requiredCheckStatuses: {
           "local-demo-hosted-evidence":
@@ -150,6 +198,12 @@ export function hostedConcurrentRaceMatrixAdminProofCase() {
             laneId: milestone.laneId,
             progressCheckId: milestone.progressCheckId,
           }),
+        ),
+        hostedMatrixSummaryIds: hostedMatrixSummaryRows(source.hostedMatrix).map(
+          (summary) => summary.id,
+        ),
+        hostedMatrixSummaryStatuses: hostedMatrixSummaryStatuses(
+          source.hostedMatrix,
         ),
         progressCheckIds: requiredProgressChecks,
         relatedAuditIds: requiredRelatedLinks,
@@ -266,6 +320,20 @@ export function assertHostedConcurrentRaceMatrixAdminProof(evidence) {
       );
     }
   }
+  assertVisibleAdminRoleSurfaceRows({
+    adminRoleSurface: evidence.adminRoleSurface,
+    rowIds: evidence.generatedFrom?.hostedMatrixSummaryIds,
+    proofName: "hosted concurrent race matrix admin proof",
+    rowName: "hosted matrix summary",
+    surfaceKey: "visibleHostedMatrixSummaries",
+  });
+  assertAdminRoleSurfaceStatusText({
+    adminRoleSurface: evidence.adminRoleSurface,
+    expectedStatuses: evidence.generatedFrom?.hostedMatrixSummaryStatuses,
+    proofName: "hosted concurrent race matrix admin proof",
+    rowName: "hosted matrix summary status",
+    surfaceKey: "visibleHostedMatrixSummaryStatuses",
+  });
   assertVisibleAdminRoleSurfaceRows({
     adminRoleSurface: evidence.adminRoleSurface,
     rowIds: evidence.generatedFrom?.relatedAuditIds,

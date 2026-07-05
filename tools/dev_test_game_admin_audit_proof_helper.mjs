@@ -300,6 +300,8 @@ export async function proveAdminAuditDetail({
   requiredSessions = [],
   requiredReconnectLanes = [],
   requiredStaleConflictLanes = [],
+  requiredHostedMatrixSummaries = [],
+  requiredHostedMatrixSummaryStatuses = {},
   requiredProofLaneCoverage = [],
   requiredSpineCycles = [],
   requiredSpineRoleUrls = [],
@@ -425,6 +427,17 @@ export async function proveAdminAuditDetail({
       page,
       prefix: "admin-audit-stale-conflict-lane",
       ids: requiredStaleConflictLanes,
+    });
+    const visibleHostedMatrixSummaries = await waitForRows({
+      page,
+      prefix: "admin-audit-hosted-matrix-summary",
+      ids: requiredHostedMatrixSummaries,
+      expectedStatuses: requiredHostedMatrixSummaryStatuses,
+    });
+    const visibleHostedMatrixSummaryStatuses = await readRowStatuses({
+      page,
+      prefix: "admin-audit-hosted-matrix-summary",
+      ids: Object.keys(requiredHostedMatrixSummaryStatuses),
     });
     const visibleProofLaneCoverage = await waitForRows({
       page,
@@ -828,6 +841,12 @@ export async function proveAdminAuditDetail({
       ...(visibleStaleConflictLanes.length === 0
         ? {}
         : { visibleStaleConflictLanes }),
+      ...(visibleHostedMatrixSummaries.length === 0
+        ? {}
+        : { visibleHostedMatrixSummaries }),
+      ...(Object.keys(visibleHostedMatrixSummaryStatuses).length === 0
+        ? {}
+        : { visibleHostedMatrixSummaryStatuses }),
       ...(visibleProofLaneCoverage.length === 0
         ? {}
         : { visibleProofLaneCoverage }),

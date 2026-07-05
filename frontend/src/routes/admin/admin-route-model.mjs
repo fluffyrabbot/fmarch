@@ -1477,6 +1477,11 @@ export function normalizeLocalHostedConcurrentRaceMatrixAudit(
     hostedConcurrentRaceMatrix,
     realHostedEvidenceInputs,
   });
+  const hostedMatrixSummary = normalizeHostedMatrixSummary({
+    hostedConcurrentRaceMatrix,
+    cells,
+    hostedHandoffChecklist,
+  });
   return Object.freeze({
     id: localAdminAuditIds.hostedConcurrentRaceMatrix,
     label: "Local hosted matrix",
@@ -1569,6 +1574,7 @@ export function normalizeLocalHostedConcurrentRaceMatrixAudit(
     realHostedEvidenceInputs,
     hostedHandoffChecklist,
     artifactSummary: Object.freeze({
+      hostedMatrixSummary,
       game: String(hostedConcurrentRaceMatrix.hostedLikeTarget?.game ?? ""),
       cellCount: Number(hostedConcurrentRaceMatrix.summary?.cellCount ?? cells.length),
       passedCellCount: Number(
@@ -1616,6 +1622,48 @@ export function normalizeLocalHostedConcurrentRaceMatrixAudit(
       releaseReady: hostedConcurrentRaceMatrix.releaseReady === true,
       productionReady: hostedConcurrentRaceMatrix.productionReady === true,
     }),
+  });
+}
+
+function normalizeHostedMatrixSummary({
+  hostedConcurrentRaceMatrix,
+  cells,
+  hostedHandoffChecklist,
+}) {
+  const cellCount = Number(hostedConcurrentRaceMatrix.summary?.cellCount ?? cells.length);
+  const passedCellCount = Number(
+    hostedConcurrentRaceMatrix.summary?.passedCellCount ?? 0,
+  );
+  const reloadCoveredCellCount = Number(
+    hostedConcurrentRaceMatrix.summary?.reloadCoveredCellCount ?? 0,
+  );
+  const missingHostedInputIds = Object.freeze([
+    ...(hostedHandoffChecklist?.blockedReceipt?.missingRequiredInputs ?? []),
+  ]);
+  return Object.freeze({
+    status: String(hostedConcurrentRaceMatrix.status ?? "unknown"),
+    cellCount,
+    passedCellCount,
+    reloadCoveredCellCount,
+    reconnectLaneCount: Number(
+      hostedConcurrentRaceMatrix.summary?.reconnectLaneCount ?? 0,
+    ),
+    staleConflictLaneCount: Number(
+      hostedConcurrentRaceMatrix.summary?.staleConflictLaneCount ?? 0,
+    ),
+    hostedEvidenceStatus: String(
+      hostedConcurrentRaceMatrix.summary?.realHostedEvidenceStatus ?? "unknown",
+    ),
+    hostedDeploymentStatus: String(
+      hostedConcurrentRaceMatrix.summary?.realHostedDeploymentStatus ?? "unknown",
+    ),
+    hostedEvidenceMode: String(
+      hostedConcurrentRaceMatrix.summary?.hostedEvidenceMode ?? "unknown",
+    ),
+    missingHostedInputCount: missingHostedInputIds.length,
+    missingHostedInputIds,
+    localVsHostedBoundary:
+      "Local hosted-like matrix evidence cannot satisfy real hosted race evidence.",
   });
 }
 
