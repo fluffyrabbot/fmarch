@@ -334,6 +334,7 @@ import {
   devTestGameHardeningAdminProofCommand,
   devTestGameHostedIdentitySequenceStage,
   devTestGameHostedIdentitySequencePromotionCommand,
+  devTestGameHostedIdentityOperatorSpineCommand,
   devTestGameIdentityAdminProofCommand,
   devTestGameLiveProofCommand,
   devTestGameNextActionPath,
@@ -3195,6 +3196,47 @@ test("dev test-game next-action derives one local recovery command from the mani
       proofBoundary: secondHostedIdentityProgression.proofBoundary,
       artifactStatus: "missing",
     },
+  );
+  const allProgressionProofs = Object.fromEntries(
+    hostedIdentityHandoffChecklist.progressionSummary.progressions.flatMap(
+      (progression) => {
+        const proof = hostedIdentityProgressionAdminProofArtifactFixture(progression);
+        return [
+          [progression.id, proof],
+          [progression.adminProofTarget, proof],
+        ];
+      },
+    ),
+  );
+  const hostedIdentityOperatorStageAction = buildDevTestGameNextAction(freshManifest, {
+    generatedAt: "2026-06-26T00:00:01.000Z",
+    sequenceStage: devTestGameHostedIdentitySequenceStage,
+    opsArtifacts: devTestGameOpsArtifactsFixture(),
+    raceCoverage: devTestGameRaceCoverageFixture(),
+    hostedIdentityProgressionProofs: allProgressionProofs,
+    releaseReadinessChecklist: devTestGameReleaseReadinessChecklistFixture({
+      includeOpsArtifactBundleCheck: true,
+      unproven: [
+        {
+          id: "hosted-production-identity",
+          status: "unproven",
+          requiredEvidence: "Hosted account lifecycle",
+        },
+      ],
+    }),
+  });
+  assertDevTestGameNextAction(hostedIdentityOperatorStageAction);
+  assert.equal(
+    hostedIdentityOperatorStageAction.nextAction.command,
+    devTestGameHostedIdentityOperatorSpineCommand,
+  );
+  assert.equal(
+    hostedIdentityOperatorStageAction.nextAction.unproven.proofTarget,
+    devTestGameHostedIdentityOperatorAdminProofPath,
+  );
+  assert.equal(
+    hostedIdentityOperatorStageAction.nextAction.unproven.hostedIdentityProgression,
+    undefined,
   );
   assert.deepEqual(
     hostedIdentityStageAction.nextAction.unproven.hostedHandoffChecklist
