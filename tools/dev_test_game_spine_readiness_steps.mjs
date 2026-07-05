@@ -1,5 +1,9 @@
 export const devTestGameReleaseReadinessScript =
   "tools/dev_test_game_release_readiness.mjs";
+export const devTestGameReleaseReadinessPath =
+  "target/dev-test-game/release-readiness-checklist.json";
+export const devTestGameReleaseReadinessMarkdownPath =
+  "target/dev-test-game/release-readiness-checklist.md";
 
 export function releaseReadinessStep({ reason, changedInputs, env } = {}) {
   if (typeof reason !== "string" || reason.trim() === "") {

@@ -9,6 +9,10 @@ import {
 } from "./dev_test_game_release_readiness.mjs";
 
 export const DEV_TEST_GAME_OPS_ARTIFACTS_VERSION = 1;
+export const devTestGameOpsArtifactsPath =
+  "target/dev-test-game/ops-artifacts.json";
+export const devTestGameOpsArtifactsMarkdownPath =
+  "target/dev-test-game/ops-artifacts.md";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const artifactDir = path.join(repoRoot, "target", "dev-test-game");
@@ -29,8 +33,8 @@ const defaultPaths = Object.freeze({
     "local-live-stack.dump",
   ),
 });
-const jsonPath = path.join(artifactDir, "ops-artifacts.json");
-const markdownPath = path.join(artifactDir, "ops-artifacts.md");
+const jsonPath = path.join(repoRoot, devTestGameOpsArtifactsPath);
+const markdownPath = path.join(repoRoot, devTestGameOpsArtifactsMarkdownPath);
 const maxArtifactAgeHours = Number.parseFloat(
   process.env.FMARCH_DEV_TEST_GAME_OPS_MAX_ARTIFACT_AGE_HOURS ?? "24",
 );

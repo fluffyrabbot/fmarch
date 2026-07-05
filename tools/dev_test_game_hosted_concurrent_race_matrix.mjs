@@ -8,6 +8,9 @@ import { assertDevTestGameRaceCoverage } from "./dev_test_game_race_coverage.mjs
 import { repoRoot } from "./dev_test_game_spine_runner.mjs";
 import { assertDevTestGameReleaseReadiness } from "./dev_test_game_release_readiness.mjs";
 import {
+  devTestGameReleaseReadinessPath,
+} from "./dev_test_game_spine_readiness_steps.mjs";
+import {
   assertRealHostedEvidenceInputs,
   buildRealHostedEvidenceInputs,
 } from "./dev_test_game_real_hosted_evidence_inputs.mjs";
@@ -26,8 +29,7 @@ import {
 } from "./dev_test_game_hosted_concurrent_race_matrix_cases.mjs";
 
 export const DEV_TEST_GAME_HOSTED_CONCURRENT_RACE_MATRIX_VERSION = 1;
-export const devTestGameReleaseReadinessPath =
-  "target/dev-test-game/release-readiness-checklist.json";
+export { devTestGameReleaseReadinessPath };
 export const devTestGameSessionPath = "target/dev-test-game/session.json";
 export const devTestGameProofRunPath = "target/dev-test-game/proof-run.json";
 export const devTestGameRaceCoveragePath =

@@ -60,6 +60,14 @@ import {
   hostedTargetPreflightCheckIds,
 } from "./dev_test_game_hosted_target_preflight.mjs";
 import {
+  devTestGameReleaseReadinessMarkdownPath,
+  devTestGameReleaseReadinessPath,
+} from "./dev_test_game_spine_readiness_steps.mjs";
+export {
+  devTestGameReleaseReadinessMarkdownPath,
+  devTestGameReleaseReadinessPath,
+} from "./dev_test_game_spine_readiness_steps.mjs";
+import {
   hardeningAuditLaneIds,
 } from "./dev_test_game_hardening_scenarios.mjs";
 import {
@@ -390,8 +398,8 @@ const defaultReleaseRunbookAdminProofPath = path.join(
   artifactDir,
   "release-runbook-admin-proof.json",
 );
-const jsonPath = path.join(artifactDir, "release-readiness-checklist.json");
-const markdownPath = path.join(artifactDir, "release-readiness-checklist.md");
+const jsonPath = path.join(repoRoot, devTestGameReleaseReadinessPath);
+const markdownPath = path.join(repoRoot, devTestGameReleaseReadinessMarkdownPath);
 const maxBackupArtifactAgeHours = Number.parseFloat(
   process.env.FMARCH_DEV_TEST_GAME_READINESS_MAX_ARTIFACT_AGE_HOURS ?? "24",
 );

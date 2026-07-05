@@ -92,6 +92,7 @@ import {
 import {
   assertDevTestGameOpsArtifacts,
   buildDevTestGameOpsArtifacts,
+  devTestGameOpsArtifactsPath,
 } from "./dev_test_game_ops_artifacts.mjs";
 import {
   assertDevTestGameHostedOpsSignals,
@@ -672,7 +673,7 @@ test("dev test-game spine orchestrators expose stable proof order and env maps",
   });
   assert.deepEqual(opsReadinessEnv, {
     ...backupRestoreEvidenceEnv,
-    FMARCH_DEV_TEST_GAME_OPS_ARTIFACTS: "target/dev-test-game/ops-artifacts.json",
+    FMARCH_DEV_TEST_GAME_OPS_ARTIFACTS: devTestGameOpsArtifactsPath,
   });
   assert.deepEqual(seedReadinessEnv, {
     FMARCH_DEV_TEST_GAME_SEED_FIXTURE_SUMMARY:
@@ -684,7 +685,7 @@ test("dev test-game spine orchestrators expose stable proof order and env maps",
     ...backupRestoreEvidenceEnv,
     FMARCH_DEV_TEST_GAME_BACKUP_ADMIN_PROOF:
       "target/dev-test-game/backup-admin-proof.json",
-    FMARCH_DEV_TEST_GAME_OPS_ARTIFACTS: "target/dev-test-game/ops-artifacts.json",
+    FMARCH_DEV_TEST_GAME_OPS_ARTIFACTS: devTestGameOpsArtifactsPath,
     FMARCH_DEV_TEST_GAME_SEED_FIXTURE_SUMMARY:
       "target/dev-test-game/seed-fixture-summary.json",
     FMARCH_DEV_TEST_GAME_SEED_ADMIN_PROOF:
@@ -701,7 +702,7 @@ test("dev test-game spine orchestrators expose stable proof order and env maps",
     ],
   );
   assert.deepEqual(identityReadinessEnv, {
-    FMARCH_DEV_TEST_GAME_OPS_ARTIFACTS: "target/dev-test-game/ops-artifacts.json",
+    FMARCH_DEV_TEST_GAME_OPS_ARTIFACTS: devTestGameOpsArtifactsPath,
     FMARCH_DEV_TEST_GAME_SEED_FIXTURE_SUMMARY:
       "target/dev-test-game/seed-fixture-summary.json",
     FMARCH_DEV_TEST_GAME_IDENTITY_ADAPTER_PROOF:
@@ -724,11 +725,10 @@ test("dev test-game spine orchestrators expose stable proof order and env maps",
       "target/live-stack-backup-restore-drill/local-live-stack.dump",
     FMARCH_DEV_TEST_GAME_BACKUP_ADMIN_PROOF:
       "target/dev-test-game/backup-admin-proof.json",
-    FMARCH_DEV_TEST_GAME_OPS_ARTIFACTS: "target/dev-test-game/ops-artifacts.json",
+    FMARCH_DEV_TEST_GAME_OPS_ARTIFACTS: devTestGameOpsArtifactsPath,
     FMARCH_DEV_TEST_GAME_OPS_ADMIN_PROOF:
       "target/dev-test-game/ops-admin-proof.json",
-    FMARCH_DEV_TEST_GAME_HOSTED_OPS_SIGNALS:
-      "target/dev-test-game/hosted-ops-signals.json",
+    FMARCH_DEV_TEST_GAME_HOSTED_OPS_SIGNALS: devTestGameHostedOpsSignalsPath,
     FMARCH_DEV_TEST_GAME_HOSTED_OPS_SIGNALS_ADMIN_PROOF:
       "target/dev-test-game/hosted-ops-signals-admin-proof.json",
     FMARCH_DEV_TEST_GAME_REAL_HOSTED_OBSERVABILITY_HANDOFF:
@@ -793,7 +793,7 @@ test("dev test-game spine orchestrators expose stable proof order and env maps",
       adminSpineTerminalBatchProofPath,
   });
   assert.deepEqual(adminSpineHostedOpsInputReadinessEnv, {
-    FMARCH_DEV_TEST_GAME_OPS_ARTIFACTS: "target/dev-test-game/ops-artifacts.json",
+    FMARCH_DEV_TEST_GAME_OPS_ARTIFACTS: devTestGameOpsArtifactsPath,
     FMARCH_DEV_TEST_GAME_HOSTED_CONCURRENT_RACE_MATRIX:
       devTestGameHostedConcurrentRaceMatrixPath,
   });
@@ -923,7 +923,7 @@ test("dev test-game spine orchestrators expose stable proof order and env maps",
     readinessReason: "hosted-matrix-and-ops-inputs-for-hosted-signals",
     changedInputs: [
       devTestGameHostedConcurrentRaceMatrixPath,
-      "target/dev-test-game/ops-artifacts.json",
+      devTestGameOpsArtifactsPath,
     ],
     env: adminSpineHostedOpsInputReadinessEnv,
   });
@@ -1743,7 +1743,7 @@ test("dev test-game spine manifest records command order and evidence wiring", (
       devTestGameRaceCoveragePath,
       "target/dev-test-game/spine-manifest.json",
       "target/dev-test-game/admin-spine-proof.json",
-      "target/dev-test-game/release-readiness-checklist.json",
+      devTestGameReleaseReadinessPath,
     ],
   });
   assert.deepEqual(manifest.commands.raceCoverage, {
@@ -1755,7 +1755,7 @@ test("dev test-game spine manifest records command order and evidence wiring", (
     script: devTestGameHostedConcurrentRaceMatrixCommand,
     proofArtifact: devTestGameHostedConcurrentRaceMatrixPath,
     dependsOn: [
-      "target/dev-test-game/release-readiness-checklist.json",
+      devTestGameReleaseReadinessPath,
       devTestGameRaceCoveragePath,
     ],
   });
@@ -1783,8 +1783,8 @@ test("dev test-game spine manifest records command order and evidence wiring", (
     script: devTestGameHostedOpsSignalsCommand,
     proofArtifact: devTestGameHostedOpsSignalsPath,
     dependsOn: [
-      "target/dev-test-game/ops-artifacts.json",
-      "target/dev-test-game/release-readiness-checklist.json",
+      devTestGameOpsArtifactsPath,
+      devTestGameReleaseReadinessPath,
       devTestGameHostedConcurrentRaceMatrixPath,
     ],
   });
@@ -1838,7 +1838,7 @@ test("dev test-game spine manifest records command order and evidence wiring", (
   assert.deepEqual(manifest.commands.releaseRunbook, {
     script: devTestGameReleaseRunbookCommand,
     proofArtifact: devTestGameReleaseRunbookPath,
-    dependsOn: ["target/dev-test-game/release-readiness-checklist.json"],
+    dependsOn: [devTestGameReleaseReadinessPath],
     roleUrl: "/admin/audit/local-release-runbook?game=<seeded-game>",
   });
   assert.deepEqual(manifest.commands.nextAction, {
@@ -1846,8 +1846,8 @@ test("dev test-game spine manifest records command order and evidence wiring", (
     proofArtifact: nextActionPath,
     dependsOn: [
       "target/dev-test-game/spine-manifest.json",
-      "target/dev-test-game/ops-artifacts.json",
-      "target/dev-test-game/release-readiness-checklist.json",
+      devTestGameOpsArtifactsPath,
+      devTestGameReleaseReadinessPath,
       devTestGameRaceCoveragePath,
       devTestGameHostedConcurrentRaceMatrixPath,
       devTestGameHostedTargetPreflightPath,
@@ -12202,7 +12202,7 @@ test("session card and markdown include role credential URLs and tokens", async 
   );
   const opsReadiness = buildDevTestGameReleaseReadiness(proofRun, {
     generatedAt: "2026-06-26T00:00:00.000Z",
-    opsArtifactsPath: "target/dev-test-game/ops-artifacts.json",
+    opsArtifactsPath: devTestGameOpsArtifactsPath,
     opsArtifacts,
     opsAdminProofPath: "target/dev-test-game/ops-admin-proof.json",
     opsAdminProof: opsAdminProofFixture(),
@@ -12238,13 +12238,11 @@ test("session card and markdown include role credential URLs and tokens", async 
     readiness: opsReadiness,
     generatedAt: "2026-06-26T00:00:00.000Z",
     artifacts: {
-      opsArtifacts: artifactSummary("target/dev-test-game/ops-artifacts.json"),
+      opsArtifacts: artifactSummary(devTestGameOpsArtifactsPath),
       hostedConcurrentRaceMatrix: artifactSummary(
         "target/dev-test-game/hosted-concurrent-race-matrix.json",
       ),
-      readiness: artifactSummary(
-        "target/dev-test-game/release-readiness-checklist.json",
-      ),
+      readiness: artifactSummary(devTestGameReleaseReadinessPath),
     },
   });
   assertDevTestGameHostedOpsSignals(hostedOpsSignals);
@@ -12263,7 +12261,7 @@ test("session card and markdown include role credential URLs and tokens", async 
   );
   const hostedOpsReadiness = buildDevTestGameReleaseReadiness(proofRun, {
     generatedAt: "2026-06-26T00:00:00.000Z",
-    opsArtifactsPath: "target/dev-test-game/ops-artifacts.json",
+    opsArtifactsPath: devTestGameOpsArtifactsPath,
     opsArtifacts,
     hostedOpsSignalsPath: devTestGameHostedOpsSignalsPath,
     hostedOpsSignals,
@@ -12426,7 +12424,7 @@ test("session card and markdown include role credential URLs and tokens", async 
   );
   const seedFixtureReadiness = buildDevTestGameReleaseReadiness(proofRun, {
     generatedAt: "2026-06-26T00:00:00.000Z",
-    opsArtifactsPath: "target/dev-test-game/ops-artifacts.json",
+    opsArtifactsPath: devTestGameOpsArtifactsPath,
     opsArtifacts,
     seedFixtureSummaryPath: "target/dev-test-game/seed-fixture-summary.json",
     seedFixtureSummary: seedFixture,

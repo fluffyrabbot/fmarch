@@ -8,7 +8,13 @@ import {
 } from "./dev_test_game_spine_manifest.mjs";
 import { repoRoot } from "./dev_test_game_spine_runner.mjs";
 import { assertDevTestGameReleaseReadiness } from "./dev_test_game_release_readiness.mjs";
-import { assertDevTestGameOpsArtifacts } from "./dev_test_game_ops_artifacts.mjs";
+import {
+  assertDevTestGameOpsArtifacts,
+  devTestGameOpsArtifactsPath,
+} from "./dev_test_game_ops_artifacts.mjs";
+import {
+  devTestGameReleaseReadinessPath,
+} from "./dev_test_game_spine_readiness_steps.mjs";
 import {
   assertDevTestGameRaceCoverage,
   devTestGameRaceCoveragePath,
@@ -75,9 +81,7 @@ export {
 
 export const DEV_TEST_GAME_NEXT_ACTION_VERSION = 1;
 export const devTestGameNextActionPath = "target/dev-test-game/next-action.json";
-export const devTestGameReleaseReadinessPath =
-  "target/dev-test-game/release-readiness-checklist.json";
-export const devTestGameOpsArtifactsPath = "target/dev-test-game/ops-artifacts.json";
+export { devTestGameOpsArtifactsPath, devTestGameReleaseReadinessPath };
 export const devTestGameLiveProofCommand =
   devTestGameProductionFeatureBrowserProofCommand;
 export const devTestGameSeedFixtureCommand =
@@ -2210,11 +2214,11 @@ const devSpineArtifactPriorities = new Map(
     ["identity", "target/dev-test-game/identity-admin-proof.json"],
     ["backup-restore", "target/live-stack-backup-restore-drill/local-backup-restore-proof.json"],
     ["backup", "target/dev-test-game/backup-admin-proof.json"],
-    ["ops-artifacts", "target/dev-test-game/ops-artifacts.json"],
+    ["ops-artifacts", devTestGameOpsArtifactsPath],
     ["ops", "target/dev-test-game/ops-admin-proof.json"],
     ["seed-fixture", "target/dev-test-game/seed-fixture-summary.json"],
     ["seed", "target/dev-test-game/seed-admin-proof.json"],
-    ["release-readiness", "target/dev-test-game/release-readiness-checklist.json"],
+    ["release-readiness", devTestGameReleaseReadinessPath],
     ["release-runbook", "target/dev-test-game/release-runbook.json"],
     ["release-runbook-admin", "target/dev-test-game/release-runbook-admin-proof.json"],
     ["race-coverage", "target/dev-test-game/race-coverage.json"],

@@ -9,6 +9,10 @@ import {
   devTestGameHostedIdentityProgressionSummaryPath,
 } from "./dev_test_game_hosted_identity_evidence.mjs";
 import { devTestGameHostedTargetPreflightPath } from "./dev_test_game_hosted_target_preflight.mjs";
+import { devTestGameOpsArtifactsPath } from "./dev_test_game_ops_artifacts.mjs";
+import {
+  devTestGameHostedOpsSignalsPath,
+} from "./dev_test_game_hosted_ops_signals.mjs";
 import { runAdminSpineProof } from "./dev_test_game_admin_spine_proof.mjs";
 import {
   devTestGameProofGraphAdminProofPath,
@@ -53,10 +57,9 @@ export const adminSpineReadinessEvidenceEnv = {
     "target/live-stack-backup-restore-drill/local-live-stack.dump",
   FMARCH_DEV_TEST_GAME_BACKUP_ADMIN_PROOF:
     "target/dev-test-game/backup-admin-proof.json",
-  FMARCH_DEV_TEST_GAME_OPS_ARTIFACTS: "target/dev-test-game/ops-artifacts.json",
+  FMARCH_DEV_TEST_GAME_OPS_ARTIFACTS: devTestGameOpsArtifactsPath,
   FMARCH_DEV_TEST_GAME_OPS_ADMIN_PROOF: "target/dev-test-game/ops-admin-proof.json",
-  FMARCH_DEV_TEST_GAME_HOSTED_OPS_SIGNALS:
-    "target/dev-test-game/hosted-ops-signals.json",
+  FMARCH_DEV_TEST_GAME_HOSTED_OPS_SIGNALS: devTestGameHostedOpsSignalsPath,
   FMARCH_DEV_TEST_GAME_HOSTED_OPS_SIGNALS_ADMIN_PROOF:
     "target/dev-test-game/hosted-ops-signals-admin-proof.json",
   FMARCH_DEV_TEST_GAME_REAL_HOSTED_OBSERVABILITY_HANDOFF:
@@ -126,7 +129,7 @@ export const adminSpinePreGraphReadinessEvidenceEnv = Object.fromEntries(
 );
 
 export const adminSpineHostedOpsInputReadinessEnv = {
-  FMARCH_DEV_TEST_GAME_OPS_ARTIFACTS: "target/dev-test-game/ops-artifacts.json",
+  FMARCH_DEV_TEST_GAME_OPS_ARTIFACTS: devTestGameOpsArtifactsPath,
   FMARCH_DEV_TEST_GAME_HOSTED_CONCURRENT_RACE_MATRIX:
     devTestGameHostedConcurrentRaceMatrixPath,
 };
@@ -162,7 +165,7 @@ export const devTestGameAdminSpinePlan = [
     reason: "hosted-matrix-and-ops-inputs-for-hosted-signals",
     changedInputs: [
       devTestGameHostedConcurrentRaceMatrixPath,
-      "target/dev-test-game/ops-artifacts.json",
+      devTestGameOpsArtifactsPath,
     ],
     env: adminSpineHostedOpsInputReadinessEnv,
   }),
@@ -194,7 +197,7 @@ export const devTestGameAdminSpinePlan = [
       devTestGameHostedTargetPreflightPath,
       devTestGameHostedEvidenceLanePath,
       "target/dev-test-game/hosted-evidence-lane-demo-proof.json",
-      "target/dev-test-game/hosted-ops-signals.json",
+      devTestGameHostedOpsSignalsPath,
       devTestGameRealHostedObservabilityHandoffPath,
       "target/dev-test-game/release-runbook.json",
       adminSpineProofPath,

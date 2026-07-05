@@ -3,8 +3,14 @@ import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { assertDevTestGameHostedConcurrentRaceMatrixEvidence } from "./dev_test_game_hosted_concurrent_race_matrix.mjs";
-import { assertDevTestGameOpsArtifacts } from "./dev_test_game_ops_artifacts.mjs";
-import { assertDevTestGameReleaseReadiness } from "./dev_test_game_release_readiness.mjs";
+import {
+  assertDevTestGameOpsArtifacts,
+  devTestGameOpsArtifactsPath,
+} from "./dev_test_game_ops_artifacts.mjs";
+import {
+  assertDevTestGameReleaseReadiness,
+  devTestGameReleaseReadinessPath,
+} from "./dev_test_game_release_readiness.mjs";
 import {
   hostedOpsReadinessBoundaryCheckId,
   hostedOpsSignalCheckCases,
@@ -20,12 +26,12 @@ export const devTestGameHostedOpsSignalsCommand =
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const artifactDir = path.join(repoRoot, "target", "dev-test-game");
 const defaultPaths = Object.freeze({
-  opsArtifacts: path.join(artifactDir, "ops-artifacts.json"),
+  opsArtifacts: path.join(repoRoot, devTestGameOpsArtifactsPath),
   hostedConcurrentRaceMatrix: path.join(
     artifactDir,
     "hosted-concurrent-race-matrix.json",
   ),
-  readiness: path.join(artifactDir, "release-readiness-checklist.json"),
+  readiness: path.join(repoRoot, devTestGameReleaseReadinessPath),
 });
 const jsonPath = path.join(repoRoot, devTestGameHostedOpsSignalsPath);
 

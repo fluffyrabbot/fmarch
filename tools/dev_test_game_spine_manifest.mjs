@@ -48,6 +48,10 @@ import {
   devTestGameHostedOpsSignalsCommand,
   devTestGameHostedOpsSignalsPath,
 } from "./dev_test_game_hosted_ops_signals.mjs";
+import { devTestGameOpsArtifactsPath } from "./dev_test_game_ops_artifacts.mjs";
+import {
+  devTestGameReleaseReadinessPath,
+} from "./dev_test_game_spine_readiness_steps.mjs";
 import {
   devTestGameRealHostedObservabilityHandoffCommand,
   devTestGameRealHostedObservabilityHandoffPath,
@@ -187,7 +191,7 @@ export function buildDevTestGameSpineManifest({
           devTestGameRaceCoveragePath,
           spineManifestPath,
           adminSpineProofPath,
-          "target/dev-test-game/release-readiness-checklist.json",
+          devTestGameReleaseReadinessPath,
         ],
       },
       raceCoverage: {
@@ -199,7 +203,7 @@ export function buildDevTestGameSpineManifest({
         script: devTestGameHostedConcurrentRaceMatrixCommand,
         proofArtifact: devTestGameHostedConcurrentRaceMatrixPath,
         dependsOn: [
-          "target/dev-test-game/release-readiness-checklist.json",
+          devTestGameReleaseReadinessPath,
           devTestGameRaceCoveragePath,
         ],
       },
@@ -231,8 +235,8 @@ export function buildDevTestGameSpineManifest({
         script: devTestGameHostedOpsSignalsCommand,
         proofArtifact: devTestGameHostedOpsSignalsPath,
         dependsOn: [
-          "target/dev-test-game/ops-artifacts.json",
-          "target/dev-test-game/release-readiness-checklist.json",
+          devTestGameOpsArtifactsPath,
+          devTestGameReleaseReadinessPath,
           devTestGameHostedConcurrentRaceMatrixPath,
         ],
       },
@@ -275,7 +279,7 @@ export function buildDevTestGameSpineManifest({
       releaseRunbook: {
         script: devTestGameReleaseRunbookCommand,
         proofArtifact: devTestGameReleaseRunbookPath,
-        dependsOn: ["target/dev-test-game/release-readiness-checklist.json"],
+        dependsOn: [devTestGameReleaseReadinessPath],
         roleUrl: "/admin/audit/local-release-runbook?game=<seeded-game>",
       },
       nextAction: {
@@ -283,8 +287,8 @@ export function buildDevTestGameSpineManifest({
         proofArtifact: nextActionPath,
         dependsOn: [
           spineManifestPath,
-          "target/dev-test-game/ops-artifacts.json",
-          "target/dev-test-game/release-readiness-checklist.json",
+          devTestGameOpsArtifactsPath,
+          devTestGameReleaseReadinessPath,
           devTestGameRaceCoveragePath,
           devTestGameHostedConcurrentRaceMatrixPath,
           devTestGameHostedTargetPreflightPath,
@@ -331,8 +335,8 @@ export function buildDevTestGameSpineManifest({
         path: nextActionPath,
         dependsOn: [
           spineManifestPath,
-          "target/dev-test-game/ops-artifacts.json",
-          "target/dev-test-game/release-readiness-checklist.json",
+          devTestGameOpsArtifactsPath,
+          devTestGameReleaseReadinessPath,
           devTestGameRaceCoveragePath,
           devTestGameHostedConcurrentRaceMatrixPath,
           devTestGameHostedTargetPreflightPath,
@@ -949,8 +953,8 @@ function assertTerminalArtifacts(terminalArtifacts) {
     nextAction.path !== nextActionPath ||
     !Array.isArray(nextAction.dependsOn) ||
     !nextAction.dependsOn.includes(spineManifestPath) ||
-    !nextAction.dependsOn.includes("target/dev-test-game/ops-artifacts.json") ||
-    !nextAction.dependsOn.includes("target/dev-test-game/release-readiness-checklist.json") ||
+    !nextAction.dependsOn.includes(devTestGameOpsArtifactsPath) ||
+    !nextAction.dependsOn.includes(devTestGameReleaseReadinessPath) ||
     !nextAction.dependsOn.includes(devTestGameRaceCoveragePath) ||
     !nextAction.dependsOn.includes(devTestGameHostedConcurrentRaceMatrixPath) ||
     !nextAction.dependsOn.includes(devTestGameHostedTargetPreflightPath) ||
