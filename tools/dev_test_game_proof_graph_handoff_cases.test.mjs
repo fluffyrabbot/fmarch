@@ -13,6 +13,8 @@ import {
   adminProofDestinationRequirements,
   devTestGameProofGraphBaseEdges,
   devTestGameProofGraphFirstClassNodes,
+  proofGraphDiagnosticProofEdges,
+  proofGraphDiagnosticProofNodes,
   proofGraphProductionFeatureCase,
   proofGraphProductionFeatureEdge,
   proofGraphProductionFeatureNode,
@@ -33,6 +35,9 @@ import {
 import {
   devTestGameProductionFeatureBrowserProofCommand,
 } from "./dev_test_game_production_feature_source_registry.mjs";
+import {
+  proofGraphDestinationSummaryDriftNextActionAdminProofPath,
+} from "./dev_test_game_next_action_admin_proof_paths.mjs";
 import {
   recoveryReceiptGraphDescriptorByReceiptKey,
 } from "./dev_test_game_recovery_receipt_graph_surfaces.mjs";
@@ -233,8 +238,35 @@ test("proof graph first-class fixture nodes share artifact and command contracts
         terminalAdminProofBatchArtifactPaths,
         terminalAdminProofBatchReceiptArtifacts,
       ],
+      [
+        "diagnostic:proof-graph-destination-summary-drift",
+        "diagnostic-browser-proof",
+        "passed",
+        proofGraphDestinationSummaryDriftNextActionAdminProofPath,
+        "/admin/audit/local-next-action?game=midsummer",
+        devTestGameProofGraphCommand,
+        [],
+        [],
+        [],
+      ],
     ],
   );
+  assert.deepEqual(proofGraphDiagnosticProofNodes, [
+    {
+      id: "diagnostic:proof-graph-destination-summary-drift",
+      label: "Proof graph destination-summary drift branch",
+      kind: "diagnostic-browser-proof",
+      status: "passed",
+      artifact: proofGraphDestinationSummaryDriftNextActionAdminProofPath,
+      roleUrl: "/admin/audit/local-next-action?game=<seeded-game>",
+      proofCommand: "npm run test:dev-test-game-next-action-admin-proof",
+      recoveryCommand: devTestGameProofGraphCommand,
+      diagnostic: true,
+      diagnosticReason: "proof-graph-destination-summary-drift",
+      promotesFreshness: false,
+      terminalArtifact: false,
+    },
+  ]);
 });
 
 test("proof graph base edges share fixed topology and seed recovery metadata", () => {
@@ -264,6 +296,7 @@ test("proof graph base edges share fixed topology and seed recovery metadata", (
         roleUrl: "/admin/audit/local-seed-fixtures?game=midsummer",
         proofTarget: devTestGameSeedFixturePath,
       },
+      ...proofGraphDiagnosticProofEdges,
       ...adminProofDestinationRequirementLinkRows.map(([linkId]) => ({
         from: "admin-spine",
         to: linkId,

@@ -301,10 +301,12 @@ import {
   assertGeneratedAdminProofHandoffPath,
 } from "./dev_test_game_admin_audit_handoff_contract.mjs";
 import {
-  proofGraphDestinationSummaryDriftNextActionAdminProofPath,
   proofGraphDestinationSummaryDriftNextActionFixture,
-  proofGraphDestinationSummaryDriftNextActionPath,
 } from "./dev_test_game_next_action_admin_proof.mjs";
+import {
+  proofGraphDestinationSummaryDriftNextActionAdminProofPath,
+  proofGraphDestinationSummaryDriftNextActionPath,
+} from "./dev_test_game_next_action_admin_proof_paths.mjs";
 import {
   hostedAdminHandoffProofArtifactCase,
   hostedAdminHandoffProofArtifactCases,
@@ -327,6 +329,7 @@ import {
 } from "./dev_test_game_next_action.mjs";
 import {
   assertDevTestGameProofGraph,
+  assertDevTestGameProofGraphCoversDiagnosticProofs,
   assertDevTestGameProofGraphCoversAdminSpine,
   assertDevTestGameProofGraphCoversProductionFeatureTargets,
   buildDevTestGameProofGraph,
@@ -337,6 +340,8 @@ import {
 } from "./dev_test_game_proof_graph.mjs";
 import {
   adminProofDestinationRequirementLinkRows,
+  proofGraphDiagnosticProofEdges,
+  proofGraphDiagnosticProofNodes,
 } from "./dev_test_game_proof_graph_handoff_cases.mjs";
 import {
   productionFeatureGraphSourceNodeId,
@@ -4210,13 +4215,14 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
 
   assertDevTestGameProofGraph(graph, { releaseReadiness });
   assertDevTestGameProofGraphCoversAdminSpine(graph, adminSpineProof);
+  assertDevTestGameProofGraphCoversDiagnosticProofs(graph);
   assertDevTestGameProofGraphCoversProductionFeatureTargets(
     graph,
     releaseReadiness,
   );
   const coreLoopFamilyRows = coreLoopScenarioFamilyRows();
-  assert.equal(graph.summary.nodeCount, 72 + coreLoopFamilyRows.length);
-  assert.equal(graph.summary.roleUrlCount, 72 + coreLoopFamilyRows.length);
+  assert.equal(graph.summary.nodeCount, 73 + coreLoopFamilyRows.length);
+  assert.equal(graph.summary.roleUrlCount, 73 + coreLoopFamilyRows.length);
   assert.equal(graph.summary.roleSurfaceProofCount, 5);
   assert.equal(graph.summary.productionFeatureTargetCount, 41);
   assert.deepEqual(
@@ -4301,6 +4307,7 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
           "proof-graph",
           "proof-freshness",
           "next-action",
+          "diagnostic:proof-graph-destination-summary-drift",
           "admin-spine-terminal-batches",
           ...proofGraphReceiptNodeIds,
         ].includes(node.id),
@@ -4349,6 +4356,13 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
         "test:dev-test-game-proof-freshness-admin-proof",
       ],
       [
+        "diagnostic:proof-graph-destination-summary-drift",
+        "diagnostic-browser-proof",
+        proofGraphDestinationSummaryDriftNextActionAdminProofPath,
+        "/admin/audit/local-next-action?game=<seeded-game>",
+        "test:dev-test-game-proof-graph",
+      ],
+      [
         "admin-spine-terminal-batches",
         "terminal-proof-batch-receipt",
         "target/dev-test-game/admin-spine-terminal-batches.json",
@@ -4366,6 +4380,51 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
   );
   const terminalBatchNode = graph.nodes.find(
     (node) => node.id === "admin-spine-terminal-batches",
+  );
+  assert.equal(
+    spineManifest.artifactFreshness.artifacts.some(
+      (artifact) =>
+        artifact.path === proofGraphDestinationSummaryDriftNextActionAdminProofPath,
+    ),
+    false,
+  );
+  assert.equal(
+    terminalBatchNode.proofIds.includes(proofGraphDiagnosticProofNodes[0].id),
+    false,
+  );
+  assert.equal(
+    terminalBatchNode.artifactPaths.includes(
+      proofGraphDestinationSummaryDriftNextActionAdminProofPath,
+    ),
+    false,
+  );
+  assert.deepEqual(
+    graph.nodes
+      .filter((node) => node.id === proofGraphDiagnosticProofNodes[0].id)
+      .map((node) => ({
+        id: node.id,
+        kind: node.kind,
+        artifact: node.artifact,
+        diagnostic: node.diagnostic,
+        diagnosticReason: node.diagnosticReason,
+        promotesFreshness: node.promotesFreshness,
+        terminalArtifact: node.terminalArtifact,
+        proofCommand: node.proofCommand,
+        recoveryCommand: node.recoveryCommand,
+      })),
+    [
+      {
+        id: proofGraphDiagnosticProofNodes[0].id,
+        kind: "diagnostic-browser-proof",
+        artifact: proofGraphDestinationSummaryDriftNextActionAdminProofPath,
+        diagnostic: true,
+        diagnosticReason: "proof-graph-destination-summary-drift",
+        promotesFreshness: false,
+        terminalArtifact: false,
+        proofCommand: "npm run test:dev-test-game-next-action-admin-proof",
+        recoveryCommand: "test:dev-test-game-proof-graph",
+      },
+    ],
   );
   assert.deepEqual(
     terminalBatchNode.receiptArtifacts.map((artifact) => [
@@ -4572,6 +4631,22 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
       ["proof-freshness", "terminal-browser-proof"],
       ["next-action", "terminal-browser-proof"],
     ],
+  );
+  assert.deepEqual(
+    graph.edges
+      .filter(
+        (edge) =>
+          edge.from === proofGraphDiagnosticProofNodes[0].id ||
+          edge.to === proofGraphDiagnosticProofNodes[0].id,
+      )
+      .map((edge) => ({
+        from: edge.from,
+        to: edge.to,
+        relationship: edge.relationship,
+        reason: edge.reason,
+        command: edge.command,
+      })),
+    proofGraphDiagnosticProofEdges,
   );
   for (const descriptor of recoveryReceiptGraphDescriptors) {
     assert.deepEqual(

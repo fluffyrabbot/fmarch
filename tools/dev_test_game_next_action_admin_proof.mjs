@@ -41,11 +41,14 @@ import {
   devTestGameProofGraphCommand,
   devTestGameProofGraphPath,
 } from "./dev_test_game_proof_graph_paths.mjs";
-
-export const proofGraphDestinationSummaryDriftNextActionPath =
-  "target/dev-test-game/next-action-proof-graph-destination-summary-drift.json";
-export const proofGraphDestinationSummaryDriftNextActionAdminProofPath =
-  "target/dev-test-game/next-action-proof-graph-destination-summary-drift-admin-proof.json";
+import {
+  proofGraphDestinationSummaryDriftNextActionAdminProofPath,
+  proofGraphDestinationSummaryDriftNextActionPath,
+} from "./dev_test_game_next_action_admin_proof_paths.mjs";
+export {
+  proofGraphDestinationSummaryDriftNextActionAdminProofPath,
+  proofGraphDestinationSummaryDriftNextActionPath,
+} from "./dev_test_game_next_action_admin_proof_paths.mjs";
 
 const proofRunPath = path.resolve(
   repoRoot,

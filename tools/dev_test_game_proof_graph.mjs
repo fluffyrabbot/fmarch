@@ -58,6 +58,10 @@ import {
   localAdminAuditRoleUrl,
 } from "./dev_test_game_admin_audit_surface_ids.mjs";
 import {
+  proofGraphDiagnosticProofEdges,
+  proofGraphDiagnosticProofNodes,
+} from "./dev_test_game_proof_graph_handoff_cases.mjs";
+import {
   devTestGameCoreLoopAdminProofPath,
 } from "./dev_test_game_local_admin_proof_paths.mjs";
 import {
@@ -341,6 +345,7 @@ export function assertDevTestGameProofGraph(
     assertDevTestGameProofGraphCoversAdminSpine(evidence, adminSpineProof);
   }
   assertDevTestGameProofGraphCoversTerminalBatches(evidence);
+  assertDevTestGameProofGraphCoversDiagnosticProofs(evidence);
   assertDevTestGameProofGraphCoversPrivateChannelRecoveryReceipt(evidence);
   assertDevTestGameProofGraphCoversCoreLoopScenarioFamilies(evidence);
   assertDevTestGameProofGraphCoversReplacementPrivateRecoveryReceipt(evidence);
@@ -358,6 +363,45 @@ export function assertDevTestGameProofGraph(
   }
   assertProductionFacingSurfaceGraphCoverage({ proofGraph: evidence });
   return evidence;
+}
+
+export function assertDevTestGameProofGraphCoversDiagnosticProofs(graph) {
+  for (const diagnosticNode of proofGraphDiagnosticProofNodes) {
+    const node = (graph.nodes ?? []).find(
+      (candidate) => candidate.id === diagnosticNode.id,
+    );
+    if (
+      node?.kind !== "diagnostic-browser-proof" ||
+      node.status !== "passed" ||
+      node.artifact !== diagnosticNode.artifact ||
+      node.roleUrl !== diagnosticNode.roleUrl ||
+      node.proofCommand !== diagnosticNode.proofCommand ||
+      node.recoveryCommand !== diagnosticNode.recoveryCommand ||
+      node.diagnostic !== true ||
+      node.diagnosticReason !== diagnosticNode.diagnosticReason ||
+      node.promotesFreshness !== false ||
+      node.terminalArtifact !== false
+    ) {
+      throw new Error(`proof graph diagnostic node drifted: ${diagnosticNode.id}`);
+    }
+  }
+  for (const diagnosticEdge of proofGraphDiagnosticProofEdges) {
+    if (
+      !(graph.edges ?? []).some(
+        (edge) =>
+          edge.from === diagnosticEdge.from &&
+          edge.to === diagnosticEdge.to &&
+          edge.relationship === diagnosticEdge.relationship &&
+          edge.reason === diagnosticEdge.reason &&
+          edge.command === diagnosticEdge.command,
+      )
+    ) {
+      throw new Error(
+        `proof graph diagnostic edge missing: ${diagnosticEdge.from}->${diagnosticEdge.to}`,
+      );
+    }
+  }
+  return graph;
 }
 
 export function assertDevTestGameProofGraphCoversReplacementActionRecoveryReceipt(
@@ -913,6 +957,7 @@ function buildProofGraphNodes({
       proofCommand: manifest.commands?.nextAction?.script,
       recoveryCommand: manifest.commands?.proofFreshness?.script,
     },
+    ...proofGraphDiagnosticProofNodes,
     ...terminalBatchNode,
     ...recoveryReceiptNodes,
     ...roleSurfaceProofNodes,
@@ -942,6 +987,15 @@ function buildProofGraphEdges({
     ["spine-manifest", "proof-freshness", "records"],
     ["spine-manifest", "next-action", "records"],
     ["proof-freshness", "next-action", "recovers-through"],
+    ...proofGraphDiagnosticProofEdges.map((edge) => [
+      edge.from,
+      edge.to,
+      edge.relationship,
+      {
+        reason: edge.reason,
+        command: edge.command,
+      },
+    ]),
     ...terminalBatchEdges(adminSpineTerminalBatches),
     ...buildRecoveryReceiptGraphEdgeRows({
       privateChannelRecoveryReceipt,

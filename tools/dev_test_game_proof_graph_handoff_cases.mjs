@@ -44,6 +44,9 @@ import {
   devTestGameProofGraphCommand,
 } from "./dev_test_game_proof_graph_paths.mjs";
 import {
+  proofGraphDestinationSummaryDriftNextActionAdminProofPath,
+} from "./dev_test_game_next_action_admin_proof_paths.mjs";
+import {
   terminalProofGraphEdgeTargetIds,
   terminalProofGraphReceiptArtifacts,
   terminalProofGraphUniqueReceiptTargets,
@@ -87,6 +90,38 @@ export const terminalAdminProofBatchReceiptArtifacts = Object.freeze(
     }),
   ),
 );
+export const proofGraphDiagnosticProofNodes = Object.freeze([
+  Object.freeze({
+    id: "diagnostic:proof-graph-destination-summary-drift",
+    label: "Proof graph destination-summary drift branch",
+    kind: "diagnostic-browser-proof",
+    status: "passed",
+    artifact: proofGraphDestinationSummaryDriftNextActionAdminProofPath,
+    roleUrl: localAdminAuditRoleUrl(localAdminAuditIds.nextAction),
+    proofCommand: "npm run test:dev-test-game-next-action-admin-proof",
+    recoveryCommand: devTestGameProofGraphCommand,
+    diagnostic: true,
+    diagnosticReason: "proof-graph-destination-summary-drift",
+    promotesFreshness: false,
+    terminalArtifact: false,
+  }),
+]);
+export const proofGraphDiagnosticProofEdges = Object.freeze([
+  Object.freeze({
+    from: "next-action",
+    to: "diagnostic:proof-graph-destination-summary-drift",
+    relationship: "diagnostic-browser-proof",
+    reason: "proof-graph-destination-summary-drift",
+    command: "npm run test:dev-test-game-next-action-admin-proof",
+  }),
+  Object.freeze({
+    from: "diagnostic:proof-graph-destination-summary-drift",
+    to: "proof-graph",
+    relationship: "diagnoses",
+    reason: "proof-graph-destination-summary-drift",
+    command: devTestGameProofGraphCommand,
+  }),
+]);
 
 export const adminProofDestinationRequirementCases = Object.freeze([
   Object.freeze({
@@ -345,6 +380,12 @@ export function devTestGameProofGraphFirstClassNodes({
       artifactPaths: terminalAdminProofBatchArtifactPaths,
       receiptArtifacts: terminalAdminProofBatchReceiptArtifacts,
     }),
+    ...proofGraphDiagnosticProofNodes.map((node) =>
+      Object.freeze({
+        ...node,
+        roleUrl: localAdminAuditRoleUrl(localAdminAuditIds.nextAction, { game }),
+      }),
+    ),
   ]);
 }
 
@@ -393,6 +434,7 @@ export function devTestGameProofGraphBaseEdges({
       roleUrl: localAdminAuditRoleUrl(localAdminAuditIds.seedFixtures, { game }),
       proofTarget: devTestGameSeedFixturePath,
     }),
+    ...proofGraphDiagnosticProofEdges,
     ...adminProofDestinationRequirementLinkRows.map(([linkId]) =>
       proofGraphEdge({
         from: "admin-spine",
