@@ -231,6 +231,9 @@ import {
   proofGraphProductionFeatureDestinationSummary,
 } from "./dev_test_game_proof_graph_production_feature_destinations.mjs";
 import {
+  hostedEvidenceProgressionHandoffSummary,
+} from "./dev_test_game_hosted_handoff_cases.mjs";
+import {
   assertProofGraphDiagnosticSummaryVisibleChecks,
   normalizeProofGraphDiagnosticProofSummary,
 } from "./dev_test_game_proof_graph_diagnostic_summary.mjs";
@@ -6344,7 +6347,9 @@ function validateProofGraphAdminProductionFeatureDestinationSummary(proof) {
     summary.adminAuditDestinationCount !==
       expected.adminAuditDestinationCount ||
     summary.roleUrlDestinationCount !== expected.roleUrlDestinationCount ||
-    summary.driftCount !== 0
+    summary.driftCount !== 0 ||
+    JSON.stringify(summary.hostedEvidenceProgressionSummary ?? null) !==
+      JSON.stringify(hostedEvidenceProgressionHandoffSummary())
   ) {
     throw new Error(
       "proof graph admin proof production feature destination summary drifted",

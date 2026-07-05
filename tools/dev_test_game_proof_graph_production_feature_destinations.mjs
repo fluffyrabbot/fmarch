@@ -1,3 +1,7 @@
+import {
+  hostedEvidenceProgressionHandoffSummary,
+} from "./dev_test_game_hosted_handoff_cases.mjs";
+
 export function proofGraphProductionFeatureTargetDestinations(proofGraph) {
   return productionFeatureTargetNodes(proofGraph).map((node) => {
     const auditId = auditIdFromAdminRoleUrl(node.roleUrl);
@@ -79,6 +83,23 @@ export function proofGraphProductionFeatureDestinationSummary(
         readinessEvidence: destination.readinessEvidence ?? "",
       }),
     );
+  const hostedEvidenceProgressionSummary =
+    hostedEvidenceProgressionHandoffSummary();
+  const hostedEvidenceProgressionRows =
+    hostedEvidenceProgressionSummary.progressions.map((progression) =>
+      Object.freeze({
+        id: `hosted-evidence-progression:${progression.id}`,
+        label: `Hosted evidence progression: ${progression.id}`,
+        status: hostedEvidenceProgressionDestinationStatus(progression),
+        progressionId: progression.id,
+        proofCommand: progression.proofCommand,
+        evidencePath: progression.evidencePath,
+        adminProofTarget: progression.adminProofTarget,
+        roleUrl: progression.roleUrl,
+        firstMissingInputId: progression.firstMissingInputId,
+        firstMissingCheckId: progression.firstMissingCheckId,
+      }),
+    );
   return Object.freeze({
     status: driftCount === 0 ? "passed" : "drift",
     totalDestinationCount,
@@ -86,6 +107,7 @@ export function proofGraphProductionFeatureDestinationSummary(
     adminAuditDestinationCount,
     roleUrlDestinationCount,
     driftCount,
+    hostedEvidenceProgressionSummary,
     rows: Object.freeze([
       Object.freeze({
         id: "admin-audit",
@@ -108,6 +130,7 @@ export function proofGraphProductionFeatureDestinationSummary(
         driftCount,
       }),
       ...roleUrlRows,
+      ...hostedEvidenceProgressionRows,
     ]),
   });
 }
@@ -126,6 +149,19 @@ function roleUrlDestinationStatus(destination) {
     ...(destination.browserWorkbench?.requiredEvidence === undefined
       ? []
       : [`browserWorkbench ${destination.browserWorkbench.requiredEvidence}`]),
+  ].join("\n");
+}
+
+function hostedEvidenceProgressionDestinationStatus(progression) {
+  return [
+    `adminProofMode ${progression.adminProofMode}`,
+    `proofCommand ${progression.proofCommand}`,
+    `evidencePath ${progression.evidencePath}`,
+    `adminProofTarget ${progression.adminProofTarget}`,
+    `roleUrl ${progression.roleUrl}`,
+    `firstMissingInputId ${progression.firstMissingInputId}`,
+    `firstMissingCheckId ${progression.firstMissingCheckId}`,
+    `proofBoundary ${progression.proofBoundary}`,
   ].join("\n");
 }
 

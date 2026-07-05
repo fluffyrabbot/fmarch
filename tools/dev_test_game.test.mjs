@@ -5517,6 +5517,17 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
       },
     }),
   );
+  assert.deepEqual(
+    graph.summary.productionFeatureDestinationSummary
+      .hostedEvidenceProgressionSummary,
+    hostedEvidenceProgressionHandoffSummary(),
+  );
+  assert.deepEqual(
+    graph.summary.productionFeatureDestinationSummary.rows
+      .filter((row) => row.id.startsWith("hosted-evidence-progression:"))
+      .map((row) => row.progressionId),
+    hostedEvidenceProgressionHandoffSummary().progressionIds,
+  );
   const hostSetupDestinationSummaryRow =
     graph.summary.productionFeatureDestinationSummary.rows.find(
       (row) => row.id === "production-feature:host-setup-route",

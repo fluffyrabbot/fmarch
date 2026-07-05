@@ -20,6 +20,9 @@ import {
   assertDevTestGameHostedEvidenceLane,
 } from "./dev_test_game_hosted_evidence_lane.mjs";
 import {
+  hostedEvidenceProgressionHandoffSummary,
+} from "./dev_test_game_hosted_handoff_cases.mjs";
+import {
   assertVisibleAdminRoleSurfaceRows,
   artifactDir,
   normalizedEvidenceObjectRowIds,
@@ -475,6 +478,9 @@ function assertProofGraphAdminProofCoversProductionFeatureDestinationSummary(
       "proof graph admin proof production feature destination summary drifted",
     );
   }
+  assertProductionFeatureDestinationSummaryCoversHostedEvidenceProgressions(
+    summary,
+  );
   for (const row of summary.rows ?? []) {
     if (
       !evidence.adminRoleSurface
@@ -491,6 +497,37 @@ function assertProofGraphAdminProofCoversProductionFeatureDestinationSummary(
     if (!visibleProductionFeatureDestinationSummaryText(row, visibleStatus)) {
       throw new Error(
         `proof graph admin proof production feature destination summary text drifted: ${row.id}`,
+      );
+    }
+  }
+}
+
+function assertProductionFeatureDestinationSummaryCoversHostedEvidenceProgressions(
+  summary,
+) {
+  const expectedSummary = hostedEvidenceProgressionHandoffSummary();
+  if (
+    JSON.stringify(summary.hostedEvidenceProgressionSummary ?? null) !==
+    JSON.stringify(expectedSummary)
+  ) {
+    throw new Error(
+      "proof graph admin proof hosted evidence progression summary drifted",
+    );
+  }
+  for (const progression of expectedSummary.progressions) {
+    const rowId = `hosted-evidence-progression:${progression.id}`;
+    const row = (summary.rows ?? []).find((candidate) => candidate.id === rowId);
+    if (
+      row?.progressionId !== progression.id ||
+      row.proofCommand !== progression.proofCommand ||
+      row.evidencePath !== progression.evidencePath ||
+      row.adminProofTarget !== progression.adminProofTarget ||
+      row.roleUrl !== progression.roleUrl ||
+      row.firstMissingInputId !== progression.firstMissingInputId ||
+      row.firstMissingCheckId !== progression.firstMissingCheckId
+    ) {
+      throw new Error(
+        `proof graph admin proof hosted evidence progression row drifted: ${progression.id}`,
       );
     }
   }

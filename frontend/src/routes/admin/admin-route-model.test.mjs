@@ -87,6 +87,7 @@ import {
 import {
   hostedEvidenceBlockedHandoffChecklistFixture,
   hostedEvidenceHandoffChecklistFromPreflight,
+  hostedEvidenceProgressionHandoffSummary,
   hostedEvidenceRealHostedInputsFixture,
 } from "../../../../tools/dev_test_game_hosted_handoff_cases.mjs";
 import {
@@ -162,6 +163,9 @@ import {
   buildProofGraphDestinationSummaryTrace,
   proofGraphDestinationSummaryTraceCheckIds,
 } from "../../../../tools/dev_test_game_proof_graph_destination_summary_trace.mjs";
+import {
+  proofGraphProductionFeatureDestinationSummary,
+} from "../../../../tools/dev_test_game_proof_graph_production_feature_destinations.mjs";
 import {
   buildProofStabilityTrace,
   proofStabilityTraceCheckRows,
@@ -1899,36 +1903,21 @@ test("admin route data exposes local proof graph as a native audit row", async (
   assert.deepEqual(graph.artifactSummary.diagnosticProofSummary, {
     ...proofGraph.summary.diagnosticProofSummary,
   });
-  assert.deepEqual(graph.artifactSummary.productionFeatureDestinationSummary, {
-    status: "passed",
-    totalDestinationCount: 1,
-    productionFeatureTargetCount: 1,
-    adminAuditDestinationCount: 1,
-    roleUrlDestinationCount: 0,
-    driftCount: 0,
-    rows: [
-      {
-        id: "admin-audit",
-        label: "Admin audit destinations",
-        status: "1 admin-audit destinations",
-        count: 1,
-      },
-      {
-        id: "role-url",
-        label: "Role URL destinations",
-        status: "0 role URL destinations",
-        count: 0,
-      },
-      {
-        id: "total",
-        label: "Production feature destinations",
-        status: "1/1 production-feature destinations",
-        count: 1,
-        expectedCount: 1,
-        driftCount: 0,
-      },
-    ],
-  });
+  assert.deepEqual(
+    graph.artifactSummary.productionFeatureDestinationSummary,
+    proofGraph.summary.productionFeatureDestinationSummary,
+  );
+  assert.deepEqual(
+    graph.artifactSummary.productionFeatureDestinationSummary
+      .hostedEvidenceProgressionSummary,
+    hostedEvidenceProgressionHandoffSummary(),
+  );
+  assert.deepEqual(
+    graph.artifactSummary.productionFeatureDestinationSummary.rows
+      .filter((row) => row.id.startsWith("hosted-evidence-progression:"))
+      .map((row) => row.progressionId),
+    hostedEvidenceProgressionHandoffSummary().progressionIds,
+  );
 });
 
 test("admin local proof graph detail data carries graph node rows", async () => {
@@ -7244,36 +7233,13 @@ function proofGraphFixture() {
       recoveryTargetCount: nodes.filter((node) => node.recoveryCommand).length,
       diagnosticProofSummary: buildProofGraphDiagnosticProofSummary({ nodes }),
       productionFeatureTargetCount: 1,
-      productionFeatureDestinationSummary: {
-        status: "passed",
-        totalDestinationCount: 1,
-        productionFeatureTargetCount: 1,
-        adminAuditDestinationCount: 1,
-        roleUrlDestinationCount: 0,
-        driftCount: 0,
-        rows: [
-          {
-            id: "admin-audit",
-            label: "Admin audit destinations",
-            status: "1 admin-audit destinations",
-            count: 1,
+      productionFeatureDestinationSummary:
+        proofGraphProductionFeatureDestinationSummary({
+          nodes,
+          summary: {
+            productionFeatureTargetCount: 1,
           },
-          {
-            id: "role-url",
-            label: "Role URL destinations",
-            status: "0 role URL destinations",
-            count: 0,
-          },
-          {
-            id: "total",
-            label: "Production feature destinations",
-            status: "1/1 production-feature destinations",
-            count: 1,
-            expectedCount: 1,
-            driftCount: 0,
-          },
-        ],
-      },
+        }),
       terminalBatchCount: 3,
     },
     nodes,
