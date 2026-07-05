@@ -8,6 +8,8 @@ export const devTestGameHostedConcurrentRaceMatrixPath =
   "target/dev-test-game/hosted-concurrent-race-matrix.json";
 export const devTestGameHostedTargetPreflightPath =
   "target/dev-test-game/hosted-target-preflight.json";
+export const devTestGameRealHostedMatrixRawCapturePath =
+  "target/dev-test-game/real-hosted-matrix-raw-capture.json";
 export const devTestGameHostedEvidenceLanePath =
   "target/dev-test-game/hosted-evidence-lane.json";
 export const devTestGameHostedEvidenceLaneDemoProofPath =

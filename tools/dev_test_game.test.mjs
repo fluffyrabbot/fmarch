@@ -500,9 +500,11 @@ import {
 } from "./dev_test_game_hosted_matrix_raw_evidence_fixture_proof.mjs";
 import {
   assertDevTestGameRealHostedMatrixRawCapture,
-  buildDevTestGameRealHostedMatrixRawCapture,
   devTestGameRealHostedMatrixRawCaptureCommand,
   devTestGameRealHostedMatrixRawCapturePath,
+} from "./dev_test_game_real_hosted_matrix_raw_capture_contract.mjs";
+import {
+  buildDevTestGameRealHostedMatrixRawCapture,
 } from "./dev_test_game_real_hosted_matrix_raw_capture.mjs";
 import {
   assertDevTestGameHostedTargetPreflight,
@@ -516,6 +518,7 @@ import {
   hostedTargetPreflightMissingApiUrlRequiredEvidence,
   hostedTargetPreflightMissingFrontendUrlRequiredEvidence,
   hostedTargetPreflightMissingRawEvidencePathRequiredEvidence,
+  hostedTargetPreflightRawCaptureRequiredEvidence,
 } from "./dev_test_game_hosted_target_preflight.mjs";
 import {
   devTestGameReleaseRunbookCommand,
@@ -4772,7 +4775,7 @@ test("dev test-game hosted evidence lane records blocked preflight state", async
       ],
       [
         "raw-evidence-real-hosted-target",
-        hostedTargetPreflightMissingRawEvidencePathRequiredEvidence,
+        hostedTargetPreflightRawCaptureRequiredEvidence,
       ],
     ],
   );
@@ -14677,6 +14680,22 @@ test("session card and markdown include role credential URLs and tokens", async 
     ...rawEvidence,
     frontendBaseUrl: laneFrontendBaseUrl,
     apiBaseUrl: laneApiBaseUrl,
+    generatedFrom: {
+      source: "external-operator-capture",
+    },
+    capture: {
+      externallyCaptured: true,
+      capturedAt: "2026-06-26T00:00:00.000Z",
+      captureSource: "operator-hosted-browser",
+      redaction: {
+        rawRoleCredentialsRedacted: true,
+        inviteTokensRedacted: true,
+        sessionCookiesRedacted: true,
+      },
+      retention: {
+        policy: "raw credentials discarded; redacted packet retained for proof",
+      },
+    },
   };
   assertDevTestGameHostedMatrixRawEvidence(laneRawEvidence, {
     frontendBaseUrl: laneFrontendBaseUrl,
@@ -23187,6 +23206,17 @@ function hostedTargetPreflightFixture({
       : null,
     rawEvidenceStatus: passed ? "passed" : "blocked",
     rawEvidenceSyntheticExternalTarget,
+    rawEvidenceFixture: false,
+    rawCaptureStatus: passed ? "passed" : "blocked",
+    rawCapturePath: devTestGameRealHostedMatrixRawCapturePath,
+    rawCaptureBlockedCheckIds: passed
+      ? []
+      : [
+          "raw-evidence-path-configured",
+          "raw-evidence-contract-valid",
+          "fixture-and-demo-markers-absent",
+          "capture-redaction-retention-metadata",
+        ],
   };
   const checks = [
     ...hostedTargetPreflightBlockingCheckIds.map((id) => ({
@@ -23247,6 +23277,12 @@ function hostedTargetPreflightFixture({
           "Configure the hosted frontend/API URLs plus a readable raw hosted matrix evidence packet from that same deployment, then rerun npm run test:dev-test-game-hosted-evidence-lane.",
         rawEvidenceContractSummary: hostedMatrixRawEvidenceContractSummary(),
         rawEvidenceContract: hostedMatrixRawEvidenceContract,
+        realHostedMatrixRawCaptureIntake: {
+          command: `npm run ${devTestGameRealHostedMatrixRawCaptureCommand}`,
+          proofTarget: devTestGameRealHostedMatrixRawCapturePath,
+          status: "blocked",
+          blockedCheckIds: target.rawCaptureBlockedCheckIds,
+        },
         localVsHostedBoundary:
           "Local hosted-like matrix artifacts and synthetic demo evidence can prove the handoff path, but they cannot satisfy hosted deployment evidence.",
       };
@@ -23293,6 +23329,8 @@ function hostedTargetPreflightRequiredEvidence(id) {
       hostedTargetPreflightMissingRawEvidencePathRequiredEvidence,
     "raw-evidence-readable":
       hostedTargetPreflightMissingRawEvidencePathRequiredEvidence,
+    "raw-evidence-real-hosted-target":
+      hostedTargetPreflightRawCaptureRequiredEvidence,
   }[id];
 }
 

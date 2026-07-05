@@ -948,6 +948,12 @@
               {#if data.audit.hostedHandoffChecklist.blockedReceipt.rawEvidenceContractSummary}
                 <span>{data.audit.hostedHandoffChecklist.blockedReceipt.rawEvidenceContractSummary}</span>
               {/if}
+              {#if data.audit.hostedHandoffChecklist.blockedReceipt.realHostedMatrixRawCaptureIntake}
+                <span>{data.audit.hostedHandoffChecklist.blockedReceipt.realHostedMatrixRawCaptureIntake.command}</span>
+                <span>{data.audit.hostedHandoffChecklist.blockedReceipt.realHostedMatrixRawCaptureIntake.proofTarget}</span>
+                <span>{data.audit.hostedHandoffChecklist.blockedReceipt.realHostedMatrixRawCaptureIntake.status}</span>
+                <span>{data.audit.hostedHandoffChecklist.blockedReceipt.realHostedMatrixRawCaptureIntake.blockedCheckIds.join(", ")}</span>
+              {/if}
               <span>{data.audit.hostedHandoffChecklist.blockedReceipt.missingRequiredInputs.join(", ")}</span>
               <span>{data.audit.hostedHandoffChecklist.blockedReceipt.nextProofTarget}</span>
               {#if data.audit.hostedHandoffChecklist.blockedReceipt.firstMissingOperatorArtifact}

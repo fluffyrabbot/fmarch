@@ -20,6 +20,7 @@ export {
   hostedTargetPreflightMissingApiUrlRequiredEvidence,
   hostedTargetPreflightMissingFrontendUrlRequiredEvidence,
   hostedTargetPreflightMissingRawEvidencePathRequiredEvidence,
+  hostedTargetPreflightRawCaptureRequiredEvidence,
   hostedTargetPreflightSyntheticRawEvidenceRequiredEvidence,
 } from "./dev_test_game_hosted_target_preflight_cases.mjs";
 import {
@@ -29,6 +30,7 @@ import {
   hostedTargetPreflightMissingApiUrlRequiredEvidence,
   hostedTargetPreflightMissingFrontendUrlRequiredEvidence,
   hostedTargetPreflightMissingRawEvidencePathRequiredEvidence,
+  hostedTargetPreflightRawCaptureRequiredEvidence,
   hostedTargetPreflightSyntheticRawEvidenceRequiredEvidence,
 } from "./dev_test_game_hosted_target_preflight_cases.mjs";
 import {
@@ -42,6 +44,13 @@ import { repoRoot } from "./dev_test_game_spine_runner.mjs";
 import {
   devTestGameHostedTargetPreflightPath,
 } from "./dev_test_game_adjacent_artifact_paths.mjs";
+import {
+  devTestGameRealHostedMatrixRawCaptureCommand,
+  devTestGameRealHostedMatrixRawCapturePath,
+} from "./dev_test_game_real_hosted_matrix_raw_capture_contract.mjs";
+import {
+  buildDevTestGameRealHostedMatrixRawCapture,
+} from "./dev_test_game_real_hosted_matrix_raw_capture.mjs";
 
 export const DEV_TEST_GAME_HOSTED_TARGET_PREFLIGHT_VERSION = 1;
 export { devTestGameHostedTargetPreflightPath };
@@ -71,6 +80,10 @@ export async function buildDevTestGameHostedTargetPreflight({
     frontendBaseUrl,
     apiBaseUrl,
     groupId,
+  });
+  const rawCapture = await buildDevTestGameRealHostedMatrixRawCapture({
+    env,
+    generatedAt,
   });
   const checks = [
     {
@@ -127,23 +140,24 @@ export async function buildDevTestGameHostedTargetPreflight({
     },
     {
       id: "raw-evidence-real-hosted-target",
-      status:
-        rawEvidence.status === "passed" &&
-        rawEvidence.syntheticExternalTarget !== true &&
-        rawEvidence.fixtureEvidence !== true
-          ? "passed"
-          : "blocked",
-      ...(rawEvidence.status === "passed" &&
-      rawEvidence.syntheticExternalTarget !== true &&
-      rawEvidence.fixtureEvidence !== true
-        ? { evidence: rawEvidence.evidence }
+      status: rawCapture.status === "passed" ? "passed" : "blocked",
+      ...(rawCapture.status === "passed"
+        ? {
+            evidence: {
+              ...rawEvidence.evidence,
+              rawCapture: devTestGameRealHostedMatrixRawCapturePath,
+            },
+          }
         : {
             requiredEvidence:
               rawEvidence.syntheticExternalTarget === true
                 ? hostedTargetPreflightSyntheticRawEvidenceRequiredEvidence
                 : rawEvidence.fixtureEvidence === true
                   ? hostedTargetPreflightFixtureRawEvidenceRequiredEvidence
-                : hostedTargetPreflightMissingRawEvidencePathRequiredEvidence,
+                  : rawCapture.status === "blocked"
+                    ? hostedTargetPreflightRawCaptureRequiredEvidence
+                    : hostedTargetPreflightMissingRawEvidencePathRequiredEvidence,
+            rawCaptureBlockedCheckIds: rawCapture.blockedCheckIds,
           }),
     },
     {
@@ -176,6 +190,9 @@ export async function buildDevTestGameHostedTargetPreflight({
       rawEvidenceSyntheticExternalTarget:
         rawEvidence.syntheticExternalTarget === true,
       rawEvidenceFixture: rawEvidence.fixtureEvidence === true,
+      rawCaptureStatus: rawCapture.status,
+      rawCapturePath: devTestGameRealHostedMatrixRawCapturePath,
+      rawCaptureBlockedCheckIds: rawCapture.blockedCheckIds,
     },
     checks,
     ...(status === "blocked"
@@ -186,6 +203,7 @@ export async function buildDevTestGameHostedTargetPreflight({
             apiBaseUrl,
             groupId,
             rawEvidencePath,
+            rawCapture,
           }),
         }
       : {}),
@@ -282,6 +300,18 @@ function assertBlockedReceipt(receipt, { blockedCheckIds }) {
   ) {
     throw new Error("hosted target preflight blocked receipt raw evidence contract drifted");
   }
+  if (
+    receipt.realHostedMatrixRawCaptureIntake?.command !==
+      `npm run ${devTestGameRealHostedMatrixRawCaptureCommand}` ||
+    receipt.realHostedMatrixRawCaptureIntake.proofTarget !==
+      devTestGameRealHostedMatrixRawCapturePath ||
+    !["passed", "blocked"].includes(
+      receipt.realHostedMatrixRawCaptureIntake.status,
+    ) ||
+    !Array.isArray(receipt.realHostedMatrixRawCaptureIntake.blockedCheckIds)
+  ) {
+    throw new Error("hosted target preflight raw capture intake receipt drifted");
+  }
   const missingRequiredInputs = receipt.requiredInputs
     .filter((input) => input?.required === true && input.value === null)
     .map((input) => input.name);
@@ -352,6 +382,7 @@ function buildBlockedReceipt({
   apiBaseUrl,
   groupId,
   rawEvidencePath,
+  rawCapture,
 }) {
   const requiredInputs = [
     {
@@ -397,6 +428,12 @@ function buildBlockedReceipt({
       .map((input) => input.name),
     rawEvidenceContractSummary: hostedMatrixRawEvidenceContractSummary(),
     rawEvidenceContract: hostedMatrixRawEvidenceContract,
+    realHostedMatrixRawCaptureIntake: {
+      command: `npm run ${devTestGameRealHostedMatrixRawCaptureCommand}`,
+      proofTarget: devTestGameRealHostedMatrixRawCapturePath,
+      status: rawCapture.status,
+      blockedCheckIds: rawCapture.blockedCheckIds,
+    },
     operatorAction:
       "Configure the hosted frontend/API URLs plus a readable raw hosted matrix evidence packet from that same deployment, then rerun npm run test:dev-test-game-hosted-evidence-lane.",
     localVsHostedBoundary:

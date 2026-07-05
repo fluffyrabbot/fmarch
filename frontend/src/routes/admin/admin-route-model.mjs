@@ -3744,6 +3744,27 @@ function normalizeHostedHandoffBlockedReceipt(receipt) {
     receipt.rawEvidenceContractSummary.trim() !== ""
       ? { rawEvidenceContractSummary: receipt.rawEvidenceContractSummary }
       : {}),
+    ...(receipt.realHostedMatrixRawCaptureIntake === null ||
+    typeof receipt.realHostedMatrixRawCaptureIntake !== "object"
+      ? {}
+      : {
+          realHostedMatrixRawCaptureIntake: Object.freeze({
+            command: String(
+              receipt.realHostedMatrixRawCaptureIntake.command ?? "",
+            ),
+            proofTarget: String(
+              receipt.realHostedMatrixRawCaptureIntake.proofTarget ?? "",
+            ),
+            status: String(
+              receipt.realHostedMatrixRawCaptureIntake.status ?? "",
+            ),
+            blockedCheckIds: Object.freeze(
+              (
+                receipt.realHostedMatrixRawCaptureIntake.blockedCheckIds ?? []
+              ).map((id) => String(id)),
+            ),
+          }),
+        }),
     missingRequiredInputs: Object.freeze(
       (Array.isArray(receipt.missingRequiredInputs)
         ? receipt.missingRequiredInputs

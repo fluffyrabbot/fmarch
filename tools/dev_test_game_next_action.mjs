@@ -43,7 +43,7 @@ import {
 } from "./dev_test_game_hosted_evidence_lane_operator_fixture_cases.mjs";
 import {
   devTestGameRealHostedMatrixRawCapturePath,
-} from "./dev_test_game_real_hosted_matrix_raw_capture.mjs";
+} from "./dev_test_game_real_hosted_matrix_raw_capture_contract.mjs";
 import {
   devTestGameBackupRestoreProofPath,
   devTestGameIdentityAdapterProofPath,

@@ -59,7 +59,7 @@ import {
 import {
   devTestGameRealHostedMatrixRawCaptureCommand,
   devTestGameRealHostedMatrixRawCapturePath,
-} from "./dev_test_game_real_hosted_matrix_raw_capture.mjs";
+} from "./dev_test_game_real_hosted_matrix_raw_capture_contract.mjs";
 import {
   devTestGameHostedOpsSignalsCommand,
   devTestGameHostedOpsSignalsPath,

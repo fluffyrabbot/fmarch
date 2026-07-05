@@ -34,6 +34,9 @@ export const hostedTargetPreflightSyntheticRawEvidenceRequiredEvidence =
 export const hostedTargetPreflightFixtureRawEvidenceRequiredEvidence =
   `Replace redacted fixture raw evidence with a real ${hostedMatrixRawEvidenceContractSummary()} captured from an externally reachable hosted target; fixture packets can prove operator handoff shape and target matching only.`;
 
+export const hostedTargetPreflightRawCaptureRequiredEvidence =
+  `Run npm run test:dev-test-game-real-hosted-matrix-raw-capture with a real ${hostedMatrixRawEvidenceContractSummary()} that includes capture.externallyCaptured=true plus capture/redaction/retention metadata; only a passed raw-capture intake or equivalent embedded metadata can satisfy the real hosted target check.`;
+
 export function hostedTargetPreflightExternalTargetsRequiredEvidence({
   frontendBaseUrl = null,
   apiBaseUrl = null,

@@ -1563,6 +1563,13 @@ async function waitForHostedHandoffBlockedReceipt({ page, expected }) {
         : normalizeExpectedFirstMissingOperatorArtifact(
             expected.firstMissingOperatorArtifact,
           ),
+    realHostedMatrixRawCaptureIntake:
+      expected.realHostedMatrixRawCaptureIntake === null ||
+      expected.realHostedMatrixRawCaptureIntake === undefined
+        ? null
+        : normalizeExpectedRawCaptureIntake(
+            expected.realHostedMatrixRawCaptureIntake,
+          ),
   };
   for (const value of [
     receipt.status,
@@ -1572,6 +1579,7 @@ async function waitForHostedHandoffBlockedReceipt({ page, expected }) {
     receipt.nextProofTarget,
     ...receipt.missingRequiredInputs,
     ...firstMissingOperatorArtifactText(receipt.firstMissingOperatorArtifact),
+    ...rawCaptureIntakeText(receipt.realHostedMatrixRawCaptureIntake),
   ].filter((value) => value !== "")) {
     if (!text.includes(value)) {
       throw new Error(
@@ -1580,6 +1588,29 @@ async function waitForHostedHandoffBlockedReceipt({ page, expected }) {
     }
   }
   return receipt;
+}
+
+function normalizeExpectedRawCaptureIntake(intake) {
+  return {
+    command: String(intake.command ?? ""),
+    proofTarget: String(intake.proofTarget ?? ""),
+    status: String(intake.status ?? ""),
+    blockedCheckIds: Array.isArray(intake.blockedCheckIds)
+      ? intake.blockedCheckIds.map((id) => String(id))
+      : [],
+  };
+}
+
+function rawCaptureIntakeText(intake) {
+  if (intake === null) {
+    return [];
+  }
+  return [
+    intake.command,
+    intake.proofTarget,
+    intake.status,
+    ...intake.blockedCheckIds,
+  ];
 }
 
 function normalizeExpectedFirstMissingOperatorArtifact(artifact) {
