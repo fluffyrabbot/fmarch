@@ -460,6 +460,7 @@ import {
   assertProofGraphAdminProof,
 } from "./dev_test_game_proof_graph_admin_proof.mjs";
 import {
+  hostedIdentityTerminalReceiptArtifactCase,
   normalizeProofGraphReceiptArtifactRows,
   proofGraphReceiptArtifactRowId,
   proofGraphReceiptArtifactRowStatus,
@@ -4231,9 +4232,9 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
         "Terminal admin proof batch",
       ],
       [
-        "hosted-identity-next-action",
-        "target/dev-test-game/hosted-identity-next-action-admin-proof.json",
-        "Terminal hosted identity next-action admin proof batch",
+        hostedIdentityTerminalReceiptArtifactCase.proofId,
+        hostedIdentityTerminalReceiptArtifactCase.artifactPath,
+        hostedIdentityTerminalReceiptArtifactCase.batchLabel,
       ],
       [
         "proof-freshness",
@@ -4258,18 +4259,18 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
       ["proof-graph", 1],
       ["proof-freshness", 2],
       ["next-action", 2],
-      ["hosted-identity-next-action", 1],
+      [hostedIdentityTerminalReceiptArtifactCase.proofId, 1],
     ],
   );
   assert.deepEqual(
     terminalBatchNode.receiptArtifacts.find(
-      (artifact) => artifact.proofId === "hosted-identity-next-action",
+      (artifact) =>
+        artifact.proofId === hostedIdentityTerminalReceiptArtifactCase.proofId,
     ),
     {
-      proofId: "hosted-identity-next-action",
-      artifactPath:
-        "target/dev-test-game/hosted-identity-next-action-admin-proof.json",
-      batchLabel: "Terminal hosted identity next-action admin proof batch",
+      proofId: hostedIdentityTerminalReceiptArtifactCase.proofId,
+      artifactPath: hostedIdentityTerminalReceiptArtifactCase.artifactPath,
+      batchLabel: hostedIdentityTerminalReceiptArtifactCase.batchLabel,
     },
   );
   assert.deepEqual(
@@ -4623,6 +4624,10 @@ test("proof graph receipt artifact rows share one browser row id contract", () =
     rows.length,
   );
   assert.equal(
+    hostedIdentityTerminalReceiptArtifactCase.visibleStatusText,
+    "receipt-artifact:admin-spine-terminal-batches:hosted-identity-next-action:terminal-hosted-identity-next-action-admin-proof-batch\nhosted-identity-next-action:Terminal hosted identity next-action admin proof batch:target/dev-test-game/hosted-identity-next-action-admin-proof.json",
+  );
+  assert.equal(
     proofGraphReceiptArtifactRowId({
       parentId: "admin-spine-terminal-batches",
       artifact: {
@@ -4727,9 +4732,9 @@ test("admin proof fixtures prove normalized evidence object rows", () => {
   });
   assert.equal(
     proofGraphProof.adminRoleSurface.visibleCheckStatuses[
-      "receipt-artifact:admin-spine-terminal-batches:hosted-identity-next-action:terminal-hosted-identity-next-action-admin-proof-batch"
+      hostedIdentityTerminalReceiptArtifactCase.rowId
     ],
-    "receipt-artifact:admin-spine-terminal-batches:hosted-identity-next-action:terminal-hosted-identity-next-action-admin-proof-batch\nhosted-identity-next-action:Terminal hosted identity next-action admin proof batch:target/dev-test-game/hosted-identity-next-action-admin-proof.json",
+    hostedIdentityTerminalReceiptArtifactCase.visibleStatusText,
   );
 });
 
@@ -18629,18 +18634,8 @@ function proofGraphAdminProofFixture() {
       objects: replacementPrivatePostNormalizedEvidenceObjects,
     }),
   ];
-  const hostedIdentityTerminalReceiptArtifact = {
-    proofId: "hosted-identity-next-action",
-    artifactPath:
-      "target/dev-test-game/hosted-identity-next-action-admin-proof.json",
-    batchLabel: "Terminal hosted identity next-action admin proof batch",
-    rowId:
-      "receipt-artifact:admin-spine-terminal-batches:hosted-identity-next-action:terminal-hosted-identity-next-action-admin-proof-batch",
-    status:
-      "hosted-identity-next-action:Terminal hosted identity next-action admin proof batch:target/dev-test-game/hosted-identity-next-action-admin-proof.json",
-  };
   const receiptArtifactRowIds = [
-    hostedIdentityTerminalReceiptArtifact.rowId,
+    hostedIdentityTerminalReceiptArtifactCase.rowId,
   ];
   return {
     version: 1,
@@ -18672,7 +18667,13 @@ function proofGraphAdminProofFixture() {
       ],
       evidenceObjectRowIds,
       receiptArtifactRowIds,
-      hostedIdentityTerminalReceiptArtifact,
+      hostedIdentityTerminalReceiptArtifact: {
+        proofId: hostedIdentityTerminalReceiptArtifactCase.proofId,
+        artifactPath: hostedIdentityTerminalReceiptArtifactCase.artifactPath,
+        batchLabel: hostedIdentityTerminalReceiptArtifactCase.batchLabel,
+        rowId: hostedIdentityTerminalReceiptArtifactCase.rowId,
+        status: hostedIdentityTerminalReceiptArtifactCase.status,
+      },
       edgeRowIds: [
         hostSetupGraphTarget.edgeRowId,
         cohostGraphTarget.edgeRowId,
@@ -18722,8 +18723,8 @@ function proofGraphAdminProofFixture() {
         ...receiptArtifactRowIds,
       ],
       visibleCheckStatuses: {
-        [hostedIdentityTerminalReceiptArtifact.rowId]:
-          `${hostedIdentityTerminalReceiptArtifact.rowId}\n${hostedIdentityTerminalReceiptArtifact.status}`,
+        [hostedIdentityTerminalReceiptArtifactCase.rowId]:
+          hostedIdentityTerminalReceiptArtifactCase.visibleStatusText,
       },
       visibleRelatedLinks: [
         ...handoffs.map((handoff) => handoff.linkId),

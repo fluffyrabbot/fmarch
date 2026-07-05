@@ -162,6 +162,9 @@ import {
   buildAdminAuditHandoffPath,
 } from "../../../../tools/dev_test_game_admin_audit_handoff_path.mjs";
 import {
+  hostedIdentityTerminalReceiptArtifactCase,
+} from "../../../../tools/dev_test_game_proof_graph_receipt_artifact_rows.mjs";
+import {
   hostedTargetPreflightExternalTargetsRequiredEvidence,
   hostedTargetPreflightMissingApiUrlRequiredEvidence,
   hostedTargetPreflightMissingFrontendUrlRequiredEvidence,
@@ -1637,11 +1640,11 @@ test("admin local proof graph detail data carries graph node rows", async () => 
   const hostedIdentityReceiptRow = data.audit.checks.find(
     (check) =>
       check.id ===
-      "receipt-artifact:admin-spine-terminal-batches:hosted-identity-next-action:terminal-hosted-identity-next-action-admin-proof-batch",
+      hostedIdentityTerminalReceiptArtifactCase.rowId,
   );
   assert.equal(
     hostedIdentityReceiptRow?.status,
-    "hosted-identity-next-action:Terminal hosted identity next-action admin proof batch:target/dev-test-game/hosted-identity-next-action-admin-proof.json",
+    hostedIdentityTerminalReceiptArtifactCase.status,
   );
   assert.deepEqual(
     data.audit.relatedLinks.map((link) => [link.id, link.href]),
@@ -1681,8 +1684,8 @@ test("admin local proof graph detail keeps duplicate terminal receipt proof ids 
         "next-action:Terminal admin proof batch:target/dev-test-game/next-action-admin-proof.json",
       ],
       [
-        "receipt-artifact:admin-spine-terminal-batches:hosted-identity-next-action:terminal-hosted-identity-next-action-admin-proof-batch",
-        "hosted-identity-next-action:Terminal hosted identity next-action admin proof batch:target/dev-test-game/hosted-identity-next-action-admin-proof.json",
+        hostedIdentityTerminalReceiptArtifactCase.rowId,
+        hostedIdentityTerminalReceiptArtifactCase.status,
       ],
       [
         "receipt-artifact:admin-spine-terminal-batches:proof-freshness:terminal-refresh-admin-proof-batch",
@@ -6132,11 +6135,9 @@ function terminalBatchReceiptArtifactsFixture() {
       batchLabel: "Terminal admin proof batch",
     },
     {
-      proofId: "hosted-identity-next-action",
-      artifactPath:
-        "target/dev-test-game/hosted-identity-next-action-admin-proof.json",
-      batchLabel:
-        "Terminal hosted identity next-action admin proof batch",
+      proofId: hostedIdentityTerminalReceiptArtifactCase.proofId,
+      artifactPath: hostedIdentityTerminalReceiptArtifactCase.artifactPath,
+      batchLabel: hostedIdentityTerminalReceiptArtifactCase.batchLabel,
     },
     {
       proofId: "proof-freshness",

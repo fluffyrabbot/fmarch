@@ -1,3 +1,18 @@
+import {
+  hostedIdentityNextActionAdminProofPath,
+} from "./dev_test_game_spine_artifact_paths.mjs";
+
+export const proofGraphTerminalReceiptParentId =
+  "admin-spine-terminal-batches";
+
+export const hostedIdentityTerminalReceiptArtifactCase =
+  terminalReceiptArtifactCase({
+    parentId: proofGraphTerminalReceiptParentId,
+    proofId: "hosted-identity-next-action",
+    artifactPath: hostedIdentityNextActionAdminProofPath,
+    batchLabel: "Terminal hosted identity next-action admin proof batch",
+  });
+
 export function normalizeProofGraphReceiptArtifactRows({
   parentId,
   artifacts,
@@ -46,4 +61,26 @@ function slugIdPart(value) {
     .toLowerCase()
     .replace(/[^a-z0-9]+/gu, "-")
     .replace(/^-+|-+$/gu, "");
+}
+
+function terminalReceiptArtifactCase({
+  parentId,
+  proofId,
+  artifactPath,
+  batchLabel,
+}) {
+  const artifact = Object.freeze({
+    proofId,
+    artifactPath,
+    batchLabel,
+  });
+  const rowId = proofGraphReceiptArtifactRowId({ parentId, artifact });
+  const status = proofGraphReceiptArtifactRowStatus(artifact);
+  return Object.freeze({
+    ...artifact,
+    parentId,
+    rowId,
+    status,
+    visibleStatusText: `${rowId}\n${status}`,
+  });
 }

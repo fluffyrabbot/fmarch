@@ -25,6 +25,9 @@ import {
   featureSpineRowKind,
 } from "./dev_test_game_feature_spine_targets.mjs";
 import {
+  hostedIdentityTerminalReceiptArtifactCase,
+} from "./dev_test_game_proof_graph_receipt_artifact_rows.mjs";
+import {
   productionFeatureGraphSourceNodeId as productionFeatureSourceGraphNodeId,
 } from "./dev_test_game_production_feature_graph_sources.mjs";
 import {
@@ -405,11 +408,11 @@ export function assertDevTestGameProofGraphCoversTerminalBatches(graph) {
     !Array.isArray(terminalNode.receiptArtifacts) ||
     !terminalNode.receiptArtifacts.some(
       (artifact) =>
-        artifact.proofId === "hosted-identity-next-action" &&
+        artifact.proofId === hostedIdentityTerminalReceiptArtifactCase.proofId &&
         artifact.artifactPath ===
-          "target/dev-test-game/hosted-identity-next-action-admin-proof.json" &&
+          hostedIdentityTerminalReceiptArtifactCase.artifactPath &&
         artifact.batchLabel ===
-          "Terminal hosted identity next-action admin proof batch",
+          hostedIdentityTerminalReceiptArtifactCase.batchLabel,
     )
   ) {
     throw new Error("proof graph terminal batch node drifted");

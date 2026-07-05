@@ -206,6 +206,9 @@ import {
   proofGraphAdminFeatureTargetCases,
 } from "./dev_test_game_proof_graph_feature_target_cases.mjs";
 import {
+  hostedIdentityTerminalReceiptArtifactCase,
+} from "./dev_test_game_proof_graph_receipt_artifact_rows.mjs";
+import {
   roleSurfaceSpineCases,
 } from "./dev_test_game_role_surface_spine_cases.mjs";
 import {
@@ -5449,36 +5452,34 @@ export function validateDevTestGameProofGraphAdminProof(proof, options = {}) {
 
 function validateProofGraphAdminTerminalReceiptArtifact(proof) {
   const artifact = proof.generatedFrom?.hostedIdentityTerminalReceiptArtifact;
-  const expectedRowId =
-    "receipt-artifact:admin-spine-terminal-batches:hosted-identity-next-action:terminal-hosted-identity-next-action-admin-proof-batch";
-  const expectedStatus =
-    "hosted-identity-next-action:Terminal hosted identity next-action admin proof batch:target/dev-test-game/hosted-identity-next-action-admin-proof.json";
+  const expected = hostedIdentityTerminalReceiptArtifactCase;
   if (
-    artifact?.rowId !== expectedRowId ||
-    artifact.proofId !== "hosted-identity-next-action" ||
-    artifact.artifactPath !==
-      "target/dev-test-game/hosted-identity-next-action-admin-proof.json" ||
-    artifact.batchLabel !==
-      "Terminal hosted identity next-action admin proof batch" ||
-    artifact.status !== expectedStatus
+    artifact?.rowId !== expected.rowId ||
+    artifact.proofId !== expected.proofId ||
+    artifact.artifactPath !== expected.artifactPath ||
+    artifact.batchLabel !== expected.batchLabel ||
+    artifact.status !== expected.status
   ) {
     throw new Error(
       "proof graph admin proof missing hosted identity terminal receipt metadata",
     );
   }
-  if (!proof.generatedFrom?.receiptArtifactRowIds?.includes(expectedRowId)) {
+  if (!proof.generatedFrom?.receiptArtifactRowIds?.includes(expected.rowId)) {
     throw new Error(
       "proof graph admin proof missing hosted identity terminal receipt row id",
     );
   }
-  if (!proof.adminRoleSurface?.visibleChecks?.includes(expectedRowId)) {
+  if (!proof.adminRoleSurface?.visibleChecks?.includes(expected.rowId)) {
     throw new Error(
       "proof graph admin proof missing hosted identity terminal receipt row",
     );
   }
   const visibleStatus =
-    proof.adminRoleSurface?.visibleCheckStatuses?.[expectedRowId];
-  if (typeof visibleStatus !== "string" || !visibleStatus.includes(expectedStatus)) {
+    proof.adminRoleSurface?.visibleCheckStatuses?.[expected.rowId];
+  if (
+    typeof visibleStatus !== "string" ||
+    !visibleStatus.includes(expected.status)
+  ) {
     throw new Error(
       "proof graph admin proof did not inspect hosted identity terminal receipt row",
     );

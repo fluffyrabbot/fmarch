@@ -47,6 +47,9 @@ import {
   devTestGameProofGraphCommand,
 } from "./dev_test_game_proof_graph_paths.mjs";
 import {
+  hostedIdentityTerminalReceiptArtifactCase,
+} from "./dev_test_game_proof_graph_receipt_artifact_rows.mjs";
+import {
   productionFeatureGraphSourceNodeId,
 } from "./dev_test_game_production_feature_graph_sources.mjs";
 import {
@@ -90,8 +93,8 @@ export const terminalAdminProofBatchReceiptArtifacts = Object.freeze(
       proofId,
       artifactPath: terminalAdminProofBatchArtifactPaths[index],
       batchLabel:
-        proofId === "hosted-identity-next-action"
-          ? "Terminal hosted identity next-action admin proof batch"
+        proofId === hostedIdentityTerminalReceiptArtifactCase.proofId
+          ? hostedIdentityTerminalReceiptArtifactCase.batchLabel
           : "Terminal admin proof batch",
     }),
   ),

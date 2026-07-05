@@ -44,7 +44,9 @@ import {
   devTestGameProofRunPath,
 } from "./dev_test_game_spine_artifact_paths.mjs";
 import {
+  hostedIdentityTerminalReceiptArtifactCase,
   normalizeProofGraphReceiptArtifactRows,
+  proofGraphTerminalReceiptParentId,
 } from "./dev_test_game_proof_graph_receipt_artifact_rows.mjs";
 
 const proofGraphPath = path.resolve(
@@ -344,17 +346,17 @@ function proofGraphReceiptArtifactRowIds(proofGraph) {
 function hostedIdentityTerminalReceiptArtifact(proofGraph) {
   return (
     normalizeProofGraphReceiptArtifactRows({
-      parentId: "admin-spine-terminal-batches",
+      parentId: proofGraphTerminalReceiptParentId,
       artifacts: proofGraph.nodes.find(
-        (node) => node.id === "admin-spine-terminal-batches",
+        (node) => node.id === proofGraphTerminalReceiptParentId,
       )?.receiptArtifacts,
     }).find(
       (artifact) =>
-        artifact.proofId === "hosted-identity-next-action" &&
+        artifact.proofId === hostedIdentityTerminalReceiptArtifactCase.proofId &&
         artifact.artifactPath ===
-          "target/dev-test-game/hosted-identity-next-action-admin-proof.json" &&
+          hostedIdentityTerminalReceiptArtifactCase.artifactPath &&
         artifact.batchLabel ===
-          "Terminal hosted identity next-action admin proof batch",
+          hostedIdentityTerminalReceiptArtifactCase.batchLabel,
     ) ?? null
   );
 }
@@ -362,15 +364,12 @@ function hostedIdentityTerminalReceiptArtifact(proofGraph) {
 function assertHostedIdentityTerminalReceiptArtifact(evidence) {
   const artifact = evidence.generatedFrom?.hostedIdentityTerminalReceiptArtifact;
   if (
-    artifact?.rowId !==
-      "receipt-artifact:admin-spine-terminal-batches:hosted-identity-next-action:terminal-hosted-identity-next-action-admin-proof-batch" ||
-    artifact.proofId !== "hosted-identity-next-action" ||
+    artifact?.rowId !== hostedIdentityTerminalReceiptArtifactCase.rowId ||
+    artifact.proofId !== hostedIdentityTerminalReceiptArtifactCase.proofId ||
     artifact.artifactPath !==
-      "target/dev-test-game/hosted-identity-next-action-admin-proof.json" ||
-    artifact.batchLabel !==
-      "Terminal hosted identity next-action admin proof batch" ||
-    artifact.status !==
-      "hosted-identity-next-action:Terminal hosted identity next-action admin proof batch:target/dev-test-game/hosted-identity-next-action-admin-proof.json"
+      hostedIdentityTerminalReceiptArtifactCase.artifactPath ||
+    artifact.batchLabel !== hostedIdentityTerminalReceiptArtifactCase.batchLabel ||
+    artifact.status !== hostedIdentityTerminalReceiptArtifactCase.status
   ) {
     throw new Error(
       "proof graph admin proof missing hosted identity terminal receipt metadata",
@@ -378,7 +377,10 @@ function assertHostedIdentityTerminalReceiptArtifact(evidence) {
   }
   const visibleStatus =
     evidence.adminRoleSurface?.visibleCheckStatuses?.[artifact.rowId];
-  if (typeof visibleStatus !== "string" || !visibleStatus.includes(artifact.status)) {
+  if (
+    typeof visibleStatus !== "string" ||
+    !visibleStatus.includes(hostedIdentityTerminalReceiptArtifactCase.status)
+  ) {
     throw new Error(
       "proof graph admin proof did not inspect hosted identity terminal receipt row",
     );
