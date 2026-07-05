@@ -9,12 +9,18 @@ import {
 import {
   devTestGameHostedIdentityPartialAdminProofPath,
   devTestGameHostedIdentityPartialEvidencePath,
-  hostedIdentityEvidenceFamilyProgressionCases,
   hostedIdentityEvidencePlaceholderFixturePath,
   hostedIdentityEvidenceInputIds,
   hostedIdentityEvidenceInputSectionStatuses,
+  hostedIdentityEvidenceProgressionAdminProofPath,
+  hostedIdentityEvidenceProgressionCase,
+  hostedIdentityEvidenceProgressionPath,
   hostedIdentityEvidenceSectionInputRows,
   hostedIdentityEvidenceSectionInputStatuses,
+} from "./dev_test_game_hosted_identity_evidence_cases.mjs";
+export {
+  hostedIdentityEvidenceProgressionAdminProofPath,
+  hostedIdentityEvidenceProgressionPath,
 } from "./dev_test_game_hosted_identity_evidence_cases.mjs";
 import {
   assertAdminRoleSurfaceStatusText,
@@ -52,29 +58,6 @@ export const hostedIdentityEvidencePartialPath =
 export const hostedIdentityEvidencePartialAdminProofPath =
   devTestGameHostedIdentityPartialAdminProofPath;
 const requiredRelatedLinks = ["local-identity-adapter", "local-next-action"];
-
-export function hostedIdentityEvidenceProgressionPath(progressionId) {
-  const progression = hostedIdentityEvidenceProgressionCase(progressionId);
-  return `target/dev-test-game/hosted-identity-evidence-${progression.id}.json`;
-}
-
-export function hostedIdentityEvidenceProgressionAdminProofPath(progressionId) {
-  const progression = hostedIdentityEvidenceProgressionCase(progressionId);
-  return `target/dev-test-game/hosted-identity-evidence-${progression.id}-admin-proof.json`;
-}
-
-function hostedIdentityEvidenceProgressionCase(progressionId) {
-  const id = String(progressionId ?? "").trim();
-  const progression = hostedIdentityEvidenceFamilyProgressionCases.find(
-    (candidate) => candidate.id === id,
-  );
-  if (progression === undefined) {
-    throw new Error(
-      `unknown hosted identity progression id: ${id || "<missing>"}; expected one of ${hostedIdentityEvidenceFamilyProgressionCases.map((candidate) => candidate.id).join(", ")}`,
-    );
-  }
-  return progression;
-}
 
 function hostedIdentityPacketSectionRows(hostedIdentityEvidence) {
   return hostedIdentityEvidence.target?.redactedIntakePacket?.sections ?? [];

@@ -29,6 +29,8 @@ import {
 import {
   devTestGameHostedIdentityEvidenceCommand,
   devTestGameHostedIdentityEvidencePath,
+  devTestGameHostedIdentityProgressionSummaryCommand,
+  devTestGameHostedIdentityProgressionSummaryPath,
 } from "./dev_test_game_hosted_identity_evidence.mjs";
 import {
   devTestGameHostedEvidenceLaneCommand,
@@ -210,6 +212,12 @@ export function buildDevTestGameSpineManifest({
         ],
         roleUrl: "/admin/audit/local-identity-adapter?game=<seeded-game>",
       },
+      hostedIdentityProgressionSummary: {
+        script: devTestGameHostedIdentityProgressionSummaryCommand,
+        proofArtifact: devTestGameHostedIdentityProgressionSummaryPath,
+        dependsOn: [devTestGameHostedIdentityEvidencePath],
+        roleUrl: "/admin/audit/local-hosted-identity-evidence?game=<seeded-game>",
+      },
       hostedIdentityEvidenceAdminProof: {
         script: hostedIdentityEvidenceAdminProofArtifact.script,
         proofArtifact: hostedIdentityEvidenceAdminProofArtifact.path,
@@ -381,6 +389,7 @@ export function buildDevTestGameSpineManifest({
       nextActionAdminProofPath,
       devTestGameHostedConcurrentRaceMatrixPath,
       devTestGameHostedIdentityEvidencePath,
+      devTestGameHostedIdentityProgressionSummaryPath,
       ...hostedAdminHandoffProofArtifactCases.map(
         (artifactCase) => artifactCase.path,
       ),
@@ -468,6 +477,14 @@ export function buildDevTestGameSpineManifest({
         evidence: [
           devTestGameHostedIdentityEvidenceCommand,
           devTestGameHostedIdentityEvidencePath,
+        ],
+      },
+      {
+        id: "hosted-identity-progression-summary-recorded",
+        status: "passed",
+        evidence: [
+          devTestGameHostedIdentityProgressionSummaryCommand,
+          devTestGameHostedIdentityProgressionSummaryPath,
         ],
       },
       {
@@ -667,6 +684,22 @@ export function assertDevTestGameSpineManifest(manifest) {
   ) {
     throw new Error(
       `spine manifest hosted identity evidence artifact drifted: ${manifest.commands.hostedIdentityEvidence.proofArtifact}`,
+    );
+  }
+  if (
+    manifest.commands?.hostedIdentityProgressionSummary?.script !==
+    devTestGameHostedIdentityProgressionSummaryCommand
+  ) {
+    throw new Error(
+      `spine manifest hosted identity progression summary command drifted: ${manifest.commands?.hostedIdentityProgressionSummary?.script}`,
+    );
+  }
+  if (
+    manifest.commands.hostedIdentityProgressionSummary.proofArtifact !==
+    devTestGameHostedIdentityProgressionSummaryPath
+  ) {
+    throw new Error(
+      `spine manifest hosted identity progression summary artifact drifted: ${manifest.commands.hostedIdentityProgressionSummary.proofArtifact}`,
     );
   }
   if (
@@ -888,6 +921,7 @@ export function assertDevTestGameSpineManifest(manifest) {
     "race-coverage-recorded",
     "hosted-concurrent-race-matrix-recorded",
     "hosted-identity-evidence-recorded",
+    "hosted-identity-progression-summary-recorded",
     `${hostedIdentityEvidenceAdminProofArtifact.id}-recorded`,
     "hosted-target-preflight-recorded",
     "hosted-evidence-lane-recorded",
@@ -1279,6 +1313,10 @@ const artifactRefreshCommands = Object.freeze({
     "npm run test:dev-test-game-hosted-concurrent-race-matrix",
   "hosted-identity-evidence":
     "npm run test:dev-test-game-hosted-identity-evidence",
+  "hosted-identity-progression-summary":
+    "npm run test:dev-test-game-hosted-identity-progression-summary",
+  [devTestGameHostedIdentityProgressionSummaryPath]:
+    "npm run test:dev-test-game-hosted-identity-progression-summary",
   ...Object.fromEntries(
     hostedAdminHandoffProofArtifactCases.flatMap((artifactCase) => [
       [artifactCase.refreshId, artifactCase.command],

@@ -4,6 +4,8 @@ import {
   devTestGameHostedIdentityEvidenceCommand,
   devTestGameHostedIdentityEvidencePath,
   devTestGameHostedIdentityProgressionAdminProofCommand,
+  devTestGameHostedIdentityProgressionSummaryCommand,
+  devTestGameHostedIdentityProgressionSummaryPath,
   hostedIdentityEvidenceBlockedCheckRows,
   hostedIdentityEvidenceBlockedChecks,
   hostedIdentityEvidenceFamilyProgressionCases,
@@ -18,6 +20,8 @@ import {
   hostedIdentityEvidenceOperatorRecoveredFixturePath,
   hostedIdentityEvidencePlaceholderFixturePath,
   hostedIdentityEvidencePlaceholderSchema,
+  hostedIdentityEvidenceProgressionAdminProofPath,
+  hostedIdentityEvidenceProgressionPath,
   hostedIdentityEvidenceRedactedPassFixturePath,
   hostedIdentityEvidenceRequirementGroups,
   hostedIdentityEvidenceSectionInputRows,
@@ -37,6 +41,14 @@ test("hosted identity evidence cases share handoff inputs and blocked groups", (
   assert.equal(
     devTestGameHostedIdentityProgressionAdminProofCommand,
     "test:dev-test-game-hosted-identity-progression-admin-proof",
+  );
+  assert.equal(
+    devTestGameHostedIdentityProgressionSummaryCommand,
+    "test:dev-test-game-hosted-identity-progression-summary",
+  );
+  assert.equal(
+    devTestGameHostedIdentityProgressionSummaryPath,
+    "target/dev-test-game/hosted-identity-progression-summary.json",
   );
   assert.equal(handoff.proofTarget, devTestGameHostedIdentityEvidencePath);
   assert.equal(
@@ -167,6 +179,31 @@ test("hosted identity evidence cases share handoff inputs and blocked groups", (
       proofGraphEvidencePath: "target/dev-test-game/proof-graph.json",
     },
   });
+  assert.deepEqual(
+    hostedIdentityEvidenceFamilyProgressionCases.map((progression) => ({
+      id: progression.id,
+      evidencePath: hostedIdentityEvidenceProgressionPath(progression.id),
+      adminProofPath: hostedIdentityEvidenceProgressionAdminProofPath(
+        progression.id,
+      ),
+    })),
+    [
+      {
+        id: "invite-delivery",
+        evidencePath:
+          "target/dev-test-game/hosted-identity-evidence-invite-delivery.json",
+        adminProofPath:
+          "target/dev-test-game/hosted-identity-evidence-invite-delivery-admin-proof.json",
+      },
+      {
+        id: "account-recovery",
+        evidencePath:
+          "target/dev-test-game/hosted-identity-evidence-account-recovery.json",
+        adminProofPath:
+          "target/dev-test-game/hosted-identity-evidence-account-recovery-admin-proof.json",
+      },
+    ],
+  );
   assert.deepEqual(
     handoff.blockedReceipt.requiredInputs.map((input) => [
       input.name,

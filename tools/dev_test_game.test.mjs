@@ -214,6 +214,8 @@ import {
   devTestGameHostedIdentityEvidenceCommand,
   devTestGameHostedIdentityEvidencePath,
   devTestGameHostedIdentityProgressionAdminProofCommand,
+  devTestGameHostedIdentityProgressionSummaryCommand,
+  devTestGameHostedIdentityProgressionSummaryPath,
   hostedIdentityEvidenceBlockedChecks,
   hostedIdentityEvidenceFamilyProgressionCases,
   hostedIdentityEvidenceFixturePaths,
@@ -225,6 +227,8 @@ import {
   hostedIdentityEvidenceOperatorPartialFixturePath,
   hostedIdentityEvidenceOperatorRecoveredFixturePath,
   hostedIdentityEvidencePacketSectionDefinitions,
+  hostedIdentityEvidenceProgressionAdminProofPath,
+  hostedIdentityEvidenceProgressionPath,
   hostedIdentityExpectedRoleSurfaceContract,
   hostedIdentityEvidencePlaceholderFixturePath,
   hostedIdentityEvidencePlaceholderSchema,
@@ -233,6 +237,10 @@ import {
   hostedIdentityEvidenceSectionInputStatuses,
   validateHostedIdentityEvidencePlaceholder,
 } from "./dev_test_game_hosted_identity_evidence.mjs";
+import {
+  assertDevTestGameHostedIdentityProgressionSummary,
+  buildDevTestGameHostedIdentityProgressionSummary,
+} from "./dev_test_game_hosted_identity_progression_summary.mjs";
 import {
   devTestGameCoreLiveSpinePlan,
   devTestGameLiveSpinePlan,
@@ -617,6 +625,18 @@ test("dev test-game spine orchestrators expose stable proof order and env maps",
       "test:dev-test-game-hosted-identity-progression-admin-proof"
     ],
     "node tools/dev_test_game_hosted_identity_progression_admin_proof.mjs",
+  );
+  assert.equal(
+    devTestGameHostedIdentityProgressionSummaryCommand,
+    "test:dev-test-game-hosted-identity-progression-summary",
+  );
+  assert.equal(
+    packageJson.scripts[devTestGameHostedIdentityProgressionSummaryCommand],
+    "node tools/dev_test_game_hosted_identity_progression_summary.mjs",
+  );
+  assert.equal(
+    devTestGameHostedIdentityProgressionSummaryPath,
+    "target/dev-test-game/hosted-identity-progression-summary.json",
   );
   for (const descriptor of recoveryReceiptGraphDescriptors) {
     assert.equal(
@@ -1317,6 +1337,48 @@ test("hosted identity evidence lane records blocked and passed handoffs", async 
       [progression.checkId],
     );
   }
+
+  const progressionSummary =
+    buildDevTestGameHostedIdentityProgressionSummary({
+      generatedAt: "2026-07-01T00:00:00.950Z",
+    });
+  assertDevTestGameHostedIdentityProgressionSummary(progressionSummary);
+  assert.equal(progressionSummary.releaseReady, false);
+  assert.equal(progressionSummary.productionReady, false);
+  assert.equal(
+    progressionSummary.nextCommand,
+    `npm run ${devTestGameHostedIdentityProgressionSummaryCommand}`,
+  );
+  assert.equal(
+    progressionSummary.nextProofTarget,
+    devTestGameHostedIdentityProgressionSummaryPath,
+  );
+  assert.deepEqual(
+    progressionSummary.progressions.map((progression) => ({
+      id: progression.id,
+      missingFixturePath: progression.missingFixturePath,
+      recoveredFixturePath: progression.recoveredFixturePath,
+      proofCommand: progression.proofCommand,
+      evidencePath: progression.evidencePath,
+      adminProofTarget: progression.adminProofTarget,
+      roleUrl: progression.roleUrl,
+      firstMissingInputId: progression.firstMissingInputId,
+      firstMissingCheckId: progression.firstMissingCheckId,
+    })),
+    hostedIdentityEvidenceFamilyProgressionCases.map((progression) => ({
+      id: progression.id,
+      missingFixturePath: progression.missingFixturePath,
+      recoveredFixturePath: progression.recoveredFixturePath,
+      proofCommand: `FMARCH_HOSTED_IDENTITY_PROGRESSION_ID=${progression.id} npm run ${devTestGameHostedIdentityProgressionAdminProofCommand}`,
+      evidencePath: hostedIdentityEvidenceProgressionPath(progression.id),
+      adminProofTarget: hostedIdentityEvidenceProgressionAdminProofPath(
+        progression.id,
+      ),
+      roleUrl: "/admin/audit/local-hosted-identity-evidence?game=<seeded-game>",
+      firstMissingInputId: progression.missingInputId,
+      firstMissingCheckId: progression.checkId,
+    })),
+  );
 
   const rawPath = "target/dev-test-game/hosted-identity-evidence-raw.test.json";
   await writeFile(

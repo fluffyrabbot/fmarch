@@ -6,6 +6,10 @@ export const devTestGameHostedIdentityPartialAdminProofCommand =
   "test:dev-test-game-hosted-identity-partial-admin-proof";
 export const devTestGameHostedIdentityProgressionAdminProofCommand =
   "test:dev-test-game-hosted-identity-progression-admin-proof";
+export const devTestGameHostedIdentityProgressionSummaryCommand =
+  "test:dev-test-game-hosted-identity-progression-summary";
+export const devTestGameHostedIdentityProgressionSummaryPath =
+  "target/dev-test-game/hosted-identity-progression-summary.json";
 export const hostedIdentityEvidencePlaceholderFixturePath =
   "tools/fixtures/dev_test_game_hosted_identity_evidence.placeholder.json";
 export const hostedIdentityEvidenceRedactedPassFixturePath =
@@ -267,6 +271,29 @@ export const hostedIdentityEvidenceFamilyProgressionCases = Object.freeze([
     ]),
   }),
 ]);
+
+export function hostedIdentityEvidenceProgressionCase(progressionId) {
+  const id = String(progressionId ?? "").trim();
+  const progression = hostedIdentityEvidenceFamilyProgressionCases.find(
+    (candidate) => candidate.id === id,
+  );
+  if (progression === undefined) {
+    throw new Error(
+      `unknown hosted identity progression id: ${id || "<missing>"}; expected one of ${hostedIdentityEvidenceFamilyProgressionCases.map((candidate) => candidate.id).join(", ")}`,
+    );
+  }
+  return progression;
+}
+
+export function hostedIdentityEvidenceProgressionPath(progressionId) {
+  const progression = hostedIdentityEvidenceProgressionCase(progressionId);
+  return `target/dev-test-game/hosted-identity-evidence-${progression.id}.json`;
+}
+
+export function hostedIdentityEvidenceProgressionAdminProofPath(progressionId) {
+  const progression = hostedIdentityEvidenceProgressionCase(progressionId);
+  return `target/dev-test-game/hosted-identity-evidence-${progression.id}-admin-proof.json`;
+}
 
 const hostedIdentityInputCheckIds = Object.freeze({
   FMARCH_HOSTED_IDENTITY_EVIDENCE_PATH:
