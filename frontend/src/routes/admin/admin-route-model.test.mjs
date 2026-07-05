@@ -954,6 +954,14 @@ test("admin route data exposes hosted identity evidence as a native audit row", 
     identity.relatedLinks.map((link) => link.id),
     [localAdminAuditIds.identityAdapter, localAdminAuditIds.nextAction],
   );
+  assert.deepEqual(identity.handoffPath, {
+    upstreamAuditId: localAdminAuditIds.nextAction,
+    upstreamLabel: "Ranked next action",
+    localCapabilityAuditId: localAdminAuditIds.identityAdapter,
+    downstreamStatus: "blocked",
+    downstreamCommand: "npm run test:dev-test-game-hosted-identity-evidence",
+    downstreamProofTarget: HOSTED_IDENTITY_EVIDENCE_PROOF_TARGET,
+  });
   assert.deepEqual(
     identity.hostedHandoffChecklist.inputs.map((input) => input.id),
     hostedIdentityEvidenceInputIds,

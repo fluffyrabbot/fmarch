@@ -124,6 +124,17 @@ function hostedIdentityHandoffSummary(hostedIdentityEvidence) {
   };
 }
 
+function hostedIdentityHandoffPath(hostedIdentityEvidence) {
+  return {
+    upstreamAuditId: "local-next-action",
+    upstreamLabel: "Ranked next action",
+    localCapabilityAuditId: "local-identity-adapter",
+    downstreamStatus: String(hostedIdentityEvidence.status ?? "unknown"),
+    downstreamCommand: String(hostedIdentityEvidence.nextCommand ?? ""),
+    downstreamProofTarget: String(hostedIdentityEvidence.nextProofTarget ?? ""),
+  };
+}
+
 export function hostedIdentityEvidenceAdminProofCase() {
   return {
     smokeName: "dev-test-game-hosted-identity-evidence-admin-proof",
@@ -231,7 +242,17 @@ export function hostedIdentityEvidenceAdminProofCase() {
           source.hostedIdentityEvidence.target.identityAdapterContractComparison.mismatches.map(
             (mismatch) => mismatch.id,
           ),
+        requiredHandoffPath: hostedIdentityHandoffPath(
+          source.hostedIdentityEvidence,
+        ),
         requiredRelatedLinks,
+        requiredRelatedDestinations: [
+          {
+            linkId: "local-next-action",
+            auditId: "local-next-action",
+            requiredChecks: ["next-command"],
+          },
+        ],
         });
       },
     buildEvidence: ({ source, adminRoleSurface }) => ({
@@ -293,6 +314,7 @@ export function hostedIdentityEvidenceAdminProofCase() {
         hostedHandoffSummary: hostedIdentityHandoffSummary(
           source.hostedIdentityEvidence,
         ),
+        handoffPath: hostedIdentityHandoffPath(source.hostedIdentityEvidence),
         ...(source.hostedIdentityEvidence.hostedHandoffChecklist
           .blockedReceipt === undefined
           ? {}
@@ -481,6 +503,17 @@ export function assertHostedIdentityEvidenceAdminProof(evidence) {
       }
     }
   }
+  const expectedHandoffPath = evidence.generatedFrom?.handoffPath;
+  if (expectedHandoffPath !== undefined) {
+    const visibleHandoffPath = evidence.adminRoleSurface?.visibleHandoffPath;
+    for (const [key, expectedValue] of Object.entries(expectedHandoffPath)) {
+      if (visibleHandoffPath?.[key] !== String(expectedValue)) {
+        throw new Error(
+          `hosted identity evidence admin proof missing handoff path: ${key}`,
+        );
+      }
+    }
+  }
   assertVisibleAdminRoleSurfaceRows({
     adminRoleSurface: evidence.adminRoleSurface,
     rowIds: evidence.generatedFrom?.hostedIdentityPacketSummaryIds,
@@ -563,5 +596,19 @@ export function assertHostedIdentityEvidenceAdminProof(evidence) {
     rowName: "related link",
     surfaceKey: "visibleRelatedLinks",
   });
+  const nextActionDestination =
+    evidence.adminRoleSurface?.visibleRelatedDestinations?.find(
+      (destination) =>
+        destination.linkId === "local-next-action" &&
+        destination.auditId === "local-next-action",
+    ) ?? null;
+  if (
+    nextActionDestination === null ||
+    !nextActionDestination.visibleChecks?.includes("next-command")
+  ) {
+    throw new Error(
+      "hosted identity evidence admin proof did not prove next-action round trip",
+    );
+  }
   return evidence;
 }

@@ -579,6 +579,27 @@
         </ol>
       </section>
     {/if}
+    {#if data.audit.handoffPath}
+      <section
+        class="admin-audit-detail__group"
+        data-testid="admin-audit-detail-handoff-path"
+      >
+        <h2>Handoff path</h2>
+        <ol class="admin-audit-detail__entries">
+          <li
+            class="admin-audit-detail__entry admin-audit-detail__entry--stack"
+            data-testid="admin-audit-handoff-path"
+          >
+            <strong>{data.audit.handoffPath.downstreamStatus}</strong>
+            <span>{data.audit.handoffPath.upstreamLabel}</span>
+            <span>{data.audit.handoffPath.upstreamAuditId}</span>
+            <span>{data.audit.handoffPath.localCapabilityAuditId}</span>
+            <span>{data.audit.handoffPath.downstreamCommand}</span>
+            <span>{data.audit.handoffPath.downstreamProofTarget}</span>
+          </li>
+        </ol>
+      </section>
+    {/if}
     {#if data.audit.hostedHandoffChecklist?.inputs?.length > 0 || data.audit.hostedHandoffChecklist?.blockedChecks?.length > 0}
       <section
         class="admin-audit-detail__group"

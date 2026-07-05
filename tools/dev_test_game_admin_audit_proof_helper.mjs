@@ -337,6 +337,7 @@ export async function proveAdminAuditDetail({
   requiredHostedIdentityAdapterContractComparisonMismatches = [],
   requiredIdentityAdapterContractStatus = null,
   requiredIdentityAdapterContractMismatches = [],
+  requiredHandoffPath = null,
   requiredHostedHandoffSummary = null,
   requiredHostedHandoffBlockedReceipt = null,
   requiredRelatedLinks = [],
@@ -621,6 +622,10 @@ export async function proveAdminAuditDetail({
       page,
       prefix: "admin-audit-identity-adapter-contract-mismatch",
       ids: requiredIdentityAdapterContractMismatches,
+    });
+    const visibleHandoffPath = await waitForHandoffPath({
+      page,
+      expected: requiredHandoffPath,
     });
     const visibleHostedHandoffSummary = await waitForHostedHandoffSummary({
       page,
@@ -992,6 +997,7 @@ export async function proveAdminAuditDetail({
             visibleIdentityAdapterContractMismatches:
               visibleIdentityAdapterContractMismatches,
           }),
+      ...(visibleHandoffPath === null ? {} : { visibleHandoffPath }),
       ...(visibleHostedHandoffSummary === null
         ? {}
         : { visibleHostedHandoffSummary }),
@@ -1148,6 +1154,39 @@ async function waitForHostedHandoffSummary({ page, expected }) {
     }
   }
   return summary;
+}
+
+async function waitForHandoffPath({ page, expected }) {
+  if (expected === null || expected === undefined) {
+    return null;
+  }
+  const row = page.getByTestId("admin-audit-handoff-path");
+  await row.waitFor({
+    state: "visible",
+    timeout: 15000,
+  });
+  const text = await row.innerText();
+  const handoffPath = {
+    upstreamAuditId: String(expected.upstreamAuditId ?? ""),
+    upstreamLabel: String(expected.upstreamLabel ?? ""),
+    localCapabilityAuditId: String(expected.localCapabilityAuditId ?? ""),
+    downstreamStatus: String(expected.downstreamStatus ?? ""),
+    downstreamCommand: String(expected.downstreamCommand ?? ""),
+    downstreamProofTarget: String(expected.downstreamProofTarget ?? ""),
+  };
+  for (const value of [
+    handoffPath.upstreamAuditId,
+    handoffPath.localCapabilityAuditId,
+    handoffPath.downstreamStatus,
+    handoffPath.downstreamCommand,
+    handoffPath.downstreamProofTarget,
+    handoffPath.upstreamLabel,
+  ]) {
+    if (value === "" || !text.includes(value)) {
+      throw new Error(`admin-audit-handoff-path missing expected text ${value}: ${text}`);
+    }
+  }
+  return handoffPath;
 }
 
 async function waitForHostedHandoffBlockedReceipt({ page, expected }) {

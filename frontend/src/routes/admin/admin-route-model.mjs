@@ -748,6 +748,14 @@ export function normalizeLocalHostedIdentityEvidenceAudit(
         command: "test:dev-test-game-next-action",
       }),
     ]),
+    handoffPath: Object.freeze({
+      upstreamAuditId: localAdminAuditIds.nextAction,
+      upstreamLabel: "Ranked next action",
+      localCapabilityAuditId: localAdminAuditIds.identityAdapter,
+      downstreamStatus: String(hostedIdentityEvidence.status ?? "unknown"),
+      downstreamCommand: String(hostedIdentityEvidence.nextCommand ?? ""),
+      downstreamProofTarget: String(hostedIdentityEvidence.nextProofTarget ?? ""),
+    }),
     hostedHandoffChecklist,
     artifactSummary: Object.freeze({
       rawEvidencePath: String(

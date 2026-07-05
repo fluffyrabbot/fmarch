@@ -17934,6 +17934,14 @@ function hostedIdentityEvidenceAdminProofFixture() {
         proofTarget: handoff.proofTarget,
       },
       hostedHandoffBlockedReceipt: handoff.blockedReceipt,
+      handoffPath: {
+        upstreamAuditId: "local-next-action",
+        upstreamLabel: "Ranked next action",
+        localCapabilityAuditId: "local-identity-adapter",
+        downstreamStatus: "blocked",
+        downstreamCommand: "npm run test:dev-test-game-hosted-identity-evidence",
+        downstreamProofTarget: "target/dev-test-game/hosted-identity-evidence.json",
+      },
       hostedIdentityPacketSummaryIds: packetSummaryRows.map((row) => row.id),
       hostedIdentityPacketSummaryStatuses: Object.fromEntries(
         packetSummaryRows.map((row) => [row.id, row.status]),
@@ -18003,6 +18011,14 @@ function hostedIdentityEvidenceAdminProofFixture() {
         nextProofTarget: handoff.blockedReceipt.nextProofTarget,
         missingRequiredInputs: handoff.blockedReceipt.missingRequiredInputs,
       },
+      visibleHandoffPath: {
+        upstreamAuditId: "local-next-action",
+        upstreamLabel: "Ranked next action",
+        localCapabilityAuditId: "local-identity-adapter",
+        downstreamStatus: "blocked",
+        downstreamCommand: "npm run test:dev-test-game-hosted-identity-evidence",
+        downstreamProofTarget: "target/dev-test-game/hosted-identity-evidence.json",
+      },
       visibleHostedIdentityPacketSummaries: packetSummaryRows.map((row) => row.id),
       visibleHostedIdentityPacketSummaryStatuses: Object.fromEntries(
         packetSummaryRows.map((row) => [row.id, row.status]),
@@ -18019,6 +18035,14 @@ function hostedIdentityEvidenceAdminProofFixture() {
         "hostedIdentity-roleSurfaceContract",
       ],
       visibleRelatedLinks: ["local-identity-adapter", "local-next-action"],
+      visibleRelatedDestinations: [
+        {
+          linkId: "local-next-action",
+          auditId: "local-next-action",
+          detailRoleUrl: "/admin/audit/local-next-action?game=<seeded-game>",
+          visibleChecks: ["next-command"],
+        },
+      ],
       rawInviteTokensVisible: false,
       releaseReady: false,
       productionReady: false,
