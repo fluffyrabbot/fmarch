@@ -20,6 +20,8 @@ import {
   devTestGameHostedIdentityEvidenceCommand,
   devTestGameHostedIdentityEvidencePath,
   hostedIdentityEvidenceHandoffCase,
+  hostedIdentityEvidenceOperatorPartialFixturePath,
+  hostedIdentityEvidenceOperatorRecoveredFixturePath,
   hostedIdentityEvidencePlaceholderFixturePath,
   hostedIdentityEvidenceRedactedPassFixturePath,
 } from "./dev_test_game_hosted_identity_evidence_cases.mjs";
@@ -344,7 +346,9 @@ export function hostedIdentityEvidencePathKind(rawEvidencePath) {
   }
   if (
     normalized === hostedIdentityEvidencePlaceholderFixturePath ||
-    normalized === hostedIdentityEvidenceRedactedPassFixturePath
+    normalized === hostedIdentityEvidenceRedactedPassFixturePath ||
+    normalized === hostedIdentityEvidenceOperatorPartialFixturePath ||
+    normalized === hostedIdentityEvidenceOperatorRecoveredFixturePath
   ) {
     return "fixture";
   }

@@ -23,6 +23,7 @@ export {
   hostedIdentityEvidenceInputSectionStatuses,
   hostedIdentityEvidenceOperatorProofDrilldowns,
   hostedIdentityEvidenceOperatorPartialFixturePath,
+  hostedIdentityEvidenceOperatorRecoveredFixturePath,
   hostedIdentityEvidencePacketSectionDefinitions,
   hostedIdentityEvidencePlaceholderFixturePath,
   hostedIdentityEvidencePlaceholderSchema,

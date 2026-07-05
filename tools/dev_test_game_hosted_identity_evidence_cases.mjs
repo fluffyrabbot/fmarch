@@ -10,6 +10,8 @@ export const hostedIdentityEvidenceRedactedPassFixturePath =
   "tools/fixtures/dev_test_game_hosted_identity_evidence.redacted-pass.json";
 export const hostedIdentityEvidenceOperatorPartialFixturePath =
   "tools/fixtures/dev_test_game_hosted_identity_evidence.operator-partial.json";
+export const hostedIdentityEvidenceOperatorRecoveredFixturePath =
+  "tools/fixtures/dev_test_game_hosted_identity_evidence.operator-recovered.json";
 export const devTestGameHostedIdentityPartialEvidencePath =
   "target/dev-test-game/hosted-identity-evidence-partial.json";
 export const devTestGameHostedIdentityPartialAdminProofPath =

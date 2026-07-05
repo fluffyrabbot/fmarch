@@ -113,6 +113,7 @@ import {
   realHostedObservabilityHandoffInputSections,
 } from "./dev_test_game_real_hosted_observability_handoff_cases.mjs";
 import {
+  hostedIdentityEvidencePathKind,
   releaseAdminProofFallbackUnprovenIds,
 } from "./dev_test_game_release_readiness_cases.mjs";
 import {
@@ -221,6 +222,7 @@ import {
   hostedIdentityEvidenceInputSectionStatuses,
   hostedIdentityEvidenceOperatorProofDrilldowns,
   hostedIdentityEvidenceOperatorPartialFixturePath,
+  hostedIdentityEvidenceOperatorRecoveredFixturePath,
   hostedIdentityEvidencePacketSectionDefinitions,
   hostedIdentityExpectedRoleSurfaceContract,
   hostedIdentityEvidencePlaceholderFixturePath,
@@ -1197,16 +1199,44 @@ test("hosted identity evidence lane records blocked and passed handoffs", async 
     validateHostedIdentityEvidencePlaceholder(operatorPartialSource),
     [],
   );
-  const operatorPartial = await buildDevTestGameHostedIdentityEvidence({
-    env: {
-      FMARCH_HOSTED_IDENTITY_EVIDENCE_PATH:
-        hostedIdentityEvidenceOperatorPartialFixturePath,
-    },
-    generatedAt: "2026-07-01T00:00:00.875Z",
-  });
+  const operatorRecoveredSource = JSON.parse(
+    await readFile(hostedIdentityEvidenceOperatorRecoveredFixturePath, "utf8"),
+  );
+  assert.deepEqual(
+    validateHostedIdentityEvidencePlaceholder(operatorRecoveredSource),
+    [],
+  );
+  const operatorCases = [];
+  for (const [fixturePath, generatedAt] of [
+    [hostedIdentityEvidenceOperatorPartialFixturePath, "2026-07-01T00:00:00.875Z"],
+    [
+      hostedIdentityEvidenceOperatorRecoveredFixturePath,
+      "2026-07-01T00:00:00.900Z",
+    ],
+  ]) {
+    const evidence = await buildDevTestGameHostedIdentityEvidence({
+      env: {
+        FMARCH_HOSTED_IDENTITY_EVIDENCE_PATH: fixturePath,
+      },
+      generatedAt,
+    });
+    assertDevTestGameHostedIdentityEvidence(evidence);
+    operatorCases.push({ fixturePath, evidence });
+  }
+  const operatorPartial = operatorCases.find(
+    (item) => item.fixturePath === hostedIdentityEvidenceOperatorPartialFixturePath,
+  ).evidence;
+  const operatorRecovered = operatorCases.find(
+    (item) =>
+      item.fixturePath === hostedIdentityEvidenceOperatorRecoveredFixturePath,
+  ).evidence;
   assertDevTestGameHostedIdentityEvidence(operatorPartial);
   assert.equal(operatorPartial.status, "blocked");
   assert.equal(operatorPartial.target.rawEvidenceStatus, "passed");
+  assert.equal(
+    hostedIdentityEvidencePathKind(hostedIdentityEvidenceOperatorPartialFixturePath),
+    "fixture",
+  );
   assert.equal(operatorPartial.target.roleSurfaceContractDiff.status, "passed");
   assert.equal(
     operatorPartial.target.identityAdapterContractComparison.status,
@@ -1256,6 +1286,44 @@ test("hosted identity evidence lane records blocked and passed handoffs", async 
         ],
       ],
     ],
+  );
+  assert.equal(operatorRecovered.status, "passed");
+  assert.equal(operatorRecovered.target.rawEvidenceStatus, "passed");
+  assert.equal(
+    hostedIdentityEvidencePathKind(hostedIdentityEvidenceOperatorRecoveredFixturePath),
+    "fixture",
+  );
+  assert.deepEqual(operatorRecovered.hostedHandoffChecklist.blockedCheckIds, []);
+  assert.equal(operatorRecovered.hostedHandoffChecklist.blockedReceipt, undefined);
+  assert.deepEqual(
+    operatorRecovered.target.redactedIntakePacket.sections
+      .filter((section) => section.id === "accountRecovery")
+      .map((section) => [
+        section.status,
+        section.providedInputIds,
+        section.missingInputs,
+        section.redactedEvidenceRefs.map((ref) => ref.id),
+      ]),
+    [
+      [
+        "provided",
+        ["recoveryMethods", "recoveredSessionsPreserveRoleSurfaceAdapter"],
+        [],
+        ["account-recovery-redacted-log"],
+      ],
+    ],
+  );
+  assert.deepEqual(
+    operatorPartial.checks
+      .filter(
+        (partialCheck) =>
+          partialCheck.status !==
+          operatorRecovered.checks.find(
+            (recoveredCheck) => recoveredCheck.id === partialCheck.id,
+          )?.status,
+      )
+      .map((check) => check.id),
+    ["account-recovery-evidence"],
   );
 
   const rawPath = "target/dev-test-game/hosted-identity-evidence-raw.test.json";
