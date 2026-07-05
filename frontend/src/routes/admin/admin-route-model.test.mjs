@@ -8,7 +8,13 @@ import {
   buildAdminAuditDetailData,
   buildAdminRouteData,
   normalizeLocalNextActionGeneratedSummary,
+  normalizeLocalNextActionLocalReadinessDependencyCheckRows,
   normalizeLocalNextActionRelatedLinks,
+  normalizeLocalNextActionSeedProofLaneCoverageCheckRows,
+  normalizeLocalNextActionSeedProofLaneCoverageTraceCheckRows,
+  normalizeLocalNextActionSelectedProductionFeatureGraphCheckRows,
+  normalizeLocalNextActionSelectedProofGraphCheckRows,
+  normalizeLocalNextActionSelectedSpineCheckRows,
   normalizeLocalProofGraphArtifactSummary,
   summarizeRecoveryGate,
 } from "./admin-route-model.mjs";
@@ -2074,48 +2080,26 @@ test("admin route data exposes local next action as a native audit row", async (
       ["next-command", "available"],
       ["release-readiness-unproven", "ready"],
       ["hosted-concurrent-race-matrix", "unproven"],
-      [
-        "selected-proof-graph-node",
-        "passed: npm run test:dev-test-game-hosted-concurrent-race-matrix -> target/dev-test-game/hosted-concurrent-race-matrix.json",
-      ],
-      [
-        "selected-proof-graph-destination",
-        "admin-proof:hosted-concurrent-race-matrix:local-hosted-concurrent-race-matrix",
-      ],
-      [
-        "selected-feature-spine-declaration",
-        "player-action-submission:d02-n02/d02-n02-n02-action-open/d02-n02-actionPlayer/action-loop",
-      ],
-      [
-        "selected-spine-target",
-        "d02-n02/d02-n02-n02-action-open/d02-n02-actionPlayer/action-loop",
-      ],
-      [
-        "selected-spine-drilldown",
-        "player-action-submission:d02-n02/d02-n02-n02-action-open/d02-n02-actionPlayer/action-loop",
-      ],
-      ["selected-spine-admin-check", "action-loop"],
-      [
-        "selected-spine-rerun-command",
-        "npm run test:dev-test-game-core-loop-admin-proof",
-      ],
-      ["selected-spine-browser-proof", LIVE_BROWSER_PROOF_COMMAND],
-      [
-        "selected-spine-coverage-decision",
-        "seeded-role-url-proof:npm run test:dev-test-game-core-loop-admin-proof",
-      ],
-      [
-        "selected-production-feature-graph-node",
-        "production-feature:player-action-submission:passed",
-      ],
-      [
-        "selected-production-feature-graph-edge",
-        "admin-proof:core-loop->production-feature:player-action-submission",
-      ],
-      [
-        "selected-production-feature-graph-coverage-decision",
-        "seeded-role-url-proof:npm run test:dev-test-game-core-loop-admin-proof",
-      ],
+      ...normalizeLocalNextActionSelectedProofGraphCheckRows({
+        selectedProofGraphNode: {
+          id: "admin-proof:hosted-concurrent-race-matrix",
+          status: "passed",
+          proofCommand: LOCAL_RACE_COMMAND,
+          proofTarget: HOSTED_MATRIX_PROOF_TARGET,
+          auditId: localAdminAuditIds.hostedConcurrentRaceMatrix,
+        },
+        selectedProofGraphNodeStatus:
+          "passed: npm run test:dev-test-game-hosted-concurrent-race-matrix -> target/dev-test-game/hosted-concurrent-race-matrix.json",
+      }).map((check) => [check.id, check.status]),
+      ...normalizeLocalNextActionSelectedSpineCheckRows({
+        selectedProductionFeatureSpineTarget: productionFeatureSpineTargetFixture(),
+        selectedSpineTarget: featureSpineTargetFixture(),
+        selectedSpineDrilldown: featureSpineDrilldownFixture(),
+      }).map((check) => [check.id, check.status]),
+      ...normalizeLocalNextActionSelectedProductionFeatureGraphCheckRows({
+        selectedProductionFeatureGraph:
+          selectedProductionFeatureGraphFixture(),
+      }).map((check) => [check.id, check.status]),
       ["terminal-proof-batch-graph", "passed:3 edges"],
       ["private-channel-recovery-graph", "passed:4 lanes"],
       ["replacement-action-recovery-graph", "passed:3 lanes"],
@@ -2127,7 +2111,9 @@ test("admin route data exposes local next action as a native audit row", async (
       ["selection-trace", "0 candidates"],
       ["release-readiness-selection-trace", "1 buildable candidates"],
       ["release-readiness-hosted-concurrent-race-matrix", "selected:unproven"],
-      ["seed-proof-lane-coverage-trace", "0 unclassified lanes"],
+      ...normalizeLocalNextActionSeedProofLaneCoverageTraceCheckRows({
+        seedProofLaneCoverageTrace: seedProofLaneCoverageTraceFixture(),
+      }).map((check) => [check.id, check.status]),
       ["race-coverage-promoted-milestones", "4/4 groups, 16/16 cells, 16/16 reloads"],
       ["replacement-race-reload-milestone", "3/3 covered"],
       ["replacement-race-reload-replacement-private-post", "covered:passed"],
@@ -2367,11 +2353,12 @@ test("admin route data exposes local readiness dependency next action", async ()
     [
       ["release-readiness-local-check-missing", "blocked"],
       ["local-proof-graph-admin-role-handoffs", "missing"],
-      ["local-readiness-dependency-trace", "1 missing local dependencies"],
-      [
-        "local-readiness-dependency-local-proof-graph-admin-role-handoffs",
-        "selected:missing",
-      ],
+      ...normalizeLocalNextActionLocalReadinessDependencyCheckRows({
+        localReadinessDependencyTrace: localReadinessDependencyTraceFixture({
+          localCheck,
+          command: LOCAL_PROOF_GRAPH_COMMAND,
+        }),
+      }).map((check) => [check.id, check.status]),
     ],
   );
   assert.deepEqual(
@@ -2421,9 +2408,14 @@ test("admin route data exposes seed proof-lane coverage drift next action", asyn
       .map((check) => [check.id, check.status]),
     [
       ["seed-proof-lane-coverage-drift", "blocked"],
-      ["seed-proof-lane-coverage", "1 unclassified lanes"],
-      ["seed-proof-lane-coverage-trace", "1 unclassified lanes"],
-      ["seed-proof-lane-coverage-new-production-proof-lane", "unclassified"],
+      ...normalizeLocalNextActionSeedProofLaneCoverageCheckRows({
+        seedProofLaneCoverage,
+      }).map((check) => [check.id, check.status]),
+      ...normalizeLocalNextActionSeedProofLaneCoverageTraceCheckRows({
+        seedProofLaneCoverageTrace: seedProofLaneCoverageTraceFixture({
+          seedProofLaneCoverage,
+        }),
+      }).map((check) => [check.id, check.status]),
     ],
   );
   assert.deepEqual(
@@ -2527,7 +2519,9 @@ test("admin local next action detail data carries recovery check rows", async ()
       ["core-loop", "stale"],
       ["selection-trace", "1 candidates"],
       ["selection-trace-core-loop", "selected:stale"],
-      ["seed-proof-lane-coverage-trace", "0 unclassified lanes"],
+      ...normalizeLocalNextActionSeedProofLaneCoverageTraceCheckRows({
+        seedProofLaneCoverageTrace: seedProofLaneCoverageTraceFixture(),
+      }).map((check) => [check.id, check.status]),
       ["race-coverage-promoted-milestones", "4/4 groups, 16/16 cells, 16/16 reloads"],
       ["replacement-race-reload-milestone", "3/3 covered"],
       ["replacement-race-reload-replacement-private-post", "covered:passed"],
@@ -2671,7 +2665,9 @@ test("admin local next action detail data carries harness stability drift rows",
       ["harness-stability-drift", "blocked"],
       ["proof-stability-drift", "1 retries, 1 DOM fallbacks, 0 force fallbacks"],
       ["selection-trace", "0 candidates"],
-      ["seed-proof-lane-coverage-trace", "0 unclassified lanes"],
+      ...normalizeLocalNextActionSeedProofLaneCoverageTraceCheckRows({
+        seedProofLaneCoverageTrace: seedProofLaneCoverageTraceFixture(),
+      }).map((check) => [check.id, check.status]),
       ["race-coverage-promoted-milestones", "4/4 groups, 16/16 cells, 16/16 reloads"],
       ["replacement-race-reload-milestone", "3/3 covered"],
       ["replacement-race-reload-replacement-private-post", "covered:passed"],

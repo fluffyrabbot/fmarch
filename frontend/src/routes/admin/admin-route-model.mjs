@@ -2247,72 +2247,18 @@ export function normalizeLocalNextActionAudit(nextAction, { game, proofGraph = n
             status: String(unproven.status ?? "unknown"),
           }),
         ]),
-    ...(selectedProofGraphNode === null
-      ? []
-      : [
-          Object.freeze({
-            id: "selected-proof-graph-node",
-            status: selectedProofGraphNodeStatus,
-          }),
-          Object.freeze({
-            id: "selected-proof-graph-destination",
-            status: `${selectedProofGraphNode.id}:${
-              selectedProofGraphNode.auditId || "unknown"
-            }`,
-          }),
-        ]),
-    ...(selectedSpineTarget.checkpointId === ""
-      ? []
-      : [
-          Object.freeze({
-            id: "selected-feature-spine-declaration",
-            status: selectedSpineDeclarationStatus(
-              selectedProductionFeatureSpineTarget,
-            ),
-          }),
-          Object.freeze({
-            id: "selected-spine-target",
-            status: selectedSpineTargetStatus(selectedSpineTarget),
-          }),
-          Object.freeze({
-            id: "selected-spine-drilldown",
-            status: selectedSpineDrilldownStatus(selectedSpineDrilldown),
-          }),
-          Object.freeze({
-            id: "selected-spine-admin-check",
-            status: selectedSpineDrilldown.adminCheckId,
-          }),
-          Object.freeze({
-            id: "selected-spine-rerun-command",
-            status: selectedSpineDrilldown.rerunCommand,
-          }),
-          Object.freeze({
-            id: "selected-spine-browser-proof",
-            status: selectedSpineTarget.browserProofCommand,
-          }),
-          ...coverageDecisionCheckRows({
-            parentId: "selected-spine",
-            rowId: "selected-spine-coverage-decision",
-            coverageDecision: selectedSpineTarget.coverageDecision,
-          }),
-        ]),
-    ...(selectedProductionFeatureGraph.nodeId === ""
-      ? []
-      : [
-          Object.freeze({
-            id: "selected-production-feature-graph-node",
-            status: `${selectedProductionFeatureGraph.nodeId}:${selectedProductionFeatureGraph.status}`,
-          }),
-          Object.freeze({
-            id: "selected-production-feature-graph-edge",
-            status: `${selectedProductionFeatureGraph.edgeFrom}->${selectedProductionFeatureGraph.edgeTo}`,
-          }),
-          ...coverageDecisionCheckRows({
-            parentId: "selected-production-feature-graph",
-            rowId: "selected-production-feature-graph-coverage-decision",
-            coverageDecision: selectedProductionFeatureGraph.coverageDecision,
-          }),
-        ]),
+    ...normalizeLocalNextActionSelectedProofGraphCheckRows({
+      selectedProofGraphNode,
+      selectedProofGraphNodeStatus,
+    }),
+    ...normalizeLocalNextActionSelectedSpineCheckRows({
+      selectedProductionFeatureSpineTarget,
+      selectedSpineTarget,
+      selectedSpineDrilldown,
+    }),
+    ...normalizeLocalNextActionSelectedProductionFeatureGraphCheckRows({
+      selectedProductionFeatureGraph,
+    }),
     ...(terminalBatchGraph.nodeId === ""
       ? []
       : [
@@ -2365,16 +2311,9 @@ export function normalizeLocalNextActionAudit(nextAction, { game, proofGraph = n
             )} force fallbacks`,
           }),
         ]),
-    ...(seedProofLaneCoverage === null
-      ? []
-      : [
-          Object.freeze({
-            id: "seed-proof-lane-coverage",
-            status: `${Number(
-              seedProofLaneCoverage.unclassifiedLaneCount ?? 0,
-            )} unclassified lanes`,
-          }),
-        ]),
+    ...normalizeLocalNextActionSeedProofLaneCoverageCheckRows({
+      seedProofLaneCoverage,
+    }),
     ...(sequenceDeferral === null
       ? []
       : [
@@ -2433,36 +2372,12 @@ export function normalizeLocalNextActionAudit(nextAction, { game, proofGraph = n
             }),
           ),
         ]),
-    ...(seedProofLaneCoverageTrace.status === "unavailable"
-      ? []
-      : [
-          Object.freeze({
-            id: "seed-proof-lane-coverage-trace",
-            status: `${seedProofLaneCoverageTrace.unclassifiedLaneCount} unclassified lanes`,
-          }),
-          ...seedProofLaneCoverageTrace.unclassifiedLaneIds.map((laneId) =>
-            Object.freeze({
-              id: `seed-proof-lane-coverage-${laneId}`,
-              status: "unclassified",
-            }),
-          ),
-        ]),
-    ...(localReadinessDependencyTrace.candidateCount === 0
-      ? []
-      : [
-          Object.freeze({
-            id: "local-readiness-dependency-trace",
-            status: `${localReadinessDependencyTrace.candidateCount} missing local dependencies`,
-          }),
-          ...localReadinessDependencyTrace.candidates.map((candidate) =>
-            Object.freeze({
-              id: `local-readiness-dependency-${candidate.id}`,
-              status: candidate.selected
-                ? `selected:${candidate.status}`
-                : `rank-${candidate.rank}:${candidate.status}`,
-            }),
-          ),
-        ]),
+    ...normalizeLocalNextActionSeedProofLaneCoverageTraceCheckRows({
+      seedProofLaneCoverageTrace,
+    }),
+    ...normalizeLocalNextActionLocalReadinessDependencyCheckRows({
+      localReadinessDependencyTrace,
+    }),
     Object.freeze({
       id: "race-coverage-promoted-milestones",
       status: `${raceCoveragePromotedMilestones.passedGroupCount}/${raceCoveragePromotedMilestones.groupCount} groups, ${raceCoveragePromotedMilestones.coveredCellCount}/${raceCoveragePromotedMilestones.requiredCellCount} cells, ${raceCoveragePromotedMilestones.reloadCoveredCellCount}/${raceCoveragePromotedMilestones.cellCount} reloads`,
@@ -2866,6 +2781,166 @@ export function normalizeLocalNextActionRelatedLinks({
           }),
         ]),
   ]);
+}
+
+export function normalizeLocalNextActionSelectedProofGraphCheckRows({
+  selectedProofGraphNode = null,
+  selectedProofGraphNodeStatus = "",
+} = {}) {
+  return selectedProofGraphNode === null
+    ? Object.freeze([])
+    : Object.freeze([
+        Object.freeze({
+          id: "selected-proof-graph-node",
+          status: selectedProofGraphNodeStatus,
+        }),
+        Object.freeze({
+          id: "selected-proof-graph-destination",
+          status: `${selectedProofGraphNode.id}:${
+            selectedProofGraphNode.auditId || "unknown"
+          }`,
+        }),
+      ]);
+}
+
+export function normalizeLocalNextActionSelectedSpineCheckRows({
+  selectedProductionFeatureSpineTarget = null,
+  selectedSpineTarget = null,
+  selectedSpineDrilldown = null,
+} = {}) {
+  return String(selectedSpineTarget?.checkpointId ?? "") === ""
+    ? Object.freeze([])
+    : Object.freeze([
+        Object.freeze({
+          id: "selected-feature-spine-declaration",
+          status: selectedSpineDeclarationStatus(
+            selectedProductionFeatureSpineTarget,
+          ),
+        }),
+        Object.freeze({
+          id: "selected-spine-target",
+          status: selectedSpineTargetStatus(selectedSpineTarget),
+        }),
+        Object.freeze({
+          id: "selected-spine-drilldown",
+          status: selectedSpineDrilldownStatus(selectedSpineDrilldown),
+        }),
+        Object.freeze({
+          id: "selected-spine-admin-check",
+          status: String(selectedSpineDrilldown?.adminCheckId ?? ""),
+        }),
+        Object.freeze({
+          id: "selected-spine-rerun-command",
+          status: String(selectedSpineDrilldown?.rerunCommand ?? ""),
+        }),
+        Object.freeze({
+          id: "selected-spine-browser-proof",
+          status: String(selectedSpineTarget?.browserProofCommand ?? ""),
+        }),
+        ...coverageDecisionCheckRows({
+          parentId: "selected-spine",
+          rowId: "selected-spine-coverage-decision",
+          coverageDecision: selectedSpineTarget?.coverageDecision,
+        }),
+      ]);
+}
+
+export function normalizeLocalNextActionSelectedProductionFeatureGraphCheckRows({
+  selectedProductionFeatureGraph = null,
+} = {}) {
+  const edgeFrom = String(
+    selectedProductionFeatureGraph?.edgeFrom ??
+      selectedProductionFeatureGraph?.edge?.from ??
+      "",
+  );
+  const edgeTo = String(
+    selectedProductionFeatureGraph?.edgeTo ??
+      selectedProductionFeatureGraph?.edge?.to ??
+      "",
+  );
+  return String(selectedProductionFeatureGraph?.nodeId ?? "") === ""
+    ? Object.freeze([])
+    : Object.freeze([
+        Object.freeze({
+          id: "selected-production-feature-graph-node",
+          status: `${selectedProductionFeatureGraph.nodeId}:${selectedProductionFeatureGraph.status}`,
+        }),
+        Object.freeze({
+          id: "selected-production-feature-graph-edge",
+          status: `${edgeFrom}->${edgeTo}`,
+        }),
+        ...coverageDecisionCheckRows({
+          parentId: "selected-production-feature-graph",
+          rowId: "selected-production-feature-graph-coverage-decision",
+          coverageDecision: selectedProductionFeatureGraph.coverageDecision,
+        }),
+      ]);
+}
+
+export function normalizeLocalNextActionSeedProofLaneCoverageCheckRows({
+  seedProofLaneCoverage = null,
+} = {}) {
+  return seedProofLaneCoverage === null
+    ? Object.freeze([])
+    : Object.freeze([
+        Object.freeze({
+          id: "seed-proof-lane-coverage",
+          status: `${Number(
+            seedProofLaneCoverage.unclassifiedLaneCount ?? 0,
+          )} unclassified lanes`,
+        }),
+      ]);
+}
+
+export function normalizeLocalNextActionSeedProofLaneCoverageTraceCheckRows({
+  seedProofLaneCoverageTrace = null,
+} = {}) {
+  return seedProofLaneCoverageTrace?.status === "unavailable" ||
+    seedProofLaneCoverageTrace === null
+    ? Object.freeze([])
+    : Object.freeze([
+        Object.freeze({
+          id: "seed-proof-lane-coverage-trace",
+          status: `${Number(
+            seedProofLaneCoverageTrace.unclassifiedLaneCount ?? 0,
+          )} unclassified lanes`,
+        }),
+        ...(Array.isArray(seedProofLaneCoverageTrace.unclassifiedLaneIds)
+          ? seedProofLaneCoverageTrace.unclassifiedLaneIds
+          : []
+        ).map((laneId) =>
+          Object.freeze({
+            id: `seed-proof-lane-coverage-${String(laneId)}`,
+            status: "unclassified",
+          }),
+        ),
+      ]);
+}
+
+export function normalizeLocalNextActionLocalReadinessDependencyCheckRows({
+  localReadinessDependencyTrace = null,
+} = {}) {
+  return Number(localReadinessDependencyTrace?.candidateCount ?? 0) === 0
+    ? Object.freeze([])
+    : Object.freeze([
+        Object.freeze({
+          id: "local-readiness-dependency-trace",
+          status: `${Number(
+            localReadinessDependencyTrace.candidateCount ?? 0,
+          )} missing local dependencies`,
+        }),
+        ...(Array.isArray(localReadinessDependencyTrace.candidates)
+          ? localReadinessDependencyTrace.candidates
+          : []
+        ).map((candidate) =>
+          Object.freeze({
+            id: `local-readiness-dependency-${candidate.id}`,
+            status: candidate.selected
+              ? `selected:${candidate.status}`
+              : `rank-${candidate.rank}:${candidate.status}`,
+          }),
+        ),
+      ]);
 }
 
 export function normalizeLocalNextActionGeneratedSummary(nextAction) {
