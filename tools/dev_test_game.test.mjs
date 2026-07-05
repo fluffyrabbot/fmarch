@@ -18834,6 +18834,8 @@ function proofGraphAdminProofFixture() {
     proofGraphReplacementActionFeatureTargetFixture();
   const replacementPrivateGraphTarget =
     proofGraphReplacementPrivateFeatureTargetFixture();
+  const coreLoopFamilyDestinations =
+    proofGraphCoreLoopScenarioFamilyDestinationsFixture();
   const evidenceObjectRowIds = [
     ...expectedNormalizedEvidenceObjectRowIds({
       parentId: "private-channel-recovery-receipt",
@@ -18874,6 +18876,7 @@ function proofGraphAdminProofFixture() {
         replacementActionGraphTarget.productionFeatureNodeId,
         replacementPrivateGraphTarget.roleSurfaceNodeId,
         replacementPrivateGraphTarget.productionFeatureNodeId,
+        ...coreLoopFamilyDestinations.map((destination) => destination.linkId),
       ],
       evidenceObjectRowIds,
       receiptArtifactRowIds,
@@ -18894,6 +18897,7 @@ function proofGraphAdminProofFixture() {
       edgeCount: handoffs.length + 5,
       adminProofSurfaceIds,
       adminProofRoleHandoffs: handoffs,
+      coreLoopScenarioFamilyDestinations: coreLoopFamilyDestinations,
       hostSetupFeatureTarget: hostSetupGraphTarget,
       cohostFeatureTarget: cohostGraphTarget,
       replacementFeatureTarget: replacementGraphTarget,
@@ -18929,6 +18933,7 @@ function proofGraphAdminProofFixture() {
         replacementPrivateGraphTarget.productionFeatureNodeId,
         replacementPrivateGraphTarget.edgeRowId,
         `coverage-decision:${replacementPrivateGraphTarget.productionFeatureNodeId}`,
+        ...coreLoopFamilyDestinations.map((destination) => destination.linkId),
         ...evidenceObjectRowIds,
         ...receiptArtifactRowIds,
       ],
@@ -18948,19 +18953,34 @@ function proofGraphAdminProofFixture() {
         replacementActionGraphTarget.productionFeatureNodeId,
         replacementPrivateGraphTarget.roleSurfaceNodeId,
         replacementPrivateGraphTarget.productionFeatureNodeId,
+        ...coreLoopFamilyDestinations.map((destination) => destination.linkId),
       ],
-      visibleRelatedDestinations: handoffs.map((handoff) => ({
-        linkId: handoff.linkId,
-        auditId: handoff.auditId,
-        detailRoleUrl: `/admin/audit/${handoff.auditId}?game=<seeded-game>`,
-        ...(handoff.linkId === "admin-proof:hosted-evidence-lane"
-          ? {
-              visibleHostedHandoffInputs: hostedHandoffInputIdsFixture(),
-              visibleHostedHandoffBlockedChecks:
-                hostedHandoffBlockedCheckIdsFixture(),
-            }
-          : {}),
-      })),
+      visibleRelatedDestinations: [
+        ...handoffs.map((handoff) => ({
+          linkId: handoff.linkId,
+          auditId: handoff.auditId,
+          detailRoleUrl: `/admin/audit/${handoff.auditId}?game=<seeded-game>`,
+          ...(handoff.linkId === "admin-proof:hosted-evidence-lane"
+            ? {
+                visibleHostedHandoffInputs: hostedHandoffInputIdsFixture(),
+                visibleHostedHandoffBlockedChecks:
+                  hostedHandoffBlockedCheckIdsFixture(),
+              }
+            : {}),
+        })),
+        ...coreLoopFamilyDestinations.map((destination) => ({
+          linkId: destination.linkId,
+          auditId: destination.auditId,
+          detailRoleUrl: destination.detailRoleUrl,
+          visibleScenarioFamilies: [destination.familyId],
+          visibleScenarioFamilyText: {
+            [destination.familyId]:
+              destination.requiredScenarioFamilyText[
+                destination.familyId
+              ].join("\n"),
+          },
+        })),
+      ],
       rawInviteTokensVisible: false,
       releaseReady: false,
       productionReady: false,
@@ -19068,6 +19088,32 @@ function proofGraphReplacementPrivateFeatureTargetFixture() {
       featureSpineCaseFixture("replacement-private-channel-recovery").spineTarget
         .coverageDecision,
   };
+}
+
+function proofGraphCoreLoopScenarioFamilyDestinationsFixture() {
+  return coreLoopScenarioFamilyRows().map((family) => ({
+    linkId: `core-loop-family:${family.id}`,
+    auditId: "local-core-loop",
+    detailRoleUrl: "/admin/audit/local-core-loop?game=<seeded-game>",
+    familyId: family.id,
+    requiredScenarioFamilies: [family.id],
+    requiredScenarioFamilyText: {
+      [family.id]: proofGraphCoreLoopScenarioFamilyTextTokensFixture(family),
+    },
+  }));
+}
+
+function proofGraphCoreLoopScenarioFamilyTextTokensFixture(family) {
+  return [
+    family.label,
+    family.status,
+    ...family.laneIds,
+    ...family.surfaces,
+    ...family.staleRejects,
+    ...family.reloads,
+    ...family.scenarios,
+    ...family.transitionTokens,
+  ].filter((token) => String(token ?? "") !== "");
 }
 
 function hostedHandoffInputIdsFixture() {

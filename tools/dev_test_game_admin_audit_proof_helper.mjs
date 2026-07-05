@@ -304,6 +304,7 @@ export async function proveAdminAuditDetail({
   requiredHostedMatrixSummaryStatuses = {},
   requiredProofLaneCoverage = [],
   requiredScenarioFamilies = [],
+  requiredScenarioFamilyText = {},
   requiredSpineCycles = [],
   requiredSpineRoleUrls = [],
   requiredSpineCheckpoints = [],
@@ -456,6 +457,11 @@ export async function proveAdminAuditDetail({
       page,
       prefix: "admin-audit-scenario-family",
       ids: requiredScenarioFamilies,
+    });
+    const visibleScenarioFamilyText = await waitForRowTextTokens({
+      page,
+      prefix: "admin-audit-scenario-family",
+      expectedTextById: requiredScenarioFamilyText,
     });
     const visibleSpineCycles = await waitForRows({
       page,
@@ -805,6 +811,16 @@ export async function proveAdminAuditDetail({
         prefix: "admin-audit-scenario",
         ids: destination.requiredScenarios ?? [],
       });
+      const destinationVisibleScenarioFamilies = await waitForRows({
+        page,
+        prefix: "admin-audit-scenario-family",
+        ids: destination.requiredScenarioFamilies ?? [],
+      });
+      const destinationVisibleScenarioFamilyText = await waitForRowTextTokens({
+        page,
+        prefix: "admin-audit-scenario-family",
+        expectedTextById: destination.requiredScenarioFamilyText ?? {},
+      });
       const destinationVisibleSessions = await waitForRows({
         page,
         prefix: "admin-audit-session",
@@ -912,6 +928,12 @@ export async function proveAdminAuditDetail({
         ...(destinationVisibleScenarios.length === 0
           ? {}
           : { visibleScenarios: destinationVisibleScenarios }),
+        ...(destinationVisibleScenarioFamilies.length === 0
+          ? {}
+          : { visibleScenarioFamilies: destinationVisibleScenarioFamilies }),
+        ...(Object.keys(destinationVisibleScenarioFamilyText).length === 0
+          ? {}
+          : { visibleScenarioFamilyText: destinationVisibleScenarioFamilyText }),
         ...(destinationVisibleSessions.length === 0
           ? {}
           : { visibleSessions: destinationVisibleSessions }),
@@ -1021,6 +1043,9 @@ export async function proveAdminAuditDetail({
       ...(visibleScenarioFamilies.length === 0
         ? {}
         : { visibleScenarioFamilies }),
+      ...(Object.keys(visibleScenarioFamilyText).length === 0
+        ? {}
+        : { visibleScenarioFamilyText }),
       ...(visibleSpineCycles.length === 0 ? {} : { visibleSpineCycles }),
       ...(visibleSpineRoleUrls.length === 0 ? {} : { visibleSpineRoleUrls }),
       ...(visibleSpineCheckpoints.length === 0
@@ -1320,6 +1345,26 @@ async function waitForRows({ page, prefix, ids, expectedStatuses = {} }) {
     visible.push(id);
   }
   return visible;
+}
+
+async function waitForRowTextTokens({ page, prefix, expectedTextById = {} }) {
+  const visibleText = {};
+  for (const [id, tokens] of Object.entries(expectedTextById ?? {})) {
+    const row = page.getByTestId(`${prefix}-${id}`);
+    await row.waitFor({
+      state: "visible",
+      timeout: 15000,
+    });
+    const text = await row.innerText();
+    for (const token of tokens ?? []) {
+      const expected = String(token ?? "");
+      if (expected !== "" && !text.includes(expected)) {
+        throw new Error(`${prefix}-${id} missing text ${expected}: ${text}`);
+      }
+    }
+    visibleText[id] = text;
+  }
+  return visibleText;
 }
 
 async function waitForHostedHandoffSummary({ page, expected }) {

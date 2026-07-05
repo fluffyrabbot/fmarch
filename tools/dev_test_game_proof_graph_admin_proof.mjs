@@ -1,6 +1,9 @@
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { assertDevTestGameProofGraph } from "./dev_test_game_proof_graph.mjs";
+import {
+  coreLoopScenarioFamilyRows,
+} from "./dev_test_game_core_loop_generated_from_families.mjs";
 import { validateDevTestGameAdminSpineProof } from "./dev_test_game_release_readiness.mjs";
 import { assertDevTestGameProofRun } from "./dev_test_game_proof_contract.mjs";
 import {
@@ -119,6 +122,8 @@ export function proofGraphAdminProofCase() {
         hostedMatrix: source.hostedMatrix,
         hostedEvidenceLane: source.hostedEvidenceLane,
       });
+      const coreLoopFamilyDestinations =
+        proofGraphCoreLoopScenarioFamilyDestinations(source.proofGraph);
       return await proveAdminAuditDetail({
         browser,
         frontendBaseUrl,
@@ -132,8 +137,10 @@ export function proofGraphAdminProofCase() {
               typeof node.roleUrl === "string" && node.roleUrl.trim() !== "",
           )
           .map((node) => node.id),
-        requiredRelatedDestinations:
-          requiredRelatedDestinationsForHandoffs(roleHandoffs),
+        requiredRelatedDestinations: [
+          ...requiredRelatedDestinationsForHandoffs(roleHandoffs),
+          ...coreLoopFamilyDestinations,
+        ],
       });
     },
     buildEvidence: ({ source, adminRoleSurface }) => ({
@@ -169,6 +176,8 @@ export function proofGraphAdminProofCase() {
           hostedMatrix: source.hostedMatrix,
           hostedEvidenceLane: source.hostedEvidenceLane,
         }),
+        coreLoopScenarioFamilyDestinations:
+          proofGraphCoreLoopScenarioFamilyDestinations(source.proofGraph),
         ...proofGraphAdminFeatureTargetEntries(source.proofGraph),
       },
       adminRoleSurface,
@@ -242,10 +251,54 @@ export function assertProofGraphAdminProof(evidence) {
     handoffs: evidence.generatedFrom?.adminProofRoleHandoffs,
     proofName: "proof graph admin proof",
   });
+  assertProofGraphAdminProofCoversCoreLoopScenarioFamilies(evidence);
   for (const featureTargetCase of proofGraphAdminFeatureTargetCases) {
     assertProofGraphAdminProofCoversFeatureTarget(evidence, featureTargetCase);
   }
   return evidence;
+}
+
+function assertProofGraphAdminProofCoversCoreLoopScenarioFamilies(evidence) {
+  for (const destination of
+    evidence.generatedFrom?.coreLoopScenarioFamilyDestinations ?? []) {
+    if (
+      !evidence.adminRoleSurface?.visibleRelatedLinks?.includes(
+        destination.linkId,
+      )
+    ) {
+      throw new Error(
+        `proof graph admin proof missing core-loop family related link: ${destination.linkId}`,
+      );
+    }
+    const visibleDestination =
+      evidence.adminRoleSurface?.visibleRelatedDestinations?.find(
+        (candidate) =>
+          candidate.linkId === destination.linkId &&
+          candidate.auditId === localAdminAuditIds.coreLoop,
+      );
+    if (
+      visibleDestination?.detailRoleUrl !==
+        `/admin/audit/${localAdminAuditIds.coreLoop}?game=<seeded-game>` ||
+      !visibleDestination.visibleScenarioFamilies?.includes(
+        destination.familyId,
+      )
+    ) {
+      throw new Error(
+        `proof graph admin proof did not inspect core-loop family destination: ${destination.familyId}`,
+      );
+    }
+    const visibleText =
+      visibleDestination.visibleScenarioFamilyText?.[destination.familyId] ?? "";
+    for (const token of destination.requiredScenarioFamilyText?.[
+      destination.familyId
+    ] ?? []) {
+      if (!visibleText.includes(token)) {
+        throw new Error(
+          `proof graph admin proof missing core-loop family destination text: ${destination.familyId} ${token}`,
+        );
+      }
+    }
+  }
 }
 
 function assertProofGraphAdminProofCoversFeatureTarget(
@@ -402,6 +455,45 @@ function proofGraphAdminFeatureTargetEntries(proofGraph) {
       proofGraphFeatureTarget(proofGraph, featureTargetCase),
     ]),
   );
+}
+
+function proofGraphCoreLoopScenarioFamilyDestinations(proofGraph) {
+  const nodesByFamilyId = new Map(
+    proofGraph.nodes
+      .filter((node) => node.kind === "core-loop-scenario-family")
+      .map((node) => [node.familyId, node]),
+  );
+  return coreLoopScenarioFamilyRows().map((family) => {
+    const node = nodesByFamilyId.get(family.id);
+    if (node === undefined) {
+      throw new Error(
+        `proof graph missing core-loop scenario family: ${family.id}`,
+      );
+    }
+    return {
+      linkId: node.id,
+      auditId: localAdminAuditIds.coreLoop,
+      detailRoleUrl: `/admin/audit/${localAdminAuditIds.coreLoop}?game=<seeded-game>`,
+      familyId: family.id,
+      requiredScenarioFamilies: [family.id],
+      requiredScenarioFamilyText: {
+        [family.id]: coreLoopScenarioFamilyTextTokens(family),
+      },
+    };
+  });
+}
+
+function coreLoopScenarioFamilyTextTokens(family) {
+  return [
+    family.label,
+    family.status,
+    ...family.laneIds,
+    ...family.surfaces,
+    ...family.staleRejects,
+    ...family.reloads,
+    ...family.scenarios,
+    ...family.transitionTokens,
+  ].filter((token) => String(token ?? "") !== "");
 }
 
 function proofGraphFeatureTarget(proofGraph, featureTargetCase) {

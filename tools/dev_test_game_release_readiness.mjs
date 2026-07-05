@@ -206,6 +206,9 @@ import {
   proofGraphAdminFeatureTargetCases,
 } from "./dev_test_game_proof_graph_feature_target_cases.mjs";
 import {
+  coreLoopScenarioFamilyRows,
+} from "./dev_test_game_core_loop_generated_from_families.mjs";
+import {
   adminProofBatchIdFromLabel,
 } from "./dev_test_game_admin_proof_batch_registry.mjs";
 import {
@@ -5439,6 +5442,7 @@ export function validateDevTestGameProofGraphAdminProof(proof, options = {}) {
   if (proofGraphAdminProofIncludesTerminalReceipts(proof)) {
     validateProofGraphAdminTerminalReceiptArtifact(proof);
   }
+  validateProofGraphAdminCoreLoopScenarioFamilyDestinations(proof);
   for (const featureTargetCase of proofGraphAdminFeatureTargetCases) {
     validateProofGraphAdminFeatureTarget(proof, featureTargetCase);
   }
@@ -5501,6 +5505,65 @@ function proofGraphAdminProofIncludesTerminalReceipts(proof) {
   return (proof.generatedFrom?.receiptArtifactRowIds ?? []).includes(
     hostedIdentityTerminalReceiptArtifactCase.rowId,
   );
+}
+
+function validateProofGraphAdminCoreLoopScenarioFamilyDestinations(proof) {
+  const destinations =
+    proof.generatedFrom?.coreLoopScenarioFamilyDestinations ?? [];
+  const destinationByFamilyId = new Map(
+    destinations.map((destination) => [destination.familyId, destination]),
+  );
+  const visibleDestinations = Array.isArray(
+    proof.adminRoleSurface?.visibleRelatedDestinations,
+  )
+    ? proof.adminRoleSurface.visibleRelatedDestinations
+    : [];
+  const coreLoopRoleUrl = localAdminAuditRoleUrl(localAdminAuditIds.coreLoop);
+  for (const family of coreLoopScenarioFamilyRows()) {
+    const destination = destinationByFamilyId.get(family.id);
+    if (
+      destination?.linkId !== `core-loop-family:${family.id}` ||
+      destination?.auditId !== localAdminAuditIds.coreLoop ||
+      destination?.detailRoleUrl !== coreLoopRoleUrl ||
+      !destination?.requiredScenarioFamilies?.includes(family.id)
+    ) {
+      throw new Error(
+        `proof graph admin proof missing core-loop scenario family destination: ${family.id}`,
+      );
+    }
+    if (
+      !proof.adminRoleSurface?.visibleRelatedLinks?.includes(
+        destination.linkId,
+      )
+    ) {
+      throw new Error(
+        `proof graph admin proof missing core-loop scenario family link: ${family.id}`,
+      );
+    }
+    const visibleDestination = visibleDestinations.find(
+      (item) =>
+        item.linkId === destination.linkId &&
+        item.auditId === localAdminAuditIds.coreLoop,
+    );
+    if (
+      visibleDestination?.detailRoleUrl !== coreLoopRoleUrl ||
+      !visibleDestination.visibleScenarioFamilies?.includes(family.id)
+    ) {
+      throw new Error(
+        `proof graph admin proof did not visit core-loop scenario family: ${family.id}`,
+      );
+    }
+    const visibleText =
+      visibleDestination.visibleScenarioFamilyText?.[family.id] ?? "";
+    for (const token of destination.requiredScenarioFamilyText?.[family.id] ??
+      []) {
+      if (!visibleText.includes(token)) {
+        throw new Error(
+          `proof graph admin proof missing core-loop scenario family text: ${family.id} ${token}`,
+        );
+      }
+    }
+  }
 }
 
 function validateProofGraphAdminFeatureTarget(proof, featureTargetCase) {
