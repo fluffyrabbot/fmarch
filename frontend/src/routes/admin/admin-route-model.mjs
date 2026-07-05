@@ -28,6 +28,9 @@ import {
   coreLoopAuditLaneIds,
 } from "../../../../tools/dev_test_game_core_loop_scenarios.mjs";
 import {
+  coreLoopGeneratedFromScenarioFamilies,
+} from "../../../../tools/dev_test_game_core_loop_generated_from_families.mjs";
+import {
   playerActionBoundaryLaneId,
   playerActionLoopLaneId,
   playerInvalidActionRecoveryLaneId,
@@ -5207,6 +5210,9 @@ export function normalizeLocalCoreLoopAudit(proofRun, { game }) {
     ),
     spineCycles: normalizeCoreLoopSpineCycles(proofRun),
     spineRecoveryHooks: normalizeCoreLoopSpineRecoveryHooks(proofRun),
+    scenarioFamilies: normalizeCoreLoopScenarioFamilies(
+      coreLoopGeneratedFromScenarioFamilies(),
+    ),
     artifactSummary: Object.freeze({
       game: String(proofRun.session?.game ?? ""),
       roleCount: Array.isArray(proofRun.session?.roles)
@@ -5226,6 +5232,49 @@ export function normalizeLocalCoreLoopAudit(proofRun, { game }) {
       productionReady: proofRun.productionReady === true,
     }),
   });
+}
+
+function normalizeCoreLoopScenarioFamilies(families) {
+  return Object.freeze(
+    Object.values(families ?? {}).map((family) => {
+      const surfaces =
+        family?.surfaces !== null && typeof family?.surfaces === "object"
+          ? Object.keys(family.surfaces)
+          : [];
+      const staleRejects =
+        family?.staleRejects !== null && typeof family?.staleRejects === "object"
+          ? Object.keys(family.staleRejects)
+          : [];
+      const reloads =
+        family?.reloads !== null && typeof family?.reloads === "object"
+          ? Object.keys(family.reloads)
+          : [];
+      const scenarios =
+        family?.scenarios !== null && typeof family?.scenarios === "object"
+          ? Object.keys(family.scenarios)
+          : [];
+      const transitionTokens =
+        family?.transitionTokens !== null &&
+        typeof family?.transitionTokens === "object"
+          ? Object.keys(family.transitionTokens)
+          : [];
+      return Object.freeze({
+        id: String(family?.id ?? ""),
+        label: formatSpineLabel(family?.id),
+        status: `${Array.isArray(family?.laneIds) ? family.laneIds.length : 0} lanes, ${surfaces.length} surfaces`,
+        laneIds: Object.freeze(
+          (Array.isArray(family?.laneIds) ? family.laneIds : []).map((id) =>
+            String(id),
+          ),
+        ),
+        surfaces: Object.freeze(surfaces),
+        staleRejects: Object.freeze(staleRejects),
+        reloads: Object.freeze(reloads),
+        scenarios: Object.freeze(scenarios),
+        transitionTokens: Object.freeze(transitionTokens),
+      });
+    }),
+  );
 }
 
 function completedGameHardeningCoverageStatus(proofRun) {

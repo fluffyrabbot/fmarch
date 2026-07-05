@@ -303,6 +303,7 @@ export async function proveAdminAuditDetail({
   requiredHostedMatrixSummaries = [],
   requiredHostedMatrixSummaryStatuses = {},
   requiredProofLaneCoverage = [],
+  requiredScenarioFamilies = [],
   requiredSpineCycles = [],
   requiredSpineRoleUrls = [],
   requiredSpineCheckpoints = [],
@@ -450,6 +451,11 @@ export async function proveAdminAuditDetail({
       page,
       prefix: "admin-audit-proof-lane-coverage",
       ids: requiredProofLaneCoverage,
+    });
+    const visibleScenarioFamilies = await waitForRows({
+      page,
+      prefix: "admin-audit-scenario-family",
+      ids: requiredScenarioFamilies,
     });
     const visibleSpineCycles = await waitForRows({
       page,
@@ -1012,6 +1018,9 @@ export async function proveAdminAuditDetail({
       ...(visibleProofLaneCoverage.length === 0
         ? {}
         : { visibleProofLaneCoverage }),
+      ...(visibleScenarioFamilies.length === 0
+        ? {}
+        : { visibleScenarioFamilies }),
       ...(visibleSpineCycles.length === 0 ? {} : { visibleSpineCycles }),
       ...(visibleSpineRoleUrls.length === 0 ? {} : { visibleSpineRoleUrls }),
       ...(visibleSpineCheckpoints.length === 0

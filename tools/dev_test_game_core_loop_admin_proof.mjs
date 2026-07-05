@@ -251,6 +251,12 @@ function proofRunLane(proofRun, laneId) {
   };
 }
 
+function coreLoopScenarioFamilyIds() {
+  return Object.values(coreLoopGeneratedFromScenarioFamilies()).map(
+    (family) => family.id,
+  );
+}
+
 export function coreLoopAdminProofCase() {
   return {
     smokeName: "dev-test-game-core-loop-admin-proof",
@@ -275,6 +281,7 @@ export function coreLoopAdminProofCase() {
           ...coreLoopHighlightedLaneEvidence(proofRun),
         },
         requiredSpineCycles: spineRows.cycles,
+        requiredScenarioFamilies: coreLoopScenarioFamilyIds(),
         requiredSpineRoleUrls: spineRows.roleUrls,
         requiredSpineCheckpoints: spineRows.checkpoints,
         requiredSpineRecoveryHooks: spineRows.recoveryHooks,
@@ -9908,6 +9915,11 @@ export function assertCoreLoopAdminProof(evidence) {
       "core-loop admin proof missing private-channel recovery family",
     );
   }
+  assertVisibleRows(
+    "core-loop admin proof missing visible scenario family",
+    evidence.adminRoleSurface?.visibleScenarioFamilies,
+    coreLoopScenarioFamilyIds(),
+  );
   assertVisibleRows(
     "core-loop admin proof missing visible spine cycle",
     evidence.adminRoleSurface?.visibleSpineCycles,

@@ -90,6 +90,39 @@
         </ol>
       </section>
     {/if}
+    {#if data.audit.scenarioFamilies?.length > 0}
+      <section
+        class="admin-audit-detail__group"
+        data-testid="admin-audit-detail-scenario-families"
+      >
+        <h2>Core loop families</h2>
+        <ol class="admin-audit-detail__entries">
+          {#each data.audit.scenarioFamilies as family}
+            <li
+              class="admin-audit-detail__entry admin-audit-detail__entry--stack"
+              data-testid={`admin-audit-scenario-family-${family.id}`}
+            >
+              <strong>{family.label}</strong>
+              <span>{family.status}</span>
+              <span>{family.laneIds.join(", ")}</span>
+              <span>{family.surfaces.join(", ")}</span>
+              {#if family.staleRejects?.length > 0}
+                <span>{family.staleRejects.join(", ")}</span>
+              {/if}
+              {#if family.reloads?.length > 0}
+                <span>{family.reloads.join(", ")}</span>
+              {/if}
+              {#if family.scenarios?.length > 0}
+                <span>{family.scenarios.join(", ")}</span>
+              {/if}
+              {#if family.transitionTokens?.length > 0}
+                <span>{family.transitionTokens.join(", ")}</span>
+              {/if}
+            </li>
+          {/each}
+        </ol>
+      </section>
+    {/if}
     {#if data.audit.spineRecoveryHooks?.length > 0}
       <section
         class="admin-audit-detail__group"
