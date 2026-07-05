@@ -21,6 +21,10 @@ export const selectedNextActionGraphDestinationCases = Object.freeze([
         subject,
       ),
     }),
+    destinationRelatedLinkIds: (subject) =>
+      String(subject?.roleUrl ?? "").trim() === ""
+        ? []
+        : [String(subject?.id ?? "")],
     proofMissingMessage:
       "next-action admin proof missing selected proof graph destination",
     proofTextMessage:
@@ -67,6 +71,7 @@ export const selectedNextActionGraphDestinationCases = Object.freeze([
           : { [coverageDecisionCheckId]: coverageDecisionTokens }),
       };
     },
+    destinationRelatedLinkIds: (subject) => [String(subject?.nodeId ?? "")],
     proofMissingMessage:
       "next-action admin proof missing selected production feature graph destination",
     proofTextMessage:
@@ -77,14 +82,6 @@ export const selectedNextActionGraphDestinationCases = Object.freeze([
       "next-action admin proof did not prove selected production feature graph destination",
   }),
 ]);
-
-export function selectedNextActionGraphDestinationCaseForId(caseId) {
-  return (
-    selectedNextActionGraphDestinationCases.find(
-      (destinationCase) => destinationCase.id === caseId,
-    ) ?? null
-  );
-}
 
 export function productionFeatureGraphCoverageDecisionCheckId(selectedGraph) {
   const nodeId = String(selectedGraph?.nodeId ?? "");
@@ -128,6 +125,34 @@ export function selectedGraphDestinationRequiredCheckText({
   subject,
 }) {
   return destinationCase?.destinationCheckText(subject) ?? {};
+}
+
+export function selectedGraphDestinationRequiredRelatedLinkIds({
+  destinationCase,
+  subject,
+}) {
+  return destinationCase?.destinationRelatedLinkIds(subject) ?? [];
+}
+
+export function selectedGraphDestinationHandoffSummary({
+  destinationCase,
+  subject,
+}) {
+  const linkId = selectedGraphDestinationLinkId({ destinationCase, subject });
+  return linkId === ""
+    ? null
+    : {
+        linkId,
+        auditId: localAdminAuditIds.proofGraph,
+        requiredCheckIds: selectedGraphDestinationRequiredCheckIds({
+          destinationCase,
+          subject,
+        }),
+        requiredRelatedLinkIds: selectedGraphDestinationRequiredRelatedLinkIds({
+          destinationCase,
+          subject,
+        }),
+      };
 }
 
 export function assertSelectedGraphDestinationCaseText({

@@ -30,9 +30,8 @@ import {
 } from "./dev_test_game_admin_audit_surface_ids.mjs";
 import {
   assertSelectedGraphDestinationCaseSurface,
-  selectedGraphDestinationRequiredCheckIds,
+  selectedGraphDestinationHandoffSummary,
   selectedGraphDestinationSubject,
-  selectedNextActionGraphDestinationCaseForId,
   selectedNextActionGraphDestinationCases,
 } from "./dev_test_game_next_action_graph_destination_assertions.mjs";
 import {
@@ -1398,28 +1397,10 @@ function selectedHostedIdentityOperatorCandidate(nextAction) {
 
 function relatedHandoffsForNextAction({ nextAction, proofGraph, hostedMatrix }) {
   return [
-    selectedProofGraphHandoffSummary({ nextAction, proofGraph }),
-    selectedProductionFeatureGraphHandoffSummary({ nextAction }),
+    ...selectedGraphDestinationHandoffSummaries({ nextAction, proofGraph }),
     hostedIdentityEvidenceHandoffSummary({ nextAction }),
     hostedMatrixHandoffSummary({ nextAction, hostedMatrix }),
   ].filter((handoff) => handoff !== null);
-}
-
-function selectedProofGraphHandoffSummary({ nextAction, proofGraph }) {
-  const selectedNode = selectedNextActionProofGraphNodeSummary({
-    nextAction,
-    proofGraph,
-  });
-  if (selectedNode === null) {
-    return null;
-  }
-  return {
-    linkId: "selected-proof-graph-node",
-    auditId: localAdminAuditIds.proofGraph,
-    requiredCheckIds: [selectedNode.id],
-    requiredRelatedLinkIds:
-      selectedNode.roleUrl === "" ? [] : [selectedNode.id],
-  };
 }
 
 function hostedIdentityEvidenceHandoffSummary({ nextAction }) {
@@ -1455,31 +1436,6 @@ function hostedIdentityEvidenceHandoffSummary({ nextAction }) {
   };
 }
 
-function selectedProductionFeatureGraphHandoffSummary({ nextAction }) {
-  const selectedGraph =
-    nextAction.nextAction.unproven?.selectedProductionFeatureGraph;
-  if (
-    selectedGraph === null ||
-    typeof selectedGraph !== "object" ||
-    typeof selectedGraph.nodeId !== "string" ||
-    selectedGraph.nodeId.trim() === ""
-  ) {
-    return null;
-  }
-  const destinationCase = selectedNextActionGraphDestinationCaseForId(
-    "selected-production-feature-graph",
-  );
-  return {
-    linkId: selectedGraph.nodeId,
-    auditId: localAdminAuditIds.proofGraph,
-    requiredCheckIds: selectedGraphDestinationRequiredCheckIds({
-      destinationCase,
-      subject: selectedGraph,
-    }),
-    requiredRelatedLinkIds: [selectedGraph.nodeId],
-  };
-}
-
 function assertSelectedGraphDestinationCases(evidence) {
   for (const destinationCase of selectedNextActionGraphDestinationCases) {
     const subject = selectedGraphDestinationSubject({
@@ -1497,6 +1453,36 @@ function assertSelectedGraphDestinationCases(evidence) {
       textErrorMessage: destinationCase.proofTextMessage,
     });
   }
+}
+
+function selectedGraphDestinationHandoffSummaries({ nextAction, proofGraph }) {
+  const generatedFrom = selectedGraphDestinationGeneratedFrom({
+    nextAction,
+    proofGraph,
+  });
+  return selectedNextActionGraphDestinationCases.map((destinationCase) => {
+    const subject = selectedGraphDestinationSubject({
+      destinationCase,
+      generatedFrom,
+    });
+    return subject === null
+      ? null
+      : selectedGraphDestinationHandoffSummary({
+          destinationCase,
+          subject,
+        });
+  });
+}
+
+function selectedGraphDestinationGeneratedFrom({ nextAction, proofGraph }) {
+  return {
+    selectedProofGraphNode: selectedNextActionProofGraphNodeSummary({
+      nextAction,
+      proofGraph,
+    }),
+    unprovenSelectedProductionFeatureGraph:
+      nextAction.nextAction.unproven?.selectedProductionFeatureGraph ?? null,
+  };
 }
 
 function requiredChecksForEvidence(evidence) {
