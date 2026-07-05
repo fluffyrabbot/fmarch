@@ -71,6 +71,7 @@ export function hostedEvidenceLaneAdminProofCase({
   requiredText = [
     "Hosted evidence blocked receipt",
     "Real hosted raw-capture intake",
+    "First missing operator artifact",
   ],
   assertEvidence = assertHostedEvidenceLaneAdminProof,
 } = {}) {

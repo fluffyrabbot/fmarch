@@ -1552,7 +1552,9 @@ test("admin audit detail page renders hosted evidence raw-capture intake as a na
   assert.match(source, /hostedHandoffBlockedReceiptHeading/);
   assert.match(source, /Hosted evidence blocked receipt/);
   assert.match(source, /Real hosted raw-capture intake/);
+  assert.match(source, /First missing operator artifact/);
   assert.match(source, /realHostedMatrixRawCaptureIntake\.proofTarget/);
+  assert.match(source, /firstMissingOperatorArtifact\.roleSurfaceDrilldown/);
 });
 
 test("admin hosted-facing audit inventory carries shared handoff paths where required", async () => {

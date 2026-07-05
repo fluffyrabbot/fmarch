@@ -1063,6 +1063,7 @@
               <span>{data.audit.hostedHandoffChecklist.blockedReceipt.missingRequiredInputs.join(", ")}</span>
               <span>{data.audit.hostedHandoffChecklist.blockedReceipt.nextProofTarget}</span>
               {#if data.audit.hostedHandoffChecklist.blockedReceipt.firstMissingOperatorArtifact}
+                <h4>First missing operator artifact</h4>
                 <span>{data.audit.hostedHandoffChecklist.blockedReceipt.firstMissingOperatorArtifact.inputId}</span>
                 <span>{data.audit.hostedHandoffChecklist.blockedReceipt.firstMissingOperatorArtifact.checkId}</span>
                 <span>{data.audit.hostedHandoffChecklist.blockedReceipt.firstMissingOperatorArtifact.sectionId}</span>
