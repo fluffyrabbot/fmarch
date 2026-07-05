@@ -754,6 +754,16 @@ export async function proveAdminAuditDetail({
         prefix: "admin-audit-hosted-handoff-blocked-check",
         ids: destination.requiredHostedHandoffBlockedChecks ?? [],
       });
+      const destinationVisibleHostedHandoffSummary =
+        await waitForHostedHandoffSummary({
+          page,
+          expected: destination.requiredHostedHandoffSummary,
+        });
+      const destinationVisibleHostedHandoffBlockedReceipt =
+        await waitForHostedHandoffBlockedReceipt({
+          page,
+          expected: destination.requiredHostedHandoffBlockedReceipt,
+        });
       await assertAdminAuditBodyText({
         page,
         auditId: destinationAuditId,
@@ -810,6 +820,18 @@ export async function proveAdminAuditDetail({
           : {
               visibleHostedHandoffBlockedChecks:
                 destinationVisibleHostedHandoffBlockedChecks,
+            }),
+        ...(destinationVisibleHostedHandoffSummary === null
+          ? {}
+          : {
+              visibleHostedHandoffSummary:
+                destinationVisibleHostedHandoffSummary,
+            }),
+        ...(destinationVisibleHostedHandoffBlockedReceipt === null
+          ? {}
+          : {
+              visibleHostedHandoffBlockedReceipt:
+                destinationVisibleHostedHandoffBlockedReceipt,
             }),
       });
     }

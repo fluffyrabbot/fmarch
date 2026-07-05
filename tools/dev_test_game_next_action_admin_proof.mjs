@@ -1031,6 +1031,7 @@ function relatedHandoffsForNextAction({ nextAction, proofGraph, hostedMatrix }) 
   return [
     selectedProofGraphHandoffSummary({ nextAction, proofGraph }),
     selectedProductionFeatureGraphHandoffSummary({ nextAction }),
+    hostedIdentityEvidenceHandoffSummary({ nextAction }),
     hostedMatrixHandoffSummary({ nextAction, hostedMatrix }),
   ].filter((handoff) => handoff !== null);
 }
@@ -1049,6 +1050,42 @@ function selectedProofGraphHandoffSummary({ nextAction, proofGraph }) {
     requiredCheckIds: [selectedNode.id],
     requiredRelatedLinkIds:
       selectedNode.roleUrl === "" ? [] : [selectedNode.id],
+  };
+}
+
+function hostedIdentityEvidenceHandoffSummary({ nextAction }) {
+  const unproven = nextAction.nextAction.unproven;
+  if (
+    unproven?.id !== "hosted-production-identity" ||
+    unproven?.proofGraphNodeId !== "admin-proof:hosted-identity-evidence" ||
+    typeof unproven?.roleUrl !== "string" ||
+    !unproven.roleUrl.includes("/admin/audit/local-hosted-identity-evidence")
+  ) {
+    return null;
+  }
+  const checklist = unproven.hostedHandoffChecklist;
+  return {
+    linkId: unproven.proofGraphNodeId,
+    auditId: localAdminAuditIds.hostedIdentityEvidence,
+    requiredCheckIds: Array.isArray(checklist?.blockedCheckIds)
+      ? checklist.blockedCheckIds
+      : [],
+    requiredHostedHandoffInputIds: Array.isArray(checklist?.inputIds)
+      ? checklist.inputIds
+      : [],
+    requiredHostedHandoffBlockedCheckIds: Array.isArray(
+      checklist?.blockedCheckIds,
+    )
+      ? checklist.blockedCheckIds
+      : [],
+    requiredHostedHandoffSummary:
+      requiredHostedHandoffSummaryForNextAction(nextAction),
+    requiredHostedHandoffBlockedReceipt:
+      requiredHostedHandoffBlockedReceiptForNextAction(nextAction),
+    requiredRelatedLinkIds: [
+      localAdminAuditIds.identityAdapter,
+      localAdminAuditIds.nextAction,
+    ],
   };
 }
 

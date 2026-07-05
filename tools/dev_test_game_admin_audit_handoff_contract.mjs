@@ -22,6 +22,10 @@ export function requiredRelatedDestinationsForHandoff(handoff) {
             handoff.requiredHostedHandoffInputIds ?? [],
           requiredHostedHandoffBlockedChecks:
             handoff.requiredHostedHandoffBlockedCheckIds ?? [],
+          requiredHostedHandoffSummary:
+            handoff.requiredHostedHandoffSummary ?? null,
+          requiredHostedHandoffBlockedReceipt:
+            handoff.requiredHostedHandoffBlockedReceipt ?? null,
           requiredRelatedLinks: handoff.requiredRelatedLinkIds ?? [],
         },
       ];
@@ -154,6 +158,25 @@ export function assertAdminAuditRelatedHandoff({
         `${name} handoff destination missing hosted handoff blocked check: ${checkId}`,
       );
     }
+  }
+  assertOptionalObjectEqual({
+    actual: destination.visibleHostedHandoffSummary,
+    expected: handoff.requiredHostedHandoffSummary,
+    message: `${name} handoff destination missing hosted handoff summary`,
+  });
+  assertOptionalObjectEqual({
+    actual: destination.visibleHostedHandoffBlockedReceipt,
+    expected: handoff.requiredHostedHandoffBlockedReceipt,
+    message: `${name} handoff destination missing hosted handoff blocked receipt`,
+  });
+}
+
+function assertOptionalObjectEqual({ actual, expected, message }) {
+  if (expected === null || expected === undefined) {
+    return;
+  }
+  if (JSON.stringify(actual ?? null) !== JSON.stringify(expected)) {
+    throw new Error(message);
   }
 }
 
