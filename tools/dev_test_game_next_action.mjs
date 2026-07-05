@@ -120,9 +120,15 @@ import {
 } from "./dev_test_game_hosted_handoff_proof_cases.mjs";
 import {
   devTestGameHostedIdentityOperatorAdminProofPath,
+  devTestGameHostedIdentityOperatorAdminProofCommand,
   devTestGameHostedIdentityProgressionAdminProofBatchCommand,
   hostedIdentityEvidenceFamilyProgressionCases,
   hostedIdentityEvidenceProgressionAdminProofPath,
+  hostedIdentityEvidenceProofGraphNodeId,
+  hostedIdentityFamilyBatchOperatorProofGraphRelationship,
+  hostedIdentityFamilyBatchProofGraphNodeId,
+  hostedIdentityOperatorAdminSurfaceProofGraphRelationship,
+  hostedIdentityOperatorPredicateProofGraphNodeId,
 } from "./dev_test_game_hosted_identity_evidence_cases.mjs";
 import {
   devTestGameAdminSpineAdminProofPath,
@@ -447,6 +453,12 @@ export function buildDevTestGameNextAction(
                     hostedIdentityFamilyBatch:
                       selectedUnproven.hostedIdentityFamilyBatch,
                   }),
+              ...(selectedUnproven.hostedIdentityProofGraphEdges === undefined
+                ? {}
+                : {
+                    hostedIdentityProofGraphEdges:
+                      selectedUnproven.hostedIdentityProofGraphEdges,
+                  }),
             },
           }
         : {
@@ -741,6 +753,17 @@ export function assertDevTestGameNextAction(evidence) {
     ) {
       throw new Error(
         "next-action release-readiness recovery has a malformed hosted identity family batch predicate",
+      );
+    }
+    if (
+      evidence.nextAction.unproven?.hostedIdentityProofGraphEdges !==
+        undefined &&
+      !validHostedIdentityProofGraphEdges(
+        evidence.nextAction.unproven.hostedIdentityProofGraphEdges,
+      )
+    ) {
+      throw new Error(
+        "next-action release-readiness recovery has a malformed hosted identity proof graph dependency",
       );
     }
   }
@@ -1059,6 +1082,10 @@ function rankedBuildableReleaseReadinessItems(
         hostedHandoffChecklist: selectedBuildable.hostedHandoffChecklist,
         hostedIdentityProgression: selectedBuildable.hostedIdentityProgression,
         hostedIdentityFamilyBatch: selectedBuildable.hostedIdentityFamilyBatch,
+        hostedIdentityProofGraphEdges:
+          item.id === "hosted-production-identity"
+            ? hostedIdentityProofGraphEdgesFromProofGraph(proofGraph)
+            : undefined,
         actionStatus: releaseReadinessActionStatus(selectedBuildable),
       };
     })
@@ -1457,6 +1484,72 @@ export function selectedProductionFeatureGraphForTarget({
     proofTarget: String(node.artifact ?? ""),
     coverageDecision: node.coverageDecision ?? spineTarget.coverageDecision,
   };
+}
+
+function hostedIdentityProofGraphEdgesFromProofGraph(proofGraph) {
+  if (proofGraph === null) {
+    return undefined;
+  }
+  const familyBatchNode = proofGraph.nodes.find(
+    (node) => node?.id === hostedIdentityFamilyBatchProofGraphNodeId,
+  );
+  const operatorNode = proofGraph.nodes.find(
+    (node) => node?.id === hostedIdentityOperatorPredicateProofGraphNodeId,
+  );
+  const adminSurfaceNode = proofGraph.nodes.find(
+    (node) => node?.id === hostedIdentityEvidenceProofGraphNodeId,
+  );
+  const familyBatchEdge = proofGraph.edges.find(
+    (edge) =>
+      edge?.from === hostedIdentityFamilyBatchProofGraphNodeId &&
+      edge?.to === hostedIdentityOperatorPredicateProofGraphNodeId &&
+      edge?.relationship ===
+        hostedIdentityFamilyBatchOperatorProofGraphRelationship,
+  );
+  const operatorSurfaceEdge = proofGraph.edges.find(
+    (edge) =>
+      edge?.from === hostedIdentityOperatorPredicateProofGraphNodeId &&
+      edge?.to === hostedIdentityEvidenceProofGraphNodeId &&
+      edge?.relationship ===
+        hostedIdentityOperatorAdminSurfaceProofGraphRelationship,
+  );
+  if (
+    familyBatchNode === undefined ||
+    operatorNode === undefined ||
+    adminSurfaceNode === undefined ||
+    familyBatchEdge === undefined ||
+    operatorSurfaceEdge === undefined
+  ) {
+    return undefined;
+  }
+  return {
+    id: "hosted-identity-proof-graph-dependency",
+    status: "recorded",
+    proofGraphRoleUrl: localAdminAuditRoleUrl(localAdminAuditIds.proofGraph),
+    familyBatchNodeId: hostedIdentityFamilyBatchProofGraphNodeId,
+    operatorPredicateNodeId: hostedIdentityOperatorPredicateProofGraphNodeId,
+    adminSurfaceNodeId: hostedIdentityEvidenceProofGraphNodeId,
+    familyProofTargets: Array.isArray(familyBatchNode.proofTargets)
+      ? familyBatchNode.proofTargets.map((target) => String(target))
+      : [],
+    operatorProofTarget: String(operatorNode.artifact ?? ""),
+    edges: [familyBatchEdge, operatorSurfaceEdge].map((edge) => ({
+      id: proofGraphEdgeCheckId(edge),
+      from: String(edge.from ?? ""),
+      to: String(edge.to ?? ""),
+      relationship: String(edge.relationship ?? ""),
+      command: String(edge.command ?? ""),
+      proofTarget: String(edge.proofTarget ?? ""),
+    })),
+    proofBoundary:
+      "Hosted identity proof graph dependency. This next-action row links the family proof batch, operator predicate proof, and hosted identity admin surface graph edges; it records local graph topology only and does not prove live hosted identity traffic, release readiness, or production readiness.",
+  };
+}
+
+function proofGraphEdgeCheckId(edge) {
+  return `edge:${String(edge?.from ?? "")}:${String(
+    edge?.relationship ?? "related",
+  )}:${String(edge?.to ?? "")}`;
 }
 
 function validSelectedProductionFeatureGraph(graphSelection, spineTarget) {
@@ -1858,6 +1951,56 @@ function validHostedIdentityFamilyBatchPredicate(batch) {
     ) &&
     typeof batch.proofBoundary === "string" &&
     batch.proofBoundary.includes("does not prove live hosted identity traffic")
+  );
+}
+
+function validHostedIdentityProofGraphEdges(dependency) {
+  const expectedEdges = [
+    {
+      from: hostedIdentityFamilyBatchProofGraphNodeId,
+      to: hostedIdentityOperatorPredicateProofGraphNodeId,
+      relationship: hostedIdentityFamilyBatchOperatorProofGraphRelationship,
+      command: `npm run ${devTestGameHostedIdentityProgressionAdminProofBatchCommand}`,
+      proofTarget: devTestGameHostedIdentityOperatorAdminProofPath,
+    },
+    {
+      from: hostedIdentityOperatorPredicateProofGraphNodeId,
+      to: hostedIdentityEvidenceProofGraphNodeId,
+      relationship: hostedIdentityOperatorAdminSurfaceProofGraphRelationship,
+      command: `npm run ${devTestGameHostedIdentityOperatorAdminProofCommand}`,
+      proofTarget: devTestGameHostedIdentityOperatorAdminProofPath,
+    },
+  ];
+  return (
+    dependency !== null &&
+    typeof dependency === "object" &&
+    dependency.id === "hosted-identity-proof-graph-dependency" &&
+    dependency.status === "recorded" &&
+    dependency.proofGraphRoleUrl ===
+      localAdminAuditRoleUrl(localAdminAuditIds.proofGraph) &&
+    dependency.familyBatchNodeId === hostedIdentityFamilyBatchProofGraphNodeId &&
+    dependency.operatorPredicateNodeId ===
+      hostedIdentityOperatorPredicateProofGraphNodeId &&
+    dependency.adminSurfaceNodeId === hostedIdentityEvidenceProofGraphNodeId &&
+    Array.isArray(dependency.familyProofTargets) &&
+    dependency.familyProofTargets.length ===
+      hostedIdentityEvidenceFamilyProgressionCases.length &&
+    dependency.operatorProofTarget === devTestGameHostedIdentityOperatorAdminProofPath &&
+    Array.isArray(dependency.edges) &&
+    dependency.edges.length === expectedEdges.length &&
+    dependency.edges.every((edge, index) => {
+      const expected = expectedEdges[index];
+      return (
+        edge.id === proofGraphEdgeCheckId(expected) &&
+        edge.from === expected.from &&
+        edge.to === expected.to &&
+        edge.relationship === expected.relationship &&
+        edge.command === expected.command &&
+        edge.proofTarget === expected.proofTarget
+      );
+    }) &&
+    typeof dependency.proofBoundary === "string" &&
+    dependency.proofBoundary.includes("records local graph topology only")
   );
 }
 

@@ -2269,6 +2269,10 @@ export function normalizeLocalNextActionAudit(nextAction, { game, proofGraph = n
     normalizeNextActionHostedIdentityFamilyBatch(
       unproven?.hostedIdentityFamilyBatch,
     );
+  const hostedIdentityProofGraphEdges =
+    normalizeNextActionHostedIdentityProofGraphEdges(
+      unproven?.hostedIdentityProofGraphEdges,
+    );
   const localCheckRoleUrl =
     typeof localCheck?.roleUrl === "string" && localCheck.roleUrl.trim() !== ""
       ? localCheck.roleUrl
@@ -2440,6 +2444,38 @@ export function normalizeLocalNextActionAudit(nextAction, { game, proofGraph = n
                     .filter((part) => String(part ?? "") !== "")
                     .join("\n"),
                 }),
+              ]),
+          ...(hostedIdentityProofGraphEdges === null
+            ? []
+            : [
+                Object.freeze({
+                  id: hostedIdentityProofGraphEdges.id,
+                  status: [
+                    hostedIdentityProofGraphEdges.status,
+                    hostedIdentityProofGraphEdges.proofGraphRoleUrl,
+                    hostedIdentityProofGraphEdges.familyBatchNodeId,
+                    hostedIdentityProofGraphEdges.operatorPredicateNodeId,
+                    hostedIdentityProofGraphEdges.adminSurfaceNodeId,
+                    hostedIdentityProofGraphEdges.operatorProofTarget,
+                    hostedIdentityProofGraphEdges.proofBoundary,
+                  ]
+                    .filter((part) => String(part ?? "") !== "")
+                    .join("\n"),
+                }),
+                ...hostedIdentityProofGraphEdges.edges.map((edge) =>
+                  Object.freeze({
+                    id: edge.id,
+                    status: [
+                      edge.from,
+                      edge.relationship,
+                      edge.to,
+                      edge.command,
+                      edge.proofTarget,
+                    ]
+                      .filter((part) => String(part ?? "") !== "")
+                      .join("\n"),
+                  }),
+                ),
               ]),
           Object.freeze({
             id: "selected-next-command",
@@ -2644,6 +2680,9 @@ export function normalizeLocalNextActionAudit(nextAction, { game, proofGraph = n
     ...(hostedIdentityFamilyBatch === null
       ? {}
       : { hostedIdentityFamilyBatch }),
+    ...(hostedIdentityProofGraphEdges === null
+      ? {}
+      : { hostedIdentityProofGraphEdges }),
     localPrerequisites:
       artifact === null || artifactRoleUrl === ""
         ? Object.freeze([])
@@ -2939,6 +2978,40 @@ function normalizeNextActionHostedIdentityFamilyBatch(batch) {
       ),
     ),
     proofBoundary: String(batch.proofBoundary ?? ""),
+  });
+}
+
+function normalizeNextActionHostedIdentityProofGraphEdges(dependency) {
+  if (dependency === null || typeof dependency !== "object") {
+    return null;
+  }
+  return Object.freeze({
+    id: String(dependency.id ?? ""),
+    status: String(dependency.status ?? "unknown"),
+    proofGraphRoleUrl: String(dependency.proofGraphRoleUrl ?? ""),
+    familyBatchNodeId: String(dependency.familyBatchNodeId ?? ""),
+    operatorPredicateNodeId: String(dependency.operatorPredicateNodeId ?? ""),
+    adminSurfaceNodeId: String(dependency.adminSurfaceNodeId ?? ""),
+    familyProofTargets: Object.freeze(
+      (Array.isArray(dependency.familyProofTargets)
+        ? dependency.familyProofTargets
+        : []
+      ).map((target) => String(target ?? "")),
+    ),
+    operatorProofTarget: String(dependency.operatorProofTarget ?? ""),
+    edges: Object.freeze(
+      (Array.isArray(dependency.edges) ? dependency.edges : []).map((edge) =>
+        Object.freeze({
+          id: String(edge?.id ?? ""),
+          from: String(edge?.from ?? ""),
+          to: String(edge?.to ?? ""),
+          relationship: String(edge?.relationship ?? ""),
+          command: String(edge?.command ?? ""),
+          proofTarget: String(edge?.proofTarget ?? ""),
+        }),
+      ),
+    ),
+    proofBoundary: String(dependency.proofBoundary ?? ""),
   });
 }
 

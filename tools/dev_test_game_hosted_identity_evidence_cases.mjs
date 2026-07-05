@@ -87,6 +87,14 @@ export const hostedIdentityEvidenceProofGraphNodeId =
   "admin-proof:hosted-identity-evidence";
 export const hostedIdentityEvidenceProductionFeatureGraphNodeId =
   "production-feature:identity-adapter";
+export const hostedIdentityFamilyBatchProofGraphNodeId =
+  "hosted-identity-family-proof-batch";
+export const hostedIdentityOperatorPredicateProofGraphNodeId =
+  "hosted-identity-operator-predicate-proof";
+export const hostedIdentityFamilyBatchOperatorProofGraphRelationship =
+  "prerequisite-for-hosted-identity-operator";
+export const hostedIdentityOperatorAdminSurfaceProofGraphRelationship =
+  "operator-predicate-for-admin-surface";
 export const hostedIdentityEvidenceProofGraphPath =
   devTestGameProofGraphPath;
 export const devTestGameHostedIdentityEvidenceAdminProofPath =

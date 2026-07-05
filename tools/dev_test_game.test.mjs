@@ -270,6 +270,11 @@ import {
   hostedIdentityEvidenceOperatorPartialFixturePath,
   hostedIdentityEvidenceOperatorRecoveredFixturePath,
   hostedIdentityOperatorEvidencePacketPath,
+  hostedIdentityEvidenceProofGraphNodeId,
+  hostedIdentityFamilyBatchOperatorProofGraphRelationship,
+  hostedIdentityFamilyBatchProofGraphNodeId,
+  hostedIdentityOperatorAdminSurfaceProofGraphRelationship,
+  hostedIdentityOperatorPredicateProofGraphNodeId,
   hostedIdentityEvidencePacketSectionDefinitions,
   hostedIdentityEvidenceProgressionAdminProofPath,
   hostedIdentityEvidenceProgressionPath,
@@ -3032,6 +3037,7 @@ test("dev test-game next-action derives one local recovery command from the mani
     proofBoundary:
       "Hosted identity family proof batch predicate. Required means one or more family admin proofs are missing or stale; current means all family admin proofs are valid and the aggregate hosted identity operator spine may run. It does not prove live hosted identity traffic, release readiness, or production readiness.",
   };
+  const hostedIdentityProofGraphEdges = hostedIdentityProofGraphEdgesFixture();
   const hostedProductionIdentityOperatorUnproven =
     hostedProductionIdentityUnprovenFixture({
       proofTarget: firstHostedIdentityProgression.adminProofTarget,
@@ -3302,6 +3308,7 @@ test("dev test-game next-action derives one local recovery command from the mani
     sequenceStage: devTestGameHostedIdentitySequenceStage,
     opsArtifacts: devTestGameOpsArtifactsFixture(),
     raceCoverage: devTestGameRaceCoverageFixture(),
+    proofGraph: hostedIdentityProofGraphFixture(),
     hostedIdentityProgressionProofs: allProgressionProofs,
     releaseReadinessChecklist: devTestGameReleaseReadinessChecklistFixture({
       includeOpsArtifactBundleCheck: true,
@@ -3334,6 +3341,11 @@ test("dev test-game next-action derives one local recovery command from the mani
       status: "current",
       firstPendingProgressionId: null,
     },
+  );
+  assert.deepEqual(
+    hostedIdentityOperatorStageAction.nextAction.unproven
+      .hostedIdentityProofGraphEdges,
+    hostedIdentityProofGraphEdges,
   );
   assert.deepEqual(
     hostedIdentityStageAction.nextAction.unproven.hostedHandoffChecklist
@@ -5170,14 +5182,14 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
       [
         "hosted-identity-family-proof-batch",
         "hosted-identity-operator-predicate-proof",
-        "prerequisite-for-hosted-identity-operator",
+        hostedIdentityFamilyBatchOperatorProofGraphRelationship,
         `npm run ${devTestGameHostedIdentityProgressionAdminProofBatchCommand}`,
         devTestGameHostedIdentityOperatorAdminProofPath,
       ],
       [
         "hosted-identity-operator-predicate-proof",
         "admin-proof:hosted-identity-evidence",
-        "operator-predicate-for-admin-surface",
+        hostedIdentityOperatorAdminSurfaceProofGraphRelationship,
         `npm run ${devTestGameHostedIdentityOperatorAdminProofCommand}`,
         devTestGameHostedIdentityOperatorAdminProofPath,
       ],
@@ -19467,6 +19479,136 @@ function nextActionProofGraphFixture(slotId = "player-action-submission") {
         nodes: graph.nodes,
       }),
     },
+  };
+}
+
+function hostedIdentityProofGraphFixture() {
+  const identityTarget = resolvedFeatureSpineTargetFixture("identity-adapter");
+  const identitySourceNodeId = productionFeatureGraphSourceNodeId(
+    identityTarget.sourceCheckId,
+  );
+  return {
+    version: 1,
+    proof: "dev-test-game-proof-graph",
+    status: "passed",
+    generatedAt: "2026-06-26T00:00:00.000Z",
+    scope: "local-dev-test-game-proof-graph",
+    summary: {
+      productionFeatureTargetCount: 0,
+      productionFeatureDestinationSummary:
+        proofGraphProductionFeatureDestinationSummary({
+          nodes: [],
+          summary: { productionFeatureTargetCount: 0 },
+        }),
+      diagnosticProofSummary: buildProofGraphDiagnosticProofSummary({
+        nodes: proofGraphDiagnosticProofNodes,
+      }),
+    },
+    nodes: [
+      {
+        id: "production-feature:identity-adapter",
+        kind: "production-feature-spine-target",
+        status: "passed",
+        artifact: devTestGameReleaseReadinessPath,
+        featureSlotId: "identity-adapter",
+        sourceCheckId: identityTarget.sourceCheckId,
+        roleUrl: identityTarget.detailRoleUrl,
+        targetRoleUrl: identityTarget.roleUrl,
+        browserProofCommand: identityTarget.browserProofCommand,
+        recoveryCommand: identityTarget.rerunCommand,
+        coverageDecision: identityTarget.coverageDecision,
+      },
+      {
+        id: hostedIdentityFamilyBatchProofGraphNodeId,
+        kind: "hosted-identity-family-proof-batch",
+        status: "recorded",
+        artifact: devTestGameHostedIdentityProgressionSummaryPath,
+        roleUrl: localAdminAuditRoleUrl(localAdminAuditIds.hostedIdentityEvidence),
+        proofCommand: `npm run ${devTestGameHostedIdentityProgressionAdminProofBatchCommand}`,
+        recoveryCommand: `npm run ${devTestGameHostedIdentityProgressionAdminProofBatchCommand}`,
+        progressionCount: hostedIdentityEvidenceFamilyProgressionCases.length,
+        progressionIds: hostedIdentityEvidenceFamilyProgressionCases.map(
+          (progression) => progression.id,
+        ),
+        proofTargets: hostedIdentityEvidenceFamilyProgressionCases.map(
+          (progression) =>
+            hostedIdentityEvidenceProgressionAdminProofPath(progression.id),
+        ),
+      },
+      {
+        id: hostedIdentityOperatorPredicateProofGraphNodeId,
+        kind: "hosted-identity-operator-predicate-proof",
+        status: "recorded",
+        artifact: devTestGameHostedIdentityOperatorAdminProofPath,
+        roleUrl: localAdminAuditRoleUrl(localAdminAuditIds.hostedIdentityEvidence),
+        proofCommand: `npm run ${devTestGameHostedIdentityOperatorAdminProofCommand}`,
+        recoveryCommand: `npm run ${devTestGameHostedIdentityOperatorAdminProofCommand}`,
+        prerequisiteNodeId: hostedIdentityFamilyBatchProofGraphNodeId,
+        auditSurfaceNodeId: hostedIdentityEvidenceProofGraphNodeId,
+      },
+      {
+        id: hostedIdentityEvidenceProofGraphNodeId,
+        kind: "admin-proof-surface",
+        status: "passed",
+        artifact: devTestGameHostedIdentityOperatorAdminProofPath,
+        roleUrl: localAdminAuditRoleUrl(localAdminAuditIds.hostedIdentityEvidence),
+        proofCommand: `npm run ${devTestGameHostedIdentityOperatorAdminProofCommand}`,
+      },
+      ...proofGraphDiagnosticProofNodes,
+    ],
+    edges: [
+      {
+        from: identitySourceNodeId,
+        to: "production-feature:identity-adapter",
+        relationship: "proves-production-feature",
+        featureSlotId: "identity-adapter",
+        targetRoleUrl: identityTarget.roleUrl,
+        command: identityTarget.browserProofCommand,
+      },
+      ...hostedIdentityProofGraphEdgesFixture().edges.map((edge) => ({
+        from: edge.from,
+        to: edge.to,
+        relationship: edge.relationship,
+        command: edge.command,
+        proofTarget: edge.proofTarget,
+      })),
+    ],
+  };
+}
+
+function hostedIdentityProofGraphEdgesFixture() {
+  return {
+    id: "hosted-identity-proof-graph-dependency",
+    status: "recorded",
+    proofGraphRoleUrl: localAdminAuditRoleUrl(localAdminAuditIds.proofGraph),
+    familyBatchNodeId: hostedIdentityFamilyBatchProofGraphNodeId,
+    operatorPredicateNodeId: hostedIdentityOperatorPredicateProofGraphNodeId,
+    adminSurfaceNodeId: hostedIdentityEvidenceProofGraphNodeId,
+    familyProofTargets: hostedIdentityEvidenceFamilyProgressionCases.map(
+      (progression) =>
+        hostedIdentityEvidenceProgressionAdminProofPath(progression.id),
+    ),
+    operatorProofTarget: devTestGameHostedIdentityOperatorAdminProofPath,
+    edges: [
+      {
+        id: `edge:${hostedIdentityFamilyBatchProofGraphNodeId}:${hostedIdentityFamilyBatchOperatorProofGraphRelationship}:${hostedIdentityOperatorPredicateProofGraphNodeId}`,
+        from: hostedIdentityFamilyBatchProofGraphNodeId,
+        to: hostedIdentityOperatorPredicateProofGraphNodeId,
+        relationship: hostedIdentityFamilyBatchOperatorProofGraphRelationship,
+        command: `npm run ${devTestGameHostedIdentityProgressionAdminProofBatchCommand}`,
+        proofTarget: devTestGameHostedIdentityOperatorAdminProofPath,
+      },
+      {
+        id: `edge:${hostedIdentityOperatorPredicateProofGraphNodeId}:${hostedIdentityOperatorAdminSurfaceProofGraphRelationship}:${hostedIdentityEvidenceProofGraphNodeId}`,
+        from: hostedIdentityOperatorPredicateProofGraphNodeId,
+        to: hostedIdentityEvidenceProofGraphNodeId,
+        relationship: hostedIdentityOperatorAdminSurfaceProofGraphRelationship,
+        command: `npm run ${devTestGameHostedIdentityOperatorAdminProofCommand}`,
+        proofTarget: devTestGameHostedIdentityOperatorAdminProofPath,
+      },
+    ],
+    proofBoundary:
+      "Hosted identity proof graph dependency. This next-action row links the family proof batch, operator predicate proof, and hosted identity admin surface graph edges; it records local graph topology only and does not prove live hosted identity traffic, release readiness, or production readiness.",
   };
 }
 

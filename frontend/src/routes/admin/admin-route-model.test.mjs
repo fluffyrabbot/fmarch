@@ -254,6 +254,37 @@ const HOSTED_IDENTITY_FAMILY_BATCH = Object.freeze({
   proofBoundary:
     "Hosted identity family proof batch predicate. Required means one or more family admin proofs are missing or stale; current means all family admin proofs are valid and the aggregate hosted identity operator spine may run. It does not prove live hosted identity traffic, release readiness, or production readiness.",
 });
+const HOSTED_IDENTITY_PROOF_GRAPH_EDGES = Object.freeze({
+  id: "hosted-identity-proof-graph-dependency",
+  status: "recorded",
+  proofGraphRoleUrl: localAdminAuditRoleUrl(localAdminAuditIds.proofGraph),
+  familyBatchNodeId: "hosted-identity-family-proof-batch",
+  operatorPredicateNodeId: "hosted-identity-operator-predicate-proof",
+  adminSurfaceNodeId: "admin-proof:hosted-identity-evidence",
+  familyProofTargets: HOSTED_IDENTITY_FAMILY_BATCH.proofTargets,
+  operatorProofTarget: HOSTED_IDENTITY_OPERATOR_PROOF_TARGET,
+  edges: Object.freeze([
+    Object.freeze({
+      id: "edge:hosted-identity-family-proof-batch:prerequisite-for-hosted-identity-operator:hosted-identity-operator-predicate-proof",
+      from: "hosted-identity-family-proof-batch",
+      to: "hosted-identity-operator-predicate-proof",
+      relationship: "prerequisite-for-hosted-identity-operator",
+      command:
+        "npm run test:dev-test-game-hosted-identity-progression-admin-proof:batch",
+      proofTarget: HOSTED_IDENTITY_OPERATOR_PROOF_TARGET,
+    }),
+    Object.freeze({
+      id: "edge:hosted-identity-operator-predicate-proof:operator-predicate-for-admin-surface:admin-proof:hosted-identity-evidence",
+      from: "hosted-identity-operator-predicate-proof",
+      to: "admin-proof:hosted-identity-evidence",
+      relationship: "operator-predicate-for-admin-surface",
+      command: "npm run test:dev-test-game-hosted-identity-operator-admin-proof",
+      proofTarget: HOSTED_IDENTITY_OPERATOR_PROOF_TARGET,
+    }),
+  ]),
+  proofBoundary:
+    "Hosted identity proof graph dependency. This next-action row links the family proof batch, operator predicate proof, and hosted identity admin surface graph edges; it records local graph topology only and does not prove live hosted identity traffic, release readiness, or production readiness.",
+});
 const HOSTED_EVIDENCE_LANE_DEMO_PROOF_TARGET =
   "target/dev-test-game/hosted-evidence-lane-demo-proof.json";
 
@@ -2882,6 +2913,7 @@ test("admin local next action detail data carries hosted identity progression la
     spineTarget: featureSpineTargetFixture(),
     hostedHandoffChecklist: hostedIdentityEvidenceHandoffCase(),
     hostedIdentityFamilyBatch: HOSTED_IDENTITY_FAMILY_BATCH,
+    hostedIdentityProofGraphEdges: HOSTED_IDENTITY_PROOF_GRAPH_EDGES,
   };
   const data = await buildAdminAuditDetailData({
     audit: localAdminAuditIds.nextAction,
@@ -2962,6 +2994,7 @@ test("admin local next action detail data carries hosted identity operator recom
     spineTarget: featureSpineTargetFixture(),
     hostedHandoffChecklist: hostedIdentityEvidenceHandoffCase(),
     hostedIdentityFamilyBatch: HOSTED_IDENTITY_FAMILY_BATCH,
+    hostedIdentityProofGraphEdges: HOSTED_IDENTITY_PROOF_GRAPH_EDGES,
   };
   const data = await buildAdminAuditDetailData({
     audit: localAdminAuditIds.nextAction,
@@ -2987,6 +3020,8 @@ test("admin local next action detail data carries hosted identity operator recom
           "selected-proof-target",
           "selected-proof-boundary",
           "hosted-identity-family-proof-batch",
+          "hosted-identity-proof-graph-dependency",
+          ...HOSTED_IDENTITY_PROOF_GRAPH_EDGES.edges.map((edge) => edge.id),
           "hosted-production-identity",
         ].includes(check.id),
       )
@@ -3002,6 +3037,28 @@ test("admin local next action detail data carries hosted identity operator recom
           HOSTED_IDENTITY_FAMILY_BATCH.proofBoundary,
         ].join("\n"),
       ],
+      [
+        "hosted-identity-proof-graph-dependency",
+        [
+          HOSTED_IDENTITY_PROOF_GRAPH_EDGES.status,
+          HOSTED_IDENTITY_PROOF_GRAPH_EDGES.proofGraphRoleUrl,
+          HOSTED_IDENTITY_PROOF_GRAPH_EDGES.familyBatchNodeId,
+          HOSTED_IDENTITY_PROOF_GRAPH_EDGES.operatorPredicateNodeId,
+          HOSTED_IDENTITY_PROOF_GRAPH_EDGES.adminSurfaceNodeId,
+          HOSTED_IDENTITY_PROOF_GRAPH_EDGES.operatorProofTarget,
+          HOSTED_IDENTITY_PROOF_GRAPH_EDGES.proofBoundary,
+        ].join("\n"),
+      ],
+      ...HOSTED_IDENTITY_PROOF_GRAPH_EDGES.edges.map((edge) => [
+        edge.id,
+        [
+          edge.from,
+          edge.relationship,
+          edge.to,
+          edge.command,
+          edge.proofTarget,
+        ].join("\n"),
+      ]),
       ["selected-next-command", HOSTED_IDENTITY_OPERATOR_COMMAND],
       ["selected-proof-target", HOSTED_IDENTITY_OPERATOR_PROOF_TARGET],
       ["selected-proof-boundary", HOSTED_IDENTITY_OPERATOR_PROOF_BOUNDARY],
@@ -3010,6 +3067,10 @@ test("admin local next action detail data carries hosted identity operator recom
   assert.deepEqual(
     data.audit.hostedIdentityFamilyBatch,
     HOSTED_IDENTITY_FAMILY_BATCH,
+  );
+  assert.deepEqual(
+    data.audit.hostedIdentityProofGraphEdges,
+    HOSTED_IDENTITY_PROOF_GRAPH_EDGES,
   );
   assert.equal(
     data.audit.artifactSummary.command,

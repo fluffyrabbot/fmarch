@@ -246,6 +246,9 @@ export function nextActionAdminProofCase({
         source.nextAction.nextAction.unproven?.hostedHandoffChecklist ?? null,
       unprovenHostedIdentityFamilyBatch:
         source.nextAction.nextAction.unproven?.hostedIdentityFamilyBatch ?? null,
+      unprovenHostedIdentityProofGraphEdges:
+        source.nextAction.nextAction.unproven?.hostedIdentityProofGraphEdges ??
+        null,
       unprovenHostedIdentityProgressionSummary:
         source.nextAction.nextAction.unproven?.hostedHandoffChecklist
           ?.progressionSummary ?? null,
@@ -704,6 +707,25 @@ export function assertNextActionAdminProof(evidence) {
       );
     }
   }
+  const hostedIdentityProofGraphEdges =
+    evidence.generatedFrom?.unprovenHostedIdentityProofGraphEdges;
+  if (
+    hostedIdentityProofGraphEdges !== null &&
+    hostedIdentityProofGraphEdges !== undefined
+  ) {
+    const expectedRows = hostedIdentityProofGraphDependencyStatuses(
+      hostedIdentityProofGraphEdges,
+    );
+    for (const [rowId, expectedText] of Object.entries(expectedRows)) {
+      const visibleText =
+        evidence.adminRoleSurface?.visibleCheckStatuses?.[rowId] ?? "";
+      if (!String(visibleText).includes(expectedText)) {
+        throw new Error(
+          `next-action admin proof missing hosted identity proof graph dependency row: ${rowId}`,
+        );
+      }
+    }
+  }
   const relatedLinkId = evidence.generatedFrom?.unprovenProofGraphNodeId;
   if (
     typeof relatedLinkId === "string" &&
@@ -1028,6 +1050,15 @@ function requiredChecksForNextAction(nextAction) {
     );
     if (nextAction.nextAction.unproven.hostedIdentityFamilyBatch !== undefined) {
       checks.push(nextAction.nextAction.unproven.hostedIdentityFamilyBatch.id);
+    }
+    if (
+      nextAction.nextAction.unproven.hostedIdentityProofGraphEdges !== undefined
+    ) {
+      checks.push(
+        ...hostedIdentityProofGraphDependencyCheckIds(
+          nextAction.nextAction.unproven.hostedIdentityProofGraphEdges,
+        ),
+      );
     }
     if (selectedHostedIdentityOperatorCandidate(nextAction) !== null) {
       checks.push(
@@ -1384,6 +1415,8 @@ function requiredCheckStatusesForNextAction(nextAction, proofGraph) {
     selectedHostedIdentityOperatorCandidate(nextAction);
   const hostedIdentityFamilyBatch =
     nextAction.nextAction.unproven?.hostedIdentityFamilyBatch;
+  const hostedIdentityProofGraphEdges =
+    nextAction.nextAction.unproven?.hostedIdentityProofGraphEdges;
   return {
     ...(selectedNodeStatus === ""
       ? {}
@@ -1395,6 +1428,11 @@ function requiredCheckStatusesForNextAction(nextAction, proofGraph) {
             hostedIdentityFamilyBatch,
           ),
         }),
+    ...(hostedIdentityProofGraphEdges === undefined
+      ? {}
+      : hostedIdentityProofGraphDependencyStatuses(
+          hostedIdentityProofGraphEdges,
+        )),
     ...(selectedOperatorCandidate === null
       ? {}
       : {
@@ -1415,6 +1453,44 @@ function hostedIdentityFamilyBatchStatusText(batch) {
   ]
     .filter((part) => String(part ?? "") !== "")
     .join(" ");
+}
+
+function hostedIdentityProofGraphDependencyStatuses(dependency) {
+  const summaryStatus = [
+    dependency.status,
+    dependency.proofGraphRoleUrl,
+    dependency.familyBatchNodeId,
+    dependency.operatorPredicateNodeId,
+    dependency.adminSurfaceNodeId,
+    dependency.operatorProofTarget,
+    dependency.proofBoundary,
+  ]
+    .filter((part) => String(part ?? "") !== "")
+    .join(" ");
+  return Object.fromEntries([
+    [dependency.id, summaryStatus],
+    ...(dependency.edges ?? []).map((edge) => [
+      edge.id,
+      [
+        edge.from,
+        edge.relationship,
+        edge.to,
+        edge.command,
+        edge.proofTarget,
+      ]
+        .filter((part) => String(part ?? "") !== "")
+        .join(" "),
+    ]),
+  ]);
+}
+
+function hostedIdentityProofGraphDependencyCheckIds(dependency) {
+  return [
+    dependency.id,
+    ...(Array.isArray(dependency.edges)
+      ? dependency.edges.map((edge) => edge.id)
+      : []),
+  ].filter((id) => typeof id === "string" && id !== "");
 }
 
 function selectedReleaseReadinessCandidateForNextAction(nextAction) {
@@ -1548,6 +1624,14 @@ function requiredChecksForEvidence(evidence) {
             undefined
             ? []
             : [evidence.generatedFrom.unprovenHostedIdentityFamilyBatch.id]),
+          ...(evidence.generatedFrom?.unprovenHostedIdentityProofGraphEdges ===
+            null ||
+          evidence.generatedFrom?.unprovenHostedIdentityProofGraphEdges ===
+            undefined
+            ? []
+            : hostedIdentityProofGraphDependencyCheckIds(
+                evidence.generatedFrom.unprovenHostedIdentityProofGraphEdges,
+              )),
           ...(evidence.generatedFrom?.unprovenSpineTarget === null ||
           evidence.generatedFrom?.unprovenSpineTarget === undefined
             ? []
