@@ -2,6 +2,9 @@ import {
   localAdminAuditIds,
 } from "./dev_test_game_admin_audit_surface_ids.mjs";
 
+export const devTestGameHostedOpsSignalsAdminProofPath =
+  "target/dev-test-game/hosted-ops-signals-admin-proof.json";
+
 export const hostedOpsTelemetryBoundaryCheckId =
   "hosted-telemetry-boundary-carried";
 export const hostedOpsReadinessBoundaryCheckId = "readiness-boundary-carried";

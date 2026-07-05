@@ -67,6 +67,9 @@ import {
   hostedOpsSignalsAdminProofCase,
 } from "./dev_test_game_hosted_ops_signals_admin_proof.mjs";
 import {
+  devTestGameHostedOpsSignalsAdminProofPath,
+} from "./dev_test_game_hosted_ops_signal_cases.mjs";
+import {
   realHostedObservabilityHandoffAdminProofCase,
 } from "./dev_test_game_real_hosted_observability_handoff_admin_proof.mjs";
 import {
@@ -202,7 +205,7 @@ export const devTestGameAdminSpineProofPlan = [
     label: "Hosted ops signals admin role surface",
     script: "tools/dev_test_game_hosted_ops_signals_admin_proof.mjs",
     rerunCommand: "npm run test:dev-test-game-hosted-ops-signals-admin-proof",
-    path: "target/dev-test-game/hosted-ops-signals-admin-proof.json",
+    path: devTestGameHostedOpsSignalsAdminProofPath,
     validate: validateDevTestGameHostedOpsSignalsAdminProof,
     caseFactory: hostedOpsSignalsAdminProofCase,
   },

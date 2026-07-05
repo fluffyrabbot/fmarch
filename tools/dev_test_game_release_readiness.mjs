@@ -80,6 +80,7 @@ import {
   coreLoopAuditLaneIds,
 } from "./dev_test_game_core_loop_scenarios.mjs";
 import {
+  devTestGameHostedOpsSignalsAdminProofPath,
   hostedOpsReadinessBoundaryCheckId,
   hostedOpsSignalCheckIds,
   hostedOpsTelemetryBoundaryCheckId,
@@ -316,8 +317,8 @@ const defaultOpsArtifactsPath = path.join(artifactDir, "ops-artifacts.json");
 const defaultOpsAdminProofPath = path.join(artifactDir, "ops-admin-proof.json");
 const defaultHostedOpsSignalsPath = path.join(artifactDir, "hosted-ops-signals.json");
 const defaultHostedOpsSignalsAdminProofPath = path.join(
-  artifactDir,
-  "hosted-ops-signals-admin-proof.json",
+  repoRoot,
+  devTestGameHostedOpsSignalsAdminProofPath,
 );
 const defaultRealHostedObservabilityHandoffAdminProofPath = path.join(
   repoRoot,
@@ -529,7 +530,7 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
         {
           path:
             options.hostedOpsSignalsAdminProofPath ??
-            "target/dev-test-game/hosted-ops-signals-admin-proof.json",
+            devTestGameHostedOpsSignalsAdminProofPath,
           artifact: options.hostedOpsSignalsAdminProofArtifact,
         },
       )
@@ -3917,7 +3918,7 @@ export function validateDevTestGameHostedOpsSignalsAdminProof(proof, options = {
   }
   return {
     status: "passed",
-    path: options.path ?? "target/dev-test-game/hosted-ops-signals-admin-proof.json",
+    path: options.path ?? devTestGameHostedOpsSignalsAdminProofPath,
     proofBoundary: proof.proofBoundary,
     overviewRoleUrl: proof.adminRoleSurface.overviewRoleUrl,
     detailRoleUrl: proof.adminRoleSurface.detailRoleUrl,
@@ -6328,8 +6329,7 @@ function adminSpineProofArtifactPath(id) {
       "target/dev-test-game/hosted-evidence-lane-admin-proof.json",
     "hosted-concurrent-race-matrix":
       hostedConcurrentRaceMatrixAdminProofArtifact.path,
-    "hosted-ops-signals":
-      "target/dev-test-game/hosted-ops-signals-admin-proof.json",
+    "hosted-ops-signals": devTestGameHostedOpsSignalsAdminProofPath,
     "real-hosted-observability-handoff":
       realHostedObservabilityHandoffAdminProofArtifact.path,
     "spine-manifest": "target/dev-test-game/spine-manifest-admin-proof.json",

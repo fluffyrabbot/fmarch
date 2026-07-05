@@ -1,7 +1,11 @@
 import path from "node:path";
 import { pathToFileURL } from "node:url";
-import { assertDevTestGameHostedOpsSignals } from "./dev_test_game_hosted_ops_signals.mjs";
 import {
+  assertDevTestGameHostedOpsSignals,
+  devTestGameHostedOpsSignalsPath,
+} from "./dev_test_game_hosted_ops_signals.mjs";
+import {
+  devTestGameHostedOpsSignalsAdminProofPath,
   hostedOpsSignalCheckIds,
   hostedOpsSignalRelatedAuditIds,
   hostedOpsTelemetryBoundaryCheckId,
@@ -9,7 +13,6 @@ import {
 } from "./dev_test_game_hosted_ops_signal_cases.mjs";
 import {
   assertVisibleAdminRoleSurfaceRows,
-  artifactDir,
   proveAdminAuditDetail,
   readJson,
   repoRoot,
@@ -19,10 +22,10 @@ import {
 const hostedOpsSignalsPath = path.resolve(
   repoRoot,
   process.env.FMARCH_DEV_TEST_GAME_HOSTED_OPS_SIGNALS ??
-    "target/dev-test-game/hosted-ops-signals.json",
+    devTestGameHostedOpsSignalsPath,
 );
 const hostedOpsSignalsRelativePath = path.relative(repoRoot, hostedOpsSignalsPath);
-const evidencePath = path.join(artifactDir, "hosted-ops-signals-admin-proof.json");
+const evidencePath = path.join(repoRoot, devTestGameHostedOpsSignalsAdminProofPath);
 const requiredChecks = hostedOpsSignalCheckIds;
 const requiredRelatedLinks = hostedOpsSignalRelatedAuditIds;
 

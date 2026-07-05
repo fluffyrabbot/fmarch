@@ -101,6 +101,7 @@ import {
   devTestGameHostedOpsSignalsPath,
 } from "./dev_test_game_hosted_ops_signals.mjs";
 import {
+  devTestGameHostedOpsSignalsAdminProofPath,
   hostedOpsSignalCheckIds,
   hostedOpsSignalRelatedAuditIds,
   hostedOpsTelemetryBoundaryCheckId,
@@ -730,7 +731,7 @@ test("dev test-game spine orchestrators expose stable proof order and env maps",
       "target/dev-test-game/ops-admin-proof.json",
     FMARCH_DEV_TEST_GAME_HOSTED_OPS_SIGNALS: devTestGameHostedOpsSignalsPath,
     FMARCH_DEV_TEST_GAME_HOSTED_OPS_SIGNALS_ADMIN_PROOF:
-      "target/dev-test-game/hosted-ops-signals-admin-proof.json",
+      devTestGameHostedOpsSignalsAdminProofPath,
     FMARCH_DEV_TEST_GAME_REAL_HOSTED_OBSERVABILITY_HANDOFF:
       devTestGameRealHostedObservabilityHandoffPath,
     FMARCH_DEV_TEST_GAME_REAL_HOSTED_OBSERVABILITY_HANDOFF_ADMIN_PROOF:
@@ -12265,8 +12266,7 @@ test("session card and markdown include role credential URLs and tokens", async 
     opsArtifacts,
     hostedOpsSignalsPath: devTestGameHostedOpsSignalsPath,
     hostedOpsSignals,
-    hostedOpsSignalsAdminProofPath:
-      "target/dev-test-game/hosted-ops-signals-admin-proof.json",
+    hostedOpsSignalsAdminProofPath: devTestGameHostedOpsSignalsAdminProofPath,
     hostedOpsSignalsAdminProof: hostedOpsSignalsAdminProofFixture(),
     realHostedObservabilityHandoffAdminProofPath:
       hostedAdminHandoffProofArtifactCase(

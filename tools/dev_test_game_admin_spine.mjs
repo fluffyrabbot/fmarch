@@ -13,6 +13,9 @@ import { devTestGameOpsArtifactsPath } from "./dev_test_game_ops_artifacts.mjs";
 import {
   devTestGameHostedOpsSignalsPath,
 } from "./dev_test_game_hosted_ops_signals.mjs";
+import {
+  devTestGameHostedOpsSignalsAdminProofPath,
+} from "./dev_test_game_hosted_ops_signal_cases.mjs";
 import { runAdminSpineProof } from "./dev_test_game_admin_spine_proof.mjs";
 import {
   devTestGameProofGraphAdminProofPath,
@@ -61,7 +64,7 @@ export const adminSpineReadinessEvidenceEnv = {
   FMARCH_DEV_TEST_GAME_OPS_ADMIN_PROOF: "target/dev-test-game/ops-admin-proof.json",
   FMARCH_DEV_TEST_GAME_HOSTED_OPS_SIGNALS: devTestGameHostedOpsSignalsPath,
   FMARCH_DEV_TEST_GAME_HOSTED_OPS_SIGNALS_ADMIN_PROOF:
-    "target/dev-test-game/hosted-ops-signals-admin-proof.json",
+    devTestGameHostedOpsSignalsAdminProofPath,
   FMARCH_DEV_TEST_GAME_REAL_HOSTED_OBSERVABILITY_HANDOFF:
     devTestGameRealHostedObservabilityHandoffPath,
   FMARCH_DEV_TEST_GAME_REAL_HOSTED_OBSERVABILITY_HANDOFF_ADMIN_PROOF:

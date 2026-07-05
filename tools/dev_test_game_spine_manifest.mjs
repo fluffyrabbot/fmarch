@@ -48,6 +48,9 @@ import {
   devTestGameHostedOpsSignalsCommand,
   devTestGameHostedOpsSignalsPath,
 } from "./dev_test_game_hosted_ops_signals.mjs";
+import {
+  devTestGameHostedOpsSignalsAdminProofPath,
+} from "./dev_test_game_hosted_ops_signal_cases.mjs";
 import { devTestGameOpsArtifactsPath } from "./dev_test_game_ops_artifacts.mjs";
 import {
   devTestGameReleaseReadinessPath,
@@ -905,7 +908,7 @@ export function assertDevTestGameSpineManifest(manifest) {
     "target/dev-test-game/release-admin-proof.json",
     "target/dev-test-game/release-runbook-admin-proof.json",
     "target/dev-test-game/hosted-target-preflight-admin-proof.json",
-    "target/dev-test-game/hosted-ops-signals-admin-proof.json",
+    devTestGameHostedOpsSignalsAdminProofPath,
     "target/dev-test-game/spine-manifest-admin-proof.json",
     "target/dev-test-game/admin-spine-admin-proof.json",
     "target/live-stack-backup-restore-drill/local-backup-restore-proof.json",
