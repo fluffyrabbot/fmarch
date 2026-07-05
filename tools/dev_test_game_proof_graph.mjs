@@ -34,6 +34,9 @@ import {
   coreLoopFeatureSpineSourceCheckId,
 } from "./dev_test_game_core_loop_feature_spine_targets.mjs";
 import {
+  coreLoopScenarioFamilyRows,
+} from "./dev_test_game_core_loop_generated_from_families.mjs";
+import {
   hardeningFeatureSpineSourceCheckId,
 } from "./dev_test_game_hardening_feature_spine_targets.mjs";
 import {
@@ -51,6 +54,9 @@ import {
   localAdminAuditIds,
   localAdminAuditRoleUrl,
 } from "./dev_test_game_admin_audit_surface_ids.mjs";
+import {
+  devTestGameCoreLoopAdminProofPath,
+} from "./dev_test_game_local_admin_proof_paths.mjs";
 import {
   assertProofGraphCoversRecoveryReceipt,
   buildRecoveryReceiptGraphEdges,
@@ -220,6 +226,9 @@ export function buildDevTestGameProofGraph(
       productionFeatureTargetCount: nodes.filter(
         (node) => node.kind === "production-feature-spine-target",
       ).length,
+      coreLoopScenarioFamilyCount: nodes.filter(
+        (node) => node.kind === "core-loop-scenario-family",
+      ).length,
       terminalBatchCount: adminSpineTerminalBatchEvidence?.batchCount ?? 0,
       ...recoveryReceiptSummaryLaneCounts({
         privateChannelRecoveryReceipt: privateChannelRecoveryReceiptEvidence,
@@ -326,6 +335,7 @@ export function assertDevTestGameProofGraph(
   }
   assertDevTestGameProofGraphCoversTerminalBatches(evidence);
   assertDevTestGameProofGraphCoversPrivateChannelRecoveryReceipt(evidence);
+  assertDevTestGameProofGraphCoversCoreLoopScenarioFamilies(evidence);
   assertDevTestGameProofGraphCoversReplacementPrivateRecoveryReceipt(evidence);
   assertDevTestGameProofGraphCoversReplacementActionRecoveryReceipt(evidence);
   assertDevTestGameProofGraphCoversReplacementHandoffRecoveryReceipt(evidence);
@@ -383,6 +393,62 @@ export function assertDevTestGameProofGraphCoversPrivateChannelRecoveryReceipt(
     graph,
     recoveryReceiptGraphDescriptorByReceiptKey("privateChannelRecoveryReceipt"),
   );
+}
+
+export function assertDevTestGameProofGraphCoversCoreLoopScenarioFamilies(graph) {
+  const familyRows = coreLoopScenarioFamilyRows();
+  const nodes = (graph.nodes ?? []).filter(
+    (node) => node.kind === "core-loop-scenario-family",
+  );
+  if (graph.summary?.coreLoopScenarioFamilyCount !== familyRows.length) {
+    throw new Error("proof graph core-loop scenario family count drifted");
+  }
+  if (nodes.length !== familyRows.length) {
+    throw new Error(
+      `proof graph core-loop scenario family node count drifted: expected ${familyRows.length}, got ${nodes.length}`,
+    );
+  }
+  const nodeByFamilyId = new Map(nodes.map((node) => [node.familyId, node]));
+  for (const family of familyRows) {
+    const expectedNodeId = coreLoopScenarioFamilyNodeId(family.id);
+    const node = nodeByFamilyId.get(family.id);
+    if (
+      node?.id !== expectedNodeId ||
+      node.label !== family.label ||
+      node.status !== "passed" ||
+      node.artifact !== devTestGameCoreLoopAdminProofPath ||
+      node.roleUrl !== localAdminAuditRoleUrl(localAdminAuditIds.coreLoop) ||
+      node.recoveryCommand !==
+        "npm run test:dev-test-game-core-loop-admin-proof" ||
+      node.laneCount !== family.laneIds.length ||
+      !sameStringArray(node.laneIds, family.laneIds) ||
+      !sameStringArray(node.surfaceIds, family.surfaces) ||
+      !sameStringArray(node.staleRejectIds, family.staleRejects) ||
+      !sameStringArray(node.reloadIds, family.reloads) ||
+      !sameStringArray(node.scenarioIds, family.scenarios) ||
+      !sameStringArray(node.transitionTokenIds, family.transitionTokens)
+    ) {
+      throw new Error(
+        `proof graph core-loop scenario family node drifted: ${family.id}`,
+      );
+    }
+    if (
+      !(graph.edges ?? []).some(
+        (edge) =>
+          edge.from === "admin-proof:core-loop" &&
+          edge.to === expectedNodeId &&
+          edge.relationship === "contains-scenario-family" &&
+          edge.familyId === family.id &&
+          edge.roleUrl === localAdminAuditRoleUrl(localAdminAuditIds.coreLoop) &&
+          edge.command === "npm run test:dev-test-game-core-loop-admin-proof",
+      )
+    ) {
+      throw new Error(
+        `proof graph core-loop scenario family edge missing: ${family.id}`,
+      );
+    }
+  }
+  return graph;
 }
 
 export function assertDevTestGameProofGraphCoversTerminalBatches(graph) {
@@ -730,6 +796,9 @@ function buildProofGraphNodes({
   const roleSurfaceProofNodes = buildRoleSurfaceProofNodes({
     releaseReadiness,
   });
+  const coreLoopScenarioFamilyNodes = buildCoreLoopScenarioFamilyNodes({
+    recoveryCommand: recoveryCommands.get("core-loop"),
+  });
   const terminalBatchNode =
     adminSpineTerminalBatches === null
       ? []
@@ -828,6 +897,7 @@ function buildProofGraphNodes({
     ...recoveryReceiptNodes,
     ...roleSurfaceProofNodes,
     ...adminProofNodes,
+    ...coreLoopScenarioFamilyNodes,
     ...productionFeatureTargetNodes,
   ].map((node) =>
     Object.fromEntries(
@@ -867,6 +937,18 @@ function buildProofGraphEdges({
       .filter((node) => node.kind === "admin-proof-surface")
       .map((node) => ["admin-spine", node.id, "aggregates"]),
     ...nodes
+      .filter((node) => node.kind === "core-loop-scenario-family")
+      .map((node) => [
+        "admin-proof:core-loop",
+        node.id,
+        "contains-scenario-family",
+        {
+          familyId: node.familyId,
+          roleUrl: node.roleUrl,
+          command: node.recoveryCommand,
+        },
+      ]),
+    ...nodes
       .filter((node) => node.kind === "production-feature-spine-target")
       .map((node) => [
         productionFeatureSourceGraphNodeId(node.sourceCheckId),
@@ -889,6 +971,33 @@ function buildProofGraphEdges({
         ),
       ),
   );
+}
+
+function buildCoreLoopScenarioFamilyNodes({ recoveryCommand }) {
+  const command =
+    recoveryCommand ?? "npm run test:dev-test-game-core-loop-admin-proof";
+  return coreLoopScenarioFamilyRows().map((family) => ({
+    id: coreLoopScenarioFamilyNodeId(family.id),
+    label: family.label,
+    kind: "core-loop-scenario-family",
+    status: "passed",
+    artifact: devTestGameCoreLoopAdminProofPath,
+    roleUrl: localAdminAuditRoleUrl(localAdminAuditIds.coreLoop),
+    proofCommand: command,
+    recoveryCommand: command,
+    familyId: family.id,
+    laneCount: family.laneIds.length,
+    laneIds: family.laneIds,
+    surfaceIds: family.surfaces,
+    staleRejectIds: family.staleRejects,
+    reloadIds: family.reloads,
+    scenarioIds: family.scenarios,
+    transitionTokenIds: family.transitionTokens,
+  }));
+}
+
+function coreLoopScenarioFamilyNodeId(familyId) {
+  return `core-loop-family:${familyId}`;
 }
 
 function buildRecoveryReceiptGraphNodes(inputs) {

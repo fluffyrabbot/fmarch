@@ -59,3 +59,43 @@ export function coreLoopGeneratedFromScenarioFamilies() {
       coreLoopPrivateChannelRecoveryScenarioFamily(),
   };
 }
+
+export function coreLoopScenarioFamilyRows(
+  families = coreLoopGeneratedFromScenarioFamilies(),
+) {
+  return Object.freeze(
+    Object.values(families ?? {}).map((family) => {
+      const surfaces = objectKeys(family?.surfaces);
+      const staleRejects = objectKeys(family?.staleRejects);
+      const reloads = objectKeys(family?.reloads);
+      const scenarios = objectKeys(family?.scenarios);
+      const transitionTokens = objectKeys(family?.transitionTokens);
+      return Object.freeze({
+        id: String(family?.id ?? ""),
+        label: formatScenarioFamilyLabel(family?.id),
+        status: `${Array.isArray(family?.laneIds) ? family.laneIds.length : 0} lanes, ${surfaces.length} surfaces`,
+        laneIds: Object.freeze(
+          (Array.isArray(family?.laneIds) ? family.laneIds : []).map((id) =>
+            String(id),
+          ),
+        ),
+        surfaces: Object.freeze(surfaces),
+        staleRejects: Object.freeze(staleRejects),
+        reloads: Object.freeze(reloads),
+        scenarios: Object.freeze(scenarios),
+        transitionTokens: Object.freeze(transitionTokens),
+      });
+    }),
+  );
+}
+
+function objectKeys(value) {
+  return value !== null && typeof value === "object" ? Object.keys(value) : [];
+}
+
+function formatScenarioFamilyLabel(value) {
+  return String(value ?? "")
+    .replace(/([a-z])([A-Z])/g, "$1 $2")
+    .replace(/[_-]+/g, " ")
+    .trim();
+}

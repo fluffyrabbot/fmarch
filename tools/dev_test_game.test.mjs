@@ -178,6 +178,9 @@ import {
   coreLoopAdminCheckIds,
 } from "./dev_test_game_core_loop_scenarios.mjs";
 import {
+  coreLoopScenarioFamilyRows,
+} from "./dev_test_game_core_loop_generated_from_families.mjs";
+import {
   adminSpineHostedOpsInputReadinessEnv,
   adminSpinePreGraphReadinessEvidenceEnv,
   adminSpineReadinessEvidenceEnv,
@@ -4117,11 +4120,47 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
     graph,
     releaseReadiness,
   );
-  assert.equal(graph.summary.nodeCount, 72);
-  assert.equal(graph.summary.roleUrlCount, 72);
+  const coreLoopFamilyRows = coreLoopScenarioFamilyRows();
+  assert.equal(graph.summary.nodeCount, 72 + coreLoopFamilyRows.length);
+  assert.equal(graph.summary.roleUrlCount, 72 + coreLoopFamilyRows.length);
   assert.equal(graph.summary.roleSurfaceProofCount, 5);
   assert.equal(graph.summary.productionFeatureTargetCount, 41);
+  assert.equal(
+    graph.summary.coreLoopScenarioFamilyCount,
+    coreLoopFamilyRows.length,
+  );
   assert.equal(graph.summary.terminalBatchCount, 3);
+  assert.deepEqual(
+    graph.nodes
+      .filter((node) => node.kind === "core-loop-scenario-family")
+      .map((node) => [
+        node.id,
+        node.familyId,
+        node.roleUrl,
+        node.artifact,
+        node.laneCount,
+        node.surfaceIds,
+      ]),
+    coreLoopFamilyRows.map((family) => [
+      `core-loop-family:${family.id}`,
+      family.id,
+      "/admin/audit/local-core-loop?game=<seeded-game>",
+      "target/dev-test-game/core-loop-admin-proof.json",
+      family.laneIds.length,
+      family.surfaces,
+    ]),
+  );
+  assert.deepEqual(
+    graph.edges
+      .filter((edge) => edge.relationship === "contains-scenario-family")
+      .map((edge) => [edge.from, edge.to, edge.familyId, edge.roleUrl]),
+    coreLoopFamilyRows.map((family) => [
+      "admin-proof:core-loop",
+      `core-loop-family:${family.id}`,
+      family.id,
+      "/admin/audit/local-core-loop?game=<seeded-game>",
+    ]),
+  );
   for (const descriptor of recoveryReceiptGraphDescriptors) {
     assert.equal(
       graph.summary[descriptor.summaryLaneCountKey],

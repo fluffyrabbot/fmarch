@@ -33,7 +33,7 @@ import {
   coreLoopAuditLaneIds,
 } from "../../../../tools/dev_test_game_core_loop_scenarios.mjs";
 import {
-  coreLoopGeneratedFromScenarioFamilies,
+  coreLoopScenarioFamilyRows,
 } from "../../../../tools/dev_test_game_core_loop_generated_from_families.mjs";
 import {
   completedGameHardeningLaneCases,
@@ -3164,16 +3164,12 @@ test("admin local core loop detail data carries lane rows", async () => {
       family.laneIds,
       family.surfaces,
     ]),
-    Object.values(coreLoopGeneratedFromScenarioFamilies()).map((family) => {
-      const surfaces =
-        family.surfaces === undefined ? [] : Object.keys(family.surfaces);
-      return [
-        family.id,
-        `${family.laneIds.length} lanes, ${surfaces.length} surfaces`,
-        family.laneIds,
-        surfaces,
-      ];
-    }),
+    coreLoopScenarioFamilyRows().map((family) => [
+      family.id,
+      family.status,
+      family.laneIds,
+      family.surfaces,
+    ]),
   );
   assert.deepEqual(
     data.audit.spineRecoveryHooks.map((hook) => [hook.id, hook.status]),
