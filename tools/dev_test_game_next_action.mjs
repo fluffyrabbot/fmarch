@@ -921,6 +921,13 @@ function terminalBatchGraphFromProofGraph(proofGraph) {
     proofIds: Array.isArray(node.proofIds)
       ? node.proofIds.map((proofId) => String(proofId))
       : [],
+    receiptArtifacts: Array.isArray(node.receiptArtifacts)
+      ? node.receiptArtifacts.map((artifact) => ({
+          proofId: String(artifact.proofId ?? ""),
+          artifactPath: String(artifact.artifactPath ?? ""),
+          batchLabel: String(artifact.batchLabel ?? ""),
+        }))
+      : [],
     edgeCount: edges.length,
     edgeTargets: edges.map((edge) => String(edge.to ?? "")),
   };
@@ -953,7 +960,15 @@ function assertTerminalBatchGraph(terminalBatchGraph) {
     terminalBatchGraph.batchCount < 1 ||
     terminalBatchGraph.edgeCount !== 3 ||
     JSON.stringify(terminalBatchGraph.edgeTargets) !==
-      JSON.stringify(["proof-graph", "proof-freshness", "next-action"])
+      JSON.stringify(["proof-graph", "proof-freshness", "next-action"]) ||
+    (Array.isArray(terminalBatchGraph.receiptArtifacts) &&
+      terminalBatchGraph.receiptArtifacts.length > 0 &&
+      !terminalBatchGraph.receiptArtifacts.some(
+        (artifact) =>
+          artifact.proofId === "hosted-identity-next-action" &&
+          artifact.artifactPath ===
+            "target/dev-test-game/hosted-identity-next-action-admin-proof.json",
+      ))
   ) {
     throw new Error("next-action terminal batch graph summary drifted");
   }

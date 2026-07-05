@@ -84,6 +84,18 @@ export const terminalAdminProofBatchArtifactPaths = Object.freeze([
   nextActionAdminProofPath,
   hostedIdentityNextActionAdminProofPath,
 ]);
+export const terminalAdminProofBatchReceiptArtifacts = Object.freeze(
+  terminalAdminProofBatchIds.map((proofId, index) =>
+    Object.freeze({
+      proofId,
+      artifactPath: terminalAdminProofBatchArtifactPaths[index],
+      batchLabel:
+        proofId === "hosted-identity-next-action"
+          ? "Terminal hosted identity next-action admin proof batch"
+          : "Terminal admin proof batch",
+    }),
+  ),
+);
 
 export const adminProofDestinationRequirementCases = Object.freeze([
   Object.freeze({
@@ -340,6 +352,7 @@ export function devTestGameProofGraphFirstClassNodes({
       batchCount: 3,
       proofIds: terminalAdminProofBatchIds,
       artifactPaths: terminalAdminProofBatchArtifactPaths,
+      receiptArtifacts: terminalAdminProofBatchReceiptArtifacts,
     }),
   ]);
 }

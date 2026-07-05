@@ -3044,6 +3044,7 @@ function normalizeNextActionTerminalBatchGraph(terminalBatchGraph) {
       batchCount: 0,
       edgeCount: 0,
       edgeTargets: Object.freeze([]),
+      receiptArtifacts: Object.freeze([]),
     });
   }
   return Object.freeze({
@@ -3056,6 +3057,17 @@ function normalizeNextActionTerminalBatchGraph(terminalBatchGraph) {
     edgeTargets: Object.freeze(
       Array.isArray(terminalBatchGraph.edgeTargets)
         ? terminalBatchGraph.edgeTargets.map((target) => String(target))
+        : [],
+    ),
+    receiptArtifacts: Object.freeze(
+      Array.isArray(terminalBatchGraph.receiptArtifacts)
+        ? terminalBatchGraph.receiptArtifacts.map((artifact) =>
+            Object.freeze({
+              proofId: String(artifact?.proofId ?? ""),
+              artifactPath: String(artifact?.artifactPath ?? ""),
+              batchLabel: String(artifact?.batchLabel ?? ""),
+            }),
+          )
         : [],
     ),
   });

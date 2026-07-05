@@ -4200,6 +4200,30 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
       ]),
     ],
   );
+  const terminalBatchNode = graph.nodes.find(
+    (node) => node.id === "admin-spine-terminal-batches",
+  );
+  assert.deepEqual(
+    terminalBatchNode.receiptArtifacts.find(
+      (artifact) => artifact.proofId === "hosted-identity-next-action",
+    ),
+    {
+      proofId: "hosted-identity-next-action",
+      artifactPath:
+        "target/dev-test-game/hosted-identity-next-action-admin-proof.json",
+      batchLabel: "Terminal hosted identity next-action admin proof batch",
+    },
+  );
+  assert.deepEqual(
+    graph.edges
+      .filter(
+        (edge) =>
+          edge.from === "admin-spine-terminal-batches" &&
+          edge.relationship === "terminal-browser-proof",
+      )
+      .map((edge) => edge.to),
+    ["proof-graph", "proof-freshness", "next-action"],
+  );
   assert.deepEqual(
     graph.nodes
       .filter((node) => node.kind === "role-surface-proof")

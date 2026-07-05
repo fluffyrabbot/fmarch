@@ -2215,6 +2215,31 @@ test("admin route data exposes local next action as a native audit row", async (
       batchCount: 3,
       edgeCount: 3,
       edgeTargets: ["proof-graph", "proof-freshness", "next-action"],
+      receiptArtifacts: [
+        {
+          proofId: "proof-graph",
+          artifactPath: "target/dev-test-game/proof-graph-admin-proof.json",
+          batchLabel: "Terminal admin proof batch",
+        },
+        {
+          proofId: "proof-freshness",
+          artifactPath:
+            "target/dev-test-game/proof-freshness-admin-proof.json",
+          batchLabel: "Terminal admin proof batch",
+        },
+        {
+          proofId: "next-action",
+          artifactPath: "target/dev-test-game/next-action-admin-proof.json",
+          batchLabel: "Terminal admin proof batch",
+        },
+        {
+          proofId: "hosted-identity-next-action",
+          artifactPath:
+            "target/dev-test-game/hosted-identity-next-action-admin-proof.json",
+          batchLabel:
+            "Terminal hosted identity next-action admin proof batch",
+        },
+      ],
     },
     privateChannelRecoveryGraph: privateChannelRecoveryGraphFixture(),
     replacementActionRecoveryGraph: replacementActionRecoveryGraphFixture(),
@@ -6038,6 +6063,30 @@ function terminalBatchGraphFixture() {
     ],
     edgeCount: 3,
     edgeTargets: ["proof-graph", "proof-freshness", "next-action"],
+    receiptArtifacts: [
+      {
+        proofId: "proof-graph",
+        artifactPath: "target/dev-test-game/proof-graph-admin-proof.json",
+        batchLabel: "Terminal admin proof batch",
+      },
+      {
+        proofId: "proof-freshness",
+        artifactPath: "target/dev-test-game/proof-freshness-admin-proof.json",
+        batchLabel: "Terminal admin proof batch",
+      },
+      {
+        proofId: "next-action",
+        artifactPath: "target/dev-test-game/next-action-admin-proof.json",
+        batchLabel: "Terminal admin proof batch",
+      },
+      {
+        proofId: "hosted-identity-next-action",
+        artifactPath:
+          "target/dev-test-game/hosted-identity-next-action-admin-proof.json",
+        batchLabel:
+          "Terminal hosted identity next-action admin proof batch",
+      },
+    ],
   };
 }
 

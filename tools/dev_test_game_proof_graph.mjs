@@ -401,7 +401,16 @@ export function assertDevTestGameProofGraphCoversTerminalBatches(graph) {
     !Array.isArray(terminalNode.proofIds) ||
     !terminalNode.proofIds.includes("proof-graph") ||
     !terminalNode.proofIds.includes("proof-freshness") ||
-    !terminalNode.proofIds.includes("next-action")
+    !terminalNode.proofIds.includes("next-action") ||
+    !Array.isArray(terminalNode.receiptArtifacts) ||
+    !terminalNode.receiptArtifacts.some(
+      (artifact) =>
+        artifact.proofId === "hosted-identity-next-action" &&
+        artifact.artifactPath ===
+          "target/dev-test-game/hosted-identity-next-action-admin-proof.json" &&
+        artifact.batchLabel ===
+          "Terminal hosted identity next-action admin proof batch",
+    )
   ) {
     throw new Error("proof graph terminal batch node drifted");
   }
@@ -746,6 +755,9 @@ function buildProofGraphNodes({
                 ),
               ),
             ],
+            receiptArtifacts: terminalBatchReceiptArtifacts(
+              adminSpineTerminalBatches,
+            ),
           },
         ];
   const recoveryReceiptNodes = buildRecoveryReceiptGraphNodes({
@@ -979,6 +991,16 @@ function terminalBatchEdges(adminSpineTerminalBatches) {
         .map((batch) => batch.label),
     },
   ]);
+}
+
+function terminalBatchReceiptArtifacts(adminSpineTerminalBatches) {
+  return adminSpineTerminalBatches.batches.flatMap((batch) =>
+    batch.proofIds.map((proofId, index) => ({
+      proofId,
+      artifactPath: batch.artifactPaths[index],
+      batchLabel: batch.label,
+    })),
+  );
 }
 
 async function readOptionalJson(filePath) {

@@ -25,6 +25,7 @@ import {
   terminalAdminProofBatchArtifactPaths,
   terminalAdminProofBatchEdgeIds,
   terminalAdminProofBatchIds,
+  terminalAdminProofBatchReceiptArtifacts,
 } from "./dev_test_game_proof_graph_handoff_cases.mjs";
 import {
   devTestGameSeedFixturePath,
@@ -163,6 +164,7 @@ test("proof graph first-class fixture nodes share artifact and command contracts
       node.recoveryCommand ?? "",
       node.proofIds ?? [],
       node.artifactPaths ?? [],
+      node.receiptArtifacts ?? [],
     ]),
     [
       [
@@ -172,6 +174,7 @@ test("proof graph first-class fixture nodes share artifact and command contracts
         "target/dev-test-game/admin-spine-proof.json",
         "/admin/audit/local-admin-spine?game=midsummer",
         adminSpineProofCommand,
+        [],
         [],
         [],
       ],
@@ -184,6 +187,7 @@ test("proof graph first-class fixture nodes share artifact and command contracts
         spineManifestAdminProofCommand,
         [],
         [],
+        [],
       ],
       [
         "proof-graph",
@@ -192,6 +196,7 @@ test("proof graph first-class fixture nodes share artifact and command contracts
         "target/dev-test-game/proof-graph.json",
         "/admin/audit/local-proof-graph?game=midsummer",
         devTestGameProofGraphCommand,
+        [],
         [],
         [],
       ],
@@ -204,6 +209,7 @@ test("proof graph first-class fixture nodes share artifact and command contracts
         proofFreshnessAdminProofCommand,
         [],
         [],
+        [],
       ],
       [
         "next-action",
@@ -212,6 +218,7 @@ test("proof graph first-class fixture nodes share artifact and command contracts
         "target/dev-test-game/next-action.json",
         "/admin/audit/local-next-action?game=midsummer",
         nextActionCommand,
+        [],
         [],
         [],
       ],
@@ -224,6 +231,7 @@ test("proof graph first-class fixture nodes share artifact and command contracts
         "",
         terminalAdminProofBatchIds,
         terminalAdminProofBatchArtifactPaths,
+        terminalAdminProofBatchReceiptArtifacts,
       ],
     ],
   );
