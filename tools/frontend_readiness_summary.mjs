@@ -387,6 +387,23 @@ const summary = {
           shellComponentCount: surface.shellComponentCount,
         })),
     },
+    hostSetupWorkbench: {
+      requirement: requirementSummary(requirements["host-setup-workbench"]),
+      local: hostSetupWorkbenchSummary(artifacts.roleSmoke),
+      imported: {
+        status: importedRoleSmokeSetupWorkbenchEvidenceComplete(
+          artifacts.importedRoleSmoke,
+        )
+          ? "imported_browser_proven"
+          : "source_blocked",
+        artifactStatus: artifacts.importedRoleSmoke.status,
+        setupCount: artifacts.importedRoleSmoke.validated?.setupCount ?? 0,
+        screenshotCheckCount:
+          artifacts.importedRoleSmoke.validated?.screenshotChecks?.filter(
+            (check) => String(check.screenshot ?? "").includes("host-setup"),
+          ).length ?? 0,
+      },
+    },
     routeStates: requirementSummary(requirements["route-states"]),
     tabletInteraction: {
       requirement: requirementSummary(
@@ -545,7 +562,28 @@ function localhostSummary(roleSmoke) {
     blockedReason:
       localhostProofState === "browser_proven"
         ? null
-        : "localhost bind is denied before the dev-server browser proof can run",
+      : "localhost bind is denied before the dev-server browser proof can run",
+  };
+}
+
+function hostSetupWorkbenchSummary(roleSmoke) {
+  const entries = roleSmoke.setup ?? [];
+  const proven = roleSmokeSetupWorkbenchEvidenceComplete(roleSmoke);
+  return {
+    status: proven ? "browser_proven" : "missing",
+    artifactStatus: roleSmoke.status,
+    route: "/g/midsummer/setup",
+    viewportLayouts: entries.map((entry) => ({
+      viewport: entry.viewport?.name ?? "unknown",
+      layout: entry.layout ?? "unknown",
+      screenshot: entry.screenshot ?? null,
+      slotCount: entry.slotCards?.length ?? 0,
+      noHorizontalOverflow: entry.noHorizontalOverflow === true,
+    })),
+    screenshotCount: entries.filter((entry) => entry.screenshotPixels !== undefined).length,
+    blockedReason: proven
+      ? null
+      : "Role smoke has not recorded setup workbench geometry for mobile, tablet, and desktop.",
   };
 }
 
@@ -723,6 +761,7 @@ function importedRoleSmokeSummary(importedRoleSmoke) {
     validated: {
       viewportCount: importedRoleSmoke.validated?.viewportCount ?? 0,
       boardCount: importedRoleSmoke.validated?.boardCount ?? 0,
+      setupCount: importedRoleSmoke.validated?.setupCount ?? 0,
       roleCount: importedRoleSmoke.validated?.roleCount ?? 0,
       playerPrivateChannelCount:
         importedRoleSmoke.validated?.playerPrivateChannelCount ?? 0,
@@ -1007,6 +1046,20 @@ function importedRoleSmokeEvidenceComplete(importedRoleSmoke) {
     validated.screenshotChecks.every((check) =>
       check.screenshotPixels?.uniqueColorBuckets >= 8 &&
       check.screenshotPixels?.changedPixelRatio >= 0.005
+    )
+  );
+}
+
+function importedRoleSmokeSetupWorkbenchEvidenceComplete(importedRoleSmoke) {
+  if (importedRoleSmoke.status !== "imported-passed") {
+    return false;
+  }
+  const validated = importedRoleSmoke.validated ?? {};
+  return (
+    validated.setupCount >= 3 &&
+    Array.isArray(validated.screenshotChecks) &&
+    validated.screenshotChecks.some((check) =>
+      String(check.screenshot ?? "").includes("host-setup"),
     )
   );
 }
@@ -1834,6 +1887,7 @@ function renderMarkdown(summary) {
     "## Shared Proof",
     "",
     `- Single root shell: \`${summary.shared.singleRootShell.requirement.state}\` (${summary.shared.singleRootShell.surfaceShellCounts.length} first-view surfaces, ${summary.shared.singleRootShell.routeStateShellCounts.length} route-state surfaces)`,
+    `- Host setup workbench: \`${summary.shared.hostSetupWorkbench.requirement.state}\` (${summary.shared.hostSetupWorkbench.local.viewportLayouts.length} local geometry viewports, ${summary.shared.hostSetupWorkbench.imported.setupCount} imported setup entries)`,
     `- Tablet interaction posture: \`${summary.shared.tabletInteraction.requirement.state}\` (${summary.shared.tabletInteraction.scannedFileCount} files scanned, ${summary.shared.tabletInteraction.forbiddenMatchCount} forbidden interaction matches, ${summary.shared.tabletInteraction.thumbZoneRoles.length} thumb-zone roles)`,
     `- Route states: \`${summary.shared.routeStates.state}\``,
     `- Route error shell: \`${summary.shared.routeError.requirement.state}\` at \`${summary.shared.routeError.path}\` with \`${summary.shared.routeError.capabilitySummary}\``,

@@ -4384,6 +4384,7 @@ test("frontend completion audit summarizes proven and blocked requirements", asy
           ["shared-app-shell", "browser_proven"],
           ["tablet-native-interaction-posture", "browser_proven"],
           ["single-root-shell-architecture", "ssr_and_source_proven"],
+          ["host-setup-workbench", "browser_proven"],
           ["player-surface", "browser_proven"],
           ["moderator-host-surface", "browser_proven"],
           ["admin-operator-surface", "browser_proven"],
@@ -4398,6 +4399,7 @@ test("frontend completion audit summarizes proven and blocked requirements", asy
             "source_css_ssr_proven_browser_blocked",
           ],
           ["single-root-shell-architecture", "ssr_and_source_proven"],
+          ["host-setup-workbench", "browser_geometry_missing"],
           ["player-surface", "dom_and_model_proven_browser_blocked"],
           ["moderator-host-surface", "dom_and_model_proven_browser_blocked"],
           ["admin-operator-surface", "dom_and_model_proven_browser_blocked"],
@@ -4435,6 +4437,9 @@ test("frontend completion audit summarizes proven and blocked requirements", asy
   const tabletRequirement = audit.requirements.find(
     (requirement) => requirement.id === "tablet-native-interaction-posture",
   );
+  const hostSetupRequirement = audit.requirements.find(
+    (requirement) => requirement.id === "host-setup-workbench",
+  );
   const browserRequirement = audit.requirements.find(
     (requirement) => requirement.id === "browser-acceptance",
   );
@@ -4447,6 +4452,22 @@ test("frontend completion audit summarizes proven and blocked requirements", asy
     "tabletInteraction.hostTouchCss",
     "tabletInteraction.thumbZones",
   ]);
+  assert.deepEqual(hostSetupRequirement.evidence, [
+    "roleSmoke.setup",
+    "roleSmoke.setup[*].slotCards",
+    "roleSmoke.setup[*].screenshotPixels",
+    "importedRoleSmoke.validated.setupCount",
+    "importedRoleSmoke.validated.screenshotChecks",
+    "browserAcceptanceBoundary.lanes[localhost-dev-server-role-smoke]",
+    "browserAcceptanceBoundary.lanes[imported-localhost-role-smoke]",
+  ]);
+  assert.equal(
+    hostSetupRequirement.proven.some((entry) =>
+      entry.includes("/g/midsummer/setup") &&
+      entry.includes("slot workbench"),
+    ),
+    true,
+  );
   assert.equal(
     tabletRequirement.proven.some((entry) =>
       entry.includes("frontend/src .css/.html/.js/.mjs/.svelte") &&
@@ -4543,6 +4564,37 @@ test("frontend readiness summary reports role proof layers without promoting bro
     summary.shared.singleRootShell.routeStateShellCounts.every(
       (entry) => entry.shellComponentCount === 1,
     ),
+    true,
+  );
+  assert.deepEqual(summary.shared.hostSetupWorkbench.requirement, {
+    id: "host-setup-workbench",
+    label: "Host setup workbench geometry",
+    state:
+      summary.status === "passed"
+        ? "browser_proven"
+        : "browser_geometry_missing",
+    proven: summary.shared.hostSetupWorkbench.requirement.proven,
+    missing: summary.shared.hostSetupWorkbench.requirement.missing,
+  });
+  assert.deepEqual(
+    summary.shared.hostSetupWorkbench.local.viewportLayouts.map((entry) => [
+      entry.viewport,
+      entry.layout,
+      entry.slotCount,
+      entry.noHorizontalOverflow,
+    ]),
+    [
+      ["mobile", "stacked", 2, true],
+      ["tablet", "co-located-columns", 2, true],
+      ["desktop", "co-located-columns", 2, true],
+    ],
+  );
+  assert.equal(
+    summary.shared.hostSetupWorkbench.local.screenshotCount >= 3,
+    true,
+  );
+  assert.equal(
+    summary.shared.hostSetupWorkbench.imported.setupCount >= 3,
     true,
   );
   assert.deepEqual(summary.shared.tabletInteraction, {

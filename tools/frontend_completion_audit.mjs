@@ -200,6 +200,9 @@ assert.equal(
 );
 const fullBrowserProof =
   browserRoleSmokeEvidenceComplete() || importedRoleSmokeEvidenceComplete();
+const hostSetupWorkbenchProof =
+  roleSmokeSetupWorkbenchEvidenceComplete() ||
+  importedRoleSmokeSetupWorkbenchEvidenceComplete();
 assert.equal(
   artifacts.browserAcceptanceBoundary.status,
   fullBrowserProof ? "passed" : "incomplete",
@@ -401,6 +404,38 @@ const audit = {
         "frontend/src/routes/root-shell-contract.test.mjs",
       ],
       missing: [],
+    }),
+    requirement({
+      id: "host-setup-workbench",
+      label: "Host setup workbench geometry",
+      state: hostSetupWorkbenchProof ? "browser_proven" : "browser_geometry_missing",
+      proven: [
+        "The setup workbench proof is scoped to /g/midsummer/setup and records the host setup surface, capability label, roster, slot workbench, slot cards, role cells, and command touch targets.",
+        ...(roleSmokeSetupWorkbenchEvidenceComplete()
+          ? [
+              "Localhost role smoke records mobile stacked layout plus tablet and desktop co-located slot/role columns with no horizontal overflow and nonblank screenshots.",
+            ]
+          : []),
+        ...(importedRoleSmokeSetupWorkbenchEvidenceComplete()
+          ? [
+              "Imported role-smoke validation preserves setup workbench screenshot and geometry evidence for portable browser acceptance.",
+            ]
+          : []),
+      ],
+      evidence: [
+        "roleSmoke.setup",
+        "roleSmoke.setup[*].slotCards",
+        "roleSmoke.setup[*].screenshotPixels",
+        "importedRoleSmoke.validated.setupCount",
+        "importedRoleSmoke.validated.screenshotChecks",
+        "browserAcceptanceBoundary.lanes[localhost-dev-server-role-smoke]",
+        "browserAcceptanceBoundary.lanes[imported-localhost-role-smoke]",
+      ],
+      missing: hostSetupWorkbenchProof
+        ? []
+        : [
+            "Run or import a passed frontend role smoke with /g/midsummer/setup workbench geometry for mobile, tablet, and desktop.",
+          ],
     }),
     requirement({
       id: "player-surface",
@@ -773,6 +808,20 @@ function tabletInteractionForbiddenSummary() {
   return artifacts.tabletInteraction.forbiddenPatterns
     .map((pattern) => pattern.id)
     .join(", ");
+}
+
+function importedRoleSmokeSetupWorkbenchEvidenceComplete() {
+  if (artifacts.importedRoleSmoke.status !== "imported-passed") {
+    return false;
+  }
+  const validated = artifacts.importedRoleSmoke.validated ?? {};
+  return (
+    validated.setupCount >= 3 &&
+    Array.isArray(validated.screenshotChecks) &&
+    validated.screenshotChecks.some((check) =>
+      String(check.screenshot ?? "").includes("host-setup"),
+    )
+  );
 }
 
 function browserRoleSmokeEvidenceComplete() {
