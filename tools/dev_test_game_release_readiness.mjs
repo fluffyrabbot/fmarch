@@ -145,6 +145,9 @@ import {
   proofGraphAdminFeatureTargetCases,
 } from "./dev_test_game_proof_graph_feature_target_cases.mjs";
 import {
+  roleSurfaceSpineCases,
+} from "./dev_test_game_role_surface_spine_cases.mjs";
+import {
   localAdminAuditHandoffCheckIds,
   localAdminAuditIds,
   localAdminAuditRoleUrl,
@@ -6839,175 +6842,68 @@ function validHardeningProductionFeatureTargets(productionFeatureTargets) {
 }
 
 function validHostSetupSpineTargets(spineTargets) {
-  return (
-    spineTargets !== null &&
-    typeof spineTargets === "object" &&
-    spineTargets.status === "passed" &&
-    spineTargets.detailRoleUrl?.includes("/g/<seeded-game>/setup") &&
-    spineTargets.defaultCycleId === hostSetupFeatureSpineCycleId &&
-    spineTargets.defaultRoleUrlId === "host-setup" &&
-    spineTargets.defaultRoleUrl?.includes("/g/<seeded-game>/setup") &&
-    spineTargets.defaultCheckpointId === "start-phase" &&
-    typeof spineTargets.browserProofCommand === "string" &&
-    spineTargets.browserProofCommand.includes("test:dev-test-game-core-live") &&
-    Array.isArray(spineTargets.cycleIds) &&
-    spineTargets.cycleIds.includes(hostSetupFeatureSpineCycleId) &&
-    Array.isArray(spineTargets.roleUrlIds) &&
-    spineTargets.roleUrlIds.includes("host-setup") &&
-    spineTargets.roleUrlHrefs?.["host-setup"]?.includes(
-      "/g/<seeded-game>/setup",
-    ) &&
-    Array.isArray(spineTargets.checkpointIds) &&
-    spineTargets.checkpointIds.includes("start-phase") &&
-    Array.isArray(spineTargets.recoveryHookIds) &&
-    spineTargets.recoveryHookIds.length === 0 &&
-    Array.isArray(spineTargets.visibleAdminCheckIds) &&
-    spineTargets.visibleAdminCheckIds.includes("start-phase") &&
-    validProductionFeatureTargetsForSource(
-      spineTargets.productionFeatureTargets,
-      hostSetupFeatureSpineSourceCheckId,
-    )
+  return validRoleSurfaceSpineTargets(
+    spineTargets,
+    roleSurfaceSpineCases.hostSetup,
   );
 }
 
 function validCohostSpineTargets(spineTargets) {
-  return (
-    spineTargets !== null &&
-    typeof spineTargets === "object" &&
-    spineTargets.status === "passed" &&
-    spineTargets.detailRoleUrl?.includes("/g/<seeded-game>/host") &&
-    spineTargets.defaultCycleId === cohostFeatureSpineCycleId &&
-    spineTargets.defaultRoleUrlId === "cohost-console" &&
-    spineTargets.defaultRoleUrl?.includes("/g/<seeded-game>/host") &&
-    spineTargets.defaultCheckpointId === "extend-deadline-ack" &&
-    typeof spineTargets.browserProofCommand === "string" &&
-    spineTargets.browserProofCommand.includes("test:dev-test-game-core-live") &&
-    Array.isArray(spineTargets.cycleIds) &&
-    spineTargets.cycleIds.includes(cohostFeatureSpineCycleId) &&
-    Array.isArray(spineTargets.roleUrlIds) &&
-    spineTargets.roleUrlIds.includes("cohost-console") &&
-    spineTargets.roleUrlHrefs?.["cohost-console"]?.includes(
-      "/g/<seeded-game>/host",
-    ) &&
-    Array.isArray(spineTargets.checkpointIds) &&
-    spineTargets.checkpointIds.includes("extend-deadline-ack") &&
-    Array.isArray(spineTargets.recoveryHookIds) &&
-    spineTargets.recoveryHookIds.length === 0 &&
-    Array.isArray(spineTargets.visibleAdminCheckIds) &&
-    spineTargets.visibleAdminCheckIds.includes("cohost-console") &&
-    validProductionFeatureTargetsForSource(
-      spineTargets.productionFeatureTargets,
-      cohostFeatureSpineSourceCheckId,
-    )
-  );
+  return validRoleSurfaceSpineTargets(spineTargets, roleSurfaceSpineCases.cohost);
 }
 
 function validReplacementSpineTargets(spineTargets) {
-  return (
-    spineTargets !== null &&
-    typeof spineTargets === "object" &&
-    spineTargets.status === "passed" &&
-    spineTargets.detailRoleUrl?.includes("/g/<seeded-game>") &&
-    spineTargets.defaultCycleId === replacementFeatureSpineCycleId &&
-    spineTargets.defaultRoleUrlId === "replacement-player" &&
-    spineTargets.defaultRoleUrl?.includes("/g/<seeded-game>") &&
-    spineTargets.defaultCheckpointId === "incoming-player-slot-authority" &&
-    typeof spineTargets.browserProofCommand === "string" &&
-    spineTargets.browserProofCommand.includes("test:dev-test-game-core-live") &&
-    Array.isArray(spineTargets.cycleIds) &&
-    spineTargets.cycleIds.includes(replacementFeatureSpineCycleId) &&
-    Array.isArray(spineTargets.roleUrlIds) &&
-    spineTargets.roleUrlIds.includes("replacement-player") &&
-    spineTargets.roleUrlHrefs?.["replacement-player"]?.includes(
-      "/g/<seeded-game>",
-    ) &&
-    Array.isArray(spineTargets.checkpointIds) &&
-    spineTargets.checkpointIds.includes("incoming-player-slot-authority") &&
-    Array.isArray(spineTargets.recoveryHookIds) &&
-    spineTargets.recoveryHookIds.length === 0 &&
-    Array.isArray(spineTargets.visibleAdminCheckIds) &&
-    spineTargets.visibleAdminCheckIds.includes("replacement-incoming-player") &&
-    spineTargets.visibleAdminCheckIds.includes("replacement-stale-player") &&
-    validProductionFeatureTargetsForSource(
-      spineTargets.productionFeatureTargets,
-      replacementFeatureSpineSourceCheckId,
-    )
+  return validRoleSurfaceSpineTargets(
+    spineTargets,
+    roleSurfaceSpineCases.replacement,
   );
 }
 
 function validReplacementActionSpineTargets(spineTargets) {
-  return (
-    spineTargets !== null &&
-    typeof spineTargets === "object" &&
-    spineTargets.status === "passed" &&
-    spineTargets.detailRoleUrl?.includes("/g/<replacement-action-game>") &&
-    spineTargets.defaultCycleId === replacementActionFeatureSpineCycleId &&
-    spineTargets.defaultRoleUrlId === "replacement-action" &&
-    spineTargets.defaultRoleUrl?.includes("/g/<replacement-action-game>") &&
-    spineTargets.defaultCheckpointId === "replacement-incoming-action" &&
-    typeof spineTargets.browserProofCommand === "string" &&
-    spineTargets.browserProofCommand.includes("test:dev-test-game-core-live") &&
-    Array.isArray(spineTargets.cycleIds) &&
-    spineTargets.cycleIds.includes(replacementActionFeatureSpineCycleId) &&
-    Array.isArray(spineTargets.roleUrlIds) &&
-    spineTargets.roleUrlIds.includes("replacement-action") &&
-    spineTargets.roleUrlHrefs?.["replacement-action"]?.includes(
-      "/g/<replacement-action-game>",
-    ) &&
-    Array.isArray(spineTargets.checkpointIds) &&
-    spineTargets.checkpointIds.includes("replacement-incoming-action") &&
-    Array.isArray(spineTargets.recoveryHookIds) &&
-    spineTargets.recoveryHookIds.length === 0 &&
-    Array.isArray(spineTargets.visibleAdminCheckIds) &&
-    spineTargets.visibleAdminCheckIds.includes("replacement-incoming-action") &&
-    spineTargets.visibleAdminCheckIds.includes("replacement-action-reconnect") &&
-    spineTargets.visibleAdminCheckIds.includes(
-      "replacement-stale-action-after-resolve",
-    ) &&
-    validProductionFeatureTargetsForSource(
-      spineTargets.productionFeatureTargets,
-      replacementActionFeatureSpineSourceCheckId,
-    )
+  return validRoleSurfaceSpineTargets(
+    spineTargets,
+    roleSurfaceSpineCases.replacementAction,
   );
 }
 
 function validReplacementPrivateSpineTargets(spineTargets) {
+  return validRoleSurfaceSpineTargets(
+    spineTargets,
+    roleSurfaceSpineCases.replacementPrivate,
+  );
+}
+
+function validRoleSurfaceSpineTargets(spineTargets, roleSurfaceCase) {
+  const { source, targetRow } = roleSurfaceCase;
   return (
     spineTargets !== null &&
     typeof spineTargets === "object" &&
     spineTargets.status === "passed" &&
-    spineTargets.detailRoleUrl?.includes(
-      "/g/<replacement-private-game>/c/private%3Amafia_day_chat",
-    ) &&
-    spineTargets.defaultCycleId === replacementPrivateFeatureSpineCycleId &&
-    spineTargets.defaultRoleUrlId === "replacement-private-channel" &&
-    spineTargets.defaultRoleUrl?.includes(
-      "/g/<replacement-private-game>/c/private%3Amafia_day_chat",
-    ) &&
-    spineTargets.defaultCheckpointId === "replacement-stale-private-channel" &&
+    spineTargets.detailRoleUrl?.includes(source.detailRoleUrlIncludes) &&
+    spineTargets.defaultCycleId === targetRow.cycleId &&
+    spineTargets.defaultRoleUrlId === targetRow.roleUrlId &&
+    spineTargets.defaultRoleUrl?.includes(source.roleUrlIncludes) &&
+    spineTargets.defaultCheckpointId === targetRow.checkpointId &&
     typeof spineTargets.browserProofCommand === "string" &&
     spineTargets.browserProofCommand.includes("test:dev-test-game-core-live") &&
     Array.isArray(spineTargets.cycleIds) &&
-    spineTargets.cycleIds.includes(replacementPrivateFeatureSpineCycleId) &&
+    spineTargets.cycleIds.includes(targetRow.cycleId) &&
     Array.isArray(spineTargets.roleUrlIds) &&
-    spineTargets.roleUrlIds.includes("replacement-private-channel") &&
-    spineTargets.roleUrlHrefs?.["replacement-private-channel"]?.includes(
-      "/g/<replacement-private-game>/c/private%3Amafia_day_chat",
+    spineTargets.roleUrlIds.includes(targetRow.roleUrlId) &&
+    spineTargets.roleUrlHrefs?.[targetRow.roleUrlId]?.includes(
+      source.roleUrlIncludes,
     ) &&
     Array.isArray(spineTargets.checkpointIds) &&
-    spineTargets.checkpointIds.includes("replacement-stale-private-channel") &&
+    spineTargets.checkpointIds.includes(targetRow.checkpointId) &&
     Array.isArray(spineTargets.recoveryHookIds) &&
     spineTargets.recoveryHookIds.length === 0 &&
     Array.isArray(spineTargets.visibleAdminCheckIds) &&
-    spineTargets.visibleAdminCheckIds.includes(
-      "replacement-stale-private-channel",
-    ) &&
-    spineTargets.visibleAdminCheckIds.includes(
-      "replacement-stale-private-post-after-complete-reload",
+    roleSurfaceCase.visibleAdminCheckIds.every((checkId) =>
+      spineTargets.visibleAdminCheckIds.includes(checkId),
     ) &&
     validProductionFeatureTargetsForSource(
       spineTargets.productionFeatureTargets,
-      replacementPrivateFeatureSpineSourceCheckId,
+      source.sourceCheckId,
     )
   );
 }

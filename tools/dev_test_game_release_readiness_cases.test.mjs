@@ -86,6 +86,9 @@ import {
   proofGraphAdminFeatureTargetCases,
 } from "./dev_test_game_proof_graph_feature_target_cases.mjs";
 import {
+  roleSurfaceSpineCaseList,
+} from "./dev_test_game_role_surface_spine_cases.mjs";
+import {
   replacementStaleConflictMessageSpineLaneCase,
 } from "./dev_test_game_stale_conflict_scenarios.mjs";
 
@@ -532,18 +535,24 @@ test("proof graph admin feature targets derive from shared source rows", () => {
       label: "host setup",
       source: hostSetupFeatureSpineSource,
       targetRow: hostSetupFeatureSpineTargetRows.hostSetupRoute,
+      visibleAdminCheckIds: ["start-phase"],
     },
     {
       generatedFromKey: "cohostFeatureTarget",
       label: "cohost console",
       source: cohostFeatureSpineSource,
       targetRow: cohostFeatureSpineTargetRows.cohostConsole,
+      visibleAdminCheckIds: ["cohost-console"],
     },
     {
       generatedFromKey: "replacementFeatureTarget",
       label: "replacement player",
       source: replacementFeatureSpineSource,
       targetRow: replacementFeatureSpineTargetRows.replacementPlayer,
+      visibleAdminCheckIds: [
+        "replacement-incoming-player",
+        "replacement-stale-player",
+      ],
     },
     {
       generatedFromKey: "replacementActionFeatureTarget",
@@ -551,6 +560,11 @@ test("proof graph admin feature targets derive from shared source rows", () => {
       source: replacementActionFeatureSpineSource,
       targetRow:
         replacementActionFeatureSpineTargetRows.replacementActionRecovery,
+      visibleAdminCheckIds: [
+        "replacement-incoming-action",
+        "replacement-action-reconnect",
+        "replacement-stale-action-after-resolve",
+      ],
     },
     {
       generatedFromKey: "replacementPrivateFeatureTarget",
@@ -558,10 +572,14 @@ test("proof graph admin feature targets derive from shared source rows", () => {
       source: replacementPrivateFeatureSpineSource,
       targetRow:
         replacementPrivateFeatureSpineTargetRows.replacementPrivateChannel,
+      visibleAdminCheckIds: [
+        "replacement-stale-private-channel",
+        "replacement-stale-private-post-after-complete-reload",
+      ],
     },
   ];
   assert.deepEqual(
-    proofGraphAdminFeatureTargetCases.map((featureTargetCase) => [
+    roleSurfaceSpineCaseList.map((featureTargetCase) => [
       featureTargetCase.generatedFromKey,
       featureTargetCase.label,
       featureTargetCase.source.sourceCheckId,
@@ -572,6 +590,7 @@ test("proof graph admin feature targets derive from shared source rows", () => {
       featureTargetCase.targetRow.sourceCheckId,
       featureTargetCase.targetRow.checkpointId,
       featureTargetCase.targetRow.adminCheckId,
+      [...featureTargetCase.visibleAdminCheckIds],
     ]),
     expectedCases.map((featureTargetCase) => [
       featureTargetCase.generatedFromKey,
@@ -584,8 +603,10 @@ test("proof graph admin feature targets derive from shared source rows", () => {
       featureTargetCase.targetRow.sourceCheckId,
       featureTargetCase.targetRow.checkpointId,
       featureTargetCase.targetRow.adminCheckId,
+      featureTargetCase.visibleAdminCheckIds,
     ]),
   );
+  assert.equal(proofGraphAdminFeatureTargetCases, roleSurfaceSpineCaseList);
   for (const featureTargetCase of proofGraphAdminFeatureTargetCases) {
     assert.equal(
       featureTargetCase.targetRow.sourceCheckId,
