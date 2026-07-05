@@ -14,8 +14,10 @@ import {
   buildDevTestGameProofRun,
 } from "./dev_test_game_proof_contract.mjs";
 import {
+  assertHostedAdminHandoffProofReadinessDecisions,
   assertDevTestGameReleaseReadiness,
   buildDevTestGameReleaseReadiness,
+  hostedAdminHandoffProofReadinessDecision,
   recoveryReceiptReleaseReadinessValidators,
   validateDevTestGameAdminSpineProof,
   validateDevTestGameAdminSpineTerminalBatches,
@@ -3882,6 +3884,42 @@ test("hosted admin proof fixtures carry visible shared handoff paths", () => {
       proofName: `${label} proof fixture`,
     });
   }
+});
+
+test("hosted handoff proof catalog requires explicit readiness decisions", async () => {
+  for (const artifactCase of hostedAdminHandoffProofArtifactCases) {
+    assert.equal(
+      hostedAdminHandoffProofReadinessDecision(artifactCase),
+      "readiness-loaded",
+      `${artifactCase.id} should be loaded by release readiness`,
+    );
+  }
+  const futureProofCase = {
+    id: "future-hosted-handoff-admin-proof",
+    readinessId: "futureHostedHandoffAdminProof",
+    path: "target/dev-test-game/future-hosted-handoff-admin-proof.json",
+    envVar: "FMARCH_DEV_TEST_GAME_FUTURE_HOSTED_HANDOFF_ADMIN_PROOF",
+    outputKeys: {
+      data: "futureHostedHandoffAdminProof",
+      path: "futureHostedHandoffAdminProofPath",
+      freshnessMetadata: "futureHostedHandoffAdminProofArtifact",
+    },
+  };
+  assert.equal(hostedAdminHandoffProofReadinessDecision(futureProofCase), null);
+  await assert.rejects(
+    () =>
+      assertHostedAdminHandoffProofReadinessDecisions({
+        artifactCases: [futureProofCase],
+        artifactExists: async () => true,
+      }),
+    /hosted handoff proof readiness decision missing: future-hosted-handoff-admin-proof/,
+  );
+  await assert.doesNotReject(() =>
+    assertHostedAdminHandoffProofReadinessDecisions({
+      artifactCases: [futureProofCase],
+      artifactExists: async () => false,
+    }),
+  );
 });
 
 test("named game selection is idempotent by default with explicit reset and reuse", () => {

@@ -258,6 +258,7 @@ import {
 } from "./dev_test_game_normalized_evidence_objects.mjs";
 import {
   hostedAdminHandoffProofArtifactCase,
+  hostedAdminHandoffProofArtifactCases,
 } from "./dev_test_game_hosted_handoff_proof_cases.mjs";
 export const DEV_TEST_GAME_RELEASE_READINESS_VERSION = 1;
 const devTestGameSeededBrowserProofCommand =
@@ -7367,7 +7368,10 @@ function optionalReadinessArtifact(descriptor) {
   return Object.freeze(descriptor);
 }
 
+const nonReadinessFacingHostedAdminHandoffProofIds = new Set();
+
 async function readOptionalReleaseReadinessArtifacts({ expectedGame } = {}) {
+  await assertHostedAdminHandoffProofReadinessDecisions();
   const optionParts = await Promise.all(
     optionalReadinessArtifactLoadPlan.map((loader) => {
       if (typeof loader === "function") {
@@ -7377,6 +7381,61 @@ async function readOptionalReleaseReadinessArtifacts({ expectedGame } = {}) {
     }),
   );
   return Object.assign({}, ...optionParts.filter(Boolean));
+}
+
+export function hostedAdminHandoffProofReadinessDecision(
+  artifactCase,
+  {
+    optionalArtifactById = optionalReadinessArtifactById,
+    loadPlan = optionalReadinessArtifactLoadPlan,
+    nonReadinessFacingIds = nonReadinessFacingHostedAdminHandoffProofIds,
+  } = {},
+) {
+  if (nonReadinessFacingIds.has(artifactCase.id)) {
+    return "non-readiness-facing";
+  }
+  const descriptor = optionalArtifactById.get(artifactCase.readinessId);
+  if (
+    descriptor !== undefined &&
+    loadPlan.includes(artifactCase.readinessId) &&
+    descriptor.envVar === artifactCase.envVar &&
+    descriptor.outputKeys === artifactCase.outputKeys
+  ) {
+    return "readiness-loaded";
+  }
+  return null;
+}
+
+export async function assertHostedAdminHandoffProofReadinessDecisions({
+  artifactCases = hostedAdminHandoffProofArtifactCases,
+  artifactExists = hostedAdminHandoffProofArtifactExists,
+} = {}) {
+  const missing = [];
+  for (const artifactCase of artifactCases) {
+    if (
+      (await artifactExists(artifactCase)) &&
+      hostedAdminHandoffProofReadinessDecision(artifactCase) === null
+    ) {
+      missing.push(`${artifactCase.id} (${artifactCase.path})`);
+    }
+  }
+  if (missing.length > 0) {
+    throw new Error(
+      `hosted handoff proof readiness decision missing: ${missing.join(", ")}`,
+    );
+  }
+}
+
+async function hostedAdminHandoffProofArtifactExists(artifactCase) {
+  try {
+    await stat(path.join(repoRoot, artifactCase.path));
+    return true;
+  } catch (error) {
+    if (error?.code === "ENOENT") {
+      return false;
+    }
+    throw error;
+  }
 }
 
 async function readOptionalReadinessArtifact(id) {
