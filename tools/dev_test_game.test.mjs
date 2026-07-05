@@ -183,6 +183,7 @@ import {
   coreLoopAdminCheckIds,
 } from "./dev_test_game_core_loop_scenarios.mjs";
 import {
+  adminSpineHostedOpsInputReadinessEnv,
   adminSpinePreGraphReadinessEvidenceEnv,
   adminSpineReadinessEvidenceEnv,
   adminSpineTerminalBatchProofPath,
@@ -791,6 +792,11 @@ test("dev test-game spine orchestrators expose stable proof order and env maps",
     FMARCH_DEV_TEST_GAME_ADMIN_SPINE_TERMINAL_BATCHES:
       adminSpineTerminalBatchProofPath,
   });
+  assert.deepEqual(adminSpineHostedOpsInputReadinessEnv, {
+    FMARCH_DEV_TEST_GAME_OPS_ARTIFACTS: "target/dev-test-game/ops-artifacts.json",
+    FMARCH_DEV_TEST_GAME_HOSTED_CONCURRENT_RACE_MATRIX:
+      devTestGameHostedConcurrentRaceMatrixPath,
+  });
   const coreLoopRecoveryReceiptSelector = {
     provingNodeId: "admin-proof:core-loop",
   };
@@ -868,6 +874,8 @@ test("dev test-game spine orchestrators expose stable proof order and env maps",
       "tools/dev_test_game_race_coverage.mjs",
       devTestGameReleaseReadinessScript,
       "tools/dev_test_game_hosted_concurrent_race_matrix.mjs",
+      "tools/dev_test_game_ops_artifacts.mjs",
+      devTestGameReleaseReadinessScript,
       "tools/dev_test_game_hosted_identity_evidence.mjs",
       "tools/dev_test_game_hosted_identity_progression_summary.mjs",
       "tools/dev_test_game_hosted_target_preflight.mjs",
@@ -894,20 +902,30 @@ test("dev test-game spine orchestrators expose stable proof order and env maps",
       devTestGameReleaseReadinessScript,
     ],
   );
-  assert.deepEqual(devTestGameAdminSpinePlan[11], {
+  assert.deepEqual(devTestGameAdminSpinePlan[13], {
     kind: "custom",
     script: "admin-spine-proof",
     label: "Admin spine proof",
   });
-  assert.deepEqual(devTestGameAdminSpinePlan[17], {
+  assert.deepEqual(devTestGameAdminSpinePlan[19], {
     kind: "custom",
     script: "terminal-admin-proof-batch",
     label: "Terminal admin proof batch",
   });
-  assert.deepEqual(devTestGameAdminSpinePlan[20], {
+  assert.deepEqual(devTestGameAdminSpinePlan[22], {
     kind: "custom",
     script: "terminal-refresh-admin-proof-batch",
     label: "Terminal refresh admin proof batch",
+  });
+  assert.deepEqual(devTestGameAdminSpinePlan[4], {
+    kind: "node",
+    script: devTestGameReleaseReadinessScript,
+    readinessReason: "hosted-matrix-and-ops-inputs-for-hosted-signals",
+    changedInputs: [
+      devTestGameHostedConcurrentRaceMatrixPath,
+      "target/dev-test-game/ops-artifacts.json",
+    ],
+    env: adminSpineHostedOpsInputReadinessEnv,
   });
   assertAdminAuditBatchPlan({
     plan: terminalAdminProofBatchPlan,
@@ -971,7 +989,7 @@ test("dev test-game spine orchestrators expose stable proof order and env maps",
     });
   }
   assert.equal(
-    devTestGameAdminSpinePlan[13].env,
+    devTestGameAdminSpinePlan[15].env,
     adminSpinePreGraphReadinessEvidenceEnv,
   );
   for (const key of [
@@ -980,8 +998,8 @@ test("dev test-game spine orchestrators expose stable proof order and env maps",
     "FMARCH_DEV_TEST_GAME_PROOF_FRESHNESS_ADMIN_PROOF",
     "FMARCH_DEV_TEST_GAME_NEXT_ACTION_ADMIN_PROOF",
   ]) {
-    assert.equal(devTestGameAdminSpinePlan[13].env[key], undefined);
-    assert.equal(Object.hasOwn(devTestGameAdminSpinePlan[13].env, key), false);
+    assert.equal(devTestGameAdminSpinePlan[15].env[key], undefined);
+    assert.equal(Object.hasOwn(devTestGameAdminSpinePlan[15].env, key), false);
   }
   assert.equal(
     devTestGameAdminSpinePlan.at(-1).env,

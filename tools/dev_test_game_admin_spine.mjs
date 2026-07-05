@@ -125,6 +125,12 @@ export const adminSpinePreGraphReadinessEvidenceEnv = Object.fromEntries(
   ),
 );
 
+export const adminSpineHostedOpsInputReadinessEnv = {
+  FMARCH_DEV_TEST_GAME_OPS_ARTIFACTS: "target/dev-test-game/ops-artifacts.json",
+  FMARCH_DEV_TEST_GAME_HOSTED_CONCURRENT_RACE_MATRIX:
+    devTestGameHostedConcurrentRaceMatrixPath,
+};
+
 export const terminalAdminProofBatchPlan = {
   label: "Terminal admin proof batch",
   reason: "terminal graph, freshness, and next-action admin surfaces share the generated proof graph inputs",
@@ -151,6 +157,15 @@ export const devTestGameAdminSpinePlan = [
     kind: "node",
     script: "tools/dev_test_game_hosted_concurrent_race_matrix.mjs",
   },
+  { kind: "node", script: "tools/dev_test_game_ops_artifacts.mjs" },
+  releaseReadinessStep({
+    reason: "hosted-matrix-and-ops-inputs-for-hosted-signals",
+    changedInputs: [
+      devTestGameHostedConcurrentRaceMatrixPath,
+      "target/dev-test-game/ops-artifacts.json",
+    ],
+    env: adminSpineHostedOpsInputReadinessEnv,
+  }),
   { kind: "node", script: "tools/dev_test_game_hosted_identity_evidence.mjs" },
   {
     kind: "node",
