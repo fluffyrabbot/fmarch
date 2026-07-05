@@ -104,6 +104,14 @@ import {
   identityReadinessEnv,
 } from "./dev_test_game_identity_spine.mjs";
 import {
+  devTestGameOpsSpinePlan,
+  opsSpineReadinessEnv,
+} from "./dev_test_game_ops_spine.mjs";
+import {
+  devTestGameSeedFixtureSpinePlan,
+  seedFixtureSpineEnv,
+} from "./dev_test_game_seed_fixture_spine.mjs";
+import {
   devTestGameCoreLiveSpinePlan,
   devTestGameLiveSpinePlan,
 } from "./dev_test_game_live_spine.mjs";
@@ -171,6 +179,12 @@ export function buildDevTestGameSpineManifest({
       seedReadinessEnv,
       backupRestoreFinalReadinessEnv,
     },
+    ops: {
+      opsSpineReadinessEnv,
+    },
+    seedFixture: {
+      seedFixtureSpineEnv,
+    },
     identity: {
       identityReadinessEnv,
     },
@@ -201,6 +215,14 @@ export function buildDevTestGameSpineManifest({
       backupRestore: {
         script: "test:dev-test-game-backup-restore",
         plan: clonePlan(devTestGameBackupRestoreSpinePlan),
+      },
+      ops: {
+        script: "test:dev-test-game-ops",
+        plan: clonePlan(devTestGameOpsSpinePlan),
+      },
+      seedFixture: {
+        script: "test:dev-test-game-seed-fixture",
+        plan: clonePlan(devTestGameSeedFixtureSpinePlan),
       },
       identity: {
         script: "test:dev-test-game-identity",
@@ -447,6 +469,8 @@ export function buildDevTestGameSpineManifest({
       ...envValues(evidenceEnv.backupRestore.opsReadinessEnv),
       ...envValues(evidenceEnv.backupRestore.seedReadinessEnv),
       ...envValues(evidenceEnv.backupRestore.backupRestoreFinalReadinessEnv),
+      ...envValues(evidenceEnv.ops.opsSpineReadinessEnv),
+      ...envValues(evidenceEnv.seedFixture.seedFixtureSpineEnv),
       ...envValues(evidenceEnv.identity.identityReadinessEnv),
       ...envValues(
         evidenceEnv.adminSpine.adminSpineTerminalBatchReadinessEvidenceEnv,
@@ -468,9 +492,21 @@ export function buildDevTestGameSpineManifest({
         status: "passed",
         evidence: [
           "test:dev-test-game-backup-restore",
+          "test:dev-test-game-ops",
+          "test:dev-test-game-seed-fixture",
           "test:dev-test-game-identity",
           "test:dev-test-game-admin-spine",
         ],
+      },
+      {
+        id: "ops-spine-order-recorded",
+        status: "passed",
+        evidence: devTestGameOpsSpinePlan.map((step) => step.script),
+      },
+      {
+        id: "seed-fixture-spine-order-recorded",
+        status: "passed",
+        evidence: devTestGameSeedFixtureSpinePlan.map((step) => step.script),
       },
       {
         id: "evidence-env-wiring-recorded",
@@ -642,6 +678,17 @@ export function assertDevTestGameSpineManifest(manifest) {
     "tools/dev_test_game_seed_admin_proof.mjs",
     "tools/dev_test_game_backup_admin_proof.mjs",
     "tools/dev_test_game_release_readiness.mjs",
+  ]);
+  assertPlanScripts(manifest.commands?.ops?.plan ?? [], [
+    "tools/dev_test_game_ops_artifacts.mjs",
+    "tools/dev_test_game_ops_admin_proof.mjs",
+    "tools/dev_test_game_release_readiness.mjs",
+  ]);
+  assertPlanScripts(manifest.commands?.seedFixture?.plan ?? [], [
+    "tools/dev_test_game_seed_fixture_summary.mjs",
+    "tools/dev_test_game_seed_admin_proof.mjs",
+    "tools/dev_test_game_release_readiness.mjs",
+    "tools/dev_test_game_next_action.mjs",
   ]);
   assertPlanScripts(manifest.commands?.identity?.plan ?? [], [
     "tools/auth_invite_role_proof.mjs",
@@ -950,6 +997,8 @@ export function assertDevTestGameSpineManifest(manifest) {
     "core-live-order-recorded",
     "live-spine-order-recorded",
     "sub-spine-orders-recorded",
+    "ops-spine-order-recorded",
+    "seed-fixture-spine-order-recorded",
     "evidence-env-wiring-recorded",
     "freshness-proof-recorded",
     "artifact-refresh-status-recorded",

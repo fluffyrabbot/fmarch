@@ -908,6 +908,10 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
       status: "passed",
       evidence: opsArtifactsEvidence.path,
       proofBoundary: opsArtifactsEvidence.proofBoundary,
+      spineLane: {
+        manifestCommandKey: "ops",
+        command: "npm run test:dev-test-game-ops",
+      },
       ...(opsAdminProofEvidence === undefined
         ? {}
         : { adminRoleSurface: opsAdminProofEvidence }),
@@ -946,6 +950,10 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
       evidence: seedFixtureEvidence.path,
       proofBoundary: seedFixtureEvidence.proofBoundary,
       recovery: localReadinessDependencyRecoveryFor(localSeedDemoFixtureCheckId),
+      spineLane: {
+        manifestCommandKey: "seedFixture",
+        command: "npm run test:dev-test-game-seed-fixture",
+      },
       scenarioCount: seedFixtureEvidence.scenarioCount,
       proofLaneCoverage: seedFixtureEvidence.proofLaneCoverage,
       ...(seedAdminProofEvidence === undefined

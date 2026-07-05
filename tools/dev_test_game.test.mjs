@@ -688,6 +688,13 @@ test("dev test-game spine orchestrators expose stable proof order and env maps",
     FMARCH_DEV_TEST_GAME_OPS_ARTIFACTS: devTestGameOpsArtifactsPath,
     FMARCH_DEV_TEST_GAME_OPS_ADMIN_PROOF: devTestGameOpsAdminProofPath,
   });
+  assert.deepEqual(devTestGameOpsSpinePlan[2], {
+    kind: "node",
+    script: devTestGameReleaseReadinessScript,
+    readinessReason: "ops-artifacts-and-admin-surface",
+    changedInputs: [devTestGameOpsArtifactsPath, devTestGameOpsAdminProofPath],
+    env: opsSpineReadinessEnv,
+  });
   assert.deepEqual(
     devTestGameSeedFixtureSpinePlan.map((step) => step.script),
     [
@@ -699,8 +706,15 @@ test("dev test-game spine orchestrators expose stable proof order and env maps",
   );
   assert.deepEqual(seedFixtureSpineEnv, {
     FMARCH_DEV_TEST_GAME_SEED_FIXTURE_SUMMARY:
-      "target/dev-test-game/seed-fixture-summary.json",
+      devTestGameSeedFixturePath,
     FMARCH_DEV_TEST_GAME_SEED_ADMIN_PROOF: devTestGameSeedAdminProofPath,
+  });
+  assert.deepEqual(devTestGameSeedFixtureSpinePlan[2], {
+    kind: "node",
+    script: devTestGameReleaseReadinessScript,
+    readinessReason: "seed-fixture-and-admin-surface",
+    changedInputs: [devTestGameSeedFixturePath, devTestGameSeedAdminProofPath],
+    env: seedFixtureSpineEnv,
   });
   assert.deepEqual(
     devTestGameBackupRestoreSpinePlan.map((step) => step.script),
@@ -1056,6 +1070,8 @@ test("dev test-game spine orchestrators expose stable proof order and env maps",
     adminSpineTerminalBatchReadinessEvidenceEnv,
   );
   assertReleaseReadinessStepMetadata({
+    ops: devTestGameOpsSpinePlan,
+    seedFixture: devTestGameSeedFixtureSpinePlan,
     backupRestore: devTestGameBackupRestoreSpinePlan,
     identity: devTestGameIdentitySpinePlan,
     admin: devTestGameAdminSpinePlan,
@@ -1801,6 +1817,14 @@ test("dev test-game spine manifest records command order and evidence wiring", (
     proofArtifact: devTestGameRaceCoveragePath,
     dependsOn: ["target/dev-test-game/proof-run.json"],
   });
+  assert.deepEqual(manifest.commands.ops, {
+    script: "test:dev-test-game-ops",
+    plan: devTestGameOpsSpinePlan,
+  });
+  assert.deepEqual(manifest.commands.seedFixture, {
+    script: "test:dev-test-game-seed-fixture",
+    plan: devTestGameSeedFixtureSpinePlan,
+  });
   assert.deepEqual(manifest.commands.hostedConcurrentRaceMatrix, {
     script: devTestGameHostedConcurrentRaceMatrixCommand,
     proofArtifact: devTestGameHostedConcurrentRaceMatrixPath,
@@ -1998,6 +2022,11 @@ test("dev test-game spine manifest records command order and evidence wiring", (
     ],
   );
   assert.deepEqual(manifest.evidenceEnv.identity.identityReadinessEnv, identityReadinessEnv);
+  assert.deepEqual(manifest.evidenceEnv.ops.opsSpineReadinessEnv, opsSpineReadinessEnv);
+  assert.deepEqual(
+    manifest.evidenceEnv.seedFixture.seedFixtureSpineEnv,
+    seedFixtureSpineEnv,
+  );
   assert(manifest.artifacts.includes("target/dev-test-game/spine-manifest.json"));
   assert(manifest.artifacts.includes("target/dev-test-game/spine-manifest.md"));
   assert(manifest.artifacts.includes("target/dev-test-game/admin-spine-proof.json"));
@@ -12263,6 +12292,15 @@ test("session card and markdown include role credential URLs and tokens", async 
       (item) => item.id === "local-ops-artifact-bundle" && item.status === "passed",
     ),
   );
+  assert.deepEqual(
+    opsReadiness.localDevelopmentSpine.checks.find(
+      (item) => item.id === "local-ops-artifact-bundle",
+    ).spineLane,
+    {
+      manifestCommandKey: "ops",
+      command: "npm run test:dev-test-game-ops",
+    },
+  );
   assert.equal(
     opsReadiness.localDevelopmentSpine.checks.find(
       (item) => item.id === "local-ops-artifact-bundle",
@@ -12490,6 +12528,15 @@ test("session card and markdown include role credential URLs and tokens", async 
       (item) => item.id === "local-seed-demo-fixture",
     ).adminRoleSurface.detailRoleUrl,
     "/admin/audit/local-seed-fixtures?game=<seeded-game>",
+  );
+  assert.deepEqual(
+    seedFixtureReadiness.localDevelopmentSpine.checks.find(
+      (item) => item.id === "local-seed-demo-fixture",
+    ).spineLane,
+    {
+      manifestCommandKey: "seedFixture",
+      command: "npm run test:dev-test-game-seed-fixture",
+    },
   );
   assert.equal(
     seedFixtureReadiness.localDevelopmentSpine.checks.find(
