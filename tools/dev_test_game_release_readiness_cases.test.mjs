@@ -553,6 +553,14 @@ test("proof graph admin feature targets derive from shared source rows", () => {
         "replacement-incoming-player",
         "replacement-stale-player",
       ],
+      buildVisibleAdminCheckIds: [
+        "replacement-host-issued-invite",
+        "replacement-session-refresh-recovery",
+        "replacement-incoming-player",
+        "replacement-stale-player",
+        "replacement-stale-private-channel",
+        "replacement-stale-private-receipts",
+      ],
     },
     {
       generatedFromKey: "replacementActionFeatureTarget",
@@ -576,6 +584,14 @@ test("proof graph admin feature targets derive from shared source rows", () => {
         "replacement-stale-private-channel",
         "replacement-stale-private-post-after-complete-reload",
       ],
+      buildVisibleAdminCheckIds: [
+        "replacement-stale-private-channel",
+        "replacement-stale-private-receipts",
+        "replacement-stale-private-post-after-resolve",
+        "replacement-stale-private-post-reconnect",
+        "replacement-stale-private-post-after-complete",
+        "replacement-stale-private-post-after-complete-reload",
+      ],
     },
   ];
   assert.deepEqual(
@@ -591,6 +607,9 @@ test("proof graph admin feature targets derive from shared source rows", () => {
       featureTargetCase.targetRow.checkpointId,
       featureTargetCase.targetRow.adminCheckId,
       [...featureTargetCase.visibleAdminCheckIds],
+      featureTargetCase.buildVisibleAdminCheckIds === undefined
+        ? null
+        : [...featureTargetCase.buildVisibleAdminCheckIds],
     ]),
     expectedCases.map((featureTargetCase) => [
       featureTargetCase.generatedFromKey,
@@ -604,6 +623,7 @@ test("proof graph admin feature targets derive from shared source rows", () => {
       featureTargetCase.targetRow.checkpointId,
       featureTargetCase.targetRow.adminCheckId,
       featureTargetCase.visibleAdminCheckIds,
+      featureTargetCase.buildVisibleAdminCheckIds ?? null,
     ]),
   );
   assert.equal(proofGraphAdminFeatureTargetCases, roleSurfaceSpineCaseList);

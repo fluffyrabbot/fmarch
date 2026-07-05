@@ -43,6 +43,14 @@ export const roleSurfaceSpineCases = Object.freeze({
       "replacement-incoming-player",
       "replacement-stale-player",
     ]),
+    buildVisibleAdminCheckIds: Object.freeze([
+      "replacement-host-issued-invite",
+      "replacement-session-refresh-recovery",
+      "replacement-incoming-player",
+      "replacement-stale-player",
+      "replacement-stale-private-channel",
+      "replacement-stale-private-receipts",
+    ]),
   }),
   replacementAction: Object.freeze({
     generatedFromKey: "replacementActionFeatureTarget",
@@ -62,6 +70,14 @@ export const roleSurfaceSpineCases = Object.freeze({
     targetRow: replacementPrivateFeatureSpineTargetRows.replacementPrivateChannel,
     visibleAdminCheckIds: Object.freeze([
       "replacement-stale-private-channel",
+      "replacement-stale-private-post-after-complete-reload",
+    ]),
+    buildVisibleAdminCheckIds: Object.freeze([
+      "replacement-stale-private-channel",
+      "replacement-stale-private-receipts",
+      "replacement-stale-private-post-after-resolve",
+      "replacement-stale-private-post-reconnect",
+      "replacement-stale-private-post-after-complete",
       "replacement-stale-private-post-after-complete-reload",
     ]),
   }),

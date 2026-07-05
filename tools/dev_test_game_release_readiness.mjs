@@ -122,19 +122,15 @@ import {
   identityFeatureSpineSourceCheckId,
 } from "./dev_test_game_identity_feature_spine_targets.mjs";
 import {
-  cohostFeatureSpineCycleId,
   cohostFeatureSpineSourceCheckId,
 } from "./dev_test_game_cohost_feature_spine_targets.mjs";
 import {
-  replacementFeatureSpineCycleId,
   replacementFeatureSpineSourceCheckId,
 } from "./dev_test_game_replacement_feature_spine_targets.mjs";
 import {
-  replacementActionFeatureSpineCycleId,
   replacementActionFeatureSpineSourceCheckId,
 } from "./dev_test_game_replacement_action_feature_spine_targets.mjs";
 import {
-  replacementPrivateFeatureSpineCycleId,
   replacementPrivateFeatureSpineSourceCheckId,
 } from "./dev_test_game_replacement_private_feature_spine_targets.mjs";
 import {
@@ -3493,16 +3489,21 @@ function buildProofRunRoleSurfaceReadinessCheck({
 
 function buildRoleSurfaceReadinessSpineTargets({
   proofEvidence,
-  sourceCheckId,
-  defaultCycleId,
-  defaultRoleUrlId,
-  defaultCheckpointId,
-  rerunCommand,
-  cycleIds = [defaultCycleId],
-  roleUrlIds = [defaultRoleUrlId],
-  checkpointIds = [defaultCheckpointId],
-  visibleAdminCheckIds,
+  roleSurfaceCase,
+  cycleIds,
+  roleUrlIds,
+  checkpointIds,
+  visibleAdminCheckIds =
+    roleSurfaceCase.buildVisibleAdminCheckIds ??
+    roleSurfaceCase.visibleAdminCheckIds,
 }) {
+  const { source, targetRow } = roleSurfaceCase;
+  const defaultCycleId = targetRow.cycleId;
+  const defaultRoleUrlId = targetRow.roleUrlId;
+  const defaultCheckpointId = targetRow.checkpointId;
+  const resolvedCycleIds = cycleIds ?? [defaultCycleId];
+  const resolvedRoleUrlIds = roleUrlIds ?? [defaultRoleUrlId];
+  const resolvedCheckpointIds = checkpointIds ?? [defaultCheckpointId];
   const roleUrlHrefs = {
     [defaultRoleUrlId]: proofEvidence.roleUrl,
   };
@@ -3514,22 +3515,22 @@ function buildRoleSurfaceReadinessSpineTargets({
     defaultRoleUrl: proofEvidence.roleUrl,
     defaultCheckpointId,
     browserProofCommand: devTestGameSeededBrowserProofCommand,
-    cycleIds,
-    roleUrlIds,
-    checkpointIds,
+    cycleIds: resolvedCycleIds,
+    roleUrlIds: resolvedRoleUrlIds,
+    checkpointIds: resolvedCheckpointIds,
     visibleAdminCheckIds,
     recoveryHookIds: [],
     roleUrlHrefs,
     productionFeatureTargets: buildProductionFeatureSpineTargetCollection({
       declarations: releaseReadinessProductionFeatureSpineTargets,
       sourceTarget: {
-        sourceCheckId,
+        sourceCheckId: source.sourceCheckId,
         detailRoleUrl: proofEvidence.roleUrl,
         browserProofCommand: devTestGameSeededBrowserProofCommand,
-        rerunCommand,
-        cycleIds,
-        roleUrlIds,
-        checkpointIds,
+        rerunCommand: source.rerunCommand,
+        cycleIds: resolvedCycleIds,
+        roleUrlIds: resolvedRoleUrlIds,
+        checkpointIds: resolvedCheckpointIds,
         visibleAdminCheckIds,
         recoveryHookIds: [],
         roleUrlHrefs,
@@ -3543,43 +3544,22 @@ function buildRoleSurfaceReadinessSpineTargets({
 function buildHostSetupReadinessSpineTargets(hostSetupProofEvidence) {
   return buildRoleSurfaceReadinessSpineTargets({
     proofEvidence: hostSetupProofEvidence,
-    sourceCheckId: hostSetupFeatureSpineSourceCheckId,
-    defaultCycleId: hostSetupFeatureSpineCycleId,
-    defaultRoleUrlId: "host-setup",
-    defaultCheckpointId: "start-phase",
+    roleSurfaceCase: roleSurfaceSpineCases.hostSetup,
     visibleAdminCheckIds: [...hostSetupProofEvidence.readyCheckIds],
-    rerunCommand: devTestGameHostSetupProofCommand,
   });
 }
 
 function buildCohostReadinessSpineTargets(cohostConsoleProofEvidence) {
   return buildRoleSurfaceReadinessSpineTargets({
     proofEvidence: cohostConsoleProofEvidence,
-    sourceCheckId: cohostFeatureSpineSourceCheckId,
-    defaultCycleId: cohostFeatureSpineCycleId,
-    defaultRoleUrlId: "cohost-console",
-    defaultCheckpointId: "extend-deadline-ack",
-    visibleAdminCheckIds: ["cohost-console"],
-    rerunCommand: devTestGameCohostConsoleProofCommand,
+    roleSurfaceCase: roleSurfaceSpineCases.cohost,
   });
 }
 
 function buildReplacementReadinessSpineTargets(replacementPlayerProofEvidence) {
   return buildRoleSurfaceReadinessSpineTargets({
     proofEvidence: replacementPlayerProofEvidence,
-    sourceCheckId: replacementFeatureSpineSourceCheckId,
-    defaultCycleId: replacementFeatureSpineCycleId,
-    defaultRoleUrlId: "replacement-player",
-    defaultCheckpointId: "incoming-player-slot-authority",
-    visibleAdminCheckIds: [
-      "replacement-host-issued-invite",
-      "replacement-session-refresh-recovery",
-      "replacement-incoming-player",
-      "replacement-stale-player",
-      "replacement-stale-private-channel",
-      "replacement-stale-private-receipts",
-    ],
-    rerunCommand: devTestGameReplacementPlayerProofCommand,
+    roleSurfaceCase: roleSurfaceSpineCases.replacement,
   });
 }
 
@@ -3588,16 +3568,7 @@ function buildReplacementActionReadinessSpineTargets(
 ) {
   return buildRoleSurfaceReadinessSpineTargets({
     proofEvidence: replacementActionProofEvidence,
-    sourceCheckId: replacementActionFeatureSpineSourceCheckId,
-    defaultCycleId: replacementActionFeatureSpineCycleId,
-    defaultRoleUrlId: "replacement-action",
-    defaultCheckpointId: "replacement-incoming-action",
-    visibleAdminCheckIds: [
-      "replacement-incoming-action",
-      "replacement-action-reconnect",
-      "replacement-stale-action-after-resolve",
-    ],
-    rerunCommand: devTestGameReplacementActionProofCommand,
+    roleSurfaceCase: roleSurfaceSpineCases.replacementAction,
   });
 }
 
@@ -3606,19 +3577,7 @@ function buildReplacementPrivateReadinessSpineTargets(
 ) {
   return buildRoleSurfaceReadinessSpineTargets({
     proofEvidence: replacementPrivateProofEvidence,
-    sourceCheckId: replacementPrivateFeatureSpineSourceCheckId,
-    defaultCycleId: replacementPrivateFeatureSpineCycleId,
-    defaultRoleUrlId: "replacement-private-channel",
-    defaultCheckpointId: "replacement-stale-private-channel",
-    visibleAdminCheckIds: [
-      "replacement-stale-private-channel",
-      "replacement-stale-private-receipts",
-      "replacement-stale-private-post-after-resolve",
-      "replacement-stale-private-post-reconnect",
-      "replacement-stale-private-post-after-complete",
-      "replacement-stale-private-post-after-complete-reload",
-    ],
-    rerunCommand: devTestGameReplacementPrivateProofCommand,
+    roleSurfaceCase: roleSurfaceSpineCases.replacementPrivate,
   });
 }
 
