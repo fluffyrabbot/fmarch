@@ -10,6 +10,7 @@ import {
   validateDevTestGameHostSetupAdminProof,
   validateDevTestGameHostedConcurrentRaceMatrixAdminProof,
   validateDevTestGameHostedEvidenceLaneAdminProof,
+  validateDevTestGameHostedEvidenceLaneOperatorFixtureAdminProof,
   validateDevTestGameHostedIdentityEvidenceAdminProof,
   validateDevTestGameHostedOpsSignalsAdminProof,
   validateDevTestGameHostedTargetPreflightAdminProof,
@@ -96,6 +97,13 @@ import {
 import {
   devTestGameHostedEvidenceLaneAdminProofPath,
 } from "./dev_test_game_hosted_handoff_cases.mjs";
+import {
+  hostedEvidenceLaneOperatorFixtureAdminProofCase,
+} from "./dev_test_game_hosted_evidence_lane_operator_fixture_admin_proof.mjs";
+import {
+  devTestGameHostedEvidenceLaneOperatorFixtureAdminProofCommand,
+  devTestGameHostedEvidenceLaneOperatorFixtureAdminProofPath,
+} from "./dev_test_game_hosted_evidence_lane_operator_fixture_cases.mjs";
 import {
   hostedConcurrentRaceMatrixAdminProofCase,
 } from "./dev_test_game_hosted_concurrent_race_matrix_admin_proof.mjs";
@@ -242,6 +250,15 @@ export const devTestGameAdminSpineProofPlan = [
     caseFactory: hostedEvidenceLaneAdminProofCase,
   },
   {
+    id: "hosted-evidence-lane-operator-fixture",
+    label: "Hosted evidence lane operator fixture admin role surface",
+    script: "tools/dev_test_game_hosted_evidence_lane_operator_fixture_admin_proof.mjs",
+    rerunCommand: `npm run ${devTestGameHostedEvidenceLaneOperatorFixtureAdminProofCommand}`,
+    path: devTestGameHostedEvidenceLaneOperatorFixtureAdminProofPath,
+    validate: validateDevTestGameHostedEvidenceLaneOperatorFixtureAdminProof,
+    caseFactory: hostedEvidenceLaneOperatorFixtureAdminProofCase,
+  },
+  {
     id: "hosted-concurrent-race-matrix",
     label: "Hosted concurrent race matrix admin role surface",
     script: "tools/dev_test_game_hosted_concurrent_race_matrix_admin_proof.mjs",
@@ -336,7 +353,7 @@ export async function runAdminSpineProof() {
   await runNodeScript("tools/dev_test_game_spine_manifest.mjs");
   const entries = [];
   const batches = [];
-  const [preReleaseBatch, releaseAndHostedBatch] =
+  const [preReleaseBatch, ...releaseAndHostedBatches] =
     devTestGameAdminSpineProofBatchPlans();
   await runAdminSpineProofBatch({
     batchPlan: preReleaseBatch,
@@ -344,11 +361,13 @@ export async function runAdminSpineProof() {
     batches,
   });
   await runNodeScript("tools/dev_test_game_release_readiness.mjs");
-  await runAdminSpineProofBatch({
-    batchPlan: releaseAndHostedBatch,
-    entries,
-    batches,
-  });
+  for (const batchPlan of releaseAndHostedBatches) {
+    await runAdminSpineProofBatch({
+      batchPlan,
+      entries,
+      batches,
+    });
+  }
   const evidence = {
     version: 1,
     proof: "dev-test-game-admin-spine-proof",

@@ -39,6 +39,9 @@ import {
   devTestGameHostedEvidenceLaneDemoProofPath,
 } from "./dev_test_game_hosted_evidence_lane_demo_proof.mjs";
 import {
+  devTestGameHostedEvidenceLaneOperatorFixtureAdminProofPath,
+} from "./dev_test_game_hosted_evidence_lane_operator_fixture_cases.mjs";
+import {
   devTestGameBackupRestoreProofPath,
   devTestGameIdentityAdapterProofPath,
   devTestGameSeedFixturePath,
@@ -2124,6 +2127,10 @@ const devSpineArtifactPriorities = new Map(
     ["hosted-evidence-lane-demo", devTestGameHostedEvidenceLaneDemoProofPath],
     ["hosted-evidence-lane", devTestGameHostedEvidenceLanePath],
     ["release", devTestGameReleaseAdminProofPath],
+    [
+      "hosted-evidence-lane-operator-fixture",
+      devTestGameHostedEvidenceLaneOperatorFixtureAdminProofPath,
+    ],
     ["admin-spine", adminSpineProofPath],
     ["admin-spine-admin", devTestGameAdminSpineAdminProofPath],
     ["proof-graph", devTestGameProofGraphPath],

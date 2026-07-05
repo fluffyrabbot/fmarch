@@ -39,6 +39,11 @@ import {
   devTestGameHostedEvidenceLanePath,
 } from "./dev_test_game_hosted_evidence_lane.mjs";
 import {
+  devTestGameHostedEvidenceLaneOperatorFixtureAdminProofCommand,
+  devTestGameHostedEvidenceLaneOperatorFixtureAdminProofPath,
+  devTestGameHostedEvidenceLaneOperatorFixturePath,
+} from "./dev_test_game_hosted_evidence_lane_operator_fixture_cases.mjs";
+import {
   devTestGameHostedEvidenceLaneDemoBlockedPath,
   devTestGameHostedEvidenceLaneDemoExternalEvidencePath,
   devTestGameHostedEvidenceLaneDemoProofCommand,
@@ -46,6 +51,11 @@ import {
   devTestGameHostedEvidenceLaneDemoRawEvidencePath,
   devTestGameHostedEvidenceLaneDemoSyntheticRejectedPath,
 } from "./dev_test_game_hosted_evidence_lane_demo_proof.mjs";
+import {
+  devTestGameHostedMatrixRawEvidenceFixtureProofCommand,
+  devTestGameHostedMatrixRawEvidenceFixtureProofPath,
+  devTestGameHostedMatrixRawEvidenceOperatorFixturePath,
+} from "./dev_test_game_hosted_matrix_raw_evidence_fixture_proof.mjs";
 import {
   devTestGameHostedOpsSignalsCommand,
   devTestGameHostedOpsSignalsPath,
@@ -351,6 +361,24 @@ export function buildDevTestGameSpineManifest({
         demoOnly: true,
         roleUrl: "/admin/audit/local-hosted-evidence-lane?game=<seeded-game>",
       },
+      hostedMatrixRawEvidenceFixtureProof: {
+        script: devTestGameHostedMatrixRawEvidenceFixtureProofCommand,
+        proofArtifact: devTestGameHostedMatrixRawEvidenceFixtureProofPath,
+        dependsOn: [devTestGameHostedMatrixRawEvidenceOperatorFixturePath],
+        fixtureEvidence: true,
+      },
+      hostedEvidenceLaneOperatorFixtureAdminProof: {
+        script: devTestGameHostedEvidenceLaneOperatorFixtureAdminProofCommand,
+        proofArtifact:
+          devTestGameHostedEvidenceLaneOperatorFixtureAdminProofPath,
+        dependsOn: [
+          devTestGameHostedMatrixRawEvidenceOperatorFixturePath,
+          devTestGameHostedMatrixRawEvidenceFixtureProofPath,
+          devTestGameHostedEvidenceLaneOperatorFixturePath,
+        ],
+        fixtureEvidence: true,
+        roleUrl: "/admin/audit/local-hosted-evidence-lane?game=<seeded-game>",
+      },
       ...recoveryReceiptManifestCommands(),
       releaseRunbook: {
         script: devTestGameReleaseRunbookCommand,
@@ -370,6 +398,7 @@ export function buildDevTestGameSpineManifest({
           devTestGameHostedTargetPreflightPath,
           devTestGameHostedEvidenceLanePath,
           devTestGameHostedEvidenceLaneDemoProofPath,
+          devTestGameHostedEvidenceLaneOperatorFixtureAdminProofPath,
         ],
       },
       nextActionAdminProof: {
@@ -418,6 +447,7 @@ export function buildDevTestGameSpineManifest({
           devTestGameHostedTargetPreflightPath,
           devTestGameHostedEvidenceLanePath,
           devTestGameHostedEvidenceLaneDemoProofPath,
+          devTestGameHostedEvidenceLaneOperatorFixtureAdminProofPath,
         ],
         boundary:
           "Terminal local receipt that chooses one upstream freshness, harness-stability, or recovery command from the manifest, ops artifacts, release-readiness checklist, and race coverage milestone.",
@@ -480,6 +510,10 @@ export function buildDevTestGameSpineManifest({
       devTestGameHostedEvidenceLaneDemoExternalEvidencePath,
       devTestGameHostedEvidenceLaneDemoBlockedPath,
       devTestGameHostedEvidenceLaneDemoSyntheticRejectedPath,
+      devTestGameHostedMatrixRawEvidenceOperatorFixturePath,
+      devTestGameHostedMatrixRawEvidenceFixtureProofPath,
+      devTestGameHostedEvidenceLaneOperatorFixturePath,
+      devTestGameHostedEvidenceLaneOperatorFixtureAdminProofPath,
       ...recoveryReceiptGraphDescriptors.map(
         (descriptor) => descriptor.proofTarget,
       ),
@@ -638,6 +672,15 @@ export function buildDevTestGameSpineManifest({
         demoOnly: true,
       },
       {
+        id: "hosted-evidence-lane-operator-fixture-recorded",
+        status: "passed",
+        evidence: [
+          devTestGameHostedEvidenceLaneOperatorFixtureAdminProofCommand,
+          devTestGameHostedEvidenceLaneOperatorFixtureAdminProofPath,
+        ],
+        fixtureEvidence: true,
+      },
+      {
         id: "release-runbook-recorded",
         status: "passed",
         evidence: [devTestGameReleaseRunbookCommand, devTestGameReleaseRunbookPath],
@@ -777,6 +820,7 @@ export function assertDevTestGameSpineManifest(manifest) {
     "tools/dev_test_game_race_coverage_admin_proof.mjs",
     "tools/dev_test_game_hosted_target_preflight_admin_proof.mjs",
     "tools/dev_test_game_hosted_evidence_lane_admin_proof.mjs",
+    "tools/dev_test_game_hosted_evidence_lane_operator_fixture_admin_proof.mjs",
     "tools/dev_test_game_hosted_concurrent_race_matrix_admin_proof.mjs",
     "tools/dev_test_game_hosted_ops_signals_admin_proof.mjs",
     "tools/dev_test_game_real_hosted_observability_handoff_admin_proof.mjs",
@@ -976,6 +1020,54 @@ export function assertDevTestGameSpineManifest(manifest) {
   if (manifest.commands.hostedEvidenceLaneDemoProof.demoOnly !== true) {
     throw new Error("spine manifest hosted evidence lane demo must stay demo-only");
   }
+  if (
+    manifest.commands?.hostedMatrixRawEvidenceFixtureProof?.script !==
+    devTestGameHostedMatrixRawEvidenceFixtureProofCommand
+  ) {
+    throw new Error(
+      `spine manifest hosted matrix raw fixture proof command drifted: ${manifest.commands?.hostedMatrixRawEvidenceFixtureProof?.script}`,
+    );
+  }
+  if (
+    manifest.commands.hostedMatrixRawEvidenceFixtureProof.proofArtifact !==
+    devTestGameHostedMatrixRawEvidenceFixtureProofPath
+  ) {
+    throw new Error(
+      `spine manifest hosted matrix raw fixture proof artifact drifted: ${manifest.commands.hostedMatrixRawEvidenceFixtureProof.proofArtifact}`,
+    );
+  }
+  if (
+    manifest.commands.hostedMatrixRawEvidenceFixtureProof.fixtureEvidence !== true
+  ) {
+    throw new Error(
+      "spine manifest hosted matrix raw fixture proof must stay fixture-only",
+    );
+  }
+  if (
+    manifest.commands?.hostedEvidenceLaneOperatorFixtureAdminProof?.script !==
+    devTestGameHostedEvidenceLaneOperatorFixtureAdminProofCommand
+  ) {
+    throw new Error(
+      `spine manifest hosted evidence lane operator fixture command drifted: ${manifest.commands?.hostedEvidenceLaneOperatorFixtureAdminProof?.script}`,
+    );
+  }
+  if (
+    manifest.commands.hostedEvidenceLaneOperatorFixtureAdminProof
+      .proofArtifact !==
+    devTestGameHostedEvidenceLaneOperatorFixtureAdminProofPath
+  ) {
+    throw new Error(
+      `spine manifest hosted evidence lane operator fixture artifact drifted: ${manifest.commands.hostedEvidenceLaneOperatorFixtureAdminProof.proofArtifact}`,
+    );
+  }
+  if (
+    manifest.commands.hostedEvidenceLaneOperatorFixtureAdminProof
+      .fixtureEvidence !== true
+  ) {
+    throw new Error(
+      "spine manifest hosted evidence lane operator fixture proof must stay fixture-only",
+    );
+  }
   assertRecoveryReceiptManifestCommands(manifest.commands ?? {});
   if (manifest.commands?.releaseRunbook?.script !== devTestGameReleaseRunbookCommand) {
     throw new Error(
@@ -1054,6 +1146,10 @@ export function assertDevTestGameSpineManifest(manifest) {
     devTestGameHostedEvidenceLaneDemoExternalEvidencePath,
     devTestGameHostedEvidenceLaneDemoBlockedPath,
     devTestGameHostedEvidenceLaneDemoSyntheticRejectedPath,
+    devTestGameHostedMatrixRawEvidenceOperatorFixturePath,
+    devTestGameHostedMatrixRawEvidenceFixtureProofPath,
+    devTestGameHostedEvidenceLaneOperatorFixturePath,
+    devTestGameHostedEvidenceLaneOperatorFixtureAdminProofPath,
     devTestGameHostedOpsSignalsPath,
     devTestGameRealHostedObservabilityHandoffPath,
     devTestGameReleaseRunbookPath,
@@ -1095,6 +1191,7 @@ export function assertDevTestGameSpineManifest(manifest) {
     "hosted-target-preflight-recorded",
     "hosted-evidence-lane-recorded",
     "hosted-evidence-lane-demo-proof-recorded",
+    "hosted-evidence-lane-operator-fixture-recorded",
     "hosted-ops-signals-recorded",
     "release-runbook-recorded",
     "terminal-artifacts-recorded",
@@ -1123,7 +1220,10 @@ function assertTerminalArtifacts(terminalArtifacts) {
     !nextAction.dependsOn.includes(devTestGameHostedConcurrentRaceMatrixPath) ||
     !nextAction.dependsOn.includes(devTestGameHostedTargetPreflightPath) ||
     !nextAction.dependsOn.includes(devTestGameHostedEvidenceLanePath) ||
-    !nextAction.dependsOn.includes(devTestGameHostedEvidenceLaneDemoProofPath)
+    !nextAction.dependsOn.includes(devTestGameHostedEvidenceLaneDemoProofPath) ||
+    !nextAction.dependsOn.includes(
+      devTestGameHostedEvidenceLaneOperatorFixtureAdminProofPath,
+    )
   ) {
     throw new Error("spine manifest next-action terminal artifact drifted");
   }
@@ -1522,6 +1622,14 @@ const artifactRefreshCommands = Object.freeze({
   "hosted-evidence-lane": "npm run test:dev-test-game-hosted-evidence-lane",
   "hosted-evidence-lane-demo":
     "npm run test:dev-test-game-hosted-evidence-lane-demo-proof",
+  "hosted-matrix-raw-evidence-fixture-proof":
+    "npm run test:dev-test-game-hosted-matrix-raw-evidence-fixture-proof",
+  [devTestGameHostedMatrixRawEvidenceFixtureProofPath]:
+    "npm run test:dev-test-game-hosted-matrix-raw-evidence-fixture-proof",
+  "hosted-evidence-lane-operator-fixture":
+    "npm run test:dev-test-game-hosted-evidence-lane-operator-fixture-admin-proof",
+  [devTestGameHostedEvidenceLaneOperatorFixtureAdminProofPath]:
+    "npm run test:dev-test-game-hosted-evidence-lane-operator-fixture-admin-proof",
   "hosted-ops-signals": "npm run test:dev-test-game-hosted-ops-signals",
   "hosted-ops-signals-admin":
     "npm run test:dev-test-game-hosted-ops-signals-admin-proof",

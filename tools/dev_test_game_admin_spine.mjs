@@ -11,6 +11,9 @@ import {
   devTestGameHostedEvidenceLaneAdminProofPath,
 } from "./dev_test_game_hosted_handoff_cases.mjs";
 import {
+  devTestGameHostedEvidenceLaneOperatorFixtureAdminProofPath,
+} from "./dev_test_game_hosted_evidence_lane_operator_fixture_cases.mjs";
+import {
   devTestGameHostedIdentityEvidencePath,
   devTestGameHostedIdentityProgressionSummaryPath,
 } from "./dev_test_game_hosted_identity_evidence.mjs";
@@ -166,6 +169,8 @@ export const adminSpineReadinessEvidenceEnv = {
     devTestGameHostedEvidenceLanePath,
   FMARCH_DEV_TEST_GAME_HOSTED_EVIDENCE_LANE_ADMIN_PROOF:
     devTestGameHostedEvidenceLaneAdminProofPath,
+  FMARCH_DEV_TEST_GAME_HOSTED_EVIDENCE_LANE_OPERATOR_FIXTURE_ADMIN_PROOF:
+    devTestGameHostedEvidenceLaneOperatorFixtureAdminProofPath,
   FMARCH_DEV_TEST_GAME_PROOF_GRAPH: devTestGameProofGraphPath,
   FMARCH_DEV_TEST_GAME_PROOF_GRAPH_ADMIN_PROOF: devTestGameProofGraphAdminProofPath,
   FMARCH_DEV_TEST_GAME_PROOF_FRESHNESS_ADMIN_PROOF: proofFreshnessAdminProofPath,
@@ -274,6 +279,7 @@ export const devTestGameAdminSpinePlan = [
       devTestGameHostedTargetPreflightPath,
       devTestGameHostedEvidenceLanePath,
       devTestGameHostedEvidenceLaneDemoProofPath,
+      devTestGameHostedEvidenceLaneOperatorFixtureAdminProofPath,
       devTestGameHostedOpsSignalsPath,
       devTestGameRealHostedObservabilityHandoffPath,
       devTestGameReleaseRunbookPath,

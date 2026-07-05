@@ -8,6 +8,9 @@ import {
   devTestGameHostedEvidenceLaneAdminProofPath,
 } from "./dev_test_game_hosted_handoff_cases.mjs";
 import {
+  devTestGameHostedEvidenceLaneOperatorFixtureAdminProofPath,
+} from "./dev_test_game_hosted_evidence_lane_operator_fixture_cases.mjs";
+import {
   devTestGameHostedIdentityEvidenceAdminProofPath,
 } from "./dev_test_game_hosted_identity_evidence_cases.mjs";
 import {
@@ -41,16 +44,22 @@ export const aggregatePreReleaseAdminProofBatchScript =
   "aggregate-pre-release-admin-proof-batch";
 export const aggregateReleaseHostedAdminProofBatchScript =
   "aggregate-release-and-hosted-admin-proof-batch";
+export const aggregateHostedOperatorFixtureAdminProofBatchScript =
+  "aggregate-hosted-operator-fixture-admin-proof-batch";
 
 export const aggregatePreReleaseAdminProofBatchLabel =
   "Aggregate pre-release admin proof batch";
 export const aggregateReleaseHostedAdminProofBatchLabel =
   "Aggregate release and hosted admin proof batch";
+export const aggregateHostedOperatorFixtureAdminProofBatchLabel =
+  "Aggregate hosted operator fixture admin proof batch";
 
 export const aggregatePreReleaseAdminProofBatchReason =
   "core, hardening, identity, backup, ops, seed, and host setup admin surfaces share the pre-readiness local proof inputs";
 export const aggregateReleaseHostedAdminProofBatchReason =
   "release, hosted, race coverage, and manifest admin surfaces share the post-readiness rollup inputs";
+export const aggregateHostedOperatorFixtureAdminProofBatchReason =
+  "hosted evidence lane operator fixture uses isolated fixture lane inputs while preserving the shared browser proof batch contract";
 
 export const adminSpineProofArtifactPathById = Object.freeze({
   "core-loop": devTestGameCoreLoopAdminProofPath,
@@ -66,6 +75,8 @@ export const adminSpineProofArtifactPathById = Object.freeze({
   "race-coverage": devTestGameRaceCoverageAdminProofPath,
   "hosted-target-preflight": devTestGameHostedTargetPreflightAdminProofPath,
   "hosted-evidence-lane": devTestGameHostedEvidenceLaneAdminProofPath,
+  "hosted-evidence-lane-operator-fixture":
+    devTestGameHostedEvidenceLaneOperatorFixtureAdminProofPath,
   "hosted-concurrent-race-matrix":
     devTestGameHostedConcurrentRaceMatrixAdminProofPath,
   "hosted-ops-signals": devTestGameHostedOpsSignalsAdminProofPath,
@@ -106,6 +117,12 @@ export const adminSpineProofBatchRegistry = defineAdminProofBatchRegistry(
         "real-hosted-observability-handoff",
         "spine-manifest",
       ],
+    },
+    {
+      label: aggregateHostedOperatorFixtureAdminProofBatchLabel,
+      script: aggregateHostedOperatorFixtureAdminProofBatchScript,
+      reason: aggregateHostedOperatorFixtureAdminProofBatchReason,
+      proofIds: ["hosted-evidence-lane-operator-fixture"],
     },
   ],
   { artifactPathForProofId: adminSpineProofArtifactPathForId },

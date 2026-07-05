@@ -1218,6 +1218,8 @@ test("dev test-game spine orchestrators expose stable proof order and env maps",
       "target/dev-test-game/hosted-evidence-lane.json",
     FMARCH_DEV_TEST_GAME_HOSTED_EVIDENCE_LANE_ADMIN_PROOF:
       devTestGameHostedEvidenceLaneAdminProofPath,
+    FMARCH_DEV_TEST_GAME_HOSTED_EVIDENCE_LANE_OPERATOR_FIXTURE_ADMIN_PROOF:
+      devTestGameHostedEvidenceLaneOperatorFixtureAdminProofPath,
     FMARCH_DEV_TEST_GAME_PROOF_GRAPH: "target/dev-test-game/proof-graph.json",
     FMARCH_DEV_TEST_GAME_PROOF_GRAPH_ADMIN_PROOF:
       "target/dev-test-game/proof-graph-admin-proof.json",
@@ -2442,6 +2444,27 @@ test("dev test-game spine manifest records command order and evidence wiring", (
     demoOnly: true,
     roleUrl: "/admin/audit/local-hosted-evidence-lane?game=<seeded-game>",
   });
+  assert.deepEqual(manifest.commands.hostedMatrixRawEvidenceFixtureProof, {
+    script: devTestGameHostedMatrixRawEvidenceFixtureProofCommand,
+    proofArtifact: devTestGameHostedMatrixRawEvidenceFixtureProofPath,
+    dependsOn: [devTestGameHostedMatrixRawEvidenceOperatorFixturePath],
+    fixtureEvidence: true,
+  });
+  assert.deepEqual(
+    manifest.commands.hostedEvidenceLaneOperatorFixtureAdminProof,
+    {
+      script: devTestGameHostedEvidenceLaneOperatorFixtureAdminProofCommand,
+      proofArtifact:
+        devTestGameHostedEvidenceLaneOperatorFixtureAdminProofPath,
+      dependsOn: [
+        devTestGameHostedMatrixRawEvidenceOperatorFixturePath,
+        devTestGameHostedMatrixRawEvidenceFixtureProofPath,
+        devTestGameHostedEvidenceLaneOperatorFixturePath,
+      ],
+      fixtureEvidence: true,
+      roleUrl: "/admin/audit/local-hosted-evidence-lane?game=<seeded-game>",
+    },
+  );
   for (const descriptor of recoveryReceiptGraphDescriptors) {
     assert.deepEqual(manifest.commands[descriptor.receiptKey], {
       script: descriptor.proofCommand,
@@ -2468,6 +2491,7 @@ test("dev test-game spine manifest records command order and evidence wiring", (
       devTestGameHostedTargetPreflightPath,
       devTestGameHostedEvidenceLanePath,
       devTestGameHostedEvidenceLaneDemoProofPath,
+      devTestGameHostedEvidenceLaneOperatorFixtureAdminProofPath,
     ],
   });
   assert.deepEqual(manifest.commands.nextActionAdminProof, {
@@ -2590,6 +2614,14 @@ test("dev test-game spine manifest records command order and evidence wiring", (
   assert(
     manifest.artifacts.includes(
       devTestGameHostedEvidenceLaneDemoSyntheticRejectedPath,
+    ),
+  );
+  assert(manifest.artifacts.includes(devTestGameHostedMatrixRawEvidenceOperatorFixturePath));
+  assert(manifest.artifacts.includes(devTestGameHostedMatrixRawEvidenceFixtureProofPath));
+  assert(manifest.artifacts.includes(devTestGameHostedEvidenceLaneOperatorFixturePath));
+  assert(
+    manifest.artifacts.includes(
+      devTestGameHostedEvidenceLaneOperatorFixtureAdminProofPath,
     ),
   );
   assert(manifest.artifacts.includes(devTestGameReleaseRunbookPath));
@@ -5080,6 +5112,12 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
         true,
         true,
       ],
+      [
+        "Aggregate hosted operator fixture admin proof batch",
+        1,
+        true,
+        true,
+      ],
     ],
   );
   const terminalBatchFixture = adminSpineTerminalBatchesFixture();
@@ -5205,8 +5243,8 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
     releaseReadiness,
   );
   const coreLoopFamilyRows = coreLoopScenarioFamilyRows();
-  assert.equal(graph.summary.nodeCount, 76 + coreLoopFamilyRows.length);
-  assert.equal(graph.summary.roleUrlCount, 76 + coreLoopFamilyRows.length);
+  assert.equal(graph.summary.nodeCount, 77 + coreLoopFamilyRows.length);
+  assert.equal(graph.summary.roleUrlCount, 77 + coreLoopFamilyRows.length);
   assert.equal(graph.summary.roleSurfaceProofCount, 5);
   assert.equal(graph.summary.productionFeatureTargetCount, 41);
   assert.deepEqual(
@@ -15381,7 +15419,7 @@ test("session card and markdown include role credential URLs and tokens", async 
   );
   assert.equal(
     adminSpineReadiness.localDevelopmentSpine.evidence.adminProofSpine.proofCount,
-    17,
+    18,
   );
   assert.equal(
     adminSpineReadiness.localDevelopmentSpine.evidence.adminProofSpine.recovery.nextCommand,
@@ -15421,6 +15459,7 @@ test("session card and markdown include role credential URLs and tokens", async 
     "hosted-ops-signals",
     "real-hosted-observability-handoff",
     "spine-manifest",
+    "hosted-evidence-lane-operator-fixture",
   ]);
   const proofGraphHandoffReadiness = buildDevTestGameReleaseReadiness(proofRun, {
     generatedAt: "2026-06-26T00:00:00.000Z",
@@ -23072,6 +23111,7 @@ function adminSpineAdminProofFixture() {
         "race-coverage",
         "hosted-target-preflight",
         "hosted-evidence-lane",
+        "hosted-evidence-lane-operator-fixture",
         "hosted-concurrent-race-matrix",
         "hosted-ops-signals",
         "spine-manifest",
@@ -23312,6 +23352,10 @@ function adminSpineProofFixture() {
     ["race-coverage", raceCoverageAdminProofFixture()],
     ["hosted-target-preflight", hostedTargetPreflightAdminProofFixture()],
     ["hosted-evidence-lane", hostedEvidenceLaneAdminProofFixture()],
+    [
+      "hosted-evidence-lane-operator-fixture",
+      hostedEvidenceLaneOperatorFixtureAdminProofFixture(),
+    ],
     [
       "hosted-concurrent-race-matrix",
       hostedConcurrentRaceMatrixAdminProofFixture(),

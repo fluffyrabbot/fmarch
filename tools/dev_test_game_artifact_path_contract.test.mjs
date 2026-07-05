@@ -7,12 +7,14 @@ import test from "node:test";
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
 const artifactPathPattern =
-  /target\/(?:dev-test-game\/(?:ops-artifacts|seed-fixture-summary|race-coverage|race-coverage-admin-proof|hosted-concurrent-race-matrix|hosted-concurrent-race-matrix-admin-proof|hosted-target-preflight|hosted-target-preflight-admin-proof|hosted-evidence-lane|hosted-evidence-lane-admin-proof|hosted-evidence-lane-demo-proof|hosted-ops-signals|hosted-identity-evidence|hosted-identity-evidence-admin-proof|hosted-identity-progression-summary|real-hosted-observability-handoff|real-hosted-observability-handoff-admin-proof|release-runbook|release-runbook-admin-proof|release-admin-proof)\.json|auth-invite-role-proof\/invite-role-proof\.json|live-stack-backup-restore-drill\/(?:local-backup-restore-proof\.json|local-live-stack\.dump))/g;
+  /target\/(?:dev-test-game\/(?:ops-artifacts|seed-fixture-summary|race-coverage|race-coverage-admin-proof|hosted-concurrent-race-matrix|hosted-concurrent-race-matrix-admin-proof|hosted-target-preflight|hosted-target-preflight-admin-proof|hosted-evidence-lane|hosted-evidence-lane-admin-proof|hosted-evidence-lane-demo-proof|hosted-evidence-lane-operator-fixture|hosted-evidence-lane-operator-fixture-admin-proof|hosted-matrix-raw-evidence-fixture-proof|hosted-ops-signals|hosted-identity-evidence|hosted-identity-evidence-admin-proof|hosted-identity-progression-summary|real-hosted-observability-handoff|real-hosted-observability-handoff-admin-proof|release-runbook|release-runbook-admin-proof|release-admin-proof)\.json|auth-invite-role-proof\/invite-role-proof\.json|live-stack-backup-restore-drill\/(?:local-backup-restore-proof\.json|local-live-stack\.dump))/g;
 
 const approvedSourceFiles = new Set([
   "tools/dev_test_game_adjacent_artifact_paths.mjs",
   "tools/dev_test_game_hosted_concurrent_race_matrix_cases.mjs",
   "tools/dev_test_game_hosted_handoff_cases.mjs",
+  "tools/dev_test_game_hosted_evidence_lane_operator_fixture_cases.mjs",
+  "tools/dev_test_game_hosted_matrix_raw_evidence_fixture_proof.mjs",
   "tools/dev_test_game_hosted_identity_evidence_cases.mjs",
   "tools/dev_test_game_hosted_target_preflight_cases.mjs",
   "tools/dev_test_game_race_coverage.mjs",

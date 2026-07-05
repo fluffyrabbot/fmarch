@@ -47,6 +47,68 @@ export async function runDevTestGameHostedEvidenceLaneOperatorFixtureAdminProof(
   env = process.env,
   generatedAt = new Date().toISOString(),
 } = {}) {
+  const evidencePath = path.join(
+    repoRoot,
+    devTestGameHostedEvidenceLaneOperatorFixtureAdminProofPath,
+  );
+  await runAdminAuditProof(
+    hostedEvidenceLaneOperatorFixtureAdminProofCase({
+      evidencePath,
+      env,
+      generatedAt,
+    }),
+  );
+  return assertHostedEvidenceLaneOperatorFixtureAdminProof(
+    await readJson(evidencePath),
+  );
+}
+
+export function hostedEvidenceLaneOperatorFixtureAdminProofCase(options = {}) {
+  const evidencePath =
+    options.evidencePath ??
+    path.join(repoRoot, devTestGameHostedEvidenceLaneOperatorFixtureAdminProofPath);
+  const env = options.env ?? process.env;
+  const rawEvidencePath =
+    optionalEnv(env.FMARCH_HOSTED_MATRIX_RAW_EVIDENCE_PATH) ??
+    devTestGameHostedMatrixRawEvidenceOperatorFixturePath;
+  const baseCase = hostedEvidenceLaneAdminProofCase({
+    lanePath: path.join(repoRoot, devTestGameHostedEvidenceLaneOperatorFixturePath),
+    evidencePath,
+    smokeName:
+      "dev-test-game-hosted-evidence-lane-operator-fixture-admin-proof",
+    stage: "hosted-evidence-lane-operator-fixture-admin-proof-listen",
+    proofName:
+      "dev-test-game-hosted-evidence-lane-operator-fixture-admin-proof",
+    scope:
+      "local-dev-test-game-hosted-evidence-lane-operator-fixture-admin-surface",
+    proofBoundary:
+      "Local SvelteKit admin role URL proof for the hosted evidence lane with a redacted operator fixture raw matrix packet. Proves the admin handoff moves from missing packet inputs to a readable target-matched fixture packet while keeping real hosted deployment, release readiness, and production readiness unproven.",
+    generatedFromExtra: {
+      rawEvidenceFixtureProof:
+        devTestGameHostedMatrixRawEvidenceFixtureProofPath,
+      rawEvidenceFixturePath: rawEvidencePath,
+      operatorFixture: true,
+      fixtureEvidence: true,
+      targetMatchedFixture: true,
+    },
+    assertEvidence: assertHostedEvidenceLaneOperatorFixtureAdminProof,
+  });
+  return {
+    ...baseCase,
+    async loadSource() {
+      await prepareDevTestGameHostedEvidenceLaneOperatorFixture({
+        env,
+        generatedAt: options.generatedAt,
+      });
+      return await baseCase.loadSource();
+    },
+  };
+}
+
+export async function prepareDevTestGameHostedEvidenceLaneOperatorFixture({
+  env = process.env,
+  generatedAt = new Date().toISOString(),
+} = {}) {
   const rawEvidencePath =
     optionalEnv(env.FMARCH_HOSTED_MATRIX_RAW_EVIDENCE_PATH) ??
     devTestGameHostedMatrixRawEvidenceOperatorFixturePath;
@@ -80,37 +142,7 @@ export async function runDevTestGameHostedEvidenceLaneOperatorFixtureAdminProof(
   );
   assertOperatorFixtureLane(lane);
   await writeJson(devTestGameHostedEvidenceLaneOperatorFixturePath, lane);
-  const evidencePath = path.join(
-    repoRoot,
-    devTestGameHostedEvidenceLaneOperatorFixtureAdminProofPath,
-  );
-  await runAdminAuditProof(
-    hostedEvidenceLaneAdminProofCase({
-      lanePath: path.join(repoRoot, devTestGameHostedEvidenceLaneOperatorFixturePath),
-      evidencePath,
-      smokeName:
-        "dev-test-game-hosted-evidence-lane-operator-fixture-admin-proof",
-      stage: "hosted-evidence-lane-operator-fixture-admin-proof-listen",
-      proofName:
-        "dev-test-game-hosted-evidence-lane-operator-fixture-admin-proof",
-      scope:
-        "local-dev-test-game-hosted-evidence-lane-operator-fixture-admin-surface",
-      proofBoundary:
-        "Local SvelteKit admin role URL proof for the hosted evidence lane with a redacted operator fixture raw matrix packet. Proves the admin handoff moves from missing packet inputs to a readable target-matched fixture packet while keeping real hosted deployment, release readiness, and production readiness unproven.",
-      generatedFromExtra: {
-        rawEvidenceFixtureProof:
-          devTestGameHostedMatrixRawEvidenceFixtureProofPath,
-        rawEvidenceFixturePath: rawEvidencePath,
-        operatorFixture: true,
-        fixtureEvidence: true,
-        targetMatchedFixture: true,
-      },
-      assertEvidence: assertHostedEvidenceLaneOperatorFixtureAdminProof,
-    }),
-  );
-  return assertHostedEvidenceLaneOperatorFixtureAdminProof(
-    await readJson(evidencePath),
-  );
+  return lane;
 }
 
 function assertOperatorFixtureLane(lane) {
