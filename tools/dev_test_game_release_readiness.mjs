@@ -727,83 +727,85 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
             ),
           },
         ]),
-    {
-      id: cohostFeatureSpineSourceCheckId,
+    buildProofRunRoleSurfaceReadinessCheck({
+      sourceCheckId: cohostFeatureSpineSourceCheckId,
       label: "Cohost role URL delegated host-console proof",
-      status: "passed",
-      evidence: cohostConsoleProofEvidence.path,
-      roleUrl: cohostConsoleProofEvidence.roleUrl,
+      proofEvidence: cohostConsoleProofEvidence,
       proofBoundary:
         "Seeded dev-test-game cohost role URL proof from proof-run. Proves delegated deadline control and NotHost rejection for host-only resolve; does not prove hosted identity, multi-node races, release readiness, or production readiness.",
-      capabilityLabel: cohostConsoleProofEvidence.capabilityLabel,
-      extendDeadlineState: cohostConsoleProofEvidence.extendDeadlineState,
-      extendDeadlinePrincipal:
-        cohostConsoleProofEvidence.extendDeadlinePrincipal,
-      hostOnlyRejectError: cohostConsoleProofEvidence.hostOnlyRejectError,
-      hostOnlyRejectPrincipal:
-        cohostConsoleProofEvidence.hostOnlyRejectPrincipal,
-      phaseAfterRejectId: cohostConsoleProofEvidence.phaseAfterRejectId,
-      phaseAfterRejectLocked:
-        cohostConsoleProofEvidence.phaseAfterRejectLocked,
+      details: {
+        capabilityLabel: cohostConsoleProofEvidence.capabilityLabel,
+        extendDeadlineState: cohostConsoleProofEvidence.extendDeadlineState,
+        extendDeadlinePrincipal:
+          cohostConsoleProofEvidence.extendDeadlinePrincipal,
+        hostOnlyRejectError: cohostConsoleProofEvidence.hostOnlyRejectError,
+        hostOnlyRejectPrincipal:
+          cohostConsoleProofEvidence.hostOnlyRejectPrincipal,
+        phaseAfterRejectId: cohostConsoleProofEvidence.phaseAfterRejectId,
+        phaseAfterRejectLocked:
+          cohostConsoleProofEvidence.phaseAfterRejectLocked,
+      },
       recoveryCommand: devTestGameCohostConsoleProofCommand,
-      spineTargets: buildCohostReadinessSpineTargets(cohostConsoleProofEvidence),
-    },
-    {
-      id: replacementFeatureSpineSourceCheckId,
+      spineTargets: buildCohostReadinessSpineTargets(
+        cohostConsoleProofEvidence,
+      ),
+    }),
+    buildProofRunRoleSurfaceReadinessCheck({
+      sourceCheckId: replacementFeatureSpineSourceCheckId,
       label: "Replacement player role URL proof",
-      status: "passed",
-      evidence: replacementPlayerProofEvidence.path,
-      roleUrl: replacementPlayerProofEvidence.roleUrl,
+      proofEvidence: replacementPlayerProofEvidence,
       proofBoundary:
         "Seeded dev-test-game replacement player role URL proof from proof-run. Proves host-issued replacement URL, fresh replacement session recovery, incoming player slot authority, stale outgoing player rejection, and private-channel authority transfer; does not prove hosted identity, invite delivery, multi-node races, release readiness, or production readiness.",
-      principalUserId: replacementPlayerProofEvidence.principalUserId,
-      commandStateSlot: replacementPlayerProofEvidence.commandStateSlot,
-      capabilityKinds: replacementPlayerProofEvidence.capabilityKinds,
-      hostIssuedInvite: replacementPlayerProofEvidence.hostIssuedInvite,
-      sessionRefresh: replacementPlayerProofEvidence.sessionRefresh,
-      incomingPlayer: replacementPlayerProofEvidence.incomingPlayer,
-      staleOutgoing: replacementPlayerProofEvidence.staleOutgoing,
-      privateAuthority: replacementPlayerProofEvidence.privateAuthority,
+      details: {
+        principalUserId: replacementPlayerProofEvidence.principalUserId,
+        commandStateSlot: replacementPlayerProofEvidence.commandStateSlot,
+        capabilityKinds: replacementPlayerProofEvidence.capabilityKinds,
+        hostIssuedInvite: replacementPlayerProofEvidence.hostIssuedInvite,
+        sessionRefresh: replacementPlayerProofEvidence.sessionRefresh,
+        incomingPlayer: replacementPlayerProofEvidence.incomingPlayer,
+        staleOutgoing: replacementPlayerProofEvidence.staleOutgoing,
+        privateAuthority: replacementPlayerProofEvidence.privateAuthority,
+      },
       recoveryCommand: devTestGameReplacementPlayerProofCommand,
       spineTargets: buildReplacementReadinessSpineTargets(
         replacementPlayerProofEvidence,
       ),
-    },
-    {
-      id: replacementActionFeatureSpineSourceCheckId,
+    }),
+    buildProofRunRoleSurfaceReadinessCheck({
+      sourceCheckId: replacementActionFeatureSpineSourceCheckId,
       label: "Replacement action recovery role URL proof",
-      status: "passed",
-      evidence: replacementActionProofEvidence.path,
-      roleUrl: replacementActionProofEvidence.roleUrl,
+      proofEvidence: replacementActionProofEvidence,
       proofBoundary:
         "Seeded dev-test-game replacement action role URL proof from proof-run. Proves incoming replacement factional_kill submission, reconnect into locked resolved state, stale replacement action PhaseLocked recovery, and scoped target receipt visibility; does not prove hosted identity, hosted transport, multi-node races, release readiness, or production readiness.",
-      incomingAction: replacementActionProofEvidence.incomingAction,
-      reconnect: replacementActionProofEvidence.reconnect,
-      staleAction: replacementActionProofEvidence.staleAction,
+      details: {
+        incomingAction: replacementActionProofEvidence.incomingAction,
+        reconnect: replacementActionProofEvidence.reconnect,
+        staleAction: replacementActionProofEvidence.staleAction,
+      },
       recoveryCommand: devTestGameReplacementActionProofCommand,
       spineTargets: buildReplacementActionReadinessSpineTargets(
         replacementActionProofEvidence,
       ),
-    },
-    {
-      id: replacementPrivateFeatureSpineSourceCheckId,
+    }),
+    buildProofRunRoleSurfaceReadinessCheck({
+      sourceCheckId: replacementPrivateFeatureSpineSourceCheckId,
       label: "Replacement private-channel recovery role URL proof",
-      status: "passed",
-      evidence: replacementPrivateProofEvidence.path,
-      roleUrl: replacementPrivateProofEvidence.roleUrl,
+      proofEvidence: replacementPrivateProofEvidence,
       proofBoundary:
         "Seeded dev-test-game replacement private-channel role URL proof from proof-run. Proves current replacement private-channel authority, stale outgoing private-channel and receipt denial, stale private-post ACK and reconnect recovery after resolution, completed-game private-post rejection, and completed private-channel reload; does not prove hosted identity, hosted transport, release readiness, or production readiness.",
-      authority: replacementPrivateProofEvidence.authority,
-      receipts: replacementPrivateProofEvidence.receipts,
-      resolvedPost: replacementPrivateProofEvidence.resolvedPost,
-      reconnect: replacementPrivateProofEvidence.reconnect,
-      completedPost: replacementPrivateProofEvidence.completedPost,
-      completedReload: replacementPrivateProofEvidence.completedReload,
+      details: {
+        authority: replacementPrivateProofEvidence.authority,
+        receipts: replacementPrivateProofEvidence.receipts,
+        resolvedPost: replacementPrivateProofEvidence.resolvedPost,
+        reconnect: replacementPrivateProofEvidence.reconnect,
+        completedPost: replacementPrivateProofEvidence.completedPost,
+        completedReload: replacementPrivateProofEvidence.completedReload,
+      },
       recoveryCommand: devTestGameReplacementPrivateProofCommand,
       spineTargets: buildReplacementPrivateReadinessSpineTargets(
         replacementPrivateProofEvidence,
       ),
-    },
+    }),
     {
       id: coreLoopFeatureSpineSourceCheckId,
       label: "Host controls, replacement, player actions, private channels, and day/night loop",
@@ -3462,38 +3464,68 @@ function completedGameHardeningSpineRoleUrl({ frontendBaseUrl, game, role }) {
   return `${frontendBaseUrl}/g/${game}${role === "host" ? "/host" : ""}`;
 }
 
-function buildHostSetupReadinessSpineTargets(hostSetupProofEvidence) {
-  const cycleIds = [hostSetupFeatureSpineCycleId];
-  const roleUrlIds = ["host-setup"];
-  const checkpointIds = ["start-phase"];
+function buildProofRunRoleSurfaceReadinessCheck({
+  sourceCheckId,
+  label,
+  proofEvidence,
+  proofBoundary,
+  details,
+  recoveryCommand,
+  spineTargets,
+}) {
+  return {
+    id: sourceCheckId,
+    label,
+    status: "passed",
+    evidence: proofEvidence.path,
+    roleUrl: proofEvidence.roleUrl,
+    proofBoundary,
+    ...details,
+    recoveryCommand,
+    spineTargets,
+  };
+}
+
+function buildRoleSurfaceReadinessSpineTargets({
+  proofEvidence,
+  sourceCheckId,
+  defaultCycleId,
+  defaultRoleUrlId,
+  defaultCheckpointId,
+  rerunCommand,
+  cycleIds = [defaultCycleId],
+  roleUrlIds = [defaultRoleUrlId],
+  checkpointIds = [defaultCheckpointId],
+  visibleAdminCheckIds,
+}) {
   const roleUrlHrefs = {
-    "host-setup": hostSetupProofEvidence.roleUrl,
+    [defaultRoleUrlId]: proofEvidence.roleUrl,
   };
   return {
     status: "passed",
-    detailRoleUrl: hostSetupProofEvidence.roleUrl,
-    defaultCycleId: hostSetupFeatureSpineCycleId,
-    defaultRoleUrlId: "host-setup",
-    defaultRoleUrl: hostSetupProofEvidence.roleUrl,
-    defaultCheckpointId: "start-phase",
+    detailRoleUrl: proofEvidence.roleUrl,
+    defaultCycleId,
+    defaultRoleUrlId,
+    defaultRoleUrl: proofEvidence.roleUrl,
+    defaultCheckpointId,
     browserProofCommand: devTestGameSeededBrowserProofCommand,
     cycleIds,
     roleUrlIds,
     checkpointIds,
-    visibleAdminCheckIds: [...hostSetupProofEvidence.readyCheckIds],
+    visibleAdminCheckIds,
     recoveryHookIds: [],
     roleUrlHrefs,
     productionFeatureTargets: buildProductionFeatureSpineTargetCollection({
       declarations: releaseReadinessProductionFeatureSpineTargets,
       sourceTarget: {
-        sourceCheckId: hostSetupFeatureSpineSourceCheckId,
-        detailRoleUrl: hostSetupProofEvidence.roleUrl,
+        sourceCheckId,
+        detailRoleUrl: proofEvidence.roleUrl,
         browserProofCommand: devTestGameSeededBrowserProofCommand,
-        rerunCommand: devTestGameHostSetupProofCommand,
+        rerunCommand,
         cycleIds,
         roleUrlIds,
         checkpointIds,
-        visibleAdminCheckIds: [...hostSetupProofEvidence.readyCheckIds],
+        visibleAdminCheckIds,
         recoveryHookIds: [],
         roleUrlHrefs,
       },
@@ -3501,196 +3533,88 @@ function buildHostSetupReadinessSpineTargets(hostSetupProofEvidence) {
         defaultProductionFeatureSpineRerunCommands,
     }),
   };
+}
+
+function buildHostSetupReadinessSpineTargets(hostSetupProofEvidence) {
+  return buildRoleSurfaceReadinessSpineTargets({
+    proofEvidence: hostSetupProofEvidence,
+    sourceCheckId: hostSetupFeatureSpineSourceCheckId,
+    defaultCycleId: hostSetupFeatureSpineCycleId,
+    defaultRoleUrlId: "host-setup",
+    defaultCheckpointId: "start-phase",
+    visibleAdminCheckIds: [...hostSetupProofEvidence.readyCheckIds],
+    rerunCommand: devTestGameHostSetupProofCommand,
+  });
 }
 
 function buildCohostReadinessSpineTargets(cohostConsoleProofEvidence) {
-  const cycleIds = [cohostFeatureSpineCycleId];
-  const roleUrlIds = ["cohost-console"];
-  const checkpointIds = ["extend-deadline-ack"];
-  const visibleAdminCheckIds = ["cohost-console"];
-  const roleUrlHrefs = {
-    "cohost-console": cohostConsoleProofEvidence.roleUrl,
-  };
-  return {
-    status: "passed",
-    detailRoleUrl: cohostConsoleProofEvidence.roleUrl,
+  return buildRoleSurfaceReadinessSpineTargets({
+    proofEvidence: cohostConsoleProofEvidence,
+    sourceCheckId: cohostFeatureSpineSourceCheckId,
     defaultCycleId: cohostFeatureSpineCycleId,
     defaultRoleUrlId: "cohost-console",
-    defaultRoleUrl: cohostConsoleProofEvidence.roleUrl,
     defaultCheckpointId: "extend-deadline-ack",
-    browserProofCommand: devTestGameSeededBrowserProofCommand,
-    cycleIds,
-    roleUrlIds,
-    checkpointIds,
-    visibleAdminCheckIds,
-    recoveryHookIds: [],
-    roleUrlHrefs,
-    productionFeatureTargets: buildProductionFeatureSpineTargetCollection({
-      declarations: releaseReadinessProductionFeatureSpineTargets,
-      sourceTarget: {
-        sourceCheckId: cohostFeatureSpineSourceCheckId,
-        detailRoleUrl: cohostConsoleProofEvidence.roleUrl,
-        browserProofCommand: devTestGameSeededBrowserProofCommand,
-        rerunCommand: devTestGameCohostConsoleProofCommand,
-        cycleIds,
-        roleUrlIds,
-        checkpointIds,
-        visibleAdminCheckIds,
-        recoveryHookIds: [],
-        roleUrlHrefs,
-      },
-      defaultRerunCommandBySourceCheckId:
-        defaultProductionFeatureSpineRerunCommands,
-    }),
-  };
+    visibleAdminCheckIds: ["cohost-console"],
+    rerunCommand: devTestGameCohostConsoleProofCommand,
+  });
 }
 
 function buildReplacementReadinessSpineTargets(replacementPlayerProofEvidence) {
-  const cycleIds = [replacementFeatureSpineCycleId];
-  const roleUrlIds = ["replacement-player"];
-  const checkpointIds = ["incoming-player-slot-authority"];
-  const visibleAdminCheckIds = [
-    "replacement-host-issued-invite",
-    "replacement-session-refresh-recovery",
-    "replacement-incoming-player",
-    "replacement-stale-player",
-    "replacement-stale-private-channel",
-    "replacement-stale-private-receipts",
-  ];
-  const roleUrlHrefs = {
-    "replacement-player": replacementPlayerProofEvidence.roleUrl,
-  };
-  return {
-    status: "passed",
-    detailRoleUrl: replacementPlayerProofEvidence.roleUrl,
+  return buildRoleSurfaceReadinessSpineTargets({
+    proofEvidence: replacementPlayerProofEvidence,
+    sourceCheckId: replacementFeatureSpineSourceCheckId,
     defaultCycleId: replacementFeatureSpineCycleId,
     defaultRoleUrlId: "replacement-player",
-    defaultRoleUrl: replacementPlayerProofEvidence.roleUrl,
     defaultCheckpointId: "incoming-player-slot-authority",
-    browserProofCommand: devTestGameSeededBrowserProofCommand,
-    cycleIds,
-    roleUrlIds,
-    checkpointIds,
-    visibleAdminCheckIds,
-    recoveryHookIds: [],
-    roleUrlHrefs,
-    productionFeatureTargets: buildProductionFeatureSpineTargetCollection({
-      declarations: releaseReadinessProductionFeatureSpineTargets,
-      sourceTarget: {
-        sourceCheckId: replacementFeatureSpineSourceCheckId,
-        detailRoleUrl: replacementPlayerProofEvidence.roleUrl,
-        browserProofCommand: devTestGameSeededBrowserProofCommand,
-        rerunCommand: devTestGameReplacementPlayerProofCommand,
-        cycleIds,
-        roleUrlIds,
-        checkpointIds,
-        visibleAdminCheckIds,
-        recoveryHookIds: [],
-        roleUrlHrefs,
-      },
-      defaultRerunCommandBySourceCheckId:
-        defaultProductionFeatureSpineRerunCommands,
-    }),
-  };
+    visibleAdminCheckIds: [
+      "replacement-host-issued-invite",
+      "replacement-session-refresh-recovery",
+      "replacement-incoming-player",
+      "replacement-stale-player",
+      "replacement-stale-private-channel",
+      "replacement-stale-private-receipts",
+    ],
+    rerunCommand: devTestGameReplacementPlayerProofCommand,
+  });
 }
 
 function buildReplacementActionReadinessSpineTargets(
   replacementActionProofEvidence,
 ) {
-  const cycleIds = [replacementActionFeatureSpineCycleId];
-  const roleUrlIds = ["replacement-action"];
-  const checkpointIds = ["replacement-incoming-action"];
-  const visibleAdminCheckIds = [
-    "replacement-incoming-action",
-    "replacement-action-reconnect",
-    "replacement-stale-action-after-resolve",
-  ];
-  const roleUrlHrefs = {
-    "replacement-action": replacementActionProofEvidence.roleUrl,
-  };
-  return {
-    status: "passed",
-    detailRoleUrl: replacementActionProofEvidence.roleUrl,
+  return buildRoleSurfaceReadinessSpineTargets({
+    proofEvidence: replacementActionProofEvidence,
+    sourceCheckId: replacementActionFeatureSpineSourceCheckId,
     defaultCycleId: replacementActionFeatureSpineCycleId,
     defaultRoleUrlId: "replacement-action",
-    defaultRoleUrl: replacementActionProofEvidence.roleUrl,
     defaultCheckpointId: "replacement-incoming-action",
-    browserProofCommand: devTestGameSeededBrowserProofCommand,
-    cycleIds,
-    roleUrlIds,
-    checkpointIds,
-    visibleAdminCheckIds,
-    recoveryHookIds: [],
-    roleUrlHrefs,
-    productionFeatureTargets: buildProductionFeatureSpineTargetCollection({
-      declarations: releaseReadinessProductionFeatureSpineTargets,
-      sourceTarget: {
-        sourceCheckId: replacementActionFeatureSpineSourceCheckId,
-        detailRoleUrl: replacementActionProofEvidence.roleUrl,
-        browserProofCommand: devTestGameSeededBrowserProofCommand,
-        rerunCommand: devTestGameReplacementActionProofCommand,
-        cycleIds,
-        roleUrlIds,
-        checkpointIds,
-        visibleAdminCheckIds,
-        recoveryHookIds: [],
-        roleUrlHrefs,
-      },
-      defaultRerunCommandBySourceCheckId:
-        defaultProductionFeatureSpineRerunCommands,
-    }),
-  };
+    visibleAdminCheckIds: [
+      "replacement-incoming-action",
+      "replacement-action-reconnect",
+      "replacement-stale-action-after-resolve",
+    ],
+    rerunCommand: devTestGameReplacementActionProofCommand,
+  });
 }
 
 function buildReplacementPrivateReadinessSpineTargets(
   replacementPrivateProofEvidence,
 ) {
-  const cycleIds = [replacementPrivateFeatureSpineCycleId];
-  const roleUrlIds = ["replacement-private-channel"];
-  const checkpointIds = ["replacement-stale-private-channel"];
-  const visibleAdminCheckIds = [
-    "replacement-stale-private-channel",
-    "replacement-stale-private-receipts",
-    "replacement-stale-private-post-after-resolve",
-    "replacement-stale-private-post-reconnect",
-    "replacement-stale-private-post-after-complete",
-    "replacement-stale-private-post-after-complete-reload",
-  ];
-  const roleUrlHrefs = {
-    "replacement-private-channel": replacementPrivateProofEvidence.roleUrl,
-  };
-  return {
-    status: "passed",
-    detailRoleUrl: replacementPrivateProofEvidence.roleUrl,
+  return buildRoleSurfaceReadinessSpineTargets({
+    proofEvidence: replacementPrivateProofEvidence,
+    sourceCheckId: replacementPrivateFeatureSpineSourceCheckId,
     defaultCycleId: replacementPrivateFeatureSpineCycleId,
     defaultRoleUrlId: "replacement-private-channel",
-    defaultRoleUrl: replacementPrivateProofEvidence.roleUrl,
     defaultCheckpointId: "replacement-stale-private-channel",
-    browserProofCommand: devTestGameSeededBrowserProofCommand,
-    cycleIds,
-    roleUrlIds,
-    checkpointIds,
-    visibleAdminCheckIds,
-    recoveryHookIds: [],
-    roleUrlHrefs,
-    productionFeatureTargets: buildProductionFeatureSpineTargetCollection({
-      declarations: releaseReadinessProductionFeatureSpineTargets,
-      sourceTarget: {
-        sourceCheckId: replacementPrivateFeatureSpineSourceCheckId,
-        detailRoleUrl: replacementPrivateProofEvidence.roleUrl,
-        browserProofCommand: devTestGameSeededBrowserProofCommand,
-        rerunCommand: devTestGameReplacementPrivateProofCommand,
-        cycleIds,
-        roleUrlIds,
-        checkpointIds,
-        visibleAdminCheckIds,
-        recoveryHookIds: [],
-        roleUrlHrefs,
-      },
-      defaultRerunCommandBySourceCheckId:
-        defaultProductionFeatureSpineRerunCommands,
-    }),
-  };
+    visibleAdminCheckIds: [
+      "replacement-stale-private-channel",
+      "replacement-stale-private-receipts",
+      "replacement-stale-private-post-after-resolve",
+      "replacement-stale-private-post-reconnect",
+      "replacement-stale-private-post-after-complete",
+      "replacement-stale-private-post-after-complete-reload",
+    ],
+    rerunCommand: devTestGameReplacementPrivateProofCommand,
+  });
 }
 
 function assertVisibleAdminRows({ label, visibleRows, requiredRows }) {
