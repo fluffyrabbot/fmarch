@@ -9,6 +9,9 @@ const cloneHostModkillScenario = (scenario) => ({
 const cloneHostLifecycleRaceScenario = (scenario) => ({
   ...scenario,
 });
+const cloneHostPublishRaceScenario = (scenario) => ({
+  ...scenario,
+});
 const clonePhaseStateCase = (phaseStateCase) => ({ ...phaseStateCase });
 const cloneTransitionProofCase = (transitionCase) => ({
   ...transitionCase,
@@ -543,6 +546,26 @@ export function hostLifecycleRaceScenario() {
   return cloneHostLifecycleRaceScenario(hostLifecycleRaceScenarioDefinition);
 }
 
+const hostPublishRaceScenarioDefinition = Object.freeze({
+  proofCheckId: "concurrent-host-publish-race",
+  reloadProofCheckId: "concurrent-host-publish-race-reload",
+  targetSlot: "slot_5",
+  targetCount: 3,
+  ackRaceRole: "second",
+  rejectRaceRole: "first",
+  ackState: "ack",
+  rejectError: "InvalidTarget",
+  apiOfficialPostCount: 1,
+  playerOfficialPostCount: 1,
+  firstHostRouteStatus: 200,
+  secondHostRouteStatus: 200,
+  playerRouteStatus: 200,
+});
+
+export function hostPublishRaceScenario() {
+  return cloneHostPublishRaceScenario(hostPublishRaceScenarioDefinition);
+}
+
 export function assertHostLifecycleControlRoleSurfaceCase({
   hostRoleSurface,
   expectedGame,
@@ -781,6 +804,47 @@ export function assertHostLifecycleRaceSurfaceCase({
     throwHostPhaseScenarioAssertionError({
       message: "core-loop admin proof missing host lifecycle race surface",
       evidence: hostLifecycleRaceSurface,
+      includeEvidenceInError,
+    });
+  }
+}
+
+export function assertHostPublishRaceSurfaceCase({
+  hostPublishRaceSurface,
+  scenario = hostPublishRaceScenarioDefinition,
+  includeEvidenceInError = false,
+}) {
+  const raceLane = hostPublishRaceSurface?.hostPublishRace;
+  const reloadLane = hostPublishRaceSurface?.hostPublishRaceReload;
+  const race = raceLane?.evidence;
+  const reload = reloadLane?.evidence;
+  if (
+    hostPublishRaceSurface?.status !== "passed" ||
+    hostPublishRaceSurface.proofCheckId !== scenario.proofCheckId ||
+    hostPublishRaceSurface.reloadProofCheckId !== scenario.reloadProofCheckId ||
+    raceLane?.id !== scenario.proofCheckId ||
+    raceLane?.status !== "passed" ||
+    typeof race?.game !== "string" ||
+    race.game.length === 0 ||
+    race?.targetSlot !== scenario.targetSlot ||
+    race?.targetCount !== scenario.targetCount ||
+    race?.ackRaceRole !== scenario.ackRaceRole ||
+    race?.rejectRaceRole !== scenario.rejectRaceRole ||
+    race?.ackState !== scenario.ackState ||
+    race?.rejectError !== scenario.rejectError ||
+    race?.apiOfficialPostCount !== scenario.apiOfficialPostCount ||
+    race?.playerOfficialPostCount !== scenario.playerOfficialPostCount ||
+    reloadLane?.id !== scenario.reloadProofCheckId ||
+    reloadLane?.status !== "passed" ||
+    reload?.firstHostRouteStatus !== scenario.firstHostRouteStatus ||
+    reload?.secondHostRouteStatus !== scenario.secondHostRouteStatus ||
+    reload?.playerRouteStatus !== scenario.playerRouteStatus ||
+    reload?.apiOfficialPostCount !== scenario.apiOfficialPostCount ||
+    reload?.playerOfficialPostCount !== scenario.playerOfficialPostCount
+  ) {
+    throwHostPhaseScenarioAssertionError({
+      message: "core-loop admin proof missing host publish race surface",
+      evidence: hostPublishRaceSurface,
       includeEvidenceInError,
     });
   }

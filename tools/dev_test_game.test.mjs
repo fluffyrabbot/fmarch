@@ -14711,6 +14711,7 @@ function coreLoopAdminProofFixture() {
     hostRoleSurface: hostLifecycleRoleSurfaceFixture(),
     hostModkillControlSurface: hostModkillControlSurfaceFixture(),
     hostLifecycleRaceSurface: hostLifecycleRaceSurfaceFixture(),
+    hostPublishRaceSurface: hostPublishRaceSurfaceFixture(),
     playerRoleSurface: playerActionRoleSurfaceFixture(),
     targetResolutionReceiptSurface: targetResolutionReceiptSurfaceFixture(),
     normalResolutionPrivacySurface: normalResolutionPrivacySurfaceFixture(),
@@ -14921,6 +14922,42 @@ function hostLifecycleRaceSurfaceFixture() {
         modkillLifecycleLabel: "Dead",
         playerStatus: "dead",
         apiStatus: "dead",
+      },
+    },
+  };
+}
+
+function hostPublishRaceSurfaceFixture() {
+  return {
+    status: "passed",
+    proofCheckId: "concurrent-host-publish-race",
+    reloadProofCheckId: "concurrent-host-publish-race-reload",
+    hostPublishRace: {
+      id: "concurrent-host-publish-race",
+      label: "Concurrent host publishes converge",
+      status: "passed",
+      evidence: {
+        game: "publish-race-game-a",
+        targetSlot: "slot_5",
+        targetCount: 3,
+        ackRaceRole: "second",
+        rejectRaceRole: "first",
+        ackState: "ack",
+        rejectError: "InvalidTarget",
+        apiOfficialPostCount: 1,
+        playerOfficialPostCount: 1,
+      },
+    },
+    hostPublishRaceReload: {
+      id: "concurrent-host-publish-race-reload",
+      label: "Concurrent host publish race reloads official count truth",
+      status: "passed",
+      evidence: {
+        firstHostRouteStatus: 200,
+        secondHostRouteStatus: 200,
+        playerRouteStatus: 200,
+        apiOfficialPostCount: 1,
+        playerOfficialPostCount: 1,
       },
     },
   };

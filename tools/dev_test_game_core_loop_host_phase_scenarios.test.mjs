@@ -8,6 +8,7 @@ import {
   assertHostLifecycleControlRoleSurfaceCase,
   assertHostModkillControlSurfaceCase,
   assertHostPhaseTransitionActionProofCase,
+  assertHostPublishRaceSurfaceCase,
   assertHostStaleAdvanceAfterTransitionProofCase,
   dayFourNoLynchHostTransitionProofCase,
   emptyNightThreeHostTransitionProofCase,
@@ -20,6 +21,7 @@ import {
   hostLifecycleRaceScenario,
   hostLifecycleControlScenario,
   hostModkillControlScenario,
+  hostPublishRaceScenario,
   hostLockedPhaseTransitionCase,
   hostLockThreadCommandFacts,
   hostNightActionTransitionSurfaceCase,
@@ -1047,6 +1049,65 @@ test("host lifecycle race assertion covers convergence and reload lanes", () => 
         },
       }),
     /host lifecycle race surface/,
+  );
+});
+
+test("host publish race assertion covers official-count convergence and reload lanes", () => {
+  const hostPublishRaceSurface = {
+    status: "passed",
+    proofCheckId: "concurrent-host-publish-race",
+    reloadProofCheckId: "concurrent-host-publish-race-reload",
+    hostPublishRace: {
+      id: "concurrent-host-publish-race",
+      label: "Concurrent host publishes converge",
+      status: "passed",
+      evidence: {
+        game: "publish-race-game-a",
+        targetSlot: "slot_5",
+        targetCount: 3,
+        ackRaceRole: "second",
+        rejectRaceRole: "first",
+        ackState: "ack",
+        rejectError: "InvalidTarget",
+        apiOfficialPostCount: 1,
+        playerOfficialPostCount: 1,
+      },
+    },
+    hostPublishRaceReload: {
+      id: "concurrent-host-publish-race-reload",
+      label: "Concurrent host publish race reloads official count truth",
+      status: "passed",
+      evidence: {
+        firstHostRouteStatus: 200,
+        secondHostRouteStatus: 200,
+        playerRouteStatus: 200,
+        apiOfficialPostCount: 1,
+        playerOfficialPostCount: 1,
+      },
+    },
+  };
+
+  assert.doesNotThrow(() =>
+    assertHostPublishRaceSurfaceCase({
+      hostPublishRaceSurface,
+      scenario: hostPublishRaceScenario(),
+    }),
+  );
+  assert.throws(
+    () =>
+      assertHostPublishRaceSurfaceCase({
+        hostPublishRaceSurface: {
+          ...hostPublishRaceSurface,
+          hostPublishRaceReload: {
+            ...hostPublishRaceSurface.hostPublishRaceReload,
+            evidence: {
+              ...hostPublishRaceSurface.hostPublishRaceReload.evidence,
+              playerOfficialPostCount: 2,
+            },
+          },
+        },
+      }),
+    /host publish race surface/,
   );
 });
 
