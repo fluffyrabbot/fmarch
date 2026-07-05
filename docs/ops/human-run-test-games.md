@@ -386,6 +386,16 @@ and API command state to N01 with no stale action controls, then clicks another
 stale `factional_kill` control with a distinct command id and proves
 `Reject ActionAlreadySubmitted` recovery reaches the same current state.
 
+The late-loop proof keeps the same role-surface architecture honest after the
+multi-revote path: the action-player role URL submits the D04 no-lynch ballot,
+the host resolves and advances into N04, the action-player role URL has no legal
+night action controls, the host resolves that no-action night, and the host
+advances to D05 where the previously killed player stays dead from the N02
+receipt while the action-player role URL gets the D05 no-lynch controls. A
+separate frozen stale N04 action-control snapshot still proves `Reject
+PhaseLocked` recovery into the current D05 controls; it is recovery evidence,
+not a claim that the current N04 surface has a legal action.
+
 The player action-boundary proof keeps the seeded `player` role URL on the same
 local game at N01, verifies that the player command surface has no unowned
 `factional_kill` action, submits a direct browser `/commands` `SubmitAction`
@@ -474,6 +484,8 @@ the `core-loop`, `action-loop`, `host-deadline-advance`,
 `private-channel`, `host-votecount-publication`,
 `host-lifecycle-control`,
 `host-modkill-control`,
+`night-four-no-action-surface`, `night-four-no-action-resolution`,
+`post-night-four-transition`,
 `replacement-host-issued-invite`,
 `replacement-pending-player`, `replacement-invalid-target-recovery`,
 `replacement-console`, `stale-host-invite-recovery`,

@@ -190,7 +190,7 @@ test("post-day and post-night production callers use shared transition assertion
     "target:D03:day_vote",
     "host:advance_phase:ack:909",
     "host:N04:advance_phase:ack:917",
-    "survivor:D05:dead_no_controls",
+    "deadPlayer:D05:dead_no_controls",
     "actionPlayer:D05:no_lynch_controls",
   ]) {
     assert(

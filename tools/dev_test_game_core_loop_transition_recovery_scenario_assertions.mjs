@@ -172,7 +172,8 @@ export function assertStaleNightFourActionRecoveryProofCase({
       .includes(`reject ${scenario.error.toLowerCase()}`)
   ) {
     throwTransitionRecoveryAssertionError({
-      message: "core-loop admin proof missing stale Night 4 action recovery",
+      message:
+        "core-loop admin proof missing frozen stale N04 action-control recovery",
       evidence: proof,
       includeEvidenceInError,
     });
