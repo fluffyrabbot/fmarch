@@ -163,6 +163,7 @@ import {
 } from "../../../../tools/dev_test_game_admin_audit_handoff_path.mjs";
 import {
   hostedIdentityTerminalReceiptArtifactCase,
+  terminalProofGraphReceiptArtifacts,
 } from "../../../../tools/dev_test_game_proof_graph_receipt_artifact_rows.mjs";
 import {
   hostedTargetPreflightExternalTargetsRequiredEvidence,
@@ -6118,38 +6119,7 @@ function terminalBatchGraphFixture() {
 }
 
 function terminalBatchReceiptArtifactsFixture() {
-  return [
-    {
-      proofId: "proof-graph",
-      artifactPath: "target/dev-test-game/proof-graph-admin-proof.json",
-      batchLabel: "Terminal admin proof batch",
-    },
-    {
-      proofId: "proof-freshness",
-      artifactPath: "target/dev-test-game/proof-freshness-admin-proof.json",
-      batchLabel: "Terminal admin proof batch",
-    },
-    {
-      proofId: "next-action",
-      artifactPath: "target/dev-test-game/next-action-admin-proof.json",
-      batchLabel: "Terminal admin proof batch",
-    },
-    {
-      proofId: hostedIdentityTerminalReceiptArtifactCase.proofId,
-      artifactPath: hostedIdentityTerminalReceiptArtifactCase.artifactPath,
-      batchLabel: hostedIdentityTerminalReceiptArtifactCase.batchLabel,
-    },
-    {
-      proofId: "proof-freshness",
-      artifactPath: "target/dev-test-game/proof-freshness-admin-proof.json",
-      batchLabel: "Terminal refresh admin proof batch",
-    },
-    {
-      proofId: "next-action",
-      artifactPath: "target/dev-test-game/next-action-admin-proof.json",
-      batchLabel: "Terminal refresh admin proof batch",
-    },
-  ];
+  return terminalProofGraphReceiptArtifacts.map((artifact) => ({ ...artifact }));
 }
 
 function privateChannelRecoveryGraphFixture() {

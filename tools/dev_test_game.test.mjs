@@ -464,6 +464,9 @@ import {
   normalizeProofGraphReceiptArtifactRows,
   proofGraphReceiptArtifactRowId,
   proofGraphReceiptArtifactRowStatus,
+  terminalProofGraphReceiptArtifacts,
+  terminalProofGraphReceiptBatchRegistry,
+  terminalProofGraphReceiptRegistry,
 } from "./dev_test_game_proof_graph_receipt_artifact_rows.mjs";
 
 test("dev test-game args expose reset reuse naming and verification controls", () => {
@@ -4215,38 +4218,11 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
       artifact.artifactPath,
       artifact.batchLabel,
     ]),
-    [
-      [
-        "proof-graph",
-        "target/dev-test-game/proof-graph-admin-proof.json",
-        "Terminal admin proof batch",
-      ],
-      [
-        "proof-freshness",
-        "target/dev-test-game/proof-freshness-admin-proof.json",
-        "Terminal admin proof batch",
-      ],
-      [
-        "next-action",
-        "target/dev-test-game/next-action-admin-proof.json",
-        "Terminal admin proof batch",
-      ],
-      [
-        hostedIdentityTerminalReceiptArtifactCase.proofId,
-        hostedIdentityTerminalReceiptArtifactCase.artifactPath,
-        hostedIdentityTerminalReceiptArtifactCase.batchLabel,
-      ],
-      [
-        "proof-freshness",
-        "target/dev-test-game/proof-freshness-admin-proof.json",
-        "Terminal refresh admin proof batch",
-      ],
-      [
-        "next-action",
-        "target/dev-test-game/next-action-admin-proof.json",
-        "Terminal refresh admin proof batch",
-      ],
-    ],
+    terminalProofGraphReceiptArtifacts.map((artifact) => [
+      artifact.proofId,
+      artifact.artifactPath,
+      artifact.batchLabel,
+    ]),
   );
   assert.deepEqual(
     Object.entries(
@@ -4568,6 +4544,83 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
 });
 
 test("proof graph receipt artifact rows share one browser row id contract", () => {
+  assert.deepEqual(
+    terminalProofGraphReceiptRegistry.map((entry) => [
+      entry.proofId,
+      entry.artifactPath,
+      entry.batchLabel,
+      entry.terminalGraphEdge,
+    ]),
+    [
+      [
+        "proof-graph",
+        "target/dev-test-game/proof-graph-admin-proof.json",
+        "Terminal admin proof batch",
+        true,
+      ],
+      [
+        "proof-freshness",
+        "target/dev-test-game/proof-freshness-admin-proof.json",
+        "Terminal admin proof batch",
+        true,
+      ],
+      [
+        "next-action",
+        "target/dev-test-game/next-action-admin-proof.json",
+        "Terminal admin proof batch",
+        true,
+      ],
+      [
+        hostedIdentityTerminalReceiptArtifactCase.proofId,
+        hostedIdentityTerminalReceiptArtifactCase.artifactPath,
+        hostedIdentityTerminalReceiptArtifactCase.batchLabel,
+        false,
+      ],
+      [
+        "proof-freshness",
+        "target/dev-test-game/proof-freshness-admin-proof.json",
+        "Terminal refresh admin proof batch",
+        false,
+      ],
+      [
+        "next-action",
+        "target/dev-test-game/next-action-admin-proof.json",
+        "Terminal refresh admin proof batch",
+        false,
+      ],
+    ],
+  );
+  assert.deepEqual(
+    terminalProofGraphReceiptBatchRegistry.map((batch) => [
+      batch.label,
+      batch.proofIds,
+      batch.artifactPaths,
+    ]),
+    [
+      [
+        "Terminal admin proof batch",
+        ["proof-graph", "proof-freshness", "next-action"],
+        [
+          "target/dev-test-game/proof-graph-admin-proof.json",
+          "target/dev-test-game/proof-freshness-admin-proof.json",
+          "target/dev-test-game/next-action-admin-proof.json",
+        ],
+      ],
+      [
+        hostedIdentityTerminalReceiptArtifactCase.batchLabel,
+        [hostedIdentityTerminalReceiptArtifactCase.proofId],
+        [hostedIdentityTerminalReceiptArtifactCase.artifactPath],
+      ],
+      [
+        "Terminal refresh admin proof batch",
+        ["proof-freshness", "next-action"],
+        [
+          "target/dev-test-game/proof-freshness-admin-proof.json",
+          "target/dev-test-game/next-action-admin-proof.json",
+        ],
+      ],
+    ],
+  );
   const rows = normalizeProofGraphReceiptArtifactRows({
     parentId: "admin-spine-terminal-batches",
     artifacts: [

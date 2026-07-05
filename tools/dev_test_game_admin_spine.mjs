@@ -87,6 +87,11 @@ import {
 import {
   nextActionAdminProofCase,
 } from "./dev_test_game_next_action_admin_proof.mjs";
+import {
+  terminalAdminProofBatchLabel,
+  terminalHostedIdentityNextActionAdminProofBatchLabel,
+  terminalRefreshAdminProofBatchLabel,
+} from "./dev_test_game_proof_graph_receipt_artifact_rows.mjs";
 import { releaseReadinessStep } from "./dev_test_game_spine_readiness_steps.mjs";
 import { runSpinePlan } from "./dev_test_game_spine_runner.mjs";
 
@@ -183,7 +188,7 @@ export const adminSpineHostedOpsInputReadinessEnv = {
 const devTestGameHostedIdentitySequenceStage = "hosted-identity";
 
 export const terminalAdminProofBatchPlan = {
-  label: "Terminal admin proof batch",
+  label: terminalAdminProofBatchLabel,
   reason: "terminal graph, freshness, and next-action admin surfaces share the generated proof graph inputs",
   cases: [
     proofGraphAdminProofCase,
@@ -193,13 +198,13 @@ export const terminalAdminProofBatchPlan = {
 };
 
 export const terminalRefreshAdminProofBatchPlan = {
-  label: "Terminal refresh admin proof batch",
+  label: terminalRefreshAdminProofBatchLabel,
   reason: "freshness and next-action admin surfaces share the refreshed next-action input",
   cases: [proofFreshnessAdminProofCase, nextActionAdminProofCase],
 };
 
 export const terminalHostedIdentityNextActionAdminProofBatchPlan = {
-  label: "Terminal hosted identity next-action admin proof batch",
+  label: terminalHostedIdentityNextActionAdminProofBatchLabel,
   reason:
     "hosted identity next-action input proves the promoted operator-aware admin rows before the default next-action receipt is restored",
   cases: [
@@ -274,7 +279,7 @@ export const devTestGameAdminSpinePlan = [
   {
     kind: "custom",
     script: "terminal-admin-proof-batch",
-    label: "Terminal admin proof batch",
+    label: terminalAdminProofBatchLabel,
   },
   releaseReadinessStep({
     reason: "terminal-graph-and-local-dependency-surfaces",
@@ -299,13 +304,13 @@ export const devTestGameAdminSpinePlan = [
   {
     kind: "custom",
     script: "terminal-hosted-identity-next-action-admin-proof-batch",
-    label: "Terminal hosted identity next-action admin proof batch",
+    label: terminalHostedIdentityNextActionAdminProofBatchLabel,
   },
   { kind: "node", script: "tools/dev_test_game_next_action.mjs" },
   {
     kind: "custom",
     script: "terminal-refresh-admin-proof-batch",
-    label: "Terminal refresh admin proof batch",
+    label: terminalRefreshAdminProofBatchLabel,
   },
   { kind: "node", script: "tools/dev_test_game_proof_graph.mjs" },
   { kind: "node", script: "tools/dev_test_game_proof_graph_admin_proof.mjs" },

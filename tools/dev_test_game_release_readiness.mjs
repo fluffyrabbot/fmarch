@@ -207,6 +207,8 @@ import {
 } from "./dev_test_game_proof_graph_feature_target_cases.mjs";
 import {
   hostedIdentityTerminalReceiptArtifactCase,
+  terminalProofGraphReceiptBatchRegistry,
+  terminalRefreshAdminProofBatchLabel,
 } from "./dev_test_game_proof_graph_receipt_artifact_rows.mjs";
 import {
   roleSurfaceSpineCases,
@@ -6500,30 +6502,7 @@ export function validateDevTestGameAdminSpineTerminalBatches(
   proof,
   options = {},
 ) {
-  const requiredBatches = [
-    {
-      label: "Terminal admin proof batch",
-      proofIds: ["proof-graph", "proof-freshness", "next-action"],
-      artifactPaths: [
-        "target/dev-test-game/proof-graph-admin-proof.json",
-        proofFreshnessAdminProofPath,
-        nextActionAdminProofPath,
-      ],
-    },
-    {
-      label: "Terminal hosted identity next-action admin proof batch",
-      proofIds: ["hosted-identity-next-action"],
-      artifactPaths: [hostedIdentityNextActionAdminProofPath],
-    },
-    {
-      label: "Terminal refresh admin proof batch",
-      proofIds: ["proof-freshness", "next-action"],
-      artifactPaths: [
-        proofFreshnessAdminProofPath,
-        nextActionAdminProofPath,
-      ],
-    },
-  ];
+  const requiredBatches = terminalProofGraphReceiptBatchRegistry;
   const requiredGeneratedFrom = {
     adminSpineProof: adminSpineProofPath,
     proofGraph: devTestGameProofGraphPath,
@@ -6576,8 +6555,13 @@ export function validateDevTestGameAdminSpineTerminalBatches(
   if (!Array.isArray(proof.batches) || proof.batches.length !== requiredBatches.length) {
     throw new Error("admin spine terminal batch proof count drifted");
   }
-  const hostedIdentityBatch = proof.batches[1];
-  const refreshBatch = proof.batches[2];
+  const hostedIdentityBatch = proof.batches.find(
+    (batch) =>
+      batch.label === hostedIdentityTerminalReceiptArtifactCase.batchLabel,
+  );
+  const refreshBatch = proof.batches.find(
+    (batch) => batch.label === terminalRefreshAdminProofBatchLabel,
+  );
   if (
     !hostedIdentityBatch?.artifactPaths?.includes(
       hostedIdentityNextActionAdminProofPath,

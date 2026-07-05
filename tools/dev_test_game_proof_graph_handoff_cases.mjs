@@ -35,10 +35,7 @@ import {
   adminSpineProofPath,
   adminSpineTerminalBatchProofPath,
   devTestGameReleaseReadinessPath,
-  devTestGameProofGraphAdminProofPath,
   devTestGameProofGraphPath,
-  hostedIdentityNextActionAdminProofPath,
-  nextActionAdminProofPath,
   nextActionPath,
   proofFreshnessAdminProofPath,
   spineManifestPath,
@@ -47,7 +44,9 @@ import {
   devTestGameProofGraphCommand,
 } from "./dev_test_game_proof_graph_paths.mjs";
 import {
-  hostedIdentityTerminalReceiptArtifactCase,
+  terminalProofGraphEdgeTargetIds,
+  terminalProofGraphReceiptArtifacts,
+  terminalProofGraphUniqueReceiptTargets,
 } from "./dev_test_game_proof_graph_receipt_artifact_rows.mjs";
 import {
   productionFeatureGraphSourceNodeId,
@@ -71,31 +70,20 @@ export const seedFixtureRecoveryCommand =
 export const seedProofLaneCoverageRecoveryReason =
   "seed-proof-lane-coverage-drift";
 export const terminalAdminProofBatchIds = Object.freeze([
-  "proof-graph",
-  "proof-freshness",
-  "next-action",
-  "hosted-identity-next-action",
+  ...terminalProofGraphUniqueReceiptTargets.map((target) => target.proofId),
 ]);
 export const terminalAdminProofBatchEdgeIds = Object.freeze([
-  "proof-graph",
-  "proof-freshness",
-  "next-action",
+  ...terminalProofGraphEdgeTargetIds,
 ]);
 export const terminalAdminProofBatchArtifactPaths = Object.freeze([
-  devTestGameProofGraphAdminProofPath,
-  proofFreshnessAdminProofPath,
-  nextActionAdminProofPath,
-  hostedIdentityNextActionAdminProofPath,
+  ...terminalProofGraphUniqueReceiptTargets.map((target) => target.artifactPath),
 ]);
 export const terminalAdminProofBatchReceiptArtifacts = Object.freeze(
-  terminalAdminProofBatchIds.map((proofId, index) =>
+  terminalProofGraphReceiptArtifacts.map((artifact) =>
     Object.freeze({
-      proofId,
-      artifactPath: terminalAdminProofBatchArtifactPaths[index],
-      batchLabel:
-        proofId === hostedIdentityTerminalReceiptArtifactCase.proofId
-          ? hostedIdentityTerminalReceiptArtifactCase.batchLabel
-          : "Terminal admin proof batch",
+      proofId: artifact.proofId,
+      artifactPath: artifact.artifactPath,
+      batchLabel: artifact.batchLabel,
     }),
   ),
 );
