@@ -1,3 +1,7 @@
+import {
+  hostedMatrixRawEvidenceContractSummary,
+} from "./dev_test_game_hosted_matrix_raw_evidence_contract.mjs";
+
 const devTestGameHostedEvidenceLaneCommand =
   "test:dev-test-game-hosted-evidence-lane";
 const devTestGameHostedMatrixExternalEvidencePath =
@@ -45,7 +49,7 @@ export function buildRealHostedEvidenceInputs({
       {
         name: "FMARCH_HOSTED_MATRIX_RAW_EVIDENCE_PATH",
         required: true,
-        description: "Raw hosted matrix evidence captured from the real target.",
+        description: hostedMatrixRawEvidenceContractSummary(),
       },
       {
         name: "FMARCH_HOSTED_MATRIX_EVIDENCE_PATH",

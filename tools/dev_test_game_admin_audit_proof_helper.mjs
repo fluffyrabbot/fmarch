@@ -1551,6 +1551,7 @@ async function waitForHostedHandoffBlockedReceipt({ page, expected }) {
     status: String(expected.status ?? ""),
     operatorAction: String(expected.operatorAction ?? ""),
     localVsHostedBoundary: String(expected.localVsHostedBoundary ?? ""),
+    rawEvidenceContractSummary: String(expected.rawEvidenceContractSummary ?? ""),
     nextProofTarget: String(expected.nextProofTarget ?? ""),
     missingRequiredInputs: Array.isArray(expected.missingRequiredInputs)
       ? expected.missingRequiredInputs.map((input) => String(input))
@@ -1567,11 +1568,12 @@ async function waitForHostedHandoffBlockedReceipt({ page, expected }) {
     receipt.status,
     receipt.operatorAction,
     receipt.localVsHostedBoundary,
+    receipt.rawEvidenceContractSummary,
     receipt.nextProofTarget,
     ...receipt.missingRequiredInputs,
     ...firstMissingOperatorArtifactText(receipt.firstMissingOperatorArtifact),
-  ]) {
-    if (value === "" || !text.includes(value)) {
+  ].filter((value) => value !== "")) {
+    if (!text.includes(value)) {
       throw new Error(
         `admin-audit-hosted-handoff-blocked-receipt missing expected text ${value}: ${text}`,
       );

@@ -21,6 +21,9 @@ import {
   hostedEvidenceRealHostedInputsFixture,
   hostedMatrixExternalEvidencePath,
 } from "./dev_test_game_hosted_handoff_cases.mjs";
+import {
+  hostedMatrixRawEvidenceContractSummary,
+} from "./dev_test_game_hosted_matrix_raw_evidence_contract.mjs";
 
 test("hosted evidence handoff cases share real hosted input and blocked check IDs", () => {
   const handoff = hostedEvidenceHandoffCase();
@@ -92,7 +95,7 @@ test("hosted evidence handoff cases share real hosted input and blocked check ID
       ["FMARCH_HOSTED_MATRIX_GROUP_ID", "Hosted matrix group to prove.", true],
       [
         "FMARCH_HOSTED_MATRIX_RAW_EVIDENCE_PATH",
-        "Raw hosted matrix evidence captured from the real target.",
+        hostedMatrixRawEvidenceContractSummary(),
         true,
       ],
       [
@@ -110,7 +113,7 @@ test("hosted evidence handoff cases share real hosted input and blocked check ID
     FMARCH_HOSTED_MATRIX_API_URL: "Externally reachable API base URL.",
     FMARCH_HOSTED_MATRIX_GROUP_ID: "Hosted matrix group to prove.",
     FMARCH_HOSTED_MATRIX_RAW_EVIDENCE_PATH:
-      "Raw hosted matrix evidence captured from the real target.",
+      hostedMatrixRawEvidenceContractSummary(),
     FMARCH_HOSTED_MATRIX_EVIDENCE_PATH:
       "Optional normalized hosted matrix evidence output path.",
   });

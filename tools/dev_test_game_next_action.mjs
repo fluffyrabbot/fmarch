@@ -183,6 +183,8 @@ export const devTestGameHostedIdentityOperatorSpineCommand =
   `npm run ${devTestGameHostedIdentityOperatorLocalSpineScript}`;
 const devTestGameHostSetupRoleUrl =
   "http://127.0.0.1:5173/g/<seeded-game>/setup";
+const frontendReadinessSummaryPath =
+  "target/frontend-readiness-summary/readiness-summary.json";
 
 export function buildDevTestGameNextAction(
   spineManifest,
@@ -200,6 +202,8 @@ export function buildDevTestGameNextAction(
     hostedTargetPreflightSource = devTestGameHostedTargetPreflightPath,
     proofGraph = null,
     proofGraphSource = devTestGameProofGraphPath,
+    frontendReadinessSummary = null,
+    frontendReadinessSummarySource = frontendReadinessSummaryPath,
     hostedIdentityProgressionProofs = {},
   } = {},
 ) {
@@ -217,6 +221,8 @@ export function buildDevTestGameNextAction(
       ? null
       : assertDevTestGameHostedTargetPreflight(hostedTargetPreflight);
   const graph = proofGraph === null ? null : assertProofGraphForNextAction(proofGraph);
+  const frontendSetupWorkbenchReadiness =
+    frontendSetupWorkbenchReadinessFromSummary(frontendReadinessSummary);
   const terminalBatchGraph = terminalBatchGraphFromProofGraph(graph);
   const nextActionHandoffPair = nextActionHandoffPairFromReadiness(readiness);
   const recoveryReceiptGraphs =
@@ -559,6 +565,12 @@ export function buildDevTestGameNextAction(
               (check) => check.status === "blocked",
             ).length,
           }),
+      ...(frontendSetupWorkbenchReadiness === null
+        ? {}
+        : {
+            frontendReadinessSummary: frontendReadinessSummarySource,
+            frontendSetupWorkbenchReadiness,
+          }),
       ...(graph === null
         ? {}
         : {
@@ -881,6 +893,17 @@ export function assertDevTestGameNextAction(evidence) {
     { label: "next-action host stale-control trace" },
   );
   assertTerminalBatchGraph(evidence.generatedFrom?.terminalBatchGraph);
+  if (evidence.generatedFrom?.frontendSetupWorkbenchReadiness !== undefined) {
+    assertFrontendSetupWorkbenchReadiness(
+      evidence.generatedFrom.frontendSetupWorkbenchReadiness,
+    );
+    if (
+      typeof evidence.generatedFrom.frontendReadinessSummary !== "string" ||
+      evidence.generatedFrom.frontendReadinessSummary.trim() === ""
+    ) {
+      throw new Error("next-action frontend readiness summary path is malformed");
+    }
+  }
   assertNextActionHandoffPairForNextAction(
     evidence.generatedFrom?.nextActionHandoffPair,
   );
@@ -929,6 +952,13 @@ export async function writeDevTestGameNextAction({
     process.env.FMARCH_DEV_TEST_GAME_PROOF_GRAPH ?? devTestGameProofGraphPath,
   );
   const proofGraph = await readOptionalJson(absoluteProofGraphPath);
+  const absoluteFrontendReadinessSummaryPath = path.resolve(
+    repoRoot,
+    process.env.FMARCH_FRONTEND_READINESS_SUMMARY ??
+      frontendReadinessSummaryPath,
+  );
+  const frontendReadinessSummary =
+    await readOptionalJson(absoluteFrontendReadinessSummaryPath);
   const hostedIdentityProgressionProofs =
     await readHostedIdentityProgressionProofs();
   const spineManifestSource = path.relative(repoRoot, absoluteManifestPath);
@@ -943,6 +973,10 @@ export async function writeDevTestGameNextAction({
     absoluteHostedTargetPreflightPath,
   );
   const proofGraphSource = path.relative(repoRoot, absoluteProofGraphPath);
+  const frontendReadinessSummarySource = path.relative(
+    repoRoot,
+    absoluteFrontendReadinessSummaryPath,
+  );
   const evidence = buildDevTestGameNextAction(manifest, {
     generatedAt,
     sequenceStage,
@@ -957,6 +991,8 @@ export async function writeDevTestGameNextAction({
     hostedTargetPreflightSource,
     proofGraph,
     proofGraphSource,
+    frontendReadinessSummary,
+    frontendReadinessSummarySource,
     hostedIdentityProgressionProofs,
   });
   await mkdir(path.dirname(nextActionJsonPath), { recursive: true });
@@ -1872,6 +1908,79 @@ function validHostedIdentityProgressionSelection(progression, checklist) {
     progression.proofBoundary === expected.proofBoundary &&
     ["missing", "stale"].includes(progression.artifactStatus)
   );
+}
+
+function frontendSetupWorkbenchReadinessFromSummary(summary) {
+  const workbench = summary?.shared?.hostSetupWorkbench;
+  if (workbench === null || typeof workbench !== "object") {
+    return null;
+  }
+  const normalized = {
+    id: String(workbench.requirement?.id ?? ""),
+    label: String(workbench.requirement?.label ?? ""),
+    state: String(workbench.requirement?.state ?? ""),
+    route: String(workbench.local?.route ?? ""),
+    localStatus: String(workbench.local?.status ?? ""),
+    importedStatus: String(workbench.imported?.status ?? ""),
+    localViewportLayouts: Array.isArray(workbench.local?.viewportLayouts)
+      ? workbench.local.viewportLayouts.map((entry) => ({
+          viewport: String(entry.viewport ?? ""),
+          layout: String(entry.layout ?? ""),
+          slotCount: Number(entry.slotCount ?? 0),
+          noHorizontalOverflow: entry.noHorizontalOverflow === true,
+          screenshot: String(entry.screenshot ?? ""),
+        }))
+      : [],
+    localScreenshotCount: Number(workbench.local?.screenshotCount ?? 0),
+    importedSetupCount: Number(workbench.imported?.setupCount ?? 0),
+    importedScreenshotCheckCount: Number(
+      workbench.imported?.screenshotCheckCount ?? 0,
+    ),
+    proofBoundary:
+      "Frontend readiness summary host-setup-workbench lane only; separates browser geometry proof from dev-test-game host setup role recovery and does not claim hosted, release, or production readiness.",
+  };
+  assertFrontendSetupWorkbenchReadiness(normalized);
+  return normalized;
+}
+
+function assertFrontendSetupWorkbenchReadiness(workbench) {
+  if (
+    workbench?.id !== "host-setup-workbench" ||
+    workbench.label !== "Host setup workbench geometry" ||
+    !["browser_proven", "browser_geometry_missing"].includes(workbench.state) ||
+    workbench.route !== "/g/midsummer/setup" ||
+    typeof workbench.localStatus !== "string" ||
+    typeof workbench.importedStatus !== "string" ||
+    !Array.isArray(workbench.localViewportLayouts) ||
+    workbench.localViewportLayouts.length < 3 ||
+    !Number.isInteger(workbench.localScreenshotCount) ||
+    !Number.isInteger(workbench.importedSetupCount) ||
+    !Number.isInteger(workbench.importedScreenshotCheckCount) ||
+    typeof workbench.proofBoundary !== "string" ||
+    !workbench.proofBoundary.includes("does not claim hosted")
+  ) {
+    throw new Error("next-action frontend setup workbench readiness is malformed");
+  }
+  const layouts = new Map(
+    workbench.localViewportLayouts.map((entry) => [entry.viewport, entry]),
+  );
+  for (const [viewport, layout] of [
+    ["mobile", "stacked"],
+    ["tablet", "co-located-columns"],
+    ["desktop", "co-located-columns"],
+  ]) {
+    const entry = layouts.get(viewport);
+    if (
+      entry === undefined ||
+      entry.layout !== layout ||
+      entry.slotCount < 2 ||
+      entry.noHorizontalOverflow !== true ||
+      typeof entry.screenshot !== "string" ||
+      !entry.screenshot.includes("host-setup")
+    ) {
+      throw new Error(`next-action frontend setup workbench ${viewport} layout drifted`);
+    }
+  }
 }
 
 function validHostedIdentityFamilyBatchPredicate(batch) {

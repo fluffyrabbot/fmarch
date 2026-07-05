@@ -343,6 +343,38 @@
         </ol>
       </section>
     {/if}
+    {#if data.audit.artifactSummary?.frontendSetupWorkbenchReadiness?.id}
+      <section
+        class="admin-audit-detail__group"
+        data-testid="admin-audit-detail-frontend-setup-workbench"
+      >
+        <h2>Frontend setup workbench</h2>
+        <ol class="admin-audit-detail__entries">
+          <li
+            class="admin-audit-detail__entry admin-audit-detail__entry--stack"
+            data-testid="admin-audit-frontend-setup-workbench-summary"
+          >
+            <strong>{data.audit.artifactSummary.frontendSetupWorkbenchReadiness.state}</strong>
+            <span>{data.audit.artifactSummary.frontendSetupWorkbenchReadiness.route}</span>
+            <span>{data.audit.artifactSummary.frontendSetupWorkbenchReadiness.localStatus}</span>
+            <span>{data.audit.artifactSummary.frontendSetupWorkbenchReadiness.importedStatus}</span>
+            <span>{data.audit.artifactSummary.frontendSetupWorkbenchReadiness.proofBoundary}</span>
+          </li>
+          {#each data.audit.artifactSummary.frontendSetupWorkbenchReadiness.localViewportLayouts as layout}
+            <li
+              class="admin-audit-detail__entry admin-audit-detail__entry--stack"
+              data-testid={`admin-audit-frontend-setup-workbench-${layout.viewport}`}
+            >
+              <strong>{layout.viewport}</strong>
+              <span>{layout.layout}</span>
+              <span>{layout.slotCount} slots</span>
+              <span>{layout.noHorizontalOverflow ? "no horizontal overflow" : "horizontal overflow"}</span>
+              <span>{layout.screenshot}</span>
+            </li>
+          {/each}
+        </ol>
+      </section>
+    {/if}
     {#if data.audit.scenarios?.length > 0}
       <ol class="admin-audit-detail__entries" data-testid="admin-audit-detail-scenarios">
         {#each data.audit.scenarios as scenario}
@@ -913,6 +945,9 @@
               <strong>{data.audit.hostedHandoffChecklist.blockedReceipt.status}</strong>
               <span>{data.audit.hostedHandoffChecklist.blockedReceipt.operatorAction}</span>
               <span>{data.audit.hostedHandoffChecklist.blockedReceipt.localVsHostedBoundary}</span>
+              {#if data.audit.hostedHandoffChecklist.blockedReceipt.rawEvidenceContractSummary}
+                <span>{data.audit.hostedHandoffChecklist.blockedReceipt.rawEvidenceContractSummary}</span>
+              {/if}
               <span>{data.audit.hostedHandoffChecklist.blockedReceipt.missingRequiredInputs.join(", ")}</span>
               <span>{data.audit.hostedHandoffChecklist.blockedReceipt.nextProofTarget}</span>
               {#if data.audit.hostedHandoffChecklist.blockedReceipt.firstMissingOperatorArtifact}

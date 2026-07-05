@@ -2390,6 +2390,7 @@ export function normalizeLocalNextActionAudit(nextAction, { game, proofGraph = n
     normalizeNextActionRecoveryReceiptGraph(
       nextAction.generatedFrom?.replacementPrivateRecoveryGraph,
     );
+  const generatedSummary = normalizeLocalNextActionGeneratedSummary(nextAction);
   const stability =
     action.stability !== null && typeof action.stability === "object"
       ? action.stability
@@ -2607,6 +2608,18 @@ export function normalizeLocalNextActionAudit(nextAction, { game, proofGraph = n
     ...normalizeLocalNextActionProofGraphDestinationSummaryTraceCheckRows({
       proofGraphDestinationSummaryTrace,
     }),
+    ...(generatedSummary.frontendSetupWorkbenchReadiness.id === ""
+      ? []
+      : [
+          Object.freeze({
+            id: "frontend-host-setup-workbench",
+            status: [
+              generatedSummary.frontendSetupWorkbenchReadiness.state,
+              generatedSummary.frontendSetupWorkbenchReadiness.localStatus,
+              generatedSummary.frontendSetupWorkbenchReadiness.importedStatus,
+            ].join(":"),
+          }),
+        ]),
     ...normalizeLocalNextActionProofGraphDiagnosticSummaryCheckRows({
       proofGraphDiagnosticSummaryTrace,
     }),
@@ -2642,7 +2655,6 @@ export function normalizeLocalNextActionAudit(nextAction, { game, proofGraph = n
       hostStaleControlTrace,
     ),
   ];
-  const generatedSummary = normalizeLocalNextActionGeneratedSummary(nextAction);
   return Object.freeze({
     id: localAdminAuditIds.nextAction,
     label: "Local next action",
@@ -2722,6 +2734,9 @@ export function normalizeLocalNextActionAudit(nextAction, { game, proofGraph = n
       selectionTrace,
       releaseReadinessChecklist: generatedSummary.releaseReadinessChecklist,
       releaseReadinessStatus: generatedSummary.releaseReadinessStatus,
+      frontendReadinessSummary: generatedSummary.frontendReadinessSummary,
+      frontendSetupWorkbenchReadiness:
+        generatedSummary.frontendSetupWorkbenchReadiness,
       unprovenCount: generatedSummary.unprovenCount,
       buildableUnprovenCount: generatedSummary.buildableUnprovenCount,
       localCheckCount: generatedSummary.localCheckCount,
@@ -3341,6 +3356,13 @@ export function normalizeLocalNextActionGeneratedSummary(nextAction) {
       nextAction?.generatedFrom?.releaseReadinessChecklist ?? "",
     ),
     releaseReadinessStatus: String(releaseReadinessSummary.status ?? "unknown"),
+    frontendReadinessSummary: String(
+      nextAction?.generatedFrom?.frontendReadinessSummary ?? "",
+    ),
+    frontendSetupWorkbenchReadiness:
+      normalizeFrontendSetupWorkbenchReadiness(
+        nextAction?.generatedFrom?.frontendSetupWorkbenchReadiness,
+      ),
     unprovenCount: Number(releaseReadinessSummary.unprovenCount ?? 0),
     buildableUnprovenCount: Number(
       releaseReadinessSummary.buildableUnprovenCount ?? 0,
@@ -3349,6 +3371,51 @@ export function normalizeLocalNextActionGeneratedSummary(nextAction) {
     buildableLocalDependencyCount: Number(
       releaseReadinessSummary.buildableLocalDependencyCount ?? 0,
     ),
+  });
+}
+
+function normalizeFrontendSetupWorkbenchReadiness(workbench) {
+  if (workbench === null || typeof workbench !== "object") {
+    return Object.freeze({
+      id: "",
+      label: "",
+      state: "",
+      route: "",
+      localStatus: "",
+      importedStatus: "",
+      localViewportLayouts: Object.freeze([]),
+      localScreenshotCount: 0,
+      importedSetupCount: 0,
+      importedScreenshotCheckCount: 0,
+      proofBoundary: "",
+    });
+  }
+  return Object.freeze({
+    id: String(workbench.id ?? ""),
+    label: String(workbench.label ?? ""),
+    state: String(workbench.state ?? ""),
+    route: String(workbench.route ?? ""),
+    localStatus: String(workbench.localStatus ?? ""),
+    importedStatus: String(workbench.importedStatus ?? ""),
+    localViewportLayouts: Object.freeze(
+      Array.isArray(workbench.localViewportLayouts)
+        ? workbench.localViewportLayouts.map((entry) =>
+            Object.freeze({
+              viewport: String(entry.viewport ?? ""),
+              layout: String(entry.layout ?? ""),
+              slotCount: Number(entry.slotCount ?? 0),
+              noHorizontalOverflow: entry.noHorizontalOverflow === true,
+              screenshot: String(entry.screenshot ?? ""),
+            }),
+          )
+        : [],
+    ),
+    localScreenshotCount: Number(workbench.localScreenshotCount ?? 0),
+    importedSetupCount: Number(workbench.importedSetupCount ?? 0),
+    importedScreenshotCheckCount: Number(
+      workbench.importedScreenshotCheckCount ?? 0,
+    ),
+    proofBoundary: String(workbench.proofBoundary ?? ""),
   });
 }
 
@@ -3673,6 +3740,10 @@ function normalizeHostedHandoffBlockedReceipt(receipt) {
     nextProofTarget: String(receipt.nextProofTarget ?? ""),
     operatorAction: String(receipt.operatorAction ?? ""),
     localVsHostedBoundary: String(receipt.localVsHostedBoundary ?? ""),
+    ...(typeof receipt.rawEvidenceContractSummary === "string" &&
+    receipt.rawEvidenceContractSummary.trim() !== ""
+      ? { rawEvidenceContractSummary: receipt.rawEvidenceContractSummary }
+      : {}),
     missingRequiredInputs: Object.freeze(
       (Array.isArray(receipt.missingRequiredInputs)
         ? receipt.missingRequiredInputs

@@ -98,6 +98,9 @@ import {
   buildRealHostedEvidenceInputs,
 } from "../../../../tools/dev_test_game_real_hosted_evidence_inputs.mjs";
 import {
+  hostedMatrixRawEvidenceContractSummary,
+} from "../../../../tools/dev_test_game_hosted_matrix_raw_evidence_contract.mjs";
+import {
   hostedOpsSignalCheckStatusRows,
 } from "../../../../tools/dev_test_game_hosted_ops_signal_cases.mjs";
 import {
@@ -2070,7 +2073,7 @@ test("admin local hosted matrix detail data carries progress and gap rows", asyn
       ["FMARCH_HOSTED_MATRIX_GROUP_ID", "Hosted matrix group to prove.", true],
       [
         "FMARCH_HOSTED_MATRIX_RAW_EVIDENCE_PATH",
-        "Raw hosted matrix evidence captured from the real target.",
+        hostedMatrixRawEvidenceContractSummary(),
         true,
       ],
       [
@@ -3240,6 +3243,52 @@ test("admin local next action detail data carries host setup artifact recovery r
   );
 });
 
+test("admin local next action detail distinguishes frontend setup workbench readiness", async () => {
+  const data = await buildAdminAuditDetailData({
+    audit: localAdminAuditIds.nextAction,
+    principalUserId: "admin_a",
+    capabilities: [{ kind: "GlobalAdmin" }],
+    nextAction: nextActionFixture({
+      actionStatus: "blocked",
+      reason: "artifact-not-fresh",
+      command: HOST_SETUP_PROOF_COMMAND,
+      frontendSetupWorkbenchReadiness: frontendSetupWorkbenchReadinessFixture(),
+      artifact: {
+        id: "host-setup-role",
+        label: "Host setup role proof",
+        path: "target/dev-test-game/host-setup-proof.json",
+        status: "stale",
+        refreshSource: "manifest-default",
+        proofTarget: "target/dev-test-game/host-setup-proof.json",
+        roleUrl: "http://127.0.0.1:5173/g/<seeded-game>/setup",
+        requiredEvidence:
+          "Fresh host setup seeded role proof artifact with setup route command recovery.",
+        buildSlice:
+          "Refresh only the host setup role URL proof before trusting host setup freshness.",
+        proofBoundary:
+          "Local host setup role proof freshness recovery only; does not prove the admin audit surface or release readiness.",
+      },
+    }),
+  });
+
+  assert.deepEqual(
+    data.audit.checks
+      .filter((check) => check.id === "frontend-host-setup-workbench")
+      .map((check) => check.status),
+    ["browser_proven:browser_proven:imported_browser_proven"],
+  );
+  assert.equal(
+    data.audit.artifactSummary.frontendReadinessSummary,
+    "target/frontend-readiness-summary/readiness-summary.json",
+  );
+  assert.deepEqual(
+    data.audit.artifactSummary.frontendSetupWorkbenchReadiness,
+    frontendSetupWorkbenchReadinessFixture(),
+  );
+  assert.equal(data.audit.localPrerequisites[0].id, "host-setup-role");
+  assert.equal(data.audit.localPrerequisites[0].status, "stale");
+});
+
 test("admin local next action detail data exposes hosted identity sequence deferral", async () => {
   const hostedIdentityCandidate = {
     id: "hosted-production-identity",
@@ -4251,7 +4300,7 @@ test("admin hosted evidence lane detail data carries blocked setup rows", async 
       ["FMARCH_HOSTED_MATRIX_GROUP_ID", "Hosted matrix group to prove.", true],
       [
         "FMARCH_HOSTED_MATRIX_RAW_EVIDENCE_PATH",
-        "Raw hosted matrix evidence captured from the real target.",
+        hostedMatrixRawEvidenceContractSummary(),
         true,
       ],
       [
@@ -4335,7 +4384,11 @@ test("admin hosted evidence lane detail data carries blocked setup rows", async 
   );
   assert.equal(
     data.audit.hostedHandoffChecklist.blockedReceipt.operatorAction,
-    "Configure the hosted frontend/API URLs plus a readable raw hosted matrix evidence JSON from that same deployment, then rerun npm run test:dev-test-game-hosted-evidence-lane.",
+    "Configure the hosted frontend/API URLs plus a readable raw hosted matrix evidence packet from that same deployment, then rerun npm run test:dev-test-game-hosted-evidence-lane.",
+  );
+  assert.equal(
+    data.audit.hostedHandoffChecklist.blockedReceipt.rawEvidenceContractSummary,
+    hostedMatrixRawEvidenceContractSummary(),
   );
   assert.equal(data.audit.artifactSummary.demoProofStatus, "passed");
   assert.equal(data.audit.artifactSummary.demoOnly, true);
@@ -6584,6 +6637,7 @@ function nextActionFixture({
   replacementActionRecoveryGraph,
   replacementHandoffRecoveryGraph,
   replacementPrivateRecoveryGraph,
+  frontendSetupWorkbenchReadiness,
 } = {}) {
   return {
     version: 1,
@@ -6678,6 +6732,13 @@ function nextActionFixture({
       seedProofLaneCoverageStatus: seedProofLaneCoverageTrace.status,
       seedProofLaneCoverageUnclassifiedCount:
         seedProofLaneCoverageTrace.unclassifiedLaneCount,
+      ...(frontendSetupWorkbenchReadiness === undefined
+        ? {}
+        : {
+            frontendReadinessSummary:
+              "target/frontend-readiness-summary/readiness-summary.json",
+            frontendSetupWorkbenchReadiness,
+          }),
     },
     nextAction: {
       command,
@@ -6709,6 +6770,45 @@ function nextActionFixture({
     raceCoveragePromotedMilestones,
     staleConflictMessageTrace,
     hostStaleControlTrace,
+  };
+}
+
+function frontendSetupWorkbenchReadinessFixture() {
+  return {
+    id: "host-setup-workbench",
+    label: "Host setup workbench geometry",
+    state: "browser_proven",
+    route: "/g/midsummer/setup",
+    localStatus: "browser_proven",
+    importedStatus: "imported_browser_proven",
+    localViewportLayouts: [
+      {
+        viewport: "mobile",
+        layout: "stacked",
+        slotCount: 2,
+        noHorizontalOverflow: true,
+        screenshot: "target/frontend-role-smoke/mobile-host-setup.png",
+      },
+      {
+        viewport: "tablet",
+        layout: "co-located-columns",
+        slotCount: 2,
+        noHorizontalOverflow: true,
+        screenshot: "target/frontend-role-smoke/tablet-host-setup.png",
+      },
+      {
+        viewport: "desktop",
+        layout: "co-located-columns",
+        slotCount: 2,
+        noHorizontalOverflow: true,
+        screenshot: "target/frontend-role-smoke/desktop-host-setup.png",
+      },
+    ],
+    localScreenshotCount: 3,
+    importedSetupCount: 3,
+    importedScreenshotCheckCount: 3,
+    proofBoundary:
+      "Frontend readiness summary host-setup-workbench lane only; separates browser geometry proof from dev-test-game host setup role recovery and does not claim hosted, release, or production readiness.",
   };
 }
 
@@ -7518,7 +7618,7 @@ function hostedBlockedReceiptFixture({ proofTarget, nextProofTarget }) {
         name: "FMARCH_HOSTED_MATRIX_RAW_EVIDENCE_PATH",
         value: null,
         required: true,
-        purpose: "Readable raw hosted matrix evidence captured from the real target.",
+        purpose: hostedMatrixRawEvidenceContractSummary(),
       },
     ],
     missingRequiredInputs: [
@@ -7527,7 +7627,8 @@ function hostedBlockedReceiptFixture({ proofTarget, nextProofTarget }) {
       "FMARCH_HOSTED_MATRIX_RAW_EVIDENCE_PATH",
     ],
     operatorAction:
-      "Configure the hosted frontend/API URLs plus a readable raw hosted matrix evidence JSON from that same deployment, then rerun npm run test:dev-test-game-hosted-evidence-lane.",
+      "Configure the hosted frontend/API URLs plus a readable raw hosted matrix evidence packet from that same deployment, then rerun npm run test:dev-test-game-hosted-evidence-lane.",
+    rawEvidenceContractSummary: hostedMatrixRawEvidenceContractSummary(),
     localVsHostedBoundary:
       "Local hosted-like matrix artifacts and synthetic demo evidence can prove the handoff path, but they cannot satisfy hosted deployment evidence.",
   };

@@ -5,9 +5,16 @@ import {
   assertDevTestGameHostedConcurrentRaceMatrixEvidence,
   devTestGameHostedConcurrentRaceMatrixPath,
 } from "./dev_test_game_hosted_concurrent_race_matrix.mjs";
+export {
+  DEV_TEST_GAME_HOSTED_MATRIX_RAW_EVIDENCE_VERSION,
+  hostedMatrixRawEvidenceContract,
+  hostedMatrixRawEvidenceContractSummary,
+} from "./dev_test_game_hosted_matrix_raw_evidence_contract.mjs";
+import {
+  DEV_TEST_GAME_HOSTED_MATRIX_RAW_EVIDENCE_VERSION,
+} from "./dev_test_game_hosted_matrix_raw_evidence_contract.mjs";
 import { repoRoot } from "./dev_test_game_spine_runner.mjs";
 
-export const DEV_TEST_GAME_HOSTED_MATRIX_RAW_EVIDENCE_VERSION = 1;
 export const devTestGameHostedMatrixRawEvidencePath =
   "target/dev-test-game/hosted-matrix-raw.json";
 export const devTestGameHostedMatrixRawEvidenceCommand =

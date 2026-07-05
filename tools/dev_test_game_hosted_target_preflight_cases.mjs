@@ -1,3 +1,7 @@
+import {
+  hostedMatrixRawEvidenceContractSummary,
+} from "./dev_test_game_hosted_matrix_raw_evidence_contract.mjs";
+
 export const devTestGameHostedTargetPreflightAdminProofPath =
   "target/dev-test-game/hosted-target-preflight-admin-proof.json";
 
@@ -22,10 +26,10 @@ export const hostedTargetPreflightMissingApiUrlRequiredEvidence =
   "Set FMARCH_HOSTED_MATRIX_API_URL to the externally reachable API base URL for the same hosted deployment, then rerun npm run test:dev-test-game-hosted-evidence-lane.";
 
 export const hostedTargetPreflightMissingRawEvidencePathRequiredEvidence =
-  "Set FMARCH_HOSTED_MATRIX_RAW_EVIDENCE_PATH to a readable raw hosted matrix evidence JSON captured from the same frontend/API/group, then rerun npm run test:dev-test-game-hosted-evidence-lane.";
+  `Set FMARCH_HOSTED_MATRIX_RAW_EVIDENCE_PATH to a readable ${hostedMatrixRawEvidenceContractSummary()} captured from the same externally reachable frontend/API/group, then rerun npm run test:dev-test-game-hosted-evidence-lane.`;
 
 export const hostedTargetPreflightSyntheticRawEvidenceRequiredEvidence =
-  "Replace synthetic demo raw evidence with raw hosted matrix evidence captured from a real externally reachable hosted target; synthetic demo evidence can only prove the local handoff shape.";
+  `Replace synthetic demo raw evidence with a real ${hostedMatrixRawEvidenceContractSummary()} captured from an externally reachable hosted target; synthetic demo evidence can only prove the local handoff shape.`;
 
 export function hostedTargetPreflightExternalTargetsRequiredEvidence({
   frontendBaseUrl = null,

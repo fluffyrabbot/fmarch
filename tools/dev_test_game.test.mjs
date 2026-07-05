@@ -482,6 +482,8 @@ import {
   buildDevTestGameHostedMatrixRawEvidence,
   devTestGameHostedMatrixRawEvidenceCommand,
   devTestGameHostedMatrixRawEvidencePath,
+  hostedMatrixRawEvidenceContract,
+  hostedMatrixRawEvidenceContractSummary,
 } from "./dev_test_game_hosted_matrix_raw_evidence.mjs";
 import {
   assertDevTestGameHostedTargetPreflight,
@@ -2679,6 +2681,19 @@ test("spine manifest gives host setup freshness artifacts focused recovery comma
         "Local host setup workbench role proof freshness recovery only; does not prove the admin audit surface, hosted setup behavior, release readiness, or production readiness.",
     },
   });
+  const nextActionWithFrontendReadiness = buildDevTestGameNextAction(manifest, {
+    generatedAt: "2026-06-26T00:00:01.000Z",
+    frontendReadinessSummary: frontendReadinessSummaryFixture(),
+  });
+  assertDevTestGameNextAction(nextActionWithFrontendReadiness);
+  assert.equal(
+    nextActionWithFrontendReadiness.generatedFrom.frontendReadinessSummary,
+    "target/frontend-readiness-summary/readiness-summary.json",
+  );
+  assert.deepEqual(
+    nextActionWithFrontendReadiness.generatedFrom.frontendSetupWorkbenchReadiness,
+    frontendSetupWorkbenchReadinessFixture(),
+  );
   const adminOnlyManifest = buildDevTestGameSpineManifest({
     generatedAt: "2026-06-26T00:00:00.000Z",
     proofFreshness: {
@@ -22663,8 +22678,7 @@ function hostedTargetPreflightFixture({
             name: "FMARCH_HOSTED_MATRIX_RAW_EVIDENCE_PATH",
             value: null,
             required: true,
-            purpose:
-              "Readable raw hosted matrix evidence captured from the real target.",
+            purpose: hostedMatrixRawEvidenceContractSummary(),
           },
         ],
         missingRequiredInputs: [
@@ -22673,7 +22687,9 @@ function hostedTargetPreflightFixture({
           "FMARCH_HOSTED_MATRIX_RAW_EVIDENCE_PATH",
         ],
         operatorAction:
-          "Configure the hosted frontend/API URLs plus a readable raw hosted matrix evidence JSON from that same deployment, then rerun npm run test:dev-test-game-hosted-evidence-lane.",
+          "Configure the hosted frontend/API URLs plus a readable raw hosted matrix evidence packet from that same deployment, then rerun npm run test:dev-test-game-hosted-evidence-lane.",
+        rawEvidenceContractSummary: hostedMatrixRawEvidenceContractSummary(),
+        rawEvidenceContract: hostedMatrixRawEvidenceContract,
         localVsHostedBoundary:
           "Local hosted-like matrix artifacts and synthetic demo evidence can prove the handoff path, but they cannot satisfy hosted deployment evidence.",
       };

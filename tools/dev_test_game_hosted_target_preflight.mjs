@@ -4,6 +4,8 @@ import { pathToFileURL } from "node:url";
 import {
   assertDevTestGameHostedMatrixRawEvidence,
   defaultHostedMatrixRawGroupId,
+  hostedMatrixRawEvidenceContract,
+  hostedMatrixRawEvidenceContractSummary,
 } from "./dev_test_game_hosted_matrix_raw_evidence.mjs";
 import {
   devTestGameHostedMatrixExternalEvidenceCommand,
@@ -264,6 +266,15 @@ function assertBlockedReceipt(receipt, { blockedCheckIds }) {
   if (JSON.stringify(receipt.blockedCheckIds) !== JSON.stringify(blockedCheckIds)) {
     throw new Error("hosted target preflight blocked receipt check ids drifted");
   }
+  if (
+    receipt.rawEvidenceContractSummary !== hostedMatrixRawEvidenceContractSummary() ||
+    receipt.rawEvidenceContract?.proof !== hostedMatrixRawEvidenceContract.proof ||
+    receipt.rawEvidenceContract?.status !== hostedMatrixRawEvidenceContract.status ||
+    !Array.isArray(receipt.rawEvidenceContract.requiredTopLevelFields) ||
+    !receipt.rawEvidenceContract.requiredTopLevelFields.includes("observations")
+  ) {
+    throw new Error("hosted target preflight blocked receipt raw evidence contract drifted");
+  }
   const missingRequiredInputs = receipt.requiredInputs
     .filter((input) => input?.required === true && input.value === null)
     .map((input) => input.name);
@@ -316,7 +327,7 @@ async function readRawEvidence({ rawEvidencePath, frontendBaseUrl, apiBaseUrl, g
   } catch (error) {
     return {
       status: "blocked",
-      requiredEvidence: `Readable raw hosted matrix evidence JSON matching FMARCH_HOSTED_MATRIX_FRONTEND_URL, FMARCH_HOSTED_MATRIX_API_URL, and FMARCH_HOSTED_MATRIX_GROUP_ID; observed ${rawEvidencePath}: ${error.message}. Rerun npm run test:dev-test-game-hosted-evidence-lane after replacing it.`,
+      requiredEvidence: `Readable ${hostedMatrixRawEvidenceContractSummary()} matching FMARCH_HOSTED_MATRIX_FRONTEND_URL, FMARCH_HOSTED_MATRIX_API_URL, and FMARCH_HOSTED_MATRIX_GROUP_ID; observed ${rawEvidencePath}: ${error.message}. Rerun npm run test:dev-test-game-hosted-evidence-lane after replacing it.`,
     };
   }
 }
@@ -355,8 +366,7 @@ function buildBlockedReceipt({
       name: "FMARCH_HOSTED_MATRIX_RAW_EVIDENCE_PATH",
       value: rawEvidencePath,
       required: true,
-      purpose:
-        "Readable raw hosted matrix evidence captured from a real externally reachable target.",
+      purpose: hostedMatrixRawEvidenceContractSummary(),
     },
     {
       name: "FMARCH_HOSTED_MATRIX_EVIDENCE_PATH",
@@ -375,8 +385,10 @@ function buildBlockedReceipt({
     missingRequiredInputs: requiredInputs
       .filter((input) => input.required && input.value === null)
       .map((input) => input.name),
+    rawEvidenceContractSummary: hostedMatrixRawEvidenceContractSummary(),
+    rawEvidenceContract: hostedMatrixRawEvidenceContract,
     operatorAction:
-      "Configure the hosted frontend/API URLs plus a readable raw hosted matrix evidence JSON from that same deployment, then rerun npm run test:dev-test-game-hosted-evidence-lane.",
+      "Configure the hosted frontend/API URLs plus a readable raw hosted matrix evidence packet from that same deployment, then rerun npm run test:dev-test-game-hosted-evidence-lane.",
     localVsHostedBoundary:
       "Local hosted-like matrix artifacts and synthetic demo evidence can prove the handoff path, but they cannot satisfy hosted deployment evidence.",
   };
