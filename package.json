@@ -29,6 +29,7 @@
     "test:dev-test-game-identity-admin-proof": "node tools/dev_test_game_identity_admin_proof.mjs",
     "test:dev-test-game-hosted-identity-evidence": "node tools/dev_test_game_hosted_identity_evidence.mjs",
     "test:dev-test-game-hosted-identity-evidence-admin-proof": "node tools/dev_test_game_hosted_identity_evidence_admin_proof.mjs",
+    "test:dev-test-game-hosted-identity-partial-admin-proof": "node tools/dev_test_game_hosted_identity_partial_admin_proof.mjs",
     "test:dev-test-game-admin-spine-proof": "node tools/dev_test_game_admin_spine_proof.mjs",
     "test:dev-test-game-admin-spine-admin-proof": "node tools/dev_test_game_admin_spine_admin_proof.mjs",
     "test:dev-test-game-spine-manifest": "node tools/dev_test_game_spine_manifest.mjs",

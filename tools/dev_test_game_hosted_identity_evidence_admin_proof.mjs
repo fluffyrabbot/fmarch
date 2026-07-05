@@ -1,11 +1,14 @@
+import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { assertDevTestGameProofRun } from "./dev_test_game_proof_contract.mjs";
 import {
   assertDevTestGameHostedIdentityEvidence,
+  buildDevTestGameHostedIdentityEvidence,
 } from "./dev_test_game_hosted_identity_evidence.mjs";
 import {
   hostedIdentityEvidencePlaceholderFixturePath,
+  hostedIdentityEvidenceOperatorPartialFixturePath,
   hostedIdentityEvidenceInputIds,
   hostedIdentityEvidenceInputSectionStatuses,
   hostedIdentityEvidenceSectionInputRows,
@@ -37,15 +40,15 @@ const proofRunPath = path.resolve(
   process.env.FMARCH_DEV_TEST_GAME_PROOF_RUN ??
     "target/dev-test-game/proof-run.json",
 );
-const hostedIdentityEvidenceRelativePath = path.relative(
-  repoRoot,
-  hostedIdentityEvidencePath,
-);
 const proofRunRelativePath = path.relative(repoRoot, proofRunPath);
 const evidencePath = path.join(
   artifactDir,
   "hosted-identity-evidence-admin-proof.json",
 );
+export const hostedIdentityEvidencePartialPath =
+  "target/dev-test-game/hosted-identity-evidence-partial.json";
+export const hostedIdentityEvidencePartialAdminProofPath =
+  "target/dev-test-game/hosted-identity-evidence-partial-admin-proof.json";
 const requiredRelatedLinks = ["local-identity-adapter", "local-next-action"];
 
 function hostedIdentityPacketSectionRows(hostedIdentityEvidence) {
@@ -140,18 +143,25 @@ function hostedIdentityHandoffPath(hostedIdentityEvidence) {
   });
 }
 
-export function hostedIdentityEvidenceAdminProofCase() {
+export function hostedIdentityEvidenceAdminProofCase({
+  sourcePath = hostedIdentityEvidencePath,
+  proofPath = evidencePath,
+  smokeName = "dev-test-game-hosted-identity-evidence-admin-proof",
+  stage = "hosted-identity-evidence-admin-proof-listen",
+} = {}) {
+  const sourceRelativePath = path.relative(repoRoot, sourcePath);
+  const proofRelativePath = path.relative(repoRoot, proofPath);
   return {
-    smokeName: "dev-test-game-hosted-identity-evidence-admin-proof",
-    stage: "hosted-identity-evidence-admin-proof-listen",
-    evidencePath,
+    smokeName,
+    stage,
+    evidencePath: proofPath,
     envOverrides: {
       FMARCH_DEV_TEST_GAME_HOSTED_IDENTITY_EVIDENCE:
-        hostedIdentityEvidenceRelativePath,
+        sourceRelativePath,
     },
     loadSource: async () => ({
       hostedIdentityEvidence: assertDevTestGameHostedIdentityEvidence(
-        await readJson(hostedIdentityEvidencePath),
+        await readJson(sourcePath),
       ),
       proofRun: assertDevTestGameProofRun(await readJson(proofRunPath)),
     }),
@@ -270,8 +280,9 @@ export function hostedIdentityEvidenceAdminProofCase() {
       proofBoundary:
         "Local SvelteKit admin role URL with fixture admin authority over the hosted identity evidence handoff. Proves the hosted identity evidence receipt is discoverable from the seeded admin overview and inspectable in a native admin audit detail route with blocked hosted account, invite, recovery, abuse/rate-limit, session-secret, and audit-retention rows visible; it does not prove hosted identity, beta readiness, release readiness, or production readiness.",
       generatedFrom: {
-        hostedIdentityEvidence: hostedIdentityEvidenceRelativePath,
+        hostedIdentityEvidence: sourceRelativePath,
         proofRun: proofRunRelativePath,
+        proofArtifact: proofRelativePath,
         game: source.proofRun.session.game,
         status: source.hostedIdentityEvidence.status,
         rawEvidencePath: source.hostedIdentityEvidence.target.rawEvidencePath,
@@ -368,6 +379,37 @@ export function hostedIdentityEvidenceAdminProofCase() {
 
 if (pathToFileURL(process.argv[1] ?? "").href === import.meta.url) {
   await runAdminAuditProof(hostedIdentityEvidenceAdminProofCase());
+}
+
+export async function writeHostedIdentityPartialOperatorAdminProof() {
+  const partialEvidencePath = path.resolve(
+    repoRoot,
+    hostedIdentityEvidencePartialPath,
+  );
+  const partialAdminProofPath = path.resolve(
+    repoRoot,
+    hostedIdentityEvidencePartialAdminProofPath,
+  );
+  const partialEvidence = await buildDevTestGameHostedIdentityEvidence({
+    env: {
+      FMARCH_HOSTED_IDENTITY_EVIDENCE_PATH:
+        hostedIdentityEvidenceOperatorPartialFixturePath,
+    },
+  });
+  await writePartialEvidence(partialEvidencePath, partialEvidence);
+  await runAdminAuditProof(
+    hostedIdentityEvidenceAdminProofCase({
+      sourcePath: partialEvidencePath,
+      proofPath: partialAdminProofPath,
+      smokeName: "dev-test-game-hosted-identity-partial-admin-proof",
+      stage: "hosted-identity-partial-admin-proof-listen",
+    }),
+  );
+}
+
+async function writePartialEvidence(filePath, evidence) {
+  await mkdir(path.dirname(filePath), { recursive: true });
+  await writeFile(filePath, `${JSON.stringify(evidence, null, 2)}\n`);
 }
 
 export function assertHostedIdentityEvidenceAdminProof(evidence) {
@@ -507,6 +549,21 @@ export function assertHostedIdentityEvidenceAdminProof(evidence) {
         );
       }
     }
+    const expectedFirstMissing =
+      expectedBlockedReceipt.firstMissingOperatorArtifact;
+    if (expectedFirstMissing !== undefined) {
+      const visibleFirstMissing = visibleReceipt.firstMissingOperatorArtifact;
+      if (
+        visibleFirstMissing === null ||
+        visibleFirstMissing === undefined ||
+        JSON.stringify(visibleFirstMissing) !==
+          JSON.stringify(normalizeVisibleFirstMissing(expectedFirstMissing))
+      ) {
+        throw new Error(
+          "hosted identity evidence admin proof first missing artifact drifted",
+        );
+      }
+    }
   }
   assertGeneratedAdminProofHandoffPath({
     proof: evidence,
@@ -595,4 +652,26 @@ export function assertHostedIdentityEvidenceAdminProof(evidence) {
     surfaceKey: "visibleRelatedLinks",
   });
   return evidence;
+}
+
+function normalizeVisibleFirstMissing(artifact) {
+  const drilldown = artifact.roleSurfaceDrilldown ?? {};
+  return {
+    inputId: String(artifact.inputId ?? ""),
+    checkId: String(artifact.checkId ?? ""),
+    sectionId: String(artifact.sectionId ?? ""),
+    sectionLabel: String(artifact.sectionLabel ?? ""),
+    requiredEvidence: String(artifact.requiredEvidence ?? ""),
+    purpose: String(artifact.purpose ?? ""),
+    proofTarget: String(artifact.proofTarget ?? ""),
+    roleSurfaceDrilldown: {
+      localCapabilityRoleUrl: String(drilldown.localCapabilityRoleUrl ?? ""),
+      handoffRoleUrl: String(drilldown.handoffRoleUrl ?? ""),
+      proofGraphNodeId: String(drilldown.proofGraphNodeId ?? ""),
+      productionFeatureGraphNodeId: String(
+        drilldown.productionFeatureGraphNodeId ?? "",
+      ),
+      proofGraphEvidencePath: String(drilldown.proofGraphEvidencePath ?? ""),
+    },
+  };
 }

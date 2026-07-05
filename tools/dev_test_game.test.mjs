@@ -599,6 +599,12 @@ test("dev test-game spine orchestrators expose stable proof order and env maps",
     packageJson.scripts["test:dev-test-game-next-action:hosted-identity"],
     "FMARCH_DEV_TEST_GAME_SEQUENCE_STAGE=hosted-identity npm run test:dev-test-game-next-action",
   );
+  assert.equal(
+    packageJson.scripts[
+      "test:dev-test-game-hosted-identity-partial-admin-proof"
+    ],
+    "node tools/dev_test_game_hosted_identity_partial_admin_proof.mjs",
+  );
   for (const descriptor of recoveryReceiptGraphDescriptors) {
     assert.equal(
       packageJson.scripts[descriptor.proofCommand],
