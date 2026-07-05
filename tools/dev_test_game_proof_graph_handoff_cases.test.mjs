@@ -13,6 +13,10 @@ import {
   adminProofDestinationRequirements,
   devTestGameProofGraphBaseEdges,
   devTestGameProofGraphFirstClassNodes,
+  proofGraphProductionFeatureEdge,
+  proofGraphProductionFeatureNode,
+  proofGraphRecoveryReceiptEdges,
+  proofGraphRecoveryReceiptNodes,
   seedFixtureRecoveryCommand,
   seedProofLaneCoverageRecoveryReason,
   spineManifestAdminProofCommand,
@@ -250,6 +254,92 @@ test("proof graph base edges share fixed topology and seed recovery metadata", (
       })),
     ],
   );
+});
+
+test("proof graph feature and recovery receipt helpers preserve fixture graph shape", () => {
+  const featureCase = {
+    id: "production-feature:future-feature",
+    label: "Production feature: future-feature",
+    featureSlotId: "future-feature",
+    status: "passed",
+    artifact: "target/dev-test-game/release-readiness-checklist.json",
+    roleUrl: "/admin/audit/local-core-loop?game=<seeded-game>",
+    provingNodeId: "admin-proof:core-loop",
+    targetRoleUrl: "/g/<seeded-game>/player-a",
+    browserProofCommand: "npm run test:dev-test-game-live",
+    coverageDecision: { kind: "covered", proofCommand: "npm run proof" },
+  };
+  assert.deepEqual(proofGraphProductionFeatureNode(featureCase), {
+    id: "production-feature:future-feature",
+    label: "Production feature: future-feature",
+    kind: "production-feature-spine-target",
+    status: "passed",
+    artifact: "target/dev-test-game/release-readiness-checklist.json",
+    roleUrl: "/admin/audit/local-core-loop?game=<seeded-game>",
+    targetRoleUrl: "/g/<seeded-game>/player-a",
+    browserProofCommand: "npm run test:dev-test-game-live",
+    coverageDecision: { kind: "covered", proofCommand: "npm run proof" },
+  });
+  assert.deepEqual(proofGraphProductionFeatureEdge(featureCase), {
+    from: "admin-proof:core-loop",
+    to: "production-feature:future-feature",
+    relationship: "proves-production-feature",
+    featureSlotId: "future-feature",
+    targetRoleUrl: "/g/<seeded-game>/player-a",
+    command: "npm run test:dev-test-game-live",
+  });
+
+  const receiptCases = [
+    {
+      graph: {
+        nodeId: "future-recovery-receipt",
+        status: "passed",
+        proofTarget: "target/dev-test-game/future-recovery-receipt.json",
+        roleUrl: "/admin/audit/local-core-loop?game=<seeded-game>",
+        familyId: "future-recovery",
+        laneCount: 2,
+        laneIds: ["future-a", "future-b"],
+        normalizedEvidenceObjects: [{ name: "evidence-a" }],
+      },
+      label: "Future recovery receipt",
+      kind: "future-recovery-receipt",
+      recoveryCommand: "npm run test:future-recovery",
+      provingNodeId: "admin-proof:core-loop",
+    },
+  ];
+  assert.deepEqual(proofGraphRecoveryReceiptNodes(receiptCases), [
+    {
+      id: "future-recovery-receipt",
+      label: "Future recovery receipt",
+      kind: "future-recovery-receipt",
+      status: "passed",
+      artifact: "target/dev-test-game/future-recovery-receipt.json",
+      roleUrl: "/admin/audit/local-core-loop?game=<seeded-game>",
+      proofCommand: "npm run test:future-recovery",
+      recoveryCommand: "npm run test:future-recovery",
+      familyId: "future-recovery",
+      laneCount: 2,
+      laneIds: ["future-a", "future-b"],
+      normalizedEvidenceObjects: [{ name: "evidence-a" }],
+    },
+  ]);
+  assert.deepEqual(proofGraphRecoveryReceiptEdges(receiptCases), [
+    {
+      from: "admin-proof:core-loop",
+      to: "future-recovery-receipt",
+      relationship: "proves",
+    },
+    {
+      from: "future-recovery-receipt",
+      to: "proof-graph",
+      relationship: "records",
+    },
+    {
+      from: "future-recovery-receipt",
+      to: "next-action",
+      relationship: "summarizes-into",
+    },
+  ]);
 });
 
 test("admin proof destination handoff cases carry shared row requirements", () => {

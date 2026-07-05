@@ -137,6 +137,10 @@ import {
   adminProofDestinationRequirementRoleRows,
   devTestGameProofGraphBaseEdges,
   devTestGameProofGraphFirstClassNodes,
+  proofGraphProductionFeatureEdge,
+  proofGraphProductionFeatureNode,
+  proofGraphRecoveryReceiptEdges,
+  proofGraphRecoveryReceiptNodes,
 } from "../../../../tools/dev_test_game_proof_graph_handoff_cases.mjs";
 import {
   featureSpineFixture,
@@ -5840,31 +5844,6 @@ function proofGraphProductionFeatureCase() {
   };
 }
 
-function proofGraphProductionFeatureNode(featureCase) {
-  return {
-    id: featureCase.id,
-    label: featureCase.label,
-    kind: "production-feature-spine-target",
-    status: featureCase.status,
-    artifact: featureCase.artifact,
-    roleUrl: featureCase.roleUrl,
-    targetRoleUrl: featureCase.targetRoleUrl,
-    browserProofCommand: featureCase.browserProofCommand,
-    coverageDecision: featureCase.coverageDecision,
-  };
-}
-
-function proofGraphProductionFeatureEdge(featureCase) {
-  return {
-    from: featureCase.provingNodeId,
-    to: featureCase.id,
-    relationship: "proves-production-feature",
-    featureSlotId: featureCase.featureSlotId,
-    targetRoleUrl: featureCase.targetRoleUrl,
-    command: featureCase.browserProofCommand,
-  };
-}
-
 function proofGraphRecoveryReceiptCases() {
   return [
     {
@@ -5881,55 +5860,6 @@ function proofGraphRecoveryReceiptCases() {
       recoveryCommand:
         "test:dev-test-game-replacement-private-recovery-receipt",
       provingNodeId: "admin-proof:hardening",
-    },
-  ];
-}
-
-function proofGraphRecoveryReceiptNodes(recoveryReceiptCases) {
-  return recoveryReceiptCases.map(({ graph, label, kind, recoveryCommand }) =>
-    recoveryReceiptProofGraphNode({ graph, label, kind, recoveryCommand }),
-  );
-}
-
-function proofGraphRecoveryReceiptEdges(recoveryReceiptCases) {
-  return recoveryReceiptCases.flatMap(({ graph, provingNodeId }) =>
-    recoveryReceiptProofGraphEdges({ graph, provingNodeId }),
-  );
-}
-
-function recoveryReceiptProofGraphNode({ graph, label, kind, recoveryCommand }) {
-  return {
-    id: graph.nodeId,
-    label,
-    kind,
-    status: graph.status,
-    artifact: graph.proofTarget,
-    roleUrl: graph.roleUrl,
-    proofCommand: recoveryCommand,
-    recoveryCommand,
-    familyId: graph.familyId,
-    laneCount: graph.laneCount,
-    laneIds: graph.laneIds,
-    normalizedEvidenceObjects: graph.normalizedEvidenceObjects,
-  };
-}
-
-function recoveryReceiptProofGraphEdges({ graph, provingNodeId }) {
-  return [
-    {
-      from: provingNodeId,
-      to: graph.nodeId,
-      relationship: "proves",
-    },
-    {
-      from: graph.nodeId,
-      to: "proof-graph",
-      relationship: "records",
-    },
-    {
-      from: graph.nodeId,
-      to: "next-action",
-      relationship: "summarizes-into",
     },
   ];
 }

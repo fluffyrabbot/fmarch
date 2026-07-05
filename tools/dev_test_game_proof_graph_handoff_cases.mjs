@@ -405,6 +405,85 @@ export function adminProofDestinationProofGraphNodes({
   );
 }
 
+export function proofGraphProductionFeatureNode(featureCase) {
+  return Object.freeze({
+    id: featureCase.id,
+    label: featureCase.label,
+    kind: "production-feature-spine-target",
+    status: featureCase.status,
+    artifact: featureCase.artifact,
+    roleUrl: featureCase.roleUrl,
+    targetRoleUrl: featureCase.targetRoleUrl,
+    browserProofCommand: featureCase.browserProofCommand,
+    coverageDecision: featureCase.coverageDecision,
+  });
+}
+
+export function proofGraphProductionFeatureEdge(featureCase) {
+  return proofGraphEdge({
+    from: featureCase.provingNodeId,
+    to: featureCase.id,
+    relationship: "proves-production-feature",
+    featureSlotId: featureCase.featureSlotId,
+    targetRoleUrl: featureCase.targetRoleUrl,
+    command: featureCase.browserProofCommand,
+  });
+}
+
+export function proofGraphRecoveryReceiptNodes(recoveryReceiptCases) {
+  return recoveryReceiptCases.map(({ graph, label, kind, recoveryCommand }) =>
+    proofGraphRecoveryReceiptNode({ graph, label, kind, recoveryCommand }),
+  );
+}
+
+export function proofGraphRecoveryReceiptEdges(recoveryReceiptCases) {
+  return recoveryReceiptCases.flatMap(({ graph, provingNodeId }) =>
+    proofGraphRecoveryReceiptEdgeRows({ graph, provingNodeId }),
+  );
+}
+
+export function proofGraphRecoveryReceiptNode({
+  graph,
+  label,
+  kind,
+  recoveryCommand,
+}) {
+  return Object.freeze({
+    id: graph.nodeId,
+    label,
+    kind,
+    status: graph.status,
+    artifact: graph.proofTarget,
+    roleUrl: graph.roleUrl,
+    proofCommand: recoveryCommand,
+    recoveryCommand,
+    familyId: graph.familyId,
+    laneCount: graph.laneCount,
+    laneIds: graph.laneIds,
+    normalizedEvidenceObjects: graph.normalizedEvidenceObjects,
+  });
+}
+
+function proofGraphRecoveryReceiptEdgeRows({ graph, provingNodeId }) {
+  return Object.freeze([
+    proofGraphEdge({
+      from: provingNodeId,
+      to: graph.nodeId,
+      relationship: "proves",
+    }),
+    proofGraphEdge({
+      from: graph.nodeId,
+      to: "proof-graph",
+      relationship: "records",
+    }),
+    proofGraphEdge({
+      from: graph.nodeId,
+      to: "next-action",
+      relationship: "summarizes-into",
+    }),
+  ]);
+}
+
 export function adminProofDestinationArtifactPath(linkId) {
   const proofId = adminProofDestinationProofId(linkId);
   return `target/dev-test-game/${proofId}-admin-proof.json`;
