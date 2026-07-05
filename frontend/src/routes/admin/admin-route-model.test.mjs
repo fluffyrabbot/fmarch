@@ -71,9 +71,11 @@ import {
   hostedEvidenceRealHostedInputsFixture,
 } from "../../../../tools/dev_test_game_hosted_handoff_cases.mjs";
 import {
+  hostedMatrixReconnectLaneIds,
   hostedMatrixRealHostedEvidenceCommand,
   hostedMatrixExternalEvidenceProofTarget,
   hostedMatrixRealHostedHandoffChecklist,
+  hostedMatrixStaleConflictLaneIds,
 } from "../../../../tools/dev_test_game_hosted_concurrent_race_matrix_cases.mjs";
 import {
   buildRealHostedEvidenceInputs,
@@ -773,8 +775,8 @@ test("admin route data exposes local hosted ops signals as a native audit row", 
   assert.deepEqual(ops.artifactSummary, {
     game: "game-a",
     cellCount: 16,
-    reconnectLaneCount: 10,
-    staleConflictLaneCount: 4,
+    reconnectLaneCount: hostedMatrixReconnectLaneIds.length,
+    staleConflictLaneCount: hostedMatrixStaleConflictLaneIds.length,
     realHostedDeploymentStatus: "unproven",
     releaseReady: false,
     productionReady: false,
@@ -1728,27 +1730,11 @@ test("admin route data exposes local hosted matrix as a native audit row", async
   });
   assert.deepEqual(
     matrix.reconnectLanes.map((lane) => [lane.id, lane.status]),
-    [
-      ["reconnect-recovery", "passed"],
-      ["replacement-reconnect-recovery", "passed"],
-      ["replacement-action-reconnect", "passed"],
-      ["replacement-stale-private-post-reconnect", "passed"],
-      ["stale-action-reconnect-recovery", "passed"],
-      ["stale-host-complete-reconnect-recovery", "passed"],
-      ["stale-host-resolve-reconnect-recovery", "passed"],
-      ["stale-host-advance-reconnect-recovery", "passed"],
-      ["stale-host-deadline-reconnect-recovery", "passed"],
-      ["stale-cohost-deadline-reconnect-recovery", "passed"],
-    ],
+    hostedMatrixReconnectLaneIds.map((laneId) => [laneId, "passed"]),
   );
   assert.deepEqual(
     matrix.staleConflictLanes.map((lane) => [lane.id, lane.status]),
-    [
-      ["replacement-stale-conflict-message", "passed"],
-      ["stale-action-conflict-message", "passed"],
-      ["stale-dead-action-conflict", "passed"],
-      ["stale-host-control", "passed"],
-    ],
+    hostedMatrixStaleConflictLaneIds.map((laneId) => [laneId, "passed"]),
   );
   assert.deepEqual(
     matrix.unproven.map((item) => [item.id, item.status]),
@@ -1764,8 +1750,8 @@ test("admin route data exposes local hosted matrix as a native audit row", async
       cellCount: 3,
       passedCellCount: 3,
       reloadCoveredCellCount: 3,
-      reconnectLaneCount: 10,
-      staleConflictLaneCount: 4,
+      reconnectLaneCount: hostedMatrixReconnectLaneIds.length,
+      staleConflictLaneCount: hostedMatrixStaleConflictLaneIds.length,
       hostedEvidenceStatus: "unproven",
       hostedDeploymentStatus: "unproven",
       hostedEvidenceMode: "not_configured",
@@ -1782,8 +1768,8 @@ test("admin route data exposes local hosted matrix as a native audit row", async
     cellCount: 3,
     passedCellCount: 3,
     reloadCoveredCellCount: 3,
-    reconnectLaneCount: 10,
-    staleConflictLaneCount: 4,
+    reconnectLaneCount: hostedMatrixReconnectLaneIds.length,
+    staleConflictLaneCount: hostedMatrixStaleConflictLaneIds.length,
     roleSurfaceCount: 2,
     hostedEvidenceStatus: "not_configured",
     hostedEvidenceMode: "not_configured",
@@ -1913,8 +1899,8 @@ test("admin local hosted matrix detail data carries progress and gap rows", asyn
     cellCount: 3,
     passedCellCount: 3,
     reloadCoveredCellCount: 3,
-    reconnectLaneCount: 10,
-    staleConflictLaneCount: 4,
+    reconnectLaneCount: hostedMatrixReconnectLaneIds.length,
+    staleConflictLaneCount: hostedMatrixStaleConflictLaneIds.length,
     hostedEvidenceStatus: "unproven",
     hostedDeploymentStatus: "unproven",
     hostedEvidenceMode: "not_configured",
@@ -1929,27 +1915,11 @@ test("admin local hosted matrix detail data carries progress and gap rows", asyn
   });
   assert.deepEqual(
     data.audit.reconnectLanes.map((lane) => [lane.id, lane.status]),
-    [
-      ["reconnect-recovery", "passed"],
-      ["replacement-reconnect-recovery", "passed"],
-      ["replacement-action-reconnect", "passed"],
-      ["replacement-stale-private-post-reconnect", "passed"],
-      ["stale-action-reconnect-recovery", "passed"],
-      ["stale-host-complete-reconnect-recovery", "passed"],
-      ["stale-host-resolve-reconnect-recovery", "passed"],
-      ["stale-host-advance-reconnect-recovery", "passed"],
-      ["stale-host-deadline-reconnect-recovery", "passed"],
-      ["stale-cohost-deadline-reconnect-recovery", "passed"],
-    ],
+    hostedMatrixReconnectLaneIds.map((laneId) => [laneId, "passed"]),
   );
   assert.deepEqual(
     data.audit.staleConflictLanes.map((lane) => [lane.id, lane.status]),
-    [
-      ["replacement-stale-conflict-message", "passed"],
-      ["stale-action-conflict-message", "passed"],
-      ["stale-dead-action-conflict", "passed"],
-      ["stale-host-control", "passed"],
-    ],
+    hostedMatrixStaleConflictLaneIds.map((laneId) => [laneId, "passed"]),
   );
 });
 
@@ -4962,8 +4932,8 @@ function localHostedOpsSignalsFixture() {
       cellCount: 16,
       passedCellCount: 16,
       reloadCoveredCellCount: 16,
-      reconnectLaneCount: 10,
-      staleConflictLaneCount: 4,
+      reconnectLaneCount: hostedMatrixReconnectLaneIds.length,
+      staleConflictLaneCount: hostedMatrixStaleConflictLaneIds.length,
       hostedEvidenceStatus: "not_configured",
     },
     checks: hostedOpsSignalCheckStatusRows(),
@@ -6308,6 +6278,17 @@ function laneFixture(id, label) {
   };
 }
 
+function hostedMatrixLaneFixture(id) {
+  return laneFixture(
+    id,
+    String(id)
+      .split("-")
+      .filter((part) => part !== "")
+      .map((part) => `${part.slice(0, 1).toUpperCase()}${part.slice(1)}`)
+      .join(" "),
+  );
+}
+
 function hostedConcurrentRaceMatrixFixture() {
   const cells = raceCoverageFixture().cells.map((cell) => ({
     id: cell.id,
@@ -6387,8 +6368,8 @@ function hostedConcurrentRaceMatrixFixture() {
       raceLaneCount: 3,
       reloadLaneCount: 3,
       reloadCoveredCellCount: 3,
-      reconnectLaneCount: 10,
-      staleConflictLaneCount: 4,
+      reconnectLaneCount: hostedMatrixReconnectLaneIds.length,
+      staleConflictLaneCount: hostedMatrixStaleConflictLaneIds.length,
       roleSurfaceCount: 2,
       hostedEvidenceStatus: "not_configured",
       hostedEvidenceMode: "not_configured",
@@ -6421,45 +6402,10 @@ function hostedConcurrentRaceMatrixFixture() {
       evidencePath: null,
     },
     cells,
-    reconnectLanes: [
-      laneFixture("reconnect-recovery", "Reconnect recovery"),
-      laneFixture("replacement-reconnect-recovery", "Replacement reconnect recovery"),
-      laneFixture("replacement-action-reconnect", "Replacement action reconnect"),
-      laneFixture(
-        "replacement-stale-private-post-reconnect",
-        "Replacement stale private post reconnect",
-      ),
-      laneFixture("stale-action-reconnect-recovery", "Stale action reconnect recovery"),
-      laneFixture(
-        "stale-host-complete-reconnect-recovery",
-        "Stale host complete reconnect recovery",
-      ),
-      laneFixture(
-        "stale-host-resolve-reconnect-recovery",
-        "Stale host resolve reconnect recovery",
-      ),
-      laneFixture(
-        "stale-host-advance-reconnect-recovery",
-        "Stale host advance reconnect recovery",
-      ),
-      laneFixture(
-        "stale-host-deadline-reconnect-recovery",
-        "Stale host deadline reconnect recovery",
-      ),
-      laneFixture(
-        "stale-cohost-deadline-reconnect-recovery",
-        "Stale cohost deadline reconnect recovery",
-      ),
-    ],
-    staleConflictLanes: [
-      laneFixture(
-        "replacement-stale-conflict-message",
-        "Replacement stale conflict message",
-      ),
-      laneFixture("stale-action-conflict-message", "Stale action conflict message"),
-      laneFixture("stale-dead-action-conflict", "Stale dead action conflict"),
-      laneFixture("stale-host-control", "Stale host control"),
-    ],
+    reconnectLanes: hostedMatrixReconnectLaneIds.map(hostedMatrixLaneFixture),
+    staleConflictLanes: hostedMatrixStaleConflictLaneIds.map(
+      hostedMatrixLaneFixture,
+    ),
     requestedEvidence: {
       id: "hosted-concurrent-race-matrix",
       status: "unproven",
