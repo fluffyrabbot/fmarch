@@ -16722,6 +16722,16 @@ function realHostedObservabilityHandoffAdminProofFixture() {
       realHostedObservabilitySummaryStatuses: Object.fromEntries(
         summaryRows.map((row) => [row.id, row.status]),
       ),
+      handoffPath: {
+        upstreamAuditId: "local-next-action",
+        upstreamLabel: "Ranked next action",
+        localCapabilityAuditId: "local-hosted-ops-signals",
+        downstreamStatus: "blocked",
+        downstreamCommand:
+          "npm run test:dev-test-game-real-hosted-observability-handoff",
+        downstreamProofTarget:
+          "target/dev-test-game/real-hosted-observability-handoff.json",
+      },
       relatedAuditIds: ["local-hosted-ops-signals", "local-next-action"],
     },
     adminRoleSurface: {
@@ -16756,7 +16766,25 @@ function realHostedObservabilityHandoffAdminProofFixture() {
       visibleRealHostedObservabilitySummaryStatuses: Object.fromEntries(
         summaryRows.map((row) => [row.id, row.status]),
       ),
+      visibleHandoffPath: {
+        upstreamAuditId: "local-next-action",
+        upstreamLabel: "Ranked next action",
+        localCapabilityAuditId: "local-hosted-ops-signals",
+        downstreamStatus: "blocked",
+        downstreamCommand:
+          "npm run test:dev-test-game-real-hosted-observability-handoff",
+        downstreamProofTarget:
+          "target/dev-test-game/real-hosted-observability-handoff.json",
+      },
       visibleRelatedLinks: ["local-hosted-ops-signals", "local-next-action"],
+      visibleRelatedDestinations: [
+        {
+          linkId: "local-next-action",
+          auditId: "local-next-action",
+          detailRoleUrl: "/admin/audit/local-next-action?game=<seeded-game>",
+          visibleChecks: ["next-command"],
+        },
+      ],
       rawInviteTokensVisible: false,
       releaseReady: false,
       productionReady: false,

@@ -17,6 +17,10 @@ import {
   repoRoot,
   runAdminAuditProof,
 } from "./dev_test_game_admin_audit_proof_helper.mjs";
+import {
+  assertAdminRoleSurfaceHandoffPath,
+  buildAdminAuditHandoffPath,
+} from "./dev_test_game_admin_audit_handoff_path.mjs";
 
 const handoffPath = path.resolve(
   repoRoot,
@@ -98,6 +102,16 @@ function realHostedObservabilitySummaryStatuses(source) {
   );
 }
 
+function realHostedObservabilityHandoffPath(source) {
+  return buildAdminAuditHandoffPath({
+    upstreamAuditId: "local-next-action",
+    localCapabilityAuditId: "local-hosted-ops-signals",
+    downstreamStatus: String(source.status ?? "unknown"),
+    downstreamCommand: String(source.nextCommand ?? ""),
+    downstreamProofTarget: String(source.nextProofTarget ?? ""),
+  });
+}
+
 export function realHostedObservabilityHandoffAdminProofCase() {
   return {
     smokeName: "dev-test-game-real-hosted-observability-handoff-admin-proof",
@@ -149,7 +163,15 @@ export function realHostedObservabilityHandoffAdminProofCase() {
           realHostedObservabilitySummaryStatuses(source),
         requiredHostedHandoffBlockedReceipt:
           source.hostedHandoffChecklist.blockedReceipt,
+        requiredHandoffPath: realHostedObservabilityHandoffPath(source),
         requiredRelatedLinks,
+        requiredRelatedDestinations: [
+          {
+            linkId: "local-next-action",
+            auditId: "local-next-action",
+            requiredChecks: ["next-command"],
+          },
+        ],
       }),
     buildEvidence: ({ source, adminRoleSurface }) => ({
       version: 1,
@@ -190,6 +212,7 @@ export function realHostedObservabilityHandoffAdminProofCase() {
           realHostedObservabilitySummaryRows(source).map((summary) => summary.id),
         realHostedObservabilitySummaryStatuses:
           realHostedObservabilitySummaryStatuses(source),
+        handoffPath: realHostedObservabilityHandoffPath(source),
         relatedAuditIds: requiredRelatedLinks,
       },
       adminRoleSurface,
@@ -307,5 +330,24 @@ export function assertRealHostedObservabilityHandoffAdminProof(evidence) {
     rowName: "related link",
     surfaceKey: "visibleRelatedLinks",
   });
+  assertAdminRoleSurfaceHandoffPath({
+    adminRoleSurface: evidence.adminRoleSurface,
+    expected: evidence.generatedFrom?.handoffPath,
+    proofName: "real hosted observability handoff admin proof",
+  });
+  const nextActionDestination =
+    evidence.adminRoleSurface?.visibleRelatedDestinations?.find(
+      (destination) =>
+        destination.linkId === "local-next-action" &&
+        destination.auditId === "local-next-action",
+    ) ?? null;
+  if (
+    nextActionDestination === null ||
+    !nextActionDestination.visibleChecks?.includes("next-command")
+  ) {
+    throw new Error(
+      "real hosted observability handoff admin proof did not prove next-action round trip",
+    );
+  }
   return evidence;
 }

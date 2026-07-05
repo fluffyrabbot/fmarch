@@ -787,6 +787,15 @@ test("admin route data exposes real hosted observability handoff as a native aud
     handoff.relatedLinks.map((link) => link.id),
     [localAdminAuditIds.hostedOpsSignals, localAdminAuditIds.nextAction],
   );
+  assert.deepEqual(handoff.handoffPath, {
+    upstreamAuditId: localAdminAuditIds.nextAction,
+    upstreamLabel: "Ranked next action",
+    localCapabilityAuditId: localAdminAuditIds.hostedOpsSignals,
+    downstreamStatus: "blocked",
+    downstreamCommand: "npm run test:dev-test-game-real-hosted-observability-handoff",
+    downstreamProofTarget:
+      "target/dev-test-game/real-hosted-observability-handoff.json",
+  });
   assert.equal(
     handoff.hostedHandoffChecklist.blockedReceipt.localVsHostedBoundary,
     "The local hosted-like ops signal bundle is baseline evidence only; it cannot satisfy real hosted observability.",

@@ -1269,6 +1269,15 @@ export function normalizeLocalRealHostedObservabilityHandoffAudit(
         command: "test:dev-test-game-next-action",
       }),
     ]),
+    handoffPath: buildAdminAuditHandoffPath({
+      upstreamAuditId: localAdminAuditIds.nextAction,
+      localCapabilityAuditId: localAdminAuditIds.hostedOpsSignals,
+      downstreamStatus: String(realHostedObservabilityHandoff.status ?? "unknown"),
+      downstreamCommand: String(realHostedObservabilityHandoff.nextCommand ?? ""),
+      downstreamProofTarget: String(
+        realHostedObservabilityHandoff.nextProofTarget ?? "",
+      ),
+    }),
     hostedHandoffChecklist,
     artifactSummary: Object.freeze({
       realHostedObservabilitySummary,
