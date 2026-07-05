@@ -12,6 +12,19 @@ import {
   validProductionFeatureSpineTarget,
   validProductionFeatureSpineTargetCollection,
 } from "./dev_test_game_production_feature_spine_resolver.mjs";
+import {
+  buildProductionFeatureTargetGraphNode,
+} from "./dev_test_game_proof_graph.mjs";
+import {
+  selectedProductionFeatureGraphForTarget,
+} from "./dev_test_game_next_action.mjs";
+import {
+  assertProductionFeatureSourceSpineChecklist,
+  productionFeatureCoverageDecisionKind,
+  productionFeatureReadinessSourceKind,
+  productionFeatureSourceCoverageDecisionSummary,
+  productionFeatureSourceSpineChecklist,
+} from "./dev_test_game_production_feature_source_registry.mjs";
 
 const browserProofCommand =
   "DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch npm run test:dev-test-game-core-live";
@@ -96,6 +109,132 @@ test("production feature spine resolver resolves seeded role targets", () => {
     }),
     true,
   );
+});
+
+test("future feature source template flows through checklist, resolver, graph, and next-action", () => {
+  const source = futureFeatureSourceFixture();
+  const sourceTarget = futureFeatureSourceTargetFixture();
+  const declaration = futureFeatureDeclarationFixture();
+  const coverageDecisionSummaryForCheckId = (sourceCheckId) => {
+    assert.equal(sourceCheckId, source.sourceCheckId);
+    return productionFeatureSourceCoverageDecisionSummary(source);
+  };
+  const validSpineDeclaration = validFutureFeatureSpineDeclaration(source);
+  const sourceCheckRules = {
+    [source.sourceCheckId]: {
+      detailRoleUrlIncludes: source.detailRoleUrlIncludes,
+      roleUrlIncludes: source.roleUrlIncludes,
+      rerunCommand: source.rerunCommand,
+    },
+  };
+
+  assert.deepEqual(productionFeatureSourceSpineChecklist(source), {
+    sourceCheckId: source.sourceCheckId,
+    coverageDecision: "declared:seeded-role-url-proof",
+    roleUrlTarget: "declared",
+    browserProofCommand,
+    proofGraphVisibility: source.graphSourceNodeId,
+    readinessDrilldown: productionFeatureReadinessSourceKind.spineTargets,
+    nextActionDrilldown: "coverage-decision-summary",
+  });
+  assert.doesNotThrow(() =>
+    assertProductionFeatureSourceSpineChecklist([source]),
+  );
+
+  const target = resolveProductionFeatureSpineTarget({
+    itemId: declaration.featureSlotId,
+    declaration,
+    sourceTargetsByCheckId: {
+      [source.sourceCheckId]: sourceTarget,
+    },
+    coverageDecisionSummaryForCheckId,
+    validSpineDeclaration,
+  });
+
+  assert.equal(
+    validProductionFeatureSpineTarget(target, {
+      sourceCheckRules,
+      coverageDecisionSummaryForCheckId,
+      validSpineDeclaration,
+    }),
+    true,
+  );
+  const drilldown = buildProductionFeatureSpineDrilldown(target);
+  assert.equal(
+    validProductionFeatureSpineDrilldown(drilldown, {
+      sourceCheckRules,
+      coverageDecisionSummaryForCheckId,
+    }),
+    true,
+  );
+
+  const graphNode = buildProductionFeatureTargetGraphNode({
+    target,
+    releaseReadinessSource:
+      "target/dev-test-game/release-readiness-checklist.json",
+  });
+  assert.deepEqual(graphNode, {
+    id: "production-feature:future-feature",
+    featureSlotId: "future-feature",
+    label: "Production feature: future-feature",
+    kind: "production-feature-spine-target",
+    status: "passed",
+    artifact: "target/dev-test-game/release-readiness-checklist.json",
+    sourceCheckId: source.sourceCheckId,
+    roleUrl: sourceTarget.detailRoleUrl,
+    targetRoleUrl: sourceTarget.roleUrlHrefs[declaration.roleUrlId],
+    cycleId: declaration.cycleId,
+    roleUrlId: declaration.roleUrlId,
+    rowKind: "checkpoint",
+    checkpointId: declaration.checkpointId,
+    recoveryHookId: undefined,
+    adminCheckId: declaration.adminCheckId,
+    browserProofCommand,
+    recoveryCommand: source.rerunCommand,
+    coverageDecision: productionFeatureSourceCoverageDecisionSummary(source),
+  });
+
+  const selectedGraph = selectedProductionFeatureGraphForTarget({
+    proofGraph: {
+      nodes: [
+        {
+          id: source.graphSourceNodeId,
+          artifact: "target/dev-test-game/future-feature-admin-proof.json",
+        },
+        graphNode,
+      ],
+      edges: [
+        {
+          from: source.graphSourceNodeId,
+          to: graphNode.id,
+          relationship: "proves-production-feature",
+          featureSlotId: target.featureSlotId,
+          targetRoleUrl: target.roleUrl,
+          command: target.browserProofCommand,
+        },
+      ],
+    },
+    spineTarget: target,
+    sourceNodeId: source.graphSourceNodeId,
+  });
+  assert.deepEqual(selectedGraph, {
+    nodeId: graphNode.id,
+    status: "passed",
+    sourceNodeId: source.graphSourceNodeId,
+    edge: {
+      from: source.graphSourceNodeId,
+      to: graphNode.id,
+      relationship: "proves-production-feature",
+    },
+    roleUrl: sourceTarget.detailRoleUrl,
+    targetRoleUrl: target.roleUrl,
+    edgeTargetRoleUrl: target.roleUrl,
+    selectedSpineTargetRoleUrl: target.roleUrl,
+    targetRoleUrlMatchesSelectedSpineTarget: true,
+    browserProofCommand,
+    proofTarget: "target/dev-test-game/release-readiness-checklist.json",
+    coverageDecision: productionFeatureSourceCoverageDecisionSummary(source),
+  });
 });
 
 test("production feature spine resolver builds and validates source collections", () => {
@@ -564,4 +703,64 @@ function coreLoopSourceCheckRules() {
       rerunCommand: coreLoopAdminProofCommand,
     },
   };
+}
+
+function futureFeatureSourceFixture() {
+  return {
+    sourceCheckId: "local-future-feature-proof",
+    readinessSourceKind: productionFeatureReadinessSourceKind.spineTargets,
+    graphSourceNodeId: "role-surface:future-feature",
+    detailRoleUrlIncludes: "/admin/audit/local-future-feature",
+    roleUrlIncludes: "/g/",
+    rerunCommand: "npm run test:dev-test-game-future-feature-admin-proof",
+    coverageDecision: {
+      kind: productionFeatureCoverageDecisionKind.seededRoleUrlProof,
+      proofCommand: "npm run test:dev-test-game-future-feature-admin-proof",
+    },
+  };
+}
+
+function futureFeatureDeclarationFixture() {
+  return {
+    featureSlotId: "future-feature",
+    sourceCheckId: "local-future-feature-proof",
+    cycleId: "future-cycle",
+    roleUrlId: "future-player",
+    checkpointId: "future-checkpoint",
+    adminCheckId: "future-admin-check",
+  };
+}
+
+function futureFeatureSourceTargetFixture() {
+  return {
+    sourceCheckId: "local-future-feature-proof",
+    detailRoleUrl: "/admin/audit/local-future-feature?game=<seeded-game>",
+    browserProofCommand,
+    rerunCommand: "npm run test:dev-test-game-future-feature-admin-proof",
+    cycleIds: ["future-cycle"],
+    roleUrlIds: ["future-player"],
+    checkpointIds: ["future-checkpoint"],
+    recoveryHookIds: [],
+    visibleAdminCheckIds: ["future-admin-check"],
+    roleUrlHrefs: {
+      "future-player": "http://127.0.0.1:5173/g/<seeded-game>",
+    },
+  };
+}
+
+function validFutureFeatureSpineDeclaration(source) {
+  return (declaration) =>
+    declaration !== null &&
+    typeof declaration === "object" &&
+    declaration.sourceCheckId === source.sourceCheckId &&
+    typeof declaration.featureSlotId === "string" &&
+    declaration.featureSlotId.length > 0 &&
+    typeof declaration.cycleId === "string" &&
+    declaration.cycleId.length > 0 &&
+    typeof declaration.roleUrlId === "string" &&
+    declaration.roleUrlId.length > 0 &&
+    typeof declaration.checkpointId === "string" &&
+    declaration.checkpointId.length > 0 &&
+    typeof declaration.adminCheckId === "string" &&
+    declaration.adminCheckId.length > 0;
 }

@@ -996,35 +996,42 @@ function buildProductionFeatureTargetNodes({
   const targets = productionFeatureTargetsForGraph(releaseReadiness);
   const evidenceObjectNamesByFeatureSlotId =
     productionFeatureEvidenceObjectNamesBySlotId(releaseReadiness);
-  return targets.map((target) => {
-    return {
-      id: `production-feature:${target.featureSlotId}`,
-      featureSlotId: target.featureSlotId,
-      label: `Production feature: ${target.featureSlotId}`,
-      kind: "production-feature-spine-target",
-      status: "passed",
-      artifact: releaseReadinessSource,
-      sourceCheckId: target.sourceCheckId,
-      roleUrl: target.detailRoleUrl,
-      targetRoleUrl: target.roleUrl,
-      cycleId: target.cycleId,
-      roleUrlId: target.roleUrlId,
-      rowKind: target.rowKind,
-      checkpointId: target.checkpointId,
-      recoveryHookId: target.recoveryHookId,
-      adminCheckId: target.adminCheckId,
-      browserProofCommand: target.browserProofCommand,
-      recoveryCommand: target.rerunCommand,
-      coverageDecision: target.coverageDecision,
-      ...((evidenceObjectNamesByFeatureSlotId[target.featureSlotId] ?? [])
-        .length === 0
-        ? {}
-        : {
-            evidenceObjectNames:
-              evidenceObjectNamesByFeatureSlotId[target.featureSlotId],
-          }),
-    };
-  });
+  return targets.map((target) =>
+    buildProductionFeatureTargetGraphNode({
+      target,
+      releaseReadinessSource,
+      evidenceObjectNames:
+        evidenceObjectNamesByFeatureSlotId[target.featureSlotId] ?? [],
+    }),
+  );
+}
+
+export function buildProductionFeatureTargetGraphNode({
+  target,
+  releaseReadinessSource,
+  evidenceObjectNames = [],
+}) {
+  return {
+    id: `production-feature:${target.featureSlotId}`,
+    featureSlotId: target.featureSlotId,
+    label: `Production feature: ${target.featureSlotId}`,
+    kind: "production-feature-spine-target",
+    status: "passed",
+    artifact: releaseReadinessSource,
+    sourceCheckId: target.sourceCheckId,
+    roleUrl: target.detailRoleUrl,
+    targetRoleUrl: target.roleUrl,
+    cycleId: target.cycleId,
+    roleUrlId: target.roleUrlId,
+    rowKind: target.rowKind,
+    checkpointId: target.checkpointId,
+    recoveryHookId: target.recoveryHookId,
+    adminCheckId: target.adminCheckId,
+    browserProofCommand: target.browserProofCommand,
+    recoveryCommand: target.rerunCommand,
+    coverageDecision: target.coverageDecision,
+    ...(evidenceObjectNames.length === 0 ? {} : { evidenceObjectNames }),
+  };
 }
 
 function buildRoleSurfaceProofNodes({ releaseReadiness }) {

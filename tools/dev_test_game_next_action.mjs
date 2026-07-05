@@ -891,7 +891,11 @@ function assertRecoveryReceiptGraphsForNextAction(generatedFrom) {
   }
 }
 
-function selectedProductionFeatureGraphForTarget({ proofGraph, spineTarget }) {
+export function selectedProductionFeatureGraphForTarget({
+  proofGraph,
+  spineTarget,
+  sourceNodeId = productionFeatureGraphSourceNodeId(spineTarget.sourceCheckId),
+}) {
   if (proofGraph === null) {
     return null;
   }
@@ -911,7 +915,7 @@ function selectedProductionFeatureGraphForTarget({ proofGraph, spineTarget }) {
   if (
     node.featureSlotId !== spineTarget.featureSlotId ||
     node.sourceCheckId !== spineTarget.sourceCheckId ||
-    edge.from !== productionFeatureGraphSourceNodeId(spineTarget.sourceCheckId) ||
+    edge.from !== sourceNodeId ||
     edge.featureSlotId !== spineTarget.featureSlotId ||
     edge.command !== spineTarget.browserProofCommand
   ) {

@@ -13,8 +13,11 @@ export function resolveProductionFeatureSpineTarget({
   declaration,
   sourceTargetsByCheckId,
   defaultRerunCommandBySourceCheckId = {},
+  coverageDecisionSummaryForCheckId =
+    productionFeatureSourceCoverageDecisionSummaryForCheckId,
+  validSpineDeclaration = validFeatureSpineDeclaration,
 }) {
-  if (!validFeatureSpineDeclaration(declaration)) {
+  if (!validSpineDeclaration(declaration)) {
     throw new Error(
       `buildable release-readiness item ${itemId} is missing a production feature spine target`,
     );
@@ -45,9 +48,7 @@ export function resolveProductionFeatureSpineTarget({
   return {
     featureSlotId: declaration.featureSlotId,
     sourceCheckId: sourceTarget.sourceCheckId,
-    coverageDecision: productionFeatureSourceCoverageDecisionSummaryForCheckId(
-      sourceTarget.sourceCheckId,
-    ),
+    coverageDecision: coverageDecisionSummaryForCheckId(sourceTarget.sourceCheckId),
     detailRoleUrl: sourceTarget.detailRoleUrl,
     cycleId: declaration.cycleId,
     roleUrlId: declaration.roleUrlId,
@@ -90,6 +91,9 @@ export function buildProductionFeatureSpineTargetCollection({
   declarations,
   sourceTarget,
   defaultRerunCommandBySourceCheckId = {},
+  coverageDecisionSummaryForCheckId =
+    productionFeatureSourceCoverageDecisionSummaryForCheckId,
+  validSpineDeclaration = validFeatureSpineDeclaration,
 }) {
   const targets = Object.values(declarations)
     .filter((declaration) => declaration.sourceCheckId === sourceTarget.sourceCheckId)
@@ -101,6 +105,8 @@ export function buildProductionFeatureSpineTargetCollection({
           [sourceTarget.sourceCheckId]: sourceTarget,
         },
         defaultRerunCommandBySourceCheckId,
+        coverageDecisionSummaryForCheckId,
+        validSpineDeclaration,
       }),
     );
   return {
@@ -114,18 +120,25 @@ export function buildProductionFeatureSpineTargetCollection({
 
 export function validProductionFeatureSpineTarget(
   target,
-  { sourceCheckRules = {} } = {},
+  {
+    sourceCheckRules = {},
+    coverageDecisionSummaryForCheckId =
+      productionFeatureSourceCoverageDecisionSummaryForCheckId,
+    validSpineDeclaration = validFeatureSpineDeclaration,
+  } = {},
 ) {
   const rowKind = featureSpineRowKind(target);
   if (
     target === null ||
     typeof target !== "object" ||
-    !validFeatureSpineDeclaration(target) ||
+    !validSpineDeclaration(target) ||
     typeof target.detailRoleUrl !== "string" ||
     typeof target.roleUrl !== "string" ||
     typeof target.browserProofCommand !== "string" ||
     !target.browserProofCommand.includes("test:dev-test-game-core-live") ||
-    !validCoverageDecision(target.coverageDecision, target.sourceCheckId)
+    !validCoverageDecision(target.coverageDecision, target.sourceCheckId, {
+      coverageDecisionSummaryForCheckId,
+    })
   ) {
     return false;
   }
@@ -145,7 +158,12 @@ export function validProductionFeatureSpineDeclaration(declaration) {
 
 export function validProductionFeatureSpineDrilldown(
   drilldown,
-  { sourceCheckRules = {} } = {},
+  {
+    sourceCheckRules = {},
+    coverageDecisionSummaryForCheckId =
+      productionFeatureSourceCoverageDecisionSummaryForCheckId,
+    validSpineDeclaration = validFeatureSpineDeclaration,
+  } = {},
 ) {
   const rowKind = featureSpineRowKind(drilldown);
   if (
@@ -169,7 +187,9 @@ export function validProductionFeatureSpineDrilldown(
     typeof drilldown.roleUrl !== "string" ||
     typeof drilldown.browserProofCommand !== "string" ||
     !drilldown.browserProofCommand.includes("test:dev-test-game-core-live") ||
-    !validCoverageDecision(drilldown.coverageDecision, drilldown.sourceCheckId)
+    !validCoverageDecision(drilldown.coverageDecision, drilldown.sourceCheckId, {
+      coverageDecisionSummaryForCheckId,
+    })
   ) {
     return false;
   }
@@ -178,7 +198,13 @@ export function validProductionFeatureSpineDrilldown(
 
 export function validProductionFeatureSpineTargetCollection(
   productionFeatureTargets,
-  { declarations, sourceCheckRules = {} } = {},
+  {
+    declarations,
+    sourceCheckRules = {},
+    coverageDecisionSummaryForCheckId =
+      productionFeatureSourceCoverageDecisionSummaryForCheckId,
+    validSpineDeclaration = validFeatureSpineDeclaration,
+  } = {},
 ) {
   if (
     productionFeatureTargets === null ||
@@ -195,7 +221,11 @@ export function validProductionFeatureSpineTargetCollection(
     const target = productionFeatureTargets.bySlotId[declaration.featureSlotId];
     if (
       !productionFeatureTargets.slotIds.includes(declaration.featureSlotId) ||
-      !validProductionFeatureSpineTarget(target, { sourceCheckRules }) ||
+      !validProductionFeatureSpineTarget(target, {
+        sourceCheckRules,
+        coverageDecisionSummaryForCheckId,
+        validSpineDeclaration,
+      }) ||
       target.featureSlotId !== declaration.featureSlotId ||
       target.sourceCheckId !== declaration.sourceCheckId ||
       target.cycleId !== declaration.cycleId ||
@@ -224,13 +254,18 @@ function validProductionFeatureSourceRule(item, sourceCheckRules) {
   );
 }
 
-function validCoverageDecision(decision, sourceCheckId) {
+function validCoverageDecision(
+  decision,
+  sourceCheckId,
+  {
+    coverageDecisionSummaryForCheckId =
+      productionFeatureSourceCoverageDecisionSummaryForCheckId,
+  } = {},
+) {
   return (
     decision !== null &&
     typeof decision === "object" &&
     JSON.stringify(decision) ===
-      JSON.stringify(
-        productionFeatureSourceCoverageDecisionSummaryForCheckId(sourceCheckId),
-      )
+      JSON.stringify(coverageDecisionSummaryForCheckId(sourceCheckId))
   );
 }
