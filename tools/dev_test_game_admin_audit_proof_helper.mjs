@@ -850,6 +850,11 @@ export async function proveAdminAuditDetail({
         ids: destination.requiredChecks ?? [],
         expectedStatuses: destination.requiredCheckStatuses ?? {},
       });
+      const destinationVisibleCheckStatuses = await readRowStatuses({
+        page,
+        prefix: "admin-audit-check",
+        ids: destinationVisibleChecks,
+      });
       const destinationVisibleScenarios = await waitForRows({
         page,
         prefix: "admin-audit-scenario",
@@ -984,6 +989,9 @@ export async function proveAdminAuditDetail({
         ...(destinationVisibleChecks.length === 0
           ? {}
           : { visibleChecks: destinationVisibleChecks }),
+        ...(Object.keys(destinationVisibleCheckStatuses).length === 0
+          ? {}
+          : { visibleCheckStatuses: destinationVisibleCheckStatuses }),
         ...(destinationVisibleScenarios.length === 0
           ? {}
           : { visibleScenarios: destinationVisibleScenarios }),

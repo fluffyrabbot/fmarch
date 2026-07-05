@@ -2000,7 +2000,7 @@ export function normalizeLocalProofGraphNodeCheckRows(node) {
   return Object.freeze([
     Object.freeze({
       id: parentId,
-      status: String(node?.status ?? "recorded"),
+      status: localProofGraphNodeCheckStatus(node),
     }),
     ...coverageDecisionCheckRows({
       parentId,
@@ -2015,6 +2015,19 @@ export function normalizeLocalProofGraphNodeCheckRows(node) {
       artifacts: node?.receiptArtifacts,
     }),
   ]);
+}
+
+function localProofGraphNodeCheckStatus(node) {
+  const status = String(node?.status ?? "recorded");
+  const roleUrl = String(node?.roleUrl ?? "").trim();
+  const recoveryCommand = String(
+    node?.recoveryCommand ?? node?.proofCommand ?? "",
+  ).trim();
+  return [
+    status,
+    ...(roleUrl === "" ? [] : [`roleUrl ${roleUrl}`]),
+    ...(recoveryCommand === "" ? [] : [`recoveryCommand ${recoveryCommand}`]),
+  ].join("\n");
 }
 
 export function normalizeLocalProofGraphEdgeCheckRows(edge) {

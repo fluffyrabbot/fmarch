@@ -5604,6 +5604,86 @@ test("next-action admin proof fixture proves proof graph next-action handoff dep
   );
 });
 
+test("next-action admin proof fixture proves selected proof graph destination text", () => {
+  const selectedProofGraphNode = {
+    id: "admin-proof:hosted-concurrent-race-matrix",
+    status: "ready",
+    auditId: "local-hosted-concurrent-race-matrix",
+    roleUrl:
+      "/admin/audit/local-hosted-concurrent-race-matrix?game=<seeded-game>",
+    proofCommand:
+      "npm run test:dev-test-game-hosted-concurrent-race-matrix-admin-proof",
+    graphProofCommand:
+      "npm run test:dev-test-game-hosted-concurrent-race-matrix-admin-proof",
+  };
+  const selectedDestination = {
+    linkId: "selected-proof-graph-node",
+    auditId: "local-proof-graph",
+    detailRoleUrl: "/admin/audit/local-proof-graph?game=<seeded-game>",
+    visibleChecks: ["admin-proof:hosted-concurrent-race-matrix"],
+    visibleCheckStatuses: {
+      "admin-proof:hosted-concurrent-race-matrix": [
+        "passed",
+        "roleUrl /admin/audit/local-hosted-concurrent-race-matrix?game=<seeded-game>",
+        "recoveryCommand npm run test:dev-test-game-hosted-concurrent-race-matrix-admin-proof",
+      ].join("\n"),
+    },
+    visibleRelatedLinks: ["admin-proof:hosted-concurrent-race-matrix"],
+  };
+  const proof = nextActionAdminProofLocalReadinessDependencyFixture();
+  proof.generatedFrom.selectedProofGraphNode = selectedProofGraphNode;
+  proof.adminRoleSurface.visibleChecks.push(
+    "selected-proof-graph-node",
+    "selected-proof-graph-destination",
+  );
+  proof.adminRoleSurface.visibleRelatedLinks.push("selected-proof-graph-node");
+  proof.adminRoleSurface.visibleRelatedDestinations = [selectedDestination];
+  assertNextActionAdminProof(proof);
+  const destination = proof.adminRoleSurface.visibleRelatedDestinations.find(
+    (item) => item.linkId === "selected-proof-graph-node",
+  );
+  assert.equal(
+    destination.visibleCheckStatuses[
+      "admin-proof:hosted-concurrent-race-matrix"
+    ].includes(
+      "roleUrl /admin/audit/local-hosted-concurrent-race-matrix?game=<seeded-game>",
+    ),
+    true,
+  );
+  assert.equal(
+    destination.visibleCheckStatuses[
+      "admin-proof:hosted-concurrent-race-matrix"
+    ].includes(
+      "recoveryCommand npm run test:dev-test-game-hosted-concurrent-race-matrix-admin-proof",
+    ),
+    true,
+  );
+
+  const proofMissingDestinationText =
+    nextActionAdminProofLocalReadinessDependencyFixture();
+  proofMissingDestinationText.generatedFrom.selectedProofGraphNode =
+    selectedProofGraphNode;
+  proofMissingDestinationText.adminRoleSurface.visibleChecks.push(
+    "selected-proof-graph-node",
+    "selected-proof-graph-destination",
+  );
+  proofMissingDestinationText.adminRoleSurface.visibleRelatedLinks.push(
+    "selected-proof-graph-node",
+  );
+  proofMissingDestinationText.adminRoleSurface.visibleRelatedDestinations = [
+    {
+      ...selectedDestination,
+      visibleCheckStatuses: undefined,
+    },
+  ];
+  delete proofMissingDestinationText.adminRoleSurface.visibleRelatedDestinations[0]
+    .visibleCheckStatuses;
+  assert.throws(
+    () => assertNextActionAdminProof(proofMissingDestinationText),
+    /next-action admin proof did not prove selected proof graph destination text/,
+  );
+});
+
 test("admin role surface helpers assert visible rows and status text", () => {
   const adminRoleSurface = {
     visibleRelatedLinks: ["local-next-action"],
@@ -20370,6 +20450,8 @@ function nextActionAdminProofFixture() {
           "/admin/audit/local-hosted-concurrent-race-matrix?game=<seeded-game>",
         proofCommand:
           "npm run test:dev-test-game-hosted-concurrent-race-matrix-admin-proof",
+        graphProofCommand:
+          "npm run test:dev-test-game-hosted-concurrent-race-matrix-admin-proof",
       },
       relatedHandoffs: [
         {
@@ -20442,6 +20524,7 @@ function nextActionAdminProofFixture() {
         "seed-proof-lane-coverage-trace",
         ...proofGraphDiagnosticSummaryCheckIds(proofGraphDiagnosticSummaryTrace),
         "release-readiness-selection-trace",
+        "release-readiness-hosted-concurrent-race-matrix",
       ],
       visibleRelatedLinks: [
         "selected-proof-graph-node",
@@ -20489,6 +20572,13 @@ function nextActionAdminProofFixture() {
           auditId: "local-proof-graph",
           detailRoleUrl: "/admin/audit/local-proof-graph?game=<seeded-game>",
           visibleChecks: ["admin-proof:hosted-concurrent-race-matrix"],
+          visibleCheckStatuses: {
+            "admin-proof:hosted-concurrent-race-matrix": [
+              "passed",
+              "roleUrl /admin/audit/local-hosted-concurrent-race-matrix?game=<seeded-game>",
+              "recoveryCommand npm run test:dev-test-game-hosted-concurrent-race-matrix-admin-proof",
+            ].join("\n"),
+          },
           visibleRelatedLinks: ["admin-proof:hosted-concurrent-race-matrix"],
         },
         {

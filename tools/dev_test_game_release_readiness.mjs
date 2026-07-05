@@ -6294,7 +6294,11 @@ export function validateDevTestGameNextActionAdminProof(proof, options = {}) {
       graphDestination === null ||
       graphDestination.detailRoleUrl !==
         localAdminAuditRoleUrl(localAdminAuditIds.proofGraph) ||
-      !graphDestination.visibleChecks?.includes(String(selectedProofGraphNode.id))
+      !graphDestination.visibleChecks?.includes(String(selectedProofGraphNode.id)) ||
+      !selectedProofGraphDestinationTextMatches({
+        graphDestination,
+        selectedProofGraphNode,
+      })
     ) {
       throw new Error(
         "next-action admin proof did not prove selected proof graph destination",
@@ -6465,6 +6469,28 @@ export function validateDevTestGameNextActionAdminProof(proof, options = {}) {
     localReadinessDependencyCandidateCount: localTrace.candidateCount,
     ...(options.artifact === undefined ? {} : { artifact: options.artifact }),
   };
+}
+
+function selectedProofGraphDestinationTextMatches({
+  graphDestination,
+  selectedProofGraphNode,
+}) {
+  const selectedNodeId = String(selectedProofGraphNode?.id ?? "");
+  const visibleText =
+    graphDestination?.visibleCheckStatuses?.[selectedNodeId] ?? "";
+  const roleUrl = String(selectedProofGraphNode?.roleUrl ?? "").trim();
+  const recoveryCommand = String(
+    selectedProofGraphNode?.graphProofCommand ??
+      selectedProofGraphNode?.proofCommand ??
+      "",
+  ).trim();
+  const requiredTokens = [roleUrl, recoveryCommand].filter(
+    (token) => token !== "",
+  );
+  return (
+    typeof visibleText === "string" &&
+    requiredTokens.every((token) => visibleText.includes(token))
+  );
 }
 
 function validateNextActionAdminProofGraphDiagnosticSummaryTrace(proof) {

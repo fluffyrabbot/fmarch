@@ -27,6 +27,7 @@ import {
 } from "../frontend/src/lib/app/local-proof-handoff-status.mjs";
 import {
   localAdminAuditIds,
+  localAdminAuditRoleUrl,
 } from "./dev_test_game_admin_audit_surface_ids.mjs";
 import {
   assertRecoveryReceiptGraphSummary,
@@ -711,6 +712,21 @@ export function assertNextActionAdminProof(evidence) {
     )
   ) {
     throw new Error("next-action admin proof missing selected graph destination link");
+  }
+  if (
+    evidence.generatedFrom?.selectedProofGraphNode !== null &&
+    evidence.generatedFrom?.selectedProofGraphNode?.id !== undefined
+  ) {
+    const graphDestination =
+      evidence.adminRoleSurface?.visibleRelatedDestinations?.find(
+        (item) =>
+          item?.linkId === "selected-proof-graph-node" &&
+          item.auditId === localAdminAuditIds.proofGraph,
+      ) ?? null;
+    assertSelectedProofGraphDestinationText({
+      graphDestination,
+      selectedProofGraphNode: evidence.generatedFrom.selectedProofGraphNode,
+    });
   }
   if (
     evidence.generatedFrom?.unprovenSpineTarget !== null &&
@@ -1489,6 +1505,35 @@ function selectedProductionFeatureGraphHandoffSummary({ nextAction }) {
     requiredCheckIds: [selectedGraph.nodeId],
     requiredRelatedLinkIds: [selectedGraph.nodeId],
   };
+}
+
+function assertSelectedProofGraphDestinationText({
+  graphDestination,
+  selectedProofGraphNode,
+}) {
+  const selectedNodeId = String(selectedProofGraphNode?.id ?? "");
+  const visibleText =
+    graphDestination?.visibleCheckStatuses?.[selectedNodeId] ?? "";
+  const roleUrl = String(selectedProofGraphNode?.roleUrl ?? "").trim();
+  const recoveryCommand = String(
+    selectedProofGraphNode?.graphProofCommand ??
+      selectedProofGraphNode?.proofCommand ??
+      "",
+  ).trim();
+  const requiredTokens = [roleUrl, recoveryCommand].filter(
+    (token) => token !== "",
+  );
+  if (
+    graphDestination === null ||
+    graphDestination.detailRoleUrl !==
+      localAdminAuditRoleUrl(localAdminAuditIds.proofGraph) ||
+    !graphDestination.visibleChecks?.includes(selectedNodeId) ||
+    requiredTokens.some((token) => !visibleText.includes(token))
+  ) {
+    throw new Error(
+      "next-action admin proof did not prove selected proof graph destination text",
+    );
+  }
 }
 
 function requiredChecksForEvidence(evidence) {
