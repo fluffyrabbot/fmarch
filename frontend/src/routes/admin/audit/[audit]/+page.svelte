@@ -13,11 +13,25 @@
   const evidenceTestId = "admin-audit-detail-evidence";
   const backTestId = "admin-audit-detail-back";
   $: auditView = buildAdminAuditPanelViewModel({ audit: [data.audit] }).items[0];
+  $: productionFeatureDestinationRows =
+    data.audit.artifactSummary?.productionFeatureDestinationSummary?.rows ?? [];
+  $: primaryProductionFeatureDestinationRows =
+    productionFeatureDestinationRows.filter(
+      (row) => !isHostedEvidenceProgressionDestination(row),
+    );
+  $: hostedEvidenceProgressionDestinationRows =
+    productionFeatureDestinationRows.filter((row) =>
+      isHostedEvidenceProgressionDestination(row),
+    );
 
   function prerequisiteRoleHref(prerequisite) {
     const roleUrl = String(prerequisite?.roleUrl ?? "");
     const game = String(data.audit?.artifactSummary?.game ?? "");
     return roleUrl.replace("<seeded-game>", encodeURIComponent(game));
+  }
+
+  function isHostedEvidenceProgressionDestination(row) {
+    return String(row?.id ?? "").startsWith("hosted-evidence-progression:");
   }
 </script>
 
@@ -409,23 +423,44 @@
         </ol>
       </section>
     {/if}
-    {#if data.audit.artifactSummary?.productionFeatureDestinationSummary?.rows?.length > 0}
+    {#if productionFeatureDestinationRows.length > 0}
       <section
         class="admin-audit-detail__group"
         data-testid="admin-audit-detail-production-feature-destination-summary"
       >
         <h2>Production feature destinations</h2>
-        <ol class="admin-audit-detail__entries">
-          {#each data.audit.artifactSummary.productionFeatureDestinationSummary.rows as row}
-            <li
-              class="admin-audit-detail__entry admin-audit-detail__entry--stack"
-              data-testid={`admin-audit-production-feature-destination-summary-${row.id}`}
-            >
-              <strong>{row.label}</strong>
-              <span>{row.status}</span>
-            </li>
-          {/each}
-        </ol>
+        {#if primaryProductionFeatureDestinationRows.length > 0}
+          <ol class="admin-audit-detail__entries">
+            {#each primaryProductionFeatureDestinationRows as row}
+              <li
+                class="admin-audit-detail__entry admin-audit-detail__entry--stack"
+                data-testid={`admin-audit-production-feature-destination-summary-${row.id}`}
+              >
+                <strong>{row.label}</strong>
+                <span>{row.status}</span>
+              </li>
+            {/each}
+          </ol>
+        {/if}
+        {#if hostedEvidenceProgressionDestinationRows.length > 0}
+          <section
+            class="admin-audit-detail__subgroup"
+            data-testid="admin-audit-detail-hosted-evidence-progression-destination-summary"
+          >
+            <h3>Hosted evidence recovery ladder</h3>
+            <ol class="admin-audit-detail__entries">
+              {#each hostedEvidenceProgressionDestinationRows as row}
+                <li
+                  class="admin-audit-detail__entry admin-audit-detail__entry--stack"
+                  data-testid={`admin-audit-production-feature-destination-summary-${row.id}`}
+                >
+                  <strong>{row.label}</strong>
+                  <span>{row.status}</span>
+                </li>
+              {/each}
+            </ol>
+          </section>
+        {/if}
       </section>
     {/if}
     {#if data.audit.artifactSummary?.diagnosticProofSummary?.rows?.length > 0}
@@ -1178,9 +1213,20 @@
     gap: 10px;
   }
 
+  .admin-audit-detail__subgroup {
+    display: grid;
+    gap: 8px;
+  }
+
   .admin-audit-detail__group h2 {
     color: #18212d;
     font-size: 0.95rem;
+    margin: 0;
+  }
+
+  .admin-audit-detail__subgroup h3 {
+    color: #334155;
+    font-size: 0.88rem;
     margin: 0;
   }
 

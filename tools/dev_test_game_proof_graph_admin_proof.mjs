@@ -160,6 +160,7 @@ export function proofGraphAdminProofCase() {
         requiredCheckStatuses: proofGraphVisibleCheckStatuses(source.proofGraph),
         requiredProductionFeatureDestinationSummaries:
           productionFeatureDestinationSummary.rows.map((row) => row.id),
+        requiredText: ["Hosted evidence recovery ladder"],
         requiredDiagnosticProofSummaries: diagnosticProofSummary.rows.map(
           (row) => row.id,
         ),

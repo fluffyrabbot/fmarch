@@ -1959,6 +1959,23 @@ test("admin local proof graph detail data carries graph node rows", async () => 
   );
 });
 
+test("admin audit detail page renders hosted evidence progression destinations as a named group", async () => {
+  const source = await readFile(
+    "frontend/src/routes/admin/audit/[audit]/+page.svelte",
+    "utf8",
+  );
+  assert.match(source, /hostedEvidenceProgressionDestinationRows/);
+  assert.match(
+    source,
+    /admin-audit-detail-hosted-evidence-progression-destination-summary/,
+  );
+  assert.match(source, /Hosted evidence recovery ladder/);
+  assert.match(
+    source,
+    /admin-audit-production-feature-destination-summary-\$\{row\.id\}/,
+  );
+});
+
 test("admin local proof graph detail keeps duplicate terminal receipt proof ids inspectable", async () => {
   const proofGraph = proofGraphWithDuplicateTerminalReceiptProofIds();
   const data = await buildAdminAuditDetailData({
