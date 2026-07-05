@@ -31,35 +31,51 @@ import {
   devTestGameProofRunPath,
 } from "./dev_test_game_spine_artifact_paths.mjs";
 
-const lanePath = path.resolve(
+const defaultLanePath = path.resolve(
   repoRoot,
   process.env.FMARCH_DEV_TEST_GAME_HOSTED_EVIDENCE_LANE ??
     devTestGameHostedEvidenceLanePath,
 );
-const proofRunPath = path.resolve(
+const defaultProofRunPath = path.resolve(
   repoRoot,
   process.env.FMARCH_DEV_TEST_GAME_PROOF_RUN ??
     devTestGameProofRunPath,
 );
-const demoProofPath = path.resolve(
+const defaultDemoProofPath = path.resolve(
   repoRoot,
   process.env.FMARCH_DEV_TEST_GAME_HOSTED_EVIDENCE_LANE_DEMO_PROOF ??
     devTestGameHostedEvidenceLaneDemoProofPath,
 );
-const laneRelativePath = path.relative(repoRoot, lanePath);
-const proofRunRelativePath = path.relative(repoRoot, proofRunPath);
-const demoProofRelativePath = path.relative(repoRoot, demoProofPath);
-const evidencePath = path.join(repoRoot, devTestGameHostedEvidenceLaneAdminProofPath);
+const defaultEvidencePath = path.join(
+  repoRoot,
+  devTestGameHostedEvidenceLaneAdminProofPath,
+);
 const requiredRelatedLinks = [
   "local-hosted-target-preflight",
   "local-hosted-concurrent-race-matrix",
   "local-next-action",
 ];
 
-export function hostedEvidenceLaneAdminProofCase() {
+export function hostedEvidenceLaneAdminProofCase({
+  lanePath = defaultLanePath,
+  proofRunPath = defaultProofRunPath,
+  demoProofPath = defaultDemoProofPath,
+  evidencePath = defaultEvidencePath,
+  smokeName = "dev-test-game-hosted-evidence-lane-admin-proof",
+  stage = "hosted-evidence-lane-admin-proof-listen",
+  proofName = "dev-test-game-hosted-evidence-lane-admin-proof",
+  scope = "local-dev-test-game-hosted-evidence-lane-admin-surface",
+  proofBoundary =
+    "Local SvelteKit admin role URL with fixture admin authority over the hosted evidence lane. Proves the lane is discoverable from the seeded admin overview and inspectable in a native admin audit detail route with blocked preflight rows and local demo proof synthetic-rejection rows visible; it does not prove hosted deployment, hosted telemetry, beta readiness, release readiness, or production readiness.",
+  generatedFromExtra = {},
+  assertEvidence = assertHostedEvidenceLaneAdminProof,
+} = {}) {
+  const laneRelativePath = path.relative(repoRoot, lanePath);
+  const proofRunRelativePath = path.relative(repoRoot, proofRunPath);
+  const demoProofRelativePath = path.relative(repoRoot, demoProofPath);
   return {
-    smokeName: "dev-test-game-hosted-evidence-lane-admin-proof",
-    stage: "hosted-evidence-lane-admin-proof-listen",
+    smokeName,
+    stage,
     evidencePath,
     envOverrides: {
       FMARCH_DEV_TEST_GAME_HOSTED_EVIDENCE_LANE: laneRelativePath,
@@ -132,13 +148,12 @@ export function hostedEvidenceLaneAdminProofCase() {
     },
     buildEvidence: ({ source, adminRoleSurface }) => ({
       version: 1,
-      proof: "dev-test-game-hosted-evidence-lane-admin-proof",
+      proof: proofName,
       status: "passed",
       releaseReady: false,
       productionReady: false,
-      scope: "local-dev-test-game-hosted-evidence-lane-admin-surface",
-      proofBoundary:
-        "Local SvelteKit admin role URL with fixture admin authority over the hosted evidence lane. Proves the lane is discoverable from the seeded admin overview and inspectable in a native admin audit detail route with blocked preflight rows and local demo proof synthetic-rejection rows visible; it does not prove hosted deployment, hosted telemetry, beta readiness, release readiness, or production readiness.",
+      scope,
+      proofBoundary,
       generatedFrom: {
         hostedEvidenceLane: laneRelativePath,
         hostedEvidenceLaneDemoProof: demoProofRelativePath,
@@ -201,10 +216,11 @@ export function hostedEvidenceLaneAdminProofCase() {
                 source.lane.hostedHandoffChecklist.blockedReceipt,
             }),
         relatedAuditIds: requiredRelatedLinks,
+        ...generatedFromExtra,
       },
       adminRoleSurface,
     }),
-    assertEvidence: assertHostedEvidenceLaneAdminProof,
+    assertEvidence,
   };
 }
 

@@ -40,9 +40,17 @@ export function buildDevTestGameHostedMatrixExternalEvidence({
   });
   const rawEvidenceSyntheticExternalTarget =
     source.generatedFrom?.syntheticExternalTarget === true;
+  const rawEvidenceFixtureEvidence =
+    source.generatedFrom?.fixtureEvidence === true ||
+    source.generatedFrom?.operatorFixture === true;
   if (rawEvidenceSyntheticExternalTarget && allowSyntheticDemo !== true) {
     throw new Error(
       "synthetic hosted matrix evidence cannot satisfy the real hosted matrix external evidence handoff",
+    );
+  }
+  if (rawEvidenceFixtureEvidence) {
+    throw new Error(
+      "fixture hosted matrix evidence cannot satisfy the real hosted matrix external evidence handoff",
     );
   }
   const cellIds = promotedGroupCells[groupId];
@@ -78,6 +86,7 @@ export function buildDevTestGameHostedMatrixExternalEvidence({
       rawEvidence: rawEvidenceSource,
       rawEvidenceGeneratedAt: source.generatedAt ?? null,
       rawEvidenceSyntheticExternalTarget,
+      rawEvidenceFixtureEvidence,
     },
     observations: source.observations.map((observation) => ({
       id: observation.id,

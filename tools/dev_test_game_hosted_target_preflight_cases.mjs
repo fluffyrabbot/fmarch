@@ -31,6 +31,9 @@ export const hostedTargetPreflightMissingRawEvidencePathRequiredEvidence =
 export const hostedTargetPreflightSyntheticRawEvidenceRequiredEvidence =
   `Replace synthetic demo raw evidence with a real ${hostedMatrixRawEvidenceContractSummary()} captured from an externally reachable hosted target; synthetic demo evidence can only prove the local handoff shape.`;
 
+export const hostedTargetPreflightFixtureRawEvidenceRequiredEvidence =
+  `Replace redacted fixture raw evidence with a real ${hostedMatrixRawEvidenceContractSummary()} captured from an externally reachable hosted target; fixture packets can prove operator handoff shape and target matching only.`;
+
 export function hostedTargetPreflightExternalTargetsRequiredEvidence({
   frontendBaseUrl = null,
   apiBaseUrl = null,

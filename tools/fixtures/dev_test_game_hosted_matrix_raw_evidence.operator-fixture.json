@@ -1,0 +1,60 @@
+{
+  "version": 1,
+  "proof": "fmarch-hosted-concurrent-race-matrix-raw",
+  "status": "passed",
+  "generatedAt": "2026-06-26T00:00:00.000Z",
+  "frontendBaseUrl": "https://fmarch-demo.example.test",
+  "apiBaseUrl": "https://api.fmarch-demo.example.test",
+  "groupId": "replacement-race-reload",
+  "commandRaceCount": 3,
+  "reloadRecoveryCount": 3,
+  "reconnectRecovery": true,
+  "staleConflictMessages": true,
+  "rawRoleCredentialsRedacted": true,
+  "generatedFrom": {
+    "hostedConcurrentRaceMatrix": "target/dev-test-game/hosted-concurrent-race-matrix.json",
+    "hostedConcurrentRaceMatrixGeneratedAt": "2026-06-26T00:00:00.000Z",
+    "groupId": "replacement-race-reload",
+    "fixtureEvidence": true,
+    "operatorFixture": true
+  },
+  "observations": [
+    {
+      "id": "replacement-private-post-operator-fixture-observation",
+      "status": "passed",
+      "cellId": "replacement-private-post",
+      "raceLaneId": "concurrent-replacement-private-post-race",
+      "reloadLaneId": "concurrent-replacement-private-post-race-reload",
+      "roleSurfaces": [
+        "player",
+        "replacementPlayer",
+        "host"
+      ]
+    },
+    {
+      "id": "replacement-vote-operator-fixture-observation",
+      "status": "passed",
+      "cellId": "replacement-vote",
+      "raceLaneId": "concurrent-replacement-vote-race",
+      "reloadLaneId": "concurrent-replacement-vote-race-reload",
+      "roleSurfaces": [
+        "player",
+        "replacementPlayer",
+        "host"
+      ]
+    },
+    {
+      "id": "replacement-action-operator-fixture-observation",
+      "status": "passed",
+      "cellId": "replacement-action",
+      "raceLaneId": "concurrent-replacement-action-race",
+      "reloadLaneId": "concurrent-replacement-action-race-reload",
+      "roleSurfaces": [
+        "player",
+        "replacementPlayer",
+        "host"
+      ]
+    }
+  ],
+  "proofBoundary": "Redacted operator fixture for the raw hosted-matrix evidence packet. It validates packet shape and configured target matching, but fixtureEvidence=true means it cannot satisfy real hosted deployment evidence, release readiness, or production readiness."
+}

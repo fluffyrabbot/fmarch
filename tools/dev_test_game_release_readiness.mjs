@@ -30,6 +30,10 @@ import {
   devTestGameHostedEvidenceLaneDemoProofPath,
 } from "./dev_test_game_hosted_evidence_lane_demo_proof.mjs";
 import {
+  assertHostedEvidenceLaneOperatorFixtureAdminProof,
+  devTestGameHostedEvidenceLaneOperatorFixtureAdminProofPath,
+} from "./dev_test_game_hosted_evidence_lane_operator_fixture_cases.mjs";
+import {
   assertDevTestGameIdentityAdapterContractPacket,
   devTestGameIdentityAdapterContractDiff,
   devTestGameIdentityAdapterProofVersion,
@@ -516,6 +520,10 @@ const defaultHostedEvidenceLaneAdminProofPath = path.join(
   repoRoot,
   devTestGameHostedEvidenceLaneAdminProofPath,
 );
+const defaultHostedEvidenceLaneOperatorFixtureAdminProofPath = path.join(
+  repoRoot,
+  devTestGameHostedEvidenceLaneOperatorFixtureAdminProofPath,
+);
 const defaultHostedEvidenceLaneDemoProofPath = path.join(
   artifactDir,
   "hosted-evidence-lane-demo-proof.json",
@@ -865,6 +873,19 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
               options.hostedEvidenceLaneAdminProofPath ??
               devTestGameHostedEvidenceLaneAdminProofPath,
             artifact: options.hostedEvidenceLaneAdminProofArtifact,
+          },
+        )
+      : undefined;
+  const hostedEvidenceLaneOperatorFixtureAdminProofEvidence =
+    options.hostedEvidenceLaneOperatorFixtureAdminProof
+      ? validateDevTestGameHostedEvidenceLaneOperatorFixtureAdminProof(
+          options.hostedEvidenceLaneOperatorFixtureAdminProof,
+          {
+            path:
+              options.hostedEvidenceLaneOperatorFixtureAdminProofPath ??
+              devTestGameHostedEvidenceLaneOperatorFixtureAdminProofPath,
+            artifact:
+              options.hostedEvidenceLaneOperatorFixtureAdminProofArtifact,
           },
         )
       : undefined;
@@ -1315,6 +1336,27 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
       blockedCheckCount:
         hostedEvidenceLaneAdminProofEvidence.visibleUnproven?.length ?? 0,
       adminRoleSurface: hostedEvidenceLaneAdminProofEvidence,
+    });
+  }
+  if (hostedEvidenceLaneOperatorFixtureAdminProofEvidence !== undefined) {
+    localChecks.push({
+      id: "local-hosted-evidence-lane-operator-fixture-admin-surface",
+      label: "Local hosted evidence lane operator fixture admin surface",
+      status: "passed",
+      evidence: hostedEvidenceLaneOperatorFixtureAdminProofEvidence.path,
+      proofBoundary:
+        hostedEvidenceLaneOperatorFixtureAdminProofEvidence.proofBoundary,
+      laneStatus: hostedEvidenceLaneOperatorFixtureAdminProofEvidence.laneStatus,
+      preflightStatus:
+        hostedEvidenceLaneOperatorFixtureAdminProofEvidence.preflightStatus,
+      fixtureEvidence:
+        hostedEvidenceLaneOperatorFixtureAdminProofEvidence.fixtureEvidence,
+      targetMatchedFixture:
+        hostedEvidenceLaneOperatorFixtureAdminProofEvidence.targetMatchedFixture,
+      blockedCheckCount:
+        hostedEvidenceLaneOperatorFixtureAdminProofEvidence.visibleUnproven
+          ?.length ?? 0,
+      adminRoleSurface: hostedEvidenceLaneOperatorFixtureAdminProofEvidence,
     });
   }
   if (hostedEvidenceLaneDemoProofEvidence !== undefined) {
@@ -4614,6 +4656,54 @@ export function validateDevTestGameHostedEvidenceLaneAdminProof(proof, options =
       proof.adminRoleSurface.visibleHostedHandoffSectionInputs ?? [],
     visibleHostedHandoffSummary:
       proof.adminRoleSurface.visibleHostedHandoffSummary ?? null,
+    laneStatus: String(proof.generatedFrom?.status ?? "unknown"),
+    preflightStatus: String(proof.generatedFrom?.preflightStatus ?? "unknown"),
+    ...(options.artifact === undefined ? {} : { artifact: options.artifact }),
+  };
+}
+
+export function validateDevTestGameHostedEvidenceLaneOperatorFixtureAdminProof(
+  proof,
+  options = {},
+) {
+  assertHostedEvidenceLaneOperatorFixtureAdminProof(proof);
+  if (
+    proof.generatedFrom?.checkStatuses?.["raw-evidence-readable"] !== "passed" ||
+    proof.generatedFrom?.checkStatuses?.["raw-evidence-real-hosted-target"] !==
+      "blocked" ||
+    proof.adminRoleSurface?.visibleUnproven?.includes(
+      "raw-evidence-real-hosted-target",
+    ) !== true
+  ) {
+    throw new Error(
+      "hosted evidence lane operator fixture proof must keep hosted evidence blocked",
+    );
+  }
+  return {
+    status: "passed",
+    path:
+      options.path ??
+      devTestGameHostedEvidenceLaneOperatorFixtureAdminProofPath,
+    proofBoundary: proof.proofBoundary,
+    overviewRoleUrl: proof.adminRoleSurface.overviewRoleUrl,
+    detailRoleUrl: proof.adminRoleSurface.detailRoleUrl,
+    visibleChecks: proof.adminRoleSurface.visibleChecks,
+    visibleUnproven: proof.adminRoleSurface.visibleUnproven,
+    visibleRelatedLinks: proof.adminRoleSurface.visibleRelatedLinks,
+    visibleHostedHandoffInputs:
+      proof.adminRoleSurface.visibleHostedHandoffInputs ?? [],
+    visibleHostedHandoffInputValues:
+      proof.adminRoleSurface.visibleHostedHandoffInputValues ?? {},
+    visibleHostedHandoffBlockedChecks:
+      proof.adminRoleSurface.visibleHostedHandoffBlockedChecks ?? [],
+    visibleHostedHandoffInputSections:
+      proof.adminRoleSurface.visibleHostedHandoffInputSections ?? [],
+    visibleHostedHandoffSectionInputs:
+      proof.adminRoleSurface.visibleHostedHandoffSectionInputs ?? [],
+    visibleHostedHandoffSummary:
+      proof.adminRoleSurface.visibleHostedHandoffSummary ?? null,
+    fixtureEvidence: true,
+    targetMatchedFixture: true,
     laneStatus: String(proof.generatedFrom?.status ?? "unknown"),
     preflightStatus: String(proof.generatedFrom?.preflightStatus ?? "unknown"),
     ...(options.artifact === undefined ? {} : { artifact: options.artifact }),
@@ -8314,6 +8404,18 @@ const optionalReadinessArtifactRegistry = Object.freeze([
     },
   }),
   optionalReadinessArtifact({
+    id: "hostedEvidenceLaneOperatorFixtureAdminProof",
+    envVar:
+      "FMARCH_DEV_TEST_GAME_HOSTED_EVIDENCE_LANE_OPERATOR_FIXTURE_ADMIN_PROOF",
+    defaultPath: defaultHostedEvidenceLaneOperatorFixtureAdminProofPath,
+    outputKeys: {
+      data: "hostedEvidenceLaneOperatorFixtureAdminProof",
+      path: "hostedEvidenceLaneOperatorFixtureAdminProofPath",
+      freshnessMetadata:
+        "hostedEvidenceLaneOperatorFixtureAdminProofArtifact",
+    },
+  }),
+  optionalReadinessArtifact({
     id: "hostedEvidenceLaneDemoProof",
     envVar: "FMARCH_DEV_TEST_GAME_HOSTED_EVIDENCE_LANE_DEMO_PROOF",
     defaultPath: defaultHostedEvidenceLaneDemoProofPath,
@@ -8413,6 +8515,7 @@ const optionalReadinessArtifactLoadPlan = Object.freeze([
   "raceCoverageAdminProof",
   "hostedConcurrentRaceMatrixAdminProof",
   "hostedEvidenceLaneAdminProof",
+  "hostedEvidenceLaneOperatorFixtureAdminProof",
   "hostedEvidenceLaneDemoProof",
   "proofGraphAdminProof",
   "proofFreshnessAdminProof",

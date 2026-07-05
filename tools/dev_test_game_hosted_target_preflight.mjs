@@ -16,6 +16,7 @@ export {
   hostedTargetPreflightBlockingCheckIds,
   hostedTargetPreflightCheckIds,
   hostedTargetPreflightExternalTargetsRequiredEvidence,
+  hostedTargetPreflightFixtureRawEvidenceRequiredEvidence,
   hostedTargetPreflightMissingApiUrlRequiredEvidence,
   hostedTargetPreflightMissingFrontendUrlRequiredEvidence,
   hostedTargetPreflightMissingRawEvidencePathRequiredEvidence,
@@ -23,6 +24,7 @@ export {
 } from "./dev_test_game_hosted_target_preflight_cases.mjs";
 import {
   hostedTargetPreflightExternalTargetsRequiredEvidence,
+  hostedTargetPreflightFixtureRawEvidenceRequiredEvidence,
   hostedTargetPreflightCheckIds,
   hostedTargetPreflightMissingApiUrlRequiredEvidence,
   hostedTargetPreflightMissingFrontendUrlRequiredEvidence,
@@ -127,16 +129,20 @@ export async function buildDevTestGameHostedTargetPreflight({
       id: "raw-evidence-real-hosted-target",
       status:
         rawEvidence.status === "passed" &&
-        rawEvidence.syntheticExternalTarget !== true
+        rawEvidence.syntheticExternalTarget !== true &&
+        rawEvidence.fixtureEvidence !== true
           ? "passed"
           : "blocked",
       ...(rawEvidence.status === "passed" &&
-      rawEvidence.syntheticExternalTarget !== true
+      rawEvidence.syntheticExternalTarget !== true &&
+      rawEvidence.fixtureEvidence !== true
         ? { evidence: rawEvidence.evidence }
         : {
             requiredEvidence:
               rawEvidence.syntheticExternalTarget === true
                 ? hostedTargetPreflightSyntheticRawEvidenceRequiredEvidence
+                : rawEvidence.fixtureEvidence === true
+                  ? hostedTargetPreflightFixtureRawEvidenceRequiredEvidence
                 : hostedTargetPreflightMissingRawEvidencePathRequiredEvidence,
           }),
     },
@@ -169,6 +175,7 @@ export async function buildDevTestGameHostedTargetPreflight({
       rawEvidenceStatus: rawEvidence.status,
       rawEvidenceSyntheticExternalTarget:
         rawEvidence.syntheticExternalTarget === true,
+      rawEvidenceFixture: rawEvidence.fixtureEvidence === true,
     },
     checks,
     ...(status === "blocked"
@@ -318,6 +325,9 @@ async function readRawEvidence({ rawEvidencePath, frontendBaseUrl, apiBaseUrl, g
     return {
       status: "passed",
       syntheticExternalTarget: source.generatedFrom?.syntheticExternalTarget === true,
+      fixtureEvidence:
+        source.generatedFrom?.fixtureEvidence === true ||
+        source.generatedFrom?.operatorFixture === true,
       evidence: {
         path: path.relative(repoRoot, resolved),
         mtime: metadata.mtime.toISOString(),

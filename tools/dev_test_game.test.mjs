@@ -478,6 +478,12 @@ import {
   runDevTestGameHostedEvidenceLaneDemoProof,
 } from "./dev_test_game_hosted_evidence_lane_demo_proof.mjs";
 import {
+  assertHostedEvidenceLaneOperatorFixtureAdminProof,
+  devTestGameHostedEvidenceLaneOperatorFixtureAdminProofCommand,
+  devTestGameHostedEvidenceLaneOperatorFixtureAdminProofPath,
+  devTestGameHostedEvidenceLaneOperatorFixturePath,
+} from "./dev_test_game_hosted_evidence_lane_operator_fixture_cases.mjs";
+import {
   assertDevTestGameHostedMatrixRawEvidence,
   buildDevTestGameHostedMatrixRawEvidence,
   devTestGameHostedMatrixRawEvidenceCommand,
@@ -486,6 +492,13 @@ import {
   hostedMatrixRawEvidenceContractSummary,
 } from "./dev_test_game_hosted_matrix_raw_evidence.mjs";
 import {
+  assertDevTestGameHostedMatrixRawEvidenceFixtureProof,
+  buildDevTestGameHostedMatrixRawEvidenceFixtureProof,
+  devTestGameHostedMatrixRawEvidenceFixtureProofCommand,
+  devTestGameHostedMatrixRawEvidenceFixtureProofPath,
+  devTestGameHostedMatrixRawEvidenceOperatorFixturePath,
+} from "./dev_test_game_hosted_matrix_raw_evidence_fixture_proof.mjs";
+import {
   assertDevTestGameHostedTargetPreflight,
   devTestGameHostedTargetPreflightCommand,
   devTestGameHostedTargetPreflightAdminProofPath,
@@ -493,6 +506,7 @@ import {
   hostedTargetPreflightBlockingCheckIds,
   hostedTargetPreflightCheckIds,
   hostedTargetPreflightExternalTargetsRequiredEvidence,
+  hostedTargetPreflightFixtureRawEvidenceRequiredEvidence,
   hostedTargetPreflightMissingApiUrlRequiredEvidence,
   hostedTargetPreflightMissingFrontendUrlRequiredEvidence,
   hostedTargetPreflightMissingRawEvidencePathRequiredEvidence,
@@ -773,6 +787,18 @@ test("dev test-game spine orchestrators expose stable proof order and env maps",
   assert.equal(
     packageJson.scripts["test:dev-test-game-seed-fixture"],
     "node tools/dev_test_game_seed_fixture_spine.mjs",
+  );
+  assert.equal(
+    packageJson.scripts[
+      "test:dev-test-game-hosted-matrix-raw-evidence-fixture-proof"
+    ],
+    "node tools/dev_test_game_hosted_matrix_raw_evidence_fixture_proof.mjs",
+  );
+  assert.equal(
+    packageJson.scripts[
+      "test:dev-test-game-hosted-evidence-lane-operator-fixture-admin-proof"
+    ],
+    "node tools/dev_test_game_hosted_evidence_lane_operator_fixture_admin_proof.mjs",
   );
   assert.equal(
     packageJson.scripts["test:dev-test-game-next-action:hosted-identity"],
@@ -4713,6 +4739,120 @@ test("dev test-game hosted evidence lane records blocked preflight state", async
   assert.equal(lane.nextProofTarget, devTestGameHostedEvidenceLanePath);
   assert.deepEqual(lane.generatedFrom, {
     hostedTargetPreflight: devTestGameHostedTargetPreflightPath,
+  });
+});
+
+test("dev test-game hosted evidence lane validates operator fixture without promoting hosted deployment", async () => {
+  const fixtureProof = await buildDevTestGameHostedMatrixRawEvidenceFixtureProof({
+    generatedAt: "2026-06-26T00:00:00.000Z",
+    env: {},
+  });
+  assertDevTestGameHostedMatrixRawEvidenceFixtureProof(fixtureProof);
+  assert.equal(
+    devTestGameHostedMatrixRawEvidenceFixtureProofCommand,
+    "test:dev-test-game-hosted-matrix-raw-evidence-fixture-proof",
+  );
+  assert.equal(
+    devTestGameHostedMatrixRawEvidenceFixtureProofPath,
+    "target/dev-test-game/hosted-matrix-raw-evidence-fixture-proof.json",
+  );
+  assert.equal(
+    devTestGameHostedMatrixRawEvidenceOperatorFixturePath,
+    "tools/fixtures/dev_test_game_hosted_matrix_raw_evidence.operator-fixture.json",
+  );
+  assert.deepEqual(
+    fixtureProof.checks.map((check) => [check.id, check.status]),
+    [
+      ["raw-evidence-readable", "passed"],
+      ["raw-evidence-target-matches-env", "passed"],
+      ["raw-evidence-fixture-boundary", "passed"],
+      ["release-claim-boundary-carried", "passed"],
+    ],
+  );
+  await assert.rejects(
+    buildDevTestGameHostedMatrixRawEvidenceFixtureProof({
+      generatedAt: "2026-06-26T00:00:00.000Z",
+      env: {
+        FMARCH_HOSTED_MATRIX_FRONTEND_URL: "https://wrong.example.test",
+      },
+    }),
+    /hosted matrix raw evidence drifted/,
+  );
+
+  const fixtureLane = await runDevTestGameHostedEvidenceLane({
+    generatedAt: "2026-06-26T00:00:00.000Z",
+    env: {
+      FMARCH_HOSTED_MATRIX_FRONTEND_URL: fixtureProof.target.frontendBaseUrl,
+      FMARCH_HOSTED_MATRIX_API_URL: fixtureProof.target.apiBaseUrl,
+      FMARCH_HOSTED_MATRIX_GROUP_ID: fixtureProof.target.groupId,
+      FMARCH_HOSTED_MATRIX_RAW_EVIDENCE_PATH:
+        fixtureProof.target.rawEvidencePath,
+    },
+  });
+  assertDevTestGameHostedEvidenceLane(fixtureLane);
+  assert.equal(fixtureLane.status, "blocked");
+  assert.equal(fixtureLane.preflightStatus, "blocked");
+  assert.deepEqual(fixtureLane.blockedCheckIds, [
+    "raw-evidence-real-hosted-target",
+  ]);
+  assert.equal(fixtureLane.target.rawEvidenceStatus, "passed");
+  assert.equal(fixtureLane.target.rawEvidenceFixture, true);
+  assert.equal(fixtureLane.target.rawEvidenceSyntheticExternalTarget, false);
+  assert.deepEqual(
+    fixtureLane.checks.map((check) => [check.id, check.status]),
+    [
+      ["hosted-target-preflight", "blocked"],
+      ["hosted-frontend-url-configured", "passed"],
+      ["hosted-api-url-configured", "passed"],
+      ["hosted-targets-external", "passed"],
+      ["raw-evidence-path-configured", "passed"],
+      ["raw-evidence-readable", "passed"],
+      ["raw-evidence-real-hosted-target", "blocked"],
+      ["release-claim-boundary-carried", "passed"],
+    ],
+  );
+  assert.equal(
+    fixtureLane.checks.find((check) => check.id === "raw-evidence-real-hosted-target")
+      ?.requiredEvidence,
+    hostedTargetPreflightFixtureRawEvidenceRequiredEvidence,
+  );
+  assert.equal(
+    fixtureLane.blockedReceipt.rawEvidenceContractSummary,
+    hostedMatrixRawEvidenceContractSummary(),
+  );
+  assert.equal(
+    devTestGameHostedEvidenceLaneOperatorFixtureAdminProofCommand,
+    "test:dev-test-game-hosted-evidence-lane-operator-fixture-admin-proof",
+  );
+  assert.equal(
+    devTestGameHostedEvidenceLaneOperatorFixturePath,
+    "target/dev-test-game/hosted-evidence-lane-operator-fixture.json",
+  );
+  assert.equal(
+    devTestGameHostedEvidenceLaneOperatorFixtureAdminProofPath,
+    "target/dev-test-game/hosted-evidence-lane-operator-fixture-admin-proof.json",
+  );
+  assertHostedEvidenceLaneOperatorFixtureAdminProof({
+    version: 1,
+    proof: "dev-test-game-hosted-evidence-lane-operator-fixture-admin-proof",
+    status: "passed",
+    releaseReady: false,
+    productionReady: false,
+    scope:
+      "local-dev-test-game-hosted-evidence-lane-operator-fixture-admin-surface",
+    generatedFrom: {
+      operatorFixture: true,
+      fixtureEvidence: true,
+      targetMatchedFixture: true,
+      checkStatuses: {
+        "raw-evidence-readable": "passed",
+        "raw-evidence-real-hosted-target": "blocked",
+      },
+    },
+    adminRoleSurface: {
+      visibleChecks: ["raw-evidence-readable", "raw-evidence-real-hosted-target"],
+      visibleUnproven: ["raw-evidence-real-hosted-target"],
+    },
   });
 });
 
@@ -14446,6 +14586,7 @@ test("session card and markdown include role credential URLs and tokens", async 
     rawEvidence: devTestGameHostedMatrixRawEvidencePath,
     rawEvidenceGeneratedAt: laneRawEvidence.generatedAt,
     rawEvidenceSyntheticExternalTarget: false,
+    rawEvidenceFixtureEvidence: false,
   });
   const laneFreshManifest = buildDevTestGameSpineManifest({
     generatedAt: "2026-06-26T00:00:00.000Z",
@@ -14830,6 +14971,33 @@ test("session card and markdown include role credential URLs and tokens", async 
   assert.equal(
     hostedEvidenceLaneCheck.adminRoleSurface.preflightStatus,
     "blocked",
+  );
+  const hostedEvidenceOperatorFixtureReadiness =
+    buildDevTestGameReleaseReadiness(proofRun, {
+      generatedAt: "2026-06-26T00:00:00.000Z",
+      hostedEvidenceLaneOperatorFixtureAdminProofPath:
+        devTestGameHostedEvidenceLaneOperatorFixtureAdminProofPath,
+      hostedEvidenceLaneOperatorFixtureAdminProof:
+        hostedEvidenceLaneOperatorFixtureAdminProofFixture(),
+    });
+  assertDevTestGameReleaseReadiness(hostedEvidenceOperatorFixtureReadiness);
+  const hostedEvidenceOperatorFixtureCheck =
+    hostedEvidenceOperatorFixtureReadiness.localDevelopmentSpine.checks.find(
+      (item) =>
+        item.id ===
+        "local-hosted-evidence-lane-operator-fixture-admin-surface",
+    );
+  assert.equal(hostedEvidenceOperatorFixtureCheck.status, "passed");
+  assert.equal(hostedEvidenceOperatorFixtureCheck.laneStatus, "blocked");
+  assert.equal(hostedEvidenceOperatorFixtureCheck.preflightStatus, "blocked");
+  assert.equal(hostedEvidenceOperatorFixtureCheck.fixtureEvidence, true);
+  assert.equal(hostedEvidenceOperatorFixtureCheck.targetMatchedFixture, true);
+  assert.equal(hostedEvidenceOperatorFixtureCheck.blockedCheckCount, 1);
+  assert.equal(
+    hostedEvidenceOperatorFixtureReadiness.releaseReadiness.unproven.some(
+      (item) => item.id === "hosted-deployment",
+    ),
+    true,
   );
   const hostedEvidenceLaneDemoReadiness = buildDevTestGameReleaseReadiness(
     proofRun,
@@ -22592,6 +22760,58 @@ function hostedEvidenceLaneAdminProofFixture() {
       productionReady: false,
     },
   };
+}
+
+function hostedEvidenceLaneOperatorFixtureAdminProofFixture() {
+  const proof = hostedEvidenceLaneAdminProofFixture();
+  proof.proof = "dev-test-game-hosted-evidence-lane-operator-fixture-admin-proof";
+  proof.scope =
+    "local-dev-test-game-hosted-evidence-lane-operator-fixture-admin-surface";
+  proof.proofBoundary =
+    "Local hosted evidence lane operator fixture admin proof only.";
+  proof.generatedFrom.hostedEvidenceLane =
+    devTestGameHostedEvidenceLaneOperatorFixturePath;
+  proof.generatedFrom.rawEvidenceFixtureProof =
+    devTestGameHostedMatrixRawEvidenceFixtureProofPath;
+  proof.generatedFrom.rawEvidenceFixturePath =
+    devTestGameHostedMatrixRawEvidenceOperatorFixturePath;
+  proof.generatedFrom.operatorFixture = true;
+  proof.generatedFrom.fixtureEvidence = true;
+  proof.generatedFrom.targetMatchedFixture = true;
+  proof.generatedFrom.blockedCheckIds = ["raw-evidence-real-hosted-target"];
+  proof.generatedFrom.hostedHandoffBlockedCheckIds = [
+    "raw-evidence-real-hosted-target",
+  ];
+  proof.generatedFrom.checkStatuses = {
+    ...Object.fromEntries(
+      [
+        "hosted-target-preflight",
+        "hosted-frontend-url-configured",
+        "hosted-api-url-configured",
+        "hosted-targets-external",
+        "raw-evidence-path-configured",
+        "raw-evidence-readable",
+        "release-claim-boundary-carried",
+      ].map((id) => [id, "passed"]),
+    ),
+    "hosted-target-preflight": "blocked",
+    "raw-evidence-real-hosted-target": "blocked",
+  };
+  proof.adminRoleSurface.visibleChecks = [
+    "hosted-target-preflight",
+    "hosted-frontend-url-configured",
+    "hosted-api-url-configured",
+    "hosted-targets-external",
+    "raw-evidence-path-configured",
+    "raw-evidence-readable",
+    "raw-evidence-real-hosted-target",
+    "release-claim-boundary-carried",
+  ];
+  proof.adminRoleSurface.visibleUnproven = ["raw-evidence-real-hosted-target"];
+  proof.adminRoleSurface.visibleHostedHandoffBlockedChecks = [
+    "raw-evidence-real-hosted-target",
+  ];
+  return proof;
 }
 
 function hostedEvidenceLaneDemoProofFixture() {
