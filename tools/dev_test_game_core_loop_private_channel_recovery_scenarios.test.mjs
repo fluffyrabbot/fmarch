@@ -12,6 +12,7 @@ import {
   coreLoopPrivateChannelInvalidActionLaneId,
   coreLoopPrivateChannelRecoveryFamilyId,
   coreLoopPrivateChannelRecoveryLaneIds,
+  coreLoopPrivateChannelRecoveryScenarioCases,
   coreLoopPrivateChannelRecoveryScenarioFamily,
   coreLoopPrivateChannelPostLaneId,
   coreLoopPrivateChannelStalePostLaneId,
@@ -38,6 +39,81 @@ test("private-channel recovery family shares post, reload, and stale recovery ca
   assert.equal(
     coreLoopPrivateChannelInvalidActionLaneId,
     "private-channel-invalid-action-recovery",
+  );
+  const scenarioCases = coreLoopPrivateChannelRecoveryScenarioCases();
+  assert.deepEqual(
+    scenarioCases.map((scenarioCase) => ({
+      key: scenarioCase.key,
+      staleRejectKey: scenarioCase.staleRejectKey,
+      reloadKey: scenarioCase.reloadKey,
+      laneId: scenarioCase.laneId,
+      coverage: scenarioCase.coverage,
+      scenario: scenarioCase.scenario,
+    })),
+    [
+      {
+        key: "submitPost",
+        staleRejectKey: undefined,
+        reloadKey: undefined,
+        laneId: coreLoopPrivateChannelPostLaneId,
+        coverage: {
+          id: "core-loop-private-channel-post",
+          label: "Private channel post and role URL",
+        },
+        scenario: privateChannelSubmitPostScenario(),
+      },
+      {
+        key: "stalePostAfterPhaseTransition",
+        staleRejectKey: "stalePostAfterPhaseTransition",
+        reloadKey: undefined,
+        laneId: coreLoopPrivateChannelStalePostLaneId,
+        coverage: {
+          id: "core-loop-private-channel-stale-post",
+          label: "Private channel stale post recovery",
+        },
+        scenario: stalePrivateChannelPostPhaseLockedScenario(),
+      },
+      {
+        key: "completedPrivateChannelReload",
+        staleRejectKey: undefined,
+        reloadKey: "completedPrivateChannel",
+        laneId: coreLoopPrivateChannelCompletedPostLaneId,
+        coverage: {
+          id: "core-loop-private-channel-completed-game",
+          label: "Completed private-channel recovery",
+        },
+        scenario: completedPrivateChannelReloadScenario(),
+      },
+      {
+        key: "staleCompletedPrivatePost",
+        staleRejectKey: "staleCompletedPrivatePost",
+        reloadKey: undefined,
+        laneId: coreLoopPrivateChannelCompletedPostLaneId,
+        coverage: undefined,
+        scenario: staleCompletedPrivatePostScenario(),
+      },
+      {
+        key: "invalidActionRecovery",
+        staleRejectKey: "invalidActionRecovery",
+        reloadKey: undefined,
+        laneId: coreLoopPrivateChannelInvalidActionLaneId,
+        coverage: {
+          id: "core-loop-private-channel-invalid-action",
+          label: "Private channel invalid action recovery",
+        },
+        scenario: privateChannelInvalidActionRecoveryScenario(),
+      },
+    ],
+  );
+  assert.notEqual(
+    coreLoopPrivateChannelRecoveryScenarioCases()[0].scenario,
+    coreLoopPrivateChannelRecoveryScenarioCases()[0].scenario,
+  );
+  assert.notEqual(
+    coreLoopPrivateChannelRecoveryScenarioCases()[0].scenario
+      .expectedRefreshKeys,
+    coreLoopPrivateChannelRecoveryScenarioCases()[0].scenario
+      .expectedRefreshKeys,
   );
   assert.deepEqual(coreLoopPrivateChannelRecoveryLaneIds, [
     coreLoopPrivateChannelPostLaneId,

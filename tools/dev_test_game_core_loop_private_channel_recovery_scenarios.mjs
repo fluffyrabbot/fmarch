@@ -49,36 +49,97 @@ export function privateChannelInvalidActionRecoveryScenario() {
   };
 }
 
+const clonePrivateChannelRecoveryScenarioCase = (scenarioCase) => ({
+  ...scenarioCase,
+  coverage:
+    scenarioCase.coverage === undefined
+      ? undefined
+      : { ...scenarioCase.coverage },
+  scenario: clonePrivateChannelRecoveryScenario(scenarioCase.scenario),
+});
+
+const clonePrivateChannelRecoveryScenario = (scenario) =>
+  Object.fromEntries(
+    Object.entries(scenario).map(([key, value]) => [
+      key,
+      Array.isArray(value) ? [...value] : value,
+    ]),
+  );
+
+const uniqueLaneIds = (scenarioCases) => [
+  ...new Set(scenarioCases.map((scenarioCase) => scenarioCase.laneId)),
+];
+
+const coreLoopPrivateChannelRecoveryScenarioCaseDefinitions = Object.freeze([
+  Object.freeze({
+    key: "submitPost",
+    laneId: coreLoopPrivateChannelPostLaneId,
+    scenario: Object.freeze(privateChannelSubmitPostScenario()),
+    coverage: Object.freeze({
+      id: "core-loop-private-channel-post",
+      label: "Private channel post and role URL",
+    }),
+  }),
+  Object.freeze({
+    key: "stalePostAfterPhaseTransition",
+    staleRejectKey: "stalePostAfterPhaseTransition",
+    laneId: coreLoopPrivateChannelStalePostLaneId,
+    scenario: Object.freeze(stalePrivateChannelPostPhaseLockedScenario()),
+    coverage: Object.freeze({
+      id: "core-loop-private-channel-stale-post",
+      label: "Private channel stale post recovery",
+    }),
+  }),
+  Object.freeze({
+    key: "completedPrivateChannelReload",
+    reloadKey: "completedPrivateChannel",
+    laneId: coreLoopPrivateChannelCompletedPostLaneId,
+    scenario: Object.freeze(completedPrivateChannelReloadScenario()),
+    coverage: Object.freeze({
+      id: "core-loop-private-channel-completed-game",
+      label: "Completed private-channel recovery",
+    }),
+  }),
+  Object.freeze({
+    key: "staleCompletedPrivatePost",
+    staleRejectKey: "staleCompletedPrivatePost",
+    laneId: coreLoopPrivateChannelCompletedPostLaneId,
+    scenario: Object.freeze(staleCompletedPrivatePostScenario()),
+  }),
+  Object.freeze({
+    key: "invalidActionRecovery",
+    staleRejectKey: "invalidActionRecovery",
+    laneId: coreLoopPrivateChannelInvalidActionLaneId,
+    scenario: Object.freeze(privateChannelInvalidActionRecoveryScenario()),
+    coverage: Object.freeze({
+      id: "core-loop-private-channel-invalid-action",
+      label: "Private channel invalid action recovery",
+    }),
+  }),
+]);
+
+export function coreLoopPrivateChannelRecoveryScenarioCases() {
+  return coreLoopPrivateChannelRecoveryScenarioCaseDefinitions.map(
+    clonePrivateChannelRecoveryScenarioCase,
+  );
+}
+
 export const coreLoopPrivateChannelRecoveryLaneIds = Object.freeze([
-  coreLoopPrivateChannelPostLaneId,
-  coreLoopPrivateChannelStalePostLaneId,
-  coreLoopPrivateChannelCompletedPostLaneId,
-  coreLoopPrivateChannelInvalidActionLaneId,
+  ...uniqueLaneIds(coreLoopPrivateChannelRecoveryScenarioCaseDefinitions),
 ]);
 
 export const coreLoopPrivateChannelRecoveryCoverageFamilyDefinitions =
-  Object.freeze([
-    Object.freeze({
-      id: "core-loop-private-channel-post",
-      label: "Private channel post and role URL",
-      laneIds: Object.freeze([coreLoopPrivateChannelPostLaneId]),
-    }),
-    Object.freeze({
-      id: "core-loop-private-channel-stale-post",
-      label: "Private channel stale post recovery",
-      laneIds: Object.freeze([coreLoopPrivateChannelStalePostLaneId]),
-    }),
-    Object.freeze({
-      id: "core-loop-private-channel-completed-game",
-      label: "Completed private-channel recovery",
-      laneIds: Object.freeze([coreLoopPrivateChannelCompletedPostLaneId]),
-    }),
-    Object.freeze({
-      id: "core-loop-private-channel-invalid-action",
-      label: "Private channel invalid action recovery",
-      laneIds: Object.freeze([coreLoopPrivateChannelInvalidActionLaneId]),
-    }),
-  ]);
+  Object.freeze(
+    coreLoopPrivateChannelRecoveryScenarioCaseDefinitions
+      .filter((scenarioCase) => scenarioCase.coverage !== undefined)
+      .map((scenarioCase) =>
+        Object.freeze({
+          id: scenarioCase.coverage.id,
+          label: scenarioCase.coverage.label,
+          laneIds: Object.freeze([scenarioCase.laneId]),
+        }),
+      ),
+  );
 
 export function coreLoopPrivateChannelRecoveryCoverageFamilies() {
   return cloneLaneCoverageFamilies(
@@ -108,30 +169,32 @@ export function assertCoreLoopPrivateChannelRecoveryCoverageSummary({
 }
 
 export function coreLoopPrivateChannelRecoveryScenarioFamily() {
-  const submitPost = privateChannelSubmitPostScenario();
-  const stalePostAfterPhaseTransition =
-    stalePrivateChannelPostPhaseLockedScenario();
-  const completedPrivateChannelReload = completedPrivateChannelReloadScenario();
-  const staleCompletedPrivatePost = staleCompletedPrivatePostScenario();
-  const invalidActionRecovery = privateChannelInvalidActionRecoveryScenario();
+  const scenarioCases = coreLoopPrivateChannelRecoveryScenarioCases();
   return {
     id: coreLoopPrivateChannelRecoveryFamilyId,
     laneIds: [...coreLoopPrivateChannelRecoveryLaneIds],
     transitionTokens: completedPrivateChannelTransitionTokens(),
-    scenarios: {
-      submitPost,
-      stalePostAfterPhaseTransition,
-      completedPrivateChannelReload,
-      staleCompletedPrivatePost,
-      invalidActionRecovery,
-    },
-    staleRejects: {
-      stalePostAfterPhaseTransition,
-      staleCompletedPrivatePost,
-      invalidActionRecovery,
-    },
-    reloads: {
-      completedPrivateChannel: completedPrivateChannelReload,
-    },
+    scenarios: Object.fromEntries(
+      scenarioCases.map((scenarioCase) => [
+        scenarioCase.key,
+        scenarioCase.scenario,
+      ]),
+    ),
+    staleRejects: Object.fromEntries(
+      scenarioCases
+        .filter((scenarioCase) => scenarioCase.staleRejectKey !== undefined)
+        .map((scenarioCase) => [
+          scenarioCase.staleRejectKey,
+          scenarioCase.scenario,
+        ]),
+    ),
+    reloads: Object.fromEntries(
+      scenarioCases
+        .filter((scenarioCase) => scenarioCase.reloadKey !== undefined)
+        .map((scenarioCase) => [
+          scenarioCase.reloadKey,
+          scenarioCase.scenario,
+        ]),
+    ),
   };
 }
