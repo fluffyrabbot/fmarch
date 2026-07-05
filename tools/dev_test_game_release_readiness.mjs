@@ -60,6 +60,12 @@ import {
   hostedTargetPreflightCheckIds,
 } from "./dev_test_game_hosted_target_preflight.mjs";
 import {
+  devTestGameHostedTargetPreflightAdminProofPath,
+} from "./dev_test_game_hosted_target_preflight_cases.mjs";
+import {
+  devTestGameHostedEvidenceLaneAdminProofPath,
+} from "./dev_test_game_hosted_handoff_cases.mjs";
+import {
   devTestGameReleaseReadinessMarkdownPath,
   devTestGameReleaseReadinessPath,
 } from "./dev_test_game_spine_readiness_steps.mjs";
@@ -375,8 +381,8 @@ const defaultHostedConcurrentRaceMatrixPath = path.join(
   "hosted-concurrent-race-matrix.json",
 );
 const defaultHostedEvidenceLaneAdminProofPath = path.join(
-  artifactDir,
-  "hosted-evidence-lane-admin-proof.json",
+  repoRoot,
+  devTestGameHostedEvidenceLaneAdminProofPath,
 );
 const defaultHostedEvidenceLaneDemoProofPath = path.join(
   artifactDir,
@@ -705,7 +711,7 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
           {
             path:
               options.hostedEvidenceLaneAdminProofPath ??
-              "target/dev-test-game/hosted-evidence-lane-admin-proof.json",
+              devTestGameHostedEvidenceLaneAdminProofPath,
             artifact: options.hostedEvidenceLaneAdminProofArtifact,
           },
         )
@@ -4092,7 +4098,7 @@ export function validateDevTestGameHostedTargetPreflightAdminProof(
     status: "passed",
     path:
       options.path ??
-      "target/dev-test-game/hosted-target-preflight-admin-proof.json",
+      devTestGameHostedTargetPreflightAdminProofPath,
     proofBoundary: proof.proofBoundary,
     overviewRoleUrl: proof.adminRoleSurface.overviewRoleUrl,
     detailRoleUrl: proof.adminRoleSurface.detailRoleUrl,
@@ -4217,7 +4223,7 @@ export function validateDevTestGameHostedEvidenceLaneAdminProof(proof, options =
     status: "passed",
     path:
       options.path ??
-      "target/dev-test-game/hosted-evidence-lane-admin-proof.json",
+      devTestGameHostedEvidenceLaneAdminProofPath,
     proofBoundary: proof.proofBoundary,
     overviewRoleUrl: proof.adminRoleSurface.overviewRoleUrl,
     detailRoleUrl: proof.adminRoleSurface.detailRoleUrl,
@@ -6323,10 +6329,8 @@ function adminSpineProofArtifactPath(id) {
     release: "target/dev-test-game/release-admin-proof.json",
     "release-runbook": "target/dev-test-game/release-runbook-admin-proof.json",
     "race-coverage": "target/dev-test-game/race-coverage-admin-proof.json",
-    "hosted-target-preflight":
-      "target/dev-test-game/hosted-target-preflight-admin-proof.json",
-    "hosted-evidence-lane":
-      "target/dev-test-game/hosted-evidence-lane-admin-proof.json",
+    "hosted-target-preflight": devTestGameHostedTargetPreflightAdminProofPath,
+    "hosted-evidence-lane": devTestGameHostedEvidenceLaneAdminProofPath,
     "hosted-concurrent-race-matrix":
       hostedConcurrentRaceMatrixAdminProofArtifact.path,
     "hosted-ops-signals": devTestGameHostedOpsSignalsAdminProofPath,

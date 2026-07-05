@@ -68,6 +68,9 @@ import {
   devTestGameHostedTargetPreflightPath,
 } from "./dev_test_game_hosted_target_preflight.mjs";
 import {
+  devTestGameHostedTargetPreflightAdminProofPath,
+} from "./dev_test_game_hosted_target_preflight_cases.mjs";
+import {
   devTestGameReleaseRunbookCommand,
   devTestGameReleaseRunbookPath,
 } from "./dev_test_game_release_runbook.mjs";
@@ -907,7 +910,7 @@ export function assertDevTestGameSpineManifest(manifest) {
     "target/dev-test-game/identity-admin-proof.json",
     "target/dev-test-game/release-admin-proof.json",
     "target/dev-test-game/release-runbook-admin-proof.json",
-    "target/dev-test-game/hosted-target-preflight-admin-proof.json",
+    devTestGameHostedTargetPreflightAdminProofPath,
     devTestGameHostedOpsSignalsAdminProofPath,
     "target/dev-test-game/spine-manifest-admin-proof.json",
     "target/dev-test-game/admin-spine-admin-proof.json",

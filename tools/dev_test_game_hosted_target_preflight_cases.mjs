@@ -1,3 +1,6 @@
+export const devTestGameHostedTargetPreflightAdminProofPath =
+  "target/dev-test-game/hosted-target-preflight-admin-proof.json";
+
 export const hostedTargetPreflightBlockingCheckIds = Object.freeze([
   "hosted-frontend-url-configured",
   "hosted-api-url-configured",

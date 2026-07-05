@@ -3,8 +3,12 @@ import { pathToFileURL } from "node:url";
 import { assertDevTestGameProofRun } from "./dev_test_game_proof_contract.mjs";
 import {
   assertDevTestGameHostedTargetPreflight,
+  devTestGameHostedTargetPreflightPath,
   hostedTargetPreflightCheckIds,
 } from "./dev_test_game_hosted_target_preflight.mjs";
+import {
+  devTestGameHostedTargetPreflightAdminProofPath,
+} from "./dev_test_game_hosted_target_preflight_cases.mjs";
 import {
   hostedEvidenceHandoffInputIds,
   hostedEvidenceHandoffInputSectionStatuses,
@@ -15,7 +19,6 @@ import {
 import {
   assertAdminRoleSurfaceStatusText,
   assertVisibleAdminRoleSurfaceRows,
-  artifactDir,
   proveAdminAuditDetail,
   readJson,
   repoRoot,
@@ -25,7 +28,7 @@ import {
 const preflightPath = path.resolve(
   repoRoot,
   process.env.FMARCH_DEV_TEST_GAME_HOSTED_TARGET_PREFLIGHT ??
-    "target/dev-test-game/hosted-target-preflight.json",
+    devTestGameHostedTargetPreflightPath,
 );
 const proofRunPath = path.resolve(
   repoRoot,
@@ -35,8 +38,8 @@ const proofRunPath = path.resolve(
 const preflightRelativePath = path.relative(repoRoot, preflightPath);
 const proofRunRelativePath = path.relative(repoRoot, proofRunPath);
 const evidencePath = path.join(
-  artifactDir,
-  "hosted-target-preflight-admin-proof.json",
+  repoRoot,
+  devTestGameHostedTargetPreflightAdminProofPath,
 );
 const requiredChecks = hostedTargetPreflightCheckIds;
 const requiredRelatedLinks = [

@@ -5,10 +5,16 @@ import { devTestGameRaceCoveragePath } from "./dev_test_game_race_coverage.mjs";
 import { devTestGameHostedConcurrentRaceMatrixPath } from "./dev_test_game_hosted_concurrent_race_matrix.mjs";
 import { devTestGameHostedEvidenceLanePath } from "./dev_test_game_hosted_evidence_lane.mjs";
 import {
+  devTestGameHostedEvidenceLaneAdminProofPath,
+} from "./dev_test_game_hosted_handoff_cases.mjs";
+import {
   devTestGameHostedIdentityEvidencePath,
   devTestGameHostedIdentityProgressionSummaryPath,
 } from "./dev_test_game_hosted_identity_evidence.mjs";
 import { devTestGameHostedTargetPreflightPath } from "./dev_test_game_hosted_target_preflight.mjs";
+import {
+  devTestGameHostedTargetPreflightAdminProofPath,
+} from "./dev_test_game_hosted_target_preflight_cases.mjs";
 import { devTestGameOpsArtifactsPath } from "./dev_test_game_ops_artifacts.mjs";
 import {
   devTestGameHostedOpsSignalsPath,
@@ -102,11 +108,11 @@ export const adminSpineReadinessEvidenceEnv = {
   FMARCH_DEV_TEST_GAME_HOSTED_TARGET_PREFLIGHT:
     devTestGameHostedTargetPreflightPath,
   FMARCH_DEV_TEST_GAME_HOSTED_TARGET_PREFLIGHT_ADMIN_PROOF:
-    "target/dev-test-game/hosted-target-preflight-admin-proof.json",
+    devTestGameHostedTargetPreflightAdminProofPath,
   FMARCH_DEV_TEST_GAME_HOSTED_EVIDENCE_LANE:
     devTestGameHostedEvidenceLanePath,
   FMARCH_DEV_TEST_GAME_HOSTED_EVIDENCE_LANE_ADMIN_PROOF:
-    "target/dev-test-game/hosted-evidence-lane-admin-proof.json",
+    devTestGameHostedEvidenceLaneAdminProofPath,
   FMARCH_DEV_TEST_GAME_PROOF_GRAPH: devTestGameProofGraphPath,
   FMARCH_DEV_TEST_GAME_PROOF_GRAPH_ADMIN_PROOF: devTestGameProofGraphAdminProofPath,
   FMARCH_DEV_TEST_GAME_PROOF_FRESHNESS_ADMIN_PROOF: proofFreshnessAdminProofPath,

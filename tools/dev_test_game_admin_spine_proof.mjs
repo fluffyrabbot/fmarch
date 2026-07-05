@@ -58,8 +58,14 @@ import {
   hostedTargetPreflightAdminProofCase,
 } from "./dev_test_game_hosted_target_preflight_admin_proof.mjs";
 import {
+  devTestGameHostedTargetPreflightAdminProofPath,
+} from "./dev_test_game_hosted_target_preflight_cases.mjs";
+import {
   hostedEvidenceLaneAdminProofCase,
 } from "./dev_test_game_hosted_evidence_lane_admin_proof.mjs";
+import {
+  devTestGameHostedEvidenceLaneAdminProofPath,
+} from "./dev_test_game_hosted_handoff_cases.mjs";
 import {
   hostedConcurrentRaceMatrixAdminProofCase,
 } from "./dev_test_game_hosted_concurrent_race_matrix_admin_proof.mjs";
@@ -177,7 +183,7 @@ export const devTestGameAdminSpineProofPlan = [
     label: "Hosted target preflight admin role surface",
     script: "tools/dev_test_game_hosted_target_preflight_admin_proof.mjs",
     rerunCommand: "npm run test:dev-test-game-hosted-target-preflight-admin-proof",
-    path: "target/dev-test-game/hosted-target-preflight-admin-proof.json",
+    path: devTestGameHostedTargetPreflightAdminProofPath,
     validate: validateDevTestGameHostedTargetPreflightAdminProof,
     caseFactory: hostedTargetPreflightAdminProofCase,
   },
@@ -186,7 +192,7 @@ export const devTestGameAdminSpineProofPlan = [
     label: "Hosted evidence lane admin role surface",
     script: "tools/dev_test_game_hosted_evidence_lane_admin_proof.mjs",
     rerunCommand: "npm run test:dev-test-game-hosted-evidence-lane-admin-proof",
-    path: "target/dev-test-game/hosted-evidence-lane-admin-proof.json",
+    path: devTestGameHostedEvidenceLaneAdminProofPath,
     validate: validateDevTestGameHostedEvidenceLaneAdminProof,
     caseFactory: hostedEvidenceLaneAdminProofCase,
   },

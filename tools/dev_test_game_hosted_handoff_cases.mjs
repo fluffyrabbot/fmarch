@@ -17,6 +17,8 @@ export const hostedEvidenceLaneCommand =
   "npm run test:dev-test-game-hosted-evidence-lane";
 export const hostedEvidenceLanePath =
   "target/dev-test-game/hosted-evidence-lane.json";
+export const devTestGameHostedEvidenceLaneAdminProofPath =
+  "target/dev-test-game/hosted-evidence-lane-admin-proof.json";
 export const hostedMatrixExternalEvidencePath =
   "target/dev-test-game/hosted-matrix-external.json";
 

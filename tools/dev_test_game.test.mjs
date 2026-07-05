@@ -370,6 +370,7 @@ import {
   runDevTestGameHostedEvidenceLane,
 } from "./dev_test_game_hosted_evidence_lane.mjs";
 import {
+  devTestGameHostedEvidenceLaneAdminProofPath,
   hostedEvidenceBlockedHandoffChecklistFixture,
   hostedEvidenceHandoffChecklistFromPreflight,
   hostedEvidenceHandoffBlockedCheckIds,
@@ -397,6 +398,7 @@ import {
 import {
   assertDevTestGameHostedTargetPreflight,
   devTestGameHostedTargetPreflightCommand,
+  devTestGameHostedTargetPreflightAdminProofPath,
   devTestGameHostedTargetPreflightPath,
   hostedTargetPreflightBlockingCheckIds,
   hostedTargetPreflightCheckIds,
@@ -775,11 +777,11 @@ test("dev test-game spine orchestrators expose stable proof order and env maps",
     FMARCH_DEV_TEST_GAME_HOSTED_TARGET_PREFLIGHT:
       "target/dev-test-game/hosted-target-preflight.json",
     FMARCH_DEV_TEST_GAME_HOSTED_TARGET_PREFLIGHT_ADMIN_PROOF:
-      "target/dev-test-game/hosted-target-preflight-admin-proof.json",
+      devTestGameHostedTargetPreflightAdminProofPath,
     FMARCH_DEV_TEST_GAME_HOSTED_EVIDENCE_LANE:
       "target/dev-test-game/hosted-evidence-lane.json",
     FMARCH_DEV_TEST_GAME_HOSTED_EVIDENCE_LANE_ADMIN_PROOF:
-      "target/dev-test-game/hosted-evidence-lane-admin-proof.json",
+      devTestGameHostedEvidenceLaneAdminProofPath,
     FMARCH_DEV_TEST_GAME_PROOF_GRAPH: "target/dev-test-game/proof-graph.json",
     FMARCH_DEV_TEST_GAME_PROOF_GRAPH_ADMIN_PROOF:
       "target/dev-test-game/proof-graph-admin-proof.json",
@@ -12317,8 +12319,7 @@ test("session card and markdown include role credential URLs and tokens", async 
   );
   const hostedEvidenceLaneReadiness = buildDevTestGameReleaseReadiness(proofRun, {
     generatedAt: "2026-06-26T00:00:00.000Z",
-    hostedEvidenceLaneAdminProofPath:
-      "target/dev-test-game/hosted-evidence-lane-admin-proof.json",
+    hostedEvidenceLaneAdminProofPath: devTestGameHostedEvidenceLaneAdminProofPath,
     hostedEvidenceLaneAdminProof: hostedEvidenceLaneAdminProofFixture(),
   });
   assertDevTestGameReleaseReadiness(hostedEvidenceLaneReadiness);

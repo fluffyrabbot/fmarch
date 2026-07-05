@@ -1,13 +1,17 @@
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { assertDevTestGameProofRun } from "./dev_test_game_proof_contract.mjs";
-import { assertDevTestGameHostedEvidenceLane } from "./dev_test_game_hosted_evidence_lane.mjs";
+import {
+  assertDevTestGameHostedEvidenceLane,
+  devTestGameHostedEvidenceLanePath,
+} from "./dev_test_game_hosted_evidence_lane.mjs";
 import {
   assertDevTestGameHostedEvidenceLaneDemoProof,
   devTestGameHostedEvidenceLaneDemoProofPath,
 } from "./dev_test_game_hosted_evidence_lane_demo_proof.mjs";
 import {
   hostedEvidenceHandoffBlockedCheckRequiredEvidence,
+  devTestGameHostedEvidenceLaneAdminProofPath,
   hostedEvidenceHandoffInputIds,
   hostedEvidenceHandoffInputSectionStatuses,
   hostedEvidenceHandoffInputValues,
@@ -18,7 +22,6 @@ import {
 import {
   assertAdminRoleSurfaceStatusText,
   assertVisibleAdminRoleSurfaceRows,
-  artifactDir,
   proveAdminAuditDetail,
   readJson,
   repoRoot,
@@ -28,7 +31,7 @@ import {
 const lanePath = path.resolve(
   repoRoot,
   process.env.FMARCH_DEV_TEST_GAME_HOSTED_EVIDENCE_LANE ??
-    "target/dev-test-game/hosted-evidence-lane.json",
+    devTestGameHostedEvidenceLanePath,
 );
 const proofRunPath = path.resolve(
   repoRoot,
@@ -43,7 +46,7 @@ const demoProofPath = path.resolve(
 const laneRelativePath = path.relative(repoRoot, lanePath);
 const proofRunRelativePath = path.relative(repoRoot, proofRunPath);
 const demoProofRelativePath = path.relative(repoRoot, demoProofPath);
-const evidencePath = path.join(artifactDir, "hosted-evidence-lane-admin-proof.json");
+const evidencePath = path.join(repoRoot, devTestGameHostedEvidenceLaneAdminProofPath);
 const requiredRelatedLinks = [
   "local-hosted-target-preflight",
   "local-hosted-concurrent-race-matrix",

@@ -10,6 +10,7 @@ import {
   devTestGameHostedMatrixExternalEvidencePath,
 } from "./dev_test_game_hosted_matrix_external_evidence.mjs";
 export {
+  devTestGameHostedTargetPreflightAdminProofPath,
   hostedTargetPreflightBlockingCheckIds,
   hostedTargetPreflightCheckIds,
   hostedTargetPreflightExternalTargetsRequiredEvidence,
