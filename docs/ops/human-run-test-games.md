@@ -230,6 +230,15 @@ seeded admin role URL, and records that the hosted-production-identity
 readiness item clears only for an operator-provided packet path. It is still a
 local predicate proof and does not prove live hosted identity traffic, release
 readiness, or production readiness.
+To run that predicate as an explicit opt-in identity spine phase, use:
+
+```sh
+DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch npm run test:dev-test-game-identity:operator
+```
+
+The default `npm run test:dev-test-game-identity` spine does not consume that
+operator packet and keeps the hosted-production-identity readiness blocker
+visible.
 
 The local release-readiness admin browser proof is:
 
@@ -717,6 +726,9 @@ After the local capability rows are passed,
 `FMARCH_DEV_TEST_GAME_SEQUENCE_STAGE=hosted-identity`, selecting the hosted
 identity evidence lane while preserving the same blocked hosted-readiness
 claims.
+`npm run test:dev-test-game-identity:operator` is the opt-in variant that appends
+the target-local operator predicate proof and a separate readiness pass; the
+default identity spine remains fixture-safe.
 After `npm run test:dev-test-game-admin-spine`, the checklist consumes
 `target/dev-test-game/admin-spine-proof.json` and records the ordered local
 admin browser proof set as a single development-spine evidence signal while

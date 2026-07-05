@@ -62,6 +62,7 @@
     "test:dev-test-game-proof-freshness-admin-proof": "node tools/dev_test_game_proof_freshness_admin_proof.mjs",
     "test:dev-test-game-admin-spine": "node tools/dev_test_game_admin_spine.mjs",
     "test:dev-test-game-identity": "node tools/dev_test_game_identity_spine.mjs",
+    "test:dev-test-game-identity:operator": "node tools/dev_test_game_identity_spine.mjs --operator",
     "test:dev-test-game-backup-restore": "node tools/dev_test_game_backup_restore_spine.mjs",
     "test:dev-test-game-core-live": "node tools/dev_test_game_live_spine.mjs --core",
     "test:dev-test-game-live": "node tools/dev_test_game_live_spine.mjs",

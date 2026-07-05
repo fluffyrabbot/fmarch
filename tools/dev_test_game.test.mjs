@@ -195,7 +195,9 @@ import {
   seedReadinessEnv,
 } from "./dev_test_game_backup_restore_spine.mjs";
 import {
+  devTestGameIdentityOperatorSpinePlan,
   devTestGameIdentitySpinePlan,
+  identityOperatorReadinessEnv,
   identityReadinessEnv,
 } from "./dev_test_game_identity_spine.mjs";
 import {
@@ -643,6 +645,10 @@ test("dev test-game spine orchestrators expose stable proof order and env maps",
     "FMARCH_DEV_TEST_GAME_SEQUENCE_STAGE=hosted-identity npm run test:dev-test-game-next-action",
   );
   assert.equal(
+    packageJson.scripts["test:dev-test-game-identity:operator"],
+    "node tools/dev_test_game_identity_spine.mjs --operator",
+  );
+  assert.equal(
     packageJson.scripts[
       "test:dev-test-game-hosted-identity-partial-admin-proof"
     ],
@@ -834,6 +840,22 @@ test("dev test-game spine orchestrators expose stable proof order and env maps",
       devTestGameReleaseReadinessScript,
     ],
   );
+  assert.deepEqual(
+    devTestGameIdentityOperatorSpinePlan.map((step) => step.script),
+    [
+      "tools/auth_invite_role_proof.mjs",
+      "tools/dev_test_game_identity_admin_proof.mjs",
+      "tools/dev_test_game_hosted_identity_evidence.mjs",
+      "tools/dev_test_game_hosted_identity_progression_summary.mjs",
+      devTestGameReleaseReadinessScript,
+      "tools/dev_test_game_hosted_identity_operator_admin_proof.mjs",
+      devTestGameReleaseReadinessScript,
+    ],
+  );
+  assert.equal(
+    devTestGameIdentityOperatorSpinePlan.at(-1).readinessReason,
+    "identity-operator-hosted-evidence-predicate",
+  );
   assert.deepEqual(identityReadinessEnv, {
     FMARCH_DEV_TEST_GAME_OPS_ARTIFACTS: devTestGameOpsArtifactsPath,
     FMARCH_DEV_TEST_GAME_SEED_FIXTURE_SUMMARY:
@@ -846,6 +868,11 @@ test("dev test-game spine orchestrators expose stable proof order and env maps",
       devTestGameHostedIdentityEvidencePath,
     FMARCH_DEV_TEST_GAME_HOSTED_IDENTITY_PROGRESSION_SUMMARY:
       devTestGameHostedIdentityProgressionSummaryPath,
+  });
+  assert.deepEqual(identityOperatorReadinessEnv, {
+    ...identityReadinessEnv,
+    FMARCH_DEV_TEST_GAME_HOSTED_IDENTITY_EVIDENCE_ADMIN_PROOF:
+      devTestGameHostedIdentityOperatorAdminProofPath,
   });
   assert.deepEqual(adminSpineReadinessEvidenceEnv, {
     FMARCH_DEV_TEST_GAME_CORE_LOOP_ADMIN_PROOF:
@@ -1910,6 +1937,14 @@ test("dev test-game spine manifest records command order and evidence wiring", (
     devTestGameBackupRestoreSpinePlan,
   );
   assert.deepEqual(manifest.commands.identity.plan, devTestGameIdentitySpinePlan);
+  assert.equal(
+    manifest.commands.identityOperator.script,
+    "test:dev-test-game-identity:operator",
+  );
+  assert.deepEqual(
+    manifest.commands.identityOperator.plan,
+    devTestGameIdentityOperatorSpinePlan,
+  );
   assert.deepEqual(
     manifest.commands.adminSpine.plan,
     devTestGameAdminSpineProofPlan.map(({ id, label, script, path }) => ({

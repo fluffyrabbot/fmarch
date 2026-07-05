@@ -100,6 +100,7 @@ import {
   seedReadinessEnv,
 } from "./dev_test_game_backup_restore_spine.mjs";
 import {
+  devTestGameIdentityOperatorSpinePlan,
   devTestGameIdentitySpinePlan,
   identityReadinessEnv,
 } from "./dev_test_game_identity_spine.mjs";
@@ -227,6 +228,10 @@ export function buildDevTestGameSpineManifest({
       identity: {
         script: "test:dev-test-game-identity",
         plan: clonePlan(devTestGameIdentitySpinePlan),
+      },
+      identityOperator: {
+        script: "test:dev-test-game-identity:operator",
+        plan: clonePlan(devTestGameIdentityOperatorSpinePlan),
       },
       adminSpine: {
         script: "test:dev-test-game-admin-spine",
@@ -695,6 +700,15 @@ export function assertDevTestGameSpineManifest(manifest) {
     "tools/dev_test_game_identity_admin_proof.mjs",
     "tools/dev_test_game_hosted_identity_evidence.mjs",
     "tools/dev_test_game_hosted_identity_progression_summary.mjs",
+    "tools/dev_test_game_release_readiness.mjs",
+  ]);
+  assertPlanScripts(manifest.commands?.identityOperator?.plan ?? [], [
+    "tools/auth_invite_role_proof.mjs",
+    "tools/dev_test_game_identity_admin_proof.mjs",
+    "tools/dev_test_game_hosted_identity_evidence.mjs",
+    "tools/dev_test_game_hosted_identity_progression_summary.mjs",
+    "tools/dev_test_game_release_readiness.mjs",
+    "tools/dev_test_game_hosted_identity_operator_admin_proof.mjs",
     "tools/dev_test_game_release_readiness.mjs",
   ]);
   assertPlanScripts(manifest.commands?.adminSpine?.plan ?? [], [

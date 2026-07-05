@@ -1,6 +1,7 @@
 import { pathToFileURL } from "node:url";
 import {
   devTestGameHostedIdentityEvidencePath,
+  devTestGameHostedIdentityOperatorAdminProofPath,
   devTestGameHostedIdentityProgressionSummaryPath,
 } from "./dev_test_game_hosted_identity_evidence.mjs";
 import {
@@ -27,7 +28,13 @@ export const identityReadinessEnv = {
     devTestGameHostedIdentityProgressionSummaryPath,
 };
 
-export const devTestGameIdentitySpinePlan = [
+export const identityOperatorReadinessEnv = {
+  ...identityReadinessEnv,
+  FMARCH_DEV_TEST_GAME_HOSTED_IDENTITY_EVIDENCE_ADMIN_PROOF:
+    devTestGameHostedIdentityOperatorAdminProofPath,
+};
+
+const devTestGameIdentityBaseSpineSteps = [
   { kind: "node", script: "tools/auth_invite_role_proof.mjs" },
   { kind: "node", script: "tools/dev_test_game_identity_admin_proof.mjs" },
   { kind: "node", script: "tools/dev_test_game_hosted_identity_evidence.mjs" },
@@ -35,6 +42,10 @@ export const devTestGameIdentitySpinePlan = [
     kind: "node",
     script: "tools/dev_test_game_hosted_identity_progression_summary.mjs",
   },
+];
+
+export const devTestGameIdentitySpinePlan = [
+  ...devTestGameIdentityBaseSpineSteps,
   releaseReadinessStep({
     reason: "identity-adapter-and-hosted-evidence",
     changedInputs: [
@@ -47,8 +58,39 @@ export const devTestGameIdentitySpinePlan = [
   }),
 ];
 
+export const devTestGameIdentityOperatorSpinePlan = [
+  ...devTestGameIdentityBaseSpineSteps,
+  releaseReadinessStep({
+    reason: "identity-adapter-and-hosted-evidence",
+    changedInputs: [
+      devTestGameIdentityAdapterProofPath,
+      devTestGameIdentityAdminProofPath,
+      devTestGameHostedIdentityEvidencePath,
+      devTestGameHostedIdentityProgressionSummaryPath,
+    ],
+    env: identityReadinessEnv,
+  }),
+  {
+    kind: "node",
+    script: "tools/dev_test_game_hosted_identity_operator_admin_proof.mjs",
+  },
+  releaseReadinessStep({
+    reason: "identity-operator-hosted-evidence-predicate",
+    changedInputs: [devTestGameHostedIdentityOperatorAdminProofPath],
+    env: identityOperatorReadinessEnv,
+  }),
+];
+
+export function devTestGameIdentitySpinePlanForArgs(
+  args = process.argv.slice(2),
+) {
+  return args.includes("--operator")
+    ? devTestGameIdentityOperatorSpinePlan
+    : devTestGameIdentitySpinePlan;
+}
+
 export async function runDevTestGameIdentitySpine() {
-  await runSpinePlan(devTestGameIdentitySpinePlan);
+  await runSpinePlan(devTestGameIdentitySpinePlanForArgs());
 }
 
 if (pathToFileURL(process.argv[1] ?? "").href === import.meta.url) {
