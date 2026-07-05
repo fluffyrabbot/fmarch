@@ -307,6 +307,7 @@ import {
   assertGeneratedAdminProofHandoffPath,
 } from "./dev_test_game_admin_audit_handoff_contract.mjs";
 import {
+  assertNextActionAdminProof,
   proofGraphDestinationSummaryDriftNextActionFixture,
 } from "./dev_test_game_next_action_admin_proof.mjs";
 import {
@@ -498,8 +499,16 @@ import {
   buildProofStabilityTrace,
 } from "./dev_test_game_proof_stability_trace.mjs";
 import {
+  buildLocalReadinessDependencyTrace,
+  preReadinessTraceCheckIds,
+  preReadinessTraceKeys,
   preReadinessTraceRegistryEntries,
 } from "./dev_test_game_pre_readiness_trace_registry.mjs";
+import {
+  getLocalReadinessDependency,
+  localProofGraphNextActionHandoffCheckId,
+  localReadinessDependencyCheckFor,
+} from "./dev_test_game_local_readiness_dependencies.mjs";
 import {
   releaseReadinessTraceCheckId,
   releaseReadinessTraceStrategy,
@@ -507,6 +516,8 @@ import {
   selectionTraceStrategy,
 } from "./dev_test_game_next_action_priority_traces.mjs";
 import {
+  recoveryTraceCheckIds,
+  recoveryTraceKeys,
   recoveryTraceRegistryEntries,
 } from "./dev_test_game_next_action_recovery_traces.mjs";
 import {
@@ -5511,6 +5522,48 @@ test("admin proof fixtures prove normalized evidence object rows", () => {
   assert.equal(
     validateDevTestGameProofGraphAdminProof(preTerminalProofGraphProof).status,
     "passed",
+  );
+});
+
+test("next-action admin proof fixture proves proof graph next-action handoff dependency rows", () => {
+  const proof = assertNextActionAdminProof(
+    nextActionAdminProofLocalReadinessDependencyFixture(),
+  );
+  const dependencyTraceRows = preReadinessTraceCheckIds(
+    preReadinessTraceKeys.localReadinessDependency,
+    proof.generatedFrom.localReadinessDependencyTrace,
+  );
+
+  assert.deepEqual(dependencyTraceRows, [
+    "local-readiness-dependency-trace",
+    "local-readiness-dependency-local-proof-graph-next-action-handoff",
+  ]);
+  assert.equal(
+    proof.generatedFrom.localReadinessDependencyTrace.selectedCheckId,
+    "local-proof-graph-next-action-handoff",
+  );
+  assert.equal(
+    proof.generatedFrom.localCheckId,
+    "local-proof-graph-next-action-handoff",
+  );
+  assert.equal(
+    proof.adminRoleSurface.visibleRelatedLinks.includes(
+      "local-proof-graph-next-action-handoff",
+    ),
+    true,
+  );
+
+  const proofMissingTraceRow =
+    nextActionAdminProofLocalReadinessDependencyFixture();
+  proofMissingTraceRow.adminRoleSurface.visibleChecks =
+    proofMissingTraceRow.adminRoleSurface.visibleChecks.filter(
+      (checkId) =>
+        checkId !==
+        "local-readiness-dependency-local-proof-graph-next-action-handoff",
+    );
+  assert.throws(
+    () => assertNextActionAdminProof(proofMissingTraceRow),
+    /next-action admin proof local readiness dependency trace missing visible check: local-readiness-dependency-local-proof-graph-next-action-handoff/,
   );
 });
 
@@ -20367,6 +20420,224 @@ function nextActionAdminProofFixture() {
       productionReady: false,
     },
   };
+}
+
+function nextActionAdminProofLocalReadinessDependencyFixture({
+  checkId = localProofGraphNextActionHandoffCheckId,
+} = {}) {
+  const proof = nextActionAdminProofFixture();
+  const check = localReadinessDependencyCheckFor(checkId);
+  const dependency = getLocalReadinessDependency(checkId);
+  const localReadinessDependencyTrace = buildLocalReadinessDependencyTrace([
+    {
+      id: check.id,
+      status: check.status,
+      priority: dependency.priority,
+      ...check.recovery,
+    },
+  ]);
+  const localReadinessTraceCheckIds = preReadinessTraceCheckIds(
+    preReadinessTraceKeys.localReadinessDependency,
+    localReadinessDependencyTrace,
+  );
+  const stabilityTrace = buildProofStabilityTrace({
+    status: "clean",
+    hostConfirmClicks: 55,
+    retryClickCount: 0,
+    domFallbackCount: 0,
+    forceFallbackCount: 0,
+    failureCount: 0,
+    maxAttempts: 1,
+    events: [],
+  });
+  const replacementRaceReloadTrace = {
+    strategy: "replacement-race-reload-before-readiness",
+    status: "covered",
+    source: devTestGameRaceCoveragePath,
+    requiredCellCount: 3,
+    coveredCellCount: 3,
+    gapCount: 0,
+    cells: [
+      {
+        id: "replacement-private-post",
+        raceLaneId: replacementPrivatePostRaceLaneIds[0],
+        reloadLaneId: replacementPrivatePostRaceLaneIds[1],
+        reloadStatus: "passed",
+        covered: true,
+      },
+      {
+        id: "replacement-vote",
+        raceLaneId: "concurrent-replacement-vote-race",
+        reloadLaneId: "concurrent-replacement-vote-race-reload",
+        reloadStatus: "passed",
+        covered: true,
+      },
+      {
+        id: "replacement-action",
+        raceLaneId: "concurrent-replacement-action-race",
+        reloadLaneId: "concurrent-replacement-action-race-reload",
+        reloadStatus: "passed",
+        covered: true,
+      },
+    ],
+  };
+  const hostConcurrentRaceReloadTrace = {
+    strategy: "host-concurrent-race-reload-before-readiness",
+    status: "covered",
+    source: devTestGameRaceCoveragePath,
+    requiredCellCount: 7,
+    coveredCellCount: 7,
+    gapCount: 0,
+    cells: hostConcurrentRaceReloadCellsFixture(),
+  };
+  const playerConcurrentActionReloadTrace = {
+    strategy: "player-concurrent-action-reload-before-readiness",
+    status: "covered",
+    source: devTestGameRaceCoveragePath,
+    requiredCellCount: 5,
+    coveredCellCount: 5,
+    gapCount: 0,
+    cells: playerConcurrentActionReloadCellsFixture(),
+  };
+  const cohostDeadlineRaceReloadTrace = {
+    strategy: "cohost-deadline-race-reload-before-readiness",
+    status: "covered",
+    source: devTestGameRaceCoveragePath,
+    requiredCellCount: 1,
+    coveredCellCount: 1,
+    gapCount: 0,
+    cells: cohostDeadlineRaceReloadCellsFixture(),
+  };
+  const staleConflictMessageTrace = {
+    strategy: "stale-conflict-message-before-readiness",
+    status: "covered",
+    source: "target/dev-test-game/release-readiness-checklist.json",
+    requiredLaneCount: staleConflictMessageLaneIds.length,
+    coveredLaneCount: staleConflictMessageLaneIds.length,
+    gapCount: 0,
+    laneIds: [...staleConflictMessageLaneIds],
+    surfaceCoverage: staleConflictMessageSurfaceCoverageFixture(),
+    surfaces: staleConflictMessageSurfaceFixtureRows(),
+  };
+  const hostStaleControlTrace = {
+    strategy: "host-stale-control-before-readiness",
+    status: "covered",
+    source: "target/dev-test-game/release-readiness-checklist.json",
+    requiredLaneCount: hostStaleControlLaneIds.length,
+    coveredLaneCount: hostStaleControlLaneIds.length,
+    gapCount: 0,
+    laneIds: [...hostStaleControlLaneIds],
+  };
+  const proofGraphDestinationSummaryTrace =
+    buildProofGraphDestinationSummaryTrace({
+      strategy: "proof-graph-destination-summary-before-readiness",
+      status: "clean",
+      source: "target/dev-test-game/proof-graph.json",
+      summaryStatus: "passed",
+      totalDestinationCount: 1,
+      productionFeatureTargetCount: 1,
+      adminAuditDestinationCount: 1,
+      roleUrlDestinationCount: 0,
+      driftCount: 0,
+    });
+  const recoveryTraceVisibleCheckIds = [
+    ...recoveryTraceCheckIds(
+      recoveryTraceKeys.replacementRaceReload,
+      replacementRaceReloadTrace,
+    ),
+    ...recoveryTraceCheckIds(
+      recoveryTraceKeys.hostConcurrentRaceReload,
+      hostConcurrentRaceReloadTrace,
+    ),
+    ...recoveryTraceCheckIds(
+      recoveryTraceKeys.playerConcurrentActionReload,
+      playerConcurrentActionReloadTrace,
+    ),
+    ...recoveryTraceCheckIds(
+      recoveryTraceKeys.cohostDeadlineRaceReload,
+      cohostDeadlineRaceReloadTrace,
+    ),
+    ...recoveryTraceCheckIds(
+      recoveryTraceKeys.staleConflictMessage,
+      staleConflictMessageTrace,
+    ),
+    ...recoveryTraceCheckIds(
+      recoveryTraceKeys.hostStaleControl,
+      hostStaleControlTrace,
+    ),
+  ];
+  const raceCoveragePromotedMilestones = raceCoveragePromotedMilestonesFixture({
+    groupStatus: "covered",
+  });
+  raceCoveragePromotedMilestones.groupIds =
+    raceCoveragePromotedMilestones.groups.map((group) => group.id);
+  const unprovenOnlyCheckIds = new Set([
+    "release-readiness-unproven",
+    "hosted-concurrent-race-matrix",
+    "selected-proof-graph-node",
+    "selected-proof-graph-destination",
+    "selected-feature-spine-declaration",
+    "selected-spine-target",
+    "selected-spine-drilldown",
+    "selected-spine-admin-check",
+    "selected-spine-rerun-command",
+    "selected-spine-browser-proof",
+    "selected-spine-coverage-decision",
+  ]);
+
+  Object.assign(proof.generatedFrom, {
+    command: check.recovery.command,
+    reason: "release-readiness-local-check-missing",
+    actionStatus: "blocked",
+    localCheckId: check.id,
+    localCheckRoleUrl: check.recovery.roleUrl,
+    unprovenId: null,
+    unprovenRoleUrl: null,
+    unprovenProofGraphNodeId: null,
+    unprovenProductionFeatureSpineTarget: null,
+    unprovenSpineDrilldown: null,
+    unprovenSpineTarget: null,
+    unprovenHostedHandoffChecklist: null,
+    selectedProofGraphNode: null,
+    relatedHandoffs: [],
+    stabilityTrace,
+    proofGraphDestinationSummary: null,
+    proofGraphDestinationSummaryTrace,
+    releaseReadinessTrace: {
+      strategy: releaseReadinessTraceStrategy,
+      candidateCount: 0,
+      selectedUnprovenId: null,
+      candidateIds: [],
+      candidates: [],
+    },
+    localReadinessDependencyTrace,
+    replacementRaceReloadTrace,
+    hostConcurrentRaceReloadTrace,
+    playerConcurrentActionReloadTrace,
+    cohostDeadlineRaceReloadTrace,
+    raceCoveragePromotedMilestones,
+    staleConflictMessageTrace,
+    hostStaleControlTrace,
+  });
+  proof.adminRoleSurface.visibleChecks = [
+    ...new Set([
+      ...proof.adminRoleSurface.visibleChecks.filter(
+        (visibleCheckId) => !unprovenOnlyCheckIds.has(visibleCheckId),
+      ),
+      "release-readiness-local-check-missing",
+      check.id,
+      ...preReadinessTraceCheckIds(
+        preReadinessTraceKeys.proofStability,
+        stabilityTrace,
+      ),
+      ...localReadinessTraceCheckIds,
+      "race-coverage-promoted-milestones",
+      ...recoveryTraceVisibleCheckIds,
+    ]),
+  ];
+  proof.adminRoleSurface.visibleRelatedLinks = [check.id];
+  proof.adminRoleSurface.visibleRelatedDestinations = [];
+  return proof;
 }
 
 function raceCoverageAdminProofFixture() {
