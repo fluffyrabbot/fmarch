@@ -300,6 +300,11 @@ import {
   coreLoopFeatureSpineTargetRows,
 } from "./dev_test_game_core_loop_feature_spine_targets.mjs";
 import {
+  devTestGameHostSetupProofCommand,
+  hostSetupFeatureSpineCycleId,
+  hostSetupFeatureSpineTargetRows,
+} from "./dev_test_game_host_setup_feature_spine_targets.mjs";
+import {
   assertDevTestGameHostedMatrixExternalEvidence,
   buildDevTestGameHostedMatrixExternalEvidence,
   devTestGameHostedMatrixExternalEvidenceCommand,
@@ -3252,10 +3257,10 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
     graph,
     releaseReadiness,
   );
-  assert.equal(graph.summary.nodeCount, 59);
-  assert.equal(graph.summary.roleUrlCount, 59);
+  assert.equal(graph.summary.nodeCount, 60);
+  assert.equal(graph.summary.roleUrlCount, 60);
   assert.equal(graph.summary.roleSurfaceProofCount, 1);
-  assert.equal(graph.summary.productionFeatureTargetCount, 32);
+  assert.equal(graph.summary.productionFeatureTargetCount, 33);
   assert.equal(graph.summary.terminalBatchCount, 2);
   for (const descriptor of recoveryReceiptGraphDescriptors) {
     assert.equal(
@@ -3395,8 +3400,16 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
   const identityAdapterCheck = releaseReadiness.localDevelopmentSpine.checks.find(
     (check) => check.id === "local-identity-adapter-proof",
   );
+  const hostSetupProductionFeatureTargets =
+    releaseReadiness.localDevelopmentSpine.checks.find(
+      (check) => check.id === "local-host-setup-proof",
+    ).spineTargets.productionFeatureTargets;
   const expectedProductionFeatureRows = [
-    ...[coreLoopProductionFeatureTargets, hardeningProductionFeatureTargets]
+    ...[
+      coreLoopProductionFeatureTargets,
+      hostSetupProductionFeatureTargets,
+      hardeningProductionFeatureTargets,
+    ]
       .flatMap((productionFeatureTargets) =>
         productionFeatureTargets.slotIds.map((slotId) => {
           const target = productionFeatureTargets.bySlotId[slotId];
@@ -10797,6 +10810,7 @@ test("session card and markdown include role credential URLs and tokens", async 
       hostSetupCheck.roleUrl,
       hostSetupCheck.recoveryCommand,
       hostSetupCheck.readyCheckIds.includes("start-phase"),
+      hostSetupCheck.spineTargets,
     ],
     [
       "target/dev-test-game/host-setup-proof.json",
@@ -10804,6 +10818,7 @@ test("session card and markdown include role credential URLs and tokens", async 
       "http://127.0.0.1:5173/g/<seeded-game>/setup",
       "npm run dev:test-game -- --verify-host-setup-only",
       true,
+      hostSetupSpineTargetsFixture(),
     ],
   );
   assert(hostSetupReadiness.releaseReadiness.reason.includes("local host setup proof"));
@@ -12294,6 +12309,7 @@ function devTestGameReleaseReadinessChecklistFixture({
                 policyCommandStatus: "passed",
                 recoveryCommand:
                   "npm run dev:test-game -- --verify-host-setup-only",
+                spineTargets: hostSetupSpineTargetsFixture(),
               },
             ]
           : []),
@@ -15436,6 +15452,53 @@ function coreLoopProductionFeatureTargetsFixture(roleUrlHrefs) {
   };
 }
 
+function hostSetupSpineTargetsFixture() {
+  const roleUrlHrefs = {
+    "host-setup": "http://127.0.0.1:5173/g/<seeded-game>/setup",
+  };
+  return {
+    status: "passed",
+    detailRoleUrl: roleUrlHrefs["host-setup"],
+    defaultCycleId: hostSetupFeatureSpineCycleId,
+    defaultRoleUrlId: "host-setup",
+    defaultRoleUrl: roleUrlHrefs["host-setup"],
+    defaultCheckpointId: "start-phase",
+    browserProofCommand: devTestGameLiveProofCommand,
+    cycleIds: [hostSetupFeatureSpineCycleId],
+    roleUrlIds: ["host-setup"],
+    checkpointIds: ["start-phase"],
+    recoveryHookIds: [],
+    visibleAdminCheckIds: [
+      "game-created",
+      "pack-valid",
+      "slots-exist",
+      "slots-occupied",
+      "roles-assigned",
+      "policy-acknowledged",
+      "start-phase",
+    ],
+    roleUrlHrefs,
+    productionFeatureTargets:
+      hostSetupProductionFeatureTargetsFixture(roleUrlHrefs),
+  };
+}
+
+function hostSetupProductionFeatureTargetsFixture(roleUrlHrefs) {
+  const slotIds = Object.values(hostSetupFeatureSpineTargetRows).map(
+    (row) => row.featureSlotId,
+  );
+  return {
+    status: "passed",
+    slotIds,
+    bySlotId: Object.fromEntries(
+      slotIds.map((slotId) => [
+        slotId,
+        featureSpineCaseFixture(slotId, { roleUrlHrefs }).spineTarget,
+      ]),
+    ),
+  };
+}
+
 function hardeningSpineTargetsFixture({
   roleUrlHrefs = hardeningRoleUrlHrefsFixture(),
 } = {}) {
@@ -15587,6 +15650,17 @@ function featureSpineCaseFixture(
       roleUrl: "/admin/audit/local-identity-adapter?game=<seeded-game>",
       browserProofCommand: devTestGameLiveProofCommand,
       rerunCommand: devTestGameIdentityAdminProofCommand,
+      includeTargetRerunCommand: true,
+    });
+  }
+  if (slotId === "host-setup-route") {
+    return featureSpineFixture({
+      slotId,
+      detailRoleUrl: "http://127.0.0.1:5173/g/<seeded-game>/setup",
+      roleUrlsById:
+        roleUrlHrefs ?? hostSetupSpineTargetsFixture().roleUrlHrefs,
+      browserProofCommand: devTestGameLiveProofCommand,
+      rerunCommand: devTestGameHostSetupProofCommand,
       includeTargetRerunCommand: true,
     });
   }

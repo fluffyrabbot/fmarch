@@ -5,6 +5,7 @@ import {
 export {
   devTestGameCoreLoopAdminProofCommand,
   devTestGameHardeningAdminProofCommand,
+  devTestGameHostSetupProofCommand,
   devTestGameIdentityAdminProofCommand,
   devTestGameProductionFeatureBrowserProofCommand,
 } from "./dev_test_game_production_feature_source_registry.mjs";

@@ -35,6 +35,9 @@ import {
   identityFeatureSpineTargetRows,
 } from "./dev_test_game_identity_feature_spine_targets.mjs";
 import {
+  hostSetupFeatureSpineTargetRows,
+} from "./dev_test_game_host_setup_feature_spine_targets.mjs";
+import {
   hardeningFeatureSpineCycleIds,
   hardeningFeatureSpineSourceCheckId,
 } from "./dev_test_game_hardening_feature_spine_targets.mjs";
@@ -95,6 +98,9 @@ const coreLoopProductionFeatureSpineTargets = Object.freeze(
 export const releaseReadinessProductionFeatureSpineTargets = Object.freeze({
   identityAdapter: featureSpineCheckpointTarget({
     ...identitySpineRows.identityAdapter,
+  }),
+  hostSetupRoute: featureSpineCheckpointTarget({
+    ...hostSetupFeatureSpineTargetRows.hostSetupRoute,
   }),
   ...coreLoopProductionFeatureSpineTargets,
   completedGameStaleRecovery: featureSpineCheckpointTarget({

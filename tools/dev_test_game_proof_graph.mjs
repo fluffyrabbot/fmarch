@@ -37,6 +37,9 @@ import {
   identityFeatureSpineSourceCheckId,
 } from "./dev_test_game_identity_feature_spine_targets.mjs";
 import {
+  hostSetupFeatureSpineSourceCheckId,
+} from "./dev_test_game_host_setup_feature_spine_targets.mjs";
+import {
   localAdminAuditIds,
   localAdminAuditRoleUrl,
 } from "./dev_test_game_admin_audit_surface_ids.mjs";
@@ -1068,11 +1071,14 @@ function seededGraphRoleUrl(roleUrl) {
 
 function productionFeatureTargetsForGraph(releaseReadiness) {
   const coreLoopTargets = coreLoopProductionFeatureTargetCollection(releaseReadiness);
+  const hostSetupTargets = hostSetupProductionFeatureTargetCollection(
+    releaseReadiness,
+  );
   const hardeningTargets = hardeningProductionFeatureTargetCollection(
     releaseReadiness,
   );
   const targetsBySlotId = new Map(
-    [coreLoopTargets, hardeningTargets].flatMap((targets) =>
+    [coreLoopTargets, hostSetupTargets, hardeningTargets].flatMap((targets) =>
       targets.slotIds.map((slotId) => [
         slotId,
         targets.bySlotId[slotId],
@@ -1122,6 +1128,22 @@ function hardeningProductionFeatureTargetCollection(releaseReadiness) {
     typeof targets.bySlotId !== "object"
   ) {
     throw new Error("proof graph missing hardening production feature targets");
+  }
+  return targets;
+}
+
+function hostSetupProductionFeatureTargetCollection(releaseReadiness) {
+  const hostSetupCheck = releaseReadiness.localDevelopmentSpine?.checks?.find(
+    (check) => check.id === hostSetupFeatureSpineSourceCheckId,
+  );
+  const targets = hostSetupCheck?.spineTargets?.productionFeatureTargets;
+  if (
+    targets?.status !== "passed" ||
+    !Array.isArray(targets.slotIds) ||
+    targets.bySlotId === null ||
+    typeof targets.bySlotId !== "object"
+  ) {
+    return { status: "passed", slotIds: [], bySlotId: {} };
   }
   return targets;
 }

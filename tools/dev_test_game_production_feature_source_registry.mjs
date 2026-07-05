@@ -10,6 +10,10 @@ import {
   devTestGameIdentityAdminProofCommand,
   identityFeatureSpineSource,
 } from "./dev_test_game_identity_feature_spine_targets.mjs";
+import {
+  devTestGameHostSetupProofCommand,
+  hostSetupFeatureSpineSource,
+} from "./dev_test_game_host_setup_feature_spine_targets.mjs";
 
 export const productionFeatureReadinessSourceKind = Object.freeze({
   spineTargets: "spine-targets",
@@ -21,11 +25,13 @@ export const devTestGameProductionFeatureBrowserProofCommand =
 export {
   devTestGameCoreLoopAdminProofCommand,
   devTestGameHardeningAdminProofCommand,
+  devTestGameHostSetupProofCommand,
   devTestGameIdentityAdminProofCommand,
 };
 
 export const productionFeatureSourceRegistry = Object.freeze([
   coreLoopFeatureSpineSource,
+  hostSetupFeatureSpineSource,
   hardeningFeatureSpineSource,
   identityFeatureSpineSource,
 ]);

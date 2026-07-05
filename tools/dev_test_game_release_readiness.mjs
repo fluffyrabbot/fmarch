@@ -104,6 +104,7 @@ import {
   defaultProductionFeatureSpineRerunCommands,
   devTestGameCoreLoopAdminProofCommand,
   devTestGameHardeningAdminProofCommand,
+  devTestGameHostSetupProofCommand,
   devTestGameProductionFeatureBrowserProofCommand,
   productionFeatureSpineSourceCheckRules,
 } from "./dev_test_game_production_feature_source_rules.mjs";
@@ -116,6 +117,10 @@ import {
 import {
   identityFeatureSpineSourceCheckId,
 } from "./dev_test_game_identity_feature_spine_targets.mjs";
+import {
+  hostSetupFeatureSpineCycleId,
+  hostSetupFeatureSpineSourceCheckId,
+} from "./dev_test_game_host_setup_feature_spine_targets.mjs";
 import {
   localAdminAuditHandoffCheckIds,
   localAdminAuditIds,
@@ -664,7 +669,7 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
       ? []
       : [
           {
-            id: "local-host-setup-proof",
+            id: hostSetupFeatureSpineSourceCheckId,
             label: "Host setup role URL, policy, roster, and recovery proof",
             status: "passed",
             evidence: hostSetupProofEvidence.path,
@@ -674,8 +679,10 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
             readyCheckIds: hostSetupProofEvidence.readyCheckIds,
             setupMutationStatus: hostSetupProofEvidence.setupMutationStatus,
             policyCommandStatus: hostSetupProofEvidence.policyCommandStatus,
-            recoveryCommand:
-              "npm run dev:test-game -- --verify-host-setup-only",
+            recoveryCommand: devTestGameHostSetupProofCommand,
+            spineTargets: buildHostSetupReadinessSpineTargets(
+              hostSetupProofEvidence,
+            ),
           },
         ]),
     {
@@ -2981,6 +2988,47 @@ function buildCompletedGameHardeningSpineRows(proof) {
 
 function completedGameHardeningSpineRoleUrl({ frontendBaseUrl, game, role }) {
   return `${frontendBaseUrl}/g/${game}${role === "host" ? "/host" : ""}`;
+}
+
+function buildHostSetupReadinessSpineTargets(hostSetupProofEvidence) {
+  const cycleIds = [hostSetupFeatureSpineCycleId];
+  const roleUrlIds = ["host-setup"];
+  const checkpointIds = ["start-phase"];
+  const roleUrlHrefs = {
+    "host-setup": hostSetupProofEvidence.roleUrl,
+  };
+  return {
+    status: "passed",
+    detailRoleUrl: hostSetupProofEvidence.roleUrl,
+    defaultCycleId: hostSetupFeatureSpineCycleId,
+    defaultRoleUrlId: "host-setup",
+    defaultRoleUrl: hostSetupProofEvidence.roleUrl,
+    defaultCheckpointId: "start-phase",
+    browserProofCommand: devTestGameSeededBrowserProofCommand,
+    cycleIds,
+    roleUrlIds,
+    checkpointIds,
+    visibleAdminCheckIds: [...hostSetupProofEvidence.readyCheckIds],
+    recoveryHookIds: [],
+    roleUrlHrefs,
+    productionFeatureTargets: buildProductionFeatureSpineTargetCollection({
+      declarations: releaseReadinessProductionFeatureSpineTargets,
+      sourceTarget: {
+        sourceCheckId: hostSetupFeatureSpineSourceCheckId,
+        detailRoleUrl: hostSetupProofEvidence.roleUrl,
+        browserProofCommand: devTestGameSeededBrowserProofCommand,
+        rerunCommand: devTestGameHostSetupProofCommand,
+        cycleIds,
+        roleUrlIds,
+        checkpointIds,
+        visibleAdminCheckIds: [...hostSetupProofEvidence.readyCheckIds],
+        recoveryHookIds: [],
+        roleUrlHrefs,
+      },
+      defaultRerunCommandBySourceCheckId:
+        defaultProductionFeatureSpineRerunCommands,
+    }),
+  };
 }
 
 function assertVisibleAdminRows({ label, visibleRows, requiredRows }) {
@@ -5727,7 +5775,8 @@ export function assertDevTestGameReleaseReadiness(checklist) {
       !Array.isArray(hostSetupCheck.readyCheckIds) ||
       !hostSetupCheck.readyCheckIds.includes("start-phase") ||
       hostSetupCheck.recoveryCommand !==
-        "npm run dev:test-game -- --verify-host-setup-only")
+        devTestGameHostSetupProofCommand ||
+      !validHostSetupSpineTargets(hostSetupCheck.spineTargets))
   ) {
     throw new Error("dev-test-game host setup readiness check is malformed");
   }
@@ -6045,6 +6094,46 @@ function validHardeningProductionFeatureTargets(productionFeatureTargets) {
       .filter(
         (declaration) =>
           declaration.sourceCheckId === hardeningFeatureSpineSourceCheckId,
+      ),
+    sourceCheckRules: productionFeatureSpineSourceCheckRules,
+  });
+}
+
+function validHostSetupSpineTargets(spineTargets) {
+  return (
+    spineTargets !== null &&
+    typeof spineTargets === "object" &&
+    spineTargets.status === "passed" &&
+    spineTargets.detailRoleUrl?.includes("/g/<seeded-game>/setup") &&
+    spineTargets.defaultCycleId === hostSetupFeatureSpineCycleId &&
+    spineTargets.defaultRoleUrlId === "host-setup" &&
+    spineTargets.defaultRoleUrl?.includes("/g/<seeded-game>/setup") &&
+    spineTargets.defaultCheckpointId === "start-phase" &&
+    typeof spineTargets.browserProofCommand === "string" &&
+    spineTargets.browserProofCommand.includes("test:dev-test-game-core-live") &&
+    Array.isArray(spineTargets.cycleIds) &&
+    spineTargets.cycleIds.includes(hostSetupFeatureSpineCycleId) &&
+    Array.isArray(spineTargets.roleUrlIds) &&
+    spineTargets.roleUrlIds.includes("host-setup") &&
+    spineTargets.roleUrlHrefs?.["host-setup"]?.includes(
+      "/g/<seeded-game>/setup",
+    ) &&
+    Array.isArray(spineTargets.checkpointIds) &&
+    spineTargets.checkpointIds.includes("start-phase") &&
+    Array.isArray(spineTargets.recoveryHookIds) &&
+    spineTargets.recoveryHookIds.length === 0 &&
+    Array.isArray(spineTargets.visibleAdminCheckIds) &&
+    spineTargets.visibleAdminCheckIds.includes("start-phase") &&
+    validHostSetupProductionFeatureTargets(spineTargets.productionFeatureTargets)
+  );
+}
+
+function validHostSetupProductionFeatureTargets(productionFeatureTargets) {
+  return validProductionFeatureSpineTargetCollection(productionFeatureTargets, {
+    declarations: Object.values(releaseReadinessProductionFeatureSpineTargets)
+      .filter(
+        (declaration) =>
+          declaration.sourceCheckId === hostSetupFeatureSpineSourceCheckId,
       ),
     sourceCheckRules: productionFeatureSpineSourceCheckRules,
   });
