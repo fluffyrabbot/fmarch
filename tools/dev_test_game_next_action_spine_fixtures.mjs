@@ -171,11 +171,13 @@ export function hostedProductionIdentityUnprovenFixture({
   rerunCommand,
   includeTargetRerunCommand = false,
   requiredEvidence,
+  buildSlice,
   hostedHandoffChecklist,
 } = {}) {
   return releaseReadinessUnprovenFixture({
     id: "hosted-production-identity",
     requiredEvidence,
+    buildSlice,
     proofTarget,
     roleUrl,
     proofGraphNodeId,

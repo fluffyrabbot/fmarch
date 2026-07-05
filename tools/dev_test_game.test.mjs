@@ -303,6 +303,7 @@ import {
   devTestGameHardeningAdminProofCommand,
   devTestGameHostedIdentitySequenceStage,
   devTestGameHostedIdentitySequencePromotionCommand,
+  devTestGameHostedIdentityOperatorSpineCommand,
   devTestGameIdentityAdminProofCommand,
   devTestGameLiveProofCommand,
   devTestGameNextActionPath,
@@ -2525,6 +2526,17 @@ test("dev test-game next-action derives one local recovery command from the mani
       requiredEvidence: "Hosted account lifecycle",
       hostedHandoffChecklist: hostedIdentityHandoffChecklistFixture(),
     });
+  const hostedProductionIdentityOperatorUnproven =
+    hostedProductionIdentityUnprovenFixture({
+      proofTarget: devTestGameHostedIdentityOperatorAdminProofPath,
+      browserProofCommand: devTestGameLiveProofCommand,
+      rerunCommand: devTestGameIdentityAdminProofCommand,
+      includeTargetRerunCommand: true,
+      requiredEvidence: "Hosted account lifecycle",
+      buildSlice:
+        "Run the opt-in hosted identity operator spine; it attaches the target-local redacted operator packet to the admin proof and refreshes readiness through the operator predicate without claiming live hosted traffic, release readiness, or production readiness.",
+      hostedHandoffChecklist: hostedIdentityHandoffChecklistFixture(),
+    });
   assert.deepEqual(freshAction.nextAction, {
     command: devTestGameLiveProofCommand,
     reason: "sequence-deferred-hosted-identity",
@@ -2695,11 +2707,15 @@ test("dev test-game next-action derives one local recovery command from the mani
     devTestGameHostedIdentitySequenceStage,
   );
   assert.deepEqual(hostedIdentityStageAction.nextAction, {
-    command: `npm run ${devTestGameHostedIdentityEvidenceCommand}`,
+    command: devTestGameHostedIdentityOperatorSpineCommand,
     reason: "release-readiness-unproven",
     status: "ready",
-    unproven: hostedProductionIdentityUnproven,
+    unproven: hostedProductionIdentityOperatorUnproven,
   });
+  assert.match(
+    hostedIdentityStageAction.releaseReadinessTrace.candidates[0].proofBoundary,
+    /does not prove live hosted account\/session\/invite traffic/,
+  );
   assert.deepEqual(
     hostedIdentityStageAction.nextAction.unproven.hostedHandoffChecklist
       .operatorProofDrilldowns,

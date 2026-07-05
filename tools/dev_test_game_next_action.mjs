@@ -84,6 +84,9 @@ import {
   hostedAdminHandoffProofArtifactCases,
 } from "./dev_test_game_hosted_handoff_proof_cases.mjs";
 import {
+  devTestGameHostedIdentityOperatorAdminProofPath,
+} from "./dev_test_game_hosted_identity_evidence_cases.mjs";
+import {
   devTestGameAdminSpineAdminProofPath,
   devTestGameBackupAdminProofPath,
   devTestGameCoreLoopAdminProofPath,
@@ -123,6 +126,10 @@ export const devTestGameDefaultSequenceStage = "local-capability-model";
 export const devTestGameHostedIdentitySequenceStage = "hosted-identity";
 export const devTestGameHostedIdentitySequencePromotionCommand =
   "npm run test:dev-test-game-next-action:hosted-identity";
+export const devTestGameHostedIdentityOperatorSpineScript =
+  "test:dev-test-game-identity:operator";
+export const devTestGameHostedIdentityOperatorSpineCommand =
+  `DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch npm run ${devTestGameHostedIdentityOperatorSpineScript}`;
 
 const nextActionJsonPath = path.join(repoRoot, devTestGameNextActionPath);
 
@@ -181,6 +188,8 @@ export function buildDevTestGameNextAction(
     hostedTargetPreflight: hostedPreflight,
     sourceTargetsByCheckId,
     proofGraph: graph,
+    hostedIdentityOperatorBuildable:
+      hostedIdentityOperatorBuildableForManifest(manifest, { sequenceStage }),
   });
   const releaseReadinessTrace = buildReleaseReadinessTrace(releaseReadinessCandidates);
   const localReadinessDependencyCandidates =
@@ -770,6 +779,7 @@ function rankedBuildableReleaseReadinessItems(
     hostedTargetPreflight = null,
     sourceTargetsByCheckId = {},
     proofGraph = null,
+    hostedIdentityOperatorBuildable = null,
   } = {},
 ) {
   if (readiness === null) {
@@ -782,9 +792,14 @@ function rankedBuildableReleaseReadinessItems(
       if (buildable === undefined) {
         return null;
       }
+      const selectedBuildable =
+        item.id === "hosted-production-identity" &&
+        hostedIdentityOperatorBuildable !== null
+          ? { ...buildable, ...hostedIdentityOperatorBuildable }
+          : buildable;
       const spineTarget = resolveProductionFeatureSpineTarget({
         itemId: item.id,
-        declaration: buildable.productionFeatureSpineTarget,
+        declaration: selectedBuildable.productionFeatureSpineTarget,
         sourceTargetsByCheckId,
         defaultRerunCommandBySourceCheckId:
           defaultProductionFeatureSpineRerunCommands,
@@ -797,22 +812,23 @@ function rankedBuildableReleaseReadinessItems(
       return {
         item,
         index,
-        priority: buildable.priority,
-        command: buildable.command,
-        buildSlice: buildable.buildSlice,
-        proofTarget: buildable.proofTarget,
-        roleUrl: buildable.roleUrl,
-        proofGraphNodeId: buildable.proofGraphNodeId,
-        proofBoundary: buildable.proofBoundary,
-        productionFeatureSpineTarget: buildable.productionFeatureSpineTarget,
+        priority: selectedBuildable.priority,
+        command: selectedBuildable.command,
+        buildSlice: selectedBuildable.buildSlice,
+        proofTarget: selectedBuildable.proofTarget,
+        roleUrl: selectedBuildable.roleUrl,
+        proofGraphNodeId: selectedBuildable.proofGraphNodeId,
+        proofBoundary: selectedBuildable.proofBoundary,
+        productionFeatureSpineTarget:
+          selectedBuildable.productionFeatureSpineTarget,
         spineTarget,
         spineDrilldown: buildProductionFeatureSpineDrilldown(spineTarget),
         selectedProductionFeatureGraph,
-        hostedEvidenceMode: buildable.hostedEvidenceMode,
-        realHostedEvidenceStatus: buildable.realHostedEvidenceStatus,
-        realHostedEvidenceInputs: buildable.realHostedEvidenceInputs,
-        hostedHandoffChecklist: buildable.hostedHandoffChecklist,
-        actionStatus: releaseReadinessActionStatus(buildable),
+        hostedEvidenceMode: selectedBuildable.hostedEvidenceMode,
+        realHostedEvidenceStatus: selectedBuildable.realHostedEvidenceStatus,
+        realHostedEvidenceInputs: selectedBuildable.realHostedEvidenceInputs,
+        hostedHandoffChecklist: selectedBuildable.hostedHandoffChecklist,
+        actionStatus: releaseReadinessActionStatus(selectedBuildable),
       };
     })
     .filter((candidate) => candidate !== null)
@@ -823,6 +839,29 @@ function rankedBuildableReleaseReadinessItems(
         left.priority - right.priority ||
         left.index - right.index,
     );
+}
+
+function hostedIdentityOperatorBuildableForManifest(
+  manifest,
+  { sequenceStage },
+) {
+  if (sequenceStage !== devTestGameHostedIdentitySequenceStage) {
+    return null;
+  }
+  if (
+    manifest.commands?.identityOperator?.script !==
+    devTestGameHostedIdentityOperatorSpineScript
+  ) {
+    return null;
+  }
+  return {
+    command: devTestGameHostedIdentityOperatorSpineCommand,
+    buildSlice:
+      "Run the opt-in hosted identity operator spine; it attaches the target-local redacted operator packet to the admin proof and refreshes readiness through the operator predicate without claiming live hosted traffic, release readiness, or production readiness.",
+    proofTarget: devTestGameHostedIdentityOperatorAdminProofPath,
+    proofBoundary:
+      "Opt-in local operator predicate proof. The command proves that a non-fixture hosted identity packet path can clear the hosted-production-identity readiness item over the existing role-surface adapter; it does not prove live hosted account/session/invite traffic, release readiness, or production readiness.",
+  };
 }
 
 function releaseReadinessActionRank(status) {

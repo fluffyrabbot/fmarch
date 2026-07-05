@@ -181,6 +181,18 @@ directly, use the explicit hosted-identity sequence selector:
 npm run test:dev-test-game-next-action:hosted-identity
 ```
 
+That selector now points the ranked `hosted-production-identity` action at the
+opt-in operator identity spine:
+
+```sh
+DATABASE_URL=postgres://fmarch:fmarch@localhost:5544/fmarch npm run test:dev-test-game-identity:operator
+```
+
+The generated next-action proof target is
+`target/dev-test-game/hosted-identity-evidence-operator-admin-proof.json`. It
+remains a local operator-predicate proof and does not prove live hosted account,
+session, or invite traffic.
+
 The hosted identity evidence lane accepts a redacted operator packet through
 `FMARCH_HOSTED_IDENTITY_EVIDENCE_PATH`. To inspect the packet shape and admin
 handoff without making a hosted-readiness claim, exercise the placeholder
@@ -723,9 +735,10 @@ browser proof without raw credential echoes.
 After the local capability rows are passed,
 `npm run test:dev-test-game-next-action:hosted-identity` refreshes
 `target/dev-test-game/next-action.json` with
-`FMARCH_DEV_TEST_GAME_SEQUENCE_STAGE=hosted-identity`, selecting the hosted
-identity evidence lane while preserving the same blocked hosted-readiness
-claims.
+`FMARCH_DEV_TEST_GAME_SEQUENCE_STAGE=hosted-identity`, selecting the opt-in
+hosted identity operator spine command and operator admin proof target while
+preserving the same local-predicate boundary and non-claims about live hosted
+identity traffic.
 `npm run test:dev-test-game-identity:operator` is the opt-in variant that appends
 the target-local operator predicate proof and a separate readiness pass; the
 default identity spine remains fixture-safe.
