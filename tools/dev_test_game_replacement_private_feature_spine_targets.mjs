@@ -1,3 +1,7 @@
+import {
+  devTestGameProofRunPath,
+} from "./dev_test_game_spine_artifact_paths.mjs";
+
 export const replacementPrivateFeatureSpineSourceCheckId =
   "local-replacement-private-proof";
 export const replacementPrivateFeatureSpineCycleId =
@@ -18,6 +22,7 @@ export const replacementPrivateFeatureSpineSource = Object.freeze({
   detailRoleUrlIncludes:
     "/g/<replacement-private-game>/c/private%3Amafia_day_chat",
   roleUrlIncludes: "/g/<replacement-private-game>/c/private%3Amafia_day_chat",
+  proofArtifact: devTestGameProofRunPath,
   rerunCommand: devTestGameReplacementPrivateProofCommand,
 });
 

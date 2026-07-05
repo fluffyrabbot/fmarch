@@ -1,3 +1,7 @@
+import {
+  devTestGameProofRunPath,
+} from "./dev_test_game_spine_artifact_paths.mjs";
+
 export const cohostFeatureSpineSourceCheckId = "local-cohost-console-proof";
 export const cohostFeatureSpineCycleId = "cohost-console";
 export const cohostConsoleFeatureSlotId = "cohost-console";
@@ -14,6 +18,7 @@ export const cohostFeatureSpineSource = Object.freeze({
   }),
   detailRoleUrlIncludes: "/g/<seeded-game>/host",
   roleUrlIncludes: "/g/<seeded-game>/host",
+  proofArtifact: devTestGameProofRunPath,
   rerunCommand: devTestGameCohostConsoleProofCommand,
 });
 

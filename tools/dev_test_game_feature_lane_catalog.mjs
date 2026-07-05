@@ -42,6 +42,9 @@ import {
 import {
   dayOneNightOneFeatureSpineRows,
 } from "./dev_test_game_core_loop_day_one_night_one_scenarios.mjs";
+import {
+  devTestGameCoreLoopAdminProofPath,
+} from "./dev_test_game_local_admin_proof_paths.mjs";
 
 export { nightThreeActionResolutionLaneId };
 
@@ -58,6 +61,7 @@ export const coreLoopFeatureSpineSource = Object.freeze({
   }),
   detailRoleUrlIncludes: "/admin/audit/local-core-loop",
   roleUrlIncludes: "/g/",
+  proofArtifact: devTestGameCoreLoopAdminProofPath,
   rerunCommand: devTestGameCoreLoopAdminProofCommand,
 });
 

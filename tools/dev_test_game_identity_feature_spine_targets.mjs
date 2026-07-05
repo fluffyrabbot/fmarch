@@ -1,3 +1,7 @@
+import {
+  devTestGameIdentityAdminProofPath,
+} from "./dev_test_game_local_admin_proof_paths.mjs";
+
 export const identityFeatureSpineSourceCheckId =
   "local-identity-adapter-proof";
 export const devTestGameIdentityAdminProofCommand =
@@ -12,6 +16,7 @@ export const identityFeatureSpineSource = Object.freeze({
   }),
   detailRoleUrlIncludes: "/admin/audit/local-identity-adapter",
   roleUrlIncludes: "/admin/audit/local-identity-adapter",
+  proofArtifact: devTestGameIdentityAdminProofPath,
   rerunCommand: devTestGameIdentityAdminProofCommand,
 });
 

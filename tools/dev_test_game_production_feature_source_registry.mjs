@@ -228,6 +228,16 @@ export function productionFeatureSourceSpineChecklist(
       browserProofCommand.includes("test:dev-test-game-core-live")
         ? browserProofCommand
         : "",
+    proofArtifact:
+      typeof source?.proofArtifact === "string" &&
+      source.proofArtifact.trim() !== ""
+        ? source.proofArtifact
+        : "",
+    recoveryCommand:
+      typeof source?.rerunCommand === "string" &&
+      source.rerunCommand.trim() !== ""
+        ? source.rerunCommand
+        : "",
     proofGraphVisibility:
       typeof source?.graphSourceNodeId === "string" &&
       source.graphSourceNodeId.trim() !== ""

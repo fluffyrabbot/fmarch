@@ -210,18 +210,25 @@ test("production feature source rules cover every feature spine source", () => {
         "admin-proof:identity",
         devTestGameIdentityAdminProofCommand,
       ],
-    ].map(([sourceCheckId, readinessDrilldown, proofGraphVisibility, command]) => ({
-      sourceCheckId,
-      coverageDecision:
-        sourceCheckId === identityFeatureSpineSourceCheckId
-          ? "declared:seeded-admin-proof"
-          : "declared:seeded-role-url-proof",
-      roleUrlTarget: "declared",
-      browserProofCommand: devTestGameProductionFeatureBrowserProofCommand,
-      proofGraphVisibility,
-      readinessDrilldown,
-      nextActionDrilldown: "coverage-decision-summary",
-    })),
+    ].map(([sourceCheckId, readinessDrilldown, proofGraphVisibility, command]) => {
+      const source = productionFeatureSourceRegistry.find(
+        (candidate) => candidate.sourceCheckId === sourceCheckId,
+      );
+      return {
+        sourceCheckId,
+        coverageDecision:
+          sourceCheckId === identityFeatureSpineSourceCheckId
+            ? "declared:seeded-admin-proof"
+            : "declared:seeded-role-url-proof",
+        roleUrlTarget: "declared",
+        browserProofCommand: devTestGameProductionFeatureBrowserProofCommand,
+        proofArtifact: source.proofArtifact,
+        recoveryCommand: command,
+        proofGraphVisibility,
+        readinessDrilldown,
+        nextActionDrilldown: "coverage-decision-summary",
+      };
+    }),
   );
   assert.ok(
     devTestGameProductionFeatureBrowserProofCommand.includes(
@@ -330,6 +337,8 @@ test("production feature source spine checklist fails closed", () => {
       coverageDecision: "declared:seeded-role-url-proof",
       roleUrlTarget: "missing",
       browserProofCommand: "",
+      proofArtifact: "",
+      recoveryCommand: "npm run future-proof",
       proofGraphVisibility: "",
       readinessDrilldown: productionFeatureReadinessSourceKind.spineTargets,
       nextActionDrilldown: "coverage-decision-summary",
@@ -340,7 +349,7 @@ test("production feature source spine checklist fails closed", () => {
       assertProductionFeatureSourceSpineChecklist([futureSource], {
         browserProofCommand: "",
       }),
-    /production feature source spine checklist missing: future-feature\.roleUrlTarget, future-feature\.browserProofCommand, future-feature\.proofGraphVisibility/,
+    /production feature source spine checklist missing: future-feature\.roleUrlTarget, future-feature\.browserProofCommand, future-feature\.proofArtifact, future-feature\.proofGraphVisibility/,
   );
 });
 

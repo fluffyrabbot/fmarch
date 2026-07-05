@@ -136,6 +136,8 @@ test("future feature source template flows through checklist, resolver, graph, a
     coverageDecision: "declared:seeded-role-url-proof",
     roleUrlTarget: "declared",
     browserProofCommand,
+    proofArtifact: "target/dev-test-game/future-feature-admin-proof.json",
+    recoveryCommand: "npm run test:dev-test-game-future-feature-admin-proof",
     proofGraphVisibility: source.graphSourceNodeId,
     readinessDrilldown: productionFeatureReadinessSourceKind.spineTargets,
     nextActionDrilldown: "coverage-decision-summary",
@@ -716,6 +718,7 @@ function futureFeatureSourceFixture() {
     graphSourceNodeId: "role-surface:future-feature",
     detailRoleUrlIncludes: "/admin/audit/local-future-feature",
     roleUrlIncludes: "/g/",
+    proofArtifact: "target/dev-test-game/future-feature-admin-proof.json",
     rerunCommand: "npm run test:dev-test-game-future-feature-admin-proof",
     coverageDecision: {
       kind: productionFeatureCoverageDecisionKind.seededRoleUrlProof,

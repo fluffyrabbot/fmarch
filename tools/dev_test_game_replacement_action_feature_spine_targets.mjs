@@ -1,3 +1,7 @@
+import {
+  devTestGameProofRunPath,
+} from "./dev_test_game_spine_artifact_paths.mjs";
+
 export const replacementActionFeatureSpineSourceCheckId =
   "local-replacement-action-proof";
 export const replacementActionFeatureSpineCycleId = "replacement-action";
@@ -15,6 +19,7 @@ export const replacementActionFeatureSpineSource = Object.freeze({
   }),
   detailRoleUrlIncludes: "/g/<replacement-action-game>",
   roleUrlIncludes: "/g/<replacement-action-game>",
+  proofArtifact: devTestGameProofRunPath,
   rerunCommand: devTestGameReplacementActionProofCommand,
 });
 

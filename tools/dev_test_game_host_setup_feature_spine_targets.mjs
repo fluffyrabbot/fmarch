@@ -1,5 +1,7 @@
 export const hostSetupFeatureSpineSourceCheckId = "local-host-setup-proof";
 export const hostSetupFeatureSpineCycleId = "host-setup";
+export const devTestGameHostSetupProofPath =
+  "target/dev-test-game/host-setup-proof.json";
 export const devTestGameHostSetupProofCommand =
   "npm run dev:test-game -- --verify-host-setup-only";
 
@@ -13,6 +15,7 @@ export const hostSetupFeatureSpineSource = Object.freeze({
   }),
   detailRoleUrlIncludes: "/g/<seeded-game>/setup",
   roleUrlIncludes: "/g/<seeded-game>/setup",
+  proofArtifact: devTestGameHostSetupProofPath,
   rerunCommand: devTestGameHostSetupProofCommand,
 });
 
