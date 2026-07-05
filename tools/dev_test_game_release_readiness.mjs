@@ -212,6 +212,7 @@ import {
   proofGraphProductionFeatureDestinationSummary,
 } from "./dev_test_game_proof_graph_production_feature_destinations.mjs";
 import {
+  assertProofGraphDiagnosticSummaryVisibleChecks,
   normalizeProofGraphDiagnosticProofSummary,
 } from "./dev_test_game_proof_graph_diagnostic_summary.mjs";
 import {
@@ -6176,68 +6177,11 @@ export function validateDevTestGameNextActionAdminProof(proof, options = {}) {
 }
 
 function validateNextActionAdminProofGraphDiagnosticSummaryTrace(proof) {
-  const trace = proof.generatedFrom?.proofGraphDiagnosticSummaryTrace;
-  if (
-    trace?.strategy !== "proof-graph-diagnostics-before-readiness" ||
-    !["recorded", "empty", "unavailable"].includes(trace.status) ||
-    trace.selected !== false ||
-    !Number.isInteger(trace.diagnosticCount) ||
-    !Number.isInteger(trace.promotesFreshnessCount) ||
-    !Number.isInteger(trace.terminalArtifactCount) ||
-    !Array.isArray(trace.rows)
-  ) {
-    throw new Error(
-      "next-action admin proof is missing proof graph diagnostic summary trace",
-    );
-  }
-  if (
-    trace.diagnosticCount !== trace.rows.length ||
-    trace.promotesFreshnessCount !== 0 ||
-    trace.terminalArtifactCount !== 0
-  ) {
-    throw new Error(
-      "next-action admin proof promoted a diagnostic proof graph summary row",
-    );
-  }
-  if (
-    trace.status !== "unavailable" &&
-    !proof.adminRoleSurface?.visibleChecks?.includes(
-      "proof-graph-diagnostic-summary",
-    )
-  ) {
-    throw new Error(
-      "next-action admin proof missing proof graph diagnostic summary row",
-    );
-  }
-  for (const row of trace.rows) {
-    if (
-      typeof row.id !== "string" ||
-      row.id === "" ||
-      typeof row.diagnosticReason !== "string" ||
-      row.diagnosticReason === "" ||
-      typeof row.artifact !== "string" ||
-      row.artifact === "" ||
-      typeof row.proofCommand !== "string" ||
-      row.proofCommand === "" ||
-      typeof row.recoveryCommand !== "string" ||
-      row.recoveryCommand === "" ||
-      row.promotesFreshness !== false ||
-      row.terminalArtifact !== false
-    ) {
-      throw new Error(
-        `next-action admin proof diagnostic summary row malformed: ${row?.id}`,
-      );
-    }
-    if (
-      !proof.adminRoleSurface?.visibleChecks?.includes(
-        `proof-graph-diagnostic-${row.id}`,
-      )
-    ) {
-      throw new Error(
-        `next-action admin proof missing proof graph diagnostic row: ${row.id}`,
-      );
-    }
-  }
+  assertProofGraphDiagnosticSummaryVisibleChecks(
+    proof.generatedFrom?.proofGraphDiagnosticSummaryTrace,
+    proof.adminRoleSurface?.visibleChecks,
+    { label: "next-action admin proof diagnostic summary trace" },
+  );
 }
 
 function hostedHandoffGroupIds(checklist) {

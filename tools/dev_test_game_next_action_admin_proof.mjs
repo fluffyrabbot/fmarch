@@ -42,6 +42,11 @@ import {
   devTestGameProofGraphPath,
 } from "./dev_test_game_proof_graph_paths.mjs";
 import {
+  assertProofGraphDiagnosticSummaryVisibleChecks,
+  normalizeProofGraphDiagnosticSummaryTrace,
+  proofGraphDiagnosticSummaryCheckIds,
+} from "./dev_test_game_proof_graph_diagnostic_summary.mjs";
+import {
   proofGraphDestinationSummaryDriftNextActionAdminProofPath,
   proofGraphDestinationSummaryDriftNextActionPath,
 } from "./dev_test_game_next_action_admin_proof_paths.mjs";
@@ -489,7 +494,7 @@ export function proofGraphDestinationSummaryDriftNextActionFixture(nextAction) {
       driftCount,
       selected: true,
     },
-    proofGraphDiagnosticSummaryTrace: cleanProofGraphDiagnosticSummaryTrace(
+    proofGraphDiagnosticSummaryTrace: normalizeProofGraphDiagnosticSummaryTrace(
       source.proofGraphDiagnosticSummaryTrace,
     ),
     seedProofLaneCoverageTrace: cleanSeedProofLaneCoverageTrace(
@@ -516,38 +521,6 @@ function cleanProofStabilityTrace(stabilityTrace = {}) {
     maxAttempts: Number(stabilityTrace.maxAttempts ?? 0),
     eventCount: 0,
     selected: false,
-  };
-}
-
-function cleanProofGraphDiagnosticSummaryTrace(
-  proofGraphDiagnosticSummaryTrace = {},
-) {
-  return {
-    strategy: "proof-graph-diagnostics-before-readiness",
-    status: proofGraphDiagnosticSummaryTrace.status ?? "unavailable",
-    source: proofGraphDiagnosticSummaryTrace.source ?? "",
-    diagnosticCount: Number(
-      proofGraphDiagnosticSummaryTrace.diagnosticCount ?? 0,
-    ),
-    promotesFreshnessCount: Number(
-      proofGraphDiagnosticSummaryTrace.promotesFreshnessCount ?? 0,
-    ),
-    terminalArtifactCount: Number(
-      proofGraphDiagnosticSummaryTrace.terminalArtifactCount ?? 0,
-    ),
-    selected: false,
-    rows: Array.isArray(proofGraphDiagnosticSummaryTrace.rows)
-      ? proofGraphDiagnosticSummaryTrace.rows.map((row) => ({
-          id: String(row.id ?? ""),
-          status: String(row.status ?? ""),
-          artifact: String(row.artifact ?? ""),
-          diagnosticReason: String(row.diagnosticReason ?? ""),
-          proofCommand: String(row.proofCommand ?? ""),
-          recoveryCommand: String(row.recoveryCommand ?? ""),
-          promotesFreshness: row.promotesFreshness === true,
-          terminalArtifact: row.terminalArtifact === true,
-        }))
-      : [],
   };
 }
 
@@ -1123,68 +1096,11 @@ function recoveryReceiptGraphGeneratedFrom(nextAction) {
 }
 
 function assertNextActionAdminProofGraphDiagnosticSummaryTrace(evidence) {
-  const trace = evidence.generatedFrom?.proofGraphDiagnosticSummaryTrace;
-  if (
-    trace?.strategy !== "proof-graph-diagnostics-before-readiness" ||
-    !["recorded", "empty", "unavailable"].includes(trace.status) ||
-    trace.selected !== false ||
-    !Number.isInteger(trace.diagnosticCount) ||
-    !Number.isInteger(trace.promotesFreshnessCount) ||
-    !Number.isInteger(trace.terminalArtifactCount) ||
-    !Array.isArray(trace.rows)
-  ) {
-    throw new Error(
-      "next-action admin proof is missing proof graph diagnostic summary trace evidence",
-    );
-  }
-  if (
-    trace.diagnosticCount !== trace.rows.length ||
-    trace.promotesFreshnessCount !== 0 ||
-    trace.terminalArtifactCount !== 0
-  ) {
-    throw new Error(
-      "next-action admin proof promoted a diagnostic proof graph summary row",
-    );
-  }
-  if (
-    trace.status !== "unavailable" &&
-    !evidence.adminRoleSurface?.visibleChecks?.includes(
-      "proof-graph-diagnostic-summary",
-    )
-  ) {
-    throw new Error(
-      "next-action admin proof missing proof graph diagnostic summary row",
-    );
-  }
-  for (const row of trace.rows) {
-    if (
-      typeof row.id !== "string" ||
-      row.id === "" ||
-      typeof row.diagnosticReason !== "string" ||
-      row.diagnosticReason === "" ||
-      typeof row.artifact !== "string" ||
-      row.artifact === "" ||
-      typeof row.proofCommand !== "string" ||
-      row.proofCommand === "" ||
-      typeof row.recoveryCommand !== "string" ||
-      row.recoveryCommand === "" ||
-      row.promotesFreshness !== false ||
-      row.terminalArtifact !== false
-    ) {
-      throw new Error(
-        `next-action admin proof diagnostic summary row malformed: ${row?.id}`,
-      );
-    }
-    if (
-      !evidence.adminRoleSurface?.visibleChecks?.includes(
-        `proof-graph-diagnostic-${row.id}`,
-      )
-    ) {
-      throw new Error(
-        `next-action admin proof missing proof graph diagnostic row: ${row.id}`,
-      );
-    }
-  }
+  assertProofGraphDiagnosticSummaryVisibleChecks(
+    evidence.generatedFrom?.proofGraphDiagnosticSummaryTrace,
+    evidence.adminRoleSurface?.visibleChecks,
+    { label: "next-action admin proof diagnostic summary trace" },
+  );
 }
 
 function assertNextActionAdminRecoveryReceiptGraphs(generatedFrom) {
@@ -1296,12 +1212,11 @@ function requiredChecksForNextAction(nextAction) {
       "proof-graph-destination-summary-trace-drift-count",
     );
   }
-  if (nextAction.proofGraphDiagnosticSummaryTrace?.status !== "unavailable") {
-    checks.push("proof-graph-diagnostic-summary");
-    for (const row of nextAction.proofGraphDiagnosticSummaryTrace.rows ?? []) {
-      checks.push(`proof-graph-diagnostic-${row.id}`);
-    }
-  }
+  checks.push(
+    ...proofGraphDiagnosticSummaryCheckIds(
+      nextAction.proofGraphDiagnosticSummaryTrace,
+    ),
+  );
   for (const candidate of nextAction.selectionTrace.candidates) {
     checks.push(`selection-trace-${candidate.id}`);
   }
@@ -1727,19 +1642,9 @@ function requiredChecksForEvidence(evidence) {
           "proof-graph-destination-summary-trace-drift-count",
         ]
       : []),
-    ...(evidence.generatedFrom?.proofGraphDiagnosticSummaryTrace?.status !==
-      "unavailable"
-      ? [
-          "proof-graph-diagnostic-summary",
-          ...(Array.isArray(
-            evidence.generatedFrom.proofGraphDiagnosticSummaryTrace.rows,
-          )
-            ? evidence.generatedFrom.proofGraphDiagnosticSummaryTrace.rows.map(
-                (row) => `proof-graph-diagnostic-${row.id}`,
-              )
-            : []),
-        ]
-      : []),
+    ...proofGraphDiagnosticSummaryCheckIds(
+      evidence.generatedFrom?.proofGraphDiagnosticSummaryTrace,
+    ),
     ...(Array.isArray(evidence.generatedFrom?.selectionTrace?.candidateIds)
       ? evidence.generatedFrom.selectionTrace.candidateIds.map((id) => `selection-trace-${id}`)
       : []),

@@ -487,6 +487,7 @@ import {
 } from "./dev_test_game_proof_graph_production_feature_destinations.mjs";
 import {
   buildProofGraphDiagnosticProofSummary,
+  buildProofGraphDiagnosticSummaryTrace,
 } from "./dev_test_game_proof_graph_diagnostic_summary.mjs";
 import {
   hostedIdentityTerminalReceiptArtifactCase,
@@ -2686,16 +2687,10 @@ test("dev test-game next-action derives one local recovery command from the mani
     eventCount: 0,
     selected: false,
   });
-  assert.deepEqual(freshAction.proofGraphDiagnosticSummaryTrace, {
-    strategy: "proof-graph-diagnostics-before-readiness",
-    status: "unavailable",
-    source: "",
-    diagnosticCount: 0,
-    promotesFreshnessCount: 0,
-    terminalArtifactCount: 0,
-    selected: false,
-    rows: [],
-  });
+  assert.deepEqual(
+    freshAction.proofGraphDiagnosticSummaryTrace,
+    buildProofGraphDiagnosticSummaryTrace(null),
+  );
   const cleanSeedProofLaneCoverage = seedProofLaneCoverageFixture();
   const cleanSeedProofLaneCoverageCounts = seedProofLaneCoverageCountSummary(
     cleanSeedProofLaneCoverage,
@@ -3063,27 +3058,10 @@ test("dev test-game next-action derives one local recovery command from the mani
       selected: true,
     },
   );
-  assert.deepEqual(destinationSummaryDriftAction.proofGraphDiagnosticSummaryTrace, {
-    strategy: "proof-graph-diagnostics-before-readiness",
-    status: "recorded",
-    source: "target/dev-test-game/proof-graph.json",
-    diagnosticCount: 1,
-    promotesFreshnessCount: 0,
-    terminalArtifactCount: 0,
-    selected: false,
-    rows: buildProofGraphDiagnosticProofSummary({
-      nodes: proofGraphDiagnosticProofNodes,
-    }).rows.map((row) => ({
-      id: row.id,
-      status: row.status,
-      artifact: row.artifact,
-      diagnosticReason: row.diagnosticReason,
-      proofCommand: row.proofCommand,
-      recoveryCommand: row.recoveryCommand,
-      promotesFreshness: false,
-      terminalArtifact: false,
-    })),
-  });
+  assert.deepEqual(
+    destinationSummaryDriftAction.proofGraphDiagnosticSummaryTrace,
+    proofGraphDiagnosticSummaryTraceFixture(),
+  );
   const syntheticDriftAction =
     proofGraphDestinationSummaryDriftNextActionFixture(freshAction);
   assertDevTestGameNextAction(syntheticDriftAction);
@@ -18387,6 +18365,18 @@ function nextActionProofGraphFixture(slotId = "player-action-submission") {
   };
 }
 
+function proofGraphDiagnosticSummaryTraceFixture({
+  nodes = proofGraphDiagnosticProofNodes,
+} = {}) {
+  return buildProofGraphDiagnosticSummaryTrace(
+    {
+      nodes,
+      summary: {},
+    },
+    { source: "target/dev-test-game/proof-graph.json" },
+  );
+}
+
 function featureSpineDrilldownFixture(slotId = "player-action-submission") {
   return featureSpineCaseFixture(slotId).spineDrilldown;
 }
@@ -19541,28 +19531,8 @@ function nextActionAdminProofFixture() {
       browserProofCommand: devTestGameLiveProofCommand,
       includeTargetRerunCommand: true,
     });
-  const diagnosticProofSummary = buildProofGraphDiagnosticProofSummary({
-    nodes: proofGraphDiagnosticProofNodes,
-  });
-  const proofGraphDiagnosticSummaryTrace = {
-    strategy: "proof-graph-diagnostics-before-readiness",
-    status: "recorded",
-    source: "target/dev-test-game/proof-graph.json",
-    diagnosticCount: diagnosticProofSummary.diagnosticCount,
-    promotesFreshnessCount: diagnosticProofSummary.promotesFreshnessCount,
-    terminalArtifactCount: diagnosticProofSummary.terminalArtifactCount,
-    selected: false,
-    rows: diagnosticProofSummary.rows.map((row) => ({
-      id: row.id,
-      status: row.status,
-      artifact: row.artifact,
-      diagnosticReason: row.diagnosticReason,
-      proofCommand: row.proofCommand,
-      recoveryCommand: row.recoveryCommand,
-      promotesFreshness: row.promotesFreshness,
-      terminalArtifact: row.terminalArtifact,
-    })),
-  };
+  const proofGraphDiagnosticSummaryTrace =
+    proofGraphDiagnosticSummaryTraceFixture();
   return {
     version: 1,
     proof: "dev-test-game-next-action-admin-proof",

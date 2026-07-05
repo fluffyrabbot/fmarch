@@ -57,6 +57,7 @@ import {
 } from "../../../../tools/dev_test_game_proof_graph_receipt_artifact_rows.mjs";
 import {
   normalizeProofGraphDiagnosticProofSummary,
+  normalizeProofGraphDiagnosticSummaryTrace,
 } from "../../../../tools/dev_test_game_proof_graph_diagnostic_summary.mjs";
 import {
   devTestGameIdentityAdapterContractDiff,
@@ -2280,7 +2281,7 @@ export function normalizeLocalNextActionAudit(nextAction, { game, proofGraph = n
       nextAction.proofGraphDestinationSummaryTrace,
     );
   const proofGraphDiagnosticSummaryTrace =
-    normalizeNextActionProofGraphDiagnosticSummaryTrace(
+    normalizeProofGraphDiagnosticSummaryTrace(
       nextAction.proofGraphDiagnosticSummaryTrace,
     );
   const terminalBatchGraph = normalizeNextActionTerminalBatchGraph(
@@ -3980,58 +3981,6 @@ function normalizeNextActionProofGraphDestinationSummaryTrace(
       proofGraphDestinationSummaryTrace.roleUrlDestinationCount ?? 0,
     ),
     driftCount: Number(proofGraphDestinationSummaryTrace.driftCount ?? 0),
-  });
-}
-
-function normalizeNextActionProofGraphDiagnosticSummaryTrace(
-  proofGraphDiagnosticSummaryTrace,
-) {
-  if (
-    proofGraphDiagnosticSummaryTrace === null ||
-    typeof proofGraphDiagnosticSummaryTrace !== "object" ||
-    proofGraphDiagnosticSummaryTrace.strategy !==
-      "proof-graph-diagnostics-before-readiness"
-  ) {
-    return Object.freeze({
-      strategy: "unknown",
-      status: "unavailable",
-      source: "",
-      selected: false,
-      diagnosticCount: 0,
-      promotesFreshnessCount: 0,
-      terminalArtifactCount: 0,
-      rows: Object.freeze([]),
-    });
-  }
-  const rows = Array.isArray(proofGraphDiagnosticSummaryTrace.rows)
-    ? proofGraphDiagnosticSummaryTrace.rows.map((row) =>
-        Object.freeze({
-          id: String(row?.id ?? ""),
-          status: String(row?.status ?? "unknown"),
-          artifact: String(row?.artifact ?? ""),
-          diagnosticReason: String(row?.diagnosticReason ?? ""),
-          proofCommand: String(row?.proofCommand ?? ""),
-          recoveryCommand: String(row?.recoveryCommand ?? ""),
-          promotesFreshness: row?.promotesFreshness === true,
-          terminalArtifact: row?.terminalArtifact === true,
-        }),
-      )
-    : [];
-  return Object.freeze({
-    strategy: proofGraphDiagnosticSummaryTrace.strategy,
-    status: String(proofGraphDiagnosticSummaryTrace.status ?? "unknown"),
-    source: String(proofGraphDiagnosticSummaryTrace.source ?? ""),
-    selected: proofGraphDiagnosticSummaryTrace.selected === true,
-    diagnosticCount: Number(
-      proofGraphDiagnosticSummaryTrace.diagnosticCount ?? rows.length,
-    ),
-    promotesFreshnessCount: Number(
-      proofGraphDiagnosticSummaryTrace.promotesFreshnessCount ?? 0,
-    ),
-    terminalArtifactCount: Number(
-      proofGraphDiagnosticSummaryTrace.terminalArtifactCount ?? 0,
-    ),
-    rows: Object.freeze(rows),
   });
 }
 

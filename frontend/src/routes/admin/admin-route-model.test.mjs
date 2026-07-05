@@ -154,6 +154,7 @@ import {
 } from "../../../../tools/dev_test_game_proof_graph_handoff_cases.mjs";
 import {
   buildProofGraphDiagnosticProofSummary,
+  buildProofGraphDiagnosticSummaryTrace,
 } from "../../../../tools/dev_test_game_proof_graph_diagnostic_summary.mjs";
 import {
   recoveryReceiptGraphDescriptorByReceiptKey,
@@ -6217,26 +6218,13 @@ function proofGraphDestinationSummaryTraceFixture({
 function proofGraphDiagnosticSummaryTraceFixture({
   nodes = proofGraphDiagnosticProofNodes,
 } = {}) {
-  const summary = buildProofGraphDiagnosticProofSummary({ nodes });
-  return {
-    strategy: "proof-graph-diagnostics-before-readiness",
-    status: summary.diagnosticCount === 0 ? "empty" : "recorded",
-    source: "target/dev-test-game/proof-graph.json",
-    diagnosticCount: summary.diagnosticCount,
-    promotesFreshnessCount: summary.promotesFreshnessCount,
-    terminalArtifactCount: summary.terminalArtifactCount,
-    selected: false,
-    rows: summary.rows.map((row) => ({
-      id: row.id,
-      status: row.status,
-      artifact: row.artifact,
-      diagnosticReason: row.diagnosticReason,
-      proofCommand: row.proofCommand,
-      recoveryCommand: row.recoveryCommand,
-      promotesFreshness: row.promotesFreshness,
-      terminalArtifact: row.terminalArtifact,
-    })),
-  };
+  return buildProofGraphDiagnosticSummaryTrace(
+    {
+      nodes,
+      summary: {},
+    },
+    { source: "target/dev-test-game/proof-graph.json" },
+  );
 }
 
 function hostedIdentitySequenceDeferralFixture() {
