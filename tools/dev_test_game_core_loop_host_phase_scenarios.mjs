@@ -18,6 +18,9 @@ const cloneHostResolveRaceScenario = (scenario) => ({
 const cloneHostAdvanceRaceScenario = (scenario) => ({
   ...scenario,
 });
+const cloneHostDeadlineAdvanceRaceScenario = (scenario) => ({
+  ...scenario,
+});
 const clonePhaseStateCase = (phaseStateCase) => ({ ...phaseStateCase });
 const cloneTransitionProofCase = (transitionCase) => ({
   ...transitionCase,
@@ -611,6 +614,28 @@ export function hostAdvanceRaceScenario() {
   return cloneHostAdvanceRaceScenario(hostAdvanceRaceScenarioDefinition);
 }
 
+const hostDeadlineAdvanceRaceScenarioDefinition = Object.freeze({
+  proofCheckId: "concurrent-host-deadline-advance-race",
+  reloadProofCheckId: "concurrent-host-deadline-advance-race-reload",
+  allowedPageRoles: Object.freeze(["live", "concurrent"]),
+  ackState: "ack",
+  rejectError: "InvalidTarget",
+  phaseAfterRace: "N01",
+  liveRouteStatus: 200,
+  concurrentRouteStatus: 200,
+  phaseId: "N01",
+  phaseState: "open",
+  phaseLocked: false,
+  apiPhase: "N01",
+  apiDeadline: null,
+});
+
+export function hostDeadlineAdvanceRaceScenario() {
+  return cloneHostDeadlineAdvanceRaceScenario(
+    hostDeadlineAdvanceRaceScenarioDefinition,
+  );
+}
+
 export function assertHostLifecycleControlRoleSurfaceCase({
   hostRoleSurface,
   expectedGame,
@@ -979,6 +1004,54 @@ export function assertHostAdvanceRaceSurfaceCase({
     throwHostPhaseScenarioAssertionError({
       message: "core-loop admin proof missing host advance race surface",
       evidence: hostAdvanceRaceSurface,
+      includeEvidenceInError,
+    });
+  }
+}
+
+export function assertHostDeadlineAdvanceRaceSurfaceCase({
+  hostDeadlineAdvanceRaceSurface,
+  scenario = hostDeadlineAdvanceRaceScenarioDefinition,
+  includeEvidenceInError = false,
+}) {
+  const raceLane = hostDeadlineAdvanceRaceSurface?.hostDeadlineAdvanceRace;
+  const reloadLane =
+    hostDeadlineAdvanceRaceSurface?.hostDeadlineAdvanceRaceReload;
+  const race = raceLane?.evidence;
+  const reload = reloadLane?.evidence;
+  if (
+    hostDeadlineAdvanceRaceSurface?.status !== "passed" ||
+    hostDeadlineAdvanceRaceSurface.proofCheckId !== scenario.proofCheckId ||
+    hostDeadlineAdvanceRaceSurface.reloadProofCheckId !==
+      scenario.reloadProofCheckId ||
+    raceLane?.id !== scenario.proofCheckId ||
+    raceLane?.status !== "passed" ||
+    !scenario.allowedPageRoles.includes(race?.ackPageRole) ||
+    !scenario.allowedPageRoles.includes(race?.rejectPageRole) ||
+    race?.ackPageRole === race?.rejectPageRole ||
+    typeof race?.game !== "string" ||
+    race.game.length === 0 ||
+    race?.ackState !== scenario.ackState ||
+    race?.rejectError !== scenario.rejectError ||
+    race?.phaseAfterRace !== scenario.phaseAfterRace ||
+    reloadLane?.id !== scenario.reloadProofCheckId ||
+    reloadLane?.status !== "passed" ||
+    reload?.game !== race.game ||
+    reload?.liveRouteStatus !== scenario.liveRouteStatus ||
+    reload?.concurrentRouteStatus !== scenario.concurrentRouteStatus ||
+    reload?.livePhase?.id !== scenario.phaseId ||
+    reload?.livePhase?.state !== scenario.phaseState ||
+    reload?.livePhase?.locked !== scenario.phaseLocked ||
+    reload?.concurrentPhase?.id !== scenario.phaseId ||
+    reload?.concurrentPhase?.state !== scenario.phaseState ||
+    reload?.concurrentPhase?.locked !== scenario.phaseLocked ||
+    reload?.apiPhase !== scenario.apiPhase ||
+    reload?.apiDeadline !== scenario.apiDeadline
+  ) {
+    throwHostPhaseScenarioAssertionError({
+      message:
+        "core-loop admin proof missing host deadline advance race surface",
+      evidence: hostDeadlineAdvanceRaceSurface,
       includeEvidenceInError,
     });
   }

@@ -14714,6 +14714,7 @@ function coreLoopAdminProofFixture() {
     hostPublishRaceSurface: hostPublishRaceSurfaceFixture(),
     hostResolveRaceSurface: hostResolveRaceSurfaceFixture(),
     hostAdvanceRaceSurface: hostAdvanceRaceSurfaceFixture(),
+    hostDeadlineAdvanceRaceSurface: hostDeadlineAdvanceRaceSurfaceFixture(),
     playerRoleSurface: playerActionRoleSurfaceFixture(),
     targetResolutionReceiptSurface: targetResolutionReceiptSurfaceFixture(),
     normalResolutionPrivacySurface: normalResolutionPrivacySurfaceFixture(),
@@ -15029,6 +15030,42 @@ function hostAdvanceRaceSurfaceFixture() {
         livePhase: { id: "N02", state: "open", locked: false },
         concurrentPhase: { id: "N02", state: "open", locked: false },
         apiPhase: "N02",
+      },
+    },
+  };
+}
+
+function hostDeadlineAdvanceRaceSurfaceFixture() {
+  return {
+    status: "passed",
+    proofCheckId: "concurrent-host-deadline-advance-race",
+    reloadProofCheckId: "concurrent-host-deadline-advance-race-reload",
+    hostDeadlineAdvanceRace: {
+      id: "concurrent-host-deadline-advance-race",
+      label: "Concurrent host deadline advances converge",
+      status: "passed",
+      evidence: {
+        ackPageRole: "live",
+        rejectPageRole: "concurrent",
+        game: "deadline-advance-race-game-a",
+        ackState: "ack",
+        rejectError: "InvalidTarget",
+        phaseAfterRace: "N01",
+      },
+    },
+    hostDeadlineAdvanceRaceReload: {
+      id: "concurrent-host-deadline-advance-race-reload",
+      label:
+        "Concurrent host deadline advance race reloads open host projections",
+      status: "passed",
+      evidence: {
+        game: "deadline-advance-race-game-a",
+        liveRouteStatus: 200,
+        concurrentRouteStatus: 200,
+        livePhase: { id: "N01", state: "open", locked: false },
+        concurrentPhase: { id: "N01", state: "open", locked: false },
+        apiPhase: "N01",
+        apiDeadline: null,
       },
     },
   };

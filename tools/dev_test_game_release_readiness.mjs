@@ -227,6 +227,7 @@ import {
 import {
   assertEmptyNightThreeHostTransitionProofCase,
   assertHostAdvanceRaceSurfaceCase,
+  assertHostDeadlineAdvanceRaceSurfaceCase,
   assertHostLifecycleRaceSurfaceCase,
   assertHostLifecycleControlRoleSurfaceCase,
   assertHostModkillControlSurfaceCase,
@@ -2454,6 +2455,9 @@ export function validateDevTestGameCoreLoopAdminProof(proof, options = {}) {
   assertCoreLoopHostPublishRaceSurface(proof.hostPublishRaceSurface);
   assertCoreLoopHostResolveRaceSurface(proof.hostResolveRaceSurface);
   assertCoreLoopHostAdvanceRaceSurface(proof.hostAdvanceRaceSurface);
+  assertCoreLoopHostDeadlineAdvanceRaceSurface(
+    proof.hostDeadlineAdvanceRaceSurface,
+  );
   assertCoreLoopPlayerActionCheckpoint(proof.playerRoleSurface);
   assertCoreLoopTargetResolutionReceiptSurface(proof.targetResolutionReceiptSurface);
   assertCoreLoopNormalResolutionPrivacySurface(proof.normalResolutionPrivacySurface);
@@ -3011,6 +3015,16 @@ function assertCoreLoopHostAdvanceRaceSurface(hostAdvanceRaceSurface) {
   assertHostAdvanceRaceSurfaceCase({
     hostAdvanceRaceSurface,
     scenario: scenarioFamily.surfaces.hostAdvanceRace,
+  });
+}
+
+function assertCoreLoopHostDeadlineAdvanceRaceSurface(
+  hostDeadlineAdvanceRaceSurface,
+) {
+  const scenarioFamily = coreLoopHostControlScenarioFamily();
+  assertHostDeadlineAdvanceRaceSurfaceCase({
+    hostDeadlineAdvanceRaceSurface,
+    scenario: scenarioFamily.surfaces.hostDeadlineAdvanceRace,
   });
 }
 

@@ -4,6 +4,7 @@ import {
   assertDayFourNoLynchHostTransitionProofCase,
   assertEmptyNightThreeHostTransitionProofCase,
   assertHostAdvanceRaceSurfaceCase,
+  assertHostDeadlineAdvanceRaceSurfaceCase,
   assertHostLifecycleRaceSurfaceCase,
   assertHostNightActionTransitionSurfaceCase,
   assertHostLifecycleControlRoleSurfaceCase,
@@ -19,6 +20,7 @@ import {
   hostAdvancePhaseCommandFacts,
   hostAdvancePhaseTransitionCase,
   hostCompleteGameCommandFacts,
+  hostDeadlineAdvanceRaceScenario,
   hostDeadlineAffordanceForPhaseState,
   hostExtendDeadlineCommandFacts,
   hostLifecycleRaceScenario,
@@ -1227,6 +1229,66 @@ test("host advance race assertion covers phase advance convergence and reload la
         },
       }),
     /host advance race surface/,
+  );
+});
+
+test("host deadline advance race assertion covers deadline convergence and reload lanes", () => {
+  const hostDeadlineAdvanceRaceSurface = {
+    status: "passed",
+    proofCheckId: "concurrent-host-deadline-advance-race",
+    reloadProofCheckId: "concurrent-host-deadline-advance-race-reload",
+    hostDeadlineAdvanceRace: {
+      id: "concurrent-host-deadline-advance-race",
+      label: "Concurrent host deadline advances converge",
+      status: "passed",
+      evidence: {
+        ackPageRole: "live",
+        rejectPageRole: "concurrent",
+        game: "deadline-advance-race-game-a",
+        ackState: "ack",
+        rejectError: "InvalidTarget",
+        phaseAfterRace: "N01",
+      },
+    },
+    hostDeadlineAdvanceRaceReload: {
+      id: "concurrent-host-deadline-advance-race-reload",
+      label:
+        "Concurrent host deadline advance race reloads open host projections",
+      status: "passed",
+      evidence: {
+        game: "deadline-advance-race-game-a",
+        liveRouteStatus: 200,
+        concurrentRouteStatus: 200,
+        livePhase: { id: "N01", state: "open", locked: false },
+        concurrentPhase: { id: "N01", state: "open", locked: false },
+        apiPhase: "N01",
+        apiDeadline: null,
+      },
+    },
+  };
+
+  assert.doesNotThrow(() =>
+    assertHostDeadlineAdvanceRaceSurfaceCase({
+      hostDeadlineAdvanceRaceSurface,
+      scenario: hostDeadlineAdvanceRaceScenario(),
+    }),
+  );
+  assert.throws(
+    () =>
+      assertHostDeadlineAdvanceRaceSurfaceCase({
+        hostDeadlineAdvanceRaceSurface: {
+          ...hostDeadlineAdvanceRaceSurface,
+          hostDeadlineAdvanceRaceReload: {
+            ...hostDeadlineAdvanceRaceSurface.hostDeadlineAdvanceRaceReload,
+            evidence: {
+              ...hostDeadlineAdvanceRaceSurface.hostDeadlineAdvanceRaceReload
+                .evidence,
+              apiDeadline: "2026-01-01T00:00:00.000Z",
+            },
+          },
+        },
+      }),
+    /host deadline advance race surface/,
   );
 });
 
