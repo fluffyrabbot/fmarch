@@ -256,6 +256,9 @@ import {
   privateChannelNormalizedEvidenceObjects,
   replacementPrivatePostNormalizedEvidenceObjects,
 } from "./dev_test_game_normalized_evidence_objects.mjs";
+import {
+  hostedAdminHandoffProofArtifactCase,
+} from "./dev_test_game_hosted_handoff_proof_cases.mjs";
 export const DEV_TEST_GAME_RELEASE_READINESS_VERSION = 1;
 const devTestGameSeededBrowserProofCommand =
   devTestGameProductionFeatureBrowserProofCommand;
@@ -265,6 +268,14 @@ const artifactCoverageMilestoneIds = Object.freeze([
 ]);
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const artifactDir = path.join(repoRoot, "target", "dev-test-game");
+const hostedIdentityEvidenceAdminProofArtifact =
+  hostedAdminHandoffProofArtifactCase("hostedIdentityEvidenceAdminProof");
+const hostedConcurrentRaceMatrixAdminProofArtifact =
+  hostedAdminHandoffProofArtifactCase("hostedConcurrentRaceMatrixAdminProof");
+const realHostedObservabilityHandoffAdminProofArtifact =
+  hostedAdminHandoffProofArtifactCase(
+    "realHostedObservabilityHandoffAdminProof",
+  );
 const defaultProofPath = path.join(artifactDir, "proof-run.json");
 const defaultCoreLoopAdminProofPath = path.join(
   artifactDir,
@@ -311,8 +322,8 @@ const defaultIdentityAdminProofPath = path.join(
   "identity-admin-proof.json",
 );
 const defaultHostedIdentityEvidenceAdminProofPath = path.join(
-  artifactDir,
-  "hosted-identity-evidence-admin-proof.json",
+  repoRoot,
+  hostedIdentityEvidenceAdminProofArtifact.path,
 );
 const defaultSpineManifestPath = path.join(artifactDir, "spine-manifest.json");
 const defaultSpineManifestAdminProofPath = path.join(
@@ -334,8 +345,8 @@ const defaultRaceCoverageAdminProofPath = path.join(
   "race-coverage-admin-proof.json",
 );
 const defaultHostedConcurrentRaceMatrixAdminProofPath = path.join(
-  artifactDir,
-  "hosted-concurrent-race-matrix-admin-proof.json",
+  repoRoot,
+  hostedConcurrentRaceMatrixAdminProofArtifact.path,
 );
 const defaultHostedConcurrentRaceMatrixPath = path.join(
   artifactDir,
@@ -539,7 +550,7 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
           {
             path:
               options.hostedIdentityEvidenceAdminProofPath ??
-              "target/dev-test-game/hosted-identity-evidence-admin-proof.json",
+              hostedIdentityEvidenceAdminProofArtifact.path,
             artifact: options.hostedIdentityEvidenceAdminProofArtifact,
           },
         )
@@ -636,7 +647,7 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
           {
             path:
               options.hostedConcurrentRaceMatrixAdminProofPath ??
-              "target/dev-test-game/hosted-concurrent-race-matrix-admin-proof.json",
+              hostedConcurrentRaceMatrixAdminProofArtifact.path,
             artifact: options.hostedConcurrentRaceMatrixAdminProofArtifact,
           },
         )
@@ -3876,7 +3887,7 @@ export function validateDevTestGameRealHostedObservabilityHandoffAdminProof(
     status: "passed",
     path:
       options.path ??
-      "target/dev-test-game/real-hosted-observability-handoff-admin-proof.json",
+      realHostedObservabilityHandoffAdminProofArtifact.path,
     proofBoundary: proof.proofBoundary,
     overviewRoleUrl: proof.adminRoleSurface.overviewRoleUrl,
     detailRoleUrl: proof.adminRoleSurface.detailRoleUrl,
@@ -4214,7 +4225,7 @@ export function validateDevTestGameHostedIdentityEvidenceAdminProof(
     status: "passed",
     path:
       options.path ??
-      "target/dev-test-game/hosted-identity-evidence-admin-proof.json",
+      hostedIdentityEvidenceAdminProofArtifact.path,
     proofBoundary: proof.proofBoundary,
     overviewRoleUrl: proof.adminRoleSurface.overviewRoleUrl,
     detailRoleUrl: proof.adminRoleSurface.detailRoleUrl,
@@ -5095,7 +5106,7 @@ export function validateDevTestGameHostedConcurrentRaceMatrixAdminProof(
     status: "passed",
     path:
       options.path ??
-      "target/dev-test-game/hosted-concurrent-race-matrix-admin-proof.json",
+      hostedConcurrentRaceMatrixAdminProofArtifact.path,
     proofBoundary: proof.proofBoundary,
     overviewRoleUrl: proof.adminRoleSurface.overviewRoleUrl,
     detailRoleUrl: proof.adminRoleSurface.detailRoleUrl,
@@ -6154,7 +6165,7 @@ function adminSpineProofArtifactPath(id) {
     hardening: "target/dev-test-game/hardening-admin-proof.json",
     identity: "target/dev-test-game/identity-admin-proof.json",
     "hosted-identity-evidence":
-      "target/dev-test-game/hosted-identity-evidence-admin-proof.json",
+      hostedIdentityEvidenceAdminProofArtifact.path,
     backup: "target/dev-test-game/backup-admin-proof.json",
     ops: "target/dev-test-game/ops-admin-proof.json",
     seed: "target/dev-test-game/seed-admin-proof.json",
@@ -6166,11 +6177,11 @@ function adminSpineProofArtifactPath(id) {
     "hosted-evidence-lane":
       "target/dev-test-game/hosted-evidence-lane-admin-proof.json",
     "hosted-concurrent-race-matrix":
-      "target/dev-test-game/hosted-concurrent-race-matrix-admin-proof.json",
+      hostedConcurrentRaceMatrixAdminProofArtifact.path,
     "hosted-ops-signals":
       "target/dev-test-game/hosted-ops-signals-admin-proof.json",
     "real-hosted-observability-handoff":
-      "target/dev-test-game/real-hosted-observability-handoff-admin-proof.json",
+      realHostedObservabilityHandoffAdminProofArtifact.path,
     "spine-manifest": "target/dev-test-game/spine-manifest-admin-proof.json",
   }[id];
 }
@@ -7061,14 +7072,10 @@ const optionalReadinessArtifactRegistry = Object.freeze([
     },
   }),
   optionalReadinessArtifact({
-    id: "hostedIdentityEvidenceAdminProof",
-    envVar: "FMARCH_DEV_TEST_GAME_HOSTED_IDENTITY_EVIDENCE_ADMIN_PROOF",
+    id: hostedIdentityEvidenceAdminProofArtifact.readinessId,
+    envVar: hostedIdentityEvidenceAdminProofArtifact.envVar,
     defaultPath: defaultHostedIdentityEvidenceAdminProofPath,
-    outputKeys: {
-      data: "hostedIdentityEvidenceAdminProof",
-      path: "hostedIdentityEvidenceAdminProofPath",
-      freshnessMetadata: "hostedIdentityEvidenceAdminProofArtifact",
-    },
+    outputKeys: hostedIdentityEvidenceAdminProofArtifact.outputKeys,
   }),
   optionalReadinessArtifact({
     id: "opsAdminProof",
@@ -7195,14 +7202,10 @@ const optionalReadinessArtifactRegistry = Object.freeze([
     },
   }),
   optionalReadinessArtifact({
-    id: "hostedConcurrentRaceMatrixAdminProof",
-    envVar: "FMARCH_DEV_TEST_GAME_HOSTED_CONCURRENT_RACE_MATRIX_ADMIN_PROOF",
+    id: hostedConcurrentRaceMatrixAdminProofArtifact.readinessId,
+    envVar: hostedConcurrentRaceMatrixAdminProofArtifact.envVar,
     defaultPath: defaultHostedConcurrentRaceMatrixAdminProofPath,
-    outputKeys: {
-      data: "hostedConcurrentRaceMatrixAdminProof",
-      path: "hostedConcurrentRaceMatrixAdminProofPath",
-      freshnessMetadata: "hostedConcurrentRaceMatrixAdminProofArtifact",
-    },
+    outputKeys: hostedConcurrentRaceMatrixAdminProofArtifact.outputKeys,
   }),
   optionalReadinessArtifact({
     id: "hostedEvidenceLaneAdminProof",

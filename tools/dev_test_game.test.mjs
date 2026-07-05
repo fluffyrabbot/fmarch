@@ -253,6 +253,10 @@ import {
   assertGeneratedAdminProofHandoffPath,
 } from "./dev_test_game_admin_audit_handoff_contract.mjs";
 import {
+  hostedAdminHandoffProofArtifactCase,
+  hostedAdminHandoffProofArtifactCases,
+} from "./dev_test_game_hosted_handoff_proof_cases.mjs";
+import {
   assertDevTestGameNextAction,
   buildDevTestGameNextAction,
   devTestGameDefaultSequenceStage,
@@ -682,7 +686,9 @@ test("dev test-game spine orchestrators expose stable proof order and env maps",
     FMARCH_DEV_TEST_GAME_REAL_HOSTED_OBSERVABILITY_HANDOFF:
       devTestGameRealHostedObservabilityHandoffPath,
     FMARCH_DEV_TEST_GAME_REAL_HOSTED_OBSERVABILITY_HANDOFF_ADMIN_PROOF:
-      "target/dev-test-game/real-hosted-observability-handoff-admin-proof.json",
+      hostedAdminHandoffProofArtifactCase(
+        "realHostedObservabilityHandoffAdminProof",
+      ).path,
     FMARCH_DEV_TEST_GAME_SEED_FIXTURE_SUMMARY:
       "target/dev-test-game/seed-fixture-summary.json",
     FMARCH_DEV_TEST_GAME_SEED_ADMIN_PROOF:
@@ -698,7 +704,7 @@ test("dev test-game spine orchestrators expose stable proof order and env maps",
     FMARCH_DEV_TEST_GAME_HOSTED_IDENTITY_EVIDENCE:
       "target/dev-test-game/hosted-identity-evidence.json",
     FMARCH_DEV_TEST_GAME_HOSTED_IDENTITY_EVIDENCE_ADMIN_PROOF:
-      "target/dev-test-game/hosted-identity-evidence-admin-proof.json",
+      hostedAdminHandoffProofArtifactCase("hostedIdentityEvidenceAdminProof").path,
     FMARCH_DEV_TEST_GAME_SPINE_MANIFEST: "target/dev-test-game/spine-manifest.json",
     FMARCH_DEV_TEST_GAME_SPINE_MANIFEST_ADMIN_PROOF:
       "target/dev-test-game/spine-manifest-admin-proof.json",
@@ -712,7 +718,9 @@ test("dev test-game spine orchestrators expose stable proof order and env maps",
     FMARCH_DEV_TEST_GAME_HOSTED_CONCURRENT_RACE_MATRIX:
       "target/dev-test-game/hosted-concurrent-race-matrix.json",
     FMARCH_DEV_TEST_GAME_HOSTED_CONCURRENT_RACE_MATRIX_ADMIN_PROOF:
-      "target/dev-test-game/hosted-concurrent-race-matrix-admin-proof.json",
+      hostedAdminHandoffProofArtifactCase(
+        "hostedConcurrentRaceMatrixAdminProof",
+      ).path,
     FMARCH_DEV_TEST_GAME_HOSTED_TARGET_PREFLIGHT:
       "target/dev-test-game/hosted-target-preflight.json",
     FMARCH_DEV_TEST_GAME_HOSTED_TARGET_PREFLIGHT_ADMIN_PROOF:
@@ -1505,6 +1513,17 @@ test("dev test-game spine manifest records command order and evidence wiring", (
     ],
     roleUrl: "/admin/audit/local-identity-adapter?game=<seeded-game>",
   });
+  const hostedIdentityEvidenceAdminProofArtifact =
+    hostedAdminHandoffProofArtifactCase("hostedIdentityEvidenceAdminProof");
+  assert.deepEqual(manifest.commands.hostedIdentityEvidenceAdminProof, {
+    script: hostedIdentityEvidenceAdminProofArtifact.script,
+    proofArtifact: hostedIdentityEvidenceAdminProofArtifact.path,
+    dependsOn: [
+      devTestGameHostedIdentityEvidencePath,
+      "target/dev-test-game/proof-run.json",
+    ],
+    roleUrl: hostedIdentityEvidenceAdminProofArtifact.roleUrl,
+  });
   assert.deepEqual(manifest.commands.hostedOpsSignals, {
     script: devTestGameHostedOpsSignalsCommand,
     proofArtifact: devTestGameHostedOpsSignalsPath,
@@ -1521,13 +1540,15 @@ test("dev test-game spine manifest records command order and evidence wiring", (
     roleUrl:
       "/admin/audit/local-real-hosted-observability-handoff?game=<seeded-game>",
   });
+  const realHostedObservabilityHandoffAdminProofArtifact =
+    hostedAdminHandoffProofArtifactCase(
+      "realHostedObservabilityHandoffAdminProof",
+    );
   assert.deepEqual(manifest.commands.realHostedObservabilityHandoffAdminProof, {
-    script: "test:dev-test-game-real-hosted-observability-handoff-admin-proof",
-    proofArtifact:
-      "target/dev-test-game/real-hosted-observability-handoff-admin-proof.json",
+    script: realHostedObservabilityHandoffAdminProofArtifact.script,
+    proofArtifact: realHostedObservabilityHandoffAdminProofArtifact.path,
     dependsOn: [devTestGameRealHostedObservabilityHandoffPath],
-    roleUrl:
-      "/admin/audit/local-real-hosted-observability-handoff?game=<seeded-game>",
+    roleUrl: realHostedObservabilityHandoffAdminProofArtifact.roleUrl,
   });
   assert.deepEqual(manifest.commands.hostedTargetPreflight, {
     script: devTestGameHostedTargetPreflightCommand,
@@ -1679,6 +1700,9 @@ test("dev test-game spine manifest records command order and evidence wiring", (
   assert(manifest.artifacts.includes(devTestGameRaceCoveragePath));
   assert(manifest.artifacts.includes(devTestGameHostedConcurrentRaceMatrixPath));
   assert(manifest.artifacts.includes(devTestGameHostedIdentityEvidencePath));
+  for (const artifactCase of hostedAdminHandoffProofArtifactCases) {
+    assert(manifest.artifacts.includes(artifactCase.path));
+  }
   assert(manifest.artifacts.includes(devTestGameHostedOpsSignalsPath));
   assert(manifest.artifacts.includes(devTestGameHostedTargetPreflightPath));
   assert(manifest.artifacts.includes(devTestGameHostedEvidenceLanePath));

@@ -5,10 +5,12 @@ import {
   assertAdminAuditRelatedHandoff,
   assertAdminAuditRelatedHandoffs,
   assertGeneratedAdminProofHandoffPath,
-  hostedAdminHandoffProofArtifactCases,
   requiredRelatedDestinationsForHandoff,
   requiredRelatedDestinationsForHandoffs,
 } from "./dev_test_game_admin_audit_handoff_contract.mjs";
+import {
+  hostedAdminHandoffProofArtifactCases,
+} from "./dev_test_game_hosted_handoff_proof_cases.mjs";
 import {
   hostedEvidenceHandoffCase,
 } from "./dev_test_game_hosted_handoff_cases.mjs";

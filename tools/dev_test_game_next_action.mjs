@@ -63,6 +63,9 @@ import {
   recoveryReceiptGraphDescriptors,
   recoveryReceiptGraphSummaryFromProofGraph,
 } from "./dev_test_game_recovery_receipt_catalog.mjs";
+import {
+  hostedAdminHandoffProofArtifactCases,
+} from "./dev_test_game_hosted_handoff_proof_cases.mjs";
 
 export {
   devTestGameCoreLoopAdminProofCommand,
@@ -2170,6 +2173,10 @@ const devSpineArtifactPriorities = new Map(
     ["proof-graph-admin", "target/dev-test-game/proof-graph-admin-proof.json"],
     ["spine-manifest", "target/dev-test-game/spine-manifest.json"],
     ["spine-manifest-admin", "target/dev-test-game/spine-manifest-admin-proof.json"],
+    ...hostedAdminHandoffProofArtifactCases.map((artifactCase) => [
+      artifactCase.refreshId,
+      artifactCase.path,
+    ]),
   ].flatMap(([id, artifactPath], index) => [
     [id, index],
     [artifactPath, index],

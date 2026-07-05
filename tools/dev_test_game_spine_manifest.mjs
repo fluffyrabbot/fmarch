@@ -51,6 +51,10 @@ import {
   devTestGameRealHostedObservabilityHandoffPath,
 } from "./dev_test_game_real_hosted_observability_handoff.mjs";
 import {
+  hostedAdminHandoffProofArtifactCase,
+  hostedAdminHandoffProofArtifactCases,
+} from "./dev_test_game_hosted_handoff_proof_cases.mjs";
+import {
   devTestGameHostedTargetPreflightCommand,
   devTestGameHostedTargetPreflightPath,
 } from "./dev_test_game_hosted_target_preflight.mjs";
@@ -110,6 +114,12 @@ export {
 
 const manifestJsonPath = path.join(repoRoot, spineManifestPath);
 const manifestMarkdownPath = path.join(repoRoot, spineManifestMarkdownPath);
+const hostedIdentityEvidenceAdminProofArtifact =
+  hostedAdminHandoffProofArtifactCase("hostedIdentityEvidenceAdminProof");
+const realHostedObservabilityHandoffAdminProofArtifact =
+  hostedAdminHandoffProofArtifactCase(
+    "realHostedObservabilityHandoffAdminProof",
+  );
 
 export function buildDevTestGameSpineManifest({
   generatedAt = new Date().toISOString(),
@@ -201,15 +211,13 @@ export function buildDevTestGameSpineManifest({
         roleUrl: "/admin/audit/local-identity-adapter?game=<seeded-game>",
       },
       hostedIdentityEvidenceAdminProof: {
-        script: "test:dev-test-game-hosted-identity-evidence-admin-proof",
-        proofArtifact:
-          "target/dev-test-game/hosted-identity-evidence-admin-proof.json",
+        script: hostedIdentityEvidenceAdminProofArtifact.script,
+        proofArtifact: hostedIdentityEvidenceAdminProofArtifact.path,
         dependsOn: [
           devTestGameHostedIdentityEvidencePath,
           "target/dev-test-game/proof-run.json",
         ],
-        roleUrl:
-          "/admin/audit/local-hosted-identity-evidence?game=<seeded-game>",
+        roleUrl: hostedIdentityEvidenceAdminProofArtifact.roleUrl,
       },
       hostedOpsSignals: {
         script: devTestGameHostedOpsSignalsCommand,
@@ -228,13 +236,10 @@ export function buildDevTestGameSpineManifest({
           "/admin/audit/local-real-hosted-observability-handoff?game=<seeded-game>",
       },
       realHostedObservabilityHandoffAdminProof: {
-        script:
-          "test:dev-test-game-real-hosted-observability-handoff-admin-proof",
-        proofArtifact:
-          "target/dev-test-game/real-hosted-observability-handoff-admin-proof.json",
+        script: realHostedObservabilityHandoffAdminProofArtifact.script,
+        proofArtifact: realHostedObservabilityHandoffAdminProofArtifact.path,
         dependsOn: [devTestGameRealHostedObservabilityHandoffPath],
-        roleUrl:
-          "/admin/audit/local-real-hosted-observability-handoff?game=<seeded-game>",
+        roleUrl: realHostedObservabilityHandoffAdminProofArtifact.roleUrl,
       },
       hostedTargetPreflight: {
         script: devTestGameHostedTargetPreflightCommand,
@@ -376,7 +381,9 @@ export function buildDevTestGameSpineManifest({
       nextActionAdminProofPath,
       devTestGameHostedConcurrentRaceMatrixPath,
       devTestGameHostedIdentityEvidencePath,
-      "target/dev-test-game/hosted-identity-evidence-admin-proof.json",
+      ...hostedAdminHandoffProofArtifactCases.map(
+        (artifactCase) => artifactCase.path,
+      ),
       devTestGameHostedTargetPreflightPath,
       devTestGameHostedEvidenceLanePath,
       devTestGameHostedEvidenceLaneDemoProofPath,
@@ -464,11 +471,11 @@ export function buildDevTestGameSpineManifest({
         ],
       },
       {
-        id: "hosted-identity-evidence-admin-proof-recorded",
+        id: `${hostedIdentityEvidenceAdminProofArtifact.id}-recorded`,
         status: "passed",
         evidence: [
-          "test:dev-test-game-hosted-identity-evidence-admin-proof",
-          "target/dev-test-game/hosted-identity-evidence-admin-proof.json",
+          hostedIdentityEvidenceAdminProofArtifact.script,
+          hostedIdentityEvidenceAdminProofArtifact.path,
         ],
       },
       {
@@ -664,7 +671,7 @@ export function assertDevTestGameSpineManifest(manifest) {
   }
   if (
     manifest.commands?.hostedIdentityEvidenceAdminProof?.script !==
-    "test:dev-test-game-hosted-identity-evidence-admin-proof"
+    hostedIdentityEvidenceAdminProofArtifact.script
   ) {
     throw new Error(
       `spine manifest hosted identity evidence admin proof command drifted: ${manifest.commands?.hostedIdentityEvidenceAdminProof?.script}`,
@@ -672,7 +679,7 @@ export function assertDevTestGameSpineManifest(manifest) {
   }
   if (
     manifest.commands.hostedIdentityEvidenceAdminProof.proofArtifact !==
-    "target/dev-test-game/hosted-identity-evidence-admin-proof.json"
+    hostedIdentityEvidenceAdminProofArtifact.path
   ) {
     throw new Error(
       `spine manifest hosted identity evidence admin proof artifact drifted: ${manifest.commands.hostedIdentityEvidenceAdminProof.proofArtifact}`,
@@ -706,10 +713,18 @@ export function assertDevTestGameSpineManifest(manifest) {
   }
   if (
     manifest.commands?.realHostedObservabilityHandoffAdminProof?.script !==
-    "test:dev-test-game-real-hosted-observability-handoff-admin-proof"
+    realHostedObservabilityHandoffAdminProofArtifact.script
   ) {
     throw new Error(
       `spine manifest real hosted observability handoff admin proof command drifted: ${manifest.commands?.realHostedObservabilityHandoffAdminProof?.script}`,
+    );
+  }
+  if (
+    manifest.commands.realHostedObservabilityHandoffAdminProof.proofArtifact !==
+    realHostedObservabilityHandoffAdminProofArtifact.path
+  ) {
+    throw new Error(
+      `spine manifest real hosted observability handoff admin proof artifact drifted: ${manifest.commands.realHostedObservabilityHandoffAdminProof.proofArtifact}`,
     );
   }
   if (
@@ -831,7 +846,9 @@ export function assertDevTestGameSpineManifest(manifest) {
     nextActionAdminProofPath,
     devTestGameHostedConcurrentRaceMatrixPath,
     devTestGameHostedIdentityEvidencePath,
-    "target/dev-test-game/hosted-identity-evidence-admin-proof.json",
+    ...hostedAdminHandoffProofArtifactCases.map(
+      (artifactCase) => artifactCase.path,
+    ),
     devTestGameHostedTargetPreflightPath,
     devTestGameHostedEvidenceLanePath,
     devTestGameHostedEvidenceLaneDemoProofPath,
@@ -850,9 +867,7 @@ export function assertDevTestGameSpineManifest(manifest) {
     "target/dev-test-game/release-admin-proof.json",
     "target/dev-test-game/release-runbook-admin-proof.json",
     "target/dev-test-game/hosted-target-preflight-admin-proof.json",
-    "target/dev-test-game/hosted-concurrent-race-matrix-admin-proof.json",
     "target/dev-test-game/hosted-ops-signals-admin-proof.json",
-    "target/dev-test-game/real-hosted-observability-handoff-admin-proof.json",
     "target/dev-test-game/spine-manifest-admin-proof.json",
     "target/dev-test-game/admin-spine-admin-proof.json",
     "target/live-stack-backup-restore-drill/local-backup-restore-proof.json",
@@ -873,7 +888,7 @@ export function assertDevTestGameSpineManifest(manifest) {
     "race-coverage-recorded",
     "hosted-concurrent-race-matrix-recorded",
     "hosted-identity-evidence-recorded",
-    "hosted-identity-evidence-admin-proof-recorded",
+    `${hostedIdentityEvidenceAdminProofArtifact.id}-recorded`,
     "hosted-target-preflight-recorded",
     "hosted-evidence-lane-recorded",
     "hosted-evidence-lane-demo-proof-recorded",
@@ -1262,12 +1277,14 @@ const artifactRefreshCommands = Object.freeze({
   "race-coverage-admin": "npm run test:dev-test-game-race-coverage-admin-proof",
   "hosted-concurrent-race-matrix":
     "npm run test:dev-test-game-hosted-concurrent-race-matrix",
-  "hosted-concurrent-race-matrix-admin":
-    "npm run test:dev-test-game-hosted-concurrent-race-matrix-admin-proof",
   "hosted-identity-evidence":
     "npm run test:dev-test-game-hosted-identity-evidence",
-  "hosted-identity-evidence-admin":
-    "npm run test:dev-test-game-hosted-identity-evidence-admin-proof",
+  ...Object.fromEntries(
+    hostedAdminHandoffProofArtifactCases.flatMap((artifactCase) => [
+      [artifactCase.refreshId, artifactCase.command],
+      [artifactCase.path, artifactCase.command],
+    ]),
+  ),
   "hosted-target-preflight": "npm run test:dev-test-game-hosted-target-preflight",
   "hosted-evidence-lane": "npm run test:dev-test-game-hosted-evidence-lane",
   "hosted-evidence-lane-demo":

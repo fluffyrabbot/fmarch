@@ -6,27 +6,6 @@ import {
   assertAdminRoleSurfaceHandoffPath,
 } from "./dev_test_game_admin_audit_handoff_path.mjs";
 
-export const hostedAdminHandoffProofArtifactCases = Object.freeze([
-  Object.freeze({
-    label: "hosted identity evidence admin proof",
-    path: "target/dev-test-game/hosted-identity-evidence-admin-proof.json",
-    command: "npm run test:dev-test-game-hosted-identity-evidence-admin-proof",
-  }),
-  Object.freeze({
-    label: "hosted concurrent race matrix admin proof",
-    path: "target/dev-test-game/hosted-concurrent-race-matrix-admin-proof.json",
-    command:
-      "npm run test:dev-test-game-hosted-concurrent-race-matrix-admin-proof",
-  }),
-  Object.freeze({
-    label: "real hosted observability handoff admin proof",
-    path:
-      "target/dev-test-game/real-hosted-observability-handoff-admin-proof.json",
-    command:
-      "npm run test:dev-test-game-real-hosted-observability-handoff-admin-proof",
-  }),
-]);
-
 export function requiredRelatedDestinationsForHandoff(handoff) {
   return handoff === null || handoff === undefined
     ? []
