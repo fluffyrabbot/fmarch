@@ -5112,6 +5112,26 @@ test("admin proof fixtures prove normalized evidence object rows", () => {
     ],
     hostedIdentityTerminalReceiptArtifactCase.visibleStatusText,
   );
+  assert.deepEqual(proofGraphProof.generatedFrom.diagnosticProofSummary, {
+    id: "diagnostic-non-terminal",
+    label: "Diagnostic non-terminal proofs",
+    status: "1 diagnostic non-terminal proof",
+    diagnosticCount: 1,
+    promotesFreshnessCount: 0,
+    terminalArtifactCount: 0,
+    rows: proofGraphDiagnosticProofNodes.map((node) => ({
+      id: node.id,
+      label: node.label,
+      status: node.status,
+      artifact: node.artifact,
+      roleUrl: node.roleUrl,
+      proofCommand: node.proofCommand,
+      recoveryCommand: node.recoveryCommand,
+      diagnosticReason: node.diagnosticReason,
+      promotesFreshness: node.promotesFreshness,
+      terminalArtifact: node.terminalArtifact,
+    })),
+  });
   const preTerminalProofGraphProof = proofGraphAdminProofFixture();
   preTerminalProofGraphProof.generatedFrom.receiptArtifactRowIds = [];
   preTerminalProofGraphProof.generatedFrom.hostedIdentityTerminalReceiptArtifact =
@@ -19054,6 +19074,32 @@ function proofGraphAdminProofFixture() {
   const receiptArtifactRowIds = [
     hostedIdentityTerminalReceiptArtifactCase.rowId,
   ];
+  const diagnosticEdgeRowIds = proofGraphDiagnosticProofEdges.map(
+    (edge) => `edge:${edge.from}:${edge.relationship}:${edge.to}`,
+  );
+  const diagnosticProofRows = proofGraphDiagnosticProofNodes.map((node) => ({
+    id: node.id,
+    label: node.label,
+    status: node.status,
+    artifact: node.artifact,
+    roleUrl: node.roleUrl,
+    proofCommand: node.proofCommand,
+    recoveryCommand: node.recoveryCommand,
+    diagnosticReason: node.diagnosticReason,
+    promotesFreshness: node.promotesFreshness,
+    terminalArtifact: node.terminalArtifact,
+  }));
+  const diagnosticProofSummary = {
+    id: "diagnostic-non-terminal",
+    label: "Diagnostic non-terminal proofs",
+    status: `${diagnosticProofRows.length} diagnostic non-terminal ${
+      diagnosticProofRows.length === 1 ? "proof" : "proofs"
+    }`,
+    diagnosticCount: diagnosticProofRows.length,
+    promotesFreshnessCount: 0,
+    terminalArtifactCount: 0,
+    rows: diagnosticProofRows,
+  };
   return {
     version: 1,
     proof: "dev-test-game-proof-graph-admin-proof",
@@ -19070,6 +19116,7 @@ function proofGraphAdminProofFixture() {
         "target/dev-test-game/hosted-concurrent-race-matrix.json",
       game: "00000000-0000-0000-0000-000000000001",
       nodeIds: [
+        ...proofGraphDiagnosticProofNodes.map((node) => node.id),
         ...handoffs.map((handoff) => handoff.linkId),
         hostSetupGraphTarget.roleSurfaceNodeId,
         coreLoopProductionFeatureTarget.productionFeatureNodeId,
@@ -19094,18 +19141,20 @@ function proofGraphAdminProofFixture() {
         status: hostedIdentityTerminalReceiptArtifactCase.status,
       },
       edgeRowIds: [
+        ...diagnosticEdgeRowIds,
         hostSetupGraphTarget.edgeRowId,
         cohostGraphTarget.edgeRowId,
         replacementGraphTarget.edgeRowId,
         replacementActionGraphTarget.edgeRowId,
         replacementPrivateGraphTarget.edgeRowId,
       ],
-      edgeCount: handoffs.length + 5,
+      edgeCount: handoffs.length + diagnosticEdgeRowIds.length + 5,
       adminProofSurfaceIds,
       adminProofRoleHandoffs: handoffs,
       coreLoopScenarioFamilyDestinations: coreLoopFamilyDestinations,
       productionFeatureTargetDestinations,
       productionFeatureDestinationSummary,
+      diagnosticProofSummary,
       hostSetupFeatureTarget: hostSetupGraphTarget,
       cohostFeatureTarget: cohostGraphTarget,
       replacementFeatureTarget: replacementGraphTarget,
@@ -19120,6 +19169,8 @@ function proofGraphAdminProofFixture() {
       surfaceTestId: "admin-audit-detail-surface",
       clickedThroughFromOverview: true,
       visibleChecks: [
+        ...proofGraphDiagnosticProofNodes.map((node) => node.id),
+        ...diagnosticEdgeRowIds,
         ...handoffs.map((handoff) => handoff.linkId),
         hostSetupGraphTarget.roleSurfaceNodeId,
         hostSetupGraphTarget.productionFeatureNodeId,
@@ -19151,6 +19202,7 @@ function proofGraphAdminProofFixture() {
           hostedIdentityTerminalReceiptArtifactCase.visibleStatusText,
       },
       visibleRelatedLinks: [
+        ...proofGraphDiagnosticProofNodes.map((node) => node.id),
         ...handoffs.map((handoff) => handoff.linkId),
         hostSetupGraphTarget.roleSurfaceNodeId,
         hostSetupGraphTarget.productionFeatureNodeId,
@@ -19167,6 +19219,19 @@ function proofGraphAdminProofFixture() {
       ],
       visibleProductionFeatureDestinationSummaries:
         productionFeatureDestinationSummary.rows.map((row) => row.id),
+      visibleDiagnosticProofSummaries: diagnosticProofRows.map((row) => row.id),
+      visibleDiagnosticProofSummaryStatuses: Object.fromEntries(
+        diagnosticProofRows.map((row) => [
+          row.id,
+          [
+            row.status,
+            row.diagnosticReason,
+            row.artifact,
+            "non-freshness-promoting",
+            "non-terminal artifact",
+          ].join("\n"),
+        ]),
+      ),
       visibleRelatedDestinations: [
         ...handoffs.map((handoff) => ({
           linkId: handoff.linkId,

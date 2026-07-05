@@ -1626,6 +1626,29 @@ test("admin route data exposes local proof graph as a native audit row", async (
     graph.artifactSummary,
     normalizeLocalProofGraphArtifactSummary(proofGraph),
   );
+  assert.deepEqual(graph.artifactSummary.diagnosticProofSummary, {
+    id: "diagnostic-non-terminal",
+    label: "Diagnostic non-terminal proofs",
+    status: "1 diagnostic non-terminal proof",
+    diagnosticCount: 1,
+    promotesFreshnessCount: 0,
+    terminalArtifactCount: 0,
+    rows: [
+      {
+        id: "diagnostic:proof-graph-destination-summary-drift",
+        label: "Proof graph destination-summary drift branch",
+        status: "passed",
+        artifact:
+          "target/dev-test-game/next-action-proof-graph-destination-summary-drift-admin-proof.json",
+        roleUrl: "/admin/audit/local-next-action?game=<seeded-game>",
+        proofCommand: "npm run test:dev-test-game-next-action-admin-proof",
+        recoveryCommand: "test:dev-test-game-proof-graph",
+        diagnosticReason: "proof-graph-destination-summary-drift",
+        promotesFreshness: false,
+        terminalArtifact: false,
+      },
+    ],
+  });
   assert.deepEqual(graph.artifactSummary.productionFeatureDestinationSummary, {
     status: "passed",
     totalDestinationCount: 1,

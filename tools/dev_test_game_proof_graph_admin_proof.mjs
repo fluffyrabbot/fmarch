@@ -131,6 +131,9 @@ export function proofGraphAdminProofCase() {
         proofGraphProductionFeatureTargetDestinations(source.proofGraph);
       const productionFeatureDestinationSummary =
         source.proofGraph.summary.productionFeatureDestinationSummary;
+      const diagnosticProofSummary = proofGraphDiagnosticProofSummary(
+        source.proofGraph,
+      );
       return await proveAdminAuditDetail({
         browser,
         frontendBaseUrl,
@@ -140,6 +143,15 @@ export function proofGraphAdminProofCase() {
         requiredCheckStatuses: proofGraphVisibleCheckStatuses(source.proofGraph),
         requiredProductionFeatureDestinationSummaries:
           productionFeatureDestinationSummary.rows.map((row) => row.id),
+        requiredDiagnosticProofSummaries: diagnosticProofSummary.rows.map(
+          (row) => row.id,
+        ),
+        requiredDiagnosticProofSummaryStatuses: Object.fromEntries(
+          diagnosticProofSummary.rows.map((row) => [
+            row.id,
+            "non-terminal artifact",
+          ]),
+        ),
         requiredRelatedLinks: source.proofGraph.nodes
           .filter(
             (node) =>
@@ -194,6 +206,9 @@ export function proofGraphAdminProofCase() {
           proofGraphProductionFeatureTargetDestinations(source.proofGraph),
         productionFeatureDestinationSummary:
           source.proofGraph.summary.productionFeatureDestinationSummary,
+        diagnosticProofSummary: proofGraphDiagnosticProofSummary(
+          source.proofGraph,
+        ),
         ...proofGraphAdminFeatureTargetEntries(source.proofGraph),
       },
       adminRoleSurface,
@@ -270,10 +285,63 @@ export function assertProofGraphAdminProof(evidence) {
   assertProofGraphAdminProofCoversCoreLoopScenarioFamilies(evidence);
   assertProofGraphAdminProofCoversProductionFeatureDestinations(evidence);
   assertProofGraphAdminProofCoversProductionFeatureDestinationSummary(evidence);
+  assertProofGraphAdminProofCoversDiagnosticProofSummary(evidence);
   for (const featureTargetCase of proofGraphAdminFeatureTargetCases) {
     assertProofGraphAdminProofCoversFeatureTarget(evidence, featureTargetCase);
   }
   return evidence;
+}
+
+function assertProofGraphAdminProofCoversDiagnosticProofSummary(evidence) {
+  const summary = evidence.generatedFrom?.diagnosticProofSummary;
+  const rows = Array.isArray(summary?.rows) ? summary.rows : [];
+  if (
+    summary?.id !== "diagnostic-non-terminal" ||
+    summary.diagnosticCount !== rows.length ||
+    summary.promotesFreshnessCount !== 0 ||
+    summary.terminalArtifactCount !== 0
+  ) {
+    throw new Error("proof graph admin proof diagnostic summary drifted");
+  }
+  for (const row of rows) {
+    if (
+      row.promotesFreshness !== false ||
+      row.terminalArtifact !== false ||
+      row.diagnosticReason === "" ||
+      row.artifact === "" ||
+      row.proofCommand === "" ||
+      row.recoveryCommand === ""
+    ) {
+      throw new Error(
+        `proof graph admin proof diagnostic row is not non-terminal: ${row.id}`,
+      );
+    }
+    if (
+      !evidence.adminRoleSurface
+        ?.visibleDiagnosticProofSummaries?.includes(row.id)
+    ) {
+      throw new Error(
+        `proof graph admin proof missing diagnostic summary row: ${row.id}`,
+      );
+    }
+    const visibleStatus =
+      evidence.adminRoleSurface?.visibleDiagnosticProofSummaryStatuses?.[
+        row.id
+      ] ?? "";
+    for (const token of [
+      row.status,
+      row.diagnosticReason,
+      row.artifact,
+      "non-freshness-promoting",
+      "non-terminal artifact",
+    ]) {
+      if (!visibleStatus.includes(token)) {
+        throw new Error(
+          `proof graph admin proof diagnostic summary row missing ${token}: ${row.id}`,
+        );
+      }
+    }
+  }
 }
 
 function assertProofGraphAdminProofCoversProductionFeatureDestinations(evidence) {
@@ -483,6 +551,36 @@ function proofGraphVisibleCheckStatuses(proofGraph) {
     : {
         [hostedIdentityReceipt.rowId]: hostedIdentityReceipt.status,
       };
+}
+
+function proofGraphDiagnosticProofSummary(proofGraph) {
+  const rows = proofGraph.nodes
+    .filter((node) => node?.diagnostic === true)
+    .map((node) => ({
+      id: String(node.id ?? ""),
+      label: String(node.label ?? node.id ?? ""),
+      status: String(node.status ?? "recorded"),
+      artifact: String(node.artifact ?? ""),
+      roleUrl: String(node.roleUrl ?? ""),
+      proofCommand: String(node.proofCommand ?? ""),
+      recoveryCommand: String(node.recoveryCommand ?? ""),
+      diagnosticReason: String(node.diagnosticReason ?? ""),
+      promotesFreshness: node.promotesFreshness === true,
+      terminalArtifact: node.terminalArtifact === true,
+    }));
+  return {
+    id: "diagnostic-non-terminal",
+    label: "Diagnostic non-terminal proofs",
+    status: diagnosticProofCountLabel(rows.length),
+    diagnosticCount: rows.length,
+    promotesFreshnessCount: rows.filter((row) => row.promotesFreshness).length,
+    terminalArtifactCount: rows.filter((row) => row.terminalArtifact).length,
+    rows,
+  };
+}
+
+function diagnosticProofCountLabel(count) {
+  return `${count} diagnostic non-terminal ${count === 1 ? "proof" : "proofs"}`;
 }
 
 function proofGraphEvidenceObjectRowIds(proofGraph) {

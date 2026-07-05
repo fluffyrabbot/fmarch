@@ -360,6 +360,29 @@
         </ol>
       </section>
     {/if}
+    {#if data.audit.artifactSummary?.diagnosticProofSummary?.rows?.length > 0}
+      <section
+        class="admin-audit-detail__group"
+        data-testid="admin-audit-detail-diagnostic-proof-summary"
+      >
+        <h2>Diagnostic non-terminal proofs</h2>
+        <ol class="admin-audit-detail__entries">
+          {#each data.audit.artifactSummary.diagnosticProofSummary.rows as row}
+            <li
+              class="admin-audit-detail__entry admin-audit-detail__entry--stack"
+              data-testid={`admin-audit-diagnostic-proof-summary-${row.id}`}
+            >
+              <strong>{row.label}</strong>
+              <span>{row.status}</span>
+              <span>{row.diagnosticReason}</span>
+              <span>{row.artifact}</span>
+              <span>{row.promotesFreshness ? "freshness-promoting" : "non-freshness-promoting"}</span>
+              <span>{row.terminalArtifact ? "terminal artifact" : "non-terminal artifact"}</span>
+            </li>
+          {/each}
+        </ol>
+      </section>
+    {/if}
     {#if data.audit.sessions?.length > 0}
       <ol class="admin-audit-detail__entries" data-testid="admin-audit-detail-sessions">
         {#each data.audit.sessions as session}
