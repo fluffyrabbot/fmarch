@@ -119,9 +119,6 @@ import {
   hostedAdminHandoffProofArtifactCases,
 } from "./dev_test_game_hosted_handoff_proof_cases.mjs";
 import {
-  devTestGameHostedIdentityOperatorAdminProofPath,
-} from "./dev_test_game_hosted_identity_evidence_cases.mjs";
-import {
   devTestGameAdminSpineAdminProofPath,
   devTestGameBackupAdminProofPath,
   devTestGameCoreLoopAdminProofPath,
@@ -430,6 +427,12 @@ export function buildDevTestGameNextAction(
                     hostedHandoffChecklist:
                       selectedUnproven.hostedHandoffChecklist,
                   }),
+              ...(selectedUnproven.hostedIdentityProgression === undefined
+                ? {}
+                : {
+                    hostedIdentityProgression:
+                      selectedUnproven.hostedIdentityProgression,
+                  }),
             },
           }
         : {
@@ -705,6 +708,17 @@ export function assertDevTestGameNextAction(evidence) {
         "next-action release-readiness recovery has a malformed hosted handoff checklist",
       );
     }
+    if (
+      evidence.nextAction.unproven?.hostedIdentityProgression !== undefined &&
+      !validHostedIdentityProgressionSelection(
+        evidence.nextAction.unproven.hostedIdentityProgression,
+        evidence.nextAction.unproven.hostedHandoffChecklist,
+      )
+    ) {
+      throw new Error(
+        "next-action release-readiness recovery has a malformed hosted identity progression",
+      );
+    }
   }
   if (
     evidence.nextAction.reason === "harness-stability-drift" &&
@@ -965,11 +979,24 @@ function rankedBuildableReleaseReadinessItems(
       if (buildable === undefined) {
         return null;
       }
-      const selectedBuildable =
+      const hostedIdentityProgressionBuildable =
         item.id === "hosted-production-identity" &&
         hostedIdentityOperatorBuildable !== null
-          ? { ...buildable, ...hostedIdentityOperatorBuildable }
-          : buildable;
+          ? hostedIdentityProgressionBuildableForChecklist({
+              hostedHandoffChecklist: buildable.hostedHandoffChecklist,
+            })
+          : null;
+      const selectedBuildable =
+        hostedIdentityProgressionBuildable !== null
+          ? {
+              ...buildable,
+              ...hostedIdentityOperatorBuildable,
+              ...hostedIdentityProgressionBuildable,
+            }
+          : item.id === "hosted-production-identity" &&
+              hostedIdentityOperatorBuildable !== null
+            ? { ...buildable, ...hostedIdentityOperatorBuildable }
+            : buildable;
       const spineTarget = resolveProductionFeatureSpineTarget({
         itemId: item.id,
         declaration: selectedBuildable.productionFeatureSpineTarget,
@@ -1001,6 +1028,7 @@ function rankedBuildableReleaseReadinessItems(
         realHostedEvidenceStatus: selectedBuildable.realHostedEvidenceStatus,
         realHostedEvidenceInputs: selectedBuildable.realHostedEvidenceInputs,
         hostedHandoffChecklist: selectedBuildable.hostedHandoffChecklist,
+        hostedIdentityProgression: selectedBuildable.hostedIdentityProgression,
         actionStatus: releaseReadinessActionStatus(selectedBuildable),
       };
     })
@@ -1028,12 +1056,43 @@ function hostedIdentityOperatorBuildableForManifest(
     return null;
   }
   return {
-    command: devTestGameHostedIdentityOperatorSpineCommand,
-    buildSlice:
-      "Run the opt-in hosted identity operator spine; it attaches the target-local redacted operator packet to the admin proof and refreshes readiness through the operator predicate without claiming live hosted traffic, release readiness, or production readiness.",
-    proofTarget: devTestGameHostedIdentityOperatorAdminProofPath,
     proofBoundary:
       "Opt-in local operator predicate proof. The command proves that a non-fixture hosted identity packet path can clear the hosted-production-identity readiness item over the existing role-surface adapter; it does not prove live hosted account/session/invite traffic, release readiness, or production readiness.",
+  };
+}
+
+function hostedIdentityProgressionBuildableForChecklist({
+  hostedHandoffChecklist,
+}) {
+  const progression =
+    hostedHandoffChecklist?.progressionSummary?.progressions?.[0];
+  if (!validHostedIdentityProgressionSummaryRow(progression)) {
+    return null;
+  }
+  const selectedProgression = {
+    id: progression.id,
+    checkId: progression.checkId,
+    missingInputId: progression.missingInputId,
+    adminProofMode: progression.adminProofMode,
+    proofCommand: progression.proofCommand,
+    evidencePath: progression.evidencePath,
+    adminProofTarget: progression.adminProofTarget,
+    roleUrl: progression.roleUrl,
+    firstMissingInputId: progression.firstMissingInputId,
+    firstMissingCheckId: progression.firstMissingCheckId,
+    proofBoundary: progression.proofBoundary,
+  };
+  return {
+    command: progression.proofCommand,
+    buildSlice: [
+      `Run the first hosted identity evidence-family admin proof (${progression.id});`,
+      `it proves the admin handoff can surface ${progression.firstMissingInputId}`,
+      "while the aggregate hosted identity evidence remains blocked and non-production.",
+    ].join(" "),
+    proofTarget: progression.adminProofTarget,
+    roleUrl: progression.roleUrl,
+    proofBoundary: progression.proofBoundary,
+    hostedIdentityProgression: selectedProgression,
   };
 }
 
@@ -1583,6 +1642,54 @@ function validHostedIdentityProgressionSummary(summary) {
         typeof progression.proofBoundary === "string" &&
         progression.proofBoundary !== "",
     )
+  );
+}
+
+function validHostedIdentityProgressionSelection(progression, checklist) {
+  if (!validHostedIdentityProgressionSummaryRow(progression)) {
+    return false;
+  }
+  const expected = checklist?.progressionSummary?.progressions?.find(
+    (candidate) => candidate.id === progression.id,
+  );
+  return (
+    validHostedIdentityProgressionSummaryRow(expected) &&
+    progression.proofCommand === expected.proofCommand &&
+    progression.evidencePath === expected.evidencePath &&
+    progression.adminProofTarget === expected.adminProofTarget &&
+    progression.roleUrl === expected.roleUrl &&
+    progression.firstMissingInputId === expected.firstMissingInputId &&
+    progression.firstMissingCheckId === expected.firstMissingCheckId &&
+    progression.proofBoundary === expected.proofBoundary
+  );
+}
+
+function validHostedIdentityProgressionSummaryRow(progression) {
+  return (
+    progression !== null &&
+    typeof progression === "object" &&
+    typeof progression.id === "string" &&
+    progression.id !== "" &&
+    typeof progression.checkId === "string" &&
+    progression.checkId !== "" &&
+    typeof progression.missingInputId === "string" &&
+    progression.missingInputId !== "" &&
+    typeof progression.adminProofMode === "string" &&
+    progression.adminProofMode !== "" &&
+    typeof progression.proofCommand === "string" &&
+    progression.proofCommand.includes("npm run test:") &&
+    typeof progression.evidencePath === "string" &&
+    progression.evidencePath !== "" &&
+    typeof progression.adminProofTarget === "string" &&
+    progression.adminProofTarget !== "" &&
+    typeof progression.roleUrl === "string" &&
+    progression.roleUrl.includes("?game=<seeded-game>") &&
+    typeof progression.firstMissingInputId === "string" &&
+    progression.firstMissingInputId !== "" &&
+    typeof progression.firstMissingCheckId === "string" &&
+    progression.firstMissingCheckId !== "" &&
+    typeof progression.proofBoundary === "string" &&
+    progression.proofBoundary !== ""
   );
 }
 

@@ -80,6 +80,12 @@ export function buildReleaseReadinessTrace(candidates) {
           ...(candidate.hostedHandoffChecklist === undefined
             ? {}
             : { hostedHandoffChecklist: candidate.hostedHandoffChecklist }),
+          ...(candidate.hostedIdentityProgression === undefined
+            ? {}
+            : {
+                hostedIdentityProgression:
+                  candidate.hostedIdentityProgression,
+              }),
         }),
       ),
     ),

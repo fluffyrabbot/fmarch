@@ -173,6 +173,7 @@ export function hostedProductionIdentityUnprovenFixture({
   requiredEvidence,
   buildSlice,
   hostedHandoffChecklist,
+  hostedIdentityProgression,
 } = {}) {
   return releaseReadinessUnprovenFixture({
     id: "hosted-production-identity",
@@ -187,6 +188,7 @@ export function hostedProductionIdentityUnprovenFixture({
     rerunCommand,
     includeTargetRerunCommand,
     hostedHandoffChecklist,
+    hostedIdentityProgression,
   });
 }
 
@@ -232,6 +234,9 @@ export function releaseReadinessTraceCandidateFixture({
     ...(unproven.hostedHandoffChecklist === undefined
       ? {}
       : { hostedHandoffChecklist: unproven.hostedHandoffChecklist }),
+    ...(unproven.hostedIdentityProgression === undefined
+      ? {}
+      : { hostedIdentityProgression: unproven.hostedIdentityProgression }),
   };
 }
 
@@ -249,6 +254,7 @@ export function releaseReadinessUnprovenFixture({
   rerunCommand,
   includeTargetRerunCommand = false,
   hostedHandoffChecklist,
+  hostedIdentityProgression,
   hostedTargetPreflight,
   realHostedEvidenceInputs,
 } = {}) {
@@ -306,6 +312,9 @@ export function releaseReadinessUnprovenFixture({
     ...(resolvedHostedHandoffChecklist === undefined
       ? {}
       : { hostedHandoffChecklist: resolvedHostedHandoffChecklist }),
+    ...(hostedIdentityProgression === undefined
+      ? {}
+      : { hostedIdentityProgression }),
   };
 }
 

@@ -51,6 +51,7 @@ import {
 import {
   productionFeatureRoleSurfaceSourceCheckIds,
   productionFeatureRoleSurfaceSources,
+  productionFeatureSourceCoverageDecisionSummaryForCheckId,
   productionFeatureSourceForCheckId,
 } from "./dev_test_game_production_feature_source_registry.mjs";
 import {
@@ -1478,6 +1479,9 @@ function resolveBuildableProductionFeatureTarget({ declaration, releaseReadiness
       adminCheckId: declaration.adminCheckId,
       browserProofCommand: devTestGameLiveProofCommand,
       rerunCommand: devTestGameIdentityAdminProofCommand,
+      coverageDecision: productionFeatureSourceCoverageDecisionSummaryForCheckId(
+        declaration.sourceCheckId,
+      ),
     };
   }
   throw new Error(

@@ -334,7 +334,6 @@ import {
   devTestGameHardeningAdminProofCommand,
   devTestGameHostedIdentitySequenceStage,
   devTestGameHostedIdentitySequencePromotionCommand,
-  devTestGameHostedIdentityOperatorSpineCommand,
   devTestGameIdentityAdminProofCommand,
   devTestGameLiveProofCommand,
   devTestGameNextActionPath,
@@ -2934,16 +2933,34 @@ test("dev test-game next-action derives one local recovery command from the mani
       requiredEvidence: "Hosted account lifecycle",
       hostedHandoffChecklist: hostedIdentityHandoffChecklistFixture(),
     });
+  const hostedIdentityHandoffChecklist = hostedIdentityHandoffChecklistFixture();
+  const firstHostedIdentityProgression =
+    hostedIdentityHandoffChecklist.progressionSummary.progressions[0];
+  const selectedHostedIdentityProgression = {
+    id: firstHostedIdentityProgression.id,
+    checkId: firstHostedIdentityProgression.checkId,
+    missingInputId: firstHostedIdentityProgression.missingInputId,
+    adminProofMode: firstHostedIdentityProgression.adminProofMode,
+    proofCommand: firstHostedIdentityProgression.proofCommand,
+    evidencePath: firstHostedIdentityProgression.evidencePath,
+    adminProofTarget: firstHostedIdentityProgression.adminProofTarget,
+    roleUrl: firstHostedIdentityProgression.roleUrl,
+    firstMissingInputId: firstHostedIdentityProgression.firstMissingInputId,
+    firstMissingCheckId: firstHostedIdentityProgression.firstMissingCheckId,
+    proofBoundary: firstHostedIdentityProgression.proofBoundary,
+  };
   const hostedProductionIdentityOperatorUnproven =
     hostedProductionIdentityUnprovenFixture({
-      proofTarget: devTestGameHostedIdentityOperatorAdminProofPath,
+      proofTarget: firstHostedIdentityProgression.adminProofTarget,
+      roleUrl: firstHostedIdentityProgression.roleUrl,
       browserProofCommand: devTestGameLiveProofCommand,
       rerunCommand: devTestGameIdentityAdminProofCommand,
       includeTargetRerunCommand: true,
       requiredEvidence: "Hosted account lifecycle",
       buildSlice:
-        "Run the opt-in hosted identity operator spine; it attaches the target-local redacted operator packet to the admin proof and refreshes readiness through the operator predicate without claiming live hosted traffic, release readiness, or production readiness.",
-      hostedHandoffChecklist: hostedIdentityHandoffChecklistFixture(),
+        "Run the first hosted identity evidence-family admin proof (hosted-account-lifecycle); it proves the admin handoff can surface redacted-account-lifecycle-packet while the aggregate hosted identity evidence remains blocked and non-production.",
+      hostedHandoffChecklist: hostedIdentityHandoffChecklist,
+      hostedIdentityProgression: selectedHostedIdentityProgression,
     });
   assert.deepEqual(freshAction.nextAction, {
     command: devTestGameLiveProofCommand,
@@ -3117,14 +3134,19 @@ test("dev test-game next-action derives one local recovery command from the mani
     devTestGameHostedIdentitySequenceStage,
   );
   assert.deepEqual(hostedIdentityStageAction.nextAction, {
-    command: devTestGameHostedIdentityOperatorSpineCommand,
+    command: firstHostedIdentityProgression.proofCommand,
     reason: "release-readiness-unproven",
     status: "ready",
     unproven: hostedProductionIdentityOperatorUnproven,
   });
   assert.match(
     hostedIdentityStageAction.releaseReadinessTrace.candidates[0].proofBoundary,
-    /does not prove live hosted account\/session\/invite traffic/,
+    /does not prove hosted identity traffic/,
+  );
+  assert.deepEqual(
+    hostedIdentityStageAction.releaseReadinessTrace.candidates[0]
+      .hostedIdentityProgression,
+    selectedHostedIdentityProgression,
   );
   assert.deepEqual(
     hostedIdentityStageAction.nextAction.unproven.hostedHandoffChecklist
@@ -3165,7 +3187,7 @@ test("dev test-game next-action derives one local recovery command from the mani
         script: "tools/dev_test_game_next_action.mjs",
         sequenceStage: devTestGameHostedIdentitySequenceStage,
         outputPath: hostedIdentityNextActionPath,
-        selectedCommand: devTestGameHostedIdentityOperatorSpineCommand,
+        selectedCommand: firstHostedIdentityProgression.proofCommand,
       },
       {
         script: "terminal-hosted-identity-next-action-admin-proof-batch",
@@ -5029,6 +5051,13 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
       ]),
     expectedProductionFeatureRows,
   );
+  const identityAdapterFeatureNode = graph.nodes.find(
+    (node) => node.id === "production-feature:identity-adapter",
+  );
+  assert.deepEqual(identityAdapterFeatureNode.coverageDecision, {
+    kind: "seeded-admin-proof",
+    proofCommand: devTestGameIdentityAdminProofCommand,
+  });
   const hostSetupFeatureNode = graph.nodes.find(
     (node) => node.id === "production-feature:host-setup-route",
   );
