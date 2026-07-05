@@ -209,6 +209,9 @@ import {
   coreLoopScenarioFamilyRows,
 } from "./dev_test_game_core_loop_generated_from_families.mjs";
 import {
+  proofGraphProductionFeatureDestinationSummary,
+} from "./dev_test_game_proof_graph_production_feature_destinations.mjs";
+import {
   adminProofBatchIdFromLabel,
 } from "./dev_test_game_admin_proof_batch_registry.mjs";
 import {
@@ -5444,6 +5447,7 @@ export function validateDevTestGameProofGraphAdminProof(proof, options = {}) {
   }
   validateProofGraphAdminCoreLoopScenarioFamilyDestinations(proof);
   validateProofGraphAdminProductionFeatureTargetDestinations(proof);
+  validateProofGraphAdminProductionFeatureDestinationSummary(proof);
   for (const featureTargetCase of proofGraphAdminFeatureTargetCases) {
     validateProofGraphAdminFeatureTarget(proof, featureTargetCase);
   }
@@ -5630,6 +5634,59 @@ function validateProofGraphAdminProductionFeatureTargetDestinations(proof) {
     ) {
       throw new Error(
         `proof graph admin proof did not inspect production feature destination: ${destination.linkId}`,
+      );
+    }
+  }
+}
+
+function validateProofGraphAdminProductionFeatureDestinationSummary(proof) {
+  const destinations =
+    proof.generatedFrom?.productionFeatureTargetDestinations ?? [];
+  const summary = proof.generatedFrom?.productionFeatureDestinationSummary;
+  const expected = proofGraphProductionFeatureDestinationSummary({
+    nodes: destinations.map((destination) => ({
+      kind: "production-feature-spine-target",
+      id: destination.linkId,
+      roleUrl:
+        destination.kind === "admin-audit"
+          ? destination.detailRoleUrl
+          : destination.roleUrl,
+      featureSlotId: destination.featureSlotId,
+      sourceCheckId: destination.sourceCheckId,
+      adminCheckId: destination.adminCheckId,
+      targetRoleUrl: destination.targetRoleUrl,
+    })),
+    summary: {
+      productionFeatureTargetCount: destinations.length,
+    },
+  });
+  if (
+    summary?.status !== expected.status ||
+    summary.totalDestinationCount !== expected.totalDestinationCount ||
+    summary.productionFeatureTargetCount !==
+      expected.productionFeatureTargetCount ||
+    summary.adminAuditDestinationCount !==
+      expected.adminAuditDestinationCount ||
+    summary.roleUrlDestinationCount !== expected.roleUrlDestinationCount ||
+    summary.driftCount !== 0
+  ) {
+    throw new Error(
+      "proof graph admin proof production feature destination summary drifted",
+    );
+  }
+  for (const row of expected.rows) {
+    const actual = (summary.rows ?? []).find((candidate) => candidate.id === row.id);
+    if (actual?.status !== row.status || actual.label !== row.label) {
+      throw new Error(
+        `proof graph admin proof production feature destination summary row drifted: ${row.id}`,
+      );
+    }
+    if (
+      !proof.adminRoleSurface
+        ?.visibleProductionFeatureDestinationSummaries?.includes(row.id)
+    ) {
+      throw new Error(
+        `proof graph admin proof did not inspect production feature destination summary row: ${row.id}`,
       );
     }
   }

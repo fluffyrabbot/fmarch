@@ -31,6 +31,9 @@ import {
   coreLoopScenarioFamilyRows,
 } from "../../../../tools/dev_test_game_core_loop_generated_from_families.mjs";
 import {
+  proofGraphProductionFeatureDestinationSummary,
+} from "../../../../tools/dev_test_game_proof_graph_production_feature_destinations.mjs";
+import {
   playerActionBoundaryLaneId,
   playerActionLoopLaneId,
   playerInvalidActionRecoveryLaneId,
@@ -2041,6 +2044,10 @@ export function normalizeLocalProofGraphArtifactSummary(
       proofGraph?.summary?.roleUrlCount ?? graphRoleNodes.length,
     ),
     recoveryTargetCount: Number(proofGraph?.summary?.recoveryTargetCount ?? 0),
+    productionFeatureDestinationSummary:
+      proofGraphProductionFeatureDestinationSummary(proofGraph, {
+        nodes: graphNodes,
+      }),
     releaseReady: proofGraph?.releaseReady === true,
     productionReady: proofGraph?.productionReady === true,
   });

@@ -473,6 +473,9 @@ import {
   assertProofGraphAdminProof,
 } from "./dev_test_game_proof_graph_admin_proof.mjs";
 import {
+  proofGraphProductionFeatureDestinationSummary,
+} from "./dev_test_game_proof_graph_production_feature_destinations.mjs";
+import {
   hostedIdentityTerminalReceiptArtifactCase,
   normalizeProofGraphReceiptArtifactRows,
   proofGraphReceiptArtifactRowId,
@@ -18845,6 +18848,10 @@ function proofGraphAdminProofFixture() {
       replacementActionGraphTarget,
       replacementPrivateGraphTarget,
     ]);
+  const productionFeatureDestinationSummary =
+    proofGraphProductionFeatureDestinationSummaryFixture(
+      productionFeatureTargetDestinations,
+    );
   const coreLoopFamilyDestinations =
     proofGraphCoreLoopScenarioFamilyDestinationsFixture();
   const evidenceObjectRowIds = [
@@ -18911,6 +18918,7 @@ function proofGraphAdminProofFixture() {
       adminProofRoleHandoffs: handoffs,
       coreLoopScenarioFamilyDestinations: coreLoopFamilyDestinations,
       productionFeatureTargetDestinations,
+      productionFeatureDestinationSummary,
       hostSetupFeatureTarget: hostSetupGraphTarget,
       cohostFeatureTarget: cohostGraphTarget,
       replacementFeatureTarget: replacementGraphTarget,
@@ -18970,6 +18978,8 @@ function proofGraphAdminProofFixture() {
         replacementPrivateGraphTarget.productionFeatureNodeId,
         ...coreLoopFamilyDestinations.map((destination) => destination.linkId),
       ],
+      visibleProductionFeatureDestinationSummaries:
+        productionFeatureDestinationSummary.rows.map((row) => row.id),
       visibleRelatedDestinations: [
         ...handoffs.map((handoff) => ({
           linkId: handoff.linkId,
@@ -19181,6 +19191,26 @@ function proofGraphProductionFeatureTargetDestinationsFixture(targets) {
       targetRoleUrl: target.targetRoleUrl,
       adminCheckId: target.adminCheckId,
     };
+  });
+}
+
+function proofGraphProductionFeatureDestinationSummaryFixture(destinations) {
+  return proofGraphProductionFeatureDestinationSummary({
+    nodes: destinations.map((destination) => ({
+      kind: "production-feature-spine-target",
+      id: destination.linkId,
+      roleUrl:
+        destination.kind === "admin-audit"
+          ? destination.detailRoleUrl
+          : destination.roleUrl,
+      featureSlotId: destination.featureSlotId,
+      sourceCheckId: destination.sourceCheckId,
+      adminCheckId: destination.adminCheckId,
+      targetRoleUrl: destination.targetRoleUrl,
+    })),
+    summary: {
+      productionFeatureTargetCount: destinations.length,
+    },
   });
 }
 

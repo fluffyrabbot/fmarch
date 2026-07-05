@@ -341,6 +341,25 @@
         </ol>
       </section>
     {/if}
+    {#if data.audit.artifactSummary?.productionFeatureDestinationSummary?.rows?.length > 0}
+      <section
+        class="admin-audit-detail__group"
+        data-testid="admin-audit-detail-production-feature-destination-summary"
+      >
+        <h2>Production feature destinations</h2>
+        <ol class="admin-audit-detail__entries">
+          {#each data.audit.artifactSummary.productionFeatureDestinationSummary.rows as row}
+            <li
+              class="admin-audit-detail__entry admin-audit-detail__entry--stack"
+              data-testid={`admin-audit-production-feature-destination-summary-${row.id}`}
+            >
+              <strong>{row.label}</strong>
+              <span>{row.status}</span>
+            </li>
+          {/each}
+        </ol>
+      </section>
+    {/if}
     {#if data.audit.sessions?.length > 0}
       <ol class="admin-audit-detail__entries" data-testid="admin-audit-detail-sessions">
         {#each data.audit.sessions as session}
