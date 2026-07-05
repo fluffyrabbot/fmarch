@@ -136,6 +136,16 @@ import {
   devTestGameSpineManifestAdminProofPath,
 } from "./dev_test_game_local_admin_proof_paths.mjs";
 import {
+  devTestGameBackupRestoreDumpPath,
+  devTestGameBackupRestoreProofPath,
+  devTestGameHostedConcurrentRaceMatrixPath,
+  devTestGameHostedOpsSignalsPath,
+  devTestGameIdentityAdapterProofPath,
+  devTestGameOpsArtifactsPath,
+  devTestGameRaceCoveragePath,
+  devTestGameSeedFixturePath,
+} from "./dev_test_game_adjacent_artifact_paths.mjs";
+import {
   proofRunLaneCoverageMilestoneIds,
   recoveryMilestoneCoverageCases,
 } from "./dev_test_game_release_readiness_milestone_cases.mjs";
@@ -520,10 +530,10 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
     ? validateDevTestGameBackupRestoreProof(options.backupRestoreProof, {
         proofPath:
           options.backupRestoreProofPath ??
-          "target/live-stack-backup-restore-drill/local-backup-restore-proof.json",
+          devTestGameBackupRestoreProofPath,
         dumpPath:
           options.backupRestoreDumpPath ??
-          "target/live-stack-backup-restore-drill/local-live-stack.dump",
+          devTestGameBackupRestoreDumpPath,
         proofArtifact: options.backupRestoreProofArtifact,
         dumpArtifact: options.backupRestoreDumpArtifact,
       })
@@ -536,7 +546,7 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
     : undefined;
   const opsArtifactsEvidence = options.opsArtifacts
     ? validateDevTestGameOpsArtifacts(options.opsArtifacts, {
-        path: options.opsArtifactsPath ?? "target/dev-test-game/ops-artifacts.json",
+        path: options.opsArtifactsPath ?? devTestGameOpsArtifactsPath,
         artifact: options.opsArtifactsArtifact,
       })
     : undefined;
@@ -550,7 +560,7 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
     ? validateDevTestGameHostedOpsSignals(options.hostedOpsSignals, {
         path:
           options.hostedOpsSignalsPath ??
-          "target/dev-test-game/hosted-ops-signals.json",
+          devTestGameHostedOpsSignalsPath,
         artifact: options.hostedOpsSignalsArtifact,
       })
     : undefined;
@@ -581,7 +591,7 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
     ? validateDevTestGameSeedFixtureSummary(options.seedFixtureSummary, {
         path:
           options.seedFixtureSummaryPath ??
-          "target/dev-test-game/seed-fixture-summary.json",
+          devTestGameSeedFixturePath,
         artifact: options.seedFixtureSummaryArtifact,
       })
     : undefined;
@@ -595,7 +605,7 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
     ? validateDevTestGameIdentityAdapterProof(options.identityAdapterProof, {
         path:
           options.identityAdapterProofPath ??
-          "target/auth-invite-role-proof/invite-role-proof.json",
+          devTestGameIdentityAdapterProofPath,
         artifact: options.identityAdapterProofArtifact,
       })
     : undefined;
@@ -682,13 +692,13 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
     recoveryReceiptEvidenceByKey.replacementHandoffRecoveryReceipt;
   const raceCoverageEvidence = options.raceCoverage
     ? validateDevTestGameRaceCoverage(options.raceCoverage, {
-        path: options.raceCoveragePath ?? "target/dev-test-game/race-coverage.json",
+        path: options.raceCoveragePath ?? devTestGameRaceCoveragePath,
         artifact: options.raceCoverageArtifact,
       })
     : undefined;
   const raceCoverageReloadMilestonesByGroupId = options.raceCoverage
     ? buildRaceCoverageReloadMilestones(options.raceCoverage, {
-        sourcePath: options.raceCoveragePath ?? "target/dev-test-game/race-coverage.json",
+        sourcePath: options.raceCoveragePath ?? devTestGameRaceCoveragePath,
       })
     : new Map();
   const raceCoveragePromotedMilestones =
@@ -703,7 +713,7 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
         {
           path:
             options.hostedConcurrentRaceMatrixPath ??
-            "target/dev-test-game/hosted-concurrent-race-matrix.json",
+            devTestGameHostedConcurrentRaceMatrixPath,
           artifact: options.hostedConcurrentRaceMatrixArtifact,
         },
       )
@@ -2232,7 +2242,7 @@ export function validateDevTestGameBackupRestoreProof(proof, options = {}) {
   assertSessionCapability(proof, "player", "ChannelMember");
   assertSessionCapability(proof, "admin", "GlobalAdmin");
   const dumpPath =
-    options.dumpPath ?? "target/live-stack-backup-restore-drill/local-live-stack.dump";
+    options.dumpPath ?? devTestGameBackupRestoreDumpPath;
   if (proof.artifact?.dump !== dumpPath) {
     throw new Error(`backup/restore dump path drifted: ${proof.artifact?.dump} != ${dumpPath}`);
   }
@@ -2240,7 +2250,7 @@ export function validateDevTestGameBackupRestoreProof(proof, options = {}) {
     status: "passed",
     path:
       options.proofPath ??
-      "target/live-stack-backup-restore-drill/local-backup-restore-proof.json",
+      devTestGameBackupRestoreProofPath,
     dumpPath,
     checkCount: requiredChecks.length,
     eventRows: proof.fingerprints.source.events.total,
@@ -3808,7 +3818,7 @@ export function validateDevTestGameOpsArtifacts(ops, options = {}) {
   }
   return {
     status: "passed",
-    path: options.path ?? "target/dev-test-game/ops-artifacts.json",
+    path: options.path ?? devTestGameOpsArtifactsPath,
     checkCount: requiredChecks.length,
     roleCount: ops.run?.roleCount ?? 0,
     laneCount: ops.proofRun?.laneCount ?? 0,
@@ -3907,7 +3917,7 @@ export function validateDevTestGameHostedOpsSignals(signals, options = {}) {
   }
   return {
     status: "passed",
-    path: options.path ?? "target/dev-test-game/hosted-ops-signals.json",
+    path: options.path ?? devTestGameHostedOpsSignalsPath,
     proofBoundary: signals.proofBoundary,
     cellCount: signals.matrix.cellCount,
     reconnectLaneCount: signals.matrix.reconnectLaneCount,
@@ -4613,7 +4623,7 @@ export function validateDevTestGameSeedFixtureSummary(summary, options = {}) {
   }
   return {
     status: "passed",
-    path: options.path ?? "target/dev-test-game/seed-fixture-summary.json",
+    path: options.path ?? devTestGameSeedFixturePath,
     checkCount: requiredChecks.length,
     scenarioCount: requiredScenarios.length,
     roleCount: summary.fixture?.roleCount ?? 0,
@@ -4930,7 +4940,7 @@ export function validateDevTestGameIdentityAdapterProof(proof, options = {}) {
   }
   return {
     status: "passed",
-    path: options.path ?? "target/auth-invite-role-proof/invite-role-proof.json",
+    path: options.path ?? devTestGameIdentityAdapterProofPath,
     roleCount: requiredRoles.size,
     roles: Array.from(requiredRoles.keys()),
     adapterContractStatus: proof.identityAdapterContract.status,
@@ -5014,7 +5024,7 @@ export function validateDevTestGameRaceCoverage(proof, options = {}) {
   }
   return {
     status: "passed",
-    path: options.path ?? "target/dev-test-game/race-coverage.json",
+    path: options.path ?? devTestGameRaceCoveragePath,
     cellCount: proof.summary.cellCount,
     provenCellCount: proof.summary.provenCellCount,
     reloadCoveredCellCount: proof.summary.reloadCoveredCellCount,
@@ -5121,7 +5131,7 @@ export function validateDevTestGameHostedConcurrentRaceMatrix(proof, options = {
   }
   return {
     status: "passed",
-    path: options.path ?? "target/dev-test-game/hosted-concurrent-race-matrix.json",
+    path: options.path ?? devTestGameHostedConcurrentRaceMatrixPath,
     proofBoundary: proof.proofBoundary,
     cellCount: summary.cellCount,
     reloadCoveredCellCount: summary.reloadCoveredCellCount,

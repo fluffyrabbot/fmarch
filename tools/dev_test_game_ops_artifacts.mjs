@@ -7,10 +7,12 @@ import {
   assertDevTestGameReleaseReadiness,
   validateDevTestGameBackupRestoreProof,
 } from "./dev_test_game_release_readiness.mjs";
+import {
+  devTestGameOpsArtifactsPath,
+} from "./dev_test_game_adjacent_artifact_paths.mjs";
 
 export const DEV_TEST_GAME_OPS_ARTIFACTS_VERSION = 1;
-export const devTestGameOpsArtifactsPath =
-  "target/dev-test-game/ops-artifacts.json";
+export { devTestGameOpsArtifactsPath };
 export const devTestGameOpsArtifactsMarkdownPath =
   "target/dev-test-game/ops-artifacts.md";
 

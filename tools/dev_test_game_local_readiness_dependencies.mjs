@@ -12,6 +12,10 @@ import {
   localAdminAuditIds,
   localAdminAuditRoleUrl,
 } from "./dev_test_game_admin_audit_surface_ids.mjs";
+import {
+  devTestGameHostedEvidenceLaneDemoProofPath,
+  devTestGameSeedFixturePath,
+} from "./dev_test_game_adjacent_artifact_paths.mjs";
 
 export const localProofGraphAdminRoleHandoffsCheckId =
   "local-proof-graph-admin-role-handoffs";
@@ -24,12 +28,8 @@ export const localHostedEvidenceLaneDemoProofCheckId =
   "local-hosted-evidence-lane-demo-proof";
 
 const devTestGameSeedFixtureCommand = "test:dev-test-game-seed-fixture";
-const devTestGameSeedFixturePath =
-  "target/dev-test-game/seed-fixture-summary.json";
 const devTestGameHostedEvidenceLaneDemoProofCommand =
   "test:dev-test-game-hosted-evidence-lane-demo-proof";
-const devTestGameHostedEvidenceLaneDemoProofPath =
-  "target/dev-test-game/hosted-evidence-lane-demo-proof.json";
 
 export const localReadinessDependencies = Object.freeze([
   Object.freeze({

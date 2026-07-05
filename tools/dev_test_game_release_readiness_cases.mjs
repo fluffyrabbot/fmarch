@@ -72,6 +72,9 @@ import {
   devTestGameReleaseRunbookCommand,
   devTestGameReleaseRunbookPath,
 } from "./dev_test_game_release_artifact_paths.mjs";
+import {
+  devTestGameHostedConcurrentRaceMatrixPath,
+} from "./dev_test_game_adjacent_artifact_paths.mjs";
 
 export {
   devTestGameReleaseAdminProofPath,
@@ -92,7 +95,7 @@ export const releaseReadinessHostedConcurrentRaceMatrixRoleUrl =
 export const releaseReadinessHostedConcurrentRaceMatrixProofGraphNodeId =
   "admin-proof:hosted-concurrent-race-matrix";
 export const releaseReadinessHostedConcurrentRaceMatrixProofTarget =
-  "target/dev-test-game/hosted-concurrent-race-matrix.json";
+  devTestGameHostedConcurrentRaceMatrixPath;
 export const releaseReadinessRealHostedConcurrentRaceMatrixCommand =
   "npm run test:dev-test-game-hosted-matrix-external-evidence";
 export const releaseReadinessRealHostedConcurrentRaceMatrixProofTarget =

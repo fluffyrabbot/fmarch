@@ -15,6 +15,10 @@ import {
   devTestGameSessionPath,
 } from "./dev_test_game_spine_artifact_paths.mjs";
 import {
+  devTestGameHostedConcurrentRaceMatrixPath,
+  devTestGameRaceCoveragePath,
+} from "./dev_test_game_adjacent_artifact_paths.mjs";
+import {
   assertRealHostedEvidenceInputs,
   buildRealHostedEvidenceInputs,
 } from "./dev_test_game_real_hosted_evidence_inputs.mjs";
@@ -38,10 +42,7 @@ export {
   devTestGameReleaseReadinessPath,
   devTestGameSessionPath,
 };
-export const devTestGameRaceCoveragePath =
-  "target/dev-test-game/race-coverage.json";
-export const devTestGameHostedConcurrentRaceMatrixPath =
-  "target/dev-test-game/hosted-concurrent-race-matrix.json";
+export { devTestGameHostedConcurrentRaceMatrixPath, devTestGameRaceCoveragePath };
 export const devTestGameHostedConcurrentRaceMatrixCommand =
   "test:dev-test-game-hosted-concurrent-race-matrix";
 

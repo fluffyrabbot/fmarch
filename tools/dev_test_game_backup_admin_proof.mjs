@@ -5,6 +5,10 @@ import {
   devTestGameBackupAdminProofPath,
 } from "./dev_test_game_local_admin_proof_paths.mjs";
 import {
+  devTestGameBackupRestoreDumpPath,
+  devTestGameBackupRestoreProofPath,
+} from "./dev_test_game_adjacent_artifact_paths.mjs";
+import {
   proveAdminAuditDetail,
   readJson,
   repoRoot,
@@ -14,12 +18,12 @@ import {
 const backupProofPath = path.resolve(
   repoRoot,
   process.env.FMARCH_DEV_TEST_GAME_BACKUP_RESTORE_PROOF ??
-    "target/live-stack-backup-restore-drill/local-backup-restore-proof.json",
+    devTestGameBackupRestoreProofPath,
 );
 const backupDumpPath = path.resolve(
   repoRoot,
   process.env.FMARCH_DEV_TEST_GAME_BACKUP_RESTORE_DUMP ??
-    "target/live-stack-backup-restore-drill/local-live-stack.dump",
+    devTestGameBackupRestoreDumpPath,
 );
 const backupProofRelativePath = path.relative(repoRoot, backupProofPath);
 const backupDumpRelativePath = path.relative(repoRoot, backupDumpPath);

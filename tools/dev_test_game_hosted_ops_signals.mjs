@@ -16,20 +16,22 @@ import {
   hostedOpsSignalCheckCases,
   hostedOpsSignalCheckIds,
 } from "./dev_test_game_hosted_ops_signal_cases.mjs";
+import {
+  devTestGameHostedConcurrentRaceMatrixPath,
+  devTestGameHostedOpsSignalsPath,
+} from "./dev_test_game_adjacent_artifact_paths.mjs";
 
 export const DEV_TEST_GAME_HOSTED_OPS_SIGNALS_VERSION = 1;
-export const devTestGameHostedOpsSignalsPath =
-  "target/dev-test-game/hosted-ops-signals.json";
+export { devTestGameHostedOpsSignalsPath };
 export const devTestGameHostedOpsSignalsCommand =
   "test:dev-test-game-hosted-ops-signals";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const artifactDir = path.join(repoRoot, "target", "dev-test-game");
 const defaultPaths = Object.freeze({
   opsArtifacts: path.join(repoRoot, devTestGameOpsArtifactsPath),
   hostedConcurrentRaceMatrix: path.join(
-    artifactDir,
-    "hosted-concurrent-race-matrix.json",
+    repoRoot,
+    devTestGameHostedConcurrentRaceMatrixPath,
   ),
   readiness: path.join(repoRoot, devTestGameReleaseReadinessPath),
 });

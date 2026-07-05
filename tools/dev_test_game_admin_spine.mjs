@@ -51,6 +51,13 @@ import {
   proofFreshnessAdminProofPath,
 } from "./dev_test_game_next_action_paths.mjs";
 import {
+  devTestGameBackupRestoreDumpPath,
+  devTestGameBackupRestoreProofPath,
+  devTestGameHostedEvidenceLaneDemoProofPath,
+  devTestGameIdentityAdapterProofPath,
+  devTestGameSeedFixturePath,
+} from "./dev_test_game_adjacent_artifact_paths.mjs";
+import {
   adminSpineProofPath,
   adminSpineTerminalBatchProofPath,
   nextActionPath,
@@ -81,9 +88,9 @@ export const adminSpineReadinessEvidenceEnv = {
   FMARCH_DEV_TEST_GAME_HARDENING_ADMIN_PROOF:
     devTestGameHardeningAdminProofPath,
   FMARCH_DEV_TEST_GAME_BACKUP_RESTORE_PROOF:
-    "target/live-stack-backup-restore-drill/local-backup-restore-proof.json",
+    devTestGameBackupRestoreProofPath,
   FMARCH_DEV_TEST_GAME_BACKUP_RESTORE_DUMP:
-    "target/live-stack-backup-restore-drill/local-live-stack.dump",
+    devTestGameBackupRestoreDumpPath,
   FMARCH_DEV_TEST_GAME_BACKUP_ADMIN_PROOF:
     devTestGameBackupAdminProofPath,
   FMARCH_DEV_TEST_GAME_OPS_ARTIFACTS: devTestGameOpsArtifactsPath,
@@ -96,14 +103,14 @@ export const adminSpineReadinessEvidenceEnv = {
   FMARCH_DEV_TEST_GAME_REAL_HOSTED_OBSERVABILITY_HANDOFF_ADMIN_PROOF:
     "target/dev-test-game/real-hosted-observability-handoff-admin-proof.json",
   FMARCH_DEV_TEST_GAME_SEED_FIXTURE_SUMMARY:
-    "target/dev-test-game/seed-fixture-summary.json",
+    devTestGameSeedFixturePath,
   FMARCH_DEV_TEST_GAME_SEED_ADMIN_PROOF: devTestGameSeedAdminProofPath,
   FMARCH_DEV_TEST_GAME_RELEASE_RUNBOOK:
     "target/dev-test-game/release-runbook.json",
   FMARCH_DEV_TEST_GAME_RELEASE_RUNBOOK_ADMIN_PROOF:
     devTestGameReleaseRunbookAdminProofPath,
   FMARCH_DEV_TEST_GAME_IDENTITY_ADAPTER_PROOF:
-    "target/auth-invite-role-proof/invite-role-proof.json",
+    devTestGameIdentityAdapterProofPath,
   FMARCH_DEV_TEST_GAME_IDENTITY_ADMIN_PROOF:
     devTestGameIdentityAdminProofPath,
   FMARCH_DEV_TEST_GAME_HOSTED_IDENTITY_EVIDENCE:
@@ -225,7 +232,7 @@ export const devTestGameAdminSpinePlan = [
       devTestGameHostedIdentityProgressionSummaryPath,
       devTestGameHostedTargetPreflightPath,
       devTestGameHostedEvidenceLanePath,
-      "target/dev-test-game/hosted-evidence-lane-demo-proof.json",
+      devTestGameHostedEvidenceLaneDemoProofPath,
       devTestGameHostedOpsSignalsPath,
       devTestGameRealHostedObservabilityHandoffPath,
       "target/dev-test-game/release-runbook.json",

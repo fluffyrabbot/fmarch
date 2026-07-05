@@ -1,6 +1,9 @@
 import path from "node:path";
 import { pathToFileURL } from "node:url";
-import { assertDevTestGameOpsArtifacts } from "./dev_test_game_ops_artifacts.mjs";
+import {
+  assertDevTestGameOpsArtifacts,
+  devTestGameOpsArtifactsPath,
+} from "./dev_test_game_ops_artifacts.mjs";
 import {
   devTestGameOpsAdminProofPath,
 } from "./dev_test_game_local_admin_proof_paths.mjs";
@@ -14,7 +17,7 @@ import {
 const opsArtifactsPath = path.resolve(
   repoRoot,
   process.env.FMARCH_DEV_TEST_GAME_OPS_ARTIFACTS ??
-    "target/dev-test-game/ops-artifacts.json",
+    devTestGameOpsArtifactsPath,
 );
 const opsArtifactsRelativePath = path.relative(repoRoot, opsArtifactsPath);
 const evidencePath = path.join(repoRoot, devTestGameOpsAdminProofPath);

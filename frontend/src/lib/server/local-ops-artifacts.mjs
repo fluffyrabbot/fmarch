@@ -21,15 +21,29 @@ import {
   nextActionPath,
   spineManifestPath,
 } from "../../../../tools/dev_test_game_spine_artifact_paths.mjs";
+import {
+  devTestGameBackupRestoreProofPath,
+  devTestGameHostedConcurrentRaceMatrixPath,
+  devTestGameHostedEvidenceLaneDemoProofPath,
+  devTestGameHostedEvidenceLanePath,
+  devTestGameHostedIdentityEvidencePath,
+  devTestGameHostedIdentityProgressionSummaryPath,
+  devTestGameHostedOpsSignalsPath,
+  devTestGameHostedTargetPreflightPath,
+  devTestGameIdentityAdapterProofPath,
+  devTestGameOpsArtifactsPath,
+  devTestGameRaceCoveragePath,
+  devTestGameRealHostedObservabilityHandoffPath,
+  devTestGameSeedFixturePath,
+} from "../../../../tools/dev_test_game_adjacent_artifact_paths.mjs";
 
-const DEFAULT_OPS_ARTIFACTS = "target/dev-test-game/ops-artifacts.json";
+const DEFAULT_OPS_ARTIFACTS = devTestGameOpsArtifactsPath;
 const DEFAULT_DEV_TEST_GAME_PROOF_RUN = devTestGameProofRunPath;
-const DEFAULT_SEED_FIXTURE_SUMMARY = "target/dev-test-game/seed-fixture-summary.json";
+const DEFAULT_SEED_FIXTURE_SUMMARY = devTestGameSeedFixturePath;
 const DEFAULT_RELEASE_READINESS_CHECKLIST = devTestGameReleaseReadinessPath;
 const DEFAULT_BACKUP_RESTORE_PROOF =
-  "target/live-stack-backup-restore-drill/local-backup-restore-proof.json";
-const DEFAULT_IDENTITY_ADAPTER_PROOF =
-  "target/auth-invite-role-proof/invite-role-proof.json";
+  devTestGameBackupRestoreProofPath;
+const DEFAULT_IDENTITY_ADAPTER_PROOF = devTestGameIdentityAdapterProofPath;
 const DEFAULT_SPINE_MANIFEST = spineManifestPath;
 const DEFAULT_ADMIN_SPINE_PROOF = adminSpineProofPath;
 const DEFAULT_ADMIN_SPINE_ADMIN_PROOF = devTestGameAdminSpineAdminProofPath;
@@ -37,35 +51,34 @@ const DEFAULT_ADMIN_SPINE_TERMINAL_BATCHES = adminSpineTerminalBatchProofPath;
 const DEFAULT_NEXT_ACTION = nextActionPath;
 const DEFAULT_PROOF_GRAPH = devTestGameProofGraphPath;
 const DEFAULT_PROOF_GRAPH_ADMIN_PROOF = devTestGameProofGraphAdminProofPath;
-const DEFAULT_RACE_COVERAGE = "target/dev-test-game/race-coverage.json";
+const DEFAULT_RACE_COVERAGE = devTestGameRaceCoveragePath;
 const DEFAULT_RACE_COVERAGE_ADMIN_PROOF =
   "target/dev-test-game/race-coverage-admin-proof.json";
 const DEFAULT_HOSTED_CONCURRENT_RACE_MATRIX =
-  "target/dev-test-game/hosted-concurrent-race-matrix.json";
+  devTestGameHostedConcurrentRaceMatrixPath;
 const DEFAULT_HOSTED_CONCURRENT_RACE_MATRIX_ADMIN_PROOF =
   "target/dev-test-game/hosted-concurrent-race-matrix-admin-proof.json";
 const DEFAULT_HOSTED_IDENTITY_EVIDENCE =
-  "target/dev-test-game/hosted-identity-evidence.json";
+  devTestGameHostedIdentityEvidencePath;
 const DEFAULT_HOSTED_IDENTITY_EVIDENCE_ADMIN_PROOF =
   "target/dev-test-game/hosted-identity-evidence-admin-proof.json";
 const DEFAULT_HOSTED_IDENTITY_PROGRESSION_SUMMARY =
-  "target/dev-test-game/hosted-identity-progression-summary.json";
-const DEFAULT_HOSTED_OPS_SIGNALS =
-  "target/dev-test-game/hosted-ops-signals.json";
+  devTestGameHostedIdentityProgressionSummaryPath;
+const DEFAULT_HOSTED_OPS_SIGNALS = devTestGameHostedOpsSignalsPath;
 const DEFAULT_REAL_HOSTED_OBSERVABILITY_HANDOFF =
-  "target/dev-test-game/real-hosted-observability-handoff.json";
+  devTestGameRealHostedObservabilityHandoffPath;
 const DEFAULT_REAL_HOSTED_OBSERVABILITY_HANDOFF_ADMIN_PROOF =
   "target/dev-test-game/real-hosted-observability-handoff-admin-proof.json";
 const DEFAULT_HOSTED_TARGET_PREFLIGHT =
-  "target/dev-test-game/hosted-target-preflight.json";
+  devTestGameHostedTargetPreflightPath;
 const DEFAULT_HOSTED_TARGET_PREFLIGHT_ADMIN_PROOF =
   "target/dev-test-game/hosted-target-preflight-admin-proof.json";
 const DEFAULT_HOSTED_EVIDENCE_LANE =
-  "target/dev-test-game/hosted-evidence-lane.json";
+  devTestGameHostedEvidenceLanePath;
 const DEFAULT_HOSTED_EVIDENCE_LANE_ADMIN_PROOF =
   "target/dev-test-game/hosted-evidence-lane-admin-proof.json";
 const DEFAULT_HOSTED_EVIDENCE_LANE_DEMO_PROOF =
-  "target/dev-test-game/hosted-evidence-lane-demo-proof.json";
+  devTestGameHostedEvidenceLaneDemoProofPath;
 const DEFAULT_RELEASE_RUNBOOK = "target/dev-test-game/release-runbook.json";
 const DEFAULT_RELEASE_RUNBOOK_ADMIN_PROOF =
   "target/dev-test-game/release-runbook-admin-proof.json";

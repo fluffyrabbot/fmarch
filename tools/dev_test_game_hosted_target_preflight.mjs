@@ -33,10 +33,12 @@ import {
   isExternallyHostedUrl,
 } from "./dev_test_game_hosted_target_url_policy.mjs";
 import { repoRoot } from "./dev_test_game_spine_runner.mjs";
+import {
+  devTestGameHostedTargetPreflightPath,
+} from "./dev_test_game_adjacent_artifact_paths.mjs";
 
 export const DEV_TEST_GAME_HOSTED_TARGET_PREFLIGHT_VERSION = 1;
-export const devTestGameHostedTargetPreflightPath =
-  "target/dev-test-game/hosted-target-preflight.json";
+export { devTestGameHostedTargetPreflightPath };
 export const devTestGameHostedTargetPreflightCommand =
   "test:dev-test-game-hosted-target-preflight";
 const outputPath = path.join(repoRoot, devTestGameHostedTargetPreflightPath);

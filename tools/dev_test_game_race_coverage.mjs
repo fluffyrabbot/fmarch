@@ -22,10 +22,12 @@ import { repoRoot } from "./dev_test_game_spine_runner.mjs";
 import {
   devTestGameProofRunPath,
 } from "./dev_test_game_spine_artifact_paths.mjs";
+import {
+  devTestGameRaceCoveragePath,
+} from "./dev_test_game_adjacent_artifact_paths.mjs";
 
 export const DEV_TEST_GAME_RACE_COVERAGE_VERSION = 1;
-export const devTestGameRaceCoveragePath =
-  "target/dev-test-game/race-coverage.json";
+export { devTestGameRaceCoveragePath };
 export const devTestGameRaceCoverageAdminProofPath =
   "target/dev-test-game/race-coverage-admin-proof.json";
 export const devTestGameRaceCoverageCommand = "test:dev-test-game-race-coverage";

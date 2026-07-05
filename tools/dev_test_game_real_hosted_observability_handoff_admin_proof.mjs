@@ -23,11 +23,14 @@ import {
 import {
   assertGeneratedAdminProofHandoffPath,
 } from "./dev_test_game_admin_audit_handoff_contract.mjs";
+import {
+  devTestGameRealHostedObservabilityHandoffPath,
+} from "./dev_test_game_adjacent_artifact_paths.mjs";
 
 const handoffPath = path.resolve(
   repoRoot,
   process.env.FMARCH_DEV_TEST_GAME_REAL_HOSTED_OBSERVABILITY_HANDOFF ??
-    "target/dev-test-game/real-hosted-observability-handoff.json",
+    devTestGameRealHostedObservabilityHandoffPath,
 );
 const handoffRelativePath = path.relative(repoRoot, handoffPath);
 const evidencePath = path.join(

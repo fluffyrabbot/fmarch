@@ -50,6 +50,11 @@ import {
   devTestGameHostedOpsSignalsPath,
 } from "./dev_test_game_hosted_ops_signals.mjs";
 import {
+  devTestGameBackupRestoreDumpPath,
+  devTestGameBackupRestoreProofPath,
+  devTestGameIdentityAdapterProofPath,
+} from "./dev_test_game_adjacent_artifact_paths.mjs";
+import {
   devTestGameHostedOpsSignalsAdminProofPath,
 } from "./dev_test_game_hosted_ops_signal_cases.mjs";
 import { devTestGameOpsArtifactsPath } from "./dev_test_game_ops_artifacts.mjs";
@@ -235,7 +240,7 @@ export function buildDevTestGameSpineManifest({
         script: devTestGameHostedIdentityEvidenceCommand,
         proofArtifact: devTestGameHostedIdentityEvidencePath,
         dependsOn: [
-          "target/auth-invite-role-proof/invite-role-proof.json",
+          devTestGameIdentityAdapterProofPath,
           devTestGameIdentityAdminProofPath,
         ],
         roleUrl: "/admin/audit/local-identity-adapter?game=<seeded-game>",
@@ -933,8 +938,8 @@ export function assertDevTestGameSpineManifest(manifest) {
     devTestGameHostedOpsSignalsAdminProofPath,
     devTestGameSpineManifestAdminProofPath,
     devTestGameAdminSpineAdminProofPath,
-    "target/live-stack-backup-restore-drill/local-backup-restore-proof.json",
-    "target/live-stack-backup-restore-drill/local-live-stack.dump",
+    devTestGameBackupRestoreProofPath,
+    devTestGameBackupRestoreDumpPath,
   ]) {
     if (!manifest.artifacts?.includes(path)) {
       throw new Error(`spine manifest missing artifact path: ${path}`);

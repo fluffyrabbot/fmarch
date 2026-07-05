@@ -31,6 +31,11 @@ import {
   devTestGameHostedEvidenceLaneDemoProofPath,
 } from "./dev_test_game_hosted_evidence_lane_demo_proof.mjs";
 import {
+  devTestGameBackupRestoreProofPath,
+  devTestGameIdentityAdapterProofPath,
+  devTestGameSeedFixturePath,
+} from "./dev_test_game_adjacent_artifact_paths.mjs";
+import {
   hostStaleControlLaneIds,
 } from "./dev_test_game_host_stale_recovery_scenarios.mjs";
 import {
@@ -105,8 +110,7 @@ export const devTestGameLiveProofCommand =
   devTestGameProductionFeatureBrowserProofCommand;
 export const devTestGameSeedFixtureCommand =
   "npm run test:dev-test-game-seed-fixture";
-export const devTestGameSeedFixturePath =
-  "target/dev-test-game/seed-fixture-summary.json";
+export { devTestGameSeedFixturePath };
 export const devTestGameSeedFixtureRoleUrl =
   "/admin/audit/local-seed-fixtures?game=<seeded-game>";
 export const devTestGameDefaultSequenceStage = "local-capability-model";
@@ -2229,18 +2233,18 @@ const devSpineArtifactPriorities = new Map(
     ["session", devTestGameSessionPath],
     ["core-loop", devTestGameCoreLoopAdminProofPath],
     ["hardening", devTestGameHardeningAdminProofPath],
-    ["identity-adapter", "target/auth-invite-role-proof/invite-role-proof.json"],
+    ["identity-adapter", devTestGameIdentityAdapterProofPath],
     ["identity", devTestGameIdentityAdminProofPath],
-    ["backup-restore", "target/live-stack-backup-restore-drill/local-backup-restore-proof.json"],
+    ["backup-restore", devTestGameBackupRestoreProofPath],
     ["backup", devTestGameBackupAdminProofPath],
     ["ops-artifacts", devTestGameOpsArtifactsPath],
     ["ops", devTestGameOpsAdminProofPath],
-    ["seed-fixture", "target/dev-test-game/seed-fixture-summary.json"],
+    ["seed-fixture", devTestGameSeedFixturePath],
     ["seed", devTestGameSeedAdminProofPath],
     ["release-readiness", devTestGameReleaseReadinessPath],
     ["release-runbook", "target/dev-test-game/release-runbook.json"],
     ["release-runbook-admin", "target/dev-test-game/release-runbook-admin-proof.json"],
-    ["race-coverage", "target/dev-test-game/race-coverage.json"],
+    ["race-coverage", devTestGameRaceCoveragePath],
     ["race-coverage-admin", "target/dev-test-game/race-coverage-admin-proof.json"],
     ["hosted-concurrent-race-matrix", devTestGameHostedConcurrentRaceMatrixPath],
     ["hosted-target-preflight", devTestGameHostedTargetPreflightPath],

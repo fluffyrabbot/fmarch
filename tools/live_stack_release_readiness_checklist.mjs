@@ -5,6 +5,11 @@ import {
   assertLiveStackReadiness,
   buildLiveStackReadiness,
 } from "./live_stack_readiness_contract.mjs";
+import {
+  devTestGameBackupRestoreDumpPath,
+  devTestGameBackupRestoreProofPath,
+  devTestGameIdentityAdapterProofPath,
+} from "./dev_test_game_adjacent_artifact_paths.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const artifactDir = path.join(repoRoot, "target", "live-stack-release-readiness");
@@ -12,10 +17,9 @@ const jsonPath = path.join(artifactDir, "release-readiness-checklist.json");
 const markdownPath = path.join(artifactDir, "release-readiness-checklist.md");
 const defaultSources = Object.freeze({
   liveStackProof: "target/host-console-live-stack-smoke/live-stack-proof.json",
-  inviteRoleProof: "target/auth-invite-role-proof/invite-role-proof.json",
-  backupRestoreProof:
-    "target/live-stack-backup-restore-drill/local-backup-restore-proof.json",
-  backupRestoreDump: "target/live-stack-backup-restore-drill/local-live-stack.dump",
+  inviteRoleProof: devTestGameIdentityAdapterProofPath,
+  backupRestoreProof: devTestGameBackupRestoreProofPath,
+  backupRestoreDump: devTestGameBackupRestoreDumpPath,
 });
 const maxArtifactAgeHours = Number.parseFloat(
   process.env.FMARCH_RELEASE_READINESS_MAX_ARTIFACT_AGE_HOURS ?? "24",

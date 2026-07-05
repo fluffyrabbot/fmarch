@@ -8,6 +8,9 @@ import {
   devTestGameSeedAdminProofPath,
 } from "./dev_test_game_local_admin_proof_paths.mjs";
 import {
+  devTestGameSeedFixturePath,
+} from "./dev_test_game_adjacent_artifact_paths.mjs";
+import {
   proveAdminAuditDetail,
   readJson,
   repoRoot,
@@ -17,7 +20,7 @@ import {
 const seedFixturePath = path.resolve(
   repoRoot,
   process.env.FMARCH_DEV_TEST_GAME_SEED_FIXTURE_SUMMARY ??
-    "target/dev-test-game/seed-fixture-summary.json",
+    devTestGameSeedFixturePath,
 );
 const seedFixtureRelativePath = path.relative(repoRoot, seedFixturePath);
 const evidencePath = path.join(repoRoot, devTestGameSeedAdminProofPath);

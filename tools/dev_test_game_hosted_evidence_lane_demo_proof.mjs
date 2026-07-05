@@ -22,10 +22,12 @@ import {
   localAdminAuditRoleUrl,
 } from "./dev_test_game_admin_audit_surface_ids.mjs";
 import { repoRoot } from "./dev_test_game_spine_runner.mjs";
+import {
+  devTestGameHostedEvidenceLaneDemoProofPath,
+} from "./dev_test_game_adjacent_artifact_paths.mjs";
 
 export const DEV_TEST_GAME_HOSTED_EVIDENCE_LANE_DEMO_PROOF_VERSION = 1;
-export const devTestGameHostedEvidenceLaneDemoProofPath =
-  "target/dev-test-game/hosted-evidence-lane-demo-proof.json";
+export { devTestGameHostedEvidenceLaneDemoProofPath };
 export const devTestGameHostedEvidenceLaneDemoProofCommand =
   "test:dev-test-game-hosted-evidence-lane-demo-proof";
 export const devTestGameHostedEvidenceLaneDemoRawEvidencePath =

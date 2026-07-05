@@ -1,9 +1,12 @@
 import {
   devTestGameProofGraphPath,
 } from "./dev_test_game_spine_artifact_paths.mjs";
+import {
+  devTestGameHostedIdentityEvidencePath,
+  devTestGameHostedIdentityProgressionSummaryPath,
+} from "./dev_test_game_adjacent_artifact_paths.mjs";
 
-export const devTestGameHostedIdentityEvidencePath =
-  "target/dev-test-game/hosted-identity-evidence.json";
+export { devTestGameHostedIdentityEvidencePath };
 export const devTestGameHostedIdentityEvidenceCommand =
   "test:dev-test-game-hosted-identity-evidence";
 export const devTestGameHostedIdentityPartialAdminProofCommand =
@@ -12,8 +15,7 @@ export const devTestGameHostedIdentityProgressionAdminProofCommand =
   "test:dev-test-game-hosted-identity-progression-admin-proof";
 export const devTestGameHostedIdentityProgressionSummaryCommand =
   "test:dev-test-game-hosted-identity-progression-summary";
-export const devTestGameHostedIdentityProgressionSummaryPath =
-  "target/dev-test-game/hosted-identity-progression-summary.json";
+export { devTestGameHostedIdentityProgressionSummaryPath };
 export const hostedIdentityEvidencePlaceholderFixturePath =
   "tools/fixtures/dev_test_game_hosted_identity_evidence.placeholder.json";
 export const hostedIdentityEvidenceRedactedPassFixturePath =

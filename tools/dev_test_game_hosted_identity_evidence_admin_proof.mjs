@@ -45,11 +45,14 @@ import {
 import {
   devTestGameProofRunPath,
 } from "./dev_test_game_spine_artifact_paths.mjs";
+import {
+  devTestGameHostedIdentityEvidencePath,
+} from "./dev_test_game_adjacent_artifact_paths.mjs";
 
 const hostedIdentityEvidencePath = path.resolve(
   repoRoot,
   process.env.FMARCH_DEV_TEST_GAME_HOSTED_IDENTITY_EVIDENCE ??
-    "target/dev-test-game/hosted-identity-evidence.json",
+    devTestGameHostedIdentityEvidencePath,
 );
 const proofRunPath = path.resolve(
   repoRoot,

@@ -62,6 +62,20 @@ import {
   spineManifestPath,
 } from "../../../../tools/dev_test_game_spine_artifact_paths.mjs";
 import {
+  devTestGameBackupRestoreDumpPath,
+  devTestGameBackupRestoreProofPath,
+  devTestGameHostedConcurrentRaceMatrixPath,
+  devTestGameHostedEvidenceLaneDemoProofPath,
+  devTestGameHostedEvidenceLanePath,
+  devTestGameHostedIdentityEvidencePath,
+  devTestGameHostedOpsSignalsPath,
+  devTestGameHostedTargetPreflightPath,
+  devTestGameIdentityAdapterProofPath,
+  devTestGameOpsArtifactsPath,
+  devTestGameRaceCoveragePath,
+  devTestGameSeedFixturePath,
+} from "../../../../tools/dev_test_game_adjacent_artifact_paths.mjs";
+import {
   normalizeSpineRowKind,
   selectedSpineDeclarationStatus,
   selectedSpineDrilldownStatus,
@@ -602,7 +616,7 @@ export function normalizeLocalHostedTargetPreflightAudit(
     boundaryDetail:
       hostedTargetPreflight.proofBoundary ??
       "Hosted target preflight without hosted deployment or release claims.",
-    href: "target/dev-test-game/hosted-target-preflight.json",
+    href: devTestGameHostedTargetPreflightPath,
     inspectHref: adminAuditInspectHref({
       game,
       audit: localAdminAuditIds.hostedTargetPreflight,
@@ -724,7 +738,7 @@ export function normalizeLocalHostedIdentityEvidenceAudit(
     boundaryDetail:
       hostedIdentityEvidence.proofBoundary ??
       "Hosted identity evidence handoff without hosted identity or release claims.",
-    href: "target/dev-test-game/hosted-identity-evidence.json",
+    href: devTestGameHostedIdentityEvidencePath,
     inspectHref: adminAuditInspectHref({
       game,
       audit: localAdminAuditIds.hostedIdentityEvidence,
@@ -980,7 +994,7 @@ export function normalizeLocalHostedEvidenceLaneAudit(
     boundaryDetail:
       hostedEvidenceLane.proofBoundary ??
       "Hosted evidence lane without hosted deployment or release claims.",
-    href: "target/dev-test-game/hosted-evidence-lane.json",
+    href: devTestGameHostedEvidenceLanePath,
     inspectHref: adminAuditInspectHref({
       game,
       audit: localAdminAuditIds.hostedEvidenceLane,
@@ -1129,7 +1143,7 @@ function normalizeLocalHostedEvidenceLaneDemoProofSummary(proof) {
   }
   return Object.freeze({
     demoProofStatus: String(proof.status),
-    demoProofTarget: "target/dev-test-game/hosted-evidence-lane-demo-proof.json",
+    demoProofTarget: devTestGameHostedEvidenceLaneDemoProofPath,
     demoOnly: true,
     syntheticExternalTarget: true,
     demoBlockedLaneStatus: String(proof.blockedLane.status),
@@ -1193,7 +1207,7 @@ export function normalizeLocalHostedOpsSignalsAudit(hostedOpsSignals, { game }) 
     boundaryDetail:
       hostedOpsSignals.proofBoundary ??
       "Local hosted-like ops signal bundle without hosted telemetry or release claims.",
-    href: "target/dev-test-game/hosted-ops-signals.json",
+    href: devTestGameHostedOpsSignalsPath,
     inspectHref: adminAuditInspectHref({ game, audit: localAdminAuditIds.hostedOpsSignals }),
     checks: Object.freeze(
       checks.map((check) =>
@@ -1582,7 +1596,7 @@ export function normalizeLocalHostedConcurrentRaceMatrixAudit(
     boundaryDetail:
       hostedConcurrentRaceMatrix.proofBoundary ??
       "Local hosted-like concurrency matrix without hosted deployment or release claims.",
-    href: "target/dev-test-game/hosted-concurrent-race-matrix.json",
+    href: devTestGameHostedConcurrentRaceMatrixPath,
     inspectHref: adminAuditInspectHref({
       game,
       audit: localAdminAuditIds.hostedConcurrentRaceMatrix,
@@ -1849,7 +1863,7 @@ export function normalizeLocalRaceCoverageAudit(raceCoverage, { game }) {
     boundaryDetail:
       raceCoverage.proofBoundary ??
       "Generated local race-coverage inventory without hosted concurrency claims.",
-    href: "target/dev-test-game/race-coverage.json",
+    href: devTestGameRaceCoveragePath,
     inspectHref: adminAuditInspectHref({ game, audit: localAdminAuditIds.raceCoverage }),
     checks: Object.freeze(
       cells.map((cell) =>
@@ -3057,7 +3071,7 @@ function realHostedObservabilityHandoffInputValue({
   if (id === realHostedObservabilityBaselineEnv) {
     return String(
       realHostedObservabilityHandoff.target?.localHostedOpsSignalsPath ??
-        "target/dev-test-game/hosted-ops-signals.json",
+        devTestGameHostedOpsSignalsPath,
     );
   }
   return "required";
@@ -4096,7 +4110,7 @@ export function normalizeLocalOpsArtifactsAudit(opsArtifacts, { game }) {
     boundaryDetail:
       opsArtifacts.proofBoundary ??
       "Local dev-test-game ops artifact bundle without hosted observability claims.",
-    href: "target/dev-test-game/ops-artifacts.json",
+    href: devTestGameOpsArtifactsPath,
     inspectHref: adminAuditInspectHref({ game, audit: localAdminAuditIds.opsArtifacts }),
     checks: Object.freeze(
       checks.map((check) =>
@@ -4430,7 +4444,7 @@ export function normalizeLocalSeedFixtureAudit(seedFixtureSummary, { game }) {
     boundaryDetail:
       seedFixtureSummary.proofBoundary ??
       "Local seed/demo fixture summary without hosted demo-data claims.",
-    href: "target/dev-test-game/seed-fixture-summary.json",
+    href: devTestGameSeedFixturePath,
     inspectHref: adminAuditInspectHref({ game, audit: localAdminAuditIds.seedFixtures }),
     scenarios: Object.freeze(
       scenarios.map((scenario) =>
@@ -5223,7 +5237,7 @@ export function normalizeLocalBackupRestoreAudit(backupRestoreProof, { game }) {
       "Local disposable Postgres backup/restore proof without production backup claims.",
     href:
       backupRestoreProof.artifact?.proof ??
-      "target/live-stack-backup-restore-drill/local-backup-restore-proof.json",
+      devTestGameBackupRestoreProofPath,
     inspectHref: adminAuditInspectHref({
       game,
       audit: localAdminAuditIds.backupRestore,
@@ -5241,7 +5255,7 @@ export function normalizeLocalBackupRestoreAudit(backupRestoreProof, { game }) {
       game: String(backupRestoreProof.game ?? ""),
       dump:
         backupRestoreProof.artifact?.dump ??
-        "target/live-stack-backup-restore-drill/local-live-stack.dump",
+        devTestGameBackupRestoreDumpPath,
       eventRows: Number(backupRestoreProof.fingerprints?.source?.events?.total ?? 0),
       restoredEventRows: Number(
         backupRestoreProof.fingerprints?.restored?.events?.total ?? 0,
@@ -5388,7 +5402,7 @@ export function normalizeLocalIdentityAdapterAudit(identityAdapterProof, { game 
     boundaryDetail:
       identityAdapterProof.proofBoundary ??
       "Local invite/session identity adapter proof without hosted account claims.",
-    href: "target/auth-invite-role-proof/invite-role-proof.json",
+    href: devTestGameIdentityAdapterProofPath,
     inspectHref: adminAuditInspectHref({
       game,
       audit: localAdminAuditIds.identityAdapter,

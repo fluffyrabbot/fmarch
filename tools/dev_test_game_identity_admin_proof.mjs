@@ -5,6 +5,9 @@ import {
   devTestGameIdentityAdminProofPath,
 } from "./dev_test_game_local_admin_proof_paths.mjs";
 import {
+  devTestGameIdentityAdapterProofPath,
+} from "./dev_test_game_adjacent_artifact_paths.mjs";
+import {
   proveAdminAuditDetail,
   readJson,
   repoRoot,
@@ -14,7 +17,7 @@ import {
 const identityProofPath = path.resolve(
   repoRoot,
   process.env.FMARCH_DEV_TEST_GAME_IDENTITY_ADAPTER_PROOF ??
-    "target/auth-invite-role-proof/invite-role-proof.json",
+    devTestGameIdentityAdapterProofPath,
 );
 const identityProofRelativePath = path.relative(repoRoot, identityProofPath);
 const evidencePath = path.join(repoRoot, devTestGameIdentityAdminProofPath);

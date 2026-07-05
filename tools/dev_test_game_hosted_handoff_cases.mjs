@@ -9,14 +9,16 @@ import {
   buildRealHostedEvidenceInputs,
   realHostedEvidenceInputIds,
 } from "./dev_test_game_real_hosted_evidence_inputs.mjs";
+import {
+  devTestGameHostedEvidenceLanePath,
+} from "./dev_test_game_adjacent_artifact_paths.mjs";
 
 export const hostedEvidenceHandoffInputIds = realHostedEvidenceInputIds;
 export const hostedEvidenceHandoffBlockedCheckIds =
   hostedTargetPreflightBlockingCheckIds;
 export const hostedEvidenceLaneCommand =
   "npm run test:dev-test-game-hosted-evidence-lane";
-export const hostedEvidenceLanePath =
-  "target/dev-test-game/hosted-evidence-lane.json";
+export const hostedEvidenceLanePath = devTestGameHostedEvidenceLanePath;
 export const devTestGameHostedEvidenceLaneAdminProofPath =
   "target/dev-test-game/hosted-evidence-lane-admin-proof.json";
 export const hostedMatrixExternalEvidencePath =

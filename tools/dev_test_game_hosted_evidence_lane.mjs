@@ -21,10 +21,12 @@ import {
   hostedEvidenceHandoffInputSections,
 } from "./dev_test_game_hosted_handoff_cases.mjs";
 import { repoRoot } from "./dev_test_game_spine_runner.mjs";
+import {
+  devTestGameHostedEvidenceLanePath,
+} from "./dev_test_game_adjacent_artifact_paths.mjs";
 
 export const DEV_TEST_GAME_HOSTED_EVIDENCE_LANE_VERSION = 1;
-export const devTestGameHostedEvidenceLanePath =
-  "target/dev-test-game/hosted-evidence-lane.json";
+export { devTestGameHostedEvidenceLanePath };
 export const devTestGameHostedEvidenceLaneCommand =
   "test:dev-test-game-hosted-evidence-lane";
 

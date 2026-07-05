@@ -3,14 +3,20 @@ import {
   devTestGameBackupAdminProofPath,
   devTestGameSeedAdminProofPath,
 } from "./dev_test_game_local_admin_proof_paths.mjs";
+import {
+  devTestGameBackupRestoreDumpPath,
+  devTestGameBackupRestoreProofPath,
+  devTestGameOpsArtifactsPath,
+  devTestGameSeedFixturePath,
+} from "./dev_test_game_adjacent_artifact_paths.mjs";
 import { releaseReadinessStep } from "./dev_test_game_spine_readiness_steps.mjs";
 import { runSpinePlan } from "./dev_test_game_spine_runner.mjs";
 
 export const backupRestoreEvidenceEnv = {
   FMARCH_DEV_TEST_GAME_BACKUP_RESTORE_PROOF:
-    "target/live-stack-backup-restore-drill/local-backup-restore-proof.json",
+    devTestGameBackupRestoreProofPath,
   FMARCH_DEV_TEST_GAME_BACKUP_RESTORE_DUMP:
-    "target/live-stack-backup-restore-drill/local-live-stack.dump",
+    devTestGameBackupRestoreDumpPath,
 };
 
 export const backupAwareOpsEnv = {
@@ -22,12 +28,11 @@ export const backupAwareOpsEnv = {
 
 export const opsReadinessEnv = {
   ...backupRestoreEvidenceEnv,
-  FMARCH_DEV_TEST_GAME_OPS_ARTIFACTS: "target/dev-test-game/ops-artifacts.json",
+  FMARCH_DEV_TEST_GAME_OPS_ARTIFACTS: devTestGameOpsArtifactsPath,
 };
 
 export const seedReadinessEnv = {
-  FMARCH_DEV_TEST_GAME_SEED_FIXTURE_SUMMARY:
-    "target/dev-test-game/seed-fixture-summary.json",
+  FMARCH_DEV_TEST_GAME_SEED_FIXTURE_SUMMARY: devTestGameSeedFixturePath,
   FMARCH_DEV_TEST_GAME_SEED_ADMIN_PROOF: devTestGameSeedAdminProofPath,
 };
 
@@ -47,8 +52,8 @@ export const devTestGameBackupRestoreSpinePlan = [
   releaseReadinessStep({
     reason: "backup-restore-evidence-for-ops-artifacts",
     changedInputs: [
-      "target/live-stack-backup-restore-drill/local-backup-restore-proof.json",
-      "target/live-stack-backup-restore-drill/local-live-stack.dump",
+      devTestGameBackupRestoreProofPath,
+      devTestGameBackupRestoreDumpPath,
     ],
     env: backupRestoreEvidenceEnv,
   }),
@@ -59,7 +64,7 @@ export const devTestGameBackupRestoreSpinePlan = [
   },
   releaseReadinessStep({
     reason: "ops-artifact-bundle-for-seed-fixtures",
-    changedInputs: ["target/dev-test-game/ops-artifacts.json"],
+    changedInputs: [devTestGameOpsArtifactsPath],
     env: opsReadinessEnv,
   }),
   { kind: "node", script: "tools/dev_test_game_seed_fixture_summary.mjs" },
@@ -68,7 +73,7 @@ export const devTestGameBackupRestoreSpinePlan = [
   releaseReadinessStep({
     reason: "backup-seed-and-admin-surfaces-final",
     changedInputs: [
-      "target/dev-test-game/seed-fixture-summary.json",
+      devTestGameSeedFixturePath,
       devTestGameSeedAdminProofPath,
       devTestGameBackupAdminProofPath,
     ],
