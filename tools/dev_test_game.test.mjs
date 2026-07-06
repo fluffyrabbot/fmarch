@@ -7065,6 +7065,21 @@ test("admin proof fixtures prove normalized evidence object rows", () => {
     ],
     hostedIdentityTerminalReceiptArtifactCase.visibleStatusText,
   );
+  assert.deepEqual(
+    proofGraphProof.generatedFrom.adminSpineTerminalValidationDestination
+      .requiredAdminSpineTerminalValidations,
+    ["release-admin-proof-contract"],
+  );
+  assert.equal(
+    proofGraphProof.adminRoleSurface.visibleRelatedDestinations.find(
+      (destination) =>
+        destination.linkId === "admin-spine-terminal-batches" &&
+        destination.auditId === localAdminAuditIds.adminSpine,
+    ).visibleAdminSpineTerminalValidationStatuses[
+      "release-admin-proof-contract"
+    ],
+    adminSpineTerminalValidationVisibleStatusFixture(),
+  );
   assert.deepEqual(proofGraphProof.generatedFrom.diagnosticProofSummary, {
     ...buildProofGraphDiagnosticProofSummary({
       nodes: proofGraphDiagnosticProofNodes,
@@ -22228,6 +22243,8 @@ function proofGraphAdminProofFixture() {
   const diagnosticProofRows = diagnosticProofSummary.rows;
   const selectedOperatorHandoffReceiptDestination =
     selectedOperatorHandoffReceiptDestinationFixture();
+  const adminSpineTerminalValidationDestination =
+    adminSpineTerminalValidationDestinationFixture();
   return {
     version: 1,
     proof: "dev-test-game-proof-graph-admin-proof",
@@ -22286,6 +22303,7 @@ function proofGraphAdminProofFixture() {
       productionFeatureProvenanceComparison,
       diagnosticProofSummary,
       selectedOperatorHandoffReceiptDestination,
+      adminSpineTerminalValidationDestination,
       hostSetupFeatureTarget: hostSetupGraphTarget,
       cohostFeatureTarget: cohostGraphTarget,
       replacementFeatureTarget: replacementGraphTarget,
@@ -22384,7 +22402,13 @@ function proofGraphAdminProofFixture() {
             : {}),
         })),
         nextActionHandoffDestinationFixture(),
-        selectedOperatorHandoffReceiptDestination,
+        {
+          ...selectedOperatorHandoffReceiptDestination,
+          visibleAdminSpineTerminalValidations:
+            adminSpineTerminalValidationDestination.visibleAdminSpineTerminalValidations,
+          visibleAdminSpineTerminalValidationStatuses:
+            adminSpineTerminalValidationDestination.visibleAdminSpineTerminalValidationStatuses,
+        },
         ...productionFeatureTargetDestinations
           .filter((destination) => destination.kind === "admin-audit")
           .map((destination) => ({
@@ -24963,6 +24987,51 @@ function selectedOperatorHandoffReceiptDestinationFixture() {
       ].join("\n"),
     },
   };
+}
+
+function adminSpineTerminalValidationDestinationFixture() {
+  const validation = adminSpineTerminalBatchesFixture().terminalValidations[0];
+  return {
+    linkId: "admin-spine-terminal-batches",
+    auditId: localAdminAuditIds.adminSpine,
+    detailRoleUrl: localAdminAuditRoleUrl(localAdminAuditIds.adminSpine),
+    terminalValidationIds: [validation.id],
+    terminalValidationArtifacts: [
+      {
+        id: validation.id,
+        artifactPath: validation.artifactPath,
+        validatesArtifacts: validation.validatesArtifacts,
+        localDiagnosticCount: validation.localDiagnosticCount,
+      },
+    ],
+    terminalValidationCommands: [
+      {
+        id: validation.id,
+        command: validation.command,
+      },
+    ],
+    requiredAdminSpineTerminalValidations: [validation.id],
+    requiredAdminSpineTerminalValidationStatuses: {
+      [validation.id]: validation.status,
+    },
+    visibleAdminSpineTerminalValidations: [validation.id],
+    visibleAdminSpineTerminalValidationStatuses: {
+      [validation.id]: adminSpineTerminalValidationVisibleStatusFixture(),
+    },
+  };
+}
+
+function adminSpineTerminalValidationVisibleStatusFixture() {
+  const validation = adminSpineTerminalBatchesFixture().terminalValidations[0];
+  return [
+    validation.label,
+    validation.status,
+    validation.proof,
+    validation.command,
+    validation.artifactPath,
+    `${validation.localDiagnosticCount} diagnostics`,
+    ...validation.validatesArtifacts,
+  ].join("\n");
 }
 
 function nextActionHandoffDestinationFixture() {

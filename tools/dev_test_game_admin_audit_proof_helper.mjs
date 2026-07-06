@@ -1044,6 +1044,21 @@ export async function proveAdminAuditDetail({
               {},
           ),
         });
+      const destinationVisibleAdminSpineTerminalValidations = await waitForRows({
+        page,
+        prefix: "admin-audit-admin-spine-terminal-validation",
+        ids: destination.requiredAdminSpineTerminalValidations ?? [],
+        expectedStatuses:
+          destination.requiredAdminSpineTerminalValidationStatuses ?? {},
+      });
+      const destinationVisibleAdminSpineTerminalValidationStatuses =
+        await readRowStatuses({
+          page,
+          prefix: "admin-audit-admin-spine-terminal-validation",
+          ids: Object.keys(
+            destination.requiredAdminSpineTerminalValidationStatuses ?? {},
+          ),
+        });
       await assertAdminAuditBodyText({
         page,
         auditId: destinationAuditId,
@@ -1163,6 +1178,20 @@ export async function proveAdminAuditDetail({
           : {
               visibleSelectedOperatorHandoffTerminalReceiptRowStatuses:
                 destinationVisibleSelectedOperatorHandoffTerminalReceiptRowStatuses,
+            }),
+        ...(destinationVisibleAdminSpineTerminalValidations.length === 0
+          ? {}
+          : {
+              visibleAdminSpineTerminalValidations:
+                destinationVisibleAdminSpineTerminalValidations,
+            }),
+        ...(Object.keys(
+          destinationVisibleAdminSpineTerminalValidationStatuses,
+        ).length === 0
+          ? {}
+          : {
+              visibleAdminSpineTerminalValidationStatuses:
+                destinationVisibleAdminSpineTerminalValidationStatuses,
             }),
       });
     }

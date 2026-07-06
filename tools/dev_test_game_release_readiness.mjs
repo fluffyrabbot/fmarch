@@ -6321,6 +6321,10 @@ export function validateDevTestGameProofGraphAdminProof(proof, options = {}) {
     validateOptionalSelectedOperatorHandoffReceiptDestination(proof, {
       visibleDestinations,
     });
+  const adminSpineTerminalValidationDestination =
+    validateOptionalAdminSpineTerminalValidationDestination(proof, {
+      visibleDestinations,
+    });
   validateProofGraphAdminDiagnosticProofSummary(proof);
   for (const featureTargetCase of proofGraphAdminFeatureTargetCases) {
     validateProofGraphAdminFeatureTarget(proof, featureTargetCase);
@@ -6342,6 +6346,7 @@ export function validateDevTestGameProofGraphAdminProof(proof, options = {}) {
     destinationAuditIds,
     nextActionHandoffDestination,
     selectedOperatorHandoffReceiptDestination,
+    adminSpineTerminalValidationDestination,
     productionFeatureProvenanceComparison,
     ...(options.artifact === undefined ? {} : { artifact: options.artifact }),
   };
@@ -6430,6 +6435,97 @@ function validateOptionalSelectedOperatorHandoffReceiptDestination(
             .visibleSelectedOperatorHandoffTerminalReceiptRowStatuses[rowId],
         ]),
       ),
+  };
+}
+
+function validateOptionalAdminSpineTerminalValidationDestination(
+  proof,
+  { visibleDestinations },
+) {
+  const destination =
+    proof.generatedFrom?.adminSpineTerminalValidationDestination;
+  if (destination === undefined) {
+    return null;
+  }
+  if (
+    destination.linkId !== "admin-spine-terminal-batches" ||
+    destination.auditId !== localAdminAuditIds.adminSpine ||
+    destination.detailRoleUrl !== localAdminAuditRoleUrl(localAdminAuditIds.adminSpine)
+  ) {
+    throw new Error(
+      "proof graph admin proof terminal validation destination drifted",
+    );
+  }
+  const expectedRows = destination.requiredAdminSpineTerminalValidations ?? [];
+  if (!Array.isArray(expectedRows) || expectedRows.length === 0) {
+    throw new Error(
+      "proof graph admin proof terminal validation destination missing rows",
+    );
+  }
+  const visibleDestination = visibleDestinations.find(
+    (item) =>
+      item.linkId === destination.linkId &&
+      item.auditId === destination.auditId,
+  );
+  if (visibleDestination === undefined) {
+    throw new Error(
+      "proof graph admin proof missing terminal validation visible destination",
+    );
+  }
+  const visibleRows =
+    visibleDestination.visibleAdminSpineTerminalValidations ?? [];
+  if (!sameStringArray(visibleRows, expectedRows)) {
+    throw new Error(
+      "proof graph admin proof terminal validation row list drifted",
+    );
+  }
+  const expectedStatuses =
+    destination.requiredAdminSpineTerminalValidationStatuses ?? {};
+  for (const rowId of expectedRows) {
+    const visibleStatus =
+      visibleDestination.visibleAdminSpineTerminalValidationStatuses?.[rowId];
+    if (
+      typeof visibleStatus !== "string" ||
+      !visibleStatus.includes(expectedStatuses[rowId] ?? "")
+    ) {
+      throw new Error(
+        `proof graph admin proof terminal validation row drifted: ${rowId}`,
+      );
+    }
+    const command =
+      destination.terminalValidationCommands?.find(
+        (validation) => validation.id === rowId,
+      )?.command ?? "";
+    const artifact =
+      destination.terminalValidationArtifacts?.find(
+        (validation) => validation.id === rowId,
+      ) ?? {};
+    for (const token of [
+      command,
+      artifact.artifactPath,
+      ...(artifact.localDiagnosticCount === undefined
+        ? []
+        : [`${artifact.localDiagnosticCount} diagnostics`]),
+      ...(artifact.validatesArtifacts ?? []),
+    ]) {
+      if (String(token).trim() !== "" && !visibleStatus.includes(token)) {
+        throw new Error(
+          `proof graph admin proof terminal validation row missing ${token}: ${rowId}`,
+        );
+      }
+    }
+  }
+  return {
+    linkId: destination.linkId,
+    auditId: destination.auditId,
+    detailRoleUrl: destination.detailRoleUrl,
+    visibleAdminSpineTerminalValidations: [...expectedRows],
+    visibleAdminSpineTerminalValidationStatuses: Object.fromEntries(
+      expectedRows.map((rowId) => [
+        rowId,
+        visibleDestination.visibleAdminSpineTerminalValidationStatuses[rowId],
+      ]),
+    ),
   };
 }
 

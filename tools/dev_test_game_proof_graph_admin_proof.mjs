@@ -217,7 +217,7 @@ export function proofGraphAdminProofCase() {
             (destination) => destination.kind === "admin-audit",
           ),
           ...proofGraphNextActionHandoffDestinations(source.proofGraph),
-          ...proofGraphSelectedOperatorHandoffReceiptDestinations(
+          ...proofGraphAdminSpineTerminalReceiptDestinations(
             source.adminSpineTerminalBatches,
           ),
         ],
@@ -287,6 +287,9 @@ export function proofGraphAdminProofCase() {
                 ),
             }
           : {}),
+        ...proofGraphAdminSpineTerminalValidationDestinationEntry(
+          source.adminSpineTerminalBatches,
+        ),
         ...proofGraphAdminFeatureTargetEntries(source.proofGraph),
       },
       adminRoleSurface,
@@ -364,6 +367,7 @@ export function assertProofGraphAdminProof(evidence) {
     throw new Error("proof graph admin proof missing next-action handoff link");
   }
   assertProofGraphAdminProofCoversSelectedOperatorHandoffReceipt(evidence);
+  assertProofGraphAdminProofCoversAdminSpineTerminalValidations(evidence);
   assertAdminAuditRelatedHandoffs({
     adminRoleSurface: evidence.adminRoleSurface,
     handoffs: evidence.generatedFrom?.adminProofRoleHandoffs,
@@ -919,14 +923,36 @@ function proofGraphNextActionHandoffDestinations(proofGraph) {
   ];
 }
 
-function proofGraphSelectedOperatorHandoffReceiptDestinations(
+function proofGraphAdminSpineTerminalReceiptDestinations(
+  adminSpineTerminalBatches,
+) {
+  const destination = proofGraphAdminSpineTerminalReceiptDestination(
+    adminSpineTerminalBatches,
+  );
+  return destination === null ? [] : [destination];
+}
+
+function proofGraphAdminSpineTerminalReceiptDestination(
   adminSpineTerminalBatches,
 ) {
   const receipt = adminSpineTerminalBatches?.selectedOperatorHandoffReceipt;
-  if (receipt?.status !== "passed") {
-    return [];
+  const terminalValidationDestination =
+    proofGraphAdminSpineTerminalValidationDestination(
+      adminSpineTerminalBatches,
+    );
+  if (receipt?.status !== "passed" && terminalValidationDestination === null) {
+    return null;
   }
-  return [proofGraphSelectedOperatorHandoffReceiptDestination(receipt)];
+  return {
+    linkId: "admin-spine-terminal-batches",
+    auditId: localAdminAuditIds.adminSpine,
+    detailRoleUrl:
+      `/admin/audit/${localAdminAuditIds.adminSpine}?game=<seeded-game>`,
+    ...(receipt?.status === "passed"
+      ? proofGraphSelectedOperatorHandoffReceiptDestinationFields(receipt)
+      : {}),
+    ...(terminalValidationDestination ?? {}),
+  };
 }
 
 function proofGraphSelectedOperatorHandoffReceiptDestination(receipt) {
@@ -935,6 +961,12 @@ function proofGraphSelectedOperatorHandoffReceiptDestination(receipt) {
     auditId: localAdminAuditIds.adminSpine,
     detailRoleUrl:
       `/admin/audit/${localAdminAuditIds.adminSpine}?game=<seeded-game>`,
+    ...proofGraphSelectedOperatorHandoffReceiptDestinationFields(receipt),
+  };
+}
+
+function proofGraphSelectedOperatorHandoffReceiptDestinationFields(receipt) {
+  return {
     selectedOperatorHandoffReceiptId: receipt.id,
     selectedOperatorHandoffReceiptStatus: receipt.status,
     requiredSelectedOperatorHandoffTerminalReceiptRows: [
@@ -974,6 +1006,62 @@ function proofGraphSelectedOperatorHandoffReceiptDestination(receipt) {
       ].join("\n"),
     },
   };
+}
+
+function proofGraphAdminSpineTerminalValidationDestinationEntry(
+  adminSpineTerminalBatches,
+) {
+  const destination = proofGraphAdminSpineTerminalValidationDestination(
+    adminSpineTerminalBatches,
+  );
+  return destination === null
+    ? {}
+    : { adminSpineTerminalValidationDestination: destination };
+}
+
+function proofGraphAdminSpineTerminalValidationDestination(
+  adminSpineTerminalBatches,
+) {
+  const terminalValidations = adminSpineTerminalValidations(
+    adminSpineTerminalBatches,
+  );
+  if (terminalValidations.length === 0) {
+    return null;
+  }
+  return {
+    linkId: "admin-spine-terminal-batches",
+    auditId: localAdminAuditIds.adminSpine,
+    detailRoleUrl:
+      `/admin/audit/${localAdminAuditIds.adminSpine}?game=<seeded-game>`,
+    terminalValidationIds: terminalValidations.map(
+      (validation) => validation.id,
+    ),
+    terminalValidationArtifacts: terminalValidations.map((validation) => ({
+      id: validation.id,
+      artifactPath: validation.artifactPath,
+      validatesArtifacts: validation.validatesArtifacts,
+      localDiagnosticCount: validation.localDiagnosticCount,
+    })),
+    terminalValidationCommands: terminalValidations.map((validation) => ({
+      id: validation.id,
+      command: validation.command,
+    })),
+    requiredAdminSpineTerminalValidations: terminalValidations.map(
+      (validation) => validation.id,
+    ),
+    requiredAdminSpineTerminalValidationStatuses: Object.fromEntries(
+      terminalValidations.map((validation) => [
+        validation.id,
+        validation.status,
+      ]),
+    ),
+  };
+}
+
+function adminSpineTerminalValidations(adminSpineTerminalBatches) {
+  return Array.isArray(adminSpineTerminalBatches?.terminalValidations)
+    ? adminSpineTerminalBatches.terminalValidations
+    : [];
 }
 
 function assertProofGraphAdminProofCoversSelectedOperatorHandoffReceipt(
@@ -1018,6 +1106,73 @@ function assertProofGraphAdminProofCoversSelectedOperatorHandoffReceipt(
     throw new Error(
       "proof graph admin proof did not inspect selected operator handoff receipt",
     );
+  }
+}
+
+function assertProofGraphAdminProofCoversAdminSpineTerminalValidations(evidence) {
+  const destination =
+    evidence.generatedFrom?.adminSpineTerminalValidationDestination;
+  if (destination === undefined) {
+    return;
+  }
+  if (
+    destination.linkId !== "admin-spine-terminal-batches" ||
+    destination.auditId !== localAdminAuditIds.adminSpine ||
+    destination.detailRoleUrl !==
+      `/admin/audit/${localAdminAuditIds.adminSpine}?game=<seeded-game>` ||
+    !Array.isArray(destination.requiredAdminSpineTerminalValidations) ||
+    destination.requiredAdminSpineTerminalValidations.length === 0
+  ) {
+    throw new Error("proof graph admin proof terminal validation destination drifted");
+  }
+  const visibleDestination =
+    evidence.adminRoleSurface?.visibleRelatedDestinations?.find(
+      (candidate) =>
+        candidate.linkId === destination.linkId &&
+        candidate.auditId === destination.auditId,
+    );
+  if (
+    visibleDestination?.detailRoleUrl !== destination.detailRoleUrl ||
+    !sameStringArray(
+      visibleDestination.visibleAdminSpineTerminalValidations,
+      destination.requiredAdminSpineTerminalValidations,
+    )
+  ) {
+    throw new Error(
+      "proof graph admin proof did not inspect admin spine terminal validations",
+    );
+  }
+  const visibleStatuses =
+    visibleDestination.visibleAdminSpineTerminalValidationStatuses ?? {};
+  const expectedStatuses =
+    destination.requiredAdminSpineTerminalValidationStatuses ?? {};
+  for (const validationId of destination.requiredAdminSpineTerminalValidations) {
+    const visibleStatus = visibleStatuses[validationId] ?? "";
+    const expectedStatus = expectedStatuses[validationId] ?? "";
+    const command =
+      destination.terminalValidationCommands?.find(
+        (validation) => validation.id === validationId,
+      )?.command ?? "";
+    const artifact =
+      destination.terminalValidationArtifacts?.find(
+        (validation) => validation.id === validationId,
+      ) ?? {};
+    const requiredTokens = [
+      expectedStatus,
+      command,
+      artifact.artifactPath,
+      ...(artifact.localDiagnosticCount === undefined
+        ? []
+        : [`${artifact.localDiagnosticCount} diagnostics`]),
+      ...(artifact.validatesArtifacts ?? []),
+    ].filter((token) => String(token).trim() !== "");
+    for (const token of requiredTokens) {
+      if (!visibleStatus.includes(token)) {
+        throw new Error(
+          `proof graph admin proof terminal validation row missing ${token}: ${validationId}`,
+        );
+      }
+    }
   }
 }
 
