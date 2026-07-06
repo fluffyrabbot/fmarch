@@ -19,12 +19,12 @@ import {
 import {
   devTestGameHostedTargetPreflightPath,
   devTestGameHostedEvidenceLanePath,
+  devTestGameHostedEvidenceOperatorChecklistProofPath,
 } from "./dev_test_game_adjacent_artifact_paths.mjs";
 
 export const devTestGameHostedEvidenceOperatorChecklistPath =
   "docs/dev-test-game-hosted-evidence-operator-checklist.md";
-export const devTestGameHostedEvidenceOperatorChecklistProofPath =
-  "target/dev-test-game/hosted-evidence-operator-checklist-proof.json";
+export { devTestGameHostedEvidenceOperatorChecklistProofPath };
 export const devTestGameHostedEvidenceOperatorChecklistProofCommand =
   "test:dev-test-game-hosted-evidence-operator-checklist";
 export const hostedEvidenceLaneCommandText =

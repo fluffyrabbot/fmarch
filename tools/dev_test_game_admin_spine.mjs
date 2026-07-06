@@ -11,6 +11,12 @@ import {
   devTestGameHostedEvidenceLaneAdminProofPath,
 } from "./dev_test_game_hosted_handoff_cases.mjs";
 import {
+  devTestGameHostedEvidenceOperatorChecklistAdminProofPath,
+} from "./dev_test_game_hosted_evidence_operator_checklist_admin_proof.mjs";
+import {
+  devTestGameHostedEvidenceOperatorChecklistProofPath,
+} from "./dev_test_game_hosted_evidence_operator_checklist.mjs";
+import {
   devTestGameHostedEvidenceLaneOperatorFixtureAdminProofPath,
 } from "./dev_test_game_hosted_evidence_lane_operator_fixture_cases.mjs";
 import {
@@ -175,8 +181,12 @@ export const adminSpineReadinessEvidenceEnv = {
     devTestGameHostedTargetPreflightAdminProofPath,
   FMARCH_DEV_TEST_GAME_HOSTED_EVIDENCE_LANE:
     devTestGameHostedEvidenceLanePath,
+  FMARCH_DEV_TEST_GAME_HOSTED_EVIDENCE_OPERATOR_CHECKLIST_PROOF:
+    devTestGameHostedEvidenceOperatorChecklistProofPath,
   FMARCH_DEV_TEST_GAME_HOSTED_EVIDENCE_LANE_ADMIN_PROOF:
     devTestGameHostedEvidenceLaneAdminProofPath,
+  FMARCH_DEV_TEST_GAME_HOSTED_EVIDENCE_OPERATOR_CHECKLIST_ADMIN_PROOF:
+    devTestGameHostedEvidenceOperatorChecklistAdminProofPath,
   FMARCH_DEV_TEST_GAME_HOSTED_EVIDENCE_LANE_OPERATOR_FIXTURE_ADMIN_PROOF:
     devTestGameHostedEvidenceLaneOperatorFixtureAdminProofPath,
   FMARCH_DEV_TEST_GAME_PROOF_GRAPH: devTestGameProofGraphPath,
@@ -199,6 +209,7 @@ export const adminSpinePreGraphReadinessEvidenceEnv = Object.fromEntries(
         "FMARCH_DEV_TEST_GAME_PROOF_GRAPH_ADMIN_PROOF",
         "FMARCH_DEV_TEST_GAME_PROOF_FRESHNESS_ADMIN_PROOF",
         "FMARCH_DEV_TEST_GAME_NEXT_ACTION_ADMIN_PROOF",
+        "FMARCH_DEV_TEST_GAME_HOSTED_EVIDENCE_OPERATOR_CHECKLIST_ADMIN_PROOF",
       ].includes(key),
   ),
 );
@@ -269,6 +280,10 @@ export const devTestGameAdminSpinePlan = [
     kind: "node",
     script: "tools/dev_test_game_hosted_evidence_lane_demo_proof.mjs",
   },
+  {
+    kind: "node",
+    script: "tools/dev_test_game_hosted_evidence_operator_checklist.mjs",
+  },
   { kind: "node", script: "tools/dev_test_game_hosted_ops_signals.mjs" },
   {
     kind: "node",
@@ -287,6 +302,7 @@ export const devTestGameAdminSpinePlan = [
       devTestGameHostedTargetPreflightPath,
       devTestGameHostedEvidenceLanePath,
       devTestGameHostedEvidenceLaneDemoProofPath,
+      devTestGameHostedEvidenceOperatorChecklistProofPath,
       devTestGameHostedEvidenceLaneOperatorFixtureAdminProofPath,
       devTestGameHostedOpsSignalsPath,
       devTestGameRealHostedObservabilityHandoffPath,
@@ -298,6 +314,10 @@ export const devTestGameAdminSpinePlan = [
   }),
   { kind: "node", script: "tools/dev_test_game_spine_manifest.mjs" },
   { kind: "node", script: "tools/dev_test_game_next_action.mjs" },
+  {
+    kind: "node",
+    script: "tools/dev_test_game_hosted_evidence_operator_checklist_admin_proof.mjs",
+  },
   { kind: "node", script: "tools/dev_test_game_proof_graph.mjs" },
   {
     kind: "custom",
@@ -309,6 +329,8 @@ export const devTestGameAdminSpinePlan = [
     changedInputs: [
       spineManifestPath,
       nextActionPath,
+      devTestGameHostedEvidenceOperatorChecklistProofPath,
+      devTestGameHostedEvidenceOperatorChecklistAdminProofPath,
       devTestGameProofGraphPath,
       devTestGameProofGraphAdminProofPath,
       proofFreshnessAdminProofPath,

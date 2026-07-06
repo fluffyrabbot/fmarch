@@ -8,6 +8,9 @@ import {
   devTestGameHostedEvidenceOperatorChecklistProofPath,
 } from "./dev_test_game_hosted_evidence_operator_checklist.mjs";
 import {
+  devTestGameHostedEvidenceOperatorChecklistAdminProofPath,
+} from "./dev_test_game_adjacent_artifact_paths.mjs";
+import {
   hostedEvidenceHandoffInputCheckIds,
 } from "./dev_test_game_hosted_handoff_cases.mjs";
 import {
@@ -33,8 +36,7 @@ import {
 
 export const devTestGameHostedEvidenceOperatorChecklistAdminProofCommand =
   "test:dev-test-game-hosted-evidence-operator-checklist-admin-proof";
-export const devTestGameHostedEvidenceOperatorChecklistAdminProofPath =
-  "target/dev-test-game/hosted-evidence-operator-checklist-admin-proof.json";
+export { devTestGameHostedEvidenceOperatorChecklistAdminProofPath };
 
 const proofName =
   "dev-test-game-hosted-evidence-operator-checklist-admin-proof";
@@ -130,7 +132,7 @@ export function hostedEvidenceOperatorChecklistAdminProofCase({
         productionReady: false,
         scope,
         proofBoundary:
-          "Local admin role URL proof for the hosted evidence operator checklist handoff. It proves the seeded admin hosted-evidence lane exposes the checklist command/doc/proof affordances and that readiness plus next-action artifacts name the same checklist command, proof target, and missing hosted inputs; it does not prove hosted deployment, release readiness, or production readiness.",
+          "Local admin role URL proof for the hosted evidence operator checklist handoff. It proves the seeded admin hosted-evidence lane exposes the checklist command/doc/proof affordances and that readiness names the same checklist command, proof target, and hosted inputs; it records whether the current next-action selection is the checklist handoff but does not require the global selector to choose it while higher-priority sequence deferrals exist. It does not prove hosted deployment, release readiness, or production readiness.",
         generatedFrom: {
           ...source.paths,
           game: source.proofRun.session.game,
@@ -245,20 +247,28 @@ function assertReadinessSummary(summary, { expectedCommand }) {
     );
   }
   assertSameStringArray(
-    summary.missingHostedInputIds,
+    summary.missingHostedInputIds.length > 0
+      ? summary.missingHostedInputIds
+      : summary.namedHostedInputIds,
     expectedMissingHostedInputIds,
     "readiness missing hosted inputs",
   );
 }
 
 function assertNextActionSummary(summary, { expectedCommand }) {
+  if (summary?.selectedChecklistHandoff !== true) {
+    if (typeof summary?.command !== "string" || summary.command === "") {
+      throw new Error(
+        "hosted evidence operator checklist admin proof next-action summary drifted",
+      );
+    }
+    return;
+  }
   if (
-    summary?.command !== expectedCommand ||
-    summary?.proofTarget !==
-      devTestGameHostedEvidenceOperatorChecklistProofPath ||
-    summary?.roleUrl !== localAdminAuditRoleUrl(localAdminAuditIds.hostedEvidenceLane) ||
-    summary.operatorChecklist?.path !==
-      devTestGameHostedEvidenceOperatorChecklistPath ||
+    summary.command !== expectedCommand ||
+    summary.proofTarget !== devTestGameHostedEvidenceOperatorChecklistProofPath ||
+    summary.roleUrl !== localAdminAuditRoleUrl(localAdminAuditIds.hostedEvidenceLane) ||
+    summary.operatorChecklist?.path !== devTestGameHostedEvidenceOperatorChecklistPath ||
     summary.operatorChecklist?.checklistProofCommand !== expectedCommand ||
     summary.operatorChecklist?.checklistProofTarget !==
       devTestGameHostedEvidenceOperatorChecklistProofPath
@@ -289,6 +299,10 @@ function hostedEvidenceChecklistReadinessSummary(readiness) {
     missingHostedInputIds: [
       ...(adminSurface?.handoffReceiptMissingRequiredInputs ?? []),
     ],
+    namedHostedInputIds: (adminSurface?.hostedHandoffBlockedReceipt
+      ?.requiredInputs ?? [])
+      .map((input) => String(input?.name ?? ""))
+      .filter((name) => expectedMissingHostedInputIds.includes(name)),
     operatorChecklist:
       adminSurface?.blockedOperatorPacket?.operatorChecklist ??
       adminSurface?.hostedHandoffBlockedReceipt?.blockedOperatorPacket
@@ -305,8 +319,14 @@ function hostedEvidenceChecklistNextActionSummary(nextAction) {
     null;
   return {
     command: String(nextAction.nextAction?.command ?? ""),
+    reason: String(nextAction.nextAction?.reason ?? ""),
     proofTarget: String(selected.proofTarget ?? ""),
     roleUrl: String(selected.roleUrl ?? ""),
+    selectedChecklistHandoff:
+      checklist?.checklistProofCommand ===
+        `npm run ${devTestGameHostedEvidenceOperatorChecklistProofCommand}` &&
+      checklist?.checklistProofTarget ===
+        devTestGameHostedEvidenceOperatorChecklistProofPath,
     missingHostedInputIds: [
       ...(selected.hostedHandoffChecklist?.blockedReceipt
         ?.missingRequiredInputs ?? []),

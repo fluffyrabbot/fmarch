@@ -34,6 +34,14 @@ import {
   devTestGameHostedEvidenceLaneDemoProofPath,
 } from "./dev_test_game_hosted_evidence_lane_demo_proof.mjs";
 import {
+  assertHostedEvidenceOperatorChecklistProof,
+  devTestGameHostedEvidenceOperatorChecklistProofPath,
+} from "./dev_test_game_hosted_evidence_operator_checklist.mjs";
+import {
+  assertHostedEvidenceOperatorChecklistAdminProof,
+  devTestGameHostedEvidenceOperatorChecklistAdminProofPath,
+} from "./dev_test_game_hosted_evidence_operator_checklist_admin_proof.mjs";
+import {
   assertHostedEvidenceLaneOperatorFixtureAdminProof,
   devTestGameHostedEvidenceLaneOperatorFixtureAdminProofCommand,
   devTestGameHostedEvidenceLaneOperatorFixtureAdminProofPath,
@@ -582,6 +590,14 @@ const defaultHostedConcurrentRaceMatrixPath = path.join(
 const defaultHostedEvidenceLaneAdminProofPath = path.join(
   repoRoot,
   devTestGameHostedEvidenceLaneAdminProofPath,
+);
+const defaultHostedEvidenceOperatorChecklistProofPath = path.join(
+  repoRoot,
+  devTestGameHostedEvidenceOperatorChecklistProofPath,
+);
+const defaultHostedEvidenceOperatorChecklistAdminProofPath = path.join(
+  repoRoot,
+  devTestGameHostedEvidenceOperatorChecklistAdminProofPath,
 );
 const defaultHostedEvidenceLaneRealCaptureAdminProofPath = path.join(
   repoRoot,
@@ -9575,6 +9591,30 @@ const optionalReadinessArtifactRegistry = Object.freeze([
     },
   }),
   optionalReadinessArtifact({
+    id: "hostedEvidenceOperatorChecklistProof",
+    envVar: "FMARCH_DEV_TEST_GAME_HOSTED_EVIDENCE_OPERATOR_CHECKLIST_PROOF",
+    defaultPath: defaultHostedEvidenceOperatorChecklistProofPath,
+    outputKeys: {
+      data: "hostedEvidenceOperatorChecklistProof",
+      path: "hostedEvidenceOperatorChecklistProofPath",
+      freshnessMetadata: "hostedEvidenceOperatorChecklistProofArtifact",
+    },
+    validator: assertHostedEvidenceOperatorChecklistProof,
+  }),
+  optionalReadinessArtifact({
+    id: "hostedEvidenceOperatorChecklistAdminProof",
+    envVar:
+      "FMARCH_DEV_TEST_GAME_HOSTED_EVIDENCE_OPERATOR_CHECKLIST_ADMIN_PROOF",
+    defaultPath: defaultHostedEvidenceOperatorChecklistAdminProofPath,
+    outputKeys: {
+      data: "hostedEvidenceOperatorChecklistAdminProof",
+      path: "hostedEvidenceOperatorChecklistAdminProofPath",
+      freshnessMetadata:
+        "hostedEvidenceOperatorChecklistAdminProofArtifact",
+    },
+    validator: assertHostedEvidenceOperatorChecklistAdminProof,
+  }),
+  optionalReadinessArtifact({
     id: "hostedEvidenceLaneRealCaptureAdminProof",
     envVar: "FMARCH_DEV_TEST_GAME_HOSTED_EVIDENCE_LANE_REAL_CAPTURE_ADMIN_PROOF",
     defaultPath: defaultHostedEvidenceLaneRealCaptureAdminProofPath,
@@ -9720,6 +9760,8 @@ const optionalReadinessArtifactLoadPlan = Object.freeze([
   "raceCoverageAdminProof",
   "hostedConcurrentRaceMatrixAdminProof",
   "hostedEvidenceLaneAdminProof",
+  "hostedEvidenceOperatorChecklistProof",
+  "hostedEvidenceOperatorChecklistAdminProof",
   "hostedEvidenceLaneRealCaptureAdminProof",
   "hostedEvidenceLaneOperatorFixtureAdminProof",
   "realHostedMatrixRawCapture",

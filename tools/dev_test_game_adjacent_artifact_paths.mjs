@@ -14,6 +14,10 @@ export const devTestGameHostedEvidenceLanePath =
   "target/dev-test-game/hosted-evidence-lane.json";
 export const devTestGameHostedEvidenceLaneDemoProofPath =
   "target/dev-test-game/hosted-evidence-lane-demo-proof.json";
+export const devTestGameHostedEvidenceOperatorChecklistProofPath =
+  "target/dev-test-game/hosted-evidence-operator-checklist-proof.json";
+export const devTestGameHostedEvidenceOperatorChecklistAdminProofPath =
+  "target/dev-test-game/hosted-evidence-operator-checklist-admin-proof.json";
 export const devTestGameHostedOpsSignalsPath =
   "target/dev-test-game/hosted-ops-signals.json";
 export const devTestGameHostedIdentityEvidencePath =
