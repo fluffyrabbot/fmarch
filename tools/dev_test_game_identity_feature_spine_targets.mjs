@@ -1,6 +1,9 @@
 import {
   devTestGameIdentityAdminProofPath,
 } from "./dev_test_game_local_admin_proof_paths.mjs";
+import {
+  featureSpineTargetProvenanceCase,
+} from "./dev_test_game_feature_spine_target_provenance.mjs";
 
 export const identityFeatureSpineSourceCheckId =
   "local-identity-adapter-proof";
@@ -30,3 +33,12 @@ export const identityFeatureSpineTargetRows = Object.freeze({
     adminCheckId: "account-login",
   }),
 });
+
+export const identityFeatureSpineTargetProvenanceCases = Object.freeze([
+  featureSpineTargetProvenanceCase({
+    targetKey: "identityAdapter",
+    sourceFactory: "identityFeatureSpineTargetRows.identityAdapter",
+    sourceRow: identityFeatureSpineTargetRows.identityAdapter,
+    source: identityFeatureSpineSource,
+  }),
+]);

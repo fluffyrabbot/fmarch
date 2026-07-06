@@ -50,10 +50,6 @@ import {
   coreLoopFeatureSpineTargetRows,
 } from "./dev_test_game_core_loop_feature_spine_targets.mjs";
 import {
-  identityFeatureSpineSourceCheckId,
-  identityFeatureSpineTargetRows,
-} from "./dev_test_game_identity_feature_spine_targets.mjs";
-import {
   replacementFeatureSpineSource,
   replacementFeatureSpineTargetRows,
 } from "./dev_test_game_replacement_feature_spine_targets.mjs";
@@ -71,7 +67,6 @@ import {
 } from "./dev_test_game_cohost_feature_spine_targets.mjs";
 import {
   hardeningFeatureSpineCycleIds,
-  hardeningFeatureSpineSource,
   hardeningFeatureSpineTargetProvenanceCases,
   hardeningFeatureSpineTargetRows,
   hardeningFeatureSpineSourceCheckId,
@@ -93,8 +88,10 @@ import {
   buildProductionFeatureSpineTargetCollection,
 } from "./dev_test_game_production_feature_spine_resolver.mjs";
 import {
+  allProductionFeatureSpineTargetProvenanceCases,
+} from "./dev_test_game_production_feature_spine_target_provenance.mjs";
+import {
   roleSurfaceBrowserWorkbenchEvidence,
-  roleSurfaceFeatureSpineTargetProvenanceCases,
   roleSurfaceSpineCaseList,
 } from "./dev_test_game_role_surface_spine_cases.mjs";
 import {
@@ -626,45 +623,27 @@ test("hardening feature spine rows are classified by exported source-case factor
   );
 });
 
-test("hardening feature spine provenance reaches readiness and proof graph rows", () => {
+test("all production feature spine provenance reaches readiness and proof graph rows", () => {
   assertFeatureSpineProvenanceReachesReadinessAndProofGraph({
-    provenanceCases: hardeningFeatureSpineTargetProvenanceCases,
-    source: hardeningFeatureSpineSource,
-    expectedGraphKind: "admin-audit",
-    expectedAuditId: "local-hardening",
-    roleUrlForProvenanceCase: (provenanceCase) =>
-      `/g/${provenanceCase.roleUrlId}`,
-  });
-});
-
-test("role-surface feature spine provenance reaches readiness and proof graph rows", () => {
-  assertFeatureSpineProvenanceReachesReadinessAndProofGraph({
-    provenanceCases: roleSurfaceFeatureSpineTargetProvenanceCases,
-    expectedGraphKind: "role-url",
-    sourceForProvenanceCase: (provenanceCase) =>
-      roleSurfaceSpineCaseList.find(
-        (roleSurfaceCase) =>
-          roleSurfaceCase.generatedFromKey === provenanceCase.generatedFromKey,
-      )?.source,
+    provenanceCases: allProductionFeatureSpineTargetProvenanceCases,
   });
 });
 
 function assertFeatureSpineProvenanceReachesReadinessAndProofGraph({
   provenanceCases,
-  source,
-  expectedGraphKind,
-  expectedAuditId,
-  sourceForProvenanceCase = () => source,
-  roleUrlForProvenanceCase = (provenanceCase) =>
-    sourceForProvenanceCase(provenanceCase).roleUrlIncludes,
 }) {
-  const sourceByCheckId = new Map(
-    provenanceCases.map((provenanceCase) => [
-      provenanceCase.sourceCheckId,
-      sourceForProvenanceCase(provenanceCase),
-    ]),
+  const sourceCheckIds = [
+    ...new Set(
+      provenanceCases.map((provenanceCase) => provenanceCase.sourceCheckId),
+    ),
+  ];
+  assert.deepEqual(
+    Object.values(releaseReadinessProductionFeatureSpineTargets).map(
+      (target) => target.featureSlotId,
+    ),
+    provenanceCases.map((provenanceCase) => provenanceCase.featureSlotId),
   );
-  for (const [sourceCheckId, sourceTarget] of sourceByCheckId) {
+  for (const sourceCheckId of sourceCheckIds) {
     const sourceProvenanceCases = provenanceCases.filter(
       (provenanceCase) => provenanceCase.sourceCheckId === sourceCheckId,
     );
@@ -674,14 +653,15 @@ function assertFeatureSpineProvenanceReachesReadinessAndProofGraph({
         roleUrlForProvenanceCase(provenanceCase),
       ]),
     );
+    const firstProvenanceCase = sourceProvenanceCases[0];
     const readinessTargets = buildProductionFeatureSpineTargetCollection({
       declarations: releaseReadinessProductionFeatureSpineTargets,
       sourceTarget: {
         sourceCheckId,
-        detailRoleUrl: sourceTarget.detailRoleUrlIncludes,
+        detailRoleUrl: firstProvenanceCase.detailRoleUrlIncludes,
         browserProofCommand: "npm run test:dev-test-game-core-live",
-        sourceProofArtifact: sourceTarget.proofArtifact,
-        rerunCommand: sourceTarget.rerunCommand,
+        sourceProofArtifact: firstProvenanceCase.proofArtifact,
+        rerunCommand: firstProvenanceCase.rerunCommand,
         cycleIds: [
           ...new Set(
             sourceProvenanceCases.map(
@@ -708,7 +688,7 @@ function assertFeatureSpineProvenanceReachesReadinessAndProofGraph({
       nodes: Object.values(readinessTargets.bySlotId).map((target) => ({
         kind: "production-feature-spine-target",
         id: `production-feature:${target.featureSlotId}`,
-        roleUrl: sourceTarget.detailRoleUrlIncludes,
+        roleUrl: firstProvenanceCase.detailRoleUrlIncludes,
         featureSlotId: target.featureSlotId,
         sourceCheckId: target.sourceCheckId,
         targetRoleUrl: target.roleUrl,
@@ -745,8 +725,14 @@ function assertFeatureSpineProvenanceReachesReadinessAndProofGraph({
         sourceCheckId: provenanceCase.sourceCheckId,
         cycleId: provenanceCase.cycleId,
         roleUrlId: provenanceCase.roleUrlId,
-        rowKind: "checkpoint",
+        rowKind:
+          provenanceCase.recoveryHookId === undefined
+            ? "checkpoint"
+            : "recovery-hook",
         checkpointId: provenanceCase.checkpointId,
+        ...(provenanceCase.recoveryHookId === undefined
+          ? {}
+          : { recoveryHookId: provenanceCase.recoveryHookId }),
         adminCheckId: provenanceCase.adminCheckId,
       });
       assert.equal(
@@ -764,21 +750,29 @@ function assertFeatureSpineProvenanceReachesReadinessAndProofGraph({
       assertFeatureSpineProofGraphDestination({
         destination: proofGraphDestination,
         provenanceCase,
-        expectedGraphKind,
-        expectedAuditId,
         targetRoleUrl: roleUrlForProvenanceCase(provenanceCase),
       });
     }
   }
 }
 
+function roleUrlForProvenanceCase(provenanceCase) {
+  if (provenanceCase.roleUrlIncludes === "/g/") {
+    return `/g/${provenanceCase.roleUrlId}`;
+  }
+  return provenanceCase.roleUrlIncludes;
+}
+
 function assertFeatureSpineProofGraphDestination({
   destination,
   provenanceCase,
-  expectedGraphKind,
-  expectedAuditId,
   targetRoleUrl,
 }) {
+  const expectedGraphKind = provenanceCase.graphSourceNodeId.startsWith(
+    "admin-proof:",
+  )
+    ? "admin-audit"
+    : "role-url";
   const commonDestination = {
     kind: destination.kind,
     featureSlotId: destination.featureSlotId,
@@ -796,6 +790,9 @@ function assertFeatureSpineProofGraphDestination({
     sourceProofArtifact: provenanceCase.proofArtifact,
   };
   if (expectedGraphKind === "admin-audit") {
+    const expectedAuditId = provenanceCase.detailRoleUrlIncludes.match(
+      /^\/admin\/audit\/([^?]+)/,
+    )?.[1];
     assert.deepEqual(
       {
         ...commonDestination,
@@ -838,17 +835,6 @@ test("local core production feature targets derive proof row ids from shared sou
       assert.equal(target.recoveryHookId, source.recoveryHookId);
     }
   }
-});
-
-test("identity production feature target derives proof row ids from shared source rows", () => {
-  const source = identityFeatureSpineTargetRows.identityAdapter;
-  const target = releaseReadinessProductionFeatureSpineTargets.identityAdapter;
-  assert.equal(target.featureSlotId, source.featureSlotId);
-  assert.equal(target.sourceCheckId, identityFeatureSpineSourceCheckId);
-  assert.equal(target.cycleId, source.cycleId);
-  assert.equal(target.roleUrlId, source.roleUrlId);
-  assert.equal(target.checkpointId, source.checkpointId);
-  assert.equal(target.adminCheckId, source.adminCheckId);
 });
 
 test("proof graph admin feature targets derive from shared source rows", () => {

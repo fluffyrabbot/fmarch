@@ -20,5 +20,7 @@ export function featureSpineTargetProvenanceCase({
     rerunCommand: source.rerunCommand,
     graphSourceNodeId: source.graphSourceNodeId,
     readinessSourceKind: source.readinessSourceKind,
+    detailRoleUrlIncludes: source.detailRoleUrlIncludes,
+    roleUrlIncludes: source.roleUrlIncludes,
   });
 }

@@ -45,6 +45,9 @@ import {
 import {
   devTestGameCoreLoopAdminProofPath,
 } from "./dev_test_game_local_admin_proof_paths.mjs";
+import {
+  featureSpineTargetProvenanceCase,
+} from "./dev_test_game_feature_spine_target_provenance.mjs";
 
 export { nightThreeActionResolutionLaneId };
 
@@ -156,6 +159,17 @@ export const coreLoopFeatureSpineTargetRows = Object.freeze(
       lane.targetKey,
       checkpointRow(lane),
     ]),
+  ),
+);
+
+export const coreLoopFeatureSpineTargetProvenanceCases = Object.freeze(
+  coreLoopFeatureSpineLaneRows.map((lane) =>
+    featureSpineTargetProvenanceCase({
+      targetKey: lane.targetKey,
+      sourceFactory: "coreLoopFeatureSpineLaneRows",
+      sourceRow: coreLoopFeatureSpineTargetRows[lane.targetKey],
+      source: coreLoopFeatureSpineSource,
+    }),
   ),
 );
 
