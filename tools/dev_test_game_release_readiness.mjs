@@ -264,8 +264,9 @@ import {
   proofGraphAdminFeatureTargetCases,
 } from "./dev_test_game_proof_graph_feature_target_cases.mjs";
 import {
-  coreLoopScenarioFamilyRows,
-} from "./dev_test_game_core_loop_generated_from_families.mjs";
+  proofGraphCoreLoopScenarioFamilyDestinations,
+  proofGraphCoreLoopScenarioFamilyNodes,
+} from "./dev_test_game_proof_graph_core_loop_scenario_families.mjs";
 import {
   hostVisibleRecoverySummaryCases,
 } from "./dev_test_game_core_loop_action_scenarios.mjs";
@@ -6734,22 +6735,27 @@ function validateProofGraphAdminCoreLoopScenarioFamilyDestinations(proof) {
   const destinationByFamilyId = new Map(
     destinations.map((destination) => [destination.familyId, destination]),
   );
+  const expectedDestinations = proofGraphCoreLoopScenarioFamilyDestinations({
+    nodes: proofGraphCoreLoopScenarioFamilyNodes(),
+  });
   const visibleDestinations = Array.isArray(
     proof.adminRoleSurface?.visibleRelatedDestinations,
   )
     ? proof.adminRoleSurface.visibleRelatedDestinations
     : [];
   const coreLoopRoleUrl = localAdminAuditRoleUrl(localAdminAuditIds.coreLoop);
-  for (const family of coreLoopScenarioFamilyRows()) {
-    const destination = destinationByFamilyId.get(family.id);
+  for (const expectedDestination of expectedDestinations) {
+    const destination = destinationByFamilyId.get(expectedDestination.familyId);
     if (
-      destination?.linkId !== `core-loop-family:${family.id}` ||
-      destination?.auditId !== localAdminAuditIds.coreLoop ||
-      destination?.detailRoleUrl !== coreLoopRoleUrl ||
-      !destination?.requiredScenarioFamilies?.includes(family.id)
+      destination?.linkId !== expectedDestination.linkId ||
+      destination?.auditId !== expectedDestination.auditId ||
+      destination?.detailRoleUrl !== expectedDestination.detailRoleUrl ||
+      !destination?.requiredScenarioFamilies?.includes(
+        expectedDestination.familyId,
+      )
     ) {
       throw new Error(
-        `proof graph admin proof missing core-loop scenario family destination: ${family.id}`,
+        `proof graph admin proof missing core-loop scenario family destination: ${expectedDestination.familyId}`,
       );
     }
     if (
@@ -6758,7 +6764,7 @@ function validateProofGraphAdminCoreLoopScenarioFamilyDestinations(proof) {
       )
     ) {
       throw new Error(
-        `proof graph admin proof missing core-loop scenario family link: ${family.id}`,
+        `proof graph admin proof missing core-loop scenario family link: ${expectedDestination.familyId}`,
       );
     }
     const visibleDestination = visibleDestinations.find(
@@ -6768,19 +6774,24 @@ function validateProofGraphAdminCoreLoopScenarioFamilyDestinations(proof) {
     );
     if (
       visibleDestination?.detailRoleUrl !== coreLoopRoleUrl ||
-      !visibleDestination.visibleScenarioFamilies?.includes(family.id)
+      !visibleDestination.visibleScenarioFamilies?.includes(
+        expectedDestination.familyId,
+      )
     ) {
       throw new Error(
-        `proof graph admin proof did not visit core-loop scenario family: ${family.id}`,
+        `proof graph admin proof did not visit core-loop scenario family: ${expectedDestination.familyId}`,
       );
     }
     const visibleText =
-      visibleDestination.visibleScenarioFamilyText?.[family.id] ?? "";
-    for (const token of destination.requiredScenarioFamilyText?.[family.id] ??
-      []) {
+      visibleDestination.visibleScenarioFamilyText?.[
+        expectedDestination.familyId
+      ] ?? "";
+    for (const token of expectedDestination.requiredScenarioFamilyText?.[
+      expectedDestination.familyId
+    ] ?? []) {
       if (!visibleText.includes(token)) {
         throw new Error(
-          `proof graph admin proof missing core-loop scenario family text: ${family.id} ${token}`,
+          `proof graph admin proof missing core-loop scenario family text: ${expectedDestination.familyId} ${token}`,
         );
       }
     }

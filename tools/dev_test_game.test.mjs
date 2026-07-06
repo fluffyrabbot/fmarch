@@ -218,9 +218,6 @@ import {
   coreLoopAdminCheckIds,
 } from "./dev_test_game_core_loop_scenarios.mjs";
 import {
-  coreLoopScenarioFamilyRows,
-} from "./dev_test_game_core_loop_generated_from_families.mjs";
-import {
   adminSpineHostedOpsInputReadinessEnv,
   adminSpinePreGraphReadinessEvidenceEnv,
   adminSpineReadinessEvidenceEnv,
@@ -647,6 +644,11 @@ import {
   proofGraphCoreLoopRecoveryDestinationNodes,
   proofGraphCoreLoopRecoveryDestinationSummary,
 } from "./dev_test_game_proof_graph_core_loop_recovery_destinations.mjs";
+import {
+  proofGraphCoreLoopScenarioFamilyDestinations,
+  proofGraphCoreLoopScenarioFamilyEdges,
+  proofGraphCoreLoopScenarioFamilyNodes,
+} from "./dev_test_game_proof_graph_core_loop_scenario_families.mjs";
 import {
   buildProofGraphDestinationSummaryTrace,
 } from "./dev_test_game_proof_graph_destination_summary_trace.mjs";
@@ -6204,7 +6206,12 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
       },
     },
   );
-  const coreLoopFamilyRows = coreLoopScenarioFamilyRows();
+  const coreLoopScenarioFamilyNodes =
+    proofGraphCoreLoopScenarioFamilyNodes();
+  const coreLoopScenarioFamilyEdges =
+    proofGraphCoreLoopScenarioFamilyEdges({
+      nodes: coreLoopScenarioFamilyNodes,
+    });
   const coreLoopHostVisibleRecoveryCases = hostVisibleRecoverySummaryCases();
   const expectedProductionFeatureTargetCount =
     releaseReadiness.localDevelopmentSpine.checks.reduce(
@@ -6218,14 +6225,14 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
     expectedBaseGraphNodeCount +
       expectedProductionFeatureTargetCount +
       coreLoopHostVisibleRecoveryCases.length +
-      coreLoopFamilyRows.length,
+      coreLoopScenarioFamilyNodes.length,
   );
   assert.equal(
     graph.summary.roleUrlCount,
     expectedBaseGraphNodeCount +
       expectedProductionFeatureTargetCount +
       coreLoopHostVisibleRecoveryCases.length +
-      coreLoopFamilyRows.length,
+      coreLoopScenarioFamilyNodes.length,
   );
   assert.equal(graph.summary.roleSurfaceProofCount, 5);
   assert.equal(
@@ -6434,7 +6441,7 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
   );
   assert.equal(
     graph.summary.coreLoopScenarioFamilyCount,
-    coreLoopFamilyRows.length,
+    coreLoopScenarioFamilyNodes.length,
   );
   assert.equal(graph.summary.terminalBatchCount, 3);
   assert.deepEqual(
@@ -6448,24 +6455,24 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
         node.laneCount,
         node.surfaceIds,
       ]),
-    coreLoopFamilyRows.map((family) => [
-      `core-loop-family:${family.id}`,
-      family.id,
-      "/admin/audit/local-core-loop?game=<seeded-game>",
-      "target/dev-test-game/core-loop-admin-proof.json",
-      family.laneIds.length,
-      family.surfaces,
+    coreLoopScenarioFamilyNodes.map((node) => [
+      node.id,
+      node.familyId,
+      node.roleUrl,
+      node.artifact,
+      node.laneCount,
+      node.surfaceIds,
     ]),
   );
   assert.deepEqual(
     graph.edges
       .filter((edge) => edge.relationship === "contains-scenario-family")
       .map((edge) => [edge.from, edge.to, edge.familyId, edge.roleUrl]),
-    coreLoopFamilyRows.map((family) => [
-      "admin-proof:core-loop",
-      `core-loop-family:${family.id}`,
-      family.id,
-      "/admin/audit/local-core-loop?game=<seeded-game>",
+    coreLoopScenarioFamilyEdges.map((edge) => [
+      edge.from,
+      edge.to,
+      edge.familyId,
+      edge.roleUrl,
     ]),
   );
   for (const descriptor of recoveryReceiptGraphDescriptors) {
@@ -23530,16 +23537,9 @@ function proofGraphReplacementPrivateFeatureTargetFixture() {
 }
 
 function proofGraphCoreLoopScenarioFamilyDestinationsFixture() {
-  return coreLoopScenarioFamilyRows().map((family) => ({
-    linkId: `core-loop-family:${family.id}`,
-    auditId: "local-core-loop",
-    detailRoleUrl: "/admin/audit/local-core-loop?game=<seeded-game>",
-    familyId: family.id,
-    requiredScenarioFamilies: [family.id],
-    requiredScenarioFamilyText: {
-      [family.id]: proofGraphCoreLoopScenarioFamilyTextTokensFixture(family),
-    },
-  }));
+  return proofGraphCoreLoopScenarioFamilyDestinations({
+    nodes: proofGraphCoreLoopScenarioFamilyNodes(),
+  });
 }
 
 function proofGraphCoreLoopHostVisibleRecoveryDestinationsFixture() {
@@ -23558,19 +23558,6 @@ function proofGraphCoreLoopHostVisibleRecoveryDestinationsFixture() {
 
 function proofGraphCoreLoopHostVisibleRecoveryEdgeRowIdsFixture() {
   return proofGraphCoreLoopRecoveryDestinationEdgeRowIds();
-}
-
-function proofGraphCoreLoopScenarioFamilyTextTokensFixture(family) {
-  return [
-    family.label,
-    family.status,
-    ...family.laneIds,
-    ...family.surfaces,
-    ...family.staleRejects,
-    ...family.reloads,
-    ...family.scenarios,
-    ...family.transitionTokens,
-  ].filter((token) => String(token ?? "") !== "");
 }
 
 function proofGraphCoreLoopHostVisibleRecoveryTextTokensFixture(recoveryCase) {

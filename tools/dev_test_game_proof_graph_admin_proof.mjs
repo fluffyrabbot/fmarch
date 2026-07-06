@@ -2,11 +2,11 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { assertDevTestGameProofGraph } from "./dev_test_game_proof_graph.mjs";
 import {
-  coreLoopScenarioFamilyRows,
-} from "./dev_test_game_core_loop_generated_from_families.mjs";
-import {
   hostVisibleRecoverySummaryCases,
 } from "./dev_test_game_core_loop_action_scenarios.mjs";
+import {
+  proofGraphCoreLoopScenarioFamilyDestinations,
+} from "./dev_test_game_proof_graph_core_loop_scenario_families.mjs";
 import {
   assertProofGraphProductionFeatureProvenanceComparison,
   proofGraphProductionFeatureTargetDestinations,
@@ -1423,32 +1423,6 @@ function proofGraphAdminFeatureTargetEntries(proofGraph) {
   );
 }
 
-function proofGraphCoreLoopScenarioFamilyDestinations(proofGraph) {
-  const nodesByFamilyId = new Map(
-    proofGraph.nodes
-      .filter((node) => node.kind === "core-loop-scenario-family")
-      .map((node) => [node.familyId, node]),
-  );
-  return coreLoopScenarioFamilyRows().map((family) => {
-    const node = nodesByFamilyId.get(family.id);
-    if (node === undefined) {
-      throw new Error(
-        `proof graph missing core-loop scenario family: ${family.id}`,
-      );
-    }
-    return {
-      linkId: node.id,
-      auditId: localAdminAuditIds.coreLoop,
-      detailRoleUrl: `/admin/audit/${localAdminAuditIds.coreLoop}?game=<seeded-game>`,
-      familyId: family.id,
-      requiredScenarioFamilies: [family.id],
-      requiredScenarioFamilyText: {
-        [family.id]: coreLoopScenarioFamilyTextTokens(family),
-      },
-    };
-  });
-}
-
 function proofGraphCoreLoopHostVisibleRecoveryDestinations(proofGraph) {
   const nodesByRecoveryCaseId = new Map(
     proofGraph.nodes
@@ -1474,19 +1448,6 @@ function proofGraphCoreLoopHostVisibleRecoveryDestinations(proofGraph) {
       },
     };
   });
-}
-
-function coreLoopScenarioFamilyTextTokens(family) {
-  return [
-    family.label,
-    family.status,
-    ...family.laneIds,
-    ...family.surfaces,
-    ...family.staleRejects,
-    ...family.reloads,
-    ...family.scenarios,
-    ...family.transitionTokens,
-  ].filter((token) => String(token ?? "") !== "");
 }
 
 function coreLoopHostVisibleRecoveryTextTokens(recoveryCase) {
