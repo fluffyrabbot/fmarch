@@ -6794,15 +6794,27 @@ function validateProofGraphAdminProductionFeatureTargetDestinations(proof) {
       "proof graph admin proof production feature destination count drifted",
     );
   }
-  const visibleDestinations = Array.isArray(
-    proof.adminRoleSurface?.visibleRelatedDestinations,
-  )
-    ? proof.adminRoleSurface.visibleRelatedDestinations
-    : [];
+  const adminAuditDestinations = destinations.filter(
+    (destination) => destination.kind === "admin-audit",
+  );
+  assertProofGraphAdminVisibleRelatedDestinations({
+    proof,
+    generatedDestinations: adminAuditDestinations,
+    expectedDestinations: adminAuditDestinations,
+    idKey: "linkId",
+    requiredIdKey: "adminCheckId",
+    requiredIdsKey: "requiredChecks",
+    visibleIdsKey: "visibleChecks",
+    missingDestinationMessage: (linkId) =>
+      `proof graph admin proof missing production feature destination link: ${linkId}`,
+    missingLinkMessage: ({ destinationId }) =>
+      `proof graph admin proof missing production feature destination link: ${destinationId}`,
+    missingVisitMessage: (linkId) =>
+      `proof graph admin proof did not inspect production feature destination: ${linkId}`,
+  });
   for (const destination of destinations) {
     if (
-      !productionNodeIds.has(destination.linkId) ||
-      !proof.adminRoleSurface?.visibleRelatedLinks?.includes(destination.linkId)
+      !productionNodeIds.has(destination.linkId)
     ) {
       throw new Error(
         `proof graph admin proof missing production feature destination link: ${destination.linkId}`,
@@ -6840,19 +6852,6 @@ function validateProofGraphAdminProductionFeatureTargetDestinations(proof) {
         );
       }
       continue;
-    }
-    const visibleDestination = visibleDestinations.find(
-      (item) =>
-        item.linkId === destination.linkId &&
-        item.auditId === destination.auditId,
-    );
-    if (
-      visibleDestination?.detailRoleUrl !== destination.detailRoleUrl ||
-      !visibleDestination.visibleChecks?.includes(destination.adminCheckId)
-    ) {
-      throw new Error(
-        `proof graph admin proof did not inspect production feature destination: ${destination.linkId}`,
-      );
     }
   }
 }

@@ -3,6 +3,7 @@ export function assertProofGraphAdminVisibleRelatedDestinations({
   generatedDestinations,
   expectedDestinations,
   idKey,
+  requiredIdKey = idKey,
   requiredIdsKey,
   visibleIdsKey,
   requiredTextKey,
@@ -25,12 +26,13 @@ export function assertProofGraphAdminVisibleRelatedDestinations({
   );
   for (const expectedDestination of expectedDestinations ?? []) {
     const destinationId = expectedDestination?.[idKey];
+    const requiredId = expectedDestination?.[requiredIdKey];
     const destination = destinationById.get(destinationId);
     if (
       destination?.linkId !== expectedDestination.linkId ||
       destination?.auditId !== expectedDestination.auditId ||
       destination?.detailRoleUrl !== expectedDestination.detailRoleUrl ||
-      !destination?.[requiredIdsKey]?.includes(destinationId)
+      !destination?.[requiredIdsKey]?.includes(requiredId)
     ) {
       throw new Error(missingDestinationMessage(destinationId));
     }
@@ -48,9 +50,16 @@ export function assertProofGraphAdminVisibleRelatedDestinations({
     );
     if (
       visibleDestination?.detailRoleUrl !== expectedDestination.detailRoleUrl ||
-      !visibleDestination?.[visibleIdsKey]?.includes(destinationId)
+      !visibleDestination?.[visibleIdsKey]?.includes(requiredId)
     ) {
       throw new Error(missingVisitMessage(destinationId));
+    }
+    if (
+      requiredTextKey === undefined ||
+      visibleTextKey === undefined ||
+      missingTextMessage === undefined
+    ) {
+      continue;
     }
     const visibleText =
       visibleDestination?.[visibleTextKey]?.[destinationId] ?? "";

@@ -647,12 +647,27 @@ function assertProofGraphAdminProofCoversProductionFeatureDestinations(evidence)
   assertProofGraphAdminProductionFeatureDestinationsMatchProvenance(
     destinations,
   );
+  const adminAuditDestinations = destinations.filter(
+    (destination) => destination.kind === "admin-audit",
+  );
+  assertProofGraphAdminVisibleRelatedDestinations({
+    proof: evidence,
+    generatedDestinations: adminAuditDestinations,
+    expectedDestinations: adminAuditDestinations,
+    idKey: "linkId",
+    requiredIdKey: "adminCheckId",
+    requiredIdsKey: "requiredChecks",
+    visibleIdsKey: "visibleChecks",
+    missingDestinationMessage: (linkId) =>
+      `proof graph admin proof missing production feature related link: ${linkId}`,
+    missingLinkMessage: ({ destination }) =>
+      `proof graph admin proof missing production feature related link: ${destination.linkId}`,
+    missingVisitMessage: (linkId) =>
+      `proof graph admin proof did not inspect production feature destination: ${linkId}`,
+  });
   for (const destination of destinations) {
     if (
-      !productionNodeIds.has(destination.linkId) ||
-      !evidence.adminRoleSurface?.visibleRelatedLinks?.includes(
-        destination.linkId,
-      )
+      !productionNodeIds.has(destination.linkId)
     ) {
       throw new Error(
         `proof graph admin proof missing production feature related link: ${destination.linkId}`,
@@ -686,20 +701,6 @@ function assertProofGraphAdminProofCoversProductionFeatureDestinations(evidence)
         );
       }
       continue;
-    }
-    const visibleDestination =
-      evidence.adminRoleSurface?.visibleRelatedDestinations?.find(
-        (candidate) =>
-          candidate.linkId === destination.linkId &&
-          candidate.auditId === destination.auditId,
-      );
-    if (
-      visibleDestination?.detailRoleUrl !== destination.detailRoleUrl ||
-      !visibleDestination.visibleChecks?.includes(destination.adminCheckId)
-    ) {
-      throw new Error(
-        `proof graph admin proof did not inspect production feature destination: ${destination.linkId}`,
-      );
     }
   }
 }
