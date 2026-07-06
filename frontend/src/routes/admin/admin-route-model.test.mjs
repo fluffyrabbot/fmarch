@@ -1833,6 +1833,8 @@ test("admin audit detail page renders hosted artifact summary sections from rout
   assert.doesNotMatch(source, /data\.audit\.id === "local-hosted-evidence-lane"/);
   assert.doesNotMatch(source, /artifactSummary\.hostedMatrixSummary/);
   assert.doesNotMatch(source, /artifactSummary\.realHostedObservabilitySummary/);
+  assert.doesNotMatch(source, /artifactSummary\.nextActionHandoffPair/);
+  assert.doesNotMatch(source, /artifactSummary\.frontendSetupWorkbenchReadiness/);
   assert.match(source, /data\.audit\.artifactSummarySections\?\.length/);
   assert.match(source, /data-testid=\{section\.testId\}/);
   assert.match(source, /data-testid=\{row\.testId\}/);
@@ -2847,9 +2849,10 @@ test("admin local proof freshness detail data carries stale and missing rows", a
 });
 
 test("admin route data exposes local next action as a native audit row", async () => {
+  const nextActionHandoffPair = nextActionHandoffPairFixture();
   const nextActionInput = nextActionFixture({
     terminalBatchGraph: terminalBatchGraphFixture(),
-    nextActionHandoffPair: nextActionHandoffPairFixture(),
+    nextActionHandoffPair,
     privateChannelRecoveryGraph: privateChannelRecoveryGraphFixture(),
     replacementActionRecoveryGraph:
       replacementActionRecoveryGraphFixture(),
@@ -2949,6 +2952,53 @@ test("admin route data exposes local next action as a native audit row", async (
         localAdminAuditRoleUrl(localAdminAuditIds.hostedConcurrentRaceMatrix),
       unprovenProofGraphNodeId: "admin-proof:hosted-concurrent-race-matrix",
     }),
+  );
+  assert.deepEqual(
+    nextAction.artifactSummarySections.map((section) => [
+      section.id,
+      section.heading,
+      section.testId,
+      section.rows.map((row) => [
+        row.id,
+        row.testId,
+        row.values.map((value) => [value.id, value.text, value.emphasized]),
+      ]),
+    ]),
+    [
+      [
+        "next-action-handoff-pair",
+        "Next action handoff",
+        "admin-audit-detail-next-action-handoff-pair",
+        [
+          [
+            "summary",
+            "admin-audit-next-action-handoff-pair-summary",
+            [
+              ["status", nextActionHandoffPair.status, true],
+              ["id", nextActionHandoffPair.id, false],
+              ["proofBoundary", nextActionHandoffPair.proofBoundary, false],
+            ],
+          ],
+          ...[
+            nextActionHandoffPair.defaultSequenceBlocker,
+            nextActionHandoffPair.hostedIdentityPredicate,
+          ].map((handoff) => [
+            handoff.id,
+            `admin-audit-next-action-handoff-pair-${handoff.id}`,
+            [
+              ["label", handoff.label, true],
+              ["status", handoff.status, false],
+              ["proofId", handoff.proofId, false],
+              ["expectedReason", handoff.expectedReason, false],
+              ["expectedActionStatus", handoff.expectedActionStatus, false],
+              ["batchLabel", handoff.batchLabel, false],
+              ["nextActionPath", handoff.nextActionPath, false],
+              ["adminProofPath", handoff.adminProofPath, false],
+            ],
+          ]),
+        ],
+      ],
+    ],
   );
   assert.deepEqual(nextAction.artifactSummary, {
     command: LOCAL_RACE_COMMAND,
@@ -3822,6 +3872,8 @@ test("admin local next action detail data carries host setup artifact recovery r
 });
 
 test("admin local next action detail distinguishes frontend setup workbench readiness", async () => {
+  const frontendSetupWorkbenchReadiness =
+    frontendSetupWorkbenchReadinessFixture();
   const data = await buildAdminAuditDetailData({
     audit: localAdminAuditIds.nextAction,
     principalUserId: "admin_a",
@@ -3830,7 +3882,7 @@ test("admin local next action detail distinguishes frontend setup workbench read
       actionStatus: "blocked",
       reason: "artifact-not-fresh",
       command: HOST_SETUP_PROOF_COMMAND,
-      frontendSetupWorkbenchReadiness: frontendSetupWorkbenchReadinessFixture(),
+      frontendSetupWorkbenchReadiness,
       artifact: {
         id: "host-setup-role",
         label: "Host setup role proof",
@@ -3861,21 +3913,73 @@ test("admin local next action detail distinguishes frontend setup workbench read
   );
   assert.deepEqual(
     data.audit.artifactSummary.frontendSetupWorkbenchReadiness,
-    frontendSetupWorkbenchReadinessFixture(),
+    frontendSetupWorkbenchReadiness,
+  );
+  assert.deepEqual(
+    data.audit.artifactSummarySections.map((section) => [
+      section.id,
+      section.heading,
+      section.testId,
+      section.rows.map((row) => [
+        row.id,
+        row.testId,
+        row.values.map((value) => [value.id, value.text, value.emphasized]),
+      ]),
+    ]),
+    [
+      [
+        "frontend-setup-workbench",
+        "Frontend setup workbench",
+        "admin-audit-detail-frontend-setup-workbench",
+        [
+          [
+            "summary",
+            "admin-audit-frontend-setup-workbench-summary",
+            [
+              ["state", frontendSetupWorkbenchReadiness.state, true],
+              ["route", frontendSetupWorkbenchReadiness.route, false],
+              ["localStatus", frontendSetupWorkbenchReadiness.localStatus, false],
+              [
+                "importedStatus",
+                frontendSetupWorkbenchReadiness.importedStatus,
+                false,
+              ],
+              ["proofBoundary", frontendSetupWorkbenchReadiness.proofBoundary, false],
+            ],
+          ],
+          ...frontendSetupWorkbenchReadiness.localViewportLayouts.map((layout) => [
+            layout.viewport,
+            `admin-audit-frontend-setup-workbench-${layout.viewport}`,
+            [
+              ["viewport", layout.viewport, true],
+              ["layout", layout.layout, false],
+              ["slotCount", `${layout.slotCount} slots`, false],
+              [
+                "noHorizontalOverflow",
+                layout.noHorizontalOverflow
+                  ? "no horizontal overflow"
+                  : "horizontal overflow",
+                false,
+              ],
+              ["screenshot", layout.screenshot, false],
+            ],
+          ]),
+        ],
+      ],
+    ],
   );
   assert.equal(data.audit.localPrerequisites[0].id, "host-setup-role");
   assert.equal(data.audit.localPrerequisites[0].status, "stale");
 });
 
-test("admin audit detail page renders frontend setup workbench section", async () => {
+test("admin audit detail page leaves frontend setup workbench to route data", async () => {
   const source = await readFile(
     "frontend/src/routes/admin/audit/[audit]/+page.svelte",
     "utf8",
   );
-  assert.match(source, /admin-audit-detail-frontend-setup-workbench/);
-  assert.match(source, /admin-audit-frontend-setup-workbench-summary/);
-  assert.match(source, /admin-audit-frontend-setup-workbench-\$\{layout\.viewport\}/);
-  assert.match(source, /frontendSetupWorkbenchReadiness\.proofBoundary/);
+  assert.doesNotMatch(source, /frontendSetupWorkbenchReadiness/);
+  assert.doesNotMatch(source, /nextActionHandoffPair/);
+  assert.match(source, /data\.audit\.artifactSummarySections\?\.length/);
 });
 
 test("admin local next action detail data exposes hosted identity sequence deferral", async () => {

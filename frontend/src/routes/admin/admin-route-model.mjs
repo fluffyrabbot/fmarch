@@ -246,6 +246,102 @@ function buildSingleRowArtifactSummarySection({ id, heading, values }) {
   });
 }
 
+function buildLocalNextActionSummarySections({
+  nextActionHandoffPair,
+  frontendSetupWorkbenchReadiness,
+}) {
+  return Object.freeze([
+    ...nextActionHandoffPairSummarySections(nextActionHandoffPair),
+    ...frontendSetupWorkbenchReadinessSummarySections(
+      frontendSetupWorkbenchReadiness,
+    ),
+  ]);
+}
+
+function nextActionHandoffPairSummarySections(pair) {
+  if (pair === null) {
+    return [];
+  }
+  return [
+    buildArtifactSummarySection({
+      id: "next-action-handoff-pair",
+      heading: "Next action handoff",
+      rows: [
+        {
+          id: "summary",
+          testId: "admin-audit-next-action-handoff-pair-summary",
+          values: [
+            { id: "status", text: pair.status, emphasized: true },
+            { id: "id", text: pair.id },
+            { id: "proofBoundary", text: pair.proofBoundary },
+          ],
+        },
+        ...[
+          pair.defaultSequenceBlocker,
+          pair.hostedIdentityPredicate,
+        ].map((handoff) => ({
+          id: handoff.id,
+          testId: `admin-audit-next-action-handoff-pair-${handoff.id}`,
+          values: [
+            { id: "label", text: handoff.label, emphasized: true },
+            { id: "status", text: handoff.status },
+            { id: "proofId", text: handoff.proofId },
+            { id: "expectedReason", text: handoff.expectedReason },
+            {
+              id: "expectedActionStatus",
+              text: handoff.expectedActionStatus,
+            },
+            { id: "batchLabel", text: handoff.batchLabel },
+            { id: "nextActionPath", text: handoff.nextActionPath },
+            { id: "adminProofPath", text: handoff.adminProofPath },
+          ],
+        })),
+      ],
+    }),
+  ];
+}
+
+function frontendSetupWorkbenchReadinessSummarySections(readiness) {
+  if (readiness.id === "") {
+    return [];
+  }
+  return [
+    buildArtifactSummarySection({
+      id: "frontend-setup-workbench",
+      heading: "Frontend setup workbench",
+      rows: [
+        {
+          id: "summary",
+          testId: "admin-audit-frontend-setup-workbench-summary",
+          values: [
+            { id: "state", text: readiness.state, emphasized: true },
+            { id: "route", text: readiness.route },
+            { id: "localStatus", text: readiness.localStatus },
+            { id: "importedStatus", text: readiness.importedStatus },
+            { id: "proofBoundary", text: readiness.proofBoundary },
+          ],
+        },
+        ...readiness.localViewportLayouts.map((layout) => ({
+          id: layout.viewport,
+          testId: `admin-audit-frontend-setup-workbench-${layout.viewport}`,
+          values: [
+            { id: "viewport", text: layout.viewport, emphasized: true },
+            { id: "layout", text: layout.layout },
+            { id: "slotCount", text: `${layout.slotCount} slots` },
+            {
+              id: "noHorizontalOverflow",
+              text: layout.noHorizontalOverflow
+                ? "no horizontal overflow"
+                : "horizontal overflow",
+            },
+            { id: "screenshot", text: layout.screenshot },
+          ],
+        })),
+      ],
+    }),
+  ];
+}
+
 function hostedReadinessText(value, label) {
   return value === true ? `${label} ready` : `${label} not ready`;
 }
@@ -3334,6 +3430,11 @@ export function normalizeLocalNextActionAudit(nextAction, { game, proofGraph = n
               proofBoundary: String(artifact.proofBoundary ?? ""),
             }),
           ]),
+    artifactSummarySections: buildLocalNextActionSummarySections({
+      nextActionHandoffPair,
+      frontendSetupWorkbenchReadiness:
+        generatedSummary.frontendSetupWorkbenchReadiness,
+    }),
     artifactSummary: Object.freeze({
       command,
       reason,

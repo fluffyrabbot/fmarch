@@ -267,42 +267,6 @@
         {/each}
       </ol>
     {/if}
-    {#if data.audit.artifactSummary?.nextActionHandoffPair}
-      <section
-        class="admin-audit-detail__group"
-        data-testid="admin-audit-detail-next-action-handoff-pair"
-      >
-        <h2>Next action handoff</h2>
-        <ol class="admin-audit-detail__entries">
-          <li
-            class="admin-audit-detail__entry admin-audit-detail__entry--stack"
-            data-testid="admin-audit-next-action-handoff-pair-summary"
-          >
-            <strong>{data.audit.artifactSummary.nextActionHandoffPair.status}</strong>
-            <span>{data.audit.artifactSummary.nextActionHandoffPair.id}</span>
-            <span>{data.audit.artifactSummary.nextActionHandoffPair.proofBoundary}</span>
-          </li>
-          {#each [
-            data.audit.artifactSummary.nextActionHandoffPair.defaultSequenceBlocker,
-            data.audit.artifactSummary.nextActionHandoffPair.hostedIdentityPredicate,
-          ] as handoff}
-            <li
-              class="admin-audit-detail__entry admin-audit-detail__entry--stack"
-              data-testid={`admin-audit-next-action-handoff-pair-${handoff.id}`}
-            >
-              <strong>{handoff.label}</strong>
-              <span>{handoff.status}</span>
-              <span>{handoff.proofId}</span>
-              <span>{handoff.expectedReason}</span>
-              <span>{handoff.expectedActionStatus}</span>
-              <span>{handoff.batchLabel}</span>
-              <span>{handoff.nextActionPath}</span>
-              <span>{handoff.adminProofPath}</span>
-            </li>
-          {/each}
-        </ol>
-      </section>
-    {/if}
     {#if data.audit.batches?.length > 0}
       <section
         class="admin-audit-detail__group"
@@ -361,38 +325,6 @@
               >
                 {prerequisite.roleUrl}
               </a>
-            </li>
-          {/each}
-        </ol>
-      </section>
-    {/if}
-    {#if data.audit.artifactSummary?.frontendSetupWorkbenchReadiness?.id}
-      <section
-        class="admin-audit-detail__group"
-        data-testid="admin-audit-detail-frontend-setup-workbench"
-      >
-        <h2>Frontend setup workbench</h2>
-        <ol class="admin-audit-detail__entries">
-          <li
-            class="admin-audit-detail__entry admin-audit-detail__entry--stack"
-            data-testid="admin-audit-frontend-setup-workbench-summary"
-          >
-            <strong>{data.audit.artifactSummary.frontendSetupWorkbenchReadiness.state}</strong>
-            <span>{data.audit.artifactSummary.frontendSetupWorkbenchReadiness.route}</span>
-            <span>{data.audit.artifactSummary.frontendSetupWorkbenchReadiness.localStatus}</span>
-            <span>{data.audit.artifactSummary.frontendSetupWorkbenchReadiness.importedStatus}</span>
-            <span>{data.audit.artifactSummary.frontendSetupWorkbenchReadiness.proofBoundary}</span>
-          </li>
-          {#each data.audit.artifactSummary.frontendSetupWorkbenchReadiness.localViewportLayouts as layout}
-            <li
-              class="admin-audit-detail__entry admin-audit-detail__entry--stack"
-              data-testid={`admin-audit-frontend-setup-workbench-${layout.viewport}`}
-            >
-              <strong>{layout.viewport}</strong>
-              <span>{layout.layout}</span>
-              <span>{layout.slotCount} slots</span>
-              <span>{layout.noHorizontalOverflow ? "no horizontal overflow" : "horizontal overflow"}</span>
-              <span>{layout.screenshot}</span>
             </li>
           {/each}
         </ol>
