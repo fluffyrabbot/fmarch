@@ -221,6 +221,56 @@ export function completedGameStaleRecoverySpineLaneCase() {
   return { ...cases[0], role: "host" };
 }
 
+export function completedGameHardeningSpineTargetCases() {
+  const laneCasesById = new Map(
+    completedGameHardeningSpineLaneCases().map((scenario) => [
+      scenario.id,
+      scenario,
+    ]),
+  );
+  return [
+    completedGameHardeningSpineTargetCase({
+      laneCasesById,
+      laneId: "stale-host-complete-reload",
+      targetKey: "completedGameStaleRecovery",
+      featureSlotId: "completed-game-stale-recovery",
+    }),
+    completedGameHardeningSpineTargetCase({
+      laneCasesById,
+      laneId: "stale-host-complete-reconnect-recovery",
+      targetKey: "completedGameStaleReconnectRecovery",
+      featureSlotId: "completed-game-stale-reconnect-recovery",
+    }),
+    completedGameHardeningSpineTargetCase({
+      laneCasesById,
+      laneId: "stale-player-complete-reload",
+      targetKey: "completedGameStalePlayerReloadRecovery",
+      featureSlotId: "completed-game-stale-player-reload-recovery",
+    }),
+  ];
+}
+
+function completedGameHardeningSpineTargetCase({
+  laneCasesById,
+  laneId,
+  targetKey,
+  featureSlotId,
+}) {
+  const lane = laneCasesById.get(laneId);
+  if (lane === undefined) {
+    throw new Error(`completed-game hardening spine target drifted: ${laneId}`);
+  }
+  return {
+    targetKey,
+    featureSlotId,
+    roleUrlId: lane.id,
+    checkpointId: lane.id,
+    adminCheckId: lane.id,
+    cycleId: completedGameHardeningSpineCycleId,
+    role: lane.role,
+  };
+}
+
 export function completedHostSeedDemoOnlyScenarioIds() {
   return completedGameHardeningLaneIdsFor({
     families: "completed-host-stale-command",

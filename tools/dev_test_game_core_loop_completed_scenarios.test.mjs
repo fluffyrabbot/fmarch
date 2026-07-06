@@ -42,6 +42,7 @@ import {
   completedGameHardeningLaneCasesFor,
   completedGameHardeningLaneIds,
   completedGameHardeningLaneIdsFor,
+  completedGameHardeningSpineTargetCases,
   completedGameSeedDemoOnlyScenarioIds,
   completedGameSeedRequiredScenarioIds,
   completedHostCompleteRaceHardeningLaneCases,
@@ -309,6 +310,46 @@ test("completed-game scenario module derives shared hardening lane groups", () =
     "stale-player-complete",
     "stale-player-complete-reload",
   ]);
+  assert.deepEqual(
+    completedGameHardeningSpineTargetCases().map((target) => ({
+      targetKey: target.targetKey,
+      featureSlotId: target.featureSlotId,
+      roleUrlId: target.roleUrlId,
+      checkpointId: target.checkpointId,
+      adminCheckId: target.adminCheckId,
+      cycleId: target.cycleId,
+      role: target.role,
+    })),
+    [
+      {
+        targetKey: "completedGameStaleRecovery",
+        featureSlotId: "completed-game-stale-recovery",
+        roleUrlId: "stale-host-complete-reload",
+        checkpointId: "stale-host-complete-reload",
+        adminCheckId: "stale-host-complete-reload",
+        cycleId: "hardening-completed-game",
+        role: "host",
+      },
+      {
+        targetKey: "completedGameStaleReconnectRecovery",
+        featureSlotId: "completed-game-stale-reconnect-recovery",
+        roleUrlId: "stale-host-complete-reconnect-recovery",
+        checkpointId: "stale-host-complete-reconnect-recovery",
+        adminCheckId: "stale-host-complete-reconnect-recovery",
+        cycleId: "hardening-completed-game",
+        role: "host",
+      },
+      {
+        targetKey: "completedGameStalePlayerReloadRecovery",
+        featureSlotId: "completed-game-stale-player-reload-recovery",
+        roleUrlId: "stale-player-complete-reload",
+        checkpointId: "stale-player-complete-reload",
+        adminCheckId: "stale-player-complete-reload",
+        cycleId: "hardening-completed-game",
+        role: "player",
+      },
+    ],
+  );
   assert.deepEqual(completedHostRaceHardeningLaneIds(), [
     "concurrent-host-complete-race",
     "concurrent-host-complete-race-reload",

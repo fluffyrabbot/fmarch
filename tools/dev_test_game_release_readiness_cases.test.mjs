@@ -43,7 +43,7 @@ import {
   completedGameHardeningSpineCycleId,
 } from "./dev_test_game_core_loop_completed_terminal_scenario_assertions.mjs";
 import {
-  completedGameStaleRecoverySpineLaneCase,
+  completedGameHardeningSpineTargetCases,
 } from "./dev_test_game_core_loop_completed_game_proof_readiness_contract.mjs";
 import {
   coreLoopFeatureSpineSourceCheckId,
@@ -467,18 +467,20 @@ test("release readiness buildable cases share next-action commands and spine tar
         coreLoopFeatureSpineTargetRows.completedGameRecovery.adminCheckId,
     },
   );
-  assert.deepEqual(
-    releaseReadinessProductionFeatureSpineTargets.completedGameStaleRecovery,
-    {
-      featureSlotId: "completed-game-stale-recovery",
-      sourceCheckId: hardeningFeatureSpineSourceCheckId,
-      cycleId: completedGameHardeningSpineCycleId,
-      roleUrlId: completedGameStaleRecoverySpineLaneCase().id,
-      rowKind: "checkpoint",
-      checkpointId: completedGameStaleRecoverySpineLaneCase().id,
-      adminCheckId: completedGameStaleRecoverySpineLaneCase().id,
-    },
-  );
+  for (const target of completedGameHardeningSpineTargetCases()) {
+    assert.deepEqual(
+      releaseReadinessProductionFeatureSpineTargets[target.targetKey],
+      {
+        featureSlotId: target.featureSlotId,
+        sourceCheckId: hardeningFeatureSpineSourceCheckId,
+        cycleId: completedGameHardeningSpineCycleId,
+        roleUrlId: target.roleUrlId,
+        rowKind: "checkpoint",
+        checkpointId: target.checkpointId,
+        adminCheckId: target.adminCheckId,
+      },
+    );
+  }
   assert.deepEqual(
     releaseReadinessProductionFeatureSpineTargets.replacementStaleConflictMessage,
     {
@@ -620,14 +622,13 @@ test("release readiness buildable cases share next-action commands and spine tar
 
 test("scenario-owned production feature targets derive proof row ids from source cases", () => {
   const scenarioOwnedTargets = [
-    {
-      target: releaseReadinessProductionFeatureSpineTargets
-        .completedGameStaleRecovery,
+    ...completedGameHardeningSpineTargetCases().map((target) => ({
+      target: releaseReadinessProductionFeatureSpineTargets[target.targetKey],
       source: {
         cycleId: completedGameHardeningSpineCycleId,
-        rowId: completedGameStaleRecoverySpineLaneCase().id,
+        rowId: target.roleUrlId,
       },
-    },
+    })),
     {
       target: releaseReadinessProductionFeatureSpineTargets
         .replacementStaleConflictMessage,

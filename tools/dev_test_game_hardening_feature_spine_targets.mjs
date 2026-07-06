@@ -2,8 +2,7 @@ import {
   devTestGameHardeningAdminProofPath,
 } from "./dev_test_game_local_admin_proof_paths.mjs";
 import {
-  completedGameHardeningSpineCycleId,
-  completedGameStaleRecoverySpineLaneCase,
+  completedGameHardeningSpineTargetCases,
 } from "./dev_test_game_core_loop_completed_game_proof_readiness_contract.mjs";
 import {
   replacementStaleConflictMessageSpineLaneCase,
@@ -39,8 +38,23 @@ export const hardeningFeatureSpineCycleIds = Object.freeze({
   reconnectRecovery: "hardening-reconnect-recovery",
   concurrentRace: "hardening-concurrent-race",
 });
-const completedGameStaleRecoverySpineLane =
-  completedGameStaleRecoverySpineLaneCase();
+const completedGameHardeningSpineTargets =
+  completedGameHardeningSpineTargetCases();
+const completedGameHardeningFeatureSpineTargetRows = Object.freeze(
+  Object.fromEntries(
+    completedGameHardeningSpineTargets.map((target) => [
+      target.targetKey,
+      Object.freeze({
+        featureSlotId: target.featureSlotId,
+        sourceCheckId: hardeningFeatureSpineSourceCheckId,
+        cycleId: target.cycleId,
+        roleUrlId: target.roleUrlId,
+        checkpointId: target.checkpointId,
+        adminCheckId: target.adminCheckId,
+      }),
+    ]),
+  ),
+);
 const replacementStaleConflictMessageSpineLane =
   replacementStaleConflictMessageSpineLaneCase();
 const hostResolveRaceSpineLane = hostResolveRaceScenario();
@@ -97,14 +111,7 @@ const replacementRaceReloadHardeningFeatureSpineTargetRows = Object.freeze(
   ),
 );
 export const hardeningFeatureSpineTargetRows = Object.freeze({
-  completedGameStaleRecovery: Object.freeze({
-    featureSlotId: "completed-game-stale-recovery",
-    sourceCheckId: hardeningFeatureSpineSourceCheckId,
-    cycleId: completedGameHardeningSpineCycleId,
-    roleUrlId: completedGameStaleRecoverySpineLane.id,
-    checkpointId: completedGameStaleRecoverySpineLane.id,
-    adminCheckId: completedGameStaleRecoverySpineLane.id,
-  }),
+  ...completedGameHardeningFeatureSpineTargetRows,
   replacementStaleConflictMessage: Object.freeze({
     featureSlotId: "replacement-stale-conflict-message",
     sourceCheckId: hardeningFeatureSpineSourceCheckId,

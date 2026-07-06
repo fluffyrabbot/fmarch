@@ -106,6 +106,7 @@ import {
 import {
   completedGameHardeningSpineCycleId,
   completedGameHardeningSpineLaneCases,
+  completedGameHardeningSpineTargetCases,
   completedGameStaleRecoverySpineLaneCase,
 } from "./dev_test_game_core_loop_completed_terminal_scenario_assertions.mjs";
 import {
@@ -506,6 +507,34 @@ test("hardening lane cases share completed-game spine rows", () => {
       id: "stale-host-complete-reload",
       role: "host",
     },
+  );
+  assert.deepEqual(
+    completedGameHardeningSpineTargetCases().map((target) => [
+      target.targetKey,
+      target.featureSlotId,
+      target.roleUrlId,
+      target.role,
+    ]),
+    [
+      [
+        "completedGameStaleRecovery",
+        "completed-game-stale-recovery",
+        "stale-host-complete-reload",
+        "host",
+      ],
+      [
+        "completedGameStaleReconnectRecovery",
+        "completed-game-stale-reconnect-recovery",
+        "stale-host-complete-reconnect-recovery",
+        "host",
+      ],
+      [
+        "completedGameStalePlayerReloadRecovery",
+        "completed-game-stale-player-reload-recovery",
+        "stale-player-complete-reload",
+        "player",
+      ],
+    ],
   );
 });
 

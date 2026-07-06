@@ -30,6 +30,7 @@ export {
   completedGameHardeningLaneCases,
   completedGameHardeningLaneIdsFor,
   completedGameHardeningLaneIds,
+  completedGameHardeningSpineTargetCases,
   completedGameRaceCoverageCellCases,
   completedGameRaceCoverageCellDefinitions,
   completedGameRaceCoverageCellIds,
