@@ -144,6 +144,103 @@ export function proofGraphProductionFeatureDestinationSummary(
   });
 }
 
+export function proofGraphProductionFeatureProvenanceComparison({
+  manifestSummary,
+  destinationSummary,
+  destinations,
+}) {
+  const destinationGroups = productionFeatureDestinationGroups({
+    destinationSummary,
+    destinations,
+  });
+  const manifestGroups = Array.isArray(manifestSummary?.sourceCheckGroups)
+    ? manifestSummary.sourceCheckGroups
+    : [];
+  const allSourceCheckIds = Array.from(
+    new Set([
+      ...manifestGroups.map((group) => String(group.sourceCheckId ?? "")),
+      ...destinationGroups.map((group) => String(group.sourceCheckId ?? "")),
+    ]),
+  )
+    .filter((sourceCheckId) => sourceCheckId !== "")
+    .sort();
+  const sourceCheckGroups = allSourceCheckIds.map((sourceCheckId) => {
+    const manifestGroup =
+      manifestGroups.find((group) => group.sourceCheckId === sourceCheckId) ??
+      {};
+    const destinationGroup =
+      destinationGroups.find((group) => group.sourceCheckId === sourceCheckId) ??
+      {};
+    const manifestFeatureSlotIds = sortedStrings(
+      manifestGroup.featureSlotIds ?? [],
+    );
+    const destinationFeatureSlotIds = sortedStrings(
+      destinationGroup.featureSlotIds ?? [],
+    );
+    const manifestProofArtifacts = sortedStrings(
+      manifestGroup.selectedProofArtifacts ?? [],
+    );
+    const destinationProofArtifacts = sortedStrings(
+      destinationGroup.selectedProofArtifacts ?? [],
+    );
+    const matched =
+      sameStrings(manifestFeatureSlotIds, destinationFeatureSlotIds) &&
+      sameStrings(manifestProofArtifacts, destinationProofArtifacts);
+    return Object.freeze({
+      sourceCheckId,
+      status: matched ? "matched" : "drift",
+      manifestFeatureCount: manifestFeatureSlotIds.length,
+      destinationFeatureCount: destinationFeatureSlotIds.length,
+      manifestFeatureSlotIds: Object.freeze(manifestFeatureSlotIds),
+      destinationFeatureSlotIds: Object.freeze(destinationFeatureSlotIds),
+      manifestProofArtifacts: Object.freeze(manifestProofArtifacts),
+      destinationProofArtifacts: Object.freeze(destinationProofArtifacts),
+    });
+  });
+  const manifestFeatureCount = Number(manifestSummary?.featureCount ?? 0);
+  const destinationFeatureCount = Number(
+    destinationSummary?.totalDestinationCount ?? 0,
+  );
+  const driftCount = sourceCheckGroups.filter(
+    (group) => group.status !== "matched",
+  ).length;
+  return Object.freeze({
+    status:
+      manifestSummary?.status === "passed" &&
+      destinationSummary?.status === "passed" &&
+      manifestFeatureCount === destinationFeatureCount &&
+      driftCount === 0
+        ? "passed"
+        : "drift",
+    manifestFeatureCount,
+    destinationFeatureCount,
+    manifestSourceCheckCount: Number(manifestSummary?.sourceCheckCount ?? 0),
+    destinationSourceCheckCount: destinationGroups.length,
+    driftCount,
+    sourceCheckGroups: Object.freeze(sourceCheckGroups),
+  });
+}
+
+export function assertProofGraphProductionFeatureProvenanceComparison(
+  comparison,
+  { manifestSummary, destinationSummary, destinations, requirePassed = false } = {},
+) {
+  const expected = proofGraphProductionFeatureProvenanceComparison({
+    manifestSummary,
+    destinationSummary,
+    destinations,
+  });
+  if (JSON.stringify(comparison ?? null) !== JSON.stringify(expected)) {
+    throw new Error("proof graph production feature provenance comparison drifted");
+  }
+  if (requirePassed && comparison.status !== "passed") {
+    throw new Error(
+      `proof graph production feature provenance comparison is ${comparison.status}`,
+    );
+  }
+  return comparison;
+}
+
 function roleUrlDestinationStatus(destination) {
   return [
     `roleUrl ${destination.roleUrl}`,
@@ -172,6 +269,49 @@ function hostedEvidenceProgressionDestinationStatus(progression) {
     `firstMissingCheckId ${progression.firstMissingCheckId}`,
     `proofBoundary ${progression.proofBoundary}`,
   ].join("\n");
+}
+
+function productionFeatureDestinationGroups({ destinationSummary, destinations }) {
+  const groups = new Map();
+  const rows = Array.isArray(destinations) ? destinations : destinationSummary?.rows;
+  for (const row of rows ?? []) {
+    const linkId = String(row.linkId ?? row.id ?? "");
+    if (!linkId.startsWith("production-feature:")) {
+      continue;
+    }
+    const sourceCheckId = String(row.sourceCheckId ?? "");
+    if (sourceCheckId === "") {
+      continue;
+    }
+    const group = groups.get(sourceCheckId) ?? {
+      sourceCheckId,
+      featureSlotIds: [],
+      selectedProofArtifacts: [],
+    };
+    group.featureSlotIds.push(String(row.featureSlotId ?? ""));
+    group.selectedProofArtifacts.push(String(row.sourceProofArtifact ?? ""));
+    groups.set(sourceCheckId, group);
+  }
+  return Array.from(groups.values())
+    .map((group) => ({
+      sourceCheckId: group.sourceCheckId,
+      featureSlotIds: sortedStrings(group.featureSlotIds),
+      selectedProofArtifacts: sortedStrings(group.selectedProofArtifacts),
+    }))
+    .sort((left, right) => left.sourceCheckId.localeCompare(right.sourceCheckId));
+}
+
+function sortedStrings(values) {
+  return Array.from(new Set(values.map((value) => String(value ?? ""))))
+    .filter((value) => value !== "")
+    .sort();
+}
+
+function sameStrings(left, right) {
+  return (
+    left.length === right.length &&
+    left.every((value, index) => value === right[index])
+  );
 }
 
 function productionFeatureTargetNodes(proofGraph) {

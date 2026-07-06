@@ -37,7 +37,10 @@ import {
   hostedIdentityOperatorDependencyProofGraphNodes,
 } from "./dev_test_game_hosted_identity_proof_graph_dependency.mjs";
 import {
+  assertProofGraphProductionFeatureProvenanceComparison,
   proofGraphProductionFeatureDestinationSummary,
+  proofGraphProductionFeatureProvenanceComparison,
+  proofGraphProductionFeatureTargetDestinations,
 } from "./dev_test_game_proof_graph_production_feature_destinations.mjs";
 import {
   productionFeatureGraphSourceNodeId as productionFeatureSourceGraphNodeId,
@@ -202,6 +205,18 @@ export function buildDevTestGameProofGraph(
     replacementPrivateRecoveryReceipt:
       replacementPrivateRecoveryReceiptEvidence,
   });
+  const productionFeatureTargetDestinations =
+    proofGraphProductionFeatureTargetDestinations({ nodes });
+  const productionFeatureDestinationSummary =
+    proofGraphProductionFeatureDestinationSummary({
+      nodes,
+    });
+  const productionFeatureProvenanceComparison =
+    proofGraphProductionFeatureProvenanceComparison({
+      manifestSummary: manifest.productionFeatureProvenanceSummary,
+      destinationSummary: productionFeatureDestinationSummary,
+      destinations: productionFeatureTargetDestinations,
+    });
   const evidence = {
     version: DEV_TEST_GAME_PROOF_GRAPH_VERSION,
     proof: "dev-test-game-proof-graph",
@@ -239,6 +254,8 @@ export function buildDevTestGameProofGraph(
         ? {}
         : { nextActionGeneratedAt: nextActionEvidence.generatedAt }),
       releaseReadinessGeneratedAt: releaseReadinessChecklist.generatedAt,
+      manifestProductionFeatureProvenanceSummary:
+        manifest.productionFeatureProvenanceSummary,
     },
     summary: {
       nodeCount: nodes.length,
@@ -251,10 +268,8 @@ export function buildDevTestGameProofGraph(
       productionFeatureTargetCount: nodes.filter(
         (node) => node.kind === "production-feature-spine-target",
       ).length,
-      productionFeatureDestinationSummary:
-        proofGraphProductionFeatureDestinationSummary({
-          nodes,
-        }),
+      productionFeatureDestinationSummary,
+      productionFeatureProvenanceComparison,
       diagnosticProofSummary: buildProofGraphDiagnosticProofSummary({ nodes }),
       coreLoopScenarioFamilyCount: nodes.filter(
         (node) => node.kind === "core-loop-scenario-family",
@@ -318,6 +333,15 @@ export function assertDevTestGameProofGraph(
   ) {
     throw new Error("proof graph production feature target count drifted");
   }
+  assertProofGraphProductionFeatureProvenanceComparison(
+    evidence.summary?.productionFeatureProvenanceComparison,
+    {
+      manifestSummary:
+        evidence.generatedFrom?.manifestProductionFeatureProvenanceSummary,
+      destinationSummary: evidence.summary?.productionFeatureDestinationSummary,
+      destinations: proofGraphProductionFeatureTargetDestinations(evidence),
+    },
+  );
   for (const node of evidence.nodes) {
     if (typeof node.id !== "string" || node.id.trim() === "") {
       throw new Error("proof graph node is missing an id");

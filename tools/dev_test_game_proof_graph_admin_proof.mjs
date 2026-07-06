@@ -5,6 +5,7 @@ import {
   coreLoopScenarioFamilyRows,
 } from "./dev_test_game_core_loop_generated_from_families.mjs";
 import {
+  assertProofGraphProductionFeatureProvenanceComparison,
   proofGraphProductionFeatureTargetDestinations,
 } from "./dev_test_game_proof_graph_production_feature_destinations.mjs";
 import { validateDevTestGameAdminSpineProof } from "./dev_test_game_release_readiness.mjs";
@@ -233,6 +234,11 @@ export function proofGraphAdminProofCase() {
           proofGraphProductionFeatureTargetDestinations(source.proofGraph),
         productionFeatureDestinationSummary:
           source.proofGraph.summary.productionFeatureDestinationSummary,
+        manifestProductionFeatureProvenanceSummary:
+          source.proofGraph.generatedFrom
+            ?.manifestProductionFeatureProvenanceSummary,
+        productionFeatureProvenanceComparison:
+          source.proofGraph.summary.productionFeatureProvenanceComparison,
         diagnosticProofSummary: normalizeProofGraphDiagnosticProofSummary(
           source.proofGraph.summary?.diagnosticProofSummary,
           { nodes: source.proofGraph.nodes },
@@ -321,11 +327,29 @@ export function assertProofGraphAdminProof(evidence) {
   assertProofGraphAdminProofCoversCoreLoopScenarioFamilies(evidence);
   assertProofGraphAdminProofCoversProductionFeatureDestinations(evidence);
   assertProofGraphAdminProofCoversProductionFeatureDestinationSummary(evidence);
+  assertProofGraphAdminProofCoversProductionFeatureProvenanceComparison(evidence);
   assertProofGraphAdminProofCoversDiagnosticProofSummary(evidence);
   for (const featureTargetCase of proofGraphAdminFeatureTargetCases) {
     assertProofGraphAdminProofCoversFeatureTarget(evidence, featureTargetCase);
   }
   return evidence;
+}
+
+function assertProofGraphAdminProofCoversProductionFeatureProvenanceComparison(
+  evidence,
+) {
+  assertProofGraphProductionFeatureProvenanceComparison(
+    evidence.generatedFrom?.productionFeatureProvenanceComparison,
+    {
+      manifestSummary:
+        evidence.generatedFrom?.manifestProductionFeatureProvenanceSummary,
+      destinationSummary:
+        evidence.generatedFrom?.productionFeatureDestinationSummary,
+      destinations:
+        evidence.generatedFrom?.productionFeatureTargetDestinations ?? [],
+      requirePassed: true,
+    },
+  );
 }
 
 function assertProofGraphAdminProofCoversDiagnosticProofSummary(evidence) {

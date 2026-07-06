@@ -589,6 +589,7 @@ import {
 } from "./dev_test_game_proof_graph_admin_proof.mjs";
 import {
   proofGraphProductionFeatureDestinationSummary,
+  proofGraphProductionFeatureProvenanceComparison,
 } from "./dev_test_game_proof_graph_production_feature_destinations.mjs";
 import {
   buildProofGraphDestinationSummaryTrace,
@@ -5577,6 +5578,26 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
       },
     }),
   );
+  assert.deepEqual(
+    graph.generatedFrom.manifestProductionFeatureProvenanceSummary,
+    spineManifest.productionFeatureProvenanceSummary,
+  );
+  assert.deepEqual(
+    graph.summary.productionFeatureProvenanceComparison,
+    proofGraphProductionFeatureProvenanceComparison({
+      manifestSummary: spineManifest.productionFeatureProvenanceSummary,
+      destinationSummary: graph.summary.productionFeatureDestinationSummary,
+      destinations: graph.nodes
+        .filter((node) => node.kind === "production-feature-spine-target")
+        .map((node) => ({
+          linkId: node.id,
+          featureSlotId: node.featureSlotId,
+          sourceCheckId: node.sourceCheckId,
+          sourceProofArtifact: node.sourceProofArtifact,
+        })),
+    }),
+  );
+  assert.equal(graph.summary.productionFeatureProvenanceComparison.status, "passed");
   assert.deepEqual(
     graph.summary.productionFeatureDestinationSummary
       .hostedEvidenceProgressionSummary,
@@ -21510,6 +21531,14 @@ function proofGraphAdminProofFixture() {
     proofGraphProductionFeatureDestinationSummaryFixture(
       productionFeatureTargetDestinations,
     );
+  const manifestProductionFeatureProvenanceSummary =
+    productionFeatureProvenanceSummaryFixture(productionFeatureTargetDestinations);
+  const productionFeatureProvenanceComparison =
+    proofGraphProductionFeatureProvenanceComparison({
+      manifestSummary: manifestProductionFeatureProvenanceSummary,
+      destinationSummary: productionFeatureDestinationSummary,
+      destinations: productionFeatureTargetDestinations,
+    });
   const coreLoopFamilyDestinations =
     proofGraphCoreLoopScenarioFamilyDestinationsFixture();
   const evidenceObjectRowIds = [
@@ -21586,6 +21615,8 @@ function proofGraphAdminProofFixture() {
       coreLoopScenarioFamilyDestinations: coreLoopFamilyDestinations,
       productionFeatureTargetDestinations,
       productionFeatureDestinationSummary,
+      manifestProductionFeatureProvenanceSummary,
+      productionFeatureProvenanceComparison,
       diagnosticProofSummary,
       hostSetupFeatureTarget: hostSetupGraphTarget,
       cohostFeatureTarget: cohostGraphTarget,
@@ -21955,6 +21986,44 @@ function proofGraphProductionFeatureDestinationSummaryFixture(destinations) {
       productionFeatureTargetCount: destinations.length,
     },
   });
+}
+
+function productionFeatureProvenanceSummaryFixture(destinations) {
+  const sourceCheckGroups = Array.from(
+    destinations
+      .reduce((groups, destination) => {
+        const group = groups.get(destination.sourceCheckId) ?? {
+          sourceCheckId: destination.sourceCheckId,
+          featureSlotIds: [],
+          selectedProofArtifacts: [],
+        };
+        group.featureSlotIds.push(destination.featureSlotId);
+        group.selectedProofArtifacts.push(destination.sourceProofArtifact);
+        groups.set(destination.sourceCheckId, group);
+        return groups;
+      }, new Map())
+      .values(),
+  )
+    .map((group) => ({
+      sourceCheckId: group.sourceCheckId,
+      featureCount: group.featureSlotIds.length,
+      featureSlotIds: uniqueSortedStrings(group.featureSlotIds),
+      selectedProofArtifacts: uniqueSortedStrings(group.selectedProofArtifacts),
+    }))
+    .sort((left, right) => left.sourceCheckId.localeCompare(right.sourceCheckId));
+  return {
+    status: "passed",
+    featureCount: destinations.length,
+    sourceCheckCount: sourceCheckGroups.length,
+    selectedProofArtifacts: uniqueSortedStrings(
+      destinations.map((destination) => destination.sourceProofArtifact),
+    ),
+    sourceCheckGroups,
+  };
+}
+
+function uniqueSortedStrings(values) {
+  return Array.from(new Set(values)).sort();
 }
 
 function hostedHandoffInputIdsFixture() {
