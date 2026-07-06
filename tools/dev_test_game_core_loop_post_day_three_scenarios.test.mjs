@@ -140,6 +140,7 @@ test("post-Day 3 resolution assertion delegates receipts, host advance, and Nigh
       expectedPhaseId: "N03",
       expectedPhaseState: "open",
       expectedRefreshKeys: [],
+      sourceRoleUrl: "http://127.0.0.1:5173/g/game-a/host",
       includeEvidenceInError: false,
     },
   ]);

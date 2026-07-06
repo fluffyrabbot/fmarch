@@ -590,6 +590,8 @@ test("Day 4 no-lynch host transition assertion covers shared projections", () =>
     },
     resolveProof: {
       ...hostPhaseTransitionProofFixture({
+        sourceRoleUrl: "http://127.0.0.1:5173/g/game-a/host",
+        visitedRolePath: "/g/game-a/host",
         actionId: "resolve_phase",
         commandKind: "ResolvePhase",
         streamSeq: 913,
@@ -605,6 +607,8 @@ test("Day 4 no-lynch host transition assertion covers shared projections", () =>
       ],
     },
     advanceProof: hostPhaseTransitionProofFixture({
+      sourceRoleUrl: "http://127.0.0.1:5173/g/game-a/host",
+      visitedRolePath: "/g/game-a/host",
       actionId: "advance_phase",
       commandKind: "AdvancePhase",
       streamSeq: 914,

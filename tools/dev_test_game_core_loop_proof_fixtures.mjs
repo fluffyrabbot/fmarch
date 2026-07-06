@@ -194,13 +194,15 @@ export function seededCoreLoopHostSurfaceFixture({
   setupSnapshotHost,
   ...proofs
 }) {
+  const sourceRoleUrl = seededCoreLoopRoleUrl({ game, suffix: "/host" });
+  const visitedRolePath = seededCoreLoopRolePath({ game, suffix: "/host" });
   const surface = {
     status: "passed",
-    sourceRoleUrl: seededCoreLoopRoleUrl({ game, suffix: "/host" }),
-    visitedRolePath: seededCoreLoopRolePath({ game, suffix: "/host" }),
+    sourceRoleUrl,
+    visitedRolePath,
     surfaceTestId: "host-console-surface",
     clickedThroughFromRoleUrl: true,
-    ...proofs,
+    ...hostProofsWithRoleUrls(proofs, { sourceRoleUrl, visitedRolePath }),
     rawInviteTokensVisible: false,
     releaseReady: false,
     productionReady: false,
@@ -219,6 +221,31 @@ export function seededCoreLoopHostSurfaceFixture({
     };
   }
   return surface;
+}
+
+function hostProofsWithRoleUrls(proofs, { sourceRoleUrl, visitedRolePath }) {
+  return Object.fromEntries(
+    Object.entries(proofs).map(([key, proof]) => [
+      key,
+      hostProofWithRoleUrl(proof, { sourceRoleUrl, visitedRolePath }),
+    ]),
+  );
+}
+
+function hostProofWithRoleUrl(proof, { sourceRoleUrl, visitedRolePath }) {
+  if (
+    proof === null ||
+    typeof proof !== "object" ||
+    proof.status !== "passed" ||
+    proof.commandKind === undefined
+  ) {
+    return proof;
+  }
+  return {
+    sourceRoleUrl,
+    visitedRolePath,
+    ...proof,
+  };
 }
 
 export function seededCoreLoopRoleUrl({ game, suffix = "" }) {

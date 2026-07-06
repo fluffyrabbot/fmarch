@@ -377,12 +377,14 @@ export function assertDayFiveNoLynchHostTransitionProofCase({
     proof: proof.resolveProof,
     expectedGame,
     ...hostCase.resolveCase,
+    sourceRoleUrl,
     includeEvidenceInError,
   });
   assertHostPhaseTransitionActionProof({
     proof: proof.advanceProof,
     expectedGame,
     ...hostCase.advanceCase,
+    sourceRoleUrl,
     includeEvidenceInError,
   });
   if (

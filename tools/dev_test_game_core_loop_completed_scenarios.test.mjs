@@ -1598,6 +1598,7 @@ test("completed-game scenario module asserts host complete-game proof shell", ()
       expectedPhaseState: "open",
       expectedDeadlineAffordance: "none",
       expectedRefreshKeys: [],
+      sourceRoleUrl: "http://127.0.0.1/g/game-a/host",
     },
   ]);
 });

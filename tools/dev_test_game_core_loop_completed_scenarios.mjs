@@ -179,6 +179,7 @@ export function assertHostCompleteGameProofCase({
     proof: proof.completeProof,
     expectedGame,
     ...hostCompleteGameCommandFacts(),
+    sourceRoleUrl,
     streamSeq: 921,
     expectedPhaseId: "N05",
     expectedPhaseState: "open",

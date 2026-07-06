@@ -166,6 +166,7 @@ function assertPostDayThreeHostAdvanceProofCase({
     proof: proof.advanceProof,
     expectedGame,
     ...hostCase.advanceCase,
+    sourceRoleUrl,
     includeEvidenceInError,
   });
 }

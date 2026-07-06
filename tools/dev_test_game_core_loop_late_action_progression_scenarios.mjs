@@ -389,6 +389,7 @@ export function assertNightFourHostResolutionProofCase({
     proof: proof.resolveProof,
     expectedGame,
     ...hostCase.resolveCase,
+    sourceRoleUrl,
     includeEvidenceInError,
   });
 }

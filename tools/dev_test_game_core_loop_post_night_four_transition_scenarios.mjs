@@ -198,6 +198,7 @@ function assertPostNightFourHostAdvanceProofCase({
     proof: proof.advanceProof,
     expectedGame,
     ...surfaceCase.hostAdvanceCase,
+    sourceRoleUrl,
     includeEvidenceInError,
   });
   if (

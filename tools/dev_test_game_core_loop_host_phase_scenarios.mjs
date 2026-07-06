@@ -390,12 +390,14 @@ export function assertDayFourNoLynchHostTransitionProofCase({
     proof: proof.resolveProof,
     expectedGame,
     ...transitionCase.resolveCase,
+    sourceRoleUrl,
     includeEvidenceInError,
   });
   assertHostPhaseTransitionActionProof({
     proof: proof.advanceProof,
     expectedGame,
     ...transitionCase.advanceCase,
+    sourceRoleUrl,
     includeEvidenceInError,
   });
   if (
@@ -472,12 +474,14 @@ export function assertEmptyNightThreeHostTransitionProofCase({
     proof: proof.resolveProof,
     expectedGame,
     ...transitionCase.resolveCase,
+    sourceRoleUrl,
     includeEvidenceInError,
   });
   assertHostPhaseTransitionActionProof({
     proof: proof.advanceProof,
     expectedGame,
     ...transitionCase.advanceCase,
+    sourceRoleUrl,
     includeEvidenceInError,
   });
 }
