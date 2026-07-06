@@ -650,6 +650,10 @@ import {
   proofGraphAdminProofEnvOverrides,
 } from "./dev_test_game_proof_graph_admin_proof.mjs";
 import {
+  assertProofGraphClickCoverage,
+  buildProofGraphClickCoverageInventory,
+} from "./dev_test_game_proof_graph_click_coverage.mjs";
+import {
   proofGraphAdminProofDescriptor,
 } from "./dev_test_game_proof_graph_admin_proof_descriptor.mjs";
 import {
@@ -8094,6 +8098,69 @@ test("admin proof fixtures prove normalized evidence object rows", () => {
   assert.equal(
     validateDevTestGameProofGraphAdminProof(preTerminalProofGraphProof).status,
     "passed",
+  );
+});
+
+test("proof graph click coverage inventory requires clicked artifact rows", () => {
+  const proof = assertProofGraphAdminProof(proofGraphAdminProofFixture());
+  const inventory = buildProofGraphClickCoverageInventory(proof);
+  assert.deepEqual(
+    inventory.families.map((family) => [
+      family.id,
+      family.visibleRowsKey,
+      family.expectedArtifactsKey,
+      family.visibleArtifactsKey,
+      family.status,
+      family.expectedArtifactCount,
+      family.clickedArtifactCount,
+    ]),
+    [
+      [
+        "proof-graph-prerequisite-destinations",
+        "visibleProofGraphPrerequisiteDestinations",
+        "proofGraphPrerequisiteDestinationArtifacts",
+        "visibleProofGraphPrerequisiteDestinationArtifacts",
+        "passed",
+        4,
+        4,
+      ],
+      [
+        "proof-graph-core-loop-recovery-destinations",
+        "visibleProofGraphCoreLoopRecoveryDestinations",
+        "coreLoopRecoveryDestinationArtifacts",
+        "visibleProofGraphCoreLoopRecoveryDestinationArtifacts",
+        "passed",
+        5,
+        5,
+      ],
+      [
+        "production-feature-destination-summaries",
+        "visibleProductionFeatureDestinationSummaries",
+        "productionFeatureDestinationArtifacts",
+        "visibleProductionFeatureDestinationArtifacts",
+        "passed",
+        16,
+        16,
+      ],
+    ],
+  );
+  const missingClickProof = structuredClone(proof);
+  missingClickProof.adminRoleSurface.visibleProductionFeatureDestinationArtifacts =
+    missingClickProof.adminRoleSurface.visibleProductionFeatureDestinationArtifacts.slice(
+      1,
+    );
+  assert.throws(
+    () => assertProofGraphClickCoverage(missingClickProof),
+    /proof graph artifact click coverage missing: production-feature-destination-summaries/,
+  );
+  const missingRowProof = structuredClone(proof);
+  missingRowProof.adminRoleSurface.visibleProofGraphCoreLoopRecoveryDestinations =
+    missingRowProof.adminRoleSurface.visibleProofGraphCoreLoopRecoveryDestinations.slice(
+      1,
+    );
+  assert.throws(
+    () => assertProofGraphClickCoverage(missingRowProof),
+    /proof graph artifact click coverage missing: proof-graph-core-loop-recovery-destinations/,
   );
 });
 

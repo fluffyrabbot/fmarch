@@ -2,6 +2,9 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { assertDevTestGameProofGraph } from "./dev_test_game_proof_graph.mjs";
 import {
+  assertProofGraphClickCoverage,
+} from "./dev_test_game_proof_graph_click_coverage.mjs";
+import {
   proofGraphCoreLoopScenarioFamilyDestinations,
   proofGraphCoreLoopScenarioFamilyNodes,
 } from "./dev_test_game_proof_graph_core_loop_scenario_families.mjs";
@@ -527,6 +530,7 @@ export function assertProofGraphAdminProof(evidence) {
     expectedArtifacts: evidence.generatedFrom?.productionFeatureDestinationArtifacts,
     proofName: "proof graph admin proof",
   });
+  assertProofGraphClickCoverage(evidence);
   assertProofGraphAdminProofCoversProductionFeatureProvenanceComparison(evidence);
   assertProofGraphAdminProofCoversDiagnosticProofSummary(evidence);
   assertProofGraphAdminProofCoversPhaseLocalNextActionGraphLinks(evidence);
