@@ -166,6 +166,7 @@ import {
   recoveryReceiptGraphDescriptors,
 } from "./dev_test_game_recovery_receipt_catalog.mjs";
 import {
+  hostedEvidenceOperatorChecklistNextActionPath,
   hostedIdentityNextActionAdminProofPath,
   hostedIdentityNextActionPath,
   nextActionAdminProofCommand,
@@ -197,6 +198,7 @@ import { repoRoot } from "./dev_test_game_spine_runner.mjs";
 export const DEV_TEST_GAME_SPINE_MANIFEST_VERSION = 1;
 
 export {
+  hostedEvidenceOperatorChecklistNextActionPath,
   hostedIdentityNextActionAdminProofPath,
   hostedIdentityNextActionPath,
   nextActionAdminProofCommand,

@@ -1,4 +1,5 @@
 export {
+  hostedEvidenceOperatorChecklistNextActionPath,
   hostedIdentityNextActionAdminProofPath,
   hostedIdentityNextActionPath,
   nextActionAdminProofPath,

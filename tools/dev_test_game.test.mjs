@@ -344,6 +344,7 @@ import {
   buildDevTestGameSpineManifest,
   hostedIdentityNextActionAdminProofPath,
   hostedIdentityNextActionPath,
+  hostedEvidenceOperatorChecklistNextActionPath,
   nextActionAdminProofCommand,
   nextActionAdminProofPath,
   nextActionCommand,
@@ -1495,6 +1496,7 @@ test("dev test-game spine orchestrators expose stable proof order and env maps",
       devTestGameReleaseReadinessScript,
       "tools/dev_test_game_spine_manifest.mjs",
       "tools/dev_test_game_next_action.mjs",
+      "tools/dev_test_game_next_action.mjs",
       "tools/dev_test_game_hosted_evidence_operator_checklist_admin_proof.mjs",
       "tools/dev_test_game_proof_graph.mjs",
       "terminal-admin-proof-batch",
@@ -1525,20 +1527,33 @@ test("dev test-game spine orchestrators expose stable proof order and env maps",
   });
   assert.deepEqual(devTestGameAdminSpinePlan[20], {
     kind: "node",
-    script: "tools/dev_test_game_hosted_evidence_operator_checklist_admin_proof.mjs",
+    script: "tools/dev_test_game_next_action.mjs",
+    env: {
+      FMARCH_DEV_TEST_GAME_NEXT_ACTION:
+        hostedEvidenceOperatorChecklistNextActionPath,
+    },
   });
-  assert.deepEqual(devTestGameAdminSpinePlan[22], {
+  assert.deepEqual(devTestGameAdminSpinePlan[21], {
+    kind: "node",
+    script: "tools/dev_test_game_hosted_evidence_operator_checklist_admin_proof.mjs",
+    env: {
+      FMARCH_DEV_TEST_GAME_NEXT_ACTION:
+        hostedEvidenceOperatorChecklistNextActionPath,
+    },
+  });
+  assert.deepEqual(devTestGameAdminSpinePlan[23], {
     kind: "custom",
     script: "terminal-admin-proof-batch",
     label: "Terminal admin proof batch",
   });
-  assert.deepEqual(devTestGameAdminSpinePlan[23], {
+  assert.deepEqual(devTestGameAdminSpinePlan[24], {
     kind: "node",
     script: devTestGameReleaseReadinessScript,
     readinessReason: "terminal-graph-and-local-dependency-surfaces",
     changedInputs: [
       spineManifestPath,
       nextActionPath,
+      hostedEvidenceOperatorChecklistNextActionPath,
       devTestGameHostedEvidenceOperatorChecklistProofPath,
       devTestGameHostedEvidenceOperatorChecklistAdminProofPath,
       devTestGameProofGraphPath,
@@ -1548,7 +1563,7 @@ test("dev test-game spine orchestrators expose stable proof order and env maps",
     ],
     env: adminSpineReadinessEvidenceEnv,
   });
-  assert.deepEqual(devTestGameAdminSpinePlan[24], {
+  assert.deepEqual(devTestGameAdminSpinePlan[25], {
     kind: "node",
     script: "tools/dev_test_game_next_action.mjs",
     env: {
@@ -1556,21 +1571,21 @@ test("dev test-game spine orchestrators expose stable proof order and env maps",
       FMARCH_DEV_TEST_GAME_NEXT_ACTION: hostedIdentityNextActionPath,
     },
   });
-  assert.deepEqual(devTestGameAdminSpinePlan[25], {
+  assert.deepEqual(devTestGameAdminSpinePlan[26], {
     kind: "custom",
     script: "terminal-hosted-identity-next-action-admin-proof-batch",
     label: "Terminal hosted identity next-action admin proof batch",
   });
-  assert.deepEqual(devTestGameAdminSpinePlan[26], {
+  assert.deepEqual(devTestGameAdminSpinePlan[27], {
     kind: "node",
     script: "tools/dev_test_game_next_action.mjs",
   });
-  assert.deepEqual(devTestGameAdminSpinePlan[27], {
+  assert.deepEqual(devTestGameAdminSpinePlan[28], {
     kind: "custom",
     script: "terminal-refresh-admin-proof-batch",
     label: "Terminal refresh admin proof batch",
   });
-  assert.deepEqual(devTestGameAdminSpinePlan[28], {
+  assert.deepEqual(devTestGameAdminSpinePlan[29], {
     kind: "node",
     script: devTestGameReleaseReadinessScript,
     readinessReason: "terminal-batch-receipt-before-proof-graph-admin-proof",
@@ -1602,22 +1617,27 @@ test("dev test-game spine orchestrators expose stable proof order and env maps",
         outputPath: nextActionPath,
       },
       {
-        index: 24,
+        index: 20,
+        sequenceStage: null,
+        outputPath: hostedEvidenceOperatorChecklistNextActionPath,
+      },
+      {
+        index: 25,
         sequenceStage: devTestGameHostedIdentitySequenceStage,
         outputPath: hostedIdentityNextActionPath,
       },
       {
-        index: 26,
+        index: 27,
         sequenceStage: null,
         outputPath: nextActionPath,
       },
       {
-        index: 29,
+        index: 30,
         sequenceStage: null,
         outputPath: nextActionPath,
       },
       {
-        index: 32,
+        index: 33,
         sequenceStage: null,
         outputPath: nextActionPath,
       },
@@ -3947,7 +3967,7 @@ test("dev test-game next-action derives one local recovery command from the mani
     ),
   );
   assert.deepEqual(
-    devTestGameAdminSpinePlan.slice(24, 28).map((step) => ({
+    devTestGameAdminSpinePlan.slice(25, 29).map((step) => ({
       script: step.script,
       sequenceStage:
         step.env?.FMARCH_DEV_TEST_GAME_SEQUENCE_STAGE ??

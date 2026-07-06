@@ -22,6 +22,7 @@ import {
 } from "./dev_test_game_proof_contract.mjs";
 import {
   devTestGameProofRunPath,
+  hostedEvidenceOperatorChecklistNextActionPath,
   nextActionPath,
 } from "./dev_test_game_spine_artifact_paths.mjs";
 import {
@@ -63,7 +64,8 @@ const defaultReleaseReadinessPath = path.resolve(
 );
 const defaultNextActionPath = path.resolve(
   repoRoot,
-  process.env.FMARCH_DEV_TEST_GAME_NEXT_ACTION ?? nextActionPath,
+  process.env.FMARCH_DEV_TEST_GAME_NEXT_ACTION ??
+    hostedEvidenceOperatorChecklistNextActionPath,
 );
 const defaultEvidencePath = path.resolve(
   repoRoot,
@@ -135,6 +137,8 @@ export function hostedEvidenceOperatorChecklistAdminProofCase({
           "Local admin role URL proof for the hosted evidence operator checklist handoff. It proves the seeded admin hosted-evidence lane exposes the checklist command/doc/proof affordances and that readiness names the same checklist command, proof target, and hosted inputs; it records whether the current next-action selection is the checklist handoff but does not require the global selector to choose it while higher-priority sequence deferrals exist. It does not prove hosted deployment, release readiness, or production readiness.",
         generatedFrom: {
           ...source.paths,
+          defaultNextAction: nextActionPath,
+          phaseLocalNextAction: hostedEvidenceOperatorChecklistNextActionPath,
           game: source.proofRun.session.game,
           roleUrl: localAdminAuditRoleUrl(localAdminAuditIds.hostedEvidenceLane),
           checklistPath: source.checklistProof.descriptor.path,

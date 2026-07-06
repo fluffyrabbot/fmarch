@@ -21,6 +21,8 @@ export const proofFreshnessAdminProofPath =
 export const nextActionPath = "target/dev-test-game/next-action.json";
 export const hostedIdentityNextActionPath =
   "target/dev-test-game/next-action-hosted-identity.json";
+export const hostedEvidenceOperatorChecklistNextActionPath =
+  "target/dev-test-game/next-action-hosted-evidence-operator-checklist.json";
 export const nextActionAdminProofPath =
   "target/dev-test-game/next-action-admin-proof.json";
 export const hostedIdentityNextActionAdminProofPath =

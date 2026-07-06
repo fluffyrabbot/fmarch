@@ -70,6 +70,7 @@ import {
   devTestGameSpineManifestAdminProofPath,
 } from "./dev_test_game_local_admin_proof_paths.mjs";
 import {
+  hostedEvidenceOperatorChecklistNextActionPath,
   hostedIdentityNextActionAdminProofPath,
   hostedIdentityNextActionPath,
   nextActionAdminProofPath,
@@ -316,7 +317,19 @@ export const devTestGameAdminSpinePlan = [
   { kind: "node", script: "tools/dev_test_game_next_action.mjs" },
   {
     kind: "node",
+    script: "tools/dev_test_game_next_action.mjs",
+    env: {
+      FMARCH_DEV_TEST_GAME_NEXT_ACTION:
+        hostedEvidenceOperatorChecklistNextActionPath,
+    },
+  },
+  {
+    kind: "node",
     script: "tools/dev_test_game_hosted_evidence_operator_checklist_admin_proof.mjs",
+    env: {
+      FMARCH_DEV_TEST_GAME_NEXT_ACTION:
+        hostedEvidenceOperatorChecklistNextActionPath,
+    },
   },
   { kind: "node", script: "tools/dev_test_game_proof_graph.mjs" },
   {
@@ -329,6 +342,7 @@ export const devTestGameAdminSpinePlan = [
     changedInputs: [
       spineManifestPath,
       nextActionPath,
+      hostedEvidenceOperatorChecklistNextActionPath,
       devTestGameHostedEvidenceOperatorChecklistProofPath,
       devTestGameHostedEvidenceOperatorChecklistAdminProofPath,
       devTestGameProofGraphPath,
@@ -501,6 +515,8 @@ async function writeAdminSpineTerminalBatchProof(
       adminSpineProof: adminSpineProofPath,
       proofGraph: devTestGameProofGraphPath,
       nextAction: nextActionPath,
+      hostedEvidenceOperatorChecklistNextAction:
+        hostedEvidenceOperatorChecklistNextActionPath,
       hostedIdentityNextAction: hostedIdentityNextActionPath,
       proofFreshnessAdminProof: proofFreshnessAdminProofPath,
       nextActionAdminProof: nextActionAdminProofPath,
