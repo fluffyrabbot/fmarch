@@ -11,6 +11,10 @@ import {
   hostedMatrixRawEvidenceContractSummary,
 } from "./dev_test_game_hosted_matrix_raw_evidence_contract.mjs";
 import {
+  devTestGameHostedMatrixRawEvidenceTemplatePath,
+  devTestGameHostedMatrixRawEvidenceTemplateProofCommand,
+} from "./dev_test_game_hosted_matrix_raw_evidence_template_proof.mjs";
+import {
   buildRealHostedEvidenceInputs,
   realHostedEvidenceInputIds,
 } from "./dev_test_game_real_hosted_evidence_inputs.mjs";
@@ -42,7 +46,7 @@ export const hostedEvidenceLaneCommand =
   "npm run test:dev-test-game-hosted-evidence-lane";
 export const hostedEvidenceLanePath = devTestGameHostedEvidenceLanePath;
 export const hostedEvidenceOperatorAction =
-  "Configure the hosted frontend/API URLs plus a readable raw hosted matrix evidence packet from that same deployment, then rerun npm run test:dev-test-game-hosted-evidence-lane.";
+  `Configure the hosted frontend/API URLs, copy ${devTestGameHostedMatrixRawEvidenceTemplatePath} to a filled raw hosted matrix evidence packet from that same deployment, validate the template with npm run ${devTestGameHostedMatrixRawEvidenceTemplateProofCommand}, then rerun npm run test:dev-test-game-hosted-evidence-lane.`;
 export const hostedEvidenceLocalVsHostedBoundary =
   "Local hosted-like matrix artifacts and synthetic demo evidence can prove the handoff path, but they cannot satisfy hosted deployment evidence.";
 export const devTestGameHostedEvidenceLaneAdminProofPath =

@@ -57,6 +57,11 @@ import {
   devTestGameHostedMatrixRawEvidenceOperatorFixturePath,
 } from "./dev_test_game_hosted_matrix_raw_evidence_fixture_proof.mjs";
 import {
+  devTestGameHostedMatrixRawEvidenceTemplatePath,
+  devTestGameHostedMatrixRawEvidenceTemplateProofCommand,
+  devTestGameHostedMatrixRawEvidenceTemplateProofPath,
+} from "./dev_test_game_hosted_matrix_raw_evidence_template_proof.mjs";
+import {
   devTestGameRealHostedMatrixRawCaptureCommand,
   devTestGameRealHostedMatrixRawCapturePath,
 } from "./dev_test_game_real_hosted_matrix_raw_capture_contract.mjs";
@@ -377,10 +382,21 @@ export function buildDevTestGameSpineManifest({
         demoOnly: true,
         roleUrl: "/admin/audit/local-hosted-evidence-lane?game=<seeded-game>",
       },
+      hostedMatrixRawEvidenceTemplateProof: {
+        script: devTestGameHostedMatrixRawEvidenceTemplateProofCommand,
+        proofArtifact: devTestGameHostedMatrixRawEvidenceTemplateProofPath,
+        dependsOn: [devTestGameHostedMatrixRawEvidenceTemplatePath],
+        templateOnly: true,
+        releaseReady: false,
+        productionReady: false,
+      },
       hostedMatrixRawEvidenceFixtureProof: {
         script: devTestGameHostedMatrixRawEvidenceFixtureProofCommand,
         proofArtifact: devTestGameHostedMatrixRawEvidenceFixtureProofPath,
-        dependsOn: [devTestGameHostedMatrixRawEvidenceOperatorFixturePath],
+        dependsOn: [
+          devTestGameHostedMatrixRawEvidenceTemplateProofPath,
+          devTestGameHostedMatrixRawEvidenceOperatorFixturePath,
+        ],
         fixtureEvidence: true,
       },
       hostedEvidenceLaneOperatorFixtureAdminProof: {
@@ -398,7 +414,10 @@ export function buildDevTestGameSpineManifest({
       realHostedMatrixRawCapture: {
         script: devTestGameRealHostedMatrixRawCaptureCommand,
         proofArtifact: devTestGameRealHostedMatrixRawCapturePath,
-        dependsOn: [devTestGameHostedMatrixRawEvidenceOperatorFixturePath],
+        dependsOn: [
+          devTestGameHostedMatrixRawEvidenceTemplatePath,
+          devTestGameHostedMatrixRawEvidenceOperatorFixturePath,
+        ],
         fixtureEvidence: false,
         releaseReady: false,
         productionReady: false,
@@ -1153,6 +1172,31 @@ export function assertDevTestGameSpineManifest(manifest) {
   ) {
     throw new Error(
       "spine manifest hosted matrix raw fixture proof must stay fixture-only",
+    );
+  }
+  if (
+    manifest.commands?.hostedMatrixRawEvidenceTemplateProof?.script !==
+    devTestGameHostedMatrixRawEvidenceTemplateProofCommand
+  ) {
+    throw new Error(
+      `spine manifest hosted matrix raw template proof command drifted: ${manifest.commands?.hostedMatrixRawEvidenceTemplateProof?.script}`,
+    );
+  }
+  if (
+    manifest.commands.hostedMatrixRawEvidenceTemplateProof.proofArtifact !==
+    devTestGameHostedMatrixRawEvidenceTemplateProofPath
+  ) {
+    throw new Error(
+      `spine manifest hosted matrix raw template proof artifact drifted: ${manifest.commands.hostedMatrixRawEvidenceTemplateProof.proofArtifact}`,
+    );
+  }
+  if (
+    manifest.commands.hostedMatrixRawEvidenceTemplateProof.templateOnly !== true ||
+    manifest.commands.hostedMatrixRawEvidenceTemplateProof.releaseReady !== false ||
+    manifest.commands.hostedMatrixRawEvidenceTemplateProof.productionReady !== false
+  ) {
+    throw new Error(
+      "spine manifest hosted matrix raw template proof must stay template-only",
     );
   }
   if (

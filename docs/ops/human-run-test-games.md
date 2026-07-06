@@ -214,15 +214,26 @@ beside it, so the current local-sequence blocker and the hosted-identity
 predicate are visible without weakening the hosted evidence boundary.
 
 The hosted deployment evidence lane accepts a raw hosted matrix packet through
-`FMARCH_HOSTED_MATRIX_RAW_EVIDENCE_PATH`. To inspect the required packet shape,
-compare the fixture-only handoff with the capture-metadata example:
+`FMARCH_HOSTED_MATRIX_RAW_EVIDENCE_PATH`. Start by checking the operator
+template, then copy it to a private filled packet and point the env var at that
+copy:
+
+```sh
+npm run test:dev-test-game-hosted-matrix-raw-evidence-template-proof
+```
+
+To inspect the difference between fixture-only handoff and real capture
+metadata, compare the checked examples:
 
 ```sh
 FMARCH_HOSTED_MATRIX_FRONTEND_URL=https://fmarch-demo.example.test FMARCH_HOSTED_MATRIX_API_URL=https://api.fmarch-demo.example.test FMARCH_HOSTED_MATRIX_RAW_EVIDENCE_PATH=tools/fixtures/dev_test_game_hosted_matrix_raw_evidence.operator-fixture.json npm run test:dev-test-game-real-hosted-matrix-raw-capture
 FMARCH_HOSTED_MATRIX_FRONTEND_URL=https://fmarch-demo.example.test FMARCH_HOSTED_MATRIX_API_URL=https://api.fmarch-demo.example.test FMARCH_HOSTED_MATRIX_RAW_EVIDENCE_PATH=tools/fixtures/dev_test_game_hosted_matrix_raw_evidence.real-capture-example.json npm run test:dev-test-game-real-hosted-matrix-raw-capture
 ```
 
-The real-capture intake requires the raw hosted matrix evidence contract plus
+The template lives at
+`tools/fixtures/dev_test_game_hosted_matrix_raw_evidence.template.json`. The
+real-capture intake requires the raw hosted matrix evidence contract plus
+real hosted values for `frontendBaseUrl`, `apiBaseUrl`,
 `capture.externallyCaptured=true`, `capture.capturedAt`,
 `capture.captureSource`, redaction booleans for raw role credentials, invite
 tokens, and session cookies, and `capture.retention.policy`. A passed intake can

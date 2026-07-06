@@ -1,0 +1,69 @@
+{
+  "version": 1,
+  "proof": "fmarch-hosted-concurrent-race-matrix-raw",
+  "status": "passed",
+  "generatedAt": "<ISO-8601_GENERATED_AT>",
+  "frontendBaseUrl": "<FMARCH_HOSTED_MATRIX_FRONTEND_URL>",
+  "apiBaseUrl": "<FMARCH_HOSTED_MATRIX_API_URL>",
+  "groupId": "replacement-race-reload",
+  "commandRaceCount": 3,
+  "reloadRecoveryCount": 3,
+  "reconnectRecovery": true,
+  "staleConflictMessages": true,
+  "rawRoleCredentialsRedacted": true,
+  "generatedFrom": {
+    "source": "external-operator-capture"
+  },
+  "capture": {
+    "externallyCaptured": true,
+    "capturedAt": "<ISO-8601_CAPTURED_AT>",
+    "captureSource": "<operator-hosted-browser-or-run-id>",
+    "redaction": {
+      "rawRoleCredentialsRedacted": true,
+      "inviteTokensRedacted": true,
+      "sessionCookiesRedacted": true
+    },
+    "retention": {
+      "policy": "<raw credentials discarded; redacted packet retained for proof>"
+    }
+  },
+  "observations": [
+    {
+      "id": "replacement-private-post-real-capture-observation",
+      "status": "passed",
+      "cellId": "replacement-private-post",
+      "raceLaneId": "concurrent-replacement-private-post-race",
+      "reloadLaneId": "concurrent-replacement-private-post-race-reload",
+      "roleSurfaces": [
+        "player",
+        "replacementPlayer",
+        "host"
+      ]
+    },
+    {
+      "id": "replacement-vote-real-capture-observation",
+      "status": "passed",
+      "cellId": "replacement-vote",
+      "raceLaneId": "concurrent-replacement-vote-race",
+      "reloadLaneId": "concurrent-replacement-vote-race-reload",
+      "roleSurfaces": [
+        "player",
+        "replacementPlayer",
+        "host"
+      ]
+    },
+    {
+      "id": "replacement-action-real-capture-observation",
+      "status": "passed",
+      "cellId": "replacement-action",
+      "raceLaneId": "concurrent-replacement-action-race",
+      "reloadLaneId": "concurrent-replacement-action-race-reload",
+      "roleSurfaces": [
+        "player",
+        "replacementPlayer",
+        "host"
+      ]
+    }
+  ],
+  "proofBoundary": "Operator template for a raw hosted-matrix packet captured from an externally reachable hosted target. Fill the placeholders with real target URLs, capture metadata, and observations, then run npm run test:dev-test-game-real-hosted-matrix-raw-capture with FMARCH_HOSTED_MATRIX_RAW_EVIDENCE_PATH pointing at the filled copy. This template itself is not deployment evidence."
+}

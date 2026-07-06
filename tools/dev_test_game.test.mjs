@@ -544,6 +544,14 @@ import {
   devTestGameHostedMatrixRawEvidenceRealCaptureExamplePath,
 } from "./dev_test_game_hosted_matrix_raw_evidence_fixture_proof.mjs";
 import {
+  assertDevTestGameHostedMatrixRawEvidenceTemplate,
+  assertDevTestGameHostedMatrixRawEvidenceTemplateProof,
+  buildDevTestGameHostedMatrixRawEvidenceTemplateProof,
+  devTestGameHostedMatrixRawEvidenceTemplatePath,
+  devTestGameHostedMatrixRawEvidenceTemplateProofCommand,
+  devTestGameHostedMatrixRawEvidenceTemplateProofPath,
+} from "./dev_test_game_hosted_matrix_raw_evidence_template_proof.mjs";
+import {
   assertDevTestGameRealHostedMatrixRawCapture,
   devTestGameRealHostedMatrixRawCaptureCommand,
   devTestGameRealHostedMatrixRawCapturePath,
@@ -2602,8 +2610,19 @@ test("dev test-game spine manifest records command order and evidence wiring", (
   assert.deepEqual(manifest.commands.hostedMatrixRawEvidenceFixtureProof, {
     script: devTestGameHostedMatrixRawEvidenceFixtureProofCommand,
     proofArtifact: devTestGameHostedMatrixRawEvidenceFixtureProofPath,
-    dependsOn: [devTestGameHostedMatrixRawEvidenceOperatorFixturePath],
+    dependsOn: [
+      devTestGameHostedMatrixRawEvidenceTemplateProofPath,
+      devTestGameHostedMatrixRawEvidenceOperatorFixturePath,
+    ],
     fixtureEvidence: true,
+  });
+  assert.deepEqual(manifest.commands.hostedMatrixRawEvidenceTemplateProof, {
+    script: devTestGameHostedMatrixRawEvidenceTemplateProofCommand,
+    proofArtifact: devTestGameHostedMatrixRawEvidenceTemplateProofPath,
+    dependsOn: [devTestGameHostedMatrixRawEvidenceTemplatePath],
+    templateOnly: true,
+    releaseReady: false,
+    productionReady: false,
   });
   assert.deepEqual(
     manifest.commands.hostedEvidenceLaneOperatorFixtureAdminProof,
@@ -2623,7 +2642,10 @@ test("dev test-game spine manifest records command order and evidence wiring", (
   assert.deepEqual(manifest.commands.realHostedMatrixRawCapture, {
     script: devTestGameRealHostedMatrixRawCaptureCommand,
     proofArtifact: devTestGameRealHostedMatrixRawCapturePath,
-    dependsOn: [devTestGameHostedMatrixRawEvidenceOperatorFixturePath],
+    dependsOn: [
+      devTestGameHostedMatrixRawEvidenceTemplatePath,
+      devTestGameHostedMatrixRawEvidenceOperatorFixturePath,
+    ],
     fixtureEvidence: false,
     releaseReady: false,
     productionReady: false,
@@ -5153,6 +5175,53 @@ test("hosted evidence lane admin proof fixtures preserve visible first-missing a
       progression.id,
     );
   }
+});
+
+test("hosted matrix raw evidence template proof names operator fill path", async () => {
+  const template = JSON.parse(
+    await readFile(devTestGameHostedMatrixRawEvidenceTemplatePath, "utf8"),
+  );
+  assertDevTestGameHostedMatrixRawEvidenceTemplate(template);
+  const proof = await buildDevTestGameHostedMatrixRawEvidenceTemplateProof({
+    generatedAt: "2026-06-26T00:00:00.000Z",
+    env: {},
+  });
+  assertDevTestGameHostedMatrixRawEvidenceTemplateProof(proof);
+  assert.equal(
+    devTestGameHostedMatrixRawEvidenceTemplateProofCommand,
+    "test:dev-test-game-hosted-matrix-raw-evidence-template-proof",
+  );
+  assert.equal(
+    devTestGameHostedMatrixRawEvidenceTemplateProofPath,
+    "target/dev-test-game/hosted-matrix-raw-evidence-template-proof.json",
+  );
+  assert.equal(
+    proof.operatorTemplate.path,
+    devTestGameHostedMatrixRawEvidenceTemplatePath,
+  );
+  assert.equal(
+    proof.operatorTemplate.copyToEnv,
+    "FMARCH_HOSTED_MATRIX_RAW_EVIDENCE_PATH",
+  );
+  assert.equal(
+    proof.operatorTemplate.validatorCommand,
+    `npm run ${devTestGameRealHostedMatrixRawCaptureCommand}`,
+  );
+  assert.deepEqual(
+    proof.operatorTemplate.promotedCellIds,
+    ["replacement-private-post", "replacement-vote", "replacement-action"],
+  );
+  assert.deepEqual(
+    proof.checks.map((check) => [check.id, check.status]),
+    [
+      ["template-readable", "passed"],
+      ["raw-evidence-contract-fields-present", "passed"],
+      ["capture-redaction-retention-placeholders-present", "passed"],
+      ["promoted-cells-covered", "passed"],
+      ["fixture-and-demo-markers-absent", "passed"],
+      ["release-claim-boundary-carried", "passed"],
+    ],
+  );
 });
 
 test("dev test-game hosted evidence lane validates operator fixture without promoting hosted deployment", async () => {
