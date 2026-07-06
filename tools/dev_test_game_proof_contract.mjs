@@ -109,8 +109,11 @@ import {
 import {
   assertReplacementPrivateChannelRecoveryCoverageSummary,
   buildReplacementPrivateChannelRecoveryCoverageSummary,
+  replacementActionRaceLaneIds,
   replacementPrivatePostRaceLaneIds,
   replacementPrivatePostRecoveryLaneIds,
+  replacementRaceLaneIds,
+  replacementVoteRaceLaneIds,
 } from "./dev_test_game_replacement_private_scenarios.mjs";
 import {
   replacementConcurrentActionRaceScenario,
@@ -196,11 +199,7 @@ const requiredLaneIds = Object.freeze([
   ...playerActionFoundationLaneIds,
   ...stalePlayerCommandLaneIds,
   ...crossRoleRaceLaneIds,
-  ...replacementPrivatePostRaceLaneIds,
-  "concurrent-replacement-vote-race",
-  "concurrent-replacement-vote-race-reload",
-  "concurrent-replacement-action-race",
-  "concurrent-replacement-action-race-reload",
+  ...replacementRaceLaneIds,
   ...replacementActionLaneIds,
   ...replacementPrivatePostRecoveryLaneIds,
   "stale-dead-target-vote",
@@ -3404,7 +3403,7 @@ export function buildDevTestGameProofRun(session, options = {}) {
       },
     ),
     lane(
-      "concurrent-replacement-private-post-race",
+      replacementPrivatePostRaceLaneIds[0],
       "Concurrent replacement and private post converge",
       {
         game: hardening.concurrentReplacementPrivatePostRace?.game ?? null,
@@ -3486,7 +3485,7 @@ export function buildDevTestGameProofRun(session, options = {}) {
       },
     ),
     lane(
-      "concurrent-replacement-private-post-race-reload",
+      replacementPrivatePostRaceLaneIds[1],
       "Concurrent replacement private-post race reloads scoped channel truth",
       {
         game: hardening.concurrentReplacementPrivatePostRace?.game ?? null,
@@ -3550,7 +3549,7 @@ export function buildDevTestGameProofRun(session, options = {}) {
       },
     ),
     lane(
-      "concurrent-replacement-vote-race",
+      replacementVoteRaceLaneIds[0],
       "Concurrent replacement and vote converge",
       {
         game: hardening.concurrentReplacementVoteRace?.game ?? null,
@@ -3630,7 +3629,7 @@ export function buildDevTestGameProofRun(session, options = {}) {
       },
     ),
     lane(
-      "concurrent-replacement-vote-race-reload",
+      replacementVoteRaceLaneIds[1],
       "Concurrent replacement vote race reloads stale role rejection",
       {
         game: hardening.concurrentReplacementVoteRace?.game ?? null,
@@ -3667,7 +3666,7 @@ export function buildDevTestGameProofRun(session, options = {}) {
       },
     ),
     lane(
-      "concurrent-replacement-action-race",
+      replacementActionRaceLaneIds[0],
       "Concurrent replacement and action converge",
       {
         game: hardening.concurrentReplacementActionRace?.game ?? null,
@@ -3793,7 +3792,7 @@ export function buildDevTestGameProofRun(session, options = {}) {
       },
     ),
     lane(
-      "concurrent-replacement-action-race-reload",
+      replacementActionRaceLaneIds[1],
       "Concurrent replacement action race reloads current action authority",
       {
         game: hardening.concurrentReplacementActionRace?.game ?? null,

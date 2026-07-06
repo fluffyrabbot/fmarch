@@ -4043,6 +4043,7 @@ function buildReconnectHardeningSpineRows(proof) {
             frontendBaseUrl,
             game,
             role: row.role,
+            channelId: row.channelId,
           }),
         ];
       })
@@ -4096,6 +4097,7 @@ function hardeningRoleUrlHrefsFromSynthesizedRows({ proof, rows }) {
             frontendBaseUrl,
             game,
             role: row.role,
+            channelId: row.channelId,
           }),
         ];
       })
@@ -4149,8 +4151,19 @@ function buildIdentityReadinessSpineTargets(identityAdminProofEvidence) {
   };
 }
 
-function completedGameHardeningSpineRoleUrl({ frontendBaseUrl, game, role }) {
-  return `${frontendBaseUrl}/g/${game}${role === "host" ? "/host" : ""}`;
+function completedGameHardeningSpineRoleUrl({
+  frontendBaseUrl,
+  game,
+  role,
+  channelId,
+}) {
+  if (role === "host") {
+    return `${frontendBaseUrl}/g/${game}/host`;
+  }
+  if (role === "private-channel") {
+    return `${frontendBaseUrl}/g/${game}/c/${encodeURIComponent(channelId)}`;
+  }
+  return `${frontendBaseUrl}/g/${game}`;
 }
 
 function buildProofRunRoleSurfaceReadinessCheck({

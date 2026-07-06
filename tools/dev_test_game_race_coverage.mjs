@@ -12,6 +12,9 @@ import {
   hostPhaseRaceCoverageCellCases,
   hostStandaloneRaceCoverageCellCases,
 } from "./dev_test_game_host_stale_recovery_scenarios.mjs";
+import {
+  replacementRaceCoverageCellCases,
+} from "./dev_test_game_replacement_private_scenario_cases.mjs";
 import { assertDevTestGameProofRun } from "./dev_test_game_proof_contract.mjs";
 import { repoRoot } from "./dev_test_game_spine_runner.mjs";
 import {
@@ -43,6 +46,8 @@ const playerHostRaceCoverageCells =
   playerHostRaceCoverageCellCases().map(raceCell);
 const cohostHostRaceCoverageCells =
   cohostHostRaceCoverageCellCases().map(raceCell);
+const replacementRaceCoverageCells =
+  replacementRaceCoverageCellCases().map(raceCell);
 const hostMixedAdvanceRaceCoverageCellId = "host-mixed-advance";
 
 const raceCells = Object.freeze([
@@ -64,30 +69,7 @@ const raceCells = Object.freeze([
   }),
   ...playerHostRaceCoverageCells,
   ...cohostHostRaceCoverageCells,
-  raceCell({
-    id: "replacement-private-post",
-    actorPair: "replacement vs outgoing player",
-    commandFamily: "private channel post",
-    raceLaneId: "concurrent-replacement-private-post-race",
-    reloadLaneId: "concurrent-replacement-private-post-race-reload",
-    roleSurfaces: ["player", "replacementPlayer", "host"],
-  }),
-  raceCell({
-    id: "replacement-vote",
-    actorPair: "replacement vs outgoing player",
-    commandFamily: "day vote",
-    raceLaneId: "concurrent-replacement-vote-race",
-    reloadLaneId: "concurrent-replacement-vote-race-reload",
-    roleSurfaces: ["player", "replacementPlayer", "host"],
-  }),
-  raceCell({
-    id: "replacement-action",
-    actorPair: "replacement vs outgoing player",
-    commandFamily: "night action",
-    raceLaneId: "concurrent-replacement-action-race",
-    reloadLaneId: "concurrent-replacement-action-race-reload",
-    roleSurfaces: ["player", "replacementPlayer", "host"],
-  }),
+  ...replacementRaceCoverageCells,
   ...hostPhaseRaceCoverageCells.filter(
     (cell) => cell.id !== hostMixedAdvanceRaceCoverageCellId,
   ),

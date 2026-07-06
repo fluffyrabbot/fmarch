@@ -19,6 +19,9 @@ import {
   playerHostRaceCoverageCellCases,
 } from "./dev_test_game_cross_role_race_scenarios.mjs";
 import {
+  replacementRaceReloadSpineTargetCases,
+} from "./dev_test_game_replacement_private_scenario_cases.mjs";
+import {
   cohostStaleDeadlineReconnectLaneId,
   hostStaleAdvanceReconnectLaneId,
   hostStaleDeadlineReconnectLaneId,
@@ -56,8 +59,23 @@ const playerActionAdvanceRaceSpineCell = crossRoleRaceCellById.get(
 const cohostDeadlineResolveRaceSpineCell = crossRoleRaceCellById.get(
   "cohost-deadline-vs-host-resolve",
 );
-export const replacementActionRaceReloadLaneId =
-  "concurrent-replacement-action-race-reload";
+const replacementRaceReloadSpineTargets =
+  replacementRaceReloadSpineTargetCases();
+const replacementRaceReloadHardeningFeatureSpineTargetRows = Object.freeze(
+  Object.fromEntries(
+    replacementRaceReloadSpineTargets.map((target) => [
+      target.targetKey,
+      Object.freeze({
+        featureSlotId: target.featureSlotId,
+        sourceCheckId: hardeningFeatureSpineSourceCheckId,
+        cycleId: hardeningFeatureSpineCycleIds.concurrentRace,
+        roleUrlId: target.reloadLaneId,
+        checkpointId: target.reloadLaneId,
+        adminCheckId: target.reloadLaneId,
+      }),
+    ]),
+  ),
+);
 export const hardeningFeatureSpineTargetRows = Object.freeze({
   completedGameStaleRecovery: Object.freeze({
     featureSlotId: "completed-game-stale-recovery",
@@ -179,14 +197,7 @@ export const hardeningFeatureSpineTargetRows = Object.freeze({
     checkpointId: cohostDeadlineResolveRaceSpineCell.reloadLaneId,
     adminCheckId: cohostDeadlineResolveRaceSpineCell.reloadLaneId,
   }),
-  replacementActionRaceReload: Object.freeze({
-    featureSlotId: "replacement-action-race-reload",
-    sourceCheckId: hardeningFeatureSpineSourceCheckId,
-    cycleId: hardeningFeatureSpineCycleIds.concurrentRace,
-    roleUrlId: replacementActionRaceReloadLaneId,
-    checkpointId: replacementActionRaceReloadLaneId,
-    adminCheckId: replacementActionRaceReloadLaneId,
-  }),
+  ...replacementRaceReloadHardeningFeatureSpineTargetRows,
 });
 export const hardeningDirectRoleUrlReconnectFeatureSpineTargetRows =
   Object.freeze([
@@ -250,10 +261,13 @@ export const hardeningSynthesizedRoleUrlConcurrentRaceFeatureSpineTargetRows =
       row: hardeningFeatureSpineTargetRows.cohostHostDeadlineResolveRaceReload,
       role: "host",
     }),
-    Object.freeze({
-      row: hardeningFeatureSpineTargetRows.replacementActionRaceReload,
-      role: "player",
-    }),
+    ...replacementRaceReloadSpineTargets.map((target) =>
+      Object.freeze({
+        row: hardeningFeatureSpineTargetRows[target.targetKey],
+        role: target.role,
+        channelId: target.channelId,
+      }),
+    ),
   ]);
 export const hardeningConcurrentRaceFeatureSpineTargetRows = Object.freeze(
   hardeningSynthesizedRoleUrlConcurrentRaceFeatureSpineTargetRows.map(

@@ -30,6 +30,9 @@ import {
 import {
   privateChannelStaleActionConflictMessageLaneId,
 } from "./dev_test_game_stale_conflict_scenarios.mjs";
+import {
+  replacementRaceLaneIds,
+} from "./dev_test_game_replacement_private_scenarios.mjs";
 
 export const seedRequiredScenarioIds = Object.freeze([
   "host-phase-controls",
@@ -46,12 +49,7 @@ export const seedRequiredScenarioIds = Object.freeze([
   "concurrent-action-race-reload",
   ...playerHostRaceLaneIds,
   ...cohostHostRaceLaneIds,
-  "concurrent-replacement-private-post-race",
-  "concurrent-replacement-private-post-race-reload",
-  "concurrent-replacement-vote-race",
-  "concurrent-replacement-vote-race-reload",
-  "concurrent-replacement-action-race",
-  "concurrent-replacement-action-race-reload",
+  ...replacementRaceLaneIds,
   "replacement-incoming-action",
   "replacement-action-reconnect",
   "replacement-stale-action-after-resolve",
@@ -162,12 +160,7 @@ const seedScenarioRoleOverrides = new Map([
   ["player-action-denied", "player"],
   [playerActionBoundaryLaneId, "player"],
   ["stale-deadline-advance", "host"],
-  ["concurrent-replacement-private-post-race", "player"],
-  ["concurrent-replacement-private-post-race-reload", "player"],
-  ["concurrent-replacement-vote-race", "player"],
-  ["concurrent-replacement-vote-race-reload", "player"],
-  ["concurrent-replacement-action-race", "player"],
-  ["concurrent-replacement-action-race-reload", "player"],
+  ...replacementRaceLaneIds.map((laneId) => [laneId, "player"]),
   ["replacement-incoming-action", "player"],
   ["host-replacement-console", "host"],
   ["replacement-host-issued-invite", "host"],

@@ -13,6 +13,9 @@ import {
   productionFeatureSourceCoverageDecisionSummaryForCheckId,
   productionFeatureSourceForCheckId,
 } from "./dev_test_game_production_feature_source_registry.mjs";
+import {
+  productionFeatureBrowserWorkbenchEvidence,
+} from "./dev_test_game_production_feature_spine_resolver.mjs";
 
 export const invalidActionRecoveryHostedConcurrentRaceMatrixUnprovenText =
   "Hosted or hosted-like concurrent command race matrix beyond the promoted local replacement, host, player, cohost deadline, lifecycle, and complete-game reload milestones, including multi-session reload/reconnect recovery and stale-client conflict evidence";
@@ -32,6 +35,7 @@ export function featureSpineFixture({
   roleUrl,
   roleUrlsById,
   browserProofCommand,
+  browserWorkbench,
   rerunCommand = "npm run test:dev-test-game-core-loop-admin-proof",
   includeTargetRerunCommand = false,
   includeEmptyRecoveryHook = false,
@@ -76,6 +80,9 @@ export function featureSpineFixture({
     sourceProofArtifact,
     ...(includeTargetRerunCommand ? { rerunCommand } : {}),
   };
+  const resolvedBrowserWorkbench =
+    browserWorkbench ?? productionFeatureBrowserWorkbenchEvidence(spineTarget);
+  spineTarget.browserWorkbench = resolvedBrowserWorkbench;
   return {
     productionFeatureSpineTarget,
     spineTarget,
@@ -94,6 +101,7 @@ export function featureSpineFixture({
       roleUrl: resolvedRoleUrl,
       rerunCommand,
       browserProofCommand,
+      browserWorkbench: resolvedBrowserWorkbench,
       sourceProofArtifact,
       coverageDecision,
     },

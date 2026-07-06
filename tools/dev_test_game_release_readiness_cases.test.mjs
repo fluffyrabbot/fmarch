@@ -76,8 +76,10 @@ import {
   hardeningFeatureSpineCycleIds,
   hardeningFeatureSpineTargetRows,
   hardeningFeatureSpineSourceCheckId,
-  replacementActionRaceReloadLaneId,
 } from "./dev_test_game_hardening_feature_spine_targets.mjs";
+import {
+  replacementRaceReloadSpineTargetCases,
+} from "./dev_test_game_replacement_private_scenario_cases.mjs";
 import {
   hostSetupFeatureSpineSource,
   hostSetupFeatureSpineTargetRows,
@@ -192,11 +194,13 @@ const hardeningConcurrentRaceFeatureTargetExpectations = Object.freeze([
     rowId: crossRoleRaceCellById.get("cohost-deadline-vs-host-resolve")
       .reloadLaneId,
   }),
-  Object.freeze({
-    targetKey: "replacementActionRaceReload",
-    featureSlotId: "replacement-action-race-reload",
-    rowId: replacementActionRaceReloadLaneId,
-  }),
+  ...replacementRaceReloadSpineTargetCases().map((target) =>
+    Object.freeze({
+      targetKey: target.targetKey,
+      featureSlotId: target.featureSlotId,
+      rowId: target.reloadLaneId,
+    }),
+  ),
 ]);
 
 test("release readiness unproven cases share blocker IDs and status rows", () => {

@@ -12,10 +12,94 @@ import {
   cloneLaneCoverageFamilies,
 } from "./dev_test_game_lane_coverage.mjs";
 
-export const replacementPrivatePostRaceLaneIds = [
+export const replacementPrivatePostRaceLaneIds = Object.freeze([
   "concurrent-replacement-private-post-race",
   "concurrent-replacement-private-post-race-reload",
-];
+]);
+
+export const replacementVoteRaceLaneIds = Object.freeze([
+  "concurrent-replacement-vote-race",
+  "concurrent-replacement-vote-race-reload",
+]);
+
+export const replacementActionRaceLaneIds = Object.freeze([
+  "concurrent-replacement-action-race",
+  "concurrent-replacement-action-race-reload",
+]);
+
+const replacementRaceCoverageCellDefinitions = Object.freeze([
+  Object.freeze({
+    id: "replacement-private-post",
+    actorPair: "replacement vs outgoing player",
+    commandFamily: "private channel post",
+    raceLaneId: replacementPrivatePostRaceLaneIds[0],
+    reloadLaneId: replacementPrivatePostRaceLaneIds[1],
+    roleSurfaces: Object.freeze([
+      "private-channel",
+      "player",
+      "replacementPlayer",
+      "host",
+    ]),
+  }),
+  Object.freeze({
+    id: "replacement-vote",
+    actorPair: "replacement vs outgoing player",
+    commandFamily: "day vote",
+    raceLaneId: replacementVoteRaceLaneIds[0],
+    reloadLaneId: replacementVoteRaceLaneIds[1],
+    roleSurfaces: Object.freeze(["player", "replacementPlayer", "host"]),
+  }),
+  Object.freeze({
+    id: "replacement-action",
+    actorPair: "replacement vs outgoing player",
+    commandFamily: "night action",
+    raceLaneId: replacementActionRaceLaneIds[0],
+    reloadLaneId: replacementActionRaceLaneIds[1],
+    roleSurfaces: Object.freeze(["player", "replacementPlayer", "host"]),
+  }),
+]);
+
+export function replacementRaceCoverageCellCases() {
+  return replacementRaceCoverageCellDefinitions.map((cell) => ({
+    ...cell,
+    roleSurfaces: [...cell.roleSurfaces],
+  }));
+}
+
+export const replacementRaceLaneIds = Object.freeze(
+  replacementRaceCoverageCellDefinitions.flatMap((cell) => [
+    cell.raceLaneId,
+    cell.reloadLaneId,
+  ]),
+);
+
+const replacementRaceReloadSpineTargetDefinitions = Object.freeze([
+  Object.freeze({
+    targetKey: "replacementPrivatePostRaceReload",
+    featureSlotId: "replacement-private-post-race-reload",
+    reloadLaneId: replacementPrivatePostRaceLaneIds[1],
+    role: "private-channel",
+    channelId: "private:mafia_day_chat",
+  }),
+  Object.freeze({
+    targetKey: "replacementVoteRaceReload",
+    featureSlotId: "replacement-vote-race-reload",
+    reloadLaneId: replacementVoteRaceLaneIds[1],
+    role: "player",
+  }),
+  Object.freeze({
+    targetKey: "replacementActionRaceReload",
+    featureSlotId: "replacement-action-race-reload",
+    reloadLaneId: replacementActionRaceLaneIds[1],
+    role: "player",
+  }),
+]);
+
+export function replacementRaceReloadSpineTargetCases() {
+  return replacementRaceReloadSpineTargetDefinitions.map((target) => ({
+    ...target,
+  }));
+}
 
 export const replacementPrivatePostRecoveryLaneIds = [
   "replacement-stale-private-post-after-resolve",

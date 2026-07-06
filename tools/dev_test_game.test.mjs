@@ -165,8 +165,11 @@ import {
 import {
   replacementPrivateChannelRecoveryCoverageFamilies,
   replacementPrivateChannelRecoveryLaneIds,
+  replacementActionRaceLaneIds,
   replacementPrivatePostRaceLaneIds,
   replacementPrivatePostRecoveryLaneIds,
+  replacementRaceLaneIds,
+  replacementVoteRaceLaneIds,
   replacementStalePrivatePostAfterCompleteScenario,
   replacementStalePrivatePostAfterResolveScenario,
 } from "./dev_test_game_replacement_private_scenarios.mjs";
@@ -395,6 +398,10 @@ import {
   productionFeatureGraphSourceNodeId,
 } from "./dev_test_game_production_feature_graph_sources.mjs";
 import {
+  roleSurfaceBrowserWorkbenchEvidence,
+  roleSurfaceSpineCases,
+} from "./dev_test_game_role_surface_spine_cases.mjs";
+import {
   assertDevTestGameRaceCoverage,
   buildDevTestGameRaceCoverage,
   devTestGameRaceCoverageAdminProofPath,
@@ -447,6 +454,12 @@ import {
   replacementPrivateFeatureSpineCycleId,
   replacementPrivateFeatureSpineTargetRows,
 } from "./dev_test_game_replacement_private_feature_spine_targets.mjs";
+import {
+  hardeningFeatureSpineTargetRows,
+  hardeningDirectRoleUrlReconnectFeatureSpineTargetRows,
+  hardeningSynthesizedRoleUrlReconnectFeatureSpineTargetRows,
+  hardeningSynthesizedRoleUrlConcurrentRaceFeatureSpineTargetRows,
+} from "./dev_test_game_hardening_feature_spine_targets.mjs";
 import {
   assertDevTestGameHostedMatrixExternalEvidence,
   buildDevTestGameHostedMatrixExternalEvidence,
@@ -4309,15 +4322,15 @@ test("dev test-game next-action derives one local recovery command from the mani
       },
       {
         id: "replacement-vote",
-        raceLaneId: "concurrent-replacement-vote-race",
-        reloadLaneId: "concurrent-replacement-vote-race-reload",
+        raceLaneId: replacementVoteRaceLaneIds[0],
+        reloadLaneId: replacementVoteRaceLaneIds[1],
         reloadStatus: "passed",
         covered: true,
       },
       {
         id: "replacement-action",
-        raceLaneId: "concurrent-replacement-action-race",
-        reloadLaneId: "concurrent-replacement-action-race-reload",
+        raceLaneId: replacementActionRaceLaneIds[0],
+        reloadLaneId: replacementActionRaceLaneIds[1],
         reloadStatus: "passed",
         covered: true,
       },
@@ -4561,6 +4574,9 @@ test("dev test-game next-action advances hosted deployment after target prefligh
         coreLoopSpineTargetsFixture().roleUrlHrefs["d02-n02-host"],
       targetRoleUrlMatchesSelectedSpineTarget: true,
       browserProofCommand: devTestGameLiveProofCommand,
+      browserWorkbench:
+        resolvedFeatureSpineTargetFixture("host-phase-control")
+          .browserWorkbench,
       proofTarget: devTestGameReleaseReadinessPath,
       sourceProofArtifact: devTestGameCoreLoopAdminProofPath,
       coverageDecision:
@@ -5485,10 +5501,30 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
     releaseReadiness,
   );
   const coreLoopFamilyRows = coreLoopScenarioFamilyRows();
-  assert.equal(graph.summary.nodeCount, 78 + coreLoopFamilyRows.length);
-  assert.equal(graph.summary.roleUrlCount, 78 + coreLoopFamilyRows.length);
+  const expectedProductionFeatureTargetCount =
+    releaseReadiness.localDevelopmentSpine.checks.reduce(
+      (count, check) =>
+        count + (check.spineTargets?.productionFeatureTargets?.slotIds?.length ?? 0),
+      0,
+    );
+  const expectedBaseGraphNodeCount = 37;
+  assert.equal(
+    graph.summary.nodeCount,
+    expectedBaseGraphNodeCount +
+      expectedProductionFeatureTargetCount +
+      coreLoopFamilyRows.length,
+  );
+  assert.equal(
+    graph.summary.roleUrlCount,
+    expectedBaseGraphNodeCount +
+      expectedProductionFeatureTargetCount +
+      coreLoopFamilyRows.length,
+  );
   assert.equal(graph.summary.roleSurfaceProofCount, 5);
-  assert.equal(graph.summary.productionFeatureTargetCount, 41);
+  assert.equal(
+    graph.summary.productionFeatureTargetCount,
+    expectedProductionFeatureTargetCount,
+  );
   assert.deepEqual(
     graph.nodes.find(
       (node) =>
@@ -6043,14 +6079,9 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
       adminDetailRoleUrl: "/admin/audit/local-host-setup-proof?game=<seeded-game>",
       recoveryCommand: devTestGameHostSetupProofCommand,
       readinessEvidence: "target/dev-test-game/host-setup-proof.json",
-      browserWorkbench: {
-        status: "passed",
-        route: "/g/<seeded-game>/setup",
-        roleUrl: "http://127.0.0.1:5173/g/<seeded-game>/setup",
-        roleSurface: "host-setup",
-        requiredEvidence:
-          "Seeded host setup role URL opens the setup workbench browser surface for /g/<seeded-game>/setup before start-phase recovery is trusted.",
-      },
+      browserWorkbench: hostSetupBrowserWorkbenchFixture(
+        "http://127.0.0.1:5173/g/<seeded-game>/setup",
+      ),
     },
   );
   assert(
@@ -14051,11 +14082,7 @@ test("session card and markdown include role credential URLs and tokens", async 
       "concurrent-player-action-advance-race-reload",
       "concurrent-cohost-deadline-resolve-race",
       "concurrent-cohost-deadline-resolve-race-reload",
-      ...replacementPrivatePostRaceLaneIds,
-      "concurrent-replacement-vote-race",
-      "concurrent-replacement-vote-race-reload",
-      "concurrent-replacement-action-race",
-      "concurrent-replacement-action-race-reload",
+      ...replacementRaceLaneIds,
       "replacement-incoming-action",
       "replacement-action-reconnect",
       "replacement-stale-action-after-resolve",
@@ -14286,14 +14313,7 @@ test("session card and markdown include role credential URLs and tokens", async 
       true,
       "StartGame",
       "Ready to start",
-      {
-        status: "passed",
-        route: "/g/<seeded-game>/setup",
-        roleUrl: "http://127.0.0.1:5173/g/<seeded-game>/setup",
-        roleSurface: "host-setup",
-        requiredEvidence:
-          "Seeded host setup role URL opens the setup workbench browser surface for /g/<seeded-game>/setup before start-phase recovery is trusted.",
-      },
+      hostSetupSpineTargetsFixture().browserWorkbench,
       hostSetupSpineTargetsFixture(),
     ],
   );
@@ -17227,13 +17247,13 @@ function devTestGameRaceCoverageFixture() {
     ),
     raceCoverageCell(
       "replacement-vote",
-      "concurrent-replacement-vote-race",
-      "concurrent-replacement-vote-race-reload",
+      replacementVoteRaceLaneIds[0],
+      replacementVoteRaceLaneIds[1],
     ),
     raceCoverageCell(
       "replacement-action",
-      "concurrent-replacement-action-race",
-      "concurrent-replacement-action-race-reload",
+      replacementActionRaceLaneIds[0],
+      replacementActionRaceLaneIds[1],
     ),
     raceCoverageCell("host-resolve", "concurrent-host-resolve-race", "concurrent-host-resolve-race-reload"),
     raceCoverageCell("host-advance", "concurrent-host-advance-race", "concurrent-host-advance-race-reload"),
@@ -20075,6 +20095,9 @@ function hostSetupSpineTargetsFixture() {
     defaultRoleUrl: roleUrlHrefs["host-setup"],
     defaultCheckpointId: "start-phase",
     browserProofCommand: devTestGameLiveProofCommand,
+    browserWorkbench:
+      featureSpineCaseFixture("host-setup-route", { roleUrlHrefs })
+        .spineTarget.browserWorkbench,
     cycleIds: [hostSetupFeatureSpineCycleId],
     roleUrlIds: ["host-setup"],
     checkpointIds: ["start-phase"],
@@ -20091,6 +20114,18 @@ function hostSetupSpineTargetsFixture() {
     roleUrlHrefs,
     productionFeatureTargets:
       hostSetupProductionFeatureTargetsFixture(roleUrlHrefs),
+  };
+}
+
+function hostSetupBrowserWorkbenchFixture(roleUrl) {
+  return {
+    status: "passed",
+    route: "/g/<seeded-game>/setup",
+    roleUrl,
+    roleSurface: "host-setup",
+    featureSlotId: "host-setup-route",
+    requiredEvidence:
+      "Seeded host setup role URL opens the setup workbench browser surface for /g/<seeded-game>/setup before start-phase recovery is trusted.",
   };
 }
 
@@ -20124,6 +20159,9 @@ function cohostSpineTargetsFixture({
     defaultRoleUrl: roleUrlHrefs["cohost-console"],
     defaultCheckpointId: "extend-deadline-ack",
     browserProofCommand: devTestGameLiveProofCommand,
+    browserWorkbench:
+      featureSpineCaseFixture("cohost-console", { roleUrlHrefs }).spineTarget
+        .browserWorkbench,
     cycleIds: [cohostFeatureSpineCycleId],
     roleUrlIds: ["cohost-console"],
     checkpointIds: ["extend-deadline-ack"],
@@ -20165,6 +20203,10 @@ function replacementSpineTargetsFixture({
     defaultRoleUrl: roleUrlHrefs["replacement-player"],
     defaultCheckpointId: "incoming-player-slot-authority",
     browserProofCommand: devTestGameLiveProofCommand,
+    browserWorkbench:
+      featureSpineCaseFixture("replacement-player-role-surface", {
+        roleUrlHrefs,
+      }).spineTarget.browserWorkbench,
     cycleIds: [replacementFeatureSpineCycleId],
     roleUrlIds: ["replacement-player"],
     checkpointIds: ["incoming-player-slot-authority"],
@@ -20213,6 +20255,10 @@ function replacementActionSpineTargetsFixture({
     defaultRoleUrl: roleUrlHrefs["replacement-action"],
     defaultCheckpointId: "replacement-incoming-action",
     browserProofCommand: devTestGameLiveProofCommand,
+    browserWorkbench:
+      featureSpineCaseFixture("replacement-action-recovery", {
+        roleUrlHrefs,
+      }).spineTarget.browserWorkbench,
     cycleIds: [replacementActionFeatureSpineCycleId],
     roleUrlIds: ["replacement-action"],
     checkpointIds: ["replacement-incoming-action"],
@@ -20259,6 +20305,10 @@ function replacementPrivateSpineTargetsFixture({
     defaultRoleUrl: roleUrlHrefs["replacement-private-channel"],
     defaultCheckpointId: "replacement-stale-private-channel",
     browserProofCommand: devTestGameLiveProofCommand,
+    browserWorkbench:
+      featureSpineCaseFixture("replacement-private-channel-recovery", {
+        roleUrlHrefs,
+      }).spineTarget.browserWorkbench,
     cycleIds: [replacementPrivateFeatureSpineCycleId],
     roleUrlIds: ["replacement-private-channel"],
     checkpointIds: ["replacement-stale-private-channel"],
@@ -20304,7 +20354,12 @@ function hardeningSpineTargetsFixture({
     defaultRoleUrl: roleUrlHrefs["replacement-stale-conflict-message"],
     defaultCheckpointId: "replacement-stale-conflict-message",
     browserProofCommand: devTestGameLiveProofCommand,
-    cycleIds: ["hardening-stale-conflict", completedGameHardeningSpineCycleId],
+    cycleIds: [
+      "hardening-stale-conflict",
+      completedGameHardeningSpineCycleId,
+      "hardening-reconnect-recovery",
+      "hardening-concurrent-race",
+    ],
     roleUrlIds: Object.keys(roleUrlHrefs),
     checkpointIds: Object.keys(roleUrlHrefs),
     recoveryHookIds: [],
@@ -20340,11 +20395,31 @@ function hardeningRoleUrlHrefsFromProofRun(proofRun) {
         }),
       ]),
     ),
+    ...Object.fromEntries(
+      hardeningDirectRoleUrlReconnectFeatureSpineTargetRows.map((row) => [
+        row.roleUrlId,
+        String(laneById.get(row.roleUrlId)?.evidence?.roleUrl ?? ""),
+      ]),
+    ),
+    ...Object.fromEntries(
+      [
+        ...hardeningSynthesizedRoleUrlReconnectFeatureSpineTargetRows,
+        ...hardeningSynthesizedRoleUrlConcurrentRaceFeatureSpineTargetRows,
+      ].map((target) => [
+        target.row.roleUrlId,
+        hardeningSpineRoleUrlFromGame({
+          frontendBaseUrl,
+          game: laneById.get(target.row.roleUrlId).evidence.game,
+          role: target.role,
+          channelId: target.channelId,
+        }),
+      ]),
+    ),
   };
 }
 
 function hardeningRoleUrlHrefsFixture() {
-  return {
+  const roleUrlHrefs = {
     ...Object.fromEntries(
       staleConflictMessageSurfaceFixtureRows().map((surface) => [
         surface.laneId,
@@ -20362,17 +20437,41 @@ function hardeningRoleUrlHrefsFixture() {
       ]),
     ),
   };
+  for (const row of Object.values(hardeningFeatureSpineTargetRows)) {
+    if (roleUrlHrefs[row.roleUrlId] === undefined) {
+      roleUrlHrefs[row.roleUrlId] = hardeningSpineRoleUrlFromGame({
+        frontendBaseUrl: "http://127.0.0.1:5173",
+        game: `fixture-${row.roleUrlId}`,
+        role:
+          row.roleUrlId === "concurrent-replacement-private-post-race-reload"
+            ? "private-channel"
+            : "player",
+        channelId: "private:mafia_day_chat",
+      });
+    }
+  }
+  return roleUrlHrefs;
 }
 
-function hardeningSpineRoleUrlFromGame({ frontendBaseUrl, game, role }) {
-  return `${frontendBaseUrl}/g/${game}${role === "host" ? "/host" : ""}`;
+function hardeningSpineRoleUrlFromGame({
+  frontendBaseUrl,
+  game,
+  role,
+  channelId,
+}) {
+  if (role === "host") {
+    return `${frontendBaseUrl}/g/${game}/host`;
+  }
+  if (role === "private-channel") {
+    return `${frontendBaseUrl}/g/${game}/c/${encodeURIComponent(channelId)}`;
+  }
+  return `${frontendBaseUrl}/g/${game}`;
 }
 
 function hardeningProductionFeatureTargetsFixture(roleUrlHrefs) {
-  const slotIds = [
-    "completed-game-stale-recovery",
-    "replacement-stale-conflict-message",
-  ];
+  const slotIds = Object.values(hardeningFeatureSpineTargetRows).map(
+    (row) => row.featureSlotId,
+  );
   return {
     status: "passed",
     slotIds,
@@ -20613,12 +20712,16 @@ function featureSpineCaseFixture(
     });
   }
   if (slotId === "host-setup-route") {
+    const hostSetupRoleUrl =
+      roleUrlHrefs?.["host-setup"] ??
+      hostSetupSpineTargetsFixture().roleUrlHrefs["host-setup"];
     return featureSpineFixture({
       slotId,
-      detailRoleUrl: "http://127.0.0.1:5173/g/<seeded-game>/setup",
+      detailRoleUrl: hostSetupRoleUrl,
       roleUrlsById:
         roleUrlHrefs ?? hostSetupSpineTargetsFixture().roleUrlHrefs,
       browserProofCommand: devTestGameLiveProofCommand,
+      browserWorkbench: hostSetupBrowserWorkbenchFixture(hostSetupRoleUrl),
       rerunCommand: devTestGameHostSetupProofCommand,
       includeTargetRerunCommand: true,
     });
@@ -20633,6 +20736,10 @@ function featureSpineCaseFixture(
       roleUrlsById:
         roleUrlHrefs ?? cohostSpineTargetsFixture().roleUrlHrefs,
       browserProofCommand: devTestGameLiveProofCommand,
+      browserWorkbench: roleSurfaceBrowserWorkbenchEvidence(
+        roleSurfaceSpineCases.cohost,
+        cohostRoleUrl,
+      ),
       rerunCommand: devTestGameCohostConsoleProofCommand,
       includeTargetRerunCommand: true,
     });
@@ -20647,6 +20754,10 @@ function featureSpineCaseFixture(
       roleUrlsById:
         roleUrlHrefs ?? replacementSpineTargetsFixture().roleUrlHrefs,
       browserProofCommand: devTestGameLiveProofCommand,
+      browserWorkbench: roleSurfaceBrowserWorkbenchEvidence(
+        roleSurfaceSpineCases.replacement,
+        replacementRoleUrl,
+      ),
       rerunCommand: devTestGameReplacementPlayerProofCommand,
       includeTargetRerunCommand: true,
     });
@@ -20663,6 +20774,10 @@ function featureSpineCaseFixture(
       roleUrlsById:
         roleUrlHrefs ?? replacementActionSpineTargetsFixture().roleUrlHrefs,
       browserProofCommand: devTestGameLiveProofCommand,
+      browserWorkbench: roleSurfaceBrowserWorkbenchEvidence(
+        roleSurfaceSpineCases.replacementAction,
+        replacementActionRoleUrl,
+      ),
       rerunCommand: devTestGameReplacementActionProofCommand,
       includeTargetRerunCommand: true,
     });
@@ -20679,15 +20794,18 @@ function featureSpineCaseFixture(
       roleUrlsById:
         roleUrlHrefs ?? replacementPrivateSpineTargetsFixture().roleUrlHrefs,
       browserProofCommand: devTestGameLiveProofCommand,
+      browserWorkbench: roleSurfaceBrowserWorkbenchEvidence(
+        roleSurfaceSpineCases.replacementPrivate,
+        replacementPrivateRoleUrl,
+      ),
       rerunCommand: devTestGameReplacementPrivateProofCommand,
       includeTargetRerunCommand: true,
     });
   }
   if (
-    [
-      "replacement-stale-conflict-message",
-      "completed-game-stale-recovery",
-    ].includes(slotId)
+    Object.values(hardeningFeatureSpineTargetRows).some(
+      (row) => row.featureSlotId === slotId,
+    )
   ) {
     return featureSpineFixture({
       slotId,
@@ -20774,11 +20892,7 @@ function hardeningAdminProofFixture() {
         "concurrent-player-action-advance-race-reload",
         "concurrent-cohost-deadline-resolve-race",
         "concurrent-cohost-deadline-resolve-race-reload",
-        ...replacementPrivatePostRaceLaneIds,
-        "concurrent-replacement-vote-race",
-        "concurrent-replacement-vote-race-reload",
-        "concurrent-replacement-action-race",
-        "concurrent-replacement-action-race-reload",
+        ...replacementRaceLaneIds,
         "replacement-incoming-action",
         "replacement-action-reconnect",
         "replacement-stale-action-after-resolve",
@@ -21629,6 +21743,9 @@ function proofGraphCohostFeatureTargetFixture() {
     browserProofCommand: devTestGameLiveProofCommand,
     recoveryCommand: devTestGameCohostConsoleProofCommand,
     sourceProofArtifact: devTestGameProofRunPath,
+    readinessEvidence: devTestGameProofRunPath,
+    browserWorkbench:
+      featureSpineCaseFixture("cohost-console").spineTarget.browserWorkbench,
     coverageDecision:
       featureSpineCaseFixture("cohost-console").spineTarget.coverageDecision,
   };
@@ -21650,6 +21767,10 @@ function proofGraphReplacementFeatureTargetFixture() {
     browserProofCommand: devTestGameLiveProofCommand,
     recoveryCommand: devTestGameReplacementPlayerProofCommand,
     sourceProofArtifact: devTestGameProofRunPath,
+    readinessEvidence: devTestGameProofRunPath,
+    browserWorkbench:
+      featureSpineCaseFixture("replacement-player-role-surface").spineTarget
+        .browserWorkbench,
     coverageDecision:
       featureSpineCaseFixture("replacement-player-role-surface").spineTarget
         .coverageDecision,
@@ -21671,6 +21792,10 @@ function proofGraphReplacementActionFeatureTargetFixture() {
     browserProofCommand: devTestGameLiveProofCommand,
     recoveryCommand: devTestGameReplacementActionProofCommand,
     sourceProofArtifact: devTestGameProofRunPath,
+    readinessEvidence: devTestGameProofRunPath,
+    browserWorkbench:
+      featureSpineCaseFixture("replacement-action-recovery").spineTarget
+        .browserWorkbench,
     coverageDecision:
       featureSpineCaseFixture("replacement-action-recovery").spineTarget
         .coverageDecision,
@@ -21695,6 +21820,10 @@ function proofGraphReplacementPrivateFeatureTargetFixture() {
     browserProofCommand: devTestGameLiveProofCommand,
     recoveryCommand: devTestGameReplacementPrivateProofCommand,
     sourceProofArtifact: devTestGameProofRunPath,
+    readinessEvidence: devTestGameProofRunPath,
+    browserWorkbench:
+      featureSpineCaseFixture("replacement-private-channel-recovery").spineTarget
+        .browserWorkbench,
     coverageDecision:
       featureSpineCaseFixture("replacement-private-channel-recovery").spineTarget
         .coverageDecision,
@@ -22092,15 +22221,15 @@ function nextActionAdminProofLocalReadinessDependencyFixture({
       },
       {
         id: "replacement-vote",
-        raceLaneId: "concurrent-replacement-vote-race",
-        reloadLaneId: "concurrent-replacement-vote-race-reload",
+        raceLaneId: replacementVoteRaceLaneIds[0],
+        reloadLaneId: replacementVoteRaceLaneIds[1],
         reloadStatus: "passed",
         covered: true,
       },
       {
         id: "replacement-action",
-        raceLaneId: "concurrent-replacement-action-race",
-        reloadLaneId: "concurrent-replacement-action-race-reload",
+        raceLaneId: replacementActionRaceLaneIds[0],
+        reloadLaneId: replacementActionRaceLaneIds[1],
         reloadStatus: "passed",
         covered: true,
       },

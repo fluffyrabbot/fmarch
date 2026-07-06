@@ -21,8 +21,8 @@ import {
   promotedStalePlayerCommandLaneIds,
 } from "./dev_test_game_player_recovery_scenarios.mjs";
 import {
-  replacementPrivatePostRaceLaneIds,
   replacementPrivatePostRecoveryLaneIds,
+  replacementRaceLaneIds,
 } from "./dev_test_game_replacement_private_scenarios.mjs";
 import {
   replacementHandoffHardeningLaneIds,
@@ -42,11 +42,7 @@ export const hardeningAuditLaneIds = Object.freeze(uniqueLaneIds([
   "concurrent-vote-race-reload",
   ...playerHostRaceLaneIds,
   ...cohostHostRaceLaneIds,
-  ...replacementPrivatePostRaceLaneIds,
-  "concurrent-replacement-vote-race",
-  "concurrent-replacement-vote-race-reload",
-  "concurrent-replacement-action-race",
-  "concurrent-replacement-action-race-reload",
+  ...replacementRaceLaneIds,
   "replacement-incoming-action",
   "replacement-stale-action-after-resolve",
   ...replacementPrivatePostRecoveryLaneIds,

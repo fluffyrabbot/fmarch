@@ -1,12 +1,17 @@
 export {
   assertReplacementPrivateChannelRecoveryCoverageSummary,
   buildReplacementPrivateChannelRecoveryCoverageSummary,
+  replacementActionRaceLaneIds,
   replacementPrivateChannelRecoveryCoverageFamilies,
   replacementPrivateChannelRecoveryCoverageFamilyDefinitions,
   replacementPrivateChannelRecoveryLaneIds,
   replacementPrivatePostHardeningLaneIds,
   replacementPrivatePostRaceLaneIds,
   replacementPrivatePostRecoveryLaneIds,
+  replacementRaceCoverageCellCases,
+  replacementRaceLaneIds,
+  replacementRaceReloadSpineTargetCases,
+  replacementVoteRaceLaneIds,
   replacementStalePrivatePostAfterCompleteScenario,
   replacementStalePrivatePostAfterResolveScenario,
 } from "./dev_test_game_replacement_private_scenario_cases.mjs";

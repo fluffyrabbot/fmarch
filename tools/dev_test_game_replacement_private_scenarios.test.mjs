@@ -12,6 +12,7 @@ import {
 import {
   assertReplacementPrivateChannelRecoveryCoverageSummary,
   buildReplacementPrivateChannelRecoveryCoverageSummary,
+  replacementActionRaceLaneIds,
   replacementConcurrentActionRaceScenario,
   replacementConcurrentPrivatePostRaceScenario,
   replacementConcurrentVoteRaceScenario,
@@ -21,6 +22,10 @@ import {
   replacementPrivatePostHardeningLaneIds,
   replacementPrivatePostRaceLaneIds,
   replacementPrivatePostRecoveryLaneIds,
+  replacementRaceCoverageCellCases,
+  replacementRaceLaneIds,
+  replacementRaceReloadSpineTargetCases,
+  replacementVoteRaceLaneIds,
   replacementStalePrivatePostAfterResolveScenario,
   replacementStalePrivatePostAfterCompleteScenario,
 } from "./dev_test_game_replacement_private_scenario_cases.mjs";
@@ -29,6 +34,19 @@ test("replacement private scenario module groups private-post race and recovery 
   assert.deepEqual(replacementPrivatePostRaceLaneIds, [
     "concurrent-replacement-private-post-race",
     "concurrent-replacement-private-post-race-reload",
+  ]);
+  assert.deepEqual(replacementVoteRaceLaneIds, [
+    "concurrent-replacement-vote-race",
+    "concurrent-replacement-vote-race-reload",
+  ]);
+  assert.deepEqual(replacementActionRaceLaneIds, [
+    "concurrent-replacement-action-race",
+    "concurrent-replacement-action-race-reload",
+  ]);
+  assert.deepEqual(replacementRaceLaneIds, [
+    ...replacementPrivatePostRaceLaneIds,
+    ...replacementVoteRaceLaneIds,
+    ...replacementActionRaceLaneIds,
   ]);
   assert.deepEqual(replacementPrivatePostRecoveryLaneIds, [
     "replacement-stale-private-post-after-resolve",
@@ -44,6 +62,60 @@ test("replacement private scenario module groups private-post race and recovery 
   assert.deepEqual(replacementPrivatePostHardeningLaneIds, [
     ...replacementPrivatePostRaceLaneIds,
     ...replacementPrivatePostRecoveryLaneIds,
+  ]);
+  assert.deepEqual(
+    replacementRaceCoverageCellCases().map((cell) => ({
+      id: cell.id,
+      raceLaneId: cell.raceLaneId,
+      reloadLaneId: cell.reloadLaneId,
+      roleSurfaces: cell.roleSurfaces,
+    })),
+    [
+      {
+        id: "replacement-private-post",
+        raceLaneId: replacementPrivatePostRaceLaneIds[0],
+        reloadLaneId: replacementPrivatePostRaceLaneIds[1],
+        roleSurfaces: [
+          "private-channel",
+          "player",
+          "replacementPlayer",
+          "host",
+        ],
+      },
+      {
+        id: "replacement-vote",
+        raceLaneId: replacementVoteRaceLaneIds[0],
+        reloadLaneId: replacementVoteRaceLaneIds[1],
+        roleSurfaces: ["player", "replacementPlayer", "host"],
+      },
+      {
+        id: "replacement-action",
+        raceLaneId: replacementActionRaceLaneIds[0],
+        reloadLaneId: replacementActionRaceLaneIds[1],
+        roleSurfaces: ["player", "replacementPlayer", "host"],
+      },
+    ],
+  );
+  assert.deepEqual(replacementRaceReloadSpineTargetCases(), [
+    {
+      targetKey: "replacementPrivatePostRaceReload",
+      featureSlotId: "replacement-private-post-race-reload",
+      reloadLaneId: replacementPrivatePostRaceLaneIds[1],
+      role: "private-channel",
+      channelId: "private:mafia_day_chat",
+    },
+    {
+      targetKey: "replacementVoteRaceReload",
+      featureSlotId: "replacement-vote-race-reload",
+      reloadLaneId: replacementVoteRaceLaneIds[1],
+      role: "player",
+    },
+    {
+      targetKey: "replacementActionRaceReload",
+      featureSlotId: "replacement-action-race-reload",
+      reloadLaneId: replacementActionRaceLaneIds[1],
+      role: "player",
+    },
   ]);
 });
 
