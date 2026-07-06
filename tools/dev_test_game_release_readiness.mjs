@@ -134,6 +134,9 @@ import {
   coreLoopAuditLaneIds,
 } from "./dev_test_game_core_loop_scenarios.mjs";
 import {
+  assertCoreLoopCommandProofRoleUrls,
+} from "./dev_test_game_core_loop_proof_shape_assertions.mjs";
+import {
   devTestGameHostedOpsSignalsAdminProofPath,
   hostedOpsReadinessBoundaryCheckId,
   hostedOpsSignalCheckIds,
@@ -2988,6 +2991,10 @@ export function validateDevTestGameCoreLoopAdminProof(proof, options = {}) {
     label: "core-loop admin proof missing visible spine recovery hook",
     visibleRows: proof.adminRoleSurface?.visibleSpineRecoveryHooks,
     requiredRows: proof.generatedFrom?.coreLoopSpineRows?.recoveryHooks,
+  });
+  assertCoreLoopCommandProofRoleUrls({
+    proof,
+    includeEvidenceInError: true,
   });
   return {
     status: "passed",

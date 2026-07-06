@@ -18976,11 +18976,14 @@ function coreLoopAdminProofFixture() {
 }
 
 function hostLifecycleRoleSurfaceFixture() {
+  const sourceRoleUrl =
+    "http://127.0.0.1:5173/g/00000000-0000-0000-0000-000000000002/host";
+  const visitedRolePath =
+    "/g/00000000-0000-0000-0000-000000000002/host";
   return {
     status: "passed",
-    sourceRoleUrl:
-      "http://127.0.0.1:5173/g/00000000-0000-0000-0000-000000000002/host",
-    visitedRolePath: "/g/00000000-0000-0000-0000-000000000002/host",
+    sourceRoleUrl,
+    visitedRolePath,
     surfaceTestId: "host-console-surface",
     checkpointTestId: "host-lifecycle-control-checkpoint",
     clickedThroughFromRoleUrl: true,
@@ -19004,6 +19007,8 @@ function hostLifecycleRoleSurfaceFixture() {
     },
     hostLifecycleControlClickProof: {
       status: "passed",
+      sourceRoleUrl,
+      visitedRolePath,
       clickedAction: "lock_thread",
       commandKind: "LockThread",
       command: {
@@ -19038,6 +19043,8 @@ function hostLifecycleRoleSurfaceFixture() {
     },
     hostLifecycleStaleRejectProof: {
       status: "passed",
+      sourceRoleUrl,
+      visitedRolePath,
       clickedAction: "lock_thread",
       commandKind: "LockThread",
       command: {

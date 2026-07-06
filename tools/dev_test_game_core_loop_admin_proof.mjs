@@ -8,6 +8,9 @@ import {
   coreLoopGeneratedFromScenarioFamilies,
 } from "./dev_test_game_core_loop_generated_from_families.mjs";
 import {
+  assertCoreLoopCommandProofRoleUrls,
+} from "./dev_test_game_core_loop_proof_shape_assertions.mjs";
+import {
   assertCompletedGameProofReadinessSurfaceProof,
   completedGameProofReadinessProofScenarioCases,
   completedGameProofReadinessScenarioFamilies,
@@ -642,6 +645,8 @@ async function proveHostLifecycleControlCheckpoint({
     const clickProof = await proveHostLifecycleControlClick({
       page,
       commandRequests,
+      roleUrl,
+      visitedRolePath,
     });
     const staleRejectProof = await proveHostLifecycleStaleReject({
       browser,
@@ -721,7 +726,12 @@ async function installHostLifecycleControlBrowserRoutes(page, { commandRequests 
   });
 }
 
-async function proveHostLifecycleControlClick({ page, commandRequests }) {
+async function proveHostLifecycleControlClick({
+  page,
+  commandRequests,
+  roleUrl,
+  visitedRolePath,
+}) {
   const actionTile = page.getByTestId("critical-host-action-lock_thread");
   await actionTile.waitFor({ state: "visible", timeout: 15000 });
   await actionTile.getByTestId("critical-host-action-trigger").click();
@@ -769,6 +779,8 @@ async function proveHostLifecycleControlClick({ page, commandRequests }) {
   const command = commandRequests.at(-1)?.LockThread ?? null;
   return {
     status: "passed",
+    sourceRoleUrl: String(roleUrl),
+    visitedRolePath,
     clickedAction: "lock_thread",
     commandKind: command === null ? null : "LockThread",
     command,
@@ -868,6 +880,8 @@ async function proveHostLifecycleStaleReject({
     const command = commandRequests.at(-1)?.LockThread ?? null;
     return {
       status: "passed",
+      sourceRoleUrl: String(roleUrl),
+      visitedRolePath,
       clickedAction: "lock_thread",
       commandKind: command === null ? null : "LockThread",
       command,
@@ -10067,6 +10081,10 @@ export function assertCoreLoopAdminProof(evidence) {
   assertPrivateChannelRoleSurfaceProof({
     privateChannelRoleSurface: evidence.privateChannelRoleSurface,
     scenarioFamily: coreLoopPrivateChannelRecoveryScenarioFamily(),
+    includeEvidenceInError: true,
+  });
+  assertCoreLoopCommandProofRoleUrls({
+    proof: evidence,
     includeEvidenceInError: true,
   });
   return evidence;

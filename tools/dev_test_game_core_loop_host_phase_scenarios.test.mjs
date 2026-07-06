@@ -946,13 +946,15 @@ test("post-Night 4 fixture satisfies the shared transition assertion", () => {
 });
 
 test("host lifecycle control assertion covers checkpoint, click, and stale reject", () => {
+  const sourceRoleUrl = "http://127.0.0.1:5173/g/game-a/host";
+  const visitedRolePath = "/g/game-a/host";
   const hostRoleSurface = {
     status: "passed",
     clickedThroughFromRoleUrl: true,
     releaseReady: false,
     productionReady: false,
-    sourceRoleUrl: "http://127.0.0.1:5173/g/game-a/host",
-    visitedRolePath: "/g/game-a/host",
+    sourceRoleUrl,
+    visitedRolePath,
     surfaceTestId: "host-console-surface",
     checkpointTestId: "host-lifecycle-control-checkpoint",
     hostLifecycleControlCheckpoint: {
@@ -974,6 +976,8 @@ test("host lifecycle control assertion covers checkpoint, click, and stale rejec
     },
     hostLifecycleControlClickProof: {
       status: "passed",
+      sourceRoleUrl,
+      visitedRolePath,
       clickedAction: "lock_thread",
       commandKind: "LockThread",
       command: { game: "game-a" },
@@ -995,6 +999,8 @@ test("host lifecycle control assertion covers checkpoint, click, and stale rejec
     },
     hostLifecycleStaleRejectProof: {
       status: "passed",
+      sourceRoleUrl,
+      visitedRolePath,
       clickedAction: "lock_thread",
       commandKind: "LockThread",
       command: { game: "game-a" },

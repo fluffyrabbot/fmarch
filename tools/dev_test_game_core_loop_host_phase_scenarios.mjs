@@ -812,12 +812,16 @@ export function assertHostLifecycleControlRoleSurfaceCase({
   assertHostLifecycleControlClickProofCase({
     clickProof,
     expectedGame,
+    sourceRoleUrl: hostRoleSurface.sourceRoleUrl,
+    visitedRolePath: hostRoleSurface.visitedRolePath,
     scenario,
     includeEvidenceInError,
   });
   assertHostLifecycleStaleRejectProofCase({
     staleRejectProof,
     expectedGame,
+    sourceRoleUrl: hostRoleSurface.sourceRoleUrl,
+    visitedRolePath: hostRoleSurface.visitedRolePath,
     scenario,
     includeEvidenceInError,
   });
@@ -826,11 +830,16 @@ export function assertHostLifecycleControlRoleSurfaceCase({
 export function assertHostLifecycleControlClickProofCase({
   clickProof,
   expectedGame,
+  sourceRoleUrl,
+  visitedRolePath,
   scenario = hostLifecycleControlScenarioDefinition,
   includeEvidenceInError = false,
 }) {
   if (
     clickProof?.status !== "passed" ||
+    (sourceRoleUrl !== undefined && clickProof.sourceRoleUrl !== sourceRoleUrl) ||
+    (visitedRolePath !== undefined &&
+      clickProof.visitedRolePath !== visitedRolePath) ||
     clickProof.clickedAction !== scenario.actionId ||
     clickProof.commandKind !== scenario.commandKind ||
     clickProof.command?.game !== expectedGame ||
@@ -871,11 +880,17 @@ export function assertHostLifecycleControlClickProofCase({
 export function assertHostLifecycleStaleRejectProofCase({
   staleRejectProof,
   expectedGame,
+  sourceRoleUrl,
+  visitedRolePath,
   scenario = hostLifecycleControlScenarioDefinition,
   includeEvidenceInError = false,
 }) {
   if (
     staleRejectProof?.status !== "passed" ||
+    (sourceRoleUrl !== undefined &&
+      staleRejectProof.sourceRoleUrl !== sourceRoleUrl) ||
+    (visitedRolePath !== undefined &&
+      staleRejectProof.visitedRolePath !== visitedRolePath) ||
     staleRejectProof.clickedAction !== scenario.actionId ||
     staleRejectProof.commandKind !== scenario.commandKind ||
     staleRejectProof.command?.game !== expectedGame ||
