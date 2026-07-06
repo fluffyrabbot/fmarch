@@ -37,8 +37,11 @@ import {
 } from "./dev_test_game_hosted_target_preflight_cases.mjs";
 import {
   assertHostedEvidenceHandoffChecklist,
+  hostedEvidenceBlockedOperatorPacketFromReceipt,
   hostedEvidenceFirstMissingOperatorArtifact,
   hostedEvidenceHandoffChecklistFromPreflight,
+  hostedEvidenceLocalVsHostedBoundary,
+  hostedEvidenceOperatorAction,
   hostedEvidenceRequiredInputsFixture,
 } from "./dev_test_game_hosted_handoff_cases.mjs";
 import {
@@ -403,7 +406,7 @@ function buildBlockedReceipt({
     requiredInputs,
     rawCapture,
   });
-  return {
+  const receipt = {
     status: "blocked",
     blockedCheckIds,
     command: "npm run test:dev-test-game-hosted-evidence-lane",
@@ -422,9 +425,11 @@ function buildBlockedReceipt({
       status: rawCapture.status,
       blockedCheckIds: rawCapture.blockedCheckIds,
     },
-    operatorAction:
-      "Configure the hosted frontend/API URLs plus a readable raw hosted matrix evidence packet from that same deployment, then rerun npm run test:dev-test-game-hosted-evidence-lane.",
-    localVsHostedBoundary:
-      "Local hosted-like matrix artifacts and synthetic demo evidence can prove the handoff path, but they cannot satisfy hosted deployment evidence.",
+    operatorAction: hostedEvidenceOperatorAction,
+    localVsHostedBoundary: hostedEvidenceLocalVsHostedBoundary,
+  };
+  return {
+    ...receipt,
+    blockedOperatorPacket: hostedEvidenceBlockedOperatorPacketFromReceipt(receipt),
   };
 }

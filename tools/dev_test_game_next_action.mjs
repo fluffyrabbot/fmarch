@@ -43,6 +43,7 @@ import {
   devTestGameHostedEvidenceLaneOperatorFixtureAdminProofPath,
 } from "./dev_test_game_hosted_evidence_lane_operator_fixture_cases.mjs";
 import {
+  assertHostedEvidenceBlockedOperatorPacket,
   devTestGameHostedEvidenceLaneRealCaptureAdminProofPath,
 } from "./dev_test_game_hosted_handoff_cases.mjs";
 import {
@@ -1855,7 +1856,7 @@ function validHostedIdentityLocalCapabilityConfidence(confidence) {
 }
 
 function validHostedHandoffChecklist(checklist) {
-  return (
+  const baseValid =
     checklist !== null &&
     typeof checklist === "object" &&
     checklist.status === "blocked" &&
@@ -1877,8 +1878,18 @@ function validHostedHandoffChecklist(checklist) {
         typeof check.requiredEvidence === "string",
     ) &&
     (checklist.progressionSummary === undefined ||
-      validHostedHandoffProgressionSummary(checklist.progressionSummary))
-  );
+      validHostedHandoffProgressionSummary(checklist.progressionSummary));
+  if (!baseValid) {
+    return false;
+  }
+  if (checklist.blockedOperatorPacket !== undefined) {
+    try {
+      assertHostedEvidenceBlockedOperatorPacket(checklist.blockedOperatorPacket);
+    } catch {
+      return false;
+    }
+  }
+  return true;
 }
 
 function validHostedHandoffProgressionSummary(summary) {

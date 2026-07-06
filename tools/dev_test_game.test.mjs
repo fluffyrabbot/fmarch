@@ -481,6 +481,7 @@ import {
   devTestGameHostedEvidenceLaneRealCaptureAdminProofCommand,
   devTestGameHostedEvidenceLaneRealCaptureAdminProofPath,
   devTestGameHostedEvidenceLaneRealCaptureSourcePath,
+  hostedEvidenceBlockedOperatorPacketFromReceipt,
   hostedEvidenceBlockedHandoffChecklistFixture,
   hostedEvidenceFirstMissingOperatorArtifact,
   hostedEvidenceFirstMissingProgressionCaseById,
@@ -495,6 +496,8 @@ import {
   hostedEvidenceRequiredInputsFixture,
   hostedEvidenceHandoffSectionInputRows,
   hostedEvidenceHandoffSectionInputStatuses,
+  hostedEvidenceLocalVsHostedBoundary,
+  hostedEvidenceOperatorAction,
 } from "./dev_test_game_hosted_handoff_cases.mjs";
 import {
   assertDevTestGameHostedEvidenceLaneDemoProof,
@@ -23526,35 +23529,40 @@ function hostedEvidenceAdminProofHandoffFixture(progression) {
   const blockedReceipt =
     progression.blockedCheckIds.length === 0
       ? null
-      : {
-          status: "blocked",
-          blockedCheckIds: [...progression.blockedCheckIds],
-          command: "npm run test:dev-test-game-hosted-evidence-lane",
-          proofTarget: devTestGameHostedTargetPreflightPath,
-          nextProofTarget: devTestGameHostedEvidenceLanePath,
-          requiredInputs: progression.requiredInputs.map((input) => ({
-            ...input,
-          })),
-          missingRequiredInputs: [...progression.missingRequiredInputs],
-          ...(progression.firstMissingOperatorArtifact === null
-            ? {}
-            : {
-                firstMissingOperatorArtifact:
-                  progression.firstMissingOperatorArtifact,
-              }),
-          rawEvidenceContractSummary: hostedMatrixRawEvidenceContractSummary(),
-          rawEvidenceContract: hostedMatrixRawEvidenceContract,
-          realHostedMatrixRawCaptureIntake: {
-            command: `npm run ${devTestGameRealHostedMatrixRawCaptureCommand}`,
-            proofTarget: devTestGameRealHostedMatrixRawCapturePath,
-            status: progression.rawCapture.status,
-            blockedCheckIds: [...progression.rawCapture.blockedCheckIds],
-          },
-          operatorAction:
-            "Configure the hosted frontend/API URLs plus a readable raw hosted matrix evidence packet from that same deployment, then rerun npm run test:dev-test-game-hosted-evidence-lane.",
-          localVsHostedBoundary:
-            "Local hosted-like matrix artifacts and synthetic demo evidence can prove the handoff path, but they cannot satisfy hosted deployment evidence.",
-        };
+      : (() => {
+          const receipt = {
+            status: "blocked",
+            blockedCheckIds: [...progression.blockedCheckIds],
+            command: "npm run test:dev-test-game-hosted-evidence-lane",
+            proofTarget: devTestGameHostedTargetPreflightPath,
+            nextProofTarget: devTestGameHostedEvidenceLanePath,
+            requiredInputs: progression.requiredInputs.map((input) => ({
+              ...input,
+            })),
+            missingRequiredInputs: [...progression.missingRequiredInputs],
+            ...(progression.firstMissingOperatorArtifact === null
+              ? {}
+              : {
+                  firstMissingOperatorArtifact:
+                    progression.firstMissingOperatorArtifact,
+                }),
+            rawEvidenceContractSummary: hostedMatrixRawEvidenceContractSummary(),
+            rawEvidenceContract: hostedMatrixRawEvidenceContract,
+            realHostedMatrixRawCaptureIntake: {
+              command: `npm run ${devTestGameRealHostedMatrixRawCaptureCommand}`,
+              proofTarget: devTestGameRealHostedMatrixRawCapturePath,
+              status: progression.rawCapture.status,
+              blockedCheckIds: [...progression.rawCapture.blockedCheckIds],
+            },
+            operatorAction: hostedEvidenceOperatorAction,
+            localVsHostedBoundary: hostedEvidenceLocalVsHostedBoundary,
+          };
+          return {
+            ...receipt,
+            blockedOperatorPacket:
+              hostedEvidenceBlockedOperatorPacketFromReceipt(receipt),
+          };
+        })();
   return hostedEvidenceHandoffChecklistFixture({
     status: progression.blockedCheckIds.length === 0 ? "passed" : "blocked",
     preflightStatus:
@@ -23581,6 +23589,9 @@ function visibleHostedEvidenceBlockedReceipt(receipt) {
       visibleHostedEvidenceFirstMissingOperatorArtifact(
         receipt.firstMissingOperatorArtifact,
       ),
+    blockedOperatorPacket: visibleHostedEvidenceBlockedOperatorPacket(
+      receipt.blockedOperatorPacket,
+    ),
     realHostedMatrixRawCaptureIntake: {
       command: receipt.realHostedMatrixRawCaptureIntake.command,
       proofTarget: receipt.realHostedMatrixRawCaptureIntake.proofTarget,
@@ -23588,6 +23599,40 @@ function visibleHostedEvidenceBlockedReceipt(receipt) {
       blockedCheckIds: [
         ...receipt.realHostedMatrixRawCaptureIntake.blockedCheckIds,
       ],
+    },
+  };
+}
+
+function visibleHostedEvidenceBlockedOperatorPacket(packet) {
+  if (packet === null || packet === undefined) {
+    return null;
+  }
+  const drilldown = packet.roleSurfaceDrilldown ?? {};
+  return {
+    status: packet.status,
+    firstMissingInputId: packet.firstMissingInputId,
+    firstMissingCheckId: packet.firstMissingCheckId,
+    firstMissingSectionId: packet.firstMissingSectionId,
+    firstMissingSectionLabel: packet.firstMissingSectionLabel,
+    firstMissingRequiredEvidence: packet.firstMissingRequiredEvidence,
+    rawEvidenceContractSummary: packet.rawEvidenceContractSummary,
+    rawEvidenceContractRequiredTopLevelFields: [
+      ...packet.rawEvidenceContractRequiredTopLevelFields,
+    ],
+    operatorAction: packet.operatorAction,
+    localVsHostedBoundary: packet.localVsHostedBoundary,
+    proofTarget: packet.proofTarget,
+    nextProofTarget: packet.nextProofTarget,
+    missingRequiredInputs: [...packet.missingRequiredInputs],
+    selectedProductionFeatureGraphNodeId:
+      packet.selectedProductionFeatureGraphNodeId,
+    selectedProductionFeatureRoleUrl: packet.selectedProductionFeatureRoleUrl,
+    roleSurfaceDrilldown: {
+      localCapabilityRoleUrl: drilldown.localCapabilityRoleUrl,
+      handoffRoleUrl: drilldown.handoffRoleUrl,
+      proofGraphNodeId: drilldown.proofGraphNodeId,
+      productionFeatureGraphNodeId: drilldown.productionFeatureGraphNodeId,
+      proofGraphEvidencePath: drilldown.proofGraphEvidencePath,
     },
   };
 }
@@ -23926,35 +23971,40 @@ function hostedTargetPreflightFixture({
   ];
   const blockedReceipt = passed
     ? undefined
-    : {
-        status: "blocked",
-        blockedCheckIds: [...hostedTargetPreflightBlockingCheckIds],
-        command: "npm run test:dev-test-game-hosted-evidence-lane",
-        proofTarget: devTestGameHostedTargetPreflightPath,
-        nextProofTarget: devTestGameHostedTargetPreflightPath,
-        requiredInputs: hostedEvidenceRequiredInputsFixture(),
-        missingRequiredInputs: [
-          "FMARCH_HOSTED_MATRIX_FRONTEND_URL",
-          "FMARCH_HOSTED_MATRIX_API_URL",
-          "FMARCH_HOSTED_MATRIX_RAW_EVIDENCE_PATH",
-        ],
-        firstMissingOperatorArtifact:
-          hostedEvidenceFirstMissingProgressionCaseById(
-            "missing-hosted-target-inputs",
-          ).firstMissingOperatorArtifact,
-        operatorAction:
-          "Configure the hosted frontend/API URLs plus a readable raw hosted matrix evidence packet from that same deployment, then rerun npm run test:dev-test-game-hosted-evidence-lane.",
-        rawEvidenceContractSummary: hostedMatrixRawEvidenceContractSummary(),
-        rawEvidenceContract: hostedMatrixRawEvidenceContract,
-        realHostedMatrixRawCaptureIntake: {
-          command: `npm run ${devTestGameRealHostedMatrixRawCaptureCommand}`,
-          proofTarget: devTestGameRealHostedMatrixRawCapturePath,
+    : (() => {
+        const receipt = {
           status: "blocked",
-          blockedCheckIds: target.rawCaptureBlockedCheckIds,
-        },
-        localVsHostedBoundary:
-          "Local hosted-like matrix artifacts and synthetic demo evidence can prove the handoff path, but they cannot satisfy hosted deployment evidence.",
-      };
+          blockedCheckIds: [...hostedTargetPreflightBlockingCheckIds],
+          command: "npm run test:dev-test-game-hosted-evidence-lane",
+          proofTarget: devTestGameHostedTargetPreflightPath,
+          nextProofTarget: devTestGameHostedTargetPreflightPath,
+          requiredInputs: hostedEvidenceRequiredInputsFixture(),
+          missingRequiredInputs: [
+            "FMARCH_HOSTED_MATRIX_FRONTEND_URL",
+            "FMARCH_HOSTED_MATRIX_API_URL",
+            "FMARCH_HOSTED_MATRIX_RAW_EVIDENCE_PATH",
+          ],
+          firstMissingOperatorArtifact:
+            hostedEvidenceFirstMissingProgressionCaseById(
+              "missing-hosted-target-inputs",
+            ).firstMissingOperatorArtifact,
+          operatorAction: hostedEvidenceOperatorAction,
+          rawEvidenceContractSummary: hostedMatrixRawEvidenceContractSummary(),
+          rawEvidenceContract: hostedMatrixRawEvidenceContract,
+          realHostedMatrixRawCaptureIntake: {
+            command: `npm run ${devTestGameRealHostedMatrixRawCaptureCommand}`,
+            proofTarget: devTestGameRealHostedMatrixRawCapturePath,
+            status: "blocked",
+            blockedCheckIds: target.rawCaptureBlockedCheckIds,
+          },
+          localVsHostedBoundary: hostedEvidenceLocalVsHostedBoundary,
+        };
+        return {
+          ...receipt,
+          blockedOperatorPacket:
+            hostedEvidenceBlockedOperatorPacketFromReceipt(receipt),
+        };
+      })();
   return {
     version: 1,
     proof: "dev-test-game-hosted-target-preflight",

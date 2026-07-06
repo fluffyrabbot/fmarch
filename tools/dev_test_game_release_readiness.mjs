@@ -1392,6 +1392,8 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
         hostedEvidenceLaneAdminProofEvidence.hostedHandoffBlockedReceipt,
       firstMissingOperatorArtifact:
         hostedEvidenceLaneAdminProofEvidence.firstMissingOperatorArtifact,
+      blockedOperatorPacket:
+        hostedEvidenceLaneAdminProofEvidence.blockedOperatorPacket,
       handoffReceiptMissingRequiredInputs:
         hostedEvidenceLaneAdminProofEvidence.handoffReceiptMissingRequiredInputs,
       handoffReceiptNextProofTarget:
@@ -4883,6 +4885,8 @@ export function validateDevTestGameHostedEvidenceLaneAdminProof(proof, options =
     null;
   const firstMissingOperatorArtifact =
     hostedHandoffBlockedReceipt?.firstMissingOperatorArtifact ?? null;
+  const blockedOperatorPacket =
+    hostedHandoffBlockedReceipt?.blockedOperatorPacket ?? null;
   return {
     status: "passed",
     path:
@@ -4912,6 +4916,7 @@ export function validateDevTestGameHostedEvidenceLaneAdminProof(proof, options =
       proof.adminRoleSurface.visibleHostedHandoffBlockedReceipt ?? null,
     hostedHandoffBlockedReceipt,
     firstMissingOperatorArtifact,
+    blockedOperatorPacket,
     handoffReceiptStatus: hostedHandoffBlockedReceipt?.status,
     handoffReceiptMissingInputCount:
       hostedHandoffBlockedReceipt?.missingRequiredInputs?.length ?? 0,
@@ -4969,6 +4974,19 @@ function assertHostedEvidenceLaneAdminProofBlockedReceipt(proof) {
       "hosted evidence lane admin proof visible first missing operator artifact drifted",
     );
   }
+  const expectedBlockedOperatorPacket =
+    visibleHostedEvidenceBlockedOperatorPacket(
+      generated.blockedOperatorPacket,
+    );
+  const visibleBlockedOperatorPacket = visible.blockedOperatorPacket ?? null;
+  if (
+    JSON.stringify(visibleBlockedOperatorPacket) !==
+    JSON.stringify(expectedBlockedOperatorPacket)
+  ) {
+    throw new Error(
+      "hosted evidence lane admin proof visible blocked operator packet drifted",
+    );
+  }
 }
 
 function visibleHostedEvidenceFirstMissingOperatorArtifact(artifact) {
@@ -4984,6 +5002,51 @@ function visibleHostedEvidenceFirstMissingOperatorArtifact(artifact) {
     requiredEvidence: String(artifact.requiredEvidence ?? ""),
     purpose: String(artifact.purpose ?? ""),
     proofTarget: String(artifact.proofTarget ?? ""),
+    roleSurfaceDrilldown: {
+      localCapabilityRoleUrl: String(drilldown.localCapabilityRoleUrl ?? ""),
+      handoffRoleUrl: String(drilldown.handoffRoleUrl ?? ""),
+      proofGraphNodeId: String(drilldown.proofGraphNodeId ?? ""),
+      productionFeatureGraphNodeId: String(
+        drilldown.productionFeatureGraphNodeId ?? "",
+      ),
+      proofGraphEvidencePath: String(drilldown.proofGraphEvidencePath ?? ""),
+    },
+  };
+}
+
+function visibleHostedEvidenceBlockedOperatorPacket(packet) {
+  if (packet === null || packet === undefined) {
+    return null;
+  }
+  const drilldown = packet.roleSurfaceDrilldown ?? {};
+  return {
+    status: String(packet.status ?? ""),
+    firstMissingInputId: String(packet.firstMissingInputId ?? ""),
+    firstMissingCheckId: String(packet.firstMissingCheckId ?? ""),
+    firstMissingSectionId: String(packet.firstMissingSectionId ?? ""),
+    firstMissingSectionLabel: String(packet.firstMissingSectionLabel ?? ""),
+    firstMissingRequiredEvidence: String(
+      packet.firstMissingRequiredEvidence ?? "",
+    ),
+    rawEvidenceContractSummary: String(
+      packet.rawEvidenceContractSummary ?? "",
+    ),
+    rawEvidenceContractRequiredTopLevelFields: (
+      packet.rawEvidenceContractRequiredTopLevelFields ?? []
+    ).map((field) => String(field)),
+    operatorAction: String(packet.operatorAction ?? ""),
+    localVsHostedBoundary: String(packet.localVsHostedBoundary ?? ""),
+    proofTarget: String(packet.proofTarget ?? ""),
+    nextProofTarget: String(packet.nextProofTarget ?? ""),
+    missingRequiredInputs: (packet.missingRequiredInputs ?? []).map((input) =>
+      String(input),
+    ),
+    selectedProductionFeatureGraphNodeId: String(
+      packet.selectedProductionFeatureGraphNodeId ?? "",
+    ),
+    selectedProductionFeatureRoleUrl: String(
+      packet.selectedProductionFeatureRoleUrl ?? "",
+    ),
     roleSurfaceDrilldown: {
       localCapabilityRoleUrl: String(drilldown.localCapabilityRoleUrl ?? ""),
       handoffRoleUrl: String(drilldown.handoffRoleUrl ?? ""),

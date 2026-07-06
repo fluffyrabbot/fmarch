@@ -731,9 +731,56 @@ function buildHostedHandoffBlockedReceiptRows({ checklist, headings }) {
           artifact: receipt.firstMissingOperatorArtifact,
           heading: headings.firstMissingOperatorArtifact,
         }),
+        ...hostedHandoffBlockedOperatorPacketSubentries({
+          packet: receipt.blockedOperatorPacket,
+        }),
       ],
     }),
   ]);
+}
+
+function hostedHandoffBlockedOperatorPacketSubentries({ packet }) {
+  if (packet === null || typeof packet !== "object") {
+    return [];
+  }
+  return [
+    {
+      id: "blocked-receipt-operator-packet",
+      testId: "admin-audit-hosted-handoff-blocked-receipt-operator-packet",
+      values: [
+        {
+          id: "heading",
+          text: "Blocked operator packet",
+          emphasized: true,
+        },
+        { id: "status", text: packet.status },
+        { id: "firstMissingInputId", text: packet.firstMissingInputId },
+        { id: "firstMissingCheckId", text: packet.firstMissingCheckId },
+        {
+          id: "firstMissingSectionId",
+          text: packet.firstMissingSectionId,
+        },
+        {
+          id: "selectedProductionFeatureRoleUrl",
+          text: packet.selectedProductionFeatureRoleUrl,
+        },
+        {
+          id: "selectedProductionFeatureGraphNodeId",
+          text: packet.selectedProductionFeatureGraphNodeId,
+        },
+        {
+          id: "rawEvidenceContractSummary",
+          text: packet.rawEvidenceContractSummary,
+        },
+        {
+          id: "rawEvidenceContractRequiredTopLevelFields",
+          text: packet.rawEvidenceContractRequiredTopLevelFields.join(", "),
+        },
+        { id: "proofTarget", text: packet.proofTarget },
+        { id: "nextProofTarget", text: packet.nextProofTarget },
+      ],
+    },
+  ];
 }
 
 function hostedHandoffRawCaptureIntakeSubentries({ intake, heading }) {
@@ -5526,6 +5573,14 @@ function normalizeHostedHandoffBlockedReceipt(receipt) {
               receipt.firstMissingOperatorArtifact,
             ),
         }),
+    ...(receipt.blockedOperatorPacket === null ||
+    typeof receipt.blockedOperatorPacket !== "object"
+      ? {}
+      : {
+          blockedOperatorPacket: normalizeHostedHandoffBlockedOperatorPacket(
+            receipt.blockedOperatorPacket,
+          ),
+        }),
     requiredInputs: Object.freeze(
       requiredInputs.map((input) =>
         Object.freeze({
@@ -5536,6 +5591,60 @@ function normalizeHostedHandoffBlockedReceipt(receipt) {
         }),
       ),
     ),
+  });
+}
+
+function normalizeHostedHandoffBlockedOperatorPacket(packet) {
+  const drilldown =
+    packet.roleSurfaceDrilldown !== null &&
+    typeof packet.roleSurfaceDrilldown === "object"
+      ? packet.roleSurfaceDrilldown
+      : {};
+  return Object.freeze({
+    status: String(packet.status ?? "unknown"),
+    firstMissingInputId: String(packet.firstMissingInputId ?? ""),
+    firstMissingCheckId: String(packet.firstMissingCheckId ?? ""),
+    firstMissingSectionId: String(packet.firstMissingSectionId ?? ""),
+    firstMissingSectionLabel: String(packet.firstMissingSectionLabel ?? ""),
+    firstMissingRequiredEvidence: String(
+      packet.firstMissingRequiredEvidence ?? "",
+    ),
+    rawEvidenceContractSummary: String(
+      packet.rawEvidenceContractSummary ?? "",
+    ),
+    rawEvidenceContractRequiredTopLevelFields: Object.freeze(
+      (Array.isArray(packet.rawEvidenceContractRequiredTopLevelFields)
+        ? packet.rawEvidenceContractRequiredTopLevelFields
+        : []
+      ).map((field) => String(field)),
+    ),
+    operatorAction: String(packet.operatorAction ?? ""),
+    localVsHostedBoundary: String(packet.localVsHostedBoundary ?? ""),
+    proofTarget: String(packet.proofTarget ?? ""),
+    nextProofTarget: String(packet.nextProofTarget ?? ""),
+    missingRequiredInputs: Object.freeze(
+      (Array.isArray(packet.missingRequiredInputs)
+        ? packet.missingRequiredInputs
+        : []
+      ).map((input) => String(input)),
+    ),
+    selectedProductionFeatureGraphNodeId: String(
+      packet.selectedProductionFeatureGraphNodeId ?? "",
+    ),
+    selectedProductionFeatureRoleUrl: String(
+      packet.selectedProductionFeatureRoleUrl ?? "",
+    ),
+    roleSurfaceDrilldown: Object.freeze({
+      localCapabilityAuditId: String(drilldown.localCapabilityAuditId ?? ""),
+      localCapabilityRoleUrl: String(drilldown.localCapabilityRoleUrl ?? ""),
+      handoffAuditId: String(drilldown.handoffAuditId ?? ""),
+      handoffRoleUrl: String(drilldown.handoffRoleUrl ?? ""),
+      proofGraphNodeId: String(drilldown.proofGraphNodeId ?? ""),
+      productionFeatureGraphNodeId: String(
+        drilldown.productionFeatureGraphNodeId ?? "",
+      ),
+      proofGraphEvidencePath: String(drilldown.proofGraphEvidencePath ?? ""),
+    }),
   });
 }
 

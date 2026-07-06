@@ -87,6 +87,7 @@ import {
   seedScenarioCoverageGroups,
 } from "../../../../tools/dev_test_game_seed_scenario_cases.mjs";
 import {
+  hostedEvidenceBlockedOperatorPacketFromReceipt,
   hostedEvidenceBlockedHandoffChecklistFixture,
   hostedEvidenceHandoffChecklistFromPreflight,
   hostedEvidenceProgressionHandoffSummary,
@@ -103,6 +104,7 @@ import {
   buildRealHostedEvidenceInputs,
 } from "../../../../tools/dev_test_game_real_hosted_evidence_inputs.mjs";
 import {
+  hostedMatrixRawEvidenceContract,
   hostedMatrixRawEvidenceContractSummary,
 } from "../../../../tools/dev_test_game_hosted_matrix_raw_evidence_contract.mjs";
 import {
@@ -3284,8 +3286,8 @@ test("admin route data exposes local next action as a native audit row", async (
     selectedRealHostedEvidenceCommand: "",
     selectedRealHostedEvidenceProofTarget: "",
     selectedProductionFeatureSpineTarget: productionFeatureSpineTargetFixture(),
-    selectedSpineDrilldown: featureSpineDrilldownFixture(),
-    selectedSpineTarget: featureSpineTargetFixture(),
+    selectedSpineDrilldown: compactSpineFixture(featureSpineDrilldownFixture()),
+    selectedSpineTarget: compactSpineFixture(featureSpineTargetFixture()),
     selectedRoleUrl:
       localAdminAuditRoleUrl(localAdminAuditIds.hostedConcurrentRaceMatrix),
     selectedRoleHref:
@@ -3357,8 +3359,8 @@ test("admin route data exposes local next action as a native audit row", async (
             localAdminAuditRoleUrl(localAdminAuditIds.hostedConcurrentRaceMatrix),
           proofGraphNodeId: "admin-proof:hosted-concurrent-race-matrix",
           productionFeatureSpineTarget: productionFeatureSpineTargetFixture(),
-          spineDrilldown: featureSpineDrilldownFixture(),
-          spineTarget: featureSpineTargetFixture(),
+          spineDrilldown: compactSpineFixture(featureSpineDrilldownFixture()),
+          spineTarget: compactSpineFixture(featureSpineTargetFixture()),
           selectedProductionFeatureGraph: {
             nodeId: "production-feature:player-action-submission",
             status: "passed",
@@ -5416,6 +5418,20 @@ test("admin hosted evidence lane detail data carries blocked setup rows", async 
   assert.equal(
     data.audit.hostedHandoffChecklist.blockedReceipt.rawEvidenceContractSummary,
     hostedMatrixRawEvidenceContractSummary(),
+  );
+  assert.equal(
+    data.audit.hostedHandoffChecklist.blockedReceipt.blockedOperatorPacket
+      .selectedProductionFeatureRoleUrl,
+    localAdminAuditRoleUrl(localAdminAuditIds.coreLoop),
+  );
+  assert.equal(
+    data.audit.hostedHandoffChecklist.blockedReceipt.blockedOperatorPacket
+      .firstMissingInputId,
+    "FMARCH_HOSTED_MATRIX_FRONTEND_URL",
+  );
+  assert.ok(
+    data.audit.hostedHandoffChecklist.blockedReceipt.blockedOperatorPacket
+      .rawEvidenceContractRequiredTopLevelFields.includes("observations"),
   );
   assert.equal(data.audit.artifactSummary.demoProofStatus, "passed");
   assert.equal(data.audit.artifactSummary.demoOnly, true);
@@ -8655,7 +8671,7 @@ function hostedHandoffChecklistFixture() {
 }
 
 function hostedBlockedReceiptFixture({ proofTarget, nextProofTarget }) {
-  return {
+  const receipt = {
     status: "blocked",
     blockedCheckIds: [
       "hosted-frontend-url-configured",
@@ -8724,8 +8740,13 @@ function hostedBlockedReceiptFixture({ proofTarget, nextProofTarget }) {
     operatorAction:
       "Configure the hosted frontend/API URLs plus a readable raw hosted matrix evidence packet from that same deployment, then rerun npm run test:dev-test-game-hosted-evidence-lane.",
     rawEvidenceContractSummary: hostedMatrixRawEvidenceContractSummary(),
+    rawEvidenceContract: hostedMatrixRawEvidenceContract,
     localVsHostedBoundary:
       "Local hosted-like matrix artifacts and synthetic demo evidence can prove the handoff path, but they cannot satisfy hosted deployment evidence.",
+  };
+  return {
+    ...receipt,
+    blockedOperatorPacket: hostedEvidenceBlockedOperatorPacketFromReceipt(receipt),
   };
 }
 
@@ -8748,6 +8769,11 @@ function featureSpineTargetFixture() {
 
 function featureSpineDrilldownFixture() {
   return playerActionSubmissionSpineFixture().spineDrilldown;
+}
+
+function compactSpineFixture(fixture) {
+  const { browserWorkbench, ...compact } = fixture;
+  return compact;
 }
 
 function selectedProductionFeatureGraphFixture() {
@@ -9974,6 +10000,50 @@ function expectedHostedHandoffBlockedReceiptRows({ checklist, headings }) {
           artifact: receipt.firstMissingOperatorArtifact,
           heading: headings.firstMissingOperatorArtifact,
         }),
+        ...expectedHostedHandoffBlockedOperatorPacketRows({
+          packet: receipt.blockedOperatorPacket,
+        }),
+      ],
+    ],
+  ];
+}
+
+function expectedHostedHandoffBlockedOperatorPacketRows({ packet }) {
+  if (packet === null || packet === undefined) {
+    return [];
+  }
+  return [
+    [
+      "blocked-receipt-operator-packet",
+      "admin-audit-hosted-handoff-blocked-receipt-operator-packet",
+      [
+        ["heading", "Blocked operator packet", true],
+        ["status", packet.status, false],
+        ["firstMissingInputId", packet.firstMissingInputId, false],
+        ["firstMissingCheckId", packet.firstMissingCheckId, false],
+        ["firstMissingSectionId", packet.firstMissingSectionId, false],
+        [
+          "selectedProductionFeatureRoleUrl",
+          packet.selectedProductionFeatureRoleUrl,
+          false,
+        ],
+        [
+          "selectedProductionFeatureGraphNodeId",
+          packet.selectedProductionFeatureGraphNodeId,
+          false,
+        ],
+        [
+          "rawEvidenceContractSummary",
+          packet.rawEvidenceContractSummary,
+          false,
+        ],
+        [
+          "rawEvidenceContractRequiredTopLevelFields",
+          packet.rawEvidenceContractRequiredTopLevelFields.join(", "),
+          false,
+        ],
+        ["proofTarget", packet.proofTarget, false],
+        ["nextProofTarget", packet.nextProofTarget, false],
       ],
     ],
   ];
