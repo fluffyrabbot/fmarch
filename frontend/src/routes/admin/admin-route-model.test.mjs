@@ -8,6 +8,8 @@ import {
   adminForbiddenMessage,
   buildAdminAuditDetailData,
   buildAdminRouteData,
+  hostedHandoffReceiptHeadingRegistry,
+  hostedHandoffReceiptHeadingsForAudit,
   normalizeLocalNextActionGeneratedSummary,
   normalizeLocalNextActionLocalReadinessDependencyCheckRows,
   normalizeLocalNextActionProofGraphDiagnosticSummaryCheckRows,
@@ -1116,6 +1118,10 @@ test("admin route data exposes hosted evidence lane as a native audit row", asyn
       localAdminAuditIds.nextAction,
     ],
   );
+  assert.deepEqual(
+    lane.hostedHandoffReceiptHeadings,
+    hostedHandoffReceiptHeadingsForAudit(localAdminAuditIds.hostedEvidenceLane),
+  );
   assert.equal(lane.artifactSummary.nextCommand, "npm run test:dev-test-game-hosted-evidence-lane");
   assert.equal(lane.artifactSummary.nextProofTarget, HOSTED_EVIDENCE_LANE_PROOF_TARGET);
   assert.equal(lane.artifactSummary.preflightStatus, "blocked");
@@ -1283,6 +1289,12 @@ test("admin route data exposes hosted identity evidence as a native audit row", 
   assert.deepEqual(
     identity.relatedLinks.map((link) => link.id),
     [localAdminAuditIds.identityAdapter, localAdminAuditIds.nextAction],
+  );
+  assert.deepEqual(
+    identity.hostedHandoffReceiptHeadings,
+    hostedHandoffReceiptHeadingsForAudit(
+      localAdminAuditIds.hostedIdentityEvidence,
+    ),
   );
   assert.deepEqual(identity.handoffPath, {
     upstreamAuditId: localAdminAuditIds.nextAction,
@@ -1540,8 +1552,38 @@ test("admin audit detail page renders hosted identity blocked receipt as a named
     "utf8",
   );
   assert.match(source, /admin-audit-hosted-handoff-blocked-receipt/);
-  assert.match(source, /Hosted identity blocked receipt/);
+  assert.match(source, /hostedHandoffReceiptHeadings\?\.blockedReceipt/);
   assert.match(source, /firstMissingOperatorArtifact\.roleSurfaceDrilldown/);
+});
+
+test("hosted handoff receipt headings come from the route-model registry", () => {
+  assert.equal(
+    hostedHandoffReceiptHeadingRegistry[localAdminAuditIds.hostedEvidenceLane]
+      .blockedReceipt,
+    "Hosted evidence blocked receipt",
+  );
+  assert.equal(
+    hostedHandoffReceiptHeadingRegistry[
+      localAdminAuditIds.hostedIdentityEvidence
+    ].blockedReceipt,
+    "Hosted identity blocked receipt",
+  );
+  assert.equal(
+    hostedHandoffReceiptHeadingRegistry[
+      localAdminAuditIds.realHostedObservabilityHandoff
+    ].blockedReceipt,
+    "Real hosted observability blocked receipt",
+  );
+  assert.equal(
+    hostedHandoffReceiptHeadingRegistry[
+      localAdminAuditIds.hostedConcurrentRaceMatrix
+    ].blockedReceipt,
+    "Hosted matrix blocked receipt",
+  );
+  assert.equal(
+    hostedHandoffReceiptHeadingsForAudit("unknown").blockedReceipt,
+    "Hosted handoff blocked receipt",
+  );
 });
 
 test("admin audit detail page renders hosted evidence raw-capture intake as a named blocked-receipt group", async () => {
@@ -1549,10 +1591,16 @@ test("admin audit detail page renders hosted evidence raw-capture intake as a na
     "frontend/src/routes/admin/audit/[audit]/+page.svelte",
     "utf8",
   );
-  assert.match(source, /hostedHandoffBlockedReceiptHeading/);
-  assert.match(source, /Hosted evidence blocked receipt/);
-  assert.match(source, /Real hosted raw-capture intake/);
-  assert.match(source, /First missing operator artifact/);
+  assert.doesNotMatch(source, /hostedHandoffBlockedReceiptHeading/);
+  assert.match(source, /hostedHandoffReceiptHeadings\?\.blockedReceipt/);
+  assert.match(
+    source,
+    /hostedHandoffReceiptHeadings\?\.realHostedMatrixRawCaptureIntake/,
+  );
+  assert.match(
+    source,
+    /hostedHandoffReceiptHeadings\?\.firstMissingOperatorArtifact/,
+  );
   assert.match(source, /realHostedMatrixRawCaptureIntake\.proofTarget/);
   assert.match(source, /firstMissingOperatorArtifact\.roleSurfaceDrilldown/);
 });

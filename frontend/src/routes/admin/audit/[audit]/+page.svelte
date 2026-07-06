@@ -23,7 +23,15 @@
     productionFeatureDestinationRows.filter((row) =>
       isHostedEvidenceProgressionDestination(row),
     );
-  $: blockedReceiptHeading = hostedHandoffBlockedReceiptHeading(data.audit?.id);
+  $: blockedReceiptHeading =
+    data.audit.hostedHandoffReceiptHeadings?.blockedReceipt ??
+    "Hosted handoff blocked receipt";
+  $: rawCaptureIntakeHeading =
+    data.audit.hostedHandoffReceiptHeadings?.realHostedMatrixRawCaptureIntake ??
+    "Real hosted raw-capture intake";
+  $: firstMissingOperatorArtifactHeading =
+    data.audit.hostedHandoffReceiptHeadings?.firstMissingOperatorArtifact ??
+    "First missing operator artifact";
 
   function prerequisiteRoleHref(prerequisite) {
     const roleUrl = String(prerequisite?.roleUrl ?? "");
@@ -33,16 +41,6 @@
 
   function isHostedEvidenceProgressionDestination(row) {
     return String(row?.id ?? "").startsWith("hosted-evidence-progression:");
-  }
-
-  function hostedHandoffBlockedReceiptHeading(auditId) {
-    if (auditId === "local-hosted-identity-evidence") {
-      return "Hosted identity blocked receipt";
-    }
-    if (auditId === "local-hosted-evidence-lane") {
-      return "Hosted evidence blocked receipt";
-    }
-    return "Hosted handoff blocked receipt";
   }
 </script>
 
@@ -1054,7 +1052,7 @@
                 <span>{data.audit.hostedHandoffChecklist.blockedReceipt.rawEvidenceContractSummary}</span>
               {/if}
               {#if data.audit.hostedHandoffChecklist.blockedReceipt.realHostedMatrixRawCaptureIntake}
-                <h4>Real hosted raw-capture intake</h4>
+                <h4>{rawCaptureIntakeHeading}</h4>
                 <span>{data.audit.hostedHandoffChecklist.blockedReceipt.realHostedMatrixRawCaptureIntake.command}</span>
                 <span>{data.audit.hostedHandoffChecklist.blockedReceipt.realHostedMatrixRawCaptureIntake.proofTarget}</span>
                 <span>{data.audit.hostedHandoffChecklist.blockedReceipt.realHostedMatrixRawCaptureIntake.status}</span>
@@ -1063,7 +1061,7 @@
               <span>{data.audit.hostedHandoffChecklist.blockedReceipt.missingRequiredInputs.join(", ")}</span>
               <span>{data.audit.hostedHandoffChecklist.blockedReceipt.nextProofTarget}</span>
               {#if data.audit.hostedHandoffChecklist.blockedReceipt.firstMissingOperatorArtifact}
-                <h4>First missing operator artifact</h4>
+                <h4>{firstMissingOperatorArtifactHeading}</h4>
                 <span>{data.audit.hostedHandoffChecklist.blockedReceipt.firstMissingOperatorArtifact.inputId}</span>
                 <span>{data.audit.hostedHandoffChecklist.blockedReceipt.firstMissingOperatorArtifact.checkId}</span>
                 <span>{data.audit.hostedHandoffChecklist.blockedReceipt.firstMissingOperatorArtifact.sectionId}</span>

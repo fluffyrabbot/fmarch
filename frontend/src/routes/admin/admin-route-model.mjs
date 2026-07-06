@@ -135,6 +135,69 @@ const SETUP_COMMAND_EVIDENCE_KEYS = Object.freeze([
   "setPostPolicy",
   "startGame",
 ]);
+export const hostedHandoffReceiptHeadingRegistry = Object.freeze({
+  [localAdminAuditIds.hostedEvidenceLane]: Object.freeze({
+    blockedReceipt: "Hosted evidence blocked receipt",
+    realHostedMatrixRawCaptureIntake: "Real hosted raw-capture intake",
+    firstMissingOperatorArtifact: "First missing operator artifact",
+  }),
+  [localAdminAuditIds.hostedIdentityEvidence]: Object.freeze({
+    blockedReceipt: "Hosted identity blocked receipt",
+    firstMissingOperatorArtifact: "First missing operator artifact",
+  }),
+  [localAdminAuditIds.hostedConcurrentRaceMatrix]: Object.freeze({
+    blockedReceipt: "Hosted matrix blocked receipt",
+    firstMissingOperatorArtifact: "First missing operator artifact",
+  }),
+  [localAdminAuditIds.realHostedObservabilityHandoff]: Object.freeze({
+    blockedReceipt: "Real hosted observability blocked receipt",
+    firstMissingOperatorArtifact: "First missing operator artifact",
+  }),
+});
+const defaultHostedHandoffReceiptHeadings = Object.freeze({
+  blockedReceipt: "Hosted handoff blocked receipt",
+  realHostedMatrixRawCaptureIntake: "Real hosted raw-capture intake",
+  firstMissingOperatorArtifact: "First missing operator artifact",
+});
+
+export function hostedHandoffReceiptHeadingsForAudit(auditId) {
+  return Object.freeze({
+    ...defaultHostedHandoffReceiptHeadings,
+    ...(hostedHandoffReceiptHeadingRegistry[String(auditId ?? "")] ?? {}),
+  });
+}
+
+function hostedHandoffReceiptHeadingsForNextActionUnproven(unproven) {
+  const roleUrl = String(unproven?.roleUrl ?? "");
+  const unprovenId = String(unproven?.id ?? "");
+  if (
+    roleUrl.includes(localAdminAuditIds.hostedIdentityEvidence) ||
+    unprovenId === "hosted-production-identity"
+  ) {
+    return hostedHandoffReceiptHeadingsForAudit(
+      localAdminAuditIds.hostedIdentityEvidence,
+    );
+  }
+  if (
+    roleUrl.includes(localAdminAuditIds.hostedEvidenceLane) ||
+    unprovenId === "hosted-deployment"
+  ) {
+    return hostedHandoffReceiptHeadingsForAudit(
+      localAdminAuditIds.hostedEvidenceLane,
+    );
+  }
+  if (roleUrl.includes(localAdminAuditIds.realHostedObservabilityHandoff)) {
+    return hostedHandoffReceiptHeadingsForAudit(
+      localAdminAuditIds.realHostedObservabilityHandoff,
+    );
+  }
+  if (roleUrl.includes(localAdminAuditIds.hostedConcurrentRaceMatrix)) {
+    return hostedHandoffReceiptHeadingsForAudit(
+      localAdminAuditIds.hostedConcurrentRaceMatrix,
+    );
+  }
+  return hostedHandoffReceiptHeadingsForAudit("");
+}
 
 export async function buildAdminRouteData({
   principalUserId,
@@ -839,6 +902,9 @@ export function normalizeLocalHostedIdentityEvidenceAudit(
       downstreamProofTarget: String(hostedIdentityEvidence.nextProofTarget ?? ""),
     }),
     hostedHandoffChecklist,
+    hostedHandoffReceiptHeadings: hostedHandoffReceiptHeadingsForAudit(
+      localAdminAuditIds.hostedIdentityEvidence,
+    ),
     artifactSummary: Object.freeze({
       rawEvidencePath: String(
         hostedIdentityEvidence.target?.rawEvidencePath ?? "",
@@ -1115,6 +1181,9 @@ export function normalizeLocalHostedEvidenceLaneAudit(
     ]),
     realHostedEvidenceInputs,
     hostedHandoffChecklist,
+    hostedHandoffReceiptHeadings: hostedHandoffReceiptHeadingsForAudit(
+      localAdminAuditIds.hostedEvidenceLane,
+    ),
     artifactSummary: Object.freeze({
       preflightStatus: String(hostedEvidenceLane.preflightStatus ?? "unknown"),
       blockedCheckCount: blockedCheckIds.length,
@@ -1431,6 +1500,9 @@ export function normalizeLocalRealHostedObservabilityHandoffAudit(
       ),
     }),
     hostedHandoffChecklist,
+    hostedHandoffReceiptHeadings: hostedHandoffReceiptHeadingsForAudit(
+      localAdminAuditIds.realHostedObservabilityHandoff,
+    ),
     artifactSummary: Object.freeze({
       realHostedObservabilitySummary,
       game: String(realHostedObservabilityHandoff.generatedFrom?.game ?? ""),
@@ -1760,6 +1832,9 @@ export function normalizeLocalHostedConcurrentRaceMatrixAudit(
     ),
     realHostedEvidenceInputs,
     hostedHandoffChecklist,
+    hostedHandoffReceiptHeadings: hostedHandoffReceiptHeadingsForAudit(
+      localAdminAuditIds.hostedConcurrentRaceMatrix,
+    ),
     artifactSummary: Object.freeze({
       hostedMatrixSummary,
       game: String(hostedConcurrentRaceMatrix.hostedLikeTarget?.game ?? ""),
@@ -2704,6 +2779,12 @@ export function normalizeLocalNextActionAudit(nextAction, { game, proofGraph = n
     }),
     realHostedEvidenceInputs,
     ...(hostedHandoffChecklist === null ? {} : { hostedHandoffChecklist }),
+    ...(hostedHandoffChecklist === null
+      ? {}
+      : {
+          hostedHandoffReceiptHeadings:
+            hostedHandoffReceiptHeadingsForNextActionUnproven(unproven),
+        }),
     ...(hostedIdentityFamilyBatch === null
       ? {}
       : { hostedIdentityFamilyBatch }),
