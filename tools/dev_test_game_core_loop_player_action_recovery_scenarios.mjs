@@ -116,12 +116,16 @@ export function assertPlayerActionRoleSurfaceProof({
   assertPlayerActionSubmissionClickProofCase({
     proof: playerRoleSurface.playerActionSubmissionClickProof,
     expectedGame,
+    sourceRoleUrl: playerRoleSurface.sourceRoleUrl,
+    visitedRolePath: playerRoleSurface.visitedRolePath,
     scenario,
     includeEvidenceInError,
   });
   assertPlayerInvalidActionRecoveryProofCase({
     proof: playerRoleSurface.playerActionInvalidRecoveryProof,
     expectedGame,
+    sourceRoleUrl: playerRoleSurface.sourceRoleUrl,
+    visitedRolePath: playerRoleSurface.visitedRolePath,
     scenario: scenarioFamily.recovery.invalidActionRecovery,
     includeEvidenceInError,
   });

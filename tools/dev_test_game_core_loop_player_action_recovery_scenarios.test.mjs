@@ -90,10 +90,11 @@ test("player-action role surface assertion uses the shared family cases", () => 
 function playerRoleSurfaceFixture() {
   const game = "game-a";
   const sourceRoleUrl = `http://127.0.0.1:5173/g/${game}`;
+  const visitedRolePath = `/g/${game}`;
   return {
     status: "passed",
     sourceRoleUrl,
-    visitedRolePath: `/g/${game}`,
+    visitedRolePath,
     surfaceTestId: "player-surface",
     checkpointTestId: "player-action-submission-checkpoint",
     clickedThroughFromRoleUrl: true,
@@ -118,17 +119,27 @@ function playerRoleSurfaceFixture() {
       recoveryText: "Reject PhaseLocked: refresh command state",
       statusText: "Player action submission is reachable from this role URL",
     },
-    playerActionSubmissionClickProof: playerActionSubmissionProof({ game }),
-    playerActionInvalidRecoveryProof: playerInvalidActionProof({ game }),
+    playerActionSubmissionClickProof: playerActionSubmissionProof({
+      game,
+      sourceRoleUrl,
+      visitedRolePath,
+    }),
+    playerActionInvalidRecoveryProof: playerInvalidActionProof({
+      game,
+      sourceRoleUrl,
+      visitedRolePath,
+    }),
     releaseReady: false,
     productionReady: false,
   };
 }
 
-function playerActionSubmissionProof({ game }) {
+function playerActionSubmissionProof({ game, sourceRoleUrl, visitedRolePath }) {
   const scenario = playerActionSubmissionScenario();
   return {
     status: "passed",
+    sourceRoleUrl,
+    visitedRolePath,
     clickedAction: scenario.clickedAction,
     commandKind: scenario.commandKind,
     command: {
@@ -162,10 +173,12 @@ function playerActionSubmissionProof({ game }) {
   };
 }
 
-function playerInvalidActionProof({ game }) {
+function playerInvalidActionProof({ game, sourceRoleUrl, visitedRolePath }) {
   const scenario = playerInvalidActionRecoveryScenario();
   return {
     status: "passed",
+    sourceRoleUrl,
+    visitedRolePath,
     clickedAction: scenario.clickedAction,
     commandKind: scenario.commandKind,
     command: {

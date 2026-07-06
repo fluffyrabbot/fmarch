@@ -30,11 +30,16 @@ export {
 export function assertPlayerActionSubmissionClickProofCase({
   proof,
   expectedGame,
+  sourceRoleUrl,
+  visitedRolePath,
   scenario = playerActionSubmissionScenario(),
   includeEvidenceInError = false,
 }) {
   if (
     proof?.status !== "passed" ||
+    (sourceRoleUrl !== undefined && proof.sourceRoleUrl !== sourceRoleUrl) ||
+    (visitedRolePath !== undefined &&
+      proof.visitedRolePath !== visitedRolePath) ||
     proof.clickedAction !== scenario.clickedAction ||
     proof.commandKind !== scenario.commandKind ||
     proof.command?.game !== expectedGame ||
@@ -76,11 +81,16 @@ export function assertPlayerActionSubmissionClickProofCase({
 export function assertPlayerInvalidActionRecoveryProofCase({
   proof,
   expectedGame,
+  sourceRoleUrl,
+  visitedRolePath,
   scenario = playerInvalidActionRecoveryScenario(),
   includeEvidenceInError = false,
 }) {
   if (
     proof?.status !== "passed" ||
+    (sourceRoleUrl !== undefined && proof.sourceRoleUrl !== sourceRoleUrl) ||
+    (visitedRolePath !== undefined &&
+      proof.visitedRolePath !== visitedRolePath) ||
     proof.clickedAction !== scenario.clickedAction ||
     proof.commandKind !== scenario.commandKind ||
     proof.command?.game !== expectedGame ||

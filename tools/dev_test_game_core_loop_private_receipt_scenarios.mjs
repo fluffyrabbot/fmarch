@@ -348,6 +348,8 @@ export function assertPrivateChannelRoleSurfaceProof({
   assertPrivateChannelSubmitPostProofCase({
     proof: submitPostProof,
     expectedGame,
+    sourceRoleUrl: privateChannelRoleSurface.sourceRoleUrl,
+    visitedRolePath: privateChannelRoleSurface.visitedRolePath,
     scenario: submitPostScenario,
     includeEvidenceInError,
   });
@@ -405,11 +407,16 @@ function ackSeqFromCommandStatus(commandStatus) {
 export function assertPrivateChannelSubmitPostProofCase({
   proof,
   expectedGame,
+  sourceRoleUrl,
+  visitedRolePath,
   scenario = privateChannelSubmitPostScenario(),
   includeEvidenceInError = false,
 }) {
   if (
     proof?.status !== "passed" ||
+    (sourceRoleUrl !== undefined && proof.sourceRoleUrl !== sourceRoleUrl) ||
+    (visitedRolePath !== undefined &&
+      proof.visitedRolePath !== visitedRolePath) ||
     proof.clickedAction !== scenario.clickedAction ||
     proof.commandKind !== scenario.commandKind ||
     proof.command?.game !== expectedGame ||

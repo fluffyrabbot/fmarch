@@ -19353,11 +19353,13 @@ function hostMixedAdvanceRaceSurfaceFixture() {
 }
 
 function playerActionRoleSurfaceFixture() {
+  const sourceRoleUrl =
+    "http://127.0.0.1:5173/g/00000000-0000-0000-0000-000000000002";
+  const visitedRolePath = "/g/00000000-0000-0000-0000-000000000002";
   return {
     status: "passed",
-    sourceRoleUrl:
-      "http://127.0.0.1:5173/g/00000000-0000-0000-0000-000000000002",
-    visitedRolePath: "/g/00000000-0000-0000-0000-000000000002",
+    sourceRoleUrl,
+    visitedRolePath,
     surfaceTestId: "player-surface",
     checkpointTestId: "player-action-submission-checkpoint",
     clickedThroughFromRoleUrl: true,
@@ -19385,6 +19387,8 @@ function playerActionRoleSurfaceFixture() {
     },
     playerActionSubmissionClickProof: {
       status: "passed",
+      sourceRoleUrl,
+      visitedRolePath,
       clickedAction: "submit_action:factional_kill",
       commandKind: "SubmitAction",
       command: {
@@ -19431,6 +19435,8 @@ function playerActionRoleSurfaceFixture() {
     },
     playerActionInvalidRecoveryProof: {
       status: "passed",
+      sourceRoleUrl,
+      visitedRolePath,
       clickedAction: "submit_invalid_action:factional_kill",
       commandKind: "SubmitAction",
       command: {
@@ -20766,6 +20772,8 @@ function privateChannelRoleSurfaceFixture() {
     },
     submitPostProof: {
       status: "passed",
+      sourceRoleUrl: roleUrl,
+      visitedRolePath,
       clickedAction: "submit_post",
       commandKind: "SubmitPost",
       command: {

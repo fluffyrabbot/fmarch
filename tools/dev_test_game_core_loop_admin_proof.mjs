@@ -4905,6 +4905,8 @@ async function provePlayerActionSubmissionCheckpoint({
     const clickProof = await provePlayerActionSubmissionClick({
       page,
       commandRequests,
+      roleUrl,
+      visitedRolePath,
     });
     const invalidRecoveryProof = await provePlayerActionInvalidRecovery({
       browser,
@@ -5081,6 +5083,8 @@ async function provePlayerActionInvalidRecovery({
     const command = commandRequests.at(-1)?.[scenario.commandSelector] ?? null;
     return {
       status: "passed",
+      sourceRoleUrl: String(roleUrl),
+      visitedRolePath,
       clickedAction: scenario.clickedAction,
       commandKind: command === null ? null : scenario.commandKind,
       command,
@@ -7945,7 +7949,12 @@ async function installPostDayVoteAdvanceCommonRoutes(
   });
 }
 
-async function provePlayerActionSubmissionClick({ page, commandRequests }) {
+async function provePlayerActionSubmissionClick({
+  page,
+  commandRequests,
+  roleUrl,
+  visitedRolePath,
+}) {
   const scenario = playerActionSubmissionScenario();
   const actionButton = page.locator(scenario.commandButtonSelector);
   await actionButton.waitFor({ state: "visible", timeout: 15000 });
@@ -7983,6 +7992,8 @@ async function provePlayerActionSubmissionClick({ page, commandRequests }) {
   const command = commandRequests.at(-1)?.[scenario.commandSelector] ?? null;
   return {
     status: "passed",
+    sourceRoleUrl: String(roleUrl),
+    visitedRolePath,
     clickedAction: scenario.clickedAction,
     commandKind: command === null ? null : scenario.commandKind,
     command,
@@ -8140,6 +8151,8 @@ async function provePrivateChannelRoleSurface({
       },
       submitPostProof: {
         status: "passed",
+        sourceRoleUrl: String(roleUrl),
+        visitedRolePath,
         clickedAction: scenario.clickedAction,
         commandKind: command === null ? null : scenario.commandKind,
         command,
