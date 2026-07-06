@@ -653,6 +653,7 @@ import {
   proofGraphAdminProofDescriptor,
 } from "./dev_test_game_proof_graph_admin_proof_descriptor.mjs";
 import {
+  proofGraphProductionFeatureDestinationArtifacts,
   proofGraphProductionFeatureDestinationSummary,
   proofGraphProductionFeatureProvenanceComparison,
 } from "./dev_test_game_proof_graph_production_feature_destinations.mjs";
@@ -6230,6 +6231,10 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
   assert.deepEqual(
     proofGraphAdminRequirements.requiredProductionFeatureDestinationSummaries,
     graph.summary.productionFeatureDestinationSummary.rows.map((row) => row.id),
+  );
+  assert.deepEqual(
+    proofGraphAdminRequirements.requiredProductionFeatureDestinationArtifacts,
+    proofGraphAdminGeneratedFrom.productionFeatureDestinationArtifacts,
   );
   assert.deepEqual(
     proofGraphAdminRequirements.requiredDiagnosticProofSummaries,
@@ -23445,6 +23450,10 @@ function proofGraphAdminProofFixture() {
     proofGraphProductionFeatureDestinationSummaryFixture(
       productionFeatureTargetDestinations,
     );
+  const productionFeatureDestinationArtifacts =
+    proofGraphProductionFeatureDestinationArtifacts(
+      productionFeatureDestinationSummary,
+    );
   const manifestProductionFeatureProvenanceSummary =
     productionFeatureProvenanceSummaryFixture(productionFeatureTargetDestinations);
   const productionFeatureProvenanceComparison =
@@ -23580,6 +23589,7 @@ function proofGraphAdminProofFixture() {
       coreLoopRecoveryDestinationArtifacts,
       productionFeatureTargetDestinations,
       productionFeatureDestinationSummary,
+      productionFeatureDestinationArtifacts,
       manifestProductionFeatureProvenanceSummary,
       productionFeatureProvenanceComparison,
       diagnosticProofSummary,
@@ -23671,6 +23681,14 @@ function proofGraphAdminProofFixture() {
       ],
       visibleProductionFeatureDestinationSummaries:
         productionFeatureDestinationSummary.rows.map((row) => row.id),
+      visibleProductionFeatureDestinationArtifacts:
+        productionFeatureDestinationArtifacts.map((artifact) => ({
+          rowId: artifact.rowId,
+          field: artifact.field,
+          artifact: artifact.artifact,
+          href: visibleAdminEvidenceArtifactFixture(artifact.artifact).href,
+          clickedThrough: true,
+        })),
       visibleProductionFeatureDestinationSummaryStatuses: Object.fromEntries(
         productionFeatureDestinationSummary.rows.map((row) => [
           row.id,

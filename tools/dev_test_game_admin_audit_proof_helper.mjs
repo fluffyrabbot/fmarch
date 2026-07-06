@@ -26,6 +26,9 @@ import {
   proofGraphCoreLoopRecoveryDestinationRowTestIdPrefix,
 } from "./dev_test_game_proof_graph_core_loop_recovery_destinations.mjs";
 import {
+  proofGraphProductionFeatureDestinationArtifactTestId,
+} from "./dev_test_game_proof_graph_production_feature_destinations.mjs";
+import {
   proofGraphDiagnosticProofSummaryRowTestIdPrefix,
 } from "./dev_test_game_proof_graph_diagnostic_summary.mjs";
 export {
@@ -178,6 +181,36 @@ export function assertAdminRoleSurfaceProofGraphCoreLoopRecoveryDestinationArtif
     if (id === "" || proofTarget === "" || match === undefined) {
       throw new Error(
         `${proofName} missing proof graph core-loop recovery destination artifact drilldown: ${id}`,
+      );
+    }
+  }
+}
+
+export function assertAdminRoleSurfaceProductionFeatureDestinationArtifacts({
+  adminRoleSurface,
+  expectedArtifacts,
+  proofName,
+}) {
+  const visible =
+    adminRoleSurface?.visibleProductionFeatureDestinationArtifacts;
+  for (const expected of expectedArtifacts ?? []) {
+    const rowId = String(expected.rowId ?? "");
+    const field = String(expected.field ?? "");
+    const artifact = String(expected.artifact ?? "");
+    const match = Array.isArray(visible)
+      ? visible.find(
+          (item) =>
+            item?.rowId === rowId &&
+            item.field === field &&
+            item.artifact === artifact &&
+            item.href ===
+              adminArtifactUrlPath({ game: "<seeded-game>", artifact }) &&
+            item.clickedThrough === true,
+        )
+      : undefined;
+    if (rowId === "" || field === "" || artifact === "" || match === undefined) {
+      throw new Error(
+        `${proofName} missing production feature destination artifact drilldown: ${rowId} ${field}`,
       );
     }
   }
@@ -426,6 +459,7 @@ export async function proveAdminAuditDetail({
   requiredHostedMatrixSummaryStatuses = {},
   requiredProofLaneCoverage = [],
   requiredProductionFeatureDestinationSummaries = [],
+  requiredProductionFeatureDestinationArtifacts = [],
   requiredDiagnosticProofSummaries = [],
   requiredDiagnosticProofSummaryStatuses = {},
   requiredProofGraphPrerequisiteDestinations = [],
@@ -615,6 +649,14 @@ export async function proveAdminAuditDetail({
         page,
         prefix: "admin-audit-production-feature-destination-summary",
         ids: visibleProductionFeatureDestinationSummaries,
+      });
+    const visibleProductionFeatureDestinationArtifacts =
+      await visitProductionFeatureDestinationArtifacts({
+        page,
+        frontendBaseUrl,
+        detailUrl,
+        game,
+        expectedArtifacts: requiredProductionFeatureDestinationArtifacts,
       });
     const visibleDiagnosticProofSummaries = await waitForRows({
       page,
@@ -1550,6 +1592,9 @@ export async function proveAdminAuditDetail({
             visibleProductionFeatureDestinationSummaryStatuses:
               visibleProductionFeatureDestinationSummaryStatuses,
           }),
+      ...(visibleProductionFeatureDestinationArtifacts.length === 0
+        ? {}
+        : { visibleProductionFeatureDestinationArtifacts }),
       ...(visibleDiagnosticProofSummaries.length === 0
         ? {}
         : { visibleDiagnosticProofSummaries }),
@@ -2170,56 +2215,27 @@ async function visitProofGraphPrerequisiteDestinationArtifacts({
   game,
   expectedArtifacts,
 }) {
-  const visited = [];
-  for (const expected of expectedArtifacts ?? []) {
-    const rowId = String(expected.rowId ?? "");
-    const proofTarget = String(expected.proofTarget ?? "");
-    if (rowId === "" || proofTarget === "") {
-      throw new Error("proof graph prerequisite destination artifact is malformed");
-    }
-    const expectedHref = adminArtifactUrlPath({ game, artifact: proofTarget });
-    await page.goto(detailUrl, { waitUntil: "networkidle" });
-    await page.getByTestId("admin-audit-detail-surface").waitFor({
-      state: "visible",
-      timeout: 15000,
-    });
-    const testId = proofGraphPrerequisiteDestinationProofTargetTestId(rowId);
-    const link = page.getByTestId(testId);
-    await link.waitFor({ state: "visible", timeout: 15000 });
-    const href = await link.getAttribute("href");
-    if (href !== expectedHref) {
-      throw new Error(`${testId} href drifted: ${href} !== ${expectedHref}`);
-    }
-    await Promise.all([
-      page.waitForURL(`${frontendBaseUrl}${expectedHref}`, { timeout: 15000 }),
-      link.click(),
-    ]);
-    await page.waitForLoadState("networkidle");
-    await page.getByTestId("admin-artifact-surface").waitFor({
-      state: "visible",
-      timeout: 15000,
-    });
-    const text = await page.getByTestId("admin-artifact-contents").innerText();
-    if (text.trim() === "") {
-      throw new Error(
-        `${testId} artifact page rendered empty contents for ${proofTarget}`,
-      );
-    }
-    visited.push({
-      rowId,
-      proofTarget,
-      href: adminArtifactUrlPath({ game: "<seeded-game>", artifact: proofTarget }),
-      clickedThrough: true,
-    });
-  }
-  if (visited.length > 0) {
-    await page.goto(detailUrl, { waitUntil: "networkidle" });
-    await page.getByTestId("admin-audit-detail-surface").waitFor({
-      state: "visible",
-      timeout: 15000,
-    });
-  }
-  return visited;
+  return visitAdminArtifactLinks({
+    page,
+    frontendBaseUrl,
+    detailUrl,
+    game,
+    expectedArtifacts,
+    malformedMessage: "proof graph prerequisite destination artifact is malformed",
+    toVisit: (expected) => {
+      const rowId = String(expected.rowId ?? "");
+      const proofTarget = String(expected.proofTarget ?? "");
+      return {
+        valid: rowId !== "" && proofTarget !== "",
+        artifact: proofTarget,
+        testId: proofGraphPrerequisiteDestinationProofTargetTestId(rowId),
+        evidence: {
+          rowId,
+          proofTarget,
+        },
+      };
+    },
+  });
 }
 
 async function visitProofGraphCoreLoopRecoveryDestinationArtifacts({
@@ -2229,25 +2245,92 @@ async function visitProofGraphCoreLoopRecoveryDestinationArtifacts({
   game,
   expectedArtifacts,
 }) {
+  return visitAdminArtifactLinks({
+    page,
+    frontendBaseUrl,
+    detailUrl,
+    game,
+    expectedArtifacts,
+    malformedMessage:
+      "proof graph core-loop recovery destination artifact is malformed",
+    toVisit: (expected) => {
+      const id = String(expected.id ?? "");
+      const proofTarget = String(expected.proofTarget ?? "");
+      return {
+        valid: id !== "" && proofTarget !== "",
+        artifact: proofTarget,
+        testId: proofGraphCoreLoopRecoveryDestinationProofTargetTestId(id),
+        evidence: {
+          id,
+          proofTarget,
+        },
+      };
+    },
+  });
+}
+
+async function visitProductionFeatureDestinationArtifacts({
+  page,
+  frontendBaseUrl,
+  detailUrl,
+  game,
+  expectedArtifacts,
+}) {
+  return visitAdminArtifactLinks({
+    page,
+    frontendBaseUrl,
+    detailUrl,
+    game,
+    expectedArtifacts,
+    malformedMessage: "production feature destination artifact is malformed",
+    toVisit: (expected) => {
+      const rowId = String(expected.rowId ?? "");
+      const field = String(expected.field ?? "");
+      const artifact = String(expected.artifact ?? "");
+      return {
+        valid: rowId !== "" && field !== "" && artifact !== "",
+        artifact,
+        testId: proofGraphProductionFeatureDestinationArtifactTestId({
+          rowId,
+          field,
+        }),
+        evidence: {
+          rowId,
+          field,
+          artifact,
+        },
+      };
+    },
+  });
+}
+
+async function visitAdminArtifactLinks({
+  page,
+  frontendBaseUrl,
+  detailUrl,
+  game,
+  expectedArtifacts,
+  malformedMessage,
+  toVisit,
+}) {
   const visited = [];
   for (const expected of expectedArtifacts ?? []) {
-    const id = String(expected.id ?? "");
-    const proofTarget = String(expected.proofTarget ?? "");
-    if (id === "" || proofTarget === "") {
-      throw new Error("proof graph core-loop recovery destination artifact is malformed");
+    const visit = toVisit(expected);
+    const artifact = String(visit.artifact ?? "");
+    if (visit.valid !== true || artifact === "") {
+      throw new Error(malformedMessage);
     }
-    const expectedHref = adminArtifactUrlPath({ game, artifact: proofTarget });
+    const expectedHref = adminArtifactUrlPath({ game, artifact });
     await page.goto(detailUrl, { waitUntil: "networkidle" });
     await page.getByTestId("admin-audit-detail-surface").waitFor({
       state: "visible",
       timeout: 15000,
     });
-    const testId = proofGraphCoreLoopRecoveryDestinationProofTargetTestId(id);
-    const link = page.getByTestId(testId);
+    const link = page.getByTestId(visit.testId);
     await link.waitFor({ state: "visible", timeout: 15000 });
     const href = await link.getAttribute("href");
     if (href !== expectedHref) {
-      throw new Error(`${testId} href drifted: ${href} !== ${expectedHref}`);
+      throw new Error(`${visit.testId} href drifted: ${href} !== ${expectedHref}`);
     }
     await Promise.all([
       page.waitForURL(`${frontendBaseUrl}${expectedHref}`, { timeout: 15000 }),
@@ -2261,13 +2344,12 @@ async function visitProofGraphCoreLoopRecoveryDestinationArtifacts({
     const text = await page.getByTestId("admin-artifact-contents").innerText();
     if (text.trim() === "") {
       throw new Error(
-        `${testId} artifact page rendered empty contents for ${proofTarget}`,
+        `${visit.testId} artifact page rendered empty contents for ${artifact}`,
       );
     }
     visited.push({
-      id,
-      proofTarget,
-      href: adminArtifactUrlPath({ game: "<seeded-game>", artifact: proofTarget }),
+      ...visit.evidence,
+      href: adminArtifactUrlPath({ game: "<seeded-game>", artifact }),
       clickedThrough: true,
     });
   }

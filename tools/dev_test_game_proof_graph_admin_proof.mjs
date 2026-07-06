@@ -11,6 +11,7 @@ import {
 } from "./dev_test_game_proof_graph_core_loop_recovery_destinations.mjs";
 import {
   assertProofGraphProductionFeatureProvenanceComparison,
+  proofGraphProductionFeatureDestinationArtifacts,
   proofGraphProductionFeatureTargetDestinations,
 } from "./dev_test_game_proof_graph_production_feature_destinations.mjs";
 import {
@@ -37,6 +38,7 @@ import {
 } from "./dev_test_game_hosted_handoff_cases.mjs";
 import {
   assertAdminRoleSurfaceEvidenceArtifact,
+  assertAdminRoleSurfaceProductionFeatureDestinationArtifacts,
   assertAdminRoleSurfaceProofGraphCoreLoopRecoveryDestinationArtifacts,
   assertAdminRoleSurfaceProofGraphPrerequisiteDestinationArtifacts,
   assertVisibleAdminRoleSurfaceRows,
@@ -282,6 +284,10 @@ export function buildProofGraphAdminProofRequirements(source) {
       ),
     requiredProductionFeatureDestinationSummaries:
       productionFeatureDestinationSummary.rows.map((row) => row.id),
+    requiredProductionFeatureDestinationArtifacts:
+      proofGraphProductionFeatureDestinationArtifacts(
+        productionFeatureDestinationSummary,
+      ),
     requiredText: ["Hosted evidence recovery ladder"],
     requiredDiagnosticProofSummaries:
       proofGraphDiagnosticProofSummaryRowIds(diagnosticProofSummary),
@@ -383,6 +389,10 @@ export function buildProofGraphAdminGeneratedFrom(
       proofGraphProductionFeatureTargetDestinations(source.proofGraph),
     productionFeatureDestinationSummary:
       source.proofGraph.summary.productionFeatureDestinationSummary,
+    productionFeatureDestinationArtifacts:
+      proofGraphProductionFeatureDestinationArtifacts(
+        source.proofGraph.summary.productionFeatureDestinationSummary,
+      ),
     manifestProductionFeatureProvenanceSummary:
       source.proofGraph.generatedFrom
         ?.manifestProductionFeatureProvenanceSummary,
@@ -512,6 +522,11 @@ export function assertProofGraphAdminProof(evidence) {
   });
   assertProofGraphAdminProofCoversProductionFeatureDestinations(evidence);
   assertProofGraphAdminProofCoversProductionFeatureDestinationSummary(evidence);
+  assertAdminRoleSurfaceProductionFeatureDestinationArtifacts({
+    adminRoleSurface: evidence.adminRoleSurface,
+    expectedArtifacts: evidence.generatedFrom?.productionFeatureDestinationArtifacts,
+    proofName: "proof graph admin proof",
+  });
   assertProofGraphAdminProofCoversProductionFeatureProvenanceComparison(evidence);
   assertProofGraphAdminProofCoversDiagnosticProofSummary(evidence);
   assertProofGraphAdminProofCoversPhaseLocalNextActionGraphLinks(evidence);

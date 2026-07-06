@@ -2,6 +2,45 @@ import {
   hostedEvidenceProgressionHandoffSummary,
 } from "./dev_test_game_hosted_handoff_cases.mjs";
 
+export const proofGraphProductionFeatureDestinationRowTestIdPrefix =
+  "admin-audit-production-feature-destination-summary";
+
+export const proofGraphProductionFeatureDestinationArtifactFields =
+  Object.freeze([
+    "sourceProofArtifact",
+    "readinessEvidence",
+    "evidencePath",
+    "adminProofTarget",
+  ]);
+
+export function proofGraphProductionFeatureDestinationRowTestId(rowId) {
+  return `${proofGraphProductionFeatureDestinationRowTestIdPrefix}-${String(rowId)}`;
+}
+
+export function proofGraphProductionFeatureDestinationArtifactTestId({
+  rowId,
+  field,
+}) {
+  return `${proofGraphProductionFeatureDestinationRowTestId(rowId)}-${kebabCase(field)}`;
+}
+
+export function proofGraphProductionFeatureDestinationArtifacts(summary) {
+  return (Array.isArray(summary?.rows) ? summary.rows : []).flatMap((row) =>
+    proofGraphProductionFeatureDestinationArtifactFields.flatMap((field) => {
+      const artifact = String(row?.[field] ?? "");
+      return artifact === ""
+        ? []
+        : [
+            Object.freeze({
+              rowId: String(row.id ?? ""),
+              field,
+              artifact,
+            }),
+          ];
+    }),
+  );
+}
+
 export function proofGraphProductionFeatureTargetDestinations(proofGraph) {
   return productionFeatureTargetNodes(proofGraph).map((node) => {
     const auditId = auditIdFromAdminRoleUrl(node.roleUrl);
@@ -312,6 +351,14 @@ function sameStrings(left, right) {
     left.length === right.length &&
     left.every((value, index) => value === right[index])
   );
+}
+
+function kebabCase(value) {
+  return String(value ?? "")
+    .replace(/([a-z0-9])([A-Z])/g, "$1-$2")
+    .replace(/[^a-zA-Z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .toLowerCase();
 }
 
 function productionFeatureTargetNodes(proofGraph) {

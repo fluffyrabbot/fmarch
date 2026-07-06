@@ -186,7 +186,10 @@ import {
   proofGraphDestinationSummaryTraceCheckIds,
 } from "../../../../tools/dev_test_game_proof_graph_destination_summary_trace.mjs";
 import {
+  proofGraphProductionFeatureDestinationArtifactFields,
+  proofGraphProductionFeatureDestinationArtifactTestId,
   proofGraphProductionFeatureDestinationSummary,
+  proofGraphProductionFeatureDestinationRowTestId,
 } from "../../../../tools/dev_test_game_proof_graph_production_feature_destinations.mjs";
 import {
   buildProofStabilityTrace,
@@ -2718,14 +2721,11 @@ test("admin local proof graph detail data carries graph node rows", async () => 
       section.id,
       section.heading,
       section.testId,
-      section.rows.map((row) => [
-        row.id,
-        row.testId,
-        row.values.map((value) => [value.id, value.text, value.emphasized]),
-      ]),
+      descriptorRowsWithLinksForAssertion(section.rows),
     ]),
     expectedProductionFeatureDestinationSections(
       proofGraph.summary.productionFeatureDestinationSummary,
+      { game: "midsummer" },
     ),
   );
 });
@@ -11153,7 +11153,7 @@ function expectedProofLaneCoverageRows(coverageRows) {
   ]);
 }
 
-function expectedProductionFeatureDestinationSections(summary) {
+function expectedProductionFeatureDestinationSections(summary, { game } = {}) {
   const rows = Array.isArray(summary?.rows) ? summary.rows : [];
   const sectionForRows = (id, heading, sectionRows) => [
     id,
@@ -11161,10 +11161,27 @@ function expectedProductionFeatureDestinationSections(summary) {
     `admin-audit-detail-${id}`,
     sectionRows.map((row) => [
       row.id,
-      `admin-audit-production-feature-destination-summary-${row.id}`,
+      proofGraphProductionFeatureDestinationRowTestId(row.id),
       [
-        ["label", row.label, true],
-        ["status", row.status, false],
+        ["label", row.label, true, "", ""],
+        ["status", row.status, false, "", ""],
+        ...proofGraphProductionFeatureDestinationArtifactFields.flatMap(
+          (field) =>
+            row[field] === undefined || row[field] === ""
+              ? []
+              : [
+                  [
+                    field,
+                    row[field],
+                    false,
+                    expectedAdminArtifactHref({ game, artifact: row[field] }),
+                    proofGraphProductionFeatureDestinationArtifactTestId({
+                      rowId: row.id,
+                      field,
+                    }),
+                  ],
+                ],
+        ),
       ],
     ]),
   ];

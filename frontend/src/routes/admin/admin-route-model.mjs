@@ -49,6 +49,11 @@ import {
   proofGraphCoreLoopRecoveryDestinationSummary,
 } from "../../../../tools/dev_test_game_proof_graph_core_loop_recovery_destinations.mjs";
 import {
+  proofGraphProductionFeatureDestinationArtifactFields,
+  proofGraphProductionFeatureDestinationArtifactTestId,
+  proofGraphProductionFeatureDestinationRowTestId,
+} from "../../../../tools/dev_test_game_proof_graph_production_feature_destinations.mjs";
+import {
   hostedEvidenceHandoffInputRows,
 } from "../../../../tools/dev_test_game_hosted_handoff_cases.mjs";
 import {
@@ -2299,6 +2304,7 @@ function withAdminAuditDetailDisplayRows(item, { game }) {
   const productionFeatureDestinationSections =
     buildProductionFeatureDestinationSections(
       item.artifactSummary?.productionFeatureDestinationSummary,
+      { game },
     );
   return Object.freeze({
     ...item,
@@ -2607,7 +2613,7 @@ function buildAdminSpineTerminalValidationRows(validations) {
   );
 }
 
-function buildProductionFeatureDestinationSections(summary) {
+function buildProductionFeatureDestinationSections(summary, { game } = {}) {
   const rows = Array.isArray(summary?.rows) ? summary.rows : [];
   const primaryRows = rows.filter(
     (row) => !isHostedEvidenceProgressionDestinationRow(row),
@@ -2623,7 +2629,7 @@ function buildProductionFeatureDestinationSections(summary) {
             id: "production-feature-destinations",
             heading: "Production feature destinations",
             rows: primaryRows.map((row) =>
-              productionFeatureDestinationDescriptorRow(row),
+              productionFeatureDestinationDescriptorRow(row, { game }),
             ),
           }),
         ]),
@@ -2634,7 +2640,7 @@ function buildProductionFeatureDestinationSections(summary) {
             id: "hosted-evidence-progression-destination-summary",
             heading: "Hosted evidence recovery ladder",
             rows: hostedEvidenceProgressionRows.map((row) =>
-              productionFeatureDestinationDescriptorRow(row),
+              productionFeatureDestinationDescriptorRow(row, { game }),
             ),
           }),
         ]),
@@ -2645,13 +2651,28 @@ function isHostedEvidenceProgressionDestinationRow(row) {
   return String(row?.id ?? "").startsWith("hosted-evidence-progression:");
 }
 
-function productionFeatureDestinationDescriptorRow(row) {
+function productionFeatureDestinationDescriptorRow(row, { game } = {}) {
   return {
     id: row.id,
-    testId: `admin-audit-production-feature-destination-summary-${row.id}`,
+    testId: proofGraphProductionFeatureDestinationRowTestId(row.id),
     values: [
       { id: "label", text: row.label, emphasized: true },
       { id: "status", text: row.status },
+      ...proofGraphProductionFeatureDestinationArtifactFields.flatMap((field) =>
+        row[field] === undefined || row[field] === ""
+          ? []
+          : [
+              localProofArtifactValue({
+                id: field,
+                text: row[field],
+                game,
+                testId: proofGraphProductionFeatureDestinationArtifactTestId({
+                  rowId: row.id,
+                  field,
+                }),
+              }),
+            ],
+      ),
     ],
   };
 }
