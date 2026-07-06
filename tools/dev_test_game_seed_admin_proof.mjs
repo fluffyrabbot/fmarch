@@ -63,6 +63,7 @@ export function seedAdminProofCase() {
       generatedFrom: {
         seedFixtureSummary: seedFixtureRelativePath,
         game: seedFixture.fixture.game,
+        scenarioCount: seedFixture.demoScenarios.length,
         proofLaneCoverage: seedFixture.proofLaneCoverage,
       },
       adminRoleSurface,
@@ -103,6 +104,13 @@ export function assertSeedAdminProof(evidence) {
         `seed admin proof missing visible proof lane coverage: ${coverageId}`,
       );
     }
+  }
+  if (
+    evidence.generatedFrom?.scenarioCount !== requiredScenarios.length ||
+    evidence.generatedFrom?.proofLaneCoverage?.status !== "passed" ||
+    evidence.generatedFrom.proofLaneCoverage.unclassified?.count !== 0
+  ) {
+    throw new Error("seed admin proof missing passed seed fixture coverage metadata");
   }
   return evidence;
 }

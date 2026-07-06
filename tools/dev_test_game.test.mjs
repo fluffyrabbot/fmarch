@@ -15617,6 +15617,18 @@ test("session card and markdown include role credential URLs and tokens", async 
     0,
   );
   assert.equal(
+    seedFixtureReadiness.localDevelopmentSpine.checks.find(
+      (item) => item.id === "local-seed-demo-fixture",
+    ).adminRoleSurface.scenarioCount,
+    seedScenarioCoverageGroups.allDemo.length,
+  );
+  assert.equal(
+    seedFixtureReadiness.localDevelopmentSpine.checks.find(
+      (item) => item.id === "local-seed-demo-fixture",
+    ).adminRoleSurface.proofLaneCoverage.unclassified.count,
+    0,
+  );
+  assert.equal(
     seedFixtureReadiness.releaseReadiness.unproven.some(
       (item) => item.id === "seed-demo-fixtures",
     ),
@@ -21319,6 +21331,8 @@ function seedAdminProofFixture() {
     generatedFrom: {
       seedFixtureSummary: "target/dev-test-game/seed-fixture-summary.json",
       game: "00000000-0000-0000-0000-000000000001",
+      scenarioCount: seedScenarioCoverageGroups.allDemo.length,
+      proofLaneCoverage: seedProofLaneCoverageFixture(),
     },
     adminRoleSurface: {
       status: "passed",

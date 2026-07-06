@@ -5487,6 +5487,18 @@ export function validateDevTestGameSeedAdminProof(proof, options = {}) {
       );
     }
   }
+  const proofLaneCoverage = assertSeedProofLaneCoverage(
+    proof.generatedFrom?.proofLaneCoverage,
+    {
+      label: "seed admin proof lane coverage",
+    },
+  );
+  if (
+    proof.generatedFrom?.scenarioCount !== requiredScenarios.length ||
+    proofLaneCoverage.unclassified.count !== 0
+  ) {
+    throw new Error("seed admin proof missing passed seed fixture coverage metadata");
+  }
   return {
     status: "passed",
     path: options.path ?? devTestGameSeedAdminProofPath,
@@ -5495,6 +5507,8 @@ export function validateDevTestGameSeedAdminProof(proof, options = {}) {
     detailRoleUrl: proof.adminRoleSurface.detailRoleUrl,
     visibleScenarios: proof.adminRoleSurface.visibleScenarios,
     visibleProofLaneCoverage: proof.adminRoleSurface.visibleProofLaneCoverage,
+    scenarioCount: proof.generatedFrom.scenarioCount,
+    proofLaneCoverage,
     ...(options.artifact === undefined ? {} : { artifact: options.artifact }),
   };
 }
