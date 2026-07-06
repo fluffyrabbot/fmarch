@@ -969,6 +969,61 @@ test("admin route data exposes real hosted observability handoff as a native aud
     releaseReady: false,
     productionReady: false,
   });
+  assert.deepEqual(
+    handoff.artifactSummarySections.map((section) => [
+      section.id,
+      section.heading,
+      section.testId,
+      section.rows.map((row) => [
+        row.id,
+        row.testId,
+        row.values.map((value) => [value.id, value.text, value.emphasized]),
+      ]),
+    ]),
+    [
+      [
+        "real-hosted-observability-summary",
+        "Real hosted observability",
+        "admin-audit-detail-real-hosted-observability-summary",
+        [
+          [
+            "real-hosted-observability-summary-status",
+            "admin-audit-real-hosted-observability-summary-status",
+            [
+              ["status", "blocked", true],
+              ["passedChecks", "1/10 checks passed", false],
+              ["blockedChecks", "9 checks blocked", false],
+            ],
+          ],
+          [
+            "real-hosted-observability-summary-inputs",
+            "admin-audit-real-hosted-observability-summary-inputs",
+            [
+              ["providedInputs", "1/11 inputs provided", true],
+              ["missingInputs", "10 inputs missing", false],
+            ],
+          ],
+          [
+            "real-hosted-observability-summary-baseline",
+            "admin-audit-real-hosted-observability-summary-baseline",
+            [
+              ["baselineStatus", "baseline only", true],
+              [
+                "localHostedOpsSignalsPath",
+                "target/dev-test-game/hosted-ops-signals.json",
+                false,
+              ],
+              [
+                "localVsHostedBoundary",
+                "Local hosted-like signals cannot satisfy real hosted observability evidence.",
+                false,
+              ],
+            ],
+          ],
+        ],
+      ],
+    ],
+  );
 });
 
 test("admin route data exposes hosted target preflight as a native audit row", async () => {
@@ -1692,6 +1747,8 @@ test("admin audit detail page renders hosted artifact summary sections from rout
   );
   assert.doesNotMatch(source, /data\.audit\.id === "local-hosted-target-preflight"/);
   assert.doesNotMatch(source, /data\.audit\.id === "local-hosted-evidence-lane"/);
+  assert.doesNotMatch(source, /artifactSummary\.hostedMatrixSummary/);
+  assert.doesNotMatch(source, /artifactSummary\.realHostedObservabilitySummary/);
   assert.match(source, /data\.audit\.artifactSummarySections\?\.length/);
   assert.match(source, /data-testid=\{section\.testId\}/);
   assert.match(source, /data-testid=\{row\.testId\}/);
@@ -2375,6 +2432,72 @@ test("admin route data exposes local hosted matrix as a native audit row", async
     releaseReady: false,
     productionReady: false,
   });
+  assert.deepEqual(
+    matrix.artifactSummarySections.map((section) => [
+      section.id,
+      section.heading,
+      section.testId,
+      section.rows.map((row) => [
+        row.id,
+        row.testId,
+        row.values.map((value) => [value.id, value.text, value.emphasized]),
+      ]),
+    ]),
+    [
+      [
+        "hosted-matrix-summary",
+        "Hosted race matrix",
+        "admin-audit-detail-hosted-matrix-summary",
+        [
+          [
+            "hosted-matrix-summary-coverage",
+            "admin-audit-hosted-matrix-summary-coverage",
+            [
+              ["status", "passed", true],
+              ["passedCells", "3/3 cells passed", false],
+              ["reloadCoverage", "3/3 reloads covered", false],
+              [
+                "reconnectLanes",
+                `${hostedMatrixReconnectLaneIds.length} reconnect lanes`,
+                false,
+              ],
+              [
+                "staleConflictLanes",
+                `${hostedMatrixStaleConflictLaneIds.length} stale conflict lanes`,
+                false,
+              ],
+            ],
+          ],
+          [
+            "hosted-matrix-summary-hosted-evidence",
+            "admin-audit-hosted-matrix-summary-hosted-evidence",
+            [
+              ["hostedEvidenceStatus", "unproven", true],
+              ["hostedDeploymentStatus", "unproven", false],
+              ["hostedEvidenceMode", "not_configured", false],
+            ],
+          ],
+          [
+            "hosted-matrix-summary-missing-inputs",
+            "admin-audit-hosted-matrix-summary-missing-inputs",
+            [
+              ["missingHostedInputCount", "3 missing hosted inputs", true],
+              [
+                "missingHostedInputIds",
+                "FMARCH_HOSTED_MATRIX_FRONTEND_URL, FMARCH_HOSTED_MATRIX_API_URL, FMARCH_HOSTED_MATRIX_RAW_EVIDENCE_PATH",
+                false,
+              ],
+              [
+                "localVsHostedBoundary",
+                "Local hosted-like matrix evidence cannot satisfy real hosted race evidence.",
+                false,
+              ],
+            ],
+          ],
+        ],
+      ],
+    ],
+  );
 });
 
 test("admin local hosted matrix detail data carries progress and gap rows", async () => {

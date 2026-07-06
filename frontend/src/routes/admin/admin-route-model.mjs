@@ -207,18 +207,28 @@ function artifactSummaryValue({ id, text, emphasized = false }) {
   });
 }
 
-function buildSingleRowArtifactSummarySection({ id, heading, values }) {
+function artifactSummaryRow({ id, testId, values }) {
+  return Object.freeze({
+    id: String(id),
+    testId: String(testId ?? `admin-audit-${id}`),
+    values: Object.freeze(values.map((value) => artifactSummaryValue(value))),
+  });
+}
+
+function buildArtifactSummarySection({ id, heading, rows }) {
   return Object.freeze({
     id: String(id),
     heading: String(heading),
     testId: `admin-audit-detail-${id}`,
-    rows: Object.freeze([
-      Object.freeze({
-        id: "summary",
-        testId: `admin-audit-${id}`,
-        values: Object.freeze(values.map((value) => artifactSummaryValue(value))),
-      }),
-    ]),
+    rows: Object.freeze(rows.map((row) => artifactSummaryRow(row))),
+  });
+}
+
+function buildSingleRowArtifactSummarySection({ id, heading, values }) {
+  return buildArtifactSummarySection({
+    id,
+    heading,
+    rows: [{ id: "summary", testId: `admin-audit-${id}`, values }],
   });
 }
 
@@ -283,6 +293,131 @@ function buildHostedEvidenceLaneSummarySections(artifactSummary) {
         {
           id: "productionReady",
           text: hostedReadinessText(artifactSummary.productionReady, "production"),
+        },
+      ],
+    }),
+  ]);
+}
+
+function buildHostedMatrixSummarySections(artifactSummary) {
+  const summary = artifactSummary.hostedMatrixSummary;
+  return Object.freeze([
+    buildArtifactSummarySection({
+      id: "hosted-matrix-summary",
+      heading: "Hosted race matrix",
+      rows: [
+        {
+          id: "hosted-matrix-summary-coverage",
+          values: [
+            { id: "status", text: summary.status, emphasized: true },
+            {
+              id: "passedCells",
+              text: `${summary.passedCellCount}/${summary.cellCount} cells passed`,
+            },
+            {
+              id: "reloadCoverage",
+              text: `${summary.reloadCoveredCellCount}/${summary.cellCount} reloads covered`,
+            },
+            {
+              id: "reconnectLanes",
+              text: `${summary.reconnectLaneCount} reconnect lanes`,
+            },
+            {
+              id: "staleConflictLanes",
+              text: `${summary.staleConflictLaneCount} stale conflict lanes`,
+            },
+          ],
+        },
+        {
+          id: "hosted-matrix-summary-hosted-evidence",
+          values: [
+            {
+              id: "hostedEvidenceStatus",
+              text: summary.hostedEvidenceStatus,
+              emphasized: true,
+            },
+            {
+              id: "hostedDeploymentStatus",
+              text: summary.hostedDeploymentStatus,
+            },
+            { id: "hostedEvidenceMode", text: summary.hostedEvidenceMode },
+          ],
+        },
+        {
+          id: "hosted-matrix-summary-missing-inputs",
+          values: [
+            {
+              id: "missingHostedInputCount",
+              text: `${summary.missingHostedInputCount} missing hosted inputs`,
+              emphasized: true,
+            },
+            {
+              id: "missingHostedInputIds",
+              text: summary.missingHostedInputIds.join(", "),
+            },
+            {
+              id: "localVsHostedBoundary",
+              text: summary.localVsHostedBoundary,
+            },
+          ],
+        },
+      ],
+    }),
+  ]);
+}
+
+function buildRealHostedObservabilitySummarySections(artifactSummary) {
+  const summary = artifactSummary.realHostedObservabilitySummary;
+  return Object.freeze([
+    buildArtifactSummarySection({
+      id: "real-hosted-observability-summary",
+      heading: "Real hosted observability",
+      rows: [
+        {
+          id: "real-hosted-observability-summary-status",
+          values: [
+            { id: "status", text: summary.status, emphasized: true },
+            {
+              id: "passedChecks",
+              text: `${summary.passedCheckCount}/${summary.checkCount} checks passed`,
+            },
+            {
+              id: "blockedChecks",
+              text: `${summary.blockedCheckCount} checks blocked`,
+            },
+          ],
+        },
+        {
+          id: "real-hosted-observability-summary-inputs",
+          values: [
+            {
+              id: "providedInputs",
+              text: `${summary.providedInputCount}/${summary.requiredInputCount} inputs provided`,
+              emphasized: true,
+            },
+            {
+              id: "missingInputs",
+              text: `${summary.missingInputCount} inputs missing`,
+            },
+          ],
+        },
+        {
+          id: "real-hosted-observability-summary-baseline",
+          values: [
+            {
+              id: "baselineStatus",
+              text: summary.baselineStatus,
+              emphasized: true,
+            },
+            {
+              id: "localHostedOpsSignalsPath",
+              text: summary.localHostedOpsSignalsPath,
+            },
+            {
+              id: "localVsHostedBoundary",
+              text: summary.localVsHostedBoundary,
+            },
+          ],
         },
       ],
     }),
@@ -1532,6 +1667,27 @@ export function normalizeLocalRealHostedObservabilityHandoffAudit(
       blockedCheckIds,
       hostedHandoffChecklist,
     });
+  const artifactSummary = Object.freeze({
+    realHostedObservabilitySummary,
+    game: String(realHostedObservabilityHandoff.generatedFrom?.game ?? ""),
+    rawEvidencePath: String(
+      realHostedObservabilityHandoff.target?.rawEvidencePath ?? "",
+    ),
+    rawEvidenceStatus: String(
+      realHostedObservabilityHandoff.target?.rawEvidenceStatus ?? "unknown",
+    ),
+    localHostedOpsSignalsPath: String(
+      realHostedObservabilityHandoff.target?.localHostedOpsSignalsPath ?? "",
+    ),
+    localHostedLikeSignalsOnlyBaseline:
+      realHostedObservabilityHandoff.target?.localHostedLikeSignalsOnlyBaseline ===
+      true,
+    blockedCheckCount: blockedCheckIds.length,
+    nextCommand: String(realHostedObservabilityHandoff.nextCommand ?? ""),
+    nextProofTarget: String(realHostedObservabilityHandoff.nextProofTarget ?? ""),
+    releaseReady: realHostedObservabilityHandoff.releaseReady === true,
+    productionReady: realHostedObservabilityHandoff.productionReady === true,
+  });
   return Object.freeze({
     id: localAdminAuditIds.realHostedObservabilityHandoff,
     label: "Real hosted observability handoff",
@@ -1597,27 +1753,9 @@ export function normalizeLocalRealHostedObservabilityHandoffAudit(
     hostedHandoffReceiptHeadings: hostedHandoffReceiptHeadingsForAudit(
       localAdminAuditIds.realHostedObservabilityHandoff,
     ),
-    artifactSummary: Object.freeze({
-      realHostedObservabilitySummary,
-      game: String(realHostedObservabilityHandoff.generatedFrom?.game ?? ""),
-      rawEvidencePath: String(
-        realHostedObservabilityHandoff.target?.rawEvidencePath ?? "",
-      ),
-      rawEvidenceStatus: String(
-        realHostedObservabilityHandoff.target?.rawEvidenceStatus ?? "unknown",
-      ),
-      localHostedOpsSignalsPath: String(
-        realHostedObservabilityHandoff.target?.localHostedOpsSignalsPath ?? "",
-      ),
-      localHostedLikeSignalsOnlyBaseline:
-        realHostedObservabilityHandoff.target
-          ?.localHostedLikeSignalsOnlyBaseline === true,
-      blockedCheckCount: blockedCheckIds.length,
-      nextCommand: String(realHostedObservabilityHandoff.nextCommand ?? ""),
-      nextProofTarget: String(realHostedObservabilityHandoff.nextProofTarget ?? ""),
-      releaseReady: realHostedObservabilityHandoff.releaseReady === true,
-      productionReady: realHostedObservabilityHandoff.productionReady === true,
-    }),
+    artifactSummary,
+    artifactSummarySections:
+      buildRealHostedObservabilitySummarySections(artifactSummary),
   });
 }
 
@@ -1822,6 +1960,54 @@ export function normalizeLocalHostedConcurrentRaceMatrixAudit(
     cells,
     hostedHandoffChecklist,
   });
+  const artifactSummary = Object.freeze({
+    hostedMatrixSummary,
+    game: String(hostedConcurrentRaceMatrix.hostedLikeTarget?.game ?? ""),
+    cellCount: Number(hostedConcurrentRaceMatrix.summary?.cellCount ?? cells.length),
+    passedCellCount: Number(
+      hostedConcurrentRaceMatrix.summary?.passedCellCount ?? 0,
+    ),
+    reloadCoveredCellCount: Number(
+      hostedConcurrentRaceMatrix.summary?.reloadCoveredCellCount ?? 0,
+    ),
+    reconnectLaneCount: Number(
+      hostedConcurrentRaceMatrix.summary?.reconnectLaneCount ?? 0,
+    ),
+    staleConflictLaneCount: Number(
+      hostedConcurrentRaceMatrix.summary?.staleConflictLaneCount ?? 0,
+    ),
+    roleSurfaceCount: Number(
+      hostedConcurrentRaceMatrix.summary?.roleSurfaceCount ?? roleSurfaces.length,
+    ),
+    hostedEvidenceStatus: String(
+      hostedConcurrentRaceMatrix.summary?.hostedEvidenceStatus ?? "unknown",
+    ),
+    hostedEvidenceMode: String(
+      hostedConcurrentRaceMatrix.summary?.hostedEvidenceMode ?? "unknown",
+    ),
+    localDemoHostedEvidenceStatus: String(
+      hostedConcurrentRaceMatrix.summary?.localDemoHostedEvidenceStatus ??
+        "unknown",
+    ),
+    realHostedEvidenceStatus: String(
+      hostedConcurrentRaceMatrix.summary?.realHostedEvidenceStatus ?? "unknown",
+    ),
+    realHostedDeploymentStatus: String(
+      hostedConcurrentRaceMatrix.summary?.realHostedDeploymentStatus ?? "unknown",
+    ),
+    externalHostedEvidenceStatus: String(
+      hostedConcurrentRaceMatrix.externalHostedEvidence?.status ?? "unknown",
+    ),
+    realHostedEvidenceCommand: String(
+      hostedConcurrentRaceMatrix.realHostedEvidenceInputs?.command ?? "",
+    ),
+    realHostedEvidenceProofTarget: String(
+      hostedConcurrentRaceMatrix.realHostedEvidenceInputs?.proofTarget ?? "",
+    ),
+    nextCommand: String(hostedConcurrentRaceMatrix.nextBuildSlice?.command ?? ""),
+    releaseReady: hostedConcurrentRaceMatrix.releaseReady === true,
+    productionReady: hostedConcurrentRaceMatrix.productionReady === true,
+  });
   return Object.freeze({
     id: localAdminAuditIds.hostedConcurrentRaceMatrix,
     label: "Local hosted matrix",
@@ -1929,55 +2115,8 @@ export function normalizeLocalHostedConcurrentRaceMatrixAudit(
     hostedHandoffReceiptHeadings: hostedHandoffReceiptHeadingsForAudit(
       localAdminAuditIds.hostedConcurrentRaceMatrix,
     ),
-    artifactSummary: Object.freeze({
-      hostedMatrixSummary,
-      game: String(hostedConcurrentRaceMatrix.hostedLikeTarget?.game ?? ""),
-      cellCount: Number(hostedConcurrentRaceMatrix.summary?.cellCount ?? cells.length),
-      passedCellCount: Number(
-        hostedConcurrentRaceMatrix.summary?.passedCellCount ?? 0,
-      ),
-      reloadCoveredCellCount: Number(
-        hostedConcurrentRaceMatrix.summary?.reloadCoveredCellCount ?? 0,
-      ),
-      reconnectLaneCount: Number(
-        hostedConcurrentRaceMatrix.summary?.reconnectLaneCount ?? 0,
-      ),
-      staleConflictLaneCount: Number(
-        hostedConcurrentRaceMatrix.summary?.staleConflictLaneCount ?? 0,
-      ),
-      roleSurfaceCount: Number(
-        hostedConcurrentRaceMatrix.summary?.roleSurfaceCount ??
-          roleSurfaces.length,
-      ),
-      hostedEvidenceStatus: String(
-        hostedConcurrentRaceMatrix.summary?.hostedEvidenceStatus ?? "unknown",
-      ),
-      hostedEvidenceMode: String(
-        hostedConcurrentRaceMatrix.summary?.hostedEvidenceMode ?? "unknown",
-      ),
-      localDemoHostedEvidenceStatus: String(
-        hostedConcurrentRaceMatrix.summary?.localDemoHostedEvidenceStatus ??
-          "unknown",
-      ),
-      realHostedEvidenceStatus: String(
-        hostedConcurrentRaceMatrix.summary?.realHostedEvidenceStatus ?? "unknown",
-      ),
-      realHostedDeploymentStatus: String(
-        hostedConcurrentRaceMatrix.summary?.realHostedDeploymentStatus ?? "unknown",
-      ),
-      externalHostedEvidenceStatus: String(
-        hostedConcurrentRaceMatrix.externalHostedEvidence?.status ?? "unknown",
-      ),
-      realHostedEvidenceCommand: String(
-        hostedConcurrentRaceMatrix.realHostedEvidenceInputs?.command ?? "",
-      ),
-      realHostedEvidenceProofTarget: String(
-        hostedConcurrentRaceMatrix.realHostedEvidenceInputs?.proofTarget ?? "",
-      ),
-      nextCommand: String(hostedConcurrentRaceMatrix.nextBuildSlice?.command ?? ""),
-      releaseReady: hostedConcurrentRaceMatrix.releaseReady === true,
-      productionReady: hostedConcurrentRaceMatrix.productionReady === true,
-    }),
+    artifactSummary,
+    artifactSummarySections: buildHostedMatrixSummarySections(artifactSummary),
   });
 }
 
