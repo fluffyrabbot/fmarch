@@ -81,6 +81,9 @@ import {
 import {
   normalizeProofGraphDiagnosticProofSummary,
 } from "./dev_test_game_proof_graph_diagnostic_summary.mjs";
+import {
+  proofGraphPrerequisiteDestinationRowIds,
+} from "./dev_test_game_proof_graph_prerequisite_destination_rows.mjs";
 
 const proofGraphPath = path.resolve(
   repoRoot,
@@ -393,25 +396,6 @@ export function assertProofGraphAdminProof(evidence) {
     assertProofGraphAdminProofCoversFeatureTarget(evidence, featureTargetCase);
   }
   return evidence;
-}
-
-function proofGraphPrerequisiteDestinationRowIds(proofGraph) {
-  return (Array.isArray(proofGraph?.nodes) ? proofGraph.nodes : []).flatMap(
-    (node) =>
-      (Array.isArray(node?.requiredLocalPrerequisiteDestinations)
-        ? node.requiredLocalPrerequisiteDestinations
-        : []
-      ).map((destination) =>
-        proofGraphPrerequisiteDestinationRowId({
-          nodeId: node.id,
-          destinationId: destination?.id,
-        }),
-      ),
-  );
-}
-
-function proofGraphPrerequisiteDestinationRowId({ nodeId, destinationId }) {
-  return `${String(nodeId ?? "")}:${String(destinationId ?? "")}`;
 }
 
 async function readOptionalAdminSpineTerminalBatches() {

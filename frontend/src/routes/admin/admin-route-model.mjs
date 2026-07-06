@@ -56,6 +56,11 @@ import {
   normalizeProofGraphReceiptArtifactRows,
 } from "../../../../tools/dev_test_game_proof_graph_receipt_artifact_rows.mjs";
 import {
+  proofGraphPrerequisiteDestinationRowsFromNodes,
+  proofGraphPrerequisiteDestinationSectionHeading,
+  proofGraphPrerequisiteDestinationSectionId,
+} from "../../../../tools/dev_test_game_proof_graph_prerequisite_destination_rows.mjs";
+import {
   selectedOperatorHandoffTerminalReceiptId,
 } from "../../../../tools/dev_test_game_selected_operator_handoff_receipt.mjs";
 import {
@@ -465,47 +470,37 @@ function buildLocalProofGraphSummarySections(artifactSummary, { nodes, game } = 
 }
 
 function proofGraphPrerequisiteDestinationSections({ nodes, game } = {}) {
-  const rows = (Array.isArray(nodes) ? nodes : []).flatMap((node) =>
-    proofGraphPrerequisiteDestinationRows({ node, game }),
-  );
+  const rows = proofGraphPrerequisiteDestinationRowsFromNodes(nodes);
   if (rows.length === 0) {
     return [];
   }
   return [
     buildArtifactSummarySection({
-      id: "proof-graph-prerequisite-destinations",
-      heading: "Proof graph prerequisite destinations",
-      rows,
+      id: proofGraphPrerequisiteDestinationSectionId,
+      heading: proofGraphPrerequisiteDestinationSectionHeading,
+      rows: rows.map((row) =>
+        proofGraphPrerequisiteDestinationArtifactRow({ row, game }),
+      ),
     }),
   ];
 }
 
-function proofGraphPrerequisiteDestinationRows({ node, game }) {
-  const nodeId = String(node?.id ?? "");
-  const destinations = Array.isArray(node?.requiredLocalPrerequisiteDestinations)
-    ? node.requiredLocalPrerequisiteDestinations
-    : [];
-  return destinations.map((destination) => {
-    const destinationId = String(destination?.id ?? "");
-    const auditId = String(destination?.auditId ?? "");
-    const roleUrl = String(destination?.roleUrl ?? "");
-    const rowId = `${nodeId}:${destinationId}`;
-    return {
-      id: rowId,
-      testId: `admin-audit-proof-graph-prerequisite-destination-${rowId}`,
-      values: [
-        { id: "nodeId", text: nodeId, emphasized: true },
-        { id: "destinationId", text: destinationId },
-        { id: "auditId", text: auditId },
-        {
-          id: "roleUrl",
-          text: roleUrl,
-          href: seededRoleUrlToAdminHref(roleUrl, { game }),
-          testId: `admin-audit-proof-graph-prerequisite-destination-role-url-${rowId}`,
-        },
-      ],
-    };
-  });
+function proofGraphPrerequisiteDestinationArtifactRow({ row, game }) {
+  return {
+    id: row.rowId,
+    testId: row.rowTestId,
+    values: [
+      { id: "nodeId", text: row.nodeId, emphasized: true },
+      { id: "destinationId", text: row.destinationId },
+      { id: "auditId", text: row.auditId },
+      {
+        id: "roleUrl",
+        text: row.roleUrl,
+        href: seededRoleUrlToAdminHref(row.roleUrl, { game }),
+        testId: row.roleUrlTestId,
+      },
+    ],
+  };
 }
 
 function diagnosticProofSummarySections(summary) {

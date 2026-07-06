@@ -17,6 +17,9 @@ import {
 import {
   localReadinessDependencyDestinationFor,
 } from "./dev_test_game_local_readiness_dependencies.mjs";
+import {
+  proofGraphPrerequisiteDestinationRowTestIdPrefix,
+} from "./dev_test_game_proof_graph_prerequisite_destination_rows.mjs";
 
 export const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 export const frontendRoot = path.join(repoRoot, "frontend");
@@ -502,7 +505,7 @@ export async function proveAdminAuditDetail({
     });
     const visibleProofGraphPrerequisiteDestinations = await waitForRows({
       page,
-      prefix: "admin-audit-proof-graph-prerequisite-destination",
+      prefix: proofGraphPrerequisiteDestinationRowTestIdPrefix,
       ids: requiredProofGraphPrerequisiteDestinations,
     });
     const visibleScenarioFamilies = await waitForRows({

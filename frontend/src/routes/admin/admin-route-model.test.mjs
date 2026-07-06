@@ -206,6 +206,11 @@ import {
   terminalProofGraphReceiptArtifacts,
 } from "../../../../tools/dev_test_game_proof_graph_receipt_artifact_rows.mjs";
 import {
+  proofGraphPrerequisiteDestinationRows,
+  proofGraphPrerequisiteDestinationSectionHeading,
+  proofGraphPrerequisiteDestinationSectionId,
+} from "../../../../tools/dev_test_game_proof_graph_prerequisite_destination_rows.mjs";
+import {
   hostedTargetPreflightExternalTargetsRequiredEvidence,
   hostedTargetPreflightMissingApiUrlRequiredEvidence,
   hostedTargetPreflightMissingFrontendUrlRequiredEvidence,
@@ -2570,9 +2575,9 @@ test("admin route data exposes local proof graph as a native audit row", async (
         ]),
       ],
       [
-        "proof-graph-prerequisite-destinations",
-        "Proof graph prerequisite destinations",
-        "admin-audit-detail-proof-graph-prerequisite-destinations",
+        proofGraphPrerequisiteDestinationSectionId,
+        proofGraphPrerequisiteDestinationSectionHeading,
+        `admin-audit-detail-${proofGraphPrerequisiteDestinationSectionId}`,
         expectedProofGraphPrerequisiteDestinationRows(proofGraph),
       ],
     ],
@@ -2613,7 +2618,7 @@ test("admin local proof graph detail data carries graph node rows", async () => 
     expectedRelatedLinkRows(data.audit.relatedLinks),
   );
   const prerequisiteDestinationSection = data.audit.artifactSummarySections.find(
-    (section) => section.id === "proof-graph-prerequisite-destinations",
+    (section) => section.id === proofGraphPrerequisiteDestinationSectionId,
   );
   assert.deepEqual(
     descriptorRowsWithLinksForAssertion(prerequisiteDestinationSection.rows),
@@ -8607,10 +8612,17 @@ function expectedProofGraphRelatedLinkRows(proofGraph, { game } = {}) {
 }
 
 function expectedProofGraphPrerequisiteDestinationRows(proofGraph) {
-  return proofGraphPrerequisiteDestinations(proofGraph).map(
-    ({ nodeId, destinationId, auditId, roleUrl, rowId }) => [
+  return proofGraphPrerequisiteDestinationRows(proofGraph).map(
+    ({
+      nodeId,
+      destinationId,
+      auditId,
+      roleUrl,
       rowId,
-      `admin-audit-proof-graph-prerequisite-destination-${rowId}`,
+      rowTestId,
+    }) => [
+      rowId,
+      rowTestId,
       [
         ["nodeId", nodeId, true],
         ["destinationId", destinationId, false],
@@ -8625,10 +8637,18 @@ function expectedProofGraphPrerequisiteDestinationRowsWithLinks(
   proofGraph,
   { game } = {},
 ) {
-  return proofGraphPrerequisiteDestinations(proofGraph).map(
-    ({ nodeId, destinationId, auditId, roleUrl, rowId }) => [
+  return proofGraphPrerequisiteDestinationRows(proofGraph).map(
+    ({
+      nodeId,
+      destinationId,
+      auditId,
+      roleUrl,
       rowId,
-      `admin-audit-proof-graph-prerequisite-destination-${rowId}`,
+      rowTestId,
+      roleUrlTestId,
+    }) => [
+      rowId,
+      rowTestId,
       [
         ["nodeId", nodeId, true, "", ""],
         ["destinationId", destinationId, false, "", ""],
@@ -8638,31 +8658,10 @@ function expectedProofGraphPrerequisiteDestinationRowsWithLinks(
           roleUrl,
           false,
           localAdminAuditRoleUrl(auditId, { game }),
-          `admin-audit-proof-graph-prerequisite-destination-role-url-${rowId}`,
+          roleUrlTestId,
         ],
       ],
     ],
-  );
-}
-
-function proofGraphPrerequisiteDestinations(proofGraph) {
-  return (Array.isArray(proofGraph?.nodes) ? proofGraph.nodes : []).flatMap(
-    (node) => {
-      const nodeId = String(node?.id ?? "");
-      return (Array.isArray(node?.requiredLocalPrerequisiteDestinations)
-        ? node.requiredLocalPrerequisiteDestinations
-        : []
-      ).map((destination) => {
-        const destinationId = String(destination?.id ?? "");
-        return {
-          nodeId,
-          destinationId,
-          auditId: String(destination?.auditId ?? ""),
-          roleUrl: String(destination?.roleUrl ?? ""),
-          rowId: `${nodeId}:${destinationId}`,
-        };
-      });
-    },
   );
 }
 
