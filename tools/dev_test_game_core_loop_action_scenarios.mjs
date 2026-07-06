@@ -7,6 +7,8 @@ import {
 } from "./dev_test_game_core_loop_action_scenario_cases.mjs";
 
 export {
+  assertHostVisibleInvalidActionRecoverySummary,
+  buildHostVisibleInvalidActionRecoverySummary,
   playerActionBoundaryLaneId,
   playerActionBoundaryRecoveryHookId,
   playerActionLoopLaneId,

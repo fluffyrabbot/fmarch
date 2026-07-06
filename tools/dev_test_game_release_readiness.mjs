@@ -327,6 +327,7 @@ import {
   completedGameStaleRecoverySpineLaneCase,
 } from "./dev_test_game_core_loop_completed_game_proof_readiness_contract.mjs";
 import {
+  assertHostVisibleInvalidActionRecoverySummary,
   assertPlayerStaleActionAfterTransitionProofCase,
   assertPlayerStaleVoteAfterTransitionProofCase,
   staleNightFourActionRecoveryScenario,
@@ -2994,6 +2995,12 @@ export function validateDevTestGameCoreLoopAdminProof(proof, options = {}) {
     visibleRows: proof.adminRoleSurface?.visibleSpineRecoveryHooks,
     requiredRows: proof.generatedFrom?.coreLoopSpineRows?.recoveryHooks,
   });
+  const hostVisibleInvalidActionRecovery =
+    assertHostVisibleInvalidActionRecoverySummary({
+      summary: proof.generatedFrom?.hostVisibleInvalidActionRecovery,
+      requireVisibleStatus: true,
+      includeEvidenceInError: true,
+    });
   assertCoreLoopCommandProofRoleUrls({
     proof,
     includeEvidenceInError: true,
@@ -3021,6 +3028,7 @@ export function validateDevTestGameCoreLoopAdminProof(proof, options = {}) {
     visibleSpineRecoveryHooks: proof.adminRoleSurface.visibleSpineRecoveryHooks,
     visibleCommandProofRoleUrlAudit,
     coreLoopSpineRows: proof.generatedFrom.coreLoopSpineRows,
+    hostVisibleInvalidActionRecovery,
     completedGameHardeningCoverage:
       proof.generatedFrom.completedGameHardeningCoverage,
     completedGameHardeningCoverageStatus:

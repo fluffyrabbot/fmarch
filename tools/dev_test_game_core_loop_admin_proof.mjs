@@ -25,6 +25,8 @@ import {
   assertPlayerStaleVoteAfterTransitionProofCase,
 } from "./dev_test_game_core_loop_action_scenarios.mjs";
 import {
+  assertHostVisibleInvalidActionRecoverySummary,
+  buildHostVisibleInvalidActionRecoverySummary,
   playerActionSubmissionScenario,
   playerInvalidActionRecoveryScenario,
   staleNightFourActionRecoveryScenario,
@@ -551,6 +553,12 @@ export function coreLoopAdminProofCase() {
             completedGameHardeningCoverageStatus(proofRun),
           ...coreLoopGeneratedFromScenarioFamilies(),
           highlightedLaneEvidence: coreLoopHighlightedLaneEvidence(proofRun),
+          hostVisibleInvalidActionRecovery:
+            buildHostVisibleInvalidActionRecoverySummary({
+              proofRun,
+              coreLoopSpineRows: requiredSpineRows(proofRun),
+              adminRoleSurface: surfaces.adminRoleSurface,
+            }),
         },
         adminRoleSurface: surfaces.adminRoleSurface,
         hostRoleSurface: surfaces.hostRoleSurface,
@@ -10063,6 +10071,11 @@ export function assertCoreLoopAdminProof(evidence) {
       );
     }
   }
+  assertHostVisibleInvalidActionRecoverySummary({
+    summary: evidence.generatedFrom?.hostVisibleInvalidActionRecovery,
+    requireVisibleStatus: true,
+    includeEvidenceInError: true,
+  });
   assertHostLifecycleControlCheckpoint(evidence.hostRoleSurface);
   assertCoreLoopHostModkillControlSurface({
     hostModkillControlSurface: evidence.hostModkillControlSurface,

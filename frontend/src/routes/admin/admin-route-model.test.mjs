@@ -4848,6 +4848,30 @@ test("admin route data exposes local core loop proof as a native audit row", asy
     coreLoop.commandProofRoleUrlAudit,
     coreLoopCommandProofRoleUrlAuditExpectation,
   );
+  assert.deepEqual(
+    {
+      status: coreLoop.hostVisibleInvalidActionRecovery.status,
+      hook: coreLoop.hostVisibleInvalidActionRecovery.recoveryHookStatus,
+      receipt: coreLoop.hostVisibleInvalidActionRecovery.receiptStatusText,
+      legalActionVisible:
+        coreLoop.hostVisibleInvalidActionRecovery.legalActionVisible,
+      hostRoleUrl: coreLoop.hostVisibleInvalidActionRecovery.hostRoleUrl,
+      actionPlayerRoleUrl:
+        coreLoop.hostVisibleInvalidActionRecovery.actionPlayerRoleUrl,
+      detailRoleUrl: coreLoop.hostVisibleInvalidActionRecovery.detailRoleUrl,
+    },
+    {
+      status: "passed",
+      hook: "InvalidTarget",
+      receipt: playerInvalidActionRecoveryMessage,
+      legalActionVisible: true,
+      hostRoleUrl: "http://127.0.0.1:5173/g/game-b/host",
+      actionPlayerRoleUrl: "http://127.0.0.1:5173/g/game-b",
+      detailRoleUrl: localAdminAuditRoleUrl(localAdminAuditIds.coreLoop, {
+        game: "midsummer",
+      }),
+    },
+  );
 });
 
 test("admin core loop completed-game coverage flags stale shared-case totals", async () => {
@@ -5049,6 +5073,27 @@ test("admin local core loop detail data carries lane rows", async () => {
           ["label", "Command proof role URLs", true, "", ""],
           ["status", "passed", false, "", ""],
           ["checkedCount", "36 checked", false, "", ""],
+        ],
+        [],
+      ],
+    ],
+  );
+  assert.deepEqual(
+    descriptorRowsWithNestedLinksForAssertion(
+      data.audit.hostVisibleInvalidActionRecoveryRows,
+    ),
+    [
+      [
+        "host-visible-invalid-action-recovery-invalid-action-recovery",
+        "admin-audit-host-visible-invalid-action-recovery-invalid-action-recovery",
+        [
+          ["label", "Invalid action recovery", true, "", ""],
+          ["status", "passed", false, "", ""],
+          ["hook", "InvalidTarget", false, "", ""],
+          ["receipt", playerInvalidActionRecoveryMessage, false, "", ""],
+          ["legalActionVisible", "true", false, "", ""],
+          ["hostRoleUrl", "http://127.0.0.1:5173/g/game-b/host", false, "", ""],
+          ["actionPlayerRoleUrl", "http://127.0.0.1:5173/g/game-b", false, "", ""],
         ],
         [],
       ],

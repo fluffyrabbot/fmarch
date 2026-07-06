@@ -47,8 +47,9 @@ import {
   coreLoopCommandProofRoleUrlAuditExpectation,
 } from "./dev_test_game_core_loop_proof_shape_assertions.mjs";
 import {
+  buildHostVisibleInvalidActionRecoverySummary,
   playerInvalidActionRecoveryMessage,
-} from "./dev_test_game_core_loop_player_action_recovery_scenarios.mjs";
+} from "./dev_test_game_core_loop_action_scenarios.mjs";
 import {
   completedGameEndgameSurfaceFixture,
   dayFiveNoLynchResolutionSurfaceFixture,
@@ -19033,6 +19034,8 @@ function coreLoopAdminProofFixture() {
         "core-loop-spine":
           "passed: D01 -> N01 -> D02, vote ack, N02 action ack, next D03, terminal advance InvalidTarget, reload D03, revote D03R1 via no_majority_continue_revote, revote vote ack, revote resolve ack, second revote D03R2 via no_majority_continue_revote, second vote ack, second resolve ack, policy no_majority_no_lynch -> N03, N03 action ack, next D04",
         "completed-game-hardening-coverage": completedGameHardeningCoverageStatus,
+        "invalid-action-recovery":
+          `passed: ${playerInvalidActionRecoveryMessage}, legal action visible true`,
       },
       visibleSpineCycles: [
         "d01-n01-d02",
@@ -19161,6 +19164,32 @@ function coreLoopAdminProofFixture() {
     completedGameEndgameSurface: completedGameEndgameSurfaceFixture(),
     privateChannelRoleSurface: privateChannelRoleSurfaceFixture(),
   };
+  proof.generatedFrom.hostVisibleInvalidActionRecovery =
+    buildHostVisibleInvalidActionRecoverySummary({
+      proofRun: {
+        lanes: [
+          {
+            id: "invalid-action-recovery",
+            status: "passed",
+            evidence: {
+              reject: {
+                error: "InvalidTarget",
+                message: playerInvalidActionRecoveryMessage,
+              },
+              legalActionVisible: true,
+              receiptStatusText: playerInvalidActionRecoveryMessage,
+            },
+          },
+        ],
+        coreLoopSpine: {
+          recoveryHooks: {
+            invalidActionReject: "InvalidTarget",
+          },
+        },
+      },
+      coreLoopSpineRows: proof.generatedFrom.coreLoopSpineRows,
+      adminRoleSurface: proof.adminRoleSurface,
+    });
   return {
     ...proof,
     commandProofRoleUrlAudit: buildCoreLoopCommandProofRoleUrlAudit(proof),
