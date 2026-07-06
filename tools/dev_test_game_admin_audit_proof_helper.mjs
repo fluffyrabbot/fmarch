@@ -14,6 +14,9 @@ import {
   blockedOperatorPacketText,
   visibleBlockedOperatorPacket,
 } from "./dev_test_game_hosted_operator_packet.mjs";
+import {
+  localReadinessDependencyDestinationFor,
+} from "./dev_test_game_local_readiness_dependencies.mjs";
 
 export const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 export const frontendRoot = path.join(repoRoot, "frontend");
@@ -943,20 +946,21 @@ export async function proveAdminAuditDetail({
         ids: destination.requiredUnproven ?? [],
       });
       const destinationRequiredLocalPrerequisites =
-        destination.requiredLocalPrerequisiteDestinations?.map((item) =>
-          String(item.id),
-        ) ??
-        destination.requiredLocalPrerequisites ??
-        [];
+        normalizeLocalPrerequisiteDestinations(
+          destination.requiredLocalPrerequisiteDestinations,
+          destination.requiredLocalPrerequisites,
+        );
+      const destinationRequiredLocalPrerequisiteIds =
+        destinationRequiredLocalPrerequisites.map((item) => item.id);
       const destinationVisibleLocalPrerequisites = await waitForRows({
         page,
         prefix: "admin-audit-local-prerequisite",
-        ids: destinationRequiredLocalPrerequisites,
+        ids: destinationRequiredLocalPrerequisiteIds,
       });
       const destinationVisibleLocalPrerequisiteRoleUrls =
         await waitForLocalPrerequisiteRoleUrls({
           page,
-          ids: destinationRequiredLocalPrerequisites,
+          ids: destinationRequiredLocalPrerequisiteIds,
         });
       const destinationVisitedLocalPrerequisiteDestinations =
         await visitLocalPrerequisiteDestinations({
@@ -966,7 +970,8 @@ export async function proveAdminAuditDetail({
             game,
           )}`,
           game,
-          ids: destinationRequiredLocalPrerequisites,
+          ids: destinationRequiredLocalPrerequisiteIds,
+          expectedDestinations: destinationRequiredLocalPrerequisites,
           forbiddenText,
         });
       const destinationVisibleRelatedLinks = await waitForRows({
@@ -1834,9 +1839,13 @@ async function visitLocalPrerequisiteDestinations({
   detailUrl,
   game,
   ids,
+  expectedDestinations = [],
   forbiddenText,
 }) {
   const destinations = [];
+  const expectedById = new Map(
+    expectedDestinations.map((destination) => [destination.id, destination]),
+  );
   for (const id of ids) {
     await page.goto(detailUrl, { waitUntil: "networkidle" });
     await page.getByTestId("admin-audit-detail-surface").waitFor({
@@ -1859,6 +1868,16 @@ async function visitLocalPrerequisiteDestinations({
         `admin-audit-local-prerequisite-role-url-${id} points at ${expectedGame} instead of ${game}`,
       );
     }
+    const expectedDestination = expectedById.get(id);
+    const clickedSeededRoleUrl = `${expectedUrl.pathname}?game=<seeded-game>`;
+    if (
+      expectedDestination !== undefined &&
+      clickedSeededRoleUrl !== expectedDestination.roleUrl
+    ) {
+      throw new Error(
+        `admin-audit-local-prerequisite-role-url-${id} points at ${clickedSeededRoleUrl} instead of ${expectedDestination.roleUrl}`,
+      );
+    }
     await Promise.all([
       page.waitForURL(expectedUrl.toString(), { timeout: 15000 }),
       link.click(),
@@ -1871,6 +1890,14 @@ async function visitLocalPrerequisiteDestinations({
     const destinationAuditId = expectedUrl.pathname.split("/").filter(Boolean).pop();
     if (destinationAuditId === undefined || destinationAuditId === "") {
       throw new Error(`admin-audit-local-prerequisite-role-url-${id} has no audit id`);
+    }
+    if (
+      expectedDestination !== undefined &&
+      destinationAuditId !== expectedDestination.auditId
+    ) {
+      throw new Error(
+        `admin-audit-local-prerequisite-role-url-${id} reached ${destinationAuditId} instead of ${expectedDestination.auditId}`,
+      );
     }
     await assertAdminAuditBodyText({
       page,
@@ -1885,6 +1912,38 @@ async function visitLocalPrerequisiteDestinations({
     });
   }
   return destinations;
+}
+
+function normalizeLocalPrerequisiteDestinations(destinations, ids = []) {
+  if (Array.isArray(destinations)) {
+    return destinations.map((destination) => {
+      const id = String(destination?.id ?? "");
+      if (id === "") {
+        throw new Error("admin proof local prerequisite destination is missing an id");
+      }
+      const expected = localReadinessDependencyDestinationFor(id);
+      if (
+        destination.auditId !== undefined &&
+        destination.auditId !== expected.auditId
+      ) {
+        throw new Error(
+          `admin proof local prerequisite destination ${id} audit id drifted from registry`,
+        );
+      }
+      if (
+        destination.roleUrl !== undefined &&
+        destination.roleUrl !== expected.roleUrl
+      ) {
+        throw new Error(
+          `admin proof local prerequisite destination ${id} role URL drifted from registry`,
+        );
+      }
+      return expected;
+    });
+  }
+  return (ids ?? []).map((id) =>
+    localReadinessDependencyDestinationFor(String(id)),
+  );
 }
 
 async function readRowStatuses({ page, prefix, ids }) {

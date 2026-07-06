@@ -5,6 +5,9 @@ import {
 import {
   assertAdminRoleSurfaceHandoffPath,
 } from "./dev_test_game_admin_audit_handoff_path.mjs";
+import {
+  localReadinessDependencyDestinationFor,
+} from "./dev_test_game_local_readiness_dependencies.mjs";
 
 export function requiredRelatedDestinationsForHandoff(handoff) {
   return handoff === null || handoff === undefined
@@ -21,7 +24,9 @@ export function requiredRelatedDestinationsForHandoff(handoff) {
           requiredStaleConflictLanes: handoff.requiredStaleConflictLaneIds ?? [],
           requiredUnproven: handoff.requiredUnprovenIds ?? [],
           requiredLocalPrerequisiteDestinations:
-            handoff.requiredLocalPrerequisiteDestinations ?? [],
+            normalizeLocalPrerequisiteDestinations(
+              handoff.requiredLocalPrerequisiteDestinations,
+            ),
           requiredHostedHandoffInputs:
             handoff.requiredHostedHandoffInputIds ?? [],
           requiredHostedHandoffBlockedChecks:
@@ -95,23 +100,26 @@ export function assertAdminAuditRelatedHandoff({
       );
     }
   }
-  for (const prerequisite of handoff.requiredLocalPrerequisiteDestinations ?? []) {
-    const prerequisiteId = String(prerequisite?.id ?? "");
-    const prerequisiteAuditId = String(prerequisite?.auditId ?? "");
-    if (prerequisiteId === "" || prerequisiteAuditId === "") {
-      throw new Error(`${name} handoff has a malformed local prerequisite`);
-    }
+  for (const prerequisite of normalizeLocalPrerequisiteDestinations(
+    handoff.requiredLocalPrerequisiteDestinations,
+  )) {
+    const prerequisiteId = prerequisite.id;
+    const prerequisiteAuditId = prerequisite.auditId;
     if (!destination.visibleLocalPrerequisites?.includes(prerequisiteId)) {
       throw new Error(
         `${name} handoff destination missing local prerequisite: ${prerequisiteId}`,
       );
     }
-    if (
-      typeof destination.visibleLocalPrerequisiteRoleUrls?.[prerequisiteId] !==
-      "string"
-    ) {
+    const visibleRoleUrl =
+      destination.visibleLocalPrerequisiteRoleUrls?.[prerequisiteId];
+    if (typeof visibleRoleUrl !== "string") {
       throw new Error(
         `${name} handoff destination missing local prerequisite role URL: ${prerequisiteId}`,
+      );
+    }
+    if (seededRoleUrl(visibleRoleUrl) !== prerequisite.roleUrl) {
+      throw new Error(
+        `${name} handoff destination local prerequisite role URL drifted: ${prerequisiteId}`,
       );
     }
     const visitedDestination =
@@ -119,7 +127,7 @@ export function assertAdminAuditRelatedHandoff({
         (item) =>
           item?.id === prerequisiteId &&
           item.auditId === prerequisiteAuditId &&
-          item.detailRoleUrl === localAdminAuditRoleUrl(prerequisiteAuditId) &&
+          item.detailRoleUrl === prerequisite.roleUrl &&
           item.clickedThrough === true,
       ) ?? null;
     if (visitedDestination === null) {
@@ -206,6 +214,38 @@ export function assertAdminAuditRelatedHandoff({
       );
     }
   }
+}
+
+function normalizeLocalPrerequisiteDestinations(destinations) {
+  return (destinations ?? []).map((destination) => {
+    const id = String(destination?.id ?? "");
+    if (id === "") {
+      throw new Error("local prerequisite destination is missing an id");
+    }
+    const expected = localReadinessDependencyDestinationFor(id);
+    if (
+      destination.auditId !== undefined &&
+      destination.auditId !== expected.auditId
+    ) {
+      throw new Error(
+        `local prerequisite destination ${id} audit id drifted from registry`,
+      );
+    }
+    if (
+      destination.roleUrl !== undefined &&
+      destination.roleUrl !== expected.roleUrl
+    ) {
+      throw new Error(
+        `local prerequisite destination ${id} role URL drifted from registry`,
+      );
+    }
+    return expected;
+  });
+}
+
+function seededRoleUrl(roleUrl) {
+  const url = new URL(roleUrl, "http://local.invalid");
+  return `${url.pathname}?game=<seeded-game>`;
 }
 
 function assertOptionalObjectEqual({ actual, expected, message }) {

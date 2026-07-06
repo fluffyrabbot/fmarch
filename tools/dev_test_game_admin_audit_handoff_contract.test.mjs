@@ -24,6 +24,7 @@ import {
   localAdminAuditRoleUrl,
 } from "./dev_test_game_admin_audit_surface_ids.mjs";
 import {
+  localReadinessDependencyDestinationFor,
   localProofFreshnessAdminSurfaceCheckId,
 } from "./dev_test_game_local_readiness_dependencies.mjs";
 
@@ -42,10 +43,9 @@ test("related handoff requirements map to admin audit destination proof inputs",
       requiredStaleConflictLanes: hostedMatrixStaleConflictLaneIds,
       requiredUnproven: [hostedMatrixRequestedEvidenceIds[0]],
       requiredLocalPrerequisiteDestinations: [
-        {
-          id: localProofFreshnessAdminSurfaceCheckId,
-          auditId: localAdminAuditIds.proofFreshness,
-        },
+        localReadinessDependencyDestinationFor(
+          localProofFreshnessAdminSurfaceCheckId,
+        ),
       ],
       requiredHostedHandoffInputs: hostedHandoffInputIdsFixture(),
       requiredHostedHandoffBlockedChecks: hostedHandoffBlockedCheckIdsFixture(),
@@ -69,10 +69,9 @@ test("related handoff requirements map to admin audit destination proof inputs",
       requiredStaleConflictLanes: hostedMatrixStaleConflictLaneIds,
       requiredUnproven: [hostedMatrixRequestedEvidenceIds[0]],
       requiredLocalPrerequisiteDestinations: [
-        {
-          id: localProofFreshnessAdminSurfaceCheckId,
-          auditId: localAdminAuditIds.proofFreshness,
-        },
+        localReadinessDependencyDestinationFor(
+          localProofFreshnessAdminSurfaceCheckId,
+        ),
       ],
       requiredHostedHandoffInputs: hostedHandoffInputIdsFixture(),
       requiredHostedHandoffBlockedChecks: hostedHandoffBlockedCheckIdsFixture(),
@@ -137,6 +136,29 @@ test("related handoff assertion fails closed for missing local prerequisite navi
         proofName: "proof graph admin proof",
       }),
     /proof graph admin proof handoff destination did not navigate local prerequisite: local-proof-freshness-admin-surface/,
+  );
+});
+
+test("related handoff assertion fails closed for local prerequisite role URL drift", () => {
+  assert.throws(
+    () =>
+      assertAdminAuditRelatedHandoff({
+        adminRoleSurface: {
+          ...adminRoleSurfaceFixture(),
+          visibleRelatedDestinations: [
+            {
+              ...adminRoleSurfaceFixture().visibleRelatedDestinations[0],
+              visibleLocalPrerequisiteRoleUrls: {
+                [localProofFreshnessAdminSurfaceCheckId]:
+                  "/admin/audit/local-next-action?game=game-a",
+              },
+            },
+          ],
+        },
+        handoff: handoffFixture(),
+        proofName: "proof graph admin proof",
+      }),
+    /proof graph admin proof handoff destination local prerequisite role URL drifted: local-proof-freshness-admin-surface/,
   );
 });
 
@@ -235,10 +257,9 @@ function handoffFixture() {
     requiredStaleConflictLaneIds: hostedMatrixStaleConflictLaneIds,
     requiredUnprovenIds: [hostedMatrixRequestedEvidenceIds[0]],
     requiredLocalPrerequisiteDestinations: [
-      {
-        id: localProofFreshnessAdminSurfaceCheckId,
-        auditId: localAdminAuditIds.proofFreshness,
-      },
+      localReadinessDependencyDestinationFor(
+        localProofFreshnessAdminSurfaceCheckId,
+      ),
     ],
     requiredHostedHandoffInputIds: hostedHandoff.inputIds,
     requiredHostedHandoffBlockedCheckIds: hostedHandoff.blockedCheckIds,

@@ -62,6 +62,7 @@ import {
 } from "./dev_test_game_next_action_paths.mjs";
 import {
   localHostedEvidenceLaneDemoProofCheckId,
+  localReadinessDependencyDestinationFor,
   localNextActionAdminSurfaceCheckId,
   localProofFreshnessAdminSurfaceCheckId,
   localProofGraphAdminRoleHandoffsCheckId,
@@ -199,28 +200,17 @@ export const adminProofDestinationRequirementCases = Object.freeze([
       "local-hardening-proof",
       localProofGraphAdminRoleHandoffsCheckId,
     ]),
-    requiredLocalPrerequisiteDestinations: Object.freeze([
-      Object.freeze({
-        id: localProofGraphAdminRoleHandoffsCheckId,
-        auditId: localAdminAuditIds.proofGraph,
-      }),
-      Object.freeze({
-        id: localProofGraphTerminalValidationCheckId,
-        auditId: localAdminAuditIds.proofGraph,
-      }),
-      Object.freeze({
-        id: localProofFreshnessAdminSurfaceCheckId,
-        auditId: localAdminAuditIds.proofFreshness,
-      }),
-      Object.freeze({
-        id: localNextActionAdminSurfaceCheckId,
-        auditId: localAdminAuditIds.nextAction,
-      }),
-      Object.freeze({
-        id: localHostedEvidenceLaneDemoProofCheckId,
-        auditId: localAdminAuditIds.hostedEvidenceLane,
-      }),
-    ]),
+    requiredLocalPrerequisiteDestinations: Object.freeze(
+      [
+        localProofGraphAdminRoleHandoffsCheckId,
+        localProofGraphTerminalValidationCheckId,
+        localProofFreshnessAdminSurfaceCheckId,
+        localNextActionAdminSurfaceCheckId,
+        localHostedEvidenceLaneDemoProofCheckId,
+      ].map((id) =>
+        Object.freeze(localReadinessDependencyDestinationFor(id)),
+      ),
+    ),
     requiredUnprovenIds: Object.freeze([
       "hosted-deployment",
       "human-release-approval",

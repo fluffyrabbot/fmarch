@@ -80,6 +80,7 @@ import {
 } from "./dev_test_game_next_action_paths.mjs";
 import {
   localHostedEvidenceLaneDemoProofCheckId,
+  localReadinessDependencyDestinationFor,
   localNextActionAdminSurfaceCheckId,
   localProofFreshnessAdminSurfaceCheckId,
   localProofGraphAdminRoleHandoffsCheckId,
@@ -535,27 +536,12 @@ test("admin proof destination handoff cases carry shared row requirements", () =
     adminProofDestinationRequirementForLink("admin-proof:release")
       .requiredLocalPrerequisiteDestinations,
     [
-      {
-        id: localProofGraphAdminRoleHandoffsCheckId,
-        auditId: localAdminAuditIds.proofGraph,
-      },
-      {
-        id: localProofGraphTerminalValidationCheckId,
-        auditId: localAdminAuditIds.proofGraph,
-      },
-      {
-        id: localProofFreshnessAdminSurfaceCheckId,
-        auditId: localAdminAuditIds.proofFreshness,
-      },
-      {
-        id: localNextActionAdminSurfaceCheckId,
-        auditId: localAdminAuditIds.nextAction,
-      },
-      {
-        id: localHostedEvidenceLaneDemoProofCheckId,
-        auditId: localAdminAuditIds.hostedEvidenceLane,
-      },
-    ],
+      localProofGraphAdminRoleHandoffsCheckId,
+      localProofGraphTerminalValidationCheckId,
+      localProofFreshnessAdminSurfaceCheckId,
+      localNextActionAdminSurfaceCheckId,
+      localHostedEvidenceLaneDemoProofCheckId,
+    ].map((id) => localReadinessDependencyDestinationFor(id)),
   );
   assert.deepEqual(
     adminProofDestinationRequirementForLink("admin-proof:spine-manifest")
