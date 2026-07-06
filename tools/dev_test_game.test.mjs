@@ -643,6 +643,9 @@ import {
 import {
   devTestGameNextActionSequenceHandoffPair,
 } from "./dev_test_game_next_action_sequence_handoff_pair.mjs";
+import {
+  buildSelectedOperatorHandoffTerminalReceipt,
+} from "./dev_test_game_selected_operator_handoff_receipt.mjs";
 
 test("dev test-game args expose reset reuse naming and verification controls", () => {
   assert.deepEqual(
@@ -1402,6 +1405,8 @@ test("dev test-game spine orchestrators expose stable proof order and env maps",
       "terminal-hosted-identity-next-action-admin-proof-batch",
       "tools/dev_test_game_next_action.mjs",
       "terminal-refresh-admin-proof-batch",
+      devTestGameReleaseReadinessScript,
+      "tools/dev_test_game_next_action.mjs",
       "tools/dev_test_game_proof_graph.mjs",
       "tools/dev_test_game_proof_graph_admin_proof.mjs",
       "tools/dev_test_game_next_action.mjs",
@@ -1442,6 +1447,17 @@ test("dev test-game spine orchestrators expose stable proof order and env maps",
     script: "terminal-refresh-admin-proof-batch",
     label: "Terminal refresh admin proof batch",
   });
+  assert.deepEqual(devTestGameAdminSpinePlan[26], {
+    kind: "node",
+    script: devTestGameReleaseReadinessScript,
+    readinessReason: "terminal-batch-receipt-before-proof-graph-admin-proof",
+    changedInputs: [
+      adminSpineTerminalBatchProofPath,
+      proofFreshnessAdminProofPath,
+      nextActionAdminProofPath,
+    ],
+    env: adminSpineTerminalBatchReadinessEvidenceEnv,
+  });
   assert.deepEqual(
     devTestGameAdminSpinePlan
       .map((step, index) => ({ index, step }))
@@ -1468,7 +1484,12 @@ test("dev test-game spine orchestrators expose stable proof order and env maps",
         outputPath: nextActionPath,
       },
       {
-        index: 28,
+        index: 27,
+        sequenceStage: null,
+        outputPath: nextActionPath,
+      },
+      {
+        index: 30,
         sequenceStage: null,
         outputPath: nextActionPath,
       },
@@ -5458,6 +5479,10 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
     nextActionHandoffPairFixture(),
   );
   assert.deepEqual(
+    terminalBatches.selectedOperatorHandoffReceipt,
+    selectedOperatorHandoffReceiptFixture(),
+  );
+  assert.deepEqual(
     terminalBatches.batches.map((batch) => [
       batch.label,
       batch.caseCount,
@@ -5621,6 +5646,64 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
         nextAction.selectedOperatorHandoff.selectedProductionFeatureRoleUrl,
       proofTarget: nextAction.selectedOperatorHandoff.proofTarget,
       unprovenId: nextAction.selectedOperatorHandoff.unprovenId,
+    },
+  );
+  assert.deepEqual(
+    buildSelectedOperatorHandoffTerminalReceipt({
+      nextAction,
+      proofGraph: graph,
+    }),
+    {
+      id: "selected-operator-handoff-terminal-receipt",
+      status: "passed",
+      proofBoundary:
+        "Local terminal receipt for the selected operator handoff. It ties the next-action selectedOperatorHandoff artifact to the proof-graph selected-operator-handoff edge and the release-readiness admin related-link contract; it does not prove hosted deployment, release readiness, or production readiness.",
+      sourceArtifacts: {
+        nextAction: "target/dev-test-game/next-action.json",
+        nextActionAdminProof:
+          "target/dev-test-game/next-action-admin-proof.json",
+        proofGraph: "target/dev-test-game/proof-graph.json",
+        releaseReadiness:
+          "target/dev-test-game/release-readiness-checklist.json",
+      },
+      assertions: [
+        "next-action.selectedOperatorHandoff",
+        "proof-graph.selected-operator-handoff-edge",
+        "release-readiness.selected-operator-handoff-related-link",
+      ],
+      selectedOperatorHandoff: {
+        id: "hosted-deployment:blocked-operator-packet",
+        status: "blocked",
+        reason: "release-readiness-unproven",
+        command: `npm run ${devTestGameHostedEvidenceLaneCommand}`,
+        unprovenId: "hosted-deployment",
+        proofTarget: devTestGameHostedEvidenceLanePath,
+        roleUrl: "/admin/audit/local-hosted-evidence-lane?game=<seeded-game>",
+        firstMissingInputId: "FMARCH_HOSTED_MATRIX_FRONTEND_URL",
+        selectedProductionFeatureGraphNodeId:
+          "production-feature:host-phase-control",
+        selectedProductionFeatureRoleUrl:
+          "/admin/audit/local-core-loop?game=<seeded-game>",
+      },
+      proofGraphEdge: {
+        from: "next-action",
+        to: "production-feature:host-phase-control",
+        relationship: "selected-operator-handoff",
+        command: `npm run ${devTestGameHostedEvidenceLaneCommand}`,
+        firstMissingInputId: "FMARCH_HOSTED_MATRIX_FRONTEND_URL",
+        roleUrl: "/admin/audit/local-core-loop?game=<seeded-game>",
+        proofTarget: devTestGameHostedEvidenceLanePath,
+        unprovenId: "hosted-deployment",
+      },
+      readinessRelatedLink: {
+        id: "selected-operator-handoff",
+        label: "Selected operator handoff",
+        sourceAuditId: localAdminAuditIds.releaseReadiness,
+        destinationAuditId: localAdminAuditIds.nextAction,
+        href: localAdminAuditRoleUrl(localAdminAuditIds.nextAction),
+        status: "blocked:FMARCH_HOSTED_MATRIX_FRONTEND_URL",
+        command: `npm run ${devTestGameHostedEvidenceLaneCommand}`,
+      },
     },
   );
   const coreLoopFamilyRows = coreLoopScenarioFamilyRows();
@@ -15977,10 +16060,21 @@ test("session card and markdown include role credential URLs and tokens", async 
     nextActionHandoffPairFixture(),
   );
   assert.deepEqual(
+    adminSpineReadiness.localDevelopmentSpine.evidence.adminProofSpine
+      .terminalBatches.selectedOperatorHandoffReceipt,
+    selectedOperatorHandoffReceiptFixture(),
+  );
+  assert.deepEqual(
     adminSpineReadiness.localDevelopmentSpine.checks.find(
       (item) => item.id === "local-admin-spine-terminal-batches",
     ).nextActionHandoffPair,
     nextActionHandoffPairFixture(),
+  );
+  assert.deepEqual(
+    adminSpineReadiness.localDevelopmentSpine.checks.find(
+      (item) => item.id === "local-admin-spine-terminal-batches",
+    ).selectedOperatorHandoffReceipt,
+    selectedOperatorHandoffReceiptFixture(),
   );
   assert.deepEqual(adminSpineReadiness.localDevelopmentSpine.evidence.adminProofSpine.proofIds, [
     "core-loop",
@@ -24256,6 +24350,7 @@ function adminSpineTerminalBatchesFixture() {
       batchCount: terminalProofGraphReceiptBatchRegistry.length,
     },
     nextActionHandoffPair: nextActionHandoffPairFixture(),
+    selectedOperatorHandoffReceipt: selectedOperatorHandoffReceiptFixture(),
     batches: terminalProofGraphReceiptBatchRegistry.map((batch, index) => ({
       label: batch.label,
       reason: batch.reason,
@@ -24275,6 +24370,10 @@ function adminSpineTerminalBatchesFixture() {
 
 function nextActionHandoffPairFixture() {
   return devTestGameNextActionSequenceHandoffPair();
+}
+
+function selectedOperatorHandoffReceiptFixture() {
+  return buildSelectedOperatorHandoffTerminalReceipt();
 }
 
 function nextActionHandoffDestinationFixture() {

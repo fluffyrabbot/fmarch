@@ -275,6 +275,9 @@ import {
   devTestGameNextActionSequenceHandoffPair,
 } from "./dev_test_game_next_action_sequence_handoff_pair.mjs";
 import {
+  assertSelectedOperatorHandoffTerminalReceipt,
+} from "./dev_test_game_selected_operator_handoff_receipt.mjs";
+import {
   adminSpineProofBatchRegistry,
   adminSpineProofIds,
 } from "./dev_test_game_admin_spine_proof_batches.mjs";
@@ -1286,6 +1289,8 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
       artifactPaths: adminSpineTerminalBatchEvidence.artifactPaths,
       nextActionHandoffPair:
         adminSpineTerminalBatchEvidence.nextActionHandoffPair,
+      selectedOperatorHandoffReceipt:
+        adminSpineTerminalBatchEvidence.selectedOperatorHandoffReceipt,
     });
   }
   for (const descriptor of recoveryReceiptReleaseReadinessDescriptors) {
@@ -7748,6 +7753,9 @@ export function validateDevTestGameAdminSpineTerminalBatches(
     devTestGameNextActionSequenceHandoffPair();
   try {
     assertDevTestGameNextActionSequenceHandoffPair(proof.nextActionHandoffPair);
+    assertSelectedOperatorHandoffTerminalReceipt(
+      proof.selectedOperatorHandoffReceipt,
+    );
   } catch (error) {
     throw new Error(
       `admin spine terminal batch proof ${error.message}`,
@@ -7797,6 +7805,7 @@ export function validateDevTestGameAdminSpineTerminalBatches(
       adminProofBatchIdFromLabel(batch.label),
     ),
     nextActionHandoffPair: expectedNextActionHandoffPair,
+    selectedOperatorHandoffReceipt: proof.selectedOperatorHandoffReceipt,
     batches: proof.batches.map((batch) => ({
       label: batch.label,
       status: batch.status,

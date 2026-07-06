@@ -199,6 +199,9 @@ import {
   devTestGameNextActionSequenceHandoffPair,
 } from "../../../../tools/dev_test_game_next_action_sequence_handoff_pair.mjs";
 import {
+  buildSelectedOperatorHandoffTerminalReceipt,
+} from "../../../../tools/dev_test_game_selected_operator_handoff_receipt.mjs";
+import {
   hostedIdentityTerminalReceiptArtifactCase,
   terminalProofGraphReceiptArtifacts,
 } from "../../../../tools/dev_test_game_proof_graph_receipt_artifact_rows.mjs";
@@ -2218,6 +2221,7 @@ test("admin route data exposes local admin spine proof as a native audit row", a
       "recovery",
       localAdminAuditHandoffCheckIds.spineManifest,
       "next-action-sequence-handoff",
+      "selected-operator-handoff-terminal-receipt",
     ],
   );
   assert.deepEqual(adminSpine.relatedLinks, [
@@ -2238,6 +2242,7 @@ test("admin route data exposes local admin spine proof as a native audit row", a
     nextCommand: "npm run test:dev-test-game-admin-spine",
     spineManifestInspectHref: localAdminAuditRoleUrl(localAdminAuditIds.spineManifest, { game: "midsummer" }),
     nextActionHandoffPair: nextActionHandoffPairFixture(),
+    selectedOperatorHandoffReceipt: selectedOperatorHandoffReceiptFixture(),
     releaseReady: false,
     productionReady: false,
   });
@@ -2255,7 +2260,7 @@ test("admin local admin spine detail data carries aggregate proof rows", async (
   assert.equal(data.status, "available");
   assert.equal(data.surfaceHeader.title, "Local admin spine");
   assert.equal(data.audit.id, localAdminAuditIds.adminSpine);
-  assert.equal(data.audit.checks.length, 14);
+  assert.equal(data.audit.checks.length, 15);
   assert.equal(data.audit.batches.length, 5);
   assert.deepEqual(
     data.audit.batches.map((batch) => [
@@ -2337,6 +2342,47 @@ test("admin local admin spine detail data carries aggregate proof rows", async (
       ["recovery", "passed"],
       [localAdminAuditHandoffCheckIds.spineManifest, "passed"],
       ["next-action-sequence-handoff", "passed:passed"],
+      ["selected-operator-handoff-terminal-receipt", "not_applicable"],
+    ],
+  );
+  assert.deepEqual(
+    data.audit.artifactSummarySections.map((section) => [
+      section.id,
+      section.rows.map((row) => [
+        row.id,
+        row.values.map((value) => [value.id, value.text, value.emphasized]),
+      ]),
+    ]),
+    [
+      [
+        "selected-operator-handoff-terminal-receipt",
+        [
+          [
+            "summary",
+            [
+              ["status", "not_applicable", true],
+              ["id", "selected-operator-handoff-terminal-receipt", false],
+              [
+                "proofBoundary",
+                selectedOperatorHandoffReceiptFixture().proofBoundary,
+                false,
+              ],
+              ["sourceNextAction", "target/dev-test-game/next-action.json", false],
+              [
+                "sourceNextActionAdminProof",
+                "target/dev-test-game/next-action-admin-proof.json",
+                false,
+              ],
+              ["sourceProofGraph", "target/dev-test-game/proof-graph.json", false],
+              [
+                "sourceReleaseReadiness",
+                "target/dev-test-game/release-readiness-checklist.json",
+                false,
+              ],
+            ],
+          ],
+        ],
+      ],
     ],
   );
   assert.equal(
@@ -9496,6 +9542,7 @@ function adminSpineTerminalBatchesFixture() {
       batchCount: 3,
     },
     nextActionHandoffPair: nextActionHandoffPairFixture(),
+    selectedOperatorHandoffReceipt: selectedOperatorHandoffReceiptFixture(),
     batches: [
       {
         label: "Terminal admin proof batch",
@@ -9566,6 +9613,10 @@ function adminSpineTerminalBatchesFixture() {
 
 function nextActionHandoffPairFixture() {
   return devTestGameNextActionSequenceHandoffPair();
+}
+
+function selectedOperatorHandoffReceiptFixture() {
+  return buildSelectedOperatorHandoffTerminalReceipt();
 }
 
 function hostedHandoffChecklistRowsForAssertion(rows) {

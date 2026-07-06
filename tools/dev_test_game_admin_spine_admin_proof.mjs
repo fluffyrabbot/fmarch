@@ -65,6 +65,7 @@ const requiredRelatedLinks = [localAdminAuditIds.spineManifest];
 const requiredAdminSpineBatches = [
   "aggregate-pre-release-admin-proof-batch",
   "aggregate-release-and-hosted-admin-proof-batch",
+  "aggregate-hosted-operator-fixture-admin-proof-batch",
 ];
 
 await runAdminAuditProof({

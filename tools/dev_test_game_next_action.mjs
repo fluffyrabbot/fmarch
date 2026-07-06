@@ -13,6 +13,10 @@ import {
   assertDevTestGameNextActionSequenceHandoffPair,
 } from "./dev_test_game_next_action_sequence_handoff_pair.mjs";
 import {
+  assertSelectedOperatorHandoffForNextAction,
+  selectedOperatorHandoffFromNextAction,
+} from "./dev_test_game_selected_operator_handoff_receipt.mjs";
+import {
   assertDevTestGameOpsArtifacts,
   devTestGameOpsArtifactsPath,
 } from "./dev_test_game_ops_artifacts.mjs";
@@ -943,58 +947,6 @@ export function assertDevTestGameNextAction(evidence) {
   );
   assertRecoveryReceiptGraphsForNextAction(evidence.generatedFrom);
   return evidence;
-}
-
-function selectedOperatorHandoffFromNextAction(nextAction) {
-  const packet =
-    nextAction?.unproven?.hostedHandoffChecklist?.blockedOperatorPacket ??
-    nextAction?.unproven?.hostedHandoffChecklist?.blockedReceipt
-      ?.blockedOperatorPacket;
-  if (packet === null || packet === undefined) {
-    return null;
-  }
-  const blockedOperatorPacket = assertBlockedOperatorPacket(packet);
-  return Object.freeze({
-    id: `${String(nextAction.unproven?.id ?? "unknown")}:blocked-operator-packet`,
-    status: blockedOperatorPacket.status,
-    reason: String(nextAction.reason ?? ""),
-    command: String(nextAction.command ?? ""),
-    unprovenId: String(nextAction.unproven?.id ?? ""),
-    proofTarget: String(nextAction.unproven?.proofTarget ?? ""),
-    roleUrl: String(nextAction.unproven?.roleUrl ?? ""),
-    firstMissingInputId: blockedOperatorPacket.firstMissingInputId,
-    selectedProductionFeatureGraphNodeId:
-      blockedOperatorPacket.selectedProductionFeatureGraphNodeId,
-    selectedProductionFeatureRoleUrl:
-      blockedOperatorPacket.selectedProductionFeatureRoleUrl,
-    blockedOperatorPacket,
-  });
-}
-
-function assertSelectedOperatorHandoffForNextAction(evidence) {
-  const expected = selectedOperatorHandoffFromNextAction(evidence.nextAction);
-  if (JSON.stringify(evidence.selectedOperatorHandoff ?? null) !==
-    JSON.stringify(expected)) {
-    throw new Error("next-action selected operator handoff drifted");
-  }
-  if (expected === null) {
-    return;
-  }
-  if (
-    expected.reason !== "release-readiness-unproven" ||
-    expected.command !== evidence.nextAction.command ||
-    expected.unprovenId !== evidence.nextAction.unproven?.id ||
-    expected.proofTarget !== evidence.nextAction.unproven?.proofTarget ||
-    expected.roleUrl !== evidence.nextAction.unproven?.roleUrl ||
-    expected.firstMissingInputId !==
-      expected.blockedOperatorPacket.firstMissingInputId ||
-    expected.selectedProductionFeatureGraphNodeId !==
-      expected.blockedOperatorPacket.selectedProductionFeatureGraphNodeId ||
-    expected.selectedProductionFeatureRoleUrl !==
-      expected.blockedOperatorPacket.selectedProductionFeatureRoleUrl
-  ) {
-    throw new Error("next-action selected operator handoff is inconsistent");
-  }
 }
 
 export async function writeDevTestGameNextAction({

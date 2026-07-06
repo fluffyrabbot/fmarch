@@ -1,4 +1,4 @@
-import { mkdir, rm, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import {
@@ -100,6 +100,9 @@ import {
 import {
   devTestGameNextActionSequenceHandoffPair,
 } from "./dev_test_game_next_action_sequence_handoff_pair.mjs";
+import {
+  buildSelectedOperatorHandoffTerminalReceipt,
+} from "./dev_test_game_selected_operator_handoff_receipt.mjs";
 import { releaseReadinessStep } from "./dev_test_game_spine_readiness_steps.mjs";
 import { runSpinePlan } from "./dev_test_game_spine_runner.mjs";
 import {
@@ -327,6 +330,16 @@ export const devTestGameAdminSpinePlan = [
     script: terminalRefreshAdminProofBatchPlan.script,
     label: terminalRefreshAdminProofBatchPlan.label,
   },
+  releaseReadinessStep({
+    reason: "terminal-batch-receipt-before-proof-graph-admin-proof",
+    changedInputs: [
+      adminSpineTerminalBatchProofPath,
+      proofFreshnessAdminProofPath,
+      nextActionAdminProofPath,
+    ],
+    env: adminSpineTerminalBatchReadinessEvidenceEnv,
+  }),
+  { kind: "node", script: "tools/dev_test_game_next_action.mjs" },
   { kind: "node", script: "tools/dev_test_game_proof_graph.mjs" },
   { kind: "node", script: "tools/dev_test_game_proof_graph_admin_proof.mjs" },
   { kind: "node", script: "tools/dev_test_game_next_action.mjs" },
@@ -415,6 +428,10 @@ async function clearAdminSpineTerminalBatchProof() {
 }
 
 async function writeAdminSpineTerminalBatchProof(batches) {
+  const nextAction = await readOptionalJson(path.join(repoRoot, nextActionPath));
+  const proofGraph = await readOptionalJson(
+    path.join(repoRoot, devTestGameProofGraphPath),
+  );
   const evidence = {
     version: 1,
     proof: "dev-test-game-admin-spine-terminal-batches",
@@ -437,6 +454,11 @@ async function writeAdminSpineTerminalBatchProof(batches) {
       batchCount: batches.length,
     },
     nextActionHandoffPair: devTestGameNextActionSequenceHandoffPair(),
+    selectedOperatorHandoffReceipt:
+      buildSelectedOperatorHandoffTerminalReceipt({
+        nextAction,
+        proofGraph,
+      }),
     batches,
   };
   await mkdir(artifactDir, { recursive: true });
@@ -445,6 +467,17 @@ async function writeAdminSpineTerminalBatchProof(batches) {
     `${JSON.stringify(evidence, null, 2)}\n`,
   );
   return evidence;
+}
+
+async function readOptionalJson(filePath) {
+  try {
+    return JSON.parse(await readFile(filePath, "utf8"));
+  } catch (error) {
+    if (error?.code === "ENOENT") {
+      return null;
+    }
+    throw error;
+  }
 }
 
 if (pathToFileURL(process.argv[1] ?? "").href === import.meta.url) {

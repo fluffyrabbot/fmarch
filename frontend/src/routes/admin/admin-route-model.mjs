@@ -56,6 +56,9 @@ import {
   normalizeProofGraphReceiptArtifactRows,
 } from "../../../../tools/dev_test_game_proof_graph_receipt_artifact_rows.mjs";
 import {
+  selectedOperatorHandoffTerminalReceiptId,
+} from "../../../../tools/dev_test_game_selected_operator_handoff_receipt.mjs";
+import {
   normalizeLocalReadinessDependencyTrace,
   normalizePreReadinessTrace,
   preReadinessTraceCheckRows,
@@ -306,6 +309,108 @@ function nextActionHandoffPairSummarySections(pair) {
             { id: "adminProofPath", text: handoff.adminProofPath },
           ],
         })),
+      ],
+    }),
+  ];
+}
+
+function selectedOperatorHandoffTerminalReceiptSummarySections(receipt) {
+  if (receipt === null) {
+    return [];
+  }
+  return [
+    buildArtifactSummarySection({
+      id: "selected-operator-handoff-terminal-receipt",
+      heading: "Selected operator handoff receipt",
+      rows: [
+        {
+          id: "summary",
+          testId: "admin-audit-selected-operator-handoff-terminal-receipt",
+          values: [
+            { id: "status", text: receipt.status, emphasized: true },
+            { id: "id", text: receipt.id },
+            { id: "proofBoundary", text: receipt.proofBoundary },
+            { id: "sourceNextAction", text: receipt.sourceArtifacts.nextAction },
+            {
+              id: "sourceNextActionAdminProof",
+              text: receipt.sourceArtifacts.nextActionAdminProof,
+            },
+            { id: "sourceProofGraph", text: receipt.sourceArtifacts.proofGraph },
+            {
+              id: "sourceReleaseReadiness",
+              text: receipt.sourceArtifacts.releaseReadiness,
+            },
+          ],
+        },
+        ...(receipt.selectedOperatorHandoff === undefined
+          ? []
+          : [
+              {
+                id: "selected-operator-handoff",
+                testId:
+                  "admin-audit-selected-operator-handoff-terminal-selected",
+                values: [
+                  {
+                    id: "status",
+                    text: receipt.selectedOperatorHandoff.status,
+                    emphasized: true,
+                  },
+                  {
+                    id: "command",
+                    text: receipt.selectedOperatorHandoff.command,
+                  },
+                  {
+                    id: "firstMissingInputId",
+                    text: receipt.selectedOperatorHandoff.firstMissingInputId,
+                  },
+                  {
+                    id: "selectedProductionFeatureGraphNodeId",
+                    text:
+                      receipt.selectedOperatorHandoff
+                        .selectedProductionFeatureGraphNodeId,
+                  },
+                ],
+              },
+              {
+                id: "proof-graph-edge",
+                testId:
+                  "admin-audit-selected-operator-handoff-terminal-edge",
+                values: [
+                  { id: "from", text: receipt.proofGraphEdge.from },
+                  {
+                    id: "relationship",
+                    text: receipt.proofGraphEdge.relationship,
+                    emphasized: true,
+                  },
+                  { id: "to", text: receipt.proofGraphEdge.to },
+                  {
+                    id: "firstMissingInputId",
+                    text: receipt.proofGraphEdge.firstMissingInputId,
+                  },
+                ],
+              },
+              {
+                id: "readiness-related-link",
+                testId:
+                  "admin-audit-selected-operator-handoff-terminal-readiness-link",
+                values: [
+                  { id: "id", text: receipt.readinessRelatedLink.id },
+                  {
+                    id: "sourceAuditId",
+                    text: receipt.readinessRelatedLink.sourceAuditId,
+                  },
+                  {
+                    id: "destinationAuditId",
+                    text: receipt.readinessRelatedLink.destinationAuditId,
+                  },
+                  { id: "status", text: receipt.readinessRelatedLink.status },
+                  {
+                    id: "command",
+                    text: receipt.readinessRelatedLink.command,
+                  },
+                ],
+              },
+            ]),
       ],
     }),
   ];
@@ -6753,6 +6858,12 @@ export function normalizeLocalAdminSpineAudit(
         terminalBatchProof.nextActionHandoffPair,
       )
     : null;
+  const terminalSelectedOperatorHandoffReceipt =
+    validAdminSpineTerminalBatchProof(terminalBatchProof)
+      ? normalizeSelectedOperatorHandoffTerminalReceipt(
+          terminalBatchProof.selectedOperatorHandoffReceipt,
+        )
+      : null;
   const batches = [...aggregateBatches, ...terminalBatches].map((batch, index) =>
     normalizeAdminSpineBatch(batch, index),
   );
@@ -6815,6 +6926,14 @@ export function normalizeLocalAdminSpineAudit(
                 status: `${terminalNextActionHandoffPair.defaultSequenceBlocker.status}:${terminalNextActionHandoffPair.hostedIdentityPredicate.status}`,
               }),
             ]),
+        ...(terminalSelectedOperatorHandoffReceipt === null
+          ? []
+          : [
+              Object.freeze({
+                id: terminalSelectedOperatorHandoffReceipt.id,
+                status: terminalSelectedOperatorHandoffReceipt.status,
+              }),
+            ]),
       ],
     ),
     batches: Object.freeze(batches),
@@ -6833,9 +6952,103 @@ export function normalizeLocalAdminSpineAudit(
       ...(terminalNextActionHandoffPair === null
         ? {}
         : { nextActionHandoffPair: terminalNextActionHandoffPair }),
+      ...(terminalSelectedOperatorHandoffReceipt === null
+        ? {}
+        : {
+            selectedOperatorHandoffReceipt:
+              terminalSelectedOperatorHandoffReceipt,
+          }),
       releaseReady: adminSpineProof.releaseReady === true,
       productionReady: adminSpineProof.productionReady === true,
     }),
+    artifactSummarySections:
+      selectedOperatorHandoffTerminalReceiptSummarySections(
+        terminalSelectedOperatorHandoffReceipt,
+      ),
+  });
+}
+
+function normalizeSelectedOperatorHandoffTerminalReceipt(receipt) {
+  if (
+    receipt === null ||
+    typeof receipt !== "object" ||
+    receipt.id !== selectedOperatorHandoffTerminalReceiptId ||
+    !["passed", "not_applicable"].includes(receipt.status) ||
+    receipt.sourceArtifacts === null ||
+    typeof receipt.sourceArtifacts !== "object" ||
+    !Array.isArray(receipt.assertions)
+  ) {
+    return null;
+  }
+  return Object.freeze({
+    id: receipt.id,
+    status: receipt.status,
+    proofBoundary: String(receipt.proofBoundary ?? ""),
+    sourceArtifacts: Object.freeze({
+      nextAction: String(receipt.sourceArtifacts.nextAction ?? ""),
+      nextActionAdminProof: String(
+        receipt.sourceArtifacts.nextActionAdminProof ?? "",
+      ),
+      proofGraph: String(receipt.sourceArtifacts.proofGraph ?? ""),
+      releaseReadiness: String(
+        receipt.sourceArtifacts.releaseReadiness ?? "",
+      ),
+    }),
+    assertions: Object.freeze(receipt.assertions.map((item) => String(item))),
+    ...(receipt.reason === undefined ? {} : { reason: String(receipt.reason) }),
+    ...(receipt.selectedOperatorHandoff === undefined
+      ? {}
+      : {
+          selectedOperatorHandoff: Object.freeze({
+            id: String(receipt.selectedOperatorHandoff.id ?? ""),
+            status: String(receipt.selectedOperatorHandoff.status ?? ""),
+            reason: String(receipt.selectedOperatorHandoff.reason ?? ""),
+            command: String(receipt.selectedOperatorHandoff.command ?? ""),
+            unprovenId: String(
+              receipt.selectedOperatorHandoff.unprovenId ?? "",
+            ),
+            proofTarget: String(
+              receipt.selectedOperatorHandoff.proofTarget ?? "",
+            ),
+            roleUrl: String(receipt.selectedOperatorHandoff.roleUrl ?? ""),
+            firstMissingInputId: String(
+              receipt.selectedOperatorHandoff.firstMissingInputId ?? "",
+            ),
+            selectedProductionFeatureGraphNodeId: String(
+              receipt.selectedOperatorHandoff
+                .selectedProductionFeatureGraphNodeId ?? "",
+            ),
+            selectedProductionFeatureRoleUrl: String(
+              receipt.selectedOperatorHandoff
+                .selectedProductionFeatureRoleUrl ?? "",
+            ),
+          }),
+          proofGraphEdge: Object.freeze({
+            from: String(receipt.proofGraphEdge?.from ?? ""),
+            to: String(receipt.proofGraphEdge?.to ?? ""),
+            relationship: String(receipt.proofGraphEdge?.relationship ?? ""),
+            command: String(receipt.proofGraphEdge?.command ?? ""),
+            firstMissingInputId: String(
+              receipt.proofGraphEdge?.firstMissingInputId ?? "",
+            ),
+            roleUrl: String(receipt.proofGraphEdge?.roleUrl ?? ""),
+            proofTarget: String(receipt.proofGraphEdge?.proofTarget ?? ""),
+            unprovenId: String(receipt.proofGraphEdge?.unprovenId ?? ""),
+          }),
+          readinessRelatedLink: Object.freeze({
+            id: String(receipt.readinessRelatedLink?.id ?? ""),
+            label: String(receipt.readinessRelatedLink?.label ?? ""),
+            sourceAuditId: String(
+              receipt.readinessRelatedLink?.sourceAuditId ?? "",
+            ),
+            destinationAuditId: String(
+              receipt.readinessRelatedLink?.destinationAuditId ?? "",
+            ),
+            href: String(receipt.readinessRelatedLink?.href ?? ""),
+            status: String(receipt.readinessRelatedLink?.status ?? ""),
+            command: String(receipt.readinessRelatedLink?.command ?? ""),
+          }),
+        }),
   });
 }
 
