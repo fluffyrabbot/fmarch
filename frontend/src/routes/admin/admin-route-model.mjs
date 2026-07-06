@@ -636,6 +636,47 @@ function hostedHandoffOperatorProofRows(drilldowns) {
   ];
 }
 
+function buildHostedHandoffProgressionRows({ checklist, artifactSummary }) {
+  if (artifactSummaryHasProgressionRows(artifactSummary)) {
+    return Object.freeze([]);
+  }
+  const progressions = Array.isArray(
+    checklist?.progressionSummary?.progressions,
+  )
+    ? checklist.progressionSummary.progressions
+    : [];
+  return Object.freeze(
+    progressions.map((progression) =>
+      artifactSummaryRow({
+        id: `progression-${progression.id}`,
+        testId: `admin-audit-hosted-identity-progression-${progression.id}`,
+        values: [
+          { id: "id", text: progression.id, emphasized: true },
+          { id: "adminProofMode", text: progression.adminProofMode },
+          {
+            id: "adminProofFixturePath",
+            text: progression.adminProofFixturePath,
+          },
+          { id: "proofCommand", text: progression.proofCommand },
+          { id: "evidencePath", text: progression.evidencePath },
+          { id: "adminProofTarget", text: progression.adminProofTarget },
+          { id: "roleUrl", text: progression.roleUrl },
+          { id: "firstMissingInputId", text: progression.firstMissingInputId },
+          { id: "firstMissingCheckId", text: progression.firstMissingCheckId },
+          { id: "proofBoundary", text: progression.proofBoundary },
+        ],
+      }),
+    ),
+  );
+}
+
+function artifactSummaryHasProgressionRows(artifactSummary) {
+  return (
+    Array.isArray(artifactSummary?.progressionSummary?.progressions) &&
+    artifactSummary.progressionSummary.progressions.length > 0
+  );
+}
+
 function hostedReadinessText(value, label) {
   return value === true ? `${label} ready` : `${label} not ready`;
 }
@@ -1699,6 +1740,10 @@ export function normalizeLocalHostedTargetPreflightAudit(
             buildHostedHandoffChecklistRows(hostedHandoffChecklist),
           hostedHandoffOperatorRows:
             buildHostedHandoffOperatorRows(hostedHandoffChecklist),
+          hostedHandoffProgressionRows: buildHostedHandoffProgressionRows({
+            checklist: hostedHandoffChecklist,
+            artifactSummary,
+          }),
         }),
     artifactSummary,
     artifactSummarySections:
@@ -1855,6 +1900,10 @@ export function normalizeLocalHostedIdentityEvidenceAudit(
       buildHostedHandoffChecklistRows(hostedHandoffChecklist),
     hostedHandoffOperatorRows:
       buildHostedHandoffOperatorRows(hostedHandoffChecklist),
+    hostedHandoffProgressionRows: buildHostedHandoffProgressionRows({
+      checklist: hostedHandoffChecklist,
+      artifactSummary,
+    }),
     hostedHandoffReceiptHeadings: hostedHandoffReceiptHeadingsForAudit(
       localAdminAuditIds.hostedIdentityEvidence,
     ),
@@ -2141,6 +2190,10 @@ export function normalizeLocalHostedEvidenceLaneAudit(
       buildHostedHandoffChecklistRows(hostedHandoffChecklist),
     hostedHandoffOperatorRows:
       buildHostedHandoffOperatorRows(hostedHandoffChecklist),
+    hostedHandoffProgressionRows: buildHostedHandoffProgressionRows({
+      checklist: hostedHandoffChecklist,
+      artifactSummary,
+    }),
     hostedHandoffReceiptHeadings: hostedHandoffReceiptHeadingsForAudit(
       localAdminAuditIds.hostedEvidenceLane,
     ),
@@ -2454,6 +2507,10 @@ export function normalizeLocalRealHostedObservabilityHandoffAudit(
       buildHostedHandoffChecklistRows(hostedHandoffChecklist),
     hostedHandoffOperatorRows:
       buildHostedHandoffOperatorRows(hostedHandoffChecklist),
+    hostedHandoffProgressionRows: buildHostedHandoffProgressionRows({
+      checklist: hostedHandoffChecklist,
+      artifactSummary,
+    }),
     hostedHandoffReceiptHeadings: hostedHandoffReceiptHeadingsForAudit(
       localAdminAuditIds.realHostedObservabilityHandoff,
     ),
@@ -2820,6 +2877,10 @@ export function normalizeLocalHostedConcurrentRaceMatrixAudit(
       buildHostedHandoffChecklistRows(hostedHandoffChecklist),
     hostedHandoffOperatorRows:
       buildHostedHandoffOperatorRows(hostedHandoffChecklist),
+    hostedHandoffProgressionRows: buildHostedHandoffProgressionRows({
+      checklist: hostedHandoffChecklist,
+      artifactSummary,
+    }),
     hostedHandoffReceiptHeadings: hostedHandoffReceiptHeadingsForAudit(
       localAdminAuditIds.hostedConcurrentRaceMatrix,
     ),
@@ -3729,6 +3790,10 @@ export function normalizeLocalNextActionAudit(nextAction, { game, proofGraph = n
             buildHostedHandoffChecklistRows(hostedHandoffChecklist),
           hostedHandoffOperatorRows:
             buildHostedHandoffOperatorRows(hostedHandoffChecklist),
+          hostedHandoffProgressionRows: buildHostedHandoffProgressionRows({
+            checklist: hostedHandoffChecklist,
+            artifactSummary: null,
+          }),
         }),
     ...(hostedHandoffChecklist === null
       ? {}

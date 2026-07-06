@@ -1537,6 +1537,7 @@ test("admin route data exposes hosted identity evidence as a native audit row", 
     identity.hostedHandoffChecklist.operatorProofDrilldowns,
     hostedIdentityEvidenceOperatorProofDrilldowns,
   );
+  assert.deepEqual(identity.hostedHandoffProgressionRows, []);
   assert.deepEqual(
     identity.hostedHandoffChecklist.progressionSummary.progressions.map(
       (progression) => [
@@ -1764,6 +1765,17 @@ test("admin audit detail page renders hosted handoff operator rows from route da
   assert.doesNotMatch(source, /providerBoundary/);
   assert.match(source, /data-testid=\{row\.testId\}/);
   assert.match(source, /data-testid=\{subentry\.testId\}/);
+});
+
+test("admin audit detail page renders hosted handoff progression rows from route data", async () => {
+  const source = await readFile(
+    "frontend/src/routes/admin/audit/[audit]/+page.svelte",
+    "utf8",
+  );
+  assert.match(source, /hostedHandoffProgressionRows/);
+  assert.doesNotMatch(source, /hostedHandoffChecklist\.progressionSummary/);
+  assert.doesNotMatch(source, /artifactSummary\?\.progressionSummary/);
+  assert.match(source, /data-testid=\{row\.testId\}/);
 });
 
 test("admin audit detail page renders hosted identity blocked receipt as a named group", async () => {
@@ -3662,6 +3674,12 @@ test("admin local next action detail data carries hosted identity progression la
       localAdminAuditRoleUrl(localAdminAuditIds.hostedIdentityEvidence),
       progression.missingInputId,
     ]),
+  );
+  assert.deepEqual(
+    hostedHandoffChecklistRowsForAssertion(
+      data.audit.hostedHandoffProgressionRows,
+    ),
+    expectedHostedHandoffProgressionRows(data.audit.hostedHandoffChecklist),
   );
   assert.deepEqual(
     data.audit.hostedHandoffChecklist.operatorEvidenceGate,
@@ -9295,6 +9313,26 @@ function expectedHostedHandoffOperatorRows(checklist) {
           ],
         ]),
   ];
+}
+
+function expectedHostedHandoffProgressionRows(checklist) {
+  return (checklist.progressionSummary?.progressions ?? []).map((progression) => [
+    `progression-${progression.id}`,
+    `admin-audit-hosted-identity-progression-${progression.id}`,
+    [
+      ["id", progression.id, true],
+      ["adminProofMode", progression.adminProofMode, false],
+      ["adminProofFixturePath", progression.adminProofFixturePath, false],
+      ["proofCommand", progression.proofCommand, false],
+      ["evidencePath", progression.evidencePath, false],
+      ["adminProofTarget", progression.adminProofTarget, false],
+      ["roleUrl", progression.roleUrl, false],
+      ["firstMissingInputId", progression.firstMissingInputId, false],
+      ["firstMissingCheckId", progression.firstMissingCheckId, false],
+      ["proofBoundary", progression.proofBoundary, false],
+    ],
+    [],
+  ]);
 }
 
 function expectedHostedIdentityProviderBoundaryRows(boundary) {

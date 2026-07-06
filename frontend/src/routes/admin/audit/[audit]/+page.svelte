@@ -582,25 +582,20 @@
               {/if}
             </li>
           {/each}
-          {#if !data.audit.artifactSummary?.progressionSummary?.progressions?.length}
-            {#each data.audit.hostedHandoffChecklist.progressionSummary?.progressions ?? [] as progression}
-              <li
-                class="admin-audit-detail__entry admin-audit-detail__entry--stack"
-                data-testid={`admin-audit-hosted-identity-progression-${progression.id}`}
-              >
-                <strong>{progression.id}</strong>
-                <span>{progression.adminProofMode}</span>
-                <span>{progression.adminProofFixturePath}</span>
-                <span>{progression.proofCommand}</span>
-                <span>{progression.evidencePath}</span>
-                <span>{progression.adminProofTarget}</span>
-                <span>{progression.roleUrl}</span>
-                <span>{progression.firstMissingInputId}</span>
-                <span>{progression.firstMissingCheckId}</span>
-                <span>{progression.proofBoundary}</span>
-              </li>
-            {/each}
-          {/if}
+          {#each data.audit.hostedHandoffProgressionRows ?? [] as row}
+            <li
+              class="admin-audit-detail__entry admin-audit-detail__entry--stack"
+              data-testid={row.testId}
+            >
+              {#each row.values as value}
+                {#if value.emphasized}
+                  <strong>{value.text}</strong>
+                {:else}
+                  <span>{value.text}</span>
+                {/if}
+              {/each}
+            </li>
+          {/each}
           {#if data.audit.hostedHandoffChecklist.blockedReceipt}
             <li
               class="admin-audit-detail__entry admin-audit-detail__entry--stack"
