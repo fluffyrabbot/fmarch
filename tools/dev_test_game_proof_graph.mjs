@@ -99,6 +99,11 @@ import {
   buildProofGraphDiagnosticProofSummary,
 } from "./dev_test_game_proof_graph_diagnostic_summary.mjs";
 import {
+  proofGraphCoreLoopRecoveryDestinationEdgeRows,
+  proofGraphCoreLoopRecoveryDestinationNodeId,
+  proofGraphCoreLoopRecoveryDestinationNodes,
+} from "./dev_test_game_proof_graph_core_loop_recovery_destinations.mjs";
+import {
   devTestGameCoreLoopAdminProofPath,
 } from "./dev_test_game_local_admin_proof_paths.mjs";
 import {
@@ -715,7 +720,9 @@ export function assertDevTestGameProofGraphCoversCoreLoopHostVisibleRecoveries(
     nodes.map((node) => [node.recoveryCaseId, node]),
   );
   for (const recoveryCase of recoveryCases) {
-    const expectedNodeId = coreLoopHostVisibleRecoveryNodeId(recoveryCase.id);
+    const expectedNodeId = proofGraphCoreLoopRecoveryDestinationNodeId(
+      recoveryCase.id,
+    );
     const node = nodeByRecoveryCaseId.get(recoveryCase.id);
     if (
       node?.id !== expectedNodeId ||
@@ -1300,7 +1307,7 @@ function buildProofGraphNodes({
       recoveryCommand: recoveryCommands.get("core-loop"),
     });
   const coreLoopHostVisibleRecoveryNodes =
-    buildCoreLoopHostVisibleRecoveryNodes({
+    proofGraphCoreLoopRecoveryDestinationNodes({
       recoveryCommand: recoveryCommands.get("core-loop"),
     });
   const hostedIdentityOperatorPrerequisiteNodes =
@@ -1545,28 +1552,7 @@ function buildProofGraphEdges({
           checkedCount: node.checkedCount,
         },
       ]),
-    ...nodes
-      .filter((node) => node.kind === "core-loop-host-visible-recovery")
-      .flatMap((node) => [
-        [
-          "admin-proof:core-loop",
-          node.id,
-          "proves-host-visible-recovery",
-          coreLoopHostVisibleRecoveryEdgeMetadata(node),
-        ],
-        [
-          node.id,
-          "proof-graph",
-          "records",
-          coreLoopHostVisibleRecoveryEdgeMetadata(node),
-        ],
-        [
-          node.id,
-          "next-action",
-          "summarizes-into",
-          coreLoopHostVisibleRecoveryEdgeMetadata(node),
-        ],
-      ]),
+    ...proofGraphCoreLoopRecoveryDestinationEdgeRows({ nodes }),
     ...nodes
       .filter((node) => node.kind === "core-loop-scenario-family")
       .map((node) => [
@@ -1797,44 +1783,6 @@ function buildCoreLoopScenarioFamilyNodes({ recoveryCommand }) {
 
 function coreLoopScenarioFamilyNodeId(familyId) {
   return `core-loop-family:${familyId}`;
-}
-
-function buildCoreLoopHostVisibleRecoveryNodes({ recoveryCommand }) {
-  const command = recoveryCommand ?? devTestGameCoreLoopAdminProofCommand;
-  return hostVisibleRecoverySummaryCases().map((recoveryCase) => ({
-    id: coreLoopHostVisibleRecoveryNodeId(recoveryCase.id),
-    label: recoveryCase.label,
-    kind: "core-loop-host-visible-recovery",
-    status: "passed",
-    artifact: devTestGameCoreLoopAdminProofPath,
-    roleUrl: localAdminAuditRoleUrl(localAdminAuditIds.coreLoop),
-    proofCommand: command,
-    recoveryCommand: command,
-    recoveryCaseId: recoveryCase.id,
-    group: recoveryCase.group,
-    adminCheckId: recoveryCase.adminCheckId,
-    recoveryHookId: recoveryCase.recoveryHookId,
-    recoveryHookStatus: recoveryCase.recoveryHookStatus,
-    commandKind: recoveryCase.commandKind,
-    visibleAdminRowId: `host-visible-recovery-${recoveryCase.id}`,
-    visibleAdminRowTestId:
-      `admin-audit-host-visible-recovery-${recoveryCase.id}`,
-  }));
-}
-
-function coreLoopHostVisibleRecoveryNodeId(recoveryCaseId) {
-  return `core-loop-host-visible-recovery:${recoveryCaseId}`;
-}
-
-function coreLoopHostVisibleRecoveryEdgeMetadata(node) {
-  return {
-    recoveryCaseId: node.recoveryCaseId,
-    group: node.group,
-    roleUrl: node.roleUrl,
-    command: node.recoveryCommand,
-    proofTarget: node.artifact,
-    visibleAdminRowId: node.visibleAdminRowId,
-  };
 }
 
 function buildRecoveryReceiptGraphNodes(inputs) {

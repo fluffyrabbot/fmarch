@@ -23,8 +23,82 @@ export function proofGraphCoreLoopRecoveryDestinationRowId(recoveryCaseId) {
   return `core-loop-recovery-destination:${String(recoveryCaseId ?? "")}`;
 }
 
+export function proofGraphCoreLoopRecoveryDestinationNodeId(recoveryCaseId) {
+  return `core-loop-host-visible-recovery:${String(recoveryCaseId ?? "")}`;
+}
+
 export function proofGraphCoreLoopRecoveryDestinationRowTestId(rowId) {
   return `${proofGraphCoreLoopRecoveryDestinationRowTestIdPrefix}-${String(rowId)}`;
+}
+
+export function proofGraphCoreLoopRecoveryDestinationNodes({
+  recoveryCommand = devTestGameCoreLoopAdminProofCommand,
+} = {}) {
+  return Object.freeze(
+    hostVisibleRecoverySummaryCases().map((recoveryCase) =>
+      Object.freeze({
+        id: proofGraphCoreLoopRecoveryDestinationNodeId(recoveryCase.id),
+        label: recoveryCase.label,
+        kind: "core-loop-host-visible-recovery",
+        status: "passed",
+        artifact: devTestGameCoreLoopAdminProofPath,
+        roleUrl: localAdminAuditRoleUrl(localAdminAuditIds.coreLoop),
+        proofCommand: recoveryCommand,
+        recoveryCommand,
+        recoveryCaseId: recoveryCase.id,
+        group: recoveryCase.group,
+        adminCheckId: recoveryCase.adminCheckId,
+        recoveryHookId: recoveryCase.recoveryHookId,
+        recoveryHookStatus: recoveryCase.recoveryHookStatus,
+        commandKind: recoveryCase.commandKind,
+        visibleAdminRowId: `host-visible-recovery-${recoveryCase.id}`,
+        visibleAdminRowTestId:
+          `admin-audit-host-visible-recovery-${recoveryCase.id}`,
+      }),
+    ),
+  );
+}
+
+export function proofGraphCoreLoopRecoveryDestinationEdgeRows({
+  nodes = proofGraphCoreLoopRecoveryDestinationNodes(),
+  requiredRelationships = null,
+} = {}) {
+  const requiredRelationshipSet =
+    requiredRelationships === null
+      ? null
+      : new Set(requiredRelationships.map((relationship) => String(relationship)));
+  return Object.freeze(
+    nodes
+      .filter((node) => node.kind === "core-loop-host-visible-recovery")
+      .flatMap((node) =>
+        proofGraphCoreLoopRecoveryDestinationEdgeDefinitions(node)
+          .filter(
+            ([, , relationship]) =>
+              requiredRelationshipSet === null ||
+              requiredRelationshipSet.has(relationship),
+          )
+          .map(([from, to, relationship, metadata]) =>
+            Object.freeze([from, to, relationship, Object.freeze(metadata)]),
+          ),
+      ),
+  );
+}
+
+export function proofGraphCoreLoopRecoveryDestinationEdges(options = {}) {
+  return Object.freeze(
+    proofGraphCoreLoopRecoveryDestinationEdgeRows(options).map(
+      ([from, to, relationship, metadata]) =>
+        Object.freeze({ from, to, relationship, ...metadata }),
+    ),
+  );
+}
+
+export function proofGraphCoreLoopRecoveryDestinationEdgeRowIds(options = {}) {
+  return Object.freeze(
+    proofGraphCoreLoopRecoveryDestinationEdgeRows(options).map(
+      ([from, to, relationship]) => `edge:${from}:${relationship}:${to}`,
+    ),
+  );
 }
 
 export function proofGraphCoreLoopRecoveryDestinationSummary(
@@ -67,11 +141,24 @@ export function proofGraphCoreLoopRecoveryDestinationRows(
       const nextActionEdgeRowId =
         `edge:${graphNodeId}:summarizes-into:next-action`;
       const node = nodes.find((candidate) => candidate?.id === graphNodeId);
-      const requiredEdges = [
-        ["admin-proof:core-loop", graphNodeId, "proves-host-visible-recovery"],
-        [graphNodeId, "proof-graph", "records"],
-        [graphNodeId, "next-action", "summarizes-into"],
-      ].filter(
+      const expectedRoleUrl = String(
+        node?.roleUrl ?? localAdminAuditRoleUrl(localAdminAuditIds.coreLoop),
+      );
+      const expectedCommand = String(
+        node?.recoveryCommand ?? devTestGameCoreLoopAdminProofCommand,
+      );
+      const expectedProofTarget = String(
+        node?.artifact ?? devTestGameCoreLoopAdminProofPath,
+      );
+      const requiredEdges = proofGraphCoreLoopRecoveryDestinationEdgeDefinitions({
+        id: graphNodeId,
+        recoveryCaseId: recoveryCase.id,
+        group: recoveryCase.group,
+        roleUrl: expectedRoleUrl,
+        recoveryCommand: expectedCommand,
+        artifact: expectedProofTarget,
+        visibleAdminRowId: adminRowId,
+      }).filter(
         ([, , relationship]) =>
           requiredRelationshipSet === null ||
           requiredRelationshipSet.has(relationship),
@@ -82,9 +169,9 @@ export function proofGraphCoreLoopRecoveryDestinationRows(
             edge?.from === from &&
             edge?.to === to &&
             edge?.relationship === relationship &&
-            edge?.roleUrl === localAdminAuditRoleUrl(localAdminAuditIds.coreLoop) &&
-            edge?.command === devTestGameCoreLoopAdminProofCommand &&
-            edge?.proofTarget === devTestGameCoreLoopAdminProofPath &&
+            edge?.roleUrl === expectedRoleUrl &&
+            edge?.command === expectedCommand &&
+            edge?.proofTarget === expectedProofTarget &&
             edge?.recoveryCaseId === recoveryCase.id,
         ),
       );
@@ -103,10 +190,31 @@ export function proofGraphCoreLoopRecoveryDestinationRows(
         proofEdgeRowId,
         graphEdgeRowId,
         nextActionEdgeRowId,
-        roleUrl: localAdminAuditRoleUrl(localAdminAuditIds.coreLoop),
-        proofTarget: devTestGameCoreLoopAdminProofPath,
-        command: devTestGameCoreLoopAdminProofCommand,
+        roleUrl: expectedRoleUrl,
+        proofTarget: expectedProofTarget,
+        command: expectedCommand,
       });
     }),
   );
+}
+
+function proofGraphCoreLoopRecoveryDestinationEdgeDefinitions(node) {
+  const metadata = {
+    recoveryCaseId: node.recoveryCaseId,
+    group: node.group,
+    roleUrl: node.roleUrl,
+    command: node.recoveryCommand,
+    proofTarget: node.artifact,
+    visibleAdminRowId: node.visibleAdminRowId,
+  };
+  return [
+    [
+      "admin-proof:core-loop",
+      node.id,
+      "proves-host-visible-recovery",
+      metadata,
+    ],
+    [node.id, "proof-graph", "records", metadata],
+    [node.id, "next-action", "summarizes-into", metadata],
+  ];
 }

@@ -642,6 +642,9 @@ import {
   proofGraphProductionFeatureProvenanceComparison,
 } from "./dev_test_game_proof_graph_production_feature_destinations.mjs";
 import {
+  proofGraphCoreLoopRecoveryDestinationEdgeRowIds,
+  proofGraphCoreLoopRecoveryDestinationEdges,
+  proofGraphCoreLoopRecoveryDestinationNodes,
   proofGraphCoreLoopRecoveryDestinationSummary,
 } from "./dev_test_game_proof_graph_core_loop_recovery_destinations.mjs";
 import {
@@ -22074,9 +22077,11 @@ function nextActionProofGraphFixture(slotId = "player-action-submission") {
   const sourceNodeId = productionFeatureGraphSourceNodeId(target.sourceCheckId);
   const nodeId = `production-feature:${slotId}`;
   const coreLoopRecoveryNodes =
-    nextActionProofGraphCoreLoopRecoveryNodesFixture();
+    proofGraphCoreLoopRecoveryDestinationNodes();
   const coreLoopRecoveryEdges =
-    nextActionProofGraphCoreLoopRecoveryEdgesFixture();
+    proofGraphCoreLoopRecoveryDestinationEdges({
+      requiredRelationships: ["summarizes-into"],
+    });
   const graph = {
     version: 1,
     proof: "dev-test-game-proof-graph",
@@ -22129,54 +22134,17 @@ function nextActionProofGraphFixture(slotId = "player-action-submission") {
   };
 }
 
-function nextActionProofGraphCoreLoopRecoveryNodesFixture() {
-  return hostVisibleRecoverySummaryCases().map((recoveryCase) => ({
-    id: `core-loop-host-visible-recovery:${recoveryCase.id}`,
-    label: recoveryCase.label,
-    kind: "core-loop-host-visible-recovery",
-    status: "passed",
-    artifact: devTestGameCoreLoopAdminProofPath,
-    roleUrl: localAdminAuditRoleUrl(localAdminAuditIds.coreLoop),
-    proofCommand: devTestGameCoreLoopAdminProofCommand,
-    recoveryCommand: devTestGameCoreLoopAdminProofCommand,
-    recoveryCaseId: recoveryCase.id,
-    group: recoveryCase.group,
-    adminCheckId: recoveryCase.adminCheckId,
-    recoveryHookId: recoveryCase.recoveryHookId,
-    recoveryHookStatus: recoveryCase.recoveryHookStatus,
-    commandKind: recoveryCase.commandKind,
-    visibleAdminRowId: `host-visible-recovery-${recoveryCase.id}`,
-    visibleAdminRowTestId:
-      `admin-audit-host-visible-recovery-${recoveryCase.id}`,
-  }));
-}
-
-function nextActionProofGraphCoreLoopRecoveryEdgesFixture() {
-  return hostVisibleRecoverySummaryCases().map((recoveryCase) => {
-    const nodeId = `core-loop-host-visible-recovery:${recoveryCase.id}`;
-    return {
-      from: nodeId,
-      to: "next-action",
-      relationship: "summarizes-into",
-      recoveryCaseId: recoveryCase.id,
-      group: recoveryCase.group,
-      roleUrl: localAdminAuditRoleUrl(localAdminAuditIds.coreLoop),
-      command: devTestGameCoreLoopAdminProofCommand,
-      proofTarget: devTestGameCoreLoopAdminProofPath,
-      visibleAdminRowId: `host-visible-recovery-${recoveryCase.id}`,
-    };
-  });
-}
-
 function hostedIdentityProofGraphFixture() {
   const identityTarget = resolvedFeatureSpineTargetFixture("identity-adapter");
   const identitySourceNodeId = productionFeatureGraphSourceNodeId(
     identityTarget.sourceCheckId,
   );
   const coreLoopRecoveryNodes =
-    nextActionProofGraphCoreLoopRecoveryNodesFixture();
+    proofGraphCoreLoopRecoveryDestinationNodes();
   const coreLoopRecoveryEdges =
-    nextActionProofGraphCoreLoopRecoveryEdgesFixture();
+    proofGraphCoreLoopRecoveryDestinationEdges({
+      requiredRelationships: ["summarizes-into"],
+    });
   return {
     version: 1,
     proof: "dev-test-game-proof-graph",
@@ -23130,7 +23098,10 @@ function proofGraphAdminProofFixture() {
   const coreLoopHostVisibleRecoveryEdgeRowIds =
     proofGraphCoreLoopHostVisibleRecoveryEdgeRowIdsFixture();
   const coreLoopRecoveryDestinationSummary =
-    proofGraphCoreLoopRecoveryDestinationSummaryFixture();
+    proofGraphCoreLoopRecoveryDestinationSummary({
+      nodes: proofGraphCoreLoopRecoveryDestinationNodes(),
+      edges: proofGraphCoreLoopRecoveryDestinationEdges(),
+    });
   const evidenceObjectRowIds = [
     ...expectedNormalizedEvidenceObjectRowIds({
       parentId: "private-channel-recovery-receipt",
@@ -23586,52 +23557,7 @@ function proofGraphCoreLoopHostVisibleRecoveryDestinationsFixture() {
 }
 
 function proofGraphCoreLoopHostVisibleRecoveryEdgeRowIdsFixture() {
-  return hostVisibleRecoverySummaryCases().flatMap((recoveryCase) => {
-    const nodeId = `core-loop-host-visible-recovery:${recoveryCase.id}`;
-    return [
-      `edge:admin-proof:core-loop:proves-host-visible-recovery:${nodeId}`,
-      `edge:${nodeId}:records:proof-graph`,
-      `edge:${nodeId}:summarizes-into:next-action`,
-    ];
-  });
-}
-
-function proofGraphCoreLoopRecoveryDestinationSummaryFixture() {
-  return proofGraphCoreLoopRecoveryDestinationSummary({
-    nodes: nextActionProofGraphCoreLoopRecoveryNodesFixture(),
-    edges: hostVisibleRecoverySummaryCases().flatMap((recoveryCase) => {
-      const nodeId = `core-loop-host-visible-recovery:${recoveryCase.id}`;
-      return [
-        {
-          from: "admin-proof:core-loop",
-          to: nodeId,
-          relationship: "proves-host-visible-recovery",
-          roleUrl: localAdminAuditRoleUrl(localAdminAuditIds.coreLoop),
-          command: devTestGameCoreLoopAdminProofCommand,
-          proofTarget: devTestGameCoreLoopAdminProofPath,
-          recoveryCaseId: recoveryCase.id,
-        },
-        {
-          from: nodeId,
-          to: "proof-graph",
-          relationship: "records",
-          roleUrl: localAdminAuditRoleUrl(localAdminAuditIds.coreLoop),
-          command: devTestGameCoreLoopAdminProofCommand,
-          proofTarget: devTestGameCoreLoopAdminProofPath,
-          recoveryCaseId: recoveryCase.id,
-        },
-        {
-          from: nodeId,
-          to: "next-action",
-          relationship: "summarizes-into",
-          roleUrl: localAdminAuditRoleUrl(localAdminAuditIds.coreLoop),
-          command: devTestGameCoreLoopAdminProofCommand,
-          proofTarget: devTestGameCoreLoopAdminProofPath,
-          recoveryCaseId: recoveryCase.id,
-        },
-      ];
-    }),
-  });
+  return proofGraphCoreLoopRecoveryDestinationEdgeRowIds();
 }
 
 function proofGraphCoreLoopScenarioFamilyTextTokensFixture(family) {
