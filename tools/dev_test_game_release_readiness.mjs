@@ -199,9 +199,11 @@ import {
   coreLoopFeatureSpineSourceCheckId,
 } from "./dev_test_game_core_loop_feature_spine_targets.mjs";
 import {
+  hardeningDirectRoleUrlReconnectFeatureSpineTargetRows,
   hardeningFeatureSpineCycleIds,
   hardeningFeatureSpineTargetRows,
   hardeningReconnectFeatureSpineTargetRows,
+  hardeningSynthesizedRoleUrlReconnectFeatureSpineTargetRows,
   hardeningFeatureSpineSourceCheckId,
 } from "./dev_test_game_hardening_feature_spine_targets.mjs";
 import {
@@ -3996,23 +3998,51 @@ function buildCompletedGameHardeningSpineRows(proof) {
 }
 
 function buildReconnectHardeningSpineRows(proof) {
+  const frontendBaseUrl = String(proof?.session?.frontendBaseUrl ?? "").replace(
+    /\/$/,
+    "",
+  );
   const laneById = new Map((proof?.lanes ?? []).map((lane) => [lane.id, lane]));
-  const roleUrlHrefs = Object.fromEntries(
-    hardeningReconnectFeatureSpineTargetRows
+  const directRoleUrlHrefs = hardeningDirectRoleUrlReconnectFeatureSpineTargetRows
+    .map((row) => {
+      const lane = laneById.get(row.roleUrlId);
+      const roleUrl = lane?.evidence?.roleUrl;
+      if (
+        lane?.status !== "passed" ||
+        typeof roleUrl !== "string" ||
+        roleUrl === ""
+      ) {
+        return null;
+      }
+      return [row.roleUrlId, roleUrl];
+    })
+    .filter((entry) => entry !== null);
+  const synthesizedRoleUrlHrefs =
+    hardeningSynthesizedRoleUrlReconnectFeatureSpineTargetRows
       .map((row) => {
-        const lane = laneById.get(row.roleUrlId);
-        const roleUrl = lane?.evidence?.roleUrl;
+        const lane = laneById.get(row.row.roleUrlId);
+        const game = String(lane?.evidence?.game ?? "");
         if (
           lane?.status !== "passed" ||
-          typeof roleUrl !== "string" ||
-          roleUrl === ""
+          frontendBaseUrl === "" ||
+          game === ""
         ) {
           return null;
         }
-        return [row.roleUrlId, roleUrl];
+        return [
+          row.row.roleUrlId,
+          completedGameHardeningSpineRoleUrl({
+            frontendBaseUrl,
+            game,
+            role: row.role,
+          }),
+        ];
       })
-      .filter((entry) => entry !== null),
-  );
+      .filter((entry) => entry !== null);
+  const roleUrlHrefs = Object.fromEntries([
+    ...directRoleUrlHrefs,
+    ...synthesizedRoleUrlHrefs,
+  ]);
   return {
     roleUrlIds: hardeningReconnectFeatureSpineTargetRows
       .map((row) => row.roleUrlId)

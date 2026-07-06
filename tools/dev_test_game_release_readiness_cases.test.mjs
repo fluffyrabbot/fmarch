@@ -92,6 +92,7 @@ import {
   replacementStaleConflictMessageSpineLaneCase,
 } from "./dev_test_game_stale_conflict_scenarios.mjs";
 import {
+  hostStaleResolveReconnectLaneId,
   privateChannelStaleActionReconnectLaneId,
   stalePlayerActionReconnectLaneId,
 } from "./dev_test_game_stale_client_reconnect_scenarios.mjs";
@@ -399,6 +400,19 @@ test("release readiness buildable cases share next-action commands and spine tar
       adminCheckId: privateChannelStaleActionReconnectLaneId,
     },
   );
+  assert.deepEqual(
+    releaseReadinessProductionFeatureSpineTargets
+      .hostStaleResolveReconnectRecovery,
+    {
+      featureSlotId: "host-stale-resolve-reconnect-recovery",
+      sourceCheckId: hardeningFeatureSpineSourceCheckId,
+      cycleId: hardeningFeatureSpineCycleIds.reconnectRecovery,
+      roleUrlId: hostStaleResolveReconnectLaneId,
+      rowKind: "checkpoint",
+      checkpointId: hostStaleResolveReconnectLaneId,
+      adminCheckId: hostStaleResolveReconnectLaneId,
+    },
+  );
 
   const releaseRunbook = releaseReadinessBuildableItemForId(
     "human-release-runbook",
@@ -530,6 +544,14 @@ test("scenario-owned production feature targets derive proof row ids from source
       source: {
         cycleId: hardeningFeatureSpineCycleIds.reconnectRecovery,
         rowId: privateChannelStaleActionReconnectLaneId,
+      },
+    },
+    {
+      target: releaseReadinessProductionFeatureSpineTargets
+        .hostStaleResolveReconnectRecovery,
+      source: {
+        cycleId: hardeningFeatureSpineCycleIds.reconnectRecovery,
+        rowId: hostStaleResolveReconnectLaneId,
       },
     },
   ];

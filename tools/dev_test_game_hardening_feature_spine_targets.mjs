@@ -9,6 +9,7 @@ import {
   replacementStaleConflictMessageSpineLaneCase,
 } from "./dev_test_game_stale_conflict_scenarios.mjs";
 import {
+  hostStaleResolveReconnectLaneId,
   privateChannelStaleActionReconnectLaneId,
   stalePlayerActionReconnectLaneId,
 } from "./dev_test_game_stale_client_reconnect_scenarios.mjs";
@@ -55,10 +56,32 @@ export const hardeningFeatureSpineTargetRows = Object.freeze({
     checkpointId: privateChannelStaleActionReconnectLaneId,
     adminCheckId: privateChannelStaleActionReconnectLaneId,
   }),
+  hostStaleResolveReconnectRecovery: Object.freeze({
+    featureSlotId: "host-stale-resolve-reconnect-recovery",
+    sourceCheckId: hardeningFeatureSpineSourceCheckId,
+    cycleId: hardeningFeatureSpineCycleIds.reconnectRecovery,
+    roleUrlId: hostStaleResolveReconnectLaneId,
+    checkpointId: hostStaleResolveReconnectLaneId,
+    adminCheckId: hostStaleResolveReconnectLaneId,
+  }),
 });
+export const hardeningDirectRoleUrlReconnectFeatureSpineTargetRows =
+  Object.freeze([
+    hardeningFeatureSpineTargetRows.staleActionReconnectRecovery,
+    hardeningFeatureSpineTargetRows.privateChannelStaleActionReconnectRecovery,
+  ]);
+export const hardeningSynthesizedRoleUrlReconnectFeatureSpineTargetRows =
+  Object.freeze([
+    Object.freeze({
+      row: hardeningFeatureSpineTargetRows.hostStaleResolveReconnectRecovery,
+      role: "host",
+    }),
+  ]);
 export const hardeningReconnectFeatureSpineTargetRows = Object.freeze([
-  hardeningFeatureSpineTargetRows.staleActionReconnectRecovery,
-  hardeningFeatureSpineTargetRows.privateChannelStaleActionReconnectRecovery,
+  ...hardeningDirectRoleUrlReconnectFeatureSpineTargetRows,
+  ...hardeningSynthesizedRoleUrlReconnectFeatureSpineTargetRows.map(
+    (entry) => entry.row,
+  ),
 ]);
 export const devTestGameHardeningAdminProofCommand =
   "npm run test:dev-test-game-hardening-admin-proof";
