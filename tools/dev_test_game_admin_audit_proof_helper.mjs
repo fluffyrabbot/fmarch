@@ -332,6 +332,8 @@ export async function proveAdminAuditDetail({
   requiredSetupCommandEvidence = [],
   requiredUnproven = [],
   requiredRealHostedEvidenceInputs = [],
+  requiredRawEvidenceTemplates = [],
+  requiredRawEvidenceTemplateStatuses = {},
   requiredHostedHandoffInputs = [],
   requiredHostedHandoffInputValues = {},
   requiredHostedHandoffBlockedChecks = [],
@@ -592,6 +594,17 @@ export async function proveAdminAuditDetail({
       page,
       prefix: "admin-audit-real-hosted-evidence-input",
       ids: requiredRealHostedEvidenceInputs,
+    });
+    const visibleRawEvidenceTemplates = await waitForRows({
+      page,
+      prefix: "admin-audit-raw-evidence-template",
+      ids: requiredRawEvidenceTemplates,
+      expectedStatuses: requiredRawEvidenceTemplateStatuses,
+    });
+    const visibleRawEvidenceTemplateStatuses = await readRowStatuses({
+      page,
+      prefix: "admin-audit-raw-evidence-template",
+      ids: Object.keys(requiredRawEvidenceTemplateStatuses),
     });
     const visibleHostedHandoffInputs = await waitForRows({
       page,
@@ -1329,6 +1342,12 @@ export async function proveAdminAuditDetail({
       ...(visibleRealHostedEvidenceInputs.length === 0
         ? {}
         : { visibleRealHostedEvidenceInputs }),
+      ...(visibleRawEvidenceTemplates.length === 0
+        ? {}
+        : { visibleRawEvidenceTemplates }),
+      ...(Object.keys(visibleRawEvidenceTemplateStatuses).length === 0
+        ? {}
+        : { visibleRawEvidenceTemplateStatuses }),
       ...(visibleHostedHandoffInputs.length === 0
         ? {}
         : { visibleHostedHandoffInputs }),

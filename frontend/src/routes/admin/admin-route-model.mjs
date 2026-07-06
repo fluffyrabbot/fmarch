@@ -42,6 +42,16 @@ import {
   hostedEvidenceHandoffInputRows,
 } from "../../../../tools/dev_test_game_hosted_handoff_cases.mjs";
 import {
+  devTestGameHostedMatrixRawEvidenceTemplateEnv,
+  devTestGameHostedMatrixRawEvidenceTemplatePath,
+  devTestGameHostedMatrixRawEvidenceTemplateProofCommand,
+  devTestGameHostedMatrixRawEvidenceTemplateProofPath,
+} from "../../../../tools/dev_test_game_hosted_matrix_raw_evidence_template_proof.mjs";
+import {
+  devTestGameRealHostedMatrixRawCaptureCommand,
+  devTestGameRealHostedMatrixRawCapturePath,
+} from "../../../../tools/dev_test_game_real_hosted_matrix_raw_capture_contract.mjs";
+import {
   devTestGameRealHostedObservabilityHandoffCommand,
   devTestGameRealHostedObservabilityHandoffPath,
   realHostedObservabilityBaselineEnv,
@@ -1117,6 +1127,41 @@ function buildRealHostedEvidenceInputRows(realHostedEvidenceInputs) {
       }),
     ),
   );
+}
+
+function normalizeRawEvidenceTemplateDescriptor() {
+  return Object.freeze({
+    id: "operator-template",
+    path: devTestGameHostedMatrixRawEvidenceTemplatePath,
+    proofCommand: `npm run ${devTestGameHostedMatrixRawEvidenceTemplateProofCommand}`,
+    proofTarget: devTestGameHostedMatrixRawEvidenceTemplateProofPath,
+    copyToEnv: devTestGameHostedMatrixRawEvidenceTemplateEnv,
+    validatorCommand: `npm run ${devTestGameRealHostedMatrixRawCaptureCommand}`,
+    validatorProofTarget: devTestGameRealHostedMatrixRawCapturePath,
+    status: "template-only",
+  });
+}
+
+function buildRawEvidenceTemplateRows(template) {
+  if (template === null || typeof template !== "object") {
+    return Object.freeze([]);
+  }
+  return Object.freeze([
+    artifactSummaryRow({
+      id: "operator-template",
+      testId: "admin-audit-raw-evidence-template-operator-template",
+      values: [
+        { id: "heading", text: "Raw evidence template", emphasized: true },
+        { id: "status", text: template.status },
+        { id: "path", text: template.path },
+        { id: "proofCommand", text: template.proofCommand },
+        { id: "proofTarget", text: template.proofTarget },
+        { id: "copyToEnv", text: template.copyToEnv },
+        { id: "validatorCommand", text: template.validatorCommand },
+        { id: "validatorProofTarget", text: template.validatorProofTarget },
+      ],
+    }),
+  ]);
 }
 
 function hostedReadinessText(value, label) {
@@ -2982,6 +3027,7 @@ export function normalizeLocalHostedEvidenceLaneAudit(
     blockedChecks: checks.filter((check) => blockedCheckIdSet.has(String(check.id))),
     realHostedEvidenceInputs,
   });
+  const rawEvidenceTemplate = normalizeRawEvidenceTemplateDescriptor();
   const artifactSummary = Object.freeze({
     preflightStatus: String(hostedEvidenceLane.preflightStatus ?? "unknown"),
     blockedCheckCount: blockedCheckIds.length,
@@ -3082,6 +3128,8 @@ export function normalizeLocalHostedEvidenceLaneAudit(
     realHostedEvidenceInputs,
     realHostedEvidenceInputRows:
       buildRealHostedEvidenceInputRows(realHostedEvidenceInputs),
+    rawEvidenceTemplate,
+    rawEvidenceTemplateRows: buildRawEvidenceTemplateRows(rawEvidenceTemplate),
     hostedHandoffChecklist,
     hostedHandoffChecklistRows:
       buildHostedHandoffChecklistRows(hostedHandoffChecklist),

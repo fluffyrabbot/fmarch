@@ -186,7 +186,7 @@ export function hostedEvidenceRequiredInputsFixture({
       name: "FMARCH_HOSTED_MATRIX_RAW_EVIDENCE_PATH",
       value: rawEvidencePath,
       required: true,
-      purpose: hostedMatrixRawEvidenceContractSummary(),
+      purpose: `${hostedMatrixRawEvidenceContractSummary()} filled from ${devTestGameHostedMatrixRawEvidenceTemplatePath}.`,
     },
     {
       name: "FMARCH_HOSTED_MATRIX_EVIDENCE_PATH",

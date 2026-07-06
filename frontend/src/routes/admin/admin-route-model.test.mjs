@@ -226,6 +226,16 @@ import {
   hostedTargetPreflightSyntheticRawEvidenceRequiredEvidence,
 } from "../../../../tools/dev_test_game_hosted_target_preflight.mjs";
 import {
+  devTestGameHostedMatrixRawEvidenceTemplateEnv,
+  devTestGameHostedMatrixRawEvidenceTemplatePath,
+  devTestGameHostedMatrixRawEvidenceTemplateProofCommand,
+  devTestGameHostedMatrixRawEvidenceTemplateProofPath,
+} from "../../../../tools/dev_test_game_hosted_matrix_raw_evidence_template_proof.mjs";
+import {
+  devTestGameRealHostedMatrixRawCaptureCommand,
+  devTestGameRealHostedMatrixRawCapturePath,
+} from "../../../../tools/dev_test_game_real_hosted_matrix_raw_capture_contract.mjs";
+import {
   devTestGameAdminSpineAdminProofPath,
   devTestGameBackupAdminProofPath,
   devTestGameCoreLoopAdminProofPath,
@@ -1926,7 +1936,9 @@ test("admin audit detail page renders handoff and real-hosted input rows from ro
   assert.match(source, /handoffPathRows/);
   assert.doesNotMatch(source, /handoffPath\.downstreamStatus/);
   assert.match(source, /realHostedEvidenceInputRows/);
+  assert.match(source, /rawEvidenceTemplateRows/);
   assert.doesNotMatch(source, /realHostedEvidenceInputs as input/);
+  assert.doesNotMatch(source, /rawEvidenceTemplate as template/);
   assert.doesNotMatch(source, /input\.required \? "required" : "optional"/);
 });
 
@@ -3095,7 +3107,7 @@ test("admin local hosted matrix detail data carries progress and gap rows", asyn
       ["FMARCH_HOSTED_MATRIX_GROUP_ID", "Hosted matrix group to prove.", true],
       [
         "FMARCH_HOSTED_MATRIX_RAW_EVIDENCE_PATH",
-        hostedMatrixRawEvidenceContractSummary(),
+        `${hostedMatrixRawEvidenceContractSummary()} filled from ${devTestGameHostedMatrixRawEvidenceTemplatePath}.`,
         true,
       ],
       [
@@ -5591,7 +5603,7 @@ test("admin hosted evidence lane detail data carries blocked setup rows", async 
       ["FMARCH_HOSTED_MATRIX_GROUP_ID", "Hosted matrix group to prove.", true],
       [
         "FMARCH_HOSTED_MATRIX_RAW_EVIDENCE_PATH",
-        hostedMatrixRawEvidenceContractSummary(),
+        `${hostedMatrixRawEvidenceContractSummary()} filled from ${devTestGameHostedMatrixRawEvidenceTemplatePath}.`,
         true,
       ],
       [
@@ -5604,6 +5616,14 @@ test("admin hosted evidence lane detail data carries blocked setup rows", async 
   assert.deepEqual(
     hostedHandoffChecklistRowsForAssertion(data.audit.realHostedEvidenceInputRows),
     expectedRealHostedEvidenceInputRows(data.audit.realHostedEvidenceInputs),
+  );
+  assert.deepEqual(
+    data.audit.rawEvidenceTemplate,
+    expectedRawEvidenceTemplateDescriptor(),
+  );
+  assert.deepEqual(
+    hostedHandoffChecklistRowsForAssertion(data.audit.rawEvidenceTemplateRows),
+    expectedRawEvidenceTemplateRows(),
   );
   assert.equal(data.audit.hostedHandoffChecklist.status, "blocked");
   assert.equal(data.audit.hostedHandoffChecklist.preflightStatus, "blocked");
@@ -5704,7 +5724,7 @@ test("admin hosted evidence lane detail data carries blocked setup rows", async 
   );
   assert.equal(
     data.audit.hostedHandoffChecklist.blockedReceipt.operatorAction,
-    "Configure the hosted frontend/API URLs plus a readable raw hosted matrix evidence packet from that same deployment, then rerun npm run test:dev-test-game-hosted-evidence-lane.",
+    `Configure the hosted frontend/API URLs, copy ${devTestGameHostedMatrixRawEvidenceTemplatePath} to a filled raw hosted matrix evidence packet from that same deployment, validate the template with npm run ${devTestGameHostedMatrixRawEvidenceTemplateProofCommand}, then rerun npm run test:dev-test-game-hosted-evidence-lane.`,
   );
   assert.equal(
     data.audit.hostedHandoffChecklist.blockedReceipt.rawEvidenceContractSummary,
@@ -8727,6 +8747,40 @@ function expectedProofGraphRelatedLinkRows(proofGraph, { game } = {}) {
   ]);
 }
 
+function expectedRawEvidenceTemplateDescriptor() {
+  return {
+    id: "operator-template",
+    path: devTestGameHostedMatrixRawEvidenceTemplatePath,
+    proofCommand: `npm run ${devTestGameHostedMatrixRawEvidenceTemplateProofCommand}`,
+    proofTarget: devTestGameHostedMatrixRawEvidenceTemplateProofPath,
+    copyToEnv: devTestGameHostedMatrixRawEvidenceTemplateEnv,
+    validatorCommand: `npm run ${devTestGameRealHostedMatrixRawCaptureCommand}`,
+    validatorProofTarget: devTestGameRealHostedMatrixRawCapturePath,
+    status: "template-only",
+  };
+}
+
+function expectedRawEvidenceTemplateRows() {
+  const template = expectedRawEvidenceTemplateDescriptor();
+  return [
+    [
+      "operator-template",
+      "admin-audit-raw-evidence-template-operator-template",
+      [
+        ["heading", "Raw evidence template", true],
+        ["status", template.status, false],
+        ["path", template.path, false],
+        ["proofCommand", template.proofCommand, false],
+        ["proofTarget", template.proofTarget, false],
+        ["copyToEnv", template.copyToEnv, false],
+        ["validatorCommand", template.validatorCommand, false],
+        ["validatorProofTarget", template.validatorProofTarget, false],
+      ],
+      [],
+    ],
+  ];
+}
+
 function expectedProofGraphPrerequisiteDestinationRows(proofGraph) {
   return proofGraphPrerequisiteDestinationRows(proofGraph).map(
     ({
@@ -9166,7 +9220,7 @@ function hostedBlockedReceiptFixture({ proofTarget, nextProofTarget }) {
         name: "FMARCH_HOSTED_MATRIX_RAW_EVIDENCE_PATH",
         value: null,
         required: true,
-        purpose: hostedMatrixRawEvidenceContractSummary(),
+        purpose: `${hostedMatrixRawEvidenceContractSummary()} filled from ${devTestGameHostedMatrixRawEvidenceTemplatePath}.`,
       },
     ],
     missingRequiredInputs: [
@@ -9197,7 +9251,7 @@ function hostedBlockedReceiptFixture({ proofTarget, nextProofTarget }) {
       },
     },
     operatorAction:
-      "Configure the hosted frontend/API URLs plus a readable raw hosted matrix evidence packet from that same deployment, then rerun npm run test:dev-test-game-hosted-evidence-lane.",
+      `Configure the hosted frontend/API URLs, copy ${devTestGameHostedMatrixRawEvidenceTemplatePath} to a filled raw hosted matrix evidence packet from that same deployment, validate the template with npm run ${devTestGameHostedMatrixRawEvidenceTemplateProofCommand}, then rerun npm run test:dev-test-game-hosted-evidence-lane.`,
     rawEvidenceContractSummary: hostedMatrixRawEvidenceContractSummary(),
     rawEvidenceContract: hostedMatrixRawEvidenceContract,
     localVsHostedBoundary:

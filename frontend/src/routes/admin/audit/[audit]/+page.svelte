@@ -313,6 +313,15 @@
         <AdminAuditDescriptorRows rows={data.audit.realHostedEvidenceInputRows} />
       </section>
     {/if}
+    {#if data.audit.rawEvidenceTemplateRows?.length > 0}
+      <section
+        class="admin-audit-detail__group"
+        data-testid="admin-audit-detail-raw-evidence-template"
+      >
+        <h2>Raw evidence template</h2>
+        <AdminAuditDescriptorRows rows={data.audit.rawEvidenceTemplateRows} />
+      </section>
+    {/if}
     {#if data.audit.relatedLinkRows?.length > 0}
       <AdminAuditDescriptorRows
         rows={data.audit.relatedLinkRows}

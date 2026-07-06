@@ -33,6 +33,16 @@ import {
 import {
   visibleBlockedOperatorPacket,
 } from "./dev_test_game_hosted_operator_packet.mjs";
+import {
+  devTestGameHostedMatrixRawEvidenceTemplateEnv,
+  devTestGameHostedMatrixRawEvidenceTemplatePath,
+  devTestGameHostedMatrixRawEvidenceTemplateProofCommand,
+  devTestGameHostedMatrixRawEvidenceTemplateProofPath,
+} from "./dev_test_game_hosted_matrix_raw_evidence_template_proof.mjs";
+import {
+  devTestGameRealHostedMatrixRawCaptureCommand,
+  devTestGameRealHostedMatrixRawCapturePath,
+} from "./dev_test_game_real_hosted_matrix_raw_capture_contract.mjs";
 
 const defaultLanePath = path.resolve(
   repoRoot,
@@ -133,6 +143,10 @@ export function hostedEvidenceLaneAdminProofCase({
         ),
         requiredUnproven: source.lane.blockedCheckIds,
         requiredRealHostedEvidenceInputs: hostedEvidenceHandoffInputIds,
+        requiredRawEvidenceTemplates: ["operator-template"],
+        requiredRawEvidenceTemplateStatuses: {
+          "operator-template": devTestGameHostedMatrixRawEvidenceTemplatePath,
+        },
         requiredHostedHandoffInputs: hostedEvidenceHandoffInputIds,
         requiredHostedHandoffInputValues: hostedHandoffInputValues,
         requiredHostedHandoffBlockedChecks: source.lane.blockedCheckIds,
@@ -187,6 +201,15 @@ export function hostedEvidenceLaneAdminProofCase({
           source.demoProof.target.syntheticExternalTarget,
         blockedCheckIds: source.lane.blockedCheckIds,
         realHostedEvidenceInputIds: hostedEvidenceHandoffInputIds,
+        rawEvidenceTemplate: {
+          id: "operator-template",
+          path: devTestGameHostedMatrixRawEvidenceTemplatePath,
+          proofCommand: `npm run ${devTestGameHostedMatrixRawEvidenceTemplateProofCommand}`,
+          proofTarget: devTestGameHostedMatrixRawEvidenceTemplateProofPath,
+          copyToEnv: devTestGameHostedMatrixRawEvidenceTemplateEnv,
+          validatorCommand: `npm run ${devTestGameRealHostedMatrixRawCaptureCommand}`,
+          validatorProofTarget: devTestGameRealHostedMatrixRawCapturePath,
+        },
         hostedHandoffInputIds: hostedEvidenceHandoffInputIds,
         hostedHandoffInputValues: hostedEvidenceHandoffInputValues(
           source.lane.hostedEvidence?.realHostedEvidenceInputs,
@@ -291,6 +314,34 @@ export function assertHostedEvidenceLaneAdminProof(evidence) {
     rowName: "real hosted input",
     surfaceKey: "visibleRealHostedEvidenceInputs",
   });
+  const expectedRawEvidenceTemplate = evidence.generatedFrom?.rawEvidenceTemplate;
+  if (expectedRawEvidenceTemplate !== undefined) {
+    assertVisibleAdminRoleSurfaceRows({
+      adminRoleSurface: evidence.adminRoleSurface,
+      rowIds: [expectedRawEvidenceTemplate.id],
+      proofName: "hosted evidence lane admin proof",
+      rowName: "raw evidence template",
+      surfaceKey: "visibleRawEvidenceTemplates",
+    });
+    const visibleTemplateText =
+      evidence.adminRoleSurface?.visibleRawEvidenceTemplateStatuses?.[
+        expectedRawEvidenceTemplate.id
+      ] ?? "";
+    for (const value of [
+      expectedRawEvidenceTemplate.path,
+      expectedRawEvidenceTemplate.proofCommand,
+      expectedRawEvidenceTemplate.proofTarget,
+      expectedRawEvidenceTemplate.copyToEnv,
+      expectedRawEvidenceTemplate.validatorCommand,
+      expectedRawEvidenceTemplate.validatorProofTarget,
+    ]) {
+      if (!visibleTemplateText.includes(String(value))) {
+        throw new Error(
+          `hosted evidence lane admin proof missing raw evidence template text: ${value}`,
+        );
+      }
+    }
+  }
   assertVisibleAdminRoleSurfaceRows({
     adminRoleSurface: evidence.adminRoleSurface,
     rowIds: evidence.generatedFrom?.hostedHandoffInputIds,

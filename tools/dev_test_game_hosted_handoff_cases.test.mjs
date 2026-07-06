@@ -15,6 +15,7 @@ import {
   hostedEvidenceHandoffSectionInputStatuses,
   hostedEvidenceHandoffInputValues,
   hostedEvidenceHandoffSummary,
+  hostedEvidenceProgressionHandoffSummary,
   hostedEvidenceLaneCommand,
   hostedEvidenceLaneHandoffFixture,
   hostedEvidenceLanePath,
@@ -24,6 +25,9 @@ import {
 import {
   hostedMatrixRawEvidenceContractSummary,
 } from "./dev_test_game_hosted_matrix_raw_evidence_contract.mjs";
+import {
+  devTestGameHostedMatrixRawEvidenceTemplatePath,
+} from "./dev_test_game_hosted_matrix_raw_evidence_template_proof.mjs";
 
 test("hosted evidence handoff cases share real hosted input and blocked check IDs", () => {
   const handoff = hostedEvidenceHandoffCase();
@@ -95,7 +99,7 @@ test("hosted evidence handoff cases share real hosted input and blocked check ID
       ["FMARCH_HOSTED_MATRIX_GROUP_ID", "Hosted matrix group to prove.", true],
       [
         "FMARCH_HOSTED_MATRIX_RAW_EVIDENCE_PATH",
-        hostedMatrixRawEvidenceContractSummary(),
+        `${hostedMatrixRawEvidenceContractSummary()} filled from ${devTestGameHostedMatrixRawEvidenceTemplatePath}.`,
         true,
       ],
       [
@@ -113,7 +117,7 @@ test("hosted evidence handoff cases share real hosted input and blocked check ID
     FMARCH_HOSTED_MATRIX_API_URL: "Externally reachable API base URL.",
     FMARCH_HOSTED_MATRIX_GROUP_ID: "Hosted matrix group to prove.",
     FMARCH_HOSTED_MATRIX_RAW_EVIDENCE_PATH:
-      hostedMatrixRawEvidenceContractSummary(),
+      `${hostedMatrixRawEvidenceContractSummary()} filled from ${devTestGameHostedMatrixRawEvidenceTemplatePath}.`,
     FMARCH_HOSTED_MATRIX_EVIDENCE_PATH:
       "Optional normalized hosted matrix evidence output path.",
   });
@@ -230,6 +234,7 @@ test("hosted evidence handoff builds blocked checklist from preflight rows", () 
     ],
     inputIds: hostedEvidenceHandoffInputIds,
     blockedCheckIds: ["hosted-targets-external", "raw-evidence-readable"],
+    progressionSummary: hostedEvidenceProgressionHandoffSummary(),
     blockedChecks: [
       {
         id: "hosted-targets-external",
