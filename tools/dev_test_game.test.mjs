@@ -606,6 +606,7 @@ import {
 import {
   getLocalReadinessDependency,
   localProofGraphNextActionHandoffCheckId,
+  localProofGraphProductionFeatureProvenanceCheckId,
   localReadinessDependencyCheckFor,
 } from "./dev_test_game_local_readiness_dependencies.mjs";
 import {
@@ -3826,7 +3827,7 @@ test("dev test-game next-action derives one local recovery command from the mani
   });
   assert.deepEqual(missingLocalDependencyAction.localReadinessDependencyTrace, {
     strategy: "local-readiness-dependency-before-hosted-work",
-    candidateCount: 2,
+    candidateCount: 3,
     selectedCheckId: "local-proof-graph-admin-role-handoffs",
     candidates: [
       {
@@ -3847,6 +3848,22 @@ test("dev test-game next-action derives one local recovery command from the mani
       },
       {
         rank: 2,
+        id: localProofGraphProductionFeatureProvenanceCheckId,
+        status: "missing",
+        priority: 1,
+        selected: false,
+        command: "npm run test:dev-test-game-proof-graph-admin-proof",
+        buildSlice:
+          "Refresh the proof graph admin browser proof until the manifest production-feature provenance summary matches proof-graph destinations.",
+        proofTarget: "target/dev-test-game/proof-graph-admin-proof.json",
+        roleUrl: "/admin/audit/local-proof-graph?game=<seeded-game>",
+        proofBoundary:
+          "Local browser proof that the proof graph admin surface carries a passed production-feature provenance comparison between the spine manifest summary and proof-graph destinations. This recovers a local readiness dependency only; it does not prove hosted deployment, release readiness, or production readiness.",
+        requiredEvidence:
+          "Passed proof graph production-feature provenance comparison in the generated release-readiness checklist",
+      },
+      {
+        rank: 3,
         id: "local-proof-graph-next-action-handoff",
         status: "missing",
         priority: 1,
@@ -15922,6 +15939,22 @@ test("session card and markdown include role credential URLs and tokens", async 
       .roleHandoffCount,
     adminProofDestinationRequirementLinkRows.length,
   );
+  const provenanceCheck =
+    proofGraphHandoffReadiness.localDevelopmentSpine.checks.find(
+      (item) => item.id === localProofGraphProductionFeatureProvenanceCheckId,
+    );
+  assert.equal(provenanceCheck.status, "passed");
+  assert.equal(provenanceCheck.comparisonStatus, "passed");
+  assert.equal(provenanceCheck.driftCount, 0);
+  assert.equal(
+    provenanceCheck.manifestFeatureCount,
+    provenanceCheck.destinationFeatureCount,
+  );
+  assert.equal(
+    provenanceCheck.manifestFeatureCount,
+    proofGraphHandoffReadiness.localDevelopmentSpine.evidence.proofGraphAdminProof
+      .productionFeatureProvenanceComparison.manifestFeatureCount,
+  );
   const nextActionHandoffCheck =
     proofGraphHandoffReadiness.localDevelopmentSpine.checks.find(
       (item) => item.id === "local-proof-graph-next-action-handoff",
@@ -16353,6 +16386,9 @@ function devTestGameReleaseReadinessChecklistFixture({
   includeHostSetupProofCheck = false,
   includeOpsArtifactBundleCheck = false,
 }) {
+  const proofGraphProvenanceComparison =
+    proofGraphAdminProofFixture().generatedFrom
+      .productionFeatureProvenanceComparison;
   return {
     version: 1,
     proof: "dev-test-game-release-readiness",
@@ -16710,6 +16746,42 @@ function devTestGameReleaseReadinessChecklistFixture({
                 roleHandoffCount: 10,
                 roleHandoffIds: ["admin-proof:release"],
                 destinationAuditIds: ["local-release-readiness"],
+              },
+            ]
+          : []),
+        ...(includeProofGraphHandoffCheck
+          ? [
+              {
+                id: localProofGraphProductionFeatureProvenanceCheckId,
+                label: "Proof graph production feature provenance",
+                status: "passed",
+                dependencyGated: true,
+                evidence: "target/dev-test-game/proof-graph-admin-proof.json",
+                proofBoundary:
+                  "Local browser proof that the proof graph admin surface follows every mapped admin-proof role URL.",
+                recovery: {
+                  command: "npm run test:dev-test-game-proof-graph-admin-proof",
+                  buildSlice:
+                    "Refresh the proof graph admin browser proof until the manifest production-feature provenance summary matches proof-graph destinations.",
+                  proofTarget: "target/dev-test-game/proof-graph-admin-proof.json",
+                  roleUrl: "/admin/audit/local-proof-graph?game=<seeded-game>",
+                  proofBoundary:
+                    "Local browser proof that the proof graph admin surface carries a passed production-feature provenance comparison between the spine manifest summary and proof-graph destinations. This recovers a local readiness dependency only; it does not prove hosted deployment, release readiness, or production readiness.",
+                  requiredEvidence:
+                    "Passed proof graph production-feature provenance comparison in the generated release-readiness checklist",
+                },
+                comparisonStatus: proofGraphProvenanceComparison.status,
+                manifestFeatureCount:
+                  proofGraphProvenanceComparison.manifestFeatureCount,
+                destinationFeatureCount:
+                  proofGraphProvenanceComparison.destinationFeatureCount,
+                driftCount: proofGraphProvenanceComparison.driftCount,
+                sourceCheckGroupCount:
+                  proofGraphProvenanceComparison.sourceCheckGroups.length,
+                sourceCheckIds:
+                  proofGraphProvenanceComparison.sourceCheckGroups.map(
+                    (group) => group.sourceCheckId,
+                  ),
               },
             ]
           : []),

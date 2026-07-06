@@ -19,6 +19,8 @@ import {
 
 export const localProofGraphAdminRoleHandoffsCheckId =
   "local-proof-graph-admin-role-handoffs";
+export const localProofGraphProductionFeatureProvenanceCheckId =
+  "local-proof-graph-production-feature-provenance";
 export const localProofGraphNextActionHandoffCheckId =
   "local-proof-graph-next-action-handoff";
 export const localProofFreshnessAdminSurfaceCheckId =
@@ -47,6 +49,20 @@ export const localReadinessDependencies = Object.freeze([
       "Local browser proof that the proof graph admin surface follows every mapped admin-proof role URL. This recovers a local readiness dependency only; it does not prove hosted deployment, release readiness, or production readiness.",
     requiredEvidence:
       "Passed proof graph admin role-handoff check in the generated release-readiness checklist",
+  }),
+  Object.freeze({
+    id: localProofGraphProductionFeatureProvenanceCheckId,
+    label: "Proof graph production feature provenance",
+    priority: 1,
+    command: `npm run ${devTestGameProofGraphAdminProofCommand}`,
+    buildSlice:
+      "Refresh the proof graph admin browser proof until the manifest production-feature provenance summary matches proof-graph destinations.",
+    proofTarget: devTestGameProofGraphAdminProofPath,
+    roleUrl: localAdminAuditRoleUrl(localAdminAuditIds.proofGraph),
+    proofBoundary:
+      "Local browser proof that the proof graph admin surface carries a passed production-feature provenance comparison between the spine manifest summary and proof-graph destinations. This recovers a local readiness dependency only; it does not prove hosted deployment, release readiness, or production readiness.",
+    requiredEvidence:
+      "Passed proof graph production-feature provenance comparison in the generated release-readiness checklist",
   }),
   Object.freeze({
     id: localProofGraphNextActionHandoffCheckId,
@@ -247,6 +263,39 @@ export function buildProofGraphAdminRoleHandoffsReadinessCheck(
     roleHandoffCount: proofGraphAdminProofEvidence.roleHandoffCount,
     roleHandoffIds: proofGraphAdminProofEvidence.roleHandoffIds,
     destinationAuditIds: proofGraphAdminProofEvidence.destinationAuditIds,
+    adminRoleSurface: proofGraphAdminProofEvidence,
+  };
+}
+
+export function buildProofGraphProductionFeatureProvenanceReadinessCheck(
+  proofGraphAdminProofEvidence,
+) {
+  const dependency = getLocalReadinessDependency(
+    localProofGraphProductionFeatureProvenanceCheckId,
+  );
+  if (dependency === undefined) {
+    throw new Error(
+      "proof graph production feature provenance readiness dependency is missing a recovery contract",
+    );
+  }
+  const comparison =
+    proofGraphAdminProofEvidence.productionFeatureProvenanceComparison;
+  return {
+    id: dependency.id,
+    label: dependency.label,
+    status: "passed",
+    dependencyGated: true,
+    evidence: proofGraphAdminProofEvidence.path,
+    proofBoundary: proofGraphAdminProofEvidence.proofBoundary,
+    recovery: buildLocalReadinessDependencyRecovery(dependency),
+    comparisonStatus: comparison.status,
+    manifestFeatureCount: comparison.manifestFeatureCount,
+    destinationFeatureCount: comparison.destinationFeatureCount,
+    driftCount: comparison.driftCount,
+    sourceCheckGroupCount: comparison.sourceCheckGroups.length,
+    sourceCheckIds: comparison.sourceCheckGroups.map(
+      (group) => group.sourceCheckId,
+    ),
     adminRoleSurface: proofGraphAdminProofEvidence,
   };
 }

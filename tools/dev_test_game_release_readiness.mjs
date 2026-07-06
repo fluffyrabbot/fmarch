@@ -7,11 +7,13 @@ import {
   buildProofFreshnessAdminSurfaceReadinessCheck,
   buildProofGraphAdminRoleHandoffsReadinessCheck,
   buildProofGraphNextActionHandoffReadinessCheck,
+  buildProofGraphProductionFeatureProvenanceReadinessCheck,
   getLocalReadinessDependency,
   localReadinessDependencyRecoveryFor,
   localHostedEvidenceLaneDemoProofCheckId,
   localProofGraphAdminRoleHandoffsCheckId,
   localProofGraphNextActionHandoffCheckId,
+  localProofGraphProductionFeatureProvenanceCheckId,
   localSeedDemoFixtureCheckId,
 } from "./dev_test_game_local_readiness_dependencies.mjs";
 import { assertDevTestGameProofRun } from "./dev_test_game_proof_contract.mjs";
@@ -238,6 +240,7 @@ import {
   coreLoopScenarioFamilyRows,
 } from "./dev_test_game_core_loop_generated_from_families.mjs";
 import {
+  assertProofGraphProductionFeatureProvenanceComparison,
   proofGraphProductionFeatureDestinationSummary,
 } from "./dev_test_game_proof_graph_production_feature_destinations.mjs";
 import {
@@ -1488,6 +1491,9 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
   if (proofGraphAdminProofEvidence !== undefined) {
     localChecks.push(
       buildProofGraphAdminRoleHandoffsReadinessCheck(proofGraphAdminProofEvidence),
+      buildProofGraphProductionFeatureProvenanceReadinessCheck(
+        proofGraphAdminProofEvidence,
+      ),
     );
     if (proofGraphAdminProofEvidence.nextActionHandoffDestination !== null) {
       localChecks.push(
@@ -6161,6 +6167,8 @@ export function validateDevTestGameProofGraphAdminProof(proof, options = {}) {
   validateProofGraphAdminCoreLoopScenarioFamilyDestinations(proof);
   validateProofGraphAdminProductionFeatureTargetDestinations(proof);
   validateProofGraphAdminProductionFeatureDestinationSummary(proof);
+  const productionFeatureProvenanceComparison =
+    validateProofGraphAdminProductionFeatureProvenanceComparison(proof);
   validateProofGraphAdminDiagnosticProofSummary(proof);
   for (const featureTargetCase of proofGraphAdminFeatureTargetCases) {
     validateProofGraphAdminFeatureTarget(proof, featureTargetCase);
@@ -6181,6 +6189,7 @@ export function validateDevTestGameProofGraphAdminProof(proof, options = {}) {
     roleHandoffIds: handoffs.map((handoff) => String(handoff.linkId)),
     destinationAuditIds,
     nextActionHandoffDestination,
+    productionFeatureProvenanceComparison,
     ...(options.artifact === undefined ? {} : { artifact: options.artifact }),
   };
 }
@@ -6520,6 +6529,21 @@ function validateProofGraphAdminProductionFeatureDestinationSummary(proof) {
       );
     }
   }
+}
+
+function validateProofGraphAdminProductionFeatureProvenanceComparison(proof) {
+  const comparison =
+    proof.generatedFrom?.productionFeatureProvenanceComparison;
+  assertProofGraphProductionFeatureProvenanceComparison(comparison, {
+    manifestSummary:
+      proof.generatedFrom?.manifestProductionFeatureProvenanceSummary,
+    destinationSummary:
+      proof.generatedFrom?.productionFeatureDestinationSummary,
+    destinations:
+      proof.generatedFrom?.productionFeatureTargetDestinations ?? [],
+    requirePassed: true,
+  });
+  return comparison;
 }
 
 function visibleProductionFeatureDestinationSummaryText(row, visibleStatus) {
@@ -8139,6 +8163,25 @@ export function assertDevTestGameReleaseReadiness(checklist) {
       ))
   ) {
     throw new Error("dev-test-game proof graph admin handoff check is malformed");
+  }
+  const proofGraphProvenanceCheck = checklist.localDevelopmentSpine?.checks?.find(
+    (check) => check.id === localProofGraphProductionFeatureProvenanceCheckId,
+  );
+  if (
+    proofGraphProvenanceCheck !== undefined &&
+    (proofGraphProvenanceCheck.comparisonStatus !== "passed" ||
+      proofGraphProvenanceCheck.manifestFeatureCount !==
+        proofGraphProvenanceCheck.destinationFeatureCount ||
+      proofGraphProvenanceCheck.driftCount !== 0 ||
+      !Number.isInteger(proofGraphProvenanceCheck.sourceCheckGroupCount) ||
+      proofGraphProvenanceCheck.sourceCheckGroupCount <= 0 ||
+      !Array.isArray(proofGraphProvenanceCheck.sourceCheckIds) ||
+      proofGraphProvenanceCheck.sourceCheckIds.length !==
+        proofGraphProvenanceCheck.sourceCheckGroupCount)
+  ) {
+    throw new Error(
+      "dev-test-game proof graph production feature provenance check is malformed",
+    );
   }
   const proofGraphNextActionHandoffCheck =
     checklist.localDevelopmentSpine?.checks?.find(
