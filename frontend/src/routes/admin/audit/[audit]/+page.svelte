@@ -222,19 +222,11 @@
         <AdminAuditDescriptorRows rows={data.audit.localPrerequisiteRows} />
       </section>
     {/if}
-    {#if data.audit.scenarios?.length > 0}
-      <ol class="admin-audit-detail__entries" data-testid="admin-audit-detail-scenarios">
-        {#each data.audit.scenarios as scenario}
-          <li
-            class="admin-audit-detail__entry"
-            data-testid={`admin-audit-scenario-${scenario.id}`}
-          >
-            <strong>{scenario.title}</strong>
-            <span>{scenario.status}</span>
-            <span>{scenario.role}</span>
-          </li>
-        {/each}
-      </ol>
+    {#if data.audit.scenarioRows?.length > 0}
+      <AdminAuditDescriptorRows
+        rows={data.audit.scenarioRows}
+        listTestId="admin-audit-detail-scenarios"
+      />
     {/if}
     {#if data.audit.proofLaneCoverageRows?.length > 0}
       <section

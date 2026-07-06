@@ -1909,6 +1909,9 @@ test("admin audit detail page renders simple list rows from route data", async (
   assert.doesNotMatch(source, /sessions as session/);
   assert.match(source, /proofLaneCoverageRows/);
   assert.doesNotMatch(source, /proofLaneCoverage as coverage/);
+  assert.match(source, /scenarioRows/);
+  assert.doesNotMatch(source, /scenarios as scenario/);
+  assert.doesNotMatch(source, /scenario\.title/);
   assert.match(source, /reconnectLaneRows/);
   assert.doesNotMatch(source, /reconnectLanes as lane/);
   assert.match(source, /staleConflictLaneRows/);
@@ -5439,6 +5442,10 @@ test("admin local seed fixture detail data carries scenario rows", async () => {
       scenario.id,
       scenario.status,
     ]),
+  );
+  assert.deepEqual(
+    hostedHandoffChecklistRowsForAssertion(data.audit.scenarioRows),
+    expectedScenarioRows(data.audit.scenarios),
   );
   assert.deepEqual(
     data.audit.proofLaneCoverage.map((coverage) => [
@@ -9634,6 +9641,19 @@ function expectedSimpleLaneRows({ rows, idPrefix, testIdPrefix }) {
     [
       ["label", row.label, true],
       ["status", row.status, false],
+    ],
+    [],
+  ]);
+}
+
+function expectedScenarioRows(scenarios) {
+  return scenarios.map((scenario) => [
+    `scenario-${scenario.id}`,
+    `admin-audit-scenario-${scenario.id}`,
+    [
+      ["title", scenario.title, true],
+      ["status", scenario.status, false],
+      ["role", scenario.role, false],
     ],
     [],
   ]);

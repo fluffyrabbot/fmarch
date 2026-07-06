@@ -1717,6 +1717,16 @@ function withAdminAuditDetailDisplayRows(item, { game }) {
       { id: "laneIds", text: coverage.laneIds.join(", ") },
     ],
   });
+  const scenarioRows = buildSimpleAdminAuditRows({
+    items: item.scenarios,
+    idPrefix: "scenario",
+    testIdPrefix: "admin-audit-scenario",
+    valuesForItem: (scenario) => [
+      { id: "title", text: scenario.title, emphasized: true },
+      { id: "status", text: scenario.status },
+      { id: "role", text: scenario.role },
+    ],
+  });
   const reconnectLaneRows = buildSimpleAdminAuditRows({
     items: item.reconnectLanes,
     idPrefix: "reconnect-lane",
@@ -1761,6 +1771,7 @@ function withAdminAuditDetailDisplayRows(item, { game }) {
     ...(checksRows.length === 0 ? {} : { checksRows }),
     ...(sessionsRows.length === 0 ? {} : { sessionsRows }),
     ...(proofLaneCoverageRows.length === 0 ? {} : { proofLaneCoverageRows }),
+    ...(scenarioRows.length === 0 ? {} : { scenarioRows }),
     ...(reconnectLaneRows.length === 0 ? {} : { reconnectLaneRows }),
     ...(staleConflictLaneRows.length === 0 ? {} : { staleConflictLaneRows }),
     ...(scenarioFamilyRows.length === 0 ? {} : { scenarioFamilyRows }),
