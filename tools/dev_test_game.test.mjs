@@ -619,15 +619,11 @@ import {
 } from "./dev_test_game_pre_readiness_trace_registry.mjs";
 import {
   getLocalReadinessDependency,
-  localHostedEvidenceLaneDemoProofCheckId,
-  localNextActionAdminSurfaceCheckId,
-  localProofFreshnessAdminSurfaceCheckId,
-  localProofGraphAdminRoleHandoffsCheckId,
+  localReadinessDependencies,
   localProofGraphNextActionHandoffCheckId,
   localProofGraphProductionFeatureProvenanceCheckId,
   localProofGraphTerminalValidationCheckId,
   localReadinessDependencyCheckFor,
-  localSeedDemoFixtureCheckId,
 } from "./dev_test_game_local_readiness_dependencies.mjs";
 import {
   releaseReadinessTraceCheckId,
@@ -7093,16 +7089,10 @@ test("core-loop generatedFrom families come from one canonical bundle", () => {
 
 test("admin proof fixtures prove normalized evidence object rows", () => {
   const releaseProof = assertReleaseAdminProof(releaseAdminProofFixture());
-  assert.deepEqual(releaseProof.generatedFrom.localPrerequisiteIds, [
-    localSeedDemoFixtureCheckId,
-    localHostedEvidenceLaneDemoProofCheckId,
-    localProofGraphAdminRoleHandoffsCheckId,
-    localProofGraphProductionFeatureProvenanceCheckId,
-    localProofGraphNextActionHandoffCheckId,
-    localProofGraphTerminalValidationCheckId,
-    localProofFreshnessAdminSurfaceCheckId,
-    localNextActionAdminSurfaceCheckId,
-  ]);
+  assert.deepEqual(
+    releaseProof.generatedFrom.localPrerequisiteIds,
+    localReadinessDependencies.map((dependency) => dependency.id),
+  );
   assert.deepEqual(
     releaseProof.adminRoleSurface.visitedLocalPrerequisiteDestinations.find(
       (destination) =>
@@ -22152,6 +22142,7 @@ function backupAdminProofFixture() {
 function releaseAdminProofFixture({
   localDiagnosticIds = releaseAdminProofLocalDiagnosticIds(),
 } = {}) {
+  const localPrerequisites = releaseAdminProofLocalPrerequisites();
   const evidenceObjectRowIds = [
     ...expectedNormalizedEvidenceObjectRowIds({
       parentId: "local-private-channel-recovery-milestone",
@@ -22180,7 +22171,7 @@ function releaseAdminProofFixture({
       ],
       localDiagnosticIds,
       evidenceObjectRowIds,
-      localPrerequisiteIds: releaseAdminProofLocalPrerequisiteIds(),
+      localPrerequisiteIds: localPrerequisites.map((item) => item.id),
       setupCommandEvidenceIds: releaseAdminProofSetupCommandEvidenceIds(),
       unprovenIds: [...releaseAdminProofFallbackUnprovenIds],
     },
@@ -22198,18 +22189,18 @@ function releaseAdminProofFixture({
         ...evidenceObjectRowIds,
       ],
       visibleLocalDiagnostics: [...localDiagnosticIds],
-      visibleLocalPrerequisites: releaseAdminProofLocalPrerequisiteIds(),
+      visibleLocalPrerequisites: localPrerequisites.map((item) => item.id),
       visibleLocalPrerequisiteRoleUrls: Object.fromEntries(
-        releaseAdminProofLocalPrerequisiteIds().map((id) => [
-          id,
-          releaseAdminProofLocalPrerequisiteRoleUrl(id),
+        localPrerequisites.map((item) => [
+          item.id,
+          item.roleUrl,
         ]),
       ),
       visitedLocalPrerequisiteDestinations:
-        releaseAdminProofLocalPrerequisiteIds().map((id) => ({
-          id,
-          auditId: releaseAdminProofLocalPrerequisiteAuditId(id),
-          detailRoleUrl: releaseAdminProofLocalPrerequisiteRoleUrl(id),
+        localPrerequisites.map((item) => ({
+          id: item.id,
+          auditId: item.auditId,
+          detailRoleUrl: item.roleUrl,
           clickedThrough: true,
         })),
       visibleSetupCommandEvidence: releaseAdminProofSetupCommandEvidenceIds(),
@@ -22229,36 +22220,29 @@ function releaseAdminProofSetupCommandEvidenceIds() {
   return ["addSlot", "assignSlot", "assignRole", "setPostPolicy", "startGame"];
 }
 
-function releaseAdminProofLocalPrerequisiteIds() {
-  return [
-    localSeedDemoFixtureCheckId,
-    localHostedEvidenceLaneDemoProofCheckId,
-    localProofGraphAdminRoleHandoffsCheckId,
-    localProofGraphProductionFeatureProvenanceCheckId,
-    localProofGraphNextActionHandoffCheckId,
-    localProofGraphTerminalValidationCheckId,
-    localProofFreshnessAdminSurfaceCheckId,
-    localNextActionAdminSurfaceCheckId,
-  ];
+function releaseAdminProofLocalPrerequisites() {
+  return localReadinessDependencies.map((dependency) => {
+    const auditId = releaseAdminProofLocalPrerequisiteAuditIdFromRoleUrl(
+      dependency.roleUrl,
+    );
+    return {
+      id: dependency.id,
+      auditId,
+      roleUrl: dependency.roleUrl,
+    };
+  });
 }
 
-function releaseAdminProofLocalPrerequisiteAuditId(id) {
-  return {
-    [localSeedDemoFixtureCheckId]: localAdminAuditIds.seedFixtures,
-    [localHostedEvidenceLaneDemoProofCheckId]:
-      localAdminAuditIds.hostedEvidenceLane,
-    [localProofGraphAdminRoleHandoffsCheckId]: localAdminAuditIds.proofGraph,
-    [localProofGraphProductionFeatureProvenanceCheckId]:
-      localAdminAuditIds.proofGraph,
-    [localProofGraphNextActionHandoffCheckId]: localAdminAuditIds.proofGraph,
-    [localProofGraphTerminalValidationCheckId]: localAdminAuditIds.proofGraph,
-    [localProofFreshnessAdminSurfaceCheckId]: localAdminAuditIds.proofFreshness,
-    [localNextActionAdminSurfaceCheckId]: localAdminAuditIds.nextAction,
-  }[id];
-}
-
-function releaseAdminProofLocalPrerequisiteRoleUrl(id) {
-  return `/admin/audit/${releaseAdminProofLocalPrerequisiteAuditId(id)}?game=<seeded-game>`;
+function releaseAdminProofLocalPrerequisiteAuditIdFromRoleUrl(roleUrl) {
+  const match = String(roleUrl).match(
+    /^\/admin\/audit\/([^?]+)\?game=<seeded-game>$/,
+  );
+  if (match === null) {
+    throw new Error(
+      `release admin proof local prerequisite role URL is malformed: ${roleUrl}`,
+    );
+  }
+  return match[1];
 }
 
 function releaseRunbookAdminProofFixture() {
