@@ -3911,6 +3911,7 @@ test("admin route data exposes proof graph destination-summary drift next action
           "proof-graph-destination-summary-drift",
           "proof-graph-destination-summary",
           "proof-graph-destination-summary-drift-count",
+          "proof-graph-destination-summary-core-loop-recovery-coverage",
           ...proofGraphDestinationSummaryTraceCheckIds(
             proofGraphDestinationSummaryTraceFixture({
               proofGraphDestinationSummary,
@@ -8669,8 +8670,14 @@ function proofGraphDestinationSummaryActionFixture({
     adminAuditDestinationCount: 8,
     roleUrlDestinationCount: 4,
     driftCount,
+    coreLoopRecoveryDestinationRequiredCount:
+      hostVisibleRecoverySummaryCases().length,
+    coreLoopRecoveryDestinationCoveredCount:
+      hostVisibleRecoverySummaryCases().length,
+    coreLoopRecoveryDestinationMissingCount: 0,
+    coreLoopRecoveryDestinationMissingIds: [],
     buildSlice:
-      "Refresh the proof graph so its production-feature destination summary matches the production-feature target inventory before next-action or readiness guidance is trusted.",
+      "Refresh the proof graph so its production-feature destination summary and core-loop recovery destinations match the shared proof registries before next-action or readiness guidance is trusted.",
     proofTarget: "target/dev-test-game/proof-graph.json",
   };
 }
@@ -8695,6 +8702,18 @@ function proofGraphDestinationSummaryTraceFixture({
     roleUrlDestinationCount:
       proofGraphDestinationSummary?.roleUrlDestinationCount ?? 4,
     driftCount: proofGraphDestinationSummary?.driftCount ?? 0,
+    coreLoopRecoveryDestinationRequiredCount:
+      proofGraphDestinationSummary
+        ?.coreLoopRecoveryDestinationRequiredCount ?? 0,
+    coreLoopRecoveryDestinationCoveredCount:
+      proofGraphDestinationSummary
+        ?.coreLoopRecoveryDestinationCoveredCount ?? 0,
+    coreLoopRecoveryDestinationMissingCount:
+      proofGraphDestinationSummary
+        ?.coreLoopRecoveryDestinationMissingCount ?? 0,
+    coreLoopRecoveryDestinationMissingIds:
+      proofGraphDestinationSummary
+        ?.coreLoopRecoveryDestinationMissingIds ?? [],
   });
 }
 

@@ -1,9 +1,15 @@
+import {
+  hostVisibleRecoverySummaryCases,
+} from "./dev_test_game_core_loop_action_scenarios.mjs";
+
 export const proofGraphDestinationSummaryTraceStrategy =
   "proof-graph-destination-summary-before-readiness";
 export const proofGraphDestinationSummaryTraceCheckId =
   "proof-graph-destination-summary-trace";
 export const proofGraphDestinationSummaryTraceDriftCountCheckId =
   "proof-graph-destination-summary-trace-drift-count";
+export const proofGraphDestinationSummaryTraceRecoveryCoverageCheckId =
+  "proof-graph-destination-summary-trace-core-loop-recovery-coverage";
 
 export function proofGraphDestinationSummaryDriftFromProofGraph(
   proofGraph,
@@ -22,12 +28,15 @@ export function proofGraphDestinationSummaryDriftFromProofGraph(
     summary?.driftCount ?? totalDestinationCount - productionFeatureTargetCount,
   );
   const summaryStatus = String(summary?.status ?? "missing");
+  const recoveryCoverage =
+    coreLoopRecoveryDestinationCoverageDriftFromProofGraph(proofGraph);
   const status =
     proofGraph === null
       ? "unavailable"
       : summaryStatus === "passed" &&
           driftCount === 0 &&
-          totalDestinationCount === productionFeatureTargetCount
+          totalDestinationCount === productionFeatureTargetCount &&
+          recoveryCoverage.missingCount === 0
         ? "clean"
         : "drifted";
   return Object.freeze({
@@ -40,6 +49,10 @@ export function proofGraphDestinationSummaryDriftFromProofGraph(
     adminAuditDestinationCount,
     roleUrlDestinationCount,
     driftCount,
+    coreLoopRecoveryDestinationRequiredCount: recoveryCoverage.requiredCount,
+    coreLoopRecoveryDestinationCoveredCount: recoveryCoverage.coveredCount,
+    coreLoopRecoveryDestinationMissingCount: recoveryCoverage.missingCount,
+    coreLoopRecoveryDestinationMissingIds: recoveryCoverage.missingIds,
   });
 }
 
@@ -73,6 +86,20 @@ export function normalizeProofGraphDestinationSummaryTrace(trace) {
     adminAuditDestinationCount: Number(trace.adminAuditDestinationCount ?? 0),
     roleUrlDestinationCount: Number(trace.roleUrlDestinationCount ?? 0),
     driftCount: Number(trace.driftCount ?? 0),
+    coreLoopRecoveryDestinationRequiredCount: Number(
+      trace.coreLoopRecoveryDestinationRequiredCount ?? 0,
+    ),
+    coreLoopRecoveryDestinationCoveredCount: Number(
+      trace.coreLoopRecoveryDestinationCoveredCount ?? 0,
+    ),
+    coreLoopRecoveryDestinationMissingCount: Number(
+      trace.coreLoopRecoveryDestinationMissingCount ?? 0,
+    ),
+    coreLoopRecoveryDestinationMissingIds: Object.freeze(
+      Array.isArray(trace.coreLoopRecoveryDestinationMissingIds)
+        ? trace.coreLoopRecoveryDestinationMissingIds.map((id) => String(id))
+        : [],
+    ),
   });
 }
 
@@ -100,7 +127,11 @@ export function assertProofGraphDestinationSummaryTrace(
     !Number.isInteger(normalized.productionFeatureTargetCount) ||
     !Number.isInteger(normalized.adminAuditDestinationCount) ||
     !Number.isInteger(normalized.roleUrlDestinationCount) ||
-    !Number.isInteger(normalized.driftCount)
+    !Number.isInteger(normalized.driftCount) ||
+    !Number.isInteger(normalized.coreLoopRecoveryDestinationRequiredCount) ||
+    !Number.isInteger(normalized.coreLoopRecoveryDestinationCoveredCount) ||
+    !Number.isInteger(normalized.coreLoopRecoveryDestinationMissingCount) ||
+    !Array.isArray(normalized.coreLoopRecoveryDestinationMissingIds)
   ) {
     throw new Error(`${label} is missing or malformed`);
   }
@@ -110,6 +141,9 @@ export function assertProofGraphDestinationSummaryTrace(
       normalized.selected !== true ||
       nextActionProofGraphDestinationSummary?.driftCount !==
         normalized.driftCount ||
+      nextActionProofGraphDestinationSummary
+        ?.coreLoopRecoveryDestinationMissingCount !==
+        normalized.coreLoopRecoveryDestinationMissingCount ||
       nextActionProofGraphDestinationSummary?.summaryStatus !==
         normalized.summaryStatus)
   ) {
@@ -131,6 +165,7 @@ export function proofGraphDestinationSummaryTraceCheckIds(trace) {
     ? Object.freeze([
         proofGraphDestinationSummaryTraceCheckId,
         proofGraphDestinationSummaryTraceDriftCountCheckId,
+        proofGraphDestinationSummaryTraceRecoveryCoverageCheckId,
       ])
     : Object.freeze([]);
 }
@@ -147,6 +182,10 @@ export function proofGraphDestinationSummaryTraceCheckRows(trace) {
         Object.freeze({
           id: checkIds[1],
           status: `${normalized.driftCount} drift`,
+        }),
+        Object.freeze({
+          id: checkIds[2],
+          status: `${normalized.coreLoopRecoveryDestinationCoveredCount}/${normalized.coreLoopRecoveryDestinationRequiredCount} recoveries`,
         }),
       ])
     : Object.freeze([]);
@@ -179,10 +218,51 @@ function unavailableProofGraphDestinationSummaryTrace() {
     adminAuditDestinationCount: 0,
     roleUrlDestinationCount: 0,
     driftCount: 0,
+    coreLoopRecoveryDestinationRequiredCount: 0,
+    coreLoopRecoveryDestinationCoveredCount: 0,
+    coreLoopRecoveryDestinationMissingCount: 0,
+    coreLoopRecoveryDestinationMissingIds: Object.freeze([]),
   });
 }
 
 function numberOrZero(value) {
   const number = Number(value ?? 0);
   return Number.isFinite(number) ? number : 0;
+}
+
+function coreLoopRecoveryDestinationCoverageDriftFromProofGraph(proofGraph) {
+  if (proofGraph === null) {
+    return Object.freeze({
+      requiredCount: 0,
+      coveredCount: 0,
+      missingCount: 0,
+      missingIds: Object.freeze([]),
+    });
+  }
+  const missingIds = [];
+  for (const recoveryCase of hostVisibleRecoverySummaryCases()) {
+    const nodeId = `core-loop-host-visible-recovery:${recoveryCase.id}`;
+    const adminRowId = `host-visible-recovery-${recoveryCase.id}`;
+    const node = proofGraph.nodes?.find((candidate) => candidate?.id === nodeId);
+    const edge = proofGraph.edges?.find(
+      (candidate) =>
+        candidate?.from === nodeId &&
+        candidate?.to === "next-action" &&
+        candidate?.relationship === "summarizes-into",
+    );
+    if (
+      node?.status !== "passed" ||
+      edge?.recoveryCaseId !== recoveryCase.id ||
+      edge?.visibleAdminRowId !== adminRowId
+    ) {
+      missingIds.push(recoveryCase.id);
+    }
+  }
+  const requiredCount = hostVisibleRecoverySummaryCases().length;
+  return Object.freeze({
+    requiredCount,
+    coveredCount: requiredCount - missingIds.length,
+    missingCount: missingIds.length,
+    missingIds: Object.freeze(missingIds),
+  });
 }

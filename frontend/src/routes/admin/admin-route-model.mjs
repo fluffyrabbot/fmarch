@@ -5059,6 +5059,32 @@ export function normalizeLocalNextActionAudit(nextAction, { game, proofGraph = n
             selectedProofGraphDestinationSummaryDriftCount: Number(
               proofGraphDestinationSummary.driftCount ?? 0,
             ),
+            selectedProofGraphDestinationSummaryCoreLoopRecoveryDestinationRequiredCount:
+              Number(
+                proofGraphDestinationSummary
+                  .coreLoopRecoveryDestinationRequiredCount ?? 0,
+              ),
+            selectedProofGraphDestinationSummaryCoreLoopRecoveryDestinationCoveredCount:
+              Number(
+                proofGraphDestinationSummary
+                  .coreLoopRecoveryDestinationCoveredCount ?? 0,
+              ),
+            selectedProofGraphDestinationSummaryCoreLoopRecoveryDestinationMissingCount:
+              Number(
+                proofGraphDestinationSummary
+                  .coreLoopRecoveryDestinationMissingCount ?? 0,
+              ),
+            selectedProofGraphDestinationSummaryCoreLoopRecoveryDestinationMissingIds:
+              Object.freeze(
+                Array.isArray(
+                  proofGraphDestinationSummary
+                    .coreLoopRecoveryDestinationMissingIds,
+                )
+                  ? proofGraphDestinationSummary.coreLoopRecoveryDestinationMissingIds.map(
+                      (id) => String(id),
+                    )
+                  : [],
+              ),
             selectedProofGraphDestinationSummaryBuildSlice: String(
               proofGraphDestinationSummary.buildSlice ?? "",
             ),
@@ -5588,6 +5614,16 @@ export function normalizeLocalNextActionProofGraphDestinationSummaryCheckRows({
         Object.freeze({
           id: "proof-graph-destination-summary-drift-count",
           status: `${Number(proofGraphDestinationSummary.driftCount ?? 0)} drift`,
+        }),
+        Object.freeze({
+          id: "proof-graph-destination-summary-core-loop-recovery-coverage",
+          status: `${Number(
+            proofGraphDestinationSummary
+              .coreLoopRecoveryDestinationCoveredCount ?? 0,
+          )}/${Number(
+            proofGraphDestinationSummary
+              .coreLoopRecoveryDestinationRequiredCount ?? 0,
+          )} recoveries`,
         }),
       ]);
 }

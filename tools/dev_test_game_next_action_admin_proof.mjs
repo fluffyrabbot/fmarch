@@ -505,8 +505,16 @@ export function proofGraphDestinationSummaryDriftNextActionFixture(nextAction) {
     adminAuditDestinationCount,
     roleUrlDestinationCount,
     driftCount,
+    coreLoopRecoveryDestinationRequiredCount:
+      sourceTrace.coreLoopRecoveryDestinationRequiredCount ?? 0,
+    coreLoopRecoveryDestinationCoveredCount:
+      sourceTrace.coreLoopRecoveryDestinationCoveredCount ?? 0,
+    coreLoopRecoveryDestinationMissingCount:
+      sourceTrace.coreLoopRecoveryDestinationMissingCount ?? 0,
+    coreLoopRecoveryDestinationMissingIds:
+      sourceTrace.coreLoopRecoveryDestinationMissingIds ?? [],
     buildSlice:
-      "Refresh the proof graph so its production-feature destination summary matches the production-feature target inventory before next-action or readiness guidance is trusted.",
+      "Refresh the proof graph so its production-feature destination summary and core-loop recovery destinations match the shared proof registries before next-action or readiness guidance is trusted.",
     proofTarget: devTestGameProofGraphPath,
   };
   return assertDevTestGameNextAction({
@@ -516,6 +524,8 @@ export function proofGraphDestinationSummaryDriftNextActionFixture(nextAction) {
       proofGraph: source.generatedFrom?.proofGraph ?? devTestGameProofGraphPath,
       proofGraphDestinationSummaryStatus: "drifted",
       proofGraphDestinationSummaryDriftCount: driftCount,
+      coreLoopRecoveryDestinationMissingCount:
+        proofGraphDestinationSummary.coreLoopRecoveryDestinationMissingCount,
       syntheticNextActionFixture:
         "proof-graph-destination-summary-drift-admin-proof",
     },
@@ -543,6 +553,14 @@ export function proofGraphDestinationSummaryDriftNextActionFixture(nextAction) {
       adminAuditDestinationCount,
       roleUrlDestinationCount,
       driftCount,
+      coreLoopRecoveryDestinationRequiredCount:
+        proofGraphDestinationSummary.coreLoopRecoveryDestinationRequiredCount,
+      coreLoopRecoveryDestinationCoveredCount:
+        proofGraphDestinationSummary.coreLoopRecoveryDestinationCoveredCount,
+      coreLoopRecoveryDestinationMissingCount:
+        proofGraphDestinationSummary.coreLoopRecoveryDestinationMissingCount,
+      coreLoopRecoveryDestinationMissingIds:
+        proofGraphDestinationSummary.coreLoopRecoveryDestinationMissingIds,
     }),
     proofGraphDiagnosticSummaryTrace: normalizeProofGraphDiagnosticSummaryTrace(
       source.proofGraphDiagnosticSummaryTrace,
@@ -1240,6 +1258,7 @@ function requiredChecksForNextAction(nextAction) {
     checks.push(
       "proof-graph-destination-summary",
       "proof-graph-destination-summary-drift-count",
+      "proof-graph-destination-summary-core-loop-recovery-coverage",
     );
   }
   if (nextAction.nextAction.sequenceDeferral !== undefined) {
@@ -1883,6 +1902,7 @@ function requiredChecksForEvidence(evidence) {
       : [
           "proof-graph-destination-summary",
           "proof-graph-destination-summary-drift-count",
+          "proof-graph-destination-summary-core-loop-recovery-coverage",
         ]),
     ...(evidence.generatedFrom?.terminalBatchGraph === null ||
     evidence.generatedFrom?.terminalBatchGraph === undefined

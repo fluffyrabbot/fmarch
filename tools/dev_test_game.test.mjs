@@ -4224,6 +4224,7 @@ test("dev test-game next-action derives one local recovery command from the mani
     status: "drift",
     driftCount: 1,
   };
+  const recoveryDestinationCount = hostVisibleRecoverySummaryCases().length;
   const destinationSummaryDriftAction = buildDevTestGameNextAction(freshManifest, {
     generatedAt: "2026-06-26T00:00:01.000Z",
     opsArtifacts: devTestGameOpsArtifactsFixture(),
@@ -4246,8 +4247,12 @@ test("dev test-game next-action derives one local recovery command from the mani
       adminAuditDestinationCount: 1,
       roleUrlDestinationCount: 0,
       driftCount: 1,
+      coreLoopRecoveryDestinationRequiredCount: recoveryDestinationCount,
+      coreLoopRecoveryDestinationCoveredCount: recoveryDestinationCount,
+      coreLoopRecoveryDestinationMissingCount: 0,
+      coreLoopRecoveryDestinationMissingIds: [],
       buildSlice:
-        "Refresh the proof graph so its production-feature destination summary matches the production-feature target inventory before next-action or readiness guidance is trusted.",
+        "Refresh the proof graph so its production-feature destination summary and core-loop recovery destinations match the shared proof registries before next-action or readiness guidance is trusted.",
       proofTarget: "target/dev-test-game/proof-graph.json",
     },
   });
@@ -4263,7 +4268,48 @@ test("dev test-game next-action derives one local recovery command from the mani
       adminAuditDestinationCount: 1,
       roleUrlDestinationCount: 0,
       driftCount: 1,
+      coreLoopRecoveryDestinationRequiredCount: recoveryDestinationCount,
+      coreLoopRecoveryDestinationCoveredCount: recoveryDestinationCount,
+      coreLoopRecoveryDestinationMissingCount: 0,
+      coreLoopRecoveryDestinationMissingIds: [],
     }),
+  );
+  const missingRecoveryDestinationProofGraph = JSON.parse(
+    JSON.stringify(nextActionProofGraphFixture()),
+  );
+  missingRecoveryDestinationProofGraph.edges =
+    missingRecoveryDestinationProofGraph.edges.filter(
+      (edge) =>
+        edge.recoveryCaseId !== "completed-game-stale-recovery",
+    );
+  const recoveryDestinationDriftAction = buildDevTestGameNextAction(freshManifest, {
+    generatedAt: "2026-06-26T00:00:01.000Z",
+    opsArtifacts: devTestGameOpsArtifactsFixture(),
+    raceCoverage: devTestGameRaceCoverageFixture(),
+    proofGraph: missingRecoveryDestinationProofGraph,
+    releaseReadinessChecklist: devTestGameReleaseReadinessChecklistFixture({
+      unproven: [],
+    }),
+  });
+  assertDevTestGameNextAction(recoveryDestinationDriftAction);
+  assert.equal(
+    recoveryDestinationDriftAction.nextAction.reason,
+    "proof-graph-destination-summary-drift",
+  );
+  assert.equal(
+    recoveryDestinationDriftAction.nextAction.proofGraphDestinationSummary
+      .driftCount,
+    0,
+  );
+  assert.deepEqual(
+    recoveryDestinationDriftAction.nextAction.proofGraphDestinationSummary
+      .coreLoopRecoveryDestinationMissingIds,
+    ["completed-game-stale-recovery"],
+  );
+  assert.equal(
+    recoveryDestinationDriftAction.proofGraphDestinationSummaryTrace
+      .coreLoopRecoveryDestinationMissingCount,
+    1,
   );
   assert.deepEqual(
     destinationSummaryDriftAction.proofGraphDiagnosticSummaryTrace,

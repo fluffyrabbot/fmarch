@@ -386,8 +386,20 @@ export function buildDevTestGameNextAction(
               roleUrlDestinationCount:
                 proofGraphDestinationSummaryDrift.roleUrlDestinationCount,
               driftCount: proofGraphDestinationSummaryDrift.driftCount,
+              coreLoopRecoveryDestinationRequiredCount:
+                proofGraphDestinationSummaryDrift
+                  .coreLoopRecoveryDestinationRequiredCount,
+              coreLoopRecoveryDestinationCoveredCount:
+                proofGraphDestinationSummaryDrift
+                  .coreLoopRecoveryDestinationCoveredCount,
+              coreLoopRecoveryDestinationMissingCount:
+                proofGraphDestinationSummaryDrift
+                  .coreLoopRecoveryDestinationMissingCount,
+              coreLoopRecoveryDestinationMissingIds:
+                proofGraphDestinationSummaryDrift
+                  .coreLoopRecoveryDestinationMissingIds,
               buildSlice:
-                "Refresh the proof graph so its production-feature destination summary matches the production-feature target inventory before next-action or readiness guidance is trusted.",
+                "Refresh the proof graph so its production-feature destination summary and core-loop recovery destinations match the shared proof registries before next-action or readiness guidance is trusted.",
               proofTarget: devTestGameProofGraphPath,
             },
           }
@@ -635,6 +647,9 @@ export function buildDevTestGameNextAction(
               proofGraphDestinationSummaryDrift.status,
             proofGraphDestinationSummaryDriftCount:
               proofGraphDestinationSummaryDrift.driftCount,
+            coreLoopRecoveryDestinationMissingCount:
+              proofGraphDestinationSummaryDrift
+                .coreLoopRecoveryDestinationMissingCount,
             proofGraphDiagnosticSummaryStatus:
               proofGraphDiagnosticSummaryTrace.status,
             proofGraphDiagnosticCount:
@@ -857,6 +872,14 @@ export function assertDevTestGameNextAction(evidence) {
         devTestGameProofGraphPath ||
       !Number.isInteger(
         evidence.nextAction.proofGraphDestinationSummary.driftCount,
+      ) ||
+      !Number.isInteger(
+        evidence.nextAction.proofGraphDestinationSummary
+          .coreLoopRecoveryDestinationMissingCount,
+      ) ||
+      !Array.isArray(
+        evidence.nextAction.proofGraphDestinationSummary
+          .coreLoopRecoveryDestinationMissingIds,
       )
     ) {
       throw new Error(
@@ -1556,9 +1579,11 @@ function assertCoreLoopRecoveryDestinationCoverageForNextAction(coverage) {
   if (
     coverage === null ||
     coverage.id !== "core-loop-recovery-destination-coverage" ||
-    coverage.status !== "passed" ||
+    !["passed", "missing"].includes(coverage.status) ||
     coverage.recoveryCount !== recoveryCases.length ||
-    coverage.coveredCount !== recoveryCases.length ||
+    !Number.isInteger(coverage.coveredCount) ||
+    coverage.coveredCount < 0 ||
+    coverage.coveredCount > recoveryCases.length ||
     !Array.isArray(coverage.rows) ||
     coverage.rows.length !== recoveryCases.length ||
     typeof coverage.proofBoundary !== "string" ||
@@ -1567,24 +1592,38 @@ function assertCoreLoopRecoveryDestinationCoverageForNextAction(coverage) {
     throw new Error("next-action core-loop recovery destination coverage drifted");
   }
   const rowsById = new Map(coverage.rows.map((row) => [row.id, row]));
+  const coveredCount = coverage.rows.filter((row) => row.status === "passed").length;
+  if (
+    coverage.coveredCount !== coveredCount ||
+    coverage.status !==
+      (coveredCount === recoveryCases.length ? "passed" : "missing")
+  ) {
+    throw new Error("next-action core-loop recovery destination coverage count drifted");
+  }
   for (const recoveryCase of recoveryCases) {
     const row = rowsById.get(recoveryCase.id);
     const nodeId = `core-loop-host-visible-recovery:${recoveryCase.id}`;
     const adminRowId = `host-visible-recovery-${recoveryCase.id}`;
     if (
       row?.label !== recoveryCase.label ||
-      row.status !== "passed" ||
+      !["passed", "missing"].includes(row.status) ||
       row.group !== recoveryCase.group ||
       row.proofGraphNodeId !== nodeId ||
       row.adminRowId !== adminRowId ||
-      row.nextActionEdgeRowId !==
-        `edge:${nodeId}:summarizes-into:next-action` ||
-      row.roleUrl !== "/admin/audit/local-core-loop?game=<seeded-game>" ||
-      row.proofTarget !== devTestGameCoreLoopAdminProofPath ||
-      row.command !== devTestGameCoreLoopAdminProofCommand
+      row.nextActionEdgeRowId !== `edge:${nodeId}:summarizes-into:next-action`
     ) {
       throw new Error(
         `next-action core-loop recovery destination row drifted: ${recoveryCase.id}`,
+      );
+    }
+    if (
+      row.status === "passed" &&
+      (row.roleUrl !== "/admin/audit/local-core-loop?game=<seeded-game>" ||
+        row.proofTarget !== devTestGameCoreLoopAdminProofPath ||
+        row.command !== devTestGameCoreLoopAdminProofCommand)
+    ) {
+      throw new Error(
+        `next-action core-loop recovery destination passed row drifted: ${recoveryCase.id}`,
       );
     }
   }
