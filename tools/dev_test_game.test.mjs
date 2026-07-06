@@ -8394,6 +8394,15 @@ test("proof graph click coverage inventory requires clicked artifact rows", () =
         4,
       ],
       [
+        "proof-graph-handoff-phase-outputs",
+        "visibleProofGraphHandoffPhaseOutputs",
+        "handoffPhaseOutputGraphLinks.outputs",
+        "visibleProofGraphHandoffPhaseOutputArtifacts",
+        "passed",
+        9,
+        9,
+      ],
+      [
         "proof-graph-core-loop-recovery-destinations",
         "visibleProofGraphCoreLoopRecoveryDestinations",
         "coreLoopRecoveryDestinationArtifacts",
@@ -8421,6 +8430,14 @@ test("proof graph click coverage inventory requires clicked artifact rows", () =
   assert.throws(
     () => assertProofGraphClickCoverage(missingClickProof),
     /proof graph artifact click coverage missing: production-feature-destination-summaries/,
+  );
+  const missingHandoffOutputClickProof = structuredClone(proof);
+  missingHandoffOutputClickProof.adminRoleSurface.visibleProofGraphHandoffPhaseOutputArtifacts =
+    missingHandoffOutputClickProof.adminRoleSurface
+      .visibleProofGraphHandoffPhaseOutputArtifacts.slice(1);
+  assert.throws(
+    () => assertProofGraphClickCoverage(missingHandoffOutputClickProof),
+    /proof graph artifact click coverage missing: proof-graph-handoff-phase-outputs/,
   );
   const missingRowProof = structuredClone(proof);
   missingRowProof.adminRoleSurface.visibleProofGraphCoreLoopRecoveryDestinations =
@@ -17869,15 +17886,16 @@ test("session card and markdown include role credential URLs and tokens", async 
       evidence: "target/dev-test-game/proof-graph-admin-proof.json",
       command: "npm run test:dev-test-game-proof-graph-admin-proof",
       roleUrl: "/admin/audit/local-proof-graph?game=<seeded-game>",
-      familyCount: 3,
+      familyCount: 4,
       missingFamilyCount: 0,
       familyIds: [
         "proof-graph-prerequisite-destinations",
+        "proof-graph-handoff-phase-outputs",
         "proof-graph-core-loop-recovery-destinations",
         "production-feature-destination-summaries",
       ],
-      expectedArtifactCount: 25,
-      clickedArtifactCount: 25,
+      expectedArtifactCount: 34,
+      clickedArtifactCount: 34,
     },
   );
   assert(

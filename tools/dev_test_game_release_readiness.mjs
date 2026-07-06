@@ -9488,15 +9488,16 @@ function assertLocalDevelopmentDiagnostics(localDevelopmentSpine) {
     (clickCoverageDiagnostic.sourceCheckId !==
       localProofGraphAdminRoleHandoffsCheckId ||
       clickCoverageDiagnostic.kind !== "artifact-click-coverage" ||
-      clickCoverageDiagnostic.familyCount !== 3 ||
+      clickCoverageDiagnostic.familyCount !== 4 ||
       clickCoverageDiagnostic.missingFamilyCount !== 0 ||
       !sameStringArray(clickCoverageDiagnostic.familyIds, [
         "proof-graph-prerequisite-destinations",
+        "proof-graph-handoff-phase-outputs",
         "proof-graph-core-loop-recovery-destinations",
         "production-feature-destination-summaries",
       ]) ||
-      clickCoverageDiagnostic.expectedArtifactCount !== 25 ||
-      clickCoverageDiagnostic.clickedArtifactCount !== 25)
+      clickCoverageDiagnostic.expectedArtifactCount !== 34 ||
+      clickCoverageDiagnostic.clickedArtifactCount !== 34)
   ) {
     throw new Error("dev-test-game proof graph click coverage diagnostic is malformed");
   }

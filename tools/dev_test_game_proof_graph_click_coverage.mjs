@@ -16,6 +16,20 @@ const proofGraphClickCoverageFamilies = Object.freeze([
       [artifact?.rowId, artifact?.proofTarget].map(normalize).join("\u0000"),
   }),
   Object.freeze({
+    id: "proof-graph-handoff-phase-outputs",
+    label: "Proof graph handoff phase outputs",
+    visibleRowsKey: "visibleProofGraphHandoffPhaseOutputs",
+    expectedArtifactsKey: "handoffPhaseOutputGraphLinks.outputs",
+    visibleArtifactsKey: "visibleProofGraphHandoffPhaseOutputArtifacts",
+    rowIdForArtifact: (artifact) => String(artifact?.id ?? ""),
+    artifactKey: (artifact) =>
+      [artifact?.id, artifact?.artifact].map(normalize).join("\u0000"),
+    expectedArtifacts: (generatedFrom) =>
+      Array.isArray(generatedFrom?.handoffPhaseOutputGraphLinks?.outputs)
+        ? generatedFrom.handoffPhaseOutputGraphLinks.outputs
+        : [],
+  }),
+  Object.freeze({
     id: "proof-graph-core-loop-recovery-destinations",
     label: "Proof graph core-loop recovery destinations",
     visibleRowsKey: "visibleProofGraphCoreLoopRecoveryDestinations",
@@ -49,11 +63,10 @@ export function buildProofGraphClickCoverageInventory(proof) {
   const adminRoleSurface = proof?.adminRoleSurface ?? {};
   const families = proofGraphClickCoverageFamilies.map((family) => {
     const visibleRows = normalizeStrings(adminRoleSurface[family.visibleRowsKey]);
-    const expectedArtifacts = Array.isArray(
-      generatedFrom[family.expectedArtifactsKey],
-    )
-      ? generatedFrom[family.expectedArtifactsKey]
-      : [];
+    const expectedArtifacts = expectedArtifactsForFamily({
+      family,
+      generatedFrom,
+    });
     const visibleArtifacts = Array.isArray(
       adminRoleSurface[family.visibleArtifactsKey],
     )
@@ -112,6 +125,15 @@ export function buildProofGraphClickCoverageInventory(proof) {
     missingFamilyCount,
     families: Object.freeze(families),
   });
+}
+
+function expectedArtifactsForFamily({ family, generatedFrom }) {
+  if (typeof family.expectedArtifacts === "function") {
+    return family.expectedArtifacts(generatedFrom);
+  }
+  return Array.isArray(generatedFrom[family.expectedArtifactsKey])
+    ? generatedFrom[family.expectedArtifactsKey]
+    : [];
 }
 
 export function assertProofGraphClickCoverage(proof) {
