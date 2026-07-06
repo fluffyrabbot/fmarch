@@ -91,6 +91,9 @@ import {
   proofGraphAdminProofDescriptor,
 } from "./dev_test_game_proof_graph_admin_proof_descriptor.mjs";
 import {
+  assertProofGraphClickCoverage,
+} from "./dev_test_game_proof_graph_click_coverage.mjs";
+import {
   hostedTargetPreflightCheckIds,
 } from "./dev_test_game_hosted_target_preflight.mjs";
 import {
@@ -1681,7 +1684,9 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
     nextActionAdminProofEvidence,
     releaseRunbookEvidence,
   });
-  const localDiagnostics = buildLocalDevelopmentDiagnostics(localChecks);
+  const localDiagnostics = buildLocalDevelopmentDiagnostics(localChecks, {
+    proofGraphAdminProofEvidence,
+  });
   return {
     version: DEV_TEST_GAME_RELEASE_READINESS_VERSION,
     proof: "dev-test-game-release-readiness",
@@ -6408,6 +6413,7 @@ export function validateDevTestGameProofGraphAdminProof(proof, options = {}) {
   validateProofGraphAdminProductionFeatureDestinationSummary(proof);
   const productionFeatureProvenanceComparison =
     validateProofGraphAdminProductionFeatureProvenanceComparison(proof);
+  const clickCoverageInventory = assertProofGraphClickCoverage(proof);
   const selectedOperatorHandoffReceiptDestination =
     validateOptionalSelectedOperatorHandoffReceiptDestination(proof, {
       visibleDestinations,
@@ -6439,6 +6445,7 @@ export function validateDevTestGameProofGraphAdminProof(proof, options = {}) {
     selectedOperatorHandoffReceiptDestination,
     adminSpineTerminalValidationDestination,
     productionFeatureProvenanceComparison,
+    clickCoverageInventory,
     ...(options.artifact === undefined ? {} : { artifact: options.artifact }),
   };
 }
@@ -9274,9 +9281,16 @@ export function markdownChecklist(checklist) {
   return `${lines.join("\n")}\n`;
 }
 
-function buildLocalDevelopmentDiagnostics(localChecks) {
+function buildLocalDevelopmentDiagnostics(
+  localChecks,
+  { proofGraphAdminProofEvidence } = {},
+) {
   const checkById = new Map(localChecks.map((check) => [check.id, check]));
   return [
+    proofGraphClickCoverageDiagnostic({
+      checkById,
+      proofGraphAdminProofEvidence,
+    }),
     diagnosticFromCheck(checkById, {
       sourceCheckId: "local-selected-operator-handoff-receipt-fixture-admin-proof",
       id: "selected-operator-handoff-receipt-fixture",
@@ -9371,6 +9385,45 @@ function buildLocalDevelopmentDiagnostics(localChecks) {
   ].filter((diagnostic) => diagnostic !== null);
 }
 
+function proofGraphClickCoverageDiagnostic({
+  checkById,
+  proofGraphAdminProofEvidence,
+}) {
+  const check = checkById.get(localProofGraphAdminRoleHandoffsCheckId);
+  const inventory = proofGraphAdminProofEvidence?.clickCoverageInventory;
+  if (check === undefined || inventory === undefined) {
+    return null;
+  }
+  const expectedArtifactCount = inventory.families.reduce(
+    (sum, family) => sum + Number(family.expectedArtifactCount ?? 0),
+    0,
+  );
+  const clickedArtifactCount = inventory.families.reduce(
+    (sum, family) => sum + Number(family.clickedArtifactCount ?? 0),
+    0,
+  );
+  return {
+    id: "local-proof-graph-click-coverage",
+    sourceCheckId: localProofGraphAdminRoleHandoffsCheckId,
+    label: "Proof graph artifact click coverage",
+    status: inventory.status,
+    kind: "artifact-click-coverage",
+    evidence: proofGraphAdminProofEvidence.path,
+    command: check.command ?? check.recovery?.command ?? "",
+    roleUrl: check.roleUrl ?? check.recovery?.roleUrl ?? "",
+    reason:
+      "Diagnostic inventory confirming proof-graph destination artifact links were clicked in the browser proof; it does not change release readiness.",
+    diagnosticOnly: true,
+    releaseReady: false,
+    productionReady: false,
+    familyCount: inventory.familyCount,
+    missingFamilyCount: inventory.missingFamilyCount,
+    familyIds: inventory.families.map((family) => family.id),
+    expectedArtifactCount,
+    clickedArtifactCount,
+  };
+}
+
 function diagnosticFromCheck(
   checkById,
   { sourceCheckId, id, kind, command, reason, extra },
@@ -9426,6 +9479,26 @@ function assertLocalDevelopmentDiagnostics(localDevelopmentSpine) {
       throw new Error("dev-test-game local diagnostic entry is malformed");
     }
     diagnosticIds.add(diagnostic.id);
+  }
+  const clickCoverageDiagnostic = diagnostics.find(
+    (diagnostic) => diagnostic.id === "local-proof-graph-click-coverage",
+  );
+  if (
+    clickCoverageDiagnostic !== undefined &&
+    (clickCoverageDiagnostic.sourceCheckId !==
+      localProofGraphAdminRoleHandoffsCheckId ||
+      clickCoverageDiagnostic.kind !== "artifact-click-coverage" ||
+      clickCoverageDiagnostic.familyCount !== 3 ||
+      clickCoverageDiagnostic.missingFamilyCount !== 0 ||
+      !sameStringArray(clickCoverageDiagnostic.familyIds, [
+        "proof-graph-prerequisite-destinations",
+        "proof-graph-core-loop-recovery-destinations",
+        "production-feature-destination-summaries",
+      ]) ||
+      clickCoverageDiagnostic.expectedArtifactCount !== 25 ||
+      clickCoverageDiagnostic.clickedArtifactCount !== 25)
+  ) {
+    throw new Error("dev-test-game proof graph click coverage diagnostic is malformed");
   }
 }
 

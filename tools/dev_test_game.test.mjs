@@ -17577,6 +17577,45 @@ test("session card and markdown include role credential URLs and tokens", async 
       `| Selected operator handoff receipt fixture admin proof | passed | \`${selectedOperatorHandoffReceiptAdminProofPath}\` |  |  |`,
     ),
   );
+  const clickCoverageDiagnostic =
+    proofGraphHandoffReadiness.localDevelopmentSpine.diagnostics.find(
+      (diagnostic) => diagnostic.id === "local-proof-graph-click-coverage",
+    );
+  assert.deepEqual(
+    {
+      sourceCheckId: clickCoverageDiagnostic.sourceCheckId,
+      kind: clickCoverageDiagnostic.kind,
+      evidence: clickCoverageDiagnostic.evidence,
+      command: clickCoverageDiagnostic.command,
+      roleUrl: clickCoverageDiagnostic.roleUrl,
+      familyCount: clickCoverageDiagnostic.familyCount,
+      missingFamilyCount: clickCoverageDiagnostic.missingFamilyCount,
+      familyIds: clickCoverageDiagnostic.familyIds,
+      expectedArtifactCount: clickCoverageDiagnostic.expectedArtifactCount,
+      clickedArtifactCount: clickCoverageDiagnostic.clickedArtifactCount,
+    },
+    {
+      sourceCheckId: "local-proof-graph-admin-role-handoffs",
+      kind: "artifact-click-coverage",
+      evidence: "target/dev-test-game/proof-graph-admin-proof.json",
+      command: "npm run test:dev-test-game-proof-graph-admin-proof",
+      roleUrl: "/admin/audit/local-proof-graph?game=<seeded-game>",
+      familyCount: 3,
+      missingFamilyCount: 0,
+      familyIds: [
+        "proof-graph-prerequisite-destinations",
+        "proof-graph-core-loop-recovery-destinations",
+        "production-feature-destination-summaries",
+      ],
+      expectedArtifactCount: 25,
+      clickedArtifactCount: 25,
+    },
+  );
+  assert(
+    markdownChecklist(proofGraphHandoffReadiness).includes(
+      "| Proof graph artifact click coverage | artifact-click-coverage | `target/dev-test-game/proof-graph-admin-proof.json` | `npm run test:dev-test-game-proof-graph-admin-proof` | Diagnostic inventory confirming proof-graph destination artifact links were clicked in the browser proof; it does not change release readiness. |",
+    ),
+  );
   const selectedOperatorDiagnosticNextAction = buildDevTestGameNextAction(
     freshSpineManifestFixture(),
     {
@@ -17589,12 +17628,23 @@ test("session card and markdown include role credential URLs and tokens", async 
   assert.equal(
     selectedOperatorDiagnosticNextAction.generatedFrom.releaseReadinessSummary
       .diagnosticCheckCount,
-    1,
+    2,
   );
   assert.deepEqual(
     selectedOperatorDiagnosticNextAction.generatedFrom.releaseReadinessSummary
       .diagnosticChecks,
     [
+      {
+        id: "local-proof-graph-click-coverage",
+        sourceCheckId: "local-proof-graph-admin-role-handoffs",
+        label: "Proof graph artifact click coverage",
+        kind: "artifact-click-coverage",
+        command: "npm run test:dev-test-game-proof-graph-admin-proof",
+        proofTarget: "target/dev-test-game/proof-graph-admin-proof.json",
+        roleUrl: "/admin/audit/local-proof-graph?game=<seeded-game>",
+        fixtureEvidence: false,
+        demoOnly: false,
+      },
       {
         id: "selected-operator-handoff-receipt-fixture",
         sourceCheckId:
