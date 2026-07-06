@@ -1,6 +1,7 @@
 <script>
   import AppSurfaceHeader from "$lib/app/AppSurfaceHeader.svelte";
   import AppStatus from "$lib/app/AppStatus.svelte";
+  import AdminAuditDescriptorRows from "$lib/components/admin/AdminAuditDescriptorRows.svelte";
   import {
     buildAdminAuditPanelViewModel,
   } from "$lib/components/admin/admin-surface-model.mjs";
@@ -23,6 +24,12 @@
     productionFeatureDestinationRows.filter((row) =>
       isHostedEvidenceProgressionDestination(row),
     );
+  $: hostedHandoffRows = [
+    ...(data.audit.hostedHandoffChecklistRows ?? []),
+    ...(data.audit.hostedHandoffOperatorRows ?? []),
+    ...(data.audit.hostedHandoffProgressionRows ?? []),
+    ...(data.audit.hostedHandoffBlockedReceiptRows ?? []),
+  ];
   function prerequisiteRoleHref(prerequisite) {
     const roleUrl = String(prerequisite?.roleUrl ?? "");
     const game = String(data.audit?.artifactSummary?.game ?? "");
@@ -442,183 +449,30 @@
         </ol>
       </section>
     {/if}
-    {#if data.audit.handoffPath}
+    {#if data.audit.handoffPathRows?.length > 0}
       <section
         class="admin-audit-detail__group"
         data-testid="admin-audit-detail-handoff-path"
       >
         <h2>Handoff path</h2>
-        <ol class="admin-audit-detail__entries">
-          <li
-            class="admin-audit-detail__entry admin-audit-detail__entry--stack"
-            data-testid="admin-audit-handoff-path"
-          >
-            <strong>{data.audit.handoffPath.downstreamStatus}</strong>
-            <span>{data.audit.handoffPath.upstreamLabel}</span>
-            <span>{data.audit.handoffPath.upstreamAuditId}</span>
-            <span>{data.audit.handoffPath.localCapabilityAuditId}</span>
-            <span>{data.audit.handoffPath.downstreamCommand}</span>
-            <span>{data.audit.handoffPath.downstreamProofTarget}</span>
-          </li>
-        </ol>
+        <AdminAuditDescriptorRows rows={data.audit.handoffPathRows} />
       </section>
     {/if}
     {#if data.audit.artifactSummarySections?.length > 0}
       {#each data.audit.artifactSummarySections as section}
         <section class="admin-audit-detail__group" data-testid={section.testId}>
           <h2>{section.heading}</h2>
-          <ol class="admin-audit-detail__entries">
-            {#each section.rows as row}
-              <li
-                class="admin-audit-detail__entry admin-audit-detail__entry--stack"
-                data-testid={row.testId}
-              >
-                {#each row.values as value}
-                  {#if value.emphasized}
-                    <strong>{value.text}</strong>
-                  {:else}
-                    <span>{value.text}</span>
-                  {/if}
-                {/each}
-                {#if row.subentries?.length > 0}
-                  <ol class="admin-audit-detail__subentries">
-                    {#each row.subentries as subentry}
-                      <li data-testid={subentry.testId}>
-                        {#each subentry.values as value}
-                          {#if value.emphasized}
-                            <strong>{value.text}</strong>
-                          {:else}
-                            <span>{value.text}</span>
-                          {/if}
-                        {/each}
-                      </li>
-                    {/each}
-                  </ol>
-                {/if}
-              </li>
-            {/each}
-          </ol>
+          <AdminAuditDescriptorRows rows={section.rows} />
         </section>
       {/each}
     {/if}
-    {#if data.audit.hostedHandoffChecklist}
+    {#if hostedHandoffRows.length > 0}
       <section
         class="admin-audit-detail__group"
         data-testid="admin-audit-detail-hosted-handoff-checklist"
       >
         <h2>Hosted handoff checklist</h2>
-        <ol class="admin-audit-detail__entries">
-          {#each data.audit.hostedHandoffChecklistRows ?? [] as row}
-            <li
-              class="admin-audit-detail__entry admin-audit-detail__entry--stack"
-              data-testid={row.testId}
-            >
-              {#each row.values as value}
-                {#if value.emphasized}
-                  <strong>{value.text}</strong>
-                {:else}
-                  <span>{value.text}</span>
-                {/if}
-              {/each}
-              {#if row.subentries?.length > 0}
-                <ol class="admin-audit-detail__nested-list">
-                  {#each row.subentries as subentry}
-                    <li
-                      class="admin-audit-detail__entry"
-                      data-testid={subentry.testId}
-                    >
-                      {#each subentry.values as value}
-                        {#if value.emphasized}
-                          <strong>{value.text}</strong>
-                        {:else}
-                          <span>{value.text}</span>
-                        {/if}
-                      {/each}
-                    </li>
-                  {/each}
-                </ol>
-              {/if}
-            </li>
-          {/each}
-          {#each data.audit.hostedHandoffOperatorRows ?? [] as row}
-            <li
-              class="admin-audit-detail__entry admin-audit-detail__entry--stack"
-              data-testid={row.testId}
-            >
-              {#each row.values as value}
-                {#if value.emphasized}
-                  <strong>{value.text}</strong>
-                {:else}
-                  <span>{value.text}</span>
-                {/if}
-              {/each}
-              {#if row.subentries?.length > 0}
-                <ol class="admin-audit-detail__subentries">
-                  {#each row.subentries as subentry}
-                    <li
-                      class="admin-audit-detail__entry admin-audit-detail__entry--stack"
-                      data-testid={subentry.testId}
-                    >
-                      {#each subentry.values as value}
-                        {#if value.emphasized}
-                          <strong>{value.text}</strong>
-                        {:else}
-                          <span>{value.text}</span>
-                        {/if}
-                      {/each}
-                    </li>
-                  {/each}
-                </ol>
-              {/if}
-            </li>
-          {/each}
-          {#each data.audit.hostedHandoffProgressionRows ?? [] as row}
-            <li
-              class="admin-audit-detail__entry admin-audit-detail__entry--stack"
-              data-testid={row.testId}
-            >
-              {#each row.values as value}
-                {#if value.emphasized}
-                  <strong>{value.text}</strong>
-                {:else}
-                  <span>{value.text}</span>
-                {/if}
-              {/each}
-            </li>
-          {/each}
-          {#each data.audit.hostedHandoffBlockedReceiptRows ?? [] as row}
-            <li
-              class="admin-audit-detail__entry admin-audit-detail__entry--stack"
-              data-testid={row.testId}
-            >
-              {#each row.values as value}
-                {#if value.emphasized}
-                  <strong>{value.text}</strong>
-                {:else}
-                  <span>{value.text}</span>
-                {/if}
-              {/each}
-              {#if row.subentries?.length > 0}
-                <ol class="admin-audit-detail__subentries">
-                  {#each row.subentries as subentry}
-                    <li
-                      class="admin-audit-detail__entry admin-audit-detail__entry--stack"
-                      data-testid={subentry.testId}
-                    >
-                      {#each subentry.values as value}
-                        {#if value.emphasized}
-                          <strong>{value.text}</strong>
-                        {:else}
-                          <span>{value.text}</span>
-                        {/if}
-                      {/each}
-                    </li>
-                  {/each}
-                </ol>
-              {/if}
-            </li>
-          {/each}
-        </ol>
+        <AdminAuditDescriptorRows rows={hostedHandoffRows} />
       </section>
     {/if}
     {#if data.audit.unproven?.length > 0}
@@ -650,42 +504,16 @@
         data-testid="admin-audit-detail-setup-command-evidence"
       >
         <h2>Setup command evidence</h2>
-        <ol class="admin-audit-detail__entries">
-          {#each data.audit.setupCommandEvidenceRows as row}
-            <li
-              class="admin-audit-detail__entry admin-audit-detail__entry--stack"
-              data-testid={row.testId}
-            >
-              {#each row.values as value}
-                {#if value.emphasized}
-                  <strong>{value.text}</strong>
-                {:else}
-                  <span>{value.text}</span>
-                {/if}
-              {/each}
-            </li>
-          {/each}
-        </ol>
+        <AdminAuditDescriptorRows rows={data.audit.setupCommandEvidenceRows} />
       </section>
     {/if}
-    {#if data.audit.realHostedEvidenceInputs?.length > 0}
+    {#if data.audit.realHostedEvidenceInputRows?.length > 0}
       <section
         class="admin-audit-detail__group"
         data-testid="admin-audit-detail-real-hosted-evidence-inputs"
       >
         <h2>Real hosted evidence inputs</h2>
-        <ol class="admin-audit-detail__entries">
-          {#each data.audit.realHostedEvidenceInputs as input}
-            <li
-              class="admin-audit-detail__entry"
-              data-testid={`admin-audit-real-hosted-evidence-input-${input.id}`}
-            >
-              <strong>{input.label}</strong>
-              <span>{input.value}</span>
-              <span>{input.required ? "required" : "optional"}</span>
-            </li>
-          {/each}
-        </ol>
+        <AdminAuditDescriptorRows rows={data.audit.realHostedEvidenceInputRows} />
       </section>
     {/if}
     {#if data.audit.relatedLinks?.length > 0}

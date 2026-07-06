@@ -1755,14 +1755,19 @@ test("admin audit detail page renders descriptor artifact sections from route da
     "frontend/src/routes/admin/audit/[audit]/+page.svelte",
     "utf8",
   );
+  const descriptorSource = await readFile(
+    "frontend/src/lib/components/admin/AdminAuditDescriptorRows.svelte",
+    "utf8",
+  );
   assert.doesNotMatch(source, /artifactSummary\.redactedIntakePacket/);
   assert.doesNotMatch(source, /artifactSummary\.roleSurfaceContractDiff/);
   assert.doesNotMatch(source, /artifactSummary\.identityAdapterContractComparison/);
   assert.doesNotMatch(source, /artifactSummary\.adapterContract/);
   assert.doesNotMatch(source, /artifactSummary\.progressionSummary\.nextCommand/);
   assert.doesNotMatch(source, /artifactSummary\.diagnosticProofSummary/);
-  assert.match(source, /row\.subentries\?\.length/);
-  assert.match(source, /data-testid=\{subentry\.testId\}/);
+  assert.match(source, /AdminAuditDescriptorRows rows=\{section\.rows\}/);
+  assert.match(descriptorSource, /row\.subentries\?\.length/);
+  assert.match(descriptorSource, /data-testid=\{subentry\.testId\}/);
 });
 
 test("admin audit detail page renders hosted handoff operator rows from route data", async () => {
@@ -1774,8 +1779,8 @@ test("admin audit detail page renders hosted handoff operator rows from route da
   assert.doesNotMatch(source, /hostedHandoffChecklist\.operatorEvidenceGate/);
   assert.doesNotMatch(source, /hostedHandoffChecklist\.operatorProofDrilldowns/);
   assert.doesNotMatch(source, /providerBoundary/);
-  assert.match(source, /data-testid=\{row\.testId\}/);
-  assert.match(source, /data-testid=\{subentry\.testId\}/);
+  assert.match(source, /hostedHandoffRows/);
+  assert.match(source, /AdminAuditDescriptorRows rows=\{hostedHandoffRows\}/);
 });
 
 test("admin audit detail page renders hosted handoff progression rows from route data", async () => {
@@ -1786,7 +1791,7 @@ test("admin audit detail page renders hosted handoff progression rows from route
   assert.match(source, /hostedHandoffProgressionRows/);
   assert.doesNotMatch(source, /hostedHandoffChecklist\.progressionSummary/);
   assert.doesNotMatch(source, /artifactSummary\?\.progressionSummary/);
-  assert.match(source, /data-testid=\{row\.testId\}/);
+  assert.match(source, /hostedHandoffRows/);
 });
 
 test("admin audit detail page renders hosted handoff blocked receipt rows from route data", async () => {
@@ -1798,8 +1803,7 @@ test("admin audit detail page renders hosted handoff blocked receipt rows from r
   assert.doesNotMatch(source, /hostedHandoffChecklist\.blockedReceipt/);
   assert.doesNotMatch(source, /hostedHandoffReceiptHeadings\?/);
   assert.doesNotMatch(source, /firstMissingOperatorArtifact\.roleSurfaceDrilldown/);
-  assert.match(source, /data-testid=\{row\.testId\}/);
-  assert.match(source, /data-testid=\{subentry\.testId\}/);
+  assert.match(source, /hostedHandoffRows/);
 });
 
 test("hosted handoff receipt headings come from the route-model registry", () => {
@@ -1833,14 +1837,12 @@ test("hosted handoff receipt headings come from the route-model registry", () =>
 });
 
 test("admin audit detail page renders hosted evidence raw-capture intake as a named blocked-receipt group", async () => {
-  const source = await readFile(
-    "frontend/src/routes/admin/audit/[audit]/+page.svelte",
+  const descriptorSource = await readFile(
+    "frontend/src/lib/components/admin/AdminAuditDescriptorRows.svelte",
     "utf8",
   );
-  assert.match(source, /row\.subentries/);
-  assert.match(source, /subentry\.values/);
-  assert.doesNotMatch(source, /realHostedMatrixRawCaptureIntake\.proofTarget/);
-  assert.doesNotMatch(source, /firstMissingOperatorArtifact\.roleSurfaceDrilldown/);
+  assert.match(descriptorSource, /row\.subentries/);
+  assert.match(descriptorSource, /subentry\.values/);
 });
 
 test("admin audit detail page renders hosted artifact summary sections from route data", async () => {
@@ -1856,8 +1858,7 @@ test("admin audit detail page renders hosted artifact summary sections from rout
   assert.doesNotMatch(source, /artifactSummary\.frontendSetupWorkbenchReadiness/);
   assert.match(source, /data\.audit\.artifactSummarySections\?\.length/);
   assert.match(source, /data-testid=\{section\.testId\}/);
-  assert.match(source, /data-testid=\{row\.testId\}/);
-  assert.match(source, /value\.emphasized/);
+  assert.match(source, /AdminAuditDescriptorRows rows=\{section\.rows\}/);
 });
 
 test("admin audit detail page renders hosted handoff checklist rows from route data", async () => {
@@ -1870,8 +1871,7 @@ test("admin audit detail page renders hosted handoff checklist rows from route d
   assert.doesNotMatch(source, /hostedHandoffChecklist\.inputSections/);
   assert.doesNotMatch(source, /hostedHandoffChecklist\.groups/);
   assert.doesNotMatch(source, /hostedHandoffChecklist\.blockedChecks/);
-  assert.match(source, /data-testid=\{row\.testId\}/);
-  assert.match(source, /data-testid=\{subentry\.testId\}/);
+  assert.match(source, /hostedHandoffRows/);
 });
 
 test("admin audit detail page renders setup command evidence rows from route data", async () => {
@@ -1883,8 +1883,19 @@ test("admin audit detail page renders setup command evidence rows from route dat
   assert.doesNotMatch(source, /setupCommandEvidence as command/);
   assert.doesNotMatch(source, /command\.commandKind/);
   assert.doesNotMatch(source, /command\.readinessSummary/);
-  assert.match(source, /data-testid=\{row\.testId\}/);
-  assert.match(source, /value\.emphasized/);
+  assert.match(source, /AdminAuditDescriptorRows rows=\{data\.audit\.setupCommandEvidenceRows\}/);
+});
+
+test("admin audit detail page renders handoff and real-hosted input rows from route data", async () => {
+  const source = await readFile(
+    "frontend/src/routes/admin/audit/[audit]/+page.svelte",
+    "utf8",
+  );
+  assert.match(source, /handoffPathRows/);
+  assert.doesNotMatch(source, /handoffPath\.downstreamStatus/);
+  assert.match(source, /realHostedEvidenceInputRows/);
+  assert.doesNotMatch(source, /realHostedEvidenceInputs as input/);
+  assert.doesNotMatch(source, /input\.required \? "required" : "optional"/);
 });
 
 test("admin hosted-facing audit inventory carries shared handoff paths where required", async () => {
@@ -1971,6 +1982,12 @@ test("admin hosted-facing audit inventory carries shared handoff paths where req
       "downstreamProofTarget",
     ]);
     assert.deepEqual(handoffPath, expectedHandoffPath);
+    assert.deepEqual(
+      hostedHandoffChecklistRowsForAssertion(
+        auditsById.get(auditId)?.handoffPathRows,
+      ),
+      expectedAdminAuditHandoffPathRows(expectedHandoffPath),
+    );
   }
 });
 
@@ -2751,6 +2768,10 @@ test("admin local hosted matrix detail data carries progress and gap rows", asyn
         false,
       ],
     ],
+  );
+  assert.deepEqual(
+    hostedHandoffChecklistRowsForAssertion(data.audit.realHostedEvidenceInputRows),
+    expectedRealHostedEvidenceInputRows(data.audit.realHostedEvidenceInputs),
   );
   assert.equal(data.audit.hostedHandoffChecklist.status, "blocked");
   assert.equal(
@@ -3615,6 +3636,10 @@ test("admin local next action detail data carries hosted evidence handoff checkl
   assert.deepEqual(
     hostedHandoffChecklistRowsForAssertion(data.audit.hostedHandoffChecklistRows),
     expectedHostedHandoffChecklistRows(data.audit.hostedHandoffChecklist),
+  );
+  assert.deepEqual(
+    hostedHandoffChecklistRowsForAssertion(data.audit.realHostedEvidenceInputRows),
+    expectedRealHostedEvidenceInputRows(data.audit.realHostedEvidenceInputs),
   );
   assert.deepEqual(
     hostedHandoffChecklistRowsForAssertion(
@@ -5116,6 +5141,10 @@ test("admin hosted evidence lane detail data carries blocked setup rows", async 
         false,
       ],
     ],
+  );
+  assert.deepEqual(
+    hostedHandoffChecklistRowsForAssertion(data.audit.realHostedEvidenceInputRows),
+    expectedRealHostedEvidenceInputRows(data.audit.realHostedEvidenceInputs),
   );
   assert.equal(data.audit.hostedHandoffChecklist.status, "blocked");
   assert.equal(data.audit.hostedHandoffChecklist.preflightStatus, "blocked");
@@ -9382,6 +9411,37 @@ function expectedSetupCommandEvidenceRows(setupCommandEvidence) {
       ["status", command.status, false],
       ["commandKind", command.commandKind, false],
       ["readinessSummary", command.readinessSummary, false],
+    ],
+    [],
+  ]);
+}
+
+function expectedAdminAuditHandoffPathRows(handoffPath) {
+  return [
+    [
+      "handoff-path",
+      "admin-audit-handoff-path",
+      [
+        ["downstreamStatus", handoffPath.downstreamStatus, true],
+        ["upstreamLabel", handoffPath.upstreamLabel, false],
+        ["upstreamAuditId", handoffPath.upstreamAuditId, false],
+        ["localCapabilityAuditId", handoffPath.localCapabilityAuditId, false],
+        ["downstreamCommand", handoffPath.downstreamCommand, false],
+        ["downstreamProofTarget", handoffPath.downstreamProofTarget, false],
+      ],
+      [],
+    ],
+  ];
+}
+
+function expectedRealHostedEvidenceInputRows(realHostedEvidenceInputs) {
+  return realHostedEvidenceInputs.map((input) => [
+    `real-hosted-evidence-input-${input.id}`,
+    `admin-audit-real-hosted-evidence-input-${input.id}`,
+    [
+      ["label", input.label, true],
+      ["value", input.value, false],
+      ["required", input.required ? "required" : "optional", false],
     ],
     [],
   ]);

@@ -808,6 +808,52 @@ function buildSetupCommandEvidenceRows(setupCommandEvidence) {
   );
 }
 
+function buildAdminAuditHandoffPathRows(handoffPath) {
+  if (handoffPath === null || typeof handoffPath !== "object") {
+    return Object.freeze([]);
+  }
+  return Object.freeze([
+    artifactSummaryRow({
+      id: "handoff-path",
+      testId: "admin-audit-handoff-path",
+      values: [
+        {
+          id: "downstreamStatus",
+          text: handoffPath.downstreamStatus,
+          emphasized: true,
+        },
+        { id: "upstreamLabel", text: handoffPath.upstreamLabel },
+        { id: "upstreamAuditId", text: handoffPath.upstreamAuditId },
+        {
+          id: "localCapabilityAuditId",
+          text: handoffPath.localCapabilityAuditId,
+        },
+        { id: "downstreamCommand", text: handoffPath.downstreamCommand },
+        {
+          id: "downstreamProofTarget",
+          text: handoffPath.downstreamProofTarget,
+        },
+      ],
+    }),
+  ]);
+}
+
+function buildRealHostedEvidenceInputRows(realHostedEvidenceInputs) {
+  return Object.freeze(
+    realHostedEvidenceInputs.map((input) =>
+      artifactSummaryRow({
+        id: `real-hosted-evidence-input-${input.id}`,
+        testId: `admin-audit-real-hosted-evidence-input-${input.id}`,
+        values: [
+          { id: "label", text: input.label, emphasized: true },
+          { id: "value", text: input.value },
+          { id: "required", text: input.required ? "required" : "optional" },
+        ],
+      }),
+    ),
+  );
+}
+
 function hostedReadinessText(value, label) {
   return value === true ? `${label} ready` : `${label} not ready`;
 }
@@ -1973,6 +2019,13 @@ export function normalizeLocalHostedIdentityEvidenceAudit(
     ),
     ...(progressionSummary === null ? {} : { progressionSummary }),
   });
+  const handoffPath = buildAdminAuditHandoffPath({
+    upstreamAuditId: localAdminAuditIds.nextAction,
+    localCapabilityAuditId: localAdminAuditIds.identityAdapter,
+    downstreamStatus: String(hostedIdentityEvidence.status ?? "unknown"),
+    downstreamCommand: String(hostedIdentityEvidence.nextCommand ?? ""),
+    downstreamProofTarget: String(hostedIdentityEvidence.nextProofTarget ?? ""),
+  });
   return Object.freeze({
     id: localAdminAuditIds.hostedIdentityEvidence,
     label: "Hosted identity evidence",
@@ -2025,13 +2078,8 @@ export function normalizeLocalHostedIdentityEvidenceAudit(
         command: "test:dev-test-game-next-action",
       }),
     ]),
-    handoffPath: buildAdminAuditHandoffPath({
-      upstreamAuditId: localAdminAuditIds.nextAction,
-      localCapabilityAuditId: localAdminAuditIds.identityAdapter,
-      downstreamStatus: String(hostedIdentityEvidence.status ?? "unknown"),
-      downstreamCommand: String(hostedIdentityEvidence.nextCommand ?? ""),
-      downstreamProofTarget: String(hostedIdentityEvidence.nextProofTarget ?? ""),
-    }),
+    handoffPath,
+    handoffPathRows: buildAdminAuditHandoffPathRows(handoffPath),
     hostedHandoffChecklist,
     hostedHandoffChecklistRows:
       buildHostedHandoffChecklistRows(hostedHandoffChecklist),
@@ -2328,6 +2376,8 @@ export function normalizeLocalHostedEvidenceLaneAudit(
       }),
     ]),
     realHostedEvidenceInputs,
+    realHostedEvidenceInputRows:
+      buildRealHostedEvidenceInputRows(realHostedEvidenceInputs),
     hostedHandoffChecklist,
     hostedHandoffChecklistRows:
       buildHostedHandoffChecklistRows(hostedHandoffChecklist),
@@ -2590,6 +2640,15 @@ export function normalizeLocalRealHostedObservabilityHandoffAudit(
     releaseReady: realHostedObservabilityHandoff.releaseReady === true,
     productionReady: realHostedObservabilityHandoff.productionReady === true,
   });
+  const handoffPath = buildAdminAuditHandoffPath({
+    upstreamAuditId: localAdminAuditIds.nextAction,
+    localCapabilityAuditId: localAdminAuditIds.hostedOpsSignals,
+    downstreamStatus: String(realHostedObservabilityHandoff.status ?? "unknown"),
+    downstreamCommand: String(realHostedObservabilityHandoff.nextCommand ?? ""),
+    downstreamProofTarget: String(
+      realHostedObservabilityHandoff.nextProofTarget ?? "",
+    ),
+  });
   return Object.freeze({
     id: localAdminAuditIds.realHostedObservabilityHandoff,
     label: "Real hosted observability handoff",
@@ -2642,15 +2701,8 @@ export function normalizeLocalRealHostedObservabilityHandoffAudit(
         command: "test:dev-test-game-next-action",
       }),
     ]),
-    handoffPath: buildAdminAuditHandoffPath({
-      upstreamAuditId: localAdminAuditIds.nextAction,
-      localCapabilityAuditId: localAdminAuditIds.hostedOpsSignals,
-      downstreamStatus: String(realHostedObservabilityHandoff.status ?? "unknown"),
-      downstreamCommand: String(realHostedObservabilityHandoff.nextCommand ?? ""),
-      downstreamProofTarget: String(
-        realHostedObservabilityHandoff.nextProofTarget ?? "",
-      ),
-    }),
+    handoffPath,
+    handoffPathRows: buildAdminAuditHandoffPathRows(handoffPath),
     hostedHandoffChecklist,
     hostedHandoffChecklistRows:
       buildHostedHandoffChecklistRows(hostedHandoffChecklist),
@@ -2924,6 +2976,19 @@ export function normalizeLocalHostedConcurrentRaceMatrixAudit(
     releaseReady: hostedConcurrentRaceMatrix.releaseReady === true,
     productionReady: hostedConcurrentRaceMatrix.productionReady === true,
   });
+  const handoffPath = buildAdminAuditHandoffPath({
+    upstreamAuditId: localAdminAuditIds.nextAction,
+    localCapabilityAuditId: localAdminAuditIds.raceCoverage,
+    downstreamStatus: String(
+      hostedConcurrentRaceMatrix.summary?.realHostedEvidenceStatus ?? "unknown",
+    ),
+    downstreamCommand: String(
+      hostedConcurrentRaceMatrix.realHostedEvidenceInputs?.command ?? "",
+    ),
+    downstreamProofTarget: String(
+      hostedConcurrentRaceMatrix.realHostedEvidenceInputs?.proofTarget ?? "",
+    ),
+  });
   return Object.freeze({
     id: localAdminAuditIds.hostedConcurrentRaceMatrix,
     label: "Local hosted matrix",
@@ -2975,19 +3040,8 @@ export function normalizeLocalHostedConcurrentRaceMatrixAudit(
         command: String(hostedConcurrentRaceMatrix.nextBuildSlice?.command ?? ""),
       }),
     ]),
-    handoffPath: buildAdminAuditHandoffPath({
-      upstreamAuditId: localAdminAuditIds.nextAction,
-      localCapabilityAuditId: localAdminAuditIds.raceCoverage,
-      downstreamStatus: String(
-        hostedConcurrentRaceMatrix.summary?.realHostedEvidenceStatus ?? "unknown",
-      ),
-      downstreamCommand: String(
-        hostedConcurrentRaceMatrix.realHostedEvidenceInputs?.command ?? "",
-      ),
-      downstreamProofTarget: String(
-        hostedConcurrentRaceMatrix.realHostedEvidenceInputs?.proofTarget ?? "",
-      ),
-    }),
+    handoffPath,
+    handoffPathRows: buildAdminAuditHandoffPathRows(handoffPath),
     reconnectLanes: Object.freeze(
       reconnectLanes.map((lane) =>
         Object.freeze({
@@ -3027,6 +3081,8 @@ export function normalizeLocalHostedConcurrentRaceMatrixAudit(
       ],
     ),
     realHostedEvidenceInputs,
+    realHostedEvidenceInputRows:
+      buildRealHostedEvidenceInputRows(realHostedEvidenceInputs),
     hostedHandoffChecklist,
     hostedHandoffChecklistRows:
       buildHostedHandoffChecklistRows(hostedHandoffChecklist),
@@ -3943,6 +3999,8 @@ export function normalizeLocalNextActionAudit(nextAction, { game, proofGraph = n
       sequenceDeferralRoleUrl,
     }),
     realHostedEvidenceInputs,
+    realHostedEvidenceInputRows:
+      buildRealHostedEvidenceInputRows(realHostedEvidenceInputs),
     ...(hostedHandoffChecklist === null ? {} : { hostedHandoffChecklist }),
     ...(hostedHandoffChecklist === null
       ? {}
