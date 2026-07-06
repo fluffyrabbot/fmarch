@@ -100,11 +100,15 @@ export function assertHostPhaseTransitionSurfaceProof({
   assertPlayerStaleVoteAfterTransitionProofCase({
     proof: playerObservationProof.staleVoteRecoveryProof,
     expectedGame,
+    sourceRoleUrl: hostPhaseTransitionSurface.sourcePlayerRoleUrl,
+    visitedRolePath: playerObservationProof.visitedRolePath,
     includeEvidenceInError,
   });
   assertPlayerStaleActionAfterTransitionProofCase({
     proof: playerObservationProof.staleActionRecoveryProof,
     expectedGame,
+    sourceRoleUrl: hostPhaseTransitionSurface.sourcePlayerRoleUrl,
+    visitedRolePath: playerObservationProof.visitedRolePath,
     includeEvidenceInError,
   });
 }

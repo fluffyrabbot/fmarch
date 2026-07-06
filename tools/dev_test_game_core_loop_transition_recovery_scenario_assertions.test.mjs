@@ -380,12 +380,14 @@ function liveStaleActionRecoveryFixture() {
 }
 
 function playerObservationProofFixture() {
+  const sourceRoleUrl = "http://127.0.0.1/g/game-a";
+  const visitedRolePath = "/g/game-a";
   return {
     status: "passed",
     releaseReady: false,
     productionReady: false,
-    sourceRoleUrl: "http://127.0.0.1/g/game-a",
-    visitedRolePath: "/g/game-a",
+    sourceRoleUrl,
+    visitedRolePath,
     surfaceTestId: "player-surface",
     resyncFromSeq: 802,
     resyncKeys: ["commandState"],
@@ -401,14 +403,22 @@ function playerObservationProofFixture() {
     checkpointActionState: "enabled:submit_action:factional_kill",
     checkpointTargetSlots: "slot-3",
     checkpointReceiptState: "reject:PhaseLocked",
-    staleVoteRecoveryProof: staleVoteProofFixture(),
-    staleActionRecoveryProof: staleActionProofFixture(),
+    staleVoteRecoveryProof: staleVoteProofFixture({
+      sourceRoleUrl,
+      visitedRolePath,
+    }),
+    staleActionRecoveryProof: staleActionProofFixture({
+      sourceRoleUrl,
+      visitedRolePath,
+    }),
   };
 }
 
-function staleVoteProofFixture() {
+function staleVoteProofFixture({ sourceRoleUrl, visitedRolePath }) {
   return {
     status: "passed",
+    sourceRoleUrl,
+    visitedRolePath,
     clickedAction: "submit_vote",
     commandKind: "SubmitVote",
     setupResyncFromSeq: 801,
@@ -448,9 +458,11 @@ function staleVoteProofFixture() {
   };
 }
 
-function staleActionProofFixture() {
+function staleActionProofFixture({ sourceRoleUrl, visitedRolePath }) {
   return {
     status: "passed",
+    sourceRoleUrl,
+    visitedRolePath,
     clickedAction: "submit_action:factional_kill",
     commandKind: "SubmitAction",
     command: {

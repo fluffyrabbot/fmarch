@@ -135,11 +135,16 @@ export function assertPlayerInvalidActionRecoveryProofCase({
 export function assertPlayerStaleVoteAfterTransitionProofCase({
   proof,
   expectedGame,
+  sourceRoleUrl,
+  visitedRolePath,
   scenario = staleDayTwoVoteAfterTransitionRecoveryScenario(),
   includeEvidenceInError = false,
 }) {
   if (
     proof?.status !== "passed" ||
+    (sourceRoleUrl !== undefined && proof.sourceRoleUrl !== sourceRoleUrl) ||
+    (visitedRolePath !== undefined &&
+      proof.visitedRolePath !== visitedRolePath) ||
     proof.clickedAction !== scenario.clickedAction ||
     proof.commandKind !== scenario.commandKind ||
     proof.setupResyncFromSeq !== scenario.setupResyncFromSeq ||
@@ -186,11 +191,16 @@ export function assertPlayerStaleVoteAfterTransitionProofCase({
 export function assertPlayerStaleActionAfterTransitionProofCase({
   proof,
   expectedGame,
+  sourceRoleUrl,
+  visitedRolePath,
   scenario = staleNightOneActionAfterTransitionRecoveryScenario(),
   includeEvidenceInError = false,
 }) {
   if (
     proof?.status !== "passed" ||
+    (sourceRoleUrl !== undefined && proof.sourceRoleUrl !== sourceRoleUrl) ||
+    (visitedRolePath !== undefined &&
+      proof.visitedRolePath !== visitedRolePath) ||
     proof.clickedAction !== scenario.clickedAction ||
     proof.commandKind !== scenario.commandKind ||
     proof.command?.game !== expectedGame ||

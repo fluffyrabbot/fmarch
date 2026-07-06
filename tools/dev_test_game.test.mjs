@@ -20128,6 +20128,9 @@ function hostPhaseTransitionSurfaceFixture() {
       ],
       staleVoteRecoveryProof: {
         status: "passed",
+        sourceRoleUrl:
+          "http://127.0.0.1:5173/g/00000000-0000-0000-0000-000000000002",
+        visitedRolePath: "/g/00000000-0000-0000-0000-000000000002",
         clickedAction: "submit_vote",
         commandKind: "SubmitVote",
         setupResyncFromSeq: 801,
@@ -20190,6 +20193,9 @@ function hostPhaseTransitionSurfaceFixture() {
       },
       staleActionRecoveryProof: {
         status: "passed",
+        sourceRoleUrl:
+          "http://127.0.0.1:5173/g/00000000-0000-0000-0000-000000000002",
+        visitedRolePath: "/g/00000000-0000-0000-0000-000000000002",
         clickedAction: "submit_action:factional_kill",
         commandKind: "SubmitAction",
         command: {

@@ -4429,10 +4429,14 @@ async function provePlayerPhaseTransitionObservation({
     const staleVoteRecoveryProof = await provePlayerStaleVoteAfterTransition({
       page,
       commandRequests,
+      roleUrl,
+      visitedRolePath,
     });
     const staleActionRecoveryProof = await provePlayerStaleActionAfterTransition({
       page,
       commandRequests,
+      roleUrl,
+      visitedRolePath,
     });
     const resyncSnapshot = await page.evaluate(async () => {
       if (typeof window.__fmarchTriggerPlayerResync !== "function") {
@@ -4485,7 +4489,12 @@ async function provePlayerPhaseTransitionObservation({
   }
 }
 
-async function provePlayerStaleVoteAfterTransition({ page, commandRequests }) {
+async function provePlayerStaleVoteAfterTransition({
+  page,
+  commandRequests,
+  roleUrl,
+  visitedRolePath,
+}) {
   const setupSnapshot = await page.evaluate(async () => {
     if (typeof window.__fmarchTriggerPlayerResync !== "function") {
       throw new Error("player resync hook is unavailable");
@@ -4517,6 +4526,8 @@ async function provePlayerStaleVoteAfterTransition({ page, commandRequests }) {
   const proof = await collectPlayerStaleCommandProof({
     page,
     commandRequests,
+    sourceRoleUrl: String(roleUrl),
+    visitedRolePath,
     clickedAction: "submit_vote",
     commandKind: "SubmitVote",
     commandSelector: "SubmitVote",
@@ -4528,7 +4539,12 @@ async function provePlayerStaleVoteAfterTransition({ page, commandRequests }) {
   };
 }
 
-async function provePlayerStaleActionAfterTransition({ page, commandRequests }) {
+async function provePlayerStaleActionAfterTransition({
+  page,
+  commandRequests,
+  roleUrl,
+  visitedRolePath,
+}) {
   const actionButton = page.locator(
     '[data-testid="player-action-commands"] button[data-action="submit_action:factional_kill"]',
   );
@@ -4558,6 +4574,8 @@ async function provePlayerStaleActionAfterTransition({ page, commandRequests }) 
   return collectPlayerStaleCommandProof({
     page,
     commandRequests,
+    sourceRoleUrl: String(roleUrl),
+    visitedRolePath,
     clickedAction: "submit_action:factional_kill",
     commandKind: "SubmitAction",
     commandSelector: "SubmitAction",
@@ -4694,6 +4712,8 @@ async function collectCompletedPrivateChannelSnapshot(page) {
 async function collectPlayerStaleCommandProof({
   page,
   commandRequests,
+  sourceRoleUrl,
+  visitedRolePath,
   clickedAction,
   commandKind,
   commandSelector,
@@ -4719,6 +4739,8 @@ async function collectPlayerStaleCommandProof({
   const command = commandRequests.at(-1)?.[commandSelector] ?? null;
   return {
     status: "passed",
+    ...(sourceRoleUrl === undefined ? {} : { sourceRoleUrl }),
+    ...(visitedRolePath === undefined ? {} : { visitedRolePath }),
     clickedAction,
     commandKind: command === null ? null : commandKind,
     command,
