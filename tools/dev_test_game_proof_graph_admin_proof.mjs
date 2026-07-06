@@ -18,6 +18,7 @@ import {
   proofGraphProductionFeatureTargetDestinations,
 } from "./dev_test_game_proof_graph_production_feature_destinations.mjs";
 import {
+  assertProofGraphAdminProductionFeatureDestinationTargetRows,
   assertProofGraphAdminVisibleRelatedDestinations,
   assertProofGraphAdminVisibleSummaryRows,
 } from "./dev_test_game_proof_graph_admin_destination_assertions.mjs";
@@ -885,6 +886,11 @@ function assertProofGraphAdminProofCoversProductionFeatureDestinationSummary(
   assertProductionFeatureDestinationSummaryCoversHostedEvidenceProgressions(
     summary,
   );
+  assertProofGraphAdminProductionFeatureDestinationTargetRows({
+    proof: evidence,
+    summary,
+    destinations,
+  });
   assertProofGraphAdminVisibleSummaryRows({
     proof: evidence,
     rows: summary.rows,

@@ -8355,6 +8355,19 @@ test("admin proof fixtures prove normalized evidence object rows", () => {
       nodes: proofGraphDiagnosticProofNodes,
     }),
   });
+  const duplicateDestinationRowProof = structuredClone(
+    proofGraphAdminProofFixture(),
+  );
+  duplicateDestinationRowProof.adminRoleSurface.visibleProductionFeatureDestinationSummaries =
+    [
+      ...duplicateDestinationRowProof.adminRoleSurface
+        .visibleProductionFeatureDestinationSummaries,
+      "production-feature:host-phase-control",
+    ];
+  assert.throws(
+    () => validateDevTestGameProofGraphAdminProof(duplicateDestinationRowProof),
+    /proof graph admin proof missing exact visible production feature destination row: production-feature:host-phase-control/,
+  );
   const preTerminalProofGraphProof = proofGraphAdminProofFixture();
   preTerminalProofGraphProof.generatedFrom.receiptArtifactRowIds = [];
   preTerminalProofGraphProof.generatedFrom.hostedIdentityTerminalReceiptArtifact =
@@ -24110,7 +24123,7 @@ function proofGraphAdminProofFixture() {
       visibleProductionFeatureDestinationSummaryStatuses: Object.fromEntries(
         productionFeatureDestinationSummary.rows.map((row) => [
           row.id,
-          [row.label, row.status].join("\n"),
+          productionFeatureDestinationSummaryVisibleText(row),
         ]),
       ),
       visibleDiagnosticProofSummaries: diagnosticProofRows.map((row) => row.id),
@@ -24480,6 +24493,29 @@ function proofGraphProductionFeatureDestinationSummaryFixture(destinations) {
       productionFeatureTargetCount: destinations.length,
     },
   });
+}
+
+function productionFeatureDestinationSummaryVisibleText(row) {
+  return [
+    row.label,
+    row.status,
+    row.featureSlotId,
+    row.sourceCheckId,
+    row.adminCheckId,
+    row.targetRoleUrl,
+    row.detailRoleUrl,
+    row.adminDetailRoleUrl,
+    row.roleUrl,
+    row.sourceProofArtifactRef,
+    row.recoveryCommand,
+    row.proofCommand,
+    row.progressionId,
+    row.firstMissingInputId,
+    row.firstMissingCheckId,
+  ]
+    .map((value) => String(value ?? ""))
+    .filter((value) => value !== "")
+    .join("\n");
 }
 
 function productionFeatureProvenanceSummaryFixture(destinations) {

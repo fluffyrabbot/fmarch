@@ -93,6 +93,81 @@ export function assertProofGraphAdminVisibleSummaryRows({
   }
 }
 
+export function assertProofGraphAdminProductionFeatureDestinationTargetRows({
+  proof,
+  summary,
+  destinations,
+}) {
+  const rows = Array.isArray(summary?.rows) ? summary.rows : [];
+  const productionRows = rows.filter((row) =>
+    String(row?.id ?? "").startsWith("production-feature:"),
+  );
+  if (productionRows.length !== destinations.length) {
+    throw new Error(
+      "proof graph admin proof production feature destination row count drifted",
+    );
+  }
+  const visibleRowIds = Array.isArray(
+    proof?.adminRoleSurface?.visibleProductionFeatureDestinationSummaries,
+  )
+    ? proof.adminRoleSurface.visibleProductionFeatureDestinationSummaries
+    : [];
+  const visibleRowStatuses =
+    proof?.adminRoleSurface?.visibleProductionFeatureDestinationSummaryStatuses ??
+    {};
+  for (const destination of destinations) {
+    const matchingRows = productionRows.filter(
+      (row) => row.id === destination.linkId,
+    );
+    if (matchingRows.length !== 1) {
+      throw new Error(
+        `proof graph admin proof missing exact production feature destination row: ${destination.linkId}`,
+      );
+    }
+    const row = matchingRows[0];
+    const visibleCount = visibleRowIds.filter(
+      (rowId) => rowId === destination.linkId,
+    ).length;
+    if (visibleCount !== 1) {
+      throw new Error(
+        `proof graph admin proof missing exact visible production feature destination row: ${destination.linkId}`,
+      );
+    }
+    const expectedDetailRoleUrl =
+      destination.kind === "admin-audit"
+        ? destination.detailRoleUrl
+        : destination.adminDetailRoleUrl;
+    if (
+      row.targetRoleUrl !== destination.targetRoleUrl ||
+      (destination.kind === "admin-audit" &&
+        row.detailRoleUrl !== destination.detailRoleUrl) ||
+      (destination.kind === "role-url" &&
+        row.roleUrl !== destination.roleUrl) ||
+      (expectedDetailRoleUrl !== undefined &&
+        expectedDetailRoleUrl !== "" &&
+        row.adminDetailRoleUrl !== expectedDetailRoleUrl &&
+        row.detailRoleUrl !== expectedDetailRoleUrl)
+    ) {
+      throw new Error(
+        `proof graph admin proof production feature destination row drifted: ${destination.linkId}`,
+      );
+    }
+    const visibleStatus = String(visibleRowStatuses[destination.linkId] ?? "");
+    for (const token of [
+      row.targetRoleUrl,
+      expectedDetailRoleUrl,
+      destination.adminCheckId,
+      destination.sourceCheckId,
+    ]) {
+      if (String(token ?? "") !== "" && !visibleStatus.includes(token)) {
+        throw new Error(
+          `proof graph admin proof production feature destination row text drifted: ${destination.linkId}`,
+        );
+      }
+    }
+  }
+}
+
 function summaryRowTextVisible(row, visibleStatus) {
   return [row.label, ...String(row.status ?? "").split("\n")]
     .map((token) => String(token ?? "").trim())

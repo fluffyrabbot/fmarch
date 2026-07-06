@@ -276,6 +276,7 @@ import {
   proofGraphAdminFeatureTargetCases,
 } from "./dev_test_game_proof_graph_feature_target_cases.mjs";
 import {
+  assertProofGraphAdminProductionFeatureDestinationTargetRows,
   assertProofGraphAdminVisibleRelatedDestinations,
   assertProofGraphAdminVisibleSummaryRows,
 } from "./dev_test_game_proof_graph_admin_destination_assertions.mjs";
@@ -7009,6 +7010,11 @@ function validateProofGraphAdminProductionFeatureDestinationSummary(proof) {
       );
     }
   }
+  assertProofGraphAdminProductionFeatureDestinationTargetRows({
+    proof,
+    summary,
+    destinations,
+  });
   assertProofGraphAdminVisibleSummaryRows({
     proof,
     rows: expected.rows,
