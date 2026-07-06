@@ -47,19 +47,8 @@ import {
   replacementPrivateFeatureSpineTargetRows,
 } from "./dev_test_game_replacement_private_feature_spine_targets.mjs";
 import {
-  hardeningFeatureSpineCycleIds,
-  hardeningFeatureSpineSourceCheckId,
+  hardeningFeatureSpineTargetRows,
 } from "./dev_test_game_hardening_feature_spine_targets.mjs";
-import {
-  completedGameHardeningSpineCycleId,
-  completedGameStaleRecoverySpineLaneCase,
-} from "./dev_test_game_core_loop_completed_game_proof_readiness_contract.mjs";
-import {
-  replacementStaleConflictMessageSpineLaneCase,
-} from "./dev_test_game_stale_conflict_scenarios.mjs";
-import {
-  stalePlayerActionReconnectLaneId,
-} from "./dev_test_game_stale_client_reconnect_scenarios.mjs";
 import {
   featureSpineCheckpointTarget,
   featureSpineRecoveryHookTarget,
@@ -101,16 +90,21 @@ export const releaseReadinessRealHostedConcurrentRaceMatrixCommand =
   "npm run test:dev-test-game-hosted-matrix-external-evidence";
 export const releaseReadinessRealHostedConcurrentRaceMatrixProofTarget =
   hostedMatrixExternalEvidencePath;
-const completedGameStaleRecoverySpineLane =
-  completedGameStaleRecoverySpineLaneCase();
-const replacementStaleConflictMessageSpineLane =
-  replacementStaleConflictMessageSpineLaneCase();
 const coreLoopSpineRows = coreLoopFeatureSpineTargetRows;
 const identitySpineRows = identityFeatureSpineTargetRows;
+const hardeningSpineRows = hardeningFeatureSpineTargetRows;
 
 const coreLoopProductionFeatureSpineTargets = Object.freeze(
   Object.fromEntries(
     Object.entries(coreLoopSpineRows).map(([targetKey, row]) => [
+      targetKey,
+      featureSpineTargetFromSourceRow(row),
+    ]),
+  ),
+);
+const hardeningProductionFeatureSpineTargets = Object.freeze(
+  Object.fromEntries(
+    Object.entries(hardeningSpineRows).map(([targetKey, row]) => [
       targetKey,
       featureSpineTargetFromSourceRow(row),
     ]),
@@ -137,30 +131,7 @@ export const releaseReadinessProductionFeatureSpineTargets = Object.freeze({
     ...replacementPrivateFeatureSpineTargetRows.replacementPrivateChannel,
   }),
   ...coreLoopProductionFeatureSpineTargets,
-  completedGameStaleRecovery: featureSpineCheckpointTarget({
-    featureSlotId: "completed-game-stale-recovery",
-    sourceCheckId: hardeningFeatureSpineSourceCheckId,
-    cycleId: completedGameHardeningSpineCycleId,
-    roleUrlId: completedGameStaleRecoverySpineLane.id,
-    checkpointId: completedGameStaleRecoverySpineLane.id,
-    adminCheckId: completedGameStaleRecoverySpineLane.id,
-  }),
-  replacementStaleConflictMessage: featureSpineCheckpointTarget({
-    featureSlotId: "replacement-stale-conflict-message",
-    sourceCheckId: hardeningFeatureSpineSourceCheckId,
-    cycleId: hardeningFeatureSpineCycleIds.staleConflict,
-    roleUrlId: replacementStaleConflictMessageSpineLane.laneId,
-    checkpointId: replacementStaleConflictMessageSpineLane.laneId,
-    adminCheckId: replacementStaleConflictMessageSpineLane.laneId,
-  }),
-  staleActionReconnectRecovery: featureSpineCheckpointTarget({
-    featureSlotId: "stale-action-reconnect-recovery",
-    sourceCheckId: hardeningFeatureSpineSourceCheckId,
-    cycleId: hardeningFeatureSpineCycleIds.reconnectRecovery,
-    roleUrlId: stalePlayerActionReconnectLaneId,
-    checkpointId: stalePlayerActionReconnectLaneId,
-    adminCheckId: stalePlayerActionReconnectLaneId,
-  }),
+  ...hardeningProductionFeatureSpineTargets,
 });
 export const releaseReadinessProductionFeatureSpineTargetsBySlotId =
   featureSpineTargetBySlotId(releaseReadinessProductionFeatureSpineTargets);

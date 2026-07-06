@@ -200,11 +200,10 @@ import {
 } from "./dev_test_game_core_loop_feature_spine_targets.mjs";
 import {
   hardeningFeatureSpineCycleIds,
+  hardeningFeatureSpineTargetRows,
+  hardeningReconnectFeatureSpineTargetRows,
   hardeningFeatureSpineSourceCheckId,
 } from "./dev_test_game_hardening_feature_spine_targets.mjs";
-import {
-  stalePlayerActionReconnectLaneId,
-} from "./dev_test_game_stale_client_reconnect_scenarios.mjs";
 import {
   identityFeatureSpineSourceCheckId,
   identityFeatureSpineTargetRows,
@@ -3998,23 +3997,27 @@ function buildCompletedGameHardeningSpineRows(proof) {
 
 function buildReconnectHardeningSpineRows(proof) {
   const laneById = new Map((proof?.lanes ?? []).map((lane) => [lane.id, lane]));
-  const lane = laneById.get(stalePlayerActionReconnectLaneId);
-  const roleUrl = lane?.evidence?.roleUrl;
-  if (
-    lane?.status !== "passed" ||
-    typeof roleUrl !== "string" ||
-    roleUrl === ""
-  ) {
-    return {
-      roleUrlIds: [],
-      roleUrlHrefs: {},
-    };
-  }
+  const roleUrlHrefs = Object.fromEntries(
+    hardeningReconnectFeatureSpineTargetRows
+      .map((row) => {
+        const lane = laneById.get(row.roleUrlId);
+        const roleUrl = lane?.evidence?.roleUrl;
+        if (
+          lane?.status !== "passed" ||
+          typeof roleUrl !== "string" ||
+          roleUrl === ""
+        ) {
+          return null;
+        }
+        return [row.roleUrlId, roleUrl];
+      })
+      .filter((entry) => entry !== null),
+  );
   return {
-    roleUrlIds: [stalePlayerActionReconnectLaneId],
-    roleUrlHrefs: {
-      [stalePlayerActionReconnectLaneId]: roleUrl,
-    },
+    roleUrlIds: hardeningReconnectFeatureSpineTargetRows
+      .map((row) => row.roleUrlId)
+      .filter((laneId) => roleUrlHrefs[laneId] !== undefined),
+    roleUrlHrefs,
   };
 }
 
@@ -8205,7 +8208,9 @@ function validHardeningSpineTargets(spineTargets) {
     completedGameStaleRecoverySpineLaneCase();
   const replacementStaleConflictLane =
     replacementStaleConflictMessageSpineLaneCase();
-  const reconnectLaneId = stalePlayerActionReconnectLaneId;
+  const reconnectLaneIds = hardeningReconnectFeatureSpineTargetRows.map(
+    (row) => row.roleUrlId,
+  );
   return (
     spineTargets !== null &&
     typeof spineTargets === "object" &&
@@ -8231,18 +8236,22 @@ function validHardeningSpineTargets(spineTargets) {
     Array.isArray(spineTargets.roleUrlIds) &&
     spineTargets.roleUrlIds.includes(replacementStaleConflictLane.laneId) &&
     spineTargets.roleUrlIds.includes(completedGameStaleRecoveryLane.id) &&
-    spineTargets.roleUrlIds.includes(reconnectLaneId) &&
+    reconnectLaneIds.every((laneId) => spineTargets.roleUrlIds.includes(laneId)) &&
     spineTargets.roleUrlHrefs !== null &&
     typeof spineTargets.roleUrlHrefs === "object" &&
     typeof spineTargets.roleUrlHrefs[replacementStaleConflictLane.laneId] ===
       "string" &&
     typeof spineTargets.roleUrlHrefs[completedGameStaleRecoveryLane.id] ===
       "string" &&
-    typeof spineTargets.roleUrlHrefs[reconnectLaneId] === "string" &&
+    reconnectLaneIds.every(
+      (laneId) => typeof spineTargets.roleUrlHrefs[laneId] === "string",
+    ) &&
     Array.isArray(spineTargets.checkpointIds) &&
     spineTargets.checkpointIds.includes(replacementStaleConflictLane.laneId) &&
     spineTargets.checkpointIds.includes(completedGameStaleRecoveryLane.id) &&
-    spineTargets.checkpointIds.includes(reconnectLaneId) &&
+    reconnectLaneIds.every((laneId) =>
+      spineTargets.checkpointIds.includes(laneId),
+    ) &&
     Array.isArray(spineTargets.recoveryHookIds) &&
     spineTargets.recoveryHookIds.length === 0 &&
     Array.isArray(spineTargets.visibleAdminCheckIds) &&
@@ -8252,7 +8261,14 @@ function validHardeningSpineTargets(spineTargets) {
     spineTargets.visibleAdminCheckIds.includes(
       completedGameStaleRecoveryLane.id,
     ) &&
-    spineTargets.visibleAdminCheckIds.includes(reconnectLaneId) &&
+    reconnectLaneIds.every((laneId) =>
+      spineTargets.visibleAdminCheckIds.includes(laneId),
+    ) &&
+    Object.values(hardeningFeatureSpineTargetRows).every((row) =>
+      spineTargets.productionFeatureTargets?.slotIds?.includes(
+        row.featureSlotId,
+      ),
+    ) &&
     validHardeningProductionFeatureTargets(spineTargets.productionFeatureTargets)
   );
 }

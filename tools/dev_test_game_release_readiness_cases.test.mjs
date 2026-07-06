@@ -74,6 +74,7 @@ import {
 } from "./dev_test_game_cohost_feature_spine_targets.mjs";
 import {
   hardeningFeatureSpineCycleIds,
+  hardeningFeatureSpineTargetRows,
   hardeningFeatureSpineSourceCheckId,
 } from "./dev_test_game_hardening_feature_spine_targets.mjs";
 import {
@@ -91,6 +92,7 @@ import {
   replacementStaleConflictMessageSpineLaneCase,
 } from "./dev_test_game_stale_conflict_scenarios.mjs";
 import {
+  privateChannelStaleActionReconnectLaneId,
   stalePlayerActionReconnectLaneId,
 } from "./dev_test_game_stale_client_reconnect_scenarios.mjs";
 
@@ -384,6 +386,19 @@ test("release readiness buildable cases share next-action commands and spine tar
       adminCheckId: stalePlayerActionReconnectLaneId,
     },
   );
+  assert.deepEqual(
+    releaseReadinessProductionFeatureSpineTargets
+      .privateChannelStaleActionReconnectRecovery,
+    {
+      featureSlotId: "private-channel-stale-action-reconnect-recovery",
+      sourceCheckId: hardeningFeatureSpineSourceCheckId,
+      cycleId: hardeningFeatureSpineCycleIds.reconnectRecovery,
+      roleUrlId: privateChannelStaleActionReconnectLaneId,
+      rowKind: "checkpoint",
+      checkpointId: privateChannelStaleActionReconnectLaneId,
+      adminCheckId: privateChannelStaleActionReconnectLaneId,
+    },
+  );
 
   const releaseRunbook = releaseReadinessBuildableItemForId(
     "human-release-runbook",
@@ -507,6 +522,14 @@ test("scenario-owned production feature targets derive proof row ids from source
       source: {
         cycleId: hardeningFeatureSpineCycleIds.reconnectRecovery,
         rowId: stalePlayerActionReconnectLaneId,
+      },
+    },
+    {
+      target: releaseReadinessProductionFeatureSpineTargets
+        .privateChannelStaleActionReconnectRecovery,
+      source: {
+        cycleId: hardeningFeatureSpineCycleIds.reconnectRecovery,
+        rowId: privateChannelStaleActionReconnectLaneId,
       },
     },
   ];
@@ -766,6 +789,7 @@ test("scenario-owned production feature targets avoid hand-maintained row litera
     "utf8",
   );
   assert.match(source, /Object\.entries\(coreLoopSpineRows\)\.map/);
+  assert.match(source, /Object\.entries\(hardeningSpineRows\)\.map/);
   assert.match(source, /featureSpineTargetFromSourceRow\(row\)/);
   for (const targetKey of Object.keys(coreLoopFeatureSpineTargetRows)) {
     assert.equal(
@@ -774,74 +798,17 @@ test("scenario-owned production feature targets avoid hand-maintained row litera
       `core-loop target should derive from catalog row: ${targetKey}`,
     );
   }
+  for (const targetKey of Object.keys(hardeningFeatureSpineTargetRows)) {
+    assert.equal(
+      source.includes(`${targetKey}: featureSpine`),
+      false,
+      `hardening target should derive from catalog row: ${targetKey}`,
+    );
+  }
   const identityBlock = featureTargetDeclarationBlock(source, "identityAdapter");
   assert.match(
     identityBlock,
     /\.\.\.identitySpineRows\.identityAdapter/,
-  );
-
-  const completedGameBlock = featureTargetDeclarationBlock(
-    source,
-    "completedGameStaleRecovery",
-  );
-  assert.match(
-    completedGameBlock,
-    /roleUrlId:\s+completedGameStaleRecoverySpineLane\.id/,
-  );
-  assert.match(
-    completedGameBlock,
-    /checkpointId:\s+completedGameStaleRecoverySpineLane\.id/,
-  );
-  assert.match(
-    completedGameBlock,
-    /adminCheckId:\s+completedGameStaleRecoverySpineLane\.id/,
-  );
-  assert.doesNotMatch(completedGameBlock, /"stale-host-complete-reload"/);
-
-  const replacementBlock = featureTargetDeclarationBlock(
-    source,
-    "replacementStaleConflictMessage",
-  );
-  assert.match(
-    replacementBlock,
-    /roleUrlId:\s+replacementStaleConflictMessageSpineLane\.laneId/,
-  );
-  assert.match(
-    replacementBlock,
-    /checkpointId:\s+replacementStaleConflictMessageSpineLane\.laneId/,
-  );
-  assert.match(
-    replacementBlock,
-    /adminCheckId:\s+replacementStaleConflictMessageSpineLane\.laneId/,
-  );
-
-  const reconnectBlock = featureTargetDeclarationBlock(
-    source,
-    "staleActionReconnectRecovery",
-  );
-  assert.match(
-    reconnectBlock,
-    /roleUrlId:\s+stalePlayerActionReconnectLaneId/,
-  );
-  assert.match(
-    reconnectBlock,
-    /checkpointId:\s+stalePlayerActionReconnectLaneId/,
-  );
-  assert.match(
-    reconnectBlock,
-    /adminCheckId:\s+stalePlayerActionReconnectLaneId/,
-  );
-  assert.doesNotMatch(
-    reconnectBlock,
-    /roleUrlId:\s+"stale-action-reconnect-recovery"/,
-  );
-  assert.doesNotMatch(
-    reconnectBlock,
-    /checkpointId:\s+"stale-action-reconnect-recovery"/,
-  );
-  assert.doesNotMatch(
-    reconnectBlock,
-    /adminCheckId:\s+"stale-action-reconnect-recovery"/,
   );
 });
 
