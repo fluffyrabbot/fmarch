@@ -33,6 +33,15 @@ import {
   devTestGameSeedFixturePath,
 } from "./dev_test_game_adjacent_artifact_paths.mjs";
 import {
+  devTestGameCoreLoopAdminProofCommand,
+} from "./dev_test_game_core_loop_feature_spine_targets.mjs";
+import {
+  coreLoopCommandProofRoleUrlAuditExpectation,
+} from "./dev_test_game_core_loop_proof_shape_assertions.mjs";
+import {
+  devTestGameCoreLoopAdminProofPath,
+} from "./dev_test_game_local_admin_proof_paths.mjs";
+import {
   devTestGameProductionFeatureBrowserProofCommand,
 } from "./dev_test_game_production_feature_source_registry.mjs";
 import {
@@ -271,6 +280,17 @@ test("proof graph first-class fixture nodes share artifact and command contracts
         [],
       ],
       [
+        "core-loop-command-proof-role-url-audit",
+        "command-proof-role-url-audit",
+        "passed",
+        devTestGameCoreLoopAdminProofPath,
+        "/admin/audit/local-core-loop?game=midsummer",
+        devTestGameCoreLoopAdminProofCommand,
+        [],
+        [],
+        [],
+      ],
+      [
         "diagnostic:proof-graph-destination-summary-drift",
         "diagnostic-browser-proof",
         "passed",
@@ -299,6 +319,25 @@ test("proof graph first-class fixture nodes share artifact and command contracts
       terminalArtifact: false,
     },
   ]);
+  assert.deepEqual(
+    devTestGameProofGraphFirstClassNodes({ game: "midsummer" }).find(
+      (node) => node.id === "core-loop-command-proof-role-url-audit",
+    ),
+    {
+      id: "core-loop-command-proof-role-url-audit",
+      label: "Core-loop command proof role URL audit",
+      kind: "command-proof-role-url-audit",
+      artifact: devTestGameCoreLoopAdminProofPath,
+      roleUrl: "/admin/audit/local-core-loop?game=midsummer",
+      proofCommand: devTestGameCoreLoopAdminProofCommand,
+      recoveryCommand: devTestGameCoreLoopAdminProofCommand,
+      visibleAdminRowId: "command-proof-role-url-audit",
+      visibleAdminRowTestId:
+        "admin-audit-command-proof-role-url-audit-command-proof-role-url-audit",
+      status: "passed",
+      checkedCount: 36,
+    },
+  );
 });
 
 test("proof graph base edges share fixed topology and seed recovery metadata", () => {
@@ -345,6 +384,15 @@ test("proof graph base edges share fixed topology and seed recovery metadata", (
         to: "next-action",
         relationship: "summarizes-into",
         command: devTestGameHostedEvidenceLaneRealCaptureAdminProofCommand,
+      },
+      {
+        from: "admin-proof:core-loop",
+        to: "core-loop-command-proof-role-url-audit",
+        relationship: "audits-command-proof-role-urls",
+        roleUrl: "/admin/audit/local-core-loop?game=midsummer",
+        command: devTestGameCoreLoopAdminProofCommand,
+        proofTarget: devTestGameCoreLoopAdminProofPath,
+        checkedCount: coreLoopCommandProofRoleUrlAuditExpectation.checkedCount,
       },
       ...proofGraphDiagnosticProofEdges,
       ...adminProofDestinationRequirementLinkRows.map(([linkId]) => ({

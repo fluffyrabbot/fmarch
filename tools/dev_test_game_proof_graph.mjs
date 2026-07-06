@@ -47,10 +47,15 @@ import {
 } from "./dev_test_game_production_feature_graph_sources.mjs";
 import {
   coreLoopFeatureSpineSourceCheckId,
+  devTestGameCoreLoopAdminProofCommand,
 } from "./dev_test_game_core_loop_feature_spine_targets.mjs";
 import {
   coreLoopScenarioFamilyRows,
 } from "./dev_test_game_core_loop_generated_from_families.mjs";
+import {
+  assertCoreLoopCommandProofRoleUrlAuditExpectation,
+  coreLoopCommandProofRoleUrlAuditExpectation,
+} from "./dev_test_game_core_loop_proof_shape_assertions.mjs";
 import {
   hardeningFeatureSpineSourceCheckId,
 } from "./dev_test_game_hardening_feature_spine_targets.mjs";
@@ -282,6 +287,9 @@ export function buildDevTestGameProofGraph(
       coreLoopScenarioFamilyCount: nodes.filter(
         (node) => node.kind === "core-loop-scenario-family",
       ).length,
+      commandProofRoleUrlAuditCount: nodes.filter(
+        (node) => node.kind === "command-proof-role-url-audit",
+      ).length,
       terminalBatchCount: adminSpineTerminalBatchEvidence?.batchCount ?? 0,
       ...recoveryReceiptSummaryLaneCounts({
         privateChannelRecoveryReceipt: privateChannelRecoveryReceiptEvidence,
@@ -402,6 +410,7 @@ export function assertDevTestGameProofGraph(
   assertDevTestGameProofGraphCoversHostedIdentityOperatorPrerequisites(evidence);
   assertDevTestGameProofGraphCoversPrivateChannelRecoveryReceipt(evidence);
   assertDevTestGameProofGraphCoversCoreLoopScenarioFamilies(evidence);
+  assertDevTestGameProofGraphCoversCoreLoopCommandProofRoleUrlAudit(evidence);
   assertDevTestGameProofGraphCoversReplacementPrivateRecoveryReceipt(evidence);
   assertDevTestGameProofGraphCoversReplacementActionRecoveryReceipt(evidence);
   assertDevTestGameProofGraphCoversReplacementHandoffRecoveryReceipt(evidence);
@@ -621,6 +630,48 @@ export function assertDevTestGameProofGraphCoversCoreLoopScenarioFamilies(graph)
         `proof graph core-loop scenario family edge missing: ${family.id}`,
       );
     }
+  }
+  return graph;
+}
+
+export function assertDevTestGameProofGraphCoversCoreLoopCommandProofRoleUrlAudit(
+  graph,
+) {
+  const node = (graph.nodes ?? []).find(
+    (candidate) => candidate.id === "core-loop-command-proof-role-url-audit",
+  );
+  const expectedAudit = assertCoreLoopCommandProofRoleUrlAuditExpectation({
+    audit: node,
+    includeEvidenceInError: true,
+  });
+  if (
+    node?.kind !== "command-proof-role-url-audit" ||
+    node.label !== "Core-loop command proof role URL audit" ||
+    node.status !== expectedAudit.status ||
+    node.artifact !== devTestGameCoreLoopAdminProofPath ||
+    node.roleUrl !== localAdminAuditRoleUrl(localAdminAuditIds.coreLoop) ||
+    node.proofCommand !== devTestGameCoreLoopAdminProofCommand ||
+    node.recoveryCommand !== devTestGameCoreLoopAdminProofCommand ||
+    node.visibleAdminRowId !== "command-proof-role-url-audit" ||
+    node.visibleAdminRowTestId !==
+      "admin-audit-command-proof-role-url-audit-command-proof-role-url-audit"
+  ) {
+    throw new Error("proof graph core-loop command proof audit node drifted");
+  }
+  if (
+    graph.summary?.commandProofRoleUrlAuditCount !== 1 ||
+    !(graph.edges ?? []).some(
+      (edge) =>
+        edge.from === "admin-proof:core-loop" &&
+        edge.to === "core-loop-command-proof-role-url-audit" &&
+        edge.relationship === "audits-command-proof-role-urls" &&
+        edge.roleUrl === localAdminAuditRoleUrl(localAdminAuditIds.coreLoop) &&
+        edge.command === devTestGameCoreLoopAdminProofCommand &&
+        edge.proofTarget === devTestGameCoreLoopAdminProofPath &&
+        edge.checkedCount === expectedAudit.checkedCount,
+    )
+  ) {
+    throw new Error("proof graph core-loop command proof audit edge drifted");
   }
   return graph;
 }
@@ -1076,6 +1127,10 @@ function buildProofGraphNodes({
   const coreLoopScenarioFamilyNodes = buildCoreLoopScenarioFamilyNodes({
     recoveryCommand: recoveryCommands.get("core-loop"),
   });
+  const coreLoopCommandProofRoleUrlAuditNode =
+    buildCoreLoopCommandProofRoleUrlAuditNode({
+      recoveryCommand: recoveryCommands.get("core-loop"),
+    });
   const hostedIdentityOperatorPrerequisiteNodes =
     hostedIdentityOperatorDependencyProofGraphNodes();
   const hostedEvidenceRealCaptureProofNode = {
@@ -1222,6 +1277,7 @@ function buildProofGraphNodes({
     hostedEvidenceRealCaptureProofNode,
     releaseAdminProofContractNode,
     ...hostedIdentityOperatorPrerequisiteNodes,
+    coreLoopCommandProofRoleUrlAuditNode,
     ...coreLoopScenarioFamilyNodes,
     ...productionFeatureTargetNodes,
   ].map((node) =>
@@ -1300,6 +1356,19 @@ function buildProofGraphEdges({
       .filter((node) => node.kind === "admin-proof-surface")
       .map((node) => ["admin-spine", node.id, "aggregates"]),
     ...hostedEvidenceRealCaptureProofEdges(nodes),
+    ...nodes
+      .filter((node) => node.kind === "command-proof-role-url-audit")
+      .map((node) => [
+        "admin-proof:core-loop",
+        node.id,
+        "audits-command-proof-role-urls",
+        {
+          roleUrl: node.roleUrl,
+          command: node.recoveryCommand,
+          proofTarget: node.artifact,
+          checkedCount: node.checkedCount,
+        },
+      ]),
     ...nodes
       .filter((node) => node.kind === "core-loop-scenario-family")
       .map((node) => [
@@ -1396,9 +1465,25 @@ function hostedEvidenceRealCaptureProofEdges(nodes) {
     : [];
 }
 
+function buildCoreLoopCommandProofRoleUrlAuditNode({ recoveryCommand }) {
+  const command = recoveryCommand ?? devTestGameCoreLoopAdminProofCommand;
+  return {
+    id: "core-loop-command-proof-role-url-audit",
+    label: "Core-loop command proof role URL audit",
+    kind: "command-proof-role-url-audit",
+    artifact: devTestGameCoreLoopAdminProofPath,
+    roleUrl: localAdminAuditRoleUrl(localAdminAuditIds.coreLoop),
+    proofCommand: command,
+    recoveryCommand: command,
+    visibleAdminRowId: "command-proof-role-url-audit",
+    visibleAdminRowTestId:
+      "admin-audit-command-proof-role-url-audit-command-proof-role-url-audit",
+    ...coreLoopCommandProofRoleUrlAuditExpectation,
+  };
+}
+
 function buildCoreLoopScenarioFamilyNodes({ recoveryCommand }) {
-  const command =
-    recoveryCommand ?? "npm run test:dev-test-game-core-loop-admin-proof";
+  const command = recoveryCommand ?? devTestGameCoreLoopAdminProofCommand;
   return coreLoopScenarioFamilyRows().map((family) => ({
     id: coreLoopScenarioFamilyNodeId(family.id),
     label: family.label,

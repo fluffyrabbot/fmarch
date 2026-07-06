@@ -4046,8 +4046,11 @@ function localProofGraphNodeCheckStatus(node) {
   const browserWorkbenchEvidence = String(
     node?.browserWorkbench?.requiredEvidence ?? "",
   ).trim();
+  const checkedCount =
+    typeof node?.checkedCount === "number" ? node.checkedCount : null;
   return [
     status,
+    ...(checkedCount === null ? [] : [`${checkedCount} checked`]),
     ...(roleUrl === "" ? [] : [`roleUrl ${roleUrl}`]),
     ...(targetRoleUrl === "" ? [] : [`targetRoleUrl ${targetRoleUrl}`]),
     ...(recoveryCommand === "" ? [] : [`recoveryCommand ${recoveryCommand}`]),

@@ -57,6 +57,15 @@ import {
   productionFeatureGraphSourceNodeId,
 } from "./dev_test_game_production_feature_graph_sources.mjs";
 import {
+  devTestGameCoreLoopAdminProofCommand,
+} from "./dev_test_game_core_loop_feature_spine_targets.mjs";
+import {
+  coreLoopCommandProofRoleUrlAuditExpectation,
+} from "./dev_test_game_core_loop_proof_shape_assertions.mjs";
+import {
+  devTestGameCoreLoopAdminProofPath,
+} from "./dev_test_game_local_admin_proof_paths.mjs";
+import {
   nextActionCommand,
   proofFreshnessAdminProofCommand,
 } from "./dev_test_game_next_action_paths.mjs";
@@ -418,6 +427,19 @@ export function devTestGameProofGraphFirstClassNodes({
       releaseReady: false,
       productionReady: false,
     }),
+    Object.freeze({
+      id: "core-loop-command-proof-role-url-audit",
+      label: "Core-loop command proof role URL audit",
+      kind: "command-proof-role-url-audit",
+      artifact: devTestGameCoreLoopAdminProofPath,
+      roleUrl: localAdminAuditRoleUrl(localAdminAuditIds.coreLoop, { game }),
+      proofCommand: devTestGameCoreLoopAdminProofCommand,
+      recoveryCommand: devTestGameCoreLoopAdminProofCommand,
+      visibleAdminRowId: "command-proof-role-url-audit",
+      visibleAdminRowTestId:
+        "admin-audit-command-proof-role-url-audit-command-proof-role-url-audit",
+      ...coreLoopCommandProofRoleUrlAuditExpectation,
+    }),
     ...proofGraphDiagnosticProofNodes.map((node) =>
       Object.freeze({
         ...node,
@@ -489,6 +511,15 @@ export function devTestGameProofGraphBaseEdges({
       to: "next-action",
       relationship: "summarizes-into",
       command: devTestGameHostedEvidenceLaneRealCaptureAdminProofCommand,
+    }),
+    proofGraphEdge({
+      from: "admin-proof:core-loop",
+      to: "core-loop-command-proof-role-url-audit",
+      relationship: "audits-command-proof-role-urls",
+      roleUrl: localAdminAuditRoleUrl(localAdminAuditIds.coreLoop, { game }),
+      command: devTestGameCoreLoopAdminProofCommand,
+      proofTarget: devTestGameCoreLoopAdminProofPath,
+      checkedCount: coreLoopCommandProofRoleUrlAuditExpectation.checkedCount,
     }),
     ...proofGraphDiagnosticProofEdges,
     ...adminProofDestinationRequirementLinkRows.map(([linkId]) =>

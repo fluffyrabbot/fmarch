@@ -2606,6 +2606,12 @@ test("admin local proof graph detail data carries graph node rows", async () => 
     data.audit.checks.map((check) => [check.id, check.status]),
     expectedProofGraphCheckRows(proofGraph),
   );
+  assert.match(
+    data.audit.checks.find(
+      (check) => check.id === "core-loop-command-proof-role-url-audit",
+    )?.status ?? "",
+    /36 checked/,
+  );
   const hostedIdentityReceiptRow = data.audit.checks.find(
     (check) =>
       check.id ===
@@ -8465,6 +8471,9 @@ function proofGraphFixture() {
       recoveryTargetCount: nodes.filter((node) => node.recoveryCommand).length,
       diagnosticProofSummary: buildProofGraphDiagnosticProofSummary({ nodes }),
       productionFeatureTargetCount: 1,
+      commandProofRoleUrlAuditCount: nodes.filter(
+        (node) => node.kind === "command-proof-role-url-audit",
+      ).length,
       productionFeatureDestinationSummary:
         proofGraphProductionFeatureDestinationSummary({
           nodes,

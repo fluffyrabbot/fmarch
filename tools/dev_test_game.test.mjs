@@ -44,6 +44,7 @@ import {
 } from "./dev_test_game_core_loop_generated_from_families.mjs";
 import {
   buildCoreLoopCommandProofRoleUrlAudit,
+  coreLoopCommandProofRoleUrlAuditExpectation,
 } from "./dev_test_game_core_loop_proof_shape_assertions.mjs";
 import {
   playerInvalidActionRecoveryMessage,
@@ -438,6 +439,7 @@ import {
   releaseReadinessTraceCandidateFixture,
 } from "./dev_test_game_next_action_spine_fixtures.mjs";
 import {
+  devTestGameCoreLoopAdminProofCommand,
   coreLoopFeatureSpineTargetRows,
 } from "./dev_test_game_core_loop_feature_spine_targets.mjs";
 import {
@@ -6015,7 +6017,7 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
         count + (check.spineTargets?.productionFeatureTargets?.slotIds?.length ?? 0),
       0,
     );
-  const expectedBaseGraphNodeCount = 38;
+  const expectedBaseGraphNodeCount = 39;
   assert.equal(
     graph.summary.nodeCount,
     expectedBaseGraphNodeCount +
@@ -6032,6 +6034,41 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
   assert.equal(
     graph.summary.productionFeatureTargetCount,
     expectedProductionFeatureTargetCount,
+  );
+  assert.equal(graph.summary.commandProofRoleUrlAuditCount, 1);
+  assert.deepEqual(
+    graph.nodes.find(
+      (node) => node.id === "core-loop-command-proof-role-url-audit",
+    ),
+    {
+      id: "core-loop-command-proof-role-url-audit",
+      label: "Core-loop command proof role URL audit",
+      kind: "command-proof-role-url-audit",
+      artifact: devTestGameCoreLoopAdminProofPath,
+      roleUrl: "/admin/audit/local-core-loop?game=<seeded-game>",
+      proofCommand: devTestGameCoreLoopAdminProofCommand,
+      recoveryCommand: devTestGameCoreLoopAdminProofCommand,
+      visibleAdminRowId: "command-proof-role-url-audit",
+      visibleAdminRowTestId:
+        "admin-audit-command-proof-role-url-audit-command-proof-role-url-audit",
+      ...coreLoopCommandProofRoleUrlAuditExpectation,
+    },
+  );
+  assert.deepEqual(
+    graph.edges.find(
+      (edge) =>
+        edge.from === "admin-proof:core-loop" &&
+        edge.to === "core-loop-command-proof-role-url-audit",
+    ),
+    {
+      from: "admin-proof:core-loop",
+      to: "core-loop-command-proof-role-url-audit",
+      relationship: "audits-command-proof-role-urls",
+      roleUrl: "/admin/audit/local-core-loop?game=<seeded-game>",
+      command: devTestGameCoreLoopAdminProofCommand,
+      proofTarget: devTestGameCoreLoopAdminProofPath,
+      checkedCount: coreLoopCommandProofRoleUrlAuditExpectation.checkedCount,
+    },
   );
   assert.deepEqual(
     graph.nodes.find(
@@ -22653,6 +22690,9 @@ function proofGraphAdminProofFixture() {
   const diagnosticEdgeRowIds = proofGraphDiagnosticProofEdges.map(
     (edge) => `edge:${edge.from}:${edge.relationship}:${edge.to}`,
   );
+  const commandProofAuditNodeId = "core-loop-command-proof-role-url-audit";
+  const commandProofAuditEdgeRowId =
+    "edge:admin-proof:core-loop:audits-command-proof-role-urls:core-loop-command-proof-role-url-audit";
   const diagnosticProofSummary = buildProofGraphDiagnosticProofSummary({
     nodes: proofGraphDiagnosticProofNodes,
   });
@@ -22690,6 +22730,7 @@ function proofGraphAdminProofFixture() {
         replacementActionGraphTarget.productionFeatureNodeId,
         replacementPrivateGraphTarget.roleSurfaceNodeId,
         replacementPrivateGraphTarget.productionFeatureNodeId,
+        commandProofAuditNodeId,
         ...coreLoopFamilyDestinations.map((destination) => destination.linkId),
       ],
       evidenceObjectRowIds,
@@ -22708,8 +22749,9 @@ function proofGraphAdminProofFixture() {
         replacementGraphTarget.edgeRowId,
         replacementActionGraphTarget.edgeRowId,
         replacementPrivateGraphTarget.edgeRowId,
+        commandProofAuditEdgeRowId,
       ],
-      edgeCount: handoffs.length + diagnosticEdgeRowIds.length + 5,
+      edgeCount: handoffs.length + diagnosticEdgeRowIds.length + 6,
       adminProofSurfaceIds,
       adminProofRoleHandoffs: handoffs,
       coreLoopScenarioFamilyDestinations: coreLoopFamilyDestinations,
@@ -22758,6 +22800,8 @@ function proofGraphAdminProofFixture() {
         replacementPrivateGraphTarget.productionFeatureNodeId,
         replacementPrivateGraphTarget.edgeRowId,
         `coverage-decision:${replacementPrivateGraphTarget.productionFeatureNodeId}`,
+        commandProofAuditNodeId,
+        commandProofAuditEdgeRowId,
         ...coreLoopFamilyDestinations.map((destination) => destination.linkId),
         ...evidenceObjectRowIds,
         ...receiptArtifactRowIds,
@@ -22765,6 +22809,8 @@ function proofGraphAdminProofFixture() {
       visibleCheckStatuses: {
         [hostedIdentityTerminalReceiptArtifactCase.rowId]:
           hostedIdentityTerminalReceiptArtifactCase.visibleStatusText,
+        [commandProofAuditNodeId]:
+          `${coreLoopCommandProofRoleUrlAuditExpectation.checkedCount} checked`,
       },
       visibleRelatedLinks: [
         ...proofGraphDiagnosticProofNodes.map((node) => node.id),
@@ -22781,6 +22827,7 @@ function proofGraphAdminProofFixture() {
         replacementActionGraphTarget.productionFeatureNodeId,
         replacementPrivateGraphTarget.roleSurfaceNodeId,
         replacementPrivateGraphTarget.productionFeatureNodeId,
+        commandProofAuditNodeId,
         ...coreLoopFamilyDestinations.map((destination) => destination.linkId),
       ],
       visibleProductionFeatureDestinationSummaries:

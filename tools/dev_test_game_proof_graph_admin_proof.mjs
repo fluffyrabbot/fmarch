@@ -876,11 +876,21 @@ function proofGraphVisibleCheckIds(proofGraph) {
 
 function proofGraphVisibleCheckStatuses(proofGraph) {
   const hostedIdentityReceipt = hostedIdentityTerminalReceiptArtifact(proofGraph);
-  return hostedIdentityReceipt === null
-    ? {}
-    : {
-        [hostedIdentityReceipt.rowId]: hostedIdentityReceipt.status,
-      };
+  const commandProofRoleUrlAuditStatuses = Object.fromEntries(
+    proofGraph.nodes
+      .filter(
+        (node) =>
+          node.kind === "command-proof-role-url-audit" &&
+          typeof node.checkedCount === "number",
+      )
+      .map((node) => [node.id, `${node.checkedCount} checked`]),
+  );
+  return {
+    ...(hostedIdentityReceipt === null
+      ? {}
+      : { [hostedIdentityReceipt.rowId]: hostedIdentityReceipt.status }),
+    ...commandProofRoleUrlAuditStatuses,
+  };
 }
 
 function hostedIdentityTerminalReceiptArtifact(proofGraph) {
