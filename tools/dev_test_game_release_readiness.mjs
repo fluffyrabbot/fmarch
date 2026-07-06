@@ -199,10 +199,12 @@ import {
   coreLoopFeatureSpineSourceCheckId,
 } from "./dev_test_game_core_loop_feature_spine_targets.mjs";
 import {
+  hardeningConcurrentRaceFeatureSpineTargetRows,
   hardeningDirectRoleUrlReconnectFeatureSpineTargetRows,
   hardeningFeatureSpineCycleIds,
   hardeningFeatureSpineTargetRows,
   hardeningReconnectFeatureSpineTargetRows,
+  hardeningSynthesizedRoleUrlConcurrentRaceFeatureSpineTargetRows,
   hardeningSynthesizedRoleUrlReconnectFeatureSpineTargetRows,
   hardeningFeatureSpineSourceCheckId,
 } from "./dev_test_game_hardening_feature_spine_targets.mjs";
@@ -3881,6 +3883,7 @@ function buildHardeningReadinessSpineTargets({
   const surfaces = [...(staleConflictMessageMilestone.surfaces ?? [])];
   const completedGameRows = buildCompletedGameHardeningSpineRows(proof);
   const reconnectRows = buildReconnectHardeningSpineRows(proof);
+  const concurrentRaceRows = buildConcurrentRaceHardeningSpineRows(proof);
   const staleConflictRoleUrlHrefs = Object.fromEntries(
     surfaces
       .filter(
@@ -3895,6 +3898,7 @@ function buildHardeningReadinessSpineTargets({
     ...staleConflictRoleUrlHrefs,
     ...completedGameRows.roleUrlHrefs,
     ...reconnectRows.roleUrlHrefs,
+    ...concurrentRaceRows.roleUrlHrefs,
   };
   const cycleIds = [
     hardeningFeatureSpineCycleIds.staleConflict,
@@ -3904,11 +3908,15 @@ function buildHardeningReadinessSpineTargets({
     ...(reconnectRows.roleUrlIds.length === 0
       ? []
       : [hardeningFeatureSpineCycleIds.reconnectRecovery]),
+    ...(concurrentRaceRows.roleUrlIds.length === 0
+      ? []
+      : [hardeningFeatureSpineCycleIds.concurrentRace]),
   ];
   const roleUrlIds = [
     ...surfaces.map((surface) => String(surface.laneId)),
     ...completedGameRows.roleUrlIds,
     ...reconnectRows.roleUrlIds,
+    ...concurrentRaceRows.roleUrlIds,
   ];
   const checkpointIds = [...roleUrlIds];
   const replacementStaleConflictLane =
@@ -4049,6 +4057,50 @@ function buildReconnectHardeningSpineRows(proof) {
       .filter((laneId) => roleUrlHrefs[laneId] !== undefined),
     roleUrlHrefs,
   };
+}
+
+function buildConcurrentRaceHardeningSpineRows(proof) {
+  const roleUrlHrefs = hardeningRoleUrlHrefsFromSynthesizedRows({
+    proof,
+    rows: hardeningSynthesizedRoleUrlConcurrentRaceFeatureSpineTargetRows,
+  });
+  return {
+    roleUrlIds: hardeningConcurrentRaceFeatureSpineTargetRows
+      .map((row) => row.roleUrlId)
+      .filter((laneId) => roleUrlHrefs[laneId] !== undefined),
+    roleUrlHrefs,
+  };
+}
+
+function hardeningRoleUrlHrefsFromSynthesizedRows({ proof, rows }) {
+  const frontendBaseUrl = String(proof?.session?.frontendBaseUrl ?? "").replace(
+    /\/$/,
+    "",
+  );
+  const laneById = new Map((proof?.lanes ?? []).map((lane) => [lane.id, lane]));
+  return Object.fromEntries(
+    rows
+      .map((row) => {
+        const lane = laneById.get(row.row.roleUrlId);
+        const game = String(lane?.evidence?.game ?? "");
+        if (
+          lane?.status !== "passed" ||
+          frontendBaseUrl === "" ||
+          game === ""
+        ) {
+          return null;
+        }
+        return [
+          row.row.roleUrlId,
+          completedGameHardeningSpineRoleUrl({
+            frontendBaseUrl,
+            game,
+            role: row.role,
+          }),
+        ];
+      })
+      .filter((entry) => entry !== null),
+  );
 }
 
 function buildIdentityReadinessSpineTargets(identityAdminProofEvidence) {
@@ -8241,6 +8293,9 @@ function validHardeningSpineTargets(spineTargets) {
   const reconnectLaneIds = hardeningReconnectFeatureSpineTargetRows.map(
     (row) => row.roleUrlId,
   );
+  const concurrentRaceLaneIds = hardeningConcurrentRaceFeatureSpineTargetRows.map(
+    (row) => row.roleUrlId,
+  );
   return (
     spineTargets !== null &&
     typeof spineTargets === "object" &&
@@ -8263,10 +8318,16 @@ function validHardeningSpineTargets(spineTargets) {
     spineTargets.cycleIds.includes(
       hardeningFeatureSpineCycleIds.reconnectRecovery,
     ) &&
+    spineTargets.cycleIds.includes(
+      hardeningFeatureSpineCycleIds.concurrentRace,
+    ) &&
     Array.isArray(spineTargets.roleUrlIds) &&
     spineTargets.roleUrlIds.includes(replacementStaleConflictLane.laneId) &&
     spineTargets.roleUrlIds.includes(completedGameStaleRecoveryLane.id) &&
     reconnectLaneIds.every((laneId) => spineTargets.roleUrlIds.includes(laneId)) &&
+    concurrentRaceLaneIds.every((laneId) =>
+      spineTargets.roleUrlIds.includes(laneId),
+    ) &&
     spineTargets.roleUrlHrefs !== null &&
     typeof spineTargets.roleUrlHrefs === "object" &&
     typeof spineTargets.roleUrlHrefs[replacementStaleConflictLane.laneId] ===
@@ -8276,10 +8337,16 @@ function validHardeningSpineTargets(spineTargets) {
     reconnectLaneIds.every(
       (laneId) => typeof spineTargets.roleUrlHrefs[laneId] === "string",
     ) &&
+    concurrentRaceLaneIds.every(
+      (laneId) => typeof spineTargets.roleUrlHrefs[laneId] === "string",
+    ) &&
     Array.isArray(spineTargets.checkpointIds) &&
     spineTargets.checkpointIds.includes(replacementStaleConflictLane.laneId) &&
     spineTargets.checkpointIds.includes(completedGameStaleRecoveryLane.id) &&
     reconnectLaneIds.every((laneId) =>
+      spineTargets.checkpointIds.includes(laneId),
+    ) &&
+    concurrentRaceLaneIds.every((laneId) =>
       spineTargets.checkpointIds.includes(laneId),
     ) &&
     Array.isArray(spineTargets.recoveryHookIds) &&
@@ -8292,6 +8359,9 @@ function validHardeningSpineTargets(spineTargets) {
       completedGameStaleRecoveryLane.id,
     ) &&
     reconnectLaneIds.every((laneId) =>
+      spineTargets.visibleAdminCheckIds.includes(laneId),
+    ) &&
+    concurrentRaceLaneIds.every((laneId) =>
       spineTargets.visibleAdminCheckIds.includes(laneId),
     ) &&
     Object.values(hardeningFeatureSpineTargetRows).every((row) =>

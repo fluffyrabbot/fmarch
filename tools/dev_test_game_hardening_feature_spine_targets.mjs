@@ -9,6 +9,9 @@ import {
   replacementStaleConflictMessageSpineLaneCase,
 } from "./dev_test_game_stale_conflict_scenarios.mjs";
 import {
+  hostResolveRaceScenario,
+} from "./dev_test_game_core_loop_host_phase_scenarios.mjs";
+import {
   cohostStaleDeadlineReconnectLaneId,
   hostStaleAdvanceReconnectLaneId,
   hostStaleDeadlineReconnectLaneId,
@@ -21,11 +24,13 @@ export const hardeningFeatureSpineSourceCheckId = "local-hardening-proof";
 export const hardeningFeatureSpineCycleIds = Object.freeze({
   staleConflict: "hardening-stale-conflict",
   reconnectRecovery: "hardening-reconnect-recovery",
+  concurrentRace: "hardening-concurrent-race",
 });
 const completedGameStaleRecoverySpineLane =
   completedGameStaleRecoverySpineLaneCase();
 const replacementStaleConflictMessageSpineLane =
   replacementStaleConflictMessageSpineLaneCase();
+const hostResolveRaceSpineLane = hostResolveRaceScenario();
 export const hardeningFeatureSpineTargetRows = Object.freeze({
   completedGameStaleRecovery: Object.freeze({
     featureSlotId: "completed-game-stale-recovery",
@@ -91,6 +96,14 @@ export const hardeningFeatureSpineTargetRows = Object.freeze({
     checkpointId: cohostStaleDeadlineReconnectLaneId,
     adminCheckId: cohostStaleDeadlineReconnectLaneId,
   }),
+  hostConcurrentResolveRaceReload: Object.freeze({
+    featureSlotId: "host-concurrent-resolve-race-reload",
+    sourceCheckId: hardeningFeatureSpineSourceCheckId,
+    cycleId: hardeningFeatureSpineCycleIds.concurrentRace,
+    roleUrlId: hostResolveRaceSpineLane.reloadProofCheckId,
+    checkpointId: hostResolveRaceSpineLane.reloadProofCheckId,
+    adminCheckId: hostResolveRaceSpineLane.reloadProofCheckId,
+  }),
 });
 export const hardeningDirectRoleUrlReconnectFeatureSpineTargetRows =
   Object.freeze([
@@ -122,6 +135,18 @@ export const hardeningReconnectFeatureSpineTargetRows = Object.freeze([
     (entry) => entry.row,
   ),
 ]);
+export const hardeningSynthesizedRoleUrlConcurrentRaceFeatureSpineTargetRows =
+  Object.freeze([
+    Object.freeze({
+      row: hardeningFeatureSpineTargetRows.hostConcurrentResolveRaceReload,
+      role: "host",
+    }),
+  ]);
+export const hardeningConcurrentRaceFeatureSpineTargetRows = Object.freeze(
+  hardeningSynthesizedRoleUrlConcurrentRaceFeatureSpineTargetRows.map(
+    (entry) => entry.row,
+  ),
+);
 export const devTestGameHardeningAdminProofCommand =
   "npm run test:dev-test-game-hardening-admin-proof";
 export const hardeningFeatureSpineSource = Object.freeze({

@@ -92,6 +92,9 @@ import {
   replacementStaleConflictMessageSpineLaneCase,
 } from "./dev_test_game_stale_conflict_scenarios.mjs";
 import {
+  hostResolveRaceScenario,
+} from "./dev_test_game_core_loop_host_phase_scenarios.mjs";
+import {
   cohostStaleDeadlineReconnectLaneId,
   hostStaleAdvanceReconnectLaneId,
   hostStaleDeadlineReconnectLaneId,
@@ -130,6 +133,14 @@ const hardeningReconnectFeatureTargetExpectations = Object.freeze([
     targetKey: "cohostStaleDeadlineReconnectRecovery",
     featureSlotId: "cohost-stale-deadline-reconnect-recovery",
     rowId: cohostStaleDeadlineReconnectLaneId,
+  }),
+]);
+const hostResolveRaceSpineLane = hostResolveRaceScenario();
+const hardeningConcurrentRaceFeatureTargetExpectations = Object.freeze([
+  Object.freeze({
+    targetKey: "hostConcurrentResolveRaceReload",
+    featureSlotId: "host-concurrent-resolve-race-reload",
+    rowId: hostResolveRaceSpineLane.reloadProofCheckId,
   }),
 ]);
 
@@ -425,6 +436,20 @@ test("release readiness buildable cases share next-action commands and spine tar
       },
     );
   }
+  for (const expectation of hardeningConcurrentRaceFeatureTargetExpectations) {
+    assert.deepEqual(
+      releaseReadinessProductionFeatureSpineTargets[expectation.targetKey],
+      {
+        featureSlotId: expectation.featureSlotId,
+        sourceCheckId: hardeningFeatureSpineSourceCheckId,
+        cycleId: hardeningFeatureSpineCycleIds.concurrentRace,
+        roleUrlId: expectation.rowId,
+        rowKind: "checkpoint",
+        checkpointId: expectation.rowId,
+        adminCheckId: expectation.rowId,
+      },
+    );
+  }
 
   const releaseRunbook = releaseReadinessBuildableItemForId(
     "human-release-runbook",
@@ -548,6 +573,15 @@ test("scenario-owned production feature targets derive proof row ids from source
       ],
       source: {
         cycleId: hardeningFeatureSpineCycleIds.reconnectRecovery,
+        rowId: expectation.rowId,
+      },
+    })),
+    ...hardeningConcurrentRaceFeatureTargetExpectations.map((expectation) => ({
+      target: releaseReadinessProductionFeatureSpineTargets[
+        expectation.targetKey
+      ],
+      source: {
+        cycleId: hardeningFeatureSpineCycleIds.concurrentRace,
         rowId: expectation.rowId,
       },
     })),
