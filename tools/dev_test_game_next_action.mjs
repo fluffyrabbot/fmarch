@@ -509,6 +509,20 @@ export function buildDevTestGameNextAction(
     readiness === null
       ? null
       : {
+          diagnosticCheckCount:
+            readiness.localDevelopmentSpine.checks.filter(
+              (check) => check.diagnosticOnly === true,
+            ).length,
+          diagnosticChecks: readiness.localDevelopmentSpine.checks
+            .filter((check) => check.diagnosticOnly === true)
+            .map((check) => ({
+              id: check.id,
+              label: check.label,
+              command: check.command,
+              proofTarget: check.evidence,
+              roleUrl: check.roleUrl,
+              fixtureEvidence: check.fixtureEvidence === true,
+            })),
           status: readiness.releaseReadiness.status,
           localCheckCount: readiness.localDevelopmentSpine.checks.length,
           buildableLocalDependencyCount: localReadinessDependencyCandidates.length,

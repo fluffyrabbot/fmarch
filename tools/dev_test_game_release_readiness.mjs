@@ -102,6 +102,13 @@ import {
   proofFreshnessAdminProofPath,
   spineManifestPath,
 } from "./dev_test_game_spine_artifact_paths.mjs";
+import {
+  selectedOperatorHandoffReceiptAdminProofCommand,
+  selectedOperatorHandoffReceiptAdminProofPath,
+} from "./dev_test_game_selected_operator_handoff_receipt_admin_proof_paths.mjs";
+import {
+  selectedOperatorHandoffTerminalReceiptId,
+} from "./dev_test_game_selected_operator_handoff_receipt.mjs";
 export {
   devTestGameReleaseReadinessMarkdownPath,
   devTestGameReleaseReadinessPath,
@@ -568,6 +575,10 @@ const defaultProofGraphAdminProofPath = path.join(
   repoRoot,
   devTestGameProofGraphAdminProofPath,
 );
+const defaultSelectedOperatorHandoffReceiptAdminProofPath = path.join(
+  repoRoot,
+  selectedOperatorHandoffReceiptAdminProofPath,
+);
 const defaultProofFreshnessAdminProofPath = path.join(
   repoRoot,
   proofFreshnessAdminProofPath,
@@ -967,6 +978,19 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
         artifact: options.proofGraphAdminProofArtifact,
       })
     : undefined;
+  const selectedOperatorHandoffReceiptAdminProofEvidence =
+    options.selectedOperatorHandoffReceiptAdminProof
+      ? validateSelectedOperatorHandoffReceiptAdminProof(
+          options.selectedOperatorHandoffReceiptAdminProof,
+          {
+            path:
+              options.selectedOperatorHandoffReceiptAdminProofPath ??
+              selectedOperatorHandoffReceiptAdminProofPath,
+            artifact:
+              options.selectedOperatorHandoffReceiptAdminProofArtifact,
+          },
+        )
+      : undefined;
   const proofFreshnessAdminProofEvidence = options.proofFreshnessAdminProof
     ? validateDevTestGameProofFreshnessAdminProof(
         options.proofFreshnessAdminProof,
@@ -1515,6 +1539,35 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
       );
     }
   }
+  if (selectedOperatorHandoffReceiptAdminProofEvidence !== undefined) {
+    const destination =
+      selectedOperatorHandoffReceiptAdminProofEvidence
+        .selectedOperatorHandoffReceiptDestination;
+    localChecks.push({
+      id: "local-selected-operator-handoff-receipt-fixture-admin-proof",
+      label: "Selected operator handoff receipt fixture admin proof",
+      status: "passed",
+      evidence: selectedOperatorHandoffReceiptAdminProofEvidence.path,
+      proofBoundary:
+        selectedOperatorHandoffReceiptAdminProofEvidence.proofBoundary,
+      command: `npm run ${selectedOperatorHandoffReceiptAdminProofCommand}`,
+      roleUrl: localAdminAuditRoleUrl(localAdminAuditIds.proofGraph),
+      diagnosticOnly: true,
+      fixtureEvidence: true,
+      releaseReady: false,
+      productionReady: false,
+      selectedOperatorHandoffReceiptId:
+        destination.selectedOperatorHandoffReceiptId,
+      selectedOperatorHandoffReceiptStatus:
+        destination.selectedOperatorHandoffReceiptStatus,
+      destinationLinkId: destination.linkId,
+      destinationAuditId: destination.auditId,
+      destinationDetailRoleUrl: destination.detailRoleUrl,
+      visibleSelectedOperatorHandoffTerminalReceiptRows:
+        destination.visibleSelectedOperatorHandoffTerminalReceiptRows,
+      adminRoleSurface: selectedOperatorHandoffReceiptAdminProofEvidence,
+    });
+  }
   if (proofFreshnessAdminProofEvidence !== undefined) {
     localChecks.push(
       buildProofFreshnessAdminSurfaceReadinessCheck(
@@ -1720,6 +1773,12 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
         : {
             proofGraphAdminProof: proofGraphAdminProofEvidence.path,
           }),
+      ...(selectedOperatorHandoffReceiptAdminProofEvidence === undefined
+        ? {}
+        : {
+            selectedOperatorHandoffReceiptAdminProof:
+              selectedOperatorHandoffReceiptAdminProofEvidence.path,
+          }),
       ...(proofFreshnessAdminProofEvidence === undefined
         ? {}
         : {
@@ -1755,6 +1814,7 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
         spineManifestEvidence === undefined &&
         adminSpineProofEvidence === undefined &&
         proofGraphAdminProofEvidence === undefined &&
+        selectedOperatorHandoffReceiptAdminProofEvidence === undefined &&
         proofFreshnessAdminProofEvidence === undefined &&
         hostedEvidenceLaneAdminProofEvidence === undefined &&
         hostedEvidenceLaneRealCaptureAdminProofEvidence === undefined &&
@@ -1934,6 +1994,12 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
               ...(proofGraphAdminProofEvidence === undefined
                 ? {}
                 : { proofGraphAdminProof: proofGraphAdminProofEvidence }),
+              ...(selectedOperatorHandoffReceiptAdminProofEvidence === undefined
+                ? {}
+                : {
+                    selectedOperatorHandoffReceiptAdminProof:
+                      selectedOperatorHandoffReceiptAdminProofEvidence,
+                  }),
               ...(releaseRunbookEvidence === undefined
                 ? {}
                 : {
@@ -6242,6 +6308,10 @@ export function validateDevTestGameProofGraphAdminProof(proof, options = {}) {
   validateProofGraphAdminProductionFeatureDestinationSummary(proof);
   const productionFeatureProvenanceComparison =
     validateProofGraphAdminProductionFeatureProvenanceComparison(proof);
+  const selectedOperatorHandoffReceiptDestination =
+    validateOptionalSelectedOperatorHandoffReceiptDestination(proof, {
+      visibleDestinations,
+    });
   validateProofGraphAdminDiagnosticProofSummary(proof);
   for (const featureTargetCase of proofGraphAdminFeatureTargetCases) {
     validateProofGraphAdminFeatureTarget(proof, featureTargetCase);
@@ -6262,8 +6332,95 @@ export function validateDevTestGameProofGraphAdminProof(proof, options = {}) {
     roleHandoffIds: handoffs.map((handoff) => String(handoff.linkId)),
     destinationAuditIds,
     nextActionHandoffDestination,
+    selectedOperatorHandoffReceiptDestination,
     productionFeatureProvenanceComparison,
     ...(options.artifact === undefined ? {} : { artifact: options.artifact }),
+  };
+}
+
+function validateSelectedOperatorHandoffReceiptAdminProof(proof, options = {}) {
+  const evidence = validateDevTestGameProofGraphAdminProof(proof, options);
+  if (evidence.selectedOperatorHandoffReceiptDestination === null) {
+    throw new Error(
+      "selected operator handoff receipt admin proof missing selected operator receipt destination",
+    );
+  }
+  return evidence;
+}
+
+function validateOptionalSelectedOperatorHandoffReceiptDestination(
+  proof,
+  { visibleDestinations },
+) {
+  const destination =
+    proof.generatedFrom?.selectedOperatorHandoffReceiptDestination;
+  if (destination === undefined) {
+    return null;
+  }
+  if (
+    destination.selectedOperatorHandoffReceiptId !==
+      selectedOperatorHandoffTerminalReceiptId ||
+    destination.selectedOperatorHandoffReceiptStatus !== "passed" ||
+    destination.linkId !== "admin-spine-terminal-batches" ||
+    destination.auditId !== localAdminAuditIds.adminSpine ||
+    destination.detailRoleUrl !== localAdminAuditRoleUrl(localAdminAuditIds.adminSpine)
+  ) {
+    throw new Error(
+      "proof graph admin proof selected operator receipt destination drifted",
+    );
+  }
+  const visibleDestination = visibleDestinations.find(
+    (item) =>
+      item.linkId === destination.linkId &&
+      item.auditId === destination.auditId,
+  );
+  if (visibleDestination === undefined) {
+    throw new Error(
+      "proof graph admin proof missing selected operator receipt visible destination",
+    );
+  }
+  const expectedRows =
+    destination.requiredSelectedOperatorHandoffTerminalReceiptRows ?? [];
+  const visibleRows =
+    visibleDestination.visibleSelectedOperatorHandoffTerminalReceiptRows ?? [];
+  if (!sameStringArray(visibleRows, expectedRows)) {
+    throw new Error(
+      "proof graph admin proof selected operator receipt row list drifted",
+    );
+  }
+  const expectedStatuses =
+    destination.requiredSelectedOperatorHandoffTerminalReceiptRowStatuses ?? {};
+  for (const [rowId, expectedStatus] of Object.entries(expectedStatuses)) {
+    const visibleStatus =
+      visibleDestination.visibleSelectedOperatorHandoffTerminalReceiptRowStatuses?.[
+        rowId
+      ];
+    if (
+      typeof visibleStatus !== "string" ||
+      visibleStatus !== expectedStatus
+    ) {
+      throw new Error(
+        `proof graph admin proof selected operator receipt row drifted: ${rowId}`,
+      );
+    }
+  }
+  return {
+    linkId: destination.linkId,
+    auditId: destination.auditId,
+    detailRoleUrl: destination.detailRoleUrl,
+    selectedOperatorHandoffReceiptId:
+      destination.selectedOperatorHandoffReceiptId,
+    selectedOperatorHandoffReceiptStatus:
+      destination.selectedOperatorHandoffReceiptStatus,
+    visibleSelectedOperatorHandoffTerminalReceiptRows: [...expectedRows],
+    visibleSelectedOperatorHandoffTerminalReceiptRowStatuses:
+      Object.fromEntries(
+        Object.keys(expectedStatuses).map((rowId) => [
+          rowId,
+          visibleDestination
+            .visibleSelectedOperatorHandoffTerminalReceiptRowStatuses[rowId],
+        ]),
+      ),
   };
 }
 
@@ -8286,6 +8443,39 @@ export function assertDevTestGameReleaseReadiness(checklist) {
       "dev-test-game proof graph next-action handoff check is malformed",
     );
   }
+  const selectedOperatorReceiptDiagnosticCheck =
+    checklist.localDevelopmentSpine?.checks?.find(
+      (check) =>
+        check.id ===
+        "local-selected-operator-handoff-receipt-fixture-admin-proof",
+    );
+  if (
+    selectedOperatorReceiptDiagnosticCheck !== undefined &&
+    (selectedOperatorReceiptDiagnosticCheck.diagnosticOnly !== true ||
+      selectedOperatorReceiptDiagnosticCheck.fixtureEvidence !== true ||
+      selectedOperatorReceiptDiagnosticCheck.releaseReady !== false ||
+      selectedOperatorReceiptDiagnosticCheck.productionReady !== false ||
+      selectedOperatorReceiptDiagnosticCheck.command !==
+        `npm run ${selectedOperatorHandoffReceiptAdminProofCommand}` ||
+      selectedOperatorReceiptDiagnosticCheck.evidence !==
+        selectedOperatorHandoffReceiptAdminProofPath ||
+      selectedOperatorReceiptDiagnosticCheck.selectedOperatorHandoffReceiptId !==
+        selectedOperatorHandoffTerminalReceiptId ||
+      selectedOperatorReceiptDiagnosticCheck
+        .selectedOperatorHandoffReceiptStatus !== "passed" ||
+      selectedOperatorReceiptDiagnosticCheck.destinationLinkId !==
+        "admin-spine-terminal-batches" ||
+      selectedOperatorReceiptDiagnosticCheck.destinationAuditId !==
+        localAdminAuditIds.adminSpine ||
+      !selectedOperatorReceiptDiagnosticCheck
+        .visibleSelectedOperatorHandoffTerminalReceiptRows?.includes(
+          "readiness-link",
+        ))
+  ) {
+    throw new Error(
+      "dev-test-game selected operator receipt fixture diagnostic check is malformed",
+    );
+  }
   for (const item of checklist.releaseReadiness?.unproven ?? []) {
     if (item.status !== "unproven") {
       throw new Error(`release item ${item.id} must remain unproven`);
@@ -9022,6 +9212,20 @@ const optionalReadinessArtifactRegistry = Object.freeze([
     validator: validateDevTestGameProofGraphAdminProof,
   }),
   optionalReadinessArtifact({
+    id: "selectedOperatorHandoffReceiptAdminProof",
+    envVar:
+      "FMARCH_DEV_TEST_GAME_SELECTED_OPERATOR_HANDOFF_RECEIPT_ADMIN_PROOF",
+    defaultPath: defaultSelectedOperatorHandoffReceiptAdminProofPath,
+    ignoreInvalidDefault: true,
+    outputKeys: {
+      data: "selectedOperatorHandoffReceiptAdminProof",
+      path: "selectedOperatorHandoffReceiptAdminProofPath",
+      freshnessMetadata:
+        "selectedOperatorHandoffReceiptAdminProofArtifact",
+    },
+    validator: validateSelectedOperatorHandoffReceiptAdminProof,
+  }),
+  optionalReadinessArtifact({
     id: "proofFreshnessAdminProof",
     envVar: "FMARCH_DEV_TEST_GAME_PROOF_FRESHNESS_ADMIN_PROOF",
     defaultPath: defaultProofFreshnessAdminProofPath,
@@ -9104,6 +9308,7 @@ const optionalReadinessArtifactLoadPlan = Object.freeze([
   "realHostedMatrixRawCapture",
   "hostedEvidenceLaneDemoProof",
   "proofGraphAdminProof",
+  "selectedOperatorHandoffReceiptAdminProof",
   "proofFreshnessAdminProof",
   "nextActionAdminProof",
   "releaseRunbook",

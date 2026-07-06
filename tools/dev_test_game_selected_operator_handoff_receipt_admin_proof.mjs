@@ -6,16 +6,19 @@ import {
   assertProofGraphAdminProof,
 } from "./dev_test_game_proof_graph_admin_proof.mjs";
 import {
-  selectedOperatorHandoffReceiptAdminProofPath,
   selectedOperatorHandoffTerminalBatchFixturePath,
 } from "./dev_test_game_spine_artifact_paths.mjs";
+export {
+  selectedOperatorHandoffReceiptAdminProofCommand,
+  selectedOperatorHandoffReceiptAdminProofPath,
+} from "./dev_test_game_selected_operator_handoff_receipt_admin_proof_paths.mjs";
+import {
+  selectedOperatorHandoffReceiptAdminProofPath,
+} from "./dev_test_game_selected_operator_handoff_receipt_admin_proof_paths.mjs";
 import { repoRoot } from "./dev_test_game_spine_runner.mjs";
 import {
   writeSelectedOperatorHandoffTerminalBatchesFixture,
 } from "./dev_test_game_selected_operator_handoff_receipt_fixture.mjs";
-
-export const selectedOperatorHandoffReceiptAdminProofCommand =
-  "test:dev-test-game-selected-operator-handoff-receipt-admin-proof";
 
 export async function runSelectedOperatorHandoffReceiptAdminProof() {
   await writeSelectedOperatorHandoffTerminalBatchesFixture();

@@ -16134,13 +16134,23 @@ test("session card and markdown include role credential URLs and tokens", async 
   ]);
   const proofGraphHandoffReadiness = buildDevTestGameReleaseReadiness(proofRun, {
     generatedAt: "2026-06-26T00:00:00.000Z",
+    coreLoopAdminProofPath: devTestGameCoreLoopAdminProofPath,
+    coreLoopAdminProof: coreLoopAdminProofFixture(),
     proofGraphAdminProofPath: "target/dev-test-game/proof-graph-admin-proof.json",
     proofGraphAdminProof: proofGraphAdminProofFixture(),
+    selectedOperatorHandoffReceiptAdminProofPath:
+      selectedOperatorHandoffReceiptAdminProofPath,
+    selectedOperatorHandoffReceiptAdminProof: proofGraphAdminProofFixture(),
   });
   assertDevTestGameReleaseReadiness(proofGraphHandoffReadiness);
   assert.equal(
     proofGraphHandoffReadiness.generatedFrom.proofGraphAdminProof,
     "target/dev-test-game/proof-graph-admin-proof.json",
+  );
+  assert.equal(
+    proofGraphHandoffReadiness.generatedFrom
+      .selectedOperatorHandoffReceiptAdminProof,
+    selectedOperatorHandoffReceiptAdminProofPath,
   );
   const handoffCheck =
     proofGraphHandoffReadiness.localDevelopmentSpine.checks.find(
@@ -16197,6 +16207,84 @@ test("session card and markdown include role credential URLs and tokens", async 
     proofGraphHandoffReadiness.localDevelopmentSpine.evidence.proofGraphAdminProof
       .nextActionHandoffDestination,
     nextActionHandoffDestinationFixture(),
+  );
+  const selectedOperatorReceiptDiagnosticCheck =
+    proofGraphHandoffReadiness.localDevelopmentSpine.checks.find(
+      (item) =>
+        item.id ===
+        "local-selected-operator-handoff-receipt-fixture-admin-proof",
+    );
+  assert.equal(selectedOperatorReceiptDiagnosticCheck.status, "passed");
+  assert.equal(selectedOperatorReceiptDiagnosticCheck.diagnosticOnly, true);
+  assert.equal(selectedOperatorReceiptDiagnosticCheck.fixtureEvidence, true);
+  assert.equal(
+    selectedOperatorReceiptDiagnosticCheck.command,
+    `npm run ${selectedOperatorHandoffReceiptAdminProofCommand}`,
+  );
+  assert.equal(
+    selectedOperatorReceiptDiagnosticCheck.evidence,
+    selectedOperatorHandoffReceiptAdminProofPath,
+  );
+  assert.equal(
+    selectedOperatorReceiptDiagnosticCheck.selectedOperatorHandoffReceiptStatus,
+    "passed",
+  );
+  const {
+    requiredSelectedOperatorHandoffTerminalReceiptRows,
+    requiredSelectedOperatorHandoffTerminalReceiptRowStatuses,
+    ...normalizedSelectedOperatorHandoffReceiptDestination
+  } = selectedOperatorHandoffReceiptDestinationFixture();
+  assert.deepEqual(requiredSelectedOperatorHandoffTerminalReceiptRows, [
+    "receipt",
+    "selected",
+    "edge",
+    "readiness-link",
+  ]);
+  assert.equal(
+    requiredSelectedOperatorHandoffTerminalReceiptRowStatuses["readiness-link"],
+    normalizedSelectedOperatorHandoffReceiptDestination
+      .visibleSelectedOperatorHandoffTerminalReceiptRowStatuses[
+        "readiness-link"
+      ],
+  );
+  assert.deepEqual(
+    proofGraphHandoffReadiness.localDevelopmentSpine.evidence
+      .selectedOperatorHandoffReceiptAdminProof
+      .selectedOperatorHandoffReceiptDestination,
+    normalizedSelectedOperatorHandoffReceiptDestination,
+  );
+  assert(
+    markdownChecklist(proofGraphHandoffReadiness).includes(
+      `| Selected operator handoff receipt fixture admin proof | passed | \`${selectedOperatorHandoffReceiptAdminProofPath}\` |  |  |`,
+    ),
+  );
+  const selectedOperatorDiagnosticNextAction = buildDevTestGameNextAction(
+    freshSpineManifestFixture(),
+    {
+      generatedAt: "2026-06-26T00:00:01.000Z",
+      opsArtifacts: devTestGameOpsArtifactsFixture(),
+      raceCoverage: devTestGameRaceCoverageFixture(),
+      releaseReadinessChecklist: proofGraphHandoffReadiness,
+    },
+  );
+  assert.equal(
+    selectedOperatorDiagnosticNextAction.generatedFrom.releaseReadinessSummary
+      .diagnosticCheckCount,
+    1,
+  );
+  assert.deepEqual(
+    selectedOperatorDiagnosticNextAction.generatedFrom.releaseReadinessSummary
+      .diagnosticChecks,
+    [
+      {
+        id: "local-selected-operator-handoff-receipt-fixture-admin-proof",
+        label: "Selected operator handoff receipt fixture admin proof",
+        command: `npm run ${selectedOperatorHandoffReceiptAdminProofCommand}`,
+        proofTarget: selectedOperatorHandoffReceiptAdminProofPath,
+        roleUrl: "/admin/audit/local-proof-graph?game=<seeded-game>",
+        fixtureEvidence: true,
+      },
+    ],
   );
   const proofFreshnessAdminReadiness = buildDevTestGameReleaseReadiness(proofRun, {
     generatedAt: "2026-06-26T00:00:00.000Z",
@@ -23146,6 +23234,37 @@ function spineManifestFixture() {
       },
     ],
   };
+}
+
+function freshSpineManifestFixture() {
+  return buildDevTestGameSpineManifest({
+    generatedAt: "2026-06-26T00:00:00.000Z",
+    proofFreshness: {
+      version: 1,
+      proof: "dev-test-game-proof-freshness",
+      status: "passed",
+      generatedAt: "2026-06-26T00:00:00.000Z",
+      maxAgeHours: 24,
+      proofBoundary: "test freshness boundary",
+      summary: {
+        artifactCount: 1,
+        freshCount: 1,
+        staleCount: 0,
+        missingCount: 0,
+      },
+      artifacts: [
+        {
+          id: "spine-manifest",
+          label: "Spine manifest",
+          path: "target/dev-test-game/spine-manifest.json",
+          status: "fresh",
+          mtime: "2026-06-26T00:00:00.000Z",
+          ageSeconds: 0,
+          maxAgeSeconds: 86400,
+        },
+      ],
+    },
+  });
 }
 
 function spineManifestAdminProofFixture() {
