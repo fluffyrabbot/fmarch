@@ -249,6 +249,8 @@ import {
 } from "./dev_test_game_identity_spine.mjs";
 import {
   devTestGameNextActionScript,
+  handoffPhaseStep,
+  handoffPhaseSteps,
   phaseLocalNextActionStep,
   runSpinePlan,
 } from "./dev_test_game_spine_runner.mjs";
@@ -342,6 +344,7 @@ import {
 } from "./dev_test_game_recovery_receipt_catalog.mjs";
 import {
   devTestGameReleaseReadinessScript,
+  releaseReadinessStep,
   releaseReadinessSteps,
 } from "./dev_test_game_spine_readiness_steps.mjs";
 import {
@@ -1552,6 +1555,7 @@ test("dev test-game spine orchestrators expose stable proof order and env maps",
         phase: {
           id: devTestGameHostedEvidenceOperatorChecklistHandoffPhaseId,
           step: "checklist-proof",
+          outputs: [devTestGameHostedEvidenceOperatorChecklistProofPath],
         },
         readinessReason: null,
         outputPath: null,
@@ -1561,6 +1565,7 @@ test("dev test-game spine orchestrators expose stable proof order and env maps",
         phase: {
           id: devTestGameHostedEvidenceOperatorChecklistHandoffPhaseId,
           step: "phase-local-next-action",
+          outputs: [hostedEvidenceOperatorChecklistNextActionPath],
         },
         readinessReason: null,
         outputPath: hostedEvidenceOperatorChecklistNextActionPath,
@@ -1571,6 +1576,7 @@ test("dev test-game spine orchestrators expose stable proof order and env maps",
         phase: {
           id: devTestGameHostedEvidenceOperatorChecklistHandoffPhaseId,
           step: "admin-proof",
+          outputs: [devTestGameHostedEvidenceOperatorChecklistAdminProofPath],
         },
         readinessReason: null,
         outputPath: hostedEvidenceOperatorChecklistNextActionPath,
@@ -1623,6 +1629,7 @@ test("dev test-game spine orchestrators expose stable proof order and env maps",
         phase: {
           id: devTestGameHostedIdentityHandoffPhaseId,
           step: "phase-local-next-action",
+          outputs: [hostedIdentityNextActionPath],
         },
         readinessReason: null,
         outputPath: hostedIdentityNextActionPath,
@@ -1633,6 +1640,7 @@ test("dev test-game spine orchestrators expose stable proof order and env maps",
         phase: {
           id: devTestGameHostedIdentityHandoffPhaseId,
           step: "hosted-identity-next-action-admin-proof-batch",
+          outputs: [hostedIdentityNextActionAdminProofPath],
         },
         readinessReason: null,
         outputPath: null,
@@ -1643,6 +1651,7 @@ test("dev test-game spine orchestrators expose stable proof order and env maps",
         phase: {
           id: devTestGameHostedIdentityHandoffPhaseId,
           step: "default-next-action-refresh",
+          outputs: [nextActionPath],
         },
         readinessReason: null,
         outputPath: null,
@@ -1653,6 +1662,11 @@ test("dev test-game spine orchestrators expose stable proof order and env maps",
         phase: {
           id: devTestGameHostedIdentityHandoffPhaseId,
           step: "terminal-refresh-admin-proof-batch",
+          outputs: [
+            proofFreshnessAdminProofPath,
+            nextActionAdminProofPath,
+            adminSpineTerminalBatchProofPath,
+          ],
         },
         readinessReason: null,
         outputPath: null,
@@ -7672,6 +7686,98 @@ test("phase-local next-action spine steps share one env contract", () => {
         id: "hosted-identity",
       }),
     /phase-local next-action spine step is missing an output path/,
+  );
+});
+
+test("handoff phase spine steps require declared phase metadata and outputs", () => {
+  assert.deepEqual(
+    handoffPhaseStep({
+      phaseId: "hosted-evidence",
+      step: "admin-proof",
+      planStep: {
+        kind: "node",
+        script: "tools/dev_test_game_next_action_admin_proof.mjs",
+        env: {
+          FMARCH_DEV_TEST_GAME_NEXT_ACTION: nextActionPath,
+          FMARCH_DEV_TEST_GAME_NEXT_ACTION_ADMIN_PROOF:
+            nextActionAdminProofPath,
+        },
+      },
+      outputs: [nextActionAdminProofPath, nextActionPath],
+    }),
+    {
+      kind: "node",
+      script: "tools/dev_test_game_next_action_admin_proof.mjs",
+      env: {
+        FMARCH_DEV_TEST_GAME_NEXT_ACTION: nextActionPath,
+        FMARCH_DEV_TEST_GAME_NEXT_ACTION_ADMIN_PROOF:
+          nextActionAdminProofPath,
+      },
+      handoffPhase: {
+        id: "hosted-evidence",
+        step: "admin-proof",
+        outputs: [nextActionAdminProofPath, nextActionPath],
+      },
+    },
+  );
+  assert.deepEqual(
+    handoffPhaseSteps({
+      phaseId: "hosted-identity",
+      steps: [
+        {
+          step: "readiness-refresh",
+          planStep: releaseReadinessStep({
+            reason: "hosted-identity-test",
+            changedInputs: [hostedIdentityNextActionAdminProofPath],
+          }),
+        },
+      ],
+    }),
+    [
+      {
+        kind: "node",
+        script: devTestGameReleaseReadinessScript,
+        readinessReason: "hosted-identity-test",
+        changedInputs: [hostedIdentityNextActionAdminProofPath],
+        handoffPhase: {
+          id: "hosted-identity",
+          step: "readiness-refresh",
+        },
+      },
+    ],
+  );
+  assert.throws(
+    () =>
+      handoffPhaseStep({
+        step: "admin-proof",
+        planStep: { kind: "node", script: "tools/example.mjs" },
+      }),
+    /handoff phase spine step is missing a phase id/,
+  );
+  assert.throws(
+    () =>
+      handoffPhaseStep({
+        phaseId: "hosted-evidence",
+        planStep: { kind: "node", script: "tools/example.mjs" },
+      }),
+    /handoff phase spine step is missing a step id/,
+  );
+  assert.throws(
+    () =>
+      handoffPhaseStep({
+        phaseId: "hosted-evidence",
+        step: "readiness-refresh",
+        planStep: {
+          kind: "node",
+          script: devTestGameReleaseReadinessScript,
+          readinessReason: "missing-inputs",
+        },
+      }),
+    /handoff phase readiness step is missing changed inputs/,
+  );
+  assert.throws(
+    () => handoffPhaseSteps({ phaseId: "hosted-evidence", steps: [] }),
+    /handoff phase spine steps must be a non-empty array/,
   );
 });
 

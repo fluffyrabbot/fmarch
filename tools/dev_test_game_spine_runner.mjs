@@ -53,6 +53,70 @@ export function phaseLocalNextActionStep({ id, outputPath, sequenceStage } = {})
   };
 }
 
+export function handoffPhaseStep({
+  phaseId,
+  step,
+  planStep,
+  outputs = [],
+} = {}) {
+  if (typeof phaseId !== "string" || phaseId.trim() === "") {
+    throw new Error("handoff phase spine step is missing a phase id");
+  }
+  if (typeof step !== "string" || step.trim() === "") {
+    throw new Error("handoff phase spine step is missing a step id");
+  }
+  if (planStep === null || typeof planStep !== "object" || Array.isArray(planStep)) {
+    throw new Error("handoff phase spine step is missing a plan step");
+  }
+  const normalizedOutputs = normalizeHandoffPhaseOutputs({
+    outputs,
+    planStep,
+  });
+  if (
+    planStep.readinessReason !== undefined &&
+    (!Array.isArray(planStep.changedInputs) || planStep.changedInputs.length === 0)
+  ) {
+    throw new Error("handoff phase readiness step is missing changed inputs");
+  }
+  return {
+    ...planStep,
+    handoffPhase: {
+      id: phaseId,
+      step,
+      ...(normalizedOutputs.length === 0
+        ? {}
+        : { outputs: normalizedOutputs }),
+    },
+  };
+}
+
+export function handoffPhaseSteps({ phaseId, steps } = {}) {
+  if (!Array.isArray(steps) || steps.length === 0) {
+    throw new Error("handoff phase spine steps must be a non-empty array");
+  }
+  return steps.map((item) =>
+    handoffPhaseStep({
+      phaseId,
+      step: item?.step,
+      planStep: item?.planStep,
+      outputs: item?.outputs,
+    }),
+  );
+}
+
+function normalizeHandoffPhaseOutputs({ outputs, planStep }) {
+  const explicitOutputs = (Array.isArray(outputs) ? outputs : []).map((output) =>
+    String(output ?? ""),
+  );
+  const implicitOutputs = [
+    planStep?.phaseLocalNextAction?.outputPath,
+  ].map((output) => String(output ?? ""));
+  const normalized = [...explicitOutputs, ...implicitOutputs].filter(
+    (output) => output !== "",
+  );
+  return [...new Set(normalized)];
+}
+
 async function runSpinePlanStep(step, { custom }) {
   await runSpinePlanStepPreconditions(step.preconditions);
   const kind = step.kind ?? "node";
