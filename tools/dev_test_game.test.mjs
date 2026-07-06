@@ -256,6 +256,7 @@ import {
 } from "./dev_test_game_spine_runner.mjs";
 import {
   devTestGameHandoffPhaseOutputs,
+  proofGraphHandoffPhaseOutputArtifactTestId,
 } from "./dev_test_game_handoff_phase_outputs.mjs";
 import {
   localSpineDatabaseUrl,
@@ -6320,6 +6321,38 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
       ],
     ),
   );
+  assert.deepEqual(
+    proofGraphAdminGeneratedFrom.handoffPhaseOutputGraphLinks.outputs.map(
+      (output) => ({
+        id: output.id,
+        artifact: output.artifact,
+        manifestEdgeRowId: output.manifestEdgeRowId,
+      }),
+    ),
+    graph.nodes
+      .filter((node) => node.kind === "handoff-phase-output")
+      .map((node) => ({
+        id: node.id,
+        artifact: node.artifact,
+        manifestEdgeRowId:
+          `edge:spine-manifest:records-handoff-phase-output:${node.id}`,
+      })),
+  );
+  assert.deepEqual(
+    proofGraphAdminRequirements.requiredProofGraphHandoffPhaseOutputs,
+    proofGraphAdminGeneratedFrom.handoffPhaseOutputGraphLinks.outputs.map(
+      (output) => output.id,
+    ),
+  );
+  assert.deepEqual(
+    proofGraphAdminRequirements.requiredProofGraphHandoffPhaseOutputArtifacts,
+    proofGraphAdminGeneratedFrom.handoffPhaseOutputGraphLinks.outputs.map(
+      (output) => ({
+        id: output.id,
+        artifact: output.artifact,
+      }),
+    ),
+  );
   assert.equal(
     proofGraphAdminRequirements.game,
     "00000000-0000-0000-0000-000000000001",
@@ -8284,6 +8317,28 @@ test("admin proof fixtures prove normalized evidence object rows", () => {
       "edge:next-action:phase-local-snapshot:next-action-hosted-evidence-operator-checklist",
       "edge:next-action:phase-local-snapshot:next-action-hosted-identity",
     ],
+  );
+  assert.deepEqual(
+    proofGraphProof.generatedFrom.handoffPhaseOutputGraphLinks.outputs.map(
+      (output) => output.id,
+    ),
+    devTestGameHandoffPhaseOutputs.map((output) =>
+      `handoff-phase-output:${String(output.id)
+        .replace(/[^a-zA-Z0-9_-]+/g, "-")
+        .replace(/^-+|-+$/g, "")}`,
+    ),
+  );
+  assert.deepEqual(
+    proofGraphProof.adminRoleSurface.visibleProofGraphHandoffPhaseOutputArtifacts.map(
+      ({ id, artifact, clickedThrough }) => ({ id, artifact, clickedThrough }),
+    ),
+    proofGraphProof.generatedFrom.handoffPhaseOutputGraphLinks.outputs.map(
+      (output) => ({
+        id: output.id,
+        artifact: output.artifact,
+        clickedThrough: true,
+      }),
+    ),
   );
   assert.equal(
     proofGraphProof.adminRoleSurface.visibleRelatedDestinations.find(
@@ -23833,11 +23888,18 @@ function proofGraphAdminProofFixture() {
     adminSpineTerminalValidationDestinationFixture();
   const phaseLocalNextActionGraphLinks =
     phaseLocalNextActionGraphLinksFixture();
+  const handoffPhaseOutputGraphLinks =
+    handoffPhaseOutputGraphLinksFixture();
   const phaseLocalNextActionGraphLinkRows =
     phaseLocalNextActionGraphLinks.snapshots.flatMap((snapshot) => [
       snapshot.id,
       snapshot.nextActionEdgeRowId,
       snapshot.manifestEdgeRowId,
+    ]);
+  const handoffPhaseOutputGraphLinkRows =
+    handoffPhaseOutputGraphLinks.outputs.flatMap((output) => [
+      output.id,
+      output.manifestEdgeRowId,
     ]);
   const proofGraphPrerequisiteDestinationArtifacts =
     proofGraphPrerequisiteDestinationArtifactsFixture();
@@ -23879,6 +23941,7 @@ function proofGraphAdminProofFixture() {
         ...phaseLocalNextActionGraphLinks.snapshots.map(
           (snapshot) => snapshot.id,
         ),
+        ...handoffPhaseOutputGraphLinks.outputs.map((output) => output.id),
         ...coreLoopHostVisibleRecoveryDestinations.map(
           (destination) => destination.linkId,
         ),
@@ -23905,12 +23968,16 @@ function proofGraphAdminProofFixture() {
           snapshot.nextActionEdgeRowId,
           snapshot.manifestEdgeRowId,
         ]),
+        ...handoffPhaseOutputGraphLinks.outputs.map(
+          (output) => output.manifestEdgeRowId,
+        ),
         ...coreLoopHostVisibleRecoveryEdgeRowIds,
       ],
       edgeCount:
         handoffs.length +
         diagnosticEdgeRowIds.length +
         10 +
+        handoffPhaseOutputGraphLinks.outputs.length +
         coreLoopHostVisibleRecoveryEdgeRowIds.length,
       adminProofSurfaceIds,
       adminProofRoleHandoffs: handoffs,
@@ -23925,6 +23992,7 @@ function proofGraphAdminProofFixture() {
       productionFeatureProvenanceComparison,
       diagnosticProofSummary,
       phaseLocalNextActionGraphLinks,
+      handoffPhaseOutputGraphLinks,
       proofGraphPrerequisiteDestinationRowIds:
         proofGraphPrerequisiteDestinationArtifacts.map((row) => row.rowId),
       proofGraphPrerequisiteDestinationArtifacts,
@@ -23974,6 +24042,7 @@ function proofGraphAdminProofFixture() {
         commandProofAuditNodeId,
         commandProofAuditEdgeRowId,
         ...phaseLocalNextActionGraphLinkRows,
+        ...handoffPhaseOutputGraphLinkRows,
         ...coreLoopHostVisibleRecoveryDestinations.map(
           (destination) => destination.linkId,
         ),
@@ -24039,6 +24108,30 @@ function proofGraphAdminProofFixture() {
           ].join("\n"),
         ]),
       ),
+      visibleProofGraphHandoffPhaseOutputs:
+        handoffPhaseOutputGraphLinks.outputs.map((output) => output.id),
+      visibleProofGraphHandoffPhaseOutputStatuses: Object.fromEntries(
+        handoffPhaseOutputGraphLinks.outputs.map((output) => [
+          output.id,
+          [
+            "recorded",
+            output.handoffPhaseId,
+            output.handoffPhaseStep,
+            output.handoffPhaseOutputId,
+            output.manifestEdgeRowId,
+            output.artifact,
+            output.proofCommand,
+          ].join("\n"),
+        ]),
+      ),
+      visibleProofGraphHandoffPhaseOutputArtifacts:
+        handoffPhaseOutputGraphLinks.outputs.map((output) => ({
+          id: output.id,
+          artifact: output.artifact,
+          href: visibleAdminEvidenceArtifactFixture(output.artifact).href,
+          clickedThrough: true,
+          testId: proofGraphHandoffPhaseOutputArtifactTestId(output.id),
+        })),
       visibleProofGraphCoreLoopRecoveryDestinations:
         coreLoopRecoveryDestinationSummary.rows.map((row) => row.id),
       visibleProofGraphCoreLoopRecoveryDestinationArtifacts:
@@ -26726,6 +26819,30 @@ function phaseLocalNextActionGraphLinksFixture() {
       manifestEdgeRowId:
         `edge:spine-manifest:records-phase-local-next-action:${snapshot.id}`,
     })),
+  };
+}
+
+function handoffPhaseOutputGraphLinksFixture() {
+  return {
+    id: "handoff-phase-output-graph-links",
+    status: "recorded",
+    outputs: devTestGameHandoffPhaseOutputs.map((output) => {
+      const nodeId = `handoff-phase-output:${String(output.id)
+        .replace(/[^a-zA-Z0-9_-]+/g, "-")
+        .replace(/^-+|-+$/g, "")}`;
+      return {
+        id: nodeId,
+        artifact: output.artifact,
+        handoffPhaseId: output.phaseId,
+        handoffPhaseStep: output.step,
+        handoffPhaseOutputId: output.id,
+        proofCommand: output.script,
+        proofBoundary:
+          "Handoff phase output recorded from the spine manifest. It records local harness artifact wiring only; it does not prove hosted deployment, release readiness, or production readiness.",
+        manifestEdgeRowId:
+          `edge:spine-manifest:records-handoff-phase-output:${nodeId}`,
+      };
+    }),
   };
 }
 

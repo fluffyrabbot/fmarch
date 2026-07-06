@@ -107,6 +107,12 @@ import {
   normalizeProofGraphDiagnosticSummaryTrace,
 } from "../../../../tools/dev_test_game_proof_graph_diagnostic_summary.mjs";
 import {
+  proofGraphHandoffPhaseOutputArtifactTestId,
+  proofGraphHandoffPhaseOutputRowTestId,
+  proofGraphHandoffPhaseOutputSectionHeading,
+  proofGraphHandoffPhaseOutputSectionId,
+} from "../../../../tools/dev_test_game_handoff_phase_outputs.mjs";
+import {
   normalizeSelectionTrace,
   releaseReadinessTraceCheckRows,
   releaseReadinessTraceStrategy,
@@ -159,10 +165,10 @@ import {
 export { ADMIN_ROUTE_CONTRACT };
 
 export const LOCAL_PLAYER_RECOVERY_AUDIT_LANE_IDS = playerRecoveryAuditLaneIds;
-export const proofGraphHandoffPhaseOutputSectionId =
-  "proof-graph-handoff-phase-outputs";
-export const proofGraphHandoffPhaseOutputSectionHeading =
-  "Handoff phase outputs";
+export {
+  proofGraphHandoffPhaseOutputSectionHeading,
+  proofGraphHandoffPhaseOutputSectionId,
+} from "../../../../tools/dev_test_game_handoff_phase_outputs.mjs";
 
 const COMPLETED_GAME_HARDENING_LANE_CASES = Object.freeze(
   completedGameHardeningLaneCases(),
@@ -617,6 +623,7 @@ function proofGraphHandoffPhaseOutputRows({ nodes, edges } = {}) {
         artifact: String(node.artifact ?? ""),
         handoffPhaseId: String(node.handoffPhaseId ?? ""),
         handoffPhaseStep: String(node.handoffPhaseStep ?? ""),
+        handoffPhaseOutputId: String(node.handoffPhaseOutputId ?? ""),
         proofCommand: String(node.proofCommand ?? ""),
         manifestEdgeRowId:
           manifestEdge === null ? "" : proofGraphEdgeCheckId(manifestEdge),
@@ -627,17 +634,19 @@ function proofGraphHandoffPhaseOutputRows({ nodes, edges } = {}) {
 function proofGraphHandoffPhaseOutputArtifactRow({ row, game }) {
   return {
     id: row.id,
-    testId: `proof-graph-handoff-phase-output-${row.id}`,
+    testId: proofGraphHandoffPhaseOutputRowTestId(row.id),
     values: [
       { id: "label", text: row.label, emphasized: true },
       { id: "status", text: row.status },
       { id: "handoffPhaseId", text: row.handoffPhaseId },
       { id: "handoffPhaseStep", text: row.handoffPhaseStep },
+      { id: "handoffPhaseOutputId", text: row.handoffPhaseOutputId },
       { id: "manifestEdgeRowId", text: row.manifestEdgeRowId },
       localProofArtifactValue({
         id: "artifact",
         text: row.artifact,
         game,
+        testId: proofGraphHandoffPhaseOutputArtifactTestId(row.id),
       }),
       { id: "command", text: row.proofCommand },
     ],

@@ -31,6 +31,10 @@ import {
 import {
   proofGraphDiagnosticProofSummaryRowTestIdPrefix,
 } from "./dev_test_game_proof_graph_diagnostic_summary.mjs";
+import {
+  proofGraphHandoffPhaseOutputArtifactTestId,
+  proofGraphHandoffPhaseOutputRowTestIdPrefix,
+} from "./dev_test_game_handoff_phase_outputs.mjs";
 export {
   normalizedEvidenceObjectRowIds,
 } from "./dev_test_game_normalized_evidence_object_rows.mjs";
@@ -153,6 +157,33 @@ export function assertAdminRoleSurfaceProofGraphPrerequisiteDestinationArtifacts
     if (rowId === "" || proofTarget === "" || match === undefined) {
       throw new Error(
         `${proofName} missing proof graph prerequisite destination artifact drilldown: ${rowId}`,
+      );
+    }
+  }
+}
+
+export function assertAdminRoleSurfaceProofGraphHandoffPhaseOutputArtifacts({
+  adminRoleSurface,
+  expectedArtifacts,
+  proofName,
+}) {
+  const visible = adminRoleSurface?.visibleProofGraphHandoffPhaseOutputArtifacts;
+  for (const expected of expectedArtifacts ?? []) {
+    const id = String(expected.id ?? "");
+    const artifact = String(expected.artifact ?? "");
+    const match = Array.isArray(visible)
+      ? visible.find(
+          (item) =>
+            item?.id === id &&
+            item.artifact === artifact &&
+            item.href ===
+              adminArtifactUrlPath({ game: "<seeded-game>", artifact }) &&
+            item.clickedThrough === true,
+        )
+      : undefined;
+    if (id === "" || artifact === "" || match === undefined) {
+      throw new Error(
+        `${proofName} missing proof graph handoff phase output artifact drilldown: ${id}`,
       );
     }
   }
@@ -462,6 +493,9 @@ export async function proveAdminAuditDetail({
   requiredProductionFeatureDestinationArtifacts = [],
   requiredDiagnosticProofSummaries = [],
   requiredDiagnosticProofSummaryStatuses = {},
+  requiredProofGraphHandoffPhaseOutputs = [],
+  requiredProofGraphHandoffPhaseOutputStatuses = {},
+  requiredProofGraphHandoffPhaseOutputArtifacts = [],
   requiredProofGraphPrerequisiteDestinations = [],
   requiredProofGraphPrerequisiteDestinationArtifacts = [],
   requiredProofGraphCoreLoopRecoveryDestinations = [],
@@ -669,6 +703,26 @@ export async function proveAdminAuditDetail({
       prefix: proofGraphDiagnosticProofSummaryRowTestIdPrefix,
       ids: Object.keys(requiredDiagnosticProofSummaryStatuses),
     });
+    const visibleProofGraphHandoffPhaseOutputs = await waitForRows({
+      page,
+      prefix: proofGraphHandoffPhaseOutputRowTestIdPrefix,
+      ids: requiredProofGraphHandoffPhaseOutputs,
+      expectedStatuses: requiredProofGraphHandoffPhaseOutputStatuses,
+    });
+    const visibleProofGraphHandoffPhaseOutputStatuses =
+      await readRowStatuses({
+        page,
+        prefix: proofGraphHandoffPhaseOutputRowTestIdPrefix,
+        ids: Object.keys(requiredProofGraphHandoffPhaseOutputStatuses),
+      });
+    const visibleProofGraphHandoffPhaseOutputArtifacts =
+      await visitProofGraphHandoffPhaseOutputArtifacts({
+        page,
+        frontendBaseUrl,
+        detailUrl,
+        game,
+        expectedArtifacts: requiredProofGraphHandoffPhaseOutputArtifacts,
+      });
     const visibleProofGraphPrerequisiteDestinations = await waitForRows({
       page,
       prefix: proofGraphPrerequisiteDestinationRowTestIdPrefix,
@@ -1601,6 +1655,15 @@ export async function proveAdminAuditDetail({
       ...(Object.keys(visibleDiagnosticProofSummaryStatuses).length === 0
         ? {}
         : { visibleDiagnosticProofSummaryStatuses }),
+      ...(visibleProofGraphHandoffPhaseOutputs.length === 0
+        ? {}
+        : { visibleProofGraphHandoffPhaseOutputs }),
+      ...(Object.keys(visibleProofGraphHandoffPhaseOutputStatuses).length === 0
+        ? {}
+        : { visibleProofGraphHandoffPhaseOutputStatuses }),
+      ...(visibleProofGraphHandoffPhaseOutputArtifacts.length === 0
+        ? {}
+        : { visibleProofGraphHandoffPhaseOutputArtifacts }),
       ...(visibleProofGraphPrerequisiteDestinations.length === 0
         ? {}
         : { visibleProofGraphPrerequisiteDestinations }),
@@ -2232,6 +2295,36 @@ async function visitProofGraphPrerequisiteDestinationArtifacts({
         evidence: {
           rowId,
           proofTarget,
+        },
+      };
+    },
+  });
+}
+
+async function visitProofGraphHandoffPhaseOutputArtifacts({
+  page,
+  frontendBaseUrl,
+  detailUrl,
+  game,
+  expectedArtifacts,
+}) {
+  return visitAdminArtifactLinks({
+    page,
+    frontendBaseUrl,
+    detailUrl,
+    game,
+    expectedArtifacts,
+    malformedMessage: "proof graph handoff phase output artifact is malformed",
+    toVisit: (expected) => {
+      const id = String(expected.id ?? "");
+      const artifact = String(expected.artifact ?? "");
+      return {
+        valid: id !== "" && artifact !== "",
+        artifact,
+        testId: proofGraphHandoffPhaseOutputArtifactTestId(id),
+        evidence: {
+          id,
+          artifact,
         },
       };
     },

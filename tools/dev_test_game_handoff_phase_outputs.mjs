@@ -24,6 +24,20 @@ export const devTestGameHostedIdentityHandoffPhaseId =
   "hosted-identity-handoff";
 export const devTestGameHandoffPhaseNextActionScript =
   "tools/dev_test_game_next_action.mjs";
+export const proofGraphHandoffPhaseOutputSectionId =
+  "proof-graph-handoff-phase-outputs";
+export const proofGraphHandoffPhaseOutputSectionHeading =
+  "Handoff phase outputs";
+export const proofGraphHandoffPhaseOutputRowTestIdPrefix =
+  "proof-graph-handoff-phase-output";
+
+export function proofGraphHandoffPhaseOutputRowTestId(rowId) {
+  return `${proofGraphHandoffPhaseOutputRowTestIdPrefix}-${rowId}`;
+}
+
+export function proofGraphHandoffPhaseOutputArtifactTestId(rowId) {
+  return `${proofGraphHandoffPhaseOutputRowTestId(rowId)}-artifact`;
+}
 
 export const devTestGameHandoffPhaseOutputs = Object.freeze(
   [

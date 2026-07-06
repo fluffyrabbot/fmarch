@@ -206,6 +206,9 @@ import {
   proofGraphDiagnosticSummaryCheckIds,
 } from "../../../../tools/dev_test_game_proof_graph_diagnostic_summary.mjs";
 import {
+  proofGraphHandoffPhaseOutputArtifactTestId,
+} from "../../../../tools/dev_test_game_handoff_phase_outputs.mjs";
+import {
   recoveryReceiptGraphDescriptorByReceiptKey,
 } from "../../../../tools/dev_test_game_recovery_receipt_graph_surfaces.mjs";
 import {
@@ -9493,6 +9496,7 @@ function expectedProofGraphHandoffPhaseOutputRows(proofGraph) {
           ["status", node.status, false],
           ["handoffPhaseId", node.handoffPhaseId, false],
           ["handoffPhaseStep", node.handoffPhaseStep, false],
+          ["handoffPhaseOutputId", node.handoffPhaseOutputId, false],
           [
             "manifestEdgeRowId",
             `edge:${edge.from}:${edge.relationship}:${edge.to}`,
@@ -9527,6 +9531,7 @@ function expectedProofGraphHandoffPhaseOutputRowsWithLinks(
           ["status", node.status, false, "", ""],
           ["handoffPhaseId", node.handoffPhaseId, false, "", ""],
           ["handoffPhaseStep", node.handoffPhaseStep, false, "", ""],
+          ["handoffPhaseOutputId", node.handoffPhaseOutputId, false, "", ""],
           [
             "manifestEdgeRowId",
             `edge:${edge.from}:${edge.relationship}:${edge.to}`,
@@ -9539,7 +9544,7 @@ function expectedProofGraphHandoffPhaseOutputRowsWithLinks(
             node.artifact,
             false,
             expectedAdminArtifactHref({ game, artifact: node.artifact }),
-            "",
+            proofGraphHandoffPhaseOutputArtifactTestId(node.id),
           ],
           ["command", node.proofCommand, false, "", ""],
         ],

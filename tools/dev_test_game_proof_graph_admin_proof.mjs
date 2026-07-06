@@ -41,6 +41,7 @@ import {
 } from "./dev_test_game_hosted_handoff_cases.mjs";
 import {
   assertAdminRoleSurfaceEvidenceArtifact,
+  assertAdminRoleSurfaceProofGraphHandoffPhaseOutputArtifacts,
   assertAdminRoleSurfaceProductionFeatureDestinationArtifacts,
   assertAdminRoleSurfaceProofGraphCoreLoopRecoveryDestinationArtifacts,
   assertAdminRoleSurfaceProofGraphPrerequisiteDestinationArtifacts,
@@ -269,6 +270,8 @@ export function buildProofGraphAdminProofRequirements(source) {
     proofGraphCoreLoopRecoveryDestinationSummary(source.proofGraph);
   const phaseLocalNextActionGraphLinks =
     proofGraphPhaseLocalNextActionGraphLinks(source.proofGraph);
+  const handoffPhaseOutputGraphLinks =
+    proofGraphHandoffPhaseOutputGraphLinks(source.proofGraph);
   return {
     game: source.proofRun.session.game,
     auditId: localAdminAuditIds.proofGraph,
@@ -285,6 +288,12 @@ export function buildProofGraphAdminProofRequirements(source) {
       proofGraphPhaseLocalNextActionGraphLinkRows(
         phaseLocalNextActionGraphLinks,
       ),
+    requiredProofGraphHandoffPhaseOutputs:
+      proofGraphHandoffPhaseOutputRows(handoffPhaseOutputGraphLinks),
+    requiredProofGraphHandoffPhaseOutputStatuses:
+      proofGraphHandoffPhaseOutputStatusMap(handoffPhaseOutputGraphLinks),
+    requiredProofGraphHandoffPhaseOutputArtifacts:
+      proofGraphHandoffPhaseOutputArtifacts(handoffPhaseOutputGraphLinks),
     requiredProductionFeatureDestinationSummaries:
       productionFeatureDestinationSummary.rows.map((row) => row.id),
     requiredProductionFeatureDestinationArtifacts:
@@ -413,6 +422,8 @@ export function buildProofGraphAdminGeneratedFrom(
       ),
     phaseLocalNextActionGraphLinks:
       proofGraphPhaseLocalNextActionGraphLinks(source.proofGraph),
+    handoffPhaseOutputGraphLinks:
+      proofGraphHandoffPhaseOutputGraphLinks(source.proofGraph),
     proofGraphPrerequisiteDestinationRowIds:
       proofGraphAdminProofPrerequisiteDestinationRowIds(source.proofGraph),
     proofGraphPrerequisiteDestinationArtifacts:
@@ -534,6 +545,13 @@ export function assertProofGraphAdminProof(evidence) {
   assertProofGraphAdminProofCoversProductionFeatureProvenanceComparison(evidence);
   assertProofGraphAdminProofCoversDiagnosticProofSummary(evidence);
   assertProofGraphAdminProofCoversPhaseLocalNextActionGraphLinks(evidence);
+  assertProofGraphAdminProofCoversHandoffPhaseOutputGraphLinks(evidence);
+  assertAdminRoleSurfaceProofGraphHandoffPhaseOutputArtifacts({
+    adminRoleSurface: evidence.adminRoleSurface,
+    expectedArtifacts:
+      evidence.generatedFrom?.handoffPhaseOutputGraphLinks?.outputs,
+    proofName: "proof graph admin proof",
+  });
   assertVisibleAdminRoleSurfaceRows({
     adminRoleSurface: evidence.adminRoleSurface,
     rowIds: evidence.generatedFrom?.proofGraphPrerequisiteDestinationRowIds,
@@ -1254,6 +1272,68 @@ function proofGraphPhaseLocalNextActionGraphLinkRows(links) {
   ]);
 }
 
+function proofGraphHandoffPhaseOutputGraphLinks(proofGraph) {
+  const outputs = (proofGraph.nodes ?? [])
+    .filter((node) => node.kind === "handoff-phase-output")
+    .map((node) => {
+      const manifestEdge = proofGraphHandoffPhaseOutputEdge({
+        proofGraph,
+        node,
+      });
+      return {
+        id: node.id,
+        artifact: node.artifact,
+        handoffPhaseId: node.handoffPhaseId,
+        handoffPhaseStep: node.handoffPhaseStep,
+        handoffPhaseOutputId: node.handoffPhaseOutputId,
+        proofCommand: node.proofCommand,
+        proofBoundary: node.proofBoundary,
+        manifestEdgeRowId: proofGraphEdgeCheckId(manifestEdge),
+      };
+    });
+  return {
+    id: "handoff-phase-output-graph-links",
+    status: outputs.length === 0 ? "missing" : "recorded",
+    outputs,
+  };
+}
+
+function proofGraphHandoffPhaseOutputEdge({ proofGraph, node }) {
+  const edge = (proofGraph.edges ?? []).find(
+    (candidate) =>
+      candidate.from === "spine-manifest" &&
+      candidate.to === node.id &&
+      candidate.relationship === "records-handoff-phase-output" &&
+      candidate.handoffPhaseOutputId === node.handoffPhaseOutputId,
+  );
+  if (edge === undefined) {
+    throw new Error(
+      `proof graph missing handoff phase output edge: ${node.id}`,
+    );
+  }
+  return edge;
+}
+
+function proofGraphHandoffPhaseOutputRows(links) {
+  return (links.outputs ?? []).map((output) => output.id);
+}
+
+function proofGraphHandoffPhaseOutputStatusMap(links) {
+  return Object.fromEntries(
+    (links.outputs ?? []).map((output) => [
+      output.id,
+      handoffPhaseOutputStatusText(output),
+    ]),
+  );
+}
+
+function proofGraphHandoffPhaseOutputArtifacts(links) {
+  return (links.outputs ?? []).map((output) => ({
+    id: output.id,
+    artifact: output.artifact,
+  }));
+}
+
 function phaseLocalNextActionSnapshotStatusText(snapshot) {
   return [
     "recorded",
@@ -1264,6 +1344,20 @@ function phaseLocalNextActionSnapshotStatusText(snapshot) {
     snapshot.nextActionEdgeRowId,
     snapshot.manifestEdgeRowId,
     snapshot.proofCommand,
+  ]
+    .filter((token) => String(token ?? "") !== "")
+    .join("\n");
+}
+
+function handoffPhaseOutputStatusText(output) {
+  return [
+    "recorded",
+    output.handoffPhaseId,
+    output.handoffPhaseStep,
+    output.handoffPhaseOutputId,
+    output.manifestEdgeRowId,
+    output.artifact,
+    output.proofCommand,
   ]
     .filter((token) => String(token ?? "") !== "")
     .join("\n");
@@ -1585,6 +1679,65 @@ function assertProofGraphAdminProofCoversPhaseLocalNextActionGraphLinks(evidence
     evidence,
     links,
   });
+}
+
+function assertProofGraphAdminProofCoversHandoffPhaseOutputGraphLinks(evidence) {
+  const links = evidence.generatedFrom?.handoffPhaseOutputGraphLinks;
+  if (links === undefined) {
+    return;
+  }
+  if (
+    links.id !== "handoff-phase-output-graph-links" ||
+    links.status !== "recorded" ||
+    !Array.isArray(links.outputs) ||
+    links.outputs.length === 0
+  ) {
+    throw new Error(
+      "proof graph admin proof handoff phase output graph links drifted",
+    );
+  }
+  const visibleRows =
+    evidence.adminRoleSurface?.visibleProofGraphHandoffPhaseOutputs ?? [];
+  const visibleStatuses =
+    evidence.adminRoleSurface?.visibleProofGraphHandoffPhaseOutputStatuses ?? {};
+  for (const output of links.outputs) {
+    if (!visibleRows.includes(output.id)) {
+      throw new Error(
+        `proof graph admin proof missing handoff phase output row: ${output.id}`,
+      );
+    }
+    if (
+      typeof output.artifact !== "string" ||
+      !output.artifact.startsWith("target/dev-test-game/") ||
+      typeof output.handoffPhaseId !== "string" ||
+      !output.handoffPhaseId.endsWith("-handoff") ||
+      typeof output.handoffPhaseOutputId !== "string" ||
+      !output.handoffPhaseOutputId.includes(output.artifact) ||
+      typeof output.manifestEdgeRowId !== "string" ||
+      !output.manifestEdgeRowId.includes("records-handoff-phase-output") ||
+      typeof output.proofCommand !== "string" ||
+      output.proofCommand.trim() === ""
+    ) {
+      throw new Error(
+        `proof graph admin proof handoff phase output drifted: ${output.id}`,
+      );
+    }
+    const visibleText = String(visibleStatuses[output.id] ?? "");
+    for (const token of [
+      output.handoffPhaseId,
+      output.handoffPhaseStep,
+      output.handoffPhaseOutputId,
+      output.artifact,
+      output.manifestEdgeRowId,
+      output.proofCommand,
+    ]) {
+      if (!visibleText.includes(String(token ?? ""))) {
+        throw new Error(
+          `proof graph admin proof handoff phase output missing text ${token}: ${output.id}`,
+        );
+      }
+    }
+  }
 }
 
 function assertProofGraphAdminProofCoversPhaseLocalNextActionDestination({
