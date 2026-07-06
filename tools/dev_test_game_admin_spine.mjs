@@ -358,6 +358,8 @@ export const devTestGameAdminSpinePlan = [
     ],
     env: adminSpineTerminalBatchReadinessEvidenceEnv,
   }),
+  { kind: "node", script: "tools/dev_test_game_release_admin_proof.mjs" },
+  { kind: "node", script: "tools/dev_test_game_release_admin_proof_contract.mjs" },
 ];
 
 function terminalAdminProofBatchPlanForScript(script) {

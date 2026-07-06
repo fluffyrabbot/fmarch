@@ -1428,6 +1428,8 @@ test("dev test-game spine orchestrators expose stable proof order and env maps",
       "tools/dev_test_game_next_action_admin_proof.mjs",
       "tools/dev_test_game_admin_spine_admin_proof.mjs",
       devTestGameReleaseReadinessScript,
+      "tools/dev_test_game_release_admin_proof.mjs",
+      "tools/dev_test_game_release_admin_proof_contract.mjs",
     ],
   );
   assert.deepEqual(devTestGameAdminSpinePlan[14], {
@@ -1584,7 +1586,7 @@ test("dev test-game spine orchestrators expose stable proof order and env maps",
     assert.equal(Object.hasOwn(devTestGameAdminSpinePlan[16].env, key), false);
   }
   assert.equal(
-    devTestGameAdminSpinePlan.at(-1).env,
+    releaseReadinessSteps(devTestGameAdminSpinePlan).at(-1).env,
     adminSpineTerminalBatchReadinessEvidenceEnv,
   );
   assertReleaseReadinessStepMetadata({
