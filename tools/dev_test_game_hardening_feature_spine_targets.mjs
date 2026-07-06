@@ -9,6 +9,9 @@ import {
   replacementStaleConflictMessageSpineLaneCase,
 } from "./dev_test_game_stale_conflict_scenarios.mjs";
 import {
+  cohostStaleDeadlineReconnectLaneId,
+  hostStaleAdvanceReconnectLaneId,
+  hostStaleDeadlineReconnectLaneId,
   hostStaleResolveReconnectLaneId,
   privateChannelStaleActionReconnectLaneId,
   stalePlayerActionReconnectLaneId,
@@ -64,6 +67,30 @@ export const hardeningFeatureSpineTargetRows = Object.freeze({
     checkpointId: hostStaleResolveReconnectLaneId,
     adminCheckId: hostStaleResolveReconnectLaneId,
   }),
+  hostStaleAdvanceReconnectRecovery: Object.freeze({
+    featureSlotId: "host-stale-advance-reconnect-recovery",
+    sourceCheckId: hardeningFeatureSpineSourceCheckId,
+    cycleId: hardeningFeatureSpineCycleIds.reconnectRecovery,
+    roleUrlId: hostStaleAdvanceReconnectLaneId,
+    checkpointId: hostStaleAdvanceReconnectLaneId,
+    adminCheckId: hostStaleAdvanceReconnectLaneId,
+  }),
+  hostStaleDeadlineReconnectRecovery: Object.freeze({
+    featureSlotId: "host-stale-deadline-reconnect-recovery",
+    sourceCheckId: hardeningFeatureSpineSourceCheckId,
+    cycleId: hardeningFeatureSpineCycleIds.reconnectRecovery,
+    roleUrlId: hostStaleDeadlineReconnectLaneId,
+    checkpointId: hostStaleDeadlineReconnectLaneId,
+    adminCheckId: hostStaleDeadlineReconnectLaneId,
+  }),
+  cohostStaleDeadlineReconnectRecovery: Object.freeze({
+    featureSlotId: "cohost-stale-deadline-reconnect-recovery",
+    sourceCheckId: hardeningFeatureSpineSourceCheckId,
+    cycleId: hardeningFeatureSpineCycleIds.reconnectRecovery,
+    roleUrlId: cohostStaleDeadlineReconnectLaneId,
+    checkpointId: cohostStaleDeadlineReconnectLaneId,
+    adminCheckId: cohostStaleDeadlineReconnectLaneId,
+  }),
 });
 export const hardeningDirectRoleUrlReconnectFeatureSpineTargetRows =
   Object.freeze([
@@ -74,6 +101,18 @@ export const hardeningSynthesizedRoleUrlReconnectFeatureSpineTargetRows =
   Object.freeze([
     Object.freeze({
       row: hardeningFeatureSpineTargetRows.hostStaleResolveReconnectRecovery,
+      role: "host",
+    }),
+    Object.freeze({
+      row: hardeningFeatureSpineTargetRows.hostStaleAdvanceReconnectRecovery,
+      role: "host",
+    }),
+    Object.freeze({
+      row: hardeningFeatureSpineTargetRows.hostStaleDeadlineReconnectRecovery,
+      role: "host",
+    }),
+    Object.freeze({
+      row: hardeningFeatureSpineTargetRows.cohostStaleDeadlineReconnectRecovery,
       role: "host",
     }),
   ]);

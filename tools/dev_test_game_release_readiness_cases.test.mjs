@@ -92,10 +92,46 @@ import {
   replacementStaleConflictMessageSpineLaneCase,
 } from "./dev_test_game_stale_conflict_scenarios.mjs";
 import {
+  cohostStaleDeadlineReconnectLaneId,
+  hostStaleAdvanceReconnectLaneId,
+  hostStaleDeadlineReconnectLaneId,
   hostStaleResolveReconnectLaneId,
   privateChannelStaleActionReconnectLaneId,
   stalePlayerActionReconnectLaneId,
 } from "./dev_test_game_stale_client_reconnect_scenarios.mjs";
+
+const hardeningReconnectFeatureTargetExpectations = Object.freeze([
+  Object.freeze({
+    targetKey: "staleActionReconnectRecovery",
+    featureSlotId: "stale-action-reconnect-recovery",
+    rowId: stalePlayerActionReconnectLaneId,
+  }),
+  Object.freeze({
+    targetKey: "privateChannelStaleActionReconnectRecovery",
+    featureSlotId: "private-channel-stale-action-reconnect-recovery",
+    rowId: privateChannelStaleActionReconnectLaneId,
+  }),
+  Object.freeze({
+    targetKey: "hostStaleResolveReconnectRecovery",
+    featureSlotId: "host-stale-resolve-reconnect-recovery",
+    rowId: hostStaleResolveReconnectLaneId,
+  }),
+  Object.freeze({
+    targetKey: "hostStaleAdvanceReconnectRecovery",
+    featureSlotId: "host-stale-advance-reconnect-recovery",
+    rowId: hostStaleAdvanceReconnectLaneId,
+  }),
+  Object.freeze({
+    targetKey: "hostStaleDeadlineReconnectRecovery",
+    featureSlotId: "host-stale-deadline-reconnect-recovery",
+    rowId: hostStaleDeadlineReconnectLaneId,
+  }),
+  Object.freeze({
+    targetKey: "cohostStaleDeadlineReconnectRecovery",
+    featureSlotId: "cohost-stale-deadline-reconnect-recovery",
+    rowId: cohostStaleDeadlineReconnectLaneId,
+  }),
+]);
 
 test("release readiness unproven cases share blocker IDs and status rows", () => {
   assert.ok(releaseReadinessUnprovenCaseIds.includes("hosted-deployment"));
@@ -375,44 +411,20 @@ test("release readiness buildable cases share next-action commands and spine tar
       adminCheckId: replacementStaleConflictMessageSpineLaneCase().laneId,
     },
   );
-  assert.deepEqual(
-    releaseReadinessProductionFeatureSpineTargets.staleActionReconnectRecovery,
-    {
-      featureSlotId: "stale-action-reconnect-recovery",
-      sourceCheckId: hardeningFeatureSpineSourceCheckId,
-      cycleId: hardeningFeatureSpineCycleIds.reconnectRecovery,
-      roleUrlId: stalePlayerActionReconnectLaneId,
-      rowKind: "checkpoint",
-      checkpointId: stalePlayerActionReconnectLaneId,
-      adminCheckId: stalePlayerActionReconnectLaneId,
-    },
-  );
-  assert.deepEqual(
-    releaseReadinessProductionFeatureSpineTargets
-      .privateChannelStaleActionReconnectRecovery,
-    {
-      featureSlotId: "private-channel-stale-action-reconnect-recovery",
-      sourceCheckId: hardeningFeatureSpineSourceCheckId,
-      cycleId: hardeningFeatureSpineCycleIds.reconnectRecovery,
-      roleUrlId: privateChannelStaleActionReconnectLaneId,
-      rowKind: "checkpoint",
-      checkpointId: privateChannelStaleActionReconnectLaneId,
-      adminCheckId: privateChannelStaleActionReconnectLaneId,
-    },
-  );
-  assert.deepEqual(
-    releaseReadinessProductionFeatureSpineTargets
-      .hostStaleResolveReconnectRecovery,
-    {
-      featureSlotId: "host-stale-resolve-reconnect-recovery",
-      sourceCheckId: hardeningFeatureSpineSourceCheckId,
-      cycleId: hardeningFeatureSpineCycleIds.reconnectRecovery,
-      roleUrlId: hostStaleResolveReconnectLaneId,
-      rowKind: "checkpoint",
-      checkpointId: hostStaleResolveReconnectLaneId,
-      adminCheckId: hostStaleResolveReconnectLaneId,
-    },
-  );
+  for (const expectation of hardeningReconnectFeatureTargetExpectations) {
+    assert.deepEqual(
+      releaseReadinessProductionFeatureSpineTargets[expectation.targetKey],
+      {
+        featureSlotId: expectation.featureSlotId,
+        sourceCheckId: hardeningFeatureSpineSourceCheckId,
+        cycleId: hardeningFeatureSpineCycleIds.reconnectRecovery,
+        roleUrlId: expectation.rowId,
+        rowKind: "checkpoint",
+        checkpointId: expectation.rowId,
+        adminCheckId: expectation.rowId,
+      },
+    );
+  }
 
   const releaseRunbook = releaseReadinessBuildableItemForId(
     "human-release-runbook",
@@ -530,30 +542,15 @@ test("scenario-owned production feature targets derive proof row ids from source
         rowId: replacementStaleConflictMessageSpineLaneCase().laneId,
       },
     },
-    {
-      target: releaseReadinessProductionFeatureSpineTargets
-        .staleActionReconnectRecovery,
+    ...hardeningReconnectFeatureTargetExpectations.map((expectation) => ({
+      target: releaseReadinessProductionFeatureSpineTargets[
+        expectation.targetKey
+      ],
       source: {
         cycleId: hardeningFeatureSpineCycleIds.reconnectRecovery,
-        rowId: stalePlayerActionReconnectLaneId,
+        rowId: expectation.rowId,
       },
-    },
-    {
-      target: releaseReadinessProductionFeatureSpineTargets
-        .privateChannelStaleActionReconnectRecovery,
-      source: {
-        cycleId: hardeningFeatureSpineCycleIds.reconnectRecovery,
-        rowId: privateChannelStaleActionReconnectLaneId,
-      },
-    },
-    {
-      target: releaseReadinessProductionFeatureSpineTargets
-        .hostStaleResolveReconnectRecovery,
-      source: {
-        cycleId: hardeningFeatureSpineCycleIds.reconnectRecovery,
-        rowId: hostStaleResolveReconnectLaneId,
-      },
-    },
+    })),
   ];
 
   for (const { target, source } of scenarioOwnedTargets) {
