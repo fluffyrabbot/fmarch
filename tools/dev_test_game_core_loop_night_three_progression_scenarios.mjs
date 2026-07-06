@@ -1,6 +1,8 @@
 export const nightThreeDayFourCycleId = "n03-d04";
 export const nightThreeActionResolutionLaneId =
   "night-three-action-resolution";
+export const nightThreeActionSubmissionLaneId =
+  "night-three-action-submission";
 export const dayFourControlsReturnLaneId = "day-four-controls-return";
 export const nightThreeProgressionAdminCheckId = "core-loop";
 export const nightThreeProgressionActionId = "submit_action:factional_kill";
@@ -24,6 +26,21 @@ const cloneCase = (scenario) => ({
 const cloneFeatureRow = (row) => ({ ...row });
 
 const nightThreeProgressionCheckpointCaseDefinitions = Object.freeze([
+  Object.freeze({
+    id: nightThreeActionSubmissionLaneId,
+    targetKey: "nightThreeActionSubmission",
+    featureSlotId: nightThreeActionSubmissionLaneId,
+    role: "actionPlayer",
+    checkpointId: "n03-action-submitted",
+    statusKind: "night-action-submission",
+    expectedCheckpointFields: Object.freeze({
+      actionState: "ack",
+      actorSlot: "slot_4",
+      templateId: "factional_kill",
+      targetSlot: "slot-7",
+      actionButtonVisible: false,
+    }),
+  }),
   Object.freeze({
     id: nightThreeActionResolutionLaneId,
     targetKey: "nightThreeActionResolution",
