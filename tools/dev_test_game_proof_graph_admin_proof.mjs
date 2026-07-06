@@ -258,11 +258,17 @@ export function buildProofGraphAdminProofRequirements(source) {
   );
   const coreLoopRecoveryDestinationSummary =
     proofGraphCoreLoopRecoveryDestinationSummary(source.proofGraph);
+  const phaseLocalNextActionGraphLinks =
+    proofGraphPhaseLocalNextActionGraphLinks(source.proofGraph);
   return {
     game: source.proofRun.session.game,
     auditId: localAdminAuditIds.proofGraph,
     requiredChecks: proofGraphVisibleCheckIds(source.proofGraph),
     requiredCheckStatuses: proofGraphVisibleCheckStatuses(source.proofGraph),
+    requiredPhaseLocalNextActionGraphLinkRows:
+      proofGraphPhaseLocalNextActionGraphLinkRows(
+        phaseLocalNextActionGraphLinks,
+      ),
     requiredProductionFeatureDestinationSummaries:
       productionFeatureDestinationSummary.rows.map((row) => row.id),
     requiredText: ["Hosted evidence recovery ladder"],
@@ -371,6 +377,8 @@ export function buildProofGraphAdminGeneratedFrom(
     ),
     coreLoopRecoveryDestinationSummary:
       proofGraphCoreLoopRecoveryDestinationSummary(source.proofGraph),
+    phaseLocalNextActionGraphLinks:
+      proofGraphPhaseLocalNextActionGraphLinks(source.proofGraph),
     proofGraphPrerequisiteDestinationRowIds:
       proofGraphAdminProofPrerequisiteDestinationRowIds(source.proofGraph),
     ...(source.adminSpineTerminalBatches?.selectedOperatorHandoffReceipt
@@ -473,6 +481,7 @@ export function assertProofGraphAdminProof(evidence) {
   assertProofGraphAdminProofCoversProductionFeatureDestinationSummary(evidence);
   assertProofGraphAdminProofCoversProductionFeatureProvenanceComparison(evidence);
   assertProofGraphAdminProofCoversDiagnosticProofSummary(evidence);
+  assertProofGraphAdminProofCoversPhaseLocalNextActionGraphLinks(evidence);
   assertVisibleAdminRoleSurfaceRows({
     adminRoleSurface: evidence.adminRoleSurface,
     rowIds: evidence.generatedFrom?.proofGraphPrerequisiteDestinationRowIds,
@@ -1100,6 +1109,74 @@ function proofGraphNextActionHandoffDestinations(proofGraph) {
   ];
 }
 
+function proofGraphPhaseLocalNextActionGraphLinks(proofGraph) {
+  const snapshots = (proofGraph.nodes ?? [])
+    .filter((node) => node.kind === "phase-local-next-action")
+    .map((node) => {
+      const nextActionEdge = proofGraphPhaseLocalNextActionEdge({
+        proofGraph,
+        node,
+        from: "next-action",
+        relationship: "phase-local-snapshot",
+      });
+      const manifestEdge = proofGraphPhaseLocalNextActionEdge({
+        proofGraph,
+        node,
+        from: "spine-manifest",
+        relationship: "records-phase-local-next-action",
+      });
+      return {
+        id: node.id,
+        artifact: node.artifact,
+        canonicalArtifact: node.canonicalArtifact,
+        phaseLocalNextActionId: node.phaseLocalNextActionId,
+        sequenceStage: node.sequenceStage,
+        proofCommand: node.proofCommand,
+        proofBoundary: node.proofBoundary,
+        nextActionEdgeRowId: proofGraphEdgeCheckId(nextActionEdge),
+        manifestEdgeRowId: proofGraphEdgeCheckId(manifestEdge),
+      };
+    });
+  return {
+    id: "phase-local-next-action-graph-links",
+    status: snapshots.length === 0 ? "missing" : "recorded",
+    canonicalNextActionNodeId: "next-action",
+    canonicalNextActionRoleUrl: localAdminAuditRoleUrl(
+      localAdminAuditIds.nextAction,
+    ),
+    snapshots,
+  };
+}
+
+function proofGraphPhaseLocalNextActionEdge({
+  proofGraph,
+  node,
+  from,
+  relationship,
+}) {
+  const edge = (proofGraph.edges ?? []).find(
+    (candidate) =>
+      candidate.from === from &&
+      candidate.to === node.id &&
+      candidate.relationship === relationship &&
+      candidate.phaseLocalNextActionId === node.phaseLocalNextActionId,
+  );
+  if (edge === undefined) {
+    throw new Error(
+      `proof graph missing ${relationship} phase-local next-action edge: ${node.id}`,
+    );
+  }
+  return edge;
+}
+
+function proofGraphPhaseLocalNextActionGraphLinkRows(links) {
+  return (links.snapshots ?? []).flatMap((snapshot) => [
+    snapshot.id,
+    snapshot.nextActionEdgeRowId,
+    snapshot.manifestEdgeRowId,
+  ]);
+}
+
 function proofGraphAdminSpineTerminalReceiptDestinations(
   adminSpineTerminalBatches,
 ) {
@@ -1344,6 +1421,60 @@ function assertProofGraphAdminProofCoversAdminSpineTerminalValidations(evidence)
           `proof graph admin proof terminal validation row missing ${token}: ${validationId}`,
         );
       }
+    }
+  }
+}
+
+function assertProofGraphAdminProofCoversPhaseLocalNextActionGraphLinks(evidence) {
+  const links = evidence.generatedFrom?.phaseLocalNextActionGraphLinks;
+  if (links === undefined) {
+    return;
+  }
+  if (
+    links.id !== "phase-local-next-action-graph-links" ||
+    links.status !== "recorded" ||
+    links.canonicalNextActionNodeId !== "next-action" ||
+    links.canonicalNextActionRoleUrl !==
+      localAdminAuditRoleUrl(localAdminAuditIds.nextAction) ||
+    !Array.isArray(links.snapshots) ||
+    links.snapshots.length === 0
+  ) {
+    throw new Error(
+      "proof graph admin proof phase-local next-action graph links drifted",
+    );
+  }
+  if (
+    !evidence.adminRoleSurface?.visibleRelatedLinks?.includes(
+      links.canonicalNextActionNodeId,
+    )
+  ) {
+    throw new Error(
+      "proof graph admin proof missing canonical next-action related link",
+    );
+  }
+  const visibleChecks = evidence.adminRoleSurface?.visibleChecks ?? [];
+  for (const snapshot of links.snapshots) {
+    const requiredRows = [
+      snapshot.id,
+      snapshot.nextActionEdgeRowId,
+      snapshot.manifestEdgeRowId,
+    ];
+    for (const rowId of requiredRows) {
+      if (!visibleChecks.includes(rowId)) {
+        throw new Error(
+          `proof graph admin proof missing phase-local next-action graph row: ${rowId}`,
+        );
+      }
+    }
+    if (
+      snapshot.canonicalArtifact !== "target/dev-test-game/next-action.json" ||
+      typeof snapshot.artifact !== "string" ||
+      !snapshot.artifact.startsWith("target/dev-test-game/next-action-") ||
+      snapshot.proofCommand !== "test:dev-test-game-next-action"
+    ) {
+      throw new Error(
+        `proof graph admin proof phase-local next-action snapshot drifted: ${snapshot.id}`,
+      );
     }
   }
 }

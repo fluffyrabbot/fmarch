@@ -6172,6 +6172,41 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
       .requiredAdminSpineTerminalValidations,
     ["release-admin-proof-contract"],
   );
+  assert.deepEqual(
+    proofGraphAdminGeneratedFrom.phaseLocalNextActionGraphLinks.snapshots.map(
+      (snapshot) => ({
+        id: snapshot.id,
+        nextActionEdgeRowId: snapshot.nextActionEdgeRowId,
+        manifestEdgeRowId: snapshot.manifestEdgeRowId,
+      }),
+    ),
+    [
+      {
+        id: "next-action-hosted-evidence-operator-checklist",
+        nextActionEdgeRowId:
+          "edge:next-action:phase-local-snapshot:next-action-hosted-evidence-operator-checklist",
+        manifestEdgeRowId:
+          "edge:spine-manifest:records-phase-local-next-action:next-action-hosted-evidence-operator-checklist",
+      },
+      {
+        id: "next-action-hosted-identity",
+        nextActionEdgeRowId:
+          "edge:next-action:phase-local-snapshot:next-action-hosted-identity",
+        manifestEdgeRowId:
+          "edge:spine-manifest:records-phase-local-next-action:next-action-hosted-identity",
+      },
+    ],
+  );
+  assert.deepEqual(
+    proofGraphAdminRequirements.requiredPhaseLocalNextActionGraphLinkRows,
+    proofGraphAdminGeneratedFrom.phaseLocalNextActionGraphLinks.snapshots.flatMap(
+      (snapshot) => [
+        snapshot.id,
+        snapshot.nextActionEdgeRowId,
+        snapshot.manifestEdgeRowId,
+      ],
+    ),
+  );
   assert.equal(
     proofGraphAdminRequirements.game,
     "00000000-0000-0000-0000-000000000001",
@@ -7975,6 +8010,15 @@ test("admin proof fixtures prove normalized evidence object rows", () => {
     proofGraphProof.generatedFrom.adminSpineTerminalValidationDestination
       .requiredAdminSpineTerminalValidations,
     ["release-admin-proof-contract"],
+  );
+  assert.deepEqual(
+    proofGraphProof.generatedFrom.phaseLocalNextActionGraphLinks.snapshots.map(
+      (snapshot) => snapshot.nextActionEdgeRowId,
+    ),
+    [
+      "edge:next-action:phase-local-snapshot:next-action-hosted-evidence-operator-checklist",
+      "edge:next-action:phase-local-snapshot:next-action-hosted-identity",
+    ],
   );
   assert.equal(
     proofGraphProof.adminRoleSurface.visibleRelatedDestinations.find(
@@ -23371,6 +23415,14 @@ function proofGraphAdminProofFixture() {
     selectedOperatorHandoffReceiptDestinationFixture();
   const adminSpineTerminalValidationDestination =
     adminSpineTerminalValidationDestinationFixture();
+  const phaseLocalNextActionGraphLinks =
+    phaseLocalNextActionGraphLinksFixture();
+  const phaseLocalNextActionGraphLinkRows =
+    phaseLocalNextActionGraphLinks.snapshots.flatMap((snapshot) => [
+      snapshot.id,
+      snapshot.nextActionEdgeRowId,
+      snapshot.manifestEdgeRowId,
+    ]);
   return {
     version: 1,
     proof: proofGraphAdminProofDescriptor.proof,
@@ -23401,6 +23453,9 @@ function proofGraphAdminProofFixture() {
         replacementPrivateGraphTarget.roleSurfaceNodeId,
         replacementPrivateGraphTarget.productionFeatureNodeId,
         commandProofAuditNodeId,
+        ...phaseLocalNextActionGraphLinks.snapshots.map(
+          (snapshot) => snapshot.id,
+        ),
         ...coreLoopHostVisibleRecoveryDestinations.map(
           (destination) => destination.linkId,
         ),
@@ -23423,12 +23478,16 @@ function proofGraphAdminProofFixture() {
         replacementActionGraphTarget.edgeRowId,
         replacementPrivateGraphTarget.edgeRowId,
         commandProofAuditEdgeRowId,
+        ...phaseLocalNextActionGraphLinks.snapshots.flatMap((snapshot) => [
+          snapshot.nextActionEdgeRowId,
+          snapshot.manifestEdgeRowId,
+        ]),
         ...coreLoopHostVisibleRecoveryEdgeRowIds,
       ],
       edgeCount:
         handoffs.length +
         diagnosticEdgeRowIds.length +
-        6 +
+        10 +
         coreLoopHostVisibleRecoveryEdgeRowIds.length,
       adminProofSurfaceIds,
       adminProofRoleHandoffs: handoffs,
@@ -23440,6 +23499,7 @@ function proofGraphAdminProofFixture() {
       manifestProductionFeatureProvenanceSummary,
       productionFeatureProvenanceComparison,
       diagnosticProofSummary,
+      phaseLocalNextActionGraphLinks,
       selectedOperatorHandoffReceiptDestination,
       adminSpineTerminalValidationDestination,
       hostSetupFeatureTarget: hostSetupGraphTarget,
@@ -23482,6 +23542,7 @@ function proofGraphAdminProofFixture() {
         `coverage-decision:${replacementPrivateGraphTarget.productionFeatureNodeId}`,
         commandProofAuditNodeId,
         commandProofAuditEdgeRowId,
+        ...phaseLocalNextActionGraphLinkRows,
         ...coreLoopHostVisibleRecoveryDestinations.map(
           (destination) => destination.linkId,
         ),
@@ -23500,6 +23561,7 @@ function proofGraphAdminProofFixture() {
         ...proofGraphDiagnosticProofNodes.map((node) => node.id),
         ...handoffs.map((handoff) => handoff.linkId),
         "next-action-sequence-handoff",
+        "next-action",
         hostSetupGraphTarget.roleSurfaceNodeId,
         hostSetupGraphTarget.productionFeatureNodeId,
         coreLoopProductionFeatureTarget.productionFeatureNodeId,
@@ -26157,6 +26219,42 @@ function adminSpineTerminalValidationDestinationFixture() {
     visibleAdminSpineTerminalValidationStatuses: {
       [validation.id]: adminSpineTerminalValidationVisibleStatusFixture(),
     },
+  };
+}
+
+function phaseLocalNextActionGraphLinksFixture() {
+  const snapshots = [
+    {
+      id: "next-action-hosted-evidence-operator-checklist",
+      artifact:
+        "target/dev-test-game/next-action-hosted-evidence-operator-checklist.json",
+      phaseLocalNextActionId: "hosted-evidence-operator-checklist",
+    },
+    {
+      id: "next-action-hosted-identity",
+      artifact: "target/dev-test-game/next-action-hosted-identity.json",
+      phaseLocalNextActionId: "hosted-identity",
+      sequenceStage: "hosted-identity",
+    },
+  ];
+  return {
+    id: "phase-local-next-action-graph-links",
+    status: "recorded",
+    canonicalNextActionNodeId: "next-action",
+    canonicalNextActionRoleUrl: localAdminAuditRoleUrl(
+      localAdminAuditIds.nextAction,
+    ),
+    snapshots: snapshots.map((snapshot) => ({
+      ...snapshot,
+      canonicalArtifact: "target/dev-test-game/next-action.json",
+      proofCommand: "test:dev-test-game-next-action",
+      proofBoundary:
+        "Phase-local next-action snapshots preserve intermediate operator guidance without replacing the canonical next-action receipt.",
+      nextActionEdgeRowId:
+        `edge:next-action:phase-local-snapshot:${snapshot.id}`,
+      manifestEdgeRowId:
+        `edge:spine-manifest:records-phase-local-next-action:${snapshot.id}`,
+    })),
   };
 }
 
