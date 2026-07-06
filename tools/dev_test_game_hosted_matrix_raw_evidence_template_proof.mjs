@@ -43,6 +43,8 @@ export const hostedMatrixRawEvidenceTemplateDescriptorFieldCases =
       rowId: "rawEvidenceTemplateValidatorProofTarget",
     }),
   ]);
+export const hostedMatrixRawEvidenceTemplateDiagnosticFieldKeys =
+  Object.freeze(["path", "proofCommand", "validatorCommand"]);
 
 const promotedCellIds = Object.freeze([
   "replacement-private-post",
@@ -193,6 +195,16 @@ export function hostedMatrixRawEvidenceTemplateDescriptorFieldValues(
       ...fieldCase,
       value: descriptor[fieldCase.key],
     }),
+  );
+}
+
+export function hostedMatrixRawEvidenceTemplateDiagnosticFieldValues(
+  descriptor,
+) {
+  return hostedMatrixRawEvidenceTemplateDescriptorFieldValues(
+    descriptor,
+  ).filter((field) =>
+    hostedMatrixRawEvidenceTemplateDiagnosticFieldKeys.includes(field.key),
   );
 }
 

@@ -42,6 +42,7 @@ import {
   hostedEvidenceHandoffInputRows,
 } from "../../../../tools/dev_test_game_hosted_handoff_cases.mjs";
 import {
+  hostedMatrixRawEvidenceTemplateDiagnosticFieldValues,
   hostedMatrixRawEvidenceTemplateDescriptorFieldValues,
   hostedMatrixRawEvidenceTemplateDescriptor,
 } from "../../../../tools/dev_test_game_hosted_matrix_raw_evidence_template_proof.mjs";
@@ -4161,11 +4162,9 @@ function localProofGraphNodeCheckStatus(node) {
       : [`rawEvidenceContract ${rawEvidenceContractSummary}`]),
     ...(rawEvidenceTemplate === null
       ? []
-      : [
-          `rawEvidenceTemplatePath ${String(rawEvidenceTemplate.path ?? "").trim()}`,
-          `rawEvidenceTemplateProofCommand ${String(rawEvidenceTemplate.proofCommand ?? "").trim()}`,
-          `rawEvidenceTemplateValidatorCommand ${String(rawEvidenceTemplate.validatorCommand ?? "").trim()}`,
-        ]),
+      : hostedMatrixRawEvidenceTemplateDiagnosticFieldValues(
+          rawEvidenceTemplate,
+        ).map((field) => `${field.rowId} ${String(field.value ?? "").trim()}`)),
     ...(operatorAction === "" ? [] : [`operatorAction ${operatorAction}`]),
     ...(localVsHostedBoundary === ""
       ? []

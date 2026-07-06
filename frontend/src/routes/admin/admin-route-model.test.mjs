@@ -230,6 +230,7 @@ import {
   devTestGameHostedMatrixRawEvidenceTemplatePath,
   devTestGameHostedMatrixRawEvidenceTemplateProofCommand,
   devTestGameHostedMatrixRawEvidenceTemplateProofPath,
+  hostedMatrixRawEvidenceTemplateDiagnosticFieldValues,
   hostedMatrixRawEvidenceTemplateDescriptorFieldValues,
   hostedMatrixRawEvidenceTemplateDescriptor,
 } from "../../../../tools/dev_test_game_hosted_matrix_raw_evidence_template_proof.mjs";
@@ -2746,9 +2747,9 @@ test("proof graph selected operator packet node row carries raw evidence diagnos
           "packetProofTarget target/dev-test-game/hosted-target-preflight.json",
           "nextProofTarget target/dev-test-game/hosted-evidence-lane.json",
           "rawEvidenceContract Raw hosted matrix evidence packet",
-          `rawEvidenceTemplatePath ${devTestGameHostedMatrixRawEvidenceTemplatePath}`,
-          `rawEvidenceTemplateProofCommand npm run ${devTestGameHostedMatrixRawEvidenceTemplateProofCommand}`,
-          `rawEvidenceTemplateValidatorCommand npm run ${devTestGameRealHostedMatrixRawCaptureCommand}`,
+          ...hostedMatrixRawEvidenceTemplateDiagnosticFieldValues(
+            hostedMatrixRawEvidenceTemplateDescriptor(),
+          ).map((field) => `${field.rowId} ${String(field.value).trim()}`),
           "operatorAction Configure the hosted frontend/API URLs plus a readable raw hosted matrix evidence packet.",
           "localVsHostedBoundary Local hosted-like matrix artifacts cannot satisfy hosted deployment evidence.",
         ].join("\n"),

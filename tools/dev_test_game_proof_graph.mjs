@@ -53,6 +53,10 @@ import {
   coreLoopScenarioFamilyRows,
 } from "./dev_test_game_core_loop_generated_from_families.mjs";
 import {
+  hostedMatrixRawEvidenceTemplateDiagnosticFieldKeys,
+  hostedMatrixRawEvidenceTemplateDiagnosticFieldValues,
+} from "./dev_test_game_hosted_matrix_raw_evidence_template_proof.mjs";
+import {
   assertCoreLoopCommandProofRoleUrlAuditExpectation,
   coreLoopCommandProofRoleUrlAuditExpectation,
 } from "./dev_test_game_core_loop_proof_shape_assertions.mjs";
@@ -720,14 +724,9 @@ export function assertDevTestGameProofGraphCoversSelectedOperatorHandoffPacket(
     !Array.isArray(node.rawEvidenceContractRequiredTopLevelFields) ||
     node.rawEvidenceContractRequiredTopLevelFields.length === 0 ||
     (node.rawEvidenceTemplate !== undefined &&
-      (node.rawEvidenceTemplate === null ||
-        typeof node.rawEvidenceTemplate !== "object" ||
-        typeof node.rawEvidenceTemplate.path !== "string" ||
-        node.rawEvidenceTemplate.path.trim() === "" ||
-        typeof node.rawEvidenceTemplate.proofCommand !== "string" ||
-        node.rawEvidenceTemplate.proofCommand.trim() === "" ||
-        typeof node.rawEvidenceTemplate.validatorCommand !== "string" ||
-        node.rawEvidenceTemplate.validatorCommand.trim() === ""))
+      rawEvidenceTemplateDiagnosticFieldsAreMissing(
+        node.rawEvidenceTemplate,
+      ))
   ) {
     throw new Error("proof graph selected operator packet node drifted");
   }
@@ -757,6 +756,16 @@ export function assertDevTestGameProofGraphCoversSelectedOperatorHandoffPacket(
     );
   }
   return graph;
+}
+
+function rawEvidenceTemplateDiagnosticFieldsAreMissing(template) {
+  const fields = hostedMatrixRawEvidenceTemplateDiagnosticFieldValues(template);
+  return (
+    fields.length !== hostedMatrixRawEvidenceTemplateDiagnosticFieldKeys.length ||
+    fields.some(
+      (field) => typeof field.value !== "string" || field.value.trim() === "",
+    )
+  );
 }
 
 export function assertDevTestGameProofGraphCoversTerminalBatches(graph) {
