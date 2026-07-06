@@ -9,9 +9,13 @@ export const spineManifestMarkdownPath = "target/dev-test-game/spine-manifest.md
 export const adminSpineProofPath = "target/dev-test-game/admin-spine-proof.json";
 export const adminSpineTerminalBatchProofPath =
   "target/dev-test-game/admin-spine-terminal-batches.json";
+export const selectedOperatorHandoffTerminalBatchFixturePath =
+  "target/dev-test-game/admin-spine-terminal-batches-selected-operator-fixture.json";
 export const devTestGameProofGraphPath = "target/dev-test-game/proof-graph.json";
 export const devTestGameProofGraphAdminProofPath =
   "target/dev-test-game/proof-graph-admin-proof.json";
+export const selectedOperatorHandoffReceiptAdminProofPath =
+  "target/dev-test-game/proof-graph-selected-operator-receipt-admin-proof.json";
 export const proofFreshnessAdminProofPath =
   "target/dev-test-game/proof-freshness-admin-proof.json";
 export const nextActionPath = "target/dev-test-game/next-action.json";

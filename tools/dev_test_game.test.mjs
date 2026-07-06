@@ -127,6 +127,8 @@ import {
 } from "./dev_test_game_local_admin_proof_paths.mjs";
 import {
   devTestGameProofRunPath,
+  selectedOperatorHandoffReceiptAdminProofPath,
+  selectedOperatorHandoffTerminalBatchFixturePath,
 } from "./dev_test_game_spine_artifact_paths.mjs";
 import {
   assertDevTestGameSeedFixtureSummary,
@@ -646,6 +648,14 @@ import {
 import {
   buildSelectedOperatorHandoffTerminalReceipt,
 } from "./dev_test_game_selected_operator_handoff_receipt.mjs";
+import {
+  selectedOperatorHandoffPassedReceiptFixture,
+  selectedOperatorHandoffReceiptFixtureSource,
+  selectedOperatorHandoffTerminalBatchesFixture,
+} from "./dev_test_game_selected_operator_handoff_receipt_fixture.mjs";
+import {
+  selectedOperatorHandoffReceiptAdminProofCommand,
+} from "./dev_test_game_selected_operator_handoff_receipt_admin_proof.mjs";
 
 test("dev test-game args expose reset reuse naming and verification controls", () => {
   assert.deepEqual(
@@ -830,6 +840,10 @@ test("dev test-game spine orchestrators expose stable proof order and env maps",
   assert.equal(
     packageJson.scripts["test:dev-test-game-live:local"],
     "node tools/dev_test_game_local_spine.mjs --script test:dev-test-game-live",
+  );
+  assert.equal(
+    packageJson.scripts[selectedOperatorHandoffReceiptAdminProofCommand],
+    "node tools/dev_test_game_selected_operator_handoff_receipt_admin_proof.mjs",
   );
   assert.equal(
     packageJson.scripts["test:dev-test-game-ops"],
@@ -5481,6 +5495,28 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
   assert.deepEqual(
     terminalBatches.selectedOperatorHandoffReceipt,
     selectedOperatorHandoffReceiptFixture(),
+  );
+  const selectedOperatorFixture =
+    selectedOperatorHandoffTerminalBatchesFixture(terminalBatchFixture);
+  const selectedOperatorTerminalBatches =
+    validateDevTestGameAdminSpineTerminalBatches(selectedOperatorFixture, {
+      path: selectedOperatorHandoffTerminalBatchFixturePath,
+    });
+  assert.equal(
+    selectedOperatorFixture.generatedFrom.selectedOperatorHandoffFixtureSource,
+    selectedOperatorHandoffReceiptFixtureSource,
+  );
+  assert.deepEqual(
+    selectedOperatorTerminalBatches.selectedOperatorHandoffReceipt,
+    selectedOperatorHandoffPassedReceiptFixture(),
+  );
+  assert.equal(
+    selectedOperatorTerminalBatches.path,
+    selectedOperatorHandoffTerminalBatchFixturePath,
+  );
+  assert.equal(
+    selectedOperatorHandoffReceiptAdminProofPath,
+    "target/dev-test-game/proof-graph-selected-operator-receipt-admin-proof.json",
   );
   assert.deepEqual(
     terminalBatches.batches.map((batch) => [
@@ -24430,7 +24466,15 @@ function selectedOperatorHandoffReceiptDestinationFixture() {
       "readiness-link",
     ],
     requiredSelectedOperatorHandoffTerminalReceiptRowStatuses: {
-      receipt: [receipt.status, receipt.id, receipt.proofBoundary].join("\n"),
+      receipt: [
+        receipt.status,
+        receipt.id,
+        receipt.proofBoundary,
+        receipt.sourceArtifacts.nextAction,
+        receipt.sourceArtifacts.nextActionAdminProof,
+        receipt.sourceArtifacts.proofGraph,
+        receipt.sourceArtifacts.releaseReadiness,
+      ].join("\n"),
       selected: [
         receipt.selectedOperatorHandoff.status,
         receipt.selectedOperatorHandoff.command,
@@ -24458,8 +24502,15 @@ function selectedOperatorHandoffReceiptDestinationFixture() {
       "readiness-link",
     ],
     visibleSelectedOperatorHandoffTerminalReceiptRowStatuses: {
-      receipt:
-        [receipt.status, receipt.id, receipt.proofBoundary].join("\n"),
+      receipt: [
+        receipt.status,
+        receipt.id,
+        receipt.proofBoundary,
+        receipt.sourceArtifacts.nextAction,
+        receipt.sourceArtifacts.nextActionAdminProof,
+        receipt.sourceArtifacts.proofGraph,
+        receipt.sourceArtifacts.releaseReadiness,
+      ].join("\n"),
       selected: [
         receipt.selectedOperatorHandoff.status,
         receipt.selectedOperatorHandoff.command,

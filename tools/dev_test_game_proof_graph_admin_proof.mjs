@@ -28,7 +28,6 @@ import {
 } from "./dev_test_game_hosted_handoff_cases.mjs";
 import {
   assertVisibleAdminRoleSurfaceRows,
-  artifactDir,
   normalizedEvidenceObjectRowIds,
   proveAdminAuditDetail,
   readJson,
@@ -64,6 +63,7 @@ import { adminProofGraphRoleHandoffs } from "./dev_test_game_proof_graph_handoff
 import {
   adminSpineProofPath as defaultAdminSpineProofPath,
   adminSpineTerminalBatchProofPath,
+  devTestGameProofGraphAdminProofPath,
   devTestGameProofGraphPath,
   devTestGameProofRunPath,
 } from "./dev_test_game_spine_artifact_paths.mjs";
@@ -123,7 +123,11 @@ const hostedEvidenceLaneRelativePath = path.relative(
   repoRoot,
   hostedEvidenceLanePath,
 );
-const evidencePath = path.join(artifactDir, "proof-graph-admin-proof.json");
+const evidencePath = path.resolve(
+  repoRoot,
+  process.env.FMARCH_DEV_TEST_GAME_PROOF_GRAPH_ADMIN_PROOF ??
+    devTestGameProofGraphAdminProofPath,
+);
 
 export function proofGraphAdminProofCase() {
   return {
@@ -940,7 +944,15 @@ function proofGraphSelectedOperatorHandoffReceiptDestination(receipt) {
       "readiness-link",
     ],
     requiredSelectedOperatorHandoffTerminalReceiptRowStatuses: {
-      receipt: [receipt.status, receipt.id, receipt.proofBoundary].join("\n"),
+      receipt: [
+        receipt.status,
+        receipt.id,
+        receipt.proofBoundary,
+        receipt.sourceArtifacts.nextAction,
+        receipt.sourceArtifacts.nextActionAdminProof,
+        receipt.sourceArtifacts.proofGraph,
+        receipt.sourceArtifacts.releaseReadiness,
+      ].join("\n"),
       selected: [
         receipt.selectedOperatorHandoff.status,
         receipt.selectedOperatorHandoff.command,

@@ -63,6 +63,7 @@
     "test:dev-test-game-hosted-target-preflight-admin-proof": "node tools/dev_test_game_hosted_target_preflight_admin_proof.mjs",
     "test:dev-test-game-hosted-target-preflight-real-capture-admin-proof": "node tools/dev_test_game_hosted_target_preflight_real_capture_admin_proof.mjs",
     "test:dev-test-game-proof-graph-admin-proof": "node tools/dev_test_game_proof_graph_admin_proof.mjs",
+    "test:dev-test-game-selected-operator-handoff-receipt-admin-proof": "node tools/dev_test_game_selected_operator_handoff_receipt_admin_proof.mjs",
     "test:dev-test-game-next-action": "node tools/dev_test_game_next_action.mjs",
     "test:dev-test-game-next-action:hosted-identity": "FMARCH_DEV_TEST_GAME_SEQUENCE_STAGE=hosted-identity npm run test:dev-test-game-next-action",
     "test:dev-test-game-next-action-admin-proof": "node tools/dev_test_game_next_action_admin_proof.mjs",
