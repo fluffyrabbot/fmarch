@@ -18,6 +18,9 @@ import {
   hostedEvidenceHandoffSectionInputRows,
   hostedEvidenceHandoffSectionInputStatuses,
   hostedEvidenceHandoffSummary,
+  hostedEvidenceOperatorChecklistProofActions,
+  hostedEvidenceOperatorChecklistProofIds,
+  hostedEvidenceOperatorChecklistProofStatuses,
 } from "./dev_test_game_hosted_handoff_cases.mjs";
 import {
   assertAdminRoleSurfaceStatusText,
@@ -42,7 +45,6 @@ import {
 import {
   devTestGameHostedEvidenceOperatorChecklistPath,
   devTestGameHostedEvidenceOperatorChecklistProofCommand,
-  devTestGameHostedEvidenceOperatorChecklistProofPath,
 } from "./dev_test_game_hosted_evidence_operator_checklist.mjs";
 import {
   devTestGameRealHostedMatrixRawCaptureCommand,
@@ -554,47 +556,6 @@ function visibleFirstMissingOperatorArtifact(artifact) {
         drilldown.productionFeatureGraphNodeId ?? "",
       ),
       proofGraphEvidencePath: String(drilldown.proofGraphEvidencePath ?? ""),
-    },
-  };
-}
-
-function hostedEvidenceOperatorChecklistProofIds(checklist) {
-  const descriptor = checklist?.blockedReceipt?.blockedOperatorPacket
-    ?.operatorChecklist;
-  return descriptor === null || typeof descriptor !== "object"
-    ? []
-    : ["hosted-evidence-operator-checklist"];
-}
-
-function hostedEvidenceOperatorChecklistProofStatuses(checklist) {
-  const descriptor = checklist?.blockedReceipt?.blockedOperatorPacket
-    ?.operatorChecklist;
-  if (descriptor === null || typeof descriptor !== "object") {
-    return {};
-  }
-  return {
-    "hosted-evidence-operator-checklist":
-      descriptor.checklistProofTarget ??
-      devTestGameHostedEvidenceOperatorChecklistProofPath,
-  };
-}
-
-function hostedEvidenceOperatorChecklistProofActions(checklist) {
-  const descriptor = checklist?.blockedReceipt?.blockedOperatorPacket
-    ?.operatorChecklist;
-  if (descriptor === null || typeof descriptor !== "object") {
-    return {};
-  }
-  return {
-    "hosted-evidence-operator-checklist": {
-      copyCommand:
-        descriptor.checklistProofCommand ??
-        `npm run ${devTestGameHostedEvidenceOperatorChecklistProofCommand}`,
-      sourcePath:
-        descriptor.path ?? devTestGameHostedEvidenceOperatorChecklistPath,
-      proofTarget:
-        descriptor.checklistProofTarget ??
-        devTestGameHostedEvidenceOperatorChecklistProofPath,
     },
   };
 }

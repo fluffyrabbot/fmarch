@@ -17,6 +17,8 @@ import {
 import {
   devTestGameHostedEvidenceOperatorChecklistPath,
   assertHostedEvidenceOperatorChecklistDescriptor,
+  devTestGameHostedEvidenceOperatorChecklistProofCommand,
+  devTestGameHostedEvidenceOperatorChecklistProofPath,
   hostedEvidenceLaneCommandText,
   hostedEvidenceOperatorChecklistDescriptor,
   hostedEvidenceOperatorChecklistInputSections,
@@ -51,6 +53,8 @@ export const hostedEvidenceHandoffBlockedCheckIds =
   hostedTargetPreflightBlockingCheckIds;
 export const hostedEvidenceLaneCommand = hostedEvidenceLaneCommandText;
 export const hostedEvidenceLanePath = devTestGameHostedEvidenceLanePath;
+export const hostedEvidenceOperatorChecklistProofId =
+  "hosted-evidence-operator-checklist";
 export const hostedEvidenceOperatorAction =
   `Follow ${devTestGameHostedEvidenceOperatorChecklistPath}: configure the hosted frontend/API URLs, copy ${devTestGameHostedMatrixRawEvidenceTemplatePath} to a filled raw hosted matrix evidence packet from that same deployment, validate the template with npm run ${devTestGameHostedMatrixRawEvidenceTemplateProofCommand}, then rerun npm run test:dev-test-game-hosted-evidence-lane.`;
 export const hostedEvidenceLocalVsHostedBoundary =
@@ -249,6 +253,67 @@ export function assertHostedEvidenceBlockedOperatorPacket(packet) {
   assertBlockedOperatorPacket(packet);
   assertHostedEvidenceOperatorChecklistDescriptor(packet.operatorChecklist);
   return packet;
+}
+
+export function hostedEvidenceOperatorChecklistActionContract(
+  descriptor = hostedEvidenceOperatorChecklistDescriptor(),
+) {
+  assertHostedEvidenceOperatorChecklistDescriptor(descriptor);
+  return Object.freeze({
+    id: hostedEvidenceOperatorChecklistProofId,
+    copyCommand:
+      descriptor.checklistProofCommand ??
+      `npm run ${devTestGameHostedEvidenceOperatorChecklistProofCommand}`,
+    sourcePath: descriptor.path ?? devTestGameHostedEvidenceOperatorChecklistPath,
+    proofTarget:
+      descriptor.checklistProofTarget ??
+      devTestGameHostedEvidenceOperatorChecklistProofPath,
+  });
+}
+
+export function hostedEvidenceOperatorChecklistDescriptorFromHandoffChecklist(
+  checklist,
+) {
+  const descriptor =
+    checklist?.blockedReceipt?.blockedOperatorPacket?.operatorChecklist ??
+    checklist?.blockedOperatorPacket?.operatorChecklist ??
+    checklist?.operatorChecklist ??
+    null;
+  return descriptor === null || typeof descriptor !== "object"
+    ? null
+    : assertHostedEvidenceOperatorChecklistDescriptor(descriptor);
+}
+
+export function hostedEvidenceOperatorChecklistProofIds(checklist) {
+  const descriptor =
+    hostedEvidenceOperatorChecklistDescriptorFromHandoffChecklist(checklist);
+  return descriptor === null ? [] : [hostedEvidenceOperatorChecklistProofId];
+}
+
+export function hostedEvidenceOperatorChecklistProofStatuses(checklist) {
+  const descriptor =
+    hostedEvidenceOperatorChecklistDescriptorFromHandoffChecklist(checklist);
+  if (descriptor === null) {
+    return {};
+  }
+  const action = hostedEvidenceOperatorChecklistActionContract(descriptor);
+  return { [action.id]: action.proofTarget };
+}
+
+export function hostedEvidenceOperatorChecklistProofActions(checklist) {
+  const descriptor =
+    hostedEvidenceOperatorChecklistDescriptorFromHandoffChecklist(checklist);
+  if (descriptor === null) {
+    return {};
+  }
+  const action = hostedEvidenceOperatorChecklistActionContract(descriptor);
+  return {
+    [action.id]: {
+      copyCommand: action.copyCommand,
+      sourcePath: action.sourcePath,
+      proofTarget: action.proofTarget,
+    },
+  };
 }
 
 function hostedEvidenceFirstMissingProgressionCase({

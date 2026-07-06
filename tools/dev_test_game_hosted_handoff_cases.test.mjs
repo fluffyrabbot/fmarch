@@ -15,6 +15,11 @@ import {
   hostedEvidenceHandoffSectionInputStatuses,
   hostedEvidenceHandoffInputValues,
   hostedEvidenceHandoffSummary,
+  hostedEvidenceOperatorChecklistActionContract,
+  hostedEvidenceOperatorChecklistProofActions,
+  hostedEvidenceOperatorChecklistProofId,
+  hostedEvidenceOperatorChecklistProofIds,
+  hostedEvidenceOperatorChecklistProofStatuses,
   hostedEvidenceProgressionHandoffSummary,
   hostedEvidenceLaneCommand,
   hostedEvidenceLaneHandoffFixture,
@@ -123,11 +128,28 @@ test("hosted evidence handoff cases share real hosted input and blocked check ID
   });
 
   const checklist = hostedEvidenceBlockedHandoffChecklistFixture();
+  const operatorAction = hostedEvidenceOperatorChecklistActionContract(
+    checklist.operatorChecklist,
+  );
   assert.equal(assertHostedEvidenceHandoffChecklist(checklist), checklist);
   assert.equal(checklist.status, "blocked");
   assert.equal(checklist.preflightStatus, "blocked");
   assert.equal(checklist.command, hostedEvidenceLaneCommand);
   assert.equal(checklist.proofTarget, hostedEvidenceLanePath);
+  assert.equal(operatorAction.id, hostedEvidenceOperatorChecklistProofId);
+  assert.deepEqual(hostedEvidenceOperatorChecklistProofIds(checklist), [
+    hostedEvidenceOperatorChecklistProofId,
+  ]);
+  assert.deepEqual(hostedEvidenceOperatorChecklistProofStatuses(checklist), {
+    [hostedEvidenceOperatorChecklistProofId]: operatorAction.proofTarget,
+  });
+  assert.deepEqual(hostedEvidenceOperatorChecklistProofActions(checklist), {
+    [hostedEvidenceOperatorChecklistProofId]: {
+      copyCommand: operatorAction.copyCommand,
+      sourcePath: operatorAction.sourcePath,
+      proofTarget: operatorAction.proofTarget,
+    },
+  });
   assert.deepEqual(checklist.inputIds, hostedEvidenceHandoffInputIds);
   assert.deepEqual(checklist.blockedCheckIds, hostedEvidenceHandoffBlockedCheckIds);
   assert.deepEqual(
@@ -234,6 +256,7 @@ test("hosted evidence handoff builds blocked checklist from preflight rows", () 
     ],
     inputIds: hostedEvidenceHandoffInputIds,
     blockedCheckIds: ["hosted-targets-external", "raw-evidence-readable"],
+    operatorChecklist: checklist.operatorChecklist,
     progressionSummary: hostedEvidenceProgressionHandoffSummary(),
     blockedChecks: [
       {

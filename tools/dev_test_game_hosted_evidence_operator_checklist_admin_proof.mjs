@@ -12,6 +12,8 @@ import {
 } from "./dev_test_game_adjacent_artifact_paths.mjs";
 import {
   hostedEvidenceHandoffInputCheckIds,
+  hostedEvidenceOperatorChecklistActionContract,
+  hostedEvidenceOperatorChecklistProofId,
 } from "./dev_test_game_hosted_handoff_cases.mjs";
 import {
   localAdminAuditIds,
@@ -43,7 +45,7 @@ const proofName =
   "dev-test-game-hosted-evidence-operator-checklist-admin-proof";
 const scope =
   "local-dev-test-game-hosted-evidence-operator-checklist-admin-surface";
-const operatorProofId = "hosted-evidence-operator-checklist";
+const operatorProofId = hostedEvidenceOperatorChecklistProofId;
 const expectedMissingHostedInputIds = Object.freeze(
   Object.keys(hostedEvidenceHandoffInputCheckIds),
 );
@@ -101,6 +103,7 @@ export function hostedEvidenceOperatorChecklistAdminProofCase({
     }),
     prove: async ({ browser, frontendBaseUrl, source }) => {
       const descriptor = source.checklistProof.descriptor;
+      const action = hostedEvidenceOperatorChecklistActionContract(descriptor);
       return await proveAdminAuditDetail({
         browser,
         frontendBaseUrl,
@@ -108,19 +111,19 @@ export function hostedEvidenceOperatorChecklistAdminProofCase({
         auditId: localAdminAuditIds.hostedEvidenceLane,
         requiredHostedHandoffOperatorProofs: [operatorProofId],
         requiredHostedHandoffOperatorProofStatuses: {
-          [operatorProofId]: descriptor.checklistProofTarget,
+          [action.id]: action.proofTarget,
         },
         requiredHostedHandoffOperatorProofActions: {
-          [operatorProofId]: {
-            copyCommand: descriptor.checklistProofCommand,
-            sourcePath: descriptor.path,
-            proofTarget: descriptor.checklistProofTarget,
+          [action.id]: {
+            copyCommand: action.copyCommand,
+            sourcePath: action.sourcePath,
+            proofTarget: action.proofTarget,
           },
         },
         requiredText: [
-          descriptor.path,
-          descriptor.checklistProofCommand,
-          descriptor.checklistProofTarget,
+          action.sourcePath,
+          action.copyCommand,
+          action.proofTarget,
           ...expectedMissingHostedInputIds,
         ],
       });
@@ -216,6 +219,7 @@ export function assertHostedEvidenceOperatorChecklistAdminProof(proof) {
 }
 
 function assertChecklistActionSurface({ adminRoleSurface, expectedCommand }) {
+  const action = hostedEvidenceOperatorChecklistActionContract();
   const actions =
     adminRoleSurface?.visibleHostedHandoffOperatorProofActions?.[
       operatorProofId
@@ -225,9 +229,8 @@ function assertChecklistActionSurface({ adminRoleSurface, expectedCommand }) {
       operatorProofId,
     ) ||
     actions?.copyCommand?.copyValue !== expectedCommand ||
-    actions?.openDoc?.href !== devTestGameHostedEvidenceOperatorChecklistPath ||
-    actions?.openProofTarget?.href !==
-      devTestGameHostedEvidenceOperatorChecklistProofPath ||
+    actions?.openDoc?.href !== action.sourcePath ||
+    actions?.openProofTarget?.href !== action.proofTarget ||
     actions?.order?.beforeRealHostedEvidenceInputs !== true ||
     actions?.order?.beforeRawEvidenceTemplate !== true
   ) {
