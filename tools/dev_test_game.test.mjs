@@ -520,6 +520,10 @@ import {
 } from "./dev_test_game_hosted_handoff_cases.mjs";
 import {
   devTestGameHostedEvidenceOperatorChecklistPath,
+  devTestGameHostedEvidenceOperatorChecklistProofCommand,
+  devTestGameHostedEvidenceOperatorChecklistProofPath,
+  assertHostedEvidenceOperatorChecklistProof,
+  buildHostedEvidenceOperatorChecklistProof,
   hostedEvidenceOperatorChecklistDescriptor,
   hostedEvidenceOperatorChecklistMarkdown,
 } from "./dev_test_game_hosted_evidence_operator_checklist.mjs";
@@ -926,6 +930,12 @@ test("dev test-game spine orchestrators expose stable proof order and env maps",
   assert.equal(
     packageJson.scripts["test:dev-test-game-real-hosted-matrix-raw-capture"],
     "node tools/dev_test_game_real_hosted_matrix_raw_capture.mjs",
+  );
+  assert.equal(
+    packageJson.scripts[
+      devTestGameHostedEvidenceOperatorChecklistProofCommand
+    ],
+    "node tools/dev_test_game_hosted_evidence_operator_checklist.mjs",
   );
   assert.equal(
     packageJson.scripts[
@@ -2625,6 +2635,17 @@ test("dev test-game spine manifest records command order and evidence wiring", (
       devTestGameHostedTargetPreflightPath,
     ],
     roleUrl: "/admin/audit/local-hosted-evidence-lane?game=<seeded-game>",
+  });
+  assert.deepEqual(manifest.commands.hostedEvidenceOperatorChecklistProof, {
+    script: devTestGameHostedEvidenceOperatorChecklistProofCommand,
+    proofArtifact: devTestGameHostedEvidenceOperatorChecklistProofPath,
+    dependsOn: [
+      devTestGameHostedEvidenceOperatorChecklistPath,
+      devTestGameHostedMatrixRawEvidenceTemplatePath,
+    ],
+    templateOnly: true,
+    releaseReady: false,
+    productionReady: false,
   });
   assert.deepEqual(manifest.commands.hostedEvidenceLaneDemoProof, {
     script: devTestGameHostedEvidenceLaneDemoProofCommand,
@@ -4822,12 +4843,12 @@ test("dev test-game next-action advances hosted deployment after target prefligh
   assertDevTestGameNextAction(blockedPreflightAction);
   assert.equal(
     blockedPreflightAction.nextAction.command,
-    `npm run ${devTestGameHostedEvidenceLaneCommand}`,
+    `npm run ${devTestGameHostedEvidenceOperatorChecklistProofCommand}`,
   );
   assert.equal(blockedPreflightAction.nextAction.status, "blocked");
   assert.equal(
     blockedPreflightAction.nextAction.unproven.proofTarget,
-    devTestGameHostedEvidenceLanePath,
+    devTestGameHostedEvidenceOperatorChecklistProofPath,
   );
   assert.equal(
     blockedPreflightAction.nextAction.unproven.roleUrl,
@@ -4944,9 +4965,9 @@ test("dev test-game next-action advances hosted deployment after target prefligh
     id: "hosted-deployment:blocked-operator-packet",
     status: "blocked",
     reason: "release-readiness-unproven",
-    command: `npm run ${devTestGameHostedEvidenceLaneCommand}`,
+    command: `npm run ${devTestGameHostedEvidenceOperatorChecklistProofCommand}`,
     unprovenId: "hosted-deployment",
-    proofTarget: devTestGameHostedEvidenceLanePath,
+    proofTarget: devTestGameHostedEvidenceOperatorChecklistProofPath,
     roleUrl: "/admin/audit/local-hosted-evidence-lane?game=<seeded-game>",
     firstMissingInputId: blockedPreflightOperatorPacket.firstMissingInputId,
     selectedProductionFeatureGraphNodeId:
@@ -5231,6 +5252,14 @@ test("hosted evidence operator checklist doc matches shared contract", async () 
   const descriptor = hostedEvidenceOperatorChecklistDescriptor();
   assert.equal(descriptor.path, devTestGameHostedEvidenceOperatorChecklistPath);
   assert.equal(
+    descriptor.checklistProofCommand,
+    `npm run ${devTestGameHostedEvidenceOperatorChecklistProofCommand}`,
+  );
+  assert.equal(
+    descriptor.checklistProofTarget,
+    devTestGameHostedEvidenceOperatorChecklistProofPath,
+  );
+  assert.equal(
     descriptor.command,
     "npm run test:dev-test-game-hosted-evidence-lane",
   );
@@ -5246,6 +5275,29 @@ test("hosted evidence operator checklist doc matches shared contract", async () 
     await readFile(devTestGameHostedEvidenceOperatorChecklistPath, "utf8"),
     hostedEvidenceOperatorChecklistMarkdown(),
   );
+});
+
+test("hosted evidence operator checklist proof validates scripts and template", async () => {
+  const proof = await buildHostedEvidenceOperatorChecklistProof({
+    generatedAt: "2026-06-26T00:00:00.000Z",
+  });
+  assertHostedEvidenceOperatorChecklistProof(proof);
+  assert.equal(
+    proof.generatedFrom.checklistProofCommand,
+    `npm run ${devTestGameHostedEvidenceOperatorChecklistProofCommand}`,
+  );
+  assert.equal(
+    proof.generatedFrom.checklistProofTarget,
+    devTestGameHostedEvidenceOperatorChecklistProofPath,
+  );
+  assert.equal(
+    proof.evidence.packageScripts[
+      devTestGameHostedEvidenceOperatorChecklistProofCommand
+    ],
+    "node tools/dev_test_game_hosted_evidence_operator_checklist.mjs",
+  );
+  assert.equal(proof.releaseReady, false);
+  assert.equal(proof.productionReady, false);
 });
 
 test("hosted evidence lane admin proof fixtures preserve visible first-missing artifacts", () => {
@@ -6202,9 +6254,9 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
         id: "hosted-deployment:blocked-operator-packet",
         status: "blocked",
         reason: "release-readiness-unproven",
-        command: `npm run ${devTestGameHostedEvidenceLaneCommand}`,
+        command: `npm run ${devTestGameHostedEvidenceOperatorChecklistProofCommand}`,
         unprovenId: "hosted-deployment",
-        proofTarget: devTestGameHostedEvidenceLanePath,
+        proofTarget: devTestGameHostedEvidenceOperatorChecklistProofPath,
         roleUrl: "/admin/audit/local-hosted-evidence-lane?game=<seeded-game>",
         firstMissingInputId: "FMARCH_HOSTED_MATRIX_FRONTEND_URL",
         selectedProductionFeatureGraphNodeId:
@@ -6217,10 +6269,10 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
         from: "next-action",
         to: "production-feature:host-phase-control",
         relationship: "selected-operator-handoff",
-        command: `npm run ${devTestGameHostedEvidenceLaneCommand}`,
+        command: `npm run ${devTestGameHostedEvidenceOperatorChecklistProofCommand}`,
         firstMissingInputId: "FMARCH_HOSTED_MATRIX_FRONTEND_URL",
         roleUrl: "/admin/audit/local-core-loop?game=<seeded-game>",
-        proofTarget: devTestGameHostedEvidenceLanePath,
+        proofTarget: devTestGameHostedEvidenceOperatorChecklistProofPath,
         unprovenId: "hosted-deployment",
       },
       readinessRelatedLink: {
@@ -6230,7 +6282,7 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
         destinationAuditId: localAdminAuditIds.nextAction,
         href: localAdminAuditRoleUrl(localAdminAuditIds.nextAction),
         status: "blocked:FMARCH_HOSTED_MATRIX_FRONTEND_URL",
-        command: `npm run ${devTestGameHostedEvidenceLaneCommand}`,
+        command: `npm run ${devTestGameHostedEvidenceOperatorChecklistProofCommand}`,
       },
     },
   );

@@ -13,6 +13,10 @@ import {
   hostedMatrixExternalEvidencePath,
 } from "./dev_test_game_hosted_handoff_cases.mjs";
 import {
+  devTestGameHostedEvidenceOperatorChecklistProofCommand,
+  devTestGameHostedEvidenceOperatorChecklistProofPath,
+} from "./dev_test_game_hosted_evidence_operator_checklist.mjs";
+import {
   devTestGameHostedIdentityCompleteAdminProofPath,
   devTestGameHostedIdentityEvidenceCommand,
   devTestGameHostedIdentityEvidencePath,
@@ -471,16 +475,23 @@ const localBuildableReleaseReadinessItems = new Map([
     "hosted-deployment",
     {
       priority: 0,
-      command: hostedEvidenceLaneCommand,
+      command: `npm run ${devTestGameHostedEvidenceOperatorChecklistProofCommand}`,
       buildSlice:
-        "Run the one-command hosted evidence lane; it records a blocked preflight report until externally reachable hosted URLs and raw evidence are configured.",
-      proofTarget: releaseReadinessHostedEvidenceLaneProofTarget,
+        [
+          "Run the hosted evidence operator checklist proof before live hosted URLs exist;",
+          "it proves the source-controlled checklist, package command, and raw-evidence template stay synchronized before the real hosted evidence lane can pass.",
+        ].join(" "),
+      proofTarget: devTestGameHostedEvidenceOperatorChecklistProofPath,
       roleUrl: releaseReadinessHostedEvidenceLaneRoleUrl,
       proofGraphNodeId: releaseReadinessHostedEvidenceLaneProofGraphNodeId,
       productionFeatureSpineTarget:
         releaseReadinessProductionFeatureSpineTargets.hostPhaseControl,
       proofBoundary:
-        "Hosted evidence lane handoff. This command records whether FMARCH_HOSTED_MATRIX_FRONTEND_URL, FMARCH_HOSTED_MATRIX_API_URL, and FMARCH_HOSTED_MATRIX_RAW_EVIDENCE_PATH are configured for a non-local hosted target, then exposes the blocked or passed lane through its native admin role URL; it does not let local hosted-like evidence satisfy hosted deployment.",
+        [
+          "Hosted evidence operator-checklist proof.",
+          "This command proves the operator-facing checklist contract while FMARCH_HOSTED_MATRIX_FRONTEND_URL, FMARCH_HOSTED_MATRIX_API_URL, and FMARCH_HOSTED_MATRIX_RAW_EVIDENCE_PATH are still missing;",
+          "it does not let local hosted-like evidence satisfy hosted deployment.",
+        ].join(" "),
       realHostedEvidenceInputs: buildRealHostedEvidenceInputs({
         status: "unproven",
         mode: "not_configured",

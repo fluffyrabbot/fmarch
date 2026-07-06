@@ -14,13 +14,15 @@ This checklist is the source-controlled operator contract for unblocking the hos
 
 ## Proof Commands
 
-1. Validate the raw evidence template: `npm run test:dev-test-game-hosted-matrix-raw-evidence-template-proof`
-2. Capture or validate the real hosted raw packet: `npm run test:dev-test-game-real-hosted-matrix-raw-capture`
-3. Rerun the hosted evidence lane: `npm run test:dev-test-game-hosted-evidence-lane`
+1. Prove this checklist contract: `npm run test:dev-test-game-hosted-evidence-operator-checklist`
+2. Validate the raw evidence template: `npm run test:dev-test-game-hosted-matrix-raw-evidence-template-proof`
+3. Capture or validate the real hosted raw packet: `npm run test:dev-test-game-real-hosted-matrix-raw-capture`
+4. Rerun the hosted evidence lane: `npm run test:dev-test-game-hosted-evidence-lane`
 
 ## Artifacts
 
 - Checklist: `docs/dev-test-game-hosted-evidence-operator-checklist.md`
+- Checklist proof target: `target/dev-test-game/hosted-evidence-operator-checklist-proof.json`
 - Hosted lane proof target: `target/dev-test-game/hosted-evidence-lane.json`
 - Hosted target preflight target: `target/dev-test-game/hosted-target-preflight.json`
 - Raw evidence template: `tools/fixtures/dev_test_game_hosted_matrix_raw_evidence.template.json`

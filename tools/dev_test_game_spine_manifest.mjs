@@ -39,6 +39,11 @@ import {
   devTestGameHostedEvidenceLanePath,
 } from "./dev_test_game_hosted_evidence_lane.mjs";
 import {
+  devTestGameHostedEvidenceOperatorChecklistPath,
+  devTestGameHostedEvidenceOperatorChecklistProofCommand,
+  devTestGameHostedEvidenceOperatorChecklistProofPath,
+} from "./dev_test_game_hosted_evidence_operator_checklist.mjs";
+import {
   devTestGameHostedEvidenceLaneOperatorFixtureAdminProofCommand,
   devTestGameHostedEvidenceLaneOperatorFixtureAdminProofPath,
   devTestGameHostedEvidenceLaneOperatorFixturePath,
@@ -374,6 +379,17 @@ export function buildDevTestGameSpineManifest({
           devTestGameHostedTargetPreflightPath,
         ],
         roleUrl: "/admin/audit/local-hosted-evidence-lane?game=<seeded-game>",
+      },
+      hostedEvidenceOperatorChecklistProof: {
+        script: devTestGameHostedEvidenceOperatorChecklistProofCommand,
+        proofArtifact: devTestGameHostedEvidenceOperatorChecklistProofPath,
+        dependsOn: [
+          devTestGameHostedEvidenceOperatorChecklistPath,
+          devTestGameHostedMatrixRawEvidenceTemplatePath,
+        ],
+        templateOnly: true,
+        releaseReady: false,
+        productionReady: false,
       },
       hostedEvidenceLaneDemoProof: {
         script: devTestGameHostedEvidenceLaneDemoProofCommand,
@@ -1130,6 +1146,33 @@ export function assertDevTestGameSpineManifest(manifest) {
   ) {
     throw new Error(
       `spine manifest hosted evidence lane artifact drifted: ${manifest.commands.hostedEvidenceLane.proofArtifact}`,
+    );
+  }
+  if (
+    manifest.commands?.hostedEvidenceOperatorChecklistProof?.script !==
+    devTestGameHostedEvidenceOperatorChecklistProofCommand
+  ) {
+    throw new Error(
+      `spine manifest hosted evidence operator checklist command drifted: ${manifest.commands?.hostedEvidenceOperatorChecklistProof?.script}`,
+    );
+  }
+  if (
+    manifest.commands.hostedEvidenceOperatorChecklistProof.proofArtifact !==
+    devTestGameHostedEvidenceOperatorChecklistProofPath
+  ) {
+    throw new Error(
+      `spine manifest hosted evidence operator checklist artifact drifted: ${manifest.commands.hostedEvidenceOperatorChecklistProof.proofArtifact}`,
+    );
+  }
+  if (
+    manifest.commands.hostedEvidenceOperatorChecklistProof.templateOnly !== true ||
+    manifest.commands.hostedEvidenceOperatorChecklistProof.releaseReady !==
+      false ||
+    manifest.commands.hostedEvidenceOperatorChecklistProof.productionReady !==
+      false
+  ) {
+    throw new Error(
+      "spine manifest hosted evidence operator checklist proof must stay template-only",
     );
   }
   if (

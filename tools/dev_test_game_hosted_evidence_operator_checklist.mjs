@@ -1,3 +1,6 @@
+import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
+import path from "node:path";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import {
   hostedTargetPreflightBlockingCheckIds,
 } from "./dev_test_game_hosted_target_preflight_cases.mjs";
@@ -5,6 +8,7 @@ import {
   hostedMatrixRawEvidenceContractSummary,
 } from "./dev_test_game_hosted_matrix_raw_evidence_contract.mjs";
 import {
+  assertDevTestGameHostedMatrixRawEvidenceTemplate,
   devTestGameHostedMatrixRawEvidenceTemplatePath,
   devTestGameHostedMatrixRawEvidenceTemplateProofCommand,
 } from "./dev_test_game_hosted_matrix_raw_evidence_template_proof.mjs";
@@ -19,8 +23,14 @@ import {
 
 export const devTestGameHostedEvidenceOperatorChecklistPath =
   "docs/dev-test-game-hosted-evidence-operator-checklist.md";
+export const devTestGameHostedEvidenceOperatorChecklistProofPath =
+  "target/dev-test-game/hosted-evidence-operator-checklist-proof.json";
+export const devTestGameHostedEvidenceOperatorChecklistProofCommand =
+  "test:dev-test-game-hosted-evidence-operator-checklist";
 export const hostedEvidenceLaneCommandText =
   "npm run test:dev-test-game-hosted-evidence-lane";
+
+const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
 export const hostedEvidenceOperatorChecklistInputSections = Object.freeze([
   Object.freeze({
@@ -51,6 +61,9 @@ export function hostedEvidenceOperatorChecklistDescriptor() {
     id: "dev-test-game-hosted-evidence-operator-checklist",
     path: devTestGameHostedEvidenceOperatorChecklistPath,
     status: "blocked-until-operator-input",
+    checklistProofCommand:
+      `npm run ${devTestGameHostedEvidenceOperatorChecklistProofCommand}`,
+    checklistProofTarget: devTestGameHostedEvidenceOperatorChecklistProofPath,
     command: hostedEvidenceLaneCommandText,
     proofTarget: devTestGameHostedEvidenceLanePath,
     preflightTarget: devTestGameHostedTargetPreflightPath,
@@ -107,6 +120,10 @@ export function assertHostedEvidenceOperatorChecklistDescriptor(descriptor) {
     descriptor.id !== "dev-test-game-hosted-evidence-operator-checklist" ||
     descriptor.path !== devTestGameHostedEvidenceOperatorChecklistPath ||
     descriptor.status !== "blocked-until-operator-input" ||
+    descriptor.checklistProofCommand !==
+      `npm run ${devTestGameHostedEvidenceOperatorChecklistProofCommand}` ||
+    descriptor.checklistProofTarget !==
+      devTestGameHostedEvidenceOperatorChecklistProofPath ||
     descriptor.command !== hostedEvidenceLaneCommandText ||
     descriptor.proofTarget !== devTestGameHostedEvidenceLanePath ||
     descriptor.preflightTarget !== devTestGameHostedTargetPreflightPath ||
@@ -166,13 +183,15 @@ export function hostedEvidenceOperatorChecklistMarkdown(
     "",
     "## Proof Commands",
     "",
-    `1. Validate the raw evidence template: \`${descriptor.rawEvidenceTemplateProofCommand}\``,
-    `2. Capture or validate the real hosted raw packet: \`${descriptor.rawCaptureCommand}\``,
-    `3. Rerun the hosted evidence lane: \`${descriptor.command}\``,
+    `1. Prove this checklist contract: \`${descriptor.checklistProofCommand}\``,
+    `2. Validate the raw evidence template: \`${descriptor.rawEvidenceTemplateProofCommand}\``,
+    `3. Capture or validate the real hosted raw packet: \`${descriptor.rawCaptureCommand}\``,
+    `4. Rerun the hosted evidence lane: \`${descriptor.command}\``,
     "",
     "## Artifacts",
     "",
     `- Checklist: \`${descriptor.path}\``,
+    `- Checklist proof target: \`${descriptor.checklistProofTarget}\``,
     `- Hosted lane proof target: \`${descriptor.proofTarget}\``,
     `- Hosted target preflight target: \`${descriptor.preflightTarget}\``,
     `- Raw evidence template: \`${descriptor.rawEvidenceTemplatePath}\``,
@@ -187,4 +206,181 @@ export function hostedEvidenceOperatorChecklistMarkdown(
     descriptor.localVsHostedBoundary,
     "",
   ].join("\n");
+}
+
+export async function writeHostedEvidenceOperatorChecklistProof({
+  generatedAt = new Date().toISOString(),
+} = {}) {
+  const proof = await buildHostedEvidenceOperatorChecklistProof({ generatedAt });
+  const outputPath = path.join(
+    repoRoot,
+    devTestGameHostedEvidenceOperatorChecklistProofPath,
+  );
+  await mkdir(path.dirname(outputPath), { recursive: true });
+  await writeFile(outputPath, `${JSON.stringify(proof, null, 2)}\n`);
+  return proof;
+}
+
+export async function buildHostedEvidenceOperatorChecklistProof({
+  generatedAt = new Date().toISOString(),
+} = {}) {
+  const descriptor = hostedEvidenceOperatorChecklistDescriptor();
+  const checklistPath = path.join(repoRoot, descriptor.path);
+  const packagePath = path.join(repoRoot, "package.json");
+  const rawTemplatePath = path.join(repoRoot, descriptor.rawEvidenceTemplatePath);
+  const [checklistMarkdown, packageJsonRaw, rawTemplateRaw] = await Promise.all([
+    readFile(checklistPath, "utf8"),
+    readFile(packagePath, "utf8"),
+    readFile(rawTemplatePath, "utf8"),
+  ]);
+  const [checklistStats, rawTemplateStats] = await Promise.all([
+    stat(checklistPath),
+    stat(rawTemplatePath),
+  ]);
+  const packageJson = JSON.parse(packageJsonRaw);
+  const rawTemplate = JSON.parse(rawTemplateRaw);
+  assertDevTestGameHostedMatrixRawEvidenceTemplate(rawTemplate);
+  const expectedScript =
+    "node tools/dev_test_game_hosted_evidence_operator_checklist.mjs";
+  const checklistProofScript =
+    packageJson.scripts?.[devTestGameHostedEvidenceOperatorChecklistProofCommand];
+  const hostedLaneScript =
+    packageJson.scripts?.["test:dev-test-game-hosted-evidence-lane"];
+  if (checklistProofScript !== expectedScript) {
+    throw new Error("hosted evidence operator checklist package script drifted");
+  }
+  if (descriptor.command !== `npm run test:dev-test-game-hosted-evidence-lane`) {
+    throw new Error("hosted evidence operator checklist lane command drifted");
+  }
+  if (hostedLaneScript !== "node tools/dev_test_game_hosted_evidence_lane.mjs") {
+    throw new Error("hosted evidence lane package script drifted");
+  }
+  if (checklistMarkdown !== hostedEvidenceOperatorChecklistMarkdown(descriptor)) {
+    throw new Error("hosted evidence operator checklist markdown drifted");
+  }
+  return assertHostedEvidenceOperatorChecklistProof({
+    version: 1,
+    proof: "dev-test-game-hosted-evidence-operator-checklist",
+    status: "passed",
+    releaseReady: false,
+    productionReady: false,
+    generatedAt,
+    scope: "local-dev-test-game-hosted-evidence-operator-checklist",
+    proofBoundary:
+      "Local operator-checklist contract proof for the hosted evidence handoff. Passing means the source-controlled checklist, descriptor, package scripts, and raw hosted matrix evidence template agree; it does not prove hosted deployment, release readiness, or production readiness.",
+    descriptor,
+    generatedFrom: {
+      checklistPath: descriptor.path,
+      packageJson: "package.json",
+      rawEvidenceTemplatePath: descriptor.rawEvidenceTemplatePath,
+      checklistProofCommand: descriptor.checklistProofCommand,
+      checklistProofTarget: descriptor.checklistProofTarget,
+      hostedEvidenceLaneCommand: descriptor.command,
+      templateOnly: true,
+    },
+    evidence: {
+      checklist: {
+        path: descriptor.path,
+        mtime: checklistStats.mtime.toISOString(),
+        sizeBytes: checklistStats.size,
+      },
+      rawEvidenceTemplate: {
+        path: descriptor.rawEvidenceTemplatePath,
+        mtime: rawTemplateStats.mtime.toISOString(),
+        sizeBytes: rawTemplateStats.size,
+      },
+      packageScripts: {
+        [devTestGameHostedEvidenceOperatorChecklistProofCommand]:
+          checklistProofScript,
+        "test:dev-test-game-hosted-evidence-lane": hostedLaneScript,
+      },
+    },
+    checks: [
+      {
+        id: "checklist-markdown-matches-descriptor",
+        status: "passed",
+        evidence: descriptor.path,
+      },
+      {
+        id: "package-script-present",
+        status: "passed",
+        evidence: devTestGameHostedEvidenceOperatorChecklistProofCommand,
+      },
+      {
+        id: "hosted-lane-command-present",
+        status: "passed",
+        evidence: descriptor.command,
+      },
+      {
+        id: "raw-evidence-template-readable",
+        status: "passed",
+        evidence: descriptor.rawEvidenceTemplatePath,
+      },
+      {
+        id: "raw-evidence-template-contract-valid",
+        status: "passed",
+        evidence: descriptor.rawEvidenceContractSummary,
+      },
+      {
+        id: "release-claim-boundary-carried",
+        status: "passed",
+        releaseReady: false,
+        productionReady: false,
+      },
+    ],
+  });
+}
+
+export function assertHostedEvidenceOperatorChecklistProof(proof) {
+  if (
+    proof?.version !== 1 ||
+    proof.proof !== "dev-test-game-hosted-evidence-operator-checklist" ||
+    proof.status !== "passed" ||
+    proof.releaseReady !== false ||
+    proof.productionReady !== false ||
+    proof.scope !==
+      "local-dev-test-game-hosted-evidence-operator-checklist" ||
+    assertHostedEvidenceOperatorChecklistDescriptor(proof.descriptor) === null ||
+    proof.generatedFrom?.checklistPath !==
+      devTestGameHostedEvidenceOperatorChecklistPath ||
+    proof.generatedFrom?.packageJson !== "package.json" ||
+    proof.generatedFrom?.rawEvidenceTemplatePath !==
+      devTestGameHostedMatrixRawEvidenceTemplatePath ||
+    proof.generatedFrom?.checklistProofCommand !==
+      `npm run ${devTestGameHostedEvidenceOperatorChecklistProofCommand}` ||
+    proof.generatedFrom?.checklistProofTarget !==
+      devTestGameHostedEvidenceOperatorChecklistProofPath ||
+    proof.generatedFrom?.hostedEvidenceLaneCommand !==
+      hostedEvidenceLaneCommandText ||
+    proof.generatedFrom?.templateOnly !== true ||
+    !Array.isArray(proof.checks) ||
+    proof.checks.length !== 6 ||
+    typeof proof.proofBoundary !== "string" ||
+    !proof.proofBoundary.includes("does not prove hosted deployment")
+  ) {
+    throw new Error("hosted evidence operator checklist proof drifted");
+  }
+  const checks = new Map(proof.checks.map((check) => [check.id, check]));
+  for (const checkId of [
+    "checklist-markdown-matches-descriptor",
+    "package-script-present",
+    "hosted-lane-command-present",
+    "raw-evidence-template-readable",
+    "raw-evidence-template-contract-valid",
+    "release-claim-boundary-carried",
+  ]) {
+    if (checks.get(checkId)?.status !== "passed") {
+      throw new Error(`hosted evidence operator checklist missing ${checkId}`);
+    }
+  }
+  return proof;
+}
+
+if (pathToFileURL(process.argv[1] ?? "").href === import.meta.url) {
+  const proof = await writeHostedEvidenceOperatorChecklistProof({
+    generatedAt: new Date().toISOString(),
+  });
+  console.log(
+    `wrote ${devTestGameHostedEvidenceOperatorChecklistProofPath} (${proof.status})`,
+  );
 }

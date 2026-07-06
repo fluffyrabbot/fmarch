@@ -43,6 +43,10 @@ import {
   completedGameHardeningSpineCycleId,
 } from "./dev_test_game_core_loop_completed_terminal_scenario_assertions.mjs";
 import {
+  devTestGameHostedEvidenceOperatorChecklistProofCommand,
+  devTestGameHostedEvidenceOperatorChecklistProofPath,
+} from "./dev_test_game_hosted_evidence_operator_checklist.mjs";
+import {
   completedGameHardeningSpineTargetCases,
 } from "./dev_test_game_core_loop_completed_game_proof_readiness_contract.mjs";
 import {
@@ -1053,7 +1057,14 @@ test("hosted deployment buildable case carries blocked and passed preflight stat
       ],
     },
   });
-  assert.equal(blocked.proofTarget, "target/dev-test-game/hosted-evidence-lane.json");
+  assert.equal(
+    blocked.command,
+    `npm run ${devTestGameHostedEvidenceOperatorChecklistProofCommand}`,
+  );
+  assert.equal(
+    blocked.proofTarget,
+    devTestGameHostedEvidenceOperatorChecklistProofPath,
+  );
   assert.deepEqual(blocked.hostedHandoffChecklist.blockedCheckIds, [
     "frontend-url-configured",
   ]);
