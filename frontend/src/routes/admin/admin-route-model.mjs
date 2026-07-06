@@ -199,6 +199,96 @@ function hostedHandoffReceiptHeadingsForNextActionUnproven(unproven) {
   return hostedHandoffReceiptHeadingsForAudit("");
 }
 
+function artifactSummaryValue({ id, text, emphasized = false }) {
+  return Object.freeze({
+    id: String(id),
+    text: String(text ?? ""),
+    emphasized: emphasized === true,
+  });
+}
+
+function buildSingleRowArtifactSummarySection({ id, heading, values }) {
+  return Object.freeze({
+    id: String(id),
+    heading: String(heading),
+    testId: `admin-audit-detail-${id}`,
+    rows: Object.freeze([
+      Object.freeze({
+        id: "summary",
+        testId: `admin-audit-${id}`,
+        values: Object.freeze(values.map((value) => artifactSummaryValue(value))),
+      }),
+    ]),
+  });
+}
+
+function hostedReadinessText(value, label) {
+  return value === true ? `${label} ready` : `${label} not ready`;
+}
+
+function buildHostedTargetPreflightSummarySections(artifactSummary) {
+  return Object.freeze([
+    buildSingleRowArtifactSummarySection({
+      id: "hosted-target-preflight-summary",
+      heading: "Hosted target preflight",
+      values: [
+        {
+          id: "rawCaptureStatus",
+          text: artifactSummary.rawCaptureStatus,
+          emphasized: true,
+        },
+        { id: "rawCapturePath", text: artifactSummary.rawCapturePath },
+        {
+          id: "rawCaptureBlockedCheckIds",
+          text: artifactSummary.rawCaptureBlockedCheckIds.join(", "),
+        },
+        { id: "rawEvidencePath", text: artifactSummary.rawEvidencePath },
+        { id: "rawEvidenceStatus", text: artifactSummary.rawEvidenceStatus },
+        { id: "nextCommand", text: artifactSummary.nextCommand },
+        { id: "nextProofTarget", text: artifactSummary.nextProofTarget },
+        {
+          id: "releaseReady",
+          text: hostedReadinessText(artifactSummary.releaseReady, "release"),
+        },
+        {
+          id: "productionReady",
+          text: hostedReadinessText(artifactSummary.productionReady, "production"),
+        },
+      ],
+    }),
+  ]);
+}
+
+function buildHostedEvidenceLaneSummarySections(artifactSummary) {
+  return Object.freeze([
+    buildSingleRowArtifactSummarySection({
+      id: "hosted-evidence-lane-summary",
+      heading: "Hosted evidence lane",
+      values: [
+        {
+          id: "realHostedEvidenceStatus",
+          text: artifactSummary.realHostedEvidenceStatus,
+          emphasized: true,
+        },
+        { id: "hostedEvidenceMode", text: artifactSummary.hostedEvidenceMode },
+        { id: "externalEvidencePath", text: artifactSummary.externalEvidencePath },
+        { id: "rawEvidencePath", text: artifactSummary.rawEvidencePath },
+        { id: "rawEvidenceStatus", text: artifactSummary.rawEvidenceStatus },
+        { id: "nextCommand", text: artifactSummary.nextCommand },
+        { id: "nextProofTarget", text: artifactSummary.nextProofTarget },
+        {
+          id: "releaseReady",
+          text: hostedReadinessText(artifactSummary.releaseReady, "release"),
+        },
+        {
+          id: "productionReady",
+          text: hostedReadinessText(artifactSummary.productionReady, "production"),
+        },
+      ],
+    }),
+  ]);
+}
+
 export async function buildAdminRouteData({
   principalUserId,
   capabilities = [],
@@ -711,6 +801,28 @@ export function normalizeLocalHostedTargetPreflightAudit(
     },
     realHostedEvidenceInputs: [],
   });
+  const artifactSummary = Object.freeze({
+    frontendBaseUrl: String(hostedTargetPreflight.target?.frontendBaseUrl ?? ""),
+    apiBaseUrl: String(hostedTargetPreflight.target?.apiBaseUrl ?? ""),
+    groupId: String(hostedTargetPreflight.target?.groupId ?? ""),
+    rawEvidencePath: String(hostedTargetPreflight.target?.rawEvidencePath ?? ""),
+    rawEvidenceStatus: String(
+      hostedTargetPreflight.target?.rawEvidenceStatus ?? "unknown",
+    ),
+    rawCaptureStatus: String(
+      hostedTargetPreflight.target?.rawCaptureStatus ?? "unknown",
+    ),
+    rawCapturePath: String(hostedTargetPreflight.target?.rawCapturePath ?? ""),
+    rawCaptureBlockedCheckIds: Object.freeze(
+      (hostedTargetPreflight.target?.rawCaptureBlockedCheckIds ?? []).map((id) =>
+        String(id),
+      ),
+    ),
+    nextCommand: String(hostedTargetPreflight.nextCommand ?? ""),
+    nextProofTarget: String(hostedTargetPreflight.nextProofTarget ?? ""),
+    releaseReady: hostedTargetPreflight.releaseReady === true,
+    productionReady: hostedTargetPreflight.productionReady === true,
+  });
   return Object.freeze({
     id: localAdminAuditIds.hostedTargetPreflight,
     label: "Hosted target preflight",
@@ -762,28 +874,9 @@ export function normalizeLocalHostedTargetPreflightAudit(
       }),
     ]),
     ...(hostedHandoffChecklist === null ? {} : { hostedHandoffChecklist }),
-    artifactSummary: Object.freeze({
-      frontendBaseUrl: String(hostedTargetPreflight.target?.frontendBaseUrl ?? ""),
-      apiBaseUrl: String(hostedTargetPreflight.target?.apiBaseUrl ?? ""),
-      groupId: String(hostedTargetPreflight.target?.groupId ?? ""),
-      rawEvidencePath: String(hostedTargetPreflight.target?.rawEvidencePath ?? ""),
-      rawEvidenceStatus: String(
-        hostedTargetPreflight.target?.rawEvidenceStatus ?? "unknown",
-      ),
-      rawCaptureStatus: String(
-        hostedTargetPreflight.target?.rawCaptureStatus ?? "unknown",
-      ),
-      rawCapturePath: String(hostedTargetPreflight.target?.rawCapturePath ?? ""),
-      rawCaptureBlockedCheckIds: Object.freeze(
-        (hostedTargetPreflight.target?.rawCaptureBlockedCheckIds ?? []).map(
-          (id) => String(id),
-        ),
-      ),
-      nextCommand: String(hostedTargetPreflight.nextCommand ?? ""),
-      nextProofTarget: String(hostedTargetPreflight.nextProofTarget ?? ""),
-      releaseReady: hostedTargetPreflight.releaseReady === true,
-      productionReady: hostedTargetPreflight.productionReady === true,
-    }),
+    artifactSummary,
+    artifactSummarySections:
+      buildHostedTargetPreflightSummarySections(artifactSummary),
   });
 }
 
@@ -1114,6 +1207,38 @@ export function normalizeLocalHostedEvidenceLaneAudit(
     blockedChecks: checks.filter((check) => blockedCheckIdSet.has(String(check.id))),
     realHostedEvidenceInputs,
   });
+  const artifactSummary = Object.freeze({
+    preflightStatus: String(hostedEvidenceLane.preflightStatus ?? "unknown"),
+    blockedCheckCount: blockedCheckIds.length,
+    realHostedEvidenceStatus: String(
+      hostedEvidenceLane.hostedEvidence?.realHostedEvidenceStatus ?? "unknown",
+    ),
+    hostedEvidenceMode: String(
+      hostedEvidenceLane.hostedEvidence?.mode ?? "unknown",
+    ),
+    externalEvidencePath: String(
+      hostedEvidenceLane.hostedEvidence?.externalEvidencePath ?? "",
+    ),
+    realHostedEvidenceCommand: String(
+      hostedEvidenceLane.hostedEvidence?.realHostedEvidenceInputs?.command ?? "",
+    ),
+    realHostedEvidenceProofTarget: String(
+      hostedEvidenceLane.hostedEvidence?.realHostedEvidenceInputs?.proofTarget ??
+        "",
+    ),
+    ...(demoProofSummary === null ? {} : demoProofSummary),
+    frontendBaseUrl: String(hostedEvidenceLane.target?.frontendBaseUrl ?? ""),
+    apiBaseUrl: String(hostedEvidenceLane.target?.apiBaseUrl ?? ""),
+    groupId: String(hostedEvidenceLane.target?.groupId ?? ""),
+    rawEvidencePath: String(hostedEvidenceLane.target?.rawEvidencePath ?? ""),
+    rawEvidenceStatus: String(
+      hostedEvidenceLane.target?.rawEvidenceStatus ?? "unknown",
+    ),
+    nextCommand: String(hostedEvidenceLane.nextCommand ?? ""),
+    nextProofTarget: String(hostedEvidenceLane.nextProofTarget ?? ""),
+    releaseReady: hostedEvidenceLane.releaseReady === true,
+    productionReady: hostedEvidenceLane.productionReady === true,
+  });
   return Object.freeze({
     id: localAdminAuditIds.hostedEvidenceLane,
     label: "Hosted evidence lane",
@@ -1184,39 +1309,8 @@ export function normalizeLocalHostedEvidenceLaneAudit(
     hostedHandoffReceiptHeadings: hostedHandoffReceiptHeadingsForAudit(
       localAdminAuditIds.hostedEvidenceLane,
     ),
-    artifactSummary: Object.freeze({
-      preflightStatus: String(hostedEvidenceLane.preflightStatus ?? "unknown"),
-      blockedCheckCount: blockedCheckIds.length,
-      realHostedEvidenceStatus: String(
-        hostedEvidenceLane.hostedEvidence?.realHostedEvidenceStatus ?? "unknown",
-      ),
-      hostedEvidenceMode: String(
-        hostedEvidenceLane.hostedEvidence?.mode ?? "unknown",
-      ),
-      externalEvidencePath: String(
-        hostedEvidenceLane.hostedEvidence?.externalEvidencePath ?? "",
-      ),
-      realHostedEvidenceCommand: String(
-        hostedEvidenceLane.hostedEvidence?.realHostedEvidenceInputs?.command ??
-          "",
-      ),
-      realHostedEvidenceProofTarget: String(
-        hostedEvidenceLane.hostedEvidence?.realHostedEvidenceInputs
-          ?.proofTarget ?? "",
-      ),
-      ...(demoProofSummary === null ? {} : demoProofSummary),
-      frontendBaseUrl: String(hostedEvidenceLane.target?.frontendBaseUrl ?? ""),
-      apiBaseUrl: String(hostedEvidenceLane.target?.apiBaseUrl ?? ""),
-      groupId: String(hostedEvidenceLane.target?.groupId ?? ""),
-      rawEvidencePath: String(hostedEvidenceLane.target?.rawEvidencePath ?? ""),
-      rawEvidenceStatus: String(
-        hostedEvidenceLane.target?.rawEvidenceStatus ?? "unknown",
-      ),
-      nextCommand: String(hostedEvidenceLane.nextCommand ?? ""),
-      nextProofTarget: String(hostedEvidenceLane.nextProofTarget ?? ""),
-      releaseReady: hostedEvidenceLane.releaseReady === true,
-      productionReady: hostedEvidenceLane.productionReady === true,
-    }),
+    artifactSummary,
+    artifactSummarySections: buildHostedEvidenceLaneSummarySections(artifactSummary),
   });
 }
 

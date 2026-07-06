@@ -827,53 +827,28 @@
         </ol>
       </section>
     {/if}
-    {#if data.audit.id === "local-hosted-target-preflight" && data.audit.artifactSummary}
-      <section
-        class="admin-audit-detail__group"
-        data-testid="admin-audit-detail-hosted-target-preflight-summary"
-      >
-        <h2>Hosted target preflight</h2>
-        <ol class="admin-audit-detail__entries">
-          <li
-            class="admin-audit-detail__entry admin-audit-detail__entry--stack"
-            data-testid="admin-audit-hosted-target-preflight-summary"
-          >
-            <strong>{data.audit.artifactSummary.rawCaptureStatus}</strong>
-            <span>{data.audit.artifactSummary.rawCapturePath}</span>
-            <span>{data.audit.artifactSummary.rawCaptureBlockedCheckIds.join(", ")}</span>
-            <span>{data.audit.artifactSummary.rawEvidencePath}</span>
-            <span>{data.audit.artifactSummary.rawEvidenceStatus}</span>
-            <span>{data.audit.artifactSummary.nextCommand}</span>
-            <span>{data.audit.artifactSummary.nextProofTarget}</span>
-            <span>{data.audit.artifactSummary.releaseReady ? "release ready" : "release not ready"}</span>
-            <span>{data.audit.artifactSummary.productionReady ? "production ready" : "production not ready"}</span>
-          </li>
-        </ol>
-      </section>
-    {/if}
-    {#if data.audit.id === "local-hosted-evidence-lane" && data.audit.artifactSummary}
-      <section
-        class="admin-audit-detail__group"
-        data-testid="admin-audit-detail-hosted-evidence-lane-summary"
-      >
-        <h2>Hosted evidence lane</h2>
-        <ol class="admin-audit-detail__entries">
-          <li
-            class="admin-audit-detail__entry admin-audit-detail__entry--stack"
-            data-testid="admin-audit-hosted-evidence-lane-summary"
-          >
-            <strong>{data.audit.artifactSummary.realHostedEvidenceStatus}</strong>
-            <span>{data.audit.artifactSummary.hostedEvidenceMode}</span>
-            <span>{data.audit.artifactSummary.externalEvidencePath}</span>
-            <span>{data.audit.artifactSummary.rawEvidencePath}</span>
-            <span>{data.audit.artifactSummary.rawEvidenceStatus}</span>
-            <span>{data.audit.artifactSummary.nextCommand}</span>
-            <span>{data.audit.artifactSummary.nextProofTarget}</span>
-            <span>{data.audit.artifactSummary.releaseReady ? "release ready" : "release not ready"}</span>
-            <span>{data.audit.artifactSummary.productionReady ? "production ready" : "production not ready"}</span>
-          </li>
-        </ol>
-      </section>
+    {#if data.audit.artifactSummarySections?.length > 0}
+      {#each data.audit.artifactSummarySections as section}
+        <section class="admin-audit-detail__group" data-testid={section.testId}>
+          <h2>{section.heading}</h2>
+          <ol class="admin-audit-detail__entries">
+            {#each section.rows as row}
+              <li
+                class="admin-audit-detail__entry admin-audit-detail__entry--stack"
+                data-testid={row.testId}
+              >
+                {#each row.values as value}
+                  {#if value.emphasized}
+                    <strong>{value.text}</strong>
+                  {:else}
+                    <span>{value.text}</span>
+                  {/if}
+                {/each}
+              </li>
+            {/each}
+          </ol>
+        </section>
+      {/each}
     {/if}
     {#if data.audit.hostedHandoffChecklist?.inputs?.length > 0 || data.audit.hostedHandoffChecklist?.blockedChecks?.length > 0}
       <section

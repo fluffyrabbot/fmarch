@@ -1017,6 +1017,42 @@ test("admin route data exposes hosted target preflight as a native audit row", a
     preflight.artifactSummary.nextProofTarget,
     HOSTED_TARGET_PREFLIGHT_PROOF_TARGET,
   );
+  assert.deepEqual(preflight.artifactSummarySections, [
+    {
+      id: "hosted-target-preflight-summary",
+      heading: "Hosted target preflight",
+      testId: "admin-audit-detail-hosted-target-preflight-summary",
+      rows: [
+        {
+          id: "summary",
+          testId: "admin-audit-hosted-target-preflight-summary",
+          values: [
+            { id: "rawCaptureStatus", text: "unknown", emphasized: true },
+            { id: "rawCapturePath", text: "", emphasized: false },
+            { id: "rawCaptureBlockedCheckIds", text: "", emphasized: false },
+            { id: "rawEvidencePath", text: "", emphasized: false },
+            { id: "rawEvidenceStatus", text: "blocked", emphasized: false },
+            {
+              id: "nextCommand",
+              text: "npm run test:dev-test-game-hosted-target-preflight",
+              emphasized: false,
+            },
+            {
+              id: "nextProofTarget",
+              text: HOSTED_TARGET_PREFLIGHT_PROOF_TARGET,
+              emphasized: false,
+            },
+            { id: "releaseReady", text: "release not ready", emphasized: false },
+            {
+              id: "productionReady",
+              text: "production not ready",
+              emphasized: false,
+            },
+          ],
+        },
+      ],
+    },
+  ]);
 });
 
 test("admin hosted target preflight detail data carries raw-capture pass summary", async () => {
@@ -1144,6 +1180,50 @@ test("admin route data exposes hosted evidence lane as a native audit row", asyn
   assert.equal(lane.artifactSummary.syntheticExternalTarget, true);
   assert.equal(lane.artifactSummary.demoBlockedLaneStatus, "blocked");
   assert.equal(lane.artifactSummary.demoSyntheticRejectedLaneStatus, "blocked");
+  assert.deepEqual(lane.artifactSummarySections, [
+    {
+      id: "hosted-evidence-lane-summary",
+      heading: "Hosted evidence lane",
+      testId: "admin-audit-detail-hosted-evidence-lane-summary",
+      rows: [
+        {
+          id: "summary",
+          testId: "admin-audit-hosted-evidence-lane-summary",
+          values: [
+            {
+              id: "realHostedEvidenceStatus",
+              text: "unproven",
+              emphasized: true,
+            },
+            { id: "hostedEvidenceMode", text: "blocked", emphasized: false },
+            {
+              id: "externalEvidencePath",
+              text: "",
+              emphasized: false,
+            },
+            { id: "rawEvidencePath", text: "", emphasized: false },
+            { id: "rawEvidenceStatus", text: "blocked", emphasized: false },
+            {
+              id: "nextCommand",
+              text: "npm run test:dev-test-game-hosted-evidence-lane",
+              emphasized: false,
+            },
+            {
+              id: "nextProofTarget",
+              text: HOSTED_EVIDENCE_LANE_PROOF_TARGET,
+              emphasized: false,
+            },
+            { id: "releaseReady", text: "release not ready", emphasized: false },
+            {
+              id: "productionReady",
+              text: "production not ready",
+              emphasized: false,
+            },
+          ],
+        },
+      ],
+    },
+  ]);
 });
 
 test("admin hosted evidence lane detail data carries real-capture pass summary", async () => {
@@ -1603,6 +1683,19 @@ test("admin audit detail page renders hosted evidence raw-capture intake as a na
   );
   assert.match(source, /realHostedMatrixRawCaptureIntake\.proofTarget/);
   assert.match(source, /firstMissingOperatorArtifact\.roleSurfaceDrilldown/);
+});
+
+test("admin audit detail page renders hosted artifact summary sections from route data", async () => {
+  const source = await readFile(
+    "frontend/src/routes/admin/audit/[audit]/+page.svelte",
+    "utf8",
+  );
+  assert.doesNotMatch(source, /data\.audit\.id === "local-hosted-target-preflight"/);
+  assert.doesNotMatch(source, /data\.audit\.id === "local-hosted-evidence-lane"/);
+  assert.match(source, /data\.audit\.artifactSummarySections\?\.length/);
+  assert.match(source, /data-testid=\{section\.testId\}/);
+  assert.match(source, /data-testid=\{row\.testId\}/);
+  assert.match(source, /value\.emphasized/);
 });
 
 test("admin hosted-facing audit inventory carries shared handoff paths where required", async () => {
