@@ -30,6 +30,10 @@ import {
 import {
   devTestGameProofGraphPath,
 } from "./dev_test_game_proof_graph_paths.mjs";
+import {
+  assertBlockedOperatorPacket,
+  blockedOperatorPacketFromReceipt,
+} from "./dev_test_game_hosted_operator_packet.mjs";
 
 export const hostedEvidenceHandoffInputIds = realHostedEvidenceInputIds;
 export const hostedEvidenceHandoffBlockedCheckIds =
@@ -243,111 +247,10 @@ export function hostedEvidenceFirstMissingOperatorArtifact({
   };
 }
 
-export function hostedEvidenceBlockedOperatorPacketFromReceipt(receipt) {
-  if (
-    receipt === null ||
-    typeof receipt !== "object" ||
-    receipt.status !== "blocked"
-  ) {
-    return null;
-  }
-  const artifact = receipt.firstMissingOperatorArtifact;
-  if (artifact === null || typeof artifact !== "object") {
-    return null;
-  }
-  const drilldown =
-    artifact.roleSurfaceDrilldown !== null &&
-    typeof artifact.roleSurfaceDrilldown === "object"
-      ? artifact.roleSurfaceDrilldown
-      : {};
-  const packet = {
-    status: "blocked",
-    firstMissingInputId: String(artifact.inputId ?? ""),
-    firstMissingCheckId: String(artifact.checkId ?? ""),
-    firstMissingSectionId: String(artifact.sectionId ?? ""),
-    firstMissingSectionLabel: String(artifact.sectionLabel ?? ""),
-    firstMissingRequiredEvidence: String(artifact.requiredEvidence ?? ""),
-    rawEvidenceContractSummary: String(
-      receipt.rawEvidenceContractSummary ?? "",
-    ),
-    rawEvidenceContractRequiredTopLevelFields: Array.isArray(
-      receipt.rawEvidenceContract?.requiredTopLevelFields,
-    )
-      ? receipt.rawEvidenceContract.requiredTopLevelFields.map((field) =>
-          String(field),
-        )
-      : [],
-    operatorAction: String(receipt.operatorAction ?? ""),
-    localVsHostedBoundary: String(receipt.localVsHostedBoundary ?? ""),
-    proofTarget: String(receipt.proofTarget ?? ""),
-    nextProofTarget: String(receipt.nextProofTarget ?? ""),
-    missingRequiredInputs: Array.isArray(receipt.missingRequiredInputs)
-      ? receipt.missingRequiredInputs.map((input) => String(input))
-      : [],
-    selectedProductionFeatureGraphNodeId: String(
-      drilldown.productionFeatureGraphNodeId ?? "",
-    ),
-    selectedProductionFeatureRoleUrl: String(
-      drilldown.localCapabilityRoleUrl ?? "",
-    ),
-    roleSurfaceDrilldown: {
-      localCapabilityAuditId: String(drilldown.localCapabilityAuditId ?? ""),
-      localCapabilityRoleUrl: String(drilldown.localCapabilityRoleUrl ?? ""),
-      handoffAuditId: String(drilldown.handoffAuditId ?? ""),
-      handoffRoleUrl: String(drilldown.handoffRoleUrl ?? ""),
-      proofGraphNodeId: String(drilldown.proofGraphNodeId ?? ""),
-      productionFeatureGraphNodeId: String(
-        drilldown.productionFeatureGraphNodeId ?? "",
-      ),
-      proofGraphEvidencePath: String(drilldown.proofGraphEvidencePath ?? ""),
-    },
-  };
-  return assertHostedEvidenceBlockedOperatorPacket(packet);
-}
-
-export function assertHostedEvidenceBlockedOperatorPacket(packet) {
-  if (
-    packet === null ||
-    typeof packet !== "object" ||
-    packet.status !== "blocked" ||
-    typeof packet.firstMissingInputId !== "string" ||
-    packet.firstMissingInputId === "" ||
-    typeof packet.firstMissingCheckId !== "string" ||
-    packet.firstMissingCheckId === "" ||
-    typeof packet.firstMissingSectionId !== "string" ||
-    packet.firstMissingSectionId === "" ||
-    typeof packet.firstMissingRequiredEvidence !== "string" ||
-    packet.firstMissingRequiredEvidence === "" ||
-    typeof packet.rawEvidenceContractSummary !== "string" ||
-    packet.rawEvidenceContractSummary === "" ||
-    !Array.isArray(packet.rawEvidenceContractRequiredTopLevelFields) ||
-    !packet.rawEvidenceContractRequiredTopLevelFields.includes("observations") ||
-    typeof packet.operatorAction !== "string" ||
-    packet.operatorAction === "" ||
-    typeof packet.localVsHostedBoundary !== "string" ||
-    packet.localVsHostedBoundary === "" ||
-    typeof packet.proofTarget !== "string" ||
-    packet.proofTarget === "" ||
-    typeof packet.nextProofTarget !== "string" ||
-    packet.nextProofTarget === "" ||
-    !Array.isArray(packet.missingRequiredInputs) ||
-    (packet.missingRequiredInputs.length > 0 &&
-      !packet.missingRequiredInputs.includes(packet.firstMissingInputId)) ||
-    typeof packet.selectedProductionFeatureGraphNodeId !== "string" ||
-    packet.selectedProductionFeatureGraphNodeId === "" ||
-    typeof packet.selectedProductionFeatureRoleUrl !== "string" ||
-    packet.selectedProductionFeatureRoleUrl === "" ||
-    packet.roleSurfaceDrilldown === null ||
-    typeof packet.roleSurfaceDrilldown !== "object" ||
-    packet.roleSurfaceDrilldown.productionFeatureGraphNodeId !==
-      packet.selectedProductionFeatureGraphNodeId ||
-    packet.roleSurfaceDrilldown.localCapabilityRoleUrl !==
-      packet.selectedProductionFeatureRoleUrl
-  ) {
-    throw new Error("hosted evidence blocked operator packet drifted");
-  }
-  return packet;
-}
+export const hostedEvidenceBlockedOperatorPacketFromReceipt =
+  blockedOperatorPacketFromReceipt;
+export const assertHostedEvidenceBlockedOperatorPacket =
+  assertBlockedOperatorPacket;
 
 function hostedEvidenceFirstMissingProgressionCase({
   id,

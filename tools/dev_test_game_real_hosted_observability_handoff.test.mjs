@@ -7,6 +7,7 @@ import {
 } from "./dev_test_game_real_hosted_observability_handoff.mjs";
 import {
   realHostedObservabilityBaselineEnv,
+  realHostedObservabilityEvidenceContractSummary,
   realHostedObservabilityEvidenceEnv,
   realHostedObservabilityHandoffCheckIds,
   realHostedObservabilityHandoffInputIds,
@@ -66,6 +67,20 @@ test("real hosted observability handoff records blocked receipt from local basel
     handoff.hostedHandoffChecklist.blockedReceipt.localVsHostedBoundary.includes(
       "baseline evidence only",
     ),
+  );
+  assert.equal(
+    handoff.hostedHandoffChecklist.blockedReceipt.rawEvidenceContractSummary,
+    realHostedObservabilityEvidenceContractSummary(),
+  );
+  assert.equal(
+    handoff.hostedHandoffChecklist.blockedReceipt.firstMissingOperatorArtifact
+      .inputId,
+    realHostedObservabilityEvidenceEnv,
+  );
+  assert.equal(
+    handoff.hostedHandoffChecklist.blockedReceipt.blockedOperatorPacket
+      .selectedProductionFeatureRoleUrl,
+    "/admin/audit/local-hosted-ops-signals?game=<seeded-game>",
   );
   assert(
     handoff.hostedHandoffChecklist.blockedCheckIds.includes(

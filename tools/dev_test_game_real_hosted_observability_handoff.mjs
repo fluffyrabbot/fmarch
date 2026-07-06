@@ -35,6 +35,9 @@ import {
   realHostedObservabilityHandoffCase,
   requiredRealHostedObservabilityEvidenceForCheck,
 } from "./dev_test_game_real_hosted_observability_handoff_cases.mjs";
+import {
+  assertBlockedOperatorPacket,
+} from "./dev_test_game_hosted_operator_packet.mjs";
 
 export const DEV_TEST_GAME_REAL_HOSTED_OBSERVABILITY_HANDOFF_VERSION = 1;
 
@@ -188,7 +191,13 @@ export async function buildDevTestGameRealHostedObservabilityHandoff({
         status === "passed"
           ? null
           : realHostedObservabilityBlockedReceipt({
-              missingRequiredInputs: blockedChecks.map((check) => check.id),
+              missingRequiredInputs: [
+                ...new Set(
+                  inputSections.flatMap((section) => section.missingInputs),
+                ),
+              ],
+              inputSections,
+              blockedChecks,
             }),
     }),
     nextCommand: `npm run ${devTestGameRealHostedObservabilityHandoffCommand}`,
@@ -238,9 +247,59 @@ export function assertDevTestGameRealHostedObservabilityHandoff(handoff) {
   ) {
     throw new Error("real hosted observability handoff checklist drifted");
   }
+  if (handoff.status === "blocked") {
+    const receipt = handoff.hostedHandoffChecklist?.blockedReceipt;
+    if (
+      receipt?.status !== "blocked" ||
+      receipt.command !==
+        `npm run ${devTestGameRealHostedObservabilityHandoffCommand}` ||
+      receipt.proofTarget !== devTestGameRealHostedObservabilityHandoffPath ||
+      receipt.nextProofTarget !==
+        devTestGameRealHostedObservabilityHandoffPath ||
+      typeof receipt.operatorAction !== "string" ||
+      receipt.operatorAction.length === 0 ||
+      typeof receipt.localVsHostedBoundary !== "string" ||
+      receipt.localVsHostedBoundary.length === 0 ||
+      typeof receipt.rawEvidenceContractSummary !== "string" ||
+      receipt.rawEvidenceContractSummary.length === 0 ||
+      !Array.isArray(receipt.missingRequiredInputs) ||
+      receipt.missingRequiredInputs.length === 0 ||
+      !validRealHostedObservabilityFirstMissingOperatorArtifact(
+        receipt.firstMissingOperatorArtifact,
+      ) ||
+      assertBlockedOperatorPacket(receipt.blockedOperatorPacket) !==
+        receipt.blockedOperatorPacket
+    ) {
+      throw new Error(
+        "real hosted observability handoff missing blocked receipt",
+      );
+    }
+  }
   assertRealHostedObservabilityRequirementGroups(handoff);
   assertRealHostedObservabilityInputSections(handoff);
   return handoff;
+}
+
+function validRealHostedObservabilityFirstMissingOperatorArtifact(artifact) {
+  return (
+    artifact !== null &&
+    typeof artifact === "object" &&
+    typeof artifact.inputId === "string" &&
+    artifact.inputId.length > 0 &&
+    typeof artifact.checkId === "string" &&
+    artifact.checkId.length > 0 &&
+    typeof artifact.sectionId === "string" &&
+    artifact.sectionId.length > 0 &&
+    typeof artifact.sectionLabel === "string" &&
+    artifact.sectionLabel.length > 0 &&
+    typeof artifact.requiredEvidence === "string" &&
+    artifact.requiredEvidence.length > 0 &&
+    typeof artifact.purpose === "string" &&
+    artifact.purpose.length > 0 &&
+    artifact.proofTarget === devTestGameRealHostedObservabilityHandoffPath &&
+    artifact.roleSurfaceDrilldown?.proofGraphNodeId ===
+      "admin-proof:real-hosted-observability-handoff"
+  );
 }
 
 function assertRealHostedObservabilityRequirementGroups(handoff) {

@@ -10,6 +10,10 @@ import {
 import {
   createUnexpectedMediaResponseGuard,
 } from "./dev_test_game_media_response_guard.mjs";
+import {
+  blockedOperatorPacketText,
+  visibleBlockedOperatorPacket,
+} from "./dev_test_game_hosted_operator_packet.mjs";
 
 export const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 export const frontendRoot = path.join(repoRoot, "frontend");
@@ -1587,9 +1591,7 @@ async function waitForHostedHandoffBlockedReceipt({ page, expected }) {
       expected.blockedOperatorPacket === null ||
       expected.blockedOperatorPacket === undefined
         ? null
-        : normalizeExpectedBlockedOperatorPacket(
-            expected.blockedOperatorPacket,
-          ),
+        : visibleBlockedOperatorPacket(expected.blockedOperatorPacket),
     realHostedMatrixRawCaptureIntake:
       expected.realHostedMatrixRawCaptureIntake === null ||
       expected.realHostedMatrixRawCaptureIntake === undefined
@@ -1616,80 +1618,6 @@ async function waitForHostedHandoffBlockedReceipt({ page, expected }) {
     }
   }
   return receipt;
-}
-
-function normalizeExpectedBlockedOperatorPacket(packet) {
-  const drilldown = packet.roleSurfaceDrilldown ?? {};
-  return {
-    status: String(packet.status ?? ""),
-    firstMissingInputId: String(packet.firstMissingInputId ?? ""),
-    firstMissingCheckId: String(packet.firstMissingCheckId ?? ""),
-    firstMissingSectionId: String(packet.firstMissingSectionId ?? ""),
-    firstMissingSectionLabel: String(packet.firstMissingSectionLabel ?? ""),
-    firstMissingRequiredEvidence: String(
-      packet.firstMissingRequiredEvidence ?? "",
-    ),
-    rawEvidenceContractSummary: String(
-      packet.rawEvidenceContractSummary ?? "",
-    ),
-    rawEvidenceContractRequiredTopLevelFields: Array.isArray(
-      packet.rawEvidenceContractRequiredTopLevelFields,
-    )
-      ? packet.rawEvidenceContractRequiredTopLevelFields.map((field) =>
-          String(field),
-        )
-      : [],
-    operatorAction: String(packet.operatorAction ?? ""),
-    localVsHostedBoundary: String(packet.localVsHostedBoundary ?? ""),
-    proofTarget: String(packet.proofTarget ?? ""),
-    nextProofTarget: String(packet.nextProofTarget ?? ""),
-    missingRequiredInputs: Array.isArray(packet.missingRequiredInputs)
-      ? packet.missingRequiredInputs.map((input) => String(input))
-      : [],
-    selectedProductionFeatureGraphNodeId: String(
-      packet.selectedProductionFeatureGraphNodeId ?? "",
-    ),
-    selectedProductionFeatureRoleUrl: String(
-      packet.selectedProductionFeatureRoleUrl ?? "",
-    ),
-    roleSurfaceDrilldown: {
-      localCapabilityRoleUrl: String(drilldown.localCapabilityRoleUrl ?? ""),
-      handoffRoleUrl: String(drilldown.handoffRoleUrl ?? ""),
-      proofGraphNodeId: String(drilldown.proofGraphNodeId ?? ""),
-      productionFeatureGraphNodeId: String(
-        drilldown.productionFeatureGraphNodeId ?? "",
-      ),
-      proofGraphEvidencePath: String(drilldown.proofGraphEvidencePath ?? ""),
-    },
-  };
-}
-
-function blockedOperatorPacketText(packet) {
-  if (packet === null) {
-    return [];
-  }
-  return [
-    packet.status,
-    packet.firstMissingInputId,
-    packet.firstMissingCheckId,
-    packet.firstMissingSectionId,
-    packet.firstMissingSectionLabel,
-    packet.firstMissingRequiredEvidence,
-    packet.rawEvidenceContractSummary,
-    ...packet.rawEvidenceContractRequiredTopLevelFields,
-    packet.operatorAction,
-    packet.localVsHostedBoundary,
-    packet.proofTarget,
-    packet.nextProofTarget,
-    ...packet.missingRequiredInputs,
-    packet.selectedProductionFeatureGraphNodeId,
-    packet.selectedProductionFeatureRoleUrl,
-    packet.roleSurfaceDrilldown.localCapabilityRoleUrl,
-    packet.roleSurfaceDrilldown.handoffRoleUrl,
-    packet.roleSurfaceDrilldown.proofGraphNodeId,
-    packet.roleSurfaceDrilldown.productionFeatureGraphNodeId,
-    packet.roleSurfaceDrilldown.proofGraphEvidencePath,
-  ];
 }
 
 function normalizeExpectedRawCaptureIntake(intake) {

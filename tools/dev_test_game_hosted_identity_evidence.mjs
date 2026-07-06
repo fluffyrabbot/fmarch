@@ -90,6 +90,9 @@ import {
   hostedIdentityRoleSurfaceContractDiff,
   requiredHostedIdentityEvidenceForCheck,
 } from "./dev_test_game_hosted_identity_evidence_cases.mjs";
+import {
+  assertBlockedOperatorPacket,
+} from "./dev_test_game_hosted_operator_packet.mjs";
 
 export const DEV_TEST_GAME_HOSTED_IDENTITY_EVIDENCE_VERSION = 1;
 
@@ -291,7 +294,9 @@ export function assertDevTestGameHostedIdentityEvidence(evidence) {
       receipt.requiredInputs.length !== hostedIdentityEvidenceInputIds.length ||
       !validHostedIdentityFirstMissingOperatorArtifact(
         receipt.firstMissingOperatorArtifact,
-      )
+      ) ||
+      assertBlockedOperatorPacket(receipt.blockedOperatorPacket) !==
+        receipt.blockedOperatorPacket
     ) {
       throw new Error("hosted identity evidence missing blocked receipt");
     }

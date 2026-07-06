@@ -109,6 +109,9 @@ import {
   releaseAdminProofFallbackUnprovenIds,
 } from "./dev_test_game_release_readiness_cases.mjs";
 import {
+  visibleBlockedOperatorPacket,
+} from "./dev_test_game_hosted_operator_packet.mjs";
+import {
   devTestGameReleaseAdminProofPath,
 } from "./dev_test_game_release_artifact_paths.mjs";
 import {
@@ -21243,6 +21246,7 @@ function realHostedObservabilityHandoffAdminProofFixture() {
       realHostedObservabilitySummaryStatuses: Object.fromEntries(
         summaryRows.map((row) => [row.id, row.status]),
       ),
+      hostedHandoffBlockedReceipt: handoff.blockedReceipt,
       handoffPath: {
         upstreamAuditId: "local-next-action",
         upstreamLabel: "Ranked next action",
@@ -21287,6 +21291,20 @@ function realHostedObservabilityHandoffAdminProofFixture() {
       visibleRealHostedObservabilitySummaryStatuses: Object.fromEntries(
         summaryRows.map((row) => [row.id, row.status]),
       ),
+      visibleHostedHandoffBlockedReceipt: {
+        status: handoff.blockedReceipt.status,
+        operatorAction: handoff.blockedReceipt.operatorAction,
+        localVsHostedBoundary: handoff.blockedReceipt.localVsHostedBoundary,
+        rawEvidenceContractSummary:
+          handoff.blockedReceipt.rawEvidenceContractSummary,
+        nextProofTarget: handoff.blockedReceipt.nextProofTarget,
+        missingRequiredInputs: handoff.blockedReceipt.missingRequiredInputs,
+        firstMissingOperatorArtifact:
+          handoff.blockedReceipt.firstMissingOperatorArtifact,
+        blockedOperatorPacket: visibleBlockedOperatorPacket(
+          handoff.blockedReceipt.blockedOperatorPacket,
+        ),
+      },
       visibleHandoffPath: {
         upstreamAuditId: "local-next-action",
         upstreamLabel: "Ranked next action",
@@ -23243,10 +23261,15 @@ function hostedIdentityEvidenceAdminProofFixture() {
         status: handoff.blockedReceipt.status,
         operatorAction: handoff.blockedReceipt.operatorAction,
         localVsHostedBoundary: handoff.blockedReceipt.localVsHostedBoundary,
+        rawEvidenceContractSummary:
+          handoff.blockedReceipt.rawEvidenceContractSummary,
         nextProofTarget: handoff.blockedReceipt.nextProofTarget,
         missingRequiredInputs: handoff.blockedReceipt.missingRequiredInputs,
         firstMissingOperatorArtifact:
           handoff.blockedReceipt.firstMissingOperatorArtifact,
+        blockedOperatorPacket: visibleBlockedOperatorPacket(
+          handoff.blockedReceipt.blockedOperatorPacket,
+        ),
       },
       visibleHandoffPath: {
         upstreamAuditId: "local-next-action",

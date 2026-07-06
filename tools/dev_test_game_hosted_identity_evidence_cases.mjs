@@ -2,6 +2,9 @@ import {
   devTestGameProofGraphPath,
 } from "./dev_test_game_spine_artifact_paths.mjs";
 import {
+  blockedOperatorPacketFromReceipt,
+} from "./dev_test_game_hosted_operator_packet.mjs";
+import {
   devTestGameHostedIdentityEvidencePath,
   devTestGameHostedIdentityProgressionSummaryPath,
 } from "./dev_test_game_adjacent_artifact_paths.mjs";
@@ -173,6 +176,45 @@ export const hostedIdentityEvidencePlaceholderSchema = Object.freeze({
     }),
   }),
 });
+
+export const hostedIdentityEvidenceContract = Object.freeze({
+  version: 1,
+  proof: "hosted-production-identity-evidence",
+  status: "passed",
+  requiredTopLevelFields: Object.freeze([
+    "version",
+    "proof",
+    "releaseReady",
+    "productionReady",
+    "redaction",
+    "hostedIdentity",
+  ]),
+  requiredHostedIdentityFields: Object.freeze([
+    "accountLifecycle",
+    "inviteDelivery",
+    "accountRecovery",
+    "abuseAndRateLimitPolicy",
+    "sessionSecretPolicy",
+    "hostedAuditRetentionExport",
+    "roleSurfaceArchitectureChanged",
+    "roleSurfaceContract",
+    "identityAdapterContract",
+  ]),
+});
+
+export function hostedIdentityEvidenceContractSummary() {
+  return [
+    "Redacted hosted identity evidence packet",
+    "proof=hosted-production-identity-evidence",
+    "status=passed",
+    "releaseReady=false",
+    "productionReady=false",
+    "redaction packet present",
+    "hostedIdentity lifecycle/invite/recovery/abuse/session/audit evidence",
+    "role-surface contract preserved",
+    "identity-adapter contract preserved",
+  ].join("; ");
+}
 
 export const hostedIdentityExpectedRoleSurfaceContract = deepFreeze({
   version: 1,
@@ -1207,7 +1249,7 @@ export function hostedIdentityEvidenceBlockedReceipt({
     inputSections,
     blockedChecks,
   });
-  return {
+  const receipt = {
     status: "blocked",
     command: `npm run ${devTestGameHostedIdentityEvidenceCommand}`,
     proofTarget: devTestGameHostedIdentityEvidencePath,
@@ -1227,10 +1269,16 @@ export function hostedIdentityEvidenceBlockedReceipt({
       "Attach a redacted hosted identity evidence JSON packet for account lifecycle, invite delivery, recovery, abuse/rate-limit, session-secret, audit retention/export, and role-surface adapter compatibility, then rerun npm run test:dev-test-game-hosted-identity-evidence.",
     localVsHostedBoundary:
       "The local identity adapter proves the role-surface capability model only; it cannot satisfy hosted account, session, invite, recovery, abuse, secret, or audit-retention evidence.",
+    rawEvidenceContractSummary: hostedIdentityEvidenceContractSummary(),
+    rawEvidenceContract: hostedIdentityEvidenceContract,
     missingRequiredInputs: [...missingRequiredInputs],
     ...(firstMissingOperatorArtifact === null
       ? {}
       : { firstMissingOperatorArtifact }),
+  };
+  return {
+    ...receipt,
+    blockedOperatorPacket: blockedOperatorPacketFromReceipt(receipt),
   };
 }
 

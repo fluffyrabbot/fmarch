@@ -19,6 +19,7 @@ import {
   hostedIdentityEvidenceFamilyProgressionCases,
   hostedIdentityEvidenceFixturePlans,
   hostedIdentityEvidenceFixturePaths,
+  hostedIdentityEvidenceContractSummary,
   hostedIdentityEvidenceHandoffCase,
   hostedIdentityEvidenceInputIds,
   hostedIdentityEvidenceInputSectionIds,
@@ -288,6 +289,30 @@ test("hosted identity evidence cases share handoff inputs and blocked groups", (
       proofGraphEvidencePath: "target/dev-test-game/proof-graph.json",
     },
   });
+  assert.equal(
+    handoff.blockedReceipt.rawEvidenceContractSummary,
+    hostedIdentityEvidenceContractSummary(),
+  );
+  assert.equal(
+    handoff.blockedReceipt.blockedOperatorPacket.firstMissingInputId,
+    "FMARCH_HOSTED_IDENTITY_EVIDENCE_PATH",
+  );
+  assert.equal(
+    handoff.blockedReceipt.blockedOperatorPacket.selectedProductionFeatureRoleUrl,
+    "/admin/audit/local-identity-adapter?game=<seeded-game>",
+  );
+  assert.deepEqual(
+    handoff.blockedReceipt.blockedOperatorPacket
+      .rawEvidenceContractRequiredTopLevelFields,
+    [
+      "version",
+      "proof",
+      "releaseReady",
+      "productionReady",
+      "redaction",
+      "hostedIdentity",
+    ],
+  );
   assert.deepEqual(
     hostedIdentityEvidenceFamilyProgressionCases.map((progression) => ({
       id: progression.id,

@@ -1,6 +1,16 @@
 import {
   devTestGameRealHostedObservabilityHandoffPath,
 } from "./dev_test_game_adjacent_artifact_paths.mjs";
+import {
+  localAdminAuditIds,
+  localAdminAuditRoleUrl,
+} from "./dev_test_game_admin_audit_surface_ids.mjs";
+import {
+  devTestGameProofGraphPath,
+} from "./dev_test_game_spine_artifact_paths.mjs";
+import {
+  blockedOperatorPacketFromReceipt,
+} from "./dev_test_game_hosted_operator_packet.mjs";
 
 export { devTestGameRealHostedObservabilityHandoffPath };
 export const devTestGameRealHostedObservabilityHandoffAdminProofPath =
@@ -87,6 +97,55 @@ export const realHostedObservabilityHandoffCheckIds = Object.freeze([
   "local-hosted-like-baseline-only",
   "release-claim-boundary-carried",
 ]);
+
+export const realHostedObservabilityEvidenceContract = Object.freeze({
+  version: 1,
+  proof: "real-hosted-observability-evidence",
+  status: "passed",
+  requiredTopLevelFields: Object.freeze([
+    "version",
+    "proof",
+    "releaseReady",
+    "productionReady",
+    "hostedObservability",
+  ]),
+  requiredHostedObservabilityFields: Object.freeze([
+    "externallyReachableLogs",
+    "externallyReachableMetrics",
+    "externallyReachableTraces",
+    "pagingSlo",
+    "incidentResponse",
+    "localHostedLikeSignalsOnlyBaseline",
+  ]),
+});
+
+export function realHostedObservabilityEvidenceContractSummary() {
+  return [
+    "Real hosted observability evidence packet",
+    "proof=real-hosted-observability-evidence",
+    "status=passed",
+    "releaseReady=false",
+    "productionReady=false",
+    "externally reachable logs/metrics/traces",
+    "pagingSlo=true",
+    "incidentResponse=true",
+    "localHostedLikeSignalsOnlyBaseline=true",
+  ].join("; ");
+}
+
+export const realHostedObservabilityRoleSurfaceDrilldown = Object.freeze({
+  localCapabilityAuditId: localAdminAuditIds.hostedOpsSignals,
+  localCapabilityRoleUrl: localAdminAuditRoleUrl(
+    localAdminAuditIds.hostedOpsSignals,
+  ),
+  handoffAuditId: localAdminAuditIds.realHostedObservabilityHandoff,
+  handoffRoleUrl: localAdminAuditRoleUrl(
+    localAdminAuditIds.realHostedObservabilityHandoff,
+  ),
+  proofGraphNodeId: "admin-proof:real-hosted-observability-handoff",
+  productionFeatureGraphNodeId: "production-feature:private-channel",
+  proofGraphEvidencePath: devTestGameProofGraphPath,
+});
 
 export const realHostedObservabilityHandoffBlockedChecks = Object.freeze([
   Object.freeze({
@@ -197,9 +256,15 @@ export function realHostedObservabilityHandoffCase({
   inputSections = realHostedObservabilityHandoffInputSections({
     checks: blockedChecks,
   }),
-  blockedReceipt = realHostedObservabilityBlockedReceipt({
-    missingRequiredInputs: blockedChecks.map((check) => check.id),
-  }),
+  blockedReceipt =
+    status === "blocked"
+      ? realHostedObservabilityBlockedReceipt({
+          missingRequiredInputs:
+            realHostedObservabilityMissingRequiredInputs(inputSections),
+          inputSections,
+          blockedChecks,
+        })
+      : null,
 } = {}) {
   return {
     status,
@@ -268,17 +333,110 @@ export function requiredRealHostedObservabilityEvidenceForCheck(id) {
 }
 
 export function realHostedObservabilityBlockedReceipt({
-  missingRequiredInputs = realHostedObservabilityHandoffCheckIds.filter(
-    (id) => id !== "local-hosted-ops-signals-baseline-carried",
+  missingRequiredInputs = realHostedObservabilityMissingRequiredInputs(
+    realHostedObservabilityHandoffInputSections({
+      checks: realHostedObservabilityBlockedCheckRows(),
+    }),
   ),
+  inputSections = realHostedObservabilityHandoffInputSections({
+    checks: realHostedObservabilityBlockedCheckRows(),
+  }),
+  blockedChecks = realHostedObservabilityBlockedCheckRows(),
 } = {}) {
-  return {
+  const firstMissingOperatorArtifact =
+    realHostedObservabilityFirstMissingOperatorArtifact({
+      missingRequiredInputs,
+      inputSections,
+      blockedChecks,
+    });
+  const receipt = {
     status: "blocked",
+    command: `npm run ${devTestGameRealHostedObservabilityHandoffCommand}`,
+    proofTarget: devTestGameRealHostedObservabilityHandoffPath,
     operatorAction:
       "Attach externally reachable hosted logs, metrics, traces, paging/SLO, and incident-response evidence, then rerun the real hosted observability handoff.",
     localVsHostedBoundary:
       "The local hosted-like ops signal bundle is baseline evidence only; it cannot satisfy real hosted observability.",
+    rawEvidenceContractSummary: realHostedObservabilityEvidenceContractSummary(),
+    rawEvidenceContract: realHostedObservabilityEvidenceContract,
     missingRequiredInputs: [...missingRequiredInputs],
     nextProofTarget: devTestGameRealHostedObservabilityHandoffPath,
+    ...(firstMissingOperatorArtifact === null
+      ? {}
+      : { firstMissingOperatorArtifact }),
   };
+  return {
+    ...receipt,
+    blockedOperatorPacket: blockedOperatorPacketFromReceipt(receipt),
+  };
+}
+
+export function realHostedObservabilityFirstMissingOperatorArtifact({
+  missingRequiredInputs = [],
+  inputSections = [],
+  blockedChecks = [],
+} = {}) {
+  const firstMissingInputId = (Array.isArray(missingRequiredInputs)
+    ? missingRequiredInputs
+    : []
+  ).find((inputId) => inputId !== realHostedObservabilityBaselineEnv);
+  if (firstMissingInputId === undefined) {
+    return null;
+  }
+  const section = (Array.isArray(inputSections) ? inputSections : []).find(
+    (candidate) =>
+      Array.isArray(candidate.missingInputs) &&
+      candidate.missingInputs.includes(firstMissingInputId),
+  );
+  const checkId = realHostedObservabilityHandoffInputCheckIds[firstMissingInputId] ??
+    String(firstMissingInputId);
+  const check = (Array.isArray(blockedChecks) ? blockedChecks : []).find(
+    (candidate) => candidate.id === checkId,
+  );
+  return Object.freeze({
+    inputId: String(firstMissingInputId),
+    checkId,
+    sectionId: String(section?.id ?? ""),
+    sectionLabel: String(section?.label ?? ""),
+    requiredEvidence: String(
+      check?.requiredEvidence ??
+        requiredRealHostedObservabilityEvidenceForCheck(checkId),
+    ),
+    purpose: realHostedObservabilityInputPurpose(firstMissingInputId),
+    proofTarget: devTestGameRealHostedObservabilityHandoffPath,
+    roleSurfaceDrilldown: realHostedObservabilityRoleSurfaceDrilldown,
+  });
+}
+
+function realHostedObservabilityMissingRequiredInputs(inputSections) {
+  return [
+    ...new Set(
+      (Array.isArray(inputSections) ? inputSections : []).flatMap((section) =>
+        Array.isArray(section.missingInputs) ? section.missingInputs : [],
+      ),
+    ),
+  ];
+}
+
+function realHostedObservabilityInputPurpose(id) {
+  return (
+    {
+      command: `npm run ${devTestGameRealHostedObservabilityHandoffCommand}`,
+      "proof-target": devTestGameRealHostedObservabilityHandoffPath,
+      [realHostedObservabilityEvidenceEnv]:
+        "Readable real hosted observability evidence JSON path.",
+      readableEvidenceJson: "Readable real hosted observability evidence JSON.",
+      externallyReachableLogs: "Externally reachable hosted log evidence.",
+      externallyReachableMetrics: "Externally reachable hosted metrics evidence.",
+      externallyReachableTraces: "Externally reachable hosted trace evidence.",
+      pagingSloEvidence: "Hosted paging and SLO evidence.",
+      incidentResponseEvidence: "Hosted incident-response evidence.",
+      [realHostedObservabilityBaselineEnv]:
+        "Local hosted-like ops signal baseline artifact.",
+      localHostedLikeSignalsOnlyBaseline:
+        "Boundary proving local hosted-like signals are baseline only.",
+      releaseReadyFalse: "Release readiness remains false.",
+      productionReadyFalse: "Production readiness remains false.",
+    }[id] ?? requiredRealHostedObservabilityEvidenceForCheck(String(id))
+  );
 }

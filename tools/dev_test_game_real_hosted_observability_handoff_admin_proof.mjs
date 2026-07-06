@@ -26,6 +26,9 @@ import {
 import {
   devTestGameRealHostedObservabilityHandoffPath,
 } from "./dev_test_game_adjacent_artifact_paths.mjs";
+import {
+  visibleBlockedOperatorPacket,
+} from "./dev_test_game_hosted_operator_packet.mjs";
 
 const handoffPath = path.resolve(
   repoRoot,
@@ -217,6 +220,12 @@ export function realHostedObservabilityHandoffAdminProofCase() {
           realHostedObservabilitySummaryRows(source).map((summary) => summary.id),
         realHostedObservabilitySummaryStatuses:
           realHostedObservabilitySummaryStatuses(source),
+        ...(source.hostedHandoffChecklist.blockedReceipt === undefined
+          ? {}
+          : {
+              hostedHandoffBlockedReceipt:
+                source.hostedHandoffChecklist.blockedReceipt,
+            }),
         handoffPath: realHostedObservabilityHandoffPath(source),
         relatedAuditIds: requiredRelatedLinks,
       },
@@ -328,6 +337,29 @@ export function assertRealHostedObservabilityHandoffAdminProof(evidence) {
     rowName: "observability summary status",
     surfaceKey: "visibleRealHostedObservabilitySummaryStatuses",
   });
+  const expectedBlockedReceipt =
+    evidence.generatedFrom?.hostedHandoffBlockedReceipt;
+  if (expectedBlockedReceipt !== undefined) {
+    const visibleReceipt =
+      evidence.adminRoleSurface?.visibleHostedHandoffBlockedReceipt;
+    if (visibleReceipt === undefined) {
+      throw new Error(
+        "real hosted observability handoff admin proof missing blocked receipt",
+      );
+    }
+    if (
+      JSON.stringify(visibleReceipt.blockedOperatorPacket ?? null) !==
+      JSON.stringify(
+        visibleBlockedOperatorPacket(
+          expectedBlockedReceipt.blockedOperatorPacket,
+        ),
+      )
+    ) {
+      throw new Error(
+        "real hosted observability handoff admin proof blocked operator packet drifted",
+      );
+    }
+  }
   assertVisibleAdminRoleSurfaceRows({
     adminRoleSurface: evidence.adminRoleSurface,
     rowIds: evidence.generatedFrom?.relatedAuditIds,

@@ -30,6 +30,9 @@ import {
 import {
   devTestGameProofRunPath,
 } from "./dev_test_game_spine_artifact_paths.mjs";
+import {
+  visibleBlockedOperatorPacket,
+} from "./dev_test_game_hosted_operator_packet.mjs";
 
 const defaultLanePath = path.resolve(
   repoRoot,
@@ -425,51 +428,6 @@ export function assertHostedEvidenceLaneAdminProof(evidence) {
     surfaceKey: "visibleRelatedLinks",
   });
   return evidence;
-}
-
-function visibleBlockedOperatorPacket(packet) {
-  if (packet === null || packet === undefined) {
-    return null;
-  }
-  const drilldown = packet.roleSurfaceDrilldown ?? {};
-  return {
-    status: String(packet.status ?? ""),
-    firstMissingInputId: String(packet.firstMissingInputId ?? ""),
-    firstMissingCheckId: String(packet.firstMissingCheckId ?? ""),
-    firstMissingSectionId: String(packet.firstMissingSectionId ?? ""),
-    firstMissingSectionLabel: String(packet.firstMissingSectionLabel ?? ""),
-    firstMissingRequiredEvidence: String(
-      packet.firstMissingRequiredEvidence ?? "",
-    ),
-    rawEvidenceContractSummary: String(
-      packet.rawEvidenceContractSummary ?? "",
-    ),
-    rawEvidenceContractRequiredTopLevelFields: (
-      packet.rawEvidenceContractRequiredTopLevelFields ?? []
-    ).map((field) => String(field)),
-    operatorAction: String(packet.operatorAction ?? ""),
-    localVsHostedBoundary: String(packet.localVsHostedBoundary ?? ""),
-    proofTarget: String(packet.proofTarget ?? ""),
-    nextProofTarget: String(packet.nextProofTarget ?? ""),
-    missingRequiredInputs: (packet.missingRequiredInputs ?? []).map((input) =>
-      String(input),
-    ),
-    selectedProductionFeatureGraphNodeId: String(
-      packet.selectedProductionFeatureGraphNodeId ?? "",
-    ),
-    selectedProductionFeatureRoleUrl: String(
-      packet.selectedProductionFeatureRoleUrl ?? "",
-    ),
-    roleSurfaceDrilldown: {
-      localCapabilityRoleUrl: String(drilldown.localCapabilityRoleUrl ?? ""),
-      handoffRoleUrl: String(drilldown.handoffRoleUrl ?? ""),
-      proofGraphNodeId: String(drilldown.proofGraphNodeId ?? ""),
-      productionFeatureGraphNodeId: String(
-        drilldown.productionFeatureGraphNodeId ?? "",
-      ),
-      proofGraphEvidencePath: String(drilldown.proofGraphEvidencePath ?? ""),
-    },
-  };
 }
 
 function visibleFirstMissingOperatorArtifact(artifact) {

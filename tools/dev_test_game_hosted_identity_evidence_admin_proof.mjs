@@ -51,6 +51,9 @@ import {
 import {
   devTestGameHostedIdentityEvidencePath,
 } from "./dev_test_game_adjacent_artifact_paths.mjs";
+import {
+  visibleBlockedOperatorPacket,
+} from "./dev_test_game_hosted_operator_packet.mjs";
 
 const hostedIdentityEvidencePath = path.resolve(
   repoRoot,
@@ -332,7 +335,10 @@ export function hostedIdentityEvidenceAdminProofCase({
         requiredText: [
           "Hosted identity recovery ladder",
           "Hosted identity operator drilldowns",
-          "Hosted identity blocked receipt",
+          ...(source.hostedIdentityEvidence.hostedHandoffChecklist
+            .blockedReceipt === undefined
+            ? []
+            : ["Hosted identity blocked receipt"]),
         ],
         requiredHostedIdentityRoleSurfaceContractDiffStatus:
           source.hostedIdentityEvidence.target.roleSurfaceContractDiff.status,
@@ -791,6 +797,18 @@ export function assertHostedIdentityEvidenceAdminProof(evidence) {
           "hosted identity evidence admin proof first missing artifact drifted",
         );
       }
+    }
+    if (
+      JSON.stringify(visibleReceipt.blockedOperatorPacket ?? null) !==
+      JSON.stringify(
+        visibleBlockedOperatorPacket(
+          expectedBlockedReceipt.blockedOperatorPacket,
+        ),
+      )
+    ) {
+      throw new Error(
+        "hosted identity evidence admin proof blocked operator packet drifted",
+      );
     }
   }
   assertGeneratedAdminProofHandoffPath({

@@ -36,6 +36,9 @@ import {
   devTestGameHostedEvidenceLaneOperatorFixtureAdminProofPath,
 } from "./dev_test_game_hosted_evidence_lane_operator_fixture_cases.mjs";
 import {
+  visibleBlockedOperatorPacket,
+} from "./dev_test_game_hosted_operator_packet.mjs";
+import {
   assertDevTestGameRealHostedMatrixRawCapture,
   devTestGameRealHostedMatrixRawCapturePath,
 } from "./dev_test_game_real_hosted_matrix_raw_capture_contract.mjs";
@@ -1198,6 +1201,8 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
         hostedIdentityEvidenceAdminProofEvidence.handoffReceiptNextProofTarget,
       handoffReceiptMissingRequiredInputs:
         hostedIdentityEvidenceAdminProofEvidence.handoffReceiptMissingRequiredInputs,
+      blockedOperatorPacket:
+        hostedIdentityEvidenceAdminProofEvidence.blockedOperatorPacket,
       blockedCheckCount:
         hostedIdentityEvidenceAdminProofEvidence.visibleUnproven?.length ?? 0,
       ...(hostedIdentityProgressionSummaryEvidence === undefined
@@ -4637,6 +4642,22 @@ export function validateDevTestGameRealHostedObservabilityHandoffAdminProof(
       );
     }
   }
+  const hostedHandoffBlockedReceipt =
+    proof.generatedFrom?.hostedHandoffBlockedReceipt ?? null;
+  const blockedOperatorPacket =
+    hostedHandoffBlockedReceipt?.blockedOperatorPacket ?? null;
+  if (hostedHandoffBlockedReceipt !== null) {
+    const visibleReceipt =
+      proof.adminRoleSurface?.visibleHostedHandoffBlockedReceipt;
+    if (
+      JSON.stringify(visibleReceipt?.blockedOperatorPacket ?? null) !==
+      JSON.stringify(visibleBlockedOperatorPacket(blockedOperatorPacket))
+    ) {
+      throw new Error(
+        "real hosted observability handoff admin proof blocked operator packet drifted",
+      );
+    }
+  }
   return {
     status: "passed",
     path:
@@ -4651,6 +4672,10 @@ export function validateDevTestGameRealHostedObservabilityHandoffAdminProof(
       proof.adminRoleSurface.visibleHostedHandoffInputs,
     visibleHostedHandoffBlockedChecks:
       proof.adminRoleSurface.visibleHostedHandoffBlockedChecks,
+    visibleHostedHandoffBlockedReceipt:
+      proof.adminRoleSurface.visibleHostedHandoffBlockedReceipt ?? null,
+    hostedHandoffBlockedReceipt,
+    blockedOperatorPacket,
     visibleRelatedLinks: proof.adminRoleSurface.visibleRelatedLinks,
     ...(options.artifact === undefined ? {} : { artifact: options.artifact }),
   };
@@ -4975,12 +5000,11 @@ function assertHostedEvidenceLaneAdminProofBlockedReceipt(proof) {
     );
   }
   const expectedBlockedOperatorPacket =
-    visibleHostedEvidenceBlockedOperatorPacket(
-      generated.blockedOperatorPacket,
-    );
-  const visibleBlockedOperatorPacket = visible.blockedOperatorPacket ?? null;
+    visibleBlockedOperatorPacket(generated.blockedOperatorPacket);
+  const visibleReceiptBlockedOperatorPacket =
+    visible.blockedOperatorPacket ?? null;
   if (
-    JSON.stringify(visibleBlockedOperatorPacket) !==
+    JSON.stringify(visibleReceiptBlockedOperatorPacket) !==
     JSON.stringify(expectedBlockedOperatorPacket)
   ) {
     throw new Error(
@@ -5002,51 +5026,6 @@ function visibleHostedEvidenceFirstMissingOperatorArtifact(artifact) {
     requiredEvidence: String(artifact.requiredEvidence ?? ""),
     purpose: String(artifact.purpose ?? ""),
     proofTarget: String(artifact.proofTarget ?? ""),
-    roleSurfaceDrilldown: {
-      localCapabilityRoleUrl: String(drilldown.localCapabilityRoleUrl ?? ""),
-      handoffRoleUrl: String(drilldown.handoffRoleUrl ?? ""),
-      proofGraphNodeId: String(drilldown.proofGraphNodeId ?? ""),
-      productionFeatureGraphNodeId: String(
-        drilldown.productionFeatureGraphNodeId ?? "",
-      ),
-      proofGraphEvidencePath: String(drilldown.proofGraphEvidencePath ?? ""),
-    },
-  };
-}
-
-function visibleHostedEvidenceBlockedOperatorPacket(packet) {
-  if (packet === null || packet === undefined) {
-    return null;
-  }
-  const drilldown = packet.roleSurfaceDrilldown ?? {};
-  return {
-    status: String(packet.status ?? ""),
-    firstMissingInputId: String(packet.firstMissingInputId ?? ""),
-    firstMissingCheckId: String(packet.firstMissingCheckId ?? ""),
-    firstMissingSectionId: String(packet.firstMissingSectionId ?? ""),
-    firstMissingSectionLabel: String(packet.firstMissingSectionLabel ?? ""),
-    firstMissingRequiredEvidence: String(
-      packet.firstMissingRequiredEvidence ?? "",
-    ),
-    rawEvidenceContractSummary: String(
-      packet.rawEvidenceContractSummary ?? "",
-    ),
-    rawEvidenceContractRequiredTopLevelFields: (
-      packet.rawEvidenceContractRequiredTopLevelFields ?? []
-    ).map((field) => String(field)),
-    operatorAction: String(packet.operatorAction ?? ""),
-    localVsHostedBoundary: String(packet.localVsHostedBoundary ?? ""),
-    proofTarget: String(packet.proofTarget ?? ""),
-    nextProofTarget: String(packet.nextProofTarget ?? ""),
-    missingRequiredInputs: (packet.missingRequiredInputs ?? []).map((input) =>
-      String(input),
-    ),
-    selectedProductionFeatureGraphNodeId: String(
-      packet.selectedProductionFeatureGraphNodeId ?? "",
-    ),
-    selectedProductionFeatureRoleUrl: String(
-      packet.selectedProductionFeatureRoleUrl ?? "",
-    ),
     roleSurfaceDrilldown: {
       localCapabilityRoleUrl: String(drilldown.localCapabilityRoleUrl ?? ""),
       handoffRoleUrl: String(drilldown.handoffRoleUrl ?? ""),
@@ -5219,6 +5198,8 @@ export function validateDevTestGameHostedIdentityEvidenceAdminProof(
     hostedHandoffSummary: hostedHandoffSummary.generated,
     visibleHostedHandoffBlockedReceipt: hostedHandoffBlockedReceipt.visible,
     hostedHandoffBlockedReceipt: hostedHandoffBlockedReceipt.generated,
+    blockedOperatorPacket:
+      hostedHandoffBlockedReceipt.generated?.blockedOperatorPacket ?? null,
     handoffReceiptStatus: hostedHandoffBlockedReceipt.generated?.status,
     handoffReceiptMissingInputCount:
       hostedHandoffBlockedReceipt.generated?.missingRequiredInputs.length ?? 0,
@@ -5390,6 +5371,14 @@ function validateHostedIdentityHandoffBlockedReceipt(proof) {
       "hosted identity evidence admin proof visible blocked receipt missing inputs drifted",
     );
   }
+  if (
+    JSON.stringify(visible.blockedOperatorPacket ?? null) !==
+    JSON.stringify(visibleBlockedOperatorPacket(generated.blockedOperatorPacket))
+  ) {
+    throw new Error(
+      "hosted identity evidence admin proof visible blocked operator packet drifted",
+    );
+  }
   return {
     generated: Object.freeze({
       status: generated.status,
@@ -5399,6 +5388,7 @@ function validateHostedIdentityHandoffBlockedReceipt(proof) {
       missingRequiredInputs: Object.freeze([
         ...generated.missingRequiredInputs,
       ]),
+      blockedOperatorPacket: generated.blockedOperatorPacket,
     }),
     visible: Object.freeze({
       status: visible.status,
@@ -5406,6 +5396,7 @@ function validateHostedIdentityHandoffBlockedReceipt(proof) {
       localVsHostedBoundary: visible.localVsHostedBoundary,
       nextProofTarget: visible.nextProofTarget,
       missingRequiredInputs: Object.freeze([...visibleMissingInputs]),
+      blockedOperatorPacket: visible.blockedOperatorPacket,
     }),
   };
 }
