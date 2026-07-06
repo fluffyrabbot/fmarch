@@ -172,63 +172,10 @@ export function proofGraphAdminProofCase() {
       };
     },
     prove: async ({ browser, frontendBaseUrl, source }) => {
-      const roleHandoffs = bootstrapProofGraphAdminRoleHandoffs({
-        proofGraph: source.proofGraph,
-        hostedMatrix: source.hostedMatrix,
-        hostedEvidenceLane: source.hostedEvidenceLane,
-      });
-      const coreLoopFamilyDestinations =
-        proofGraphCoreLoopScenarioFamilyDestinations(source.proofGraph);
-      const productionFeatureTargetDestinations =
-        proofGraphProductionFeatureTargetDestinations(source.proofGraph);
-      const productionFeatureDestinationSummary =
-        source.proofGraph.summary.productionFeatureDestinationSummary;
-      const diagnosticProofSummary = normalizeProofGraphDiagnosticProofSummary(
-        source.proofGraph.summary?.diagnosticProofSummary,
-        { nodes: source.proofGraph.nodes },
-      );
       return await proveAdminAuditDetail({
         browser,
         frontendBaseUrl,
-        game: source.proofRun.session.game,
-        auditId: localAdminAuditIds.proofGraph,
-        requiredChecks: proofGraphVisibleCheckIds(source.proofGraph),
-        requiredCheckStatuses: proofGraphVisibleCheckStatuses(source.proofGraph),
-        requiredProductionFeatureDestinationSummaries:
-          productionFeatureDestinationSummary.rows.map((row) => row.id),
-        requiredText: ["Hosted evidence recovery ladder"],
-        requiredDiagnosticProofSummaries:
-          proofGraphDiagnosticProofSummaryRowIds(diagnosticProofSummary),
-        requiredDiagnosticProofSummaryStatuses: Object.fromEntries(
-          diagnosticProofSummary.rows.map((row) => [
-            row.id,
-            "non-terminal artifact",
-          ]),
-        ),
-        requiredProofGraphPrerequisiteDestinations:
-          proofGraphPrerequisiteDestinationRowIds(source.proofGraph),
-        requiredRelatedLinks: source.proofGraph.nodes
-          .filter(
-            (node) =>
-              typeof node.roleUrl === "string" && node.roleUrl.trim() !== "",
-          )
-          .map((node) => node.id)
-          .concat(
-            proofGraphIncludesTerminalBatchNode(source.proofGraph)
-              ? ["next-action-sequence-handoff"]
-              : [],
-          ),
-        requiredRelatedDestinations: [
-          ...requiredRelatedDestinationsForHandoffs(roleHandoffs),
-          ...coreLoopFamilyDestinations,
-          ...productionFeatureTargetDestinations.filter(
-            (destination) => destination.kind === "admin-audit",
-          ),
-          ...proofGraphNextActionHandoffDestinations(source.proofGraph),
-          ...proofGraphAdminSpineTerminalReceiptDestinations(
-            source.adminSpineTerminalBatches,
-          ),
-        ],
+        ...buildProofGraphAdminProofRequirements(source),
       });
     },
     buildEvidence: ({ source, adminRoleSurface }) => ({
@@ -244,6 +191,65 @@ export function proofGraphAdminProofCase() {
       adminRoleSurface,
     }),
     assertEvidence: assertProofGraphAdminProof,
+  };
+}
+
+export function buildProofGraphAdminProofRequirements(source) {
+  const roleHandoffs = bootstrapProofGraphAdminRoleHandoffs({
+    proofGraph: source.proofGraph,
+    hostedMatrix: source.hostedMatrix,
+    hostedEvidenceLane: source.hostedEvidenceLane,
+  });
+  const coreLoopFamilyDestinations =
+    proofGraphCoreLoopScenarioFamilyDestinations(source.proofGraph);
+  const productionFeatureTargetDestinations =
+    proofGraphProductionFeatureTargetDestinations(source.proofGraph);
+  const productionFeatureDestinationSummary =
+    source.proofGraph.summary.productionFeatureDestinationSummary;
+  const diagnosticProofSummary = normalizeProofGraphDiagnosticProofSummary(
+    source.proofGraph.summary?.diagnosticProofSummary,
+    { nodes: source.proofGraph.nodes },
+  );
+  return {
+    game: source.proofRun.session.game,
+    auditId: localAdminAuditIds.proofGraph,
+    requiredChecks: proofGraphVisibleCheckIds(source.proofGraph),
+    requiredCheckStatuses: proofGraphVisibleCheckStatuses(source.proofGraph),
+    requiredProductionFeatureDestinationSummaries:
+      productionFeatureDestinationSummary.rows.map((row) => row.id),
+    requiredText: ["Hosted evidence recovery ladder"],
+    requiredDiagnosticProofSummaries:
+      proofGraphDiagnosticProofSummaryRowIds(diagnosticProofSummary),
+    requiredDiagnosticProofSummaryStatuses: Object.fromEntries(
+      diagnosticProofSummary.rows.map((row) => [
+        row.id,
+        "non-terminal artifact",
+      ]),
+    ),
+    requiredProofGraphPrerequisiteDestinations:
+      proofGraphPrerequisiteDestinationRowIds(source.proofGraph),
+    requiredRelatedLinks: source.proofGraph.nodes
+      .filter(
+        (node) =>
+          typeof node.roleUrl === "string" && node.roleUrl.trim() !== "",
+      )
+      .map((node) => node.id)
+      .concat(
+        proofGraphIncludesTerminalBatchNode(source.proofGraph)
+          ? ["next-action-sequence-handoff"]
+          : [],
+      ),
+    requiredRelatedDestinations: [
+      ...requiredRelatedDestinationsForHandoffs(roleHandoffs),
+      ...coreLoopFamilyDestinations,
+      ...productionFeatureTargetDestinations.filter(
+        (destination) => destination.kind === "admin-audit",
+      ),
+      ...proofGraphNextActionHandoffDestinations(source.proofGraph),
+      ...proofGraphAdminSpineTerminalReceiptDestinations(
+        source.adminSpineTerminalBatches,
+      ),
+    ],
   };
 }
 
