@@ -1739,6 +1739,7 @@ function withAdminAuditDetailDisplayRows(item, { game }) {
     item.localPrerequisites,
     { game },
   );
+  const batchRows = buildAdminSpineBatchRows(item.batches);
   const productionFeatureDestinationSections =
     buildProductionFeatureDestinationSections(
       item.artifactSummary?.productionFeatureDestinationSummary,
@@ -1751,6 +1752,7 @@ function withAdminAuditDetailDisplayRows(item, { game }) {
     ...(reconnectLaneRows.length === 0 ? {} : { reconnectLaneRows }),
     ...(staleConflictLaneRows.length === 0 ? {} : { staleConflictLaneRows }),
     ...(localPrerequisiteRows.length === 0 ? {} : { localPrerequisiteRows }),
+    ...(batchRows.length === 0 ? {} : { batchRows }),
     ...(productionFeatureDestinationSections.length === 0
       ? {}
       : { productionFeatureDestinationSections }),
@@ -1798,6 +1800,52 @@ function buildLocalPrerequisiteRows(localPrerequisites, { game }) {
             },
           ],
         }),
+    ),
+  );
+}
+
+function buildAdminSpineBatchRows(batches) {
+  return Object.freeze(
+    (Array.isArray(batches) ? batches : []).map((batch) =>
+      artifactSummaryRow({
+        id: `admin-spine-batch-${batch.id}`,
+        testId: `admin-audit-admin-spine-batch-${batch.id}`,
+        values: [
+          { id: "label", text: batch.label, emphasized: true },
+          { id: "status", text: batch.status },
+          { id: "caseCount", text: `${batch.caseCount} cases` },
+          { id: "elapsedMs", text: `${batch.elapsedMs} ms` },
+          {
+            id: "sharedFrontendSession",
+            text:
+              batch.sharedFrontendSession === true
+                ? "shared frontend"
+                : "separate frontend",
+          },
+          {
+            id: "sharedChromiumSession",
+            text:
+              batch.sharedChromiumSession === true
+                ? "shared chromium"
+                : "separate chromium",
+          },
+          { id: "reason", text: batch.reason },
+        ],
+        subentries: (Array.isArray(batch.artifactPaths)
+          ? batch.artifactPaths
+          : []
+        ).map((artifactPath, index) => ({
+          id: `artifact-path-${index + 1}`,
+          testId: `admin-audit-admin-spine-batch-${batch.id}-artifact-path-${index + 1}`,
+          values: [
+            {
+              id: "artifactPath",
+              text: artifactPath,
+              emphasized: true,
+            },
+          ],
+        })),
+      }),
     ),
   );
 }

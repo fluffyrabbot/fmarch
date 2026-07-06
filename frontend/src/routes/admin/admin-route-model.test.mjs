@@ -1915,6 +1915,19 @@ test("admin audit detail page renders simple list rows from route data", async (
   assert.doesNotMatch(source, /staleConflictLanes as lane/);
 });
 
+test("admin audit detail page renders admin spine batch rows from route data", async () => {
+  const source = await readFile(
+    "frontend/src/routes/admin/audit/[audit]/+page.svelte",
+    "utf8",
+  );
+  assert.match(source, /batchRows/);
+  assert.doesNotMatch(source, /batches as batch/);
+  assert.doesNotMatch(source, /batch\.sharedFrontendSession/);
+  assert.doesNotMatch(source, /batch\.sharedChromiumSession/);
+  assert.doesNotMatch(source, /batch\.artifactPaths/);
+  assert.match(source, /AdminAuditDescriptorRows rows=\{data\.audit\.batchRows\}/);
+});
+
 test("admin audit detail page renders local prerequisite rows from route data", async () => {
   const source = await readFile(
     "frontend/src/routes/admin/audit/[audit]/+page.svelte",
@@ -2243,6 +2256,23 @@ test("admin local admin spine detail data carries aggregate proof rows", async (
         true,
       ],
     ],
+  );
+  assert.deepEqual(
+    data.audit.batchRows.map((row) => [
+      row.id,
+      row.testId,
+      row.values.map((value) => [value.id, value.text, value.emphasized]),
+      (row.subentries ?? []).map((subentry) => [
+        subentry.id,
+        subentry.testId,
+        subentry.values.map((value) => [
+          value.id,
+          value.text,
+          value.emphasized,
+        ]),
+      ]),
+    ]),
+    expectedAdminSpineBatchRows(data.audit.batches),
   );
   assert.deepEqual(
     data.audit.checks.map((check) => [check.id, check.status]),
@@ -9584,6 +9614,35 @@ function expectedSimpleLaneRows({ rows, idPrefix, testIdPrefix }) {
       ["status", row.status, false],
     ],
     [],
+  ]);
+}
+
+function expectedAdminSpineBatchRows(batches) {
+  return batches.map((batch) => [
+    `admin-spine-batch-${batch.id}`,
+    `admin-audit-admin-spine-batch-${batch.id}`,
+    [
+      ["label", batch.label, true],
+      ["status", batch.status, false],
+      ["caseCount", `${batch.caseCount} cases`, false],
+      ["elapsedMs", `${batch.elapsedMs} ms`, false],
+      [
+        "sharedFrontendSession",
+        batch.sharedFrontendSession ? "shared frontend" : "separate frontend",
+        false,
+      ],
+      [
+        "sharedChromiumSession",
+        batch.sharedChromiumSession ? "shared chromium" : "separate chromium",
+        false,
+      ],
+      ["reason", batch.reason, false],
+    ],
+    batch.artifactPaths.map((artifactPath, index) => [
+      `artifact-path-${index + 1}`,
+      `admin-audit-admin-spine-batch-${batch.id}-artifact-path-${index + 1}`,
+      [["artifactPath", artifactPath, true]],
+    ]),
   ]);
 }
 

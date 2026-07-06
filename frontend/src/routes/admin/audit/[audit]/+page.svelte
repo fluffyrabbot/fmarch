@@ -238,37 +238,13 @@
         listTestId="admin-audit-detail-checks"
       />
     {/if}
-    {#if data.audit.batches?.length > 0}
+    {#if data.audit.batchRows?.length > 0}
       <section
         class="admin-audit-detail__group"
         data-testid="admin-audit-detail-admin-spine-batches"
       >
         <h2>Admin spine batches</h2>
-        <ol class="admin-audit-detail__entries">
-          {#each data.audit.batches as batch}
-            <li
-              class="admin-audit-detail__entry admin-audit-detail__entry--stack"
-              data-testid={`admin-audit-admin-spine-batch-${batch.id}`}
-            >
-              <strong>{batch.label}</strong>
-              <span>{batch.status}</span>
-              <span>{batch.caseCount} cases</span>
-              <span>{batch.elapsedMs} ms</span>
-              <span>{batch.sharedFrontendSession ? "shared frontend" : "separate frontend"}</span>
-              <span>{batch.sharedChromiumSession ? "shared chromium" : "separate chromium"}</span>
-              <span>{batch.reason}</span>
-              {#if batch.artifactPaths?.length > 0}
-                <ol class="admin-audit-detail__subentries">
-                  {#each batch.artifactPaths as artifactPath}
-                    <li>
-                      <strong>{artifactPath}</strong>
-                    </li>
-                  {/each}
-                </ol>
-              {/if}
-            </li>
-          {/each}
-        </ol>
+        <AdminAuditDescriptorRows rows={data.audit.batchRows} />
       </section>
     {/if}
     {#if data.audit.localPrerequisiteRows?.length > 0}
