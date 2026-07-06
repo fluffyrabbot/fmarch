@@ -66,6 +66,10 @@ import {
   devTestGameCoreLoopAdminProofPath,
 } from "./dev_test_game_local_admin_proof_paths.mjs";
 import {
+  proofGraphCoreLoopRecoveryDestinationEdges,
+  proofGraphCoreLoopRecoveryDestinationNodes,
+} from "./dev_test_game_proof_graph_core_loop_recovery_destinations.mjs";
+import {
   nextActionCommand,
   proofFreshnessAdminProofCommand,
 } from "./dev_test_game_next_action_paths.mjs";
@@ -356,6 +360,11 @@ export function adminProofDestinationRequirementRoleRows({
 export function devTestGameProofGraphFirstClassNodes({
   game = "<seeded-game>",
 } = {}) {
+  const coreLoopRecoveryDestinationNodes =
+    proofGraphCoreLoopRecoveryDestinationNodes({
+      game,
+      recoveryCommand: devTestGameCoreLoopAdminProofCommand,
+    });
   return Object.freeze([
     proofGraphSurfaceNode({
       id: "admin-spine",
@@ -440,6 +449,7 @@ export function devTestGameProofGraphFirstClassNodes({
         "admin-audit-command-proof-role-url-audit-command-proof-role-url-audit",
       ...coreLoopCommandProofRoleUrlAuditExpectation,
     }),
+    ...coreLoopRecoveryDestinationNodes,
     ...proofGraphDiagnosticProofNodes.map((node) =>
       Object.freeze({
         ...node,
@@ -452,6 +462,11 @@ export function devTestGameProofGraphFirstClassNodes({
 export function devTestGameProofGraphBaseEdges({
   game = "<seeded-game>",
 } = {}) {
+  const coreLoopRecoveryDestinationNodes =
+    proofGraphCoreLoopRecoveryDestinationNodes({
+      game,
+      recoveryCommand: devTestGameCoreLoopAdminProofCommand,
+    });
   return Object.freeze([
     proofGraphEdge({
       from: "admin-spine",
@@ -520,6 +535,9 @@ export function devTestGameProofGraphBaseEdges({
       command: devTestGameCoreLoopAdminProofCommand,
       proofTarget: devTestGameCoreLoopAdminProofPath,
       checkedCount: coreLoopCommandProofRoleUrlAuditExpectation.checkedCount,
+    }),
+    ...proofGraphCoreLoopRecoveryDestinationEdges({
+      nodes: coreLoopRecoveryDestinationNodes,
     }),
     ...proofGraphDiagnosticProofEdges,
     ...adminProofDestinationRequirementLinkRows.map(([linkId]) =>

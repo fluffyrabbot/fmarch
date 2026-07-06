@@ -32,6 +32,7 @@ export function proofGraphCoreLoopRecoveryDestinationRowTestId(rowId) {
 }
 
 export function proofGraphCoreLoopRecoveryDestinationNodes({
+  game = "<seeded-game>",
   recoveryCommand = devTestGameCoreLoopAdminProofCommand,
 } = {}) {
   return Object.freeze(
@@ -42,7 +43,7 @@ export function proofGraphCoreLoopRecoveryDestinationNodes({
         kind: "core-loop-host-visible-recovery",
         status: "passed",
         artifact: devTestGameCoreLoopAdminProofPath,
-        roleUrl: localAdminAuditRoleUrl(localAdminAuditIds.coreLoop),
+        roleUrl: localAdminAuditRoleUrl(localAdminAuditIds.coreLoop, { game }),
         proofCommand: recoveryCommand,
         recoveryCommand,
         recoveryCaseId: recoveryCase.id,

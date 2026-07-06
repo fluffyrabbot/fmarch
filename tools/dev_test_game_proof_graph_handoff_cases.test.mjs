@@ -42,6 +42,10 @@ import {
   devTestGameCoreLoopAdminProofPath,
 } from "./dev_test_game_local_admin_proof_paths.mjs";
 import {
+  proofGraphCoreLoopRecoveryDestinationEdges,
+  proofGraphCoreLoopRecoveryDestinationNodes,
+} from "./dev_test_game_proof_graph_core_loop_recovery_destinations.mjs";
+import {
   devTestGameProductionFeatureBrowserProofCommand,
 } from "./dev_test_game_production_feature_source_registry.mjs";
 import {
@@ -189,6 +193,11 @@ test("admin proof destination handoff cases derive proof graph nodes", () => {
 });
 
 test("proof graph first-class fixture nodes share artifact and command contracts", () => {
+  const coreLoopRecoveryDestinationNodes =
+    proofGraphCoreLoopRecoveryDestinationNodes({
+      game: "midsummer",
+      recoveryCommand: devTestGameCoreLoopAdminProofCommand,
+    });
   assert.deepEqual(
     devTestGameProofGraphFirstClassNodes({ game: "midsummer" }).map((node) => [
       node.id,
@@ -290,6 +299,17 @@ test("proof graph first-class fixture nodes share artifact and command contracts
         [],
         [],
       ],
+      ...coreLoopRecoveryDestinationNodes.map((node) => [
+        node.id,
+        node.kind,
+        node.status,
+        node.artifact,
+        node.roleUrl,
+        node.recoveryCommand,
+        [],
+        [],
+        [],
+      ]),
       [
         "diagnostic:proof-graph-destination-summary-drift",
         "diagnostic-browser-proof",
@@ -335,12 +355,17 @@ test("proof graph first-class fixture nodes share artifact and command contracts
       visibleAdminRowTestId:
         "admin-audit-command-proof-role-url-audit-command-proof-role-url-audit",
       status: "passed",
-      checkedCount: 36,
+      checkedCount: coreLoopCommandProofRoleUrlAuditExpectation.checkedCount,
     },
   );
 });
 
 test("proof graph base edges share fixed topology and seed recovery metadata", () => {
+  const coreLoopRecoveryDestinationNodes =
+    proofGraphCoreLoopRecoveryDestinationNodes({
+      game: "midsummer",
+      recoveryCommand: devTestGameCoreLoopAdminProofCommand,
+    });
   assert.deepEqual(
     devTestGameProofGraphBaseEdges({ game: "midsummer" }),
     [
@@ -394,6 +419,9 @@ test("proof graph base edges share fixed topology and seed recovery metadata", (
         proofTarget: devTestGameCoreLoopAdminProofPath,
         checkedCount: coreLoopCommandProofRoleUrlAuditExpectation.checkedCount,
       },
+      ...proofGraphCoreLoopRecoveryDestinationEdges({
+        nodes: coreLoopRecoveryDestinationNodes,
+      }),
       ...proofGraphDiagnosticProofEdges,
       ...adminProofDestinationRequirementLinkRows.map(([linkId]) => ({
         from: "admin-spine",
