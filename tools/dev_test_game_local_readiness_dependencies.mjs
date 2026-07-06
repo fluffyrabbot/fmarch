@@ -156,11 +156,49 @@ export const localReadinessDependencies = Object.freeze([
 const localReadinessDependencyById = new Map(
   localReadinessDependencies.map((dependency) => [dependency.id, dependency]),
 );
+const localAdminAuditIdSet = new Set(Object.values(localAdminAuditIds));
 
 assertLocalReadinessDependencyRegistry();
 
 export function getLocalReadinessDependency(id) {
   return localReadinessDependencyById.get(id);
+}
+
+export function localReadinessDependencyAuditIdFromRoleUrl(roleUrl) {
+  const match = String(roleUrl).match(
+    /^\/admin\/audit\/([^?]+)\?game=<seeded-game>$/,
+  );
+  if (match === null) {
+    throw new Error(
+      `local readiness dependency role URL is malformed: ${roleUrl}`,
+    );
+  }
+  const auditId = match[1];
+  if (!localAdminAuditIdSet.has(auditId)) {
+    throw new Error(
+      `local readiness dependency role URL uses unknown admin audit id: ${auditId}`,
+    );
+  }
+  if (roleUrl !== localAdminAuditRoleUrl(auditId)) {
+    throw new Error(
+      `local readiness dependency role URL is not canonical: ${roleUrl}`,
+    );
+  }
+  return auditId;
+}
+
+export function localReadinessDependencyDestinationFor(id) {
+  const dependency = getLocalReadinessDependency(id);
+  if (dependency === undefined) {
+    throw new Error(`unknown local readiness dependency: ${id}`);
+  }
+  return buildLocalReadinessDependencyDestination(dependency);
+}
+
+export function localReadinessDependencyDestinations() {
+  return localReadinessDependencies.map((dependency) =>
+    buildLocalReadinessDependencyDestination(dependency),
+  );
 }
 
 export function localReadinessDependencyRecoveryFor(id) {
@@ -449,7 +487,18 @@ function buildLocalReadinessDependencyRecovery(dependency) {
   };
 }
 
+function buildLocalReadinessDependencyDestination(dependency) {
+  return {
+    id: dependency.id,
+    auditId: localReadinessDependencyAuditIdFromRoleUrl(dependency.roleUrl),
+    roleUrl: dependency.roleUrl,
+  };
+}
+
 function assertLocalReadinessDependencyDescriptor(dependency) {
+  if (typeof dependency?.roleUrl === "string") {
+    localReadinessDependencyAuditIdFromRoleUrl(dependency.roleUrl);
+  }
   if (
     typeof dependency?.id !== "string" ||
     dependency.id.length === 0 ||
@@ -464,7 +513,6 @@ function assertLocalReadinessDependencyDescriptor(dependency) {
     typeof dependency.proofTarget !== "string" ||
     dependency.proofTarget.length === 0 ||
     typeof dependency.roleUrl !== "string" ||
-    !dependency.roleUrl.includes("?game=<seeded-game>") ||
     typeof dependency.proofBoundary !== "string" ||
     dependency.proofBoundary.length === 0 ||
     typeof dependency.requiredEvidence !== "string" ||

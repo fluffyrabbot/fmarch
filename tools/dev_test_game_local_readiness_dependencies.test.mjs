@@ -7,7 +7,10 @@ import {
   buildProofGraphAdminRoleHandoffsReadinessCheck,
   buildProofGraphTerminalValidationReadinessCheck,
   getLocalReadinessDependency,
+  localReadinessDependencyAuditIdFromRoleUrl,
   localReadinessDependencyCheckFor,
+  localReadinessDependencyDestinationFor,
+  localReadinessDependencyDestinations,
   localReadinessDependencyRecoveryFor,
   localNextActionAdminSurfaceCheckId,
   localHostedEvidenceLaneDemoProofCheckId,
@@ -77,6 +80,86 @@ test("local readiness dependency contract carries recovery command and role surf
   );
   assert.throws(
     () => localReadinessDependencyCheckFor("local-unknown-readiness-dependency"),
+    /unknown local readiness dependency/,
+  );
+  assert.deepEqual(
+    localReadinessDependencyDestinationFor(dependency.id),
+    {
+      id: dependency.id,
+      auditId: localAdminAuditIds.proofGraph,
+      roleUrl: proofGraphRoleUrl,
+    },
+  );
+  assert.deepEqual(
+    localReadinessDependencyDestinations().map((destination) => [
+      destination.id,
+      destination.auditId,
+      destination.roleUrl,
+    ]),
+    [
+      [
+        localProofGraphAdminRoleHandoffsCheckId,
+        localAdminAuditIds.proofGraph,
+        proofGraphRoleUrl,
+      ],
+      [
+        localProofGraphProductionFeatureProvenanceCheckId,
+        localAdminAuditIds.proofGraph,
+        proofGraphRoleUrl,
+      ],
+      [
+        localProofGraphNextActionHandoffCheckId,
+        localAdminAuditIds.proofGraph,
+        proofGraphRoleUrl,
+      ],
+      [
+        localProofGraphTerminalValidationCheckId,
+        localAdminAuditIds.proofGraph,
+        proofGraphRoleUrl,
+      ],
+      [
+        localProofFreshnessAdminSurfaceCheckId,
+        localAdminAuditIds.proofFreshness,
+        proofFreshnessRoleUrl,
+      ],
+      [
+        localNextActionAdminSurfaceCheckId,
+        localAdminAuditIds.nextAction,
+        nextActionRoleUrl,
+      ],
+      [
+        localSeedDemoFixtureCheckId,
+        localAdminAuditIds.seedFixtures,
+        seedFixturesRoleUrl,
+      ],
+      [
+        localHostedEvidenceLaneDemoProofCheckId,
+        localAdminAuditIds.hostedEvidenceLane,
+        hostedEvidenceLaneRoleUrl,
+      ],
+    ],
+  );
+  assert.equal(
+    localReadinessDependencyAuditIdFromRoleUrl(proofGraphRoleUrl),
+    localAdminAuditIds.proofGraph,
+  );
+  assert.throws(
+    () =>
+      localReadinessDependencyAuditIdFromRoleUrl("/admin/audit/local-proof-graph"),
+    /local readiness dependency role URL is malformed/,
+  );
+  assert.throws(
+    () =>
+      localReadinessDependencyAuditIdFromRoleUrl(
+        "/admin/audit/local-unknown?game=<seeded-game>",
+      ),
+    /local readiness dependency role URL uses unknown admin audit id/,
+  );
+  assert.throws(
+    () =>
+      localReadinessDependencyDestinationFor(
+        "local-unknown-readiness-dependency",
+      ),
     /unknown local readiness dependency/,
   );
 });

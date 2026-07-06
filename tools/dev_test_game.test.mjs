@@ -619,7 +619,7 @@ import {
 } from "./dev_test_game_pre_readiness_trace_registry.mjs";
 import {
   getLocalReadinessDependency,
-  localReadinessDependencies,
+  localReadinessDependencyDestinations,
   localProofGraphNextActionHandoffCheckId,
   localProofGraphProductionFeatureProvenanceCheckId,
   localProofGraphTerminalValidationCheckId,
@@ -7091,7 +7091,7 @@ test("admin proof fixtures prove normalized evidence object rows", () => {
   const releaseProof = assertReleaseAdminProof(releaseAdminProofFixture());
   assert.deepEqual(
     releaseProof.generatedFrom.localPrerequisiteIds,
-    localReadinessDependencies.map((dependency) => dependency.id),
+    localReadinessDependencyDestinations().map((destination) => destination.id),
   );
   assert.deepEqual(
     releaseProof.adminRoleSurface.visitedLocalPrerequisiteDestinations.find(
@@ -22221,28 +22221,7 @@ function releaseAdminProofSetupCommandEvidenceIds() {
 }
 
 function releaseAdminProofLocalPrerequisites() {
-  return localReadinessDependencies.map((dependency) => {
-    const auditId = releaseAdminProofLocalPrerequisiteAuditIdFromRoleUrl(
-      dependency.roleUrl,
-    );
-    return {
-      id: dependency.id,
-      auditId,
-      roleUrl: dependency.roleUrl,
-    };
-  });
-}
-
-function releaseAdminProofLocalPrerequisiteAuditIdFromRoleUrl(roleUrl) {
-  const match = String(roleUrl).match(
-    /^\/admin\/audit\/([^?]+)\?game=<seeded-game>$/,
-  );
-  if (match === null) {
-    throw new Error(
-      `release admin proof local prerequisite role URL is malformed: ${roleUrl}`,
-    );
-  }
-  return match[1];
+  return localReadinessDependencyDestinations();
 }
 
 function releaseRunbookAdminProofFixture() {
