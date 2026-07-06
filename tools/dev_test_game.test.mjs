@@ -611,6 +611,9 @@ import {
   proofGraphAdminProofEnvOverrides,
 } from "./dev_test_game_proof_graph_admin_proof.mjs";
 import {
+  proofGraphAdminProofDescriptor,
+} from "./dev_test_game_proof_graph_admin_proof_descriptor.mjs";
+import {
   proofGraphProductionFeatureDestinationSummary,
   proofGraphProductionFeatureProvenanceComparison,
 } from "./dev_test_game_proof_graph_production_feature_destinations.mjs";
@@ -1555,7 +1558,7 @@ test("dev test-game spine orchestrators expose stable proof order and env maps",
     plan: terminalAdminProofBatchPlan,
     batch: terminalProofGraphReceiptBatchRegistry[0],
     caseSmokeNames: [
-      "dev-test-game-proof-graph-admin-proof",
+      proofGraphAdminProofDescriptor.smokeName,
       "dev-test-game-proof-freshness-admin-proof",
       "dev-test-game-next-action-admin-proof",
     ],
@@ -6889,6 +6892,8 @@ test("proof graph admin proof source loading names default artifacts", () => {
   };
 
   assert.equal(proofCase.loadSource, loadProofGraphAdminProofSource);
+  assert.equal(proofCase.smokeName, proofGraphAdminProofDescriptor.smokeName);
+  assert.equal(proofCase.stage, proofGraphAdminProofDescriptor.stage);
   assert.deepEqual(proofCase.envOverrides, expectedEnvOverrides);
   assert.deepEqual(proofGraphAdminProofEnvOverrides(), expectedEnvOverrides);
   assert.deepEqual(
@@ -22593,12 +22598,12 @@ function proofGraphAdminProofFixture() {
     adminSpineTerminalValidationDestinationFixture();
   return {
     version: 1,
-    proof: "dev-test-game-proof-graph-admin-proof",
+    proof: proofGraphAdminProofDescriptor.proof,
     status: "passed",
     releaseReady: false,
     productionReady: false,
-    scope: "local-dev-test-game-proof-graph-admin-surface",
-    proofBoundary: "Local admin proof graph handoff proof only.",
+    scope: proofGraphAdminProofDescriptor.scope,
+    proofBoundary: proofGraphAdminProofDescriptor.proofBoundary,
     generatedFrom: {
       proofGraph: "target/dev-test-game/proof-graph.json",
       proofRun: "target/dev-test-game/proof-run.json",
@@ -25424,7 +25429,7 @@ function nextActionHandoffDestinationFixture() {
 
 function terminalAdminProofSmokeNameForId(proofId) {
   return {
-    "proof-graph": "dev-test-game-proof-graph-admin-proof",
+    "proof-graph": proofGraphAdminProofDescriptor.smokeName,
     "proof-freshness": "dev-test-game-proof-freshness-admin-proof",
     "next-action": "dev-test-game-next-action-admin-proof",
     "hosted-identity-next-action":

@@ -80,6 +80,9 @@ import {
   seedScenarioCoverageGroups,
 } from "./dev_test_game_seed_scenario_cases.mjs";
 import {
+  proofGraphAdminProofDescriptor,
+} from "./dev_test_game_proof_graph_admin_proof_descriptor.mjs";
+import {
   hostedTargetPreflightCheckIds,
 } from "./dev_test_game_hosted_target_preflight.mjs";
 import {
@@ -6275,14 +6278,17 @@ export function validateDevTestGameProofGraphAdminProof(proof, options = {}) {
   if (proof?.version !== 1) {
     throw new Error(`proof graph admin proof version drifted: ${proof?.version}`);
   }
-  if (proof.proof !== "dev-test-game-proof-graph-admin-proof") {
+  if (proof.proof !== proofGraphAdminProofDescriptor.proof) {
     throw new Error(`unexpected proof graph admin proof id: ${proof.proof}`);
   }
   if (proof.status !== "passed") {
     throw new Error(`proof graph admin proof status is ${proof.status}`);
   }
-  if (proof.scope !== "local-dev-test-game-proof-graph-admin-surface") {
+  if (proof.scope !== proofGraphAdminProofDescriptor.scope) {
     throw new Error(`proof graph admin proof scope drifted: ${proof.scope}`);
+  }
+  if (proof.proofBoundary !== proofGraphAdminProofDescriptor.proofBoundary) {
+    throw new Error("proof graph admin proof boundary drifted");
   }
   if (proof.productionReady !== false || proof.releaseReady !== false) {
     throw new Error("proof graph admin proof must not claim production or release readiness");

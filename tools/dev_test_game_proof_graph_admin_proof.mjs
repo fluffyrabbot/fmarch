@@ -88,6 +88,9 @@ import {
 import {
   proofGraphPrerequisiteDestinationRowIds,
 } from "./dev_test_game_proof_graph_prerequisite_destination_rows.mjs";
+import {
+  proofGraphAdminProofDescriptor,
+} from "./dev_test_game_proof_graph_admin_proof_descriptor.mjs";
 
 const proofGraphPath = path.resolve(
   repoRoot,
@@ -138,8 +141,8 @@ const evidencePath = path.resolve(
 
 export function proofGraphAdminProofCase() {
   return {
-    smokeName: "dev-test-game-proof-graph-admin-proof",
-    stage: "proof-graph-admin-proof-listen",
+    smokeName: proofGraphAdminProofDescriptor.smokeName,
+    stage: proofGraphAdminProofDescriptor.stage,
     evidencePath,
     envOverrides: proofGraphAdminProofEnvOverrides(),
     loadSource: loadProofGraphAdminProofSource,
@@ -152,13 +155,12 @@ export function proofGraphAdminProofCase() {
     },
     buildEvidence: ({ source, adminRoleSurface }) => ({
       version: 1,
-      proof: "dev-test-game-proof-graph-admin-proof",
+      proof: proofGraphAdminProofDescriptor.proof,
       status: "passed",
       releaseReady: false,
       productionReady: false,
-      scope: "local-dev-test-game-proof-graph-admin-surface",
-      proofBoundary:
-        "Local SvelteKit admin role URL with fixture admin authority over the generated dev-test-game proof graph. Proves the machine-readable proof graph, recovery receipt evidence-object rows, and role handoffs are discoverable from the seeded admin overview and inspectable in a native admin audit detail route; it does not prove hosted operations, beta readiness, release readiness, or production readiness.",
+      scope: proofGraphAdminProofDescriptor.scope,
+      proofBoundary: proofGraphAdminProofDescriptor.proofBoundary,
       generatedFrom: buildProofGraphAdminGeneratedFrom(source),
       adminRoleSurface,
     }),
@@ -364,11 +366,12 @@ if (pathToFileURL(process.argv[1] ?? "").href === import.meta.url) {
 export function assertProofGraphAdminProof(evidence) {
   if (
     evidence?.version !== 1 ||
-    evidence.proof !== "dev-test-game-proof-graph-admin-proof" ||
+    evidence.proof !== proofGraphAdminProofDescriptor.proof ||
     evidence.status !== "passed" ||
     evidence.releaseReady !== false ||
     evidence.productionReady !== false ||
-    evidence.scope !== "local-dev-test-game-proof-graph-admin-surface"
+    evidence.scope !== proofGraphAdminProofDescriptor.scope ||
+    evidence.proofBoundary !== proofGraphAdminProofDescriptor.proofBoundary
   ) {
     throw new Error("proof graph admin proof must pass locally without release claims");
   }
