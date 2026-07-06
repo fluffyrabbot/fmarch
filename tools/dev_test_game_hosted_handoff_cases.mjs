@@ -15,6 +15,13 @@ import {
   devTestGameHostedMatrixRawEvidenceTemplateProofCommand,
 } from "./dev_test_game_hosted_matrix_raw_evidence_template_proof.mjs";
 import {
+  devTestGameHostedEvidenceOperatorChecklistPath,
+  assertHostedEvidenceOperatorChecklistDescriptor,
+  hostedEvidenceLaneCommandText,
+  hostedEvidenceOperatorChecklistDescriptor,
+  hostedEvidenceOperatorChecklistInputSections,
+} from "./dev_test_game_hosted_evidence_operator_checklist.mjs";
+import {
   buildRealHostedEvidenceInputs,
   realHostedEvidenceInputIds,
 } from "./dev_test_game_real_hosted_evidence_inputs.mjs";
@@ -42,11 +49,10 @@ import {
 export const hostedEvidenceHandoffInputIds = realHostedEvidenceInputIds;
 export const hostedEvidenceHandoffBlockedCheckIds =
   hostedTargetPreflightBlockingCheckIds;
-export const hostedEvidenceLaneCommand =
-  "npm run test:dev-test-game-hosted-evidence-lane";
+export const hostedEvidenceLaneCommand = hostedEvidenceLaneCommandText;
 export const hostedEvidenceLanePath = devTestGameHostedEvidenceLanePath;
 export const hostedEvidenceOperatorAction =
-  `Configure the hosted frontend/API URLs, copy ${devTestGameHostedMatrixRawEvidenceTemplatePath} to a filled raw hosted matrix evidence packet from that same deployment, validate the template with npm run ${devTestGameHostedMatrixRawEvidenceTemplateProofCommand}, then rerun npm run test:dev-test-game-hosted-evidence-lane.`;
+  `Follow ${devTestGameHostedEvidenceOperatorChecklistPath}: configure the hosted frontend/API URLs, copy ${devTestGameHostedMatrixRawEvidenceTemplatePath} to a filled raw hosted matrix evidence packet from that same deployment, validate the template with npm run ${devTestGameHostedMatrixRawEvidenceTemplateProofCommand}, then rerun npm run test:dev-test-game-hosted-evidence-lane.`;
 export const hostedEvidenceLocalVsHostedBoundary =
   "Local hosted-like matrix artifacts and synthetic demo evidence can prove the handoff path, but they cannot satisfy hosted deployment evidence.";
 export const devTestGameHostedEvidenceLaneAdminProofPath =
@@ -62,29 +68,8 @@ export const devTestGameHostedEvidenceLaneRealCaptureAdminProofCommand =
 export const hostedMatrixExternalEvidencePath =
   "target/dev-test-game/hosted-matrix-external.json";
 
-export const hostedEvidenceHandoffInputSectionDefinitions = Object.freeze([
-  Object.freeze({
-    id: "proof-command",
-    label: "Proof command",
-    requiredInputIds: Object.freeze(["command", "proof-target"]),
-  }),
-  Object.freeze({
-    id: "hosted-target",
-    label: "Hosted target",
-    requiredInputIds: Object.freeze([
-      "FMARCH_HOSTED_MATRIX_FRONTEND_URL",
-      "FMARCH_HOSTED_MATRIX_API_URL",
-      "FMARCH_HOSTED_MATRIX_GROUP_ID",
-    ]),
-  }),
-  Object.freeze({
-    id: "raw-evidence",
-    label: "Raw evidence",
-    requiredInputIds: Object.freeze([
-      "FMARCH_HOSTED_MATRIX_RAW_EVIDENCE_PATH",
-    ]),
-  }),
-]);
+export const hostedEvidenceHandoffInputSectionDefinitions =
+  hostedEvidenceOperatorChecklistInputSections;
 
 export const hostedEvidenceHandoffInputSectionIds = Object.freeze(
   hostedEvidenceHandoffInputSectionDefinitions.map((section) => section.id),
@@ -251,10 +236,20 @@ export function hostedEvidenceFirstMissingOperatorArtifact({
   };
 }
 
-export const hostedEvidenceBlockedOperatorPacketFromReceipt =
-  blockedOperatorPacketFromReceipt;
-export const assertHostedEvidenceBlockedOperatorPacket =
-  assertBlockedOperatorPacket;
+export function hostedEvidenceBlockedOperatorPacketFromReceipt(receipt) {
+  return assertHostedEvidenceBlockedOperatorPacket(
+    blockedOperatorPacketFromReceipt({
+      ...receipt,
+      operatorChecklist: hostedEvidenceOperatorChecklistDescriptor(),
+    }),
+  );
+}
+
+export function assertHostedEvidenceBlockedOperatorPacket(packet) {
+  assertBlockedOperatorPacket(packet);
+  assertHostedEvidenceOperatorChecklistDescriptor(packet.operatorChecklist);
+  return packet;
+}
 
 function hostedEvidenceFirstMissingProgressionCase({
   id,
@@ -630,6 +625,7 @@ export function assertHostedEvidenceHandoffChecklist(checklist) {
   if (checklist.blockedOperatorPacket !== undefined) {
     assertHostedEvidenceBlockedOperatorPacket(checklist.blockedOperatorPacket);
   }
+  assertHostedEvidenceOperatorChecklistDescriptor(checklist.operatorChecklist);
   return checklist;
 }
 
@@ -660,6 +656,7 @@ export function hostedEvidenceHandoffChecklistFixture({
       .filter((check) => blockedCheckIdSet.has(check.id))
       .map((check) => ({ ...check })),
     inputSections,
+    operatorChecklist: hostedEvidenceOperatorChecklistDescriptor(),
     ...(blockedReceipt === null ? {} : { blockedReceipt }),
     ...(blockedOperatorPacket === null ? {} : { blockedOperatorPacket }),
     ...(progressionSummary === undefined ? {} : { progressionSummary }),

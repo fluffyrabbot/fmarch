@@ -46,6 +46,9 @@ export function blockedOperatorPacketFromReceipt(receipt) {
             ),
         }),
     operatorAction: String(receipt.operatorAction ?? ""),
+    ...(receipt.operatorChecklist === undefined
+      ? {}
+      : { operatorChecklist: receipt.operatorChecklist }),
     localVsHostedBoundary: String(receipt.localVsHostedBoundary ?? ""),
     proofTarget: String(receipt.proofTarget ?? ""),
     nextProofTarget: String(receipt.nextProofTarget ?? ""),
@@ -150,6 +153,9 @@ export function visibleBlockedOperatorPacket(packet) {
             ),
         }),
     operatorAction: String(packet.operatorAction ?? ""),
+    ...(packet.operatorChecklist === undefined
+      ? {}
+      : { operatorChecklist: packet.operatorChecklist }),
     localVsHostedBoundary: String(packet.localVsHostedBoundary ?? ""),
     proofTarget: String(packet.proofTarget ?? ""),
     nextProofTarget: String(packet.nextProofTarget ?? ""),
@@ -192,6 +198,19 @@ export function blockedOperatorPacketText(packet) {
       visible.rawEvidenceTemplate,
     ).map((field) => field.value),
     visible.operatorAction,
+    ...(visible.operatorChecklist === undefined
+      ? []
+      : [
+          visible.operatorChecklist.id,
+          visible.operatorChecklist.path,
+          visible.operatorChecklist.command,
+          visible.operatorChecklist.proofTarget,
+          visible.operatorChecklist.preflightTarget,
+          visible.operatorChecklist.rawEvidenceTemplatePath,
+          visible.operatorChecklist.rawEvidenceTemplateProofCommand,
+          visible.operatorChecklist.rawCaptureCommand,
+          visible.operatorChecklist.rawCaptureProofTarget,
+        ]),
     visible.localVsHostedBoundary,
     visible.proofTarget,
     visible.nextProofTarget,

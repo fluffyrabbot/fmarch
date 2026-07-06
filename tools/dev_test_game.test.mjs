@@ -519,6 +519,11 @@ import {
   hostedEvidenceOperatorAction,
 } from "./dev_test_game_hosted_handoff_cases.mjs";
 import {
+  devTestGameHostedEvidenceOperatorChecklistPath,
+  hostedEvidenceOperatorChecklistDescriptor,
+  hostedEvidenceOperatorChecklistMarkdown,
+} from "./dev_test_game_hosted_evidence_operator_checklist.mjs";
+import {
   assertDevTestGameHostedEvidenceLaneDemoProof,
   devTestGameHostedEvidenceLaneDemoBlockedPath,
   devTestGameHostedEvidenceLaneDemoExternalEvidencePath,
@@ -5222,6 +5227,27 @@ test("hosted evidence first-missing progression cases drive operator artifacts",
   );
 });
 
+test("hosted evidence operator checklist doc matches shared contract", async () => {
+  const descriptor = hostedEvidenceOperatorChecklistDescriptor();
+  assert.equal(descriptor.path, devTestGameHostedEvidenceOperatorChecklistPath);
+  assert.equal(
+    descriptor.command,
+    "npm run test:dev-test-game-hosted-evidence-lane",
+  );
+  assert.deepEqual(
+    descriptor.blockedCheckIds,
+    hostedEvidenceHandoffBlockedCheckIds,
+  );
+  assert.deepEqual(
+    descriptor.inputSections.map((section) => section.id),
+    ["proof-command", "hosted-target", "raw-evidence"],
+  );
+  assert.equal(
+    await readFile(devTestGameHostedEvidenceOperatorChecklistPath, "utf8"),
+    hostedEvidenceOperatorChecklistMarkdown(),
+  );
+});
+
 test("hosted evidence lane admin proof fixtures preserve visible first-missing artifacts", () => {
   for (const progression of hostedEvidenceFirstMissingProgressionCases) {
     const proof = hostedEvidenceLaneAdminProofFixture({
@@ -6120,6 +6146,7 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
         selectedOperatorPacket.rawEvidenceContractRequiredTopLevelFields,
       rawEvidenceTemplate: selectedOperatorPacket.rawEvidenceTemplate,
       operatorAction: selectedOperatorPacket.operatorAction,
+      operatorChecklist: selectedOperatorPacket.operatorChecklist,
       localVsHostedBoundary: selectedOperatorPacket.localVsHostedBoundary,
       selectedProductionFeatureGraphNodeId:
         selectedOperatorPacket.selectedProductionFeatureGraphNodeId,
@@ -25206,6 +25233,7 @@ function visibleHostedEvidenceBlockedOperatorPacket(packet) {
       ? {}
       : { rawEvidenceTemplate: packet.rawEvidenceTemplate }),
     operatorAction: packet.operatorAction,
+    operatorChecklist: packet.operatorChecklist,
     localVsHostedBoundary: packet.localVsHostedBoundary,
     proofTarget: packet.proofTarget,
     nextProofTarget: packet.nextProofTarget,

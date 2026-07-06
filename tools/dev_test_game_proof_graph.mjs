@@ -54,6 +54,9 @@ import {
   hostedMatrixRawEvidenceTemplateDiagnosticFieldValues,
 } from "./dev_test_game_hosted_matrix_raw_evidence_template_proof.mjs";
 import {
+  assertHostedEvidenceOperatorChecklistDescriptor,
+} from "./dev_test_game_hosted_evidence_operator_checklist.mjs";
+import {
   assertCoreLoopCommandProofRoleUrlAuditExpectation,
   coreLoopCommandProofRoleUrlAuditExpectation,
 } from "./dev_test_game_core_loop_proof_shape_assertions.mjs";
@@ -812,7 +815,10 @@ export function assertDevTestGameProofGraphCoversSelectedOperatorHandoffPacket(
     (node.rawEvidenceTemplate !== undefined &&
       rawEvidenceTemplateDiagnosticFieldsAreMissing(
         node.rawEvidenceTemplate,
-      ))
+      )) ||
+    (node.unprovenId === "hosted-deployment" &&
+      assertHostedEvidenceOperatorChecklistDescriptor(node.operatorChecklist) ===
+        null)
   ) {
     throw new Error("proof graph selected operator packet node drifted");
   }
@@ -1688,6 +1694,7 @@ function buildSelectedOperatorHandoffPacketNode({ nextAction }) {
         ? {}
         : { rawEvidenceTemplate: packet.rawEvidenceTemplate }),
       operatorAction: packet.operatorAction,
+      operatorChecklist: packet.operatorChecklist,
       localVsHostedBoundary: packet.localVsHostedBoundary,
       selectedProductionFeatureGraphNodeId:
         packet.selectedProductionFeatureGraphNodeId,
