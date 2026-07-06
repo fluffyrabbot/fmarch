@@ -619,10 +619,15 @@ import {
 } from "./dev_test_game_pre_readiness_trace_registry.mjs";
 import {
   getLocalReadinessDependency,
+  localHostedEvidenceLaneDemoProofCheckId,
+  localNextActionAdminSurfaceCheckId,
+  localProofFreshnessAdminSurfaceCheckId,
+  localProofGraphAdminRoleHandoffsCheckId,
   localProofGraphNextActionHandoffCheckId,
   localProofGraphProductionFeatureProvenanceCheckId,
   localProofGraphTerminalValidationCheckId,
   localReadinessDependencyCheckFor,
+  localSeedDemoFixtureCheckId,
 } from "./dev_test_game_local_readiness_dependencies.mjs";
 import {
   releaseReadinessTraceCheckId,
@@ -7088,6 +7093,28 @@ test("core-loop generatedFrom families come from one canonical bundle", () => {
 
 test("admin proof fixtures prove normalized evidence object rows", () => {
   const releaseProof = assertReleaseAdminProof(releaseAdminProofFixture());
+  assert.deepEqual(releaseProof.generatedFrom.localPrerequisiteIds, [
+    localSeedDemoFixtureCheckId,
+    localHostedEvidenceLaneDemoProofCheckId,
+    localProofGraphAdminRoleHandoffsCheckId,
+    localProofGraphProductionFeatureProvenanceCheckId,
+    localProofGraphNextActionHandoffCheckId,
+    localProofGraphTerminalValidationCheckId,
+    localProofFreshnessAdminSurfaceCheckId,
+    localNextActionAdminSurfaceCheckId,
+  ]);
+  assert.deepEqual(
+    releaseProof.adminRoleSurface.visitedLocalPrerequisiteDestinations.find(
+      (destination) =>
+        destination.id === localProofGraphTerminalValidationCheckId,
+    ),
+    {
+      id: localProofGraphTerminalValidationCheckId,
+      auditId: localAdminAuditIds.proofGraph,
+      detailRoleUrl: localAdminAuditRoleUrl(localAdminAuditIds.proofGraph),
+      clickedThrough: true,
+    },
+  );
   assert.deepEqual(
     releaseProof.generatedFrom.evidenceObjectRowIds,
     [
@@ -22204,19 +22231,29 @@ function releaseAdminProofSetupCommandEvidenceIds() {
 
 function releaseAdminProofLocalPrerequisiteIds() {
   return [
-    "local-proof-graph-admin-role-handoffs",
-    "local-proof-freshness-admin-surface",
-    "local-next-action-admin-surface",
-    "local-hosted-evidence-lane-demo-proof",
+    localSeedDemoFixtureCheckId,
+    localHostedEvidenceLaneDemoProofCheckId,
+    localProofGraphAdminRoleHandoffsCheckId,
+    localProofGraphProductionFeatureProvenanceCheckId,
+    localProofGraphNextActionHandoffCheckId,
+    localProofGraphTerminalValidationCheckId,
+    localProofFreshnessAdminSurfaceCheckId,
+    localNextActionAdminSurfaceCheckId,
   ];
 }
 
 function releaseAdminProofLocalPrerequisiteAuditId(id) {
   return {
-    "local-proof-graph-admin-role-handoffs": "local-proof-graph",
-    "local-proof-freshness-admin-surface": "local-proof-freshness",
-    "local-next-action-admin-surface": "local-next-action",
-    "local-hosted-evidence-lane-demo-proof": "local-hosted-evidence-lane",
+    [localSeedDemoFixtureCheckId]: localAdminAuditIds.seedFixtures,
+    [localHostedEvidenceLaneDemoProofCheckId]:
+      localAdminAuditIds.hostedEvidenceLane,
+    [localProofGraphAdminRoleHandoffsCheckId]: localAdminAuditIds.proofGraph,
+    [localProofGraphProductionFeatureProvenanceCheckId]:
+      localAdminAuditIds.proofGraph,
+    [localProofGraphNextActionHandoffCheckId]: localAdminAuditIds.proofGraph,
+    [localProofGraphTerminalValidationCheckId]: localAdminAuditIds.proofGraph,
+    [localProofFreshnessAdminSurfaceCheckId]: localAdminAuditIds.proofFreshness,
+    [localNextActionAdminSurfaceCheckId]: localAdminAuditIds.nextAction,
   }[id];
 }
 
