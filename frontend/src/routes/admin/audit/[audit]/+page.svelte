@@ -14,25 +14,12 @@
   const evidenceTestId = "admin-audit-detail-evidence";
   const backTestId = "admin-audit-detail-back";
   $: auditView = buildAdminAuditPanelViewModel({ audit: [data.audit] }).items[0];
-  $: productionFeatureDestinationRows =
-    data.audit.artifactSummary?.productionFeatureDestinationSummary?.rows ?? [];
-  $: primaryProductionFeatureDestinationRows =
-    productionFeatureDestinationRows.filter(
-      (row) => !isHostedEvidenceProgressionDestination(row),
-    );
-  $: hostedEvidenceProgressionDestinationRows =
-    productionFeatureDestinationRows.filter((row) =>
-      isHostedEvidenceProgressionDestination(row),
-    );
   $: hostedHandoffRows = [
     ...(data.audit.hostedHandoffChecklistRows ?? []),
     ...(data.audit.hostedHandoffOperatorRows ?? []),
     ...(data.audit.hostedHandoffProgressionRows ?? []),
     ...(data.audit.hostedHandoffBlockedReceiptRows ?? []),
   ];
-  function isHostedEvidenceProgressionDestination(row) {
-    return String(row?.id ?? "").startsWith("hosted-evidence-progression:");
-  }
 </script>
 
 <svelte:head>
@@ -316,44 +303,21 @@
         <AdminAuditDescriptorRows rows={data.audit.proofLaneCoverageRows} />
       </section>
     {/if}
-    {#if productionFeatureDestinationRows.length > 0}
+    {#if data.audit.productionFeatureDestinationSections?.length > 0}
       <section
         class="admin-audit-detail__group"
         data-testid="admin-audit-detail-production-feature-destination-summary"
       >
         <h2>Production feature destinations</h2>
-        {#if primaryProductionFeatureDestinationRows.length > 0}
-          <ol class="admin-audit-detail__entries">
-            {#each primaryProductionFeatureDestinationRows as row}
-              <li
-                class="admin-audit-detail__entry admin-audit-detail__entry--stack"
-                data-testid={`admin-audit-production-feature-destination-summary-${row.id}`}
-              >
-                <strong>{row.label}</strong>
-                <span>{row.status}</span>
-              </li>
-            {/each}
-          </ol>
-        {/if}
-        {#if hostedEvidenceProgressionDestinationRows.length > 0}
+        {#each data.audit.productionFeatureDestinationSections as section}
           <section
             class="admin-audit-detail__subgroup"
-            data-testid="admin-audit-detail-hosted-evidence-progression-destination-summary"
+            data-testid={section.testId}
           >
-            <h3>Hosted evidence recovery ladder</h3>
-            <ol class="admin-audit-detail__entries">
-              {#each hostedEvidenceProgressionDestinationRows as row}
-                <li
-                  class="admin-audit-detail__entry admin-audit-detail__entry--stack"
-                  data-testid={`admin-audit-production-feature-destination-summary-${row.id}`}
-                >
-                  <strong>{row.label}</strong>
-                  <span>{row.status}</span>
-                </li>
-              {/each}
-            </ol>
+            <h3>{section.heading}</h3>
+            <AdminAuditDescriptorRows rows={section.rows} />
           </section>
-        {/if}
+        {/each}
       </section>
     {/if}
     {#if data.audit.sessionsRows?.length > 0}

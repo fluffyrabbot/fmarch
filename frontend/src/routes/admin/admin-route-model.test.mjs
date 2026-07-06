@@ -2430,23 +2430,33 @@ test("admin local proof graph detail data carries graph node rows", async () => 
       game: "midsummer",
     }),
   );
+  assert.deepEqual(
+    data.audit.productionFeatureDestinationSections.map((section) => [
+      section.id,
+      section.heading,
+      section.testId,
+      section.rows.map((row) => [
+        row.id,
+        row.testId,
+        row.values.map((value) => [value.id, value.text, value.emphasized]),
+      ]),
+    ]),
+    expectedProductionFeatureDestinationSections(
+      proofGraph.summary.productionFeatureDestinationSummary,
+    ),
+  );
 });
 
-test("admin audit detail page renders hosted evidence progression destinations as a named group", async () => {
+test("admin audit detail page renders production feature destinations from route data", async () => {
   const source = await readFile(
     "frontend/src/routes/admin/audit/[audit]/+page.svelte",
     "utf8",
   );
-  assert.match(source, /hostedEvidenceProgressionDestinationRows/);
-  assert.match(
-    source,
-    /admin-audit-detail-hosted-evidence-progression-destination-summary/,
-  );
-  assert.match(source, /Hosted evidence recovery ladder/);
-  assert.match(
-    source,
-    /admin-audit-production-feature-destination-summary-\$\{row\.id\}/,
-  );
+  assert.match(source, /productionFeatureDestinationSections/);
+  assert.doesNotMatch(source, /productionFeatureDestinationRows/);
+  assert.doesNotMatch(source, /hostedEvidenceProgressionDestinationRows/);
+  assert.doesNotMatch(source, /isHostedEvidenceProgressionDestination/);
+  assert.match(source, /AdminAuditDescriptorRows rows=\{section\.rows\}/);
 });
 
 test("admin local proof graph detail keeps duplicate terminal receipt proof ids inspectable", async () => {
@@ -9588,6 +9598,49 @@ function expectedProofLaneCoverageRows(coverageRows) {
     ],
     [],
   ]);
+}
+
+function expectedProductionFeatureDestinationSections(summary) {
+  const rows = Array.isArray(summary?.rows) ? summary.rows : [];
+  const sectionForRows = (id, heading, sectionRows) => [
+    id,
+    heading,
+    `admin-audit-detail-${id}`,
+    sectionRows.map((row) => [
+      row.id,
+      `admin-audit-production-feature-destination-summary-${row.id}`,
+      [
+        ["label", row.label, true],
+        ["status", row.status, false],
+      ],
+    ]),
+  ];
+  const primaryRows = rows.filter(
+    (row) => !String(row?.id ?? "").startsWith("hosted-evidence-progression:"),
+  );
+  const hostedRows = rows.filter((row) =>
+    String(row?.id ?? "").startsWith("hosted-evidence-progression:"),
+  );
+  return [
+    ...(primaryRows.length === 0
+      ? []
+      : [
+          sectionForRows(
+            "production-feature-destinations",
+            "Production feature destinations",
+            primaryRows,
+          ),
+        ]),
+    ...(hostedRows.length === 0
+      ? []
+      : [
+          sectionForRows(
+            "hosted-evidence-progression-destination-summary",
+            "Hosted evidence recovery ladder",
+            hostedRows,
+          ),
+        ]),
+  ];
 }
 
 function expectedLocalPrerequisiteRows(localPrerequisites, { game }) {

@@ -1739,6 +1739,10 @@ function withAdminAuditDetailDisplayRows(item, { game }) {
     item.localPrerequisites,
     { game },
   );
+  const productionFeatureDestinationSections =
+    buildProductionFeatureDestinationSections(
+      item.artifactSummary?.productionFeatureDestinationSummary,
+    );
   return Object.freeze({
     ...item,
     ...(checksRows.length === 0 ? {} : { checksRows }),
@@ -1747,6 +1751,9 @@ function withAdminAuditDetailDisplayRows(item, { game }) {
     ...(reconnectLaneRows.length === 0 ? {} : { reconnectLaneRows }),
     ...(staleConflictLaneRows.length === 0 ? {} : { staleConflictLaneRows }),
     ...(localPrerequisiteRows.length === 0 ? {} : { localPrerequisiteRows }),
+    ...(productionFeatureDestinationSections.length === 0
+      ? {}
+      : { productionFeatureDestinationSections }),
   });
 }
 
@@ -1793,6 +1800,55 @@ function buildLocalPrerequisiteRows(localPrerequisites, { game }) {
         }),
     ),
   );
+}
+
+function buildProductionFeatureDestinationSections(summary) {
+  const rows = Array.isArray(summary?.rows) ? summary.rows : [];
+  const primaryRows = rows.filter(
+    (row) => !isHostedEvidenceProgressionDestinationRow(row),
+  );
+  const hostedEvidenceProgressionRows = rows.filter((row) =>
+    isHostedEvidenceProgressionDestinationRow(row),
+  );
+  return Object.freeze([
+    ...(primaryRows.length === 0
+      ? []
+      : [
+          buildArtifactSummarySection({
+            id: "production-feature-destinations",
+            heading: "Production feature destinations",
+            rows: primaryRows.map((row) =>
+              productionFeatureDestinationDescriptorRow(row),
+            ),
+          }),
+        ]),
+    ...(hostedEvidenceProgressionRows.length === 0
+      ? []
+      : [
+          buildArtifactSummarySection({
+            id: "hosted-evidence-progression-destination-summary",
+            heading: "Hosted evidence recovery ladder",
+            rows: hostedEvidenceProgressionRows.map((row) =>
+              productionFeatureDestinationDescriptorRow(row),
+            ),
+          }),
+        ]),
+  ]);
+}
+
+function isHostedEvidenceProgressionDestinationRow(row) {
+  return String(row?.id ?? "").startsWith("hosted-evidence-progression:");
+}
+
+function productionFeatureDestinationDescriptorRow(row) {
+  return {
+    id: row.id,
+    testId: `admin-audit-production-feature-destination-summary-${row.id}`,
+    values: [
+      { id: "label", text: row.label, emphasized: true },
+      { id: "status", text: row.status },
+    ],
+  };
 }
 
 export function adminForbiddenMessage() {
