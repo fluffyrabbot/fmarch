@@ -401,6 +401,7 @@ import {
   assertDevTestGameProofGraphCoversDiagnosticProofs,
   assertDevTestGameProofGraphCoversAdminSpine,
   assertDevTestGameProofGraphCoversHostedIdentityOperatorPrerequisites,
+  assertDevTestGameProofGraphCoversPhaseLocalNextActions,
   assertDevTestGameProofGraphCoversProductionFeatureTargets,
   buildDevTestGameProofGraph,
   devTestGameProofGraphAdminProofCommand,
@@ -2853,6 +2854,18 @@ test("dev test-game spine manifest records command order and evidence wiring", (
         id: "next-action",
         command: nextActionCommand,
         path: nextActionPath,
+        roleUrl: undefined,
+      },
+      {
+        id: "next-action-hosted-evidence-operator-checklist",
+        command: nextActionCommand,
+        path: hostedEvidenceOperatorChecklistNextActionPath,
+        roleUrl: undefined,
+      },
+      {
+        id: "next-action-hosted-identity",
+        command: nextActionCommand,
+        path: hostedIdentityNextActionPath,
         roleUrl: undefined,
       },
       {
@@ -6072,6 +6085,7 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
   assertDevTestGameProofGraphCoversAdminSpine(graph, adminSpineProof);
   assertDevTestGameProofGraphCoversDiagnosticProofs(graph);
   assertDevTestGameProofGraphCoversHostedIdentityOperatorPrerequisites(graph);
+  assertDevTestGameProofGraphCoversPhaseLocalNextActions(graph);
   assertDevTestGameProofGraphCoversProductionFeatureTargets(
     graph,
     releaseReadiness,
@@ -6361,7 +6375,8 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
         count + (check.spineTargets?.productionFeatureTargets?.slotIds?.length ?? 0),
       0,
     );
-  const expectedBaseGraphNodeCount = 40;
+  const expectedBaseGraphNodeCount = 42;
+  const expectedBaseRoleUrlCount = 40;
   assert.equal(
     graph.summary.nodeCount,
     expectedBaseGraphNodeCount +
@@ -6371,11 +6386,12 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
   );
   assert.equal(
     graph.summary.roleUrlCount,
-    expectedBaseGraphNodeCount +
+    expectedBaseRoleUrlCount +
       expectedProductionFeatureTargetCount +
       coreLoopHostVisibleRecoveryCases.length +
       coreLoopScenarioFamilyNodes.length,
   );
+  assert.equal(graph.summary.phaseLocalNextActionCount, 2);
   assert.equal(graph.summary.roleSurfaceProofCount, 5);
   assert.equal(
     graph.summary.productionFeatureTargetCount,
@@ -17553,6 +17569,27 @@ test("session card and markdown include role credential URLs and tokens", async 
       },
     ],
   );
+  assert.deepEqual(
+    manifestReadiness.localDevelopmentSpine.checks.find(
+      (item) => item.id === "local-spine-manifest",
+    ).phaseLocalNextActionSnapshots,
+    [
+      {
+        id: "hosted-evidence-operator-checklist",
+        path:
+          "target/dev-test-game/next-action-hosted-evidence-operator-checklist.json",
+        command: "test:dev-test-game-next-action",
+        canonicalPath: "target/dev-test-game/next-action.json",
+      },
+      {
+        id: "hosted-identity",
+        path: "target/dev-test-game/next-action-hosted-identity.json",
+        command: "test:dev-test-game-next-action",
+        canonicalPath: "target/dev-test-game/next-action.json",
+        sequenceStage: "hosted-identity",
+      },
+    ],
+  );
 });
 
 function artifactSummary(path) {
@@ -24584,6 +24621,29 @@ function spineManifestFixture() {
         id: "next-action",
         command: "test:dev-test-game-next-action",
         path: "target/dev-test-game/next-action.json",
+      },
+      {
+        id: "next-action-hosted-evidence-operator-checklist",
+        command: "test:dev-test-game-next-action",
+        path:
+          "target/dev-test-game/next-action-hosted-evidence-operator-checklist.json",
+        phaseLocalNextAction: {
+          id: "hosted-evidence-operator-checklist",
+          canonicalPath: "target/dev-test-game/next-action.json",
+          outputPath:
+            "target/dev-test-game/next-action-hosted-evidence-operator-checklist.json",
+        },
+      },
+      {
+        id: "next-action-hosted-identity",
+        command: "test:dev-test-game-next-action",
+        path: "target/dev-test-game/next-action-hosted-identity.json",
+        phaseLocalNextAction: {
+          id: "hosted-identity",
+          canonicalPath: "target/dev-test-game/next-action.json",
+          outputPath: "target/dev-test-game/next-action-hosted-identity.json",
+          sequenceStage: "hosted-identity",
+        },
       },
       {
         id: "next-action-admin-proof",

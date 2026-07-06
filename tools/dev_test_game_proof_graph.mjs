@@ -317,6 +317,9 @@ export function buildDevTestGameProofGraph(
       selectedOperatorHandoffPacketCount: nodes.filter(
         (node) => node.kind === "selected-operator-handoff-packet",
       ).length,
+      phaseLocalNextActionCount: nodes.filter(
+        (node) => node.kind === "phase-local-next-action",
+      ).length,
       terminalBatchCount: adminSpineTerminalBatchEvidence?.batchCount ?? 0,
       ...recoveryReceiptSummaryLaneCounts({
         privateChannelRecoveryReceipt: privateChannelRecoveryReceiptEvidence,
@@ -440,6 +443,7 @@ export function assertDevTestGameProofGraph(
   assertDevTestGameProofGraphCoversCoreLoopCommandProofRoleUrlAudit(evidence);
   assertDevTestGameProofGraphCoversCoreLoopHostVisibleRecoveries(evidence);
   assertDevTestGameProofGraphCoversSelectedOperatorHandoffPacket(evidence);
+  assertDevTestGameProofGraphCoversPhaseLocalNextActions(evidence);
   assertDevTestGameProofGraphCoversReplacementPrivateRecoveryReceipt(evidence);
   assertDevTestGameProofGraphCoversReplacementActionRecoveryReceipt(evidence);
   assertDevTestGameProofGraphCoversReplacementHandoffRecoveryReceipt(evidence);
@@ -1324,6 +1328,8 @@ function buildProofGraphNodes({
     hostedIdentityOperatorDependencyProofGraphNodes();
   const selectedOperatorHandoffPacketNode =
     buildSelectedOperatorHandoffPacketNode({ nextAction });
+  const phaseLocalNextActionNodes =
+    buildPhaseLocalNextActionSnapshotNodes(manifest);
   const hostedEvidenceRealCaptureProofNode = {
     id: "hosted-evidence-lane-real-capture-admin-proof",
     label: "Hosted evidence lane real-capture admin proof",
@@ -1460,6 +1466,7 @@ function buildProofGraphNodes({
       proofCommand: manifest.commands?.nextAction?.script,
       recoveryCommand: manifest.commands?.proofFreshness?.script,
     },
+    ...phaseLocalNextActionNodes,
     ...proofGraphDiagnosticProofNodes,
     ...terminalBatchNode,
     ...recoveryReceiptNodes,
@@ -1543,6 +1550,31 @@ function buildProofGraphEdges({
     }),
     ...nextActionRecoveryEdges(nextAction),
     ...nodes
+      .filter((node) => node.kind === "phase-local-next-action")
+      .flatMap((node) => [
+        [
+          "spine-manifest",
+          node.id,
+          "records-phase-local-next-action",
+          {
+            command: node.proofCommand,
+            proofTarget: node.artifact,
+            phaseLocalNextActionId: node.phaseLocalNextActionId,
+          },
+        ],
+        [
+          "next-action",
+          node.id,
+          "phase-local-snapshot",
+          {
+            command: node.proofCommand,
+            proofTarget: node.artifact,
+            phaseLocalNextActionId: node.phaseLocalNextActionId,
+            sequenceStage: node.sequenceStage,
+          },
+        ],
+      ]),
+    ...nodes
       .filter((node) => node.kind === "role-surface-proof")
       .map((node) => ["spine-manifest", node.id, "records"]),
     ...nodes
@@ -1590,6 +1622,91 @@ function buildProofGraphEdges({
         ),
       ),
   );
+}
+
+function buildPhaseLocalNextActionSnapshotNodes(manifest) {
+  return (manifest.terminalArtifacts ?? [])
+    .filter((artifact) => artifact.phaseLocalNextAction !== undefined)
+    .map((artifact) => ({
+      id: artifact.id,
+      label: artifact.label,
+      kind: "phase-local-next-action",
+      status: "recorded",
+      artifact: artifact.path,
+      canonicalArtifact: artifact.phaseLocalNextAction.canonicalPath,
+      phaseLocalNextActionId: artifact.phaseLocalNextAction.id,
+      sequenceStage: artifact.phaseLocalNextAction.sequenceStage,
+      proofCommand: artifact.command,
+      recoveryCommand: artifact.command,
+      proofBoundary: artifact.boundary,
+    }));
+}
+
+export function assertDevTestGameProofGraphCoversPhaseLocalNextActions(graph) {
+  const snapshots = (graph?.nodes ?? []).filter(
+    (node) => node.kind === "phase-local-next-action",
+  );
+  if (graph.summary?.phaseLocalNextActionCount !== snapshots.length) {
+    throw new Error("proof graph phase-local next-action summary drifted");
+  }
+  const expected = [
+    {
+      id: "next-action-hosted-evidence-operator-checklist",
+      artifact:
+        "target/dev-test-game/next-action-hosted-evidence-operator-checklist.json",
+      phaseLocalNextActionId: "hosted-evidence-operator-checklist",
+      sequenceStage: undefined,
+    },
+    {
+      id: "next-action-hosted-identity",
+      artifact: "target/dev-test-game/next-action-hosted-identity.json",
+      phaseLocalNextActionId: "hosted-identity",
+      sequenceStage: "hosted-identity",
+    },
+  ];
+  const actual = snapshots.map((node) => ({
+    id: node.id,
+    artifact: node.artifact,
+    canonicalArtifact: node.canonicalArtifact,
+    phaseLocalNextActionId: node.phaseLocalNextActionId,
+    sequenceStage: node.sequenceStage,
+    proofCommand: node.proofCommand,
+  }));
+  const normalizedExpected = expected.map((node) => ({
+    id: node.id,
+    artifact: node.artifact,
+    canonicalArtifact: devTestGameNextActionPath,
+    phaseLocalNextActionId: node.phaseLocalNextActionId,
+    sequenceStage: node.sequenceStage,
+    proofCommand: "test:dev-test-game-next-action",
+  }));
+  if (JSON.stringify(actual) !== JSON.stringify(normalizedExpected)) {
+    throw new Error(
+      `proof graph phase-local next-action nodes drifted: ${JSON.stringify(actual)}`,
+    );
+  }
+  for (const node of expected) {
+    for (const [from, relationship] of [
+      ["spine-manifest", "records-phase-local-next-action"],
+      ["next-action", "phase-local-snapshot"],
+    ]) {
+      if (
+        !(graph.edges ?? []).some(
+          (edge) =>
+            edge.from === from &&
+            edge.to === node.id &&
+            edge.relationship === relationship &&
+            edge.phaseLocalNextActionId === node.phaseLocalNextActionId &&
+            edge.proofTarget === node.artifact,
+        )
+      ) {
+        throw new Error(
+          `proof graph phase-local next-action edge missing: ${from}->${node.id}`,
+        );
+      }
+    }
+  }
+  return graph;
 }
 
 function releaseAdminProofContractEdges(nodes) {

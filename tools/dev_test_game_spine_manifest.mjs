@@ -215,6 +215,57 @@ const manifestJsonPath = path.join(repoRoot, spineManifestPath);
 const manifestMarkdownPath = path.join(repoRoot, spineManifestMarkdownPath);
 const hostedIdentityEvidenceAdminProofArtifact =
   hostedAdminHandoffProofArtifactCase("hostedIdentityEvidenceAdminProof");
+const nextActionTerminalDependsOn = Object.freeze([
+  spineManifestPath,
+  devTestGameOpsArtifactsPath,
+  devTestGameReleaseReadinessPath,
+  devTestGameRaceCoveragePath,
+  devTestGameHostedConcurrentRaceMatrixPath,
+  devTestGameHostedTargetPreflightPath,
+  devTestGameHostedEvidenceLanePath,
+  devTestGameHostedEvidenceLaneDemoProofPath,
+  devTestGameHostedEvidenceLaneOperatorFixtureAdminProofPath,
+  devTestGameHostedEvidenceLaneRealCaptureAdminProofPath,
+]);
+
+function phaseLocalNextActionTerminalArtifacts() {
+  return [
+    {
+      id: "next-action-hosted-evidence-operator-checklist",
+      label: "Hosted evidence operator checklist phase next-action receipt",
+      command: nextActionCommand,
+      path: hostedEvidenceOperatorChecklistNextActionPath,
+      dependsOn: [...nextActionTerminalDependsOn],
+      phaseLocalNextAction: {
+        id: "hosted-evidence-operator-checklist",
+        canonicalPath: nextActionPath,
+        outputPath: hostedEvidenceOperatorChecklistNextActionPath,
+      },
+      boundary:
+        "Phase-local next-action receipt for the hosted evidence operator checklist handoff. It snapshots selector state for the checklist admin proof without replacing canonical next-action guidance.",
+    },
+    {
+      id: "next-action-hosted-identity",
+      label: "Hosted identity phase next-action receipt",
+      command: nextActionCommand,
+      path: hostedIdentityNextActionPath,
+      dependsOn: [
+        ...nextActionTerminalDependsOn,
+        devTestGameHostedIdentityEvidencePath,
+        devTestGameHostedIdentityProgressionSummaryPath,
+        devTestGameProofGraphPath,
+      ],
+      phaseLocalNextAction: {
+        id: "hosted-identity",
+        canonicalPath: nextActionPath,
+        outputPath: hostedIdentityNextActionPath,
+        sequenceStage: "hosted-identity",
+      },
+      boundary:
+        "Phase-local next-action receipt for the hosted-identity sequence stage. It snapshots selector state for hosted identity admin proof without replacing canonical next-action guidance.",
+    },
+  ];
+}
 const realHostedObservabilityHandoffAdminProofArtifact =
   hostedAdminHandoffProofArtifactCase(
     "realHostedObservabilityHandoffAdminProof",
@@ -544,21 +595,11 @@ export function buildDevTestGameSpineManifest({
         label: "Next action receipt",
         command: nextActionCommand,
         path: nextActionPath,
-        dependsOn: [
-          spineManifestPath,
-          devTestGameOpsArtifactsPath,
-          devTestGameReleaseReadinessPath,
-          devTestGameRaceCoveragePath,
-          devTestGameHostedConcurrentRaceMatrixPath,
-          devTestGameHostedTargetPreflightPath,
-          devTestGameHostedEvidenceLanePath,
-          devTestGameHostedEvidenceLaneDemoProofPath,
-          devTestGameHostedEvidenceLaneOperatorFixtureAdminProofPath,
-          devTestGameHostedEvidenceLaneRealCaptureAdminProofPath,
-        ],
+        dependsOn: [...nextActionTerminalDependsOn],
         boundary:
           "Terminal local receipt that chooses one upstream freshness, harness-stability, or recovery command from the manifest, ops artifacts, release-readiness checklist, and race coverage milestone.",
       },
+      ...phaseLocalNextActionTerminalArtifacts(),
       {
         id: "next-action-admin-proof",
         label: "Next action admin proof",
@@ -616,6 +657,8 @@ export function buildDevTestGameSpineManifest({
       adminSpineProofPath,
       proofFreshnessAdminProofPath,
       nextActionPath,
+      hostedEvidenceOperatorChecklistNextActionPath,
+      hostedIdentityNextActionPath,
       nextActionAdminProofPath,
       devTestGameHostedConcurrentRaceMatrixPath,
       devTestGameHostedIdentityEvidencePath,
@@ -1620,6 +1663,22 @@ function assertTerminalArtifacts(terminalArtifacts) {
   ) {
     throw new Error("spine manifest next-action terminal artifact drifted");
   }
+  assertPhaseLocalNextActionTerminalArtifact(artifacts, {
+    artifactId: "next-action-hosted-evidence-operator-checklist",
+    phaseId: "hosted-evidence-operator-checklist",
+    path: hostedEvidenceOperatorChecklistNextActionPath,
+  });
+  assertPhaseLocalNextActionTerminalArtifact(artifacts, {
+    artifactId: "next-action-hosted-identity",
+    phaseId: "hosted-identity",
+    path: hostedIdentityNextActionPath,
+    sequenceStage: "hosted-identity",
+    extraDependsOn: [
+      devTestGameHostedIdentityEvidencePath,
+      devTestGameHostedIdentityProgressionSummaryPath,
+      devTestGameProofGraphPath,
+    ],
+  });
   const adminProof = artifacts.get("next-action-admin-proof");
   if (
     adminProof?.command !== nextActionAdminProofCommand ||
@@ -1669,6 +1728,32 @@ function assertTerminalArtifacts(terminalArtifacts) {
   ) {
     throw new Error(
       "spine manifest release admin proof contract terminal artifact drifted",
+    );
+  }
+}
+
+function assertPhaseLocalNextActionTerminalArtifact(
+  artifacts,
+  { artifactId, phaseId, path: artifactPath, sequenceStage, extraDependsOn = [] },
+) {
+  const artifact = artifacts.get(artifactId);
+  if (
+    artifact?.command !== nextActionCommand ||
+    artifact.path !== artifactPath ||
+    artifact.phaseLocalNextAction?.id !== phaseId ||
+    artifact.phaseLocalNextAction?.canonicalPath !== nextActionPath ||
+    artifact.phaseLocalNextAction?.outputPath !== artifactPath ||
+    (sequenceStage === undefined
+      ? artifact.phaseLocalNextAction?.sequenceStage !== undefined
+      : artifact.phaseLocalNextAction?.sequenceStage !== sequenceStage) ||
+    !Array.isArray(artifact.dependsOn) ||
+    !nextActionTerminalDependsOn.every((dependency) =>
+      artifact.dependsOn.includes(dependency),
+    ) ||
+    !extraDependsOn.every((dependency) => artifact.dependsOn.includes(dependency))
+  ) {
+    throw new Error(
+      `spine manifest phase-local next-action artifact drifted: ${artifactId}`,
     );
   }
 }

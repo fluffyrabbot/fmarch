@@ -111,6 +111,7 @@ import {
   devTestGameProofGraphPath,
   devTestGameProofGraphAdminProofPath,
   devTestGameProofRunPath,
+  hostedEvidenceOperatorChecklistNextActionPath,
   hostedIdentityNextActionAdminProofPath,
   hostedIdentityNextActionPath,
   nextActionAdminProofPath,
@@ -1327,6 +1328,8 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
       commandCount: spineManifestEvidence.commandCount,
       artifactCount: spineManifestEvidence.artifactCount,
       localLiveWrapperScripts: spineManifestEvidence.localLiveWrapperScripts,
+      phaseLocalNextActionSnapshots:
+        spineManifestEvidence.phaseLocalNextActionSnapshots,
       ...(spineManifestAdminProofEvidence === undefined
         ? {}
         : { adminRoleSurface: spineManifestAdminProofEvidence }),
@@ -7692,6 +7695,8 @@ export function validateDevTestGameSpineManifest(manifest, options = {}) {
     throw new Error("spine manifest missing artifact list");
   }
   const localLiveWrapperScripts = validateLocalLiveWrapperScripts(manifest);
+  const phaseLocalNextActionSnapshots =
+    validatePhaseLocalNextActionSnapshots(manifest);
   return {
     status: "passed",
     path: options.path ?? spineManifestPath,
@@ -7699,12 +7704,50 @@ export function validateDevTestGameSpineManifest(manifest, options = {}) {
     commandCount,
     artifactCount: manifest.artifacts.length,
     localLiveWrapperScripts,
+    phaseLocalNextActionSnapshots,
     proofBoundary: manifest.proofBoundary,
     scope: manifest.scope,
     productionReady: manifest.productionReady,
     releaseReady: manifest.releaseReady,
     ...(options.artifact === undefined ? {} : { artifact: options.artifact }),
   };
+}
+
+function validatePhaseLocalNextActionSnapshots(manifest) {
+  const snapshots = (manifest.terminalArtifacts ?? [])
+    .filter((artifact) => artifact.phaseLocalNextAction !== undefined)
+    .map((artifact) => ({
+      id: String(artifact.phaseLocalNextAction?.id ?? ""),
+      path: String(artifact.path ?? ""),
+      command: String(artifact.command ?? ""),
+      canonicalPath: String(artifact.phaseLocalNextAction?.canonicalPath ?? ""),
+      ...(artifact.phaseLocalNextAction?.sequenceStage === undefined
+        ? {}
+        : {
+            sequenceStage: String(
+              artifact.phaseLocalNextAction.sequenceStage,
+            ),
+          }),
+    }));
+  const expectedSnapshots = [
+    {
+      id: "hosted-evidence-operator-checklist",
+      path: hostedEvidenceOperatorChecklistNextActionPath,
+      command: "test:dev-test-game-next-action",
+      canonicalPath: nextActionPath,
+    },
+    {
+      id: "hosted-identity",
+      path: hostedIdentityNextActionPath,
+      command: "test:dev-test-game-next-action",
+      canonicalPath: nextActionPath,
+      sequenceStage: "hosted-identity",
+    },
+  ];
+  if (JSON.stringify(snapshots) !== JSON.stringify(expectedSnapshots)) {
+    throw new Error("spine manifest phase-local next-action snapshots drifted");
+  }
+  return snapshots;
 }
 
 function validateLocalLiveWrapperScripts(manifest) {
