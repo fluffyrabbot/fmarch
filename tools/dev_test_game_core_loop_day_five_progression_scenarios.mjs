@@ -7,6 +7,8 @@ export const coreLoopDayFiveProgressionFamilyId =
   "core-loop-day-five-progression";
 export const coreLoopDayFiveProgressionAdminCheckId = "core-loop";
 export const coreLoopDayFiveProgressionCycleId = "d05-n05";
+export const dayFiveNoLynchVoteSubmittedLaneId =
+  "day-five-no-lynch-vote-submitted";
 
 export const coreLoopDayFiveProgressionLaneIds = Object.freeze([
   "day-vote-no-lynch",
@@ -14,6 +16,12 @@ export const coreLoopDayFiveProgressionLaneIds = Object.freeze([
 ]);
 
 const dayFiveProgressionFeatureRowDefinitions = Object.freeze([
+  Object.freeze({
+    targetKey: "dayFiveNoLynchVoteSubmitted",
+    featureSlotId: dayFiveNoLynchVoteSubmittedLaneId,
+    role: "actionPlayer",
+    checkpointId: "d05-no-lynch-vote-submitted",
+  }),
   Object.freeze({
     targetKey: "dayFiveNoLynchResolution",
     featureSlotId: "day-five-no-lynch-resolution",
