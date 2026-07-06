@@ -1738,7 +1738,7 @@ test("admin route data exposes hosted identity evidence as a native audit row", 
   ]);
 });
 
-test("admin audit detail page renders hosted identity artifact sections from route data", async () => {
+test("admin audit detail page renders descriptor artifact sections from route data", async () => {
   const source = await readFile(
     "frontend/src/routes/admin/audit/[audit]/+page.svelte",
     "utf8",
@@ -1746,6 +1746,7 @@ test("admin audit detail page renders hosted identity artifact sections from rou
   assert.doesNotMatch(source, /artifactSummary\.redactedIntakePacket/);
   assert.doesNotMatch(source, /artifactSummary\.roleSurfaceContractDiff/);
   assert.doesNotMatch(source, /artifactSummary\.identityAdapterContractComparison/);
+  assert.doesNotMatch(source, /artifactSummary\.adapterContract/);
   assert.doesNotMatch(source, /artifactSummary\.progressionSummary\.nextCommand/);
   assert.match(source, /row\.subentries\?\.length/);
   assert.match(source, /data-testid=\{subentry\.testId\}/);
@@ -5656,6 +5657,37 @@ test("admin route data exposes local identity adapter proof as a native audit ro
     releaseReady: false,
     productionReady: false,
   });
+  assert.deepEqual(
+    identity.artifactSummarySections.map((section) => [
+      section.id,
+      section.heading,
+      section.testId,
+      section.rows.map((row) => [
+        row.id,
+        row.testId,
+        row.values.map((value) => [value.id, value.text, value.emphasized]),
+      ]),
+    ]),
+    [
+      [
+        "identity-adapter-contract",
+        "Identity adapter contract",
+        "admin-audit-detail-identity-adapter-contract",
+        [
+          [
+            "identity-adapter-contract-summary",
+            "admin-audit-identity-adapter-contract-summary",
+            [
+              ["status", "passed", true],
+              ["adapterId", "local-production-identity-adapter-v1", false],
+              ["roleSurfaceContractStatus", "passed", false],
+              ["mismatchCount", "0 mismatches", false],
+            ],
+          ],
+        ],
+      ],
+    ],
+  );
 });
 
 test("admin local identity adapter detail data carries lifecycle checks and role rows", async () => {

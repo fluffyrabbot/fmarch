@@ -553,6 +553,45 @@ function hostedIdentityAdapterContractSummarySections(comparison) {
   ];
 }
 
+function buildIdentityAdapterSummarySections(artifactSummary) {
+  return Object.freeze([
+    ...identityAdapterContractSummarySections(artifactSummary.adapterContract),
+  ]);
+}
+
+function identityAdapterContractSummarySections(contract) {
+  if (contract === null || typeof contract !== "object") {
+    return [];
+  }
+  return [
+    buildArtifactSummarySection({
+      id: "identity-adapter-contract",
+      heading: "Identity adapter contract",
+      rows: [
+        {
+          id: "identity-adapter-contract-summary",
+          values: [
+            { id: "status", text: contract.status, emphasized: true },
+            { id: "adapterId", text: contract.adapterId },
+            {
+              id: "roleSurfaceContractStatus",
+              text: contract.roleSurfaceContractStatus,
+            },
+            {
+              id: "mismatchCount",
+              text: `${contract.mismatchCount} mismatches`,
+            },
+          ],
+        },
+        ...(contract.mismatches ?? []).map((mismatch) => ({
+          id: `identity-adapter-contract-mismatch-${mismatch.id}`,
+          values: [{ id: "path", text: mismatch.path, emphasized: true }],
+        })),
+      ],
+    }),
+  ];
+}
+
 function buildHostedMatrixSummarySections(artifactSummary) {
   const summary = artifactSummary.hostedMatrixSummary;
   return Object.freeze([
@@ -6660,6 +6699,136 @@ export function normalizeLocalIdentityAdapterAudit(identityAdapterProof, { game 
   const controls = Array.isArray(identityAdapterProof.identityAdapter?.lifecycleControls)
     ? identityAdapterProof.identityAdapter.lifecycleControls
     : [];
+  const artifactSummary = Object.freeze({
+    game: String(identityAdapterProof.game ?? ""),
+    adapterContract: normalizeIdentityAdapterContractSummary(
+      identityAdapterProof.identityAdapterContract,
+      identityAdapterProof.identityAdapterContractDiff,
+    ),
+    browserCookieName: String(identityAdapterProof.identityAdapter?.browserCookieName ?? ""),
+    inviteCredentialKind: String(
+      identityAdapterProof.identityAdapter?.inviteCredentialKind ?? "",
+    ),
+    sessionCredentialKind: String(
+      identityAdapterProof.identityAdapter?.sessionCredentialKind ?? "",
+    ),
+    accountCredentialKind: String(
+      identityAdapterProof.identityAdapter?.accountCredentialKind ?? "",
+    ),
+    lifecycleControls: Object.freeze(controls.map((control) => String(control))),
+    delegatedIssuanceControls: Object.freeze(
+      (Array.isArray(identityAdapterProof.identityAdapter?.delegatedIssuanceControls)
+        ? identityAdapterProof.identityAdapter.delegatedIssuanceControls
+        : []
+      ).map((control) => String(control)),
+    ),
+    hostScopedInvite: Object.freeze({
+      issuedByPrincipalUserId: String(
+        identityAdapterProof.identityLifecycle.hostScopedInviteIssuance
+          ?.issuedByPrincipalUserId ?? "",
+      ),
+      issuedForGame: String(
+        identityAdapterProof.identityLifecycle.hostScopedInviteIssuance
+          ?.issuedForGame ?? "",
+      ),
+      storedGameScope: String(
+        identityAdapterProof.identityLifecycle.hostScopedInviteIssuance
+          ?.storedGameScope ?? "",
+      ),
+      globalCapabilitiesGranted:
+        identityAdapterProof.identityLifecycle.hostScopedInviteIssuance
+          ?.globalCapabilitiesGranted ?? null,
+      hostRoleSurface: String(
+        identityAdapterProof.identityLifecycle.hostScopedInviteIssuance
+          ?.hostRoleSurface ?? "",
+      ),
+      hostAction: String(
+        identityAdapterProof.identityLifecycle.hostScopedInviteIssuance?.hostAction ??
+          "",
+      ),
+      clickedThroughFromHostRoleUrl:
+        identityAdapterProof.identityLifecycle.hostScopedInviteIssuance
+          ?.clickedThroughFromHostRoleUrl === true,
+    }),
+    accountLogin: Object.freeze({
+      principalUserId: String(
+        identityAdapterProof.identityLifecycle.accountLogin?.principalUserId ?? "",
+      ),
+      accountId: String(
+        identityAdapterProof.identityLifecycle.accountLogin?.accountId ?? "",
+      ),
+      sameRoleSurface:
+        identityAdapterProof.identityLifecycle.accountLogin?.sameRoleSurface === true,
+      cookieValuePrefix: String(
+        identityAdapterProof.identityLifecycle.accountLogin?.cookieValuePrefix ?? "",
+      ),
+      rawPasswordStored:
+        identityAdapterProof.identityLifecycle.accountLogin?.rawPasswordStored === true,
+    }),
+    accountLifecycle: Object.freeze({
+      disabledStatus: String(
+        identityAdapterProof.identityLifecycle.accountLifecycle?.disabledStatus ?? "",
+      ),
+      enabledStatus: String(
+        identityAdapterProof.identityLifecycle.accountLifecycle?.enabledStatus ?? "",
+      ),
+      disabledAccountRejected:
+        identityAdapterProof.identityLifecycle.accountLifecycle
+          ?.disabledAccountRejected === true,
+      staleAccountSessionRejected:
+        identityAdapterProof.identityLifecycle.accountLifecycle
+          ?.staleAccountSessionRejected === true,
+      staleAdminControlRejected:
+        identityAdapterProof.identityLifecycle.accountLifecycle
+          ?.staleAdminControlRejected === true,
+      staleAdminControlReloadRecovered:
+        identityAdapterProof.identityLifecycle.accountLifecycle
+          ?.staleAdminControlReloadRecovered === true,
+      sameRoleSurface:
+        identityAdapterProof.identityLifecycle.accountLifecycle?.sameRoleSurface ===
+        true,
+      revokedSessionCount:
+        identityAdapterProof.identityLifecycle.accountLifecycle?.revokedSessionCount ??
+        null,
+      adminControlSurface: Object.freeze({
+        detailRoleUrl: String(
+          identityAdapterProof.identityLifecycle.accountLifecycle?.adminControlSurface
+            ?.detailRoleUrl ?? "",
+        ),
+        controlsTestId: String(
+          identityAdapterProof.identityLifecycle.accountLifecycle?.adminControlSurface
+            ?.controlsTestId ?? "",
+        ),
+        visitedDetailRoleUrl:
+          identityAdapterProof.identityLifecycle.accountLifecycle?.adminControlSurface
+            ?.visitedDetailRoleUrl === true,
+        staleConflictStatusText: String(
+          identityAdapterProof.identityLifecycle.accountLifecycle?.adminControlSurface
+            ?.staleConflictStatusText ?? "",
+        ),
+        reloadRecoveryStatus: String(
+          identityAdapterProof.identityLifecycle.accountLifecycle?.adminControlSurface
+            ?.reloadRecoveryStatus ?? "",
+        ),
+        reloadRecoveryDetailRoleUrl: String(
+          identityAdapterProof.identityLifecycle.accountLifecycle?.adminControlSurface
+            ?.reloadRecoveryDetailRoleUrl ?? "",
+        ),
+        reloadRecoveryTargetText: String(
+          identityAdapterProof.identityLifecycle.accountLifecycle?.adminControlSurface
+            ?.reloadRecoveryTargetText ?? "",
+        ),
+      }),
+      rawPasswordStored:
+        identityAdapterProof.identityLifecycle.accountLifecycle?.rawPasswordStored ===
+        true,
+    }),
+    rawTokensStored: identityAdapterProof.identityLifecycle.auditTrail.rawTokensStored,
+    rawTokensVisible:
+      identityAdapterProof.identityLifecycle.adminAuditSurface.rawTokensVisible,
+    releaseReady: identityAdapterProof.releaseReady === true,
+    productionReady: identityAdapterProof.productionReady === true,
+  });
   return Object.freeze({
     id: localAdminAuditIds.identityAdapter,
     label: "Local identity adapter",
@@ -6683,133 +6852,8 @@ export function normalizeLocalIdentityAdapterAudit(identityAdapterProof, { game 
       ),
     ),
     sessions: Object.freeze(roles),
-    artifactSummary: Object.freeze({
-      game: String(identityAdapterProof.game ?? ""),
-      adapterContract: normalizeIdentityAdapterContractSummary(
-        identityAdapterProof.identityAdapterContract,
-        identityAdapterProof.identityAdapterContractDiff,
-      ),
-      browserCookieName: String(identityAdapterProof.identityAdapter?.browserCookieName ?? ""),
-      inviteCredentialKind: String(
-        identityAdapterProof.identityAdapter?.inviteCredentialKind ?? "",
-      ),
-      sessionCredentialKind: String(
-        identityAdapterProof.identityAdapter?.sessionCredentialKind ?? "",
-      ),
-      accountCredentialKind: String(
-        identityAdapterProof.identityAdapter?.accountCredentialKind ?? "",
-      ),
-      lifecycleControls: Object.freeze(controls.map((control) => String(control))),
-      delegatedIssuanceControls: Object.freeze(
-        (Array.isArray(identityAdapterProof.identityAdapter?.delegatedIssuanceControls)
-          ? identityAdapterProof.identityAdapter.delegatedIssuanceControls
-          : []
-        ).map((control) => String(control)),
-      ),
-      hostScopedInvite: Object.freeze({
-        issuedByPrincipalUserId: String(
-          identityAdapterProof.identityLifecycle.hostScopedInviteIssuance
-            ?.issuedByPrincipalUserId ?? "",
-        ),
-        issuedForGame: String(
-          identityAdapterProof.identityLifecycle.hostScopedInviteIssuance?.issuedForGame ??
-            "",
-        ),
-        storedGameScope: String(
-          identityAdapterProof.identityLifecycle.hostScopedInviteIssuance
-            ?.storedGameScope ?? "",
-        ),
-        globalCapabilitiesGranted:
-          identityAdapterProof.identityLifecycle.hostScopedInviteIssuance
-            ?.globalCapabilitiesGranted ?? null,
-        hostRoleSurface: String(
-          identityAdapterProof.identityLifecycle.hostScopedInviteIssuance
-            ?.hostRoleSurface ?? "",
-        ),
-        hostAction: String(
-          identityAdapterProof.identityLifecycle.hostScopedInviteIssuance?.hostAction ?? "",
-        ),
-        clickedThroughFromHostRoleUrl:
-          identityAdapterProof.identityLifecycle.hostScopedInviteIssuance
-            ?.clickedThroughFromHostRoleUrl === true,
-      }),
-      accountLogin: Object.freeze({
-        principalUserId: String(
-          identityAdapterProof.identityLifecycle.accountLogin?.principalUserId ?? "",
-        ),
-        accountId: String(
-          identityAdapterProof.identityLifecycle.accountLogin?.accountId ?? "",
-        ),
-        sameRoleSurface:
-          identityAdapterProof.identityLifecycle.accountLogin?.sameRoleSurface === true,
-        cookieValuePrefix: String(
-          identityAdapterProof.identityLifecycle.accountLogin?.cookieValuePrefix ?? "",
-        ),
-        rawPasswordStored:
-          identityAdapterProof.identityLifecycle.accountLogin?.rawPasswordStored === true,
-      }),
-      accountLifecycle: Object.freeze({
-        disabledStatus: String(
-          identityAdapterProof.identityLifecycle.accountLifecycle?.disabledStatus ?? "",
-        ),
-        enabledStatus: String(
-          identityAdapterProof.identityLifecycle.accountLifecycle?.enabledStatus ?? "",
-        ),
-        disabledAccountRejected:
-          identityAdapterProof.identityLifecycle.accountLifecycle
-            ?.disabledAccountRejected === true,
-        staleAccountSessionRejected:
-          identityAdapterProof.identityLifecycle.accountLifecycle
-            ?.staleAccountSessionRejected === true,
-        staleAdminControlRejected:
-          identityAdapterProof.identityLifecycle.accountLifecycle
-            ?.staleAdminControlRejected === true,
-        staleAdminControlReloadRecovered:
-          identityAdapterProof.identityLifecycle.accountLifecycle
-            ?.staleAdminControlReloadRecovered === true,
-        sameRoleSurface:
-          identityAdapterProof.identityLifecycle.accountLifecycle?.sameRoleSurface === true,
-        revokedSessionCount:
-          identityAdapterProof.identityLifecycle.accountLifecycle?.revokedSessionCount ??
-          null,
-        adminControlSurface: Object.freeze({
-          detailRoleUrl: String(
-            identityAdapterProof.identityLifecycle.accountLifecycle?.adminControlSurface
-              ?.detailRoleUrl ?? "",
-          ),
-          controlsTestId: String(
-            identityAdapterProof.identityLifecycle.accountLifecycle?.adminControlSurface
-              ?.controlsTestId ?? "",
-          ),
-          visitedDetailRoleUrl:
-            identityAdapterProof.identityLifecycle.accountLifecycle?.adminControlSurface
-              ?.visitedDetailRoleUrl === true,
-          staleConflictStatusText: String(
-            identityAdapterProof.identityLifecycle.accountLifecycle?.adminControlSurface
-              ?.staleConflictStatusText ?? "",
-          ),
-          reloadRecoveryStatus: String(
-            identityAdapterProof.identityLifecycle.accountLifecycle?.adminControlSurface
-              ?.reloadRecoveryStatus ?? "",
-          ),
-          reloadRecoveryDetailRoleUrl: String(
-            identityAdapterProof.identityLifecycle.accountLifecycle?.adminControlSurface
-              ?.reloadRecoveryDetailRoleUrl ?? "",
-          ),
-          reloadRecoveryTargetText: String(
-            identityAdapterProof.identityLifecycle.accountLifecycle?.adminControlSurface
-              ?.reloadRecoveryTargetText ?? "",
-          ),
-        }),
-        rawPasswordStored:
-          identityAdapterProof.identityLifecycle.accountLifecycle?.rawPasswordStored === true,
-      }),
-      rawTokensStored: identityAdapterProof.identityLifecycle.auditTrail.rawTokensStored,
-      rawTokensVisible:
-        identityAdapterProof.identityLifecycle.adminAuditSurface.rawTokensVisible,
-      releaseReady: identityAdapterProof.releaseReady === true,
-      productionReady: identityAdapterProof.productionReady === true,
-    }),
+    artifactSummary,
+    artifactSummarySections: buildIdentityAdapterSummarySections(artifactSummary),
   });
 }
 
