@@ -3,6 +3,7 @@ import { pathToFileURL } from "node:url";
 import { assertDevTestGameProofGraph } from "./dev_test_game_proof_graph.mjs";
 import {
   proofGraphCoreLoopScenarioFamilyDestinations,
+  proofGraphCoreLoopScenarioFamilyNodes,
 } from "./dev_test_game_proof_graph_core_loop_scenario_families.mjs";
 import {
   proofGraphCoreLoopHostVisibleRecoveryDestinations,
@@ -12,6 +13,9 @@ import {
   assertProofGraphProductionFeatureProvenanceComparison,
   proofGraphProductionFeatureTargetDestinations,
 } from "./dev_test_game_proof_graph_production_feature_destinations.mjs";
+import {
+  assertProofGraphAdminVisibleRelatedDestinations,
+} from "./dev_test_game_proof_graph_admin_destination_assertions.mjs";
 import {
   validateDevTestGameAdminSpineProof,
   validateDevTestGameAdminSpineTerminalBatches,
@@ -848,114 +852,51 @@ function visibleProductionFeatureDestinationSummaryText(row, visibleStatus) {
 }
 
 function assertProofGraphAdminProofCoversCoreLoopScenarioFamilies(evidence) {
-  for (const destination of
-    evidence.generatedFrom?.coreLoopScenarioFamilyDestinations ?? []) {
-    if (
-      !evidence.adminRoleSurface?.visibleRelatedLinks?.includes(
-        destination.linkId,
-      )
-    ) {
-      throw new Error(
-        `proof graph admin proof missing core-loop family related link: ${destination.linkId}`,
-      );
-    }
-    const visibleDestination =
-      evidence.adminRoleSurface?.visibleRelatedDestinations?.find(
-        (candidate) =>
-          candidate.linkId === destination.linkId &&
-          candidate.auditId === localAdminAuditIds.coreLoop,
-      );
-    if (
-      visibleDestination?.detailRoleUrl !==
-        `/admin/audit/${localAdminAuditIds.coreLoop}?game=<seeded-game>` ||
-      !visibleDestination.visibleScenarioFamilies?.includes(
-        destination.familyId,
-      )
-    ) {
-      throw new Error(
-        `proof graph admin proof did not inspect core-loop family destination: ${destination.familyId}`,
-      );
-    }
-    const visibleText =
-      visibleDestination.visibleScenarioFamilyText?.[destination.familyId] ?? "";
-    for (const token of destination.requiredScenarioFamilyText?.[
-      destination.familyId
-    ] ?? []) {
-      if (!visibleText.includes(token)) {
-        throw new Error(
-          `proof graph admin proof missing core-loop family destination text: ${destination.familyId} ${token}`,
-        );
-      }
-    }
-  }
+  assertProofGraphAdminVisibleRelatedDestinations({
+    proof: evidence,
+    generatedDestinations:
+      evidence.generatedFrom?.coreLoopScenarioFamilyDestinations ?? [],
+    expectedDestinations: proofGraphCoreLoopScenarioFamilyDestinations({
+      nodes: proofGraphCoreLoopScenarioFamilyNodes(),
+    }),
+    idKey: "familyId",
+    requiredIdsKey: "requiredScenarioFamilies",
+    visibleIdsKey: "visibleScenarioFamilies",
+    requiredTextKey: "requiredScenarioFamilyText",
+    visibleTextKey: "visibleScenarioFamilyText",
+    missingDestinationMessage: (familyId) =>
+      `proof graph admin proof missing core-loop scenario family destination: ${familyId}`,
+    missingLinkMessage: ({ destination }) =>
+      `proof graph admin proof missing core-loop family related link: ${destination.linkId}`,
+    missingVisitMessage: (familyId) =>
+      `proof graph admin proof did not inspect core-loop family destination: ${familyId}`,
+    missingTextMessage: ({ destinationId, token }) =>
+      `proof graph admin proof missing core-loop family destination text: ${destinationId} ${token}`,
+  });
 }
 
 function assertProofGraphAdminProofCoversCoreLoopHostVisibleRecoveries(evidence) {
-  const destinationByRecoveryCaseId = new Map(
-    (evidence.generatedFrom?.coreLoopHostVisibleRecoveryDestinations ?? []).map(
-      (destination) => [destination.recoveryCaseId, destination],
-    ),
-  );
-  const expectedDestinations = proofGraphCoreLoopHostVisibleRecoveryDestinations(
-    {
+  assertProofGraphAdminVisibleRelatedDestinations({
+    proof: evidence,
+    generatedDestinations:
+      evidence.generatedFrom?.coreLoopHostVisibleRecoveryDestinations ?? [],
+    expectedDestinations: proofGraphCoreLoopHostVisibleRecoveryDestinations({
       nodes: proofGraphCoreLoopRecoveryDestinationNodes(),
-    },
-  );
-  for (const expectedDestination of expectedDestinations) {
-    const destination = destinationByRecoveryCaseId.get(
-      expectedDestination.recoveryCaseId,
-    );
-    if (
-      destination?.linkId !== expectedDestination.linkId ||
-      destination?.auditId !== expectedDestination.auditId ||
-      destination?.detailRoleUrl !== expectedDestination.detailRoleUrl ||
-      !destination?.requiredHostVisibleRecoveries?.includes(
-        expectedDestination.recoveryCaseId,
-      )
-    ) {
-      throw new Error(
-        `proof graph admin proof missing core-loop host-visible recovery destination: ${expectedDestination.recoveryCaseId}`,
-      );
-    }
-    if (
-      !evidence.adminRoleSurface?.visibleRelatedLinks?.includes(
-        destination.linkId,
-      )
-    ) {
-      throw new Error(
-        `proof graph admin proof missing core-loop host-visible recovery link: ${expectedDestination.recoveryCaseId}`,
-      );
-    }
-    const visibleDestination =
-      evidence.adminRoleSurface?.visibleRelatedDestinations?.find(
-        (candidate) =>
-          candidate.linkId === destination.linkId &&
-          candidate.auditId === localAdminAuditIds.coreLoop,
-      );
-    if (
-      visibleDestination?.detailRoleUrl !== destination.detailRoleUrl ||
-      !visibleDestination.visibleHostVisibleRecoveries?.includes(
-        expectedDestination.recoveryCaseId,
-      )
-    ) {
-      throw new Error(
-        `proof graph admin proof did not visit core-loop host-visible recovery: ${expectedDestination.recoveryCaseId}`,
-      );
-    }
-    const visibleText =
-      visibleDestination.visibleHostVisibleRecoveryText?.[
-        expectedDestination.recoveryCaseId
-      ] ?? "";
-    for (const token of expectedDestination.requiredHostVisibleRecoveryText?.[
-      expectedDestination.recoveryCaseId
-    ] ?? []) {
-      if (!visibleText.includes(token)) {
-        throw new Error(
-          `proof graph admin proof missing core-loop host-visible recovery text: ${expectedDestination.recoveryCaseId} ${token}`,
-        );
-      }
-    }
-  }
+    }),
+    idKey: "recoveryCaseId",
+    requiredIdsKey: "requiredHostVisibleRecoveries",
+    visibleIdsKey: "visibleHostVisibleRecoveries",
+    requiredTextKey: "requiredHostVisibleRecoveryText",
+    visibleTextKey: "visibleHostVisibleRecoveryText",
+    missingDestinationMessage: (recoveryCaseId) =>
+      `proof graph admin proof missing core-loop host-visible recovery destination: ${recoveryCaseId}`,
+    missingLinkMessage: ({ destinationId }) =>
+      `proof graph admin proof missing core-loop host-visible recovery link: ${destinationId}`,
+    missingVisitMessage: (recoveryCaseId) =>
+      `proof graph admin proof did not visit core-loop host-visible recovery: ${recoveryCaseId}`,
+    missingTextMessage: ({ destinationId, token }) =>
+      `proof graph admin proof missing core-loop host-visible recovery text: ${destinationId} ${token}`,
+  });
 }
 
 function assertProofGraphAdminProofCoversFeatureTarget(
