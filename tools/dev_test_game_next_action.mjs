@@ -216,6 +216,7 @@ export function buildDevTestGameNextAction(
     generatedAt = new Date().toISOString(),
     sequenceStage = devTestGameDefaultSequenceStage,
     spineManifestSource = spineManifestPath,
+    nextActionOutputPath = devTestGameNextActionPath,
     releaseReadinessChecklist = null,
     releaseReadinessChecklistSource = devTestGameReleaseReadinessPath,
     opsArtifacts = null,
@@ -525,6 +526,9 @@ export function buildDevTestGameNextAction(
           };
   const selectedOperatorHandoff =
     selectedOperatorHandoffFromNextAction(nextAction);
+  const phaseLocalNextAction = phaseLocalNextActionMetadataForOutput(manifest, {
+    nextActionOutputPath,
+  });
   const releaseReadinessDiagnostics =
     readiness?.localDevelopmentSpine?.diagnostics ?? [];
   const releaseReadinessSummary =
@@ -562,6 +566,7 @@ export function buildDevTestGameNextAction(
     generatedFrom: {
       spineManifest: spineManifestSource,
       manifestGeneratedAt: manifest.generatedAt,
+      ...(phaseLocalNextAction === null ? {} : { phaseLocalNextAction }),
       artifactFreshnessStatus: manifest.artifactFreshness.status,
       artifactFreshnessSummary: { ...manifest.artifactFreshness.summary },
       productionFeatureProvenanceSummary,
@@ -1070,6 +1075,7 @@ export async function writeDevTestGameNextAction({
     generatedAt,
     sequenceStage,
     spineManifestSource,
+    nextActionOutputPath,
     releaseReadinessChecklist,
     releaseReadinessChecklistSource,
     opsArtifacts,
@@ -1107,6 +1113,34 @@ function rankedArtifactsNeedingRefresh(manifest) {
         artifactAgeSeconds(right.artifact) - artifactAgeSeconds(left.artifact) ||
         left.index - right.index,
     );
+}
+
+function phaseLocalNextActionMetadataForOutput(manifest, { nextActionOutputPath }) {
+  const outputPath = String(nextActionOutputPath ?? "");
+  if (outputPath === "" || outputPath === devTestGameNextActionPath) {
+    return null;
+  }
+  const artifact =
+    (manifest.terminalArtifacts ?? []).find(
+      (item) =>
+        item?.path === outputPath &&
+        item.phaseLocalNextAction !== null &&
+        typeof item.phaseLocalNextAction === "object",
+    ) ?? null;
+  if (artifact === null) {
+    return null;
+  }
+  return Object.freeze({
+    id: String(artifact.phaseLocalNextAction.id ?? artifact.id ?? ""),
+    artifactId: String(artifact.id ?? ""),
+    outputPath,
+    canonicalPath: String(artifact.phaseLocalNextAction.canonicalPath ?? ""),
+    proofCommand: String(artifact.command ?? ""),
+    ...(artifact.phaseLocalNextAction.sequenceStage === undefined
+      ? {}
+      : { sequenceStage: String(artifact.phaseLocalNextAction.sequenceStage) }),
+    boundary: String(artifact.boundary ?? ""),
+  });
 }
 
 function artifactRecoveryMetadata(artifact) {

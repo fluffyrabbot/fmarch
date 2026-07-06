@@ -7569,6 +7569,39 @@ test("phase-local next-action spine steps share one env contract", () => {
   );
 });
 
+test("phase-local next-action receipts carry canonical artifact metadata", () => {
+  const manifest = freshSpineManifestFixture();
+  const hostedEvidenceChecklistAction = buildDevTestGameNextAction(manifest, {
+    generatedAt: "2026-07-06T00:00:01.000Z",
+    nextActionOutputPath: hostedEvidenceOperatorChecklistNextActionPath,
+  });
+  const hostedIdentityAction = buildDevTestGameNextAction(manifest, {
+    generatedAt: "2026-07-06T00:00:02.000Z",
+    sequenceStage: devTestGameHostedIdentitySequenceStage,
+    nextActionOutputPath: hostedIdentityNextActionPath,
+  });
+
+  assert.deepEqual(hostedEvidenceChecklistAction.generatedFrom.phaseLocalNextAction, {
+    id: "hosted-evidence-operator-checklist",
+    artifactId: "next-action-hosted-evidence-operator-checklist",
+    outputPath: hostedEvidenceOperatorChecklistNextActionPath,
+    canonicalPath: nextActionPath,
+    proofCommand: nextActionCommand,
+    boundary:
+      "Phase-local next-action receipt for the hosted evidence operator checklist handoff. It snapshots selector state for the checklist admin proof without replacing canonical next-action guidance.",
+  });
+  assert.deepEqual(hostedIdentityAction.generatedFrom.phaseLocalNextAction, {
+    id: "hosted-identity",
+    artifactId: "next-action-hosted-identity",
+    outputPath: hostedIdentityNextActionPath,
+    canonicalPath: nextActionPath,
+    proofCommand: nextActionCommand,
+    sequenceStage: devTestGameHostedIdentitySequenceStage,
+    boundary:
+      "Phase-local next-action receipt for the hosted-identity sequence stage. It snapshots selector state for hosted identity admin proof without replacing canonical next-action guidance.",
+  });
+});
+
 test("proof graph receipt artifact rows share one browser row id contract", () => {
   assert.deepEqual(
     terminalProofGraphReceiptRegistry.map((entry) => [
@@ -24179,6 +24212,9 @@ function nextActionAdminProofFixture() {
           phaseLocalNextActionSnapshotVisibleStatus(snapshot),
         ]),
       ),
+      visiblePhaseLocalNextActionDrilldowns: phaseLocalNextActionSnapshots.map(
+        phaseLocalNextActionSnapshotDrilldownFixture,
+      ),
       ...(hostedHandoffChecklist.blockedReceipt === undefined
         ? {}
         : {
@@ -26332,6 +26368,9 @@ function nextActionHandoffDestinationFixture() {
         phaseLocalNextActionSnapshotVisibleStatus(snapshot),
       ]),
     ),
+    visiblePhaseLocalNextActionDrilldowns: phaseLocalNextActionSnapshots.map(
+      phaseLocalNextActionSnapshotDrilldownFixture,
+    ),
   };
 }
 
@@ -26349,6 +26388,22 @@ function phaseLocalNextActionSnapshotVisibleStatus(snapshot) {
   ]
     .filter((token) => String(token ?? "") !== "")
     .join("\n");
+}
+
+function phaseLocalNextActionSnapshotDrilldownFixture(snapshot) {
+  const params = new URLSearchParams({
+    game: "<seeded-game>",
+    path: snapshot.artifact,
+  });
+  return {
+    id: snapshot.id,
+    artifact: snapshot.artifact,
+    href: `/admin/artifact?${params.toString()}`,
+    canonicalArtifact: snapshot.canonicalArtifact,
+    phaseLocalNextActionId: snapshot.phaseLocalNextActionId,
+    proofCommand: snapshot.proofCommand,
+    clickedThrough: true,
+  };
 }
 
 function terminalAdminProofSmokeNameForId(proofId) {

@@ -368,6 +368,7 @@ export async function proveAdminAuditDetail({
   requiredNextActionHandoffPairRowStatuses = {},
   requiredPhaseLocalNextActionSnapshots = [],
   requiredPhaseLocalNextActionSnapshotStatuses = {},
+  requiredPhaseLocalNextActionDrilldowns = [],
   requiredSelectedOperatorHandoffTerminalReceiptRows = [],
   requiredSelectedOperatorHandoffTerminalReceiptRowStatuses = {},
   requiredHostedIdentityOperatorGate = null,
@@ -775,6 +776,14 @@ export async function proveAdminAuditDetail({
       prefix: "admin-audit-phase-local-next-action",
       ids: Object.keys(requiredPhaseLocalNextActionSnapshotStatuses),
     });
+    const visiblePhaseLocalNextActionDrilldowns =
+      await visitPhaseLocalNextActionDrilldowns({
+        page,
+        frontendBaseUrl,
+        detailUrl,
+        game,
+        snapshots: requiredPhaseLocalNextActionDrilldowns,
+      });
     const visibleSelectedOperatorHandoffTerminalReceiptRows =
       await waitForRows({
         page,
@@ -1125,6 +1134,16 @@ export async function proveAdminAuditDetail({
             destination.requiredPhaseLocalNextActionSnapshotStatuses ?? {},
           ),
         });
+      const destinationVisiblePhaseLocalNextActionDrilldowns =
+        await visitPhaseLocalNextActionDrilldowns({
+          page,
+          frontendBaseUrl,
+          detailUrl: `${frontendBaseUrl}/admin/audit/${destinationAuditId}?game=${encodeURIComponent(
+            game,
+          )}`,
+          game,
+          snapshots: destination.requiredPhaseLocalNextActionDrilldowns ?? [],
+        });
       const destinationVisibleSelectedOperatorHandoffTerminalReceiptRows =
         await waitForRows({
           page,
@@ -1286,6 +1305,12 @@ export async function proveAdminAuditDetail({
           : {
               visiblePhaseLocalNextActionSnapshotStatuses:
                 destinationVisiblePhaseLocalNextActionSnapshotStatuses,
+            }),
+        ...(destinationVisiblePhaseLocalNextActionDrilldowns.length === 0
+          ? {}
+          : {
+              visiblePhaseLocalNextActionDrilldowns:
+                destinationVisiblePhaseLocalNextActionDrilldowns,
             }),
         ...(destinationVisibleSelectedOperatorHandoffTerminalReceiptRows
           .length === 0
@@ -1558,6 +1583,9 @@ export async function proveAdminAuditDetail({
             visiblePhaseLocalNextActionSnapshotStatuses:
               visiblePhaseLocalNextActionSnapshotStatuses,
           }),
+      ...(visiblePhaseLocalNextActionDrilldowns.length === 0
+        ? {}
+        : { visiblePhaseLocalNextActionDrilldowns }),
       ...(visibleSelectedOperatorHandoffTerminalReceiptRows.length === 0
         ? {}
         : {
@@ -1771,6 +1799,88 @@ async function waitForRows({ page, prefix, ids, expectedStatuses = {} }) {
     visible.push(id);
   }
   return visible;
+}
+
+async function visitPhaseLocalNextActionDrilldowns({
+  page,
+  frontendBaseUrl,
+  detailUrl,
+  game,
+  snapshots,
+}) {
+  const visited = [];
+  for (const snapshot of snapshots ?? []) {
+    const id = String(snapshot.id ?? "");
+    const artifact = String(snapshot.artifact ?? "");
+    const canonicalArtifact = String(snapshot.canonicalArtifact ?? "");
+    if (id === "" || artifact === "" || canonicalArtifact === "") {
+      throw new Error("phase-local next-action drilldown expectation is malformed");
+    }
+    const expectedHref = adminArtifactUrlPath({ game, artifact });
+    await page.goto(detailUrl, { waitUntil: "networkidle" });
+    await page.getByTestId("admin-audit-detail-surface").waitFor({
+      state: "visible",
+      timeout: 15000,
+    });
+    const link = page.getByTestId(
+      `admin-audit-phase-local-next-action-open-artifact-${id}`,
+    );
+    await link.waitFor({ state: "visible", timeout: 15000 });
+    const href = await link.getAttribute("href");
+    if (href !== expectedHref) {
+      throw new Error(
+        `phase-local next-action drilldown href drifted for ${id}: ${href} !== ${expectedHref}`,
+      );
+    }
+    await Promise.all([
+      page.waitForURL(`${frontendBaseUrl}${expectedHref}`, { timeout: 15000 }),
+      link.click(),
+    ]);
+    await page.waitForLoadState("networkidle");
+    const text = await page.locator("body").innerText();
+    for (const token of [
+      id,
+      artifact,
+      canonicalArtifact,
+      snapshot.phaseLocalNextActionId,
+      snapshot.proofCommand,
+    ]) {
+      const expected = String(token ?? "");
+      if (expected !== "" && !text.includes(expected)) {
+        throw new Error(
+          `phase-local next-action drilldown ${id} missing text ${expected}: ${text.slice(
+            0,
+            2000,
+          )}`,
+        );
+      }
+    }
+    visited.push({
+      id,
+      artifact,
+      href: adminArtifactUrlPath({ game: "<seeded-game>", artifact }),
+      canonicalArtifact,
+      phaseLocalNextActionId: String(snapshot.phaseLocalNextActionId ?? ""),
+      proofCommand: String(snapshot.proofCommand ?? ""),
+      clickedThrough: true,
+    });
+  }
+  if (visited.length > 0) {
+    await page.goto(detailUrl, { waitUntil: "networkidle" });
+    await page.getByTestId("admin-audit-detail-surface").waitFor({
+      state: "visible",
+      timeout: 15000,
+    });
+  }
+  return visited;
+}
+
+function adminArtifactUrlPath({ game, artifact }) {
+  const params = new URLSearchParams({
+    game: String(game ?? ""),
+    path: String(artifact ?? ""),
+  });
+  return `/admin/artifact?${params.toString()}`;
 }
 
 async function waitForRowTextTokens({ page, prefix, expectedTextById = {} }) {

@@ -386,6 +386,8 @@ export function buildProofGraphNextActionHandoffReadinessCheck(
       handoff.visiblePhaseLocalNextActionSnapshots,
     visiblePhaseLocalNextActionSnapshotStatuses:
       handoff.visiblePhaseLocalNextActionSnapshotStatuses,
+    visiblePhaseLocalNextActionDrilldowns:
+      handoff.visiblePhaseLocalNextActionDrilldowns,
     adminRoleSurface: proofGraphAdminProofEvidence,
   };
 }

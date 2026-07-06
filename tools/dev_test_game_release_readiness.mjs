@@ -6705,6 +6705,11 @@ function validateProofGraphNextActionHandoffDestination(
     : [];
   const phaseLocalStatuses =
     destination.visiblePhaseLocalNextActionSnapshotStatuses ?? {};
+  const phaseLocalDrilldowns = Array.isArray(
+    destination.visiblePhaseLocalNextActionDrilldowns,
+  )
+    ? destination.visiblePhaseLocalNextActionDrilldowns
+    : [];
   for (const snapshot of phaseLocalSnapshots) {
     if (!visiblePhaseLocalRows.includes(snapshot.id)) {
       throw new Error(
@@ -6728,6 +6733,19 @@ function validateProofGraphNextActionHandoffDestination(
           `proof graph admin proof next-action destination phase-local row drifted: ${snapshot.id}`,
         );
       }
+    }
+    const drilldown = phaseLocalDrilldowns.find((item) => item.id === snapshot.id);
+    if (
+      drilldown?.clickedThrough !== true ||
+      drilldown.artifact !== snapshot.artifact ||
+      drilldown.href !== phaseLocalNextActionArtifactHref(snapshot.artifact) ||
+      drilldown.canonicalArtifact !== snapshot.canonicalArtifact ||
+      drilldown.phaseLocalNextActionId !== snapshot.phaseLocalNextActionId ||
+      drilldown.proofCommand !== snapshot.proofCommand
+    ) {
+      throw new Error(
+        `proof graph admin proof next-action destination phase-local drilldown drifted: ${snapshot.id}`,
+      );
     }
   }
   return {
@@ -6753,8 +6771,20 @@ function validateProofGraphNextActionHandoffDestination(
               phaseLocalStatuses[snapshot.id],
             ]),
           ),
+          visiblePhaseLocalNextActionDrilldowns: phaseLocalSnapshots.map(
+            (snapshot) =>
+              phaseLocalDrilldowns.find((item) => item.id === snapshot.id),
+          ),
         }),
   };
+}
+
+function phaseLocalNextActionArtifactHref(artifact) {
+  const params = new URLSearchParams({
+    game: "<seeded-game>",
+    path: String(artifact ?? ""),
+  });
+  return `/admin/artifact?${params.toString()}`;
 }
 
 function validateProofGraphAdminTerminalReceiptArtifact(proof) {

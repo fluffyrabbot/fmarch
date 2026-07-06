@@ -3555,6 +3555,22 @@ test("admin route data exposes local next action as a native audit row", async (
       ],
     ],
   );
+  const phaseLocalSection = nextAction.artifactSummarySections.find(
+    (section) => section.id === "phase-local-next-actions",
+  );
+  assert.deepEqual(
+    phaseLocalSection.rows.map((row) => {
+      const artifact = row.values.find((value) => value.id === "artifact");
+      return [row.id, artifact.href, artifact.testId];
+    }),
+    phaseLocalSnapshots.map((snapshot) => [
+      snapshot.id,
+      `/admin/artifact?game=midsummer&path=${encodeURIComponent(
+        snapshot.artifact,
+      )}`,
+      `admin-audit-phase-local-next-action-open-artifact-${snapshot.id}`,
+    ]),
+  );
   assert.deepEqual(nextAction.artifactSummary, {
     command: LOCAL_RACE_COMMAND,
     reason: "release-readiness-unproven",

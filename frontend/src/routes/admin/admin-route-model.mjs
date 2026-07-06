@@ -293,6 +293,7 @@ function buildSingleRowArtifactSummarySection({ id, heading, values }) {
 }
 
 function buildLocalNextActionSummarySections({
+  game,
   nextActionHandoffPair,
   frontendSetupWorkbenchReadiness,
   phaseLocalNextActionSnapshots,
@@ -302,7 +303,7 @@ function buildLocalNextActionSummarySections({
     ...frontendSetupWorkbenchReadinessSummarySections(
       frontendSetupWorkbenchReadiness,
     ),
-    ...phaseLocalNextActionSummarySections(phaseLocalNextActionSnapshots),
+    ...phaseLocalNextActionSummarySections(phaseLocalNextActionSnapshots, { game }),
   ]);
 }
 
@@ -349,7 +350,7 @@ function nextActionHandoffPairSummarySections(pair) {
   ];
 }
 
-function phaseLocalNextActionSummarySections(snapshots) {
+function phaseLocalNextActionSummarySections(snapshots, { game }) {
   if (!Array.isArray(snapshots) || snapshots.length === 0) {
     return [];
   }
@@ -364,7 +365,12 @@ function phaseLocalNextActionSummarySections(snapshots) {
           { id: "status", text: snapshot.status, emphasized: true },
           { id: "phaseLocalNextActionId", text: snapshot.phaseLocalNextActionId },
           { id: "sequenceStage", text: snapshot.sequenceStage },
-          { id: "artifact", text: snapshot.artifact },
+          {
+            id: "artifact",
+            text: snapshot.artifact,
+            href: adminArtifactInspectHref({ game, artifact: snapshot.artifact }),
+            testId: `admin-audit-phase-local-next-action-open-artifact-${snapshot.id}`,
+          },
           { id: "canonicalArtifact", text: snapshot.canonicalArtifact },
           { id: "nextActionEdgeRowId", text: snapshot.nextActionEdgeRowId },
           { id: "manifestEdgeRowId", text: snapshot.manifestEdgeRowId },
@@ -5160,6 +5166,7 @@ export function normalizeLocalNextActionAudit(nextAction, { game, proofGraph = n
             }),
           ]),
     artifactSummarySections: buildLocalNextActionSummarySections({
+      game,
       nextActionHandoffPair,
       frontendSetupWorkbenchReadiness:
         generatedSummary.frontendSetupWorkbenchReadiness,
@@ -9319,6 +9326,14 @@ export function adminAuditInspectHref({ game, audit }) {
   return `/admin/audit/${encodeURIComponent(
     normalizeRoutePart(audit, "audit"),
   )}?${params.toString()}`;
+}
+
+export function adminArtifactInspectHref({ game, artifact }) {
+  const params = new URLSearchParams({
+    game: normalizeRoutePart(game, "game"),
+    path: normalizeRoutePart(artifact, "artifact"),
+  });
+  return `/admin/artifact?${params.toString()}`;
 }
 
 export function adminOverviewHref({ game }) {

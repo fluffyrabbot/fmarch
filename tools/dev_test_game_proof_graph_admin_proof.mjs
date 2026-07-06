@@ -1117,6 +1117,7 @@ function proofGraphNextActionHandoffDestinations(proofGraph) {
           phaseLocalNextActionSnapshotStatusText(snapshot),
         ]),
       ),
+      requiredPhaseLocalNextActionDrilldowns: phaseLocalSnapshots,
     },
   ];
 }
@@ -1529,6 +1530,8 @@ function assertProofGraphAdminProofCoversPhaseLocalNextActionDestination({
     visibleDestination.visiblePhaseLocalNextActionSnapshots ?? [];
   const visibleStatuses =
     visibleDestination.visiblePhaseLocalNextActionSnapshotStatuses ?? {};
+  const visibleDrilldowns =
+    visibleDestination.visiblePhaseLocalNextActionDrilldowns ?? [];
   for (const snapshot of links.snapshots) {
     if (!visibleRows.includes(snapshot.id)) {
       throw new Error(
@@ -1550,7 +1553,28 @@ function assertProofGraphAdminProofCoversPhaseLocalNextActionDestination({
         );
       }
     }
+    const drilldown = visibleDrilldowns.find((item) => item.id === snapshot.id);
+    if (
+      drilldown?.clickedThrough !== true ||
+      drilldown.artifact !== snapshot.artifact ||
+      drilldown.href !== phaseLocalNextActionArtifactHref(snapshot.artifact) ||
+      drilldown.canonicalArtifact !== snapshot.canonicalArtifact ||
+      drilldown.phaseLocalNextActionId !== snapshot.phaseLocalNextActionId ||
+      drilldown.proofCommand !== snapshot.proofCommand
+    ) {
+      throw new Error(
+        `proof graph admin proof next-action destination missing phase-local drilldown: ${snapshot.id}`,
+      );
+    }
   }
+}
+
+function phaseLocalNextActionArtifactHref(artifact) {
+  const params = new URLSearchParams({
+    game: "<seeded-game>",
+    path: String(artifact ?? ""),
+  });
+  return `/admin/artifact?${params.toString()}`;
 }
 
 function sameStringArray(actual, expected) {

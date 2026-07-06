@@ -201,6 +201,8 @@ export function nextActionAdminProofCase({
           requiredPhaseLocalNextActionSnapshotStatusesForProofGraph(
             source.proofGraph,
           ),
+        requiredPhaseLocalNextActionDrilldowns:
+          phaseLocalNextActionSnapshotsForProofGraph(source.proofGraph),
         requiredHostedIdentityOperatorGate:
           requiredHostedIdentityOperatorGateForNextAction(source.nextAction),
         requiredText: requiredSelectedOperatorHandoffTextForNextAction(
@@ -1143,6 +1145,8 @@ function assertNextActionAdminPhaseLocalNextActionSnapshots(evidence) {
     evidence.adminRoleSurface?.visiblePhaseLocalNextActionSnapshots ?? [];
   const visibleStatuses =
     evidence.adminRoleSurface?.visiblePhaseLocalNextActionSnapshotStatuses ?? {};
+  const visibleDrilldowns =
+    evidence.adminRoleSurface?.visiblePhaseLocalNextActionDrilldowns ?? [];
   for (const snapshot of snapshots) {
     if (
       snapshot.status !== "recorded" ||
@@ -1172,6 +1176,19 @@ function assertNextActionAdminPhaseLocalNextActionSnapshots(evidence) {
         );
       }
     }
+    const drilldown = visibleDrilldowns.find((item) => item.id === snapshot.id);
+    if (
+      drilldown?.clickedThrough !== true ||
+      drilldown.artifact !== snapshot.artifact ||
+      drilldown.href !== phaseLocalNextActionArtifactHref(snapshot.artifact) ||
+      drilldown.canonicalArtifact !== snapshot.canonicalArtifact ||
+      drilldown.phaseLocalNextActionId !== snapshot.phaseLocalNextActionId ||
+      drilldown.proofCommand !== snapshot.proofCommand
+    ) {
+      throw new Error(
+        `next-action admin proof missing phase-local snapshot drilldown: ${snapshot.id}`,
+      );
+    }
   }
 }
 
@@ -1183,6 +1200,14 @@ function assertNextActionAdminRecoveryReceiptGraphs(generatedFrom) {
       { label: "next-action admin proof" },
     );
   }
+}
+
+function phaseLocalNextActionArtifactHref(artifact) {
+  const params = new URLSearchParams({
+    game: "<seeded-game>",
+    path: String(artifact ?? ""),
+  });
+  return `/admin/artifact?${params.toString()}`;
 }
 
 function assertNextActionAdminCoreLoopRecoveryDestinationCoverage(evidence) {
