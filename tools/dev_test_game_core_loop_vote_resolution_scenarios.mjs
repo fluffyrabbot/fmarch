@@ -234,6 +234,7 @@ export function assertDayThreeHostVoteResolutionProofCase({
     proof: proof.resolveProof,
     expectedGame,
     ...hostCase.resolveCase,
+    sourceRoleUrl,
     includeEvidenceInError,
   });
   if (

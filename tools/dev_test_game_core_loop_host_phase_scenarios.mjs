@@ -295,12 +295,14 @@ export function assertHostNightActionTransitionSurfaceCase({
     proof: hostNightActionTransitionSurface.resolveProof,
     expectedGame,
     ...surfaceCase.resolveCase,
+    sourceRoleUrl: hostNightActionTransitionSurface.sourceHostRoleUrl,
     includeEvidenceInError,
   });
   assertHostPhaseTransitionActionProofCase({
     proof: hostNightActionTransitionSurface.advanceProof,
     expectedGame,
     ...surfaceCase.advanceCase,
+    sourceRoleUrl: hostNightActionTransitionSurface.sourceHostRoleUrl,
     includeEvidenceInError,
   });
   for (const playerCase of surfaceCase.playerObservationCases) {
@@ -1360,10 +1362,14 @@ export function assertHostPhaseTransitionActionProofCase({
     expectedPhaseState,
   ),
   expectedRefreshKeys,
+  sourceRoleUrl,
   includeEvidenceInError = false,
 }) {
   if (
     proof?.status !== "passed" ||
+    (sourceRoleUrl !== undefined && proof.sourceRoleUrl !== sourceRoleUrl) ||
+    (sourceRoleUrl !== undefined &&
+      !String(proof.visitedRolePath ?? "").endsWith("/host")) ||
     proof.clickedAction !== actionId ||
     proof.commandKind !== commandKind ||
     proof.command?.game !== expectedGame ||

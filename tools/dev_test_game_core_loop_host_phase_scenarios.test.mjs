@@ -462,6 +462,8 @@ test("host night action transition assertion delegates player observation cases"
     transition:
       "resolve_phase:ack:905 -> advance_phase:ack:906 -> actionPlayer:D03 -> target:D03 -> normal:D03",
     resolveProof: hostPhaseTransitionProofFixture({
+      sourceRoleUrl: "http://127.0.0.1:5173/g/game-a/host",
+      visitedRolePath: "/g/game-a/host",
       actionId: "resolve_phase",
       commandKind: "ResolvePhase",
       streamSeq: 905,
@@ -471,6 +473,8 @@ test("host night action transition assertion delegates player observation cases"
       refreshKeys: ["host", "votecount", "dayVoteOutcomes", "hostPrompts"],
     }),
     advanceProof: hostPhaseTransitionProofFixture({
+      sourceRoleUrl: "http://127.0.0.1:5173/g/game-a/host",
+      visitedRolePath: "/g/game-a/host",
       actionId: "advance_phase",
       commandKind: "AdvancePhase",
       streamSeq: 906,
@@ -1617,9 +1621,13 @@ function hostPhaseTransitionProofFixture({
   expectedPhaseState,
   deadlineAffordance,
   refreshKeys,
+  sourceRoleUrl,
+  visitedRolePath,
 }) {
   return {
     status: "passed",
+    ...(sourceRoleUrl === undefined ? {} : { sourceRoleUrl }),
+    ...(visitedRolePath === undefined ? {} : { visitedRolePath }),
     clickedAction: actionId,
     commandKind,
     command: {

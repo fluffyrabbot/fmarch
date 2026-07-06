@@ -8,9 +8,13 @@ export function hostPhaseTransitionActionFixture({
   projectionRefreshKeys,
   command,
   dayVoteOutcomesProjection = [],
+  sourceRoleUrl,
+  visitedRolePath,
 }) {
   return {
     status: "passed",
+    ...(sourceRoleUrl === undefined ? {} : { sourceRoleUrl }),
+    ...(visitedRolePath === undefined ? {} : { visitedRolePath }),
     clickedAction: actionId,
     commandKind,
     command,

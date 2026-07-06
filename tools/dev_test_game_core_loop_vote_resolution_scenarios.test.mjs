@@ -185,6 +185,7 @@ test("Day 3 vote resolution assertion delegates host resolve and covers vote pro
         "dayVoteOutcomes",
         "hostPrompts",
       ],
+      sourceRoleUrl: dayThreeVoteResolutionSurface.sourceHostRoleUrl,
       includeEvidenceInError: false,
     },
   ]);

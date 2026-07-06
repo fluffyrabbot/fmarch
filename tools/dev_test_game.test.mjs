@@ -20018,6 +20018,9 @@ function hostPhaseTransitionSurfaceFixture() {
     clickedThroughFromRoleUrl: true,
     transition: "resolve_phase:ack:801 -> advance_phase:ack:802 -> player:N02",
     resolveProof: hostPhaseTransitionActionFixture({
+      sourceRoleUrl:
+        "http://127.0.0.1:5173/g/00000000-0000-0000-0000-000000000002/host",
+      visitedRolePath: "/g/00000000-0000-0000-0000-000000000002/host",
       actionId: "resolve_phase",
       commandKind: "ResolvePhase",
       streamSeq: 801,
@@ -20036,6 +20039,9 @@ function hostPhaseTransitionSurfaceFixture() {
       },
     }),
     advanceProof: hostPhaseTransitionActionFixture({
+      sourceRoleUrl:
+        "http://127.0.0.1:5173/g/00000000-0000-0000-0000-000000000002/host",
+      visitedRolePath: "/g/00000000-0000-0000-0000-000000000002/host",
       actionId: "advance_phase",
       commandKind: "AdvancePhase",
       streamSeq: 802,
@@ -20278,6 +20284,8 @@ function hostNightActionTransitionSurfaceFixture() {
     transition:
       "resolve_phase:ack:905 -> advance_phase:ack:906 -> actionPlayer:D03 -> target:D03 -> normal:D03",
     resolveProof: hostPhaseTransitionActionFixture({
+      sourceRoleUrl: `${baseRoleUrl}/host`,
+      visitedRolePath: `/g/${game}/host`,
       actionId: "resolve_phase",
       commandKind: "ResolvePhase",
       streamSeq: 905,
@@ -20296,6 +20304,8 @@ function hostNightActionTransitionSurfaceFixture() {
       },
     }),
     advanceProof: hostPhaseTransitionActionFixture({
+      sourceRoleUrl: `${baseRoleUrl}/host`,
+      visitedRolePath: `/g/${game}/host`,
       actionId: "advance_phase",
       commandKind: "AdvancePhase",
       streamSeq: 906,
@@ -20546,6 +20556,8 @@ function dayThreeVoteResolutionSurfaceFixture() {
       game,
       resolveProof: {
         ...hostPhaseTransitionActionFixture({
+          sourceRoleUrl: `${baseRoleUrl}/host`,
+          visitedRolePath: `/g/${game}/host`,
           actionId: "resolve_phase",
           commandKind: "ResolvePhase",
           streamSeq: 908,

@@ -4008,8 +4008,12 @@ async function proveHostPhaseActionClick({
     .getByTestId(`host-command-activity-status-${actionId}`)
     .innerText();
   const command = commandRequests.at(-1)?.[commandKind] ?? null;
+  const source = new URL(page.url());
+  const sourceRoleUrl = `${source.origin}${source.pathname}${source.search}`;
   return {
     status: "passed",
+    sourceRoleUrl,
+    visitedRolePath: `${source.pathname}${source.search}`,
     clickedAction: actionId,
     commandKind: command === null ? null : commandKind,
     command,
@@ -10435,6 +10439,7 @@ function assertHostPhaseTransitionActionProof({
     expectedPhaseState,
   ),
   expectedRefreshKeys,
+  sourceRoleUrl,
 }) {
   assertHostPhaseTransitionActionProofCase({
     proof,
@@ -10446,6 +10451,7 @@ function assertHostPhaseTransitionActionProof({
     expectedPhaseState,
     expectedDeadlineAffordance,
     expectedRefreshKeys,
+    sourceRoleUrl,
     includeEvidenceInError: true,
   });
 }

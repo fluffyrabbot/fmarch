@@ -75,10 +75,25 @@ test("shared host phase transition surface assertion composes stale recovery cas
       call.commandKind,
       call.streamSeq,
       call.expectedPhaseId,
+      call.sourceRoleUrl,
     ]),
     [
-      ["resolve", "resolve_phase", "ResolvePhase", 801, "D02"],
-      ["advance", "advance_phase", "AdvancePhase", 802, "N02"],
+      [
+        "resolve",
+        "resolve_phase",
+        "ResolvePhase",
+        801,
+        "D02",
+        surface.sourceHostRoleUrl,
+      ],
+      [
+        "advance",
+        "advance_phase",
+        "AdvancePhase",
+        802,
+        "N02",
+        surface.sourceHostRoleUrl,
+      ],
     ],
   );
 
