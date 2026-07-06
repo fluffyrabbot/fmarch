@@ -7,6 +7,7 @@ import {
 } from "./dev_test_game_hosted_operator_packet.mjs";
 import {
   assertHostedMatrixRawEvidenceTemplateDescriptor,
+  hostedMatrixRawEvidenceTemplateDescriptorFieldValues,
 } from "./dev_test_game_hosted_matrix_raw_evidence_template_proof.mjs";
 import {
   devTestGameReleaseReadinessPath,
@@ -191,18 +192,9 @@ export function selectedOperatorHandoffReceiptSelectedRowStatus(receipt) {
     receipt.selectedOperatorHandoff.command,
     receipt.selectedOperatorHandoff.firstMissingInputId,
     receipt.selectedOperatorHandoff.selectedProductionFeatureGraphNodeId,
-    ...(template === undefined
-      ? []
-      : [
-          template.id,
-          template.status,
-          template.path,
-          template.proofCommand,
-          template.proofTarget,
-          template.copyToEnv,
-          template.validatorCommand,
-          template.validatorProofTarget,
-        ]),
+    ...hostedMatrixRawEvidenceTemplateDescriptorFieldValues(template).map(
+      (field) => field.value,
+    ),
   ].join("\n");
 }
 

@@ -1,5 +1,6 @@
 import {
   assertHostedMatrixRawEvidenceTemplateDescriptor,
+  hostedMatrixRawEvidenceTemplateDescriptorFieldValues,
 } from "./dev_test_game_hosted_matrix_raw_evidence_template_proof.mjs";
 
 export function blockedOperatorPacketFromReceipt(receipt) {
@@ -187,18 +188,9 @@ export function blockedOperatorPacketText(packet) {
     visible.firstMissingRequiredEvidence,
     visible.rawEvidenceContractSummary,
     ...visible.rawEvidenceContractRequiredTopLevelFields,
-    ...(visible.rawEvidenceTemplate === undefined
-      ? []
-      : [
-          visible.rawEvidenceTemplate.id,
-          visible.rawEvidenceTemplate.status,
-          visible.rawEvidenceTemplate.path,
-          visible.rawEvidenceTemplate.proofCommand,
-          visible.rawEvidenceTemplate.proofTarget,
-          visible.rawEvidenceTemplate.copyToEnv,
-          visible.rawEvidenceTemplate.validatorCommand,
-          visible.rawEvidenceTemplate.validatorProofTarget,
-        ]),
+    ...hostedMatrixRawEvidenceTemplateDescriptorFieldValues(
+      visible.rawEvidenceTemplate,
+    ).map((field) => field.value),
     visible.operatorAction,
     visible.localVsHostedBoundary,
     visible.proofTarget,

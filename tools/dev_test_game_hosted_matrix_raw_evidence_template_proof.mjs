@@ -20,6 +20,29 @@ export const devTestGameHostedMatrixRawEvidenceTemplateProofCommand =
   "test:dev-test-game-hosted-matrix-raw-evidence-template-proof";
 export const devTestGameHostedMatrixRawEvidenceTemplateEnv =
   "FMARCH_HOSTED_MATRIX_RAW_EVIDENCE_PATH";
+export const hostedMatrixRawEvidenceTemplateDescriptorFieldCases =
+  Object.freeze([
+    Object.freeze({ key: "id", rowId: "rawEvidenceTemplateId" }),
+    Object.freeze({ key: "status", rowId: "rawEvidenceTemplateStatus" }),
+    Object.freeze({ key: "path", rowId: "rawEvidenceTemplatePath" }),
+    Object.freeze({
+      key: "proofCommand",
+      rowId: "rawEvidenceTemplateProofCommand",
+    }),
+    Object.freeze({
+      key: "proofTarget",
+      rowId: "rawEvidenceTemplateProofTarget",
+    }),
+    Object.freeze({ key: "copyToEnv", rowId: "rawEvidenceTemplateCopyToEnv" }),
+    Object.freeze({
+      key: "validatorCommand",
+      rowId: "rawEvidenceTemplateValidatorCommand",
+    }),
+    Object.freeze({
+      key: "validatorProofTarget",
+      rowId: "rawEvidenceTemplateValidatorProofTarget",
+    }),
+  ]);
 
 const promotedCellIds = Object.freeze([
   "replacement-private-post",
@@ -153,6 +176,24 @@ export function hostedMatrixRawEvidenceTemplateDescriptor() {
     validatorProofTarget: devTestGameRealHostedMatrixRawCapturePath,
     status: "template-only",
   });
+}
+
+export function hostedMatrixRawEvidenceTemplateDescriptorFieldValues(
+  descriptor,
+) {
+  if (
+    descriptor === undefined ||
+    descriptor === null ||
+    typeof descriptor !== "object"
+  ) {
+    return [];
+  }
+  return hostedMatrixRawEvidenceTemplateDescriptorFieldCases.map((fieldCase) =>
+    Object.freeze({
+      ...fieldCase,
+      value: descriptor[fieldCase.key],
+    }),
+  );
 }
 
 export function assertHostedMatrixRawEvidenceTemplateDescriptor(descriptor) {

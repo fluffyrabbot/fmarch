@@ -42,6 +42,7 @@ import {
   hostedEvidenceHandoffInputRows,
 } from "../../../../tools/dev_test_game_hosted_handoff_cases.mjs";
 import {
+  hostedMatrixRawEvidenceTemplateDescriptorFieldValues,
   hostedMatrixRawEvidenceTemplateDescriptor,
 } from "../../../../tools/dev_test_game_hosted_matrix_raw_evidence_template_proof.mjs";
 import {
@@ -999,28 +1000,28 @@ function hostedOperatorPacketDescriptorRow({
 }
 
 function rawEvidenceTemplateDescriptorValues(template) {
-  if (template === undefined) {
-    return [];
+  return hostedMatrixRawEvidenceTemplateDescriptorFieldValues(template).map(
+    (field) => ({ id: field.rowId, text: field.value }),
+  );
+}
+
+function normalizeRawEvidenceTemplateDescriptorObject(template) {
+  if (template === null || typeof template !== "object") {
+    return undefined;
   }
-  return [
-    { id: "rawEvidenceTemplateId", text: template.id },
-    { id: "rawEvidenceTemplateStatus", text: template.status },
-    { id: "rawEvidenceTemplatePath", text: template.path },
-    {
-      id: "rawEvidenceTemplateProofCommand",
-      text: template.proofCommand,
-    },
-    { id: "rawEvidenceTemplateProofTarget", text: template.proofTarget },
-    { id: "rawEvidenceTemplateCopyToEnv", text: template.copyToEnv },
-    {
-      id: "rawEvidenceTemplateValidatorCommand",
-      text: template.validatorCommand,
-    },
-    {
-      id: "rawEvidenceTemplateValidatorProofTarget",
-      text: template.validatorProofTarget,
-    },
-  ];
+  return Object.freeze(
+    Object.fromEntries(
+      hostedMatrixRawEvidenceTemplateDescriptorFieldValues(template).map(
+        (field) => [field.key, String(field.value ?? "")],
+      ),
+    ),
+  );
+}
+
+function rawEvidenceTemplateDescriptorProperty(template) {
+  const rawEvidenceTemplate =
+    normalizeRawEvidenceTemplateDescriptorObject(template);
+  return rawEvidenceTemplate === undefined ? {} : { rawEvidenceTemplate };
 }
 
 function hostedHandoffRawCaptureIntakeSubentries({ intake, heading }) {
@@ -6078,25 +6079,7 @@ function normalizeHostedHandoffBlockedOperatorPacket(packet) {
         : []
       ).map((field) => String(field)),
     ),
-    ...(packet.rawEvidenceTemplate === null ||
-    typeof packet.rawEvidenceTemplate !== "object"
-      ? {}
-      : {
-          rawEvidenceTemplate: Object.freeze({
-            id: String(packet.rawEvidenceTemplate.id ?? ""),
-            path: String(packet.rawEvidenceTemplate.path ?? ""),
-            proofCommand: String(packet.rawEvidenceTemplate.proofCommand ?? ""),
-            proofTarget: String(packet.rawEvidenceTemplate.proofTarget ?? ""),
-            copyToEnv: String(packet.rawEvidenceTemplate.copyToEnv ?? ""),
-            validatorCommand: String(
-              packet.rawEvidenceTemplate.validatorCommand ?? "",
-            ),
-            validatorProofTarget: String(
-              packet.rawEvidenceTemplate.validatorProofTarget ?? "",
-            ),
-            status: String(packet.rawEvidenceTemplate.status ?? ""),
-          }),
-        }),
+    ...rawEvidenceTemplateDescriptorProperty(packet.rawEvidenceTemplate),
     operatorAction: String(packet.operatorAction ?? ""),
     localVsHostedBoundary: String(packet.localVsHostedBoundary ?? ""),
     proofTarget: String(packet.proofTarget ?? ""),
@@ -7300,46 +7283,9 @@ function normalizeSelectedOperatorHandoffTerminalReceipt(receipt) {
               receipt.selectedOperatorHandoff
                 .selectedProductionFeatureRoleUrl ?? "",
             ),
-            ...(receipt.selectedOperatorHandoff.rawEvidenceTemplate === null ||
-            typeof receipt.selectedOperatorHandoff.rawEvidenceTemplate !==
-              "object"
-              ? {}
-              : {
-                  rawEvidenceTemplate: Object.freeze({
-                    id: String(
-                      receipt.selectedOperatorHandoff.rawEvidenceTemplate.id ??
-                        "",
-                    ),
-                    status: String(
-                      receipt.selectedOperatorHandoff.rawEvidenceTemplate
-                        .status ?? "",
-                    ),
-                    path: String(
-                      receipt.selectedOperatorHandoff.rawEvidenceTemplate.path ??
-                        "",
-                    ),
-                    proofCommand: String(
-                      receipt.selectedOperatorHandoff.rawEvidenceTemplate
-                        .proofCommand ?? "",
-                    ),
-                    proofTarget: String(
-                      receipt.selectedOperatorHandoff.rawEvidenceTemplate
-                        .proofTarget ?? "",
-                    ),
-                    copyToEnv: String(
-                      receipt.selectedOperatorHandoff.rawEvidenceTemplate
-                        .copyToEnv ?? "",
-                    ),
-                    validatorCommand: String(
-                      receipt.selectedOperatorHandoff.rawEvidenceTemplate
-                        .validatorCommand ?? "",
-                    ),
-                    validatorProofTarget: String(
-                      receipt.selectedOperatorHandoff.rawEvidenceTemplate
-                        .validatorProofTarget ?? "",
-                    ),
-                  }),
-                }),
+            ...rawEvidenceTemplateDescriptorProperty(
+              receipt.selectedOperatorHandoff.rawEvidenceTemplate,
+            ),
           }),
           proofGraphEdge: Object.freeze({
             from: String(receipt.proofGraphEdge?.from ?? ""),

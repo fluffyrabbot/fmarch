@@ -230,6 +230,7 @@ import {
   devTestGameHostedMatrixRawEvidenceTemplatePath,
   devTestGameHostedMatrixRawEvidenceTemplateProofCommand,
   devTestGameHostedMatrixRawEvidenceTemplateProofPath,
+  hostedMatrixRawEvidenceTemplateDescriptorFieldValues,
   hostedMatrixRawEvidenceTemplateDescriptor,
 } from "../../../../tools/dev_test_game_hosted_matrix_raw_evidence_template_proof.mjs";
 import {
@@ -10694,27 +10695,9 @@ function expectedHostedHandoffBlockedOperatorPacketValues({ packet, heading }) {
 }
 
 function expectedRawEvidenceTemplateDescriptorValues(template) {
-  if (template === undefined) {
-    return [];
-  }
-  return [
-    ["rawEvidenceTemplateId", template.id, false],
-    ["rawEvidenceTemplateStatus", template.status, false],
-    ["rawEvidenceTemplatePath", template.path, false],
-    ["rawEvidenceTemplateProofCommand", template.proofCommand, false],
-    ["rawEvidenceTemplateProofTarget", template.proofTarget, false],
-    ["rawEvidenceTemplateCopyToEnv", template.copyToEnv, false],
-    [
-      "rawEvidenceTemplateValidatorCommand",
-      template.validatorCommand,
-      false,
-    ],
-    [
-      "rawEvidenceTemplateValidatorProofTarget",
-      template.validatorProofTarget,
-      false,
-    ],
-  ];
+  return hostedMatrixRawEvidenceTemplateDescriptorFieldValues(template).map(
+    (field) => [field.rowId, field.value, false],
+  );
 }
 
 function expectedHostedHandoffRawCaptureIntakeRows({ intake, heading }) {
