@@ -129,6 +129,98 @@ const hardeningConcurrentRaceFeatureTargetExpectations = Object.freeze([
   ),
 ]);
 
+function expectedHardeningSourceCaseRows() {
+  const replacementStaleConflictLane =
+    replacementStaleConflictMessageSpineLaneCase();
+  return Object.freeze(
+    Object.fromEntries([
+      ...completedGameHardeningSpineTargetCases().map((target) => [
+        target.targetKey,
+        expectedHardeningSourceCaseRow({
+          sourceFactory: "completedGameHardeningSpineTargetCases",
+          featureSlotId: target.featureSlotId,
+          cycleId: target.cycleId,
+          rowId: target.roleUrlId,
+        }),
+      ]),
+      [
+        "replacementStaleConflictMessage",
+        expectedHardeningSourceCaseRow({
+          sourceFactory: "replacementStaleConflictMessageSpineLaneCase",
+          featureSlotId: "replacement-stale-conflict-message",
+          cycleId: hardeningFeatureSpineCycleIds.staleConflict,
+          rowId: replacementStaleConflictLane.laneId,
+        }),
+      ],
+      ...reconnectHardeningSpineTargetCases().map((target) => [
+        target.targetKey,
+        expectedHardeningSourceCaseRow({
+          sourceFactory: "reconnectHardeningSpineTargetCases",
+          featureSlotId: target.featureSlotId,
+          cycleId: hardeningFeatureSpineCycleIds.reconnectRecovery,
+          rowId: target.laneId,
+        }),
+      ]),
+      ...[
+        ...hostPhaseRaceReloadSpineTargetCases(),
+        ...hostStandaloneRaceReloadSpineTargetCases(),
+        ...crossRoleRaceReloadSpineTargetCases(),
+        ...replacementRaceReloadSpineTargetCases(),
+      ].map((target) => [
+        target.targetKey,
+        expectedHardeningSourceCaseRow({
+          sourceFactory: hardeningRaceSourceFactoryForTarget(target.targetKey),
+          featureSlotId: target.featureSlotId,
+          cycleId: hardeningFeatureSpineCycleIds.concurrentRace,
+          rowId: target.reloadLaneId,
+        }),
+      ]),
+    ]),
+  );
+}
+
+function expectedHardeningSourceCaseRow({
+  sourceFactory,
+  featureSlotId,
+  cycleId,
+  rowId,
+}) {
+  return {
+    sourceFactory,
+    featureSlotId,
+    sourceCheckId: hardeningFeatureSpineSourceCheckId,
+    cycleId,
+    roleUrlId: rowId,
+    checkpointId: rowId,
+    adminCheckId: rowId,
+  };
+}
+
+function hardeningRaceSourceFactoryForTarget(targetKey) {
+  if (
+    hostPhaseRaceReloadSpineTargetCases().some(
+      (target) => target.targetKey === targetKey,
+    )
+  ) {
+    return "hostPhaseRaceReloadSpineTargetCases";
+  }
+  if (
+    hostStandaloneRaceReloadSpineTargetCases().some(
+      (target) => target.targetKey === targetKey,
+    )
+  ) {
+    return "hostStandaloneRaceReloadSpineTargetCases";
+  }
+  if (
+    crossRoleRaceReloadSpineTargetCases().some(
+      (target) => target.targetKey === targetKey,
+    )
+  ) {
+    return "crossRoleRaceReloadSpineTargetCases";
+  }
+  return "replacementRaceReloadSpineTargetCases";
+}
+
 test("release readiness unproven cases share blocker IDs and status rows", () => {
   assert.ok(releaseReadinessUnprovenCaseIds.includes("hosted-deployment"));
   assert.ok(releaseReadinessUnprovenCaseIds.includes("human-release-runbook"));
@@ -580,6 +672,31 @@ test("scenario-owned production feature targets derive proof row ids from source
     assert.equal(target.checkpointId, source.rowId);
     assert.equal(target.adminCheckId, source.rowId);
   }
+});
+
+test("hardening feature spine rows are classified by exported source-case factories", () => {
+  const expectedRows = expectedHardeningSourceCaseRows();
+  assert.deepEqual(
+    Object.keys(hardeningFeatureSpineTargetRows),
+    Object.keys(expectedRows),
+  );
+  assert.deepEqual(
+    Object.fromEntries(
+      Object.entries(hardeningFeatureSpineTargetRows).map(([targetKey, row]) => [
+        targetKey,
+        {
+          sourceFactory: expectedRows[targetKey]?.sourceFactory,
+          featureSlotId: row.featureSlotId,
+          sourceCheckId: row.sourceCheckId,
+          cycleId: row.cycleId,
+          roleUrlId: row.roleUrlId,
+          checkpointId: row.checkpointId,
+          adminCheckId: row.adminCheckId,
+        },
+      ]),
+    ),
+    expectedRows,
+  );
 });
 
 test("local core production feature targets derive proof row ids from shared source rows", () => {
