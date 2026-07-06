@@ -7,6 +7,7 @@ import {
 } from "./dev_test_game_hosted_identity_proof_graph_dependency.mjs";
 
 export const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+export const devTestGameNextActionScript = "tools/dev_test_game_next_action.mjs";
 
 export function runNodeScript(scriptPath, options = {}) {
   return runCommand(process.execPath, [scriptPath], options);
@@ -20,6 +21,36 @@ export async function runSpinePlan(plan, { custom = {} } = {}) {
   for (const step of plan) {
     await runSpinePlanStep(step, { custom });
   }
+}
+
+export function phaseLocalNextActionStep({ id, outputPath, sequenceStage } = {}) {
+  if (typeof id !== "string" || id.trim() === "") {
+    throw new Error("phase-local next-action spine step is missing an id");
+  }
+  if (typeof outputPath !== "string" || outputPath.trim() === "") {
+    throw new Error("phase-local next-action spine step is missing an output path");
+  }
+  if (
+    sequenceStage !== undefined &&
+    (typeof sequenceStage !== "string" || sequenceStage.trim() === "")
+  ) {
+    throw new Error("phase-local next-action spine step has an invalid sequence stage");
+  }
+  return {
+    kind: "node",
+    script: devTestGameNextActionScript,
+    env: {
+      ...(sequenceStage === undefined
+        ? {}
+        : { FMARCH_DEV_TEST_GAME_SEQUENCE_STAGE: sequenceStage }),
+      FMARCH_DEV_TEST_GAME_NEXT_ACTION: outputPath,
+    },
+    phaseLocalNextAction: {
+      id,
+      outputPath,
+      ...(sequenceStage === undefined ? {} : { sequenceStage }),
+    },
+  };
 }
 
 async function runSpinePlanStep(step, { custom }) {

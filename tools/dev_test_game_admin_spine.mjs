@@ -116,7 +116,10 @@ import {
   buildSelectedOperatorHandoffTerminalReceipt,
 } from "./dev_test_game_selected_operator_handoff_receipt.mjs";
 import { releaseReadinessStep } from "./dev_test_game_spine_readiness_steps.mjs";
-import { runSpinePlan } from "./dev_test_game_spine_runner.mjs";
+import {
+  phaseLocalNextActionStep,
+  runSpinePlan,
+} from "./dev_test_game_spine_runner.mjs";
 import {
   devTestGameHostedIdentityProgressionAdminProofBatchScript,
   hostedIdentityProgressionAdminProofBatchArtifactPaths,
@@ -315,14 +318,10 @@ export const devTestGameAdminSpinePlan = [
   }),
   { kind: "node", script: "tools/dev_test_game_spine_manifest.mjs" },
   { kind: "node", script: "tools/dev_test_game_next_action.mjs" },
-  {
-    kind: "node",
-    script: "tools/dev_test_game_next_action.mjs",
-    env: {
-      FMARCH_DEV_TEST_GAME_NEXT_ACTION:
-        hostedEvidenceOperatorChecklistNextActionPath,
-    },
-  },
+  phaseLocalNextActionStep({
+    id: "hosted-evidence-operator-checklist",
+    outputPath: hostedEvidenceOperatorChecklistNextActionPath,
+  }),
   {
     kind: "node",
     script: "tools/dev_test_game_hosted_evidence_operator_checklist_admin_proof.mjs",
@@ -352,14 +351,11 @@ export const devTestGameAdminSpinePlan = [
     ],
     env: adminSpineReadinessEvidenceEnv,
   }),
-  {
-    kind: "node",
-    script: "tools/dev_test_game_next_action.mjs",
-    env: {
-      FMARCH_DEV_TEST_GAME_SEQUENCE_STAGE: devTestGameHostedIdentitySequenceStage,
-      FMARCH_DEV_TEST_GAME_NEXT_ACTION: hostedIdentityNextActionPath,
-    },
-  },
+  phaseLocalNextActionStep({
+    id: "hosted-identity",
+    outputPath: hostedIdentityNextActionPath,
+    sequenceStage: devTestGameHostedIdentitySequenceStage,
+  }),
   {
     kind: "custom",
     script: terminalHostedIdentityNextActionAdminProofBatchPlan.script,

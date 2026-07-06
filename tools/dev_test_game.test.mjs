@@ -244,6 +244,8 @@ import {
   identityReadinessEnv,
 } from "./dev_test_game_identity_spine.mjs";
 import {
+  devTestGameNextActionScript,
+  phaseLocalNextActionStep,
   runSpinePlan,
 } from "./dev_test_game_spine_runner.mjs";
 import {
@@ -1527,10 +1529,14 @@ test("dev test-game spine orchestrators expose stable proof order and env maps",
   });
   assert.deepEqual(devTestGameAdminSpinePlan[20], {
     kind: "node",
-    script: "tools/dev_test_game_next_action.mjs",
+    script: devTestGameNextActionScript,
     env: {
       FMARCH_DEV_TEST_GAME_NEXT_ACTION:
         hostedEvidenceOperatorChecklistNextActionPath,
+    },
+    phaseLocalNextAction: {
+      id: "hosted-evidence-operator-checklist",
+      outputPath: hostedEvidenceOperatorChecklistNextActionPath,
     },
   });
   assert.deepEqual(devTestGameAdminSpinePlan[21], {
@@ -1565,10 +1571,15 @@ test("dev test-game spine orchestrators expose stable proof order and env maps",
   });
   assert.deepEqual(devTestGameAdminSpinePlan[25], {
     kind: "node",
-    script: "tools/dev_test_game_next_action.mjs",
+    script: devTestGameNextActionScript,
     env: {
       FMARCH_DEV_TEST_GAME_SEQUENCE_STAGE: "hosted-identity",
       FMARCH_DEV_TEST_GAME_NEXT_ACTION: hostedIdentityNextActionPath,
+    },
+    phaseLocalNextAction: {
+      id: "hosted-identity",
+      outputPath: hostedIdentityNextActionPath,
+      sequenceStage: "hosted-identity",
     },
   });
   assert.deepEqual(devTestGameAdminSpinePlan[26], {
@@ -7449,6 +7460,62 @@ test("spine runner enforces hosted identity graph preconditions before a step", 
     /proof graph hosted identity operator dependency missing/,
   );
   assert.deepEqual(calls, ["record"]);
+});
+
+test("phase-local next-action spine steps share one env contract", () => {
+  assert.deepEqual(
+    phaseLocalNextActionStep({
+      id: "hosted-evidence-operator-checklist",
+      outputPath: hostedEvidenceOperatorChecklistNextActionPath,
+    }),
+    {
+      kind: "node",
+      script: devTestGameNextActionScript,
+      env: {
+        FMARCH_DEV_TEST_GAME_NEXT_ACTION:
+          hostedEvidenceOperatorChecklistNextActionPath,
+      },
+      phaseLocalNextAction: {
+        id: "hosted-evidence-operator-checklist",
+        outputPath: hostedEvidenceOperatorChecklistNextActionPath,
+      },
+    },
+  );
+  assert.deepEqual(
+    phaseLocalNextActionStep({
+      id: "hosted-identity",
+      outputPath: hostedIdentityNextActionPath,
+      sequenceStage: devTestGameHostedIdentitySequenceStage,
+    }),
+    {
+      kind: "node",
+      script: devTestGameNextActionScript,
+      env: {
+        FMARCH_DEV_TEST_GAME_SEQUENCE_STAGE:
+          devTestGameHostedIdentitySequenceStage,
+        FMARCH_DEV_TEST_GAME_NEXT_ACTION: hostedIdentityNextActionPath,
+      },
+      phaseLocalNextAction: {
+        id: "hosted-identity",
+        outputPath: hostedIdentityNextActionPath,
+        sequenceStage: devTestGameHostedIdentitySequenceStage,
+      },
+    },
+  );
+  assert.throws(
+    () =>
+      phaseLocalNextActionStep({
+        outputPath: hostedIdentityNextActionPath,
+      }),
+    /phase-local next-action spine step is missing an id/,
+  );
+  assert.throws(
+    () =>
+      phaseLocalNextActionStep({
+        id: "hosted-identity",
+      }),
+    /phase-local next-action spine step is missing an output path/,
+  );
 });
 
 test("proof graph receipt artifact rows share one browser row id contract", () => {
