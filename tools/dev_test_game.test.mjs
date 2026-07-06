@@ -49,9 +49,15 @@ import {
 import {
   buildHostVisibleInvalidActionRecoverySummary,
   buildHostVisibleStaleTransitionRecoverySummaries,
+  completedGameStaleRecoverySummaryId,
+  hostVisibleRecoverySummaryCases,
   playerInvalidActionRecoveryMessage,
+  playerInvalidActionRecoveryLaneId,
   playerStaleActionTransitionRecoveryMessage,
+  playerStaleActionTransitionRecoveryFeatureSlotId,
   playerStaleVoteTransitionRecoveryMessage,
+  playerStaleVoteTransitionRecoveryFeatureSlotId,
+  privateChannelInvalidActionRecoveryLaneId,
 } from "./dev_test_game_core_loop_action_scenarios.mjs";
 import {
   completedGameEndgameSurfaceFixture,
@@ -7492,6 +7498,44 @@ test("core-loop generatedFrom families come from one canonical bundle", () => {
   assert.deepEqual(
     coreLoopAdminProofFixture().generatedFrom.phaseProgressionFamily,
     families.phaseProgressionFamily,
+  );
+});
+
+test("host-visible recovery summaries come from one registry", () => {
+  const recoveryCases = hostVisibleRecoverySummaryCases();
+  assert.deepEqual(
+    recoveryCases.map((recoveryCase) => [
+      recoveryCase.id,
+      recoveryCase.group,
+      recoveryCase.recoveryHookId,
+    ]),
+    [
+      [
+        playerInvalidActionRecoveryLaneId,
+        "invalid-action",
+        "invalidActionReject",
+      ],
+      [
+        playerStaleActionTransitionRecoveryFeatureSlotId,
+        "stale-transition",
+        "staleActionTransitionReject",
+      ],
+      [
+        playerStaleVoteTransitionRecoveryFeatureSlotId,
+        "stale-transition",
+        "staleVoteTransitionReject",
+      ],
+      [
+        privateChannelInvalidActionRecoveryLaneId,
+        "private-channel",
+        "invalidActionReject",
+      ],
+      [
+        completedGameStaleRecoverySummaryId,
+        "completed-game",
+        "gameCompleted",
+      ],
+    ],
   );
 });
 

@@ -7,11 +7,6 @@ import {
 } from "./dev_test_game_core_loop_action_scenario_cases.mjs";
 
 export {
-  assertHostVisibleInvalidActionRecoverySummary,
-  assertHostVisibleStaleTransitionRecoverySummaries,
-  buildHostVisibleInvalidActionRecoverySummary,
-  buildHostVisibleStaleTransitionRecoverySummaries,
-  hostVisibleStaleTransitionRecoveryCases,
   playerActionBoundaryLaneId,
   playerActionBoundaryRecoveryHookId,
   playerActionLoopLaneId,
@@ -33,6 +28,17 @@ export {
   staleNightOneActionAfterTransitionRecoveryScenario,
   staleVoteTransitionRecoveryFeatureSpineRow,
 } from "./dev_test_game_core_loop_action_scenario_cases.mjs";
+
+export {
+  assertHostVisibleInvalidActionRecoverySummary,
+  assertHostVisibleStaleTransitionRecoverySummaries,
+  buildHostVisibleInvalidActionRecoverySummary,
+  buildHostVisibleStaleTransitionRecoverySummaries,
+  completedGameStaleRecoverySummaryId,
+  hostVisibleRecoverySummaryCases,
+  hostVisibleStaleTransitionRecoveryCases,
+  privateChannelInvalidActionRecoveryLaneId,
+} from "./dev_test_game_core_loop_recovery_summary_registry.mjs";
 
 export function assertPlayerActionSubmissionClickProofCase({
   proof,

@@ -25,14 +25,16 @@ import {
   assertPlayerStaleVoteAfterTransitionProofCase,
 } from "./dev_test_game_core_loop_action_scenarios.mjs";
 import {
-  assertHostVisibleInvalidActionRecoverySummary,
-  assertHostVisibleStaleTransitionRecoverySummaries,
-  buildHostVisibleInvalidActionRecoverySummary,
-  buildHostVisibleStaleTransitionRecoverySummaries,
   playerActionSubmissionScenario,
   playerInvalidActionRecoveryScenario,
   staleNightFourActionRecoveryScenario,
 } from "./dev_test_game_core_loop_action_scenario_cases.mjs";
+import {
+  assertHostVisibleInvalidActionRecoverySummary,
+  assertHostVisibleStaleTransitionRecoverySummaries,
+  buildHostVisibleInvalidActionRecoverySummary,
+  buildHostVisibleStaleTransitionRecoverySummaries,
+} from "./dev_test_game_core_loop_recovery_summary_registry.mjs";
 import {
   assertPlayerActionRoleSurfaceProof,
   coreLoopPlayerActionRecoveryFamilyId,
