@@ -165,6 +165,9 @@ import {
   localAdminAuditRoleUrl,
 } from "./dev_test_game_admin_audit_surface_ids.mjs";
 import {
+  allProductionFeatureSpineTargetProvenanceCases,
+} from "./dev_test_game_production_feature_spine_target_provenance.mjs";
+import {
   devTestGameProofRunPath,
   devTestGameSessionPath,
   spineManifestMarkdownPath,
@@ -463,6 +466,8 @@ export function buildDevTestGameSpineManifest({
       recoveryCommands: adminSpineRecoveryCommands,
       proofRunContract,
     }),
+    productionFeatureProvenanceSummary:
+      buildProductionFeatureProvenanceSummary(),
     terminalArtifacts: [
       {
         id: "next-action",
@@ -752,6 +757,14 @@ export function buildDevTestGameSpineManifest({
         ],
       },
       {
+        id: "production-feature-provenance-summary-recorded",
+        status: "passed",
+        evidence: [
+          "manifest.productionFeatureProvenanceSummary",
+          `${allProductionFeatureSpineTargetProvenanceCases.length} feature slots`,
+        ],
+      },
+      {
         id: "release-boundary-carried",
         status: "passed",
         releaseReady: false,
@@ -780,6 +793,9 @@ export function assertDevTestGameSpineManifest(manifest) {
     throw new Error("spine manifest must not claim production or release readiness");
   }
   assertArtifactFreshnessReport(manifest.artifactFreshness);
+  assertProductionFeatureProvenanceSummary(
+    manifest.productionFeatureProvenanceSummary,
+  );
   assertLocalLiveWrapperScript({
     manifest,
     commandId: "coreLive",
@@ -1312,6 +1328,7 @@ export function assertDevTestGameSpineManifest(manifest) {
     "hosted-ops-signals-recorded",
     "release-runbook-recorded",
     "terminal-artifacts-recorded",
+    "production-feature-provenance-summary-recorded",
     "release-boundary-carried",
   ]) {
     if (checks.get(id) !== "passed") {
@@ -1319,6 +1336,52 @@ export function assertDevTestGameSpineManifest(manifest) {
     }
   }
   return manifest;
+}
+
+export function buildProductionFeatureProvenanceSummary() {
+  const sourceCheckGroups = Array.from(
+    allProductionFeatureSpineTargetProvenanceCases
+      .reduce((groups, provenanceCase) => {
+        const group = groups.get(provenanceCase.sourceCheckId) ?? {
+          sourceCheckId: provenanceCase.sourceCheckId,
+          featureCount: 0,
+          featureSlotIds: [],
+          selectedProofArtifacts: [],
+        };
+        group.featureCount += 1;
+        group.featureSlotIds.push(provenanceCase.featureSlotId);
+        group.selectedProofArtifacts.push(provenanceCase.proofArtifact);
+        groups.set(provenanceCase.sourceCheckId, group);
+        return groups;
+      }, new Map())
+      .values(),
+  )
+    .map((group) => ({
+      sourceCheckId: group.sourceCheckId,
+      featureCount: group.featureCount,
+      featureSlotIds: uniqueSorted(group.featureSlotIds),
+      selectedProofArtifacts: uniqueSorted(group.selectedProofArtifacts),
+    }))
+    .sort((left, right) => left.sourceCheckId.localeCompare(right.sourceCheckId));
+  return {
+    status: "passed",
+    featureCount: allProductionFeatureSpineTargetProvenanceCases.length,
+    sourceCheckCount: sourceCheckGroups.length,
+    selectedProofArtifacts: uniqueSorted(
+      allProductionFeatureSpineTargetProvenanceCases.map(
+        (provenanceCase) => provenanceCase.proofArtifact,
+      ),
+    ),
+    sourceCheckGroups,
+  };
+}
+
+export function assertProductionFeatureProvenanceSummary(summary) {
+  const expected = buildProductionFeatureProvenanceSummary();
+  if (JSON.stringify(summary) !== JSON.stringify(expected)) {
+    throw new Error("spine manifest production feature provenance summary drifted");
+  }
+  return summary;
 }
 
 function assertTerminalArtifacts(terminalArtifacts) {
@@ -1834,6 +1897,22 @@ function markdownSpineManifest(manifest) {
   );
   for (const artifact of manifest.artifactFreshness.artifacts) {
     lines.push(`| ${artifact.id} | ${artifact.status} | ${artifact.refreshCommand} |`);
+  }
+  lines.push(
+    "",
+    "## Production Feature Provenance",
+    "",
+    `- featureCount: ${manifest.productionFeatureProvenanceSummary.featureCount}`,
+    `- sourceCheckCount: ${manifest.productionFeatureProvenanceSummary.sourceCheckCount}`,
+    `- selectedProofArtifacts: ${manifest.productionFeatureProvenanceSummary.selectedProofArtifacts.length}`,
+    "",
+    "| Source Check | Features | Proof Artifacts |",
+    "| --- | ---: | --- |",
+  );
+  for (const group of manifest.productionFeatureProvenanceSummary.sourceCheckGroups) {
+    lines.push(
+      `| ${group.sourceCheckId} | ${group.featureCount} | ${group.selectedProofArtifacts.join("<br>")} |`,
+    );
   }
   lines.push("", "## Artifacts", "");
   for (const artifact of manifest.artifacts) {

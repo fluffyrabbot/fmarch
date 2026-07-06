@@ -322,6 +322,7 @@ import {
 } from "./dev_test_game_spine_readiness_steps.mjs";
 import {
   assertDevTestGameSpineManifest,
+  buildProductionFeatureProvenanceSummary,
   buildDevTestGameSpineManifest,
   hostedIdentityNextActionAdminProofPath,
   hostedIdentityNextActionPath,
@@ -2340,6 +2341,22 @@ test("dev test-game spine manifest records command order and evidence wiring", (
     "test:dev-test-game-live:local",
   );
   assert.deepEqual(
+    manifest.productionFeatureProvenanceSummary,
+    buildProductionFeatureProvenanceSummary(),
+  );
+  assert.ok(manifest.productionFeatureProvenanceSummary.featureCount > 0);
+  assert.ok(
+    manifest.productionFeatureProvenanceSummary.selectedProofArtifacts.includes(
+      devTestGameProofRunPath,
+    ),
+  );
+  assert.equal(
+    manifest.checks.find(
+      (check) => check.id === "production-feature-provenance-summary-recorded",
+    )?.status,
+    "passed",
+  );
+  assert.deepEqual(
     manifest.checks.find(
       (check) => check.id === "local-live-wrapper-scripts-recorded",
     ),
@@ -2797,6 +2814,10 @@ test("spine manifest gives host setup freshness artifacts focused recovery comma
     generatedAt: "2026-06-26T00:00:01.000Z",
   });
   assertDevTestGameNextAction(nextAction);
+  assert.deepEqual(
+    nextAction.generatedFrom.productionFeatureProvenanceSummary,
+    manifest.productionFeatureProvenanceSummary,
+  );
   assert.deepEqual(nextAction.nextAction, {
     command: devTestGameHostSetupProofCommand,
     reason: "artifact-not-fresh",

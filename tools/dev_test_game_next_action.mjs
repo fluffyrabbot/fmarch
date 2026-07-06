@@ -3,6 +3,7 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 import {
   assertDevTestGameSpineManifest,
+  assertProductionFeatureProvenanceSummary,
   proofFreshnessAdminProofCommand,
   spineManifestPath,
 } from "./dev_test_game_spine_manifest.mjs";
@@ -220,6 +221,10 @@ export function buildDevTestGameNextAction(
   } = {},
 ) {
   const manifest = assertDevTestGameSpineManifest(spineManifest);
+  const productionFeatureProvenanceSummary =
+    assertProductionFeatureProvenanceSummary(
+      manifest.productionFeatureProvenanceSummary,
+    );
   const readiness =
     releaseReadinessChecklist === null
       ? null
@@ -516,6 +521,7 @@ export function buildDevTestGameNextAction(
       manifestGeneratedAt: manifest.generatedAt,
       artifactFreshnessStatus: manifest.artifactFreshness.status,
       artifactFreshnessSummary: { ...manifest.artifactFreshness.summary },
+      productionFeatureProvenanceSummary,
       ...(ops === null
         ? {}
         : {
@@ -647,6 +653,9 @@ export function assertDevTestGameNextAction(evidence) {
   if (evidence.releaseReady !== false || evidence.productionReady !== false) {
     throw new Error("next-action must not claim production or release readiness");
   }
+  assertProductionFeatureProvenanceSummary(
+    evidence.generatedFrom?.productionFeatureProvenanceSummary,
+  );
   if (typeof evidence.nextAction?.command !== "string" || evidence.nextAction.command === "") {
     throw new Error("next-action is missing a command");
   }
