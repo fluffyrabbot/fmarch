@@ -72,3 +72,30 @@ export function assertProofGraphAdminVisibleRelatedDestinations({
     }
   }
 }
+
+export function assertProofGraphAdminVisibleSummaryRows({
+  proof,
+  rows,
+  visibleRowIdsKey,
+  visibleRowStatusesKey,
+  missingRowMessage,
+  textDriftMessage,
+}) {
+  for (const row of rows ?? []) {
+    if (!proof?.adminRoleSurface?.[visibleRowIdsKey]?.includes(row.id)) {
+      throw new Error(missingRowMessage(row.id));
+    }
+    const visibleStatus =
+      proof?.adminRoleSurface?.[visibleRowStatusesKey]?.[row.id] ?? "";
+    if (!summaryRowTextVisible(row, visibleStatus)) {
+      throw new Error(textDriftMessage(row.id));
+    }
+  }
+}
+
+function summaryRowTextVisible(row, visibleStatus) {
+  return [row.label, ...String(row.status ?? "").split("\n")]
+    .map((token) => String(token ?? "").trim())
+    .filter((token) => token !== "")
+    .every((token) => String(visibleStatus ?? "").includes(token));
+}

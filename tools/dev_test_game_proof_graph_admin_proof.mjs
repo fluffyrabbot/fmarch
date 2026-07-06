@@ -15,6 +15,7 @@ import {
 } from "./dev_test_game_proof_graph_production_feature_destinations.mjs";
 import {
   assertProofGraphAdminVisibleRelatedDestinations,
+  assertProofGraphAdminVisibleSummaryRows,
 } from "./dev_test_game_proof_graph_admin_destination_assertions.mjs";
 import {
   validateDevTestGameAdminSpineProof,
@@ -793,25 +794,17 @@ function assertProofGraphAdminProofCoversProductionFeatureDestinationSummary(
   assertProductionFeatureDestinationSummaryCoversHostedEvidenceProgressions(
     summary,
   );
-  for (const row of summary.rows ?? []) {
-    if (
-      !evidence.adminRoleSurface
-        ?.visibleProductionFeatureDestinationSummaries?.includes(row.id)
-    ) {
-      throw new Error(
-        `proof graph admin proof missing production feature destination summary row: ${row.id}`,
-      );
-    }
-    const visibleStatus =
-      evidence.adminRoleSurface?.visibleProductionFeatureDestinationSummaryStatuses?.[
-        row.id
-      ] ?? "";
-    if (!visibleProductionFeatureDestinationSummaryText(row, visibleStatus)) {
-      throw new Error(
-        `proof graph admin proof production feature destination summary text drifted: ${row.id}`,
-      );
-    }
-  }
+  assertProofGraphAdminVisibleSummaryRows({
+    proof: evidence,
+    rows: summary.rows,
+    visibleRowIdsKey: "visibleProductionFeatureDestinationSummaries",
+    visibleRowStatusesKey:
+      "visibleProductionFeatureDestinationSummaryStatuses",
+    missingRowMessage: (rowId) =>
+      `proof graph admin proof missing production feature destination summary row: ${rowId}`,
+    textDriftMessage: (rowId) =>
+      `proof graph admin proof production feature destination summary text drifted: ${rowId}`,
+  });
 }
 
 function assertProductionFeatureDestinationSummaryCoversHostedEvidenceProgressions(
@@ -843,13 +836,6 @@ function assertProductionFeatureDestinationSummaryCoversHostedEvidenceProgressio
       );
     }
   }
-}
-
-function visibleProductionFeatureDestinationSummaryText(row, visibleStatus) {
-  return [row.label, ...String(row.status ?? "").split("\n")]
-    .map((token) => String(token ?? "").trim())
-    .filter((token) => token !== "")
-    .every((token) => String(visibleStatus ?? "").includes(token));
 }
 
 function assertProofGraphAdminProofCoversCoreLoopScenarioFamilies(evidence) {
