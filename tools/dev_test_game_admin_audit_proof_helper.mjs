@@ -314,6 +314,7 @@ export async function proveAdminAuditDetail({
   requiredProductionFeatureDestinationSummaries = [],
   requiredDiagnosticProofSummaries = [],
   requiredDiagnosticProofSummaryStatuses = {},
+  requiredProofGraphPrerequisiteDestinations = [],
   requiredScenarioFamilies = [],
   requiredScenarioFamilyText = {},
   requiredSpineCycles = [],
@@ -498,6 +499,11 @@ export async function proveAdminAuditDetail({
       page,
       prefix: "admin-audit-diagnostic-proof-summary",
       ids: Object.keys(requiredDiagnosticProofSummaryStatuses),
+    });
+    const visibleProofGraphPrerequisiteDestinations = await waitForRows({
+      page,
+      prefix: "admin-audit-proof-graph-prerequisite-destination",
+      ids: requiredProofGraphPrerequisiteDestinations,
     });
     const visibleScenarioFamilies = await waitForRows({
       page,
@@ -1260,6 +1266,9 @@ export async function proveAdminAuditDetail({
       ...(Object.keys(visibleDiagnosticProofSummaryStatuses).length === 0
         ? {}
         : { visibleDiagnosticProofSummaryStatuses }),
+      ...(visibleProofGraphPrerequisiteDestinations.length === 0
+        ? {}
+        : { visibleProofGraphPrerequisiteDestinations }),
       ...(visibleScenarioFamilies.length === 0
         ? {}
         : { visibleScenarioFamilies }),

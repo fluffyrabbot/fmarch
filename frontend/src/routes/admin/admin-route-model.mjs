@@ -457,10 +457,55 @@ function frontendSetupWorkbenchReadinessSummarySections(readiness) {
   ];
 }
 
-function buildLocalProofGraphSummarySections(artifactSummary) {
+function buildLocalProofGraphSummarySections(artifactSummary, { nodes, game } = {}) {
   return Object.freeze([
     ...diagnosticProofSummarySections(artifactSummary.diagnosticProofSummary),
+    ...proofGraphPrerequisiteDestinationSections({ nodes, game }),
   ]);
+}
+
+function proofGraphPrerequisiteDestinationSections({ nodes, game } = {}) {
+  const rows = (Array.isArray(nodes) ? nodes : []).flatMap((node) =>
+    proofGraphPrerequisiteDestinationRows({ node, game }),
+  );
+  if (rows.length === 0) {
+    return [];
+  }
+  return [
+    buildArtifactSummarySection({
+      id: "proof-graph-prerequisite-destinations",
+      heading: "Proof graph prerequisite destinations",
+      rows,
+    }),
+  ];
+}
+
+function proofGraphPrerequisiteDestinationRows({ node, game }) {
+  const nodeId = String(node?.id ?? "");
+  const destinations = Array.isArray(node?.requiredLocalPrerequisiteDestinations)
+    ? node.requiredLocalPrerequisiteDestinations
+    : [];
+  return destinations.map((destination) => {
+    const destinationId = String(destination?.id ?? "");
+    const auditId = String(destination?.auditId ?? "");
+    const roleUrl = String(destination?.roleUrl ?? "");
+    const rowId = `${nodeId}:${destinationId}`;
+    return {
+      id: rowId,
+      testId: `admin-audit-proof-graph-prerequisite-destination-${rowId}`,
+      values: [
+        { id: "nodeId", text: nodeId, emphasized: true },
+        { id: "destinationId", text: destinationId },
+        { id: "auditId", text: auditId },
+        {
+          id: "roleUrl",
+          text: roleUrl,
+          href: seededRoleUrlToAdminHref(roleUrl, { game }),
+          testId: `admin-audit-proof-graph-prerequisite-destination-role-url-${rowId}`,
+        },
+      ],
+    };
+  });
 }
 
 function diagnosticProofSummarySections(summary) {
@@ -3924,7 +3969,10 @@ export function normalizeLocalProofGraphAudit(proofGraph, { game }) {
     checks: normalizeLocalProofGraphCheckRows(proofGraph),
     relatedLinks: normalizeLocalProofGraphRelatedLinks(proofGraph, { game, nodes }),
     artifactSummary,
-    artifactSummarySections: buildLocalProofGraphSummarySections(artifactSummary),
+    artifactSummarySections: buildLocalProofGraphSummarySections(artifactSummary, {
+      nodes,
+      game,
+    }),
   });
 }
 

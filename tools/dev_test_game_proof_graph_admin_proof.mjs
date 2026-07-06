@@ -199,6 +199,8 @@ export function proofGraphAdminProofCase() {
             "non-terminal artifact",
           ]),
         ),
+        requiredProofGraphPrerequisiteDestinations:
+          proofGraphPrerequisiteDestinationRowIds(source.proofGraph),
         requiredRelatedLinks: source.proofGraph.nodes
           .filter(
             (node) =>
@@ -277,6 +279,8 @@ export function proofGraphAdminProofCase() {
           source.proofGraph.summary?.diagnosticProofSummary,
           { nodes: source.proofGraph.nodes },
         ),
+        proofGraphPrerequisiteDestinationRowIds:
+          proofGraphPrerequisiteDestinationRowIds(source.proofGraph),
         ...(source.adminSpineTerminalBatches?.selectedOperatorHandoffReceipt
           ?.status === "passed"
           ? {
@@ -378,10 +382,36 @@ export function assertProofGraphAdminProof(evidence) {
   assertProofGraphAdminProofCoversProductionFeatureDestinationSummary(evidence);
   assertProofGraphAdminProofCoversProductionFeatureProvenanceComparison(evidence);
   assertProofGraphAdminProofCoversDiagnosticProofSummary(evidence);
+  assertVisibleAdminRoleSurfaceRows({
+    adminRoleSurface: evidence.adminRoleSurface,
+    rowIds: evidence.generatedFrom?.proofGraphPrerequisiteDestinationRowIds,
+    proofName: "proof graph admin proof",
+    rowName: "proof graph prerequisite destination",
+    surfaceKey: "visibleProofGraphPrerequisiteDestinations",
+  });
   for (const featureTargetCase of proofGraphAdminFeatureTargetCases) {
     assertProofGraphAdminProofCoversFeatureTarget(evidence, featureTargetCase);
   }
   return evidence;
+}
+
+function proofGraphPrerequisiteDestinationRowIds(proofGraph) {
+  return (Array.isArray(proofGraph?.nodes) ? proofGraph.nodes : []).flatMap(
+    (node) =>
+      (Array.isArray(node?.requiredLocalPrerequisiteDestinations)
+        ? node.requiredLocalPrerequisiteDestinations
+        : []
+      ).map((destination) =>
+        proofGraphPrerequisiteDestinationRowId({
+          nodeId: node.id,
+          destinationId: destination?.id,
+        }),
+      ),
+  );
+}
+
+function proofGraphPrerequisiteDestinationRowId({ nodeId, destinationId }) {
+  return `${String(nodeId ?? "")}:${String(destinationId ?? "")}`;
 }
 
 async function readOptionalAdminSpineTerminalBatches() {
