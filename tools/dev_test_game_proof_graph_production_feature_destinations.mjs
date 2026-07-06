@@ -131,6 +131,21 @@ export function proofGraphProductionFeatureDestinationSummary(
         readinessEvidence: destination.readinessEvidence ?? "",
       }),
     );
+  const adminAuditRows = destinations
+    .filter((destination) => destination.kind === "admin-audit")
+    .map((destination) =>
+      Object.freeze({
+        id: destination.linkId,
+        label: `Admin audit destination: ${destination.featureSlotId}`,
+        status: adminAuditDestinationStatus(destination),
+        featureSlotId: destination.featureSlotId,
+        sourceCheckId: destination.sourceCheckId,
+        adminCheckId: destination.adminCheckId,
+        targetRoleUrl: destination.targetRoleUrl,
+        detailRoleUrl: destination.detailRoleUrl,
+        sourceProofArtifactRef: destination.sourceProofArtifact,
+      }),
+    );
   const hostedEvidenceProgressionSummary =
     hostedEvidenceProgressionHandoffSummary();
   const hostedEvidenceProgressionRows =
@@ -177,6 +192,7 @@ export function proofGraphProductionFeatureDestinationSummary(
         expectedCount: productionFeatureTargetCount,
         driftCount,
       }),
+      ...adminAuditRows,
       ...roleUrlRows,
       ...hostedEvidenceProgressionRows,
     ]),
@@ -297,6 +313,19 @@ function roleUrlDestinationStatus(destination) {
   ].join("\n");
 }
 
+function adminAuditDestinationStatus(destination) {
+  return [
+    `targetRoleUrl ${destination.targetRoleUrl}`,
+    `detailRoleUrl ${destination.detailRoleUrl}`,
+    `sourceProofArtifact ${destination.sourceProofArtifact}`,
+    `sourceCheckId ${destination.sourceCheckId}`,
+    `adminCheckId ${destination.adminCheckId}`,
+    ...(destination.browserWorkbench?.requiredEvidence === undefined
+      ? []
+      : [`browserWorkbench ${destination.browserWorkbench.requiredEvidence}`]),
+  ].join("\n");
+}
+
 function hostedEvidenceProgressionDestinationStatus(progression) {
   return [
     `adminProofMode ${progression.adminProofMode}`,
@@ -322,13 +351,16 @@ function productionFeatureDestinationGroups({ destinationSummary, destinations }
     if (sourceCheckId === "") {
       continue;
     }
+    const sourceProofArtifact = String(
+      row.sourceProofArtifact ?? row.sourceProofArtifactRef ?? "",
+    );
     const group = groups.get(sourceCheckId) ?? {
       sourceCheckId,
       featureSlotIds: [],
       selectedProofArtifacts: [],
     };
     group.featureSlotIds.push(String(row.featureSlotId ?? ""));
-    group.selectedProofArtifacts.push(String(row.sourceProofArtifact ?? ""));
+    group.selectedProofArtifacts.push(sourceProofArtifact);
     groups.set(sourceCheckId, group);
   }
   return Array.from(groups.values())

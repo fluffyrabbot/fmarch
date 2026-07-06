@@ -2739,6 +2739,7 @@ function productionFeatureDestinationDescriptorRow(row, { game } = {}) {
     values: [
       { id: "label", text: row.label, emphasized: true },
       { id: "status", text: row.status },
+      ...productionFeatureDestinationMetadataValues(row, { game }),
       ...proofGraphProductionFeatureDestinationArtifactFields.flatMap((field) =>
         row[field] === undefined || row[field] === ""
           ? []
@@ -2755,6 +2756,44 @@ function productionFeatureDestinationDescriptorRow(row, { game } = {}) {
             ],
       ),
     ],
+  };
+}
+
+function productionFeatureDestinationMetadataValues(row, { game } = {}) {
+  return [
+    optionalArtifactSummaryTextValue(row, "featureSlotId"),
+    optionalArtifactSummaryTextValue(row, "sourceCheckId"),
+    optionalArtifactSummaryTextValue(row, "adminCheckId"),
+    optionalProductionFeatureDestinationRoleValue(row, "targetRoleUrl", {
+      game,
+    }),
+    optionalProductionFeatureDestinationRoleValue(row, "detailRoleUrl", {
+      game,
+    }),
+    optionalProductionFeatureDestinationRoleValue(row, "roleUrl", { game }),
+    optionalArtifactSummaryTextValue(row, "sourceProofArtifactRef"),
+    optionalArtifactSummaryTextValue(row, "recoveryCommand"),
+    optionalArtifactSummaryTextValue(row, "proofCommand"),
+    optionalArtifactSummaryTextValue(row, "progressionId"),
+    optionalArtifactSummaryTextValue(row, "firstMissingInputId"),
+    optionalArtifactSummaryTextValue(row, "firstMissingCheckId"),
+  ].flatMap((value) => (value === null ? [] : [value]));
+}
+
+function optionalArtifactSummaryTextValue(row, field) {
+  const text = String(row?.[field] ?? "");
+  return text === "" ? null : { id: field, text };
+}
+
+function optionalProductionFeatureDestinationRoleValue(row, field, { game } = {}) {
+  const text = String(row?.[field] ?? "");
+  if (text === "") {
+    return null;
+  }
+  return {
+    id: field,
+    text,
+    href: seededRoleUrlToAdminHref(text, { game }),
   };
 }
 

@@ -11319,6 +11319,7 @@ function expectedProductionFeatureDestinationSections(summary, { game } = {}) {
       [
         ["label", row.label, true, "", ""],
         ["status", row.status, false, "", ""],
+        ...expectedProductionFeatureDestinationMetadataValues(row, { game }),
         ...proofGraphProductionFeatureDestinationArtifactFields.flatMap(
           (field) =>
             row[field] === undefined || row[field] === ""
@@ -11365,6 +11366,63 @@ function expectedProductionFeatureDestinationSections(summary, { game } = {}) {
           ),
         ]),
   ];
+}
+
+function expectedProductionFeatureDestinationMetadataValues(
+  row,
+  { game } = {},
+) {
+  return [
+    optionalExpectedProductionFeatureDestinationTextValue(row, "featureSlotId"),
+    optionalExpectedProductionFeatureDestinationTextValue(row, "sourceCheckId"),
+    optionalExpectedProductionFeatureDestinationTextValue(row, "adminCheckId"),
+    optionalExpectedProductionFeatureDestinationRoleValue(row, "targetRoleUrl", {
+      game,
+    }),
+    optionalExpectedProductionFeatureDestinationRoleValue(row, "detailRoleUrl", {
+      game,
+    }),
+    optionalExpectedProductionFeatureDestinationRoleValue(row, "roleUrl", {
+      game,
+    }),
+    optionalExpectedProductionFeatureDestinationTextValue(
+      row,
+      "sourceProofArtifactRef",
+    ),
+    optionalExpectedProductionFeatureDestinationTextValue(row, "recoveryCommand"),
+    optionalExpectedProductionFeatureDestinationTextValue(row, "proofCommand"),
+    optionalExpectedProductionFeatureDestinationTextValue(row, "progressionId"),
+    optionalExpectedProductionFeatureDestinationTextValue(
+      row,
+      "firstMissingInputId",
+    ),
+    optionalExpectedProductionFeatureDestinationTextValue(
+      row,
+      "firstMissingCheckId",
+    ),
+  ].flatMap((value) => (value === null ? [] : [value]));
+}
+
+function optionalExpectedProductionFeatureDestinationTextValue(row, field) {
+  const text = String(row?.[field] ?? "");
+  return text === "" ? null : [field, text, false, "", ""];
+}
+
+function optionalExpectedProductionFeatureDestinationRoleValue(
+  row,
+  field,
+  { game } = {},
+) {
+  const text = String(row?.[field] ?? "");
+  return text === ""
+    ? null
+    : [
+        field,
+        text,
+        false,
+        text.replace("<seeded-game>", encodeURIComponent(game)),
+        "",
+      ];
 }
 
 function expectedLocalReleaseReadinessDiagnosticSections(diagnostics) {
