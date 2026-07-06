@@ -1915,6 +1915,9 @@ test("admin audit detail page renders simple list rows from route data", async (
   assert.match(source, /unprovenRows/);
   assert.doesNotMatch(source, /unproven as item/);
   assert.doesNotMatch(source, /item\.requiredEvidence/);
+  assert.match(source, /relatedLinkRows/);
+  assert.doesNotMatch(source, /relatedLinks as link/);
+  assert.doesNotMatch(source, /link\.href/);
   assert.match(source, /reconnectLaneRows/);
   assert.doesNotMatch(source, /reconnectLanes as lane/);
   assert.match(source, /staleConflictLaneRows/);
@@ -2467,6 +2470,10 @@ test("admin local proof graph detail data carries graph node rows", async () => 
   assert.deepEqual(
     data.audit.relatedLinks.map((link) => [link.id, link.href]),
     expectedProofGraphRelatedLinkRows(proofGraph, { game: "midsummer" }),
+  );
+  assert.deepEqual(
+    descriptorRowsWithLinksForAssertion(data.audit.relatedLinkRows),
+    expectedRelatedLinkRows(data.audit.relatedLinks),
   );
   assert.equal(
     data.audit.relatedLinks.find(
@@ -9719,6 +9726,23 @@ function expectedUnprovenRows(unproven) {
 
 function optionalExpectedTextValue(id, value) {
   return String(value ?? "") === "" ? [] : [[id, value, false]];
+}
+
+function expectedRelatedLinkRows(relatedLinks) {
+  return relatedLinks.map((link) => [
+    `related-link-${link.id}`,
+    `admin-audit-related-link-entry-${link.id}`,
+    [
+      [
+        "label",
+        link.label,
+        false,
+        link.href,
+        `admin-audit-related-link-${link.id}`,
+      ],
+      ["status", link.status, false, "", ""],
+    ],
+  ]);
 }
 
 function expectedSpineCycleRows(cycles) {

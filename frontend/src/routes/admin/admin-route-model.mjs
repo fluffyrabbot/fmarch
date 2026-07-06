@@ -1728,6 +1728,7 @@ function withAdminAuditDetailDisplayRows(item, { game }) {
     ],
   });
   const unprovenRows = buildUnprovenRows(item.unproven);
+  const relatedLinkRows = buildRelatedLinkRows(item.relatedLinks);
   const reconnectLaneRows = buildSimpleAdminAuditRows({
     items: item.reconnectLanes,
     idPrefix: "reconnect-lane",
@@ -1775,6 +1776,7 @@ function withAdminAuditDetailDisplayRows(item, { game }) {
     ...(proofLaneCoverageRows.length === 0 ? {} : { proofLaneCoverageRows }),
     ...(scenarioRows.length === 0 ? {} : { scenarioRows }),
     ...(unprovenRows.length === 0 ? {} : { unprovenRows }),
+    ...(relatedLinkRows.length === 0 ? {} : { relatedLinkRows }),
     ...(reconnectLaneRows.length === 0 ? {} : { reconnectLaneRows }),
     ...(staleConflictLaneRows.length === 0 ? {} : { staleConflictLaneRows }),
     ...(scenarioFamilyRows.length === 0 ? {} : { scenarioFamilyRows }),
@@ -1904,6 +1906,26 @@ function buildUnprovenRows(unproven) {
 
 function optionalTextValue(id, value) {
   return String(value ?? "") === "" ? [] : [{ id, text: value }];
+}
+
+function buildRelatedLinkRows(relatedLinks) {
+  return Object.freeze(
+    (Array.isArray(relatedLinks) ? relatedLinks : []).map((link) =>
+      artifactSummaryRow({
+        id: `related-link-${link.id}`,
+        testId: `admin-audit-related-link-entry-${link.id}`,
+        values: [
+          {
+            id: "label",
+            text: link.label,
+            href: link.href,
+            testId: `admin-audit-related-link-${link.id}`,
+          },
+          { id: "status", text: link.status },
+        ],
+      }),
+    ),
+  );
 }
 
 function buildLocalPrerequisiteRows(localPrerequisites, { game }) {

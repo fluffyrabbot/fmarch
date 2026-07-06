@@ -286,21 +286,11 @@
         <AdminAuditDescriptorRows rows={data.audit.realHostedEvidenceInputRows} />
       </section>
     {/if}
-    {#if data.audit.relatedLinks?.length > 0}
-      <ol class="admin-audit-detail__entries" data-testid="admin-audit-detail-related-links">
-        {#each data.audit.relatedLinks as link}
-          <li class="admin-audit-detail__entry">
-            <a
-              data-testid={`admin-audit-related-link-${link.id}`}
-              data-min-touch-target-px="44"
-              href={link.href}
-            >
-              <strong>{link.label}</strong>
-              <span>{link.status}</span>
-            </a>
-          </li>
-        {/each}
-      </ol>
+    {#if data.audit.relatedLinkRows?.length > 0}
+      <AdminAuditDescriptorRows
+        rows={data.audit.relatedLinkRows}
+        listTestId="admin-audit-detail-related-links"
+      />
     {/if}
     <a
       class="fm-touch-button fm-touch-button--secondary"
