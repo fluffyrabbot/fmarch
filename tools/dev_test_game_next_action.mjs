@@ -1526,6 +1526,7 @@ export function selectedProductionFeatureGraphForTarget({
     browserProofCommand: String(
       node.browserProofCommand ?? edge.command ?? spineTarget.browserProofCommand,
     ),
+    browserWorkbench: node.browserWorkbench ?? spineTarget.browserWorkbench,
     proofTarget: String(node.artifact ?? ""),
     sourceProofArtifact: String(
       node.sourceProofArtifact ??
@@ -1559,6 +1560,8 @@ function validSelectedProductionFeatureGraph(graphSelection, spineTarget) {
     typeof graphSelection.selectedSpineTargetRoleUrl === "string" &&
     graphSelection.selectedSpineTargetRoleUrl === spineTarget.roleUrl &&
     graphSelection.browserProofCommand === spineTarget.browserProofCommand &&
+    JSON.stringify(graphSelection.browserWorkbench ?? null) ===
+      JSON.stringify(spineTarget.browserWorkbench ?? null) &&
     typeof graphSelection.proofTarget === "string" &&
     graphSelection.proofTarget.length > 0 &&
     graphSelection.sourceProofArtifact === spineTarget.sourceProofArtifact &&

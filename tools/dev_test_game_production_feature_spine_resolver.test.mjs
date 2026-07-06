@@ -81,6 +81,7 @@ test("production feature spine resolver resolves seeded role targets", () => {
     checkpointId: "d01-n01-d02-n01-resolved-target-killed",
     adminCheckId: "resolution-receipts",
     browserProofCommand,
+    browserWorkbench: coreLoopResolutionBrowserWorkbenchFixture(),
     sourceProofArtifact: "target/dev-test-game/core-loop-admin-proof.json",
     rerunCommand: coreLoopAdminProofCommand,
   });
@@ -102,6 +103,7 @@ test("production feature spine resolver resolves seeded role targets", () => {
     roleUrl: "http://127.0.0.1:5173/g/game-a",
     rerunCommand: coreLoopAdminProofCommand,
     browserProofCommand,
+    browserWorkbench: coreLoopResolutionBrowserWorkbenchFixture(),
     sourceProofArtifact: "target/dev-test-game/core-loop-admin-proof.json",
     coverageDecision: {
       kind: "seeded-role-url-proof",
@@ -115,6 +117,18 @@ test("production feature spine resolver resolves seeded role targets", () => {
     true,
   );
 });
+
+function coreLoopResolutionBrowserWorkbenchFixture() {
+  return {
+    status: "passed",
+    route: "/g/game-a",
+    roleUrl: "http://127.0.0.1:5173/g/game-a",
+    roleSurface: "player",
+    featureSlotId: "resolution-receipts",
+    requiredEvidence:
+      "Seeded resolution-receipts role URL opens /g/game-a in the browser proof before resolution-receipts recovery is trusted.",
+  };
+}
 
 test("future feature source template flows through checklist, resolver, graph, and next-action", () => {
   const source = futureFeatureSourceFixture();
@@ -248,6 +262,7 @@ test("future feature source template flows through checklist, resolver, graph, a
     selectedSpineTargetRoleUrl: target.roleUrl,
     targetRoleUrlMatchesSelectedSpineTarget: true,
     browserProofCommand,
+    browserWorkbench: futureFeatureBrowserWorkbenchFixture(),
     proofTarget: "target/dev-test-game/release-readiness-checklist.json",
     sourceProofArtifact: source.proofArtifact,
     coverageDecision: productionFeatureSourceCoverageDecisionSummary(source),

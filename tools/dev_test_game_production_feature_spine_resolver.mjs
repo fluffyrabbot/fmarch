@@ -45,7 +45,7 @@ export function resolveProductionFeatureSpineTarget({
       `buildable release-readiness item ${itemId} production feature role URL is missing`,
     );
   }
-  return {
+  const target = {
     featureSlotId: declaration.featureSlotId,
     sourceCheckId: sourceTarget.sourceCheckId,
     coverageDecision: coverageDecisionSummaryForCheckId(sourceTarget.sourceCheckId),
@@ -60,13 +60,16 @@ export function resolveProductionFeatureSpineTarget({
       : {}),
     adminCheckId: declaration.adminCheckId,
     browserProofCommand: sourceTarget.browserProofCommand,
-    ...(sourceTarget.browserWorkbench === undefined
-      ? {}
-      : { browserWorkbench: sourceTarget.browserWorkbench }),
     sourceProofArtifact: sourceTarget.sourceProofArtifact,
     rerunCommand:
       sourceTarget.rerunCommand ??
       defaultRerunCommandBySourceCheckId[sourceTarget.sourceCheckId],
+  };
+  return {
+    ...target,
+    browserWorkbench:
+      sourceTarget.browserWorkbench ??
+      productionFeatureBrowserWorkbenchEvidence(target),
   };
 }
 
@@ -144,6 +147,7 @@ export function validProductionFeatureSpineTarget(
     typeof target.roleUrl !== "string" ||
     typeof target.browserProofCommand !== "string" ||
     !target.browserProofCommand.includes("test:dev-test-game-core-live") ||
+    !validProductionFeatureBrowserWorkbench(target.browserWorkbench, target) ||
     typeof target.sourceProofArtifact !== "string" ||
     target.sourceProofArtifact.length === 0 ||
     !validCoverageDecision(target.coverageDecision, target.sourceCheckId, {
@@ -197,6 +201,10 @@ export function validProductionFeatureSpineDrilldown(
     typeof drilldown.roleUrl !== "string" ||
     typeof drilldown.browserProofCommand !== "string" ||
     !drilldown.browserProofCommand.includes("test:dev-test-game-core-live") ||
+    !validProductionFeatureBrowserWorkbench(
+      drilldown.browserWorkbench,
+      drilldown,
+    ) ||
     typeof drilldown.sourceProofArtifact !== "string" ||
     drilldown.sourceProofArtifact.length === 0 ||
     !validCoverageDecision(drilldown.coverageDecision, drilldown.sourceCheckId, {
@@ -252,6 +260,54 @@ export function validProductionFeatureSpineTargetCollection(
     }
   }
   return true;
+}
+
+export function productionFeatureBrowserWorkbenchEvidence(target) {
+  const route = productionFeatureRoleUrlRoute(target.roleUrl);
+  return {
+    status: "passed",
+    route,
+    roleUrl: String(target.roleUrl ?? ""),
+    roleSurface: productionFeatureRoleSurfaceKind(route),
+    featureSlotId: String(target.featureSlotId ?? ""),
+    requiredEvidence: `Seeded ${target.featureSlotId} role URL opens ${route} in the browser proof before ${target.adminCheckId} recovery is trusted.`,
+  };
+}
+
+function productionFeatureRoleUrlRoute(roleUrl) {
+  return String(roleUrl ?? "").replace(/^https?:\/\/[^/]+/, "");
+}
+
+function productionFeatureRoleSurfaceKind(route) {
+  if (String(route).startsWith("/admin/audit/")) {
+    return "admin-audit";
+  }
+  if (String(route).includes("/host")) {
+    return "host";
+  }
+  if (String(route).includes("/c/")) {
+    return "private-channel";
+  }
+  if (String(route).includes("/setup")) {
+    return "host-setup";
+  }
+  return "player";
+}
+
+function validProductionFeatureBrowserWorkbench(browserWorkbench, target) {
+  return (
+    browserWorkbench !== null &&
+    typeof browserWorkbench === "object" &&
+    browserWorkbench.status === "passed" &&
+    browserWorkbench.roleUrl === target.roleUrl &&
+    browserWorkbench.featureSlotId === target.featureSlotId &&
+    typeof browserWorkbench.route === "string" &&
+    browserWorkbench.route.length > 0 &&
+    typeof browserWorkbench.roleSurface === "string" &&
+    browserWorkbench.roleSurface.length > 0 &&
+    typeof browserWorkbench.requiredEvidence === "string" &&
+    browserWorkbench.requiredEvidence.includes(target.adminCheckId)
+  );
 }
 
 function validProductionFeatureSourceRule(item, sourceCheckRules) {

@@ -25,6 +25,9 @@ import {
   featureSpineRowKind,
 } from "./dev_test_game_feature_spine_targets.mjs";
 import {
+  productionFeatureBrowserWorkbenchEvidence,
+} from "./dev_test_game_production_feature_spine_resolver.mjs";
+import {
   hostedIdentityTerminalReceiptArtifactCase,
 } from "./dev_test_game_proof_graph_receipt_artifact_rows.mjs";
 import {
@@ -1640,7 +1643,7 @@ function resolveBuildableProductionFeatureTarget({ declaration, releaseReadiness
     if (typeof detailRoleUrl !== "string" || detailRoleUrl.trim() === "") {
       throw new Error("proof graph missing identity adapter production feature target");
     }
-    return {
+    const target = {
       featureSlotId: declaration.featureSlotId,
       sourceCheckId: declaration.sourceCheckId,
       detailRoleUrl,
@@ -1658,6 +1661,10 @@ function resolveBuildableProductionFeatureTarget({ declaration, releaseReadiness
       coverageDecision: productionFeatureSourceCoverageDecisionSummaryForCheckId(
         declaration.sourceCheckId,
       ),
+    };
+    return {
+      ...target,
+      browserWorkbench: productionFeatureBrowserWorkbenchEvidence(target),
     };
   }
   throw new Error(

@@ -1119,6 +1119,7 @@ function requiredChecksForNextAction(nextAction) {
     ) {
       checks.push("selected-production-feature-graph-node");
       checks.push("selected-production-feature-graph-edge");
+      checks.push("selected-production-feature-graph-browser-workbench");
       checks.push("selected-production-feature-graph-coverage-decision");
     }
   }
@@ -1697,6 +1698,7 @@ function requiredChecksForEvidence(evidence) {
             : [
                 "selected-production-feature-graph-node",
                 "selected-production-feature-graph-edge",
+                "selected-production-feature-graph-browser-workbench",
                 "selected-production-feature-graph-coverage-decision",
               ]),
         ]

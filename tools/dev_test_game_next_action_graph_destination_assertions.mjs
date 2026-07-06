@@ -66,6 +66,15 @@ export const selectedNextActionGraphDestinationCases = Object.freeze([
       roleUrl: "/admin/audit/local-core-loop?game=<seeded-game>",
       targetRoleUrl: "http://127.0.0.1:5173/g/<seeded-game>/c/thread:day-two",
       browserProofCommand: String(browserProofCommand ?? ""),
+      browserWorkbench: {
+        status: "passed",
+        route: "/g/<seeded-game>/c/thread:day-two",
+        roleUrl: "http://127.0.0.1:5173/g/<seeded-game>/c/thread:day-two",
+        roleSurface: "private-channel",
+        featureSlotId: "player-action-submission",
+        requiredEvidence:
+          "Seeded player-action-submission role URL opens /g/<seeded-game>/c/thread:day-two in the browser proof before action-loop recovery is trusted.",
+      },
       proofTarget: "target/dev-test-game/release-readiness-checklist.json",
       coverageDecision: {
         kind: "seeded-role-url-proof",
@@ -78,6 +87,7 @@ export const selectedNextActionGraphDestinationCases = Object.freeze([
     localCheckIds: () => [
       "selected-production-feature-graph-node",
       "selected-production-feature-graph-edge",
+      "selected-production-feature-graph-browser-workbench",
       "selected-production-feature-graph-coverage-decision",
     ],
     localRelatedLinkIds: (subject) => [String(subject?.nodeId ?? "")],
@@ -438,6 +448,7 @@ function selectedProductionFeatureGraphDestinationTextTokens(selectedGraph) {
     String(selectedGraph?.roleUrl ?? "").trim(),
     String(selectedGraph?.targetRoleUrl ?? "").trim(),
     String(selectedGraph?.browserProofCommand ?? "").trim(),
+    String(selectedGraph?.browserWorkbench?.requiredEvidence ?? "").trim(),
   ].filter((token) => token !== "");
 }
 

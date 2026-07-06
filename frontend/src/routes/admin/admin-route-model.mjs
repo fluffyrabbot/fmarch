@@ -3712,6 +3712,9 @@ function localProofGraphNodeCheckStatus(node) {
   ).trim();
   const targetRoleUrl = String(node?.targetRoleUrl ?? "").trim();
   const browserProofCommand = String(node?.browserProofCommand ?? "").trim();
+  const browserWorkbenchEvidence = String(
+    node?.browserWorkbench?.requiredEvidence ?? "",
+  ).trim();
   return [
     status,
     ...(roleUrl === "" ? [] : [`roleUrl ${roleUrl}`]),
@@ -3720,6 +3723,9 @@ function localProofGraphNodeCheckStatus(node) {
     ...(browserProofCommand === ""
       ? []
       : [`browserProofCommand ${browserProofCommand}`]),
+    ...(browserWorkbenchEvidence === ""
+      ? []
+      : [`browserWorkbench ${browserWorkbenchEvidence}`]),
   ].join("\n");
 }
 
@@ -4963,12 +4969,36 @@ export function normalizeLocalNextActionSelectedProductionFeatureGraphCheckRows(
           id: "selected-production-feature-graph-edge",
           status: `${edgeFrom}->${edgeTo}`,
         }),
+        ...(selectedProductionFeatureGraph.browserWorkbench == null
+          ? []
+          : [
+              Object.freeze({
+                id: "selected-production-feature-graph-browser-workbench",
+                status:
+                  selectedProductionFeatureGraph.browserWorkbench
+                    .requiredEvidence,
+              }),
+            ]),
         ...coverageDecisionCheckRows({
           parentId: "selected-production-feature-graph",
           rowId: "selected-production-feature-graph-coverage-decision",
           coverageDecision: selectedProductionFeatureGraph.coverageDecision,
         }),
       ]);
+}
+
+function normalizeBrowserWorkbench(browserWorkbench) {
+  if (browserWorkbench === null || typeof browserWorkbench !== "object") {
+    return null;
+  }
+  return Object.freeze({
+    status: String(browserWorkbench.status ?? ""),
+    route: String(browserWorkbench.route ?? ""),
+    roleUrl: String(browserWorkbench.roleUrl ?? ""),
+    roleSurface: String(browserWorkbench.roleSurface ?? ""),
+    featureSlotId: String(browserWorkbench.featureSlotId ?? ""),
+    requiredEvidence: String(browserWorkbench.requiredEvidence ?? ""),
+  });
 }
 
 export function normalizeLocalNextActionSeedProofLaneCoverageCheckRows({
@@ -5948,6 +5978,9 @@ function normalizeNextActionProductionFeatureGraph(graphSelection) {
     graphSelection.edge !== null && typeof graphSelection.edge === "object"
       ? graphSelection.edge
       : {};
+  const browserWorkbench = normalizeBrowserWorkbench(
+    graphSelection.browserWorkbench,
+  );
   return Object.freeze({
     nodeId: String(graphSelection.nodeId ?? ""),
     status: String(graphSelection.status ?? "unknown"),
@@ -5964,6 +5997,7 @@ function normalizeNextActionProductionFeatureGraph(graphSelection) {
     targetRoleUrlMatchesSelectedSpineTarget:
       graphSelection.targetRoleUrlMatchesSelectedSpineTarget === true,
     browserProofCommand: String(graphSelection.browserProofCommand ?? ""),
+    ...(browserWorkbench === null ? {} : { browserWorkbench }),
     proofTarget: String(graphSelection.proofTarget ?? ""),
     coverageDecision: normalizeCoverageDecision(graphSelection.coverageDecision),
   });

@@ -12,10 +12,19 @@ export function proofGraphProductionFeatureTargetDestinations(proofGraph) {
         auditId,
         detailRoleUrl: `/admin/audit/${auditId}?game=<seeded-game>`,
         featureSlotId: String(node.featureSlotId ?? ""),
-      sourceCheckId: String(node.sourceCheckId ?? ""),
-      adminCheckId: String(node.adminCheckId ?? ""),
-      sourceProofArtifact: String(node.sourceProofArtifact ?? ""),
-      requiredChecks: Object.freeze([String(node.adminCheckId ?? "")]),
+        sourceCheckId: String(node.sourceCheckId ?? ""),
+        targetRoleUrl: String(node.targetRoleUrl ?? ""),
+        adminCheckId: String(node.adminCheckId ?? ""),
+        sourceProofArtifact: String(node.sourceProofArtifact ?? ""),
+        requiredChecks: Object.freeze([String(node.adminCheckId ?? "")]),
+        ...(node.browserWorkbench === null ||
+        typeof node.browserWorkbench !== "object"
+          ? {}
+          : { browserWorkbench: Object.freeze({ ...node.browserWorkbench }) }),
+        ...(typeof node.readinessEvidence === "string" &&
+        node.readinessEvidence.trim() !== ""
+          ? { readinessEvidence: String(node.readinessEvidence) }
+          : {}),
       });
     }
     return Object.freeze({

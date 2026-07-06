@@ -2981,6 +2981,7 @@ function hostSetupBrowserWorkbenchEvidence(proof) {
     route: "/g/<seeded-game>/setup",
     roleUrl: proof.hostSetup.roleUrl.replace(proof.game, "<seeded-game>"),
     roleSurface: "host-setup",
+    featureSlotId: "host-setup-route",
     requiredEvidence:
       "Seeded host setup role URL opens the setup workbench browser surface for /g/<seeded-game>/setup before start-phase recovery is trusted.",
   };
