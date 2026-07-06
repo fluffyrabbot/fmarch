@@ -16112,6 +16112,33 @@ test("session card and markdown include role credential URLs and tokens", async 
     ).selectedOperatorHandoffReceipt,
     selectedOperatorHandoffReceiptFixture(),
   );
+  assert.deepEqual(
+    adminSpineReadiness.localDevelopmentSpine.diagnostics.map((diagnostic) => [
+      diagnostic.id,
+      diagnostic.sourceCheckId,
+      diagnostic.kind,
+      diagnostic.evidence,
+      diagnostic.batchCount,
+      diagnostic.nextActionHandoffPairStatus,
+      diagnostic.selectedOperatorHandoffReceiptStatus,
+    ]),
+    [
+      [
+        "admin-spine-terminal-batches",
+        "local-admin-spine-terminal-batches",
+        "terminal-receipts",
+        "target/dev-test-game/admin-spine-terminal-batches.json",
+        3,
+        "passed",
+        "not_applicable",
+      ],
+    ],
+  );
+  assert(
+    markdownChecklist(adminSpineReadiness).includes(
+      "| Local admin spine terminal proof batches | terminal-receipts | `target/dev-test-game/admin-spine-terminal-batches.json` | `npm run test:dev-test-game-admin-spine` | Terminal browser-proof batch receipt summary; useful for operator audit without changing release readiness. |",
+    ),
+  );
   assert.deepEqual(adminSpineReadiness.localDevelopmentSpine.evidence.adminProofSpine.proofIds, [
     "core-loop",
     "hardening",
@@ -16277,12 +16304,16 @@ test("session card and markdown include role credential URLs and tokens", async 
       .diagnosticChecks,
     [
       {
-        id: "local-selected-operator-handoff-receipt-fixture-admin-proof",
+        id: "selected-operator-handoff-receipt-fixture",
+        sourceCheckId:
+          "local-selected-operator-handoff-receipt-fixture-admin-proof",
         label: "Selected operator handoff receipt fixture admin proof",
+        kind: "fixture-browser-proof",
         command: `npm run ${selectedOperatorHandoffReceiptAdminProofCommand}`,
         proofTarget: selectedOperatorHandoffReceiptAdminProofPath,
         roleUrl: "/admin/audit/local-proof-graph?game=<seeded-game>",
         fixtureEvidence: true,
+        demoOnly: false,
       },
     ],
   );
@@ -16307,6 +16338,31 @@ test("session card and markdown include role credential URLs and tokens", async 
   assert.equal(
     proofFreshnessAdminCheck.adminRoleSurface.detailRoleUrl,
     "/admin/audit/local-proof-freshness?game=<seeded-game>",
+  );
+  assert.deepEqual(
+    proofFreshnessAdminReadiness.localDevelopmentSpine.diagnostics.map(
+      (diagnostic) => [
+        diagnostic.id,
+        diagnostic.sourceCheckId,
+        diagnostic.kind,
+        diagnostic.evidence,
+        diagnostic.command,
+      ],
+    ),
+    [
+      [
+        "proof-freshness-admin-surface",
+        "local-proof-freshness-admin-surface",
+        "freshness-browser-proof",
+        "target/dev-test-game/proof-freshness-admin-proof.json",
+        "npm run test:dev-test-game-proof-freshness-admin-proof",
+      ],
+    ],
+  );
+  assert(
+    markdownChecklist(proofFreshnessAdminReadiness).includes(
+      "## Diagnostics, Not Gates",
+    ),
   );
   assert.equal(
     proofFreshnessAdminReadiness.localDevelopmentSpine.evidence

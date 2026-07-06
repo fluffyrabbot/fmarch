@@ -33,6 +33,7 @@ import {
 } from "./dev_test_game_hosted_evidence_lane_demo_proof.mjs";
 import {
   assertHostedEvidenceLaneOperatorFixtureAdminProof,
+  devTestGameHostedEvidenceLaneOperatorFixtureAdminProofCommand,
   devTestGameHostedEvidenceLaneOperatorFixtureAdminProofPath,
 } from "./dev_test_game_hosted_evidence_lane_operator_fixture_cases.mjs";
 import {
@@ -40,6 +41,7 @@ import {
 } from "./dev_test_game_hosted_operator_packet.mjs";
 import {
   assertDevTestGameRealHostedMatrixRawCapture,
+  devTestGameRealHostedMatrixRawCaptureCommand,
   devTestGameRealHostedMatrixRawCapturePath,
 } from "./dev_test_game_real_hosted_matrix_raw_capture_contract.mjs";
 import {
@@ -83,6 +85,7 @@ import {
 } from "./dev_test_game_hosted_target_preflight_cases.mjs";
 import {
   devTestGameHostedEvidenceLaneAdminProofPath,
+  devTestGameHostedEvidenceLaneRealCaptureAdminProofCommand,
   devTestGameHostedEvidenceLaneRealCaptureAdminProofPath,
 } from "./dev_test_game_hosted_handoff_cases.mjs";
 import {
@@ -1624,6 +1627,7 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
     nextActionAdminProofEvidence,
     releaseRunbookEvidence,
   });
+  const localDiagnostics = buildLocalDevelopmentDiagnostics(localChecks);
   return {
     version: DEV_TEST_GAME_RELEASE_READINESS_VERSION,
     proof: "dev-test-game-release-readiness",
@@ -1805,6 +1809,7 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
     localDevelopmentSpine: {
       status: "passed",
       checks: localChecks,
+      diagnostics: localDiagnostics,
       ...((backupRestoreEvidence === undefined &&
         opsArtifactsEvidence === undefined &&
         hostSetupProofEvidence === undefined &&
@@ -8094,6 +8099,7 @@ export function assertDevTestGameReleaseReadiness(checklist) {
   assertReleaseReadinessCoverageMilestoneConventions(
     checklist.localDevelopmentSpine?.checks,
   );
+  assertLocalDevelopmentDiagnostics(checklist.localDevelopmentSpine);
   const coreLoopCheck = checklist.localDevelopmentSpine?.checks?.find(
     (check) => check.id === coreLoopFeatureSpineSourceCheckId,
   );
@@ -8860,6 +8866,20 @@ export function markdownChecklist(checklist) {
       `| ${check.label} | ${check.status} | \`${check.evidence}\` | ${evidenceObjectNamesText(check)} | ${firstMissingOperatorArtifactText(check)} |`,
     );
   }
+  if ((checklist.localDevelopmentSpine.diagnostics ?? []).length > 0) {
+    lines.push(
+      "",
+      "## Diagnostics, Not Gates",
+      "",
+      "| Diagnostic | Kind | Evidence | Command | Note |",
+      "| --- | --- | --- | --- | --- |",
+    );
+    for (const diagnostic of checklist.localDevelopmentSpine.diagnostics) {
+      lines.push(
+        `| ${diagnostic.label} | ${diagnostic.kind} | \`${diagnostic.evidence}\` | ${markdownCommand(diagnostic.command)} | ${diagnostic.reason} |`,
+      );
+    }
+  }
   lines.push(
     "",
     "## Release Readiness",
@@ -8875,6 +8895,167 @@ export function markdownChecklist(checklist) {
     lines.push(`| ${item.id} | ${item.status} | ${item.requiredEvidence} |`);
   }
   return `${lines.join("\n")}\n`;
+}
+
+function buildLocalDevelopmentDiagnostics(localChecks) {
+  const checkById = new Map(localChecks.map((check) => [check.id, check]));
+  return [
+    diagnosticFromCheck(checkById, {
+      sourceCheckId: "local-selected-operator-handoff-receipt-fixture-admin-proof",
+      id: "selected-operator-handoff-receipt-fixture",
+      kind: "fixture-browser-proof",
+      reason:
+        "Fixture proof for selected-operator receipt rows; discoverable for local operator debugging but not release evidence.",
+      extra: (check) => ({
+        fixtureEvidence: check.fixtureEvidence === true,
+        selectedOperatorHandoffReceiptStatus:
+          check.selectedOperatorHandoffReceiptStatus,
+        destinationLinkId: check.destinationLinkId,
+      }),
+    }),
+    diagnosticFromCheck(checkById, {
+      sourceCheckId: "local-hosted-evidence-lane-operator-fixture-admin-surface",
+      id: "hosted-evidence-lane-operator-fixture",
+      kind: "fixture-browser-proof",
+      command: `npm run ${devTestGameHostedEvidenceLaneOperatorFixtureAdminProofCommand}`,
+      reason:
+        "Fixture-backed hosted evidence operator surface; useful for local drilldown but hosted deployment remains unproven.",
+      extra: (check) => ({
+        fixtureEvidence: check.fixtureEvidence === true,
+        targetMatchedFixture: check.targetMatchedFixture === true,
+        laneStatus: check.laneStatus,
+      }),
+    }),
+    diagnosticFromCheck(checkById, {
+      sourceCheckId: "local-hosted-evidence-lane-demo-proof",
+      id: "hosted-evidence-lane-demo-proof",
+      kind: "demo-proof",
+      reason:
+        "Synthetic hosted evidence demo path; proves local handoff behavior without proving hosted deployment.",
+      extra: (check) => ({
+        demoOnly: check.demoOnly === true,
+        syntheticExternalTarget: check.syntheticExternalTarget === true,
+        blockedLaneStatus: check.blockedLaneStatus,
+        syntheticRejectedLaneStatus: check.syntheticRejectedLaneStatus,
+      }),
+    }),
+    diagnosticFromCheck(checkById, {
+      sourceCheckId: "local-real-hosted-matrix-raw-capture-intake",
+      id: "real-hosted-matrix-raw-capture-intake",
+      kind: "real-capture-intake",
+      command: `npm run ${devTestGameRealHostedMatrixRawCaptureCommand}`,
+      reason:
+        "Raw capture intake diagnostic; fixture markers remain visible when the capture is not real hosted evidence.",
+      extra: (check) => ({
+        intakeStatus: check.intakeStatus,
+        rawEvidenceFixture: check.rawEvidenceFixture === true,
+        rawEvidenceSyntheticExternalTarget:
+          check.rawEvidenceSyntheticExternalTarget === true,
+      }),
+    }),
+    diagnosticFromCheck(checkById, {
+      sourceCheckId: "local-hosted-evidence-lane-real-capture-admin-surface",
+      id: "hosted-evidence-lane-real-capture-admin-surface",
+      kind: "real-capture-browser-proof",
+      command: devTestGameHostedEvidenceLaneRealCaptureAdminProofCommand,
+      reason:
+        "Browser proof for the real-capture hosted evidence lane surface; keeps release claims false until hosted evidence is real.",
+      extra: (check) => ({
+        laneStatus: check.laneStatus,
+        preflightStatus: check.preflightStatus,
+      }),
+    }),
+    diagnosticFromCheck(checkById, {
+      sourceCheckId: "local-proof-freshness-admin-surface",
+      id: "proof-freshness-admin-surface",
+      kind: "freshness-browser-proof",
+      reason:
+        "Proof-freshness browser surface and next-action handoff proof; diagnostic here, local dependency elsewhere.",
+      extra: (check) => ({
+        artifactCount: check.artifactCount,
+        nextActionReason: check.nextActionReason,
+      }),
+    }),
+    diagnosticFromCheck(checkById, {
+      sourceCheckId: "local-admin-spine-terminal-batches",
+      id: "admin-spine-terminal-batches",
+      kind: "terminal-receipts",
+      command: "npm run test:dev-test-game-admin-spine",
+      reason:
+        "Terminal browser-proof batch receipt summary; useful for operator audit without changing release readiness.",
+      extra: (check) => ({
+        batchCount: check.batchCount,
+        batchIds: check.batchIds,
+        nextActionHandoffPairStatus: check.nextActionHandoffPair?.status,
+        selectedOperatorHandoffReceiptStatus:
+          check.selectedOperatorHandoffReceipt?.status,
+      }),
+    }),
+  ].filter((diagnostic) => diagnostic !== null);
+}
+
+function diagnosticFromCheck(
+  checkById,
+  { sourceCheckId, id, kind, command, reason, extra },
+) {
+  const check = checkById.get(sourceCheckId);
+  if (check === undefined) {
+    return null;
+  }
+  return {
+    id,
+    sourceCheckId,
+    label: check.label,
+    status: check.status,
+    kind,
+    evidence: check.evidence,
+    command: command ?? check.command ?? check.recovery?.command ?? "",
+    roleUrl: check.roleUrl ?? check.recovery?.roleUrl ?? "",
+    reason,
+    diagnosticOnly: true,
+    releaseReady: false,
+    productionReady: false,
+    ...(extra === undefined ? {} : extra(check)),
+  };
+}
+
+function assertLocalDevelopmentDiagnostics(localDevelopmentSpine) {
+  const diagnostics = localDevelopmentSpine?.diagnostics ?? [];
+  if (!Array.isArray(diagnostics)) {
+    throw new Error("dev-test-game local diagnostics must be an array");
+  }
+  const checkIds = new Set(
+    (localDevelopmentSpine?.checks ?? []).map((check) => check.id),
+  );
+  const diagnosticIds = new Set();
+  for (const diagnostic of diagnostics) {
+    if (
+      diagnostic === null ||
+      typeof diagnostic !== "object" ||
+      typeof diagnostic.id !== "string" ||
+      diagnosticIds.has(diagnostic.id) ||
+      !checkIds.has(diagnostic.sourceCheckId) ||
+      diagnostic.status !== "passed" ||
+      diagnostic.diagnosticOnly !== true ||
+      diagnostic.releaseReady !== false ||
+      diagnostic.productionReady !== false ||
+      typeof diagnostic.kind !== "string" ||
+      diagnostic.kind.trim() === "" ||
+      typeof diagnostic.evidence !== "string" ||
+      diagnostic.evidence.trim() === "" ||
+      typeof diagnostic.reason !== "string" ||
+      diagnostic.reason.trim() === ""
+    ) {
+      throw new Error("dev-test-game local diagnostic entry is malformed");
+    }
+    diagnosticIds.add(diagnostic.id);
+  }
+}
+
+function markdownCommand(command) {
+  return typeof command === "string" && command.trim() !== ""
+    ? `\`${command}\``
+    : "";
 }
 
 function evidenceObjectNamesText(check) {
