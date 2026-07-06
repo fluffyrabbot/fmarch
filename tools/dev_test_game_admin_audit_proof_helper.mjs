@@ -954,6 +954,17 @@ export async function proveAdminAuditDetail({
         prefix: "admin-audit-scenario-family",
         expectedTextById: destination.requiredScenarioFamilyText ?? {},
       });
+      const destinationVisibleHostVisibleRecoveries = await waitForRows({
+        page,
+        prefix: "admin-audit-host-visible-recovery",
+        ids: destination.requiredHostVisibleRecoveries ?? [],
+      });
+      const destinationVisibleHostVisibleRecoveryText =
+        await waitForRowTextTokens({
+          page,
+          prefix: "admin-audit-host-visible-recovery",
+          expectedTextById: destination.requiredHostVisibleRecoveryText ?? {},
+        });
       const destinationVisibleSessions = await waitForRows({
         page,
         prefix: "admin-audit-session",
@@ -1123,6 +1134,15 @@ export async function proveAdminAuditDetail({
         ...(Object.keys(destinationVisibleScenarioFamilyText).length === 0
           ? {}
           : { visibleScenarioFamilyText: destinationVisibleScenarioFamilyText }),
+        ...(destinationVisibleHostVisibleRecoveries.length === 0
+          ? {}
+          : { visibleHostVisibleRecoveries: destinationVisibleHostVisibleRecoveries }),
+        ...(Object.keys(destinationVisibleHostVisibleRecoveryText).length === 0
+          ? {}
+          : {
+              visibleHostVisibleRecoveryText:
+                destinationVisibleHostVisibleRecoveryText,
+            }),
         ...(destinationVisibleSessions.length === 0
           ? {}
           : { visibleSessions: destinationVisibleSessions }),

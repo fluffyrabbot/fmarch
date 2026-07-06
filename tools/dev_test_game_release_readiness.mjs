@@ -267,6 +267,9 @@ import {
   coreLoopScenarioFamilyRows,
 } from "./dev_test_game_core_loop_generated_from_families.mjs";
 import {
+  hostVisibleRecoverySummaryCases,
+} from "./dev_test_game_core_loop_action_scenarios.mjs";
+import {
   assertProofGraphProductionFeatureProvenanceComparison,
   proofGraphProductionFeatureDestinationSummary,
 } from "./dev_test_game_proof_graph_production_feature_destinations.mjs";
@@ -6375,6 +6378,7 @@ export function validateDevTestGameProofGraphAdminProof(proof, options = {}) {
     validateProofGraphAdminTerminalReceiptArtifact(proof);
   }
   validateProofGraphAdminCoreLoopScenarioFamilyDestinations(proof);
+  validateProofGraphAdminCoreLoopHostVisibleRecoveryDestinations(proof);
   validateProofGraphAdminProductionFeatureTargetDestinations(proof);
   validateProofGraphAdminProductionFeatureDestinationSummary(proof);
   const productionFeatureProvenanceComparison =
@@ -6777,6 +6781,70 @@ function validateProofGraphAdminCoreLoopScenarioFamilyDestinations(proof) {
       if (!visibleText.includes(token)) {
         throw new Error(
           `proof graph admin proof missing core-loop scenario family text: ${family.id} ${token}`,
+        );
+      }
+    }
+  }
+}
+
+function validateProofGraphAdminCoreLoopHostVisibleRecoveryDestinations(proof) {
+  const destinations =
+    proof.generatedFrom?.coreLoopHostVisibleRecoveryDestinations ?? [];
+  const destinationByRecoveryCaseId = new Map(
+    destinations.map((destination) => [destination.recoveryCaseId, destination]),
+  );
+  const visibleDestinations = Array.isArray(
+    proof.adminRoleSurface?.visibleRelatedDestinations,
+  )
+    ? proof.adminRoleSurface.visibleRelatedDestinations
+    : [];
+  const coreLoopRoleUrl = localAdminAuditRoleUrl(localAdminAuditIds.coreLoop);
+  for (const recoveryCase of hostVisibleRecoverySummaryCases()) {
+    const destination = destinationByRecoveryCaseId.get(recoveryCase.id);
+    if (
+      destination?.linkId !==
+        `core-loop-host-visible-recovery:${recoveryCase.id}` ||
+      destination?.auditId !== localAdminAuditIds.coreLoop ||
+      destination?.detailRoleUrl !== coreLoopRoleUrl ||
+      !destination?.requiredHostVisibleRecoveries?.includes(recoveryCase.id)
+    ) {
+      throw new Error(
+        `proof graph admin proof missing core-loop host-visible recovery destination: ${recoveryCase.id}`,
+      );
+    }
+    if (
+      !proof.adminRoleSurface?.visibleRelatedLinks?.includes(
+        destination.linkId,
+      )
+    ) {
+      throw new Error(
+        `proof graph admin proof missing core-loop host-visible recovery link: ${recoveryCase.id}`,
+      );
+    }
+    const visibleDestination = visibleDestinations.find(
+      (item) =>
+        item.linkId === destination.linkId &&
+        item.auditId === localAdminAuditIds.coreLoop,
+    );
+    if (
+      visibleDestination?.detailRoleUrl !== coreLoopRoleUrl ||
+      !visibleDestination.visibleHostVisibleRecoveries?.includes(
+        recoveryCase.id,
+      )
+    ) {
+      throw new Error(
+        `proof graph admin proof did not visit core-loop host-visible recovery: ${recoveryCase.id}`,
+      );
+    }
+    const visibleText =
+      visibleDestination.visibleHostVisibleRecoveryText?.[recoveryCase.id] ??
+      "";
+    for (const token of destination.requiredHostVisibleRecoveryText?.[
+      recoveryCase.id
+    ] ?? []) {
+      if (!visibleText.includes(token)) {
+        throw new Error(
+          `proof graph admin proof missing core-loop host-visible recovery text: ${recoveryCase.id} ${token}`,
         );
       }
     }

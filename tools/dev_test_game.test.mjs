@@ -6153,6 +6153,7 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
     },
   );
   const coreLoopFamilyRows = coreLoopScenarioFamilyRows();
+  const coreLoopHostVisibleRecoveryCases = hostVisibleRecoverySummaryCases();
   const expectedProductionFeatureTargetCount =
     releaseReadiness.localDevelopmentSpine.checks.reduce(
       (count, check) =>
@@ -6164,12 +6165,14 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
     graph.summary.nodeCount,
     expectedBaseGraphNodeCount +
       expectedProductionFeatureTargetCount +
+      coreLoopHostVisibleRecoveryCases.length +
       coreLoopFamilyRows.length,
   );
   assert.equal(
     graph.summary.roleUrlCount,
     expectedBaseGraphNodeCount +
       expectedProductionFeatureTargetCount +
+      coreLoopHostVisibleRecoveryCases.length +
       coreLoopFamilyRows.length,
   );
   assert.equal(graph.summary.roleSurfaceProofCount, 5);
@@ -6178,6 +6181,10 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
     expectedProductionFeatureTargetCount,
   );
   assert.equal(graph.summary.commandProofRoleUrlAuditCount, 1);
+  assert.equal(
+    graph.summary.coreLoopHostVisibleRecoveryCount,
+    coreLoopHostVisibleRecoveryCases.length,
+  );
   assert.deepEqual(
     graph.nodes.find(
       (node) => node.id === "core-loop-command-proof-role-url-audit",
@@ -6211,6 +6218,71 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
       proofTarget: devTestGameCoreLoopAdminProofPath,
       checkedCount: coreLoopCommandProofRoleUrlAuditExpectation.checkedCount,
     },
+  );
+  assert.deepEqual(
+    graph.nodes
+      .filter((node) => node.kind === "core-loop-host-visible-recovery")
+      .map((node) => [
+        node.id,
+        node.recoveryCaseId,
+        node.group,
+        node.adminCheckId,
+        node.recoveryHookId,
+        node.recoveryHookStatus,
+        node.commandKind,
+        node.visibleAdminRowId,
+      ]),
+    coreLoopHostVisibleRecoveryCases.map((recoveryCase) => [
+      `core-loop-host-visible-recovery:${recoveryCase.id}`,
+      recoveryCase.id,
+      recoveryCase.group,
+      recoveryCase.adminCheckId,
+      recoveryCase.recoveryHookId,
+      recoveryCase.recoveryHookStatus,
+      recoveryCase.commandKind,
+      `host-visible-recovery-${recoveryCase.id}`,
+    ]),
+  );
+  assert.deepEqual(
+    graph.edges
+      .filter(
+        (edge) =>
+          String(edge.to).startsWith("core-loop-host-visible-recovery:") ||
+          String(edge.from).startsWith("core-loop-host-visible-recovery:"),
+      )
+      .map((edge) => [
+        edge.from,
+        edge.to,
+        edge.relationship,
+        edge.recoveryCaseId,
+        edge.visibleAdminRowId,
+      ]),
+    coreLoopHostVisibleRecoveryCases.flatMap((recoveryCase) => {
+      const nodeId = `core-loop-host-visible-recovery:${recoveryCase.id}`;
+      return [
+        [
+          "admin-proof:core-loop",
+          nodeId,
+          "proves-host-visible-recovery",
+          recoveryCase.id,
+          `host-visible-recovery-${recoveryCase.id}`,
+        ],
+        [
+          nodeId,
+          "proof-graph",
+          "records",
+          recoveryCase.id,
+          `host-visible-recovery-${recoveryCase.id}`,
+        ],
+        [
+          nodeId,
+          "next-action",
+          "summarizes-into",
+          recoveryCase.id,
+          `host-visible-recovery-${recoveryCase.id}`,
+        ],
+      ];
+    }),
   );
   assert.deepEqual(
     graph.nodes.find(
@@ -22951,6 +23023,10 @@ function proofGraphAdminProofFixture() {
     });
   const coreLoopFamilyDestinations =
     proofGraphCoreLoopScenarioFamilyDestinationsFixture();
+  const coreLoopHostVisibleRecoveryDestinations =
+    proofGraphCoreLoopHostVisibleRecoveryDestinationsFixture();
+  const coreLoopHostVisibleRecoveryEdgeRowIds =
+    proofGraphCoreLoopHostVisibleRecoveryEdgeRowIdsFixture();
   const evidenceObjectRowIds = [
     ...expectedNormalizedEvidenceObjectRowIds({
       parentId: "private-channel-recovery-receipt",
@@ -23008,6 +23084,9 @@ function proofGraphAdminProofFixture() {
         replacementPrivateGraphTarget.roleSurfaceNodeId,
         replacementPrivateGraphTarget.productionFeatureNodeId,
         commandProofAuditNodeId,
+        ...coreLoopHostVisibleRecoveryDestinations.map(
+          (destination) => destination.linkId,
+        ),
         ...coreLoopFamilyDestinations.map((destination) => destination.linkId),
       ],
       evidenceObjectRowIds,
@@ -23027,11 +23106,17 @@ function proofGraphAdminProofFixture() {
         replacementActionGraphTarget.edgeRowId,
         replacementPrivateGraphTarget.edgeRowId,
         commandProofAuditEdgeRowId,
+        ...coreLoopHostVisibleRecoveryEdgeRowIds,
       ],
-      edgeCount: handoffs.length + diagnosticEdgeRowIds.length + 6,
+      edgeCount:
+        handoffs.length +
+        diagnosticEdgeRowIds.length +
+        6 +
+        coreLoopHostVisibleRecoveryEdgeRowIds.length,
       adminProofSurfaceIds,
       adminProofRoleHandoffs: handoffs,
       coreLoopScenarioFamilyDestinations: coreLoopFamilyDestinations,
+      coreLoopHostVisibleRecoveryDestinations,
       productionFeatureTargetDestinations,
       productionFeatureDestinationSummary,
       manifestProductionFeatureProvenanceSummary,
@@ -23079,6 +23164,10 @@ function proofGraphAdminProofFixture() {
         `coverage-decision:${replacementPrivateGraphTarget.productionFeatureNodeId}`,
         commandProofAuditNodeId,
         commandProofAuditEdgeRowId,
+        ...coreLoopHostVisibleRecoveryDestinations.map(
+          (destination) => destination.linkId,
+        ),
+        ...coreLoopHostVisibleRecoveryEdgeRowIds,
         ...coreLoopFamilyDestinations.map((destination) => destination.linkId),
         ...evidenceObjectRowIds,
         ...receiptArtifactRowIds,
@@ -23105,6 +23194,9 @@ function proofGraphAdminProofFixture() {
         replacementPrivateGraphTarget.roleSurfaceNodeId,
         replacementPrivateGraphTarget.productionFeatureNodeId,
         commandProofAuditNodeId,
+        ...coreLoopHostVisibleRecoveryDestinations.map(
+          (destination) => destination.linkId,
+        ),
         ...coreLoopFamilyDestinations.map((destination) => destination.linkId),
       ],
       visibleProductionFeatureDestinationSummaries:
@@ -23166,6 +23258,18 @@ function proofGraphAdminProofFixture() {
             [destination.familyId]:
               destination.requiredScenarioFamilyText[
                 destination.familyId
+              ].join("\n"),
+          },
+        })),
+        ...coreLoopHostVisibleRecoveryDestinations.map((destination) => ({
+          linkId: destination.linkId,
+          auditId: destination.auditId,
+          detailRoleUrl: destination.detailRoleUrl,
+          visibleHostVisibleRecoveries: [destination.recoveryCaseId],
+          visibleHostVisibleRecoveryText: {
+            [destination.recoveryCaseId]:
+              destination.requiredHostVisibleRecoveryText[
+                destination.recoveryCaseId
               ].join("\n"),
           },
         })),
@@ -23341,6 +23445,31 @@ function proofGraphCoreLoopScenarioFamilyDestinationsFixture() {
   }));
 }
 
+function proofGraphCoreLoopHostVisibleRecoveryDestinationsFixture() {
+  return hostVisibleRecoverySummaryCases().map((recoveryCase) => ({
+    linkId: `core-loop-host-visible-recovery:${recoveryCase.id}`,
+    auditId: "local-core-loop",
+    detailRoleUrl: "/admin/audit/local-core-loop?game=<seeded-game>",
+    recoveryCaseId: recoveryCase.id,
+    requiredHostVisibleRecoveries: [recoveryCase.id],
+    requiredHostVisibleRecoveryText: {
+      [recoveryCase.id]:
+        proofGraphCoreLoopHostVisibleRecoveryTextTokensFixture(recoveryCase),
+    },
+  }));
+}
+
+function proofGraphCoreLoopHostVisibleRecoveryEdgeRowIdsFixture() {
+  return hostVisibleRecoverySummaryCases().flatMap((recoveryCase) => {
+    const nodeId = `core-loop-host-visible-recovery:${recoveryCase.id}`;
+    return [
+      `edge:admin-proof:core-loop:proves-host-visible-recovery:${nodeId}`,
+      `edge:${nodeId}:records:proof-graph`,
+      `edge:${nodeId}:summarizes-into:next-action`,
+    ];
+  });
+}
+
 function proofGraphCoreLoopScenarioFamilyTextTokensFixture(family) {
   return [
     family.label,
@@ -23351,6 +23480,16 @@ function proofGraphCoreLoopScenarioFamilyTextTokensFixture(family) {
     ...family.reloads,
     ...family.scenarios,
     ...family.transitionTokens,
+  ].filter((token) => String(token ?? "") !== "");
+}
+
+function proofGraphCoreLoopHostVisibleRecoveryTextTokensFixture(recoveryCase) {
+  return [
+    recoveryCase.label,
+    "passed",
+    recoveryCase.group,
+    recoveryCase.recoveryHookStatus,
+    recoveryCase.commandKind,
   ].filter((token) => String(token ?? "") !== "");
 }
 

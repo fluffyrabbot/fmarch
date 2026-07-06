@@ -25,6 +25,8 @@ export function hostVisibleRecoverySummaryCases() {
       group: "invalid-action",
       adminCheckId: playerInvalidActionRecoveryLaneId,
       recoveryHookId: playerInvalidActionRecoveryHookId,
+      recoveryHookStatus: "InvalidTarget",
+      commandKind: "SubmitAction",
     }),
     ...hostVisibleStaleTransitionRecoveryCases().map((recoveryCase) =>
       Object.freeze({
@@ -33,6 +35,8 @@ export function hostVisibleRecoverySummaryCases() {
         group: "stale-transition",
         adminCheckId: recoveryCase.adminCheckId,
         recoveryHookId: recoveryCase.recoveryHookId,
+        recoveryHookStatus: "PhaseLocked",
+        commandKind: recoveryCase.commandKind,
       }),
     ),
     Object.freeze({
@@ -41,6 +45,8 @@ export function hostVisibleRecoverySummaryCases() {
       group: "private-channel",
       adminCheckId: privateChannelInvalidActionRecoveryLaneId,
       recoveryHookId: playerInvalidActionRecoveryHookId,
+      recoveryHookStatus: "InvalidTarget",
+      commandKind: "SubmitAction",
     }),
     Object.freeze({
       id: completedGameStaleRecoverySummaryId,
@@ -48,6 +54,8 @@ export function hostVisibleRecoverySummaryCases() {
       group: "completed-game",
       adminCheckId: "stale-host-complete-reload",
       recoveryHookId: "gameCompleted",
+      recoveryHookStatus: "GameAlreadyCompleted",
+      commandKind: "CompleteGame",
     }),
   ]);
 }

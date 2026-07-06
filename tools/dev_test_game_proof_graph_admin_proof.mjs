@@ -5,6 +5,9 @@ import {
   coreLoopScenarioFamilyRows,
 } from "./dev_test_game_core_loop_generated_from_families.mjs";
 import {
+  hostVisibleRecoverySummaryCases,
+} from "./dev_test_game_core_loop_action_scenarios.mjs";
+import {
   assertProofGraphProductionFeatureProvenanceComparison,
   proofGraphProductionFeatureTargetDestinations,
 } from "./dev_test_game_proof_graph_production_feature_destinations.mjs";
@@ -234,6 +237,8 @@ export function buildProofGraphAdminProofRequirements(source) {
   });
   const coreLoopFamilyDestinations =
     proofGraphCoreLoopScenarioFamilyDestinations(source.proofGraph);
+  const coreLoopHostVisibleRecoveryDestinations =
+    proofGraphCoreLoopHostVisibleRecoveryDestinations(source.proofGraph);
   const productionFeatureTargetDestinations =
     proofGraphProductionFeatureTargetDestinations(source.proofGraph);
   const productionFeatureDestinationSummary =
@@ -274,6 +279,7 @@ export function buildProofGraphAdminProofRequirements(source) {
     requiredRelatedDestinations: proofGraphAdminProofRelatedDestinations([
       ...requiredRelatedDestinationsForHandoffs(roleHandoffs),
       ...coreLoopFamilyDestinations,
+      ...coreLoopHostVisibleRecoveryDestinations,
       ...productionFeatureTargetDestinations.filter(
         (destination) => destination.kind === "admin-audit",
       ),
@@ -329,6 +335,8 @@ export function buildProofGraphAdminGeneratedFrom(
     }),
     coreLoopScenarioFamilyDestinations:
       proofGraphCoreLoopScenarioFamilyDestinations(source.proofGraph),
+    coreLoopHostVisibleRecoveryDestinations:
+      proofGraphCoreLoopHostVisibleRecoveryDestinations(source.proofGraph),
     productionFeatureTargetDestinations:
       proofGraphProductionFeatureTargetDestinations(source.proofGraph),
     productionFeatureDestinationSummary:
@@ -438,6 +446,7 @@ export function assertProofGraphAdminProof(evidence) {
     proofName: "proof graph admin proof",
   });
   assertProofGraphAdminProofCoversCoreLoopScenarioFamilies(evidence);
+  assertProofGraphAdminProofCoversCoreLoopHostVisibleRecoveries(evidence);
   assertProofGraphAdminProofCoversProductionFeatureDestinations(evidence);
   assertProofGraphAdminProofCoversProductionFeatureDestinationSummary(evidence);
   assertProofGraphAdminProofCoversProductionFeatureProvenanceComparison(evidence);
@@ -799,6 +808,66 @@ function assertProofGraphAdminProofCoversCoreLoopScenarioFamilies(evidence) {
       if (!visibleText.includes(token)) {
         throw new Error(
           `proof graph admin proof missing core-loop family destination text: ${destination.familyId} ${token}`,
+        );
+      }
+    }
+  }
+}
+
+function assertProofGraphAdminProofCoversCoreLoopHostVisibleRecoveries(evidence) {
+  const destinationByRecoveryCaseId = new Map(
+    (evidence.generatedFrom?.coreLoopHostVisibleRecoveryDestinations ?? []).map(
+      (destination) => [destination.recoveryCaseId, destination],
+    ),
+  );
+  for (const recoveryCase of hostVisibleRecoverySummaryCases()) {
+    const destination = destinationByRecoveryCaseId.get(recoveryCase.id);
+    if (
+      destination?.linkId !==
+        `core-loop-host-visible-recovery:${recoveryCase.id}` ||
+      destination?.auditId !== localAdminAuditIds.coreLoop ||
+      destination?.detailRoleUrl !==
+        `/admin/audit/${localAdminAuditIds.coreLoop}?game=<seeded-game>` ||
+      !destination?.requiredHostVisibleRecoveries?.includes(recoveryCase.id)
+    ) {
+      throw new Error(
+        `proof graph admin proof missing core-loop host-visible recovery destination: ${recoveryCase.id}`,
+      );
+    }
+    if (
+      !evidence.adminRoleSurface?.visibleRelatedLinks?.includes(
+        destination.linkId,
+      )
+    ) {
+      throw new Error(
+        `proof graph admin proof missing core-loop host-visible recovery link: ${recoveryCase.id}`,
+      );
+    }
+    const visibleDestination =
+      evidence.adminRoleSurface?.visibleRelatedDestinations?.find(
+        (candidate) =>
+          candidate.linkId === destination.linkId &&
+          candidate.auditId === localAdminAuditIds.coreLoop,
+      );
+    if (
+      visibleDestination?.detailRoleUrl !== destination.detailRoleUrl ||
+      !visibleDestination.visibleHostVisibleRecoveries?.includes(
+        recoveryCase.id,
+      )
+    ) {
+      throw new Error(
+        `proof graph admin proof did not visit core-loop host-visible recovery: ${recoveryCase.id}`,
+      );
+    }
+    const visibleText =
+      visibleDestination.visibleHostVisibleRecoveryText?.[recoveryCase.id] ??
+      "";
+    for (const token of destination.requiredHostVisibleRecoveryText?.[
+      recoveryCase.id
+    ] ?? []) {
+      if (!visibleText.includes(token)) {
+        throw new Error(
+          `proof graph admin proof missing core-loop host-visible recovery text: ${recoveryCase.id} ${token}`,
         );
       }
     }
@@ -1306,6 +1375,33 @@ function proofGraphCoreLoopScenarioFamilyDestinations(proofGraph) {
   });
 }
 
+function proofGraphCoreLoopHostVisibleRecoveryDestinations(proofGraph) {
+  const nodesByRecoveryCaseId = new Map(
+    proofGraph.nodes
+      .filter((node) => node.kind === "core-loop-host-visible-recovery")
+      .map((node) => [node.recoveryCaseId, node]),
+  );
+  return hostVisibleRecoverySummaryCases().map((recoveryCase) => {
+    const node = nodesByRecoveryCaseId.get(recoveryCase.id);
+    if (node === undefined) {
+      throw new Error(
+        `proof graph missing core-loop host-visible recovery: ${recoveryCase.id}`,
+      );
+    }
+    return {
+      linkId: node.id,
+      auditId: localAdminAuditIds.coreLoop,
+      detailRoleUrl: `/admin/audit/${localAdminAuditIds.coreLoop}?game=<seeded-game>`,
+      recoveryCaseId: recoveryCase.id,
+      requiredHostVisibleRecoveries: [recoveryCase.id],
+      requiredHostVisibleRecoveryText: {
+        [recoveryCase.id]:
+          coreLoopHostVisibleRecoveryTextTokens(recoveryCase),
+      },
+    };
+  });
+}
+
 function coreLoopScenarioFamilyTextTokens(family) {
   return [
     family.label,
@@ -1316,6 +1412,16 @@ function coreLoopScenarioFamilyTextTokens(family) {
     ...family.reloads,
     ...family.scenarios,
     ...family.transitionTokens,
+  ].filter((token) => String(token ?? "") !== "");
+}
+
+function coreLoopHostVisibleRecoveryTextTokens(recoveryCase) {
+  return [
+    recoveryCase.label,
+    "passed",
+    recoveryCase.group,
+    recoveryCase.recoveryHookStatus,
+    recoveryCase.commandKind,
   ].filter((token) => String(token ?? "") !== "");
 }
 

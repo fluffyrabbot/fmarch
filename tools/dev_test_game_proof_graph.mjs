@@ -61,6 +61,9 @@ import {
   coreLoopCommandProofRoleUrlAuditExpectation,
 } from "./dev_test_game_core_loop_proof_shape_assertions.mjs";
 import {
+  hostVisibleRecoverySummaryCases,
+} from "./dev_test_game_core_loop_action_scenarios.mjs";
+import {
   hardeningFeatureSpineSourceCheckId,
 } from "./dev_test_game_hardening_feature_spine_targets.mjs";
 import {
@@ -299,6 +302,9 @@ export function buildDevTestGameProofGraph(
       commandProofRoleUrlAuditCount: nodes.filter(
         (node) => node.kind === "command-proof-role-url-audit",
       ).length,
+      coreLoopHostVisibleRecoveryCount: nodes.filter(
+        (node) => node.kind === "core-loop-host-visible-recovery",
+      ).length,
       selectedOperatorHandoffPacketCount: nodes.filter(
         (node) => node.kind === "selected-operator-handoff-packet",
       ).length,
@@ -423,6 +429,7 @@ export function assertDevTestGameProofGraph(
   assertDevTestGameProofGraphCoversPrivateChannelRecoveryReceipt(evidence);
   assertDevTestGameProofGraphCoversCoreLoopScenarioFamilies(evidence);
   assertDevTestGameProofGraphCoversCoreLoopCommandProofRoleUrlAudit(evidence);
+  assertDevTestGameProofGraphCoversCoreLoopHostVisibleRecoveries(evidence);
   assertDevTestGameProofGraphCoversSelectedOperatorHandoffPacket(evidence);
   assertDevTestGameProofGraphCoversReplacementPrivateRecoveryReceipt(evidence);
   assertDevTestGameProofGraphCoversReplacementActionRecoveryReceipt(evidence);
@@ -685,6 +692,74 @@ export function assertDevTestGameProofGraphCoversCoreLoopCommandProofRoleUrlAudi
     )
   ) {
     throw new Error("proof graph core-loop command proof audit edge drifted");
+  }
+  return graph;
+}
+
+export function assertDevTestGameProofGraphCoversCoreLoopHostVisibleRecoveries(
+  graph,
+) {
+  const recoveryCases = hostVisibleRecoverySummaryCases();
+  const nodes = (graph.nodes ?? []).filter(
+    (node) => node.kind === "core-loop-host-visible-recovery",
+  );
+  if (graph.summary?.coreLoopHostVisibleRecoveryCount !== recoveryCases.length) {
+    throw new Error("proof graph core-loop host-visible recovery count drifted");
+  }
+  if (nodes.length !== recoveryCases.length) {
+    throw new Error(
+      `proof graph core-loop host-visible recovery node count drifted: expected ${recoveryCases.length}, got ${nodes.length}`,
+    );
+  }
+  const nodeByRecoveryCaseId = new Map(
+    nodes.map((node) => [node.recoveryCaseId, node]),
+  );
+  for (const recoveryCase of recoveryCases) {
+    const expectedNodeId = coreLoopHostVisibleRecoveryNodeId(recoveryCase.id);
+    const node = nodeByRecoveryCaseId.get(recoveryCase.id);
+    if (
+      node?.id !== expectedNodeId ||
+      node.label !== recoveryCase.label ||
+      node.status !== "passed" ||
+      node.artifact !== devTestGameCoreLoopAdminProofPath ||
+      node.roleUrl !== localAdminAuditRoleUrl(localAdminAuditIds.coreLoop) ||
+      node.proofCommand !== devTestGameCoreLoopAdminProofCommand ||
+      node.recoveryCommand !== devTestGameCoreLoopAdminProofCommand ||
+      node.group !== recoveryCase.group ||
+      node.adminCheckId !== recoveryCase.adminCheckId ||
+      node.recoveryHookId !== recoveryCase.recoveryHookId ||
+      node.recoveryHookStatus !== recoveryCase.recoveryHookStatus ||
+      node.commandKind !== recoveryCase.commandKind ||
+      node.visibleAdminRowId !== `host-visible-recovery-${recoveryCase.id}` ||
+      node.visibleAdminRowTestId !==
+        `admin-audit-host-visible-recovery-${recoveryCase.id}`
+    ) {
+      throw new Error(
+        `proof graph core-loop host-visible recovery node drifted: ${recoveryCase.id}`,
+      );
+    }
+    for (const [from, to, relationship] of [
+      ["admin-proof:core-loop", expectedNodeId, "proves-host-visible-recovery"],
+      [expectedNodeId, "proof-graph", "records"],
+      [expectedNodeId, "next-action", "summarizes-into"],
+    ]) {
+      if (
+        !(graph.edges ?? []).some(
+          (edge) =>
+            edge.from === from &&
+            edge.to === to &&
+            edge.relationship === relationship &&
+            edge.roleUrl === localAdminAuditRoleUrl(localAdminAuditIds.coreLoop) &&
+            edge.command === devTestGameCoreLoopAdminProofCommand &&
+            edge.proofTarget === devTestGameCoreLoopAdminProofPath &&
+            edge.recoveryCaseId === recoveryCase.id,
+        )
+      ) {
+        throw new Error(
+          `proof graph core-loop host-visible recovery edge missing: ${recoveryCase.id} ${from}->${to}`,
+        );
+      }
+    }
   }
   return graph;
 }
@@ -1224,6 +1299,10 @@ function buildProofGraphNodes({
     buildCoreLoopCommandProofRoleUrlAuditNode({
       recoveryCommand: recoveryCommands.get("core-loop"),
     });
+  const coreLoopHostVisibleRecoveryNodes =
+    buildCoreLoopHostVisibleRecoveryNodes({
+      recoveryCommand: recoveryCommands.get("core-loop"),
+    });
   const hostedIdentityOperatorPrerequisiteNodes =
     hostedIdentityOperatorDependencyProofGraphNodes();
   const selectedOperatorHandoffPacketNode =
@@ -1374,6 +1453,7 @@ function buildProofGraphNodes({
     releaseAdminProofContractNode,
     ...hostedIdentityOperatorPrerequisiteNodes,
     coreLoopCommandProofRoleUrlAuditNode,
+    ...coreLoopHostVisibleRecoveryNodes,
     ...coreLoopScenarioFamilyNodes,
     ...productionFeatureTargetNodes,
   ].map((node) =>
@@ -1464,6 +1544,28 @@ function buildProofGraphEdges({
           proofTarget: node.artifact,
           checkedCount: node.checkedCount,
         },
+      ]),
+    ...nodes
+      .filter((node) => node.kind === "core-loop-host-visible-recovery")
+      .flatMap((node) => [
+        [
+          "admin-proof:core-loop",
+          node.id,
+          "proves-host-visible-recovery",
+          coreLoopHostVisibleRecoveryEdgeMetadata(node),
+        ],
+        [
+          node.id,
+          "proof-graph",
+          "records",
+          coreLoopHostVisibleRecoveryEdgeMetadata(node),
+        ],
+        [
+          node.id,
+          "next-action",
+          "summarizes-into",
+          coreLoopHostVisibleRecoveryEdgeMetadata(node),
+        ],
       ]),
     ...nodes
       .filter((node) => node.kind === "core-loop-scenario-family")
@@ -1695,6 +1797,44 @@ function buildCoreLoopScenarioFamilyNodes({ recoveryCommand }) {
 
 function coreLoopScenarioFamilyNodeId(familyId) {
   return `core-loop-family:${familyId}`;
+}
+
+function buildCoreLoopHostVisibleRecoveryNodes({ recoveryCommand }) {
+  const command = recoveryCommand ?? devTestGameCoreLoopAdminProofCommand;
+  return hostVisibleRecoverySummaryCases().map((recoveryCase) => ({
+    id: coreLoopHostVisibleRecoveryNodeId(recoveryCase.id),
+    label: recoveryCase.label,
+    kind: "core-loop-host-visible-recovery",
+    status: "passed",
+    artifact: devTestGameCoreLoopAdminProofPath,
+    roleUrl: localAdminAuditRoleUrl(localAdminAuditIds.coreLoop),
+    proofCommand: command,
+    recoveryCommand: command,
+    recoveryCaseId: recoveryCase.id,
+    group: recoveryCase.group,
+    adminCheckId: recoveryCase.adminCheckId,
+    recoveryHookId: recoveryCase.recoveryHookId,
+    recoveryHookStatus: recoveryCase.recoveryHookStatus,
+    commandKind: recoveryCase.commandKind,
+    visibleAdminRowId: `host-visible-recovery-${recoveryCase.id}`,
+    visibleAdminRowTestId:
+      `admin-audit-host-visible-recovery-${recoveryCase.id}`,
+  }));
+}
+
+function coreLoopHostVisibleRecoveryNodeId(recoveryCaseId) {
+  return `core-loop-host-visible-recovery:${recoveryCaseId}`;
+}
+
+function coreLoopHostVisibleRecoveryEdgeMetadata(node) {
+  return {
+    recoveryCaseId: node.recoveryCaseId,
+    group: node.group,
+    roleUrl: node.roleUrl,
+    command: node.recoveryCommand,
+    proofTarget: node.artifact,
+    visibleAdminRowId: node.visibleAdminRowId,
+  };
 }
 
 function buildRecoveryReceiptGraphNodes(inputs) {

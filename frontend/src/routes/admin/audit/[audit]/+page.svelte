@@ -79,6 +79,15 @@
         <AdminAuditDescriptorRows rows={data.audit.commandProofRoleUrlAuditRows} />
       </section>
     {/if}
+    {#if data.audit.hostVisibleRecoveryRows?.length > 0}
+      <section
+        class="admin-audit-detail__group"
+        data-testid="admin-audit-detail-host-visible-recoveries"
+      >
+        <h2>Host-visible recoveries</h2>
+        <AdminAuditDescriptorRows rows={data.audit.hostVisibleRecoveryRows} />
+      </section>
+    {/if}
     {#if data.audit.entries?.length > 0}
       <ol class="admin-audit-detail__entries" data-testid="admin-audit-detail-entries">
         {#each data.audit.entries as entry}
