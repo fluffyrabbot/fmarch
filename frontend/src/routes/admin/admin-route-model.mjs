@@ -740,47 +740,104 @@ function buildHostedHandoffBlockedReceiptRows({ checklist, headings }) {
 }
 
 function hostedHandoffBlockedOperatorPacketSubentries({ packet }) {
-  if (packet === null || typeof packet !== "object") {
-    return [];
+  const row = hostedOperatorPacketDescriptorRow({
+    packet,
+    id: "blocked-receipt-operator-packet",
+    testId: "admin-audit-hosted-handoff-blocked-receipt-operator-packet",
+    heading: "Blocked operator packet",
+  });
+  return row === null ? [] : [row];
+}
+
+function buildSelectedOperatorHandoffRows(handoff, { game }) {
+  if (handoff === null || typeof handoff !== "object") {
+    return Object.freeze([]);
   }
-  return [
-    {
-      id: "blocked-receipt-operator-packet",
-      testId: "admin-audit-hosted-handoff-blocked-receipt-operator-packet",
+  const packetRow = hostedOperatorPacketDescriptorRow({
+    packet: handoff.blockedOperatorPacket,
+    id: "selected-operator-handoff-packet",
+    testId: "admin-audit-selected-operator-handoff-packet",
+    heading: "Selected blocked operator packet",
+  });
+  return Object.freeze([
+    artifactSummaryRow({
+      id: "selected-operator-handoff",
+      testId: "admin-audit-selected-operator-handoff",
       values: [
         {
           id: "heading",
-          text: "Blocked operator packet",
+          text: "Selected operator handoff",
           emphasized: true,
         },
-        { id: "status", text: packet.status },
-        { id: "firstMissingInputId", text: packet.firstMissingInputId },
-        { id: "firstMissingCheckId", text: packet.firstMissingCheckId },
-        {
-          id: "firstMissingSectionId",
-          text: packet.firstMissingSectionId,
-        },
+        { id: "status", text: handoff.status },
+        { id: "command", text: handoff.command },
+        { id: "unprovenId", text: handoff.unprovenId },
+        { id: "firstMissingInputId", text: handoff.firstMissingInputId },
         {
           id: "selectedProductionFeatureRoleUrl",
-          text: packet.selectedProductionFeatureRoleUrl,
+          text: handoff.selectedProductionFeatureRoleUrl,
+          href: seededRoleUrlToAdminHref(
+            handoff.selectedProductionFeatureRoleUrl,
+            { game },
+          ),
         },
         {
           id: "selectedProductionFeatureGraphNodeId",
-          text: packet.selectedProductionFeatureGraphNodeId,
+          text: handoff.selectedProductionFeatureGraphNodeId,
         },
-        {
-          id: "rawEvidenceContractSummary",
-          text: packet.rawEvidenceContractSummary,
-        },
-        {
-          id: "rawEvidenceContractRequiredTopLevelFields",
-          text: packet.rawEvidenceContractRequiredTopLevelFields.join(", "),
-        },
-        { id: "proofTarget", text: packet.proofTarget },
-        { id: "nextProofTarget", text: packet.nextProofTarget },
       ],
-    },
-  ];
+      subentries: packetRow === null ? [] : [packetRow],
+    }),
+  ]);
+}
+
+function hostedOperatorPacketDescriptorRow({
+  packet,
+  id,
+  testId,
+  heading,
+}) {
+  if (packet === null || typeof packet !== "object") {
+    return null;
+  }
+  return {
+    id,
+    testId,
+    values: [
+      {
+        id: "heading",
+        text: heading,
+        emphasized: true,
+      },
+      { id: "status", text: packet.status },
+      { id: "operatorAction", text: packet.operatorAction },
+      { id: "localVsHostedBoundary", text: packet.localVsHostedBoundary },
+      { id: "firstMissingInputId", text: packet.firstMissingInputId },
+      { id: "firstMissingCheckId", text: packet.firstMissingCheckId },
+      {
+        id: "firstMissingSectionId",
+        text: packet.firstMissingSectionId,
+      },
+      {
+        id: "selectedProductionFeatureRoleUrl",
+        text: packet.selectedProductionFeatureRoleUrl,
+      },
+      {
+        id: "selectedProductionFeatureGraphNodeId",
+        text: packet.selectedProductionFeatureGraphNodeId,
+      },
+      {
+        id: "rawEvidenceContractSummary",
+        text: packet.rawEvidenceContractSummary,
+      },
+      {
+        id: "rawEvidenceContractRequiredTopLevelFields",
+        text: packet.rawEvidenceContractRequiredTopLevelFields.join(", "),
+      },
+      { id: "proofTarget", text: packet.proofTarget },
+      { id: "nextProofTarget", text: packet.nextProofTarget },
+    ],
+  };
 }
 
 function hostedHandoffRawCaptureIntakeSubentries({ intake, heading }) {
@@ -1555,7 +1612,7 @@ export async function buildAdminRouteData({
                                           { game },
                                         ),
                                         releaseReadinessChecklist,
-                                        { game },
+                                        { game, nextAction },
                                       ),
                                       releaseReadinessChecklist,
                                       { game },
@@ -1811,6 +1868,10 @@ function withAdminAuditDetailDisplayRows(item, { game }) {
     item.localPrerequisites,
     { game },
   );
+  const selectedOperatorHandoffRows = buildSelectedOperatorHandoffRows(
+    item.selectedOperatorHandoff,
+    { game },
+  );
   const batchRows = buildAdminSpineBatchRows(item.batches);
   const productionFeatureDestinationSections =
     buildProductionFeatureDestinationSections(
@@ -1832,6 +1893,9 @@ function withAdminAuditDetailDisplayRows(item, { game }) {
       : { spineRecoveryHookRows }),
     ...(spineCycleRows.length === 0 ? {} : { spineCycleRows }),
     ...(localPrerequisiteRows.length === 0 ? {} : { localPrerequisiteRows }),
+    ...(selectedOperatorHandoffRows.length === 0
+      ? {}
+      : { selectedOperatorHandoffRows }),
     ...(batchRows.length === 0 ? {} : { batchRows }),
     ...(productionFeatureDestinationSections.length === 0
       ? {}
@@ -6967,10 +7031,11 @@ function normalizeProofLaneCoverage(coverage) {
 export function appendLocalReleaseReadinessAudit(
   audit,
   releaseReadinessChecklist,
-  { game },
+  { game, nextAction = null },
 ) {
   const row = normalizeLocalReleaseReadinessAudit(releaseReadinessChecklist, {
     game,
+    nextAction,
   });
   if (row === null) {
     return audit;
@@ -6994,7 +7059,7 @@ export function appendLocalHostSetupProofAudit(
 
 export function normalizeLocalReleaseReadinessAudit(
   releaseReadinessChecklist,
-  { game },
+  { game, nextAction = null },
 ) {
   if (
     releaseReadinessChecklist === null ||
@@ -7018,6 +7083,8 @@ export function normalizeLocalReleaseReadinessAudit(
   const unproven = Array.isArray(releaseReadinessChecklist.releaseReadiness?.unproven)
     ? releaseReadinessChecklist.releaseReadiness.unproven
     : [];
+  const nextActionRow = normalizeLocalNextActionAudit(nextAction, { game });
+  const selectedOperatorHandoff = nextActionRow?.selectedOperatorHandoff ?? null;
   const hostSetupProofEvidence =
     releaseReadinessChecklist.localDevelopmentSpine?.evidence?.hostSetupProof;
   const setupCommandEvidence = normalizeSetupCommandEvidenceRows(
@@ -7042,27 +7109,50 @@ export function normalizeLocalReleaseReadinessAudit(
       audit: localAdminAuditIds.releaseReadiness,
     }),
     checks: Object.freeze(
-      checks.flatMap((check) => [
-        Object.freeze({
-          id: String(check.id),
-          status: localReleaseReadinessCheckStatus(check),
-          dependencyGated: check.dependencyGated === true,
-          laneIds: Object.freeze(
-            Array.isArray(check.laneIds)
-              ? check.laneIds.map((laneId) => String(laneId))
-              : [],
-          ),
-          requiredLaneCount: Number(check.requiredLaneCount ?? 0),
-          coveredLaneCount: Number(check.coveredLaneCount ?? 0),
-          familyCount: Number(check.familyCount ?? 0),
-          expectedLaneCount: Number(check.expectedLaneCount ?? 0),
-          expectedFamilyCount: Number(check.expectedFamilyCount ?? 0),
-        }),
-        ...normalizedEvidenceObjectCheckRows({
-          parentId: String(check.id),
-          objects: check.normalizedEvidenceObjects,
-        }),
-      ]),
+      [
+        ...checks.flatMap((check) => [
+          Object.freeze({
+            id: String(check.id),
+            status: localReleaseReadinessCheckStatus(check),
+            dependencyGated: check.dependencyGated === true,
+            laneIds: Object.freeze(
+              Array.isArray(check.laneIds)
+                ? check.laneIds.map((laneId) => String(laneId))
+                : [],
+            ),
+            requiredLaneCount: Number(check.requiredLaneCount ?? 0),
+            coveredLaneCount: Number(check.coveredLaneCount ?? 0),
+            familyCount: Number(check.familyCount ?? 0),
+            expectedLaneCount: Number(check.expectedLaneCount ?? 0),
+            expectedFamilyCount: Number(check.expectedFamilyCount ?? 0),
+          }),
+          ...normalizedEvidenceObjectCheckRows({
+            parentId: String(check.id),
+            objects: check.normalizedEvidenceObjects,
+          }),
+        ]),
+        ...(selectedOperatorHandoff === null
+          ? []
+          : [
+              Object.freeze({
+                id: "selected-operator-handoff",
+                status: `${selectedOperatorHandoff.status}:${selectedOperatorHandoff.firstMissingInputId}`,
+              }),
+            ]),
+      ],
+    ),
+    relatedLinks: Object.freeze(
+      selectedOperatorHandoff === null
+        ? []
+        : [
+            Object.freeze({
+              id: "selected-operator-handoff",
+              label: "Selected operator handoff",
+              href: nextActionRow.inspectHref,
+              status: `${selectedOperatorHandoff.status}:${selectedOperatorHandoff.firstMissingInputId}`,
+              command: selectedOperatorHandoff.command,
+            }),
+          ],
     ),
     localPrerequisites: Object.freeze(
       localPrerequisites.map((check) =>
@@ -7099,6 +7189,14 @@ export function normalizeLocalReleaseReadinessAudit(
       coverageStatus: coverageSummary.status,
       localPrerequisiteCount: localPrerequisites.length,
       unprovenCount: unproven.length,
+      ...(selectedOperatorHandoff === null
+        ? {}
+        : {
+            selectedOperatorHandoffFirstMissingInputId:
+              selectedOperatorHandoff.firstMissingInputId,
+            selectedOperatorHandoffRoleUrl:
+              selectedOperatorHandoff.selectedProductionFeatureRoleUrl,
+          }),
       releaseReady: releaseReadinessChecklist.releaseReady === true,
       productionReady: releaseReadinessChecklist.productionReady === true,
     }),

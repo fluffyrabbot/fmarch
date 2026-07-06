@@ -253,6 +253,15 @@
         </section>
       {/each}
     {/if}
+    {#if data.audit.selectedOperatorHandoffRows?.length > 0}
+      <section
+        class="admin-audit-detail__group"
+        data-testid="admin-audit-detail-selected-operator-handoff"
+      >
+        <h2>Selected operator handoff</h2>
+        <AdminAuditDescriptorRows rows={data.audit.selectedOperatorHandoffRows} />
+      </section>
+    {/if}
     {#if hostedHandoffRows.length > 0}
       <section
         class="admin-audit-detail__group"

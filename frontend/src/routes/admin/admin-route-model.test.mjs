@@ -1872,6 +1872,7 @@ test("admin audit detail page renders hosted handoff checklist rows from route d
     "utf8",
   );
   assert.match(source, /hostedHandoffChecklistRows/);
+  assert.match(source, /selectedOperatorHandoffRows/);
   assert.doesNotMatch(source, /hostedHandoffChecklist\.inputs/);
   assert.doesNotMatch(source, /hostedHandoffChecklist\.inputSections/);
   assert.doesNotMatch(source, /hostedHandoffChecklist\.groups/);
@@ -3817,6 +3818,10 @@ test("admin local next action detail data carries hosted evidence handoff checkl
   assert.equal(
     data.audit.artifactSummary.selectedOperatorHandoffFirstMissingInputId,
     "FMARCH_HOSTED_MATRIX_FRONTEND_URL",
+  );
+  assert.deepEqual(
+    hostedHandoffChecklistRowsForAssertion(data.audit.selectedOperatorHandoffRows),
+    expectedSelectedOperatorHandoffRows(data.audit.selectedOperatorHandoff),
   );
   assert.deepEqual(
     hostedHandoffChecklistRowsForAssertion(data.audit.hostedHandoffChecklistRows),
@@ -5774,6 +5779,45 @@ test("admin local release readiness detail data carries checks and unproven rows
   assert.deepEqual(
     hostedHandoffChecklistRowsForAssertion(data.audit.unprovenRows),
     expectedUnprovenRows(data.audit.unproven),
+  );
+});
+
+test("admin local release readiness links to selected next-action operator handoff", async () => {
+  const unproven = hostedEvidenceLaneUnprovenFixture();
+  const data = await buildAdminAuditDetailData({
+    audit: localAdminAuditIds.releaseReadiness,
+    principalUserId: "admin_a",
+    capabilities: [{ kind: "GlobalAdmin" }],
+    releaseReadinessChecklist: releaseReadinessChecklistFixture(),
+    nextAction: nextActionFixture({
+      command: "npm run test:dev-test-game-hosted-evidence-lane",
+      unproven,
+    }),
+  });
+  const handoff = data.audit.relatedLinks.find(
+    (link) => link.id === "selected-operator-handoff",
+  );
+  assert.deepEqual(handoff, {
+    id: "selected-operator-handoff",
+    label: "Selected operator handoff",
+    href: localAdminAuditRoleUrl(localAdminAuditIds.nextAction, {
+      game: "midsummer",
+    }),
+    status: "blocked:FMARCH_HOSTED_MATRIX_FRONTEND_URL",
+    command: "npm run test:dev-test-game-hosted-evidence-lane",
+  });
+  assert.equal(
+    data.audit.checks.find((check) => check.id === "selected-operator-handoff")
+      ?.status,
+    "blocked:FMARCH_HOSTED_MATRIX_FRONTEND_URL",
+  );
+  assert.equal(
+    data.audit.artifactSummary.selectedOperatorHandoffRoleUrl,
+    localAdminAuditRoleUrl(localAdminAuditIds.coreLoop),
+  );
+  assert.deepEqual(
+    descriptorRowsWithLinksForAssertion(data.audit.relatedLinkRows),
+    expectedRelatedLinkRows(data.audit.relatedLinks),
   );
 });
 
@@ -10087,6 +10131,45 @@ function expectedHostedHandoffBlockedReceiptRows({ checklist, headings }) {
   ];
 }
 
+function expectedSelectedOperatorHandoffRows(handoff) {
+  if (handoff === null || handoff === undefined) {
+    return [];
+  }
+  return [
+    [
+      "selected-operator-handoff",
+      "admin-audit-selected-operator-handoff",
+      [
+        ["heading", "Selected operator handoff", true],
+        ["status", handoff.status, false],
+        ["command", handoff.command, false],
+        ["unprovenId", handoff.unprovenId, false],
+        ["firstMissingInputId", handoff.firstMissingInputId, false],
+        [
+          "selectedProductionFeatureRoleUrl",
+          handoff.selectedProductionFeatureRoleUrl,
+          false,
+        ],
+        [
+          "selectedProductionFeatureGraphNodeId",
+          handoff.selectedProductionFeatureGraphNodeId,
+          false,
+        ],
+      ],
+      [
+        [
+          "selected-operator-handoff-packet",
+          "admin-audit-selected-operator-handoff-packet",
+          expectedHostedHandoffBlockedOperatorPacketValues({
+            packet: handoff.blockedOperatorPacket,
+            heading: "Selected blocked operator packet",
+          }),
+        ],
+      ],
+    ],
+  ];
+}
+
 function expectedHostedHandoffBlockedOperatorPacketRows({ packet }) {
   if (packet === null || packet === undefined) {
     return [];
@@ -10095,36 +10178,45 @@ function expectedHostedHandoffBlockedOperatorPacketRows({ packet }) {
     [
       "blocked-receipt-operator-packet",
       "admin-audit-hosted-handoff-blocked-receipt-operator-packet",
-      [
-        ["heading", "Blocked operator packet", true],
-        ["status", packet.status, false],
-        ["firstMissingInputId", packet.firstMissingInputId, false],
-        ["firstMissingCheckId", packet.firstMissingCheckId, false],
-        ["firstMissingSectionId", packet.firstMissingSectionId, false],
-        [
-          "selectedProductionFeatureRoleUrl",
-          packet.selectedProductionFeatureRoleUrl,
-          false,
-        ],
-        [
-          "selectedProductionFeatureGraphNodeId",
-          packet.selectedProductionFeatureGraphNodeId,
-          false,
-        ],
-        [
-          "rawEvidenceContractSummary",
-          packet.rawEvidenceContractSummary,
-          false,
-        ],
-        [
-          "rawEvidenceContractRequiredTopLevelFields",
-          packet.rawEvidenceContractRequiredTopLevelFields.join(", "),
-          false,
-        ],
-        ["proofTarget", packet.proofTarget, false],
-        ["nextProofTarget", packet.nextProofTarget, false],
-      ],
+      expectedHostedHandoffBlockedOperatorPacketValues({
+        packet,
+        heading: "Blocked operator packet",
+      }),
     ],
+  ];
+}
+
+function expectedHostedHandoffBlockedOperatorPacketValues({ packet, heading }) {
+  return [
+    ["heading", heading, true],
+    ["status", packet.status, false],
+    ["operatorAction", packet.operatorAction, false],
+    ["localVsHostedBoundary", packet.localVsHostedBoundary, false],
+    ["firstMissingInputId", packet.firstMissingInputId, false],
+    ["firstMissingCheckId", packet.firstMissingCheckId, false],
+    ["firstMissingSectionId", packet.firstMissingSectionId, false],
+    [
+      "selectedProductionFeatureRoleUrl",
+      packet.selectedProductionFeatureRoleUrl,
+      false,
+    ],
+    [
+      "selectedProductionFeatureGraphNodeId",
+      packet.selectedProductionFeatureGraphNodeId,
+      false,
+    ],
+    [
+      "rawEvidenceContractSummary",
+      packet.rawEvidenceContractSummary,
+      false,
+    ],
+    [
+      "rawEvidenceContractRequiredTopLevelFields",
+      packet.rawEvidenceContractRequiredTopLevelFields.join(", "),
+      false,
+    ],
+    ["proofTarget", packet.proofTarget, false],
+    ["nextProofTarget", packet.nextProofTarget, false],
   ];
 }
 

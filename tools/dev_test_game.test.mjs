@@ -5550,12 +5550,46 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
     },
     adminSpineProof,
   });
+  const operatorHandoffSpineManifest = buildDevTestGameSpineManifest({
+    generatedAt: "2026-06-26T00:00:00.000Z",
+    proofFreshness: {
+      version: 1,
+      proof: "dev-test-game-proof-freshness",
+      status: "passed",
+      generatedAt: "2026-06-26T00:00:00.000Z",
+      maxAgeHours: 24,
+      proofBoundary: "test freshness boundary",
+      summary: {
+        artifactCount: 1,
+        freshCount: 1,
+        staleCount: 0,
+        missingCount: 0,
+      },
+      artifacts: [
+        {
+          id: "spine-manifest",
+          label: "Spine manifest",
+          path: "target/dev-test-game/spine-manifest.json",
+          status: "fresh",
+        },
+      ],
+    },
+  });
+  const nextAction = buildDevTestGameNextAction(operatorHandoffSpineManifest, {
+    generatedAt: "2026-06-26T00:00:01.000Z",
+    opsArtifacts: devTestGameOpsArtifactsFixture(),
+    raceCoverage: devTestGameRaceCoverageFixture(),
+    releaseReadinessChecklist: releaseReadiness,
+    hostedTargetPreflight: hostedTargetPreflightFixture({ status: "blocked" }),
+    proofGraph: nextActionProofGraphFixture("host-phase-control"),
+  });
   const graph = buildDevTestGameProofGraph(
     {
       spineManifest,
       adminSpineProof,
       adminSpineTerminalBatches: adminSpineTerminalBatchesFixture(),
       ...recoveryReceiptFixtures(),
+      nextAction,
       releaseReadiness,
     },
     {
@@ -5570,6 +5604,24 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
   assertDevTestGameProofGraphCoversProductionFeatureTargets(
     graph,
     releaseReadiness,
+  );
+  assert.deepEqual(
+    graph.edges.find(
+      (edge) =>
+        edge.from === "next-action" &&
+        edge.relationship === "selected-operator-handoff",
+    ),
+    {
+      from: "next-action",
+      to: nextAction.selectedOperatorHandoff.selectedProductionFeatureGraphNodeId,
+      relationship: "selected-operator-handoff",
+      command: nextAction.selectedOperatorHandoff.command,
+      firstMissingInputId: nextAction.selectedOperatorHandoff.firstMissingInputId,
+      roleUrl:
+        nextAction.selectedOperatorHandoff.selectedProductionFeatureRoleUrl,
+      proofTarget: nextAction.selectedOperatorHandoff.proofTarget,
+      unprovenId: nextAction.selectedOperatorHandoff.unprovenId,
+    },
   );
   const coreLoopFamilyRows = coreLoopScenarioFamilyRows();
   const expectedProductionFeatureTargetCount =

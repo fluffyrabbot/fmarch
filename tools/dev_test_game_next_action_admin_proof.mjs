@@ -195,6 +195,9 @@ export function nextActionAdminProofCase({
           ),
         requiredHostedIdentityOperatorGate:
           requiredHostedIdentityOperatorGateForNextAction(source.nextAction),
+        requiredText: requiredSelectedOperatorHandoffTextForNextAction(
+          source.nextAction,
+        ),
         requiredRelatedDestinations: requiredRelatedDestinationsForHandoffs(
           relatedHandoffsForNextAction({
             nextAction: source.nextAction,
@@ -1442,6 +1445,24 @@ function requiredHostedIdentityOperatorGateForNextAction(nextAction) {
   const gate =
     nextAction.nextAction.unproven?.hostedHandoffChecklist?.operatorEvidenceGate;
   return gate === null || gate === undefined ? null : gate;
+}
+
+function requiredSelectedOperatorHandoffTextForNextAction(nextAction) {
+  const handoff = nextAction.selectedOperatorHandoff;
+  const packet = handoff?.blockedOperatorPacket;
+  if (handoff === null || handoff === undefined || packet === undefined) {
+    return [];
+  }
+  return [
+    "Selected operator handoff",
+    "Selected blocked operator packet",
+    handoff.command,
+    handoff.firstMissingInputId,
+    handoff.selectedProductionFeatureRoleUrl,
+    packet.rawEvidenceContractSummary,
+    packet.localVsHostedBoundary,
+    packet.operatorAction,
+  ];
 }
 
 function hostedHandoffInputSections(checklist) {

@@ -1697,6 +1697,13 @@ function resolveBuildableProductionFeatureTarget({ declaration, releaseReadiness
 }
 
 function nextActionRecoveryEdges(nextAction) {
+  return [
+    ...nextActionSeedCoverageRecoveryEdges(nextAction),
+    ...nextActionSelectedOperatorHandoffEdges(nextAction),
+  ];
+}
+
+function nextActionSeedCoverageRecoveryEdges(nextAction) {
   if (nextAction?.nextAction?.reason !== "seed-proof-lane-coverage-drift") {
     return [];
   }
@@ -1714,6 +1721,27 @@ function nextActionRecoveryEdges(nextAction) {
         buildSlice: seedCoverage?.buildSlice,
         unclassifiedLaneCount: seedCoverage?.unclassifiedLaneCount,
         unclassifiedLaneIds: seedCoverage?.unclassifiedLaneIds,
+      },
+    ],
+  ];
+}
+
+function nextActionSelectedOperatorHandoffEdges(nextAction) {
+  const handoff = nextAction?.selectedOperatorHandoff;
+  if (handoff === null || typeof handoff !== "object") {
+    return [];
+  }
+  return [
+    [
+      "next-action",
+      handoff.selectedProductionFeatureGraphNodeId,
+      "selected-operator-handoff",
+      {
+        command: handoff.command,
+        firstMissingInputId: handoff.firstMissingInputId,
+        roleUrl: handoff.selectedProductionFeatureRoleUrl,
+        proofTarget: handoff.proofTarget,
+        unprovenId: handoff.unprovenId,
       },
     ],
   ];
