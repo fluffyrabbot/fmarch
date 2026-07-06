@@ -195,6 +195,31 @@ export function assertReleaseAdminProof(evidence) {
   return evidence;
 }
 
+export function assertReleaseAdminProofDiagnosticsMatchReadiness({
+  proof,
+  readiness,
+}) {
+  const readinessDiagnosticIds = releaseReadinessDiagnosticIds(readiness);
+  const proofDiagnosticIds = (proof.generatedFrom?.localDiagnosticIds ?? []).map(
+    (id) => String(id),
+  );
+  const readinessJson = JSON.stringify(readinessDiagnosticIds);
+  const proofJson = JSON.stringify(proofDiagnosticIds);
+  if (readinessJson !== proofJson) {
+    throw new Error(
+      `release admin proof diagnostic ids drifted from readiness checklist: ${proofJson} !== ${readinessJson}`,
+    );
+  }
+  assertVisibleAdminRoleSurfaceRows({
+    adminRoleSurface: proof.adminRoleSurface,
+    rowIds: readinessDiagnosticIds,
+    proofName: "release admin proof readiness diagnostic contract",
+    rowName: "local diagnostic",
+    surfaceKey: "visibleLocalDiagnostics",
+  });
+  return proof;
+}
+
 function releaseReadinessVisibleCheckIds(readiness) {
   return [
     ...readiness.localDevelopmentSpine.checks.map((check) => check.id),
@@ -202,7 +227,7 @@ function releaseReadinessVisibleCheckIds(readiness) {
   ];
 }
 
-function releaseReadinessDiagnosticIds(readiness) {
+export function releaseReadinessDiagnosticIds(readiness) {
   return (readiness.localDevelopmentSpine.diagnostics ?? []).map(
     (diagnostic) => diagnostic.id,
   );

@@ -591,6 +591,7 @@ import {
 } from "./dev_test_game_normalized_evidence_objects.mjs";
 import {
   assertReleaseAdminProof,
+  assertReleaseAdminProofDiagnosticsMatchReadiness,
 } from "./dev_test_game_release_admin_proof.mjs";
 import {
   assertProofGraphAdminProof,
@@ -6951,6 +6952,55 @@ test("admin proof fixtures prove normalized evidence object rows", () => {
   assert.equal(
     validateDevTestGameProofGraphAdminProof(preTerminalProofGraphProof).status,
     "passed",
+  );
+});
+
+test("release admin proof diagnostics match the readiness checklist", () => {
+  const readiness = devTestGameReleaseReadinessChecklistFixture({
+    unproven: releaseAdminProofFallbackUnprovenIds.map((id) => ({
+      id,
+      status: "unproven",
+      requiredEvidence: `${id} evidence`,
+    })),
+  });
+  readiness.localDevelopmentSpine.diagnostics = [
+    {
+      id: "proof-freshness-admin-surface",
+      sourceCheckId: "local-proof-freshness-admin-surface",
+      label: "Proof freshness admin surface",
+      status: "passed",
+      kind: "freshness-browser-proof",
+      evidence: "target/dev-test-game/proof-freshness-admin-proof.json",
+      command: "npm run test:dev-test-game-proof-freshness-admin-proof",
+      reason:
+        "Proof-freshness browser surface and next-action handoff proof; diagnostic here, local dependency elsewhere.",
+      diagnosticOnly: true,
+      releaseReady: false,
+      productionReady: false,
+    },
+  ];
+  assertDevTestGameReleaseReadiness(readiness);
+  const diagnosticIds = readiness.localDevelopmentSpine.diagnostics.map(
+    (diagnostic) => diagnostic.id,
+  );
+  const proof = assertReleaseAdminProof(
+    releaseAdminProofFixture({ localDiagnosticIds: diagnosticIds }),
+  );
+  assert.equal(
+    assertReleaseAdminProofDiagnosticsMatchReadiness({
+      proof,
+      readiness,
+    }),
+    proof,
+  );
+
+  assert.throws(
+    () =>
+      assertReleaseAdminProofDiagnosticsMatchReadiness({
+        proof: releaseAdminProofFixture({ localDiagnosticIds: [] }),
+        readiness,
+      }),
+    /release admin proof diagnostic ids drifted from readiness checklist/,
   );
 });
 
@@ -21802,7 +21852,9 @@ function backupAdminProofFixture() {
   };
 }
 
-function releaseAdminProofFixture() {
+function releaseAdminProofFixture({
+  localDiagnosticIds = releaseAdminProofLocalDiagnosticIds(),
+} = {}) {
   const evidenceObjectRowIds = [
     ...expectedNormalizedEvidenceObjectRowIds({
       parentId: "local-private-channel-recovery-milestone",
@@ -21829,6 +21881,7 @@ function releaseAdminProofFixture() {
         "local-core-loop-proof",
         "local-hardening-proof",
       ],
+      localDiagnosticIds,
       evidenceObjectRowIds,
       localPrerequisiteIds: releaseAdminProofLocalPrerequisiteIds(),
       setupCommandEvidenceIds: releaseAdminProofSetupCommandEvidenceIds(),
@@ -21847,6 +21900,7 @@ function releaseAdminProofFixture() {
         "local-hardening-proof",
         ...evidenceObjectRowIds,
       ],
+      visibleLocalDiagnostics: [...localDiagnosticIds],
       visibleLocalPrerequisites: releaseAdminProofLocalPrerequisiteIds(),
       visibleLocalPrerequisiteRoleUrls: Object.fromEntries(
         releaseAdminProofLocalPrerequisiteIds().map((id) => [
@@ -21868,6 +21922,10 @@ function releaseAdminProofFixture() {
       productionReady: false,
     },
   };
+}
+
+function releaseAdminProofLocalDiagnosticIds() {
+  return ["proof-freshness-admin-surface"];
 }
 
 function releaseAdminProofSetupCommandEvidenceIds() {
