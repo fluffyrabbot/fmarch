@@ -135,6 +135,22 @@ const dayOneNightOneCheckpointCaseDefinitions = Object.freeze([
       actionButtonVisible: true,
     }),
   }),
+  Object.freeze({
+    id: "day-two-controls-return",
+    targetKey: "dayTwoControlsReturn",
+    featureSlotId: "day-two-controls-return",
+    role: "actionPlayer",
+    checkpointId: "d02-day-controls-return",
+    adminCheckId: "core-loop",
+    expectedCheckpointFields: Object.freeze({
+      phase: "D02",
+      locked: false,
+      advanceState: "ack",
+      actionSubmitControls: 0,
+      actionVoteControls: 3,
+      normalVoteControls: 3,
+    }),
+  }),
 ]);
 
 export function dayOneNightOneCheckpointCases() {

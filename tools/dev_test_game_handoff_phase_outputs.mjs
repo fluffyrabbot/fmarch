@@ -12,7 +12,7 @@ import {
 } from "./dev_test_game_hosted_evidence_operator_checklist.mjs";
 import {
   devTestGameHostedEvidenceOperatorChecklistAdminProofPath,
-} from "./dev_test_game_hosted_evidence_operator_checklist_admin_proof.mjs";
+} from "./dev_test_game_adjacent_artifact_paths.mjs";
 import {
   terminalHostedIdentityNextActionAdminProofBatchScript,
   terminalRefreshAdminProofBatchScript,
