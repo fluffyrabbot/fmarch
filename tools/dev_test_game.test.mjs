@@ -1435,6 +1435,9 @@ test("dev test-game spine orchestrators expose stable proof order and env maps",
       devTestGameReleaseReadinessScript,
       "tools/dev_test_game_release_admin_proof.mjs",
       "tools/dev_test_game_release_admin_proof_contract.mjs",
+      "admin-spine-terminal-validation-receipt",
+      "tools/dev_test_game_proof_graph.mjs",
+      "tools/dev_test_game_proof_graph_admin_proof.mjs",
     ],
   );
   assert.deepEqual(devTestGameAdminSpinePlan[14], {
@@ -1479,6 +1482,11 @@ test("dev test-game spine orchestrators expose stable proof order and env maps",
       nextActionAdminProofPath,
     ],
     env: adminSpineTerminalBatchReadinessEvidenceEnv,
+  });
+  assert.deepEqual(devTestGameAdminSpinePlan.at(-3), {
+    kind: "custom",
+    script: "admin-spine-terminal-validation-receipt",
+    label: "Admin spine terminal validation receipt",
   });
   assert.deepEqual(
     devTestGameAdminSpinePlan
@@ -6141,6 +6149,23 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
       batchLabel: hostedIdentityTerminalReceiptArtifactCase.batchLabel,
     },
   );
+  assert.deepEqual(terminalBatchNode.terminalValidations, [
+    {
+      id: "release-admin-proof-contract",
+      label: "Release admin proof diagnostics contract",
+      status: "passed",
+      proof: "dev-test-game-release-admin-proof-contract",
+      command: devTestGameReleaseAdminProofContractCommand,
+      artifactPath: devTestGameReleaseAdminProofContractPath,
+      validatesArtifacts: [
+        devTestGameReleaseReadinessPath,
+        devTestGameReleaseAdminProofPath,
+      ],
+      localDiagnosticCount: releaseAdminProofLocalDiagnosticIds().length,
+      releaseReady: false,
+      productionReady: false,
+    },
+  ]);
   assert.deepEqual(
     graph.nodes
       .filter((node) =>
@@ -6227,8 +6252,14 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
         edge.relationship,
         edge.command,
         edge.proofTarget,
-      ]),
+    ]),
     [
+      [
+        "admin-spine-terminal-batches",
+        "terminal-artifact-validation",
+        devTestGameReleaseAdminProofContractCommand,
+        devTestGameReleaseAdminProofContractPath,
+      ],
       [
         "spine-manifest",
         "records-terminal-validation",
@@ -6252,6 +6283,28 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
       )
       .map((edge) => edge.to),
     ["proof-graph", "proof-freshness", "next-action"],
+  );
+  assert.deepEqual(
+    graph.edges
+      .filter(
+        (edge) =>
+          edge.from === "admin-spine-terminal-batches" &&
+          edge.relationship === "terminal-artifact-validation",
+      )
+      .map((edge) => [
+        edge.to,
+        edge.command,
+        edge.proofTarget,
+        edge.localDiagnosticCount,
+      ]),
+    [
+      [
+        "release-admin-proof-contract",
+        devTestGameReleaseAdminProofContractCommand,
+        devTestGameReleaseAdminProofContractPath,
+        releaseAdminProofLocalDiagnosticIds().length,
+      ],
+    ],
   );
   assert.deepEqual(
     graph.nodes
@@ -6439,6 +6492,7 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
       ["proof-graph", "terminal-browser-proof"],
       ["proof-freshness", "terminal-browser-proof"],
       ["next-action", "terminal-browser-proof"],
+      ["release-admin-proof-contract", "terminal-artifact-validation"],
     ],
   );
   assert.deepEqual(
@@ -24717,10 +24771,29 @@ function adminSpineTerminalBatchesFixture() {
       nextActionAdminProof: "target/dev-test-game/next-action-admin-proof.json",
       hostedIdentityNextActionAdminProof:
         "target/dev-test-game/hosted-identity-next-action-admin-proof.json",
+      releaseAdminProofContract: devTestGameReleaseAdminProofContractPath,
       batchCount: terminalProofGraphReceiptBatchRegistry.length,
+      terminalValidationCount: 1,
     },
     nextActionHandoffPair: nextActionHandoffPairFixture(),
     selectedOperatorHandoffReceipt: selectedOperatorHandoffReceiptFixture(),
+    terminalValidations: [
+      {
+        id: "release-admin-proof-contract",
+        label: "Release admin proof diagnostics contract",
+        status: "passed",
+        proof: "dev-test-game-release-admin-proof-contract",
+        command: devTestGameReleaseAdminProofContractCommand,
+        artifactPath: devTestGameReleaseAdminProofContractPath,
+        validatesArtifacts: [
+          devTestGameReleaseReadinessPath,
+          devTestGameReleaseAdminProofPath,
+        ],
+        localDiagnosticCount: releaseAdminProofLocalDiagnosticIds().length,
+        releaseReady: false,
+        productionReady: false,
+      },
+    ],
     batches: terminalProofGraphReceiptBatchRegistry.map((batch, index) => ({
       label: batch.label,
       reason: batch.reason,

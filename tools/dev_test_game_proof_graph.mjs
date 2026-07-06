@@ -667,6 +667,27 @@ export function assertDevTestGameProofGraphCoversTerminalBatches(graph) {
       throw new Error(`proof graph terminal batch edge missing: ${target}`);
     }
   }
+  const releaseValidation = (terminalNode.terminalValidations ?? []).find(
+    (validation) => validation.id === "release-admin-proof-contract",
+  );
+  if (releaseValidation !== undefined) {
+    if (
+      releaseValidation.artifactPath !==
+        devTestGameReleaseAdminProofContractPath ||
+      releaseValidation.command !==
+        devTestGameReleaseAdminProofContractCommand ||
+      !(graph.edges ?? []).some(
+        (edge) =>
+          edge.from === "admin-spine-terminal-batches" &&
+          edge.to === "release-admin-proof-contract" &&
+          edge.relationship === "terminal-artifact-validation" &&
+          edge.command === devTestGameReleaseAdminProofContractCommand &&
+          edge.proofTarget === devTestGameReleaseAdminProofContractPath,
+      )
+    ) {
+      throw new Error("proof graph terminal validation edge drifted");
+    }
+  }
   return graph;
 }
 
@@ -1106,6 +1127,8 @@ function buildProofGraphNodes({
             receiptArtifacts: terminalBatchReceiptArtifacts(
               adminSpineTerminalBatches,
             ),
+            terminalValidations:
+              adminSpineTerminalBatches.terminalValidations ?? [],
           },
         ];
   const recoveryReceiptNodes = buildRecoveryReceiptGraphNodes({
@@ -1443,16 +1466,30 @@ function terminalBatchEdges(adminSpineTerminalBatches) {
   if (adminSpineTerminalBatches === null) {
     return [];
   }
-  return ["proof-graph", "proof-freshness", "next-action"].map((target) => [
-    "admin-spine-terminal-batches",
-    target,
-    "terminal-browser-proof",
-    {
-      batchLabels: adminSpineTerminalBatches.batches
-        .filter((batch) => batch.proofIds.includes(target))
-        .map((batch) => batch.label),
-    },
-  ]);
+  return [
+    ...["proof-graph", "proof-freshness", "next-action"].map((target) => [
+      "admin-spine-terminal-batches",
+      target,
+      "terminal-browser-proof",
+      {
+        batchLabels: adminSpineTerminalBatches.batches
+          .filter((batch) => batch.proofIds.includes(target))
+          .map((batch) => batch.label),
+      },
+    ]),
+    ...(adminSpineTerminalBatches.terminalValidations ?? []).map(
+      (validation) => [
+        "admin-spine-terminal-batches",
+        validation.id,
+        "terminal-artifact-validation",
+        {
+          command: validation.command,
+          proofTarget: validation.artifactPath,
+          localDiagnosticCount: validation.localDiagnosticCount,
+        },
+      ],
+    ),
+  ];
 }
 
 function terminalBatchReceiptArtifacts(adminSpineTerminalBatches) {

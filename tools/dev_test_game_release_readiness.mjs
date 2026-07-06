@@ -160,9 +160,13 @@ import {
 } from "./dev_test_game_release_readiness_cases.mjs";
 import {
   devTestGameReleaseAdminProofPath,
+  devTestGameReleaseAdminProofContractPath,
   devTestGameReleaseRunbookAdminProofPath,
   devTestGameReleaseRunbookPath,
 } from "./dev_test_game_release_artifact_paths.mjs";
+import {
+  devTestGameReleaseAdminProofContractCommand,
+} from "./dev_test_game_release_admin_proof_contract.mjs";
 import {
   devTestGameAdminSpineAdminProofPath,
   devTestGameBackupAdminProofPath,
@@ -7847,6 +7851,18 @@ export function validateDevTestGameAdminSpineTerminalBatches(
       hostedIdentityNextActionAdminProofPath,
     batchCount: requiredBatches.length,
   };
+  const terminalValidations = validateAdminSpineTerminalValidations(
+    proof.terminalValidations,
+  );
+  const expectedGeneratedFrom = {
+    ...requiredGeneratedFrom,
+    ...(terminalValidations.length === 0
+      ? {}
+      : {
+          releaseAdminProofContract: devTestGameReleaseAdminProofContractPath,
+          terminalValidationCount: terminalValidations.length,
+        }),
+  };
   if (proof?.version !== 1) {
     throw new Error(
       `admin spine terminal batch proof version drifted: ${proof?.version}`,
@@ -7879,7 +7895,7 @@ export function validateDevTestGameAdminSpineTerminalBatches(
     );
   }
   if (
-    Object.entries(requiredGeneratedFrom).some(
+    Object.entries(expectedGeneratedFrom).some(
       ([key, value]) => proof.generatedFrom?.[key] !== value,
     )
   ) {
@@ -7968,6 +7984,7 @@ export function validateDevTestGameAdminSpineTerminalBatches(
     ),
     nextActionHandoffPair: expectedNextActionHandoffPair,
     selectedOperatorHandoffReceipt: proof.selectedOperatorHandoffReceipt,
+    terminalValidations,
     batches: proof.batches.map((batch) => ({
       label: batch.label,
       status: batch.status,
@@ -7980,6 +7997,56 @@ export function validateDevTestGameAdminSpineTerminalBatches(
     artifactPaths: proof.batches.flatMap((batch) => batch.artifactPaths),
     ...(options.artifact === undefined ? {} : { artifact: options.artifact }),
   };
+}
+
+function validateAdminSpineTerminalValidations(terminalValidations) {
+  if (terminalValidations === undefined) {
+    return [];
+  }
+  if (!Array.isArray(terminalValidations)) {
+    throw new Error("admin spine terminal validations must be an array");
+  }
+  if (terminalValidations.length === 0) {
+    return [];
+  }
+  if (terminalValidations.length !== 1) {
+    throw new Error("admin spine terminal validation count drifted");
+  }
+  const validation = terminalValidations[0];
+  const expectedArtifacts = [
+    devTestGameReleaseReadinessPath,
+    devTestGameReleaseAdminProofPath,
+  ];
+  if (
+    validation?.id !== "release-admin-proof-contract" ||
+    validation.label !== "Release admin proof diagnostics contract" ||
+    validation.status !== "passed" ||
+    validation.proof !== "dev-test-game-release-admin-proof-contract" ||
+    validation.command !== devTestGameReleaseAdminProofContractCommand ||
+    validation.artifactPath !== devTestGameReleaseAdminProofContractPath ||
+    JSON.stringify(validation.validatesArtifacts) !==
+      JSON.stringify(expectedArtifacts) ||
+    !Number.isInteger(validation.localDiagnosticCount) ||
+    validation.localDiagnosticCount < 0 ||
+    validation.releaseReady !== false ||
+    validation.productionReady !== false
+  ) {
+    throw new Error("admin spine terminal validation drifted");
+  }
+  return [
+    {
+      id: validation.id,
+      label: validation.label,
+      status: validation.status,
+      proof: validation.proof,
+      command: validation.command,
+      artifactPath: validation.artifactPath,
+      validatesArtifacts: [...validation.validatesArtifacts],
+      localDiagnosticCount: validation.localDiagnosticCount,
+      releaseReady: false,
+      productionReady: false,
+    },
+  ];
 }
 
 export const recoveryReceiptReleaseReadinessValidators = Object.freeze(

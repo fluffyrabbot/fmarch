@@ -457,8 +457,9 @@ release-readiness admin browser proofs, records per-surface recovery commands in
 keeping release readiness `not_ready`. After the final readiness refresh, the
 spine refreshes `target/dev-test-game/release-admin-proof.json`, writes
 `target/dev-test-game/release-admin-proof-contract.json`, and records that
-terminal validation in the spine manifest and proof graph so the final
-browser-visible diagnostics contract is no longer an invisible tail command.
+terminal validation in the admin-spine terminal receipt, spine manifest, and
+proof graph so the final browser-visible diagnostics contract is no longer an
+invisible tail command.
 
 The cohost proof uses the generated cohost role URL to open the host console
 with `CohostOf(<game>)`, renders only the delegated deadline control, runs the

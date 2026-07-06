@@ -46,7 +46,12 @@ import {
 import {
   devTestGameReleaseRunbookPath,
   devTestGameReleaseRunbookAdminProofPath,
+  devTestGameReleaseAdminProofContractPath,
 } from "./dev_test_game_release_artifact_paths.mjs";
+import {
+  assertReleaseAdminProofContractArtifact,
+  devTestGameReleaseAdminProofContractCommand,
+} from "./dev_test_game_release_admin_proof_contract.mjs";
 import {
   devTestGameAdminSpineAdminProofPath,
   devTestGameBackupAdminProofPath,
@@ -360,6 +365,13 @@ export const devTestGameAdminSpinePlan = [
   }),
   { kind: "node", script: "tools/dev_test_game_release_admin_proof.mjs" },
   { kind: "node", script: "tools/dev_test_game_release_admin_proof_contract.mjs" },
+  {
+    kind: "custom",
+    script: "admin-spine-terminal-validation-receipt",
+    label: "Admin spine terminal validation receipt",
+  },
+  { kind: "node", script: "tools/dev_test_game_proof_graph.mjs" },
+  { kind: "node", script: "tools/dev_test_game_proof_graph_admin_proof.mjs" },
 ];
 
 function terminalAdminProofBatchPlanForScript(script) {
@@ -419,6 +431,19 @@ export async function runDevTestGameAdminSpine() {
           `wrote ${adminSpineTerminalBatchProofPath} (${evidence.status})`,
         );
       },
+      "admin-spine-terminal-validation-receipt": async () => {
+        const evidence = await writeAdminSpineTerminalBatchProof(
+          terminalBatchEvidence,
+          {
+            terminalValidations: [
+              await readReleaseAdminProofContractTerminalValidation(),
+            ],
+          },
+        );
+        console.log(
+          `wrote ${adminSpineTerminalBatchProofPath} (${evidence.status}; ${evidence.terminalValidations.length} terminal validations)`,
+        );
+      },
     },
   });
 }
@@ -429,10 +454,16 @@ async function clearAdminSpineTerminalBatchProof() {
   });
 }
 
-async function writeAdminSpineTerminalBatchProof(batches) {
+async function writeAdminSpineTerminalBatchProof(
+  batches,
+  { terminalValidations = [] } = {},
+) {
   const nextAction = await readOptionalJson(path.join(repoRoot, nextActionPath));
   const proofGraph = await readOptionalJson(
     path.join(repoRoot, devTestGameProofGraphPath),
+  );
+  const normalizedTerminalValidations = terminalValidations.map(
+    normalizeTerminalValidation,
   );
   const evidence = {
     version: 1,
@@ -443,7 +474,7 @@ async function writeAdminSpineTerminalBatchProof(batches) {
     generatedAt: new Date().toISOString(),
     scope: "local-dev-test-game-admin-spine-terminal-batches",
     proofBoundary:
-      "Local admin spine terminal proof-batch receipt. It records the batched browser proofs for proof graph, proof freshness, and next-action admin surfaces after the terminal graph/refresh phase; it does not prove hosted deployment, hosted operations, beta readiness, release readiness, or production readiness.",
+      "Local admin spine terminal proof-batch receipt. It records the batched browser proofs for proof graph, proof freshness, and next-action admin surfaces plus terminal artifact validations after the terminal graph/refresh phase; it does not prove hosted deployment, hosted operations, beta readiness, release readiness, or production readiness.",
     generatedFrom: {
       adminSpineProof: adminSpineProofPath,
       proofGraph: devTestGameProofGraphPath,
@@ -453,7 +484,14 @@ async function writeAdminSpineTerminalBatchProof(batches) {
       nextActionAdminProof: nextActionAdminProofPath,
       hostedIdentityNextActionAdminProof:
         hostedIdentityNextActionAdminProofPath,
+      ...(normalizedTerminalValidations.length === 0
+        ? {}
+        : {
+            releaseAdminProofContract:
+              devTestGameReleaseAdminProofContractPath,
+          }),
       batchCount: batches.length,
+      terminalValidationCount: normalizedTerminalValidations.length,
     },
     nextActionHandoffPair: devTestGameNextActionSequenceHandoffPair(),
     selectedOperatorHandoffReceipt:
@@ -461,6 +499,9 @@ async function writeAdminSpineTerminalBatchProof(batches) {
         nextAction,
         proofGraph,
       }),
+    ...(normalizedTerminalValidations.length === 0
+      ? {}
+      : { terminalValidations: normalizedTerminalValidations }),
     batches,
   };
   await mkdir(artifactDir, { recursive: true });
@@ -469,6 +510,42 @@ async function writeAdminSpineTerminalBatchProof(batches) {
     `${JSON.stringify(evidence, null, 2)}\n`,
   );
   return evidence;
+}
+
+async function readReleaseAdminProofContractTerminalValidation() {
+  const contract = assertReleaseAdminProofContractArtifact(
+    await readOptionalJson(path.join(repoRoot, devTestGameReleaseAdminProofContractPath)),
+  );
+  return {
+    id: "release-admin-proof-contract",
+    label: "Release admin proof diagnostics contract",
+    status: contract.status,
+    proof: contract.proof,
+    command: devTestGameReleaseAdminProofContractCommand,
+    artifactPath: devTestGameReleaseAdminProofContractPath,
+    validatesArtifacts: [
+      contract.generatedFrom.releaseReadinessChecklist,
+      contract.generatedFrom.releaseAdminProof,
+    ],
+    localDiagnosticCount: contract.generatedFrom.localDiagnosticIds.length,
+    releaseReady: false,
+    productionReady: false,
+  };
+}
+
+function normalizeTerminalValidation(validation) {
+  return {
+    id: String(validation.id),
+    label: String(validation.label),
+    status: String(validation.status),
+    proof: String(validation.proof),
+    command: String(validation.command),
+    artifactPath: String(validation.artifactPath),
+    validatesArtifacts: [...(validation.validatesArtifacts ?? [])],
+    localDiagnosticCount: Number(validation.localDiagnosticCount),
+    releaseReady: validation.releaseReady,
+    productionReady: validation.productionReady,
+  };
 }
 
 async function readOptionalJson(filePath) {
