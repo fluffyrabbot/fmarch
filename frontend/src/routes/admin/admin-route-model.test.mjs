@@ -1934,6 +1934,27 @@ test("admin audit detail page renders simple list rows from route data", async (
   assert.doesNotMatch(source, /cycle\.checkpoints/);
 });
 
+test("admin audit detail page keeps only approved bespoke raw audit loops", async () => {
+  const source = await readFile(
+    "frontend/src/routes/admin/audit/[audit]/+page.svelte",
+    "utf8",
+  );
+  const rawAuditLoops = [
+    ...source.matchAll(
+      /\{#each data\.audit\.([A-Za-z0-9_]+) as ([A-Za-z0-9_]+)/g,
+    ),
+  ].map((match) => [match[1], match[2]]);
+
+  assert.deepEqual(rawAuditLoops, [
+    ["entries", "entry"],
+    ["productionFeatureDestinationSections", "section"],
+    ["artifactSummarySections", "section"],
+  ]);
+  assert.match(source, /data\.audit\.accountControls/);
+  assert.match(source, /data-testid="admin-identity-account-disable-form"/);
+  assert.match(source, /data-testid="admin-identity-account-enable-form"/);
+});
+
 test("admin audit detail page renders admin spine batch rows from route data", async () => {
   const source = await readFile(
     "frontend/src/routes/admin/audit/[audit]/+page.svelte",
