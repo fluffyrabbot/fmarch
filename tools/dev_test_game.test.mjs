@@ -21837,6 +21837,8 @@ function proofGraphAdminProofFixture() {
     nodes: proofGraphDiagnosticProofNodes,
   });
   const diagnosticProofRows = diagnosticProofSummary.rows;
+  const selectedOperatorHandoffReceiptDestination =
+    selectedOperatorHandoffReceiptDestinationFixture();
   return {
     version: 1,
     proof: "dev-test-game-proof-graph-admin-proof",
@@ -21894,6 +21896,7 @@ function proofGraphAdminProofFixture() {
       manifestProductionFeatureProvenanceSummary,
       productionFeatureProvenanceComparison,
       diagnosticProofSummary,
+      selectedOperatorHandoffReceiptDestination,
       hostSetupFeatureTarget: hostSetupGraphTarget,
       cohostFeatureTarget: cohostGraphTarget,
       replacementFeatureTarget: replacementGraphTarget,
@@ -21992,6 +21995,7 @@ function proofGraphAdminProofFixture() {
             : {}),
         })),
         nextActionHandoffDestinationFixture(),
+        selectedOperatorHandoffReceiptDestination,
         ...productionFeatureTargetDestinations
           .filter((destination) => destination.kind === "admin-audit")
           .map((destination) => ({
@@ -24374,6 +24378,109 @@ function nextActionHandoffPairFixture() {
 
 function selectedOperatorHandoffReceiptFixture() {
   return buildSelectedOperatorHandoffTerminalReceipt();
+}
+
+function selectedOperatorHandoffReceiptPassedFixture() {
+  return buildSelectedOperatorHandoffTerminalReceipt({
+    nextAction: {
+      selectedOperatorHandoff: {
+        id: "hosted-deployment:blocked-operator-packet",
+        status: "blocked",
+        reason: "release-readiness-unproven",
+        command: `npm run ${devTestGameHostedEvidenceLaneCommand}`,
+        unprovenId: "hosted-deployment",
+        proofTarget: devTestGameHostedEvidenceLanePath,
+        roleUrl: "/admin/audit/local-hosted-evidence-lane?game=<seeded-game>",
+        firstMissingInputId: "FMARCH_HOSTED_MATRIX_FRONTEND_URL",
+        selectedProductionFeatureGraphNodeId:
+          "production-feature:host-phase-control",
+        selectedProductionFeatureRoleUrl:
+          "/admin/audit/local-core-loop?game=<seeded-game>",
+      },
+    },
+    proofGraph: {
+      edges: [
+        {
+          from: "next-action",
+          to: "production-feature:host-phase-control",
+          relationship: "selected-operator-handoff",
+          command: `npm run ${devTestGameHostedEvidenceLaneCommand}`,
+          firstMissingInputId: "FMARCH_HOSTED_MATRIX_FRONTEND_URL",
+          roleUrl: "/admin/audit/local-core-loop?game=<seeded-game>",
+          proofTarget: devTestGameHostedEvidenceLanePath,
+          unprovenId: "hosted-deployment",
+        },
+      ],
+    },
+  });
+}
+
+function selectedOperatorHandoffReceiptDestinationFixture() {
+  const receipt = selectedOperatorHandoffReceiptPassedFixture();
+  return {
+    linkId: "admin-spine-terminal-batches",
+    auditId: localAdminAuditIds.adminSpine,
+    detailRoleUrl: localAdminAuditRoleUrl(localAdminAuditIds.adminSpine),
+    selectedOperatorHandoffReceiptId: receipt.id,
+    selectedOperatorHandoffReceiptStatus: receipt.status,
+    requiredSelectedOperatorHandoffTerminalReceiptRows: [
+      "receipt",
+      "selected",
+      "edge",
+      "readiness-link",
+    ],
+    requiredSelectedOperatorHandoffTerminalReceiptRowStatuses: {
+      receipt: [receipt.status, receipt.id, receipt.proofBoundary].join("\n"),
+      selected: [
+        receipt.selectedOperatorHandoff.status,
+        receipt.selectedOperatorHandoff.command,
+        receipt.selectedOperatorHandoff.firstMissingInputId,
+        receipt.selectedOperatorHandoff.selectedProductionFeatureGraphNodeId,
+      ].join("\n"),
+      edge: [
+        receipt.proofGraphEdge.from,
+        receipt.proofGraphEdge.relationship,
+        receipt.proofGraphEdge.to,
+        receipt.proofGraphEdge.firstMissingInputId,
+      ].join("\n"),
+      "readiness-link": [
+        receipt.readinessRelatedLink.id,
+        receipt.readinessRelatedLink.sourceAuditId,
+        receipt.readinessRelatedLink.destinationAuditId,
+        receipt.readinessRelatedLink.status,
+        receipt.readinessRelatedLink.command,
+      ].join("\n"),
+    },
+    visibleSelectedOperatorHandoffTerminalReceiptRows: [
+      "receipt",
+      "selected",
+      "edge",
+      "readiness-link",
+    ],
+    visibleSelectedOperatorHandoffTerminalReceiptRowStatuses: {
+      receipt:
+        [receipt.status, receipt.id, receipt.proofBoundary].join("\n"),
+      selected: [
+        receipt.selectedOperatorHandoff.status,
+        receipt.selectedOperatorHandoff.command,
+        receipt.selectedOperatorHandoff.firstMissingInputId,
+        receipt.selectedOperatorHandoff.selectedProductionFeatureGraphNodeId,
+      ].join("\n"),
+      edge: [
+        receipt.proofGraphEdge.from,
+        receipt.proofGraphEdge.relationship,
+        receipt.proofGraphEdge.to,
+        receipt.proofGraphEdge.firstMissingInputId,
+      ].join("\n"),
+      "readiness-link": [
+        receipt.readinessRelatedLink.id,
+        receipt.readinessRelatedLink.sourceAuditId,
+        receipt.readinessRelatedLink.destinationAuditId,
+        receipt.readinessRelatedLink.status,
+        receipt.readinessRelatedLink.command,
+      ].join("\n"),
+    },
+  };
 }
 
 function nextActionHandoffDestinationFixture() {

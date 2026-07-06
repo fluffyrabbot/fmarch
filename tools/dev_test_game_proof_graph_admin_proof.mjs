@@ -8,7 +8,10 @@ import {
   assertProofGraphProductionFeatureProvenanceComparison,
   proofGraphProductionFeatureTargetDestinations,
 } from "./dev_test_game_proof_graph_production_feature_destinations.mjs";
-import { validateDevTestGameAdminSpineProof } from "./dev_test_game_release_readiness.mjs";
+import {
+  validateDevTestGameAdminSpineProof,
+  validateDevTestGameAdminSpineTerminalBatches,
+} from "./dev_test_game_release_readiness.mjs";
 import { assertDevTestGameProofRun } from "./dev_test_game_proof_contract.mjs";
 import {
   assertDevTestGameHostedConcurrentRaceMatrixEvidence,
@@ -60,6 +63,7 @@ import {
 import { adminProofGraphRoleHandoffs } from "./dev_test_game_proof_graph_handoffs.mjs";
 import {
   adminSpineProofPath as defaultAdminSpineProofPath,
+  adminSpineTerminalBatchProofPath,
   devTestGameProofGraphPath,
   devTestGameProofRunPath,
 } from "./dev_test_game_spine_artifact_paths.mjs";
@@ -71,6 +75,9 @@ import {
 import {
   devTestGameNextActionSequenceHandoffPair,
 } from "./dev_test_game_next_action_sequence_handoff_pair.mjs";
+import {
+  selectedOperatorHandoffTerminalReceiptId,
+} from "./dev_test_game_selected_operator_handoff_receipt.mjs";
 import {
   normalizeProofGraphDiagnosticProofSummary,
 } from "./dev_test_game_proof_graph_diagnostic_summary.mjs";
@@ -89,6 +96,11 @@ const adminSpineProofPath = path.resolve(
   process.env.FMARCH_DEV_TEST_GAME_ADMIN_SPINE_PROOF ??
     defaultAdminSpineProofPath,
 );
+const adminSpineTerminalBatchesPath = path.resolve(
+  repoRoot,
+  process.env.FMARCH_DEV_TEST_GAME_ADMIN_SPINE_TERMINAL_BATCHES ??
+    adminSpineTerminalBatchProofPath,
+);
 const hostedMatrixPath = path.resolve(
   repoRoot,
   process.env.FMARCH_DEV_TEST_GAME_HOSTED_CONCURRENT_RACE_MATRIX ??
@@ -102,6 +114,10 @@ const hostedEvidenceLanePath = path.resolve(
 const proofGraphRelativePath = path.relative(repoRoot, proofGraphPath);
 const proofRunRelativePath = path.relative(repoRoot, proofRunPath);
 const adminSpineProofRelativePath = path.relative(repoRoot, adminSpineProofPath);
+const adminSpineTerminalBatchesRelativePath = path.relative(
+  repoRoot,
+  adminSpineTerminalBatchesPath,
+);
 const hostedMatrixRelativePath = path.relative(repoRoot, hostedMatrixPath);
 const hostedEvidenceLaneRelativePath = path.relative(
   repoRoot,
@@ -117,12 +133,16 @@ export function proofGraphAdminProofCase() {
     envOverrides: {
       FMARCH_DEV_TEST_GAME_PROOF_GRAPH: proofGraphRelativePath,
       FMARCH_DEV_TEST_GAME_ADMIN_SPINE_PROOF: adminSpineProofRelativePath,
+      FMARCH_DEV_TEST_GAME_ADMIN_SPINE_TERMINAL_BATCHES:
+        adminSpineTerminalBatchesRelativePath,
       FMARCH_DEV_TEST_GAME_HOSTED_CONCURRENT_RACE_MATRIX:
         hostedMatrixRelativePath,
       FMARCH_DEV_TEST_GAME_HOSTED_EVIDENCE_LANE: hostedEvidenceLaneRelativePath,
     },
     loadSource: async () => {
       const adminSpineProof = await readJson(adminSpineProofPath);
+      const adminSpineTerminalBatches =
+        await readOptionalAdminSpineTerminalBatches();
       return {
         proofGraph: assertDevTestGameProofGraph(await readJson(proofGraphPath), {
           adminSpineProof,
@@ -131,6 +151,7 @@ export function proofGraphAdminProofCase() {
         adminSpineProof: validateDevTestGameAdminSpineProof(adminSpineProof, {
           path: adminSpineProofRelativePath,
         }),
+        adminSpineTerminalBatches,
         hostedMatrix: assertDevTestGameHostedConcurrentRaceMatrixEvidence(
           await readJson(hostedMatrixPath),
         ),
@@ -192,6 +213,9 @@ export function proofGraphAdminProofCase() {
             (destination) => destination.kind === "admin-audit",
           ),
           ...proofGraphNextActionHandoffDestinations(source.proofGraph),
+          ...proofGraphSelectedOperatorHandoffReceiptDestinations(
+            source.adminSpineTerminalBatches,
+          ),
         ],
       });
     },
@@ -208,6 +232,12 @@ export function proofGraphAdminProofCase() {
         proofGraph: proofGraphRelativePath,
         proofRun: proofRunRelativePath,
         adminSpineProof: adminSpineProofRelativePath,
+        ...(source.adminSpineTerminalBatches === null
+          ? {}
+          : {
+              adminSpineTerminalBatches:
+                adminSpineTerminalBatchesRelativePath,
+            }),
         hostedConcurrentRaceMatrix: hostedMatrixRelativePath,
         hostedEvidenceLane: hostedEvidenceLaneRelativePath,
         game: source.proofRun.session.game,
@@ -243,6 +273,16 @@ export function proofGraphAdminProofCase() {
           source.proofGraph.summary?.diagnosticProofSummary,
           { nodes: source.proofGraph.nodes },
         ),
+        ...(source.adminSpineTerminalBatches?.selectedOperatorHandoffReceipt
+          ?.status === "passed"
+          ? {
+              selectedOperatorHandoffReceiptDestination:
+                proofGraphSelectedOperatorHandoffReceiptDestination(
+                  source.adminSpineTerminalBatches
+                    .selectedOperatorHandoffReceipt,
+                ),
+            }
+          : {}),
         ...proofGraphAdminFeatureTargetEntries(source.proofGraph),
       },
       adminRoleSurface,
@@ -319,6 +359,7 @@ export function assertProofGraphAdminProof(evidence) {
   ) {
     throw new Error("proof graph admin proof missing next-action handoff link");
   }
+  assertProofGraphAdminProofCoversSelectedOperatorHandoffReceipt(evidence);
   assertAdminAuditRelatedHandoffs({
     adminRoleSurface: evidence.adminRoleSurface,
     handoffs: evidence.generatedFrom?.adminProofRoleHandoffs,
@@ -333,6 +374,21 @@ export function assertProofGraphAdminProof(evidence) {
     assertProofGraphAdminProofCoversFeatureTarget(evidence, featureTargetCase);
   }
   return evidence;
+}
+
+async function readOptionalAdminSpineTerminalBatches() {
+  let payload;
+  try {
+    payload = await readJson(adminSpineTerminalBatchesPath);
+  } catch (error) {
+    if (error?.code === "ENOENT") {
+      return null;
+    }
+    throw error;
+  }
+  return validateDevTestGameAdminSpineTerminalBatches(payload, {
+    path: adminSpineTerminalBatchesRelativePath,
+  });
 }
 
 function assertProofGraphAdminProofCoversProductionFeatureProvenanceComparison(
@@ -857,6 +913,104 @@ function proofGraphNextActionHandoffDestinations(proofGraph) {
       },
     },
   ];
+}
+
+function proofGraphSelectedOperatorHandoffReceiptDestinations(
+  adminSpineTerminalBatches,
+) {
+  const receipt = adminSpineTerminalBatches?.selectedOperatorHandoffReceipt;
+  if (receipt?.status !== "passed") {
+    return [];
+  }
+  return [proofGraphSelectedOperatorHandoffReceiptDestination(receipt)];
+}
+
+function proofGraphSelectedOperatorHandoffReceiptDestination(receipt) {
+  return {
+    linkId: "admin-spine-terminal-batches",
+    auditId: localAdminAuditIds.adminSpine,
+    detailRoleUrl:
+      `/admin/audit/${localAdminAuditIds.adminSpine}?game=<seeded-game>`,
+    selectedOperatorHandoffReceiptId: receipt.id,
+    selectedOperatorHandoffReceiptStatus: receipt.status,
+    requiredSelectedOperatorHandoffTerminalReceiptRows: [
+      "receipt",
+      "selected",
+      "edge",
+      "readiness-link",
+    ],
+    requiredSelectedOperatorHandoffTerminalReceiptRowStatuses: {
+      receipt: [receipt.status, receipt.id, receipt.proofBoundary].join("\n"),
+      selected: [
+        receipt.selectedOperatorHandoff.status,
+        receipt.selectedOperatorHandoff.command,
+        receipt.selectedOperatorHandoff.firstMissingInputId,
+        receipt.selectedOperatorHandoff.selectedProductionFeatureGraphNodeId,
+      ].join("\n"),
+      edge: [
+        receipt.proofGraphEdge.from,
+        receipt.proofGraphEdge.relationship,
+        receipt.proofGraphEdge.to,
+        receipt.proofGraphEdge.firstMissingInputId,
+      ].join("\n"),
+      "readiness-link": [
+        receipt.readinessRelatedLink.id,
+        receipt.readinessRelatedLink.sourceAuditId,
+        receipt.readinessRelatedLink.destinationAuditId,
+        receipt.readinessRelatedLink.status,
+        receipt.readinessRelatedLink.command,
+      ].join("\n"),
+    },
+  };
+}
+
+function assertProofGraphAdminProofCoversSelectedOperatorHandoffReceipt(
+  evidence,
+) {
+  const destination =
+    evidence.generatedFrom?.selectedOperatorHandoffReceiptDestination;
+  if (destination === undefined) {
+    return;
+  }
+  if (
+    destination.selectedOperatorHandoffReceiptId !==
+      selectedOperatorHandoffTerminalReceiptId ||
+    destination.selectedOperatorHandoffReceiptStatus !== "passed" ||
+    destination.linkId !== "admin-spine-terminal-batches" ||
+    destination.auditId !== localAdminAuditIds.adminSpine
+  ) {
+    throw new Error(
+      "proof graph admin proof selected operator receipt destination drifted",
+    );
+  }
+  const visibleDestination =
+    evidence.adminRoleSurface?.visibleRelatedDestinations?.find(
+      (candidate) =>
+        candidate.linkId === destination.linkId &&
+        candidate.auditId === destination.auditId,
+    );
+  if (
+    visibleDestination?.detailRoleUrl !== destination.detailRoleUrl ||
+    !sameStringArray(
+      visibleDestination.visibleSelectedOperatorHandoffTerminalReceiptRows,
+      destination.requiredSelectedOperatorHandoffTerminalReceiptRows,
+    ) ||
+    JSON.stringify(
+      visibleDestination
+        .visibleSelectedOperatorHandoffTerminalReceiptRowStatuses ?? {},
+    ) !==
+      JSON.stringify(
+        destination.requiredSelectedOperatorHandoffTerminalReceiptRowStatuses,
+      )
+  ) {
+    throw new Error(
+      "proof graph admin proof did not inspect selected operator handoff receipt",
+    );
+  }
+}
+
+function sameStringArray(actual, expected) {
+  return JSON.stringify(actual ?? []) === JSON.stringify(expected ?? []);
 }
 
 function proofGraphAdminFeatureTargetEntries(proofGraph) {

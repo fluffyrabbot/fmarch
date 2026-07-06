@@ -347,6 +347,8 @@ export async function proveAdminAuditDetail({
   requiredHostedIdentityProgressionStatuses = {},
   requiredNextActionHandoffPairRows = [],
   requiredNextActionHandoffPairRowStatuses = {},
+  requiredSelectedOperatorHandoffTerminalReceiptRows = [],
+  requiredSelectedOperatorHandoffTerminalReceiptRowStatuses = {},
   requiredHostedIdentityOperatorGate = null,
   requiredHostedIdentityProviderBoundary = null,
   requiredHostedIdentityRoleSurfaceContractDiffStatus = null,
@@ -681,6 +683,22 @@ export async function proveAdminAuditDetail({
       prefix: "admin-audit-next-action-handoff-pair",
       ids: Object.keys(requiredNextActionHandoffPairRowStatuses),
     });
+    const visibleSelectedOperatorHandoffTerminalReceiptRows =
+      await waitForRows({
+        page,
+        prefix: "admin-audit-selected-operator-handoff-terminal",
+        ids: requiredSelectedOperatorHandoffTerminalReceiptRows,
+        expectedStatuses:
+          requiredSelectedOperatorHandoffTerminalReceiptRowStatuses,
+      });
+    const visibleSelectedOperatorHandoffTerminalReceiptRowStatuses =
+      await readRowStatuses({
+        page,
+        prefix: "admin-audit-selected-operator-handoff-terminal",
+        ids: Object.keys(
+          requiredSelectedOperatorHandoffTerminalReceiptRowStatuses,
+        ),
+      });
     const requiredHostedIdentityOperatorGateIds =
       requiredHostedIdentityOperatorGate === null
         ? []
@@ -987,6 +1005,26 @@ export async function proveAdminAuditDetail({
             destination.requiredNextActionHandoffPairRowStatuses ?? {},
           ),
         });
+      const destinationVisibleSelectedOperatorHandoffTerminalReceiptRows =
+        await waitForRows({
+          page,
+          prefix: "admin-audit-selected-operator-handoff-terminal",
+          ids:
+            destination.requiredSelectedOperatorHandoffTerminalReceiptRows ??
+            [],
+          expectedStatuses:
+            destination.requiredSelectedOperatorHandoffTerminalReceiptRowStatuses ??
+            {},
+        });
+      const destinationVisibleSelectedOperatorHandoffTerminalReceiptRowStatuses =
+        await readRowStatuses({
+          page,
+          prefix: "admin-audit-selected-operator-handoff-terminal",
+          ids: Object.keys(
+            destination.requiredSelectedOperatorHandoffTerminalReceiptRowStatuses ??
+              {},
+          ),
+        });
       await assertAdminAuditBodyText({
         page,
         auditId: destinationAuditId,
@@ -1091,6 +1129,21 @@ export async function proveAdminAuditDetail({
           : {
               visibleNextActionHandoffPairRowStatuses:
                 destinationVisibleNextActionHandoffPairRowStatuses,
+            }),
+        ...(destinationVisibleSelectedOperatorHandoffTerminalReceiptRows
+          .length === 0
+          ? {}
+          : {
+              visibleSelectedOperatorHandoffTerminalReceiptRows:
+                destinationVisibleSelectedOperatorHandoffTerminalReceiptRows,
+            }),
+        ...(Object.keys(
+          destinationVisibleSelectedOperatorHandoffTerminalReceiptRowStatuses,
+        ).length === 0
+          ? {}
+          : {
+              visibleSelectedOperatorHandoffTerminalReceiptRowStatuses:
+                destinationVisibleSelectedOperatorHandoffTerminalReceiptRowStatuses,
             }),
       });
     }
@@ -1279,6 +1332,19 @@ export async function proveAdminAuditDetail({
         : {
             visibleNextActionHandoffPairRowStatuses:
               visibleNextActionHandoffPairRowStatuses,
+          }),
+      ...(visibleSelectedOperatorHandoffTerminalReceiptRows.length === 0
+        ? {}
+        : {
+            visibleSelectedOperatorHandoffTerminalReceiptRows:
+              visibleSelectedOperatorHandoffTerminalReceiptRows,
+          }),
+      ...(Object.keys(visibleSelectedOperatorHandoffTerminalReceiptRowStatuses)
+        .length === 0
+        ? {}
+        : {
+            visibleSelectedOperatorHandoffTerminalReceiptRowStatuses:
+              visibleSelectedOperatorHandoffTerminalReceiptRowStatuses,
           }),
       ...(visibleHostedIdentityOperatorGate.length === 0
         ? {}
