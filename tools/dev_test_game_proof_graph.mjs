@@ -745,6 +745,8 @@ export function assertDevTestGameProofGraphCoversProductionFeatureTargets(
       node.checkpointId !== target.checkpointId ||
       node.adminCheckId !== target.adminCheckId ||
       node.browserProofCommand !== target.browserProofCommand ||
+      JSON.stringify(node.browserWorkbench ?? null) !==
+        JSON.stringify(target.browserWorkbench ?? null) ||
       node.sourceProofArtifact !== target.sourceProofArtifact ||
       node.recoveryCommand !== target.rerunCommand ||
       JSON.stringify(node.coverageDecision ?? null) !==
@@ -757,6 +759,15 @@ export function assertDevTestGameProofGraphCoversProductionFeatureTargets(
       !validHostSetupProductionFeatureDestinationMetadata(node)
     ) {
       throw new Error("proof graph host setup production feature destination metadata drifted");
+    }
+    if (
+      productionFeatureRoleSurfaceSourceCheckIds.includes(target.sourceCheckId) &&
+      target.sourceCheckId !== hostSetupFeatureSpineSourceCheckId &&
+      !validRoleSurfaceProductionFeatureDestinationMetadata(node, target)
+    ) {
+      throw new Error(
+        `proof graph role-surface production feature destination metadata drifted: ${slotId}`,
+      );
     }
     if ((node.recoveryHookId ?? undefined) !== (target.recoveryHookId ?? undefined)) {
       throw new Error(`proof graph production feature recovery hook drifted: ${slotId}`);
@@ -804,6 +815,19 @@ function validHostSetupProductionFeatureDestinationMetadata(node) {
     node.browserWorkbench.requiredEvidence.includes(
       "setup workbench browser surface",
     )
+  );
+}
+
+function validRoleSurfaceProductionFeatureDestinationMetadata(node, target) {
+  return (
+    node.readinessEvidence === target.sourceProofArtifact &&
+    node.browserWorkbench !== null &&
+    typeof node.browserWorkbench === "object" &&
+    node.browserWorkbench.status === "passed" &&
+    node.browserWorkbench.roleUrl === target.roleUrl &&
+    node.browserWorkbench.featureSlotId === target.featureSlotId &&
+    typeof node.browserWorkbench.requiredEvidence === "string" &&
+    node.browserWorkbench.requiredEvidence.trim() !== ""
   );
 }
 
@@ -1414,6 +1438,9 @@ export function buildProductionFeatureTargetGraphNode({
     recoveryHookId: target.recoveryHookId,
     adminCheckId: target.adminCheckId,
     browserProofCommand: target.browserProofCommand,
+    ...(target.browserWorkbench === undefined
+      ? {}
+      : { browserWorkbench: target.browserWorkbench }),
     sourceProofArtifact: target.sourceProofArtifact,
     recoveryCommand: target.rerunCommand,
     coverageDecision: target.coverageDecision,
@@ -1423,27 +1450,34 @@ export function buildProductionFeatureTargetGraphNode({
 }
 
 function productionFeatureDestinationMetadataBySlotId(releaseReadiness) {
-  const hostSetupCheck = releaseReadiness.localDevelopmentSpine?.checks?.find(
-    (check) => check.id === hostSetupFeatureSpineSourceCheckId,
+  const roleSurfaceSourceCheckIds = new Set(
+    productionFeatureRoleSurfaceSourceCheckIds,
   );
-  if (hostSetupCheck === undefined) {
-    return {};
-  }
-  const hostSetupTargets = hostSetupCheck.spineTargets?.productionFeatureTargets;
-  if (!Array.isArray(hostSetupTargets?.slotIds)) {
-    return {};
-  }
   return Object.fromEntries(
-    hostSetupTargets.slotIds.map((slotId) => [
-      slotId,
-      {
-        adminDetailRoleUrl:
-          hostSetupCheck.adminRoleSurface?.detailRoleUrl ??
-          localAdminAuditRoleUrl(localAdminAuditIds.hostSetupProof),
-        browserWorkbench: hostSetupCheck.browserWorkbench,
-        readinessEvidence: hostSetupCheck.evidence,
-      },
-    ]),
+    (releaseReadiness.localDevelopmentSpine?.checks ?? [])
+      .filter((check) => roleSurfaceSourceCheckIds.has(check.id))
+      .flatMap((check) => {
+        const targets = check.spineTargets?.productionFeatureTargets;
+        if (!Array.isArray(targets?.slotIds)) {
+          return [];
+        }
+        const browserWorkbench =
+          check.spineTargets?.browserWorkbench ?? check.browserWorkbench;
+        return targets.slotIds.map((slotId) => [
+          slotId,
+          {
+            ...(check.id === hostSetupFeatureSpineSourceCheckId
+              ? {
+                  adminDetailRoleUrl:
+                    check.adminRoleSurface?.detailRoleUrl ??
+                    localAdminAuditRoleUrl(localAdminAuditIds.hostSetupProof),
+                }
+              : {}),
+            ...(browserWorkbench === undefined ? {} : { browserWorkbench }),
+            readinessEvidence: check.evidence,
+          },
+        ]);
+      }),
   );
 }
 

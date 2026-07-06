@@ -167,6 +167,7 @@ test("future feature source template flows through checklist, resolver, graph, a
     }),
     true,
   );
+  assert.deepEqual(target.browserWorkbench, futureFeatureBrowserWorkbenchFixture());
   const drilldown = buildProductionFeatureSpineDrilldown(target);
   assert.equal(
     validProductionFeatureSpineDrilldown(drilldown, {
@@ -174,6 +175,10 @@ test("future feature source template flows through checklist, resolver, graph, a
       coverageDecisionSummaryForCheckId,
     }),
     true,
+  );
+  assert.deepEqual(
+    drilldown.browserWorkbench,
+    futureFeatureBrowserWorkbenchFixture(),
   );
 
   const graphNode = buildProductionFeatureTargetGraphNode({
@@ -198,6 +203,7 @@ test("future feature source template flows through checklist, resolver, graph, a
     recoveryHookId: undefined,
     adminCheckId: declaration.adminCheckId,
     browserProofCommand,
+    browserWorkbench: futureFeatureBrowserWorkbenchFixture(),
     sourceProofArtifact: source.proofArtifact,
     recoveryCommand: source.rerunCommand,
     coverageDecision: productionFeatureSourceCoverageDecisionSummary(source),
@@ -751,6 +757,7 @@ function futureFeatureSourceTargetFixture() {
     sourceCheckId: "local-future-feature-proof",
     detailRoleUrl: "/admin/audit/local-future-feature?game=<seeded-game>",
     browserProofCommand,
+    browserWorkbench: futureFeatureBrowserWorkbenchFixture(),
     sourceProofArtifact: "target/dev-test-game/future-feature-admin-proof.json",
     rerunCommand: "npm run test:dev-test-game-future-feature-admin-proof",
     cycleIds: ["future-cycle"],
@@ -761,6 +768,18 @@ function futureFeatureSourceTargetFixture() {
     roleUrlHrefs: {
       "future-player": "http://127.0.0.1:5173/g/<seeded-game>",
     },
+  };
+}
+
+function futureFeatureBrowserWorkbenchFixture() {
+  return {
+    status: "passed",
+    route: "/g/<seeded-game>",
+    roleUrl: "http://127.0.0.1:5173/g/<seeded-game>",
+    roleSurface: "future-feature",
+    featureSlotId: "future-feature",
+    requiredEvidence:
+      "Seeded future feature role URL opens /g/<seeded-game> in the browser proof before future-admin-check recovery is trusted.",
   };
 }
 

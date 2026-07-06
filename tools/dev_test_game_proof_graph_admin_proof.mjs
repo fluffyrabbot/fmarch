@@ -420,6 +420,14 @@ function assertProofGraphAdminProofCoversProductionFeatureDestinations(evidence)
           `proof graph admin proof has malformed host setup production feature destination: ${destination.linkId}`,
         );
       }
+      if (
+        destination.sourceCheckId !== hostSetupFeatureSpineSourceCheckId &&
+        !validRoleUrlProductionFeatureDestination(destination)
+      ) {
+        throw new Error(
+          `proof graph admin proof has malformed role URL workbench production feature destination: ${destination.linkId}`,
+        );
+      }
       continue;
     }
     const visibleDestination =
@@ -455,6 +463,19 @@ function validHostSetupProductionFeatureDestination(destination) {
     destination.browserWorkbench.requiredEvidence.includes(
       "setup workbench browser surface",
     )
+  );
+}
+
+function validRoleUrlProductionFeatureDestination(destination) {
+  return (
+    destination.readinessEvidence === destination.sourceProofArtifact &&
+    destination.browserWorkbench !== null &&
+    typeof destination.browserWorkbench === "object" &&
+    destination.browserWorkbench.status === "passed" &&
+    destination.browserWorkbench.roleUrl === destination.roleUrl &&
+    destination.browserWorkbench.featureSlotId === destination.featureSlotId &&
+    typeof destination.browserWorkbench.requiredEvidence === "string" &&
+    destination.browserWorkbench.requiredEvidence.trim() !== ""
   );
 }
 

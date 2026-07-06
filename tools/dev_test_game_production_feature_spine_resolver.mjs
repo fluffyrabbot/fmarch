@@ -60,6 +60,9 @@ export function resolveProductionFeatureSpineTarget({
       : {}),
     adminCheckId: declaration.adminCheckId,
     browserProofCommand: sourceTarget.browserProofCommand,
+    ...(sourceTarget.browserWorkbench === undefined
+      ? {}
+      : { browserWorkbench: sourceTarget.browserWorkbench }),
     sourceProofArtifact: sourceTarget.sourceProofArtifact,
     rerunCommand:
       sourceTarget.rerunCommand ??
@@ -84,6 +87,9 @@ export function buildProductionFeatureSpineDrilldown(spineTarget) {
     roleUrl: spineTarget.roleUrl,
     rerunCommand: spineTarget.rerunCommand,
     browserProofCommand: spineTarget.browserProofCommand,
+    ...(spineTarget.browserWorkbench === undefined
+      ? {}
+      : { browserWorkbench: spineTarget.browserWorkbench }),
     sourceProofArtifact: spineTarget.sourceProofArtifact,
     coverageDecision: spineTarget.coverageDecision,
   };

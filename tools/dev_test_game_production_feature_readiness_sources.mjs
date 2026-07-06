@@ -73,6 +73,7 @@ function spineTargetsSourceTargetFromReadiness(readiness, sourceCheckId) {
     roleUrl: String(targets.defaultRoleUrl ?? ""),
     checkpointId: String(targets.defaultCheckpointId ?? ""),
     browserProofCommand: String(targets.browserProofCommand ?? ""),
+    browserWorkbench: normalizeBrowserWorkbench(targets.browserWorkbench),
     sourceProofArtifact: String(source.proofArtifact ?? ""),
     cycleIds: [...(targets.cycleIds ?? [])].map((id) => String(id)),
     roleUrlIds: [...(targets.roleUrlIds ?? [])].map((id) => String(id)),
@@ -94,6 +95,18 @@ function spineTargetsSourceTargetFromReadiness(readiness, sourceCheckId) {
         : {},
   };
   return validSourceTarget(sourceTarget) ? sourceTarget : null;
+}
+
+function normalizeBrowserWorkbench(browserWorkbench) {
+  if (browserWorkbench === null || typeof browserWorkbench !== "object") {
+    return undefined;
+  }
+  return Object.fromEntries(
+    Object.entries(browserWorkbench).map(([key, value]) => [
+      String(key),
+      String(value ?? ""),
+    ]),
+  );
 }
 
 function identityAdapterSourceTargetFromReadiness(

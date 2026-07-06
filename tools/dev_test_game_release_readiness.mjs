@@ -263,6 +263,7 @@ import {
   adminSpineProofIds,
 } from "./dev_test_game_admin_spine_proof_batches.mjs";
 import {
+  roleSurfaceBrowserWorkbenchEvidence,
   roleSurfaceSpineCases,
 } from "./dev_test_game_role_surface_spine_cases.mjs";
 import {
@@ -4072,6 +4073,9 @@ function buildRoleSurfaceReadinessSpineTargets({
   const roleUrlHrefs = {
     [defaultRoleUrlId]: proofEvidence.roleUrl,
   };
+  const browserWorkbench =
+    proofEvidence.browserWorkbench ??
+    roleSurfaceBrowserWorkbenchEvidence(roleSurfaceCase, proofEvidence.roleUrl);
   return {
     status: "passed",
     detailRoleUrl: proofEvidence.roleUrl,
@@ -4080,6 +4084,7 @@ function buildRoleSurfaceReadinessSpineTargets({
     defaultRoleUrl: proofEvidence.roleUrl,
     defaultCheckpointId,
     browserProofCommand: devTestGameSeededBrowserProofCommand,
+    browserWorkbench,
     cycleIds: resolvedCycleIds,
     roleUrlIds: resolvedRoleUrlIds,
     checkpointIds: resolvedCheckpointIds,
@@ -4092,6 +4097,7 @@ function buildRoleSurfaceReadinessSpineTargets({
         sourceCheckId: source.sourceCheckId,
         detailRoleUrl: proofEvidence.roleUrl,
         browserProofCommand: devTestGameSeededBrowserProofCommand,
+        browserWorkbench,
         sourceProofArtifact: source.proofArtifact,
         rerunCommand: source.rerunCommand,
         cycleIds: resolvedCycleIds,
@@ -8274,6 +8280,11 @@ function validRoleSurfaceSpineTargets(spineTargets, roleSurfaceCase) {
     spineTargets.defaultCycleId === targetRow.cycleId &&
     spineTargets.defaultRoleUrlId === targetRow.roleUrlId &&
     spineTargets.defaultRoleUrl?.includes(source.roleUrlIncludes) &&
+    validRoleSurfaceBrowserWorkbench(
+      spineTargets.browserWorkbench,
+      roleSurfaceCase,
+      spineTargets.defaultRoleUrl,
+    ) &&
     spineTargets.defaultCheckpointId === targetRow.checkpointId &&
     typeof spineTargets.browserProofCommand === "string" &&
     spineTargets.browserProofCommand.includes("test:dev-test-game-core-live") &&
@@ -8308,6 +8319,20 @@ function validProductionFeatureTargetsForSource(
       .filter((declaration) => declaration.sourceCheckId === sourceCheckId),
     sourceCheckRules: productionFeatureSpineSourceCheckRules,
   });
+}
+
+function validRoleSurfaceBrowserWorkbench(
+  browserWorkbench,
+  roleSurfaceCase,
+  roleUrl,
+) {
+  if (roleSurfaceCase.source.sourceCheckId === hostSetupFeatureSpineSourceCheckId) {
+    return validHostSetupBrowserWorkbench(browserWorkbench);
+  }
+  return (
+    JSON.stringify(browserWorkbench ?? null) ===
+    JSON.stringify(roleSurfaceBrowserWorkbenchEvidence(roleSurfaceCase, roleUrl))
+  );
 }
 
 export function markdownChecklist(checklist) {

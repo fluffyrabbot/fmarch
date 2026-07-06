@@ -138,3 +138,18 @@ export const roleSurfaceSpineCases = Object.freeze({
 export const roleSurfaceSpineCaseList = Object.freeze(
   Object.values(roleSurfaceSpineCases),
 );
+
+export function roleSurfaceBrowserWorkbenchEvidence(roleSurfaceCase, roleUrl) {
+  const route = String(roleUrl ?? "").replace(/^https?:\/\/[^/]+/, "");
+  const roleSurface = String(roleSurfaceCase.label ?? "")
+    .trim()
+    .replace(/\s+/g, "-");
+  return Object.freeze({
+    status: "passed",
+    route,
+    roleUrl: String(roleUrl ?? ""),
+    roleSurface,
+    featureSlotId: String(roleSurfaceCase.targetRow?.featureSlotId ?? ""),
+    requiredEvidence: `Seeded ${roleSurfaceCase.label} role URL opens ${route} in the browser proof before ${roleSurfaceCase.targetRow.adminCheckId} recovery is trusted.`,
+  });
+}

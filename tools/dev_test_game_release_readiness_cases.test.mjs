@@ -84,6 +84,7 @@ import {
   proofGraphAdminFeatureTargetCases,
 } from "./dev_test_game_proof_graph_feature_target_cases.mjs";
 import {
+  roleSurfaceBrowserWorkbenchEvidence,
   roleSurfaceSpineCaseList,
 } from "./dev_test_game_role_surface_spine_cases.mjs";
 import {
@@ -691,6 +692,10 @@ test("proof graph admin feature targets derive from shared source rows", () => {
       featureTargetCase.targetRow.sourceCheckId,
       featureTargetCase.targetRow.checkpointId,
       featureTargetCase.targetRow.adminCheckId,
+      roleSurfaceBrowserWorkbenchEvidence(
+        featureTargetCase,
+        featureTargetCase.source.roleUrlIncludes,
+      ),
       [...featureTargetCase.visibleAdminCheckIds],
       featureTargetCase.buildVisibleAdminCheckIds === undefined
         ? null
@@ -710,6 +715,14 @@ test("proof graph admin feature targets derive from shared source rows", () => {
       featureTargetCase.targetRow.sourceCheckId,
       featureTargetCase.targetRow.checkpointId,
       featureTargetCase.targetRow.adminCheckId,
+      {
+        status: "passed",
+        route: featureTargetCase.source.roleUrlIncludes,
+        roleUrl: featureTargetCase.source.roleUrlIncludes,
+        roleSurface: featureTargetCase.label.replace(/\s+/g, "-"),
+        featureSlotId: featureTargetCase.targetRow.featureSlotId,
+        requiredEvidence: `Seeded ${featureTargetCase.label} role URL opens ${featureTargetCase.source.roleUrlIncludes} in the browser proof before ${featureTargetCase.targetRow.adminCheckId} recovery is trusted.`,
+      },
       featureTargetCase.visibleAdminCheckIds,
       featureTargetCase.buildVisibleAdminCheckIds ?? null,
       featureTargetCase.readinessDetailKeys,

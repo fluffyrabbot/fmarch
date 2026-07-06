@@ -53,6 +53,18 @@ test("production feature readiness sources derive every available source target"
     ],
     "http://127.0.0.1:5173/g/game-a/host",
   );
+  assert.deepEqual(
+    sourceTargets["local-hardening-proof"].browserWorkbench,
+    {
+      status: "passed",
+      route: "/g/game-a/host",
+      roleUrl: "http://127.0.0.1:5173/g/game-a/host",
+      roleSurface: "hardening-host",
+      featureSlotId: "replacement-stale-conflict-message",
+      requiredEvidence:
+        "Seeded hardening host role URL opens /g/game-a/host in the browser proof before replacement-stale-conflict-message recovery is trusted.",
+    },
+  );
   assert.equal(
     sourceTargets[identityFeatureSpineSourceCheckId].rerunCommand,
     identityAdminProofCommand,
@@ -140,6 +152,15 @@ function readinessFixture() {
             defaultRoleUrl: "http://127.0.0.1:5173/g/game-a/host",
             defaultCheckpointId: "replacement-stale-conflict-message",
             browserProofCommand,
+            browserWorkbench: {
+              status: "passed",
+              route: "/g/game-a/host",
+              roleUrl: "http://127.0.0.1:5173/g/game-a/host",
+              roleSurface: "hardening-host",
+              featureSlotId: "replacement-stale-conflict-message",
+              requiredEvidence:
+                "Seeded hardening host role URL opens /g/game-a/host in the browser proof before replacement-stale-conflict-message recovery is trusted.",
+            },
             cycleIds: ["hardening-stale-conflict"],
             roleUrlIds: ["replacement-stale-conflict-message"],
             checkpointIds: ["replacement-stale-conflict-message"],
