@@ -19081,6 +19081,8 @@ function hostLifecycleRoleSurfaceFixture() {
 function hostModkillControlSurfaceFixture() {
   return {
     status: "passed",
+    sourceRoleUrl:
+      "http://127.0.0.1:5173/g/00000000-0000-0000-0000-000000000001/host",
     proofCheckId: "host-modkill-control",
     staleProofCheckId: "stale-host-modkill",
     staleReloadProofCheckId: "stale-host-modkill-reload",
@@ -19128,6 +19130,7 @@ function hostModkillControlSurfaceFixture() {
 function hostLifecycleRaceSurfaceFixture() {
   return {
     status: "passed",
+    sourceRoleUrl: "http://127.0.0.1:5173/g/lifecycle-race-game-a/host",
     proofCheckId: "concurrent-host-lifecycle-race",
     reloadProofCheckId: "concurrent-host-lifecycle-race-reload",
     hostLifecycleRace: {
@@ -19167,6 +19170,7 @@ function hostLifecycleRaceSurfaceFixture() {
 function hostPublishRaceSurfaceFixture() {
   return {
     status: "passed",
+    sourceRoleUrl: "http://127.0.0.1:5173/g/publish-race-game-a/host",
     proofCheckId: "concurrent-host-publish-race",
     reloadProofCheckId: "concurrent-host-publish-race-reload",
     hostPublishRace: {
@@ -19204,6 +19208,7 @@ function hostPublishRaceSurfaceFixture() {
 function hostResolveRaceSurfaceFixture() {
   return {
     status: "passed",
+    sourceRoleUrl: "http://127.0.0.1:5173/g/resolve-race-game-a/host",
     proofCheckId: "concurrent-host-resolve-race",
     reloadProofCheckId: "concurrent-host-resolve-race-reload",
     hostResolveRace: {
@@ -19239,6 +19244,7 @@ function hostResolveRaceSurfaceFixture() {
 function hostAdvanceRaceSurfaceFixture() {
   return {
     status: "passed",
+    sourceRoleUrl: "http://127.0.0.1:5173/g/advance-race-game-a/host",
     proofCheckId: "concurrent-host-advance-race",
     reloadProofCheckId: "concurrent-host-advance-race-reload",
     hostAdvanceRace: {
@@ -19273,6 +19279,8 @@ function hostAdvanceRaceSurfaceFixture() {
 function hostDeadlineAdvanceRaceSurfaceFixture() {
   return {
     status: "passed",
+    sourceRoleUrl:
+      "http://127.0.0.1:5173/g/deadline-advance-race-game-a/host",
     proofCheckId: "concurrent-host-deadline-advance-race",
     reloadProofCheckId: "concurrent-host-deadline-advance-race-reload",
     hostDeadlineAdvanceRace: {
@@ -19309,6 +19317,7 @@ function hostDeadlineAdvanceRaceSurfaceFixture() {
 function hostMixedAdvanceRaceSurfaceFixture() {
   return {
     status: "passed",
+    sourceRoleUrl: "http://127.0.0.1:5173/g/mixed-advance-race-game-a/host",
     proofCheckId: "concurrent-host-mixed-advance-race",
     reloadProofCheckId: "concurrent-host-mixed-advance-race-reload",
     hostMixedAdvanceRace: {

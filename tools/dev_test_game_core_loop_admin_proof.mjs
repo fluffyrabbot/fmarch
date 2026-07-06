@@ -197,6 +197,7 @@ function completedGameHardeningCoverageStatus(proofRun) {
 
 function hostModkillControlSurfaceFromProofRun(proofRun) {
   return proofRunLaneSurface(proofRun, {
+    sourceRoleUrl: proofRunHostRoleUrl(proofRun, proofRun.session?.game),
     metadata: {
       proofCheckId: "host-modkill-control",
       staleProofCheckId: "stale-host-modkill",
@@ -217,12 +218,14 @@ function hostRaceSurfacesFromProofRun(proofRun) {
       proofRunLaneSurface(proofRun, {
         metadata: raceCase.metadata,
         laneMap: raceCase.laneMap,
+        sourceRoleUrl: (lanes) =>
+          proofRunHostRoleUrl(proofRun, proofRunLaneSurfaceGame(lanes)),
       }),
     ]),
   );
 }
 
-function proofRunLaneSurface(proofRun, { metadata, laneMap }) {
+function proofRunLaneSurface(proofRun, { metadata, laneMap, sourceRoleUrl }) {
   const lanes = Object.fromEntries(
     Object.entries(laneMap).map(([surfaceKey, laneId]) => [
       surfaceKey,
@@ -233,9 +236,33 @@ function proofRunLaneSurface(proofRun, { metadata, laneMap }) {
     status: Object.values(lanes).every((lane) => lane?.status === "passed")
       ? "passed"
       : "failed",
+    ...(sourceRoleUrl === undefined
+      ? {}
+      : {
+          sourceRoleUrl:
+            typeof sourceRoleUrl === "function"
+              ? sourceRoleUrl(lanes)
+              : sourceRoleUrl,
+        }),
     ...metadata,
     ...lanes,
   };
+}
+
+function proofRunLaneSurfaceGame(lanes) {
+  return (
+    Object.values(lanes)
+      .map((lane) => lane?.evidence?.game)
+      .find((game) => typeof game === "string" && game.length > 0) ?? ""
+  );
+}
+
+function proofRunHostRoleUrl(proofRun, game) {
+  const frontendBaseUrl = String(proofRun?.session?.frontendBaseUrl ?? "");
+  if (frontendBaseUrl === "" || typeof game !== "string" || game === "") {
+    return "";
+  }
+  return `${frontendBaseUrl.replace(/\/$/u, "")}/g/${encodeURIComponent(game)}/host`;
 }
 
 function proofRunLane(proofRun, laneId) {

@@ -55,6 +55,8 @@ import {
   postNightFourTransitionSurfaceFixture,
 } from "./dev_test_game_core_loop_late_action_fixtures.mjs";
 
+const hostRoleUrl = (game) => `http://127.0.0.1:5173/g/${game}/host`;
+
 test("host phase scenario module exposes shared command facts", () => {
   assert.deepEqual(hostResolvePhaseCommandFacts(), {
     actionId: "resolve_phase",
@@ -1039,6 +1041,7 @@ test("host lifecycle control assertion covers checkpoint, click, and stale rejec
 test("host modkill control assertion covers ack, stale reject, and reload recovery", () => {
   const hostModkillControlSurface = {
     status: "passed",
+    sourceRoleUrl: hostRoleUrl("game-a"),
     proofCheckId: "host-modkill-control",
     staleProofCheckId: "stale-host-modkill",
     staleReloadProofCheckId: "stale-host-modkill-reload",
@@ -1111,6 +1114,7 @@ test("host modkill control assertion covers ack, stale reject, and reload recove
 test("host lifecycle race assertion covers convergence and reload lanes", () => {
   const hostLifecycleRaceSurface = {
     status: "passed",
+    sourceRoleUrl: hostRoleUrl("race-game-a"),
     proofCheckId: "concurrent-host-lifecycle-race",
     reloadProofCheckId: "concurrent-host-lifecycle-race-reload",
     hostLifecycleRace: {
@@ -1204,6 +1208,7 @@ test("host lifecycle race assertion covers convergence and reload lanes", () => 
 test("host publish race assertion covers official-count convergence and reload lanes", () => {
   const hostPublishRaceSurface = {
     status: "passed",
+    sourceRoleUrl: hostRoleUrl("publish-race-game-a"),
     proofCheckId: "concurrent-host-publish-race",
     reloadProofCheckId: "concurrent-host-publish-race-reload",
     hostPublishRace: {
@@ -1279,6 +1284,7 @@ test("host publish race assertion covers official-count convergence and reload l
 test("host resolve race assertion covers phase-lock convergence and reload lanes", () => {
   const hostResolveRaceSurface = {
     status: "passed",
+    sourceRoleUrl: hostRoleUrl("resolve-race-game-a"),
     proofCheckId: "concurrent-host-resolve-race",
     reloadProofCheckId: "concurrent-host-resolve-race-reload",
     hostResolveRace: {
@@ -1337,6 +1343,7 @@ test("host resolve race assertion covers phase-lock convergence and reload lanes
 test("host advance race assertion covers phase advance convergence and reload lanes", () => {
   const hostAdvanceRaceSurface = {
     status: "passed",
+    sourceRoleUrl: hostRoleUrl("advance-race-game-a"),
     proofCheckId: "concurrent-host-advance-race",
     reloadProofCheckId: "concurrent-host-advance-race-reload",
     hostAdvanceRace: {
@@ -1394,6 +1401,7 @@ test("host advance race assertion covers phase advance convergence and reload la
 test("host deadline advance race assertion covers deadline convergence and reload lanes", () => {
   const hostDeadlineAdvanceRaceSurface = {
     status: "passed",
+    sourceRoleUrl: hostRoleUrl("deadline-advance-race-game-a"),
     proofCheckId: "concurrent-host-deadline-advance-race",
     reloadProofCheckId: "concurrent-host-deadline-advance-race-reload",
     hostDeadlineAdvanceRace: {
@@ -1454,6 +1462,7 @@ test("host deadline advance race assertion covers deadline convergence and reloa
 test("host mixed advance race assertion covers mixed advance convergence and reload lanes", () => {
   const hostMixedAdvanceRaceSurface = {
     status: "passed",
+    sourceRoleUrl: hostRoleUrl("mixed-advance-race-game-a"),
     proofCheckId: "concurrent-host-mixed-advance-race",
     reloadProofCheckId: "concurrent-host-mixed-advance-race-reload",
     hostMixedAdvanceRace: {

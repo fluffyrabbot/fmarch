@@ -921,6 +921,7 @@ export function assertHostModkillControlSurfaceCase({
   const staleReloadProof = staleReloadLane?.evidence;
   if (
     hostModkillControlSurface?.status !== "passed" ||
+    !hasHostControlSourceRoleUrl(hostModkillControlSurface) ||
     hostModkillControlSurface.proofCheckId !== scenario.proofCheckId ||
     hostModkillControlSurface.staleProofCheckId !== scenario.staleProofCheckId ||
     hostModkillControlSurface.staleReloadProofCheckId !==
@@ -956,6 +957,24 @@ export function assertHostModkillControlSurfaceCase({
   }
 }
 
+function hasHostControlSourceRoleUrl(surface, expectedGame) {
+  if (
+    typeof surface?.sourceRoleUrl !== "string" ||
+    !surface.sourceRoleUrl.includes("/g/") ||
+    !surface.sourceRoleUrl.endsWith("/host")
+  ) {
+    return false;
+  }
+  if (expectedGame === undefined) {
+    return true;
+  }
+  try {
+    return new URL(surface.sourceRoleUrl).pathname.split("/")[2] === expectedGame;
+  } catch {
+    return false;
+  }
+}
+
 export function assertHostLifecycleRaceSurfaceCase({
   hostLifecycleRaceSurface,
   scenario = hostLifecycleRaceScenarioDefinition,
@@ -968,6 +987,7 @@ export function assertHostLifecycleRaceSurfaceCase({
   const expectedOutcome = hostLifecycleRaceExpectedOutcome({ race, scenario });
   if (
     hostLifecycleRaceSurface?.status !== "passed" ||
+    !hasHostControlSourceRoleUrl(hostLifecycleRaceSurface, race?.game) ||
     hostLifecycleRaceSurface.proofCheckId !== scenario.proofCheckId ||
     hostLifecycleRaceSurface.reloadProofCheckId !== scenario.reloadProofCheckId ||
     raceLane?.id !== scenario.proofCheckId ||
@@ -1042,6 +1062,7 @@ export function assertHostPublishRaceSurfaceCase({
   const expectedRace = symmetricHostRaceRoleOutcome({ race, scenario });
   if (
     hostPublishRaceSurface?.status !== "passed" ||
+    !hasHostControlSourceRoleUrl(hostPublishRaceSurface, race?.game) ||
     hostPublishRaceSurface.proofCheckId !== scenario.proofCheckId ||
     hostPublishRaceSurface.reloadProofCheckId !== scenario.reloadProofCheckId ||
     raceLane?.id !== scenario.proofCheckId ||
@@ -1102,6 +1123,7 @@ export function assertHostResolveRaceSurfaceCase({
   const reload = reloadLane?.evidence;
   if (
     hostResolveRaceSurface?.status !== "passed" ||
+    !hasHostControlSourceRoleUrl(hostResolveRaceSurface, race?.game) ||
     hostResolveRaceSurface.proofCheckId !== scenario.proofCheckId ||
     hostResolveRaceSurface.reloadProofCheckId !== scenario.reloadProofCheckId ||
     raceLane?.id !== scenario.proofCheckId ||
@@ -1147,6 +1169,7 @@ export function assertHostAdvanceRaceSurfaceCase({
   const reload = reloadLane?.evidence;
   if (
     hostAdvanceRaceSurface?.status !== "passed" ||
+    !hasHostControlSourceRoleUrl(hostAdvanceRaceSurface, race?.game) ||
     hostAdvanceRaceSurface.proofCheckId !== scenario.proofCheckId ||
     hostAdvanceRaceSurface.reloadProofCheckId !== scenario.reloadProofCheckId ||
     raceLane?.id !== scenario.proofCheckId ||
@@ -1192,6 +1215,7 @@ export function assertHostDeadlineAdvanceRaceSurfaceCase({
   const reload = reloadLane?.evidence;
   if (
     hostDeadlineAdvanceRaceSurface?.status !== "passed" ||
+    !hasHostControlSourceRoleUrl(hostDeadlineAdvanceRaceSurface, race?.game) ||
     hostDeadlineAdvanceRaceSurface.proofCheckId !== scenario.proofCheckId ||
     hostDeadlineAdvanceRaceSurface.reloadProofCheckId !==
       scenario.reloadProofCheckId ||
@@ -1240,6 +1264,7 @@ export function assertHostMixedAdvanceRaceSurfaceCase({
   const expectedRace = symmetricHostRaceExpectedOutcome({ race, scenario });
   if (
     hostMixedAdvanceRaceSurface?.status !== "passed" ||
+    !hasHostControlSourceRoleUrl(hostMixedAdvanceRaceSurface, race?.game) ||
     hostMixedAdvanceRaceSurface.proofCheckId !== scenario.proofCheckId ||
     hostMixedAdvanceRaceSurface.reloadProofCheckId !==
       scenario.reloadProofCheckId ||
