@@ -382,6 +382,10 @@ export function buildProofGraphNextActionHandoffReadinessCheck(
       handoff.visibleNextActionHandoffPairRows,
     visibleNextActionHandoffPairRowStatuses:
       handoff.visibleNextActionHandoffPairRowStatuses,
+    visiblePhaseLocalNextActionSnapshots:
+      handoff.visiblePhaseLocalNextActionSnapshots,
+    visiblePhaseLocalNextActionSnapshotStatuses:
+      handoff.visiblePhaseLocalNextActionSnapshotStatuses,
     adminRoleSurface: proofGraphAdminProofEvidence,
   };
 }

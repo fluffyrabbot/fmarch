@@ -193,6 +193,14 @@ export function nextActionAdminProofCase({
           requiredNextActionHandoffPairRowStatusesForNextAction(
             source.nextAction,
           ),
+        requiredPhaseLocalNextActionSnapshots:
+          requiredPhaseLocalNextActionSnapshotRowsForProofGraph(
+            source.proofGraph,
+          ),
+        requiredPhaseLocalNextActionSnapshotStatuses:
+          requiredPhaseLocalNextActionSnapshotStatusesForProofGraph(
+            source.proofGraph,
+          ),
         requiredHostedIdentityOperatorGate:
           requiredHostedIdentityOperatorGateForNextAction(source.nextAction),
         requiredText: requiredSelectedOperatorHandoffTextForNextAction(
@@ -272,6 +280,8 @@ export function nextActionAdminProofCase({
       terminalBatchGraph: source.nextAction.generatedFrom?.terminalBatchGraph ?? null,
       nextActionHandoffPair:
         source.nextAction.generatedFrom?.nextActionHandoffPair ?? null,
+      phaseLocalNextActionSnapshots:
+        phaseLocalNextActionSnapshotsForProofGraph(source.proofGraph),
       coreLoopRecoveryDestinationCoverage:
         source.nextAction.generatedFrom?.coreLoopRecoveryDestinationCoverage ??
         null,
@@ -681,6 +691,7 @@ export function assertNextActionAdminProof(evidence) {
     { label: "next-action admin proof local readiness dependency trace" },
   );
   assertNextActionAdminProofGraphDiagnosticSummaryTrace(evidence);
+  assertNextActionAdminPhaseLocalNextActionSnapshots(evidence);
   assertNextActionAdminCoreLoopRecoveryDestinationCoverage(evidence);
   assertRecoveryTrace(
     recoveryTraceKeys.replacementRaceReload,
@@ -1123,6 +1134,47 @@ function assertNextActionAdminProofGraphDiagnosticSummaryTrace(evidence) {
   );
 }
 
+function assertNextActionAdminPhaseLocalNextActionSnapshots(evidence) {
+  const snapshots = evidence.generatedFrom?.phaseLocalNextActionSnapshots;
+  if (!Array.isArray(snapshots) || snapshots.length === 0) {
+    return;
+  }
+  const visibleRows =
+    evidence.adminRoleSurface?.visiblePhaseLocalNextActionSnapshots ?? [];
+  const visibleStatuses =
+    evidence.adminRoleSurface?.visiblePhaseLocalNextActionSnapshotStatuses ?? {};
+  for (const snapshot of snapshots) {
+    if (
+      snapshot.status !== "recorded" ||
+      snapshot.canonicalArtifact !== "target/dev-test-game/next-action.json" ||
+      !String(snapshot.artifact ?? "").startsWith(
+        "target/dev-test-game/next-action-",
+      ) ||
+      snapshot.proofCommand !== "test:dev-test-game-next-action" ||
+      !visibleRows.includes(snapshot.id)
+    ) {
+      throw new Error(
+        `next-action admin proof phase-local snapshot drifted: ${snapshot?.id}`,
+      );
+    }
+    const visibleText = String(visibleStatuses[snapshot.id] ?? "");
+    for (const token of [
+      snapshot.phaseLocalNextActionId,
+      snapshot.artifact,
+      snapshot.canonicalArtifact,
+      snapshot.nextActionEdgeRowId,
+      snapshot.manifestEdgeRowId,
+      snapshot.proofCommand,
+    ]) {
+      if (!visibleText.includes(String(token ?? ""))) {
+        throw new Error(
+          `next-action admin proof missing phase-local snapshot text ${token}: ${snapshot.id}`,
+        );
+      }
+    }
+  }
+}
+
 function assertNextActionAdminRecoveryReceiptGraphs(generatedFrom) {
   for (const descriptor of recoveryReceiptGraphDescriptors) {
     assertRecoveryReceiptGraphSummary(
@@ -1513,6 +1565,88 @@ function requiredNextActionHandoffPairRowStatusesForNextAction(nextAction) {
       pair.hostedIdentityPredicate.expectedReason ?? "",
     )}\n${String(pair.hostedIdentityPredicate.expectedActionStatus ?? "")}`,
   };
+}
+
+function requiredPhaseLocalNextActionSnapshotRowsForProofGraph(proofGraph) {
+  return phaseLocalNextActionSnapshotsForProofGraph(proofGraph).map(
+    (snapshot) => snapshot.id,
+  );
+}
+
+function requiredPhaseLocalNextActionSnapshotStatusesForProofGraph(proofGraph) {
+  return Object.fromEntries(
+    phaseLocalNextActionSnapshotsForProofGraph(proofGraph).map((snapshot) => [
+      snapshot.id,
+      phaseLocalNextActionSnapshotStatusText(snapshot),
+    ]),
+  );
+}
+
+function phaseLocalNextActionSnapshotsForProofGraph(proofGraph) {
+  const edges = Array.isArray(proofGraph?.edges) ? proofGraph.edges : [];
+  return (Array.isArray(proofGraph?.nodes) ? proofGraph.nodes : [])
+    .filter((node) => node.kind === "phase-local-next-action")
+    .map((node) => {
+      const nextActionEdge = phaseLocalNextActionEdge({
+        edges,
+        node,
+        from: "next-action",
+        relationship: "phase-local-snapshot",
+      });
+      const manifestEdge = phaseLocalNextActionEdge({
+        edges,
+        node,
+        from: "spine-manifest",
+        relationship: "records-phase-local-next-action",
+      });
+      return {
+        id: String(node.id ?? ""),
+        status: String(node.status ?? "recorded"),
+        artifact: String(node.artifact ?? ""),
+        canonicalArtifact: String(node.canonicalArtifact ?? ""),
+        phaseLocalNextActionId: String(node.phaseLocalNextActionId ?? ""),
+        sequenceStage: String(node.sequenceStage ?? ""),
+        proofCommand: String(node.proofCommand ?? ""),
+        proofBoundary: String(node.proofBoundary ?? ""),
+        nextActionEdgeRowId:
+          nextActionEdge === null ? "" : proofGraphEdgeCheckId(nextActionEdge),
+        manifestEdgeRowId:
+          manifestEdge === null ? "" : proofGraphEdgeCheckId(manifestEdge),
+      };
+    });
+}
+
+function phaseLocalNextActionEdge({ edges, node, from, relationship }) {
+  return (
+    edges.find(
+      (edge) =>
+        edge.from === from &&
+        edge.to === node.id &&
+        edge.relationship === relationship &&
+        edge.phaseLocalNextActionId === node.phaseLocalNextActionId,
+    ) ?? null
+  );
+}
+
+function proofGraphEdgeCheckId(edge) {
+  return `edge:${String(edge?.from ?? "")}:${String(
+    edge?.relationship ?? "related",
+  )}:${String(edge?.to ?? "")}`;
+}
+
+function phaseLocalNextActionSnapshotStatusText(snapshot) {
+  return [
+    snapshot.status,
+    snapshot.phaseLocalNextActionId,
+    snapshot.sequenceStage,
+    snapshot.artifact,
+    snapshot.canonicalArtifact,
+    snapshot.nextActionEdgeRowId,
+    snapshot.manifestEdgeRowId,
+    snapshot.proofCommand,
+  ]
+    .filter((token) => String(token ?? "") !== "")
+    .join("\n");
 }
 
 function requiredHostedIdentityOperatorGateForNextAction(nextAction) {

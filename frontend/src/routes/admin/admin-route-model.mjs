@@ -295,12 +295,14 @@ function buildSingleRowArtifactSummarySection({ id, heading, values }) {
 function buildLocalNextActionSummarySections({
   nextActionHandoffPair,
   frontendSetupWorkbenchReadiness,
+  phaseLocalNextActionSnapshots,
 }) {
   return Object.freeze([
     ...nextActionHandoffPairSummarySections(nextActionHandoffPair),
     ...frontendSetupWorkbenchReadinessSummarySections(
       frontendSetupWorkbenchReadiness,
     ),
+    ...phaseLocalNextActionSummarySections(phaseLocalNextActionSnapshots),
   ]);
 }
 
@@ -343,6 +345,33 @@ function nextActionHandoffPairSummarySections(pair) {
           ],
         })),
       ],
+    }),
+  ];
+}
+
+function phaseLocalNextActionSummarySections(snapshots) {
+  if (!Array.isArray(snapshots) || snapshots.length === 0) {
+    return [];
+  }
+  return [
+    buildArtifactSummarySection({
+      id: "phase-local-next-actions",
+      heading: "Phase-local next-action snapshots",
+      rows: snapshots.map((snapshot) => ({
+        id: snapshot.id,
+        testId: `admin-audit-phase-local-next-action-${snapshot.id}`,
+        values: [
+          { id: "status", text: snapshot.status, emphasized: true },
+          { id: "phaseLocalNextActionId", text: snapshot.phaseLocalNextActionId },
+          { id: "sequenceStage", text: snapshot.sequenceStage },
+          { id: "artifact", text: snapshot.artifact },
+          { id: "canonicalArtifact", text: snapshot.canonicalArtifact },
+          { id: "nextActionEdgeRowId", text: snapshot.nextActionEdgeRowId },
+          { id: "manifestEdgeRowId", text: snapshot.manifestEdgeRowId },
+          { id: "proofCommand", text: snapshot.proofCommand },
+          { id: "proofBoundary", text: snapshot.proofBoundary },
+        ],
+      })),
     }),
   ];
 }
@@ -1080,10 +1109,40 @@ function hostedOperatorPacketDescriptorRow({
         text: packet.rawEvidenceContractRequiredTopLevelFields.join(", "),
       },
       ...rawEvidenceTemplateDescriptorValues(packet.rawEvidenceTemplate),
+      ...hostedEvidenceOperatorChecklistDescriptorValues(packet.operatorChecklist),
       { id: "proofTarget", text: packet.proofTarget },
       { id: "nextProofTarget", text: packet.nextProofTarget },
     ],
   };
+}
+
+function hostedEvidenceOperatorChecklistDescriptorValues(checklist) {
+  if (checklist === null || checklist === undefined) {
+    return [];
+  }
+  return [
+    { id: "operatorChecklistId", text: checklist.id },
+    { id: "operatorChecklistPath", text: checklist.path },
+    { id: "operatorChecklistCommand", text: checklist.command },
+    { id: "operatorChecklistProofTarget", text: checklist.proofTarget },
+    { id: "operatorChecklistPreflightTarget", text: checklist.preflightTarget },
+    {
+      id: "operatorChecklistRawEvidenceTemplatePath",
+      text: checklist.rawEvidenceTemplatePath,
+    },
+    {
+      id: "operatorChecklistRawEvidenceTemplateProofCommand",
+      text: checklist.rawEvidenceTemplateProofCommand,
+    },
+    {
+      id: "operatorChecklistRawCaptureCommand",
+      text: checklist.rawCaptureCommand,
+    },
+    {
+      id: "operatorChecklistRawCaptureProofTarget",
+      text: checklist.rawCaptureProofTarget,
+    },
+  ];
 }
 
 function rawEvidenceTemplateDescriptorValues(template) {
@@ -4715,6 +4774,8 @@ export function normalizeLocalNextActionAudit(nextAction, { game, proofGraph = n
     normalizeNextActionCoreLoopRecoveryDestinationCoverage(
       nextAction.generatedFrom?.coreLoopRecoveryDestinationCoverage,
     );
+  const phaseLocalNextActionSnapshots =
+    normalizeLocalNextActionPhaseLocalSnapshots(proofGraph);
   const generatedSummary = normalizeLocalNextActionGeneratedSummary(nextAction);
   const stability =
     action.stability !== null && typeof action.stability === "object"
@@ -5102,6 +5163,7 @@ export function normalizeLocalNextActionAudit(nextAction, { game, proofGraph = n
       nextActionHandoffPair,
       frontendSetupWorkbenchReadiness:
         generatedSummary.frontendSetupWorkbenchReadiness,
+      phaseLocalNextActionSnapshots,
     }),
     artifactSummary: Object.freeze({
       command,
@@ -5134,6 +5196,8 @@ export function normalizeLocalNextActionAudit(nextAction, { game, proofGraph = n
       localCheckCount: generatedSummary.localCheckCount,
       buildableLocalDependencyCount:
         generatedSummary.buildableLocalDependencyCount,
+      phaseLocalNextActionSnapshotCount:
+        phaseLocalNextActionSnapshots.length,
       selectedLocalCheckId: String(localCheck?.id ?? ""),
       selectedLocalCheckBuildSlice: String(localCheck?.buildSlice ?? ""),
       selectedLocalCheckProofTarget: String(localCheck?.proofTarget ?? ""),
@@ -5807,6 +5871,56 @@ function normalizeLocalNextActionLocalReadinessDependencyTrace(
     selectedCheckId: normalized.selectedCheckId,
     candidates: normalized.candidates,
   });
+}
+
+function normalizeLocalNextActionPhaseLocalSnapshots(proofGraph) {
+  const nodes = Array.isArray(proofGraph?.nodes) ? proofGraph.nodes : [];
+  const edges = Array.isArray(proofGraph?.edges) ? proofGraph.edges : [];
+  return Object.freeze(
+    nodes
+      .filter((node) => node?.kind === "phase-local-next-action")
+      .map((node) => {
+        const nextActionEdge = phaseLocalNextActionEdge({
+          edges,
+          node,
+          from: "next-action",
+          relationship: "phase-local-snapshot",
+        });
+        const manifestEdge = phaseLocalNextActionEdge({
+          edges,
+          node,
+          from: "spine-manifest",
+          relationship: "records-phase-local-next-action",
+        });
+        return Object.freeze({
+          id: String(node.id ?? ""),
+          label: String(node.label ?? node.id ?? ""),
+          status: String(node.status ?? "recorded"),
+          artifact: String(node.artifact ?? ""),
+          canonicalArtifact: String(node.canonicalArtifact ?? ""),
+          phaseLocalNextActionId: String(node.phaseLocalNextActionId ?? ""),
+          sequenceStage: String(node.sequenceStage ?? ""),
+          proofCommand: String(node.proofCommand ?? ""),
+          proofBoundary: String(node.proofBoundary ?? ""),
+          nextActionEdgeRowId:
+            nextActionEdge === null ? "" : proofGraphEdgeCheckId(nextActionEdge),
+          manifestEdgeRowId:
+            manifestEdge === null ? "" : proofGraphEdgeCheckId(manifestEdge),
+        });
+      }),
+  );
+}
+
+function phaseLocalNextActionEdge({ edges, node, from, relationship }) {
+  return (
+    edges.find(
+      (edge) =>
+        edge.from === from &&
+        edge.to === node.id &&
+        edge.relationship === relationship &&
+        edge.phaseLocalNextActionId === node.phaseLocalNextActionId,
+    ) ?? null
+  );
 }
 
 export function normalizeLocalNextActionGeneratedSummary(nextAction) {

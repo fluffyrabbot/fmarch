@@ -366,6 +366,8 @@ export async function proveAdminAuditDetail({
   requiredHostedIdentityProgressionStatuses = {},
   requiredNextActionHandoffPairRows = [],
   requiredNextActionHandoffPairRowStatuses = {},
+  requiredPhaseLocalNextActionSnapshots = [],
+  requiredPhaseLocalNextActionSnapshotStatuses = {},
   requiredSelectedOperatorHandoffTerminalReceiptRows = [],
   requiredSelectedOperatorHandoffTerminalReceiptRowStatuses = {},
   requiredHostedIdentityOperatorGate = null,
@@ -762,6 +764,17 @@ export async function proveAdminAuditDetail({
       prefix: "admin-audit-next-action-handoff-pair",
       ids: Object.keys(requiredNextActionHandoffPairRowStatuses),
     });
+    const visiblePhaseLocalNextActionSnapshots = await waitForRows({
+      page,
+      prefix: "admin-audit-phase-local-next-action",
+      ids: requiredPhaseLocalNextActionSnapshots,
+      expectedStatuses: requiredPhaseLocalNextActionSnapshotStatuses,
+    });
+    const visiblePhaseLocalNextActionSnapshotStatuses = await readRowStatuses({
+      page,
+      prefix: "admin-audit-phase-local-next-action",
+      ids: Object.keys(requiredPhaseLocalNextActionSnapshotStatuses),
+    });
     const visibleSelectedOperatorHandoffTerminalReceiptRows =
       await waitForRows({
         page,
@@ -1097,6 +1110,21 @@ export async function proveAdminAuditDetail({
             destination.requiredNextActionHandoffPairRowStatuses ?? {},
           ),
         });
+      const destinationVisiblePhaseLocalNextActionSnapshots = await waitForRows({
+        page,
+        prefix: "admin-audit-phase-local-next-action",
+        ids: destination.requiredPhaseLocalNextActionSnapshots ?? [],
+        expectedStatuses:
+          destination.requiredPhaseLocalNextActionSnapshotStatuses ?? {},
+      });
+      const destinationVisiblePhaseLocalNextActionSnapshotStatuses =
+        await readRowStatuses({
+          page,
+          prefix: "admin-audit-phase-local-next-action",
+          ids: Object.keys(
+            destination.requiredPhaseLocalNextActionSnapshotStatuses ?? {},
+          ),
+        });
       const destinationVisibleSelectedOperatorHandoffTerminalReceiptRows =
         await waitForRows({
           page,
@@ -1245,6 +1273,19 @@ export async function proveAdminAuditDetail({
           : {
               visibleNextActionHandoffPairRowStatuses:
                 destinationVisibleNextActionHandoffPairRowStatuses,
+            }),
+        ...(destinationVisiblePhaseLocalNextActionSnapshots.length === 0
+          ? {}
+          : {
+              visiblePhaseLocalNextActionSnapshots:
+                destinationVisiblePhaseLocalNextActionSnapshots,
+            }),
+        ...(Object.keys(destinationVisiblePhaseLocalNextActionSnapshotStatuses)
+          .length === 0
+          ? {}
+          : {
+              visiblePhaseLocalNextActionSnapshotStatuses:
+                destinationVisiblePhaseLocalNextActionSnapshotStatuses,
             }),
         ...(destinationVisibleSelectedOperatorHandoffTerminalReceiptRows
           .length === 0
@@ -1507,6 +1548,15 @@ export async function proveAdminAuditDetail({
         : {
             visibleNextActionHandoffPairRowStatuses:
               visibleNextActionHandoffPairRowStatuses,
+          }),
+      ...(visiblePhaseLocalNextActionSnapshots.length === 0
+        ? {}
+        : { visiblePhaseLocalNextActionSnapshots }),
+      ...(Object.keys(visiblePhaseLocalNextActionSnapshotStatuses).length === 0
+        ? {}
+        : {
+            visiblePhaseLocalNextActionSnapshotStatuses:
+              visiblePhaseLocalNextActionSnapshotStatuses,
           }),
       ...(visibleSelectedOperatorHandoffTerminalReceiptRows.length === 0
         ? {}

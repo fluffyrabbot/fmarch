@@ -1076,6 +1076,9 @@ function proofGraphNextActionHandoffDestinations(proofGraph) {
     return [];
   }
   const pair = devTestGameNextActionSequenceHandoffPair();
+  const phaseLocalNextActionGraphLinks =
+    proofGraphPhaseLocalNextActionGraphLinks(proofGraph);
+  const phaseLocalSnapshots = phaseLocalNextActionGraphLinks.snapshots ?? [];
   return [
     {
       linkId: "next-action-sequence-handoff",
@@ -1105,6 +1108,15 @@ function proofGraphNextActionHandoffDestinations(proofGraph) {
           pair.hostedIdentityPredicate.expectedActionStatus,
         ].join("\n"),
       },
+      requiredPhaseLocalNextActionSnapshots: phaseLocalSnapshots.map(
+        (snapshot) => snapshot.id,
+      ),
+      requiredPhaseLocalNextActionSnapshotStatuses: Object.fromEntries(
+        phaseLocalSnapshots.map((snapshot) => [
+          snapshot.id,
+          phaseLocalNextActionSnapshotStatusText(snapshot),
+        ]),
+      ),
     },
   ];
 }
@@ -1175,6 +1187,21 @@ function proofGraphPhaseLocalNextActionGraphLinkRows(links) {
     snapshot.nextActionEdgeRowId,
     snapshot.manifestEdgeRowId,
   ]);
+}
+
+function phaseLocalNextActionSnapshotStatusText(snapshot) {
+  return [
+    "recorded",
+    snapshot.phaseLocalNextActionId,
+    snapshot.sequenceStage,
+    snapshot.artifact,
+    snapshot.canonicalArtifact,
+    snapshot.nextActionEdgeRowId,
+    snapshot.manifestEdgeRowId,
+    snapshot.proofCommand,
+  ]
+    .filter((token) => String(token ?? "") !== "")
+    .join("\n");
 }
 
 function proofGraphAdminSpineTerminalReceiptDestinations(
@@ -1475,6 +1502,53 @@ function assertProofGraphAdminProofCoversPhaseLocalNextActionGraphLinks(evidence
       throw new Error(
         `proof graph admin proof phase-local next-action snapshot drifted: ${snapshot.id}`,
       );
+    }
+  }
+  assertProofGraphAdminProofCoversPhaseLocalNextActionDestination({
+    evidence,
+    links,
+  });
+}
+
+function assertProofGraphAdminProofCoversPhaseLocalNextActionDestination({
+  evidence,
+  links,
+}) {
+  const visibleDestination =
+    evidence.adminRoleSurface?.visibleRelatedDestinations?.find(
+      (destination) =>
+        destination.linkId === "next-action-sequence-handoff" &&
+        destination.auditId === localAdminAuditIds.nextAction,
+    );
+  if (visibleDestination === undefined) {
+    throw new Error(
+      "proof graph admin proof did not inspect next-action destination",
+    );
+  }
+  const visibleRows =
+    visibleDestination.visiblePhaseLocalNextActionSnapshots ?? [];
+  const visibleStatuses =
+    visibleDestination.visiblePhaseLocalNextActionSnapshotStatuses ?? {};
+  for (const snapshot of links.snapshots) {
+    if (!visibleRows.includes(snapshot.id)) {
+      throw new Error(
+        `proof graph admin proof next-action destination missing phase-local row: ${snapshot.id}`,
+      );
+    }
+    const visibleText = String(visibleStatuses[snapshot.id] ?? "");
+    for (const token of [
+      snapshot.phaseLocalNextActionId,
+      snapshot.artifact,
+      snapshot.canonicalArtifact,
+      snapshot.nextActionEdgeRowId,
+      snapshot.manifestEdgeRowId,
+      snapshot.proofCommand,
+    ]) {
+      if (!visibleText.includes(String(token ?? ""))) {
+        throw new Error(
+          `proof graph admin proof next-action destination missing phase-local text ${token}: ${snapshot.id}`,
+        );
+      }
     }
   }
 }

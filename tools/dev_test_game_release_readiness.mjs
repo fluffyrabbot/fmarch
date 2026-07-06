@@ -6696,6 +6696,40 @@ function validateProofGraphNextActionHandoffDestination(
       );
     }
   }
+  const phaseLocalSnapshots =
+    proof.generatedFrom?.phaseLocalNextActionGraphLinks?.snapshots ?? [];
+  const visiblePhaseLocalRows = Array.isArray(
+    destination.visiblePhaseLocalNextActionSnapshots,
+  )
+    ? destination.visiblePhaseLocalNextActionSnapshots
+    : [];
+  const phaseLocalStatuses =
+    destination.visiblePhaseLocalNextActionSnapshotStatuses ?? {};
+  for (const snapshot of phaseLocalSnapshots) {
+    if (!visiblePhaseLocalRows.includes(snapshot.id)) {
+      throw new Error(
+        `proof graph admin proof next-action destination missing phase-local row: ${snapshot.id}`,
+      );
+    }
+    const visibleStatus = phaseLocalStatuses[snapshot.id];
+    for (const token of [
+      snapshot.phaseLocalNextActionId,
+      snapshot.artifact,
+      snapshot.canonicalArtifact,
+      snapshot.nextActionEdgeRowId,
+      snapshot.manifestEdgeRowId,
+      snapshot.proofCommand,
+    ]) {
+      if (
+        typeof visibleStatus !== "string" ||
+        !visibleStatus.includes(String(token ?? ""))
+      ) {
+        throw new Error(
+          `proof graph admin proof next-action destination phase-local row drifted: ${snapshot.id}`,
+        );
+      }
+    }
+  }
   return {
     linkId: pair.id,
     auditId: localAdminAuditIds.nextAction,
@@ -6708,6 +6742,18 @@ function validateProofGraphNextActionHandoffDestination(
         destination.visibleNextActionHandoffPairRowStatuses[rowId],
       ]),
     ),
+    ...(phaseLocalSnapshots.length === 0
+      ? {}
+      : {
+          visiblePhaseLocalNextActionSnapshots:
+            phaseLocalSnapshots.map((snapshot) => snapshot.id),
+          visiblePhaseLocalNextActionSnapshotStatuses: Object.fromEntries(
+            phaseLocalSnapshots.map((snapshot) => [
+              snapshot.id,
+              phaseLocalStatuses[snapshot.id],
+            ]),
+          ),
+        }),
   };
 }
 
@@ -8712,6 +8758,12 @@ export function assertDevTestGameReleaseReadiness(checklist) {
       ) ||
       !proofGraphNextActionHandoffCheck.visibleNextActionHandoffPairRows?.includes(
         "opt-in-hosted-identity-predicate",
+      ) ||
+      !proofGraphNextActionHandoffCheck.visiblePhaseLocalNextActionSnapshots?.includes(
+        "next-action-hosted-evidence-operator-checklist",
+      ) ||
+      !proofGraphNextActionHandoffCheck.visiblePhaseLocalNextActionSnapshots?.includes(
+        "next-action-hosted-identity",
       ))
   ) {
     throw new Error(

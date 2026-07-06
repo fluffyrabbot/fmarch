@@ -3378,6 +3378,7 @@ test("admin route data exposes local next action as a native audit row", async (
   });
   const coreLoopRecoveryDestinationCoverage =
     coreLoopRecoveryDestinationCoverageFixture();
+  const phaseLocalSnapshots = phaseLocalNextActionSnapshotsFixture();
   const data = await buildAdminRouteData({
     principalUserId: "admin_a",
     capabilities: [{ kind: "GlobalAdmin" }],
@@ -3528,6 +3529,30 @@ test("admin route data exposes local next action as a native audit row", async (
           ]),
         ],
       ],
+      [
+        "phase-local-next-actions",
+        "Phase-local next-action snapshots",
+        "admin-audit-detail-phase-local-next-actions",
+        phaseLocalSnapshots.map((snapshot) => [
+          snapshot.id,
+          `admin-audit-phase-local-next-action-${snapshot.id}`,
+          [
+            ["status", snapshot.status, true],
+            [
+              "phaseLocalNextActionId",
+              snapshot.phaseLocalNextActionId,
+              false,
+            ],
+            ["sequenceStage", snapshot.sequenceStage ?? "", false],
+            ["artifact", snapshot.artifact, false],
+            ["canonicalArtifact", snapshot.canonicalArtifact, false],
+            ["nextActionEdgeRowId", snapshot.nextActionEdgeRowId, false],
+            ["manifestEdgeRowId", snapshot.manifestEdgeRowId, false],
+            ["proofCommand", snapshot.proofCommand, false],
+            ["proofBoundary", snapshot.proofBoundary, false],
+          ],
+        ]),
+      ],
     ],
   );
   assert.deepEqual(nextAction.artifactSummary, {
@@ -3542,6 +3567,7 @@ test("admin route data exposes local next action as a native audit row", async (
     selectedArtifactBuildSlice: "",
     selectedArtifactRequiredEvidence: "",
     ...normalizeLocalNextActionGeneratedSummary(nextActionInput),
+    phaseLocalNextActionSnapshotCount: phaseLocalSnapshots.length,
     coreLoopRecoveryDestinationCoverage:
       normalizedCoreLoopRecoveryDestinationCoverageFixture(),
     selectionTrace: {
@@ -8965,14 +8991,44 @@ function proofGraphFixture() {
     spineTarget: featureSpineTargetFixture(),
   });
   const recoveryReceiptCases = proofGraphRecoveryReceiptCases();
+  const phaseLocalNextActionSnapshots = phaseLocalNextActionSnapshotsFixture();
   const nodes = [
     ...devTestGameProofGraphFirstClassNodes(),
+    ...phaseLocalNextActionSnapshots.map((snapshot) => ({
+      id: snapshot.id,
+      label: snapshot.label,
+      kind: "phase-local-next-action",
+      status: snapshot.status,
+      artifact: snapshot.artifact,
+      canonicalArtifact: snapshot.canonicalArtifact,
+      phaseLocalNextActionId: snapshot.phaseLocalNextActionId,
+      sequenceStage: snapshot.sequenceStage || undefined,
+      proofCommand: snapshot.proofCommand,
+      recoveryCommand: snapshot.proofCommand,
+      proofBoundary: snapshot.proofBoundary,
+    })),
     proofGraphProductionFeatureNode(productionFeatureCase),
     ...proofGraphRecoveryReceiptNodes(recoveryReceiptCases),
     ...adminProofDestinationProofGraphNodes(),
   ];
   const edges = [
     ...devTestGameProofGraphBaseEdges(),
+    ...phaseLocalNextActionSnapshots.flatMap((snapshot) => [
+      {
+        from: "spine-manifest",
+        to: snapshot.id,
+        relationship: "records-phase-local-next-action",
+        phaseLocalNextActionId: snapshot.phaseLocalNextActionId,
+        proofTarget: snapshot.artifact,
+      },
+      {
+        from: "next-action",
+        to: snapshot.id,
+        relationship: "phase-local-snapshot",
+        phaseLocalNextActionId: snapshot.phaseLocalNextActionId,
+        proofTarget: snapshot.artifact,
+      },
+    ]),
     proofGraphProductionFeatureEdge(productionFeatureCase),
     ...proofGraphRecoveryReceiptEdges(recoveryReceiptCases),
   ];
@@ -9001,6 +9057,7 @@ function proofGraphFixture() {
       commandProofRoleUrlAuditCount: nodes.filter(
         (node) => node.kind === "command-proof-role-url-audit",
       ).length,
+      phaseLocalNextActionCount: phaseLocalNextActionSnapshots.length,
       productionFeatureDestinationSummary:
         proofGraphProductionFeatureDestinationSummary({
           nodes,
@@ -9013,6 +9070,38 @@ function proofGraphFixture() {
     nodes,
     edges,
   };
+}
+
+function phaseLocalNextActionSnapshotsFixture() {
+  const snapshots = [
+    {
+      id: "next-action-hosted-evidence-operator-checklist",
+      label: "Hosted evidence operator checklist next-action snapshot",
+      artifact:
+        "target/dev-test-game/next-action-hosted-evidence-operator-checklist.json",
+      phaseLocalNextActionId: "hosted-evidence-operator-checklist",
+      sequenceStage: "",
+    },
+    {
+      id: "next-action-hosted-identity",
+      label: "Hosted identity next-action snapshot",
+      artifact: "target/dev-test-game/next-action-hosted-identity.json",
+      phaseLocalNextActionId: "hosted-identity",
+      sequenceStage: "hosted-identity",
+    },
+  ];
+  return snapshots.map((snapshot) => ({
+    ...snapshot,
+    status: "recorded",
+    canonicalArtifact: "target/dev-test-game/next-action.json",
+    proofCommand: "test:dev-test-game-next-action",
+    proofBoundary:
+      "Phase-local next-action snapshots preserve intermediate operator guidance without replacing the canonical next-action receipt.",
+    nextActionEdgeRowId:
+      `edge:next-action:phase-local-snapshot:${snapshot.id}`,
+    manifestEdgeRowId:
+      `edge:spine-manifest:records-phase-local-next-action:${snapshot.id}`,
+  }));
 }
 
 function proofGraphWithDuplicateTerminalReceiptProofIds() {
@@ -11187,8 +11276,48 @@ function expectedHostedHandoffBlockedOperatorPacketValues({ packet, heading }) {
       false,
     ],
     ...expectedRawEvidenceTemplateDescriptorValues(packet.rawEvidenceTemplate),
+    ...expectedHostedEvidenceOperatorChecklistDescriptorValues(
+      packet.operatorChecklist,
+    ),
     ["proofTarget", packet.proofTarget, false],
     ["nextProofTarget", packet.nextProofTarget, false],
+  ];
+}
+
+function expectedHostedEvidenceOperatorChecklistDescriptorValues(checklist) {
+  if (checklist === null || checklist === undefined) {
+    return [];
+  }
+  return [
+    ["operatorChecklistId", checklist.id, false],
+    ["operatorChecklistPath", checklist.path, false],
+    ["operatorChecklistCommand", checklist.command, false],
+    ["operatorChecklistProofTarget", checklist.proofTarget, false],
+    [
+      "operatorChecklistPreflightTarget",
+      checklist.preflightTarget,
+      false,
+    ],
+    [
+      "operatorChecklistRawEvidenceTemplatePath",
+      checklist.rawEvidenceTemplatePath,
+      false,
+    ],
+    [
+      "operatorChecklistRawEvidenceTemplateProofCommand",
+      checklist.rawEvidenceTemplateProofCommand,
+      false,
+    ],
+    [
+      "operatorChecklistRawCaptureCommand",
+      checklist.rawCaptureCommand,
+      false,
+    ],
+    [
+      "operatorChecklistRawCaptureProofTarget",
+      checklist.rawCaptureProofTarget,
+      false,
+    ],
   ];
 }
 

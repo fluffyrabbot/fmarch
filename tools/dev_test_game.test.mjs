@@ -24023,6 +24023,8 @@ function nextActionAdminProofFixture() {
     });
   const proofGraphDiagnosticSummaryTrace =
     proofGraphDiagnosticSummaryTraceFixture();
+  const phaseLocalNextActionSnapshots =
+    phaseLocalNextActionGraphLinksFixture().snapshots;
   return {
     version: 1,
     proof: "dev-test-game-next-action-admin-proof",
@@ -24113,6 +24115,7 @@ function nextActionAdminProofFixture() {
         unclassifiedLaneIds: [],
       },
       proofGraphDiagnosticSummaryTrace,
+      phaseLocalNextActionSnapshots,
     },
     adminRoleSurface: {
       status: "passed",
@@ -24168,6 +24171,14 @@ function nextActionAdminProofFixture() {
         command: hostedHandoffChecklist.command,
         proofTarget: hostedHandoffChecklist.proofTarget,
       },
+      visiblePhaseLocalNextActionSnapshots:
+        phaseLocalNextActionSnapshots.map((snapshot) => snapshot.id),
+      visiblePhaseLocalNextActionSnapshotStatuses: Object.fromEntries(
+        phaseLocalNextActionSnapshots.map((snapshot) => [
+          snapshot.id,
+          phaseLocalNextActionSnapshotVisibleStatus(snapshot),
+        ]),
+      ),
       ...(hostedHandoffChecklist.blockedReceipt === undefined
         ? {}
         : {
@@ -26246,6 +26257,7 @@ function phaseLocalNextActionGraphLinksFixture() {
     ),
     snapshots: snapshots.map((snapshot) => ({
       ...snapshot,
+      status: "recorded",
       canonicalArtifact: "target/dev-test-game/next-action.json",
       proofCommand: "test:dev-test-game-next-action",
       proofBoundary:
@@ -26273,6 +26285,8 @@ function adminSpineTerminalValidationVisibleStatusFixture() {
 
 function nextActionHandoffDestinationFixture() {
   const pair = nextActionHandoffPairFixture();
+  const phaseLocalNextActionSnapshots =
+    phaseLocalNextActionGraphLinksFixture().snapshots;
   return {
     linkId: pair.id,
     auditId: localAdminAuditIds.nextAction,
@@ -26310,7 +26324,31 @@ function nextActionHandoffDestinationFixture() {
         pair.hostedIdentityPredicate.adminProofPath,
       ].join("\n"),
     },
+    visiblePhaseLocalNextActionSnapshots:
+      phaseLocalNextActionSnapshots.map((snapshot) => snapshot.id),
+    visiblePhaseLocalNextActionSnapshotStatuses: Object.fromEntries(
+      phaseLocalNextActionSnapshots.map((snapshot) => [
+        snapshot.id,
+        phaseLocalNextActionSnapshotVisibleStatus(snapshot),
+      ]),
+    ),
   };
+}
+
+function phaseLocalNextActionSnapshotVisibleStatus(snapshot) {
+  return [
+    snapshot.status,
+    snapshot.phaseLocalNextActionId,
+    snapshot.sequenceStage,
+    snapshot.artifact,
+    snapshot.canonicalArtifact,
+    snapshot.nextActionEdgeRowId,
+    snapshot.manifestEdgeRowId,
+    snapshot.proofCommand,
+    snapshot.proofBoundary,
+  ]
+    .filter((token) => String(token ?? "") !== "")
+    .join("\n");
 }
 
 function terminalAdminProofSmokeNameForId(proofId) {
