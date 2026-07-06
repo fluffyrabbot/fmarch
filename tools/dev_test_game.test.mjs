@@ -22024,6 +22024,10 @@ function nextActionProofGraphFixture(slotId = "player-action-submission") {
   const target = resolvedFeatureSpineTargetFixture(slotId);
   const sourceNodeId = productionFeatureGraphSourceNodeId(target.sourceCheckId);
   const nodeId = `production-feature:${slotId}`;
+  const coreLoopRecoveryNodes =
+    nextActionProofGraphCoreLoopRecoveryNodesFixture();
+  const coreLoopRecoveryEdges =
+    nextActionProofGraphCoreLoopRecoveryEdgesFixture();
   const graph = {
     version: 1,
     proof: "dev-test-game-proof-graph",
@@ -22032,6 +22036,7 @@ function nextActionProofGraphFixture(slotId = "player-action-submission") {
     scope: "local-dev-test-game-proof-graph",
     summary: {
       productionFeatureTargetCount: 1,
+      coreLoopHostVisibleRecoveryCount: coreLoopRecoveryNodes.length,
     },
     nodes: [
       {
@@ -22046,6 +22051,7 @@ function nextActionProofGraphFixture(slotId = "player-action-submission") {
         sourceProofArtifact: target.sourceProofArtifact,
         artifact: devTestGameReleaseReadinessPath,
       },
+      ...coreLoopRecoveryNodes,
       ...proofGraphDiagnosticProofNodes,
     ],
     edges: [
@@ -22058,6 +22064,7 @@ function nextActionProofGraphFixture(slotId = "player-action-submission") {
         sourceProofArtifact: target.sourceProofArtifact,
         command: target.browserProofCommand,
       },
+      ...coreLoopRecoveryEdges,
     ],
   };
   return {
@@ -22073,11 +22080,54 @@ function nextActionProofGraphFixture(slotId = "player-action-submission") {
   };
 }
 
+function nextActionProofGraphCoreLoopRecoveryNodesFixture() {
+  return hostVisibleRecoverySummaryCases().map((recoveryCase) => ({
+    id: `core-loop-host-visible-recovery:${recoveryCase.id}`,
+    label: recoveryCase.label,
+    kind: "core-loop-host-visible-recovery",
+    status: "passed",
+    artifact: devTestGameCoreLoopAdminProofPath,
+    roleUrl: localAdminAuditRoleUrl(localAdminAuditIds.coreLoop),
+    proofCommand: devTestGameCoreLoopAdminProofCommand,
+    recoveryCommand: devTestGameCoreLoopAdminProofCommand,
+    recoveryCaseId: recoveryCase.id,
+    group: recoveryCase.group,
+    adminCheckId: recoveryCase.adminCheckId,
+    recoveryHookId: recoveryCase.recoveryHookId,
+    recoveryHookStatus: recoveryCase.recoveryHookStatus,
+    commandKind: recoveryCase.commandKind,
+    visibleAdminRowId: `host-visible-recovery-${recoveryCase.id}`,
+    visibleAdminRowTestId:
+      `admin-audit-host-visible-recovery-${recoveryCase.id}`,
+  }));
+}
+
+function nextActionProofGraphCoreLoopRecoveryEdgesFixture() {
+  return hostVisibleRecoverySummaryCases().map((recoveryCase) => {
+    const nodeId = `core-loop-host-visible-recovery:${recoveryCase.id}`;
+    return {
+      from: nodeId,
+      to: "next-action",
+      relationship: "summarizes-into",
+      recoveryCaseId: recoveryCase.id,
+      group: recoveryCase.group,
+      roleUrl: localAdminAuditRoleUrl(localAdminAuditIds.coreLoop),
+      command: devTestGameCoreLoopAdminProofCommand,
+      proofTarget: devTestGameCoreLoopAdminProofPath,
+      visibleAdminRowId: `host-visible-recovery-${recoveryCase.id}`,
+    };
+  });
+}
+
 function hostedIdentityProofGraphFixture() {
   const identityTarget = resolvedFeatureSpineTargetFixture("identity-adapter");
   const identitySourceNodeId = productionFeatureGraphSourceNodeId(
     identityTarget.sourceCheckId,
   );
+  const coreLoopRecoveryNodes =
+    nextActionProofGraphCoreLoopRecoveryNodesFixture();
+  const coreLoopRecoveryEdges =
+    nextActionProofGraphCoreLoopRecoveryEdgesFixture();
   return {
     version: 1,
     proof: "dev-test-game-proof-graph",
@@ -22086,6 +22136,7 @@ function hostedIdentityProofGraphFixture() {
     scope: "local-dev-test-game-proof-graph",
     summary: {
       productionFeatureTargetCount: 0,
+      coreLoopHostVisibleRecoveryCount: coreLoopRecoveryNodes.length,
       productionFeatureDestinationSummary:
         proofGraphProductionFeatureDestinationSummary({
           nodes: [],
@@ -22151,6 +22202,7 @@ function hostedIdentityProofGraphFixture() {
         roleUrl: localAdminAuditRoleUrl(localAdminAuditIds.hostedIdentityEvidence),
         proofCommand: `npm run ${devTestGameHostedIdentityOperatorAdminProofCommand}`,
       },
+      ...coreLoopRecoveryNodes,
       ...proofGraphDiagnosticProofNodes,
     ],
     edges: [
@@ -22163,6 +22215,7 @@ function hostedIdentityProofGraphFixture() {
         sourceProofArtifact: identityTarget.sourceProofArtifact,
         command: identityTarget.browserProofCommand,
       },
+      ...coreLoopRecoveryEdges,
       ...hostedIdentityProofGraphEdgesFixture().edges.map((edge) => ({
         from: edge.from,
         to: edge.to,

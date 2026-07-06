@@ -71,6 +71,7 @@ import {
 } from "../../../../tools/dev_test_game_replacement_handoff_scenario_cases.mjs";
 import {
   completedGameStaleRecoverySummaryId,
+  hostVisibleRecoverySummaryCases,
   playerInvalidActionRecoveryMessage,
   playerInvalidActionRecoveryLaneId,
   playerStaleActionTransitionRecoveryFeatureSlotId,
@@ -3348,7 +3349,11 @@ test("admin route data exposes local next action as a native audit row", async (
       replacementHandoffRecoveryGraphFixture(),
     replacementPrivateRecoveryGraph:
       replacementPrivateRecoveryGraphFixture(),
+    coreLoopRecoveryDestinationCoverage:
+      coreLoopRecoveryDestinationCoverageFixture(),
   });
+  const coreLoopRecoveryDestinationCoverage =
+    coreLoopRecoveryDestinationCoverageFixture();
   const data = await buildAdminRouteData({
     principalUserId: "admin_a",
     capabilities: [{ kind: "GlobalAdmin" }],
@@ -3398,6 +3403,19 @@ test("admin route data exposes local next action as a native audit row", async (
         `passed:${replacementHandoffRecoveryLaneIds.length} lanes`,
       ],
       ["replacement-private-recovery-graph", "passed:6 lanes"],
+      [
+        "core-loop-recovery-destination-coverage",
+        `passed:${coreLoopRecoveryDestinationCoverage.coveredCount}/${coreLoopRecoveryDestinationCoverage.recoveryCount} recoveries`,
+      ],
+      ...coreLoopRecoveryDestinationCoverage.rows.map((row) => [
+        `core-loop-recovery-destination:${row.id}`,
+        [
+          row.status,
+          row.adminRowId,
+          row.proofGraphNodeId,
+          row.nextActionEdgeRowId,
+        ].join("\n"),
+      ]),
       ["selection-trace", "0 candidates"],
       ["release-readiness-selection-trace", "1 buildable candidates"],
       ["release-readiness-hosted-concurrent-race-matrix", "selected:unproven"],
@@ -3500,6 +3518,8 @@ test("admin route data exposes local next action as a native audit row", async (
     selectedArtifactBuildSlice: "",
     selectedArtifactRequiredEvidence: "",
     ...normalizeLocalNextActionGeneratedSummary(nextActionInput),
+    coreLoopRecoveryDestinationCoverage:
+      normalizedCoreLoopRecoveryDestinationCoverageFixture(),
     selectionTrace: {
       strategy: "development-spine-priority",
       candidateCount: 0,
@@ -8396,6 +8416,7 @@ function nextActionFixture({
   replacementActionRecoveryGraph,
   replacementHandoffRecoveryGraph,
   replacementPrivateRecoveryGraph,
+  coreLoopRecoveryDestinationCoverage,
   frontendSetupWorkbenchReadiness,
 } = {}) {
   return {
@@ -8488,6 +8509,9 @@ function nextActionFixture({
       ...(replacementPrivateRecoveryGraph === undefined
         ? {}
         : { replacementPrivateRecoveryGraph }),
+      ...(coreLoopRecoveryDestinationCoverage === undefined
+        ? {}
+        : { coreLoopRecoveryDestinationCoverage }),
       seedProofLaneCoverageStatus: seedProofLaneCoverageTrace.status,
       seedProofLaneCoverageUnclassifiedCount:
         seedProofLaneCoverageTrace.unclassifiedLaneCount,
@@ -8908,6 +8932,48 @@ function privateChannelRecoveryGraphFixture() {
     ),
     edgeCount: 3,
     edgeTargets: ["admin-proof:core-loop", "proof-graph", "next-action"],
+  };
+}
+
+function coreLoopRecoveryDestinationCoverageFixture() {
+  const rows = hostVisibleRecoverySummaryCases().map((recoveryCase) => {
+    const proofGraphNodeId =
+      `core-loop-host-visible-recovery:${recoveryCase.id}`;
+    return {
+      id: recoveryCase.id,
+      label: recoveryCase.label,
+      status: "passed",
+      group: recoveryCase.group,
+      proofGraphNodeId,
+      adminRowId: `host-visible-recovery-${recoveryCase.id}`,
+      nextActionEdgeRowId:
+        `edge:${proofGraphNodeId}:summarizes-into:next-action`,
+      roleUrl: localAdminAuditRoleUrl(localAdminAuditIds.coreLoop),
+      proofTarget: devTestGameCoreLoopAdminProofPath,
+      command: "npm run test:dev-test-game-core-loop-admin-proof",
+    };
+  });
+  return {
+    id: "core-loop-recovery-destination-coverage",
+    status: "passed",
+    source: "target/dev-test-game/proof-graph.json",
+    recoveryCount: rows.length,
+    coveredCount: rows.length,
+    proofBoundary:
+      "Next-action coverage map for host-visible core-loop recoveries.",
+    rows,
+  };
+}
+
+function normalizedCoreLoopRecoveryDestinationCoverageFixture() {
+  const coverage = coreLoopRecoveryDestinationCoverageFixture();
+  return {
+    ...coverage,
+    rows: coverage.rows.map((row) => ({
+      ...row,
+      id: `core-loop-recovery-destination:${row.id}`,
+      recoveryCaseId: row.id,
+    })),
   };
 }
 

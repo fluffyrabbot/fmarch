@@ -86,6 +86,7 @@ import {
 } from "./dev_test_game_production_feature_spine_target_provenance.mjs";
 import {
   defaultProductionFeatureSpineRerunCommands,
+  devTestGameCoreLoopAdminProofCommand,
   devTestGameProductionFeatureBrowserProofCommand,
   productionFeatureSpineSourceCheckRules,
 } from "./dev_test_game_production_feature_source_rules.mjs";
@@ -125,6 +126,9 @@ import {
   recoveryReceiptGraphDescriptors,
   recoveryReceiptGraphSummaryFromProofGraph,
 } from "./dev_test_game_recovery_receipt_catalog.mjs";
+import {
+  hostVisibleRecoverySummaryCases,
+} from "./dev_test_game_core_loop_action_scenarios.mjs";
 import {
   assertRecoveryTrace,
   buildCohostDeadlineRaceReloadTrace,
@@ -251,6 +255,10 @@ export function buildDevTestGameNextAction(
   const nextActionHandoffPair = nextActionHandoffPairFromReadiness(readiness);
   const recoveryReceiptGraphs =
     recoveryReceiptGraphSummariesFromProofGraph(graph);
+  const coreLoopRecoveryDestinationCoverage =
+    coreLoopRecoveryDestinationCoverageFromProofGraph(graph, {
+      source: proofGraphSource,
+    });
   const sourceTargetsByCheckId =
     productionFeatureSourceTargetsByCheckIdFromReadiness(readiness, {
       defaultBrowserProofCommand: devTestGameLiveProofCommand,
@@ -637,6 +645,9 @@ export function buildDevTestGameNextAction(
             ...(nextActionHandoffPair === null
               ? {}
               : { nextActionHandoffPair }),
+            ...(coreLoopRecoveryDestinationCoverage === null
+              ? {}
+              : { coreLoopRecoveryDestinationCoverage }),
             ...recoveryReceiptGraphs,
           }),
     },
@@ -958,6 +969,9 @@ export function assertDevTestGameNextAction(evidence) {
   }
   assertNextActionHandoffPairForNextAction(
     evidence.generatedFrom?.nextActionHandoffPair,
+  );
+  assertCoreLoopRecoveryDestinationCoverageForNextAction(
+    evidence.generatedFrom?.coreLoopRecoveryDestinationCoverage,
   );
   assertRecoveryReceiptGraphsForNextAction(evidence.generatedFrom);
   return evidence;
@@ -1479,6 +1493,101 @@ function recoveryReceiptGraphSummariesFromProofGraph(proofGraph) {
       ])
       .filter(([, summary]) => summary !== null),
   );
+}
+
+function coreLoopRecoveryDestinationCoverageFromProofGraph(
+  proofGraph,
+  { source = devTestGameProofGraphPath } = {},
+) {
+  if (proofGraph === null) {
+    return null;
+  }
+  const rows = hostVisibleRecoverySummaryCases().map((recoveryCase) => {
+    const nodeId = `core-loop-host-visible-recovery:${recoveryCase.id}`;
+    const adminRowId = `host-visible-recovery-${recoveryCase.id}`;
+    const node = proofGraph.nodes.find(
+      (candidate) => candidate?.id === nodeId,
+    );
+    const edge = proofGraph.edges.find(
+      (candidate) =>
+        candidate?.from === nodeId &&
+        candidate?.to === "next-action" &&
+        candidate?.relationship === "summarizes-into",
+    );
+    const edgeRowId = `edge:${nodeId}:summarizes-into:next-action`;
+    const status =
+      node?.status === "passed" &&
+      edge?.recoveryCaseId === recoveryCase.id &&
+      edge?.visibleAdminRowId === adminRowId
+        ? "passed"
+        : "missing";
+    return {
+      id: recoveryCase.id,
+      label: recoveryCase.label,
+      status,
+      group: recoveryCase.group,
+      proofGraphNodeId: nodeId,
+      adminRowId,
+      nextActionEdgeRowId: edgeRowId,
+      roleUrl: String(node?.roleUrl ?? ""),
+      proofTarget: String(node?.artifact ?? ""),
+      command: String(node?.recoveryCommand ?? ""),
+    };
+  });
+  const coveredCount = rows.filter((row) => row.status === "passed").length;
+  return {
+    id: "core-loop-recovery-destination-coverage",
+    status:
+      coveredCount === rows.length && rows.length > 0 ? "passed" : "missing",
+    source,
+    recoveryCount: rows.length,
+    coveredCount,
+    proofBoundary:
+      "Next-action coverage map for host-visible core-loop recoveries. It ties each shared recovery registry case to the admin detail row, proof-graph node, and proof-graph edge that summarizes into next-action; it does not add new gameplay proof.",
+    rows,
+  };
+}
+
+function assertCoreLoopRecoveryDestinationCoverageForNextAction(coverage) {
+  if (coverage === undefined) {
+    return;
+  }
+  const recoveryCases = hostVisibleRecoverySummaryCases();
+  if (
+    coverage === null ||
+    coverage.id !== "core-loop-recovery-destination-coverage" ||
+    coverage.status !== "passed" ||
+    coverage.recoveryCount !== recoveryCases.length ||
+    coverage.coveredCount !== recoveryCases.length ||
+    !Array.isArray(coverage.rows) ||
+    coverage.rows.length !== recoveryCases.length ||
+    typeof coverage.proofBoundary !== "string" ||
+    !coverage.proofBoundary.includes("host-visible core-loop recoveries")
+  ) {
+    throw new Error("next-action core-loop recovery destination coverage drifted");
+  }
+  const rowsById = new Map(coverage.rows.map((row) => [row.id, row]));
+  for (const recoveryCase of recoveryCases) {
+    const row = rowsById.get(recoveryCase.id);
+    const nodeId = `core-loop-host-visible-recovery:${recoveryCase.id}`;
+    const adminRowId = `host-visible-recovery-${recoveryCase.id}`;
+    if (
+      row?.label !== recoveryCase.label ||
+      row.status !== "passed" ||
+      row.group !== recoveryCase.group ||
+      row.proofGraphNodeId !== nodeId ||
+      row.adminRowId !== adminRowId ||
+      row.nextActionEdgeRowId !==
+        `edge:${nodeId}:summarizes-into:next-action` ||
+      row.roleUrl !== "/admin/audit/local-core-loop?game=<seeded-game>" ||
+      row.proofTarget !== devTestGameCoreLoopAdminProofPath ||
+      row.command !== devTestGameCoreLoopAdminProofCommand
+    ) {
+      throw new Error(
+        `next-action core-loop recovery destination row drifted: ${recoveryCase.id}`,
+      );
+    }
+  }
 }
 
 function assertTerminalBatchGraph(terminalBatchGraph) {

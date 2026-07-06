@@ -4577,6 +4577,10 @@ export function normalizeLocalNextActionAudit(nextAction, { game, proofGraph = n
     normalizeNextActionRecoveryReceiptGraph(
       nextAction.generatedFrom?.replacementPrivateRecoveryGraph,
     );
+  const coreLoopRecoveryDestinationCoverage =
+    normalizeNextActionCoreLoopRecoveryDestinationCoverage(
+      nextAction.generatedFrom?.coreLoopRecoveryDestinationCoverage,
+    );
   const generatedSummary = normalizeLocalNextActionGeneratedSummary(nextAction);
   const stability =
     action.stability !== null && typeof action.stability === "object"
@@ -4754,6 +4758,25 @@ export function normalizeLocalNextActionAudit(nextAction, { game, proofGraph = n
             id: "replacement-private-recovery-graph",
             status: `${replacementPrivateRecoveryGraph.status}:${replacementPrivateRecoveryGraph.laneCount} lanes`,
           }),
+        ]),
+    ...(coreLoopRecoveryDestinationCoverage.id === ""
+      ? []
+      : [
+          Object.freeze({
+            id: coreLoopRecoveryDestinationCoverage.id,
+            status: `${coreLoopRecoveryDestinationCoverage.status}:${coreLoopRecoveryDestinationCoverage.coveredCount}/${coreLoopRecoveryDestinationCoverage.recoveryCount} recoveries`,
+          }),
+          ...coreLoopRecoveryDestinationCoverage.rows.map((row) =>
+            Object.freeze({
+              id: row.id,
+              status: [
+                row.status,
+                row.adminRowId,
+                row.proofGraphNodeId,
+                row.nextActionEdgeRowId,
+              ].join("\n"),
+            }),
+          ),
         ]),
     ...preReadinessTraceCheckRows(
       preReadinessTraceKeys.proofStability,
@@ -5202,6 +5225,9 @@ export function normalizeLocalNextActionAudit(nextAction, { game, proofGraph = n
       ...(replacementPrivateRecoveryGraph.nodeId === ""
         ? {}
         : { replacementPrivateRecoveryGraph }),
+      ...(coreLoopRecoveryDestinationCoverage.id === ""
+        ? {}
+        : { coreLoopRecoveryDestinationCoverage }),
       stabilitySource: String(stability?.source ?? ""),
       stabilityBuildSlice: String(stability?.buildSlice ?? ""),
       stabilityProofTarget: String(stability?.proofTarget ?? ""),
@@ -5776,6 +5802,47 @@ function normalizeNextActionRecoveryReceiptGraph(recoveryReceiptGraph) {
     ...(normalizedEvidenceObjects.length === 0
       ? {}
       : { normalizedEvidenceObjects }),
+  });
+}
+
+function normalizeNextActionCoreLoopRecoveryDestinationCoverage(coverage) {
+  if (coverage === null || typeof coverage !== "object") {
+    return Object.freeze({
+      id: "",
+      status: "",
+      source: "",
+      recoveryCount: 0,
+      coveredCount: 0,
+      proofBoundary: "",
+      rows: Object.freeze([]),
+    });
+  }
+  return Object.freeze({
+    id: String(coverage.id ?? ""),
+    status: String(coverage.status ?? "unknown"),
+    source: String(coverage.source ?? ""),
+    recoveryCount: Number(coverage.recoveryCount ?? 0),
+    coveredCount: Number(coverage.coveredCount ?? 0),
+    proofBoundary: String(coverage.proofBoundary ?? ""),
+    rows: Object.freeze(
+      Array.isArray(coverage.rows)
+        ? coverage.rows.map((row) =>
+            Object.freeze({
+              id: `core-loop-recovery-destination:${String(row?.id ?? "")}`,
+              recoveryCaseId: String(row?.id ?? ""),
+              label: String(row?.label ?? ""),
+              status: String(row?.status ?? "unknown"),
+              group: String(row?.group ?? ""),
+              adminRowId: String(row?.adminRowId ?? ""),
+              proofGraphNodeId: String(row?.proofGraphNodeId ?? ""),
+              nextActionEdgeRowId: String(row?.nextActionEdgeRowId ?? ""),
+              roleUrl: String(row?.roleUrl ?? ""),
+              proofTarget: String(row?.proofTarget ?? ""),
+              command: String(row?.command ?? ""),
+            }),
+          )
+        : [],
+    ),
   });
 }
 

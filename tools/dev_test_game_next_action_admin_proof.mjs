@@ -272,6 +272,9 @@ export function nextActionAdminProofCase({
       terminalBatchGraph: source.nextAction.generatedFrom?.terminalBatchGraph ?? null,
       nextActionHandoffPair:
         source.nextAction.generatedFrom?.nextActionHandoffPair ?? null,
+      coreLoopRecoveryDestinationCoverage:
+        source.nextAction.generatedFrom?.coreLoopRecoveryDestinationCoverage ??
+        null,
       ...recoveryReceiptGraphGeneratedFrom(source.nextAction),
       relatedHandoffs: relatedHandoffsForNextAction({
         nextAction: source.nextAction,
@@ -660,6 +663,7 @@ export function assertNextActionAdminProof(evidence) {
     { label: "next-action admin proof local readiness dependency trace" },
   );
   assertNextActionAdminProofGraphDiagnosticSummaryTrace(evidence);
+  assertNextActionAdminCoreLoopRecoveryDestinationCoverage(evidence);
   assertRecoveryTrace(
     recoveryTraceKeys.replacementRaceReload,
     evidence.generatedFrom?.replacementRaceReloadTrace,
@@ -1111,6 +1115,50 @@ function assertNextActionAdminRecoveryReceiptGraphs(generatedFrom) {
   }
 }
 
+function assertNextActionAdminCoreLoopRecoveryDestinationCoverage(evidence) {
+  const coverage = evidence.generatedFrom?.coreLoopRecoveryDestinationCoverage;
+  if (coverage === null || coverage === undefined) {
+    return;
+  }
+  if (
+    coverage.id !== "core-loop-recovery-destination-coverage" ||
+    coverage.status !== "passed" ||
+    !Number.isInteger(coverage.recoveryCount) ||
+    coverage.recoveryCount < 1 ||
+    coverage.coveredCount !== coverage.recoveryCount ||
+    !Array.isArray(coverage.rows) ||
+    coverage.rows.length !== coverage.recoveryCount
+  ) {
+    throw new Error(
+      "next-action admin proof core-loop recovery destination coverage drifted",
+    );
+  }
+  const statuses = evidence.adminRoleSurface?.visibleCheckStatuses ?? {};
+  if (
+    !String(statuses[coverage.id] ?? "").includes(
+      `${coverage.coveredCount}/${coverage.recoveryCount} recoveries`,
+    )
+  ) {
+    throw new Error(
+      "next-action admin proof missing core-loop recovery destination summary",
+    );
+  }
+  for (const row of coverage.rows) {
+    const rowId = `core-loop-recovery-destination:${String(row.id ?? "")}`;
+    const visibleText = String(statuses[rowId] ?? "");
+    if (
+      row.status !== "passed" ||
+      !visibleText.includes(String(row.adminRowId ?? "")) ||
+      !visibleText.includes(String(row.proofGraphNodeId ?? "")) ||
+      !visibleText.includes(String(row.nextActionEdgeRowId ?? ""))
+    ) {
+      throw new Error(
+        `next-action admin proof missing core-loop recovery destination row: ${rowId}`,
+      );
+    }
+  }
+}
+
 function recoveryReceiptGraphCheckIdsForEvidence(evidence) {
   return recoveryReceiptGraphDescriptors.flatMap((descriptor) =>
     evidence.generatedFrom?.[descriptor.nextActionGeneratedFromKey] === null ||
@@ -1215,6 +1263,13 @@ function requiredChecksForNextAction(nextAction) {
   }
   if (nextAction.generatedFrom?.nextActionHandoffPair !== undefined) {
     checks.push(nextAction.generatedFrom.nextActionHandoffPair.id);
+  }
+  if (nextAction.generatedFrom?.coreLoopRecoveryDestinationCoverage !== undefined) {
+    checks.push(
+      ...coreLoopRecoveryDestinationCoverageCheckIds(
+        nextAction.generatedFrom.coreLoopRecoveryDestinationCoverage,
+      ),
+    );
   }
   for (const descriptor of recoveryReceiptGraphDescriptors) {
     if (
@@ -1577,6 +1632,26 @@ function requiredCheckStatusesForNextAction(nextAction, proofGraph) {
           "selected-operator-handoff-feature-node":
             selectedOperatorHandoff.selectedProductionFeatureGraphNodeId,
         }),
+    ...coreLoopRecoveryDestinationCoverageStatuses(
+      nextAction.generatedFrom?.coreLoopRecoveryDestinationCoverage,
+    ),
+  };
+}
+
+function coreLoopRecoveryDestinationCoverageStatuses(coverage) {
+  if (coverage === null || coverage === undefined) {
+    return {};
+  }
+  return {
+    [coverage.id]: `${coverage.coveredCount}/${coverage.recoveryCount} recoveries`,
+    ...(Array.isArray(coverage.rows)
+      ? Object.fromEntries(
+          coverage.rows.map((row) => [
+            `core-loop-recovery-destination:${String(row.id ?? "")}`,
+            String(row.proofGraphNodeId ?? ""),
+          ]),
+        )
+      : {}),
   };
 }
 
@@ -1817,6 +1892,9 @@ function requiredChecksForEvidence(evidence) {
     evidence.generatedFrom?.nextActionHandoffPair === undefined
       ? []
       : [evidence.generatedFrom.nextActionHandoffPair.id]),
+    ...coreLoopRecoveryDestinationCoverageCheckIds(
+      evidence.generatedFrom?.coreLoopRecoveryDestinationCoverage,
+    ),
     ...recoveryReceiptGraphCheckIdsForEvidence(evidence),
     ...preReadinessTraceCheckIds(
       preReadinessTraceKeys.seedProofLaneCoverage,
@@ -1862,5 +1940,19 @@ function requiredChecksForEvidence(evidence) {
       recoveryTraceKeys.hostStaleControl,
       evidence.generatedFrom?.hostStaleControlTrace,
     ),
+  ];
+}
+
+function coreLoopRecoveryDestinationCoverageCheckIds(coverage) {
+  if (coverage === null || coverage === undefined) {
+    return [];
+  }
+  return [
+    coverage.id,
+    ...(Array.isArray(coverage.rows)
+      ? coverage.rows.map(
+          (row) => `core-loop-recovery-destination:${String(row.id ?? "")}`,
+        )
+      : []),
   ];
 }
