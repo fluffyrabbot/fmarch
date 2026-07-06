@@ -57,6 +57,7 @@
     "test:dev-test-game-real-hosted-matrix-raw-capture": "node tools/dev_test_game_real_hosted_matrix_raw_capture.mjs",
     "test:dev-test-game-hosted-matrix-external-evidence": "node tools/dev_test_game_hosted_matrix_external_evidence.mjs",
     "test:dev-test-game-hosted-evidence-operator-checklist": "node tools/dev_test_game_hosted_evidence_operator_checklist.mjs",
+    "test:dev-test-game-hosted-evidence-operator-checklist-admin-proof": "node tools/dev_test_game_hosted_evidence_operator_checklist_admin_proof.mjs",
     "test:dev-test-game-hosted-evidence-lane": "node tools/dev_test_game_hosted_evidence_lane.mjs",
     "test:dev-test-game-hosted-evidence-lane-operator-fixture-admin-proof": "node tools/dev_test_game_hosted_evidence_lane_operator_fixture_admin_proof.mjs",
     "test:dev-test-game-hosted-evidence-lane-demo-proof": "node tools/dev_test_game_hosted_evidence_lane_demo_proof.mjs",

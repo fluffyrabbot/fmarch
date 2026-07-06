@@ -44,6 +44,10 @@ import {
   devTestGameHostedEvidenceOperatorChecklistProofPath,
 } from "./dev_test_game_hosted_evidence_operator_checklist.mjs";
 import {
+  devTestGameHostedEvidenceOperatorChecklistAdminProofCommand,
+  devTestGameHostedEvidenceOperatorChecklistAdminProofPath,
+} from "./dev_test_game_hosted_evidence_operator_checklist_admin_proof.mjs";
+import {
   devTestGameHostedEvidenceLaneOperatorFixtureAdminProofCommand,
   devTestGameHostedEvidenceLaneOperatorFixtureAdminProofPath,
   devTestGameHostedEvidenceLaneOperatorFixturePath,
@@ -95,6 +99,7 @@ import {
   hostedAdminHandoffProofArtifactCases,
 } from "./dev_test_game_hosted_handoff_proof_cases.mjs";
 import {
+  devTestGameHostedEvidenceLaneAdminProofPath,
   devTestGameHostedEvidenceLaneRealCaptureAdminProofCommand,
   devTestGameHostedEvidenceLaneRealCaptureAdminProofPath,
   devTestGameHostedEvidenceLaneRealCaptureSourcePath,
@@ -388,6 +393,19 @@ export function buildDevTestGameSpineManifest({
           devTestGameHostedMatrixRawEvidenceTemplatePath,
         ],
         templateOnly: true,
+        releaseReady: false,
+        productionReady: false,
+      },
+      hostedEvidenceOperatorChecklistAdminProof: {
+        script: devTestGameHostedEvidenceOperatorChecklistAdminProofCommand,
+        proofArtifact: devTestGameHostedEvidenceOperatorChecklistAdminProofPath,
+        dependsOn: [
+          devTestGameHostedEvidenceOperatorChecklistProofPath,
+          devTestGameHostedEvidenceLaneAdminProofPath,
+          devTestGameReleaseReadinessPath,
+          nextActionPath,
+        ],
+        roleUrl: "/admin/audit/local-hosted-evidence-lane?game=<seeded-game>",
         releaseReady: false,
         productionReady: false,
       },
@@ -1173,6 +1191,46 @@ export function assertDevTestGameSpineManifest(manifest) {
   ) {
     throw new Error(
       "spine manifest hosted evidence operator checklist proof must stay template-only",
+    );
+  }
+  if (
+    manifest.commands?.hostedEvidenceOperatorChecklistAdminProof?.script !==
+    devTestGameHostedEvidenceOperatorChecklistAdminProofCommand
+  ) {
+    throw new Error(
+      `spine manifest hosted evidence operator checklist admin proof command drifted: ${manifest.commands?.hostedEvidenceOperatorChecklistAdminProof?.script}`,
+    );
+  }
+  if (
+    manifest.commands.hostedEvidenceOperatorChecklistAdminProof.proofArtifact !==
+    devTestGameHostedEvidenceOperatorChecklistAdminProofPath
+  ) {
+    throw new Error(
+      `spine manifest hosted evidence operator checklist admin proof artifact drifted: ${manifest.commands.hostedEvidenceOperatorChecklistAdminProof.proofArtifact}`,
+    );
+  }
+  if (
+    !manifest.commands.hostedEvidenceOperatorChecklistAdminProof.dependsOn.includes(
+      devTestGameHostedEvidenceOperatorChecklistProofPath,
+    ) ||
+    !manifest.commands.hostedEvidenceOperatorChecklistAdminProof.dependsOn.includes(
+      devTestGameHostedEvidenceLaneAdminProofPath,
+    ) ||
+    !manifest.commands.hostedEvidenceOperatorChecklistAdminProof.dependsOn.includes(
+      devTestGameReleaseReadinessPath,
+    ) ||
+    !manifest.commands.hostedEvidenceOperatorChecklistAdminProof.dependsOn.includes(
+      nextActionPath,
+    ) ||
+    manifest.commands.hostedEvidenceOperatorChecklistAdminProof.roleUrl !==
+      "/admin/audit/local-hosted-evidence-lane?game=<seeded-game>" ||
+    manifest.commands.hostedEvidenceOperatorChecklistAdminProof.releaseReady !==
+      false ||
+    manifest.commands.hostedEvidenceOperatorChecklistAdminProof.productionReady !==
+      false
+  ) {
+    throw new Error(
+      "spine manifest hosted evidence operator checklist admin proof contract drifted",
     );
   }
   if (
