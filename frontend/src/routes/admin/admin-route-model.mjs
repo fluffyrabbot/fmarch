@@ -1757,6 +1757,7 @@ function withAdminAuditDetailDisplayRows(item, { game }) {
       { id: "status", text: hook.status },
     ],
   });
+  const spineCycleRows = buildCoreLoopSpineCycleRows(item.spineCycles);
   const localPrerequisiteRows = buildLocalPrerequisiteRows(
     item.localPrerequisites,
     { game },
@@ -1778,6 +1779,7 @@ function withAdminAuditDetailDisplayRows(item, { game }) {
     ...(spineRecoveryHookRows.length === 0
       ? {}
       : { spineRecoveryHookRows }),
+    ...(spineCycleRows.length === 0 ? {} : { spineCycleRows }),
     ...(localPrerequisiteRows.length === 0 ? {} : { localPrerequisiteRows }),
     ...(batchRows.length === 0 ? {} : { batchRows }),
     ...(productionFeatureDestinationSections.length === 0
@@ -1834,6 +1836,49 @@ function optionalJoinedValue(id, values) {
   return Array.isArray(values) && values.length > 0
     ? [{ id, text: joinedValue(values) }]
     : [];
+}
+
+function buildCoreLoopSpineCycleRows(spineCycles) {
+  return Object.freeze(
+    (Array.isArray(spineCycles) ? spineCycles : []).map((cycle) =>
+      artifactSummaryRow({
+        id: `spine-cycle-${cycle.id}`,
+        testId: `admin-audit-spine-cycle-${cycle.id}`,
+        values: [
+          { id: "label", text: cycle.label, emphasized: true },
+          { id: "game", text: cycle.game },
+          { id: "status", text: cycle.status },
+        ],
+        subentries: [
+          ...(Array.isArray(cycle.roleUrls) ? cycle.roleUrls : []).map(
+            (roleUrl) => ({
+              id: `role-url-${roleUrl.id}`,
+              testId: `admin-audit-spine-role-url-entry-${cycle.id}-${roleUrl.id}`,
+              values: [
+                { id: "label", text: roleUrl.label, emphasized: true },
+                {
+                  id: "href",
+                  text: roleUrl.href,
+                  href: roleUrl.href,
+                  testId: `admin-audit-spine-role-url-${cycle.id}-${roleUrl.id}`,
+                },
+              ],
+            }),
+          ),
+          ...(Array.isArray(cycle.checkpoints) ? cycle.checkpoints : []).map(
+            (checkpoint) => ({
+              id: `checkpoint-${checkpoint.id}`,
+              testId: `admin-audit-spine-checkpoint-${cycle.id}-${checkpoint.id}`,
+              values: [
+                { id: "label", text: checkpoint.label, emphasized: true },
+                { id: "status", text: checkpoint.status },
+              ],
+            }),
+          ),
+        ],
+      }),
+    ),
+  );
 }
 
 function buildLocalPrerequisiteRows(localPrerequisites, { game }) {

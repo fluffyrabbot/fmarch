@@ -1922,6 +1922,10 @@ test("admin audit detail page renders simple list rows from route data", async (
   assert.doesNotMatch(source, /family\.transitionTokens/);
   assert.match(source, /spineRecoveryHookRows/);
   assert.doesNotMatch(source, /spineRecoveryHooks as hook/);
+  assert.match(source, /spineCycleRows/);
+  assert.doesNotMatch(source, /spineCycles as cycle/);
+  assert.doesNotMatch(source, /cycle\.roleUrls/);
+  assert.doesNotMatch(source, /cycle\.checkpoints/);
 });
 
 test("admin audit detail page renders admin spine batch rows from route data", async () => {
@@ -4660,6 +4664,10 @@ test("admin local core loop detail data carries lane rows", async () => {
         ],
       ],
     ],
+  );
+  assert.deepEqual(
+    descriptorRowsWithNestedLinksForAssertion(data.audit.spineCycleRows),
+    expectedSpineCycleRows(data.audit.spineCycles),
   );
   assert.deepEqual(
     data.audit.scenarioFamilies.map((family) => [
@@ -9399,6 +9407,29 @@ function descriptorRowsWithLinksForAssertion(rows) {
   ]);
 }
 
+function descriptorRowsWithNestedLinksForAssertion(rows) {
+  return rows.map((row) => [
+    row.id,
+    row.testId,
+    row.values.map(descriptorValueForAssertion),
+    (row.subentries ?? []).map((subentry) => [
+      subentry.id,
+      subentry.testId,
+      subentry.values.map(descriptorValueForAssertion),
+    ]),
+  ]);
+}
+
+function descriptorValueForAssertion(value) {
+  return [
+    value.id,
+    value.text,
+    value.emphasized,
+    value.href ?? "",
+    value.testId ?? "",
+  ];
+}
+
 function expectedHostedHandoffChecklistRows(checklist) {
   return [
     [
@@ -9656,6 +9687,42 @@ function expectedScenarioRows(scenarios) {
       ["role", scenario.role, false],
     ],
     [],
+  ]);
+}
+
+function expectedSpineCycleRows(cycles) {
+  return cycles.map((cycle) => [
+    `spine-cycle-${cycle.id}`,
+    `admin-audit-spine-cycle-${cycle.id}`,
+    [
+      ["label", cycle.label, true, "", ""],
+      ["game", cycle.game, false, "", ""],
+      ["status", cycle.status, false, "", ""],
+    ],
+    [
+      ...cycle.roleUrls.map((roleUrl) => [
+        `role-url-${roleUrl.id}`,
+        `admin-audit-spine-role-url-entry-${cycle.id}-${roleUrl.id}`,
+        [
+          ["label", roleUrl.label, true, "", ""],
+          [
+            "href",
+            roleUrl.href,
+            false,
+            roleUrl.href,
+            `admin-audit-spine-role-url-${cycle.id}-${roleUrl.id}`,
+          ],
+        ],
+      ]),
+      ...cycle.checkpoints.map((checkpoint) => [
+        `checkpoint-${checkpoint.id}`,
+        `admin-audit-spine-checkpoint-${cycle.id}-${checkpoint.id}`,
+        [
+          ["label", checkpoint.label, true, "", ""],
+          ["status", checkpoint.status, false, "", ""],
+        ],
+      ]),
+    ],
   ]);
 }
 
