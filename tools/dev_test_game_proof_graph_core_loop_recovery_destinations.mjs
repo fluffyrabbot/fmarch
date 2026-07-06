@@ -27,8 +27,13 @@ export function proofGraphCoreLoopRecoveryDestinationRowTestId(rowId) {
   return `${proofGraphCoreLoopRecoveryDestinationRowTestIdPrefix}-${String(rowId)}`;
 }
 
-export function proofGraphCoreLoopRecoveryDestinationSummary(proofGraph) {
-  const rows = proofGraphCoreLoopRecoveryDestinationRows(proofGraph);
+export function proofGraphCoreLoopRecoveryDestinationSummary(
+  proofGraph,
+  { requiredRelationships = null } = {},
+) {
+  const rows = proofGraphCoreLoopRecoveryDestinationRows(proofGraph, {
+    requiredRelationships,
+  });
   const coveredCount = rows.filter((row) => row.status === "passed").length;
   return Object.freeze({
     id: proofGraphCoreLoopRecoveryDestinationSectionId,
@@ -42,9 +47,16 @@ export function proofGraphCoreLoopRecoveryDestinationSummary(proofGraph) {
   });
 }
 
-export function proofGraphCoreLoopRecoveryDestinationRows(proofGraph) {
+export function proofGraphCoreLoopRecoveryDestinationRows(
+  proofGraph,
+  { requiredRelationships = null } = {},
+) {
   const nodes = Array.isArray(proofGraph?.nodes) ? proofGraph.nodes : [];
   const edges = Array.isArray(proofGraph?.edges) ? proofGraph.edges : [];
+  const requiredRelationshipSet =
+    requiredRelationships === null
+      ? null
+      : new Set(requiredRelationships.map((relationship) => String(relationship)));
   return Object.freeze(
     hostVisibleRecoverySummaryCases().map((recoveryCase) => {
       const graphNodeId = `core-loop-host-visible-recovery:${recoveryCase.id}`;
@@ -59,7 +71,11 @@ export function proofGraphCoreLoopRecoveryDestinationRows(proofGraph) {
         ["admin-proof:core-loop", graphNodeId, "proves-host-visible-recovery"],
         [graphNodeId, "proof-graph", "records"],
         [graphNodeId, "next-action", "summarizes-into"],
-      ];
+      ].filter(
+        ([, , relationship]) =>
+          requiredRelationshipSet === null ||
+          requiredRelationshipSet.has(relationship),
+      );
       const edgesCovered = requiredEdges.every(([from, to, relationship]) =>
         edges.some(
           (edge) =>

@@ -1,6 +1,6 @@
 import {
-  hostVisibleRecoverySummaryCases,
-} from "./dev_test_game_core_loop_action_scenarios.mjs";
+  proofGraphCoreLoopRecoveryDestinationSummary,
+} from "./dev_test_game_proof_graph_core_loop_recovery_destinations.mjs";
 
 export const proofGraphDestinationSummaryTraceStrategy =
   "proof-graph-destination-summary-before-readiness";
@@ -29,7 +29,7 @@ export function proofGraphDestinationSummaryDriftFromProofGraph(
   );
   const summaryStatus = String(summary?.status ?? "missing");
   const recoveryCoverage =
-    coreLoopRecoveryDestinationCoverageDriftFromProofGraph(proofGraph);
+    coreLoopRecoveryDestinationCoverageFromProofGraph(proofGraph);
   const status =
     proofGraph === null
       ? "unavailable"
@@ -230,7 +230,7 @@ function numberOrZero(value) {
   return Number.isFinite(number) ? number : 0;
 }
 
-function coreLoopRecoveryDestinationCoverageDriftFromProofGraph(proofGraph) {
+function coreLoopRecoveryDestinationCoverageFromProofGraph(proofGraph) {
   if (proofGraph === null) {
     return Object.freeze({
       requiredCount: 0,
@@ -239,30 +239,16 @@ function coreLoopRecoveryDestinationCoverageDriftFromProofGraph(proofGraph) {
       missingIds: Object.freeze([]),
     });
   }
-  const missingIds = [];
-  for (const recoveryCase of hostVisibleRecoverySummaryCases()) {
-    const nodeId = `core-loop-host-visible-recovery:${recoveryCase.id}`;
-    const adminRowId = `host-visible-recovery-${recoveryCase.id}`;
-    const node = proofGraph.nodes?.find((candidate) => candidate?.id === nodeId);
-    const edge = proofGraph.edges?.find(
-      (candidate) =>
-        candidate?.from === nodeId &&
-        candidate?.to === "next-action" &&
-        candidate?.relationship === "summarizes-into",
-    );
-    if (
-      node?.status !== "passed" ||
-      edge?.recoveryCaseId !== recoveryCase.id ||
-      edge?.visibleAdminRowId !== adminRowId
-    ) {
-      missingIds.push(recoveryCase.id);
-    }
-  }
-  const requiredCount = hostVisibleRecoverySummaryCases().length;
+  const summary = proofGraphCoreLoopRecoveryDestinationSummary(proofGraph, {
+    requiredRelationships: ["summarizes-into"],
+  });
+  const missingIds = summary.rows
+    .filter((row) => row.status !== "passed")
+    .map((row) => row.recoveryCaseId);
   return Object.freeze({
-    requiredCount,
-    coveredCount: requiredCount - missingIds.length,
-    missingCount: missingIds.length,
+    requiredCount: summary.requiredCount,
+    coveredCount: summary.coveredCount,
+    missingCount: summary.missingCount,
     missingIds: Object.freeze(missingIds),
   });
 }
