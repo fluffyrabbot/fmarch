@@ -22,6 +22,8 @@ export const coreLoopLateActionProgressionAdminCheckId = "core-loop";
 export const coreLoopLateActionProgressionCycleId = "d04-n04-d05";
 export const dayFourNoLynchVoteSubmittedLaneId =
   "day-four-no-lynch-vote-submitted";
+export const dayFourNoLynchResolutionLaneId =
+  "day-four-no-lynch-resolution";
 
 const lateActionProgressionFeatureRowDefinitions = Object.freeze([
   Object.freeze({
@@ -29,6 +31,12 @@ const lateActionProgressionFeatureRowDefinitions = Object.freeze([
     featureSlotId: dayFourNoLynchVoteSubmittedLaneId,
     role: "actionPlayer",
     checkpointId: "d04-no-lynch-vote-submitted",
+  }),
+  Object.freeze({
+    targetKey: "dayFourNoLynchResolution",
+    featureSlotId: dayFourNoLynchResolutionLaneId,
+    role: "host",
+    checkpointId: "d04-resolved-no-lynch",
   }),
   Object.freeze({
     targetKey: "nightFourNoActionSurface",
