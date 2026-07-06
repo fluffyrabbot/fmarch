@@ -8,7 +8,9 @@ import {
   coreLoopGeneratedFromScenarioFamilies,
 } from "./dev_test_game_core_loop_generated_from_families.mjs";
 import {
+  assertCoreLoopCommandProofRoleUrlAudit,
   assertCoreLoopCommandProofRoleUrls,
+  buildCoreLoopCommandProofRoleUrlAudit,
 } from "./dev_test_game_core_loop_proof_shape_assertions.mjs";
 import {
   assertCompletedGameProofReadinessSurfaceProof,
@@ -518,66 +520,76 @@ export function coreLoopAdminProofCase() {
         privateChannelRoleSurface,
       };
     },
-    buildEvidence: ({ source: proofRun, adminRoleSurface: surfaces }) => ({
-      version: 1,
-      proof: "dev-test-game-core-loop-admin-proof",
-      status: "passed",
-      releaseReady: false,
-      productionReady: false,
-      scope: "local-dev-test-game-core-loop-admin-surface",
-      proofBoundary:
-        "Local SvelteKit admin role URL with fixture admin authority over the dev-test-game core-loop proof-run lanes. Proves the saved host-control, lynch and no-lynch day-vote resolution, player-action, day/night, second-night action-resolution receipt/privacy, host Night 2 resolution to Day 3 transition, Day 3 player-vote submission and host resolution, post-Day 3 receipt/privacy and advance to Night 3, empty Night 3 host resolution and advance to Day 4 player vote controls, a living Day 4 survivor role URL, Day 4 no-lynch resolution into Night 4, Night 4 no-action player surface with no legal action controls, Night 4 no-action resolution/privacy after host resolution, post-Night 4 advance to Day 5 with dead-player/no-lynch surfaces plus frozen stale N04 action-control recovery, Day 5 no-lynch resolution into Night 5 with stale Day 5 vote recovery, and host CompleteGame into completed endgame host/player surfaces with role URL reload closure plus stale completed-game vote recovery; official-votecount publication, private-channel, replacement, stale outgoing-player recovery, and incoming replacement-player evidence is discoverable from the seeded admin overview and inspectable in a native admin audit detail route; it does not prove hosted deployment, production identity, exhaustive action/race coverage, beta readiness, or production readiness.",
-      generatedFrom: {
-        proofRun: proofRunRelativePath,
-        game: proofRun.session.game,
-        coreLoopSpineStatus: coreLoopSpineStatus(proofRun),
-        coreLoopSpineRows: requiredSpineRows(proofRun),
-        completedGameHardeningCoverage:
-          proofRun.completedGameHardeningCoverage,
-        completedGameHardeningCoverageStatus:
-          completedGameHardeningCoverageStatus(proofRun),
-        ...coreLoopGeneratedFromScenarioFamilies(),
-        highlightedLaneEvidence: coreLoopHighlightedLaneEvidence(proofRun),
-      },
-      adminRoleSurface: surfaces.adminRoleSurface,
-      hostRoleSurface: surfaces.hostRoleSurface,
-      hostModkillControlSurface: surfaces.hostModkillControlSurface,
-      ...Object.fromEntries(
-        hostControlRaceScenarioCases().map((raceCase) => [
-          raceCase.surfaceField,
-          surfaces[raceCase.surfaceField],
-        ]),
-      ),
-      playerRoleSurface: surfaces.playerRoleSurface,
-      targetResolutionReceiptSurface: surfaces.targetResolutionReceiptSurface,
-      normalResolutionPrivacySurface: surfaces.normalResolutionPrivacySurface,
-      targetDayVoteReceiptSurface: surfaces.targetDayVoteReceiptSurface,
-      normalDayVotePrivacySurface: surfaces.normalDayVotePrivacySurface,
-      hostPhaseTransitionSurface: surfaces.hostPhaseTransitionSurface,
-      targetPostDayVoteAdvanceSurface: surfaces.targetPostDayVoteAdvanceSurface,
-      normalPostDayVoteAdvanceSurface: surfaces.normalPostDayVoteAdvanceSurface,
-      nightActionResolutionReceiptSurface:
-        surfaces.nightActionResolutionReceiptSurface,
-      normalNightActionResolutionPrivacySurface:
-        surfaces.normalNightActionResolutionPrivacySurface,
-      hostNightActionTransitionSurface: surfaces.hostNightActionTransitionSurface,
-      dayThreeVoteResolutionSurface: surfaces.dayThreeVoteResolutionSurface,
-      postDayThreeResolutionSurface: surfaces.postDayThreeResolutionSurface,
-      nightThreeEmptyResolutionSurface:
-        surfaces.nightThreeEmptyResolutionSurface,
-      dayFourSurvivorRoleSurface: surfaces.dayFourSurvivorRoleSurface,
-      nightFourNoActionSurface:
-        surfaces.nightFourNoActionSurface,
-      nightFourNoActionResolutionSurface:
-        surfaces.nightFourNoActionResolutionSurface,
-      postNightFourTransitionSurface:
-        surfaces.postNightFourTransitionSurface,
-      dayFiveNoLynchResolutionSurface:
-        surfaces.dayFiveNoLynchResolutionSurface,
-      completedGameEndgameSurface:
-        surfaces.completedGameEndgameSurface,
-      privateChannelRoleSurface: surfaces.privateChannelRoleSurface,
-    }),
+    buildEvidence: ({ source: proofRun, adminRoleSurface: surfaces }) => {
+      const evidence = {
+        version: 1,
+        proof: "dev-test-game-core-loop-admin-proof",
+        status: "passed",
+        releaseReady: false,
+        productionReady: false,
+        scope: "local-dev-test-game-core-loop-admin-surface",
+        proofBoundary:
+          "Local SvelteKit admin role URL with fixture admin authority over the dev-test-game core-loop proof-run lanes. Proves the saved host-control, lynch and no-lynch day-vote resolution, player-action, day/night, second-night action-resolution receipt/privacy, host Night 2 resolution to Day 3 transition, Day 3 player-vote submission and host resolution, post-Day 3 receipt/privacy and advance to Night 3, empty Night 3 host resolution and advance to Day 4 player vote controls, a living Day 4 survivor role URL, Day 4 no-lynch resolution into Night 4, Night 4 no-action player surface with no legal action controls, Night 4 no-action resolution/privacy after host resolution, post-Night 4 advance to Day 5 with dead-player/no-lynch surfaces plus frozen stale N04 action-control recovery, Day 5 no-lynch resolution into Night 5 with stale Day 5 vote recovery, and host CompleteGame into completed endgame host/player surfaces with role URL reload closure plus stale completed-game vote recovery; official-votecount publication, private-channel, replacement, stale outgoing-player recovery, and incoming replacement-player evidence is discoverable from the seeded admin overview and inspectable in a native admin audit detail route; it does not prove hosted deployment, production identity, exhaustive action/race coverage, beta readiness, or production readiness.",
+        generatedFrom: {
+          proofRun: proofRunRelativePath,
+          game: proofRun.session.game,
+          coreLoopSpineStatus: coreLoopSpineStatus(proofRun),
+          coreLoopSpineRows: requiredSpineRows(proofRun),
+          completedGameHardeningCoverage:
+            proofRun.completedGameHardeningCoverage,
+          completedGameHardeningCoverageStatus:
+            completedGameHardeningCoverageStatus(proofRun),
+          ...coreLoopGeneratedFromScenarioFamilies(),
+          highlightedLaneEvidence: coreLoopHighlightedLaneEvidence(proofRun),
+        },
+        adminRoleSurface: surfaces.adminRoleSurface,
+        hostRoleSurface: surfaces.hostRoleSurface,
+        hostModkillControlSurface: surfaces.hostModkillControlSurface,
+        ...Object.fromEntries(
+          hostControlRaceScenarioCases().map((raceCase) => [
+            raceCase.surfaceField,
+            surfaces[raceCase.surfaceField],
+          ]),
+        ),
+        playerRoleSurface: surfaces.playerRoleSurface,
+        targetResolutionReceiptSurface: surfaces.targetResolutionReceiptSurface,
+        normalResolutionPrivacySurface: surfaces.normalResolutionPrivacySurface,
+        targetDayVoteReceiptSurface: surfaces.targetDayVoteReceiptSurface,
+        normalDayVotePrivacySurface: surfaces.normalDayVotePrivacySurface,
+        hostPhaseTransitionSurface: surfaces.hostPhaseTransitionSurface,
+        targetPostDayVoteAdvanceSurface:
+          surfaces.targetPostDayVoteAdvanceSurface,
+        normalPostDayVoteAdvanceSurface:
+          surfaces.normalPostDayVoteAdvanceSurface,
+        nightActionResolutionReceiptSurface:
+          surfaces.nightActionResolutionReceiptSurface,
+        normalNightActionResolutionPrivacySurface:
+          surfaces.normalNightActionResolutionPrivacySurface,
+        hostNightActionTransitionSurface:
+          surfaces.hostNightActionTransitionSurface,
+        dayThreeVoteResolutionSurface: surfaces.dayThreeVoteResolutionSurface,
+        postDayThreeResolutionSurface: surfaces.postDayThreeResolutionSurface,
+        nightThreeEmptyResolutionSurface:
+          surfaces.nightThreeEmptyResolutionSurface,
+        dayFourSurvivorRoleSurface: surfaces.dayFourSurvivorRoleSurface,
+        nightFourNoActionSurface:
+          surfaces.nightFourNoActionSurface,
+        nightFourNoActionResolutionSurface:
+          surfaces.nightFourNoActionResolutionSurface,
+        postNightFourTransitionSurface:
+          surfaces.postNightFourTransitionSurface,
+        dayFiveNoLynchResolutionSurface:
+          surfaces.dayFiveNoLynchResolutionSurface,
+        completedGameEndgameSurface:
+          surfaces.completedGameEndgameSurface,
+        privateChannelRoleSurface: surfaces.privateChannelRoleSurface,
+      };
+      return {
+        ...evidence,
+        commandProofRoleUrlAudit:
+          buildCoreLoopCommandProofRoleUrlAudit(evidence),
+      };
+    },
     assertEvidence: assertCoreLoopAdminProof,
   };
 }
@@ -10085,6 +10097,11 @@ export function assertCoreLoopAdminProof(evidence) {
   });
   assertCoreLoopCommandProofRoleUrls({
     proof: evidence,
+    includeEvidenceInError: true,
+  });
+  assertCoreLoopCommandProofRoleUrlAudit({
+    proof: evidence,
+    audit: evidence.commandProofRoleUrlAudit,
     includeEvidenceInError: true,
   });
   return evidence;

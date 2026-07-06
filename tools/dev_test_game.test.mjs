@@ -43,6 +43,9 @@ import {
   coreLoopGeneratedFromScenarioFamilies,
 } from "./dev_test_game_core_loop_generated_from_families.mjs";
 import {
+  buildCoreLoopCommandProofRoleUrlAudit,
+} from "./dev_test_game_core_loop_proof_shape_assertions.mjs";
+import {
   playerInvalidActionRecoveryMessage,
 } from "./dev_test_game_core_loop_player_action_recovery_scenarios.mjs";
 import {
@@ -15032,6 +15035,12 @@ test("session card and markdown include role credential URLs and tokens", async 
   assert.deepEqual(
     coreLoopReadiness.localDevelopmentSpine.checks.find(
       (item) => item.id === "local-core-loop-proof",
+    ).adminRoleSurface.commandProofRoleUrlAudit,
+    coreLoopAdminProofFixture().commandProofRoleUrlAudit,
+  );
+  assert.deepEqual(
+    coreLoopReadiness.localDevelopmentSpine.checks.find(
+      (item) => item.id === "local-core-loop-proof",
     ).spineTargets,
     coreLoopSpineTargetsFixture(),
   );
@@ -18684,7 +18693,7 @@ function identityAdminProofFixture() {
 function coreLoopAdminProofFixture() {
   const completedGameHardeningCoverageStatus =
     completedGameHardeningCoverageStatusFixture();
-  return {
+  const proof = {
     version: 1,
     proof: "dev-test-game-core-loop-admin-proof",
     status: "passed",
@@ -18972,6 +18981,10 @@ function coreLoopAdminProofFixture() {
     dayFiveNoLynchResolutionSurface: dayFiveNoLynchResolutionSurfaceFixture(),
     completedGameEndgameSurface: completedGameEndgameSurfaceFixture(),
     privateChannelRoleSurface: privateChannelRoleSurfaceFixture(),
+  };
+  return {
+    ...proof,
+    commandProofRoleUrlAudit: buildCoreLoopCommandProofRoleUrlAudit(proof),
   };
 }
 

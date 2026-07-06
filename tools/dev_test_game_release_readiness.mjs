@@ -134,6 +134,7 @@ import {
   coreLoopAuditLaneIds,
 } from "./dev_test_game_core_loop_scenarios.mjs";
 import {
+  assertCoreLoopCommandProofRoleUrlAudit,
   assertCoreLoopCommandProofRoleUrls,
 } from "./dev_test_game_core_loop_proof_shape_assertions.mjs";
 import {
@@ -2996,6 +2997,11 @@ export function validateDevTestGameCoreLoopAdminProof(proof, options = {}) {
     proof,
     includeEvidenceInError: true,
   });
+  const commandProofRoleUrlAudit = assertCoreLoopCommandProofRoleUrlAudit({
+    proof,
+    audit: proof.commandProofRoleUrlAudit,
+    includeEvidenceInError: true,
+  });
   return {
     status: "passed",
     path: options.path ?? devTestGameCoreLoopAdminProofPath,
@@ -3032,6 +3038,7 @@ export function validateDevTestGameCoreLoopAdminProof(proof, options = {}) {
     dayFiveNoLynchResolutionSurface: proof.dayFiveNoLynchResolutionSurface,
     completedGameEndgameSurface: proof.completedGameEndgameSurface,
     privateChannelRoleSurface: proof.privateChannelRoleSurface,
+    commandProofRoleUrlAudit,
     ...(options.artifact === undefined ? {} : { artifact: options.artifact }),
   };
 }

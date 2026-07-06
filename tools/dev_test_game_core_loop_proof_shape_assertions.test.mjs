@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
   assertCoreLoopCommandProofRoleUrls,
+  assertCoreLoopCommandProofRoleUrlAudit,
+  buildCoreLoopCommandProofRoleUrlAudit,
   coreLoopCommandProofRoleUrlRows,
 } from "./dev_test_game_core_loop_proof_shape_assertions.mjs";
 
@@ -61,4 +63,40 @@ test("core-loop command proof role URL audit rejects parent drift", () => {
 
   assert.equal(rows[0].status, "failed");
   assert.deepEqual(rows[0].errors, ["source-role-url-parent-mismatch"]);
+});
+
+test("core-loop command proof role URL audit summary records checked count", () => {
+  const proof = {
+    sourceRoleUrl: "http://127.0.0.1:5173/g/game-a",
+    visitedRolePath: "/g/game-a",
+    voteProof: {
+      status: "passed",
+      sourceRoleUrl: "http://127.0.0.1:5173/g/game-a",
+      visitedRolePath: "/g/game-a",
+      clickedAction: "submit_vote",
+      commandKind: "SubmitVote",
+    },
+    postProof: {
+      status: "passed",
+      sourceRoleUrl: "http://127.0.0.1:5173/g/game-a",
+      visitedRolePath: "/g/game-a",
+      clickedAction: "submit_post",
+      commandKind: "SubmitPost",
+    },
+  };
+  const audit = buildCoreLoopCommandProofRoleUrlAudit(proof);
+
+  assert.deepEqual(audit, { status: "passed", checkedCount: 2 });
+  assert.deepEqual(
+    assertCoreLoopCommandProofRoleUrlAudit({ proof, audit }),
+    audit,
+  );
+  assert.throws(
+    () =>
+      assertCoreLoopCommandProofRoleUrlAudit({
+        proof,
+        audit: { status: "passed", checkedCount: 1 },
+      }),
+    /audit summary drifted/,
+  );
 });

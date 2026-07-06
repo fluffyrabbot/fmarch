@@ -30,6 +30,33 @@ export function assertCoreLoopCommandProofRoleUrls({
   return rows;
 }
 
+export function buildCoreLoopCommandProofRoleUrlAudit(proof) {
+  const rows = assertCoreLoopCommandProofRoleUrls({ proof });
+  return {
+    status: "passed",
+    checkedCount: rows.length,
+  };
+}
+
+export function assertCoreLoopCommandProofRoleUrlAudit({
+  proof,
+  audit,
+  includeEvidenceInError = false,
+}) {
+  const expectedAudit = buildCoreLoopCommandProofRoleUrlAudit(proof);
+  if (
+    audit?.status !== expectedAudit.status ||
+    audit?.checkedCount !== expectedAudit.checkedCount
+  ) {
+    const message = `core-loop command proof role URL audit summary drifted: expected ${expectedAudit.checkedCount}, got ${audit?.checkedCount}`;
+    if (includeEvidenceInError) {
+      throw new Error(`${message}: ${JSON.stringify({ audit, expectedAudit })}`);
+    }
+    throw new Error(message);
+  }
+  return expectedAudit;
+}
+
 function collectCommandProofRoleUrlRows({
   value,
   path,
