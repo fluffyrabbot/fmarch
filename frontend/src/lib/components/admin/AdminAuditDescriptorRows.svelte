@@ -10,7 +10,15 @@
       data-testid={row.testId}
     >
       {#each row.values as value}
-        {#if value.emphasized}
+        {#if value.href}
+          <a
+            data-testid={value.testId || null}
+            data-min-touch-target-px="44"
+            href={value.href}
+          >
+            {value.text}
+          </a>
+        {:else if value.emphasized}
           <strong>{value.text}</strong>
         {:else}
           <span>{value.text}</span>
@@ -24,7 +32,15 @@
               data-testid={subentry.testId}
             >
               {#each subentry.values as value}
-                {#if value.emphasized}
+                {#if value.href}
+                  <a
+                    data-testid={value.testId || null}
+                    data-min-touch-target-px="44"
+                    href={value.href}
+                  >
+                    {value.text}
+                  </a>
+                {:else if value.emphasized}
                   <strong>{value.text}</strong>
                 {:else}
                   <span>{value.text}</span>
@@ -67,6 +83,14 @@
 
   .admin-audit-detail__entry span {
     color: #455466;
+  }
+
+  .admin-audit-detail__entry a {
+    color: inherit;
+    display: inline-flex;
+    min-block-size: 44px;
+    overflow-wrap: anywhere;
+    text-decoration: none;
   }
 
   .admin-audit-detail__subentries {

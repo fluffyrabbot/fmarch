@@ -1915,6 +1915,23 @@ test("admin audit detail page renders simple list rows from route data", async (
   assert.doesNotMatch(source, /staleConflictLanes as lane/);
 });
 
+test("admin audit detail page renders local prerequisite rows from route data", async () => {
+  const source = await readFile(
+    "frontend/src/routes/admin/audit/[audit]/+page.svelte",
+    "utf8",
+  );
+  const descriptorSource = await readFile(
+    "frontend/src/lib/components/admin/AdminAuditDescriptorRows.svelte",
+    "utf8",
+  );
+  assert.match(source, /localPrerequisiteRows/);
+  assert.doesNotMatch(source, /localPrerequisites as prerequisite/);
+  assert.doesNotMatch(source, /prerequisiteRoleHref/);
+  assert.doesNotMatch(source, /encodeURIComponent\(game\)/);
+  assert.match(descriptorSource, /value\.href/);
+  assert.match(descriptorSource, /data-testid=\{value\.testId/);
+});
+
 test("admin hosted-facing audit inventory carries shared handoff paths where required", async () => {
   const data = await buildAdminRouteData({
     principalUserId: "admin_a",
@@ -3992,6 +4009,12 @@ test("admin local next action detail data carries host setup artifact recovery r
       ],
     ],
   );
+  assert.deepEqual(
+    descriptorRowsWithLinksForAssertion(roleData.audit.localPrerequisiteRows),
+    expectedLocalPrerequisiteRows(roleData.audit.localPrerequisites, {
+      game: "midsummer",
+    }),
+  );
   assert.equal(
     roleData.audit.artifactSummary.selectedArtifactRoleHref,
     "http://127.0.0.1:5173/g/midsummer/setup",
@@ -4040,6 +4063,12 @@ test("admin local next action detail data carries host setup artifact recovery r
         localAdminAuditRoleUrl(localAdminAuditIds.hostSetupProof),
       ],
     ],
+  );
+  assert.deepEqual(
+    descriptorRowsWithLinksForAssertion(adminData.audit.localPrerequisiteRows),
+    expectedLocalPrerequisiteRows(adminData.audit.localPrerequisites, {
+      game: "midsummer",
+    }),
   );
 });
 
@@ -5535,6 +5564,12 @@ test("admin local release readiness detail data carries checks and unproven rows
         "target/dev-test-game/next-action-admin-proof.json",
       ],
     ],
+  );
+  assert.deepEqual(
+    descriptorRowsWithLinksForAssertion(data.audit.localPrerequisiteRows),
+    expectedLocalPrerequisiteRows(data.audit.localPrerequisites, {
+      game: "midsummer",
+    }),
   );
   assert.equal(data.audit.unproven.length, 2);
   assert.deepEqual(
@@ -9281,6 +9316,20 @@ function hostedHandoffChecklistRowsForAssertion(rows) {
   ]);
 }
 
+function descriptorRowsWithLinksForAssertion(rows) {
+  return rows.map((row) => [
+    row.id,
+    row.testId,
+    row.values.map((value) => [
+      value.id,
+      value.text,
+      value.emphasized,
+      value.href ?? "",
+      value.testId ?? "",
+    ]),
+  ]);
+}
+
 function expectedHostedHandoffChecklistRows(checklist) {
   return [
     [
@@ -9538,6 +9587,28 @@ function expectedProofLaneCoverageRows(coverageRows) {
       ["laneIds", coverage.laneIds.join(", "), false],
     ],
     [],
+  ]);
+}
+
+function expectedLocalPrerequisiteRows(localPrerequisites, { game }) {
+  return localPrerequisites.map((prerequisite) => [
+    `local-prerequisite-${prerequisite.id}`,
+    `admin-audit-local-prerequisite-${prerequisite.id}`,
+    [
+      ["label", prerequisite.label, true, "", ""],
+      ["status", prerequisite.status, false, "", ""],
+      ["command", prerequisite.command, false, "", ""],
+      ["proofTarget", prerequisite.proofTarget, false, "", ""],
+      ["evidence", prerequisite.evidence, false, "", ""],
+      ["requiredEvidence", prerequisite.requiredEvidence, false, "", ""],
+      [
+        "roleUrl",
+        prerequisite.roleUrl,
+        false,
+        prerequisite.roleUrl.replace("<seeded-game>", encodeURIComponent(game)),
+        `admin-audit-local-prerequisite-role-url-${prerequisite.id}`,
+      ],
+    ],
   ]);
 }
 

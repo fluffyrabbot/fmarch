@@ -30,12 +30,6 @@
     ...(data.audit.hostedHandoffProgressionRows ?? []),
     ...(data.audit.hostedHandoffBlockedReceiptRows ?? []),
   ];
-  function prerequisiteRoleHref(prerequisite) {
-    const roleUrl = String(prerequisite?.roleUrl ?? "");
-    const game = String(data.audit?.artifactSummary?.game ?? "");
-    return roleUrl.replace("<seeded-game>", encodeURIComponent(game));
-  }
-
   function isHostedEvidenceProgressionDestination(row) {
     return String(row?.id ?? "").startsWith("hosted-evidence-progression:");
   }
@@ -290,34 +284,13 @@
         </ol>
       </section>
     {/if}
-    {#if data.audit.localPrerequisites?.length > 0}
+    {#if data.audit.localPrerequisiteRows?.length > 0}
       <section
         class="admin-audit-detail__group"
         data-testid="admin-audit-detail-local-prerequisites"
       >
         <h2>Local prerequisites before hosted work</h2>
-        <ol class="admin-audit-detail__entries">
-          {#each data.audit.localPrerequisites as prerequisite}
-            <li
-              class="admin-audit-detail__entry admin-audit-detail__entry--stack"
-              data-testid={`admin-audit-local-prerequisite-${prerequisite.id}`}
-            >
-              <strong>{prerequisite.label}</strong>
-              <span>{prerequisite.status}</span>
-              <span>{prerequisite.command}</span>
-              <span>{prerequisite.proofTarget}</span>
-              <span>{prerequisite.evidence}</span>
-              <span>{prerequisite.requiredEvidence}</span>
-              <a
-                data-testid={`admin-audit-local-prerequisite-role-url-${prerequisite.id}`}
-                data-min-touch-target-px="44"
-                href={prerequisiteRoleHref(prerequisite)}
-              >
-                {prerequisite.roleUrl}
-              </a>
-            </li>
-          {/each}
-        </ol>
+        <AdminAuditDescriptorRows rows={data.audit.localPrerequisiteRows} />
       </section>
     {/if}
     {#if data.audit.scenarios?.length > 0}

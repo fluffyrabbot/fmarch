@@ -199,11 +199,21 @@ function hostedHandoffReceiptHeadingsForNextActionUnproven(unproven) {
   return hostedHandoffReceiptHeadingsForAudit("");
 }
 
-function artifactSummaryValue({ id, text, emphasized = false }) {
+function artifactSummaryValue({
+  id,
+  text,
+  emphasized = false,
+  href = "",
+  testId = "",
+}) {
+  const normalizedHref = typeof href === "string" ? href : "";
+  const normalizedTestId = typeof testId === "string" ? testId : "";
   return Object.freeze({
     id: String(id),
     text: String(text ?? ""),
     emphasized: emphasized === true,
+    ...(normalizedHref === "" ? {} : { href: normalizedHref }),
+    ...(normalizedTestId === "" ? {} : { testId: normalizedTestId }),
   });
 }
 
@@ -1650,7 +1660,9 @@ export async function buildAdminAuditDetailData({
   const auditId = requiredAuditId(audit);
   const item = data.audit.find((candidate) => candidate.id === auditId);
   const detailAudit =
-    item === undefined ? null : withAdminAuditDetailDisplayRows(item);
+    item === undefined
+      ? null
+      : withAdminAuditDetailDisplayRows(item, { game });
 
   return Object.freeze({
     shell: data.shell,
@@ -1675,7 +1687,7 @@ export async function buildAdminAuditDetailData({
   });
 }
 
-function withAdminAuditDetailDisplayRows(item) {
+function withAdminAuditDetailDisplayRows(item, { game }) {
   const checksRows = buildSimpleAdminAuditRows({
     items: item.checks,
     idPrefix: "check",
@@ -1723,6 +1735,10 @@ function withAdminAuditDetailDisplayRows(item) {
       { id: "status", text: lane.status },
     ],
   });
+  const localPrerequisiteRows = buildLocalPrerequisiteRows(
+    item.localPrerequisites,
+    { game },
+  );
   return Object.freeze({
     ...item,
     ...(checksRows.length === 0 ? {} : { checksRows }),
@@ -1730,6 +1746,7 @@ function withAdminAuditDetailDisplayRows(item) {
     ...(proofLaneCoverageRows.length === 0 ? {} : { proofLaneCoverageRows }),
     ...(reconnectLaneRows.length === 0 ? {} : { reconnectLaneRows }),
     ...(staleConflictLaneRows.length === 0 ? {} : { staleConflictLaneRows }),
+    ...(localPrerequisiteRows.length === 0 ? {} : { localPrerequisiteRows }),
   });
 }
 
@@ -1749,6 +1766,32 @@ function buildSimpleAdminAuditRows({
         values: valuesForItem(item),
       });
     }),
+  );
+}
+
+function buildLocalPrerequisiteRows(localPrerequisites, { game }) {
+  return Object.freeze(
+    (Array.isArray(localPrerequisites) ? localPrerequisites : []).map(
+      (prerequisite) =>
+        artifactSummaryRow({
+          id: `local-prerequisite-${prerequisite.id}`,
+          testId: `admin-audit-local-prerequisite-${prerequisite.id}`,
+          values: [
+            { id: "label", text: prerequisite.label, emphasized: true },
+            { id: "status", text: prerequisite.status },
+            { id: "command", text: prerequisite.command },
+            { id: "proofTarget", text: prerequisite.proofTarget },
+            { id: "evidence", text: prerequisite.evidence },
+            { id: "requiredEvidence", text: prerequisite.requiredEvidence },
+            {
+              id: "roleUrl",
+              text: prerequisite.roleUrl,
+              href: seededRoleUrlToAdminHref(prerequisite.roleUrl, { game }),
+              testId: `admin-audit-local-prerequisite-role-url-${prerequisite.id}`,
+            },
+          ],
+        }),
+    ),
   );
 }
 
