@@ -51,6 +51,11 @@ import {
   hostedEvidenceHandoffInputRows,
 } from "../../../../tools/dev_test_game_hosted_handoff_cases.mjs";
 import {
+  devTestGameHostedEvidenceOperatorChecklistPath,
+  devTestGameHostedEvidenceOperatorChecklistProofCommand,
+  devTestGameHostedEvidenceOperatorChecklistProofPath,
+} from "../../../../tools/dev_test_game_hosted_evidence_operator_checklist.mjs";
+import {
   hostedMatrixRawEvidenceTemplateDiagnosticFieldValues,
   hostedMatrixRawEvidenceTemplateDescriptorFieldValues,
   hostedMatrixRawEvidenceTemplateDescriptor,
@@ -3292,7 +3297,53 @@ function normalizeHostedEvidenceLaneHandoffChecklist({
       checklist?.blockedReceipt ?? hostedEvidenceLane.blockedReceipt,
     ),
     inputSections: normalizeHostedHandoffInputSections(checklist?.inputSections),
+    operatorProofDrilldowns:
+      normalizeHostedEvidenceOperatorChecklistProofDrilldowns(
+        checklist?.blockedReceipt ?? hostedEvidenceLane.blockedReceipt,
+      ),
   });
+}
+
+function normalizeHostedEvidenceOperatorChecklistProofDrilldowns(blockedReceipt) {
+  const packet = blockedReceipt?.blockedOperatorPacket;
+  const operatorChecklist =
+    packet !== null && typeof packet === "object"
+      ? packet.operatorChecklist
+      : null;
+  if (operatorChecklist === null || typeof operatorChecklist !== "object") {
+    return Object.freeze([]);
+  }
+  const drilldown =
+    packet.roleSurfaceDrilldown !== null &&
+    typeof packet.roleSurfaceDrilldown === "object"
+      ? packet.roleSurfaceDrilldown
+      : {};
+  return Object.freeze([
+    Object.freeze({
+      id: "hosted-evidence-operator-checklist",
+      label: "Hosted evidence operator checklist proof",
+      command: String(
+        operatorChecklist.checklistProofCommand ??
+          `npm run ${devTestGameHostedEvidenceOperatorChecklistProofCommand}`,
+      ),
+      progressionId: "hosted-deployment",
+      sourcePath: String(
+        operatorChecklist.path ?? devTestGameHostedEvidenceOperatorChecklistPath,
+      ),
+      proofTarget: String(
+        operatorChecklist.checklistProofTarget ??
+          devTestGameHostedEvidenceOperatorChecklistProofPath,
+      ),
+      roleUrl: String(
+        drilldown.handoffRoleUrl ??
+          operatorChecklist.roleUrl ??
+          "",
+      ),
+      firstMissingInputId: String(packet.firstMissingInputId ?? ""),
+      firstMissingCheckId: String(packet.firstMissingCheckId ?? ""),
+      proofBoundary: String(operatorChecklist.localVsHostedBoundary ?? ""),
+    }),
+  ]);
 }
 
 function normalizeLocalHostedEvidenceLaneDemoProofSummary(proof) {
@@ -6260,6 +6311,14 @@ function normalizeHostedHandoffBlockedOperatorPacket(packet) {
     ),
     ...rawEvidenceTemplateDescriptorProperty(packet.rawEvidenceTemplate),
     operatorAction: String(packet.operatorAction ?? ""),
+    ...(packet.operatorChecklist === null ||
+    typeof packet.operatorChecklist !== "object"
+      ? {}
+      : {
+          operatorChecklist: normalizeHostedEvidenceOperatorChecklist(
+            packet.operatorChecklist,
+          ),
+        }),
     localVsHostedBoundary: String(packet.localVsHostedBoundary ?? ""),
     proofTarget: String(packet.proofTarget ?? ""),
     nextProofTarget: String(packet.nextProofTarget ?? ""),
@@ -6286,6 +6345,61 @@ function normalizeHostedHandoffBlockedOperatorPacket(packet) {
       ),
       proofGraphEvidencePath: String(drilldown.proofGraphEvidencePath ?? ""),
     }),
+  });
+}
+
+function normalizeHostedEvidenceOperatorChecklist(checklist) {
+  return Object.freeze({
+    id: String(checklist.id ?? ""),
+    path: String(checklist.path ?? ""),
+    status: String(checklist.status ?? ""),
+    checklistProofCommand: String(checklist.checklistProofCommand ?? ""),
+    checklistProofTarget: String(checklist.checklistProofTarget ?? ""),
+    command: String(checklist.command ?? ""),
+    proofTarget: String(checklist.proofTarget ?? ""),
+    preflightTarget: String(checklist.preflightTarget ?? ""),
+    rawEvidenceTemplatePath: String(checklist.rawEvidenceTemplatePath ?? ""),
+    rawEvidenceTemplateProofCommand: String(
+      checklist.rawEvidenceTemplateProofCommand ?? "",
+    ),
+    rawCaptureCommand: String(checklist.rawCaptureCommand ?? ""),
+    rawCaptureProofTarget: String(checklist.rawCaptureProofTarget ?? ""),
+    rawEvidenceContractSummary: String(
+      checklist.rawEvidenceContractSummary ?? "",
+    ),
+    blockedCheckIds: Object.freeze(
+      (Array.isArray(checklist.blockedCheckIds)
+        ? checklist.blockedCheckIds
+        : []
+      ).map((id) => String(id)),
+    ),
+    inputSections: Object.freeze(
+      (Array.isArray(checklist.inputSections)
+        ? checklist.inputSections
+        : []
+      ).map((section) =>
+        Object.freeze({
+          id: String(section?.id ?? ""),
+          label: String(section?.label ?? ""),
+          requiredInputIds: Object.freeze(
+            (Array.isArray(section?.requiredInputIds)
+              ? section.requiredInputIds
+              : []
+            ).map((id) => String(id)),
+          ),
+        }),
+      ),
+    ),
+    env: Object.freeze(
+      (Array.isArray(checklist.env) ? checklist.env : []).map((input) =>
+        Object.freeze({
+          name: String(input?.name ?? ""),
+          required: input?.required === true,
+          purpose: String(input?.purpose ?? ""),
+        }),
+      ),
+    ),
+    localVsHostedBoundary: String(checklist.localVsHostedBoundary ?? ""),
   });
 }
 

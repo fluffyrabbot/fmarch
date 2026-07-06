@@ -40,6 +40,11 @@ import {
   devTestGameHostedMatrixRawEvidenceTemplateProofPath,
 } from "./dev_test_game_hosted_matrix_raw_evidence_template_proof.mjs";
 import {
+  devTestGameHostedEvidenceOperatorChecklistPath,
+  devTestGameHostedEvidenceOperatorChecklistProofCommand,
+  devTestGameHostedEvidenceOperatorChecklistProofPath,
+} from "./dev_test_game_hosted_evidence_operator_checklist.mjs";
+import {
   devTestGameRealHostedMatrixRawCaptureCommand,
   devTestGameRealHostedMatrixRawCapturePath,
 } from "./dev_test_game_real_hosted_matrix_raw_capture_contract.mjs";
@@ -85,6 +90,9 @@ export function hostedEvidenceLaneAdminProofCase({
     "Hosted evidence blocked receipt",
     "Real hosted raw-capture intake",
     "First missing operator artifact",
+    "Hosted evidence operator checklist proof",
+    devTestGameHostedEvidenceOperatorChecklistPath,
+    `npm run ${devTestGameHostedEvidenceOperatorChecklistProofCommand}`,
   ],
   assertEvidence = assertHostedEvidenceLaneAdminProof,
 } = {}) {
@@ -126,6 +134,14 @@ export function hostedEvidenceLaneAdminProofCase({
         source.lane.hostedHandoffChecklist?.inputSections ?? [];
       const hostedHandoffSectionInputRows =
         hostedEvidenceHandoffSectionInputRows(hostedHandoffInputSections);
+      const hostedHandoffOperatorProofIds =
+        hostedEvidenceOperatorChecklistProofIds(
+          source.lane.hostedHandoffChecklist,
+        );
+      const hostedHandoffOperatorProofStatuses =
+        hostedEvidenceOperatorChecklistProofStatuses(
+          source.lane.hostedHandoffChecklist,
+        );
       return await proveAdminAuditDetail({
         browser,
         frontendBaseUrl,
@@ -166,6 +182,9 @@ export function hostedEvidenceLaneAdminProofCase({
         ),
         requiredHostedHandoffSectionInputStatuses:
           hostedEvidenceHandoffSectionInputStatuses(hostedHandoffInputSections),
+        requiredHostedHandoffOperatorProofs: hostedHandoffOperatorProofIds,
+        requiredHostedHandoffOperatorProofStatuses:
+          hostedHandoffOperatorProofStatuses,
         requiredRelatedLinks,
       });
     },
@@ -240,6 +259,13 @@ export function hostedEvidenceLaneAdminProofCase({
         hostedHandoffSectionInputStatuses:
           hostedEvidenceHandoffSectionInputStatuses(
             source.lane.hostedHandoffChecklist?.inputSections ?? [],
+          ),
+        hostedHandoffOperatorProofIds: hostedEvidenceOperatorChecklistProofIds(
+          source.lane.hostedHandoffChecklist,
+        ),
+        hostedHandoffOperatorProofStatuses:
+          hostedEvidenceOperatorChecklistProofStatuses(
+            source.lane.hostedHandoffChecklist,
           ),
         ...(source.lane.hostedHandoffChecklist?.blockedReceipt === undefined
           ? {}
@@ -399,6 +425,21 @@ export function assertHostedEvidenceLaneAdminProof(evidence) {
     rowName: "handoff section input status",
     surfaceKey: "visibleHostedHandoffSectionInputStatuses",
   });
+  assertVisibleAdminRoleSurfaceRows({
+    adminRoleSurface: evidence.adminRoleSurface,
+    rowIds: evidence.generatedFrom?.hostedHandoffOperatorProofIds,
+    proofName: "hosted evidence lane admin proof",
+    rowName: "hosted handoff operator proof",
+    surfaceKey: "visibleHostedHandoffOperatorProofs",
+  });
+  assertAdminRoleSurfaceStatusText({
+    adminRoleSurface: evidence.adminRoleSurface,
+    expectedStatuses:
+      evidence.generatedFrom?.hostedHandoffOperatorProofStatuses,
+    proofName: "hosted evidence lane admin proof",
+    rowName: "hosted handoff operator proof status",
+    surfaceKey: "visibleHostedHandoffOperatorProofStatuses",
+  });
   const expectedSummary = evidence.generatedFrom?.hostedHandoffSummary;
   if (expectedSummary !== undefined) {
     for (const [key, expectedValue] of Object.entries(expectedSummary)) {
@@ -503,6 +544,27 @@ function visibleFirstMissingOperatorArtifact(artifact) {
       ),
       proofGraphEvidencePath: String(drilldown.proofGraphEvidencePath ?? ""),
     },
+  };
+}
+
+function hostedEvidenceOperatorChecklistProofIds(checklist) {
+  const descriptor = checklist?.blockedReceipt?.blockedOperatorPacket
+    ?.operatorChecklist;
+  return descriptor === null || typeof descriptor !== "object"
+    ? []
+    : ["hosted-evidence-operator-checklist"];
+}
+
+function hostedEvidenceOperatorChecklistProofStatuses(checklist) {
+  const descriptor = checklist?.blockedReceipt?.blockedOperatorPacket
+    ?.operatorChecklist;
+  if (descriptor === null || typeof descriptor !== "object") {
+    return {};
+  }
+  return {
+    "hosted-evidence-operator-checklist":
+      descriptor.checklistProofTarget ??
+      devTestGameHostedEvidenceOperatorChecklistProofPath,
   };
 }
 

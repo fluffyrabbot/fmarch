@@ -107,6 +107,11 @@ import {
   hostedEvidenceRealHostedInputsFixture,
 } from "../../../../tools/dev_test_game_hosted_handoff_cases.mjs";
 import {
+  devTestGameHostedEvidenceOperatorChecklistPath,
+  devTestGameHostedEvidenceOperatorChecklistProofCommand,
+  devTestGameHostedEvidenceOperatorChecklistProofPath,
+} from "../../../../tools/dev_test_game_hosted_evidence_operator_checklist.mjs";
+import {
   hostedMatrixReconnectLaneIds,
   hostedMatrixRealHostedEvidenceCommand,
   hostedMatrixExternalEvidenceProofTarget,
@@ -6011,7 +6016,7 @@ test("admin hosted evidence lane detail data carries blocked setup rows", async 
   );
   assert.equal(
     data.audit.hostedHandoffChecklist.blockedReceipt.operatorAction,
-    `Configure the hosted frontend/API URLs, copy ${devTestGameHostedMatrixRawEvidenceTemplatePath} to a filled raw hosted matrix evidence packet from that same deployment, validate the template with npm run ${devTestGameHostedMatrixRawEvidenceTemplateProofCommand}, then rerun npm run test:dev-test-game-hosted-evidence-lane.`,
+    `Follow ${devTestGameHostedEvidenceOperatorChecklistPath}: configure the hosted frontend/API URLs, copy ${devTestGameHostedMatrixRawEvidenceTemplatePath} to a filled raw hosted matrix evidence packet from that same deployment, validate the template with npm run ${devTestGameHostedMatrixRawEvidenceTemplateProofCommand}, then rerun npm run test:dev-test-game-hosted-evidence-lane.`,
   );
   assert.equal(
     data.audit.hostedHandoffChecklist.blockedReceipt.rawEvidenceContractSummary,
@@ -6030,6 +6035,80 @@ test("admin hosted evidence lane detail data carries blocked setup rows", async 
   assert.ok(
     data.audit.hostedHandoffChecklist.blockedReceipt.blockedOperatorPacket
       .rawEvidenceContractRequiredTopLevelFields.includes("observations"),
+  );
+  assert.deepEqual(data.audit.hostedHandoffChecklist.operatorProofDrilldowns, [
+    {
+      id: "hosted-evidence-operator-checklist",
+      label: "Hosted evidence operator checklist proof",
+      command: `npm run ${devTestGameHostedEvidenceOperatorChecklistProofCommand}`,
+      progressionId: "hosted-deployment",
+      sourcePath: devTestGameHostedEvidenceOperatorChecklistPath,
+      proofTarget: devTestGameHostedEvidenceOperatorChecklistProofPath,
+      roleUrl: localAdminAuditRoleUrl(localAdminAuditIds.hostedEvidenceLane),
+      firstMissingInputId: "FMARCH_HOSTED_MATRIX_FRONTEND_URL",
+      firstMissingCheckId: "hosted-frontend-url-configured",
+      proofBoundary:
+        "Local hosted-like matrix artifacts and synthetic demo evidence can prove the handoff path, but they cannot satisfy hosted deployment evidence.",
+    },
+  ]);
+  assert.deepEqual(
+    hostedHandoffChecklistRowsForAssertion(data.audit.hostedHandoffOperatorRows),
+    [
+      [
+        "operator-drilldowns",
+        "admin-audit-hosted-identity-operator-drilldowns",
+        [["heading", "Hosted identity operator drilldowns", true]],
+        [
+          [
+            "operator-proof-hosted-evidence-operator-checklist",
+            "admin-audit-hosted-handoff-operator-proof-hosted-evidence-operator-checklist",
+            [
+              [
+                "label",
+                "Hosted evidence operator checklist proof",
+                true,
+              ],
+              [
+                "command",
+                `npm run ${devTestGameHostedEvidenceOperatorChecklistProofCommand}`,
+                false,
+              ],
+              ["progressionId", "hosted-deployment", false],
+              [
+                "sourcePath",
+                devTestGameHostedEvidenceOperatorChecklistPath,
+                false,
+              ],
+              [
+                "proofTarget",
+                devTestGameHostedEvidenceOperatorChecklistProofPath,
+                false,
+              ],
+              [
+                "roleUrl",
+                localAdminAuditRoleUrl(localAdminAuditIds.hostedEvidenceLane),
+                false,
+              ],
+              [
+                "firstMissingInputId",
+                "FMARCH_HOSTED_MATRIX_FRONTEND_URL",
+                false,
+              ],
+              [
+                "firstMissingCheckId",
+                "hosted-frontend-url-configured",
+                false,
+              ],
+              [
+                "proofBoundary",
+                "Local hosted-like matrix artifacts and synthetic demo evidence can prove the handoff path, but they cannot satisfy hosted deployment evidence.",
+                false,
+              ],
+            ],
+          ],
+        ],
+      ],
+    ],
   );
   assert.equal(data.audit.artifactSummary.demoProofStatus, "passed");
   assert.equal(data.audit.artifactSummary.demoOnly, true);
@@ -9624,7 +9703,7 @@ function hostedBlockedReceiptFixture({ proofTarget, nextProofTarget }) {
       },
     },
     operatorAction:
-      `Configure the hosted frontend/API URLs, copy ${devTestGameHostedMatrixRawEvidenceTemplatePath} to a filled raw hosted matrix evidence packet from that same deployment, validate the template with npm run ${devTestGameHostedMatrixRawEvidenceTemplateProofCommand}, then rerun npm run test:dev-test-game-hosted-evidence-lane.`,
+      `Follow ${devTestGameHostedEvidenceOperatorChecklistPath}: configure the hosted frontend/API URLs, copy ${devTestGameHostedMatrixRawEvidenceTemplatePath} to a filled raw hosted matrix evidence packet from that same deployment, validate the template with npm run ${devTestGameHostedMatrixRawEvidenceTemplateProofCommand}, then rerun npm run test:dev-test-game-hosted-evidence-lane.`,
     rawEvidenceContractSummary: hostedMatrixRawEvidenceContractSummary(),
     rawEvidenceContract: hostedMatrixRawEvidenceContract,
     rawEvidenceTemplate: hostedMatrixRawEvidenceTemplateDescriptor(),
