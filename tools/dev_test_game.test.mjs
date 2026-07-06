@@ -5952,6 +5952,65 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
       unprovenId: nextAction.selectedOperatorHandoff.unprovenId,
     },
   );
+  const selectedOperatorPacket =
+    nextAction.selectedOperatorHandoff.blockedOperatorPacket;
+  assert.deepEqual(
+    graph.nodes.find((node) => node.id === "selected-operator-handoff-packet"),
+    {
+      id: "selected-operator-handoff-packet",
+      packetId: nextAction.selectedOperatorHandoff.id,
+      label: "Selected operator handoff packet",
+      kind: "selected-operator-handoff-packet",
+      status: selectedOperatorPacket.status,
+      artifact: "target/dev-test-game/next-action.json",
+      roleUrl: selectedOperatorPacket.roleSurfaceDrilldown.handoffRoleUrl,
+      proofCommand: nextAction.selectedOperatorHandoff.command,
+      recoveryCommand: nextAction.selectedOperatorHandoff.command,
+      command: nextAction.selectedOperatorHandoff.command,
+      reason: nextAction.selectedOperatorHandoff.reason,
+      unprovenId: nextAction.selectedOperatorHandoff.unprovenId,
+      proofTarget: nextAction.selectedOperatorHandoff.proofTarget,
+      packetProofTarget: selectedOperatorPacket.proofTarget,
+      nextProofTarget: selectedOperatorPacket.nextProofTarget,
+      firstMissingInputId: selectedOperatorPacket.firstMissingInputId,
+      firstMissingCheckId: selectedOperatorPacket.firstMissingCheckId,
+      firstMissingSectionId: selectedOperatorPacket.firstMissingSectionId,
+      firstMissingSectionLabel: selectedOperatorPacket.firstMissingSectionLabel,
+      firstMissingRequiredEvidence:
+        selectedOperatorPacket.firstMissingRequiredEvidence,
+      rawEvidenceContractSummary:
+        selectedOperatorPacket.rawEvidenceContractSummary,
+      rawEvidenceContractRequiredTopLevelFields:
+        selectedOperatorPacket.rawEvidenceContractRequiredTopLevelFields,
+      operatorAction: selectedOperatorPacket.operatorAction,
+      localVsHostedBoundary: selectedOperatorPacket.localVsHostedBoundary,
+      selectedProductionFeatureGraphNodeId:
+        selectedOperatorPacket.selectedProductionFeatureGraphNodeId,
+      selectedProductionFeatureRoleUrl:
+        selectedOperatorPacket.selectedProductionFeatureRoleUrl,
+      roleSurfaceDrilldown: selectedOperatorPacket.roleSurfaceDrilldown,
+      releaseReady: false,
+      productionReady: false,
+    },
+  );
+  assert(
+    graph.edges.some(
+      (edge) =>
+        edge.from === "next-action" &&
+        edge.to === "selected-operator-handoff-packet" &&
+        edge.relationship === "selected-operator-packet" &&
+        edge.firstMissingInputId === selectedOperatorPacket.firstMissingInputId,
+    ),
+  );
+  assert(
+    graph.edges.some(
+      (edge) =>
+        edge.from === "selected-operator-handoff-packet" &&
+        edge.to === selectedOperatorPacket.selectedProductionFeatureGraphNodeId &&
+        edge.relationship === "blocks-hosted-evidence-for" &&
+        edge.firstMissingInputId === selectedOperatorPacket.firstMissingInputId,
+    ),
+  );
   assert.deepEqual(
     buildSelectedOperatorHandoffTerminalReceipt({
       nextAction,
@@ -6017,7 +6076,7 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
         count + (check.spineTargets?.productionFeatureTargets?.slotIds?.length ?? 0),
       0,
     );
-  const expectedBaseGraphNodeCount = 39;
+  const expectedBaseGraphNodeCount = 40;
   assert.equal(
     graph.summary.nodeCount,
     expectedBaseGraphNodeCount +

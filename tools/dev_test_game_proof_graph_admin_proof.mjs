@@ -898,12 +898,28 @@ function proofGraphVisibleCheckStatuses(proofGraph) {
         edge.firstMissingInputId,
       ]),
   );
+  const selectedOperatorHandoffPacketNodeStatuses = Object.fromEntries(
+    proofGraph.nodes
+      .filter(
+        (node) =>
+          node.kind === "selected-operator-handoff-packet" &&
+          typeof node.firstMissingInputId === "string" &&
+          node.firstMissingInputId.trim() !== "" &&
+          typeof node.rawEvidenceContractSummary === "string" &&
+          node.rawEvidenceContractSummary.trim() !== "",
+      )
+      .map((node) => [
+        node.id,
+        `firstMissingInputId ${node.firstMissingInputId}`,
+      ]),
+  );
   return {
     ...(hostedIdentityReceipt === null
       ? {}
       : { [hostedIdentityReceipt.rowId]: hostedIdentityReceipt.status }),
     ...commandProofRoleUrlAuditStatuses,
     ...selectedOperatorHandoffEdgeStatuses,
+    ...selectedOperatorHandoffPacketNodeStatuses,
   };
 }
 

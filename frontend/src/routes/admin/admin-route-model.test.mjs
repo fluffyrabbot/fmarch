@@ -24,6 +24,7 @@ import {
   normalizeLocalProofGraphArtifactSummary,
   normalizeLocalProofGraphCheckRows,
   normalizeLocalProofGraphEdgeCheckRows,
+  normalizeLocalProofGraphNodeCheckRows,
   normalizeLocalProofGraphRelatedLinks,
   summarizeRecoveryGate,
 } from "./admin-route-model.mjs";
@@ -2686,6 +2687,52 @@ test("proof graph selected operator handoff edge row carries operator inputs", (
           "proofTarget target/dev-test-game/hosted-evidence-lane.json",
           "roleUrl /admin/audit/local-core-loop?game=<seeded-game>",
           "unprovenId hosted-deployment",
+        ].join("\n"),
+      ],
+    ],
+  );
+});
+
+test("proof graph selected operator packet node row carries raw evidence diagnostics", () => {
+  assert.deepEqual(
+    normalizeLocalProofGraphNodeCheckRows({
+      id: "selected-operator-handoff-packet",
+      kind: "selected-operator-handoff-packet",
+      status: "blocked",
+      roleUrl: "/admin/audit/local-hosted-evidence-lane?game=<seeded-game>",
+      recoveryCommand: "npm run test:dev-test-game-hosted-evidence-lane",
+      proofTarget: "target/dev-test-game/hosted-evidence-lane.json",
+      packetProofTarget: "target/dev-test-game/hosted-target-preflight.json",
+      nextProofTarget: "target/dev-test-game/hosted-evidence-lane.json",
+      firstMissingInputId: "FMARCH_HOSTED_MATRIX_RAW_EVIDENCE_PATH",
+      firstMissingCheckId: "raw-evidence-path-configured",
+      rawEvidenceContractSummary: "Raw hosted matrix evidence packet",
+      selectedProductionFeatureGraphNodeId:
+        "production-feature:host-phase-control",
+      selectedProductionFeatureRoleUrl:
+        "/admin/audit/local-core-loop?game=<seeded-game>",
+      operatorAction:
+        "Configure the hosted frontend/API URLs plus a readable raw hosted matrix evidence packet.",
+      localVsHostedBoundary:
+        "Local hosted-like matrix artifacts cannot satisfy hosted deployment evidence.",
+    }).map((check) => [check.id, check.status]),
+    [
+      [
+        "selected-operator-handoff-packet",
+        [
+          "blocked",
+          "firstMissingInputId FMARCH_HOSTED_MATRIX_RAW_EVIDENCE_PATH",
+          "firstMissingCheckId raw-evidence-path-configured",
+          "roleUrl /admin/audit/local-hosted-evidence-lane?game=<seeded-game>",
+          "selectedProductionFeatureGraphNodeId production-feature:host-phase-control",
+          "selectedProductionFeatureRoleUrl /admin/audit/local-core-loop?game=<seeded-game>",
+          "recoveryCommand npm run test:dev-test-game-hosted-evidence-lane",
+          "proofTarget target/dev-test-game/hosted-evidence-lane.json",
+          "packetProofTarget target/dev-test-game/hosted-target-preflight.json",
+          "nextProofTarget target/dev-test-game/hosted-evidence-lane.json",
+          "rawEvidenceContract Raw hosted matrix evidence packet",
+          "operatorAction Configure the hosted frontend/API URLs plus a readable raw hosted matrix evidence packet.",
+          "localVsHostedBoundary Local hosted-like matrix artifacts cannot satisfy hosted deployment evidence.",
         ].join("\n"),
       ],
     ],

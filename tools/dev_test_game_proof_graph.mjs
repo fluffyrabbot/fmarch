@@ -85,6 +85,9 @@ import {
   proofGraphDiagnosticProofNodes,
 } from "./dev_test_game_proof_graph_handoff_cases.mjs";
 import {
+  selectedOperatorHandoffFromNextAction,
+} from "./dev_test_game_selected_operator_handoff_receipt.mjs";
+import {
   assertProofGraphDiagnosticProofSummary,
   buildProofGraphDiagnosticProofSummary,
 } from "./dev_test_game_proof_graph_diagnostic_summary.mjs";
@@ -123,6 +126,7 @@ import { repoRoot } from "./dev_test_game_spine_runner.mjs";
 export const DEV_TEST_GAME_PROOF_GRAPH_VERSION = 1;
 
 const proofGraphJsonPath = path.join(repoRoot, devTestGameProofGraphPath);
+const selectedOperatorHandoffPacketNodeId = "selected-operator-handoff-packet";
 
 export function buildDevTestGameProofGraph(
   {
@@ -203,6 +207,7 @@ export function buildDevTestGameProofGraph(
     replacementPrivateRecoveryReceipt:
       replacementPrivateRecoveryReceiptEvidence,
     replacementPrivateRecoveryReceiptSource,
+    nextAction: nextActionEvidence,
     releaseReadiness: releaseReadinessChecklist,
     releaseReadinessSource,
   });
@@ -289,6 +294,9 @@ export function buildDevTestGameProofGraph(
       ).length,
       commandProofRoleUrlAuditCount: nodes.filter(
         (node) => node.kind === "command-proof-role-url-audit",
+      ).length,
+      selectedOperatorHandoffPacketCount: nodes.filter(
+        (node) => node.kind === "selected-operator-handoff-packet",
       ).length,
       terminalBatchCount: adminSpineTerminalBatchEvidence?.batchCount ?? 0,
       ...recoveryReceiptSummaryLaneCounts({
@@ -411,6 +419,7 @@ export function assertDevTestGameProofGraph(
   assertDevTestGameProofGraphCoversPrivateChannelRecoveryReceipt(evidence);
   assertDevTestGameProofGraphCoversCoreLoopScenarioFamilies(evidence);
   assertDevTestGameProofGraphCoversCoreLoopCommandProofRoleUrlAudit(evidence);
+  assertDevTestGameProofGraphCoversSelectedOperatorHandoffPacket(evidence);
   assertDevTestGameProofGraphCoversReplacementPrivateRecoveryReceipt(evidence);
   assertDevTestGameProofGraphCoversReplacementActionRecoveryReceipt(evidence);
   assertDevTestGameProofGraphCoversReplacementHandoffRecoveryReceipt(evidence);
@@ -672,6 +681,71 @@ export function assertDevTestGameProofGraphCoversCoreLoopCommandProofRoleUrlAudi
     )
   ) {
     throw new Error("proof graph core-loop command proof audit edge drifted");
+  }
+  return graph;
+}
+
+export function assertDevTestGameProofGraphCoversSelectedOperatorHandoffPacket(
+  graph,
+) {
+  const nodes = Array.isArray(graph?.nodes) ? graph.nodes : [];
+  const edges = Array.isArray(graph?.edges) ? graph.edges : [];
+  const node = nodes.find(
+    (candidate) => candidate.id === selectedOperatorHandoffPacketNodeId,
+  );
+  const selectedEdge = edges.find(
+    (edge) =>
+      edge.from === "next-action" &&
+      edge.relationship === "selected-operator-handoff",
+  );
+  if (selectedEdge === undefined) {
+    if (node !== undefined) {
+      throw new Error(
+        "proof graph selected operator packet node has no selected edge",
+      );
+    }
+    return graph;
+  }
+  if (
+    node === undefined ||
+    node.kind !== "selected-operator-handoff-packet" ||
+    node.status !== "blocked" ||
+    node.firstMissingInputId !== selectedEdge.firstMissingInputId ||
+    node.selectedProductionFeatureGraphNodeId !== selectedEdge.to ||
+    node.selectedProductionFeatureRoleUrl !== selectedEdge.roleUrl ||
+    node.proofTarget !== selectedEdge.proofTarget ||
+    node.unprovenId !== selectedEdge.unprovenId ||
+    typeof node.rawEvidenceContractSummary !== "string" ||
+    node.rawEvidenceContractSummary.trim() === "" ||
+    !Array.isArray(node.rawEvidenceContractRequiredTopLevelFields) ||
+    node.rawEvidenceContractRequiredTopLevelFields.length === 0
+  ) {
+    throw new Error("proof graph selected operator packet node drifted");
+  }
+  if (
+    !edges.some(
+      (edge) =>
+        edge.from === "next-action" &&
+        edge.to === selectedOperatorHandoffPacketNodeId &&
+        edge.relationship === "selected-operator-packet" &&
+        edge.firstMissingInputId === node.firstMissingInputId &&
+        edge.proofTarget === node.proofTarget,
+    )
+  ) {
+    throw new Error("proof graph selected operator packet node is not linked");
+  }
+  if (
+    !edges.some(
+      (edge) =>
+        edge.from === selectedOperatorHandoffPacketNodeId &&
+        edge.to === node.selectedProductionFeatureGraphNodeId &&
+        edge.relationship === "blocks-hosted-evidence-for" &&
+        edge.firstMissingInputId === node.firstMissingInputId,
+    )
+  ) {
+    throw new Error(
+      "proof graph selected operator packet does not block its feature",
+    );
   }
   return graph;
 }
@@ -1096,6 +1170,7 @@ function buildProofGraphNodes({
   replacementHandoffRecoveryReceiptSource,
   replacementPrivateRecoveryReceipt,
   replacementPrivateRecoveryReceiptSource,
+  nextAction,
   releaseReadiness,
   releaseReadinessSource,
 }) {
@@ -1133,6 +1208,8 @@ function buildProofGraphNodes({
     });
   const hostedIdentityOperatorPrerequisiteNodes =
     hostedIdentityOperatorDependencyProofGraphNodes();
+  const selectedOperatorHandoffPacketNode =
+    buildSelectedOperatorHandoffPacketNode({ nextAction });
   const hostedEvidenceRealCaptureProofNode = {
     id: "hosted-evidence-lane-real-capture-admin-proof",
     label: "Hosted evidence lane real-capture admin proof",
@@ -1274,6 +1351,7 @@ function buildProofGraphNodes({
     ...recoveryReceiptNodes,
     ...roleSurfaceProofNodes,
     ...adminProofNodes,
+    ...selectedOperatorHandoffPacketNode,
     hostedEvidenceRealCaptureProofNode,
     releaseAdminProofContractNode,
     ...hostedIdentityOperatorPrerequisiteNodes,
@@ -1381,6 +1459,7 @@ function buildProofGraphEdges({
           command: node.recoveryCommand,
         },
       ]),
+    ...selectedOperatorHandoffPacketEdges(nodes),
     ...hostedIdentityOperatorDependencyProofGraphEdgeRows(nodes),
     ...nodes
       .filter((node) => node.kind === "production-feature-spine-target")
@@ -1463,6 +1542,95 @@ function hostedEvidenceRealCaptureProofEdges(nodes) {
         ],
       ]
     : [];
+}
+
+function buildSelectedOperatorHandoffPacketNode({ nextAction }) {
+  const handoff =
+    nextAction?.selectedOperatorHandoff ??
+    selectedOperatorHandoffFromNextAction(nextAction?.nextAction);
+  if (handoff === null || typeof handoff !== "object") {
+    return [];
+  }
+  const packet = handoff.blockedOperatorPacket;
+  if (packet === null || typeof packet !== "object") {
+    return [];
+  }
+  const roleSurfaceDrilldown =
+    packet.roleSurfaceDrilldown !== null &&
+    typeof packet.roleSurfaceDrilldown === "object"
+      ? packet.roleSurfaceDrilldown
+      : null;
+  return [
+    {
+      id: selectedOperatorHandoffPacketNodeId,
+      packetId: handoff.id,
+      label: "Selected operator handoff packet",
+      kind: "selected-operator-handoff-packet",
+      status: packet.status,
+      artifact: devTestGameNextActionPath,
+      roleUrl: roleSurfaceDrilldown?.handoffRoleUrl ?? handoff.roleUrl,
+      proofCommand: handoff.command,
+      recoveryCommand: handoff.command,
+      command: handoff.command,
+      reason: handoff.reason,
+      unprovenId: handoff.unprovenId,
+      proofTarget: handoff.proofTarget,
+      packetProofTarget: packet.proofTarget,
+      nextProofTarget: packet.nextProofTarget,
+      firstMissingInputId: packet.firstMissingInputId,
+      firstMissingCheckId: packet.firstMissingCheckId,
+      firstMissingSectionId: packet.firstMissingSectionId,
+      firstMissingSectionLabel: packet.firstMissingSectionLabel,
+      firstMissingRequiredEvidence: packet.firstMissingRequiredEvidence,
+      rawEvidenceContractSummary: packet.rawEvidenceContractSummary,
+      rawEvidenceContractRequiredTopLevelFields:
+        packet.rawEvidenceContractRequiredTopLevelFields,
+      operatorAction: packet.operatorAction,
+      localVsHostedBoundary: packet.localVsHostedBoundary,
+      selectedProductionFeatureGraphNodeId:
+        packet.selectedProductionFeatureGraphNodeId,
+      selectedProductionFeatureRoleUrl:
+        packet.selectedProductionFeatureRoleUrl,
+      roleSurfaceDrilldown: roleSurfaceDrilldown ?? undefined,
+      releaseReady: false,
+      productionReady: false,
+    },
+  ];
+}
+
+function selectedOperatorHandoffPacketEdges(nodes) {
+  const node = nodes.find(
+    (candidate) => candidate.id === selectedOperatorHandoffPacketNodeId,
+  );
+  if (node === undefined) {
+    return [];
+  }
+  return [
+    [
+      "next-action",
+      node.id,
+      "selected-operator-packet",
+      {
+        command: node.command,
+        firstMissingInputId: node.firstMissingInputId,
+        roleUrl: node.roleUrl,
+        proofTarget: node.proofTarget,
+        unprovenId: node.unprovenId,
+      },
+    ],
+    [
+      node.id,
+      node.selectedProductionFeatureGraphNodeId,
+      "blocks-hosted-evidence-for",
+      {
+        command: node.command,
+        firstMissingInputId: node.firstMissingInputId,
+        roleUrl: node.selectedProductionFeatureRoleUrl,
+        proofTarget: node.proofTarget,
+        unprovenId: node.unprovenId,
+      },
+    ],
+  ];
 }
 
 function buildCoreLoopCommandProofRoleUrlAuditNode({ recoveryCommand }) {

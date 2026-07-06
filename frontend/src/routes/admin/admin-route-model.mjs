@@ -4046,14 +4046,56 @@ function localProofGraphNodeCheckStatus(node) {
   const browserWorkbenchEvidence = String(
     node?.browserWorkbench?.requiredEvidence ?? "",
   ).trim();
+  const firstMissingInputId = String(node?.firstMissingInputId ?? "").trim();
+  const firstMissingCheckId = String(node?.firstMissingCheckId ?? "").trim();
+  const rawEvidenceContractSummary = String(
+    node?.rawEvidenceContractSummary ?? "",
+  ).trim();
+  const proofTarget = String(node?.proofTarget ?? "").trim();
+  const packetProofTarget = String(node?.packetProofTarget ?? "").trim();
+  const nextProofTarget = String(node?.nextProofTarget ?? "").trim();
+  const selectedProductionFeatureGraphNodeId = String(
+    node?.selectedProductionFeatureGraphNodeId ?? "",
+  ).trim();
+  const selectedProductionFeatureRoleUrl = String(
+    node?.selectedProductionFeatureRoleUrl ?? "",
+  ).trim();
+  const operatorAction = String(node?.operatorAction ?? "").trim();
+  const localVsHostedBoundary = String(
+    node?.localVsHostedBoundary ?? "",
+  ).trim();
   const checkedCount =
     typeof node?.checkedCount === "number" ? node.checkedCount : null;
   return [
     status,
     ...(checkedCount === null ? [] : [`${checkedCount} checked`]),
+    ...(firstMissingInputId === ""
+      ? []
+      : [`firstMissingInputId ${firstMissingInputId}`]),
+    ...(firstMissingCheckId === ""
+      ? []
+      : [`firstMissingCheckId ${firstMissingCheckId}`]),
     ...(roleUrl === "" ? [] : [`roleUrl ${roleUrl}`]),
     ...(targetRoleUrl === "" ? [] : [`targetRoleUrl ${targetRoleUrl}`]),
+    ...(selectedProductionFeatureGraphNodeId === ""
+      ? []
+      : [`selectedProductionFeatureGraphNodeId ${selectedProductionFeatureGraphNodeId}`]),
+    ...(selectedProductionFeatureRoleUrl === ""
+      ? []
+      : [`selectedProductionFeatureRoleUrl ${selectedProductionFeatureRoleUrl}`]),
     ...(recoveryCommand === "" ? [] : [`recoveryCommand ${recoveryCommand}`]),
+    ...(proofTarget === "" ? [] : [`proofTarget ${proofTarget}`]),
+    ...(packetProofTarget === ""
+      ? []
+      : [`packetProofTarget ${packetProofTarget}`]),
+    ...(nextProofTarget === "" ? [] : [`nextProofTarget ${nextProofTarget}`]),
+    ...(rawEvidenceContractSummary === ""
+      ? []
+      : [`rawEvidenceContract ${rawEvidenceContractSummary}`]),
+    ...(operatorAction === "" ? [] : [`operatorAction ${operatorAction}`]),
+    ...(localVsHostedBoundary === ""
+      ? []
+      : [`localVsHostedBoundary ${localVsHostedBoundary}`]),
     ...(browserProofCommand === ""
       ? []
       : [`browserProofCommand ${browserProofCommand}`]),
