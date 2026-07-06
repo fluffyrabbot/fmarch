@@ -23230,6 +23230,7 @@ function releaseAdminProofFixture({
   localDiagnosticIds = releaseAdminProofLocalDiagnosticIds(),
 } = {}) {
   const localPrerequisites = releaseAdminProofLocalPrerequisites();
+  const localPrerequisiteArtifacts = releaseAdminProofLocalPrerequisiteArtifacts();
   const evidenceObjectRowIds = [
     ...expectedNormalizedEvidenceObjectRowIds({
       parentId: "local-private-channel-recovery-milestone",
@@ -23259,6 +23260,7 @@ function releaseAdminProofFixture({
       localDiagnosticIds,
       evidenceObjectRowIds,
       localPrerequisiteIds: localPrerequisites.map((item) => item.id),
+      localPrerequisiteArtifacts,
       setupCommandEvidenceIds: releaseAdminProofSetupCommandEvidenceIds(),
       unprovenIds: [...releaseAdminProofFallbackUnprovenIds],
     },
@@ -23280,6 +23282,8 @@ function releaseAdminProofFixture({
       ],
       visibleLocalDiagnostics: [...localDiagnosticIds],
       visibleLocalPrerequisites: localPrerequisites.map((item) => item.id),
+      visibleLocalPrerequisiteArtifacts:
+        visibleAdminLocalPrerequisiteArtifactsFixture(localPrerequisiteArtifacts),
       visibleLocalPrerequisiteRoleUrls: Object.fromEntries(
         localPrerequisites.map((item) => [
           item.id,
@@ -23312,6 +23316,17 @@ function releaseAdminProofSetupCommandEvidenceIds() {
 
 function releaseAdminProofLocalPrerequisites() {
   return localReadinessDependencyDestinations();
+}
+
+function releaseAdminProofLocalPrerequisiteArtifacts() {
+  return localReadinessDependencyDestinations().map((destination) => {
+    const dependency = getLocalReadinessDependency(destination.id);
+    return {
+      id: destination.id,
+      proofTarget: dependency.proofTarget,
+      evidence: dependency.proofTarget,
+    };
+  });
 }
 
 function releaseRunbookAdminProofFixture() {
@@ -26639,6 +26654,21 @@ function visibleAdminEvidenceArtifactFixture(artifact) {
     href: `/admin/artifact?${params.toString()}`,
     clickedThrough: true,
   };
+}
+
+function visibleAdminLocalPrerequisiteArtifactsFixture(artifacts) {
+  return artifacts.flatMap((expected) =>
+    [
+      ["proofTarget", expected.proofTarget],
+      ["evidence", expected.evidence],
+    ].map(([kind, artifact]) => ({
+      id: expected.id,
+      kind,
+      artifact,
+      href: visibleAdminEvidenceArtifactFixture(artifact).href,
+      clickedThrough: true,
+    })),
+  );
 }
 
 function adminProofRerunCommandFor(id) {

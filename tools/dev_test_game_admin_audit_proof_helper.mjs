@@ -93,6 +93,39 @@ export function assertAdminRoleSurfaceEvidenceArtifact({
   }
 }
 
+export function assertAdminRoleSurfaceLocalPrerequisiteArtifacts({
+  adminRoleSurface,
+  expectedArtifacts,
+  proofName,
+}) {
+  const visible = adminRoleSurface?.visibleLocalPrerequisiteArtifacts;
+  for (const expected of expectedArtifacts ?? []) {
+    const id = String(expected.id ?? "");
+    for (const [kind, rawArtifact] of [
+      ["proofTarget", expected.proofTarget],
+      ["evidence", expected.evidence],
+    ]) {
+      const artifact = String(rawArtifact ?? "");
+      const match = Array.isArray(visible)
+        ? visible.find(
+            (item) =>
+              item?.id === id &&
+              item.kind === kind &&
+              item.artifact === artifact &&
+              item.href ===
+                adminArtifactUrlPath({ game: "<seeded-game>", artifact }) &&
+              item.clickedThrough === true,
+          )
+        : undefined;
+      if (id === "" || artifact === "" || match === undefined) {
+        throw new Error(
+          `${proofName} missing local prerequisite ${kind} artifact drilldown: ${id}`,
+        );
+      }
+    }
+  }
+}
+
 export async function runAdminAuditProof({
   smokeName,
   stage,
@@ -327,6 +360,7 @@ export async function proveAdminAuditDetail({
   requiredCheckStatuses = {},
   requiredLocalDiagnostics = [],
   requiredLocalPrerequisites = [],
+  requiredLocalPrerequisiteArtifacts = [],
   requiredScenarios = [],
   requiredSessions = [],
   requiredReconnectLanes = [],
@@ -950,6 +984,14 @@ export async function proveAdminAuditDetail({
       auditId,
       expected: requiredEvidenceArtifact,
     });
+    const visibleLocalPrerequisiteArtifacts =
+      await visitLocalPrerequisiteArtifacts({
+        page,
+        frontendBaseUrl,
+        detailUrl,
+        game,
+        expectedArtifacts: requiredLocalPrerequisiteArtifacts,
+      });
     const visibleRelatedLinks = await waitForRows({
       page,
       prefix: "admin-audit-related-link",
@@ -1394,6 +1436,9 @@ export async function proveAdminAuditDetail({
       ...(visitedLocalPrerequisiteDestinations.length === 0
         ? {}
         : { visitedLocalPrerequisiteDestinations }),
+      ...(visibleLocalPrerequisiteArtifacts.length === 0
+        ? {}
+        : { visibleLocalPrerequisiteArtifacts }),
       ...(visibleScenarios.length === 0 ? {} : { visibleScenarios }),
       ...(visibleSessions.length === 0 ? {} : { visibleSessions }),
       ...(visibleReconnectLanes.length === 0
@@ -1963,6 +2008,78 @@ async function visitMachineEvidenceArtifact({
     href: adminArtifactUrlPath({ game: "<seeded-game>", artifact }),
     clickedThrough: true,
   };
+}
+
+async function visitLocalPrerequisiteArtifacts({
+  page,
+  frontendBaseUrl,
+  detailUrl,
+  game,
+  expectedArtifacts,
+}) {
+  const visited = [];
+  for (const expected of expectedArtifacts ?? []) {
+    const id = String(expected.id ?? "");
+    const artifacts = [
+      ["proofTarget", expected.proofTarget],
+      ["evidence", expected.evidence],
+    ];
+    if (id === "") {
+      throw new Error("local prerequisite artifact expectation is missing an id");
+    }
+    for (const [kind, rawArtifact] of artifacts) {
+      const artifact = String(rawArtifact ?? "");
+      if (artifact === "") {
+        throw new Error(`${id} local prerequisite ${kind} artifact is malformed`);
+      }
+      const expectedHref = adminArtifactUrlPath({ game, artifact });
+      await page.goto(detailUrl, { waitUntil: "networkidle" });
+      await page.getByTestId("admin-audit-detail-surface").waitFor({
+        state: "visible",
+        timeout: 15000,
+      });
+      const testIdKind = kind === "proofTarget" ? "proof-target" : kind;
+      const testId = `admin-audit-local-prerequisite-${testIdKind}-${id}`;
+      const link = page.getByTestId(testId);
+      await link.waitFor({ state: "visible", timeout: 15000 });
+      const href = await link.getAttribute("href");
+      if (href !== expectedHref) {
+        throw new Error(
+          `${testId} href drifted: ${href} !== ${expectedHref}`,
+        );
+      }
+      await Promise.all([
+        page.waitForURL(`${frontendBaseUrl}${expectedHref}`, { timeout: 15000 }),
+        link.click(),
+      ]);
+      await page.waitForLoadState("networkidle");
+      await page.getByTestId("admin-artifact-surface").waitFor({
+        state: "visible",
+        timeout: 15000,
+      });
+      const text = await page.getByTestId("admin-artifact-contents").innerText();
+      if (text.trim() === "") {
+        throw new Error(
+          `${testId} artifact page rendered empty contents for ${artifact}`,
+        );
+      }
+      visited.push({
+        id,
+        kind,
+        artifact,
+        href: adminArtifactUrlPath({ game: "<seeded-game>", artifact }),
+        clickedThrough: true,
+      });
+    }
+  }
+  if (visited.length > 0) {
+    await page.goto(detailUrl, { waitUntil: "networkidle" });
+    await page.getByTestId("admin-audit-detail-surface").waitFor({
+      state: "visible",
+      timeout: 15000,
+    });
+  }
+  return visited;
 }
 
 function adminArtifactUrlPath({ game, artifact }) {

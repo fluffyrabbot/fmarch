@@ -12,6 +12,7 @@ import {
 } from "./dev_test_game_spine_artifact_paths.mjs";
 import {
   assertAdminRoleSurfaceEvidenceArtifact,
+  assertAdminRoleSurfaceLocalPrerequisiteArtifacts,
   assertVisibleAdminRoleSurfaceRows,
   proveAdminAuditDetail,
   readJson,
@@ -59,17 +60,18 @@ export function releaseAdminProofCase() {
     },
     loadSource: async () =>
       assertDevTestGameReleaseReadiness(await readJson(readinessPath)),
-    prove: async ({ browser, frontendBaseUrl, source: readiness }) =>
-      await proveAdminAuditDetail({
+    prove: async ({ browser, frontendBaseUrl, source: readiness }) => {
+      const localPrerequisiteChecks = releaseLocalPrerequisiteChecks(readiness);
+      return await proveAdminAuditDetail({
         browser,
         frontendBaseUrl,
         game: readiness.generatedFrom.game,
         auditId: "local-release-readiness",
         requiredChecks: releaseReadinessVisibleCheckIds(readiness),
         requiredLocalDiagnostics: releaseReadinessDiagnosticIds(readiness),
-        requiredLocalPrerequisites: readiness.localDevelopmentSpine.checks
-          .filter((check) => check.dependencyGated === true)
-          .map((check) => check.id),
+        requiredLocalPrerequisites: localPrerequisiteChecks.map((check) => check.id),
+        requiredLocalPrerequisiteArtifacts:
+          releaseLocalPrerequisiteArtifactExpectations(localPrerequisiteChecks),
         requiredSetupCommandEvidence:
           readiness.localDevelopmentSpine.evidence?.hostSetupProof
             ?.setupCommandEvidence === undefined
@@ -87,7 +89,8 @@ export function releaseAdminProofCase() {
           releaseReadinessDiagnosticIds(readiness).length === 0
             ? []
             : ["Diagnostics, Not Gates"],
-      }),
+      });
+    },
     buildEvidence: ({ source: readiness, adminRoleSurface }) => ({
       version: 1,
       proof: "dev-test-game-release-admin-proof",
@@ -107,6 +110,10 @@ export function releaseAdminProofCase() {
         localPrerequisiteIds: readiness.localDevelopmentSpine.checks
           .filter((check) => check.dependencyGated === true)
           .map((check) => check.id),
+        localPrerequisiteArtifacts:
+          releaseLocalPrerequisiteArtifactExpectations(
+            releaseLocalPrerequisiteChecks(readiness),
+          ),
         setupCommandEvidenceIds: requiredSetupCommandEvidence.filter(
           (id) =>
             readiness.localDevelopmentSpine.evidence?.hostSetupProof
@@ -144,6 +151,11 @@ export function assertReleaseAdminProof(evidence) {
   assertAdminRoleSurfaceEvidenceArtifact({
     adminRoleSurface: evidence.adminRoleSurface,
     artifact: readinessRelativePath,
+    proofName: "release admin proof",
+  });
+  assertAdminRoleSurfaceLocalPrerequisiteArtifacts({
+    adminRoleSurface: evidence.adminRoleSurface,
+    expectedArtifacts: evidence.generatedFrom?.localPrerequisiteArtifacts,
     proofName: "release admin proof",
   });
   for (const checkId of evidence.generatedFrom?.localCheckIds ?? requiredReleaseChecks) {
@@ -246,6 +258,20 @@ export function releaseReadinessDiagnosticIds(readiness) {
   return (readiness.localDevelopmentSpine.diagnostics ?? []).map(
     (diagnostic) => diagnostic.id,
   );
+}
+
+function releaseLocalPrerequisiteChecks(readiness) {
+  return readiness.localDevelopmentSpine.checks.filter(
+    (check) => check.dependencyGated === true,
+  );
+}
+
+function releaseLocalPrerequisiteArtifactExpectations(checks) {
+  return checks.map((check) => ({
+    id: String(check.id ?? ""),
+    proofTarget: String(check.recovery?.proofTarget ?? ""),
+    evidence: String(check.evidence ?? ""),
+  }));
 }
 
 function releaseReadinessEvidenceObjectRowIds(readiness) {
