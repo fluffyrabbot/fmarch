@@ -113,6 +113,14 @@ import {
   devTestGameNextActionSequenceHandoffPair,
 } from "./dev_test_game_next_action_sequence_handoff_pair.mjs";
 import {
+  devTestGameHostedEvidenceOperatorChecklistHandoffPhaseId,
+  devTestGameHostedIdentityHandoffPhaseId,
+} from "./dev_test_game_handoff_phase_outputs.mjs";
+export {
+  devTestGameHostedEvidenceOperatorChecklistHandoffPhaseId,
+  devTestGameHostedIdentityHandoffPhaseId,
+} from "./dev_test_game_handoff_phase_outputs.mjs";
+import {
   buildSelectedOperatorHandoffTerminalReceipt,
 } from "./dev_test_game_selected_operator_handoff_receipt.mjs";
 import { releaseReadinessStep } from "./dev_test_game_spine_readiness_steps.mjs";
@@ -227,10 +235,6 @@ export const adminSpineHostedOpsInputReadinessEnv = {
 };
 
 const devTestGameHostedIdentitySequenceStage = "hosted-identity";
-export const devTestGameHostedEvidenceOperatorChecklistHandoffPhaseId =
-  "hosted-evidence-operator-checklist-handoff";
-export const devTestGameHostedIdentityHandoffPhaseId =
-  "hosted-identity-handoff";
 
 const terminalAdminProofCaseFactories = Object.freeze({
   "proof-graph": proofGraphAdminProofCase,

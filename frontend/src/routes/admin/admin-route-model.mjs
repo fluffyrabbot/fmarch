@@ -159,6 +159,10 @@ import {
 export { ADMIN_ROUTE_CONTRACT };
 
 export const LOCAL_PLAYER_RECOVERY_AUDIT_LANE_IDS = playerRecoveryAuditLaneIds;
+export const proofGraphHandoffPhaseOutputSectionId =
+  "proof-graph-handoff-phase-outputs";
+export const proofGraphHandoffPhaseOutputSectionHeading =
+  "Handoff phase outputs";
 
 const COMPLETED_GAME_HARDENING_LANE_CASES = Object.freeze(
   completedGameHardeningLaneCases(),
@@ -561,15 +565,83 @@ function frontendSetupWorkbenchReadinessSummarySections(readiness) {
   ];
 }
 
-function buildLocalProofGraphSummarySections(artifactSummary, { nodes, game } = {}) {
+function buildLocalProofGraphSummarySections(
+  artifactSummary,
+  { nodes, edges, game } = {},
+) {
   return Object.freeze([
     ...diagnosticProofSummarySections(artifactSummary.diagnosticProofSummary),
+    ...proofGraphHandoffPhaseOutputSections({ nodes, edges, game }),
     ...proofGraphPrerequisiteDestinationSections({ nodes, game }),
     ...proofGraphCoreLoopRecoveryDestinationSections({
       summary: artifactSummary.coreLoopRecoveryDestinationSummary,
       game,
     }),
   ]);
+}
+
+function proofGraphHandoffPhaseOutputSections({ nodes, edges, game } = {}) {
+  const rows = proofGraphHandoffPhaseOutputRows({ nodes, edges });
+  if (rows.length === 0) {
+    return [];
+  }
+  return [
+    buildArtifactSummarySection({
+      id: proofGraphHandoffPhaseOutputSectionId,
+      heading: proofGraphHandoffPhaseOutputSectionHeading,
+      rows: rows.map((row) =>
+        proofGraphHandoffPhaseOutputArtifactRow({ row, game }),
+      ),
+    }),
+  ];
+}
+
+function proofGraphHandoffPhaseOutputRows({ nodes, edges } = {}) {
+  const graphNodes = Array.isArray(nodes) ? nodes : [];
+  const graphEdges = Array.isArray(edges) ? edges : [];
+  return graphNodes
+    .filter((node) => node?.kind === "handoff-phase-output")
+    .map((node) => {
+      const manifestEdge =
+        graphEdges.find(
+          (edge) =>
+            edge.from === "spine-manifest" &&
+            edge.to === node.id &&
+            edge.relationship === "records-handoff-phase-output" &&
+            edge.handoffPhaseOutputId === node.handoffPhaseOutputId,
+        ) ?? null;
+      return Object.freeze({
+        id: String(node.id ?? ""),
+        label: String(node.label ?? node.id ?? ""),
+        status: String(node.status ?? "recorded"),
+        artifact: String(node.artifact ?? ""),
+        handoffPhaseId: String(node.handoffPhaseId ?? ""),
+        handoffPhaseStep: String(node.handoffPhaseStep ?? ""),
+        proofCommand: String(node.proofCommand ?? ""),
+        manifestEdgeRowId:
+          manifestEdge === null ? "" : proofGraphEdgeCheckId(manifestEdge),
+      });
+    });
+}
+
+function proofGraphHandoffPhaseOutputArtifactRow({ row, game }) {
+  return {
+    id: row.id,
+    testId: `proof-graph-handoff-phase-output-${row.id}`,
+    values: [
+      { id: "label", text: row.label, emphasized: true },
+      { id: "status", text: row.status },
+      { id: "handoffPhaseId", text: row.handoffPhaseId },
+      { id: "handoffPhaseStep", text: row.handoffPhaseStep },
+      { id: "manifestEdgeRowId", text: row.manifestEdgeRowId },
+      localProofArtifactValue({
+        id: "artifact",
+        text: row.artifact,
+        game,
+      }),
+      { id: "command", text: row.proofCommand },
+    ],
+  };
 }
 
 function proofGraphCoreLoopRecoveryDestinationSections({ summary, game } = {}) {
@@ -4348,6 +4420,7 @@ export function normalizeLocalProofGraphAudit(proofGraph, { game }) {
     artifactSummary,
     artifactSummarySections: buildLocalProofGraphSummarySections(artifactSummary, {
       nodes,
+      edges,
       game,
     }),
   });

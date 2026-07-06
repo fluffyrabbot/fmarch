@@ -11,6 +11,9 @@ import {
   adminSpineTerminalBatchProofPath,
   adminSpineTerminalBatchReadinessEvidenceEnv,
 } from "./dev_test_game_admin_spine.mjs";
+import {
+  devTestGameHandoffPhaseOutputs,
+} from "./dev_test_game_handoff_phase_outputs.mjs";
 import { devTestGameAdminSpineProofPlan } from "./dev_test_game_admin_spine_proof.mjs";
 import {
   devTestGameProofGraphAdminProofCommand,
@@ -266,6 +269,9 @@ function phaseLocalNextActionTerminalArtifacts() {
     },
   ];
 }
+const handoffPhaseOutputs = Object.freeze(
+  devTestGameHandoffPhaseOutputs.map((output) => Object.freeze({ ...output })),
+);
 const realHostedObservabilityHandoffAdminProofArtifact =
   hostedAdminHandoffProofArtifactCase(
     "realHostedObservabilityHandoffAdminProof",
@@ -589,6 +595,7 @@ export function buildDevTestGameSpineManifest({
     }),
     productionFeatureProvenanceSummary:
       buildProductionFeatureProvenanceSummary(),
+    handoffPhaseOutputs: handoffPhaseOutputs.map((output) => ({ ...output })),
     terminalArtifacts: [
       {
         id: "next-action",
@@ -659,6 +666,7 @@ export function buildDevTestGameSpineManifest({
       nextActionPath,
       hostedEvidenceOperatorChecklistNextActionPath,
       hostedIdentityNextActionPath,
+      ...handoffPhaseOutputs.map((output) => output.artifact),
       nextActionAdminProofPath,
       devTestGameHostedConcurrentRaceMatrixPath,
       devTestGameHostedIdentityEvidencePath,
@@ -934,6 +942,7 @@ export function assertDevTestGameSpineManifest(manifest) {
   assertProductionFeatureProvenanceSummary(
     manifest.productionFeatureProvenanceSummary,
   );
+  assertHandoffPhaseOutputs(manifest);
   assertLocalLiveWrapperScript({
     manifest,
     commandId: "coreLive",
@@ -1638,6 +1647,42 @@ export function assertProductionFeatureProvenanceSummary(summary) {
     throw new Error("spine manifest production feature provenance summary drifted");
   }
   return summary;
+}
+
+function assertHandoffPhaseOutputs(manifest) {
+  if (
+    !Array.isArray(manifest.handoffPhaseOutputs) ||
+    manifest.handoffPhaseOutputs.length !== handoffPhaseOutputs.length
+  ) {
+    throw new Error("spine manifest handoff phase outputs drifted");
+  }
+  const expected = handoffPhaseOutputs.map((output) => ({ ...output }));
+  if (JSON.stringify(manifest.handoffPhaseOutputs) !== JSON.stringify(expected)) {
+    throw new Error("spine manifest handoff phase outputs drifted");
+  }
+  const artifactSet = new Set(manifest.artifacts ?? []);
+  const outputIds = new Set();
+  for (const output of manifest.handoffPhaseOutputs) {
+    if (
+      typeof output.id !== "string" ||
+      output.id === "" ||
+      typeof output.phaseId !== "string" ||
+      output.phaseId === "" ||
+      typeof output.step !== "string" ||
+      output.step === "" ||
+      typeof output.script !== "string" ||
+      output.script === "" ||
+      typeof output.artifact !== "string" ||
+      output.artifact === "" ||
+      !artifactSet.has(output.artifact)
+    ) {
+      throw new Error("spine manifest handoff phase output is malformed");
+    }
+    if (outputIds.has(output.id)) {
+      throw new Error("spine manifest handoff phase output ids must be unique");
+    }
+    outputIds.add(output.id);
+  }
 }
 
 function assertTerminalArtifacts(terminalArtifacts) {

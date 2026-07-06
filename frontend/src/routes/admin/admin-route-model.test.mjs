@@ -26,6 +26,8 @@ import {
   normalizeLocalProofGraphEdgeCheckRows,
   normalizeLocalProofGraphNodeCheckRows,
   normalizeLocalProofGraphRelatedLinks,
+  proofGraphHandoffPhaseOutputSectionHeading,
+  proofGraphHandoffPhaseOutputSectionId,
   summarizeRecoveryGate,
 } from "./admin-route-model.mjs";
 import {
@@ -2636,6 +2638,12 @@ test("admin route data exposes local proof graph as a native audit row", async (
         ]),
       ],
       [
+        proofGraphHandoffPhaseOutputSectionId,
+        proofGraphHandoffPhaseOutputSectionHeading,
+        `admin-audit-detail-${proofGraphHandoffPhaseOutputSectionId}`,
+        expectedProofGraphHandoffPhaseOutputRows(proofGraph),
+      ],
+      [
         proofGraphPrerequisiteDestinationSectionId,
         proofGraphPrerequisiteDestinationSectionHeading,
         `admin-audit-detail-${proofGraphPrerequisiteDestinationSectionId}`,
@@ -2696,6 +2704,15 @@ test("admin local proof graph detail data carries graph node rows", async () => 
   assert.deepEqual(
     descriptorRowsWithLinksForAssertion(prerequisiteDestinationSection.rows),
     expectedProofGraphPrerequisiteDestinationRowsWithLinks(proofGraph, {
+      game: "midsummer",
+    }),
+  );
+  const handoffPhaseOutputSection = data.audit.artifactSummarySections.find(
+    (section) => section.id === proofGraphHandoffPhaseOutputSectionId,
+  );
+  assert.deepEqual(
+    descriptorRowsWithLinksForAssertion(handoffPhaseOutputSection.rows),
+    expectedProofGraphHandoffPhaseOutputRowsWithLinks(proofGraph, {
       game: "midsummer",
     }),
   );
@@ -9047,6 +9064,7 @@ function proofGraphFixture() {
   });
   const recoveryReceiptCases = proofGraphRecoveryReceiptCases();
   const phaseLocalNextActionSnapshots = phaseLocalNextActionSnapshotsFixture();
+  const handoffPhaseOutputs = handoffPhaseOutputsFixture();
   const nodes = [
     ...devTestGameProofGraphFirstClassNodes(),
     ...phaseLocalNextActionSnapshots.map((snapshot) => ({
@@ -9061,6 +9079,19 @@ function proofGraphFixture() {
       proofCommand: snapshot.proofCommand,
       recoveryCommand: snapshot.proofCommand,
       proofBoundary: snapshot.proofBoundary,
+    })),
+    ...handoffPhaseOutputs.map((output) => ({
+      id: output.id,
+      label: output.label,
+      kind: "handoff-phase-output",
+      status: output.status,
+      artifact: output.artifact,
+      handoffPhaseId: output.handoffPhaseId,
+      handoffPhaseStep: output.handoffPhaseStep,
+      handoffPhaseOutputId: output.handoffPhaseOutputId,
+      proofCommand: output.proofCommand,
+      recoveryCommand: output.proofCommand,
+      proofBoundary: output.proofBoundary,
     })),
     proofGraphProductionFeatureNode(productionFeatureCase),
     ...proofGraphRecoveryReceiptNodes(recoveryReceiptCases),
@@ -9084,6 +9115,16 @@ function proofGraphFixture() {
         proofTarget: snapshot.artifact,
       },
     ]),
+    ...handoffPhaseOutputs.map((output) => ({
+      from: "spine-manifest",
+      to: output.id,
+      relationship: "records-handoff-phase-output",
+      handoffPhaseId: output.handoffPhaseId,
+      handoffPhaseStep: output.handoffPhaseStep,
+      handoffPhaseOutputId: output.handoffPhaseOutputId,
+      proofTarget: output.artifact,
+      command: output.proofCommand,
+    })),
     proofGraphProductionFeatureEdge(productionFeatureCase),
     ...proofGraphRecoveryReceiptEdges(recoveryReceiptCases),
   ];
@@ -9113,6 +9154,7 @@ function proofGraphFixture() {
         (node) => node.kind === "command-proof-role-url-audit",
       ).length,
       phaseLocalNextActionCount: phaseLocalNextActionSnapshots.length,
+      handoffPhaseOutputCount: handoffPhaseOutputs.length,
       productionFeatureDestinationSummary:
         proofGraphProductionFeatureDestinationSummary({
           nodes,
@@ -9157,6 +9199,40 @@ function phaseLocalNextActionSnapshotsFixture() {
     manifestEdgeRowId:
       `edge:spine-manifest:records-phase-local-next-action:${snapshot.id}`,
   }));
+}
+
+function handoffPhaseOutputsFixture() {
+  return [
+    {
+      id: "handoff-phase-output:hosted-evidence-operator-checklist-handoff-checklist-proof-target-dev-test-game-hosted-evidence-operator-checklist-proof-json",
+      label:
+        "Handoff phase output hosted-evidence-operator-checklist-handoff checklist-proof",
+      status: "recorded",
+      artifact:
+        "target/dev-test-game/hosted-evidence-operator-checklist-proof.json",
+      handoffPhaseId: "hosted-evidence-operator-checklist-handoff",
+      handoffPhaseStep: "checklist-proof",
+      handoffPhaseOutputId:
+        "hosted-evidence-operator-checklist-handoff:checklist-proof:target/dev-test-game/hosted-evidence-operator-checklist-proof.json",
+      proofCommand: "tools/dev_test_game_hosted_evidence_operator_checklist.mjs",
+      proofBoundary:
+        "Handoff phase output recorded from the spine manifest. It records local harness artifact wiring only; it does not prove hosted deployment, release readiness, or production readiness.",
+    },
+    {
+      id: "handoff-phase-output:hosted-identity-handoff-terminal-refresh-admin-proof-batch-target-dev-test-game-admin-spine-terminal-batches-json",
+      label:
+        "Handoff phase output hosted-identity-handoff terminal-refresh-admin-proof-batch",
+      status: "recorded",
+      artifact: "target/dev-test-game/admin-spine-terminal-batches.json",
+      handoffPhaseId: "hosted-identity-handoff",
+      handoffPhaseStep: "terminal-refresh-admin-proof-batch",
+      handoffPhaseOutputId:
+        "hosted-identity-handoff:terminal-refresh-admin-proof-batch:target/dev-test-game/admin-spine-terminal-batches.json",
+      proofCommand: "terminal refresh admin proof batch",
+      proofBoundary:
+        "Handoff phase output recorded from the spine manifest. It records local harness artifact wiring only; it does not prove hosted deployment, release readiness, or production readiness.",
+    },
+  ];
 }
 
 function proofGraphWithDuplicateTerminalReceiptProofIds() {
@@ -9396,6 +9472,79 @@ function expectedRawEvidenceTemplateRows() {
       [],
     ],
   ];
+}
+
+function expectedProofGraphHandoffPhaseOutputRows(proofGraph) {
+  return proofGraph.nodes
+    .filter((node) => node.kind === "handoff-phase-output")
+    .map((node) => {
+      const edge = proofGraph.edges.find(
+        (candidate) =>
+          candidate.from === "spine-manifest" &&
+          candidate.to === node.id &&
+          candidate.relationship === "records-handoff-phase-output" &&
+          candidate.handoffPhaseOutputId === node.handoffPhaseOutputId,
+      );
+      return [
+        node.id,
+        `proof-graph-handoff-phase-output-${node.id}`,
+        [
+          ["label", node.label, true],
+          ["status", node.status, false],
+          ["handoffPhaseId", node.handoffPhaseId, false],
+          ["handoffPhaseStep", node.handoffPhaseStep, false],
+          [
+            "manifestEdgeRowId",
+            `edge:${edge.from}:${edge.relationship}:${edge.to}`,
+            false,
+          ],
+          ["artifact", node.artifact, false],
+          ["command", node.proofCommand, false],
+        ],
+      ];
+    });
+}
+
+function expectedProofGraphHandoffPhaseOutputRowsWithLinks(
+  proofGraph,
+  { game } = {},
+) {
+  return proofGraph.nodes
+    .filter((node) => node.kind === "handoff-phase-output")
+    .map((node) => {
+      const edge = proofGraph.edges.find(
+        (candidate) =>
+          candidate.from === "spine-manifest" &&
+          candidate.to === node.id &&
+          candidate.relationship === "records-handoff-phase-output" &&
+          candidate.handoffPhaseOutputId === node.handoffPhaseOutputId,
+      );
+      return [
+        node.id,
+        `proof-graph-handoff-phase-output-${node.id}`,
+        [
+          ["label", node.label, true, "", ""],
+          ["status", node.status, false, "", ""],
+          ["handoffPhaseId", node.handoffPhaseId, false, "", ""],
+          ["handoffPhaseStep", node.handoffPhaseStep, false, "", ""],
+          [
+            "manifestEdgeRowId",
+            `edge:${edge.from}:${edge.relationship}:${edge.to}`,
+            false,
+            "",
+            "",
+          ],
+          [
+            "artifact",
+            node.artifact,
+            false,
+            expectedAdminArtifactHref({ game, artifact: node.artifact }),
+            "",
+          ],
+          ["command", node.proofCommand, false, "", ""],
+        ],
+      ];
+    });
 }
 
 function expectedProofGraphPrerequisiteDestinationRows(proofGraph) {

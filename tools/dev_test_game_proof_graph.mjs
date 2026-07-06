@@ -320,6 +320,9 @@ export function buildDevTestGameProofGraph(
       phaseLocalNextActionCount: nodes.filter(
         (node) => node.kind === "phase-local-next-action",
       ).length,
+      handoffPhaseOutputCount: nodes.filter(
+        (node) => node.kind === "handoff-phase-output",
+      ).length,
       terminalBatchCount: adminSpineTerminalBatchEvidence?.batchCount ?? 0,
       ...recoveryReceiptSummaryLaneCounts({
         privateChannelRecoveryReceipt: privateChannelRecoveryReceiptEvidence,
@@ -1330,6 +1333,7 @@ function buildProofGraphNodes({
     buildSelectedOperatorHandoffPacketNode({ nextAction });
   const phaseLocalNextActionNodes =
     buildPhaseLocalNextActionSnapshotNodes(manifest);
+  const handoffPhaseOutputNodes = buildHandoffPhaseOutputNodes(manifest);
   const hostedEvidenceRealCaptureProofNode = {
     id: "hosted-evidence-lane-real-capture-admin-proof",
     label: "Hosted evidence lane real-capture admin proof",
@@ -1467,6 +1471,7 @@ function buildProofGraphNodes({
       recoveryCommand: manifest.commands?.proofFreshness?.script,
     },
     ...phaseLocalNextActionNodes,
+    ...handoffPhaseOutputNodes,
     ...proofGraphDiagnosticProofNodes,
     ...terminalBatchNode,
     ...recoveryReceiptNodes,
@@ -1575,6 +1580,20 @@ function buildProofGraphEdges({
         ],
       ]),
     ...nodes
+      .filter((node) => node.kind === "handoff-phase-output")
+      .map((node) => [
+        "spine-manifest",
+        node.id,
+        "records-handoff-phase-output",
+        {
+          command: node.proofCommand,
+          proofTarget: node.artifact,
+          handoffPhaseId: node.handoffPhaseId,
+          handoffPhaseStep: node.handoffPhaseStep,
+          handoffPhaseOutputId: node.handoffPhaseOutputId,
+        },
+      ]),
+    ...nodes
       .filter((node) => node.kind === "role-surface-proof")
       .map((node) => ["spine-manifest", node.id, "records"]),
     ...nodes
@@ -1642,6 +1661,32 @@ function buildPhaseLocalNextActionSnapshotNodes(manifest) {
     }));
 }
 
+function buildHandoffPhaseOutputNodes(manifest) {
+  return (manifest.handoffPhaseOutputs ?? []).map((output) => ({
+    id: `handoff-phase-output:${proofGraphIdPart(output.id)}`,
+    label: `Handoff phase output ${output.phaseId} ${output.step}`,
+    kind: "handoff-phase-output",
+    status: "recorded",
+    artifact: output.artifact,
+    handoffPhaseId: output.phaseId,
+    handoffPhaseStep: output.step,
+    handoffPhaseOutputId: output.id,
+    proofCommand: output.script,
+    recoveryCommand: output.script,
+    ...(output.readinessReason === undefined
+      ? {}
+      : { readinessReason: output.readinessReason }),
+    proofBoundary:
+      "Handoff phase output recorded from the spine manifest. It records local harness artifact wiring only; it does not prove hosted deployment, release readiness, or production readiness.",
+  }));
+}
+
+function proofGraphIdPart(value) {
+  return String(value ?? "")
+    .replace(/[^a-zA-Z0-9_-]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
 export function assertDevTestGameProofGraphCoversPhaseLocalNextActions(graph) {
   const snapshots = (graph?.nodes ?? []).filter(
     (node) => node.kind === "phase-local-next-action",
@@ -1704,6 +1749,98 @@ export function assertDevTestGameProofGraphCoversPhaseLocalNextActions(graph) {
           `proof graph phase-local next-action edge missing: ${from}->${node.id}`,
         );
       }
+    }
+  }
+  return graph;
+}
+
+export function assertDevTestGameProofGraphCoversHandoffPhaseOutputs(graph) {
+  const outputs = (graph?.nodes ?? []).filter(
+    (node) => node.kind === "handoff-phase-output",
+  );
+  if (graph.summary?.handoffPhaseOutputCount !== outputs.length) {
+    throw new Error("proof graph handoff phase output summary drifted");
+  }
+  const expected = [
+    {
+      handoffPhaseId: "hosted-evidence-operator-checklist-handoff",
+      handoffPhaseStep: "checklist-proof",
+      artifact:
+        "target/dev-test-game/hosted-evidence-operator-checklist-proof.json",
+    },
+    {
+      handoffPhaseId: "hosted-evidence-operator-checklist-handoff",
+      handoffPhaseStep: "phase-local-next-action",
+      artifact:
+        "target/dev-test-game/next-action-hosted-evidence-operator-checklist.json",
+    },
+    {
+      handoffPhaseId: "hosted-evidence-operator-checklist-handoff",
+      handoffPhaseStep: "admin-proof",
+      artifact:
+        "target/dev-test-game/hosted-evidence-operator-checklist-admin-proof.json",
+    },
+    {
+      handoffPhaseId: "hosted-identity-handoff",
+      handoffPhaseStep: "phase-local-next-action",
+      artifact: "target/dev-test-game/next-action-hosted-identity.json",
+    },
+    {
+      handoffPhaseId: "hosted-identity-handoff",
+      handoffPhaseStep: "hosted-identity-next-action-admin-proof-batch",
+      artifact: "target/dev-test-game/hosted-identity-next-action-admin-proof.json",
+    },
+    {
+      handoffPhaseId: "hosted-identity-handoff",
+      handoffPhaseStep: "default-next-action-refresh",
+      artifact: "target/dev-test-game/next-action.json",
+    },
+    {
+      handoffPhaseId: "hosted-identity-handoff",
+      handoffPhaseStep: "terminal-refresh-admin-proof-batch",
+      artifact: "target/dev-test-game/proof-freshness-admin-proof.json",
+    },
+    {
+      handoffPhaseId: "hosted-identity-handoff",
+      handoffPhaseStep: "terminal-refresh-admin-proof-batch",
+      artifact: "target/dev-test-game/next-action-admin-proof.json",
+    },
+    {
+      handoffPhaseId: "hosted-identity-handoff",
+      handoffPhaseStep: "terminal-refresh-admin-proof-batch",
+      artifact: "target/dev-test-game/admin-spine-terminal-batches.json",
+    },
+  ];
+  const actual = outputs.map((node) => ({
+    handoffPhaseId: node.handoffPhaseId,
+    handoffPhaseStep: node.handoffPhaseStep,
+    artifact: node.artifact,
+    proofCommand: node.proofCommand,
+  }));
+  if (
+    JSON.stringify(actual.map(({ proofCommand, ...row }) => row)) !==
+    JSON.stringify(expected)
+  ) {
+    throw new Error(
+      `proof graph handoff phase output nodes drifted: ${JSON.stringify(actual)}`,
+    );
+  }
+  for (const node of outputs) {
+    if (
+      !(graph.edges ?? []).some(
+        (edge) =>
+          edge.from === "spine-manifest" &&
+          edge.to === node.id &&
+          edge.relationship === "records-handoff-phase-output" &&
+          edge.handoffPhaseId === node.handoffPhaseId &&
+          edge.handoffPhaseStep === node.handoffPhaseStep &&
+          edge.handoffPhaseOutputId === node.handoffPhaseOutputId &&
+          edge.proofTarget === node.artifact,
+      )
+    ) {
+      throw new Error(
+        `proof graph handoff phase output edge missing: spine-manifest->${node.id}`,
+      );
     }
   }
   return graph;

@@ -255,6 +255,9 @@ import {
   runSpinePlan,
 } from "./dev_test_game_spine_runner.mjs";
 import {
+  devTestGameHandoffPhaseOutputs,
+} from "./dev_test_game_handoff_phase_outputs.mjs";
+import {
   localSpineDatabaseUrl,
   parseArgs as parseLocalSpineArgs,
 } from "./dev_test_game_local_spine.mjs";
@@ -407,6 +410,7 @@ import {
   assertDevTestGameProofGraph,
   assertDevTestGameProofGraphCoversDiagnosticProofs,
   assertDevTestGameProofGraphCoversAdminSpine,
+  assertDevTestGameProofGraphCoversHandoffPhaseOutputs,
   assertDevTestGameProofGraphCoversHostedIdentityOperatorPrerequisites,
   assertDevTestGameProofGraphCoversPhaseLocalNextActions,
   assertDevTestGameProofGraphCoversProductionFeatureTargets,
@@ -6193,6 +6197,7 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
   assertDevTestGameProofGraphCoversAdminSpine(graph, adminSpineProof);
   assertDevTestGameProofGraphCoversDiagnosticProofs(graph);
   assertDevTestGameProofGraphCoversHostedIdentityOperatorPrerequisites(graph);
+  assertDevTestGameProofGraphCoversHandoffPhaseOutputs(graph);
   assertDevTestGameProofGraphCoversPhaseLocalNextActions(graph);
   assertDevTestGameProofGraphCoversProductionFeatureTargets(
     graph,
@@ -6530,7 +6535,7 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
         count + (check.spineTargets?.productionFeatureTargets?.slotIds?.length ?? 0),
       0,
     );
-  const expectedBaseGraphNodeCount = 42;
+  const expectedBaseGraphNodeCount = 51;
   const expectedBaseRoleUrlCount = 40;
   assert.equal(
     graph.summary.nodeCount,
@@ -6547,6 +6552,7 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
       coreLoopScenarioFamilyNodes.length,
   );
   assert.equal(graph.summary.phaseLocalNextActionCount, 2);
+  assert.equal(graph.summary.handoffPhaseOutputCount, 9);
   assert.equal(graph.summary.roleSurfaceProofCount, 5);
   assert.equal(
     graph.summary.productionFeatureTargetCount,
@@ -7690,6 +7696,20 @@ test("phase-local next-action spine steps share one env contract", () => {
 });
 
 test("handoff phase spine steps require declared phase metadata and outputs", () => {
+  const actualHandoffPhaseOutputs = [
+    ...devTestGameHostedEvidenceOperatorChecklistHandoffPhase,
+    ...devTestGameHostedIdentityHandoffPhase,
+  ].flatMap((step) =>
+    (step.handoffPhase?.outputs ?? []).map((artifact) => ({
+      id: `${step.handoffPhase.id}:${step.handoffPhase.step}:${artifact}`,
+      phaseId: step.handoffPhase.id,
+      step: step.handoffPhase.step,
+      script: step.script,
+      kind: step.kind ?? "node",
+      artifact,
+    })),
+  );
+  assert.deepEqual(actualHandoffPhaseOutputs, devTestGameHandoffPhaseOutputs);
   assert.deepEqual(
     handoffPhaseStep({
       phaseId: "hosted-evidence",
