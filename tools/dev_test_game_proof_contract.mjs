@@ -4760,6 +4760,7 @@ export function buildDevTestGameProofRun(session, options = {}) {
       "concurrent-host-publish-race-reload",
       "Concurrent host publish race reloads official count truth",
       {
+        game: hardening.concurrentHostPublishRace?.game ?? null,
         firstHostRouteStatus:
           hardening.concurrentHostPublishRace?.roleReloadAfterRace
             ?.firstHostRouteStatus ?? null,

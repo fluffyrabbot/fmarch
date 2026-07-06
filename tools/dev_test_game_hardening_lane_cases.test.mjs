@@ -35,6 +35,7 @@ import {
   hostStandaloneRaceCoverageCellCases,
   hostStandaloneRaceCoverageCellDefinitions,
   hostStandaloneRaceReloadLaneIds,
+  hostStandaloneRaceReloadSpineTargetCases,
   hostStandaloneStaleControlLaneIds,
   hostStaleAdvanceControlCase,
   hostStaleAdvanceControlLaneId,
@@ -510,7 +511,7 @@ test("hardening lane cases share completed-game spine rows", () => {
 
 test("host stale-control production callers use the shared recovery facade", async () => {
   const callerPaths = [
-    "tools/dev_test_game_next_action.mjs",
+    "tools/dev_test_game_next_action_recovery_traces.mjs",
     "tools/dev_test_game_release_readiness.mjs",
     "tools/dev_test_game_proof_contract.mjs",
     "tools/dev_test_game_core_loop_scenarios.mjs",
@@ -575,7 +576,7 @@ test("player recovery production callers use the shared scenario module", async 
 
 test("stale conflict production callers use the shared scenario module", async () => {
   const callerPaths = [
-    "tools/dev_test_game_next_action.mjs",
+    "tools/dev_test_game_next_action_recovery_traces.mjs",
     "tools/dev_test_game_release_readiness.mjs",
     "tools/dev_test_game_proof_contract.mjs",
     "tools/dev_test_game_hardening_admin_proof.mjs",
@@ -847,6 +848,20 @@ test("hardening lane cases share host race/reload IDs", () => {
   assert.deepEqual(hostStandaloneRaceReloadLaneIds, [
     ...hostPublishRaceLaneIds,
     ...hostLifecycleRaceLaneIds,
+  ]);
+  assert.deepEqual(hostStandaloneRaceReloadSpineTargetCases(), [
+    {
+      targetKey: "hostConcurrentPublishRaceReload",
+      featureSlotId: "host-concurrent-publish-race-reload",
+      reloadLaneId: hostPublishRaceLaneIds[1],
+      role: "host",
+    },
+    {
+      targetKey: "hostConcurrentLifecycleRaceReload",
+      featureSlotId: "host-concurrent-lifecycle-race-reload",
+      reloadLaneId: hostLifecycleRaceLaneIds[1],
+      role: "host",
+    },
   ]);
   assert.deepEqual(
     hostStandaloneRaceCoverageCellCases().map((cell) => ({

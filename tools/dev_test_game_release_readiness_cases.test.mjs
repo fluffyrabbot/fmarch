@@ -105,6 +105,9 @@ import {
   playerHostRaceCoverageCellCases,
 } from "./dev_test_game_cross_role_race_scenarios.mjs";
 import {
+  hostStandaloneRaceReloadSpineTargetCases,
+} from "./dev_test_game_host_stale_recovery_scenarios.mjs";
+import {
   cohostStaleDeadlineReconnectLaneId,
   hostStaleAdvanceReconnectLaneId,
   hostStaleDeadlineReconnectLaneId,
@@ -176,6 +179,13 @@ const hardeningConcurrentRaceFeatureTargetExpectations = Object.freeze([
     featureSlotId: "host-concurrent-mixed-advance-race-reload",
     rowId: hostMixedAdvanceRaceSpineLane.reloadProofCheckId,
   }),
+  ...hostStandaloneRaceReloadSpineTargetCases().map((target) =>
+    Object.freeze({
+      targetKey: target.targetKey,
+      featureSlotId: target.featureSlotId,
+      rowId: target.reloadLaneId,
+    }),
+  ),
   Object.freeze({
     targetKey: "playerHostVoteResolveRaceReload",
     featureSlotId: "player-host-vote-resolve-race-reload",

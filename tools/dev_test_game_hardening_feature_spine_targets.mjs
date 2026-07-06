@@ -19,6 +19,9 @@ import {
   playerHostRaceCoverageCellCases,
 } from "./dev_test_game_cross_role_race_scenarios.mjs";
 import {
+  hostStandaloneRaceReloadSpineTargetCases,
+} from "./dev_test_game_host_stale_recovery_scenarios.mjs";
+import {
   replacementRaceReloadSpineTargetCases,
 } from "./dev_test_game_replacement_private_scenario_cases.mjs";
 import {
@@ -58,6 +61,23 @@ const playerActionAdvanceRaceSpineCell = crossRoleRaceCellById.get(
 );
 const cohostDeadlineResolveRaceSpineCell = crossRoleRaceCellById.get(
   "cohost-deadline-vs-host-resolve",
+);
+const hostStandaloneRaceReloadSpineTargets =
+  hostStandaloneRaceReloadSpineTargetCases();
+const hostStandaloneRaceReloadHardeningFeatureSpineTargetRows = Object.freeze(
+  Object.fromEntries(
+    hostStandaloneRaceReloadSpineTargets.map((target) => [
+      target.targetKey,
+      Object.freeze({
+        featureSlotId: target.featureSlotId,
+        sourceCheckId: hardeningFeatureSpineSourceCheckId,
+        cycleId: hardeningFeatureSpineCycleIds.concurrentRace,
+        roleUrlId: target.reloadLaneId,
+        checkpointId: target.reloadLaneId,
+        adminCheckId: target.reloadLaneId,
+      }),
+    ]),
+  ),
 );
 const replacementRaceReloadSpineTargets =
   replacementRaceReloadSpineTargetCases();
@@ -173,6 +193,7 @@ export const hardeningFeatureSpineTargetRows = Object.freeze({
     checkpointId: hostMixedAdvanceRaceSpineLane.reloadProofCheckId,
     adminCheckId: hostMixedAdvanceRaceSpineLane.reloadProofCheckId,
   }),
+  ...hostStandaloneRaceReloadHardeningFeatureSpineTargetRows,
   playerHostVoteResolveRaceReload: Object.freeze({
     featureSlotId: "player-host-vote-resolve-race-reload",
     sourceCheckId: hardeningFeatureSpineSourceCheckId,
@@ -249,6 +270,12 @@ export const hardeningSynthesizedRoleUrlConcurrentRaceFeatureSpineTargetRows =
       row: hardeningFeatureSpineTargetRows.hostConcurrentMixedAdvanceRaceReload,
       role: "host",
     }),
+    ...hostStandaloneRaceReloadSpineTargets.map((target) =>
+      Object.freeze({
+        row: hardeningFeatureSpineTargetRows[target.targetKey],
+        role: target.role,
+      }),
+    ),
     Object.freeze({
       row: hardeningFeatureSpineTargetRows.playerHostVoteResolveRaceReload,
       role: "host",

@@ -345,6 +345,21 @@ export const hostStandaloneRaceCoverageCellDefinitions = Object.freeze([
   }),
 ]);
 
+const hostStandaloneRaceReloadSpineTargetDefinitions = Object.freeze([
+  Object.freeze({
+    targetKey: "hostConcurrentPublishRaceReload",
+    featureSlotId: "host-concurrent-publish-race-reload",
+    reloadLaneId: hostStandaloneRaceCoverageCellDefinitions[0].reloadLaneId,
+    role: "host",
+  }),
+  Object.freeze({
+    targetKey: "hostConcurrentLifecycleRaceReload",
+    featureSlotId: "host-concurrent-lifecycle-race-reload",
+    reloadLaneId: hostStandaloneRaceCoverageCellDefinitions[1].reloadLaneId,
+    role: "host",
+  }),
+]);
+
 export function hostPhaseRaceCoverageCellCases() {
   return hostPhaseRaceCoverageCellDefinitions.map(cloneRaceCoverageCell);
 }
@@ -369,6 +384,12 @@ export function hostStandaloneRaceCoverageCellCase(id) {
     throw new Error(`unknown host standalone race coverage cell: ${id}`);
   }
   return cloneRaceCoverageCell(cell);
+}
+
+export function hostStandaloneRaceReloadSpineTargetCases() {
+  return hostStandaloneRaceReloadSpineTargetDefinitions.map((target) => ({
+    ...target,
+  }));
 }
 
 export const hostRaceReloadLaneIds = Object.freeze(

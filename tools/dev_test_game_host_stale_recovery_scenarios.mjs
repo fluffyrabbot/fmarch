@@ -31,6 +31,7 @@ export {
   hostStandaloneRaceCoverageCellDefinitions,
   hostStandaloneRaceCoverageCellIds,
   hostStandaloneRaceReloadLaneIds,
+  hostStandaloneRaceReloadSpineTargetCases,
   hostStandaloneStaleControlLaneIds,
   hostStaleAdvanceControlCase,
   hostStaleAdvanceControlLaneId,

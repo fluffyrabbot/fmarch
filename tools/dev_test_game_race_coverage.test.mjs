@@ -16,6 +16,7 @@ import {
   hostPhaseRaceCoverageCellDefinitions,
   hostStandaloneRaceCoverageCellCases,
   hostStandaloneRaceCoverageCellDefinitions,
+  hostStandaloneRaceReloadSpineTargetCases,
 } from "./dev_test_game_host_stale_recovery_scenarios.mjs";
 import {
   cohostDeadlineRaceCoveragePromotedReloadGroup,
@@ -124,6 +125,28 @@ test("race coverage imports standalone host race cells from shared scenarios", a
   assert.notEqual(
     hostStandaloneRaceCoverageCellCases()[0],
     hostStandaloneRaceCoverageCellDefinitions[0],
+  );
+  assert.deepEqual(
+    hostStandaloneRaceReloadSpineTargetCases().map((target) => ({
+      targetKey: target.targetKey,
+      featureSlotId: target.featureSlotId,
+      reloadLaneId: target.reloadLaneId,
+      role: target.role,
+    })),
+    [
+      {
+        targetKey: "hostConcurrentPublishRaceReload",
+        featureSlotId: "host-concurrent-publish-race-reload",
+        reloadLaneId: "concurrent-host-publish-race-reload",
+        role: "host",
+      },
+      {
+        targetKey: "hostConcurrentLifecycleRaceReload",
+        featureSlotId: "host-concurrent-lifecycle-race-reload",
+        reloadLaneId: "concurrent-host-lifecycle-race-reload",
+        role: "host",
+      },
+    ],
   );
 
   const source = await readFile("tools/dev_test_game_race_coverage.mjs", "utf8");

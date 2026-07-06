@@ -18122,6 +18122,7 @@ function hostPublishRaceSurfaceFixture() {
       label: "Concurrent host publish race reloads official count truth",
       status: "passed",
       evidence: {
+        game: "publish-race-game-a",
         firstHostRouteStatus: 200,
         secondHostRouteStatus: 200,
         playerRouteStatus: 200,
@@ -20437,16 +20438,24 @@ function hardeningRoleUrlHrefsFixture() {
       ]),
     ),
   };
+  const synthesizedTargetsByRoleUrlId = new Map(
+    [
+      ...hardeningSynthesizedRoleUrlReconnectFeatureSpineTargetRows,
+      ...hardeningSynthesizedRoleUrlConcurrentRaceFeatureSpineTargetRows,
+    ].map((target) => [target.row.roleUrlId, target]),
+  );
   for (const row of Object.values(hardeningFeatureSpineTargetRows)) {
     if (roleUrlHrefs[row.roleUrlId] === undefined) {
+      const target = synthesizedTargetsByRoleUrlId.get(row.roleUrlId);
       roleUrlHrefs[row.roleUrlId] = hardeningSpineRoleUrlFromGame({
         frontendBaseUrl: "http://127.0.0.1:5173",
         game: `fixture-${row.roleUrlId}`,
         role:
-          row.roleUrlId === "concurrent-replacement-private-post-race-reload"
+          target?.role ??
+          (row.roleUrlId === "concurrent-replacement-private-post-race-reload"
             ? "private-channel"
-            : "player",
-        channelId: "private:mafia_day_chat",
+            : "player"),
+        channelId: target?.channelId ?? "private:mafia_day_chat",
       });
     }
   }
