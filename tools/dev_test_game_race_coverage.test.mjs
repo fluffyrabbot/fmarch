@@ -6,6 +6,7 @@ import {
   completedGameRaceCoverageCellDefinitions,
 } from "./dev_test_game_core_loop_completed_scenarios.mjs";
 import {
+  crossRoleRaceReloadSpineTargetCases,
   cohostHostRaceCoverageCellCases,
   cohostHostRaceCoverageCellDefinitions,
   playerHostRaceCoverageCellCases,
@@ -14,6 +15,7 @@ import {
 import {
   hostPhaseRaceCoverageCellCases,
   hostPhaseRaceCoverageCellDefinitions,
+  hostPhaseRaceReloadSpineTargetCases,
   hostStandaloneRaceCoverageCellCases,
   hostStandaloneRaceCoverageCellDefinitions,
   hostStandaloneRaceReloadSpineTargetCases,
@@ -92,6 +94,40 @@ test("race coverage imports host phase race cells from shared scenarios", () => 
   assert.notEqual(
     hostPhaseRaceCoverageCellCases()[0].commandFacts,
     hostPhaseRaceCoverageCellDefinitions[0].commandFacts,
+  );
+  assert.deepEqual(
+    hostPhaseRaceReloadSpineTargetCases().map((target) => ({
+      targetKey: target.targetKey,
+      featureSlotId: target.featureSlotId,
+      reloadLaneId: target.reloadLaneId,
+      role: target.role,
+    })),
+    [
+      {
+        targetKey: "hostConcurrentResolveRaceReload",
+        featureSlotId: "host-concurrent-resolve-race-reload",
+        reloadLaneId: "concurrent-host-resolve-race-reload",
+        role: "host",
+      },
+      {
+        targetKey: "hostConcurrentAdvanceRaceReload",
+        featureSlotId: "host-concurrent-advance-race-reload",
+        reloadLaneId: "concurrent-host-advance-race-reload",
+        role: "host",
+      },
+      {
+        targetKey: "hostConcurrentDeadlineAdvanceRaceReload",
+        featureSlotId: "host-concurrent-deadline-advance-race-reload",
+        reloadLaneId: "concurrent-host-deadline-advance-race-reload",
+        role: "host",
+      },
+      {
+        targetKey: "hostConcurrentMixedAdvanceRaceReload",
+        featureSlotId: "host-concurrent-mixed-advance-race-reload",
+        reloadLaneId: "concurrent-host-mixed-advance-race-reload",
+        role: "host",
+      },
+    ],
   );
 });
 
@@ -216,6 +252,34 @@ test("race coverage imports cross-role race cells from shared scenarios", async 
   assert.notEqual(
     playerHostRaceCoverageCellCases()[0],
     playerHostRaceCoverageCellDefinitions[0],
+  );
+  assert.deepEqual(
+    crossRoleRaceReloadSpineTargetCases().map((target) => ({
+      targetKey: target.targetKey,
+      featureSlotId: target.featureSlotId,
+      reloadLaneId: target.reloadLaneId,
+      role: target.role,
+    })),
+    [
+      {
+        targetKey: "playerHostVoteResolveRaceReload",
+        featureSlotId: "player-host-vote-resolve-race-reload",
+        reloadLaneId: "concurrent-player-vote-resolve-race-reload",
+        role: "host",
+      },
+      {
+        targetKey: "playerHostActionAdvanceRaceReload",
+        featureSlotId: "player-host-action-advance-race-reload",
+        reloadLaneId: "concurrent-player-action-advance-race-reload",
+        role: "host",
+      },
+      {
+        targetKey: "cohostHostDeadlineResolveRaceReload",
+        featureSlotId: "cohost-host-deadline-resolve-race-reload",
+        reloadLaneId: "concurrent-cohost-deadline-resolve-race-reload",
+        role: "host",
+      },
+    ],
   );
 
   const source = await readFile("tools/dev_test_game_race_coverage.mjs", "utf8");

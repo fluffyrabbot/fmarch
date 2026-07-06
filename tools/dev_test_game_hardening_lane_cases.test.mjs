@@ -21,6 +21,7 @@ import {
   hostStaleAdvanceReconnectLaneId,
   hostPhaseRaceCoverageCellCases,
   hostPhaseRaceCoverageCellDefinitions,
+  hostPhaseRaceReloadSpineTargetCases,
   hostStaleControlCoverageFamilies,
   hostStaleControlCoverageFamilyDefinitions,
   hostPhaseStaleControlCase,
@@ -112,6 +113,7 @@ import {
 } from "./dev_test_game_core_loop_completed_terminal_scenario_assertions.mjs";
 import {
   cohostHostRaceLaneIds,
+  crossRoleRaceReloadSpineTargetCases,
   crossRoleRaceLaneIds,
   playerHostRaceLaneIds,
 } from "./dev_test_game_cross_role_race_scenarios.mjs";
@@ -542,6 +544,7 @@ test("hardening lane cases share completed-game spine rows", () => {
 test("host stale-control production callers use the shared recovery facade", async () => {
   const callerPaths = [
     "tools/dev_test_game_next_action_recovery_traces.mjs",
+    "tools/dev_test_game_hardening_feature_spine_targets.mjs",
     "tools/dev_test_game_release_readiness.mjs",
     "tools/dev_test_game_proof_contract.mjs",
     "tools/dev_test_game_core_loop_scenarios.mjs",
@@ -867,6 +870,40 @@ test("hardening lane cases share host race/reload IDs", () => {
     ]),
     hostRaceReloadLaneIds,
   );
+  assert.deepEqual(
+    hostPhaseRaceReloadSpineTargetCases().map((target) => [
+      target.targetKey,
+      target.featureSlotId,
+      target.reloadLaneId,
+      target.role,
+    ]),
+    [
+      [
+        "hostConcurrentResolveRaceReload",
+        "host-concurrent-resolve-race-reload",
+        "concurrent-host-resolve-race-reload",
+        "host",
+      ],
+      [
+        "hostConcurrentAdvanceRaceReload",
+        "host-concurrent-advance-race-reload",
+        "concurrent-host-advance-race-reload",
+        "host",
+      ],
+      [
+        "hostConcurrentDeadlineAdvanceRaceReload",
+        "host-concurrent-deadline-advance-race-reload",
+        "concurrent-host-deadline-advance-race-reload",
+        "host",
+      ],
+      [
+        "hostConcurrentMixedAdvanceRaceReload",
+        "host-concurrent-mixed-advance-race-reload",
+        "concurrent-host-mixed-advance-race-reload",
+        "host",
+      ],
+    ],
+  );
   assert.deepEqual(hostPublishRaceLaneIds, [
     "concurrent-host-publish-race",
     "concurrent-host-publish-race-reload",
@@ -1093,8 +1130,37 @@ test("hardening lane cases share cross-role race IDs", async () => {
     "concurrent-vote-race-reload",
     ...playerHostRaceLaneIds,
   ]);
+  assert.deepEqual(
+    crossRoleRaceReloadSpineTargetCases().map((target) => [
+      target.targetKey,
+      target.featureSlotId,
+      target.reloadLaneId,
+      target.role,
+    ]),
+    [
+      [
+        "playerHostVoteResolveRaceReload",
+        "player-host-vote-resolve-race-reload",
+        "concurrent-player-vote-resolve-race-reload",
+        "host",
+      ],
+      [
+        "playerHostActionAdvanceRaceReload",
+        "player-host-action-advance-race-reload",
+        "concurrent-player-action-advance-race-reload",
+        "host",
+      ],
+      [
+        "cohostHostDeadlineResolveRaceReload",
+        "cohost-host-deadline-resolve-race-reload",
+        "concurrent-cohost-deadline-resolve-race-reload",
+        "host",
+      ],
+    ],
+  );
 
   for (const callerPath of [
+    "tools/dev_test_game_hardening_feature_spine_targets.mjs",
     "tools/dev_test_game_hardening_scenarios.mjs",
     "tools/dev_test_game_seed_scenario_cases.mjs",
     "tools/dev_test_game_player_recovery_scenarios.mjs",

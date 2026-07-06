@@ -18,6 +18,7 @@ export {
   hostPhaseRaceCoverageCellCases,
   hostPhaseRaceCoverageCellDefinitions,
   hostPhaseRaceCoverageCellIds,
+  hostPhaseRaceReloadSpineTargetCases,
   hostPhaseStaleControlCase,
   hostPhaseStaleControlCaseDefinitions,
   hostPhaseStaleControlCases,

@@ -37,6 +37,27 @@ export const cohostHostRaceCoverageCellDefinitions = Object.freeze([
   }),
 ]);
 
+const crossRoleRaceReloadSpineTargetDefinitions = Object.freeze([
+  Object.freeze({
+    targetKey: "playerHostVoteResolveRaceReload",
+    featureSlotId: "player-host-vote-resolve-race-reload",
+    reloadLaneId: playerHostRaceCoverageCellDefinitions[0].reloadLaneId,
+    role: "host",
+  }),
+  Object.freeze({
+    targetKey: "playerHostActionAdvanceRaceReload",
+    featureSlotId: "player-host-action-advance-race-reload",
+    reloadLaneId: playerHostRaceCoverageCellDefinitions[1].reloadLaneId,
+    role: "host",
+  }),
+  Object.freeze({
+    targetKey: "cohostHostDeadlineResolveRaceReload",
+    featureSlotId: "cohost-host-deadline-resolve-race-reload",
+    reloadLaneId: cohostHostRaceCoverageCellDefinitions[0].reloadLaneId,
+    role: "host",
+  }),
+]);
+
 export function playerHostRaceCoverageCellCases() {
   return playerHostRaceCoverageCellDefinitions.map(cloneRaceCoverageCell);
 }
@@ -51,6 +72,12 @@ export function cohostHostRaceCoverageCellCases() {
 
 export function cohostHostRaceCoverageCellIds() {
   return cohostHostRaceCoverageCellCases().map((cell) => cell.id);
+}
+
+export function crossRoleRaceReloadSpineTargetCases() {
+  return crossRoleRaceReloadSpineTargetDefinitions.map((target) => ({
+    ...target,
+  }));
 }
 
 export const playerHostRaceLaneIds = Object.freeze(

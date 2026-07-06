@@ -345,6 +345,33 @@ export const hostStandaloneRaceCoverageCellDefinitions = Object.freeze([
   }),
 ]);
 
+const hostPhaseRaceReloadSpineTargetDefinitions = Object.freeze([
+  Object.freeze({
+    targetKey: "hostConcurrentResolveRaceReload",
+    featureSlotId: "host-concurrent-resolve-race-reload",
+    reloadLaneId: hostPhaseRaceCoverageCellDefinitions[0].reloadLaneId,
+    role: "host",
+  }),
+  Object.freeze({
+    targetKey: "hostConcurrentAdvanceRaceReload",
+    featureSlotId: "host-concurrent-advance-race-reload",
+    reloadLaneId: hostPhaseRaceCoverageCellDefinitions[1].reloadLaneId,
+    role: "host",
+  }),
+  Object.freeze({
+    targetKey: "hostConcurrentDeadlineAdvanceRaceReload",
+    featureSlotId: "host-concurrent-deadline-advance-race-reload",
+    reloadLaneId: hostPhaseRaceCoverageCellDefinitions[2].reloadLaneId,
+    role: "host",
+  }),
+  Object.freeze({
+    targetKey: "hostConcurrentMixedAdvanceRaceReload",
+    featureSlotId: "host-concurrent-mixed-advance-race-reload",
+    reloadLaneId: hostPhaseRaceCoverageCellDefinitions[3].reloadLaneId,
+    role: "host",
+  }),
+]);
+
 const hostStandaloneRaceReloadSpineTargetDefinitions = Object.freeze([
   Object.freeze({
     targetKey: "hostConcurrentPublishRaceReload",
@@ -384,6 +411,12 @@ export function hostStandaloneRaceCoverageCellCase(id) {
     throw new Error(`unknown host standalone race coverage cell: ${id}`);
   }
   return cloneRaceCoverageCell(cell);
+}
+
+export function hostPhaseRaceReloadSpineTargetCases() {
+  return hostPhaseRaceReloadSpineTargetDefinitions.map((target) => ({
+    ...target,
+  }));
 }
 
 export function hostStandaloneRaceReloadSpineTargetCases() {
