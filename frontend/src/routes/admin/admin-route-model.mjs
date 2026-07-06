@@ -207,11 +207,25 @@ function artifactSummaryValue({ id, text, emphasized = false }) {
   });
 }
 
-function artifactSummaryRow({ id, testId, values }) {
+function artifactSummarySubentry({ id, testId, values }) {
   return Object.freeze({
     id: String(id),
     testId: String(testId ?? `admin-audit-${id}`),
     values: Object.freeze(values.map((value) => artifactSummaryValue(value))),
+  });
+}
+
+function artifactSummaryRow({ id, testId, values, subentries = [] }) {
+  const normalizedSubentries = subentries.map((subentry) =>
+    artifactSummarySubentry(subentry),
+  );
+  return Object.freeze({
+    id: String(id),
+    testId: String(testId ?? `admin-audit-${id}`),
+    values: Object.freeze(values.map((value) => artifactSummaryValue(value))),
+    ...(normalizedSubentries.length === 0
+      ? {}
+      : { subentries: Object.freeze(normalizedSubentries) }),
   });
 }
 
@@ -297,6 +311,246 @@ function buildHostedEvidenceLaneSummarySections(artifactSummary) {
       ],
     }),
   ]);
+}
+
+function buildHostedIdentityEvidenceSummarySections(artifactSummary) {
+  return Object.freeze([
+    ...hostedIdentityPacketSummarySections(artifactSummary.redactedIntakePacket),
+    ...hostedIdentityProgressionSummarySections(
+      artifactSummary.progressionSummary,
+    ),
+    ...hostedIdentityRoleSurfaceContractSummarySections(
+      artifactSummary.roleSurfaceContractDiff,
+    ),
+    ...hostedIdentityAdapterContractSummarySections(
+      artifactSummary.identityAdapterContractComparison,
+    ),
+  ]);
+}
+
+function hostedIdentityPacketSummarySections(packet) {
+  if (!Array.isArray(packet?.sections) || packet.sections.length === 0) {
+    return [];
+  }
+  return [
+    buildArtifactSummarySection({
+      id: "hosted-identity-packet",
+      heading: "Hosted identity packet",
+      rows: [
+        {
+          id: "hosted-identity-packet-summary-status",
+          values: [
+            { id: "status", text: packet.status, emphasized: true },
+            {
+              id: "providedSections",
+              text: `${packet.providedSectionCount}/${packet.sectionCount} sections provided`,
+            },
+            {
+              id: "missingSections",
+              text: `${packet.missingSectionCount} sections missing`,
+            },
+          ],
+        },
+        {
+          id: "hosted-identity-packet-summary-inputs",
+          values: [
+            {
+              id: "providedInputs",
+              text: `${packet.providedInputCount}/${packet.requiredInputCount} inputs provided`,
+              emphasized: true,
+            },
+            {
+              id: "missingInputs",
+              text: `${packet.missingInputCount} inputs missing`,
+            },
+          ],
+        },
+        {
+          id: "hosted-identity-packet-summary-redacted-refs",
+          values: [
+            {
+              id: "redactedRefs",
+              text: `${packet.redactedEvidenceRefCount} redacted refs`,
+              emphasized: true,
+            },
+          ],
+        },
+        ...packet.sections.map((section) =>
+          hostedIdentityPacketSectionSummaryRow(section),
+        ),
+      ],
+    }),
+  ];
+}
+
+function hostedIdentityPacketSectionSummaryRow(section) {
+  const requiredInputIds = Array.isArray(section?.requiredInputIds)
+    ? section.requiredInputIds
+    : [];
+  const providedInputIds = Array.isArray(section?.providedInputIds)
+    ? section.providedInputIds
+    : [];
+  const redactedEvidenceRefs = Array.isArray(section?.redactedEvidenceRefs)
+    ? section.redactedEvidenceRefs
+    : [];
+  return {
+    id: `hosted-identity-packet-section-${section.id}`,
+    values: [
+      { id: "label", text: section.label, emphasized: true },
+      { id: "status", text: section.status },
+      {
+        id: "redactedEvidenceRefCount",
+        text: `${section.redactedEvidenceRefCount} redacted refs`,
+      },
+      {
+        id: "missingInputs",
+        text: Array.isArray(section.missingInputs)
+          ? section.missingInputs.join(", ")
+          : "",
+      },
+    ],
+    subentries: [
+      ...requiredInputIds.map((inputId) => ({
+        id: `hosted-identity-packet-input-${section.id}-${inputId}`,
+        values: [
+          { id: "inputId", text: inputId, emphasized: true },
+          {
+            id: "status",
+            text: providedInputIds.includes(inputId) ? "provided" : "missing",
+          },
+        ],
+      })),
+      ...redactedEvidenceRefs.map((ref) => ({
+        id: `hosted-identity-packet-ref-${section.id}-${ref.id}`,
+        values: [
+          { id: "evidenceFamily", text: ref.evidenceFamily, emphasized: true },
+          { id: "kind", text: ref.kind },
+          { id: "capturedAt", text: ref.capturedAt },
+          { id: "retentionWindow", text: ref.retentionWindow },
+          { id: "exportLocator", text: ref.exportLocator },
+        ],
+      })),
+    ],
+  };
+}
+
+function hostedIdentityProgressionSummarySections(summary) {
+  if (!Array.isArray(summary?.progressions) || summary.progressions.length === 0) {
+    return [];
+  }
+  return [
+    buildArtifactSummarySection({
+      id: "hosted-identity-progression-summary",
+      heading: "Hosted identity recovery ladder",
+      rows: [
+        {
+          id: "hosted-identity-progression-summary",
+          values: [
+            { id: "status", text: summary.status, emphasized: true },
+            {
+              id: "progressionCount",
+              text: `${summary.progressionCount} progression rows`,
+            },
+            { id: "nextCommand", text: summary.nextCommand },
+            { id: "nextProofTarget", text: summary.nextProofTarget },
+            { id: "proofBoundary", text: summary.proofBoundary },
+          ],
+        },
+        ...summary.progressions.map((progression) => ({
+          id: `hosted-identity-progression-${progression.id}`,
+          values: [
+            { id: "field", text: progression.field, emphasized: true },
+            { id: "checkId", text: progression.checkId },
+            { id: "missingInputId", text: progression.missingInputId },
+            { id: "adminProofMode", text: progression.adminProofMode },
+            { id: "missingFixturePath", text: progression.missingFixturePath },
+            { id: "recoveredFixturePath", text: progression.recoveredFixturePath },
+            {
+              id: "adminProofFixturePath",
+              text: progression.adminProofFixturePath,
+            },
+            { id: "proofCommand", text: progression.proofCommand },
+            { id: "evidencePath", text: progression.evidencePath },
+            { id: "adminProofTarget", text: progression.adminProofTarget },
+            { id: "roleUrl", text: progression.roleUrl },
+            { id: "firstMissingInputId", text: progression.firstMissingInputId },
+            { id: "firstMissingCheckId", text: progression.firstMissingCheckId },
+          ],
+        })),
+      ],
+    }),
+  ];
+}
+
+function hostedIdentityRoleSurfaceContractSummarySections(diff) {
+  if (diff === null || typeof diff !== "object") {
+    return [];
+  }
+  return [
+    buildArtifactSummarySection({
+      id: "hosted-identity-role-surface-contract",
+      heading: "Role-surface contract",
+      rows: [
+        {
+          id: "hosted-identity-role-surface-contract-diff-summary",
+          values: [
+            { id: "status", text: diff.status, emphasized: true },
+            { id: "architectureId", text: diff.architectureId },
+            {
+              id: "mismatchCount",
+              text: `${diff.mismatchCount} mismatches`,
+            },
+          ],
+        },
+        ...(diff.mismatches ?? []).map((mismatch) => ({
+          id: `hosted-identity-role-surface-contract-mismatch-${mismatch.id}`,
+          values: [
+            { id: "path", text: mismatch.path, emphasized: true },
+            { id: "expected", text: mismatch.expected },
+            { id: "actual", text: mismatch.actual },
+          ],
+        })),
+      ],
+    }),
+  ];
+}
+
+function hostedIdentityAdapterContractSummarySections(comparison) {
+  if (comparison === null || typeof comparison !== "object") {
+    return [];
+  }
+  return [
+    buildArtifactSummarySection({
+      id: "hosted-identity-adapter-contract-comparison",
+      heading: "Hosted adapter contract",
+      rows: [
+        {
+          id: "hosted-identity-adapter-contract-comparison-summary",
+          values: [
+            { id: "status", text: comparison.status, emphasized: true },
+            { id: "localAdapterId", text: comparison.localAdapterId },
+            { id: "hostedAdapterId", text: comparison.hostedAdapterId },
+            {
+              id: "roleSurfaceContractStatus",
+              text: comparison.roleSurfaceContractStatus,
+            },
+            {
+              id: "mismatchCount",
+              text: `${comparison.mismatchCount} mismatches`,
+            },
+          ],
+        },
+        ...(comparison.mismatches ?? []).map((mismatch) => ({
+          id: `hosted-identity-adapter-contract-comparison-mismatch-${mismatch.id}`,
+          values: [
+            { id: "path", text: mismatch.path, emphasized: true },
+            { id: "expected", text: mismatch.expected },
+            { id: "actual", text: mismatch.actual },
+          ],
+        })),
+      ],
+    }),
+  ];
 }
 
 function buildHostedMatrixSummarySections(artifactSummary) {
@@ -1070,6 +1324,36 @@ export function normalizeLocalHostedIdentityEvidenceAudit(
     normalizeHostedIdentityProgressionSummary(
       hostedIdentityProgressionSummary,
     );
+  const artifactSummary = Object.freeze({
+    rawEvidencePath: String(hostedIdentityEvidence.target?.rawEvidencePath ?? ""),
+    placeholderFixturePath: String(
+      hostedIdentityEvidence.target?.placeholderFixturePath ??
+        hostedIdentityEvidence.hostedHandoffChecklist?.placeholderFixturePath ??
+        "",
+    ),
+    rawEvidenceStatus: String(
+      hostedIdentityEvidence.target?.rawEvidenceStatus ?? "unknown",
+    ),
+    blockedCheckCount: blockedCheckIds.length,
+    nextCommand: String(hostedIdentityEvidence.nextCommand ?? ""),
+    nextProofTarget: String(hostedIdentityEvidence.nextProofTarget ?? ""),
+    releaseReady: hostedIdentityEvidence.releaseReady === true,
+    productionReady: hostedIdentityEvidence.productionReady === true,
+    roleSurfaceContractDiff: normalizeHostedIdentityRoleSurfaceContractDiff(
+      hostedIdentityEvidence.target?.roleSurfaceContractDiff,
+    ),
+    identityAdapterContractComparison:
+      normalizeHostedIdentityAdapterContractComparison(
+        hostedIdentityEvidence.target?.identityAdapterContractComparison,
+      ),
+    identityProviderBoundary: normalizeHostedIdentityProviderBoundary(
+      hostedIdentityEvidence.target?.identityProviderBoundary,
+    ),
+    redactedIntakePacket: normalizeHostedIdentityRedactedIntakePacket(
+      hostedIdentityEvidence.target?.redactedIntakePacket,
+    ),
+    ...(progressionSummary === null ? {} : { progressionSummary }),
+  });
   return Object.freeze({
     id: localAdminAuditIds.hostedIdentityEvidence,
     label: "Hosted identity evidence",
@@ -1133,38 +1417,9 @@ export function normalizeLocalHostedIdentityEvidenceAudit(
     hostedHandoffReceiptHeadings: hostedHandoffReceiptHeadingsForAudit(
       localAdminAuditIds.hostedIdentityEvidence,
     ),
-    artifactSummary: Object.freeze({
-      rawEvidencePath: String(
-        hostedIdentityEvidence.target?.rawEvidencePath ?? "",
-      ),
-      placeholderFixturePath: String(
-        hostedIdentityEvidence.target?.placeholderFixturePath ??
-          hostedIdentityEvidence.hostedHandoffChecklist?.placeholderFixturePath ??
-          "",
-      ),
-      rawEvidenceStatus: String(
-        hostedIdentityEvidence.target?.rawEvidenceStatus ?? "unknown",
-      ),
-      blockedCheckCount: blockedCheckIds.length,
-      nextCommand: String(hostedIdentityEvidence.nextCommand ?? ""),
-      nextProofTarget: String(hostedIdentityEvidence.nextProofTarget ?? ""),
-      releaseReady: hostedIdentityEvidence.releaseReady === true,
-      productionReady: hostedIdentityEvidence.productionReady === true,
-      roleSurfaceContractDiff: normalizeHostedIdentityRoleSurfaceContractDiff(
-        hostedIdentityEvidence.target?.roleSurfaceContractDiff,
-      ),
-      identityAdapterContractComparison:
-        normalizeHostedIdentityAdapterContractComparison(
-          hostedIdentityEvidence.target?.identityAdapterContractComparison,
-        ),
-      identityProviderBoundary: normalizeHostedIdentityProviderBoundary(
-        hostedIdentityEvidence.target?.identityProviderBoundary,
-      ),
-      redactedIntakePacket: normalizeHostedIdentityRedactedIntakePacket(
-        hostedIdentityEvidence.target?.redactedIntakePacket,
-      ),
-      ...(progressionSummary === null ? {} : { progressionSummary }),
-    }),
+    artifactSummary,
+    artifactSummarySections:
+      buildHostedIdentityEvidenceSummarySections(artifactSummary),
   });
 }
 

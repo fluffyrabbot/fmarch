@@ -543,173 +543,6 @@
         </ol>
       </section>
     {/if}
-    {#if data.audit.artifactSummary?.redactedIntakePacket?.sections?.length > 0}
-      <section
-        class="admin-audit-detail__group"
-        data-testid="admin-audit-detail-hosted-identity-packet"
-      >
-        <h2>Hosted identity packet</h2>
-        <ol class="admin-audit-detail__entries">
-          <li
-            class="admin-audit-detail__entry admin-audit-detail__entry--stack"
-            data-testid="admin-audit-hosted-identity-packet-summary-status"
-          >
-            <strong>{data.audit.artifactSummary.redactedIntakePacket.status}</strong>
-            <span>{data.audit.artifactSummary.redactedIntakePacket.providedSectionCount}/{data.audit.artifactSummary.redactedIntakePacket.sectionCount} sections provided</span>
-            <span>{data.audit.artifactSummary.redactedIntakePacket.missingSectionCount} sections missing</span>
-          </li>
-          <li
-            class="admin-audit-detail__entry admin-audit-detail__entry--stack"
-            data-testid="admin-audit-hosted-identity-packet-summary-inputs"
-          >
-            <strong>{data.audit.artifactSummary.redactedIntakePacket.providedInputCount}/{data.audit.artifactSummary.redactedIntakePacket.requiredInputCount} inputs provided</strong>
-            <span>{data.audit.artifactSummary.redactedIntakePacket.missingInputCount} inputs missing</span>
-          </li>
-          <li
-            class="admin-audit-detail__entry admin-audit-detail__entry--stack"
-            data-testid="admin-audit-hosted-identity-packet-summary-redacted-refs"
-          >
-            <strong>{data.audit.artifactSummary.redactedIntakePacket.redactedEvidenceRefCount} redacted refs</strong>
-          </li>
-          {#each data.audit.artifactSummary.redactedIntakePacket.sections as section}
-            <li
-              class="admin-audit-detail__entry admin-audit-detail__entry--stack"
-              data-testid={`admin-audit-hosted-identity-packet-section-${section.id}`}
-            >
-              <strong>{section.label}</strong>
-              <span>{section.status}</span>
-              <span>{section.redactedEvidenceRefCount} redacted refs</span>
-              <span>{section.missingInputs.join(", ")}</span>
-              {#if section.requiredInputIds?.length > 0}
-                <ol class="admin-audit-detail__subentries">
-                  {#each section.requiredInputIds as inputId}
-                    <li
-                      data-testid={`admin-audit-hosted-identity-packet-input-${section.id}-${inputId}`}
-                    >
-                      <strong>{inputId}</strong>
-                      <span>{section.providedInputIds?.includes(inputId) ? "provided" : "missing"}</span>
-                    </li>
-                  {/each}
-                </ol>
-              {/if}
-              {#if section.redactedEvidenceRefs?.length > 0}
-                <ol class="admin-audit-detail__subentries">
-                  {#each section.redactedEvidenceRefs as ref}
-                    <li
-                      data-testid={`admin-audit-hosted-identity-packet-ref-${section.id}-${ref.id}`}
-                    >
-                      <strong>{ref.evidenceFamily}</strong>
-                      <span>{ref.kind}</span>
-                      <span>{ref.capturedAt}</span>
-                      <span>{ref.retentionWindow}</span>
-                      <span>{ref.exportLocator}</span>
-                    </li>
-                  {/each}
-                </ol>
-              {/if}
-            </li>
-          {/each}
-        </ol>
-      </section>
-    {/if}
-    {#if data.audit.artifactSummary?.progressionSummary?.progressions?.length > 0}
-      <section
-        class="admin-audit-detail__group"
-        data-testid="admin-audit-detail-hosted-identity-progression-summary"
-      >
-        <h2>Hosted identity recovery ladder</h2>
-        <ol class="admin-audit-detail__entries">
-          <li
-            class="admin-audit-detail__entry admin-audit-detail__entry--stack"
-            data-testid="admin-audit-hosted-identity-progression-summary"
-          >
-            <strong>{data.audit.artifactSummary.progressionSummary.status}</strong>
-            <span>{data.audit.artifactSummary.progressionSummary.progressionCount} progression rows</span>
-            <span>{data.audit.artifactSummary.progressionSummary.nextCommand}</span>
-            <span>{data.audit.artifactSummary.progressionSummary.nextProofTarget}</span>
-            <span>{data.audit.artifactSummary.progressionSummary.proofBoundary}</span>
-          </li>
-          {#each data.audit.artifactSummary.progressionSummary.progressions as progression}
-            <li
-              class="admin-audit-detail__entry admin-audit-detail__entry--stack"
-              data-testid={`admin-audit-hosted-identity-progression-${progression.id}`}
-            >
-              <strong>{progression.field}</strong>
-              <span>{progression.checkId}</span>
-              <span>{progression.missingInputId}</span>
-              <span>{progression.adminProofMode}</span>
-              <span>{progression.missingFixturePath}</span>
-              <span>{progression.recoveredFixturePath}</span>
-              <span>{progression.adminProofFixturePath}</span>
-              <span>{progression.proofCommand}</span>
-              <span>{progression.evidencePath}</span>
-              <span>{progression.adminProofTarget}</span>
-              <span>{progression.roleUrl}</span>
-              <span>{progression.firstMissingInputId}</span>
-              <span>{progression.firstMissingCheckId}</span>
-            </li>
-          {/each}
-        </ol>
-      </section>
-    {/if}
-    {#if data.audit.artifactSummary?.roleSurfaceContractDiff}
-      <section
-        class="admin-audit-detail__group"
-        data-testid="admin-audit-detail-hosted-identity-role-surface-contract"
-      >
-        <h2>Role-surface contract</h2>
-        <ol class="admin-audit-detail__entries">
-          <li
-            class="admin-audit-detail__entry admin-audit-detail__entry--stack"
-            data-testid="admin-audit-hosted-identity-role-surface-contract-diff-summary"
-          >
-            <strong>{data.audit.artifactSummary.roleSurfaceContractDiff.status}</strong>
-            <span>{data.audit.artifactSummary.roleSurfaceContractDiff.architectureId}</span>
-            <span>{data.audit.artifactSummary.roleSurfaceContractDiff.mismatchCount} mismatches</span>
-          </li>
-          {#each data.audit.artifactSummary.roleSurfaceContractDiff.mismatches as mismatch}
-            <li
-              class="admin-audit-detail__entry admin-audit-detail__entry--stack"
-              data-testid={`admin-audit-hosted-identity-role-surface-contract-mismatch-${mismatch.id}`}
-            >
-              <strong>{mismatch.path}</strong>
-              <span>{mismatch.expected}</span>
-              <span>{mismatch.actual}</span>
-            </li>
-          {/each}
-        </ol>
-      </section>
-    {/if}
-    {#if data.audit.artifactSummary?.identityAdapterContractComparison}
-      <section
-        class="admin-audit-detail__group"
-        data-testid="admin-audit-detail-hosted-identity-adapter-contract-comparison"
-      >
-        <h2>Hosted adapter contract</h2>
-        <ol class="admin-audit-detail__entries">
-          <li
-            class="admin-audit-detail__entry admin-audit-detail__entry--stack"
-            data-testid="admin-audit-hosted-identity-adapter-contract-comparison-summary"
-          >
-            <strong>{data.audit.artifactSummary.identityAdapterContractComparison.status}</strong>
-            <span>{data.audit.artifactSummary.identityAdapterContractComparison.localAdapterId}</span>
-            <span>{data.audit.artifactSummary.identityAdapterContractComparison.hostedAdapterId}</span>
-            <span>{data.audit.artifactSummary.identityAdapterContractComparison.roleSurfaceContractStatus}</span>
-            <span>{data.audit.artifactSummary.identityAdapterContractComparison.mismatchCount} mismatches</span>
-          </li>
-          {#each data.audit.artifactSummary.identityAdapterContractComparison.mismatches as mismatch}
-            <li
-              class="admin-audit-detail__entry admin-audit-detail__entry--stack"
-              data-testid={`admin-audit-hosted-identity-adapter-contract-comparison-mismatch-${mismatch.id}`}
-            >
-              <strong>{mismatch.path}</strong>
-              <span>{mismatch.expected}</span>
-              <span>{mismatch.actual}</span>
-            </li>
-          {/each}
-        </ol>
-      </section>
-    {/if}
     {#if data.audit.artifactSummary?.adapterContract}
       <section
         class="admin-audit-detail__group"
@@ -775,6 +608,21 @@
                     <span>{value.text}</span>
                   {/if}
                 {/each}
+                {#if row.subentries?.length > 0}
+                  <ol class="admin-audit-detail__subentries">
+                    {#each row.subentries as subentry}
+                      <li data-testid={subentry.testId}>
+                        {#each subentry.values as value}
+                          {#if value.emphasized}
+                            <strong>{value.text}</strong>
+                          {:else}
+                            <span>{value.text}</span>
+                          {/if}
+                        {/each}
+                      </li>
+                    {/each}
+                  </ol>
+                {/if}
               </li>
             {/each}
           </ol>

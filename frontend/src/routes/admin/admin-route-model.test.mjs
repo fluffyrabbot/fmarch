@@ -1653,19 +1653,102 @@ test("admin route data exposes hosted identity evidence as a native audit row", 
       ["status-provided", ...section.requiredInputIds, "redactedEvidenceRefs"],
     ]),
   );
+  assert.deepEqual(
+    identity.artifactSummarySections.map((section) => section.id),
+    [
+      "hosted-identity-packet",
+      "hosted-identity-progression-summary",
+      "hosted-identity-role-surface-contract",
+      "hosted-identity-adapter-contract-comparison",
+    ],
+  );
+  const packetSection = identity.artifactSummarySections.find(
+    (section) => section.id === "hosted-identity-packet",
+  );
+  assert.equal(packetSection.heading, "Hosted identity packet");
+  assert.deepEqual(
+    packetSection.rows.slice(0, 3).map((row) => [row.id, row.testId]),
+    [
+      [
+        "hosted-identity-packet-summary-status",
+        "admin-audit-hosted-identity-packet-summary-status",
+      ],
+      [
+        "hosted-identity-packet-summary-inputs",
+        "admin-audit-hosted-identity-packet-summary-inputs",
+      ],
+      [
+        "hosted-identity-packet-summary-redacted-refs",
+        "admin-audit-hosted-identity-packet-summary-redacted-refs",
+      ],
+    ],
+  );
+  assert.deepEqual(
+    packetSection.rows[3].subentries.map((subentry) => [
+      subentry.id,
+      subentry.testId,
+      subentry.values.map((value) => value.text),
+    ]),
+    [
+      [
+        "hosted-identity-packet-input-accountLifecycle-createAccount",
+        "admin-audit-hosted-identity-packet-input-accountLifecycle-createAccount",
+        ["createAccount", "missing"],
+      ],
+      [
+        "hosted-identity-packet-input-accountLifecycle-login",
+        "admin-audit-hosted-identity-packet-input-accountLifecycle-login",
+        ["login", "missing"],
+      ],
+      [
+        "hosted-identity-packet-input-accountLifecycle-disableAccount",
+        "admin-audit-hosted-identity-packet-input-accountLifecycle-disableAccount",
+        ["disableAccount", "missing"],
+      ],
+      [
+        "hosted-identity-packet-input-accountLifecycle-enableAccount",
+        "admin-audit-hosted-identity-packet-input-accountLifecycle-enableAccount",
+        ["enableAccount", "missing"],
+      ],
+    ],
+  );
+  const progressionSection = identity.artifactSummarySections.find(
+    (section) => section.id === "hosted-identity-progression-summary",
+  );
+  assert.equal(progressionSection.heading, "Hosted identity recovery ladder");
+  assert.deepEqual(
+    progressionSection.rows.map((row) => row.testId).slice(0, 3),
+    [
+      "admin-audit-hosted-identity-progression-summary",
+      `admin-audit-hosted-identity-progression-${hostedIdentityEvidenceFamilyProgressionCases[0].id}`,
+      `admin-audit-hosted-identity-progression-${hostedIdentityEvidenceFamilyProgressionCases[1].id}`,
+    ],
+  );
+  const roleSurfaceSection = identity.artifactSummarySections.find(
+    (section) => section.id === "hosted-identity-role-surface-contract",
+  );
+  assert.deepEqual(roleSurfaceSection.rows.map((row) => row.testId), [
+    "admin-audit-hosted-identity-role-surface-contract-diff-summary",
+  ]);
+  const adapterContractSection = identity.artifactSummarySections.find(
+    (section) => section.id === "hosted-identity-adapter-contract-comparison",
+  );
+  assert.deepEqual(adapterContractSection.rows.map((row) => row.testId), [
+    "admin-audit-hosted-identity-adapter-contract-comparison-summary",
+  ]);
 });
 
-test("admin audit detail page renders hosted identity progressions as a named recovery ladder", async () => {
+test("admin audit detail page renders hosted identity artifact sections from route data", async () => {
   const source = await readFile(
     "frontend/src/routes/admin/audit/[audit]/+page.svelte",
     "utf8",
   );
-  assert.match(source, /admin-audit-detail-hosted-identity-progression-summary/);
-  assert.match(source, /Hosted identity recovery ladder/);
-  assert.match(
-    source,
-    /admin-audit-hosted-identity-progression-\$\{progression\.id\}/,
-  );
+  assert.doesNotMatch(source, /artifactSummary\.redactedIntakePacket/);
+  assert.doesNotMatch(source, /artifactSummary\.roleSurfaceContractDiff/);
+  assert.doesNotMatch(source, /artifactSummary\.identityAdapterContractComparison/);
+  assert.doesNotMatch(source, /artifactSummary\.progressionSummary\.nextCommand/);
+  assert.match(source, /row\.subentries\?\.length/);
+  assert.match(source, /data-testid=\{subentry\.testId\}/);
 });
 
 test("admin audit detail page renders hosted identity operator drilldowns as a named group", async () => {
