@@ -226,6 +226,8 @@ import {
   devTestGameAdminSpinePlan,
   devTestGameHostedEvidenceOperatorChecklistHandoffPhase,
   devTestGameHostedEvidenceOperatorChecklistHandoffPhaseId,
+  devTestGameHostedIdentityHandoffPhase,
+  devTestGameHostedIdentityHandoffPhaseId,
   terminalAdminProofBatchPlan,
   terminalHostedIdentityNextActionAdminProofBatchPlan,
   terminalRefreshAdminProofBatchPlan,
@@ -1607,43 +1609,85 @@ test("dev test-game spine orchestrators expose stable proof order and env maps",
     ],
     env: adminSpineReadinessEvidenceEnv,
   });
-  assert.deepEqual(devTestGameAdminSpinePlan[26], {
-    kind: "node",
-    script: devTestGameNextActionScript,
-    env: {
-      FMARCH_DEV_TEST_GAME_SEQUENCE_STAGE: "hosted-identity",
-      FMARCH_DEV_TEST_GAME_NEXT_ACTION: hostedIdentityNextActionPath,
-    },
-    phaseLocalNextAction: {
-      id: "hosted-identity",
-      outputPath: hostedIdentityNextActionPath,
-      sequenceStage: "hosted-identity",
-    },
-  });
-  assert.deepEqual(devTestGameAdminSpinePlan[27], {
-    kind: "custom",
-    script: "terminal-hosted-identity-next-action-admin-proof-batch",
-    label: "Terminal hosted identity next-action admin proof batch",
-  });
-  assert.deepEqual(devTestGameAdminSpinePlan[28], {
-    kind: "node",
-    script: "tools/dev_test_game_next_action.mjs",
-  });
-  assert.deepEqual(devTestGameAdminSpinePlan[29], {
-    kind: "custom",
-    script: "terminal-refresh-admin-proof-batch",
-    label: "Terminal refresh admin proof batch",
-  });
-  assert.deepEqual(devTestGameAdminSpinePlan[30], {
+  assert.deepEqual(
+    devTestGameHostedIdentityHandoffPhase.map((step) => ({
+      script: step.script,
+      phase: step.handoffPhase,
+      readinessReason: step.readinessReason ?? null,
+      outputPath: step.env?.FMARCH_DEV_TEST_GAME_NEXT_ACTION ?? null,
+      sequenceStage: step.env?.FMARCH_DEV_TEST_GAME_SEQUENCE_STAGE ?? null,
+    })),
+    [
+      {
+        script: devTestGameNextActionScript,
+        phase: {
+          id: devTestGameHostedIdentityHandoffPhaseId,
+          step: "phase-local-next-action",
+        },
+        readinessReason: null,
+        outputPath: hostedIdentityNextActionPath,
+        sequenceStage: devTestGameHostedIdentitySequenceStage,
+      },
+      {
+        script: "terminal-hosted-identity-next-action-admin-proof-batch",
+        phase: {
+          id: devTestGameHostedIdentityHandoffPhaseId,
+          step: "hosted-identity-next-action-admin-proof-batch",
+        },
+        readinessReason: null,
+        outputPath: null,
+        sequenceStage: null,
+      },
+      {
+        script: devTestGameNextActionScript,
+        phase: {
+          id: devTestGameHostedIdentityHandoffPhaseId,
+          step: "default-next-action-refresh",
+        },
+        readinessReason: null,
+        outputPath: null,
+        sequenceStage: null,
+      },
+      {
+        script: "terminal-refresh-admin-proof-batch",
+        phase: {
+          id: devTestGameHostedIdentityHandoffPhaseId,
+          step: "terminal-refresh-admin-proof-batch",
+        },
+        readinessReason: null,
+        outputPath: null,
+        sequenceStage: null,
+      },
+      {
+        script: devTestGameReleaseReadinessScript,
+        phase: {
+          id: devTestGameHostedIdentityHandoffPhaseId,
+          step: "readiness-refresh",
+        },
+        readinessReason: "hosted-identity-handoff-terminal-refresh",
+        outputPath: null,
+        sequenceStage: null,
+      },
+    ],
+  );
+  assert.deepEqual(
+    devTestGameAdminSpinePlan.slice(26, 31),
+    devTestGameHostedIdentityHandoffPhase,
+  );
+  assert.deepEqual(devTestGameHostedIdentityHandoffPhase.at(-1), {
     kind: "node",
     script: devTestGameReleaseReadinessScript,
-    readinessReason: "terminal-batch-receipt-before-proof-graph-admin-proof",
+    readinessReason: "hosted-identity-handoff-terminal-refresh",
     changedInputs: [
       adminSpineTerminalBatchProofPath,
       proofFreshnessAdminProofPath,
       nextActionAdminProofPath,
     ],
     env: adminSpineTerminalBatchReadinessEvidenceEnv,
+    handoffPhase: {
+      id: devTestGameHostedIdentityHandoffPhaseId,
+      step: "readiness-refresh",
+    },
   });
   assert.deepEqual(devTestGameAdminSpinePlan.at(-3), {
     kind: "custom",

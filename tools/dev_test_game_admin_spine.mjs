@@ -228,6 +228,8 @@ export const adminSpineHostedOpsInputReadinessEnv = {
 const devTestGameHostedIdentitySequenceStage = "hosted-identity";
 export const devTestGameHostedEvidenceOperatorChecklistHandoffPhaseId =
   "hosted-evidence-operator-checklist-handoff";
+export const devTestGameHostedIdentityHandoffPhaseId =
+  "hosted-identity-handoff";
 
 const terminalAdminProofCaseFactories = Object.freeze({
   "proof-graph": proofGraphAdminProofCase,
@@ -296,6 +298,61 @@ export const devTestGameHostedEvidenceOperatorChecklistHandoffPhase = [
     }),
     handoffPhase: {
       id: devTestGameHostedEvidenceOperatorChecklistHandoffPhaseId,
+      step: "readiness-refresh",
+    },
+  },
+];
+
+export const devTestGameHostedIdentityHandoffPhase = [
+  {
+    ...phaseLocalNextActionStep({
+      id: "hosted-identity",
+      outputPath: hostedIdentityNextActionPath,
+      sequenceStage: devTestGameHostedIdentitySequenceStage,
+    }),
+    handoffPhase: {
+      id: devTestGameHostedIdentityHandoffPhaseId,
+      step: "phase-local-next-action",
+    },
+  },
+  {
+    kind: "custom",
+    script: terminalHostedIdentityNextActionAdminProofBatchPlan.script,
+    label: terminalHostedIdentityNextActionAdminProofBatchPlan.label,
+    handoffPhase: {
+      id: devTestGameHostedIdentityHandoffPhaseId,
+      step: "hosted-identity-next-action-admin-proof-batch",
+    },
+  },
+  {
+    kind: "node",
+    script: "tools/dev_test_game_next_action.mjs",
+    handoffPhase: {
+      id: devTestGameHostedIdentityHandoffPhaseId,
+      step: "default-next-action-refresh",
+    },
+  },
+  {
+    kind: "custom",
+    script: terminalRefreshAdminProofBatchPlan.script,
+    label: terminalRefreshAdminProofBatchPlan.label,
+    handoffPhase: {
+      id: devTestGameHostedIdentityHandoffPhaseId,
+      step: "terminal-refresh-admin-proof-batch",
+    },
+  },
+  {
+    ...releaseReadinessStep({
+      reason: "hosted-identity-handoff-terminal-refresh",
+      changedInputs: [
+        adminSpineTerminalBatchProofPath,
+        proofFreshnessAdminProofPath,
+        nextActionAdminProofPath,
+      ],
+      env: adminSpineTerminalBatchReadinessEvidenceEnv,
+    }),
+    handoffPhase: {
+      id: devTestGameHostedIdentityHandoffPhaseId,
       step: "readiness-refresh",
     },
   },
@@ -383,31 +440,7 @@ export const devTestGameAdminSpinePlan = [
     ],
     env: adminSpineReadinessEvidenceEnv,
   }),
-  phaseLocalNextActionStep({
-    id: "hosted-identity",
-    outputPath: hostedIdentityNextActionPath,
-    sequenceStage: devTestGameHostedIdentitySequenceStage,
-  }),
-  {
-    kind: "custom",
-    script: terminalHostedIdentityNextActionAdminProofBatchPlan.script,
-    label: terminalHostedIdentityNextActionAdminProofBatchPlan.label,
-  },
-  { kind: "node", script: "tools/dev_test_game_next_action.mjs" },
-  {
-    kind: "custom",
-    script: terminalRefreshAdminProofBatchPlan.script,
-    label: terminalRefreshAdminProofBatchPlan.label,
-  },
-  releaseReadinessStep({
-    reason: "terminal-batch-receipt-before-proof-graph-admin-proof",
-    changedInputs: [
-      adminSpineTerminalBatchProofPath,
-      proofFreshnessAdminProofPath,
-      nextActionAdminProofPath,
-    ],
-    env: adminSpineTerminalBatchReadinessEvidenceEnv,
-  }),
+  ...devTestGameHostedIdentityHandoffPhase,
   { kind: "node", script: "tools/dev_test_game_next_action.mjs" },
   { kind: "node", script: "tools/dev_test_game_proof_graph.mjs" },
   { kind: "node", script: "tools/dev_test_game_proof_graph_admin_proof.mjs" },
