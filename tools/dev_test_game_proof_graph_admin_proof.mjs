@@ -37,6 +37,7 @@ import {
 } from "./dev_test_game_hosted_handoff_cases.mjs";
 import {
   assertAdminRoleSurfaceEvidenceArtifact,
+  assertAdminRoleSurfaceProofGraphCoreLoopRecoveryDestinationArtifacts,
   assertAdminRoleSurfaceProofGraphPrerequisiteDestinationArtifacts,
   assertVisibleAdminRoleSurfaceRows,
   proveAdminAuditDetail,
@@ -302,6 +303,10 @@ export function buildProofGraphAdminProofRequirements(source) {
         row.nextActionEdgeRowId,
       ]),
     ),
+    requiredProofGraphCoreLoopRecoveryDestinationArtifacts:
+      proofGraphCoreLoopRecoveryDestinationArtifacts(
+        coreLoopRecoveryDestinationSummary,
+      ),
     requiredRelatedLinks: source.proofGraph.nodes
       .filter(
         (node) =>
@@ -389,6 +394,10 @@ export function buildProofGraphAdminGeneratedFrom(
     ),
     coreLoopRecoveryDestinationSummary:
       proofGraphCoreLoopRecoveryDestinationSummary(source.proofGraph),
+    coreLoopRecoveryDestinationArtifacts:
+      proofGraphCoreLoopRecoveryDestinationArtifacts(
+        proofGraphCoreLoopRecoveryDestinationSummary(source.proofGraph),
+      ),
     phaseLocalNextActionGraphLinks:
       proofGraphPhaseLocalNextActionGraphLinks(source.proofGraph),
     proofGraphPrerequisiteDestinationRowIds:
@@ -496,6 +505,11 @@ export function assertProofGraphAdminProof(evidence) {
   assertProofGraphAdminProofCoversCoreLoopScenarioFamilies(evidence);
   assertProofGraphAdminProofCoversCoreLoopHostVisibleRecoveries(evidence);
   assertProofGraphAdminProofCoversCoreLoopRecoveryDestinations(evidence);
+  assertAdminRoleSurfaceProofGraphCoreLoopRecoveryDestinationArtifacts({
+    adminRoleSurface: evidence.adminRoleSurface,
+    expectedArtifacts: evidence.generatedFrom?.coreLoopRecoveryDestinationArtifacts,
+    proofName: "proof graph admin proof",
+  });
   assertProofGraphAdminProofCoversProductionFeatureDestinations(evidence);
   assertProofGraphAdminProofCoversProductionFeatureDestinationSummary(evidence);
   assertProofGraphAdminProofCoversProductionFeatureProvenanceComparison(evidence);
@@ -576,6 +590,13 @@ function assertProofGraphAdminProofCoversCoreLoopRecoveryDestinations(evidence) 
       }
     }
   }
+}
+
+function proofGraphCoreLoopRecoveryDestinationArtifacts(summary) {
+  return (Array.isArray(summary?.rows) ? summary.rows : []).map((row) => ({
+    id: row.id,
+    proofTarget: row.proofTarget,
+  }));
 }
 
 async function readOptionalAdminSpineTerminalBatches({

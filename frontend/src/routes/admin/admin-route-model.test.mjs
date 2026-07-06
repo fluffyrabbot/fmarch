@@ -233,6 +233,7 @@ import {
   proofGraphPrerequisiteDestinationSectionId,
 } from "../../../../tools/dev_test_game_proof_graph_prerequisite_destination_rows.mjs";
 import {
+  proofGraphCoreLoopRecoveryDestinationProofTargetTestId,
   proofGraphCoreLoopRecoveryDestinationRowTestId,
   proofGraphCoreLoopRecoveryDestinationSectionHeading,
   proofGraphCoreLoopRecoveryDestinationSectionId,
@@ -2692,6 +2693,15 @@ test("admin local proof graph detail data carries graph node rows", async () => 
   assert.deepEqual(
     descriptorRowsWithLinksForAssertion(prerequisiteDestinationSection.rows),
     expectedProofGraphPrerequisiteDestinationRowsWithLinks(proofGraph, {
+      game: "midsummer",
+    }),
+  );
+  const recoveryDestinationSection = data.audit.artifactSummarySections.find(
+    (section) => section.id === proofGraphCoreLoopRecoveryDestinationSectionId,
+  );
+  assert.deepEqual(
+    descriptorRowsWithLinksForAssertion(recoveryDestinationSection.rows),
+    expectedProofGraphCoreLoopRecoveryDestinationRowsWithLinks(proofGraph, {
       game: "midsummer",
     }),
   );
@@ -9429,6 +9439,43 @@ function expectedProofGraphCoreLoopRecoveryDestinationRows(proofGraph) {
         ["proofTarget", row.proofTarget, false],
         ["command", row.command, false],
         ["roleUrl", row.roleUrl, false],
+      ],
+    ],
+  );
+}
+
+function expectedProofGraphCoreLoopRecoveryDestinationRowsWithLinks(
+  proofGraph,
+  { game } = {},
+) {
+  return proofGraphCoreLoopRecoveryDestinationSummary(proofGraph).rows.map(
+    (row) => [
+      row.id,
+      proofGraphCoreLoopRecoveryDestinationRowTestId(row.id),
+      [
+        ["label", row.label, true, "", ""],
+        ["status", row.status, false, "", ""],
+        ["recoveryCaseId", row.recoveryCaseId, false, "", ""],
+        ["graphNodeId", row.graphNodeId, false, "", ""],
+        ["adminRowId", row.adminRowId, false, "", ""],
+        ["proofEdgeRowId", row.proofEdgeRowId, false, "", ""],
+        ["graphEdgeRowId", row.graphEdgeRowId, false, "", ""],
+        ["nextActionEdgeRowId", row.nextActionEdgeRowId, false, "", ""],
+        [
+          "proofTarget",
+          row.proofTarget,
+          false,
+          expectedAdminArtifactHref({ game, artifact: row.proofTarget }),
+          proofGraphCoreLoopRecoveryDestinationProofTargetTestId(row.id),
+        ],
+        ["command", row.command, false, "", ""],
+        [
+          "roleUrl",
+          row.roleUrl,
+          false,
+          localAdminAuditRoleUrl(localAdminAuditIds.coreLoop, { game }),
+          "",
+        ],
       ],
     ],
   );

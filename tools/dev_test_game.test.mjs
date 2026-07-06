@@ -6243,6 +6243,10 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
     proofGraphAdminRequirements.requiredProofGraphPrerequisiteDestinationArtifacts,
     proofGraphAdminGeneratedFrom.proofGraphPrerequisiteDestinationArtifacts,
   );
+  assert.deepEqual(
+    proofGraphAdminRequirements.requiredProofGraphCoreLoopRecoveryDestinationArtifacts,
+    proofGraphAdminGeneratedFrom.coreLoopRecoveryDestinationArtifacts,
+  );
   assert(
     proofGraphAdminRequirements.requiredRelatedLinks.includes(
       "next-action-sequence-handoff",
@@ -23497,6 +23501,11 @@ function proofGraphAdminProofFixture() {
     ]);
   const proofGraphPrerequisiteDestinationArtifacts =
     proofGraphPrerequisiteDestinationArtifactsFixture();
+  const coreLoopRecoveryDestinationArtifacts =
+    coreLoopRecoveryDestinationSummary.rows.map((row) => ({
+      id: row.id,
+      proofTarget: row.proofTarget,
+    }));
   return {
     version: 1,
     proof: proofGraphAdminProofDescriptor.proof,
@@ -23568,6 +23577,7 @@ function proofGraphAdminProofFixture() {
       coreLoopScenarioFamilyDestinations: coreLoopFamilyDestinations,
       coreLoopHostVisibleRecoveryDestinations,
       coreLoopRecoveryDestinationSummary,
+      coreLoopRecoveryDestinationArtifacts,
       productionFeatureTargetDestinations,
       productionFeatureDestinationSummary,
       manifestProductionFeatureProvenanceSummary,
@@ -23682,6 +23692,13 @@ function proofGraphAdminProofFixture() {
       ),
       visibleProofGraphCoreLoopRecoveryDestinations:
         coreLoopRecoveryDestinationSummary.rows.map((row) => row.id),
+      visibleProofGraphCoreLoopRecoveryDestinationArtifacts:
+        coreLoopRecoveryDestinationArtifacts.map((row) => ({
+          id: row.id,
+          proofTarget: row.proofTarget,
+          href: visibleAdminEvidenceArtifactFixture(row.proofTarget).href,
+          clickedThrough: true,
+        })),
       visibleProofGraphPrerequisiteDestinations:
         proofGraphPrerequisiteDestinationArtifacts.map((row) => row.rowId),
       visibleProofGraphPrerequisiteDestinationArtifacts:

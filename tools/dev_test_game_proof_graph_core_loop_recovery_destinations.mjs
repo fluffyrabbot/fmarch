@@ -31,6 +31,10 @@ export function proofGraphCoreLoopRecoveryDestinationRowTestId(rowId) {
   return `${proofGraphCoreLoopRecoveryDestinationRowTestIdPrefix}-${String(rowId)}`;
 }
 
+export function proofGraphCoreLoopRecoveryDestinationProofTargetTestId(rowId) {
+  return `admin-audit-core-loop-recovery-destination-proof-target-${String(rowId)}`;
+}
+
 export function proofGraphCoreLoopRecoveryDestinationNodes({
   game = "<seeded-game>",
   recoveryCommand = devTestGameCoreLoopAdminProofCommand,

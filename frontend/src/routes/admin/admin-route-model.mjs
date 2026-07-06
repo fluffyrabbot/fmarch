@@ -42,6 +42,7 @@ import {
   playerInvalidActionRecoveryLaneId,
 } from "../../../../tools/dev_test_game_core_loop_action_scenarios.mjs";
 import {
+  proofGraphCoreLoopRecoveryDestinationProofTargetTestId,
   proofGraphCoreLoopRecoveryDestinationRowTestId,
   proofGraphCoreLoopRecoveryDestinationSectionHeading,
   proofGraphCoreLoopRecoveryDestinationSectionId,
@@ -599,7 +600,7 @@ function proofGraphCoreLoopRecoveryDestinationArtifactRow({ row, game }) {
         id: "proofTarget",
         text: row.proofTarget,
         game,
-        testId: `admin-audit-core-loop-recovery-destination-proof-target-${row.id}`,
+        testId: proofGraphCoreLoopRecoveryDestinationProofTargetTestId(row.id),
       }),
       { id: "command", text: row.command },
       {
