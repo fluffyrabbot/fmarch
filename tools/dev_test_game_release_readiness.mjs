@@ -8,12 +8,14 @@ import {
   buildProofGraphAdminRoleHandoffsReadinessCheck,
   buildProofGraphNextActionHandoffReadinessCheck,
   buildProofGraphProductionFeatureProvenanceReadinessCheck,
+  buildProofGraphTerminalValidationReadinessCheck,
   getLocalReadinessDependency,
   localReadinessDependencyRecoveryFor,
   localHostedEvidenceLaneDemoProofCheckId,
   localProofGraphAdminRoleHandoffsCheckId,
   localProofGraphNextActionHandoffCheckId,
   localProofGraphProductionFeatureProvenanceCheckId,
+  localProofGraphTerminalValidationCheckId,
   localSeedDemoFixtureCheckId,
 } from "./dev_test_game_local_readiness_dependencies.mjs";
 import { assertDevTestGameProofRun } from "./dev_test_game_proof_contract.mjs";
@@ -1545,6 +1547,16 @@ export function buildDevTestGameReleaseReadiness(proofRun, options = {}) {
         ),
       );
     }
+    if (
+      proofGraphAdminProofEvidence.adminSpineTerminalValidationDestination !==
+      null
+    ) {
+      localChecks.push(
+        buildProofGraphTerminalValidationReadinessCheck(
+          proofGraphAdminProofEvidence,
+        ),
+      );
+    }
   }
   if (selectedOperatorHandoffReceiptAdminProofEvidence !== undefined) {
     const destination =
@@ -2089,7 +2101,13 @@ function releaseReadinessReason({
       : ["local hosted-like race matrix"]),
     ...(proofGraphAdminProofEvidence === undefined
       ? []
-      : ["proof graph admin role handoffs"]),
+      : [
+          "proof graph admin role handoffs",
+          ...(proofGraphAdminProofEvidence
+            .adminSpineTerminalValidationDestination === null
+            ? []
+            : ["proof graph terminal validation destination"]),
+        ]),
     ...(proofFreshnessAdminProofEvidence === undefined
       ? []
       : ["proof freshness admin surface"]),
@@ -8610,6 +8628,32 @@ export function assertDevTestGameReleaseReadiness(checklist) {
   ) {
     throw new Error(
       "dev-test-game proof graph next-action handoff check is malformed",
+    );
+  }
+  const proofGraphTerminalValidationCheck =
+    checklist.localDevelopmentSpine?.checks?.find(
+      (check) => check.id === localProofGraphTerminalValidationCheckId,
+    );
+  if (
+    proofGraphTerminalValidationCheck !== undefined &&
+    (proofGraphTerminalValidationCheck.linkId !==
+      "admin-spine-terminal-batches" ||
+      proofGraphTerminalValidationCheck.auditId !==
+        localAdminAuditIds.adminSpine ||
+      proofGraphTerminalValidationCheck.detailRoleUrl !==
+        localAdminAuditRoleUrl(localAdminAuditIds.adminSpine) ||
+      !proofGraphTerminalValidationCheck.visibleAdminSpineTerminalValidations?.includes(
+        "release-admin-proof-contract",
+      ) ||
+      !String(
+        proofGraphTerminalValidationCheck
+          .visibleAdminSpineTerminalValidationStatuses?.[
+          "release-admin-proof-contract"
+        ] ?? "",
+      ).includes("target/dev-test-game/release-admin-proof-contract.json"))
+  ) {
+    throw new Error(
+      "dev-test-game proof graph terminal validation check is malformed",
     );
   }
   const selectedOperatorReceiptDiagnosticCheck =

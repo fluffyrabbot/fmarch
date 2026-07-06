@@ -83,6 +83,7 @@ import {
   localNextActionAdminSurfaceCheckId,
   localProofFreshnessAdminSurfaceCheckId,
   localProofGraphAdminRoleHandoffsCheckId,
+  localProofGraphTerminalValidationCheckId,
 } from "./dev_test_game_local_readiness_dependencies.mjs";
 
 test("admin proof destination handoff cases share link and audit rows", () => {
@@ -536,6 +537,10 @@ test("admin proof destination handoff cases carry shared row requirements", () =
     [
       {
         id: localProofGraphAdminRoleHandoffsCheckId,
+        auditId: localAdminAuditIds.proofGraph,
+      },
+      {
+        id: localProofGraphTerminalValidationCheckId,
         auditId: localAdminAuditIds.proofGraph,
       },
       {

@@ -23,6 +23,8 @@ export const localProofGraphProductionFeatureProvenanceCheckId =
   "local-proof-graph-production-feature-provenance";
 export const localProofGraphNextActionHandoffCheckId =
   "local-proof-graph-next-action-handoff";
+export const localProofGraphTerminalValidationCheckId =
+  "local-proof-graph-terminal-validation";
 export const localProofFreshnessAdminSurfaceCheckId =
   "local-proof-freshness-admin-surface";
 export const localNextActionAdminSurfaceCheckId =
@@ -77,6 +79,20 @@ export const localReadinessDependencies = Object.freeze([
       "Local browser proof that the proof graph terminal batch links to the next-action handoff detail and verifies the default blocker plus opt-in hosted identity predicate rows. This recovers a local readiness dependency only; it does not prove hosted deployment, release readiness, or production readiness.",
     requiredEvidence:
       "Passed proof graph next-action handoff check in the generated release-readiness checklist",
+  }),
+  Object.freeze({
+    id: localProofGraphTerminalValidationCheckId,
+    label: "Proof graph terminal validation destination",
+    priority: 1,
+    command: `npm run ${devTestGameProofGraphAdminProofCommand}`,
+    buildSlice:
+      "Refresh the proof graph admin browser proof so the terminal validation links to the admin-spine diagnostics contract row before hosted readiness work can be selected.",
+    proofTarget: devTestGameProofGraphAdminProofPath,
+    roleUrl: localAdminAuditRoleUrl(localAdminAuditIds.proofGraph),
+    proofBoundary:
+      "Local browser proof that the proof graph terminal validation destination clicks through to the admin-spine diagnostics contract row. This recovers a local readiness dependency only; it does not prove hosted deployment, release readiness, or production readiness.",
+    requiredEvidence:
+      "Passed proof graph terminal validation destination check in the generated release-readiness checklist",
   }),
   Object.freeze({
     id: localProofFreshnessAdminSurfaceCheckId,
@@ -328,6 +344,38 @@ export function buildProofGraphNextActionHandoffReadinessCheck(
       handoff.visibleNextActionHandoffPairRows,
     visibleNextActionHandoffPairRowStatuses:
       handoff.visibleNextActionHandoffPairRowStatuses,
+    adminRoleSurface: proofGraphAdminProofEvidence,
+  };
+}
+
+export function buildProofGraphTerminalValidationReadinessCheck(
+  proofGraphAdminProofEvidence,
+) {
+  const dependency = getLocalReadinessDependency(
+    localProofGraphTerminalValidationCheckId,
+  );
+  if (dependency === undefined) {
+    throw new Error(
+      "proof graph terminal validation readiness dependency is missing a recovery contract",
+    );
+  }
+  const destination =
+    proofGraphAdminProofEvidence.adminSpineTerminalValidationDestination;
+  return {
+    id: dependency.id,
+    label: dependency.label,
+    status: "passed",
+    dependencyGated: true,
+    evidence: proofGraphAdminProofEvidence.path,
+    proofBoundary: proofGraphAdminProofEvidence.proofBoundary,
+    recovery: buildLocalReadinessDependencyRecovery(dependency),
+    linkId: destination.linkId,
+    auditId: destination.auditId,
+    detailRoleUrl: destination.detailRoleUrl,
+    visibleAdminSpineTerminalValidations:
+      destination.visibleAdminSpineTerminalValidations,
+    visibleAdminSpineTerminalValidationStatuses:
+      destination.visibleAdminSpineTerminalValidationStatuses,
     adminRoleSurface: proofGraphAdminProofEvidence,
   };
 }

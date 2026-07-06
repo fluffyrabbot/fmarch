@@ -65,6 +65,7 @@ import {
   localNextActionAdminSurfaceCheckId,
   localProofFreshnessAdminSurfaceCheckId,
   localProofGraphAdminRoleHandoffsCheckId,
+  localProofGraphTerminalValidationCheckId,
 } from "./dev_test_game_local_readiness_dependencies.mjs";
 
 export const adminSpineProofCommand = "npm run test:dev-test-game-admin-spine";
@@ -201,6 +202,10 @@ export const adminProofDestinationRequirementCases = Object.freeze([
     requiredLocalPrerequisiteDestinations: Object.freeze([
       Object.freeze({
         id: localProofGraphAdminRoleHandoffsCheckId,
+        auditId: localAdminAuditIds.proofGraph,
+      }),
+      Object.freeze({
+        id: localProofGraphTerminalValidationCheckId,
         auditId: localAdminAuditIds.proofGraph,
       }),
       Object.freeze({

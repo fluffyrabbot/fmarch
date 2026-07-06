@@ -5,6 +5,7 @@ import {
   buildNextActionAdminSurfaceReadinessCheck,
   buildProofFreshnessAdminSurfaceReadinessCheck,
   buildProofGraphAdminRoleHandoffsReadinessCheck,
+  buildProofGraphTerminalValidationReadinessCheck,
   getLocalReadinessDependency,
   localReadinessDependencyCheckFor,
   localReadinessDependencyRecoveryFor,
@@ -12,6 +13,9 @@ import {
   localHostedEvidenceLaneDemoProofCheckId,
   localProofFreshnessAdminSurfaceCheckId,
   localProofGraphAdminRoleHandoffsCheckId,
+  localProofGraphNextActionHandoffCheckId,
+  localProofGraphProductionFeatureProvenanceCheckId,
+  localProofGraphTerminalValidationCheckId,
   localSeedDemoFixtureCheckId,
   rankedMissingLocalReadinessDependencies,
 } from "./dev_test_game_local_readiness_dependencies.mjs";
@@ -112,6 +116,59 @@ test("proof graph admin proof builds the matching local readiness check", () => 
       roleHandoffCount: 2,
       roleHandoffIds: ["admin-proof:release", "admin-proof:next-action"],
       destinationAuditIds: ["local-release-readiness", "local-next-action"],
+      adminRoleSurface: proofGraphAdminProofEvidence,
+    },
+  );
+});
+
+test("proof graph terminal validation proof builds the matching local readiness check", () => {
+  const proofGraphAdminProofEvidence = {
+    path: "target/dev-test-game/proof-graph-admin-proof.json",
+    proofBoundary: "Local browser proof boundary.",
+    adminSpineTerminalValidationDestination: {
+      linkId: "admin-spine-terminal-batches",
+      auditId: localAdminAuditIds.adminSpine,
+      detailRoleUrl: localAdminAuditRoleUrl(localAdminAuditIds.adminSpine),
+      visibleAdminSpineTerminalValidations: [
+        "release-admin-proof-contract",
+      ],
+      visibleAdminSpineTerminalValidationStatuses: {
+        "release-admin-proof-contract":
+          "Release admin proof diagnostics contract\npassed\ntarget/dev-test-game/release-admin-proof-contract.json",
+      },
+    },
+  };
+
+  assert.deepEqual(
+    buildProofGraphTerminalValidationReadinessCheck(
+      proofGraphAdminProofEvidence,
+    ),
+    {
+      id: localProofGraphTerminalValidationCheckId,
+      label: "Proof graph terminal validation destination",
+      status: "passed",
+      dependencyGated: true,
+      evidence: "target/dev-test-game/proof-graph-admin-proof.json",
+      proofBoundary: "Local browser proof boundary.",
+      recovery: {
+        command: "npm run test:dev-test-game-proof-graph-admin-proof",
+        buildSlice:
+          "Refresh the proof graph admin browser proof so the terminal validation links to the admin-spine diagnostics contract row before hosted readiness work can be selected.",
+        proofTarget: "target/dev-test-game/proof-graph-admin-proof.json",
+        roleUrl: proofGraphRoleUrl,
+        proofBoundary:
+          "Local browser proof that the proof graph terminal validation destination clicks through to the admin-spine diagnostics contract row. This recovers a local readiness dependency only; it does not prove hosted deployment, release readiness, or production readiness.",
+        requiredEvidence:
+          "Passed proof graph terminal validation destination check in the generated release-readiness checklist",
+      },
+      linkId: "admin-spine-terminal-batches",
+      auditId: localAdminAuditIds.adminSpine,
+      detailRoleUrl: localAdminAuditRoleUrl(localAdminAuditIds.adminSpine),
+      visibleAdminSpineTerminalValidations: ["release-admin-proof-contract"],
+      visibleAdminSpineTerminalValidationStatuses: {
+        "release-admin-proof-contract":
+          "Release admin proof diagnostics contract\npassed\ntarget/dev-test-game/release-admin-proof-contract.json",
+      },
       adminRoleSurface: proofGraphAdminProofEvidence,
     },
   );
@@ -253,83 +310,44 @@ test("missing local readiness dependencies rank before hosted readiness work", (
     localDevelopmentSpine: { checks: [] },
   });
 
-  assert.deepEqual(missingCandidates, [
+  assert.deepEqual(
+    missingCandidates.map((candidate) => [
+      candidate.id,
+      candidate.index,
+      candidate.priority,
+      candidate.status,
+    ]),
+    [
+      ["local-proof-graph-admin-role-handoffs", 0, 0, "missing"],
+      [localProofGraphProductionFeatureProvenanceCheckId, 1, 1, "missing"],
+      [localProofGraphNextActionHandoffCheckId, 2, 1, "missing"],
+      [localProofGraphTerminalValidationCheckId, 3, 1, "missing"],
+      [localProofFreshnessAdminSurfaceCheckId, 4, 2, "missing"],
+      [localNextActionAdminSurfaceCheckId, 5, 3, "missing"],
+      [localSeedDemoFixtureCheckId, 6, 4, "missing"],
+      [localHostedEvidenceLaneDemoProofCheckId, 7, 5, "missing"],
+    ],
+  );
+  assert.deepEqual(
+    missingCandidates.find(
+      (candidate) => candidate.id === localProofGraphTerminalValidationCheckId,
+    ),
     {
-      id: "local-proof-graph-admin-role-handoffs",
+      id: localProofGraphTerminalValidationCheckId,
       status: "missing",
-      index: 0,
-      priority: 0,
+      index: 3,
+      priority: 1,
       command: "npm run test:dev-test-game-proof-graph-admin-proof",
       buildSlice:
-        "Refresh the proof graph admin role-handoff browser proof before choosing hosted readiness work.",
+        "Refresh the proof graph admin browser proof so the terminal validation links to the admin-spine diagnostics contract row before hosted readiness work can be selected.",
       proofTarget: "target/dev-test-game/proof-graph-admin-proof.json",
       roleUrl: proofGraphRoleUrl,
       proofBoundary:
-        "Local browser proof that the proof graph admin surface follows every mapped admin-proof role URL. This recovers a local readiness dependency only; it does not prove hosted deployment, release readiness, or production readiness.",
+        "Local browser proof that the proof graph terminal validation destination clicks through to the admin-spine diagnostics contract row. This recovers a local readiness dependency only; it does not prove hosted deployment, release readiness, or production readiness.",
       requiredEvidence:
-        "Passed proof graph admin role-handoff check in the generated release-readiness checklist",
+        "Passed proof graph terminal validation destination check in the generated release-readiness checklist",
     },
-    {
-      id: "local-proof-freshness-admin-surface",
-      status: "missing",
-      index: 1,
-      priority: 1,
-      command: "npm run test:dev-test-game-proof-freshness-admin-proof",
-      buildSlice:
-        "Refresh the proof-freshness admin browser proof before hosted readiness work can be selected.",
-      proofTarget: "target/dev-test-game/proof-freshness-admin-proof.json",
-      roleUrl: proofFreshnessRoleUrl,
-      proofBoundary:
-        "Local browser proof that the proof-freshness admin surface exposes fresh generated artifacts and the next-action handoff from the seeded admin audit route. This recovers a local readiness dependency only; it does not validate artifact contents, hosted deployment, release readiness, or production readiness.",
-      requiredEvidence:
-        "Passed proof-freshness admin surface check in the generated release-readiness checklist",
-    },
-    {
-      id: "local-next-action-admin-surface",
-      status: "missing",
-      index: 2,
-      priority: 2,
-      command: "npm run test:dev-test-game-next-action-admin-proof",
-      buildSlice:
-        "Refresh the next-action admin browser proof before hosted readiness work can be selected.",
-      proofTarget: "target/dev-test-game/next-action-admin-proof.json",
-      roleUrl: nextActionRoleUrl,
-      proofBoundary:
-        "Local browser proof that the next-action admin surface exposes the selected command, local readiness dependency trace, release-readiness trace, and role URL handoffs from the seeded admin audit route. This recovers a local readiness dependency only; it does not prove hosted deployment, release readiness, or production readiness.",
-      requiredEvidence:
-        "Passed next-action admin surface check in the generated release-readiness checklist",
-    },
-    {
-      id: "local-seed-demo-fixture",
-      status: "missing",
-      index: 3,
-      priority: 3,
-      command: "npm run test:dev-test-game-seed-fixture",
-      buildSlice:
-        "Generate the local seed/demo fixture inventory and admin proof before choosing hosted readiness work.",
-      proofTarget: "target/dev-test-game/seed-fixture-summary.json",
-      roleUrl: seedFixturesRoleUrl,
-      proofBoundary:
-        "Local seed/demo fixture inventory and admin browser proof for one dev-test-game run. This recovers the local fixture dependency only; it does not prove hosted demo data, invite delivery, release readiness, or production readiness.",
-      requiredEvidence:
-        "Passed local seed/demo fixture inventory and admin role-surface proof in the generated release-readiness checklist",
-    },
-    {
-      id: "local-hosted-evidence-lane-demo-proof",
-      status: "missing",
-      index: 4,
-      priority: 4,
-      command: "npm run test:dev-test-game-hosted-evidence-lane-demo-proof",
-      buildSlice:
-        "Refresh the local hosted evidence lane demo proof before choosing hosted deployment work.",
-      proofTarget: "target/dev-test-game/hosted-evidence-lane-demo-proof.json",
-      roleUrl: hostedEvidenceLaneRoleUrl,
-      proofBoundary:
-        "Local demo proof for the hosted evidence lane pass path. This recovers the blocked-to-passed handoff using synthetic external-looking evidence only; it does not prove hosted deployment, release readiness, or production readiness.",
-      requiredEvidence:
-        "Passed local hosted evidence lane demo proof with synthetic external target warning",
-    },
-  ]);
+  );
 
   assert.deepEqual(
     rankedMissingLocalReadinessDependencies({
@@ -337,6 +355,18 @@ test("missing local readiness dependencies rank before hosted readiness work", (
         checks: [
           {
             id: "local-proof-graph-admin-role-handoffs",
+            status: "passed",
+          },
+          {
+            id: localProofGraphProductionFeatureProvenanceCheckId,
+            status: "passed",
+          },
+          {
+            id: localProofGraphNextActionHandoffCheckId,
+            status: "passed",
+          },
+          {
+            id: localProofGraphTerminalValidationCheckId,
             status: "passed",
           },
           {
