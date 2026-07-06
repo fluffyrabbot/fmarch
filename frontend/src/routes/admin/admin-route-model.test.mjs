@@ -230,6 +230,7 @@ import {
   devTestGameHostedMatrixRawEvidenceTemplatePath,
   devTestGameHostedMatrixRawEvidenceTemplateProofCommand,
   devTestGameHostedMatrixRawEvidenceTemplateProofPath,
+  hostedMatrixRawEvidenceTemplateDescriptor,
 } from "../../../../tools/dev_test_game_hosted_matrix_raw_evidence_template_proof.mjs";
 import {
   devTestGameRealHostedMatrixRawCaptureCommand,
@@ -2719,6 +2720,7 @@ test("proof graph selected operator packet node row carries raw evidence diagnos
       firstMissingInputId: "FMARCH_HOSTED_MATRIX_RAW_EVIDENCE_PATH",
       firstMissingCheckId: "raw-evidence-path-configured",
       rawEvidenceContractSummary: "Raw hosted matrix evidence packet",
+      rawEvidenceTemplate: hostedMatrixRawEvidenceTemplateDescriptor(),
       selectedProductionFeatureGraphNodeId:
         "production-feature:host-phase-control",
       selectedProductionFeatureRoleUrl:
@@ -2743,6 +2745,9 @@ test("proof graph selected operator packet node row carries raw evidence diagnos
           "packetProofTarget target/dev-test-game/hosted-target-preflight.json",
           "nextProofTarget target/dev-test-game/hosted-evidence-lane.json",
           "rawEvidenceContract Raw hosted matrix evidence packet",
+          `rawEvidenceTemplatePath ${devTestGameHostedMatrixRawEvidenceTemplatePath}`,
+          `rawEvidenceTemplateProofCommand npm run ${devTestGameHostedMatrixRawEvidenceTemplateProofCommand}`,
+          `rawEvidenceTemplateValidatorCommand npm run ${devTestGameRealHostedMatrixRawCaptureCommand}`,
           "operatorAction Configure the hosted frontend/API URLs plus a readable raw hosted matrix evidence packet.",
           "localVsHostedBoundary Local hosted-like matrix artifacts cannot satisfy hosted deployment evidence.",
         ].join("\n"),
@@ -9254,6 +9259,7 @@ function hostedBlockedReceiptFixture({ proofTarget, nextProofTarget }) {
       `Configure the hosted frontend/API URLs, copy ${devTestGameHostedMatrixRawEvidenceTemplatePath} to a filled raw hosted matrix evidence packet from that same deployment, validate the template with npm run ${devTestGameHostedMatrixRawEvidenceTemplateProofCommand}, then rerun npm run test:dev-test-game-hosted-evidence-lane.`,
     rawEvidenceContractSummary: hostedMatrixRawEvidenceContractSummary(),
     rawEvidenceContract: hostedMatrixRawEvidenceContract,
+    rawEvidenceTemplate: hostedMatrixRawEvidenceTemplateDescriptor(),
     localVsHostedBoundary:
       "Local hosted-like matrix artifacts and synthetic demo evidence can prove the handoff path, but they cannot satisfy hosted deployment evidence.",
   };
@@ -10681,6 +10687,42 @@ function expectedHostedHandoffBlockedOperatorPacketValues({ packet, heading }) {
       packet.rawEvidenceContractRequiredTopLevelFields.join(", "),
       false,
     ],
+    ...(packet.rawEvidenceTemplate === undefined
+      ? []
+      : [
+          ["rawEvidenceTemplateId", packet.rawEvidenceTemplate.id, false],
+          [
+            "rawEvidenceTemplateStatus",
+            packet.rawEvidenceTemplate.status,
+            false,
+          ],
+          ["rawEvidenceTemplatePath", packet.rawEvidenceTemplate.path, false],
+          [
+            "rawEvidenceTemplateProofCommand",
+            packet.rawEvidenceTemplate.proofCommand,
+            false,
+          ],
+          [
+            "rawEvidenceTemplateProofTarget",
+            packet.rawEvidenceTemplate.proofTarget,
+            false,
+          ],
+          [
+            "rawEvidenceTemplateCopyToEnv",
+            packet.rawEvidenceTemplate.copyToEnv,
+            false,
+          ],
+          [
+            "rawEvidenceTemplateValidatorCommand",
+            packet.rawEvidenceTemplate.validatorCommand,
+            false,
+          ],
+          [
+            "rawEvidenceTemplateValidatorProofTarget",
+            packet.rawEvidenceTemplate.validatorProofTarget,
+            false,
+          ],
+        ]),
     ["proofTarget", packet.proofTarget, false],
     ["nextProofTarget", packet.nextProofTarget, false],
   ];

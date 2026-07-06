@@ -550,6 +550,7 @@ import {
   devTestGameHostedMatrixRawEvidenceTemplatePath,
   devTestGameHostedMatrixRawEvidenceTemplateProofCommand,
   devTestGameHostedMatrixRawEvidenceTemplateProofPath,
+  hostedMatrixRawEvidenceTemplateDescriptor,
 } from "./dev_test_game_hosted_matrix_raw_evidence_template_proof.mjs";
 import {
   assertDevTestGameRealHostedMatrixRawCapture,
@@ -6051,6 +6052,7 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
         selectedOperatorPacket.rawEvidenceContractSummary,
       rawEvidenceContractRequiredTopLevelFields:
         selectedOperatorPacket.rawEvidenceContractRequiredTopLevelFields,
+      rawEvidenceTemplate: selectedOperatorPacket.rawEvidenceTemplate,
       operatorAction: selectedOperatorPacket.operatorAction,
       localVsHostedBoundary: selectedOperatorPacket.localVsHostedBoundary,
       selectedProductionFeatureGraphNodeId:
@@ -24779,6 +24781,7 @@ function hostedEvidenceAdminProofHandoffFixture(progression) {
                 }),
             rawEvidenceContractSummary: hostedMatrixRawEvidenceContractSummary(),
             rawEvidenceContract: hostedMatrixRawEvidenceContract,
+            rawEvidenceTemplate: hostedMatrixRawEvidenceTemplateDescriptor(),
             realHostedMatrixRawCaptureIntake: {
               command: `npm run ${devTestGameRealHostedMatrixRawCaptureCommand}`,
               proofTarget: devTestGameRealHostedMatrixRawCapturePath,
@@ -24814,6 +24817,9 @@ function visibleHostedEvidenceBlockedReceipt(receipt) {
     operatorAction: receipt.operatorAction,
     localVsHostedBoundary: receipt.localVsHostedBoundary,
     rawEvidenceContractSummary: receipt.rawEvidenceContractSummary,
+    ...(receipt.rawEvidenceTemplate === undefined
+      ? {}
+      : { rawEvidenceTemplate: receipt.rawEvidenceTemplate }),
     nextProofTarget: receipt.nextProofTarget,
     missingRequiredInputs: [...(receipt.missingRequiredInputs ?? [])],
     firstMissingOperatorArtifact:
@@ -24850,6 +24856,9 @@ function visibleHostedEvidenceBlockedOperatorPacket(packet) {
     rawEvidenceContractRequiredTopLevelFields: [
       ...packet.rawEvidenceContractRequiredTopLevelFields,
     ],
+    ...(packet.rawEvidenceTemplate === undefined
+      ? {}
+      : { rawEvidenceTemplate: packet.rawEvidenceTemplate }),
     operatorAction: packet.operatorAction,
     localVsHostedBoundary: packet.localVsHostedBoundary,
     proofTarget: packet.proofTarget,
@@ -25222,6 +25231,7 @@ function hostedTargetPreflightFixture({
           operatorAction: hostedEvidenceOperatorAction,
           rawEvidenceContractSummary: hostedMatrixRawEvidenceContractSummary(),
           rawEvidenceContract: hostedMatrixRawEvidenceContract,
+          rawEvidenceTemplate: hostedMatrixRawEvidenceTemplateDescriptor(),
           realHostedMatrixRawCaptureIntake: {
             command: `npm run ${devTestGameRealHostedMatrixRawCaptureCommand}`,
             proofTarget: devTestGameRealHostedMatrixRawCapturePath,

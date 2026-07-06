@@ -142,6 +142,38 @@ export async function buildDevTestGameHostedMatrixRawEvidenceTemplateProof({
   });
 }
 
+export function hostedMatrixRawEvidenceTemplateDescriptor() {
+  return Object.freeze({
+    id: "operator-template",
+    path: devTestGameHostedMatrixRawEvidenceTemplatePath,
+    proofCommand: `npm run ${devTestGameHostedMatrixRawEvidenceTemplateProofCommand}`,
+    proofTarget: devTestGameHostedMatrixRawEvidenceTemplateProofPath,
+    copyToEnv: devTestGameHostedMatrixRawEvidenceTemplateEnv,
+    validatorCommand: `npm run ${devTestGameRealHostedMatrixRawCaptureCommand}`,
+    validatorProofTarget: devTestGameRealHostedMatrixRawCapturePath,
+    status: "template-only",
+  });
+}
+
+export function assertHostedMatrixRawEvidenceTemplateDescriptor(descriptor) {
+  const expected = hostedMatrixRawEvidenceTemplateDescriptor();
+  if (
+    descriptor === null ||
+    typeof descriptor !== "object" ||
+    descriptor.id !== expected.id ||
+    descriptor.path !== expected.path ||
+    descriptor.proofCommand !== expected.proofCommand ||
+    descriptor.proofTarget !== expected.proofTarget ||
+    descriptor.copyToEnv !== expected.copyToEnv ||
+    descriptor.validatorCommand !== expected.validatorCommand ||
+    descriptor.validatorProofTarget !== expected.validatorProofTarget ||
+    descriptor.status !== expected.status
+  ) {
+    throw new Error("hosted matrix raw evidence template descriptor drifted");
+  }
+  return Object.freeze({ ...expected });
+}
+
 export function assertDevTestGameHostedMatrixRawEvidenceTemplate(template) {
   const observations = Array.isArray(template?.observations)
     ? template.observations

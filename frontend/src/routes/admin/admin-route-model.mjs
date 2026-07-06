@@ -42,15 +42,8 @@ import {
   hostedEvidenceHandoffInputRows,
 } from "../../../../tools/dev_test_game_hosted_handoff_cases.mjs";
 import {
-  devTestGameHostedMatrixRawEvidenceTemplateEnv,
-  devTestGameHostedMatrixRawEvidenceTemplatePath,
-  devTestGameHostedMatrixRawEvidenceTemplateProofCommand,
-  devTestGameHostedMatrixRawEvidenceTemplateProofPath,
+  hostedMatrixRawEvidenceTemplateDescriptor,
 } from "../../../../tools/dev_test_game_hosted_matrix_raw_evidence_template_proof.mjs";
-import {
-  devTestGameRealHostedMatrixRawCaptureCommand,
-  devTestGameRealHostedMatrixRawCapturePath,
-} from "../../../../tools/dev_test_game_real_hosted_matrix_raw_capture_contract.mjs";
 import {
   devTestGameRealHostedObservabilityHandoffCommand,
   devTestGameRealHostedObservabilityHandoffPath,
@@ -995,6 +988,42 @@ function hostedOperatorPacketDescriptorRow({
         id: "rawEvidenceContractRequiredTopLevelFields",
         text: packet.rawEvidenceContractRequiredTopLevelFields.join(", "),
       },
+      ...(packet.rawEvidenceTemplate === undefined
+        ? []
+        : [
+            {
+              id: "rawEvidenceTemplateId",
+              text: packet.rawEvidenceTemplate.id,
+            },
+            {
+              id: "rawEvidenceTemplateStatus",
+              text: packet.rawEvidenceTemplate.status,
+            },
+            {
+              id: "rawEvidenceTemplatePath",
+              text: packet.rawEvidenceTemplate.path,
+            },
+            {
+              id: "rawEvidenceTemplateProofCommand",
+              text: packet.rawEvidenceTemplate.proofCommand,
+            },
+            {
+              id: "rawEvidenceTemplateProofTarget",
+              text: packet.rawEvidenceTemplate.proofTarget,
+            },
+            {
+              id: "rawEvidenceTemplateCopyToEnv",
+              text: packet.rawEvidenceTemplate.copyToEnv,
+            },
+            {
+              id: "rawEvidenceTemplateValidatorCommand",
+              text: packet.rawEvidenceTemplate.validatorCommand,
+            },
+            {
+              id: "rawEvidenceTemplateValidatorProofTarget",
+              text: packet.rawEvidenceTemplate.validatorProofTarget,
+            },
+          ]),
       { id: "proofTarget", text: packet.proofTarget },
       { id: "nextProofTarget", text: packet.nextProofTarget },
     ],
@@ -1130,16 +1159,7 @@ function buildRealHostedEvidenceInputRows(realHostedEvidenceInputs) {
 }
 
 function normalizeRawEvidenceTemplateDescriptor() {
-  return Object.freeze({
-    id: "operator-template",
-    path: devTestGameHostedMatrixRawEvidenceTemplatePath,
-    proofCommand: `npm run ${devTestGameHostedMatrixRawEvidenceTemplateProofCommand}`,
-    proofTarget: devTestGameHostedMatrixRawEvidenceTemplateProofPath,
-    copyToEnv: devTestGameHostedMatrixRawEvidenceTemplateEnv,
-    validatorCommand: `npm run ${devTestGameRealHostedMatrixRawCaptureCommand}`,
-    validatorProofTarget: devTestGameRealHostedMatrixRawCapturePath,
-    status: "template-only",
-  });
+  return hostedMatrixRawEvidenceTemplateDescriptor();
 }
 
 function buildRawEvidenceTemplateRows(template) {
@@ -4099,6 +4119,11 @@ function localProofGraphNodeCheckStatus(node) {
   const rawEvidenceContractSummary = String(
     node?.rawEvidenceContractSummary ?? "",
   ).trim();
+  const rawEvidenceTemplate =
+    node?.rawEvidenceTemplate !== null &&
+    typeof node?.rawEvidenceTemplate === "object"
+      ? node.rawEvidenceTemplate
+      : null;
   const proofTarget = String(node?.proofTarget ?? "").trim();
   const packetProofTarget = String(node?.packetProofTarget ?? "").trim();
   const nextProofTarget = String(node?.nextProofTarget ?? "").trim();
@@ -4140,6 +4165,13 @@ function localProofGraphNodeCheckStatus(node) {
     ...(rawEvidenceContractSummary === ""
       ? []
       : [`rawEvidenceContract ${rawEvidenceContractSummary}`]),
+    ...(rawEvidenceTemplate === null
+      ? []
+      : [
+          `rawEvidenceTemplatePath ${String(rawEvidenceTemplate.path ?? "").trim()}`,
+          `rawEvidenceTemplateProofCommand ${String(rawEvidenceTemplate.proofCommand ?? "").trim()}`,
+          `rawEvidenceTemplateValidatorCommand ${String(rawEvidenceTemplate.validatorCommand ?? "").trim()}`,
+        ]),
     ...(operatorAction === "" ? [] : [`operatorAction ${operatorAction}`]),
     ...(localVsHostedBoundary === ""
       ? []
@@ -6053,6 +6085,25 @@ function normalizeHostedHandoffBlockedOperatorPacket(packet) {
         : []
       ).map((field) => String(field)),
     ),
+    ...(packet.rawEvidenceTemplate === null ||
+    typeof packet.rawEvidenceTemplate !== "object"
+      ? {}
+      : {
+          rawEvidenceTemplate: Object.freeze({
+            id: String(packet.rawEvidenceTemplate.id ?? ""),
+            path: String(packet.rawEvidenceTemplate.path ?? ""),
+            proofCommand: String(packet.rawEvidenceTemplate.proofCommand ?? ""),
+            proofTarget: String(packet.rawEvidenceTemplate.proofTarget ?? ""),
+            copyToEnv: String(packet.rawEvidenceTemplate.copyToEnv ?? ""),
+            validatorCommand: String(
+              packet.rawEvidenceTemplate.validatorCommand ?? "",
+            ),
+            validatorProofTarget: String(
+              packet.rawEvidenceTemplate.validatorProofTarget ?? "",
+            ),
+            status: String(packet.rawEvidenceTemplate.status ?? ""),
+          }),
+        }),
     operatorAction: String(packet.operatorAction ?? ""),
     localVsHostedBoundary: String(packet.localVsHostedBoundary ?? ""),
     proofTarget: String(packet.proofTarget ?? ""),

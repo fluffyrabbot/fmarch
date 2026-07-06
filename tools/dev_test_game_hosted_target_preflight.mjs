@@ -58,6 +58,10 @@ import {
 import {
   buildDevTestGameRealHostedMatrixRawCapture,
 } from "./dev_test_game_real_hosted_matrix_raw_capture.mjs";
+import {
+  assertHostedMatrixRawEvidenceTemplateDescriptor,
+  hostedMatrixRawEvidenceTemplateDescriptor,
+} from "./dev_test_game_hosted_matrix_raw_evidence_template_proof.mjs";
 
 export const DEV_TEST_GAME_HOSTED_TARGET_PREFLIGHT_VERSION = 1;
 export { devTestGameHostedTargetPreflightPath };
@@ -307,6 +311,7 @@ function assertBlockedReceipt(receipt, { blockedCheckIds }) {
   ) {
     throw new Error("hosted target preflight blocked receipt raw evidence contract drifted");
   }
+  assertHostedMatrixRawEvidenceTemplateDescriptor(receipt.rawEvidenceTemplate);
   if (
     receipt.realHostedMatrixRawCaptureIntake?.command !==
       `npm run ${devTestGameRealHostedMatrixRawCaptureCommand}` ||
@@ -419,6 +424,7 @@ function buildBlockedReceipt({
       : { firstMissingOperatorArtifact }),
     rawEvidenceContractSummary: hostedMatrixRawEvidenceContractSummary(),
     rawEvidenceContract: hostedMatrixRawEvidenceContract,
+    rawEvidenceTemplate: hostedMatrixRawEvidenceTemplateDescriptor(),
     realHostedMatrixRawCaptureIntake: {
       command: `npm run ${devTestGameRealHostedMatrixRawCaptureCommand}`,
       proofTarget: devTestGameRealHostedMatrixRawCapturePath,

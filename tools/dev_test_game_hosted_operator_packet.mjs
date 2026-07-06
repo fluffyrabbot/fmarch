@@ -1,3 +1,7 @@
+import {
+  assertHostedMatrixRawEvidenceTemplateDescriptor,
+} from "./dev_test_game_hosted_matrix_raw_evidence_template_proof.mjs";
+
 export function blockedOperatorPacketFromReceipt(receipt) {
   if (
     receipt === null ||
@@ -32,6 +36,14 @@ export function blockedOperatorPacketFromReceipt(receipt) {
           String(field),
         )
       : [],
+    ...(receipt.rawEvidenceTemplate === undefined
+      ? {}
+      : {
+          rawEvidenceTemplate:
+            assertHostedMatrixRawEvidenceTemplateDescriptor(
+              receipt.rawEvidenceTemplate,
+            ),
+        }),
     operatorAction: String(receipt.operatorAction ?? ""),
     localVsHostedBoundary: String(receipt.localVsHostedBoundary ?? ""),
     proofTarget: String(receipt.proofTarget ?? ""),
@@ -77,6 +89,10 @@ export function assertBlockedOperatorPacket(packet) {
     packet.rawEvidenceContractSummary === "" ||
     !Array.isArray(packet.rawEvidenceContractRequiredTopLevelFields) ||
     packet.rawEvidenceContractRequiredTopLevelFields.length === 0 ||
+    (packet.rawEvidenceTemplate !== undefined &&
+      assertHostedMatrixRawEvidenceTemplateDescriptor(
+        packet.rawEvidenceTemplate,
+      ) === null) ||
     typeof packet.operatorAction !== "string" ||
     packet.operatorAction === "" ||
     typeof packet.localVsHostedBoundary !== "string" ||
@@ -124,6 +140,14 @@ export function visibleBlockedOperatorPacket(packet) {
     rawEvidenceContractRequiredTopLevelFields: (
       packet.rawEvidenceContractRequiredTopLevelFields ?? []
     ).map((field) => String(field)),
+    ...(packet.rawEvidenceTemplate === undefined
+      ? {}
+      : {
+          rawEvidenceTemplate:
+            assertHostedMatrixRawEvidenceTemplateDescriptor(
+              packet.rawEvidenceTemplate,
+            ),
+        }),
     operatorAction: String(packet.operatorAction ?? ""),
     localVsHostedBoundary: String(packet.localVsHostedBoundary ?? ""),
     proofTarget: String(packet.proofTarget ?? ""),
@@ -163,6 +187,18 @@ export function blockedOperatorPacketText(packet) {
     visible.firstMissingRequiredEvidence,
     visible.rawEvidenceContractSummary,
     ...visible.rawEvidenceContractRequiredTopLevelFields,
+    ...(visible.rawEvidenceTemplate === undefined
+      ? []
+      : [
+          visible.rawEvidenceTemplate.id,
+          visible.rawEvidenceTemplate.status,
+          visible.rawEvidenceTemplate.path,
+          visible.rawEvidenceTemplate.proofCommand,
+          visible.rawEvidenceTemplate.proofTarget,
+          visible.rawEvidenceTemplate.copyToEnv,
+          visible.rawEvidenceTemplate.validatorCommand,
+          visible.rawEvidenceTemplate.validatorProofTarget,
+        ]),
     visible.operatorAction,
     visible.localVsHostedBoundary,
     visible.proofTarget,

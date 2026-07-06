@@ -718,7 +718,16 @@ export function assertDevTestGameProofGraphCoversSelectedOperatorHandoffPacket(
     typeof node.rawEvidenceContractSummary !== "string" ||
     node.rawEvidenceContractSummary.trim() === "" ||
     !Array.isArray(node.rawEvidenceContractRequiredTopLevelFields) ||
-    node.rawEvidenceContractRequiredTopLevelFields.length === 0
+    node.rawEvidenceContractRequiredTopLevelFields.length === 0 ||
+    (node.rawEvidenceTemplate !== undefined &&
+      (node.rawEvidenceTemplate === null ||
+        typeof node.rawEvidenceTemplate !== "object" ||
+        typeof node.rawEvidenceTemplate.path !== "string" ||
+        node.rawEvidenceTemplate.path.trim() === "" ||
+        typeof node.rawEvidenceTemplate.proofCommand !== "string" ||
+        node.rawEvidenceTemplate.proofCommand.trim() === "" ||
+        typeof node.rawEvidenceTemplate.validatorCommand !== "string" ||
+        node.rawEvidenceTemplate.validatorCommand.trim() === ""))
   ) {
     throw new Error("proof graph selected operator packet node drifted");
   }
@@ -1585,6 +1594,9 @@ function buildSelectedOperatorHandoffPacketNode({ nextAction }) {
       rawEvidenceContractSummary: packet.rawEvidenceContractSummary,
       rawEvidenceContractRequiredTopLevelFields:
         packet.rawEvidenceContractRequiredTopLevelFields,
+      ...(packet.rawEvidenceTemplate === undefined
+        ? {}
+        : { rawEvidenceTemplate: packet.rawEvidenceTemplate }),
       operatorAction: packet.operatorAction,
       localVsHostedBoundary: packet.localVsHostedBoundary,
       selectedProductionFeatureGraphNodeId:
