@@ -184,6 +184,28 @@ export function assertSelectedOperatorHandoffTerminalReceipt(
   return receipt;
 }
 
+export function selectedOperatorHandoffReceiptSelectedRowStatus(receipt) {
+  const template = receipt.selectedOperatorHandoff.rawEvidenceTemplate;
+  return [
+    receipt.selectedOperatorHandoff.status,
+    receipt.selectedOperatorHandoff.command,
+    receipt.selectedOperatorHandoff.firstMissingInputId,
+    receipt.selectedOperatorHandoff.selectedProductionFeatureGraphNodeId,
+    ...(template === undefined
+      ? []
+      : [
+          template.id,
+          template.status,
+          template.path,
+          template.proofCommand,
+          template.proofTarget,
+          template.copyToEnv,
+          template.validatorCommand,
+          template.validatorProofTarget,
+        ]),
+  ].join("\n");
+}
+
 function assertSelectedOperatorHandoffReceiptShape(receipt) {
   if (receipt.status === "not_applicable") {
     if (
@@ -234,7 +256,8 @@ function assertSelectedOperatorHandoffReceiptShape(receipt) {
 
 function selectedOperatorHandoffSummary(handoff) {
   const rawEvidenceTemplateSource =
-    handoff.rawEvidenceTemplate ?? handoff.blockedOperatorPacket?.rawEvidenceTemplate;
+    handoff.rawEvidenceTemplate ??
+    handoff.blockedOperatorPacket?.rawEvidenceTemplate;
   return Object.freeze({
     id: handoff.id,
     status: handoff.status,

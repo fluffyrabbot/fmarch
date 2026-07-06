@@ -686,6 +686,7 @@ import {
 } from "./dev_test_game_next_action_sequence_handoff_pair.mjs";
 import {
   buildSelectedOperatorHandoffTerminalReceipt,
+  selectedOperatorHandoffReceiptSelectedRowStatus,
 } from "./dev_test_game_selected_operator_handoff_receipt.mjs";
 import {
   selectedOperatorHandoffPassedReceiptFixture,
@@ -25580,28 +25581,6 @@ function selectedOperatorHandoffReceiptDestinationFixture() {
       ].join("\n"),
     },
   };
-}
-
-function selectedOperatorHandoffReceiptSelectedRowStatus(receipt) {
-  const template = receipt.selectedOperatorHandoff.rawEvidenceTemplate;
-  return [
-    receipt.selectedOperatorHandoff.status,
-    receipt.selectedOperatorHandoff.command,
-    receipt.selectedOperatorHandoff.firstMissingInputId,
-    receipt.selectedOperatorHandoff.selectedProductionFeatureGraphNodeId,
-    ...(template === undefined
-      ? []
-      : [
-          template.id,
-          template.status,
-          template.path,
-          template.proofCommand,
-          template.proofTarget,
-          template.copyToEnv,
-          template.validatorCommand,
-          template.validatorProofTarget,
-        ]),
-  ].join("\n");
 }
 
 function adminSpineTerminalValidationDestinationFixture() {
