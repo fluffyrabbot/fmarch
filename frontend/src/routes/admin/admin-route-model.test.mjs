@@ -1898,6 +1898,23 @@ test("admin audit detail page renders handoff and real-hosted input rows from ro
   assert.doesNotMatch(source, /input\.required \? "required" : "optional"/);
 });
 
+test("admin audit detail page renders simple list rows from route data", async () => {
+  const source = await readFile(
+    "frontend/src/routes/admin/audit/[audit]/+page.svelte",
+    "utf8",
+  );
+  assert.match(source, /checksRows/);
+  assert.doesNotMatch(source, /checks as check/);
+  assert.match(source, /sessionsRows/);
+  assert.doesNotMatch(source, /sessions as session/);
+  assert.match(source, /proofLaneCoverageRows/);
+  assert.doesNotMatch(source, /proofLaneCoverage as coverage/);
+  assert.match(source, /reconnectLaneRows/);
+  assert.doesNotMatch(source, /reconnectLanes as lane/);
+  assert.match(source, /staleConflictLaneRows/);
+  assert.doesNotMatch(source, /staleConflictLanes as lane/);
+});
+
 test("admin hosted-facing audit inventory carries shared handoff paths where required", async () => {
   const data = await buildAdminRouteData({
     principalUserId: "admin_a",
@@ -2828,8 +2845,24 @@ test("admin local hosted matrix detail data carries progress and gap rows", asyn
     hostedMatrixReconnectLaneIds.map((laneId) => [laneId, "passed"]),
   );
   assert.deepEqual(
+    hostedHandoffChecklistRowsForAssertion(data.audit.reconnectLaneRows),
+    expectedSimpleLaneRows({
+      rows: data.audit.reconnectLanes,
+      idPrefix: "reconnect-lane",
+      testIdPrefix: "admin-audit-reconnect-lane",
+    }),
+  );
+  assert.deepEqual(
     data.audit.staleConflictLanes.map((lane) => [lane.id, lane.status]),
     hostedMatrixStaleConflictLaneIds.map((laneId) => [laneId, "passed"]),
+  );
+  assert.deepEqual(
+    hostedHandoffChecklistRowsForAssertion(data.audit.staleConflictLaneRows),
+    expectedSimpleLaneRows({
+      rows: data.audit.staleConflictLanes,
+      idPrefix: "stale-conflict-lane",
+      testIdPrefix: "admin-audit-stale-conflict-lane",
+    }),
   );
 });
 
@@ -5328,6 +5361,10 @@ test("admin local seed fixture detail data carries scenario rows", async () => {
       ["unclassified", seedCoverageCounts.unclassifiedLaneCount],
     ],
   );
+  assert.deepEqual(
+    hostedHandoffChecklistRowsForAssertion(data.audit.proofLaneCoverageRows),
+    expectedProofLaneCoverageRows(data.audit.proofLaneCoverage),
+  );
 });
 
 test("admin route data exposes local release readiness as a native audit row", async () => {
@@ -5588,6 +5625,10 @@ test("admin local host setup proof detail data carries setup command evidence ro
     ],
   );
   assert.deepEqual(
+    hostedHandoffChecklistRowsForAssertion(data.audit.checksRows),
+    expectedCheckRows(data.audit.checks),
+  );
+  assert.deepEqual(
     data.audit.setupCommandEvidence.map((item) => [
       item.id,
       item.status,
@@ -5807,6 +5848,10 @@ test("admin local backup restore detail data carries checks and restored session
       ["player", ["SlotOccupant", "ChannelMember"]],
       ["admin", ["GlobalAdmin"]],
     ],
+  );
+  assert.deepEqual(
+    hostedHandoffChecklistRowsForAssertion(data.audit.sessionsRows),
+    expectedSessionRows(data.audit.sessions),
   );
 });
 
@@ -9442,6 +9487,55 @@ function expectedRealHostedEvidenceInputRows(realHostedEvidenceInputs) {
       ["label", input.label, true],
       ["value", input.value, false],
       ["required", input.required ? "required" : "optional", false],
+    ],
+    [],
+  ]);
+}
+
+function expectedCheckRows(checks) {
+  return checks.map((check) => [
+    `check-${check.id}`,
+    `admin-audit-check-${check.id}`,
+    [
+      ["id", check.id, true],
+      ["status", check.status, false],
+    ],
+    [],
+  ]);
+}
+
+function expectedSessionRows(sessions) {
+  return sessions.map((session) => [
+    `session-${session.role}`,
+    `admin-audit-session-${session.role}`,
+    [
+      ["role", session.role, true],
+      ["capabilities", session.capabilities.join(", "), false],
+    ],
+    [],
+  ]);
+}
+
+function expectedSimpleLaneRows({ rows, idPrefix, testIdPrefix }) {
+  return rows.map((row) => [
+    `${idPrefix}-${row.id}`,
+    `${testIdPrefix}-${row.id}`,
+    [
+      ["label", row.label, true],
+      ["status", row.status, false],
+    ],
+    [],
+  ]);
+}
+
+function expectedProofLaneCoverageRows(coverageRows) {
+  return coverageRows.map((coverage) => [
+    `proof-lane-coverage-${coverage.id}`,
+    `admin-audit-proof-lane-coverage-${coverage.id}`,
+    [
+      ["label", coverage.label, true],
+      ["status", coverage.status, false],
+      ["laneIds", coverage.laneIds.join(", "), false],
     ],
     [],
   ]);

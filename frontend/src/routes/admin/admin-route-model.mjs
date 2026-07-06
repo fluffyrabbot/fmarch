@@ -1649,6 +1649,8 @@ export async function buildAdminAuditDetailData({
   });
   const auditId = requiredAuditId(audit);
   const item = data.audit.find((candidate) => candidate.id === auditId);
+  const detailAudit =
+    item === undefined ? null : withAdminAuditDetailDisplayRows(item);
 
   return Object.freeze({
     shell: data.shell,
@@ -1667,10 +1669,87 @@ export async function buildAdminAuditDetailData({
       label: game,
     }),
     overviewHref: adminOverviewHref({ game }),
-    audit: item ?? null,
+    audit: detailAudit,
     auditId,
     status: item === undefined ? "missing" : "available",
   });
+}
+
+function withAdminAuditDetailDisplayRows(item) {
+  const checksRows = buildSimpleAdminAuditRows({
+    items: item.checks,
+    idPrefix: "check",
+    testIdPrefix: "admin-audit-check",
+    valuesForItem: (check) => [
+      { id: "id", text: check.id, emphasized: true },
+      { id: "status", text: check.status },
+    ],
+  });
+  const sessionsRows = buildSimpleAdminAuditRows({
+    items: item.sessions,
+    idPrefix: "session",
+    testIdPrefix: "admin-audit-session",
+    itemId: (session) => session.role,
+    valuesForItem: (session) => [
+      { id: "role", text: session.role, emphasized: true },
+      { id: "capabilities", text: session.capabilities.join(", ") },
+    ],
+  });
+  const proofLaneCoverageRows = buildSimpleAdminAuditRows({
+    items: item.proofLaneCoverage,
+    idPrefix: "proof-lane-coverage",
+    testIdPrefix: "admin-audit-proof-lane-coverage",
+    valuesForItem: (coverage) => [
+      { id: "label", text: coverage.label, emphasized: true },
+      { id: "status", text: coverage.status },
+      { id: "laneIds", text: coverage.laneIds.join(", ") },
+    ],
+  });
+  const reconnectLaneRows = buildSimpleAdminAuditRows({
+    items: item.reconnectLanes,
+    idPrefix: "reconnect-lane",
+    testIdPrefix: "admin-audit-reconnect-lane",
+    valuesForItem: (lane) => [
+      { id: "label", text: lane.label, emphasized: true },
+      { id: "status", text: lane.status },
+    ],
+  });
+  const staleConflictLaneRows = buildSimpleAdminAuditRows({
+    items: item.staleConflictLanes,
+    idPrefix: "stale-conflict-lane",
+    testIdPrefix: "admin-audit-stale-conflict-lane",
+    valuesForItem: (lane) => [
+      { id: "label", text: lane.label, emphasized: true },
+      { id: "status", text: lane.status },
+    ],
+  });
+  return Object.freeze({
+    ...item,
+    ...(checksRows.length === 0 ? {} : { checksRows }),
+    ...(sessionsRows.length === 0 ? {} : { sessionsRows }),
+    ...(proofLaneCoverageRows.length === 0 ? {} : { proofLaneCoverageRows }),
+    ...(reconnectLaneRows.length === 0 ? {} : { reconnectLaneRows }),
+    ...(staleConflictLaneRows.length === 0 ? {} : { staleConflictLaneRows }),
+  });
+}
+
+function buildSimpleAdminAuditRows({
+  items,
+  idPrefix,
+  testIdPrefix,
+  itemId = (item) => item.id,
+  valuesForItem,
+}) {
+  return Object.freeze(
+    (Array.isArray(items) ? items : []).map((item) => {
+      const id = String(itemId(item) ?? "");
+      return artifactSummaryRow({
+        id: `${idPrefix}-${id}`,
+        testId: `${testIdPrefix}-${id}`,
+        values: valuesForItem(item),
+      });
+    }),
+  );
 }
 
 export function adminForbiddenMessage() {

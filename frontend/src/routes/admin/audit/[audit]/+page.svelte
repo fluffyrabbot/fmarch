@@ -251,18 +251,11 @@
         {/if}
       </section>
     {/if}
-    {#if data.audit.checks?.length > 0}
-      <ol class="admin-audit-detail__entries" data-testid="admin-audit-detail-checks">
-        {#each data.audit.checks as check}
-          <li
-            class="admin-audit-detail__entry"
-            data-testid={`admin-audit-check-${check.id}`}
-          >
-            <strong>{check.id}</strong>
-            <span>{check.status}</span>
-          </li>
-        {/each}
-      </ol>
+    {#if data.audit.checksRows?.length > 0}
+      <AdminAuditDescriptorRows
+        rows={data.audit.checksRows}
+        listTestId="admin-audit-detail-checks"
+      />
     {/if}
     {#if data.audit.batches?.length > 0}
       <section
@@ -341,24 +334,13 @@
         {/each}
       </ol>
     {/if}
-    {#if data.audit.proofLaneCoverage?.length > 0}
+    {#if data.audit.proofLaneCoverageRows?.length > 0}
       <section
         class="admin-audit-detail__group"
         data-testid="admin-audit-detail-proof-lane-coverage"
       >
         <h2>Proof lane coverage</h2>
-        <ol class="admin-audit-detail__entries">
-          {#each data.audit.proofLaneCoverage as coverage}
-            <li
-              class="admin-audit-detail__entry admin-audit-detail__entry--stack"
-              data-testid={`admin-audit-proof-lane-coverage-${coverage.id}`}
-            >
-              <strong>{coverage.label}</strong>
-              <span>{coverage.status}</span>
-              <span>{coverage.laneIds.join(", ")}</span>
-            </li>
-          {/each}
-        </ol>
+        <AdminAuditDescriptorRows rows={data.audit.proofLaneCoverageRows} />
       </section>
     {/if}
     {#if productionFeatureDestinationRows.length > 0}
@@ -401,52 +383,25 @@
         {/if}
       </section>
     {/if}
-    {#if data.audit.sessions?.length > 0}
-      <ol class="admin-audit-detail__entries" data-testid="admin-audit-detail-sessions">
-        {#each data.audit.sessions as session}
-          <li
-            class="admin-audit-detail__entry"
-            data-testid={`admin-audit-session-${session.role}`}
-          >
-            <strong>{session.role}</strong>
-            <span>{session.capabilities.join(", ")}</span>
-          </li>
-        {/each}
-      </ol>
+    {#if data.audit.sessionsRows?.length > 0}
+      <AdminAuditDescriptorRows
+        rows={data.audit.sessionsRows}
+        listTestId="admin-audit-detail-sessions"
+      />
     {/if}
-    {#if data.audit.reconnectLanes?.length > 0}
+    {#if data.audit.reconnectLaneRows?.length > 0}
       <section class="admin-audit-detail__group" data-testid="admin-audit-detail-reconnect-lanes">
         <h2>Reconnect recovery lanes</h2>
-        <ol class="admin-audit-detail__entries">
-          {#each data.audit.reconnectLanes as lane}
-            <li
-              class="admin-audit-detail__entry"
-              data-testid={`admin-audit-reconnect-lane-${lane.id}`}
-            >
-              <strong>{lane.label}</strong>
-              <span>{lane.status}</span>
-            </li>
-          {/each}
-        </ol>
+        <AdminAuditDescriptorRows rows={data.audit.reconnectLaneRows} />
       </section>
     {/if}
-    {#if data.audit.staleConflictLanes?.length > 0}
+    {#if data.audit.staleConflictLaneRows?.length > 0}
       <section
         class="admin-audit-detail__group"
         data-testid="admin-audit-detail-stale-conflict-lanes"
       >
         <h2>Stale-client conflict lanes</h2>
-        <ol class="admin-audit-detail__entries">
-          {#each data.audit.staleConflictLanes as lane}
-            <li
-              class="admin-audit-detail__entry"
-              data-testid={`admin-audit-stale-conflict-lane-${lane.id}`}
-            >
-              <strong>{lane.label}</strong>
-              <span>{lane.status}</span>
-            </li>
-          {/each}
-        </ol>
+        <AdminAuditDescriptorRows rows={data.audit.staleConflictLaneRows} />
       </section>
     {/if}
     {#if data.audit.handoffPathRows?.length > 0}
