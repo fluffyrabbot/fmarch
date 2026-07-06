@@ -8,7 +8,10 @@ import {
 
 export {
   assertHostVisibleInvalidActionRecoverySummary,
+  assertHostVisibleStaleTransitionRecoverySummaries,
   buildHostVisibleInvalidActionRecoverySummary,
+  buildHostVisibleStaleTransitionRecoverySummaries,
+  hostVisibleStaleTransitionRecoveryCases,
   playerActionBoundaryLaneId,
   playerActionBoundaryRecoveryHookId,
   playerActionLoopLaneId,
@@ -17,8 +20,10 @@ export {
   playerInvalidActionRecoveryMessage,
   playerInvalidActionRecoveryLaneId,
   playerInvalidActionRecoveryScenario,
+  playerStaleActionTransitionRecoveryMessage,
   playerStaleActionTransitionRecoveryHookId,
   playerStaleActionTransitionRecoveryFeatureSlotId,
+  playerStaleVoteTransitionRecoveryMessage,
   playerStaleVoteTransitionRecoveryHookId,
   playerStaleVoteTransitionRecoveryFeatureSlotId,
   playerSlotVoteCommandFacts,

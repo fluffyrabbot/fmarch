@@ -328,6 +328,7 @@ import {
 } from "./dev_test_game_core_loop_completed_game_proof_readiness_contract.mjs";
 import {
   assertHostVisibleInvalidActionRecoverySummary,
+  assertHostVisibleStaleTransitionRecoverySummaries,
   assertPlayerStaleActionAfterTransitionProofCase,
   assertPlayerStaleVoteAfterTransitionProofCase,
   staleNightFourActionRecoveryScenario,
@@ -3001,6 +3002,13 @@ export function validateDevTestGameCoreLoopAdminProof(proof, options = {}) {
       requireVisibleStatus: true,
       includeEvidenceInError: true,
     });
+  const hostVisibleStaleTransitionRecoveries =
+    assertHostVisibleStaleTransitionRecoverySummaries({
+      summaries: proof.generatedFrom?.hostVisibleStaleTransitionRecoveries,
+      requireBrowserProof: true,
+      requireRecoveryHookVisible: true,
+      includeEvidenceInError: true,
+    });
   assertCoreLoopCommandProofRoleUrls({
     proof,
     includeEvidenceInError: true,
@@ -3029,6 +3037,7 @@ export function validateDevTestGameCoreLoopAdminProof(proof, options = {}) {
     visibleCommandProofRoleUrlAudit,
     coreLoopSpineRows: proof.generatedFrom.coreLoopSpineRows,
     hostVisibleInvalidActionRecovery,
+    hostVisibleStaleTransitionRecoveries,
     completedGameHardeningCoverage:
       proof.generatedFrom.completedGameHardeningCoverage,
     completedGameHardeningCoverageStatus:

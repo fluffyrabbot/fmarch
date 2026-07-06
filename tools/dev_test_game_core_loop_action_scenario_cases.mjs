@@ -14,6 +14,10 @@ export const playerStaleVoteTransitionRecoveryHookId =
   "staleVoteTransitionReject";
 export const playerStaleActionTransitionRecoveryHookId =
   "staleActionTransitionReject";
+export const playerStaleVoteTransitionRecoveryMessage =
+  "stale vote state, refresh and use current vote controls";
+export const playerStaleActionTransitionRecoveryMessage =
+  "stale action state, refresh and use current action controls";
 
 export function invalidActionRecoveryFeatureSpineRow({ cycleId }) {
   return {
@@ -253,6 +257,274 @@ export function assertHostVisibleInvalidActionRecoverySummary({
     );
   }
   return summary;
+}
+
+export function hostVisibleStaleTransitionRecoveryCases() {
+  return [
+    {
+      id: playerStaleActionTransitionRecoveryFeatureSlotId,
+      label: "Stale action transition recovery",
+      adminCheckId: playerActionLoopLaneId,
+      recoveryHookId: playerStaleActionTransitionRecoveryHookId,
+      commandKind: "SubmitAction",
+      clickedAction: "submit_action:factional_kill",
+      messageIncludes: playerStaleActionTransitionRecoveryMessage,
+      refreshedPhaseId: "D05",
+      refreshedActionState: "disabled:no legal action available",
+      sourceSurfaceField: "postNightFourTransitionSurface",
+      nestedProofField: "staleNightFourActionRecoveryProof",
+      sourceHostRoleUrlField: "sourceHostRoleUrl",
+      sourceActionPlayerRoleUrlField: "sourceActionPlayerRoleUrl",
+      roleUrlId: "d04-n04-d05-actionPlayer",
+      hostRoleUrlId: "d04-n04-d05-host",
+    },
+    {
+      id: playerStaleVoteTransitionRecoveryFeatureSlotId,
+      label: "Stale vote transition recovery",
+      adminCheckId: playerActionLoopLaneId,
+      recoveryHookId: playerStaleVoteTransitionRecoveryHookId,
+      commandKind: "SubmitVote",
+      clickedAction: "submit_vote:no_lynch",
+      messageIncludes: playerStaleVoteTransitionRecoveryMessage,
+      refreshedPhaseId: "N05",
+      refreshedActionState: "disabled:no legal action available",
+      sourceSurfaceField: "dayFiveNoLynchResolutionSurface",
+      nestedProofField: "staleDayFiveVoteRecoveryProof",
+      sourceHostRoleUrlField: "sourceHostRoleUrl",
+      sourceActionPlayerRoleUrlField: "sourceActionPlayerRoleUrl",
+      roleUrlId: "d05-n05-actionPlayer",
+      hostRoleUrlId: "d05-n05-host",
+    },
+  ].map((recoveryCase) => Object.freeze({ ...recoveryCase }));
+}
+
+export function buildHostVisibleStaleTransitionRecoverySummaries({
+  proofRun,
+  coreLoopSpineRows,
+  adminRoleSurface,
+  proofSurfaces,
+  detailRoleUrl,
+} = {}) {
+  const roleUrlHrefs = {
+    ...roleUrlHrefsFromProofRun(proofRun),
+    ...roleUrlHrefsFromSpineRows(coreLoopSpineRows),
+  };
+  return Object.freeze(
+    hostVisibleStaleTransitionRecoveryCases().map((recoveryCase) =>
+      buildHostVisibleStaleTransitionRecoverySummary({
+        recoveryCase,
+        proofRun,
+        roleUrlHrefs,
+        adminRoleSurface,
+        proofSurfaces,
+        detailRoleUrl,
+      }),
+    ),
+  );
+}
+
+export function assertHostVisibleStaleTransitionRecoverySummaries({
+  summaries,
+  requireBrowserProof = false,
+  requireRecoveryHookVisible = false,
+  includeEvidenceInError = false,
+} = {}) {
+  const summariesById = new Map(
+    (Array.isArray(summaries) ? summaries : []).map((summary) => [
+      summary?.id,
+      summary,
+    ]),
+  );
+  return Object.freeze(
+    hostVisibleStaleTransitionRecoveryCases().map((recoveryCase) =>
+      assertHostVisibleStaleTransitionRecoverySummary({
+        summary: summariesById.get(recoveryCase.id),
+        recoveryCase,
+        requireBrowserProof,
+        requireRecoveryHookVisible,
+        includeEvidenceInError,
+      }),
+    ),
+  );
+}
+
+function buildHostVisibleStaleTransitionRecoverySummary({
+  recoveryCase,
+  proofRun,
+  roleUrlHrefs,
+  adminRoleSurface,
+  proofSurfaces,
+  detailRoleUrl,
+}) {
+  const sourceSurface = proofSurfaces?.[recoveryCase.sourceSurfaceField];
+  const browserProof = sourceSurface?.[recoveryCase.nestedProofField] ?? null;
+  const recoveryHookStatus = String(
+    proofRun?.coreLoopSpine?.recoveryHooks?.[recoveryCase.recoveryHookId] ?? "",
+  );
+  const commandStatus =
+    browserProof?.commandStatus !== null &&
+    typeof browserProof?.commandStatus === "object"
+      ? browserProof.commandStatus
+      : {};
+  const receiptStatusText = String(
+    browserProof?.receiptStatusText ?? commandStatus.message ?? "",
+  );
+  const refreshedPhaseId = String(
+    browserProof?.projectionCommandState?.phase?.phaseId ??
+      recoveryCase.refreshedPhaseId,
+  );
+  const checkpointActionState = String(
+    browserProof?.checkpointActionStateAfterReject ??
+      recoveryCase.refreshedActionState,
+  );
+  const browserProofPassed =
+    browserProof?.status === "passed" &&
+    browserProof.clickedAction === recoveryCase.clickedAction &&
+    browserProof.commandKind === recoveryCase.commandKind &&
+    commandStatus.state === "reject" &&
+    commandStatus.error === "PhaseLocked" &&
+    receiptStatusText.includes(recoveryCase.messageIncludes) &&
+    refreshedPhaseId === recoveryCase.refreshedPhaseId &&
+    checkpointActionState === recoveryCase.refreshedActionState;
+  const visibleRecoveryHook = (
+    Array.isArray(adminRoleSurface?.visibleSpineRecoveryHooks)
+      ? adminRoleSurface.visibleSpineRecoveryHooks
+      : []
+  ).includes(recoveryCase.recoveryHookId);
+  const hostRoleUrl = String(
+    sourceSurface?.[recoveryCase.sourceHostRoleUrlField] ??
+      roleUrlHrefs[recoveryCase.hostRoleUrlId] ??
+      firstRoleUrl(roleUrlHrefs, "host") ??
+      "",
+  );
+  const actionPlayerRoleUrl = String(
+    sourceSurface?.[recoveryCase.sourceActionPlayerRoleUrlField] ??
+      roleUrlHrefs[recoveryCase.roleUrlId] ??
+      firstRoleUrl(roleUrlHrefs, "actionPlayer") ??
+      "",
+  );
+  return Object.freeze({
+    id: recoveryCase.id,
+    label: recoveryCase.label,
+    status:
+      recoveryHookStatus === "PhaseLocked" &&
+      hostRoleUrl.includes("/host") &&
+      actionPlayerRoleUrl.includes("/g/") &&
+      (browserProof === null || browserProofPassed)
+        ? "passed"
+        : "failed",
+    adminCheckId: recoveryCase.adminCheckId,
+    recoveryHookId: recoveryCase.recoveryHookId,
+    recoveryHookStatus,
+    commandKind: recoveryCase.commandKind,
+    clickedAction: recoveryCase.clickedAction,
+    rejectError: String(commandStatus.error ?? "PhaseLocked"),
+    receiptStatusText:
+      receiptStatusText === ""
+        ? `Reject PhaseLocked: phase locked; ${recoveryCase.messageIncludes}`
+        : receiptStatusText,
+    refreshedPhaseId,
+    checkpointActionStateAfterReject: checkpointActionState,
+    browserProofStatus: String(browserProof?.status ?? ""),
+    browserProofPassed,
+    visibleRecoveryHook,
+    hostRoleUrl,
+    actionPlayerRoleUrl,
+    sourceRoleUrl: actionPlayerRoleUrl,
+    visitedRolePath: visitedRolePathFromRoleUrl(actionPlayerRoleUrl),
+    detailRoleUrl: String(
+      detailRoleUrl ?? adminRoleSurface?.detailRoleUrl ?? "",
+    ),
+    proofBoundary:
+      "Host-visible local core-loop stale transition recovery summary: the seeded admin detail names the recovery hook, host URL, action-player URL, stale command reject receipt, and refreshed current controls.",
+  });
+}
+
+function assertHostVisibleStaleTransitionRecoverySummary({
+  summary,
+  recoveryCase,
+  requireBrowserProof,
+  requireRecoveryHookVisible,
+  includeEvidenceInError,
+}) {
+  const failure =
+    summary?.status !== "passed" ||
+    summary.id !== recoveryCase.id ||
+    summary.adminCheckId !== recoveryCase.adminCheckId ||
+    summary.recoveryHookId !== recoveryCase.recoveryHookId ||
+    summary.recoveryHookStatus !== "PhaseLocked" ||
+    summary.commandKind !== recoveryCase.commandKind ||
+    summary.clickedAction !== recoveryCase.clickedAction ||
+    summary.rejectError !== "PhaseLocked" ||
+    !String(summary.receiptStatusText ?? "").includes(
+      recoveryCase.messageIncludes,
+    ) ||
+    !String(summary.hostRoleUrl ?? "").includes("/g/") ||
+    !String(summary.hostRoleUrl ?? "").includes("/host") ||
+    !String(summary.actionPlayerRoleUrl ?? "").includes("/g/") ||
+    !String(summary.detailRoleUrl ?? "").includes("/admin/audit/") ||
+    (requireBrowserProof &&
+      (summary.browserProofStatus !== "passed" ||
+        summary.browserProofPassed !== true ||
+        summary.refreshedPhaseId !== recoveryCase.refreshedPhaseId ||
+        summary.checkpointActionStateAfterReject !==
+          recoveryCase.refreshedActionState)) ||
+    (requireRecoveryHookVisible && summary.visibleRecoveryHook !== true);
+  if (failure) {
+    throw new Error(
+      includeEvidenceInError
+        ? `core-loop proof missing host-visible stale transition recovery summary: ${JSON.stringify(summary)}`
+        : "core-loop proof missing host-visible stale transition recovery summary",
+    );
+  }
+  return summary;
+}
+
+function roleUrlHrefsFromSpineRows(coreLoopSpineRows) {
+  if (
+    coreLoopSpineRows?.roleUrlHrefs !== null &&
+    typeof coreLoopSpineRows?.roleUrlHrefs === "object"
+  ) {
+    return coreLoopSpineRows.roleUrlHrefs;
+  }
+  return {};
+}
+
+function roleUrlHrefsFromProofRun(proofRun) {
+  const cycles = Array.isArray(proofRun?.coreLoopSpine?.cycles)
+    ? proofRun.coreLoopSpine.cycles
+    : [];
+  return Object.fromEntries(
+    cycles.flatMap((cycle) => {
+      const cycleId = String(cycle?.id ?? "");
+      const roleUrls =
+        cycle?.roleUrls !== null && typeof cycle?.roleUrls === "object"
+          ? cycle.roleUrls
+          : {};
+      return Object.entries(roleUrls).map(([role, href]) => [
+        `${cycleId}-${String(role)}`,
+        String(href ?? ""),
+      ]);
+    }),
+  );
+}
+
+function firstRoleUrl(roleUrlHrefs, role) {
+  return Object.entries(roleUrlHrefs).find(([id, href]) =>
+    id.endsWith(`-${role}`) && typeof href === "string" && href.includes("/g/")
+  )?.[1];
+}
+
+function visitedRolePathFromRoleUrl(roleUrl) {
+  if (typeof roleUrl !== "string" || roleUrl.trim() === "") {
+    return "";
+  }
+  try {
+    const parsed = new URL(roleUrl);
+    return `${parsed.pathname}${parsed.search}`;
+  } catch {
+    return "";
+  }
 }
 
 export function staleNightFourActionRecoveryScenario() {

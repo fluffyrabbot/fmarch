@@ -71,6 +71,10 @@ import {
 } from "../../../../tools/dev_test_game_replacement_handoff_scenario_cases.mjs";
 import {
   playerInvalidActionRecoveryMessage,
+  playerStaleActionTransitionRecoveryFeatureSlotId,
+  playerStaleActionTransitionRecoveryMessage,
+  playerStaleVoteTransitionRecoveryFeatureSlotId,
+  playerStaleVoteTransitionRecoveryMessage,
 } from "../../../../tools/dev_test_game_core_loop_action_scenarios.mjs";
 import {
   coreLoopPrivateChannelRecoveryCoverageFamilies,
@@ -2627,7 +2631,7 @@ test("admin local proof graph detail data carries graph node rows", async () => 
     data.audit.checks.find(
       (check) => check.id === "core-loop-command-proof-role-url-audit",
     )?.status ?? "",
-    /36 checked/,
+    /38 checked/,
   );
   const hostedIdentityReceiptRow = data.audit.checks.find(
     (check) =>
@@ -4872,6 +4876,42 @@ test("admin route data exposes local core loop proof as a native audit row", asy
       }),
     },
   );
+  assert.deepEqual(
+    coreLoop.hostVisibleStaleTransitionRecoveries.map((summary) => ({
+      id: summary.id,
+      status: summary.status,
+      hook: summary.recoveryHookStatus,
+      command: summary.commandKind,
+      refreshedPhase: summary.refreshedPhaseId,
+      receipt: summary.receiptStatusText,
+      hostRoleUrl: summary.hostRoleUrl,
+      actionPlayerRoleUrl: summary.actionPlayerRoleUrl,
+    })),
+    [
+      {
+        id: playerStaleActionTransitionRecoveryFeatureSlotId,
+        status: "passed",
+        hook: "PhaseLocked",
+        command: "SubmitAction",
+        refreshedPhase: "D05",
+        receipt:
+          `Reject PhaseLocked: phase locked; ${playerStaleActionTransitionRecoveryMessage}`,
+        hostRoleUrl: "http://127.0.0.1:5173/g/game-a/host",
+        actionPlayerRoleUrl: "http://127.0.0.1:5173/g/game-a",
+      },
+      {
+        id: playerStaleVoteTransitionRecoveryFeatureSlotId,
+        status: "passed",
+        hook: "PhaseLocked",
+        command: "SubmitVote",
+        refreshedPhase: "N05",
+        receipt:
+          `Reject PhaseLocked: phase locked; ${playerStaleVoteTransitionRecoveryMessage}`,
+        hostRoleUrl: "http://127.0.0.1:5173/g/game-a/host",
+        actionPlayerRoleUrl: "http://127.0.0.1:5173/g/game-a",
+      },
+    ],
+  );
 });
 
 test("admin core loop completed-game coverage flags stale shared-case totals", async () => {
@@ -5072,7 +5112,7 @@ test("admin local core loop detail data carries lane rows", async () => {
         [
           ["label", "Command proof role URLs", true, "", ""],
           ["status", "passed", false, "", ""],
-          ["checkedCount", "36 checked", false, "", ""],
+          ["checkedCount", "38 checked", false, "", ""],
         ],
         [],
       ],
@@ -5094,6 +5134,55 @@ test("admin local core loop detail data carries lane rows", async () => {
           ["legalActionVisible", "true", false, "", ""],
           ["hostRoleUrl", "http://127.0.0.1:5173/g/game-b/host", false, "", ""],
           ["actionPlayerRoleUrl", "http://127.0.0.1:5173/g/game-b", false, "", ""],
+        ],
+        [],
+      ],
+    ],
+  );
+  assert.deepEqual(
+    descriptorRowsWithNestedLinksForAssertion(
+      data.audit.hostVisibleStaleTransitionRecoveryRows,
+    ),
+    [
+      [
+        `host-visible-stale-transition-recovery-${playerStaleActionTransitionRecoveryFeatureSlotId}`,
+        `admin-audit-host-visible-stale-transition-recovery-${playerStaleActionTransitionRecoveryFeatureSlotId}`,
+        [
+          ["label", "Stale action transition recovery", true, "", ""],
+          ["status", "passed", false, "", ""],
+          ["hook", "PhaseLocked", false, "", ""],
+          ["command", "SubmitAction", false, "", ""],
+          [
+            "receipt",
+            `Reject PhaseLocked: phase locked; ${playerStaleActionTransitionRecoveryMessage}`,
+            false,
+            "",
+            "",
+          ],
+          ["refreshedPhase", "D05", false, "", ""],
+          ["hostRoleUrl", "http://127.0.0.1:5173/g/game-a/host", false, "", ""],
+          ["actionPlayerRoleUrl", "http://127.0.0.1:5173/g/game-a", false, "", ""],
+        ],
+        [],
+      ],
+      [
+        `host-visible-stale-transition-recovery-${playerStaleVoteTransitionRecoveryFeatureSlotId}`,
+        `admin-audit-host-visible-stale-transition-recovery-${playerStaleVoteTransitionRecoveryFeatureSlotId}`,
+        [
+          ["label", "Stale vote transition recovery", true, "", ""],
+          ["status", "passed", false, "", ""],
+          ["hook", "PhaseLocked", false, "", ""],
+          ["command", "SubmitVote", false, "", ""],
+          [
+            "receipt",
+            `Reject PhaseLocked: phase locked; ${playerStaleVoteTransitionRecoveryMessage}`,
+            false,
+            "",
+            "",
+          ],
+          ["refreshedPhase", "N05", false, "", ""],
+          ["hostRoleUrl", "http://127.0.0.1:5173/g/game-a/host", false, "", ""],
+          ["actionPlayerRoleUrl", "http://127.0.0.1:5173/g/game-a", false, "", ""],
         ],
         [],
       ],

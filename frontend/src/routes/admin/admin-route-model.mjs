@@ -35,6 +35,7 @@ import {
 } from "../../../../tools/dev_test_game_core_loop_proof_shape_assertions.mjs";
 import {
   buildHostVisibleInvalidActionRecoverySummary,
+  buildHostVisibleStaleTransitionRecoverySummaries,
   playerActionBoundaryLaneId,
   playerActionLoopLaneId,
   playerInvalidActionRecoveryLaneId,
@@ -2100,6 +2101,21 @@ function withAdminAuditDetailDisplayRows(item, { game }) {
       { id: "actionPlayerRoleUrl", text: summary.actionPlayerRoleUrl },
     ],
   });
+  const hostVisibleStaleTransitionRecoveryRows = buildSimpleAdminAuditRows({
+    items: item.hostVisibleStaleTransitionRecoveries,
+    idPrefix: "host-visible-stale-transition-recovery",
+    testIdPrefix: "admin-audit-host-visible-stale-transition-recovery",
+    valuesForItem: (summary) => [
+      { id: "label", text: summary.label, emphasized: true },
+      { id: "status", text: summary.status },
+      { id: "hook", text: summary.recoveryHookStatus },
+      { id: "command", text: summary.commandKind },
+      { id: "receipt", text: summary.receiptStatusText },
+      { id: "refreshedPhase", text: summary.refreshedPhaseId },
+      { id: "hostRoleUrl", text: summary.hostRoleUrl },
+      { id: "actionPlayerRoleUrl", text: summary.actionPlayerRoleUrl },
+    ],
+  });
   const localPrerequisiteRows = buildLocalPrerequisiteRows(
     item.localPrerequisites,
     { game },
@@ -2137,6 +2153,9 @@ function withAdminAuditDetailDisplayRows(item, { game }) {
     ...(hostVisibleInvalidActionRecoveryRows.length === 0
       ? {}
       : { hostVisibleInvalidActionRecoveryRows }),
+    ...(hostVisibleStaleTransitionRecoveryRows.length === 0
+      ? {}
+      : { hostVisibleStaleTransitionRecoveryRows }),
     ...(localPrerequisiteRows.length === 0 ? {} : { localPrerequisiteRows }),
     ...(selectedOperatorHandoffRows.length === 0
       ? {}
@@ -8116,6 +8135,14 @@ export function normalizeLocalCoreLoopAudit(proofRun, { game }) {
     commandProofRoleUrlAudit: coreLoopCommandProofRoleUrlAuditExpectation,
     hostVisibleInvalidActionRecovery:
       buildHostVisibleInvalidActionRecoverySummary({
+        proofRun,
+        detailRoleUrl: adminAuditInspectHref({
+          game,
+          audit: localAdminAuditIds.coreLoop,
+        }),
+      }),
+    hostVisibleStaleTransitionRecoveries:
+      buildHostVisibleStaleTransitionRecoverySummaries({
         proofRun,
         detailRoleUrl: adminAuditInspectHref({
           game,

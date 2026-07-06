@@ -26,7 +26,9 @@ import {
 } from "./dev_test_game_core_loop_action_scenarios.mjs";
 import {
   assertHostVisibleInvalidActionRecoverySummary,
+  assertHostVisibleStaleTransitionRecoverySummaries,
   buildHostVisibleInvalidActionRecoverySummary,
+  buildHostVisibleStaleTransitionRecoverySummaries,
   playerActionSubmissionScenario,
   playerInvalidActionRecoveryScenario,
   staleNightFourActionRecoveryScenario,
@@ -558,6 +560,13 @@ export function coreLoopAdminProofCase() {
               proofRun,
               coreLoopSpineRows: requiredSpineRows(proofRun),
               adminRoleSurface: surfaces.adminRoleSurface,
+            }),
+          hostVisibleStaleTransitionRecoveries:
+            buildHostVisibleStaleTransitionRecoverySummaries({
+              proofRun,
+              coreLoopSpineRows: requiredSpineRows(proofRun),
+              adminRoleSurface: surfaces.adminRoleSurface,
+              proofSurfaces: surfaces,
             }),
         },
         adminRoleSurface: surfaces.adminRoleSurface,
@@ -10074,6 +10083,12 @@ export function assertCoreLoopAdminProof(evidence) {
   assertHostVisibleInvalidActionRecoverySummary({
     summary: evidence.generatedFrom?.hostVisibleInvalidActionRecovery,
     requireVisibleStatus: true,
+    includeEvidenceInError: true,
+  });
+  assertHostVisibleStaleTransitionRecoverySummaries({
+    summaries: evidence.generatedFrom?.hostVisibleStaleTransitionRecoveries,
+    requireBrowserProof: true,
+    requireRecoveryHookVisible: true,
     includeEvidenceInError: true,
   });
   assertHostLifecycleControlCheckpoint(evidence.hostRoleSurface);

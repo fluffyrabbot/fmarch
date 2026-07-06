@@ -48,7 +48,10 @@ import {
 } from "./dev_test_game_core_loop_proof_shape_assertions.mjs";
 import {
   buildHostVisibleInvalidActionRecoverySummary,
+  buildHostVisibleStaleTransitionRecoverySummaries,
   playerInvalidActionRecoveryMessage,
+  playerStaleActionTransitionRecoveryMessage,
+  playerStaleVoteTransitionRecoveryMessage,
 } from "./dev_test_game_core_loop_action_scenarios.mjs";
 import {
   completedGameEndgameSurfaceFixture,
@@ -19126,7 +19129,7 @@ function coreLoopAdminProofFixture() {
       ],
       visibleCommandProofRoleUrlAudit: {
         status: "passed",
-        checkedCount: 36,
+        checkedCount: 38,
       },
       rawInviteTokensVisible: false,
       releaseReady: false,
@@ -19189,6 +19192,75 @@ function coreLoopAdminProofFixture() {
       },
       coreLoopSpineRows: proof.generatedFrom.coreLoopSpineRows,
       adminRoleSurface: proof.adminRoleSurface,
+    });
+  proof.generatedFrom.hostVisibleStaleTransitionRecoveries =
+    buildHostVisibleStaleTransitionRecoverySummaries({
+      proofRun: {
+        coreLoopSpine: {
+          recoveryHooks: {
+            staleActionTransitionReject: "PhaseLocked",
+            staleVoteTransitionReject: "PhaseLocked",
+          },
+        },
+      },
+      coreLoopSpineRows: proof.generatedFrom.coreLoopSpineRows,
+      adminRoleSurface: proof.adminRoleSurface,
+      proofSurfaces: {
+        postNightFourTransitionSurface: {
+          sourceHostRoleUrl:
+            proof.generatedFrom.coreLoopSpineRows.roleUrlHrefs[
+              "d04-n04-d05-host"
+            ],
+          sourceActionPlayerRoleUrl:
+            proof.generatedFrom.coreLoopSpineRows.roleUrlHrefs[
+              "d04-n04-d05-actionPlayer"
+            ],
+          staleNightFourActionRecoveryProof: {
+            status: "passed",
+            clickedAction: "submit_action:factional_kill",
+            commandKind: "SubmitAction",
+            commandStatus: {
+              state: "reject",
+              error: "PhaseLocked",
+              message:
+                `Reject PhaseLocked: phase locked; ${playerStaleActionTransitionRecoveryMessage}`,
+            },
+            receiptStatusText:
+              `Reject PhaseLocked: phase locked; ${playerStaleActionTransitionRecoveryMessage}`,
+            projectionCommandState: {
+              phase: { phaseId: "D05" },
+            },
+            checkpointActionStateAfterReject:
+              "disabled:no legal action available",
+          },
+        },
+        dayFiveNoLynchResolutionSurface: {
+          sourceHostRoleUrl:
+            proof.generatedFrom.coreLoopSpineRows.roleUrlHrefs["d05-n05-host"],
+          sourceActionPlayerRoleUrl:
+            proof.generatedFrom.coreLoopSpineRows.roleUrlHrefs[
+              "d05-n05-actionPlayer"
+            ],
+          staleDayFiveVoteRecoveryProof: {
+            status: "passed",
+            clickedAction: "submit_vote:no_lynch",
+            commandKind: "SubmitVote",
+            commandStatus: {
+              state: "reject",
+              error: "PhaseLocked",
+              message:
+                `Reject PhaseLocked: phase locked; ${playerStaleVoteTransitionRecoveryMessage}`,
+            },
+            receiptStatusText:
+              `Reject PhaseLocked: phase locked; ${playerStaleVoteTransitionRecoveryMessage}`,
+            projectionCommandState: {
+              phase: { phaseId: "N05" },
+            },
+            checkpointActionStateAfterReject:
+              "disabled:no legal action available",
+          },
+        },
+      },
     });
   return {
     ...proof,
