@@ -319,6 +319,8 @@ export async function proveAdminAuditDetail({
   requiredSpineRecoveryHooks = [],
   requiredAdminSpineBatches = [],
   requiredAdminSpineBatchStatuses = {},
+  requiredAdminSpineTerminalValidations = [],
+  requiredAdminSpineTerminalValidationStatuses = {},
   requiredSetupCommandEvidence = [],
   requiredUnproven = [],
   requiredRealHostedEvidenceInputs = [],
@@ -534,6 +536,17 @@ export async function proveAdminAuditDetail({
       page,
       prefix: "admin-audit-admin-spine-batch",
       ids: Object.keys(requiredAdminSpineBatchStatuses),
+    });
+    const visibleAdminSpineTerminalValidations = await waitForRows({
+      page,
+      prefix: "admin-audit-admin-spine-terminal-validation",
+      ids: requiredAdminSpineTerminalValidations,
+      expectedStatuses: requiredAdminSpineTerminalValidationStatuses,
+    });
+    const visibleAdminSpineTerminalValidationStatuses = await readRowStatuses({
+      page,
+      prefix: "admin-audit-admin-spine-terminal-validation",
+      ids: Object.keys(requiredAdminSpineTerminalValidationStatuses),
     });
     const visibleSetupCommandEvidence = await waitForRows({
       page,
@@ -1233,6 +1246,15 @@ export async function proveAdminAuditDetail({
       ...(Object.keys(visibleAdminSpineBatchStatuses).length === 0
         ? {}
         : { visibleAdminSpineBatchStatuses }),
+      ...(visibleAdminSpineTerminalValidations.length === 0
+        ? {}
+        : { visibleAdminSpineTerminalValidations }),
+      ...(Object.keys(visibleAdminSpineTerminalValidationStatuses).length === 0
+        ? {}
+        : {
+            visibleAdminSpineTerminalValidationStatuses:
+              visibleAdminSpineTerminalValidationStatuses,
+          }),
       ...(visibleSetupCommandEvidence.length === 0
         ? {}
         : { visibleSetupCommandEvidence }),

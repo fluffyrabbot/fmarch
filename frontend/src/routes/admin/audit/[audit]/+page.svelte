@@ -174,6 +174,15 @@
         <AdminAuditDescriptorRows rows={data.audit.batchRows} />
       </section>
     {/if}
+    {#if data.audit.terminalValidationRows?.length > 0}
+      <section
+        class="admin-audit-detail__group"
+        data-testid="admin-audit-detail-admin-spine-terminal-validations"
+      >
+        <h2>Admin spine terminal validations</h2>
+        <AdminAuditDescriptorRows rows={data.audit.terminalValidationRows} />
+      </section>
+    {/if}
     {#if data.audit.localPrerequisiteRows?.length > 0}
       <section
         class="admin-audit-detail__group"

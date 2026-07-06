@@ -223,6 +223,16 @@ import {
   devTestGameSeedAdminProofPath,
   devTestGameSpineManifestAdminProofPath,
 } from "../../../../tools/dev_test_game_local_admin_proof_paths.mjs";
+import {
+  devTestGameReleaseReadinessPath,
+} from "../../../../tools/dev_test_game_spine_artifact_paths.mjs";
+import {
+  devTestGameReleaseAdminProofPath,
+  devTestGameReleaseAdminProofContractPath,
+} from "../../../../tools/dev_test_game_release_artifact_paths.mjs";
+import {
+  devTestGameReleaseAdminProofContractCommand,
+} from "../../../../tools/dev_test_game_release_admin_proof_contract.mjs";
 
 const LOCAL_RACE_COMMAND =
   "npm run test:dev-test-game-hosted-concurrent-race-matrix";
@@ -1970,11 +1980,18 @@ test("admin audit detail page renders admin spine batch rows from route data", a
     "utf8",
   );
   assert.match(source, /batchRows/);
+  assert.match(source, /terminalValidationRows/);
+  assert.match(source, /admin-audit-detail-admin-spine-terminal-validations/);
+  assert.match(source, /Admin spine terminal validations/);
   assert.doesNotMatch(source, /batches as batch/);
   assert.doesNotMatch(source, /batch\.sharedFrontendSession/);
   assert.doesNotMatch(source, /batch\.sharedChromiumSession/);
   assert.doesNotMatch(source, /batch\.artifactPaths/);
   assert.match(source, /AdminAuditDescriptorRows rows=\{data\.audit\.batchRows\}/);
+  assert.match(
+    source,
+    /AdminAuditDescriptorRows rows=\{data\.audit\.terminalValidationRows\}/,
+  );
 });
 
 test("admin audit detail page renders local prerequisite rows from route data", async () => {
@@ -2237,6 +2254,7 @@ test("admin route data exposes local admin spine proof as a native audit row", a
     game: "game-a",
     proofCount: 11,
     batchCount: 5,
+    terminalValidationCount: 1,
     recoveryStatus: "passed",
     refreshedCount: 11,
     nextCommand: "npm run test:dev-test-game-admin-spine",
@@ -2262,6 +2280,29 @@ test("admin local admin spine detail data carries aggregate proof rows", async (
   assert.equal(data.audit.id, localAdminAuditIds.adminSpine);
   assert.equal(data.audit.checks.length, 15);
   assert.equal(data.audit.batches.length, 5);
+  assert.equal(data.audit.terminalValidations.length, 1);
+  assert.deepEqual(
+    data.audit.terminalValidations.map((validation) => [
+      validation.id,
+      validation.status,
+      validation.proof,
+      validation.command,
+      validation.artifactPath,
+      validation.validatesArtifacts,
+      validation.localDiagnosticCount,
+    ]),
+    [
+      [
+        "release-admin-proof-contract",
+        "passed",
+        "dev-test-game-release-admin-proof-contract",
+        devTestGameReleaseAdminProofContractCommand,
+        devTestGameReleaseAdminProofContractPath,
+        [devTestGameReleaseReadinessPath, devTestGameReleaseAdminProofPath],
+        1,
+      ],
+    ],
+  );
   assert.deepEqual(
     data.audit.batches.map((batch) => [
       batch.id,
@@ -2324,6 +2365,23 @@ test("admin local admin spine detail data carries aggregate proof rows", async (
       ]),
     ]),
     expectedAdminSpineBatchRows(data.audit.batches),
+  );
+  assert.deepEqual(
+    data.audit.terminalValidationRows.map((row) => [
+      row.id,
+      row.testId,
+      row.values.map((value) => [value.id, value.text, value.emphasized]),
+      (row.subentries ?? []).map((subentry) => [
+        subentry.id,
+        subentry.testId,
+        subentry.values.map((value) => [
+          value.id,
+          value.text,
+          value.emphasized,
+        ]),
+      ]),
+    ]),
+    expectedAdminSpineTerminalValidationRows(data.audit.terminalValidations),
   );
   assert.deepEqual(
     data.audit.checks.map((check) => [check.id, check.status]),
@@ -9581,10 +9639,29 @@ function adminSpineTerminalBatchesFixture() {
       nextActionAdminProof: "target/dev-test-game/next-action-admin-proof.json",
       hostedIdentityNextActionAdminProof:
         "target/dev-test-game/hosted-identity-next-action-admin-proof.json",
+      releaseAdminProofContract: devTestGameReleaseAdminProofContractPath,
       batchCount: 3,
+      terminalValidationCount: 1,
     },
     nextActionHandoffPair: nextActionHandoffPairFixture(),
     selectedOperatorHandoffReceipt: selectedOperatorHandoffReceiptFixture(),
+    terminalValidations: [
+      {
+        id: "release-admin-proof-contract",
+        label: "Release admin proof diagnostics contract",
+        status: "passed",
+        proof: "dev-test-game-release-admin-proof-contract",
+        command: devTestGameReleaseAdminProofContractCommand,
+        artifactPath: devTestGameReleaseAdminProofContractPath,
+        validatesArtifacts: [
+          devTestGameReleaseReadinessPath,
+          devTestGameReleaseAdminProofPath,
+        ],
+        localDiagnosticCount: 1,
+        releaseReady: false,
+        productionReady: false,
+      },
+    ],
     batches: [
       {
         label: "Terminal admin proof batch",
@@ -10095,6 +10172,30 @@ function expectedAdminSpineBatchRows(batches) {
       `artifact-path-${index + 1}`,
       `admin-audit-admin-spine-batch-${batch.id}-artifact-path-${index + 1}`,
       [["artifactPath", artifactPath, true]],
+    ]),
+  ]);
+}
+
+function expectedAdminSpineTerminalValidationRows(validations) {
+  return validations.map((validation) => [
+    `admin-spine-terminal-validation-${validation.id}`,
+    `admin-audit-admin-spine-terminal-validation-${validation.id}`,
+    [
+      ["label", validation.label, true],
+      ["status", validation.status, false],
+      ["proof", validation.proof, false],
+      ["command", validation.command, false],
+      ["artifactPath", validation.artifactPath, false],
+      [
+        "localDiagnosticCount",
+        `${validation.localDiagnosticCount} diagnostics`,
+        false,
+      ],
+    ],
+    validation.validatesArtifacts.map((artifactPath, index) => [
+      `validated-artifact-${index + 1}`,
+      `admin-audit-admin-spine-terminal-validation-${validation.id}-validated-artifact-${index + 1}`,
+      [["validatedArtifact", artifactPath, true]],
     ]),
   ]);
 }

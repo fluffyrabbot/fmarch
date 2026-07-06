@@ -87,6 +87,9 @@ await runAdminAuditProof({
       ...requiredAdminSpineBatches,
       ...adminSpineTerminalBatchIds(source.adminSpineTerminalBatches),
     ];
+    const requiredTerminalValidationIds = adminSpineTerminalValidationIds(
+      source.adminSpineTerminalBatches,
+    );
     return await proveAdminAuditDetail({
       browser,
       frontendBaseUrl,
@@ -97,6 +100,10 @@ await runAdminAuditProof({
       requiredAdminSpineBatches: requiredBatchIds,
       requiredAdminSpineBatchStatuses: Object.fromEntries(
         requiredBatchIds.map((id) => [id, "passed"]),
+      ),
+      requiredAdminSpineTerminalValidations: requiredTerminalValidationIds,
+      requiredAdminSpineTerminalValidationStatuses: Object.fromEntries(
+        requiredTerminalValidationIds.map((id) => [id, "passed"]),
       ),
     });
   },
@@ -136,6 +143,22 @@ await runAdminAuditProof({
         label: batch.label,
         caseCount: batch.caseCount,
       })),
+      terminalValidationIds: adminSpineTerminalValidationIds(
+        source.adminSpineTerminalBatches,
+      ),
+      terminalValidationArtifacts: adminSpineTerminalValidations(
+        source.adminSpineTerminalBatches,
+      ).map((validation) => ({
+        id: validation.id,
+        artifactPath: validation.artifactPath,
+        validatesArtifacts: validation.validatesArtifacts,
+      })),
+      terminalValidationCommands: adminSpineTerminalValidations(
+        source.adminSpineTerminalBatches,
+      ).map((validation) => ({
+        id: validation.id,
+        command: validation.command,
+      })),
       relatedAuditIds: requiredRelatedLinks,
     },
     adminRoleSurface,
@@ -166,6 +189,16 @@ async function readAdminSpineTerminalBatches() {
 
 function adminSpineTerminalBatchIds(terminalBatches) {
   return terminalBatches?.batchIds ?? [];
+}
+
+function adminSpineTerminalValidations(terminalBatches) {
+  return terminalBatches?.terminalValidations ?? [];
+}
+
+function adminSpineTerminalValidationIds(terminalBatches) {
+  return adminSpineTerminalValidations(terminalBatches).map(
+    (validation) => validation.id,
+  );
 }
 
 export function assertAdminSpineAdminProof(evidence) {
@@ -210,6 +243,36 @@ export function assertAdminSpineAdminProof(evidence) {
       evidence.adminRoleSurface?.visibleAdminSpineBatchStatuses?.[batchId] ?? "";
     if (!visibleText.includes("passed") || !visibleText.includes("shared frontend")) {
       throw new Error(`admin spine admin proof missing batch status: ${batchId}`);
+    }
+  }
+  for (const validationId of evidence.generatedFrom?.terminalValidationIds ?? []) {
+    assertVisibleAdminRoleSurfaceRows({
+      adminRoleSurface: evidence.adminRoleSurface,
+      rowIds: [validationId],
+      proofName: "admin spine admin proof",
+      rowName: "terminal validation row",
+      surfaceKey: "visibleAdminSpineTerminalValidations",
+    });
+    const visibleText =
+      evidence.adminRoleSurface?.visibleAdminSpineTerminalValidationStatuses?.[
+        validationId
+      ] ?? "";
+    const command =
+      evidence.generatedFrom?.terminalValidationCommands?.find(
+        (validation) => validation.id === validationId,
+      )?.command ?? "";
+    const artifactPath =
+      evidence.generatedFrom?.terminalValidationArtifacts?.find(
+        (validation) => validation.id === validationId,
+      )?.artifactPath ?? "";
+    if (
+      !visibleText.includes("passed") ||
+      (command !== "" && !visibleText.includes(command)) ||
+      (artifactPath !== "" && !visibleText.includes(artifactPath))
+    ) {
+      throw new Error(
+        `admin spine admin proof missing terminal validation status: ${validationId}`,
+      );
     }
   }
   return evidence;

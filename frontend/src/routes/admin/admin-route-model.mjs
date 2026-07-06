@@ -1978,6 +1978,9 @@ function withAdminAuditDetailDisplayRows(item, { game }) {
     { game },
   );
   const batchRows = buildAdminSpineBatchRows(item.batches);
+  const terminalValidationRows = buildAdminSpineTerminalValidationRows(
+    item.terminalValidations,
+  );
   const productionFeatureDestinationSections =
     buildProductionFeatureDestinationSections(
       item.artifactSummary?.productionFeatureDestinationSummary,
@@ -2002,6 +2005,9 @@ function withAdminAuditDetailDisplayRows(item, { game }) {
       ? {}
       : { selectedOperatorHandoffRows }),
     ...(batchRows.length === 0 ? {} : { batchRows }),
+    ...(terminalValidationRows.length === 0
+      ? {}
+      : { terminalValidationRows }),
     ...(productionFeatureDestinationSections.length === 0
       ? {}
       : { productionFeatureDestinationSections }),
@@ -2206,6 +2212,39 @@ function buildAdminSpineBatchRows(batches) {
           values: [
             {
               id: "artifactPath",
+              text: artifactPath,
+              emphasized: true,
+            },
+          ],
+        })),
+      }),
+    ),
+  );
+}
+
+function buildAdminSpineTerminalValidationRows(validations) {
+  return Object.freeze(
+    (Array.isArray(validations) ? validations : []).map((validation) =>
+      artifactSummaryRow({
+        id: `admin-spine-terminal-validation-${validation.id}`,
+        testId: `admin-audit-admin-spine-terminal-validation-${validation.id}`,
+        values: [
+          { id: "label", text: validation.label, emphasized: true },
+          { id: "status", text: validation.status },
+          { id: "proof", text: validation.proof },
+          { id: "command", text: validation.command },
+          { id: "artifactPath", text: validation.artifactPath },
+          {
+            id: "localDiagnosticCount",
+            text: `${validation.localDiagnosticCount} diagnostics`,
+          },
+        ],
+        subentries: validation.validatesArtifacts.map((artifactPath, index) => ({
+          id: `validated-artifact-${index + 1}`,
+          testId: `admin-audit-admin-spine-terminal-validation-${validation.id}-validated-artifact-${index + 1}`,
+          values: [
+            {
+              id: "validatedArtifact",
               text: artifactPath,
               emphasized: true,
             },
@@ -6851,6 +6890,11 @@ export function normalizeLocalAdminSpineAudit(
   const terminalBatches = validAdminSpineTerminalBatchProof(terminalBatchProof)
     ? terminalBatchProof.batches
     : [];
+  const terminalValidations = validAdminSpineTerminalBatchProof(
+    terminalBatchProof,
+  )
+    ? normalizeAdminSpineTerminalValidations(terminalBatchProof.terminalValidations)
+    : [];
   const terminalNextActionHandoffPair = validAdminSpineTerminalBatchProof(
     terminalBatchProof,
   )
@@ -6937,11 +6981,13 @@ export function normalizeLocalAdminSpineAudit(
       ],
     ),
     batches: Object.freeze(batches),
+    terminalValidations,
     relatedLinks: adminSpineRelatedLinks,
     artifactSummary: Object.freeze({
       game: String(adminSpineProof.generatedFrom?.game ?? ""),
       proofCount: proofs.length,
       batchCount: batches.length,
+      terminalValidationCount: terminalValidations.length,
       recoveryStatus: String(recovery.status ?? "unknown"),
       refreshedCount: Number(recovery.refreshedCount ?? 0),
       nextCommand: String(recovery.nextCommand ?? ""),
@@ -7064,6 +7110,36 @@ function validAdminSpineTerminalBatchProof(proof) {
     proof.productionReady === false &&
     Array.isArray(proof.batches)
   );
+}
+
+function normalizeAdminSpineTerminalValidations(validations) {
+  return Object.freeze(
+    (Array.isArray(validations) ? validations : []).map((validation, index) =>
+      normalizeAdminSpineTerminalValidation(validation, index),
+    ),
+  );
+}
+
+function normalizeAdminSpineTerminalValidation(validation, index) {
+  const id = String(validation?.id ?? `terminal-validation-${index + 1}`);
+  return Object.freeze({
+    id,
+    label: String(validation?.label ?? id),
+    status: String(validation?.status ?? "unknown"),
+    proof: String(validation?.proof ?? ""),
+    command: String(validation?.command ?? ""),
+    artifactPath: String(validation?.artifactPath ?? ""),
+    validatesArtifacts: Object.freeze(
+      Array.isArray(validation?.validatesArtifacts)
+        ? validation.validatesArtifacts.map((artifactPath) =>
+            String(artifactPath),
+          )
+        : [],
+    ),
+    localDiagnosticCount: Number(validation?.localDiagnosticCount ?? 0),
+    releaseReady: validation?.releaseReady === true,
+    productionReady: validation?.productionReady === true,
+  });
 }
 
 function normalizeAdminSpineBatch(batch, index) {

@@ -24707,6 +24707,23 @@ function adminSpineAdminProofFixture() {
         label: batch.label,
         caseCount: batch.proofIds.length,
       })),
+      terminalValidationIds: ["release-admin-proof-contract"],
+      terminalValidationArtifacts: [
+        {
+          id: "release-admin-proof-contract",
+          artifactPath: devTestGameReleaseAdminProofContractPath,
+          validatesArtifacts: [
+            devTestGameReleaseReadinessPath,
+            devTestGameReleaseAdminProofPath,
+          ],
+        },
+      ],
+      terminalValidationCommands: [
+        {
+          id: "release-admin-proof-contract",
+          command: devTestGameReleaseAdminProofContractCommand,
+        },
+      ],
     },
     adminRoleSurface: {
       status: "passed",
@@ -24742,6 +24759,17 @@ function adminSpineAdminProofFixture() {
           adminProofBatchStatusText(batch),
         ]),
       ),
+      visibleAdminSpineTerminalValidations: ["release-admin-proof-contract"],
+      visibleAdminSpineTerminalValidationStatuses: {
+        "release-admin-proof-contract": [
+          "Release admin proof diagnostics contract",
+          "passed",
+          "dev-test-game-release-admin-proof-contract",
+          devTestGameReleaseAdminProofContractCommand,
+          devTestGameReleaseAdminProofContractPath,
+          `${releaseAdminProofLocalDiagnosticIds().length} diagnostics`,
+        ].join(" "),
+      },
       rawInviteTokensVisible: false,
       releaseReady: false,
       productionReady: false,
