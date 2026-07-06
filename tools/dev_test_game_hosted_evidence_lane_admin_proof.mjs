@@ -142,6 +142,10 @@ export function hostedEvidenceLaneAdminProofCase({
         hostedEvidenceOperatorChecklistProofStatuses(
           source.lane.hostedHandoffChecklist,
         );
+      const hostedHandoffOperatorProofActions =
+        hostedEvidenceOperatorChecklistProofActions(
+          source.lane.hostedHandoffChecklist,
+        );
       return await proveAdminAuditDetail({
         browser,
         frontendBaseUrl,
@@ -185,6 +189,8 @@ export function hostedEvidenceLaneAdminProofCase({
         requiredHostedHandoffOperatorProofs: hostedHandoffOperatorProofIds,
         requiredHostedHandoffOperatorProofStatuses:
           hostedHandoffOperatorProofStatuses,
+        requiredHostedHandoffOperatorProofActions:
+          hostedHandoffOperatorProofActions,
         requiredRelatedLinks,
       });
     },
@@ -265,6 +271,10 @@ export function hostedEvidenceLaneAdminProofCase({
         ),
         hostedHandoffOperatorProofStatuses:
           hostedEvidenceOperatorChecklistProofStatuses(
+            source.lane.hostedHandoffChecklist,
+          ),
+        hostedHandoffOperatorProofActions:
+          hostedEvidenceOperatorChecklistProofActions(
             source.lane.hostedHandoffChecklist,
           ),
         ...(source.lane.hostedHandoffChecklist?.blockedReceipt === undefined
@@ -440,6 +450,7 @@ export function assertHostedEvidenceLaneAdminProof(evidence) {
     rowName: "hosted handoff operator proof status",
     surfaceKey: "visibleHostedHandoffOperatorProofStatuses",
   });
+  assertHostedEvidenceOperatorChecklistProofActions(evidence);
   const expectedSummary = evidence.generatedFrom?.hostedHandoffSummary;
   if (expectedSummary !== undefined) {
     for (const [key, expectedValue] of Object.entries(expectedSummary)) {
@@ -566,6 +577,58 @@ function hostedEvidenceOperatorChecklistProofStatuses(checklist) {
       descriptor.checklistProofTarget ??
       devTestGameHostedEvidenceOperatorChecklistProofPath,
   };
+}
+
+function hostedEvidenceOperatorChecklistProofActions(checklist) {
+  const descriptor = checklist?.blockedReceipt?.blockedOperatorPacket
+    ?.operatorChecklist;
+  if (descriptor === null || typeof descriptor !== "object") {
+    return {};
+  }
+  return {
+    "hosted-evidence-operator-checklist": {
+      copyCommand:
+        descriptor.checklistProofCommand ??
+        `npm run ${devTestGameHostedEvidenceOperatorChecklistProofCommand}`,
+      sourcePath:
+        descriptor.path ?? devTestGameHostedEvidenceOperatorChecklistPath,
+      proofTarget:
+        descriptor.checklistProofTarget ??
+        devTestGameHostedEvidenceOperatorChecklistProofPath,
+    },
+  };
+}
+
+function assertHostedEvidenceOperatorChecklistProofActions(evidence) {
+  const expectedActions =
+    evidence.generatedFrom?.hostedHandoffOperatorProofActions ?? {};
+  const visibleActions =
+    evidence.adminRoleSurface?.visibleHostedHandoffOperatorProofActions ?? {};
+  for (const [id, expected] of Object.entries(expectedActions)) {
+    const visible = visibleActions[id];
+    if (visible === undefined) {
+      throw new Error(
+        `hosted evidence lane admin proof missing operator action controls: ${id}`,
+      );
+    }
+    if (
+      visible.copyCommand?.copyValue !== expected.copyCommand ||
+      visible.openDoc?.href !== expected.sourcePath ||
+      visible.openProofTarget?.href !== expected.proofTarget
+    ) {
+      throw new Error(
+        `hosted evidence lane admin proof operator action controls drifted: ${id}`,
+      );
+    }
+    if (
+      visible.order?.beforeRealHostedEvidenceInputs !== true ||
+      visible.order?.beforeRawEvidenceTemplate !== true
+    ) {
+      throw new Error(
+        `hosted evidence lane admin proof operator action row is not before live input sections: ${id}`,
+      );
+    }
+  }
 }
 
 function hostedEvidenceLaneDemoProofCheckIds(proof) {

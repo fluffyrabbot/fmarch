@@ -1831,6 +1831,9 @@ test("admin audit detail page renders descriptor artifact sections from route da
   assert.match(source, /AdminAuditDescriptorRows rows=\{section\.rows\}/);
   assert.match(descriptorSource, /row\.subentries\?\.length/);
   assert.match(descriptorSource, /data-testid=\{subentry\.testId\}/);
+  assert.match(descriptorSource, /value\.copyText/);
+  assert.match(descriptorSource, /data-copy-value=\{value\.copyText\}/);
+  assert.match(descriptorSource, /data-copy-status=\{copyStatus\(value\)\}/);
 });
 
 test("admin audit detail page renders hosted handoff operator rows from route data", async () => {
@@ -6089,6 +6092,9 @@ test("admin hosted evidence lane detail data carries blocked setup rows", async 
                 localAdminAuditRoleUrl(localAdminAuditIds.hostedEvidenceLane),
                 false,
               ],
+              ["copyCommand", "Copy command", false],
+              ["openSource", "Open doc", false],
+              ["openProofTarget", "Open proof", false],
               [
                 "firstMissingInputId",
                 "FMARCH_HOSTED_MATRIX_FRONTEND_URL",
@@ -6107,6 +6113,43 @@ test("admin hosted evidence lane detail data carries blocked setup rows", async 
             ],
           ],
         ],
+      ],
+    ],
+  );
+  const operatorProofValues = data.audit.hostedHandoffOperatorRows
+    .find((row) => row.id === "operator-drilldowns")
+    ?.subentries.find(
+      (entry) => entry.id === "operator-proof-hosted-evidence-operator-checklist",
+    )?.values;
+  assert.deepEqual(
+    operatorProofValues
+      .filter((value) =>
+        ["copyCommand", "openSource", "openProofTarget"].includes(value.id),
+      )
+      .map((value) => [
+        value.id,
+        value.testId,
+        value.copyText ?? "",
+        value.href ?? "",
+      ]),
+    [
+      [
+        "copyCommand",
+        "admin-audit-hosted-handoff-operator-proof-hosted-evidence-operator-checklist-copy-command",
+        `npm run ${devTestGameHostedEvidenceOperatorChecklistProofCommand}`,
+        "",
+      ],
+      [
+        "openSource",
+        "admin-audit-hosted-handoff-operator-proof-hosted-evidence-operator-checklist-open-doc",
+        "",
+        devTestGameHostedEvidenceOperatorChecklistPath,
+      ],
+      [
+        "openProofTarget",
+        "admin-audit-hosted-handoff-operator-proof-hosted-evidence-operator-checklist-open-proof-target",
+        "",
+        devTestGameHostedEvidenceOperatorChecklistProofPath,
       ],
     ],
   );
@@ -10621,6 +10664,7 @@ function expectedHostedHandoffOperatorRows(checklist) {
                 ["sourcePath", drilldown.sourcePath, false],
                 ["proofTarget", drilldown.proofTarget, false],
                 ["roleUrl", drilldown.roleUrl, false],
+                ...expectedHostedHandoffOperatorActionValues(drilldown),
                 ["firstMissingInputId", drilldown.firstMissingInputId, false],
                 ["firstMissingCheckId", drilldown.firstMissingCheckId, false],
                 ["proofBoundary", drilldown.proofBoundary, false],
@@ -10628,6 +10672,14 @@ function expectedHostedHandoffOperatorRows(checklist) {
             ]),
           ],
         ]),
+  ];
+}
+
+function expectedHostedHandoffOperatorActionValues(drilldown) {
+  return [
+    ["copyCommand", "Copy command", false],
+    ["openSource", "Open doc", false],
+    ["openProofTarget", "Open proof", false],
   ];
 }
 

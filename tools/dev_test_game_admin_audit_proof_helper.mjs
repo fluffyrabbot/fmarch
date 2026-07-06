@@ -351,6 +351,7 @@ export async function proveAdminAuditDetail({
   requiredHostedHandoffSectionInputStatuses = {},
   requiredHostedHandoffOperatorProofs = [],
   requiredHostedHandoffOperatorProofStatuses = {},
+  requiredHostedHandoffOperatorProofActions = {},
   requiredRealHostedObservabilitySummaries = [],
   requiredRealHostedObservabilitySummaryStatuses = {},
   requiredHostedIdentityPacketSummaries = [],
@@ -689,6 +690,11 @@ export async function proveAdminAuditDetail({
       prefix: "admin-audit-hosted-handoff-operator-proof",
       ids: Object.keys(requiredHostedHandoffOperatorProofStatuses),
     });
+    const visibleHostedHandoffOperatorProofActions =
+      await readHostedHandoffOperatorProofActions({
+        page,
+        expectedActions: requiredHostedHandoffOperatorProofActions,
+      });
     const visibleRealHostedObservabilitySummaries = await waitForRows({
       page,
       prefix: "admin-audit-real-hosted-observability-summary",
@@ -1445,6 +1451,12 @@ export async function proveAdminAuditDetail({
             visibleHostedHandoffOperatorProofStatuses:
               visibleHostedHandoffOperatorProofStatuses,
           }),
+      ...(Object.keys(visibleHostedHandoffOperatorProofActions).length === 0
+        ? {}
+        : {
+            visibleHostedHandoffOperatorProofActions:
+              visibleHostedHandoffOperatorProofActions,
+          }),
       ...(visibleRealHostedObservabilitySummaries.length === 0
         ? {}
         : { visibleRealHostedObservabilitySummaries }),
@@ -2050,6 +2062,83 @@ async function readRowStatuses({ page, prefix, ids }) {
     statuses[id] = await page.getByTestId(`${prefix}-${id}`).innerText();
   }
   return statuses;
+}
+
+async function readHostedHandoffOperatorProofActions({
+  page,
+  expectedActions,
+}) {
+  const visibleActions = {};
+  for (const [id, expected] of Object.entries(expectedActions ?? {})) {
+    const rowTestId = `admin-audit-hosted-handoff-operator-proof-${id}`;
+    const copyTestId = `${rowTestId}-copy-command`;
+    const docTestId = `${rowTestId}-open-doc`;
+    const proofTargetTestId = `${rowTestId}-open-proof-target`;
+    const row = page.getByTestId(rowTestId);
+    const copyCommand = page.getByTestId(copyTestId);
+    const openDoc = page.getByTestId(docTestId);
+    const openProofTarget = page.getByTestId(proofTargetTestId);
+    await row.waitFor({ state: "visible", timeout: 15000 });
+    await copyCommand.waitFor({ state: "visible", timeout: 15000 });
+    await openDoc.waitFor({ state: "visible", timeout: 15000 });
+    await openProofTarget.waitFor({ state: "visible", timeout: 15000 });
+    const copyValue = await copyCommand.getAttribute("data-copy-value");
+    if (copyValue !== expected.copyCommand) {
+      throw new Error(
+        `${copyTestId} copy value drifted: ${copyValue} !== ${expected.copyCommand}`,
+      );
+    }
+    const docHref = await openDoc.getAttribute("href");
+    const proofTargetHref = await openProofTarget.getAttribute("href");
+    if (docHref !== expected.sourcePath) {
+      throw new Error(
+        `${docTestId} href drifted: ${docHref} !== ${expected.sourcePath}`,
+      );
+    }
+    if (proofTargetHref !== expected.proofTarget) {
+      throw new Error(
+        `${proofTargetTestId} href drifted: ${proofTargetHref} !== ${expected.proofTarget}`,
+      );
+    }
+    const order = await page.evaluate((currentRowTestId) => {
+      const rowElement = document.querySelector(
+        `[data-testid="${currentRowTestId}"]`,
+      );
+      const realHostedInputs = document.querySelector(
+        '[data-testid="admin-audit-detail-real-hosted-evidence-inputs"]',
+      );
+      const rawEvidenceTemplate = document.querySelector(
+        '[data-testid="admin-audit-detail-raw-evidence-template"]',
+      );
+      const before = (target) =>
+        target === null
+          ? null
+          : (rowElement.compareDocumentPosition(target) &
+              Node.DOCUMENT_POSITION_FOLLOWING) !==
+            0;
+      return {
+        beforeRealHostedEvidenceInputs: before(realHostedInputs),
+        beforeRawEvidenceTemplate: before(rawEvidenceTemplate),
+      };
+    }, rowTestId);
+    visibleActions[id] = {
+      copyCommand: {
+        testId: copyTestId,
+        copyValue,
+        copyStatus: await copyCommand.getAttribute("data-copy-status"),
+      },
+      openDoc: {
+        testId: docTestId,
+        href: docHref,
+      },
+      openProofTarget: {
+        testId: proofTargetTestId,
+        href: proofTargetHref,
+      },
+      order,
+    };
+  }
+  return visibleActions;
 }
 
 async function startFrontend() {

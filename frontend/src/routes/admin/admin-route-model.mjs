@@ -238,15 +238,18 @@ function artifactSummaryValue({
   emphasized = false,
   href = "",
   testId = "",
+  copyText = "",
 }) {
   const normalizedHref = typeof href === "string" ? href : "";
   const normalizedTestId = typeof testId === "string" ? testId : "";
+  const normalizedCopyText = typeof copyText === "string" ? copyText : "";
   return Object.freeze({
     id: String(id),
     text: String(text ?? ""),
     emphasized: emphasized === true,
     ...(normalizedHref === "" ? {} : { href: normalizedHref }),
     ...(normalizedTestId === "" ? {} : { testId: normalizedTestId }),
+    ...(normalizedCopyText === "" ? {} : { copyText: normalizedCopyText }),
   });
 }
 
@@ -854,11 +857,36 @@ function hostedHandoffOperatorProofRows(drilldowns) {
           { id: "sourcePath", text: drilldown.sourcePath },
           { id: "proofTarget", text: drilldown.proofTarget },
           { id: "roleUrl", text: drilldown.roleUrl },
+          ...hostedHandoffOperatorProofActionValues(drilldown),
           { id: "firstMissingInputId", text: drilldown.firstMissingInputId },
           { id: "firstMissingCheckId", text: drilldown.firstMissingCheckId },
           { id: "proofBoundary", text: drilldown.proofBoundary },
         ],
       })),
+    },
+  ];
+}
+
+function hostedHandoffOperatorProofActionValues(drilldown) {
+  const baseTestId = `admin-audit-hosted-handoff-operator-proof-${drilldown.id}`;
+  return [
+    {
+      id: "copyCommand",
+      text: "Copy command",
+      copyText: drilldown.command,
+      testId: `${baseTestId}-copy-command`,
+    },
+    {
+      id: "openSource",
+      text: "Open doc",
+      href: drilldown.sourcePath,
+      testId: `${baseTestId}-open-doc`,
+    },
+    {
+      id: "openProofTarget",
+      text: "Open proof",
+      href: drilldown.proofTarget,
+      testId: `${baseTestId}-open-proof-target`,
     },
   ];
 }
