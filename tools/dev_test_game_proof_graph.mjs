@@ -86,6 +86,13 @@ import {
   devTestGameCoreLoopAdminProofPath,
 } from "./dev_test_game_local_admin_proof_paths.mjs";
 import {
+  devTestGameReleaseAdminProofPath,
+  devTestGameReleaseAdminProofContractPath,
+} from "./dev_test_game_release_artifact_paths.mjs";
+import {
+  devTestGameReleaseAdminProofContractCommand,
+} from "./dev_test_game_release_admin_proof_contract.mjs";
+import {
   assertProofGraphCoversRecoveryReceipt,
   buildRecoveryReceiptGraphEdges,
   buildRecoveryReceiptGraphNode,
@@ -1046,6 +1053,28 @@ function buildProofGraphNodes({
     releaseReady: false,
     productionReady: false,
   };
+  const releaseAdminProofContractNode = {
+    id: "release-admin-proof-contract",
+    label: "Release admin proof diagnostics contract",
+    kind: "terminal-validation",
+    status: "passed",
+    artifact:
+      manifest.commands?.releaseAdminProofContract?.proofArtifact ??
+      devTestGameReleaseAdminProofContractPath,
+    roleUrl: localAdminAuditRoleUrl(localAdminAuditIds.releaseReadiness),
+    proofCommand:
+      manifest.commands?.releaseAdminProofContract?.script ??
+      devTestGameReleaseAdminProofContractCommand,
+    recoveryCommand:
+      manifest.commands?.releaseAdminProofContract?.script ??
+      devTestGameReleaseAdminProofContractCommand,
+    validatesArtifacts: [
+      releaseReadinessSource,
+      devTestGameReleaseAdminProofPath,
+    ],
+    releaseReady: false,
+    productionReady: false,
+  };
   const terminalBatchNode =
     adminSpineTerminalBatches === null
       ? []
@@ -1146,6 +1175,7 @@ function buildProofGraphNodes({
     ...roleSurfaceProofNodes,
     ...adminProofNodes,
     hostedEvidenceRealCaptureProofNode,
+    releaseAdminProofContractNode,
     ...hostedIdentityOperatorPrerequisiteNodes,
     ...coreLoopScenarioFamilyNodes,
     ...productionFeatureTargetNodes,
@@ -1182,6 +1212,7 @@ function buildProofGraphEdges({
       },
     ]),
     ...terminalBatchEdges(adminSpineTerminalBatches),
+    ...releaseAdminProofContractEdges(nodes),
     ...buildRecoveryReceiptGraphEdgeRows({
       privateChannelRecoveryReceipt,
       replacementActionRecoveryReceipt,
@@ -1233,6 +1264,30 @@ function buildProofGraphEdges({
         ),
       ),
   );
+}
+
+function releaseAdminProofContractEdges(nodes) {
+  return nodes.some((node) => node.id === "release-admin-proof-contract")
+    ? [
+        [
+          "spine-manifest",
+          "release-admin-proof-contract",
+          "records-terminal-validation",
+          {
+            command: devTestGameReleaseAdminProofContractCommand,
+          },
+        ],
+        [
+          "admin-proof:release",
+          "release-admin-proof-contract",
+          "validates-browser-diagnostics",
+          {
+            command: devTestGameReleaseAdminProofContractCommand,
+            proofTarget: devTestGameReleaseAdminProofContractPath,
+          },
+        ],
+      ]
+    : [];
 }
 
 function hostedEvidenceRealCaptureProofEdges(nodes) {

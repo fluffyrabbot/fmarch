@@ -6,3 +6,5 @@ export const devTestGameReleaseRunbookAdminProofPath =
   "target/dev-test-game/release-runbook-admin-proof.json";
 export const devTestGameReleaseAdminProofPath =
   "target/dev-test-game/release-admin-proof.json";
+export const devTestGameReleaseAdminProofContractPath =
+  "target/dev-test-game/release-admin-proof-contract.json";

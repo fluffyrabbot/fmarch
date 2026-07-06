@@ -113,6 +113,7 @@ import {
 } from "./dev_test_game_hosted_operator_packet.mjs";
 import {
   devTestGameReleaseAdminProofPath,
+  devTestGameReleaseAdminProofContractPath,
 } from "./dev_test_game_release_artifact_paths.mjs";
 import {
   devTestGameAdminSpineAdminProofPath,
@@ -593,6 +594,10 @@ import {
   assertReleaseAdminProof,
   assertReleaseAdminProofDiagnosticsMatchReadiness,
 } from "./dev_test_game_release_admin_proof.mjs";
+import {
+  assertReleaseAdminProofContractArtifact,
+  devTestGameReleaseAdminProofContractCommand,
+} from "./dev_test_game_release_admin_proof_contract.mjs";
 import {
   assertProofGraphAdminProof,
 } from "./dev_test_game_proof_graph_admin_proof.mjs";
@@ -2618,6 +2623,17 @@ test("dev test-game spine manifest records command order and evidence wiring", (
     dependsOn: [devTestGameReleaseReadinessPath],
     roleUrl: "/admin/audit/local-release-runbook?game=<seeded-game>",
   });
+  assert.deepEqual(manifest.commands.releaseAdminProofContract, {
+    script: devTestGameReleaseAdminProofContractCommand,
+    proofArtifact: devTestGameReleaseAdminProofContractPath,
+    dependsOn: [
+      devTestGameReleaseReadinessPath,
+      devTestGameReleaseAdminProofPath,
+    ],
+    roleUrl: "/admin/audit/local-release-readiness?game=<seeded-game>",
+    releaseReady: false,
+    productionReady: false,
+  });
   assert.deepEqual(manifest.commands.nextAction, {
     script: nextActionCommand,
     proofArtifact: nextActionPath,
@@ -2694,6 +2710,12 @@ test("dev test-game spine manifest records command order and evidence wiring", (
         path: devTestGameProofGraphAdminProofPath,
         roleUrl: "/admin/audit/local-proof-graph?game=<seeded-game>",
       },
+      {
+        id: "release-admin-proof-contract",
+        command: devTestGameReleaseAdminProofContractCommand,
+        path: devTestGameReleaseAdminProofContractPath,
+        roleUrl: "/admin/audit/local-release-readiness?game=<seeded-game>",
+      },
     ],
   );
   assert.equal(manifest.artifactFreshness.status, "blocked");
@@ -2766,6 +2788,7 @@ test("dev test-game spine manifest records command order and evidence wiring", (
   );
   assert(manifest.artifacts.includes(devTestGameRealHostedMatrixRawCapturePath));
   assert(manifest.artifacts.includes(devTestGameReleaseRunbookPath));
+  assert(manifest.artifacts.includes(devTestGameReleaseAdminProofContractPath));
   assert(manifest.artifacts.includes(nextActionPath));
   assert(manifest.artifacts.includes(nextActionAdminProofPath));
   assert(manifest.artifacts.includes(devTestGameProofGraphPath));
@@ -5752,7 +5775,7 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
         count + (check.spineTargets?.productionFeatureTargets?.slotIds?.length ?? 0),
       0,
     );
-  const expectedBaseGraphNodeCount = 37;
+  const expectedBaseGraphNodeCount = 38;
   assert.equal(
     graph.summary.nodeCount,
     expectedBaseGraphNodeCount +
@@ -5784,6 +5807,25 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
       roleUrl: "/admin/audit/local-hosted-evidence-lane?game=<seeded-game>",
       proofCommand: devTestGameHostedEvidenceLaneRealCaptureAdminProofCommand,
       recoveryCommand: devTestGameHostedEvidenceLaneRealCaptureAdminProofCommand,
+      releaseReady: false,
+      productionReady: false,
+    },
+  );
+  assert.deepEqual(
+    graph.nodes.find((node) => node.id === "release-admin-proof-contract"),
+    {
+      id: "release-admin-proof-contract",
+      label: "Release admin proof diagnostics contract",
+      kind: "terminal-validation",
+      status: "passed",
+      artifact: devTestGameReleaseAdminProofContractPath,
+      roleUrl: "/admin/audit/local-release-readiness?game=<seeded-game>",
+      proofCommand: devTestGameReleaseAdminProofContractCommand,
+      recoveryCommand: devTestGameReleaseAdminProofContractCommand,
+      validatesArtifacts: [
+        devTestGameReleaseReadinessPath,
+        devTestGameReleaseAdminProofPath,
+      ],
       releaseReady: false,
       productionReady: false,
     },
@@ -5923,6 +5965,7 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
           "admin-spine-terminal-batches",
           "hosted-identity-family-proof-batch",
           "hosted-identity-operator-predicate-proof",
+          "release-admin-proof-contract",
           ...proofGraphReceiptNodeIds,
         ].includes(node.id),
       )
@@ -5990,6 +6033,13 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
         descriptor.roleUrl,
         descriptor.proofCommand,
       ]),
+      [
+        "release-admin-proof-contract",
+        "terminal-validation",
+        devTestGameReleaseAdminProofContractPath,
+        "/admin/audit/local-release-readiness?game=<seeded-game>",
+        devTestGameReleaseAdminProofContractCommand,
+      ],
       [
         "hosted-identity-family-proof-batch",
         "hosted-identity-family-proof-batch",
@@ -6166,6 +6216,30 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
         hostedIdentityOperatorAdminSurfaceProofGraphRelationship,
         `npm run ${devTestGameHostedIdentityOperatorAdminProofCommand}`,
         devTestGameHostedIdentityOperatorAdminProofPath,
+      ],
+    ],
+  );
+  assert.deepEqual(
+    graph.edges
+      .filter((edge) => edge.to === "release-admin-proof-contract")
+      .map((edge) => [
+        edge.from,
+        edge.relationship,
+        edge.command,
+        edge.proofTarget,
+      ]),
+    [
+      [
+        "spine-manifest",
+        "records-terminal-validation",
+        devTestGameReleaseAdminProofContractCommand,
+        undefined,
+      ],
+      [
+        "admin-proof:release",
+        "validates-browser-diagnostics",
+        devTestGameReleaseAdminProofContractCommand,
+        devTestGameReleaseAdminProofContractPath,
       ],
     ],
   );
@@ -6994,6 +7068,27 @@ test("release admin proof diagnostics match the readiness checklist", () => {
       readiness,
     }),
     proof,
+  );
+  assert.deepEqual(
+    assertReleaseAdminProofContractArtifact({
+      version: 1,
+      proof: "dev-test-game-release-admin-proof-contract",
+      status: "passed",
+      releaseReady: false,
+      productionReady: false,
+      scope: "local-dev-test-game-release-admin-proof-contract",
+      proofBoundary: "Local terminal artifact contract fixture.",
+      generatedFrom: {
+        releaseReadinessChecklist: devTestGameReleaseReadinessPath,
+        releaseAdminProof: devTestGameReleaseAdminProofPath,
+        localDiagnosticIds: diagnosticIds,
+      },
+    }).generatedFrom,
+    {
+      releaseReadinessChecklist: devTestGameReleaseReadinessPath,
+      releaseAdminProof: devTestGameReleaseAdminProofPath,
+      localDiagnosticIds: diagnosticIds,
+    },
   );
 
   assert.throws(

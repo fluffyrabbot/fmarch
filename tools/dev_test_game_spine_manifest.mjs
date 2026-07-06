@@ -103,7 +103,11 @@ import {
 } from "./dev_test_game_release_runbook.mjs";
 import {
   devTestGameReleaseAdminProofPath,
+  devTestGameReleaseAdminProofContractPath,
 } from "./dev_test_game_release_artifact_paths.mjs";
+import {
+  devTestGameReleaseAdminProofContractCommand,
+} from "./dev_test_game_release_admin_proof_contract.mjs";
 import {
   devTestGameAdminSpineAdminProofPath,
   devTestGameCoreLoopAdminProofPath,
@@ -419,6 +423,17 @@ export function buildDevTestGameSpineManifest({
         dependsOn: [devTestGameReleaseReadinessPath],
         roleUrl: "/admin/audit/local-release-runbook?game=<seeded-game>",
       },
+      releaseAdminProofContract: {
+        script: devTestGameReleaseAdminProofContractCommand,
+        proofArtifact: devTestGameReleaseAdminProofContractPath,
+        dependsOn: [
+          devTestGameReleaseReadinessPath,
+          devTestGameReleaseAdminProofPath,
+        ],
+        roleUrl: localAdminAuditRoleUrl(localAdminAuditIds.releaseReadiness),
+        releaseReady: false,
+        productionReady: false,
+      },
       nextAction: {
         script: nextActionCommand,
         proofArtifact: nextActionPath,
@@ -526,6 +541,19 @@ export function buildDevTestGameSpineManifest({
         boundary:
           "Terminal local admin role proof for the generated proof graph detail route and graph-to-admin-spine coverage invariant.",
       },
+      {
+        id: "release-admin-proof-contract",
+        label: "Release admin proof diagnostics contract",
+        command: devTestGameReleaseAdminProofContractCommand,
+        path: devTestGameReleaseAdminProofContractPath,
+        dependsOn: [
+          devTestGameReleaseReadinessPath,
+          devTestGameReleaseAdminProofPath,
+        ],
+        roleUrl: localAdminAuditRoleUrl(localAdminAuditIds.releaseReadiness),
+        boundary:
+          "Terminal local artifact contract proving final readiness diagnostics are visible in the release admin browser proof.",
+      },
     ],
     artifacts: uniqueSorted([
       spineManifestPath,
@@ -560,6 +588,7 @@ export function buildDevTestGameSpineManifest({
       devTestGameHostedOpsSignalsPath,
       devTestGameRealHostedObservabilityHandoffPath,
       devTestGameReleaseRunbookPath,
+      devTestGameReleaseAdminProofContractPath,
       devTestGameProofGraphPath,
       devTestGameProofGraphAdminProofPath,
       ...devTestGameAdminSpineProofPlan.map((step) => step.path),
@@ -747,6 +776,16 @@ export function buildDevTestGameSpineManifest({
         evidence: [devTestGameReleaseRunbookCommand, devTestGameReleaseRunbookPath],
       },
       {
+        id: "release-admin-proof-contract-recorded",
+        status: "passed",
+        evidence: [
+          devTestGameReleaseAdminProofContractCommand,
+          devTestGameReleaseAdminProofContractPath,
+        ],
+        releaseReady: false,
+        productionReady: false,
+      },
+      {
         id: "terminal-artifacts-recorded",
         status: "passed",
         evidence: [
@@ -754,6 +793,7 @@ export function buildDevTestGameSpineManifest({
           nextActionAdminProofPath,
           devTestGameProofGraphPath,
           devTestGameProofGraphAdminProofPath,
+          devTestGameReleaseAdminProofContractPath,
         ],
       },
       {
@@ -1209,6 +1249,30 @@ export function assertDevTestGameSpineManifest(manifest) {
       `spine manifest release runbook artifact drifted: ${manifest.commands.releaseRunbook.proofArtifact}`,
     );
   }
+  if (
+    manifest.commands?.releaseAdminProofContract?.script !==
+    devTestGameReleaseAdminProofContractCommand
+  ) {
+    throw new Error(
+      `spine manifest release admin proof contract command drifted: ${manifest.commands?.releaseAdminProofContract?.script}`,
+    );
+  }
+  if (
+    manifest.commands.releaseAdminProofContract.proofArtifact !==
+    devTestGameReleaseAdminProofContractPath
+  ) {
+    throw new Error(
+      `spine manifest release admin proof contract artifact drifted: ${manifest.commands.releaseAdminProofContract.proofArtifact}`,
+    );
+  }
+  if (
+    manifest.commands.releaseAdminProofContract.releaseReady !== false ||
+    manifest.commands.releaseAdminProofContract.productionReady !== false
+  ) {
+    throw new Error(
+      "spine manifest release admin proof contract must not claim readiness",
+    );
+  }
   if (manifest.commands?.nextAction?.script !== nextActionCommand) {
     throw new Error(
       `spine manifest next-action command drifted: ${manifest.commands?.nextAction?.script}`,
@@ -1290,6 +1354,7 @@ export function assertDevTestGameSpineManifest(manifest) {
     devTestGameHardeningAdminProofPath,
     devTestGameIdentityAdminProofPath,
     devTestGameReleaseAdminProofPath,
+    devTestGameReleaseAdminProofContractPath,
     devTestGameRaceCoverageAdminProofPath,
     devTestGameReleaseRunbookAdminProofPath,
     devTestGameHostedTargetPreflightAdminProofPath,
@@ -1327,6 +1392,7 @@ export function assertDevTestGameSpineManifest(manifest) {
     "hosted-evidence-lane-real-capture-admin-proof-recorded",
     "hosted-ops-signals-recorded",
     "release-runbook-recorded",
+    "release-admin-proof-contract-recorded",
     "terminal-artifacts-recorded",
     "production-feature-provenance-summary-recorded",
     "release-boundary-carried",
@@ -1438,6 +1504,25 @@ function assertTerminalArtifacts(terminalArtifacts) {
     !proofGraphAdminProof.dependsOn.includes(devTestGameProofGraphPath)
   ) {
     throw new Error("spine manifest proof graph admin terminal artifact drifted");
+  }
+  const releaseAdminProofContract = artifacts.get("release-admin-proof-contract");
+  if (
+    releaseAdminProofContract?.command !==
+      devTestGameReleaseAdminProofContractCommand ||
+    releaseAdminProofContract.path !== devTestGameReleaseAdminProofContractPath ||
+    releaseAdminProofContract.roleUrl !==
+      localAdminAuditRoleUrl(localAdminAuditIds.releaseReadiness) ||
+    !Array.isArray(releaseAdminProofContract.dependsOn) ||
+    !releaseAdminProofContract.dependsOn.includes(
+      devTestGameReleaseReadinessPath,
+    ) ||
+    !releaseAdminProofContract.dependsOn.includes(
+      devTestGameReleaseAdminProofPath,
+    )
+  ) {
+    throw new Error(
+      "spine manifest release admin proof contract terminal artifact drifted",
+    );
   }
 }
 
@@ -1825,6 +1910,10 @@ const artifactRefreshCommands = Object.freeze({
     "npm run test:dev-test-game-hosted-ops-signals-admin-proof",
   "release-runbook": "npm run test:dev-test-game-release-runbook",
   "release-runbook-admin": "npm run test:dev-test-game-release-runbook-admin-proof",
+  "release-admin-proof-contract":
+    "npm run test:dev-test-game-release-admin-proof-contract",
+  [devTestGameReleaseAdminProofContractPath]:
+    "npm run test:dev-test-game-release-admin-proof-contract",
   "identity-adapter": `${localDatabasePrefix} npm run test:dev-test-game-identity`,
   "spine-manifest": "npm run test:dev-test-game-spine-manifest",
   "core-loop": "npm run test:dev-test-game-core-loop-admin-proof",

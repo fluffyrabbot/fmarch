@@ -310,9 +310,11 @@ The local release-readiness admin browser proof is:
 npm run test:dev-test-game-release-admin-proof
 ```
 
-The matching artifact contract verifies that the release-readiness diagnostics
-listed in `target/dev-test-game/release-readiness-checklist.json` are also
-browser-visible in `target/dev-test-game/release-admin-proof.json`:
+The matching artifact contract writes
+`target/dev-test-game/release-admin-proof-contract.json` and verifies that the
+release-readiness diagnostics listed in
+`target/dev-test-game/release-readiness-checklist.json` are also browser-visible
+in `target/dev-test-game/release-admin-proof.json`:
 
 ```sh
 npm run test:dev-test-game-release-admin-proof-contract
@@ -453,8 +455,10 @@ release-readiness admin browser proofs, records per-surface recovery commands in
 `target/dev-test-game/admin-spine-proof.json`, then records
 `target/dev-test-game/admin-spine-proof.json` in the readiness checklist while
 keeping release readiness `not_ready`. After the final readiness refresh, the
-spine refreshes `target/dev-test-game/release-admin-proof.json` and validates
-that its browser-visible diagnostics match the final readiness checklist.
+spine refreshes `target/dev-test-game/release-admin-proof.json`, writes
+`target/dev-test-game/release-admin-proof-contract.json`, and records that
+terminal validation in the spine manifest and proof graph so the final
+browser-visible diagnostics contract is no longer an invisible tail command.
 
 The cohost proof uses the generated cohost role URL to open the host console
 with `CohostOf(<game>)`, renders only the delegated deadline control, runs the
