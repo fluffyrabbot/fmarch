@@ -619,7 +619,11 @@ import {
 } from "./dev_test_game_pre_readiness_trace_registry.mjs";
 import {
   getLocalReadinessDependency,
+  localHostedEvidenceLaneDemoProofCheckId,
+  localNextActionAdminSurfaceCheckId,
   localReadinessDependencyDestinations,
+  localProofFreshnessAdminSurfaceCheckId,
+  localProofGraphAdminRoleHandoffsCheckId,
   localProofGraphNextActionHandoffCheckId,
   localProofGraphProductionFeatureProvenanceCheckId,
   localProofGraphTerminalValidationCheckId,
@@ -6034,6 +6038,19 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
       proof.detailRoleUrl,
       proof.rerunCommand,
     ]),
+  );
+  assert.deepEqual(
+    graph.nodes.find((node) => node.id === "admin-proof:release")
+      .requiredLocalPrerequisiteDestinations,
+    localReadinessDependencyDestinations().filter((destination) =>
+      [
+        localProofGraphAdminRoleHandoffsCheckId,
+        localProofGraphTerminalValidationCheckId,
+        localProofFreshnessAdminSurfaceCheckId,
+        localNextActionAdminSurfaceCheckId,
+        localHostedEvidenceLaneDemoProofCheckId,
+      ].includes(destination.id),
+    ),
   );
   const proofGraphReceiptNodeIds = recoveryReceiptGraphDescriptors.map(
     (descriptor) => descriptor.nodeId,

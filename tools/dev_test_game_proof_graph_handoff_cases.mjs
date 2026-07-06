@@ -505,18 +505,32 @@ export function adminProofDestinationProofGraphNodes({
   game = "<seeded-game>",
   status = "passed",
 } = {}) {
-  return adminProofDestinationRequirementRoleRows({ game }).map(
-    ({ linkId, auditId, roleUrl }) =>
+  return adminProofDestinationRequirementCases.map((requirement) => {
+    const linkId = requirement.linkId;
+    const roleUrl = adminProofDestinationRoleUrl({
+      auditId: requirement.auditId,
+      game,
+    });
+    return (
       Object.freeze({
         id: linkId,
-        label: `${auditId} admin proof`,
+        label: `${requirement.auditId} admin proof`,
         kind: "proof-surface",
         status,
         artifact: adminProofDestinationArtifactPath(linkId),
         roleUrl,
         recoveryCommand: adminProofDestinationRecoveryCommand(linkId),
-      }),
-  );
+        ...(requirement.requiredLocalPrerequisiteDestinations === undefined
+          ? {}
+          : {
+              requiredLocalPrerequisiteDestinations:
+                requirement.requiredLocalPrerequisiteDestinations.map(
+                  (destination) => ({ ...destination }),
+                ),
+            }),
+      })
+    );
+  });
 }
 
 export function proofGraphProductionFeatureCase({

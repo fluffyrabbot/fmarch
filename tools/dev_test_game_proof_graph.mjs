@@ -75,6 +75,7 @@ import {
   devTestGameHostedEvidenceLaneRealCaptureAdminProofPath,
 } from "./dev_test_game_hosted_handoff_cases.mjs";
 import {
+  adminProofDestinationRequirementForLink,
   proofGraphDiagnosticProofEdges,
   proofGraphDiagnosticProofNodes,
 } from "./dev_test_game_proof_graph_handoff_cases.mjs";
@@ -365,6 +366,7 @@ export function assertDevTestGameProofGraph(
     ) {
       throw new Error(`proof graph production feature ${node.id} target role URL is missing`);
     }
+    assertProofGraphNodeLocalPrerequisiteDestinations(node);
   }
   for (const edge of evidence.edges) {
     if (!nodesById.has(edge.from) || !nodesById.has(edge.to)) {
@@ -738,6 +740,11 @@ export function assertDevTestGameProofGraphCoversAdminSpine(graph, adminSpinePro
     if (node.recoveryCommand !== recoveryCommands.get(id)) {
       throw new Error(`proof graph admin surface ${id} recovery command drifted`);
     }
+    assertProofGraphAdminSurfacePrerequisites({
+      node,
+      expectedNodeId,
+      id,
+    });
     if (
       !(graph.edges ?? []).some(
         (edge) =>
@@ -750,6 +757,20 @@ export function assertDevTestGameProofGraphCoversAdminSpine(graph, adminSpinePro
     }
   }
   return graph;
+}
+
+function assertProofGraphAdminSurfacePrerequisites({ node, expectedNodeId, id }) {
+  const requirement = adminProofDestinationRequirementForLink(expectedNodeId);
+  const expectedDestinations =
+    requirement?.requiredLocalPrerequisiteDestinations ?? [];
+  const actualDestinations = node.requiredLocalPrerequisiteDestinations ?? [];
+  if (
+    JSON.stringify(actualDestinations) !== JSON.stringify(expectedDestinations)
+  ) {
+    throw new Error(
+      `proof graph admin surface ${id} local prerequisite destinations drifted`,
+    );
+  }
 }
 
 export function assertDevTestGameProofGraphCoversProductionFeatureTargets(
@@ -1043,6 +1064,7 @@ function buildProofGraphNodes({
     roleUrl: proof.detailRoleUrl,
     proofCommand: proof.rerunCommand,
     recoveryCommand: recoveryCommands.get(proof.id) ?? proof.rerunCommand,
+    ...adminProofNodePrerequisiteMetadata(`admin-proof:${proof.id}`),
   }));
   const productionFeatureTargetNodes = buildProductionFeatureTargetNodes({
     releaseReadiness,
@@ -1207,6 +1229,34 @@ function buildProofGraphNodes({
       Object.entries(node).filter(([, value]) => value !== undefined && value !== ""),
     ),
   );
+}
+
+function adminProofNodePrerequisiteMetadata(linkId) {
+  const requirement = adminProofDestinationRequirementForLink(linkId);
+  const destinations = requirement?.requiredLocalPrerequisiteDestinations ?? [];
+  return destinations.length === 0
+    ? {}
+    : {
+        requiredLocalPrerequisiteDestinations: destinations.map(
+          (destination) => ({ ...destination }),
+        ),
+      };
+}
+
+function assertProofGraphNodeLocalPrerequisiteDestinations(node) {
+  if (node.requiredLocalPrerequisiteDestinations === undefined) {
+    return;
+  }
+  const requirement = adminProofDestinationRequirementForLink(node.id);
+  const expected = requirement?.requiredLocalPrerequisiteDestinations ?? [];
+  if (
+    JSON.stringify(node.requiredLocalPrerequisiteDestinations) !==
+    JSON.stringify(expected)
+  ) {
+    throw new Error(
+      `proof graph node ${node.id} local prerequisite destinations drifted`,
+    );
+  }
 }
 
 function buildProofGraphEdges({

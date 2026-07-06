@@ -145,8 +145,9 @@ test("admin proof destination handoff cases share link and audit rows", () => {
 });
 
 test("admin proof destination handoff cases derive proof graph nodes", () => {
+  const nodes = adminProofDestinationProofGraphNodes({ game: "midsummer" });
   assert.deepEqual(
-    adminProofDestinationProofGraphNodes({ game: "midsummer" }).map((node) => [
+    nodes.map((node) => [
       node.id,
       node.label,
       node.kind,
@@ -164,6 +165,17 @@ test("admin proof destination handoff cases derive proof graph nodes", () => {
       `/admin/audit/${auditId}?game=midsummer`,
       adminProofDestinationRecoveryCommand(linkId),
     ]),
+  );
+  assert.deepEqual(
+    nodes.find((node) => node.id === "admin-proof:release")
+      .requiredLocalPrerequisiteDestinations,
+    [
+      localProofGraphAdminRoleHandoffsCheckId,
+      localProofGraphTerminalValidationCheckId,
+      localProofFreshnessAdminSurfaceCheckId,
+      localNextActionAdminSurfaceCheckId,
+      localHostedEvidenceLaneDemoProofCheckId,
+    ].map((id) => localReadinessDependencyDestinationFor(id)),
   );
 });
 
