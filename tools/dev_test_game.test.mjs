@@ -603,6 +603,7 @@ import {
 } from "./dev_test_game_release_admin_proof_contract.mjs";
 import {
   assertProofGraphAdminProof,
+  buildProofGraphAdminGeneratedFrom,
 } from "./dev_test_game_proof_graph_admin_proof.mjs";
 import {
   proofGraphProductionFeatureDestinationSummary,
@@ -5785,6 +5786,84 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
   assertDevTestGameProofGraphCoversProductionFeatureTargets(
     graph,
     releaseReadiness,
+  );
+  const proofGraphAdminGeneratedFrom = buildProofGraphAdminGeneratedFrom({
+    proofGraph: graph,
+    proofRun: {
+      session: {
+        game: "00000000-0000-0000-0000-000000000001",
+      },
+    },
+    adminSpineProof: validatedAdminSpineProof,
+    adminSpineTerminalBatches: selectedOperatorTerminalBatches,
+    hostedMatrix: {
+      evidenceProgress: [],
+      cells: [],
+      summary: {
+        realHostedDeploymentStatus: "unproven",
+      },
+      requestedEvidence: {
+        id: "hosted-concurrent-race-matrix",
+      },
+      remainingGaps: [],
+      reconnectLanes: [],
+      staleConflictLanes: [],
+    },
+    hostedEvidenceLane: {
+      blockedCheckIds: ["raw-evidence-real-hosted-target"],
+    },
+  });
+  assert.deepEqual(
+    Object.keys(proofGraphAdminGeneratedFrom).slice(0, 14),
+    [
+      "proofGraph",
+      "proofRun",
+      "adminSpineProof",
+      "adminSpineTerminalBatches",
+      "hostedConcurrentRaceMatrix",
+      "hostedEvidenceLane",
+      "game",
+      "nodeIds",
+      "evidenceObjectRowIds",
+      "receiptArtifactRowIds",
+      "hostedIdentityTerminalReceiptArtifact",
+      "edgeRowIds",
+      "edgeCount",
+      "adminProofSurfaceIds",
+    ],
+  );
+  assert.deepEqual(
+    proofGraphAdminGeneratedFrom.nodeIds,
+    graph.nodes.map((node) => node.id),
+  );
+  assert.deepEqual(
+    proofGraphAdminGeneratedFrom.edgeRowIds,
+    graph.edges.map(
+      (edge) =>
+        `edge:${String(edge.from)}:${String(edge.relationship ?? "related")}:${String(edge.to)}`,
+    ),
+  );
+  assert.deepEqual(
+    proofGraphAdminGeneratedFrom.adminProofSurfaceIds,
+    validatedAdminSpineProof.proofIds,
+  );
+  assert.deepEqual(
+    proofGraphAdminGeneratedFrom.productionFeatureDestinationSummary,
+    graph.summary.productionFeatureDestinationSummary,
+  );
+  assert.deepEqual(
+    proofGraphAdminGeneratedFrom.diagnosticProofSummary,
+    graph.summary.diagnosticProofSummary,
+  );
+  assert.deepEqual(
+    proofGraphAdminGeneratedFrom.selectedOperatorHandoffReceiptDestination
+      .requiredSelectedOperatorHandoffTerminalReceiptRows,
+    ["receipt", "selected", "edge", "readiness-link"],
+  );
+  assert.deepEqual(
+    proofGraphAdminGeneratedFrom.adminSpineTerminalValidationDestination
+      .requiredAdminSpineTerminalValidations,
+    ["release-admin-proof-contract"],
   );
   assert.deepEqual(
     graph.edges.find(

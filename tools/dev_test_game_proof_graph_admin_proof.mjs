@@ -240,73 +240,86 @@ export function proofGraphAdminProofCase() {
       scope: "local-dev-test-game-proof-graph-admin-surface",
       proofBoundary:
         "Local SvelteKit admin role URL with fixture admin authority over the generated dev-test-game proof graph. Proves the machine-readable proof graph, recovery receipt evidence-object rows, and role handoffs are discoverable from the seeded admin overview and inspectable in a native admin audit detail route; it does not prove hosted operations, beta readiness, release readiness, or production readiness.",
-      generatedFrom: {
-        proofGraph: proofGraphRelativePath,
-        proofRun: proofRunRelativePath,
-        adminSpineProof: adminSpineProofRelativePath,
-        ...(source.adminSpineTerminalBatches === null
-          ? {}
-          : {
-              adminSpineTerminalBatches:
-                adminSpineTerminalBatchesRelativePath,
-            }),
-        hostedConcurrentRaceMatrix: hostedMatrixRelativePath,
-        hostedEvidenceLane: hostedEvidenceLaneRelativePath,
-        game: source.proofRun.session.game,
-        nodeIds: source.proofGraph.nodes.map((node) => node.id),
-        evidenceObjectRowIds: normalizedEvidenceObjectRowIdsForProofGraph(
-          source.proofGraph,
-        ),
-        receiptArtifactRowIds: proofGraphReceiptArtifactRowIds(
-          source.proofGraph,
-        ),
-        hostedIdentityTerminalReceiptArtifact:
-          hostedIdentityTerminalReceiptArtifact(source.proofGraph),
-        edgeRowIds: source.proofGraph.edges.map((edge) =>
-          proofGraphEdgeCheckId(edge),
-        ),
-        edgeCount: source.proofGraph.edges.length,
-        adminProofSurfaceIds: source.adminSpineProof.proofIds,
-        adminProofRoleHandoffs: bootstrapProofGraphAdminRoleHandoffs({
-          proofGraph: source.proofGraph,
-          hostedMatrix: source.hostedMatrix,
-          hostedEvidenceLane: source.hostedEvidenceLane,
-        }),
-        coreLoopScenarioFamilyDestinations:
-          proofGraphCoreLoopScenarioFamilyDestinations(source.proofGraph),
-        productionFeatureTargetDestinations:
-          proofGraphProductionFeatureTargetDestinations(source.proofGraph),
-        productionFeatureDestinationSummary:
-          source.proofGraph.summary.productionFeatureDestinationSummary,
-        manifestProductionFeatureProvenanceSummary:
-          source.proofGraph.generatedFrom
-            ?.manifestProductionFeatureProvenanceSummary,
-        productionFeatureProvenanceComparison:
-          source.proofGraph.summary.productionFeatureProvenanceComparison,
-        diagnosticProofSummary: normalizeProofGraphDiagnosticProofSummary(
-          source.proofGraph.summary?.diagnosticProofSummary,
-          { nodes: source.proofGraph.nodes },
-        ),
-        proofGraphPrerequisiteDestinationRowIds:
-          proofGraphPrerequisiteDestinationRowIds(source.proofGraph),
-        ...(source.adminSpineTerminalBatches?.selectedOperatorHandoffReceipt
-          ?.status === "passed"
-          ? {
-              selectedOperatorHandoffReceiptDestination:
-                proofGraphSelectedOperatorHandoffReceiptDestination(
-                  source.adminSpineTerminalBatches
-                    .selectedOperatorHandoffReceipt,
-                ),
-            }
-          : {}),
-        ...proofGraphAdminSpineTerminalValidationDestinationEntry(
-          source.adminSpineTerminalBatches,
-        ),
-        ...proofGraphAdminFeatureTargetEntries(source.proofGraph),
-      },
+      generatedFrom: buildProofGraphAdminGeneratedFrom(source),
       adminRoleSurface,
     }),
     assertEvidence: assertProofGraphAdminProof,
+  };
+}
+
+export function buildProofGraphAdminGeneratedFrom(
+  source,
+  {
+    proofGraph = proofGraphRelativePath,
+    proofRun = proofRunRelativePath,
+    adminSpineProof = adminSpineProofRelativePath,
+    adminSpineTerminalBatches = adminSpineTerminalBatchesRelativePath,
+    hostedConcurrentRaceMatrix = hostedMatrixRelativePath,
+    hostedEvidenceLane = hostedEvidenceLaneRelativePath,
+  } = {},
+) {
+  return {
+    proofGraph,
+    proofRun,
+    adminSpineProof,
+    ...(source.adminSpineTerminalBatches === null
+      ? {}
+      : {
+          adminSpineTerminalBatches,
+        }),
+    hostedConcurrentRaceMatrix,
+    hostedEvidenceLane,
+    game: source.proofRun.session.game,
+    nodeIds: source.proofGraph.nodes.map((node) => node.id),
+    evidenceObjectRowIds: normalizedEvidenceObjectRowIdsForProofGraph(
+      source.proofGraph,
+    ),
+    receiptArtifactRowIds: proofGraphReceiptArtifactRowIds(
+      source.proofGraph,
+    ),
+    hostedIdentityTerminalReceiptArtifact:
+      hostedIdentityTerminalReceiptArtifact(source.proofGraph),
+    edgeRowIds: source.proofGraph.edges.map((edge) =>
+      proofGraphEdgeCheckId(edge),
+    ),
+    edgeCount: source.proofGraph.edges.length,
+    adminProofSurfaceIds: source.adminSpineProof.proofIds,
+    adminProofRoleHandoffs: bootstrapProofGraphAdminRoleHandoffs({
+      proofGraph: source.proofGraph,
+      hostedMatrix: source.hostedMatrix,
+      hostedEvidenceLane: source.hostedEvidenceLane,
+    }),
+    coreLoopScenarioFamilyDestinations:
+      proofGraphCoreLoopScenarioFamilyDestinations(source.proofGraph),
+    productionFeatureTargetDestinations:
+      proofGraphProductionFeatureTargetDestinations(source.proofGraph),
+    productionFeatureDestinationSummary:
+      source.proofGraph.summary.productionFeatureDestinationSummary,
+    manifestProductionFeatureProvenanceSummary:
+      source.proofGraph.generatedFrom
+        ?.manifestProductionFeatureProvenanceSummary,
+    productionFeatureProvenanceComparison:
+      source.proofGraph.summary.productionFeatureProvenanceComparison,
+    diagnosticProofSummary: normalizeProofGraphDiagnosticProofSummary(
+      source.proofGraph.summary?.diagnosticProofSummary,
+      { nodes: source.proofGraph.nodes },
+    ),
+    proofGraphPrerequisiteDestinationRowIds:
+      proofGraphPrerequisiteDestinationRowIds(source.proofGraph),
+    ...(source.adminSpineTerminalBatches?.selectedOperatorHandoffReceipt
+      ?.status === "passed"
+      ? {
+          selectedOperatorHandoffReceiptDestination:
+            proofGraphSelectedOperatorHandoffReceiptDestination(
+              source.adminSpineTerminalBatches
+                .selectedOperatorHandoffReceipt,
+            ),
+        }
+      : {}),
+    ...proofGraphAdminSpineTerminalValidationDestinationEntry(
+      source.adminSpineTerminalBatches,
+    ),
+    ...proofGraphAdminFeatureTargetEntries(source.proofGraph),
   };
 }
 
