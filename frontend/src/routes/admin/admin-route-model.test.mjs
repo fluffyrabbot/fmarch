@@ -1748,6 +1748,7 @@ test("admin audit detail page renders descriptor artifact sections from route da
   assert.doesNotMatch(source, /artifactSummary\.identityAdapterContractComparison/);
   assert.doesNotMatch(source, /artifactSummary\.adapterContract/);
   assert.doesNotMatch(source, /artifactSummary\.progressionSummary\.nextCommand/);
+  assert.doesNotMatch(source, /artifactSummary\.diagnosticProofSummary/);
   assert.match(source, /row\.subentries\?\.length/);
   assert.match(source, /data-testid=\{subentry\.testId\}/);
 });
@@ -2250,6 +2251,49 @@ test("admin route data exposes local proof graph as a native audit row", async (
       .filter((row) => row.id.startsWith("hosted-evidence-progression:"))
       .map((row) => row.progressionId),
     hostedEvidenceProgressionHandoffSummary().progressionIds,
+  );
+  assert.deepEqual(
+    graph.artifactSummarySections.map((section) => [
+      section.id,
+      section.heading,
+      section.testId,
+      section.rows.map((row) => [
+        row.id,
+        row.testId,
+        row.values.map((value) => [value.id, value.text, value.emphasized]),
+      ]),
+    ]),
+    [
+      [
+        "diagnostic-proof-summary",
+        "Diagnostic non-terminal proofs",
+        "admin-audit-detail-diagnostic-proof-summary",
+        proofGraph.summary.diagnosticProofSummary.rows.map((row) => [
+          row.id,
+          `admin-audit-diagnostic-proof-summary-${row.id}`,
+          [
+            ["label", row.label, true],
+            ["status", row.status, false],
+            ["diagnosticReason", row.diagnosticReason, false],
+            ["artifact", row.artifact, false],
+            [
+              "promotesFreshness",
+              row.promotesFreshness
+                ? "freshness-promoting"
+                : "non-freshness-promoting",
+              false,
+            ],
+            [
+              "terminalArtifact",
+              row.terminalArtifact
+                ? "terminal artifact"
+                : "non-terminal artifact",
+              false,
+            ],
+          ],
+        ]),
+      ],
+    ],
   );
 });
 

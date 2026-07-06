@@ -342,6 +342,47 @@ function frontendSetupWorkbenchReadinessSummarySections(readiness) {
   ];
 }
 
+function buildLocalProofGraphSummarySections(artifactSummary) {
+  return Object.freeze([
+    ...diagnosticProofSummarySections(artifactSummary.diagnosticProofSummary),
+  ]);
+}
+
+function diagnosticProofSummarySections(summary) {
+  const rows = Array.isArray(summary?.rows) ? summary.rows : [];
+  if (rows.length === 0) {
+    return [];
+  }
+  return [
+    buildArtifactSummarySection({
+      id: "diagnostic-proof-summary",
+      heading: "Diagnostic non-terminal proofs",
+      rows: rows.map((row) => ({
+        id: row.id,
+        testId: `admin-audit-diagnostic-proof-summary-${row.id}`,
+        values: [
+          { id: "label", text: row.label, emphasized: true },
+          { id: "status", text: row.status },
+          { id: "diagnosticReason", text: row.diagnosticReason },
+          { id: "artifact", text: row.artifact },
+          {
+            id: "promotesFreshness",
+            text: row.promotesFreshness
+              ? "freshness-promoting"
+              : "non-freshness-promoting",
+          },
+          {
+            id: "terminalArtifact",
+            text: row.terminalArtifact
+              ? "terminal artifact"
+              : "non-terminal artifact",
+          },
+        ],
+      })),
+    }),
+  ];
+}
+
 function hostedReadinessText(value, label) {
   return value === true ? `${label} ready` : `${label} not ready`;
 }
@@ -2678,6 +2719,11 @@ export function normalizeLocalProofGraphAudit(proofGraph, { game }) {
   const roleNodes = nodes.filter(
     (node) => typeof node?.roleUrl === "string" && node.roleUrl.trim() !== "",
   );
+  const artifactSummary = normalizeLocalProofGraphArtifactSummary(proofGraph, {
+    nodes,
+    edges,
+    roleNodes,
+  });
   return Object.freeze({
     id: localAdminAuditIds.proofGraph,
     label: "Local proof graph",
@@ -2691,11 +2737,8 @@ export function normalizeLocalProofGraphAudit(proofGraph, { game }) {
     inspectHref: adminAuditInspectHref({ game, audit: localAdminAuditIds.proofGraph }),
     checks: normalizeLocalProofGraphCheckRows(proofGraph),
     relatedLinks: normalizeLocalProofGraphRelatedLinks(proofGraph, { game, nodes }),
-    artifactSummary: normalizeLocalProofGraphArtifactSummary(proofGraph, {
-      nodes,
-      edges,
-      roleNodes,
-    }),
+    artifactSummary,
+    artifactSummarySections: buildLocalProofGraphSummarySections(artifactSummary),
   });
 }
 
