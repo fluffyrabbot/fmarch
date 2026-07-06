@@ -37,6 +37,7 @@ import {
 } from "./dev_test_game_hosted_handoff_cases.mjs";
 import {
   assertAdminRoleSurfaceEvidenceArtifact,
+  assertAdminRoleSurfaceProofGraphPrerequisiteDestinationArtifacts,
   assertVisibleAdminRoleSurfaceRows,
   proveAdminAuditDetail,
   readJson,
@@ -99,6 +100,7 @@ import {
 } from "./dev_test_game_proof_graph_diagnostic_summary.mjs";
 import {
   proofGraphPrerequisiteDestinationRowIds,
+  proofGraphPrerequisiteDestinationRows,
 } from "./dev_test_game_proof_graph_prerequisite_destination_rows.mjs";
 import {
   proofGraphCoreLoopRecoveryDestinationSummary,
@@ -290,6 +292,8 @@ export function buildProofGraphAdminProofRequirements(source) {
     ),
     requiredProofGraphPrerequisiteDestinations:
       proofGraphAdminProofPrerequisiteDestinationRowIds(source.proofGraph),
+    requiredProofGraphPrerequisiteDestinationArtifacts:
+      proofGraphAdminProofPrerequisiteDestinationArtifacts(source.proofGraph),
     requiredProofGraphCoreLoopRecoveryDestinations:
       coreLoopRecoveryDestinationSummary.rows.map((row) => row.id),
     requiredProofGraphCoreLoopRecoveryDestinationStatuses: Object.fromEntries(
@@ -389,6 +393,8 @@ export function buildProofGraphAdminGeneratedFrom(
       proofGraphPhaseLocalNextActionGraphLinks(source.proofGraph),
     proofGraphPrerequisiteDestinationRowIds:
       proofGraphAdminProofPrerequisiteDestinationRowIds(source.proofGraph),
+    proofGraphPrerequisiteDestinationArtifacts:
+      proofGraphAdminProofPrerequisiteDestinationArtifacts(source.proofGraph),
     ...(source.adminSpineTerminalBatches?.selectedOperatorHandoffReceipt
       ?.status === "passed"
       ? {
@@ -501,6 +507,11 @@ export function assertProofGraphAdminProof(evidence) {
     proofName: "proof graph admin proof",
     rowName: "proof graph prerequisite destination",
     surfaceKey: "visibleProofGraphPrerequisiteDestinations",
+  });
+  assertAdminRoleSurfaceProofGraphPrerequisiteDestinationArtifacts({
+    adminRoleSurface: evidence.adminRoleSurface,
+    expectedArtifacts: evidence.generatedFrom?.proofGraphPrerequisiteDestinationArtifacts,
+    proofName: "proof graph admin proof",
   });
   for (const featureTargetCase of proofGraphAdminFeatureTargetCases) {
     assertProofGraphAdminProofCoversFeatureTarget(evidence, featureTargetCase);
@@ -1266,6 +1277,18 @@ function proofGraphAdminProofPrerequisiteDestinationRowIds(proofGraph) {
       rowId !== localProofGraphTerminalValidationCheckId &&
       !rowId.endsWith(`:${localProofGraphTerminalValidationCheckId}`),
   );
+}
+
+function proofGraphAdminProofPrerequisiteDestinationArtifacts(proofGraph) {
+  const rowIds = new Set(
+    proofGraphAdminProofPrerequisiteDestinationRowIds(proofGraph),
+  );
+  return proofGraphPrerequisiteDestinationRows(proofGraph)
+    .filter((row) => rowIds.has(row.rowId))
+    .map((row) => ({
+      rowId: row.rowId,
+      proofTarget: row.proofTarget,
+    }));
 }
 
 function proofGraphAdminProofRoleHandoffs(source) {

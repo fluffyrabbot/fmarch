@@ -78,6 +78,7 @@ import {
   normalizeProofGraphReceiptArtifactRows,
 } from "../../../../tools/dev_test_game_proof_graph_receipt_artifact_rows.mjs";
 import {
+  proofGraphPrerequisiteDestinationProofTargetTestId,
   proofGraphPrerequisiteDestinationRowsFromNodes,
   proofGraphPrerequisiteDestinationSectionHeading,
   proofGraphPrerequisiteDestinationSectionId,
@@ -634,6 +635,12 @@ function proofGraphPrerequisiteDestinationArtifactRow({ row, game }) {
       { id: "nodeId", text: row.nodeId, emphasized: true },
       { id: "destinationId", text: row.destinationId },
       { id: "auditId", text: row.auditId },
+      localProofArtifactValue({
+        id: "proofTarget",
+        text: row.proofTarget,
+        game,
+        testId: proofGraphPrerequisiteDestinationProofTargetTestId(row.rowId),
+      }),
       {
         id: "roleUrl",
         text: row.roleUrl,

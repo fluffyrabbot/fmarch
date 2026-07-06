@@ -414,6 +414,7 @@ import {
   hostedIdentityProofGraphDependencyFromGraph,
 } from "./dev_test_game_hosted_identity_proof_graph_dependency.mjs";
 import {
+  adminProofDestinationRequirementCases,
   adminProofDestinationRequirementLinkRows,
   proofGraphDiagnosticProofEdges,
   proofGraphDiagnosticProofNodes,
@@ -6237,6 +6238,10 @@ test("dev test-game proof graph records local proof role URLs and recovery edges
   assert.deepEqual(
     proofGraphAdminRequirements.requiredProofGraphPrerequisiteDestinations,
     proofGraphAdminGeneratedFrom.proofGraphPrerequisiteDestinationRowIds,
+  );
+  assert.deepEqual(
+    proofGraphAdminRequirements.requiredProofGraphPrerequisiteDestinationArtifacts,
+    proofGraphAdminGeneratedFrom.proofGraphPrerequisiteDestinationArtifacts,
   );
   assert(
     proofGraphAdminRequirements.requiredRelatedLinks.includes(
@@ -23329,6 +23334,22 @@ function releaseAdminProofLocalPrerequisiteArtifacts() {
   });
 }
 
+function proofGraphPrerequisiteDestinationArtifactsFixture() {
+  return adminProofDestinationRequirementCases.flatMap((requirement) =>
+    (requirement.requiredLocalPrerequisiteDestinations ?? [])
+      .filter(
+        (destination) => destination.id !== localProofGraphTerminalValidationCheckId,
+      )
+      .map((destination) => {
+        const dependency = getLocalReadinessDependency(destination.id);
+        return {
+          rowId: `${requirement.linkId}:${destination.id}`,
+          proofTarget: dependency.proofTarget,
+        };
+      }),
+  );
+}
+
 function releaseRunbookAdminProofFixture() {
   return {
     version: 1,
@@ -23474,6 +23495,8 @@ function proofGraphAdminProofFixture() {
       snapshot.nextActionEdgeRowId,
       snapshot.manifestEdgeRowId,
     ]);
+  const proofGraphPrerequisiteDestinationArtifacts =
+    proofGraphPrerequisiteDestinationArtifactsFixture();
   return {
     version: 1,
     proof: proofGraphAdminProofDescriptor.proof,
@@ -23551,6 +23574,9 @@ function proofGraphAdminProofFixture() {
       productionFeatureProvenanceComparison,
       diagnosticProofSummary,
       phaseLocalNextActionGraphLinks,
+      proofGraphPrerequisiteDestinationRowIds:
+        proofGraphPrerequisiteDestinationArtifacts.map((row) => row.rowId),
+      proofGraphPrerequisiteDestinationArtifacts,
       selectedOperatorHandoffReceiptDestination,
       adminSpineTerminalValidationDestination,
       hostSetupFeatureTarget: hostSetupGraphTarget,
@@ -23656,6 +23682,15 @@ function proofGraphAdminProofFixture() {
       ),
       visibleProofGraphCoreLoopRecoveryDestinations:
         coreLoopRecoveryDestinationSummary.rows.map((row) => row.id),
+      visibleProofGraphPrerequisiteDestinations:
+        proofGraphPrerequisiteDestinationArtifacts.map((row) => row.rowId),
+      visibleProofGraphPrerequisiteDestinationArtifacts:
+        proofGraphPrerequisiteDestinationArtifacts.map((row) => ({
+          rowId: row.rowId,
+          proofTarget: row.proofTarget,
+          href: visibleAdminEvidenceArtifactFixture(row.proofTarget).href,
+          clickedThrough: true,
+        })),
       visibleProofGraphCoreLoopRecoveryDestinationStatuses:
         Object.fromEntries(
           coreLoopRecoveryDestinationSummary.rows.map((row) => [

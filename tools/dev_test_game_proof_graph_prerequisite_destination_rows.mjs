@@ -1,3 +1,7 @@
+import {
+  getLocalReadinessDependency,
+} from "./dev_test_game_local_readiness_dependencies.mjs";
+
 export const proofGraphPrerequisiteDestinationSectionId =
   "proof-graph-prerequisite-destinations";
 export const proofGraphPrerequisiteDestinationSectionHeading =
@@ -6,6 +10,8 @@ export const proofGraphPrerequisiteDestinationRowTestIdPrefix =
   "admin-audit-proof-graph-prerequisite-destination";
 export const proofGraphPrerequisiteDestinationRoleUrlTestIdPrefix =
   "admin-audit-proof-graph-prerequisite-destination-role-url";
+export const proofGraphPrerequisiteDestinationProofTargetTestIdPrefix =
+  "admin-audit-proof-graph-prerequisite-destination-proof-target";
 
 export function proofGraphPrerequisiteDestinationRows(proofGraph) {
   return proofGraphPrerequisiteDestinationRowsFromNodes(proofGraph?.nodes);
@@ -40,6 +46,10 @@ export function proofGraphPrerequisiteDestinationRoleUrlTestId(rowId) {
   return `${proofGraphPrerequisiteDestinationRoleUrlTestIdPrefix}-${String(rowId)}`;
 }
 
+export function proofGraphPrerequisiteDestinationProofTargetTestId(rowId) {
+  return `${proofGraphPrerequisiteDestinationProofTargetTestIdPrefix}-${String(rowId)}`;
+}
+
 function proofGraphPrerequisiteDestinationRowsForNode(node) {
   const nodeId = String(node?.id ?? "");
   const destinations = Array.isArray(node?.requiredLocalPrerequisiteDestinations)
@@ -56,9 +66,15 @@ function proofGraphPrerequisiteDestinationRowsForNode(node) {
       destinationId,
       auditId: String(destination?.auditId ?? ""),
       roleUrl: String(destination?.roleUrl ?? ""),
+      proofTarget: String(
+        destination?.proofTarget ??
+          getLocalReadinessDependency(destinationId)?.proofTarget ??
+          "",
+      ),
       rowId,
       rowTestId: proofGraphPrerequisiteDestinationRowTestId(rowId),
       roleUrlTestId: proofGraphPrerequisiteDestinationRoleUrlTestId(rowId),
+      proofTargetTestId: proofGraphPrerequisiteDestinationProofTargetTestId(rowId),
     });
   });
 }

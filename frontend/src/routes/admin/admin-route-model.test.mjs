@@ -227,6 +227,7 @@ import {
   terminalProofGraphReceiptArtifacts,
 } from "../../../../tools/dev_test_game_proof_graph_receipt_artifact_rows.mjs";
 import {
+  proofGraphPrerequisiteDestinationProofTargetTestId,
   proofGraphPrerequisiteDestinationRows,
   proofGraphPrerequisiteDestinationSectionHeading,
   proofGraphPrerequisiteDestinationSectionId,
@@ -9394,6 +9395,7 @@ function expectedProofGraphPrerequisiteDestinationRows(proofGraph) {
       destinationId,
       auditId,
       roleUrl,
+      proofTarget,
       rowId,
       rowTestId,
     }) => [
@@ -9403,6 +9405,7 @@ function expectedProofGraphPrerequisiteDestinationRows(proofGraph) {
         ["nodeId", nodeId, true],
         ["destinationId", destinationId, false],
         ["auditId", auditId, false],
+        ["proofTarget", proofTarget, false],
         ["roleUrl", roleUrl, false],
       ],
     ],
@@ -9441,6 +9444,7 @@ function expectedProofGraphPrerequisiteDestinationRowsWithLinks(
       destinationId,
       auditId,
       roleUrl,
+      proofTarget,
       rowId,
       rowTestId,
       roleUrlTestId,
@@ -9451,6 +9455,13 @@ function expectedProofGraphPrerequisiteDestinationRowsWithLinks(
         ["nodeId", nodeId, true, "", ""],
         ["destinationId", destinationId, false, "", ""],
         ["auditId", auditId, false, "", ""],
+        [
+          "proofTarget",
+          proofTarget,
+          false,
+          expectedAdminArtifactHref({ game, artifact: proofTarget }),
+          proofGraphPrerequisiteDestinationProofTargetTestId(rowId),
+        ],
         [
           "roleUrl",
           roleUrl,
