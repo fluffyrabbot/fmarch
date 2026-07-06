@@ -4674,6 +4674,28 @@ test("dev test-game next-action advances hosted deployment after target prefligh
       .hostedHandoffChecklist,
     blockedPreflightAction.nextAction.unproven.hostedHandoffChecklist,
   );
+  const blockedPreflightOperatorPacket =
+    blockedPreflightAction.nextAction.unproven.hostedHandoffChecklist
+      .blockedReceipt.blockedOperatorPacket;
+  assert.deepEqual(blockedPreflightAction.selectedOperatorHandoff, {
+    id: "hosted-deployment:blocked-operator-packet",
+    status: "blocked",
+    reason: "release-readiness-unproven",
+    command: `npm run ${devTestGameHostedEvidenceLaneCommand}`,
+    unprovenId: "hosted-deployment",
+    proofTarget: devTestGameHostedEvidenceLanePath,
+    roleUrl: "/admin/audit/local-hosted-evidence-lane?game=<seeded-game>",
+    firstMissingInputId: blockedPreflightOperatorPacket.firstMissingInputId,
+    selectedProductionFeatureGraphNodeId:
+      blockedPreflightOperatorPacket.selectedProductionFeatureGraphNodeId,
+    selectedProductionFeatureRoleUrl:
+      blockedPreflightOperatorPacket.selectedProductionFeatureRoleUrl,
+    blockedOperatorPacket: blockedPreflightOperatorPacket,
+  });
+  assert.equal(
+    blockedPreflightAction.selectedOperatorHandoff.firstMissingInputId,
+    "FMARCH_HOSTED_MATRIX_FRONTEND_URL",
+  );
 
   const mixedBlockedAndReadyReadiness = devTestGameReleaseReadinessChecklistFixture({
     unproven: [
@@ -4728,6 +4750,7 @@ test("dev test-game next-action advances hosted deployment after target prefligh
       .hostedHandoffChecklist.blockedCheckIds,
     hostedEvidenceHandoffBlockedCheckIds,
   );
+  assert.equal(mixedBlockedAndReadyAction.selectedOperatorHandoff, null);
 
   const externalHostedMatrixAction = buildDevTestGameNextAction(freshManifest, {
     generatedAt: "2026-06-26T00:00:01.000Z",

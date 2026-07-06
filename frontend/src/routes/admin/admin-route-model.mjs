@@ -4005,6 +4005,10 @@ export function normalizeLocalNextActionAudit(nextAction, { game, proofGraph = n
     unproven,
     realHostedEvidenceInputs,
   });
+  const selectedOperatorHandoff =
+    normalizeNextActionSelectedOperatorHandoff(
+      nextAction.selectedOperatorHandoff,
+    );
   const hostedIdentityFamilyBatch =
     normalizeNextActionHostedIdentityFamilyBatch(
       unproven?.hostedIdentityFamilyBatch,
@@ -4232,6 +4236,22 @@ export function normalizeLocalNextActionAudit(nextAction, { game, proofGraph = n
           }),
         ]
       : []),
+    ...(selectedOperatorHandoff === null
+      ? []
+      : [
+          Object.freeze({
+            id: "selected-operator-handoff",
+            status: `${selectedOperatorHandoff.status}:${selectedOperatorHandoff.firstMissingInputId}`,
+          }),
+          Object.freeze({
+            id: "selected-operator-handoff-role-url",
+            status: selectedOperatorHandoff.selectedProductionFeatureRoleUrl,
+          }),
+          Object.freeze({
+            id: "selected-operator-handoff-feature-node",
+            status: selectedOperatorHandoff.selectedProductionFeatureGraphNodeId,
+          }),
+        ]),
     ...normalizeLocalNextActionSelectedProofGraphCheckRows({
       selectedProofGraphNode,
       selectedProofGraphNodeStatus,
@@ -4447,6 +4467,9 @@ export function normalizeLocalNextActionAudit(nextAction, { game, proofGraph = n
             headings: hostedHandoffReceiptHeadingsForNextActionUnproven(unproven),
           }),
         }),
+    ...(selectedOperatorHandoff === null
+      ? {}
+      : { selectedOperatorHandoff }),
     ...(hostedHandoffChecklist === null
       ? {}
       : {
@@ -4702,6 +4725,22 @@ export function normalizeLocalNextActionAudit(nextAction, { game, proofGraph = n
         selectedProofGraphNode === null
           ? ""
           : adminAuditInspectHref({ game, audit: localAdminAuditIds.proofGraph }),
+      ...(selectedOperatorHandoff === null
+        ? {}
+        : {
+            selectedOperatorHandoffId: selectedOperatorHandoff.id,
+            selectedOperatorHandoffStatus: selectedOperatorHandoff.status,
+            selectedOperatorHandoffFirstMissingInputId:
+              selectedOperatorHandoff.firstMissingInputId,
+            selectedOperatorHandoffRoleUrl:
+              selectedOperatorHandoff.selectedProductionFeatureRoleUrl,
+            selectedOperatorHandoffRoleHref: seededRoleUrlToAdminHref(
+              selectedOperatorHandoff.selectedProductionFeatureRoleUrl,
+              { game },
+            ),
+            selectedOperatorHandoffProductionFeatureGraphNodeId:
+              selectedOperatorHandoff.selectedProductionFeatureGraphNodeId,
+          }),
       ...(terminalBatchGraph.nodeId === ""
         ? {}
         : { terminalProofBatchGraph: terminalBatchGraph }),
@@ -5645,6 +5684,39 @@ function normalizeHostedHandoffBlockedOperatorPacket(packet) {
       ),
       proofGraphEvidencePath: String(drilldown.proofGraphEvidencePath ?? ""),
     }),
+  });
+}
+
+function normalizeNextActionSelectedOperatorHandoff(handoff) {
+  if (handoff === null || typeof handoff !== "object") {
+    return null;
+  }
+  const blockedOperatorPacket =
+    handoff.blockedOperatorPacket === null ||
+    typeof handoff.blockedOperatorPacket !== "object"
+      ? null
+      : normalizeHostedHandoffBlockedOperatorPacket(
+          handoff.blockedOperatorPacket,
+        );
+  if (blockedOperatorPacket === null) {
+    return null;
+  }
+  return Object.freeze({
+    id: String(handoff.id ?? ""),
+    status: String(handoff.status ?? "unknown"),
+    reason: String(handoff.reason ?? ""),
+    command: String(handoff.command ?? ""),
+    unprovenId: String(handoff.unprovenId ?? ""),
+    proofTarget: String(handoff.proofTarget ?? ""),
+    roleUrl: String(handoff.roleUrl ?? ""),
+    firstMissingInputId: String(handoff.firstMissingInputId ?? ""),
+    selectedProductionFeatureGraphNodeId: String(
+      handoff.selectedProductionFeatureGraphNodeId ?? "",
+    ),
+    selectedProductionFeatureRoleUrl: String(
+      handoff.selectedProductionFeatureRoleUrl ?? "",
+    ),
+    blockedOperatorPacket,
   });
 }
 

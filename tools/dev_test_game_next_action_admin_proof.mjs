@@ -91,6 +91,9 @@ import {
 import {
   selectedProductionFeatureSpineMatchesProvenance,
 } from "./dev_test_game_production_feature_spine_target_provenance.mjs";
+import {
+  visibleBlockedOperatorPacket,
+} from "./dev_test_game_hosted_operator_packet.mjs";
 export {
   proofGraphDestinationSummaryDriftNextActionAdminProofPath,
   proofGraphDestinationSummaryDriftNextActionPath,
@@ -249,6 +252,8 @@ export function nextActionAdminProofCase({
         null,
       unprovenHostedHandoffChecklist:
         source.nextAction.nextAction.unproven?.hostedHandoffChecklist ?? null,
+      selectedOperatorHandoff:
+        source.nextAction.selectedOperatorHandoff ?? null,
       unprovenHostedIdentityFamilyBatch:
         source.nextAction.nextAction.unproven?.hostedIdentityFamilyBatch ?? null,
       unprovenHostedIdentityProofGraphEdges:
@@ -514,6 +519,7 @@ export function proofGraphDestinationSummaryDriftNextActionFixture(nextAction) {
       status: "blocked",
       proofGraphDestinationSummary,
     },
+    selectedOperatorHandoff: null,
     selectionTrace: {
       strategy: selectionTraceStrategy,
       candidateCount: 0,
@@ -584,6 +590,25 @@ export function assertNextActionAdminProof(evidence) {
   );
   const selectedCandidate =
     evidence.generatedFrom.releaseReadinessTrace.selectedCandidate;
+  const selectedOperatorHandoff = evidence.generatedFrom?.selectedOperatorHandoff;
+  if (selectedOperatorHandoff !== null && selectedOperatorHandoff !== undefined) {
+    const statuses = evidence.adminRoleSurface?.visibleCheckStatuses ?? {};
+    if (
+      !String(statuses["selected-operator-handoff"] ?? "").includes(
+        selectedOperatorHandoff.firstMissingInputId,
+      ) ||
+      !String(statuses["selected-operator-handoff-role-url"] ?? "").includes(
+        selectedOperatorHandoff.selectedProductionFeatureRoleUrl,
+      ) ||
+      !String(statuses["selected-operator-handoff-feature-node"] ?? "").includes(
+        selectedOperatorHandoff.selectedProductionFeatureGraphNodeId,
+      )
+    ) {
+      throw new Error(
+        "next-action admin proof missing selected operator handoff rows",
+      );
+    }
+  }
   if (
     selectedCandidate?.id === "hosted-production-identity" &&
     evidence.generatedFrom?.command?.includes(
@@ -788,9 +813,6 @@ export function assertNextActionAdminProof(evidence) {
         "selected-feature-spine-declaration",
       ) ||
       !evidence.adminRoleSurface?.visibleChecks?.includes(
-        "selected-spine-provenance",
-      ) ||
-      !evidence.adminRoleSurface?.visibleChecks?.includes(
         "selected-spine-target",
       ) ||
       !evidence.adminRoleSurface?.visibleChecks?.includes(
@@ -959,6 +981,12 @@ export function assertNextActionAdminProof(evidence) {
             visibleFirstMissingOperatorArtifact(
               checklist.blockedReceipt.firstMissingOperatorArtifact,
             ),
+          ) ||
+        JSON.stringify(receipt?.blockedOperatorPacket ?? null) !==
+          JSON.stringify(
+            visibleBlockedOperatorPacket(
+              checklist.blockedReceipt.blockedOperatorPacket,
+            ),
           )
       ) {
         throw new Error(
@@ -1124,7 +1152,6 @@ function requiredChecksForNextAction(nextAction) {
     }
     if (nextAction.nextAction.unproven.spineTarget !== undefined) {
       checks.push("selected-feature-spine-declaration");
-      checks.push("selected-spine-provenance");
       checks.push("selected-spine-target");
       checks.push("selected-spine-drilldown");
       checks.push("selected-spine-admin-check");
@@ -1132,6 +1159,13 @@ function requiredChecksForNextAction(nextAction) {
       checks.push("selected-spine-browser-proof");
       checks.push("selected-spine-source-artifact");
       checks.push("selected-spine-coverage-decision");
+    }
+    if (nextAction.selectedOperatorHandoff != null) {
+      checks.push(
+        "selected-operator-handoff",
+        "selected-operator-handoff-role-url",
+        "selected-operator-handoff-feature-node",
+      );
     }
     if (
       nextAction.nextAction.unproven.selectedProductionFeatureGraph !== undefined
@@ -1467,6 +1501,13 @@ function requiredHostedHandoffBlockedReceiptForNextAction(nextAction) {
               firstMissingOperatorArtifact:
                 receipt.firstMissingOperatorArtifact,
             }),
+        ...(receipt.blockedOperatorPacket === undefined
+          ? {}
+          : {
+              blockedOperatorPacket: visibleBlockedOperatorPacket(
+                receipt.blockedOperatorPacket,
+              ),
+            }),
       };
 }
 
@@ -1481,6 +1522,7 @@ function requiredCheckStatusesForNextAction(nextAction, proofGraph) {
     nextAction.nextAction.unproven?.hostedIdentityFamilyBatch;
   const hostedIdentityProofGraphEdges =
     nextAction.nextAction.unproven?.hostedIdentityProofGraphEdges;
+  const selectedOperatorHandoff = nextAction.selectedOperatorHandoff;
   return {
     ...(selectedNodeStatus === ""
       ? {}
@@ -1503,6 +1545,16 @@ function requiredCheckStatusesForNextAction(nextAction, proofGraph) {
           "selected-next-command": nextAction.nextAction.command,
           "selected-proof-target": selectedOperatorCandidate.proofTarget,
           "selected-proof-boundary": selectedOperatorCandidate.proofBoundary,
+        }),
+    ...(selectedOperatorHandoff == null
+      ? {}
+      : {
+          "selected-operator-handoff":
+            selectedOperatorHandoff.firstMissingInputId,
+          "selected-operator-handoff-role-url":
+            selectedOperatorHandoff.selectedProductionFeatureRoleUrl,
+          "selected-operator-handoff-feature-node":
+            selectedOperatorHandoff.selectedProductionFeatureGraphNodeId,
         }),
   };
 }
@@ -1701,7 +1753,6 @@ function requiredChecksForEvidence(evidence) {
             ? []
             : [
                 "selected-feature-spine-declaration",
-                "selected-spine-provenance",
                 "selected-spine-target",
                 "selected-spine-drilldown",
                 "selected-spine-admin-check",

@@ -3772,6 +3772,52 @@ test("admin local next action detail data carries hosted evidence handoff checkl
       "FMARCH_HOSTED_MATRIX_RAW_EVIDENCE_PATH",
     ],
   );
+  const blockedOperatorPacket =
+    unproven.hostedHandoffChecklist.blockedReceipt.blockedOperatorPacket;
+  assert.deepEqual(data.audit.selectedOperatorHandoff, {
+    id: `${unproven.id}:blocked-operator-packet`,
+    status: blockedOperatorPacket.status,
+    reason: "release-readiness-unproven",
+    command: "npm run test:dev-test-game-hosted-evidence-lane",
+    unprovenId: unproven.id,
+    proofTarget: unproven.proofTarget,
+    roleUrl: unproven.roleUrl,
+    firstMissingInputId: blockedOperatorPacket.firstMissingInputId,
+    selectedProductionFeatureGraphNodeId:
+      blockedOperatorPacket.selectedProductionFeatureGraphNodeId,
+    selectedProductionFeatureRoleUrl:
+      blockedOperatorPacket.selectedProductionFeatureRoleUrl,
+    blockedOperatorPacket,
+  });
+  assert.deepEqual(
+    data.audit.checks
+      .filter((check) =>
+        [
+          "selected-operator-handoff",
+          "selected-operator-handoff-role-url",
+          "selected-operator-handoff-feature-node",
+        ].includes(check.id),
+      )
+      .map((check) => [check.id, check.status]),
+    [
+      [
+        "selected-operator-handoff",
+        `${blockedOperatorPacket.status}:${blockedOperatorPacket.firstMissingInputId}`,
+      ],
+      [
+        "selected-operator-handoff-role-url",
+        blockedOperatorPacket.selectedProductionFeatureRoleUrl,
+      ],
+      [
+        "selected-operator-handoff-feature-node",
+        blockedOperatorPacket.selectedProductionFeatureGraphNodeId,
+      ],
+    ],
+  );
+  assert.equal(
+    data.audit.artifactSummary.selectedOperatorHandoffFirstMissingInputId,
+    "FMARCH_HOSTED_MATRIX_FRONTEND_URL",
+  );
   assert.deepEqual(
     hostedHandoffChecklistRowsForAssertion(data.audit.hostedHandoffChecklistRows),
     expectedHostedHandoffChecklistRows(data.audit.hostedHandoffChecklist),
@@ -7724,6 +7770,11 @@ function nextActionFixture({
             selectedProductionFeatureGraphFixture(),
         }
       : undefined,
+  selectedOperatorHandoff = selectedOperatorHandoffFixture({
+    command,
+    reason,
+    unproven,
+  }),
   selectionTrace = selectionTraceFixture({ artifact, command }),
   releaseReadinessTrace = releaseReadinessTraceFixture({ unproven, command }),
   localReadinessDependencyTrace = localReadinessDependencyTraceFixture(),
@@ -7871,6 +7922,7 @@ function nextActionFixture({
         : { proofGraphDestinationSummary }),
       ...(sequenceDeferral === undefined ? {} : { sequenceDeferral }),
     },
+    selectedOperatorHandoff,
     selectionTrace,
     stabilityTrace,
     proofGraphDestinationSummaryTrace,
@@ -7885,6 +7937,30 @@ function nextActionFixture({
     raceCoveragePromotedMilestones,
     staleConflictMessageTrace,
     hostStaleControlTrace,
+  };
+}
+
+function selectedOperatorHandoffFixture({ command, reason, unproven }) {
+  const packet =
+    unproven?.hostedHandoffChecklist?.blockedOperatorPacket ??
+    unproven?.hostedHandoffChecklist?.blockedReceipt?.blockedOperatorPacket;
+  if (packet === null || packet === undefined) {
+    return null;
+  }
+  return {
+    id: `${unproven.id}:blocked-operator-packet`,
+    status: packet.status,
+    reason,
+    command,
+    unprovenId: unproven.id,
+    proofTarget: unproven.proofTarget,
+    roleUrl: unproven.roleUrl,
+    firstMissingInputId: packet.firstMissingInputId,
+    selectedProductionFeatureGraphNodeId:
+      packet.selectedProductionFeatureGraphNodeId,
+    selectedProductionFeatureRoleUrl:
+      packet.selectedProductionFeatureRoleUrl,
+    blockedOperatorPacket: packet,
   };
 }
 
