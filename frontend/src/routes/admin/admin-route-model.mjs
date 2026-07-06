@@ -383,6 +383,112 @@ function diagnosticProofSummarySections(summary) {
   ];
 }
 
+function buildHostedHandoffChecklistRows(checklist) {
+  if (checklist === null || typeof checklist !== "object") {
+    return Object.freeze([]);
+  }
+  return Object.freeze(
+    [
+      {
+        id: "summary",
+        testId: "admin-audit-hosted-handoff-summary",
+        values: [
+          { id: "status", text: checklist.status, emphasized: true },
+          { id: "preflightStatus", text: checklist.preflightStatus },
+          { id: "command", text: checklist.command },
+          { id: "proofTarget", text: checklist.proofTarget },
+        ],
+      },
+      ...hostedHandoffInputRows(checklist.inputs),
+      ...hostedHandoffInputSectionRows(checklist.inputSections),
+      ...hostedHandoffGroupRows(checklist.groups),
+      ...hostedHandoffBlockedCheckRows(checklist.blockedChecks),
+    ].map((row) => artifactSummaryRow(row)),
+  );
+}
+
+function hostedHandoffInputRows(inputs) {
+  return (Array.isArray(inputs) ? inputs : []).map((input) => ({
+    id: `input-${input.id}`,
+    testId: `admin-audit-hosted-handoff-input-${input.id}`,
+    values: [
+      { id: "label", text: input.label, emphasized: true },
+      { id: "value", text: input.value },
+      { id: "required", text: input.required ? "required" : "optional" },
+    ],
+  }));
+}
+
+function hostedHandoffInputSectionRows(sections) {
+  return (Array.isArray(sections) ? sections : []).map((section) => ({
+    id: `input-section-${section.id}`,
+    testId: `admin-audit-hosted-handoff-input-section-${section.id}`,
+    values: [
+      { id: "label", text: section.label, emphasized: true },
+      { id: "status", text: section.status },
+      {
+        id: "missingInputs",
+        text: Array.isArray(section.missingInputs)
+          ? section.missingInputs.join(", ")
+          : "",
+      },
+    ],
+    subentries: (Array.isArray(section.requiredInputIds)
+      ? section.requiredInputIds
+      : []
+    ).map((inputId) => ({
+      id: `input-section-${section.id}-${inputId}`,
+      testId: `admin-audit-hosted-handoff-section-input-${section.id}-${inputId}`,
+      values: [
+        { id: "inputId", text: inputId, emphasized: true },
+        {
+          id: "status",
+          text: hostedHandoffInputSectionStatus(section, inputId),
+        },
+      ],
+    })),
+  }));
+}
+
+function hostedHandoffInputSectionStatus(section, inputId) {
+  return Array.isArray(section.providedInputIds) &&
+    section.providedInputIds.includes(inputId)
+    ? "provided"
+    : "missing";
+}
+
+function hostedHandoffGroupRows(groups) {
+  return (Array.isArray(groups) ? groups : []).map((group) => ({
+    id: `group-${group.id}`,
+    testId: `admin-audit-hosted-handoff-group-${group.id}`,
+    values: [
+      { id: "label", text: group.label, emphasized: true },
+      { id: "status", text: group.status },
+      {
+        id: "blockedCheckCount",
+        text: `${hostedHandoffBlockedCheckCount(group)} blocked`,
+      },
+      { id: "requiredEvidence", text: group.requiredEvidence },
+    ],
+  }));
+}
+
+function hostedHandoffBlockedCheckCount(group) {
+  return Array.isArray(group.blockedCheckIds) ? group.blockedCheckIds.length : 0;
+}
+
+function hostedHandoffBlockedCheckRows(blockedChecks) {
+  return (Array.isArray(blockedChecks) ? blockedChecks : []).map((check) => ({
+    id: `blocked-check-${check.id}`,
+    testId: `admin-audit-hosted-handoff-blocked-check-${check.id}`,
+    values: [
+      { id: "id", text: check.id, emphasized: true },
+      { id: "status", text: check.status },
+      { id: "requiredEvidence", text: check.requiredEvidence },
+    ],
+  }));
+}
+
 function hostedReadinessText(value, label) {
   return value === true ? `${label} ready` : `${label} not ready`;
 }
@@ -1439,6 +1545,12 @@ export function normalizeLocalHostedTargetPreflightAudit(
       }),
     ]),
     ...(hostedHandoffChecklist === null ? {} : { hostedHandoffChecklist }),
+    ...(hostedHandoffChecklist === null
+      ? {}
+      : {
+          hostedHandoffChecklistRows:
+            buildHostedHandoffChecklistRows(hostedHandoffChecklist),
+        }),
     artifactSummary,
     artifactSummarySections:
       buildHostedTargetPreflightSummarySections(artifactSummary),
@@ -1590,6 +1702,8 @@ export function normalizeLocalHostedIdentityEvidenceAudit(
       downstreamProofTarget: String(hostedIdentityEvidence.nextProofTarget ?? ""),
     }),
     hostedHandoffChecklist,
+    hostedHandoffChecklistRows:
+      buildHostedHandoffChecklistRows(hostedHandoffChecklist),
     hostedHandoffReceiptHeadings: hostedHandoffReceiptHeadingsForAudit(
       localAdminAuditIds.hostedIdentityEvidence,
     ),
@@ -1872,6 +1986,8 @@ export function normalizeLocalHostedEvidenceLaneAudit(
     ]),
     realHostedEvidenceInputs,
     hostedHandoffChecklist,
+    hostedHandoffChecklistRows:
+      buildHostedHandoffChecklistRows(hostedHandoffChecklist),
     hostedHandoffReceiptHeadings: hostedHandoffReceiptHeadingsForAudit(
       localAdminAuditIds.hostedEvidenceLane,
     ),
@@ -2181,6 +2297,8 @@ export function normalizeLocalRealHostedObservabilityHandoffAudit(
       ),
     }),
     hostedHandoffChecklist,
+    hostedHandoffChecklistRows:
+      buildHostedHandoffChecklistRows(hostedHandoffChecklist),
     hostedHandoffReceiptHeadings: hostedHandoffReceiptHeadingsForAudit(
       localAdminAuditIds.realHostedObservabilityHandoff,
     ),
@@ -2543,6 +2661,8 @@ export function normalizeLocalHostedConcurrentRaceMatrixAudit(
     ),
     realHostedEvidenceInputs,
     hostedHandoffChecklist,
+    hostedHandoffChecklistRows:
+      buildHostedHandoffChecklistRows(hostedHandoffChecklist),
     hostedHandoffReceiptHeadings: hostedHandoffReceiptHeadingsForAudit(
       localAdminAuditIds.hostedConcurrentRaceMatrix,
     ),
@@ -3445,6 +3565,12 @@ export function normalizeLocalNextActionAudit(nextAction, { game, proofGraph = n
     }),
     realHostedEvidenceInputs,
     ...(hostedHandoffChecklist === null ? {} : { hostedHandoffChecklist }),
+    ...(hostedHandoffChecklist === null
+      ? {}
+      : {
+          hostedHandoffChecklistRows:
+            buildHostedHandoffChecklistRows(hostedHandoffChecklist),
+        }),
     ...(hostedHandoffChecklist === null
       ? {}
       : {

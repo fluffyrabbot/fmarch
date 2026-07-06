@@ -1842,6 +1842,20 @@ test("admin audit detail page renders hosted artifact summary sections from rout
   assert.match(source, /value\.emphasized/);
 });
 
+test("admin audit detail page renders hosted handoff checklist rows from route data", async () => {
+  const source = await readFile(
+    "frontend/src/routes/admin/audit/[audit]/+page.svelte",
+    "utf8",
+  );
+  assert.match(source, /hostedHandoffChecklistRows/);
+  assert.doesNotMatch(source, /hostedHandoffChecklist\.inputs/);
+  assert.doesNotMatch(source, /hostedHandoffChecklist\.inputSections/);
+  assert.doesNotMatch(source, /hostedHandoffChecklist\.groups/);
+  assert.doesNotMatch(source, /hostedHandoffChecklist\.blockedChecks/);
+  assert.match(source, /data-testid=\{row\.testId\}/);
+  assert.match(source, /data-testid=\{subentry\.testId\}/);
+});
+
 test("admin hosted-facing audit inventory carries shared handoff paths where required", async () => {
   const data = await buildAdminRouteData({
     principalUserId: "admin_a",
@@ -3566,6 +3580,10 @@ test("admin local next action detail data carries hosted evidence handoff checkl
       "FMARCH_HOSTED_MATRIX_API_URL",
       "FMARCH_HOSTED_MATRIX_RAW_EVIDENCE_PATH",
     ],
+  );
+  assert.deepEqual(
+    hostedHandoffChecklistRowsForAssertion(data.audit.hostedHandoffChecklistRows),
+    expectedHostedHandoffChecklistRows(data.audit.hostedHandoffChecklist),
   );
   assert.equal(
     data.audit.hostedHandoffChecklist.blockedReceipt.localVsHostedBoundary,
@@ -9114,6 +9132,87 @@ function adminSpineTerminalBatchesFixture() {
 
 function nextActionHandoffPairFixture() {
   return devTestGameNextActionSequenceHandoffPair();
+}
+
+function hostedHandoffChecklistRowsForAssertion(rows) {
+  return rows.map((row) => [
+    row.id,
+    row.testId,
+    row.values.map((value) => [value.id, value.text, value.emphasized]),
+    (row.subentries ?? []).map((subentry) => [
+      subentry.id,
+      subentry.testId,
+      subentry.values.map((value) => [value.id, value.text, value.emphasized]),
+    ]),
+  ]);
+}
+
+function expectedHostedHandoffChecklistRows(checklist) {
+  return [
+    [
+      "summary",
+      "admin-audit-hosted-handoff-summary",
+      [
+        ["status", checklist.status, true],
+        ["preflightStatus", checklist.preflightStatus, false],
+        ["command", checklist.command, false],
+        ["proofTarget", checklist.proofTarget, false],
+      ],
+      [],
+    ],
+    ...checklist.inputs.map((input) => [
+      `input-${input.id}`,
+      `admin-audit-hosted-handoff-input-${input.id}`,
+      [
+        ["label", input.label, true],
+        ["value", input.value, false],
+        ["required", input.required ? "required" : "optional", false],
+      ],
+      [],
+    ]),
+    ...checklist.inputSections.map((section) => [
+      `input-section-${section.id}`,
+      `admin-audit-hosted-handoff-input-section-${section.id}`,
+      [
+        ["label", section.label, true],
+        ["status", section.status, false],
+        ["missingInputs", section.missingInputs.join(", "), false],
+      ],
+      section.requiredInputIds.map((inputId) => [
+        `input-section-${section.id}-${inputId}`,
+        `admin-audit-hosted-handoff-section-input-${section.id}-${inputId}`,
+        [
+          ["inputId", inputId, true],
+          [
+            "status",
+            section.providedInputIds.includes(inputId) ? "provided" : "missing",
+            false,
+          ],
+        ],
+      ]),
+    ]),
+    ...checklist.groups.map((group) => [
+      `group-${group.id}`,
+      `admin-audit-hosted-handoff-group-${group.id}`,
+      [
+        ["label", group.label, true],
+        ["status", group.status, false],
+        ["blockedCheckCount", `${group.blockedCheckIds.length} blocked`, false],
+        ["requiredEvidence", group.requiredEvidence, false],
+      ],
+      [],
+    ]),
+    ...checklist.blockedChecks.map((check) => [
+      `blocked-check-${check.id}`,
+      `admin-audit-hosted-handoff-blocked-check-${check.id}`,
+      [
+        ["id", check.id, true],
+        ["status", check.status, false],
+        ["requiredEvidence", check.requiredEvidence, false],
+      ],
+      [],
+    ]),
+  ];
 }
 
 function adminSpineProofRow(id) {

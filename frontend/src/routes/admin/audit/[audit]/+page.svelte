@@ -511,49 +511,39 @@
         </section>
       {/each}
     {/if}
-    {#if data.audit.hostedHandoffChecklist?.inputs?.length > 0 || data.audit.hostedHandoffChecklist?.blockedChecks?.length > 0}
+    {#if data.audit.hostedHandoffChecklist}
       <section
         class="admin-audit-detail__group"
         data-testid="admin-audit-detail-hosted-handoff-checklist"
       >
         <h2>Hosted handoff checklist</h2>
         <ol class="admin-audit-detail__entries">
-          <li
-            class="admin-audit-detail__entry admin-audit-detail__entry--stack"
-            data-testid="admin-audit-hosted-handoff-summary"
-          >
-            <strong>{data.audit.hostedHandoffChecklist.status}</strong>
-            <span>{data.audit.hostedHandoffChecklist.preflightStatus}</span>
-            <span>{data.audit.hostedHandoffChecklist.command}</span>
-            <span>{data.audit.hostedHandoffChecklist.proofTarget}</span>
-          </li>
-          {#each data.audit.hostedHandoffChecklist.inputs as input}
-            <li
-              class="admin-audit-detail__entry"
-              data-testid={`admin-audit-hosted-handoff-input-${input.id}`}
-            >
-              <strong>{input.label}</strong>
-              <span>{input.value}</span>
-              <span>{input.required ? "required" : "optional"}</span>
-            </li>
-          {/each}
-          {#each data.audit.hostedHandoffChecklist.inputSections ?? [] as section}
+          {#each data.audit.hostedHandoffChecklistRows ?? [] as row}
             <li
               class="admin-audit-detail__entry admin-audit-detail__entry--stack"
-              data-testid={`admin-audit-hosted-handoff-input-section-${section.id}`}
+              data-testid={row.testId}
             >
-              <strong>{section.label}</strong>
-              <span>{section.status}</span>
-              <span>{section.missingInputs.join(", ")}</span>
-              {#if section.requiredInputIds?.length > 0}
+              {#each row.values as value}
+                {#if value.emphasized}
+                  <strong>{value.text}</strong>
+                {:else}
+                  <span>{value.text}</span>
+                {/if}
+              {/each}
+              {#if row.subentries?.length > 0}
                 <ol class="admin-audit-detail__nested-list">
-                  {#each section.requiredInputIds as inputId}
+                  {#each row.subentries as subentry}
                     <li
                       class="admin-audit-detail__entry"
-                      data-testid={`admin-audit-hosted-handoff-section-input-${section.id}-${inputId}`}
+                      data-testid={subentry.testId}
                     >
-                      <strong>{inputId}</strong>
-                      <span>{section.providedInputIds?.includes(inputId) ? "provided" : "missing"}</span>
+                      {#each subentry.values as value}
+                        {#if value.emphasized}
+                          <strong>{value.text}</strong>
+                        {:else}
+                          <span>{value.text}</span>
+                        {/if}
+                      {/each}
                     </li>
                   {/each}
                 </ol>
@@ -713,27 +703,6 @@
               {/if}
             </li>
           {/if}
-          {#each data.audit.hostedHandoffChecklist.groups ?? [] as group}
-            <li
-              class="admin-audit-detail__entry admin-audit-detail__entry--stack"
-              data-testid={`admin-audit-hosted-handoff-group-${group.id}`}
-            >
-              <strong>{group.label}</strong>
-              <span>{group.status}</span>
-              <span>{group.blockedCheckIds.length} blocked</span>
-              <span>{group.requiredEvidence}</span>
-            </li>
-          {/each}
-          {#each data.audit.hostedHandoffChecklist.blockedChecks as check}
-            <li
-              class="admin-audit-detail__entry"
-              data-testid={`admin-audit-hosted-handoff-blocked-check-${check.id}`}
-            >
-              <strong>{check.id}</strong>
-              <span>{check.status}</span>
-              <span>{check.requiredEvidence}</span>
-            </li>
-          {/each}
         </ol>
       </section>
     {/if}
