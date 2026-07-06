@@ -24,13 +24,8 @@ import {
   replacementRaceReloadSpineTargetCases,
 } from "./dev_test_game_replacement_private_scenario_cases.mjs";
 import {
-  cohostStaleDeadlineReconnectLaneId,
-  hostStaleAdvanceReconnectLaneId,
-  hostStaleDeadlineReconnectLaneId,
-  hostStaleResolveReconnectLaneId,
-  privateChannelStaleActionReconnectLaneId,
-  stalePlayerActionReconnectLaneId,
-} from "./dev_test_game_stale_client_reconnect_scenarios.mjs";
+  reconnectHardeningSpineTargetCases,
+} from "./dev_test_game_hardening_recovery_scenarios.mjs";
 
 export const hardeningFeatureSpineSourceCheckId = "local-hardening-proof";
 export const hardeningFeatureSpineCycleIds = Object.freeze({
@@ -57,6 +52,22 @@ const completedGameHardeningFeatureSpineTargetRows = Object.freeze(
 );
 const replacementStaleConflictMessageSpineLane =
   replacementStaleConflictMessageSpineLaneCase();
+const reconnectHardeningSpineTargets = reconnectHardeningSpineTargetCases();
+const reconnectHardeningFeatureSpineTargetRows = Object.freeze(
+  Object.fromEntries(
+    reconnectHardeningSpineTargets.map((target) => [
+      target.targetKey,
+      Object.freeze({
+        featureSlotId: target.featureSlotId,
+        sourceCheckId: hardeningFeatureSpineSourceCheckId,
+        cycleId: hardeningFeatureSpineCycleIds.reconnectRecovery,
+        roleUrlId: target.laneId,
+        checkpointId: target.laneId,
+        adminCheckId: target.laneId,
+      }),
+    ]),
+  ),
+);
 const hostResolveRaceSpineLane = hostResolveRaceScenario();
 const hostAdvanceRaceSpineLane = hostAdvanceRaceScenario();
 const hostDeadlineAdvanceRaceSpineLane = hostDeadlineAdvanceRaceScenario();
@@ -120,54 +131,7 @@ export const hardeningFeatureSpineTargetRows = Object.freeze({
     checkpointId: replacementStaleConflictMessageSpineLane.laneId,
     adminCheckId: replacementStaleConflictMessageSpineLane.laneId,
   }),
-  staleActionReconnectRecovery: Object.freeze({
-    featureSlotId: "stale-action-reconnect-recovery",
-    sourceCheckId: hardeningFeatureSpineSourceCheckId,
-    cycleId: hardeningFeatureSpineCycleIds.reconnectRecovery,
-    roleUrlId: stalePlayerActionReconnectLaneId,
-    checkpointId: stalePlayerActionReconnectLaneId,
-    adminCheckId: stalePlayerActionReconnectLaneId,
-  }),
-  privateChannelStaleActionReconnectRecovery: Object.freeze({
-    featureSlotId: "private-channel-stale-action-reconnect-recovery",
-    sourceCheckId: hardeningFeatureSpineSourceCheckId,
-    cycleId: hardeningFeatureSpineCycleIds.reconnectRecovery,
-    roleUrlId: privateChannelStaleActionReconnectLaneId,
-    checkpointId: privateChannelStaleActionReconnectLaneId,
-    adminCheckId: privateChannelStaleActionReconnectLaneId,
-  }),
-  hostStaleResolveReconnectRecovery: Object.freeze({
-    featureSlotId: "host-stale-resolve-reconnect-recovery",
-    sourceCheckId: hardeningFeatureSpineSourceCheckId,
-    cycleId: hardeningFeatureSpineCycleIds.reconnectRecovery,
-    roleUrlId: hostStaleResolveReconnectLaneId,
-    checkpointId: hostStaleResolveReconnectLaneId,
-    adminCheckId: hostStaleResolveReconnectLaneId,
-  }),
-  hostStaleAdvanceReconnectRecovery: Object.freeze({
-    featureSlotId: "host-stale-advance-reconnect-recovery",
-    sourceCheckId: hardeningFeatureSpineSourceCheckId,
-    cycleId: hardeningFeatureSpineCycleIds.reconnectRecovery,
-    roleUrlId: hostStaleAdvanceReconnectLaneId,
-    checkpointId: hostStaleAdvanceReconnectLaneId,
-    adminCheckId: hostStaleAdvanceReconnectLaneId,
-  }),
-  hostStaleDeadlineReconnectRecovery: Object.freeze({
-    featureSlotId: "host-stale-deadline-reconnect-recovery",
-    sourceCheckId: hardeningFeatureSpineSourceCheckId,
-    cycleId: hardeningFeatureSpineCycleIds.reconnectRecovery,
-    roleUrlId: hostStaleDeadlineReconnectLaneId,
-    checkpointId: hostStaleDeadlineReconnectLaneId,
-    adminCheckId: hostStaleDeadlineReconnectLaneId,
-  }),
-  cohostStaleDeadlineReconnectRecovery: Object.freeze({
-    featureSlotId: "cohost-stale-deadline-reconnect-recovery",
-    sourceCheckId: hardeningFeatureSpineSourceCheckId,
-    cycleId: hardeningFeatureSpineCycleIds.reconnectRecovery,
-    roleUrlId: cohostStaleDeadlineReconnectLaneId,
-    checkpointId: cohostStaleDeadlineReconnectLaneId,
-    adminCheckId: cohostStaleDeadlineReconnectLaneId,
-  }),
+  ...reconnectHardeningFeatureSpineTargetRows,
   hostConcurrentResolveRaceReload: Object.freeze({
     featureSlotId: "host-concurrent-resolve-race-reload",
     sourceCheckId: hardeningFeatureSpineSourceCheckId,
@@ -228,29 +192,23 @@ export const hardeningFeatureSpineTargetRows = Object.freeze({
   ...replacementRaceReloadHardeningFeatureSpineTargetRows,
 });
 export const hardeningDirectRoleUrlReconnectFeatureSpineTargetRows =
-  Object.freeze([
-    hardeningFeatureSpineTargetRows.staleActionReconnectRecovery,
-    hardeningFeatureSpineTargetRows.privateChannelStaleActionReconnectRecovery,
-  ]);
+  Object.freeze(
+    reconnectHardeningSpineTargets
+      .filter((target) => target.roleUrlSource === "direct")
+      .map((target) => hardeningFeatureSpineTargetRows[target.targetKey]),
+  );
 export const hardeningSynthesizedRoleUrlReconnectFeatureSpineTargetRows =
-  Object.freeze([
-    Object.freeze({
-      row: hardeningFeatureSpineTargetRows.hostStaleResolveReconnectRecovery,
-      role: "host",
-    }),
-    Object.freeze({
-      row: hardeningFeatureSpineTargetRows.hostStaleAdvanceReconnectRecovery,
-      role: "host",
-    }),
-    Object.freeze({
-      row: hardeningFeatureSpineTargetRows.hostStaleDeadlineReconnectRecovery,
-      role: "host",
-    }),
-    Object.freeze({
-      row: hardeningFeatureSpineTargetRows.cohostStaleDeadlineReconnectRecovery,
-      role: "host",
-    }),
-  ]);
+  Object.freeze(
+    reconnectHardeningSpineTargets
+      .filter((target) => target.roleUrlSource === "synthesized")
+      .map((target) =>
+        Object.freeze({
+          row: hardeningFeatureSpineTargetRows[target.targetKey],
+          role: target.role,
+          channelId: target.channelId,
+        }),
+      ),
+  );
 export const hardeningReconnectFeatureSpineTargetRows = Object.freeze([
   ...hardeningDirectRoleUrlReconnectFeatureSpineTargetRows,
   ...hardeningSynthesizedRoleUrlReconnectFeatureSpineTargetRows.map(

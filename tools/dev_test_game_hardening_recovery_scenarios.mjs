@@ -46,6 +46,7 @@ export {
   replacementActionReconnectLaneId,
   replacementPrivatePostReconnectLaneId,
   replacementSessionReconnectLaneId,
+  reconnectHardeningSpineTargetCases,
   staleClientReconnectCaseDefinitions,
   staleClientReconnectCases,
   staleClientReconnectHighlightedLaneIds,

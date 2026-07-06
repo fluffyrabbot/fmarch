@@ -108,46 +108,18 @@ import {
   hostStandaloneRaceReloadSpineTargetCases,
 } from "./dev_test_game_host_stale_recovery_scenarios.mjs";
 import {
-  cohostStaleDeadlineReconnectLaneId,
-  hostStaleAdvanceReconnectLaneId,
-  hostStaleDeadlineReconnectLaneId,
-  hostStaleResolveReconnectLaneId,
-  privateChannelStaleActionReconnectLaneId,
-  stalePlayerActionReconnectLaneId,
-} from "./dev_test_game_stale_client_reconnect_scenarios.mjs";
+  reconnectHardeningSpineTargetCases,
+} from "./dev_test_game_hardening_recovery_scenarios.mjs";
 
-const hardeningReconnectFeatureTargetExpectations = Object.freeze([
-  Object.freeze({
-    targetKey: "staleActionReconnectRecovery",
-    featureSlotId: "stale-action-reconnect-recovery",
-    rowId: stalePlayerActionReconnectLaneId,
-  }),
-  Object.freeze({
-    targetKey: "privateChannelStaleActionReconnectRecovery",
-    featureSlotId: "private-channel-stale-action-reconnect-recovery",
-    rowId: privateChannelStaleActionReconnectLaneId,
-  }),
-  Object.freeze({
-    targetKey: "hostStaleResolveReconnectRecovery",
-    featureSlotId: "host-stale-resolve-reconnect-recovery",
-    rowId: hostStaleResolveReconnectLaneId,
-  }),
-  Object.freeze({
-    targetKey: "hostStaleAdvanceReconnectRecovery",
-    featureSlotId: "host-stale-advance-reconnect-recovery",
-    rowId: hostStaleAdvanceReconnectLaneId,
-  }),
-  Object.freeze({
-    targetKey: "hostStaleDeadlineReconnectRecovery",
-    featureSlotId: "host-stale-deadline-reconnect-recovery",
-    rowId: hostStaleDeadlineReconnectLaneId,
-  }),
-  Object.freeze({
-    targetKey: "cohostStaleDeadlineReconnectRecovery",
-    featureSlotId: "cohost-stale-deadline-reconnect-recovery",
-    rowId: cohostStaleDeadlineReconnectLaneId,
-  }),
-]);
+const hardeningReconnectFeatureTargetExpectations = Object.freeze(
+  reconnectHardeningSpineTargetCases().map((target) =>
+    Object.freeze({
+      targetKey: target.targetKey,
+      featureSlotId: target.featureSlotId,
+      rowId: target.laneId,
+    }),
+  ),
+);
 const hostResolveRaceSpineLane = hostResolveRaceScenario();
 const hostAdvanceRaceSpineLane = hostAdvanceRaceScenario();
 const hostDeadlineAdvanceRaceSpineLane = hostDeadlineAdvanceRaceScenario();

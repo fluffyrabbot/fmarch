@@ -136,6 +136,52 @@ export const hostStaleReconnectExpectationDefinitions = Object.freeze([
   cohostStaleDeadlineReconnectExpectationDefinition,
 ]);
 
+const reconnectHardeningSpineTargetDefinitions = Object.freeze([
+  Object.freeze({
+    targetKey: "staleActionReconnectRecovery",
+    featureSlotId: "stale-action-reconnect-recovery",
+    laneId: stalePlayerActionReconnectLaneId,
+    role: "player",
+    roleUrlSource: "direct",
+  }),
+  Object.freeze({
+    targetKey: "privateChannelStaleActionReconnectRecovery",
+    featureSlotId: "private-channel-stale-action-reconnect-recovery",
+    laneId: privateChannelStaleActionReconnectLaneId,
+    role: "private-channel",
+    roleUrlSource: "direct",
+    channelId: privateChannelStaleActionReconnectExpectationDefinition.channelId,
+  }),
+  Object.freeze({
+    targetKey: "hostStaleResolveReconnectRecovery",
+    featureSlotId: "host-stale-resolve-reconnect-recovery",
+    laneId: hostStaleResolveReconnectLaneId,
+    role: "host",
+    roleUrlSource: "synthesized",
+  }),
+  Object.freeze({
+    targetKey: "hostStaleAdvanceReconnectRecovery",
+    featureSlotId: "host-stale-advance-reconnect-recovery",
+    laneId: hostStaleAdvanceReconnectLaneId,
+    role: "host",
+    roleUrlSource: "synthesized",
+  }),
+  Object.freeze({
+    targetKey: "hostStaleDeadlineReconnectRecovery",
+    featureSlotId: "host-stale-deadline-reconnect-recovery",
+    laneId: hostStaleDeadlineReconnectLaneId,
+    role: "host",
+    roleUrlSource: "synthesized",
+  }),
+  Object.freeze({
+    targetKey: "cohostStaleDeadlineReconnectRecovery",
+    featureSlotId: "cohost-stale-deadline-reconnect-recovery",
+    laneId: cohostStaleDeadlineReconnectLaneId,
+    role: "host",
+    roleUrlSource: "synthesized",
+  }),
+]);
+
 export const staleClientReconnectCaseDefinitions = Object.freeze([
   Object.freeze({
     id: "player-live-projection-reconnect",
@@ -246,6 +292,12 @@ export function hostStaleReconnectExpectationForLane(laneId) {
     throw new Error(`unknown host stale reconnect lane: ${laneId}`);
   }
   return cloneExpectation(expectation);
+}
+
+export function reconnectHardeningSpineTargetCases() {
+  return reconnectHardeningSpineTargetDefinitions.map((target) => ({
+    ...target,
+  }));
 }
 
 export const staleClientReconnectHighlightedLaneIds = Object.freeze([

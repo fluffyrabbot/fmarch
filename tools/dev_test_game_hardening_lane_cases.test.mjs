@@ -65,6 +65,7 @@ import {
   privateChannelStaleActionConflictMessageLaneId,
   privateChannelStaleActionReconnectExpectation,
   privateChannelStaleActionReconnectLaneId,
+  reconnectHardeningSpineTargetCases,
   replacementStaleConflictMessageLaneId,
   replacementActionReconnectLaneId,
   replacementPrivatePostReconnectLaneId,
@@ -1208,6 +1209,66 @@ test("hardening lane cases share stale-client reconnect scenarios", async () => 
   );
   assert.deepEqual(staleClientReconnectLaneIds(), hostedMatrixReconnectLaneIds);
   assert.deepEqual(
+    reconnectHardeningSpineTargetCases().map((target) => ({
+      targetKey: target.targetKey,
+      featureSlotId: target.featureSlotId,
+      laneId: target.laneId,
+      role: target.role,
+      roleUrlSource: target.roleUrlSource,
+      channelId: target.channelId,
+    })),
+    [
+      {
+        targetKey: "staleActionReconnectRecovery",
+        featureSlotId: "stale-action-reconnect-recovery",
+        laneId: stalePlayerActionReconnectLaneId,
+        role: "player",
+        roleUrlSource: "direct",
+        channelId: undefined,
+      },
+      {
+        targetKey: "privateChannelStaleActionReconnectRecovery",
+        featureSlotId: "private-channel-stale-action-reconnect-recovery",
+        laneId: privateChannelStaleActionReconnectLaneId,
+        role: "private-channel",
+        roleUrlSource: "direct",
+        channelId: "private:mafia_day_chat",
+      },
+      {
+        targetKey: "hostStaleResolveReconnectRecovery",
+        featureSlotId: "host-stale-resolve-reconnect-recovery",
+        laneId: hostStaleResolveReconnectLaneId,
+        role: "host",
+        roleUrlSource: "synthesized",
+        channelId: undefined,
+      },
+      {
+        targetKey: "hostStaleAdvanceReconnectRecovery",
+        featureSlotId: "host-stale-advance-reconnect-recovery",
+        laneId: hostStaleAdvanceReconnectLaneId,
+        role: "host",
+        roleUrlSource: "synthesized",
+        channelId: undefined,
+      },
+      {
+        targetKey: "hostStaleDeadlineReconnectRecovery",
+        featureSlotId: "host-stale-deadline-reconnect-recovery",
+        laneId: hostStaleDeadlineReconnectLaneId,
+        role: "host",
+        roleUrlSource: "synthesized",
+        channelId: undefined,
+      },
+      {
+        targetKey: "cohostStaleDeadlineReconnectRecovery",
+        featureSlotId: "cohost-stale-deadline-reconnect-recovery",
+        laneId: cohostStaleDeadlineReconnectLaneId,
+        role: "host",
+        roleUrlSource: "synthesized",
+        channelId: undefined,
+      },
+    ],
+  );
+  assert.deepEqual(
     {
       laneId: stalePlayerActionReconnectExpectation().laneId,
       rejectError: stalePlayerActionReconnectExpectation().rejectError,
@@ -1303,6 +1364,7 @@ test("hardening lane cases share stale-client reconnect scenarios", async () => 
   );
 
   for (const callerPath of [
+    "tools/dev_test_game_hardening_feature_spine_targets.mjs",
     "tools/dev_test_game_hosted_concurrent_race_matrix_cases.mjs",
     "tools/dev_test_game_proof_contract.mjs",
     "tools/dev_test_game_hardening_lane_cases.mjs",
