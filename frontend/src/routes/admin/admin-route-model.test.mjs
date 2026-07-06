@@ -1753,17 +1753,17 @@ test("admin audit detail page renders descriptor artifact sections from route da
   assert.match(source, /data-testid=\{subentry\.testId\}/);
 });
 
-test("admin audit detail page renders hosted identity operator drilldowns as a named group", async () => {
+test("admin audit detail page renders hosted handoff operator rows from route data", async () => {
   const source = await readFile(
     "frontend/src/routes/admin/audit/[audit]/+page.svelte",
     "utf8",
   );
-  assert.match(source, /admin-audit-hosted-identity-operator-drilldowns/);
-  assert.match(source, /Hosted identity operator drilldowns/);
-  assert.match(
-    source,
-    /admin-audit-hosted-handoff-operator-proof-\$\{drilldown\.id\}/,
-  );
+  assert.match(source, /hostedHandoffOperatorRows/);
+  assert.doesNotMatch(source, /hostedHandoffChecklist\.operatorEvidenceGate/);
+  assert.doesNotMatch(source, /hostedHandoffChecklist\.operatorProofDrilldowns/);
+  assert.doesNotMatch(source, /providerBoundary/);
+  assert.match(source, /data-testid=\{row\.testId\}/);
+  assert.match(source, /data-testid=\{subentry\.testId\}/);
 });
 
 test("admin audit detail page renders hosted identity blocked receipt as a named group", async () => {
@@ -3666,6 +3666,10 @@ test("admin local next action detail data carries hosted identity progression la
   assert.deepEqual(
     data.audit.hostedHandoffChecklist.operatorEvidenceGate,
     normalizedHostedIdentityOperatorGateFixture(),
+  );
+  assert.deepEqual(
+    hostedHandoffChecklistRowsForAssertion(data.audit.hostedHandoffOperatorRows),
+    expectedHostedHandoffOperatorRows(data.audit.hostedHandoffChecklist),
   );
   assert.equal(data.audit.artifactSummary.command, HOSTED_IDENTITY_EVIDENCE_COMMAND);
   assert.equal(
@@ -9213,6 +9217,140 @@ function expectedHostedHandoffChecklistRows(checklist) {
       [],
     ]),
   ];
+}
+
+function expectedHostedHandoffOperatorRows(checklist) {
+  const gate = checklist.operatorEvidenceGate;
+  if (gate === null || gate === undefined) {
+    return [];
+  }
+  return [
+    [
+      `operator-gate-${gate.id}`,
+      `admin-audit-hosted-identity-operator-gate-${gate.id}`,
+      [
+        ["status", gate.status, true],
+        ["evidencePathEnv", gate.evidencePathEnv, false],
+        [
+          "requiredRawEvidencePathKind",
+          gate.requiredRawEvidencePathKind,
+          false,
+        ],
+        [
+          "rejectedRawEvidencePathKinds",
+          gate.rejectedRawEvidencePathKinds.join(", "),
+          false,
+        ],
+        ["command", gate.command, false],
+        ["proofTarget", gate.proofTarget, false],
+        ["roleUrl", gate.roleUrl, false],
+        ["localCapabilityRoleUrl", gate.localCapabilityRoleUrl, false],
+        ["proofBoundary", gate.proofBoundary, false],
+      ],
+      [],
+    ],
+    ...gate.requiredEvidenceFamilies.map((family) => [
+      `operator-gate-family-${family.id}`,
+      `admin-audit-hosted-identity-operator-gate-family-${family.id}`,
+      [
+        ["id", family.id, true],
+        ["field", family.field, false],
+        ["checkId", family.checkId, false],
+        ["requiredInputIds", family.requiredInputIds.join(", "), false],
+      ],
+      [],
+    ]),
+    ...expectedHostedIdentityProviderBoundaryRows(gate.providerBoundary),
+    ...gate.rejectedRawEvidencePathKinds.map((kind) => [
+      `operator-gate-rejected-path-kind-${kind}`,
+      `admin-audit-hosted-identity-operator-gate-rejected-path-kind-${kind}`,
+      [
+        ["kind", kind, true],
+        ["status", "rejected", false],
+      ],
+      [],
+    ]),
+    ...(checklist.operatorProofDrilldowns.length === 0
+      ? []
+      : [
+          [
+            "operator-drilldowns",
+            "admin-audit-hosted-identity-operator-drilldowns",
+            [["heading", "Hosted identity operator drilldowns", true]],
+            checklist.operatorProofDrilldowns.map((drilldown) => [
+              `operator-proof-${drilldown.id}`,
+              `admin-audit-hosted-handoff-operator-proof-${drilldown.id}`,
+              [
+                ["label", drilldown.label, true],
+                ["command", drilldown.command, false],
+                ["progressionId", drilldown.progressionId, false],
+                ["sourcePath", drilldown.sourcePath, false],
+                ["proofTarget", drilldown.proofTarget, false],
+                ["roleUrl", drilldown.roleUrl, false],
+                ["firstMissingInputId", drilldown.firstMissingInputId, false],
+                ["firstMissingCheckId", drilldown.firstMissingCheckId, false],
+                ["proofBoundary", drilldown.proofBoundary, false],
+              ],
+            ]),
+          ],
+        ]),
+  ];
+}
+
+function expectedHostedIdentityProviderBoundaryRows(boundary) {
+  if (boundary === null || boundary === undefined) {
+    return [];
+  }
+  return [
+    [
+      `provider-boundary-${boundary.id}`,
+      `admin-audit-hosted-identity-provider-boundary-${boundary.id}`,
+      [
+        ["status", boundary.status, true],
+        ["architectureId", boundary.architectureId, false],
+        ["providerCount", `${boundary.providerCount} providers`, false],
+        [
+          "roleSurfaceArchitectureChanged",
+          hostedIdentityRoleSurfaceArchitectureText(boundary),
+          false,
+        ],
+        ["proofBoundary", boundary.proofBoundary, false],
+      ],
+      [],
+    ],
+    ...boundary.providers.map((provider) => [
+      `provider-boundary-provider-${provider.id}`,
+      `admin-audit-hosted-identity-provider-boundary-provider-${provider.id}`,
+      [
+        ["status", provider.status, true],
+        ["label", provider.label, false],
+        ["mode", provider.mode, false],
+        ["accountCredential", provider.accountCredential, false],
+        ["inviteCredential", provider.inviteCredential, false],
+        ["sessionCredential", provider.sessionCredential, false],
+        ["loginBoundary", provider.loginBoundary, false],
+        ["sessionBoundary", provider.sessionBoundary, false],
+        ["sessionGrantBoundary", provider.sessionGrantBoundary, false],
+        ["browserCookieName", provider.browserCookieName, false],
+        ["rawCredentialPolicy", provider.rawCredentialPolicy, false],
+        [
+          "roleSurfaceArchitectureChanged",
+          hostedIdentityRoleSurfaceArchitectureText(provider),
+          false,
+        ],
+        ...(provider.requiredEvidence === ""
+          ? []
+          : [["requiredEvidence", provider.requiredEvidence, false]]),
+      ],
+      [],
+    ]),
+  ];
+}
+
+function hostedIdentityRoleSurfaceArchitectureText(item) {
+  return item.roleSurfaceArchitectureChanged
+    ? "role surface changed"
+    : "role surface preserved";
 }
 
 function adminSpineProofRow(id) {

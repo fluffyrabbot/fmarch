@@ -550,102 +550,38 @@
               {/if}
             </li>
           {/each}
-          {#if data.audit.hostedHandoffChecklist.operatorEvidenceGate}
+          {#each data.audit.hostedHandoffOperatorRows ?? [] as row}
             <li
               class="admin-audit-detail__entry admin-audit-detail__entry--stack"
-              data-testid={`admin-audit-hosted-identity-operator-gate-${data.audit.hostedHandoffChecklist.operatorEvidenceGate.id}`}
+              data-testid={row.testId}
             >
-              <strong>{data.audit.hostedHandoffChecklist.operatorEvidenceGate.status}</strong>
-              <span>{data.audit.hostedHandoffChecklist.operatorEvidenceGate.evidencePathEnv}</span>
-              <span>{data.audit.hostedHandoffChecklist.operatorEvidenceGate.requiredRawEvidencePathKind}</span>
-              <span>{data.audit.hostedHandoffChecklist.operatorEvidenceGate.rejectedRawEvidencePathKinds.join(", ")}</span>
-              <span>{data.audit.hostedHandoffChecklist.operatorEvidenceGate.command}</span>
-              <span>{data.audit.hostedHandoffChecklist.operatorEvidenceGate.proofTarget}</span>
-              <span>{data.audit.hostedHandoffChecklist.operatorEvidenceGate.roleUrl}</span>
-              <span>{data.audit.hostedHandoffChecklist.operatorEvidenceGate.localCapabilityRoleUrl}</span>
-              <span>{data.audit.hostedHandoffChecklist.operatorEvidenceGate.proofBoundary}</span>
-            </li>
-            {#each data.audit.hostedHandoffChecklist.operatorEvidenceGate.requiredEvidenceFamilies as family}
-              <li
-                class="admin-audit-detail__entry admin-audit-detail__entry--stack"
-                data-testid={`admin-audit-hosted-identity-operator-gate-family-${family.id}`}
-              >
-                <strong>{family.id}</strong>
-                <span>{family.field}</span>
-                <span>{family.checkId}</span>
-                <span>{family.requiredInputIds.join(", ")}</span>
-              </li>
-            {/each}
-            {#if data.audit.hostedHandoffChecklist.operatorEvidenceGate.providerBoundary}
-              <li
-                class="admin-audit-detail__entry admin-audit-detail__entry--stack"
-                data-testid={`admin-audit-hosted-identity-provider-boundary-${data.audit.hostedHandoffChecklist.operatorEvidenceGate.providerBoundary.id}`}
-              >
-                <strong>{data.audit.hostedHandoffChecklist.operatorEvidenceGate.providerBoundary.status}</strong>
-                <span>{data.audit.hostedHandoffChecklist.operatorEvidenceGate.providerBoundary.architectureId}</span>
-                <span>{data.audit.hostedHandoffChecklist.operatorEvidenceGate.providerBoundary.providerCount} providers</span>
-                <span>{data.audit.hostedHandoffChecklist.operatorEvidenceGate.providerBoundary.roleSurfaceArchitectureChanged ? "role surface changed" : "role surface preserved"}</span>
-                <span>{data.audit.hostedHandoffChecklist.operatorEvidenceGate.providerBoundary.proofBoundary}</span>
-              </li>
-              {#each data.audit.hostedHandoffChecklist.operatorEvidenceGate.providerBoundary.providers as provider}
-                <li
-                  class="admin-audit-detail__entry admin-audit-detail__entry--stack"
-                  data-testid={`admin-audit-hosted-identity-provider-boundary-provider-${provider.id}`}
-                >
-                  <strong>{provider.status}</strong>
-                  <span>{provider.label}</span>
-                  <span>{provider.mode}</span>
-                  <span>{provider.accountCredential}</span>
-                  <span>{provider.inviteCredential}</span>
-                  <span>{provider.sessionCredential}</span>
-                  <span>{provider.loginBoundary}</span>
-                  <span>{provider.sessionBoundary}</span>
-                  <span>{provider.sessionGrantBoundary}</span>
-                  <span>{provider.browserCookieName}</span>
-                  <span>{provider.rawCredentialPolicy}</span>
-                  <span>{provider.roleSurfaceArchitectureChanged ? "role surface changed" : "role surface preserved"}</span>
-                  {#if provider.requiredEvidence}
-                    <span>{provider.requiredEvidence}</span>
-                  {/if}
-                </li>
+              {#each row.values as value}
+                {#if value.emphasized}
+                  <strong>{value.text}</strong>
+                {:else}
+                  <span>{value.text}</span>
+                {/if}
               {/each}
-            {/if}
-            {#each data.audit.hostedHandoffChecklist.operatorEvidenceGate.rejectedRawEvidencePathKinds as kind}
-              <li
-                class="admin-audit-detail__entry"
-                data-testid={`admin-audit-hosted-identity-operator-gate-rejected-path-kind-${kind}`}
-              >
-                <strong>{kind}</strong>
-                <span>rejected</span>
-              </li>
-            {/each}
-          {/if}
-          {#if data.audit.hostedHandoffChecklist.operatorProofDrilldowns?.length > 0}
-            <li
-              class="admin-audit-detail__entry admin-audit-detail__entry--stack"
-              data-testid="admin-audit-hosted-identity-operator-drilldowns"
-            >
-              <h3>Hosted identity operator drilldowns</h3>
-              <ol class="admin-audit-detail__subentries">
-                {#each data.audit.hostedHandoffChecklist.operatorProofDrilldowns as drilldown}
-                  <li
-                    class="admin-audit-detail__entry admin-audit-detail__entry--stack"
-                    data-testid={`admin-audit-hosted-handoff-operator-proof-${drilldown.id}`}
-                  >
-                    <strong>{drilldown.label}</strong>
-                    <span>{drilldown.command}</span>
-                    <span>{drilldown.progressionId}</span>
-                    <span>{drilldown.sourcePath}</span>
-                    <span>{drilldown.proofTarget}</span>
-                    <span>{drilldown.roleUrl}</span>
-                    <span>{drilldown.firstMissingInputId}</span>
-                    <span>{drilldown.firstMissingCheckId}</span>
-                    <span>{drilldown.proofBoundary}</span>
-                  </li>
-                {/each}
-              </ol>
+              {#if row.subentries?.length > 0}
+                <ol class="admin-audit-detail__subentries">
+                  {#each row.subentries as subentry}
+                    <li
+                      class="admin-audit-detail__entry admin-audit-detail__entry--stack"
+                      data-testid={subentry.testId}
+                    >
+                      {#each subentry.values as value}
+                        {#if value.emphasized}
+                          <strong>{value.text}</strong>
+                        {:else}
+                          <span>{value.text}</span>
+                        {/if}
+                      {/each}
+                    </li>
+                  {/each}
+                </ol>
+              {/if}
             </li>
-          {/if}
+          {/each}
           {#if !data.audit.artifactSummary?.progressionSummary?.progressions?.length}
             {#each data.audit.hostedHandoffChecklist.progressionSummary?.progressions ?? [] as progression}
               <li

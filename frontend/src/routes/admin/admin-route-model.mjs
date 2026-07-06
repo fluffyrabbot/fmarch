@@ -489,6 +489,153 @@ function hostedHandoffBlockedCheckRows(blockedChecks) {
   }));
 }
 
+function buildHostedHandoffOperatorRows(checklist) {
+  if (checklist === null || typeof checklist !== "object") {
+    return Object.freeze([]);
+  }
+  return Object.freeze(
+    [
+      ...hostedIdentityOperatorGateRows(checklist.operatorEvidenceGate),
+      ...hostedHandoffOperatorProofRows(checklist.operatorProofDrilldowns),
+    ].map((row) => artifactSummaryRow(row)),
+  );
+}
+
+function hostedIdentityOperatorGateRows(gate) {
+  if (gate === null || typeof gate !== "object") {
+    return [];
+  }
+  return [
+    {
+      id: `operator-gate-${gate.id}`,
+      testId: `admin-audit-hosted-identity-operator-gate-${gate.id}`,
+      values: [
+        { id: "status", text: gate.status, emphasized: true },
+        { id: "evidencePathEnv", text: gate.evidencePathEnv },
+        {
+          id: "requiredRawEvidencePathKind",
+          text: gate.requiredRawEvidencePathKind,
+        },
+        {
+          id: "rejectedRawEvidencePathKinds",
+          text: gate.rejectedRawEvidencePathKinds.join(", "),
+        },
+        { id: "command", text: gate.command },
+        { id: "proofTarget", text: gate.proofTarget },
+        { id: "roleUrl", text: gate.roleUrl },
+        { id: "localCapabilityRoleUrl", text: gate.localCapabilityRoleUrl },
+        { id: "proofBoundary", text: gate.proofBoundary },
+      ],
+    },
+    ...gate.requiredEvidenceFamilies.map((family) => ({
+      id: `operator-gate-family-${family.id}`,
+      testId: `admin-audit-hosted-identity-operator-gate-family-${family.id}`,
+      values: [
+        { id: "id", text: family.id, emphasized: true },
+        { id: "field", text: family.field },
+        { id: "checkId", text: family.checkId },
+        { id: "requiredInputIds", text: family.requiredInputIds.join(", ") },
+      ],
+    })),
+    ...hostedIdentityProviderBoundaryRows(gate.providerBoundary),
+    ...gate.rejectedRawEvidencePathKinds.map((kind) => ({
+      id: `operator-gate-rejected-path-kind-${kind}`,
+      testId: `admin-audit-hosted-identity-operator-gate-rejected-path-kind-${kind}`,
+      values: [
+        { id: "kind", text: kind, emphasized: true },
+        { id: "status", text: "rejected" },
+      ],
+    })),
+  ];
+}
+
+function hostedIdentityProviderBoundaryRows(boundary) {
+  if (boundary === null || typeof boundary !== "object") {
+    return [];
+  }
+  return [
+    {
+      id: `provider-boundary-${boundary.id}`,
+      testId: `admin-audit-hosted-identity-provider-boundary-${boundary.id}`,
+      values: [
+        { id: "status", text: boundary.status, emphasized: true },
+        { id: "architectureId", text: boundary.architectureId },
+        { id: "providerCount", text: `${boundary.providerCount} providers` },
+        {
+          id: "roleSurfaceArchitectureChanged",
+          text: hostedIdentityRoleSurfaceArchitectureText(boundary),
+        },
+        { id: "proofBoundary", text: boundary.proofBoundary },
+      ],
+    },
+    ...boundary.providers.map((provider) => ({
+      id: `provider-boundary-provider-${provider.id}`,
+      testId: `admin-audit-hosted-identity-provider-boundary-provider-${provider.id}`,
+      values: [
+        { id: "status", text: provider.status, emphasized: true },
+        { id: "label", text: provider.label },
+        { id: "mode", text: provider.mode },
+        { id: "accountCredential", text: provider.accountCredential },
+        { id: "inviteCredential", text: provider.inviteCredential },
+        { id: "sessionCredential", text: provider.sessionCredential },
+        { id: "loginBoundary", text: provider.loginBoundary },
+        { id: "sessionBoundary", text: provider.sessionBoundary },
+        { id: "sessionGrantBoundary", text: provider.sessionGrantBoundary },
+        { id: "browserCookieName", text: provider.browserCookieName },
+        { id: "rawCredentialPolicy", text: provider.rawCredentialPolicy },
+        {
+          id: "roleSurfaceArchitectureChanged",
+          text: hostedIdentityRoleSurfaceArchitectureText(provider),
+        },
+        ...(provider.requiredEvidence === ""
+          ? []
+          : [{ id: "requiredEvidence", text: provider.requiredEvidence }]),
+      ],
+    })),
+  ];
+}
+
+function hostedIdentityRoleSurfaceArchitectureText(item) {
+  return item.roleSurfaceArchitectureChanged
+    ? "role surface changed"
+    : "role surface preserved";
+}
+
+function hostedHandoffOperatorProofRows(drilldowns) {
+  const normalizedDrilldowns = Array.isArray(drilldowns) ? drilldowns : [];
+  if (normalizedDrilldowns.length === 0) {
+    return [];
+  }
+  return [
+    {
+      id: "operator-drilldowns",
+      testId: "admin-audit-hosted-identity-operator-drilldowns",
+      values: [
+        {
+          id: "heading",
+          text: "Hosted identity operator drilldowns",
+          emphasized: true,
+        },
+      ],
+      subentries: normalizedDrilldowns.map((drilldown) => ({
+        id: `operator-proof-${drilldown.id}`,
+        testId: `admin-audit-hosted-handoff-operator-proof-${drilldown.id}`,
+        values: [
+          { id: "label", text: drilldown.label, emphasized: true },
+          { id: "command", text: drilldown.command },
+          { id: "progressionId", text: drilldown.progressionId },
+          { id: "sourcePath", text: drilldown.sourcePath },
+          { id: "proofTarget", text: drilldown.proofTarget },
+          { id: "roleUrl", text: drilldown.roleUrl },
+          { id: "firstMissingInputId", text: drilldown.firstMissingInputId },
+          { id: "firstMissingCheckId", text: drilldown.firstMissingCheckId },
+          { id: "proofBoundary", text: drilldown.proofBoundary },
+        ],
+      })),
+    },
+  ];
+}
+
 function hostedReadinessText(value, label) {
   return value === true ? `${label} ready` : `${label} not ready`;
 }
@@ -1550,6 +1697,8 @@ export function normalizeLocalHostedTargetPreflightAudit(
       : {
           hostedHandoffChecklistRows:
             buildHostedHandoffChecklistRows(hostedHandoffChecklist),
+          hostedHandoffOperatorRows:
+            buildHostedHandoffOperatorRows(hostedHandoffChecklist),
         }),
     artifactSummary,
     artifactSummarySections:
@@ -1704,6 +1853,8 @@ export function normalizeLocalHostedIdentityEvidenceAudit(
     hostedHandoffChecklist,
     hostedHandoffChecklistRows:
       buildHostedHandoffChecklistRows(hostedHandoffChecklist),
+    hostedHandoffOperatorRows:
+      buildHostedHandoffOperatorRows(hostedHandoffChecklist),
     hostedHandoffReceiptHeadings: hostedHandoffReceiptHeadingsForAudit(
       localAdminAuditIds.hostedIdentityEvidence,
     ),
@@ -1988,6 +2139,8 @@ export function normalizeLocalHostedEvidenceLaneAudit(
     hostedHandoffChecklist,
     hostedHandoffChecklistRows:
       buildHostedHandoffChecklistRows(hostedHandoffChecklist),
+    hostedHandoffOperatorRows:
+      buildHostedHandoffOperatorRows(hostedHandoffChecklist),
     hostedHandoffReceiptHeadings: hostedHandoffReceiptHeadingsForAudit(
       localAdminAuditIds.hostedEvidenceLane,
     ),
@@ -2299,6 +2452,8 @@ export function normalizeLocalRealHostedObservabilityHandoffAudit(
     hostedHandoffChecklist,
     hostedHandoffChecklistRows:
       buildHostedHandoffChecklistRows(hostedHandoffChecklist),
+    hostedHandoffOperatorRows:
+      buildHostedHandoffOperatorRows(hostedHandoffChecklist),
     hostedHandoffReceiptHeadings: hostedHandoffReceiptHeadingsForAudit(
       localAdminAuditIds.realHostedObservabilityHandoff,
     ),
@@ -2663,6 +2818,8 @@ export function normalizeLocalHostedConcurrentRaceMatrixAudit(
     hostedHandoffChecklist,
     hostedHandoffChecklistRows:
       buildHostedHandoffChecklistRows(hostedHandoffChecklist),
+    hostedHandoffOperatorRows:
+      buildHostedHandoffOperatorRows(hostedHandoffChecklist),
     hostedHandoffReceiptHeadings: hostedHandoffReceiptHeadingsForAudit(
       localAdminAuditIds.hostedConcurrentRaceMatrix,
     ),
@@ -3570,6 +3727,8 @@ export function normalizeLocalNextActionAudit(nextAction, { game, proofGraph = n
       : {
           hostedHandoffChecklistRows:
             buildHostedHandoffChecklistRows(hostedHandoffChecklist),
+          hostedHandoffOperatorRows:
+            buildHostedHandoffOperatorRows(hostedHandoffChecklist),
         }),
     ...(hostedHandoffChecklist === null
       ? {}
