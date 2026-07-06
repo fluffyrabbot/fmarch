@@ -1727,6 +1727,7 @@ function withAdminAuditDetailDisplayRows(item, { game }) {
       { id: "role", text: scenario.role },
     ],
   });
+  const unprovenRows = buildUnprovenRows(item.unproven);
   const reconnectLaneRows = buildSimpleAdminAuditRows({
     items: item.reconnectLanes,
     idPrefix: "reconnect-lane",
@@ -1773,6 +1774,7 @@ function withAdminAuditDetailDisplayRows(item, { game }) {
     ...(sessionsRows.length === 0 ? {} : { sessionsRows }),
     ...(proofLaneCoverageRows.length === 0 ? {} : { proofLaneCoverageRows }),
     ...(scenarioRows.length === 0 ? {} : { scenarioRows }),
+    ...(unprovenRows.length === 0 ? {} : { unprovenRows }),
     ...(reconnectLaneRows.length === 0 ? {} : { reconnectLaneRows }),
     ...(staleConflictLaneRows.length === 0 ? {} : { staleConflictLaneRows }),
     ...(scenarioFamilyRows.length === 0 ? {} : { scenarioFamilyRows }),
@@ -1879,6 +1881,29 @@ function buildCoreLoopSpineCycleRows(spineCycles) {
       }),
     ),
   );
+}
+
+function buildUnprovenRows(unproven) {
+  return Object.freeze(
+    (Array.isArray(unproven) ? unproven : []).map((item) =>
+      artifactSummaryRow({
+        id: `unproven-${item.id}`,
+        testId: `admin-audit-unproven-${item.id}`,
+        values: [
+          { id: "id", text: item.id, emphasized: true },
+          { id: "status", text: item.status },
+          { id: "requiredEvidence", text: item.requiredEvidence },
+          ...optionalTextValue("command", item.command),
+          ...optionalTextValue("proofTarget", item.proofTarget),
+          ...optionalTextValue("roleUrl", item.roleUrl),
+        ],
+      }),
+    ),
+  );
+}
+
+function optionalTextValue(id, value) {
+  return String(value ?? "") === "" ? [] : [{ id, text: value }];
 }
 
 function buildLocalPrerequisiteRows(localPrerequisites, { game }) {

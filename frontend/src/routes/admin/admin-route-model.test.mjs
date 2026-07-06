@@ -1912,6 +1912,9 @@ test("admin audit detail page renders simple list rows from route data", async (
   assert.match(source, /scenarioRows/);
   assert.doesNotMatch(source, /scenarios as scenario/);
   assert.doesNotMatch(source, /scenario\.title/);
+  assert.match(source, /unprovenRows/);
+  assert.doesNotMatch(source, /unproven as item/);
+  assert.doesNotMatch(source, /item\.requiredEvidence/);
   assert.match(source, /reconnectLaneRows/);
   assert.doesNotMatch(source, /reconnectLanes as lane/);
   assert.match(source, /staleConflictLaneRows/);
@@ -5675,6 +5678,10 @@ test("admin local release readiness detail data carries checks and unproven rows
       "human-release-runbook",
     ]).map((item) => [item.id, item.status]),
   );
+  assert.deepEqual(
+    hostedHandoffChecklistRowsForAssertion(data.audit.unprovenRows),
+    expectedUnprovenRows(data.audit.unproven),
+  );
 });
 
 test("admin route data exposes local host setup proof as a native audit row", async () => {
@@ -5837,6 +5844,10 @@ test("admin local release runbook detail data routes hosted identity handoff to 
         localAdminAuditRoleUrl(localAdminAuditIds.hostedIdentityEvidence),
       ],
     ],
+  );
+  assert.deepEqual(
+    hostedHandoffChecklistRowsForAssertion(data.audit.unprovenRows),
+    expectedUnprovenRows(data.audit.unproven),
   );
   assert.equal(
     data.audit.artifactSummary.nextBuildCommand,
@@ -9688,6 +9699,26 @@ function expectedScenarioRows(scenarios) {
     ],
     [],
   ]);
+}
+
+function expectedUnprovenRows(unproven) {
+  return unproven.map((item) => [
+    `unproven-${item.id}`,
+    `admin-audit-unproven-${item.id}`,
+    [
+      ["id", item.id, true],
+      ["status", item.status, false],
+      ["requiredEvidence", item.requiredEvidence, false],
+      ...optionalExpectedTextValue("command", item.command),
+      ...optionalExpectedTextValue("proofTarget", item.proofTarget),
+      ...optionalExpectedTextValue("roleUrl", item.roleUrl),
+    ],
+    [],
+  ]);
+}
+
+function optionalExpectedTextValue(id, value) {
+  return String(value ?? "") === "" ? [] : [[id, value, false]];
 }
 
 function expectedSpineCycleRows(cycles) {

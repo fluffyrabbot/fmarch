@@ -262,28 +262,11 @@
         <AdminAuditDescriptorRows rows={hostedHandoffRows} />
       </section>
     {/if}
-    {#if data.audit.unproven?.length > 0}
-      <ol class="admin-audit-detail__entries" data-testid="admin-audit-detail-unproven">
-        {#each data.audit.unproven as item}
-          <li
-            class="admin-audit-detail__entry"
-            data-testid={`admin-audit-unproven-${item.id}`}
-          >
-            <strong>{item.id}</strong>
-            <span>{item.status}</span>
-            <span>{item.requiredEvidence}</span>
-            {#if item.command}
-              <span>{item.command}</span>
-            {/if}
-            {#if item.proofTarget}
-              <span>{item.proofTarget}</span>
-            {/if}
-            {#if item.roleUrl}
-              <span>{item.roleUrl}</span>
-            {/if}
-          </li>
-        {/each}
-      </ol>
+    {#if data.audit.unprovenRows?.length > 0}
+      <AdminAuditDescriptorRows
+        rows={data.audit.unprovenRows}
+        listTestId="admin-audit-detail-unproven"
+      />
     {/if}
     {#if data.audit.setupCommandEvidenceRows?.length > 0}
       <section
