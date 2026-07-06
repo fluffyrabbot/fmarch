@@ -5,6 +5,7 @@ import {
 export const hardeningFeatureSpineSourceCheckId = "local-hardening-proof";
 export const hardeningFeatureSpineCycleIds = Object.freeze({
   staleConflict: "hardening-stale-conflict",
+  reconnectRecovery: "hardening-reconnect-recovery",
 });
 export const devTestGameHardeningAdminProofCommand =
   "npm run test:dev-test-game-hardening-admin-proof";

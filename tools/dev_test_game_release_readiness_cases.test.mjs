@@ -90,6 +90,9 @@ import {
 import {
   replacementStaleConflictMessageSpineLaneCase,
 } from "./dev_test_game_stale_conflict_scenarios.mjs";
+import {
+  stalePlayerActionReconnectLaneId,
+} from "./dev_test_game_stale_client_reconnect_scenarios.mjs";
 
 test("release readiness unproven cases share blocker IDs and status rows", () => {
   assert.ok(releaseReadinessUnprovenCaseIds.includes("hosted-deployment"));
@@ -369,6 +372,18 @@ test("release readiness buildable cases share next-action commands and spine tar
       adminCheckId: replacementStaleConflictMessageSpineLaneCase().laneId,
     },
   );
+  assert.deepEqual(
+    releaseReadinessProductionFeatureSpineTargets.staleActionReconnectRecovery,
+    {
+      featureSlotId: "stale-action-reconnect-recovery",
+      sourceCheckId: hardeningFeatureSpineSourceCheckId,
+      cycleId: hardeningFeatureSpineCycleIds.reconnectRecovery,
+      roleUrlId: stalePlayerActionReconnectLaneId,
+      rowKind: "checkpoint",
+      checkpointId: stalePlayerActionReconnectLaneId,
+      adminCheckId: stalePlayerActionReconnectLaneId,
+    },
+  );
 
   const releaseRunbook = releaseReadinessBuildableItemForId(
     "human-release-runbook",
@@ -484,6 +499,14 @@ test("scenario-owned production feature targets derive proof row ids from source
       source: {
         cycleId: hardeningFeatureSpineCycleIds.staleConflict,
         rowId: replacementStaleConflictMessageSpineLaneCase().laneId,
+      },
+    },
+    {
+      target: releaseReadinessProductionFeatureSpineTargets
+        .staleActionReconnectRecovery,
+      source: {
+        cycleId: hardeningFeatureSpineCycleIds.reconnectRecovery,
+        rowId: stalePlayerActionReconnectLaneId,
       },
     },
   ];
@@ -790,6 +813,35 @@ test("scenario-owned production feature targets avoid hand-maintained row litera
   assert.match(
     replacementBlock,
     /adminCheckId:\s+replacementStaleConflictMessageSpineLane\.laneId/,
+  );
+
+  const reconnectBlock = featureTargetDeclarationBlock(
+    source,
+    "staleActionReconnectRecovery",
+  );
+  assert.match(
+    reconnectBlock,
+    /roleUrlId:\s+stalePlayerActionReconnectLaneId/,
+  );
+  assert.match(
+    reconnectBlock,
+    /checkpointId:\s+stalePlayerActionReconnectLaneId/,
+  );
+  assert.match(
+    reconnectBlock,
+    /adminCheckId:\s+stalePlayerActionReconnectLaneId/,
+  );
+  assert.doesNotMatch(
+    reconnectBlock,
+    /roleUrlId:\s+"stale-action-reconnect-recovery"/,
+  );
+  assert.doesNotMatch(
+    reconnectBlock,
+    /checkpointId:\s+"stale-action-reconnect-recovery"/,
+  );
+  assert.doesNotMatch(
+    reconnectBlock,
+    /adminCheckId:\s+"stale-action-reconnect-recovery"/,
   );
 });
 

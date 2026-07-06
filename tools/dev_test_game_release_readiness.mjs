@@ -199,8 +199,12 @@ import {
   coreLoopFeatureSpineSourceCheckId,
 } from "./dev_test_game_core_loop_feature_spine_targets.mjs";
 import {
+  hardeningFeatureSpineCycleIds,
   hardeningFeatureSpineSourceCheckId,
 } from "./dev_test_game_hardening_feature_spine_targets.mjs";
+import {
+  stalePlayerActionReconnectLaneId,
+} from "./dev_test_game_stale_client_reconnect_scenarios.mjs";
 import {
   identityFeatureSpineSourceCheckId,
   identityFeatureSpineTargetRows,
@@ -3875,6 +3879,7 @@ function buildHardeningReadinessSpineTargets({
 }) {
   const surfaces = [...(staleConflictMessageMilestone.surfaces ?? [])];
   const completedGameRows = buildCompletedGameHardeningSpineRows(proof);
+  const reconnectRows = buildReconnectHardeningSpineRows(proof);
   const staleConflictRoleUrlHrefs = Object.fromEntries(
     surfaces
       .filter(
@@ -3888,16 +3893,21 @@ function buildHardeningReadinessSpineTargets({
   const roleUrlHrefs = {
     ...staleConflictRoleUrlHrefs,
     ...completedGameRows.roleUrlHrefs,
+    ...reconnectRows.roleUrlHrefs,
   };
   const cycleIds = [
-    "hardening-stale-conflict",
+    hardeningFeatureSpineCycleIds.staleConflict,
     ...(completedGameRows.roleUrlIds.length === 0
       ? []
       : [completedGameHardeningSpineCycleId]),
+    ...(reconnectRows.roleUrlIds.length === 0
+      ? []
+      : [hardeningFeatureSpineCycleIds.reconnectRecovery]),
   ];
   const roleUrlIds = [
     ...surfaces.map((surface) => String(surface.laneId)),
     ...completedGameRows.roleUrlIds,
+    ...reconnectRows.roleUrlIds,
   ];
   const checkpointIds = [...roleUrlIds];
   const replacementStaleConflictLane =
@@ -3910,7 +3920,7 @@ function buildHardeningReadinessSpineTargets({
   return {
     status: "passed",
     detailRoleUrl: hardeningAdminProofEvidence.detailRoleUrl,
-    defaultCycleId: "hardening-stale-conflict",
+    defaultCycleId: hardeningFeatureSpineCycleIds.staleConflict,
     defaultRoleUrlId,
     defaultRoleUrl: String(roleUrlHrefs[defaultRoleUrlId] ?? ""),
     defaultCheckpointId: defaultRoleUrlId,
@@ -3983,6 +3993,28 @@ function buildCompletedGameHardeningSpineRows(proof) {
       .map((scenario) => scenario.id)
       .filter((laneId) => roleUrlHrefs[laneId] !== undefined),
     roleUrlHrefs,
+  };
+}
+
+function buildReconnectHardeningSpineRows(proof) {
+  const laneById = new Map((proof?.lanes ?? []).map((lane) => [lane.id, lane]));
+  const lane = laneById.get(stalePlayerActionReconnectLaneId);
+  const roleUrl = lane?.evidence?.roleUrl;
+  if (
+    lane?.status !== "passed" ||
+    typeof roleUrl !== "string" ||
+    roleUrl === ""
+  ) {
+    return {
+      roleUrlIds: [],
+      roleUrlHrefs: {},
+    };
+  }
+  return {
+    roleUrlIds: [stalePlayerActionReconnectLaneId],
+    roleUrlHrefs: {
+      [stalePlayerActionReconnectLaneId]: roleUrl,
+    },
   };
 }
 
@@ -8173,13 +8205,15 @@ function validHardeningSpineTargets(spineTargets) {
     completedGameStaleRecoverySpineLaneCase();
   const replacementStaleConflictLane =
     replacementStaleConflictMessageSpineLaneCase();
+  const reconnectLaneId = stalePlayerActionReconnectLaneId;
   return (
     spineTargets !== null &&
     typeof spineTargets === "object" &&
     spineTargets.status === "passed" &&
     typeof spineTargets.detailRoleUrl === "string" &&
     spineTargets.detailRoleUrl.includes("/admin/audit/local-hardening") &&
-    spineTargets.defaultCycleId === "hardening-stale-conflict" &&
+    spineTargets.defaultCycleId ===
+      hardeningFeatureSpineCycleIds.staleConflict &&
     spineTargets.defaultRoleUrlId === replacementStaleConflictLane.laneId &&
     typeof spineTargets.defaultRoleUrl === "string" &&
     spineTargets.defaultRoleUrl.includes("/g/") &&
@@ -8187,20 +8221,28 @@ function validHardeningSpineTargets(spineTargets) {
     typeof spineTargets.browserProofCommand === "string" &&
     spineTargets.browserProofCommand.includes("test:dev-test-game-core-live") &&
     Array.isArray(spineTargets.cycleIds) &&
-    spineTargets.cycleIds.includes("hardening-stale-conflict") &&
+    spineTargets.cycleIds.includes(
+      hardeningFeatureSpineCycleIds.staleConflict,
+    ) &&
     spineTargets.cycleIds.includes(completedGameHardeningSpineCycleId) &&
+    spineTargets.cycleIds.includes(
+      hardeningFeatureSpineCycleIds.reconnectRecovery,
+    ) &&
     Array.isArray(spineTargets.roleUrlIds) &&
     spineTargets.roleUrlIds.includes(replacementStaleConflictLane.laneId) &&
     spineTargets.roleUrlIds.includes(completedGameStaleRecoveryLane.id) &&
+    spineTargets.roleUrlIds.includes(reconnectLaneId) &&
     spineTargets.roleUrlHrefs !== null &&
     typeof spineTargets.roleUrlHrefs === "object" &&
     typeof spineTargets.roleUrlHrefs[replacementStaleConflictLane.laneId] ===
       "string" &&
     typeof spineTargets.roleUrlHrefs[completedGameStaleRecoveryLane.id] ===
       "string" &&
+    typeof spineTargets.roleUrlHrefs[reconnectLaneId] === "string" &&
     Array.isArray(spineTargets.checkpointIds) &&
     spineTargets.checkpointIds.includes(replacementStaleConflictLane.laneId) &&
     spineTargets.checkpointIds.includes(completedGameStaleRecoveryLane.id) &&
+    spineTargets.checkpointIds.includes(reconnectLaneId) &&
     Array.isArray(spineTargets.recoveryHookIds) &&
     spineTargets.recoveryHookIds.length === 0 &&
     Array.isArray(spineTargets.visibleAdminCheckIds) &&
@@ -8210,6 +8252,7 @@ function validHardeningSpineTargets(spineTargets) {
     spineTargets.visibleAdminCheckIds.includes(
       completedGameStaleRecoveryLane.id,
     ) &&
+    spineTargets.visibleAdminCheckIds.includes(reconnectLaneId) &&
     validHardeningProductionFeatureTargets(spineTargets.productionFeatureTargets)
   );
 }

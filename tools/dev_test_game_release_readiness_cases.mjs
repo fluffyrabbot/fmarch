@@ -58,6 +58,9 @@ import {
   replacementStaleConflictMessageSpineLaneCase,
 } from "./dev_test_game_stale_conflict_scenarios.mjs";
 import {
+  stalePlayerActionReconnectLaneId,
+} from "./dev_test_game_stale_client_reconnect_scenarios.mjs";
+import {
   featureSpineCheckpointTarget,
   featureSpineRecoveryHookTarget,
   featureSpineTargetBySlotId,
@@ -149,6 +152,14 @@ export const releaseReadinessProductionFeatureSpineTargets = Object.freeze({
     roleUrlId: replacementStaleConflictMessageSpineLane.laneId,
     checkpointId: replacementStaleConflictMessageSpineLane.laneId,
     adminCheckId: replacementStaleConflictMessageSpineLane.laneId,
+  }),
+  staleActionReconnectRecovery: featureSpineCheckpointTarget({
+    featureSlotId: "stale-action-reconnect-recovery",
+    sourceCheckId: hardeningFeatureSpineSourceCheckId,
+    cycleId: hardeningFeatureSpineCycleIds.reconnectRecovery,
+    roleUrlId: stalePlayerActionReconnectLaneId,
+    checkpointId: stalePlayerActionReconnectLaneId,
+    adminCheckId: stalePlayerActionReconnectLaneId,
   }),
 });
 export const releaseReadinessProductionFeatureSpineTargetsBySlotId =
